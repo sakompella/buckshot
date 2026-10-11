@@ -7,8 +7,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BEND="${BEND:-bend}"
 export BEND
 
-# Law names LAWS.bend must declare (`law <name>:`). Phase 4 fills this in.
-required_laws=()
+required_laws=(step_matches run_matches start_matches state_roundtrip jam_skip_once turn_traversal observe_matches legal_exact legal_accepted privacy)
 
 failed=0
 report() {
@@ -69,11 +68,11 @@ gate_ai_imports() {
 
 gate_sm_imports() {
   local bad
-  bad="$(imports_under "$here/sm" | grep -E 'import[[:space:]]+[^[:space:]]*ref/' || true)"
+  bad="$(imports_under "$here/sm" | grep -vE ':[0-9]+:[[:space:]]*import[[:space:]]+(Base|(\.\./domain\.bend|\./[A-Za-z0-9_-]+\.bend)[[:space:]]+as[[:space:]]+[A-Za-z0-9_]+)[[:space:]]*$' || true)"
   if [[ -z "$bad" ]]; then
-    report ok "sm/ never imports ref/"
+    report ok "sm/ imports only Base, domain and siblings"
   else
-    report fail "sm/ never imports ref/" "$bad"
+    report fail "sm/ imports only Base, domain and siblings" "$bad"
   fi
 }
 
@@ -121,14 +120,47 @@ gate_core_scenarios() {
   fi
 }
 
+gate_machine_scenarios() {
+  local out
+  out="$(bun "$here/test/machine-core.mjs" 2>&1)"
+  if [[ $? -eq 0 ]]; then
+    report ok "machine core scenarios" "$(printf '%s' "$out" | tail -1)"
+  else
+    report fail "machine core scenarios" "$(printf '%s' "$out" | tail -20)"
+  fi
+}
+
+gate_proofs() {
+  local out
+  out="$("$BEND" "$here/PROOF.bend" 2>&1)"
+  if [[ $? -eq 0 && "$out" == *"ALL PROOFS CHECK"* && "$out" != *"SOME PROOFS FAIL"* ]]; then
+    report ok "PROOF.bend" "ALL PROOFS CHECK"
+  else
+    report fail "PROOF.bend" "$(printf '%s' "$out" | head -20)"
+  fi
+}
+
+gate_mutations() {
+  local out
+  out="$(python3 "$here/mutate.py" 2>&1)"
+  if [[ $? -eq 0 ]]; then
+    report ok "machine mutations" "$(printf '%s' "$out" | tail -1)"
+  else
+    report fail "machine mutations" "$(printf '%s' "$out" | tail -20)"
+  fi
+}
+
 gate_domain
 gate_unsafe
 gate_ai_imports
 gate_sm_imports
 gate_driver_imports
 gate_laws
+gate_proofs
 gate_roundtrip
 gate_core_scenarios
+gate_machine_scenarios
+gate_mutations
 
 if [[ $failed -eq 0 ]]; then
   echo PASS
