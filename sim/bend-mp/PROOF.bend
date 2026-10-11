@@ -829,34 +829,8 @@ def run_zero(request: D.Request, +state: S.State, +tape: List<&2, Nat>) -> {A.re
     case D.Choose{menus} n <> rest:
       {==}
 
-def run_request(~step: A.StepOracle(), +fuel: Nat, request: D.Request, +state: S.State, +tape: List<&2, Nat>, +valid: A.Valid(state), recur: A.RunHypothesis(fuel)) -> {A.ref_driver(1n+fuel, request, A.ref(state), tape) == A.ran(M.run.request(1n+fuel, request, state, tape)) : A.RefRan()}:
-  match request tape:
-    case D.Finished{} Nil{}:
-      {==}
-    case D.Finished{} n <> rest:
-      {==}
-    case D.Stuck{} Nil{}:
-      {==}
-    case D.Stuck{} n <> rest:
-      {==}
-    case D.Draw{kind, range} Nil{}:
-      {==}
-    case D.Choose{menus} Nil{}:
-      {==}
-    case D.Draw{kind, range} +n <> +rest:
-      run_successor(fuel, state, n, rest, step(state, n, valid), recur)
-    case D.Choose{menus} +n <> +rest:
-      run_successor(fuel, state, n, rest, step(state, n, valid), recur)
-
 def run_glue(+fuel: Nat, +state: S.State, +tape: List<&2, Nat>, +valid: A.Valid(state), lifted: {A.ref_driver(fuel, A.machine_request(state), A.ref(state), tape) == A.ran(M.run(fuel, state, tape)) : A.RefRan()}) -> {A.ref_run(fuel, A.ref(state), tape) == A.ran(M.run(fuel, state, tape)) : A.RefRan()}:
   Equal.trans(A.RefRan(), A.ref_run(fuel, A.ref(state), tape), A.ref_driver(fuel, A.machine_request(state), A.ref(state), tape), A.ran(M.run(fuel, state, tape)), Equal.trans(A.RefRan(), A.ref_run(fuel, A.ref(state), tape), A.ref_driver(fuel, A.ref_request(A.ref(state)), A.ref(state), tape), A.ref_driver(fuel, A.machine_request(state), A.ref(state), tape), ref_run_driver(fuel, state, tape), Equal.cong(D.Request, A.RefRan(), request => A.ref_driver(fuel, request, A.ref(state), tape), A.ref_request(A.ref(state)), A.machine_request(state), Equal.sym(D.Request, A.machine_request(state), A.ref_request(A.ref(state)), valid_request(state, valid)))), lifted)
-
-def run_lift(~step: A.StepOracle(), +fuel: Nat) -> A.RunHypothesis(fuel):
-  match fuel:
-    case 0n:
-      +state => +tape => +valid => run_glue(0n, state, tape, valid, run_zero(A.machine_request(state), state, tape))
-    case 1n+rest:
-      +state => +tape => +valid => run_glue(1n+rest, state, tape, valid, run_request(~step, rest, A.machine_request(state), state, tape, valid, run_lift(~step, rest)))
 
 def normalized_pack(+world: S.World, +seats: A.Seats(), +phase: S.Phase, +notes: A.Notes()) -> {A.normalize(A.pack(world, seats, phase, notes)) == A.canonical_state(world, seats, phase, notes) : S.State}:
   Equal.cong(A.Seats(), S.State, restored => A.canonical_state(world, restored, phase, notes), A.core(A.players(seats)), seats, Laws.core_roundtrip(seats))
@@ -2752,36 +2726,6 @@ def run_valid_zero(request: D.Request, +state: S.State, tape: List<&2, Nat>, val
     case D.Choose{menus} n <> rest:
       valid
 
-def run_valid_request(~step: A.StepOracle(), +fuel: Nat, request: D.Request, +state: S.State, tape: List<&2, Nat>, +valid: A.Valid(state), recur: A.RunValidHypothesis(fuel)) -> A.Valid(A.machine_ran_state(M.run.request(1n+fuel, request, state, tape))):
-  match request tape:
-    case D.Finished{} Nil{}:
-      valid
-    case D.Finished{} n <> rest:
-      valid
-    case D.Stuck{} Nil{}:
-      valid
-    case D.Stuck{} n <> rest:
-      valid
-    case D.Draw{kind, range} Nil{}:
-      valid
-    case D.Choose{menus} Nil{}:
-      valid
-    case D.Draw{kind, range} +n <> +rest:
-      run_valid_successor(fuel, state, n, rest, step(state, n, valid), recur)
-    case D.Choose{menus} +n <> +rest:
-      run_valid_successor(fuel, state, n, rest, step(state, n, valid), recur)
-
-def run_valid(~step: A.StepOracle(), +fuel: Nat) -> A.RunValidHypothesis(fuel):
-  match fuel:
-    case 0n:
-      +state => +tape => valid => run_valid_zero(M.request(state), state, tape, valid)
-    case 1n+rest:
-      +state => +tape => +valid => run_valid_request(~step, rest, M.request(state), state, tape, valid, run_valid(~step, rest))
-
-def run_final_point(~step: A.StepOracle(), +fuel: Nat, +state: S.State, +tape: List<&2, Nat>, +valid: A.Valid(state)) -> {A.machine_point(A.machine_ran_state(M.run(fuel, state, tape))) == A.ref_ran_point(A.ref_run(fuel, A.ref(state), tape)) : D.Point}:
-  Equal.trans(D.Point, A.machine_point(A.machine_ran_state(M.run(fuel, state, tape))), A.point_of_ref(A.machine_ran_state(M.run(fuel, state, tape))), A.ref_ran_point(A.ref_run(fuel, A.ref(state), tape)), point.valid(A.machine_ran_state(M.run(fuel, state, tape)), run_valid(~step, fuel, state, tape, valid)), Equal.trans(D.Point, A.point_of_ref(A.machine_ran_state(M.run(fuel, state, tape))), A.ref_ran_point(A.ran(M.run(fuel, state, tape))), A.ref_ran_point(A.ref_run(fuel, A.ref(state), tape)), Equal.sym(D.Point, A.ref_ran_point(A.ran(M.run(fuel, state, tape))), A.point_of_ref(A.machine_ran_state(M.run(fuel, state, tape))), ran_point_commutes(M.run(fuel, state, tape))), Equal.cong(A.RefRan(), D.Point, ran => A.ref_ran_point(ran), A.ran(M.run(fuel, state, tape)), A.ref_run(fuel, A.ref(state), tape), Equal.sym(A.RefRan(), A.ref_run(fuel, A.ref(state), tape), A.ran(M.run(fuel, state, tape)), run_lift(~step, fuel, state, tape, valid)))))
-
-
 def aimstep.synced_world(+world: S.World, +seats: A.Seats(), synced: {S.world.table(world) == D.ring.table(A.CoreSeat, seats) : D.Table}) -> {A.world_for(world, seats) == world : S.World}:
   match world:
     case S.World{D.Config{+table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}:
@@ -4417,8 +4361,64 @@ def step(+state: S.State, +n: Nat, +valid: A.Valid(state)) -> A.Simulation(state
     case S.State{+world, +players, +phase, +notes}:
       step_phase(world, players, phase, notes, n, valid)
 
+def run_request(+fuel: Nat, request: D.Request, +state: S.State, +tape: List<&2, Nat>, +valid: A.Valid(state), recur: A.RunHypothesis(fuel)) -> {A.ref_driver(1n+fuel, request, A.ref(state), tape) == A.ran(M.run.request(1n+fuel, request, state, tape)) : A.RefRan()}:
+  match request tape:
+    case D.Finished{} Nil{}:
+      {==}
+    case D.Finished{} n <> rest:
+      {==}
+    case D.Stuck{} Nil{}:
+      {==}
+    case D.Stuck{} n <> rest:
+      {==}
+    case D.Draw{kind, range} Nil{}:
+      {==}
+    case D.Choose{menus} Nil{}:
+      {==}
+    case D.Draw{kind, range} +n <> +rest:
+      run_successor(fuel, state, n, rest, step(state, n, valid), recur)
+    case D.Choose{menus} +n <> +rest:
+      run_successor(fuel, state, n, rest, step(state, n, valid), recur)
+
+def run_lift(+fuel: Nat) -> A.RunHypothesis(fuel):
+  match fuel:
+    case 0n:
+      +state => +tape => +valid => run_glue(0n, state, tape, valid, run_zero(A.machine_request(state), state, tape))
+    case 1n+rest:
+      +state => +tape => +valid => run_glue(1n+rest, state, tape, valid, run_request(rest, A.machine_request(state), state, tape, valid, run_lift(rest)))
+
+def run_valid_request(+fuel: Nat, request: D.Request, +state: S.State, tape: List<&2, Nat>, +valid: A.Valid(state), recur: A.RunValidHypothesis(fuel)) -> A.Valid(A.machine_ran_state(M.run.request(1n+fuel, request, state, tape))):
+  match request tape:
+    case D.Finished{} Nil{}:
+      valid
+    case D.Finished{} n <> rest:
+      valid
+    case D.Stuck{} Nil{}:
+      valid
+    case D.Stuck{} n <> rest:
+      valid
+    case D.Draw{kind, range} Nil{}:
+      valid
+    case D.Choose{menus} Nil{}:
+      valid
+    case D.Draw{kind, range} +n <> +rest:
+      run_valid_successor(fuel, state, n, rest, step(state, n, valid), recur)
+    case D.Choose{menus} +n <> +rest:
+      run_valid_successor(fuel, state, n, rest, step(state, n, valid), recur)
+
+def run_valid(+fuel: Nat) -> A.RunValidHypothesis(fuel):
+  match fuel:
+    case 0n:
+      +state => +tape => valid => run_valid_zero(M.request(state), state, tape, valid)
+    case 1n+rest:
+      +state => +tape => +valid => run_valid_request(rest, M.request(state), state, tape, valid, run_valid(rest))
+
+def run_final_point(+fuel: Nat, +state: S.State, +tape: List<&2, Nat>, +valid: A.Valid(state)) -> {A.machine_point(A.machine_ran_state(M.run(fuel, state, tape))) == A.ref_ran_point(A.ref_run(fuel, A.ref(state), tape)) : D.Point}:
+  Equal.trans(D.Point, A.machine_point(A.machine_ran_state(M.run(fuel, state, tape))), A.point_of_ref(A.machine_ran_state(M.run(fuel, state, tape))), A.ref_ran_point(A.ref_run(fuel, A.ref(state), tape)), point.valid(A.machine_ran_state(M.run(fuel, state, tape)), run_valid(fuel, state, tape, valid)), Equal.trans(D.Point, A.point_of_ref(A.machine_ran_state(M.run(fuel, state, tape))), A.ref_ran_point(A.ran(M.run(fuel, state, tape))), A.ref_ran_point(A.ref_run(fuel, A.ref(state), tape)), Equal.sym(D.Point, A.ref_ran_point(A.ran(M.run(fuel, state, tape))), A.point_of_ref(A.machine_ran_state(M.run(fuel, state, tape))), ran_point_commutes(M.run(fuel, state, tape))), Equal.cong(A.RefRan(), D.Point, ran => A.ref_ran_point(ran), A.ran(M.run(fuel, state, tape)), A.ref_run(fuel, A.ref(state), tape), Equal.sym(A.RefRan(), A.ref_run(fuel, A.ref(state), tape), A.ran(M.run(fuel, state, tape)), run_lift(fuel, state, tape, valid)))))
+
+
 def Laws.step_matches(state, n, valid):
   step(state, n, valid)
 
 def Laws.run_matches(fuel, state, tape, valid):
-  run_lift(~step, fuel)(state, tape, valid)
+  run_lift(fuel)(state, tape, valid)

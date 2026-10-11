@@ -1003,9 +1003,6 @@ def next(state: S.State, n: Nat) -> S.State:
 def Simulation(+state: S.State, +n: Nat) -> Data:
   Sigma<&2, &2, {ref_answer(ref(state), n) == stepped(M.answer(state, n)) : RefStep()}, _ => Sigma<&2, &2, {machine_point(next(state, n)) == ref_step_point(ref_answer(ref(state), n)) : D.Point}, _ => Valid(next(state, n))>>
 
-def StepOracle() -> Type:
-  @+state: S.State -> @+n: Nat -> @+valid: Valid(state) -> Simulation(state, n)
-
 def ref_run(fuel: Nat, state: R.RefState, tape: List<&2, Nat>) -> D.Ran<&2, R.RefState>:
   R.run(fuel, state, tape)
 
