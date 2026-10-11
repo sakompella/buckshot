@@ -13,11 +13,11 @@ import ./LAWS.bend as Laws
 
 def core_roundtrip(+seats: D.Ring<&2, A.CoreSeat>) -> {A.core(A.players(seats)) == seats : D.Ring<&2, A.CoreSeat>}:
   match seats:
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}}:
       {==}
 
 def Laws.core_roundtrip(seats):
@@ -80,18 +80,18 @@ def targets_entries(+entries: List<&2, D.At<&2, A.CoreSeat>>) -> {A.machine_shot
   match entries:
     case Nil{}:
       {==}
-    case D.At{seat, A.CoreSeat{0n, jam, checked, cash, slots, turn}} <> +rest:
+    case D.At{seat, A.CoreSeat{0n, jam, checked, cash, turn}} <> +rest:
       targets_entries(rest)
-    case D.At{+seat, A.CoreSeat{1n+hp, jam, checked, cash, slots, turn}} <> +rest:
+    case D.At{+seat, A.CoreSeat{1n+hp, jam, checked, cash, turn}} <> +rest:
       Equal.cong(List<&2, D.Move>, List<&2, D.Move>, moves => D.Shoot{seat} <> moves, A.machine_shots_entries(rest), A.ref_shots_entries(rest), targets_entries(rest))
 
 def targets_render(+seats: D.Ring<&2, A.CoreSeat>) -> {A.machine_shots(seats) == A.ref_shots(seats) : List<&2, D.Move>}:
   match seats:
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}}:
       targets_entries(D.ring.entries(A.CoreSeat, seats))
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}}:
       targets_entries(D.ring.entries(A.CoreSeat, seats))
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}}:
       targets_entries(D.ring.entries(A.CoreSeat, seats))
 
 def machine_pickup_actual(+world: S.World, +seats: D.Ring<&2, A.CoreSeat>, +seat: D.Seat, notes: List<&2, D.Note>, +n: Nat, present: A.seated(world, seat)) -> {A.machine_pickup_state(world, seats, seat, notes, n) == A.aim_successor(world, seats, seat) : S.State}:
@@ -110,13 +110,13 @@ def successor_point(+world: S.World, +seats: D.Ring<&2, A.CoreSeat>, +seat: D.Se
   match world:
     case S.World{D.Config{table, plan}, before, round, index, first, hp, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}:
       match seats:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}}:
           %targets_backwards(seats) : {A.successor_point_with_moves(A.world_for(world, seats), seats, seat, _) == A.ref_step_point(A.expected_pickup(A.world_for(world, seats), seats, seat)) : D.Point}
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}}:
           %targets_backwards(seats) : {A.successor_point_with_moves(A.world_for(world, seats), seats, seat, _) == A.ref_step_point(A.expected_pickup(A.world_for(world, seats), seats, seat)) : D.Point}
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}}:
           %targets_backwards(seats) : {A.successor_point_with_moves(A.world_for(world, seats), seats, seat, _) == A.ref_step_point(A.expected_pickup(A.world_for(world, seats), seats, seat)) : D.Point}
           {==}
 
@@ -200,11 +200,11 @@ def machine_board_canonical(+world: S.World, +seats: D.Ring<&2, A.CoreSeat>, +ph
   match world:
     case S.World{D.Config{table, plan}, before, round, index, first, hp, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}:
       match seats:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}}:
           {==}
 
 
@@ -212,11 +212,11 @@ def ref_board_canonical(+world: S.World, +seats: D.Ring<&2, A.CoreSeat>, +phase:
   match world:
     case S.World{D.Config{table, plan}, before, round, index, first, hp, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}:
       match seats:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}}:
           {==}
 
 
@@ -277,7 +277,7 @@ def legal_canonical_raw(+world: S.World, +seats: D.Ring<&2, A.CoreSeat>, +phase:
   match world:
     case S.World{D.Config{table, plan}, before, round, index, first, hp, recipient, turn, direction, died, checking, amount, saw, gun, shown, S.Decks{two, three, four}}:
       match seats:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}}:
           match phase:
             case S.NeedFirst{}:
               {==}
@@ -300,7 +300,7 @@ def legal_canonical_raw(+world: S.World, +seats: D.Ring<&2, A.CoreSeat>, +phase:
               {==}
             case S.Blocked{}:
               {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}}:
           match phase:
             case S.NeedFirst{}:
               {==}
@@ -323,7 +323,7 @@ def legal_canonical_raw(+world: S.World, +seats: D.Ring<&2, A.CoreSeat>, +phase:
               {==}
             case S.Blocked{}:
               {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}}:
           match phase:
             case S.NeedFirst{}:
               {==}
@@ -382,9 +382,9 @@ def single_shape(+mode: D.Mode, +choice: D.Choice, n: Nat, all: {A.choices_shape
     case D.Choice{seat, index, move}:
       match n:
         case 0n:
-          and_left(A.packet_mode(mode, move), True{}, all)
+          and_left(A.core_move(mode, move), True{}, all)
         case 1n+k:
-          and_left(A.packet_mode(mode, move), True{}, all)
+          and_left(A.core_move(mode, move), True{}, all)
 
 def chosen_shape(+mode: D.Mode, +choices: List<&2, D.Choice>, +n: Nat, all: {A.choices_shape(mode, choices) == True{} : Bool}) -> {A.maybe_shape(mode, D.choices.nth(choices, n)) == True{} : Bool}:
   match choices n:
@@ -393,9 +393,9 @@ def chosen_shape(+mode: D.Mode, +choices: List<&2, D.Choice>, +n: Nat, all: {A.c
     case D.Choice{seat, index, move} <> Nil{} n:
       single_shape(mode, D.Choice{seat, index, move}, n, all)
     case D.Choice{seat, index, move} <> other <> rest 0n:
-      and_left(A.packet_mode(mode, move), A.choices_shape(mode, other <> rest), all)
+      and_left(A.core_move(mode, move), A.choices_shape(mode, other <> rest), all)
     case D.Choice{seat, index, move} <> other <> +rest 1n+k:
-      chosen_shape(mode, other <> rest, k, and_right(A.packet_mode(mode, move), A.choices_shape(mode, other <> rest), all))
+      chosen_shape(mode, other <> rest, k, and_right(A.core_move(mode, move), A.choices_shape(mode, other <> rest), all))
 
 
 def target_choices_shape(options: List<&2, S.TargetOption>, +seat: D.Seat, index: Nat) -> {A.choices_shape(D.Aiming{}, A.target_choices(options, seat, index)) == True{} : Bool}:
@@ -449,12 +449,36 @@ def and_true(+a: Bool, +b: Bool, left: {a == True{} : Bool}, right: {b == True{}
 
 def accept_play_packet(+world: S.World, +seats: D.Ring<&2, A.CoreSeat>, +seat: D.Seat, +aiming: Bool, +notes: List<&2, D.Note>, +choice: D.Choice, shape: {A.resolved_pick_shape(aiming, choice) == True{} : Bool}, current: {A.current_matches(A.ref(A.play_state(world, seats, seat, aiming, notes)), A.choice_seat(choice)) == True{} : Bool}, permission: {A.has_turn(A.ref(A.play_state(world, seats, seat, aiming, notes)), A.choice_seat(choice)) == True{} : Bool}) -> {A.verify(A.ref(A.play_state(world, seats, seat, aiming, notes)), choice) == True{} : Bool}:
   match aiming choice:
-    case False{} D.Choice{+chosen, index, +move}:
+    case False{} D.Choice{+chosen, index, D.PickUp{}}:
       +state : A.Ref() = A.ref(A.play_state(world, seats, seat, False{}, notes))
-      and_true(A.current_matches(state, chosen), Bool.and(A.has_turn(state, chosen), A.packet_mode(D.Idle{}, move)), current, and_true(A.has_turn(state, chosen), A.packet_mode(D.Idle{}, move), permission, shape))
-    case True{} D.Choice{+chosen, index, +move}:
+      and_true(A.current_matches(state, chosen), Bool.and(A.has_turn(state, chosen), True{}), current, and_true(A.has_turn(state, chosen), True{}, permission, {==}))
+    case False{} D.Choice{chosen, index, D.Shoot{target}}:
+      Empty.absurd({A.verify(A.ref(A.play_state(world, seats, seat, False{}, notes)), D.Choice{chosen, index, D.Shoot{target}}) == True{} : Bool}, false_true_absurd(shape))
+    case False{} D.Choice{chosen, index, D.UseItem{slot, item}}:
+      Empty.absurd({A.verify(A.ref(A.play_state(world, seats, seat, False{}, notes)), D.Choice{chosen, index, D.UseItem{slot, item}}) == True{} : Bool}, false_true_absurd(shape))
+    case False{} D.Choice{chosen, index, D.Grab{}}:
+      Empty.absurd({A.verify(A.ref(A.play_state(world, seats, seat, False{}, notes)), D.Choice{chosen, index, D.Grab{}}) == True{} : Bool}, false_true_absurd(shape))
+    case False{} D.Choice{chosen, index, D.Place{slot}}:
+      Empty.absurd({A.verify(A.ref(A.play_state(world, seats, seat, False{}, notes)), D.Choice{chosen, index, D.Place{slot}}) == True{} : Bool}, false_true_absurd(shape))
+    case False{} D.Choice{chosen, index, D.JamTarget{target}}:
+      Empty.absurd({A.verify(A.ref(A.play_state(world, seats, seat, False{}, notes)), D.Choice{chosen, index, D.JamTarget{target}}) == True{} : Bool}, false_true_absurd(shape))
+    case False{} D.Choice{chosen, index, D.Steal{owner, slot, item}}:
+      Empty.absurd({A.verify(A.ref(A.play_state(world, seats, seat, False{}, notes)), D.Choice{chosen, index, D.Steal{owner, slot, item}}) == True{} : Bool}, false_true_absurd(shape))
+    case True{} D.Choice{+chosen, index, D.Shoot{+target}}:
       +state : A.Ref() = A.ref(A.play_state(world, seats, seat, True{}, notes))
-      and_true(A.current_matches(state, chosen), Bool.and(A.has_turn(state, chosen), A.packet_mode(D.Aiming{}, move)), current, and_true(A.has_turn(state, chosen), A.packet_mode(D.Aiming{}, move), permission, shape))
+      and_true(A.current_matches(state, chosen), Bool.and(A.has_turn(state, chosen), True{}), current, and_true(A.has_turn(state, chosen), True{}, permission, {==}))
+    case True{} D.Choice{chosen, index, D.PickUp{}}:
+      Empty.absurd({A.verify(A.ref(A.play_state(world, seats, seat, True{}, notes)), D.Choice{chosen, index, D.PickUp{}}) == True{} : Bool}, false_true_absurd(shape))
+    case True{} D.Choice{chosen, index, D.UseItem{slot, item}}:
+      Empty.absurd({A.verify(A.ref(A.play_state(world, seats, seat, True{}, notes)), D.Choice{chosen, index, D.UseItem{slot, item}}) == True{} : Bool}, false_true_absurd(shape))
+    case True{} D.Choice{chosen, index, D.Grab{}}:
+      Empty.absurd({A.verify(A.ref(A.play_state(world, seats, seat, True{}, notes)), D.Choice{chosen, index, D.Grab{}}) == True{} : Bool}, false_true_absurd(shape))
+    case True{} D.Choice{chosen, index, D.Place{slot}}:
+      Empty.absurd({A.verify(A.ref(A.play_state(world, seats, seat, True{}, notes)), D.Choice{chosen, index, D.Place{slot}}) == True{} : Bool}, false_true_absurd(shape))
+    case True{} D.Choice{chosen, index, D.JamTarget{target}}:
+      Empty.absurd({A.verify(A.ref(A.play_state(world, seats, seat, True{}, notes)), D.Choice{chosen, index, D.JamTarget{target}}) == True{} : Bool}, false_true_absurd(shape))
+    case True{} D.Choice{chosen, index, D.Steal{owner, slot, item}}:
+      Empty.absurd({A.verify(A.ref(A.play_state(world, seats, seat, True{}, notes)), D.Choice{chosen, index, D.Steal{owner, slot, item}}) == True{} : Bool}, false_true_absurd(shape))
 
 def Laws.legal_accepted(world, seats, seat, aiming, notes, n, choice, present, selected, current, permission):
   accept_play_packet(A.world_for(world, seats), seats, seat, aiming, notes, choice, packet_shape_selected(A.world_for(world, seats), seats, seat, aiming, notes, n, choice, present, selected), current, permission)
@@ -480,11 +504,11 @@ def inv.decks_roundtrip(+deck: S.Decks) -> {A.decks_roundtrip(deck) == deck : S.
 
 def inv.seats_roundtrip(+seats: A.Seats()) -> {A.seats_roundtrip(seats) == seats : A.Seats()}:
   match seats:
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}}:
       {==}
 
 def inv.world_roundtrip(+world: S.World, seats: A.Seats()) -> {A.world_roundtrip(world, seats) == world : S.World}:
@@ -496,18 +520,18 @@ def inv.targets_entries(+entries: List<&2, D.At<&2, A.CoreSeat>>) -> {A.ref_targ
   match entries:
     case Nil{}:
       {==}
-    case D.At{seat, A.CoreSeat{0n, jam, checked, cash, slots, turn}} <> +rest:
+    case D.At{seat, A.CoreSeat{0n, jam, checked, cash, turn}} <> +rest:
       inv.targets_entries(rest)
-    case D.At{+seat, A.CoreSeat{1n+hp, jam, checked, cash, slots, turn}} <> +rest:
+    case D.At{+seat, A.CoreSeat{1n+hp, jam, checked, cash, turn}} <> +rest:
       Equal.cong(List<&2, S.TargetOption>, List<&2, S.TargetOption>, xs => S.Target{seat} <> xs, A.ref_targets_entries(rest), A.machine_targets_entries(rest), inv.targets_entries(rest))
 
 def inv.targets_render(+seats: A.Seats()) -> {A.ref_targets(seats) == A.machine_targets(seats) : List<&2, S.TargetOption>}:
   match seats:
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}}:
       inv.targets_entries(D.ring.entries(A.CoreSeat, seats))
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}}:
       inv.targets_entries(D.ring.entries(A.CoreSeat, seats))
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}}:
       inv.targets_entries(D.ring.entries(A.CoreSeat, seats))
 
 def inv.batch_phase(+deck: A.RefBatches(), h: A.RefHost()) -> {A.batch_phase(deck, h) == S.NeedBatch{} : S.Phase}:
@@ -565,11 +589,11 @@ def inv.restored_parts(+world: S.World, +seats: A.Seats(), +phase: A.RequestPhas
 
 def inv.core_roundtrip(+seats: D.Ring<&2, A.CoreSeat>) -> {A.core(A.players(seats)) == seats : D.Ring<&2, A.CoreSeat>}:
   match seats:
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}}:
       {==}
 
 
@@ -602,16 +626,16 @@ def turn_entries(+entries: List<&2, D.At<&2, A.CoreSeat>>, +current: D.Seat) -> 
   match entries:
     case Nil{}:
       {==}
-    case D.At{+seat, A.CoreSeat{hp, _, _, _, _, _}} <> +rest:
+    case D.At{+seat, A.CoreSeat{hp, _, _, _, _}} <> +rest:
       turn_cons(hp, D.seat.eq(seat, current), seat, A.turn_entries_machine(rest, current), A.turn_entries_ref(rest, current), turn_entries(rest, current))
 
 def turn_candidates_match(+seats: D.Ring<&2, A.CoreSeat>, +current: D.Seat) -> {Q.turn_candidates(D.ring.entries(Nat, A.seats.health(seats)), current) == A.turn_candidates_ref(seats, current) : List<&2, D.Seat>}:
   match seats:
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}}:
       turn_entries(D.ring.entries(A.CoreSeat, seats), current)
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}}:
       turn_entries(D.ring.entries(A.CoreSeat, seats), current)
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}}:
       turn_entries(D.ring.entries(A.CoreSeat, seats), current)
 
 def turn_pick(same: Bool, +next: D.Seat, +left: D.Seat, +right: D.Seat, rest: {left == right : D.Seat}) -> {Q.successor.pick(same, next, left) == A.ref_pick(same, next, right) : D.Seat}:
@@ -857,56 +881,56 @@ def stable_turn(+world: S.World, +seats: A.Seats(), +seat: D.Seat, stable: A.Sta
 
 def give_pack(+world: S.World, +seats: A.Seats(), +seat: D.Seat, +phase: S.Phase, +notes: A.Notes()) -> {M.give_turn(A.pack(world, seats, phase, notes), seat) == A.pack(world, A.preserve.turn(seats, seat), S.Idle{seat, D.NonEmpty{S.TakeGun{}, Nil{}}}, List.append(&2, D.Note, notes, [D.Shown{D.TurnGiven{seat}}])) : S.State}:
   match seats seat:
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{}:
       {==}
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{}:
       {==}
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{}:
       {==}
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat0{}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat0{}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat1{}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat1{}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat2{}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat2{}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat3{}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat3{}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{}:
       {==}
 
 def turn_shape(+seats: A.Seats(), +seat: D.Seat) -> {D.ring.table(A.CoreSeat, A.preserve.turn(seats, seat)) == D.ring.table(A.CoreSeat, seats) : D.Table}:
   match seats seat:
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{}:
       {==}
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{}:
       {==}
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{}:
       {==}
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat0{}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat0{}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat1{}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat1{}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat2{}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat2{}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat3{}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat3{}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{}:
       {==}
 
 def give_valid(+world: S.World, +seats: A.Seats(), +seat: D.Seat, +phase: S.Phase, +notes: A.Notes(), stable: A.Stable(world, seats)) -> A.Valid(M.give_turn(A.pack(world, seats, phase, notes), seat)):
@@ -1257,19 +1281,19 @@ def loadproof.grab_seats_empty(+world: S.World, +seats: D.Ring<&2, A.CoreSeat>, 
   match world:
     case S.World{D.Config{table, plan}, before, round, index, first, hp, recipient, turn, direction, died, checking, count, saw, gun, shown, deck}:
       match seats:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}}:
           match amount:
             case 0n:
               {==}
             case 1n+k:
               loadproof.grab_entries_empty(world, seats, new_round, D.ring.entries(A.CoreSeat, seats), disabled)
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}}:
           match amount:
             case 0n:
               {==}
             case 1n+k:
               loadproof.grab_entries_empty(world, seats, new_round, D.ring.entries(A.CoreSeat, seats), disabled)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}}:
           match amount:
             case 0n:
               {==}
@@ -1281,13 +1305,13 @@ def loadproof.round_reset_to_load(+fuel: Nat, +world: S.World, +seats: D.Ring<&2
   match world:
     case S.World{D.Config{table, plan}, before, round, index, first, hp, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}:
       match seats:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}}:
           %Equal.sym(List<&2, D.Seat>, A.ref_grab_seats(A.reset_world(A.world_for(world, seats)), A.reset_seats(seats, hp), True{}, amount), Nil{}, loadproof.grab_seats_empty(A.reset_world(A.world_for(world, seats)), A.reset_seats(seats, hp), True{}, amount, disabled)) : {A.ref_begin_grabbing(1n+fuel, A.reset_world(A.world_for(world, seats)), A.reset_seats(seats, hp), A.reset_notes(A.world_for(world, seats), notes), _) == A.ref_load_begin(fuel, A.reset_world(A.world_for(world, seats)), A.reset_seats(seats, hp), A.reset_notes(A.world_for(world, seats), notes)) : A.Ref()}
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}}:
           %Equal.sym(List<&2, D.Seat>, A.ref_grab_seats(A.reset_world(A.world_for(world, seats)), A.reset_seats(seats, hp), True{}, amount), Nil{}, loadproof.grab_seats_empty(A.reset_world(A.world_for(world, seats)), A.reset_seats(seats, hp), True{}, amount, disabled)) : {A.ref_begin_grabbing(1n+fuel, A.reset_world(A.world_for(world, seats)), A.reset_seats(seats, hp), A.reset_notes(A.world_for(world, seats), notes), _) == A.ref_load_begin(fuel, A.reset_world(A.world_for(world, seats)), A.reset_seats(seats, hp), A.reset_notes(A.world_for(world, seats), notes)) : A.Ref()}
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}}:
           %Equal.sym(List<&2, D.Seat>, A.ref_grab_seats(A.reset_world(A.world_for(world, seats)), A.reset_seats(seats, hp), True{}, amount), Nil{}, loadproof.grab_seats_empty(A.reset_world(A.world_for(world, seats)), A.reset_seats(seats, hp), True{}, amount, disabled)) : {A.ref_begin_grabbing(1n+fuel, A.reset_world(A.world_for(world, seats)), A.reset_seats(seats, hp), A.reset_notes(A.world_for(world, seats), notes), _) == A.ref_load_begin(fuel, A.reset_world(A.world_for(world, seats)), A.reset_seats(seats, hp), A.reset_notes(A.world_for(world, seats), notes)) : A.Ref()}
           {==}
 
@@ -1296,11 +1320,11 @@ def loadproof.machine_reset(+world: S.World, +seats: D.Ring<&2, A.CoreSeat>, +ph
   match world:
     case S.World{D.Config{table, plan}, before, round, index, first, hp, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}:
       match seats:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}}:
           {==}
 
 
@@ -1917,11 +1941,11 @@ def reset_pack_synced(+world: S.World, +seats: A.Seats(), +phase: S.Phase, +note
   match world:
     case S.World{D.Config{table, plan}, before, round, index, first, hp, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}:
       match seats:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}}:
           {==}
 
 def reset_pack(+world: S.World, +seats: A.Seats(), +phase: S.Phase, +notes: A.Notes(), eq: {A.world_for(world, seats) == world : S.World}) -> {M.round.reset(A.pack(world, seats, phase, notes)) == M.load.begin(A.pack(A.preserve.reset_world(world), A.preserve.reset_seats(seats, S.world.round_health(world)), phase, A.preserve.reset_notes(world, notes))) : S.State}:
@@ -1930,11 +1954,11 @@ def reset_pack(+world: S.World, +seats: A.Seats(), +phase: S.Phase, +notes: A.No
 
 def reset_shape(+seats: A.Seats(), +hp: Nat) -> {D.ring.table(A.CoreSeat, A.preserve.reset_seats(seats, hp)) == D.ring.table(A.CoreSeat, seats) : D.Table}:
   match seats:
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}}:
       {==}
 
 def stable_reset_world(+world: S.World, +seats: A.Seats(), stable: A.Stable(world, seats)) -> A.Stable(A.preserve.reset_world(world), seats):
@@ -2123,29 +2147,29 @@ def idleproof.idle_permission(+world: S.World, +seats: A.Seats(), +seat: D.Seat)
   match world:
     case S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}:
       match seats seat:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat0{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat0{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat1{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat1{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat2{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat2{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat3{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat3{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{}:
           {==}
 
 def idleproof.idle_current(+world: S.World, +seat: D.Seat) -> {A.idle.current(world, seat) == Q.current(S.world.turn(world), seat) : Bool}:
@@ -2351,9 +2375,9 @@ def aimproof.living_entries(+entries: List<&2, D.At<&2, A.CoreSeat>>) -> {A.turn
   match entries:
     case Nil{}:
       {==}
-    case D.At{seat, A.CoreSeat{0n, jam, checked, cash, slots, turn}} <> +rest:
+    case D.At{seat, A.CoreSeat{0n, jam, checked, cash, turn}} <> +rest:
       aimproof.living_entries(rest)
-    case D.At{+seat, A.CoreSeat{1n+hp, jam, checked, cash, slots, turn}} <> +rest:
+    case D.At{+seat, A.CoreSeat{1n+hp, jam, checked, cash, turn}} <> +rest:
       Equal.cong(List<&2, D.Seat>, List<&2, D.Seat>, tail => seat <> tail, A.turn.machine_living(rest), A.turn.source_living(rest), aimproof.living_entries(rest))
 
 def aimproof.only_matches(seats: List<&2, D.Seat>) -> {Q.winner.only(seats) == A.turn.source_only(seats) : Maybe<&2, D.Seat>}:
@@ -2369,11 +2393,11 @@ def aimproof.winner_raw(+world: S.World, +seats: A.Seats()) -> {Q.winner(A.seats
   match world:
     case S.World{config, before, round, index, first, hp, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}:
       match seats:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}}:
           Equal.trans(Maybe<&2, D.Seat>, Q.winner(A.seats.health(seats)), Q.winner.only(A.turn.source_living(D.ring.entries(A.CoreSeat, seats))), A.turn.source_winner(world, seats), Equal.cong(List<&2, D.Seat>, Maybe<&2, D.Seat>, Q.winner.only, A.turn.machine_living(D.ring.entries(A.CoreSeat, seats)), A.turn.source_living(D.ring.entries(A.CoreSeat, seats)), aimproof.living_entries(D.ring.entries(A.CoreSeat, seats))), aimproof.only_matches(A.turn.source_living(D.ring.entries(A.CoreSeat, seats))))
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}}:
           Equal.trans(Maybe<&2, D.Seat>, Q.winner(A.seats.health(seats)), Q.winner.only(A.turn.source_living(D.ring.entries(A.CoreSeat, seats))), A.turn.source_winner(world, seats), Equal.cong(List<&2, D.Seat>, Maybe<&2, D.Seat>, Q.winner.only, A.turn.machine_living(D.ring.entries(A.CoreSeat, seats)), A.turn.source_living(D.ring.entries(A.CoreSeat, seats)), aimproof.living_entries(D.ring.entries(A.CoreSeat, seats))), aimproof.only_matches(A.turn.source_living(D.ring.entries(A.CoreSeat, seats))))
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}}:
           Equal.trans(Maybe<&2, D.Seat>, Q.winner(A.seats.health(seats)), Q.winner.only(A.turn.source_living(D.ring.entries(A.CoreSeat, seats))), A.turn.source_winner(world, seats), Equal.cong(List<&2, D.Seat>, Maybe<&2, D.Seat>, Q.winner.only, A.turn.machine_living(D.ring.entries(A.CoreSeat, seats)), A.turn.source_living(D.ring.entries(A.CoreSeat, seats)), aimproof.living_entries(D.ring.entries(A.CoreSeat, seats))), aimproof.only_matches(A.turn.source_living(D.ring.entries(A.CoreSeat, seats))))
 
 def aimproof.rules_found_matches(found: Maybe<&2, D.RoundRules>) -> {Q.value.or(D.RoundRules, found, D.config.default_round()) == A.turn.source_rules_found(found) : D.RoundRules}:
@@ -2512,83 +2536,83 @@ def aimproof.shoot_loaded_factor(+state: S.State, +shooter: D.Seat, +target: D.S
 
 def aimproof.players_health_write(+seats: A.Seats(), +seat: D.Seat, +hp: Nat) -> {S.players.set_health(A.players(seats), D.ring.set(Nat, A.seats.health(seats), seat, hp)) == A.players(A.shot.health_write(seats, seat, hp)) : S.Players}:
   match seats seat:
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{}:
       {==}
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{}:
       {==}
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{}:
       {==}
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat0{}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat0{}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat1{}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat1{}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat2{}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat2{}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat3{}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat3{}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{}:
       {==}
 
 def aimproof.players_turn_write(+seats: A.Seats(), +seat: D.Seat, +turn: Bool) -> {S.players.set_has_turn(A.players(seats), D.ring.set(Bool, A.seats.has_turn(seats), seat, turn)) == A.players(A.shot.turn_write(seats, seat, turn)) : S.Players}:
   match seats seat:
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{}:
       {==}
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{}:
       {==}
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{}:
       {==}
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat0{}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat0{}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat1{}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat1{}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat2{}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat2{}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat3{}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat3{}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{}:
       {==}
 
 def aimproof.players_cash_write(+seats: A.Seats(), +seat: D.Seat, +prize: U32) -> {S.players.set_cash(A.players(seats), D.ring.set(U32, A.seats.cash(seats), seat, U32.add(Q.value.or(U32, D.ring.get(U32, A.seats.cash(seats), seat), 0), prize))) == A.players(A.shot.cash_write(seats, seat, prize)) : S.Players}:
   match seats seat:
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{}:
       {==}
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{}:
       {==}
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{}:
       {==}
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat0{}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat0{}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat1{}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat1{}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat2{}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat2{}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat3{}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat3{}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{}:
       {==}
 
 def aimproof.empty_probe(+world: S.World, +seats: A.Seats(), disabled: {Q.items.disabled(A.support.current_items(world, seats)) == True{} : Bool}) -> {A.turn.ref_probe(world, seats) == False{} : Bool}:
@@ -2659,29 +2683,29 @@ def aimproof.awarded_pack(+world: S.World, +seats: A.Seats(), +phase: S.Phase, +
 
 def aimproof.cash_shape(+seats: A.Seats(), +seat: D.Seat, prize: U32) -> {D.ring.table(A.CoreSeat, A.shot.cash_write(seats, seat, prize)) == D.ring.table(A.CoreSeat, seats) : D.Table}:
   match seats seat:
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{}:
       {==}
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{}:
       {==}
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{}:
       {==}
-    case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+    case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat0{}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat0{}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat1{}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat1{}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat2{}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat2{}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat3{}:
+    case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat3{}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+    case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{}:
       {==}
 
 
@@ -2738,29 +2762,29 @@ def aimstep.machine_final_gate(+world: S.World, +seats: A.Seats(), +seat: D.Seat
   match world:
     case S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}:
       match seats seat:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat0{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat0{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat1{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat1{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat2{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat2{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat3{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat3{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{}:
           {==}
 
 def aimstep.machine_final_closed(+world: S.World, +seats: A.Seats(), +seat: D.Seat, +phase: S.Phase, +notes: A.Notes(), final: {A.final_condition(world) == True{} : Bool}) -> {A.ref(M.win(A.pack(world, seats, phase, notes), seat)) == A.expected_win(world, seats, seat, notes) : A.Ref()}:
@@ -2773,29 +2797,29 @@ def aimstep.loop_award(+world: S.World, +seats: A.Seats(), +seat: D.Seat, +notes
   match world:
     case S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}:
       match seats seat:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat0{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat0{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat1{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat1{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat2{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat2{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat3{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat3{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{}:
           {==}
 
 def aimstep.win_final_eq(+world: S.World, +seats: A.Seats(), +seat: D.Seat, +phase: S.Phase, +notes: A.Notes(), +final: {A.final_condition(world) == True{} : Bool}) -> {A.ref_win(world, seats, seat, notes, 87n) == A.ref(M.win(A.pack(world, seats, phase, notes), seat)) : A.Ref()}:
@@ -2863,17 +2887,17 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
   match world:
     case S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, False{}, amount, saw, gun, shown, deck}:
       match seats actor target:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{} D.Seat0{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{} D.Seat0{}:
           match present_a:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{} D.Seat1{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{} D.Seat1{}:
           match present_a:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{} D.Seat2{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{} D.Seat2{}:
           match present_a:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{} D.Seat3{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{} D.Seat3{}:
           match present_a:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{} D.Seat0{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{} D.Seat0{}:
           match present_t:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{} D.Seat1{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{} D.Seat1{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -2881,9 +2905,9 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{} D.Seat2{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{} D.Seat2{}:
           match present_t:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{} D.Seat3{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{} D.Seat3{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -2891,17 +2915,17 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{} D.Seat0{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{} D.Seat0{}:
           match present_a:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{} D.Seat1{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{} D.Seat1{}:
           match present_a:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{} D.Seat2{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{} D.Seat2{}:
           match present_a:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{} D.Seat3{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{} D.Seat3{}:
           match present_a:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{} D.Seat0{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{} D.Seat0{}:
           match present_t:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{} D.Seat1{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{} D.Seat1{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -2909,9 +2933,9 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{} D.Seat2{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{} D.Seat2{}:
           match present_t:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{} D.Seat3{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{} D.Seat3{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -2919,7 +2943,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat0{} D.Seat0{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat0{} D.Seat0{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -2927,7 +2951,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat0{} D.Seat1{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat0{} D.Seat1{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -2935,7 +2959,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat0{} D.Seat2{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat0{} D.Seat2{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -2943,9 +2967,9 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat0{} D.Seat3{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat0{} D.Seat3{}:
           match present_t:
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat1{} D.Seat0{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat1{} D.Seat0{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -2953,7 +2977,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat1{} D.Seat1{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat1{} D.Seat1{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -2961,7 +2985,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat1{} D.Seat2{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat1{} D.Seat2{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -2969,9 +2993,9 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat1{} D.Seat3{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat1{} D.Seat3{}:
           match present_t:
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat2{} D.Seat0{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat2{} D.Seat0{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -2979,7 +3003,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat2{} D.Seat1{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat2{} D.Seat1{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -2987,7 +3011,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat2{} D.Seat2{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat2{} D.Seat2{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -2995,17 +3019,17 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat2{} D.Seat3{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat2{} D.Seat3{}:
           match present_t:
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat3{} D.Seat0{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat3{} D.Seat0{}:
           match present_a:
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat3{} D.Seat1{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat3{} D.Seat1{}:
           match present_a:
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat3{} D.Seat2{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat3{} D.Seat2{}:
           match present_a:
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat3{} D.Seat3{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat3{} D.Seat3{}:
           match present_a:
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{} D.Seat0{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{} D.Seat0{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3013,7 +3037,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{} D.Seat1{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{} D.Seat1{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3021,7 +3045,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{} D.Seat2{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{} D.Seat2{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3029,7 +3053,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{} D.Seat3{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{} D.Seat3{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3037,7 +3061,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{} D.Seat0{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{} D.Seat0{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3045,7 +3069,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{} D.Seat1{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{} D.Seat1{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3053,7 +3077,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{} D.Seat2{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{} D.Seat2{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3061,7 +3085,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{} D.Seat3{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{} D.Seat3{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3069,7 +3093,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{} D.Seat0{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{} D.Seat0{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3077,7 +3101,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{} D.Seat1{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{} D.Seat1{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3085,7 +3109,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{} D.Seat2{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{} D.Seat2{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3093,7 +3117,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{} D.Seat3{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{} D.Seat3{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3101,7 +3125,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{} D.Seat0{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{} D.Seat0{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3109,7 +3133,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{} D.Seat1{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{} D.Seat1{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3117,7 +3141,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{} D.Seat2{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{} D.Seat2{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3125,7 +3149,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{} D.Seat3{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{} D.Seat3{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3135,17 +3159,17 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
     case S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, True{}, amount, saw, gun, shown, deck}:
       match seats actor target:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{} D.Seat0{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{} D.Seat0{}:
           match present_a:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{} D.Seat1{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{} D.Seat1{}:
           match present_a:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{} D.Seat2{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{} D.Seat2{}:
           match present_a:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{} D.Seat3{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{} D.Seat3{}:
           match present_a:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{} D.Seat0{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{} D.Seat0{}:
           match present_t:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{} D.Seat1{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{} D.Seat1{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3153,9 +3177,9 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{} D.Seat2{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{} D.Seat2{}:
           match present_t:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{} D.Seat3{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{} D.Seat3{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3163,17 +3187,17 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{} D.Seat0{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{} D.Seat0{}:
           match present_a:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{} D.Seat1{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{} D.Seat1{}:
           match present_a:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{} D.Seat2{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{} D.Seat2{}:
           match present_a:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{} D.Seat3{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{} D.Seat3{}:
           match present_a:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{} D.Seat0{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{} D.Seat0{}:
           match present_t:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{} D.Seat1{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{} D.Seat1{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3181,9 +3205,9 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{} D.Seat2{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{} D.Seat2{}:
           match present_t:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{} D.Seat3{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{} D.Seat3{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3191,7 +3215,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat0{} D.Seat0{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat0{} D.Seat0{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3199,7 +3223,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat0{} D.Seat1{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat0{} D.Seat1{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3207,7 +3231,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat0{} D.Seat2{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat0{} D.Seat2{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3215,9 +3239,9 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat0{} D.Seat3{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat0{} D.Seat3{}:
           match present_t:
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat1{} D.Seat0{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat1{} D.Seat0{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3225,7 +3249,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat1{} D.Seat1{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat1{} D.Seat1{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3233,7 +3257,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat1{} D.Seat2{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat1{} D.Seat2{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3241,9 +3265,9 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat1{} D.Seat3{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat1{} D.Seat3{}:
           match present_t:
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat2{} D.Seat0{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat2{} D.Seat0{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3251,7 +3275,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat2{} D.Seat1{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat2{} D.Seat1{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3259,7 +3283,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat2{} D.Seat2{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat2{} D.Seat2{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3267,17 +3291,17 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat2{} D.Seat3{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat2{} D.Seat3{}:
           match present_t:
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat3{} D.Seat0{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat3{} D.Seat0{}:
           match present_a:
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat3{} D.Seat1{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat3{} D.Seat1{}:
           match present_a:
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat3{} D.Seat2{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat3{} D.Seat2{}:
           match present_a:
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat3{} D.Seat3{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat3{} D.Seat3{}:
           match present_a:
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{} D.Seat0{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{} D.Seat0{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3285,7 +3309,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{} D.Seat1{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{} D.Seat1{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3293,7 +3317,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{} D.Seat2{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{} D.Seat2{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3301,7 +3325,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{} D.Seat3{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{} D.Seat3{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3309,7 +3333,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{} D.Seat0{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{} D.Seat0{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3317,7 +3341,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{} D.Seat1{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{} D.Seat1{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3325,7 +3349,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{} D.Seat2{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{} D.Seat2{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3333,7 +3357,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{} D.Seat3{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{} D.Seat3{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3341,7 +3365,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{} D.Seat0{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{} D.Seat0{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3349,7 +3373,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{} D.Seat1{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{} D.Seat1{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3357,7 +3381,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{} D.Seat2{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{} D.Seat2{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3365,7 +3389,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{} D.Seat3{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{} D.Seat3{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3373,7 +3397,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{} D.Seat0{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{} D.Seat0{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3381,7 +3405,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{} D.Seat1{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{} D.Seat1{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3389,7 +3413,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{} D.Seat2{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{} D.Seat2{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3397,7 +3421,7 @@ def aimstep.mid(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.S
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
             case D.Live{} 1n+x:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{} D.Seat3{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{} D.Seat3{}:
           match shell hp:
             case D.Blank{} _:
               aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)
@@ -3410,133 +3434,133 @@ def aimstep.r1(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.Se
   match world:
     case S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}:
       match seats actor target:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{} D.Seat0{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{} D.Seat0{}:
           match present_a:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{} D.Seat1{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{} D.Seat1{}:
           match present_a:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{} D.Seat2{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{} D.Seat2{}:
           match present_a:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{} D.Seat3{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{} D.Seat3{}:
           match present_a:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{} D.Seat0{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{} D.Seat0{}:
           match present_t:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{} D.Seat1{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{} D.Seat1{}:
           match shell:
             case D.Live{}:
               {==}
             case D.Blank{}:
               {==}
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{} D.Seat2{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{} D.Seat2{}:
           match present_t:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{} D.Seat3{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{} D.Seat3{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{} D.Seat0{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{} D.Seat0{}:
           match present_a:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{} D.Seat1{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{} D.Seat1{}:
           match present_a:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{} D.Seat2{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{} D.Seat2{}:
           match present_a:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{} D.Seat3{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{} D.Seat3{}:
           match present_a:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{} D.Seat0{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{} D.Seat0{}:
           match present_t:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{} D.Seat1{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{} D.Seat1{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{} D.Seat2{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{} D.Seat2{}:
           match present_t:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{} D.Seat3{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{} D.Seat3{}:
           match shell:
             case D.Live{}:
               {==}
             case D.Blank{}:
               {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat0{} D.Seat0{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat0{} D.Seat0{}:
           match shell:
             case D.Live{}:
               {==}
             case D.Blank{}:
               {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat0{} D.Seat1{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat0{} D.Seat1{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat0{} D.Seat2{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat0{} D.Seat2{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat0{} D.Seat3{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat0{} D.Seat3{}:
           match present_t:
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat1{} D.Seat0{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat1{} D.Seat0{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat1{} D.Seat1{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat1{} D.Seat1{}:
           match shell:
             case D.Live{}:
               {==}
             case D.Blank{}:
               {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat1{} D.Seat2{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat1{} D.Seat2{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat1{} D.Seat3{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat1{} D.Seat3{}:
           match present_t:
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat2{} D.Seat0{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat2{} D.Seat0{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat2{} D.Seat1{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat2{} D.Seat1{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat2{} D.Seat2{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat2{} D.Seat2{}:
           match shell:
             case D.Live{}:
               {==}
             case D.Blank{}:
               {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat2{} D.Seat3{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat2{} D.Seat3{}:
           match present_t:
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat3{} D.Seat0{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat3{} D.Seat0{}:
           match present_a:
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat3{} D.Seat1{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat3{} D.Seat1{}:
           match present_a:
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat3{} D.Seat2{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat3{} D.Seat2{}:
           match present_a:
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat3{} D.Seat3{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat3{} D.Seat3{}:
           match present_a:
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{} D.Seat0{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{} D.Seat0{}:
           match shell:
             case D.Live{}:
               {==}
             case D.Blank{}:
               {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{} D.Seat1{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{} D.Seat1{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{} D.Seat2{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{} D.Seat2{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{} D.Seat3{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{} D.Seat3{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{} D.Seat0{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{} D.Seat0{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{} D.Seat1{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{} D.Seat1{}:
           match shell:
             case D.Live{}:
               {==}
             case D.Blank{}:
               {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{} D.Seat2{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{} D.Seat2{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{} D.Seat3{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat1{} D.Seat3{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{} D.Seat0{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{} D.Seat0{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{} D.Seat1{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{} D.Seat1{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{} D.Seat2{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{} D.Seat2{}:
           match shell:
             case D.Live{}:
               {==}
             case D.Blank{}:
               {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{} D.Seat3{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{} D.Seat3{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{} D.Seat0{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{} D.Seat0{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{} D.Seat1{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{} D.Seat1{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{} D.Seat2{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{} D.Seat2{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{} D.Seat3{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat3{} D.Seat3{}:
           match shell:
             case D.Live{}:
               {==}
@@ -3594,23 +3618,23 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
   match world:
     case S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}:
       match seats actor:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat0{}:
           ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, {==}))
-        case D.Duo{A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat1{}:
+        case D.Duo{A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat1{}:
           ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, {==}))
-        case D.Duo{A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+        case D.Duo{A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat1{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 1n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Duo{A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat1{}:
+        case D.Duo{A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat1{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 1n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Duo{A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+        case D.Duo{A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat1{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -3618,23 +3642,23 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h3, j3, c3, p3, t3}} D.Seat2{}:
           ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, {==}))
-        case D.Duo{A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat3{}:
+        case D.Duo{A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat3{}:
           ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, {==}))
-        case D.Duo{A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+        case D.Duo{A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat3{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 1n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Duo{A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat3{}:
+        case D.Duo{A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat3{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 1n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Duo{A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+        case D.Duo{A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat3{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -3642,21 +3666,21 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Trio{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}} D.Seat0{}:
+        case D.Trio{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}} D.Seat0{}:
           ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, {==}))
-        case D.Trio{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}} D.Seat0{}:
+        case D.Trio{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}} D.Seat0{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 1n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Trio{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}} D.Seat0{}:
+        case D.Trio{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}} D.Seat0{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 1n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Trio{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}} D.Seat0{}:
+        case D.Trio{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}} D.Seat0{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -3664,13 +3688,13 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Trio{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}} D.Seat0{}:
+        case D.Trio{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}} D.Seat0{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 1n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Trio{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}} D.Seat0{}:
+        case D.Trio{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}} D.Seat0{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -3678,7 +3702,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Trio{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}} D.Seat0{}:
+        case D.Trio{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}} D.Seat0{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -3686,7 +3710,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Trio{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}} D.Seat0{}:
+        case D.Trio{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}} D.Seat0{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -3696,21 +3720,21 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 3n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Trio{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}} D.Seat1{}:
+        case D.Trio{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}} D.Seat1{}:
           ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, {==}))
-        case D.Trio{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}} D.Seat1{}:
+        case D.Trio{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}} D.Seat1{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 1n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Trio{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}} D.Seat1{}:
+        case D.Trio{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}} D.Seat1{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 1n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Trio{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}} D.Seat1{}:
+        case D.Trio{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}} D.Seat1{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -3718,13 +3742,13 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Trio{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}} D.Seat1{}:
+        case D.Trio{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}} D.Seat1{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 1n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Trio{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}} D.Seat1{}:
+        case D.Trio{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}} D.Seat1{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -3732,7 +3756,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Trio{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}} D.Seat1{}:
+        case D.Trio{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}} D.Seat1{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -3740,7 +3764,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Trio{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}} D.Seat1{}:
+        case D.Trio{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}} D.Seat1{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -3750,21 +3774,21 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 3n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Trio{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}} D.Seat2{}:
+        case D.Trio{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}} D.Seat2{}:
           ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, {==}))
-        case D.Trio{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}} D.Seat2{}:
+        case D.Trio{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}} D.Seat2{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 1n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Trio{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}} D.Seat2{}:
+        case D.Trio{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}} D.Seat2{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 1n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Trio{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}} D.Seat2{}:
+        case D.Trio{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}} D.Seat2{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -3772,13 +3796,13 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Trio{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}} D.Seat2{}:
+        case D.Trio{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}} D.Seat2{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 1n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Trio{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}} D.Seat2{}:
+        case D.Trio{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}} D.Seat2{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -3786,7 +3810,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Trio{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}} D.Seat2{}:
+        case D.Trio{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}} D.Seat2{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -3794,7 +3818,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Trio{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}} D.Seat2{}:
+        case D.Trio{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}} D.Seat2{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -3804,23 +3828,23 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 3n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat3{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, t0}, A.CoreSeat{h1, j1, c1, p1, t1}, A.CoreSeat{h2, j2, c2, p2, t2}} D.Seat3{}:
           ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, {==}))
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat0{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat0{}:
           ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, {==}))
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat0{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat0{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 1n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat0{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat0{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 1n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat0{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat0{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -3828,13 +3852,13 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat0{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat0{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 1n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat0{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat0{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -3842,7 +3866,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat0{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat0{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -3850,7 +3874,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat0{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat0{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -3860,13 +3884,13 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 3n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat0{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat0{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 1n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat0{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat0{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -3874,7 +3898,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat0{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat0{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -3882,7 +3906,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat0{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat0{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -3892,7 +3916,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 3n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat0{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat0{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -3900,7 +3924,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat0{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat0{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -3910,7 +3934,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 3n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat0{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat0{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -3920,7 +3944,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 3n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat0{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat0{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -3932,21 +3956,21 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 3n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 4n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 3n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat1{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat1{}:
           ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, {==}))
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat1{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 1n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat1{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat1{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 1n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat1{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -3954,13 +3978,13 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat1{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat1{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 1n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat1{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -3968,7 +3992,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat1{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat1{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -3976,7 +4000,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat1{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -3986,13 +4010,13 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 3n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat1{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat1{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 1n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat1{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -4000,7 +4024,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat1{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat1{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -4008,7 +4032,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat1{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -4018,7 +4042,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 3n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat1{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat1{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -4026,7 +4050,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat1{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -4036,7 +4060,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 3n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat1{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat1{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -4046,7 +4070,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 3n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat1{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -4058,21 +4082,21 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 3n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 4n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 3n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat2{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat2{}:
           ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, {==}))
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat2{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat2{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 1n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat2{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat2{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 1n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat2{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat2{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -4080,13 +4104,13 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat2{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat2{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 1n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat2{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat2{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -4094,7 +4118,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat2{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat2{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -4102,7 +4126,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat2{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat2{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -4112,13 +4136,13 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 3n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat2{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat2{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 1n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat2{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat2{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -4126,7 +4150,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat2{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat2{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -4134,7 +4158,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat2{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat2{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -4144,7 +4168,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 3n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat2{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat2{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -4152,7 +4176,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat2{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat2{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -4162,7 +4186,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 3n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat2{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat2{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -4172,7 +4196,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 3n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat2{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat2{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -4184,21 +4208,21 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 3n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 4n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 3n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat3{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat3{}:
           ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, {==}))
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat3{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 1n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat3{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat3{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 1n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat3{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -4206,13 +4230,13 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat3{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat3{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 1n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat3{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -4220,7 +4244,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat3{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat3{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -4228,7 +4252,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{0n, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+        case D.Quad{A.CoreSeat{0n, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat3{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -4238,13 +4262,13 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 3n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat3{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat3{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 1n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat3{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -4252,7 +4276,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat3{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat3{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -4260,7 +4284,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{0n, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{0n, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat3{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -4270,7 +4294,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 3n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat3{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat3{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -4278,7 +4302,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat1{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{0n, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{0n, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat3{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -4288,7 +4312,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 3n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{0n, j3, c3, p3, s3, t3}} D.Seat3{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{0n, j3, c3, p3, t3}} D.Seat3{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})
@@ -4298,7 +4322,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
             case 3n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==})
-        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, s0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, s1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, s2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+        case D.Quad{A.CoreSeat{1n+h0, j0, c0, p0, t0}, A.CoreSeat{1n+h1, j1, c1, p1, t1}, A.CoreSeat{1n+h2, j2, c2, p2, t2}, A.CoreSeat{1n+h3, j3, c3, p3, t3}} D.Seat3{}:
           match n:
             case 0n:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat0{}, 0n, {==}, Unit{}, Unit{}, supported, bounded, {==})

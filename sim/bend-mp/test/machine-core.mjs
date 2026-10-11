@@ -38,7 +38,7 @@ try {
   const hostState = state => {
     const { world, players } = state;
     const seats = ring(players.health, (_, key) => ({ health: players.health[key], jammed: players.jammed[key], jam_checked: players.checked[key], cash: players.cash[key], slots: players.slots[key], grabbing: false, holding: { $: 'None' }, has_turn: players.has_turn[key] }));
-    return { ...world, seats, distributing: false };
+    return { ...world, seats, distributing: false, grabs: ring(players.health, () => ({ $: 'GrabProgress', count: 0, intake: false })) };
   };
   const referenceHost = state => ({ ...state.host, seats: ring(state.host.seats, props => {
     const { $, ...fields } = props;

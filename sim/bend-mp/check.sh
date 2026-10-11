@@ -120,6 +120,16 @@ gate_core_scenarios() {
   fi
 }
 
+gate_item_scenarios() {
+  local out
+  out="$(bun "$here/test/item-scenarios.mjs" 2>&1)"
+  if [[ $? -eq 0 ]]; then
+    report ok "reference item scenarios" "$(printf '%s' "$out" | tail -1)"
+  else
+    report fail "reference item scenarios" "$(printf '%s' "$out" | tail -20)"
+  fi
+}
+
 gate_machine_scenarios() {
   local out
   out="$(bun "$here/test/machine-core.mjs" 2>&1)"
@@ -170,6 +180,7 @@ gate_generated
 gate_proofs
 gate_roundtrip
 gate_core_scenarios
+gate_item_scenarios
 gate_machine_scenarios
 gate_mutations
 
