@@ -11,178 +11,181 @@ type Batch is Data:
 type Decks is Data:
   Decks{two: List<&2, Batch>, three: List<&2, Batch>, four: List<&2, Batch>}
 
+type GrabProgress is Data:
+  GrabProgress{count: Nat, intake: Bool}
+
 type Host is Data:
-  Host{config: D.Config, before_round: Bool, round_index: Nat, load_index: Nat, first_sequence: Bool, round_health: Nat, first_turn: D.Seat, turn: Maybe<&2, D.Seat>, direction: D.Direction, first_death: Maybe<&2, D.Seat>, checking_first_death: Bool, item_amount: Nat, distributing: Bool, sawed: Bool, gun: List<&2, D.Shell>, shown: D.Load, decks: Decks, seats: D.Ring<&2, Props>}
+  Host{config: D.Config, before_round: Bool, round_index: Nat, load_index: Nat, first_sequence: Bool, round_health: Nat, first_turn: D.Seat, turn: Maybe<&2, D.Seat>, direction: D.Direction, first_death: Maybe<&2, D.Seat>, checking_first_death: Bool, item_amount: Nat, distributing: Bool, sawed: Bool, gun: List<&2, D.Shell>, shown: D.Load, decks: Decks, seats: D.Ring<&2, Props>, grabs: D.Ring<&2, GrabProgress>}
 
 def host.before_round(host: Host) -> Bool:
   match host:
-    case Host{_, before_round, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}:
+    case Host{_, before_round, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}:
       before_round
 
 def host.set_before_round(host: Host, value: Bool) -> Host:
   match host:
-    case Host{config, _, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats}:
-      Host{config, value, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats}
+    case Host{config, _, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats, grabs}:
+      Host{config, value, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats, grabs}
 
 def host.round_index(host: Host) -> Nat:
   match host:
-    case Host{_, _, round_index, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}:
+    case Host{_, _, round_index, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}:
       round_index
 
 def host.set_round_index(host: Host, value: Nat) -> Host:
   match host:
-    case Host{config, before_round, _, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats}:
-      Host{config, before_round, value, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats}
+    case Host{config, before_round, _, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats, grabs}:
+      Host{config, before_round, value, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats, grabs}
 
 def host.load_index(host: Host) -> Nat:
   match host:
-    case Host{_, _, _, load_index, _, _, _, _, _, _, _, _, _, _, _, _, _, _}:
+    case Host{_, _, _, load_index, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}:
       load_index
 
 def host.set_load_index(host: Host, value: Nat) -> Host:
   match host:
-    case Host{config, before_round, round_index, _, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats}:
-      Host{config, before_round, round_index, value, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats}
+    case Host{config, before_round, round_index, _, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats, grabs}:
+      Host{config, before_round, round_index, value, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats, grabs}
 
 def host.first_sequence(host: Host) -> Bool:
   match host:
-    case Host{_, _, _, _, first_sequence, _, _, _, _, _, _, _, _, _, _, _, _, _}:
+    case Host{_, _, _, _, first_sequence, _, _, _, _, _, _, _, _, _, _, _, _, _, _}:
       first_sequence
 
 def host.set_first_sequence(host: Host, value: Bool) -> Host:
   match host:
-    case Host{config, before_round, round_index, load_index, _, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats}:
-      Host{config, before_round, round_index, load_index, value, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats}
+    case Host{config, before_round, round_index, load_index, _, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats, grabs}:
+      Host{config, before_round, round_index, load_index, value, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats, grabs}
 
 def host.round_health(host: Host) -> Nat:
   match host:
-    case Host{_, _, _, _, _, round_health, _, _, _, _, _, _, _, _, _, _, _, _}:
+    case Host{_, _, _, _, _, round_health, _, _, _, _, _, _, _, _, _, _, _, _, _}:
       round_health
 
 def host.set_round_health(host: Host, value: Nat) -> Host:
   match host:
-    case Host{config, before_round, round_index, load_index, first_sequence, _, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats}:
-      Host{config, before_round, round_index, load_index, first_sequence, value, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats}
+    case Host{config, before_round, round_index, load_index, first_sequence, _, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats, grabs}:
+      Host{config, before_round, round_index, load_index, first_sequence, value, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats, grabs}
 
 def host.first_turn(host: Host) -> D.Seat:
   match host:
-    case Host{_, _, _, _, _, _, first_turn, _, _, _, _, _, _, _, _, _, _, _}:
+    case Host{_, _, _, _, _, _, first_turn, _, _, _, _, _, _, _, _, _, _, _, _}:
       first_turn
 
 def host.set_first_turn(host: Host, value: D.Seat) -> Host:
   match host:
-    case Host{config, before_round, round_index, load_index, first_sequence, round_health, _, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats}:
-      Host{config, before_round, round_index, load_index, first_sequence, round_health, value, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats}
+    case Host{config, before_round, round_index, load_index, first_sequence, round_health, _, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats, grabs}:
+      Host{config, before_round, round_index, load_index, first_sequence, round_health, value, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats, grabs}
 
 def host.turn(host: Host) -> Maybe<&2, D.Seat>:
   match host:
-    case Host{_, _, _, _, _, _, _, turn, _, _, _, _, _, _, _, _, _, _}:
+    case Host{_, _, _, _, _, _, _, turn, _, _, _, _, _, _, _, _, _, _, _}:
       turn
 
 def host.set_turn(host: Host, value: Maybe<&2, D.Seat>) -> Host:
   match host:
-    case Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, _, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats}:
-      Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, value, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats}
+    case Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, _, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats, grabs}:
+      Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, value, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats, grabs}
 
 def host.direction(host: Host) -> D.Direction:
   match host:
-    case Host{_, _, _, _, _, _, _, _, direction, _, _, _, _, _, _, _, _, _}:
+    case Host{_, _, _, _, _, _, _, _, direction, _, _, _, _, _, _, _, _, _, _}:
       direction
 
 def host.set_direction(host: Host, value: D.Direction) -> Host:
   match host:
-    case Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, _, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats}:
-      Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, value, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats}
+    case Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, _, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats, grabs}:
+      Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, value, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats, grabs}
 
 def host.first_death(host: Host) -> Maybe<&2, D.Seat>:
   match host:
-    case Host{_, _, _, _, _, _, _, _, _, first_death, _, _, _, _, _, _, _, _}:
+    case Host{_, _, _, _, _, _, _, _, _, first_death, _, _, _, _, _, _, _, _, _}:
       first_death
 
 def host.set_first_death(host: Host, value: Maybe<&2, D.Seat>) -> Host:
   match host:
-    case Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, _, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats}:
-      Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, value, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats}
+    case Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, _, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats, grabs}:
+      Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, value, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats, grabs}
 
 def host.checking_first_death(host: Host) -> Bool:
   match host:
-    case Host{_, _, _, _, _, _, _, _, _, _, checking_first_death, _, _, _, _, _, _, _}:
+    case Host{_, _, _, _, _, _, _, _, _, _, checking_first_death, _, _, _, _, _, _, _, _}:
       checking_first_death
 
 def host.set_checking_first_death(host: Host, value: Bool) -> Host:
   match host:
-    case Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, _, item_amount, distributing, sawed, gun, shown, decks, seats}:
-      Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, value, item_amount, distributing, sawed, gun, shown, decks, seats}
+    case Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, _, item_amount, distributing, sawed, gun, shown, decks, seats, grabs}:
+      Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, value, item_amount, distributing, sawed, gun, shown, decks, seats, grabs}
 
 def host.item_amount(host: Host) -> Nat:
   match host:
-    case Host{_, _, _, _, _, _, _, _, _, _, _, item_amount, _, _, _, _, _, _}:
+    case Host{_, _, _, _, _, _, _, _, _, _, _, item_amount, _, _, _, _, _, _, _}:
       item_amount
 
 def host.set_item_amount(host: Host, value: Nat) -> Host:
   match host:
-    case Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, _, distributing, sawed, gun, shown, decks, seats}:
-      Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, value, distributing, sawed, gun, shown, decks, seats}
+    case Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, _, distributing, sawed, gun, shown, decks, seats, grabs}:
+      Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, value, distributing, sawed, gun, shown, decks, seats, grabs}
 
 def host.distributing(host: Host) -> Bool:
   match host:
-    case Host{_, _, _, _, _, _, _, _, _, _, _, _, distributing, _, _, _, _, _}:
+    case Host{_, _, _, _, _, _, _, _, _, _, _, _, distributing, _, _, _, _, _, _}:
       distributing
 
 def host.set_distributing(host: Host, value: Bool) -> Host:
   match host:
-    case Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, _, sawed, gun, shown, decks, seats}:
-      Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, value, sawed, gun, shown, decks, seats}
+    case Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, _, sawed, gun, shown, decks, seats, grabs}:
+      Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, value, sawed, gun, shown, decks, seats, grabs}
 
 def host.sawed(host: Host) -> Bool:
   match host:
-    case Host{_, _, _, _, _, _, _, _, _, _, _, _, _, sawed, _, _, _, _}:
+    case Host{_, _, _, _, _, _, _, _, _, _, _, _, _, sawed, _, _, _, _, _}:
       sawed
 
 def host.set_sawed(host: Host, value: Bool) -> Host:
   match host:
-    case Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, _, gun, shown, decks, seats}:
-      Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, value, gun, shown, decks, seats}
+    case Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, _, gun, shown, decks, seats, grabs}:
+      Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, value, gun, shown, decks, seats, grabs}
 
 def host.gun(host: Host) -> List<&2, D.Shell>:
   match host:
-    case Host{_, _, _, _, _, _, _, _, _, _, _, _, _, _, gun, _, _, _}:
+    case Host{_, _, _, _, _, _, _, _, _, _, _, _, _, _, gun, _, _, _, _}:
       gun
 
 def host.set_gun(host: Host, value: List<&2, D.Shell>) -> Host:
   match host:
-    case Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, _, shown, decks, seats}:
-      Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, value, shown, decks, seats}
+    case Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, _, shown, decks, seats, grabs}:
+      Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, value, shown, decks, seats, grabs}
 
 def host.shown(host: Host) -> D.Load:
   match host:
-    case Host{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, shown, _, _}:
+    case Host{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, shown, _, _, _}:
       shown
 
 def host.set_shown(host: Host, value: D.Load) -> Host:
   match host:
-    case Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, _, decks, seats}:
-      Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, value, decks, seats}
+    case Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, _, decks, seats, grabs}:
+      Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, value, decks, seats, grabs}
 
 def host.decks(host: Host) -> Decks:
   match host:
-    case Host{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, decks, _}:
+    case Host{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, decks, _, _}:
       decks
 
 def host.set_decks(host: Host, value: Decks) -> Host:
   match host:
-    case Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, _, seats}:
-      Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, value, seats}
+    case Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, _, seats, grabs}:
+      Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, value, seats, grabs}
 
 def host.seats(host: Host) -> D.Ring<&2, Props>:
   match host:
-    case Host{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, seats}:
+    case Host{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, seats, _}:
       seats
 
 def host.set_seats(host: Host, value: D.Ring<&2, Props>) -> Host:
   match host:
-    case Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, _}:
-      Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, value}
+    case Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, _, grabs}:
+      Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, value, grabs}
 
 def props.initial() -> Props:
   Props{100n, False{}, False{}, 0, D.slots.empty(), False{}, None{}, False{}}
@@ -214,12 +217,12 @@ def props.award(props: Props, prize: U32) -> Props:
 
 def host.table(host: Host) -> D.Table:
   match host:
-    case Host{D.Config{table, _}, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}:
+    case Host{D.Config{table, _}, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}:
       table
 
 def host.plan(host: Host) -> D.Plan:
   match host:
-    case Host{D.Config{_, plan}, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}:
+    case Host{D.Config{_, plan}, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}:
       plan
 
 def rules.found(found: Maybe<&2, D.RoundRules>) -> D.RoundRules:
@@ -309,7 +312,7 @@ def config.table(config: D.Config) -> D.Table:
       table
 
 def host.initial(+config: D.Config) -> Host:
-  Host{config, True{}, 0n, 0n, False{}, 0n, D.Seat0{}, None{}, D.Clockwise{}, None{}, False{}, 0n, False{}, False{}, Nil{}, D.Load{0n, 0n}, MakeSequenceCopies(), D.ring.fill(Props, config.table(config), props.initial())}
+  Host{config, True{}, 0n, 0n, False{}, 0n, D.Seat0{}, None{}, D.Clockwise{}, None{}, False{}, 0n, False{}, False{}, Nil{}, D.Load{0n, 0n}, MakeSequenceCopies(), D.ring.fill(Props, config.table(config), props.initial()), D.ring.fill(GrabProgress, config.table(config), GrabProgress{0n, False{}})}
 
 def props.unjam(props: Props) -> Props:
   match props:
@@ -320,3 +323,46 @@ def props.clear_slots(props: Props) -> Props:
   match props:
     case Props{hp, jam, checked, cash, _, grab, holding, turn}:
       Props{hp, jam, checked, cash, D.slots.empty(), grab, holding, turn}
+
+def host.grabs(host: Host) -> D.Ring<&2, GrabProgress>:
+  match host:
+    case Host{_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, grabs}:
+      grabs
+
+def host.set_grabs(host: Host, grabs: D.Ring<&2, GrabProgress>) -> Host:
+  match host:
+    case Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats, _}:
+      Host{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, distributing, sawed, gun, shown, decks, seats, grabs}
+
+def progress.found(found: Maybe<&2, GrabProgress>) -> GrabProgress:
+  match found:
+    case Some{p}:
+      p
+    case None{}:
+      GrabProgress{0n, False{}}
+
+def host.progress(host: Host, seat: D.Seat) -> GrabProgress:
+  progress.found(D.ring.get(GrabProgress, host.grabs(host), seat))
+
+def host.set_progress(+host: Host, seat: D.Seat, progress: GrabProgress) -> Host:
+  host.set_grabs(host, D.ring.set(GrabProgress, host.grabs(host), seat, progress))
+
+def props.set_slots(props: Props, slots: D.Slots) -> Props:
+  match props:
+    case Props{hp, jam, checked, cash, _, grab, holding, turn}:
+      Props{hp, jam, checked, cash, slots, grab, holding, turn}
+
+def props.set_holding(props: Props, holding: Maybe<&2, D.Item>) -> Props:
+  match props:
+    case Props{hp, jam, checked, cash, slots, grab, _, turn}:
+      Props{hp, jam, checked, cash, slots, grab, holding, turn}
+
+def props.end_grab(props: Props) -> Props:
+  match props:
+    case Props{hp, jam, checked, cash, slots, _, holding, turn}:
+      Props{hp, jam, checked, cash, slots, False{}, holding, turn}
+
+def props.jam(props: Props) -> Props:
+  match props:
+    case Props{hp, _, _, cash, slots, grab, holding, turn}:
+      Props{hp, True{}, False{}, cash, slots, grab, holding, turn}

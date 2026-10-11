@@ -23,7 +23,7 @@ export const plain = value => JSON.parse(JSON.stringify(value, (_, x) => typeof 
 export async function buildReference() {
   const dir = mkdtempSync(join(tmpdir(), 'bend-mp-core-'));
   try {
-    const source = new URL('../ref/main.bend', import.meta.url).pathname;
+    const source = process.env.BEND_REFERENCE_SOURCE ?? new URL('../ref/main.bend', import.meta.url).pathname;
     const output = join(dir, 'reference.mjs');
     for (const args of [[source, '--check-only'], [source, '-o', output]]) {
       const result = spawnSync(process.env.BEND ?? 'bend', args, { encoding: 'utf8' });
@@ -52,7 +52,7 @@ export function round({ health = 1, live = 1, blank = 0, amount = 0, loads = nul
     health: health === null ? tag('RandomHealth') : tag('FixedHealth', { health: tag('Pos', { minus_one: health - 1 }) }),
     loads: tag('LoadRules', Object.fromEntries(rules.map((spec, i) => [`l${i}`, load(spec)]))),
     items: tag('ItemRules', Object.fromEntries(itemNames.map(name => [name, tag('ItemRule', {
-      enabled: bool(name in items), per_player: items[name]?.per_player ?? 8, on_table: items[name]?.on_table ?? 32,
+      enabled: bool(name in items && items[name]?.enabled !== false), per_player: items[name]?.per_player ?? 8, on_table: items[name]?.on_table ?? 32,
     })]))),
   });
 }

@@ -162,13 +162,6 @@ def slots.full(xs: List<&2, Maybe<&2, D.Item>>) -> Bool:
     case Some{item} <> rest:
       slots.full(rest)
 
-def begin_grab(xs: List<&2, D.Seat>, +host: S.Host) -> S.Host:
-  match xs:
-    case Nil{}:
-      host
-    case +seat <> rest:
-      begin_grab(rest, S.host.set_props(host, seat, S.props.grab(S.host.props(host, seat))))
-
 def replicate(n: Nat, +shell: D.Shell) -> List<&2, D.Shell>:
   match n:
     case 0n:
