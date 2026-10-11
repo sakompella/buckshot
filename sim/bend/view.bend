@@ -1,5 +1,6 @@
 import Base
 import ./model.bend as M
+import ./driver.bend as D
 
 def side_name(side: M.Side) -> String:
   match side:
@@ -141,3 +142,42 @@ def render_summary(+g: M.Game) -> String:
       "A: $" ++ U32.show(cash_a) ++ ", rounds won " ++ U32.show(wins_a) ++ "\n" ++
       "B: $" ++ U32.show(cash_b) ++ ", rounds won " ++ U32.show(wins_b) ++ "\n" ++
       "Winner: " ++ winner_name(done, U32.cmp(cash_a, cash_b))
+
+def render_entry(entry: D.Entry) -> String:
+  match entry:
+    case D.Opened{events}:
+      render_events(events)
+    case D.Acted{obs, events}:
+      render_table(obs) ++ "\n" ++ render_events(events)
+    case D.RanOut{}:
+      render_event(M.Exhausted{}) ++ "\n"
+
+def render_trace(entries: List<&2, D.Entry>) -> String:
+  match entries:
+    case Nil{}:
+      ""
+    case entry <> rest:
+      render_entry(entry) ++ render_trace(rest)
+
+def render_match(played: D.Played) -> String:
+  D.Played{+g, trace} = played
+  render_trace(trace) ++ render_summary(g)
+
+def hundredths.small(small: Bool, n: U32) -> String:
+  match small:
+    case True{}:
+      "0" ++ U32.show(n)
+    case False{}:
+      U32.show(n)
+
+def hundredths(+n: U32) -> String:
+  hundredths.small(U32.is_lt(n, 10), n)
+
+def percent(+wins: U32, +total: U32) -> String:
+  +basis: U32 = U32.div(U32.mul(wins, 10000), total)
+  U32.show(U32.div(basis, 100)) ++ "." ++ hundredths(U32.mod(basis, 100)) ++ "%"
+
+def render_counts(label: String, counts: D.Counts) -> String:
+  D.Counts{+played, +matches, +rounds, exhausted} = counts
+  +rounds_played: U32 = U32.mul(played, 3)
+  label ++ "  match A " ++ percent(matches, played) ++ " (" ++ U32.show(matches) ++ "/" ++ U32.show(played) ++ ")  round A " ++ percent(rounds, rounds_played) ++ " (" ++ U32.show(rounds) ++ "/" ++ U32.show(rounds_played) ++ ")  exhausted " ++ U32.show(exhausted)

@@ -19,9 +19,10 @@ bun verify-model-tests.mjs
 ## Modules
 
 - `model.bend` owns the game: the hidden shell order, the shell deck, the counter-based random numbers, reloads, jams, rounds and prizes. `observe(game, side)` returns what one side may know. `step(game, action)` applies one action and returns events.
-- `controller.bend` holds the policies: story, DoN, and a trivial `AlwaysOpp`. A controller sees only its `Obs`, its own memory, and the events addressed to its side. It never sees `Game`, so it can't read the shell order. Randomness reaches it only as an explicit coin.
-- `view.bend` renders events, a side's view of the table, and the match summary as strings.
-- `main.bend` wires them together. It routes events to each side's memory, supplies coins, caps a match at 4,096 actions, and runs the matches as a parallel fork tree.
+- `controller.bend` holds the policies: story, DoN, and a trivial `AlwaysOpp`. A controller sees only its `Obs`, its own memory, and the events addressed to its side. It never sees `Game`, so it can't read the shell order. Randomness reaches it only as an explicit coin. The driver still draws that coin from the model's random stream, so controller and game randomness share one stream.
+- `driver.bend` runs matches. It routes events to each side's memory, supplies coins, caps a match at 4,096 actions, records the printed match as a list of entries, and runs batches as a parallel fork tree.
+- `view.bend` renders events, a side's view of the table, the recorded match, the match summary and batch results as strings.
+- `main.bend` only calls the driver and the view.
 - `LAWS.bend` and `PROOF.bend` hold the laws and their proofs.
 
 The model's event type is `GameEvent`, because Base already defines `Event`.
