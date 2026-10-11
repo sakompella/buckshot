@@ -130,6 +130,16 @@ gate_machine_scenarios() {
   fi
 }
 
+gate_generated() {
+  local out
+  out="$(python3 "$here/tools/proof_cases.py" 2>&1)"
+  if [[ $? -eq 0 ]]; then
+    report ok "generated proof bodies" "$(printf '%s' "$out" | tail -1)"
+  else
+    report fail "generated proof bodies" "$(printf '%s' "$out" | tail -20)"
+  fi
+}
+
 gate_proofs() {
   local out
   out="$("$BEND" "$here/PROOF.bend" 2>&1)"
@@ -156,6 +166,7 @@ gate_ai_imports
 gate_sm_imports
 gate_driver_imports
 gate_laws
+gate_generated
 gate_proofs
 gate_roundtrip
 gate_core_scenarios

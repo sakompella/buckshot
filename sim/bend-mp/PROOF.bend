@@ -2147,31 +2147,31 @@ def idleproof.idle_machine_present(+world: S.World, +seats: A.Seats(), +seat: D.
 
 def idleproof.idle_permission(+world: S.World, +seats: A.Seats(), +seat: D.Seat) -> {A.idle.permission(world, seats, seat) == Q.value.or(Bool, D.ring.get(Bool, S.players.has_turn(A.players(seats)), seat), False{}) : Bool}:
   match world:
-    case S.World{config, before, round, index, first, hp, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}:
+    case S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}:
       match seats seat:
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1},A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1},A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1},A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1},A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+        case D.Duo{A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0},A.CoreSeat{h1, j1, c1, p1, s1, t1},A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat0{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat0{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0},A.CoreSeat{h1, j1, c1, p1, s1, t1},A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat1{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat1{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0},A.CoreSeat{h1, j1, c1, p1, s1, t1},A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat2{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat2{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0},A.CoreSeat{h1, j1, c1, p1, s1, t1},A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat3{}:
+        case D.Trio{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}} D.Seat3{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0},A.CoreSeat{h1, j1, c1, p1, s1, t1},A.CoreSeat{h2, j2, c2, p2, s2, t2},A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat0{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0},A.CoreSeat{h1, j1, c1, p1, s1, t1},A.CoreSeat{h2, j2, c2, p2, s2, t2},A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat1{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0},A.CoreSeat{h1, j1, c1, p1, s1, t1},A.CoreSeat{h2, j2, c2, p2, s2, t2},A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat2{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0},A.CoreSeat{h1, j1, c1, p1, s1, t1},A.CoreSeat{h2, j2, c2, p2, s2, t2},A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{}:
+        case D.Quad{A.CoreSeat{h0, j0, c0, p0, s0, t0}, A.CoreSeat{h1, j1, c1, p1, s1, t1}, A.CoreSeat{h2, j2, c2, p2, s2, t2}, A.CoreSeat{h3, j3, c3, p3, s3, t3}} D.Seat3{}:
           {==}
 
 def idleproof.idle_current(+world: S.World, +seat: D.Seat) -> {A.idle.current(world, seat) == Q.current(S.world.turn(world), seat) : Bool}:
