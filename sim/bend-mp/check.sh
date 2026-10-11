@@ -111,6 +111,16 @@ gate_roundtrip() {
   fi
 }
 
+gate_core_scenarios() {
+  local out
+  out="$(bun "$here/test/core-scenarios.mjs" 2>&1)"
+  if [[ $? -eq 0 ]]; then
+    report ok "reference core scenarios" "$(printf '%s' "$out" | tail -1)"
+  else
+    report fail "reference core scenarios" "$(printf '%s' "$out" | tail -20)"
+  fi
+}
+
 gate_domain
 gate_unsafe
 gate_ai_imports
@@ -118,6 +128,7 @@ gate_sm_imports
 gate_driver_imports
 gate_laws
 gate_roundtrip
+gate_core_scenarios
 
 if [[ $failed -eq 0 ]]; then
   echo PASS
