@@ -17,6 +17,8 @@ def idle.moves(options: List<&2, S.IdleOption>) -> List<&2, D.Move>:
       Nil{}
     case S.TakeGun{} <> rest:
       D.PickUp{} <> idle.moves(rest)
+    case S.UseAt{slot, item} <> rest:
+      D.UseItem{slot, item} <> idle.moves(rest)
 
 def aim.moves(options: List<&2, S.TargetOption>) -> List<&2, D.Move>:
   match options:

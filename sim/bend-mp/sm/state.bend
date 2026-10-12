@@ -9,9 +9,20 @@ type Decks is Data:
 
 type IdleOption is Data:
   TakeGun{}
+  UseAt{slot: D.Slot, item: D.Item}
 
 type TargetOption is Data:
   Target{seat: D.Seat}
+
+type GrabOption is Data:
+  TakeItem{}
+  PutAt{slot: D.Slot}
+
+type JamOption is Data:
+  JamAt{seat: D.Seat}
+
+type StealOption is Data:
+  Pick{owner: D.Seat, slot: D.Slot, item: D.Item}
 
 type Phase is Data:
   NeedFirst{}
@@ -23,6 +34,12 @@ type Phase is Data:
   Aim{seat: D.Seat, targets: List<&2, TargetOption>}
   Ended{}
   Blocked{}
+  NeedTurnAmount{from: D.Seat, passing: Bool, winner: Maybe<&2, D.Seat>}
+  Grab{needs: D.Ring<&2, List<&2, GrabOption>>}
+  NeedItem{seat: D.Seat, first: D.Item, second: D.Item, rest: List<&2, D.Item>}
+  NeedPhone{seat: D.Seat, owner: D.Seat, slot: D.Slot}
+  JamPick{seat: D.Seat, targets: List<&2, JamOption>}
+  StealPick{seat: D.Seat, picks: List<&2, StealOption>}
 
 type World is Data:
   World{config: D.Config, before_round: Bool, round_index: Nat, load_index: Nat, first_sequence: Bool, round_health: Nat, first_turn: D.Seat, turn: Maybe<&2, D.Seat>, direction: D.Direction, first_death: Maybe<&2, D.Seat>, checking_first_death: Bool, item_amount: Nat, sawed: Bool, gun: List<&2, D.Shell>, shown: D.Load, decks: Decks}
@@ -30,8 +47,13 @@ type World is Data:
 type Players is Data:
   Players{health: D.Ring<&2, Nat>, jammed: D.Ring<&2, Bool>, checked: D.Ring<&2, Bool>, cash: D.Ring<&2, U32>, slots: D.Ring<&2, D.Slots>, has_turn: D.Ring<&2, Bool>}
 
+# Item distribution flags. A seat's grant count and intake survive the
+# distribution that set them, until that seat begins grabbing again.
+type Grabs is Data:
+  Grabs{distributing: Bool, grabbing: D.Ring<&2, Bool>, holding: D.Ring<&2, Maybe<&2, D.Item>>, granted: D.Ring<&2, Nat>, intake: D.Ring<&2, Bool>}
+
 type State is Data:
-  State{world: World, players: Players, phase: Phase, notes: List<&2, D.Note>}
+  State{world: World, players: Players, phase: Phase, notes: List<&2, D.Note>, grabs: Grabs}
 
 def world.config(value: World) -> D.Config:
   match value:
@@ -255,43 +277,103 @@ def players.set_has_turn(value: Players, replacement: D.Ring<&2, Bool>) -> Playe
 
 def state.world(value: State) -> World:
   match value:
-    case State{world, _, _, _}:
+    case State{world, _, _, _, _}:
       world
 
 def state.set_world(value: State, replacement: World) -> State:
   match value:
-    case State{_, players, phase, notes}:
-      State{replacement, players, phase, notes}
+    case State{_, players, phase, notes, grabs}:
+      State{replacement, players, phase, notes, grabs}
 
 def state.players(value: State) -> Players:
   match value:
-    case State{_, players, _, _}:
+    case State{_, players, _, _, _}:
       players
 
 def state.set_players(value: State, replacement: Players) -> State:
   match value:
-    case State{world, _, phase, notes}:
-      State{world, replacement, phase, notes}
+    case State{world, _, phase, notes, grabs}:
+      State{world, replacement, phase, notes, grabs}
 
 def state.phase(value: State) -> Phase:
   match value:
-    case State{_, _, phase, _}:
+    case State{_, _, phase, _, _}:
       phase
 
 def state.set_phase(value: State, replacement: Phase) -> State:
   match value:
-    case State{world, players, _, notes}:
-      State{world, players, replacement, notes}
+    case State{world, players, _, notes, grabs}:
+      State{world, players, replacement, notes, grabs}
 
 def state.notes(value: State) -> List<&2, D.Note>:
   match value:
-    case State{_, _, _, notes}:
+    case State{_, _, _, notes, _}:
       notes
 
 def state.set_notes(value: State, replacement: List<&2, D.Note>) -> State:
   match value:
-    case State{world, players, phase, _}:
-      State{world, players, phase, replacement}
+    case State{world, players, phase, _, grabs}:
+      State{world, players, phase, replacement, grabs}
+
+def state.grabs(value: State) -> Grabs:
+  match value:
+    case State{_, _, _, _, grabs}:
+      grabs
+
+def state.set_grabs(value: State, replacement: Grabs) -> State:
+  match value:
+    case State{world, players, phase, notes, _}:
+      State{world, players, phase, notes, replacement}
+
+def grabs.distributing(value: Grabs) -> Bool:
+  match value:
+    case Grabs{distributing, _, _, _, _}:
+      distributing
+
+def grabs.set_distributing(value: Grabs, replacement: Bool) -> Grabs:
+  match value:
+    case Grabs{_, grabbing, holding, granted, intake}:
+      Grabs{replacement, grabbing, holding, granted, intake}
+
+def grabs.grabbing(value: Grabs) -> D.Ring<&2, Bool>:
+  match value:
+    case Grabs{_, grabbing, _, _, _}:
+      grabbing
+
+def grabs.set_grabbing(value: Grabs, replacement: D.Ring<&2, Bool>) -> Grabs:
+  match value:
+    case Grabs{distributing, _, holding, granted, intake}:
+      Grabs{distributing, replacement, holding, granted, intake}
+
+def grabs.holding(value: Grabs) -> D.Ring<&2, Maybe<&2, D.Item>>:
+  match value:
+    case Grabs{_, _, holding, _, _}:
+      holding
+
+def grabs.set_holding(value: Grabs, replacement: D.Ring<&2, Maybe<&2, D.Item>>) -> Grabs:
+  match value:
+    case Grabs{distributing, grabbing, _, granted, intake}:
+      Grabs{distributing, grabbing, replacement, granted, intake}
+
+def grabs.granted(value: Grabs) -> D.Ring<&2, Nat>:
+  match value:
+    case Grabs{_, _, _, granted, _}:
+      granted
+
+def grabs.set_granted(value: Grabs, replacement: D.Ring<&2, Nat>) -> Grabs:
+  match value:
+    case Grabs{distributing, grabbing, holding, _, intake}:
+      Grabs{distributing, grabbing, holding, replacement, intake}
+
+def grabs.intake(value: Grabs) -> D.Ring<&2, Bool>:
+  match value:
+    case Grabs{_, _, _, _, intake}:
+      intake
+
+def grabs.set_intake(value: Grabs, replacement: D.Ring<&2, Bool>) -> Grabs:
+  match value:
+    case Grabs{distributing, grabbing, holding, granted, _}:
+      Grabs{distributing, grabbing, holding, granted, replacement}
 
 def world.table(world: World) -> D.Table:
   match world:
@@ -329,8 +411,13 @@ def world.set_deck(+world: World, deck: List<&2, Batch>) -> World:
 
 def state.emit(state: State, event: D.GameEvent) -> State:
   match state:
-    case State{world, players, phase, notes}:
-      State{world, players, phase, List.append(&2, D.Note, notes, [D.Shown{event}])}
+    case State{world, players, phase, notes, grabs}:
+      State{world, players, phase, List.append(&2, D.Note, notes, [D.Shown{event}]), grabs}
+
+def state.tell(state: State, seat: D.Seat, secret: D.Secret) -> State:
+  match state:
+    case State{world, players, phase, notes, grabs}:
+      State{world, players, phase, List.append(&2, D.Note, notes, [D.Told{seat, secret}]), grabs}
 
 def state.stepped(+state: State) -> D.Stepped<&2, State>:
   D.Stepped{state, state.notes(state)}

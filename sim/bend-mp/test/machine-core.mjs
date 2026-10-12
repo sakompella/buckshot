@@ -36,9 +36,9 @@ try {
   const ring = (template, f) => Object.fromEntries(Object.entries(template).map(([key, value]) => [key, key === '$' ? value : f(value, key)]));
   const nil = list([]);
   const hostState = state => {
-    const { world, players } = state;
-    const seats = ring(players.health, (_, key) => ({ health: players.health[key], jammed: players.jammed[key], jam_checked: players.checked[key], cash: players.cash[key], slots: players.slots[key], grabbing: false, holding: { $: 'None' }, has_turn: players.has_turn[key] }));
-    return { ...world, seats, distributing: false, grabs: ring(players.health, () => ({ $: 'GrabProgress', count: 0, intake: false })) };
+    const { world, players, grabs } = state;
+    const seats = ring(players.health, (_, key) => ({ health: players.health[key], jammed: players.jammed[key], jam_checked: players.checked[key], cash: players.cash[key], slots: players.slots[key], grabbing: grabs.grabbing[key], holding: grabs.holding[key], has_turn: players.has_turn[key] }));
+    return { ...world, seats, distributing: grabs.distributing, grabs: ring(players.health, (_, key) => ({ $: 'GrabProgress', count: grabs.granted[key], intake: grabs.intake[key] })) };
   };
   const referenceHost = state => ({ ...state.host, seats: ring(state.host.seats, props => {
     const { $, ...fields } = props;
@@ -162,8 +162,9 @@ try {
   assert.equal(requestJSON(M.point(exhausted).request).kind, 'Stuck');
   assert.deepEqual(plain(M.answer(exhausted, 0).state), plain(exhausted));
   assert.deepEqual(array(M.run(5, exhausted, list([1, 2])).tape).map(Number), [1, 2]);
-  const unsupported = config(2, [round(), round({ items: { saw: {} } })]);
-  assert.equal(requestJSON(M.point(M.start(unsupported).state).request).kind, 'Stuck', 'support predicate must cover every round');
+  const itemized = config(2, [round(), round({ items: { saw: {} } })]);
+  assert.notEqual(requestJSON(M.point(M.start(itemized).state).request).kind, 'Stuck', 'an item config starts');
+  compare(R.start(itemized).state, M.start(itemized).state);
   console.log(`core differential verification: ${checked} boundaries passed`);
 } finally {
   rmSync(dir, { recursive: true });

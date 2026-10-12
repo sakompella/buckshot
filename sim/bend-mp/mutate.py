@@ -121,7 +121,7 @@ MUTATIONS = (
         "sm/main.bend",
         (
             Edit(
-                "    case D.RandomAmount{}:\n      turn.winner(state, shooter, passing, G.winner(S.players.health(S.state.players(state))))",
+                "    case D.RandomAmount{}:\n      turn.winner(state, shooter, passing, winner)",
                 "    case D.RandomAmount{}:\n      S.state.set_phase(state, S.NeedAmount{})",
             ),
         ),
@@ -155,8 +155,8 @@ MUTATIONS = (
         "sm/main.bend",
         (
             Edit(
-                "    case Nil{}:\n      load.begin(S.state.set_world(state, S.world.set_first_turn(S.state.world(state), recipient)))",
-                "    case Nil{}:\n      load.begin(state)",
+                "    case Nil{}:\n      reload.begin(S.state.set_world(state, S.world.set_first_turn(S.state.world(state), recipient)))",
+                "    case Nil{}:\n      reload.begin(state)",
             ),
         ),
     ),
