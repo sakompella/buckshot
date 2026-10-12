@@ -1,0 +1,479 @@
+import { Array as Arr, Duration, Effect, Match, Option, Result, Schema, Stream } from "effect";
+import { Runtime, Subscription, type Update } from "foldkit";
+import type { Document, Html, HtmlBuilder } from "foldkit/html";
+import { defineMessageUnion } from "foldkit/message";
+import { modifyFields } from "foldkit/struct";
+
+import { Game, type AnswerError } from "./bend.ts";
+import { type Board, Briefcase, Counter, GameEvent, LearnedSecret, Move, Seat, SeatCount, type SeatView, Secret, Stage } from "./domain.ts";
+import { begin, botPrompt, botStep, Controller, controllerOf, play, type Progress, promptsOf } from "./driver.ts";
+import { seedRng } from "./rng.ts";
+import { titles } from "./titles.ts";
+
+const AUTOPLAY_INTERVAL_MS = 350;
+
+const DEFAULT_SEED = 20261012;
+
+// MODEL
+
+const Viewer = Schema.Union([Schema.Literal("Spectator"), Seat]);
+
+type Viewer = typeof Viewer.Type;
+
+const Setup = Schema.Struct({
+  table: SeatCount,
+  controllers: Schema.Array(Controller),
+  isItemsEnabled: Schema.Boolean,
+  seed: Schema.Number,
+});
+
+type Setup = typeof Setup.Type;
+
+const Session = Schema.Struct({
+  game: Schema.instanceOf(Game),
+  rng: Schema.Number,
+  events: Schema.Array(GameEvent),
+  learned: Schema.Array(LearnedSecret),
+  controllers: Schema.Array(Controller),
+  viewer: Viewer,
+  isAutoplay: Schema.Boolean,
+});
+
+type Session = typeof Session.Type;
+
+export const Model = Schema.Struct({
+  setup: Setup,
+  matchCount: Schema.Number,
+  maybeMatch: Schema.Option(Session),
+  maybeError: Schema.Option(Schema.String),
+});
+
+export type Model = typeof Model.Type;
+
+// MESSAGE
+
+export const Message = defineMessageUnion({
+  SelectedTable: { table: SeatCount },
+  ToggledController: { seat: Seat },
+  ToggledItems: {},
+  UpdatedSeed: { value: Schema.String },
+  ClickedNewMatch: {},
+  SelectedViewer: { viewer: Viewer },
+  ClickedMove: { match: Schema.Number, generation: Schema.Number, seat: Seat, index: Schema.Number },
+  ClickedStep: {},
+  ToggledAutoplay: {},
+  TickedAutoplay: {},
+});
+
+export type Message = typeof Message.Type;
+
+// TABLE
+
+const SEATS_BY_TABLE: Readonly<Record<SeatCount, ReadonlyArray<Seat>>> = { 2: [1, 3], 3: [0, 1, 2], 4: [0, 1, 2, 3] };
+
+const progressOf = (match: Session): Progress => ({ game: match.game, rng: match.rng, events: match.events, learned: match.learned });
+
+const withProgress = (match: Session, progress: Progress): Session => ({ ...match, game: progress.game, rng: progress.rng, events: progress.events, learned: progress.learned });
+
+const describeError = (error: AnswerError): string =>
+  Match.value(error).pipe(
+    Match.tag("BendContractError", ({ call, detail }) => `Bend returned an unexpected value from ${call}: ${detail}`),
+    Match.tag("StaleAnswer", () => "That move was for an earlier turn. Choose again."),
+    Match.tag("NoPrompt", ({ seat }) => `Seat ${seat} has no move right now.`),
+    Match.exhaustive,
+  );
+
+// UPDATE
+
+type Return = Update.Return<Model, Message>;
+
+const applyResult = (model: Model, match: Session, result: Result.Result<Progress, AnswerError>): Return =>
+  Result.match(result, {
+    onSuccess: (progress) => ({
+      model: modifyFields(model, {
+        maybeMatch: () => Option.some(withProgress(match, progress)),
+        maybeError: () => Option.none(),
+      }),
+    }),
+    onFailure: (error) => ({
+      model: modifyFields(model, {
+        maybeMatch: () => Option.some({ ...match, isAutoplay: false }),
+        maybeError: () => Option.some(describeError(error)),
+      }),
+    }),
+  });
+
+const stepBot = (model: Model, match: Session): Return =>
+  Option.match(botPrompt(match.game, match.controllers), {
+    onNone: () => ({ model: modifyFields(model, { maybeMatch: () => Option.some({ ...match, isAutoplay: match.isAutoplay && match.game.pending.kind === "Choose" }) }) }),
+    onSome: (prompt) => applyResult(model, match, botStep(progressOf(match), prompt)),
+  });
+
+const withMatch = (model: Model, toReturn: (match: Session) => Return): Return => Option.match(model.maybeMatch, { onNone: () => ({ model }), onSome: toReturn });
+
+const startMatch = (model: Model): Return => {
+  const { table, controllers, isItemsEnabled, seed } = model.setup;
+  const matchNumber = model.matchCount + 1;
+
+  return Result.match(begin(table, isItemsEnabled, matchNumber, seedRng(seed)), {
+    onSuccess: (progress) => ({
+      model: modifyFields(model, {
+        matchCount: () => matchNumber,
+        maybeError: () => Option.none(),
+        maybeMatch: () =>
+          Option.some({
+            ...progress,
+            controllers,
+            viewer: Option.getOrElse(
+              Arr.findFirst(SEATS_BY_TABLE[table], (seat) => controllerOf(controllers, seat) === "Human"),
+              (): Viewer => "Spectator",
+            ),
+            isAutoplay: false,
+          }),
+      }),
+    }),
+    onFailure: (error) => ({ model: modifyFields(model, { maybeError: () => Option.some(describeError(error)) }) }),
+  });
+};
+
+export const update = (model: Model, message: Message): Return =>
+  Message.match<Return>(message, {
+    SelectedTable: ({ table }) => ({ model: modifyFields(model, { setup: (setup) => ({ ...setup, table }) }) }),
+    ToggledController: ({ seat }) => ({
+      model: modifyFields(model, {
+        setup: (setup) => ({ ...setup, controllers: setup.controllers.map((controller, index): Controller => (index !== seat ? controller : controller === "Human" ? "Bot" : "Human")) }),
+      }),
+    }),
+    ToggledItems: () => ({ model: modifyFields(model, { setup: (setup) => ({ ...setup, isItemsEnabled: !setup.isItemsEnabled }) }) }),
+    UpdatedSeed: ({ value }) => ({
+      model: modifyFields(model, { setup: (setup) => ({ ...setup, seed: Option.getOrElse(Option.filter(Option.some(Number.parseInt(value, 10)), Number.isSafeInteger), () => setup.seed) }) }),
+    }),
+    ClickedNewMatch: () => startMatch(model),
+    SelectedViewer: ({ viewer }) => withMatch(model, (match) => ({ model: modifyFields(model, { maybeMatch: () => Option.some({ ...match, viewer }) }) })),
+    ClickedMove: ({ match: matchNumber, generation, seat, index }) =>
+      withMatch(model, (match) => applyResult(model, match, play(progressOf(match), { match: matchNumber, generation }, seat, index, match.rng))),
+    ClickedStep: () => withMatch(model, (match) => stepBot(model, match)),
+    ToggledAutoplay: () => withMatch(model, (match) => ({ model: modifyFields(model, { maybeMatch: () => Option.some({ ...match, isAutoplay: !match.isAutoplay }) }) })),
+    TickedAutoplay: () => withMatch(model, (match) => (match.isAutoplay ? stepBot(model, match) : { model })),
+  });
+
+// INIT
+
+export const init: Runtime.ApplicationInit<Model, Message> = () => ({
+  model: {
+    setup: { table: 2, controllers: ["Bot", "Human", "Bot", "Bot"], isItemsEnabled: false, seed: DEFAULT_SEED },
+    matchCount: 0,
+    maybeMatch: Option.none(),
+    maybeError: Option.none(),
+  },
+});
+
+// SUBSCRIPTION
+
+export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
+  autoplay: entry(
+    { isAutoplay: Schema.Boolean },
+    {
+      modelToDependencies: (model) => ({ isAutoplay: Option.exists(model.maybeMatch, (match) => match.isAutoplay) }),
+      dependenciesToStream: ({ isAutoplay }) =>
+        Stream.when(
+          Stream.tick(Duration.millis(AUTOPLAY_INTERVAL_MS)).pipe(
+            Stream.drop(1),
+            Stream.map(() => Message.TickedAutoplay()),
+          ),
+          Effect.sync(() => isAutoplay),
+        ),
+    },
+  ),
+}));
+
+// TEXT
+
+const seatName = (seat: Seat): string => `Seat ${seat}`;
+
+const moveText = (seat: Seat, move: Move): string =>
+  Move.match(move, {
+    PickUp: () => "Pick up the shotgun",
+    Shoot: ({ target }) => (target === seat ? "Shoot yourself" : `Shoot ${seatName(target)}`),
+    UseItem: ({ item, slot }) => `Use ${item} (slot ${slot + 1})`,
+    Grab: () => "Grab from the briefcase",
+    Place: ({ slot }) => `Place in slot ${slot + 1}`,
+    JamTarget: ({ target }) => `Jam ${seatName(target)}`,
+    Steal: ({ owner, slot, item }) => `Take ${item} from ${seatName(owner)} (slot ${slot + 1})`,
+  });
+
+const eventText = (event: GameEvent): string =>
+  GameEvent.match(event, {
+    RoundBegan: ({ round, health, first }) => `Round ${round + 1} begins. Everyone has ${health} health; ${seatName(first)} starts.`,
+    GrabbingBegan: ({ seats }) => `Item distribution: ${seats.map(seatName).join(", ")} grab from the briefcase.`,
+    Granted: ({ seat }) => `${seatName(seat)} drew an item.`,
+    Placed: ({ seat, item, slot }) => `${seatName(seat)} placed ${item} in slot ${slot + 1}.`,
+    GrabbingEnded: ({ seat }) => `${seatName(seat)} finished grabbing.`,
+    DistributionDone: () => "Distribution is over.",
+    Loaded: ({ load }) => `The shotgun is loaded: ${load.live} live, ${load.blank} blank.`,
+    TurnSkipped: ({ seat }) => `${seatName(seat)} is jammed and loses the turn.`,
+    JamLifted: ({ seat }) => `${seatName(seat)} is no longer jammed.`,
+    TurnGiven: ({ seat }) => `${seatName(seat)}'s turn.`,
+    PickedUp: ({ seat }) => `${seatName(seat)} picked up the shotgun.`,
+    Fired: ({ shooter, target, shell, applied, health }) =>
+      `${seatName(shooter)} shot ${shooter === target ? "themselves" : seatName(target)}: ${shell === "Live" ? `live, ${applied} damage, ${health} health left` : "blank"}.`,
+    Died: ({ seat }) => `${seatName(seat)} is out.`,
+    Used: ({ seat, owner, item }) => (seat === owner ? `${seatName(seat)} used ${item}.` : `${seatName(seat)} took ${item} from ${seatName(owner)} and used it.`),
+    Healed: ({ seat, health }) => `${seatName(seat)} healed to ${health}.`,
+    Ejected: ({ seat, shell }) => `${seatName(seat)} racked out a ${shell.toLowerCase()} shell.`,
+    Inverted: ({ seat }) => `${seatName(seat)} inverted the chambered shell.`,
+    JamApplied: ({ by, target }) => `${seatName(by)} jammed ${seatName(target)}.`,
+    DirectionFlipped: ({ direction }) => `Turn order is now ${direction === "Clockwise" ? "clockwise" : "counterclockwise"}.`,
+    RoundWon: ({ seat, prize }) => `${seatName(seat)} wins the round and $${prize.toLocaleString("en-US")}.`,
+    MatchConcluded: () => "The match is over.",
+  });
+
+const secretText = (secret: Secret): string =>
+  Secret.match(secret, {
+    Glimpse: ({ shell }) => `The chambered shell is ${shell.toLowerCase()}.`,
+    Clue: ({ position, shell }) => `Shell ${position + 1} from now is ${shell.toLowerCase()}.`,
+    NoClue: () => "The phone gave no clue.",
+    EmptyBriefcase: () => "The briefcase was empty.",
+  });
+
+// VIEW
+
+type H = HtmlBuilder<Message>;
+
+const segmented = <A>(h: H, label: string, options: ReadonlyArray<readonly [A, string]>, selected: A, toMessage: (value: A) => Message): Html =>
+  h.div(
+    [h.Class("field")],
+    [
+      h.span([h.Class("field-label")], [label]),
+      h.div(
+        [h.Class("segmented"), h.Role("group"), h.AriaLabel(label)],
+        options.map(([value, text]) => h.button([h.Type("button"), h.AriaPressed(value === selected ? "true" : "false"), h.OnClick(toMessage(value))], [text])),
+      ),
+    ],
+  );
+
+const setupView = (h: H, model: Model): Html => {
+  const { table, controllers, isItemsEnabled, seed } = model.setup;
+
+  return h.section(
+    [h.Class("setup"), h.AriaLabel("Match setup")],
+    [
+      segmented(h, "Players", [[2, "2"], [3, "3"], [4, "4"]] as const, table, (value) => Message.SelectedTable({ table: value })),
+      h.div(
+        [h.Class("field")],
+        [
+          h.span([h.Class("field-label")], ["Controllers"]),
+          h.div(
+            [h.Class("controllers")],
+            SEATS_BY_TABLE[table].map((seat) =>
+              h.button([h.Type("button"), h.Class("controller"), h.OnClick(Message.ToggledController({ seat }))], [`${seatName(seat)}: ${controllerOf(controllers, seat) === "Human" ? "Human" : "Bot"}`]),
+            ),
+          ),
+        ],
+      ),
+      h.label(
+        [h.Class("field check")],
+        [h.input([h.Type("checkbox"), h.Checked(isItemsEnabled), h.OnChange(() => Message.ToggledItems())]), "Items"],
+      ),
+      h.label([h.Class("field")], [h.span([h.Class("field-label")], ["Seed"]), h.input([h.Class("seed"), h.Type("number"), h.Value(String(seed)), h.OnInput((value) => Message.UpdatedSeed({ value }))])]),
+      h.button([h.Type("button"), h.Class("primary"), h.OnClick(Message.ClickedNewMatch())], [Option.isSome(model.maybeMatch) ? "Restart match" : "Start match"]),
+    ],
+  );
+};
+
+const counterText = (view: SeatView): string => Counter.match(view.counter, { Unjammed: ({ health }) => `${health}`, Jammed: () => "Jammed" });
+
+const actingSeat = (board: Board): Option.Option<Seat> =>
+  Stage.matchOrElse(board.stage, { Playing: ({ seat }) => Option.some(seat) }, () => Option.none());
+
+const seatPanel = (h: H, match: Session, view: SeatView): Html => {
+  const isActing = Option.contains(actingSeat(match.game.board), view.seat);
+  const isViewer = match.viewer === view.seat;
+
+  return h.article(
+    [h.Class(`seat${isActing ? " acting" : ""}${isViewer ? " viewer" : ""}`), h.AriaLabel(seatName(view.seat))],
+    [
+      h.header(
+        [h.Class("seat-head")],
+        [
+          h.h2([], [seatName(view.seat)]),
+          h.span([h.Class("controller-tag")], [controllerOf(match.controllers, view.seat)]),
+        ],
+      ),
+      h.div(
+        [h.Class("seat-stats")],
+        [
+          h.div([h.Class("stat")], [h.span([h.Class("stat-label")], ["Health"]), h.strong([h.Class(Counter.guards.Jammed(view.counter) ? "health jammed" : "health")], [counterText(view)])]),
+          h.div([h.Class("stat")], [h.span([h.Class("stat-label")], ["Cash"]), h.strong([], [`$${view.cash.toLocaleString("en-US")}`])]),
+        ],
+      ),
+      h.ol(
+        [h.Class("slots"), h.AriaLabel("Item slots")],
+        view.slots.map((slot) => h.li([h.Class(Option.isSome(slot) ? "slot filled" : "slot")], [Option.getOrElse(slot, () => "")])),
+      ),
+      Briefcase.match(view.briefcase, {
+        NotGrabbing: () => h.empty,
+        Grabbing: () => h.p([h.Class("briefcase")], ["Grabbing from the briefcase"]),
+        Holding: ({ item }) => h.p([h.Class("briefcase")], [`Holding ${item}`]),
+      }),
+      isActing ? h.p([h.Class("turn")], ["Has the turn"]) : h.empty,
+    ],
+  );
+};
+
+const gunView = (h: H, board: Board): Html => {
+  const { shown, remaining, sawed } = board.gun;
+
+  return h.section(
+    [h.Class("gun"), h.AriaLabel("Shotgun")],
+    [
+      h.div(
+        [h.Class("shells"), h.AriaLabel(`Last load shown: ${shown.live} live, ${shown.blank} blank`)],
+        [...Arr.replicate(h.span([h.Class("shell live")], []), shown.live), ...Arr.replicate(h.span([h.Class("shell blank")], []), shown.blank)],
+      ),
+      h.p([], [`Last load shown: ${shown.live} live, ${shown.blank} blank. ${remaining} shell${remaining === 1 ? "" : "s"} left in the gun.${sawed ? " Sawed off: the next shot does double damage." : ""}`]),
+      h.p(
+        [h.Class("muted")],
+        [`Round ${board.round.index + 1} of ${board.round.rounds}. Starting health ${board.round.health}. Turn order ${board.direction === "Clockwise" ? "clockwise" : "counterclockwise"}.`],
+      ),
+    ],
+  );
+};
+
+const viewerBar = (h: H, match: Session): Html =>
+  segmented<Viewer>(
+    h,
+    "View as",
+    [["Spectator", "Spectator"], ...match.game.seats.map((seat): readonly [Viewer, string] => [seat, seatName(seat)])],
+    match.viewer,
+    (viewer) => Message.SelectedViewer({ viewer }),
+  );
+
+const movesView = (h: H, match: Session): Html => {
+  const prompts = promptsOf(match.game);
+  const humanPrompts = prompts.filter((prompt) => controllerOf(match.controllers, prompt.seat) === "Human");
+  const viewerPrompt = Arr.findFirst(humanPrompts, (prompt) => prompt.seat === match.viewer);
+  const waiting = humanPrompts.filter((prompt) => prompt.seat !== match.viewer).map((prompt) => prompt.seat);
+  const hasBotMove = Option.isSome(botPrompt(match.game, match.controllers));
+
+  return h.section(
+    [h.Class("moves"), h.AriaLabel("Moves")],
+    [
+      h.h2([], [Option.match(viewerPrompt, { onNone: () => "Moves", onSome: ({ seat }) => `Your moves as ${seatName(seat)}` })]),
+      Option.match(viewerPrompt, {
+        onNone: () => h.p([h.Class("muted")], [match.game.pending.kind === "Finished" ? "The match is over." : "No move for the seat you are viewing."]),
+        onSome: (prompt) =>
+          h.div(
+            [h.Class("move-list")],
+            prompt.menu.map((move, index) =>
+              h.button(
+                [h.Type("button"), h.OnClick(Message.ClickedMove({ match: prompt.ticket.match, generation: prompt.ticket.generation, seat: prompt.seat, index }))],
+                [moveText(prompt.seat, move)],
+              ),
+            ),
+          ),
+      }),
+      ...waiting.map((seat) =>
+        h.p([h.Class("waiting")], [`${seatName(seat)} (human) can move. `, h.button([h.Type("button"), h.Class("link"), h.OnClick(Message.SelectedViewer({ viewer: seat }))], [`View as ${seatName(seat)}`])]),
+      ),
+      h.div(
+        [h.Class("bot-controls")],
+        [
+          h.button([h.Type("button"), h.Disabled(!hasBotMove), h.OnClick(Message.ClickedStep())], ["Step bot"]),
+          h.button([h.Type("button"), h.AriaPressed(match.isAutoplay ? "true" : "false"), h.OnClick(Message.ToggledAutoplay())], [match.isAutoplay ? "Pause autoplay" : "Autoplay bots"]),
+        ],
+      ),
+    ],
+  );
+};
+
+const notesView = (h: H, match: Session): Html => {
+  const mine = match.learned.filter(({ seat }) => seat === match.viewer);
+
+  return h.section(
+    [h.Class("notes"), h.AriaLabel("Private notes")],
+    [
+      h.h2([], [match.viewer === "Spectator" ? "Private notes" : `Private notes for ${seatName(match.viewer)}`]),
+      match.viewer === "Spectator"
+        ? h.p([h.Class("muted")], ["Spectators see no private notes."])
+        : mine.length === 0
+          ? h.p([h.Class("muted")], ["Nothing learned yet."])
+          : h.ul([], mine.map(({ secret }) => h.li([], [secretText(secret)]))),
+    ],
+  );
+};
+
+// Hits, deaths and round boundaries stand out in the log.
+const isHeadline = (event: GameEvent): boolean =>
+  GameEvent.matchOrElse(event, { Fired: ({ applied }) => applied > 0, Died: () => true, RoundWon: () => true, MatchConcluded: () => true }, () => false);
+
+const logView = (h: H, match: Session): Html =>
+  h.aside(
+    [h.Class("log"), h.AriaLabel("Event log")],
+    [
+      h.h2([], ["Event log"]),
+      h.ol(
+        [h.Class("log-list")],
+        match.events
+          .map((event, index) => h.keyed("li")(index, [h.Class(isHeadline(event) ? "event headline" : "event")], [eventText(event)]))
+          .toReversed(),
+      ),
+    ],
+  );
+
+const resultsView = (h: H, match: Session): Html => {
+  const seats = match.game.seats;
+  const standings = match.game.board.seats.toSorted((left, right) => right.cash - left.cash);
+
+  return h.section(
+    [h.Class("results"), h.AriaLabel("Results")],
+    [
+      h.h2([], ["Results"]),
+      h.ol([h.Class("standings")], standings.map((view) => h.li([], [`${seatName(view.seat)}: $${view.cash.toLocaleString("en-US")}`]))),
+      h.dl(
+        [h.Class("titles")],
+        titles(match.events, seats).flatMap((title) => [
+          h.dt([], [title.name]),
+          h.dd([], [title.seats.length === 0 ? `Nobody (${title.description})` : `${title.seats.map(seatName).join(", ")} with ${title.score} ${title.description}`]),
+        ]),
+      ),
+    ],
+  );
+};
+
+const matchView = (h: H, match: Session): Html => {
+  const pending = match.game.pending;
+
+  return h.div(
+    [h.Class("match")],
+    [
+      h.div(
+        [h.Class("table")],
+        [
+          viewerBar(h, match),
+          pending.kind === "Stuck" ? h.p([h.Class("error")], ["The machine is stuck: no seat has a legal move. With items on, the machine may not support items yet."]) : h.empty,
+          pending.kind === "Finished" ? resultsView(h, match) : h.empty,
+          gunView(h, match.game.board),
+          h.div([h.Class("seats")], match.game.board.seats.map((view) => seatPanel(h, match, view))),
+          h.div([h.Class("lower")], [movesView(h, match), notesView(h, match)]),
+        ],
+      ),
+      logView(h, match),
+    ],
+  );
+};
+
+export const view = (model: Model, h: H): Document => ({
+  title: "Buckshot table",
+  body: h.main(
+    [h.Class("app")],
+    [
+      h.header([h.Class("topbar")], [h.h1([], ["Buckshot table"]), setupView(h, model)]),
+      Option.match(model.maybeError, { onNone: () => h.empty, onSome: (error) => h.p([h.Class("error"), h.Role("alert")], [error]) }),
+      Option.match(model.maybeMatch, {
+        onNone: () => h.p([h.Class("empty")], ["Pick the players and press Start match."]),
+        onSome: (match) => matchView(h, match),
+      }),
+    ],
+  ),
+});
