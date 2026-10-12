@@ -15,7 +15,9 @@ import ../domain.bend as D
 #     the pick is 0, the menu's first move.
 #   - "The opponent" is the living opponent with the lowest health (a jammed
 #     seat's health is hidden, so it counts as the round's starting health),
-#     ties to the lowest socket. Shooting and jamming both use it.
+#     ties broken by a hash of the seat's own random word and the target's
+#     socket, so seats do not all pick the lowest socket. Shooting and
+#     jamming both use it.
 #   - The hybrid decided and shot in one step. Here Idle decides: it uses an
 #     item or takes the gun, and remembers the aim; Aiming shoots at that aim.
 #   - Items come in inventory (slot) order. Adrenaline is a UseItem and the
@@ -317,7 +319,7 @@ type Loot is Data:
   Loot{owner: D.Seat, slot: D.Slot, item: D.Item}
 
 type Ctx is Data:
-  Ctx{me: D.Seat, max_hp: Nat, hp: Nat, remaining: Nat, sawed: Bool, seats: D.Ring<&2, D.SeatView>, mine: List<&2, Held>, loot: List<&2, Loot>, opp_free: Bool}
+  Ctx{me: D.Seat, max_hp: Nat, hp: Nat, remaining: Nat, sawed: Bool, seats: D.Ring<&2, D.SeatView>, mine: List<&2, Held>, loot: List<&2, Loot>, opp_free: Bool, word: U32}
 
 def counter.hp(counter: D.Counter, max_hp: Nat) -> Nat:
   match counter:
@@ -382,42 +384,42 @@ def free.of(entries: List<&2, D.At<&2, D.SeatView>>, +me: D.Seat) -> Bool:
     case D.At{+seat, D.SeatView{counter, slots, cash, briefcase}} <> rest:
       Bool.or(Bool.and(Bool.not(D.seat.eq(seat, me)), counter.free(counter)), free.of(rest, me))
 
-def ctx.build(+me: D.Seat, +max_hp: Nat, remaining: Nat, sawed: Bool, +seats: D.Ring<&2, D.SeatView>, own: Maybe<&2, D.SeatView>) -> Ctx:
+def ctx.build(+me: D.Seat, +max_hp: Nat, remaining: Nat, sawed: Bool, +seats: D.Ring<&2, D.SeatView>, word: U32, own: Maybe<&2, D.SeatView>) -> Ctx:
   match own:
     case Some{D.SeatView{counter, slots, cash, briefcase}}:
       +entries : List<&2, D.At<&2, D.SeatView>> = D.ring.entries(D.SeatView, seats)
-      Ctx{me, max_hp, counter.hp(counter, max_hp), remaining, sawed, seats, held.of(slots), loot.of(entries, me), free.of(entries, me)}
+      Ctx{me, max_hp, counter.hp(counter, max_hp), remaining, sawed, seats, held.of(slots), loot.of(entries, me), free.of(entries, me), word}
     case None{}:
-      Ctx{me, max_hp, max_hp, remaining, sawed, seats, Nil{}, Nil{}, False{}}
+      Ctx{me, max_hp, max_hp, remaining, sawed, seats, Nil{}, Nil{}, False{}, word}
 
-def ctx.of(obs: D.Obs) -> Ctx:
+def ctx.of(obs: D.Obs, word: U32) -> Ctx:
   match obs:
     case D.Obs{+me, D.Board{D.RoundView{index, rounds, max_hp}, +seats, D.GunView{shown, remaining, sawed}, direction, stage}}:
-      ctx.build(me, max_hp, remaining, sawed, seats, D.ring.get(D.SeatView, seats, me))
+      ctx.build(me, max_hp, remaining, sawed, seats, word, D.ring.get(D.SeatView, seats, me))
 
 def ctx.me(ctx: Ctx) -> D.Seat:
   match ctx:
-    case Ctx{me, max_hp, hp, remaining, sawed, seats, mine, loot, opp_free}:
+    case Ctx{me, max_hp, hp, remaining, sawed, seats, mine, loot, opp_free, word}:
       me
 
 def ctx.remaining(ctx: Ctx) -> Nat:
   match ctx:
-    case Ctx{me, max_hp, hp, remaining, sawed, seats, mine, loot, opp_free}:
+    case Ctx{me, max_hp, hp, remaining, sawed, seats, mine, loot, opp_free, word}:
       remaining
 
 def ctx.sawed(ctx: Ctx) -> Bool:
   match ctx:
-    case Ctx{me, max_hp, hp, remaining, sawed, seats, mine, loot, opp_free}:
+    case Ctx{me, max_hp, hp, remaining, sawed, seats, mine, loot, opp_free, word}:
       sawed
 
 def ctx.mine(ctx: Ctx) -> List<&2, Held>:
   match ctx:
-    case Ctx{me, max_hp, hp, remaining, sawed, seats, mine, loot, opp_free}:
+    case Ctx{me, max_hp, hp, remaining, sawed, seats, mine, loot, opp_free, word}:
       mine
 
 def ctx.loot(ctx: Ctx) -> List<&2, Loot>:
   match ctx:
-    case Ctx{me, max_hp, hp, remaining, sawed, seats, mine, loot, opp_free}:
+    case Ctx{me, max_hp, hp, remaining, sawed, seats, mine, loot, opp_free, word}:
       loot
 
 # Which items to use
@@ -446,7 +448,7 @@ def eligible.item(item: D.Item, max_hp: Nat, hp: Nat, remaining: Nat, sawed: Boo
 
 def eligible(ctx: Ctx, mem: Mem, item: D.Item) -> Bool:
   match ctx:
-    case Ctx{me, max_hp, hp, remaining, sawed, seats, mine, loot, opp_free}:
+    case Ctx{me, max_hp, hp, remaining, sawed, seats, mine, loot, opp_free, word}:
       eligible.item(item, max_hp, hp, remaining, sawed, opp_free, mem)
 
 def first_held(helds: List<&2, Held>, +ctx: Ctx, +mem: Mem) -> Maybe<&2, Held>:
@@ -577,7 +579,24 @@ def idle(+ctx: Ctx, +mem: Mem, coin: Bool) -> Planned:
 # =======
 
 type Cand is Data:
-  Cand{move: D.Move, key: Nat}
+  Cand{move: D.Move, key: U32}
+
+def seat.code(seat: D.Seat) -> U32:
+  match seat:
+    case D.Seat0{}:
+      0
+    case D.Seat1{}:
+      1
+    case D.Seat2{}:
+      2
+    case D.Seat3{}:
+      3
+
+# A small hash of (word, seat), so equal-health opponents are ordered at random.
+def tie.hash(+word: U32, seat: D.Seat) -> U32:
+  +x1 : U32 = U32.mul(U32.xor(word, U32.mul(2654435769, (1 + seat.code(seat) : U32))), 2146121005)
+  +x2 : U32 = U32.mul(U32.xor(x1, U32.shrn(x1, 15n)), 2221713035)
+  U32.and(U32.xor(x2, U32.shrn(x2, 13n)), 65535)
 
 def target.key.counter(counter: D.Counter, max_hp: Nat) -> Nat:
   match counter:
@@ -595,13 +614,13 @@ def target.key.view(view: Maybe<&2, D.SeatView>, max_hp: Nat) -> Nat:
     case None{}:
       1000n
 
-# Sort key of a seat as a target: dead seats last.
-def target.key(ctx: Ctx, seat: D.Seat) -> Nat:
+# Sort key of a seat as a target: health first (dead seats last), then the tie hash.
+def target.key(ctx: Ctx, +seat: D.Seat) -> U32:
   match ctx:
-    case Ctx{me, max_hp, hp, remaining, sawed, seats, mine, loot, opp_free}:
-      target.key.view(D.ring.get(D.SeatView, seats, seat), max_hp)
+    case Ctx{me, max_hp, hp, remaining, sawed, seats, mine, loot, opp_free, word}:
+      U32.add(U32.mul(U32.from_nat(target.key.view(D.ring.get(D.SeatView, seats, seat), max_hp)), 65536), tie.hash(word, seat))
 
-def cand.make(self: Bool, move: D.Move, key: Nat) -> Maybe<&2, Cand>:
+def cand.make(self: Bool, move: D.Move, key: U32) -> Maybe<&2, Cand>:
   match self:
     case True{}:
       None{}
@@ -624,7 +643,7 @@ def cand.better(best: Maybe<&2, Cand>, next: Maybe<&2, Cand>) -> Maybe<&2, Cand>
     case best None{}:
       best
     case Some{Cand{move, +key}} Some{Cand{other, +found}}:
-      Bool.pick(Maybe<&2, Cand>, Nat.is_lt(found, key), Some{Cand{other, found}}, Some{Cand{move, key}})
+      Bool.pick(Maybe<&2, Cand>, U32.is_lt(found, key), Some{Cand{other, found}}, Some{Cand{move, key}})
 
 def cand.move(best: Maybe<&2, Cand>) -> Maybe<&2, D.Move>:
   match best:
@@ -633,8 +652,8 @@ def cand.move(best: Maybe<&2, Cand>) -> Maybe<&2, D.Move>:
     case Some{Cand{move, key}}:
       Some{move}
 
-# The first move aimed at the weakest living opponent (strictly lower keys win,
-# so ties keep the lowest socket).
+# The first move aimed at the weakest living opponent; equal health is decided
+# by the seat's own random word.
 def lowest(moves: List<&2, D.Move>, +ctx: Ctx, best: Maybe<&2, Cand>) -> Maybe<&2, D.Move>:
   match moves:
     case Nil{}:
@@ -774,7 +793,7 @@ def decide.rank(rank: Nat, +prompt: D.Prompt, +ctx: Ctx, +mem: Mem, coin: Bool) 
 
 # The seat's decision for one prompt: heard events first, then the move.
 # `pick` indexes prompt.menu; `coin` is this seat's own random word.
-def decide(+prompt: D.Prompt, obs: D.Obs, heard: List<&2, D.Heard>, mem: Mem, coin: U32) -> D.Decision<&2, Mem>:
-  +ctx : Ctx = ctx.of(obs)
+def decide(+prompt: D.Prompt, obs: D.Obs, heard: List<&2, D.Heard>, mem: Mem, +coin: U32) -> D.Decision<&2, Mem>:
+  +ctx : Ctx = ctx.of(obs, coin)
   +current : Mem = update(heard, ctx.me(ctx), mem)
   decide.rank(menu.rank(prompt.moves(prompt)), prompt, ctx, current, U32.is_eq(U32.mod(coin, 2), 1))

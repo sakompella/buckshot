@@ -43,3 +43,7 @@ def main() -> IO(Unit):
     IO.print(three("3 seats, story / DoN / DoN", trio(R.StoryBrain{}, R.DoNBrain{}, R.DoNBrain{}), 600))
     IO.print(four("4 seats, DoN / DoN / story / story", quad(R.DoNBrain{}, R.DoNBrain{}, R.StoryBrain{}, R.StoryBrain{}), 700))
     IO.print(four("4 seats, story / story / DoN / DoN", quad(R.StoryBrain{}, R.StoryBrain{}, R.DoNBrain{}, R.DoNBrain{}), 800))
+    IO.print(three("3 seats, all story", trio(R.StoryBrain{}, R.StoryBrain{}, R.StoryBrain{}), 900))
+    IO.print(three("3 seats, all DoN", trio(R.DoNBrain{}, R.DoNBrain{}, R.DoNBrain{}), 1000))
+    IO.print(four("4 seats, all story", quad(R.StoryBrain{}, R.StoryBrain{}, R.StoryBrain{}, R.StoryBrain{}), 1100))
+    IO.print(four("4 seats, all DoN", quad(R.DoNBrain{}, R.DoNBrain{}, R.DoNBrain{}, R.DoNBrain{}), 1200))
