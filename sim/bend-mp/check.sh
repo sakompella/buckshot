@@ -86,6 +86,16 @@ gate_driver_imports() {
   fi
 }
 
+gate_driver_smoke() {
+  local out
+  out="$("$BEND" "$here/test/driver-smoke.bend" 2>&1)"
+  if [[ $? -eq 0 && "$(printf '%s\n' "$out" | grep -c ' played=64 stuck=0 exhausted=0$')" -eq 3 ]]; then
+    report ok "driver smoke" "3 table sizes, 0 stuck, 0 exhausted"
+  else
+    report fail "driver smoke" "$(printf '%s' "$out" | head -20)"
+  fi
+}
+
 gate_laws() {
   local laws="$here/LAWS.bend" missing=() name
   for name in ${required_laws[@]+"${required_laws[@]}"}; do
@@ -215,6 +225,7 @@ gate_unsafe
 gate_ai_imports
 gate_sm_imports
 gate_driver_imports
+gate_driver_smoke
 gate_laws
 gate_generated
 gate_ref_api
