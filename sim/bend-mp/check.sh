@@ -140,6 +140,36 @@ gate_machine_scenarios() {
   fi
 }
 
+gate_machine_items() {
+  local out
+  out="$(bun "$here/test/machine-items.mjs" 2>&1)"
+  if [[ $? -eq 0 ]]; then
+    report ok "machine item scenarios" "$(printf '%s' "$out" | tail -1)"
+  else
+    report fail "machine item scenarios" "$(printf '%s' "$out" | tail -20)"
+  fi
+}
+
+gate_machine_item_fuzz() {
+  local out
+  out="$(bun "$here/test/machine-items-fuzz.mjs" 2>&1)"
+  if [[ $? -eq 0 ]]; then
+    report ok "machine item law fuzz" "$(printf '%s' "$out" | tail -1 | cut -c1-200)"
+  else
+    report fail "machine item law fuzz" "$(printf '%s' "$out" | tail -20 | cut -c1-600)"
+  fi
+}
+
+gate_fuzz_mutations() {
+  local out
+  out="$(python3 "$here/tools/fuzz_mutations.py" 2>&1)"
+  if [[ $? -eq 0 ]]; then
+    report ok "item fuzz mutations" "$(printf '%s' "$out" | tail -1)"
+  else
+    report fail "item fuzz mutations" "$(printf '%s' "$out" | tail -20)"
+  fi
+}
+
 gate_generated() {
   local out
   out="$(python3 "$here/tools/proof_cases.py" 2>&1)"
@@ -147,6 +177,16 @@ gate_generated() {
     report ok "generated proof bodies" "$(printf '%s' "$out" | tail -1)"
   else
     report fail "generated proof bodies" "$(printf '%s' "$out" | tail -20)"
+  fi
+}
+
+gate_ref_api() {
+  local out
+  out="$(python3 "$here/tools/ref_api.py" 2>&1)"
+  if [[ $? -eq 0 ]]; then
+    report ok "generated reference API" "$(printf '%s' "$out" | tail -1)"
+  else
+    report fail "generated reference API" "$(printf '%s' "$out" | tail -20)"
   fi
 }
 
@@ -177,12 +217,16 @@ gate_sm_imports
 gate_driver_imports
 gate_laws
 gate_generated
+gate_ref_api
 gate_proofs
 gate_roundtrip
 gate_core_scenarios
 gate_item_scenarios
 gate_machine_scenarios
+gate_machine_items
+gate_machine_item_fuzz
 gate_mutations
+gate_fuzz_mutations
 
 if [[ $failed -eq 0 ]]; then
   echo PASS

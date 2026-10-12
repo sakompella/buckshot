@@ -3,6 +3,7 @@ import ../domain.bend as D
 import ./state.bend as S
 import ./rules.bend as G
 import ./point.bend as P
+import ./items.bend as I
 
 def request(state: S.State) -> D.Request:
   P.request(state)
@@ -15,41 +16,8 @@ def point(state: S.State) -> D.Point:
 
 def pickup(state: S.State, +seat: D.Seat) -> S.State:
   match state:
-    case S.State{world, +players, _, notes}:
-      S.State{world, players, S.Aim{seat, G.targets(D.ring.entries(Nat, S.players.health(players)))}, List.append(&2, D.Note, notes, [D.Shown{D.PickedUp{seat}}])}
-
-def pickup.selected(state: S.State, seat: D.Seat, selected: Maybe<&2, S.IdleOption>) -> S.State:
-  match selected:
-    case Some{S.TakeGun{}}:
-      pickup(state, seat)
-    case None{}:
-      S.state.set_phase(state, S.Blocked{})
-
-def pickup.same(state: S.State, seat: D.Seat, options: D.NonEmpty<&2, S.IdleOption>, index: Nat, same: Bool) -> S.State:
-  match same:
-    case True{}:
-      pickup.selected(state, seat, G.idle.nth(D.nonempty.list(S.IdleOption, options), index))
-    case False{}:
-      S.state.set_phase(state, S.Blocked{})
-
-def pickup.choice(state: S.State, +seat: D.Seat, options: D.NonEmpty<&2, S.IdleOption>, choice: D.Choice) -> S.State:
-  match choice:
-    case D.Choice{chosen, index, _}:
-      pickup.same(state, seat, options, index, D.seat.eq(seat, chosen))
-
-def pickup.resolved(state: S.State, seat: D.Seat, options: D.NonEmpty<&2, S.IdleOption>, resolved: D.Resolved) -> S.State:
-  match resolved:
-    case D.Chose{choice}:
-      pickup.choice(state, seat, options, choice)
-    case _:
-      S.state.set_phase(state, S.Blocked{})
-
-def pickup_slice(+state: S.State, n: Nat) -> D.Stepped<&2, S.State>:
-  match state:
-    case S.State{world, players, S.Idle{seat, options}, notes}:
-      S.state.stepped(pickup.resolved(S.state.set_notes(state, Nil{}), seat, options, D.resolve(request(state), n)))
-    case _:
-      D.Stepped{state, Nil{}}
+    case S.State{world, +players, _, notes, grabs}:
+      S.State{world, players, S.Aim{seat, G.targets(D.ring.entries(Nat, S.players.health(players)))}, List.append(&2, D.Note, notes, [D.Shown{D.PickedUp{seat}}]), grabs}
 
 def replace_hidden(+state: S.State, gun: List<&2, D.Shell>, decks: S.Decks) -> S.State:
   S.state.set_world(state, S.world.set_decks(S.world.set_gun(S.state.world(state), gun), decks))
@@ -57,7 +25,8 @@ def replace_hidden(+state: S.State, gun: List<&2, D.Shell>, decks: S.Decks) -> S
 def give_turn(+state: S.State, +seat: D.Seat) -> S.State:
   +players : S.Players = S.state.players(state)
   players : S.Players = S.players.set_has_turn(players, D.ring.set(Bool, S.players.has_turn(players), seat, True{}))
-  S.state.emit(S.state.set_phase(S.state.set_players(state, players), S.Idle{seat, D.NonEmpty{S.TakeGun{}, Nil{}}}), D.TurnGiven{seat})
+  +state : S.State = S.state.set_players(state, players)
+  S.state.emit(S.state.set_phase(state, S.Idle{seat, D.NonEmpty{S.TakeGun{}, I.uses(state, seat)}}), D.TurnGiven{seat})
 
 def grant.step(rank: Nat, +state: S.State, +seat: D.Seat, result: S.JamResult) -> S.State:
   match rank result:
@@ -128,7 +97,105 @@ def load.begin(+state: S.State) -> S.State:
 
 def initial(+config: D.Config) -> S.State:
   +table : D.Table = G.config.table(config)
-  S.State{S.World{config, True{}, 0n, 0n, False{}, 0n, D.Seat0{}, None{}, D.Clockwise{}, None{}, False{}, 0n, False{}, Nil{}, D.Load{0n, 0n}, G.decks.full()}, S.Players{D.ring.fill(Nat, table, 100n), D.ring.fill(Bool, table, False{}), D.ring.fill(Bool, table, False{}), D.ring.fill(U32, table, 0), D.ring.fill(D.Slots, table, D.slots.empty()), D.ring.fill(Bool, table, False{})}, S.NeedFirst{}, Nil{}}
+  S.State{S.World{config, True{}, 0n, 0n, False{}, 0n, D.Seat0{}, None{}, D.Clockwise{}, None{}, False{}, 0n, False{}, Nil{}, D.Load{0n, 0n}, G.decks.full()}, S.Players{D.ring.fill(Nat, table, 100n), D.ring.fill(Bool, table, False{}), D.ring.fill(Bool, table, False{}), D.ring.fill(U32, table, 0), D.ring.fill(D.Slots, table, D.slots.empty()), D.ring.fill(Bool, table, False{})}, S.NeedFirst{}, Nil{}, S.Grabs{False{}, D.ring.fill(Bool, table, False{}), D.ring.fill(Maybe<&2, D.Item>, table, None{}), D.ring.fill(Nat, table, 0n), D.ring.fill(Bool, table, False{})}}
+
+# Item distribution (D05, D06, D22, D37 grabbing rows, D55 M1, D56).
+
+def distribute.begin(+state: S.State, seats: List<&2, D.Seat>) -> S.State:
+  match seats:
+    case Nil{}:
+      load.begin(state)
+    case +seat <> +rest:
+      +grabs : S.Grabs = S.grabs.set_distributing(I.grabs.open_all(seat <> rest, S.state.grabs(state)), True{})
+      +state : S.State = S.state.emit(S.state.set_grabs(state, grabs), D.GrabbingBegan{seat <> rest})
+      S.state.set_phase(state, S.Grab{I.grab.needs(state)})
+
+def grab.continue.ready(+state: S.State, distributing: Bool, holders: Bool) -> S.State:
+  match distributing holders:
+    case False{} False{}:
+      load.begin(state)
+    case _ _:
+      S.state.set_phase(state, S.Grab{I.grab.needs(state)})
+
+def grab.continue(+state: S.State) -> S.State:
+  +grabs : S.Grabs = S.state.grabs(state)
+  grab.continue.ready(state, S.grabs.distributing(grabs), I.holders(D.ring.entries(Maybe<&2, D.Item>, S.grabs.holding(grabs))))
+
+def grab.give(+state: S.State, +seat: D.Seat, +item: D.Item) -> S.State:
+  grab.continue(S.state.emit(S.state.set_grabs(state, I.grabs.give(S.state.grabs(state), seat, item)), D.Granted{seat, item}))
+
+def grab.chosen(+state: S.State, +seat: D.Seat, found: Maybe<&2, D.Item>) -> S.State:
+  match found:
+    case Some{item}:
+      grab.give(state, seat, item)
+    case None{}:
+      grab.continue(S.state.tell(state, seat, D.EmptyBriefcase{}))
+
+def grab.pool(+state: S.State, +seat: D.Seat, pool: List<&2, D.Item>) -> S.State:
+  match pool:
+    case Nil{}:
+      grab.chosen(state, seat, None{})
+    case item <> Nil{}:
+      grab.give(state, seat, item)
+    case first <> second <> rest:
+      S.state.set_phase(state, S.NeedItem{seat, first, second, rest})
+
+def grab.take(+state: S.State, +seat: D.Seat) -> S.State:
+  +state : S.State = S.state.set_grabs(state, I.grabs.stop_intake(S.state.grabs(state), seat))
+  grab.pool(state, seat, I.pool(state, seat))
+
+def grab.check.done(+state: S.State, done: Bool) -> S.State:
+  match done:
+    case True{}:
+      S.state.emit(S.state.set_grabs(state, S.grabs.set_distributing(S.state.grabs(state), False{})), D.DistributionDone{})
+    case False{}:
+      state
+
+def grab.check(+state: S.State) -> S.State:
+  grab.check.done(state, Bool.and(S.grabs.distributing(S.state.grabs(state)), I.finished(state)))
+
+def grab.end_all(seats: List<&2, D.Seat>, +state: S.State) -> S.State:
+  match seats:
+    case Nil{}:
+      state
+    case +seat <> rest:
+      grab.end_all(rest, S.state.emit(S.state.set_grabs(state, I.grabs.close(S.state.grabs(state), seat)), D.GrabbingEnded{seat}))
+
+def grab.put.held(+state: S.State, +seat: D.Seat, +slot: D.Slot, held: Maybe<&2, D.Item>) -> S.State:
+  match held:
+    case None{}:
+      S.state.set_phase(state, S.Blocked{})
+    case Some{+item}:
+      +players : S.Players = S.state.players(state)
+      players : S.Players = S.players.set_slots(players, D.ring.set(D.Slots, S.players.slots(players), seat, I.slots.put(I.seat.slots(players, seat), slot, Some{item})))
+      +state : S.State = S.state.set_grabs(S.state.set_players(state, players), I.grabs.placed(S.state.grabs(state), seat))
+      grab.continue(S.state.emit(state, D.Placed{seat, slot, item}))
+
+def grab.put(+state: S.State, +seat: D.Seat, +slot: D.Slot) -> S.State:
+  grab.put.held(state, seat, slot, I.seat.holding(S.state.grabs(state), seat))
+
+# A last placement ends the seat, checks completion, ends the noneligible
+# empty-handed grabbers, and (M1) checks completion again before placing.
+def grab.place.last(+state: S.State, +seat: D.Seat, +slot: D.Slot, last: Bool) -> S.State:
+  match last:
+    case True{}:
+      +state : S.State = grab.check(S.state.emit(S.state.set_grabs(state, I.grabs.close(S.state.grabs(state), seat)), D.GrabbingEnded{seat}))
+      +state : S.State = grab.end_all(I.stalled.seats(state, seat), state)
+      grab.put(grab.check(state), seat, slot)
+    case False{}:
+      grab.put(state, seat, slot)
+
+def grab.place(+state: S.State, +seat: D.Seat, +slot: D.Slot) -> S.State:
+  grab.place.last(state, seat, slot, I.placing.last(state, seat))
+
+def grab.selected(+state: S.State, +seat: D.Seat, selected: Maybe<&2, S.GrabOption>) -> S.State:
+  match selected:
+    case Some{S.TakeItem{}}:
+      grab.take(state, seat)
+    case Some{S.PutAt{slot}}:
+      grab.place(state, seat, slot)
+    case None{}:
+      S.state.set_phase(state, S.Blocked{})
 
 def round.reset(+state: S.State) -> S.State:
   +world : S.World = S.state.world(state)
@@ -138,7 +205,8 @@ def round.reset(+state: S.State) -> S.State:
   players : S.Players = S.players.set_health(players, D.ring.fill(Nat, table, S.world.round_health(world)))
   players : S.Players = S.players.set_slots(players, D.ring.fill(D.Slots, table, D.slots.empty()))
   +world : S.World = S.world.set_direction(S.world.set_checking_first_death(world, True{}), D.Clockwise{})
-  load.begin(S.state.emit(S.state.set_players(S.state.set_world(state, world), players), D.RoundBegan{S.world.round_index(world), S.world.round_health(world), S.world.first_turn(world)}))
+  +state : S.State = S.state.emit(S.state.set_players(S.state.set_world(state, world), players), D.RoundBegan{S.world.round_index(world), S.world.round_health(world), S.world.first_turn(world)})
+  distribute.begin(state, I.begin.seats(state, True{}, S.world.item_amount(world)))
 
 def amount.chosen(+state: S.State, value: Nat) -> S.State:
   round.reset(S.state.set_world(state, S.world.set_item_amount(S.state.world(state), value)))
@@ -183,15 +251,8 @@ def first.override(state: S.State, first_death: Maybe<&2, D.Seat>) -> S.State:
 def first.begin(+state: S.State) -> S.State:
   first.override(state, S.world.first_death(S.state.world(state)))
 
-def start.supported(state: S.State, supported: Bool) -> D.Stepped<&2, S.State>:
-  match supported:
-    case True{}:
-      S.state.stepped(first.begin(state))
-    case False{}:
-      S.state.stepped(S.state.set_phase(state, S.Blocked{}))
-
 def start(+config: D.Config) -> D.Stepped<&2, S.State>:
-  start.supported(initial(config), G.config.no_items(config))
+  S.state.stepped(first.begin(initial(config)))
 
 def win.final(state: S.State, final: Bool) -> S.State:
   match final:
@@ -215,10 +276,13 @@ def turn.recipient(passing: Bool, current: D.Seat, next: D.Seat) -> D.Seat:
     case True{}:
       next
 
+def reload.begin(+state: S.State) -> S.State:
+  distribute.begin(state, I.begin.seats(state, False{}, S.world.item_amount(S.state.world(state))))
+
 def turn.continue(+state: S.State, +recipient: D.Seat, gun: List<&2, D.Shell>) -> S.State:
   match gun:
     case Nil{}:
-      load.begin(S.state.set_world(state, S.world.set_first_turn(S.state.world(state), recipient)))
+      reload.begin(S.state.set_world(state, S.world.set_first_turn(S.state.world(state), recipient)))
     case shell <> rest:
       grant(S.state.set_world(state, S.world.set_first_turn(S.state.world(state), recipient)), recipient)
 
@@ -231,16 +295,29 @@ def turn.winner(+state: S.State, +shooter: D.Seat, passing: Bool, winner: Maybe<
       recipient : D.Seat = turn.recipient(passing, shooter, G.next_turn(S.players.health(S.state.players(state)), S.world.direction(world), shooter))
       turn.continue(state, recipient, S.world.gun(world))
 
-def turn.amount(+state: S.State, shooter: D.Seat, passing: Bool, rule: D.AmountRule) -> S.State:
+def turn.amount(+state: S.State, shooter: D.Seat, passing: Bool, winner: Maybe<&2, D.Seat>, rule: D.AmountRule) -> S.State:
   match rule:
     case D.RandomAmount{}:
-      turn.winner(state, shooter, passing, G.winner(S.players.health(S.state.players(state))))
+      turn.winner(state, shooter, passing, winner)
     case D.FixedAmount{amount}:
       +state : S.State = S.state.set_world(state, S.world.set_item_amount(S.state.world(state), amount))
-      turn.winner(state, shooter, passing, G.winner(S.players.health(S.state.players(state))))
+      turn.winner(state, shooter, passing, winner)
+
+def turn.live(+state: S.State, shooter: D.Seat, passing: Bool, winner: Maybe<&2, D.Seat>, rule: D.AmountRule, live: Bool) -> S.State:
+  match live:
+    case True{}:
+      S.state.set_phase(state, S.NeedTurnAmount{shooter, passing, winner})
+    case False{}:
+      turn.amount(state, shooter, passing, winner, rule)
+
+# UserEndTurn_Packet: the packet's winner is the shot's winner check, or
+# None after beer ejects the last shell.
+def turn.packet(+state: S.State, shooter: D.Seat, passing: Bool, +winner: Maybe<&2, D.Seat>) -> S.State:
+  +rule : D.AmountRule = G.load.amount(G.world.load_rule(S.state.world(state)))
+  turn.live(state, shooter, passing, winner, rule, I.amount.live(rule, S.grabs.distributing(S.state.grabs(state)), I.reload.wanted(state, winner)))
 
 def turn.end(+state: S.State, shooter: D.Seat, passing: Bool) -> S.State:
-  turn.amount(state, shooter, passing, G.load.amount(G.world.load_rule(S.state.world(state))))
+  turn.packet(state, shooter, passing, G.winner(S.players.health(S.state.players(state))))
 
 def death.remember(+state: S.State, seat: D.Seat, checking: Bool) -> S.State:
   match checking:
@@ -286,6 +363,174 @@ def aim.selected(state: S.State, shooter: D.Seat, selected: Maybe<&2, S.TargetOp
     case None{}:
       S.state.set_phase(state, S.Blocked{})
 
+# Item use (D17, D18, D28, D29, D37). A use or steal consumes the slot,
+# then applies the effect; jammer and adrenaline open a selection phase.
+
+def item.resume(+state: S.State, +seat: D.Seat) -> S.State:
+  +players : S.Players = S.state.players(state)
+  +state : S.State = S.state.set_players(state, S.players.set_has_turn(players, D.ring.set(Bool, S.players.has_turn(players), seat, True{})))
+  S.state.set_phase(state, S.Idle{seat, D.NonEmpty{S.TakeGun{}, I.uses(state, seat)}})
+
+def item.end(+state: S.State, +seat: D.Seat, ending: Bool) -> S.State:
+  match ending:
+    case True{}:
+      turn.packet(state, seat, True{}, None{})
+    case False{}:
+      item.resume(state, seat)
+
+def item.chamber(+state: S.State, +seat: D.Seat, item: D.Item, ending: Bool, +shell: D.Shell, rest: List<&2, D.Shell>) -> S.State:
+  match item:
+    case D.Glass{}:
+      item.end(S.state.tell(state, seat, D.Glimpse{shell}), seat, ending)
+    case D.Beer{}:
+      +state : S.State = S.state.set_world(state, S.world.set_gun(S.state.world(state), rest))
+      item.end(S.state.emit(state, D.Ejected{seat, shell}), seat, ending)
+    case D.Inverter{}:
+      +state : S.State = S.state.set_world(state, S.world.set_gun(S.state.world(state), I.invert(shell) <> rest))
+      item.end(S.state.emit(state, D.Inverted{seat}), seat, ending)
+    case _:
+      S.state.set_phase(state, S.Blocked{})
+
+def item.shell(+state: S.State, +seat: D.Seat, item: D.Item, ending: Bool, gun: List<&2, D.Shell>) -> S.State:
+  match gun:
+    case Nil{}:
+      S.state.set_phase(state, S.Blocked{})
+    case +shell <> rest:
+      item.chamber(state, seat, item, ending, shell, rest)
+
+def item.heal(+state: S.State, +seat: D.Seat, heal: Bool) -> S.State:
+  match heal:
+    case True{}:
+      +players : S.Players = S.state.players(state)
+      +hp : Nat = 1n+I.seat.health(players, seat)
+      +state : S.State = S.state.set_players(state, S.players.set_health(players, D.ring.set(Nat, S.players.health(players), seat, hp)))
+      item.resume(S.state.emit(state, D.Healed{seat, hp}), seat)
+    case False{}:
+      item.resume(state, seat)
+
+def item.tell(+state: S.State, +seat: D.Seat, phone: Maybe<&2, D.Secret>) -> S.State:
+  match phone:
+    case None{}:
+      S.state.set_phase(state, S.Blocked{})
+    case Some{secret}:
+      item.resume(S.state.tell(state, seat, secret), seat)
+
+def item.effect(+state: S.State, +seat: D.Seat, item: D.Item, ending: Bool, phone: Maybe<&2, D.Secret>) -> S.State:
+  match item:
+    case D.Saw{}:
+      item.resume(S.state.set_world(state, S.world.set_sawed(S.state.world(state), True{})), seat)
+    case D.Jammer{}:
+      S.state.set_phase(state, S.JamPick{seat, I.jam.for(state, seat)})
+    case D.Cigarettes{}:
+      item.heal(state, seat, Nat.is_lt(I.seat.health(S.state.players(state), seat), S.world.round_health(S.state.world(state))))
+    case D.Phone{}:
+      item.tell(state, seat, phone)
+    case D.Adrenaline{}:
+      S.state.set_phase(state, S.StealPick{seat, I.steal.for(state, seat)})
+    case D.Remote{}:
+      +direction : D.Direction = I.flip(S.world.direction(S.state.world(state)))
+      item.resume(S.state.emit(S.state.set_world(state, S.world.set_direction(S.state.world(state), direction)), D.DirectionFlipped{direction}), seat)
+    case D.Glass{}:
+      item.shell(state, seat, D.Glass{}, ending, S.world.gun(S.state.world(state)))
+    case D.Beer{}:
+      item.shell(state, seat, D.Beer{}, ending, S.world.gun(S.state.world(state)))
+    case D.Inverter{}:
+      item.shell(state, seat, D.Inverter{}, ending, S.world.gun(S.state.world(state)))
+
+def item.consume(+state: S.State, +seat: D.Seat, +owner: D.Seat, +slot: D.Slot, +item: D.Item, ending: Bool, phone: Maybe<&2, D.Secret>) -> S.State:
+  +players : S.Players = S.state.players(state)
+  +players : S.Players = S.players.set_has_turn(players, D.ring.set(Bool, S.players.has_turn(players), seat, I.keeps_turn(item)))
+  players : S.Players = S.players.set_slots(players, D.ring.set(D.Slots, S.players.slots(players), owner, I.slots.put(I.seat.slots(players, owner), slot, None{})))
+  item.effect(S.state.emit(S.state.set_players(state, players), D.Used{seat, owner, slot, item}), seat, item, ending, phone)
+
+def item.clue.found(+state: S.State, +seat: D.Seat, +owner: D.Seat, +slot: D.Slot, +position: Nat, found: Maybe<&2, D.Shell>) -> S.State:
+  match found:
+    case None{}:
+      S.state.set_phase(state, S.Blocked{})
+    case Some{shell}:
+      item.consume(state, seat, owner, slot, D.Phone{}, False{}, Some{D.Clue{position, shell}})
+
+# The phone announces drawn index plus one, capped at the seventh shell (D28).
+def item.clue(+state: S.State, +seat: D.Seat, +owner: D.Seat, +slot: D.Slot, index: Nat) -> S.State:
+  +position : Nat = D.clamp(1n+index, D.phone.cap())
+  item.clue.found(state, seat, owner, slot, position, G.nth(D.Shell, S.world.gun(S.state.world(state)), G.predecessor(position)))
+
+def item.phone(+state: S.State, +seat: D.Seat, +owner: D.Seat, +slot: D.Slot, length: Nat) -> S.State:
+  match length:
+    case 0n:
+      item.consume(state, seat, owner, slot, D.Phone{}, False{}, Some{D.NoClue{}})
+    case 1n:
+      item.consume(state, seat, owner, slot, D.Phone{}, False{}, Some{D.NoClue{}})
+    case 2n:
+      item.consume(state, seat, owner, slot, D.Phone{}, False{}, Some{D.NoClue{}})
+    case 3n:
+      item.clue(state, seat, owner, slot, 2n)
+    case _:
+      S.state.set_phase(state, S.NeedPhone{seat, owner, slot})
+
+def item.route(+state: S.State, +seat: D.Seat, +owner: D.Seat, +slot: D.Slot, item: D.Item, ending: Bool, length: Nat) -> S.State:
+  match item:
+    case D.Phone{}:
+      item.phone(state, seat, owner, slot, length)
+    case item:
+      item.consume(state, seat, owner, slot, item, ending, None{})
+
+def item.use(+state: S.State, +seat: D.Seat, +owner: D.Seat, +slot: D.Slot, +item: D.Item) -> S.State:
+  +length : Nat = List.length(&2, D.Shell, S.world.gun(S.state.world(state)))
+  item.route(state, seat, owner, slot, item, I.ends_turn(item, length), length)
+
+def jam.selected(+state: S.State, +seat: D.Seat, selected: Maybe<&2, S.JamOption>) -> S.State:
+  match selected:
+    case Some{S.JamAt{+target}}:
+      +players : S.Players = S.state.players(state)
+      +players : S.Players = S.players.set_jammed(players, D.ring.set(Bool, S.players.jammed(players), target, True{}))
+      players : S.Players = S.players.set_checked(players, D.ring.set(Bool, S.players.checked(players), target, False{}))
+      item.resume(S.state.emit(S.state.set_players(state, players), D.JamApplied{seat, target}), seat)
+    case None{}:
+      S.state.set_phase(state, S.Blocked{})
+
+def steal.selected(+state: S.State, +seat: D.Seat, selected: Maybe<&2, S.StealOption>) -> S.State:
+  match selected:
+    case Some{S.Pick{owner, slot, item}}:
+      item.use(state, seat, owner, slot, item)
+    case None{}:
+      S.state.set_phase(state, S.Blocked{})
+
+def pickup.selected(state: S.State, +seat: D.Seat, selected: Maybe<&2, S.IdleOption>) -> S.State:
+  match selected:
+    case Some{S.TakeGun{}}:
+      pickup(state, seat)
+    case Some{S.UseAt{slot, item}}:
+      item.use(state, seat, seat, slot, item)
+    case None{}:
+      S.state.set_phase(state, S.Blocked{})
+
+def pickup.same(state: S.State, seat: D.Seat, options: D.NonEmpty<&2, S.IdleOption>, index: Nat, same: Bool) -> S.State:
+  match same:
+    case True{}:
+      pickup.selected(state, seat, G.idle.nth(D.nonempty.list(S.IdleOption, options), index))
+    case False{}:
+      S.state.set_phase(state, S.Blocked{})
+
+def pickup.choice(state: S.State, +seat: D.Seat, options: D.NonEmpty<&2, S.IdleOption>, choice: D.Choice) -> S.State:
+  match choice:
+    case D.Choice{chosen, index, _}:
+      pickup.same(state, seat, options, index, D.seat.eq(seat, chosen))
+
+def pickup.resolved(state: S.State, seat: D.Seat, options: D.NonEmpty<&2, S.IdleOption>, resolved: D.Resolved) -> S.State:
+  match resolved:
+    case D.Chose{choice}:
+      pickup.choice(state, seat, options, choice)
+    case _:
+      S.state.set_phase(state, S.Blocked{})
+
+def pickup_slice(+state: S.State, n: Nat) -> D.Stepped<&2, S.State>:
+  match state:
+    case S.State{world, players, S.Idle{seat, options}, notes, grabs}:
+      S.state.stepped(pickup.resolved(S.state.set_notes(state, Nil{}), seat, options, D.resolve(request(state), n)))
+    case _:
+      D.Stepped{state, Nil{}}
+
 def answer.idle(state: S.State, seat: D.Seat, options: D.NonEmpty<&2, S.IdleOption>, index: Nat, allowed: Bool) -> S.State:
   match allowed:
     case True{}:
@@ -300,27 +545,53 @@ def answer.aim(state: S.State, seat: D.Seat, targets: List<&2, S.TargetOption>, 
     case False{}:
       S.state.set_phase(state, S.Blocked{})
 
+def answer.jam(state: S.State, seat: D.Seat, targets: List<&2, S.JamOption>, index: Nat, allowed: Bool) -> S.State:
+  match allowed:
+    case True{}:
+      jam.selected(state, seat, I.jam.nth(targets, index))
+    case False{}:
+      S.state.set_phase(state, S.Blocked{})
+
+def answer.steal(state: S.State, seat: D.Seat, picks: List<&2, S.StealOption>, index: Nat, allowed: Bool) -> S.State:
+  match allowed:
+    case True{}:
+      steal.selected(state, seat, I.steal.nth(picks, index))
+    case False{}:
+      S.state.set_phase(state, S.Blocked{})
+
 def answer.choice(+state: S.State, choice: D.Choice) -> S.State:
   match state choice:
-    case S.State{world, players, S.Idle{+seat, options}, notes} D.Choice{chosen, index, _}:
+    case S.State{world, players, S.Idle{+seat, options}, notes, grabs} D.Choice{chosen, index, _}:
       answer.idle(state, seat, options, index, Bool.and(D.seat.eq(seat, chosen), G.accepted(state, seat)))
-    case S.State{world, players, S.Aim{+seat, targets}, notes} D.Choice{chosen, index, _}:
+    case S.State{world, players, S.Aim{+seat, targets}, notes, grabs} D.Choice{chosen, index, _}:
       answer.aim(state, seat, targets, index, Bool.and(D.seat.eq(seat, chosen), G.accepted(state, seat)))
+    case S.State{world, players, S.Grab{needs}, notes, grabs} D.Choice{+chosen, index, _}:
+      grab.selected(state, chosen, I.grab.nth(G.value.or(List<&2, S.GrabOption>, D.ring.get(List<&2, S.GrabOption>, needs, chosen), Nil{}), index))
+    case S.State{world, players, S.JamPick{+seat, targets}, notes, grabs} D.Choice{chosen, index, _}:
+      answer.jam(state, seat, targets, index, Bool.and(D.seat.eq(seat, chosen), G.accepted(state, seat)))
+    case S.State{world, players, S.StealPick{+seat, picks}, notes, grabs} D.Choice{chosen, index, _}:
+      answer.steal(state, seat, picks, index, Bool.and(D.seat.eq(seat, chosen), G.accepted(state, seat)))
     case _ _:
       S.state.set_phase(state, S.Blocked{})
 
 def answer.draw(+state: S.State, value: Nat) -> S.State:
   match state:
-    case S.State{world, players, S.NeedFirst{}, notes}:
+    case S.State{world, players, S.NeedFirst{}, notes, grabs}:
       first.chosen(state, G.value.or(D.Seat, G.nth(D.Seat, D.table.seats(S.world.table(world)), value), D.Seat0{}))
-    case S.State{world, players, S.NeedHealth{}, notes}:
+    case S.State{world, players, S.NeedHealth{}, notes, grabs}:
       health.chosen(state, value)
-    case S.State{world, players, S.NeedAmount{}, notes}:
+    case S.State{world, players, S.NeedAmount{}, notes, grabs}:
       amount.chosen(state, value)
-    case S.State{world, players, S.NeedBatch{}, notes}:
+    case S.State{world, players, S.NeedBatch{}, notes, grabs}:
       batch(state, value)
-    case S.State{world, players, S.NeedSwap{load, shells, +i}, notes}:
+    case S.State{world, players, S.NeedSwap{load, shells, +i}, notes, grabs}:
       shuffle(state, load, G.swap(shells, i, value), G.predecessor(i))
+    case S.State{world, players, S.NeedTurnAmount{from, passing, winner}, notes, grabs}:
+      turn.winner(S.state.set_world(state, S.world.set_item_amount(world, value)), from, passing, winner)
+    case S.State{world, players, S.NeedItem{seat, first, second, rest}, notes, grabs}:
+      grab.chosen(state, seat, G.nth(D.Item, first <> second <> rest, value))
+    case S.State{world, players, S.NeedPhone{seat, owner, slot}, notes, grabs}:
+      item.clue(state, seat, owner, slot, value)
     case _:
       S.state.set_phase(state, S.Blocked{})
 

@@ -1,11 +1,11 @@
-"""Generate the case-split proof bodies of PROOF.bend.
+"""Generate the case-split proof bodies of core-proof.bend.
 
-Some lemmas in PROOF.bend are case splits too large to write by hand: the
+Some lemmas in core-proof.bend are case splits too large to write by hand: the
 same small proof repeated for every table shape, seat and value the rules
-branch on. Their signatures (the claims) are written by hand in PROOF.bend;
+branch on. Their signatures (the claims) are written by hand in core-proof.bend;
 this script owns only their bodies.
 
-    python3 tools/proof_cases.py          # fail if PROOF.bend differs
+    python3 tools/proof_cases.py          # fail if core-proof.bend differs
     python3 tools/proof_cases.py --write  # rewrite the bodies in place
 """
 
@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from itertools import product
 from pathlib import Path
 
-PROOF = Path(__file__).resolve().parent.parent / "PROOF.bend"
+PROOF = Path(__file__).resolve().parent.parent / "core-proof.bend"
 
 SEATS = ("D.Seat0{}", "D.Seat1{}", "D.Seat2{}", "D.Seat3{}")
 
@@ -34,7 +34,9 @@ class Shape:
         cells = []
         for seat in self.seated:
             hp = (health or {}).get(seat, f"h{seat}")
-            cells.append(f"A.CoreSeat{{{hp}, j{seat}, c{seat}, p{seat}, t{seat}}}")
+            cells.append(
+                f"A.CoreSeat{{{hp}, j{seat}, c{seat}, p{seat}, s{seat}, t{seat}}}"
+            )
         return f"D.{self.ring}{{{', '.join(cells)}}}"
 
 
@@ -175,6 +177,7 @@ BODIES: dict[str, Callable[[], list[str]]] = {
     "aimstep.loop_award": seat_split(match_world=True),
     "aimstep.mid": mid,
     "aimstep.r1": r1,
+    "inv.idle_phase": seat_split(match_world=True),
     "aimstep.front": front,
 }
 
@@ -193,9 +196,9 @@ def body_span(text: str, name: str) -> tuple[int, int]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Generate the case-split proof bodies of PROOF.bend."
+        description="Generate the case-split proof bodies of core-proof.bend."
     )
-    parser.add_argument("--write", action="store_true", help="rewrite PROOF.bend")
+    parser.add_argument("--write", action="store_true", help="rewrite core-proof.bend")
     args = parser.parse_args()
     text = PROOF.read_text()
     stale = []
@@ -211,7 +214,7 @@ def main() -> int:
         return 0
     if stale:
         print(
-            f"PROOF.bend differs from tools/proof_cases.py: {', '.join(stale)}",
+            f"core-proof.bend differs from tools/proof_cases.py: {', '.join(stale)}",
             file=sys.stderr,
         )
         return 1
