@@ -4,6 +4,7 @@ import ./core-proof.bend as Core
 import ./step-proof.bend as Step
 import ./item-step-proof.bend as ItemStep
 import ./grab-proof.bend as GrabProof
+import ./load-proof.bend as LoadProof
 
 def Laws.core_roundtrip(seats):
   Core.law.core_roundtrip(seats)
