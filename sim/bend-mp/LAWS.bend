@@ -87,7 +87,6 @@ law turn_traversal:
 
 law start_result_matches:
   for +config: D.Config
-  for supported: {Q.config.no_items(config) == True{} : Bool}
   {A.ref_start(config) == A.stepped(M.start(config)) : A.RefStep()}
 
 law privacy:
@@ -109,7 +108,6 @@ law jam_skip_once:
 
 law start_matches:
   for +config: D.Config
-  for +supported: {Q.config.no_items(config) == True{} : Bool}
   A.StartSimulation(config)
 
 
@@ -119,20 +117,27 @@ law start_matches:
 law step_matches:
   for +state: S.State
   for +n: Nat
-  for +valid: A.Valid(state)
-  Sigma<&2, &2, {A.ref_answer(A.ref(state), n) == A.stepped(M.answer(state, n)) : A.RefStep()}, _ => Sigma<&2, &2, {M.point(A.next(state, n)) == A.ref_step_point(A.ref_answer(A.ref(state), n)) : D.Point}, _ => A.Valid(A.next(state, n))>>
+  for +valid: A.ValidItems(state)
+  Sigma<&2, &2, {A.ref_answer(A.ref(state), n) == A.stepped(M.answer(state, n)) : A.RefStep()}, _ => Sigma<&2, &2, {M.point(A.next(state, n)) == A.ref_step_point(A.ref_answer(A.ref(state), n)) : D.Point}, _ => A.ValidItems(A.next(state, n))>>
 
 law run_matches:
   for fuel: Nat
   for +state: S.State
   for +tape: List<&2, Nat>
-  for +valid: A.Valid(state)
+  for +valid: A.ValidItems(state)
   {A.ref_run(fuel, A.ref(state), tape) == A.ran(M.run(fuel, state, tape)) : A.RefRan()}
 
-# Every state the machine reaches from a no-item start is valid.
+# Every state the machine reaches from a start is valid.
 law reachable_valid:
   for fuel: Nat
   for +config: D.Config
-  for +supported: {Q.config.no_items(config) == True{} : Bool}
   for +tape: List<&2, Nat>
-  A.Valid(A.machine_ran_state(M.run(fuel, M.stepped.state(M.start(config)), tape)))
+  A.ValidItems(A.machine_ran_state(M.run(fuel, M.stepped.state(M.start(config)), tape)))
+
+# Every machine game is a reference game, and the reverse: for every config
+# and tape, the reference's game equals the machine's read through A.ran.
+law games_match:
+  for +fuel: Nat
+  for +config: D.Config
+  for +tape: List<&2, Nat>
+  {A.ref_game(fuel, config, tape) == A.ran(A.machine_game(fuel, config, tape)) : A.RefRan()}

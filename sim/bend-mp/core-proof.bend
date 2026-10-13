@@ -460,7 +460,6 @@ def choices_of_play(aiming: Bool, +seats: D.Ring<&2, A.CoreSeat>, +seat: D.Seat)
       target_choices_shape(A.target_options(seats), seat, 0n)
 
 
-
 def menu_shapes(+world: S.World, +seats: D.Ring<&2, A.CoreSeat>, +seat: D.Seat, +aiming: Bool, present: A.seated(world, seat)) -> {A.choices_shape(A.play_mode(aiming), A.menu_choices(world, seat, A.play_moves(aiming, seats))) == True{} : Bool}:
   match world:
     case S.World{D.Config{+table, plan}, before, round, index, first, hp, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}:
@@ -754,15 +753,6 @@ def supported_backwards(+value: Bool, proof: {value == True{} : Bool}) -> {True{
   %proof : {_ == value : Bool}
   {==}
 
-def law.start_result_matches(+config: D.Config, supported: {Q.config.no_items(config) == True{} : Bool}) -> {A.ref_start(config) == A.stepped(M.start(config)) : A.RefStep()}:
-  match config:
-    case D.Config{D.TwoSeats{}, plan}:
-      {==}
-    case D.Config{D.ThreeSeats{}, plan}:
-      {==}
-    case D.Config{D.FourSeats{}, plan}:
-      {==}
-
 def public(+world: S.World, players: S.Players, grabs: S.Grabs, phase: S.Phase, +seat: D.Seat, remaining: Nat, notes: List<&2, D.Note>) -> D.Obs & List<&2, D.Heard>:
   +table : D.Table = S.world.table(world)
   views : D.Ring<&2, D.SeatView> = PView.seat.views(D.table.seats(table), players, grabs, D.ring.fill(D.SeatView, table, D.SeatView{D.Unjammed{100n}, D.slots.empty(), 0, D.NotGrabbing{}}))
@@ -895,10 +885,6 @@ def normalized_request(+state: S.State) -> {A.machine_request(A.normalize(state)
     case S.State{world, players, phase, notes, grabs}:
       law.legal_exact(world, A.core(players), phase, notes)
 
-def valid_request(+state: S.State, valid: A.Valid(state)) -> {A.machine_request(state) == A.ref_request(A.ref(state)) : D.Request}:
-  %A.valid.norm(state, valid) : {A.machine_request(_) == A.ref_request(A.ref(_)) : D.Request}
-  normalized_request(state)
-
 def merge_matches(+step: D.Stepped<&2, S.State>, +ran: D.Ran<&2, S.State>) -> {A.ref_merge(A.stepped(step), A.ran(ran)) == A.ran(A.machine_merge(step, ran)) : A.RefRan()}:
   match step ran:
     case D.Stepped{before, first} D.Ran{state, rest, tape}:
@@ -913,9 +899,6 @@ def next_run_transport(+step: D.Stepped<&2, S.State>, +fuel: Nat, +tape: List<&2
   match step:
     case D.Stepped{state, notes}:
       proof
-
-def run_successor(+fuel: Nat, +state: S.State, +n: Nat, +tape: List<&2, Nat>, +simulation: A.Simulation(state, n), recur: A.RunHypothesis(fuel)) -> {A.ref_merge(A.ref_answer(A.ref(state), n), A.ref_run(fuel, A.ref_next(A.ref_answer(A.ref(state), n)), tape)) == A.ran(A.machine_merge(M.answer(state, n), M.run(fuel, M.stepped.state(M.answer(state, n)), tape))) : A.RefRan()}:
-  Equal.trans(A.RefRan(), A.ref_merge(A.ref_answer(A.ref(state), n), A.ref_run(fuel, A.ref_next(A.ref_answer(A.ref(state), n)), tape)), A.ref_merge(A.stepped(M.answer(state, n)), A.ref_run(fuel, A.ref_next(A.stepped(M.answer(state, n))), tape)), A.ran(A.machine_merge(M.answer(state, n), M.run(fuel, M.stepped.state(M.answer(state, n)), tape))), Equal.cong(A.RefStep(), A.RefRan(), next => A.ref_merge(next, A.ref_run(fuel, A.ref_next(next), tape)), A.ref_answer(A.ref(state), n), A.stepped(M.answer(state, n)), A.simulation.step(state, n, simulation)), merge_lift(M.answer(state, n), fuel, tape, next_run_transport(M.answer(state, n), fuel, tape, recur(A.next(state, n), tape, A.simulation.next(state, n, simulation)))))
 
 def run_zero(request: D.Request, +state: S.State, +tape: List<&2, Nat>) -> {A.ref_driver(0n, request, A.ref(state), tape) == A.ran(M.run.request(0n, request, state, tape)) : A.RefRan()}:
   match request tape:
@@ -935,9 +918,6 @@ def run_zero(request: D.Request, +state: S.State, +tape: List<&2, Nat>) -> {A.re
       {==}
     case D.Choose{menus} n <> rest:
       {==}
-
-def run_glue(+fuel: Nat, +state: S.State, +tape: List<&2, Nat>, +valid: A.Valid(state), lifted: {A.ref_driver(fuel, A.machine_request(state), A.ref(state), tape) == A.ran(M.run(fuel, state, tape)) : A.RefRan()}) -> {A.ref_run(fuel, A.ref(state), tape) == A.ran(M.run(fuel, state, tape)) : A.RefRan()}:
-  Equal.trans(A.RefRan(), A.ref_run(fuel, A.ref(state), tape), A.ref_driver(fuel, A.machine_request(state), A.ref(state), tape), A.ran(M.run(fuel, state, tape)), Equal.trans(A.RefRan(), A.ref_run(fuel, A.ref(state), tape), A.ref_driver(fuel, A.ref_request(A.ref(state)), A.ref(state), tape), A.ref_driver(fuel, A.machine_request(state), A.ref(state), tape), ref_run_driver(fuel, state, tape), Equal.cong(D.Request, A.RefRan(), request => A.ref_driver(fuel, request, A.ref(state), tape), A.ref_request(A.ref(state)), A.machine_request(state), Equal.sym(D.Request, A.machine_request(state), A.ref_request(A.ref(state)), valid_request(state, valid)))), lifted)
 
 def normalized_pack(+world: S.World, +seats: A.Seats(), +phase: S.Phase, +notes: A.Notes()) -> {A.normalize(A.pack(world, seats, phase, notes)) == A.canonical_state(world, seats, phase, notes) : S.State}:
   match seats:
@@ -1081,7 +1061,6 @@ def loadproof.disabled_ineligible(+rule: D.ItemRule, dealt: Bool, own: Nat, tota
 
 def loadproof.pool_rule_false(+world: S.World, +seats: D.Ring<&2, A.CoreSeat>, +seat: D.Seat, +item: D.Item, disabled: {A.items_disabled(A.current_items(world, seats)) == True{} : Bool}) -> {A.pool_rule(world, seats, seat, item) == False{} : Bool}:
   loadproof.disabled_ineligible(D.rules.item(A.current_items(world, seats), item), A.pool_dealt(world, seats, item), A.pool_own(world, seats, seat, item), A.pool_total(world, seats, item), loadproof.disabled_selected(A.current_items(world, seats), item, disabled))
-
 
 
 def loadproof.rule_off_id(+rule: D.ItemRule, disabled: {A.disabled_rule(rule) == True{} : Bool}) -> {rule == A.rule_off(rule) : D.ItemRule}:
@@ -1467,7 +1446,6 @@ def loadproof.shuffle_done(+world: S.World, +seats: D.Ring<&2, A.CoreSeat>, +pha
   match world:
     case S.World{config, before, round, index, first, hp, +recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}:
       GrantProof.grant_six_dispatches(A.shuffle_world(world, load, shells), seats, recipient, phase, A.loaded_notes(notes, load), extra)
-
 
 
 def loadproof.step_ref_commutes(+state: S.State) -> {A.ref_stepped(A.ref(state)) == A.machine_ref_step(state) : A.RefStep()}:
@@ -2224,16 +2202,6 @@ def initial_normal(+config: D.Config) -> {A.normalize(M.initial(config)) == M.in
     case D.Config{D.FourSeats{}, plan}:
       {==}
 
-def initial_valid(+config: D.Config, supported: {Q.config.no_items(config) == True{} : Bool}) -> A.Valid(M.initial(config)):
-  match config:
-    case D.Config{table, +plan}:
-      (initial_normal(config), (supported, (plan_nonempty(plan), plan_nonempty(plan))))
-
-def start_valid(+config: D.Config, +supported: {Q.config.no_items(config) == True{} : Bool}) -> A.Valid(A.machine_step_state(M.start(config))):
-  match config:
-    case D.Config{table, plan}:
-      initial_valid(config, supported)
-
 def point_stepped(+step: D.Stepped<&2, S.State>) -> {A.point_of_ref(A.machine_step_state(step)) == A.ref_step_point(A.stepped(step)) : D.Point}:
   match step:
     case D.Stepped{state, notes}:
@@ -2382,14 +2350,6 @@ def first_begin_matches(+world: S.World, +seats: A.Seats(), +phase: S.Phase, +no
           loadproof.raw_state_exact(A.world_for(world, seats), seats, S.NeedFirst{}, notes)
         case Some{+seat}:
           loadproof.first_chosen_matches(world, seats, phase, notes, seat, extra, SupportProof.current_disabled(A.world_for(A.first_world(world, seat), seats), seats, supported, ready))
-
-def start_build(+config: D.Config, +supported: {Q.config.no_items(config) == True{} : Bool}) -> A.StartSimulation(config):
-  +result : {A.ref_start(config) == A.stepped(M.start(config)) : A.RefStep()} = law.start_result_matches(config, supported)
-  +valid : A.Valid(A.machine_step_state(M.start(config))) = start_valid(config, supported)
-  (result, (Equal.trans(D.Point, A.ref_step_point(A.ref_start(config)), A.ref_step_point(A.stepped(M.start(config))), A.machine_point(A.machine_step_state(M.start(config))), Equal.cong(A.RefStep(), D.Point, A.ref_step_point, A.ref_start(config), A.stepped(M.start(config)), result), Equal.trans(D.Point, A.ref_step_point(A.stepped(M.start(config))), A.point_of_ref(A.machine_step_state(M.start(config))), A.machine_point(A.machine_step_state(M.start(config))), Equal.sym(D.Point, A.point_of_ref(A.machine_step_state(M.start(config))), A.ref_step_point(A.stepped(M.start(config))), point_stepped(M.start(config))), Equal.sym(D.Point, A.machine_point(A.machine_step_state(M.start(config))), A.point_of_ref(A.machine_step_state(M.start(config))), point.valid(A.machine_step_state(M.start(config)), valid)))), valid))
-
-def law.start_matches(+config: D.Config, +supported: {Q.config.no_items(config) == True{} : Bool}) -> A.StartSimulation(config):
-  start_build(config, supported)
 
 def result_original(+state: S.State, +n: Nat, +valid: A.Valid(state), result: {A.ref_answer(A.ref(A.normalize(state)), n) == A.stepped(M.answer(A.normalize(state), n)) : A.RefStep()}) -> {A.ref_answer(A.ref(state), n) == A.stepped(M.answer(state, n)) : A.RefStep()}:
   match valid:
@@ -2795,37 +2755,6 @@ def merge_final_state(+step: D.Stepped<&2, S.State>, +ran: D.Ran<&2, S.State>) -
   match step ran:
     case D.Stepped{before, first} D.Ran{state, notes, tape}:
       {==}
-
-def merge_final_valid(+step: D.Stepped<&2, S.State>, +ran: D.Ran<&2, S.State>, valid: A.Valid(A.machine_ran_state(ran))) -> A.Valid(A.machine_ran_state(M.run.merge(step, ran))):
-  %Equal.sym(S.State, A.machine_ran_state(M.run.merge(step, ran)), A.machine_ran_state(ran), merge_final_state(step, ran)) : A.Valid(_)
-  valid
-
-def next_valid_transport(+step: D.Stepped<&2, S.State>, valid: A.Valid(A.machine_step_state(step))) -> A.Valid(M.stepped.state(step)):
-  match step:
-    case D.Stepped{state, notes}:
-      valid
-
-def run_valid_successor(+fuel: Nat, +state: S.State, +n: Nat, +tape: List<&2, Nat>, simulation: A.Simulation(state, n), recur: A.RunValidHypothesis(fuel)) -> A.Valid(A.machine_ran_state(M.run.merge(M.answer(state, n), M.run(fuel, M.stepped.state(M.answer(state, n)), tape)))):
-  merge_final_valid(M.answer(state, n), M.run(fuel, M.stepped.state(M.answer(state, n)), tape), recur(M.stepped.state(M.answer(state, n)), tape, next_valid_transport(M.answer(state, n), A.simulation.next(state, n, simulation))))
-
-def run_valid_zero(request: D.Request, +state: S.State, tape: List<&2, Nat>, valid: A.Valid(state)) -> A.Valid(A.machine_ran_state(M.run.request(0n, request, state, tape))):
-  match request tape:
-    case D.Finished{} Nil{}:
-      valid
-    case D.Finished{} n <> rest:
-      valid
-    case D.Stuck{} Nil{}:
-      valid
-    case D.Stuck{} n <> rest:
-      valid
-    case D.Draw{kind, range} Nil{}:
-      valid
-    case D.Draw{kind, range} n <> rest:
-      valid
-    case D.Choose{menus} Nil{}:
-      valid
-    case D.Choose{menus} n <> rest:
-      valid
 
 def aimstep.synced_world(+world: S.World, +seats: A.Seats(), synced: {S.world.table(world) == D.ring.table(A.CoreSeat, seats) : D.Table}) -> {A.world_for(world, seats) == world : S.World}:
   match world:

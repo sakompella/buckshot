@@ -40,14 +40,8 @@ def Laws.state_roundtrip(world, seats, phase, notes):
 def Laws.turn_traversal(world, seats, current):
   Core.law.turn_traversal(world, seats, current)
 
-def Laws.start_result_matches(config, supported):
-  Core.law.start_result_matches(config, supported)
-
 def Laws.privacy(state, gun, decks, seat, same_length):
   Core.law.privacy(state, gun, decks, seat, same_length)
 
 def Laws.jam_skip_once(world, seats, seat, notes):
   Core.law.jam_skip_once(world, seats, seat, notes)
-
-def Laws.start_matches(config, supported):
-  Core.law.start_matches(config, supported)
