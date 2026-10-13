@@ -6,7 +6,7 @@ import { modifyFields } from "foldkit/struct";
 
 import { Game, type AnswerError } from "./bend.ts";
 import { type Board, Briefcase, Counter, GameEvent, healthOf, type Item, LearnedSecret, Move, Seat, SeatCount, type SeatView, Secret, Stage } from "./domain.ts";
-import { aiPrompt, aiStep, AiSeat, begin, Controller, controllerOf, play, type Progress, promptsOf } from "./driver.ts";
+import { aiPrompt, aiStep, AiSeat, begin, Controller, controllerOf, isAi, play, type Progress, promptsOf } from "./driver.ts";
 import { seedRng } from "./rng.ts";
 import { titles } from "./titles.ts";
 
@@ -75,7 +75,18 @@ const SEATS_BY_TABLE: Readonly<Record<SeatCount, ReadonlyArray<Seat>>> = { 2: [1
 
 const progressOf = (match: Session): Progress => ({ game: match.game, rng: match.rng, events: match.events, learned: match.learned, ais: match.ais, seed: match.seed });
 
-const withProgress = (match: Session, progress: Progress): Session => ({ ...match, game: progress.game, rng: progress.rng, events: progress.events, learned: progress.learned, ais: progress.ais });
+const canAiMoveAgain = (game: Game, controllers: ReadonlyArray<Controller>): boolean =>
+  (game.pending.kind === "Draw" || game.pending.kind === "Choose") && game.seats.some((seat) => isAi(controllerOf(controllers, seat)));
+
+const withProgress = (match: Session, progress: Progress): Session => ({
+  ...match,
+  game: progress.game,
+  rng: progress.rng,
+  events: progress.events,
+  learned: progress.learned,
+  ais: progress.ais,
+  isAutoplay: match.isAutoplay && canAiMoveAgain(progress.game, match.controllers),
+});
 
 const describeError = (error: AnswerError): string =>
   Match.value(error).pipe(
@@ -111,7 +122,7 @@ const applyResult = (model: Model, match: Session, result: Result.Result<Progres
 
 const stepAi = (model: Model, match: Session): Return =>
   Option.match(aiPrompt(match.game, match.controllers), {
-    onNone: () => ({ model: modifyFields(model, { maybeMatch: () => Option.some({ ...match, isAutoplay: match.isAutoplay && match.game.pending.kind === "Choose" }) }) }),
+    onNone: () => ({ model }),
     onSome: (prompt) => applyResult(model, match, aiStep(progressOf(match), prompt)),
   });
 
@@ -159,7 +170,7 @@ export const update = (model: Model, message: Message): Return =>
     ClickedMove: ({ match: matchNumber, generation, seat, index }) =>
       withMatch(model, (match) => applyResult(model, match, play(progressOf(match), { match: matchNumber, generation }, seat, index, match.rng))),
     ClickedStep: () => withMatch(model, (match) => stepAi(model, match)),
-    ToggledAutoplay: () => withMatch(model, (match) => ({ model: modifyFields(model, { maybeMatch: () => Option.some({ ...match, isAutoplay: !match.isAutoplay }) }) })),
+    ToggledAutoplay: () => withMatch(model, (match) => ({ model: modifyFields(model, { maybeMatch: () => Option.some({ ...match, isAutoplay: !match.isAutoplay && canAiMoveAgain(match.game, match.controllers) }) }) })),
     TickedAutoplay: () => withMatch(model, (match) => (match.isAutoplay ? stepAi(model, match) : { model })),
   });
 
