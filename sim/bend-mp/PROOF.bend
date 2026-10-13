@@ -12,6 +12,7 @@ import ./pick-proof.bend as PickProof
 import ./round-proof.bend as RoundProof
 import ./load-step-proof.bend as LoadStepProof
 import ./items-proof.bend as ItemsProof
+import ./accept-proof.bend as AcceptProof
 
 def Laws.core_roundtrip(seats):
   Core.law.core_roundtrip(seats)
@@ -25,8 +26,8 @@ def Laws.pickup_point_matches(world, seats, seat, notes, n, present, accepted):
 def Laws.legal_play_exact(world, seats, seat, aiming, notes):
   Core.law.legal_play_exact(world, seats, seat, aiming, notes)
 
-def Laws.legal_accepted(world, seats, seat, aiming, notes, n, choice, present, selected, current, permission):
-  Core.law.legal_accepted(world, seats, seat, aiming, notes, n, choice, present, selected, current, permission)
+def Laws.legal_accepted(state, valid, n, choice, selected):
+  AcceptProof.accept(state, valid, n, choice)(selected)
 
 def Laws.state_roundtrip(world, seats, phase, notes):
   Core.law.state_roundtrip(world, seats, phase, notes)

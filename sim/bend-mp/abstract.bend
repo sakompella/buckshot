@@ -573,18 +573,10 @@ def menu_choices(+world: S.World, +seat: D.Seat, moves: List<&2, D.Move>) -> Lis
 def verify(state: R.RefState, choice: D.Choice) -> Bool:
   R.VerifyPacket(state, choice)
 
-def choice_seat(choice: D.Choice) -> D.Seat:
-  match choice:
-    case D.Choice{seat, _, _}:
-      seat
-
 def choice_move(choice: D.Choice) -> D.Move:
   match choice:
     case D.Choice{_, _, move}:
       move
-
-def current_matches(state: R.RefState, seat: D.Seat) -> Bool:
-  R.current.eq(H.host.turn(R.host(state)), seat)
 
 def has_turn(state: R.RefState, seat: D.Seat) -> Bool:
   R.props.has_turn(H.host.props(R.host(state), seat))
@@ -630,10 +622,6 @@ def resolved_choice_shape(mode: D.Mode, picked: Maybe<&2, D.Choice>) -> Bool:
 
 def smart_request_shape(mode: D.Mode, +menus: D.Ring<&2, List<&2, D.Move>>, n: Nat, any: Bool) -> Bool:
   resolved_shape(mode, D.resolve(D.request.choose.any(any, menus), n))
-
-def resolved_pick_shape(aiming: Bool, choice: D.Choice) -> Bool:
-  resolved_shape(play_mode(aiming), D.Chose{choice})
-
 
 def ref_shell_nth(shells: List<&2, D.Shell>, index: Nat) -> Maybe<&2, D.Shell>:
   G.nth(D.Shell, shells, index)

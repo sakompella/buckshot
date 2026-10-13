@@ -53,19 +53,16 @@ law legal_exact:
   {A.machine_request(state) == A.ref_request(A.ref(state)) : D.Request}
 
 
+# Every move the machine offers at a valid state passes the host's
+# VerifyPacket.
 law legal_accepted:
-  for +world: A.World()
-  for +seats: A.Seats()
-  for +seat: A.Seat()
-  for +aiming: Bool
-  for +notes: A.Notes()
+  for +state: S.State
+  for +valid: A.Valid(state)
   for +n: Nat
   for +choice: D.Choice
-  for present: A.seated(A.world_for(world, seats), seat)
-  for selected: {D.resolve(A.machine_request(A.play_state(A.world_for(world, seats), seats, seat, aiming, notes)), n) == D.Chose{choice} : D.Resolved}
-  for current: {A.current_matches(A.ref(A.play_state(A.world_for(world, seats), seats, seat, aiming, notes)), A.choice_seat(choice)) == True{} : Bool}
-  for permission: {A.has_turn(A.ref(A.play_state(A.world_for(world, seats), seats, seat, aiming, notes)), A.choice_seat(choice)) == True{} : Bool}
-  {A.verify(A.ref(A.play_state(A.world_for(world, seats), seats, seat, aiming, notes)), choice) == True{} : Bool}
+  for selected: {D.resolve(A.machine_request(state), n) == D.Chose{choice} : D.Resolved}
+  {A.verify(A.ref(state), choice) == True{} : Bool}
+
 
 law state_roundtrip:
   for +world: S.World

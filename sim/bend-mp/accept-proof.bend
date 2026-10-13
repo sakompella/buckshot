@@ -4,6 +4,7 @@ import ./domain.bend as D
 import ./sm/state.bend as S
 import ./sm/items.bend as I
 import ./sm/main.bend as M
+import ./sm/point.bend as V
 import ./sm/rules.bend as Q
 import ./ref/main.bend as R
 import ./ref/state.bend as H
@@ -189,3 +190,116 @@ def accept.steal(+w: S.World, +p: S.Players, +seat: D.Seat, +picks: List<&2, S.S
   %A.valid.normal(S.State{w, p, S.StealPick{seat, picks}, notes, g}, valid) : Accepts(_, n, choice)
   +selected => steal.on(w, p, seat, notes, g, choice, seat.on(S.world.table(w), seat, I.steal.moves(PK.steal.picks(w, p, g, seat)), n, choice, selected), A.valid.ready(PK.steal.at(w, p, seat, notes, g), normal), ISP.shape.move(w, p, S.StealPick{seat, PK.steal.picks(w, p, g, seat)}, notes, g, S.StealPick{seat, PK.steal.picks(w, p, g, seat)}, Nil{}, A.valid.shape(PK.steal.at(w, p, seat, notes, g), normal)))
 
+def grab.verify(+w: S.World, +p: S.Players, +notes: A.Notes(), +g: S.Grabs, +c: D.Choice, +sel: GP.Selected(ISP.needs.at(w, p, g), c), +shape: A.Shape(ISP.grab.at(w, p, notes, g))) -> {R.VerifyPacket(A.ref(ISP.grab.at(w, p, notes, g)), c) == True{} : Bool}:
+  match c:
+    case D.Choice{+seat, +index, +move}:
+      GP.accept.at(ISP.grab.at(w, p, notes, g), seat, index, move, shape, sel)
+
+def grab.picked.on(+w: S.World, +p: S.Players, +notes: A.Notes(), +g: S.Grabs, +picked: Maybe<&2, D.Choice>, +sel: GP.MaybeSelected(ISP.needs.at(w, p, g), picked), +choice: D.Choice, +e: {D.resolve.choice(picked) == D.Chose{choice} : D.Resolved}, +shape: A.Shape(ISP.grab.at(w, p, notes, g))) -> {R.VerifyPacket(A.ref(ISP.grab.at(w, p, notes, g)), choice) == True{} : Bool}:
+  match picked:
+    case None{}:
+      GP.absurd({R.VerifyPacket(A.ref(ISP.grab.at(w, p, notes, g)), choice) == True{} : Bool}, unanswerable(choice, e))
+    case Some{+c}:
+      %chose.inj(c, choice, e) : {R.VerifyPacket(A.ref(ISP.grab.at(w, p, notes, g)), _) == True{} : Bool}
+      grab.verify(w, p, notes, g, c, sel, shape)
+
+def grab.any.on(+w: S.World, +p: S.Players, +notes: A.Notes(), +g: S.Grabs, +n: Nat, +choice: D.Choice, +any: Bool, +e: {D.resolve(D.request.choose.any(any, I.grab.menus(ISP.needs.at(w, p, g))), n) == D.Chose{choice} : D.Resolved}, +shape: A.Shape(ISP.grab.at(w, p, notes, g))) -> {R.VerifyPacket(A.ref(ISP.grab.at(w, p, notes, g)), choice) == True{} : Bool}:
+  match any:
+    case True{}:
+      grab.picked.on(w, p, notes, g, D.choose(I.grab.menus(ISP.needs.at(w, p, g)), n), GP.sel.choose(ISP.needs.at(w, p, g), n), choice, e, shape)
+    case False{}:
+      GP.absurd({R.VerifyPacket(A.ref(ISP.grab.at(w, p, notes, g)), choice) == True{} : Bool}, unanswerable(choice, e))
+
+def accept.grab(+w: S.World, +p: S.Players, +needs: D.Ring<&2, List<&2, S.GrabOption>>, +notes: A.Notes(), +g: S.Grabs, +n: Nat, +choice: D.Choice, +valid: A.Valid(S.State{w, p, S.Grab{needs}, notes, g})) -> Accepts(S.State{w, p, S.Grab{needs}, notes, g}, n, choice):
+  +normal : A.Valid(ISP.grab.at(w, p, notes, g)) = ISP.valid.normalized(S.State{w, p, S.Grab{needs}, notes, g}, valid)
+  %A.valid.normal(S.State{w, p, S.Grab{needs}, notes, g}, valid) : Accepts(_, n, choice)
+  +selected => grab.any.on(w, p, notes, g, n, choice, D.menus.any(D.ring.entries(List<&2, D.Move>, I.grab.menus(ISP.needs.at(w, p, g)))), selected, A.valid.shape(ISP.grab.at(w, p, notes, g), normal))
+
+# The phases whose request is a draw, Finished or Stuck offer no move.
+def request.chooses(r: D.Request) -> Bool:
+  match r:
+    case D.Choose{_}:
+      True{}
+    case _:
+      False{}
+
+def no.choice(+r: D.Request, +n: Nat, +choice: D.Choice, +offers: {request.chooses(r) == False{} : Bool}, +sel: {D.resolve(r, n) == D.Chose{choice} : D.Resolved}) -> Empty:
+  match r:
+    case D.Draw{+label, +range}:
+      drawn(D.draw.value(range, n), choice, sel)
+    case D.Choose{+menus}:
+      T.clash.false_true(Equal.sym(Bool, True{}, False{}, offers))
+    case D.Finished{}:
+      unanswerable(choice, sel)
+    case D.Stuck{}:
+      unanswerable(choice, sel)
+
+def refuted(+s: S.State, +n: Nat, +choice: D.Choice, +offers: {request.chooses(M.request(s)) == False{} : Bool}) -> Accepts(s, n, choice):
+  +selected => GP.absurd({R.VerifyPacket(A.ref(s), choice) == True{} : Bool}, no.choice(M.request(s), n, choice, offers, selected))
+
+def batch.draws(+size: Nat) -> {request.chooses(V.batch.request(size)) == False{} : Bool}:
+  match size:
+    case 0n:
+      {==}
+    case 1n:
+      {==}
+    case 2n+extra:
+      {==}
+
+def phone.draws(+length: Nat) -> {request.chooses(I.phone.request(length)) == False{} : Bool}:
+  match length:
+    case 0n:
+      {==}
+    case 1n:
+      {==}
+    case 2n:
+      {==}
+    case 3n:
+      {==}
+    case 4n+extra:
+      {==}
+
+def accept.swap(+w: S.World, +p: S.Players, +ld: D.Load, +sh: List<&2, D.Shell>, +i: Nat, +notes: A.Notes(), +g: S.Grabs, +n: Nat, +choice: D.Choice) -> Accepts(S.State{w, p, S.NeedSwap{ld, sh, i}, notes, g}, n, choice):
+  match i:
+    case 0n:
+      refuted(S.State{w, p, S.NeedSwap{ld, sh, 0n}, notes, g}, n, choice, {==})
+    case 1n+extra:
+      refuted(S.State{w, p, S.NeedSwap{ld, sh, 1n+extra}, notes, g}, n, choice, {==})
+
+def accept.phase(+w: S.World, +p: S.Players, +ph: S.Phase, +notes: A.Notes(), +g: S.Grabs, +n: Nat, +choice: D.Choice, +valid: A.Valid(S.State{w, p, ph, notes, g})) -> Accepts(S.State{w, p, ph, notes, g}, n, choice):
+  match ph:
+    case S.NeedFirst{}:
+      refuted(S.State{w, p, S.NeedFirst{}, notes, g}, n, choice, {==})
+    case S.NeedHealth{}:
+      refuted(S.State{w, p, S.NeedHealth{}, notes, g}, n, choice, {==})
+    case S.NeedAmount{}:
+      refuted(S.State{w, p, S.NeedAmount{}, notes, g}, n, choice, {==})
+    case S.NeedBatch{}:
+      refuted(S.State{w, p, S.NeedBatch{}, notes, g}, n, choice, batch.draws(List.length(&2, S.Batch, S.world.deck(w))))
+    case S.NeedSwap{+ld, +sh, +i}:
+      accept.swap(w, p, ld, sh, i, notes, g, n, choice)
+    case S.Idle{+seat, +options}:
+      accept.idle(w, p, seat, options, notes, g, n, choice, valid)
+    case S.Aim{+seat}:
+      accept.aim(w, p, seat, notes, g, n, choice, valid)
+    case S.Ended{}:
+      refuted(S.State{w, p, S.Ended{}, notes, g}, n, choice, {==})
+    case S.Blocked{+holder}:
+      refuted(S.State{w, p, S.Blocked{holder}, notes, g}, n, choice, {==})
+    case S.NeedTurnAmount{+from, +passing, +winner}:
+      refuted(S.State{w, p, S.NeedTurnAmount{from, passing, winner}, notes, g}, n, choice, {==})
+    case S.Grab{+needs}:
+      accept.grab(w, p, needs, notes, g, n, choice, valid)
+    case S.NeedItem{+seat, +first, +second, +rest}:
+      refuted(S.State{w, p, S.NeedItem{seat, first, second, rest}, notes, g}, n, choice, {==})
+    case S.NeedPhone{+seat, +owner, +slot}:
+      refuted(S.State{w, p, S.NeedPhone{seat, owner, slot}, notes, g}, n, choice, phone.draws(List.length(&2, D.Shell, S.world.gun(w))))
+    case S.JamPick{+seat, +targets}:
+      accept.jam(w, p, seat, targets, notes, g, n, choice, valid)
+    case S.StealPick{+seat, +picks}:
+      accept.steal(w, p, seat, picks, notes, g, n, choice, valid)
+
+def accept(+state: S.State, +valid: A.Valid(state), +n: Nat, +choice: D.Choice) -> Accepts(state, n, choice):
+  match state:
+    case S.State{+w, +p, +ph, +notes, +g}:
+      accept.phase(w, p, ph, notes, g, n, choice, valid)
