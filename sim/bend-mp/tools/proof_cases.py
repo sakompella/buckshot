@@ -29,6 +29,7 @@ USE_PROOF = PROOF.with_name("use-proof.bend")
 AIM_PROOF = PROOF.with_name("aim-proof.bend")
 PICK_PROOF = PROOF.with_name("pick-proof.bend")
 ROUND_PROOF = PROOF.with_name("round-proof.bend")
+LOAD_STEP_PROOF = PROOF.with_name("load-step-proof.bend")
 
 SEATS = ("D.Seat0{}", "D.Seat1{}", "D.Seat2{}", "D.Seat3{}")
 
@@ -672,12 +673,122 @@ PICK_BODIES: dict[str, Callable[[], list[str]]] = {
     "entries.ok": ring_split(lambda state: f"entries.claim({state})", ("players",), False, entries_ok_leaf, "GP."),
 }
 
+WORLD_FIELDS = (
+    "table", "plan", "before", "round", "load", "first", "rh", "recipient", "turn",
+    "direction", "died", "checking", "amount", "saw", "gun", "shown", "deck",
+)
+TABLE_VALUES = ("D.TwoSeats{}", "D.ThreeSeats{}", "D.FourSeats{}")
+
+
+def world_with(bind: bool, **fields: str) -> str:
+    """A world pattern (`bind`) or value, with some fields replaced."""
+    vals = {f: ("+" if bind else "") + f for f in WORLD_FIELDS} | fields
+    rest = ", ".join(vals[f] for f in WORLD_FIELDS[2:])
+    return f"S.World{{D.Config{{{vals['table']}, {vals['plan']}}}, {rest}}}"
+
+
+def first_answer() -> list[str]:
+    """NeedFirst per table: the ref's defaulted seat is the machine's, then fc.close."""
+    rows = ["match w:"]
+    for table in TABLE_VALUES:
+        w = world_with(False, table=table)
+        st = f"S.State{{{w}, p, S.NeedFirst{{}}, Nil{{}}, g}}"
+        seats = f"D.table.seats({table})"
+        v = f"D.draw.value(PT.first.range({table}), n)"
+        ref_seat = f"G.seat.default(G.nth(D.Seat, {seats}, {v}))"
+        seat = f"Q.value.or(D.Seat, Q.nth(D.Seat, {seats}, {v}), D.Seat0{{}})"
+
+        def chosen(x: str) -> str:
+            return f"R.stepped(R.settle(96n, R.RefState{{T.qh({st}), R.MainRoutine_StartRound{{R.FirstChosen{{{x}}}}}, Nil{{}}}}))"
+
+        e_seat = (
+            f"Equal.trans(D.Seat, {ref_seat}, G.seat.default(Q.nth(D.Seat, {seats}, {v})), {seat}, "
+            f"Equal.cong(Maybe<&2, D.Seat>, D.Seat, m => G.seat.default(m), G.nth(D.Seat, {seats}, {v}), Q.nth(D.Seat, {seats}, {v}), ISP.nth.eq(D.Seat, {seats}, {v})), "
+            f"default.eq(Q.nth(D.Seat, {seats}, {v})))"
+        )
+        shape = f"ISP.shape.move({w}, p, S.NeedFirst{{}}, n0, g, S.NeedFirst{{}}, Nil{{}}, shape)"
+        rows += [
+            f"  case {world_with(True, table=table)}:",
+            f"    Equal.trans(A.RefStep(), {chosen(ref_seat)}, {chosen(seat)}, A.stepped(S.state.stepped(M.first.chosen({st}, {seat}))), "
+            f"Equal.cong(D.Seat, A.RefStep(), x => {chosen('x')}, {ref_seat}, {seat}, {e_seat}), "
+            f"U.stepped.ref.local(R.settle(96n, R.RefState{{T.qh({st}), R.MainRoutine_StartRound{{R.FirstChosen{{{seat}}}}}, Nil{{}}}}), M.first.chosen({st}, {seat}), fc.close({st}, {seat}, 77n, {shape})))",
+        ]
+    return rows
+
+
+DECK_NAMES = ("two", "three", "four")
+SHORT_DECKS = (("Nil{}", "Nil{}"), ("S.Batch{+i0, +l0} <> Nil{}", "S.Batch{i0, l0} <> Nil{}"))
+LONG_DECK = ("S.Batch{+i0, +l0} <> S.Batch{+i1, +l1} <> +rest", "S.Batch{i0, l0} <> S.Batch{i1, l1} <> rest")
+
+
+def deck_world(table: str, deck: tuple[str, str]) -> tuple[str, str]:
+    """The world pattern and value with this table's deck replaced."""
+    pats, vals = ["+" + d for d in DECK_NAMES], list(DECK_NAMES)
+    k = TABLE_VALUES.index(table)
+    pats[k], vals[k] = deck
+    return (
+        world_with(True, table=table, deck=f"S.Decks{{{', '.join(pats)}}}"),
+        world_with(False, table=table, deck=f"S.Decks{{{', '.join(vals)}}}"),
+    )
+
+
+def batch_split(long_leaf: Callable[[str, str], list[str]], short_leaf: str) -> Callable[[], list[str]]:
+    """NeedBatch per table and deck length; a deck under two batches is stuck."""
+
+    def body() -> list[str]:
+        rows = ["match w:"]
+        for table in TABLE_VALUES:
+            for deck in SHORT_DECKS:
+                rows += [f"  case {deck_world(table, deck)[0]}:", f"    {short_leaf}"]
+            pat, w = deck_world(table, LONG_DECK)
+            rows += [f"  case {pat}:", *indent(4, long_leaf(w, f"S.State{{{w}, p, S.NeedBatch{{}}, Nil{{}}, g}}"))]
+        return rows
+
+    return body
+
+
+BATCH_VALUE = "D.draw.value(D.Range{0n, List.length(&2, S.Batch, rest)}, n)"
+
+
+def batch_shape(w: str) -> str:
+    return f"ISP.shape.move({w}, p, S.NeedBatch{{}}, n0, g, S.NeedBatch{{}}, Nil{{}}, shape)"
+
+
+def batch_answer_leaf(w: str, st: str) -> list[str]:
+    def chosen(width: str) -> str:
+        return f"R.stepped(R.settle(96n, R.RefState{{A.ref_host({st}), R.GenerateRandomSequence{{R.BatchChosen{{D.draw.value(D.Range{{0n, {width}}}, n)}}}}, Nil{{}}}}))"
+
+    ref_len, len_ = "A.ref_batch_length(rest)", "List.length(&2, S.Batch, rest)"
+    v = BATCH_VALUE
+    return [
+        f"Equal.trans(A.RefStep(), {chosen(ref_len)}, {chosen(len_)}, A.stepped(S.state.stepped(M.batch({st}, {v}))), "
+        f"Equal.cong(Nat, A.RefStep(), x => {chosen('x')}, {ref_len}, {len_}, Equal.sym(Nat, {len_}, {ref_len}, C.batch_length_backwards(rest))), "
+        f"U.stepped.ref.local(R.settle(96n, R.RefState{{A.ref_host({st}), R.GenerateRandomSequence{{R.BatchChosen{{{v}}}}}, Nil{{}}}}), M.batch({st}, {v}), LP.batch.close({st}, {v}, 87n, {batch_shape(w)}, {{==}})))"
+    ]
+
+
+def batch_valid_leaf(w: str, st: str) -> list[str]:
+    v = BATCH_VALUE
+    return [
+        "match valid:",
+        "  case Tuple{+normal, Tuple{+shape, Tuple{+bounded, +ready}}}:",
+        f"    LP.valid.found(Q.nth(S.Batch, S.world.deck(S.state.world({st})), {v}), {st}, {v}, ({batch_shape(w)}, bounded))",
+    ]
+
+
+LOAD_STEP_BODIES: dict[str, Callable[[], list[str]]] = {
+    "batch.answer": batch_split(batch_answer_leaf, "{==}"),
+    "valid.batch.answer": batch_split(batch_valid_leaf, "valid"),
+}
+
+
 ROUND_BODIES: dict[str, Callable[[], list[str]]] = {
     "reset.eq": ring_split(lambda state: f"reset.claim({state})", ("players",), False, closed, "GP."),
     "award.eq": ring_split(lambda state: f"award.claim({state}, seat, prize)", ("players",), True, closed, "GP."),
+    "first.answer": first_answer,
 }
 
-FILES = {PROOF: BODIES, ITEM_PROOF: ITEM_BODIES, GRAB_PROOF: GRAB_BODIES, LOAD_PROOF: LOAD_BODIES, TURN_PROOF: TURN_BODIES, USE_PROOF: USE_BODIES, AIM_PROOF: AIM_BODIES, PICK_PROOF: PICK_BODIES, ROUND_PROOF: ROUND_BODIES}
+FILES = {PROOF: BODIES, ITEM_PROOF: ITEM_BODIES, GRAB_PROOF: GRAB_BODIES, LOAD_PROOF: LOAD_BODIES, TURN_PROOF: TURN_BODIES, USE_PROOF: USE_BODIES, AIM_PROOF: AIM_BODIES, PICK_PROOF: PICK_BODIES, ROUND_PROOF: ROUND_BODIES, LOAD_STEP_PROOF: LOAD_STEP_BODIES}
 
 
 def body_span(text: str, name: str) -> tuple[int, int]:
