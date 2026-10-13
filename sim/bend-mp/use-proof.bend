@@ -1070,3 +1070,261 @@ def idle.answer(+w: S.World, +p: S.Players, +seat: D.Seat, +n0: A.Notes(), +g: S
     case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}:
       +menu : D.Ring<&2, List<&2, D.Move>> = menu.of(table, seat, idle.moves(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, g, seat))
       idle.any.answer(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, seat, n0, g, n, D.menus.any(D.ring.entries(List<&2, D.Move>, menu)), {==}, ready, ISP.shape.move(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, S.Idle{seat, idle.opts(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, g, seat)}, n0, g, S.Idle{seat, idle.opts(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, g, seat)}, Nil{}, shape), win)
+
+# Part 3 for item use: the successors are valid; the seat keeps world.turn
+# throughout, so Idle, JamPick, StealPick and NeedPhone are ready.
+
+def valid.resume(+s: S.State, +seat: D.Seat, +vpre: LP.VPre(s), +ready: {R.current.eq(S.world.turn(S.state.world(s)), seat) == True{} : Bool}) -> A.ValidItems(M.item.resume(s, seat)):
+  match s:
+    case S.State{+w, +p, +ph, +n, +g}:
+      match vpre:
+        case Tuple{+shape, +bounded}:
+          ({==}, (ISP.shape.move(w, p, ph, n, g, S.Idle{seat, D.NonEmpty{S.TakeGun{}, I.uses(S.State{w, p, ph, n, g}, seat)}}, n, shape), (bounded, ready)))
+
+def valid.end(+ending: Bool, +s: S.State, +seat: D.Seat, +vpre: LP.VPre(s), +ready: {R.current.eq(S.world.turn(S.state.world(s)), seat) == True{} : Bool}, winv: T.WinValid()) -> A.ValidItems(M.item.end(s, seat, ending)):
+  match ending:
+    case True{}:
+      T.valid.packet(s, seat, True{}, None{}, vpre, winv)
+    case False{}:
+      valid.resume(s, seat, vpre, ready)
+
+def valid.heal(+b: Bool, +s: S.State, +seat: D.Seat, +vpre: LP.VPre(s), +ready: {R.current.eq(S.world.turn(S.state.world(s)), seat) == True{} : Bool}) -> A.ValidItems(M.item.heal(s, seat, b)):
+  match b:
+    case True{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
+          match vpre:
+            case Tuple{+shape, +bounded}:
+              +hp : Nat = I.seat.health(p, seat)
+              +p3 : S.Players = S.players.set_health(p, seat, 1n+hp)
+              +st : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}
+              valid.resume(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p3, ph, List.append(&2, D.Note, n, [D.Shown{D.Healed{seat, 1n+hp}}]), S.Grabs{dist, grabbing, holding, granted, intake}}, seat, (shape.players(st, p3, GP.set_table(S.Seat, p, seat, S.seat.set_health(S.players.seat(p, seat), 1n+hp)), shape), bounded), ready)
+    case False{}:
+      valid.resume(s, seat, vpre, ready)
+
+def valid.consume(+item: D.Item, +s: S.State, +seat: D.Seat, +owner: D.Seat, +slot: D.Slot, +ending: Bool, +phone: Maybe<&2, D.Secret>, +vpre: LP.VPre(s), +ready: {R.current.eq(S.world.turn(S.state.world(s)), seat) == True{} : Bool}, winv: T.WinValid()) -> A.ValidItems(M.item.consume(s, seat, owner, slot, item, ending, phone)):
+  match item:
+    case D.Saw{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
+          match vpre:
+            case Tuple{+shape, +bounded}:
+              +st : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}
+              +s1 : S.State = used(st, seat, owner, slot, D.Saw{})
+              +vpre1 : LP.VPre(s1) = (shape.removed(st, owner, slot, shape), bounded)
+              valid.resume(S.state.set_world(s1, S.world.set_sawed(S.state.world(s1), True{})), seat, vpre1, ready)
+    case D.Jammer{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
+          match vpre:
+            case Tuple{+shape, +bounded}:
+              +st : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}
+              +s1 : S.State = used(st, seat, owner, slot, D.Jammer{})
+              +vpre1 : LP.VPre(s1) = (shape.removed(st, owner, slot, shape), bounded)
+              ({==}, (shape.removed(st, owner, slot, shape), (bounded, ready)))
+    case D.Adrenaline{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
+          match vpre:
+            case Tuple{+shape, +bounded}:
+              +st : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}
+              +s1 : S.State = used(st, seat, owner, slot, D.Adrenaline{})
+              +vpre1 : LP.VPre(s1) = (shape.removed(st, owner, slot, shape), bounded)
+              ({==}, (shape.removed(st, owner, slot, shape), (bounded, ready)))
+    case D.Cigarettes{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
+          match vpre:
+            case Tuple{+shape, +bounded}:
+              +st : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}
+              +s1 : S.State = used(st, seat, owner, slot, D.Cigarettes{})
+              +vpre1 : LP.VPre(s1) = (shape.removed(st, owner, slot, shape), bounded)
+              valid.heal(Nat.is_lt(I.seat.health(S.state.players(s1), seat), rh), s1, seat, vpre1, ready)
+    case D.Remote{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
+          match vpre:
+            case Tuple{+shape, +bounded}:
+              +st : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}
+              +s1 : S.State = used(st, seat, owner, slot, D.Remote{})
+              +vpre1 : LP.VPre(s1) = (shape.removed(st, owner, slot, shape), bounded)
+              valid.resume(S.state.emit(S.state.set_world(s1, S.world.set_direction(S.state.world(s1), I.flip(direction))), D.DirectionFlipped{I.flip(direction)}), seat, vpre1, ready)
+    case D.Phone{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
+          match phone vpre:
+            case None{} Tuple{+shape, +bounded}:
+              +st : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}
+              +s1 : S.State = used(st, seat, owner, slot, D.Phone{})
+              +vpre1 : LP.VPre(s1) = (shape.removed(st, owner, slot, shape), bounded)
+              ({==}, (shape.removed(st, owner, slot, shape), (bounded, {==})))
+            case Some{+secret} Tuple{+shape, +bounded}:
+              +st : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}
+              +s1 : S.State = used(st, seat, owner, slot, D.Phone{})
+              +vpre1 : LP.VPre(s1) = (shape.removed(st, owner, slot, shape), bounded)
+              valid.resume(S.state.tell(s1, seat, secret), seat, vpre1, ready)
+    case D.Glass{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, Nil{}, +shown, +deck}, +p, +ph, +n, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
+          match vpre:
+            case Tuple{+shape, +bounded}:
+              +st : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, Nil{}, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}
+              +s1 : S.State = used(st, seat, owner, slot, D.Glass{})
+              +vpre1 : LP.VPre(s1) = (shape.removed(st, owner, slot, shape), bounded)
+              ({==}, (shape.removed(st, owner, slot, shape), (bounded, {==})))
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +shell <> +tail, +shown, +deck}, +p, +ph, +n, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
+          match vpre:
+            case Tuple{+shape, +bounded}:
+              +st : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, shell <> tail, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}
+              +s1 : S.State = used(st, seat, owner, slot, D.Glass{})
+              +vpre1 : LP.VPre(s1) = (shape.removed(st, owner, slot, shape), bounded)
+              valid.end(ending, S.state.tell(s1, seat, D.Glimpse{shell}), seat, vpre1, ready, winv)
+    case D.Beer{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, Nil{}, +shown, +deck}, +p, +ph, +n, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
+          match vpre:
+            case Tuple{+shape, +bounded}:
+              +st : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, Nil{}, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}
+              +s1 : S.State = used(st, seat, owner, slot, D.Beer{})
+              +vpre1 : LP.VPre(s1) = (shape.removed(st, owner, slot, shape), bounded)
+              ({==}, (shape.removed(st, owner, slot, shape), (bounded, {==})))
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +shell <> +tail, +shown, +deck}, +p, +ph, +n, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
+          match vpre:
+            case Tuple{+shape, +bounded}:
+              +st : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, shell <> tail, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}
+              +s1 : S.State = used(st, seat, owner, slot, D.Beer{})
+              +vpre1 : LP.VPre(s1) = (shape.removed(st, owner, slot, shape), bounded)
+              valid.end(ending, S.state.emit(S.state.set_world(s1, S.world.set_gun(S.state.world(s1), tail)), D.Ejected{seat, shell}), seat, vpre1, ready, winv)
+    case D.Inverter{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, Nil{}, +shown, +deck}, +p, +ph, +n, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
+          match vpre:
+            case Tuple{+shape, +bounded}:
+              +st : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, Nil{}, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}
+              +s1 : S.State = used(st, seat, owner, slot, D.Inverter{})
+              +vpre1 : LP.VPre(s1) = (shape.removed(st, owner, slot, shape), bounded)
+              ({==}, (shape.removed(st, owner, slot, shape), (bounded, {==})))
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +shell <> +tail, +shown, +deck}, +p, +ph, +n, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
+          match vpre:
+            case Tuple{+shape, +bounded}:
+              +st : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, shell <> tail, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}
+              +s1 : S.State = used(st, seat, owner, slot, D.Inverter{})
+              +vpre1 : LP.VPre(s1) = (shape.removed(st, owner, slot, shape), bounded)
+              valid.end(ending, S.state.emit(S.state.set_world(s1, S.world.set_gun(S.state.world(s1), I.invert(shell) <> tail)), D.Inverted{seat}), seat, vpre1, ready, winv)
+
+def valid.found(+found: Maybe<&2, D.Shell>, +s: S.State, +seat: D.Seat, +owner: D.Seat, +slot: D.Slot, +position: Nat, +vpre: LP.VPre(s), +ready: {R.current.eq(S.world.turn(S.state.world(s)), seat) == True{} : Bool}, winv: T.WinValid()) -> A.ValidItems(M.item.clue.found(s, seat, owner, slot, position, found)):
+  match found:
+    case None{}:
+      match s:
+        case S.State{+w, +p, +ph, +n, +g}:
+          match vpre:
+            case Tuple{+shape, +bounded}:
+              ({==}, (ISP.shape.move(w, p, ph, n, g, S.Blocked{Some{seat}}, n, shape), (bounded, {==})))
+    case Some{+shell}:
+      valid.consume(D.Phone{}, s, seat, owner, slot, False{}, Some{D.Clue{position, shell}}, vpre, ready, winv)
+
+def valid.clue(+s: S.State, +seat: D.Seat, +owner: D.Seat, +slot: D.Slot, +index: Nat, +vpre: LP.VPre(s), +ready: {R.current.eq(S.world.turn(S.state.world(s)), seat) == True{} : Bool}, winv: T.WinValid()) -> A.ValidItems(M.item.clue(s, seat, owner, slot, index)):
+  match s:
+    case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
+      +position : Nat = D.clamp(1n+index, D.phone.cap())
+      valid.found(Q.nth(D.Shell, gun, Q.predecessor(position)), S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g}, seat, owner, slot, position, vpre, ready, winv)
+
+def valid.use(+item: D.Item, +s: S.State, +seat: D.Seat, +owner: D.Seat, +slot: D.Slot, +vpre: LP.VPre(s), +ready: {R.current.eq(S.world.turn(S.state.world(s)), seat) == True{} : Bool}, winv: T.WinValid()) -> A.ValidItems(M.item.use(s, seat, owner, slot, item)):
+  match item:
+    case D.Saw{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
+          valid.consume(D.Saw{}, S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g}, seat, owner, slot, False{}, None{}, vpre, ready, winv)
+    case D.Glass{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
+          valid.consume(D.Glass{}, S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g}, seat, owner, slot, False{}, None{}, vpre, ready, winv)
+    case D.Jammer{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
+          valid.consume(D.Jammer{}, S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g}, seat, owner, slot, False{}, None{}, vpre, ready, winv)
+    case D.Cigarettes{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
+          valid.consume(D.Cigarettes{}, S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g}, seat, owner, slot, False{}, None{}, vpre, ready, winv)
+    case D.Beer{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
+          valid.consume(D.Beer{}, S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g}, seat, owner, slot, Nat.is_eq(List.length(&2, D.Shell, gun), 1n), None{}, vpre, ready, winv)
+    case D.Inverter{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
+          valid.consume(D.Inverter{}, S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g}, seat, owner, slot, False{}, None{}, vpre, ready, winv)
+    case D.Adrenaline{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
+          valid.consume(D.Adrenaline{}, S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g}, seat, owner, slot, False{}, None{}, vpre, ready, winv)
+    case D.Remote{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
+          valid.consume(D.Remote{}, S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g}, seat, owner, slot, False{}, None{}, vpre, ready, winv)
+    case D.Phone{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, Nil{}, +shown, +deck}, +p, +ph, +n, +g}:
+          +st : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, Nil{}, shown, deck}, p, ph, n, g}
+          valid.consume(D.Phone{}, st, seat, owner, slot, False{}, Some{D.NoClue{}}, vpre, ready, winv)
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +a <> Nil{}, +shown, +deck}, +p, +ph, +n, +g}:
+          +st : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, a <> Nil{}, shown, deck}, p, ph, n, g}
+          valid.consume(D.Phone{}, st, seat, owner, slot, False{}, Some{D.NoClue{}}, vpre, ready, winv)
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +a <> +b <> Nil{}, +shown, +deck}, +p, +ph, +n, +g}:
+          +st : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, a <> b <> Nil{}, shown, deck}, p, ph, n, g}
+          valid.consume(D.Phone{}, st, seat, owner, slot, False{}, Some{D.NoClue{}}, vpre, ready, winv)
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +a <> +b <> +c <> Nil{}, +shown, +deck}, +p, +ph, +n, +g}:
+          +st : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, a <> b <> c <> Nil{}, shown, deck}, p, ph, n, g}
+          valid.clue(st, seat, owner, slot, 2n, vpre, ready, winv)
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +a <> +b <> +c <> +d <> +more, +shown, +deck}, +p, +ph, +n, +g}:
+          match vpre:
+            case Tuple{+shape, +bounded}:
+              ({==}, (ISP.shape.move(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, a <> b <> c <> d <> more, shown, deck}, p, ph, n, g, S.NeedPhone{seat, owner, slot}, n, shape), (bounded, ready)))
+
+def valid.idle.move(+w: S.World, +p: S.Players, +seat: D.Seat, +g: S.Grabs, +i: Nat, +m: D.Move, +sel: IdleSel(D.nonempty.list(S.IdleOption, idle.opts(w, p, g, seat)), i, m), +vpre: LP.VPre(idle.at(w, p, seat, Nil{}, g)), +ready: {R.current.eq(S.world.turn(w), seat) == True{} : Bool}, winv: T.WinValid()) -> A.ValidItems(A.machine_step_state(S.state.stepped(M.answer.choice(idle.at(w, p, seat, Nil{}, g), D.Choice{seat, i, m})))):
+  match m vpre:
+    case D.PickUp{} Tuple{+shape, +bounded}:
+      %Equal.sym(Maybe<&2, S.IdleOption>, Q.idle.nth(D.nonempty.list(S.IdleOption, idle.opts(w, p, g, seat)), i), Some{S.TakeGun{}}, sel) : A.ValidItems(M.pickup.selected(idle.at(w, p, seat, Nil{}, g), seat, _))
+      ({==}, (ISP.shape.move(w, p, S.Idle{seat, idle.opts(w, p, g, seat)}, Nil{}, g, S.Aim{seat}, [D.Shown{D.PickedUp{seat}}], shape), (bounded, ready)))
+    case D.UseItem{+slot, +item} vpre:
+      %Equal.sym(Maybe<&2, S.IdleOption>, Q.idle.nth(D.nonempty.list(S.IdleOption, idle.opts(w, p, g, seat)), i), Some{S.UseAt{slot, item}}, sel) : A.ValidItems(M.pickup.selected(idle.at(w, p, seat, Nil{}, g), seat, _))
+      valid.use(item, idle.at(w, p, seat, Nil{}, g), seat, seat, slot, vpre, ready, winv)
+    case D.Shoot{t} vpre:
+      match sel:
+    case D.Grab{} vpre:
+      match sel:
+    case D.Place{x} vpre:
+      match sel:
+    case D.JamTarget{t} vpre:
+      match sel:
+    case D.Steal{a, b, c} vpre:
+      match sel:
+
+def valid.idle.picked(+w: S.World, +p: S.Players, +seat: D.Seat, +g: S.Grabs, +picked: Maybe<&2, D.Choice>, +pk: Pick(seat, S.world.table(w), idle.moves(w, p, g, seat), picked), +e_any: {D.menus.any(D.ring.entries(List<&2, D.Move>, menu.of(S.world.table(w), seat, idle.moves(w, p, g, seat)))) == True{} : Bool}, +vpre: LP.VPre(idle.at(w, p, seat, Nil{}, g)), +ready: {R.current.eq(S.world.turn(w), seat) == True{} : Bool}, winv: T.WinValid()) -> A.ValidItems(A.machine_step_state(S.state.stepped(M.answer.resolved(idle.at(w, p, seat, Nil{}, g), D.resolve.choice(picked))))):
+  match picked:
+    case None{}:
+      GP.absurd(A.ValidItems(A.machine_step_state(S.state.stepped(M.answer.resolved(idle.at(w, p, seat, Nil{}, g), D.resolve.choice(None{}))))), T.clash.false_true(Equal.trans(Bool, False{}, D.menus.any(D.ring.entries(List<&2, D.Move>, menu.of(S.world.table(w), seat, idle.moves(w, p, g, seat)))), True{}, Equal.sym(Bool, D.menus.any(D.ring.entries(List<&2, D.Move>, menu.of(S.world.table(w), seat, idle.moves(w, p, g, seat)))), False{}, pk), e_any)))
+    case Some{D.Choice{+s, +i, +m}}:
+      match pk:
+        case Tuple{+e_s, Tuple{+e_nth, +seated}}:
+          valid.idle.move(w, p, seat, g, i, m, idle.sel(D.nonempty.list(S.IdleOption, idle.opts(w, p, g, seat)), i, m, e_nth), vpre, ready, winv)
+
+def valid.idle.any(+w: S.World, +p: S.Players, +seat: D.Seat, +n0: A.Notes(), +g: S.Grabs, +n: Nat, +any: Bool, +e: {D.menus.any(D.ring.entries(List<&2, D.Move>, menu.of(S.world.table(w), seat, idle.moves(w, p, g, seat)))) == any : Bool}, +valid: A.ValidItems(idle.at(w, p, seat, n0, g)), +vpre: LP.VPre(idle.at(w, p, seat, Nil{}, g)), +ready: {R.current.eq(S.world.turn(w), seat) == True{} : Bool}, winv: T.WinValid()) -> A.ValidItems(A.machine_step_state(M.answer.request(idle.at(w, p, seat, n0, g), n, D.request.choose.any(any, menu.of(S.world.table(w), seat, idle.moves(w, p, g, seat)))))):
+  match any:
+    case True{}:
+      valid.idle.picked(w, p, seat, g, D.choose(menu.of(S.world.table(w), seat, idle.moves(w, p, g, seat)), n), pick.choose(S.world.table(w), seat, idle.moves(w, p, g, seat), n), e, vpre, ready, winv)
+    case False{}:
+      valid
+
+def valid.idle(+w: S.World, +p: S.Players, +seat: D.Seat, +n0: A.Notes(), +g: S.Grabs, +n: Nat, +valid: A.ValidItems(idle.at(w, p, seat, n0, g)), winv: T.WinValid()) -> A.ValidItems(A.next(idle.at(w, p, seat, n0, g), n)):
+  match valid:
+    case Tuple{+normal, Tuple{+shape, Tuple{+bounded, +ready}}}:
+      +vpre : LP.VPre(idle.at(w, p, seat, Nil{}, g)) = (ISP.shape.move(w, p, S.Idle{seat, idle.opts(w, p, g, seat)}, n0, g, S.Idle{seat, idle.opts(w, p, g, seat)}, Nil{}, shape), bounded)
+      valid.idle.any(w, p, seat, n0, g, n, D.menus.any(D.ring.entries(List<&2, D.Move>, menu.of(S.world.table(w), seat, idle.moves(w, p, g, seat)))), {==}, (normal, (shape, (bounded, ready))), vpre, ready, winv)
+
+# step_matches at Idle with items, given the win's closure and validity.
+def step.idle(+world: S.World, +players: S.Players, +actor: D.Seat, +options: D.NonEmpty<&2, S.IdleOption>, +notes: A.Notes(), +grabs: S.Grabs, +n: Nat, +valid: A.ValidItems(S.State{world, players, S.Idle{actor, options}, notes, grabs}), win: T.WinClosure(), winv: T.WinValid()) -> A.SimulationItems(S.State{world, players, S.Idle{actor, options}, notes, grabs}, n):
+  +normal : A.ValidItems(idle.at(world, players, actor, notes, grabs)) = ISP.valid.normalized(S.State{world, players, S.Idle{actor, options}, notes, grabs}, valid)
+  %A.valid_items.normal(S.State{world, players, S.Idle{actor, options}, notes, grabs}, valid) : A.SimulationItems(_, n)
+  ISP.simulation.items(idle.at(world, players, actor, notes, grabs), n, idle.answer(world, players, actor, notes, grabs, n, A.valid_items.shape(idle.at(world, players, actor, notes, grabs), normal), A.valid_items.ready(idle.at(world, players, actor, notes, grabs), normal), win), valid.idle(world, players, actor, notes, grabs, n, normal, winv))

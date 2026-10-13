@@ -534,3 +534,68 @@ def packet.close(+s: S.State, +from: D.Seat, +passing: Bool, +winner: Maybe<&2, 
   +rule_r : D.AmountRule = G.load.amount(H.host.load_rule(qh(s)))
   +rule_m : D.AmountRule = Q.load.amount(Q.world.load_rule(S.state.world(s)))
   Equal.trans(R.RefState, packet.at(Nat.add(24n, k), qh(s), pkt, S.state.notes(s), rule_r), packet.at(Nat.add(24n, k), qh(s), pkt, S.state.notes(s), rule_m), A.ref(M.turn.packet(s, from, passing, winner)), Equal.cong(D.AmountRule, R.RefState, x => packet.at(Nat.add(24n, k), qh(s), pkt, S.state.notes(s), x), rule_r, rule_m, rule.eq(s)), packet.rule(rule_m, s, from, passing, winner, k, shape, rule.eq(s), win))
+
+# Part 3 for the turn end: every successor is a valid request point, given
+# that the win's successor is (premise until the round start is proven).
+
+def WinValid() -> Type:
+  @+s:S.State -> @+seat:D.Seat -> @+vpre:LP.VPre(s) -> A.ValidItems(M.win(s, seat))
+
+def valid.distribute(+xs: List<&2, D.Seat>, +s: S.State, +vpre: LP.VPre(s)) -> A.ValidItems(M.distribute.begin(s, xs)):
+  match xs:
+    case Nil{}:
+      match s:
+        case S.State{+w, +p, +ph, +n, +g}:
+          match vpre:
+            case Tuple{+shape, +bounded}:
+              %Equal.sym(S.State, M.load.begin(S.State{w, p, ph, n, g}), M.load.begin(S.State{w, p, S.Blocked{None{}}, n, g}), irr.load(w, p, ph, n, g)) : A.ValidItems(_)
+              LP.valid.load(S.State{w, p, S.Blocked{None{}}, n, g}, ((ISP.shape.move(w, p, ph, n, g, S.Blocked{None{}}, n, shape), {==}), bounded))
+    case +seat <> +rest:
+      match s:
+        case S.State{+w, +p, +ph, +n, +g}:
+          match vpre:
+            case Tuple{+shape, +bounded}:
+              +ys : List<&2, D.Seat> = seat <> rest
+              +s0 : S.State = S.State{w, p, ph, n, g}
+              +told : A.Notes() = List.append(&2, D.Note, n, [D.Shown{D.GrabbingBegan{ys}}])
+              +g1 : S.Grabs = S.grabs.set_distributing(I.grabs.open_all(ys, g), True{})
+              +s1 : S.State = S.State{w, p, ph, told, g1}
+              ({==}, (ISP.shape.move(w, p, ph, n, g1, S.Grab{I.grab.needs(s1)}, told, shape.dist(opened(s0, ys), shape.opened(ys, s0, shape))), (bounded, {==})))
+
+def valid.main(+winner: Maybe<&2, D.Seat>, +s: S.State, +from: D.Seat, +passing: Bool, +vpre: LP.VPre(s), winv: WinValid()) -> A.ValidItems(M.turn.winner(s, from, passing, winner)):
+  match winner:
+    case Some{+seat}:
+      winv(s, seat, vpre)
+    case None{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, Nil{}, +shown, +deck}, +p, +ph, +n, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
+          +rm : D.Seat = M.turn.recipient(passing, from, Q.next_turn(S.players.health(p), direction, from))
+          +s1 : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, rm, turn, direction, died, checking, amount, saw, Nil{}, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}
+          valid.distribute(I.begin.seats(s1, False{}, amount), s1, vpre)
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +shell <> +rest, +shown, +deck}, +p, +ph, +n, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
+          +rm : D.Seat = M.turn.recipient(passing, from, Q.next_turn(S.players.health(p), direction, from))
+          +s1 : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, rm, turn, direction, died, checking, amount, saw, shell <> rest, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}
+          LP.valid.grant(s1, rm, vpre)
+
+def valid.live(+live: Bool, +s: S.State, +from: D.Seat, +passing: Bool, +winner: Maybe<&2, D.Seat>, +vpre: LP.VPre(s), winv: WinValid()) -> A.ValidItems(M.turn.live(s, from, passing, winner, D.RandomAmount{}, live)):
+  match live:
+    case True{}:
+      match s:
+        case S.State{+w, +p, +ph, +n, +g}:
+          match vpre:
+            case Tuple{+shape, +bounded}:
+              ({==}, (ISP.shape.move(w, p, ph, n, g, S.NeedTurnAmount{from, passing, winner}, n, shape), (bounded, {==})))
+    case False{}:
+      valid.main(winner, s, from, passing, vpre, winv)
+
+def valid.rule(+rule: D.AmountRule, +s: S.State, +from: D.Seat, +passing: Bool, +winner: Maybe<&2, D.Seat>, +vpre: LP.VPre(s), winv: WinValid()) -> A.ValidItems(M.turn.live(s, from, passing, winner, rule, I.amount.live(rule, S.grabs.distributing(S.state.grabs(s)), I.reload.wanted(s, winner)))):
+  match rule:
+    case D.FixedAmount{+a}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
+          valid.main(winner, S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, a, saw, gun, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}, from, passing, vpre, winv)
+    case D.RandomAmount{}:
+      valid.live(I.amount.live(D.RandomAmount{}, S.grabs.distributing(S.state.grabs(s)), I.reload.wanted(s, winner)), s, from, passing, winner, vpre, winv)
+
+def valid.packet(+s: S.State, +from: D.Seat, +passing: Bool, +winner: Maybe<&2, D.Seat>, +vpre: LP.VPre(s), winv: WinValid()) -> A.ValidItems(M.turn.packet(s, from, passing, winner)):
+  valid.rule(Q.load.amount(Q.world.load_rule(S.state.world(s))), s, from, passing, winner, vpre, winv)
