@@ -4,7 +4,7 @@ import ../domain.bend as D
 # Double or Nothing dealer AI (Buckshot multiplayer).
 #
 # One pure controller for one seat, ported from the verified two-player dealer
-# policy (sim/bend/controller.bend). It sees
+# policy. It sees
 # only D.Prompt (its legal moves), D.Obs (the public board) and D.Heard (public
 # events plus its own secrets); it keeps its own Mem.
 #
