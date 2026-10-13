@@ -133,7 +133,7 @@ def r1() -> list[str]:
 
 FRONT_STUCK = (
     "({==}, pack_valid(A.world_for(world, seats), seats, "
-    "S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, notes, "
+    "S.Aim{actor}, notes, "
     "aimstep.front_stable(world, seats, supported, bounded), {==}, ready))"
 )
 

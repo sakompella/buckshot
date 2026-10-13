@@ -1,12 +1,12 @@
-import { Array as Arr, Duration, Effect, Match, Option, Result, Schema, Stream } from "effect";
+import { Array as Arr, Duration, Effect, Match, Option, Predicate, Result, Schema, Stream } from "effect";
 import { Runtime, Subscription, type Update } from "foldkit";
 import type { Document, Html, HtmlBuilder } from "foldkit/html";
 import { defineMessageUnion } from "foldkit/message";
 import { modifyFields } from "foldkit/struct";
 
 import { Game, type AnswerError } from "./bend.ts";
-import { type Board, Briefcase, Counter, GameEvent, type Item, LearnedSecret, Move, Seat, SeatCount, type SeatView, Secret, Stage } from "./domain.ts";
-import { aiPrompt, aiStep, AiSeat, begin, Controller, controllerOf, play, type Progress, promptsOf } from "./driver.ts";
+import { type Board, Briefcase, Counter, GameEvent, healthOf, type Item, LearnedSecret, Move, Seat, SeatCount, type SeatView, Secret, Stage } from "./domain.ts";
+import { aiPrompt, aiStep, AiSeat, begin, Controller, controllerOf, isAi, play, type Progress, promptsOf } from "./driver.ts";
 import { seedRng } from "./rng.ts";
 import { titles } from "./titles.ts";
 
@@ -75,7 +75,18 @@ const SEATS_BY_TABLE: Readonly<Record<SeatCount, ReadonlyArray<Seat>>> = { 2: [1
 
 const progressOf = (match: Session): Progress => ({ game: match.game, rng: match.rng, events: match.events, learned: match.learned, ais: match.ais, seed: match.seed });
 
-const withProgress = (match: Session, progress: Progress): Session => ({ ...match, game: progress.game, rng: progress.rng, events: progress.events, learned: progress.learned, ais: progress.ais });
+const canAiMoveAgain = (game: Game, controllers: ReadonlyArray<Controller>): boolean =>
+  (game.pending.kind === "Draw" || game.pending.kind === "Choose") && game.seats.some((seat) => isAi(controllerOf(controllers, seat)));
+
+const withProgress = (match: Session, progress: Progress): Session => ({
+  ...match,
+  game: progress.game,
+  rng: progress.rng,
+  events: progress.events,
+  learned: progress.learned,
+  ais: progress.ais,
+  isAutoplay: match.isAutoplay && canAiMoveAgain(progress.game, match.controllers),
+});
 
 const describeError = (error: AnswerError): string =>
   Match.value(error).pipe(
@@ -101,17 +112,21 @@ const applyResult = (model: Model, match: Session, result: Result.Result<Progres
         maybeError: () => Option.none(),
       }),
     }),
-    onFailure: (error) => ({
-      model: modifyFields(model, {
-        maybeMatch: () => Option.some({ ...match, isAutoplay: false }),
-        maybeError: () => Option.some(describeError(error)),
-      }),
-    }),
+    // A click on a menu the game has already moved past is a no-op, not an error.
+    onFailure: (error) =>
+      Predicate.isTagged(error, "StaleAnswer")
+        ? { model }
+        : {
+            model: modifyFields(model, {
+              maybeMatch: () => Option.some({ ...match, isAutoplay: false }),
+              maybeError: () => Option.some(describeError(error)),
+            }),
+          },
   });
 
 const stepAi = (model: Model, match: Session): Return =>
   Option.match(aiPrompt(match.game, match.controllers), {
-    onNone: () => ({ model: modifyFields(model, { maybeMatch: () => Option.some({ ...match, isAutoplay: match.isAutoplay && match.game.pending.kind === "Choose" }) }) }),
+    onNone: () => ({ model }),
     onSome: (prompt) => applyResult(model, match, aiStep(progressOf(match), prompt)),
   });
 
@@ -159,7 +174,7 @@ export const update = (model: Model, message: Message): Return =>
     ClickedMove: ({ match: matchNumber, generation, seat, index }) =>
       withMatch(model, (match) => applyResult(model, match, play(progressOf(match), { match: matchNumber, generation }, seat, index, match.rng))),
     ClickedStep: () => withMatch(model, (match) => stepAi(model, match)),
-    ToggledAutoplay: () => withMatch(model, (match) => ({ model: modifyFields(model, { maybeMatch: () => Option.some({ ...match, isAutoplay: !match.isAutoplay }) }) })),
+    ToggledAutoplay: () => withMatch(model, (match) => ({ model: modifyFields(model, { maybeMatch: () => Option.some({ ...match, isAutoplay: !match.isAutoplay && canAiMoveAgain(match.game, match.controllers) }) }) })),
     TickedAutoplay: () => withMatch(model, (match) => (match.isAutoplay ? stepAi(model, match) : { model })),
   });
 
@@ -301,17 +316,17 @@ const setupView = (h: H, model: Model): Html => {
   );
 };
 
-const counterText = (view: SeatView): string => Counter.match(view.counter, { Unjammed: ({ health }) => `${health}`, Jammed: () => "Jammed" });
-
 const actingSeat = (board: Board): Option.Option<Seat> =>
   Stage.matchOrElse(board.stage, { Playing: ({ seat }) => Option.some(seat) }, () => Option.none());
 
 const seatPanel = (h: H, match: Session, view: SeatView): Html => {
   const isActing = Option.contains(actingSeat(match.game.board), view.seat);
   const isViewer = match.viewer === view.seat;
+  const health = healthOf(view, match.events);
+  const isOut = health === 0;
 
   return h.article(
-    [h.Class(`seat${isActing ? " acting" : ""}${isViewer ? " viewer" : ""}`), h.AriaLabel(seatName(view.seat))],
+    [h.Class(`seat${isActing ? " acting" : ""}${isViewer ? " viewer" : ""}${isOut ? " out" : ""}`), h.AriaLabel(seatName(view.seat))],
     [
       h.header(
         [h.Class("seat-head")],
@@ -323,14 +338,20 @@ const seatPanel = (h: H, match: Session, view: SeatView): Html => {
       h.div(
         [h.Class("seat-stats")],
         [
-          h.div([h.Class("stat")], [h.span([h.Class("stat-label")], ["Health"]), h.strong([h.Class(Counter.guards.Jammed(view.counter) ? "health jammed" : "health")], [counterText(view)])]),
+          h.div([h.Class("stat")], [h.span([h.Class("stat-label")], ["Health"]), h.strong([], [`${health}`])]),
           h.div([h.Class("stat")], [h.span([h.Class("stat-label")], ["Cash"]), h.strong([], [`$${view.cash.toLocaleString("en-US")}`])]),
         ],
       ),
       h.ol(
         [h.Class("slots"), h.AriaLabel("Item slots")],
-        view.slots.map((slot) => h.li([h.Class(Option.isSome(slot) ? "slot filled" : "slot")], [Option.match(slot, { onNone: () => "", onSome: itemName })])),
+        view.slots.map((slot) =>
+          Option.match(slot, {
+            onNone: () => h.li([h.Class("slot")], []),
+            onSome: (item) => h.li([h.Class("slot filled"), h.Title(itemName(item))], [itemName(item)]),
+          }),
+        ),
       ),
+      isOut ? h.p([h.Class("status")], ["Out"]) : Counter.guards.Jammed(view.counter) ? h.p([h.Class("status")], ["Jammed"]) : h.empty,
       Briefcase.match(view.briefcase, {
         NotGrabbing: () => h.empty,
         Grabbing: () => h.p([h.Class("briefcase")], ["Grabbing from the briefcase"]),
@@ -349,7 +370,7 @@ const gunView = (h: H, board: Board): Html => {
     [
       h.div(
         [h.Class("shells"), h.AriaLabel(`Last load shown: ${shown.live} live, ${shown.blank} blank`)],
-        [...Arr.replicate(h.span([h.Class("shell live")], []), shown.live), ...Arr.replicate(h.span([h.Class("shell blank")], []), shown.blank)],
+        [...Array.from({ length: shown.live }, () => h.span([h.Class("shell live")], [])), ...Array.from({ length: shown.blank }, () => h.span([h.Class("shell blank")], []))],
       ),
       h.p([], [`Last load shown: ${shown.live} live, ${shown.blank} blank. ${remaining} shell${remaining === 1 ? "" : "s"} left in the gun.${sawed ? " Sawed off: the next shot does double damage." : ""}`]),
       h.p(

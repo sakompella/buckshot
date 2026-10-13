@@ -283,13 +283,13 @@ input {
   font-variant-numeric: tabular-nums;
 }
 
-.health.jammed {
-  color: var(--muted);
+.seat.out {
+  opacity: 0.6;
 }
 
 .slots {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
   gap: 4px;
   margin: 0;
   padding: 0;
@@ -303,8 +303,7 @@ input {
   text-align: center;
   border: 1px dashed var(--border);
   border-radius: 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
 }
 
 .slot.filled {
@@ -313,6 +312,7 @@ input {
 }
 
 .briefcase,
+.status,
 .turn {
   font-size: 13px;
 }

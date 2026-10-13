@@ -128,3 +128,11 @@ law run_matches:
   for +tape: List<&2, Nat>
   for +valid: A.Valid(state)
   {A.ref_run(fuel, A.ref(state), tape) == A.ran(M.run(fuel, state, tape)) : A.RefRan()}
+
+# Every state the machine reaches from a no-item start is valid.
+law reachable_valid:
+  for fuel: Nat
+  for +config: D.Config
+  for +supported: {Q.config.no_items(config) == True{} : Bool}
+  for +tape: List<&2, Nat>
+  A.Valid(A.machine_ran_state(M.run(fuel, M.stepped.state(M.start(config)), tape)))

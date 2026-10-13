@@ -31,7 +31,7 @@ type Phase is Data:
   NeedBatch{}
   NeedSwap{load: D.Load, shells: List<&2, D.Shell>, i: Nat}
   Idle{seat: D.Seat, options: D.NonEmpty<&2, IdleOption>}
-  Aim{seat: D.Seat, targets: List<&2, TargetOption>}
+  Aim{seat: D.Seat}
   Ended{}
   # Stuck. holder is the seat that still held the turn when the machine stuck.
   Blocked{holder: Maybe<&2, D.Seat>}

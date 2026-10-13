@@ -11,6 +11,10 @@ def targets(entries: List<&2, D.At<&2, Nat>>) -> List<&2, S.TargetOption>:
     case D.At{seat, 1n+hp} <> rest:
       S.Target{seat} <> targets(rest)
 
+# Every living seat, in ring order: who an aiming seat may shoot.
+def aim.targets(+players: S.Players) -> List<&2, S.TargetOption>:
+  targets(D.ring.entries(Nat, S.players.health(players)))
+
 def idle.moves(options: List<&2, S.IdleOption>) -> List<&2, D.Move>:
   match options:
     case Nil{}:
