@@ -289,10 +289,12 @@ def ring_split(
     rings: tuple[str, ...],
     seat: bool,
     leaf: Callable[[Shape, int | None, str], list[str]],
+    scope: str = "",
 ) -> Callable[[], list[str]]:
     """Split s's table, the named rings and (if seat) the seat; `claim(state)` is
     the lemma's type at a refuted state, `leaf(shape, seat, state)` the proof of
-    a case at its split state."""
+    a case at its split state. `scope` qualifies grab-proof.bend's `absurd` and
+    `clash.*` from another file."""
 
     def body() -> list[str]:
         with_players = "players" in rings
@@ -329,7 +331,7 @@ def ring_split(
                         f"  case {' '.join([table, *patterns(bad), *(['+seat'] if seat else [])])}:",
                         "    match shape:",
                         f"      case {SHAPE_FACTS}:",
-                        f"        absurd({claim(state)}, clash.{other}_{name}(e_{ring}))",
+                        f"        {scope}absurd({claim(state)}, {scope}clash.{other}_{name}(e_{ring}))",
                     ]
         return head + indent(4, rows)
 
@@ -423,6 +425,22 @@ GRAB_BODIES: dict[str, Callable[[], list[str]]] = {
     "held.eq": ring_split(lambda state: f"held.claim({state}, seat)", ("players", "holding"), True, closed),
     "slots.eq": ring_split(lambda state: f"slots.claim({state}, seat)", ("players",), True, closed),
     "accept.at": ring_split(lambda state: f"accept.at.claim({state}, seat, move)", ("players", "grabbing", "holding", "intake"), True, accept_leaf),
+}
+
+
+def view_leaf(shape: Shape, seat: int | None, _state: str) -> list[str]:
+    """A seated seat's view from its cells; a missing seat reads the defaults on both sides."""
+    if seat not in shape.seated:
+        return ["{==}"]
+    k = seat
+    cells = [f"h{k}", f"S.jam.jammed(j{k})", f"A.jam.checked(j{k})", f"c{k}", f"s{k}", f"g{k}", f"o{k}", f"A.turn.held(A.turn.holder(phase), {SEATS[seat]})"]
+    return [f"view.parts({', '.join(cells)})"]
+
+
+# item-step-proof.bend's splits of the same kind, refuting through grab-proof.bend.
+ITEM_BODIES |= {
+    "view.eq": ring_split(lambda state: f"view.claim({state}, seat)", ("players", "grabbing", "holding"), True, view_leaf, "GP."),
+    "health.eq": ring_split(lambda state: f"health.claim({state})", ("players",), False, closed, "GP."),
 }
 
 FILES = {PROOF: BODIES, ITEM_PROOF: ITEM_BODIES, GRAB_PROOF: GRAB_BODIES}
