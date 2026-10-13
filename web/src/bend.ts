@@ -470,6 +470,11 @@ const RawState = Schema.declare(Schema.is(Schema.Struct({ $: Schema.Literal("sm/
 
 const RawNotes = Schema.declare(Schema.is(Schema.Struct({ $: Schema.Literals(["Con", "Nil"]) })));
 
+// An AI's memory (a driver Mind) also passes back into Bend untouched.
+const RawMind = Schema.declare(Schema.is(Schema.Struct({ $: Schema.Literals(["driver.StoryMind", "driver.DonMind"]) })));
+
+const RawDecision = Schema.Struct({ $: Schema.Literal("domain.Decision"), pick: Nat, memory: RawMind });
+
 const RawStepped = Schema.Struct({ $: Schema.Literal("domain.Stepped"), state: RawState, notes: RawNotes });
 
 // Decoding
@@ -487,6 +492,8 @@ const decodePoint = decode(RawPoint, "point");
 const decodePrompts = decode(RawPromptList, "prompts");
 
 const decodeEvents = decode(RawEventList, "public_events");
+
+const decodeDecision = decode(RawDecision, "mind.decide");
 
 const decodeHeard = decode(RawHeardList, "hear");
 
@@ -510,6 +517,7 @@ export interface Step {
   readonly game: Game;
   readonly events: ReadonlyArray<GameEvent>;
   readonly learned: ReadonlyArray<LearnedSecret>;
+  readonly notes: BendNode;
 }
 
 const promptOf = (ticket: Ticket, raw: RawPrompt): Prompt => new Prompt(seatOf(raw.seat), [moveOf(raw.menu.head), ...listToArray(raw.menu.tail).map(moveOf)], ticket, raw);
@@ -554,7 +562,7 @@ const stepFrom = (table: SeatCount, ticket: Ticket, stepped: BendNode): Result.R
       }
     }
 
-    return { game, events, learned };
+    return { game, events, learned, notes };
   });
 
 /** Starts the default three-round match. With items false every item is disabled. */
@@ -581,3 +589,31 @@ export const answerPrompt = (game: Game, ticket: Ticket, seat: Seat, index: numb
 
     return yield* stepFrom(current.table, nextTicket(current.ticket), rules.answer(current.state, rules["prompt.answer"](prompt.raw, BigInt(index))));
   });
+
+// AI seats
+// ========
+
+/** Which AI plays a seat. Both are the Bend AIs the simulator driver uses. */
+export type Brain = "Story" | "DoN";
+
+/** One AI's memory. Opaque: only Bend reads it. */
+export class Mind {
+  constructor(readonly raw: BendNode) {}
+}
+
+export const freshMind = (brain: Brain): Mind => new Mind(brain === "Story" ? rules["mind.story"]() : rules["mind.don"]());
+
+/** The memory after the seat heard the notes of one step. */
+export const hearNotes = (mind: Mind, notes: BendNode, seat: Seat): Mind => new Mind(rules["mind.hear"](mind.raw, notes, seatNode(seat)));
+
+/** Word number count of the seat's own random stream for a match seed. */
+export const coinWord = (seed: number, seat: Seat, count: number): number => rules["mind.coin"](seed >>> 0, seatNode(seat), count);
+
+/** What an AI chose: an index into the prompt's menu, and its memory after choosing. */
+export interface Choice {
+  readonly index: number;
+  readonly mind: Mind;
+}
+
+export const decideMove = (game: Game, prompt: Prompt, mind: Mind, coin: number): Result.Result<Choice, BendContractError> =>
+  Result.map(decodeDecision(rules["mind.decide"](game.state, prompt.raw, mind.raw, coin)), ({ pick, memory }) => ({ index: natToNumber(pick), mind: new Mind(memory) }));

@@ -5,9 +5,8 @@ import ./view.bend as V
 
 # A stub: one verbose 2-seat match, then batches. All the work is in driver.bend.
 
-# Flip to True once the machine supports items.
 def items() -> Bool:
-  False{}
+  True{}
 
 def fuel() -> Nat:
   20000n
@@ -21,14 +20,23 @@ def trio(a: R.Brain, b: R.Brain, c: R.Brain) -> D.Ring<&2, R.Brain>:
 def quad(a: R.Brain, b: R.Brain, c: R.Brain, d: R.Brain) -> D.Ring<&2, R.Brain>:
   D.Quad{a, b, c, d}
 
+def two.with(items: Bool, label: String, brains: D.Ring<&2, R.Brain>, salt: U32) -> String:
+  V.render_totals(label, R.batch(14n, fuel(), D.TwoSeats{}, items, brains, 1, salt))
+
 def two(label: String, brains: D.Ring<&2, R.Brain>, salt: U32) -> String:
-  V.render_totals(label, R.batch(14n, fuel(), D.TwoSeats{}, items(), brains, 1, salt))
+  two.with(items(), label, brains, salt)
+
+def three.with(items: Bool, label: String, brains: D.Ring<&2, R.Brain>, salt: U32) -> String:
+  V.render_totals(label, R.batch(14n, fuel(), D.ThreeSeats{}, items, brains, 1, salt))
 
 def three(label: String, brains: D.Ring<&2, R.Brain>, salt: U32) -> String:
-  V.render_totals(label, R.batch(14n, fuel(), D.ThreeSeats{}, items(), brains, 1, salt))
+  three.with(items(), label, brains, salt)
+
+def four.with(items: Bool, label: String, brains: D.Ring<&2, R.Brain>, salt: U32) -> String:
+  V.render_totals(label, R.batch(14n, fuel(), D.FourSeats{}, items, brains, 1, salt))
 
 def four(label: String, brains: D.Ring<&2, R.Brain>, salt: U32) -> String:
-  V.render_totals(label, R.batch(14n, fuel(), D.FourSeats{}, items(), brains, 1, salt))
+  four.with(items(), label, brains, salt)
 
 def main() -> IO(Unit):
   do IO<Unit>:
@@ -43,6 +51,9 @@ def main() -> IO(Unit):
     IO.print(three("3 seats, story / DoN / DoN", trio(R.StoryBrain{}, R.DoNBrain{}, R.DoNBrain{}), 600))
     IO.print(four("4 seats, DoN / DoN / story / story", quad(R.DoNBrain{}, R.DoNBrain{}, R.StoryBrain{}, R.StoryBrain{}), 700))
     IO.print(four("4 seats, story / story / DoN / DoN", quad(R.StoryBrain{}, R.StoryBrain{}, R.DoNBrain{}, R.DoNBrain{}), 800))
+    IO.print("No-item lines, for comparison.")
+    IO.print(two.with(False{}, "2 seats, no items, DoN (seat 1) vs story (seat 3)", duo(R.DoNBrain{}, R.StoryBrain{}), 300))
+    IO.print(two.with(False{}, "2 seats, no items, story (seat 1) vs DoN (seat 3)", duo(R.StoryBrain{}, R.DoNBrain{}), 400))
     IO.print(three("3 seats, all story", trio(R.StoryBrain{}, R.StoryBrain{}, R.StoryBrain{}), 900))
     IO.print(three("3 seats, all DoN", trio(R.DoNBrain{}, R.DoNBrain{}, R.DoNBrain{}), 1000))
     IO.print(four("4 seats, all story", quad(R.StoryBrain{}, R.StoryBrain{}, R.StoryBrain{}, R.StoryBrain{}), 1100))

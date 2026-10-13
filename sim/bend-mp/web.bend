@@ -2,14 +2,17 @@ import Base
 import ./domain.bend as D
 import ./sm/main.bend as M
 import ./sm/state.bend as S
+import ./driver.bend as R
+import ./ai/story.bend as Story
+import ./ai/don.bend as Don
 
 # The JS entry for the web UI (web/src/bend.ts is its only caller). Rooted
 # here, these defs export under bare names; domain constructors carry the
 # "domain." prefix. Each def is a thin, stable name over the machine so the UI
 # never reaches into sm/ internals.
 #
-# Seam: when sim/bend-mp/ai/*.bend and driver.bend land, import them here and
-# export the AI decision and the driver's seeded source next to these.
+# The AI seats use the driver's own entry points (R.mind.of, R.think,
+# R.coin.word), so the web and the driver cannot drift.
 
 def items.off() -> D.ItemRules:
   +off : D.ItemRule = D.ItemRule{False{}, 0n, 0n}
@@ -49,3 +52,26 @@ def hear(notes: List<&2, D.Note>, seat: D.Seat) -> List<&2, D.Heard>:
 
 def public_events(notes: List<&2, D.Note>) -> List<&2, D.GameEvent>:
   D.public_events(notes)
+
+# AI seats
+# ========
+
+# A fresh AI memory (a Mind) for the story AI or for DoN.
+def mind.story() -> R.Mind:
+  R.StoryMind{Story.fresh()}
+
+def mind.don() -> R.Mind:
+  R.DonMind{Don.fresh()}
+
+# The memory after the seat heard these notes.
+def mind.hear(mind: R.Mind, notes: List<&2, D.Note>, +seat: D.Seat) -> R.Mind:
+  R.hear.mind(mind, D.hear(notes, seat), seat)
+
+# One decision for a prompt at a state: the driver's own think, with the seat's
+# observation taken from the state and nothing left in the backlog.
+def mind.decide(+state: S.State, +prompt: D.Prompt, mind: R.Mind, coin: U32) -> D.Decision<&2, R.Mind>:
+  R.think(mind, prompt, D.observe(M.point(state), R.prompt.seat(prompt)), Nil{}, coin)
+
+# Word number count of a seat's own random stream for a match seed.
+def mind.coin(seed: U32, +seat: D.Seat, count: U32) -> U32:
+  R.coin.word(R.mix(seed), seat, count)
