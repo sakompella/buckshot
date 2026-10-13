@@ -24,6 +24,12 @@ PROOF = Path(__file__).resolve().parent.parent / "core-proof.bend"
 ITEM_PROOF = PROOF.with_name("item-step-proof.bend")
 GRAB_PROOF = PROOF.with_name("grab-proof.bend")
 LOAD_PROOF = PROOF.with_name("load-proof.bend")
+TURN_PROOF = PROOF.with_name("turn-proof.bend")
+USE_PROOF = PROOF.with_name("use-proof.bend")
+AIM_PROOF = PROOF.with_name("aim-proof.bend")
+PICK_PROOF = PROOF.with_name("pick-proof.bend")
+ROUND_PROOF = PROOF.with_name("round-proof.bend")
+LOAD_STEP_PROOF = PROOF.with_name("load-step-proof.bend")
 
 SEATS = ("D.Seat0{}", "D.Seat1{}", "D.Seat2{}", "D.Seat3{}")
 
@@ -489,7 +495,300 @@ LOAD_BODIES: dict[str, Callable[[], list[str]]] = {
     "next.eq": ring_split(lambda state: f"next.claim({state}, seat)", ("players",), False, next_leaf, "GP."),
 }
 
-FILES = {PROOF: BODIES, ITEM_PROOF: ITEM_BODIES, GRAB_PROOF: GRAB_BODIES, LOAD_PROOF: LOAD_BODIES}
+TURN_BODIES: dict[str, Callable[[], list[str]]] = {
+    "open.eq": ring_split(lambda state: f"open.claim({state}, seat)", RINGS, True, closed, "GP."),
+}
+
+SLOTS = tuple(f"D.Slot{k}{{}}" for k in range(8))
+
+
+def slot_split() -> list[str]:
+    """Every slot of a matched inventory, closed by computation."""
+    rows = ["match sl slot:"]
+    for slot in SLOTS:
+        rows += [f"  case D.Slots{{+a, +b, +c, +d, +e, +f, +g, +h}} {slot}:", "    {==}"]
+    return rows
+
+
+def count_slot() -> list[str]:
+    """The slot holding the item is its position in the slot list."""
+    rows = ["match sl slot:"]
+    for k, slot in enumerate(SLOTS):
+        rows += [
+            f"  case D.Slots{{{', '.join(f'+c{j}' for j in range(8))}}} {slot}:",
+            f"    count.pos([{', '.join(f'c{j}' for j in range(8))}], item, {k}n, Equal.cong(Maybe<&2, D.Item>, Maybe<&2, Maybe<&2, D.Item>>, x => Some{{x}}, c{k}, Some{{item}}, e))",
+        ]
+    return rows
+
+
+def seated_leaf(shape: Shape, seat: int | None, _state: str) -> list[str]:
+    """Closed by computation at a seated seat; an unseated one refutes `seated`."""
+    return ["{==}"] if seat in shape.seated else ["match seated:"]
+
+
+def pick_choose() -> list[str]:
+    """A single seat's menu per table and seat: a seated seat's choices, an
+    unseated one's empty ring."""
+    rows = ["match table seat:"]
+    for table, _, shape in TABLES:
+        for k, seat in enumerate(SEATS):
+            rows.append(f"  case {table} {seat}:")
+            if k in shape.seated:
+                rows += ["    match moves:", "      case Nil{}:", "        {==}", "      case +m <> +ms:", f"        on.seated({seat}, {table}, m, ms, n, Unit{{}})"]
+            else:
+                rows.append("    {==}")
+    return rows
+
+
+USE_BODIES: dict[str, Callable[[], list[str]]] = {
+    "pick.choose": pick_choose,
+    "clear.eq": ring_split(lambda state: f"clear.claim({state}, seat)", ("players",), True, closed, "GP."),
+    "keep.eq": ring_split(lambda state: f"keep.claim({state}, seat)", ("players",), True, closed, "GP."),
+    "slots.write": ring_split(lambda state: f"slots.claim({state}, seat, slot, hold)", ("players",), True, closed, "GP."),
+    "heal.eq": ring_split(lambda state: f"heal.claim({state}, seat)", ("players",), True, closed, "GP."),
+    "slot.set.eq": slot_split,
+    "count.slot": count_slot,
+    "held.turn": ring_split(lambda state: f"held.turn.claim({state}, seat)", ("players",), True, seated_leaf, "GP."),
+}
+
+
+# aim-proof.bend's shot: one chain of rewrites per shell, self-target, written
+# health and (for a death) first-death flag. Each link names the reference
+# term it rewrites; the last link is the machine side read backwards.
+SHOT_WORLD = ("D.Config{table, plan}", "before", "round", "load", "first", "rh", "recipient", "turn",
+              "direction", "died", "checking", "amount", "saw", "shell <> rest", "shown", "deck")
+SHOT_FIELDS = ("config", "before", "round", "load", "first", "rh", "recipient", "turn",
+               "direction", "died", "checking", "amount", "saw", "gun", "shown", "deck")
+SHOT_DAMAGE = "Q.captured(saw)"
+SHOT_LENGTH = "List.length(&2, D.Shell, rest)"
+
+
+def shot_world(**over: str) -> str:
+    cells = dict(zip(SHOT_FIELDS, SHOT_WORLD)) | over
+    return "S.World{" + ", ".join(cells[f] for f in SHOT_FIELDS) + "}"
+
+
+def shot_state(world: str) -> str:
+    return f"S.State{{{world}, p, S.Aim{{seat}}, Nil{{}}, g}}"
+
+
+def shot_hp(shell: str) -> str:
+    return f"Q.shot.health({shell}, I.seat.health(p, t), {SHOT_DAMAGE})"
+
+
+def shot_machine(shell: str, hp: str, same: str) -> str:
+    rest = shot_world(gun="rest", saw="False{}")
+    fired = f"D.Fired{{seat, t, {shell}, {SHOT_DAMAGE}, Q.subtract(I.seat.health(p, t), {hp}), {hp}}}"
+    state = f"S.state.emit(S.state.set_players(S.state.set_world({shot_state(shot_world())}, {rest}), S.players.set_health(p, t, {hp})), {fired})"
+    return f"A.ref(M.turn.end(M.death({state}, t, {shell}, {hp}), seat, Q.shot.passes({shell}, {same})))"
+
+
+def shot_leaf(shell: str, same: str, hp: str, checking: str | None = None) -> str:
+    over = {} if checking is None else {"checking": checking}
+    grown = shell == "D.Live{}" and same == "True{}"
+    st = shot_state(shot_world(**over))
+    w1 = shot_world(saw="False{}", **over) if grown else shot_world(**over)
+    st1 = shot_state(w1)
+    k = 92 if grown else 93
+    shot = f"R.Shot{{seat, t, {shell}, {SHOT_DAMAGE}, {SHOT_LENGTH}}}"
+
+    def grow_at(b: str, host: str) -> str:
+        return f"R.settle(94n, R.ReceivePacket_Shoot.grow(R.RefState{{{host}, R.ReceivePacket_Shoot{{{shot}}}, Nil{{}}}}, {shot}, Bool.and({b}, G.shell.live({shell}))))"
+
+    def outcome(v: str) -> str:
+        so = f"so.state({st1}, seat, t, {shell}, {SHOT_DAMAGE}, {v})"
+        return f"R.settle({k}n, R.RefState{{T.qh({so}), R.DeathRequest{{{shot}}}, S.state.notes({so})}})"
+
+    turned = f"U.turned.host(U.hh({st}, seat), seat, False{{}})"
+    death = f"M.death(so.state({st1}, seat, t, {shell}, {SHOT_DAMAGE}, {hp}), t, {shell}, {hp})"
+    removed = f"R.settle({k - 1}n, R.RefState{{T.qh({death}), R.RemoveFirstShellFromSequence{{{shot}}}, S.state.notes({death})}})"
+    p1 = f"S.players.set_health(p, t, {hp})"
+    shape1 = f"shape.world({shot_world(**over)}, {w1}, p, S.Aim{{seat}}, Nil{{}}, g, {{==}}, shape)"
+    shape_p1 = f"U.shape.players({st1}, {p1}, GP.set_table(S.Seat, p, t, S.seat.set_health(S.players.seat(p, t), {hp})), {shape1})"
+    shape_w = f"shape.world({w1}, S.state.world({death}), {p1}, S.Aim{{seat}}, Nil{{}}, g, {{==}}, {shape_p1})"
+    shape_d = f"ISP.shape.move(S.state.world({death}), {p1}, S.Aim{{seat}}, Nil{{}}, g, S.Aim{{seat}}, S.state.notes({death}), {shape_w})"
+    tail = (f"tail.self({death}, seat, t, {SHOT_DAMAGE}, {k - 29}n, e_same, {shape_d}, win)" if grown
+            else f"tail.grow({shell}, {same}, {death}, seat, t, {SHOT_DAMAGE}, {k - 29}n, e_same, {{==}}, {shape_d}, win)")
+    final = shot_machine(shell, hp, same)
+    start = f"R.settle(95n, R.RefState{{U.hh({st}, seat), R.ReceivePacket_Shoot{{R.Shot{{seat, t, {shell}, G.damage(saw), {SHOT_LENGTH}}}}}, Nil{{}}}})"
+    priced = f"R.settle(95n, R.RefState{{U.hh({st}, seat), R.ReceivePacket_Shoot{{{shot}}}, Nil{{}}}})"
+    links = [
+        (start, priced, f"Equal.cong(D.Damage, R.RefState, dd => R.settle(95n, R.RefState{{U.hh({st}, seat), R.ReceivePacket_Shoot{{R.Shot{{seat, t, {shell}, dd, {SHOT_LENGTH}}}}}, Nil{{}}}}), G.damage(saw), {SHOT_DAMAGE}, damage.eq(saw))"),
+        (priced, grow_at(same, turned), f"Equal.cong(Bool, R.RefState, b => {grow_at('b', turned)}, D.seat.eq(seat, t), {same}, e_same)"),
+        (grow_at(same, turned), grow_at(same, f"T.qh({st})"), f"Equal.cong(H.Host, R.RefState, hx => {grow_at(same, 'hx')}, {turned}, T.qh({st}), U.clear.eq({st}, seat, shape))"),
+        (grow_at(same, f"T.qh({st})"), outcome(shot_hp(shell)), f"so.close({st1}, seat, t, {shell}, {SHOT_DAMAGE}, {SHOT_LENGTH}, {k}n, {shape1})"),
+        (outcome(shot_hp(shell)), outcome(hp), f"Equal.cong(Nat, R.RefState, v => {outcome('v')}, {shot_hp(shell)}, {hp}, e_x)"),
+        (outcome(hp), removed, f"dr.close({shell}, {hp}, {st1}, seat, t, {SHOT_DAMAGE}, {SHOT_LENGTH}, {k - 1}n, {shape1}, seated)"),
+        (removed, final, tail),
+    ]
+    raw, mid = shot_machine(shell, shot_hp(shell), "D.seat.eq(seat, t)"), shot_machine(shell, hp, "D.seat.eq(seat, t)")
+    machine = (f"Equal.trans(R.RefState, {raw}, {mid}, {final}, "
+               f"Equal.cong(Nat, R.RefState, v => {shot_machine(shell, 'v', 'D.seat.eq(seat, t)')}, {shot_hp(shell)}, {hp}, e_x), "
+               f"Equal.cong(Bool, R.RefState, b => {shot_machine(shell, hp, 'b')}, D.seat.eq(seat, t), {same}, e_same))")
+    proof, end = f"Equal.sym(R.RefState, {raw}, {final}, {machine})", raw
+    for a, b, link in reversed(links):
+        proof = f"Equal.trans(R.RefState, {a}, {b}, {end}, {link}, {proof})"
+    return proof
+
+
+def shot_close() -> list[str]:
+    rows = ["match shell same x:"]
+    for same in ("True{}", "False{}"):
+        rows += [f"  case D.Blank{{}} {same} x:", f"    {shot_leaf('D.Blank{}', same, 'x')}"]
+    for same in ("True{}", "False{}"):
+        rows += [f"  case D.Live{{}} {same} 1n+y:", f"    {shot_leaf('D.Live{}', same, '1n+y')}"]
+    for same in ("True{}", "False{}"):
+        rows += [f"  case D.Live{{}} {same} 0n:", "    match checking:"]
+        for checking in ("True{}", "False{}"):
+            rows += [f"      case {checking}:", f"        {shot_leaf('D.Live{}', same, '0n', checking)}"]
+    return rows
+
+
+
+def seated_entries_leaf(shape: Shape, _seat: int | None, _state: str) -> list[str]:
+    """Every entry of a table's ring is a seated seat."""
+    proof = "Unit{}"
+    for _ in shape.seated:
+        proof = f"(Unit{{}}, {proof})"
+    return [proof]
+
+
+AIM_BODIES: dict[str, Callable[[], list[str]]] = {
+    "hw.eq": ring_split(lambda state: f"hw.claim({state}, seat, x)", ("players",), True, closed, "GP."),
+    "back.eq": ring_split(lambda state: f"back.claim({state}, seat, x)", ("players",), True, seated_leaf, "GP."),
+    "shot.close": shot_close,
+    "entries.seated": ring_split(lambda state: f"seated.claim({state})", ("players",), False, seated_entries_leaf, "GP."),
+}
+
+def entries_ok_leaf(shape: Shape, _seat: int | None, _state: str) -> list[str]:
+    """Each slots entry of a table's ring is its seat's slots, by computation."""
+    proof = "Unit{}"
+    for _ in shape.seated:
+        proof = f"({{==}}, {proof})"
+    return [proof]
+
+
+PICK_BODIES: dict[str, Callable[[], list[str]]] = {
+    "jam.write": ring_split(lambda state: f"jam.claim({state}, seat)", ("players",), True, closed, "GP."),
+    "entries.ok": ring_split(lambda state: f"entries.claim({state})", ("players",), False, entries_ok_leaf, "GP."),
+}
+
+WORLD_FIELDS = (
+    "table", "plan", "before", "round", "load", "first", "rh", "recipient", "turn",
+    "direction", "died", "checking", "amount", "saw", "gun", "shown", "deck",
+)
+TABLE_VALUES = ("D.TwoSeats{}", "D.ThreeSeats{}", "D.FourSeats{}")
+
+
+def world_with(bind: bool, **fields: str) -> str:
+    """A world pattern (`bind`) or value, with some fields replaced."""
+    vals = {f: ("+" if bind else "") + f for f in WORLD_FIELDS} | fields
+    rest = ", ".join(vals[f] for f in WORLD_FIELDS[2:])
+    return f"S.World{{D.Config{{{vals['table']}, {vals['plan']}}}, {rest}}}"
+
+
+def first_answer() -> list[str]:
+    """NeedFirst per table: the ref's defaulted seat is the machine's, then fc.close."""
+    rows = ["match w:"]
+    for table in TABLE_VALUES:
+        w = world_with(False, table=table)
+        st = f"S.State{{{w}, p, S.NeedFirst{{}}, Nil{{}}, g}}"
+        seats = f"D.table.seats({table})"
+        v = f"D.draw.value(PT.first.range({table}), n)"
+        ref_seat = f"G.seat.default(G.nth(D.Seat, {seats}, {v}))"
+        seat = f"Q.value.or(D.Seat, Q.nth(D.Seat, {seats}, {v}), D.Seat0{{}})"
+
+        def chosen(x: str) -> str:
+            return f"R.stepped(R.settle(96n, R.RefState{{T.qh({st}), R.MainRoutine_StartRound{{R.FirstChosen{{{x}}}}}, Nil{{}}}}))"
+
+        e_seat = (
+            f"Equal.trans(D.Seat, {ref_seat}, G.seat.default(Q.nth(D.Seat, {seats}, {v})), {seat}, "
+            f"Equal.cong(Maybe<&2, D.Seat>, D.Seat, m => G.seat.default(m), G.nth(D.Seat, {seats}, {v}), Q.nth(D.Seat, {seats}, {v}), ISP.nth.eq(D.Seat, {seats}, {v})), "
+            f"default.eq(Q.nth(D.Seat, {seats}, {v})))"
+        )
+        shape = f"ISP.shape.move({w}, p, S.NeedFirst{{}}, n0, g, S.NeedFirst{{}}, Nil{{}}, shape)"
+        rows += [
+            f"  case {world_with(True, table=table)}:",
+            f"    Equal.trans(A.RefStep(), {chosen(ref_seat)}, {chosen(seat)}, A.stepped(S.state.stepped(M.first.chosen({st}, {seat}))), "
+            f"Equal.cong(D.Seat, A.RefStep(), x => {chosen('x')}, {ref_seat}, {seat}, {e_seat}), "
+            f"U.stepped.ref.local(R.settle(96n, R.RefState{{T.qh({st}), R.MainRoutine_StartRound{{R.FirstChosen{{{seat}}}}}, Nil{{}}}}), M.first.chosen({st}, {seat}), fc.close({st}, {seat}, 77n, {shape})))",
+        ]
+    return rows
+
+
+DECK_NAMES = ("two", "three", "four")
+SHORT_DECKS = (("Nil{}", "Nil{}"), ("S.Batch{+i0, +l0} <> Nil{}", "S.Batch{i0, l0} <> Nil{}"))
+LONG_DECK = ("S.Batch{+i0, +l0} <> S.Batch{+i1, +l1} <> +rest", "S.Batch{i0, l0} <> S.Batch{i1, l1} <> rest")
+
+
+def deck_world(table: str, deck: tuple[str, str]) -> tuple[str, str]:
+    """The world pattern and value with this table's deck replaced."""
+    pats, vals = ["+" + d for d in DECK_NAMES], list(DECK_NAMES)
+    k = TABLE_VALUES.index(table)
+    pats[k], vals[k] = deck
+    return (
+        world_with(True, table=table, deck=f"S.Decks{{{', '.join(pats)}}}"),
+        world_with(False, table=table, deck=f"S.Decks{{{', '.join(vals)}}}"),
+    )
+
+
+def batch_split(long_leaf: Callable[[str, str], list[str]], short_leaf: str) -> Callable[[], list[str]]:
+    """NeedBatch per table and deck length; a deck under two batches is stuck."""
+
+    def body() -> list[str]:
+        rows = ["match w:"]
+        for table in TABLE_VALUES:
+            for deck in SHORT_DECKS:
+                rows += [f"  case {deck_world(table, deck)[0]}:", f"    {short_leaf}"]
+            pat, w = deck_world(table, LONG_DECK)
+            rows += [f"  case {pat}:", *indent(4, long_leaf(w, f"S.State{{{w}, p, S.NeedBatch{{}}, Nil{{}}, g}}"))]
+        return rows
+
+    return body
+
+
+BATCH_VALUE = "D.draw.value(D.Range{0n, List.length(&2, S.Batch, rest)}, n)"
+
+
+def batch_shape(w: str) -> str:
+    return f"ISP.shape.move({w}, p, S.NeedBatch{{}}, n0, g, S.NeedBatch{{}}, Nil{{}}, shape)"
+
+
+def batch_answer_leaf(w: str, st: str) -> list[str]:
+    def chosen(width: str) -> str:
+        return f"R.stepped(R.settle(96n, R.RefState{{A.ref_host({st}), R.GenerateRandomSequence{{R.BatchChosen{{D.draw.value(D.Range{{0n, {width}}}, n)}}}}, Nil{{}}}}))"
+
+    ref_len, len_ = "A.ref_batch_length(rest)", "List.length(&2, S.Batch, rest)"
+    v = BATCH_VALUE
+    return [
+        f"Equal.trans(A.RefStep(), {chosen(ref_len)}, {chosen(len_)}, A.stepped(S.state.stepped(M.batch({st}, {v}))), "
+        f"Equal.cong(Nat, A.RefStep(), x => {chosen('x')}, {ref_len}, {len_}, Equal.sym(Nat, {len_}, {ref_len}, C.batch_length_backwards(rest))), "
+        f"U.stepped.ref.local(R.settle(96n, R.RefState{{A.ref_host({st}), R.GenerateRandomSequence{{R.BatchChosen{{{v}}}}}, Nil{{}}}}), M.batch({st}, {v}), LP.batch.close({st}, {v}, 87n, {batch_shape(w)}, {{==}})))"
+    ]
+
+
+def batch_valid_leaf(w: str, st: str) -> list[str]:
+    v = BATCH_VALUE
+    return [
+        "match valid:",
+        "  case Tuple{+normal, Tuple{+shape, Tuple{+bounded, +ready}}}:",
+        f"    LP.valid.found(Q.nth(S.Batch, S.world.deck(S.state.world({st})), {v}), {st}, {v}, ({batch_shape(w)}, bounded))",
+    ]
+
+
+LOAD_STEP_BODIES: dict[str, Callable[[], list[str]]] = {
+    "batch.answer": batch_split(batch_answer_leaf, "{==}"),
+    "valid.batch.answer": batch_split(batch_valid_leaf, "valid"),
+}
+
+
+ROUND_BODIES: dict[str, Callable[[], list[str]]] = {
+    "reset.eq": ring_split(lambda state: f"reset.claim({state})", ("players",), False, closed, "GP."),
+    "award.eq": ring_split(lambda state: f"award.claim({state}, seat, prize)", ("players",), True, closed, "GP."),
+    "first.answer": first_answer,
+}
+
+FILES = {PROOF: BODIES, ITEM_PROOF: ITEM_BODIES, GRAB_PROOF: GRAB_BODIES, LOAD_PROOF: LOAD_BODIES, TURN_PROOF: TURN_BODIES, USE_PROOF: USE_BODIES, AIM_PROOF: AIM_BODIES, PICK_PROOF: PICK_BODIES, ROUND_PROOF: ROUND_BODIES, LOAD_STEP_PROOF: LOAD_STEP_BODIES}
 
 
 def body_span(text: str, name: str) -> tuple[int, int]:
