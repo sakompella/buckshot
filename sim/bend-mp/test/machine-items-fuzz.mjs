@@ -3,18 +3,19 @@
 // of seeded random item games (and some no-item ones), machine against reference.
 import assert from 'node:assert/strict';
 import { list, array, kind, seatNumber, tag, requestJSON } from './reference-adapter.mjs';
-import { loadModels, makeRandom, normalize } from './machine-items-lib.mjs';
+import { loadModels, makeRandom, normalize, asAbstract } from './machine-items-lib.mjs';
 
 const GAMES_PER_TABLE = Number(process.env.FUZZ_GAMES ?? 500);
 const SKIPPED = new Set((process.env.FUZZ_SKIP ?? '').split(',')); // lets fuzz_mutations.py see what the other properties catch alone
 const MAX_STEPS = Number(process.env.FUZZ_STEPS ?? 50);
 
-const { M, R, close } = await loadModels('bend-mp-item-fuzz-');
+const { M, R, A, close } = await loadModels('bend-mp-item-fuzz-', { abstract: true });
+const mapped = state => A.ref(asAbstract(state));
 const { random, randomConfig, answerFor } = makeRandom(0x66757a7a);
 
 const OBSERVE = '../domain.observe', HEAR = '../domain.hear', RESOLVE = '../domain.resolve';
 const sockets = n => n === 2 ? [1, 3] : Array.from({ length: n }, (_, i) => i);
-const count = { step_matches: 0, observe_matches: 0, legal_exact: 0, legal_accepted: 0, privacy: 0 };
+const count = { step_matches: 0, observe_matches: 0, legal_exact: 0, legal_accepted: 0, privacy: 0, reachable_valid: 0 };
 const coverage = { games: 0, boundaries: 0, noItemGames: 0, itemGames: 0, choosePoints: 0, finished: 0, itemMoves: 0, hiddenChanged: 0 };
 
 class Mismatch extends Error {}
@@ -84,6 +85,19 @@ const requestMove = move => {
   }
 };
 
+const RING_TABLE = { Duo: 'TwoSeats', Trio: 'ThreeSeats', Quad: 'FourSeats' };
+
+// A.ValidItems at a reachable request point: the item normal form, the table
+// tie of the seat ring and the Grabs rings, the round bound and the turn facts.
+function checkValidItems(game) {
+  const s = asAbstract(game.m);
+  same('reachable_valid', 'ValidItems normal form', s, A.normalize_items(s), game);
+  const { grabbing, holding, granted, intake } = game.m.grabs;
+  const table = kind(game.m.world.config.table);
+  same('reachable_valid', 'ValidItems table tie', Array(5).fill(table), [game.m.players, grabbing, holding, granted, intake].map(ring => RING_TABLE[kind(ring)]), game);
+  same('reachable_valid', 'ValidItems facts', { bounded: true, ready: true }, { bounded: A.bounded(s), ready: A.items_ready(s.phase, s.world) }, game);
+}
+
 function checkPrivacyAtPoint(game) {
   const { gun, decks } = otherHidden(game.m);
   const swapped = M.replace_hidden(game.m, gun, decks);
@@ -101,12 +115,14 @@ function play(config, label, seats) {
   const game = { label, config, seats, tape: [], r: r.state, m: m.state };
   let rNotes = r.notes, mNotes = m.notes;
   same('step_matches', 'start notes', rNotes, mNotes, game);
+  same('step_matches', 'start state', game.r, mapped(game.m), game, 'A.ref of the machine state');
   same('step_matches', 'start point', R.point(game.r), M.point(game.m), game);
   for (let step = 0; step < MAX_STEPS; step++) {
     const mPoint = M.point(game.m), rPoint = R.point(game.r);
     checkObservations(game, `step ${step}`, mPoint, rPoint, mNotes, rNotes);
     checkLegal(game, mPoint.request, rPoint.request);
     checkPrivacyAtPoint(game);
+    checkValidItems(game);
     coverage.boundaries++;
     const request = requestJSON(rPoint.request);
     if (request.kind === 'Finished') { coverage.finished++; return; }
@@ -115,6 +131,7 @@ function play(config, label, seats) {
     game.tape.push(n);
     const nr = R.answer(game.r, n), nm = M.answer(game.m, n);
     same('step_matches', 'answer notes', nr.notes, nm.notes, game);
+    same('step_matches', 'answer state', nr.state, mapped(nm.state), game, 'A.ref of the machine state');
     same('step_matches', 'answer point', R.point(nr.state), M.point(nm.state), game);
     game.r = nr.state; game.m = nm.state; rNotes = nr.notes; mNotes = nm.notes;
   }

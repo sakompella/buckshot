@@ -303,7 +303,7 @@ def AdvanceTurn.props(+state: RefState, +seat: D.Seat, +props: S.Props) -> RefSt
       +h : S.Host = S.host.set_props(host(state), seat, S.Props{hp, True{}, True{}, cash, slots, grab, holding, turn})
       frame(emit(with_host(state, h), D.TurnSkipped{seat}), AdvanceTurn{G.NextTurn(h, seat)})
     case S.Props{hp, True{}, True{}, cash, slots, grab, holding, turn}:
-      +h : S.Host = S.host.set_props(host(state), seat, S.Props{hp, False{}, True{}, cash, slots, grab, holding, turn})
+      +h : S.Host = S.host.set_props(host(state), seat, S.Props{hp, False{}, False{}, cash, slots, grab, holding, turn})
       frame(emit(with_host(state, h), D.JamLifted{seat}), GrantTurn{seat})
     case _:
       frame(state, GrantTurn{seat})

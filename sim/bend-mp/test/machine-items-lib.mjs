@@ -22,20 +22,30 @@ function build(dir, name, relativeSource) {
   return pathToFileURL(output).href;
 }
 
-// Builds the machine and the reference to JS modules in a temp dir.
-export async function loadModels(prefix) {
+// Builds the machine and the reference to JS modules in a temp dir, and with
+// `abstract` also abstract.bend, whose A.ref maps machine states to reference states.
+export async function loadModels(prefix, { abstract = false } = {}) {
   const dir = mkdtempSync(join(tmpdir(), prefix));
   try {
+    // Every build comes before the first import: Bun caches the directory listing.
     const machine = build(dir, 'machine', '../sm/main.bend');
     const reference = build(dir, 'reference', '../ref/main.bend');
+    const mapping = abstract && build(dir, 'abstract', '../abstract.bend');
     const M = (await import(machine)).default;
     const R = (await import(reference)).default;
-    return { M, R, close: () => rmSync(dir, { recursive: true }) };
+    const A = mapping && (await import(mapping)).default;
+    return { M, R, A, close: () => rmSync(dir, { recursive: true }) };
   } catch (error) {
     rmSync(dir, { recursive: true });
     throw error;
   }
 }
+
+// A machine value with its tags as abstract.bend sees them: sm/main.bend sees
+// `../domain.X` and `state.X`, abstract.bend sees `domain.X` and `sm/state.X`.
+const abstractTag = tag => tag.startsWith('../') ? tag.slice(3) : tag.includes('.') ? `sm/${tag}` : tag;
+export const asAbstract = value => value === null || typeof value !== 'object' ? value
+  : Object.fromEntries(Object.entries(value).map(([key, x]) => [key, key === '$' ? abstractTag(x) : asAbstract(x)]));
 
 export const normalize = value => JSON.parse(JSON.stringify(value, (key, x) => {
   if (typeof x === 'bigint') return Number(x);
