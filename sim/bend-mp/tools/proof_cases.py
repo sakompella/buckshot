@@ -421,6 +421,7 @@ GRAB_BODIES: dict[str, Callable[[], list[str]]] = {
     "put.eq": ring_split(lambda state: f"put.claim({state}, seat, fresh)", ("players", "holding", "intake"), True, closed),
     "done.eq": ring_split(lambda state: f"done.claim({state})", ("players",), False, closed),
     "held.eq": ring_split(lambda state: f"held.claim({state}, seat)", ("players", "holding"), True, closed),
+    "slots.eq": ring_split(lambda state: f"slots.claim({state}, seat)", ("players",), True, closed),
     "accept.at": ring_split(lambda state: f"accept.at.claim({state}, seat, move)", ("players", "grabbing", "holding", "intake"), True, accept_leaf),
 }
 
