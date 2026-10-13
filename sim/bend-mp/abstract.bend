@@ -11,76 +11,53 @@ import ./sm/items.bend as I
 import ./primitive.bend as P
 import ./ref/items.bend as RI
 
-type CoreSeat is Data:
-  CoreSeat{health: Nat, jam: S.Jam, cash: U32, slots: D.Slots}
+def CoreSeat() -> Data:
+  S.Seat
 
-def seats.health(seats: D.Ring<&2, CoreSeat>) -> D.Ring<&2, Nat>:
-  match seats:
-    case D.Duo{CoreSeat{a, _, _, _}, CoreSeat{b, _, _, _}}:
-      D.Duo{a, b}
-    case D.Trio{CoreSeat{a, _, _, _}, CoreSeat{b, _, _, _}, CoreSeat{c, _, _, _}}:
-      D.Trio{a, b, c}
-    case D.Quad{CoreSeat{a, _, _, _}, CoreSeat{b, _, _, _}, CoreSeat{c, _, _, _}, CoreSeat{d, _, _, _}}:
-      D.Quad{a, b, c, d}
-
-def seats.jam(seats: D.Ring<&2, CoreSeat>) -> D.Ring<&2, S.Jam>:
-  match seats:
-    case D.Duo{CoreSeat{_, a, _, _}, CoreSeat{_, b, _, _}}:
-      D.Duo{a, b}
-    case D.Trio{CoreSeat{_, a, _, _}, CoreSeat{_, b, _, _}, CoreSeat{_, c, _, _}}:
-      D.Trio{a, b, c}
-    case D.Quad{CoreSeat{_, a, _, _}, CoreSeat{_, b, _, _}, CoreSeat{_, c, _, _}, CoreSeat{_, d, _, _}}:
-      D.Quad{a, b, c, d}
-
-def seats.cash(seats: D.Ring<&2, CoreSeat>) -> D.Ring<&2, U32>:
-  match seats:
-    case D.Duo{CoreSeat{_, _, a, _}, CoreSeat{_, _, b, _}}:
-      D.Duo{a, b}
-    case D.Trio{CoreSeat{_, _, a, _}, CoreSeat{_, _, b, _}, CoreSeat{_, _, c, _}}:
-      D.Trio{a, b, c}
-    case D.Quad{CoreSeat{_, _, a, _}, CoreSeat{_, _, b, _}, CoreSeat{_, _, c, _}, CoreSeat{_, _, d, _}}:
-      D.Quad{a, b, c, d}
 
 def seats.slots(seats: D.Ring<&2, CoreSeat>) -> D.Ring<&2, D.Slots>:
-  match seats:
-    case D.Duo{CoreSeat{_, _, _, a}, CoreSeat{_, _, _, b}}:
-      D.Duo{a, b}
-    case D.Trio{CoreSeat{_, _, _, a}, CoreSeat{_, _, _, b}, CoreSeat{_, _, _, c}}:
-      D.Trio{a, b, c}
-    case D.Quad{CoreSeat{_, _, _, a}, CoreSeat{_, _, _, b}, CoreSeat{_, _, _, c}, CoreSeat{_, _, _, d}}:
-      D.Quad{a, b, c, d}
-
-# The no-item scope's jam ring: no seat is jammed.
-def seats.no_jams(seats: D.Ring<&2, CoreSeat>) -> D.Ring<&2, S.Jam>:
-  match seats:
-    case D.Duo{_, _}:
-      D.Duo{S.Free{}, S.Free{}}
-    case D.Trio{_, _, _}:
-      D.Trio{S.Free{}, S.Free{}, S.Free{}}
-    case D.Quad{_, _, _, _}:
-      D.Quad{S.Free{}, S.Free{}, S.Free{}, S.Free{}}
-
-# The no-item scope's slot ring: every seat's inventory is empty.
-def seats.no_slots(seats: D.Ring<&2, CoreSeat>) -> D.Ring<&2, D.Slots>:
-  match seats:
-    case D.Duo{_, _}:
-      D.Duo{D.slots.empty(), D.slots.empty()}
-    case D.Trio{_, _, _}:
-      D.Trio{D.slots.empty(), D.slots.empty(), D.slots.empty()}
-    case D.Quad{_, _, _, _}:
-      D.Quad{D.slots.empty(), D.slots.empty(), D.slots.empty(), D.slots.empty()}
+  S.players.slots(seats)
 
 def players(+seats: D.Ring<&2, CoreSeat>) -> S.Players:
-  S.Players{seats.health(seats), seats.jam(seats), seats.cash(seats), seats.slots(seats)}
+  seats
 
-# The no-item scope's Players: no seat is jammed (only an item jams) and every
-# inventory is empty, whatever the seats say.
+# The no-item scope's seat: unjammed (only an item jams), inventory empty.
+def seat.free(+seat: CoreSeat) -> CoreSeat:
+  S.Seat{S.seat.health(seat), S.Free{}, S.seat.cash(seat), D.slots.empty()}
+
+# The jam_skip_once law's seat: its jam kept, inventory empty.
+def seat.jams(+seat: CoreSeat) -> CoreSeat:
+  S.Seat{S.seat.health(seat), S.seat.jam(seat), S.seat.cash(seat), D.slots.empty()}
+
+# The no-item scope's Players, whatever the seats say.
 def players.free(+seats: D.Ring<&2, CoreSeat>) -> S.Players:
-  S.Players{seats.health(seats), seats.no_jams(seats), seats.cash(seats), seats.no_slots(seats)}
+  match seats:
+    case D.Duo{a, b}:
+      D.Duo{seat.free(a), seat.free(b)}
+    case D.Trio{a, b, c}:
+      D.Trio{seat.free(a), seat.free(b), seat.free(c)}
+    case D.Quad{a, b, c, d}:
+      D.Quad{seat.free(a), seat.free(b), seat.free(c), seat.free(d)}
 
-# The seats' jams with empty inventories: the jam_skip_once law's scope.
 def players.jams(+seats: D.Ring<&2, CoreSeat>) -> S.Players:
-  S.Players{seats.health(seats), seats.jam(seats), seats.cash(seats), seats.no_slots(seats)}
+  match seats:
+    case D.Duo{a, b}:
+      D.Duo{seat.jams(a), seat.jams(b)}
+    case D.Trio{a, b, c}:
+      D.Trio{seat.jams(a), seat.jams(b), seat.jams(c)}
+    case D.Quad{a, b, c, d}:
+      D.Quad{seat.jams(a), seat.jams(b), seat.jams(c), seat.jams(d)}
+
+# The seats' health, cash and jams, read through the no-item and jam-law
+# views so they stay definitionally equal to those views' fields.
+def seats.health(+seats: D.Ring<&2, CoreSeat>) -> D.Ring<&2, Nat>:
+  S.players.health(players.free(seats))
+
+def seats.jam(+seats: D.Ring<&2, CoreSeat>) -> D.Ring<&2, S.Jam>:
+  S.players.jam(players.jams(seats))
+
+def seats.cash(+seats: D.Ring<&2, CoreSeat>) -> D.Ring<&2, U32>:
+  S.players.cash(players.free(seats))
 
 # The reference's (is_jammed, jammer_checked) pair of a jam. Free reads as
 # (False, False); a lift leaves Godot's jammer_checked set, which
@@ -95,7 +72,7 @@ def jam.checked(jam: S.Jam) -> Bool:
 # Host props of one seat in the no-item scope: unjammed, empty slots, not grabbing.
 def seat.props(seat: CoreSeat) -> H.Props:
   match seat:
-    case CoreSeat{hp, _, cash, sl}:
+    case S.Seat{hp, _, cash, sl}:
       H.Props{hp, False{}, False{}, cash, D.slots.empty(), False{}, None{}, False{}}
 
 # The reference's per-seat has_turn, derived from the phase: only the seat a
@@ -130,7 +107,7 @@ def turn.held(holder: Maybe<&2, D.Seat>, at: D.Seat) -> Bool:
 # whether it holds the turn.
 def seat.props.at(seat: CoreSeat, +grabs: S.Grabs, +holder: Maybe<&2, D.Seat>, +at: D.Seat) -> H.Props:
   match seat:
-    case CoreSeat{hp, +jam, cash, slots}:
+    case S.Seat{hp, +jam, cash, slots}:
       H.Props{hp, S.jam.jammed(jam), jam.checked(jam), cash, slots, I.seat.grabbing(grabs, at), I.seat.holding(grabs, at), turn.held(holder, at)}
 
 def props.at(seats: D.Ring<&2, CoreSeat>, +grabs: S.Grabs, +holder: Maybe<&2, D.Seat>) -> D.Ring<&2, H.Props>:
@@ -162,20 +139,8 @@ def value.or(-A: Data, found: Maybe<&2, A>, fallback: A) -> A:
     case None{}:
       fallback
 
-def core.at(+players: S.Players, +seat: D.Seat, hp: Nat) -> CoreSeat:
-  CoreSeat{hp, value.or(S.Jam, D.ring.get(S.Jam, S.players.jam(players), seat), S.Free{}), value.or(U32, D.ring.get(U32, S.players.cash(players), seat), 0), value.or(D.Slots, D.ring.get(D.Slots, S.players.slots(players), seat), D.slots.empty())}
-
-def core.health(health: D.Ring<&2, Nat>, +players: S.Players) -> D.Ring<&2, CoreSeat>:
-  match health:
-    case D.Duo{a, b}:
-      D.Duo{core.at(players, D.Seat1{}, a), core.at(players, D.Seat3{}, b)}
-    case D.Trio{a, b, c}:
-      D.Trio{core.at(players, D.Seat0{}, a), core.at(players, D.Seat1{}, b), core.at(players, D.Seat2{}, c)}
-    case D.Quad{a, b, c, d}:
-      D.Quad{core.at(players, D.Seat0{}, a), core.at(players, D.Seat1{}, b), core.at(players, D.Seat2{}, c), core.at(players, D.Seat3{}, d)}
-
 def core(+players: S.Players) -> D.Ring<&2, CoreSeat>:
-  core.health(S.players.health(players), players)
+  players
 
 def batches(deck: List<&2, S.Batch>) -> List<&2, H.Batch>:
   match deck:
@@ -372,7 +337,7 @@ def health_entries(entries: List<&2, D.At<&2, CoreSeat>>) -> List<&2, D.At<&2, N
   match entries:
     case Nil{}:
       Nil{}
-    case D.At{seat, CoreSeat{hp, _, _, sl}} <> rest:
+    case D.At{seat, S.Seat{hp, _, _, sl}} <> rest:
       D.At{seat, hp} <> health_entries(rest)
 
 def props_entries(entries: List<&2, D.At<&2, CoreSeat>>) -> List<&2, D.At<&2, H.Props>>:
@@ -390,7 +355,7 @@ def props_entries.held(entries: List<&2, D.At<&2, CoreSeat>>, +holder: Maybe<&2,
   match entries:
     case Nil{}:
       Nil{}
-    case D.At{+seat, CoreSeat{hp, +jam, cash, sl}} <> rest:
+    case D.At{+seat, S.Seat{hp, +jam, cash, sl}} <> rest:
       D.At{seat, H.Props{hp, S.jam.jammed(jam), jam.checked(jam), cash, D.slots.empty(), False{}, None{}, turn.held(holder, seat)}} <> props_entries.held(rest, holder)
 
 def ref_shots_entries(entries: List<&2, D.At<&2, CoreSeat>>, holder: Maybe<&2, D.Seat>) -> List<&2, D.Move>:
@@ -483,7 +448,7 @@ def ref_phase_stage(+world: S.World, +seats: D.Ring<&2, CoreSeat>, phase: S.Phas
 
 def seat.view(seat: CoreSeat) -> D.SeatView:
   match seat:
-    case CoreSeat{hp, jam, cash, sl}:
+    case S.Seat{hp, jam, cash, sl}:
       D.SeatView{D.counter.of(False{}, hp), D.slots.empty(), cash, D.NotGrabbing{}}
 
 def seat.views(seats: D.Ring<&2, CoreSeat>) -> D.Ring<&2, D.SeatView>:
@@ -761,7 +726,7 @@ def back.jam(jammed: Bool, checked: Bool) -> S.Jam:
 def back.props(seat: H.Props) -> CoreSeat:
   match seat:
     case H.Props{hp, jammed, checked, cash, slots, _, _, _}:
-      CoreSeat{hp, back.jam(jammed, checked), cash, slots}
+      S.Seat{hp, back.jam(jammed, checked), cash, slots}
 
 def back.seats(seats: D.Ring<&2, H.Props>) -> D.Ring<&2, CoreSeat>:
   match seats:
@@ -1101,11 +1066,11 @@ def grant.pass_case(+world: S.World, result: GrantCase, +seat: D.Seat, notes: Li
 
 def grant.clear_at(+seats: D.Ring<&2, CoreSeat>, seat: D.Seat, props: CoreSeat) -> D.Ring<&2, CoreSeat>:
   match props:
-    case CoreSeat{hp, _, cash, sl}:
-      D.ring.set(CoreSeat, seats, seat, CoreSeat{hp, S.Free{}, cash, sl})
+    case S.Seat{hp, _, cash, sl}:
+      D.ring.set(CoreSeat, seats, seat, S.Seat{hp, S.Free{}, cash, sl})
 
 def grant.clear(+seats: D.Ring<&2, CoreSeat>, +seat: D.Seat) -> D.Ring<&2, CoreSeat>:
-  grant.clear_at(seats, seat, value.or(CoreSeat, D.ring.get(CoreSeat, seats, seat), CoreSeat{100n, S.Free{}, 0, D.slots.empty()}))
+  grant.clear_at(seats, seat, value.or(CoreSeat, D.ring.get(CoreSeat, seats, seat), S.Seat{100n, S.Free{}, 0, D.slots.empty()}))
 
 def grant.once_claim(result: GrantCase, +seat: D.Seat) -> Type:
   match result:
@@ -1179,7 +1144,7 @@ def machine_win_gate(+world: S.World, seats: D.Ring<&2, CoreSeat>, +seat: D.Seat
   +players : S.Players = S.state.players(state)
   +prize : U32 = D.prize(S.world.round_index(world))
   cash : U32 = Q.value.or(U32, D.ring.get(U32, S.players.cash(players), seat), 0)
-  players : S.Players = S.players.set_cash(players, D.ring.set(U32, S.players.cash(players), seat, U32.add(cash, prize)))
+  players : S.Players = S.players.set_cash(players, seat, U32.add(cash, prize))
   ref(M.win.final(S.state.emit(S.state.set_players(state, players), D.RoundWon{seat, prize}), final))
 
 def finished(h: H.Host, notes: List<&2, D.Note>) -> R.RefState:
@@ -1191,7 +1156,7 @@ def win_notes(+world: S.World, +seat: D.Seat, notes: List<&2, D.Note>) -> List<&
 def machine_health_write(+world: S.World, +seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>, +seat: D.Seat, health: Nat) -> S.State:
   +players : S.Players = players.free(seats)
   pack : S.State = pack(world, seats, phase, notes)
-  S.state.set_players(pack, S.players.set_health(players, D.ring.set(Nat, S.players.health(players), seat, health)))
+  S.state.set_players(pack, S.players.set_health(players, seat, health))
 
 def ref_health_write(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +phase: S.Phase, notes: List<&2, D.Note>, +seat: D.Seat, health: Nat) -> R.RefState:
   +h : H.Host = host.held(world, seats, turn.holder(phase))
@@ -1556,8 +1521,8 @@ def reset_world(world: S.World) -> S.World:
 
 def reset_seat(seat: CoreSeat, health: Nat) -> CoreSeat:
   match seat:
-    case CoreSeat{_, _, cash, sl}:
-      CoreSeat{health, S.Free{}, cash, sl}
+    case S.Seat{_, _, cash, sl}:
+      S.Seat{health, S.Free{}, cash, sl}
 
 def reset_seats(seats: D.Ring<&2, CoreSeat>, +health: Nat) -> D.Ring<&2, CoreSeat>:
   match seats:
@@ -1584,11 +1549,7 @@ def ref_begin_grabbing(fuel: Nat, world: S.World, seats: D.Ring<&2, CoreSeat>, n
 # The state M.round.reset hands to item distribution, as round.reset builds it.
 def reset.state(+state: S.State) -> S.State:
   +world : S.World = S.state.world(state)
-  +table : D.Table = S.world.table(world)
-  +players : S.Players = S.state.players(state)
-  players : S.Players = S.players.set_jam(players, D.ring.fill(S.Jam, table, S.Free{}))
-  players : S.Players = S.players.set_health(players, D.ring.fill(Nat, table, S.world.round_health(world)))
-  players : S.Players = S.players.set_slots(players, D.ring.fill(D.Slots, table, D.slots.empty()))
+  players : S.Players = S.players.reset(S.state.players(state), S.world.round_health(world))
   +world : S.World = S.world.set_direction(S.world.set_checking_first_death(world, True{}), D.Clockwise{})
   S.state.emit(S.state.set_players(S.state.set_world(state, world), players), D.RoundBegan{S.world.round_index(world), S.world.round_health(world), S.world.first_turn(world)})
 
@@ -1943,12 +1904,12 @@ def preserve.plan(config: D.Config) -> D.Plan:
 
 def preserve.reset_seats(seats: D.Ring<&2, CoreSeat>, +hp: Nat) -> D.Ring<&2, CoreSeat>:
   match seats:
-    case D.Duo{CoreSeat{_, _, p1, s1}, CoreSeat{_, _, p3, s3}}:
-      D.Duo{CoreSeat{hp, S.Free{}, p1, s1}, CoreSeat{hp, S.Free{}, p3, s3}}
-    case D.Trio{CoreSeat{_, _, p0, s0}, CoreSeat{_, _, p1, s1}, CoreSeat{_, _, p2, s2}}:
-      D.Trio{CoreSeat{hp, S.Free{}, p0, s0}, CoreSeat{hp, S.Free{}, p1, s1}, CoreSeat{hp, S.Free{}, p2, s2}}
-    case D.Quad{CoreSeat{_, _, p0, s0}, CoreSeat{_, _, p1, s1}, CoreSeat{_, _, p2, s2}, CoreSeat{_, _, p3, s3}}:
-      D.Quad{CoreSeat{hp, S.Free{}, p0, s0}, CoreSeat{hp, S.Free{}, p1, s1}, CoreSeat{hp, S.Free{}, p2, s2}, CoreSeat{hp, S.Free{}, p3, s3}}
+    case D.Duo{S.Seat{_, _, p1, s1}, S.Seat{_, _, p3, s3}}:
+      D.Duo{S.Seat{hp, S.Free{}, p1, s1}, S.Seat{hp, S.Free{}, p3, s3}}
+    case D.Trio{S.Seat{_, _, p0, s0}, S.Seat{_, _, p1, s1}, S.Seat{_, _, p2, s2}}:
+      D.Trio{S.Seat{hp, S.Free{}, p0, s0}, S.Seat{hp, S.Free{}, p1, s1}, S.Seat{hp, S.Free{}, p2, s2}}
+    case D.Quad{S.Seat{_, _, p0, s0}, S.Seat{_, _, p1, s1}, S.Seat{_, _, p2, s2}, S.Seat{_, _, p3, s3}}:
+      D.Quad{S.Seat{hp, S.Free{}, p0, s0}, S.Seat{hp, S.Free{}, p1, s1}, S.Seat{hp, S.Free{}, p2, s2}, S.Seat{hp, S.Free{}, p3, s3}}
 
 def preserve.reset_world(world: S.World) -> S.World:
   S.world.set_direction(S.world.set_checking_first_death(world, True{}), D.Clockwise{})
@@ -2097,26 +2058,26 @@ def shot.prefix(+state: S.State, +shooter: D.Seat, +target: D.Seat, +shell: D.Sh
   +damage : D.Damage = Q.captured(S.world.sawed(world))
   +before : Nat = Q.value.or(Nat, D.ring.get(Nat, S.players.health(ps), target), 100n)
   +health : Nat = Q.shot.health(shell, before, damage)
-  +ps : S.Players = S.players.set_health(ps, D.ring.set(Nat, S.players.health(ps), target, health))
+  +ps : S.Players = S.players.set_health(ps, target, health)
   world : S.World = S.world.set_sawed(S.world.set_gun(world, rest), False{})
   state : S.State = S.state.emit(S.state.set_players(S.state.set_world(state, world), ps), D.Fired{shooter, target, shell, damage, Q.subtract(before, health), health})
   M.death(state, target, shell, health)
 
 def shot.health_at(seat: CoreSeat, hp: Nat) -> CoreSeat:
   match seat:
-    case CoreSeat{_, jam, cash, sl}:
-      CoreSeat{hp, jam, cash, sl}
+    case S.Seat{_, jam, cash, sl}:
+      S.Seat{hp, jam, cash, sl}
 
 def shot.health_write(+seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, hp: Nat) -> D.Ring<&2, CoreSeat>:
-  D.ring.set(CoreSeat, seats, seat, shot.health_at(value.or(CoreSeat, D.ring.get(CoreSeat, seats, seat), CoreSeat{100n, S.Free{}, 0, D.slots.empty()}), hp))
+  D.ring.set(CoreSeat, seats, seat, shot.health_at(value.or(CoreSeat, D.ring.get(CoreSeat, seats, seat), S.Seat{100n, S.Free{}, 0, D.slots.empty()}), hp))
 
 def shot.cash_at(seat: CoreSeat, prize: U32) -> CoreSeat:
   match seat:
-    case CoreSeat{hp, jam, cash, sl}:
-      CoreSeat{hp, jam, U32.add(cash, prize), sl}
+    case S.Seat{hp, jam, cash, sl}:
+      S.Seat{hp, jam, U32.add(cash, prize), sl}
 
 def shot.cash_write(+seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, prize: U32) -> D.Ring<&2, CoreSeat>:
-  D.ring.set(CoreSeat, seats, seat, shot.cash_at(value.or(CoreSeat, D.ring.get(CoreSeat, seats, seat), CoreSeat{100n, S.Free{}, 0, D.slots.empty()}), prize))
+  D.ring.set(CoreSeat, seats, seat, shot.cash_at(value.or(CoreSeat, D.ring.get(CoreSeat, seats, seat), S.Seat{100n, S.Free{}, 0, D.slots.empty()}), prize))
 
 def turn.ref_probe_list(seats: List<&2, D.Seat>) -> Bool:
   G.nonempty(D.Seat, seats)
@@ -2135,7 +2096,7 @@ def win.awarded(+state: S.State, +seat: D.Seat) -> S.State:
   +ps : S.Players = S.state.players(state)
   +prize : U32 = D.prize(S.world.round_index(world))
   cash : U32 = Q.value.or(U32, D.ring.get(U32, S.players.cash(ps), seat), 0)
-  ps : S.Players = S.players.set_cash(ps, D.ring.set(U32, S.players.cash(ps), seat, U32.add(cash, prize)))
+  ps : S.Players = S.players.set_cash(ps, seat, U32.add(cash, prize))
   S.state.emit(S.state.set_players(state, ps), D.RoundWon{seat, prize})
 
 def win.source_gate(world: S.World, seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, notes: List<&2, D.Note>, k: Nat, final: Bool) -> R.RefState:
@@ -2220,7 +2181,7 @@ def aim.rs_mid(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +actor: D.Seat, +t
   R.RefState{host(aim.so_world(S.world.set_gun(world, shell <> rest), aim.self_live(actor, target, shell)), shot.health_write(seats, target, hp)), R.DeathRequest{R.Shot{actor, target, shell, dmg, List.length(&2, D.Shell, rest)}}, [D.Shown{D.Fired{actor, target, shell, dmg, d, hp}}]}
 
 def aim.ms_mid(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +actor: D.Seat, +target: D.Seat, +shell: D.Shell, rest: List<&2, D.Shell>, phase: S.Phase, +hp: Nat, d: Nat, +dmg: D.Damage) -> S.State:
-  M.death(S.State{S.world.set_sawed(S.world.set_gun(world, rest), False{}), S.players.set_health(players.free(seats), D.ring.set(Nat, seats.health(seats), target, hp)), phase, [D.Shown{D.Fired{actor, target, shell, dmg, d, hp}}], grabs(seats)}, target, shell, hp)
+  M.death(S.State{S.world.set_sawed(S.world.set_gun(world, rest), False{}), S.players.set_health(players.free(seats), target, hp), phase, [D.Shown{D.Fired{actor, target, shell, dmg, d, hp}}], grabs(seats)}, target, shell, hp)
 
 def aim.ue_state(+world: S.World, +seats: D.Ring<&2, CoreSeat>, notes: List<&2, D.Note>, +from: D.Seat, +passing: Bool) -> R.RefState:
   R.RefState{host(world, seats), R.UserEndTurn_Packet{R.EndPacket{from, passing, Nat.is_eq(List.length(&2, D.Shell, S.world.gun(world)), 0n), turn.source_winner(world, seats)}}, notes}
@@ -2514,11 +2475,11 @@ def normalize_all(+s: S.State) -> S.State:
 def ring_shape(-X: Data, ring: D.Ring<&2, X>, +world: S.World) -> Data:
   {D.ring.table(X, ring) == S.world.table(world) : D.Table}
 
-# Every Players and Grabs ring has the config's table constructor.
+# The seat ring and every Grabs ring have the config's table constructor.
 def Shape(+s: S.State) -> Data:
   match s:
-    case S.State{+world, S.Players{health, jam, cash, slots}, _, _, S.Grabs{_, taking, holding, granted, intake}}:
-      Sigma<&2, &2, ring_shape(Nat, health, world), _ => Sigma<&2, &2, ring_shape(S.Jam, jam, world), _ => Sigma<&2, &2, ring_shape(U32, cash, world), _ => Sigma<&2, &2, ring_shape(D.Slots, slots, world), _ => Sigma<&2, &2, ring_shape(Bool, taking, world), _ => Sigma<&2, &2, ring_shape(Maybe<&2, D.Item>, holding, world), _ => Sigma<&2, &2, ring_shape(Nat, granted, world), _ => ring_shape(Bool, intake, world)>>>>>>>
+    case S.State{+world, players, _, _, S.Grabs{_, taking, holding, granted, intake}}:
+      Sigma<&2, &2, ring_shape(S.Seat, players, world), _ => Sigma<&2, &2, ring_shape(Bool, taking, world), _ => Sigma<&2, &2, ring_shape(Maybe<&2, D.Item>, holding, world), _ => Sigma<&2, &2, ring_shape(Nat, granted, world), _ => ring_shape(Bool, intake, world)>>>>
 
 # The full request-point invariant (proof-plan section 1). Components, in
 # order: normal form, Shape, caps, grab progress, latch, quiet, pending item

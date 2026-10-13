@@ -37,8 +37,8 @@ try {
   const nil = list([]);
   const hostState = state => {
     const { world, players, grabs } = state;
-    const seats = ring(players.health, (_, key) => ({ health: players.health[key], ...jamPair(players.jam[key]), cash: players.cash[key], slots: players.slots[key], grabbing: grabs.grabbing[key], holding: grabs.holding[key], has_turn: turnHolder(state.phase) === Number(key.slice(1)) }));
-    return { ...world, seats, distributing: grabs.distributing, grabs: ring(players.health, (_, key) => ({ $: 'GrabProgress', count: grabs.granted[key], intake: grabs.intake[key] })) };
+    const seats = ring(players, (s, key) => ({ health: s.health, ...jamPair(s.jam), cash: s.cash, slots: s.slots, grabbing: grabs.grabbing[key], holding: grabs.holding[key], has_turn: turnHolder(state.phase) === Number(key.slice(1)) }));
+    return { ...world, seats, distributing: grabs.distributing, grabs: ring(players, (_, key) => ({ $: 'GrabProgress', count: grabs.granted[key], intake: grabs.intake[key] })) };
   };
   const referenceHost = state => ({ ...state.host, seats: ring(state.host.seats, props => {
     const { $, ...fields } = props;
@@ -94,7 +94,7 @@ try {
     const c = config(seats, [round({ health: 3, live: 1, blank: 1 })]);
     const { reference, machine } = replay(c, [0, 0, 1, 0]);
     const jammedR = { ...reference, host: { ...reference.host, seats: ring(reference.host.seats, props => ({ ...props, jammed: true, jam_checked: false, has_turn: false })) }, notes: nil };
-    const jammedM = { ...machine, players: { ...machine.players, jam: ring(machine.players.jam, () => machineJam(true, false)) }, notes: nil };
+    const jammedM = { ...machine, players: ring(machine.players, s => ({ ...s, jam: machineJam(true, false) })), notes: nil };
     const actor = seats === 2 ? 1 : 0;
     const grantedR = R.settle(96, { ...jammedR, frame: { $: 'PassTurn', seat: seat(actor) } });
     const grantedM = M.grant(jammedM, seat(actor));
@@ -102,8 +102,8 @@ try {
     assert.deepEqual(normalize(grantedM.notes), normalize(grantedR.notes), 'unchecked jam chain must preserve checked bits and note order');
     for (const direction of ['Clockwise', 'CounterClockwise']) {
       const deadR = { ...reference, host: { ...reference.host, direction: tag(direction), seats: ring(reference.host.seats, (props, key) => ({ ...props, health: key === `s${actor}` ? 0n : props.health })) } };
-      const deadM = { ...machine, world: { ...machine.world, direction: tag(direction) }, players: { ...machine.players, health: ring(machine.players.health, (hp, key) => key === `s${actor}` ? 0n : hp) } };
-      assert.deepEqual(normalize(M['rules.next_turn'](deadM.players.health, deadM.world.direction, seat(actor))), normalize(R['rules.GetNextTurn_Socket'](deadR.host, seat(actor))));
+      const deadM = { ...machine, world: { ...machine.world, direction: tag(direction) }, players: ring(machine.players, (s, key) => key === `s${actor}` ? { ...s, health: 0n } : s) };
+      assert.deepEqual(normalize(M['rules.next_turn'](M['state.players.health'](deadM.players), deadM.world.direction, seat(actor))), normalize(R['rules.GetNextTurn_Socket'](deadR.host, seat(actor))));
     }
     for (const shell of ['Live', 'Blank']) {
       const sawR = { ...reference, host: { ...reference.host, sawed: true, gun: list([tag(shell)]) } };
@@ -123,13 +123,13 @@ try {
   }
   for (const seats of [2, 3, 4]) {
     const { reference, machine } = replay(config(seats, [round({ health: 3 })]), [0, 0]);
-    const keys = Object.keys(machine.players.health).filter(key => key.startsWith('s'));
+    const keys = Object.keys(machine.players).filter(key => key.startsWith('s'));
     for (let flags = 0; flags < 1 << (2 * seats); flags++) {
       const jammed = key => Boolean(flags & 1 << (2 * keys.indexOf(key)));
       const checked = key => Boolean(flags & 1 << (2 * keys.indexOf(key) + 1));
       for (const direction of ['Clockwise', 'CounterClockwise']) {
         const r = { ...reference, notes: nil, host: { ...reference.host, direction: tag(direction), seats: ring(reference.host.seats, (props, key) => ({ ...props, jammed: jammed(key), jam_checked: checked(key), has_turn: false })) } };
-        const m = { ...machine, notes: nil, world: { ...machine.world, direction: tag(direction) }, players: { ...machine.players, jam: ring(machine.players.jam, (_, key) => machineJam(jammed(key), checked(key))) } };
+        const m = { ...machine, notes: nil, world: { ...machine.world, direction: tag(direction) }, players: ring(machine.players, (s, key) => ({ ...s, jam: machineJam(jammed(key), checked(key)) })) };
         for (const key of keys) {
           const actor = seat(Number(key.slice(1)));
           const rg = R.settle(96, { ...r, frame: { $: 'PassTurn', seat: actor } }), mg = M.grant(m, actor);
@@ -143,7 +143,7 @@ try {
   const forgedMove = tag('Choice', { seat: seat(1), index: 0n, move: tag('Shoot', { target: seat(3) }) });
   assert.deepEqual(normalize(M['answer.choice'](idle, forgedMove)), normalize(M.pickup(idle, seat(1))), 'effect must reread typed options and ignore Choice.move');
   const initial = M.start(twoBlank).state;
-  const dead = { ...initial.players, health: ring(initial.players.health, () => 0n) };
+  const dead = ring(initial.players, s => ({ ...s, health: 0n }));
   const terminals = [
     { phase: { $: 'state.Ended' } },
     { phase: { $: 'state.Blocked', holder: maybe(null) } },
