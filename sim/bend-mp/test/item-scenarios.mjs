@@ -361,7 +361,7 @@ try {
       event(lifted, 'JamLifted');
       assert.equal(game.snapshot.turn, opponent);
       assert.equal(game.snapshot.seats[opponent].jammed, false);
-      assert.equal(game.snapshot.seats[opponent].jam_checked, true);
+      assert.equal(game.snapshot.seats[opponent].jam_checked, false);
       while (game.snapshot.turn !== actor) game.shoot(game.snapshot.turn, game.snapshot.turn);
       game.use(actor, 'Jammer');
       game.move(actor, move => move.JamTarget === opponent);

@@ -60,8 +60,7 @@ def seats.cash(+seats: D.Ring<&2, CoreSeat>) -> D.Ring<&2, U32>:
   S.players.cash(players.free(seats))
 
 # The reference's (is_jammed, jammer_checked) pair of a jam. Free reads as
-# (False, False); a lift leaves Godot's jammer_checked set, which
-# grant.pass_case restores where the reference keeps it.
+# (False, False); the reference clears the bit when a jam lifts (D57).
 def jam.checked(jam: S.Jam) -> Bool:
   match jam:
     case S.JammedSkipped{}:
@@ -1038,16 +1037,6 @@ def grant.pass(world: S.World, +seats: D.Ring<&2, CoreSeat>, seat: D.Seat, notes
 def grant.give.jams(world: S.World, +seats: D.Ring<&2, CoreSeat>, seat: D.Seat, notes: List<&2, D.Note>) -> R.RefState:
   R.RefState{host.jams(world, seats), R.GiveTurnPermissions{seat}, notes}
 
-# A lift leaves Godot's jammer_checked set on the Free seat.
-def grant.lifted(props: H.Props) -> H.Props:
-  match props:
-    case H.Props{hp, _, _, cash, slots, grab, holding, turn}:
-      H.Props{hp, False{}, True{}, cash, slots, grab, holding, turn}
-
-def grant.give.lifted(world: S.World, +seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, notes: List<&2, D.Note>) -> R.RefState:
-  +h : H.Host = host.jams(world, seats)
-  R.RefState{H.host.set_props(h, seat, grant.lifted(H.host.props(h, seat))), R.GiveTurnPermissions{seat}, notes}
-
 def grant.dispatch(state: R.RefState) -> R.RefState:
   R.dispatch(state)
 
@@ -1059,7 +1048,7 @@ def grant.pass_case(+world: S.World, result: GrantCase, +seat: D.Seat, notes: Li
     case GrantAct{seats}:
       grant.give.jams(S.world.set_turn(world, Some{seat}), seats, seat, notes)
     case GrantLift{seats}:
-      grant.give.lifted(S.world.set_turn(world, Some{seat}), seats, seat, List.append(&2, D.Note, notes, [D.Shown{D.JamLifted{seat}}]))
+      grant.give.jams(S.world.set_turn(world, Some{seat}), seats, seat, List.append(&2, D.Note, notes, [D.Shown{D.JamLifted{seat}}]))
     case GrantSkip{+seats}:
       +turned : S.World = S.world.set_turn(world, Some{seat})
       grant.pass(turned, seats, G.GetNextTurn_Socket(host.jams(turned, seats), seat), List.append(&2, D.Note, notes, [D.Shown{D.TurnSkipped{seat}}]))
