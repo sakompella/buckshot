@@ -187,7 +187,7 @@ def phase_stage(+world: S.World, +seats: D.Ring<&2, A.CoreSeat>, +phase: S.Phase
       {==}
     case S.Idle{seat, options}:
       {==}
-    case S.Aim{seat, options}:
+    case S.Aim{seat}:
       {==}
     case S.Ended{}:
       {==}
@@ -284,7 +284,7 @@ def subtract_zero_backwards(+n: Nat) -> {n == A.subtract_zero(n) : Nat}:
   %subtract_zero(n) : {_ == A.subtract_zero(n) : Nat}
   {==}
 
-def legal_canonical_raw(+world: S.World, +seats: D.Ring<&2, A.CoreSeat>, +phase: S.Phase, notes: List<&2, D.Note>) -> {A.machine_request(A.canonical_state(world, seats, phase, notes)) == A.ref_request(A.raw_state(A.world_for(world, seats), seats, A.canonical_phase(phase, seats), notes)) : D.Request}:
+def legal_canonical_raw(+world: S.World, +seats: D.Ring<&2, A.CoreSeat>, +phase: S.Phase, notes: List<&2, D.Note>) -> {A.machine_request(A.canonical_state(world, seats, phase, notes)) == A.ref_request(A.raw_state(A.world_for(world, seats), seats, A.canonical_phase(phase), notes)) : D.Request}:
   match world:
     case S.World{D.Config{table, plan}, before, round, index, first, hp, recipient, turn, direction, died, checking, amount, saw, gun, shown, S.Decks{two, three, four}}:
       match seats:
@@ -304,8 +304,8 @@ def legal_canonical_raw(+world: S.World, +seats: D.Ring<&2, A.CoreSeat>, +phase:
               Equal.cong(Nat, D.Request, width => D.Draw{D.ShuffleSwap{}, D.Range{0n, width}}, extra, A.subtract_zero(extra), subtract_zero_backwards(extra))
             case S.Idle{seat, options}:
               {==}
-            case S.Aim{seat, options}:
-              %targets_backwards(seats, Some{seat}) : {A.play_request_with_moves(A.world_for(world, seats), seat, _) == A.ref_request(A.raw_state(A.world_for(world, seats), seats, A.canonical_phase(phase, seats), notes)) : D.Request}
+            case S.Aim{seat}:
+              %targets_backwards(seats, Some{seat}) : {A.play_request_with_moves(A.world_for(world, seats), seat, _) == A.ref_request(A.raw_state(A.world_for(world, seats), seats, A.canonical_phase(phase), notes)) : D.Request}
               {==}
             case S.Ended{}:
               {==}
@@ -339,8 +339,8 @@ def legal_canonical_raw(+world: S.World, +seats: D.Ring<&2, A.CoreSeat>, +phase:
               Equal.cong(Nat, D.Request, width => D.Draw{D.ShuffleSwap{}, D.Range{0n, width}}, extra, A.subtract_zero(extra), subtract_zero_backwards(extra))
             case S.Idle{seat, options}:
               {==}
-            case S.Aim{seat, options}:
-              %targets_backwards(seats, Some{seat}) : {A.play_request_with_moves(A.world_for(world, seats), seat, _) == A.ref_request(A.raw_state(A.world_for(world, seats), seats, A.canonical_phase(phase, seats), notes)) : D.Request}
+            case S.Aim{seat}:
+              %targets_backwards(seats, Some{seat}) : {A.play_request_with_moves(A.world_for(world, seats), seat, _) == A.ref_request(A.raw_state(A.world_for(world, seats), seats, A.canonical_phase(phase), notes)) : D.Request}
               {==}
             case S.Ended{}:
               {==}
@@ -374,8 +374,8 @@ def legal_canonical_raw(+world: S.World, +seats: D.Ring<&2, A.CoreSeat>, +phase:
               Equal.cong(Nat, D.Request, width => D.Draw{D.ShuffleSwap{}, D.Range{0n, width}}, extra, A.subtract_zero(extra), subtract_zero_backwards(extra))
             case S.Idle{seat, options}:
               {==}
-            case S.Aim{seat, options}:
-              %targets_backwards(seats, Some{seat}) : {A.play_request_with_moves(A.world_for(world, seats), seat, _) == A.ref_request(A.raw_state(A.world_for(world, seats), seats, A.canonical_phase(phase, seats), notes)) : D.Request}
+            case S.Aim{seat}:
+              %targets_backwards(seats, Some{seat}) : {A.play_request_with_moves(A.world_for(world, seats), seat, _) == A.ref_request(A.raw_state(A.world_for(world, seats), seats, A.canonical_phase(phase), notes)) : D.Request}
               {==}
             case S.Ended{}:
               {==}
@@ -396,7 +396,7 @@ def legal_canonical_raw(+world: S.World, +seats: D.Ring<&2, A.CoreSeat>, +phase:
 
 
 def law.legal_exact(+world: A.World(), +seats: A.Seats(), +phase: A.Phase(), +notes: A.Notes()) -> {A.machine_request(A.canonical_state(world, seats, phase, notes)) == A.ref_request(A.ref(A.canonical_state(world, seats, phase, notes))) : D.Request}:
-  Equal.trans(D.Request, A.machine_request(A.canonical_state(world, seats, phase, notes)), A.ref_request(A.raw_state(A.world_for(world, seats), seats, A.canonical_phase(phase, seats), notes)), A.ref_request(A.ref(A.canonical_state(world, seats, phase, notes))), legal_canonical_raw(world, seats, phase, notes), ref_request_backwards(A.world_for(world, seats), seats, A.canonical_phase(phase, seats), notes))
+  Equal.trans(D.Request, A.machine_request(A.canonical_state(world, seats, phase, notes)), A.ref_request(A.raw_state(A.world_for(world, seats), seats, A.canonical_phase(phase), notes)), A.ref_request(A.ref(A.canonical_state(world, seats, phase, notes))), legal_canonical_raw(world, seats, phase, notes), ref_request_backwards(A.world_for(world, seats), seats, A.canonical_phase(phase), notes))
 
 
 def bool_truth(value: Bool) -> Data:
@@ -563,24 +563,6 @@ def inv.world_roundtrip(+world: S.World, seats: A.Seats(), holder: Maybe<&2, D.S
     case S.World{+config, +before, +round, +index, +first, +hp, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}:
       Equal.cong(S.Decks, S.World, ds => S.World{config, before, round, index, first, hp, recipient, turn, direction, died, checking, amount, saw, gun, shown, ds}, A.decks_roundtrip(deck), deck, inv.decks_roundtrip(deck))
 
-def inv.targets_entries(+entries: List<&2, D.At<&2, A.CoreSeat>>, +holder: Maybe<&2, D.Seat>) -> {A.ref_targets_entries(entries, holder) == A.machine_targets_entries(entries) : List<&2, S.TargetOption>}:
-  match entries:
-    case Nil{}:
-      {==}
-    case D.At{seat, A.CoreSeat{0n, jam, cash, sl}} <> +rest:
-      inv.targets_entries(rest, holder)
-    case D.At{+seat, A.CoreSeat{1n+hp, jam, cash, sl}} <> +rest:
-      Equal.cong(List<&2, S.TargetOption>, List<&2, S.TargetOption>, xs => S.Target{seat} <> xs, A.ref_targets_entries(rest, holder), A.machine_targets_entries(rest), inv.targets_entries(rest, holder))
-
-def inv.targets_render(+seats: A.Seats(), +holder: Maybe<&2, D.Seat>) -> {A.ref_targets(seats, holder) == A.machine_targets(seats) : List<&2, S.TargetOption>}:
-  match seats:
-    case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, j3, p3, s3}}:
-      inv.targets_entries(D.ring.entries(A.CoreSeat, seats), holder)
-    case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}}:
-      inv.targets_entries(D.ring.entries(A.CoreSeat, seats), holder)
-    case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}}:
-      inv.targets_entries(D.ring.entries(A.CoreSeat, seats), holder)
-
 def inv.batch_phase(+deck: A.RefBatches(), h: A.RefHost()) -> {A.batch_phase(deck, h) == S.NeedBatch{} : S.Phase}:
   match deck:
     case Nil{}:
@@ -593,7 +575,7 @@ def inv.batch_phase(+deck: A.RefBatches(), h: A.RefHost()) -> {A.batch_phase(dec
 def inv.aim_phase(+world: S.World, +seats: A.Seats(), +seat: D.Seat) -> {A.phase_roundtrip(world, seats, A.Aim{seat}) == A.request_phase(A.Aim{seat}, seats) : S.Phase}:
   match world:
     case S.World{config, before, round, index, first, hp, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}:
-      Equal.cong(List<&2, S.TargetOption>, S.Phase, xs => S.Aim{seat, xs}, A.ref_targets(seats, Some{seat}), A.machine_targets(seats), inv.targets_render(seats, Some{seat}))
+      {==}
 
 def inv.idle_phase(+world: S.World, +seats: A.Seats(), +seat: D.Seat) -> {A.idle_options_roundtrip(world, seats, seat) == Nil{} : List<&2, S.IdleOption>}:
   match world:
@@ -802,7 +784,7 @@ def law.jam_skip_once(+world: S.World, +seats: A.Seats(), +seat: D.Seat, +notes:
 def point.canonical(+world: S.World, +seats: A.Seats(), +phase: S.Phase, +notes: A.Notes()) -> {A.machine_point(A.canonical_state(world, seats, phase, notes)) == A.point_of_ref(A.canonical_state(world, seats, phase, notes)) : D.Point}:
   +state : S.State = A.canonical_state(world, seats, phase, notes)
   requests : {A.machine_request(state) == A.ref_request(A.ref(state)) : D.Request} = law.legal_exact(world, seats, phase, notes)
-  boards : {PView.board(state) == A.ref_board(A.ref(state)) : D.Board} = Equal.cong(D.Obs & List<&2, D.Heard>, D.Board, A.observation_board, (A.observation(state, D.Seat0{}), A.heard(state, D.Seat0{})), (A.ref_observation(A.ref(state), D.Seat0{}), A.ref_heard(A.ref(state), D.Seat0{})), law.observe_matches(world, seats, A.canonical_phase(phase, seats), notes, D.Seat0{}))
+  boards : {PView.board(state) == A.ref_board(A.ref(state)) : D.Board} = Equal.cong(D.Obs & List<&2, D.Heard>, D.Board, A.observation_board, (A.observation(state, D.Seat0{}), A.heard(state, D.Seat0{})), (A.ref_observation(A.ref(state), D.Seat0{}), A.ref_heard(A.ref(state), D.Seat0{})), law.observe_matches(world, seats, A.canonical_phase(phase), notes, D.Seat0{}))
   Equal.trans(D.Point, A.machine_point(state), D.Point{A.ref_request(A.ref(state)), PView.board(state)}, A.point_of_ref(state), Equal.cong(D.Request, D.Point, request => D.Point{request, PView.board(state)}, A.machine_request(state), A.ref_request(A.ref(state)), requests), Equal.cong(D.Board, D.Point, board => D.Point{A.ref_request(A.ref(state)), board}, PView.board(state), A.ref_board(A.ref(state)), boards))
 
 def point.valid(+state: S.State, +valid: A.Valid(state)) -> {A.machine_point(state) == A.point_of_ref(state) : D.Point}:
@@ -872,7 +854,7 @@ def exposed_ref(+state: S.State) -> {A.ref(state) == A.exposed_ref(state) : A.Re
           {==}
         case S.Idle{seat, options}:
           {==}
-        case S.Aim{seat, targets}:
+        case S.Aim{seat}:
           {==}
         case S.Ended{}:
           {==}
@@ -966,10 +948,10 @@ def normalized_pack(+world: S.World, +seats: A.Seats(), +phase: S.Phase, +notes:
     case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}}:
       {==}
 
-def canonical_pack(+world: S.World, +seats: A.Seats(), +phase: S.Phase, +notes: A.Notes(), world_eq: {A.world_for(world, seats) == world : S.World}, phase_eq: {A.canonical_phase(phase, seats) == phase : S.Phase}) -> {A.canonical_state(world, seats, phase, notes) == A.pack(world, seats, phase, notes) : S.State}:
-  Equal.trans(S.State, A.canonical_state(world, seats, phase, notes), A.pack(world, seats, A.canonical_phase(phase, seats), notes), A.pack(world, seats, phase, notes), Equal.cong(S.World, S.State, w => A.pack(w, seats, A.canonical_phase(phase, seats), notes), A.world_for(world, seats), world, world_eq), Equal.cong(S.Phase, S.State, p => A.pack(world, seats, p, notes), A.canonical_phase(phase, seats), phase, phase_eq))
+def canonical_pack(+world: S.World, +seats: A.Seats(), +phase: S.Phase, +notes: A.Notes(), world_eq: {A.world_for(world, seats) == world : S.World}, phase_eq: {A.canonical_phase(phase) == phase : S.Phase}) -> {A.canonical_state(world, seats, phase, notes) == A.pack(world, seats, phase, notes) : S.State}:
+  Equal.trans(S.State, A.canonical_state(world, seats, phase, notes), A.pack(world, seats, A.canonical_phase(phase), notes), A.pack(world, seats, phase, notes), Equal.cong(S.World, S.State, w => A.pack(w, seats, A.canonical_phase(phase), notes), A.world_for(world, seats), world, world_eq), Equal.cong(S.Phase, S.State, p => A.pack(world, seats, p, notes), A.canonical_phase(phase), phase, phase_eq))
 
-def pack_valid(+world: S.World, +seats: A.Seats(), +phase: S.Phase, +notes: A.Notes(), stable: A.Stable(world, seats), phase_eq: {A.canonical_phase(phase, seats) == phase : S.Phase}, ready: {A.phase_ready(phase, world) == True{} : Bool}) -> A.Valid(A.pack(world, seats, phase, notes)):
+def pack_valid(+world: S.World, +seats: A.Seats(), +phase: S.Phase, +notes: A.Notes(), stable: A.Stable(world, seats), phase_eq: {A.canonical_phase(phase) == phase : S.Phase}, ready: {A.phase_ready(phase, world) == True{} : Bool}) -> A.Valid(A.pack(world, seats, phase, notes)):
   match stable:
     case Tuple{world_eq, Tuple{supported, bounded}}:
       (Equal.trans(S.State, A.normalize(A.pack(world, seats, phase, notes)), A.canonical_state(world, seats, phase, notes), A.pack(world, seats, phase, notes), normalized_pack(world, seats, phase, notes), canonical_pack(world, seats, phase, notes, world_eq, phase_eq)), (supported, (bounded, ready)))
@@ -1674,7 +1656,7 @@ def loadproof.batch_chosen_matches(+world: S.World, +seats: D.Ring<&2, A.CoreSea
 def loadproof.canonical_point(+world: S.World, +seats: D.Ring<&2, A.CoreSeat>, +phase: S.Phase, +notes: List<&2, D.Note>) -> {A.machine_point(A.canonical_state(world, seats, phase, notes)) == A.ref_point(A.ref(A.canonical_state(world, seats, phase, notes))) : D.Point}:
   +state : S.State = A.canonical_state(world, seats, phase, notes)
   request : {A.machine_request(state) == A.ref_request(A.ref(state)) : D.Request} = law.legal_exact(world, seats, phase, notes)
-  board : {A.machine_board(state) == A.ref_board(A.ref(state)) : D.Board} = boards_match(world, seats, A.canonical_phase(phase, seats), notes)
+  board : {A.machine_board(state) == A.ref_board(A.ref(state)) : D.Board} = boards_match(world, seats, A.canonical_phase(phase), notes)
   Equal.trans(D.Point, A.machine_point(state), D.Point{A.ref_request(A.ref(state)), A.machine_board(state)}, A.ref_point(A.ref(state)), Equal.cong(D.Request, D.Point, request => D.Point{request, A.machine_board(state)}, A.machine_request(state), A.ref_request(A.ref(state)), request), Equal.cong(D.Board, D.Point, board => D.Point{A.ref_request(A.ref(state)), board}, A.machine_board(state), A.ref_board(A.ref(state)), board))
 
 
@@ -2165,7 +2147,7 @@ def stable_first(+world: S.World, +seats: A.Seats(), +seat: D.Seat, stable: A.St
 def first_chosen_valid(+world: S.World, +seats: A.Seats(), +phase: S.Phase, +notes: A.Notes(), +seat: D.Seat, stable: A.Stable(world, seats), ready: {A.phase_ready(S.NeedFirst{}, world) == True{} : Bool}) -> A.Valid(M.first.chosen(A.pack(world, seats, phase, notes), seat)):
   health_begin_valid(A.preserve.first_world(world, seat), seats, phase, notes, stable_first(world, seats, seat, stable, ready))
 
-def setup_canonical(phase: A.SetupPhase, +seats: A.Seats()) -> {A.canonical_phase(A.preserve.phase(phase), seats) == A.preserve.phase(phase) : S.Phase}:
+def setup_canonical(phase: A.SetupPhase) -> {A.canonical_phase(A.preserve.phase(phase)) == A.preserve.phase(phase) : S.Phase}:
   match phase:
     case A.SetupFirst{}:
       {==}
@@ -2198,9 +2180,9 @@ def setup_resolved_valid(phase: A.SetupPhase, resolved: D.Resolved, +world: S.Wo
 def setup_answer_request_valid(+phase: A.SetupPhase, request: D.Request, +world: S.World, +seats: A.Seats(), +notes: A.Notes(), +n: Nat, stable: A.Stable(world, seats), ready: {A.phase_ready(A.preserve.phase(phase), world) == True{} : Bool}) -> A.Valid(A.machine_step_state(M.answer.request(A.pack(world, seats, A.preserve.phase(phase), notes), n, request))):
   match request:
     case D.Finished{}:
-      pack_valid(world, seats, A.preserve.phase(phase), notes, stable, setup_canonical(phase, seats), ready)
+      pack_valid(world, seats, A.preserve.phase(phase), notes, stable, setup_canonical(phase), ready)
     case D.Stuck{}:
-      pack_valid(world, seats, A.preserve.phase(phase), notes, stable, setup_canonical(phase, seats), ready)
+      pack_valid(world, seats, A.preserve.phase(phase), notes, stable, setup_canonical(phase), ready)
     case D.Draw{kind, range}:
       setup_resolved_valid(phase, D.resolve(request, n), world, seats, stable, ready)
     case D.Choose{menus}:
@@ -2352,7 +2334,7 @@ def idleproof.idle_all_matches(+world: S.World, +seats: A.Seats(), +seat: D.Seat
 
 def idleproof.idle_present_valid(+world: S.World, +seats: A.Seats(), +seat: D.Seat, +notes: A.Notes(), +n: Nat, +present: A.seated(world, seat), stable: A.Stable(world, seats), ready: {A.idle.current(world, seat) == True{} : Bool}) -> A.Valid(A.next(A.idle(world, seats, seat, notes), n)):
   %Equal.sym(D.Stepped<&2, S.State>, M.answer(A.idle(world, seats, seat, notes), n), A.idle.expected(world, seats, seat), idleproof.idle_machine_present(world, seats, seat, notes, n, present)) : A.Valid(A.machine_step_state(_))
-  pack_valid(world, seats, S.Aim{seat, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, [D.Shown{D.PickedUp{seat}}], stable, {==}, ready)
+  pack_valid(world, seats, S.Aim{seat}, [D.Shown{D.PickedUp{seat}}], stable, {==}, ready)
 
 def idleproof.idle_all_valid(+world: S.World, +seats: A.Seats(), +seat: D.Seat, +notes: A.Notes(), +n: Nat, stable: A.Stable(world, seats), ready: {A.idle.current(world, seat) == True{} : Bool}) -> A.Valid(A.next(A.idle(world, seats, seat, notes), n)):
   match world seat:
@@ -3684,10 +3666,10 @@ def aimstep.shot(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.
     case S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}:
       aimstep.shot_glue(world, seats, actor, target, index, shell, rest, phase, present_a, present_t, aimstep.mid(world, seats, actor, target, shell, rest, phase, A.aim.machine_hp(world, seats, target, shell), Q.subtract(A.aim.before(seats, target), A.aim.machine_hp(world, seats, target, shell)), A.aim.machine_damage(world), present_a, present_t, supported, bounded, synced))
 
-def aimstep.pick_shot(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.Seat, +index: Nat, +shell: D.Shell, +rest: List<&2, D.Shell>, bundle: Sigma<&2, &2, {A.ref_settle(96n, A.aim.psv(S.world.set_gun(world, shell <> rest), seats, actor, target, index)) == A.ref(M.shoot.loaded(A.pack(S.world.set_gun(world, shell <> rest), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, Nil{}), actor, target, shell, rest)) : A.Ref()}, _ => A.Valid(M.shoot.loaded(A.pack(S.world.set_gun(world, shell <> rest), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, Nil{}), actor, target, shell, rest))>) -> Sigma<&2, &2, {A.ref_stepped(A.ref_settle(96n, A.aim.psv(S.world.set_gun(world, shell <> rest), seats, actor, target, index))) == A.machine_ref_step(M.shoot.loaded(A.pack(S.world.set_gun(world, shell <> rest), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, Nil{}), actor, target, shell, rest)) : A.RefStep()}, _ => A.Valid(M.shoot.loaded(A.pack(S.world.set_gun(world, shell <> rest), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, Nil{}), actor, target, shell, rest))>:
+def aimstep.pick_shot(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.Seat, +index: Nat, +shell: D.Shell, +rest: List<&2, D.Shell>, bundle: Sigma<&2, &2, {A.ref_settle(96n, A.aim.psv(S.world.set_gun(world, shell <> rest), seats, actor, target, index)) == A.ref(M.shoot.loaded(A.pack(S.world.set_gun(world, shell <> rest), seats, S.Aim{actor}, Nil{}), actor, target, shell, rest)) : A.Ref()}, _ => A.Valid(M.shoot.loaded(A.pack(S.world.set_gun(world, shell <> rest), seats, S.Aim{actor}, Nil{}), actor, target, shell, rest))>) -> Sigma<&2, &2, {A.ref_stepped(A.ref_settle(96n, A.aim.psv(S.world.set_gun(world, shell <> rest), seats, actor, target, index))) == A.machine_ref_step(M.shoot.loaded(A.pack(S.world.set_gun(world, shell <> rest), seats, S.Aim{actor}, Nil{}), actor, target, shell, rest)) : A.RefStep()}, _ => A.Valid(M.shoot.loaded(A.pack(S.world.set_gun(world, shell <> rest), seats, S.Aim{actor}, Nil{}), actor, target, shell, rest))>:
   match bundle:
     case Tuple{eq, valid}:
-      (Equal.trans(A.RefStep(), A.ref_stepped(A.ref_settle(96n, A.aim.psv(S.world.set_gun(world, shell <> rest), seats, actor, target, index))), A.ref_stepped(A.ref(M.shoot.loaded(A.pack(S.world.set_gun(world, shell <> rest), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, Nil{}), actor, target, shell, rest))), A.machine_ref_step(M.shoot.loaded(A.pack(S.world.set_gun(world, shell <> rest), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, Nil{}), actor, target, shell, rest)), Equal.cong(A.Ref(), A.RefStep(), A.ref_stepped, A.ref_settle(96n, A.aim.psv(S.world.set_gun(world, shell <> rest), seats, actor, target, index)), A.ref(M.shoot.loaded(A.pack(S.world.set_gun(world, shell <> rest), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, Nil{}), actor, target, shell, rest)), eq), loadproof.step_ref_commutes(M.shoot.loaded(A.pack(S.world.set_gun(world, shell <> rest), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, Nil{}), actor, target, shell, rest))), valid)
+      (Equal.trans(A.RefStep(), A.ref_stepped(A.ref_settle(96n, A.aim.psv(S.world.set_gun(world, shell <> rest), seats, actor, target, index))), A.ref_stepped(A.ref(M.shoot.loaded(A.pack(S.world.set_gun(world, shell <> rest), seats, S.Aim{actor}, Nil{}), actor, target, shell, rest))), A.machine_ref_step(M.shoot.loaded(A.pack(S.world.set_gun(world, shell <> rest), seats, S.Aim{actor}, Nil{}), actor, target, shell, rest)), Equal.cong(A.Ref(), A.RefStep(), A.ref_stepped, A.ref_settle(96n, A.aim.psv(S.world.set_gun(world, shell <> rest), seats, actor, target, index)), A.ref(M.shoot.loaded(A.pack(S.world.set_gun(world, shell <> rest), seats, S.Aim{actor}, Nil{}), actor, target, shell, rest)), eq), loadproof.step_ref_commutes(M.shoot.loaded(A.pack(S.world.set_gun(world, shell <> rest), seats, S.Aim{actor}, Nil{}), actor, target, shell, rest))), valid)
 
 def aimstep.pick_selected(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.Seat, +index: Nat, +selected: {Q.target.nth(Q.targets(D.ring.entries(Nat, A.seats.health(seats))), index) == Some{S.Target{target}} : Maybe<&2, S.TargetOption>}, +present_a: P.seated(D.ring.table(A.CoreSeat, seats), actor), +present_t: P.seated(D.ring.table(A.CoreSeat, seats), target), +supported: {Q.config.no_items(S.world.config(world)) == True{} : Bool}, +bounded: {Nat.is_lt(S.world.round_index(world), D.plan.length(S.world.plan(world))) == True{} : Bool}, +synced: {S.world.table(world) == D.ring.table(A.CoreSeat, seats) : D.Table}) -> Sigma<&2, &2, {A.aim.ref_accepting(world, seats, actor, D.Choice{actor, index, D.Shoot{target}}, True{}) == A.stepped(S.state.stepped(M.aim.selected(A.aim.state(world, seats, actor, Nil{}), actor, Q.target.nth(Q.targets(D.ring.entries(Nat, A.seats.health(seats))), index)))) : A.RefStep()}, _ => A.Valid(M.aim.selected(A.aim.state(world, seats, actor, Nil{}), actor, Q.target.nth(Q.targets(D.ring.entries(Nat, A.seats.health(seats))), index)))>:
   match world:
@@ -3696,7 +3678,7 @@ def aimstep.pick_selected(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +t
       (Equal.cong(A.Seats(), A.RefStep(), restored => A.ref_stepped(A.raw_state(world, restored, S.Blocked{Some{actor}}, Nil{})), seats, seats, {==}), pack_valid(world, seats, S.Blocked{Some{actor}}, Nil{}, aimstep.stable_synced(world, seats, synced, supported, bounded), {==}, {==}))
     case S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, +shell <> +rest, shown, deck}:
       %Equal.sym(Maybe<&2, S.TargetOption>, Q.target.nth(Q.targets(D.ring.entries(Nat, A.seats.health(seats))), index), Some{S.Target{target}}, selected) : Sigma<&2, &2, {A.aim.ref_accepting(world, seats, actor, D.Choice{actor, index, D.Shoot{target}}, True{}) == A.stepped(S.state.stepped(M.aim.selected(A.aim.state(world, seats, actor, Nil{}), actor, _))) : A.RefStep()}, _ => A.Valid(M.aim.selected(A.aim.state(world, seats, actor, Nil{}), actor, _))>
-      aimstep.pick_shot(world, seats, actor, target, index, shell, rest, aimstep.shot(world, seats, actor, target, index, shell, rest, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, present_a, present_t, supported, bounded, synced))
+      aimstep.pick_shot(world, seats, actor, target, index, shell, rest, aimstep.shot(world, seats, actor, target, index, shell, rest, S.Aim{actor}, present_a, present_t, supported, bounded, synced))
 
 def aimstep.pick(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +target: D.Seat, +index: Nat, +selected: {Q.target.nth(Q.targets(D.ring.entries(Nat, A.seats.health(seats))), index) == Some{S.Target{target}} : Maybe<&2, S.TargetOption>}, +present_a: P.seated(D.ring.table(A.CoreSeat, seats), actor), +present_t: P.seated(D.ring.table(A.CoreSeat, seats), target), +supported: {Q.config.no_items(S.world.config(world)) == True{} : Bool}, +bounded: {Nat.is_lt(S.world.round_index(world), D.plan.length(S.world.plan(world))) == True{} : Bool}, +synced: {S.world.table(world) == D.ring.table(A.CoreSeat, seats) : D.Table}, ready: {A.idle.current(world, actor) == True{} : Bool}) -> Sigma<&2, &2, {A.aim.ref_pick(world, seats, actor, D.Choice{actor, index, D.Shoot{target}}) == A.stepped(S.state.stepped(M.aim.selected(A.aim.state(world, seats, actor, Nil{}), actor, Q.target.nth(Q.targets(D.ring.entries(Nat, A.seats.health(seats))), index)))) : A.RefStep()}, _ => A.Valid(M.aim.selected(A.aim.state(world, seats, actor, Nil{}), actor, Q.target.nth(Q.targets(D.ring.entries(Nat, A.seats.health(seats))), index)))>:
   %Equal.sym(Bool, A.raw_accepted(world, seats, actor), True{}, idleproof.idle_accepts(world, seats, actor, present_a, ready)) : Sigma<&2, &2, {A.aim.ref_accepting(world, seats, actor, D.Choice{actor, index, D.Shoot{target}}, _) == A.stepped(S.state.stepped(M.aim.selected(A.aim.state(world, seats, actor, Nil{}), actor, Q.target.nth(Q.targets(D.ring.entries(Nat, A.seats.health(seats))), index)))) : A.RefStep()}, _ => A.Valid(M.aim.selected(A.aim.state(world, seats, actor, Nil{}), actor, Q.target.nth(Q.targets(D.ring.entries(Nat, A.seats.health(seats))), index)))>
@@ -3713,9 +3695,9 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
     case S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}:
       match seats actor:
         case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, j3, p3, s3}} D.Seat0{}:
-          ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, ready))
+          ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, ready))
         case D.Duo{A.CoreSeat{0n, j1, p1, s1}, A.CoreSeat{0n, j3, p3, s3}} D.Seat1{}:
-          ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, ready))
+          ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, ready))
         case D.Duo{A.CoreSeat{0n, j1, p1, s1}, A.CoreSeat{1n+h3, j3, p3, s3}} D.Seat1{}:
           match n:
             case 0n:
@@ -3737,9 +3719,9 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==}, ready)
         case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, j3, p3, s3}} D.Seat2{}:
-          ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, ready))
+          ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, ready))
         case D.Duo{A.CoreSeat{0n, j1, p1, s1}, A.CoreSeat{0n, j3, p3, s3}} D.Seat3{}:
-          ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, ready))
+          ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, ready))
         case D.Duo{A.CoreSeat{0n, j1, p1, s1}, A.CoreSeat{1n+h3, j3, p3, s3}} D.Seat3{}:
           match n:
             case 0n:
@@ -3761,7 +3743,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
             case 2n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 1n, {==}, Unit{}, Unit{}, supported, bounded, {==}, ready)
         case D.Trio{A.CoreSeat{0n, j0, p0, s0}, A.CoreSeat{0n, j1, p1, s1}, A.CoreSeat{0n, j2, p2, s2}} D.Seat0{}:
-          ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, ready))
+          ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, ready))
         case D.Trio{A.CoreSeat{0n, j0, p0, s0}, A.CoreSeat{0n, j1, p1, s1}, A.CoreSeat{1n+h2, j2, p2, s2}} D.Seat0{}:
           match n:
             case 0n:
@@ -3815,7 +3797,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
             case 3n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==}, ready)
         case D.Trio{A.CoreSeat{0n, j0, p0, s0}, A.CoreSeat{0n, j1, p1, s1}, A.CoreSeat{0n, j2, p2, s2}} D.Seat1{}:
-          ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, ready))
+          ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, ready))
         case D.Trio{A.CoreSeat{0n, j0, p0, s0}, A.CoreSeat{0n, j1, p1, s1}, A.CoreSeat{1n+h2, j2, p2, s2}} D.Seat1{}:
           match n:
             case 0n:
@@ -3869,7 +3851,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
             case 3n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==}, ready)
         case D.Trio{A.CoreSeat{0n, j0, p0, s0}, A.CoreSeat{0n, j1, p1, s1}, A.CoreSeat{0n, j2, p2, s2}} D.Seat2{}:
-          ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, ready))
+          ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, ready))
         case D.Trio{A.CoreSeat{0n, j0, p0, s0}, A.CoreSeat{0n, j1, p1, s1}, A.CoreSeat{1n+h2, j2, p2, s2}} D.Seat2{}:
           match n:
             case 0n:
@@ -3923,9 +3905,9 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
             case 3n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat2{}, 2n, {==}, Unit{}, Unit{}, supported, bounded, {==}, ready)
         case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat3{}:
-          ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, ready))
+          ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, ready))
         case D.Quad{A.CoreSeat{0n, j0, p0, s0}, A.CoreSeat{0n, j1, p1, s1}, A.CoreSeat{0n, j2, p2, s2}, A.CoreSeat{0n, j3, p3, s3}} D.Seat0{}:
-          ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, ready))
+          ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, ready))
         case D.Quad{A.CoreSeat{0n, j0, p0, s0}, A.CoreSeat{0n, j1, p1, s1}, A.CoreSeat{0n, j2, p2, s2}, A.CoreSeat{1n+h3, j3, p3, s3}} D.Seat0{}:
           match n:
             case 0n:
@@ -4051,7 +4033,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
             case 4n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 3n, {==}, Unit{}, Unit{}, supported, bounded, {==}, ready)
         case D.Quad{A.CoreSeat{0n, j0, p0, s0}, A.CoreSeat{0n, j1, p1, s1}, A.CoreSeat{0n, j2, p2, s2}, A.CoreSeat{0n, j3, p3, s3}} D.Seat1{}:
-          ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, ready))
+          ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, ready))
         case D.Quad{A.CoreSeat{0n, j0, p0, s0}, A.CoreSeat{0n, j1, p1, s1}, A.CoreSeat{0n, j2, p2, s2}, A.CoreSeat{1n+h3, j3, p3, s3}} D.Seat1{}:
           match n:
             case 0n:
@@ -4177,7 +4159,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
             case 4n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 3n, {==}, Unit{}, Unit{}, supported, bounded, {==}, ready)
         case D.Quad{A.CoreSeat{0n, j0, p0, s0}, A.CoreSeat{0n, j1, p1, s1}, A.CoreSeat{0n, j2, p2, s2}, A.CoreSeat{0n, j3, p3, s3}} D.Seat2{}:
-          ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, ready))
+          ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, ready))
         case D.Quad{A.CoreSeat{0n, j0, p0, s0}, A.CoreSeat{0n, j1, p1, s1}, A.CoreSeat{0n, j2, p2, s2}, A.CoreSeat{1n+h3, j3, p3, s3}} D.Seat2{}:
           match n:
             case 0n:
@@ -4303,7 +4285,7 @@ def aimstep.front(+world: S.World, +seats: A.Seats(), +actor: D.Seat, +notes: A.
             case 4n+more:
               aimstep.pick(A.world_for(world, seats), seats, actor, D.Seat3{}, 3n, {==}, Unit{}, Unit{}, supported, bounded, {==}, ready)
         case D.Quad{A.CoreSeat{0n, j0, p0, s0}, A.CoreSeat{0n, j1, p1, s1}, A.CoreSeat{0n, j2, p2, s2}, A.CoreSeat{0n, j3, p3, s3}} D.Seat3{}:
-          ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, ready))
+          ({==}, pack_valid(A.world_for(world, seats), seats, S.Aim{actor}, notes, aimstep.front_stable(world, seats, supported, bounded), {==}, ready))
         case D.Quad{A.CoreSeat{0n, j0, p0, s0}, A.CoreSeat{0n, j1, p1, s1}, A.CoreSeat{0n, j2, p2, s2}, A.CoreSeat{1n+h3, j3, p3, s3}} D.Seat3{}:
           match n:
             case 0n:
@@ -4433,13 +4415,13 @@ def aimstep.next_valid(+state: S.State, +n: Nat, normal: {A.normalize(state) == 
   %normal : A.Valid(A.next(_, n))
   next_valid
 
-def aimstep.finish(+world: S.World, +players: S.Players, +actor: D.Seat, +targets: List<&2, S.TargetOption>, +notes: A.Notes(), +grabs: S.Grabs, +n: Nat, +valid: A.Valid(S.State{world, players, S.Aim{actor, targets}, notes, grabs}), +normal: {A.normalize(S.State{world, players, S.Aim{actor, targets}, notes, grabs}) == S.State{world, players, S.Aim{actor, targets}, notes, grabs} : S.State}, bundle: Sigma<&2, &2, {A.ref_answer(A.ref(A.aim.state(A.world_for(world, A.core(players)), A.core(players), actor, notes)), n) == A.stepped(M.answer(A.aim.state(A.world_for(world, A.core(players)), A.core(players), actor, notes), n)) : A.RefStep()}, _ => A.Valid(A.next(A.aim.state(A.world_for(world, A.core(players)), A.core(players), actor, notes), n))>) -> A.Simulation(S.State{world, players, S.Aim{actor, targets}, notes, grabs}, n):
+def aimstep.finish(+world: S.World, +players: S.Players, +actor: D.Seat, +notes: A.Notes(), +grabs: S.Grabs, +n: Nat, +valid: A.Valid(S.State{world, players, S.Aim{actor}, notes, grabs}), +normal: {A.normalize(S.State{world, players, S.Aim{actor}, notes, grabs}) == S.State{world, players, S.Aim{actor}, notes, grabs} : S.State}, bundle: Sigma<&2, &2, {A.ref_answer(A.ref(A.aim.state(A.world_for(world, A.core(players)), A.core(players), actor, notes)), n) == A.stepped(M.answer(A.aim.state(A.world_for(world, A.core(players)), A.core(players), actor, notes), n)) : A.RefStep()}, _ => A.Valid(A.next(A.aim.state(A.world_for(world, A.core(players)), A.core(players), actor, notes), n))>) -> A.Simulation(S.State{world, players, S.Aim{actor}, notes, grabs}, n):
   match bundle:
     case Tuple{eq, next_valid}:
-      simulation_build(S.State{world, players, S.Aim{actor, targets}, notes, grabs}, n, result_original(S.State{world, players, S.Aim{actor, targets}, notes, grabs}, n, valid, eq), aimstep.next_valid(S.State{world, players, S.Aim{actor, targets}, notes, grabs}, n, normal, next_valid))
+      simulation_build(S.State{world, players, S.Aim{actor}, notes, grabs}, n, result_original(S.State{world, players, S.Aim{actor}, notes, grabs}, n, valid, eq), aimstep.next_valid(S.State{world, players, S.Aim{actor}, notes, grabs}, n, normal, next_valid))
 
 
-def step_aim(+world: S.World, +players: S.Players, +actor: D.Seat, +targets: List<&2, S.TargetOption>, +notes: A.Notes(), +grabs: S.Grabs, +n: Nat, +valid: A.Valid(S.State{world, players, S.Aim{actor, targets}, notes, grabs})) -> A.Simulation(S.State{world, players, S.Aim{actor, targets}, notes, grabs}, n):
+def step_aim(+world: S.World, +players: S.Players, +actor: D.Seat, +notes: A.Notes(), +grabs: S.Grabs, +n: Nat, +valid: A.Valid(S.State{world, players, S.Aim{actor}, notes, grabs})) -> A.Simulation(S.State{world, players, S.Aim{actor}, notes, grabs}, n):
   match valid:
     case Tuple{+normal, Tuple{+supported, Tuple{+bounded, +ready}}}:
-      aimstep.finish(world, players, actor, targets, notes, grabs, n, valid, normal, aimstep.front(world, A.core(players), actor, notes, n, supported, bounded, ready))
+      aimstep.finish(world, players, actor, notes, grabs, n, valid, normal, aimstep.front(world, A.core(players), actor, notes, n, supported, bounded, ready))

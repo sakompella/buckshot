@@ -17,7 +17,7 @@ def point(state: S.State) -> D.Point:
 def pickup(state: S.State, +seat: D.Seat) -> S.State:
   match state:
     case S.State{world, +players, _, notes, grabs}:
-      S.State{world, players, S.Aim{seat, G.targets(D.ring.entries(Nat, S.players.health(players)))}, List.append(&2, D.Note, notes, [D.Shown{D.PickedUp{seat}}]), grabs}
+      S.State{world, players, S.Aim{seat}, List.append(&2, D.Note, notes, [D.Shown{D.PickedUp{seat}}]), grabs}
 
 def replace_hidden(+state: S.State, gun: List<&2, D.Shell>, decks: S.Decks) -> S.State:
   S.state.set_world(state, S.world.set_decks(S.world.set_gun(S.state.world(state), gun), decks))
@@ -527,8 +527,8 @@ def answer.choice(+state: S.State, choice: D.Choice) -> S.State:
   match state choice:
     case S.State{world, players, S.Idle{+seat, options}, notes, grabs} D.Choice{_, index, _}:
       pickup.selected(state, seat, G.idle.nth(D.nonempty.list(S.IdleOption, options), index))
-    case S.State{world, players, S.Aim{+seat, targets}, notes, grabs} D.Choice{_, index, _}:
-      aim.selected(state, seat, G.target.nth(targets, index))
+    case S.State{world, +players, S.Aim{+seat}, notes, grabs} D.Choice{_, index, _}:
+      aim.selected(state, seat, G.target.nth(G.aim.targets(players), index))
     case S.State{world, players, S.Grab{needs}, notes, grabs} D.Choice{+chosen, index, _}:
       grab.selected(state, chosen, I.grab.nth(G.value.or(List<&2, S.GrabOption>, D.ring.get(List<&2, S.GrabOption>, needs, chosen), Nil{}), index))
     case S.State{world, players, S.JamPick{+seat, targets}, notes, grabs} D.Choice{_, index, _}:

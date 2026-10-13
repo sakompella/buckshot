@@ -143,14 +143,15 @@ try {
   const forgedMove = tag('Choice', { seat: seat(1), index: 0n, move: tag('Shoot', { target: seat(3) }) });
   assert.deepEqual(normalize(M['answer.choice'](idle, forgedMove)), normalize(M.pickup(idle, seat(1))), 'effect must reread typed options and ignore Choice.move');
   const initial = M.start(twoBlank).state;
+  const dead = { ...initial.players, health: ring(initial.players.health, () => 0n) };
   const terminals = [
-    { $: 'state.Ended' },
-    { $: 'state.Blocked', holder: maybe(null) },
-    { $: 'state.Aim', seat: seat(1), targets: nil },
-    { $: 'state.NeedSwap', load: tag('Load', { live: 0n, blank: 0n }), shells: nil, i: 0n },
+    { phase: { $: 'state.Ended' } },
+    { phase: { $: 'state.Blocked', holder: maybe(null) } },
+    { phase: { $: 'state.Aim', seat: seat(1) }, players: dead },
+    { phase: { $: 'state.NeedSwap', load: tag('Load', { live: 0n, blank: 0n }), shells: nil, i: 0n } },
   ];
-  for (const phase of terminals) {
-    const state = { ...initial, phase, notes: list([tag('Shown', { event: tag('MatchConcluded') })]) };
+  for (const { phase, players = initial.players } of terminals) {
+    const state = { ...initial, phase, players, notes: list([tag('Shown', { event: tag('MatchConcluded') })]) };
     const answer = M.answer(state, 99), ran = M.run(99, state, list([1, 2]));
     assert.deepEqual(plain(answer.state), plain(state));
     assert.deepEqual(array(answer.notes), []);

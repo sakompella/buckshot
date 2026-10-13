@@ -35,8 +35,8 @@ def step_phase(+world: S.World, +players: S.Players, +phase: S.Phase, +notes: A.
       step_swap(world, players, load, shells, i, notes, grabs, n, valid)
     case S.Idle{+actor, +options}:
       C.step_idle(world, players, actor, options, notes, grabs, n, valid)
-    case S.Aim{+actor, +targets}:
-      C.step_aim(world, players, actor, targets, notes, grabs, n, valid)
+    case S.Aim{+actor}:
+      C.step_aim(world, players, actor, notes, grabs, n, valid)
     case S.Ended{}:
       C.step_ended(world, players, notes, grabs, n, valid)
     case S.Blocked{+holder}:
@@ -120,3 +120,11 @@ def Laws.step_matches(state, n, valid):
 
 def Laws.run_matches(fuel, state, tape, valid):
   run_lift(fuel)(state, tape, valid)
+
+def start_valid(+config: D.Config, +simulation: A.StartSimulation(config)) -> A.Valid(M.stepped.state(M.start(config))):
+  match simulation:
+    case Tuple{_, Tuple{_, valid}}:
+      valid
+
+def Laws.reachable_valid(fuel, config, supported, tape):
+  run_valid(fuel)(M.stepped.state(M.start(config)), tape, start_valid(config, C.law.start_matches(config, supported)))

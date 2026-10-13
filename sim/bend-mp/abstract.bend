@@ -106,7 +106,7 @@ def turn.holder(phase: S.Phase) -> Maybe<&2, D.Seat>:
   match phase:
     case S.Idle{seat, _}:
       Some{seat}
-    case S.Aim{seat, _}:
+    case S.Aim{seat}:
       Some{seat}
     case S.NeedPhone{seat, _, _}:
       Some{seat}
@@ -239,7 +239,7 @@ def frame(phase: S.Phase, +h: H.Host) -> R.Frame:
       R.Await{D.Draw{D.ShuffleSwap{}, D.Range{0n, G.subtract(i, 1n)}}, D.Loading{}, R.ShuffleSwapResult{load, shells, i}}
     case S.Idle{seat, options}:
       idle.frame(h, seat, D.Idle{}, Q.idle.moves(D.nonempty.list(S.IdleOption, options)))
-    case S.Aim{seat, _}:
+    case S.Aim{seat}:
       idle.frame(h, seat, D.Aiming{}, R.shot_moves(G.living(D.ring.entries(H.Props, H.host.seats(h)))))
     case S.Ended{}:
       R.Await{D.Finished{}, D.MatchOver{}, R.PlayerMove{D.Idle{}}}
@@ -426,7 +426,7 @@ def RefPoint() -> Data:
 
 
 def aim_successor(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +seat: D.Seat) -> S.State:
-  pack(world, seats, S.Aim{seat, Q.targets(D.ring.entries(Nat, seats.health(seats)))}, [D.Shown{D.PickedUp{seat}}])
+  pack(world, seats, S.Aim{seat}, [D.Shown{D.PickedUp{seat}}])
 
 def machine_pickup_resolved_state(world: S.World, seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, resolved: D.Resolved) -> S.State:
   M.pickup.resolved(idle(world, seats, seat, Nil{}), seat, D.NonEmpty{S.TakeGun{}, Nil{}}, resolved)
@@ -455,7 +455,7 @@ def play_phase(+seat: D.Seat, aiming: Bool, seats: D.Ring<&2, CoreSeat>) -> S.Ph
     case False{}:
       S.Idle{seat, D.NonEmpty{S.TakeGun{}, Nil{}}}
     case True{}:
-      S.Aim{seat, Q.targets(D.ring.entries(Nat, seats.health(seats)))}
+      S.Aim{seat}
 
 def play_state(world: S.World, +seats: D.Ring<&2, CoreSeat>, seat: D.Seat, aiming: Bool, notes: List<&2, D.Note>) -> S.State:
   pack(world, seats, play_phase(seat, aiming, seats), notes)
@@ -528,12 +528,12 @@ def batch_stage_matches(+world: S.World, +seats: D.Ring<&2, CoreSeat>, notes: Li
   batch_frame_stage(host(world, seats), H.host.deck(host(world, seats)), notes)
 
 
-def canonical_phase.health(phase: S.Phase, +health: D.Ring<&2, Nat>) -> S.Phase:
+# B1 normal phase: an Idle phase offers only the gun, and a swap at index 0 or a
+# phase outside the no-item scope becomes Blocked.
+def canonical_phase(phase: S.Phase) -> S.Phase:
   match phase:
     case S.Idle{seat, _}:
       S.Idle{seat, D.NonEmpty{S.TakeGun{}, Nil{}}}
-    case S.Aim{seat, _}:
-      S.Aim{seat, Q.targets(D.ring.entries(Nat, health))}
     case S.NeedSwap{load, shells, 0n}:
       S.Blocked{None{}}
     case S.NeedTurnAmount{_, _, _}:
@@ -551,13 +551,8 @@ def canonical_phase.health(phase: S.Phase, +health: D.Ring<&2, Nat>) -> S.Phase:
     case phase:
       phase
 
-# B1 normal phase. It reads the seats only through their health ring, so two
-# seat rings that differ only in slots give the same phase.
-def canonical_phase(phase: S.Phase, +seats: D.Ring<&2, CoreSeat>) -> S.Phase:
-  canonical_phase.health(phase, seats.health(seats))
-
 def canonical_state(+world: S.World, +seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>) -> S.State:
-  pack(world_for(world, seats), seats, canonical_phase(phase, seats), notes)
+  pack(world_for(world, seats), seats, canonical_phase(phase), notes)
 
 def ref_batch_length(deck: List<&2, S.Batch>) -> Nat:
   List.length(&2, H.Batch, batches(deck))
@@ -728,7 +723,7 @@ def request_phase(phase: RequestPhase, seats: D.Ring<&2, CoreSeat>) -> S.Phase:
     case Idle{seat}:
       S.Idle{seat, D.NonEmpty{S.TakeGun{}, Nil{}}}
     case Aim{seat}:
-      S.Aim{seat, Q.targets(D.ring.entries(Nat, seats.health(seats)))}
+      S.Aim{seat}
     case Ended{}:
       S.Ended{}
     case Blocked{}:
@@ -816,13 +811,6 @@ def back.intake(progress: D.Ring<&2, H.GrabProgress>) -> D.Ring<&2, Bool>:
 def back.grabs(+h: H.Host) -> S.Grabs:
   S.Grabs{H.host.distributing(h), back.grabbing(H.host.seats(h)), back.holding(H.host.seats(h)), back.granted(H.host.grabs(h)), back.intake(H.host.grabs(h))}
 
-def back.targets(seats: List<&2, D.Seat>) -> List<&2, S.TargetOption>:
-  match seats:
-    case Nil{}:
-      Nil{}
-    case seat <> rest:
-      S.Target{seat} <> back.targets(rest)
-
 # Typed option lists recovered from the reference's rendered moves.
 def back.uses(moves: List<&2, D.Move>) -> List<&2, S.IdleOption>:
   match moves:
@@ -904,7 +892,7 @@ def back.play(stage: D.Stage, mode: D.Mode, request: D.Request, +h: H.Host) -> S
     case D.Playing{seat, D.Aiming{}}:
       match mode:
         case D.Aiming{}:
-          S.Aim{seat, back.targets(G.living(D.ring.entries(H.Props, H.host.seats(h))))}
+          S.Aim{seat}
         case _:
           S.Blocked{None{}}
     case D.Playing{+seat, D.Jamming{}}:
@@ -995,18 +983,6 @@ def idle_options_roundtrip(world: S.World, +seats: D.Ring<&2, CoreSeat>, +seat: 
 
 def seats_roundtrip(+seats: D.Ring<&2, CoreSeat>, holder: Maybe<&2, D.Seat>) -> D.Ring<&2, CoreSeat>:
   back.seats(props.at(core(players.free(seats)), grabs(seats), holder))
-
-def ref_targets_entries(entries: List<&2, D.At<&2, CoreSeat>>, holder: Maybe<&2, D.Seat>) -> List<&2, S.TargetOption>:
-  back.targets(G.living(props_entries.held(entries, holder)))
-
-def machine_targets_entries(entries: List<&2, D.At<&2, CoreSeat>>) -> List<&2, S.TargetOption>:
-  Q.targets(health_entries(entries))
-
-def ref_targets(+seats: D.Ring<&2, CoreSeat>, holder: Maybe<&2, D.Seat>) -> List<&2, S.TargetOption>:
-  back.targets(G.living(D.ring.entries(H.Props, props.at(core(players.free(seats)), grabs(seats), holder))))
-
-def machine_targets(seats: D.Ring<&2, CoreSeat>) -> List<&2, S.TargetOption>:
-  Q.targets(D.ring.entries(Nat, seats.health(seats)))
 
 def phase_roundtrip(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +phase: RequestPhase) -> S.Phase:
   +h : H.Host = host.held(world, seats, turn.holder(request_phase(phase, seats)))
@@ -1237,7 +1213,7 @@ def phase_ready(phase: S.Phase, +world: S.World) -> Bool:
       Nat.is_lt(Q.round.next(S.world.before_round(world), S.world.round_index(world)), D.plan.length(S.world.plan(world)))
     case S.Idle{seat, _}:
       R.current.eq(S.world.turn(world), seat)
-    case S.Aim{seat, _}:
+    case S.Aim{seat}:
       R.current.eq(S.world.turn(world), seat)
     case _:
       True{}
@@ -2188,7 +2164,7 @@ def RunValidHypothesis(+fuel: Nat) -> Type:
 
 # Aim step: the reference and machine pieces of one shot, named for the proof.
 def aim.state(world: S.World, +seats: D.Ring<&2, CoreSeat>, seat: D.Seat, notes: List<&2, D.Note>) -> S.State:
-  pack(world, seats, S.Aim{seat, Q.targets(D.ring.entries(Nat, seats.health(seats)))}, notes)
+  pack(world, seats, S.Aim{seat}, notes)
 
 def aim.menus(+world: S.World, seats: D.Ring<&2, CoreSeat>, +actor: D.Seat) -> D.Ring<&2, List<&2, D.Move>>:
   D.ring.set(List<&2, D.Move>, D.ring.fill(List<&2, D.Move>, S.world.table(world), Nil{}), actor, ref_shots(seats, Some{actor}))
@@ -2346,7 +2322,7 @@ def playing(phase: S.Phase) -> Bool:
   match phase:
     case S.Idle{_, _}:
       True{}
-    case S.Aim{_, _}:
+    case S.Aim{_}:
       True{}
     case S.JamPick{_, _}:
       True{}
@@ -2494,7 +2470,7 @@ def phase.ready.with(+s: S.State, phase: S.Phase, +health: Bool) -> Bool:
       Bool.and(two_live(s), health)
     case S.Idle{+seat, _}:
       Bool.and(active(s, seat), health)
-    case S.Aim{+seat, _}:
+    case S.Aim{+seat}:
       Bool.and(active(s, seat), health)
     case S.JamPick{+seat, _}:
       Bool.and(active(s, seat), health)
@@ -2521,8 +2497,6 @@ def canonical_phase_all(+s: S.State, phase: S.Phase) -> S.Phase:
   match phase:
     case S.Idle{+seat, _}:
       S.Idle{seat, D.NonEmpty{S.TakeGun{}, I.uses(s, seat)}}
-    case S.Aim{seat, _}:
-      S.Aim{seat, Q.targets(D.ring.entries(Nat, S.players.health(S.state.players(s))))}
     case S.NeedSwap{load, shells, 0n}:
       S.Blocked{None{}}
     case S.Grab{_}:
