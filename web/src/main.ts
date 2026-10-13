@@ -1,13 +1,15 @@
 import { Array as Arr, Duration, Effect, Match, Option, Predicate, Result, Schema, Stream } from "effect";
-import { Runtime, Subscription, type Update } from "foldkit";
+import { Command, Port, Runtime, Subscription, type Update } from "foldkit";
 import type { Document, Html, HtmlBuilder } from "foldkit/html";
 import { defineMessageUnion } from "foldkit/message";
 import { modifyFields } from "foldkit/struct";
 
+import { AgentCall, AgentReply, agentGame, agentMove, NO_MATCH, ports } from "./agent.ts";
 import { Game, type AnswerError } from "./bend.ts";
-import { type Board, Briefcase, Counter, GameEvent, type Item, LearnedSecret, Move, Seat, SeatCount, type SeatView, Secret, seatsOut, Stage } from "./domain.ts";
+import { type Board, Briefcase, Counter, GameEvent, LearnedSecret, Seat, SeatCount, type SeatView, seatsOut, Stage } from "./domain.ts";
 import { aiPrompt, aiStep, AiSeat, begin, Controller, controllerOf, isAi, play, type Progress, promptsOf } from "./driver.ts";
 import { seedRng } from "./rng.ts";
+import { eventText, itemName, moveText, seatName, secretText } from "./text.ts";
 import { titles } from "./titles.ts";
 
 const AUTOPLAY_INTERVAL_MS = 350;
@@ -48,6 +50,7 @@ export const Model = Schema.Struct({
   matchCount: Schema.Number,
   maybeMatch: Schema.Option(Session),
   maybeError: Schema.Option(Schema.String),
+  isWebMcpAvailable: Schema.Boolean,
 });
 
 export type Model = typeof Model.Type;
@@ -65,6 +68,8 @@ export const Message = defineMessageUnion({
   ClickedStep: {},
   ToggledAutoplay: {},
   TickedAutoplay: {},
+  AgentCalled: { id: Schema.Number, call: AgentCall },
+  CompletedReplyToAgent: {},
 });
 
 export type Message = typeof Message.Type;
@@ -96,9 +101,14 @@ const describeError = (error: AnswerError): string =>
     Match.exhaustive,
   );
 
-const NEXT_CONTROLLER: Readonly<Record<Controller, Controller>> = { Human: "Story", Story: "DoN", DoN: "Human" };
+const NEXT_CONTROLLER: Readonly<Record<Controller, Controller>> = { Human: "Story", Story: "DoN", DoN: "Agent", Agent: "Human" };
 
-const nextController = (controller: Controller): Controller => NEXT_CONTROLLER[controller];
+/** Cycles one seat's controller. At most one seat is the Agent, so a new Agent takes the role from the old one, which goes back to Human. */
+const cycleController = (controllers: ReadonlyArray<Controller>, seat: Seat): ReadonlyArray<Controller> => {
+  const next = Option.match(Arr.get(controllers, seat), { onNone: (): Controller => "Human", onSome: (controller) => NEXT_CONTROLLER[controller] });
+
+  return controllers.map((controller, index): Controller => (index === seat ? next : next === "Agent" && controller === "Agent" ? "Human" : controller));
+};
 
 // UPDATE
 
@@ -157,12 +167,69 @@ const startMatch = (model: Model): Return => {
   });
 };
 
+// AGENT
+
+const ReplyToAgent = Command.define("ReplyToAgent", {
+  args: { id: Schema.Number, reply: AgentReply },
+  messages: [Message.CompletedReplyToAgent],
+  execute: ({ id, reply }) => Port.emit(ports.outbound.agentReplied, { id, reply }).pipe(Effect.as(Message.CompletedReplyToAgent())),
+});
+
+const SEED_PATTERN = /^-?\d+$/;
+
+interface AgentOutcome {
+  readonly model: Model;
+  readonly reply: AgentReply;
+}
+
+const refused = (model: Model, reason: string): AgentOutcome => ({ model, reply: AgentReply.cases.Refused.make({ reason }) });
+
+const gameReply = (model: Model): AgentOutcome => ({
+  model,
+  reply: Option.match(model.maybeMatch, {
+    onNone: () => AgentReply.cases.Refused.make({ reason: NO_MATCH }),
+    onSome: (match) => Result.match(agentGame(match), { onSuccess: (game) => AgentReply.cases.Answered.make({ text: JSON.stringify(game) }), onFailure: (reason) => AgentReply.cases.Refused.make({ reason }) }),
+  }),
+});
+
+/** Runs one tool call over the model, through the same Messages the buttons send. */
+export const handleAgentCall = (model: Model, call: AgentCall): AgentOutcome =>
+  AgentCall.match<AgentOutcome>(call, {
+    GetGame: () => gameReply(model),
+    PlayMove: ({ index, turn }) =>
+      Option.match(model.maybeMatch, {
+        onNone: () => refused(model, NO_MATCH),
+        onSome: (match) =>
+          Result.match(agentMove(match, index, turn), {
+            onFailure: (reason) => refused(model, reason),
+            onSuccess: (click) => {
+              const moved = update(model, Message.ClickedMove(click)).model;
+
+              return Option.match(moved.maybeError, { onNone: () => gameReply(moved), onSome: (reason) => refused(moved, reason) });
+            },
+          }),
+      }),
+    NewMatch: ({ players, items, seed }) =>
+      seed !== undefined && !SEED_PATTERN.test(seed)
+        ? refused(model, `The seed must be an integer, not "${seed}".`)
+        : gameReply(startAgentMatch(model, players, items, seed === undefined ? model.setup.seed : Number(seed))),
+  });
+
+/** The agent takes the table's first seat and DoN plays the rest. Autoplay starts so the bots move between the agent's turns. */
+const startAgentMatch = (model: Model, table: SeatCount, isItemsEnabled: boolean, seed: number): Model => {
+  const agent = SEATS_BY_TABLE[table][0];
+  const controllers = Arr.makeBy(4, (seat): Controller => (seat === agent ? "Agent" : "DoN"));
+  const configured = modifyFields(model, { setup: (setup) => ({ ...setup, table, controllers, isItemsEnabled, seed }) });
+
+  return update(update(configured, Message.ClickedNewMatch()).model, Message.ToggledAutoplay()).model;
+};
+
 export const update = (model: Model, message: Message): Return =>
   Message.match<Return>(message, {
     SelectedTable: ({ table }) => ({ model: modifyFields(model, { setup: (setup) => ({ ...setup, table }) }) }),
     ToggledController: ({ seat }) => ({
       model: modifyFields(model, {
-        setup: (setup) => ({ ...setup, controllers: setup.controllers.map((controller, index): Controller => (index !== seat ? controller : nextController(controller))) }),
+        setup: (setup) => ({ ...setup, controllers: cycleController(setup.controllers, seat) }),
       }),
     }),
     ToggledItems: () => ({ model: modifyFields(model, { setup: (setup) => ({ ...setup, isItemsEnabled: !setup.isItemsEnabled }) }) }),
@@ -176,22 +243,34 @@ export const update = (model: Model, message: Message): Return =>
     ClickedStep: () => withMatch(model, (match) => stepAi(model, match)),
     ToggledAutoplay: () => withMatch(model, (match) => ({ model: modifyFields(model, { maybeMatch: () => Option.some({ ...match, isAutoplay: !match.isAutoplay && canAiMoveAgain(match.game, match.controllers) }) }) })),
     TickedAutoplay: () => withMatch(model, (match) => (match.isAutoplay ? stepAi(model, match) : { model })),
+    AgentCalled: ({ id, call }) => {
+      const outcome = handleAgentCall(model, call);
+
+      return { model: outcome.model, commands: [ReplyToAgent({ id, reply: outcome.reply })] };
+    },
+    CompletedReplyToAgent: () => ({ model }),
   });
 
 // INIT
 
-export const init: Runtime.ApplicationInit<Model, Message> = () => ({
+export const Flags = Schema.Struct({ isWebMcpAvailable: Schema.Boolean });
+
+export type Flags = typeof Flags.Type;
+
+export const init: Runtime.ApplicationInit<Model, Message, Flags> = ({ isWebMcpAvailable }) => ({
   model: {
     setup: { table: 2, controllers: ["DoN", "Human", "DoN", "DoN"], isItemsEnabled: false, seed: DEFAULT_SEED },
     matchCount: 0,
     maybeMatch: Option.none(),
     maybeError: Option.none(),
+    isWebMcpAvailable,
   },
 });
 
 // SUBSCRIPTION
 
 export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
+  agent: Port.subscriptionEntry(ports.inbound.agentCalled, ({ id, call }) => Message.AgentCalled({ id, call })),
   autoplay: entry(
     { isAutoplay: Schema.Boolean },
     {
@@ -207,69 +286,6 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
     },
   ),
 }));
-
-// TEXT
-
-const seatName = (seat: Seat): string => `Seat ${seat}`;
-
-const ITEM_NAMES: Readonly<Record<Item, string>> = {
-  Saw: "handsaw",
-  Glass: "magnifying glass",
-  Jammer: "jammer",
-  Cigarettes: "cigarettes",
-  Beer: "beer",
-  Phone: "burner phone",
-  Inverter: "inverter",
-  Adrenaline: "adrenaline",
-  Remote: "remote",
-};
-
-const itemName = (item: Item): string => ITEM_NAMES[item];
-
-const moveText = (seat: Seat, move: Move): string =>
-  Move.match(move, {
-    PickUp: () => "Pick up the shotgun",
-    Shoot: ({ target }) => (target === seat ? "Shoot yourself" : `Shoot ${seatName(target)}`),
-    UseItem: ({ item, slot }) => `Use ${itemName(item)} (slot ${slot + 1})`,
-    Grab: () => "Grab an item from the briefcase",
-    Place: ({ slot }) => `Place the item in slot ${slot + 1}`,
-    JamTarget: ({ target }) => `Jam ${seatName(target)} (they skip a turn)`,
-    Steal: ({ owner, slot, item }) => `Steal ${itemName(item)} from ${seatName(owner)} (slot ${slot + 1})`,
-  });
-
-const eventText = (event: GameEvent): string =>
-  GameEvent.match(event, {
-    RoundBegan: ({ round, health, first }) => `Round ${round + 1} begins. Everyone has ${health} health; ${seatName(first)} starts.`,
-    GrabbingBegan: ({ seats }) => `Item distribution: ${seats.map(seatName).join(", ")} grab from the briefcase.`,
-    Granted: ({ seat }) => `${seatName(seat)} drew an item.`,
-    Placed: ({ seat, item, slot }) => `${seatName(seat)} placed ${itemName(item)} in slot ${slot + 1}.`,
-    GrabbingEnded: ({ seat }) => `${seatName(seat)} finished grabbing.`,
-    DistributionDone: () => "Distribution is over.",
-    Loaded: ({ load }) => `The shotgun is loaded: ${load.live} live, ${load.blank} blank.`,
-    TurnSkipped: ({ seat }) => `${seatName(seat)} is jammed and loses the turn.`,
-    JamLifted: ({ seat }) => `${seatName(seat)} is no longer jammed.`,
-    TurnGiven: ({ seat }) => `${seatName(seat)}'s turn.`,
-    PickedUp: ({ seat }) => `${seatName(seat)} picked up the shotgun.`,
-    Fired: ({ shooter, target, shell, applied, health }) =>
-      `${seatName(shooter)} shot ${shooter === target ? "themselves" : seatName(target)}: ${shell === "Live" ? `live, ${applied} damage, ${health} health left` : "blank"}.`,
-    Died: ({ seat }) => `${seatName(seat)} is out.`,
-    Used: ({ seat, owner, item }) => (seat === owner ? `${seatName(seat)} used ${itemName(item)}.` : `${seatName(seat)} took ${itemName(item)} from ${seatName(owner)} and used it.`),
-    Healed: ({ seat, health }) => `${seatName(seat)} healed to ${health}.`,
-    Ejected: ({ seat, shell }) => `${seatName(seat)} racked out a ${shell.toLowerCase()} shell.`,
-    Inverted: ({ seat }) => `${seatName(seat)} inverted the chambered shell.`,
-    JamApplied: ({ by, target }) => `${seatName(by)} jammed ${seatName(target)}.`,
-    DirectionFlipped: ({ direction }) => `Turn order is now ${direction === "Clockwise" ? "clockwise" : "counterclockwise"}.`,
-    RoundWon: ({ seat, prize }) => `${seatName(seat)} wins the round and $${prize.toLocaleString("en-US")}.`,
-    MatchConcluded: () => "The match is over.",
-  });
-
-const secretText = (secret: Secret): string =>
-  Secret.match(secret, {
-    Glimpse: ({ shell }) => `The chambered shell is ${shell.toLowerCase()}.`,
-    Clue: ({ position, shell }) => `Shell ${position + 1} from now is ${shell.toLowerCase()}.`,
-    NoClue: () => "The phone gave no clue.",
-    EmptyBriefcase: () => "The briefcase was empty.",
-  });
 
 // VIEW
 
@@ -304,6 +320,9 @@ const setupView = (h: H, model: Model): Html => {
               h.button([h.Type("button"), h.Class("controller"), h.OnClick(Message.ToggledController({ seat }))], [`${seatName(seat)}: ${controllerOf(controllers, seat)}`]),
             ),
           ),
+          model.isWebMcpAvailable || !SEATS_BY_TABLE[table].some((seat) => controllerOf(controllers, seat) === "Agent")
+            ? h.empty
+            : h.p([h.Class("muted")], ["WebMCP is not available in this browser, so no agent can play the Agent seat."]),
         ],
       ),
       h.label(
@@ -396,6 +415,7 @@ const movesView = (h: H, match: Session): Html => {
   const humanPrompts = prompts.filter((prompt) => controllerOf(match.controllers, prompt.seat) === "Human");
   const viewerPrompt = Arr.findFirst(humanPrompts, (prompt) => prompt.seat === match.viewer);
   const waiting = humanPrompts.filter((prompt) => prompt.seat !== match.viewer).map((prompt) => prompt.seat);
+  const agentWaiting = prompts.filter((prompt) => controllerOf(match.controllers, prompt.seat) === "Agent").map((prompt) => prompt.seat);
   const hasBotMove = Option.isSome(aiPrompt(match.game, match.controllers));
 
   return h.section(
@@ -418,6 +438,7 @@ const movesView = (h: H, match: Session): Html => {
       ...waiting.map((seat) =>
         h.p([h.Class("waiting")], [`${seatName(seat)} (human) can move. `, h.button([h.Type("button"), h.Class("link"), h.OnClick(Message.SelectedViewer({ viewer: seat }))], [`View as ${seatName(seat)}`])]),
       ),
+      ...agentWaiting.map((seat) => h.p([h.Class("waiting")], [`Waiting for the agent (${seatName(seat)}).`])),
       h.div(
         [h.Class("bot-controls")],
         [
