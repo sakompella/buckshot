@@ -438,6 +438,42 @@ def view_leaf(shape: Shape, seat: int | None, _state: str) -> list[str]:
     return [f"view.parts({', '.join(cells)})"]
 
 
+def rank_leaf(shape: Shape, seat: int | None, state: str) -> list[str]:
+    """jam_rank drops by one at the skipped seat: move its bit to the front
+    through the sums before it; a missing seat reads Free, refuted by `e`."""
+    if seat not in shape.seated:
+        return [f"GP.absurd(rank.claim({state}, {SEATS[seat]}), jam.clash(e))"]
+    seated = list(shape.seated)
+    bits = [f"Q.jam_rank.bit(j{k})" for k in seated]
+
+    def total(cells: list[str]) -> str:
+        out = "0n"
+        for cell in reversed(cells):
+            out = f"Nat.add({cell}, {out})"
+        return out
+
+    def prove(i: int, cells: list[str]) -> str:
+        if i == 0:
+            return f"rank.at(0n, j{seat}, {total(cells[1:])}, e)"
+        head, rest = cells[0], cells[1:]
+        before, after = total(rest), total(rest[: i - 1] + rest[i:])
+        return (
+            f"Equal.trans(Nat, Nat.add({head}, {before}), Nat.add({head}, 1n+{after}), 1n+Nat.add({head}, {after}), "
+            f"Equal.cong(Nat, Nat, x => Nat.add({head}, x), {before}, 1n+{after}, {prove(i - 1, rest)}), GP.add.succ({head}, {after}))"
+        )
+
+    return [prove(seated.index(seat), bits)]
+
+
+def next_leaf(_shape: Shape, _seat: int | None, state: str) -> list[str]:
+    """The next seat at a split ring is grant-proof.bend's no-item traversal."""
+    world, players = f"S.state.world({state})", f"S.state.players({state})"
+    return [
+        f"Equal.sym(D.Seat, Q.next_turn(A.seats.health({players}), S.world.direction({world}), seat), "
+        f"A.ref_turn({world}, {players}, seat), GrantProof.turn_raw({world}, {players}, seat))"
+    ]
+
+
 # item-step-proof.bend's splits of the same kind, refuting through grab-proof.bend.
 ITEM_BODIES |= {
     "view.eq": ring_split(lambda state: f"view.claim({state}, seat)", ("players", "grabbing", "holding"), True, view_leaf, "GP."),
@@ -447,6 +483,10 @@ ITEM_BODIES |= {
 LOAD_BODIES: dict[str, Callable[[], list[str]]] = {
     "inventory.eq": ring_split(lambda state: f"inventory.claim({state})", ("players",), False, closed, "GP."),
     "give.eq": ring_split(lambda state: f"give.claim({state}, seat)", ("players",), True, closed, "GP."),
+    "rank.skip": ring_split(lambda state: f"rank.claim({state}, seat)", ("players",), True, rank_leaf, "GP."),
+    "pprops.eq": ring_split(lambda state: f"pprops.claim({state}, seat)", ("players", "grabbing", "holding"), True, closed, "GP."),
+    "jamw.eq": ring_split(lambda state: f"jamw.claim({state}, seat, jam)", ("players",), True, closed, "GP."),
+    "next.eq": ring_split(lambda state: f"next.claim({state}, seat)", ("players",), False, next_leaf, "GP."),
 }
 
 FILES = {PROOF: BODIES, ITEM_PROOF: ITEM_BODIES, GRAB_PROOF: GRAB_BODIES, LOAD_PROOF: LOAD_BODIES}
