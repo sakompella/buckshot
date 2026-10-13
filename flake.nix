@@ -14,7 +14,7 @@
       });
 
       devShells = forEachSystem (pkgs:
-        let inherit (nixpkgs.lib.getAttrFromPath [ "packages" pkgs.stdenv.hostPlatform.system ] self) bend bendtt; in {
+        let inherit (self.packages.${pkgs.stdenv.hostPlatform.system}) bend bendtt; in {
           default = pkgs.mkShell {
             packages = [ bend pkgs.bun pkgs.python3 pkgs.uv ];
             BENDTT = "${bendtt}/bin/bendtt";
