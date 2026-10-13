@@ -1953,3 +1953,43 @@ def continue.close(+s: S.State, +ctx: Ctx(s), load: LoadClosure()) -> A.Closure(
     %dist.eq(s) : {R.settle(Nat.add(11n, k), R.ContinueItemGrabbing.ready(R.RefState{A.ref_host(s), R.ContinueItemGrabbing{}, S.state.notes(s)}, H.host.distributing(A.ref_host(s)), RI.holders(D.ring.entries(H.Props, H.host.seats(A.ref_host(s)))))) == A.ref(M.grab.continue.ready(s, _, I.holders(D.ring.entries(Maybe<&2, D.Item>, S.grabs.holding(S.state.grabs(s)))))) : R.RefState}
     %holders.eq(s, ctx.shape(s, ctx)) : {R.settle(Nat.add(11n, k), R.ContinueItemGrabbing.ready(R.RefState{A.ref_host(s), R.ContinueItemGrabbing{}, S.state.notes(s)}, H.host.distributing(A.ref_host(s)), RI.holders(D.ring.entries(H.Props, H.host.seats(A.ref_host(s)))))) == A.ref(M.grab.continue.ready(s, H.host.distributing(A.ref_host(s)), _)) : R.RefState}
     continue.ready(s, H.host.distributing(A.ref_host(s)), RI.holders(D.ring.entries(H.Props, H.host.seats(A.ref_host(s)))), k, ctx, load)
+
+def give.close(+s: S.State, +seat: D.Seat, +item: D.Item, +ctx: Ctx(s), load: LoadClosure()) -> A.Closure(13n, s, A.frame_ReceivePacket_GrabItem(seat, item), M.grab.give(s, seat, item)):
+  match s:
+    case S.State{+world, +players, +phase, +notes, +grabs}:
+      +k =>
+        +given : S.State = S.state.emit(give.state(S.State{world, players, phase, notes, grabs}, seat, item), D.Granted{seat, item})
+        +step : {A.close(Nat.add(13n, k), S.State{world, players, phase, notes, grabs}, A.frame_ReceivePacket_GrabItem(seat, item)) == A.close(Nat.add(12n, k), given, A.frame_ContinueItemGrabbing()) : R.RefState} = Equal.cong(H.Host, R.RefState, x => R.settle(Nat.add(12n, k), R.RefState{x, R.ContinueItemGrabbing{}, List.append(&2, D.Note, notes, [D.Shown{D.Granted{seat, item}}])}), give.host(A.ref_host(S.State{world, players, phase, notes, grabs}), seat, item), A.ref_host(give.state(S.State{world, players, phase, notes, grabs}, seat, item)), give.eq(S.State{world, players, phase, notes, grabs}, seat, item, ctx.shape(S.State{world, players, phase, notes, grabs}, ctx)))
+        Equal.trans(R.RefState, A.close(Nat.add(13n, k), S.State{world, players, phase, notes, grabs}, A.frame_ReceivePacket_GrabItem(seat, item)), A.close(Nat.add(12n, k), given, A.frame_ContinueItemGrabbing()), A.ref(M.grab.continue(given)), step, continue.close(given, ctx.emit(give.state(S.State{world, players, phase, notes, grabs}, seat, item), D.Granted{seat, item}, ctx.give(S.State{world, players, phase, notes, grabs}, seat, item, ctx)), load, k))
+
+def chosen.close(+s: S.State, +seat: D.Seat, +found: Maybe<&2, D.Item>, +f: R.Frame, +ctx: Ctx(s), load: LoadClosure()) -> @+k:Nat -> {R.settle(Nat.add(13n, k), R.GetItemToGrab.selected(R.RefState{A.ref_host(s), f, S.state.notes(s)}, seat, found)) == A.ref(M.grab.chosen(s, seat, found)) : R.RefState}:
+  match s found:
+    case S.State{+world, +players, +phase, +notes, +grabs} Some{+item}:
+      give.close(S.State{world, players, phase, notes, grabs}, seat, item, ctx, load)
+    case S.State{+world, +players, +phase, +notes, +grabs} None{}:
+      +k => continue.close(S.state.tell(S.State{world, players, phase, notes, grabs}, seat, D.EmptyBriefcase{}), ctx.tell(S.State{world, players, phase, notes, grabs}, seat, D.EmptyBriefcase{}, ctx), load, 1n+k)
+
+def item_choice.point(+s: S.State, +seat: D.Seat, +first: D.Item, +second: D.Item, +rest: List<&2, D.Item>, +quiet: {A.turn.holder(S.state.phase(s)) == None{} : Maybe<&2, D.Seat>}) -> {R.RefState{A.ref_host(s), R.Await{D.Draw{D.ItemChoice{}, D.Range{0n, List.length(&2, D.Item, rest)}}, D.Distributing{}, R.ItemChoiceResult{seat, first <> second <> rest}}, S.state.notes(s)} == A.ref(S.state.set_phase(s, S.NeedItem{seat, first, second, rest})) : R.RefState}:
+  match s:
+    case S.State{+world, +players, +phase, +notes, +grabs}:
+      %Equal.sym(Maybe<&2, D.Seat>, A.turn.holder(phase), None{}, quiet) : {R.RefState{A.host.at(world, A.core(players), grabs, _), R.Await{D.Draw{D.ItemChoice{}, D.Range{0n, List.length(&2, D.Item, rest)}}, D.Distributing{}, R.ItemChoiceResult{seat, first <> second <> rest}}, notes} == A.ref(S.State{world, players, S.NeedItem{seat, first, second, rest}, notes, grabs}) : R.RefState}
+      {==}
+
+def take.pool(+s: S.State, +seat: D.Seat, +pool: List<&2, D.Item>, +f: R.Frame, +ctx: Ctx(s), load: LoadClosure()) -> @+k:Nat -> {R.settle(Nat.add(13n, k), R.GetItemToGrab.pool(R.RefState{A.ref_host(s), f, S.state.notes(s)}, seat, pool)) == A.ref(M.grab.pool(s, seat, pool)) : R.RefState}:
+  match pool:
+    case Nil{}:
+      chosen.close(s, seat, None{}, f, ctx, load)
+    case +item <> Nil{}:
+      give.close(s, seat, item, ctx, load)
+    case +first <> +second <> +rest:
+      +k => item_choice.point(s, seat, first, second, rest, ctx.quiet(s, ctx))
+
+def take.close(+s: S.State, +seat: D.Seat, +ctx: Ctx(s), load: LoadClosure()) -> A.Closure(14n, s, A.frame_GetItemToGrab(seat), M.grab.take(s, seat)):
+  match s:
+    case S.State{+world, +players, +phase, +notes, +grabs}:
+      +k =>
+        +stopped : S.State = stop.state(S.State{world, players, phase, notes, grabs}, seat)
+        +ctx1 : Ctx(stopped) = ctx.stop(S.State{world, players, phase, notes, grabs}, seat, ctx)
+        +host1 : {A.close(Nat.add(14n, k), S.State{world, players, phase, notes, grabs}, A.frame_GetItemToGrab(seat)) == R.settle(Nat.add(13n, k), R.GetItemToGrab.pool(R.RefState{A.ref_host(stopped), R.GetItemToGrab{seat}, notes}, seat, G.GetItemToGrab.pool(D.item.order(), A.ref_host(stopped), seat))) : R.RefState} = Equal.cong(H.Host, R.RefState, x => R.settle(Nat.add(13n, k), R.GetItemToGrab.pool(R.RefState{x, R.GetItemToGrab{seat}, notes}, seat, G.GetItemToGrab.pool(D.item.order(), x, seat))), H.host.set_progress(A.ref_host(S.State{world, players, phase, notes, grabs}), seat, H.GrabProgress{RI.progress.count(H.host.progress(A.ref_host(S.State{world, players, phase, notes, grabs}), seat)), False{}}), A.ref_host(stopped), stop.eq(S.State{world, players, phase, notes, grabs}, seat, ctx.shape(S.State{world, players, phase, notes, grabs}, ctx)))
+        +pooled : {R.settle(Nat.add(13n, k), R.GetItemToGrab.pool(R.RefState{A.ref_host(stopped), R.GetItemToGrab{seat}, notes}, seat, G.GetItemToGrab.pool(D.item.order(), A.ref_host(stopped), seat))) == R.settle(Nat.add(13n, k), R.GetItemToGrab.pool(R.RefState{A.ref_host(stopped), R.GetItemToGrab{seat}, notes}, seat, I.pool(stopped, seat))) : R.RefState} = Equal.cong(List<&2, D.Item>, R.RefState, p => R.settle(Nat.add(13n, k), R.GetItemToGrab.pool(R.RefState{A.ref_host(stopped), R.GetItemToGrab{seat}, notes}, seat, p)), G.GetItemToGrab.pool(D.item.order(), A.ref_host(stopped), seat), I.pool(stopped, seat), pool.eq(stopped, seat, ctx.shape(stopped, ctx1)))
+        Equal.trans(R.RefState, A.close(Nat.add(14n, k), S.State{world, players, phase, notes, grabs}, A.frame_GetItemToGrab(seat)), R.settle(Nat.add(13n, k), R.GetItemToGrab.pool(R.RefState{A.ref_host(stopped), R.GetItemToGrab{seat}, notes}, seat, G.GetItemToGrab.pool(D.item.order(), A.ref_host(stopped), seat))), A.ref(M.grab.take(S.State{world, players, phase, notes, grabs}, seat)), host1, Equal.trans(R.RefState, R.settle(Nat.add(13n, k), R.GetItemToGrab.pool(R.RefState{A.ref_host(stopped), R.GetItemToGrab{seat}, notes}, seat, G.GetItemToGrab.pool(D.item.order(), A.ref_host(stopped), seat))), R.settle(Nat.add(13n, k), R.GetItemToGrab.pool(R.RefState{A.ref_host(stopped), R.GetItemToGrab{seat}, notes}, seat, I.pool(stopped, seat))), A.ref(M.grab.take(S.State{world, players, phase, notes, grabs}, seat)), pooled, take.pool(stopped, seat, I.pool(stopped, seat), R.GetItemToGrab{seat}, ctx1, load, k)))
