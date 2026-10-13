@@ -1,4 +1,5 @@
-"""Generate the case-split proof bodies of core-proof.bend and item-step-proof.bend.
+"""Generate the case-split proof bodies of core-proof.bend, item-step-proof.bend
+and grab-proof.bend.
 
 Some lemmas in the proof files are case splits too large to write by hand: the
 same small proof repeated for every table shape, seat and value the rules
@@ -21,6 +22,7 @@ from pathlib import Path
 
 PROOF = Path(__file__).resolve().parent.parent / "core-proof.bend"
 ITEM_PROOF = PROOF.with_name("item-step-proof.bend")
+GRAB_PROOF = PROOF.with_name("grab-proof.bend")
 
 SEATS = ("D.Seat0{}", "D.Seat1{}", "D.Seat2{}", "D.Seat3{}")
 
@@ -245,7 +247,124 @@ ITEM_BODIES: dict[str, Callable[[], list[str]]] = {
     "items.pack_valid": pack_valid,
 }
 
-FILES = {PROOF: BODIES, ITEM_PROOF: ITEM_BODIES}
+# ---------------------------------------------------------------------------
+# grab-proof.bend: splits over the table, the seat ring and the Grabs rings an
+# A.Shape(s) premise ties to it. A ring with another table's constructor is
+# refuted by its Shape equation.
+
+TABLES = (
+    ("D.TwoSeats{}", "two", SHAPES[0]),
+    ("D.ThreeSeats{}", "three", SHAPES[1]),
+    ("D.FourSeats{}", "four", SHAPES[2]),
+)
+RINGS = ("players", "grabbing", "holding", "granted", "intake")
+GRAB_RINGS = RINGS[1:]
+CELLS = {
+    "players": lambda k: f"S.Seat{{+h{k}, +j{k}, +c{k}, +s{k}}}",
+    "grabbing": lambda k: f"+g{k}",
+    "holding": lambda k: f"+o{k}",
+    "granted": lambda k: f"+n{k}",
+    "intake": lambda k: f"+i{k}",
+}
+STATE_WORLD_FIELDS = "before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck"
+SHAPE_FACTS = "Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}"
+
+
+def ring_pattern(ring: str, shape: Shape) -> str:
+    return f"D.{shape.ring}{{{', '.join(CELLS[ring](k) for k in shape.seated)}}}"
+
+
+def unplus(text: str) -> str:
+    return re.sub(r"(?<=[{ ])\+", "", text)
+
+
+def state_text(table: str, rings: dict[str, str], with_grabs: bool) -> str:
+    world = f"S.World{{D.Config{{{table}, plan}}, {STATE_WORLD_FIELDS}}}"
+    grabs = f"S.Grabs{{dist, {', '.join(rings[r] for r in GRAB_RINGS)}}}" if with_grabs else "grabs"
+    return f"S.State{{{world}, {rings['players']}, phase, notes, {grabs}}}"
+
+
+def ring_split(
+    claim: Callable[[str], str],
+    rings: tuple[str, ...],
+    seat: bool,
+    leaf: Callable[[Shape, int | None], list[str]],
+) -> Callable[[], list[str]]:
+    """Split s's table, the named rings and (if seat) the seat; `claim(state)` is
+    the lemma's type at a refuted state, `leaf(shape, seat)` the proof of a case."""
+
+    def body() -> list[str]:
+        with_players = "players" in rings
+        with_grabs = any(r in GRAB_RINGS for r in rings)
+        fields = ", ".join("+" + f for f in STATE_WORLD_FIELDS.split(", "))
+        head = [
+            "match s:",
+            f"  case S.State{{S.World{{D.Config{{table, +plan}}, {fields}}}, players, +phase, +notes, grabs}}:",
+        ]
+
+        def patterns(assigned: dict[str, str]) -> list[str]:
+            out = [assigned["players"]] if with_players else []
+            if with_grabs:
+                out.append(f"S.Grabs{{+dist, {', '.join(assigned[r] for r in GRAB_RINGS)}}}")
+            return out
+
+        scrutinees = ["table"] + (["players"] if with_players else []) + (["grabs"] if with_grabs else [])
+        rows = [f"match {' '.join(scrutinees + (['seat'] if seat else []))}:"]
+        free = {r: "+" + r for r in RINGS}
+        for table, name, shape in TABLES:
+            good = free | {r: ring_pattern(r, shape) for r in rings}
+            for k in range(4) if seat else [None]:
+                rows.append(f"  case {' '.join([table, *patterns(good), *([SEATS[k]] if seat else [])])}:")
+                rows += indent(4, leaf(shape, k))
+            for ring in rings:
+                for _, other, wrong in TABLES:
+                    if wrong is shape:
+                        continue
+                    bad = free | {ring: ring_pattern(ring, wrong)}
+                    state = state_text(table, {r: r for r in RINGS} | {ring: unplus(bad[ring])}, with_grabs)
+                    rows += [
+                        f"  case {' '.join([table, *patterns(bad), *(['+seat'] if seat else [])])}:",
+                        "    match shape:",
+                        f"      case {SHAPE_FACTS}:",
+                        f"        absurd({claim(state)}, clash.{other}_{name}(e_{ring}))",
+                    ]
+        return head + indent(4, rows)
+
+    return body
+
+
+def own_leaf(shape: Shape, seat: int | None) -> list[str]:
+    """A seated seat's count is L1 on its slots and hand; a missing seat reads 0 on both sides."""
+    return [f"count.owned(s{seat}, o{seat}, item)"] if seat in shape.seated else ["{==}"]
+
+
+def total_leaf(shape: Shape, _seat: int | None) -> list[str]:
+    """The table count, one count.owned per seat chained through add_cong."""
+
+    def sums(seats: tuple[int, ...], side: str) -> str:
+        out = "0n"
+        for k in reversed(seats):
+            out = f"Nat.add(own.{side}(s{k}, o{k}, item), {out})"
+        return out
+
+    def chain(seats: tuple[int, ...]) -> str:
+        if not seats:
+            return "{==}"
+        k, rest = seats[0], seats[1:]
+        return (
+            f"add_cong(own.ref(s{k}, o{k}, item), own.machine(s{k}, o{k}, item), "
+            f"{sums(rest, 'ref')}, {sums(rest, 'machine')}, count.owned(s{k}, o{k}, item), {chain(rest)})"
+        )
+
+    return [chain(shape.seated)]
+
+
+GRAB_BODIES: dict[str, Callable[[], list[str]]] = {
+    "own.eq": ring_split(lambda state: f"own.claim({state}, seat, item)", ("players", "holding"), True, own_leaf),
+    "total.eq": ring_split(lambda state: f"total.claim({state}, item)", ("players", "holding"), False, total_leaf),
+}
+
+FILES = {PROOF: BODIES, ITEM_PROOF: ITEM_BODIES, GRAB_PROOF: GRAB_BODIES}
 
 
 def body_span(text: str, name: str) -> tuple[int, int]:
