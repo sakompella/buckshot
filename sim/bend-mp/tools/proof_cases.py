@@ -27,6 +27,7 @@ LOAD_PROOF = PROOF.with_name("load-proof.bend")
 TURN_PROOF = PROOF.with_name("turn-proof.bend")
 USE_PROOF = PROOF.with_name("use-proof.bend")
 AIM_PROOF = PROOF.with_name("aim-proof.bend")
+PICK_PROOF = PROOF.with_name("pick-proof.bend")
 
 SEATS = ("D.Seat0{}", "D.Seat1{}", "D.Seat2{}", "D.Seat3{}")
 
@@ -657,7 +658,11 @@ AIM_BODIES: dict[str, Callable[[], list[str]]] = {
     "entries.seated": ring_split(lambda state: f"seated.claim({state})", ("players",), False, seated_entries_leaf, "GP."),
 }
 
-FILES = {PROOF: BODIES, ITEM_PROOF: ITEM_BODIES, GRAB_PROOF: GRAB_BODIES, LOAD_PROOF: LOAD_BODIES, TURN_PROOF: TURN_BODIES, USE_PROOF: USE_BODIES, AIM_PROOF: AIM_BODIES}
+PICK_BODIES: dict[str, Callable[[], list[str]]] = {
+    "jam.write": ring_split(lambda state: f"jam.claim({state}, seat)", ("players",), True, closed, "GP."),
+}
+
+FILES = {PROOF: BODIES, ITEM_PROOF: ITEM_BODIES, GRAB_PROOF: GRAB_BODIES, LOAD_PROOF: LOAD_BODIES, TURN_PROOF: TURN_BODIES, USE_PROOF: USE_BODIES, AIM_PROOF: AIM_BODIES, PICK_PROOF: PICK_BODIES}
 
 
 def body_span(text: str, name: str) -> tuple[int, int]:
