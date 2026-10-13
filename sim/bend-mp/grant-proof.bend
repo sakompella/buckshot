@@ -9,157 +9,157 @@ def ref_pass(+world: S.World, +seats: A.Seats(), +seat: D.Seat, +notes: A.Notes(
   match world:
     case S.World{config, before, round, index, first, hp, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}:
       match seats seat:
-        case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, j3, p3, s3}} D.Seat0{}:
+        case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat0{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, S.Free{}, p1, s1}, A.CoreSeat{h3, j3, p3, s3}} D.Seat1{}:
+        case D.Duo{S.Seat{h1, S.Free{}, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat1{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, S.Jammed{}, p1, s1}, A.CoreSeat{h3, j3, p3, s3}} D.Seat1{}:
+        case D.Duo{S.Seat{h1, S.Jammed{}, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat1{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, S.JammedSkipped{}, p1, s1}, A.CoreSeat{h3, j3, p3, s3}} D.Seat1{}:
+        case D.Duo{S.Seat{h1, S.JammedSkipped{}, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat1{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, j3, p3, s3}} D.Seat2{}:
+        case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat2{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, S.Free{}, p3, s3}} D.Seat3{}:
+        case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, S.Free{}, p3, s3}} D.Seat3{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, S.Jammed{}, p3, s3}} D.Seat3{}:
+        case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, S.Jammed{}, p3, s3}} D.Seat3{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, S.JammedSkipped{}, p3, s3}} D.Seat3{}:
+        case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, S.JammedSkipped{}, p3, s3}} D.Seat3{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, S.Free{}, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat0{}:
+        case D.Trio{S.Seat{h0, S.Free{}, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat0{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, S.Jammed{}, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat0{}:
+        case D.Trio{S.Seat{h0, S.Jammed{}, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat0{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, S.JammedSkipped{}, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat0{}:
+        case D.Trio{S.Seat{h0, S.JammedSkipped{}, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat0{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, S.Free{}, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat1{}:
+        case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, S.Free{}, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat1{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, S.Jammed{}, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat1{}:
+        case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, S.Jammed{}, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat1{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, S.JammedSkipped{}, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat1{}:
+        case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, S.JammedSkipped{}, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat1{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, S.Free{}, p2, s2}} D.Seat2{}:
+        case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, S.Free{}, p2, s2}} D.Seat2{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, S.Jammed{}, p2, s2}} D.Seat2{}:
+        case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, S.Jammed{}, p2, s2}} D.Seat2{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, S.JammedSkipped{}, p2, s2}} D.Seat2{}:
+        case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, S.JammedSkipped{}, p2, s2}} D.Seat2{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat3{}:
+        case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat3{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, S.Free{}, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat0{}:
+        case D.Quad{S.Seat{h0, S.Free{}, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat0{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, S.Jammed{}, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat0{}:
+        case D.Quad{S.Seat{h0, S.Jammed{}, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat0{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, S.JammedSkipped{}, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat0{}:
+        case D.Quad{S.Seat{h0, S.JammedSkipped{}, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat0{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, S.Free{}, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat1{}:
+        case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, S.Free{}, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat1{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, S.Jammed{}, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat1{}:
+        case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, S.Jammed{}, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat1{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, S.JammedSkipped{}, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat1{}:
+        case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, S.JammedSkipped{}, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat1{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, S.Free{}, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat2{}:
+        case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, S.Free{}, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat2{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, S.Jammed{}, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat2{}:
+        case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, S.Jammed{}, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat2{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, S.JammedSkipped{}, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat2{}:
+        case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, S.JammedSkipped{}, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat2{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, S.Free{}, p3, s3}} D.Seat3{}:
+        case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, S.Free{}, p3, s3}} D.Seat3{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, S.Jammed{}, p3, s3}} D.Seat3{}:
+        case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, S.Jammed{}, p3, s3}} D.Seat3{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, S.JammedSkipped{}, p3, s3}} D.Seat3{}:
+        case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, S.JammedSkipped{}, p3, s3}} D.Seat3{}:
           {==}
 
 def jam_once(+seats: A.Seats(), +seat: D.Seat) -> A.grant.once_claim(A.grant.jam(seats, seat), seat):
   match seats seat:
-    case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, j3, p3, s3}} D.Seat0{}:
+    case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat0{}:
       Unit{}
-    case D.Duo{A.CoreSeat{h1, S.Free{}, p1, s1}, A.CoreSeat{h3, j3, p3, s3}} D.Seat1{}:
+    case D.Duo{S.Seat{h1, S.Free{}, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat1{}:
       Unit{}
-    case D.Duo{A.CoreSeat{h1, S.Jammed{}, p1, s1}, A.CoreSeat{h3, j3, p3, s3}} D.Seat1{}:
+    case D.Duo{S.Seat{h1, S.Jammed{}, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat1{}:
       ({==}, ({==}, {==}))
-    case D.Duo{A.CoreSeat{h1, S.JammedSkipped{}, p1, s1}, A.CoreSeat{h3, j3, p3, s3}} D.Seat1{}:
+    case D.Duo{S.Seat{h1, S.JammedSkipped{}, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat1{}:
       ({==}, {==})
-    case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, j3, p3, s3}} D.Seat2{}:
+    case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat2{}:
       Unit{}
-    case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, S.Free{}, p3, s3}} D.Seat3{}:
+    case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, S.Free{}, p3, s3}} D.Seat3{}:
       Unit{}
-    case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, S.Jammed{}, p3, s3}} D.Seat3{}:
+    case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, S.Jammed{}, p3, s3}} D.Seat3{}:
       ({==}, ({==}, {==}))
-    case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, S.JammedSkipped{}, p3, s3}} D.Seat3{}:
+    case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, S.JammedSkipped{}, p3, s3}} D.Seat3{}:
       ({==}, {==})
-    case D.Trio{A.CoreSeat{h0, S.Free{}, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat0{}:
+    case D.Trio{S.Seat{h0, S.Free{}, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat0{}:
       Unit{}
-    case D.Trio{A.CoreSeat{h0, S.Jammed{}, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat0{}:
+    case D.Trio{S.Seat{h0, S.Jammed{}, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat0{}:
       ({==}, ({==}, {==}))
-    case D.Trio{A.CoreSeat{h0, S.JammedSkipped{}, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat0{}:
+    case D.Trio{S.Seat{h0, S.JammedSkipped{}, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat0{}:
       ({==}, {==})
-    case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, S.Free{}, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat1{}:
+    case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, S.Free{}, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat1{}:
       Unit{}
-    case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, S.Jammed{}, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat1{}:
+    case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, S.Jammed{}, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat1{}:
       ({==}, ({==}, {==}))
-    case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, S.JammedSkipped{}, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat1{}:
+    case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, S.JammedSkipped{}, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat1{}:
       ({==}, {==})
-    case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, S.Free{}, p2, s2}} D.Seat2{}:
+    case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, S.Free{}, p2, s2}} D.Seat2{}:
       Unit{}
-    case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, S.Jammed{}, p2, s2}} D.Seat2{}:
+    case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, S.Jammed{}, p2, s2}} D.Seat2{}:
       ({==}, ({==}, {==}))
-    case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, S.JammedSkipped{}, p2, s2}} D.Seat2{}:
+    case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, S.JammedSkipped{}, p2, s2}} D.Seat2{}:
       ({==}, {==})
-    case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat3{}:
+    case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat3{}:
       Unit{}
-    case D.Quad{A.CoreSeat{h0, S.Free{}, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat0{}:
+    case D.Quad{S.Seat{h0, S.Free{}, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat0{}:
       Unit{}
-    case D.Quad{A.CoreSeat{h0, S.Jammed{}, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat0{}:
+    case D.Quad{S.Seat{h0, S.Jammed{}, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat0{}:
       ({==}, ({==}, {==}))
-    case D.Quad{A.CoreSeat{h0, S.JammedSkipped{}, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat0{}:
+    case D.Quad{S.Seat{h0, S.JammedSkipped{}, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat0{}:
       ({==}, {==})
-    case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, S.Free{}, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat1{}:
+    case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, S.Free{}, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat1{}:
       Unit{}
-    case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, S.Jammed{}, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat1{}:
+    case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, S.Jammed{}, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat1{}:
       ({==}, ({==}, {==}))
-    case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, S.JammedSkipped{}, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat1{}:
+    case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, S.JammedSkipped{}, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat1{}:
       ({==}, {==})
-    case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, S.Free{}, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat2{}:
+    case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, S.Free{}, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat2{}:
       Unit{}
-    case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, S.Jammed{}, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat2{}:
+    case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, S.Jammed{}, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat2{}:
       ({==}, ({==}, {==}))
-    case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, S.JammedSkipped{}, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat2{}:
+    case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, S.JammedSkipped{}, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat2{}:
       ({==}, {==})
-    case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, S.Free{}, p3, s3}} D.Seat3{}:
+    case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, S.Free{}, p3, s3}} D.Seat3{}:
       Unit{}
-    case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, S.Jammed{}, p3, s3}} D.Seat3{}:
+    case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, S.Jammed{}, p3, s3}} D.Seat3{}:
       ({==}, ({==}, {==}))
-    case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, S.JammedSkipped{}, p3, s3}} D.Seat3{}:
+    case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, S.JammedSkipped{}, p3, s3}} D.Seat3{}:
       ({==}, {==})
 
 def give_dispatch(+world: S.World, +seats: A.Seats(), +seat: D.Seat, +phase: S.Phase, +notes: A.Notes()) -> {A.grant.dispatch(A.grant.give(world, seats, seat, notes)) == A.ref(A.grant.given(world, seats, phase, notes, seat)) : A.Ref()}:
   match world:
     case S.World{config, before, round, index, first, hp, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}:
       match seats seat:
-        case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, j3, p3, s3}} D.Seat0{}:
+        case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat0{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, j3, p3, s3}} D.Seat1{}:
+        case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat1{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, j3, p3, s3}} D.Seat2{}:
+        case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat2{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, j3, p3, s3}} D.Seat3{}:
+        case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat3{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat0{}:
+        case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat0{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat1{}:
+        case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat1{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat2{}:
+        case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat2{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat3{}:
+        case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat3{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat0{}:
+        case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat0{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat1{}:
+        case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat1{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat2{}:
+        case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat2{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat3{}:
+        case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat3{}:
           {==}
 
 def settle_given(fuel: Nat, +world: S.World, +seats: A.Seats(), +seat: D.Seat, +phase: S.Phase, +notes: A.Notes()) -> {A.grant.settle(fuel, A.ref(A.grant.given(world, seats, phase, notes, seat))) == A.ref(A.grant.given(world, seats, phase, notes, seat)) : A.Ref()}:
@@ -197,16 +197,16 @@ def turn_entries(+entries: List<&2, D.At<&2, A.CoreSeat>>, +current: D.Seat) -> 
   match entries:
     case Nil{}:
       {==}
-    case D.At{+seat, A.CoreSeat{hp, _, _, sl}} <> +rest:
+    case D.At{+seat, S.Seat{hp, _, _, sl}} <> +rest:
       turn_cons(hp, D.seat.eq(seat, current), seat, A.turn_entries_machine(rest, current), A.turn_entries_ref(rest, current), turn_entries(rest, current))
 
 def turn_candidates_match(+seats: D.Ring<&2, A.CoreSeat>, +current: D.Seat) -> {Q.turn_candidates(D.ring.entries(Nat, A.seats.health(seats)), current) == A.turn_candidates_ref(seats, current) : List<&2, D.Seat>}:
   match seats:
-    case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, j3, p3, s3}}:
+    case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, j3, p3, s3}}:
       turn_entries(D.ring.entries(A.CoreSeat, seats), current)
-    case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}}:
+    case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}}:
       turn_entries(D.ring.entries(A.CoreSeat, seats), current)
-    case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}}:
+    case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}}:
       turn_entries(D.ring.entries(A.CoreSeat, seats), current)
 
 def turn_pick(same: Bool, +next: D.Seat, +left: D.Seat, +right: D.Seat, rest: {left == right : D.Seat}) -> {Q.successor.pick(same, next, left) == A.ref_pick(same, next, right) : D.Seat}:
@@ -252,29 +252,29 @@ def give_point_synced(+world: S.World, +seats: A.Seats(), +seat: D.Seat, +phase:
   match world:
     case S.World{D.Config{table, plan}, before, round, index, first, hp, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}:
       match seats seat:
-        case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, j3, p3, s3}} D.Seat0{}:
+        case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat0{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, j3, p3, s3}} D.Seat1{}:
+        case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat1{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, j3, p3, s3}} D.Seat2{}:
+        case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat2{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, j3, p3, s3}} D.Seat3{}:
+        case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat3{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat0{}:
+        case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat0{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat1{}:
+        case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat1{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat2{}:
+        case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat2{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat3{}:
+        case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat3{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat0{}:
+        case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat0{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat1{}:
+        case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat1{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat2{}:
+        case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat2{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat3{}:
+        case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat3{}:
           {==}
 
 def world_config_identity(+world: S.World) -> {S.world.set_config(world, D.Config{S.world.table(world), S.world.plan(world)}) == world : S.World}:
@@ -297,58 +297,58 @@ def table_turn(+world: S.World, +seat: D.Seat) -> {S.world.table(S.world.set_tur
 # No-item scope: every seat is Free, so the grant acts at once.
 def grant_free(+world: S.World, +seats: A.Seats(), +phase: S.Phase, +notes: A.Notes(), +seat: D.Seat) -> {M.grant(A.pack(world, seats, phase, notes), seat) == A.grant.given(S.world.set_turn(world, Some{seat}), seats, phase, notes, seat) : S.State}:
   match seats seat:
-    case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, j3, p3, s3}} D.Seat0{}:
+    case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat0{}:
       {==}
-    case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, j3, p3, s3}} D.Seat1{}:
+    case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat1{}:
       {==}
-    case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, j3, p3, s3}} D.Seat2{}:
+    case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat2{}:
       {==}
-    case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, j3, p3, s3}} D.Seat3{}:
+    case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat3{}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat0{}:
+    case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat0{}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat1{}:
+    case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat1{}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat2{}:
+    case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat2{}:
       {==}
-    case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat3{}:
+    case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat3{}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat0{}:
+    case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat0{}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat1{}:
+    case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat1{}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat2{}:
+    case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat2{}:
       {==}
-    case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat3{}:
+    case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat3{}:
       {==}
 
 def ref_pass_free(+world: S.World, +seats: A.Seats(), +seat: D.Seat, +notes: A.Notes()) -> {A.grant.dispatch(A.grant.pass.free(world, seats, seat, notes)) == A.grant.give(S.world.set_turn(world, Some{seat}), seats, seat, notes) : A.Ref()}:
   match world:
     case S.World{config, before, round, index, first, hp, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}:
       match seats seat:
-        case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, j3, p3, s3}} D.Seat0{}:
+        case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat0{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, j3, p3, s3}} D.Seat1{}:
+        case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat1{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, j3, p3, s3}} D.Seat2{}:
+        case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat2{}:
           {==}
-        case D.Duo{A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h3, j3, p3, s3}} D.Seat3{}:
+        case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat3{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat0{}:
+        case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat0{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat1{}:
+        case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat1{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat2{}:
+        case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat2{}:
           {==}
-        case D.Trio{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}} D.Seat3{}:
+        case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat3{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat0{}:
+        case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat0{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat1{}:
+        case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat1{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat2{}:
+        case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat2{}:
           {==}
-        case D.Quad{A.CoreSeat{h0, j0, p0, s0}, A.CoreSeat{h1, j1, p1, s1}, A.CoreSeat{h2, j2, p2, s2}, A.CoreSeat{h3, j3, p3, s3}} D.Seat3{}:
+        case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat3{}:
           {==}
 
 def grant_six_given(+world: S.World, +seats: A.Seats(), +seat: D.Seat, +phase: S.Phase, +notes: A.Notes(), +extra: Nat) -> {A.grant.settle(6n+extra, A.grant.pass.free(world, seats, seat, notes)) == A.ref(A.grant.given(S.world.set_turn(world, Some{seat}), seats, phase, notes, seat)) : A.Ref()}:
