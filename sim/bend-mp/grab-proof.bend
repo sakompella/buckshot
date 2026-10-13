@@ -2072,3 +2072,148 @@ def put.close(+s: S.State, +seat: D.Seat, +slot: D.Slot, +ctx: Ctx(s), load: Loa
   +k =>
     +read : {A.close(Nat.add(13n, k), s, A.frame_ReceivePacket_PlaceItem(seat, slot)) == R.settle(Nat.add(12n, k), R.ReceivePacket_PlaceItem.held(R.RefState{A.ref_host(s), R.ReceivePacket_PlaceItem{seat, slot}, S.state.notes(s)}, seat, slot, I.seat.holding(S.state.grabs(s), seat))) : R.RefState} = Equal.cong(Maybe<&2, D.Item>, R.RefState, held => R.settle(Nat.add(12n, k), R.ReceivePacket_PlaceItem.held(R.RefState{A.ref_host(s), R.ReceivePacket_PlaceItem{seat, slot}, S.state.notes(s)}, seat, slot, held)), RI.props.holding(H.host.props(A.ref_host(s), seat)), I.seat.holding(S.state.grabs(s), seat), held.eq(s, seat, ctx.shape(s, ctx)))
     Equal.trans(R.RefState, A.close(Nat.add(13n, k), s, A.frame_ReceivePacket_PlaceItem(seat, slot)), R.settle(Nat.add(12n, k), R.ReceivePacket_PlaceItem.held(R.RefState{A.ref_host(s), R.ReceivePacket_PlaceItem{seat, slot}, S.state.notes(s)}, seat, slot, I.seat.holding(S.state.grabs(s), seat))), A.ref(M.grab.put(s, seat, slot)), read, put.held.close(s, seat, slot, I.seat.holding(S.state.grabs(s), seat), ctx, load, k))
+
+# The completion check, the noneligible pass and the last placement (M1).
+
+def check.done(+s: S.State, +next: R.Frame, +b: Bool, +k: Nat, +ctx: Ctx(s)) -> {R.settle(k, R.CheckIfItemGrabbingFinishedForAllUsers.result(R.RefState{A.ref_host(s), R.CheckIfItemGrabbingFinishedForAllUsers{next}, S.state.notes(s)}, next, b)) == A.close(k, M.grab.check.done(s, b), next) : R.RefState}:
+  match s b:
+    case S.State{+world, +players, +phase, +notes, +grabs} True{}:
+      Equal.cong(H.Host, R.RefState, x => R.settle(k, R.RefState{x, next, List.append(&2, D.Note, notes, [D.Shown{D.DistributionDone{}}])}), H.host.set_distributing(A.ref_host(S.State{world, players, phase, notes, grabs}), False{}), A.ref_host(done.state(S.State{world, players, phase, notes, grabs})), done.eq(S.State{world, players, phase, notes, grabs}, ctx.shape(S.State{world, players, phase, notes, grabs}, ctx)))
+    case S.State{+world, +players, +phase, +notes, +grabs} False{}:
+      {==}
+
+def check.step(+s: S.State, +next: R.Frame, +k: Nat, +ctx: Ctx(s)) -> {A.close(1n+k, s, R.CheckIfItemGrabbingFinishedForAllUsers{next}) == A.close(k, M.grab.check(s), next) : R.RefState}:
+  +flag : {Bool.and(H.host.distributing(A.ref_host(s)), RI.CheckIfItemGrabbingFinishedForAllUsers(A.ref_host(s))) == Bool.and(S.grabs.distributing(S.state.grabs(s)), I.finished(s)) : Bool} = and_cong(H.host.distributing(A.ref_host(s)), S.grabs.distributing(S.state.grabs(s)), RI.CheckIfItemGrabbingFinishedForAllUsers(A.ref_host(s)), I.finished(s), dist.eq(s), finished.eq(s, ctx.shape(s, ctx)))
+  Equal.trans(R.RefState, A.close(1n+k, s, R.CheckIfItemGrabbingFinishedForAllUsers{next}), R.settle(k, R.CheckIfItemGrabbingFinishedForAllUsers.result(R.RefState{A.ref_host(s), R.CheckIfItemGrabbingFinishedForAllUsers{next}, S.state.notes(s)}, next, Bool.and(S.grabs.distributing(S.state.grabs(s)), I.finished(s)))), A.close(k, M.grab.check(s), next), Equal.cong(Bool, R.RefState, b => R.settle(k, R.CheckIfItemGrabbingFinishedForAllUsers.result(R.RefState{A.ref_host(s), R.CheckIfItemGrabbingFinishedForAllUsers{next}, S.state.notes(s)}, next, b)), Bool.and(H.host.distributing(A.ref_host(s)), RI.CheckIfItemGrabbingFinishedForAllUsers(A.ref_host(s))), Bool.and(S.grabs.distributing(S.state.grabs(s)), I.finished(s)), flag), check.done(s, next, Bool.and(S.grabs.distributing(S.state.grabs(s)), I.finished(s)), k, ctx))
+
+def ctx.check.done(+s: S.State, +b: Bool, +ctx: Ctx(s)) -> Ctx(M.grab.check.done(s, b)):
+  match b:
+    case True{}:
+      ctx.emit(done.state(s), D.DistributionDone{}, ctx.done(s, ctx))
+    case False{}:
+      ctx
+
+def ctx.check(+s: S.State, +ctx: Ctx(s)) -> Ctx(M.grab.check(s)):
+  ctx.check.done(s, Bool.and(S.grabs.distributing(S.state.grabs(s)), I.finished(s)), ctx)
+
+def end.close(+seats: List<&2, D.Seat>, +s: S.State, +next: R.Frame, +k: Nat, +ctx: Ctx(s)) -> {A.close(Nat.add(List.length(&2, D.Seat, seats), 1n+k), s, R.EndItemGrabbingAfterNonEligible{seats, next}) == A.close(k, M.grab.end_all(seats, s), next) : R.RefState}:
+  match seats s:
+    case Nil{} s:
+      {==}
+    case +seat <> +rest S.State{+world, +players, +phase, +notes, +grabs}:
+      +ended : S.State = S.state.emit(close.state(S.State{world, players, phase, notes, grabs}, seat), D.GrabbingEnded{seat})
+      +step : {A.close(Nat.add(List.length(&2, D.Seat, seat <> rest), 1n+k), S.State{world, players, phase, notes, grabs}, R.EndItemGrabbingAfterNonEligible{seat <> rest, next}) == A.close(Nat.add(List.length(&2, D.Seat, rest), 1n+k), ended, R.EndItemGrabbingAfterNonEligible{rest, next}) : R.RefState} = Equal.cong(H.Host, R.RefState, x => R.settle(Nat.add(List.length(&2, D.Seat, rest), 1n+k), R.RefState{x, R.EndItemGrabbingAfterNonEligible{rest, next}, List.append(&2, D.Note, notes, [D.Shown{D.GrabbingEnded{seat}}])}), H.host.set_props(A.ref_host(S.State{world, players, phase, notes, grabs}), seat, H.props.end_grab(H.host.props(A.ref_host(S.State{world, players, phase, notes, grabs}), seat))), A.ref_host(close.state(S.State{world, players, phase, notes, grabs}, seat)), close.eq(S.State{world, players, phase, notes, grabs}, seat, ctx.shape(S.State{world, players, phase, notes, grabs}, ctx)))
+      Equal.trans(R.RefState, A.close(Nat.add(List.length(&2, D.Seat, seat <> rest), 1n+k), S.State{world, players, phase, notes, grabs}, R.EndItemGrabbingAfterNonEligible{seat <> rest, next}), A.close(Nat.add(List.length(&2, D.Seat, rest), 1n+k), ended, R.EndItemGrabbingAfterNonEligible{rest, next}), A.close(k, M.grab.end_all(rest, ended), next), step, end.close(rest, ended, next, k, ctx.emit(close.state(S.State{world, players, phase, notes, grabs}, seat), D.GrabbingEnded{seat}, ctx.close(S.State{world, players, phase, notes, grabs}, seat, ctx))))
+
+def ctx.end_all(+seats: List<&2, D.Seat>, +s: S.State, +ctx: Ctx(s)) -> Ctx(M.grab.end_all(seats, s)):
+  match seats s:
+    case Nil{} s:
+      ctx
+    case +seat <> +rest S.State{+world, +players, +phase, +notes, +grabs}:
+      ctx.end_all(rest, S.state.emit(close.state(S.State{world, players, phase, notes, grabs}, seat), D.GrabbingEnded{seat}), ctx.emit(close.state(S.State{world, players, phase, notes, grabs}, seat), D.GrabbingEnded{seat}, ctx.close(S.State{world, players, phase, notes, grabs}, seat, ctx)))
+
+def gs.step(+s: S.State, +seat: D.Seat, +slot: D.Slot, +k: Nat, +shape: A.Shape(s)) -> {A.close(1n+k, s, R.GetSocketArrayToEndItemGrabbingOn{seat, slot}) == A.close(k, s, R.EndItemGrabbingAfterNonEligible{I.stalled.seats(s, seat), R.CheckIfItemGrabbingFinishedForAllUsers{R.ReceivePacket_PlaceItem{seat, slot}}}) : R.RefState}:
+  Equal.cong(List<&2, D.Seat>, R.RefState, xs => R.settle(k, R.RefState{A.ref_host(s), R.EndItemGrabbingAfterNonEligible{xs, R.CheckIfItemGrabbingFinishedForAllUsers{R.ReceivePacket_PlaceItem{seat, slot}}}, S.state.notes(s)}), RI.GetSocketArrayToEndItemGrabbingOn(D.ring.entries(H.Props, H.host.seats(A.ref_host(s))), A.ref_host(s), seat), I.stalled.seats(s, seat), stalled.eq(s, seat, shape))
+
+# Fuel arithmetic for the noneligible pass, whose length is at most four.
+
+def add.succ(+a: Nat, +b: Nat) -> {Nat.add(a, 1n+b) == 1n+Nat.add(a, b) : Nat}:
+  match a:
+    case 0n:
+      {==}
+    case 1n+p:
+      Equal.cong(Nat, Nat, n => 1n+n, Nat.add(p, 1n+b), 1n+Nat.add(p, b), add.succ(p, b))
+
+def add.assoc(+a: Nat, +b: Nat, +c: Nat) -> {Nat.add(Nat.add(a, b), c) == Nat.add(a, Nat.add(b, c)) : Nat}:
+  match a:
+    case 0n:
+      {==}
+    case 1n+p:
+      Equal.cong(Nat, Nat, n => 1n+n, Nat.add(Nat.add(p, b), c), Nat.add(p, Nat.add(b, c)), add.assoc(p, b, c))
+
+def add.shift(+n: Nat, +a: Nat, +b: Nat) -> {Nat.add(a, Nat.add(n, b)) == Nat.add(n, Nat.add(a, b)) : Nat}:
+  match n:
+    case 0n:
+      {==}
+    case 1n+p:
+      Equal.trans(Nat, Nat.add(a, 1n+Nat.add(p, b)), 1n+Nat.add(a, Nat.add(p, b)), 1n+Nat.add(p, Nat.add(a, b)), add.succ(a, Nat.add(p, b)), Equal.cong(Nat, Nat, x => 1n+x, Nat.add(a, Nat.add(p, b)), Nat.add(p, Nat.add(a, b)), add.shift(p, a, b)))
+
+def fuel.split(+len: Nat, +room: Nat, +k: Nat, +fits: {Nat.add(len, room) == 4n : Nat}) -> {Nat.add(19n, k) == Nat.add(len, 1n+Nat.add(14n, Nat.add(room, k))) : Nat}:
+  +y : Nat = Nat.add(room, k)
+  +inner : {Nat.add(len, y) == Nat.add(4n, k) : Nat} = Equal.trans(Nat, Nat.add(len, y), Nat.add(Nat.add(len, room), k), Nat.add(4n, k), Equal.sym(Nat, Nat.add(Nat.add(len, room), k), Nat.add(len, y), add.assoc(len, room, k)), Equal.cong(Nat, Nat, z => Nat.add(z, k), Nat.add(len, room), 4n, fits))
+  +rhs : {Nat.add(len, 1n+Nat.add(14n, y)) == Nat.add(19n, k) : Nat} = Equal.trans(Nat, Nat.add(len, 1n+Nat.add(14n, y)), 1n+Nat.add(len, Nat.add(14n, y)), Nat.add(19n, k), add.succ(len, Nat.add(14n, y)), Equal.trans(Nat, 1n+Nat.add(len, Nat.add(14n, y)), 1n+Nat.add(14n, Nat.add(len, y)), Nat.add(19n, k), Equal.cong(Nat, Nat, z => 1n+z, Nat.add(len, Nat.add(14n, y)), Nat.add(14n, Nat.add(len, y)), add.shift(14n, len, y)), Equal.cong(Nat, Nat, z => 1n+Nat.add(14n, z), Nat.add(len, y), Nat.add(4n, k), inner)))
+  Equal.sym(Nat, Nat.add(len, 1n+Nat.add(14n, y)), Nat.add(19n, k), rhs)
+
+def Room(+len: Nat, +total: Nat) -> Data:
+  Sigma<&2, &2, Nat, room => {Nat.add(len, room) == total : Nat}>
+
+def keep.room(+b: Bool, +x: D.Seat, +rest: List<&2, D.Seat>, +total: Nat, +r: Nat, +e: {Nat.add(List.length(&2, D.Seat, rest), r) == total : Nat}) -> Room(List.length(&2, D.Seat, I.keep(D.Seat, b, x, rest)), 1n+total):
+  match b:
+    case True{}:
+      (r, Equal.cong(Nat, Nat, n => 1n+n, Nat.add(List.length(&2, D.Seat, rest), r), total, e))
+    case False{}:
+      (1n+r, Equal.trans(Nat, Nat.add(List.length(&2, D.Seat, rest), 1n+r), 1n+Nat.add(List.length(&2, D.Seat, rest), r), 1n+total, add.succ(List.length(&2, D.Seat, rest), r), Equal.cong(Nat, Nat, n => 1n+n, Nat.add(List.length(&2, D.Seat, rest), r), total, e)))
+
+def stalled.room.step(+seat: D.Seat, +rest: List<&2, D.Seat>, +s: S.State, +placing: D.Seat, +ih: Room(List.length(&2, D.Seat, I.stalled(rest, s, placing)), List.length(&2, D.Seat, rest))) -> Room(List.length(&2, D.Seat, I.stalled(seat <> rest, s, placing)), List.length(&2, D.Seat, seat <> rest)):
+  match ih:
+    case Tuple{+r, +e}:
+      keep.room(Bool.and(I.seat.grabbing(S.state.grabs(s), seat), Bool.and(I.is_none(I.seat.holding(S.state.grabs(s), seat)), Bool.and(Bool.not(D.seat.eq(seat, placing)), Bool.not(I.has_items(I.pool(s, seat)))))), seat, I.stalled(rest, s, placing), List.length(&2, D.Seat, rest), r, e)
+
+def stalled.room(+seats: List<&2, D.Seat>, +s: S.State, +placing: D.Seat) -> Room(List.length(&2, D.Seat, I.stalled(seats, s, placing)), List.length(&2, D.Seat, seats)):
+  match seats:
+    case Nil{}:
+      (0n, {==})
+    case +seat <> +rest:
+      stalled.room.step(seat, rest, s, placing, stalled.room(rest, s, placing))
+
+def table.room(+table: D.Table) -> Room(List.length(&2, D.Seat, D.table.seats(table)), 4n):
+  match table:
+    case D.TwoSeats{}:
+      (2n, {==})
+    case D.ThreeSeats{}:
+      (1n, {==})
+    case D.FourSeats{}:
+      (0n, {==})
+
+def room.join(+a: Nat, +b: Nat, +x: Room(a, b), +y: Room(b, 4n)) -> Room(a, 4n):
+  match x y:
+    case Tuple{+r, +e1} Tuple{+q, +e2}:
+      (Nat.add(r, q), Equal.trans(Nat, Nat.add(a, Nat.add(r, q)), Nat.add(Nat.add(a, r), q), 4n, Equal.sym(Nat, Nat.add(Nat.add(a, r), q), Nat.add(a, Nat.add(r, q)), add.assoc(a, r, q)), Equal.trans(Nat, Nat.add(Nat.add(a, r), q), Nat.add(b, q), 4n, Equal.cong(Nat, Nat, z => Nat.add(z, q), Nat.add(a, r), b, e1), e2)))
+
+def stalled.fits(+s: S.State, +placing: D.Seat) -> Room(List.length(&2, D.Seat, I.stalled.seats(s, placing)), 4n):
+  +seats : List<&2, D.Seat> = D.table.seats(S.world.table(S.state.world(s)))
+  room.join(List.length(&2, D.Seat, I.stalled(seats, s, placing)), List.length(&2, D.Seat, seats), stalled.room(seats, s, placing), table.room(S.world.table(S.state.world(s))))
+
+def place.tail(+s1: S.State, +seat: D.Seat, +slot: D.Slot, +k: Nat, +ctx1: Ctx(s1), load: LoadClosure(), +room: Nat, +fits: {Nat.add(List.length(&2, D.Seat, I.stalled.seats(s1, seat)), room) == 4n : Nat}) -> {A.close(Nat.add(19n, k), s1, R.EndItemGrabbingAfterNonEligible{I.stalled.seats(s1, seat), R.CheckIfItemGrabbingFinishedForAllUsers{R.ReceivePacket_PlaceItem{seat, slot}}}) == A.ref(M.grab.put(M.grab.check(M.grab.end_all(I.stalled.seats(s1, seat), s1)), seat, slot)) : R.RefState}:
+  +big : Nat = Nat.add(14n, Nat.add(room, k))
+  +s2 : S.State = M.grab.end_all(I.stalled.seats(s1, seat), s1)
+  +ctx2 : Ctx(s2) = ctx.end_all(I.stalled.seats(s1, seat), s1, ctx1)
+  +fuel : {A.close(Nat.add(19n, k), s1, R.EndItemGrabbingAfterNonEligible{I.stalled.seats(s1, seat), R.CheckIfItemGrabbingFinishedForAllUsers{R.ReceivePacket_PlaceItem{seat, slot}}}) == A.close(Nat.add(List.length(&2, D.Seat, I.stalled.seats(s1, seat)), 1n+big), s1, R.EndItemGrabbingAfterNonEligible{I.stalled.seats(s1, seat), R.CheckIfItemGrabbingFinishedForAllUsers{R.ReceivePacket_PlaceItem{seat, slot}}}) : R.RefState} = Equal.cong(Nat, R.RefState, n => A.close(n, s1, R.EndItemGrabbingAfterNonEligible{I.stalled.seats(s1, seat), R.CheckIfItemGrabbingFinishedForAllUsers{R.ReceivePacket_PlaceItem{seat, slot}}}), Nat.add(19n, k), Nat.add(List.length(&2, D.Seat, I.stalled.seats(s1, seat)), 1n+big), fuel.split(List.length(&2, D.Seat, I.stalled.seats(s1, seat)), room, k, fits))
+  +ended : {A.close(Nat.add(List.length(&2, D.Seat, I.stalled.seats(s1, seat)), 1n+big), s1, R.EndItemGrabbingAfterNonEligible{I.stalled.seats(s1, seat), R.CheckIfItemGrabbingFinishedForAllUsers{R.ReceivePacket_PlaceItem{seat, slot}}}) == A.close(big, s2, R.CheckIfItemGrabbingFinishedForAllUsers{R.ReceivePacket_PlaceItem{seat, slot}}) : R.RefState} = end.close(I.stalled.seats(s1, seat), s1, R.CheckIfItemGrabbingFinishedForAllUsers{R.ReceivePacket_PlaceItem{seat, slot}}, big, ctx1)
+  +checked : {A.close(big, s2, R.CheckIfItemGrabbingFinishedForAllUsers{R.ReceivePacket_PlaceItem{seat, slot}}) == A.close(Nat.add(13n, Nat.add(room, k)), M.grab.check(s2), R.ReceivePacket_PlaceItem{seat, slot}) : R.RefState} = check.step(s2, R.ReceivePacket_PlaceItem{seat, slot}, Nat.add(13n, Nat.add(room, k)), ctx2)
+  Equal.trans(R.RefState, A.close(Nat.add(19n, k), s1, R.EndItemGrabbingAfterNonEligible{I.stalled.seats(s1, seat), R.CheckIfItemGrabbingFinishedForAllUsers{R.ReceivePacket_PlaceItem{seat, slot}}}), A.close(Nat.add(List.length(&2, D.Seat, I.stalled.seats(s1, seat)), 1n+big), s1, R.EndItemGrabbingAfterNonEligible{I.stalled.seats(s1, seat), R.CheckIfItemGrabbingFinishedForAllUsers{R.ReceivePacket_PlaceItem{seat, slot}}}), A.ref(M.grab.put(M.grab.check(s2), seat, slot)), fuel, Equal.trans(R.RefState, A.close(Nat.add(List.length(&2, D.Seat, I.stalled.seats(s1, seat)), 1n+big), s1, R.EndItemGrabbingAfterNonEligible{I.stalled.seats(s1, seat), R.CheckIfItemGrabbingFinishedForAllUsers{R.ReceivePacket_PlaceItem{seat, slot}}}), A.close(big, s2, R.CheckIfItemGrabbingFinishedForAllUsers{R.ReceivePacket_PlaceItem{seat, slot}}), A.ref(M.grab.put(M.grab.check(s2), seat, slot)), ended, Equal.trans(R.RefState, A.close(big, s2, R.CheckIfItemGrabbingFinishedForAllUsers{R.ReceivePacket_PlaceItem{seat, slot}}), A.close(Nat.add(13n, Nat.add(room, k)), M.grab.check(s2), R.ReceivePacket_PlaceItem{seat, slot}), A.ref(M.grab.put(M.grab.check(s2), seat, slot)), checked, put.close(M.grab.check(s2), seat, slot, ctx.check(s2, ctx2), load, Nat.add(room, k)))))
+
+def place.tail.fit(+s1: S.State, +seat: D.Seat, +slot: D.Slot, +k: Nat, +ctx1: Ctx(s1), load: LoadClosure(), +fits: Room(List.length(&2, D.Seat, I.stalled.seats(s1, seat)), 4n)) -> {A.close(Nat.add(19n, k), s1, R.EndItemGrabbingAfterNonEligible{I.stalled.seats(s1, seat), R.CheckIfItemGrabbingFinishedForAllUsers{R.ReceivePacket_PlaceItem{seat, slot}}}) == A.ref(M.grab.put(M.grab.check(M.grab.end_all(I.stalled.seats(s1, seat), s1)), seat, slot)) : R.RefState}:
+  match fits:
+    case Tuple{+room, +e}:
+      place.tail(s1, seat, slot, k, ctx1, load, room, e)
+
+def place.last(+s: S.State, +seat: D.Seat, +slot: D.Slot, +last: Bool, +ctx: Ctx(s), load: LoadClosure()) -> @+k:Nat -> {R.settle(Nat.add(21n, k), R.IsPlacingLastItem.last(R.RefState{A.ref_host(s), R.IsPlacingLastItem{seat, slot}, S.state.notes(s)}, seat, slot, last)) == A.ref(M.grab.place.last(s, seat, slot, last)) : R.RefState}:
+  match s last:
+    case S.State{+world, +players, +phase, +notes, +grabs} False{}:
+      +k => put.close(S.State{world, players, phase, notes, grabs}, seat, slot, ctx, load, 8n+k)
+    case S.State{+world, +players, +phase, +notes, +grabs} True{}:
+      +k =>
+        +s0 : S.State = S.state.emit(close.state(S.State{world, players, phase, notes, grabs}, seat), D.GrabbingEnded{seat})
+        +ctx0 : Ctx(s0) = ctx.emit(close.state(S.State{world, players, phase, notes, grabs}, seat), D.GrabbingEnded{seat}, ctx.close(S.State{world, players, phase, notes, grabs}, seat, ctx))
+        +s1 : S.State = M.grab.check(s0)
+        +ctx1 : Ctx(s1) = ctx.check(s0, ctx0)
+        +ended : {R.settle(Nat.add(21n, k), R.IsPlacingLastItem.last(R.RefState{A.ref_host(S.State{world, players, phase, notes, grabs}), R.IsPlacingLastItem{seat, slot}, notes}, seat, slot, True{})) == A.close(Nat.add(21n, k), s0, R.CheckIfItemGrabbingFinishedForAllUsers{R.GetSocketArrayToEndItemGrabbingOn{seat, slot}}) : R.RefState} = Equal.cong(H.Host, R.RefState, x => R.settle(Nat.add(21n, k), R.RefState{x, R.CheckIfItemGrabbingFinishedForAllUsers{R.GetSocketArrayToEndItemGrabbingOn{seat, slot}}, List.append(&2, D.Note, notes, [D.Shown{D.GrabbingEnded{seat}}])}), H.host.set_props(A.ref_host(S.State{world, players, phase, notes, grabs}), seat, H.props.end_grab(H.host.props(A.ref_host(S.State{world, players, phase, notes, grabs}), seat))), A.ref_host(close.state(S.State{world, players, phase, notes, grabs}, seat)), close.eq(S.State{world, players, phase, notes, grabs}, seat, ctx.shape(S.State{world, players, phase, notes, grabs}, ctx)))
+        +checked : {A.close(Nat.add(21n, k), s0, R.CheckIfItemGrabbingFinishedForAllUsers{R.GetSocketArrayToEndItemGrabbingOn{seat, slot}}) == A.close(Nat.add(20n, k), s1, R.GetSocketArrayToEndItemGrabbingOn{seat, slot}) : R.RefState} = check.step(s0, R.GetSocketArrayToEndItemGrabbingOn{seat, slot}, Nat.add(20n, k), ctx0)
+        +gathered : {A.close(Nat.add(20n, k), s1, R.GetSocketArrayToEndItemGrabbingOn{seat, slot}) == A.close(Nat.add(19n, k), s1, R.EndItemGrabbingAfterNonEligible{I.stalled.seats(s1, seat), R.CheckIfItemGrabbingFinishedForAllUsers{R.ReceivePacket_PlaceItem{seat, slot}}}) : R.RefState} = gs.step(s1, seat, slot, Nat.add(19n, k), ctx.shape(s1, ctx1))
+        Equal.trans(R.RefState, R.settle(Nat.add(21n, k), R.IsPlacingLastItem.last(R.RefState{A.ref_host(S.State{world, players, phase, notes, grabs}), R.IsPlacingLastItem{seat, slot}, notes}, seat, slot, True{})), A.close(Nat.add(21n, k), s0, R.CheckIfItemGrabbingFinishedForAllUsers{R.GetSocketArrayToEndItemGrabbingOn{seat, slot}}), A.ref(M.grab.place.last(S.State{world, players, phase, notes, grabs}, seat, slot, True{})), ended, Equal.trans(R.RefState, A.close(Nat.add(21n, k), s0, R.CheckIfItemGrabbingFinishedForAllUsers{R.GetSocketArrayToEndItemGrabbingOn{seat, slot}}), A.close(Nat.add(20n, k), s1, R.GetSocketArrayToEndItemGrabbingOn{seat, slot}), A.ref(M.grab.place.last(S.State{world, players, phase, notes, grabs}, seat, slot, True{})), checked, Equal.trans(R.RefState, A.close(Nat.add(20n, k), s1, R.GetSocketArrayToEndItemGrabbingOn{seat, slot}), A.close(Nat.add(19n, k), s1, R.EndItemGrabbingAfterNonEligible{I.stalled.seats(s1, seat), R.CheckIfItemGrabbingFinishedForAllUsers{R.ReceivePacket_PlaceItem{seat, slot}}}), A.ref(M.grab.place.last(S.State{world, players, phase, notes, grabs}, seat, slot, True{})), gathered, place.tail.fit(s1, seat, slot, k, ctx1, load, stalled.fits(s1, seat)))))
+
+def place.close(+s: S.State, +seat: D.Seat, +slot: D.Slot, +ctx: Ctx(s), load: LoadClosure()) -> A.Closure(22n, s, A.frame_IsPlacingLastItem(seat, slot), M.grab.place(s, seat, slot)):
+  +k =>
+    +read : {A.close(Nat.add(22n, k), s, A.frame_IsPlacingLastItem(seat, slot)) == R.settle(Nat.add(21n, k), R.IsPlacingLastItem.last(R.RefState{A.ref_host(s), R.IsPlacingLastItem{seat, slot}, S.state.notes(s)}, seat, slot, I.placing.last(s, seat))) : R.RefState} = Equal.cong(Bool, R.RefState, b => R.settle(Nat.add(21n, k), R.IsPlacingLastItem.last(R.RefState{A.ref_host(s), R.IsPlacingLastItem{seat, slot}, S.state.notes(s)}, seat, slot, b)), RI.IsPlacingLastItem(A.ref_host(s), seat), I.placing.last(s, seat), last.eq(s, seat, ctx.shape(s, ctx)))
+    Equal.trans(R.RefState, A.close(Nat.add(22n, k), s, A.frame_IsPlacingLastItem(seat, slot)), R.settle(Nat.add(21n, k), R.IsPlacingLastItem.last(R.RefState{A.ref_host(s), R.IsPlacingLastItem{seat, slot}, S.state.notes(s)}, seat, slot, I.placing.last(s, seat))), A.ref(M.grab.place(s, seat, slot)), read, place.last(s, seat, slot, I.placing.last(s, seat), ctx, load, k))
