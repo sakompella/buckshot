@@ -1923,7 +1923,7 @@ def ctx.notes(+s: S.State, +notes2: List<&2, D.Note>, +ctx: Ctx(s)) -> Ctx(S.sta
 
 # Closures of the handout, from a machine state's reference host and notes
 # (A.close), each as an A.Closure with the reference's dispatch count. The
-# load closure (L11) is a premise.
+# load closure (L11) is stated here and proven in load-proof.bend.
 
 def LoadClosure() -> Type:
   @+s:S.State -> @+ctx:Ctx(s) -> A.Closure(11n, s, A.frame_MainRoutine_LoadShotgun(), M.load.begin(s))

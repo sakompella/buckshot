@@ -8,6 +8,7 @@ import ./sm/rules.bend as Q
 import ./ref/main.bend as R
 import ./ref/state.bend as H
 import ./ref/rules.bend as G
+import ./core-proof.bend as C
 import ./grab-proof.bend as GP
 import ./ref/items.bend as RI
 import ./grant-proof.bend as GrantProof
@@ -892,3 +893,256 @@ def pass.close(+rank: Nat, +jam: S.Jam, +s: S.State, +seat: D.Seat, +k: Nat, +sh
           +rest_rank : {Q.jam_rank(skipped) == r : Nat} = Equal.cong(Nat, Nat, n => nat.pred(n), 1n+Q.jam_rank(skipped), 1n+r, ranked)
           +rec : {R.settle(fuel, R.RefState{A.ref_host(s1), R.PassTurn{next}, told}) == A.ref(M.grant.step(r, turned(s1, next), next, Q.jam.state(skipped, next, Q.value.or(S.Jam, D.ring.get(S.Jam, S.players.jam(S.state.players(s1)), next), S.Free{})))) : R.RefState} = pass.close(r, Q.value.or(S.Jam, D.ring.get(S.Jam, S.players.jam(S.state.players(s1)), next), S.Free{}), s1, next, k, shape_s1, quiet, {==}, rest_rank)
           Equal.trans(R.RefState, R.settle(1n+Nat.add(1n+r, k), R.PassTurn.props(rs, seat, H.host.props(A.ref_host(t), seat))), pass.at(fuel, h2, seat, told), A.ref(M.grant.step(r, turned(s1, next), next, Q.jam.state(skipped, next, Q.value.or(S.Jam, D.ring.get(S.Jam, S.players.jam(S.state.players(s1)), next), S.Free{})))), read, Equal.trans(R.RefState, pass.at(fuel, h2, seat, told), pass.at(fuel, A.ref_host(s1), seat, told), A.ref(M.grant.step(r, turned(s1, next), next, Q.jam.state(skipped, next, Q.value.or(S.Jam, D.ring.get(S.Jam, S.players.jam(S.state.players(s1)), next), S.Free{})))), written, Equal.trans(R.RefState, pass.at(fuel, A.ref_host(s1), seat, told), R.settle(fuel, R.RefState{A.ref_host(s1), R.PassTurn{next}, told}), A.ref(M.grant.step(r, turned(s1, next), next, Q.jam.state(skipped, next, Q.value.or(S.Jam, D.ring.get(S.Jam, S.players.jam(S.state.players(s1)), next), S.Free{})))), nexted, rec)))
+
+# The machine's rank bound fits the load closure: at most four seats skip.
+def gap.bit(+jam: S.Jam) -> Nat:
+  match jam:
+    case S.Jammed{}:
+      0n
+    case _:
+      1n
+
+def gap.entries(+entries: List<&2, D.At<&2, S.Jam>>) -> Nat:
+  match entries:
+    case Nil{}:
+      0n
+    case D.At{seat, jam} <> rest:
+      Nat.add(gap.bit(jam), gap.entries(rest))
+
+def rank.count(+entries: List<&2, D.At<&2, S.Jam>>) -> {Nat.add(Q.jam_rank.entries(entries), gap.entries(entries)) == List.length(&2, D.At<&2, S.Jam>, entries) : Nat}:
+  match entries:
+    case Nil{}:
+      {==}
+    case D.At{+seat, +jam} <> +rest:
+      match jam:
+        case S.Jammed{}:
+          Equal.cong(Nat, Nat, n => 1n+n, Nat.add(Q.jam_rank.entries(rest), gap.entries(rest)), List.length(&2, D.At<&2, S.Jam>, rest), rank.count(rest))
+        case S.Free{}:
+          Equal.trans(Nat, Nat.add(Q.jam_rank.entries(rest), 1n+gap.entries(rest)), 1n+Nat.add(Q.jam_rank.entries(rest), gap.entries(rest)), 1n+List.length(&2, D.At<&2, S.Jam>, rest), GP.add.succ(Q.jam_rank.entries(rest), gap.entries(rest)), Equal.cong(Nat, Nat, n => 1n+n, Nat.add(Q.jam_rank.entries(rest), gap.entries(rest)), List.length(&2, D.At<&2, S.Jam>, rest), rank.count(rest)))
+        case S.JammedSkipped{}:
+          Equal.trans(Nat, Nat.add(Q.jam_rank.entries(rest), 1n+gap.entries(rest)), 1n+Nat.add(Q.jam_rank.entries(rest), gap.entries(rest)), 1n+List.length(&2, D.At<&2, S.Jam>, rest), GP.add.succ(Q.jam_rank.entries(rest), gap.entries(rest)), Equal.cong(Nat, Nat, n => 1n+n, Nat.add(Q.jam_rank.entries(rest), gap.entries(rest)), List.length(&2, D.At<&2, S.Jam>, rest), rank.count(rest)))
+
+def table.gap(+jams: D.Ring<&2, S.Jam>) -> Nat:
+  match jams:
+    case D.Duo{a, b}:
+      2n
+    case D.Trio{a, b, c}:
+      1n
+    case D.Quad{a, b, c, d}:
+      0n
+
+def ring.room(+jams: D.Ring<&2, S.Jam>) -> {Nat.add(List.length(&2, D.At<&2, S.Jam>, D.ring.entries(S.Jam, jams)), table.gap(jams)) == 4n : Nat}:
+  match jams:
+    case D.Duo{a, b}:
+      {==}
+    case D.Trio{a, b, c}:
+      {==}
+    case D.Quad{a, b, c, d}:
+      {==}
+
+def rank.slack(+players: S.Players) -> Nat:
+  +jams : D.Ring<&2, S.Jam> = S.players.jam(players)
+  Nat.add(gap.entries(D.ring.entries(S.Jam, jams)), table.gap(jams))
+
+# After the five load dispatches, the grant chain has 2 + rank + k' fuel.
+def rank.fuel(+players: S.Players, +k: Nat) -> {Nat.add(6n, k) == Nat.add(2n, Nat.add(Q.jam_rank(players), Nat.add(rank.slack(players), k))) : Nat}:
+  +jams : D.Ring<&2, S.Jam> = S.players.jam(players)
+  +xs : List<&2, D.At<&2, S.Jam>> = D.ring.entries(S.Jam, jams)
+  +r : Nat = Q.jam_rank.entries(xs)
+  +g : Nat = gap.entries(xs)
+  +t : Nat = table.gap(jams)
+  +len : Nat = List.length(&2, D.At<&2, S.Jam>, xs)
+  +four : {Nat.add(r, Nat.add(g, t)) == 4n : Nat} = Equal.trans(Nat, Nat.add(r, Nat.add(g, t)), Nat.add(Nat.add(r, g), t), 4n, Equal.sym(Nat, Nat.add(Nat.add(r, g), t), Nat.add(r, Nat.add(g, t)), GP.add.assoc(r, g, t)), Equal.trans(Nat, Nat.add(Nat.add(r, g), t), Nat.add(len, t), 4n, Equal.cong(Nat, Nat, n => Nat.add(n, t), Nat.add(r, g), len, rank.count(xs)), ring.room(jams)))
+  +moved : {Nat.add(4n, k) == Nat.add(r, Nat.add(Nat.add(g, t), k)) : Nat} = Equal.trans(Nat, Nat.add(4n, k), Nat.add(Nat.add(r, Nat.add(g, t)), k), Nat.add(r, Nat.add(Nat.add(g, t), k)), Equal.cong(Nat, Nat, n => Nat.add(n, k), 4n, Nat.add(r, Nat.add(g, t)), Equal.sym(Nat, Nat.add(r, Nat.add(g, t)), 4n, four)), GP.add.assoc(r, Nat.add(g, t), k))
+  Equal.cong(Nat, Nat, n => Nat.add(2n, n), Nat.add(4n, k), Nat.add(r, Nat.add(Nat.add(g, t), k)), moved)
+
+# The load prefix (MainRoutine_LoadShotgun .. LoadShotgun) against
+# M.load.begin, each stage at the fuel left when the reference reaches it.
+
+def deck.eq(+s: S.State) -> {H.host.deck(A.ref_host(s)) == A.batches(S.world.deck(S.state.world(s))) : List<&2, H.Batch>}:
+  match s:
+    case S.State{S.World{D.Config{D.TwoSeats{}, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, S.Decks{+a, +b, +c}}, +players, +phase, +notes, +grabs}:
+      {==}
+    case S.State{S.World{D.Config{D.ThreeSeats{}, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, S.Decks{+a, +b, +c}}, +players, +phase, +notes, +grabs}:
+      {==}
+    case S.State{S.World{D.Config{D.FourSeats{}, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, S.Decks{+a, +b, +c}}, +players, +phase, +notes, +grabs}:
+      {==}
+
+def removed(+s: S.State, +index: Nat) -> S.State:
+  +world : S.World = S.state.world(s)
+  S.state.set_world(s, S.world.set_deck(world, Q.remove(S.Batch, S.world.deck(world), index)))
+
+def removed.host(+s: S.State, +index: Nat) -> {H.host.set_deck(A.ref_host(s), G.remove(H.Batch, H.host.deck(A.ref_host(s)), index)) == A.ref_host(removed(s, index)) : H.Host}:
+  match s:
+    case S.State{S.World{D.Config{D.TwoSeats{}, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, S.Decks{+a, +b, +c}}, +players, +phase, +notes, +grabs}:
+      Equal.cong(List<&2, H.Batch>, H.Host, d => H.host.set_decks(A.host.at(S.World{D.Config{D.TwoSeats{}, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, S.Decks{a, b, c}}, players, grabs, A.turn.holder(phase)), H.Decks{d, A.batches(b), A.batches(c)}), G.remove(H.Batch, A.batches(a), index), A.batches(Q.remove(S.Batch, a, index)), C.loadproof.batch_remove(a, index))
+    case S.State{S.World{D.Config{D.ThreeSeats{}, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, S.Decks{+a, +b, +c}}, +players, +phase, +notes, +grabs}:
+      Equal.cong(List<&2, H.Batch>, H.Host, d => H.host.set_decks(A.host.at(S.World{D.Config{D.ThreeSeats{}, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, S.Decks{a, b, c}}, players, grabs, A.turn.holder(phase)), H.Decks{A.batches(a), d, A.batches(c)}), G.remove(H.Batch, A.batches(b), index), A.batches(Q.remove(S.Batch, b, index)), C.loadproof.batch_remove(b, index))
+    case S.State{S.World{D.Config{D.FourSeats{}, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, S.Decks{+a, +b, +c}}, +players, +phase, +notes, +grabs}:
+      Equal.cong(List<&2, H.Batch>, H.Host, d => H.host.set_decks(A.host.at(S.World{D.Config{D.FourSeats{}, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, S.Decks{a, b, c}}, players, grabs, A.turn.holder(phase)), H.Decks{A.batches(a), A.batches(b), d}), G.remove(H.Batch, A.batches(c), index), A.batches(Q.remove(S.Batch, c, index)), C.loadproof.batch_remove(c, index))
+
+def sub.one(+r: Nat) -> {G.subtract(1n+r, 1n) == r : Nat}:
+  match r:
+    case 0n:
+      {==}
+    case 1n+q:
+      {==}
+
+def shape.loaded(+s: S.State, +ld: D.Load, +sh: List<&2, D.Shell>, +shape: A.Shape(s)) -> A.Shape(S.state.set_world(s, S.world.set_shown(S.world.set_gun(S.state.world(s), sh), ld))):
+  match s:
+    case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +players, +phase, +notes, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
+      shape
+
+def swap.at(+h: H.Host, +ld: D.Load, +sh: List<&2, D.Shell>, +width: Nat, +n: Nat, +notes: A.Notes()) -> R.RefState:
+  R.RefState{h, R.Await{D.Draw{D.ShuffleSwap{}, D.Range{0n, width}}, D.Loading{}, R.ShuffleSwapResult{ld, sh, n}}, notes}
+
+def shuffle.close(+i: Nat, +s: S.State, +ld: D.Load, +sh: List<&2, D.Shell>, +k: Nat, +shape: A.Shape(s), +quiet: {A.turn.holder(S.state.phase(s)) == None{} : Maybe<&2, D.Seat>}) -> {R.settle(Nat.add(8n, k), R.RefState{A.ref_host(s), R.GenerateRandomSequence{R.Shuffle{ld, sh, i}}, S.state.notes(s)}) == A.ref(M.shuffle(s, ld, sh, i)) : R.RefState}:
+  match i:
+    case 0n:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +players, +phase, +notes, +grabs}:
+          +s5 : S.State = S.state.emit(S.state.set_world(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, S.world.set_shown(S.world.set_gun(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, sh), ld)), D.Loaded{ld})
+          +rank : Nat = Q.jam_rank(players)
+          +fuel : {Nat.add(6n, k) == Nat.add(2n, Nat.add(rank, Nat.add(rank.slack(players), k))) : Nat} = rank.fuel(players, k)
+          +more : {R.settle(Nat.add(6n, k), R.RefState{A.ref_host(s5), R.PassTurn{recipient}, S.state.notes(s5)}) == R.settle(Nat.add(2n, Nat.add(rank, Nat.add(rank.slack(players), k))), R.RefState{A.ref_host(s5), R.PassTurn{recipient}, S.state.notes(s5)}) : R.RefState} = Equal.cong(Nat, R.RefState, n => R.settle(n, R.RefState{A.ref_host(s5), R.PassTurn{recipient}, S.state.notes(s5)}), Nat.add(6n, k), Nat.add(2n, Nat.add(rank, Nat.add(rank.slack(players), k))), fuel)
+          Equal.trans(R.RefState, R.settle(Nat.add(6n, k), R.RefState{A.ref_host(s5), R.PassTurn{recipient}, S.state.notes(s5)}), R.settle(Nat.add(2n, Nat.add(rank, Nat.add(rank.slack(players), k))), R.RefState{A.ref_host(s5), R.PassTurn{recipient}, S.state.notes(s5)}), A.ref(M.grant.step(rank, turned(s5, recipient), recipient, Q.jam.state(players, recipient, Q.value.or(S.Jam, D.ring.get(S.Jam, S.players.jam(players), recipient), S.Free{})))), more, pass.close(rank, Q.value.or(S.Jam, D.ring.get(S.Jam, S.players.jam(players), recipient), S.Free{}), s5, recipient, Nat.add(rank.slack(players), k), ISP.shape.move(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, sh, ld, deck}, players, phase, notes, grabs, phase, List.append(&2, D.Note, notes, [D.Shown{D.Loaded{ld}}]), shape.loaded(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, ld, sh, shape)), quiet, {==}, {==}))
+    case 1n+r:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +players, +phase, +notes, +grabs}:
+          +h0 : H.Host = A.host.at(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, grabs, None{})
+          +waited : {R.settle(Nat.add(7n, k), swap.at(A.ref_host(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}), ld, sh, r, 1n+r, notes)) == swap.at(A.ref_host(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}), ld, sh, r, 1n+r, notes) : R.RefState} = settle.await(Nat.add(7n, k), A.ref_host(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}), D.Draw{D.ShuffleSwap{}, D.Range{0n, r}}, D.Loading{}, R.ShuffleSwapResult{ld, sh, 1n+r}, notes)
+          +held : {swap.at(A.ref_host(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}), ld, sh, r, 1n+r, notes) == swap.at(h0, ld, sh, r, 1n+r, notes) : R.RefState} = Equal.cong(H.Host, R.RefState, h => swap.at(h, ld, sh, r, 1n+r, notes), A.ref_host(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}), h0, quiet.host(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, quiet))
+          +width : {swap.at(h0, ld, sh, r, 1n+r, notes) == swap.at(h0, ld, sh, G.subtract(1n+r, 1n), 1n+r, notes) : R.RefState} = Equal.cong(Nat, R.RefState, w => swap.at(h0, ld, sh, w, 1n+r, notes), r, G.subtract(1n+r, 1n), Equal.sym(Nat, G.subtract(1n+r, 1n), r, sub.one(r)))
+          Equal.trans(R.RefState, R.settle(Nat.add(7n, k), swap.at(A.ref_host(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}), ld, sh, r, 1n+r, notes)), swap.at(A.ref_host(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}), ld, sh, r, 1n+r, notes), swap.at(h0, ld, sh, G.subtract(1n+r, 1n), 1n+r, notes), waited, Equal.trans(R.RefState, swap.at(A.ref_host(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}), ld, sh, r, 1n+r, notes), swap.at(h0, ld, sh, r, 1n+r, notes), swap.at(h0, ld, sh, G.subtract(1n+r, 1n), 1n+r, notes), held, width))
+
+def blocked.close(+s: S.State, +fuel: Nat, +quiet: {A.turn.holder(S.state.phase(s)) == None{} : Maybe<&2, D.Seat>}) -> {R.settle(fuel, R.RefState{A.ref_host(s), R.Await{D.Stuck{}, D.Setup{}, R.PlayerMove{D.Idle{}}}, S.state.notes(s)}) == A.ref(S.state.set_phase(s, S.Blocked{None{}})) : R.RefState}:
+  match s:
+    case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +players, +phase, +notes, +grabs}:
+      +waited : {R.settle(fuel, R.RefState{A.ref_host(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}), R.Await{D.Stuck{}, D.Setup{}, R.PlayerMove{D.Idle{}}}, notes}) == R.RefState{A.ref_host(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}), R.Await{D.Stuck{}, D.Setup{}, R.PlayerMove{D.Idle{}}}, notes} : R.RefState} = settle.await(fuel, A.ref_host(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}), D.Stuck{}, D.Setup{}, R.PlayerMove{D.Idle{}}, notes)
+      Equal.trans(R.RefState, R.settle(fuel, R.RefState{A.ref_host(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}), R.Await{D.Stuck{}, D.Setup{}, R.PlayerMove{D.Idle{}}}, notes}), R.RefState{A.ref_host(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}), R.Await{D.Stuck{}, D.Setup{}, R.PlayerMove{D.Idle{}}}, notes}, A.ref(S.state.set_phase(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, S.Blocked{None{}})), waited, Equal.cong(H.Host, R.RefState, h => R.RefState{h, R.Await{D.Stuck{}, D.Setup{}, R.PlayerMove{D.Idle{}}}, notes}, A.ref_host(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}), A.host.at(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, grabs, None{}), quiet.host(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, quiet)))
+
+def shuffle.ref(+k: Nat, +h: H.Host, +notes: A.Notes(), +ld: D.Load) -> R.RefState:
+  R.settle(Nat.add(8n, k), R.RefState{h, R.GenerateRandomSequence{R.Shuffle{ld, G.load.shells(ld), G.subtract(List.length(&2, D.Shell, G.load.shells(ld)), 1n)}}, notes})
+
+def shuffle.shells(+k: Nat, +h: H.Host, +notes: A.Notes(), +ld: D.Load, +sh: List<&2, D.Shell>) -> R.RefState:
+  R.settle(Nat.add(8n, k), R.RefState{h, R.GenerateRandomSequence{R.Shuffle{ld, sh, G.subtract(List.length(&2, D.Shell, sh), 1n)}}, notes})
+
+def shuffle.width(+k: Nat, +h: H.Host, +notes: A.Notes(), +ld: D.Load, +sh: List<&2, D.Shell>, +w: Nat) -> R.RefState:
+  R.settle(Nat.add(8n, k), R.RefState{h, R.GenerateRandomSequence{R.Shuffle{ld, sh, w}}, notes})
+
+def shape.removed(+s: S.State, +index: Nat, +shape: A.Shape(s)) -> A.Shape(removed(s, index)):
+  match s:
+    case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +players, +phase, +notes, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
+      shape
+
+def batch.found.close(+selected: Maybe<&2, S.Batch>, +s: S.State, +index: Nat, +k: Nat, +shape: A.Shape(s), +quiet: {A.turn.holder(S.state.phase(s)) == None{} : Maybe<&2, D.Seat>}) -> {R.settle(Nat.add(8n, k), R.GenerateRandomSequence.batch(R.RefState{A.ref_host(s), R.GenerateRandomSequence{R.BatchChosen{index}}, S.state.notes(s)}, index, A.found_batch(selected))) == A.ref(M.batch.found(s, index, selected)) : R.RefState}:
+  match selected:
+    case None{}:
+      blocked.close(s, Nat.add(8n, k), quiet)
+    case Some{S.Batch{+id, +sampled}}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +players, +phase, +notes, +grabs}:
+          +h0 : H.Host = A.ref_host(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs})
+          +h2 : H.Host = H.host.set_deck(h0, G.remove(H.Batch, H.host.deck(h0), index))
+          +ld_r : D.Load = G.load.custom(H.host.load_rule(h0), sampled)
+          +ld : D.Load = Q.load.actual(Q.world.load_rule(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}), sampled)
+          +sh : List<&2, D.Shell> = Q.load.shells(ld)
+          +loaded : {shuffle.ref(k, h2, notes, ld_r) == shuffle.ref(k, h2, notes, ld) : R.RefState} = Equal.cong(D.Load, R.RefState, l => shuffle.ref(k, h2, notes, l), ld_r, ld, C.loadproof.actual_world_load(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, sampled))
+          +shelled : {shuffle.ref(k, h2, notes, ld) == shuffle.shells(k, h2, notes, ld, sh) : R.RefState} = Equal.cong(List<&2, D.Shell>, R.RefState, xs => shuffle.shells(k, h2, notes, ld, xs), G.load.shells(ld), sh, C.loadproof.load_shells(ld))
+          +narrowed : {shuffle.shells(k, h2, notes, ld, sh) == shuffle.width(k, h2, notes, ld, sh, Q.predecessor(List.length(&2, D.Shell, sh))) : R.RefState} = Equal.cong(Nat, R.RefState, w => shuffle.width(k, h2, notes, ld, sh, w), G.subtract(List.length(&2, D.Shell, sh), 1n), Q.predecessor(List.length(&2, D.Shell, sh)), C.loadproof.predecessor(List.length(&2, D.Shell, sh)))
+          +hosted : {shuffle.width(k, h2, notes, ld, sh, Q.predecessor(List.length(&2, D.Shell, sh))) == shuffle.width(k, A.ref_host(removed(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, index)), notes, ld, sh, Q.predecessor(List.length(&2, D.Shell, sh))) : R.RefState} = Equal.cong(H.Host, R.RefState, h => shuffle.width(k, h, notes, ld, sh, Q.predecessor(List.length(&2, D.Shell, sh))), h2, A.ref_host(removed(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, index)), removed.host(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, index))
+          +shaped : A.Shape(removed(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, index)) = shape.removed(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, index, shape)
+          +rest : {shuffle.width(k, A.ref_host(removed(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, index)), notes, ld, sh, Q.predecessor(List.length(&2, D.Shell, sh))) == A.ref(M.shuffle(removed(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, index), ld, sh, Q.predecessor(List.length(&2, D.Shell, sh)))) : R.RefState} = shuffle.close(Q.predecessor(List.length(&2, D.Shell, sh)), removed(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, index), ld, sh, k, shaped, quiet)
+          Equal.trans(R.RefState, shuffle.ref(k, h2, notes, ld_r), shuffle.ref(k, h2, notes, ld), A.ref(M.shuffle(removed(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, index), ld, sh, Q.predecessor(List.length(&2, D.Shell, sh)))), loaded, Equal.trans(R.RefState, shuffle.ref(k, h2, notes, ld), shuffle.shells(k, h2, notes, ld, sh), A.ref(M.shuffle(removed(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, index), ld, sh, Q.predecessor(List.length(&2, D.Shell, sh)))), shelled, Equal.trans(R.RefState, shuffle.shells(k, h2, notes, ld, sh), shuffle.width(k, h2, notes, ld, sh, Q.predecessor(List.length(&2, D.Shell, sh))), A.ref(M.shuffle(removed(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, index), ld, sh, Q.predecessor(List.length(&2, D.Shell, sh)))), narrowed, Equal.trans(R.RefState, shuffle.width(k, h2, notes, ld, sh, Q.predecessor(List.length(&2, D.Shell, sh))), shuffle.width(k, A.ref_host(removed(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, index)), notes, ld, sh, Q.predecessor(List.length(&2, D.Shell, sh))), A.ref(M.shuffle(removed(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, index), ld, sh, Q.predecessor(List.length(&2, D.Shell, sh)))), hosted, rest))))
+
+
+def batch.pick(+k: Nat, +s: S.State, +index: Nat, +m: Maybe<&2, H.Batch>) -> R.RefState:
+  R.settle(Nat.add(8n, k), R.GenerateRandomSequence.batch(R.RefState{A.ref_host(s), R.GenerateRandomSequence{R.BatchChosen{index}}, S.state.notes(s)}, index, m))
+
+def batch.close(+s: S.State, +index: Nat, +k: Nat, +shape: A.Shape(s), +quiet: {A.turn.holder(S.state.phase(s)) == None{} : Maybe<&2, D.Seat>}) -> {R.settle(Nat.add(9n, k), R.RefState{A.ref_host(s), R.GenerateRandomSequence{R.BatchChosen{index}}, S.state.notes(s)}) == A.ref(M.batch(s, index)) : R.RefState}:
+  +deck : List<&2, S.Batch> = S.world.deck(S.state.world(s))
+  +read : {G.nth(H.Batch, H.host.deck(A.ref_host(s)), index) == A.found_batch(Q.nth(S.Batch, deck, index)) : Maybe<&2, H.Batch>} = Equal.trans(Maybe<&2, H.Batch>, G.nth(H.Batch, H.host.deck(A.ref_host(s)), index), G.nth(H.Batch, A.batches(deck), index), A.found_batch(Q.nth(S.Batch, deck, index)), Equal.cong(List<&2, H.Batch>, Maybe<&2, H.Batch>, d => G.nth(H.Batch, d, index), H.host.deck(A.ref_host(s)), A.batches(deck), deck.eq(s)), C.loadproof.batch_nth(deck, index))
+  Equal.trans(R.RefState, batch.pick(k, s, index, G.nth(H.Batch, H.host.deck(A.ref_host(s)), index)), batch.pick(k, s, index, A.found_batch(Q.nth(S.Batch, deck, index))), A.ref(M.batch(s, index)), Equal.cong(Maybe<&2, H.Batch>, R.RefState, m => batch.pick(k, s, index, m), G.nth(H.Batch, H.host.deck(A.ref_host(s)), index), A.found_batch(Q.nth(S.Batch, deck, index)), read), batch.found.close(Q.nth(S.Batch, deck, index), s, index, k, shape, quiet))
+
+def batch.at(+h: H.Host, +deck: List<&2, H.Batch>, +notes: A.Notes()) -> R.RefState:
+  R.RefState{h, A.batch.frame(deck), notes}
+
+def batch.host(+h: H.Host, +notes: A.Notes()) -> R.RefState:
+  R.RefState{h, A.batch.frame(H.host.deck(h)), notes}
+
+def ready.close(+cards: List<&2, S.Batch>, +s: S.State, +k: Nat, +shape: A.Shape(s), +quiet: {A.turn.holder(S.state.phase(s)) == None{} : Maybe<&2, D.Seat>}, +e: {H.host.deck(A.ref_host(s)) == A.batches(cards) : List<&2, H.Batch>}) -> {R.settle(Nat.add(9n, k), R.GenerateRandomSequence.request(R.RefState{A.ref_host(s), R.GenerateRandomSequence{R.SelectBatch{}}, S.state.notes(s)}, A.batches(cards))) == A.ref(M.load.ready(s, cards)) : R.RefState}:
+  match cards:
+    case Nil{}:
+      blocked.close(s, Nat.add(9n, k), quiet)
+    case S.Batch{+id, +l} <> Nil{}:
+      batch.close(s, 0n, k, shape, quiet)
+    case S.Batch{+id0, +l0} <> S.Batch{+id1, +l1} <> +rest:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +players, +phase, +notes, +grabs}:
+          +cards_r : List<&2, H.Batch> = A.batches(S.Batch{id0, l0} <> S.Batch{id1, l1} <> rest)
+          +h : H.Host = A.ref_host(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs})
+          +h0 : H.Host = A.host.at(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, grabs, None{})
+          +waited : {R.settle(Nat.add(8n, k), batch.at(h, cards_r, notes)) == batch.at(h, cards_r, notes) : R.RefState} = settle.await(Nat.add(8n, k), h, D.Draw{D.SequenceBatch{}, D.Range{0n, List.length(&2, H.Batch, A.batches(rest))}}, D.Loading{}, R.SequenceBatchResult{}, notes)
+          +decked : {batch.at(h, cards_r, notes) == batch.host(h, notes) : R.RefState} = Equal.cong(List<&2, H.Batch>, R.RefState, d => batch.at(h, d, notes), cards_r, H.host.deck(h), Equal.sym(List<&2, H.Batch>, H.host.deck(h), cards_r, e))
+          +held : {batch.host(h, notes) == batch.host(h0, notes) : R.RefState} = Equal.cong(H.Host, R.RefState, x => batch.host(x, notes), h, h0, quiet.host(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, quiet))
+          Equal.trans(R.RefState, R.settle(Nat.add(8n, k), batch.at(h, cards_r, notes)), batch.at(h, cards_r, notes), batch.host(h0, notes), waited, Equal.trans(R.RefState, batch.at(h, cards_r, notes), batch.host(h, notes), batch.host(h0, notes), decked, held))
+
+def shape.decks(+s: S.State, +d: S.Decks, +shape: A.Shape(s)) -> A.Shape(S.state.set_world(s, S.world.set_decks(S.state.world(s), d))):
+  match s:
+    case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +players, +phase, +notes, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
+      shape
+
+def shape.begin(+s: S.State, +index: Nat, +shape: A.Shape(s)) -> A.Shape(S.state.set_world(s, S.world.set_first_sequence(S.world.set_load_index(S.state.world(s), index), False{}))):
+  match s:
+    case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +players, +phase, +notes, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
+      shape
+
+def refill.at(+k: Nat, +s: S.State, +d: List<&2, H.Batch>) -> R.RefState:
+  R.settle(Nat.add(9n, k), R.GenerateRandomSequence.refill(R.RefState{A.ref_host(s), R.GenerateRandomSequence{R.SelectBatch{}}, S.state.notes(s)}, d))
+
+def ready.ref(+k: Nat, +h: H.Host, +notes: A.Notes()) -> R.RefState:
+  R.settle(Nat.add(9n, k), R.GenerateRandomSequence.request(R.RefState{h, R.GenerateRandomSequence{R.SelectBatch{}}, notes}, H.host.deck(h)))
+
+def ready.deck(+k: Nat, +s: S.State, +d: List<&2, H.Batch>) -> R.RefState:
+  R.settle(Nat.add(9n, k), R.GenerateRandomSequence.request(R.RefState{A.ref_host(s), R.GenerateRandomSequence{R.SelectBatch{}}, S.state.notes(s)}, d))
+
+def refill.close(+cards: List<&2, S.Batch>, +s: S.State, +k: Nat, +shape: A.Shape(s), +quiet: {A.turn.holder(S.state.phase(s)) == None{} : Maybe<&2, D.Seat>}, +e: {H.host.deck(A.ref_host(s)) == A.batches(cards) : List<&2, H.Batch>}) -> {R.settle(Nat.add(10n, k), R.RefState{A.ref_host(s), R.GenerateRandomSequence{R.SelectBatch{}}, S.state.notes(s)}) == A.ref(M.load.refill(s, cards)) : R.RefState}:
+  match cards:
+    case Nil{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +players, +phase, +notes, +grabs}:
+          +read : {refill.at(k, S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, H.host.deck(A.ref_host(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}))) == refill.at(k, S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, Nil{}) : R.RefState} = Equal.cong(List<&2, H.Batch>, R.RefState, d => refill.at(k, S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, d), H.host.deck(A.ref_host(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs})), Nil{}, e)
+          +full : {refill.at(k, S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, Nil{}) == ready.ref(k, A.ref_host(S.state.set_world(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, S.world.set_decks(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.decks.full()))), notes) : R.RefState} = Equal.cong(H.Decks, R.RefState, d => ready.ref(k, H.host.set_decks(A.ref_host(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}), d), notes), H.MakeSequenceCopies(), A.decks(Q.decks.full()), C.loadproof.full_decks())
+          +decked : {ready.ref(k, A.ref_host(S.state.set_world(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, S.world.set_decks(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.decks.full()))), notes) == ready.deck(k, S.state.set_world(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, S.world.set_decks(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.decks.full())), A.batches(S.world.deck(S.world.set_decks(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.decks.full())))) : R.RefState} = Equal.cong(List<&2, H.Batch>, R.RefState, d => ready.deck(k, S.state.set_world(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, S.world.set_decks(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.decks.full())), d), H.host.deck(A.ref_host(S.state.set_world(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, S.world.set_decks(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.decks.full())))), A.batches(S.world.deck(S.world.set_decks(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.decks.full()))), deck.eq(S.state.set_world(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, S.world.set_decks(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.decks.full()))))
+          +rest : {ready.deck(k, S.state.set_world(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, S.world.set_decks(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.decks.full())), A.batches(S.world.deck(S.world.set_decks(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.decks.full())))) == A.ref(M.load.ready(S.state.set_world(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, S.world.set_decks(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.decks.full())), S.world.deck(S.world.set_decks(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.decks.full())))) : R.RefState} = ready.close(S.world.deck(S.world.set_decks(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.decks.full())), S.state.set_world(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, S.world.set_decks(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.decks.full())), k, shape.decks(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, Q.decks.full(), shape), quiet, deck.eq(S.state.set_world(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, S.world.set_decks(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.decks.full()))))
+          Equal.trans(R.RefState, refill.at(k, S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, H.host.deck(A.ref_host(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}))), refill.at(k, S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, Nil{}), A.ref(M.load.ready(S.state.set_world(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, S.world.set_decks(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.decks.full())), S.world.deck(S.world.set_decks(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.decks.full())))), read, Equal.trans(R.RefState, refill.at(k, S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, Nil{}), ready.ref(k, A.ref_host(S.state.set_world(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, S.world.set_decks(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.decks.full()))), notes), A.ref(M.load.ready(S.state.set_world(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, S.world.set_decks(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.decks.full())), S.world.deck(S.world.set_decks(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.decks.full())))), full, Equal.trans(R.RefState, ready.ref(k, A.ref_host(S.state.set_world(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, S.world.set_decks(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.decks.full()))), notes), ready.deck(k, S.state.set_world(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, S.world.set_decks(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.decks.full())), A.batches(S.world.deck(S.world.set_decks(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.decks.full())))), A.ref(M.load.ready(S.state.set_world(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, S.world.set_decks(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.decks.full())), S.world.deck(S.world.set_decks(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.decks.full())))), decked, rest)))
+    case S.Batch{+id, +l} <> +rest:
+      +read : {refill.at(k, s, H.host.deck(A.ref_host(s))) == refill.at(k, s, A.batches(S.Batch{id, l} <> rest)) : R.RefState} = Equal.cong(List<&2, H.Batch>, R.RefState, d => refill.at(k, s, d), H.host.deck(A.ref_host(s)), A.batches(S.Batch{id, l} <> rest), e)
+      Equal.trans(R.RefState, refill.at(k, s, H.host.deck(A.ref_host(s))), refill.at(k, s, A.batches(S.Batch{id, l} <> rest)), A.ref(M.load.ready(s, S.Batch{id, l} <> rest)), read, ready.close(S.Batch{id, l} <> rest, s, k, shape, quiet, e))
+
+def select.at(+k: Nat, +h: H.Host, +notes: A.Notes()) -> R.RefState:
+  R.settle(Nat.add(10n, k), R.RefState{h, R.GenerateRandomSequence{R.SelectBatch{}}, notes})
+
+# L11: the load closure, from MainRoutine_LoadShotgun to the next request.
+def load.close(+s: S.State, +k: Nat, +shape: A.Shape(s), +quiet: {A.turn.holder(S.state.phase(s)) == None{} : Maybe<&2, D.Seat>}) -> {R.settle(Nat.add(11n, k), R.RefState{A.ref_host(s), R.MainRoutine_LoadShotgun{}, S.state.notes(s)}) == A.ref(M.load.begin(s)) : R.RefState}:
+  match s:
+    case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +players, +phase, +notes, +grabs}:
+      +h : H.Host = A.ref_host(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs})
+      +next : {select.at(k, H.host.set_first_sequence(H.host.set_load_index(h, R.IncrementActiveSequenceIndex(first, load)), False{}), notes) == select.at(k, A.ref_host(S.state.set_world(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, S.world.set_first_sequence(S.world.set_load_index(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.load.next(first, load)), False{}))), notes) : R.RefState} = Equal.cong(Nat, R.RefState, n => select.at(k, H.host.set_first_sequence(H.host.set_load_index(h, n), False{}), notes), R.IncrementActiveSequenceIndex(first, load), Q.load.next(first, load), C.loadproof.load_next(first, load))
+      Equal.trans(R.RefState, select.at(k, H.host.set_first_sequence(H.host.set_load_index(h, R.IncrementActiveSequenceIndex(first, load)), False{}), notes), select.at(k, A.ref_host(S.state.set_world(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, S.world.set_first_sequence(S.world.set_load_index(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.load.next(first, load)), False{}))), notes), A.ref(M.load.begin(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs})), next, refill.close(S.world.deck(S.world.set_first_sequence(S.world.set_load_index(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.load.next(first, load)), False{})), S.state.set_world(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, S.world.set_first_sequence(S.world.set_load_index(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.load.next(first, load)), False{})), k, shape.begin(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, Q.load.next(first, load), shape), quiet, deck.eq(S.state.set_world(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, S.world.set_first_sequence(S.world.set_load_index(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, Q.load.next(first, load)), False{})))))
+
+def load.close.ctx(+s: S.State, +ctx: GP.Ctx(s), +k: Nat) -> {A.close(Nat.add(11n, k), s, A.frame_MainRoutine_LoadShotgun()) == A.ref(M.load.begin(s)) : R.RefState}:
+  match ctx:
+    case Tuple{+shape, +quiet}:
+      load.close(s, k, shape, quiet)
+
+def load.closure() -> GP.LoadClosure():
+  +s => +ctx => +k => load.close.ctx(s, ctx, k)
+
+# step_matches at the Grab and NeedItem points, with the load closure and
+# its validity proven above.
+def step.grab(+world: S.World, +players: S.Players, +needs: D.Ring<&2, List<&2, S.GrabOption>>, +notes: A.Notes(), +grabs: S.Grabs, +n: Nat, +valid: A.ValidItems(S.State{world, players, S.Grab{needs}, notes, grabs})) -> A.SimulationItems(S.State{world, players, S.Grab{needs}, notes, grabs}, n):
+  ISP.step.grab(world, players, needs, notes, grabs, n, valid, load.closure(), load.valid())
+
+def step.item(+world: S.World, +players: S.Players, +seat: D.Seat, +first: D.Item, +second: D.Item, +rest: List<&2, D.Item>, +notes: A.Notes(), +grabs: S.Grabs, +n: Nat, +valid: A.ValidItems(S.State{world, players, S.NeedItem{seat, first, second, rest}, notes, grabs})) -> A.SimulationItems(S.State{world, players, S.NeedItem{seat, first, second, rest}, notes, grabs}, n):
+  ISP.step.item(world, players, seat, first, second, rest, notes, grabs, n, valid, load.closure(), load.valid())
