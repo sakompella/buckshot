@@ -25,6 +25,7 @@ ITEM_PROOF = PROOF.with_name("item-step-proof.bend")
 GRAB_PROOF = PROOF.with_name("grab-proof.bend")
 LOAD_PROOF = PROOF.with_name("load-proof.bend")
 TURN_PROOF = PROOF.with_name("turn-proof.bend")
+USE_PROOF = PROOF.with_name("use-proof.bend")
 
 SEATS = ("D.Seat0{}", "D.Seat1{}", "D.Seat2{}", "D.Seat3{}")
 
@@ -494,7 +495,26 @@ TURN_BODIES: dict[str, Callable[[], list[str]]] = {
     "open.eq": ring_split(lambda state: f"open.claim({state}, seat)", RINGS, True, closed, "GP."),
 }
 
-FILES = {PROOF: BODIES, ITEM_PROOF: ITEM_BODIES, GRAB_PROOF: GRAB_BODIES, LOAD_PROOF: LOAD_BODIES, TURN_PROOF: TURN_BODIES}
+SLOTS = tuple(f"D.Slot{k}{{}}" for k in range(8))
+
+
+def slot_split() -> list[str]:
+    """Every slot of a matched inventory, closed by computation."""
+    rows = ["match sl slot:"]
+    for slot in SLOTS:
+        rows += [f"  case D.Slots{{+a, +b, +c, +d, +e, +f, +g, +h}} {slot}:", "    {==}"]
+    return rows
+
+
+USE_BODIES: dict[str, Callable[[], list[str]]] = {
+    "clear.eq": ring_split(lambda state: f"clear.claim({state}, seat)", ("players",), True, closed, "GP."),
+    "keep.eq": ring_split(lambda state: f"keep.claim({state}, seat)", ("players",), True, closed, "GP."),
+    "slots.write": ring_split(lambda state: f"slots.claim({state}, seat, slot, hold)", ("players",), True, closed, "GP."),
+    "heal.eq": ring_split(lambda state: f"heal.claim({state}, seat)", ("players",), True, closed, "GP."),
+    "slot.set.eq": slot_split,
+}
+
+FILES = {PROOF: BODIES, ITEM_PROOF: ITEM_BODIES, GRAB_PROOF: GRAB_BODIES, LOAD_PROOF: LOAD_BODIES, TURN_PROOF: TURN_BODIES, USE_PROOF: USE_BODIES}
 
 
 def body_span(text: str, name: str) -> tuple[int, int]:
