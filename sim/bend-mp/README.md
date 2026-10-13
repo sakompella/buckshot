@@ -170,7 +170,7 @@ Run every gate.
 
     bash sim/bend-mp/check.sh
 
-It takes about 7 minutes on a Mac. It prints one line per gate, then PASS or FAIL, and exits nonzero on any failure. `FUZZ_GAMES` sets the games for each table size in the item fuzz. The gates, in order:
+It takes about 7 to 8 minutes on a Mac, and about 1.5 minutes on a 7-core Linux box. It prints one line per gate, then PASS or FAIL, and exits nonzero on any failure. `FUZZ_GAMES` sets the games for each table size in the item fuzz. The gates, in order:
 
 1. `domain.bend` type-checks and its proofs check.
 2. No `@unsafe` and no unfinished `def name?(` hole anywhere under this directory.
@@ -203,6 +203,18 @@ An optional script, `_work/tools/remote-check.sh`, copies the working tree to a 
 
 The two AIs are ports of the verified two-player dealer policies in `sim/python/dealer_vs_dealer.py`. Story uses fair coins and the dealer's item rules. Double or Nothing, DoN for short, is the story policy plus three upgrades. They are count_flip, deduce and beer_reset. Each AI is one pure function from its prompt, the board, what it heard and its own memory to a move. The driver gives each AI its own random stream.
 
-In 2-seat matches, DoN beats story in both seat orders. DoN wins 72.5% and 71.4% with items, and 78.9% and 79.1% without. These come from the batches in `main.bend`.
+`main.bend` runs 16,384 matches per line. In 2-seat matches DoN beats story in both seat orders:
 
-In the 3- and 4-seat mirrors, where every seat runs the same AI, the later seats win more often. The cause is an open question. It may be the turn order or a bias in the AIs. It has not been checked yet.
+| Items | DoN in seat 1 | DoN in seat 3 |
+|---|---|---|
+| on | 72.5% | 71.4% |
+| off | 78.9% | 79.1% |
+
+In the mirrors, where every seat runs the same AI, the later seats win more often (items on, seats in table order):
+
+| Table | Story | DoN |
+|---|---|---|
+| 3 seats | 28.4 / 33.1 / 38.3 | 29.4 / 33.0 / 37.5 |
+| 4 seats | 19.5 / 23.2 / 26.4 / 30.7 | 19.9 / 23.4 / 27.1 / 29.4 |
+
+The cause is an open question. It may be the turn order or a bias in the AIs. It has not been checked yet.
