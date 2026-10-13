@@ -524,3 +524,72 @@ def step.steal(+world: S.World, +players: S.Players, +actor: D.Seat, +picks: Lis
   %A.valid_items.normal(S.State{world, players, S.StealPick{actor, picks}, notes, grabs}, valid) : A.SimulationItems(_, n)
   ISP.simulation.items(steal.at(world, players, actor, notes, grabs), n, steal.answer(world, players, actor, notes, grabs, n, A.valid_items.shape(steal.at(world, players, actor, notes, grabs), normal), A.valid_items.ready(steal.at(world, players, actor, notes, grabs), normal), win), valid.steal(world, players, actor, notes, grabs, n, normal, winv))
 
+
+# NeedPhone: the burner phone's shell index, then the clue. A gun under four
+# shells has no index to draw (Stuck on both sides).
+
+def phone.at(+w: S.World, +p: S.Players, +seat: D.Seat, +owner: D.Seat, +slot: D.Slot, +n: A.Notes(), +g: S.Grabs) -> S.State:
+  S.State{w, p, S.NeedPhone{seat, owner, slot}, n, g}
+
+
+def phone.answer(+w: S.World, +p: S.Players, +seat: D.Seat, +owner: D.Seat, +slot: D.Slot, +n0: A.Notes(), +g: S.Grabs, +n: Nat, +shape: A.Shape(phone.at(w, p, seat, owner, slot, n0, g)), win: T.WinClosure()) -> {A.ref_answer(A.ref(phone.at(w, p, seat, owner, slot, n0, g)), n) == A.stepped(M.answer(phone.at(w, p, seat, owner, slot, n0, g), n)) : A.RefStep()}:
+  match w:
+    case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, Nil{}, +shown, +deck}:
+      {==}
+    case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +a <> Nil{}, +shown, +deck}:
+      {==}
+    case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +a <> +b <> Nil{}, +shown, +deck}:
+      {==}
+    case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +a <> +b <> +c <> Nil{}, +shown, +deck}:
+      {==}
+    case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +a <> +b <> +c <> +d <> +rest, +shown, +deck}:
+      +st : S.State = phone.at(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, a <> b <> c <> d <> rest, shown, deck}, p, seat, owner, slot, Nil{}, g)
+      U.stepped.ref.local(R.settle(96n, R.RefState{U.hh(st, seat), R._GetBurnerPhone_Shell{U.item.packet(seat, owner, slot, D.Phone{}, False{}, None{}), D.draw.value(D.Range{2n, List.length(&2, D.Shell, rest)}, n)}, Nil{}}), M.item.clue(st, seat, owner, slot, D.draw.value(D.Range{2n, List.length(&2, D.Shell, rest)}, n)), U.clue.close(st, seat, owner, slot, D.draw.value(D.Range{2n, List.length(&2, D.Shell, rest)}, n), 65n, ISP.shape.move(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, a <> b <> c <> d <> rest, shown, deck}, p, S.NeedPhone{seat, owner, slot}, n0, g, S.NeedPhone{seat, owner, slot}, Nil{}, shape), win))
+
+
+def valid.phone(+w: S.World, +p: S.Players, +seat: D.Seat, +owner: D.Seat, +slot: D.Slot, +n0: A.Notes(), +g: S.Grabs, +n: Nat, +valid: A.ValidItems(phone.at(w, p, seat, owner, slot, n0, g)), winv: T.WinValid()) -> A.ValidItems(A.next(phone.at(w, p, seat, owner, slot, n0, g), n)):
+  match w:
+    case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, Nil{}, +shown, +deck}:
+      valid
+    case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +a <> Nil{}, +shown, +deck}:
+      valid
+    case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +a <> +b <> Nil{}, +shown, +deck}:
+      valid
+    case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +a <> +b <> +c <> Nil{}, +shown, +deck}:
+      valid
+    case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +a <> +b <> +c <> +d <> +rest, +shown, +deck}:
+      match valid:
+        case Tuple{+normal, Tuple{+shape, Tuple{+bounded, +ready}}}:
+          +st : S.State = phone.at(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, a <> b <> c <> d <> rest, shown, deck}, p, seat, owner, slot, Nil{}, g)
+          U.valid.clue(st, seat, owner, slot, D.draw.value(D.Range{2n, List.length(&2, D.Shell, rest)}, n), (ISP.shape.move(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, a <> b <> c <> d <> rest, shown, deck}, p, S.NeedPhone{seat, owner, slot}, n0, g, S.NeedPhone{seat, owner, slot}, Nil{}, shape), bounded), ready, winv)
+
+# step_matches at NeedPhone with items, given the win's closure and validity.
+def step.phone(+world: S.World, +players: S.Players, +actor: D.Seat, +owner: D.Seat, +slot: D.Slot, +notes: A.Notes(), +grabs: S.Grabs, +n: Nat, +valid: A.ValidItems(S.State{world, players, S.NeedPhone{actor, owner, slot}, notes, grabs}), win: T.WinClosure(), winv: T.WinValid()) -> A.SimulationItems(S.State{world, players, S.NeedPhone{actor, owner, slot}, notes, grabs}, n):
+  ISP.simulation.items(phone.at(world, players, actor, owner, slot, notes, grabs), n, phone.answer(world, players, actor, owner, slot, notes, grabs, n, A.valid_items.shape(phone.at(world, players, actor, owner, slot, notes, grabs), valid), win), valid.phone(world, players, actor, owner, slot, notes, grabs, n, valid, winv))
+
+
+# NeedTurnAmount: the item amount for the grab round that ends a turn, then
+# the turn end (MainRoutine_UserEndTurn).
+
+def amount.at(+w: S.World, +p: S.Players, +from: D.Seat, +passing: Bool, +winner: Maybe<&2, D.Seat>, +n: A.Notes(), +g: S.Grabs) -> S.State:
+  S.State{w, p, S.NeedTurnAmount{from, passing, winner}, n, g}
+
+
+def amount.answer(+w: S.World, +p: S.Players, +from: D.Seat, +passing: Bool, +winner: Maybe<&2, D.Seat>, +n0: A.Notes(), +g: S.Grabs, +n: Nat, +shape: A.Shape(amount.at(w, p, from, passing, winner, n0, g)), win: T.WinClosure()) -> {A.ref_answer(A.ref(amount.at(w, p, from, passing, winner, n0, g)), n) == A.stepped(M.answer(amount.at(w, p, from, passing, winner, n0, g), n)) : A.RefStep()}:
+  match w:
+    case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}:
+      +s2 : S.State = S.state.set_world(amount.at(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, from, passing, winner, Nil{}, g), S.world.set_item_amount(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, D.draw.value(D.table.amount_range(table), n)))
+      U.stepped.ref.local(R.settle(96n, R.RefState{T.qh(s2), R.MainRoutine_UserEndTurn{T.end.packet(s2, from, passing, winner)}, Nil{}}), M.turn.winner(s2, from, passing, winner), T.main.close(winner, s2, from, passing, 72n, AP.shape.world(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, S.world.set_item_amount(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, D.draw.value(D.table.amount_range(table), n)), p, S.NeedTurnAmount{from, passing, winner}, Nil{}, g, {==}, ISP.shape.move(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, S.NeedTurnAmount{from, passing, winner}, n0, g, S.NeedTurnAmount{from, passing, winner}, Nil{}, shape)), win))
+
+
+def valid.amount(+w: S.World, +p: S.Players, +from: D.Seat, +passing: Bool, +winner: Maybe<&2, D.Seat>, +n0: A.Notes(), +g: S.Grabs, +n: Nat, +valid: A.ValidItems(amount.at(w, p, from, passing, winner, n0, g)), winv: T.WinValid()) -> A.ValidItems(A.next(amount.at(w, p, from, passing, winner, n0, g), n)):
+  match w:
+    case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}:
+      match valid:
+        case Tuple{+normal, Tuple{+shape, Tuple{+bounded, +ready}}}:
+          T.valid.main(winner, S.state.set_world(amount.at(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, from, passing, winner, Nil{}, g), S.world.set_item_amount(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, D.draw.value(D.table.amount_range(table), n))), from, passing, (AP.shape.world(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, S.world.set_item_amount(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, D.draw.value(D.table.amount_range(table), n)), p, S.NeedTurnAmount{from, passing, winner}, Nil{}, g, {==}, ISP.shape.move(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, S.NeedTurnAmount{from, passing, winner}, n0, g, S.NeedTurnAmount{from, passing, winner}, Nil{}, shape)), bounded), winv)
+
+# step_matches at NeedTurnAmount with items, given the win's closure and validity.
+def step.amount(+world: S.World, +players: S.Players, +from: D.Seat, +passing: Bool, +winner: Maybe<&2, D.Seat>, +notes: A.Notes(), +grabs: S.Grabs, +n: Nat, +valid: A.ValidItems(S.State{world, players, S.NeedTurnAmount{from, passing, winner}, notes, grabs}), win: T.WinClosure(), winv: T.WinValid()) -> A.SimulationItems(S.State{world, players, S.NeedTurnAmount{from, passing, winner}, notes, grabs}, n):
+  ISP.simulation.items(amount.at(world, players, from, passing, winner, notes, grabs), n, amount.answer(world, players, from, passing, winner, notes, grabs, n, A.valid_items.shape(amount.at(world, players, from, passing, winner, notes, grabs), valid), win), valid.amount(world, players, from, passing, winner, notes, grabs, n, valid, winv))
+
