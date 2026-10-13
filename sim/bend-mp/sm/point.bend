@@ -97,7 +97,7 @@ def field.or(-A: Data, value: Maybe<&2, A>, fallback: A) -> A:
 
 def seat.view(+players: S.Players, +grabs: S.Grabs, +seat: D.Seat) -> D.SeatView:
   hp : Nat = field.or(Nat, D.ring.get(Nat, S.players.health(players), seat), 100n)
-  jam : Bool = field.or(Bool, D.ring.get(Bool, S.players.jammed(players), seat), False{})
+  jam : Bool = S.jam.jammed(field.or(S.Jam, D.ring.get(S.Jam, S.players.jam(players), seat), S.Free{}))
   slots : D.Slots = field.or(D.Slots, D.ring.get(D.Slots, S.players.slots(players), seat), D.slots.empty())
   cash : U32 = field.or(U32, D.ring.get(U32, S.players.cash(players), seat), 0)
   D.SeatView{D.counter.of(jam, hp), slots, cash, I.briefcase(I.seat.grabbing(grabs, seat), I.seat.holding(grabs, seat))}

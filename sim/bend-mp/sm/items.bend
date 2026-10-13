@@ -101,7 +101,7 @@ def seat.slots(+players: S.Players, seat: D.Seat) -> D.Slots:
   G.value.or(D.Slots, D.ring.get(D.Slots, S.players.slots(players), seat), D.slots.empty())
 
 def seat.jammed(+players: S.Players, seat: D.Seat) -> Bool:
-  G.value.or(Bool, D.ring.get(Bool, S.players.jammed(players), seat), False{})
+  S.jam.jammed(G.value.or(S.Jam, D.ring.get(S.Jam, S.players.jam(players), seat), S.Free{}))
 
 def seat.grabbing(+grabs: S.Grabs, seat: D.Seat) -> Bool:
   G.value.or(Bool, D.ring.get(Bool, S.grabs.grabbing(grabs), seat), False{})

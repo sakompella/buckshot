@@ -12,52 +12,53 @@ import ./primitive.bend as P
 import ./ref/items.bend as RI
 
 type CoreSeat is Data:
-  CoreSeat{health: Nat, jammed: Bool, checked: Bool, cash: U32, slots: D.Slots}
+  CoreSeat{health: Nat, jam: S.Jam, cash: U32, slots: D.Slots}
 
 def seats.health(seats: D.Ring<&2, CoreSeat>) -> D.Ring<&2, Nat>:
   match seats:
-    case D.Duo{CoreSeat{a, _, _, _, _}, CoreSeat{b, _, _, _, _}}:
+    case D.Duo{CoreSeat{a, _, _, _}, CoreSeat{b, _, _, _}}:
       D.Duo{a, b}
-    case D.Trio{CoreSeat{a, _, _, _, _}, CoreSeat{b, _, _, _, _}, CoreSeat{c, _, _, _, _}}:
+    case D.Trio{CoreSeat{a, _, _, _}, CoreSeat{b, _, _, _}, CoreSeat{c, _, _, _}}:
       D.Trio{a, b, c}
-    case D.Quad{CoreSeat{a, _, _, _, _}, CoreSeat{b, _, _, _, _}, CoreSeat{c, _, _, _, _}, CoreSeat{d, _, _, _, _}}:
+    case D.Quad{CoreSeat{a, _, _, _}, CoreSeat{b, _, _, _}, CoreSeat{c, _, _, _}, CoreSeat{d, _, _, _}}:
       D.Quad{a, b, c, d}
 
-def seats.jammed(seats: D.Ring<&2, CoreSeat>) -> D.Ring<&2, Bool>:
+def seats.jam(seats: D.Ring<&2, CoreSeat>) -> D.Ring<&2, S.Jam>:
   match seats:
-    case D.Duo{CoreSeat{_, a, _, _, _}, CoreSeat{_, b, _, _, _}}:
+    case D.Duo{CoreSeat{_, a, _, _}, CoreSeat{_, b, _, _}}:
       D.Duo{a, b}
-    case D.Trio{CoreSeat{_, a, _, _, _}, CoreSeat{_, b, _, _, _}, CoreSeat{_, c, _, _, _}}:
+    case D.Trio{CoreSeat{_, a, _, _}, CoreSeat{_, b, _, _}, CoreSeat{_, c, _, _}}:
       D.Trio{a, b, c}
-    case D.Quad{CoreSeat{_, a, _, _, _}, CoreSeat{_, b, _, _, _}, CoreSeat{_, c, _, _, _}, CoreSeat{_, d, _, _, _}}:
-      D.Quad{a, b, c, d}
-
-def seats.checked(seats: D.Ring<&2, CoreSeat>) -> D.Ring<&2, Bool>:
-  match seats:
-    case D.Duo{CoreSeat{_, _, a, _, _}, CoreSeat{_, _, b, _, _}}:
-      D.Duo{a, b}
-    case D.Trio{CoreSeat{_, _, a, _, _}, CoreSeat{_, _, b, _, _}, CoreSeat{_, _, c, _, _}}:
-      D.Trio{a, b, c}
-    case D.Quad{CoreSeat{_, _, a, _, _}, CoreSeat{_, _, b, _, _}, CoreSeat{_, _, c, _, _}, CoreSeat{_, _, d, _, _}}:
+    case D.Quad{CoreSeat{_, a, _, _}, CoreSeat{_, b, _, _}, CoreSeat{_, c, _, _}, CoreSeat{_, d, _, _}}:
       D.Quad{a, b, c, d}
 
 def seats.cash(seats: D.Ring<&2, CoreSeat>) -> D.Ring<&2, U32>:
   match seats:
-    case D.Duo{CoreSeat{_, _, _, a, _}, CoreSeat{_, _, _, b, _}}:
+    case D.Duo{CoreSeat{_, _, a, _}, CoreSeat{_, _, b, _}}:
       D.Duo{a, b}
-    case D.Trio{CoreSeat{_, _, _, a, _}, CoreSeat{_, _, _, b, _}, CoreSeat{_, _, _, c, _}}:
+    case D.Trio{CoreSeat{_, _, a, _}, CoreSeat{_, _, b, _}, CoreSeat{_, _, c, _}}:
       D.Trio{a, b, c}
-    case D.Quad{CoreSeat{_, _, _, a, _}, CoreSeat{_, _, _, b, _}, CoreSeat{_, _, _, c, _}, CoreSeat{_, _, _, d, _}}:
+    case D.Quad{CoreSeat{_, _, a, _}, CoreSeat{_, _, b, _}, CoreSeat{_, _, c, _}, CoreSeat{_, _, d, _}}:
       D.Quad{a, b, c, d}
 
 def seats.slots(seats: D.Ring<&2, CoreSeat>) -> D.Ring<&2, D.Slots>:
   match seats:
-    case D.Duo{CoreSeat{_, _, _, _, a}, CoreSeat{_, _, _, _, b}}:
+    case D.Duo{CoreSeat{_, _, _, a}, CoreSeat{_, _, _, b}}:
       D.Duo{a, b}
-    case D.Trio{CoreSeat{_, _, _, _, a}, CoreSeat{_, _, _, _, b}, CoreSeat{_, _, _, _, c}}:
+    case D.Trio{CoreSeat{_, _, _, a}, CoreSeat{_, _, _, b}, CoreSeat{_, _, _, c}}:
       D.Trio{a, b, c}
-    case D.Quad{CoreSeat{_, _, _, _, a}, CoreSeat{_, _, _, _, b}, CoreSeat{_, _, _, _, c}, CoreSeat{_, _, _, _, d}}:
+    case D.Quad{CoreSeat{_, _, _, a}, CoreSeat{_, _, _, b}, CoreSeat{_, _, _, c}, CoreSeat{_, _, _, d}}:
       D.Quad{a, b, c, d}
+
+# The no-item scope's jam ring: no seat is jammed.
+def seats.no_jams(seats: D.Ring<&2, CoreSeat>) -> D.Ring<&2, S.Jam>:
+  match seats:
+    case D.Duo{_, _}:
+      D.Duo{S.Free{}, S.Free{}}
+    case D.Trio{_, _, _}:
+      D.Trio{S.Free{}, S.Free{}, S.Free{}}
+    case D.Quad{_, _, _, _}:
+      D.Quad{S.Free{}, S.Free{}, S.Free{}, S.Free{}}
 
 # The no-item scope's slot ring: every seat's inventory is empty.
 def seats.no_slots(seats: D.Ring<&2, CoreSeat>) -> D.Ring<&2, D.Slots>:
@@ -70,17 +71,32 @@ def seats.no_slots(seats: D.Ring<&2, CoreSeat>) -> D.Ring<&2, D.Slots>:
       D.Quad{D.slots.empty(), D.slots.empty(), D.slots.empty(), D.slots.empty()}
 
 def players(+seats: D.Ring<&2, CoreSeat>) -> S.Players:
-  S.Players{seats.health(seats), seats.jammed(seats), seats.checked(seats), seats.cash(seats), seats.slots(seats)}
+  S.Players{seats.health(seats), seats.jam(seats), seats.cash(seats), seats.slots(seats)}
 
-# The no-item scope's Players: the seats' slots are replaced by empty ones.
+# The no-item scope's Players: no seat is jammed (only an item jams) and every
+# inventory is empty, whatever the seats say.
 def players.free(+seats: D.Ring<&2, CoreSeat>) -> S.Players:
-  S.Players{seats.health(seats), seats.jammed(seats), seats.checked(seats), seats.cash(seats), seats.no_slots(seats)}
+  S.Players{seats.health(seats), seats.no_jams(seats), seats.cash(seats), seats.no_slots(seats)}
 
-# Host props of one seat in the no-item scope: empty slots, not grabbing.
+# The seats' jams with empty inventories: the jam_skip_once law's scope.
+def players.jams(+seats: D.Ring<&2, CoreSeat>) -> S.Players:
+  S.Players{seats.health(seats), seats.jam(seats), seats.cash(seats), seats.no_slots(seats)}
+
+# The reference's (is_jammed, jammer_checked) pair of a jam. Free reads as
+# (False, False); a lift leaves Godot's jammer_checked set, which
+# grant.pass_case restores where the reference keeps it.
+def jam.checked(jam: S.Jam) -> Bool:
+  match jam:
+    case S.JammedSkipped{}:
+      True{}
+    case _:
+      False{}
+
+# Host props of one seat in the no-item scope: unjammed, empty slots, not grabbing.
 def seat.props(seat: CoreSeat) -> H.Props:
   match seat:
-    case CoreSeat{hp, jam, checked, cash, sl}:
-      H.Props{hp, jam, checked, cash, D.slots.empty(), False{}, None{}, False{}}
+    case CoreSeat{hp, _, cash, sl}:
+      H.Props{hp, False{}, False{}, cash, D.slots.empty(), False{}, None{}, False{}}
 
 # The reference's per-seat has_turn, derived from the phase: only the seat a
 # Playing request waits on holds it (Godot clears it on a shot and when an
@@ -114,8 +130,8 @@ def turn.held(holder: Maybe<&2, D.Seat>, at: D.Seat) -> Bool:
 # whether it holds the turn.
 def seat.props.at(seat: CoreSeat, +grabs: S.Grabs, +holder: Maybe<&2, D.Seat>, +at: D.Seat) -> H.Props:
   match seat:
-    case CoreSeat{hp, jam, checked, cash, slots}:
-      H.Props{hp, jam, checked, cash, slots, I.seat.grabbing(grabs, at), I.seat.holding(grabs, at), turn.held(holder, at)}
+    case CoreSeat{hp, +jam, cash, slots}:
+      H.Props{hp, S.jam.jammed(jam), jam.checked(jam), cash, slots, I.seat.grabbing(grabs, at), I.seat.holding(grabs, at), turn.held(holder, at)}
 
 def props.at(seats: D.Ring<&2, CoreSeat>, +grabs: S.Grabs, +holder: Maybe<&2, D.Seat>) -> D.Ring<&2, H.Props>:
   match seats:
@@ -147,7 +163,7 @@ def value.or(-A: Data, found: Maybe<&2, A>, fallback: A) -> A:
       fallback
 
 def core.at(+players: S.Players, +seat: D.Seat, hp: Nat) -> CoreSeat:
-  CoreSeat{hp, value.or(Bool, D.ring.get(Bool, S.players.jammed(players), seat), False{}), value.or(Bool, D.ring.get(Bool, S.players.checked(players), seat), False{}), value.or(U32, D.ring.get(U32, S.players.cash(players), seat), 0), value.or(D.Slots, D.ring.get(D.Slots, S.players.slots(players), seat), D.slots.empty())}
+  CoreSeat{hp, value.or(S.Jam, D.ring.get(S.Jam, S.players.jam(players), seat), S.Free{}), value.or(U32, D.ring.get(U32, S.players.cash(players), seat), 0), value.or(D.Slots, D.ring.get(D.Slots, S.players.slots(players), seat), D.slots.empty())}
 
 def core.health(health: D.Ring<&2, Nat>, +players: S.Players) -> D.Ring<&2, CoreSeat>:
   match health:
@@ -356,7 +372,7 @@ def health_entries(entries: List<&2, D.At<&2, CoreSeat>>) -> List<&2, D.At<&2, N
   match entries:
     case Nil{}:
       Nil{}
-    case D.At{seat, CoreSeat{hp, _, _, _, sl}} <> rest:
+    case D.At{seat, CoreSeat{hp, _, _, sl}} <> rest:
       D.At{seat, hp} <> health_entries(rest)
 
 def props_entries(entries: List<&2, D.At<&2, CoreSeat>>) -> List<&2, D.At<&2, H.Props>>:
@@ -374,8 +390,8 @@ def props_entries.held(entries: List<&2, D.At<&2, CoreSeat>>, +holder: Maybe<&2,
   match entries:
     case Nil{}:
       Nil{}
-    case D.At{+seat, CoreSeat{hp, jam, checked, cash, sl}} <> rest:
-      D.At{seat, H.Props{hp, jam, checked, cash, D.slots.empty(), False{}, None{}, turn.held(holder, seat)}} <> props_entries.held(rest, holder)
+    case D.At{+seat, CoreSeat{hp, +jam, cash, sl}} <> rest:
+      D.At{seat, H.Props{hp, S.jam.jammed(jam), jam.checked(jam), cash, D.slots.empty(), False{}, None{}, turn.held(holder, seat)}} <> props_entries.held(rest, holder)
 
 def ref_shots_entries(entries: List<&2, D.At<&2, CoreSeat>>, holder: Maybe<&2, D.Seat>) -> List<&2, D.Move>:
   R.shot_moves(G.living(props_entries.held(entries, holder)))
@@ -467,8 +483,8 @@ def ref_phase_stage(+world: S.World, +seats: D.Ring<&2, CoreSeat>, phase: S.Phas
 
 def seat.view(seat: CoreSeat) -> D.SeatView:
   match seat:
-    case CoreSeat{hp, jam, _, cash, sl}:
-      D.SeatView{D.counter.of(jam, hp), D.slots.empty(), cash, D.NotGrabbing{}}
+    case CoreSeat{hp, jam, cash, sl}:
+      D.SeatView{D.counter.of(False{}, hp), D.slots.empty(), cash, D.NotGrabbing{}}
 
 def seat.views(seats: D.Ring<&2, CoreSeat>) -> D.Ring<&2, D.SeatView>:
   match seats:
@@ -738,10 +754,19 @@ def back.world(h: H.Host) -> S.World:
     case H.Host{config, before, round, index, first, hp, recipient, turn, direction, died, checking, amount, _, saw, gun, shown, deck, _, _}:
       S.World{config, before, round, index, first, hp, recipient, turn, direction, died, checking, amount, saw, gun, shown, back.decks(deck)}
 
+def back.jam(jammed: Bool, checked: Bool) -> S.Jam:
+  match jammed checked:
+    case False{} _:
+      S.Free{}
+    case True{} False{}:
+      S.Jammed{}
+    case True{} True{}:
+      S.JammedSkipped{}
+
 def back.props(seat: H.Props) -> CoreSeat:
   match seat:
-    case H.Props{hp, jam, checked, cash, slots, _, _, turn}:
-      CoreSeat{hp, jam, checked, cash, slots}
+    case H.Props{hp, jammed, checked, cash, slots, _, _, _}:
+      CoreSeat{hp, back.jam(jammed, checked), cash, slots}
 
 def back.seats(seats: D.Ring<&2, H.Props>) -> D.Ring<&2, CoreSeat>:
   match seats:
@@ -1043,40 +1068,44 @@ def ref_start(config: D.Config) -> D.Stepped<&2, R.RefState>:
 
 
 
+# The jam_skip_once law's view of a grant: the machine's jam step (Q.jam) on
+# the seats' jams, read back as seats.
 type GrantCase is Data:
   GrantAct{seats: D.Ring<&2, CoreSeat>}
   GrantLift{seats: D.Ring<&2, CoreSeat>}
   GrantSkip{seats: D.Ring<&2, CoreSeat>}
 
-def grant.jam_at(+seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, props: CoreSeat) -> GrantCase:
-  match props:
-    case CoreSeat{hp, False{}, checked, cash, sl}:
-      GrantAct{seats}
-    case CoreSeat{hp, True{}, False{}, cash, sl}:
-      GrantSkip{D.ring.set(CoreSeat, seats, seat, CoreSeat{hp, True{}, True{}, cash, sl})}
-    case CoreSeat{hp, True{}, True{}, cash, sl}:
-      GrantLift{D.ring.set(CoreSeat, seats, seat, CoreSeat{hp, False{}, True{}, cash, sl})}
+def grant.case(result: S.JamResult) -> GrantCase:
+  match result:
+    case S.Act{players}:
+      GrantAct{core(players)}
+    case S.Lift{players}:
+      GrantLift{core(players)}
+    case S.Skip{players}:
+      GrantSkip{core(players)}
 
 def grant.jam(+seats: D.Ring<&2, CoreSeat>, +seat: D.Seat) -> GrantCase:
-  grant.jam_at(seats, seat, value.or(CoreSeat, D.ring.get(CoreSeat, seats, seat), CoreSeat{100n, False{}, False{}, 0, D.slots.empty()}))
+  grant.case(Q.jam(players.jams(seats), seat))
 
-def grant.players(result: GrantCase) -> S.JamResult:
-  match result:
-    case GrantAct{seats}:
-      S.Act{players.free(seats)}
-    case GrantLift{seats}:
-      S.Lift{players.free(seats)}
-    case GrantSkip{seats}:
-      S.Skip{players.free(seats)}
+# The reference Host of seats with their jams and empty inventories.
+def host.jams(world: S.World, +seats: D.Ring<&2, CoreSeat>) -> H.Host:
+  host.at(world, core(players.jams(seats)), grabs(seats), None{})
 
-def grant.rank(seats: D.Ring<&2, CoreSeat>) -> Nat:
-  Q.jam_rank(players.free(seats))
+def grant.pass(world: S.World, +seats: D.Ring<&2, CoreSeat>, seat: D.Seat, notes: List<&2, D.Note>) -> R.RefState:
+  R.RefState{host.jams(world, seats), R.PassTurn{seat}, notes}
 
-def grant.pass(world: S.World, seats: D.Ring<&2, CoreSeat>, seat: D.Seat, notes: List<&2, D.Note>) -> R.RefState:
-  R.RefState{host(world, seats), R.PassTurn{seat}, notes}
+def grant.give.jams(world: S.World, +seats: D.Ring<&2, CoreSeat>, seat: D.Seat, notes: List<&2, D.Note>) -> R.RefState:
+  R.RefState{host.jams(world, seats), R.GiveTurnPermissions{seat}, notes}
 
-def grant.give(world: S.World, seats: D.Ring<&2, CoreSeat>, seat: D.Seat, notes: List<&2, D.Note>) -> R.RefState:
-  R.RefState{host(world, seats), R.GiveTurnPermissions{seat}, notes}
+# A lift leaves Godot's jammer_checked set on the Free seat.
+def grant.lifted(props: H.Props) -> H.Props:
+  match props:
+    case H.Props{hp, _, _, cash, slots, grab, holding, turn}:
+      H.Props{hp, False{}, True{}, cash, slots, grab, holding, turn}
+
+def grant.give.lifted(world: S.World, +seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, notes: List<&2, D.Note>) -> R.RefState:
+  +h : H.Host = host.jams(world, seats)
+  R.RefState{H.host.set_props(h, seat, grant.lifted(H.host.props(h, seat))), R.GiveTurnPermissions{seat}, notes}
 
 def grant.dispatch(state: R.RefState) -> R.RefState:
   R.dispatch(state)
@@ -1087,97 +1116,39 @@ def grant.settle(fuel: Nat, state: R.RefState) -> R.RefState:
 def grant.pass_case(+world: S.World, result: GrantCase, +seat: D.Seat, notes: List<&2, D.Note>) -> R.RefState:
   match result:
     case GrantAct{seats}:
-      grant.give(S.world.set_turn(world, Some{seat}), seats, seat, notes)
+      grant.give.jams(S.world.set_turn(world, Some{seat}), seats, seat, notes)
     case GrantLift{seats}:
-      grant.give(S.world.set_turn(world, Some{seat}), seats, seat, List.append(&2, D.Note, notes, [D.Shown{D.JamLifted{seat}}]))
+      grant.give.lifted(S.world.set_turn(world, Some{seat}), seats, seat, List.append(&2, D.Note, notes, [D.Shown{D.JamLifted{seat}}]))
     case GrantSkip{+seats}:
       +turned : S.World = S.world.set_turn(world, Some{seat})
-      grant.pass(turned, seats, ref_turn(turned, seats, seat), List.append(&2, D.Note, notes, [D.Shown{D.TurnSkipped{seat}}]))
-
-def grant.machine(rank: Nat, world: S.World, seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>, seat: D.Seat) -> S.State:
-  M.grant.bound(rank, pack(world, seats, phase, notes), seat)
-
-def grant.machine_case(rank: Nat, world: S.World, seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>, +seat: D.Seat, result: GrantCase) -> S.State:
-  M.grant.step(rank, pack(S.world.set_turn(world, Some{seat}), seats, phase, notes), seat, grant.players(result))
-
-def grant.given(world: S.World, seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>, seat: D.Seat) -> S.State:
-  M.give_turn(pack(world, seats, phase, notes), seat)
-
-
-def grant.sum(prefix: List<&2, Nat>, tail: Nat) -> Nat:
-  match prefix:
-    case Nil{}:
-      tail
-    case x <> rest:
-      Nat.add(x, grant.sum(rest, tail))
-
-def grant.rank_claim(+seats: D.Ring<&2, CoreSeat>, result: GrantCase) -> Data:
-  match result:
-    case GrantSkip{after}:
-      {grant.rank(seats) == 1n+grant.rank(after) : Nat}
-    case _:
-      Unit
-
+      grant.pass(turned, seats, G.GetNextTurn_Socket(host.jams(turned, seats), seat), List.append(&2, D.Note, notes, [D.Shown{D.TurnSkipped{seat}}]))
 
 def grant.clear_at(+seats: D.Ring<&2, CoreSeat>, seat: D.Seat, props: CoreSeat) -> D.Ring<&2, CoreSeat>:
   match props:
-    case CoreSeat{hp, _, checked, cash, sl}:
-      D.ring.set(CoreSeat, seats, seat, CoreSeat{hp, False{}, checked, cash, sl})
+    case CoreSeat{hp, _, cash, sl}:
+      D.ring.set(CoreSeat, seats, seat, CoreSeat{hp, S.Free{}, cash, sl})
 
 def grant.clear(+seats: D.Ring<&2, CoreSeat>, +seat: D.Seat) -> D.Ring<&2, CoreSeat>:
-  grant.clear_at(seats, seat, value.or(CoreSeat, D.ring.get(CoreSeat, seats, seat), CoreSeat{100n, False{}, False{}, 0, D.slots.empty()}))
+  grant.clear_at(seats, seat, value.or(CoreSeat, D.ring.get(CoreSeat, seats, seat), CoreSeat{100n, S.Free{}, 0, D.slots.empty()}))
 
 def grant.once_claim(result: GrantCase, +seat: D.Seat) -> Type:
   match result:
     case GrantSkip{+after}:
-      {D.ring.get(Bool, seats.checked(after), seat) == Some{True{}} : Maybe<&2, Bool>} & {D.ring.get(Bool, seats.jammed(after), seat) == Some{True{}} : Maybe<&2, Bool>} & {grant.jam(after, seat) == GrantLift{grant.clear(after, seat)} : GrantCase} & {grant.jam(grant.clear(after, seat), seat) == GrantAct{grant.clear(after, seat)} : GrantCase}
+      {D.ring.get(S.Jam, seats.jam(after), seat) == Some{S.JammedSkipped{}} : Maybe<&2, S.Jam>} & {grant.jam(after, seat) == GrantLift{grant.clear(after, seat)} : GrantCase} & {grant.jam(grant.clear(after, seat), seat) == GrantAct{grant.clear(after, seat)} : GrantCase}
     case GrantLift{+after}:
-      {D.ring.get(Bool, seats.checked(after), seat) == Some{True{}} : Maybe<&2, Bool>} & {D.ring.get(Bool, seats.jammed(after), seat) == Some{False{}} : Maybe<&2, Bool>} & {grant.jam(after, seat) == GrantAct{after} : GrantCase}
+      {D.ring.get(S.Jam, seats.jam(after), seat) == Some{S.Free{}} : Maybe<&2, S.Jam>} & {grant.jam(after, seat) == GrantAct{after} : GrantCase}
     case GrantAct{_}:
       Unit
 
+# No-item scope: every seat is Free, so a grant gives the turn at once.
+def grant.pass.free(world: S.World, +seats: D.Ring<&2, CoreSeat>, seat: D.Seat, notes: List<&2, D.Note>) -> R.RefState:
+  R.RefState{host(world, seats), R.PassTurn{seat}, notes}
 
-def grant.Hypothesis(+rank: Nat) -> Type:
-  @+world:S.World -> @+seats:D.Ring<&2, CoreSeat> -> @+seat:D.Seat -> @+phase:S.Phase -> @+notes:List<&2, D.Note> -> @+extra:Nat -> @budget:{rank == grant.rank(seats) : Nat} -> {grant.settle(2n+Nat.add(rank, extra), grant.pass(world, seats, seat, notes)) == ref(grant.machine(rank, world, seats, phase, notes, seat)) : R.RefState}
+def grant.give(world: S.World, seats: D.Ring<&2, CoreSeat>, seat: D.Seat, notes: List<&2, D.Note>) -> R.RefState:
+  R.RefState{host(world, seats), R.GiveTurnPermissions{seat}, notes}
 
-
-def grant.limit(amount: Nat, bound: Nat) -> Data:
-  match amount bound:
-    case 0n _:
-      Unit
-    case 1n+amount 1n+bound:
-      grant.limit(amount, bound)
-    case 1n+amount 0n:
-      Empty
-
-
-def grant.zero_claim(n: Nat) -> Data:
-  match n:
-    case 0n:
-      Unit
-    case 1n+rest:
-      Empty
-
-
-def grant.pred(n: Nat) -> Nat:
-  match n:
-    case 0n:
-      0n
-    case 1n+rest:
-      rest
-
-
-def grant.shape_claim(result: GrantCase, table: D.Table) -> Data:
-  match result:
-    case GrantAct{after}:
-      {D.ring.table(CoreSeat, after) == table : D.Table}
-    case GrantLift{after}:
-      {D.ring.table(CoreSeat, after) == table : D.Table}
-    case GrantSkip{after}:
-      {D.ring.table(CoreSeat, after) == table : D.Table}
-
-def grant.PointHypothesis(+rank: Nat) -> Type:
-  @+world:S.World -> @+seats:D.Ring<&2, CoreSeat> -> @+seat:D.Seat -> @+phase:S.Phase -> @+notes:List<&2, D.Note> -> @budget:{rank == grant.rank(seats) : Nat} -> @synced:{S.world.table(world) == D.ring.table(CoreSeat, seats) : D.Table} -> {M.point(grant.machine(rank, world, seats, phase, notes, seat)) == R.point(ref(grant.machine(rank, world, seats, phase, notes, seat))) : D.Point}
+def grant.given(world: S.World, seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>, seat: D.Seat) -> S.State:
+  M.give_turn(pack(world, seats, phase, notes), seat)
 
 def ref_subtract(left: Nat, right: Nat) -> Nat:
   G.subtract(left, right)
@@ -1399,9 +1370,6 @@ def RunHypothesis(+fuel: Nat) -> Type:
 def Stable(+world: S.World, +seats: D.Ring<&2, CoreSeat>) -> Data:
   Sigma<&2, &2, {world_for(world, seats) == world : S.World}, _ => Sigma<&2, &2, {Q.config.no_items(S.world.config(world)) == True{} : Bool}, _ => {Nat.is_lt(S.world.round_index(world), D.plan.length(S.world.plan(world))) == True{} : Bool}>>
 
-def preserve.GrantHypothesis(+rank: Nat) -> Type:
-  @+world:S.World -> @+seats:D.Ring<&2, CoreSeat> -> @+phase:S.Phase -> @+notes:List<&2, D.Note> -> @+seat:D.Seat -> @+stable:Stable(world, seats) -> Valid(M.grant.bound(rank, pack(world, seats, phase, notes), seat))
-
 def preserve.norm(+state: S.State, valid: Valid(state)) -> {normalize(state) == state : S.State}:
   match valid:
     case Tuple{eq, _}:
@@ -1612,8 +1580,8 @@ def reset_world(world: S.World) -> S.World:
 
 def reset_seat(seat: CoreSeat, health: Nat) -> CoreSeat:
   match seat:
-    case CoreSeat{_, _, checked, cash, sl}:
-      CoreSeat{health, False{}, checked, cash, sl}
+    case CoreSeat{_, _, cash, sl}:
+      CoreSeat{health, S.Free{}, cash, sl}
 
 def reset_seats(seats: D.Ring<&2, CoreSeat>, +health: Nat) -> D.Ring<&2, CoreSeat>:
   match seats:
@@ -1642,7 +1610,7 @@ def reset.state(+state: S.State) -> S.State:
   +world : S.World = S.state.world(state)
   +table : D.Table = S.world.table(world)
   +players : S.Players = S.state.players(state)
-  players : S.Players = S.players.set_jammed(players, D.ring.fill(Bool, table, False{}))
+  players : S.Players = S.players.set_jam(players, D.ring.fill(S.Jam, table, S.Free{}))
   players : S.Players = S.players.set_health(players, D.ring.fill(Nat, table, S.world.round_health(world)))
   players : S.Players = S.players.set_slots(players, D.ring.fill(D.Slots, table, D.slots.empty()))
   +world : S.World = S.world.set_direction(S.world.set_checking_first_death(world, True{}), D.Clockwise{})
@@ -1999,12 +1967,12 @@ def preserve.plan(config: D.Config) -> D.Plan:
 
 def preserve.reset_seats(seats: D.Ring<&2, CoreSeat>, +hp: Nat) -> D.Ring<&2, CoreSeat>:
   match seats:
-    case D.Duo{CoreSeat{_, _, c1, p1, s1}, CoreSeat{_, _, c3, p3, s3}}:
-      D.Duo{CoreSeat{hp, False{}, c1, p1, s1}, CoreSeat{hp, False{}, c3, p3, s3}}
-    case D.Trio{CoreSeat{_, _, c0, p0, s0}, CoreSeat{_, _, c1, p1, s1}, CoreSeat{_, _, c2, p2, s2}}:
-      D.Trio{CoreSeat{hp, False{}, c0, p0, s0}, CoreSeat{hp, False{}, c1, p1, s1}, CoreSeat{hp, False{}, c2, p2, s2}}
-    case D.Quad{CoreSeat{_, _, c0, p0, s0}, CoreSeat{_, _, c1, p1, s1}, CoreSeat{_, _, c2, p2, s2}, CoreSeat{_, _, c3, p3, s3}}:
-      D.Quad{CoreSeat{hp, False{}, c0, p0, s0}, CoreSeat{hp, False{}, c1, p1, s1}, CoreSeat{hp, False{}, c2, p2, s2}, CoreSeat{hp, False{}, c3, p3, s3}}
+    case D.Duo{CoreSeat{_, _, p1, s1}, CoreSeat{_, _, p3, s3}}:
+      D.Duo{CoreSeat{hp, S.Free{}, p1, s1}, CoreSeat{hp, S.Free{}, p3, s3}}
+    case D.Trio{CoreSeat{_, _, p0, s0}, CoreSeat{_, _, p1, s1}, CoreSeat{_, _, p2, s2}}:
+      D.Trio{CoreSeat{hp, S.Free{}, p0, s0}, CoreSeat{hp, S.Free{}, p1, s1}, CoreSeat{hp, S.Free{}, p2, s2}}
+    case D.Quad{CoreSeat{_, _, p0, s0}, CoreSeat{_, _, p1, s1}, CoreSeat{_, _, p2, s2}, CoreSeat{_, _, p3, s3}}:
+      D.Quad{CoreSeat{hp, S.Free{}, p0, s0}, CoreSeat{hp, S.Free{}, p1, s1}, CoreSeat{hp, S.Free{}, p2, s2}, CoreSeat{hp, S.Free{}, p3, s3}}
 
 def preserve.reset_world(world: S.World) -> S.World:
   S.world.set_direction(S.world.set_checking_first_death(world, True{}), D.Clockwise{})
@@ -2160,19 +2128,19 @@ def shot.prefix(+state: S.State, +shooter: D.Seat, +target: D.Seat, +shell: D.Sh
 
 def shot.health_at(seat: CoreSeat, hp: Nat) -> CoreSeat:
   match seat:
-    case CoreSeat{_, jam, checked, cash, sl}:
-      CoreSeat{hp, jam, checked, cash, sl}
+    case CoreSeat{_, jam, cash, sl}:
+      CoreSeat{hp, jam, cash, sl}
 
 def shot.health_write(+seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, hp: Nat) -> D.Ring<&2, CoreSeat>:
-  D.ring.set(CoreSeat, seats, seat, shot.health_at(value.or(CoreSeat, D.ring.get(CoreSeat, seats, seat), CoreSeat{100n, False{}, False{}, 0, D.slots.empty()}), hp))
+  D.ring.set(CoreSeat, seats, seat, shot.health_at(value.or(CoreSeat, D.ring.get(CoreSeat, seats, seat), CoreSeat{100n, S.Free{}, 0, D.slots.empty()}), hp))
 
 def shot.cash_at(seat: CoreSeat, prize: U32) -> CoreSeat:
   match seat:
-    case CoreSeat{hp, jam, checked, cash, sl}:
-      CoreSeat{hp, jam, checked, U32.add(cash, prize), sl}
+    case CoreSeat{hp, jam, cash, sl}:
+      CoreSeat{hp, jam, U32.add(cash, prize), sl}
 
 def shot.cash_write(+seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, prize: U32) -> D.Ring<&2, CoreSeat>:
-  D.ring.set(CoreSeat, seats, seat, shot.cash_at(value.or(CoreSeat, D.ring.get(CoreSeat, seats, seat), CoreSeat{100n, False{}, False{}, 0, D.slots.empty()}), prize))
+  D.ring.set(CoreSeat, seats, seat, shot.cash_at(value.or(CoreSeat, D.ring.get(CoreSeat, seats, seat), CoreSeat{100n, S.Free{}, 0, D.slots.empty()}), prize))
 
 def turn.ref_probe_list(seats: List<&2, D.Seat>) -> Bool:
   G.nonempty(D.Seat, seats)
@@ -2575,8 +2543,8 @@ def ring_shape(-X: Data, ring: D.Ring<&2, X>, +world: S.World) -> Data:
 # Every Players and Grabs ring has the config's table constructor.
 def Shape(+s: S.State) -> Data:
   match s:
-    case S.State{+world, S.Players{health, jammed, checked, cash, slots}, _, _, S.Grabs{_, taking, holding, granted, intake}}:
-      Sigma<&2, &2, ring_shape(Nat, health, world), _ => Sigma<&2, &2, ring_shape(Bool, jammed, world), _ => Sigma<&2, &2, ring_shape(Bool, checked, world), _ => Sigma<&2, &2, ring_shape(U32, cash, world), _ => Sigma<&2, &2, ring_shape(D.Slots, slots, world), _ => Sigma<&2, &2, ring_shape(Bool, taking, world), _ => Sigma<&2, &2, ring_shape(Maybe<&2, D.Item>, holding, world), _ => Sigma<&2, &2, ring_shape(Nat, granted, world), _ => ring_shape(Bool, intake, world)>>>>>>>>
+    case S.State{+world, S.Players{health, jam, cash, slots}, _, _, S.Grabs{_, taking, holding, granted, intake}}:
+      Sigma<&2, &2, ring_shape(Nat, health, world), _ => Sigma<&2, &2, ring_shape(S.Jam, jam, world), _ => Sigma<&2, &2, ring_shape(U32, cash, world), _ => Sigma<&2, &2, ring_shape(D.Slots, slots, world), _ => Sigma<&2, &2, ring_shape(Bool, taking, world), _ => Sigma<&2, &2, ring_shape(Maybe<&2, D.Item>, holding, world), _ => Sigma<&2, &2, ring_shape(Nat, granted, world), _ => ring_shape(Bool, intake, world)>>>>>>>
 
 # The full request-point invariant (proof-plan section 1). Components, in
 # order: normal form, Shape, caps, grab progress, latch, quiet, pending item

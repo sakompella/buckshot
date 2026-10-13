@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { config, round, list, array, kind, seatNumber, tag, maybe, requestJSON, stateJSON, turnHolder } from './reference-adapter.mjs';
+import { config, round, list, array, kind, seatNumber, tag, maybe, requestJSON, stateJSON, turnHolder, jamPair, machineJam } from './reference-adapter.mjs';
 import { items, loadModels, makeRandom, normalize, rules } from './machine-items-lib.mjs';
 
 const { M, R, close } = await loadModels('bend-mp-machine-items-');
@@ -8,12 +8,12 @@ try {
   const nil = list([]);
   const hostState = state => {
     const { world, players, grabs } = state;
-    const seats = ring(players.health, (_, key) => ({ health: players.health[key], jammed: players.jammed[key], jam_checked: players.checked[key], cash: players.cash[key], slots: players.slots[key], grabbing: grabs.grabbing[key], holding: grabs.holding[key], has_turn: turnHolder(state.phase) === Number(key.slice(1)) }));
+    const seats = ring(players.health, (_, key) => ({ health: players.health[key], ...jamPair(players.jam[key]), cash: players.cash[key], slots: players.slots[key], grabbing: grabs.grabbing[key], holding: grabs.holding[key], has_turn: turnHolder(state.phase) === Number(key.slice(1)) }));
     return { ...world, seats, distributing: grabs.distributing, grabs: ring(players.health, (_, key) => ({ $: 'GrabProgress', count: grabs.granted[key], intake: grabs.intake[key] })) };
   };
   const referenceHost = state => ({ ...state.host, seats: ring(state.host.seats, props => {
     const { $, ...fields } = props;
-    return fields;
+    return { ...fields, jam_checked: fields.jammed ? fields.jam_checked : null };
   }) });
 
   let boundaries = 0;
@@ -94,14 +94,14 @@ try {
       },
       fixture(changes, sawed = null) {
         const host = { ...this.r.host, seats: { ...this.r.host.seats } };
-        const players = { ...this.m.players, health: { ...this.m.players.health }, jammed: { ...this.m.players.jammed }, slots: { ...this.m.players.slots } };
+        const players = { ...this.m.players, health: { ...this.m.players.health }, jam: { ...this.m.players.jam }, slots: { ...this.m.players.slots } };
         const grabs = { ...this.m.grabs, grabbing: { ...this.m.grabs.grabbing } };
         for (const [s, change] of Object.entries(changes)) {
           const key = `s${s}`;
           const slots = change.inventory && { ...host.seats[key].slots, ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`s${i}`, maybe(change.inventory[i] ? tag(change.inventory[i]) : null)])) };
           const props = { ...host.seats[key] };
           if ('health' in change) { props.health = BigInt(change.health); players.health[key] = BigInt(change.health); }
-          if ('jammed' in change) { props.jammed = change.jammed; players.jammed[key] = change.jammed; }
+          if ('jammed' in change) { props.jammed = change.jammed; players.jam[key] = machineJam(change.jammed, props.jam_checked); }
           if ('grabbing' in change) { props.grabbing = change.grabbing; grabs.grabbing[key] = change.grabbing; }
           if (slots) { props.slots = slots; players.slots[key] = slots; }
           host.seats[key] = props;
@@ -356,7 +356,7 @@ try {
     const phase = phaseOf(m);
     const { players, grabs, world } = m;
     const seatKeys = keysOf(players.health);
-    for (const r of [players.jammed, players.checked, players.cash, players.slots, grabs.grabbing, grabs.holding, grabs.granted, grabs.intake]) assert.equal(keysOf(r), seatKeys, `rings share the table (${where})`);
+    for (const r of [players.jam, players.cash, players.slots, grabs.grabbing, grabs.holding, grabs.granted, grabs.intake]) assert.equal(keysOf(r), seatKeys, `rings share the table (${where})`);
     const keys = seatKeys.split(',');
     const items = key => Object.entries(players.slots[key]).filter(([k]) => k !== '$').map(([, slot]) => kind(slot) === 'Some' ? kind(slot.value) : null);
     const handling = phase === 'Grab' || phase === 'NeedItem';

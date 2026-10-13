@@ -35,7 +35,7 @@ class Shape:
         for seat in self.seated:
             hp = (health or {}).get(seat, f"h{seat}")
             cells.append(
-                f"A.CoreSeat{{{hp}, j{seat}, c{seat}, p{seat}, s{seat}}}"
+                f"A.CoreSeat{{{hp}, j{seat}, p{seat}, s{seat}}}"
             )
         return f"D.{self.ring}{{{', '.join(cells)}}}"
 

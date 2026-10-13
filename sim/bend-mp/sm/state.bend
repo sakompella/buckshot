@@ -45,12 +45,21 @@ type Phase is Data:
 type World is Data:
   World{config: D.Config, before_round: Bool, round_index: Nat, load_index: Nat, first_sequence: Bool, round_health: Nat, first_turn: D.Seat, turn: Maybe<&2, D.Seat>, direction: D.Direction, first_death: Maybe<&2, D.Seat>, checking_first_death: Bool, item_amount: Nat, sawed: Bool, gun: List<&2, D.Shell>, shown: D.Load, decks: Decks}
 
+# A seat's jammer state. A jammed seat loses its next turn (JammedSkipped
+# records that skip) and gets the turn after that, which lifts the jam.
+type Jam is Data:
+  Free{}
+  Jammed{}
+  JammedSkipped{}
+
 # cash: each seat's cash is the sum of D.prize over the rounds it won.
 type Players is Data:
-  Players{health: D.Ring<&2, Nat>, jammed: D.Ring<&2, Bool>, checked: D.Ring<&2, Bool>, cash: D.Ring<&2, U32>, slots: D.Ring<&2, D.Slots>}
+  Players{health: D.Ring<&2, Nat>, jam: D.Ring<&2, Jam>, cash: D.Ring<&2, U32>, slots: D.Ring<&2, D.Slots>}
 
 # Item distribution flags. A seat's grant count and intake survive the
 # distribution that set them, until that seat begins grabbing again.
+# Invariant (abstract.bend grab.seat): a holding seat is grabbing with intake
+# closed, and a grabbing seat's grants stay within the item amount.
 type Grabs is Data:
   Grabs{distributing: Bool, grabbing: D.Ring<&2, Bool>, holding: D.Ring<&2, Maybe<&2, D.Item>>, granted: D.Ring<&2, Nat>, intake: D.Ring<&2, Bool>}
 
@@ -219,53 +228,43 @@ def world.set_decks(value: World, replacement: Decks) -> World:
 
 def players.health(value: Players) -> D.Ring<&2, Nat>:
   match value:
-    case Players{health, _, _, _, _}:
+    case Players{health, _, _, _}:
       health
 
 def players.set_health(value: Players, replacement: D.Ring<&2, Nat>) -> Players:
   match value:
-    case Players{_, jammed, checked, cash, slots}:
-      Players{replacement, jammed, checked, cash, slots}
+    case Players{_, jam, cash, slots}:
+      Players{replacement, jam, cash, slots}
 
-def players.jammed(value: Players) -> D.Ring<&2, Bool>:
+def players.jam(value: Players) -> D.Ring<&2, Jam>:
   match value:
-    case Players{_, jammed, _, _, _}:
-      jammed
+    case Players{_, jam, _, _}:
+      jam
 
-def players.set_jammed(value: Players, replacement: D.Ring<&2, Bool>) -> Players:
+def players.set_jam(value: Players, replacement: D.Ring<&2, Jam>) -> Players:
   match value:
-    case Players{health, _, checked, cash, slots}:
-      Players{health, replacement, checked, cash, slots}
-
-def players.checked(value: Players) -> D.Ring<&2, Bool>:
-  match value:
-    case Players{_, _, checked, _, _}:
-      checked
-
-def players.set_checked(value: Players, replacement: D.Ring<&2, Bool>) -> Players:
-  match value:
-    case Players{health, jammed, _, cash, slots}:
-      Players{health, jammed, replacement, cash, slots}
+    case Players{health, _, cash, slots}:
+      Players{health, replacement, cash, slots}
 
 def players.cash(value: Players) -> D.Ring<&2, U32>:
   match value:
-    case Players{_, _, _, cash, _}:
+    case Players{_, _, cash, _}:
       cash
 
 def players.set_cash(value: Players, replacement: D.Ring<&2, U32>) -> Players:
   match value:
-    case Players{health, jammed, checked, _, slots}:
-      Players{health, jammed, checked, replacement, slots}
+    case Players{health, jam, _, slots}:
+      Players{health, jam, replacement, slots}
 
 def players.slots(value: Players) -> D.Ring<&2, D.Slots>:
   match value:
-    case Players{_, _, _, _, slots}:
+    case Players{_, _, _, slots}:
       slots
 
 def players.set_slots(value: Players, replacement: D.Ring<&2, D.Slots>) -> Players:
   match value:
-    case Players{health, jammed, checked, cash, _}:
-      Players{health, jammed, checked, cash, replacement}
+    case Players{health, jam, cash, _}:
+      Players{health, jam, cash, replacement}
 
 def state.world(value: State) -> World:
   match value:
@@ -413,6 +412,13 @@ def state.tell(state: State, seat: D.Seat, secret: D.Secret) -> State:
 
 def state.stepped(+state: State) -> D.Stepped<&2, State>:
   D.Stepped{state, state.notes(state)}
+
+def jam.jammed(jam: Jam) -> Bool:
+  match jam:
+    case Free{}:
+      False{}
+    case _:
+      True{}
 
 type JamResult is Data:
   Skip{players: Players}

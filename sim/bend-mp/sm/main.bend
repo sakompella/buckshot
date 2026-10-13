@@ -94,7 +94,7 @@ def load.begin(+state: S.State) -> S.State:
 
 def initial(+config: D.Config) -> S.State:
   +table : D.Table = G.config.table(config)
-  S.State{S.World{config, True{}, 0n, 0n, False{}, 0n, D.Seat0{}, None{}, D.Clockwise{}, None{}, False{}, 0n, False{}, Nil{}, D.Load{0n, 0n}, G.decks.full()}, S.Players{D.ring.fill(Nat, table, 100n), D.ring.fill(Bool, table, False{}), D.ring.fill(Bool, table, False{}), D.ring.fill(U32, table, 0), D.ring.fill(D.Slots, table, D.slots.empty())}, S.NeedFirst{}, Nil{}, S.Grabs{False{}, D.ring.fill(Bool, table, False{}), D.ring.fill(Maybe<&2, D.Item>, table, None{}), D.ring.fill(Nat, table, 0n), D.ring.fill(Bool, table, False{})}}
+  S.State{S.World{config, True{}, 0n, 0n, False{}, 0n, D.Seat0{}, None{}, D.Clockwise{}, None{}, False{}, 0n, False{}, Nil{}, D.Load{0n, 0n}, G.decks.full()}, S.Players{D.ring.fill(Nat, table, 100n), D.ring.fill(S.Jam, table, S.Free{}), D.ring.fill(U32, table, 0), D.ring.fill(D.Slots, table, D.slots.empty())}, S.NeedFirst{}, Nil{}, S.Grabs{False{}, D.ring.fill(Bool, table, False{}), D.ring.fill(Maybe<&2, D.Item>, table, None{}), D.ring.fill(Nat, table, 0n), D.ring.fill(Bool, table, False{})}}
 
 # Item distribution (D05, D06, D22, D37 grabbing rows, D55 M1, D56).
 
@@ -198,7 +198,7 @@ def round.reset(+state: S.State) -> S.State:
   +world : S.World = S.state.world(state)
   +table : D.Table = S.world.table(world)
   +players : S.Players = S.state.players(state)
-  players : S.Players = S.players.set_jammed(players, D.ring.fill(Bool, table, False{}))
+  players : S.Players = S.players.set_jam(players, D.ring.fill(S.Jam, table, S.Free{}))
   players : S.Players = S.players.set_health(players, D.ring.fill(Nat, table, S.world.round_health(world)))
   players : S.Players = S.players.set_slots(players, D.ring.fill(D.Slots, table, D.slots.empty()))
   +world : S.World = S.world.set_direction(S.world.set_checking_first_death(world, True{}), D.Clockwise{})
@@ -476,8 +476,7 @@ def jam.selected(+state: S.State, +seat: D.Seat, selected: Maybe<&2, S.JamOption
   match selected:
     case Some{S.JamAt{+target}}:
       +players : S.Players = S.state.players(state)
-      +players : S.Players = S.players.set_jammed(players, D.ring.set(Bool, S.players.jammed(players), target, True{}))
-      players : S.Players = S.players.set_checked(players, D.ring.set(Bool, S.players.checked(players), target, False{}))
+      players : S.Players = S.players.set_jam(players, D.ring.set(S.Jam, S.players.jam(players), target, S.Jammed{}))
       item.resume(S.state.emit(S.state.set_players(state, players), D.JamApplied{seat, target}), seat)
     case None{}:
       S.state.set_phase(state, S.Blocked{Some{seat}})
