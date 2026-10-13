@@ -62,13 +62,15 @@ The mapping covers only the states the machine can reach. `A.Valid` says which t
 
 ## The laws
 
-The ten required laws are listed in `check.sh`. Each is stated in `LAWS.bend`.
+The eleven required laws are listed in `check.sh`. Each is stated in `LAWS.bend`.
 
 `start_matches` says that for a config with no items, the machine's start and the reference's start give the same result, the same first point, and a valid machine state. The helper law `start_result_matches` states only the equality of the two start results.
 
 `step_matches` says that for a valid state and any answer, the reference's answer, including its bounded run of silent internal steps, equals the machine's answer. Both reach the same request point with the same notes, and the machine state is valid again.
 
 `run_matches` lifts that to whole runs. For any fuel, valid state and tape, the reference's run equals the machine's run. Together with `step_matches` this means every machine game is a reference game and the reverse. The two models offer equal menus, so neither can take a move the other cannot.
+
+`reachable_valid` says that for a config with no items, every state the machine reaches from its start through any tape is valid. The machine builds states only through `start` and `answer`, so no game reaches a state that `A.Valid` rules out. The state type itself can still hold invalid states, for example an idle phase whose seat does not hold the turn. Only code that builds a state by hand can make one.
 
 `legal_exact` says the machine's request at a state equals the reference's request at the mapped state. The legal moves are exactly the same.
 
