@@ -9,7 +9,7 @@ const TICK_LIMIT = 5_000;
 const send = (model: Model, message: Message): Model => update(model, message).model;
 
 const started = (controllers: Model["setup"]["controllers"]): Model => {
-  const model = init().model;
+  const model = init({ isWebMcpAvailable: false }).model;
 
   return send({ ...model, setup: { ...model.setup, controllers } }, Message.ClickedNewMatch());
 };
