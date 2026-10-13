@@ -25,12 +25,6 @@ def Laws.pickup_point_matches(world, seats, seat, notes, n, present, accepted):
 def Laws.legal_play_exact(world, seats, seat, aiming, notes):
   Core.law.legal_play_exact(world, seats, seat, aiming, notes)
 
-def Laws.observe_matches(world, seats, phase, notes, seat):
-  Core.law.observe_matches(world, seats, phase, notes, seat)
-
-def Laws.legal_exact(world, seats, phase, notes):
-  Core.law.legal_exact(world, seats, phase, notes)
-
 def Laws.legal_accepted(world, seats, seat, aiming, notes, n, choice, present, selected, current, permission):
   Core.law.legal_accepted(world, seats, seat, aiming, notes, n, choice, present, selected, current, permission)
 

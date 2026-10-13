@@ -41,20 +41,16 @@ law legal_play_exact:
 
 
 law observe_matches:
-  for +world: A.World()
-  for +seats: A.Seats()
-  for +phase: A.Phase()
-  for +notes: A.Notes()
-  for +seat: A.Seat()
-  {(A.observation(A.pack(A.world_for(world, seats), seats, phase, notes), seat), A.heard(A.pack(A.world_for(world, seats), seats, phase, notes), seat)) == (A.ref_observation(A.ref(A.pack(A.world_for(world, seats), seats, phase, notes)), seat), A.ref_heard(A.ref(A.pack(A.world_for(world, seats), seats, phase, notes)), seat)) : D.Obs & List<&2, D.Heard>}
+  for +state: S.State
+  for +valid: A.ValidItems(state)
+  for +seat: D.Seat
+  {(A.observation(state, seat), A.heard(state, seat)) == (A.ref_observation(A.ref(state), seat), A.ref_heard(A.ref(state), seat)) : D.Obs & List<&2, D.Heard>}
 
 
 law legal_exact:
-  for +world: A.World()
-  for +seats: A.Seats()
-  for +phase: A.Phase()
-  for +notes: A.Notes()
-  {A.machine_request(A.canonical_state(world, seats, phase, notes)) == A.ref_request(A.ref(A.canonical_state(world, seats, phase, notes))) : D.Request}
+  for +state: S.State
+  for +valid: A.ValidItems(state)
+  {A.machine_request(state) == A.ref_request(A.ref(state)) : D.Request}
 
 
 law legal_accepted:

@@ -108,6 +108,11 @@ def run_valid(+fuel: Nat) -> A.RunValidHypothesis(fuel):
     case 1n+rest:
       +state => +tape => +valid => run_valid_request(rest, M.request(state), state, tape, valid, run_valid(rest))
 
+def observe.valid(+state: S.State, +valid: A.ValidItems(state), +seat: D.Seat) -> {(A.observation(state, seat), A.heard(state, seat)) == (A.ref_observation(A.ref(state), seat), A.ref_heard(A.ref(state), seat)) : D.Obs & List<&2, D.Heard>}:
+  match state:
+    case S.State{+w, +p, +ph, +notes, +g}:
+      Equal.cong(D.Point, D.Obs & List<&2, D.Heard>, point => (D.observe(point, seat), D.hear(notes, seat)), A.machine_point(S.State{w, p, ph, notes, g}), A.point_of_ref(S.State{w, p, ph, notes, g}), ISP.point.items(S.State{w, p, ph, notes, g}, valid))
+
 def start.valid(+config: D.Config) -> A.ValidItems(A.machine_step_state(M.start(config))):
   match config:
     case D.Config{D.TwoSeats{}, +plan}:
@@ -142,6 +147,12 @@ def Laws.run_matches(fuel, state, tape, valid):
 
 def Laws.reachable_valid(fuel, config, tape):
   run_valid(fuel)(M.stepped.state(M.start(config)), tape, start.state_valid(config))
+
+def Laws.legal_exact(state, valid):
+  valid.request(state, valid)
+
+def Laws.observe_matches(state, valid, seat):
+  observe.valid(state, valid, seat)
 
 def Laws.start_result_matches(config):
   start.result(config)
