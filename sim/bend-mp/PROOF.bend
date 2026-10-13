@@ -9,6 +9,7 @@ import ./turn-proof.bend as TurnProof
 import ./use-proof.bend as UseProof
 import ./aim-proof.bend as AimProof
 import ./pick-proof.bend as PickProof
+import ./round-proof.bend as RoundProof
 
 def Laws.core_roundtrip(seats):
   Core.law.core_roundtrip(seats)
