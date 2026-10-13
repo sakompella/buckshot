@@ -9,11 +9,11 @@ import { nextBelow, type Rng } from "./rng.ts";
 // driver uses (sim/bend-mp/driver.bend); its memory is an opaque Bend value
 // held in the Progress, and each seat draws coins from its own stream.
 
-export const Controller = Schema.Literals(["Human", "Story", "DoN"]);
+export const Controller = Schema.Literals(["Human", "Story", "DoN", "Agent"]);
 
 export type Controller = typeof Controller.Type;
 
-export const isAi = (controller: Controller): controller is Brain => controller !== "Human";
+export const isAi = (controller: Controller): controller is Brain => controller === "Story" || controller === "DoN";
 
 /** Draw answers taken in one settle before giving up; a match needs a few hundred at most. */
 const DRAW_LIMIT = 10_000;
