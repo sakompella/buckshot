@@ -6,7 +6,8 @@ import { AgentCall, AgentReply, type ports } from "./agent.ts";
 
 // Registers the WebMCP tools. Each tool sends one AgentCall into the runtime
 // through its inbound port and resolves with the reply the app emits on the
-// outbound port, so the tools never read the Model or touch the game.
+// outbound port, so the tools never read the Model or touch the game. A refusal
+// is returned as {"error": ...} text, because Chrome hides a thrown error's message from the agent.
 
 type Handles = Runtime.EmbedHandle<typeof ports>["ports"];
 
@@ -23,14 +24,14 @@ export const registerAgentTools = (context: WebMCP.ModelContext, handles: Handle
   });
 
   const call = (request: AgentCall): Promise<string> =>
-    new Promise((resolve, reject) => {
+    new Promise((resolve) => {
       lastId += 1;
       const id = lastId;
 
       waiting.set(id, (reply) =>
         AgentReply.match(reply, {
           Answered: ({ text }) => resolve(text),
-          Refused: ({ reason }) => reject(new Error(reason)),
+          Refused: ({ reason }) => resolve(JSON.stringify({ error: reason })),
         }),
       );
 
@@ -38,7 +39,7 @@ export const registerAgentTools = (context: WebMCP.ModelContext, handles: Handle
 
       if (Exit.isFailure(sent)) {
         waiting.delete(id);
-        reject(new Error("The arguments do not match the tool's input schema."));
+        resolve(JSON.stringify({ error: "The arguments do not match the tool's input schema." }));
       }
     });
 
