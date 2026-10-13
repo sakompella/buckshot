@@ -12,96 +12,13 @@ import ./sm/point.bend as V
 import ./grab-proof.bend as GP
 import ./core-proof.bend as C
 
-# Internal lemmas toward step_matches for item configs, under A.ValidItems.
+# Internal lemmas toward step_matches for item configs, under A.Valid.
 # Bodies marked generated in tools/proof_cases.py are owned by that script.
 
-# The no-item Valid is a special case of ValidItems: its normal form packs
+# The no-item Valid is a special case of Valid: its normal form packs
 # empty slots, initial Grabs and a world tied to the seat ring.
 
-def items.idle_uses(+world: S.World, +seats: A.Seats(), +seat: D.Seat, +notes: A.Notes()) -> {I.uses(A.pack(A.world_for(world, seats), seats, S.Idle{seat, D.NonEmpty{S.TakeGun{}, Nil{}}}, notes), seat) == Nil{} : List<&2, S.IdleOption>}:
-  match seats seat:
-    case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat0{}:
-      {==}
-    case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat1{}:
-      {==}
-    case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat2{}:
-      {==}
-    case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, j3, p3, s3}} D.Seat3{}:
-      {==}
-    case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat0{}:
-      {==}
-    case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat1{}:
-      {==}
-    case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat2{}:
-      {==}
-    case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}} D.Seat3{}:
-      {==}
-    case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat0{}:
-      {==}
-    case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat1{}:
-      {==}
-    case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat2{}:
-      {==}
-    case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}} D.Seat3{}:
-      {==}
-
-def items.pack_shape(+world: S.World, +seats: A.Seats(), +phase: S.Phase, +notes: A.Notes()) -> A.Shape(A.pack(A.world_for(world, seats), seats, phase, notes)):
-  match world:
-    case S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}:
-      match seats:
-        case D.Duo{S.Seat{h1, j1, p1, s1}, S.Seat{h3, j3, p3, s3}}:
-          ({==}, ({==}, ({==}, ({==}, {==}))))
-        case D.Trio{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}}:
-          ({==}, ({==}, ({==}, ({==}, {==}))))
-        case D.Quad{S.Seat{h0, j0, p0, s0}, S.Seat{h1, j1, p1, s1}, S.Seat{h2, j2, p2, s2}, S.Seat{h3, j3, p3, s3}}:
-          ({==}, ({==}, ({==}, ({==}, {==}))))
-
-def items.pack_valid(+world: S.World, +seats: A.Seats(), +phase: S.Phase, +notes: A.Notes(), +bounded: {Nat.is_lt(S.world.round_index(world), D.plan.length(S.world.plan(world))) == True{} : Bool}, +ready: {A.phase_ready(phase, world) == True{} : Bool}) -> A.ValidItems(A.pack(A.world_for(world, seats), seats, A.canonical_phase(phase), notes)):
-  match world:
-    case S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}:
-      match phase:
-        case S.NeedFirst{}:
-          ({==}, (items.pack_shape(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, seats, S.NeedFirst{}, notes), (bounded, ready)))
-        case S.NeedHealth{}:
-          ({==}, (items.pack_shape(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, seats, S.NeedHealth{}, notes), (bounded, ready)))
-        case S.NeedAmount{}:
-          ({==}, (items.pack_shape(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, seats, S.NeedAmount{}, notes), (bounded, ready)))
-        case S.NeedBatch{}:
-          ({==}, (items.pack_shape(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, seats, S.NeedBatch{}, notes), (bounded, ready)))
-        case S.NeedSwap{_, _, 0n}:
-          ({==}, (items.pack_shape(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, seats, S.Blocked{None{}}, notes), (bounded, {==})))
-        case S.NeedSwap{+swap_load, +shells, 1n+i}:
-          ({==}, (items.pack_shape(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, seats, S.NeedSwap{swap_load, shells, 1n+i}, notes), (bounded, ready)))
-        case S.Idle{+seat, options}:
-          (Equal.cong(List<&2, S.IdleOption>, S.State, xs => S.State{A.world_for(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, seats), A.players.free(seats), S.Idle{seat, D.NonEmpty{S.TakeGun{}, xs}}, notes, A.grabs(seats)}, I.uses(A.pack(A.world_for(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, seats), seats, S.Idle{seat, D.NonEmpty{S.TakeGun{}, Nil{}}}, notes), seat), Nil{}, items.idle_uses(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, seats, seat, notes)), (items.pack_shape(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, seats, S.Idle{seat, D.NonEmpty{S.TakeGun{}, Nil{}}}, notes), (bounded, ready)))
-        case S.Aim{+seat}:
-          ({==}, (items.pack_shape(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, seats, S.Aim{seat}, notes), (bounded, ready)))
-        case S.Ended{}:
-          ({==}, (items.pack_shape(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, seats, S.Ended{}, notes), (bounded, ready)))
-        case S.Blocked{+holder}:
-          ({==}, (items.pack_shape(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, seats, S.Blocked{holder}, notes), (bounded, ready)))
-        case S.NeedTurnAmount{_, _, _}:
-          ({==}, (items.pack_shape(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, seats, S.Blocked{None{}}, notes), (bounded, {==})))
-        case S.Grab{_}:
-          ({==}, (items.pack_shape(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, seats, S.Blocked{None{}}, notes), (bounded, {==})))
-        case S.NeedItem{_, _, _, _}:
-          ({==}, (items.pack_shape(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, seats, S.Blocked{None{}}, notes), (bounded, {==})))
-        case S.NeedPhone{_, _, _}:
-          ({==}, (items.pack_shape(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, seats, S.Blocked{None{}}, notes), (bounded, {==})))
-        case S.JamPick{_, _}:
-          ({==}, (items.pack_shape(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, seats, S.Blocked{None{}}, notes), (bounded, {==})))
-        case S.StealPick{_, _}:
-          ({==}, (items.pack_shape(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, seats, S.Blocked{None{}}, notes), (bounded, {==})))
-
-def valid.items(+s: S.State, +valid: A.Valid(s)) -> A.ValidItems(s):
-  match s:
-    case S.State{+world, +players, +phase, +notes, +grabs}:
-      match valid:
-        case Tuple{normal, Tuple{_, Tuple{bounded, ready}}}:
-          %normal : A.ValidItems(_)
-          items.pack_valid(world, players, phase, notes, bounded, ready)
-
-# Part 1 of SimulationItems at the handout's request points: the
+# Part 1 of Simulation at the handout's request points: the
 # reference's answer equals the machine's, mapped.
 
 def stepped.ref(+x: R.RefState, +out: S.State, +e: {x == A.ref(out) : R.RefState}) -> {R.stepped(x) == A.stepped(S.state.stepped(out)) : A.RefStep()}:
@@ -110,7 +27,7 @@ def stepped.ref(+x: R.RefState, +out: S.State, +e: {x == A.ref(out) : R.RefState
       Equal.cong(R.RefState, A.RefStep(), y => R.stepped(y), x, A.ref(S.State{world, players, phase, notes, grabs}), e)
 
 # The Grab menus of a world, seat ring and Grabs, and the Grab request point
-# whose stored menus are them (the ValidItems normal form).
+# whose stored menus are them (the Valid normal form).
 def needs.at(+world: S.World, +players: S.Players, +grabs: S.Grabs) -> D.Ring<&2, List<&2, S.GrabOption>>:
   I.grab.needs(S.State{world, players, S.Ended{}, Nil{}, grabs})
 
@@ -207,7 +124,7 @@ def Pre(+s: S.State) -> Data:
   Sigma<&2, &2, GP.Ctx(s), _ => A.Holds(A.bounded(s))>
 
 def LoadValid() -> Type:
-  @+s:S.State -> @+pre:Pre(s) -> A.ValidItems(M.load.begin(s))
+  @+s:S.State -> @+pre:Pre(s) -> A.Valid(M.load.begin(s))
 
 def pre.stop(+s: S.State, +seat: D.Seat, +pre: Pre(s)) -> Pre(GP.stop.state(s, seat)):
   match s:
@@ -277,21 +194,21 @@ def pre.end_all(+seats: List<&2, D.Seat>, +s: S.State, +pre: Pre(s)) -> Pre(M.gr
 
 # The request points the handout stops at.
 
-def grab.point.valid(+s: S.State, +pre: Pre(s)) -> A.ValidItems(S.state.set_phase(s, S.Grab{I.grab.needs(s)})):
+def grab.point.valid(+s: S.State, +pre: Pre(s)) -> A.Valid(S.state.set_phase(s, S.Grab{I.grab.needs(s)})):
   match s:
     case S.State{+world, +players, +phase, +notes, +grabs}:
       match pre:
         case Tuple{Tuple{+shape, _}, +bounded}:
           ({==}, (shape.move(world, players, phase, notes, grabs, S.Grab{I.grab.needs(S.State{world, players, phase, notes, grabs})}, notes, shape), (bounded, {==})))
 
-def item.point.valid(+s: S.State, +seat: D.Seat, +first: D.Item, +second: D.Item, +rest: List<&2, D.Item>, +pre: Pre(s)) -> A.ValidItems(S.state.set_phase(s, S.NeedItem{seat, first, second, rest})):
+def item.point.valid(+s: S.State, +seat: D.Seat, +first: D.Item, +second: D.Item, +rest: List<&2, D.Item>, +pre: Pre(s)) -> A.Valid(S.state.set_phase(s, S.NeedItem{seat, first, second, rest})):
   match s:
     case S.State{+world, +players, +phase, +notes, +grabs}:
       match pre:
         case Tuple{Tuple{+shape, _}, +bounded}:
           ({==}, (shape.move(world, players, phase, notes, grabs, S.NeedItem{seat, first, second, rest}, notes, shape), (bounded, {==})))
 
-def blocked.point.valid(+s: S.State, +pre: Pre(s)) -> A.ValidItems(S.state.set_phase(s, S.Blocked{None{}})):
+def blocked.point.valid(+s: S.State, +pre: Pre(s)) -> A.Valid(S.state.set_phase(s, S.Blocked{None{}})):
   match s:
     case S.State{+world, +players, +phase, +notes, +grabs}:
       match pre:
@@ -300,7 +217,7 @@ def blocked.point.valid(+s: S.State, +pre: Pre(s)) -> A.ValidItems(S.state.set_p
 
 # The handout's closures end at valid request points.
 
-def continue.ready.valid(+s: S.State, +d: Bool, +held: Bool, +pre: Pre(s), load: LoadValid()) -> A.ValidItems(M.grab.continue.ready(s, d, held)):
+def continue.ready.valid(+s: S.State, +d: Bool, +held: Bool, +pre: Pre(s), load: LoadValid()) -> A.Valid(M.grab.continue.ready(s, d, held)):
   match d held:
     case False{} False{}:
       load(s, pre)
@@ -311,20 +228,20 @@ def continue.ready.valid(+s: S.State, +d: Bool, +held: Bool, +pre: Pre(s), load:
     case False{} True{}:
       grab.point.valid(s, pre)
 
-def continue.valid(+s: S.State, +pre: Pre(s), load: LoadValid()) -> A.ValidItems(M.grab.continue(s)):
+def continue.valid(+s: S.State, +pre: Pre(s), load: LoadValid()) -> A.Valid(M.grab.continue(s)):
   continue.ready.valid(s, S.grabs.distributing(S.state.grabs(s)), I.holders(D.ring.entries(Maybe<&2, D.Item>, S.grabs.holding(S.state.grabs(s)))), pre, load)
 
-def give.valid(+s: S.State, +seat: D.Seat, +item: D.Item, +pre: Pre(s), load: LoadValid()) -> A.ValidItems(M.grab.give(s, seat, item)):
+def give.valid(+s: S.State, +seat: D.Seat, +item: D.Item, +pre: Pre(s), load: LoadValid()) -> A.Valid(M.grab.give(s, seat, item)):
   continue.valid(S.state.emit(GP.give.state(s, seat, item), D.Granted{seat, item}), pre.emit(GP.give.state(s, seat, item), D.Granted{seat, item}, pre.give(s, seat, item, pre)), load)
 
-def chosen.valid(+s: S.State, +seat: D.Seat, +found: Maybe<&2, D.Item>, +pre: Pre(s), load: LoadValid()) -> A.ValidItems(M.grab.chosen(s, seat, found)):
+def chosen.valid(+s: S.State, +seat: D.Seat, +found: Maybe<&2, D.Item>, +pre: Pre(s), load: LoadValid()) -> A.Valid(M.grab.chosen(s, seat, found)):
   match found:
     case Some{+item}:
       give.valid(s, seat, item, pre, load)
     case None{}:
       continue.valid(S.state.tell(s, seat, D.EmptyBriefcase{}), pre.tell(s, seat, D.EmptyBriefcase{}, pre), load)
 
-def pool.valid(+s: S.State, +seat: D.Seat, +pool: List<&2, D.Item>, +pre: Pre(s), load: LoadValid()) -> A.ValidItems(M.grab.pool(s, seat, pool)):
+def pool.valid(+s: S.State, +seat: D.Seat, +pool: List<&2, D.Item>, +pre: Pre(s), load: LoadValid()) -> A.Valid(M.grab.pool(s, seat, pool)):
   match pool:
     case Nil{}:
       chosen.valid(s, seat, None{}, pre, load)
@@ -333,10 +250,10 @@ def pool.valid(+s: S.State, +seat: D.Seat, +pool: List<&2, D.Item>, +pre: Pre(s)
     case +first <> +second <> +rest:
       item.point.valid(s, seat, first, second, rest, pre)
 
-def take.valid(+s: S.State, +seat: D.Seat, +pre: Pre(s), load: LoadValid()) -> A.ValidItems(M.grab.take(s, seat)):
+def take.valid(+s: S.State, +seat: D.Seat, +pre: Pre(s), load: LoadValid()) -> A.Valid(M.grab.take(s, seat)):
   pool.valid(GP.stop.state(s, seat), seat, I.pool(GP.stop.state(s, seat), seat), pre.stop(s, seat, pre), load)
 
-def put.held.valid(+s: S.State, +seat: D.Seat, +slot: D.Slot, +held: Maybe<&2, D.Item>, +pre: Pre(s), load: LoadValid()) -> A.ValidItems(M.grab.put.held(s, seat, slot, held)):
+def put.held.valid(+s: S.State, +seat: D.Seat, +slot: D.Slot, +held: Maybe<&2, D.Item>, +pre: Pre(s), load: LoadValid()) -> A.Valid(M.grab.put.held(s, seat, slot, held)):
   match held:
     case None{}:
       blocked.point.valid(s, pre)
@@ -344,10 +261,10 @@ def put.held.valid(+s: S.State, +seat: D.Seat, +slot: D.Slot, +held: Maybe<&2, D
       +fresh : D.Slots = I.slots.put(I.seat.slots(S.state.players(s), seat), slot, Some{item})
       continue.valid(S.state.emit(GP.put.state(s, seat, fresh), D.Placed{seat, slot, item}), pre.emit(GP.put.state(s, seat, fresh), D.Placed{seat, slot, item}, pre.put(s, seat, fresh, pre)), load)
 
-def put.valid(+s: S.State, +seat: D.Seat, +slot: D.Slot, +pre: Pre(s), load: LoadValid()) -> A.ValidItems(M.grab.put(s, seat, slot)):
+def put.valid(+s: S.State, +seat: D.Seat, +slot: D.Slot, +pre: Pre(s), load: LoadValid()) -> A.Valid(M.grab.put(s, seat, slot)):
   put.held.valid(s, seat, slot, I.seat.holding(S.state.grabs(s), seat), pre, load)
 
-def place.last.valid(+s: S.State, +seat: D.Seat, +slot: D.Slot, +last: Bool, +pre: Pre(s), load: LoadValid()) -> A.ValidItems(M.grab.place.last(s, seat, slot, last)):
+def place.last.valid(+s: S.State, +seat: D.Seat, +slot: D.Slot, +last: Bool, +pre: Pre(s), load: LoadValid()) -> A.Valid(M.grab.place.last(s, seat, slot, last)):
   match last:
     case False{}:
       put.valid(s, seat, slot, pre, load)
@@ -358,18 +275,18 @@ def place.last.valid(+s: S.State, +seat: D.Seat, +slot: D.Slot, +last: Bool, +pr
       +s2 : S.State = M.grab.end_all(I.stalled.seats(s1, seat), s1)
       put.valid(M.grab.check(s2), seat, slot, pre.check(s2, pre.end_all(I.stalled.seats(s1, seat), s1, pre1)), load)
 
-def place.valid(+s: S.State, +seat: D.Seat, +slot: D.Slot, +pre: Pre(s), load: LoadValid()) -> A.ValidItems(M.grab.place(s, seat, slot)):
+def place.valid(+s: S.State, +seat: D.Seat, +slot: D.Slot, +pre: Pre(s), load: LoadValid()) -> A.Valid(M.grab.place(s, seat, slot)):
   place.last.valid(s, seat, slot, I.placing.last(s, seat), pre, load)
 
 # The successor of a Grab or NeedItem answer is valid.
 
-def grab.move.valid(+world: S.World, +players: S.Players, +grabs: S.Grabs, +seat: D.Seat, +index: Nat, +move: D.Move, +sel: GP.Selected(needs.at(world, players, grabs), D.Choice{seat, index, move}), +pre: Pre(grab.at(world, players, Nil{}, grabs)), load: LoadValid()) -> A.ValidItems(M.answer.choice(grab.at(world, players, Nil{}, grabs), D.Choice{seat, index, move})):
+def grab.move.valid(+world: S.World, +players: S.Players, +grabs: S.Grabs, +seat: D.Seat, +index: Nat, +move: D.Move, +sel: GP.Selected(needs.at(world, players, grabs), D.Choice{seat, index, move}), +pre: Pre(grab.at(world, players, Nil{}, grabs)), load: LoadValid()) -> A.Valid(M.answer.choice(grab.at(world, players, Nil{}, grabs), D.Choice{seat, index, move})):
   match move:
     case D.Grab{}:
-      %Equal.sym(Maybe<&2, S.GrabOption>, I.grab.nth(Q.value.or(List<&2, S.GrabOption>, D.ring.get(List<&2, S.GrabOption>, needs.at(world, players, grabs), seat), Nil{}), index), Some{S.TakeItem{}}, sel) : A.ValidItems(M.grab.selected(grab.at(world, players, Nil{}, grabs), seat, _))
+      %Equal.sym(Maybe<&2, S.GrabOption>, I.grab.nth(Q.value.or(List<&2, S.GrabOption>, D.ring.get(List<&2, S.GrabOption>, needs.at(world, players, grabs), seat), Nil{}), index), Some{S.TakeItem{}}, sel) : A.Valid(M.grab.selected(grab.at(world, players, Nil{}, grabs), seat, _))
       take.valid(grab.at(world, players, Nil{}, grabs), seat, pre, load)
     case D.Place{+slot}:
-      %Equal.sym(Maybe<&2, S.GrabOption>, I.grab.nth(Q.value.or(List<&2, S.GrabOption>, D.ring.get(List<&2, S.GrabOption>, needs.at(world, players, grabs), seat), Nil{}), index), Some{S.PutAt{slot}}, sel) : A.ValidItems(M.grab.selected(grab.at(world, players, Nil{}, grabs), seat, _))
+      %Equal.sym(Maybe<&2, S.GrabOption>, I.grab.nth(Q.value.or(List<&2, S.GrabOption>, D.ring.get(List<&2, S.GrabOption>, needs.at(world, players, grabs), seat), Nil{}), index), Some{S.PutAt{slot}}, sel) : A.Valid(M.grab.selected(grab.at(world, players, Nil{}, grabs), seat, _))
       place.valid(grab.at(world, players, Nil{}, grabs), seat, slot, pre, load)
     case D.PickUp{}:
       match sel:
@@ -382,7 +299,7 @@ def grab.move.valid(+world: S.World, +players: S.Players, +grabs: S.Grabs, +seat
     case D.Steal{owner, slot, item}:
       match sel:
 
-def grab.picked.valid(+world: S.World, +players: S.Players, +grabs: S.Grabs, +picked: Maybe<&2, D.Choice>, +sel: GP.MaybeSelected(needs.at(world, players, grabs), picked), +pre: Pre(grab.at(world, players, Nil{}, grabs)), load: LoadValid()) -> A.ValidItems(M.answer.resolved(grab.at(world, players, Nil{}, grabs), D.resolve.choice(picked))):
+def grab.picked.valid(+world: S.World, +players: S.Players, +grabs: S.Grabs, +picked: Maybe<&2, D.Choice>, +sel: GP.MaybeSelected(needs.at(world, players, grabs), picked), +pre: Pre(grab.at(world, players, Nil{}, grabs)), load: LoadValid()) -> A.Valid(M.answer.resolved(grab.at(world, players, Nil{}, grabs), D.resolve.choice(picked))):
   match picked:
     case None{}:
       blocked.point.valid(grab.at(world, players, Nil{}, grabs), pre)
@@ -391,22 +308,22 @@ def grab.picked.valid(+world: S.World, +players: S.Players, +grabs: S.Grabs, +pi
         case D.Choice{+seat, +index, +move}:
           grab.move.valid(world, players, grabs, seat, index, move, sel, pre, load)
 
-def grab.any.valid(+world: S.World, +players: S.Players, +notes: A.Notes(), +grabs: S.Grabs, +n: Nat, +any: Bool, +valid: A.ValidItems(grab.at(world, players, notes, grabs)), +pre: Pre(grab.at(world, players, Nil{}, grabs)), load: LoadValid()) -> A.ValidItems(A.machine_step_state(M.answer.request(grab.at(world, players, notes, grabs), n, D.request.choose.any(any, I.grab.menus(needs.at(world, players, grabs)))))):
+def grab.any.valid(+world: S.World, +players: S.Players, +notes: A.Notes(), +grabs: S.Grabs, +n: Nat, +any: Bool, +valid: A.Valid(grab.at(world, players, notes, grabs)), +pre: Pre(grab.at(world, players, Nil{}, grabs)), load: LoadValid()) -> A.Valid(A.machine_step_state(M.answer.request(grab.at(world, players, notes, grabs), n, D.request.choose.any(any, I.grab.menus(needs.at(world, players, grabs)))))):
   match any:
     case True{}:
       grab.picked.valid(world, players, grabs, D.choose(I.grab.menus(needs.at(world, players, grabs)), n), GP.sel.choose(needs.at(world, players, grabs), n), pre, load)
     case False{}:
       valid
 
-def pre.at(+world: S.World, +players: S.Players, +phase: S.Phase, +notes: A.Notes(), +grabs: S.Grabs, +quiet: {A.turn.holder(phase) == None{} : Maybe<&2, D.Seat>}, +valid: A.ValidItems(S.State{world, players, phase, notes, grabs})) -> Pre(S.State{world, players, phase, Nil{}, grabs}):
+def pre.at(+world: S.World, +players: S.Players, +phase: S.Phase, +notes: A.Notes(), +grabs: S.Grabs, +quiet: {A.turn.holder(phase) == None{} : Maybe<&2, D.Seat>}, +valid: A.Valid(S.State{world, players, phase, notes, grabs})) -> Pre(S.State{world, players, phase, Nil{}, grabs}):
   match valid:
     case Tuple{_, Tuple{+shape, Tuple{+bounded, _}}}:
       ((shape.move(world, players, phase, notes, grabs, phase, Nil{}, shape), quiet), bounded)
 
-def grab.valid(+world: S.World, +players: S.Players, +notes: A.Notes(), +grabs: S.Grabs, +n: Nat, +valid: A.ValidItems(grab.at(world, players, notes, grabs)), load: LoadValid()) -> A.ValidItems(A.next(grab.at(world, players, notes, grabs), n)):
+def grab.valid(+world: S.World, +players: S.Players, +notes: A.Notes(), +grabs: S.Grabs, +n: Nat, +valid: A.Valid(grab.at(world, players, notes, grabs)), load: LoadValid()) -> A.Valid(A.next(grab.at(world, players, notes, grabs), n)):
   grab.any.valid(world, players, notes, grabs, n, D.menus.any(D.ring.entries(List<&2, D.Move>, I.grab.menus(needs.at(world, players, grabs)))), valid, pre.at(world, players, S.Grab{needs.at(world, players, grabs)}, notes, grabs, {==}, valid), load)
 
-def item.valid(+world: S.World, +players: S.Players, +seat: D.Seat, +first: D.Item, +second: D.Item, +rest: List<&2, D.Item>, +notes: A.Notes(), +grabs: S.Grabs, +n: Nat, +valid: A.ValidItems(item.at(world, players, seat, first, second, rest, notes, grabs)), load: LoadValid()) -> A.ValidItems(A.next(item.at(world, players, seat, first, second, rest, notes, grabs), n)):
+def item.valid(+world: S.World, +players: S.Players, +seat: D.Seat, +first: D.Item, +second: D.Item, +rest: List<&2, D.Item>, +notes: A.Notes(), +grabs: S.Grabs, +n: Nat, +valid: A.Valid(item.at(world, players, seat, first, second, rest, notes, grabs)), load: LoadValid()) -> A.Valid(A.next(item.at(world, players, seat, first, second, rest, notes, grabs), n)):
   chosen.valid(item.at(world, players, seat, first, second, rest, Nil{}, grabs), seat, Q.nth(D.Item, first <> second <> rest, D.draw.value(D.Range{0n, List.length(&2, D.Item, rest)}, n)), pre.at(world, players, S.NeedItem{seat, first, second, rest}, notes, grabs, {==}, valid), load)
 
 # Part 2: the machine's Point equals the reference's at a valid state.
@@ -733,25 +650,25 @@ def point.norm(+s: S.State, +shape: A.Shape(s)) -> {V.point(A.normalize_items(s)
       +boards : {V.board(normal) == R.board(A.ref(normal)) : D.Board} = board.eq(normal, shape.move(world, players, phase, notes, grabs, A.canonical_phase_items(S.State{world, players, phase, notes, grabs}, phase), notes, shape))
       Equal.trans(D.Point, D.Point{V.request(normal), V.board(normal)}, D.Point{R.request(A.ref(normal)), V.board(normal)}, D.Point{R.request(A.ref(normal)), R.board(A.ref(normal))}, Equal.cong(D.Request, D.Point, r => D.Point{r, V.board(normal)}, V.request(normal), R.request(A.ref(normal)), requests), Equal.cong(D.Board, D.Point, b => D.Point{R.request(A.ref(normal)), b}, V.board(normal), R.board(A.ref(normal)), boards))
 
-def point.items(+s: S.State, +valid: A.ValidItems(s)) -> {A.machine_point(s) == A.point_of_ref(s) : D.Point}:
-  +normal : {A.normalize_items(s) == s : S.State} = A.valid_items.normal(s, valid)
-  Equal.trans(D.Point, A.machine_point(s), A.machine_point(A.normalize_items(s)), A.point_of_ref(s), Equal.cong(S.State, D.Point, x => A.machine_point(x), s, A.normalize_items(s), Equal.sym(S.State, A.normalize_items(s), s, normal)), Equal.trans(D.Point, A.machine_point(A.normalize_items(s)), A.point_of_ref(A.normalize_items(s)), A.point_of_ref(s), point.norm(s, A.valid_items.shape(s, valid)), Equal.cong(S.State, D.Point, x => A.point_of_ref(x), A.normalize_items(s), s, normal)))
+def point.items(+s: S.State, +valid: A.Valid(s)) -> {A.machine_point(s) == A.point_of_ref(s) : D.Point}:
+  +normal : {A.normalize_items(s) == s : S.State} = A.valid.normal(s, valid)
+  Equal.trans(D.Point, A.machine_point(s), A.machine_point(A.normalize_items(s)), A.point_of_ref(s), Equal.cong(S.State, D.Point, x => A.machine_point(x), s, A.normalize_items(s), Equal.sym(S.State, A.normalize_items(s), s, normal)), Equal.trans(D.Point, A.machine_point(A.normalize_items(s)), A.point_of_ref(A.normalize_items(s)), A.point_of_ref(s), point.norm(s, A.valid.shape(s, valid)), Equal.cong(S.State, D.Point, x => A.point_of_ref(x), A.normalize_items(s), s, normal)))
 
-# SimulationItems from part 1 and part 3; part 2 follows by point.items.
-def simulation.items(+state: S.State, +n: Nat, +result: {A.ref_answer(A.ref(state), n) == A.stepped(M.answer(state, n)) : A.RefStep()}, +valid: A.ValidItems(A.next(state, n))) -> A.SimulationItems(state, n):
+# Simulation from part 1 and part 3; part 2 follows by point.items.
+def simulation.items(+state: S.State, +n: Nat, +result: {A.ref_answer(A.ref(state), n) == A.stepped(M.answer(state, n)) : A.RefStep()}, +valid: A.Valid(A.next(state, n))) -> A.Simulation(state, n):
   (result, (Equal.trans(D.Point, A.machine_point(A.next(state, n)), A.point_of_ref(A.next(state, n)), A.ref_step_point(A.ref_answer(A.ref(state), n)), point.items(A.next(state, n), valid), Equal.trans(D.Point, A.point_of_ref(A.next(state, n)), A.ref_step_point(A.stepped(M.answer(state, n))), A.ref_step_point(A.ref_answer(A.ref(state), n)), C.point_stepped(M.answer(state, n)), Equal.cong(A.RefStep(), D.Point, x => A.ref_step_point(x), A.stepped(M.answer(state, n)), A.ref_answer(A.ref(state), n), Equal.sym(A.RefStep(), A.ref_answer(A.ref(state), n), A.stepped(M.answer(state, n)), result)))), valid))
 
-def valid.normalized(+s: S.State, +valid: A.ValidItems(s)) -> A.ValidItems(A.normalize_items(s)):
-  %Equal.sym(S.State, A.normalize_items(s), s, A.valid_items.normal(s, valid)) : A.ValidItems(_)
+def valid.normalized(+s: S.State, +valid: A.Valid(s)) -> A.Valid(A.normalize_items(s)):
+  %Equal.sym(S.State, A.normalize_items(s), s, A.valid.normal(s, valid)) : A.Valid(_)
   valid
 
-# step_matches at the handout's request points, under ValidItems, given the
+# step_matches at the handout's request points, under Valid, given the
 # load closure (L11) and that it ends valid.
 
-def step.grab(+world: S.World, +players: S.Players, +needs: D.Ring<&2, List<&2, S.GrabOption>>, +notes: A.Notes(), +grabs: S.Grabs, +n: Nat, +valid: A.ValidItems(S.State{world, players, S.Grab{needs}, notes, grabs}), load: GP.LoadClosure(), loaded: LoadValid()) -> A.SimulationItems(S.State{world, players, S.Grab{needs}, notes, grabs}, n):
-  +normal : A.ValidItems(grab.at(world, players, notes, grabs)) = valid.normalized(S.State{world, players, S.Grab{needs}, notes, grabs}, valid)
-  %A.valid_items.normal(S.State{world, players, S.Grab{needs}, notes, grabs}, valid) : A.SimulationItems(_, n)
-  simulation.items(grab.at(world, players, notes, grabs), n, grab.answer(world, players, notes, grabs, n, A.valid_items.shape(grab.at(world, players, notes, grabs), normal), load), grab.valid(world, players, notes, grabs, n, normal, loaded))
+def step.grab(+world: S.World, +players: S.Players, +needs: D.Ring<&2, List<&2, S.GrabOption>>, +notes: A.Notes(), +grabs: S.Grabs, +n: Nat, +valid: A.Valid(S.State{world, players, S.Grab{needs}, notes, grabs}), load: GP.LoadClosure(), loaded: LoadValid()) -> A.Simulation(S.State{world, players, S.Grab{needs}, notes, grabs}, n):
+  +normal : A.Valid(grab.at(world, players, notes, grabs)) = valid.normalized(S.State{world, players, S.Grab{needs}, notes, grabs}, valid)
+  %A.valid.normal(S.State{world, players, S.Grab{needs}, notes, grabs}, valid) : A.Simulation(_, n)
+  simulation.items(grab.at(world, players, notes, grabs), n, grab.answer(world, players, notes, grabs, n, A.valid.shape(grab.at(world, players, notes, grabs), normal), load), grab.valid(world, players, notes, grabs, n, normal, loaded))
 
-def step.item(+world: S.World, +players: S.Players, +seat: D.Seat, +first: D.Item, +second: D.Item, +rest: List<&2, D.Item>, +notes: A.Notes(), +grabs: S.Grabs, +n: Nat, +valid: A.ValidItems(S.State{world, players, S.NeedItem{seat, first, second, rest}, notes, grabs}), load: GP.LoadClosure(), loaded: LoadValid()) -> A.SimulationItems(S.State{world, players, S.NeedItem{seat, first, second, rest}, notes, grabs}, n):
-  simulation.items(item.at(world, players, seat, first, second, rest, notes, grabs), n, item.answer(world, players, seat, first, second, rest, notes, grabs, n, A.valid_items.shape(item.at(world, players, seat, first, second, rest, notes, grabs), valid), load), item.valid(world, players, seat, first, second, rest, notes, grabs, n, valid, loaded))
+def step.item(+world: S.World, +players: S.Players, +seat: D.Seat, +first: D.Item, +second: D.Item, +rest: List<&2, D.Item>, +notes: A.Notes(), +grabs: S.Grabs, +n: Nat, +valid: A.Valid(S.State{world, players, S.NeedItem{seat, first, second, rest}, notes, grabs}), load: GP.LoadClosure(), loaded: LoadValid()) -> A.Simulation(S.State{world, players, S.NeedItem{seat, first, second, rest}, notes, grabs}, n):
+  simulation.items(item.at(world, players, seat, first, second, rest, notes, grabs), n, item.answer(world, players, seat, first, second, rest, notes, grabs, n, A.valid.shape(item.at(world, players, seat, first, second, rest, notes, grabs), valid), load), item.valid(world, players, seat, first, second, rest, notes, grabs, n, valid, loaded))

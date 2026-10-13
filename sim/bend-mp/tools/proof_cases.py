@@ -79,15 +79,6 @@ def seat_split(match_world: bool) -> Callable[[], list[str]]:
     return body
 
 
-def seat_split_present() -> list[str]:
-    """Every shape and seat; a seat off the table is refuted by `present`."""
-    rows = ["match seats seat:"]
-    for shape, seat in product(SHAPES, range(4)):
-        rows.append(f"  case {shape.pattern()} {SEATS[seat]}:")
-        rows.append("    {==}" if seat in shape.seated else "    match present:")
-    return ["match world:", f"  case {world()}:", *indent(4, rows)]
-
-
 def seat_pairs(leaf: Callable[[bool], list[str]]) -> list[str]:
     """Every (actor, target) pair per shape; a seat off the table is refuted."""
     rows = ["match seats actor target:"]
@@ -125,133 +116,12 @@ def mid() -> list[str]:
     return rows
 
 
-def r1() -> list[str]:
-    """Reference shot prefix: a self shot also splits the shell (saw timing)."""
-
-    def leaf(same: bool) -> list[str]:
-        if not same:
-            return ["{==}"]
-        return [
-            "match shell:",
-            "  case D.Live{}:",
-            "    {==}",
-            "  case D.Blank{}:",
-            "    {==}",
-        ]
-
-    return ["match world:", f"  case {world()}:", *indent(4, seat_pairs(leaf))]
-
-
-FRONT_STUCK = (
-    "({==}, pack_valid(A.world_for(world, seats), seats, "
-    "S.Aim{actor}, notes, "
-    "aimstep.front_stable(world, seats, supported, bounded), {==}, ready))"
-)
-
-
-def front_pick(target: int, index: int) -> str:
-    return (
-        f"aimstep.pick(A.world_for(world, seats), seats, actor, {SEATS[target]}, {index}n, "
-        "{==}, Unit{}, Unit{}, supported, bounded, {==}, ready)"
-    )
-
-
-def front_menu(living: list[int]) -> list[str]:
-    """The tape value picks a living target; values past the menu clamp."""
-    if not living:
-        return [FRONT_STUCK]
-    rows = ["match n:"]
-    for index, target in enumerate(living):
-        rows += [f"  case {index}n:", f"    {front_pick(target, index)}"]
-    last = len(living) - 1
-    return rows + [f"  case {last + 1}n+more:", f"    {front_pick(living[last], last)}"]
-
-
-def front() -> list[str]:
-    """Aim answer: split the actor and which seats are alive."""
-    rows = ["match seats actor:"]
-    for shape, actor in product(SHAPES, range(4)):
-        if actor not in shape.seated:
-            rows += [f"  case {shape.pattern()} {SEATS[actor]}:", f"    {FRONT_STUCK}"]
-            continue
-        for alive in product((False, True), repeat=len(shape.seated)):
-            health = {
-                seat: f"1n+h{seat}" if live else "0n"
-                for seat, live in zip(shape.seated, alive)
-            }
-            living = [seat for seat, live in zip(shape.seated, alive) if live]
-            rows.append(f"  case {shape.pattern(health)} {SEATS[actor]}:")
-            rows += indent(4, front_menu(living))
-    return ["match world:", f"  case {world()}:", *indent(4, rows)]
-
-
-
-def pack_shape() -> list[str]:
-    """The table tie of a no-item pack, per table shape."""
-    rows = ["match seats:"]
-    for shape in SHAPES:
-        rows += [f"  case {shape.pattern()}:", "    ({==}, ({==}, ({==}, ({==}, {==}))))"]
-    return ["match world:", f"  case {world()}:", *indent(4, rows)]
-
-
 # Each phase constructor and what the no-item normal form makes of it: kept,
 # Blocked, or Idle with the gun alone.
-PHASES = (
-    ("S.NeedFirst{}", "keep"),
-    ("S.NeedHealth{}", "keep"),
-    ("S.NeedAmount{}", "keep"),
-    ("S.NeedBatch{}", "keep"),
-    ("S.NeedSwap{_, _, 0n}", "blocked"),
-    ("S.NeedSwap{+swap_load, +shells, 1n+i}", "keep"),
-    ("S.Idle{+seat, options}", "idle"),
-    ("S.Aim{+seat}", "keep"),
-    ("S.Ended{}", "keep"),
-    ("S.Blocked{+holder}", "keep"),
-    ("S.NeedTurnAmount{_, _, _}", "blocked"),
-    ("S.Grab{_}", "blocked"),
-    ("S.NeedItem{_, _, _, _}", "blocked"),
-    ("S.NeedPhone{_, _, _}", "blocked"),
-    ("S.JamPick{_, _}", "blocked"),
-    ("S.StealPick{_, _}", "blocked"),
-)
 
-
-def pack_valid() -> list[str]:
-    """ValidItems of a no-item pack, per phase constructor."""
-    w = world()
-    idle = "S.Idle{seat, D.NonEmpty{S.TakeGun{}, Nil{}}}"
-    pack = f"A.pack(A.world_for({w}, seats), seats, {idle}, notes)"
-    rows = ["match phase:"]
-    for pattern, kind in PHASES:
-        canonical = {"keep": re.sub(r"(?<=[{ ])\+", "", pattern), "blocked": "S.Blocked{None{}}", "idle": idle}[kind]
-        shape = f"items.pack_shape({w}, seats, {canonical}, notes)"
-        if kind == "idle":
-            state = f"xs => S.State{{A.world_for({w}, seats), A.players.free(seats), S.Idle{{seat, D.NonEmpty{{S.TakeGun{{}}, xs}}}}, notes, A.grabs(seats)}}"
-            normal = f"Equal.cong(List<&2, S.IdleOption>, S.State, {state}, I.uses({pack}, seat), Nil{{}}, items.idle_uses({w}, seats, seat, notes))"
-        else:
-            normal = "{==}"
-        ready = "{==}" if kind == "blocked" else "ready"
-        rows += [f"  case {pattern}:", f"    ({normal}, ({shape}, (bounded, {ready})))"]
-    return ["match world:", f"  case {w}:", *indent(4, rows)]
 
 BODIES: dict[str, Callable[[], list[str]]] = {
-    "give_pack": seat_split(match_world=False),
-    "idleproof.idle_guards": seat_split_present,
-    "aimproof.players_health_write": seat_split(match_world=False),
-    "aimproof.players_cash_write": seat_split(match_world=False),
-    "aimproof.cash_shape": seat_split(match_world=False),
-    "aimstep.machine_final_gate": seat_split(match_world=True),
-    "aimstep.loop_award": seat_split(match_world=True),
-    "aimstep.mid": mid,
-    "aimstep.r1": r1,
     "inv.idle_phase": seat_split(match_world=True),
-    "aimstep.front": front,
-}
-
-ITEM_BODIES: dict[str, Callable[[], list[str]]] = {
-    "items.idle_uses": seat_split(match_world=False),
-    "items.pack_shape": pack_shape,
-    "items.pack_valid": pack_valid,
 }
 
 # ---------------------------------------------------------------------------
@@ -481,7 +351,7 @@ def next_leaf(_shape: Shape, _seat: int | None, state: str) -> list[str]:
 
 
 # item-step-proof.bend's splits of the same kind, refuting through grab-proof.bend.
-ITEM_BODIES |= {
+ITEM_BODIES: dict[str, Callable[[], list[str]]] = {
     "view.eq": ring_split(lambda state: f"view.claim({state}, seat)", ("players", "grabbing", "holding"), True, view_leaf, "GP."),
     "health.eq": ring_split(lambda state: f"health.claim({state})", ("players",), False, closed, "GP."),
 }
@@ -642,7 +512,6 @@ def shot_close() -> list[str]:
         for checking in ("True{}", "False{}"):
             rows += [f"      case {checking}:", f"        {shot_leaf('D.Live{}', same, '0n', checking)}"]
     return rows
-
 
 
 def seated_entries_leaf(shape: Shape, _seat: int | None, _state: str) -> list[str]:

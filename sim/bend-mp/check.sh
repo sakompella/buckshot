@@ -7,7 +7,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BEND="${BEND:-bend}"
 export BEND
 
-required_laws=(step_matches run_matches reachable_valid start_matches state_roundtrip jam_skip_once turn_traversal observe_matches legal_exact legal_accepted privacy)
+required_laws=(step_matches run_matches reachable_valid start_matches games_match state_roundtrip jam_skip_once turn_traversal observe_matches legal_exact legal_accepted privacy)
 
 failed=0
 report() {

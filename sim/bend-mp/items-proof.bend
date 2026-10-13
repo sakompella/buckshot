@@ -22,20 +22,20 @@ import ./pick-proof.bend as PK
 import ./round-proof.bend as RP
 import ./load-step-proof.bend as LS
 
-# step_matches for every config: A.SimulationItems at every A.ValidItems
+# step_matches for every config: A.Simulation at every A.Valid
 # state, by the phase. The win premises of the turn proofs are discharged by
 # round-proof.bend.
 
-def step.swap(+w: S.World, +p: S.Players, +ld: D.Load, +sh: List<&2, D.Shell>, +i: Nat, +notes: A.Notes(), +g: S.Grabs, +n: Nat, +valid: A.ValidItems(S.State{w, p, S.NeedSwap{ld, sh, i}, notes, g})) -> A.SimulationItems(S.State{w, p, S.NeedSwap{ld, sh, i}, notes, g}, n):
+def step.swap(+w: S.World, +p: S.Players, +ld: D.Load, +sh: List<&2, D.Shell>, +i: Nat, +notes: A.Notes(), +g: S.Grabs, +n: Nat, +valid: A.Valid(S.State{w, p, S.NeedSwap{ld, sh, i}, notes, g})) -> A.Simulation(S.State{w, p, S.NeedSwap{ld, sh, i}, notes, g}, n):
   match i:
     case 0n:
-      %A.valid_items.normal(S.State{w, p, S.NeedSwap{ld, sh, 0n}, notes, g}, valid) : A.SimulationItems(_, n)
+      %A.valid.normal(S.State{w, p, S.NeedSwap{ld, sh, 0n}, notes, g}, valid) : A.Simulation(_, n)
       ISP.simulation.items(S.State{w, p, S.Blocked{None{}}, notes, g}, n, {==}, ISP.valid.normalized(S.State{w, p, S.NeedSwap{ld, sh, 0n}, notes, g}, valid))
     case 1n+e:
-      ISP.simulation.items(S.State{w, p, S.NeedSwap{ld, sh, 1n+e}, notes, g}, n, LS.swap.answer(w, p, ld, sh, e, notes, g, n, A.valid_items.shape(S.State{w, p, S.NeedSwap{ld, sh, 1n+e}, notes, g}, valid)), LS.valid.swap.answer(w, p, ld, sh, e, notes, g, n, valid))
+      ISP.simulation.items(S.State{w, p, S.NeedSwap{ld, sh, 1n+e}, notes, g}, n, LS.swap.answer(w, p, ld, sh, e, notes, g, n, A.valid.shape(S.State{w, p, S.NeedSwap{ld, sh, 1n+e}, notes, g}, valid)), LS.valid.swap.answer(w, p, ld, sh, e, notes, g, n, valid))
 
 
-def step.items(+s: S.State, +n: Nat, +valid: A.ValidItems(s)) -> A.SimulationItems(s, n):
+def step.items(+s: S.State, +n: Nat, +valid: A.Valid(s)) -> A.Simulation(s, n):
   match s:
     case S.State{+w, +p, +ph, +notes, +g}:
       match ph:

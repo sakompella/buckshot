@@ -87,15 +87,15 @@ const requestMove = move => {
 
 const RING_TABLE = { Duo: 'TwoSeats', Trio: 'ThreeSeats', Quad: 'FourSeats' };
 
-// A.ValidItems at a reachable request point: the item normal form, the table
+// A.Valid at a reachable request point: the item normal form, the table
 // tie of the seat ring and the Grabs rings, the round bound and the turn facts.
-function checkValidItems(game) {
+function checkValid(game) {
   const s = asAbstract(game.m);
-  same('reachable_valid', 'ValidItems normal form', s, A.normalize_items(s), game);
+  same('reachable_valid', 'Valid normal form', s, A.normalize_items(s), game);
   const { grabbing, holding, granted, intake } = game.m.grabs;
   const table = kind(game.m.world.config.table);
-  same('reachable_valid', 'ValidItems table tie', Array(5).fill(table), [game.m.players, grabbing, holding, granted, intake].map(ring => RING_TABLE[kind(ring)]), game);
-  same('reachable_valid', 'ValidItems facts', { bounded: true, ready: true }, { bounded: A.bounded(s), ready: A.items_ready(s.phase, s.world) }, game);
+  same('reachable_valid', 'Valid table tie', Array(5).fill(table), [game.m.players, grabbing, holding, granted, intake].map(ring => RING_TABLE[kind(ring)]), game);
+  same('reachable_valid', 'Valid facts', { bounded: true, ready: true }, { bounded: A.bounded(s), ready: A.items_ready(s.phase, s.world) }, game);
 }
 
 function checkPrivacyAtPoint(game) {
@@ -122,7 +122,7 @@ function play(config, label, seats) {
     checkObservations(game, `step ${step}`, mPoint, rPoint, mNotes, rNotes);
     checkLegal(game, mPoint.request, rPoint.request);
     checkPrivacyAtPoint(game);
-    checkValidItems(game);
+    checkValid(game);
     coverage.boundaries++;
     const request = requestJSON(rPoint.request);
     if (request.kind === 'Finished') { coverage.finished++; return; }

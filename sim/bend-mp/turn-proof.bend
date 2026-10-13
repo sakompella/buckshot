@@ -539,16 +539,16 @@ def packet.close(+s: S.State, +from: D.Seat, +passing: Bool, +winner: Maybe<&2, 
 # that the win's successor is (premise until the round start is proven).
 
 def WinValid() -> Type:
-  @+s:S.State -> @+seat:D.Seat -> @+vpre:LP.VPre(s) -> A.ValidItems(M.win(s, seat))
+  @+s:S.State -> @+seat:D.Seat -> @+vpre:LP.VPre(s) -> A.Valid(M.win(s, seat))
 
-def valid.distribute(+xs: List<&2, D.Seat>, +s: S.State, +vpre: LP.VPre(s)) -> A.ValidItems(M.distribute.begin(s, xs)):
+def valid.distribute(+xs: List<&2, D.Seat>, +s: S.State, +vpre: LP.VPre(s)) -> A.Valid(M.distribute.begin(s, xs)):
   match xs:
     case Nil{}:
       match s:
         case S.State{+w, +p, +ph, +n, +g}:
           match vpre:
             case Tuple{+shape, +bounded}:
-              %Equal.sym(S.State, M.load.begin(S.State{w, p, ph, n, g}), M.load.begin(S.State{w, p, S.Blocked{None{}}, n, g}), irr.load(w, p, ph, n, g)) : A.ValidItems(_)
+              %Equal.sym(S.State, M.load.begin(S.State{w, p, ph, n, g}), M.load.begin(S.State{w, p, S.Blocked{None{}}, n, g}), irr.load(w, p, ph, n, g)) : A.Valid(_)
               LP.valid.load(S.State{w, p, S.Blocked{None{}}, n, g}, ((ISP.shape.move(w, p, ph, n, g, S.Blocked{None{}}, n, shape), {==}), bounded))
     case +seat <> +rest:
       match s:
@@ -562,7 +562,7 @@ def valid.distribute(+xs: List<&2, D.Seat>, +s: S.State, +vpre: LP.VPre(s)) -> A
               +s1 : S.State = S.State{w, p, ph, told, g1}
               ({==}, (ISP.shape.move(w, p, ph, n, g1, S.Grab{I.grab.needs(s1)}, told, shape.dist(opened(s0, ys), shape.opened(ys, s0, shape))), (bounded, {==})))
 
-def valid.main(+winner: Maybe<&2, D.Seat>, +s: S.State, +from: D.Seat, +passing: Bool, +vpre: LP.VPre(s), winv: WinValid()) -> A.ValidItems(M.turn.winner(s, from, passing, winner)):
+def valid.main(+winner: Maybe<&2, D.Seat>, +s: S.State, +from: D.Seat, +passing: Bool, +vpre: LP.VPre(s), winv: WinValid()) -> A.Valid(M.turn.winner(s, from, passing, winner)):
   match winner:
     case Some{+seat}:
       winv(s, seat, vpre)
@@ -577,7 +577,7 @@ def valid.main(+winner: Maybe<&2, D.Seat>, +s: S.State, +from: D.Seat, +passing:
           +s1 : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, rm, turn, direction, died, checking, amount, saw, shell <> rest, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}
           LP.valid.grant(s1, rm, vpre)
 
-def valid.live(+live: Bool, +s: S.State, +from: D.Seat, +passing: Bool, +winner: Maybe<&2, D.Seat>, +vpre: LP.VPre(s), winv: WinValid()) -> A.ValidItems(M.turn.live(s, from, passing, winner, D.RandomAmount{}, live)):
+def valid.live(+live: Bool, +s: S.State, +from: D.Seat, +passing: Bool, +winner: Maybe<&2, D.Seat>, +vpre: LP.VPre(s), winv: WinValid()) -> A.Valid(M.turn.live(s, from, passing, winner, D.RandomAmount{}, live)):
   match live:
     case True{}:
       match s:
@@ -588,7 +588,7 @@ def valid.live(+live: Bool, +s: S.State, +from: D.Seat, +passing: Bool, +winner:
     case False{}:
       valid.main(winner, s, from, passing, vpre, winv)
 
-def valid.rule(+rule: D.AmountRule, +s: S.State, +from: D.Seat, +passing: Bool, +winner: Maybe<&2, D.Seat>, +vpre: LP.VPre(s), winv: WinValid()) -> A.ValidItems(M.turn.live(s, from, passing, winner, rule, I.amount.live(rule, S.grabs.distributing(S.state.grabs(s)), I.reload.wanted(s, winner)))):
+def valid.rule(+rule: D.AmountRule, +s: S.State, +from: D.Seat, +passing: Bool, +winner: Maybe<&2, D.Seat>, +vpre: LP.VPre(s), winv: WinValid()) -> A.Valid(M.turn.live(s, from, passing, winner, rule, I.amount.live(rule, S.grabs.distributing(S.state.grabs(s)), I.reload.wanted(s, winner)))):
   match rule:
     case D.FixedAmount{+a}:
       match s:
@@ -597,5 +597,5 @@ def valid.rule(+rule: D.AmountRule, +s: S.State, +from: D.Seat, +passing: Bool, 
     case D.RandomAmount{}:
       valid.live(I.amount.live(D.RandomAmount{}, S.grabs.distributing(S.state.grabs(s)), I.reload.wanted(s, winner)), s, from, passing, winner, vpre, winv)
 
-def valid.packet(+s: S.State, +from: D.Seat, +passing: Bool, +winner: Maybe<&2, D.Seat>, +vpre: LP.VPre(s), winv: WinValid()) -> A.ValidItems(M.turn.packet(s, from, passing, winner)):
+def valid.packet(+s: S.State, +from: D.Seat, +passing: Bool, +winner: Maybe<&2, D.Seat>, +vpre: LP.VPre(s), winv: WinValid()) -> A.Valid(M.turn.packet(s, from, passing, winner)):
   valid.rule(Q.load.amount(Q.world.load_rule(S.state.world(s))), s, from, passing, winner, vpre, winv)
