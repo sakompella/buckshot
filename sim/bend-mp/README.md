@@ -178,7 +178,7 @@ It takes about 7 to 8 minutes on a Mac, and about 1.5 minutes on a 7-core Linux 
 2. No `@unsafe` and no unfinished `def name?(` hole anywhere under this directory.
 3. The import rules for `ai/`, `sm/` and `driver.bend`.
 4. The driver smoke test. 64 matches at each table size finish with none stuck and no fuel spent.
-5. All ten required laws are present in `LAWS.bend`.
+5. All eleven required laws are present in `LAWS.bend`.
 6. The generated proof bodies and the generated reference API match their scripts.
 7. `PROOF.bend` checks with `--verdict`.
 8. The round trip of the domain types through JavaScript.
