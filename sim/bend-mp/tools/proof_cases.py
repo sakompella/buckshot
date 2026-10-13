@@ -446,6 +446,7 @@ ITEM_BODIES |= {
 
 LOAD_BODIES: dict[str, Callable[[], list[str]]] = {
     "inventory.eq": ring_split(lambda state: f"inventory.claim({state})", ("players",), False, closed, "GP."),
+    "give.eq": ring_split(lambda state: f"give.claim({state}, seat)", ("players",), True, closed, "GP."),
 }
 
 FILES = {PROOF: BODIES, ITEM_PROOF: ITEM_BODIES, GRAB_PROOF: GRAB_BODIES, LOAD_PROOF: LOAD_BODIES}

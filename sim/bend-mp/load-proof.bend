@@ -397,3 +397,98 @@ def use.slots.eq(+slots: List<&2, D.Slot>, +h: H.Host, +seat: D.Seat, +inv: D.Sl
 # The Idle item menu: the reference renders exactly the machine's options.
 def uses.eq(+s: S.State, +seat: D.Seat, +shape: A.Shape(s)) -> {RI.use_moves(I.slot.order(), A.ref_host(s), seat) == Q.idle.moves(I.uses(s, seat)) : List<&2, D.Move>}:
   use.slots.eq(I.slot.order(), A.ref_host(s), seat, I.seat.slots(S.state.players(s), seat), S.world.sawed(S.state.world(s)), I.jam.any(I.jam.for(s, seat)), I.steal.any(I.steal.for(s, seat)), GP.slots.eq(s, seat, shape), sawed.eq(s), targets.eq(s, seat, shape), steals.eq(s, seat, shape))
+
+# The grant chain (PassTurn, GiveTurnPermissions) from a state no seat holds
+# the turn in.
+
+def quiet.host(+s: S.State, +quiet: {A.turn.holder(S.state.phase(s)) == None{} : Maybe<&2, D.Seat>}) -> {A.ref_host(s) == A.host.at(S.state.world(s), S.state.players(s), S.state.grabs(s), None{}) : H.Host}:
+  match s:
+    case S.State{+world, +players, +phase, +notes, +grabs}:
+      Equal.cong(Maybe<&2, D.Seat>, H.Host, x => A.host.at(world, players, grabs, x), A.turn.holder(phase), None{}, quiet)
+
+def give.claim(+s: S.State, +seat: D.Seat) -> Type:
+  {H.host.set_props(A.host.at(S.state.world(s), S.state.players(s), S.state.grabs(s), None{}), seat, H.props.set_turn(H.host.props(A.host.at(S.state.world(s), S.state.players(s), S.state.grabs(s), None{}), seat), True{})) == A.host.at(S.state.world(s), S.state.players(s), S.state.grabs(s), Some{seat}) : H.Host}
+
+def give.eq(+s: S.State, +seat: D.Seat, +shape: A.Shape(s)) -> give.claim(s, seat):
+  match s:
+    case S.State{S.World{D.Config{table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, players, +phase, +notes, grabs}:
+      match table players grabs seat:
+        case D.TwoSeats{} D.Duo{S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h3, +j3, +c3, +s3}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} D.Seat0{}:
+          {==}
+        case D.TwoSeats{} D.Duo{S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h3, +j3, +c3, +s3}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} D.Seat1{}:
+          {==}
+        case D.TwoSeats{} D.Duo{S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h3, +j3, +c3, +s3}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} D.Seat2{}:
+          {==}
+        case D.TwoSeats{} D.Duo{S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h3, +j3, +c3, +s3}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} D.Seat3{}:
+          {==}
+        case D.TwoSeats{} D.Trio{S.Seat{+h0, +j0, +c0, +s0}, S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h2, +j2, +c2, +s2}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} +seat:
+          match shape:
+            case Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}:
+              GP.absurd(give.claim(S.State{S.World{D.Config{D.TwoSeats{}, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, D.Trio{S.Seat{h0, j0, c0, s0}, S.Seat{h1, j1, c1, s1}, S.Seat{h2, j2, c2, s2}}, phase, notes, S.Grabs{dist, grabbing, holding, granted, intake}}, seat), GP.clash.three_two(e_players))
+        case D.TwoSeats{} D.Quad{S.Seat{+h0, +j0, +c0, +s0}, S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h2, +j2, +c2, +s2}, S.Seat{+h3, +j3, +c3, +s3}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} +seat:
+          match shape:
+            case Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}:
+              GP.absurd(give.claim(S.State{S.World{D.Config{D.TwoSeats{}, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, D.Quad{S.Seat{h0, j0, c0, s0}, S.Seat{h1, j1, c1, s1}, S.Seat{h2, j2, c2, s2}, S.Seat{h3, j3, c3, s3}}, phase, notes, S.Grabs{dist, grabbing, holding, granted, intake}}, seat), GP.clash.four_two(e_players))
+        case D.ThreeSeats{} D.Trio{S.Seat{+h0, +j0, +c0, +s0}, S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h2, +j2, +c2, +s2}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} D.Seat0{}:
+          {==}
+        case D.ThreeSeats{} D.Trio{S.Seat{+h0, +j0, +c0, +s0}, S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h2, +j2, +c2, +s2}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} D.Seat1{}:
+          {==}
+        case D.ThreeSeats{} D.Trio{S.Seat{+h0, +j0, +c0, +s0}, S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h2, +j2, +c2, +s2}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} D.Seat2{}:
+          {==}
+        case D.ThreeSeats{} D.Trio{S.Seat{+h0, +j0, +c0, +s0}, S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h2, +j2, +c2, +s2}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} D.Seat3{}:
+          {==}
+        case D.ThreeSeats{} D.Duo{S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h3, +j3, +c3, +s3}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} +seat:
+          match shape:
+            case Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}:
+              GP.absurd(give.claim(S.State{S.World{D.Config{D.ThreeSeats{}, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, D.Duo{S.Seat{h1, j1, c1, s1}, S.Seat{h3, j3, c3, s3}}, phase, notes, S.Grabs{dist, grabbing, holding, granted, intake}}, seat), GP.clash.two_three(e_players))
+        case D.ThreeSeats{} D.Quad{S.Seat{+h0, +j0, +c0, +s0}, S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h2, +j2, +c2, +s2}, S.Seat{+h3, +j3, +c3, +s3}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} +seat:
+          match shape:
+            case Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}:
+              GP.absurd(give.claim(S.State{S.World{D.Config{D.ThreeSeats{}, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, D.Quad{S.Seat{h0, j0, c0, s0}, S.Seat{h1, j1, c1, s1}, S.Seat{h2, j2, c2, s2}, S.Seat{h3, j3, c3, s3}}, phase, notes, S.Grabs{dist, grabbing, holding, granted, intake}}, seat), GP.clash.four_three(e_players))
+        case D.FourSeats{} D.Quad{S.Seat{+h0, +j0, +c0, +s0}, S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h2, +j2, +c2, +s2}, S.Seat{+h3, +j3, +c3, +s3}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} D.Seat0{}:
+          {==}
+        case D.FourSeats{} D.Quad{S.Seat{+h0, +j0, +c0, +s0}, S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h2, +j2, +c2, +s2}, S.Seat{+h3, +j3, +c3, +s3}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} D.Seat1{}:
+          {==}
+        case D.FourSeats{} D.Quad{S.Seat{+h0, +j0, +c0, +s0}, S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h2, +j2, +c2, +s2}, S.Seat{+h3, +j3, +c3, +s3}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} D.Seat2{}:
+          {==}
+        case D.FourSeats{} D.Quad{S.Seat{+h0, +j0, +c0, +s0}, S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h2, +j2, +c2, +s2}, S.Seat{+h3, +j3, +c3, +s3}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} D.Seat3{}:
+          {==}
+        case D.FourSeats{} D.Duo{S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h3, +j3, +c3, +s3}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} +seat:
+          match shape:
+            case Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}:
+              GP.absurd(give.claim(S.State{S.World{D.Config{D.FourSeats{}, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, D.Duo{S.Seat{h1, j1, c1, s1}, S.Seat{h3, j3, c3, s3}}, phase, notes, S.Grabs{dist, grabbing, holding, granted, intake}}, seat), GP.clash.two_four(e_players))
+        case D.FourSeats{} D.Trio{S.Seat{+h0, +j0, +c0, +s0}, S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h2, +j2, +c2, +s2}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} +seat:
+          match shape:
+            case Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}:
+              GP.absurd(give.claim(S.State{S.World{D.Config{D.FourSeats{}, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, D.Trio{S.Seat{h0, j0, c0, s0}, S.Seat{h1, j1, c1, s1}, S.Seat{h2, j2, c2, s2}}, phase, notes, S.Grabs{dist, grabbing, holding, granted, intake}}, seat), GP.clash.three_four(e_players))
+
+def idle.at(+h: H.Host, +seat: D.Seat, +moves: List<&2, D.Move>, +notes: A.Notes()) -> R.RefState:
+  R.RefState{h, R.Await{D.request.choose(D.ring.set(List<&2, D.Move>, D.ring.fill(List<&2, D.Move>, H.host.table(h), Nil{}), seat, D.PickUp{} <> moves)), D.Playing{seat, D.Idle{}}, R.PlayerMove{D.Idle{}}}, notes}
+
+def settle.await(+k: Nat, +h: H.Host, +request: D.Request, +stage: D.Stage, +continuation: R.Continuation, +notes: A.Notes()) -> {R.settle(k, R.RefState{h, R.Await{request, stage, continuation}, notes}) == R.RefState{h, R.Await{request, stage, continuation}, notes} : R.RefState}:
+  match k:
+    case 0n:
+      {==}
+    case 1n+j:
+      {==}
+
+def idle.menu(+h: H.Host, +seat: D.Seat, +notes: A.Notes()) -> R.RefState:
+  idle.at(h, seat, RI.use_moves(I.slot.order(), h, seat), notes)
+
+def give.after(+h: H.Host, +seat: D.Seat, +notes: A.Notes()) -> R.RefState:
+  idle.menu(H.host.set_props(h, seat, H.props.set_turn(H.host.props(h, seat), True{})), seat, notes)
+
+def give.close(+s: S.State, +seat: D.Seat, +k: Nat, +shape: A.Shape(s), +quiet: {A.turn.holder(S.state.phase(s)) == None{} : Maybe<&2, D.Seat>}) -> {R.settle(1n+k, R.RefState{A.ref_host(s), R.GiveTurnPermissions{seat}, S.state.notes(s)}) == A.ref(M.give_turn(s, seat)) : R.RefState}:
+  match s:
+    case S.State{+world, +players, +phase, +notes, +grabs}:
+      +st : S.State = S.State{world, players, phase, notes, grabs}
+      +given : S.State = M.give_turn(st, seat)
+      +told : A.Notes() = List.append(&2, D.Note, notes, [D.Shown{D.TurnGiven{seat}}])
+      +h0 : H.Host = A.host.at(world, players, grabs, None{})
+      +h1 : H.Host = A.host.at(world, players, grabs, Some{seat})
+      +quieted : {give.after(A.ref_host(st), seat, told) == give.after(h0, seat, told) : R.RefState} = Equal.cong(H.Host, R.RefState, h => give.after(h, seat, told), A.ref_host(st), h0, quiet.host(st, quiet))
+      +granted : {give.after(h0, seat, told) == idle.menu(h1, seat, told) : R.RefState} = Equal.cong(H.Host, R.RefState, h => idle.menu(h, seat, told), H.host.set_props(h0, seat, H.props.set_turn(H.host.props(h0, seat), True{})), h1, give.eq(st, seat, shape))
+      +menu : {idle.menu(h1, seat, told) == A.ref(given) : R.RefState} = Equal.cong(List<&2, D.Move>, R.RefState, xs => idle.at(h1, seat, xs, told), RI.use_moves(I.slot.order(), h1, seat), Q.idle.moves(I.uses(st, seat)), uses.eq(given, seat, ISP.shape.move(world, players, phase, notes, grabs, S.state.phase(given), told, shape)))
+      +hs : H.Host = H.host.set_props(A.ref_host(st), seat, H.props.set_turn(H.host.props(A.ref_host(st), seat), True{}))
+      +waited : {R.settle(k, give.after(A.ref_host(st), seat, told)) == give.after(A.ref_host(st), seat, told) : R.RefState} = settle.await(k, hs, D.request.choose(D.ring.set(List<&2, D.Move>, D.ring.fill(List<&2, D.Move>, H.host.table(hs), Nil{}), seat, D.PickUp{} <> RI.use_moves(I.slot.order(), hs, seat))), D.Playing{seat, D.Idle{}}, R.PlayerMove{D.Idle{}}, told)
+      Equal.trans(R.RefState, R.settle(k, give.after(A.ref_host(st), seat, told)), give.after(A.ref_host(st), seat, told), A.ref(given), waited, Equal.trans(R.RefState, give.after(A.ref_host(st), seat, told), give.after(h0, seat, told), A.ref(given), quieted, Equal.trans(R.RefState, give.after(h0, seat, told), idle.menu(h1, seat, told), A.ref(given), granted, menu)))
