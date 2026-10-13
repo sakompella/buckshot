@@ -376,6 +376,26 @@ def last_leaf(shape: Shape, seat: int | None, state: str) -> list[str]:
     ]
 
 
+def menu_leaf(shape: Shape, seat: int | None, _state: str) -> list[str]:
+    """One seat's grab menu from its cells; a missing seat is not grabbing."""
+    turn = f"A.turn.held(A.turn.holder(phase), {SEATS[seat]})"
+    if seat in shape.seated:
+        k = seat
+        cells = [f"g{k}", f"o{k}", f"i{k}", "dist", f"s{k}", f"h{k}", f"S.jam.jammed(j{k})", f"A.jam.checked(j{k})", f"c{k}", turn, f"n{k}"]
+    else:
+        cells = ["False{}", "None{}", "False{}", "dist", "D.slots.empty()", "100n", "False{}", "False{}", "0", turn, "0n"]
+    return [f"menu.cell({', '.join(cells)})"]
+
+
+def menus_set() -> list[str]:
+    """A ring write commutes with rendering, per ring shape and seat."""
+    rows = ["match menus seat:"]
+    for shape, seat in product(SHAPES, SEATS):
+        cells = ", ".join(f"m{k}" for k in shape.seated)
+        rows += [f"  case D.{shape.ring}{{{cells}}} {seat}:", "    {==}"]
+    return rows
+
+
 GRAB_BODIES: dict[str, Callable[[], list[str]]] = {
     "own.eq": ring_split(lambda state: f"own.claim({state}, seat, item)", ("players", "holding"), True, own_leaf),
     "total.eq": ring_split(lambda state: f"total.claim({state}, item)", ("players", "holding"), False, total_leaf),
@@ -383,6 +403,8 @@ GRAB_BODIES: dict[str, Callable[[], list[str]]] = {
     "ended.eq": ring_split(lambda state: f"ended.claim({state})", ("players", "grabbing"), False, closed),
     "last.eq": ring_split(lambda state: f"last.claim({state}, seat)", ("players", "granted"), True, last_leaf),
     "holding.eq": ring_split(lambda state: f"holding.claim({state})", ("holding",), False, closed),
+    "menu.at": ring_split(lambda state: f"menu.claim({state}, seat)", RINGS, True, menu_leaf),
+    "menus.set": menus_set,
 }
 
 FILES = {PROOF: BODIES, ITEM_PROOF: ITEM_BODIES, GRAB_PROOF: GRAB_BODIES}
