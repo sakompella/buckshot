@@ -153,7 +153,8 @@ Results so far.
 - 2 seats, core rules, 2,000 random tapes, 0 mismatches. 1,999 matches ran to the end with identical traces. One tape is a custom config that never ends. All 4,029 points before the game-time limit were identical. One engine crash after a trace was written was recovered by a rerun.
 - Item tapes, 76 in all, 37 with 2 seats, 23 with 3 and 16 with 4. That is 25,533 request points and 0 mismatches. They include witness tapes for M1, M3, M4 and D56. They use every kind of move and every kind of draw.
 - The comparator flagged all 7 trace differences planted in a test.
-- 3 and 4 seats, core rules, smaller runs of 16 tapes each, 0 mismatches. The full 4-seat run is in progress.
+- 4 seats, core rules, 1,000 random tapes (seed 2026101104), 0 mismatches. Every match ran to the end with identical traces. Three tapes first crashed Godot (exit 241) while a second harness run competed for memory; run alone, they matched.
+- 3 seats, core rules, a smaller run of 16 tapes, 0 mismatches.
 
 The harness had two bugs of its own. Both showed up as mismatches and both were fixed.
 
