@@ -2140,7 +2140,7 @@ def aim.loop_expected(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +seat: D.Se
 
 
 # ============================================================================
-# Every-config interface. ValidItems is the request-point invariant for item
+# Every-config interface. Valid is the request-point invariant for item
 # configs; the B1 Valid above keeps the no-item scope until the laws are lifted.
 # ============================================================================
 
@@ -2213,51 +2213,51 @@ def Shape(+s: S.State) -> Data:
 
 # The request-point invariant for every config: the item normal form, the
 # table tie, the round bound and the phase's turn facts.
-def ValidItems(+s: S.State) -> Data:
+def Valid(+s: S.State) -> Data:
   Sigma<&2, &2, {normalize_items(s) == s : S.State}, _ => Sigma<&2, &2, Shape(s), _ => Sigma<&2, &2, Holds(bounded(s)), _ => Holds(items_ready(S.state.phase(s), S.state.world(s)))>>>
 
-def valid_items.normal(+s: S.State, valid: ValidItems(s)) -> {normalize_items(s) == s : S.State}:
+def valid.normal(+s: S.State, valid: Valid(s)) -> {normalize_items(s) == s : S.State}:
   match valid:
     case Tuple{x, _}:
       x
 
-def valid_items.shape(+s: S.State, valid: ValidItems(s)) -> Shape(s):
+def valid.shape(+s: S.State, valid: Valid(s)) -> Shape(s):
   match valid:
     case Tuple{_, Tuple{x, _}}:
       x
 
-def valid_items.bounded(+s: S.State, valid: ValidItems(s)) -> Holds(bounded(s)):
+def valid.bounded(+s: S.State, valid: Valid(s)) -> Holds(bounded(s)):
   match valid:
     case Tuple{_, Tuple{_, Tuple{x, _}}}:
       x
 
-def valid_items.ready(+s: S.State, valid: ValidItems(s)) -> Holds(items_ready(S.state.phase(s), S.state.world(s))):
+def valid.ready(+s: S.State, valid: Valid(s)) -> Holds(items_ready(S.state.phase(s), S.state.world(s))):
   match valid:
     case Tuple{_, Tuple{_, Tuple{_, x}}}:
       x
 
-def SimulationItems(+state: S.State, +n: Nat) -> Data:
-  Sigma<&2, &2, {ref_answer(ref(state), n) == stepped(M.answer(state, n)) : RefStep()}, _ => Sigma<&2, &2, {machine_point(next(state, n)) == ref_step_point(ref_answer(ref(state), n)) : D.Point}, _ => ValidItems(next(state, n))>>
+def Simulation(+state: S.State, +n: Nat) -> Data:
+  Sigma<&2, &2, {ref_answer(ref(state), n) == stepped(M.answer(state, n)) : RefStep()}, _ => Sigma<&2, &2, {machine_point(next(state, n)) == ref_step_point(ref_answer(ref(state), n)) : D.Point}, _ => Valid(next(state, n))>>
 
 
-def simulation.step(+state: S.State, +n: Nat, simulation: SimulationItems(state, n)) -> {ref_answer(ref(state), n) == stepped(M.answer(state, n)) : RefStep()}:
+def simulation.step(+state: S.State, +n: Nat, simulation: Simulation(state, n)) -> {ref_answer(ref(state), n) == stepped(M.answer(state, n)) : RefStep()}:
   match simulation:
     case Tuple{eq, _}:
       eq
 
-def simulation.next(+state: S.State, +n: Nat, simulation: SimulationItems(state, n)) -> ValidItems(next(state, n)):
+def simulation.next(+state: S.State, +n: Nat, simulation: Simulation(state, n)) -> Valid(next(state, n)):
   match simulation:
     case Tuple{_, Tuple{_, valid}}:
       valid
 
 def StartSimulation(+config: D.Config) -> Data:
-  Sigma<&2, &2, {ref_start(config) == stepped(M.start(config)) : RefStep()}, _ => Sigma<&2, &2, {ref_step_point(ref_start(config)) == machine_point(machine_step_state(M.start(config))) : D.Point}, _ => ValidItems(machine_step_state(M.start(config)))>>
+  Sigma<&2, &2, {ref_start(config) == stepped(M.start(config)) : RefStep()}, _ => Sigma<&2, &2, {ref_step_point(ref_start(config)) == machine_point(machine_step_state(M.start(config))) : D.Point}, _ => Valid(machine_step_state(M.start(config)))>>
 
 def RunHypothesis(+fuel: Nat) -> Type:
-  @+state:S.State -> @+tape:List<&2, Nat> -> @+valid:ValidItems(state) -> {ref_run(fuel, ref(state), tape) == ran(M.run(fuel, state, tape)) : RefRan()}
+  @+state:S.State -> @+tape:List<&2, Nat> -> @+valid:Valid(state) -> {ref_run(fuel, ref(state), tape) == ran(M.run(fuel, state, tape)) : RefRan()}
 
 def RunValidHypothesis(+fuel: Nat) -> Type:
-  @+state:S.State -> @+tape:List<&2, Nat> -> @+valid:ValidItems(state) -> ValidItems(machine_ran_state(M.run(fuel, state, tape)))
+  @+state:S.State -> @+tape:List<&2, Nat> -> @+valid:Valid(state) -> Valid(machine_ran_state(M.run(fuel, state, tape)))
 
 # A game from a config: the start's notes, then the run on the tape.
 def ref_game(fuel: Nat, +config: D.Config, tape: List<&2, Nat>) -> D.Ran<&2, R.RefState>:

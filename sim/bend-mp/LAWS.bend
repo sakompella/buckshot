@@ -42,14 +42,14 @@ law legal_play_exact:
 
 law observe_matches:
   for +state: S.State
-  for +valid: A.ValidItems(state)
+  for +valid: A.Valid(state)
   for +seat: D.Seat
   {(A.observation(state, seat), A.heard(state, seat)) == (A.ref_observation(A.ref(state), seat), A.ref_heard(A.ref(state), seat)) : D.Obs & List<&2, D.Heard>}
 
 
 law legal_exact:
   for +state: S.State
-  for +valid: A.ValidItems(state)
+  for +valid: A.Valid(state)
   {A.machine_request(state) == A.ref_request(A.ref(state)) : D.Request}
 
 
@@ -113,14 +113,14 @@ law start_matches:
 law step_matches:
   for +state: S.State
   for +n: Nat
-  for +valid: A.ValidItems(state)
-  Sigma<&2, &2, {A.ref_answer(A.ref(state), n) == A.stepped(M.answer(state, n)) : A.RefStep()}, _ => Sigma<&2, &2, {M.point(A.next(state, n)) == A.ref_step_point(A.ref_answer(A.ref(state), n)) : D.Point}, _ => A.ValidItems(A.next(state, n))>>
+  for +valid: A.Valid(state)
+  Sigma<&2, &2, {A.ref_answer(A.ref(state), n) == A.stepped(M.answer(state, n)) : A.RefStep()}, _ => Sigma<&2, &2, {M.point(A.next(state, n)) == A.ref_step_point(A.ref_answer(A.ref(state), n)) : D.Point}, _ => A.Valid(A.next(state, n))>>
 
 law run_matches:
   for fuel: Nat
   for +state: S.State
   for +tape: List<&2, Nat>
-  for +valid: A.ValidItems(state)
+  for +valid: A.Valid(state)
   {A.ref_run(fuel, A.ref(state), tape) == A.ran(M.run(fuel, state, tape)) : A.RefRan()}
 
 # Every state the machine reaches from a start is valid.
@@ -128,7 +128,7 @@ law reachable_valid:
   for fuel: Nat
   for +config: D.Config
   for +tape: List<&2, Nat>
-  A.ValidItems(A.machine_ran_state(M.run(fuel, M.stepped.state(M.start(config)), tape)))
+  A.Valid(A.machine_ran_state(M.run(fuel, M.stepped.state(M.start(config)), tape)))
 
 # Every machine game is a reference game, and the reverse: for every config
 # and tape, the reference's game equals the machine's read through A.ran.
