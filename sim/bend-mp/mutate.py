@@ -71,8 +71,8 @@ MUTATIONS = (
         "sm/rules.bend",
         (
             Edit(
-                "S.Skip{S.players.set_checked(players, D.ring.set(Bool, S.players.checked(players), seat, True{}))}",
-                "S.Skip{S.players.set_checked(players, D.ring.set(Bool, S.players.checked(players), seat, False{}))}",
+                "S.Skip{S.players.set_jam(players, D.ring.set(S.Jam, S.players.jam(players), seat, S.JammedSkipped{}))}",
+                "S.Skip{S.players.set_jam(players, D.ring.set(S.Jam, S.players.jam(players), seat, S.Jammed{}))}",
             ),
         ),
     ),

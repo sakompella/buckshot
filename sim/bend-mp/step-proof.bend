@@ -39,8 +39,8 @@ def step_phase(+world: S.World, +players: S.Players, +phase: S.Phase, +notes: A.
       C.step_aim(world, players, actor, targets, notes, grabs, n, valid)
     case S.Ended{}:
       C.step_ended(world, players, notes, grabs, n, valid)
-    case S.Blocked{}:
-      C.step_blocked(world, players, notes, grabs, n, valid)
+    case S.Blocked{+holder}:
+      C.step_blocked(world, players, holder, notes, grabs, n, valid)
     case S.NeedTurnAmount{from, passing, winner}:
       C.step_item_phase(world, players, S.NeedTurnAmount{from, passing, winner}, notes, grabs, n, valid, {==}, {==})
     case S.Grab{needs}:
