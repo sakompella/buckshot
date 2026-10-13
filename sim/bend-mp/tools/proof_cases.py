@@ -641,10 +641,20 @@ def shot_close() -> list[str]:
     return rows
 
 
+
+def seated_entries_leaf(shape: Shape, _seat: int | None, _state: str) -> list[str]:
+    """Every entry of a table's ring is a seated seat."""
+    proof = "Unit{}"
+    for _ in shape.seated:
+        proof = f"(Unit{{}}, {proof})"
+    return [proof]
+
+
 AIM_BODIES: dict[str, Callable[[], list[str]]] = {
     "hw.eq": ring_split(lambda state: f"hw.claim({state}, seat, x)", ("players",), True, closed, "GP."),
     "back.eq": ring_split(lambda state: f"back.claim({state}, seat, x)", ("players",), True, seated_leaf, "GP."),
     "shot.close": shot_close,
+    "entries.seated": ring_split(lambda state: f"seated.claim({state})", ("players",), False, seated_entries_leaf, "GP."),
 }
 
 FILES = {PROOF: BODIES, ITEM_PROOF: ITEM_BODIES, GRAB_PROOF: GRAB_BODIES, LOAD_PROOF: LOAD_BODIES, TURN_PROOF: TURN_BODIES, USE_PROOF: USE_BODIES, AIM_PROOF: AIM_BODIES}
