@@ -13,6 +13,17 @@ export function array(xs) {
 }
 export const kind = value => value.$.split('.').at(-1);
 export const seatNumber = seat => Number(kind(seat).slice(4));
+// The machine's Jam for the reference's (is_jammed, jammer_checked) pair.
+export const machineJam = (jammed, checked) => ({ $: `state.${!jammed ? 'Free' : checked ? 'JammedSkipped' : 'Jammed'}` });
+// The reference pair of a machine Jam. Godot leaves jammer_checked stale after
+// a lift, so the pair compares jammer_checked only while jammed.
+export const jamPair = jam => ({ jammed: kind(jam) !== 'Free', jam_checked: kind(jam) === 'Free' ? null : kind(jam) === 'JammedSkipped' });
+// The seat holding the reference's has_turn, derived from a machine phase like abstract.bend's turn.holder.
+export const turnHolder = phase => {
+  if (['Idle', 'Aim', 'NeedPhone', 'JamPick', 'StealPick'].includes(kind(phase))) return seatNumber(phase.seat);
+  if (kind(phase) === 'Blocked' && kind(phase.holder) === 'Some') return seatNumber(phase.holder.value);
+  return null;
+};
 export const tag = (name, fields = {}) => ({ $: `../domain.${name}`, ...fields });
 export const bool = value => value;
 export const seat = n => tag(`Seat${n}`);

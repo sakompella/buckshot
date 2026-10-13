@@ -109,34 +109,35 @@ def traversal(direction: D.Direction, seats: List<&2, D.Seat>, current: D.Seat) 
 def next_turn(health: D.Ring<&2, Nat>, direction: D.Direction, +current: D.Seat) -> D.Seat:
   traversal(direction, turn_candidates(D.ring.entries(Nat, health), current), current)
 
-def jam.flags(+players: S.Players, +seat: D.Seat, jammed: Bool, checked: Bool) -> S.JamResult:
-  match jammed checked:
-    case False{} _:
+def jam.state(+players: S.Players, +seat: D.Seat, jam: S.Jam) -> S.JamResult:
+  match jam:
+    case S.Free{}:
       S.Act{players}
-    case True{} False{}:
-      S.Skip{S.players.set_checked(players, D.ring.set(Bool, S.players.checked(players), seat, True{}))}
-    case True{} True{}:
-      S.Lift{S.players.set_jammed(players, D.ring.set(Bool, S.players.jammed(players), seat, False{}))}
+    case S.Jammed{}:
+      S.Skip{S.players.set_jam(players, D.ring.set(S.Jam, S.players.jam(players), seat, S.JammedSkipped{}))}
+    case S.JammedSkipped{}:
+      S.Lift{S.players.set_jam(players, D.ring.set(S.Jam, S.players.jam(players), seat, S.Free{}))}
 
 def jam(+players: S.Players, +seat: D.Seat) -> S.JamResult:
-  jam.flags(players, seat, value.or(Bool, D.ring.get(Bool, S.players.jammed(players), seat), False{}), value.or(Bool, D.ring.get(Bool, S.players.checked(players), seat), False{}))
+  jam.state(players, seat, value.or(S.Jam, D.ring.get(S.Jam, S.players.jam(players), seat), S.Free{}))
 
-def jam_rank.bit(jammed: Bool, checked: Bool) -> Nat:
-  match jammed checked:
-    case True{} False{}:
+# Seats whose next turn is skipped: grant skips at most this many seats.
+def jam_rank.bit(jam: S.Jam) -> Nat:
+  match jam:
+    case S.Jammed{}:
       1n
-    case _ _:
+    case _:
       0n
 
-def jam_rank.entries(entries: List<&2, D.At<&2, Bool>>, +checked: D.Ring<&2, Bool>) -> Nat:
+def jam_rank.entries(entries: List<&2, D.At<&2, S.Jam>>) -> Nat:
   match entries:
     case Nil{}:
       0n
-    case D.At{seat, jammed} <> rest:
-      Nat.add(jam_rank.bit(jammed, value.or(Bool, D.ring.get(Bool, checked, seat), False{})), jam_rank.entries(rest, checked))
+    case D.At{seat, jam} <> rest:
+      Nat.add(jam_rank.bit(jam), jam_rank.entries(rest))
 
 def jam_rank(+players: S.Players) -> Nat:
-  jam_rank.entries(D.ring.entries(Bool, S.players.jammed(players)), S.players.checked(players))
+  jam_rank.entries(D.ring.entries(S.Jam, S.players.jam(players)))
 
 def nth(-A: Data, xs: List<&2, A>, n: Nat) -> Maybe<&2, A>:
   match xs n:
@@ -347,13 +348,3 @@ def winner.only(seats: List<&2, D.Seat>) -> Maybe<&2, D.Seat>:
 
 def winner(health: D.Ring<&2, Nat>) -> Maybe<&2, D.Seat>:
   winner.only(living(D.ring.entries(Nat, health)))
-
-def current(turn: Maybe<&2, D.Seat>, seat: D.Seat) -> Bool:
-  match turn:
-    case None{}:
-      False{}
-    case Some{current}:
-      D.seat.eq(current, seat)
-
-def accepted(+state: S.State, +seat: D.Seat) -> Bool:
-  Bool.and(current(S.world.turn(S.state.world(state)), seat), value.or(Bool, D.ring.get(Bool, S.players.has_turn(S.state.players(state)), seat), False{}))
