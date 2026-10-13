@@ -3,6 +3,7 @@ import ./abstract.bend as A
 import ./domain.bend as D
 import ./sm/state.bend as S
 import ./sm/items.bend as I
+import ./sm/main.bend as M
 import ./sm/rules.bend as Q
 import ./ref/main.bend as R
 import ./ref/state.bend as H
@@ -1849,65 +1850,106 @@ def set_table(-X: Data, +r: D.Ring<&2, X>, +seat: D.Seat, +x: X) -> {D.ring.tabl
     case D.Quad{x0, x1, x2, x3} D.Seat3{}:
       {==}
 
-def shape.stop(+s: S.State, +seat: D.Seat, +shape: A.Shape(s)) -> A.Shape(stop.state(s, seat)):
-  match s:
-    case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +players, +phase, +notes, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
-      match shape:
-        case Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}:
-          (e_players, (e_grabbing, (e_holding, (e_granted, Equal.trans(D.Table, D.ring.table(Bool, D.ring.set(Bool, intake, seat, False{})), D.ring.table(Bool, intake), table, set_table(Bool, intake, seat, False{}), e_intake)))))
+# A closure's context: the table tie, and no seat holds the turn (a Grab or
+# NeedItem phase), so the reference host's has_turn flags are all clear.
+def Ctx(+s: S.State) -> Data:
+  Sigma<&2, &2, A.Shape(s), _ => {A.turn.holder(S.state.phase(s)) == None{} : Maybe<&2, D.Seat>}>
 
-def shape.give(+s: S.State, +seat: D.Seat, +item: D.Item, +shape: A.Shape(s)) -> A.Shape(give.state(s, seat, item)):
-  match s:
-    case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +players, +phase, +notes, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
-      match shape:
-        case Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}:
-          (e_players, (e_grabbing, (Equal.trans(D.Table, D.ring.table(Maybe<&2, D.Item>, D.ring.set(Maybe<&2, D.Item>, holding, seat, Some{item})), D.ring.table(Maybe<&2, D.Item>, holding), table, set_table(Maybe<&2, D.Item>, holding, seat, Some{item}), e_holding), (Equal.trans(D.Table, D.ring.table(Nat, D.ring.set(Nat, granted, seat, 1n+I.seat.granted(S.Grabs{dist, grabbing, holding, granted, intake}, seat))), D.ring.table(Nat, granted), table, set_table(Nat, granted, seat, 1n+I.seat.granted(S.Grabs{dist, grabbing, holding, granted, intake}, seat)), e_granted), Equal.trans(D.Table, D.ring.table(Bool, D.ring.set(Bool, intake, seat, False{})), D.ring.table(Bool, intake), table, set_table(Bool, intake, seat, False{}), e_intake)))))
+def ctx.shape(+s: S.State, +ctx: Ctx(s)) -> A.Shape(s):
+  match ctx:
+    case Tuple{+shape, _}:
+      shape
 
-def shape.close(+s: S.State, +seat: D.Seat, +shape: A.Shape(s)) -> A.Shape(close.state(s, seat)):
-  match s:
-    case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +players, +phase, +notes, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
-      match shape:
-        case Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}:
-          (e_players, (Equal.trans(D.Table, D.ring.table(Bool, D.ring.set(Bool, grabbing, seat, False{})), D.ring.table(Bool, grabbing), table, set_table(Bool, grabbing, seat, False{}), e_grabbing), (e_holding, (e_granted, e_intake))))
+def ctx.quiet(+s: S.State, +ctx: Ctx(s)) -> {A.turn.holder(S.state.phase(s)) == None{} : Maybe<&2, D.Seat>}:
+  match ctx:
+    case Tuple{_, +quiet}:
+      quiet
 
-def shape.put(+s: S.State, +seat: D.Seat, +fresh: D.Slots, +shape: A.Shape(s)) -> A.Shape(put.state(s, seat, fresh)):
+def ctx.stop(+s: S.State, +seat: D.Seat, +ctx: Ctx(s)) -> Ctx(stop.state(s, seat)):
   match s:
     case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +players, +phase, +notes, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
-      match shape:
-        case Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}:
-          (Equal.trans(D.Table, D.ring.table(S.Seat, D.ring.set(S.Seat, players, seat, S.seat.set_slots(S.players.seat(players, seat), fresh))), D.ring.table(S.Seat, players), table, set_table(S.Seat, players, seat, S.seat.set_slots(S.players.seat(players, seat), fresh)), e_players), (e_grabbing, (Equal.trans(D.Table, D.ring.table(Maybe<&2, D.Item>, D.ring.set(Maybe<&2, D.Item>, holding, seat, None{})), D.ring.table(Maybe<&2, D.Item>, holding), table, set_table(Maybe<&2, D.Item>, holding, seat, None{}), e_holding), (e_granted, Equal.trans(D.Table, D.ring.table(Bool, D.ring.set(Bool, intake, seat, I.seat.grabbing(S.Grabs{dist, grabbing, holding, granted, intake}, seat))), D.ring.table(Bool, intake), table, set_table(Bool, intake, seat, I.seat.grabbing(S.Grabs{dist, grabbing, holding, granted, intake}, seat)), e_intake)))))
+      match ctx:
+        case Tuple{Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}, +quiet}:
+          ((e_players, (e_grabbing, (e_holding, (e_granted, Equal.trans(D.Table, D.ring.table(Bool, D.ring.set(Bool, intake, seat, False{})), D.ring.table(Bool, intake), table, set_table(Bool, intake, seat, False{}), e_intake))))), quiet)
 
-def shape.done(+s: S.State, +shape: A.Shape(s)) -> A.Shape(done.state(s)):
+def ctx.give(+s: S.State, +seat: D.Seat, +item: D.Item, +ctx: Ctx(s)) -> Ctx(give.state(s, seat, item)):
   match s:
     case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +players, +phase, +notes, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
-      match shape:
-        case Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}:
-          (e_players, (e_grabbing, (e_holding, (e_granted, e_intake))))
+      match ctx:
+        case Tuple{Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}, +quiet}:
+          ((e_players, (e_grabbing, (Equal.trans(D.Table, D.ring.table(Maybe<&2, D.Item>, D.ring.set(Maybe<&2, D.Item>, holding, seat, Some{item})), D.ring.table(Maybe<&2, D.Item>, holding), table, set_table(Maybe<&2, D.Item>, holding, seat, Some{item}), e_holding), (Equal.trans(D.Table, D.ring.table(Nat, D.ring.set(Nat, granted, seat, 1n+I.seat.granted(S.Grabs{dist, grabbing, holding, granted, intake}, seat))), D.ring.table(Nat, granted), table, set_table(Nat, granted, seat, 1n+I.seat.granted(S.Grabs{dist, grabbing, holding, granted, intake}, seat)), e_granted), Equal.trans(D.Table, D.ring.table(Bool, D.ring.set(Bool, intake, seat, False{})), D.ring.table(Bool, intake), table, set_table(Bool, intake, seat, False{}), e_intake))))), quiet)
 
-def shape.emit(+s: S.State, +event: D.GameEvent, +shape: A.Shape(s)) -> A.Shape(S.state.emit(s, event)):
+def ctx.close(+s: S.State, +seat: D.Seat, +ctx: Ctx(s)) -> Ctx(close.state(s, seat)):
   match s:
     case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +players, +phase, +notes, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
-      match shape:
-        case Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}:
-          (e_players, (e_grabbing, (e_holding, (e_granted, e_intake))))
+      match ctx:
+        case Tuple{Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}, +quiet}:
+          ((e_players, (Equal.trans(D.Table, D.ring.table(Bool, D.ring.set(Bool, grabbing, seat, False{})), D.ring.table(Bool, grabbing), table, set_table(Bool, grabbing, seat, False{}), e_grabbing), (e_holding, (e_granted, e_intake)))), quiet)
 
-def shape.tell(+s: S.State, +seat: D.Seat, +secret: D.Secret, +shape: A.Shape(s)) -> A.Shape(S.state.tell(s, seat, secret)):
+def ctx.put(+s: S.State, +seat: D.Seat, +fresh: D.Slots, +ctx: Ctx(s)) -> Ctx(put.state(s, seat, fresh)):
   match s:
     case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +players, +phase, +notes, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
-      match shape:
-        case Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}:
-          (e_players, (e_grabbing, (e_holding, (e_granted, e_intake))))
+      match ctx:
+        case Tuple{Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}, +quiet}:
+          ((Equal.trans(D.Table, D.ring.table(S.Seat, D.ring.set(S.Seat, players, seat, S.seat.set_slots(S.players.seat(players, seat), fresh))), D.ring.table(S.Seat, players), table, set_table(S.Seat, players, seat, S.seat.set_slots(S.players.seat(players, seat), fresh)), e_players), (e_grabbing, (Equal.trans(D.Table, D.ring.table(Maybe<&2, D.Item>, D.ring.set(Maybe<&2, D.Item>, holding, seat, None{})), D.ring.table(Maybe<&2, D.Item>, holding), table, set_table(Maybe<&2, D.Item>, holding, seat, None{}), e_holding), (e_granted, Equal.trans(D.Table, D.ring.table(Bool, D.ring.set(Bool, intake, seat, I.seat.grabbing(S.Grabs{dist, grabbing, holding, granted, intake}, seat))), D.ring.table(Bool, intake), table, set_table(Bool, intake, seat, I.seat.grabbing(S.Grabs{dist, grabbing, holding, granted, intake}, seat)), e_intake))))), quiet)
 
-def shape.phase(+s: S.State, +phase2: S.Phase, +shape: A.Shape(s)) -> A.Shape(S.state.set_phase(s, phase2)):
+def ctx.done(+s: S.State, +ctx: Ctx(s)) -> Ctx(done.state(s)):
   match s:
     case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +players, +phase, +notes, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
-      match shape:
-        case Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}:
-          (e_players, (e_grabbing, (e_holding, (e_granted, e_intake))))
+      match ctx:
+        case Tuple{Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}, +quiet}:
+          ((e_players, (e_grabbing, (e_holding, (e_granted, e_intake)))), quiet)
 
-def shape.notes(+s: S.State, +notes2: List<&2, D.Note>, +shape: A.Shape(s)) -> A.Shape(S.state.set_notes(s, notes2)):
+def ctx.emit(+s: S.State, +event: D.GameEvent, +ctx: Ctx(s)) -> Ctx(S.state.emit(s, event)):
   match s:
     case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +players, +phase, +notes, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
-      match shape:
-        case Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}:
-          (e_players, (e_grabbing, (e_holding, (e_granted, e_intake))))
+      match ctx:
+        case Tuple{Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}, +quiet}:
+          ((e_players, (e_grabbing, (e_holding, (e_granted, e_intake)))), quiet)
+
+def ctx.tell(+s: S.State, +seat: D.Seat, +secret: D.Secret, +ctx: Ctx(s)) -> Ctx(S.state.tell(s, seat, secret)):
+  match s:
+    case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +players, +phase, +notes, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
+      match ctx:
+        case Tuple{Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}, +quiet}:
+          ((e_players, (e_grabbing, (e_holding, (e_granted, e_intake)))), quiet)
+
+def ctx.notes(+s: S.State, +notes2: List<&2, D.Note>, +ctx: Ctx(s)) -> Ctx(S.state.set_notes(s, notes2)):
+  match s:
+    case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +players, +phase, +notes, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
+      match ctx:
+        case Tuple{Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}, +quiet}:
+          ((e_players, (e_grabbing, (e_holding, (e_granted, e_intake)))), quiet)
+
+# Closures of the handout, from a machine state's reference host and notes
+# (A.close), each as an A.Closure with the reference's dispatch count. The
+# load closure (L11) is a premise.
+
+def LoadClosure() -> Type:
+  @+s:S.State -> @+ctx:Ctx(s) -> A.Closure(11n, s, A.frame_MainRoutine_LoadShotgun(), M.load.begin(s))
+
+def grab.point(+s: S.State, +quiet: {A.turn.holder(S.state.phase(s)) == None{} : Maybe<&2, D.Seat>}) -> {R.RefState{A.ref_host(s), R.Await{D.request.choose(I.grab.menus(I.grab.needs(s))), D.Distributing{}, R.ItemGrab_Packet{}}, S.state.notes(s)} == A.ref(S.state.set_phase(s, S.Grab{I.grab.needs(s)})) : R.RefState}:
+  match s:
+    case S.State{+world, +players, +phase, +notes, +grabs}:
+      %Equal.sym(Maybe<&2, D.Seat>, A.turn.holder(phase), None{}, quiet) : {R.RefState{A.host.at(world, A.core(players), grabs, _), R.Await{D.request.choose(I.grab.menus(I.grab.needs(S.State{world, players, phase, notes, grabs}))), D.Distributing{}, R.ItemGrab_Packet{}}, notes} == A.ref(S.State{world, players, S.Grab{I.grab.needs(S.State{world, players, phase, notes, grabs})}, notes, grabs}) : R.RefState}
+      {==}
+
+def continue.ready(+s: S.State, +d: Bool, +held: Bool, +k: Nat, +ctx: Ctx(s), load: LoadClosure()) -> {R.settle(Nat.add(11n, k), R.ContinueItemGrabbing.ready(R.RefState{A.ref_host(s), R.ContinueItemGrabbing{}, S.state.notes(s)}, d, held)) == A.ref(M.grab.continue.ready(s, d, held)) : R.RefState}:
+  match d held:
+    case False{} False{}:
+      load(s, ctx, k)
+    case True{} True{}:
+      %Equal.sym(D.Ring<&2, List<&2, D.Move>>, R.grab_menus(D.ring.entries(H.Props, H.host.seats(A.ref_host(s))), A.ref_host(s), D.ring.fill(List<&2, D.Move>, H.host.table(A.ref_host(s)), Nil{})), I.grab.menus(I.grab.needs(s)), menus.eq(s, ctx.shape(s, ctx))) : {R.RefState{A.ref_host(s), R.Await{D.request.choose(_), D.Distributing{}, R.ItemGrab_Packet{}}, S.state.notes(s)} == A.ref(S.state.set_phase(s, S.Grab{I.grab.needs(s)})) : R.RefState}
+      grab.point(s, ctx.quiet(s, ctx))
+    case True{} False{}:
+      %Equal.sym(D.Ring<&2, List<&2, D.Move>>, R.grab_menus(D.ring.entries(H.Props, H.host.seats(A.ref_host(s))), A.ref_host(s), D.ring.fill(List<&2, D.Move>, H.host.table(A.ref_host(s)), Nil{})), I.grab.menus(I.grab.needs(s)), menus.eq(s, ctx.shape(s, ctx))) : {R.RefState{A.ref_host(s), R.Await{D.request.choose(_), D.Distributing{}, R.ItemGrab_Packet{}}, S.state.notes(s)} == A.ref(S.state.set_phase(s, S.Grab{I.grab.needs(s)})) : R.RefState}
+      grab.point(s, ctx.quiet(s, ctx))
+    case False{} True{}:
+      %Equal.sym(D.Ring<&2, List<&2, D.Move>>, R.grab_menus(D.ring.entries(H.Props, H.host.seats(A.ref_host(s))), A.ref_host(s), D.ring.fill(List<&2, D.Move>, H.host.table(A.ref_host(s)), Nil{})), I.grab.menus(I.grab.needs(s)), menus.eq(s, ctx.shape(s, ctx))) : {R.RefState{A.ref_host(s), R.Await{D.request.choose(_), D.Distributing{}, R.ItemGrab_Packet{}}, S.state.notes(s)} == A.ref(S.state.set_phase(s, S.Grab{I.grab.needs(s)})) : R.RefState}
+      grab.point(s, ctx.quiet(s, ctx))
+
+def continue.close(+s: S.State, +ctx: Ctx(s), load: LoadClosure()) -> A.Closure(12n, s, A.frame_ContinueItemGrabbing(), M.grab.continue(s)):
+  +k =>
+    %dist.eq(s) : {R.settle(Nat.add(11n, k), R.ContinueItemGrabbing.ready(R.RefState{A.ref_host(s), R.ContinueItemGrabbing{}, S.state.notes(s)}, H.host.distributing(A.ref_host(s)), RI.holders(D.ring.entries(H.Props, H.host.seats(A.ref_host(s)))))) == A.ref(M.grab.continue.ready(s, _, I.holders(D.ring.entries(Maybe<&2, D.Item>, S.grabs.holding(S.state.grabs(s)))))) : R.RefState}
+    %holders.eq(s, ctx.shape(s, ctx)) : {R.settle(Nat.add(11n, k), R.ContinueItemGrabbing.ready(R.RefState{A.ref_host(s), R.ContinueItemGrabbing{}, S.state.notes(s)}, H.host.distributing(A.ref_host(s)), RI.holders(D.ring.entries(H.Props, H.host.seats(A.ref_host(s)))))) == A.ref(M.grab.continue.ready(s, H.host.distributing(A.ref_host(s)), _)) : R.RefState}
+    continue.ready(s, H.host.distributing(A.ref_host(s)), RI.holders(D.ring.entries(H.Props, H.host.seats(A.ref_host(s)))), k, ctx, load)
