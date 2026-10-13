@@ -38,7 +38,7 @@ gate_domain() {
     return
   fi
   local out
-  out="$("$BEND" "$here/domain.bend" --check-only 2>&1)"
+  out="$("$BEND" "$here/domain.bend" --verdict 2>&1)"
   if [[ $? -eq 0 && "$out" == *"ALL PROOFS CHECK"* ]]; then
     report ok domain.bend "ALL PROOFS CHECK"
   else
@@ -202,7 +202,7 @@ gate_ref_api() {
 
 gate_proofs() {
   local out
-  out="$("$BEND" "$here/PROOF.bend" 2>&1)"
+  out="$("$BEND" "$here/PROOF.bend" --verdict 2>&1)"
   if [[ $? -eq 0 && "$out" == *"ALL PROOFS CHECK"* && "$out" != *"SOME PROOFS FAIL"* ]]; then
     report ok "PROOF.bend" "ALL PROOFS CHECK"
   else
