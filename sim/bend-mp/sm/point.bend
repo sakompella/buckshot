@@ -20,7 +20,7 @@ def batch.request(size: Nat) -> D.Request:
     case _:
       D.Stuck{}
 
-def phase.request(phase: S.Phase, +world: S.World) -> D.Request:
+def phase.request(phase: S.Phase, +world: S.World, +players: S.Players) -> D.Request:
   match phase:
     case S.NeedFirst{}:
       D.Draw{D.FirstSeat{}, first.range(S.world.table(world))}
@@ -36,8 +36,8 @@ def phase.request(phase: S.Phase, +world: S.World) -> D.Request:
       D.Stuck{}
     case S.Idle{seat, options}:
       G.seat.menu(S.world.table(world), seat, G.idle.moves(D.nonempty.list(S.IdleOption, options)))
-    case S.Aim{seat, targets}:
-      G.seat.menu(S.world.table(world), seat, G.aim.moves(targets))
+    case S.Aim{seat}:
+      G.seat.menu(S.world.table(world), seat, G.aim.moves(G.aim.targets(players)))
     case S.Ended{}:
       D.Finished{}
     case S.Blocked{_}:
@@ -56,7 +56,7 @@ def phase.request(phase: S.Phase, +world: S.World) -> D.Request:
       G.seat.menu(S.world.table(world), seat, I.steal.moves(picks))
 
 def request(+state: S.State) -> D.Request:
-  phase.request(S.state.phase(state), S.state.world(state))
+  phase.request(S.state.phase(state), S.state.world(state), S.state.players(state))
 
 def phase.stage(phase: S.Phase) -> D.Stage:
   match phase:
@@ -66,7 +66,7 @@ def phase.stage(phase: S.Phase) -> D.Stage:
       D.Loading{}
     case S.Idle{seat, _}:
       D.Playing{seat, D.Idle{}}
-    case S.Aim{seat, _}:
+    case S.Aim{seat}:
       D.Playing{seat, D.Aiming{}}
     case S.Ended{}:
       D.MatchOver{}

@@ -35,8 +35,8 @@ def step_phase(+world: S.World, +players: S.Players, +phase: S.Phase, +notes: A.
       step_swap(world, players, load, shells, i, notes, grabs, n, valid)
     case S.Idle{+actor, +options}:
       C.step_idle(world, players, actor, options, notes, grabs, n, valid)
-    case S.Aim{+actor, +targets}:
-      C.step_aim(world, players, actor, targets, notes, grabs, n, valid)
+    case S.Aim{+actor}:
+      C.step_aim(world, players, actor, notes, grabs, n, valid)
     case S.Ended{}:
       C.step_ended(world, players, notes, grabs, n, valid)
     case S.Blocked{+holder}:
