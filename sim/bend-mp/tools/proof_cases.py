@@ -24,6 +24,7 @@ PROOF = Path(__file__).resolve().parent.parent / "core-proof.bend"
 ITEM_PROOF = PROOF.with_name("item-step-proof.bend")
 GRAB_PROOF = PROOF.with_name("grab-proof.bend")
 LOAD_PROOF = PROOF.with_name("load-proof.bend")
+TURN_PROOF = PROOF.with_name("turn-proof.bend")
 
 SEATS = ("D.Seat0{}", "D.Seat1{}", "D.Seat2{}", "D.Seat3{}")
 
@@ -489,7 +490,11 @@ LOAD_BODIES: dict[str, Callable[[], list[str]]] = {
     "next.eq": ring_split(lambda state: f"next.claim({state}, seat)", ("players",), False, next_leaf, "GP."),
 }
 
-FILES = {PROOF: BODIES, ITEM_PROOF: ITEM_BODIES, GRAB_PROOF: GRAB_BODIES, LOAD_PROOF: LOAD_BODIES}
+TURN_BODIES: dict[str, Callable[[], list[str]]] = {
+    "open.eq": ring_split(lambda state: f"open.claim({state}, seat)", RINGS, True, closed, "GP."),
+}
+
+FILES = {PROOF: BODIES, ITEM_PROOF: ITEM_BODIES, GRAB_PROOF: GRAB_BODIES, LOAD_PROOF: LOAD_BODIES, TURN_PROOF: TURN_BODIES}
 
 
 def body_span(text: str, name: str) -> tuple[int, int]:
