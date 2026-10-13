@@ -5,6 +5,13 @@ import ./step-proof.bend as Step
 import ./item-step-proof.bend as ItemStep
 import ./grab-proof.bend as GrabProof
 import ./load-proof.bend as LoadProof
+import ./turn-proof.bend as TurnProof
+import ./use-proof.bend as UseProof
+import ./aim-proof.bend as AimProof
+import ./pick-proof.bend as PickProof
+import ./round-proof.bend as RoundProof
+import ./load-step-proof.bend as LoadStepProof
+import ./items-proof.bend as ItemsProof
 
 def Laws.core_roundtrip(seats):
   Core.law.core_roundtrip(seats)
