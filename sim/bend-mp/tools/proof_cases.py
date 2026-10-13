@@ -658,8 +658,17 @@ AIM_BODIES: dict[str, Callable[[], list[str]]] = {
     "entries.seated": ring_split(lambda state: f"seated.claim({state})", ("players",), False, seated_entries_leaf, "GP."),
 }
 
+def entries_ok_leaf(shape: Shape, _seat: int | None, _state: str) -> list[str]:
+    """Each slots entry of a table's ring is its seat's slots, by computation."""
+    proof = "Unit{}"
+    for _ in shape.seated:
+        proof = f"({{==}}, {proof})"
+    return [proof]
+
+
 PICK_BODIES: dict[str, Callable[[], list[str]]] = {
     "jam.write": ring_split(lambda state: f"jam.claim({state}, seat)", ("players",), True, closed, "GP."),
+    "entries.ok": ring_split(lambda state: f"entries.claim({state})", ("players",), False, entries_ok_leaf, "GP."),
 }
 
 FILES = {PROOF: BODIES, ITEM_PROOF: ITEM_BODIES, GRAB_PROOF: GRAB_BODIES, LOAD_PROOF: LOAD_BODIES, TURN_PROOF: TURN_BODIES, USE_PROOF: USE_BODIES, AIM_PROOF: AIM_BODIES, PICK_PROOF: PICK_BODIES}
