@@ -1,5 +1,5 @@
-"""Generate the case-split proof bodies of core-proof.bend, item-step-proof.bend
-and grab-proof.bend.
+"""Generate the case-split proof bodies of core-proof.bend, item-step-proof.bend,
+grab-proof.bend and load-proof.bend.
 
 Some lemmas in the proof files are case splits too large to write by hand: the
 same small proof repeated for every table shape, seat and value the rules
@@ -23,6 +23,7 @@ from pathlib import Path
 PROOF = Path(__file__).resolve().parent.parent / "core-proof.bend"
 ITEM_PROOF = PROOF.with_name("item-step-proof.bend")
 GRAB_PROOF = PROOF.with_name("grab-proof.bend")
+LOAD_PROOF = PROOF.with_name("load-proof.bend")
 
 SEATS = ("D.Seat0{}", "D.Seat1{}", "D.Seat2{}", "D.Seat3{}")
 
@@ -443,7 +444,11 @@ ITEM_BODIES |= {
     "health.eq": ring_split(lambda state: f"health.claim({state})", ("players",), False, closed, "GP."),
 }
 
-FILES = {PROOF: BODIES, ITEM_PROOF: ITEM_BODIES, GRAB_PROOF: GRAB_BODIES}
+LOAD_BODIES: dict[str, Callable[[], list[str]]] = {
+    "inventory.eq": ring_split(lambda state: f"inventory.claim({state})", ("players",), False, closed, "GP."),
+}
+
+FILES = {PROOF: BODIES, ITEM_PROOF: ITEM_BODIES, GRAB_PROOF: GRAB_BODIES, LOAD_PROOF: LOAD_BODIES}
 
 
 def body_span(text: str, name: str) -> tuple[int, int]:
