@@ -17,6 +17,11 @@ declare const rules: {
   readonly "prompt.answer": (prompt: BendNode, index: bigint) => bigint;
   readonly hear: (notes: BendNode, seat: BendNode) => BendNode;
   readonly public_events: (notes: BendNode) => BendNode;
+  readonly "mind.story": () => BendNode;
+  readonly "mind.don": () => BendNode;
+  readonly "mind.hear": (mind: BendNode, notes: BendNode, seat: BendNode) => BendNode;
+  readonly "mind.decide": (state: BendNode, prompt: BendNode, mind: BendNode, coin: number) => BendNode;
+  readonly "mind.coin": (seed: number, seat: BendNode, count: number) => number;
 };
 
 export default rules;

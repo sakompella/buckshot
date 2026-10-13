@@ -5,8 +5,8 @@ import { defineMessageUnion } from "foldkit/message";
 import { modifyFields } from "foldkit/struct";
 
 import { Game, type AnswerError } from "./bend.ts";
-import { type Board, Briefcase, Counter, GameEvent, LearnedSecret, Move, Seat, SeatCount, type SeatView, Secret, Stage } from "./domain.ts";
-import { begin, botPrompt, botStep, Controller, controllerOf, play, type Progress, promptsOf } from "./driver.ts";
+import { type Board, Briefcase, Counter, GameEvent, type Item, LearnedSecret, Move, Seat, SeatCount, type SeatView, Secret, Stage } from "./domain.ts";
+import { aiPrompt, aiStep, AiSeat, begin, Controller, controllerOf, play, type Progress, promptsOf } from "./driver.ts";
 import { seedRng } from "./rng.ts";
 import { titles } from "./titles.ts";
 
@@ -35,6 +35,8 @@ const Session = Schema.Struct({
   events: Schema.Array(GameEvent),
   learned: Schema.Array(LearnedSecret),
   controllers: Schema.Array(Controller),
+  ais: Schema.Array(Schema.Option(AiSeat)),
+  seed: Schema.Number,
   viewer: Viewer,
   isAutoplay: Schema.Boolean,
 });
@@ -71,9 +73,9 @@ export type Message = typeof Message.Type;
 
 const SEATS_BY_TABLE: Readonly<Record<SeatCount, ReadonlyArray<Seat>>> = { 2: [1, 3], 3: [0, 1, 2], 4: [0, 1, 2, 3] };
 
-const progressOf = (match: Session): Progress => ({ game: match.game, rng: match.rng, events: match.events, learned: match.learned });
+const progressOf = (match: Session): Progress => ({ game: match.game, rng: match.rng, events: match.events, learned: match.learned, ais: match.ais, seed: match.seed });
 
-const withProgress = (match: Session, progress: Progress): Session => ({ ...match, game: progress.game, rng: progress.rng, events: progress.events, learned: progress.learned });
+const withProgress = (match: Session, progress: Progress): Session => ({ ...match, game: progress.game, rng: progress.rng, events: progress.events, learned: progress.learned, ais: progress.ais });
 
 const describeError = (error: AnswerError): string =>
   Match.value(error).pipe(
@@ -82,6 +84,10 @@ const describeError = (error: AnswerError): string =>
     Match.tag("NoPrompt", ({ seat }) => `Seat ${seat} has no move right now.`),
     Match.exhaustive,
   );
+
+const NEXT_CONTROLLER: Readonly<Record<Controller, Controller>> = { Human: "Story", Story: "DoN", DoN: "Human" };
+
+const nextController = (controller: Controller): Controller => NEXT_CONTROLLER[controller];
 
 // UPDATE
 
@@ -103,10 +109,10 @@ const applyResult = (model: Model, match: Session, result: Result.Result<Progres
     }),
   });
 
-const stepBot = (model: Model, match: Session): Return =>
-  Option.match(botPrompt(match.game, match.controllers), {
+const stepAi = (model: Model, match: Session): Return =>
+  Option.match(aiPrompt(match.game, match.controllers), {
     onNone: () => ({ model: modifyFields(model, { maybeMatch: () => Option.some({ ...match, isAutoplay: match.isAutoplay && match.game.pending.kind === "Choose" }) }) }),
-    onSome: (prompt) => applyResult(model, match, botStep(progressOf(match), prompt)),
+    onSome: (prompt) => applyResult(model, match, aiStep(progressOf(match), prompt)),
   });
 
 const withMatch = (model: Model, toReturn: (match: Session) => Return): Return => Option.match(model.maybeMatch, { onNone: () => ({ model }), onSome: toReturn });
@@ -115,7 +121,7 @@ const startMatch = (model: Model): Return => {
   const { table, controllers, isItemsEnabled, seed } = model.setup;
   const matchNumber = model.matchCount + 1;
 
-  return Result.match(begin(table, isItemsEnabled, matchNumber, seedRng(seed)), {
+  return Result.match(begin(table, isItemsEnabled, matchNumber, seedRng(seed), controllers, seed), {
     onSuccess: (progress) => ({
       model: modifyFields(model, {
         matchCount: () => matchNumber,
@@ -141,7 +147,7 @@ export const update = (model: Model, message: Message): Return =>
     SelectedTable: ({ table }) => ({ model: modifyFields(model, { setup: (setup) => ({ ...setup, table }) }) }),
     ToggledController: ({ seat }) => ({
       model: modifyFields(model, {
-        setup: (setup) => ({ ...setup, controllers: setup.controllers.map((controller, index): Controller => (index !== seat ? controller : controller === "Human" ? "Bot" : "Human")) }),
+        setup: (setup) => ({ ...setup, controllers: setup.controllers.map((controller, index): Controller => (index !== seat ? controller : nextController(controller))) }),
       }),
     }),
     ToggledItems: () => ({ model: modifyFields(model, { setup: (setup) => ({ ...setup, isItemsEnabled: !setup.isItemsEnabled }) }) }),
@@ -152,16 +158,16 @@ export const update = (model: Model, message: Message): Return =>
     SelectedViewer: ({ viewer }) => withMatch(model, (match) => ({ model: modifyFields(model, { maybeMatch: () => Option.some({ ...match, viewer }) }) })),
     ClickedMove: ({ match: matchNumber, generation, seat, index }) =>
       withMatch(model, (match) => applyResult(model, match, play(progressOf(match), { match: matchNumber, generation }, seat, index, match.rng))),
-    ClickedStep: () => withMatch(model, (match) => stepBot(model, match)),
+    ClickedStep: () => withMatch(model, (match) => stepAi(model, match)),
     ToggledAutoplay: () => withMatch(model, (match) => ({ model: modifyFields(model, { maybeMatch: () => Option.some({ ...match, isAutoplay: !match.isAutoplay }) }) })),
-    TickedAutoplay: () => withMatch(model, (match) => (match.isAutoplay ? stepBot(model, match) : { model })),
+    TickedAutoplay: () => withMatch(model, (match) => (match.isAutoplay ? stepAi(model, match) : { model })),
   });
 
 // INIT
 
 export const init: Runtime.ApplicationInit<Model, Message> = () => ({
   model: {
-    setup: { table: 2, controllers: ["Bot", "Human", "Bot", "Bot"], isItemsEnabled: false, seed: DEFAULT_SEED },
+    setup: { table: 2, controllers: ["DoN", "Human", "DoN", "DoN"], isItemsEnabled: false, seed: DEFAULT_SEED },
     matchCount: 0,
     maybeMatch: Option.none(),
     maybeError: Option.none(),
@@ -191,15 +197,29 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
 
 const seatName = (seat: Seat): string => `Seat ${seat}`;
 
+const ITEM_NAMES: Readonly<Record<Item, string>> = {
+  Saw: "handsaw",
+  Glass: "magnifying glass",
+  Jammer: "jammer",
+  Cigarettes: "cigarettes",
+  Beer: "beer",
+  Phone: "burner phone",
+  Inverter: "inverter",
+  Adrenaline: "adrenaline",
+  Remote: "remote",
+};
+
+const itemName = (item: Item): string => ITEM_NAMES[item];
+
 const moveText = (seat: Seat, move: Move): string =>
   Move.match(move, {
     PickUp: () => "Pick up the shotgun",
     Shoot: ({ target }) => (target === seat ? "Shoot yourself" : `Shoot ${seatName(target)}`),
-    UseItem: ({ item, slot }) => `Use ${item} (slot ${slot + 1})`,
-    Grab: () => "Grab from the briefcase",
-    Place: ({ slot }) => `Place in slot ${slot + 1}`,
-    JamTarget: ({ target }) => `Jam ${seatName(target)}`,
-    Steal: ({ owner, slot, item }) => `Take ${item} from ${seatName(owner)} (slot ${slot + 1})`,
+    UseItem: ({ item, slot }) => `Use ${itemName(item)} (slot ${slot + 1})`,
+    Grab: () => "Grab an item from the briefcase",
+    Place: ({ slot }) => `Place the item in slot ${slot + 1}`,
+    JamTarget: ({ target }) => `Jam ${seatName(target)} (they skip a turn)`,
+    Steal: ({ owner, slot, item }) => `Steal ${itemName(item)} from ${seatName(owner)} (slot ${slot + 1})`,
   });
 
 const eventText = (event: GameEvent): string =>
@@ -207,7 +227,7 @@ const eventText = (event: GameEvent): string =>
     RoundBegan: ({ round, health, first }) => `Round ${round + 1} begins. Everyone has ${health} health; ${seatName(first)} starts.`,
     GrabbingBegan: ({ seats }) => `Item distribution: ${seats.map(seatName).join(", ")} grab from the briefcase.`,
     Granted: ({ seat }) => `${seatName(seat)} drew an item.`,
-    Placed: ({ seat, item, slot }) => `${seatName(seat)} placed ${item} in slot ${slot + 1}.`,
+    Placed: ({ seat, item, slot }) => `${seatName(seat)} placed ${itemName(item)} in slot ${slot + 1}.`,
     GrabbingEnded: ({ seat }) => `${seatName(seat)} finished grabbing.`,
     DistributionDone: () => "Distribution is over.",
     Loaded: ({ load }) => `The shotgun is loaded: ${load.live} live, ${load.blank} blank.`,
@@ -218,7 +238,7 @@ const eventText = (event: GameEvent): string =>
     Fired: ({ shooter, target, shell, applied, health }) =>
       `${seatName(shooter)} shot ${shooter === target ? "themselves" : seatName(target)}: ${shell === "Live" ? `live, ${applied} damage, ${health} health left` : "blank"}.`,
     Died: ({ seat }) => `${seatName(seat)} is out.`,
-    Used: ({ seat, owner, item }) => (seat === owner ? `${seatName(seat)} used ${item}.` : `${seatName(seat)} took ${item} from ${seatName(owner)} and used it.`),
+    Used: ({ seat, owner, item }) => (seat === owner ? `${seatName(seat)} used ${itemName(item)}.` : `${seatName(seat)} took ${itemName(item)} from ${seatName(owner)} and used it.`),
     Healed: ({ seat, health }) => `${seatName(seat)} healed to ${health}.`,
     Ejected: ({ seat, shell }) => `${seatName(seat)} racked out a ${shell.toLowerCase()} shell.`,
     Inverted: ({ seat }) => `${seatName(seat)} inverted the chambered shell.`,
@@ -266,7 +286,7 @@ const setupView = (h: H, model: Model): Html => {
           h.div(
             [h.Class("controllers")],
             SEATS_BY_TABLE[table].map((seat) =>
-              h.button([h.Type("button"), h.Class("controller"), h.OnClick(Message.ToggledController({ seat }))], [`${seatName(seat)}: ${controllerOf(controllers, seat) === "Human" ? "Human" : "Bot"}`]),
+              h.button([h.Type("button"), h.Class("controller"), h.OnClick(Message.ToggledController({ seat }))], [`${seatName(seat)}: ${controllerOf(controllers, seat)}`]),
             ),
           ),
         ],
@@ -309,12 +329,12 @@ const seatPanel = (h: H, match: Session, view: SeatView): Html => {
       ),
       h.ol(
         [h.Class("slots"), h.AriaLabel("Item slots")],
-        view.slots.map((slot) => h.li([h.Class(Option.isSome(slot) ? "slot filled" : "slot")], [Option.getOrElse(slot, () => "")])),
+        view.slots.map((slot) => h.li([h.Class(Option.isSome(slot) ? "slot filled" : "slot")], [Option.match(slot, { onNone: () => "", onSome: itemName })])),
       ),
       Briefcase.match(view.briefcase, {
         NotGrabbing: () => h.empty,
         Grabbing: () => h.p([h.Class("briefcase")], ["Grabbing from the briefcase"]),
-        Holding: ({ item }) => h.p([h.Class("briefcase")], [`Holding ${item}`]),
+        Holding: ({ item }) => h.p([h.Class("briefcase")], [`Holding ${itemName(item)}`]),
       }),
       isActing ? h.p([h.Class("turn")], ["Has the turn"]) : h.empty,
     ],
@@ -354,7 +374,7 @@ const movesView = (h: H, match: Session): Html => {
   const humanPrompts = prompts.filter((prompt) => controllerOf(match.controllers, prompt.seat) === "Human");
   const viewerPrompt = Arr.findFirst(humanPrompts, (prompt) => prompt.seat === match.viewer);
   const waiting = humanPrompts.filter((prompt) => prompt.seat !== match.viewer).map((prompt) => prompt.seat);
-  const hasBotMove = Option.isSome(botPrompt(match.game, match.controllers));
+  const hasBotMove = Option.isSome(aiPrompt(match.game, match.controllers));
 
   return h.section(
     [h.Class("moves"), h.AriaLabel("Moves")],
@@ -379,8 +399,8 @@ const movesView = (h: H, match: Session): Html => {
       h.div(
         [h.Class("bot-controls")],
         [
-          h.button([h.Type("button"), h.Disabled(!hasBotMove), h.OnClick(Message.ClickedStep())], ["Step bot"]),
-          h.button([h.Type("button"), h.AriaPressed(match.isAutoplay ? "true" : "false"), h.OnClick(Message.ToggledAutoplay())], [match.isAutoplay ? "Pause autoplay" : "Autoplay bots"]),
+          h.button([h.Type("button"), h.Disabled(!hasBotMove), h.OnClick(Message.ClickedStep())], ["Step AI"]),
+          h.button([h.Type("button"), h.AriaPressed(match.isAutoplay ? "true" : "false"), h.OnClick(Message.ToggledAutoplay())], [match.isAutoplay ? "Pause autoplay" : "Autoplay AIs"]),
         ],
       ),
     ],
@@ -451,7 +471,7 @@ const matchView = (h: H, match: Session): Html => {
         [h.Class("table")],
         [
           viewerBar(h, match),
-          pending.kind === "Stuck" ? h.p([h.Class("error")], ["The machine is stuck: no seat has a legal move. With items on, the machine may not support items yet."]) : h.empty,
+          pending.kind === "Stuck" ? h.p([h.Class("error")], ["The machine is stuck: no seat has a legal move."]) : h.empty,
           pending.kind === "Finished" ? resultsView(h, match) : h.empty,
           gunView(h, match.game.board),
           h.div([h.Class("seats")], match.game.board.seats.map((view) => seatPanel(h, match, view))),

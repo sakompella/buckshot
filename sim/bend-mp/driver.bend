@@ -56,6 +56,15 @@ def think(mind: Mind, prompt: D.Prompt, obs: D.Obs, heard: List<&2, D.Heard>, co
     case DonMind{mem}:
       think.don(Don.decide(prompt, obs, heard, mem, coin))
 
+# Hearing eagerly is the same as passing the backlog to think: every decide
+# starts by updating its memory with the heard notes. The web UI uses this.
+def hear.mind(mind: Mind, heard: List<&2, D.Heard>, +seat: D.Seat) -> Mind:
+  match mind:
+    case StoryMind{mem}:
+      StoryMind{Story.update(heard, seat, mem)}
+    case DonMind{mem}:
+      DonMind{Don.update(heard, seat, mem)}
+
 # Randomness
 # ==========
 
@@ -94,12 +103,16 @@ def rng.draw(rng: Rng) -> Rng & U32:
     case Rng{+seed, +game, seats}:
       (Rng{seed, (game + 1 : U32), seats}, mix(U32.xor(seed, mix(game))))
 
+# Word number count of one seat's own stream, for the mixed match seed.
+def coin.word(+seed: U32, +seat: D.Seat, +count: U32) -> U32:
+  mix(U32.xor(mix(U32.xor(seed, U32.mul(2654435769, (1 + seat.code(seat) : U32)))), mix(count)))
+
 # The next word of one seat's own stream.
 def rng.coin(rng: Rng, +seat: D.Seat) -> Rng & U32:
   match rng:
     case Rng{+seed, game, +seats}:
       +count : U32 = or.default(U32, D.ring.get(U32, seats, seat), 0)
-      (Rng{seed, game, D.ring.set(U32, seats, seat, (count + 1 : U32))}, mix(U32.xor(mix(U32.xor(seed, U32.mul(2654435769, (1 + seat.code(seat) : U32)))), mix(count))))
+      (Rng{seed, game, D.ring.set(U32, seats, seat, (count + 1 : U32))}, coin.word(seed, seat, count))
 
 # The tape answer for a draw: one of its range's values, as a Nat.
 def draw.answer(range: D.Range, word: U32) -> Nat:
