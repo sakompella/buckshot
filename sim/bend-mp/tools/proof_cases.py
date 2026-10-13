@@ -387,6 +387,16 @@ def menu_leaf(shape: Shape, seat: int | None, _state: str) -> list[str]:
     return [f"menu.cell({', '.join(cells)})"]
 
 
+def accept_leaf(shape: Shape, seat: int | None, _state: str) -> list[str]:
+    """The selected option passes the grab check; a missing seat has no options."""
+    if seat in shape.seated:
+        k = seat
+        cells = [f"g{k}", f"o{k}", f"Bool.and(i{k}, dist)", f"s{k}", f"h{k}", f"S.jam.jammed(j{k})", f"A.jam.checked(j{k})", f"c{k}", f"A.turn.held(A.turn.holder(phase), {SEATS[seat]})"]
+    else:
+        cells = ["False{}", "None{}", "False{}", "D.slots.empty()", "100n", "False{}", "False{}", "0", "False{}"]
+    return [f"accept.cell({', '.join(cells)}, index, move, sel)"]
+
+
 def menus_set() -> list[str]:
     """A ring write commutes with rendering, per ring shape and seat."""
     rows = ["match menus seat:"]
@@ -405,6 +415,7 @@ GRAB_BODIES: dict[str, Callable[[], list[str]]] = {
     "holding.eq": ring_split(lambda state: f"holding.claim({state})", ("holding",), False, closed),
     "menu.at": ring_split(lambda state: f"menu.claim({state}, seat)", RINGS, True, menu_leaf),
     "menus.set": menus_set,
+    "accept.at": ring_split(lambda state: f"accept.at.claim({state}, seat, move)", ("players", "grabbing", "holding", "intake"), True, accept_leaf),
 }
 
 FILES = {PROOF: BODIES, ITEM_PROOF: ITEM_BODIES, GRAB_PROOF: GRAB_BODIES}
