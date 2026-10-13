@@ -362,27 +362,6 @@ def invert.eq(+shell: D.Shell) -> {RI.inverted(shell) == I.invert(shell) : D.She
     case D.Blank{}:
       {==}
 
-def ending.eq(+item: D.Item, +length: Nat) -> {RI.CheckIfEndingTurnAfterItemUse(item, length) == I.ends_turn(item, length) : Bool}:
-  match item:
-    case D.Saw{}:
-      {==}
-    case D.Glass{}:
-      {==}
-    case D.Jammer{}:
-      {==}
-    case D.Cigarettes{}:
-      {==}
-    case D.Beer{}:
-      {==}
-    case D.Phone{}:
-      {==}
-    case D.Inverter{}:
-      {==}
-    case D.Adrenaline{}:
-      {==}
-    case D.Remote{}:
-      {==}
-
 def heal.split(+b: Bool, +s: S.State, +seat: D.Seat, +owner: D.Seat, +slot: D.Slot, +ending: Bool, +phone: Maybe<&2, D.Secret>, +k: Nat, +shape: A.Shape(s)) -> {R.settle(27n+k, R.ChangeGameStateWithItem.heal(R.RefState{T.qh(s), R.ChangeGameStateWithItem{item.packet(seat, owner, slot, D.Cigarettes{}, ending, phone)}, S.state.notes(s)}, seat, b)) == A.ref(M.item.heal(s, seat, b)) : R.RefState}:
   match b:
     case True{}:

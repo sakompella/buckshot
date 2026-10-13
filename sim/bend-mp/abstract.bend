@@ -1170,14 +1170,8 @@ def phase_ready(phase: S.Phase, +world: S.World) -> Bool:
     case _:
       True{}
 
-def Valid(+state: S.State) -> Data:
-  Sigma<&2, &2, {normalize(state) == state : S.State}, _ => Sigma<&2, &2, {Q.config.no_items(S.world.config(S.state.world(state))) == True{} : Bool}, _ => Sigma<&2, &2, {Nat.is_lt(S.world.round_index(S.state.world(state)), D.plan.length(S.world.plan(S.state.world(state)))) == True{} : Bool}, _ => {phase_ready(S.state.phase(state), S.state.world(state)) == True{} : Bool}>>>
-
 def next(state: S.State, n: Nat) -> S.State:
   machine_step_state(M.answer(state, n))
-
-def Simulation(+state: S.State, +n: Nat) -> Data:
-  Sigma<&2, &2, {ref_answer(ref(state), n) == stepped(M.answer(state, n)) : RefStep()}, _ => Sigma<&2, &2, {machine_point(next(state, n)) == ref_step_point(ref_answer(ref(state), n)) : D.Point}, _ => Valid(next(state, n))>>
 
 def ref_run(fuel: Nat, state: R.RefState, tape: List<&2, Nat>) -> D.Ran<&2, R.RefState>:
   R.run(fuel, state, tape)
@@ -1202,11 +1196,6 @@ def support.current_items(world: S.World, seats: D.Ring<&2, CoreSeat>) -> D.Item
 def support.items(round: D.RoundRules) -> D.ItemRules:
   H.rules.items(round)
 
-
-def valid.norm(+state: S.State, valid: Valid(state)) -> {normalize(state) == state : S.State}:
-  match valid:
-    case Tuple{eq, _}:
-      eq
 
 def ref_driver(fuel: Nat, request: D.Request, +state: R.RefState, tape: List<&2, Nat>) -> D.Ran<&2, R.RefState>:
   match fuel request tape:
@@ -1280,14 +1269,6 @@ def pending.batch_raw(h: H.Host, deck: List<&2, H.Batch>, notes: List<&2, D.Note
 def pending.batch_exposed(h: H.Host, deck: List<&2, H.Batch>, notes: List<&2, D.Note>) -> R.RefState:
   pending.state(h, pending(batch.frame(deck)), notes)
 
-
-def Stable(+world: S.World, +seats: D.Ring<&2, CoreSeat>) -> Data:
-  Sigma<&2, &2, {world_for(world, seats) == world : S.World}, _ => Sigma<&2, &2, {Q.config.no_items(S.world.config(world)) == True{} : Bool}, _ => {Nat.is_lt(S.world.round_index(world), D.plan.length(S.world.plan(world))) == True{} : Bool}>>
-
-def preserve.norm(+state: S.State, valid: Valid(state)) -> {normalize(state) == state : S.State}:
-  match valid:
-    case Tuple{eq, _}:
-      eq
 
 def items_disabled(items: D.ItemRules) -> Bool:
   Q.items.disabled(items)
