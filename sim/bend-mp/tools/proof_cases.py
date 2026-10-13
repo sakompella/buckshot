@@ -506,6 +506,22 @@ def slot_split() -> list[str]:
     return rows
 
 
+def count_slot() -> list[str]:
+    """The slot holding the item is its position in the slot list."""
+    rows = ["match sl slot:"]
+    for k, slot in enumerate(SLOTS):
+        rows += [
+            f"  case D.Slots{{{', '.join(f'+c{j}' for j in range(8))}}} {slot}:",
+            f"    count.pos([{', '.join(f'c{j}' for j in range(8))}], item, {k}n, Equal.cong(Maybe<&2, D.Item>, Maybe<&2, Maybe<&2, D.Item>>, x => Some{{x}}, c{k}, Some{{item}}, e))",
+        ]
+    return rows
+
+
+def seated_leaf(shape: Shape, seat: int | None, _state: str) -> list[str]:
+    """Closed by computation at a seated seat; an unseated one refutes `seated`."""
+    return ["{==}"] if seat in shape.seated else ["match seated:"]
+
+
 def pick_choose() -> list[str]:
     """A single seat's menu per table and seat: a seated seat's choices, an
     unseated one's empty ring."""
@@ -527,6 +543,8 @@ USE_BODIES: dict[str, Callable[[], list[str]]] = {
     "slots.write": ring_split(lambda state: f"slots.claim({state}, seat, slot, hold)", ("players",), True, closed, "GP."),
     "heal.eq": ring_split(lambda state: f"heal.claim({state}, seat)", ("players",), True, closed, "GP."),
     "slot.set.eq": slot_split,
+    "count.slot": count_slot,
+    "held.turn": ring_split(lambda state: f"held.turn.claim({state}, seat)", ("players",), True, seated_leaf, "GP."),
 }
 
 FILES = {PROOF: BODIES, ITEM_PROOF: ITEM_BODIES, GRAB_PROOF: GRAB_BODIES, LOAD_PROOF: LOAD_BODIES, TURN_PROOF: TURN_BODIES, USE_PROOF: USE_BODIES}

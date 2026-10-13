@@ -745,3 +745,328 @@ def pick.choose(+table: D.Table, +seat: D.Seat, +moves: List<&2, D.Move>, +n: Na
           {==}
         case +m <> +ms:
           on.seated(D.Seat3{}, D.FourSeats{}, m, ms, n, Unit{})
+
+# The Idle answer with items: PickUp to Aim, or an item use.
+
+def held.turn.claim(+s: S.State, +seat: D.Seat) -> Type:
+  {R.props.has_turn(H.host.props(hh(s, seat), seat)) == True{} : Bool}
+
+def held.turn(+s: S.State, +seat: D.Seat, +shape: A.Shape(s), +seated: P.seated(S.world.table(S.state.world(s)), seat)) -> held.turn.claim(s, seat):
+  match s:
+    case S.State{S.World{D.Config{table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, players, +phase, +notes, grabs}:
+      match table players grabs seat:
+        case D.TwoSeats{} D.Duo{S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h3, +j3, +c3, +s3}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} D.Seat0{}:
+          match seated:
+        case D.TwoSeats{} D.Duo{S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h3, +j3, +c3, +s3}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} D.Seat1{}:
+          {==}
+        case D.TwoSeats{} D.Duo{S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h3, +j3, +c3, +s3}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} D.Seat2{}:
+          match seated:
+        case D.TwoSeats{} D.Duo{S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h3, +j3, +c3, +s3}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} D.Seat3{}:
+          {==}
+        case D.TwoSeats{} D.Trio{S.Seat{+h0, +j0, +c0, +s0}, S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h2, +j2, +c2, +s2}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} +seat:
+          match shape:
+            case Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}:
+              GP.absurd(held.turn.claim(S.State{S.World{D.Config{D.TwoSeats{}, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, D.Trio{S.Seat{h0, j0, c0, s0}, S.Seat{h1, j1, c1, s1}, S.Seat{h2, j2, c2, s2}}, phase, notes, S.Grabs{dist, grabbing, holding, granted, intake}}, seat), GP.clash.three_two(e_players))
+        case D.TwoSeats{} D.Quad{S.Seat{+h0, +j0, +c0, +s0}, S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h2, +j2, +c2, +s2}, S.Seat{+h3, +j3, +c3, +s3}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} +seat:
+          match shape:
+            case Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}:
+              GP.absurd(held.turn.claim(S.State{S.World{D.Config{D.TwoSeats{}, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, D.Quad{S.Seat{h0, j0, c0, s0}, S.Seat{h1, j1, c1, s1}, S.Seat{h2, j2, c2, s2}, S.Seat{h3, j3, c3, s3}}, phase, notes, S.Grabs{dist, grabbing, holding, granted, intake}}, seat), GP.clash.four_two(e_players))
+        case D.ThreeSeats{} D.Trio{S.Seat{+h0, +j0, +c0, +s0}, S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h2, +j2, +c2, +s2}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} D.Seat0{}:
+          {==}
+        case D.ThreeSeats{} D.Trio{S.Seat{+h0, +j0, +c0, +s0}, S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h2, +j2, +c2, +s2}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} D.Seat1{}:
+          {==}
+        case D.ThreeSeats{} D.Trio{S.Seat{+h0, +j0, +c0, +s0}, S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h2, +j2, +c2, +s2}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} D.Seat2{}:
+          {==}
+        case D.ThreeSeats{} D.Trio{S.Seat{+h0, +j0, +c0, +s0}, S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h2, +j2, +c2, +s2}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} D.Seat3{}:
+          match seated:
+        case D.ThreeSeats{} D.Duo{S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h3, +j3, +c3, +s3}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} +seat:
+          match shape:
+            case Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}:
+              GP.absurd(held.turn.claim(S.State{S.World{D.Config{D.ThreeSeats{}, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, D.Duo{S.Seat{h1, j1, c1, s1}, S.Seat{h3, j3, c3, s3}}, phase, notes, S.Grabs{dist, grabbing, holding, granted, intake}}, seat), GP.clash.two_three(e_players))
+        case D.ThreeSeats{} D.Quad{S.Seat{+h0, +j0, +c0, +s0}, S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h2, +j2, +c2, +s2}, S.Seat{+h3, +j3, +c3, +s3}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} +seat:
+          match shape:
+            case Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}:
+              GP.absurd(held.turn.claim(S.State{S.World{D.Config{D.ThreeSeats{}, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, D.Quad{S.Seat{h0, j0, c0, s0}, S.Seat{h1, j1, c1, s1}, S.Seat{h2, j2, c2, s2}, S.Seat{h3, j3, c3, s3}}, phase, notes, S.Grabs{dist, grabbing, holding, granted, intake}}, seat), GP.clash.four_three(e_players))
+        case D.FourSeats{} D.Quad{S.Seat{+h0, +j0, +c0, +s0}, S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h2, +j2, +c2, +s2}, S.Seat{+h3, +j3, +c3, +s3}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} D.Seat0{}:
+          {==}
+        case D.FourSeats{} D.Quad{S.Seat{+h0, +j0, +c0, +s0}, S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h2, +j2, +c2, +s2}, S.Seat{+h3, +j3, +c3, +s3}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} D.Seat1{}:
+          {==}
+        case D.FourSeats{} D.Quad{S.Seat{+h0, +j0, +c0, +s0}, S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h2, +j2, +c2, +s2}, S.Seat{+h3, +j3, +c3, +s3}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} D.Seat2{}:
+          {==}
+        case D.FourSeats{} D.Quad{S.Seat{+h0, +j0, +c0, +s0}, S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h2, +j2, +c2, +s2}, S.Seat{+h3, +j3, +c3, +s3}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} D.Seat3{}:
+          {==}
+        case D.FourSeats{} D.Duo{S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h3, +j3, +c3, +s3}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} +seat:
+          match shape:
+            case Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}:
+              GP.absurd(held.turn.claim(S.State{S.World{D.Config{D.FourSeats{}, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, D.Duo{S.Seat{h1, j1, c1, s1}, S.Seat{h3, j3, c3, s3}}, phase, notes, S.Grabs{dist, grabbing, holding, granted, intake}}, seat), GP.clash.two_four(e_players))
+        case D.FourSeats{} D.Trio{S.Seat{+h0, +j0, +c0, +s0}, S.Seat{+h1, +j1, +c1, +s1}, S.Seat{+h2, +j2, +c2, +s2}} S.Grabs{+dist, +grabbing, +holding, +granted, +intake} +seat:
+          match shape:
+            case Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}:
+              GP.absurd(held.turn.claim(S.State{S.World{D.Config{D.FourSeats{}, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, D.Trio{S.Seat{h0, j0, c0, s0}, S.Seat{h1, j1, c1, s1}, S.Seat{h2, j2, c2, s2}}, phase, notes, S.Grabs{dist, grabbing, holding, granted, intake}}, seat), GP.clash.three_four(e_players))
+
+def IdleSel(+opts: List<&2, S.IdleOption>, +i: Nat, +m: D.Move) -> Data:
+  match m:
+    case D.PickUp{}:
+      {Q.idle.nth(opts, i) == Some{S.TakeGun{}} : Maybe<&2, S.IdleOption>}
+    case D.UseItem{+slot, +item}:
+      {Q.idle.nth(opts, i) == Some{S.UseAt{slot, item}} : Maybe<&2, S.IdleOption>}
+    case _:
+      Empty
+
+def some.inj(-X: Data, +a: X, +b: X, +e: {Some{a} == Some{b} : Maybe<&2, X>}) -> {a == b : X}:
+  Equal.cong(Maybe<&2, X>, X, x => Q.value.or(X, x, a), Some{a}, Some{b}, e)
+
+def move.none(+m: Maybe<&2, D.Move>) -> Type:
+  match m:
+    case None{}:
+      Empty
+    case Some{x}:
+      Unit
+
+def none.some(+b: D.Move, +e: {None{} == Some{b} : Maybe<&2, D.Move>}) -> Empty:
+  %Equal.sym(Maybe<&2, D.Move>, None{}, Some{b}, e) : move.none(_)
+  Unit{}
+
+def idle.sel.tail(+o: S.IdleOption, +os: List<&2, S.IdleOption>, +j: Nat, +m: D.Move, +sel: IdleSel(os, j, m)) -> IdleSel(o <> os, 1n+j, m):
+  match m:
+    case D.PickUp{}:
+      sel
+    case D.UseItem{+slot, +item}:
+      sel
+    case D.Shoot{t}:
+      match sel:
+    case D.Grab{}:
+      match sel:
+    case D.Place{x}:
+      match sel:
+    case D.JamTarget{t}:
+      match sel:
+    case D.Steal{a, b, c}:
+      match sel:
+
+def idle.sel(+opts: List<&2, S.IdleOption>, +i: Nat, +m: D.Move, +e: {Q.nth(D.Move, Q.idle.moves(opts), i) == Some{m} : Maybe<&2, D.Move>}) -> IdleSel(opts, i, m):
+  match opts i:
+    case Nil{} i:
+      GP.absurd(IdleSel(Nil{}, i, m), none.some(m, e))
+    case S.TakeGun{} <> +os 0n:
+      %some.inj(D.Move, D.PickUp{}, m, e) : IdleSel(S.TakeGun{} <> os, 0n, _)
+      {==}
+    case S.UseAt{+slot, +item} <> +os 0n:
+      %some.inj(D.Move, D.UseItem{slot, item}, m, e) : IdleSel(S.UseAt{slot, item} <> os, 0n, _)
+      {==}
+    case S.TakeGun{} <> +os 1n+j:
+      idle.sel.tail(S.TakeGun{}, os, j, m, idle.sel(os, j, m, e))
+    case S.UseAt{+slot, +item} <> +os 1n+j:
+      idle.sel.tail(S.UseAt{slot, item}, os, j, m, idle.sel(os, j, m, e))
+
+# An item use offered at Idle is in the seat's slot, so the reference's
+# ownership check passes.
+
+def opt.none(+m: Maybe<&2, S.IdleOption>) -> Type:
+  match m:
+    case None{}:
+      Empty
+    case Some{x}:
+      Unit
+
+def opt.clash(+b: S.IdleOption, +e: {None{} == Some{b} : Maybe<&2, S.IdleOption>}) -> Empty:
+  %Equal.sym(Maybe<&2, S.IdleOption>, None{}, Some{b}, e) : opt.none(_)
+  Unit{}
+
+def opt.slot(+o: Maybe<&2, S.IdleOption>) -> D.Slot:
+  match o:
+    case Some{S.UseAt{slot, _}}:
+      slot
+    case _:
+      D.Slot0{}
+
+def opt.item(+o: Maybe<&2, S.IdleOption>) -> D.Item:
+  match o:
+    case Some{S.UseAt{_, item}}:
+      item
+    case _:
+      D.Saw{}
+
+def UseIH(+r: List<&2, S.IdleOption>, +inv: D.Slots, +slot: D.Slot, +item: D.Item) -> Type:
+  @+j:Nat -> @+e:{Q.idle.nth(r, j) == Some{S.UseAt{slot, item}} : Maybe<&2, S.IdleOption>} -> {D.slots.get(inv, slot) == Some{item} : Maybe<&2, D.Item>}
+
+def use.mem.keep(+b: Bool, +x: D.Item, +sl0: D.Slot, +r: List<&2, S.IdleOption>, +inv: D.Slots, +slot: D.Slot, +item: D.Item, +ef: {D.slots.get(inv, sl0) == Some{x} : Maybe<&2, D.Item>}, ih: UseIH(r, inv, slot, item), +i: Nat, +e: {Q.idle.nth(I.keep(S.IdleOption, b, S.UseAt{sl0, x}, r), i) == Some{S.UseAt{slot, item}} : Maybe<&2, S.IdleOption>}) -> {D.slots.get(inv, slot) == Some{item} : Maybe<&2, D.Item>}:
+  match b i:
+    case False{} i:
+      ih(i, e)
+    case True{} 0n:
+      +e_slot : {sl0 == slot : D.Slot} = Equal.cong(Maybe<&2, S.IdleOption>, D.Slot, o => opt.slot(o), Some{S.UseAt{sl0, x}}, Some{S.UseAt{slot, item}}, e)
+      +e_item : {x == item : D.Item} = Equal.cong(Maybe<&2, S.IdleOption>, D.Item, o => opt.item(o), Some{S.UseAt{sl0, x}}, Some{S.UseAt{slot, item}}, e)
+      Equal.trans(Maybe<&2, D.Item>, D.slots.get(inv, slot), D.slots.get(inv, sl0), Some{item}, Equal.cong(D.Slot, Maybe<&2, D.Item>, z => D.slots.get(inv, z), slot, sl0, Equal.sym(D.Slot, sl0, slot, e_slot)), Equal.trans(Maybe<&2, D.Item>, D.slots.get(inv, sl0), Some{x}, Some{item}, ef, Equal.cong(D.Item, Maybe<&2, D.Item>, z => Some{z}, x, item, e_item)))
+    case True{} 1n+j:
+      ih(j, e)
+
+def use.mem.step(+found: Maybe<&2, D.Item>, +sl0: D.Slot, +r: List<&2, S.IdleOption>, +inv: D.Slots, +sw: Bool, +tg: Bool, +st: Bool, +slot: D.Slot, +item: D.Item, +ef: {D.slots.get(inv, sl0) == found : Maybe<&2, D.Item>}, ih: UseIH(r, inv, slot, item), +i: Nat, +e: {Q.idle.nth(I.use.here(found, sl0, sw, tg, st, r), i) == Some{S.UseAt{slot, item}} : Maybe<&2, S.IdleOption>}) -> {D.slots.get(inv, slot) == Some{item} : Maybe<&2, D.Item>}:
+  match found:
+    case None{}:
+      ih(i, e)
+    case Some{+x}:
+      use.mem.keep(I.use.fits(x, sw, tg, st), x, sl0, r, inv, slot, item, ef, ih, i, e)
+
+def use.mem(+slots: List<&2, D.Slot>, +inv: D.Slots, +sw: Bool, +tg: Bool, +st: Bool, +slot: D.Slot, +item: D.Item, +i: Nat, +e: {Q.idle.nth(I.use.slots(slots, inv, sw, tg, st), i) == Some{S.UseAt{slot, item}} : Maybe<&2, S.IdleOption>}) -> {D.slots.get(inv, slot) == Some{item} : Maybe<&2, D.Item>}:
+  match slots:
+    case Nil{}:
+      GP.absurd({D.slots.get(inv, slot) == Some{item} : Maybe<&2, D.Item>}, opt.clash(S.UseAt{slot, item}, e))
+    case +sl0 <> +rest:
+      use.mem.step(D.slots.get(inv, sl0), sl0, I.use.slots(rest, inv, sw, tg, st), inv, sw, tg, st, slot, item, {==}, +j => +e2 => use.mem(rest, inv, sw, tg, st, slot, item, j, e2), i, e)
+
+def alive.add(+a: Nat, +b: Nat, +e: {G.alive(b) == True{} : Bool}) -> {G.alive(Nat.add(a, b)) == True{} : Bool}:
+  match a:
+    case 0n:
+      e
+    case 1n+x:
+      {==}
+
+def item.self(+item: D.Item, +c: Nat) -> {G.alive(Nat.add(G.item.count.here(Some{item}, item), c)) == True{} : Bool}:
+  match item:
+    case D.Saw{}:
+      {==}
+    case D.Glass{}:
+      {==}
+    case D.Jammer{}:
+      {==}
+    case D.Cigarettes{}:
+      {==}
+    case D.Beer{}:
+      {==}
+    case D.Phone{}:
+      {==}
+    case D.Inverter{}:
+      {==}
+    case D.Adrenaline{}:
+      {==}
+    case D.Remote{}:
+      {==}
+
+def cell.none(+m: Maybe<&2, Maybe<&2, D.Item>>) -> Type:
+  match m:
+    case None{}:
+      Empty
+    case Some{x}:
+      Unit
+
+def cell.clash(+b: Maybe<&2, D.Item>, +e: {None{} == Some{b} : Maybe<&2, Maybe<&2, D.Item>>}) -> Empty:
+  %Equal.sym(Maybe<&2, Maybe<&2, D.Item>>, None{}, Some{b}, e) : cell.none(_)
+  Unit{}
+
+def count.pos(+xs: List<&2, Maybe<&2, D.Item>>, +item: D.Item, +k: Nat, +e: {Q.nth(Maybe<&2, D.Item>, xs, k) == Some{Some{item}} : Maybe<&2, Maybe<&2, D.Item>>}) -> {G.alive(G.item.count(xs, item)) == True{} : Bool}:
+  match xs k:
+    case Nil{} k:
+      GP.absurd({G.alive(G.item.count(Nil{}, item)) == True{} : Bool}, cell.clash(Some{item}, e))
+    case +x <> +rest 0n:
+      %Equal.sym(Maybe<&2, D.Item>, x, Some{item}, some.inj(Maybe<&2, D.Item>, x, Some{item}, e)) : {G.alive(G.item.count(_ <> rest, item)) == True{} : Bool}
+      item.self(item, G.item.count(rest, item))
+    case +x <> +rest 1n+j:
+      alive.add(G.item.count.here(x, item), G.item.count(rest, item), count.pos(rest, item, j, e))
+
+def count.slot(+sl: D.Slots, +slot: D.Slot, +item: D.Item, +e: {D.slots.get(sl, slot) == Some{item} : Maybe<&2, D.Item>}) -> {G.alive(G.item.count(G.slots.list(sl), item)) == True{} : Bool}:
+  match sl slot:
+    case D.Slots{+c0, +c1, +c2, +c3, +c4, +c5, +c6, +c7} D.Slot0{}:
+      count.pos([c0, c1, c2, c3, c4, c5, c6, c7], item, 0n, Equal.cong(Maybe<&2, D.Item>, Maybe<&2, Maybe<&2, D.Item>>, x => Some{x}, c0, Some{item}, e))
+    case D.Slots{+c0, +c1, +c2, +c3, +c4, +c5, +c6, +c7} D.Slot1{}:
+      count.pos([c0, c1, c2, c3, c4, c5, c6, c7], item, 1n, Equal.cong(Maybe<&2, D.Item>, Maybe<&2, Maybe<&2, D.Item>>, x => Some{x}, c1, Some{item}, e))
+    case D.Slots{+c0, +c1, +c2, +c3, +c4, +c5, +c6, +c7} D.Slot2{}:
+      count.pos([c0, c1, c2, c3, c4, c5, c6, c7], item, 2n, Equal.cong(Maybe<&2, D.Item>, Maybe<&2, Maybe<&2, D.Item>>, x => Some{x}, c2, Some{item}, e))
+    case D.Slots{+c0, +c1, +c2, +c3, +c4, +c5, +c6, +c7} D.Slot3{}:
+      count.pos([c0, c1, c2, c3, c4, c5, c6, c7], item, 3n, Equal.cong(Maybe<&2, D.Item>, Maybe<&2, Maybe<&2, D.Item>>, x => Some{x}, c3, Some{item}, e))
+    case D.Slots{+c0, +c1, +c2, +c3, +c4, +c5, +c6, +c7} D.Slot4{}:
+      count.pos([c0, c1, c2, c3, c4, c5, c6, c7], item, 4n, Equal.cong(Maybe<&2, D.Item>, Maybe<&2, Maybe<&2, D.Item>>, x => Some{x}, c4, Some{item}, e))
+    case D.Slots{+c0, +c1, +c2, +c3, +c4, +c5, +c6, +c7} D.Slot5{}:
+      count.pos([c0, c1, c2, c3, c4, c5, c6, c7], item, 5n, Equal.cong(Maybe<&2, D.Item>, Maybe<&2, Maybe<&2, D.Item>>, x => Some{x}, c5, Some{item}, e))
+    case D.Slots{+c0, +c1, +c2, +c3, +c4, +c5, +c6, +c7} D.Slot6{}:
+      count.pos([c0, c1, c2, c3, c4, c5, c6, c7], item, 6n, Equal.cong(Maybe<&2, D.Item>, Maybe<&2, Maybe<&2, D.Item>>, x => Some{x}, c6, Some{item}, e))
+    case D.Slots{+c0, +c1, +c2, +c3, +c4, +c5, +c6, +c7} D.Slot7{}:
+      count.pos([c0, c1, c2, c3, c4, c5, c6, c7], item, 7n, Equal.cong(Maybe<&2, D.Item>, Maybe<&2, Maybe<&2, D.Item>>, x => Some{x}, c7, Some{item}, e))
+
+def and.cong_true(+a: Bool, +b: Bool, +ea: {a == True{} : Bool}, +eb: {b == True{} : Bool}) -> {Bool.and(a, b) == True{} : Bool}:
+  T.and.cong(a, True{}, b, True{}, ea, eb)
+
+def stepped.ref.local(+x: R.RefState, +out: S.State, +e: {x == A.ref(out) : R.RefState}) -> {R.stepped(x) == A.stepped(S.state.stepped(out)) : A.RefStep()}:
+  ISP.stepped.ref(x, out, e)
+
+def idle.opts(+w: S.World, +p: S.Players, +g: S.Grabs, +seat: D.Seat) -> D.NonEmpty<&2, S.IdleOption>:
+  D.NonEmpty{S.TakeGun{}, I.uses(S.State{w, p, S.Ended{}, Nil{}, g}, seat)}
+
+def idle.at(+w: S.World, +p: S.Players, +seat: D.Seat, +n: A.Notes(), +g: S.Grabs) -> S.State:
+  S.State{w, p, S.Idle{seat, idle.opts(w, p, g, seat)}, n, g}
+
+def idle.moves(+w: S.World, +p: S.Players, +g: S.Grabs, +seat: D.Seat) -> List<&2, D.Move>:
+  Q.idle.moves(D.nonempty.list(S.IdleOption, idle.opts(w, p, g, seat)))
+
+def idle.ref(+w: S.World, +p: S.Players, +g: S.Grabs, +seat: D.Seat) -> R.RefState:
+  R.RefState{hh(idle.at(w, p, seat, Nil{}, g), seat), R.Await{D.Choose{menu.of(S.world.table(w), seat, idle.moves(w, p, g, seat))}, D.Playing{seat, D.Idle{}}, R.PlayerMove{D.Idle{}}}, Nil{}}
+
+def opt.is_take(+m: Maybe<&2, S.IdleOption>) -> Type:
+  match m:
+    case Some{S.TakeGun{}}:
+      Empty
+    case _:
+      Unit
+
+def opt.take_use(+slot: D.Slot, +item: D.Item, +e: {Some{S.TakeGun{}} == Some{S.UseAt{slot, item}} : Maybe<&2, S.IdleOption>}) -> Empty:
+  %Equal.sym(Maybe<&2, S.IdleOption>, Some{S.TakeGun{}}, Some{S.UseAt{slot, item}}, e) : opt.is_take(_)
+  Unit{}
+
+def verify.accept(+rs: R.RefState, +choice: D.Choice, +out: S.State, +e: {R.VerifyPacket(rs, choice) == True{} : Bool}, +rest: {R.stepped(R.settle(96n, R.answer.move.accepted(rs, choice, True{}))) == A.stepped(S.state.stepped(out)) : A.RefStep()}) -> {R.stepped(R.settle(96n, R.answer.move(rs, choice))) == A.stepped(S.state.stepped(out)) : A.RefStep()}:
+  Equal.trans(A.RefStep(), R.stepped(R.settle(96n, R.answer.move.accepted(rs, choice, R.VerifyPacket(rs, choice)))), R.stepped(R.settle(96n, R.answer.move.accepted(rs, choice, True{}))), A.stepped(S.state.stepped(out)), Equal.cong(Bool, A.RefStep(), b => R.stepped(R.settle(96n, R.answer.move.accepted(rs, choice, b))), R.VerifyPacket(rs, choice), True{}, e), rest)
+
+def idle.use.answer(+w: S.World, +p: S.Players, +seat: D.Seat, +g: S.Grabs, +i: Nat, +slot: D.Slot, +item: D.Item, +sel: {Q.idle.nth(D.nonempty.list(S.IdleOption, idle.opts(w, p, g, seat)), i) == Some{S.UseAt{slot, item}} : Maybe<&2, S.IdleOption>}, +seated: P.seated(S.world.table(w), seat), +ready: {R.current.eq(S.world.turn(w), seat) == True{} : Bool}, +shape: A.Shape(idle.at(w, p, seat, Nil{}, g)), win: T.WinClosure()) -> {R.stepped(R.settle(96n, R.answer.move(idle.ref(w, p, g, seat), D.Choice{seat, i, D.UseItem{slot, item}}))) == A.stepped(S.state.stepped(M.item.use(idle.at(w, p, seat, Nil{}, g), seat, seat, slot, item))) : A.RefStep()}:
+  match w i:
+    case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck} 0n:
+      GP.absurd({R.stepped(R.settle(96n, R.answer.move(idle.ref(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, g, seat), D.Choice{seat, 0n, D.UseItem{slot, item}}))) == A.stepped(S.state.stepped(M.item.use(idle.at(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, seat, Nil{}, g), seat, seat, slot, item))) : A.RefStep()}, opt.take_use(slot, item, sel))
+    case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck} 1n+j:
+      +st : S.State = idle.at(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, seat, Nil{}, g)
+      +inv : D.Slots = I.seat.slots(p, seat)
+      +owned : {G.alive(G.item.count(G.slots.list(inv), item)) == True{} : Bool} = count.slot(inv, slot, item, use.mem(I.slot.order(), inv, saw, I.jam.any(I.jam.for(st, seat)), I.steal.any(I.steal.for(st, seat)), slot, item, j, sel))
+      +e_own : {G.alive(G.item.count(G.slots.list(RI.props.slots(H.host.props(hh(idle.at(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, seat, Nil{}, g), seat), seat))), item)) == True{} : Bool} = Equal.trans(Bool, G.alive(G.item.count(G.slots.list(RI.props.slots(H.host.props(hh(idle.at(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, seat, Nil{}, g), seat), seat))), item)), G.alive(G.item.count(G.slots.list(inv), item)), True{}, Equal.cong(D.Slots, Bool, x => G.alive(G.item.count(G.slots.list(x), item)), RI.props.slots(H.host.props(hh(st, seat), seat)), inv, GP.slots.eq(st, seat, shape)), owned)
+      +e_v : {R.VerifyPacket(idle.ref(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, g, seat), D.Choice{seat, 1n+j, D.UseItem{slot, item}}) == True{} : Bool} = and.cong_true(R.current.eq(turn, seat), Bool.and(R.props.has_turn(H.host.props(hh(st, seat), seat)), G.alive(G.item.count(G.slots.list(RI.props.slots(H.host.props(hh(idle.at(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, seat, Nil{}, g), seat), seat))), item))), ready, and.cong_true(R.props.has_turn(H.host.props(hh(st, seat), seat)), G.alive(G.item.count(G.slots.list(RI.props.slots(H.host.props(hh(idle.at(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, seat, Nil{}, g), seat), seat))), item)), held.turn(idle.at(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, seat, Nil{}, g), seat, shape, seated), e_own))
+      verify.accept(idle.ref(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, g, seat), D.Choice{seat, 1n+j, D.UseItem{slot, item}}, M.item.use(st, seat, seat, slot, item), e_v, stepped.ref.local(R.settle(95n, R.RefState{hh(st, seat), R.CheckIfEndingTurnAfterItemUse{seat, seat, slot, item}, Nil{}}), M.item.use(st, seat, seat, slot, item), use.close(item, st, seat, seat, slot, 62n, shape, win)))
+
+def idle.move.answer(+w: S.World, +p: S.Players, +seat: D.Seat, +g: S.Grabs, +i: Nat, +m: D.Move, +sel: IdleSel(D.nonempty.list(S.IdleOption, idle.opts(w, p, g, seat)), i, m), +seated: P.seated(S.world.table(w), seat), +ready: {R.current.eq(S.world.turn(w), seat) == True{} : Bool}, +shape: A.Shape(idle.at(w, p, seat, Nil{}, g)), win: T.WinClosure()) -> {R.stepped(R.settle(96n, R.answer.move(idle.ref(w, p, g, seat), D.Choice{seat, i, m}))) == A.stepped(S.state.stepped(M.answer.choice(idle.at(w, p, seat, Nil{}, g), D.Choice{seat, i, m}))) : A.RefStep()}:
+  match w m:
+    case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck} D.PickUp{}:
+      +st : S.State = idle.at(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, seat, Nil{}, g)
+      +e_v : {R.VerifyPacket(idle.ref(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, g, seat), D.Choice{seat, i, D.PickUp{}}) == True{} : Bool} = and.cong_true(R.current.eq(turn, seat), Bool.and(R.props.has_turn(H.host.props(hh(st, seat), seat)), True{}), ready, and.cong_true(R.props.has_turn(H.host.props(hh(st, seat), seat)), True{}, held.turn(idle.at(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, seat, Nil{}, g), seat, shape, seated), {==}))
+      +picked : {A.stepped(S.state.stepped(M.pickup(st, seat))) == A.stepped(S.state.stepped(M.answer.choice(st, D.Choice{seat, i, D.PickUp{}}))) : A.RefStep()} = Equal.cong(Maybe<&2, S.IdleOption>, A.RefStep(), o => A.stepped(S.state.stepped(M.pickup.selected(st, seat, o))), Some{S.TakeGun{}}, Q.idle.nth(D.nonempty.list(S.IdleOption, idle.opts(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, g, seat)), i), Equal.sym(Maybe<&2, S.IdleOption>, Q.idle.nth(D.nonempty.list(S.IdleOption, idle.opts(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, g, seat)), i), Some{S.TakeGun{}}, sel))
+      verify.accept(idle.ref(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, g, seat), D.Choice{seat, i, D.PickUp{}}, M.answer.choice(st, D.Choice{seat, i, D.PickUp{}}), e_v, picked)
+    case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck} D.UseItem{+slot, +item}:
+      +st : S.State = idle.at(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, seat, Nil{}, g)
+      +picked : {A.stepped(S.state.stepped(M.item.use(st, seat, seat, slot, item))) == A.stepped(S.state.stepped(M.answer.choice(st, D.Choice{seat, i, D.UseItem{slot, item}}))) : A.RefStep()} = Equal.cong(Maybe<&2, S.IdleOption>, A.RefStep(), o => A.stepped(S.state.stepped(M.pickup.selected(st, seat, o))), Some{S.UseAt{slot, item}}, Q.idle.nth(D.nonempty.list(S.IdleOption, idle.opts(w, p, g, seat)), i), Equal.sym(Maybe<&2, S.IdleOption>, Q.idle.nth(D.nonempty.list(S.IdleOption, idle.opts(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, g, seat)), i), Some{S.UseAt{slot, item}}, sel))
+      Equal.trans(A.RefStep(), R.stepped(R.settle(96n, R.answer.move(idle.ref(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, g, seat), D.Choice{seat, i, D.UseItem{slot, item}}))), A.stepped(S.state.stepped(M.item.use(st, seat, seat, slot, item))), A.stepped(S.state.stepped(M.answer.choice(st, D.Choice{seat, i, D.UseItem{slot, item}}))), idle.use.answer(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, seat, g, i, slot, item, sel, seated, ready, shape, win), picked)
+    case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck} D.Shoot{t}:
+      match sel:
+    case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck} D.Grab{}:
+      match sel:
+    case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck} D.Place{x}:
+      match sel:
+    case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck} D.JamTarget{t}:
+      match sel:
+    case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck} D.Steal{a, b, c}:
+      match sel:
+
+def idle.picked.answer(+w: S.World, +p: S.Players, +seat: D.Seat, +g: S.Grabs, +picked: Maybe<&2, D.Choice>, +pk: Pick(seat, S.world.table(w), idle.moves(w, p, g, seat), picked), +e_any: {D.menus.any(D.ring.entries(List<&2, D.Move>, menu.of(S.world.table(w), seat, idle.moves(w, p, g, seat)))) == True{} : Bool}, +ready: {R.current.eq(S.world.turn(w), seat) == True{} : Bool}, +shape: A.Shape(idle.at(w, p, seat, Nil{}, g)), win: T.WinClosure()) -> {R.stepped(R.settle(96n, R.answer.resolved(idle.ref(w, p, g, seat), R.PlayerMove{D.Idle{}}, D.resolve.choice(picked)))) == A.stepped(S.state.stepped(M.answer.resolved(idle.at(w, p, seat, Nil{}, g), D.resolve.choice(picked)))) : A.RefStep()}:
+  match picked:
+    case None{}:
+      GP.absurd({R.stepped(R.settle(96n, R.answer.resolved(idle.ref(w, p, g, seat), R.PlayerMove{D.Idle{}}, D.resolve.choice(None{})))) == A.stepped(S.state.stepped(M.answer.resolved(idle.at(w, p, seat, Nil{}, g), D.resolve.choice(None{})))) : A.RefStep()}, T.clash.false_true(Equal.trans(Bool, False{}, D.menus.any(D.ring.entries(List<&2, D.Move>, menu.of(S.world.table(w), seat, idle.moves(w, p, g, seat)))), True{}, Equal.sym(Bool, D.menus.any(D.ring.entries(List<&2, D.Move>, menu.of(S.world.table(w), seat, idle.moves(w, p, g, seat)))), False{}, pk), e_any)))
+    case Some{D.Choice{+s, +i, +m}}:
+      match pk:
+        case Tuple{+e_s, Tuple{+e_nth, +seated}}:
+          Equal.trans(A.RefStep(), R.stepped(R.settle(96n, R.answer.move(idle.ref(w, p, g, seat), D.Choice{s, i, m}))), R.stepped(R.settle(96n, R.answer.move(idle.ref(w, p, g, seat), D.Choice{seat, i, m}))), A.stepped(S.state.stepped(M.answer.choice(idle.at(w, p, seat, Nil{}, g), D.Choice{seat, i, m}))), Equal.cong(D.Seat, A.RefStep(), x => R.stepped(R.settle(96n, R.answer.move(idle.ref(w, p, g, seat), D.Choice{x, i, m}))), s, seat, e_s), idle.move.answer(w, p, seat, g, i, m, idle.sel(D.nonempty.list(S.IdleOption, idle.opts(w, p, g, seat)), i, m, e_nth), seated, ready, shape, win))
+
+def idle.any.answer(+w: S.World, +p: S.Players, +seat: D.Seat, +n0: A.Notes(), +g: S.Grabs, +n: Nat, +any: Bool, +e: {D.menus.any(D.ring.entries(List<&2, D.Move>, menu.of(S.world.table(w), seat, idle.moves(w, p, g, seat)))) == any : Bool}, +ready: {R.current.eq(S.world.turn(w), seat) == True{} : Bool}, +shape: A.Shape(idle.at(w, p, seat, Nil{}, g)), win: T.WinClosure()) -> {R.answer(R.RefState{hh(idle.at(w, p, seat, n0, g), seat), R.Await{D.request.choose.any(any, menu.of(S.world.table(w), seat, idle.moves(w, p, g, seat))), D.Playing{seat, D.Idle{}}, R.PlayerMove{D.Idle{}}}, n0}, n) == A.stepped(M.answer.request(idle.at(w, p, seat, n0, g), n, D.request.choose.any(any, menu.of(S.world.table(w), seat, idle.moves(w, p, g, seat))))) : A.RefStep()}:
+  match w any:
+    case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck} True{}:
+      idle.picked.answer(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, seat, g, D.choose(menu.of(table, seat, idle.moves(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, g, seat)), n), pick.choose(table, seat, idle.moves(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, g, seat), n), e, ready, shape, win)
+    case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck} False{}:
+      Equal.cong(Bool, A.RefStep(), b => D.Stepped{R.RefState{hh(idle.at(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, seat, n0, g), seat), R.Await{D.request.choose.any(b, menu.of(table, seat, idle.moves(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, g, seat))), D.Playing{seat, D.Idle{}}, R.PlayerMove{D.Idle{}}}, n0}, Nil{}}, False{}, D.menus.any(D.ring.entries(List<&2, D.Move>, menu.of(table, seat, idle.moves(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, g, seat)))), Equal.sym(Bool, D.menus.any(D.ring.entries(List<&2, D.Move>, menu.of(table, seat, idle.moves(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, g, seat)))), False{}, e))
+
+def idle.answer(+w: S.World, +p: S.Players, +seat: D.Seat, +n0: A.Notes(), +g: S.Grabs, +n: Nat, +shape: A.Shape(idle.at(w, p, seat, n0, g)), +ready: {R.current.eq(S.world.turn(w), seat) == True{} : Bool}, win: T.WinClosure()) -> {A.ref_answer(A.ref(idle.at(w, p, seat, n0, g)), n) == A.stepped(M.answer(idle.at(w, p, seat, n0, g), n)) : A.RefStep()}:
+  match w:
+    case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}:
+      +menu : D.Ring<&2, List<&2, D.Move>> = menu.of(table, seat, idle.moves(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, g, seat))
+      idle.any.answer(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, seat, n0, g, n, D.menus.any(D.ring.entries(List<&2, D.Move>, menu)), {==}, ready, ISP.shape.move(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, S.Idle{seat, idle.opts(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, g, seat)}, n0, g, S.Idle{seat, idle.opts(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, g, seat)}, Nil{}, shape), win)
