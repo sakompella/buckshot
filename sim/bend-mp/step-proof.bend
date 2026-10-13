@@ -120,3 +120,11 @@ def Laws.step_matches(state, n, valid):
 
 def Laws.run_matches(fuel, state, tape, valid):
   run_lift(fuel)(state, tape, valid)
+
+def start_valid(+config: D.Config, +simulation: A.StartSimulation(config)) -> A.Valid(M.stepped.state(M.start(config))):
+  match simulation:
+    case Tuple{_, Tuple{_, valid}}:
+      valid
+
+def Laws.reachable_valid(fuel, config, supported, tape):
+  run_valid(fuel)(M.stepped.state(M.start(config)), tape, start_valid(config, C.law.start_matches(config, supported)))
