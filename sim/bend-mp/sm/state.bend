@@ -52,9 +52,13 @@ type Jam is Data:
   Jammed{}
   JammedSkipped{}
 
-# cash: each seat's cash is the sum of D.prize over the rounds it won.
-type Players is Data:
-  Players{health: D.Ring<&2, Nat>, jam: D.Ring<&2, Jam>, cash: D.Ring<&2, U32>, slots: D.Ring<&2, D.Slots>}
+# One seat's record. cash is the sum of D.prize over the rounds the seat won.
+type Seat is Data:
+  Seat{health: Nat, jam: Jam, cash: U32, slots: D.Slots}
+
+# One record per seated socket, in the ring of the table.
+def Players() -> Data:
+  D.Ring<&2, Seat>
 
 # Item distribution flags. A seat's grant count and intake survive the
 # distribution that set them, until that seat begins grabbing again.
@@ -226,45 +230,109 @@ def world.set_decks(value: World, replacement: Decks) -> World:
     case World{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, sawed, gun, shown, _}:
       World{config, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, sawed, gun, shown, replacement}
 
-def players.health(value: Players) -> D.Ring<&2, Nat>:
-  match value:
-    case Players{health, _, _, _}:
-      health
+def seat.health(seat: Seat) -> Nat:
+  match seat:
+    case Seat{value, _, _, _}:
+      value
 
-def players.set_health(value: Players, replacement: D.Ring<&2, Nat>) -> Players:
-  match value:
-    case Players{_, jam, cash, slots}:
-      Players{replacement, jam, cash, slots}
+def seat.jam(seat: Seat) -> Jam:
+  match seat:
+    case Seat{_, value, _, _}:
+      value
 
-def players.jam(value: Players) -> D.Ring<&2, Jam>:
-  match value:
-    case Players{_, jam, _, _}:
-      jam
+def seat.cash(seat: Seat) -> U32:
+  match seat:
+    case Seat{_, _, value, _}:
+      value
 
-def players.set_jam(value: Players, replacement: D.Ring<&2, Jam>) -> Players:
-  match value:
-    case Players{health, _, cash, slots}:
-      Players{health, replacement, cash, slots}
+def seat.slots(seat: Seat) -> D.Slots:
+  match seat:
+    case Seat{_, _, _, value}:
+      value
 
-def players.cash(value: Players) -> D.Ring<&2, U32>:
-  match value:
-    case Players{_, _, cash, _}:
-      cash
+def players.health(players: Players) -> D.Ring<&2, Nat>:
+  match players:
+    case D.Duo{a, b}:
+      D.Duo{seat.health(a), seat.health(b)}
+    case D.Trio{a, b, c}:
+      D.Trio{seat.health(a), seat.health(b), seat.health(c)}
+    case D.Quad{a, b, c, d}:
+      D.Quad{seat.health(a), seat.health(b), seat.health(c), seat.health(d)}
 
-def players.set_cash(value: Players, replacement: D.Ring<&2, U32>) -> Players:
-  match value:
-    case Players{health, jam, _, slots}:
-      Players{health, jam, replacement, slots}
+def players.jam(players: Players) -> D.Ring<&2, Jam>:
+  match players:
+    case D.Duo{a, b}:
+      D.Duo{seat.jam(a), seat.jam(b)}
+    case D.Trio{a, b, c}:
+      D.Trio{seat.jam(a), seat.jam(b), seat.jam(c)}
+    case D.Quad{a, b, c, d}:
+      D.Quad{seat.jam(a), seat.jam(b), seat.jam(c), seat.jam(d)}
 
-def players.slots(value: Players) -> D.Ring<&2, D.Slots>:
-  match value:
-    case Players{_, _, _, slots}:
-      slots
+def players.cash(players: Players) -> D.Ring<&2, U32>:
+  match players:
+    case D.Duo{a, b}:
+      D.Duo{seat.cash(a), seat.cash(b)}
+    case D.Trio{a, b, c}:
+      D.Trio{seat.cash(a), seat.cash(b), seat.cash(c)}
+    case D.Quad{a, b, c, d}:
+      D.Quad{seat.cash(a), seat.cash(b), seat.cash(c), seat.cash(d)}
 
-def players.set_slots(value: Players, replacement: D.Ring<&2, D.Slots>) -> Players:
-  match value:
-    case Players{health, jam, cash, _}:
-      Players{health, jam, cash, replacement}
+def players.slots(players: Players) -> D.Ring<&2, D.Slots>:
+  match players:
+    case D.Duo{a, b}:
+      D.Duo{seat.slots(a), seat.slots(b)}
+    case D.Trio{a, b, c}:
+      D.Trio{seat.slots(a), seat.slots(b), seat.slots(c)}
+    case D.Quad{a, b, c, d}:
+      D.Quad{seat.slots(a), seat.slots(b), seat.slots(c), seat.slots(d)}
+
+# A seat missing from the ring reads as a fresh seat.
+def seat.found(found: Maybe<&2, Seat>) -> Seat:
+  match found:
+    case Some{seat}:
+      seat
+    case None{}:
+      Seat{100n, Free{}, 0, D.slots.empty()}
+
+def players.seat(players: Players, seat: D.Seat) -> Seat:
+  seat.found(D.ring.get(Seat, players, seat))
+
+def seat.set_health(+seat: Seat, value: Nat) -> Seat:
+  Seat{value, seat.jam(seat), seat.cash(seat), seat.slots(seat)}
+
+def players.set_health(+players: Players, +seat: D.Seat, value: Nat) -> Players:
+  D.ring.set(Seat, players, seat, seat.set_health(players.seat(players, seat), value))
+
+def seat.set_jam(+seat: Seat, value: Jam) -> Seat:
+  Seat{seat.health(seat), value, seat.cash(seat), seat.slots(seat)}
+
+def players.set_jam(+players: Players, +seat: D.Seat, value: Jam) -> Players:
+  D.ring.set(Seat, players, seat, seat.set_jam(players.seat(players, seat), value))
+
+def seat.set_cash(+seat: Seat, value: U32) -> Seat:
+  Seat{seat.health(seat), seat.jam(seat), value, seat.slots(seat)}
+
+def players.set_cash(+players: Players, +seat: D.Seat, value: U32) -> Players:
+  D.ring.set(Seat, players, seat, seat.set_cash(players.seat(players, seat), value))
+
+def seat.set_slots(+seat: Seat, value: D.Slots) -> Seat:
+  Seat{seat.health(seat), seat.jam(seat), seat.cash(seat), value}
+
+def players.set_slots(+players: Players, +seat: D.Seat, value: D.Slots) -> Players:
+  D.ring.set(Seat, players, seat, seat.set_slots(players.seat(players, seat), value))
+
+# A new round: every seat at the round's health, free, with empty slots.
+def seat.reset(seat: Seat, health: Nat) -> Seat:
+  Seat{health, Free{}, seat.cash(seat), D.slots.empty()}
+
+def players.reset(players: Players, +health: Nat) -> Players:
+  match players:
+    case D.Duo{a, b}:
+      D.Duo{seat.reset(a, health), seat.reset(b, health)}
+    case D.Trio{a, b, c}:
+      D.Trio{seat.reset(a, health), seat.reset(b, health), seat.reset(c, health)}
+    case D.Quad{a, b, c, d}:
+      D.Quad{seat.reset(a, health), seat.reset(b, health), seat.reset(c, health), seat.reset(d, health)}
 
 def state.world(value: State) -> World:
   match value:

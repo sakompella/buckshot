@@ -94,7 +94,7 @@ def load.begin(+state: S.State) -> S.State:
 
 def initial(+config: D.Config) -> S.State:
   +table : D.Table = G.config.table(config)
-  S.State{S.World{config, True{}, 0n, 0n, False{}, 0n, D.Seat0{}, None{}, D.Clockwise{}, None{}, False{}, 0n, False{}, Nil{}, D.Load{0n, 0n}, G.decks.full()}, S.Players{D.ring.fill(Nat, table, 100n), D.ring.fill(S.Jam, table, S.Free{}), D.ring.fill(U32, table, 0), D.ring.fill(D.Slots, table, D.slots.empty())}, S.NeedFirst{}, Nil{}, S.Grabs{False{}, D.ring.fill(Bool, table, False{}), D.ring.fill(Maybe<&2, D.Item>, table, None{}), D.ring.fill(Nat, table, 0n), D.ring.fill(Bool, table, False{})}}
+  S.State{S.World{config, True{}, 0n, 0n, False{}, 0n, D.Seat0{}, None{}, D.Clockwise{}, None{}, False{}, 0n, False{}, Nil{}, D.Load{0n, 0n}, G.decks.full()}, D.ring.fill(S.Seat, table, S.Seat{100n, S.Free{}, 0, D.slots.empty()}), S.NeedFirst{}, Nil{}, S.Grabs{False{}, D.ring.fill(Bool, table, False{}), D.ring.fill(Maybe<&2, D.Item>, table, None{}), D.ring.fill(Nat, table, 0n), D.ring.fill(Bool, table, False{})}}
 
 # Item distribution (D05, D06, D22, D37 grabbing rows, D55 M1, D56).
 
@@ -164,7 +164,7 @@ def grab.put.held(+state: S.State, +seat: D.Seat, +slot: D.Slot, held: Maybe<&2,
       S.state.set_phase(state, S.Blocked{None{}})
     case Some{+item}:
       +players : S.Players = S.state.players(state)
-      players : S.Players = S.players.set_slots(players, D.ring.set(D.Slots, S.players.slots(players), seat, I.slots.put(I.seat.slots(players, seat), slot, Some{item})))
+      players : S.Players = S.players.set_slots(players, seat, I.slots.put(I.seat.slots(players, seat), slot, Some{item}))
       +state : S.State = S.state.set_grabs(S.state.set_players(state, players), I.grabs.placed(S.state.grabs(state), seat))
       grab.continue(S.state.emit(state, D.Placed{seat, slot, item}))
 
@@ -196,11 +196,7 @@ def grab.selected(+state: S.State, +seat: D.Seat, selected: Maybe<&2, S.GrabOpti
 
 def round.reset(+state: S.State) -> S.State:
   +world : S.World = S.state.world(state)
-  +table : D.Table = S.world.table(world)
-  +players : S.Players = S.state.players(state)
-  players : S.Players = S.players.set_jam(players, D.ring.fill(S.Jam, table, S.Free{}))
-  players : S.Players = S.players.set_health(players, D.ring.fill(Nat, table, S.world.round_health(world)))
-  players : S.Players = S.players.set_slots(players, D.ring.fill(D.Slots, table, D.slots.empty()))
+  players : S.Players = S.players.reset(S.state.players(state), S.world.round_health(world))
   +world : S.World = S.world.set_direction(S.world.set_checking_first_death(world, True{}), D.Clockwise{})
   +state : S.State = S.state.emit(S.state.set_players(S.state.set_world(state, world), players), D.RoundBegan{S.world.round_index(world), S.world.round_health(world), S.world.first_turn(world)})
   distribute.begin(state, I.begin.seats(state, True{}, S.world.item_amount(world)))
@@ -263,7 +259,7 @@ def win(+state: S.State, +seat: D.Seat) -> S.State:
   +players : S.Players = S.state.players(state)
   +prize : U32 = D.prize(S.world.round_index(world))
   cash : U32 = G.value.or(U32, D.ring.get(U32, S.players.cash(players), seat), 0)
-  players : S.Players = S.players.set_cash(players, D.ring.set(U32, S.players.cash(players), seat, U32.add(cash, prize)))
+  players : S.Players = S.players.set_cash(players, seat, U32.add(cash, prize))
   win.final(S.state.emit(S.state.set_players(state, players), D.RoundWon{seat, prize}), Nat.is_eq(1n+S.world.round_index(world), D.plan.length(S.world.plan(world))))
 
 def turn.recipient(passing: Bool, current: D.Seat, next: D.Seat) -> D.Seat:
@@ -337,7 +333,7 @@ def shoot.loaded(+state: S.State, +shooter: D.Seat, +target: D.Seat, +shell: D.S
   +damage : D.Damage = G.captured(S.world.sawed(world))
   +before : Nat = G.value.or(Nat, D.ring.get(Nat, S.players.health(players), target), 100n)
   +health : Nat = G.shot.health(shell, before, damage)
-  +players : S.Players = S.players.set_health(players, D.ring.set(Nat, S.players.health(players), target, health))
+  +players : S.Players = S.players.set_health(players, target, health)
   world : S.World = S.world.set_sawed(S.world.set_gun(world, rest), False{})
   state : S.State = S.state.emit(S.state.set_players(S.state.set_world(state, world), players), D.Fired{shooter, target, shell, damage, G.subtract(before, health), health})
   turn.end(death(state, target, shell, health), shooter, G.shot.passes(shell, D.seat.eq(shooter, target)))
@@ -397,7 +393,7 @@ def item.heal(+state: S.State, +seat: D.Seat, heal: Bool) -> S.State:
     case True{}:
       +players : S.Players = S.state.players(state)
       +hp : Nat = 1n+I.seat.health(players, seat)
-      +state : S.State = S.state.set_players(state, S.players.set_health(players, D.ring.set(Nat, S.players.health(players), seat, hp)))
+      +state : S.State = S.state.set_players(state, S.players.set_health(players, seat, hp))
       item.resume(S.state.emit(state, D.Healed{seat, hp}), seat)
     case False{}:
       item.resume(state, seat)
@@ -433,7 +429,7 @@ def item.effect(+state: S.State, +seat: D.Seat, item: D.Item, ending: Bool, phon
 
 def item.consume(+state: S.State, +seat: D.Seat, +owner: D.Seat, +slot: D.Slot, +item: D.Item, ending: Bool, phone: Maybe<&2, D.Secret>) -> S.State:
   +players : S.Players = S.state.players(state)
-  players : S.Players = S.players.set_slots(players, D.ring.set(D.Slots, S.players.slots(players), owner, I.slots.put(I.seat.slots(players, owner), slot, None{})))
+  players : S.Players = S.players.set_slots(players, owner, I.slots.put(I.seat.slots(players, owner), slot, None{}))
   item.effect(S.state.emit(S.state.set_players(state, players), D.Used{seat, owner, slot, item}), seat, item, ending, phone)
 
 def item.clue.found(+state: S.State, +seat: D.Seat, +owner: D.Seat, +slot: D.Slot, +position: Nat, found: Maybe<&2, D.Shell>) -> S.State:
@@ -476,7 +472,7 @@ def jam.selected(+state: S.State, +seat: D.Seat, selected: Maybe<&2, S.JamOption
   match selected:
     case Some{S.JamAt{+target}}:
       +players : S.Players = S.state.players(state)
-      players : S.Players = S.players.set_jam(players, D.ring.set(S.Jam, S.players.jam(players), target, S.Jammed{}))
+      players : S.Players = S.players.set_jam(players, target, S.Jammed{})
       item.resume(S.state.emit(S.state.set_players(state, players), D.JamApplied{seat, target}), seat)
     case None{}:
       S.state.set_phase(state, S.Blocked{Some{seat}})

@@ -8,8 +8,8 @@ try {
   const nil = list([]);
   const hostState = state => {
     const { world, players, grabs } = state;
-    const seats = ring(players.health, (_, key) => ({ health: players.health[key], ...jamPair(players.jam[key]), cash: players.cash[key], slots: players.slots[key], grabbing: grabs.grabbing[key], holding: grabs.holding[key], has_turn: turnHolder(state.phase) === Number(key.slice(1)) }));
-    return { ...world, seats, distributing: grabs.distributing, grabs: ring(players.health, (_, key) => ({ $: 'GrabProgress', count: grabs.granted[key], intake: grabs.intake[key] })) };
+    const seats = ring(players, (s, key) => ({ health: s.health, ...jamPair(s.jam), cash: s.cash, slots: s.slots, grabbing: grabs.grabbing[key], holding: grabs.holding[key], has_turn: turnHolder(state.phase) === Number(key.slice(1)) }));
+    return { ...world, seats, distributing: grabs.distributing, grabs: ring(players, (_, key) => ({ $: 'GrabProgress', count: grabs.granted[key], intake: grabs.intake[key] })) };
   };
   const referenceHost = state => ({ ...state.host, seats: ring(state.host.seats, props => {
     const { $, ...fields } = props;
@@ -94,16 +94,16 @@ try {
       },
       fixture(changes, sawed = null) {
         const host = { ...this.r.host, seats: { ...this.r.host.seats } };
-        const players = { ...this.m.players, health: { ...this.m.players.health }, jam: { ...this.m.players.jam }, slots: { ...this.m.players.slots } };
+        const players = ring(this.m.players, s => ({ ...s }));
         const grabs = { ...this.m.grabs, grabbing: { ...this.m.grabs.grabbing } };
         for (const [s, change] of Object.entries(changes)) {
           const key = `s${s}`;
           const slots = change.inventory && { ...host.seats[key].slots, ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`s${i}`, maybe(change.inventory[i] ? tag(change.inventory[i]) : null)])) };
           const props = { ...host.seats[key] };
-          if ('health' in change) { props.health = BigInt(change.health); players.health[key] = BigInt(change.health); }
-          if ('jammed' in change) { props.jammed = change.jammed; players.jam[key] = machineJam(change.jammed, props.jam_checked); }
+          if ('health' in change) { props.health = BigInt(change.health); players[key].health = BigInt(change.health); }
+          if ('jammed' in change) { props.jammed = change.jammed; players[key].jam = machineJam(change.jammed, props.jam_checked); }
           if ('grabbing' in change) { props.grabbing = change.grabbing; grabs.grabbing[key] = change.grabbing; }
-          if (slots) { props.slots = slots; players.slots[key] = slots; }
+          if (slots) { props.slots = slots; players[key].slots = slots; }
           host.seats[key] = props;
         }
         const world = { ...this.m.world };
@@ -355,10 +355,10 @@ try {
   const invariants = (m, where) => {
     const phase = phaseOf(m);
     const { players, grabs, world } = m;
-    const seatKeys = keysOf(players.health);
-    for (const r of [players.jam, players.cash, players.slots, grabs.grabbing, grabs.holding, grabs.granted, grabs.intake]) assert.equal(keysOf(r), seatKeys, `rings share the table (${where})`);
+    const seatKeys = keysOf(players);
+    for (const r of [grabs.grabbing, grabs.holding, grabs.granted, grabs.intake]) assert.equal(keysOf(r), seatKeys, `rings share the table (${where})`);
     const keys = seatKeys.split(',');
-    const items = key => Object.entries(players.slots[key]).filter(([k]) => k !== '$').map(([, slot]) => kind(slot) === 'Some' ? kind(slot.value) : null);
+    const items = key => Object.entries(players[key].slots).filter(([k]) => k !== '$').map(([, slot]) => kind(slot) === 'Some' ? kind(slot.value) : null);
     const handling = phase === 'Grab' || phase === 'NeedItem';
     if (grabs.distributing) assert.ok(handling, `distributing only in grab phases (${where})`);
     for (const key of keys) {
@@ -386,7 +386,7 @@ try {
     if (['Idle', 'Aim', 'JamPick', 'StealPick', 'NeedPhone'].includes(phase)) {
       const key = `s${seatNumber(m.phase.seat)}`;
       assert.ok(kind(world.turn) === 'Some' && kind(world.turn.value) === kind(m.phase.seat), `the acting seat holds the turn (${where})`);
-      assert.ok(keys.filter(k => Number(players.health[k]) > 0).length >= 2, `two seats live during play (${where})`);
+      assert.ok(keys.filter(k => Number(players[k].health) > 0).length >= 2, `two seats live during play (${where})`);
     }
     if (phase === 'StealPick') assert.equal(kind(m.phase.picks), 'Con', `a steal always has a pick (M4) (${where})`);
     if (phase === 'JamPick') assert.equal(kind(m.phase.targets), 'Con', `a jammer always has a target (${where})`);

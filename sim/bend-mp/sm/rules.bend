@@ -118,9 +118,9 @@ def jam.state(+players: S.Players, +seat: D.Seat, jam: S.Jam) -> S.JamResult:
     case S.Free{}:
       S.Act{players}
     case S.Jammed{}:
-      S.Skip{S.players.set_jam(players, D.ring.set(S.Jam, S.players.jam(players), seat, S.JammedSkipped{}))}
+      S.Skip{S.players.set_jam(players, seat, S.JammedSkipped{})}
     case S.JammedSkipped{}:
-      S.Lift{S.players.set_jam(players, D.ring.set(S.Jam, S.players.jam(players), seat, S.Free{}))}
+      S.Lift{S.players.set_jam(players, seat, S.Free{})}
 
 def jam(+players: S.Players, +seat: D.Seat) -> S.JamResult:
   jam.state(players, seat, value.or(S.Jam, D.ring.get(S.Jam, S.players.jam(players), seat), S.Free{}))

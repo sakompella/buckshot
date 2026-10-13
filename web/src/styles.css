@@ -283,6 +283,10 @@ input {
   font-variant-numeric: tabular-nums;
 }
 
+.stat strong.hidden-stat {
+  opacity: 0.35;
+}
+
 .seat.out {
   opacity: 0.6;
 }
