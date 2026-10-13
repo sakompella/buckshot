@@ -15,7 +15,7 @@ const { random, randomConfig, answerFor } = makeRandom(0x66757a7a);
 
 const OBSERVE = '../domain.observe', HEAR = '../domain.hear', RESOLVE = '../domain.resolve';
 const sockets = n => n === 2 ? [1, 3] : Array.from({ length: n }, (_, i) => i);
-const count = { step_matches: 0, observe_matches: 0, legal_exact: 0, legal_accepted: 0, privacy: 0 };
+const count = { step_matches: 0, observe_matches: 0, legal_exact: 0, legal_accepted: 0, privacy: 0, reachable_valid: 0 };
 const coverage = { games: 0, boundaries: 0, noItemGames: 0, itemGames: 0, choosePoints: 0, finished: 0, itemMoves: 0, hiddenChanged: 0 };
 
 class Mismatch extends Error {}
@@ -85,6 +85,19 @@ const requestMove = move => {
   }
 };
 
+const RING_TABLE = { Duo: 'TwoSeats', Trio: 'ThreeSeats', Quad: 'FourSeats' };
+
+// A.ValidItems at a reachable request point: the item normal form, the table
+// tie of the seat ring and the Grabs rings, the round bound and the turn facts.
+function checkValidItems(game) {
+  const s = asAbstract(game.m);
+  same('reachable_valid', 'ValidItems normal form', s, A.normalize_items(s), game);
+  const { grabbing, holding, granted, intake } = game.m.grabs;
+  const table = kind(game.m.world.config.table);
+  same('reachable_valid', 'ValidItems table tie', Array(5).fill(table), [game.m.players, grabbing, holding, granted, intake].map(ring => RING_TABLE[kind(ring)]), game);
+  same('reachable_valid', 'ValidItems facts', { bounded: true, ready: true }, { bounded: A.bounded(s), ready: A.items_ready(s.phase, s.world) }, game);
+}
+
 function checkPrivacyAtPoint(game) {
   const { gun, decks } = otherHidden(game.m);
   const swapped = M.replace_hidden(game.m, gun, decks);
@@ -109,6 +122,7 @@ function play(config, label, seats) {
     checkObservations(game, `step ${step}`, mPoint, rPoint, mNotes, rNotes);
     checkLegal(game, mPoint.request, rPoint.request);
     checkPrivacyAtPoint(game);
+    checkValidItems(game);
     coverage.boundaries++;
     const request = requestJSON(rPoint.request);
     if (request.kind === 'Finished') { coverage.finished++; return; }

@@ -1,6 +1,6 @@
-"""Generate the case-split proof bodies of core-proof.bend.
+"""Generate the case-split proof bodies of core-proof.bend and item-step-proof.bend.
 
-Some lemmas in core-proof.bend are case splits too large to write by hand: the
+Some lemmas in the proof files are case splits too large to write by hand: the
 same small proof repeated for every table shape, seat and value the rules
 branch on. Their signatures (the claims) are written by hand in core-proof.bend;
 this script owns only their bodies.
@@ -12,6 +12,7 @@ this script owns only their bodies.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -19,6 +20,7 @@ from itertools import product
 from pathlib import Path
 
 PROOF = Path(__file__).resolve().parent.parent / "core-proof.bend"
+ITEM_PROOF = PROOF.with_name("item-step-proof.bend")
 
 SEATS = ("D.Seat0{}", "D.Seat1{}", "D.Seat2{}", "D.Seat3{}")
 
@@ -174,6 +176,55 @@ def front() -> list[str]:
     return ["match world:", f"  case {world()}:", *indent(4, rows)]
 
 
+
+def pack_shape() -> list[str]:
+    """The table tie of a no-item pack, per table shape."""
+    rows = ["match seats:"]
+    for shape in SHAPES:
+        rows += [f"  case {shape.pattern()}:", "    ({==}, ({==}, ({==}, ({==}, {==}))))"]
+    return ["match world:", f"  case {world()}:", *indent(4, rows)]
+
+
+# Each phase constructor and what the no-item normal form makes of it: kept,
+# Blocked, or Idle with the gun alone.
+PHASES = (
+    ("S.NeedFirst{}", "keep"),
+    ("S.NeedHealth{}", "keep"),
+    ("S.NeedAmount{}", "keep"),
+    ("S.NeedBatch{}", "keep"),
+    ("S.NeedSwap{_, _, 0n}", "blocked"),
+    ("S.NeedSwap{+swap_load, +shells, 1n+i}", "keep"),
+    ("S.Idle{+seat, options}", "idle"),
+    ("S.Aim{+seat}", "keep"),
+    ("S.Ended{}", "keep"),
+    ("S.Blocked{+holder}", "keep"),
+    ("S.NeedTurnAmount{_, _, _}", "blocked"),
+    ("S.Grab{_}", "blocked"),
+    ("S.NeedItem{_, _, _, _}", "blocked"),
+    ("S.NeedPhone{_, _, _}", "blocked"),
+    ("S.JamPick{_, _}", "blocked"),
+    ("S.StealPick{_, _}", "blocked"),
+)
+
+
+def pack_valid() -> list[str]:
+    """ValidItems of a no-item pack, per phase constructor."""
+    w = world()
+    idle = "S.Idle{seat, D.NonEmpty{S.TakeGun{}, Nil{}}}"
+    pack = f"A.pack(A.world_for({w}, seats), seats, {idle}, notes)"
+    rows = ["match phase:"]
+    for pattern, kind in PHASES:
+        canonical = {"keep": re.sub(r"(?<=[{ ])\+", "", pattern), "blocked": "S.Blocked{None{}}", "idle": idle}[kind]
+        shape = f"items.pack_shape({w}, seats, {canonical}, notes)"
+        if kind == "idle":
+            state = f"xs => S.State{{A.world_for({w}, seats), A.players.free(seats), S.Idle{{seat, D.NonEmpty{{S.TakeGun{{}}, xs}}}}, notes, A.grabs(seats)}}"
+            normal = f"Equal.cong(List<&2, S.IdleOption>, S.State, {state}, I.uses({pack}, seat), Nil{{}}, items.idle_uses({w}, seats, seat, notes))"
+        else:
+            normal = "{==}"
+        ready = "{==}" if kind == "blocked" else "ready"
+        rows += [f"  case {pattern}:", f"    ({normal}, ({shape}, (bounded, {ready})))"]
+    return ["match world:", f"  case {w}:", *indent(4, rows)]
+
 BODIES: dict[str, Callable[[], list[str]]] = {
     "give_pack": seat_split(match_world=False),
     "idleproof.idle_guards": seat_split_present,
@@ -187,6 +238,14 @@ BODIES: dict[str, Callable[[], list[str]]] = {
     "inv.idle_phase": seat_split(match_world=True),
     "aimstep.front": front,
 }
+
+ITEM_BODIES: dict[str, Callable[[], list[str]]] = {
+    "items.idle_uses": seat_split(match_world=False),
+    "items.pack_shape": pack_shape,
+    "items.pack_valid": pack_valid,
+}
+
+FILES = {PROOF: BODIES, ITEM_PROOF: ITEM_BODIES}
 
 
 def body_span(text: str, name: str) -> tuple[int, int]:
@@ -203,29 +262,32 @@ def body_span(text: str, name: str) -> tuple[int, int]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Generate the case-split proof bodies of core-proof.bend."
+        description="Generate the case-split proof bodies of the proof files."
     )
-    parser.add_argument("--write", action="store_true", help="rewrite core-proof.bend")
+    parser.add_argument("--write", action="store_true", help="rewrite the proof files")
     args = parser.parse_args()
-    text = PROOF.read_text()
     stale = []
-    for name, generate in BODIES.items():
-        body = "\n".join(indent(2, generate()))
-        start, end = body_span(text, name)
-        if text[start:end] != body:
-            stale.append(name)
-            text = text[:start] + body + text[end:]
+    total = sum(len(bodies) for bodies in FILES.values())
+    for path, bodies in FILES.items():
+        text = path.read_text()
+        for name, generate in bodies.items():
+            body = "\n".join(indent(2, generate()))
+            start, end = body_span(text, name)
+            if text[start:end] != body:
+                stale.append(f"{path.name}:{name}")
+                text = text[:start] + body + text[end:]
+        if args.write:
+            path.write_text(text)
     if args.write:
-        PROOF.write_text(text)
-        print(f"rewrote {len(stale)} of {len(BODIES)} generated bodies")
+        print(f"rewrote {len(stale)} of {total} generated bodies")
         return 0
     if stale:
         print(
-            f"core-proof.bend differs from tools/proof_cases.py: {', '.join(stale)}",
+            f"proof files differ from tools/proof_cases.py: {', '.join(stale)}",
             file=sys.stderr,
         )
         return 1
-    print(f"{len(BODIES)} generated proof bodies match tools/proof_cases.py")
+    print(f"{total} generated proof bodies match tools/proof_cases.py")
     return 0
 
 

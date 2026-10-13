@@ -92,7 +92,7 @@ The helper laws are small steps that the larger proofs use. They are `core_round
 
 The laws are proven for configs with no items, with two exceptions. `privacy` and `jam_skip_once` hold for all states.
 
-With items, the laws are checked, not proven. `test/machine-items-fuzz.mjs` plays seeded random games, 500 for each of 2, 3 and 4 seats, so 1,500 games by default. At every request point it compares the machine to the reference on `step_matches`, `observe_matches`, `legal_exact`, `legal_accepted` and `privacy`. It checks `step_matches` on whole states: after each answer the reference's state equals `A.ref` of the machine's (abstract.bend is built to JS for this), and the notes and points match. It checks `legal_accepted` for every offered move. Checking `step_matches` at every point covers what `run_matches` says about those games. The fuzz does not check `state_roundtrip`, `turn_traversal` or `jam_skip_once` with items. `FUZZ_GAMES` sets the number of games for each table size.
+With items, the laws are checked, not proven. `test/machine-items-fuzz.mjs` plays seeded random games, 500 for each of 2, 3 and 4 seats, so 1,500 games by default. At every request point it compares the machine to the reference on `step_matches`, `observe_matches`, `legal_exact`, `legal_accepted` and `privacy`. It checks `step_matches` on whole states: after each answer the reference's state equals `A.ref` of the machine's (abstract.bend is built to JS for this), and the notes and points match. It also checks `reachable_valid` against `A.ValidItems`, the invariant the item proofs use: Idle, StealPick and Grab menus equal their recomputation, a swap index is positive, the seat of each playing phase holds the turn, and the seat ring and the Grabs rings have the config's table. `item-step-proof.bend` proves that a no-item valid state is item-valid too. It checks `legal_accepted` for every offered move. Checking `step_matches` at every point covers what `run_matches` says about those games. The fuzz does not check `state_roundtrip`, `turn_traversal` or `jam_skip_once` with items. `FUZZ_GAMES` sets the number of games for each table size.
 
 Two mutation gates check that the checks can fail.
 
@@ -113,7 +113,7 @@ The model fixes below also depart on purpose from raw Godot. The reference and t
 
 ## Generated proof bodies
 
-Some lemmas in `core-proof.bend` are case splits over every table shape, seat and value the rules branch on. They are too large to write by hand. `tools/proof_cases.py` writes their bodies. The claims, meaning the signatures, are written by hand. The script is not trusted. The Bend kernel checks every generated body like any other proof. `check.sh` runs the script in check mode and fails if the file differs from what the script would write. `tools/ref_api.py` does the same for the generated section of `abstract.bend`.
+Some lemmas in `core-proof.bend` and `item-step-proof.bend` are case splits over every table shape, seat and value the rules branch on. They are too large to write by hand. `tools/proof_cases.py` writes their bodies. The claims, meaning the signatures, are written by hand. The script is not trusted. The Bend kernel checks every generated body like any other proof. `check.sh` runs the script in check mode and fails if the file differs from what the script would write. `tools/ref_api.py` does the same for the generated section of `abstract.bend`.
 
 ## Model fixes
 
