@@ -5,7 +5,7 @@ import { defineMessageUnion } from "foldkit/message";
 import { modifyFields } from "foldkit/struct";
 
 import { Game, type AnswerError } from "./bend.ts";
-import { type Board, Briefcase, Counter, GameEvent, healthOf, type Item, LearnedSecret, Move, Seat, SeatCount, type SeatView, Secret, Stage } from "./domain.ts";
+import { type Board, Briefcase, Counter, GameEvent, type Item, LearnedSecret, Move, Seat, SeatCount, type SeatView, Secret, seatsOut, Stage } from "./domain.ts";
 import { aiPrompt, aiStep, AiSeat, begin, Controller, controllerOf, isAi, play, type Progress, promptsOf } from "./driver.ts";
 import { seedRng } from "./rng.ts";
 import { titles } from "./titles.ts";
@@ -322,8 +322,8 @@ const actingSeat = (board: Board): Option.Option<Seat> =>
 const seatPanel = (h: H, match: Session, view: SeatView): Html => {
   const isActing = Option.contains(actingSeat(match.game.board), view.seat);
   const isViewer = match.viewer === view.seat;
-  const health = healthOf(view, match.events);
-  const isOut = health === 0;
+  const isOut = seatsOut(match.events).has(view.seat);
+  const isJammed = Counter.guards.Jammed(view.counter);
 
   return h.article(
     [h.Class(`seat${isActing ? " acting" : ""}${isViewer ? " viewer" : ""}${isOut ? " out" : ""}`), h.AriaLabel(seatName(view.seat))],
@@ -338,7 +338,7 @@ const seatPanel = (h: H, match: Session, view: SeatView): Html => {
       h.div(
         [h.Class("seat-stats")],
         [
-          h.div([h.Class("stat")], [h.span([h.Class("stat-label")], ["Health"]), h.strong([], [`${health}`])]),
+          h.div([h.Class("stat")], [h.span([h.Class("stat-label")], ["Health"]), h.strong([h.Class(isJammed ? "hidden-stat" : "")], [Counter.match(view.counter, { Unjammed: ({ health }) => `${health}`, Jammed: () => "—" })])]),
           h.div([h.Class("stat")], [h.span([h.Class("stat-label")], ["Cash"]), h.strong([], [`$${view.cash.toLocaleString("en-US")}`])]),
         ],
       ),
@@ -351,7 +351,8 @@ const seatPanel = (h: H, match: Session, view: SeatView): Html => {
           }),
         ),
       ),
-      isOut ? h.p([h.Class("status")], ["Out"]) : Counter.guards.Jammed(view.counter) ? h.p([h.Class("status")], ["Jammed"]) : h.empty,
+      isOut ? h.p([h.Class("status")], ["Out"]) : h.empty,
+      isJammed ? h.p([h.Class("status")], ["Jammed"]) : h.empty,
       Briefcase.match(view.briefcase, {
         NotGrabbing: () => h.empty,
         Grabbing: () => h.p([h.Class("briefcase")], ["Grabbing from the briefcase"]),

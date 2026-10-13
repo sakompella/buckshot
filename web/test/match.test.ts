@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { Option, Predicate, Result } from "effect";
 
 import { answerPrompt } from "../src/bend.ts";
-import { Counter, healthOf, type SeatCount } from "../src/domain.ts";
+import { type SeatCount } from "../src/domain.ts";
 import { aiPrompt, aiStep, begin, type Controller, type Progress, promptsOf } from "../src/driver.ts";
 import { seedRng } from "../src/rng.ts";
 import { titles } from "../src/titles.ts";
@@ -61,22 +61,4 @@ test("an answer for an earlier request point is rejected", () => {
   const stale = answerPrompt(progress.game, first.ticket, first.seat, 0);
 
   expect(Result.isFailure(stale) && Predicate.isTagged(stale.failure, "StaleAnswer")).toBe(true);
-});
-
-test("a seat's health read from events matches its counter at every step", () => {
-  for (const table of [2, 3, 4] as const) {
-    let progress = Result.getOrThrow(begin(table, true, 5, seedRng(5), MIXED, 5));
-
-    for (let moves = 0; moves < MOVE_LIMIT && progress.game.pending.kind === "Choose"; moves++) {
-      for (const view of progress.game.board.seats) {
-        if (Counter.guards.Jammed(view.counter)) continue;
-
-        const hidden = { ...view, counter: Counter.cases.Jammed.make({}) };
-
-        expect(healthOf(hidden, progress.events)).toBe(healthOf(view, []));
-      }
-
-      progress = Result.getOrThrow(aiStep(progress, Option.getOrThrow(aiPrompt(progress.game, MIXED))));
-    }
-  }
 });

@@ -1,4 +1,4 @@
-import { Array as Arr, Option, Schema } from "effect";
+import { Schema } from "effect";
 
 // The UI's view of the Bend domain (sim/bend-mp/domain.bend). Only
 // web/src/bend.ts builds these values from Bend output.
@@ -140,17 +140,10 @@ export const LearnedSecret = Schema.Struct({ seat: Seat, secret: Secret });
 
 export type LearnedSecret = typeof LearnedSecret.Type;
 
-const healthSetBy = (event: GameEvent, seat: Seat): Option.Option<number> =>
-  GameEvent.matchOrElse(event, {
-    RoundBegan: ({ health }) => Option.some(health),
-    Fired: ({ target, health }) => (target === seat ? Option.some(health) : Option.none()),
-    Healed: ({ seat: healed, health }) => (healed === seat ? Option.some(health) : Option.none()),
-    Died: ({ seat: dead }) => (dead === seat ? Option.some(0) : Option.none()),
-  }, () => Option.none());
-
-// A jammed seat hides its counter, so its health is read back from the latest event that set it.
-export const healthOf = (view: SeatView, events: ReadonlyArray<GameEvent>): number =>
-  Counter.match(view.counter, {
-    Unjammed: ({ health }) => health,
-    Jammed: () => Option.getOrThrowWith(Arr.findLast(events, (event) => healthSetBy(event, view.seat)), () => new Error(`No health event for seat ${view.seat}`)),
-  });
+// The library reports a death only as a Died event, and a new round revives everyone.
+export const seatsOut = (events: ReadonlyArray<GameEvent>): ReadonlySet<Seat> =>
+  events.reduce<ReadonlySet<Seat>>(
+    (out, event) =>
+      GameEvent.matchOrElse(event, { RoundBegan: () => new Set<Seat>(), Died: ({ seat }) => new Set(out).add(seat) }, () => out),
+    new Set<Seat>(),
+  );
