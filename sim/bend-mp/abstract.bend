@@ -296,7 +296,6 @@ def expected_pickup(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +seat: D.Seat
   R.stepped(R.ReceivePacket_PickUpShotgun(raw_idle(world, seats, seat, Nil{}), seat))
 
 
-
 def Ref() -> Data:
   R.RefState
 
@@ -574,18 +573,10 @@ def menu_choices(+world: S.World, +seat: D.Seat, moves: List<&2, D.Move>) -> Lis
 def verify(state: R.RefState, choice: D.Choice) -> Bool:
   R.VerifyPacket(state, choice)
 
-def choice_seat(choice: D.Choice) -> D.Seat:
-  match choice:
-    case D.Choice{seat, _, _}:
-      seat
-
 def choice_move(choice: D.Choice) -> D.Move:
   match choice:
     case D.Choice{_, _, move}:
       move
-
-def current_matches(state: R.RefState, seat: D.Seat) -> Bool:
-  R.current.eq(H.host.turn(R.host(state)), seat)
 
 def has_turn(state: R.RefState, seat: D.Seat) -> Bool:
   R.props.has_turn(H.host.props(R.host(state), seat))
@@ -631,10 +622,6 @@ def resolved_choice_shape(mode: D.Mode, picked: Maybe<&2, D.Choice>) -> Bool:
 
 def smart_request_shape(mode: D.Mode, +menus: D.Ring<&2, List<&2, D.Move>>, n: Nat, any: Bool) -> Bool:
   resolved_shape(mode, D.resolve(D.request.choose.any(any, menus), n))
-
-def resolved_pick_shape(aiming: Bool, choice: D.Choice) -> Bool:
-  resolved_shape(play_mode(aiming), D.Chose{choice})
-
 
 def ref_shell_nth(shells: List<&2, D.Shell>, index: Nat) -> Maybe<&2, D.Shell>:
   G.nth(D.Shell, shells, index)
@@ -1007,7 +994,6 @@ def ref_start(config: D.Config) -> D.Stepped<&2, R.RefState>:
   R.start(config)
 
 
-
 # The jam_skip_once law's view of a grant: the machine's jam step (Q.jam) on
 # the seats' jams, read back as seats.
 type GrantCase is Data:
@@ -1172,14 +1158,8 @@ def phase_ready(phase: S.Phase, +world: S.World) -> Bool:
     case _:
       True{}
 
-def Valid(+state: S.State) -> Data:
-  Sigma<&2, &2, {normalize(state) == state : S.State}, _ => Sigma<&2, &2, {Q.config.no_items(S.world.config(S.state.world(state))) == True{} : Bool}, _ => Sigma<&2, &2, {Nat.is_lt(S.world.round_index(S.state.world(state)), D.plan.length(S.world.plan(S.state.world(state)))) == True{} : Bool}, _ => {phase_ready(S.state.phase(state), S.state.world(state)) == True{} : Bool}>>>
-
 def next(state: S.State, n: Nat) -> S.State:
   machine_step_state(M.answer(state, n))
-
-def Simulation(+state: S.State, +n: Nat) -> Data:
-  Sigma<&2, &2, {ref_answer(ref(state), n) == stepped(M.answer(state, n)) : RefStep()}, _ => Sigma<&2, &2, {machine_point(next(state, n)) == ref_step_point(ref_answer(ref(state), n)) : D.Point}, _ => Valid(next(state, n))>>
 
 def ref_run(fuel: Nat, state: R.RefState, tape: List<&2, Nat>) -> D.Ran<&2, R.RefState>:
   R.run(fuel, state, tape)
@@ -1204,21 +1184,6 @@ def support.current_items(world: S.World, seats: D.Ring<&2, CoreSeat>) -> D.Item
 def support.items(round: D.RoundRules) -> D.ItemRules:
   H.rules.items(round)
 
-
-def valid.norm(+state: S.State, valid: Valid(state)) -> {normalize(state) == state : S.State}:
-  match valid:
-    case Tuple{eq, _}:
-      eq
-
-def simulation.step(+state: S.State, +n: Nat, simulation: Simulation(state, n)) -> {ref_answer(ref(state), n) == stepped(M.answer(state, n)) : RefStep()}:
-  match simulation:
-    case Tuple{eq, _}:
-      eq
-
-def simulation.next(+state: S.State, +n: Nat, simulation: Simulation(state, n)) -> Valid(next(state, n)):
-  match simulation:
-    case Tuple{_, Tuple{_, valid}}:
-      valid
 
 def ref_driver(fuel: Nat, request: D.Request, +state: R.RefState, tape: List<&2, Nat>) -> D.Ran<&2, R.RefState>:
   match fuel request tape:
@@ -1293,18 +1258,6 @@ def pending.batch_exposed(h: H.Host, deck: List<&2, H.Batch>, notes: List<&2, D.
   pending.state(h, pending(batch.frame(deck)), notes)
 
 
-def RunHypothesis(+fuel: Nat) -> Type:
-  @+state:S.State -> @+tape:List<&2, Nat> -> @+valid:Valid(state) -> {ref_run(fuel, ref(state), tape) == ran(M.run(fuel, state, tape)) : RefRan()}
-
-
-def Stable(+world: S.World, +seats: D.Ring<&2, CoreSeat>) -> Data:
-  Sigma<&2, &2, {world_for(world, seats) == world : S.World}, _ => Sigma<&2, &2, {Q.config.no_items(S.world.config(world)) == True{} : Bool}, _ => {Nat.is_lt(S.world.round_index(world), D.plan.length(S.world.plan(world))) == True{} : Bool}>>
-
-def preserve.norm(+state: S.State, valid: Valid(state)) -> {normalize(state) == state : S.State}:
-  match valid:
-    case Tuple{eq, _}:
-      eq
-
 def items_disabled(items: D.ItemRules) -> Bool:
   Q.items.disabled(items)
 
@@ -1316,7 +1269,6 @@ def disabled_rule(rule: D.ItemRule) -> Bool:
 
 def eligible_rule(rule: D.ItemRule, dealt: Bool, own: Nat, total: Nat) -> Bool:
   G.eligible.rule(rule, dealt, own, total)
-
 
 
 def current_items(+world: S.World, seats: D.Ring<&2, CoreSeat>) -> D.ItemRules:
@@ -1944,9 +1896,6 @@ def ref_first_begin(fuel: Nat, world: S.World, seats: D.Ring<&2, CoreSeat>, note
 def machine_first_begin(world: S.World, seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>) -> S.State:
   M.first.begin(pack(world, seats, phase, notes))
 
-def StartSimulation(+config: D.Config) -> Data:
-  Sigma<&2, &2, {ref_start(config) == stepped(M.start(config)) : RefStep()}, _ => Sigma<&2, &2, {ref_step_point(ref_start(config)) == machine_point(machine_step_state(M.start(config))) : D.Point}, _ => Valid(machine_step_state(M.start(config)))>>
-
 def zero_swap(state: S.State) -> Bool:
   match state:
     case S.State{world, players, S.NeedSwap{load, shells, 0n}, notes, grabs}:
@@ -2108,10 +2057,6 @@ def ref_ran_point(ran: D.Ran<&2, R.RefState>) -> D.Point:
     case D.Ran{state, _, _}:
       R.point(state)
 
-def RunValidHypothesis(+fuel: Nat) -> Type:
-  @+state:S.State -> @+tape:List<&2, Nat> -> @+valid:Valid(state) -> Valid(machine_ran_state(M.run(fuel, state, tape)))
-
-
 # Aim step: the reference and machine pieces of one shot, named for the proof.
 def aim.state(world: S.World, +seats: D.Ring<&2, CoreSeat>, seat: D.Seat, notes: List<&2, D.Note>) -> S.State:
   pack(world, seats, S.Aim{seat}, notes)
@@ -2183,7 +2128,7 @@ def aim.loop_expected(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +seat: D.Se
 
 
 # ============================================================================
-# Every-config interface. ValidItems is the request-point invariant for item
+# Every-config interface. Valid is the request-point invariant for item
 # configs; the B1 Valid above keeps the no-item scope until the laws are lifted.
 # ============================================================================
 
@@ -2256,32 +2201,58 @@ def Shape(+s: S.State) -> Data:
 
 # The request-point invariant for every config: the item normal form, the
 # table tie, the round bound and the phase's turn facts.
-def ValidItems(+s: S.State) -> Data:
+def Valid(+s: S.State) -> Data:
   Sigma<&2, &2, {normalize_items(s) == s : S.State}, _ => Sigma<&2, &2, Shape(s), _ => Sigma<&2, &2, Holds(bounded(s)), _ => Holds(items_ready(S.state.phase(s), S.state.world(s)))>>>
 
-def valid_items.normal(+s: S.State, valid: ValidItems(s)) -> {normalize_items(s) == s : S.State}:
+def valid.normal(+s: S.State, valid: Valid(s)) -> {normalize_items(s) == s : S.State}:
   match valid:
     case Tuple{x, _}:
       x
 
-def valid_items.shape(+s: S.State, valid: ValidItems(s)) -> Shape(s):
+def valid.shape(+s: S.State, valid: Valid(s)) -> Shape(s):
   match valid:
     case Tuple{_, Tuple{x, _}}:
       x
 
-def valid_items.bounded(+s: S.State, valid: ValidItems(s)) -> Holds(bounded(s)):
+def valid.bounded(+s: S.State, valid: Valid(s)) -> Holds(bounded(s)):
   match valid:
     case Tuple{_, Tuple{_, Tuple{x, _}}}:
       x
 
-def valid_items.ready(+s: S.State, valid: ValidItems(s)) -> Holds(items_ready(S.state.phase(s), S.state.world(s))):
+def valid.ready(+s: S.State, valid: Valid(s)) -> Holds(items_ready(S.state.phase(s), S.state.world(s))):
   match valid:
     case Tuple{_, Tuple{_, Tuple{_, x}}}:
       x
 
-def SimulationItems(+state: S.State, +n: Nat) -> Data:
-  Sigma<&2, &2, {ref_answer(ref(state), n) == stepped(M.answer(state, n)) : RefStep()}, _ => Sigma<&2, &2, {machine_point(next(state, n)) == ref_step_point(ref_answer(ref(state), n)) : D.Point}, _ => ValidItems(next(state, n))>>
+def Simulation(+state: S.State, +n: Nat) -> Data:
+  Sigma<&2, &2, {ref_answer(ref(state), n) == stepped(M.answer(state, n)) : RefStep()}, _ => Sigma<&2, &2, {machine_point(next(state, n)) == ref_step_point(ref_answer(ref(state), n)) : D.Point}, _ => Valid(next(state, n))>>
 
+
+def simulation.step(+state: S.State, +n: Nat, simulation: Simulation(state, n)) -> {ref_answer(ref(state), n) == stepped(M.answer(state, n)) : RefStep()}:
+  match simulation:
+    case Tuple{eq, _}:
+      eq
+
+def simulation.next(+state: S.State, +n: Nat, simulation: Simulation(state, n)) -> Valid(next(state, n)):
+  match simulation:
+    case Tuple{_, Tuple{_, valid}}:
+      valid
+
+def StartSimulation(+config: D.Config) -> Data:
+  Sigma<&2, &2, {ref_start(config) == stepped(M.start(config)) : RefStep()}, _ => Sigma<&2, &2, {ref_step_point(ref_start(config)) == machine_point(machine_step_state(M.start(config))) : D.Point}, _ => Valid(machine_step_state(M.start(config)))>>
+
+def RunHypothesis(+fuel: Nat) -> Type:
+  @+state:S.State -> @+tape:List<&2, Nat> -> @+valid:Valid(state) -> {ref_run(fuel, ref(state), tape) == ran(M.run(fuel, state, tape)) : RefRan()}
+
+def RunValidHypothesis(+fuel: Nat) -> Type:
+  @+state:S.State -> @+tape:List<&2, Nat> -> @+valid:Valid(state) -> Valid(machine_ran_state(M.run(fuel, state, tape)))
+
+# A game from a config: the start's notes, then the run on the tape.
+def ref_game(fuel: Nat, +config: D.Config, tape: List<&2, Nat>) -> D.Ran<&2, R.RefState>:
+  ref_merge(ref_start(config), ref_run(fuel, ref_next(ref_start(config)), tape))
+
+def machine_game(fuel: Nat, +config: D.Config, tape: List<&2, Nat>) -> D.Ran<&2, S.State>:
+  machine_merge(M.start(config), M.run(fuel, M.stepped.state(M.start(config)), tape))
 
 # The reference closure of a frame from a machine state's host and notes.
 def close(fuel: Nat, +s: S.State, f: R.Frame) -> R.RefState:

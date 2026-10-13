@@ -41,35 +41,28 @@ law legal_play_exact:
 
 
 law observe_matches:
-  for +world: A.World()
-  for +seats: A.Seats()
-  for +phase: A.Phase()
-  for +notes: A.Notes()
-  for +seat: A.Seat()
-  {(A.observation(A.pack(A.world_for(world, seats), seats, phase, notes), seat), A.heard(A.pack(A.world_for(world, seats), seats, phase, notes), seat)) == (A.ref_observation(A.ref(A.pack(A.world_for(world, seats), seats, phase, notes)), seat), A.ref_heard(A.ref(A.pack(A.world_for(world, seats), seats, phase, notes)), seat)) : D.Obs & List<&2, D.Heard>}
+  for +state: S.State
+  for +valid: A.Valid(state)
+  for +seat: D.Seat
+  {(A.observation(state, seat), A.heard(state, seat)) == (A.ref_observation(A.ref(state), seat), A.ref_heard(A.ref(state), seat)) : D.Obs & List<&2, D.Heard>}
 
 
 law legal_exact:
-  for +world: A.World()
-  for +seats: A.Seats()
-  for +phase: A.Phase()
-  for +notes: A.Notes()
-  {A.machine_request(A.canonical_state(world, seats, phase, notes)) == A.ref_request(A.ref(A.canonical_state(world, seats, phase, notes))) : D.Request}
+  for +state: S.State
+  for +valid: A.Valid(state)
+  {A.machine_request(state) == A.ref_request(A.ref(state)) : D.Request}
 
 
+# Every move the machine offers at a valid state passes the host's
+# VerifyPacket.
 law legal_accepted:
-  for +world: A.World()
-  for +seats: A.Seats()
-  for +seat: A.Seat()
-  for +aiming: Bool
-  for +notes: A.Notes()
+  for +state: S.State
+  for +valid: A.Valid(state)
   for +n: Nat
   for +choice: D.Choice
-  for present: A.seated(A.world_for(world, seats), seat)
-  for selected: {D.resolve(A.machine_request(A.play_state(A.world_for(world, seats), seats, seat, aiming, notes)), n) == D.Chose{choice} : D.Resolved}
-  for current: {A.current_matches(A.ref(A.play_state(A.world_for(world, seats), seats, seat, aiming, notes)), A.choice_seat(choice)) == True{} : Bool}
-  for permission: {A.has_turn(A.ref(A.play_state(A.world_for(world, seats), seats, seat, aiming, notes)), A.choice_seat(choice)) == True{} : Bool}
-  {A.verify(A.ref(A.play_state(A.world_for(world, seats), seats, seat, aiming, notes)), choice) == True{} : Bool}
+  for selected: {D.resolve(A.machine_request(state), n) == D.Chose{choice} : D.Resolved}
+  {A.verify(A.ref(state), choice) == True{} : Bool}
+
 
 law state_roundtrip:
   for +world: S.World
@@ -87,7 +80,6 @@ law turn_traversal:
 
 law start_result_matches:
   for +config: D.Config
-  for supported: {Q.config.no_items(config) == True{} : Bool}
   {A.ref_start(config) == A.stepped(M.start(config)) : A.RefStep()}
 
 law privacy:
@@ -109,7 +101,6 @@ law jam_skip_once:
 
 law start_matches:
   for +config: D.Config
-  for +supported: {Q.config.no_items(config) == True{} : Bool}
   A.StartSimulation(config)
 
 
@@ -129,10 +120,17 @@ law run_matches:
   for +valid: A.Valid(state)
   {A.ref_run(fuel, A.ref(state), tape) == A.ran(M.run(fuel, state, tape)) : A.RefRan()}
 
-# Every state the machine reaches from a no-item start is valid.
+# Every state the machine reaches from a start is valid.
 law reachable_valid:
   for fuel: Nat
   for +config: D.Config
-  for +supported: {Q.config.no_items(config) == True{} : Bool}
   for +tape: List<&2, Nat>
   A.Valid(A.machine_ran_state(M.run(fuel, M.stepped.state(M.start(config)), tape)))
+
+# Every machine game is a reference game, and the reverse: for every config
+# and tape, the reference's game equals the machine's read through A.ran.
+law games_match:
+  for +fuel: Nat
+  for +config: D.Config
+  for +tape: List<&2, Nat>
+  {A.ref_game(fuel, config, tape) == A.ran(A.machine_game(fuel, config, tape)) : A.RefRan()}

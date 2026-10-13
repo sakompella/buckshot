@@ -23,7 +23,7 @@ Out of scope are graphics, animation, sound, networking, the lobby, seat shuffli
 - `ref/` is the reference, a Bend model that follows the Godot `MP_*` scripts function by function. Its frames carry the names of the Godot functions they follow. It exists only to verify the machine.
 - `sm/` is the machine. `state.bend` has the state, `rules.bend` and `items.bend` the pure rule functions, `point.bend` the requests and the public board, and `main.bend` the step function.
 - `abstract.bend` is the bridge between the machine and the reference. Proof files may import it but not `ref/` directly. A generated section of it wraps every reference definition, kept in sync by `tools/ref_api.py`.
-- `LAWS.bend` states the laws. `PROOF.bend` proves them, using `core-proof.bend`, `step-proof.bend`, `grant-proof.bend`, `shot-proof.bend`, `support-proof.bend` and `primitive.bend`.
+- `LAWS.bend` states the laws. `PROOF.bend` proves them, using `step-proof.bend` (the run, start and game laws), `accept-proof.bend` (`legal_accepted`), `items-proof.bend` and the phase proofs it calls (listed below), and `core-proof.bend`, `grant-proof.bend`, `shot-proof.bend` and `primitive.bend`.
 - `ai/story.bend` and `ai/don.bend` are the two dealer AIs.
 - `driver.bend` is the controller that plays whole matches. `view.bend` renders them as text.
 - `main.bend` is a command line entry that plays matches and prints win rates. `web.bend` is the entry that the web UI builds to JavaScript.
@@ -53,48 +53,50 @@ The laws compare the machine to the reference, so something must turn a machine 
 
 `back` is the inverse at request points. The law `state_roundtrip` states that `back(ref(state))` returns the state.
 
-The mapping covers only the states the machine can reach. `A.Valid` says which those are. A state is valid when all four of these hold.
+The mapping covers only the states the machine can reach. `A.Valid` says which those are. It covers every config, with or without items. A state is valid when all four of these hold.
 
-- It is in normal form. Slots are empty, no seat is jammed, the grabs are initial, and phases that only exist with items are replaced by blocked.
-- Its config has no item enabled.
+- It is in item normal form. The stored menus of an idle, steal or grab phase equal their recomputation from the state, since the reference checks ownership and the grab flags where the machine reads the stored menu. A swap at index 0 is blocked.
+- Its seat ring and every ring of its `Grabs` have the config's table.
 - Its round index is inside the round plan.
-- Its phase fits its world. A first-seat draw has a round left to begin, and an idle or aim phase waits on the seat that holds the world's turn.
+- Its phase fits its world. A first-seat draw has a round left to begin, and the seat that an idle, aim, jam, steal or phone phase waits on holds the world's turn.
 
 ## The laws
 
-The eleven required laws are listed in `check.sh`. Each is stated in `LAWS.bend`.
+The twelve required laws are listed in `check.sh`. Each is stated in `LAWS.bend`.
 
-`start_matches` says that for a config with no items, the machine's start and the reference's start give the same result, the same first point, and a valid machine state. The helper law `start_result_matches` states only the equality of the two start results.
+`start_matches` says that for every config, the machine's start and the reference's start give the same result, the same first point, and a valid machine state. The helper law `start_result_matches` states only the equality of the two start results.
 
 `step_matches` says that for a valid state and any answer, the reference's answer, including its bounded run of silent internal steps, equals the machine's answer. Both reach the same request point with the same notes, and the machine state is valid again.
 
-`run_matches` lifts that to whole runs. For any fuel, valid state and tape, the reference's run equals the machine's run. Together with `step_matches` this means every machine game is a reference game and the reverse. The two models offer equal menus, so neither can take a move the other cannot.
+`run_matches` lifts that to whole runs. For any fuel, valid state and tape, the reference's run equals the machine's run.
 
-`reachable_valid` says that for a config with no items, every state the machine reaches from its start through any tape is valid. The machine builds states only through `start` and `answer`, so no game reaches a state that `A.Valid` rules out. The state type itself can still hold invalid states, for example an idle phase whose seat does not hold the turn. Only code that builds a state by hand can make one.
+`games_match` says that for every config, fuel and tape, the reference's game equals the machine's game read through `A.ran`. A game is the start's notes, then the run from the start state on the tape (`A.ref_game` and `A.machine_game`). So every machine game is a reference game, and the reverse. The two models offer equal menus, so neither can take a move the other cannot. The proof is `start_result_matches` and `run_matches` from the valid start state.
 
-`legal_exact` says the machine's request at a state equals the reference's request at the mapped state. The legal moves are exactly the same.
+`reachable_valid` says that for every config, every state the machine reaches from its start through any tape is valid. The machine builds states only through `start` and `answer`, so no game reaches a state that `A.Valid` rules out. The state type itself can still hold invalid states, for example an idle phase whose seat does not hold the turn. Only code that builds a state by hand can make one.
 
-`legal_accepted` says that each machine move at a play point is accepted by the reference's host verification, when the move's seat is the seat whose turn it is. The faithful reference never rejects a normal move.
+`legal_exact` says that at every valid state the machine's request equals the reference's request at the mapped state. The legal moves are exactly the same.
 
-`observe_matches` says that for every seat, the observation and the heard notes of the machine equal those of the reference.
+`legal_accepted` says that at every valid state, every move the machine offers is accepted by the host's `VerifyPacket`: the seat holds the turn, the move fits the mode, the seat owns the item it uses or steals, and a grab or place fits the seat's grab flags. So the faithful reference never rejects a move the machine offers. `accept-proof.bend` reads the choice back from the request by the phase.
+
+`observe_matches` says that at every valid state, for every seat, the observation and the heard notes of the machine equal those of the reference.
 
 `privacy` says that a seat's observation and heard notes do not change if the hidden shell order and the decks are replaced. The new gun must have the same length. The law holds for all states, with or without items.
 
-`turn_traversal` says the machine's choice of the next seat equals the reference's. Both skip dead seats and follow the direction of play.
+`turn_traversal` says the machine's choice of the next seat equals the reference's. Both skip dead seats and follow the direction of play. It reads only the seats' health and the direction, so items do not enter it.
 
 `jam_skip_once` says that a jammed seat loses exactly one turn. The first grant of the turn skips the seat and marks it skipped. The next grant lifts the jam and gives the seat the turn. The one after that finds a free seat. The law also says the machine's jam step matches the reference's. After a lift, the reference leaves Godot's checked flag set, and the mapping restores that. A seat that is jammed again goes back to the jammed state, so it is skipped again. The law holds for all jam states.
 
-`state_roundtrip` says the mapping and its inverse agree, as above.
+`state_roundtrip` says the mapping and its inverse agree, as above. It is stated for states without items: `back` is defined for the no-item request phases and for seats with empty slots and initial grabs.
 
-The helper laws are small steps that the larger proofs use. They are `core_roundtrip`, `pickup_matches`, `pickup_point_matches` and `legal_play_exact`. Each states the same kind of equality for one narrow case, such as picking up the gun or the play menu.
+The helper laws are small steps about one narrow no-item case each, such as picking up the gun or the play menu. They are `core_roundtrip`, `pickup_matches`, `pickup_point_matches` and `legal_play_exact`. No other law uses them now; `step_matches` and `legal_exact` cover the same moves at every valid state.
 
 ## What is proven and what is fuzzed
 
-The laws are proven for configs with no items, with two exceptions. `privacy` and `jam_skip_once` hold for all states.
+These laws are proven for every config, items included: `start_matches`, `start_result_matches`, `step_matches`, `run_matches`, `games_match`, `reachable_valid`, `legal_exact`, `legal_accepted` and `observe_matches`. `privacy` and `jam_skip_once` hold for all states, and `turn_traversal` does not depend on items. `state_roundtrip` and the helper laws stay no-item only, for the reasons above.
 
-With items, `step_matches` is proven as an internal lemma. `items-proof.bend` proves `step.items`: for every state that satisfies `A.ValidItems` and every answer, the reference's answer and its silent chain equal the machine's answer, the next request matches, and the machine stays item-valid. The phase proofs are in `load-proof.bend` (the handout and reload), `turn-proof.bend` (turn end), `use-proof.bend` (item uses at Idle), `aim-proof.bend` (shots), `pick-proof.bend` (jam targets, steals, the phone draw and the end-of-turn item draw), `round-proof.bend` (wins and round start) and `load-step-proof.bend` (shell batches and swaps). The laws in `LAWS.bend` still state the no-item scope; restating them for item configs is the next step.
+`step_matches` is `step.items` in `items-proof.bend`, by the phase. The phase proofs are in `load-proof.bend` (the handout and reload), `turn-proof.bend` (turn end), `use-proof.bend` (item uses at Idle), `aim-proof.bend` (shots), `pick-proof.bend` (jam targets, steals, the phone draw and the end-of-turn item draw), `round-proof.bend` (wins and round start), `load-step-proof.bend` (shell batches and swaps) and `item-step-proof.bend` (the grab and item handout points, and `point.items`: the machine's point equals the reference's at every valid state). `step-proof.bend` lifts the step to runs by induction on the fuel and proves the start, game, `legal_exact` and `observe_matches` laws. `accept-proof.bend` proves `legal_accepted`.
 
-Until then, the item laws are also checked on random games. `test/machine-items-fuzz.mjs` plays seeded random games, 500 for each of 2, 3 and 4 seats, so 1,500 games by default. At every request point it compares the machine to the reference on `step_matches`, `observe_matches`, `legal_exact`, `legal_accepted` and `privacy`. It checks `step_matches` on whole states: after each answer the reference's state equals `A.ref` of the machine's (abstract.bend is built to JS for this), and the notes and points match. It also checks `reachable_valid` against `A.ValidItems`, the invariant the item proofs use: Idle, StealPick and Grab menus equal their recomputation, a swap index is positive, the seat of each playing phase holds the turn, and the seat ring and the Grabs rings have the config's table. `item-step-proof.bend` proves that a no-item valid state is item-valid too. It checks `legal_accepted` for every offered move. Checking `step_matches` at every point covers what `run_matches` says about those games. The fuzz does not check `state_roundtrip`, `turn_traversal` or `jam_skip_once` with items. `FUZZ_GAMES` sets the number of games for each table size.
+The laws are also checked on random games. `test/machine-items-fuzz.mjs` plays seeded random games, 500 for each of 2, 3 and 4 seats, so 1,500 games by default. At every request point it compares the machine to the reference on `step_matches`, `observe_matches`, `legal_exact`, `legal_accepted` and `privacy`. It checks `step_matches` on whole states: after each answer the reference's state equals `A.ref` of the machine's (abstract.bend is built to JS for this), and the notes and points match. It also checks `reachable_valid` against `A.Valid`. It checks `legal_accepted` for every offered move. Checking `step_matches` at every point covers what `run_matches` says about those games. The fuzz does not check `state_roundtrip`, `turn_traversal` or `jam_skip_once` with items. `FUZZ_GAMES` sets the number of games for each table size.
 
 Two mutation gates check that the checks can fail.
 
@@ -115,7 +117,7 @@ The model fixes below also depart on purpose from raw Godot. The reference and t
 
 ## Generated proof bodies
 
-Some lemmas in `core-proof.bend` and `item-step-proof.bend` are case splits over every table shape, seat and value the rules branch on. They are too large to write by hand. `tools/proof_cases.py` writes their bodies. The claims, meaning the signatures, are written by hand. The script is not trusted. The Bend kernel checks every generated body like any other proof. `check.sh` runs the script in check mode and fails if the file differs from what the script would write. `tools/ref_api.py` does the same for the generated section of `abstract.bend`.
+Some lemmas in the proof files are case splits over every table shape, seat and value the rules branch on. They are too large to write by hand. `tools/proof_cases.py` writes their bodies. The claims, meaning the signatures, are written by hand. The script is not trusted. The Bend kernel checks every generated body like any other proof. `check.sh` runs the script in check mode and fails if the file differs from what the script would write. `tools/ref_api.py` does the same for the generated section of `abstract.bend`.
 
 ## Model fixes
 
@@ -181,7 +183,7 @@ It takes about 7 to 8 minutes on a Mac, and about 1.5 minutes on a 7-core Linux 
 2. No `@unsafe` and no unfinished `def name?(` hole anywhere under this directory.
 3. The import rules for `ai/`, `sm/` and `driver.bend`.
 4. The driver smoke test. 64 matches at each table size finish with none stuck and no fuel spent.
-5. All eleven required laws are present in `LAWS.bend`.
+5. All twelve required laws are present in `LAWS.bend`.
 6. The generated proof bodies and the generated reference API match their scripts.
 7. `PROOF.bend` checks with `--verdict`.
 8. The round trip of the domain types through JavaScript.

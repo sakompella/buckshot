@@ -1914,13 +1914,6 @@ def ctx.tell(+s: S.State, +seat: D.Seat, +secret: D.Secret, +ctx: Ctx(s)) -> Ctx
         case Tuple{Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}, +quiet}:
           ((e_players, (e_grabbing, (e_holding, (e_granted, e_intake)))), quiet)
 
-def ctx.notes(+s: S.State, +notes2: List<&2, D.Note>, +ctx: Ctx(s)) -> Ctx(S.state.set_notes(s, notes2)):
-  match s:
-    case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +players, +phase, +notes, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
-      match ctx:
-        case Tuple{Tuple{e_players, Tuple{e_grabbing, Tuple{e_holding, Tuple{e_granted, e_intake}}}}, +quiet}:
-          ((e_players, (e_grabbing, (e_holding, (e_granted, e_intake)))), quiet)
-
 # Closures of the handout, from a machine state's reference host and notes
 # (A.close), each as an A.Closure with the reference's dispatch count. The
 # load closure (L11) is stated here and proven in load-proof.bend.

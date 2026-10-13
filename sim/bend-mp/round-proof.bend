@@ -260,7 +260,7 @@ def win.closure() -> T.WinClosure():
 # Validity of the round start: every stop is a ready request point, and the
 # new round index stays within the plan.
 
-def valid.reset(+s: S.State, +vpre: LP.VPre(s)) -> A.ValidItems(M.round.reset(s)):
+def valid.reset(+s: S.State, +vpre: LP.VPre(s)) -> A.Valid(M.round.reset(s)):
   match s:
     case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
       match vpre:
@@ -268,7 +268,7 @@ def valid.reset(+s: S.State, +vpre: LP.VPre(s)) -> A.ValidItems(M.round.reset(s)
           T.valid.distribute(I.begin.seats(A.reset.state(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g}), True{}, amount), A.reset.state(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g}), (shape.reset(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g}, shape), bounded))
 
 
-def valid.arule(+rule: D.AmountRule, +s: S.State, +vpre: LP.VPre(s)) -> A.ValidItems(M.amount.rule(s, rule)):
+def valid.arule(+rule: D.AmountRule, +s: S.State, +vpre: LP.VPre(s)) -> A.Valid(M.amount.rule(s, rule)):
   match rule s:
     case D.RandomAmount{} S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
       match vpre:
@@ -280,11 +280,11 @@ def valid.arule(+rule: D.AmountRule, +s: S.State, +vpre: LP.VPre(s)) -> A.ValidI
           valid.reset(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, x, saw, gun, shown, deck}, p, ph, n, g}, (AP.shape.world(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, x, saw, gun, shown, deck}, p, ph, n, g, {==}, shape), bounded))
 
 
-def valid.amt(+s: S.State, +vpre: LP.VPre(s)) -> A.ValidItems(M.amount.begin(s)):
+def valid.amt(+s: S.State, +vpre: LP.VPre(s)) -> A.Valid(M.amount.begin(s)):
   valid.arule(Q.load.amount(Q.world.load_rule(S.state.world(s))), s, vpre)
 
 
-def valid.hrule(+rule: D.HealthRule, +s: S.State, +vpre: LP.VPre(s)) -> A.ValidItems(M.health.rule(s, rule)):
+def valid.hrule(+rule: D.HealthRule, +s: S.State, +vpre: LP.VPre(s)) -> A.Valid(M.health.rule(s, rule)):
   match rule s:
     case D.RandomHealth{} S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
       match vpre:
@@ -296,7 +296,7 @@ def valid.hrule(+rule: D.HealthRule, +s: S.State, +vpre: LP.VPre(s)) -> A.ValidI
           valid.amt(S.State{S.World{D.Config{table, plan}, before, round, load, first, D.pos.nat(x), recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g}, (AP.shape.world(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, S.World{D.Config{table, plan}, before, round, load, first, D.pos.nat(x), recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g, {==}, shape), bounded))
 
 
-def valid.health(+s: S.State, +vpre: LP.VPre(s)) -> A.ValidItems(M.health.begin(s)):
+def valid.health(+s: S.State, +vpre: LP.VPre(s)) -> A.Valid(M.health.begin(s)):
   valid.hrule(Q.round.health(Q.world.rules(S.state.world(s))), s, vpre)
 
 
@@ -305,7 +305,7 @@ def FirstReady(+s: S.State) -> Data:
   A.Holds(Nat.is_lt(Q.round.next(S.world.before_round(S.state.world(s)), S.world.round_index(S.state.world(s))), D.plan.length(S.world.plan(S.state.world(s)))))
 
 
-def valid.fc(+s: S.State, +seat: D.Seat, +shape: A.Shape(s), +next: FirstReady(s)) -> A.ValidItems(M.first.chosen(s, seat)):
+def valid.fc(+s: S.State, +seat: D.Seat, +shape: A.Shape(s), +next: FirstReady(s)) -> A.Valid(M.first.chosen(s, seat)):
   match s:
     case S.State{+w, +p, +ph, +n, +g}:
       match w:
@@ -315,7 +315,7 @@ def valid.fc(+s: S.State, +seat: D.Seat, +shape: A.Shape(s), +next: FirstReady(s
           valid.health(S.State{S.World{D.Config{table, plan}, False{}, 1n+round, load, True{}, rh, seat, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g}, (AP.shape.world(S.World{D.Config{table, plan}, False{}, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, S.World{D.Config{table, plan}, False{}, 1n+round, load, True{}, rh, seat, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g, {==}, shape), next))
 
 
-def valid.first(+s: S.State, +vpre: LP.VPre(s), +ready: FirstReady(s)) -> A.ValidItems(M.first.begin(s)):
+def valid.first(+s: S.State, +vpre: LP.VPre(s), +ready: FirstReady(s)) -> A.Valid(M.first.begin(s)):
   match s:
     case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, None{}, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
       match vpre:
@@ -361,7 +361,7 @@ def lt.next(+before: Bool, +r: Nat, +l: Nat, +e_lt: {Nat.is_lt(r, l) == True{} :
       lt.step(r, l, e_lt, e_ne)
 
 
-def valid.lb(+final: Bool, +s: S.State, +vpre: LP.VPre(s), +e_final: {Nat.is_eq(1n+S.world.round_index(S.state.world(s)), D.plan.length(S.world.plan(S.state.world(s)))) == final : Bool}) -> A.ValidItems(M.win.final(s, final)):
+def valid.lb(+final: Bool, +s: S.State, +vpre: LP.VPre(s), +e_final: {Nat.is_eq(1n+S.world.round_index(S.state.world(s)), D.plan.length(S.world.plan(S.state.world(s)))) == final : Bool}) -> A.Valid(M.win.final(s, final)):
   match final s:
     case True{} S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
       match vpre:
@@ -373,7 +373,7 @@ def valid.lb(+final: Bool, +s: S.State, +vpre: LP.VPre(s), +e_final: {Nat.is_eq(
           valid.first(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g}, (shape, bounded), lt.next(before, round, D.plan.length(plan), bounded, e_final))
 
 
-def valid.win(+s: S.State, +seat: D.Seat, +vpre: LP.VPre(s)) -> A.ValidItems(M.win(s, seat)):
+def valid.win(+s: S.State, +seat: D.Seat, +vpre: LP.VPre(s)) -> A.Valid(M.win(s, seat)):
   match s:
     case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
       match vpre:
@@ -411,7 +411,7 @@ def first.answer(+w: S.World, +p: S.Players, +n0: A.Notes(), +g: S.Grabs, +n: Na
       Equal.trans(A.RefStep(), R.stepped(R.settle(96n, R.RefState{T.qh(S.State{S.World{D.Config{D.FourSeats{}, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, S.NeedFirst{}, Nil{}, g}), R.MainRoutine_StartRound{R.FirstChosen{G.seat.default(G.nth(D.Seat, D.table.seats(D.FourSeats{}), D.draw.value(PT.first.range(D.FourSeats{}), n)))}}, Nil{}})), R.stepped(R.settle(96n, R.RefState{T.qh(S.State{S.World{D.Config{D.FourSeats{}, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, S.NeedFirst{}, Nil{}, g}), R.MainRoutine_StartRound{R.FirstChosen{Q.value.or(D.Seat, Q.nth(D.Seat, D.table.seats(D.FourSeats{}), D.draw.value(PT.first.range(D.FourSeats{}), n)), D.Seat0{})}}, Nil{}})), A.stepped(S.state.stepped(M.first.chosen(S.State{S.World{D.Config{D.FourSeats{}, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, S.NeedFirst{}, Nil{}, g}, Q.value.or(D.Seat, Q.nth(D.Seat, D.table.seats(D.FourSeats{}), D.draw.value(PT.first.range(D.FourSeats{}), n)), D.Seat0{})))), Equal.cong(D.Seat, A.RefStep(), x => R.stepped(R.settle(96n, R.RefState{T.qh(S.State{S.World{D.Config{D.FourSeats{}, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, S.NeedFirst{}, Nil{}, g}), R.MainRoutine_StartRound{R.FirstChosen{x}}, Nil{}})), G.seat.default(G.nth(D.Seat, D.table.seats(D.FourSeats{}), D.draw.value(PT.first.range(D.FourSeats{}), n))), Q.value.or(D.Seat, Q.nth(D.Seat, D.table.seats(D.FourSeats{}), D.draw.value(PT.first.range(D.FourSeats{}), n)), D.Seat0{}), Equal.trans(D.Seat, G.seat.default(G.nth(D.Seat, D.table.seats(D.FourSeats{}), D.draw.value(PT.first.range(D.FourSeats{}), n))), G.seat.default(Q.nth(D.Seat, D.table.seats(D.FourSeats{}), D.draw.value(PT.first.range(D.FourSeats{}), n))), Q.value.or(D.Seat, Q.nth(D.Seat, D.table.seats(D.FourSeats{}), D.draw.value(PT.first.range(D.FourSeats{}), n)), D.Seat0{}), Equal.cong(Maybe<&2, D.Seat>, D.Seat, m => G.seat.default(m), G.nth(D.Seat, D.table.seats(D.FourSeats{}), D.draw.value(PT.first.range(D.FourSeats{}), n)), Q.nth(D.Seat, D.table.seats(D.FourSeats{}), D.draw.value(PT.first.range(D.FourSeats{}), n)), ISP.nth.eq(D.Seat, D.table.seats(D.FourSeats{}), D.draw.value(PT.first.range(D.FourSeats{}), n))), default.eq(Q.nth(D.Seat, D.table.seats(D.FourSeats{}), D.draw.value(PT.first.range(D.FourSeats{}), n))))), U.stepped.ref.local(R.settle(96n, R.RefState{T.qh(S.State{S.World{D.Config{D.FourSeats{}, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, S.NeedFirst{}, Nil{}, g}), R.MainRoutine_StartRound{R.FirstChosen{Q.value.or(D.Seat, Q.nth(D.Seat, D.table.seats(D.FourSeats{}), D.draw.value(PT.first.range(D.FourSeats{}), n)), D.Seat0{})}}, Nil{}}), M.first.chosen(S.State{S.World{D.Config{D.FourSeats{}, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, S.NeedFirst{}, Nil{}, g}, Q.value.or(D.Seat, Q.nth(D.Seat, D.table.seats(D.FourSeats{}), D.draw.value(PT.first.range(D.FourSeats{}), n)), D.Seat0{})), fc.close(S.State{S.World{D.Config{D.FourSeats{}, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, S.NeedFirst{}, Nil{}, g}, Q.value.or(D.Seat, Q.nth(D.Seat, D.table.seats(D.FourSeats{}), D.draw.value(PT.first.range(D.FourSeats{}), n)), D.Seat0{}), 77n, ISP.shape.move(S.World{D.Config{D.FourSeats{}, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, S.NeedFirst{}, n0, g, S.NeedFirst{}, Nil{}, shape))))
 
 
-def valid.first.answer(+w: S.World, +p: S.Players, +n0: A.Notes(), +g: S.Grabs, +n: Nat, +valid: A.ValidItems(S.State{w, p, S.NeedFirst{}, n0, g})) -> A.ValidItems(A.next(S.State{w, p, S.NeedFirst{}, n0, g}, n)):
+def valid.first.answer(+w: S.World, +p: S.Players, +n0: A.Notes(), +g: S.Grabs, +n: Nat, +valid: A.Valid(S.State{w, p, S.NeedFirst{}, n0, g})) -> A.Valid(A.next(S.State{w, p, S.NeedFirst{}, n0, g}, n)):
   match valid:
     case Tuple{+normal, Tuple{+shape, Tuple{+bounded, +ready}}}:
       +seat : D.Seat = Q.value.or(D.Seat, Q.nth(D.Seat, D.table.seats(S.world.table(w)), D.draw.value(PT.first.range(S.world.table(w)), n)), D.Seat0{})
@@ -424,7 +424,7 @@ def health.answer(+w: S.World, +p: S.Players, +n0: A.Notes(), +g: S.Grabs, +n: N
       U.stepped.ref.local(R.settle(96n, R.RefState{T.qh(S.State{S.World{D.Config{table, plan}, before, round, load, first, D.draw.value(D.table.health_range(table), n), recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, S.NeedHealth{}, Nil{}, g}), R.GetRandomItemGrabAmount{R.PacketSort_StartRound{}}, Nil{}}), M.health.chosen(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, S.NeedHealth{}, Nil{}, g}, D.draw.value(D.table.health_range(table), n)), amount.close(S.State{S.World{D.Config{table, plan}, before, round, load, first, D.draw.value(D.table.health_range(table), n), recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, S.NeedHealth{}, Nil{}, g}, 79n, AP.shape.world(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, S.World{D.Config{table, plan}, before, round, load, first, D.draw.value(D.table.health_range(table), n), recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, S.NeedHealth{}, Nil{}, g, {==}, ISP.shape.move(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, S.NeedHealth{}, n0, g, S.NeedHealth{}, Nil{}, shape))))
 
 
-def valid.health.answer(+w: S.World, +p: S.Players, +n0: A.Notes(), +g: S.Grabs, +n: Nat, +valid: A.ValidItems(S.State{w, p, S.NeedHealth{}, n0, g})) -> A.ValidItems(A.next(S.State{w, p, S.NeedHealth{}, n0, g}, n)):
+def valid.health.answer(+w: S.World, +p: S.Players, +n0: A.Notes(), +g: S.Grabs, +n: Nat, +valid: A.Valid(S.State{w, p, S.NeedHealth{}, n0, g})) -> A.Valid(A.next(S.State{w, p, S.NeedHealth{}, n0, g}, n)):
   match w:
     case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}:
       match valid:
@@ -438,7 +438,7 @@ def amount.answer(+w: S.World, +p: S.Players, +n0: A.Notes(), +g: S.Grabs, +n: N
       U.stepped.ref.local(R.settle(96n, R.RefState{T.qh(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, D.draw.value(D.table.amount_range(table), n), saw, gun, shown, deck}, p, S.NeedAmount{}, Nil{}, g}), R.PacketSort_StartRound{}, Nil{}}), M.amount.chosen(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, S.NeedAmount{}, Nil{}, g}, D.draw.value(D.table.amount_range(table), n)), reset.close(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, D.draw.value(D.table.amount_range(table), n), saw, gun, shown, deck}, p, S.NeedAmount{}, Nil{}, g}, 80n, AP.shape.world(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, D.draw.value(D.table.amount_range(table), n), saw, gun, shown, deck}, p, S.NeedAmount{}, Nil{}, g, {==}, ISP.shape.move(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, S.NeedAmount{}, n0, g, S.NeedAmount{}, Nil{}, shape))))
 
 
-def valid.amount.answer(+w: S.World, +p: S.Players, +n0: A.Notes(), +g: S.Grabs, +n: Nat, +valid: A.ValidItems(S.State{w, p, S.NeedAmount{}, n0, g})) -> A.ValidItems(A.next(S.State{w, p, S.NeedAmount{}, n0, g}, n)):
+def valid.amount.answer(+w: S.World, +p: S.Players, +n0: A.Notes(), +g: S.Grabs, +n: Nat, +valid: A.Valid(S.State{w, p, S.NeedAmount{}, n0, g})) -> A.Valid(A.next(S.State{w, p, S.NeedAmount{}, n0, g}, n)):
   match w:
     case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}:
       match valid:
@@ -446,14 +446,14 @@ def valid.amount.answer(+w: S.World, +p: S.Players, +n0: A.Notes(), +g: S.Grabs,
           valid.reset(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, D.draw.value(D.table.amount_range(table), n), saw, gun, shown, deck}, p, S.NeedAmount{}, Nil{}, g}, (AP.shape.world(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, D.draw.value(D.table.amount_range(table), n), saw, gun, shown, deck}, p, S.NeedAmount{}, Nil{}, g, {==}, ISP.shape.move(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, S.NeedAmount{}, n0, g, S.NeedAmount{}, Nil{}, shape)), bounded))
 
 # step_matches at NeedFirst with items.
-def step.first(+world: S.World, +players: S.Players, +notes: A.Notes(), +grabs: S.Grabs, +n: Nat, +valid: A.ValidItems(S.State{world, players, S.NeedFirst{}, notes, grabs})) -> A.SimulationItems(S.State{world, players, S.NeedFirst{}, notes, grabs}, n):
-  ISP.simulation.items(S.State{world, players, S.NeedFirst{}, notes, grabs}, n, first.answer(world, players, notes, grabs, n, A.valid_items.shape(S.State{world, players, S.NeedFirst{}, notes, grabs}, valid)), valid.first.answer(world, players, notes, grabs, n, valid))
+def step.first(+world: S.World, +players: S.Players, +notes: A.Notes(), +grabs: S.Grabs, +n: Nat, +valid: A.Valid(S.State{world, players, S.NeedFirst{}, notes, grabs})) -> A.Simulation(S.State{world, players, S.NeedFirst{}, notes, grabs}, n):
+  ISP.simulation.items(S.State{world, players, S.NeedFirst{}, notes, grabs}, n, first.answer(world, players, notes, grabs, n, A.valid.shape(S.State{world, players, S.NeedFirst{}, notes, grabs}, valid)), valid.first.answer(world, players, notes, grabs, n, valid))
 
 # step_matches at NeedHealth with items.
-def step.health(+world: S.World, +players: S.Players, +notes: A.Notes(), +grabs: S.Grabs, +n: Nat, +valid: A.ValidItems(S.State{world, players, S.NeedHealth{}, notes, grabs})) -> A.SimulationItems(S.State{world, players, S.NeedHealth{}, notes, grabs}, n):
-  ISP.simulation.items(S.State{world, players, S.NeedHealth{}, notes, grabs}, n, health.answer(world, players, notes, grabs, n, A.valid_items.shape(S.State{world, players, S.NeedHealth{}, notes, grabs}, valid)), valid.health.answer(world, players, notes, grabs, n, valid))
+def step.health(+world: S.World, +players: S.Players, +notes: A.Notes(), +grabs: S.Grabs, +n: Nat, +valid: A.Valid(S.State{world, players, S.NeedHealth{}, notes, grabs})) -> A.Simulation(S.State{world, players, S.NeedHealth{}, notes, grabs}, n):
+  ISP.simulation.items(S.State{world, players, S.NeedHealth{}, notes, grabs}, n, health.answer(world, players, notes, grabs, n, A.valid.shape(S.State{world, players, S.NeedHealth{}, notes, grabs}, valid)), valid.health.answer(world, players, notes, grabs, n, valid))
 
 # step_matches at NeedAmount with items.
-def step.amount(+world: S.World, +players: S.Players, +notes: A.Notes(), +grabs: S.Grabs, +n: Nat, +valid: A.ValidItems(S.State{world, players, S.NeedAmount{}, notes, grabs})) -> A.SimulationItems(S.State{world, players, S.NeedAmount{}, notes, grabs}, n):
-  ISP.simulation.items(S.State{world, players, S.NeedAmount{}, notes, grabs}, n, amount.answer(world, players, notes, grabs, n, A.valid_items.shape(S.State{world, players, S.NeedAmount{}, notes, grabs}, valid)), valid.amount.answer(world, players, notes, grabs, n, valid))
+def step.amount(+world: S.World, +players: S.Players, +notes: A.Notes(), +grabs: S.Grabs, +n: Nat, +valid: A.Valid(S.State{world, players, S.NeedAmount{}, notes, grabs})) -> A.Simulation(S.State{world, players, S.NeedAmount{}, notes, grabs}, n):
+  ISP.simulation.items(S.State{world, players, S.NeedAmount{}, notes, grabs}, n, amount.answer(world, players, notes, grabs, n, A.valid.shape(S.State{world, players, S.NeedAmount{}, notes, grabs}, valid)), valid.amount.answer(world, players, notes, grabs, n, valid))
 
