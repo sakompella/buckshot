@@ -288,14 +288,16 @@ def ring_split(
     claim: Callable[[str], str],
     rings: tuple[str, ...],
     seat: bool,
-    leaf: Callable[[Shape, int | None], list[str]],
+    leaf: Callable[[Shape, int | None, str], list[str]],
 ) -> Callable[[], list[str]]:
     """Split s's table, the named rings and (if seat) the seat; `claim(state)` is
-    the lemma's type at a refuted state, `leaf(shape, seat)` the proof of a case."""
+    the lemma's type at a refuted state, `leaf(shape, seat, state)` the proof of
+    a case at its split state."""
 
     def body() -> list[str]:
         with_players = "players" in rings
-        with_grabs = any(r in GRAB_RINGS for r in rings)
+        # Shape(s) reads the Grabs constructor, so grabs is always matched.
+        with_grabs = True
         fields = ", ".join("+" + f for f in STATE_WORLD_FIELDS.split(", "))
         head = [
             "match s:",
@@ -313,9 +315,10 @@ def ring_split(
         free = {r: "+" + r for r in RINGS}
         for table, name, shape in TABLES:
             good = free | {r: ring_pattern(r, shape) for r in rings}
+            state = state_text(table, {r: unplus(good[r]).lstrip("+") for r in RINGS}, with_grabs)
             for k in range(4) if seat else [None]:
                 rows.append(f"  case {' '.join([table, *patterns(good), *([SEATS[k]] if seat else [])])}:")
-                rows += indent(4, leaf(shape, k))
+                rows += indent(4, leaf(shape, k, state))
             for ring in rings:
                 for _, other, wrong in TABLES:
                     if wrong is shape:
@@ -333,12 +336,16 @@ def ring_split(
     return body
 
 
-def own_leaf(shape: Shape, seat: int | None) -> list[str]:
+def closed(_shape: Shape, _seat: int | None, _state: str) -> list[str]:
+    return ["{==}"]
+
+
+def own_leaf(shape: Shape, seat: int | None, _state: str) -> list[str]:
     """A seated seat's count is L1 on its slots and hand; a missing seat reads 0 on both sides."""
     return [f"count.owned(s{seat}, o{seat}, item)"] if seat in shape.seated else ["{==}"]
 
 
-def total_leaf(shape: Shape, _seat: int | None) -> list[str]:
+def total_leaf(shape: Shape, _seat: int | None, _state: str) -> list[str]:
     """The table count, one count.owned per seat chained through add_cong."""
 
     def sums(seats: tuple[int, ...], side: str) -> str:
@@ -359,9 +366,23 @@ def total_leaf(shape: Shape, _seat: int | None) -> list[str]:
     return [chain(shape.seated)]
 
 
+def last_leaf(shape: Shape, seat: int | None, state: str) -> list[str]:
+    """IsPlacingLastItem's three reads; a missing seat reads empty slots and no grants."""
+    slots, granted = (f"s{seat}", f"n{seat}") if seat in shape.seated else ("D.slots.empty()", "0n")
+    at = SEATS[seat]
+    return [
+        f"last.parts(G.GetItemToGrab.pool(D.item.order(), A.ref_host({state}), {at}), I.pool({state}, {at}), "
+        f"{slots}, {granted}, amount, empty.eq({state}, {at}, shape))"
+    ]
+
+
 GRAB_BODIES: dict[str, Callable[[], list[str]]] = {
     "own.eq": ring_split(lambda state: f"own.claim({state}, seat, item)", ("players", "holding"), True, own_leaf),
     "total.eq": ring_split(lambda state: f"total.claim({state}, item)", ("players", "holding"), False, total_leaf),
+    "entries.eq": ring_split(lambda state: f"entries.claim({state})", ("players",), False, closed),
+    "ended.eq": ring_split(lambda state: f"ended.claim({state})", ("players", "grabbing"), False, closed),
+    "last.eq": ring_split(lambda state: f"last.claim({state}, seat)", ("players", "granted"), True, last_leaf),
+    "holding.eq": ring_split(lambda state: f"holding.claim({state})", ("holding",), False, closed),
 }
 
 FILES = {PROOF: BODIES, ITEM_PROOF: ITEM_BODIES, GRAB_PROOF: GRAB_BODIES}
