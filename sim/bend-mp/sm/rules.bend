@@ -347,13 +347,3 @@ def winner.only(seats: List<&2, D.Seat>) -> Maybe<&2, D.Seat>:
 
 def winner(health: D.Ring<&2, Nat>) -> Maybe<&2, D.Seat>:
   winner.only(living(D.ring.entries(Nat, health)))
-
-def current(turn: Maybe<&2, D.Seat>, seat: D.Seat) -> Bool:
-  match turn:
-    case None{}:
-      False{}
-    case Some{current}:
-      D.seat.eq(current, seat)
-
-def accepted(+state: S.State, +seat: D.Seat) -> Bool:
-  Bool.and(current(S.world.turn(S.state.world(state)), seat), value.or(Bool, D.ring.get(Bool, S.players.has_turn(S.state.players(state)), seat), False{}))

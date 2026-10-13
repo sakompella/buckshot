@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { config, round, list, array, kind, seat, tag, plain, requestJSON } from './reference-adapter.mjs';
+import { config, round, list, array, kind, seat, tag, plain, requestJSON, maybe, turnHolder } from './reference-adapter.mjs';
 
 const dir = mkdtempSync(join(tmpdir(), 'bend-mp-machine-core-'));
 function build(name, relativeSource) {
@@ -37,7 +37,7 @@ try {
   const nil = list([]);
   const hostState = state => {
     const { world, players, grabs } = state;
-    const seats = ring(players.health, (_, key) => ({ health: players.health[key], jammed: players.jammed[key], jam_checked: players.checked[key], cash: players.cash[key], slots: players.slots[key], grabbing: grabs.grabbing[key], holding: grabs.holding[key], has_turn: players.has_turn[key] }));
+    const seats = ring(players.health, (_, key) => ({ health: players.health[key], jammed: players.jammed[key], jam_checked: players.checked[key], cash: players.cash[key], slots: players.slots[key], grabbing: grabs.grabbing[key], holding: grabs.holding[key], has_turn: turnHolder(state.phase) === Number(key.slice(1)) }));
     return { ...world, seats, distributing: grabs.distributing, grabs: ring(players.health, (_, key) => ({ $: 'GrabProgress', count: grabs.granted[key], intake: grabs.intake[key] })) };
   };
   const referenceHost = state => ({ ...state.host, seats: ring(state.host.seats, props => {
@@ -93,7 +93,7 @@ try {
   for (const seats of [2, 3, 4]) {
     const c = config(seats, [round({ health: 3, live: 1, blank: 1 })]);
     const { reference, machine } = replay(c, [0, 0, 1, 0]);
-    const jammedR = { ...reference, host: { ...reference.host, seats: ring(reference.host.seats, props => ({ ...props, jammed: true, jam_checked: false })) }, notes: nil };
+    const jammedR = { ...reference, host: { ...reference.host, seats: ring(reference.host.seats, props => ({ ...props, jammed: true, jam_checked: false, has_turn: false })) }, notes: nil };
     const jammedM = { ...machine, players: { ...machine.players, jammed: ring(machine.players.jammed, () => true), checked: ring(machine.players.checked, () => false) }, notes: nil };
     const actor = seats === 2 ? 1 : 0;
     const grantedR = R.settle(96, { ...jammedR, frame: { $: 'PassTurn', seat: seat(actor) } });
@@ -128,7 +128,7 @@ try {
       const jammed = key => Boolean(flags & 1 << (2 * keys.indexOf(key)));
       const checked = key => Boolean(flags & 1 << (2 * keys.indexOf(key) + 1));
       for (const direction of ['Clockwise', 'CounterClockwise']) {
-        const r = { ...reference, notes: nil, host: { ...reference.host, direction: tag(direction), seats: ring(reference.host.seats, (props, key) => ({ ...props, jammed: jammed(key), jam_checked: checked(key) })) } };
+        const r = { ...reference, notes: nil, host: { ...reference.host, direction: tag(direction), seats: ring(reference.host.seats, (props, key) => ({ ...props, jammed: jammed(key), jam_checked: checked(key), has_turn: false })) } };
         const m = { ...machine, notes: nil, world: { ...machine.world, direction: tag(direction) }, players: { ...machine.players, jammed: ring(machine.players.jammed, (_, key) => jammed(key)), checked: ring(machine.players.checked, (_, key) => checked(key)) } };
         for (const key of keys) {
           const actor = seat(Number(key.slice(1)));
@@ -145,7 +145,7 @@ try {
   const initial = M.start(twoBlank).state;
   const terminals = [
     { $: 'state.Ended' },
-    { $: 'state.Blocked' },
+    { $: 'state.Blocked', holder: maybe(null) },
     { $: 'state.Aim', seat: seat(1), targets: nil },
     { $: 'state.NeedSwap', load: tag('Load', { live: 0n, blank: 0n }), shells: nil, i: 0n },
   ];

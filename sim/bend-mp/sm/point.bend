@@ -40,7 +40,7 @@ def phase.request(phase: S.Phase, +world: S.World) -> D.Request:
       G.seat.menu(S.world.table(world), seat, G.aim.moves(targets))
     case S.Ended{}:
       D.Finished{}
-    case S.Blocked{}:
+    case S.Blocked{_}:
       D.Stuck{}
     case S.NeedTurnAmount{_, _, _}:
       D.Draw{D.ItemAmount{}, D.table.amount_range(S.world.table(world))}

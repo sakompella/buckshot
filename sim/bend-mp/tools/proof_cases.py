@@ -35,7 +35,7 @@ class Shape:
         for seat in self.seated:
             hp = (health or {}).get(seat, f"h{seat}")
             cells.append(
-                f"A.CoreSeat{{{hp}, j{seat}, c{seat}, p{seat}, s{seat}, t{seat}}}"
+                f"A.CoreSeat{{{hp}, j{seat}, c{seat}, p{seat}, s{seat}}}"
             )
         return f"D.{self.ring}{{{', '.join(cells)}}}"
 
@@ -68,6 +68,15 @@ def seat_split(match_world: bool) -> Callable[[], list[str]]:
     return body
 
 
+def seat_split_present() -> list[str]:
+    """Every shape and seat; a seat off the table is refuted by `present`."""
+    rows = ["match seats seat:"]
+    for shape, seat in product(SHAPES, range(4)):
+        rows.append(f"  case {shape.pattern()} {SEATS[seat]}:")
+        rows.append("    {==}" if seat in shape.seated else "    match present:")
+    return ["match world:", f"  case {world()}:", *indent(4, rows)]
+
+
 def seat_pairs(leaf: Callable[[bool], list[str]]) -> list[str]:
     """Every (actor, target) pair per shape; a seat off the table is refuted."""
     rows = ["match seats actor target:"]
@@ -84,7 +93,7 @@ def seat_pairs(leaf: Callable[[bool], list[str]]) -> list[str]:
 
 MID_TAIL = (
     "aimstep.tail(S.state.world(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), "
-    "A.shot.turn_write(A.shot.health_write(seats, target, hp), actor, False{}), phase, "
+    "A.shot.health_write(seats, target, hp), phase, "
     "S.state.notes(A.aim.ms_mid(world, seats, actor, target, shell, rest, phase, hp, d, dmg)), "
     "actor, Q.shot.passes(shell, D.seat.eq(actor, target)), supported, bounded, synced)"
 )
@@ -125,14 +134,14 @@ def r1() -> list[str]:
 FRONT_STUCK = (
     "({==}, pack_valid(A.world_for(world, seats), seats, "
     "S.Aim{actor, Q.targets(D.ring.entries(Nat, A.seats.health(seats)))}, notes, "
-    "aimstep.front_stable(world, seats, supported, bounded), {==}, {==}))"
+    "aimstep.front_stable(world, seats, supported, bounded), {==}, ready))"
 )
 
 
 def front_pick(target: int, index: int) -> str:
     return (
         f"aimstep.pick(A.world_for(world, seats), seats, actor, {SEATS[target]}, {index}n, "
-        "{==}, Unit{}, Unit{}, supported, bounded, {==})"
+        "{==}, Unit{}, Unit{}, supported, bounded, {==}, ready)"
     )
 
 
@@ -167,10 +176,8 @@ def front() -> list[str]:
 
 BODIES: dict[str, Callable[[], list[str]]] = {
     "give_pack": seat_split(match_world=False),
-    "turn_shape": seat_split(match_world=False),
-    "idleproof.idle_permission": seat_split(match_world=True),
+    "idleproof.idle_guards": seat_split_present,
     "aimproof.players_health_write": seat_split(match_world=False),
-    "aimproof.players_turn_write": seat_split(match_world=False),
     "aimproof.players_cash_write": seat_split(match_world=False),
     "aimproof.cash_shape": seat_split(match_world=False),
     "aimstep.machine_final_gate": seat_split(match_world=True),

@@ -13,6 +13,12 @@ export function array(xs) {
 }
 export const kind = value => value.$.split('.').at(-1);
 export const seatNumber = seat => Number(kind(seat).slice(4));
+// The seat holding the reference's has_turn, derived from a machine phase like abstract.bend's turn.holder.
+export const turnHolder = phase => {
+  if (['Idle', 'Aim', 'NeedPhone', 'JamPick', 'StealPick'].includes(kind(phase))) return seatNumber(phase.seat);
+  if (kind(phase) === 'Blocked' && kind(phase.holder) === 'Some') return seatNumber(phase.holder.value);
+  return null;
+};
 export const tag = (name, fields = {}) => ({ $: `../domain.${name}`, ...fields });
 export const bool = value => value;
 export const seat = n => tag(`Seat${n}`);
