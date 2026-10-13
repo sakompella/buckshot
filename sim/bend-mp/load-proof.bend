@@ -815,3 +815,80 @@ def props.at.quiet(+s: S.State, +seat: D.Seat, +jam: S.Jam, +shape: A.Shape(s), 
 
 def pass.at(+fuel: Nat, +h: H.Host, +seat: D.Seat, +notes: A.Notes()) -> R.RefState:
   R.settle(fuel, R.RefState{h, R.PassTurn{G.GetNextTurn_Socket(h, seat)}, notes})
+
+def shape.turn(+s: S.State, +seat: D.Seat, +shape: A.Shape(s)) -> A.Shape(turned(s, seat)):
+  match s:
+    case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +players, +phase, +notes, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
+      shape
+
+def step.act(+rank: Nat, +t: S.State, +seat: D.Seat, +p: S.Players) -> {A.ref(M.give_turn(S.state.set_players(t, p), seat)) == A.ref(M.grant.step(rank, t, seat, S.Act{p})) : R.RefState}:
+  match rank:
+    case 0n:
+      {==}
+    case 1n+r:
+      {==}
+
+def step.lift(+rank: Nat, +t: S.State, +seat: D.Seat, +p: S.Players) -> {A.ref(M.give_turn(S.state.emit(S.state.set_players(t, p), D.JamLifted{seat}), seat)) == A.ref(M.grant.step(rank, t, seat, S.Lift{p})) : R.RefState}:
+  match rank:
+    case 0n:
+      {==}
+    case 1n+r:
+      {==}
+
+def nat.pred(+n: Nat) -> Nat:
+  match n:
+    case 0n:
+      0n
+    case 1n+m:
+      m
+
+# PassTurn from a quiet state: the reference's jam checks follow the
+# machine's grant step, one dispatch per skipped seat.
+def pass.close(+rank: Nat, +jam: S.Jam, +s: S.State, +seat: D.Seat, +k: Nat, +shape: A.Shape(s), +quiet: {A.turn.holder(S.state.phase(s)) == None{} : Maybe<&2, D.Seat>}, +e_jam: {Q.value.or(S.Jam, D.ring.get(S.Jam, S.players.jam(S.state.players(s)), seat), S.Free{}) == jam : S.Jam}, +e_rank: {Q.jam_rank(S.state.players(s)) == rank : Nat}) -> {R.settle(Nat.add(2n, Nat.add(rank, k)), R.RefState{A.ref_host(s), R.PassTurn{seat}, S.state.notes(s)}) == A.ref(M.grant.step(rank, turned(s, seat), seat, Q.jam.state(S.state.players(s), seat, jam))) : R.RefState}:
+  match rank jam:
+    case rank S.Free{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +players, +phase, +notes, +grabs}:
+          +t : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, Some{seat}, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}
+          +shape_t : A.Shape(t) = shape.turn(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, seat, shape)
+          +rs : R.RefState = R.RefState{A.ref_host(t), R.PassTurn{seat}, notes}
+          +read : {R.settle(1n+Nat.add(rank, k), R.PassTurn.props(rs, seat, H.host.props(A.ref_host(t), seat))) == R.settle(1n+Nat.add(rank, k), R.PassTurn.props(rs, seat, pprops.with(t, seat, S.Free{}))) : R.RefState} = Equal.cong(H.Props, R.RefState, p => R.settle(1n+Nat.add(rank, k), R.PassTurn.props(rs, seat, p)), H.host.props(A.ref_host(t), seat), pprops.with(t, seat, S.Free{}), props.at.quiet(t, seat, S.Free{}, shape_t, quiet, e_jam))
+          Equal.trans(R.RefState, R.settle(1n+Nat.add(rank, k), R.PassTurn.props(rs, seat, H.host.props(A.ref_host(t), seat))), R.settle(1n+Nat.add(rank, k), R.PassTurn.props(rs, seat, pprops.with(t, seat, S.Free{}))), A.ref(M.grant.step(rank, t, seat, S.Act{players})), read, Equal.trans(R.RefState, R.settle(1n+Nat.add(rank, k), R.PassTurn.props(rs, seat, pprops.with(t, seat, S.Free{}))), A.ref(M.give_turn(S.state.set_players(t, players), seat)), A.ref(M.grant.step(rank, t, seat, S.Act{players})), give.close(t, seat, Nat.add(rank, k), shape_t, quiet), step.act(rank, t, seat, players)))
+    case rank S.JammedSkipped{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +players, +phase, +notes, +grabs}:
+          +t : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, Some{seat}, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}
+          +shape_t : A.Shape(t) = shape.turn(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, seat, shape)
+          +rs : R.RefState = R.RefState{A.ref_host(t), R.PassTurn{seat}, notes}
+          +lifted : S.State = S.state.emit(S.state.set_players(t, S.players.set_jam(players, seat, S.Free{})), D.JamLifted{seat})
+          +told : A.Notes() = List.append(&2, D.Note, notes, [D.Shown{D.JamLifted{seat}}])
+          +read : {R.settle(1n+Nat.add(rank, k), R.PassTurn.props(rs, seat, H.host.props(A.ref_host(t), seat))) == R.settle(1n+Nat.add(rank, k), R.PassTurn.props(rs, seat, pprops.with(t, seat, S.JammedSkipped{}))) : R.RefState} = Equal.cong(H.Props, R.RefState, p => R.settle(1n+Nat.add(rank, k), R.PassTurn.props(rs, seat, p)), H.host.props(A.ref_host(t), seat), pprops.with(t, seat, S.JammedSkipped{}), props.at.quiet(t, seat, S.JammedSkipped{}, shape_t, quiet, e_jam))
+          +written : {R.settle(1n+Nat.add(rank, k), R.RefState{H.host.set_props(A.ref_host(t), seat, pprops.with(t, seat, S.Free{})), R.GiveTurnPermissions{seat}, told}) == R.settle(1n+Nat.add(rank, k), R.RefState{A.ref_host(lifted), R.GiveTurnPermissions{seat}, told}) : R.RefState} = Equal.cong(H.Host, R.RefState, h => R.settle(1n+Nat.add(rank, k), R.RefState{h, R.GiveTurnPermissions{seat}, told}), H.host.set_props(A.ref_host(t), seat, pprops.with(t, seat, S.Free{})), A.ref_host(lifted), jamw.host(t, seat, S.Free{}, D.JamLifted{seat}, shape_t, quiet))
+          +shaped : A.Shape(lifted) = ISP.shape.move(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, Some{seat}, direction, died, checking, amount, saw, gun, shown, deck}, S.players.set_jam(players, seat, S.Free{}), phase, notes, grabs, phase, told, shape.jam(t, seat, S.Free{}, shape_t))
+          Equal.trans(R.RefState, R.settle(1n+Nat.add(rank, k), R.PassTurn.props(rs, seat, H.host.props(A.ref_host(t), seat))), R.settle(1n+Nat.add(rank, k), R.PassTurn.props(rs, seat, pprops.with(t, seat, S.JammedSkipped{}))), A.ref(M.grant.step(rank, t, seat, S.Lift{S.players.set_jam(players, seat, S.Free{})})), read, Equal.trans(R.RefState, R.settle(1n+Nat.add(rank, k), R.RefState{H.host.set_props(A.ref_host(t), seat, pprops.with(t, seat, S.Free{})), R.GiveTurnPermissions{seat}, told}), R.settle(1n+Nat.add(rank, k), R.RefState{A.ref_host(lifted), R.GiveTurnPermissions{seat}, told}), A.ref(M.grant.step(rank, t, seat, S.Lift{S.players.set_jam(players, seat, S.Free{})})), written, Equal.trans(R.RefState, R.settle(1n+Nat.add(rank, k), R.RefState{A.ref_host(lifted), R.GiveTurnPermissions{seat}, told}), A.ref(M.give_turn(lifted, seat)), A.ref(M.grant.step(rank, t, seat, S.Lift{S.players.set_jam(players, seat, S.Free{})})), give.close(lifted, seat, Nat.add(rank, k), shaped, quiet), step.lift(rank, t, seat, S.players.set_jam(players, seat, S.Free{})))))
+    case 0n S.Jammed{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +players, +phase, +notes, +grabs}:
+          +down : {0n == 1n+Q.jam_rank(S.players.set_jam(players, seat, S.JammedSkipped{})) : Nat} = Equal.trans(Nat, 0n, Q.jam_rank(players), 1n+Q.jam_rank(S.players.set_jam(players, seat, S.JammedSkipped{})), Equal.sym(Nat, Q.jam_rank(players), 0n, e_rank), rank.skip(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, seat, shape, e_jam))
+          GP.absurd({R.settle(Nat.add(2n, Nat.add(0n, k)), R.RefState{A.ref_host(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}), R.PassTurn{seat}, notes}) == A.ref(M.grant.step(0n, turned(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, seat), seat, Q.jam.state(players, seat, S.Jammed{}))) : R.RefState}, nat.clash(Q.jam_rank(S.players.set_jam(players, seat, S.JammedSkipped{})), down))
+    case 1n+r S.Jammed{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +players, +phase, +notes, +grabs}:
+          +t : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, Some{seat}, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}
+          +shape_t : A.Shape(t) = shape.turn(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, seat, shape)
+          +rs : R.RefState = R.RefState{A.ref_host(t), R.PassTurn{seat}, notes}
+          +fuel : Nat = Nat.add(2n, Nat.add(r, k))
+          +skipped : S.Players = S.players.set_jam(players, seat, S.JammedSkipped{})
+          +told : A.Notes() = List.append(&2, D.Note, notes, [D.Shown{D.TurnSkipped{seat}}])
+          +s1 : S.State = S.state.emit(S.state.set_players(t, skipped), D.TurnSkipped{seat})
+          +shape_s1 : A.Shape(s1) = ISP.shape.move(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, Some{seat}, direction, died, checking, amount, saw, gun, shown, deck}, skipped, phase, notes, grabs, phase, told, shape.jam(t, seat, S.JammedSkipped{}, shape_t))
+          +next : D.Seat = Q.next_turn(S.players.health(skipped), direction, seat)
+          +h2 : H.Host = H.host.set_props(A.ref_host(t), seat, pprops.with(t, seat, S.JammedSkipped{}))
+          +read : {R.settle(1n+Nat.add(1n+r, k), R.PassTurn.props(rs, seat, H.host.props(A.ref_host(t), seat))) == pass.at(fuel, h2, seat, told) : R.RefState} = Equal.cong(H.Props, R.RefState, p => R.settle(1n+Nat.add(1n+r, k), R.PassTurn.props(rs, seat, p)), H.host.props(A.ref_host(t), seat), pprops.with(t, seat, S.Jammed{}), props.at.quiet(t, seat, S.Jammed{}, shape_t, quiet, e_jam))
+          +written : {pass.at(fuel, h2, seat, told) == pass.at(fuel, A.ref_host(s1), seat, told) : R.RefState} = Equal.cong(H.Host, R.RefState, h => pass.at(fuel, h, seat, told), h2, A.ref_host(s1), jamw.host(t, seat, S.JammedSkipped{}, D.TurnSkipped{seat}, shape_t, quiet))
+          +seat_eq : {G.GetNextTurn_Socket(A.ref_host(s1), seat) == next : D.Seat} = Equal.trans(D.Seat, G.GetNextTurn_Socket(A.ref_host(s1), seat), G.GetNextTurn_Socket(A.host.at(S.state.world(s1), skipped, grabs, None{}), seat), next, Equal.cong(H.Host, D.Seat, h => G.GetNextTurn_Socket(h, seat), A.ref_host(s1), A.host.at(S.state.world(s1), skipped, grabs, None{}), quiet.host(s1, quiet)), next.eq(s1, seat, shape_s1))
+          +nexted : {pass.at(fuel, A.ref_host(s1), seat, told) == R.settle(fuel, R.RefState{A.ref_host(s1), R.PassTurn{next}, told}) : R.RefState} = Equal.cong(D.Seat, R.RefState, x => R.settle(fuel, R.RefState{A.ref_host(s1), R.PassTurn{x}, told}), G.GetNextTurn_Socket(A.ref_host(s1), seat), next, seat_eq)
+          +ranked : {1n+Q.jam_rank(skipped) == 1n+r : Nat} = Equal.trans(Nat, 1n+Q.jam_rank(skipped), Q.jam_rank(players), 1n+r, Equal.sym(Nat, Q.jam_rank(players), 1n+Q.jam_rank(skipped), rank.skip(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}, seat, shape, e_jam)), e_rank)
+          +rest_rank : {Q.jam_rank(skipped) == r : Nat} = Equal.cong(Nat, Nat, n => nat.pred(n), 1n+Q.jam_rank(skipped), 1n+r, ranked)
+          +rec : {R.settle(fuel, R.RefState{A.ref_host(s1), R.PassTurn{next}, told}) == A.ref(M.grant.step(r, turned(s1, next), next, Q.jam.state(skipped, next, Q.value.or(S.Jam, D.ring.get(S.Jam, S.players.jam(S.state.players(s1)), next), S.Free{})))) : R.RefState} = pass.close(r, Q.value.or(S.Jam, D.ring.get(S.Jam, S.players.jam(S.state.players(s1)), next), S.Free{}), s1, next, k, shape_s1, quiet, {==}, rest_rank)
+          Equal.trans(R.RefState, R.settle(1n+Nat.add(1n+r, k), R.PassTurn.props(rs, seat, H.host.props(A.ref_host(t), seat))), pass.at(fuel, h2, seat, told), A.ref(M.grant.step(r, turned(s1, next), next, Q.jam.state(skipped, next, Q.value.or(S.Jam, D.ring.get(S.Jam, S.players.jam(S.state.players(s1)), next), S.Free{})))), read, Equal.trans(R.RefState, pass.at(fuel, h2, seat, told), pass.at(fuel, A.ref_host(s1), seat, told), A.ref(M.grant.step(r, turned(s1, next), next, Q.jam.state(skipped, next, Q.value.or(S.Jam, D.ring.get(S.Jam, S.players.jam(S.state.players(s1)), next), S.Free{})))), written, Equal.trans(R.RefState, pass.at(fuel, A.ref_host(s1), seat, told), R.settle(fuel, R.RefState{A.ref_host(s1), R.PassTurn{next}, told}), A.ref(M.grant.step(r, turned(s1, next), next, Q.jam.state(skipped, next, Q.value.or(S.Jam, D.ring.get(S.Jam, S.players.jam(S.state.players(s1)), next), S.Free{})))), nexted, rec)))
