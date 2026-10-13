@@ -217,7 +217,7 @@ try {
     assert.deepEqual(events(back.notes), ['JamLifted', 'TurnGiven']);
     assert.equal(snap(back).turn, 1);
     assert.equal(snap(back).seats['1'].jammed, false);
-    assert.equal(snap(back).seats['1'].jam_checked, true);
+    assert.equal(snap(back).seats['1'].jam_checked, false);
     const both = { ...jammed, frame: { $: 'PassTurn', seat: seat(1) }, notes: list([]), host: { ...jammed.host, seats: { ...jammed.host.seats, s3: { ...jammed.host.seats.s3, jammed: true, jam_checked: false } } } };
     const closed = R.settle(96, both);
     assert.deepEqual(events(closed.notes), ['TurnSkipped', 'TurnSkipped', 'JamLifted', 'TurnGiven']);

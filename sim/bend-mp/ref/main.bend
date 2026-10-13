@@ -303,7 +303,7 @@ def PassTurn.props(+state: RefState, +seat: D.Seat, +props: S.Props) -> RefState
       +h : S.Host = S.host.set_props(host(state), seat, S.Props{hp, True{}, True{}, cash, slots, grab, holding, turn})
       frame(emit(with_host(state, h), D.TurnSkipped{seat}), PassTurn{G.GetNextTurn_Socket(h, seat)})
     case S.Props{hp, True{}, True{}, cash, slots, grab, holding, turn}:
-      +h : S.Host = S.host.set_props(host(state), seat, S.Props{hp, False{}, True{}, cash, slots, grab, holding, turn})
+      +h : S.Host = S.host.set_props(host(state), seat, S.Props{hp, False{}, False{}, cash, slots, grab, holding, turn})
       frame(emit(with_host(state, h), D.JamLifted{seat}), GiveTurnPermissions{seat})
     case _:
       frame(state, GiveTurnPermissions{seat})

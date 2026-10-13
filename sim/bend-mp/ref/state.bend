@@ -314,10 +314,12 @@ def config.table(config: D.Config) -> D.Table:
 def host.initial(+config: D.Config) -> Host:
   Host{config, True{}, 0n, 0n, False{}, 0n, D.Seat0{}, None{}, D.Clockwise{}, None{}, False{}, 0n, False{}, False{}, Nil{}, D.Load{0n, 0n}, MakeSequenceCopies(), D.ring.fill(Props, config.table(config), props.initial()), D.ring.fill(GrabProgress, config.table(config), GrabProgress{0n, False{}})}
 
+# Godot keeps jammer_checked after a lift, but reads it only while jammed and
+# every jam resets it (D57), so a lift clears it.
 def props.unjam(props: Props) -> Props:
   match props:
-    case Props{hp, _, checked, cash, slots, grab, holding, turn}:
-      Props{hp, False{}, checked, cash, slots, grab, holding, turn}
+    case Props{hp, _, _, cash, slots, grab, holding, turn}:
+      Props{hp, False{}, False{}, cash, slots, grab, holding, turn}
 
 def props.clear_slots(props: Props) -> Props:
   match props:

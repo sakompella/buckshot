@@ -60,8 +60,7 @@ def seats.cash(+seats: D.Ring<&2, CoreSeat>) -> D.Ring<&2, U32>:
   S.players.cash(players.free(seats))
 
 # The reference's (is_jammed, jammer_checked) pair of a jam. Free reads as
-# (False, False); a lift leaves Godot's jammer_checked set, which
-# grant.pass_case restores where the reference keeps it.
+# (False, False); the reference clears the bit when a jam lifts (D57).
 def jam.checked(jam: S.Jam) -> Bool:
   match jam:
     case S.JammedSkipped{}:
@@ -1038,16 +1037,6 @@ def grant.pass(world: S.World, +seats: D.Ring<&2, CoreSeat>, seat: D.Seat, notes
 def grant.give.jams(world: S.World, +seats: D.Ring<&2, CoreSeat>, seat: D.Seat, notes: List<&2, D.Note>) -> R.RefState:
   R.RefState{host.jams(world, seats), R.GiveTurnPermissions{seat}, notes}
 
-# A lift leaves Godot's jammer_checked set on the Free seat.
-def grant.lifted(props: H.Props) -> H.Props:
-  match props:
-    case H.Props{hp, _, _, cash, slots, grab, holding, turn}:
-      H.Props{hp, False{}, True{}, cash, slots, grab, holding, turn}
-
-def grant.give.lifted(world: S.World, +seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, notes: List<&2, D.Note>) -> R.RefState:
-  +h : H.Host = host.jams(world, seats)
-  R.RefState{H.host.set_props(h, seat, grant.lifted(H.host.props(h, seat))), R.GiveTurnPermissions{seat}, notes}
-
 def grant.dispatch(state: R.RefState) -> R.RefState:
   R.dispatch(state)
 
@@ -1059,7 +1048,7 @@ def grant.pass_case(+world: S.World, result: GrantCase, +seat: D.Seat, notes: Li
     case GrantAct{seats}:
       grant.give.jams(S.world.set_turn(world, Some{seat}), seats, seat, notes)
     case GrantLift{seats}:
-      grant.give.lifted(S.world.set_turn(world, Some{seat}), seats, seat, List.append(&2, D.Note, notes, [D.Shown{D.JamLifted{seat}}]))
+      grant.give.jams(S.world.set_turn(world, Some{seat}), seats, seat, List.append(&2, D.Note, notes, [D.Shown{D.JamLifted{seat}}]))
     case GrantSkip{+seats}:
       +turned : S.World = S.world.set_turn(world, Some{seat})
       grant.pass(turned, seats, G.GetNextTurn_Socket(host.jams(turned, seats), seat), List.append(&2, D.Note, notes, [D.Shown{D.TurnSkipped{seat}}]))
@@ -2194,8 +2183,8 @@ def aim.loop_expected(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +seat: D.Se
 
 
 # ============================================================================
-# Every-config interface (Phase 6 package 1). Packages 2-9 build on these
-# names; the B1 Valid above keeps the no-item scope until integration.
+# Every-config interface. ValidItems is the request-point invariant for item
+# configs; the B1 Valid above keeps the no-item scope until the laws are lifted.
 # ============================================================================
 
 def RefFrame() -> Data:
@@ -2217,244 +2206,17 @@ def Grabs() -> Data:
 def Holds(b: Bool) -> Data:
   {b == True{} : Bool}
 
-def implies(a: Bool, b: Bool) -> Bool:
-  match a:
-    case False{}:
-      True{}
-    case True{}:
-      b
-
-def is_some(-X: Data, found: Maybe<&2, X>) -> Bool:
-  match found:
-    case None{}:
-      False{}
-    case Some{x}:
-      True{}
-
-# Per-seat reads of a machine state (I.seat.* with the state unpacked).
-def seats_of(+s: S.State) -> List<&2, D.Seat>:
-  D.table.seats(S.world.table(S.state.world(s)))
-
-def present(+s: S.State, +seat: D.Seat) -> Bool:
-  is_some(Nat, D.ring.get(Nat, S.players.health(S.state.players(s)), seat))
-
-def slots_at(+s: S.State, +seat: D.Seat) -> D.Slots:
-  I.seat.slots(S.state.players(s), seat)
-
-def held(+s: S.State, +seat: D.Seat) -> Maybe<&2, D.Item>:
-  I.seat.holding(S.state.grabs(s), seat)
-
-def grabbing(+s: S.State, +seat: D.Seat) -> Bool:
-  I.seat.grabbing(S.state.grabs(s), seat)
-
-def intake(+s: S.State, +seat: D.Seat) -> Bool:
-  I.seat.intake(S.state.grabs(s), seat)
-
-def granted(+s: S.State, +seat: D.Seat) -> Nat:
-  I.seat.granted(S.state.grabs(s), seat)
-
-def occ(+s: S.State, +seat: D.Seat) -> Nat:
-  I.occupied(I.slots.items(slots_at(s, seat)))
-
-def hand(found: Maybe<&2, D.Item>) -> Nat:
-  match found:
-    case None{}:
-      0n
-    case Some{item}:
-      1n
-
-def amount_of(+s: S.State) -> Nat:
-  S.world.item_amount(S.state.world(s))
-
-def round_health_of(+s: S.State) -> Nat:
-  S.world.round_health(S.state.world(s))
-
 def gun_length(+s: S.State) -> Nat:
   List.length(&2, D.Shell, S.world.gun(S.state.world(s)))
-
-def two_live(+s: S.State) -> Bool:
-  Nat.is_le(2n, List.length(&2, S.TargetOption, Q.targets(D.ring.entries(Nat, S.players.health(S.state.players(s))))))
-
-def active(+s: S.State, +seat: D.Seat) -> Bool:
-  Bool.and(present(s, seat), Bool.and(R.current.eq(S.world.turn(S.state.world(s)), seat), two_live(s)))
-
-# Phase classes.
-def playing(phase: S.Phase) -> Bool:
-  match phase:
-    case S.Idle{_, _}:
-      True{}
-    case S.Aim{_}:
-      True{}
-    case S.JamPick{_, _}:
-      True{}
-    case S.StealPick{_, _}:
-      True{}
-    case S.NeedPhone{_, _, _}:
-      True{}
-    case _:
-      False{}
-
-def grabbing_phase(phase: S.Phase) -> Bool:
-  match phase:
-    case S.Grab{_}:
-      True{}
-    case S.NeedItem{_, _, _, _}:
-      True{}
-    case _:
-      False{}
-
-# Between a round's first-seat answer and its inventory clear, the slots
-# still hold the previous round's items.
-def reset_pending(phase: S.Phase) -> Bool:
-  match phase:
-    case S.NeedHealth{}:
-      True{}
-    case S.NeedAmount{}:
-      True{}
-    case _:
-      False{}
-
-# Caps (D22): a disabled or undealt item is absent; an enabled one is within
-# per_player for the seat and on_table overall. Holdings count.
-def cap.rule(rule: D.ItemRule, dealt: Bool, +own: Nat, total: Nat) -> Bool:
-  match rule:
-    case D.ItemRule{enabled, per_player, on_table}:
-      Bool.and(Nat.is_le(own, per_player), Bool.and(Nat.is_le(total, on_table), implies(Bool.not(Bool.and(enabled, dealt)), Nat.is_eq(own, 0n))))
-
-def cap.item(+s: S.State, +seat: D.Seat, +item: D.Item) -> Bool:
-  +world : S.World = S.state.world(s)
-  cap.rule(D.rules.item(I.round.items(Q.world.rules(world)), item), D.item.dealt_at(S.world.table(world), item), I.owned(S.state.players(s), S.state.grabs(s), seat, item), I.owned.table(seats_of(s), S.state.players(s), S.state.grabs(s), item))
-
-def cap.items(xs: List<&2, D.Item>, +s: S.State, +seat: D.Seat) -> Bool:
-  match xs:
-    case Nil{}:
-      True{}
-    case +item <> rest:
-      Bool.and(cap.item(s, seat, item), cap.items(rest, s, seat))
-
-def cap.seats(xs: List<&2, D.Seat>, +s: S.State) -> Bool:
-  match xs:
-    case Nil{}:
-      True{}
-    case +seat <> rest:
-      Bool.and(cap.items(D.item.order(), s, seat), cap.seats(rest, s))
-
-def caps(+s: S.State) -> Bool:
-  Bool.or(reset_pending(S.state.phase(s)), cap.seats(seats_of(s), s))
-
-# Grab progress of one seat at a request point.
-def grab.seat(+s: S.State, +seat: D.Seat) -> Bool:
-  +hold : Maybe<&2, D.Item> = held(s, seat)
-  +taking : Bool = grabbing(s, seat)
-  Bool.and(Nat.is_le(Nat.add(occ(s, seat), hand(hold)), 8n), Bool.and(implies(taking, Nat.is_le(granted(s, seat), amount_of(s))), Bool.and(implies(Bool.and(taking, I.is_none(hold)), Bool.and(Nat.is_lt(occ(s, seat), 8n), Nat.is_lt(granted(s, seat), amount_of(s)))), implies(Bool.not(I.is_none(hold)), Bool.and(taking, Bool.not(intake(s, seat)))))))
-
-def grab.all(xs: List<&2, D.Seat>, +s: S.State) -> Bool:
-  match xs:
-    case Nil{}:
-      True{}
-    case +seat <> rest:
-      Bool.and(grab.seat(s, seat), grab.all(rest, s))
-
-def none_grabbing(entries: List<&2, D.At<&2, Bool>>) -> Bool:
-  match entries:
-    case Nil{}:
-      True{}
-    case D.At{_, flag} <> rest:
-      Bool.and(Bool.not(flag), none_grabbing(rest))
-
-# The distribution latch or any holder implies a grab phase.
-def latch(+s: S.State) -> Bool:
-  +grabs : S.Grabs = S.state.grabs(s)
-  implies(Bool.or(S.grabs.distributing(grabs), I.holders(D.ring.entries(Maybe<&2, D.Item>, S.grabs.holding(grabs)))), grabbing_phase(S.state.phase(s)))
-
-# Outside grab phases no seat is grabbing. Intake may stay stale.
-def quiet(+s: S.State) -> Bool:
-  implies(Bool.not(grabbing_phase(S.state.phase(s))), none_grabbing(D.ring.entries(Bool, S.grabs.grabbing(S.state.grabs(s)))))
-
-def items.eq(xs: List<&2, D.Item>, ys: List<&2, D.Item>) -> Bool:
-  match xs ys:
-    case Nil{} Nil{}:
-      True{}
-    case x <> xs y <> ys:
-      Bool.and(D.item.eq(x, y), items.eq(xs, ys))
-    case _ _:
-      False{}
-
-def maybe_item.eq(a: Maybe<&2, D.Item>, b: Maybe<&2, D.Item>) -> Bool:
-  match a b:
-    case None{} None{}:
-      True{}
-    case Some{x} Some{y}:
-      D.item.eq(x, y)
-    case _ _:
-      False{}
-
-def maybe_seat.eq(a: Maybe<&2, D.Seat>, b: Maybe<&2, D.Seat>) -> Bool:
-  match a b:
-    case None{} None{}:
-      True{}
-    case Some{x} Some{y}:
-      D.seat.eq(x, y)
-    case _ _:
-      False{}
-
-# Facts a pending item phase needs that its stored data cannot carry.
-def item.pending.phase(+s: S.State, phase: S.Phase) -> Bool:
-  match phase:
-    case S.NeedItem{+seat, a, b, rest}:
-      Bool.and(present(s, seat), Bool.and(grabbing(s, seat), Bool.and(I.is_none(held(s, seat)), Bool.and(Bool.not(intake(s, seat)), Bool.and(S.grabs.distributing(S.state.grabs(s)), items.eq(a <> b <> rest, I.pool(s, seat)))))))
-    case S.NeedPhone{+seat, +owner, slot}:
-      Bool.and(active(s, seat), Bool.and(present(s, owner), Bool.and(Nat.is_le(4n, gun_length(s)), maybe_item.eq(D.slots.get(slots_at(s, owner), slot), Some{D.Phone{}}))))
-    case S.JamPick{+seat, targets}:
-      Bool.and(active(s, seat), I.jam.any(targets))
-    case S.StealPick{+seat, picks}:
-      Bool.and(active(s, seat), I.steal.any(picks))
-    case _:
-      True{}
-
-# What each request phase needs of the state before its answer is taken.
-def phase.ready.with(+s: S.State, phase: S.Phase, +health: Bool) -> Bool:
-  match phase:
-    case S.NeedFirst{}:
-      True{}
-    case S.NeedHealth{}:
-      True{}
-    case S.NeedAmount{}:
-      health
-    case S.NeedBatch{}:
-      Bool.and(two_live(s), health)
-    case S.NeedSwap{_, _, i}:
-      Bool.and(two_live(s), Bool.and(health, Nat.is_lt(0n, i)))
-    case S.Grab{_}:
-      Bool.and(two_live(s), health)
-    case S.NeedItem{_, _, _, _}:
-      Bool.and(two_live(s), health)
-    case S.Idle{+seat, _}:
-      Bool.and(active(s, seat), health)
-    case S.Aim{+seat}:
-      Bool.and(active(s, seat), health)
-    case S.JamPick{+seat, _}:
-      Bool.and(active(s, seat), health)
-    case S.StealPick{+seat, _}:
-      Bool.and(active(s, seat), health)
-    case S.NeedPhone{+seat, _, _}:
-      Bool.and(active(s, seat), health)
-    case S.NeedTurnAmount{+from, _, +winner}:
-      Bool.and(present(s, from), Bool.and(maybe_seat.eq(winner, Q.winner(S.players.health(S.state.players(s)))), Bool.and(Bool.or(is_some(D.Seat, winner), two_live(s)), health)))
-    case S.Ended{}:
-      True{}
-    case S.Blocked{_}:
-      True{}
-
-def phase.ready(+s: S.State, phase: S.Phase) -> Bool:
-  phase.ready.with(s, phase, Nat.is_lt(0n, round_health_of(s)))
 
 def bounded(+s: S.State) -> Bool:
   Nat.is_lt(S.world.round_index(S.state.world(s)), D.plan.length(S.world.plan(S.state.world(s))))
 
-# Every-config normal form: each stored option list equals its recomputation
-# on the same state. NeedItem pools and NeedPhone facts live in Valid instead.
-def canonical_phase_all(+s: S.State, phase: S.Phase) -> S.Phase:
+# Item-config normal form: the stored menus of Idle, StealPick and Grab equal
+# their recomputation, since the reference checks ownership and the grab flags
+# where the machine does not; a swap at index 0 is Blocked. NeedItem, JamPick
+# and NeedPhone data need no tie (both models read the stored values).
+def canonical_phase_items(+s: S.State, phase: S.Phase) -> S.Phase:
   match phase:
     case S.Idle{+seat, _}:
       S.Idle{seat, D.NonEmpty{S.TakeGun{}, I.uses(s, seat)}}
@@ -2462,15 +2224,26 @@ def canonical_phase_all(+s: S.State, phase: S.Phase) -> S.Phase:
       S.Blocked{None{}}
     case S.Grab{_}:
       S.Grab{I.grab.needs(s)}
-    case S.JamPick{+seat, _}:
-      S.JamPick{seat, I.jam.for(s, seat)}
     case S.StealPick{+seat, _}:
       S.StealPick{seat, I.steal.for(s, seat)}
     case phase:
       phase
 
-def normalize_all(+s: S.State) -> S.State:
-  S.state.set_phase(s, canonical_phase_all(s, S.state.phase(s)))
+def normalize_items(+s: S.State) -> S.State:
+  S.state.set_phase(s, canonical_phase_items(s, S.state.phase(s)))
+
+# phase_ready, and every Playing phase's seat holds world.turn: the reference
+# checks the turn on a move, and JamPick and NeedPhone resume to Idle.
+def items_ready(phase: S.Phase, +world: S.World) -> Bool:
+  match phase:
+    case S.JamPick{seat, _}:
+      R.current.eq(S.world.turn(world), seat)
+    case S.StealPick{seat, _}:
+      R.current.eq(S.world.turn(world), seat)
+    case S.NeedPhone{seat, _, _}:
+      R.current.eq(S.world.turn(world), seat)
+    case phase:
+      phase_ready(phase, world)
 
 def ring_shape(-X: Data, ring: D.Ring<&2, X>, +world: S.World) -> Data:
   {D.ring.table(X, ring) == S.world.table(world) : D.Table}
@@ -2481,86 +2254,34 @@ def Shape(+s: S.State) -> Data:
     case S.State{+world, players, _, _, S.Grabs{_, taking, holding, granted, intake}}:
       Sigma<&2, &2, ring_shape(S.Seat, players, world), _ => Sigma<&2, &2, ring_shape(Bool, taking, world), _ => Sigma<&2, &2, ring_shape(Maybe<&2, D.Item>, holding, world), _ => Sigma<&2, &2, ring_shape(Nat, granted, world), _ => ring_shape(Bool, intake, world)>>>>
 
-# The full request-point invariant (proof-plan section 1). Components, in
-# order: normal form, Shape, caps, grab progress, latch, quiet, pending item
-# facts, phase readiness, round bound, next-round bound.
-# After the distribution latch drops, every seat still grabbing holds an item
-# and has an empty pool, so its placement is its last (M1, D56).
-def drained.seat(+s: S.State, +seat: D.Seat) -> Bool:
-  implies(grabbing(s, seat), Bool.and(Bool.not(I.is_none(held(s, seat))), Bool.not(I.has_items(I.pool(s, seat)))))
+# The request-point invariant for every config: the item normal form, the
+# table tie, the round bound and the phase's turn facts.
+def ValidItems(+s: S.State) -> Data:
+  Sigma<&2, &2, {normalize_items(s) == s : S.State}, _ => Sigma<&2, &2, Shape(s), _ => Sigma<&2, &2, Holds(bounded(s)), _ => Holds(items_ready(S.state.phase(s), S.state.world(s)))>>>
 
-def drained.all(xs: List<&2, D.Seat>, +s: S.State) -> Bool:
-  match xs:
-    case Nil{}:
-      True{}
-    case +seat <> rest:
-      Bool.and(drained.seat(s, seat), drained.all(rest, s))
-
-def drained(+s: S.State) -> Bool:
-  implies(Bool.not(S.grabs.distributing(S.state.grabs(s))), drained.all(seats_of(s), s))
-
-def ValidAll(+s: S.State) -> Data:
-  Sigma<&2, &2, {normalize_all(s) == s : S.State}, _ => Sigma<&2, &2, Shape(s), _ => Sigma<&2, &2, Holds(caps(s)), _ => Sigma<&2, &2, Holds(grab.all(seats_of(s), s)), _ => Sigma<&2, &2, Holds(latch(s)), _ => Sigma<&2, &2, Holds(quiet(s)), _ => Sigma<&2, &2, Holds(item.pending.phase(s, S.state.phase(s))), _ => Sigma<&2, &2, Holds(phase.ready(s, S.state.phase(s))), _ => Sigma<&2, &2, Holds(bounded(s)), _ => Sigma<&2, &2, Holds(phase_ready(S.state.phase(s), S.state.world(s))), _ => Holds(drained(s))>>>>>>>>>>
-
-def valid_all.normal(+s: S.State, valid: ValidAll(s)) -> {normalize_all(s) == s : S.State}:
+def valid_items.normal(+s: S.State, valid: ValidItems(s)) -> {normalize_items(s) == s : S.State}:
   match valid:
     case Tuple{x, _}:
       x
 
-def valid_all.shape(+s: S.State, valid: ValidAll(s)) -> Shape(s):
+def valid_items.shape(+s: S.State, valid: ValidItems(s)) -> Shape(s):
   match valid:
     case Tuple{_, Tuple{x, _}}:
       x
 
-def valid_all.caps(+s: S.State, valid: ValidAll(s)) -> Holds(caps(s)):
+def valid_items.bounded(+s: S.State, valid: ValidItems(s)) -> Holds(bounded(s)):
   match valid:
     case Tuple{_, Tuple{_, Tuple{x, _}}}:
       x
 
-def valid_all.grab(+s: S.State, valid: ValidAll(s)) -> Holds(grab.all(seats_of(s), s)):
+def valid_items.ready(+s: S.State, valid: ValidItems(s)) -> Holds(items_ready(S.state.phase(s), S.state.world(s))):
   match valid:
-    case Tuple{_, Tuple{_, Tuple{_, Tuple{x, _}}}}:
+    case Tuple{_, Tuple{_, Tuple{_, x}}}:
       x
 
-def valid_all.latch(+s: S.State, valid: ValidAll(s)) -> Holds(latch(s)):
-  match valid:
-    case Tuple{_, Tuple{_, Tuple{_, Tuple{_, Tuple{x, _}}}}}:
-      x
+def SimulationItems(+state: S.State, +n: Nat) -> Data:
+  Sigma<&2, &2, {ref_answer(ref(state), n) == stepped(M.answer(state, n)) : RefStep()}, _ => Sigma<&2, &2, {machine_point(next(state, n)) == ref_step_point(ref_answer(ref(state), n)) : D.Point}, _ => ValidItems(next(state, n))>>
 
-def valid_all.quiet(+s: S.State, valid: ValidAll(s)) -> Holds(quiet(s)):
-  match valid:
-    case Tuple{_, Tuple{_, Tuple{_, Tuple{_, Tuple{_, Tuple{x, _}}}}}}:
-      x
-
-def valid_all.pending(+s: S.State, valid: ValidAll(s)) -> Holds(item.pending.phase(s, S.state.phase(s))):
-  match valid:
-    case Tuple{_, Tuple{_, Tuple{_, Tuple{_, Tuple{_, Tuple{_, Tuple{x, _}}}}}}}:
-      x
-
-def valid_all.ready(+s: S.State, valid: ValidAll(s)) -> Holds(phase.ready(s, S.state.phase(s))):
-  match valid:
-    case Tuple{_, Tuple{_, Tuple{_, Tuple{_, Tuple{_, Tuple{_, Tuple{_, Tuple{x, _}}}}}}}}:
-      x
-
-def valid_all.bounded(+s: S.State, valid: ValidAll(s)) -> Holds(bounded(s)):
-  match valid:
-    case Tuple{_, Tuple{_, Tuple{_, Tuple{_, Tuple{_, Tuple{_, Tuple{_, Tuple{_, Tuple{x, _}}}}}}}}}:
-      x
-
-def valid_all.phase_ready(+s: S.State, valid: ValidAll(s)) -> Holds(phase_ready(S.state.phase(s), S.state.world(s))):
-  match valid:
-    case Tuple{_, Tuple{_, Tuple{_, Tuple{_, Tuple{_, Tuple{_, Tuple{_, Tuple{_, Tuple{_, Tuple{x, _}}}}}}}}}}:
-      x
-
-def valid_all.drained(+s: S.State, valid: ValidAll(s)) -> Holds(drained(s)):
-  match valid:
-    case Tuple{_, Tuple{_, Tuple{_, Tuple{_, Tuple{_, Tuple{_, Tuple{_, Tuple{_, Tuple{_, Tuple{_, x}}}}}}}}}}:
-      x
-
-# Bool form of the computable ValidAll components (all but the normal form
-# and Shape), for differential tests of reachable states.
-def valid_all.check(+s: S.State) -> Bool:
-  Bool.and(caps(s), Bool.and(grab.all(seats_of(s), s), Bool.and(latch(s), Bool.and(quiet(s), Bool.and(item.pending.phase(s, S.state.phase(s)), Bool.and(phase.ready(s, S.state.phase(s)), Bool.and(bounded(s), Bool.and(phase_ready(S.state.phase(s), S.state.world(s)), drained(s)))))))))
 
 # The reference closure of a frame from a machine state's host and notes.
 def close(fuel: Nat, +s: S.State, f: R.Frame) -> R.RefState:
@@ -3695,7 +3416,3 @@ def ref_state.props.jam(props: H.Props) -> H.Props:
 
 # END GENERATED REF API
 
-
-# Every-config per-request simulation: the integration target of packages 2-9.
-def SimulationAll(+state: S.State, +n: Nat) -> Data:
-  Sigma<&2, &2, {ref_answer(ref(state), n) == stepped(M.answer(state, n)) : RefStep()}, _ => Sigma<&2, &2, {machine_point(next(state, n)) == ref_step_point(ref_answer(ref(state), n)) : D.Point}, _ => ValidAll(next(state, n))>>
