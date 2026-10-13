@@ -506,7 +506,22 @@ def slot_split() -> list[str]:
     return rows
 
 
+def pick_choose() -> list[str]:
+    """A single seat's menu per table and seat: a seated seat's choices, an
+    unseated one's empty ring."""
+    rows = ["match table seat:"]
+    for table, _, shape in TABLES:
+        for k, seat in enumerate(SEATS):
+            rows.append(f"  case {table} {seat}:")
+            if k in shape.seated:
+                rows += ["    match moves:", "      case Nil{}:", "        {==}", "      case +m <> +ms:", f"        on.seated({seat}, {table}, m, ms, n, Unit{{}})"]
+            else:
+                rows.append("    {==}")
+    return rows
+
+
 USE_BODIES: dict[str, Callable[[], list[str]]] = {
+    "pick.choose": pick_choose,
     "clear.eq": ring_split(lambda state: f"clear.claim({state}, seat)", ("players",), True, closed, "GP."),
     "keep.eq": ring_split(lambda state: f"keep.claim({state}, seat)", ("players",), True, closed, "GP."),
     "slots.write": ring_split(lambda state: f"slots.claim({state}, seat, slot, hold)", ("players",), True, closed, "GP."),

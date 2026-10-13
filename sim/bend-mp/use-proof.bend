@@ -14,6 +14,7 @@ import ./grab-proof.bend as GP
 import ./item-step-proof.bend as ISP
 import ./load-proof.bend as LP
 import ./turn-proof.bend as T
+import ./primitive.bend as P
 
 # Item use from a seat that holds the turn: CheckIfEndingTurnAfterItemUse
 # onward against item.use, for every item. The use clears the seat's turn
@@ -497,3 +498,250 @@ def consume.close(+item: D.Item, +s: S.State, +seat: D.Seat, +owner: D.Seat, +sl
           +flipped : {R.settle(27n+k, R.RefState{H.host.set_gun(T.qh(s1), RI.inverted(shell) <> tail), R.EndItemInteraction{seat, ending}, List.append(&2, D.Note, S.state.notes(s1), [D.Shown{D.Inverted{seat}}])}) == R.settle(27n+k, R.RefState{H.host.set_gun(T.qh(s1), I.invert(shell) <> tail), R.EndItemInteraction{seat, ending}, List.append(&2, D.Note, S.state.notes(s1), [D.Shown{D.Inverted{seat}}])}) : R.RefState} = Equal.cong(D.Shell, R.RefState, x => R.settle(27n+k, R.RefState{H.host.set_gun(T.qh(s1), x <> tail), R.EndItemInteraction{seat, ending}, List.append(&2, D.Note, S.state.notes(s1), [D.Shown{D.Inverted{seat}}])}), RI.inverted(shell), I.invert(shell), invert.eq(shell))
           +rest : {R.settle(28n+k, R.RefState{A.host.at(S.state.world(s1), S.state.players(s1), S.state.grabs(s1), None{}), R.ChangeGameStateWithItem{item.packet(seat, owner, slot, D.Inverter{}, ending, phone)}, S.state.notes(s1)}) == A.ref(M.item.effect(s1, seat, D.Inverter{}, ending, phone)) : R.RefState} = Equal.trans(R.RefState, R.settle(27n+k, R.RefState{H.host.set_gun(T.qh(s1), RI.inverted(shell) <> tail), R.EndItemInteraction{seat, ending}, List.append(&2, D.Note, S.state.notes(s1), [D.Shown{D.Inverted{seat}}])}), R.settle(27n+k, R.RefState{H.host.set_gun(T.qh(s1), I.invert(shell) <> tail), R.EndItemInteraction{seat, ending}, List.append(&2, D.Note, S.state.notes(s1), [D.Shown{D.Inverted{seat}}])}), A.ref(M.item.effect(s1, seat, D.Inverter{}, ending, phone)), flipped, end.close(ending, S.state.emit(S.state.set_world(s1, S.world.set_gun(S.state.world(s1), I.invert(shell) <> tail)), D.Inverted{seat}), seat, 1n+k, shape1, win))
           consume.via(D.Inverter{}, st, seat, owner, slot, ending, phone, k, False{}, None{}, {==}, clear.eq(st, seat, shape), shape, rest)
+
+# The phone: the verbal index and its shell (D28), then the use.
+def found.close(+found: Maybe<&2, D.Shell>, +s: S.State, +seat: D.Seat, +owner: D.Seat, +slot: D.Slot, +position: Nat, +index: Nat, +k: Nat, +shape: A.Shape(s), win: T.WinClosure()) -> {R.settle(Nat.add(30n, k), R._GetBurnerPhone_Shell.found(R.RefState{hh(s, seat), R._GetBurnerPhone_Shell{item.packet(seat, owner, slot, D.Phone{}, False{}, None{}), index}, S.state.notes(s)}, item.packet(seat, owner, slot, D.Phone{}, False{}, None{}), position, found)) == A.ref(M.item.clue.found(s, seat, owner, slot, position, found)) : R.RefState}:
+  match found:
+    case None{}:
+      match s:
+        case S.State{+w, +p, +ph, +n, +g}:
+          {==}
+    case Some{+shell}:
+      consume.close(D.Phone{}, s, seat, owner, slot, False{}, Some{D.Clue{position, shell}}, k, shape, win)
+
+def clue.close(+s: S.State, +seat: D.Seat, +owner: D.Seat, +slot: D.Slot, +index: Nat, +k: Nat, +shape: A.Shape(s), win: T.WinClosure()) -> {R.settle(Nat.add(31n, k), R.RefState{hh(s, seat), R._GetBurnerPhone_Shell{item.packet(seat, owner, slot, D.Phone{}, False{}, None{}), index}, S.state.notes(s)}) == A.ref(M.item.clue(s, seat, owner, slot, index)) : R.RefState}:
+  match s:
+    case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
+      +st : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g}
+      +position : Nat = D.clamp(1n+index, D.phone.cap())
+      +rs : R.RefState = R.RefState{hh(st, seat), R._GetBurnerPhone_Shell{item.packet(seat, owner, slot, D.Phone{}, False{}, None{}), index}, n}
+      +e_at : {G.subtract(position, 1n) == Q.predecessor(position) : Nat} = C.loadproof.predecessor(position)
+      +e_nth : {G.nth(D.Shell, gun, G.subtract(position, 1n)) == Q.nth(D.Shell, gun, Q.predecessor(position)) : Maybe<&2, D.Shell>} = Equal.trans(Maybe<&2, D.Shell>, G.nth(D.Shell, gun, G.subtract(position, 1n)), G.nth(D.Shell, gun, Q.predecessor(position)), Q.nth(D.Shell, gun, Q.predecessor(position)), Equal.cong(Nat, Maybe<&2, D.Shell>, i => G.nth(D.Shell, gun, i), G.subtract(position, 1n), Q.predecessor(position), e_at), ISP.nth.eq(D.Shell, gun, Q.predecessor(position)))
+      Equal.trans(R.RefState, R.settle(Nat.add(30n, k), R._GetBurnerPhone_Shell.found(rs, item.packet(seat, owner, slot, D.Phone{}, False{}, None{}), position, G.nth(D.Shell, gun, G.subtract(position, 1n)))), R.settle(Nat.add(30n, k), R._GetBurnerPhone_Shell.found(rs, item.packet(seat, owner, slot, D.Phone{}, False{}, None{}), position, Q.nth(D.Shell, gun, Q.predecessor(position)))), A.ref(M.item.clue(st, seat, owner, slot, index)), Equal.cong(Maybe<&2, D.Shell>, R.RefState, x => R.settle(Nat.add(30n, k), R._GetBurnerPhone_Shell.found(rs, item.packet(seat, owner, slot, D.Phone{}, False{}, None{}), position, x)), G.nth(D.Shell, gun, G.subtract(position, 1n)), Q.nth(D.Shell, gun, Q.predecessor(position)), e_nth), found.close(Q.nth(D.Shell, gun, Q.predecessor(position)), st, seat, owner, slot, position, index, k, shape, win))
+
+# CheckIfEndingTurnAfterItemUse onward: the use from a seat that holds the
+# turn, by its own slot (Idle) or another seat's (StealPick).
+def use.close(+item: D.Item, +s: S.State, +seat: D.Seat, +owner: D.Seat, +slot: D.Slot, +k: Nat, +shape: A.Shape(s), win: T.WinClosure()) -> {R.settle(Nat.add(33n, k), R.RefState{hh(s, seat), R.CheckIfEndingTurnAfterItemUse{seat, owner, slot, item}, S.state.notes(s)}) == A.ref(M.item.use(s, seat, owner, slot, item)) : R.RefState}:
+  match item:
+    case D.Saw{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
+          consume.close(D.Saw{}, S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g}, seat, owner, slot, False{}, None{}, 2n+k, shape, win)
+    case D.Glass{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
+          consume.close(D.Glass{}, S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g}, seat, owner, slot, False{}, None{}, 2n+k, shape, win)
+    case D.Jammer{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
+          consume.close(D.Jammer{}, S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g}, seat, owner, slot, False{}, None{}, 2n+k, shape, win)
+    case D.Cigarettes{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
+          consume.close(D.Cigarettes{}, S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g}, seat, owner, slot, False{}, None{}, 2n+k, shape, win)
+    case D.Beer{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
+          consume.close(D.Beer{}, S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g}, seat, owner, slot, Nat.is_eq(List.length(&2, D.Shell, gun), 1n), None{}, 2n+k, shape, win)
+    case D.Inverter{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
+          consume.close(D.Inverter{}, S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g}, seat, owner, slot, False{}, None{}, 2n+k, shape, win)
+    case D.Adrenaline{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
+          consume.close(D.Adrenaline{}, S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g}, seat, owner, slot, False{}, None{}, 2n+k, shape, win)
+    case D.Remote{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
+          consume.close(D.Remote{}, S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g}, seat, owner, slot, False{}, None{}, 2n+k, shape, win)
+    case D.Phone{}:
+      match s:
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, Nil{}, +shown, +deck}, +p, +ph, +n, +g}:
+          +st : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, Nil{}, shown, deck}, p, ph, n, g}
+          consume.close(D.Phone{}, st, seat, owner, slot, False{}, Some{D.NoClue{}}, 1n+k, shape, win)
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +a <> Nil{}, +shown, +deck}, +p, +ph, +n, +g}:
+          +st : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, a <> Nil{}, shown, deck}, p, ph, n, g}
+          consume.close(D.Phone{}, st, seat, owner, slot, False{}, Some{D.NoClue{}}, 1n+k, shape, win)
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +a <> +b <> Nil{}, +shown, +deck}, +p, +ph, +n, +g}:
+          +st : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, a <> b <> Nil{}, shown, deck}, p, ph, n, g}
+          consume.close(D.Phone{}, st, seat, owner, slot, False{}, Some{D.NoClue{}}, 1n+k, shape, win)
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +a <> +b <> +c <> Nil{}, +shown, +deck}, +p, +ph, +n, +g}:
+          +st : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, a <> b <> c <> Nil{}, shown, deck}, p, ph, n, g}
+          clue.close(st, seat, owner, slot, 2n, k, shape, win)
+        case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +a <> +b <> +c <> +d <> +more, +shown, +deck}, +p, +ph, +n, +g}:
+          +st : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, a <> b <> c <> d <> more, shown, deck}, p, ph, n, g}
+          {==}
+
+# A single seat's menu (Idle, Aim, JamPick, StealPick): a resolved choice
+# names that seat, a move of its menu, and a seat at the table; an empty
+# menu resolves to nothing.
+
+def OnSeat(+seat: D.Seat, +table: D.Table, +moves: List<&2, D.Move>, +c: D.Choice) -> Data:
+  match c:
+    case D.Choice{+s, +i, +m}:
+      Sigma<&2, &2, {s == seat : D.Seat}, _ => Sigma<&2, &2, {Q.nth(D.Move, moves, i) == Some{m} : Maybe<&2, D.Move>}, _ => P.seated(table, seat)>>
+
+def AllOn(+seat: D.Seat, +table: D.Table, +moves: List<&2, D.Move>, +cs: List<&2, D.Choice>) -> Data:
+  match cs:
+    case Nil{}:
+      Unit
+    case +c <> +rest:
+      Sigma<&2, &2, OnSeat(seat, table, moves, c), _ => AllOn(seat, table, moves, rest)>
+
+def menu.of(+table: D.Table, +seat: D.Seat, +moves: List<&2, D.Move>) -> D.Ring<&2, List<&2, D.Move>>:
+  D.ring.set(List<&2, D.Move>, D.ring.fill(List<&2, D.Move>, table, Nil{}), seat, moves)
+
+def Pick(+seat: D.Seat, +table: D.Table, +moves: List<&2, D.Move>, +picked: Maybe<&2, D.Choice>) -> Data:
+  match picked:
+    case None{}:
+      {D.menus.any(D.ring.entries(List<&2, D.Move>, menu.of(table, seat, moves))) == False{} : Bool}
+    case Some{+c}:
+      OnSeat(seat, table, moves, c)
+
+def mskip(+i: Nat, +xs: List<&2, D.Move>) -> List<&2, D.Move>:
+  match i:
+    case 0n:
+      xs
+    case 1n+k:
+      match xs:
+        case Nil{}:
+          Nil{}
+        case x <> +rest:
+          mskip(k, rest)
+
+def mlist.is_nil(xs: List<&2, D.Move>) -> Type:
+  match xs:
+    case Nil{}:
+      Unit
+    case _:
+      Empty
+
+def mclash.nil_cons(+x: D.Move, +rest: List<&2, D.Move>, e: {Nil{} == x <> rest : List<&2, D.Move>}) -> Empty:
+  %e : mlist.is_nil(_)
+  Unit{}
+
+def mskip.head(+xs: List<&2, D.Move>, +i: Nat, +o: D.Move, +os: List<&2, D.Move>, +e: {mskip(i, xs) == o <> os : List<&2, D.Move>}) -> {Q.nth(D.Move, xs, i) == Some{o} : Maybe<&2, D.Move>}:
+  match xs i:
+    case Nil{} 0n:
+      GP.absurd({Q.nth(D.Move, Nil{}, 0n) == Some{o} : Maybe<&2, D.Move>}, mclash.nil_cons(o, os, e))
+    case +x <> +rest 0n:
+      %Equal.sym(List<&2, D.Move>, x <> rest, o <> os, e) : {Q.nth(D.Move, _, 0n) == Some{o} : Maybe<&2, D.Move>}
+      {==}
+    case Nil{} 1n+k:
+      GP.absurd({Q.nth(D.Move, Nil{}, 1n+k) == Some{o} : Maybe<&2, D.Move>}, mclash.nil_cons(o, os, e))
+    case x <> +rest 1n+k:
+      mskip.head(rest, k, o, os, e)
+
+def mskip.tail(+xs: List<&2, D.Move>, +i: Nat, +o: D.Move, +os: List<&2, D.Move>, +e: {mskip(i, xs) == o <> os : List<&2, D.Move>}) -> {mskip(1n+i, xs) == os : List<&2, D.Move>}:
+  match xs i:
+    case Nil{} 0n:
+      GP.absurd({mskip(1n, Nil{}) == os : List<&2, D.Move>}, mclash.nil_cons(o, os, e))
+    case +x <> +rest 0n:
+      %Equal.sym(List<&2, D.Move>, x <> rest, o <> os, e) : {mskip(1n, _) == os : List<&2, D.Move>}
+      {==}
+    case Nil{} 1n+k:
+      GP.absurd({mskip(2n+k, Nil{}) == os : List<&2, D.Move>}, mclash.nil_cons(o, os, e))
+    case x <> +rest 1n+k:
+      mskip.tail(rest, k, o, os, e)
+
+def on.of(+seat: D.Seat, +table: D.Table, +moves: List<&2, D.Move>, +opts: List<&2, D.Move>, +i: Nat, +suffix: {mskip(i, moves) == opts : List<&2, D.Move>}, +seated: P.seated(table, seat)) -> AllOn(seat, table, moves, D.choices.of(opts, seat, i)):
+  match opts:
+    case Nil{}:
+      Unit{}
+    case +m <> +ms:
+      ((({==}, (mskip.head(moves, i, m, ms, suffix), seated))), on.of(seat, table, moves, ms, 1n+i, mskip.tail(moves, i, m, ms, suffix), seated))
+
+def on.append(+seat: D.Seat, +table: D.Table, +moves: List<&2, D.Move>, +xs: List<&2, D.Choice>, +ys: List<&2, D.Choice>, +ax: AllOn(seat, table, moves, xs), +ay: AllOn(seat, table, moves, ys)) -> AllOn(seat, table, moves, List.append(&2, D.Choice, xs, ys)):
+  match xs:
+    case Nil{}:
+      ay
+    case +x <> +rest:
+      match ax:
+        case Tuple{+here, +more}:
+          (here, on.append(seat, table, moves, rest, ys, more, ay))
+
+def on.nth(+seat: D.Seat, +table: D.Table, +moves: List<&2, D.Move>, +cs: List<&2, D.Choice>, +c: D.Choice, +n: Nat, +ax: AllOn(seat, table, moves, c <> cs)) -> Pick(seat, table, moves, D.choices.nth(c <> cs, n)):
+  match cs n:
+    case Nil{} 0n:
+      match ax:
+        case Tuple{+here, _}:
+          here
+    case Nil{} 1n+k:
+      match ax:
+        case Tuple{+here, _}:
+          here
+    case +d <> +rest 0n:
+      match ax:
+        case Tuple{+here, _}:
+          here
+    case +d <> +rest 1n+k:
+      match ax:
+        case Tuple{_, +more}:
+          on.nth(seat, table, moves, rest, d, k, more)
+
+def on.seated(+seat: D.Seat, +table: D.Table, +m: D.Move, +ms: List<&2, D.Move>, +n: Nat, +seated: P.seated(table, seat)) -> Pick(seat, table, m <> ms, D.choices.nth(List.append(&2, D.Choice, D.choices.of(m <> ms, seat, 0n), Nil{}), n)):
+  on.nth(seat, table, m <> ms, List.append(&2, D.Choice, D.choices.of(ms, seat, 1n), Nil{}), D.Choice{seat, 0n, m}, n, (({==}, ({==}, seated)), on.append(seat, table, m <> ms, D.choices.of(ms, seat, 1n), Nil{}, on.of(seat, table, m <> ms, ms, 1n, {==}, seated), Unit{})))
+
+def pick.choose(+table: D.Table, +seat: D.Seat, +moves: List<&2, D.Move>, +n: Nat) -> Pick(seat, table, moves, D.choose(menu.of(table, seat, moves), n)):
+  match table seat:
+    case D.TwoSeats{} D.Seat0{}:
+      {==}
+    case D.TwoSeats{} D.Seat1{}:
+      match moves:
+        case Nil{}:
+          {==}
+        case +m <> +ms:
+          on.seated(D.Seat1{}, D.TwoSeats{}, m, ms, n, Unit{})
+    case D.TwoSeats{} D.Seat2{}:
+      {==}
+    case D.TwoSeats{} D.Seat3{}:
+      match moves:
+        case Nil{}:
+          {==}
+        case +m <> +ms:
+          on.seated(D.Seat3{}, D.TwoSeats{}, m, ms, n, Unit{})
+    case D.ThreeSeats{} D.Seat0{}:
+      match moves:
+        case Nil{}:
+          {==}
+        case +m <> +ms:
+          on.seated(D.Seat0{}, D.ThreeSeats{}, m, ms, n, Unit{})
+    case D.ThreeSeats{} D.Seat1{}:
+      match moves:
+        case Nil{}:
+          {==}
+        case +m <> +ms:
+          on.seated(D.Seat1{}, D.ThreeSeats{}, m, ms, n, Unit{})
+    case D.ThreeSeats{} D.Seat2{}:
+      match moves:
+        case Nil{}:
+          {==}
+        case +m <> +ms:
+          on.seated(D.Seat2{}, D.ThreeSeats{}, m, ms, n, Unit{})
+    case D.ThreeSeats{} D.Seat3{}:
+      {==}
+    case D.FourSeats{} D.Seat0{}:
+      match moves:
+        case Nil{}:
+          {==}
+        case +m <> +ms:
+          on.seated(D.Seat0{}, D.FourSeats{}, m, ms, n, Unit{})
+    case D.FourSeats{} D.Seat1{}:
+      match moves:
+        case Nil{}:
+          {==}
+        case +m <> +ms:
+          on.seated(D.Seat1{}, D.FourSeats{}, m, ms, n, Unit{})
+    case D.FourSeats{} D.Seat2{}:
+      match moves:
+        case Nil{}:
+          {==}
+        case +m <> +ms:
+          on.seated(D.Seat2{}, D.FourSeats{}, m, ms, n, Unit{})
+    case D.FourSeats{} D.Seat3{}:
+      match moves:
+        case Nil{}:
+          {==}
+        case +m <> +ms:
+          on.seated(D.Seat3{}, D.FourSeats{}, m, ms, n, Unit{})
