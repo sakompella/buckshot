@@ -5,7 +5,7 @@ import { defineMessageUnion } from "foldkit/message";
 import { modifyFields } from "foldkit/struct";
 
 import { Game, type AnswerError } from "./bend.ts";
-import { type Board, Briefcase, Counter, GameEvent, type Item, LearnedSecret, Move, Seat, SeatCount, type SeatView, Secret, Stage } from "./domain.ts";
+import { type Board, Briefcase, Counter, GameEvent, healthOf, type Item, LearnedSecret, Move, Seat, SeatCount, type SeatView, Secret, Stage } from "./domain.ts";
 import { aiPrompt, aiStep, AiSeat, begin, Controller, controllerOf, play, type Progress, promptsOf } from "./driver.ts";
 import { seedRng } from "./rng.ts";
 import { titles } from "./titles.ts";
@@ -301,17 +301,17 @@ const setupView = (h: H, model: Model): Html => {
   );
 };
 
-const counterText = (view: SeatView): string => Counter.match(view.counter, { Unjammed: ({ health }) => `${health}`, Jammed: () => "Jammed" });
-
 const actingSeat = (board: Board): Option.Option<Seat> =>
   Stage.matchOrElse(board.stage, { Playing: ({ seat }) => Option.some(seat) }, () => Option.none());
 
 const seatPanel = (h: H, match: Session, view: SeatView): Html => {
   const isActing = Option.contains(actingSeat(match.game.board), view.seat);
   const isViewer = match.viewer === view.seat;
+  const health = healthOf(view, match.events);
+  const isOut = health === 0;
 
   return h.article(
-    [h.Class(`seat${isActing ? " acting" : ""}${isViewer ? " viewer" : ""}`), h.AriaLabel(seatName(view.seat))],
+    [h.Class(`seat${isActing ? " acting" : ""}${isViewer ? " viewer" : ""}${isOut ? " out" : ""}`), h.AriaLabel(seatName(view.seat))],
     [
       h.header(
         [h.Class("seat-head")],
@@ -323,14 +323,20 @@ const seatPanel = (h: H, match: Session, view: SeatView): Html => {
       h.div(
         [h.Class("seat-stats")],
         [
-          h.div([h.Class("stat")], [h.span([h.Class("stat-label")], ["Health"]), h.strong([h.Class(Counter.guards.Jammed(view.counter) ? "health jammed" : "health")], [counterText(view)])]),
+          h.div([h.Class("stat")], [h.span([h.Class("stat-label")], ["Health"]), h.strong([], [`${health}`])]),
           h.div([h.Class("stat")], [h.span([h.Class("stat-label")], ["Cash"]), h.strong([], [`$${view.cash.toLocaleString("en-US")}`])]),
         ],
       ),
       h.ol(
         [h.Class("slots"), h.AriaLabel("Item slots")],
-        view.slots.map((slot) => h.li([h.Class(Option.isSome(slot) ? "slot filled" : "slot")], [Option.match(slot, { onNone: () => "", onSome: itemName })])),
+        view.slots.map((slot) =>
+          Option.match(slot, {
+            onNone: () => h.li([h.Class("slot")], []),
+            onSome: (item) => h.li([h.Class("slot filled"), h.Title(itemName(item))], [itemName(item)]),
+          }),
+        ),
       ),
+      isOut ? h.p([h.Class("status")], ["Out"]) : Counter.guards.Jammed(view.counter) ? h.p([h.Class("status")], ["Jammed"]) : h.empty,
       Briefcase.match(view.briefcase, {
         NotGrabbing: () => h.empty,
         Grabbing: () => h.p([h.Class("briefcase")], ["Grabbing from the briefcase"]),
@@ -349,7 +355,7 @@ const gunView = (h: H, board: Board): Html => {
     [
       h.div(
         [h.Class("shells"), h.AriaLabel(`Last load shown: ${shown.live} live, ${shown.blank} blank`)],
-        [...Arr.replicate(h.span([h.Class("shell live")], []), shown.live), ...Arr.replicate(h.span([h.Class("shell blank")], []), shown.blank)],
+        [...Array.from({ length: shown.live }, () => h.span([h.Class("shell live")], [])), ...Array.from({ length: shown.blank }, () => h.span([h.Class("shell blank")], []))],
       ),
       h.p([], [`Last load shown: ${shown.live} live, ${shown.blank} blank. ${remaining} shell${remaining === 1 ? "" : "s"} left in the gun.${sawed ? " Sawed off: the next shot does double damage." : ""}`]),
       h.p(
