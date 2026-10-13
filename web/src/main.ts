@@ -1,4 +1,4 @@
-import { Array as Arr, Duration, Effect, Match, Option, Result, Schema, Stream } from "effect";
+import { Array as Arr, Duration, Effect, Match, Option, Predicate, Result, Schema, Stream } from "effect";
 import { Runtime, Subscription, type Update } from "foldkit";
 import type { Document, Html, HtmlBuilder } from "foldkit/html";
 import { defineMessageUnion } from "foldkit/message";
@@ -112,12 +112,16 @@ const applyResult = (model: Model, match: Session, result: Result.Result<Progres
         maybeError: () => Option.none(),
       }),
     }),
-    onFailure: (error) => ({
-      model: modifyFields(model, {
-        maybeMatch: () => Option.some({ ...match, isAutoplay: false }),
-        maybeError: () => Option.some(describeError(error)),
-      }),
-    }),
+    // A click on a menu the game has already moved past is a no-op, not an error.
+    onFailure: (error) =>
+      Predicate.isTagged(error, "StaleAnswer")
+        ? { model }
+        : {
+            model: modifyFields(model, {
+              maybeMatch: () => Option.some({ ...match, isAutoplay: false }),
+              maybeError: () => Option.some(describeError(error)),
+            }),
+          },
   });
 
 const stepAi = (model: Model, match: Session): Return =>

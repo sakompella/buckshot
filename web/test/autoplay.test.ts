@@ -69,3 +69,18 @@ test("a new match starts with autoplay off", () => {
 
   expect(autoplaying(model)).toBe(false);
 });
+
+test("a click on a menu the game has moved past changes nothing and keeps autoplay on", () => {
+  let model = send(started(["DoN", "Human", "DoN", "DoN"]), Message.ToggledAutoplay());
+
+  for (let steps = 0; steps < TICK_LIMIT && Option.isNone(humanPrompt(model)); steps++) model = send(model, Message.TickedAutoplay());
+
+  const prompt = Option.getOrThrow(humanPrompt(model));
+  const click = Message.ClickedMove({ match: prompt.ticket.match, generation: prompt.ticket.generation, seat: prompt.seat, index: 0 });
+  const answered = send(model, click);
+  const replayed = send(answered, click);
+
+  expect(replayed).toEqual(answered);
+  expect(Option.isNone(replayed.maybeError)).toBe(true);
+  expect(autoplaying(replayed)).toBe(true);
+});
