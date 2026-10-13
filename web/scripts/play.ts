@@ -1,7 +1,8 @@
 import { chromium, type Page } from "playwright-core";
 
-// Drives the running dev server in a headless browser: one human-vs-bot match
-// played by clicking move buttons, then one all-bot match on autoplay.
+// Drives the running dev server in a headless browser: one human-vs-DoN match
+// with items played by clicking move buttons, then one 4-seat all-AI match with
+// items on autoplay.
 // Usage: bun run dev (elsewhere), then bun scripts/play.ts [url] [outdir]
 
 const url = process.argv[2] ?? "http://localhost:5173/";
@@ -33,6 +34,8 @@ const isOver = async (current: Page): Promise<boolean> => (await current.locator
 await page.goto(url);
 
 await shot("01-empty");
+
+await page.getByLabel("Items").check();
 
 await page.getByRole("button", { name: "Start match" }).click();
 
@@ -82,7 +85,9 @@ for (; clicks < CLICK_LIMIT; clicks++) {
 
 await shot("04-human-vs-bot-end");
 
-console.log(`human vs bot: ${clicks} clicks, over: ${await isOver(page)}`);
+console.log(`private notes at the end: ${(await page.locator("section.notes").textContent()) ?? ""}`);
+
+console.log(`human vs DoN: ${clicks} clicks, over: ${await isOver(page)}`);
 
 await page.getByRole("button", { name: "4" }).click();
 
@@ -93,7 +98,7 @@ for (const seat of [0, 1, 2, 3]) {
 
   if ((await toggle.textContent())?.includes("Human") === true) {
     await toggle.click();
-    await toggle.filter({ hasText: "Bot" }).waitFor();
+    await toggle.filter({ hasText: "Story" }).waitFor();
   }
 }
 
@@ -101,7 +106,7 @@ await page.getByRole("button", { name: "Restart match" }).click();
 
 await page.getByRole("button", { name: "Spectator" }).click();
 
-await page.getByRole("button", { name: "Autoplay bots" }).click();
+await page.getByRole("button", { name: "Autoplay AIs" }).click();
 
 await page.waitForTimeout(3_000);
 
