@@ -92,7 +92,7 @@ The helper laws are small steps that the larger proofs use. They are `core_round
 
 The laws are proven for configs with no items, with two exceptions. `privacy` and `jam_skip_once` hold for all states.
 
-With items, the laws are checked, not proven. `test/machine-items-fuzz.mjs` plays seeded random games, 500 for each of 2, 3 and 4 seats, so 1,500 games by default. At every request point it compares the machine to the reference on `step_matches`, `observe_matches`, `legal_exact`, `legal_accepted` and `privacy`. It checks `legal_accepted` for every offered move. Checking `step_matches` at every point covers what `run_matches` says about those games. The fuzz does not check `state_roundtrip`, `turn_traversal` or `jam_skip_once` with items. `FUZZ_GAMES` sets the number of games for each table size.
+With items, the laws are checked, not proven. `test/machine-items-fuzz.mjs` plays seeded random games, 500 for each of 2, 3 and 4 seats, so 1,500 games by default. At every request point it compares the machine to the reference on `step_matches`, `observe_matches`, `legal_exact`, `legal_accepted` and `privacy`. It checks `step_matches` on whole states: after each answer the reference's state equals `A.ref` of the machine's (abstract.bend is built to JS for this), and the notes and points match. It checks `legal_accepted` for every offered move. Checking `step_matches` at every point covers what `run_matches` says about those games. The fuzz does not check `state_roundtrip`, `turn_traversal` or `jam_skip_once` with items. `FUZZ_GAMES` sets the number of games for each table size.
 
 Two mutation gates check that the checks can fail.
 

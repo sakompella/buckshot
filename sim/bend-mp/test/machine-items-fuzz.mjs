@@ -3,13 +3,14 @@
 // of seeded random item games (and some no-item ones), machine against reference.
 import assert from 'node:assert/strict';
 import { list, array, kind, seatNumber, tag, requestJSON } from './reference-adapter.mjs';
-import { loadModels, makeRandom, normalize } from './machine-items-lib.mjs';
+import { loadModels, makeRandom, normalize, asAbstract } from './machine-items-lib.mjs';
 
 const GAMES_PER_TABLE = Number(process.env.FUZZ_GAMES ?? 500);
 const SKIPPED = new Set((process.env.FUZZ_SKIP ?? '').split(',')); // lets fuzz_mutations.py see what the other properties catch alone
 const MAX_STEPS = Number(process.env.FUZZ_STEPS ?? 50);
 
-const { M, R, close } = await loadModels('bend-mp-item-fuzz-');
+const { M, R, A, close } = await loadModels('bend-mp-item-fuzz-', { abstract: true });
+const mapped = state => A.ref(asAbstract(state));
 const { random, randomConfig, answerFor } = makeRandom(0x66757a7a);
 
 const OBSERVE = '../domain.observe', HEAR = '../domain.hear', RESOLVE = '../domain.resolve';
@@ -101,6 +102,7 @@ function play(config, label, seats) {
   const game = { label, config, seats, tape: [], r: r.state, m: m.state };
   let rNotes = r.notes, mNotes = m.notes;
   same('step_matches', 'start notes', rNotes, mNotes, game);
+  same('step_matches', 'start state', game.r, mapped(game.m), game, 'A.ref of the machine state');
   same('step_matches', 'start point', R.point(game.r), M.point(game.m), game);
   for (let step = 0; step < MAX_STEPS; step++) {
     const mPoint = M.point(game.m), rPoint = R.point(game.r);
@@ -115,6 +117,7 @@ function play(config, label, seats) {
     game.tape.push(n);
     const nr = R.answer(game.r, n), nm = M.answer(game.m, n);
     same('step_matches', 'answer notes', nr.notes, nm.notes, game);
+    same('step_matches', 'answer state', nr.state, mapped(nm.state), game, 'A.ref of the machine state');
     same('step_matches', 'answer point', R.point(nr.state), M.point(nm.state), game);
     game.r = nr.state; game.m = nm.state; rNotes = nr.notes; mNotes = nm.notes;
   }
