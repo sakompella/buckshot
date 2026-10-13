@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
-import { Option } from "effect";
+import { Array as Arr, Option } from "effect";
 
+import { controllerOf, promptsOf } from "../src/driver.ts";
 import { init, Message, type Model, update } from "../src/main.ts";
 
 const TICK_LIMIT = 5_000;
@@ -14,6 +15,9 @@ const started = (controllers: Model["setup"]["controllers"]): Model => {
 };
 
 const autoplaying = (model: Model): boolean => Option.exists(model.maybeMatch, (match) => match.isAutoplay);
+
+const humanPrompt = (model: Model) =>
+  Option.flatMap(model.maybeMatch, (match) => Arr.findFirst(promptsOf(match.game), (prompt) => controllerOf(match.controllers, prompt.seat) === "Human"));
 
 const pendingKind = (model: Model): string | undefined => Option.getOrUndefined(model.maybeMatch)?.game.pending.kind;
 
@@ -29,16 +33,34 @@ test("autoplay switches off as soon as the match finishes", () => {
   expect(autoplaying(model)).toBe(false);
 });
 
-test("autoplay switches off when only a human move is left, and cannot be switched on", () => {
-  let model = send(started(["Human", "Human", "Human", "Human"]), Message.ToggledAutoplay());
+test("autoplay stays armed on a human turn and the AI moves on after the human answers", () => {
+  let model = send(started(["DoN", "Human", "DoN", "DoN"]), Message.ToggledAutoplay());
 
-  expect(autoplaying(model)).toBe(false);
+  for (let steps = 0; steps < TICK_LIMIT && Option.isNone(humanPrompt(model)); steps++) model = send(model, Message.TickedAutoplay());
 
-  model = send(started(["DoN", "Human", "DoN", "DoN"]), Message.ToggledAutoplay());
+  expect(Option.isSome(humanPrompt(model))).toBe(true);
+  expect(autoplaying(model)).toBe(true);
 
-  for (let ticks = 0; ticks < TICK_LIMIT && autoplaying(model); ticks++) model = send(model, Message.TickedAutoplay());
+  for (let answers = 0; answers < TICK_LIMIT && Option.isSome(humanPrompt(model)); answers++) {
+    const prompt = Option.getOrThrow(humanPrompt(model));
 
-  expect(pendingKind(model)).toBe("Choose");
+    model = send(model, Message.ClickedMove({ match: prompt.ticket.match, generation: prompt.ticket.generation, seat: prompt.seat, index: 0 }));
+  }
+
+  const match = Option.getOrThrow(model.maybeMatch);
+  const aiCoins = (): number => Option.getOrThrow(model.maybeMatch).ais.reduce((total, ai) => total + Option.match(ai, { onNone: () => 0, onSome: ({ coins }) => coins }), 0);
+  const before = aiCoins();
+
+  expect(match.isAutoplay).toBe(true);
+
+  model = send(model, Message.TickedAutoplay());
+
+  expect(aiCoins()).toBe(before + 1);
+});
+
+test("autoplay cannot be switched on at a table with no AI seat", () => {
+  const model = send(started(["Human", "Human", "Human", "Human"]), Message.ToggledAutoplay());
+
   expect(autoplaying(model)).toBe(false);
 });
 
