@@ -478,11 +478,11 @@ def steal.answer(+w: S.World, +p: S.Players, +seat: D.Seat, +n0: A.Notes(), +g: 
     case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}:
       steal.any.answer(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, seat, n0, g, n, D.menus.any(D.ring.entries(List<&2, D.Move>, U.menu.of(table, seat, I.steal.moves(steal.picks(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, g, seat))))), {==}, ready, ISP.shape.move(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, S.StealPick{seat, steal.picks(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, g, seat)}, n0, g, S.StealPick{seat, steal.picks(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, g, seat)}, Nil{}, shape), win)
 
-def valid.steal.move(+w: S.World, +p: S.Players, +seat: D.Seat, +g: S.Grabs, +i: Nat, +m: D.Move, +sel: StealSel(steal.picks(w, p, g, seat), i, m), +vpre: LP.VPre(steal.at(w, p, seat, Nil{}, g)), +ready: {R.current.eq(S.world.turn(w), seat) == True{} : Bool}, winv: T.WinValid()) -> A.Valid(A.machine_step_state(S.state.stepped(M.answer.choice(steal.at(w, p, seat, Nil{}, g), D.Choice{seat, i, m})))):
+def valid.steal.move(+w: S.World, +p: S.Players, +seat: D.Seat, +g: S.Grabs, +i: Nat, +m: D.Move, +sel: StealSel(steal.picks(w, p, g, seat), i, m), +vpre: LP.VPre(steal.at(w, p, seat, Nil{}, g)), +ready: {R.current.eq(S.world.turn(w), seat) == True{} : Bool}, +seated: P.seated(S.world.table(w), seat), winv: T.WinValid()) -> A.Valid(A.machine_step_state(S.state.stepped(M.answer.choice(steal.at(w, p, seat, Nil{}, g), D.Choice{seat, i, m})))):
   match m:
     case D.Steal{+owner, +slot, +item}:
       %Equal.sym(Maybe<&2, S.StealOption>, I.steal.nth(steal.picks(w, p, g, seat), i), Some{S.Pick{owner, slot, item}}, sel) : A.Valid(A.machine_step_state(S.state.stepped(M.steal.selected(steal.at(w, p, seat, Nil{}, g), seat, _))))
-      U.valid.use(item, steal.at(w, p, seat, Nil{}, g), seat, owner, slot, vpre, ready, winv)
+      U.valid.use(item, steal.at(w, p, seat, Nil{}, g), seat, owner, slot, vpre, ready, seated, winv)
     case D.PickUp{}:
       match sel:
     case D.Shoot{x}:
@@ -503,7 +503,7 @@ def valid.steal.picked(+w: S.World, +p: S.Players, +seat: D.Seat, +g: S.Grabs, +
     case Some{D.Choice{+s, +i, +m}}:
       match pk:
         case Tuple{+e_s, Tuple{+e_nth, +seated}}:
-          valid.steal.move(w, p, seat, g, i, m, steal.sel(steal.picks(w, p, g, seat), i, m, e_nth), vpre, ready, winv)
+          valid.steal.move(w, p, seat, g, i, m, steal.sel(steal.picks(w, p, g, seat), i, m, e_nth), vpre, ready, seated, winv)
 
 def valid.steal.any(+w: S.World, +p: S.Players, +seat: D.Seat, +n0: A.Notes(), +g: S.Grabs, +n: Nat, +any: Bool, +e: {D.menus.any(D.ring.entries(List<&2, D.Move>, U.menu.of(S.world.table(w), seat, I.steal.moves(steal.picks(w, p, g, seat))))) == any : Bool}, +valid: A.Valid(steal.at(w, p, seat, n0, g)), +vpre: LP.VPre(steal.at(w, p, seat, Nil{}, g)), +ready: {R.current.eq(S.world.turn(w), seat) == True{} : Bool}, winv: T.WinValid()) -> A.Valid(A.machine_step_state(M.answer.request(steal.at(w, p, seat, n0, g), n, D.request.choose.any(any, U.menu.of(S.world.table(w), seat, I.steal.moves(steal.picks(w, p, g, seat))))))):
   match any:
@@ -561,7 +561,7 @@ def valid.phone(+w: S.World, +p: S.Players, +seat: D.Seat, +owner: D.Seat, +slot
       match valid:
         case Tuple{+normal, Tuple{+shape, Tuple{+bounded, +ready}}}:
           +st : S.State = phone.at(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, a <> b <> c <> d <> rest, shown, deck}, p, seat, owner, slot, Nil{}, g)
-          U.valid.clue(st, seat, owner, slot, D.draw.value(D.Range{2n, List.length(&2, D.Shell, rest)}, n), (ISP.shape.move(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, a <> b <> c <> d <> rest, shown, deck}, p, S.NeedPhone{seat, owner, slot}, n0, g, S.NeedPhone{seat, owner, slot}, Nil{}, shape), bounded), ready, winv)
+          U.valid.clue(st, seat, owner, slot, D.draw.value(D.Range{2n, List.length(&2, D.Shell, rest)}, n), (ISP.shape.move(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, a <> b <> c <> d <> rest, shown, deck}, p, S.NeedPhone{seat, owner, slot}, n0, g, S.NeedPhone{seat, owner, slot}, Nil{}, shape), bounded), U.and.true_left(R.current.eq(turn, seat), A.table.has(table, seat), ready), U.has.seated(table, seat, U.and.true_right(R.current.eq(turn, seat), A.table.has(table, seat), ready)), winv)
 
 # step_matches at NeedPhone with items, given the win's closure and validity.
 def step.phone(+world: S.World, +players: S.Players, +actor: D.Seat, +owner: D.Seat, +slot: D.Slot, +notes: A.Notes(), +grabs: S.Grabs, +n: Nat, +valid: A.Valid(S.State{world, players, S.NeedPhone{actor, owner, slot}, notes, grabs}), win: T.WinClosure(), winv: T.WinValid()) -> A.Simulation(S.State{world, players, S.NeedPhone{actor, owner, slot}, notes, grabs}, n):

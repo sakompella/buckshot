@@ -1,6 +1,6 @@
-// Law-property fuzz for the item machine. LAWS.bend proves these laws only for
-// no-item configs; here each is checked as a property at every request point
-// of seeded random item games (and some no-item ones), machine against reference.
+// Law-property fuzz for the item machine. LAWS.bend proves these laws for every
+// config; here each is also checked as a property at every request point of
+// seeded random item games (and some no-item ones), machine against reference.
 import assert from 'node:assert/strict';
 import { list, array, kind, seatNumber, tag, requestJSON } from './reference-adapter.mjs';
 import { loadModels, makeRandom, normalize, asAbstract } from './machine-items-lib.mjs';
@@ -15,7 +15,7 @@ const { random, randomConfig, answerFor } = makeRandom(0x66757a7a);
 
 const OBSERVE = '../domain.observe', HEAR = '../domain.hear', RESOLVE = '../domain.resolve';
 const sockets = n => n === 2 ? [1, 3] : Array.from({ length: n }, (_, i) => i);
-const count = { step_matches: 0, observe_matches: 0, legal_exact: 0, legal_accepted: 0, privacy: 0, reachable_valid: 0 };
+const count = { step_matches: 0, observe_matches: 0, legal_exact: 0, legal_accepted: 0, privacy: 0, reachable_valid: 0, state_roundtrip: 0 };
 const coverage = { games: 0, boundaries: 0, noItemGames: 0, itemGames: 0, choosePoints: 0, finished: 0, itemMoves: 0, hiddenChanged: 0 };
 
 class Mismatch extends Error {}
@@ -96,6 +96,7 @@ function checkValid(game) {
   const table = kind(game.m.world.config.table);
   same('reachable_valid', 'Valid table tie', Array(5).fill(table), [game.m.players, grabbing, holding, granted, intake].map(ring => RING_TABLE[kind(ring)]), game);
   same('reachable_valid', 'Valid facts', { bounded: true, ready: true }, { bounded: A.bounded(s), ready: A.items_ready(s.phase, s.world) }, game);
+  same('state_roundtrip', 'A.back of A.ref', s, A.back(A.ref(s)), game);
 }
 
 function checkPrivacyAtPoint(game) {
