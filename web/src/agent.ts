@@ -2,17 +2,18 @@ import { Array as Arr, Option, Result, Schema } from "effect";
 import { Port } from "foldkit";
 
 import type { Game } from "./bend.ts";
-import { Briefcase, Counter, type GameEvent, type LearnedSecret, type Seat, SeatCount, seatsOut, Stage } from "./domain.ts";
-import { type Controller, controllerOf, promptsOf } from "./driver.ts";
+import { Briefcase, Counter, type GameEvent, type LearnedSecret, Seat, SeatCount, seatsOut, Stage } from "./domain.ts";
+import { Controller, controllerOf, promptsOf } from "./driver.ts";
 import { eventText, itemName, moveText, seatName, secretText } from "./text.ts";
 
-// What the WebMCP tools say and hear. The agent sees one seat: the public
-// board, the events everyone saw, and the notes that seat heard.
+// What the WebMCP tools say and hear. Every call names an Agent seat, and
+// sees only that seat: the public board, the events everyone saw, and the
+// notes that seat heard.
 
 export const AgentCall = Schema.TaggedUnion({
-  GetGame: {},
-  PlayMove: { index: Schema.Number, turn: Schema.optional(Schema.Number) },
-  NewMatch: { players: SeatCount, items: Schema.Boolean, seed: Schema.optional(Schema.String) },
+  GetGame: { seat: Seat },
+  PlayMove: { seat: Seat, index: Schema.Number, turn: Schema.optional(Schema.Number) },
+  NewMatch: { players: SeatCount, items: Schema.Boolean, seed: Schema.optional(Schema.String), controllers: Schema.optional(Schema.Array(Controller)) },
 });
 
 export type AgentCall = typeof AgentCall.Type;
@@ -62,9 +63,18 @@ export interface AgentGame {
 
 export const NO_MATCH = "No match is running. Call new_match to start one.";
 
-const NO_AGENT_SEAT = "No seat is set to Agent. Call new_match, or ask the user to set a seat's controller to Agent.";
+const agentSeats = (source: AgentSource): ReadonlyArray<Seat> => source.game.seats.filter((seat) => controllerOf(source.controllers, seat) === "Agent");
 
-export const agentSeat = (source: AgentSource): Option.Option<Seat> => Arr.findFirst(source.game.seats, (seat) => controllerOf(source.controllers, seat) === "Agent");
+const notAgent = (source: AgentSource, seat: Seat): string => {
+  const agents = agentSeats(source);
+
+  return agents.length === 0
+    ? `${seatName(seat)} is not an Agent seat, and no seat is. Call new_match, or ask the user to set a seat's controller to Agent.`
+    : `${seatName(seat)} is not an Agent seat. Agent seats: ${agents.map(seatName).join(", ")}.`;
+};
+
+/** The seat a call names, if it is at the table and set to Agent. */
+const agentSeat = (source: AgentSource, seat: Seat): Result.Result<Seat, string> => (agentSeats(source).includes(seat) ? Result.succeed(seat) : Result.fail(notAgent(source, seat)));
 
 const promptFor = (source: AgentSource, seat: Seat) => Arr.findFirst(promptsOf(source.game), (prompt) => prompt.seat === seat);
 
@@ -86,9 +96,9 @@ const seatStatus = (source: AgentSource, seat: Seat, isJammed: boolean, briefcas
   }),
 ];
 
-/** The view of the agent's seat, or why there is none. */
-export const agentGame = (source: AgentSource): Result.Result<AgentGame, string> =>
-  Result.map(Result.fromOption(agentSeat(source), () => NO_AGENT_SEAT), (you) => {
+/** The view of one Agent seat, or why there is none. */
+export const agentGame = (source: AgentSource, seat: Seat): Result.Result<AgentGame, string> =>
+  Result.map(agentSeat(source, seat), (you) => {
     const { board, pending, ticket } = source.game;
     const prompt = promptFor(source, you);
     const isOver = pending.kind === "Finished";
@@ -115,9 +125,9 @@ export const agentGame = (source: AgentSource): Result.Result<AgentGame, string>
     };
   });
 
-/** The click the agent's move stands for, or why the move is refused. */
-export const agentMove = (source: AgentSource, index: number, turn: number | undefined): Result.Result<{ match: number; generation: number; seat: Seat; index: number }, string> =>
-  Result.flatMap(Result.fromOption(agentSeat(source), () => NO_AGENT_SEAT), (seat) =>
+/** The click an Agent seat's move stands for, or why the move is refused. */
+export const agentMove = (source: AgentSource, seat: Seat, index: number, turn: number | undefined): Result.Result<{ match: number; generation: number; seat: Seat; index: number }, string> =>
+  Result.flatMap(agentSeat(source, seat), () =>
     Result.gen(function* () {
       const prompt = yield* Result.fromOption(promptFor(source, seat), () => "It is not your turn. Call get_game and wait until isYourTurn is true.");
 

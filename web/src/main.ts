@@ -103,12 +103,8 @@ const describeError = (error: AnswerError): string =>
 
 const NEXT_CONTROLLER: Readonly<Record<Controller, Controller>> = { Human: "Story", Story: "DoN", DoN: "Agent", Agent: "Human" };
 
-/** Cycles one seat's controller. At most one seat is the Agent, so a new Agent takes the role from the old one, which goes back to Human. */
-const cycleController = (controllers: ReadonlyArray<Controller>, seat: Seat): ReadonlyArray<Controller> => {
-  const next = Option.match(Arr.get(controllers, seat), { onNone: (): Controller => "Human", onSome: (controller) => NEXT_CONTROLLER[controller] });
-
-  return controllers.map((controller, index): Controller => (index === seat ? next : next === "Agent" && controller === "Agent" ? "Human" : controller));
-};
+const cycleController = (controllers: ReadonlyArray<Controller>, seat: Seat): ReadonlyArray<Controller> =>
+  controllers.map((controller, index) => (index === seat ? NEXT_CONTROLLER[controller] : controller));
 
 // UPDATE
 
@@ -184,41 +180,66 @@ interface AgentOutcome {
 
 const refused = (model: Model, reason: string): AgentOutcome => ({ model, reply: AgentReply.cases.Refused.make({ reason }) });
 
-const gameReply = (model: Model): AgentOutcome => ({
+const gameReply = (model: Model, seat: Seat): AgentOutcome => ({
   model,
   reply: Option.match(model.maybeMatch, {
     onNone: () => AgentReply.cases.Refused.make({ reason: NO_MATCH }),
-    onSome: (match) => Result.match(agentGame(match), { onSuccess: (game) => AgentReply.cases.Answered.make({ text: JSON.stringify(game) }), onFailure: (reason) => AgentReply.cases.Refused.make({ reason }) }),
+    onSome: (match) => Result.match(agentGame(match, seat), { onSuccess: (game) => AgentReply.cases.Answered.make({ text: JSON.stringify(game) }), onFailure: (reason) => AgentReply.cases.Refused.make({ reason }) }),
   }),
 });
 
 /** Runs one tool call over the model, through the same Messages the buttons send. */
 export const handleAgentCall = (model: Model, call: AgentCall): AgentOutcome =>
   AgentCall.match<AgentOutcome>(call, {
-    GetGame: () => gameReply(model),
-    PlayMove: ({ index, turn }) =>
+    GetGame: ({ seat }) => gameReply(model, seat),
+    PlayMove: ({ seat, index, turn }) =>
       Option.match(model.maybeMatch, {
         onNone: () => refused(model, NO_MATCH),
         onSome: (match) =>
-          Result.match(agentMove(match, index, turn), {
+          Result.match(agentMove(match, seat, index, turn), {
             onFailure: (reason) => refused(model, reason),
             onSuccess: (click) => {
               const moved = update(model, Message.ClickedMove(click)).model;
 
-              return Option.match(moved.maybeError, { onNone: () => gameReply(moved), onSome: (reason) => refused(moved, reason) });
+              return Option.match(moved.maybeError, { onNone: () => gameReply(moved, seat), onSome: (reason) => refused(moved, reason) });
             },
           }),
       }),
-    NewMatch: ({ players, items, seed }) =>
+    NewMatch: ({ players, items, seed, controllers = defaultAgentControllers(players) }) =>
       seed !== undefined && !SEED_PATTERN.test(seed)
         ? refused(model, `The seed must be an integer, not "${seed}".`)
-        : gameReply(startAgentMatch(model, players, items, seed === undefined ? model.setup.seed : Number(seed))),
+        : controllers.length === players
+          ? newMatchReply(startAgentMatch(model, players, items, seed === undefined ? model.setup.seed : Number(seed), controllers))
+          : refused(model, `controllers must list one controller per seat: ${players} for ${players} players, not ${controllers.length}.`),
   });
 
-/** The agent takes the table's first seat and DoN plays the rest. Autoplay starts so the bots move between the agent's turns. */
-const startAgentMatch = (model: Model, table: SeatCount, isItemsEnabled: boolean, seed: number): Model => {
-  const agent = SEATS_BY_TABLE[table][0];
-  const controllers = Arr.makeBy(4, (seat): Controller => (seat === agent ? "Agent" : "DoN"));
+/** The table as new_match left it: each seat's number and controller, so the agents know which seats to name. */
+const newMatchReply = (model: Model): AgentOutcome =>
+  Option.match(model.maybeError, {
+    onSome: (reason) => refused(model, reason),
+    onNone: () =>
+      Option.match(model.maybeMatch, {
+        onNone: () => refused(model, NO_MATCH),
+        onSome: (match) => ({
+          model,
+          reply: AgentReply.cases.Answered.make({
+            text: JSON.stringify({
+              seats: match.game.seats.map((seat) => ({ seat, controller: controllerOf(match.controllers, seat) })),
+              hint: "Call get_game with an Agent seat's number to see that seat's view and moves.",
+            }),
+          }),
+        }),
+      }),
+  });
+
+const defaultAgentControllers = (table: SeatCount): ReadonlyArray<Controller> => SEATS_BY_TABLE[table].map((_, position): Controller => (position === 0 ? "Agent" : "DoN"));
+
+/** Seats the table's controllers in seat order. Autoplay starts so the bots move between the agents' turns. */
+const startAgentMatch = (model: Model, table: SeatCount, isItemsEnabled: boolean, seed: number, tableControllers: ReadonlyArray<Controller>): Model => {
+  const atTable = (seat: number): Option.Option<Controller> =>
+    Arr.findFirstIndex(SEATS_BY_TABLE[table], (tableSeat) => tableSeat === seat).pipe(Option.flatMap((position) => Arr.get(tableControllers, position)));
+
+  const controllers = model.setup.controllers.map((controller, seat) => Option.getOrElse(atTable(seat), () => controller));
   const configured = modifyFields(model, { setup: (setup) => ({ ...setup, table, controllers, isItemsEnabled, seed }) });
 
   return update(update(configured, Message.ClickedNewMatch()).model, Message.ToggledAutoplay()).model;
@@ -322,7 +343,7 @@ const setupView = (h: H, model: Model): Html => {
           ),
           model.isWebMcpAvailable || !SEATS_BY_TABLE[table].some((seat) => controllerOf(controllers, seat) === "Agent")
             ? h.empty
-            : h.p([h.Class("muted")], ["WebMCP is not available in this browser, so no agent can play the Agent seat."]),
+            : h.p([h.Class("muted")], ["WebMCP is not available in this browser, so no agent can play the Agent seats."]),
         ],
       ),
       h.label(
