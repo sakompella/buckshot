@@ -30,6 +30,8 @@ export const Session = Schema.Struct({
   game: Schema.instanceOf(Game),
   rng: Schema.Number,
   events: Schema.Array(GameEvent),
+  /** Where the events of the latest step begin, so autoplay can wait for what that step showed. */
+  stepStart: Schema.Number,
   learned: Schema.Array(LearnedSecret),
   controllers: Schema.Array(Controller),
   ais: Schema.Array(Schema.Option(AiSeat)),

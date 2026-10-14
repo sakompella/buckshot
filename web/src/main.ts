@@ -23,6 +23,7 @@ const withProgress = (match: Session, progress: Progress): Session => ({
   game: progress.game,
   rng: progress.rng,
   events: progress.events,
+  stepStart: match.events.length,
   learned: progress.learned,
   ais: progress.ais,
   isAutoplay: match.isAutoplay && canAiMoveAgain(progress.game, match.controllers),
@@ -85,6 +86,7 @@ const startMatch = (model: Model): Return => {
         maybeMatch: () =>
           Option.some({
             ...progress,
+            stepStart: 0,
             controllers,
             viewer: Option.getOrElse(
               Arr.findFirst(SEATS_BY_TABLE[table], (seat) => controllerOf(controllers, seat) === "Human"),
@@ -229,27 +231,27 @@ export const init: Runtime.ApplicationInit<Model, Message, Flags> = ({ isWebMcpA
 
 // SUBSCRIPTION
 
-// The pause after a step, at Normal speed, long enough to see what the step did.
-const pauseAfter = (event: GameEvent | undefined): number =>
-  event === undefined
-    ? 400
-    : GameEvent.matchOrElse(
-        event,
-        {
-          Loaded: () => 2600,
-          RoundWon: () => 3200,
-          Fired: () => 1500,
-          Used: () => 1000,
-          Ejected: () => 1000,
-          Inverted: () => 900,
-          JamApplied: () => 900,
-          Healed: () => 900,
-          PickedUp: () => 700,
-          Granted: () => 250,
-          Placed: () => 250,
-        },
-        () => 400,
-      );
+// The pause after an event, at Normal speed, long enough to see it.
+const pauseAfter = (event: GameEvent): number =>
+  GameEvent.matchOrElse(
+    event,
+    {
+      Loaded: () => 2600,
+      RoundWon: () => 3200,
+      Fired: () => 1500,
+      Used: () => 1000,
+      Ejected: () => 1000,
+      Inverted: () => 900,
+      JamApplied: () => 900,
+      Healed: () => 900,
+      PickedUp: () => 700,
+      Granted: () => 250,
+      Placed: () => 250,
+    },
+    () => 400,
+  );
+
+const pauseAfterStep = (match: Session): number => Math.max(0, ...match.events.slice(match.stepStart).map(pauseAfter));
 
 const SPEED_FACTOR: Readonly<Record<Speed, number>> = { Slow: 1.6, Normal: 1, Fast: 0.12 };
 
@@ -264,7 +266,7 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
           onNone: () => ({ isAutoplay: false, pauseMs: 0, match: model.matchCount, generation: 0 }),
           onSome: (match) => ({
             isAutoplay: match.isAutoplay,
-            pauseMs: Math.round(pauseAfter(match.events.at(-1)) * SPEED_FACTOR[model.speed]),
+            pauseMs: Math.round(pauseAfterStep(match) * SPEED_FACTOR[model.speed]),
             match: model.matchCount,
             generation: match.game.ticket.generation,
           }),
