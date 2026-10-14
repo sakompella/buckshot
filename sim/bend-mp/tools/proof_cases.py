@@ -1,12 +1,12 @@
-"""Generate the case-split proof bodies of core-proof.bend, item-step-proof.bend,
-grab-proof.bend and load-proof.bend.
+"""Generate the case-split proof bodies of the step proof files (item-step,
+grab, load, turn, use, aim, pick, round and load-step).
 
 Some lemmas in the proof files are case splits too large to write by hand: the
 same small proof repeated for every table shape, seat and value the rules
-branch on. Their signatures (the claims) are written by hand in core-proof.bend;
-this script owns only their bodies.
+branch on. Their signatures (the claims) are written by hand in the proof
+files; this script owns only their bodies.
 
-    python3 tools/proof_cases.py          # fail if core-proof.bend differs
+    python3 tools/proof_cases.py          # fail if a proof file differs
     python3 tools/proof_cases.py --write  # rewrite the bodies in place
 """
 
@@ -20,16 +20,16 @@ from dataclasses import dataclass
 from itertools import product
 from pathlib import Path
 
-PROOF = Path(__file__).resolve().parent.parent / "core-proof.bend"
-ITEM_PROOF = PROOF.with_name("item-step-proof.bend")
-GRAB_PROOF = PROOF.with_name("grab-proof.bend")
-LOAD_PROOF = PROOF.with_name("load-proof.bend")
-TURN_PROOF = PROOF.with_name("turn-proof.bend")
-USE_PROOF = PROOF.with_name("use-proof.bend")
-AIM_PROOF = PROOF.with_name("aim-proof.bend")
-PICK_PROOF = PROOF.with_name("pick-proof.bend")
-ROUND_PROOF = PROOF.with_name("round-proof.bend")
-LOAD_STEP_PROOF = PROOF.with_name("load-step-proof.bend")
+HERE = Path(__file__).resolve().parent.parent
+ITEM_PROOF = HERE / "item-step-proof.bend"
+GRAB_PROOF = HERE / "grab-proof.bend"
+LOAD_PROOF = HERE / "load-proof.bend"
+TURN_PROOF = HERE / "turn-proof.bend"
+USE_PROOF = HERE / "use-proof.bend"
+AIM_PROOF = HERE / "aim-proof.bend"
+PICK_PROOF = HERE / "pick-proof.bend"
+ROUND_PROOF = HERE / "round-proof.bend"
+LOAD_STEP_PROOF = HERE / "load-step-proof.bend"
 
 SEATS = ("D.Seat0{}", "D.Seat1{}", "D.Seat2{}", "D.Seat3{}")
 
@@ -63,20 +63,6 @@ def world(checking: str = "checking") -> str:
 
 def indent(depth: int, rows: list[str]) -> list[str]:
     return [" " * depth + row for row in rows]
-
-
-def seat_split(match_world: bool) -> Callable[[], list[str]]:
-    """Every shape and seat, each closed by computation."""
-
-    def body() -> list[str]:
-        rows = ["match seats seat:"]
-        for shape, seat in product(SHAPES, SEATS):
-            rows += [f"  case {shape.pattern()} {seat}:", "    {==}"]
-        if match_world:
-            return ["match world:", f"  case {world()}:", *indent(4, rows)]
-        return rows
-
-    return body
 
 
 def seat_pairs(leaf: Callable[[bool], list[str]]) -> list[str]:
@@ -115,14 +101,6 @@ def mid() -> list[str]:
         rows += [f"  case {world(checking)}:", *indent(4, seat_pairs(leaf))]
     return rows
 
-
-# Each phase constructor and what the no-item normal form makes of it: kept,
-# Blocked, or Idle with the gun alone.
-
-
-BODIES: dict[str, Callable[[], list[str]]] = {
-    "inv.idle_phase": seat_split(match_world=True),
-}
 
 # ---------------------------------------------------------------------------
 # grab-proof.bend: splits over the table, the seat ring and the Grabs rings an
@@ -657,7 +635,7 @@ ROUND_BODIES: dict[str, Callable[[], list[str]]] = {
     "first.answer": first_answer,
 }
 
-FILES = {PROOF: BODIES, ITEM_PROOF: ITEM_BODIES, GRAB_PROOF: GRAB_BODIES, LOAD_PROOF: LOAD_BODIES, TURN_PROOF: TURN_BODIES, USE_PROOF: USE_BODIES, AIM_PROOF: AIM_BODIES, PICK_PROOF: PICK_BODIES, ROUND_PROOF: ROUND_BODIES, LOAD_STEP_PROOF: LOAD_STEP_BODIES}
+FILES = {ITEM_PROOF: ITEM_BODIES, GRAB_PROOF: GRAB_BODIES, LOAD_PROOF: LOAD_BODIES, TURN_PROOF: TURN_BODIES, USE_PROOF: USE_BODIES, AIM_PROOF: AIM_BODIES, PICK_PROOF: PICK_BODIES, ROUND_PROOF: ROUND_BODIES, LOAD_STEP_PROOF: LOAD_STEP_BODIES}
 
 
 def body_span(text: str, name: str) -> tuple[int, int]:

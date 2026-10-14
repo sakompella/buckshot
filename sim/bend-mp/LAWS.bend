@@ -29,12 +29,11 @@ law legal_accepted:
   {A.verify(A.ref(state), choice) == True{} : Bool}
 
 
+# A.back inverts A.ref at every valid state: the mapping loses nothing.
 law state_roundtrip:
-  for +world: S.World
-  for +seats: A.Seats()
-  for +phase: A.RequestPhase
-  for +notes: A.Notes()
-  {A.back(A.ref(A.pack(world, seats, A.request_phase(phase, seats), notes))) == A.pack(world, seats, A.request_phase(phase, seats), notes) : S.State}
+  for +state: S.State
+  for +valid: A.Valid(state)
+  {A.back(A.ref(state)) == state : S.State}
 
 
 law turn_traversal:

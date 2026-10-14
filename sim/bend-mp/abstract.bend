@@ -245,7 +245,7 @@ def assemble(world: S.World, +seats: D.Ring<&2, CoreSeat>, grabs: S.Grabs, phase
   S.State{world, players(seats), phase, notes, grabs}
 
 # No-item scope (B1): empty slots and the initial Grabs, whatever the seats'
-# slots say. The laws and the B1 proofs are stated over pack.
+# slots say. The B1 proofs are stated over pack.
 def pack(world: S.World, +seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>) -> S.State:
   S.State{world, players.free(seats), phase, notes, grabs(seats)}
 
@@ -550,41 +550,6 @@ def machine_swap_found(shells: List<&2, D.Shell>, i: Nat, j: Nat, x: Maybe<&2, D
   Q.swap.found(shells, i, j, x, y)
 
 
-type RequestPhase is Data:
-  First{}
-  Health{}
-  Amount{}
-  Batch{}
-  Swap{load: D.Load, shells: List<&2, D.Shell>, i: Nat}
-  Idle{seat: D.Seat}
-  Aim{seat: D.Seat}
-  Ended{}
-  Blocked{}
-
-def request_phase(phase: RequestPhase, seats: D.Ring<&2, CoreSeat>) -> S.Phase:
-  match phase:
-    case First{}:
-      S.NeedFirst{}
-    case Health{}:
-      S.NeedHealth{}
-    case Amount{}:
-      S.NeedAmount{}
-    case Batch{}:
-      S.NeedBatch{}
-    case Swap{load, shells, i}:
-      S.NeedSwap{load, shells, i}
-    case Idle{seat}:
-      S.Idle{seat, D.NonEmpty{S.TakeGun{}, Nil{}}}
-    case Aim{seat}:
-      S.Aim{seat}
-    case Ended{}:
-      S.Ended{}
-    case Blocked{}:
-      S.Blocked{None{}}
-
-def canonical(world: S.World, +seats: D.Ring<&2, CoreSeat>, phase: RequestPhase, notes: List<&2, D.Note>) -> S.State:
-  pack(world, seats, request_phase(phase, seats), notes)
-
 def back.batches(deck: List<&2, H.Batch>) -> List<&2, S.Batch>:
   match deck:
     case Nil{}:
@@ -665,21 +630,25 @@ def back.grabs(+h: H.Host) -> S.Grabs:
   S.Grabs{H.host.distributing(h), back.grabbing(H.host.seats(h)), back.holding(H.host.seats(h)), back.granted(H.host.grabs(h)), back.intake(H.host.grabs(h))}
 
 # Typed option lists recovered from the reference's rendered moves.
-def back.uses(moves: List<&2, D.Move>) -> List<&2, S.IdleOption>:
+def back.idle_options(moves: List<&2, D.Move>) -> List<&2, S.IdleOption>:
   match moves:
     case Nil{}:
       Nil{}
+    case D.PickUp{} <> rest:
+      S.TakeGun{} <> back.idle_options(rest)
     case D.UseItem{slot, item} <> rest:
-      S.UseAt{slot, item} <> back.uses(rest)
+      S.UseAt{slot, item} <> back.idle_options(rest)
     case _ <> rest:
-      back.uses(rest)
+      back.idle_options(rest)
 
-def back.jams(seats: List<&2, D.Seat>) -> List<&2, S.JamOption>:
-  match seats:
+def back.jams(moves: List<&2, D.Move>) -> List<&2, S.JamOption>:
+  match moves:
     case Nil{}:
       Nil{}
-    case seat <> rest:
+    case D.JamTarget{seat} <> rest:
       S.JamAt{seat} <> back.jams(rest)
+    case _ <> rest:
+      back.jams(rest)
 
 def back.steals(moves: List<&2, D.Move>) -> List<&2, S.StealOption>:
   match moves:
@@ -714,8 +683,8 @@ def back.needs(menus: D.Ring<&2, List<&2, D.Move>>) -> D.Ring<&2, List<&2, S.Gra
 def ref.use_moves(+h: H.Host, +seat: D.Seat) -> List<&2, D.Move>:
   RI.use_moves(RI.slots.all(), h, seat)
 
-def ref.jam_targets(+h: H.Host, +seat: D.Seat) -> List<&2, D.Seat>:
-  RI.jam_targets(D.ring.entries(H.Props, H.host.seats(h)), seat)
+def ref.jam_moves(+h: H.Host, +seat: D.Seat) -> List<&2, D.Move>:
+  RI.jam_moves(RI.jam_targets(D.ring.entries(H.Props, H.host.seats(h)), seat))
 
 def ref.steal_moves(+h: H.Host, +seat: D.Seat) -> List<&2, D.Move>:
   RI.steal_moves(D.ring.entries(H.Props, H.host.seats(h)), h, seat)
@@ -723,7 +692,17 @@ def ref.steal_moves(+h: H.Host, +seat: D.Seat) -> List<&2, D.Move>:
 def ref.grab_menus(+h: H.Host) -> D.Ring<&2, List<&2, D.Move>>:
   R.grab_menus(D.ring.entries(H.Props, H.host.seats(h)), h, D.ring.fill(List<&2, D.Move>, H.host.table(h), Nil{}))
 
-def back.terminal(stage: D.Stage, request: D.Request) -> S.Phase:
+# The seat whose has_turn is set: the holder of a blocked machine.
+def back.holder(seats: List<&2, D.At<&2, H.Props>>) -> Maybe<&2, D.Seat>:
+  match seats:
+    case Nil{}:
+      None{}
+    case D.At{seat, H.Props{_, _, _, _, _, _, _, True{}}} <> _:
+      Some{seat}
+    case _ <> rest:
+      back.holder(rest)
+
+def back.terminal(stage: D.Stage, request: D.Request, +h: H.Host) -> S.Phase:
   match stage:
     case D.MatchOver{}:
       match request:
@@ -732,14 +711,14 @@ def back.terminal(stage: D.Stage, request: D.Request) -> S.Phase:
         case _:
           S.Blocked{None{}}
     case _:
-      S.Blocked{None{}}
+      S.Blocked{back.holder(D.ring.entries(H.Props, H.host.seats(h)))}
 
 def back.play(stage: D.Stage, mode: D.Mode, request: D.Request, +h: H.Host) -> S.Phase:
   match stage:
     case D.Playing{+seat, D.Idle{}}:
       match mode:
         case D.Idle{}:
-          S.Idle{seat, D.NonEmpty{S.TakeGun{}, back.uses(ref.use_moves(h, seat))}}
+          S.Idle{seat, D.NonEmpty{S.TakeGun{}, back.idle_options(ref.use_moves(h, seat))}}
         case _:
           S.Blocked{None{}}
     case D.Playing{seat, D.Aiming{}}:
@@ -751,7 +730,7 @@ def back.play(stage: D.Stage, mode: D.Mode, request: D.Request, +h: H.Host) -> S
     case D.Playing{+seat, D.Jamming{}}:
       match mode:
         case D.Jamming{}:
-          S.JamPick{seat, back.jams(ref.jam_targets(h, seat))}
+          S.JamPick{seat, back.jams(ref.jam_moves(h, seat))}
         case _:
           S.Blocked{None{}}
     case D.Playing{+seat, D.Stealing{}}:
@@ -761,7 +740,7 @@ def back.play(stage: D.Stage, mode: D.Mode, request: D.Request, +h: H.Host) -> S
         case _:
           S.Blocked{None{}}
     case _:
-      back.terminal(stage, request)
+      back.terminal(stage, request, h)
 
 # The two ItemAmountResult continuations: a round start, or a turn end.
 def back.amount(next: R.Frame) -> S.Phase:
@@ -813,54 +792,17 @@ def back.phase(frame: R.Frame, +h: H.Host) -> S.Phase:
     case _:
       S.Blocked{None{}}
 
-# The inverse of ref at request points, for every config.
+# The inverse of ref at every valid state (the law state_roundtrip).
 def back(state: R.RefState) -> S.State:
   match state:
     case R.RefState{+h, frame, notes}:
       S.State{back.world(h), players(back.seats(H.host.seats(h))), back.phase(frame, h), notes, back.grabs(h)}
-
-def batches_roundtrip(deck: List<&2, S.Batch>) -> List<&2, S.Batch>:
-  back.batches(batches(deck))
-
-def decks_roundtrip(deck: S.Decks) -> S.Decks:
-  back.decks(decks(deck))
-
-def world_roundtrip(world: S.World, seats: D.Ring<&2, CoreSeat>, holder: Maybe<&2, D.Seat>) -> S.World:
-  back.world(host.held(world, seats, holder))
-
-def grabs_roundtrip(world: S.World, +seats: D.Ring<&2, CoreSeat>, holder: Maybe<&2, D.Seat>) -> S.Grabs:
-  back.grabs(host.held(world, seats, holder))
-
-def idle_options_roundtrip(world: S.World, +seats: D.Ring<&2, CoreSeat>, +seat: D.Seat) -> List<&2, S.IdleOption>:
-  back.uses(ref.use_moves(host.held(world, seats, Some{seat}), seat))
-
-def seats_roundtrip(+seats: D.Ring<&2, CoreSeat>, holder: Maybe<&2, D.Seat>) -> D.Ring<&2, CoreSeat>:
-  back.seats(props.at(core(players.free(seats)), grabs(seats), holder))
-
-def phase_roundtrip(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +phase: RequestPhase) -> S.Phase:
-  +h : H.Host = host.held(world, seats, turn.holder(request_phase(phase, seats)))
-  back.phase(frame(request_phase(phase, seats), h), h)
-
-def raw_canonical(world: S.World, +seats: D.Ring<&2, CoreSeat>, phase: RequestPhase, notes: List<&2, D.Note>) -> R.RefState:
-  raw_state(world, seats, request_phase(phase, seats), notes)
-
 
 def RefHost() -> Data:
   H.Host
 
 def RefBatches() -> Data:
   List<&2, H.Batch>
-
-def selected_deck(+world: S.World, seats: D.Ring<&2, CoreSeat>) -> List<&2, H.Batch>:
-  H.host.deck(host(world, seats))
-
-def batch_phase(deck: List<&2, H.Batch>, h: H.Host) -> S.Phase:
-  back.phase(batch.frame(deck), h)
-
-
-def restored_parts(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +phase: RequestPhase, notes: List<&2, D.Note>) -> S.State:
-  +holder : Maybe<&2, D.Seat> = turn.holder(request_phase(phase, seats))
-  S.State{world_roundtrip(world, seats, holder), players(seats_roundtrip(seats, holder)), phase_roundtrip(world, seats, phase), notes, grabs_roundtrip(world, seats, holder)}
 
 def ref_turn(world: S.World, seats: D.Ring<&2, CoreSeat>, current: D.Seat) -> D.Seat:
   G.GetNextTurn_Socket(host(world, seats), current)
