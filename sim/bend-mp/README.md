@@ -88,11 +88,9 @@ The twelve required laws are listed in `check.sh`. Each is stated in `LAWS.bend`
 
 `state_roundtrip` says the mapping and its inverse agree, as above. It is stated for states without items: `back` is defined for the no-item request phases and for seats with empty slots and initial grabs.
 
-The helper laws are small steps about one narrow no-item case each, such as picking up the gun or the play menu. They are `core_roundtrip`, `pickup_matches`, `pickup_point_matches` and `legal_play_exact`. No other law uses them now; `step_matches` and `legal_exact` cover the same moves at every valid state.
-
 ## What is proven and what is fuzzed
 
-These laws are proven for every config, items included: `start_matches`, `start_result_matches`, `step_matches`, `run_matches`, `games_match`, `reachable_valid`, `legal_exact`, `legal_accepted` and `observe_matches`. `privacy` and `jam_skip_once` hold for all states, and `turn_traversal` does not depend on items. `state_roundtrip` and the helper laws stay no-item only, for the reasons above.
+These laws are proven for every config, items included: `start_matches`, `start_result_matches`, `step_matches`, `run_matches`, `games_match`, `reachable_valid`, `legal_exact`, `legal_accepted` and `observe_matches`. `privacy` and `jam_skip_once` hold for all states, and `turn_traversal` does not depend on items. `state_roundtrip` stays no-item only, for the reason above.
 
 `step_matches` is `step.items` in `items-proof.bend`, by the phase. The phase proofs are in `load-proof.bend` (the handout and reload), `turn-proof.bend` (turn end), `use-proof.bend` (item uses at Idle), `aim-proof.bend` (shots), `pick-proof.bend` (jam targets, steals, the phone draw and the end-of-turn item draw), `round-proof.bend` (wins and round start), `load-step-proof.bend` (shell batches and swaps) and `item-step-proof.bend` (the grab and item handout points, and `point.items`: the machine's point equals the reference's at every valid state). `step-proof.bend` lifts the step to runs by induction on the fuel and proves the start, game, `legal_exact` and `observe_matches` laws. `accept-proof.bend` proves `legal_accepted`.
 

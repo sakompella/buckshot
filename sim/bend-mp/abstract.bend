@@ -253,9 +253,6 @@ def pack(world: S.World, +seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: Li
 def World() -> Data:
   S.World
 
-def Seat() -> Data:
-  D.Seat
-
 def Seats() -> Data:
   D.Ring<&2, CoreSeat>
 
@@ -265,36 +262,11 @@ def Notes() -> Data:
 def table(world: S.World) -> D.Table:
   S.world.table(world)
 
-def idle(world: S.World, seats: D.Ring<&2, CoreSeat>, seat: D.Seat, notes: List<&2, D.Note>) -> S.State:
-  pack(world, seats, S.Idle{seat, D.NonEmpty{S.TakeGun{}, Nil{}}}, notes)
-
-def pickup_step(world: S.World, seats: D.Ring<&2, CoreSeat>, seat: D.Seat, notes: List<&2, D.Note>, n: Nat) -> D.Stepped<&2, R.RefState>:
-  stepped(M.pickup_slice(idle(world, seats, seat, notes), n))
-
-def pickup_choice(seat: D.Seat) -> D.Choice:
-  D.Choice{seat, 0n, D.PickUp{}}
-
-def pickup_accepted(world: S.World, seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, notes: List<&2, D.Note>) -> Bool:
-  R.VerifyPacket(ref(idle(world, seats, seat, notes)), pickup_choice(seat))
-
-
-def seated(+world: S.World, seat: D.Seat) -> Data:
-  P.seated(table(world), seat)
-
-
 def RefStep() -> Data:
   D.Stepped<&2, R.RefState>
 
 def Phase() -> Data:
   S.Phase
-
-def raw_idle(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, notes: List<&2, D.Note>) -> R.RefState:
-  +h : H.Host = host.held(world, seats, Some{seat})
-  R.RefState{h, idle.frame(h, seat, D.Idle{}, [D.PickUp{}]), notes}
-
-def expected_pickup(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +seat: D.Seat) -> D.Stepped<&2, R.RefState>:
-  R.stepped(R.ReceivePacket_PickUpShotgun(raw_idle(world, seats, seat, Nil{}), seat))
-
 
 def Ref() -> Data:
   R.RefState
@@ -305,31 +277,6 @@ def ref_answer(state: R.RefState, n: Nat) -> D.Stepped<&2, R.RefState>:
 
 def ref_stepped(state: R.RefState) -> D.Stepped<&2, R.RefState>:
   R.stepped(state)
-
-def ref_idle_choose(+world: S.World, seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, notes: List<&2, D.Note>) -> R.RefState:
-  +h : H.Host = host.held(world, seats, Some{seat})
-  R.RefState{h, R.Await{D.Choose{D.ring.set(List<&2, D.Move>, D.ring.fill(List<&2, D.Move>, H.host.table(h), Nil{}), seat, [D.PickUp{}])}, D.Playing{seat, D.Idle{}}, R.PlayerMove{D.Idle{}}}, notes}
-
-def ref_idle_request(+world: S.World, seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, notes: List<&2, D.Note>, request: D.Request) -> R.RefState:
-  R.RefState{host.held(world, seats, Some{seat}), R.Await{request, D.Playing{seat, D.Idle{}}, R.PlayerMove{D.Idle{}}}, notes}
-
-def ref_idle_resolved(+world: S.World, seats: D.Ring<&2, CoreSeat>, seat: D.Seat, resolved: D.Resolved) -> D.Stepped<&2, R.RefState>:
-  +state : R.RefState = ref_idle_choose(world, seats, seat, Nil{})
-  R.stepped(R.settle(96n, R.answer.resolved(state, R.PlayerMove{D.Idle{}}, resolved)))
-
-def raw_accepted(+world: S.World, seats: D.Ring<&2, CoreSeat>, +seat: D.Seat) -> Bool:
-  R.VerifyPacket(ref_idle_choose(world, seats, seat, Nil{}), pickup_choice(seat))
-
-def ref_idle_accepting(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, accepted: Bool) -> D.Stepped<&2, R.RefState>:
-  R.stepped(R.settle(96n, R.answer.move.accepted(ref_idle_choose(world, seats, seat, Nil{}), pickup_choice(seat), accepted)))
-
-
-def machine_pickup_resolved(world: S.World, seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, resolved: D.Resolved) -> D.Stepped<&2, R.RefState>:
-  stepped(S.state.stepped(M.pickup.resolved(idle(world, seats, seat, Nil{}), seat, D.NonEmpty{S.TakeGun{}, Nil{}}, resolved)))
-
-def machine_pickup_same(world: S.World, seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, same: Bool) -> D.Stepped<&2, R.RefState>:
-  stepped(S.state.stepped(M.pickup.same(idle(world, seats, seat, Nil{}), seat, D.NonEmpty{S.TakeGun{}, Nil{}}, 0n, same)))
-
 
 def health_entries(entries: List<&2, D.At<&2, CoreSeat>>) -> List<&2, D.At<&2, Nat>>:
   match entries:
@@ -345,9 +292,6 @@ def props_entries(entries: List<&2, D.At<&2, CoreSeat>>) -> List<&2, D.At<&2, H.
     case D.At{seat, props} <> rest:
       D.At{seat, seat.props(props)} <> props_entries(rest)
 
-def machine_shots_entries(entries: List<&2, D.At<&2, CoreSeat>>) -> List<&2, D.Move>:
-  Q.aim.moves(Q.targets(health_entries(entries)))
-
 # Host props of the entries when holder holds the turn.
 def props_entries.held(entries: List<&2, D.At<&2, CoreSeat>>, +holder: Maybe<&2, D.Seat>) -> List<&2, D.At<&2, H.Props>>:
   match entries:
@@ -355,9 +299,6 @@ def props_entries.held(entries: List<&2, D.At<&2, CoreSeat>>, +holder: Maybe<&2,
       Nil{}
     case D.At{+seat, S.Seat{hp, +jam, cash, sl}} <> rest:
       D.At{seat, H.Props{hp, S.jam.jammed(jam), jam.checked(jam), cash, D.slots.empty(), False{}, None{}, turn.held(holder, seat)}} <> props_entries.held(rest, holder)
-
-def ref_shots_entries(entries: List<&2, D.At<&2, CoreSeat>>, holder: Maybe<&2, D.Seat>) -> List<&2, D.Move>:
-  R.shot_moves(G.living(props_entries.held(entries, holder)))
 
 def machine_shots(seats: D.Ring<&2, CoreSeat>) -> List<&2, D.Move>:
   Q.aim.moves(Q.targets(D.ring.entries(Nat, seats.health(seats))))
@@ -370,12 +311,6 @@ def machine_step_state(result: D.Stepped<&2, S.State>) -> S.State:
     case D.Stepped{state, _}:
       state
 
-def machine_pickup_state(world: S.World, seats: D.Ring<&2, CoreSeat>, seat: D.Seat, notes: List<&2, D.Note>, n: Nat) -> S.State:
-  machine_step_state(M.pickup_slice(idle(world, seats, seat, notes), n))
-
-def pickup_point(world: S.World, seats: D.Ring<&2, CoreSeat>, seat: D.Seat, notes: List<&2, D.Note>, n: Nat) -> D.Point:
-  M.point(machine_pickup_state(world, seats, seat, notes, n))
-
 def ref_point(state: R.RefState) -> D.Point:
   R.point(state)
 
@@ -384,18 +319,8 @@ def ref_step_point(result: D.Stepped<&2, R.RefState>) -> D.Point:
     case D.Stepped{state, _}:
       R.point(state)
 
-def RefPoint() -> Data:
-  D.Point
-
-
 def aim_successor(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +seat: D.Seat) -> S.State:
   pack(world, seats, S.Aim{seat}, [D.Shown{D.PickedUp{seat}}])
-
-def machine_pickup_resolved_state(world: S.World, seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, resolved: D.Resolved) -> S.State:
-  M.pickup.resolved(idle(world, seats, seat, Nil{}), seat, D.NonEmpty{S.TakeGun{}, Nil{}}, resolved)
-
-def machine_pickup_same_state(world: S.World, seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, same: Bool) -> S.State:
-  M.pickup.same(idle(world, seats, seat, Nil{}), seat, D.NonEmpty{S.TakeGun{}, Nil{}}, 0n, same)
 
 def machine_point(state: S.State) -> D.Point:
   M.point(state)
@@ -404,34 +329,11 @@ def machine_point(state: S.State) -> D.Point:
 def world_for(+world: S.World, +seats: D.Ring<&2, CoreSeat>) -> S.World:
   S.world.set_config(world, D.Config{D.ring.table(CoreSeat, seats), S.world.plan(world)})
 
-def point_board(point: D.Point) -> D.Board:
-  match point:
-    case D.Point{_, board}:
-      board
-
-def successor_point_with_moves(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, moves: List<&2, D.Move>) -> D.Point:
-  D.Point{Q.seat.menu(S.world.table(world), seat, moves), point_board(M.point(aim_successor(world, seats, seat)))}
-
-
-def play_phase(+seat: D.Seat, aiming: Bool, seats: D.Ring<&2, CoreSeat>) -> S.Phase:
-  match aiming:
-    case False{}:
-      S.Idle{seat, D.NonEmpty{S.TakeGun{}, Nil{}}}
-    case True{}:
-      S.Aim{seat}
-
-def play_state(world: S.World, +seats: D.Ring<&2, CoreSeat>, seat: D.Seat, aiming: Bool, notes: List<&2, D.Note>) -> S.State:
-  pack(world, seats, play_phase(seat, aiming, seats), notes)
-
 def machine_request(state: S.State) -> D.Request:
   M.request(state)
 
 def ref_request(state: R.RefState) -> D.Request:
   R.request(state)
-
-def play_request_with_moves(world: S.World, +seat: D.Seat, moves: List<&2, D.Move>) -> D.Request:
-  Q.seat.menu(S.world.table(world), seat, moves)
-
 
 def raw_state(world: S.World, seats: D.Ring<&2, CoreSeat>, +phase: S.Phase, notes: List<&2, D.Note>) -> R.RefState:
   +h : H.Host = host.held(world, seats, turn.holder(phase))

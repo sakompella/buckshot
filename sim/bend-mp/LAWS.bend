@@ -5,41 +5,6 @@ import ./sm/state.bend as S
 import ./sm/main.bend as M
 import ./sm/rules.bend as Q
 
-law core_roundtrip:
-  for +seats: A.Seats()
-  {A.core(A.players(seats)) == seats : A.Seats()}
-
-law pickup_matches:
-  for +world: A.World()
-  for +seats: A.Seats()
-  for +seat: A.Seat()
-  for +notes: A.Notes()
-  for +n: Nat
-  for +present: A.seated(world, seat)
-  for accepted: {A.pickup_accepted(world, seats, seat, notes) == True{} : Bool}
-  {A.ref_answer(A.ref(A.idle(world, seats, seat, notes)), n) == A.pickup_step(world, seats, seat, notes, n) : A.RefStep()}
-
-
-law pickup_point_matches:
-  for +world: A.World()
-  for +seats: A.Seats()
-  for +seat: A.Seat()
-  for +notes: A.Notes()
-  for +n: Nat
-  for +present: A.seated(A.world_for(world, seats), seat)
-  for accepted: {A.pickup_accepted(A.world_for(world, seats), seats, seat, notes) == True{} : Bool}
-  {A.pickup_point(A.world_for(world, seats), seats, seat, notes, n) == A.ref_step_point(A.ref_answer(A.ref(A.idle(A.world_for(world, seats), seats, seat, notes)), n)) : A.RefPoint()}
-
-
-law legal_play_exact:
-  for +world: A.World()
-  for +seats: A.Seats()
-  for +seat: A.Seat()
-  for +aiming: Bool
-  for +notes: A.Notes()
-  {A.machine_request(A.play_state(A.world_for(world, seats), seats, seat, aiming, notes)) == A.ref_request(A.ref(A.play_state(A.world_for(world, seats), seats, seat, aiming, notes))) : D.Request}
-
-
 law observe_matches:
   for +state: S.State
   for +valid: A.Valid(state)
