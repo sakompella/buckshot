@@ -2059,10 +2059,11 @@ def gun_length(+s: S.State) -> Nat:
 def bounded(+s: S.State) -> Bool:
   Nat.is_lt(S.world.round_index(S.state.world(s)), D.plan.length(S.world.plan(S.state.world(s))))
 
-# Item-config normal form: the stored menus of Idle, StealPick and Grab equal
-# their recomputation, since the reference checks ownership and the grab flags
-# where the machine does not; a swap at index 0 is Blocked. NeedItem, JamPick
-# and NeedPhone data need no tie (both models read the stored values).
+# Item-config normal form: the stored menus of Idle, JamPick, StealPick and
+# Grab equal their recomputation, since the reference checks ownership and the
+# grab flags where the machine does not, and a menu at a seat outside the table
+# leaves no trace in the reference's request; a swap at index 0 is Blocked.
+# NeedItem and NeedPhone data need no tie (both models read the stored values).
 def canonical_phase_items(+s: S.State, phase: S.Phase) -> S.Phase:
   match phase:
     case S.Idle{+seat, _}:
@@ -2071,6 +2072,8 @@ def canonical_phase_items(+s: S.State, phase: S.Phase) -> S.Phase:
       S.Blocked{None{}}
     case S.Grab{_}:
       S.Grab{I.grab.needs(s)}
+    case S.JamPick{+seat, _}:
+      S.JamPick{seat, I.jam.for(s, seat)}
     case S.StealPick{+seat, _}:
       S.StealPick{seat, I.steal.for(s, seat)}
     case phase:
@@ -2079,16 +2082,66 @@ def canonical_phase_items(+s: S.State, phase: S.Phase) -> S.Phase:
 def normalize_items(+s: S.State) -> S.State:
   S.state.set_phase(s, canonical_phase_items(s, S.state.phase(s)))
 
-# phase_ready, and every Playing phase's seat holds world.turn: the reference
-# checks the turn on a move, and JamPick and NeedPhone resume to Idle.
+# Whether a seat sits at the table (P.seated as a Bool).
+def table.has(table: D.Table, seat: D.Seat) -> Bool:
+  match table seat:
+    case D.TwoSeats{} D.Seat1{}:
+      True{}
+    case D.TwoSeats{} D.Seat3{}:
+      True{}
+    case D.ThreeSeats{} D.Seat0{}:
+      True{}
+    case D.ThreeSeats{} D.Seat1{}:
+      True{}
+    case D.ThreeSeats{} D.Seat2{}:
+      True{}
+    case D.FourSeats{} _:
+      True{}
+    case _ _:
+      False{}
+
+def table.has.seated(+table: D.Table, +seat: D.Seat, +seated: P.seated(table, seat)) -> Holds(table.has(table, seat)):
+  match table seat:
+    case D.TwoSeats{} D.Seat1{}:
+      {==}
+    case D.TwoSeats{} D.Seat3{}:
+      {==}
+    case D.ThreeSeats{} D.Seat0{}:
+      {==}
+    case D.ThreeSeats{} D.Seat1{}:
+      {==}
+    case D.ThreeSeats{} D.Seat2{}:
+      {==}
+    case D.FourSeats{} D.Seat0{}:
+      {==}
+    case D.FourSeats{} D.Seat1{}:
+      {==}
+    case D.FourSeats{} D.Seat2{}:
+      {==}
+    case D.FourSeats{} D.Seat3{}:
+      {==}
+    case D.TwoSeats{} D.Seat0{}:
+      match seated:
+    case D.TwoSeats{} D.Seat2{}:
+      match seated:
+    case D.ThreeSeats{} D.Seat3{}:
+      match seated:
+
+# phase_ready, every Playing phase's seat holds world.turn, and a blocked
+# holder and a phone draw's seat sit at the table: the reference checks the
+# turn on a move, JamPick and NeedPhone resume to Idle, the reference keeps a
+# blocked holder only in its seats' has_turn, and a failed phone draw blocks
+# with its seat as the holder.
 def items_ready(phase: S.Phase, +world: S.World) -> Bool:
   match phase:
     case S.JamPick{seat, _}:
       R.current.eq(S.world.turn(world), seat)
     case S.StealPick{seat, _}:
       R.current.eq(S.world.turn(world), seat)
-    case S.NeedPhone{seat, _, _}:
-      R.current.eq(S.world.turn(world), seat)
+    case S.NeedPhone{+seat, _, _}:
+      Bool.and(R.current.eq(S.world.turn(world), seat), table.has(S.world.table(world), seat))
+    case S.Blocked{Some{seat}}:
+      table.has(S.world.table(world), seat)
     case phase:
       phase_ready(phase, world)
 

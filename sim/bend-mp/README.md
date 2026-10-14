@@ -55,10 +55,10 @@ The laws compare the machine to the reference, so something must turn a machine 
 
 The mapping covers only the states the machine can reach. `A.Valid` says which those are. It covers every config, with or without items. A state is valid when all four of these hold.
 
-- It is in item normal form. The stored menus of an idle, steal or grab phase equal their recomputation from the state, since the reference checks ownership and the grab flags where the machine reads the stored menu. A swap at index 0 is blocked.
+- It is in item normal form. The stored menus of an idle, jam, steal or grab phase equal their recomputation from the state, since the reference checks ownership and the grab flags where the machine reads the stored menu. A swap at index 0 is blocked.
 - Its seat ring and every ring of its `Grabs` have the config's table.
 - Its round index is inside the round plan.
-- Its phase fits its world. A first-seat draw has a round left to begin, and the seat that an idle, aim, jam, steal or phone phase waits on holds the world's turn.
+- Its phase fits its world. A first-seat draw has a round left to begin, and the seat that an idle, aim, jam, steal or phone phase waits on holds the world's turn. The holder of a blocked machine and the seat of a phone draw sit at the table, since the reference keeps a blocked holder only in its seats' turn flags.
 
 ## The laws
 

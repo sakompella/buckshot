@@ -492,11 +492,11 @@ def vpre.death(+shell: D.Shell, +x: Nat, +s: S.State, +t: D.Seat, +vpre: LP.VPre
             case Tuple{+shape, +bounded}:
               (ISP.shape.move(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, False{}, amount, saw, gun, shown, deck}, p, ph, n, g, ph, List.append(&2, D.Note, n, [D.Shown{D.Died{t}}]), shape), bounded)
 
-def valid.aim.move(+w: S.World, +p: S.Players, +seat: D.Seat, +g: S.Grabs, +i: Nat, +m: D.Move, +sel: AimSel(Q.aim.targets(p), i, m), +vpre: LP.VPre(aim.at(w, p, seat, Nil{}, g)), winv: T.WinValid()) -> A.Valid(A.machine_step_state(S.state.stepped(M.answer.choice(aim.at(w, p, seat, Nil{}, g), D.Choice{seat, i, m})))):
+def valid.aim.move(+w: S.World, +p: S.Players, +seat: D.Seat, +g: S.Grabs, +i: Nat, +m: D.Move, +sel: AimSel(Q.aim.targets(p), i, m), +vpre: LP.VPre(aim.at(w, p, seat, Nil{}, g)), +seated: P.seated(S.world.table(w), seat), winv: T.WinValid()) -> A.Valid(A.machine_step_state(S.state.stepped(M.answer.choice(aim.at(w, p, seat, Nil{}, g), D.Choice{seat, i, m})))):
   match w m vpre:
     case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, Nil{}, +shown, +deck} D.Shoot{+t} Tuple{+shape, +bounded}:
       %Equal.sym(Maybe<&2, S.TargetOption>, Q.target.nth(Q.aim.targets(p), i), Some{S.Target{t}}, sel) : A.Valid(M.aim.selected(aim.at(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, Nil{}, shown, deck}, p, seat, Nil{}, g), seat, _))
-      ({==}, (ISP.shape.move(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, Nil{}, shown, deck}, p, S.Aim{seat}, Nil{}, g, S.Blocked{Some{seat}}, Nil{}, shape), (bounded, {==})))
+      ({==}, (ISP.shape.move(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, Nil{}, shown, deck}, p, S.Aim{seat}, Nil{}, g, S.Blocked{Some{seat}}, Nil{}, shape), (bounded, A.table.has.seated(table, seat, seated))))
     case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +shell <> +rest, +shown, +deck} D.Shoot{+t} Tuple{+shape, +bounded}:
       %Equal.sym(Maybe<&2, S.TargetOption>, Q.target.nth(Q.aim.targets(p), i), Some{S.Target{t}}, sel) : A.Valid(M.aim.selected(aim.at(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, shell <> rest, shown, deck}, p, seat, Nil{}, g), seat, _))
       +hp : Nat = Q.shot.health(shell, I.seat.health(p, t), Q.captured(saw))
@@ -527,7 +527,7 @@ def valid.aim.picked(+w: S.World, +p: S.Players, +seat: D.Seat, +g: S.Grabs, +pi
     case Some{D.Choice{+s, +i, +m}}:
       match pk:
         case Tuple{+e_s, Tuple{+e_nth, +seated}}:
-          valid.aim.move(w, p, seat, g, i, m, aim.sel(Q.aim.targets(p), i, m, e_nth), vpre, winv)
+          valid.aim.move(w, p, seat, g, i, m, aim.sel(Q.aim.targets(p), i, m, e_nth), vpre, seated, winv)
 
 def valid.aim.any(+w: S.World, +p: S.Players, +seat: D.Seat, +n0: A.Notes(), +g: S.Grabs, +n: Nat, +any: Bool, +e: {D.menus.any(D.ring.entries(List<&2, D.Move>, U.menu.of(S.world.table(w), seat, aim.moves(p)))) == any : Bool}, +valid: A.Valid(aim.at(w, p, seat, n0, g)), +vpre: LP.VPre(aim.at(w, p, seat, Nil{}, g)), winv: T.WinValid()) -> A.Valid(A.machine_step_state(M.answer.request(aim.at(w, p, seat, n0, g), n, D.request.choose.any(any, U.menu.of(S.world.table(w), seat, aim.moves(p)))))):
   match any:

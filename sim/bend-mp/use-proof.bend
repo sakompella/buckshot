@@ -965,6 +965,43 @@ def count.slot(+sl: D.Slots, +slot: D.Slot, +item: D.Item, +e: {D.slots.get(sl, 
 def and.cong_true(+a: Bool, +b: Bool, +ea: {a == True{} : Bool}, +eb: {b == True{} : Bool}) -> {Bool.and(a, b) == True{} : Bool}:
   T.and.cong(a, True{}, b, True{}, ea, eb)
 
+
+def and.true_left(+a: Bool, +b: Bool, +e: {Bool.and(a, b) == True{} : Bool}) -> {a == True{} : Bool}:
+  match a:
+    case True{}:
+      {==}
+    case False{}:
+      e
+
+def and.true_right(+a: Bool, +b: Bool, +e: {Bool.and(a, b) == True{} : Bool}) -> {b == True{} : Bool}:
+  match a:
+    case True{}:
+      e
+    case False{}:
+      GP.absurd({b == True{} : Bool}, T.clash.false_true(e))
+
+# A seat the table has is seated.
+def has.seated(+table: D.Table, +seat: D.Seat, +e: A.Holds(A.table.has(table, seat))) -> P.seated(table, seat):
+  match table seat:
+    case D.TwoSeats{} D.Seat1{}:
+      Unit{}
+    case D.TwoSeats{} D.Seat3{}:
+      Unit{}
+    case D.ThreeSeats{} D.Seat0{}:
+      Unit{}
+    case D.ThreeSeats{} D.Seat1{}:
+      Unit{}
+    case D.ThreeSeats{} D.Seat2{}:
+      Unit{}
+    case D.FourSeats{} _:
+      Unit{}
+    case D.TwoSeats{} D.Seat0{}:
+      GP.absurd(P.seated(D.TwoSeats{}, D.Seat0{}), T.clash.false_true(e))
+    case D.TwoSeats{} D.Seat2{}:
+      GP.absurd(P.seated(D.TwoSeats{}, D.Seat2{}), T.clash.false_true(e))
+    case D.ThreeSeats{} D.Seat3{}:
+      GP.absurd(P.seated(D.ThreeSeats{}, D.Seat3{}), T.clash.false_true(e))
+
 def stepped.ref.local(+x: R.RefState, +out: S.State, +e: {x == A.ref(out) : R.RefState}) -> {R.stepped(x) == A.stepped(S.state.stepped(out)) : A.RefStep()}:
   ISP.stepped.ref(x, out, e)
 
@@ -1205,24 +1242,24 @@ def valid.consume(+item: D.Item, +s: S.State, +seat: D.Seat, +owner: D.Seat, +sl
               +vpre1 : LP.VPre(s1) = (shape.removed(st, owner, slot, shape), bounded)
               valid.end(ending, S.state.emit(S.state.set_world(s1, S.world.set_gun(S.state.world(s1), I.invert(shell) <> tail)), D.Inverted{seat}), seat, vpre1, ready, winv)
 
-def valid.found(+found: Maybe<&2, D.Shell>, +s: S.State, +seat: D.Seat, +owner: D.Seat, +slot: D.Slot, +position: Nat, +vpre: LP.VPre(s), +ready: {R.current.eq(S.world.turn(S.state.world(s)), seat) == True{} : Bool}, winv: T.WinValid()) -> A.Valid(M.item.clue.found(s, seat, owner, slot, position, found)):
+def valid.found(+found: Maybe<&2, D.Shell>, +s: S.State, +seat: D.Seat, +owner: D.Seat, +slot: D.Slot, +position: Nat, +vpre: LP.VPre(s), +ready: {R.current.eq(S.world.turn(S.state.world(s)), seat) == True{} : Bool}, +seated: P.seated(S.world.table(S.state.world(s)), seat), winv: T.WinValid()) -> A.Valid(M.item.clue.found(s, seat, owner, slot, position, found)):
   match found:
     case None{}:
       match s:
         case S.State{+w, +p, +ph, +n, +g}:
           match vpre:
             case Tuple{+shape, +bounded}:
-              ({==}, (ISP.shape.move(w, p, ph, n, g, S.Blocked{Some{seat}}, n, shape), (bounded, {==})))
+              ({==}, (ISP.shape.move(w, p, ph, n, g, S.Blocked{Some{seat}}, n, shape), (bounded, A.table.has.seated(S.world.table(w), seat, seated))))
     case Some{+shell}:
       valid.consume(D.Phone{}, s, seat, owner, slot, False{}, Some{D.Clue{position, shell}}, vpre, ready, winv)
 
-def valid.clue(+s: S.State, +seat: D.Seat, +owner: D.Seat, +slot: D.Slot, +index: Nat, +vpre: LP.VPre(s), +ready: {R.current.eq(S.world.turn(S.state.world(s)), seat) == True{} : Bool}, winv: T.WinValid()) -> A.Valid(M.item.clue(s, seat, owner, slot, index)):
+def valid.clue(+s: S.State, +seat: D.Seat, +owner: D.Seat, +slot: D.Slot, +index: Nat, +vpre: LP.VPre(s), +ready: {R.current.eq(S.world.turn(S.state.world(s)), seat) == True{} : Bool}, +seated: P.seated(S.world.table(S.state.world(s)), seat), winv: T.WinValid()) -> A.Valid(M.item.clue(s, seat, owner, slot, index)):
   match s:
     case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
       +position : Nat = D.clamp(1n+index, D.phone.cap())
-      valid.found(Q.nth(D.Shell, gun, Q.predecessor(position)), S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g}, seat, owner, slot, position, vpre, ready, winv)
+      valid.found(Q.nth(D.Shell, gun, Q.predecessor(position)), S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g}, seat, owner, slot, position, vpre, ready, seated, winv)
 
-def valid.use(+item: D.Item, +s: S.State, +seat: D.Seat, +owner: D.Seat, +slot: D.Slot, +vpre: LP.VPre(s), +ready: {R.current.eq(S.world.turn(S.state.world(s)), seat) == True{} : Bool}, winv: T.WinValid()) -> A.Valid(M.item.use(s, seat, owner, slot, item)):
+def valid.use(+item: D.Item, +s: S.State, +seat: D.Seat, +owner: D.Seat, +slot: D.Slot, +vpre: LP.VPre(s), +ready: {R.current.eq(S.world.turn(S.state.world(s)), seat) == True{} : Bool}, +seated: P.seated(S.world.table(S.state.world(s)), seat), winv: T.WinValid()) -> A.Valid(M.item.use(s, seat, owner, slot, item)):
   match item:
     case D.Saw{}:
       match s:
@@ -1269,20 +1306,20 @@ def valid.use(+item: D.Item, +s: S.State, +seat: D.Seat, +owner: D.Seat, +slot: 
           valid.consume(D.Phone{}, st, seat, owner, slot, False{}, Some{D.NoClue{}}, vpre, ready, winv)
         case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +a <> +b <> +c <> Nil{}, +shown, +deck}, +p, +ph, +n, +g}:
           +st : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, a <> b <> c <> Nil{}, shown, deck}, p, ph, n, g}
-          valid.clue(st, seat, owner, slot, 2n, vpre, ready, winv)
+          valid.clue(st, seat, owner, slot, 2n, vpre, ready, seated, winv)
         case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +a <> +b <> +c <> +d <> +more, +shown, +deck}, +p, +ph, +n, +g}:
           match vpre:
             case Tuple{+shape, +bounded}:
-              ({==}, (ISP.shape.move(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, a <> b <> c <> d <> more, shown, deck}, p, ph, n, g, S.NeedPhone{seat, owner, slot}, n, shape), (bounded, ready)))
+              ({==}, (ISP.shape.move(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, a <> b <> c <> d <> more, shown, deck}, p, ph, n, g, S.NeedPhone{seat, owner, slot}, n, shape), (bounded, and.cong_true(R.current.eq(turn, seat), A.table.has(table, seat), ready, A.table.has.seated(table, seat, seated)))))
 
-def valid.idle.move(+w: S.World, +p: S.Players, +seat: D.Seat, +g: S.Grabs, +i: Nat, +m: D.Move, +sel: IdleSel(D.nonempty.list(S.IdleOption, idle.opts(w, p, g, seat)), i, m), +vpre: LP.VPre(idle.at(w, p, seat, Nil{}, g)), +ready: {R.current.eq(S.world.turn(w), seat) == True{} : Bool}, winv: T.WinValid()) -> A.Valid(A.machine_step_state(S.state.stepped(M.answer.choice(idle.at(w, p, seat, Nil{}, g), D.Choice{seat, i, m})))):
+def valid.idle.move(+w: S.World, +p: S.Players, +seat: D.Seat, +g: S.Grabs, +i: Nat, +m: D.Move, +sel: IdleSel(D.nonempty.list(S.IdleOption, idle.opts(w, p, g, seat)), i, m), +vpre: LP.VPre(idle.at(w, p, seat, Nil{}, g)), +ready: {R.current.eq(S.world.turn(w), seat) == True{} : Bool}, +seated: P.seated(S.world.table(w), seat), winv: T.WinValid()) -> A.Valid(A.machine_step_state(S.state.stepped(M.answer.choice(idle.at(w, p, seat, Nil{}, g), D.Choice{seat, i, m})))):
   match m vpre:
     case D.PickUp{} Tuple{+shape, +bounded}:
       %Equal.sym(Maybe<&2, S.IdleOption>, Q.idle.nth(D.nonempty.list(S.IdleOption, idle.opts(w, p, g, seat)), i), Some{S.TakeGun{}}, sel) : A.Valid(M.pickup.selected(idle.at(w, p, seat, Nil{}, g), seat, _))
       ({==}, (ISP.shape.move(w, p, S.Idle{seat, idle.opts(w, p, g, seat)}, Nil{}, g, S.Aim{seat}, [D.Shown{D.PickedUp{seat}}], shape), (bounded, ready)))
     case D.UseItem{+slot, +item} vpre:
       %Equal.sym(Maybe<&2, S.IdleOption>, Q.idle.nth(D.nonempty.list(S.IdleOption, idle.opts(w, p, g, seat)), i), Some{S.UseAt{slot, item}}, sel) : A.Valid(M.pickup.selected(idle.at(w, p, seat, Nil{}, g), seat, _))
-      valid.use(item, idle.at(w, p, seat, Nil{}, g), seat, seat, slot, vpre, ready, winv)
+      valid.use(item, idle.at(w, p, seat, Nil{}, g), seat, seat, slot, vpre, ready, seated, winv)
     case D.Shoot{t} vpre:
       match sel:
     case D.Grab{} vpre:
@@ -1301,7 +1338,7 @@ def valid.idle.picked(+w: S.World, +p: S.Players, +seat: D.Seat, +g: S.Grabs, +p
     case Some{D.Choice{+s, +i, +m}}:
       match pk:
         case Tuple{+e_s, Tuple{+e_nth, +seated}}:
-          valid.idle.move(w, p, seat, g, i, m, idle.sel(D.nonempty.list(S.IdleOption, idle.opts(w, p, g, seat)), i, m, e_nth), vpre, ready, winv)
+          valid.idle.move(w, p, seat, g, i, m, idle.sel(D.nonempty.list(S.IdleOption, idle.opts(w, p, g, seat)), i, m, e_nth), vpre, ready, seated, winv)
 
 def valid.idle.any(+w: S.World, +p: S.Players, +seat: D.Seat, +n0: A.Notes(), +g: S.Grabs, +n: Nat, +any: Bool, +e: {D.menus.any(D.ring.entries(List<&2, D.Move>, menu.of(S.world.table(w), seat, idle.moves(w, p, g, seat)))) == any : Bool}, +valid: A.Valid(idle.at(w, p, seat, n0, g)), +vpre: LP.VPre(idle.at(w, p, seat, Nil{}, g)), +ready: {R.current.eq(S.world.turn(w), seat) == True{} : Bool}, winv: T.WinValid()) -> A.Valid(A.machine_step_state(M.answer.request(idle.at(w, p, seat, n0, g), n, D.request.choose.any(any, menu.of(S.world.table(w), seat, idle.moves(w, p, g, seat)))))):
   match any:
