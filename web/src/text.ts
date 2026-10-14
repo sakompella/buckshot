@@ -18,6 +18,21 @@ const ITEM_NAMES: Readonly<Record<Item, string>> = {
 
 export const itemName = (item: Item): string => ITEM_NAMES[item];
 
+const ITEM_NOTES: Readonly<Record<Item, string>> = {
+  Saw: "Cuts the barrel down: the next shot does double damage.",
+  Glass: "Shows you the shell in the chamber.",
+  Jammer: "Pick a seat; that seat skips its next turn.",
+  Cigarettes: "Gives back one charge.",
+  Beer: "Racks the chambered shell out of the gun.",
+  Phone: "Tells you about one shell further down.",
+  Inverter: "Flips the chambered shell between live and blank.",
+  Adrenaline: "Take an item from another seat and use it at once.",
+  Remote: "Reverses the turn order.",
+};
+
+/** A one-line description of what an item does, for the table's tooltips. */
+export const itemNote = (item: Item): string => ITEM_NOTES[item];
+
 export const moveText = (seat: Seat, move: Move): string =>
   Move.match(move, {
     PickUp: () => "Pick up the shotgun",

@@ -1,8 +1,9 @@
 # Buckshot table (web UI)
 
-A plain web UI for the Bend multiplayer rules library in `sim/bend-mp/`, built
+A web game for the Bend multiplayer rules library in `sim/bend-mp/`, built
 on Foldkit 0.167 and Effect 4 and run with bun and Vite. It builds `web.bend` to
-JavaScript and plays 2- to 4-seat matches in the browser. Any seat can be a
+JavaScript and plays 2- to 4-seat matches in the browser, on a dark top-down
+table: you play by clicking the shotgun, a seat, an item slot or the briefcase. Any seat can be a
 human, a Story AI, a DoN AI or an agent (see below). The UI has no rules of its own. Legality,
 observation and privacy all come from the machine. See
 [`sim/bend-mp/README.md`](../sim/bend-mp/README.md) for the rules library.
@@ -21,7 +22,40 @@ Checks:
     bun run typecheck  # tsc --noEmit, strict
     bun run lint       # oxlint with every anti-slop rule and the Effect group, --deny-warnings
     bun run test       # plays full Story and DoN matches through bend.ts at 2, 3 and 4 seats; checks stale answers are rejected
-    bun scripts/play.ts [url] [outdir]   # headless Chrome: one human-vs-bot match by clicking, one 4-bot autoplay match
+    bun scripts/play.ts [url] [outdir]   # headless Chrome: one human-vs-bot match by clicking the table, one 4-bot autoplay match
+    bun scripts/shots.ts [url] [outdir] [WxH ...]   # headless Chrome: a screenshot of each stage of a match, at 1440x900 and 390x844 by default
+
+## Playing
+
+The setup screen picks the number of players, each seat's controller, items
+and the seed. In a match the banner says whose view it is and the phase
+(Your turn, Grab items, Watch, Match over). Each of the viewer's legal moves is
+a dashed outline on the thing it acts on:
+
+| Move | Click |
+|---|---|
+| Grab | your open briefcase |
+| Place | an empty slot on your side |
+| Pick up | the shotgun |
+| Shoot, Jam | a seat's counter |
+| Use an item | the item on your side |
+| Steal (adrenaline) | the item on another seat's side |
+
+`src/board.ts` maps each move to its target. Moves that would share a target
+get plain buttons instead; the tests check that every legal move of many bot
+matches has its own target. The bots move on their own from the start of a
+match. The Menu in the corner pauses or steps them, sets their speed, switches
+whose view the table shows (hotseat), lists the controllers and WebMCP status,
+and has the event log. Animations are CSS, keyed by the event's place in the
+log so each plays once, and `prefers-reduced-motion` turns movement off.
+
+The shotgun in the middle is also drawn in three.js (`src/gun-model.ts`): a
+small accent, loaded after the page in its own chunk, and not loaded at all
+under `prefers-reduced-motion`. Without it the SVG shotgun shows.
+
+Fonts are self-hosted from `@fontsource`: League Gothic (banners) and VT323
+(everything else), both under the SIL Open Font License 1.1. Every drawing is
+original CSS or SVG.
 
 ## Playing with an agent (WebMCP)
 
@@ -92,5 +126,9 @@ through `document.modelContext.getTools()` and `executeTool()` from the spec.
 - `src/agent.ts`: an Agent seat's view, move checks and the port schemas.
   `src/webmcp.ts` registers the tools. `src/text.ts` has the labels shared by the
   buttons and the agent.
-- `src/main.ts`: Foldkit Model, Messages, update, view, autoplay subscription.
+- `src/model.ts`: Foldkit Model and Messages. `src/main.ts`: update, init,
+  agent calls and the autoplay subscription, which pauses after each step for
+  as long as its animation needs (scaled by the speed setting).
+- `src/view.ts`: setup screen, banner, menu, round-over and results.
+  `src/board-view.ts` draws the table; `src/icons.ts` has the SVG drawings.
 - `tools/oxlint/anti-slop/`: vendored anti-slop rules (see PROVENANCE.md).

@@ -5,7 +5,8 @@ import { AgentCall, AgentReply } from "../src/agent.ts";
 import { Game } from "../src/bend.ts";
 import { Seat, SeatCount } from "../src/domain.ts";
 import { type Controller, promptsOf } from "../src/driver.ts";
-import { init, Message, type Model, handleAgentCall, update } from "../src/main.ts";
+import { handleAgentCall, init, update } from "../src/main.ts";
+import { Message, type Model } from "../src/model.ts";
 import { nextBelow, type Rng, seedRng } from "../src/rng.ts";
 
 const STEP_LIMIT = 20_000;

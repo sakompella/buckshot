@@ -1,9 +1,18 @@
+import "@fontsource/league-gothic/400.css";
+import "@fontsource/vt323/400.css";
 import { Effect } from "effect";
 import { Runtime } from "foldkit";
 
 import { ports } from "./agent.ts";
-import { Flags, init, Message, Model, subscriptions, update, view } from "./main.ts";
+import { Flags, init, subscriptions, update } from "./main.ts";
+import { Message, Model } from "./model.ts";
+import { view } from "./view.ts";
 import { registerAgentTools } from "./webmcp.ts";
+
+// The 3D shotgun is an accent: it loads after the page, and not at all for reduced motion.
+if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+  import("./gun-model.ts").then(({ defineGunModel }) => defineGunModel()).catch((error: Error) => console.warn("The 3D shotgun did not load", error));
+}
 
 const application = Runtime.makeApplication({
   Model,
