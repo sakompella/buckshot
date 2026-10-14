@@ -1,11 +1,12 @@
-import { chromium } from "playwright-core";
+import { chromium, firefox } from "playwright-core";
 
 // Screenshots of each stage of a human-vs-DoN match with items, for judging the
 // look: setup, load reveal, grabbing, your turn, aiming, a shot, round over and
 // match over. The human picks up the shotgun and shoots the other seat when it
 // can, so every stage shows up.
 // Usage: bun run dev (elsewhere), then bun scripts/shots.ts [url] [outdir] [WIDTHxHEIGHT ...]
-// MOTION=reduce emulates prefers-reduced-motion.
+// MOTION=reduce emulates prefers-reduced-motion. BROWSER=firefox uses Playwright's
+// Firefox (FIREFOX=path to its binary if it is not the installed revision).
 
 const url = process.argv[2] ?? "http://localhost:5173/";
 
@@ -17,7 +18,10 @@ const chrome = process.env["CHROME"] ?? "/Applications/Google Chrome.app/Content
 
 const STEP_LIMIT = 3_000;
 
-const browser = await chromium.launch({ executablePath: chrome, headless: true });
+const browser =
+  process.env["BROWSER"] === "firefox"
+    ? await firefox.launch({ executablePath: process.env["FIREFOX"] ?? firefox.executablePath(), headless: true })
+    : await chromium.launch({ executablePath: chrome, headless: true });
 
 const run = async (size: string): Promise<void> => {
   const [width = 1440, height = 900] = size.split("x").map(Number);
@@ -52,8 +56,9 @@ const run = async (size: string): Promise<void> => {
       break;
     }
 
-    if (!taken.has("7-round-over") && (await isShowing(".round-over"))) {
-      await page.waitForTimeout(500);
+    // The banner waits for the last shot's labels, and goes when the next move is played.
+    if (!taken.has("7-round-over") && (await page.locator(".round-over").count()) > 0) {
+      await page.waitForTimeout(2000);
       await shot("7-round-over");
     }
 

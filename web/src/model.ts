@@ -30,7 +30,7 @@ export const Session = Schema.Struct({
   game: Schema.instanceOf(Game),
   rng: Schema.Number,
   events: Schema.Array(GameEvent),
-  /** Where the events of the latest step begin, so autoplay can wait for what that step showed. */
+  /** Where the events of the latest step begin: the table animates them, and autoplay waits for them. */
   stepStart: Schema.Number,
   learned: Schema.Array(LearnedSecret),
   controllers: Schema.Array(Controller),
@@ -41,6 +41,15 @@ export const Session = Schema.Struct({
 });
 
 export type Session = typeof Session.Type;
+
+export interface StepEvent {
+  readonly index: number;
+  readonly event: GameEvent;
+}
+
+/** The latest step's events with their places in the log. */
+export const latestStep = (match: Session): ReadonlyArray<StepEvent> =>
+  match.events.slice(match.stepStart).map((event, offset) => ({ index: match.stepStart + offset, event }));
 
 export const Model = Schema.Struct({
   setup: Setup,

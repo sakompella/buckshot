@@ -23,7 +23,7 @@ Checks:
     bun run lint       # oxlint with every anti-slop rule and the Effect group, --deny-warnings
     bun run test       # plays full Story and DoN matches through bend.ts at 2, 3 and 4 seats; checks stale answers are rejected
     bun scripts/play.ts [url] [outdir]   # headless Chrome: one human-vs-bot match by clicking the table, one 4-bot autoplay match
-    bun scripts/shots.ts [url] [outdir] [WxH ...]   # headless Chrome: a screenshot of each stage of a match, at 1440x900 and 390x844 by default; MOTION=reduce for reduced motion
+    bun scripts/shots.ts [url] [outdir] [WxH ...]   # headless Chrome: a screenshot of each stage of a match, at 1440x900 and 390x844 by default; MOTION=reduce for reduced motion, BROWSER=firefox for Playwright Firefox
 
 ## Playing
 
@@ -47,11 +47,8 @@ matches has its own target. The bots move on their own from the start of a
 match. The Menu in the corner pauses or steps them, sets their speed, switches
 whose view the table shows (hotseat), lists the controllers and WebMCP status,
 and has the event log. Animations are CSS, keyed by the event's place in the
-log so each plays once, and `prefers-reduced-motion` turns movement off.
-
-The shotgun in the middle is also drawn in three.js (`src/gun-model.ts`): a
-small accent, loaded after the page in its own chunk, and not loaded at all
-under `prefers-reduced-motion`. Without it the SVG shotgun shows.
+log so each plays once and is gone when the next step starts, and
+`prefers-reduced-motion` turns movement off.
 
 Fonts are self-hosted from `@fontsource`: League Gothic (banners) and VT323
 (everything else), both under the SIL Open Font License 1.1. Every drawing is

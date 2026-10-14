@@ -1,37 +1,26 @@
 import { Array as Arr, Option } from "effect";
-import { CustomElement } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { type BoardMove, boardMoves, type Position, positionOf, Target, targetKey, viewerPrompt } from "./board.ts";
 import { Briefcase, Counter, GameEvent, type Load, type Seat, type SeatView, seatsOut, type Shell, Slot, Stage } from "./domain.ts";
 import { boltIcon, gunIcon, itemIcon, shellIcon } from "./icons.ts";
-import { Message, type Session } from "./model.ts";
+import { latestStep, Message, type Session, type StepEvent } from "./model.ts";
 import { itemName, itemNote, seatName } from "./text.ts";
 
 // The table from above. Each seat's things sit in a layer turned to face its
 // edge, so one layout serves all four sides. The viewer's legal moves are
-// buttons on the things they act on; recent events play once as CSS
-// animations, keyed by their place in the event log.
+// buttons on the things they act on; the latest step's events play once as
+// CSS animations, keyed by their place in the event log, and are gone when
+// the next step starts.
 
 type H = HtmlBuilder<Message>;
-
-/** The lazily loaded three.js shotgun (gun-model.ts); until it is defined the SVG gun shows. */
-const gunModel = CustomElement.define({ tag: "gun-model", properties: {}, events: {} });
-
-/** How many of the latest events may still be animating. */
-const RECENT_EVENTS = 12;
-
-interface Recent {
-  readonly index: number;
-  readonly event: GameEvent;
-}
 
 interface Table {
   readonly match: Session;
   readonly matchNumber: number;
   readonly moves: ReadonlyMap<string, BoardMove>;
   readonly toMessage: (move: BoardMove) => Option.Option<Message>;
-  readonly recent: ReadonlyArray<Recent>;
+  readonly recent: ReadonlyArray<StepEvent>;
   readonly out: ReadonlySet<Seat>;
 }
 
@@ -233,11 +222,10 @@ const centreText = (h: H, table: Table): ReadonlyArray<Html> =>
   );
 
 /**
- * The gun rests across the plate. A seat aiming holds it at its edge, turned
- * toward the seat under the pointer; after a shot it shows the shooter's aim
- * for a moment, then goes back to rest. The gun's elements stay the same
- * across renders (the 3D model holds a WebGL context), so a new shot restarts
- * the animation by switching between two copies of its keyframes.
+ * The gun lies across the plate. A seat aiming holds it on its side of the
+ * plate, turned toward the seat under the pointer; after a shot it shows the
+ * shooter's aim and recoil for a moment, then goes back to rest. A new shot
+ * restarts the animation by switching between two copies of its keyframes.
  */
 const gunView = (h: H, table: Table): ReadonlyArray<Html> => {
   const { board } = table.match.game;
@@ -256,27 +244,12 @@ const gunView = (h: H, table: Table): ReadonlyArray<Html> => {
 
   const rigClass = Option.isSome(aimer) ? "gun-rig held" : Option.match(shot, { onNone: () => "gun-rig", onSome: ({ index }) => `gun-rig fired-${index % 2 === 0 ? "a" : "b"}` });
   const liveShot = Option.filter(shot, ({ event }) => event.shell === "Live");
-  const model = gunModel.withMessage(h);
 
   return [
     h.div(
       [h.Class(rigClass), h.Style(rigStyle), h.AriaHidden(true)],
       [
-        h.div(
-          [h.Class("gun-body")],
-          [
-            gunIcon(board.gun.sawed),
-            model(
-              [
-                h.Key("gun-model"),
-                h.DataAttribute("sawed", `${board.gun.sawed}`),
-                h.DataAttribute("held", `${Option.isSome(aimer)}`),
-                h.DataAttribute("shot", Option.match(liveShot, { onNone: () => "", onSome: ({ index }) => `${index}` })),
-              ],
-              [],
-            ),
-          ],
-        ),
+        h.div([h.Class("gun-body")], [gunIcon(board.gun.sawed)]),
         Option.match(liveShot, { onNone: () => h.empty, onSome: ({ index }) => h.keyed("span")(effectKey(table, "flash", index), [h.Class("flash")], []) }),
       ],
     ),
@@ -317,7 +290,7 @@ const tableOf = (match: Session, matchNumber: number): Table => {
     matchNumber,
     moves: Option.match(prompt, { onNone: () => new Map<string, BoardMove>(), onSome: (mine) => boardMoves(mine).onTable }),
     toMessage: (move) => Option.map(prompt, ({ ticket, seat }) => Message.ClickedMove({ match: ticket.match, generation: ticket.generation, seat, index: move.index })),
-    recent: match.events.slice(-RECENT_EVENTS).map((event, offset) => ({ index: Math.max(0, match.events.length - RECENT_EVENTS) + offset, event })),
+    recent: latestStep(match),
     out: seatsOut(match.events),
   };
 };
@@ -326,7 +299,7 @@ export const tableView = (h: H, match: Session, matchNumber: number): Html => {
   const table = tableOf(match, matchNumber);
 
   return h.div(
-    [h.Class("stage"), h.AriaLabel("Table")],
+    [h.Class("stage"), h.AriaLabel("Table"), h.DataAttribute("seats", `${match.game.seats.length}`)],
     [
       h.div([h.Class("cloth")], []),
       plateView(h, table),

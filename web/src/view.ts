@@ -4,7 +4,7 @@ import type { Document, Html, HtmlBuilder } from "foldkit/html";
 import type { Prompt } from "./bend.ts";
 import { GameEvent, Move, type Seat, Stage } from "./domain.ts";
 import { aiPrompt, controllerOf, promptsOf } from "./driver.ts";
-import { Message, type Model, SEATS_BY_TABLE, type Session, type Speed, type Viewer } from "./model.ts";
+import { latestStep, Message, type Model, SEATS_BY_TABLE, type Session, type Speed, type Viewer } from "./model.ts";
 import { boardMoves, viewerPrompt } from "./board.ts";
 import { hurtView, tableView } from "./board-view.ts";
 import { eventText, seatName, secretText } from "./text.ts";
@@ -102,7 +102,17 @@ const bannerView = (h: H, model: Model, match: Session): Html => {
   return h.header(
     [h.Class("banner"), h.AriaLive("polite")],
     [
-      h.h1([h.Class(Option.isSome(prompt) ? "banner-title is-mine" : "banner-title")], [`${viewerName(match.viewer)} · ${phase}`]),
+      h.h1(
+        [h.Class(Option.isSome(prompt) ? "banner-title is-mine" : "banner-title")],
+        Option.match(roundJustWon(match), {
+          onNone: () => [`${viewerName(match.viewer)} · ${phase}`],
+          // The phase waits behind "Round over" until the round-over beat ends.
+          onSome: ({ index }) => [
+            `${viewerName(match.viewer)} · `,
+            h.keyed("span")(`phase-${index}`, [h.Class("phase")], [h.span([h.Class("phase-beat")], ["Round over"]), h.span([h.Class("phase-after")], [phase])]),
+          ],
+        }),
+      ),
       hint === "" ? h.empty : h.p([h.Class("hint")], [hint]),
       ...agents.map((seat) => h.p([h.Class("hint")], [`Waiting for the agent at ${seatName(seat)}.`])),
       ...otherHumans.map((seat) => h.button([h.Type("button"), h.Class("pass"), h.OnClick(Message.SelectedViewer({ viewer: seat }))], [`Take ${seatName(seat)}`])),
@@ -142,32 +152,23 @@ const notesView = (h: H, match: Session): Html => {
       );
 };
 
-/** Shown once per round end, by the element key; the CSS animation fades it out. */
-const roundOverView = (h: H, match: Session): Html => {
-  const won = Arr.findLast(
-    match.events.map((event, index) => ({ event, index })),
-    ({ event }) => GameEvent.guards.RoundWon(event),
-  );
+/** The round the latest step ended, if any: the table and the heading show it for one beat. */
+const roundJustWon = (match: Session): Option.Option<{ readonly index: number; readonly seat: Seat; readonly prize: number }> =>
+  match.game.pending.kind === "Finished"
+    ? Option.none()
+    : Arr.head(latestStep(match).flatMap(({ index, event }) => (GameEvent.guards.RoundWon(event) ? [{ index, seat: event.seat, prize: event.prize }] : [])));
 
-  return match.game.pending.kind === "Finished"
-    ? h.empty
-    : Option.match(won, {
-        onNone: () => h.empty,
-        onSome: ({ event, index }) =>
-          GameEvent.matchOrElse(
-            event,
-            {
-              RoundWon: ({ seat, prize }) =>
-                h.keyed("div")(
-                  `round-${index}`,
-                  [h.Class("round-over"), h.AriaHidden(true)],
-                  [h.p([h.Class("round-over-title")], ["Round over"]), h.p([h.Class("round-over-prize")], [`${seatName(seat)} takes ${cash(prize)}`])],
-                ),
-            },
-            () => h.empty,
-          ),
-      });
-};
+/** Keyed by the round, so its CSS animation plays once. */
+const roundOverView = (h: H, match: Session): Html =>
+  Option.match(roundJustWon(match), {
+    onNone: () => h.empty,
+    onSome: ({ index, seat, prize }) =>
+      h.keyed("div")(
+        `round-${index}`,
+        [h.Class("round-over"), h.AriaHidden(true)],
+        [h.p([h.Class("round-over-title")], ["Round over"]), h.p([h.Class("round-over-prize")], [`${seatName(seat)} takes ${cash(prize)}`])],
+      ),
+  });
 
 const resultsView = (h: H, match: Session): Html => {
   const standings = match.game.board.seats.toSorted((left, right) => right.cash - left.cash);

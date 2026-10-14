@@ -88,6 +88,7 @@ summary:focus-visible {
   position: relative;
   height: 100vh;
   height: 100dvh;
+  overflow: hidden;
 }
 
 /* SETUP */
@@ -212,17 +213,18 @@ summary:focus-visible {
 /* TABLE: positions are percentages of the square stage; the cloth spans 8% to 92%. */
 
 /* Tilted away from the viewer, as if seen from the near seat. */
+/* The table fills the room at any size. It is centred by its own size, not
+   by translate, so the tilt has only one transform to compose with. */
 .stage {
   --line: rgb(222 204 168 / 0.72);
   --cell: 7%;
-  position: relative;
+  --size: min(calc(100vw - 16px), calc((100dvh - 60px) * 1.08));
   position: absolute;
-  left: 50%;
-  top: calc(50% + 34px);
-  translate: -50% -50%;
-  width: min(calc(100vw - 16px), calc((100dvh - 60px) * 1.08), 1040px);
-  aspect-ratio: 1;
-  transform: perspective(1600px) rotateX(30deg);
+  left: calc(50% - var(--size) / 2);
+  top: calc(50% + 34px - var(--size) / 2);
+  width: var(--size);
+  height: var(--size);
+  transform: perspective(calc(var(--size) * 1.6)) rotateX(30deg);
   transform-origin: 50% 60%;
 }
 
@@ -296,7 +298,7 @@ summary:focus-visible {
   background: #070806;
   border: 1px solid #2b2a20;
   color: var(--charge);
-  font-size: clamp(12px, 1.8vmin, 20px);
+  font-size: max(12px, calc(var(--size) * 0.018));
   line-height: 1.1;
   text-align: center;
 }
@@ -519,7 +521,7 @@ summary:focus-visible {
   display: flex;
   justify-content: space-between;
   gap: 4px;
-  font-size: clamp(11px, 1.7vmin, 18px);
+  font-size: max(11px, calc(var(--size) * 0.017));
   line-height: 1;
   color: var(--bone);
   white-space: nowrap;
@@ -530,7 +532,7 @@ summary:focus-visible {
 }
 
 .counter-screen {
-  height: clamp(18px, 4.2vmin, 40px);
+  height: max(18px, calc(var(--size) * 0.042));
   display: flex;
   align-items: center;
   gap: 4%;
@@ -573,7 +575,7 @@ summary:focus-visible {
   width: 100%;
   text-align: center;
   color: var(--charge);
-  font-size: clamp(12px, 1.8vmin, 20px);
+  font-size: max(12px, calc(var(--size) * 0.018));
   text-transform: uppercase;
   background: repeating-linear-gradient(90deg, rgb(191 242 166 / 0.18) 0 2px, transparent 2px 5px);
 }
@@ -660,7 +662,7 @@ summary:focus-visible {
   top: 70%;
   translate: -50% 0;
   font-family: var(--banner);
-  font-size: clamp(26px, 5vmin, 48px);
+  font-size: max(26px, calc(var(--size) * 0.05));
   line-height: 1;
   text-transform: uppercase;
   white-space: nowrap;
@@ -675,7 +677,7 @@ summary:focus-visible {
 .float.live { color: #ff7a5c; }
 .float.blank { color: var(--blank); }
 .float.good { color: var(--charge); }
-.float.item { top: 62%; font-family: inherit; font-size: clamp(18px, 3vmin, 28px); text-transform: none; }
+.float.item { top: 62%; font-family: inherit; font-size: max(18px, calc(var(--size) * 0.03)); text-transform: none; }
 .float.centre { top: 44%; }
 .float.late { top: 60%; animation-delay: 550ms; }
 
@@ -708,16 +710,16 @@ summary:focus-visible {
 }
 
 .gun-rig.held {
-  --hold: 17%;
+  --hold: 4%;
 }
 
 .gun-body,
 .gun-pick {
   position: absolute;
-  left: 46%;
-  top: 32%;
-  width: 8%;
-  height: 36%;
+  left: 46.9%;
+  top: 38%;
+  width: 6.2%;
+  height: 24%;
   rotate: var(--gun-turn, 45deg);
   transition: rotate 260ms ease-out;
   filter: drop-shadow(0 6px 4px rgb(0 0 0 / 0.55));
@@ -746,17 +748,12 @@ summary:focus-visible {
   top: 40%;
 }
 
-.gun-icon,
-gun-model {
+.gun-icon {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   shape-rendering: crispEdges;
-}
-
-.gun-body:has(gun-model[data-ready]) .gun-icon {
-  visibility: hidden;
 }
 
 .gun-rig.fired-a { animation: fired-rig-a 1500ms ease-in-out; }
@@ -765,12 +762,12 @@ gun-model {
 .gun-rig.fired-b .gun-body { animation: fired-gun-b 1500ms ease-in-out; }
 
 @keyframes fired-rig-a {
-  0%, 70% { transform: rotate(var(--holder)) translateY(17%); }
+  0%, 70% { transform: rotate(var(--holder)) translateY(4%); }
   100% { transform: rotate(0deg) translateY(0%); }
 }
 
 @keyframes fired-rig-b {
-  0%, 70% { transform: rotate(var(--holder)) translateY(17%); }
+  0%, 70% { transform: rotate(var(--holder)) translateY(4%); }
   100% { transform: rotate(0deg) translateY(0%); }
 }
 
@@ -822,7 +819,7 @@ gun-model {
 
 .reveal-count {
   font-family: var(--banner);
-  font-size: clamp(28px, 5.5vmin, 52px);
+  font-size: max(28px, calc(var(--size) * 0.055));
   line-height: 1;
   text-transform: uppercase;
   white-space: nowrap;
@@ -835,7 +832,7 @@ gun-model {
 
 .reveal-shells {
   display: flex;
-  gap: clamp(4px, 0.9vmin, 10px);
+  gap: max(4px, calc(var(--size) * 0.009));
   padding: 10px 14px;
   background: rgb(10 8 6 / 0.72);
   border: 1px solid #3b3427;
@@ -843,7 +840,7 @@ gun-model {
 
 .shell {
   display: block;
-  width: clamp(14px, 2.6vmin, 26px);
+  width: max(14px, calc(var(--size) * 0.026));
   aspect-ratio: 14 / 40;
   position: relative;
 }
@@ -881,7 +878,7 @@ gun-model {
 
 .eject-text {
   font-family: var(--banner);
-  font-size: clamp(24px, 4.5vmin, 42px);
+  font-size: max(24px, calc(var(--size) * 0.045));
   text-transform: uppercase;
   text-shadow: 0 0 2px #000, 0 3px 0 #000;
 }
@@ -991,7 +988,7 @@ gun-model {
   text-align: center;
   pointer-events: none;
   opacity: 0;
-  animation: round-over 3200ms ease-out forwards;
+  animation: round-over 4400ms ease-out forwards;
   z-index: 3;
 }
 
@@ -1011,18 +1008,19 @@ gun-model {
   text-transform: uppercase;
   color: var(--charge);
   text-shadow: 0 3px 0 #000;
-  animation: prize 3200ms ease-out forwards;
+  animation: prize 4400ms ease-out forwards;
 }
 
+/* It waits for the last shot's labels to fade first. */
 @keyframes round-over {
-  0% { opacity: 0; }
-  8%, 80% { opacity: 1; }
+  0%, 27% { opacity: 0; }
+  32%, 85% { opacity: 1; }
   100% { opacity: 0; visibility: hidden; }
 }
 
 @keyframes prize {
-  0%, 10% { opacity: 0; transform: translateY(10px); }
-  20% { opacity: 1; transform: translateY(0); }
+  0%, 32% { opacity: 0; transform: translateY(10px); }
+  40% { opacity: 1; transform: translateY(0); }
   100% { opacity: 1; }
 }
 
@@ -1147,9 +1145,15 @@ gun-model {
 
 @media (max-width: 600px) {
   .stage {
-    top: 50%;
-    width: calc(100vw - 4px);
-    transform: perspective(900px) rotateX(14deg);
+    --size: min(calc(100vw - 4px), calc(100dvh - 120px));
+    top: calc(50% - var(--size) / 2);
+    transform: perspective(calc(var(--size) * 2.4)) rotateX(14deg);
+  }
+
+  /* With two seats the table's sides are empty, so a tall screen crops them
+     and the seats' things grow. */
+  .stage[data-seats="2"] {
+    --size: min(calc((100vw - 8px) / 0.58), calc(100dvh - 120px));
   }
 
   .banner {
@@ -1213,6 +1217,11 @@ gun-model {
     animation: none;
   }
 
+  .phase-beat,
+  .phase-after {
+    animation-timing-function: steps(1, end);
+  }
+
   button {
     transition: none;
   }
@@ -1221,4 +1230,43 @@ gun-model {
 @keyframes appear {
   0%, 99% { opacity: 1; }
   100% { opacity: 0; }
+}
+
+/* The heading's phase waits behind "Round over" for the round-over beat. */
+.phase {
+  display: inline-grid;
+}
+
+.phase > * {
+  grid-area: 1 / 1;
+}
+
+.phase-beat {
+  animation: phase-beat 4400ms forwards;
+}
+
+.phase-after {
+  opacity: 0;
+  animation: phase-after 4400ms forwards;
+}
+
+@keyframes phase-beat {
+  0%, 85% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes phase-after {
+  0%, 85% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* Descriptions are for pointers that hover, and step aside for the round-over beat. */
+@media (hover: none) {
+  .tip {
+    display: none;
+  }
+}
+
+.app:has(.round-over) .tip {
+  display: none;
 }

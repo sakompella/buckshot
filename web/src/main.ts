@@ -237,7 +237,7 @@ const pauseAfter = (event: GameEvent): number =>
     event,
     {
       Loaded: () => 2600,
-      RoundWon: () => 3200,
+      RoundWon: () => 4400,
       Fired: () => 1500,
       Used: () => 1000,
       Ejected: () => 1000,
