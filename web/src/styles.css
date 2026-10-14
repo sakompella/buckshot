@@ -1021,8 +1021,8 @@ gun-model {
 }
 
 @keyframes prize {
-  0%, 25% { opacity: 0; transform: translateY(10px); }
-  40% { opacity: 1; transform: translateY(0); }
+  0%, 10% { opacity: 0; transform: translateY(10px); }
+  20% { opacity: 1; transform: translateY(0); }
   100% { opacity: 1; }
 }
 

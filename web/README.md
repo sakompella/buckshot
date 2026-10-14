@@ -23,7 +23,7 @@ Checks:
     bun run lint       # oxlint with every anti-slop rule and the Effect group, --deny-warnings
     bun run test       # plays full Story and DoN matches through bend.ts at 2, 3 and 4 seats; checks stale answers are rejected
     bun scripts/play.ts [url] [outdir]   # headless Chrome: one human-vs-bot match by clicking the table, one 4-bot autoplay match
-    bun scripts/shots.ts [url] [outdir] [WxH ...]   # headless Chrome: a screenshot of each stage of a match, at 1440x900 and 390x844 by default
+    bun scripts/shots.ts [url] [outdir] [WxH ...]   # headless Chrome: a screenshot of each stage of a match, at 1440x900 and 390x844 by default; MOTION=reduce for reduced motion
 
 ## Playing
 
