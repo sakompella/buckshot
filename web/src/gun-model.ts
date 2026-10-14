@@ -140,6 +140,7 @@ class GunModel extends HTMLElement {
     cancelAnimationFrame(this.#frame);
     this.#observer?.disconnect();
     this.#renderer?.dispose();
+    this.#renderer?.forceContextLoss();
     this.#renderer = null;
     this.replaceChildren();
   }

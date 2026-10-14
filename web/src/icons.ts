@@ -22,10 +22,10 @@ const INK = "#14110c";
 
 const DRAWINGS: Readonly<Record<Item, () => ReadonlyArray<Html>>> = {
   Saw: () => [
-    path("M6 6 L22 4 L27 20 L10 25 Z", "#8b8a80", INK, 1),
-    path("M10 25 L11 23 L13 24.5 L14 22.5 L16 24 L17 22 L19 23.5 L20 21.5 L22 23 L23 21 L25 22 L27 20", "none", "#cfcabb", 0.8),
-    path("M3 3 L9 2 L11 9 L5 10 Z", "#6a3b26", INK, 1),
-    circle(7, 6, 1.4, INK),
+    path("M4 21 L23 4 L28 9 L9 26 Z", "#8b8a80", INK, 1),
+    path("M9 26 L9.5 23.5 L11.5 24 L12 21.6 L14 22 L14.5 19.6 L16.5 20 L17 17.6 L19 18 L19.5 15.6 L21.5 16 L22 13.6 L24 14 L24.5 11.6 L26.5 12 L28 9", "none", "#d6d1c2", 0.9),
+    path("M1.5 23 L6 19 L11 25 L6.5 30 Z", "#6a3b26", INK, 1),
+    path("M4.5 24 L6 22.6 L8 25 L6.6 26.4 Z", INK),
   ],
   Glass: () => [rect(19, 19, 4, 11, "#5a3424", 1.5), circle(14, 13, 9, "#5f7d78", "#a08f5c", 2.5), path("M9 10 Q12 7 15 7", "none", "#c8ddd6", 1.2)],
   Jammer: () => [rect(5, 10, 22, 16, "#4c4a3a", 2), rect(8, 13, 9, 6, "#1d2a1b", 1), circle(22, 20, 1.6, "#7fd06a"), path("M22 10 L26 2", "none", "#8a8878", 1.6), circle(26, 2.5, 1.3, "#8a8878")],

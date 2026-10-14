@@ -235,9 +235,11 @@ const centreText = (h: H, table: Table): ReadonlyArray<Html> =>
 /**
  * The gun rests across the plate. A seat aiming holds it at its edge, turned
  * toward the seat under the pointer; after a shot it shows the shooter's aim
- * for a moment, then goes back to rest.
+ * for a moment, then goes back to rest. The gun's elements stay the same
+ * across renders (the 3D model holds a WebGL context), so a new shot restarts
+ * the animation by switching between two copies of its keyframes.
  */
-const gunView = (h: H, table: Table): Html => {
+const gunView = (h: H, table: Table): ReadonlyArray<Html> => {
   const { board } = table.match.game;
   const aimer = Stage.matchOrElse(board.stage, { Playing: ({ seat, mode }) => (mode === "Aiming" ? Option.some(seat) : Option.none<Seat>()) }, () => Option.none<Seat>());
   const shot = lastOf(table, GameEvent.guards.Fired);
@@ -252,23 +254,34 @@ const gunView = (h: H, table: Table): Html => {
       }),
   });
 
-  const rigClass = Option.isSome(aimer) ? "gun-rig held" : Option.isSome(shot) ? "gun-rig fired" : "gun-rig";
+  const rigClass = Option.isSome(aimer) ? "gun-rig held" : Option.match(shot, { onNone: () => "gun-rig", onSome: ({ index }) => `gun-rig fired-${index % 2 === 0 ? "a" : "b"}` });
+  const liveShot = Option.filter(shot, ({ event }) => event.shell === "Live");
+  const model = gunModel.withMessage(h);
 
-  const flash = Option.match(
-    Option.filter(shot, ({ event }) => event.shell === "Live"),
-    { onNone: () => h.empty, onSome: ({ index }) => h.keyed("span")(effectKey(table, "flash", index), [h.Class("flash")], []) },
-  );
-
-  const gun = h.div(
-    [h.Class("gun")],
-    [gunIcon(board.gun.sawed), gunModel.withMessage(h)([h.DataAttribute("sawed", `${board.gun.sawed}`), h.DataAttribute("held", `${Option.isSome(aimer)}`), h.DataAttribute("shot", Option.match(shot, { onNone: () => "", onSome: ({ index, event }) => (event.shell === "Live" ? `${index}` : "") }))], []), flash],
-  );
-
-  return Option.match(shot, {
-    onNone: () => h.div([h.Class(rigClass), h.Style(rigStyle)], [thing(h, table, Target.cases.Gun.make({}), "gun-spot", [gun])]),
-    // Keyed by the shot, so the hold-then-rest animation plays once per shot.
-    onSome: ({ index }) => h.keyed("div")(Option.isSome(aimer) ? "gun-held" : effectKey(table, "gun", index), [h.Class(rigClass), h.Style(rigStyle)], [thing(h, table, Target.cases.Gun.make({}), "gun-spot", [gun])]),
-  });
+  return [
+    h.div(
+      [h.Class(rigClass), h.Style(rigStyle), h.AriaHidden(true)],
+      [
+        h.div(
+          [h.Class("gun-body")],
+          [
+            gunIcon(board.gun.sawed),
+            model(
+              [
+                h.Key("gun-model"),
+                h.DataAttribute("sawed", `${board.gun.sawed}`),
+                h.DataAttribute("held", `${Option.isSome(aimer)}`),
+                h.DataAttribute("shot", Option.match(liveShot, { onNone: () => "", onSome: ({ index }) => `${index}` })),
+              ],
+              [],
+            ),
+          ],
+        ),
+        Option.match(liveShot, { onNone: () => h.empty, onSome: ({ index }) => h.keyed("span")(effectKey(table, "flash", index), [h.Class("flash")], []) }),
+      ],
+    ),
+    Option.isSome(moveAt(table, Target.cases.Gun.make({}))) ? thing(h, table, Target.cases.Gun.make({}), "gun-pick", []) : h.empty,
+  ];
 };
 
 const plateView = (h: H, table: Table): Html => {
@@ -320,7 +333,7 @@ export const tableView = (h: H, match: Session, matchNumber: number): Html => {
       ...match.game.board.seats.map((view) => zoneView(h, table, view, positionOf(match, view.seat))),
       revealView(h, table),
       ejectView(h, table),
-      gunView(h, table),
+      ...gunView(h, table),
       ...centreText(h, table),
     ],
   );

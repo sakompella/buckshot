@@ -5,6 +5,7 @@ import { chromium } from "playwright-core";
 // match over. The human picks up the shotgun and shoots the other seat when it
 // can, so every stage shows up.
 // Usage: bun run dev (elsewhere), then bun scripts/shots.ts [url] [outdir] [WIDTHxHEIGHT ...]
+// MOTION=reduce emulates prefers-reduced-motion.
 
 const url = process.argv[2] ?? "http://localhost:5173/";
 
@@ -20,7 +21,7 @@ const browser = await chromium.launch({ executablePath: chrome, headless: true }
 
 const run = async (size: string): Promise<void> => {
   const [width = 1440, height = 900] = size.split("x").map(Number);
-  const page = await browser.newPage({ viewport: { width, height } });
+  const page = await browser.newPage({ viewport: { width, height }, reducedMotion: process.env["MOTION"] === "reduce" ? "reduce" : "no-preference" });
   const taken = new Set<string>();
 
   const shot = async (name: string): Promise<void> => {
