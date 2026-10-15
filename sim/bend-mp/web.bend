@@ -47,6 +47,10 @@ def prompts(state: S.State) -> List<&2, D.Prompt>:
 def prompt.answer(prompt: D.Prompt, k: Nat) -> Nat:
   D.prompt.answer(prompt, k)
 
+# Which of these prompts the driver serves first (see R.prompt.next).
+def prompt.next(state: S.State, prompts: List<&2, D.Prompt>) -> Maybe<&2, D.Prompt>:
+  R.prompt.next(state, prompts)
+
 def hear(notes: List<&2, D.Note>, seat: D.Seat) -> List<&2, D.Heard>:
   D.hear(notes, seat)
 

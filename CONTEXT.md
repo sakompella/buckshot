@@ -67,6 +67,16 @@ One player's record of the match: every event and that player's own secrets, in 
 
 ### The machine
 
+**Reference**:
+The model that follows the real game's scripts function by function. It exists only to check the strong machine.
+
+**Strong machine**:
+The rules machine whose steps are the real game's steps, such as picking up the shotgun, then shooting. It offers every seat that may act its legal steps at once. Laws prove it equal to the reference.
+_Avoid_: sm (in prose)
+
+**Simple machine**:
+The rules machine whose choices are whole moves, offered to one seat at a time. Distribution happens with no choices. Each of its answers is a chain of strong-machine steps.
+
 **Request point**:
 A moment when the machine stops and asks its caller: for a draw, for a choice among legal moves, or because the match is finished or stuck. The caller answers with one number.
 _Avoid_: prompt (a prompt is one seat's legal moves at a request point)
