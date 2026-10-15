@@ -1,17 +1,16 @@
 import { Array as Arr, Option, Result } from "effect";
 
 import type { Game } from "../bend.ts";
-import { Briefcase, Counter, type GameEvent, type LearnedSecret, type Seat, seatsOut, Stage } from "../domain.ts";
+import { type Board, Counter, GameEvent, type LearnedSecret, type Seat, Stage } from "../domain.ts";
 import { type Controller, controllerOf, promptsOf } from "../driver.ts";
 import { type PlayerNumber, playerName, type Roster, rosterOf } from "../players.ts";
 import { eventText, itemName, moveText, secretText } from "../text.ts";
 
 // An Agent player's view and move checks. Every call names an Agent player and
-// sees only that player: the public board, the events everyone saw, and the
-// notes that player heard. Players are numbered 1 to N in table order; the
-// seat ids behind them never leave this module.
-
-const RECENT_EVENTS = 20;
+// sees only what that player's screen shows: the board on the player's turn, what
+// appeared since the player's last view, and the notes that player heard.
+// Players are numbered 1 to N in table order; the seat ids behind them never
+// leave this module. Properties that are undefined are left out of the JSON.
 
 /** The parts of a running match the agent's view is built from. */
 export interface AgentSource {
@@ -20,27 +19,57 @@ export interface AgentSource {
   readonly events: ReadonlyArray<GameEvent>;
   readonly learned: ReadonlyArray<LearnedSecret>;
   readonly seed: number;
+  /** By seat: how many events the seat has been shown, in its replies on its own turn. Its next such reply starts after them. */
+  readonly reported: ReadonlyArray<number>;
 }
 
-export interface AgentGame {
+export const NOTHING_REPORTED: ReadonlyArray<number> = [0, 0, 0, 0];
+
+/** The reports after a seat was shown the first `eventCount` events. */
+export const reportedTo = (reported: ReadonlyArray<number>, seat: Seat, eventCount: number): ReadonlyArray<number> => reported.map((count, index) => (index === seat ? eventCount : count));
+
+export interface PlayerLine {
+  readonly player: PlayerNumber;
+  /** Not on screen while the player is jammed. */
+  readonly health: number | undefined;
+  readonly items: ReadonlyArray<string> | undefined;
+}
+
+interface Standing {
+  readonly player: PlayerNumber;
+  readonly cash: number;
+}
+
+/** Not this player's turn: nothing else, so polling is cheap. */
+interface Waiting {
   readonly you: PlayerNumber;
-  readonly isYourTurn: boolean;
-  readonly isMatchOver: boolean;
+  readonly status: "waiting";
+}
+
+/** The screen on this player's turn. */
+interface YourTurn {
+  readonly you: PlayerNumber;
+  readonly status: "your turn";
   readonly turn: number;
-  readonly hint: string;
-  readonly round: { readonly number: number; readonly of: number; readonly startingHealth: number; readonly turnOrder: string };
-  readonly gun: { readonly lastLoadShown: { readonly live: number; readonly blank: number }; readonly shellsLeft: number; readonly isSawedOff: boolean };
-  readonly players: ReadonlyArray<{
-    readonly player: PlayerNumber;
-    readonly isYou: boolean;
-    readonly health: number | null;
-    readonly cash: number;
-    readonly items: ReadonlyArray<{ readonly slot: number; readonly item: string }>;
-    readonly status: ReadonlyArray<string>;
-  }>;
-  readonly privateNotes: ReadonlyArray<string>;
-  readonly recentEvents: ReadonlyArray<string>;
-  readonly moves: ReadonlyArray<{ readonly index: number; readonly label: string }>;
+  readonly players: ReadonlyArray<PlayerLine>;
+  readonly gun: { readonly heldBy: PlayerNumber | undefined; readonly sawed: true | undefined } | undefined;
+  /** What happened since this player's previous reply on its turn: the public events, and the secrets this player heard, in order. */
+  readonly events: ReadonlyArray<string> | undefined;
+  readonly moves: ReadonlyArray<string>;
+}
+
+interface Over {
+  readonly you: PlayerNumber;
+  readonly status: "over";
+  readonly standings: ReadonlyArray<Standing>;
+}
+
+export type AgentGame = Waiting | YourTurn | Over;
+
+/** An Agent player's view, and the seat that was shown it. */
+export interface AgentView {
+  readonly seat: Seat;
+  readonly game: AgentGame;
 }
 
 const agentSeats = (source: AgentSource): ReadonlyArray<Seat> => source.game.seats.filter((seat) => controllerOf(source.controllers, seat) === "Agent");
@@ -62,52 +91,54 @@ const agentSeat = (source: AgentSource, roster: Roster, player: PlayerNumber): R
 
 const promptFor = (source: AgentSource, seat: Seat) => Arr.findFirst(promptsOf(source.game), (prompt) => prompt.seat === seat);
 
-const hintFor = (isOver: boolean, isYourTurn: boolean): string =>
-  isOver
-    ? "The match is over."
-    : isYourTurn
-      ? "It is your turn. Pick a move and call play_move with its index."
-      : "It is not your turn. The other players are moving; call get_game again in a moment.";
+const nonEmpty = <A>(values: ReadonlyArray<A>): ReadonlyArray<A> | undefined => (values.length === 0 ? undefined : values);
 
-const seatStatus = (source: AgentSource, seat: Seat, isJammed: boolean, briefcase: Briefcase): ReadonlyArray<string> => [
-  ...(seatsOut(source.events).has(seat) ? ["out"] : []),
-  ...(isJammed ? ["jammed"] : []),
-  ...(Option.contains(Stage.matchOrElse(source.game.board.stage, { Playing: ({ seat: acting }) => Option.some(acting) }, () => Option.none<Seat>()), seat) ? ["has the turn"] : []),
-  ...Briefcase.match<ReadonlyArray<string>>(briefcase, {
-    NotGrabbing: () => [],
-    Grabbing: () => ["grabbing from the briefcase"],
-    Holding: ({ item }) => [`holding ${itemName(item)} from the briefcase`],
-  }),
-];
+/** The events after the first `reported`, as this player saw them: each secret the player heard stands just after the event that gave it. */
+const eventsSince = (source: AgentSource, roster: Roster, seat: Seat, reported: number): ReadonlyArray<string> => {
+  const heardAt = (count: number): ReadonlyArray<string> => source.learned.flatMap((note) => (note.seat === seat && note.at === count ? [secretText(note.secret)] : []));
+
+  return source.events.slice(reported).flatMap((event, index) => [eventText(roster, event), ...heardAt(reported + index + 1)]);
+};
+
+const gunOf = (board: Board, roster: Roster): YourTurn["gun"] => {
+  const heldBy = Stage.matchOrElse(board.stage, { Playing: ({ seat }) => Option.some(roster.playerOf(seat)) }, () => Option.none<PlayerNumber>());
+  const sawed = board.gun.sawed ? true : undefined;
+
+  return Option.isNone(heldBy) && sawed === undefined ? undefined : { heldBy: Option.getOrUndefined(heldBy), sawed };
+};
+
+const standingsOf = (board: Board, roster: Roster): ReadonlyArray<Standing> =>
+  board.seats.toSorted((left, right) => right.cash - left.cash).map((view) => ({ player: roster.playerOf(view.seat), cash: view.cash }));
 
 /** The view of one Agent player, or why there is none. */
-export const agentGame = (source: AgentSource, player: PlayerNumber): Result.Result<AgentGame, string> => {
+export const agentGame = (source: AgentSource, player: PlayerNumber): Result.Result<AgentView, string> => {
   const roster = rosterOf(source.game.seats);
 
-  return Result.map(agentSeat(source, roster, player), (you) => {
+  return Result.map(agentSeat(source, roster, player), (you): AgentView => {
     const { board, pending, ticket } = source.game;
-    const prompt = promptFor(source, you);
-    const isOver = pending.kind === "Finished";
+    const reported = Option.getOrElse(Arr.get(source.reported, you), () => 0);
 
     return {
-      you: player,
-      isYourTurn: Option.isSome(prompt),
-      isMatchOver: isOver,
-      turn: ticket.generation,
-      hint: hintFor(isOver, Option.isSome(prompt)),
-      round: { number: board.round.index + 1, of: board.round.rounds, startingHealth: board.round.health, turnOrder: board.direction === "Clockwise" ? "clockwise" : "counterclockwise" },
-      gun: { lastLoadShown: board.gun.shown, shellsLeft: board.gun.remaining, isSawedOff: board.gun.sawed },
-      players: board.seats.map((view) => ({
-        player: roster.playerOf(view.seat),
-        isYou: view.seat === you,
-        health: Counter.match(view.counter, { Unjammed: ({ health }) => health, Jammed: () => null }),
-        cash: view.cash,
-        items: view.slots.flatMap((slot, index) => Option.match(slot, { onNone: () => [], onSome: (item) => [{ slot: index + 1, item: itemName(item) }] })),
-        status: seatStatus(source, view.seat, Counter.guards.Jammed(view.counter), view.briefcase),
-      })),
-      privateNotes: source.learned.filter(({ seat }) => seat === you).map(({ secret }) => secretText(secret)),
-      recentEvents: source.events.slice(-RECENT_EVENTS).map((event) => eventText(roster, event)),
-      moves: Option.match(prompt, { onNone: () => [], onSome: ({ seat, menu }) => menu.map((move, index) => ({ index, label: moveText(roster, seat, move) })) }),
+      seat: you,
+      game:
+        pending.kind === "Finished"
+          ? { you: player, status: "over", standings: standingsOf(board, roster) }
+          : Option.match(promptFor(source, you), {
+              onNone: (): AgentGame => ({ you: player, status: "waiting" }),
+              onSome: ({ seat, menu }): AgentGame => ({
+                you: player,
+                status: "your turn",
+                turn: ticket.generation,
+                players: board.seats.map((view) => ({
+                  player: roster.playerOf(view.seat),
+                  health: Counter.match(view.counter, { Unjammed: ({ health }) => health, Jammed: () => undefined }),
+                  items: nonEmpty(view.slots.flatMap(Option.match({ onNone: () => [], onSome: (item) => [itemName(item)] }))),
+                })),
+                gun: gunOf(board, roster),
+                events: nonEmpty(eventsSince(source, roster, you, reported)),
+                moves: menu.map((move) => moveText(roster, seat, move)),
+              }),
+            }),
     };
   });
 };
@@ -124,7 +155,7 @@ export interface SeatMove {
 export const agentMove = (source: AgentSource, player: PlayerNumber, index: number, turn: number | undefined): Result.Result<SeatMove, string> =>
   Result.flatMap(agentSeat(source, rosterOf(source.game.seats), player), (seat) =>
     Result.gen(function* () {
-      const prompt = yield* Result.fromOption(promptFor(source, seat), () => "It is not your turn. Call get_game and wait until isYourTurn is true.");
+      const prompt = yield* Result.fromOption(promptFor(source, seat), () => "It is not your turn. Call get_game and wait until status is \"your turn\".");
 
       if (turn !== undefined && turn !== prompt.ticket.generation) {
         return yield* Result.fail(`Stale move: you saw turn ${turn}, but the game is at turn ${prompt.ticket.generation}. Call get_game for the current moves.`);

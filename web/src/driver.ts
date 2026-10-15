@@ -47,7 +47,7 @@ const absorb = (progress: Progress, step: Step, rng: Rng): Progress => ({
   game: step.game,
   rng,
   events: [...progress.events, ...step.events],
-  learned: [...progress.learned, ...step.learned],
+  learned: [...progress.learned, ...step.learned.map((heard) => ({ ...heard, at: progress.events.length + step.events.length }))],
   ais: progress.ais.map((ai, seat) => Option.map(ai, ({ mind, coins }) => ({ mind: hearNotes(mind, step.notes, SEATS[seat] ?? 0), coins }))),
 });
 

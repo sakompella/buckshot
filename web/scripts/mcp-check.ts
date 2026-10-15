@@ -11,11 +11,10 @@ const CALL_LIMIT = 3_000;
 const RAW_SEAT = /seat|Player 0/i;
 
 const View = Schema.Struct({
-  isYourTurn: Schema.Boolean,
-  isMatchOver: Schema.Boolean,
-  turn: Schema.Number,
-  privateNotes: Schema.Array(Schema.String),
-  moves: Schema.Array(Schema.Struct({ index: Schema.Number, label: Schema.String })),
+  status: Schema.Literals(["your turn", "waiting", "over"]),
+  turn: Schema.optionalKey(Schema.Number),
+  events: Schema.optionalKey(Schema.Array(Schema.String)),
+  moves: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 
 const parseView = Schema.decodeUnknownSync(Schema.fromJsonString(View));
@@ -36,10 +35,14 @@ const { tools } = await client.listTools();
 
 console.log("tools:", JSON.stringify(tools, null, 2));
 
+const replySizes: Array<number> = [];
+
 const callTool = async (name: string, input: Record<string, number | string | boolean | ReadonlyArray<string>>): Promise<{ readonly ok: boolean; readonly text: string }> => {
   const { content, isError } = parseToolText(await client.callTool({ name, arguments: input }));
 
   if (RAW_SEAT.test(content[0].text)) throw new Error(`${name} reply names a seat or a Player 0: ${content[0].text}`);
+
+  replySizes.push(content[0].text.length);
 
   return { ok: isError !== true, text: content[0].text };
 };
@@ -74,34 +77,47 @@ let sharedTurns = 0;
 
 let isStaleChecked = false;
 
-let notesSeen = 0;
+let longestEvents = 0;
+
+const firstViewSeen = new Set<number>();
 
 for (; calls < CALL_LIMIT; calls++) {
   const views = await Promise.all(agents.map(async (player) => ({ player, view: await getView(player) })));
 
-  if (views.some(({ view }) => view.isMatchOver)) break;
+  if (views.some(({ view }) => view.status === "over")) break;
 
-  const ready = views.filter(({ view }) => view.isYourTurn);
+  const ready = views.filter(({ view }) => view.status === "your turn");
   const mover = ready[moves % ready.length];
 
   // The DoN player moves inside the server before any reply, so an Agent always has the turn.
   if (mover === undefined) throw new Error("no Agent player has the turn, but the match is not over");
 
-  notesSeen = Math.max(notesSeen, ...views.map(({ view }) => view.privateNotes.length));
+  const { turn, moves: legal = [] } = mover.view;
+
+  if (turn === undefined) throw new Error("an agent with the turn has no turn number");
+
+  for (const { player, view } of ready) {
+    const isFirstView = !firstViewSeen.has(player);
+
+    firstViewSeen.add(player);
+
+    // A player's first view on its turn starts from the match start.
+    if (isFirstView && !view.events?.[0]?.startsWith("Round 1 begins")) throw new Error(`the first view of player ${player} does not start at the match start: ${JSON.stringify(view.events)}`);
+
+    longestEvents = Math.max(longestEvents, view.events?.length ?? 0);
+  }
 
   if (!isStaleChecked) {
     isStaleChecked = true;
-    console.log("stale turn:", await callTool("play_move", { player: mover.player, index: 0, turn: mover.view.turn + 1 }));
-    console.log("out-of-range move:", await callTool("play_move", { player: mover.player, index: mover.view.moves.length, turn: mover.view.turn }));
+    console.log("stale turn:", await callTool("play_move", { player: mover.player, index: 0, turn: turn + 1 }));
+    console.log("out-of-range move:", await callTool("play_move", { player: mover.player, index: legal.length, turn }));
   }
 
   sharedTurns += ready.length > 1 ? 1 : 0;
 
-  const choice = mover.view.moves[(moves * 5 + 1) % mover.view.moves.length];
+  if (legal.length === 0) throw new Error("agent turn with no legal moves");
 
-  if (choice === undefined) throw new Error("agent turn with no legal moves");
-
-  const played = await callTool("play_move", { player: mover.player, index: choice.index, turn: mover.view.turn });
+  const played = await callTool("play_move", { player: mover.player, index: (moves * 5 + 1) % legal.length, turn });
 
   if (!played.ok) throw new Error(`play_move refused: ${played.text}`);
 
@@ -110,9 +126,13 @@ for (; calls < CALL_LIMIT; calls++) {
 
 const finals = await Promise.all(agents.map(getView));
 
-const isOver = finals.every((view) => view.isMatchOver);
+const isOver = finals.every((view) => view.status === "over");
 
-console.log(`match over: ${isOver}, agent players: ${agents.join(", ")}, agent moves: ${moves}, turns where both agents could move: ${sharedTurns}, most private notes one player held: ${notesSeen}, tool rounds: ${calls}`);
+console.log(`match over: ${isOver}, agent players: ${agents.join(", ")}, agent moves: ${moves}, turns where both agents could move: ${sharedTurns}, most events in one view: ${longestEvents}, tool rounds: ${calls}`);
+
+const bySize = replySizes.toSorted((left, right) => left - right);
+
+console.log(`reply characters: median ${bySize[Math.floor(bySize.length / 2)]}, max ${bySize.at(-1)}, over ${bySize.length} replies`);
 
 await client.close();
 

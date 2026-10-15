@@ -18,11 +18,10 @@ const CALL_LIMIT = 3_000;
 const POLL_MS = 100;
 
 const View = Schema.Struct({
-  isYourTurn: Schema.Boolean,
-  isMatchOver: Schema.Boolean,
-  turn: Schema.Number,
-  privateNotes: Schema.Array(Schema.String),
-  moves: Schema.Array(Schema.Struct({ index: Schema.Number, label: Schema.String })),
+  status: Schema.Literals(["your turn", "waiting", "over"]),
+  turn: Schema.optionalKey(Schema.Number),
+  events: Schema.optionalKey(Schema.Array(Schema.String)),
+  moves: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 
 const parseView = Schema.decodeUnknownSync(Schema.fromJsonString(View));
@@ -152,9 +151,9 @@ const playMatch = async (name: string, input: Record<string, number | string | b
   for (; calls < CALL_LIMIT; calls++) {
     const views = await Promise.all(agents.map(async (player) => ({ player, view: await getView(player) })));
 
-    if (views.some(({ view }) => view.isMatchOver)) break;
+    if (views.some(({ view }) => view.status === "over")) break;
 
-    const ready = views.filter(({ view }) => view.isYourTurn);
+    const ready = views.filter(({ view }) => view.status === "your turn");
 
     if (ready.length === 0) {
       await page.waitForTimeout(POLL_MS);
@@ -165,6 +164,10 @@ const playMatch = async (name: string, input: Record<string, number | string | b
 
     if (mover === undefined) throw new Error("no ready agent to move");
 
+    const { turn, moves: legal = [] } = mover.view;
+
+    if (turn === undefined) throw new Error("an agent with the turn has no turn number");
+
     if (!isFirstTurnShown) {
       isFirstTurnShown = true;
       console.log(`${name} first agent turn:`, JSON.stringify(mover.view).slice(0, 1200));
@@ -174,18 +177,16 @@ const playMatch = async (name: string, input: Record<string, number | string | b
 
     if (!isStaleChecked) {
       isStaleChecked = true;
-      console.log(`${name} out-of-range move:`, await callTool(page, "play_move", { player: mover.player, index: mover.view.moves.length, turn: mover.view.turn }));
-      console.log(`${name} stale turn:`, await callTool(page, "play_move", { player: mover.player, index: 0, turn: mover.view.turn + 1 }));
+      console.log(`${name} out-of-range move:`, await callTool(page, "play_move", { player: mover.player, index: legal.length, turn }));
+      console.log(`${name} stale turn:`, await callTool(page, "play_move", { player: mover.player, index: 0, turn: turn + 1 }));
       console.log(`${name} bad argument type:`, await callTool(page, "play_move", { player: mover.player, index: "zero" }));
     }
 
     sharedTurns += ready.length > 1 ? 1 : 0;
 
-    const choice = mover.view.moves[(moves * 5 + 1) % mover.view.moves.length];
+    if (legal.length === 0) throw new Error("agent turn with no legal moves");
 
-    if (choice === undefined) throw new Error("agent turn with no legal moves");
-
-    const played = await callTool(page, "play_move", { player: mover.player, index: choice.index, turn: mover.view.turn });
+    const played = await callTool(page, "play_move", { player: mover.player, index: (moves * 5 + 1) % legal.length, turn });
 
     // Another player can move between get_game and play_move while several players grab at once; read again.
     if (played.text.includes("Stale move")) {
@@ -201,7 +202,7 @@ const playMatch = async (name: string, input: Record<string, number | string | b
   }
 
   const finals = await Promise.all(agents.map(getView));
-  const isOver = finals.every((view) => view.isMatchOver);
+  const isOver = finals.every((view) => view.status === "over");
 
   console.log(`${name}: match over: ${isOver}, agent players: ${agents.join(", ")}, agent moves: ${moves}, turns where several agents could move: ${sharedTurns}, stale retries: ${staleRetries}, tool rounds: ${calls}`);
 

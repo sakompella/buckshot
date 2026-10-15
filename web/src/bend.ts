@@ -1,7 +1,7 @@
 import { Array as Arr, Data, Match, Option, Result, Schema } from "effect";
 
 import rules, { type BendNode } from "../generated/rules.mjs";
-import { Board, Briefcase, Counter, GameEvent, Move, Secret, Stage, type Damage, type Direction, type DrawLabel, type Item, type LearnedSecret, type Mode, type Seat, type SeatCount, type SeatView, type Shell, type Slot } from "./domain.ts";
+import { Board, Briefcase, Counter, GameEvent, Move, Secret, Stage, type Damage, type Direction, type DrawLabel, type Item, type HeardSecret, type Mode, type Seat, type SeatCount, type SeatView, type Shell, type Slot } from "./domain.ts";
 
 // The one boundary between the app and the Bend build. It is the only file
 // that writes Bend constructor tags, and it decodes every value Bend returns
@@ -516,7 +516,7 @@ export class Game {
 export interface Step {
   readonly game: Game;
   readonly events: ReadonlyArray<GameEvent>;
-  readonly learned: ReadonlyArray<LearnedSecret>;
+  readonly learned: ReadonlyArray<HeardSecret>;
   readonly notes: BendNode;
 }
 
@@ -554,7 +554,7 @@ const stepFrom = (table: SeatCount, ticket: Ticket, stepped: BendNode): Result.R
     const { state, notes } = yield* decodeStepped(stepped);
     const game = yield* gameAt(table, ticket, state);
     const events = listToArray(yield* decodeEvents(rules.public_events(notes))).map(eventOf);
-    const learned: Array<LearnedSecret> = [];
+    const learned: Array<HeardSecret> = [];
 
     for (const seat of game.seats) {
       for (const heard of listToArray(yield* decodeHeard(rules.hear(notes, seatNode(seat))))) {

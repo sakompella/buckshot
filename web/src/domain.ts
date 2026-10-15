@@ -138,7 +138,12 @@ export const Secret = Schema.TaggedUnion({
 export type Secret = typeof Secret.Type;
 
 // A secret as one seat heard it; the seat is the hearer, never read from Bend.
-export const LearnedSecret = Schema.Struct({ seat: Seat, secret: Secret });
+export const HeardSecret = Schema.Struct({ seat: Seat, secret: Secret });
+
+export type HeardSecret = typeof HeardSecret.Type;
+
+// A heard secret, and how many events the log held when the step that told it ended.
+export const LearnedSecret = Schema.Struct({ ...HeardSecret.fields, at: Schema.Number });
 
 export type LearnedSecret = typeof LearnedSecret.Type;
 
