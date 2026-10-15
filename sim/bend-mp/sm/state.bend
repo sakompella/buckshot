@@ -70,16 +70,6 @@ type Grabs is Data:
 type State is Data:
   State{world: World, players: Players, phase: Phase, notes: List<&2, D.Note>, grabs: Grabs}
 
-def world.config(value: World) -> D.Config:
-  match value:
-    case World{config, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _}:
-      config
-
-def world.set_config(value: World, replacement: D.Config) -> World:
-  match value:
-    case World{_, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, sawed, gun, shown, decks}:
-      World{replacement, before_round, round_index, load_index, first_sequence, round_health, first_turn, turn, direction, first_death, checking_first_death, item_amount, sawed, gun, shown, decks}
-
 def world.before_round(value: World) -> Bool:
   match value:
     case World{_, before_round, _, _, _, _, _, _, _, _, _, _, _, _, _, _}:
@@ -399,40 +389,20 @@ def grabs.grabbing(value: Grabs) -> D.Ring<&2, Bool>:
     case Grabs{_, grabbing, _, _, _}:
       grabbing
 
-def grabs.set_grabbing(value: Grabs, replacement: D.Ring<&2, Bool>) -> Grabs:
-  match value:
-    case Grabs{distributing, _, holding, granted, intake}:
-      Grabs{distributing, replacement, holding, granted, intake}
-
 def grabs.holding(value: Grabs) -> D.Ring<&2, Maybe<&2, D.Item>>:
   match value:
     case Grabs{_, _, holding, _, _}:
       holding
-
-def grabs.set_holding(value: Grabs, replacement: D.Ring<&2, Maybe<&2, D.Item>>) -> Grabs:
-  match value:
-    case Grabs{distributing, grabbing, _, granted, intake}:
-      Grabs{distributing, grabbing, replacement, granted, intake}
 
 def grabs.granted(value: Grabs) -> D.Ring<&2, Nat>:
   match value:
     case Grabs{_, _, _, granted, _}:
       granted
 
-def grabs.set_granted(value: Grabs, replacement: D.Ring<&2, Nat>) -> Grabs:
-  match value:
-    case Grabs{distributing, grabbing, holding, _, intake}:
-      Grabs{distributing, grabbing, holding, replacement, intake}
-
 def grabs.intake(value: Grabs) -> D.Ring<&2, Bool>:
   match value:
     case Grabs{_, _, _, _, intake}:
       intake
-
-def grabs.set_intake(value: Grabs, replacement: D.Ring<&2, Bool>) -> Grabs:
-  match value:
-    case Grabs{distributing, grabbing, holding, granted, _}:
-      Grabs{distributing, grabbing, holding, granted, replacement}
 
 def world.table(world: World) -> D.Table:
   match world:

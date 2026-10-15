@@ -493,32 +493,6 @@ def pickup.selected(state: S.State, +seat: D.Seat, selected: Maybe<&2, S.IdleOpt
     case None{}:
       S.state.set_phase(state, S.Blocked{Some{seat}})
 
-def pickup.same(state: S.State, seat: D.Seat, options: D.NonEmpty<&2, S.IdleOption>, index: Nat, same: Bool) -> S.State:
-  match same:
-    case True{}:
-      pickup.selected(state, seat, G.idle.nth(D.nonempty.list(S.IdleOption, options), index))
-    case False{}:
-      S.state.set_phase(state, S.Blocked{Some{seat}})
-
-def pickup.choice(state: S.State, +seat: D.Seat, options: D.NonEmpty<&2, S.IdleOption>, choice: D.Choice) -> S.State:
-  match choice:
-    case D.Choice{chosen, index, _}:
-      pickup.same(state, seat, options, index, D.seat.eq(seat, chosen))
-
-def pickup.resolved(state: S.State, seat: D.Seat, options: D.NonEmpty<&2, S.IdleOption>, resolved: D.Resolved) -> S.State:
-  match resolved:
-    case D.Chose{choice}:
-      pickup.choice(state, seat, options, choice)
-    case _:
-      S.state.set_phase(state, S.Blocked{Some{seat}})
-
-def pickup_slice(+state: S.State, n: Nat) -> D.Stepped<&2, S.State>:
-  match state:
-    case S.State{world, players, S.Idle{seat, options}, notes, grabs}:
-      S.state.stepped(pickup.resolved(S.state.set_notes(state, Nil{}), seat, options, D.resolve(request(state), n)))
-    case _:
-      D.Stepped{state, Nil{}}
-
 def answer.choice(+state: S.State, choice: D.Choice) -> S.State:
   match state choice:
     case S.State{world, players, S.Idle{+seat, options}, notes, grabs} D.Choice{_, index, _}:

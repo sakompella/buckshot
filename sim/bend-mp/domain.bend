@@ -367,13 +367,6 @@ def config.default(table: Table) -> Config:
 type NonEmpty<a, -A: Kind(a)> is Kind(a):
   NonEmpty{head: A, tail: List<a, A>}
 
-def nonempty.of(-A: Data, xs: List<&2, A>) -> Maybe<&2, NonEmpty<&2, A>>:
-  match xs:
-    case Nil{}:
-      None{}
-    case x <> rest:
-      Some{NonEmpty{x, rest}}
-
 def nonempty.list(-A: Data, xs: NonEmpty<&2, A>) -> List<&2, A>:
   match xs:
     case NonEmpty{x, rest}:

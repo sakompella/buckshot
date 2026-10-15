@@ -500,15 +500,6 @@ def ends_turn(item: D.Item, length: Nat) -> Bool:
     case _:
       False{}
 
-def keeps_turn(item: D.Item) -> Bool:
-  match item:
-    case D.Jammer{}:
-      True{}
-    case D.Adrenaline{}:
-      True{}
-    case _:
-      False{}
-
 def invert(shell: D.Shell) -> D.Shell:
   match shell:
     case D.Live{}:
