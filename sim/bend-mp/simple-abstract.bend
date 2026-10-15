@@ -345,3 +345,188 @@ def ran(ran: D.Ran<&2, T.State>) -> Maybe<&2, D.Stepped<&2, S.State>>:
   match ran:
     case D.Ran{+state, +notes, _}:
       Some{D.Stepped{S.state.set_notes(embed(state), notes), notes}}
+
+# Completeness: a player gesture at an Idle point is legal sm choice steps
+# that pass only through pick points (Aim, JamPick, StealPick) and stop at the
+# first other point.
+def pick.phase(phase: S.Phase) -> Bool:
+  match phase:
+    case S.Aim{_}:
+      True{}
+    case S.JamPick{_, _}:
+      True{}
+    case S.StealPick{_, _}:
+      True{}
+    case _:
+      False{}
+
+def idle.phase(phase: S.Phase) -> Bool:
+  match phase:
+    case S.Idle{_, _}:
+      True{}
+    case _:
+      False{}
+
+def gesture.then(rest: List<&2, Step>, +next: S.State) -> Bool:
+  match rest:
+    case Nil{}:
+      True{}
+    case _:
+      pick.phase(S.state.phase(next))
+
+def gesture.answer(found: Maybe<&2, Nat>, +state: S.State, then: @+next:S.State -> Bool) -> Bool:
+  match found:
+    case None{}:
+      False{}
+    case Some{n}:
+      then(M.stepped.state(M.answer(state, n)))
+
+def gesture.go(steps: List<&2, Step>, +state: S.State) -> Bool:
+  match steps:
+    case Nil{}:
+      Bool.not(pick.phase(S.state.phase(state)))
+    case +step <> +rest:
+      gesture.answer(walk.legal(M.request(state), step), state, +next => Bool.and(gesture.then(rest, next), gesture.go(rest, next)))
+
+def gesture(+state: S.State, steps: List<&2, Step>) -> Bool:
+  match steps:
+    case Nil{}:
+      False{}
+    case +step <> rest:
+      Bool.and(idle.phase(S.state.phase(state)), gesture.go(step <> rest, state))
+
+def slot.is(found: Maybe<&2, D.Slot>, +slot: D.Slot) -> Bool:
+  match found:
+    case Some{s}:
+      D.slot.eq(s, slot)
+    case None{}:
+      False{}
+
+# The owner's first slot holding the item, among the steal picks.
+def steal.first(picks: List<&2, S.StealOption>, +owner: D.Seat, +item: D.Item) -> Maybe<&2, D.Slot>:
+  match picks:
+    case Nil{}:
+      None{}
+    case S.Pick{o, s, i} <> rest:
+      Bool.pick(Maybe<&2, D.Slot>, Bool.and(D.seat.eq(o, owner), D.item.eq(i, item)), Some{s}, steal.first(rest, owner, item))
+
+def first.steal(rest: List<&2, Step>, +picks: List<&2, S.StealOption>) -> Bool:
+  match rest:
+    case ChoiceStep{_, D.Steal{owner, slot, item}} <> _:
+      slot.is(steal.first(picks, owner, item), slot)
+    case _:
+      True{}
+
+def first.steps(steps: List<&2, Step>, +uses: List<&2, S.IdleOption>, +picks: List<&2, S.StealOption>) -> Bool:
+  match steps:
+    case ChoiceStep{_, D.UseItem{slot, +item}} <> rest:
+      Bool.and(slot.is(P.use.first(uses, item), slot), first.steal(rest, picks))
+    case _:
+      True{}
+
+def first.phase(phase: S.Phase, +state: S.State, steps: List<&2, Step>) -> Bool:
+  match phase:
+    case S.Idle{+seat, _}:
+      first.steps(steps, I.uses(state, seat), I.steal.for(state, seat))
+    case _:
+      True{}
+
+# Every item a gesture uses or steals sits in its owner's first slot holding it.
+def first_slots(+state: S.State, steps: List<&2, Step>) -> Bool:
+  first.phase(S.state.phase(state), state, steps)
+
+def recover.steal(owner: D.Seat, item: D.Item, rest: List<&2, Step>) -> Maybe<&2, T.Move>:
+  match item rest:
+    case D.Jammer{} ChoiceStep{_, D.JamTarget{t}} <> Nil{}:
+      Some{T.StealJam{owner, t}}
+    case item Nil{}:
+      Some{T.Steal{owner, item}}
+    case _ _:
+      None{}
+
+def recover.use(item: D.Item, rest: List<&2, Step>) -> Maybe<&2, T.Move>:
+  match item rest:
+    case D.Jammer{} ChoiceStep{_, D.JamTarget{t}} <> Nil{}:
+      Some{T.Jam{t}}
+    case D.Adrenaline{} ChoiceStep{_, D.Steal{owner, _, stolen}} <> more:
+      recover.steal(owner, stolen, more)
+    case item Nil{}:
+      Some{T.Use{item}}
+    case _ _:
+      None{}
+
+# The simple move a gesture stands for.
+def recover(steps: List<&2, Step>) -> Maybe<&2, T.Move>:
+  match steps:
+    case ChoiceStep{_, D.PickUp{}} <> ChoiceStep{_, D.Shoot{t}} <> Nil{}:
+      Some{T.Shoot{t}}
+    case ChoiceStep{_, D.UseItem{_, item}} <> rest:
+      recover.use(item, rest)
+    case _:
+      None{}
+
+def move.same(a: T.Move, b: T.Move) -> Bool:
+  match a b:
+    case T.Shoot{s} T.Shoot{t}:
+      D.seat.eq(s, t)
+    case T.Use{i} T.Use{j}:
+      D.item.eq(i, j)
+    case T.Jam{s} T.Jam{t}:
+      D.seat.eq(s, t)
+    case T.Steal{o, i} T.Steal{p, j}:
+      Bool.and(D.seat.eq(o, p), D.item.eq(i, j))
+    case T.StealJam{o, s} T.StealJam{p, t}:
+      Bool.and(D.seat.eq(o, p), D.seat.eq(s, t))
+    case _ _:
+      False{}
+
+def move.index(moves: List<&2, T.Move>, +move: T.Move) -> Maybe<&2, Nat>:
+  match moves:
+    case Nil{}:
+      None{}
+    case m <> rest:
+      D.menu.find.here(move.same(m, move), move.index(rest, move))
+
+def step.same(a: Step, b: Step) -> Bool:
+  match a b:
+    case DrawStep{m} DrawStep{n}:
+      Nat.is_eq(m, n)
+    case ChoiceStep{s, m} ChoiceStep{t, n}:
+      Bool.and(D.seat.eq(s, t), D.move.eq(m, n))
+    case _ _:
+      False{}
+
+def prefix(xs: List<&2, Step>, ys: List<&2, Step>) -> Bool:
+  match xs ys:
+    case Nil{} _:
+      True{}
+    case x <> xr y <> yr:
+      Bool.and(step.same(x, y), prefix(xr, yr))
+    case _ _:
+      False{}
+
+def menu.index(+state: T.State, +move: T.Move) -> Maybe<&2, Nat>:
+  match state:
+    case T.State{_, _, T.Idle{+seat}, _, _}:
+      move.index(P.moves(P.options(state, seat)), move)
+    case _:
+      None{}
+
+def recovered.at(index: Maybe<&2, Nat>, +state: T.State, steps: List<&2, Step>) -> Bool:
+  match index:
+    case Some{k}:
+      prefix(steps, chain(state, k))
+    case None{}:
+      False{}
+
+# The gesture's simple move is in the menu, and its chain starts with the
+# gesture.
+def recovered.move(found: Maybe<&2, T.Move>, +state: T.State, +steps: List<&2, Step>) -> Bool:
+  match found:
+    case Some{+move}:
+      recovered.at(menu.index(state, move), state, steps)
+    case None{}:
+      False{}
+
+def recovered(+state: T.State, +steps: List<&2, Step>) -> Bool:
+  recovered.move(recover(steps), state, steps)
