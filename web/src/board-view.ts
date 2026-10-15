@@ -5,7 +5,8 @@ import { type BoardMove, boardMoves, type Position, positionOf, Target, targetKe
 import { Briefcase, Counter, GameEvent, type Load, type Seat, type SeatView, seatsOut, type Shell, Slot, Stage } from "./domain.ts";
 import { boltIcon, gunIcon, itemIcon, shellIcon } from "./icons.ts";
 import { latestStep, Message, type Session, type StepEvent } from "./model.ts";
-import { itemName, itemNote, seatName } from "./text.ts";
+import { itemName, itemNote } from "./text.ts";
+import { rosterOf } from "./players.ts";
 
 // The table from above. Each seat's things sit in a layer turned to face its
 // edge, so one layout serves all four sides. The viewer's legal moves are
@@ -79,10 +80,7 @@ const counterView = (h: H, table: Table, view: SeatView, position: Position, isA
     [
       h.div(
         [h.Class("counter-face"), h.Style({ rotate: `-${turn(position)}` })],
-        [
-          h.p([h.Class("counter-name")], [h.span([], [seatName(view.seat)]), h.span([h.Class("counter-cash")], [`$${view.cash.toLocaleString("en-US")}`])]),
-          h.div([h.Class("counter-screen")], screen),
-        ],
+        [h.div([h.Class("counter-screen")], screen)],
       ),
     ],
   );
@@ -288,7 +286,7 @@ const tableOf = (match: Session, matchNumber: number): Table => {
   return {
     match,
     matchNumber,
-    moves: Option.match(prompt, { onNone: () => new Map<string, BoardMove>(), onSome: (mine) => boardMoves(mine).onTable }),
+    moves: Option.match(prompt, { onNone: () => new Map<string, BoardMove>(), onSome: (mine) => boardMoves(rosterOf(match.game.seats), mine).onTable }),
     toMessage: (move) => Option.map(prompt, ({ ticket, seat }) => Message.ClickedMove({ match: ticket.match, generation: ticket.generation, seat, index: move.index })),
     recent: latestStep(match),
     out: seatsOut(match.events),

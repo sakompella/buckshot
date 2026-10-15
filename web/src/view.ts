@@ -2,12 +2,13 @@ import { Array as Arr, Option } from "effect";
 import type { Document, Html, HtmlBuilder } from "foldkit/html";
 
 import type { Prompt } from "./bend.ts";
-import { GameEvent, Move, type Seat, Stage } from "./domain.ts";
+import { GameEvent, Move, type Seat, SEATS_BY_TABLE, Stage } from "./domain.ts";
 import { aiPrompt, controllerOf, promptsOf } from "./driver.ts";
-import { latestStep, Message, type Model, SEATS_BY_TABLE, type Session, type Speed, type Viewer } from "./model.ts";
+import { latestStep, Message, type Model, type Session, type Speed, type Viewer } from "./model.ts";
+import { rosterOf } from "./players.ts";
 import { boardMoves, viewerPrompt } from "./board.ts";
 import { hurtView, tableView } from "./board-view.ts";
-import { eventText, seatName, secretText } from "./text.ts";
+import { eventText, secretText } from "./text.ts";
 import { titles } from "./titles.ts";
 
 type H = HtmlBuilder<Message>;
@@ -25,6 +26,7 @@ const choice = <A>(h: H, label: string, options: ReadonlyArray<readonly [A, stri
 const setupView = (h: H, model: Model): Html => {
   const { table, controllers, isItemsEnabled, seed } = model.setup;
   const seats = SEATS_BY_TABLE[table];
+  const roster = rosterOf(seats);
   const hasAgent = seats.some((seat) => controllerOf(controllers, seat) === "Agent");
 
   return h.section(
@@ -40,8 +42,8 @@ const setupView = (h: H, model: Model): Html => {
             [h.Class("controllers")],
             seats.map((seat) =>
               h.button(
-                [h.Type("button"), h.Class("controller"), h.AriaLabel(`${seatName(seat)}: ${controllerOf(controllers, seat)}`), h.OnClick(Message.ToggledController({ seat }))],
-                [h.span([], [seatName(seat)]), h.strong([], [controllerOf(controllers, seat)])],
+                [h.Type("button"), h.Class("controller"), h.AriaLabel(`${roster.nameOf(seat)}: ${controllerOf(controllers, seat)}`), h.OnClick(Message.ToggledController({ seat }))],
+                [h.span([], [roster.nameOf(seat)]), h.strong([], [controllerOf(controllers, seat)])],
               ),
             ),
           ),
@@ -81,14 +83,16 @@ const promptHint = (prompt: Prompt): string =>
 
 const watchHint = (match: Session): string =>
   Stage.match(match.game.board.stage, {
-    Playing: ({ seat }) => (seat === match.viewer ? "Your turn." : `${seatName(seat)}'s turn.`),
+    Playing: ({ seat }) => (seat === match.viewer ? "Your turn." : `${nameIn(match, seat)}'s turn.`),
     Distributing: () => "Grabbing items.",
     Loading: () => "Loading the shotgun.",
     Setup: () => "",
     MatchOver: () => "",
   });
 
-const viewerName = (viewer: Viewer): string => (viewer === "Spectator" ? "Spectator" : seatName(viewer));
+const nameIn = (match: Session, seat: Seat): string => rosterOf(match.game.seats).nameOf(seat);
+
+const viewerName = (match: Session): string => (match.viewer === "Spectator" ? "Spectator" : nameIn(match, match.viewer));
 
 const bannerView = (h: H, model: Model, match: Session): Html => {
   const prompt = viewerPrompt(match);
@@ -105,17 +109,17 @@ const bannerView = (h: H, model: Model, match: Session): Html => {
       h.h1(
         [h.Class(Option.isSome(prompt) ? "banner-title is-mine" : "banner-title")],
         Option.match(roundJustWon(match), {
-          onNone: () => [`${viewerName(match.viewer)} · ${phase}`],
+          onNone: () => [`${viewerName(match)} · ${phase}`],
           // The phase waits behind "Round over" until the round-over beat ends.
           onSome: ({ index }) => [
-            `${viewerName(match.viewer)} · `,
+            `${viewerName(match)} · `,
             h.keyed("span")(`phase-${index}`, [h.Class("phase")], [h.span([h.Class("phase-beat")], ["Round over"]), h.span([h.Class("phase-after")], [phase])]),
           ],
         }),
       ),
       hint === "" ? h.empty : h.p([h.Class("hint")], [hint]),
-      ...agents.map((seat) => h.p([h.Class("hint")], [`Waiting for the agent at ${seatName(seat)}.`])),
-      ...otherHumans.map((seat) => h.button([h.Type("button"), h.Class("pass"), h.OnClick(Message.SelectedViewer({ viewer: seat }))], [`Take ${seatName(seat)}`])),
+      ...agents.map((seat) => h.p([h.Class("hint")], [`Waiting for the agent at ${nameIn(match, seat)}.`])),
+      ...otherHumans.map((seat) => h.button([h.Type("button"), h.Class("pass"), h.OnClick(Message.SelectedViewer({ viewer: seat }))], [`Take ${nameIn(match, seat)}`])),
       Option.match(model.maybeError, { onNone: () => h.empty, onSome: (error) => h.p([h.Class("error"), h.Role("alert")], [error]) }),
     ],
   );
@@ -126,7 +130,7 @@ const looseMovesView = (h: H, match: Session): Html =>
   Option.match(viewerPrompt(match), {
     onNone: () => h.empty,
     onSome: (prompt) => {
-      const { buttons } = boardMoves(prompt);
+      const { buttons } = boardMoves(rosterOf(match.game.seats), prompt);
 
       return buttons.length === 0
         ? h.empty
@@ -147,7 +151,7 @@ const notesView = (h: H, match: Session): Html => {
   return mine.length === 0
     ? h.empty
     : h.aside(
-        [h.Class("notes"), h.AriaLabel(`Private notes for ${viewerName(match.viewer)}`)],
+        [h.Class("notes"), h.AriaLabel(`Private notes for ${viewerName(match)}`)],
         [h.ul([], mine.map(({ secret }, index) => h.keyed("li")(`${match.learned.length}-${index}`, [], [secretText(secret)])))],
       );
 };
@@ -166,7 +170,7 @@ const roundOverView = (h: H, match: Session): Html =>
       h.keyed("div")(
         `round-${index}`,
         [h.Class("round-over"), h.AriaHidden(true)],
-        [h.p([h.Class("round-over-title")], ["Round over"]), h.p([h.Class("round-over-prize")], [`${seatName(seat)} takes ${cash(prize)}`])],
+        [h.p([h.Class("round-over-title")], ["Round over"]), h.p([h.Class("round-over-prize")], [`${nameIn(match, seat)} takes ${cash(prize)}`])],
       ),
   });
 
@@ -176,12 +180,12 @@ const resultsView = (h: H, match: Session): Html => {
   return h.section(
     [h.Class("results"), h.AriaLabel("Results")],
     [
-      h.ol([h.Class("standings")], standings.map((view) => h.li([], [h.span([], [seatName(view.seat)]), h.strong([], [cash(view.cash)])]))),
+      h.ol([h.Class("standings")], standings.map((view) => h.li([], [h.span([], [nameIn(match, view.seat)]), h.strong([], [cash(view.cash)])]))),
       h.dl(
         [h.Class("titles")],
         titles(match.events, match.game.seats).flatMap((title) => [
           h.dt([], [title.name]),
-          h.dd([], [title.seats.length === 0 ? `Nobody (${title.description})` : `${title.seats.map(seatName).join(", ")}: ${title.score} ${title.description}`]),
+          h.dd([], [title.seats.length === 0 ? `Nobody (${title.description})` : `${title.seats.map((seat) => nameIn(match, seat)).join(", ")}: ${title.score} ${title.description}`]),
         ]),
       ),
       h.div(
@@ -229,13 +233,13 @@ const menuView = (h: H, model: Model, match: Session): Html => {
               choice<Viewer>(h, "View as", [["Spectator", "All"], ...match.game.seats.map((seat): readonly [Viewer, string] => [seat, `${seat}`])], match.viewer, (viewer) => Message.SelectedViewer({ viewer })),
             ],
           ),
-          h.p([h.Class("menu-seats")], [match.game.seats.map((seat: Seat) => `${seatName(seat)} ${controllerOf(match.controllers, seat)}`).join(", ")]),
+          h.p([h.Class("menu-seats")], [match.game.seats.map((seat: Seat) => `${nameIn(match, seat)} ${controllerOf(match.controllers, seat)}`).join(", ")]),
           hasAgent ? h.p([h.Class("menu-seats")], [model.isWebMcpAvailable ? "WebMCP tools are registered." : "WebMCP is not available in this browser."]) : h.empty,
           h.ol(
             [h.Class("log"), h.AriaLabel("Event log")],
             match.events
               .slice(-LOG_SHOWN)
-              .map((event, offset) => h.keyed("li")(match.events.length - LOG_SHOWN + offset, [], [eventText(event)]))
+              .map((event, offset) => h.keyed("li")(match.events.length - LOG_SHOWN + offset, [], [eventText(rosterOf(match.game.seats), event)]))
               .toReversed(),
           ),
         ],

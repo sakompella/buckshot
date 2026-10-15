@@ -3,11 +3,10 @@ import "@fontsource/vt323/400.css";
 import { Effect } from "effect";
 import { Runtime } from "foldkit";
 
-import { ports } from "./agent.ts";
 import { Flags, init, subscriptions, update } from "./main.ts";
 import { Message, Model } from "./model.ts";
 import { view } from "./view.ts";
-import { registerAgentTools } from "./webmcp.ts";
+import { ports, registerAgentTools } from "./webmcp.ts";
 
 const application = Runtime.makeApplication({
   Model,

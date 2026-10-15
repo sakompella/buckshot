@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { Option, Result } from "effect";
 
 import { boardMoves, targetKey, targetOf } from "../src/board.ts";
+import { rosterOf } from "../src/players.ts";
 import { type Move, type SeatCount } from "../src/domain.ts";
 import { aiPrompt, aiStep, begin, type Controller, promptsOf } from "../src/driver.ts";
 import { seedRng } from "../src/rng.ts";
@@ -18,10 +19,11 @@ test("at every prompt of bot matches, each legal move is on the table exactly on
   for (const table of [2, 3, 4] satisfies ReadonlyArray<SeatCount>) {
     for (let seed = 1; seed <= 4; seed++) {
       let progress = Result.getOrThrow(begin(table, true, seed, seedRng(seed * 31 + table), BOTS, seed));
+      const roster = rosterOf(progress.game.seats);
 
       for (let moves = 0; moves < MOVE_LIMIT && progress.game.pending.kind === "Choose"; moves++) {
         for (const prompt of promptsOf(progress.game)) {
-          const { onTable, buttons } = boardMoves(prompt);
+          const { onTable, buttons } = boardMoves(roster, prompt);
           const offered = [...onTable.values(), ...buttons].map(({ index }) => index).toSorted((left, right) => left - right);
 
           expect(offered).toEqual(prompt.menu.map((_, index) => index));

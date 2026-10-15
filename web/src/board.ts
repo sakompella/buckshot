@@ -4,6 +4,7 @@ import type { Prompt } from "./bend.ts";
 import { Move, Seat, Slot } from "./domain.ts";
 import { controllerOf, promptsOf } from "./driver.ts";
 import type { Session } from "./model.ts";
+import type { Roster } from "./players.ts";
 import { moveText } from "./text.ts";
 
 // Where each legal move is played on the table. The board shows the viewer's
@@ -46,8 +47,8 @@ export interface BoardMoves {
 }
 
 /** Every move of the menu, each either on the table or as a plain button. */
-export const boardMoves = (prompt: Prompt): BoardMoves => {
-  const placed = prompt.menu.map((move, index) => ({ key: targetKey(targetOf(prompt.seat, move)), move: { index, label: moveText(prompt.seat, move) } }));
+export const boardMoves = (roster: Roster, prompt: Prompt): BoardMoves => {
+  const placed = prompt.menu.map((move, index) => ({ key: targetKey(targetOf(prompt.seat, move)), move: { index, label: moveText(roster, prompt.seat, move) } }));
   const isShared = (key: string): boolean => placed.filter((other) => other.key === key).length > 1;
 
   return {

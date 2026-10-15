@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 import { defineMessageUnion } from "foldkit/message";
 
-import { AgentCall } from "./agent.ts";
+import { AgentCall } from "./agent/tools.ts";
 import { Game } from "./bend.ts";
 import { GameEvent, LearnedSecret, Seat, SeatCount } from "./domain.ts";
 import { AiSeat, Controller } from "./driver.ts";
@@ -83,4 +83,3 @@ export const Message = defineMessageUnion({
 
 export type Message = typeof Message.Type;
 
-export const SEATS_BY_TABLE: Readonly<Record<SeatCount, ReadonlyArray<Seat>>> = { 2: [1, 3], 3: [0, 1, 2], 4: [0, 1, 2, 3] };
