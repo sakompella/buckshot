@@ -46,11 +46,11 @@ const ITEM_FACTS = [
   'Adrenaline (the "Steal" moves): uses your adrenaline to take that item from another player, alive or dead, and use it at once. Adrenaline cannot be taken.',
   "Remote: reverses the turn order until the round ends.",
   "Reload: when a turn ends with the gun empty and no winner, living players with free slots get more items, a new load is announced, and health stays. The turn passes as it would have.",
-  "Rounds: each round starts with fresh health, empty slots and no jams. Prizes are 70,000, 75,000 and 80,000. Round 1 starts with a random player, later rounds with the player who died first in the round before.",
+  "Rounds: every player starts each round with fresh health, empty slots and no jams. Prizes are 70,000, 75,000 and 80,000. Round 1 starts with a random player, later rounds with the player who died first in the round before.",
 ].join("\n");
 
 /** The same for every player; the arena adds nothing per model. */
-export const INSTRUCTIONS = `${RULES} You are one of the players. On each of your turns you get your view as JSON: you, your player letter; turn, to pass to play_move; players, with health (not shown while jammed), items and, while players grab from the briefcase, holding; gun, with sawed when it is; events, the entries of the match log you have not been sent yet; and moves, your legal moves. Play one with play_move, giving its position in moves (from 0) and the turn. get_game shows your view again, without log entries. Log entries say what happened, and what only you learned from the magnifying glass or the phone. Each entry reaches you once, with your turn or in a message between turns, so remember what you need. When your only move is "Grab an item", it is played for you. Your goal is to finish the match with the most cash.\n\n${ITEM_FACTS}`;
+export const INSTRUCTIONS = `${RULES} You are one of the players. On each of your turns you get your view as JSON: you, your player letter; turn, to pass to play_move; players, with health (not shown while jammed), items and, while players grab from the briefcase, holding; gun, with sawed when it is; events, the entries of the match log you have not been sent yet; and moves, your legal moves, each with its number. Play one with play_move, giving its number and the turn. Make exactly one play_move call per reply. get_game shows your view again, without log entries. Log entries say what happened, and what only you learned from the magnifying glass or the phone. Each entry reaches you once, with your turn or in a message between turns, so remember what you need. When your only move is "Grab an item", it is played for you. Your goal is to finish the match with the most cash.\n\n${ITEM_FACTS}`;
 
 const GRAB = "Grab an item";
 
@@ -128,7 +128,7 @@ const View = Schema.Struct({
   players: Schema.optional(Schema.Array(Schema.Struct({ player: Letter, health: Schema.optional(Schema.Int), items: Schema.optional(Schema.Array(Schema.String)), holding: Schema.optional(Schema.String) }))),
   gun: Schema.optional(Schema.Struct({ sawed: Schema.Boolean })),
   events: Schema.optional(Schema.Array(Schema.String)),
-  moves: Schema.optional(Schema.Array(Schema.String)),
+  moves: Schema.optional(Schema.Array(Schema.Struct({ move: Schema.Int, label: Schema.String }))),
   standings: Schema.optional(Schema.Array(Schema.Struct({ player: Letter, cash: Schema.Number }))),
 });
 
@@ -261,7 +261,7 @@ class Table {
   tryMove(player: Letter, move: number, turn: number, by: MoveLine["by"]): Played {
     if (this.onTurn() !== player) return { ok: false, text: JSON.stringify({ error: "It is not your turn." }) };
 
-    const label = this.view(player).moves?.[move] ?? "";
+    const label = this.view(player).moves?.[move]?.label ?? "";
     const reply = this.run(decode("play_move", { player, move, turn }));
 
     if (AgentReply.guards.Refused(reply)) return { ok: false, text: replyText(reply) };
@@ -314,7 +314,7 @@ const seatTools = (dir: string, table: () => Table, onReply: (agent: AgentId, me
         name: "play_move",
         description: "Play one of your legal moves. Returns the move played; your next turn comes as a new message.",
         parameters: Type.Object({
-          move: Type.Integer({ minimum: 0, description: "The position of the move in your view's moves list, from 0." }),
+          move: Type.Integer({ minimum: 0, description: "The number of the move, from your view's moves." }),
           turn: Type.Integer({ minimum: 0, description: "The turn of the view you chose the move from." }),
         }),
         replay: "safe",
@@ -586,7 +586,7 @@ export const playMatch = (match: ArenaMatch) =>
       const state = yield* journal();
       const where = whereIs(player);
 
-      if (view.moves?.length === 1 && view.moves[0] === GRAB) {
+      if (view.moves?.length === 1 && view.moves[0]?.label === GRAB) {
         const played = playing.tryMove(player, 0, turn, "forced");
 
         if (!played.ok) return yield* new ArenaFault({ message: played.text });

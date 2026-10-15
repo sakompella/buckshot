@@ -76,7 +76,7 @@ export const eventText = (roster: Roster, event: GameEvent): string =>
     PickedUp: ({ seat }) => `${roster.nameOf(seat)} picked up the shotgun.`,
     Fired: ({ shooter, target, shell, applied, health }) =>
       `${roster.nameOf(shooter)} shot ${shooter === target ? "themselves" : roster.nameOf(target)}: ${shell === "Live" ? `live, ${applied} damage, ${health} health left` : "blank"}.`,
-    Died: ({ seat }) => `${roster.nameOf(seat)} is out.`,
+    Died: ({ seat }) => `${roster.nameOf(seat)} is out for this round.`,
     Used: ({ seat, owner, item }) => (seat === owner ? `${roster.nameOf(seat)} used ${itemName(item)}.` : `${roster.nameOf(seat)} took ${itemName(item)} from ${roster.nameOf(owner)} and used it.`),
     Healed: ({ seat, health }) => `${roster.nameOf(seat)} healed to ${health}.`,
     Ejected: ({ seat, shell }) => `${roster.nameOf(seat)} racked out a ${shell.toLowerCase()} shell.`,

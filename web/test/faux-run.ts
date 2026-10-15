@@ -8,7 +8,7 @@ import type { Controller } from "../src/driver.ts";
 // A finished arena run that costs nothing: faux pi-ai models that answer each
 // turn's view with a move. The viewer's tests and its screenshot check use it.
 
-const View = Schema.Struct({ turn: Schema.optional(Schema.Int), moves: Schema.optional(Schema.Array(Schema.String)) });
+const View = Schema.Struct({ turn: Schema.optional(Schema.Int), moves: Schema.optional(Schema.Array(Schema.Struct({ move: Schema.Int, label: Schema.String }))) });
 
 const parseView = Schema.decodeUnknownSync(Schema.fromJsonString(View));
 

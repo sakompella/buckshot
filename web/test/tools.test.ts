@@ -25,7 +25,7 @@ const View = Schema.Struct({
   players: Schema.optionalKey(Schema.Array(Schema.Struct({ player: Schema.String, holding: Schema.optionalKey(Schema.String) }))),
   gun: Schema.optionalKey(Schema.Struct({ sawed: Schema.optionalKey(Schema.Literal(true)) })),
   events: Schema.optionalKey(Schema.Array(Schema.String)),
-  moves: Schema.optionalKey(Schema.Array(Schema.String)),
+  moves: Schema.optionalKey(Schema.Array(Schema.Struct({ move: Schema.Int, label: Schema.String }))),
   standings: Schema.optionalKey(Schema.Array(Schema.Struct({ player: Schema.String, cash: Schema.Number }))),
 });
 
@@ -300,7 +300,7 @@ test("on random tables of 2 to 4 players with items, the moves list is exactly t
       expect(listed.map(({ chain }) => chain.map(({ index }) => index))).toEqual(firstOfEachAction.map((chain) => chain.map(({ index }) => index)));
       expect(new Set(listed.map(({ label }) => label)).size).toBe(listed.length);
       expect(listed.map(({ label }) => label)).not.toContain("");
-      expect(turnViewOf(table, player).moves).toEqual(listed.map(({ label }) => label));
+      expect(turnViewOf(table, player).moves).toEqual(listed.map(({ label }, move) => ({ move, label })));
 
       for (const { chain } of listed) {
         const end = chain.reduce<Progress>((current, { move, index }) => {

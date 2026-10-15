@@ -19,7 +19,7 @@ import type { Controller } from "../src/driver.ts";
 // The audit checks that every view an agent got names it by its own letter, so
 // agents seated out of letter order check that letters follow agents, not seats.
 
-const View = Schema.Struct({ you: Schema.String, turn: Schema.optional(Schema.Int), moves: Schema.optional(Schema.Array(Schema.String)) });
+const View = Schema.Struct({ you: Schema.String, turn: Schema.optional(Schema.Int), moves: Schema.optional(Schema.Array(Schema.Struct({ move: Schema.Int, label: Schema.String }))) });
 
 const parseView = Schema.decodeUnknownSync(Schema.fromJsonString(View));
 

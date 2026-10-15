@@ -15,7 +15,7 @@ const decodeMessage = Schema.decodeUnknownSync(Schema.fromJsonString(ToHuman));
 
 const decodeObject = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Record(Schema.String, Schema.Json)));
 
-const Lists = Schema.Struct({ events: Schema.optional(Schema.Array(Schema.String)), moves: Schema.optional(Schema.Array(Schema.String)), error: Schema.optional(Schema.String) });
+const Lists = Schema.Struct({ events: Schema.optional(Schema.Array(Schema.String)), moves: Schema.optional(Schema.Array(Schema.Struct({ move: Schema.Int, label: Schema.String }))), error: Schema.optional(Schema.String) });
 
 /** A message as lines: its heading, its log entries, any error, the rest of its view, then the moves by number. */
 const render = (text: string): ReadonlyArray<string> => {
@@ -33,7 +33,7 @@ const render = (text: string): ReadonlyArray<string> => {
     ...events,
     ...(error === undefined ? [] : [`error: ${error}`]),
     ...(Object.keys(rest).length === 0 ? [] : [JSON.stringify(rest)]),
-    ...moves.map((move, index) => `${index}. ${move}`),
+    ...moves.map(({ move, label }) => `${move}. ${label}`),
   ];
 };
 

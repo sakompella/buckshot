@@ -54,8 +54,8 @@ player's secrets or the shell order.
   with the secrets this player heard (the magnifying glass, the phone) just after the
   event that told them. The first view covers the match from its start. So the views a
   player moves from, then its final view, add up to the whole log with no gaps or
-  repeats, and no other player's secrets appear. `moves` lists whole actions; a move's
-  number is its position in the list, from 0. Fields with nothing to show are left
+  repeats, and no other player's secrets appear. `moves` lists whole actions, each as `{ move, label }`;
+  `move` is the number `play_move` takes, from 0. Fields with nothing to show are left
   out, with no nulls. When the match is over the view is `status: "over"`, the events
   since the player's last turn ended (the final shot, the last round's prize, "The
   match is over."), and `standings`, the cash of each player; cash appears nowhere else.
@@ -84,10 +84,17 @@ A your-turn view in a 3-player match with items, as the MCP check prints it:
      "events":["Player A drew an item.","Player A finished grabbing.","Player A placed magnifying glass in slot 3.",
                "Player B drew an item.","Player B finished grabbing.","Distribution is over.",
                "Player B placed inverter in slot 3.","The shotgun is loaded: 4 live, 3 blank.","Player A's turn."],
-     "moves":["Shoot yourself","Shoot Player B","Shoot Player C","Use burner phone",
-              "Steal magnifying glass from Player B","Steal inverter from Player B","Steal remote from Player C",
-              "Steal jammer from Player C and jam Player B","Steal jammer from Player C and jam Player C",
-              "Steal magnifying glass from Player C","Use magnifying glass"]}
+     "moves":[{"move":0,"label":"Shoot yourself"},
+              {"move":1,"label":"Shoot Player B"},
+              {"move":2,"label":"Shoot Player C"},
+              {"move":3,"label":"Use burner phone"},
+              {"move":4,"label":"Steal magnifying glass from Player B"},
+              {"move":5,"label":"Steal inverter from Player B"},
+              {"move":6,"label":"Steal remote from Player C"},
+              {"move":7,"label":"Steal jammer from Player C and jam Player B"},
+              {"move":8,"label":"Steal jammer from Player C and jam Player C"},
+              {"move":9,"label":"Steal magnifying glass from Player C"},
+              {"move":10,"label":"Use magnifying glass"}]}
 
 ### Moves
 
