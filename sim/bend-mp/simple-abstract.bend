@@ -43,6 +43,12 @@ def embed.phase(phase: T.Phase, +records: S.State) -> S.Phase:
 def embed(+state: T.State) -> S.State:
   S.State{T.state.world(state), T.state.players(state), embed.phase(T.state.phase(state), T.state.records(state)), T.state.notes(state), T.state.grabs(state)}
 
+# A simple answer read as an sm one: the embedded state and the same notes.
+def lift(stepped: D.Stepped<&2, T.State>) -> Maybe<&2, D.Stepped<&2, S.State>>:
+  match stepped:
+    case D.Stepped{state, notes}:
+      Some{D.Stepped{embed(state), notes}}
+
 # One sm answer: a tape answer to a draw, or a seat's move.
 type Step is Data:
   DrawStep{answer: Nat}
@@ -306,3 +312,36 @@ def chain(+state: T.State, +n: Nat) -> List<&2, Step>:
   +first : List<&2, Step> = chain.first(state, n, N.request(state))
   chain.rest(state, first, walk.go(first, embed(state)))
 
+
+def ran.state(ran: D.Ran<&2, T.State>) -> T.State:
+  match ran:
+    case D.Ran{state, _, _}:
+      state
+
+# The sm steps of a simple run: each answer's chain, in turn.
+def chains.request(fuel: Nat, request: T.Request, +state: T.State, tape: List<&2, Nat>) -> List<&2, Step>:
+  match fuel request tape:
+    case _ T.Finished{} _:
+      Nil{}
+    case _ T.Stuck{} _:
+      Nil{}
+    case 0n _ _:
+      Nil{}
+    case _ _ Nil{}:
+      Nil{}
+    case 1n+fuel _ +n <> rest:
+      +next : T.State = N.stepped.state(N.answer(state, n))
+      List.append(&2, Step, chain(state, n), chains.request(fuel, P.request(next), next, rest))
+
+def chains(fuel: Nat, +state: T.State, tape: List<&2, Nat>) -> List<&2, Step>:
+  chains.request(fuel, N.request(state), state, tape)
+
+# sm playing steps from a state, the end state holding all their notes.
+def replay(+state: S.State, steps: List<&2, Step>) -> Maybe<&2, D.Stepped<&2, S.State>>:
+  walk.notes(walk.go(steps, state))
+
+# A simple run read as an sm one: its end embedded, holding all its notes.
+def ran(ran: D.Ran<&2, T.State>) -> Maybe<&2, D.Stepped<&2, S.State>>:
+  match ran:
+    case D.Ran{+state, +notes, _}:
+      Some{D.Stepped{S.state.set_notes(embed(state), notes), notes}}

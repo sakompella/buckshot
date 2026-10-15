@@ -8,6 +8,7 @@ BEND="${BEND:-bend}"
 export BEND
 
 required_laws=(step_matches run_matches reachable_valid start_matches games_match state_roundtrip jam_skip_once turn_traversal observe_matches legal_exact legal_accepted privacy)
+required_simple_laws=(simple_start simple_refines simple_roundtrip simple_valid simple_reachable_valid simple_run_refines simple_observe simple_privacy)
 
 failed=0
 report() {
@@ -130,6 +131,20 @@ gate_laws() {
   fi
 }
 
+gate_simple_laws() {
+  local laws="$here/SIMPLE-LAWS.bend" missing=() name
+  for name in ${required_simple_laws[@]+"${required_simple_laws[@]}"}; do
+    if [[ ! -f "$laws" ]] || ! grep -qE "^law[[:space:]]+${name}[[:space:]]*:" "$laws"; then
+      missing+=("$name")
+    fi
+  done
+  if [[ ${#missing[@]} -eq 0 ]]; then
+    report ok "required simple laws" "${#required_simple_laws[@]} required"
+  else
+    report fail "required simple laws" "missing from SIMPLE-LAWS.bend: ${missing[*]}"
+  fi
+}
+
 gate_roundtrip() {
   local out
   out="$(bun "$here/test/domain-roundtrip.mjs" 2>&1)"
@@ -230,6 +245,26 @@ gate_laws_imports() {
   fi
 }
 
+gate_simple_laws_imports() {
+  local bad
+  bad="$(imports_under "$here/SIMPLE-LAWS.bend" | grep -E 'import[[:space:]]+[^[:space:]]*ref/' || true)"
+  if [[ -z "$bad" ]]; then
+    report ok "SIMPLE-LAWS.bend never imports ref/"
+  else
+    report fail "SIMPLE-LAWS.bend never imports ref/" "$bad"
+  fi
+}
+
+gate_simple_proofs() {
+  local out
+  out="$("$BEND" "$here/SIMPLE-PROOF.bend" --verdict 2>&1)"
+  if [[ $? -eq 0 && "$out" == *"ALL PROOFS CHECK"* && "$out" != *"SOME PROOFS FAIL"* ]]; then
+    report ok "SIMPLE-PROOF.bend" "ALL PROOFS CHECK"
+  else
+    report fail "SIMPLE-PROOF.bend" "$(printf '%s' "$out" | head -20)"
+  fi
+}
+
 gate_proofs() {
   local out
   out="$("$BEND" "$here/PROOF.bend" --verdict 2>&1)"
@@ -257,11 +292,14 @@ gate_sm_imports
 gate_simple_imports
 gate_driver_imports
 gate_laws_imports
+gate_simple_laws_imports
 gate_driver_smoke
 gate_simple_smoke
 gate_laws
+gate_simple_laws
 gate_generated
 gate_proofs
+gate_simple_proofs
 gate_roundtrip
 gate_core_scenarios
 gate_item_scenarios

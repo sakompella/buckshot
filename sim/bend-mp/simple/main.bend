@@ -95,11 +95,12 @@ def initial(+config: D.Config) -> T.State:
   +table : D.Table = G.config.table(config)
   T.State{S.World{config, True{}, 0n, 0n, False{}, 0n, D.Seat0{}, None{}, D.Clockwise{}, None{}, False{}, 0n, False{}, Nil{}, D.Load{0n, 0n}, G.decks.full()}, D.ring.fill(S.Seat, table, S.Seat{100n, S.Free{}, 0, D.slots.empty()}), T.NeedFirst{}, T.Empty{}, S.Grabs{False{}, D.ring.fill(Bool, table, False{}), D.ring.fill(Maybe<&2, D.Item>, table, None{}), D.ring.fill(Nat, table, 0n), D.ring.fill(Bool, table, False{})}}
 
-# Item distribution (D05, D06, D22, D37 grabbing rows, D55 M1, D56). Where sm
-# offers grab moves, the simple machine makes them itself, one sm move at a
-# time, reading the menus sm offers: the last seat to act places a granted
-# item in its first offered slot; otherwise the next seat after it, in socket
-# order, whose only move is a take, takes. So items go one per seat in turn.
+# Item distribution (D05, D06, D22, D37 grabbing rows, D55 M1, D56). The
+# simple machine hands items out by itself, one take or place per pass. Each
+# pass reads the pure rule I.grab.needs (who may take or place, and where):
+# the last seat to act places a granted item in its first free slot;
+# otherwise the next seat after it, in socket order, that may only take,
+# takes. So items go one per seat in turn.
 
 type Distribution is Data:
   Taking{seat: D.Seat}
