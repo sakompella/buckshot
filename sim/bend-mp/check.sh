@@ -76,6 +76,16 @@ gate_sm_imports() {
   fi
 }
 
+gate_simple_imports() {
+  local bad
+  bad="$(imports_under "$here/simple" | grep -vE ':[0-9]+:[[:space:]]*import[[:space:]]+(Base|(\.\./domain\.bend|\.\./sm/(state|rules|items)\.bend|\./[A-Za-z0-9_-]+\.bend)[[:space:]]+as[[:space:]]+[A-Za-z0-9_]+)[[:space:]]*$' || true)"
+  if [[ -z "$bad" ]]; then
+    report ok "simple/ imports only Base, domain, sm's state, rules and items, and siblings"
+  else
+    report fail "simple/ imports only Base, domain, sm's state, rules and items, and siblings" "$bad"
+  fi
+}
+
 gate_driver_imports() {
   local bad
   bad="$(imports_under "$here/driver.bend" | grep -E 'import[[:space:]]+[^[:space:]]*(ref/|abstract\.bend)' || true)"
@@ -93,6 +103,16 @@ gate_driver_smoke() {
     report ok "driver smoke" "3 table sizes, 0 stuck, 0 exhausted"
   else
     report fail "driver smoke" "$(printf '%s' "$out" | head -20)"
+  fi
+}
+
+gate_simple_smoke() {
+  local out
+  out="$("$BEND" "$here/test/simple-smoke.bend" 2>&1)"
+  if [[ $? -eq 0 && "$(printf '%s\n' "$out" | grep -c '^simple smoke [234] played=64 stuck=0 exhausted=0$')" -eq 3 ]]; then
+    report ok "simple smoke" "3 table sizes, 0 stuck, 0 exhausted"
+  else
+    report fail "simple smoke" "$(printf '%s' "$out" | head -20)"
   fi
 }
 
@@ -224,9 +244,11 @@ gate_domain
 gate_unsafe
 gate_ai_imports
 gate_sm_imports
+gate_simple_imports
 gate_driver_imports
 gate_laws_imports
 gate_driver_smoke
+gate_simple_smoke
 gate_laws
 gate_generated
 gate_proofs
