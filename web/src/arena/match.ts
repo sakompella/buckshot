@@ -27,7 +27,26 @@ import { addTokens, agentTotals, logCall, logEvent, readCalls, type Sitting, wri
 const context = BACKGROUND_CONTEXT;
 
 /** The same for every player; the arena adds nothing per model. */
-export const INSTRUCTIONS = `${RULES} You are one of the players. On each of your turns you get your view as JSON: you, your player number; turn, to pass to play_move; players, with health (not shown while jammed), items and, while players grab from the briefcase, holding; gun, with sawed when it is; events, the entries of the match log you have not been sent yet; and moves, your legal moves. Play one with play_move, giving its position in moves (from 0) and the turn. get_game shows your view again, without log entries. Log entries say what happened, and what only you learned from the magnifying glass or the phone. Each entry reaches you once, with your turn or in a message between turns, so remember what you need. When your only move is "Grab an item", it is played for you. Your goal is to finish the match with the most cash.`;
+/**
+ * What each item and the reload do, as facts with no advice. Checked line by line against `item.effect` in
+ * sim/bend-mp/sm/main.bend and the use and steal checks in sm/items.bend; it must change when they do.
+ */
+const ITEM_FACTS = [
+  "Items: using one empties its slot, everyone sees which item was used, and your turn goes on unless stated below.",
+  "Handsaw: your next shot does 2 damage instead of 1. Any shot spends it, a blank too. It is not offered while the gun is sawed.",
+  "Magnifying glass: shows only you whether the shell in the chamber is live or blank.",
+  'Jammer ("Jam Player N"): that player skips their next turn, once. They cannot be jammed again until they have played a turn.',
+  "Cigarettes: you heal 1 if your health is below the round's starting health. Otherwise nothing happens.",
+  "Beer: ejects the shell in the chamber without firing it, and everyone sees whether it was live or blank. If it was the last shell, your turn ends.",
+  "Burner phone: shows only you whether one later shell is live or blank, and its position, counting the chamber as 1. The position is from 3 to 7. With 2 or fewer shells left it shows nothing.",
+  "Inverter: switches the shell in the chamber between live and blank. The others see that you used it, not the shell.",
+  'Adrenaline ("Steal <item> from Player N"): uses your adrenaline to take that item from another player, alive or dead, and use it at once. Adrenaline cannot be taken.',
+  "Remote: reverses the turn order until the round ends.",
+  "Reload: when a turn ends with the gun empty and no winner, living players with free slots get more items, a new load is announced, and health stays. The turn passes as it would have.",
+  "Rounds: each round starts with fresh health, empty slots and no jams. Prizes are 70,000, 75,000 and 80,000. Round 1 starts with a random player, later rounds with the player who died first in the round before.",
+].join("\n");
+
+export const INSTRUCTIONS = `${RULES} You are one of the players. On each of your turns you get your view as JSON: you, your player number; turn, to pass to play_move; players, with health (not shown while jammed), items and, while players grab from the briefcase, holding; gun, with sawed when it is; events, the entries of the match log you have not been sent yet; and moves, your legal moves. Play one with play_move, giving its position in moves (from 0) and the turn. get_game shows your view again, without log entries. Log entries say what happened, and what only you learned from the magnifying glass or the phone. Each entry reaches you once, with your turn or in a message between turns, so remember what you need. When your only move is "Grab an item", it is played for you. Your goal is to finish the match with the most cash.\n\n${ITEM_FACTS}`;
 
 const GRAB = "Grab an item";
 
