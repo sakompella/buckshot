@@ -85,11 +85,15 @@ _Avoid_: bot
 A player's place in table order in one match, from 1. Arena logs and seating use it; agents never see it.
 _Avoid_: seat (the machine's own)
 
+**Human seat**:
+An arena seat a person plays from a terminal, through the terminal client. The person gets the instructions, views and log entries an agent gets, and types a move's number.
+_Avoid_: Human controller (in the web app, a person clicking on the page)
+
 **Seating**:
-Which agent is at which position in one match. It rotates between matches.
+Which agent is at which position in one match. It rotates between matches, together with the bots and Human seats.
 
 **Forced turn**:
-A turn whose only move is "Grab an item". The arena plays it for the agent.
+A turn whose only move is "Grab an item". The arena plays it for the agent or human.
 
 **Delivery**:
 How a player's log entries reach it in the arena, set when a match starts. With on-turn delivery the new entries come with the player's next turn. With live delivery each change is sent as it happens.

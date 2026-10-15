@@ -8,7 +8,10 @@ import { ConfigProvider, Effect, Exit, Schema } from "effect";
 
 import { AGENTS, AgentId } from "../src/arena/agent.ts";
 import { agentEndpoint } from "../src/arena/endpoints.ts";
-import { type Delivery, playMatch } from "../src/arena/match.ts";
+import { listenForHuman } from "../src/arena/human.ts";
+import { DELIVERIES, type Delivery, INSTRUCTIONS, playMatch } from "../src/arena/match.ts";
+import { entriesSentTo } from "../src/arena/runlog.ts";
+import type { Controller } from "../src/driver.ts";
 
 // The arena with faux pi-ai models, which play from their transcripts alone, so
 // these matches cost nothing. A faux player's first act probes another player's
@@ -42,7 +45,7 @@ const decide = (transcript: TranscriptContext): AssistantMessage => {
 };
 
 /** A faux match; `agents` sit at the Agent seats in table order. */
-const fauxMatch = (controllers: ReadonlyArray<"Agent" | "DoN">, seed: string, contextWindow: number, delivery: Delivery, { dir = mkdtempSync(join(tmpdir(), "arena-test-")), agents = AGENTS }: { readonly dir?: string; readonly agents?: ReadonlyArray<AgentId> } = {}) => {
+const fauxMatch = (controllers: ReadonlyArray<Controller>, seed: string, contextWindow: number, delivery: Delivery, { dir = mkdtempSync(join(tmpdir(), "arena-test-")), agents = AGENTS }: { readonly dir?: string; readonly agents?: ReadonlyArray<AgentId> } = {}) => {
   const faux = fauxProvider({ provider: "faux", models: [{ id: "faux-a", contextWindow, maxTokens: 512 }, { id: "faux-b", contextWindow, maxTokens: 512 }] });
   const models = createModels();
   const seated = agents.slice(0, controllers.filter((controller) => controller === "Agent").length);
@@ -64,12 +67,14 @@ const fauxMatch = (controllers: ReadonlyArray<"Agent" | "DoN">, seed: string, co
 test.each([
   [["Agent", "Agent"] as const, "7", "on-turn", "A,B"],
   [["Agent", "Agent", "DoN"] as const, "42", "live", "B,A"],
+  [["Agent", "DoN", "Story"] as const, "9", "on-turn", "C"],
 ] as const)("faux players play %p, seed %s, to game over, each seeing only its own seat, with %s delivery, agents %s", async (controllers, seed, delivery, agents) => {
   const result = await Effect.runPromise(fauxMatch(controllers, seed, 6_000, delivery, { agents: Schema.decodeUnknownSync(Schema.Array(AgentId))(agents.split(",")) }));
   const stored = Object.values(result.storeUsage);
 
   expect(result.audit).toEqual({ over: true, every_view_is_own_player: true, delivered_is_own_log_exactly: true, replay_matches: true });
   expect(result.moves.fallback).toBe(0);
+  expect(result.standings.map((standing) => standing.controller).toSorted()).toEqual([...controllers].toSorted());
   expect(result.loggedUsage.input).toBe(stored.reduce((total, usage) => total + usage.input, 0));
   expect(result.loggedUsage.output).toBe(stored.reduce((total, usage) => total + usage.output, 0));
 }, 60_000);
@@ -97,6 +102,47 @@ test("live and on-turn delivery send each player the same entries, in the same o
     expect(sentLive[agent]?.entries).toEqual(sentOnTurn[agent]?.entries ?? []);
     expect(sentLive[agent]?.deliveries ?? 0).toBeGreaterThan(sentOnTurn[agent]?.deliveries ?? 0);
   }
+}, 60_000);
+
+/** What a scripted human types: some lines that are not legal moves, and a 0, always legal, in every cycle. */
+const TYPED = Array.from({ length: 600 }, () => "9\nx\n2\n1\n0\n").join("");
+
+test.each([...DELIVERIES])("a human types moves into the terminal client and plays Human vs DoN vs Story to game over, seeing only its own seat, with %s delivery", async (delivery) => {
+  const dir = mkdtempSync(join(tmpdir(), "arena-human-"));
+  const clients: Array<ReturnType<typeof Bun.spawn<"pipe", "pipe", "inherit">>> = [];
+
+  const connectHuman = async () => {
+    const socket = join(dir, "human.sock");
+    const { connected } = await listenForHuman(socket);
+    const client = Bun.spawn(["bun", "scripts/arena-human.ts", socket], { cwd: join(import.meta.dir, ".."), stdin: "pipe", stdout: "pipe", stderr: "inherit" });
+
+    client.stdin.write(TYPED);
+    void client.stdin.end();
+    clients.push(client);
+
+    return connected;
+  };
+
+  const result = await Effect.runPromise(playMatch({ dir, seed: "11", controllers: ["Human", "DoN", "Story"], entrants: [], connectHuman, models: createModels(), compaction: {}, delivery }));
+  const [client] = clients;
+
+  if (client === undefined) throw new Error("the arena never connected its human");
+
+  expect(await client.exited).toBe(0);
+  expect(result.audit).toEqual({ over: true, every_view_is_own_player: true, delivered_is_own_log_exactly: true, replay_matches: true });
+  expect(result.moves.human).toBeGreaterThan(0);
+  expect(result.standings.map((standing) => standing.controller).toSorted()).toEqual(["DoN", "Human", "Story"]);
+
+  const instructions = new Set(INSTRUCTIONS.split("\n"));
+  const shown = (await new Response(client.stdout).text()).split("\n").map((line) => line.replace(/^(> )+/, ""));
+  const views = shown.filter((line) => line.startsWith("{")).map((line) => parseView(line));
+  const entries = shown.filter((line) => line !== "" && !instructions.has(line) && line !== "Your turn." && !line.startsWith("{") && !line.startsWith("error: ") && !/^\d+\. /.test(line));
+
+  // The human is Player A: the letters left after no agents, in table order.
+  expect(views.length).toBeGreaterThan(0);
+  expect(views.every((view) => view.you === "A")).toBe(true);
+  expect(entries).toEqual([...entriesSentTo(dir, "A")]);
+  expect(shown.some((line) => line.startsWith("error: "))).toBe(true);
 }, 60_000);
 
 const CPA = { url: "http://127.0.0.1:8318", key: "sk-test-secret-value" };

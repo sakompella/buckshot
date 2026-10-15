@@ -46,22 +46,22 @@ export type CallLine = typeof CallLine.Type;
 /** The version of the run directory's files, which .audit/agent-arena-design.md describes; it changes when a field changes meaning or goes away. */
 export const RUN_FORMAT = 1;
 
-const Sitting = { agent: AgentId, position: Schema.Int };
+/** Where a line's player sits; `agent` only when an agent plays it. */
+const Sitting = { agent: Schema.optional(AgentId), player: Letter, position: Schema.Int };
 
 export const Standing = Schema.Struct({ player: Letter, cash: Schema.Number, controller: Schema.NullOr(Schema.String) });
 
 export type Standing = typeof Standing.Type;
 
-/** A move the arena journaled: an agent's own, a forced "Grab an item", or the fallback after a turn with no move. */
+/** A move the arena journaled: an agent's or a human's own, a forced "Grab an item", or the fallback after a turn with no move. */
 export const MoveLine = Schema.Struct({
   t: Schema.String,
   kind: Schema.Literals(["move", "fallback"]),
   ...Sitting,
   turn: Schema.Int,
-  player: Letter,
   move: Schema.Int,
   label: Schema.String,
-  by: Schema.Literals(["agent", "forced", "fallback"]),
+  by: Schema.Literals(["agent", "human", "forced", "fallback"]),
 });
 
 export type MoveLine = typeof MoveLine.Type;
@@ -81,16 +81,21 @@ export const EventLine = Schema.Union([
 
 export type EventLine = typeof EventLine.Type;
 
-/** The fields of an event line that totals read; the rest of each line is for people. */
-const TotalsFields = Schema.Struct({ kind: Schema.String, agent: Schema.optional(AgentId), wall_ms: Schema.optional(Schema.Number) });
+/** The fields of an event line that totals and the audit read. */
+const ReadFields = Schema.Struct({ kind: Schema.String, agent: Schema.optional(AgentId), player: Schema.optional(Letter), wall_ms: Schema.optional(Schema.Number), entries: Schema.optional(Schema.Array(Schema.String)) });
 
 const decodeCall = Schema.decodeUnknownSync(Schema.fromJsonString(CallLine));
 
-const decodeEvent = Schema.decodeUnknownSync(Schema.fromJsonString(TotalsFields));
+const decodeEvent = Schema.decodeUnknownSync(Schema.fromJsonString(ReadFields));
 
 const linesOf = (path: string): ReadonlyArray<string> => (existsSync(path) ? readFileSync(path, "utf8").split("\n").filter((line) => line !== "") : []);
 
 export const readCalls = (dir: string): ReadonlyArray<CallLine> => linesOf(join(dir, "calls.jsonl")).map((line) => decodeCall(line));
+
+const readEvents = (dir: string) => linesOf(join(dir, "events.jsonl")).map((line) => decodeEvent(line));
+
+/** Every log entry the arena sent a player, in order, as its delivered lines record them. */
+export const entriesSentTo = (dir: string, player: Letter): ReadonlyArray<string> => readEvents(dir).flatMap((event) => (event.kind === "delivered" && event.player === player ? (event.entries ?? []) : []));
 
 const append = (path: string, line: string) => appendFileSync(path, `${line}\n`);
 
@@ -143,7 +148,7 @@ export const addTokens = (calls: ReadonlyArray<CallLine>): Tokens => ({
 /** One agent's totals for a match, recomputed from the logs, so they cover every process that played it. */
 export const agentTotals = (dir: string, agent: AgentId) => {
   const calls = readCalls(dir).filter((call) => call.agent === agent);
-  const events = linesOf(join(dir, "events.jsonl")).map((line) => decodeEvent(line)).filter((event) => event.agent === agent);
+  const events = readEvents(dir).filter((event) => event.agent === agent);
   const latencies = calls.map((call) => call.latency_ms ?? 0);
 
   return {
