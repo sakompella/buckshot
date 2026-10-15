@@ -80,19 +80,24 @@ export const eventText = (roster: Roster, event: GameEvent): string =>
     MatchConcluded: () => "The match is over.",
   });
 
+const ORDINALS = ["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th"];
+
+const ordinal = (position: number): string => ORDINALS[position - 1] ?? `${position}th`;
+
+/** Clue positions count from 1, the chambered shell, as the rules library does. */
+export const secretText = (secret: Secret): string =>
+  Secret.match(secret, {
+    Glimpse: ({ shell }) => `The chambered shell is ${shell.toLowerCase()}.`,
+    Clue: ({ position, shell }) => `The ${ordinal(position)} shell is ${shell.toLowerCase()}.`,
+    NoClue: () => "The phone gave no clue.",
+    EmptyBriefcase: () => "The briefcase was empty.",
+  });
+
 /** A secret as the table announces it, in a few words. */
 export const secretShout = (secret: Secret): string =>
   Secret.match(secret, {
     Glimpse: ({ shell }) => `Chambered . . . ${shell}`,
-    Clue: ({ position, shell }) => `Shell ${position + 1} . . . ${shell}`,
+    Clue: ({ position, shell }) => `${ordinal(position)} shell . . . ${shell}`,
     NoClue: () => "No clue",
     EmptyBriefcase: () => "Briefcase empty",
-  });
-
-export const secretText = (secret: Secret): string =>
-  Secret.match(secret, {
-    Glimpse: ({ shell }) => `The chambered shell is ${shell.toLowerCase()}.`,
-    Clue: ({ position, shell }) => `Shell ${position + 1} from now is ${shell.toLowerCase()}.`,
-    NoClue: () => "The phone gave no clue.",
-    EmptyBriefcase: () => "The briefcase was empty.",
   });

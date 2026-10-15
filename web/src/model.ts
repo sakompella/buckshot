@@ -41,6 +41,8 @@ export const Session = Schema.Struct({
   controllers: Schema.Array(Controller),
   ais: Schema.Array(Schema.Option(AiSeat)),
   seed: Schema.Number,
+  /** How many events each Agent player has been told about, by seat. */
+  reported: Schema.Array(Schema.Number),
   viewer: Viewer,
   isAutoplay: Schema.Boolean,
 });

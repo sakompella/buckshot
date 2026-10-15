@@ -8,8 +8,6 @@ import ./sm/rules.bend as Q
 import ./ref/main.bend as R
 import ./ref/state.bend as H
 import ./ref/rules.bend as G
-import ./ref/items.bend as RI
-import ./core-proof.bend as C
 import ./grab-proof.bend as GP
 import ./item-step-proof.bend as ISP
 import ./load-proof.bend as LP

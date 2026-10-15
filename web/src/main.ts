@@ -3,6 +3,7 @@ import { Command, Port, Runtime, Subscription, type Update } from "foldkit";
 import { modifyFields } from "foldkit/struct";
 
 import { AgentCall, AgentReply, type MatchSession, runTool } from "./agent/tools.ts";
+import { NOTHING_REPORTED, reportedTo } from "./agent/view.ts";
 import type { AnswerError, Game } from "./bend.ts";
 import { GameEvent, type Seat, SEATS_BY_TABLE, type SeatCount } from "./domain.ts";
 import { aiPrompt, aiStep, begin, type Controller, controllerOf, isAi, play, type Progress } from "./driver.ts";
@@ -85,6 +86,7 @@ const startMatch = (model: Model): Return => {
             stepStart: 0,
             learnedStart: 0,
             controllers,
+            reported: NOTHING_REPORTED,
             viewer: Option.getOrElse(
               Arr.findFirst(SEATS_BY_TABLE[table], (seat) => controllerOf(controllers, seat) === "Human"),
               (): Viewer => "Spectator",
@@ -124,6 +126,8 @@ const pageSession: MatchSession<Model> = {
   current: (model) => model.maybeMatch,
   start: (model, { table, isItemsEnabled, maybeSeed, controllers }) => applied(startAgentMatch(model, table, isItemsEnabled, Option.getOrElse(maybeSeed, () => model.setup.seed), controllers)),
   move: (model, move) => applied(update(model, Message.ClickedMove(move)).model),
+  report: (model, seat, eventCount) =>
+    modifyFields(model, { maybeMatch: (maybeMatch) => Option.map(maybeMatch, (match) => ({ ...match, reported: reportedTo(match.reported, seat, eventCount) })) }),
 };
 
 /** Runs one tool call over the model. */

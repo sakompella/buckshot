@@ -21,7 +21,7 @@ Checks:
 
     bun run typecheck  # tsc --noEmit, strict
     bun run lint       # oxlint with every anti-slop rule and the Effect group, --deny-warnings
-    bun run test       # plays full Story and DoN matches through bend.ts at 2, 3 and 4 players; checks stale answers are rejected; checks the agent tool contract
+    bun run test       # plays full Story and DoN matches through bend.ts at 2, 3 and 4 players; checks stale answers are rejected; checks the agent tool contract: privacy, stale turns, and each Agent's events adding up to the whole log
     bun scripts/play.ts [url] [outdir]   # headless Chrome (BROWSER=firefox for Playwright Firefox): one human-vs-bot match by clicking the table, one 4-bot autoplay match
     bun scripts/shots.ts [url] [outdir] [WxH ...]   # a screenshot of each stage of a match, at 1440x900 and 390x844 by default; MOTION=reduce for reduced motion, BROWSER=firefox for Playwright Firefox
 
@@ -77,17 +77,28 @@ Players are numbered 1 to N in table order, as in the game's "PLAYER 2". A
 player they are for by that number (`player`: 1 to 4). A call for a number the
 table does not have, or for a player that is not an Agent, is refused. Replies
 never show the machine's seat ids. A player's view never includes another
-player's notes or the shell order.
+player's secrets or the shell order.
 
-- `get_game(player)`: the player's view as JSON. It has the table and round, each
-  player's public health (null while jammed), cash, items and status, the last
-  load shown, the player's private notes, recent events, `isYourTurn`, `turn`, and
-  `moves`, a numbered list of the legal moves with the same labels as the buttons.
-  Slots start at 1. A move's `index` starts at 0.
+- `get_game(player)`: the player's view as JSON, with only what that player's screen
+  shows. While it is not the player's turn it is just `{"you": 2, "status": "waiting"}`.
+  On the player's turn it has `status: "your turn"`, `turn`, `players` (health, which
+  is left out while a player is jammed, and item names, with no slots or cash),
+  `gun` (`heldBy`, and `sawed` when it is), `events` and `moves`. `events` are what
+  happened since the player's previous reply on its turn, from the start of the
+  match in the first one. They include round starts and round wins. The secrets
+  this player heard (the magnifying glass, the phone) stand in the list just after
+  the event that told them, and no other player's secrets appear. Events are shown
+  once, so the agent remembers what it needs, as a person does. The server keeps
+  one count per Agent player of the events it has shown; a waiting reply does not
+  move it. `moves` is the list of the legal moves with the same labels as the
+  buttons; a move's number is its position in the list, from 0. Fields with
+  nothing to show are left out, with no nulls. When the match is over the view is
+  `status: "over"` and `standings`, the cash of each player; cash appears nowhere
+  else.
 - `play_move(player, index, turn?)`: plays move `index` for the player. It refuses a
   call when it is not that player's turn, an index outside the list, or a `turn`
-  that no longer matches. It returns the player's new `get_game` JSON. The bots
-  move on their own afterwards, so poll `get_game` until `isYourTurn` is true.
+  that no longer matches. It returns the player's view as `get_game` does. The bots
+  move on their own afterwards, so poll `get_game` until `status` is `"your turn"`.
 - `new_match(players, items, seed?, controllers?)`: starts a match with
   autoplay on. `controllers` lists one controller per player in player order, for
   example `["Agent", "Agent", "DoN"]`; each is `Agent`, `DoN`, `Story` or
@@ -148,7 +159,7 @@ or add this to `~/.codex/config.toml`, with the absolute path to `web/`:
 Each launch rebuilds the rules first, which takes a few seconds. Then ask the
 agent to call `new_match` and play its player. Checks:
 
-    bun scripts/mcp-check.ts   # spawns the server with the SDK client, lists the tools, plays two Agent players against DoN to the end
+    bun scripts/mcp-check.ts   # spawns the server with the SDK client, lists the tools, plays two Agent players against DoN to the end, and prints the reply sizes
     bunx @modelcontextprotocol/inspector --cli bun scripts/mcp.ts --method tools/list
 
 The server uses `@modelcontextprotocol/server` 2.3.1, the v2 SDK. It also

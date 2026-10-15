@@ -9,6 +9,8 @@ import { seedRng } from "../src/rng.ts";
 
 const MOVE_LIMIT = 5_000;
 
+// Twelve full bot matches: seconds of work, more on a loaded machine.
+
 const BOTS: ReadonlyArray<Controller> = ["DoN", "Story", "DoN", "Story"];
 
 const ALL_KINDS: ReadonlyArray<Move["_tag"]> = ["PickUp", "Shoot", "UseItem", "Grab", "Place", "JamTarget", "Steal"];
@@ -46,4 +48,4 @@ test("at every prompt of bot matches, each legal move is on the table exactly on
   }
 
   expect([...seen].toSorted()).toEqual([...ALL_KINDS].toSorted());
-});
+}, 30_000);

@@ -22,7 +22,7 @@ Out of scope are graphics, animation, sound, networking, the lobby, seat shuffli
 - `domain.bend` holds the types every part shares. They are seats, moves, requests, points, observations, notes and the match config. It holds no model state.
 - `ref/` is the reference, a Bend model that follows the Godot `MP_*` scripts function by function. Its frames carry the names of the Godot functions they follow. It exists only to verify the machine.
 - `sm/` is the machine. `state.bend` has the state, `rules.bend` and `items.bend` the pure rule functions, `point.bend` the requests and the public board, and `main.bend` the step function.
-- `abstract.bend` is the bridge between the machine and the reference. Proof files may import it but not `ref/` directly. A generated section of it wraps every reference definition, kept in sync by `tools/ref_api.py`.
+- `abstract.bend` is the bridge between the machine and the reference. `LAWS.bend` reaches the reference only through it. Proof files may also use `ref/` directly.
 - `LAWS.bend` states the laws. `PROOF.bend` proves them, using `step-proof.bend` (the run, start and game laws), `accept-proof.bend` (`legal_accepted`), `roundtrip-proof.bend` (`state_roundtrip`), `items-proof.bend` and the phase proofs it calls (listed below), and `core-proof.bend`, `grant-proof.bend`, `shot-proof.bend` and `primitive.bend`.
 - `ai/story.bend` and `ai/don.bend` are the two dealer AIs.
 - `driver.bend` is the controller that plays whole matches. `view.bend` renders them as text.
@@ -33,7 +33,7 @@ Out of scope are graphics, animation, sound, networking, the lobby, seat shuffli
 
 The machine keeps fixed seat identity. Two seats use sockets 1 and 3. Three seats use 0 to 2, and four seats use 0 to 3.
 
-Three modules keep to import rules that `check.sh` enforces. `ai/` imports only the domain. `sm/` imports only the domain and its own files. `driver.bend` never imports `ref/` or `abstract.bend`. An AI therefore sees only its prompt, the public board and what it heard, and a wrong decision can only come from AI code.
+Four modules keep to import rules that `check.sh` enforces. `ai/` imports only the domain. `sm/` imports only the domain and its own files. `driver.bend` never imports `ref/` or `abstract.bend`. An AI therefore sees only its prompt, the public board and what it heard, and a wrong decision can only come from AI code. `LAWS.bend` never imports `ref/`, so every law is stated over the machine and the mapping in `abstract.bend`.
 
 ## Answers
 
@@ -115,7 +115,7 @@ The model fixes below also depart on purpose from raw Godot. The reference and t
 
 ## Generated proof bodies
 
-Some lemmas in the proof files are case splits over every table shape, seat and value the rules branch on. They are too large to write by hand. `tools/proof_cases.py` writes their bodies. The claims, meaning the signatures, are written by hand. The script is not trusted. The Bend kernel checks every generated body like any other proof. `check.sh` runs the script in check mode and fails if the file differs from what the script would write. `tools/ref_api.py` does the same for the generated section of `abstract.bend`.
+Some lemmas in the proof files are case splits over every table shape, seat and value the rules branch on. They are too large to write by hand. `tools/proof_cases.py` writes their bodies. The claims, meaning the signatures, are written by hand. The script is not trusted. The Bend kernel checks every generated body like any other proof. `check.sh` runs the script in check mode and fails if the file differs from what the script would write.
 
 ## Model fixes
 
@@ -180,10 +180,10 @@ It takes about 7 to 8 minutes on a Mac, and about 1.5 minutes on a 7-core Linux 
 
 1. `domain.bend` type-checks and its proofs check.
 2. No `@unsafe` and no unfinished `def name?(` hole anywhere under this directory.
-3. The import rules for `ai/`, `sm/` and `driver.bend`.
+3. The import rules for `ai/`, `sm/`, `driver.bend` and `LAWS.bend`.
 4. The driver smoke test. 64 matches at each table size finish with none stuck and no fuel spent.
 5. All twelve required laws are present in `LAWS.bend`.
-6. The generated proof bodies and the generated reference API match their scripts.
+6. The generated proof bodies match their script.
 7. `PROOF.bend` checks with `--verdict`.
 8. The round trip of the domain types through JavaScript.
 9. The reference's core and item scenarios.

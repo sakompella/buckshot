@@ -12,11 +12,9 @@ const STEP_LIMIT = 20_000;
 
 const View = Schema.Struct({
   you: Schema.Number,
-  isYourTurn: Schema.Boolean,
-  isMatchOver: Schema.Boolean,
-  turn: Schema.Number,
-  privateNotes: Schema.Array(Schema.String),
-  moves: Schema.Array(Schema.Struct({ index: Schema.Number, label: Schema.String })),
+  status: Schema.Literals(["your turn", "waiting", "over"]),
+  turn: Schema.optionalKey(Schema.Number),
+  moves: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 
 const parseView = Schema.decodeUnknownSync(Schema.fromJsonString(View));
@@ -71,8 +69,8 @@ test("in the page, two Agent players and a DoN player play a 3-player match to t
   for (; moves < STEP_LIMIT && !isOver(model); moves++) {
     const ready = agentsToMove(model);
     const player = Arr.getUnsafe(ready, moves % ready.length);
-    const view = viewOf(model, player);
-    const outcome = play(model, player, (moves * 7) % view.moves.length, view.turn);
+    const { turn = expect.unreachable("a player to move has no turn"), moves: legal = [] } = viewOf(model, player);
+    const outcome = play(model, player, (moves * 7) % legal.length, turn);
 
     sharedTurns += ready.length > 1 ? 1 : 0;
     moved.add(player);
@@ -82,7 +80,7 @@ test("in the page, two Agent players and a DoN player play a 3-player match to t
   }
 
   expect(isOver(model)).toBe(true);
-  expect(viewOf(model, PlayerNumber.make(1)).isMatchOver).toBe(true);
+  expect(viewOf(model, PlayerNumber.make(1)).status).toBe("over");
   expect(moved).toEqual(new Set([PlayerNumber.make(1), PlayerNumber.make(2)]));
   expect(sharedTurns).toBeGreaterThan(0);
 });
