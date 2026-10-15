@@ -77,7 +77,9 @@ let sharedTurns = 0;
 
 let isStaleChecked = false;
 
-let longestRound = 0;
+let longestEvents = 0;
+
+const firstViewSeen = new Set<number>();
 
 for (; calls < CALL_LIMIT; calls++) {
   const views = await Promise.all(agents.map(async (player) => ({ player, view: await getView(player) })));
@@ -94,13 +96,15 @@ for (; calls < CALL_LIMIT; calls++) {
 
   if (turn === undefined) throw new Error("an agent with the turn has no turn number");
 
-  // A view's events start at its round's start, so each holds exactly one "Round n begins".
-  for (const { view } of ready) {
-    const roundStarts = (view.events ?? []).filter((line) => /^Round \d begins/.test(line));
+  for (const { player, view } of ready) {
+    const isFirstView = !firstViewSeen.has(player);
 
-    if (roundStarts.length !== 1) throw new Error(`events hold ${roundStarts.length} round starts: ${JSON.stringify(view.events)}`);
+    firstViewSeen.add(player);
 
-    longestRound = Math.max(longestRound, view.events?.length ?? 0);
+    // A player's first view on its turn starts from the match start.
+    if (isFirstView && !view.events?.[0]?.startsWith("Round 1 begins")) throw new Error(`the first view of player ${player} does not start at the match start: ${JSON.stringify(view.events)}`);
+
+    longestEvents = Math.max(longestEvents, view.events?.length ?? 0);
   }
 
   if (!isStaleChecked) {
@@ -124,7 +128,7 @@ const finals = await Promise.all(agents.map(getView));
 
 const isOver = finals.every((view) => view.status === "over");
 
-console.log(`match over: ${isOver}, agent players: ${agents.join(", ")}, agent moves: ${moves}, turns where both agents could move: ${sharedTurns}, most events in one view: ${longestRound}, tool rounds: ${calls}`);
+console.log(`match over: ${isOver}, agent players: ${agents.join(", ")}, agent moves: ${moves}, turns where both agents could move: ${sharedTurns}, most events in one view: ${longestEvents}, tool rounds: ${calls}`);
 
 const bySize = replySizes.toSorted((left, right) => left - right);
 

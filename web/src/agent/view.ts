@@ -19,7 +19,14 @@ export interface AgentSource {
   readonly events: ReadonlyArray<GameEvent>;
   readonly learned: ReadonlyArray<LearnedSecret>;
   readonly seed: number;
+  /** By seat: how many events the seat has been shown, in its replies on its own turn. Its next such reply starts after them. */
+  readonly reported: ReadonlyArray<number>;
 }
+
+export const NOTHING_REPORTED: ReadonlyArray<number> = [0, 0, 0, 0];
+
+/** The reports after a seat was shown the first `eventCount` events. */
+export const reportedTo = (reported: ReadonlyArray<number>, seat: Seat, eventCount: number): ReadonlyArray<number> => reported.map((count, index) => (index === seat ? eventCount : count));
 
 export interface PlayerLine {
   readonly player: PlayerNumber;
@@ -46,8 +53,8 @@ interface YourTurn {
   readonly turn: number;
   readonly players: ReadonlyArray<PlayerLine>;
   readonly gun: { readonly heldBy: PlayerNumber | undefined; readonly sawed: true | undefined } | undefined;
-  /** The round so far, from its start: the public events, and the secrets this player heard, in order. */
-  readonly events: ReadonlyArray<string>;
+  /** What happened since this player's previous reply on its turn: the public events, and the secrets this player heard, in order. */
+  readonly events: ReadonlyArray<string> | undefined;
   readonly moves: ReadonlyArray<string>;
 }
 
@@ -58,6 +65,12 @@ interface Over {
 }
 
 export type AgentGame = Waiting | YourTurn | Over;
+
+/** An Agent player's view, and the seat that was shown it. */
+export interface AgentView {
+  readonly seat: Seat;
+  readonly game: AgentGame;
+}
 
 const agentSeats = (source: AgentSource): ReadonlyArray<Seat> => source.game.seats.filter((seat) => controllerOf(source.controllers, seat) === "Agent");
 
@@ -80,14 +93,11 @@ const promptFor = (source: AgentSource, seat: Seat) => Arr.findFirst(promptsOf(s
 
 const nonEmpty = <A>(values: ReadonlyArray<A>): ReadonlyArray<A> | undefined => (values.length === 0 ? undefined : values);
 
-const isRoundBegan = GameEvent.guards.RoundBegan;
-
-/** The current round as this player saw it: its public events from the round's start, each secret the player heard just after the event that gave it. */
-const roundEventsOf = (source: AgentSource, roster: Roster, seat: Seat): ReadonlyArray<string> => {
-  const start = Math.max(0, source.events.findLastIndex(isRoundBegan));
+/** The events after the first `reported`, as this player saw them: each secret the player heard stands just after the event that gave it. */
+const eventsSince = (source: AgentSource, roster: Roster, seat: Seat, reported: number): ReadonlyArray<string> => {
   const heardAt = (count: number): ReadonlyArray<string> => source.learned.flatMap((note) => (note.seat === seat && note.at === count ? [secretText(note.secret)] : []));
 
-  return source.events.slice(start).flatMap((event, index) => [eventText(roster, event), ...heardAt(start + index + 1)]);
+  return source.events.slice(reported).flatMap((event, index) => [eventText(roster, event), ...heardAt(reported + index + 1)]);
 };
 
 const gunOf = (board: Board, roster: Roster): YourTurn["gun"] => {
@@ -101,30 +111,35 @@ const standingsOf = (board: Board, roster: Roster): ReadonlyArray<Standing> =>
   board.seats.toSorted((left, right) => right.cash - left.cash).map((view) => ({ player: roster.playerOf(view.seat), cash: view.cash }));
 
 /** The view of one Agent player, or why there is none. */
-export const agentGame = (source: AgentSource, player: PlayerNumber): Result.Result<AgentGame, string> => {
+export const agentGame = (source: AgentSource, player: PlayerNumber): Result.Result<AgentView, string> => {
   const roster = rosterOf(source.game.seats);
 
-  return Result.map(agentSeat(source, roster, player), (you): AgentGame => {
+  return Result.map(agentSeat(source, roster, player), (you): AgentView => {
     const { board, pending, ticket } = source.game;
+    const reported = Option.getOrElse(Arr.get(source.reported, you), () => 0);
 
-    return pending.kind === "Finished"
-      ? { you: player, status: "over", standings: standingsOf(board, roster) }
-      : Option.match(promptFor(source, you), {
-          onNone: (): AgentGame => ({ you: player, status: "waiting" }),
-          onSome: ({ seat, menu }): AgentGame => ({
-            you: player,
-            status: "your turn",
-            turn: ticket.generation,
-            players: board.seats.map((view) => ({
-              player: roster.playerOf(view.seat),
-              health: Counter.match(view.counter, { Unjammed: ({ health }) => health, Jammed: () => undefined }),
-              items: nonEmpty(view.slots.flatMap(Option.match({ onNone: () => [], onSome: (item) => [itemName(item)] }))),
-            })),
-            gun: gunOf(board, roster),
-            events: roundEventsOf(source, roster, you),
-            moves: menu.map((move) => moveText(roster, seat, move)),
-          }),
-        });
+    return {
+      seat: you,
+      game:
+        pending.kind === "Finished"
+          ? { you: player, status: "over", standings: standingsOf(board, roster) }
+          : Option.match(promptFor(source, you), {
+              onNone: (): AgentGame => ({ you: player, status: "waiting" }),
+              onSome: ({ seat, menu }): AgentGame => ({
+                you: player,
+                status: "your turn",
+                turn: ticket.generation,
+                players: board.seats.map((view) => ({
+                  player: roster.playerOf(view.seat),
+                  health: Counter.match(view.counter, { Unjammed: ({ health }) => health, Jammed: () => undefined }),
+                  items: nonEmpty(view.slots.flatMap(Option.match({ onNone: () => [], onSome: (item) => [itemName(item)] }))),
+                })),
+                gun: gunOf(board, roster),
+                events: nonEmpty(eventsSince(source, roster, you, reported)),
+                moves: menu.map((move) => moveText(roster, seat, move)),
+              }),
+            }),
+    };
   });
 };
 

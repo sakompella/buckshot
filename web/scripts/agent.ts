@@ -20,6 +20,7 @@ const POLL_MS = 100;
 const View = Schema.Struct({
   status: Schema.Literals(["your turn", "waiting", "over"]),
   turn: Schema.optionalKey(Schema.Number),
+  events: Schema.optionalKey(Schema.Array(Schema.String)),
   moves: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 
@@ -169,7 +170,7 @@ const playMatch = async (name: string, input: Record<string, number | string | b
 
     if (!isFirstTurnShown) {
       isFirstTurnShown = true;
-      console.log(`${name} first agent turn:`, (await callTool(page, "get_game", { player: mover.player })).text.slice(0, 1200));
+      console.log(`${name} first agent turn:`, JSON.stringify(mover.view).slice(0, 1200));
       console.log(`${name} waiting hints:`, await page.getByText("Waiting for the agent").count());
       await shot(page, `${name}-2-agent-turn`);
     }

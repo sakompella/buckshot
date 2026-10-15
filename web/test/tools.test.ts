@@ -221,30 +221,61 @@ test("a view holds only what the screen shows: a bare waiting while it is not th
   expect(standings?.map(({ player }) => player).toSorted()).toEqual([1, 2]);
 }, 30_000);
 
-test("on random tables of 2 to 4 players, an Agent's events are the current round's events in order, from its start, with no gaps or repeats, and only its own secrets in them", () => {
-  let laterRounds = 0;
+test("on random tables of 2 to 4 players, an Agent's replies on its turn carry the events since its previous one, so together they are the whole log in order with no gaps or repeats, with only its own secrets; waiting replies change nothing", () => {
+  const choose = chooser(31);
   let secretsShown = 0;
+  let roundWinsHeard = 0;
 
-  playRandomTables(31, 9, (table) => {
-    const { events, learned } = match(table);
-    const roster = rosterAt(table);
-    const roundStart = events.findLastIndex(GameEvent.guards.RoundBegan);
-    const publicRound = events.slice(roundStart).map((event) => eventText(roster, event));
-    const everySecret = new Set(learned.map(({ secret }) => secretText(secret)));
+  for (let trial = 0; trial < 9; trial++) {
+    const players = SeatCount.literals[trial % SeatCount.literals.length] ?? 2;
+    const lead = choose(Arr.range(0, players - 1));
+    const controllers = Arr.makeBy(players, (position): Controller => (position === lead ? "Agent" : choose(["Agent", "DoN", "Story"] as const)));
+    let table = newMatch(players, choose(Arr.range(1, 10_000)), controllers);
+    const heard = new Map<number, Array<string>>();
 
-    laterRounds += roundStart > 0 ? 1 : 0;
+    const absorb = (player: number, view: ReturnType<typeof viewOf>): void => {
+      if (view.status === "your turn") heard.set(player, [...(heard.get(player) ?? []), ...(view.events ?? [])]);
+    };
 
-    for (const player of agentsToMove(table)) {
-      const shown = viewOf(table, player).events ?? [];
-      const ownSecrets = learned.filter((note) => note.seat === seatOfPlayer(table, player) && note.at > roundStart).map(({ secret }) => secretText(secret));
+    for (let steps = 0; steps < STEP_LIMIT && !isOver(table); steps++) {
+      const { events, learned } = match(table);
+      const roster = rosterAt(table);
+      const everySecret = new Set(learned.map(({ secret }) => secretText(secret)));
+      const toMove = new Map<number, ReturnType<typeof turnViewOf>>();
 
-      expect(shown.filter((line) => !everySecret.has(line))).toEqual(publicRound);
-      expect(shown.filter((line) => everySecret.has(line))).toEqual(ownSecrets);
-      secretsShown += ownSecrets.length;
+      for (const player of agentPlayers(table)) {
+        const outcome = call(table, "get_game", { player });
+        const view = parseView(answered(outcome.reply));
+
+        if (view.status === "waiting") {
+          expect(outcome.table).toBe(table);
+          continue;
+        }
+
+        absorb(player, view);
+        table = outcome.table;
+        toMove.set(player, turnViewOf(table, player));
+
+        const seen = heard.get(player) ?? [];
+        const ownSecrets = learned.filter((note) => note.seat === seatOfPlayer(table, player)).map(({ secret }) => secretText(secret));
+
+        expect(seen.filter((line) => !everySecret.has(line))).toEqual(events.map((event) => eventText(roster, event)));
+        expect(seen.filter((line) => everySecret.has(line))).toEqual(ownSecrets);
+        expect(viewOf(table, player).events).toBeUndefined();
+        secretsShown += ownSecrets.length;
+        roundWinsHeard += seen.filter((line) => line.includes("wins the round")).length;
+      }
+
+      const player = choose(agentsToMove(table));
+      const view = toMove.get(player) ?? expect.unreachable("an Agent to move was not asked");
+      const outcome = play(table, player, choose(Arr.range(0, view.moves.length - 1)), view.turn);
+
+      absorb(player, parseView(answered(outcome.reply)));
+      table = outcome.table;
     }
-  });
+  }
 
-  expect(laterRounds).toBeGreaterThan(0);
+  expect(roundWinsHeard).toBeGreaterThan(0);
   expect(secretsShown).toBeGreaterThan(0);
 }, 30_000);
 

@@ -1,6 +1,6 @@
 import { flow, Option, Result, Schema } from "effect";
 
-import { SEATS_BY_TABLE, SeatCount } from "../domain.ts";
+import { SEATS_BY_TABLE, type Seat, SeatCount } from "../domain.ts";
 import { Controller, controllerOf } from "../driver.ts";
 import { PlayerNumber, rosterOf } from "../players.ts";
 import { type AgentSource, agentGame, agentMove, type SeatMove } from "./view.ts";
@@ -62,7 +62,7 @@ const inputSchemaOf = (schema: Schema.Top) => Schema.toJsonSchemaDocument(schema
 export const tools = [
   {
     name: "get_game",
-    description: `${RULES} Returns your view as JSON, without any field that has nothing to show. When it is not your turn the view is just {"status":"waiting"}: call get_game again in a moment. On your turn it is what your screen shows: status "your turn"; turn, to pass to play_move; players with health (not shown while jammed) and item names; gun, with who holds it and sawed when it is; events, the current round so far from its start, with what only you learned from the magnifying glass or the phone in its place (a load's live and blank counts are here; turn order is clockwise at each round's start and changes only when an event says so); and moves, your legal moves, played by their position in the list, from 0. Events of earlier rounds are not repeated, so remember what you need. When the match is over the view is "over" with the final standings. Several players can be Agents; each sees only its own secrets.`,
+    description: `${RULES} Returns your view as JSON, without any field that has nothing to show. When it is not your turn the view is just {"status":"waiting"}: call get_game again in a moment. On your turn it is what your screen shows: status "your turn"; turn, to pass to play_move; players with health (not shown while jammed) and item names; gun, with who holds it and sawed when it is; events, what happened since your previous view on your turn, from the start of the match in the first one, with what only you learned from the magnifying glass or the phone in its place (a load's live and blank counts, round wins and prizes, and round starts are events; turn order is clockwise at each round's start and changes only when an event says so); and moves, your legal moves, played by their position in the list, from 0. Events are shown once, so remember what you need. When the match is over the view is "over" with the final standings, which show each player's cash. Several players can be Agents; each sees only its own secrets and events.`,
     inputSchema: inputSchemaOf(GetGameArguments),
     isReadOnly: true,
     decodeCall: decoder("get_game", GetGameArguments, AgentCall.cases.GetGame.make),
@@ -108,6 +108,8 @@ export interface MatchSession<S> {
   readonly current: (state: S) => Option.Option<AgentSource>;
   readonly start: (state: S, setup: MatchSetup) => Applied<S>;
   readonly move: (state: S, move: SeatMove) => Applied<S>;
+  /** Records that a seat was shown the first `eventCount` events, so its next reply on its turn starts after them. */
+  readonly report: (state: S, seat: Seat, eventCount: number) => S;
 }
 
 export interface ToolOutcome<S> {
@@ -128,7 +130,8 @@ const viewReply = <S>(session: MatchSession<S>, state: S, player: PlayerNumber):
     onNone: () => refused(state, NO_MATCH),
     onSome: (source) =>
       Result.match(agentGame(source, player), {
-        onSuccess: (game) => answered(state, JSON.stringify(game)),
+        // Only a reply on the player's turn shows its events, so only that reply moves the report.
+        onSuccess: ({ seat, game }) => answered(game.status === "your turn" ? session.report(state, seat, source.events.length) : state, JSON.stringify(game)),
         onFailure: (reason) => refused(state, reason),
       }),
   });
