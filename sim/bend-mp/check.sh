@@ -285,6 +285,16 @@ gate_mutations() {
   fi
 }
 
+gate_simple_mutations() {
+  local out
+  out="$(python3 "$here/tools/simple_mutations.py" 2>&1)"
+  if [[ $? -eq 0 ]]; then
+    report ok "simple mutations" "$(printf '%s' "$out" | tail -1)"
+  else
+    report fail "simple mutations" "$(printf '%s' "$out" | tail -20)"
+  fi
+}
+
 gate_domain
 gate_unsafe
 gate_ai_imports
@@ -309,6 +319,7 @@ gate_machine_item_fuzz
 gate_simple_fuzz
 gate_mutations
 gate_fuzz_mutations
+gate_simple_mutations
 
 if [[ $failed -eq 0 ]]; then
   echo PASS
