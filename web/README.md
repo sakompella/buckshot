@@ -3,8 +3,9 @@
 A web game for the Bend multiplayer rules library in `sim/bend-mp/`, built
 on Foldkit 0.167 and Effect 4 and run with bun and Vite. It builds `web.bend` to
 JavaScript and plays 2- to 4-player matches in the browser, on a dark top-down
-table: you play by clicking the shotgun, a player's defibrillator, an item or the briefcase. Any player can be a
-human, a Story AI, a DoN AI or an agent (see below). The UI has no rules of its own. Legality,
+table drawn in DOM, CSS and SVG: you play by clicking the shotgun, a player's
+defibrillator, an item or the briefcase. Any player can be a human, a Story
+AI, a DoN AI or an agent (see below). The UI has no rules of its own. Legality,
 observation and privacy all come from the machine. See
 [`sim/bend-mp/README.md`](../sim/bend-mp/README.md) for the rules library.
 
@@ -55,9 +56,14 @@ and has the event log. Animations are CSS, keyed by the event's place in the
 log so each plays once and is gone when the next step starts, and
 `prefers-reduced-motion` turns movement off.
 
+The Speed setting (Slow, Normal, Fast) scales every pause: Normal holds a load
+reveal 2.6 s, a shot 2.2 s and a round over 4.4 s, and Fast is about an eighth
+of that. ADR-0029 records why the table is 2D; a three.js version of the whole
+scene is kept unmerged on branch `web/game-3d` as a reference.
+
 Fonts are self-hosted from `@fontsource`: League Gothic (banners) and VT323
 (everything else), both under the SIL Open Font License 1.1. Every drawing is
-original CSS or SVG.
+original CSS or SVG (ADR-0028).
 
 ## Playing with an agent (WebMCP)
 
@@ -266,8 +272,11 @@ The look borrows from the studio viewer in
 - `src/model.ts`: Foldkit Model and Messages. `src/main.ts`: update, init and
   the autoplay subscription, which pauses after each step for as long as its
   animation needs (scaled by the speed setting).
-- `src/view.ts`: setup screen, banner, menu, round-over and results.
-  `src/board-view.ts` draws the table; `src/icons.ts` has the SVG drawings.
+- `src/view.ts`: setup screen, banner, menu, round-over, private results and
+  the results. `src/board-view.ts` draws the table and its one-time effects,
+  keyed by event index; `src/board.ts` maps each legal move to the thing it is
+  played on; `src/icons.ts` has the SVG drawings; `src/styles.css` the look
+  and the animations.
 - `tools/oxlint/anti-slop/`: vendored anti-slop rules (see PROVENANCE.md).
 - `src/arena/cost.ts` prices model calls from `prices.json` and totals them; `scripts/arena-cost.ts` and the viewer both use it.
 - `src/viewer/runs.ts` reads run directories and their JSONL files, leaving out a last line still being written.
