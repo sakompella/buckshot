@@ -3,6 +3,9 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@earendil-works/chord": "1.1.0",
+    "@earendil-works/pi-ai": "1.1.0",
+    "@earendil-works/pi-durable": "1.1.0",
     "@effect/platform-browser": "4.0.0",
     "@fontsource/league-gothic": "5.3.0",
     "@fontsource/vt323": "5.3.0",
@@ -28,6 +31,7 @@
     "lint": "oxlint --deny-warnings",
     "typecheck": "tsc --noEmit -p .",
     "test": "bun run rules && bun test ./test",
-    "mcp": "bun run rules 1>&2 && bun scripts/mcp.ts"
+    "mcp": "bun run rules 1>&2 && bun scripts/mcp.ts",
+    "viewer": "bun run rules && bun scripts/viewer.ts"
   }
 }

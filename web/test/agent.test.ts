@@ -4,15 +4,15 @@ import { Array as Arr, Option, Schema } from "effect";
 import { AgentCall, AgentReply } from "../src/agent/tools.ts";
 import { Seat, SeatCount } from "../src/domain.ts";
 import { type Controller, promptsOf } from "../src/driver.ts";
-import { PlayerLetter, rosterOf } from "../src/players.ts";
+import { type Letter, rosterOf } from "../src/players.ts";
 import { handleAgentCall, init, update } from "../src/main.ts";
 import { Message, type Model } from "../src/model.ts";
 
 const STEP_LIMIT = 20_000;
 
-const A = PlayerLetter.make("A");
+const A = "A" satisfies Letter;
 
-const B = PlayerLetter.make("B");
+const B = "B" satisfies Letter;
 
 const View = Schema.Struct({
   you: Schema.String,
@@ -31,14 +31,14 @@ const call = (model: Model, request: AgentCall) => handleAgentCall(model, reques
 const newMatch = (players: SeatCount, items: boolean, seed: number, controllers: ReadonlyArray<Controller>, model = blank()): Model =>
   call(model, AgentCall.cases.NewMatch.make({ players, items, seed, controllers })).state;
 
-const getGame = (model: Model, player: PlayerLetter): AgentReply => call(model, AgentCall.cases.GetGame.make({ player })).reply;
+const getGame = (model: Model, player: Letter): AgentReply => call(model, AgentCall.cases.GetGame.make({ player })).reply;
 
-const play = (model: Model, player: PlayerLetter, move: number, turn: number) => call(model, AgentCall.cases.PlayMove.make({ player, move, turn }));
+const play = (model: Model, player: Letter, move: number, turn: number) => call(model, AgentCall.cases.PlayMove.make({ player, move, turn }));
 
 const answered = (reply: AgentReply): string =>
   AgentReply.match(reply, { Answered: ({ text }) => text, Refused: ({ reason }) => expect.unreachable(`refused: ${reason}`) });
 
-const viewOf = (model: Model, player: PlayerLetter) => parseView(answered(getGame(model, player)));
+const viewOf = (model: Model, player: Letter) => parseView(answered(getGame(model, player)));
 
 const match = (model: Model) => Option.getOrThrow(model.maybeMatch);
 
@@ -46,10 +46,10 @@ const isOver = (model: Model): boolean => match(model).game.pending.kind === "Fi
 
 const agentSeats = (model: Model): ReadonlyArray<Seat> => match(model).game.seats.filter((seat) => match(model).controllers[seat] === "Agent");
 
-const agentsToMove = (model: Model): ReadonlyArray<PlayerLetter> => {
+const agentsToMove = (model: Model): ReadonlyArray<Letter> => {
   const roster = rosterOf(match(model).game.seats);
 
-  return promptsOf(match(model).game).map(({ seat }) => seat).filter((seat) => agentSeats(model).includes(seat)).map(roster.playerOf);
+  return promptsOf(match(model).game).map(({ seat }) => seat).filter((seat) => agentSeats(model).includes(seat)).map((seat) => roster.playerOf(seat).letter);
 };
 
 /** Autoplay ticks until an Agent seat has a move or the match ends. */
@@ -69,7 +69,7 @@ test("in the page, two Agent players and a DoN player play a 3-player match to t
   let model = untilAgentTurn(newMatch(3, true, 42, ["Agent", "Agent", "DoN"]));
   let moves = 0;
   let sharedTurns = 0;
-  const moved = new Set<PlayerLetter>();
+  const moved = new Set<Letter>();
 
   for (; moves < STEP_LIMIT && !isOver(model); moves++) {
     const ready = agentsToMove(model);
@@ -147,7 +147,7 @@ test("in the page, new_match is refused while a match runs, the Restart match bu
 
 test("in the page, an Agent sees the item a Human player drew and has not placed yet", () => {
   const model = newMatch(2, true, 5, ["Human", "Agent"]);
-  const human = Option.getOrThrow(rosterOf(match(model).game.seats).seatOf(A));
+  const human = Option.getOrThrow(rosterOf(match(model).game.seats).find(A)).seat;
   const grab = Arr.findFirst(promptsOf(match(model).game), ({ seat }) => seat === human).pipe(Option.getOrThrow);
   const holding = update(model, Message.ClickedMove({ ...grab.ticket, seat: human, index: 0 })).model;
 

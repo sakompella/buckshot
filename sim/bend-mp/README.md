@@ -22,18 +22,21 @@ Out of scope are graphics, animation, sound, networking, the lobby, seat shuffli
 - `domain.bend` holds the types every part shares. They are seats, moves, requests, points, observations, notes and the match config. It holds no model state.
 - `ref/` is the reference, a Bend model that follows the Godot `MP_*` scripts function by function. Its frames carry the names of the Godot functions they follow. It exists only to verify the machine.
 - `sm/` is the machine. `state.bend` has the state, `rules.bend` and `items.bend` the pure rule functions, `point.bend` the requests and the public board, and `main.bend` the step function.
+- `simple/` is the simple machine (ADR-0013). Its choices are whole moves for one seat, such as shoot a player or steal an item, and distribution makes no choices. It reuses `sm/`'s records and pure rules but not its step. `simple-abstract.bend` embeds a simple state in a machine state and plays each simple answer as a chain of the machine's own legal steps.
 - `abstract.bend` is the bridge between the machine and the reference. `LAWS.bend` reaches the reference only through it. Proof files may also use `ref/` directly.
 - `LAWS.bend` states the laws. `PROOF.bend` proves them, using `step-proof.bend` (the run, start and game laws), `accept-proof.bend` (`legal_accepted`), `roundtrip-proof.bend` (`state_roundtrip`), `items-proof.bend` and the phase proofs it calls (listed below), and `core-proof.bend`, `grant-proof.bend`, `shot-proof.bend` and `primitive.bend`.
 - `ai/story.bend` and `ai/don.bend` are the two dealer AIs.
 - `driver.bend` is the controller that plays whole matches. `view.bend` renders them as text.
 - `main.bend` is a command line entry that plays matches and prints win rates. `web.bend` is the entry that the web UI builds to JavaScript.
-- `test/` holds scenario tests, the item law fuzz, a driver smoke test and a round trip test of the domain types.
+- `test/` holds scenario tests, the item law fuzz, a driver smoke test, a round trip test of the domain types, and the simple machine's smoke test and fuzz.
 - `tools/` and `mutate.py` hold the generators and the bug-planting checks.
 - `check.sh` runs every gate.
 
+When several seats can grab at once, the driver serves one grab per seat in turn, in socket order, from the seat after the first shooter (ADR-0033). The simple machine distributes in the same order, and the web bots and arena agents use the driver's chooser. The game itself has no fixed order: every client grabs at once.
+
 The machine keeps fixed seat identity. Two seats use sockets 1 and 3. Three seats use 0 to 2, and four seats use 0 to 3.
 
-Four modules keep to import rules that `check.sh` enforces. `ai/` imports only the domain. `sm/` imports only the domain and its own files. `driver.bend` never imports `ref/` or `abstract.bend`. An AI therefore sees only its prompt, the public board and what it heard, and a wrong decision can only come from AI code. `LAWS.bend` never imports `ref/`, so every law is stated over the machine and the mapping in `abstract.bend`.
+Five modules keep to import rules that `check.sh` enforces. `ai/` imports only the domain. `sm/` imports only the domain and its own files. `simple/` imports only the domain, `sm/`'s state, rules and items, and its own files. `driver.bend` never imports `ref/` or `abstract.bend`. An AI therefore sees only its prompt, the public board and what it heard, and a wrong decision can only come from AI code. `LAWS.bend` never imports `ref/`, so every law is stated over the machine and the mapping in `abstract.bend`.
 
 ## Answers
 
@@ -180,15 +183,15 @@ It takes about 7 to 8 minutes on a Mac, and about 1.5 minutes on a 7-core Linux 
 
 1. `domain.bend` type-checks and its proofs check.
 2. No `@unsafe` and no unfinished `def name?(` hole anywhere under this directory.
-3. The import rules for `ai/`, `sm/`, `driver.bend` and `LAWS.bend`.
-4. The driver smoke test. 64 matches at each table size finish with none stuck and no fuel spent.
+3. The import rules for `ai/`, `sm/`, `simple/`, `driver.bend` and `LAWS.bend`.
+4. The driver smoke test and the simple machine's smoke test. 64 matches at each table size finish with none stuck and no fuel spent.
 5. All twelve required laws are present in `LAWS.bend`.
 6. The generated proof bodies match their script.
 7. `PROOF.bend` checks with `--verdict`.
 8. The round trip of the domain types through JavaScript.
 9. The reference's core and item scenarios.
 10. The machine's core and item scenarios.
-11. The item law fuzz.
+11. The item law fuzz, and the simple machine fuzz. At every point of seeded random games it checks that the simple answer is a chain of the machine's legal steps that lands on the mapped next state with the same notes, and that the mapped state is valid. It also checks that boards, draws, menus, privacy and the distribution order agree.
 12. The machine mutations and the item fuzz mutations.
 
 Run only the proof kernel.
@@ -213,14 +216,14 @@ The two AIs are ports of the verified two-player dealer policies in `sim/python/
 
 | Items | DoN in seat 1 | DoN in seat 3 |
 |---|---|---|
-| on | 72.5% | 71.4% |
+| on | 71.9% | 72.4% |
 | off | 78.9% | 79.1% |
 
 In the mirrors, where every seat runs the same AI, the later seats win more often (items on, seats in table order):
 
 | Table | Story | DoN |
 |---|---|---|
-| 3 seats | 28.4 / 33.1 / 38.3 | 29.4 / 33.0 / 37.5 |
-| 4 seats | 19.5 / 23.2 / 26.4 / 30.7 | 19.9 / 23.4 / 27.1 / 29.4 |
+| 3 seats | 30.8 / 33.8 / 35.3 | 30.4 / 33.8 / 35.7 |
+| 4 seats | 20.8 / 24.4 / 26.9 / 27.7 | 20.9 / 24.3 / 26.5 / 28.1 |
 
-The cause is an open question. It may be the turn order or a bias in the AIs. It has not been checked yet.
+These numbers use the round-robin distribution of ADR-0033. Earlier tables came from a driver that served the lowest socket first, so seat 0 took all its items first and had first claim on the jammer and the remotes. With that driver the mirrors were wider: 28.4 / 33.1 / 38.3 for story at 3 seats, and 19.5 / 23.2 / 26.4 / 30.7 at 4 seats. The 2-seat items-on figures were 72.5% and 71.4%. Fixing the order narrowed the later-seat advantage but did not remove it. The rest is still an open question. It may be the turn order or a bias in the AIs.

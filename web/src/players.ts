@@ -8,49 +8,52 @@ import type { Seat } from "./domain.ts";
 // whichever seats they sit in. Bend and the driver keep raw seat ids; only a
 // Roster converts between the two.
 
-const Letter = Schema.Literals(["A", "B", "C", "D"]);
+/** A player's letter as people, agents and logs write it. Parse it with this schema wherever text comes in. */
+export const Letter = Schema.Literals(["A", "B", "C", "D"]);
 
-export const PlayerLetter = Letter.pipe(Schema.brand("PlayerLetter"));
+export type Letter = typeof Letter.Type;
 
-export type PlayerLetter = typeof PlayerLetter.Type;
+/**
+ * A player seated at a table. Only a Roster makes one, so holding a Player proves the table has it and its seat is known.
+ * `Player<"A">` is Player A where the letter is known statically and `Player` is any player; a call that names a letter gets a `Player` from `Roster.find`.
+ */
+export interface Player<L extends Letter = Letter> {
+  readonly letter: L;
+  readonly seat: Seat;
+}
 
-export const playerName = (player: PlayerLetter): string => `Player ${player}`;
+export const playerName = (letter: Letter): string => `Player ${letter}`;
 
 /** The letter of each seat at a table. */
-export type Assignment = ReadonlyMap<Seat, PlayerLetter>;
+export type Assignment = ReadonlyMap<Seat, Letter>;
 
-/** The seats at one table, in table order. */
+/** The players at one table, in table order. */
 export interface Roster {
-  readonly players: ReadonlyArray<PlayerLetter>;
+  readonly players: ReadonlyArray<Player>;
   /** The player in a seat of this table. Events and boards only name seated seats, so any other seat is a bug. */
-  readonly playerOf: (seat: Seat) => PlayerLetter;
-  /** The seat of a player a caller named, or none when the table has no such player. */
-  readonly seatOf: (player: PlayerLetter) => Option.Option<Seat>;
+  readonly playerOf: (seat: Seat) => Player;
+  /** The player a caller named, or none when the table has no such player. */
+  readonly find: <L extends Letter>(letter: L) => Option.Option<Player<L>>;
   readonly nameOf: (seat: Seat) => string;
 }
 
-const toLetter = Schema.decodeUnknownOption(PlayerLetter);
-
-const inTableOrder = (seats: ReadonlyArray<Seat>): Assignment => new Map(Arr.zip(seats, Arr.getSomes(Letter.literals.map((letter) => toLetter(letter)))));
+const inTableOrder = (seats: ReadonlyArray<Seat>): Assignment => new Map(Arr.zip(seats, Letter.literals));
 
 /** A roster for the seats of a table. Without an assignment the letters run A, B, ... in the order of the seats. */
 export const rosterOf = (seats: ReadonlyArray<Seat>, assignment: Assignment = inTableOrder(seats)): Roster => {
-  const seated = Arr.getSomes(seats.map((seat) => Option.fromUndefinedOr(assignment.get(seat)).pipe(Option.map((player) => [player, seat] as const))));
+  const players = Arr.getSomes(seats.map((seat) => Option.fromUndefinedOr(assignment.get(seat)).pipe(Option.map((letter): Player => ({ letter, seat })))));
 
-  if (seated.length !== seats.length || new Set(seated.map(([player]) => player)).size !== seats.length) {
+  if (players.length !== seats.length || new Set(players.map(({ letter }) => letter)).size !== seats.length) {
     throw new Error("A roster needs every seat at the table to have its own letter.");
   }
 
-  const playerOf = (seat: Seat): PlayerLetter =>
-    Arr.findFirst(seated, ([, seatOfPlayer]) => seatOfPlayer === seat).pipe(
-      Option.map(([player]) => player),
-      Option.getOrThrowWith(() => new Error("A player was asked for a seat that is not at this table.")),
-    );
+  const playerOf = (seat: Seat): Player =>
+    Arr.findFirst(players, (player) => player.seat === seat).pipe(Option.getOrThrowWith(() => new Error("A player was asked for a seat that is not at this table.")));
 
   return {
-    players: seated.map(([player]) => player),
+    players,
     playerOf,
-    seatOf: (player) => Arr.findFirst(seated, ([candidate]) => candidate === player).pipe(Option.map(([, seat]) => seat)),
-    nameOf: (seat) => playerName(playerOf(seat)),
+    find: <L extends Letter>(letter: L) => Arr.findFirst(players, (player): player is Player<L> => player.letter === letter),
+    nameOf: (seat) => playerName(playerOf(seat).letter),
   };
 };
