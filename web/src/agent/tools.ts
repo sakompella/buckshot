@@ -11,7 +11,7 @@ import { type AgentSource, agentGame, agentMove, type SeatMove } from "./view.ts
 // runs it with runTool over its own MatchSession.
 
 const RULES =
-  "Buckshot: a shotgun is loaded with a hidden mix of live and blank shells, and each load is announced. On your turn you shoot a player or yourself, or use an item; a live shell does damage and a blank fired at yourself keeps your turn. The last player alive wins the round and its prize, and the most cash after the last round wins.";
+  "Buckshot: a shotgun is loaded with a hidden mix of live and blank shells, and each load is announced. On your turn you shoot a player or yourself, or use an item; a live shell does damage and a blank fired at yourself keeps your turn. The last player alive wins the round and its prize, and the most cash after the last round wins. A match has three rounds.";
 
 const PlayerArgument = PlayerNumber.annotate({ description: "The Agent player this call is for: the number in the player names, 1 for Player 1 up to the number of players at the table (at most 4)." });
 
@@ -19,7 +19,7 @@ const GetGameArguments = Schema.Struct({ player: PlayerArgument });
 
 const PlayMoveArguments = Schema.Struct({
   player: PlayerArgument,
-  index: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)).annotate({ description: "The index of the move in get_game's moves list." }),
+  index: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)).annotate({ description: "The position of the move in get_game's moves list, from 0." }),
   turn: Schema.optionalKey(Schema.Int.annotate({ description: "The turn value from get_game. Pass it so a stale move is refused instead of played." })),
 });
 
@@ -62,7 +62,7 @@ const inputSchemaOf = (schema: Schema.Top) => Schema.toJsonSchemaDocument(schema
 export const tools = [
   {
     name: "get_game",
-    description: `${RULES} Returns your view as JSON: the public board, your private notes, recent events, whether it is your turn, and your legal moves as a numbered list. Only legal moves are listed. Several players can be Agents; each sees only its own notes.`,
+    description: `${RULES} Returns your view as JSON, without any field that has nothing to show. When it is not your turn the view is just {"status":"waiting"}: call get_game again in a moment. On your turn it is what your screen shows: status "your turn"; turn, to pass to play_move; players with health (not shown while jammed) and item names; gun, with who holds it and sawed when it is; events, the current round so far from its start, with what only you learned from the magnifying glass or the phone in its place (a load's live and blank counts are here; turn order is clockwise at each round's start and changes only when an event says so); and moves, your legal moves, played by their position in the list, from 0. Events of earlier rounds are not repeated, so remember what you need. When the match is over the view is "over" with the final standings. Several players can be Agents; each sees only its own secrets.`,
     inputSchema: inputSchemaOf(GetGameArguments),
     isReadOnly: true,
     decodeCall: decoder("get_game", GetGameArguments, AgentCall.cases.GetGame.make),
@@ -70,7 +70,7 @@ export const tools = [
   {
     name: "play_move",
     description:
-      "Play one of your legal moves, by its number in get_game's moves list. Only legal moves are listed, so any listed number is allowed. Fails if it is not your turn or the turn is stale; any player's move advances the turn. Returns your new view. The other players move on their own, so call get_game until isYourTurn is true.",
+      'Play one of your legal moves, by its position in get_game\'s moves list, from 0. Only legal moves are listed. Fails if it is not your turn or the turn is stale; any player\'s move advances the turn. Returns your view as get_game does. The other players move on their own, so call get_game until status is "your turn".',
     inputSchema: inputSchemaOf(PlayMoveArguments),
     isReadOnly: false,
     decodeCall: decoder("play_move", PlayMoveArguments, AgentCall.cases.PlayMove.make),
@@ -126,7 +126,11 @@ const answered = <S>(state: S, text: string): ToolOutcome<S> => ({ state, reply:
 const viewReply = <S>(session: MatchSession<S>, state: S, player: PlayerNumber): ToolOutcome<S> =>
   Option.match(session.current(state), {
     onNone: () => refused(state, NO_MATCH),
-    onSome: (source) => Result.match(agentGame(source, player), { onSuccess: (game) => answered(state, JSON.stringify(game)), onFailure: (reason) => refused(state, reason) }),
+    onSome: (source) =>
+      Result.match(agentGame(source, player), {
+        onSuccess: (game) => answered(state, JSON.stringify(game)),
+        onFailure: (reason) => refused(state, reason),
+      }),
   });
 
 /** Replies from the state a change left, or with the error it ran into. */
@@ -145,7 +149,6 @@ const tableReply = <S>(session: MatchSession<S>, state: S): ToolOutcome<S> =>
         JSON.stringify({
           players: source.game.seats.map((seat) => ({ player: roster.playerOf(seat), controller: controllerOf(source.controllers, seat) })),
           seed: String(source.seed),
-          hint: "Call get_game with an Agent player's number to see that player's view and moves.",
         }),
       );
     },

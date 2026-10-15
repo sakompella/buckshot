@@ -4,10 +4,11 @@ import { Array as Arr, Option, Result, Schema } from "effect";
 import { emptyTable, type HeadlessTable, headlessSession } from "../src/agent/headless.ts";
 import { AgentReply, runTool, tools } from "../src/agent/tools.ts";
 import { Game } from "../src/bend.ts";
-import { SeatCount } from "../src/domain.ts";
+import { GameEvent, Secret, SeatCount } from "../src/domain.ts";
 import { type Controller, promptsOf } from "../src/driver.ts";
 import { rosterOf } from "../src/players.ts";
 import { nextBelow, type Rng, seedRng } from "../src/rng.ts";
+import { eventText, secretText } from "../src/text.ts";
 
 // The tool contract, through the same decodeCall and runTool both front ends
 // use, over the headless session the MCP server runs.
@@ -18,12 +19,12 @@ const MAX_PLAYERS = 4;
 
 const View = Schema.Struct({
   you: Schema.Number,
-  players: Schema.Array(Schema.Struct({ player: Schema.Number })),
-  isYourTurn: Schema.Boolean,
-  isMatchOver: Schema.Boolean,
-  turn: Schema.Number,
-  privateNotes: Schema.Array(Schema.String),
-  moves: Schema.Array(Schema.Struct({ index: Schema.Number, label: Schema.String })),
+  status: Schema.Literals(["your turn", "waiting", "over"]),
+  turn: Schema.optionalKey(Schema.Number),
+  players: Schema.optionalKey(Schema.Array(Schema.Struct({ player: Schema.Number }))),
+  events: Schema.optionalKey(Schema.Array(Schema.String)),
+  moves: Schema.optionalKey(Schema.Array(Schema.String)),
+  standings: Schema.optionalKey(Schema.Array(Schema.Struct({ player: Schema.Number, cash: Schema.Number }))),
 });
 
 const parseView = Schema.decodeUnknownSync(Schema.fromJsonString(View));
@@ -65,6 +66,13 @@ const getGame = (table: HeadlessTable, player: number): AgentReply => call(table
 
 const viewOf = (table: HeadlessTable, player: number) => parseView(answered(getGame(table, player)));
 
+/** A view of a player who has the turn, with its turn and moves. */
+const turnViewOf = (table: HeadlessTable, player: number) => {
+  const { turn, moves = [], ...view } = viewOf(table, player);
+
+  return { ...view, turn: turn ?? expect.unreachable("a player to move has no turn"), moves };
+};
+
 const play = (table: HeadlessTable, player: number, index: number, turn: number): Outcome => call(table, "play_move", { player, index, turn });
 
 const match = (table: HeadlessTable) => Option.getOrThrow(table.maybeMatch);
@@ -103,13 +111,12 @@ const chooser = (seed: number) => {
   };
 };
 
-test("on random tables of 2 to 4 players, random Agent moves reach the end; each Agent sees only its own notes and the players as Player 1 to N, and calls for other players or stale turns change nothing", () => {
-  const choose = chooser(2026);
-  const otherState = match(newMatch(4, 8, ["Agent", "DoN", "DoN", "DoN"])).game.state;
+/** Plays random matches on tables of 2 to 4 players, with Agents moving at random, and runs a check at every point where an Agent has the turn. Returns the table sizes it played. */
+const playRandomTables = (seed: number, trials: number, check: (table: HeadlessTable) => void): ReadonlySet<SeatCount> => {
+  const choose = chooser(seed);
   const tableSizes = new Set<SeatCount>();
-  let otherAgentNotes = 0;
 
-  for (let trial = 0; trial < 9; trial++) {
+  for (let trial = 0; trial < trials; trial++) {
     const players = SeatCount.literals[trial % SeatCount.literals.length] ?? 2;
     const lead = choose(Arr.range(0, players - 1));
     const controllers = Arr.makeBy(players, (position): Controller => (position === lead ? "Agent" : choose(["Agent", "DoN", "Story"] as const)));
@@ -118,61 +125,160 @@ test("on random tables of 2 to 4 players, random Agent moves reach the end; each
     tableSizes.add(players);
 
     for (let steps = 0; steps < STEP_LIMIT && !isOver(table); steps++) {
-      const current = match(table);
-      const agents = agentPlayers(table);
-      const roster = rosterAt(table);
-
       // The bots have already moved: an Agent always has the turn until the end.
       expect(agentsToMove(table).length).toBeGreaterThan(0);
-
-      for (const player of Arr.range(1, Math.min(roster.players.length + 1, MAX_PLAYERS))) {
-        if (!agents.includes(player)) {
-          const outcome = call(table, "play_move", { player, index: 0 });
-          const isAtTable = player <= roster.players.length;
-
-          expect(refusal(getGame(table, player))).toContain(isAtTable ? "not an Agent player" : "no Player");
-          expect(refusal(outcome.reply)).toContain(isAtTable ? "not an Agent player" : "no Player");
-          expect(outcome.table).toBe(table);
-
-          if (isAtTable) expectOnlyPlayers(table, outcome.reply);
-
-          continue;
-        }
-
-        const seat = seatOfPlayer(table, player);
-        const reply = getGame(table, player);
-        const view = parseView(answered(reply));
-        const ownNotes = current.learned.filter((note) => note.seat === seat);
-        const hiddenSwapped = new Game(current.game.table, current.game.seats, current.game.ticket, current.game.board, current.game.pending, otherState);
-
-        otherAgentNotes += current.learned.filter((note) => note.seat !== seat && agents.includes(roster.playerOf(note.seat))).length;
-        expectOnlyPlayers(table, reply);
-        expect(view.you).toBe(player);
-        expect(view.players.map((entry) => entry.player)).toEqual(Arr.range(1, roster.players.length));
-        expect(view.privateNotes).toHaveLength(ownNotes.length);
-        expect(getGame({ ...table, maybeMatch: Option.some({ ...current, learned: ownNotes }) }, player)).toEqual(reply);
-        expect(getGame({ ...table, maybeMatch: Option.some({ ...current, game: hiddenSwapped }) }, player)).toEqual(reply);
-
-        for (const turn of [view.turn - 1, view.turn + 1]) {
-          const outcome = play(table, player, 0, turn);
-
-          expect(refusal(outcome.reply)).toContain(view.isYourTurn ? "Stale" : "not your turn");
-          expect(outcome.table).toBe(table);
-        }
-      }
+      check(table);
 
       const player = choose(agentsToMove(table));
-      const view = viewOf(table, player);
+      const view = turnViewOf(table, player);
 
-      table = play(table, player, choose(view.moves).index, view.turn).table;
+      table = play(table, player, choose(Arr.range(0, view.moves.length - 1)), view.turn).table;
     }
 
     expect(isOver(table)).toBe(true);
-    expect(viewOf(table, lead + 1).isMatchOver).toBe(true);
+    expect(viewOf(table, lead + 1).status).toBe("over");
   }
+
+  return tableSizes;
+};
+
+test("on random tables of 2 to 4 players, each Agent sees the players as Player 1 to N and never another player's secrets or the hidden shells, and calls for other players or stale turns change nothing", () => {
+  const otherState = match(newMatch(4, 8, ["Agent", "DoN", "DoN", "DoN"])).game.state;
+  let otherAgentNotes = 0;
+
+  const tableSizes = playRandomTables(2026, 9, (table) => {
+    const current = match(table);
+    const agents = agentPlayers(table);
+    const roster = rosterAt(table);
+
+    for (const player of Arr.range(1, Math.min(roster.players.length + 1, MAX_PLAYERS))) {
+      if (!agents.includes(player)) {
+        const outcome = call(table, "play_move", { player, index: 0 });
+        const isAtTable = player <= roster.players.length;
+
+        expect(refusal(getGame(table, player))).toContain(isAtTable ? "not an Agent player" : "no Player");
+        expect(refusal(outcome.reply)).toContain(isAtTable ? "not an Agent player" : "no Player");
+        expect(outcome.table).toBe(table);
+
+        if (isAtTable) expectOnlyPlayers(table, outcome.reply);
+
+        continue;
+      }
+
+      const seat = seatOfPlayer(table, player);
+      const reply = getGame(table, player);
+      const view = parseView(answered(reply));
+      const ownNotes = current.learned.filter((note) => note.seat === seat);
+      const hiddenSwapped = new Game(current.game.table, current.game.seats, current.game.ticket, current.game.board, current.game.pending, otherState);
+
+      otherAgentNotes += current.learned.filter((note) => note.seat !== seat && agents.includes(roster.playerOf(note.seat))).length;
+      expectOnlyPlayers(table, reply);
+      expect(view.you).toBe(player);
+      expect(getGame({ ...table, maybeMatch: Option.some({ ...current, learned: ownNotes }) }, player)).toEqual(reply);
+      expect(getGame({ ...table, maybeMatch: Option.some({ ...current, game: hiddenSwapped }) }, player)).toEqual(reply);
+
+      if (view.status === "your turn") expect(view.players?.map((entry) => entry.player)).toEqual(Arr.range(1, roster.players.length));
+
+      const turn = view.turn ?? 0;
+
+      for (const staleTurn of [turn - 1, turn + 1]) {
+        const outcome = play(table, player, 0, staleTurn);
+
+        expect(refusal(outcome.reply)).toContain(view.status === "your turn" ? "Stale" : "not your turn");
+        expect(outcome.table).toBe(table);
+      }
+    }
+  });
 
   expect(tableSizes).toEqual(new Set(SeatCount.literals));
   expect(otherAgentNotes).toBeGreaterThan(0);
+}, 30_000);
+
+test("a view holds only what the screen shows: a bare waiting while it is not the player's turn, no cash or nulls until the match is over, and the final standings with every player's cash", () => {
+  playRandomTables(77, 3, (table) => {
+    for (const player of agentPlayers(table)) {
+      const text = answered(getGame(table, player));
+      const view = parseView(text);
+
+      expect(text).not.toContain("null");
+
+      if (view.status === "waiting") expect(JSON.parse(text)).toEqual({ you: player, status: "waiting" });
+      else expect(text).not.toContain("cash");
+    }
+  });
+
+  let table = newMatch(2, 5, ["Agent", "DoN"]);
+
+  while (!isOver(table)) {
+    const view = turnViewOf(table, 1);
+
+    table = play(table, 1, 0, view.turn).table;
+  }
+
+  const { standings, ...over } = viewOf(table, 1);
+
+  expect(over).toEqual({ you: 1, status: "over" });
+  expect(standings?.map(({ player }) => player).toSorted()).toEqual([1, 2]);
+}, 30_000);
+
+test("on random tables of 2 to 4 players, an Agent's events are the current round's events in order, from its start, with no gaps or repeats, and only its own secrets in them", () => {
+  let laterRounds = 0;
+  let secretsShown = 0;
+
+  playRandomTables(31, 9, (table) => {
+    const { events, learned } = match(table);
+    const roster = rosterAt(table);
+    const roundStart = events.findLastIndex(GameEvent.guards.RoundBegan);
+    const publicRound = events.slice(roundStart).map((event) => eventText(roster, event));
+    const everySecret = new Set(learned.map(({ secret }) => secretText(secret)));
+
+    laterRounds += roundStart > 0 ? 1 : 0;
+
+    for (const player of agentsToMove(table)) {
+      const shown = viewOf(table, player).events ?? [];
+      const ownSecrets = learned.filter((note) => note.seat === seatOfPlayer(table, player) && note.at > roundStart).map(({ secret }) => secretText(secret));
+
+      expect(shown.filter((line) => !everySecret.has(line))).toEqual(publicRound);
+      expect(shown.filter((line) => everySecret.has(line))).toEqual(ownSecrets);
+      secretsShown += ownSecrets.length;
+    }
+  });
+
+  expect(laterRounds).toBeGreaterThan(0);
+  expect(secretsShown).toBeGreaterThan(0);
+}, 30_000);
+
+test("a phone clue's position counts the chambered shell as 1, as the shells fired later show", () => {
+  let checked = 0;
+
+  for (const seed of Arr.range(1, 8)) {
+    let table = newMatch(3, seed, ["Agent", "Agent", "DoN"]);
+
+    for (let steps = 0; steps < STEP_LIMIT && !isOver(table); steps++) {
+      const player = Arr.getUnsafe(agentsToMove(table), 0);
+      const { moves, turn } = turnViewOf(table, player);
+
+      table = play(table, player, (steps * 7 + 3) % moves.length, turn).table;
+    }
+
+    const { events, learned } = match(table);
+
+    for (const { secret, at } of learned) {
+      if (!Secret.guards.Clue(secret)) continue;
+
+      const rest = events.slice(at);
+      const sameGun = rest.slice(0, Math.max(0, rest.findIndex(GameEvent.guards.Loaded)));
+      const used = sameGun.flatMap((event) => (GameEvent.guards.Fired(event) || GameEvent.guards.Ejected(event) ? [event.shell] : []));
+
+      // An inverter flips the chambered shell, which would hide what the clue said.
+      if (sameGun.some(GameEvent.guards.Inverted) || used.length < secret.position) continue;
+
+      expect(used[secret.position - 1]).toBe(secret.shell);
+      checked += 1;
+    }
+  }
+
+  expect(checked).toBeGreaterThan(0);
 }, 30_000);
 
 test("Agent players that may move at once can answer in either order, and the later one must reread its turn", () => {
@@ -181,22 +287,22 @@ test("Agent players that may move at once can answer in either order, and the la
   for (let steps = 0; steps < STEP_LIMIT && agentsToMove(table).length < 2; steps++) {
     const player = Arr.getUnsafe(agentsToMove(table), 0);
 
-    table = play(table, player, 0, viewOf(table, player).turn).table;
+    table = play(table, player, 0, turnViewOf(table, player).turn).table;
   }
 
   for (const [first, second] of [[1, 2], [2, 1]] as const) {
-    const before = viewOf(table, second);
-    const afterFirst = play(table, first, 0, viewOf(table, first).turn).table;
+    const before = turnViewOf(table, second);
+    const afterFirst = play(table, first, 0, turnViewOf(table, first).turn).table;
 
-    expect(viewOf(afterFirst, second).isYourTurn).toBe(true);
+    expect(viewOf(afterFirst, second).status).toBe("your turn");
     expect(refusal(play(afterFirst, second, 0, before.turn).reply)).toContain("Stale");
-    expect(play(afterFirst, second, 0, viewOf(afterFirst, second).turn).reply._tag).toBe("Answered");
+    expect(play(afterFirst, second, 0, turnViewOf(afterFirst, second).turn).reply._tag).toBe("Answered");
   }
 });
 
 test("a move number outside the list, or arguments that do not fit the schema, are refused and change nothing", () => {
   const table = newMatch(2, 3, ["DoN", "Agent"]);
-  const { moves, turn } = viewOf(table, 2);
+  const { moves, turn } = turnViewOf(table, 2);
   const outOfRange = play(table, 2, moves.length, turn);
 
   expect(refusal(outOfRange.reply)).toContain("no move");
@@ -216,7 +322,7 @@ test("a move when it is not the player's turn is refused", () => {
   for (let steps = 0; steps < STEP_LIMIT && agentsToMove(table).length !== 1; steps++) {
     const player = Arr.getUnsafe(agentsToMove(table), 0);
 
-    table = play(table, player, 0, viewOf(table, player).turn).table;
+    table = play(table, player, 0, turnViewOf(table, player).turn).table;
   }
 
   const waiting = agentPlayers(table).find((player) => !agentsToMove(table).includes(player)) ?? expect.unreachable("no waiting agent");
