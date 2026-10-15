@@ -2,8 +2,8 @@ import { Schema } from "effect";
 import { chromium, type Page } from "playwright-core";
 
 // Plays two matches with items through the WebMCP tools only, in headless
-// Chrome with the WebMCP testing feature: a 2-seat match with one Agent seat
-// against DoN, and a 3-seat match with two Agent seats and one DoN seat. Chrome 155 has no navigator.modelContextTesting,
+// Chrome with the WebMCP testing feature: a 2-player match with one Agent player
+// against DoN, and a 3-player match with two Agent players and one DoN player. Chrome 155 has no navigator.modelContextTesting,
 // so the tools run through document.modelContext.getTools() and executeTool(), as the spec defines.
 // Usage: bun run dev -- --port 5177 (elsewhere), then bun scripts/agent.ts [url] [outdir]
 
@@ -29,6 +29,11 @@ const parseView = Schema.decodeUnknownSync(Schema.fromJsonString(View));
 
 const problems: Array<string> = [];
 
+// Anything that names a seat or a Player 0, where people and agents should only see Player 1 to N.
+const leaks: Array<string> = [];
+
+const RAW_SEAT = /seat|Player 0/i;
+
 const watch = (page: Page): void => {
   page.on("console", (message) => {
     if (message.type() === "error" || message.type() === "warning") problems.push(message.text());
@@ -37,8 +42,8 @@ const watch = (page: Page): void => {
 };
 
 /** Runs one tool through the page's own model context. A refusal comes back as text, not a throw. */
-const callTool = (page: Page, name: string, input: Record<string, number | string | boolean | ReadonlyArray<string>>): Promise<{ readonly ok: boolean; readonly text: string }> =>
-  page.evaluate(
+const callTool = async (page: Page, name: string, input: Record<string, number | string | boolean | ReadonlyArray<string>>): Promise<{ readonly ok: boolean; readonly text: string }> => {
+  const reply = await page.evaluate(
     async ([toolName, args]) => {
       const context = document.modelContext;
       const tool = (await context?.getTools())?.find((candidate) => candidate.name === toolName);
@@ -53,7 +58,16 @@ const callTool = (page: Page, name: string, input: Record<string, number | strin
     [name, input] as const,
   );
 
+  if (RAW_SEAT.test(reply.text)) leaks.push(`${name}: ${reply.text.slice(0, 200)}`);
+
+  return reply;
+};
+
 const shot = async (page: Page, name: string): Promise<void> => {
+  const shown = await page.locator("body").innerText();
+
+  if (RAW_SEAT.test(shown)) leaks.push(`${name}: ${shown.match(/.*(?:seat|Player 0).*/i)?.[0]}`);
+
   await page.screenshot({ path: `${outdir}/${name}.png`, fullPage: true });
 };
 
@@ -66,9 +80,9 @@ const plainPage = await plain.newPage({ viewport: { width: 1360, height: 900 } }
 
 await plainPage.goto(url);
 
-await plainPage.getByRole("button", { name: "Seat 3: DoN" }).click();
+await plainPage.getByRole("button", { name: "Player 2: DoN" }).click();
 
-await plainPage.getByRole("button", { name: "Seat 3: Agent" }).waitFor();
+await plainPage.getByRole("button", { name: "Player 2: Agent" }).waitFor();
 
 await shot(plainPage, "01-no-webmcp-hint");
 
@@ -92,27 +106,27 @@ console.log("registered tools:", JSON.stringify(tools, null, 2));
 
 await shot(page, "02-flag-on-empty");
 
-console.log("get_game with no match:", await callTool(page, "get_game", { seat: 0 }));
+console.log("get_game with no match:", await callTool(page, "get_game", { player: 1 }));
 
-console.log("play_move with no match:", await callTool(page, "play_move", { seat: 0, index: 0 }));
+console.log("play_move with no match:", await callTool(page, "play_move", { player: 1, index: 0 }));
 
 console.log("new_match with a bad seed:", await callTool(page, "new_match", { players: 2, items: true, seed: "abc" }));
 
 console.log("new_match with too few controllers:", await callTool(page, "new_match", { players: 3, items: true, controllers: ["Agent"] }));
 
-const Table = Schema.Struct({ seats: Schema.Array(Schema.Struct({ seat: Schema.Number, controller: Schema.String })) });
+const Table = Schema.Struct({ players: Schema.Array(Schema.Struct({ player: Schema.Number, controller: Schema.String })) });
 
 const parseTable = Schema.decodeUnknownSync(Schema.fromJsonString(Table));
 
-const getView = async (seat: number) => {
-  const got = await callTool(page, "get_game", { seat });
+const getView = async (player: number) => {
+  const got = await callTool(page, "get_game", { player });
 
-  if (!got.ok) throw new Error(`get_game(${seat}) failed: ${got.text}`);
+  if (!got.ok) throw new Error(`get_game(${player}) failed: ${got.text}`);
 
   return parseView(got.text);
 };
 
-/** Starts a match and plays every Agent seat through the tools until the match is over. */
+/** Starts a match and plays every Agent player through the tools until the match is over. */
 const playMatch = async (name: string, input: Record<string, number | string | boolean | ReadonlyArray<string>>): Promise<boolean> => {
   const started = await callTool(page, "new_match", input);
 
@@ -120,11 +134,11 @@ const playMatch = async (name: string, input: Record<string, number | string | b
 
   if (!started.ok) throw new Error(`new_match refused: ${started.text}`);
 
-  const table = parseTable(started.text).seats;
-  const agents = table.filter(({ controller }) => controller === "Agent").map(({ seat }) => seat);
+  const table = parseTable(started.text).players;
+  const agents = table.filter(({ controller }) => controller === "Agent").map(({ player }) => player);
   const other = table.find(({ controller }) => controller !== "Agent");
 
-  if (other !== undefined) console.log(`${name} get_game for a non-Agent seat:`, await callTool(page, "get_game", { seat: other.seat }));
+  if (other !== undefined) console.log(`${name} get_game for a non-Agent player:`, await callTool(page, "get_game", { player: other.player }));
 
   await shot(page, `${name}-1-new-match`);
 
@@ -136,7 +150,7 @@ const playMatch = async (name: string, input: Record<string, number | string | b
   let isStaleChecked = false;
 
   for (; calls < CALL_LIMIT; calls++) {
-    const views = await Promise.all(agents.map(async (seat) => ({ seat, view: await getView(seat) })));
+    const views = await Promise.all(agents.map(async (player) => ({ player, view: await getView(player) })));
 
     if (views.some(({ view }) => view.isMatchOver)) break;
 
@@ -160,9 +174,9 @@ const playMatch = async (name: string, input: Record<string, number | string | b
 
     if (!isStaleChecked) {
       isStaleChecked = true;
-      console.log(`${name} out-of-range move:`, await callTool(page, "play_move", { seat: mover.seat, index: mover.view.moves.length, turn: mover.view.turn }));
-      console.log(`${name} stale turn:`, await callTool(page, "play_move", { seat: mover.seat, index: 0, turn: mover.view.turn + 1 }));
-      console.log(`${name} bad argument type:`, await callTool(page, "play_move", { seat: mover.seat, index: "zero" }));
+      console.log(`${name} out-of-range move:`, await callTool(page, "play_move", { player: mover.player, index: mover.view.moves.length, turn: mover.view.turn }));
+      console.log(`${name} stale turn:`, await callTool(page, "play_move", { player: mover.player, index: 0, turn: mover.view.turn + 1 }));
+      console.log(`${name} bad argument type:`, await callTool(page, "play_move", { player: mover.player, index: "zero" }));
     }
 
     sharedTurns += ready.length > 1 ? 1 : 0;
@@ -171,9 +185,9 @@ const playMatch = async (name: string, input: Record<string, number | string | b
 
     if (choice === undefined) throw new Error("agent turn with no legal moves");
 
-    const played = await callTool(page, "play_move", { seat: mover.seat, index: choice.index, turn: mover.view.turn });
+    const played = await callTool(page, "play_move", { player: mover.player, index: choice.index, turn: mover.view.turn });
 
-    // Another seat can move between get_game and play_move while several seats grab at once; read again.
+    // Another player can move between get_game and play_move while several players grab at once; read again.
     if (played.text.includes("Stale move")) {
       staleRetries += 1;
       continue;
@@ -189,9 +203,9 @@ const playMatch = async (name: string, input: Record<string, number | string | b
   const finals = await Promise.all(agents.map(getView));
   const isOver = finals.every((view) => view.isMatchOver);
 
-  console.log(`${name}: match over: ${isOver}, agent seats: ${agents.join(", ")}, agent moves: ${moves}, turns where several agents could move: ${sharedTurns}, stale retries: ${staleRetries}, tool rounds: ${calls}`);
+  console.log(`${name}: match over: ${isOver}, agent players: ${agents.join(", ")}, agent moves: ${moves}, turns where several agents could move: ${sharedTurns}, stale retries: ${staleRetries}, tool rounds: ${calls}`);
 
-  console.log(`${name} play_move after the end:`, await callTool(page, "play_move", { seat: agents[0] ?? 0, index: 0 }));
+  console.log(`${name} play_move after the end:`, await callTool(page, "play_move", { player: agents[0] ?? 1, index: 0 }));
 
   await shot(page, `${name}-4-match-over`);
 
@@ -206,6 +220,8 @@ const isTrioOver = await playMatch("trio", { players: 3, items: true, seed: "42"
 
 console.log("console problems:", problems);
 
+console.log("seat or Player 0 shown:", leaks);
+
 await browser.close();
 
-if (!isDuelOver || !isTrioOver) process.exit(1);
+if (!isDuelOver || !isTrioOver || leaks.length > 0) process.exit(1);

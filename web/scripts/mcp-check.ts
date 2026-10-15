@@ -2,11 +2,13 @@ import { Client } from "@modelcontextprotocol/client";
 import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { Schema } from "effect";
 
-// Spawns the stdio MCP server, lists its tools, and plays a 3-seat match with
-// items to the end: two Agent seats through the tools, one DoN seat in the server.
+// Spawns the stdio MCP server, lists its tools, and plays a 3-player match with
+// items to the end: two Agent players through the tools, one DoN player in the server.
 // Usage: bun run rules, then bun scripts/mcp-check.ts
 
 const CALL_LIMIT = 3_000;
+
+const RAW_SEAT = /seat|Player 0/i;
 
 const View = Schema.Struct({
   isYourTurn: Schema.Boolean,
@@ -18,7 +20,7 @@ const View = Schema.Struct({
 
 const parseView = Schema.decodeUnknownSync(Schema.fromJsonString(View));
 
-const Table = Schema.Struct({ seats: Schema.Array(Schema.Struct({ seat: Schema.Number, controller: Schema.String })), seed: Schema.String });
+const Table = Schema.Struct({ players: Schema.Array(Schema.Struct({ player: Schema.Number, controller: Schema.String })), seed: Schema.String });
 
 const parseTable = Schema.decodeUnknownSync(Schema.fromJsonString(Table));
 
@@ -37,30 +39,32 @@ console.log("tools:", JSON.stringify(tools, null, 2));
 const callTool = async (name: string, input: Record<string, number | string | boolean | ReadonlyArray<string>>): Promise<{ readonly ok: boolean; readonly text: string }> => {
   const { content, isError } = parseToolText(await client.callTool({ name, arguments: input }));
 
+  if (RAW_SEAT.test(content[0].text)) throw new Error(`${name} reply names a seat or a Player 0: ${content[0].text}`);
+
   return { ok: isError !== true, text: content[0].text };
 };
 
-const getView = async (seat: number) => {
-  const got = await callTool("get_game", { seat });
+const getView = async (player: number) => {
+  const got = await callTool("get_game", { player });
 
-  if (!got.ok) throw new Error(`get_game(${seat}) failed: ${got.text}`);
+  if (!got.ok) throw new Error(`get_game(${player}) failed: ${got.text}`);
 
   return parseView(got.text);
 };
 
-console.log("get_game with no match:", await callTool("get_game", { seat: 0 }));
+console.log("get_game with no match:", await callTool("get_game", { player: 1 }));
 
-console.log("new_match with a Human seat:", await callTool("new_match", { players: 2, items: true, controllers: ["Agent", "Human"] }));
+console.log("new_match with a Human player:", await callTool("new_match", { players: 2, items: true, controllers: ["Agent", "Human"] }));
 
-console.log("play_move with a bad argument type:", await callTool("play_move", { seat: 0, index: "zero" }));
+console.log("play_move with a bad argument type:", await callTool("play_move", { player: 1, index: "zero" }));
 
 const started = await callTool("new_match", { players: 3, items: true, seed: "42", controllers: ["Agent", "Agent", "DoN"] });
 
 console.log("new_match:", started.text);
 
-const agents = parseTable(started.text).seats.filter(({ controller }) => controller === "Agent").map(({ seat }) => seat);
+const agents = parseTable(started.text).players.filter(({ controller }) => controller === "Agent").map(({ player }) => player);
 
-console.log("get_game for the DoN seat:", await callTool("get_game", { seat: 2 }));
+console.log("get_game for the DoN player:", await callTool("get_game", { player: 3 }));
 
 let calls = 0;
 
@@ -73,22 +77,22 @@ let isStaleChecked = false;
 let notesSeen = 0;
 
 for (; calls < CALL_LIMIT; calls++) {
-  const views = await Promise.all(agents.map(async (seat) => ({ seat, view: await getView(seat) })));
+  const views = await Promise.all(agents.map(async (player) => ({ player, view: await getView(player) })));
 
   if (views.some(({ view }) => view.isMatchOver)) break;
 
   const ready = views.filter(({ view }) => view.isYourTurn);
   const mover = ready[moves % ready.length];
 
-  // The DoN seat moves inside the server before any reply, so an Agent always has the turn.
-  if (mover === undefined) throw new Error("no Agent seat has the turn, but the match is not over");
+  // The DoN player moves inside the server before any reply, so an Agent always has the turn.
+  if (mover === undefined) throw new Error("no Agent player has the turn, but the match is not over");
 
   notesSeen = Math.max(notesSeen, ...views.map(({ view }) => view.privateNotes.length));
 
   if (!isStaleChecked) {
     isStaleChecked = true;
-    console.log("stale turn:", await callTool("play_move", { seat: mover.seat, index: 0, turn: mover.view.turn + 1 }));
-    console.log("out-of-range move:", await callTool("play_move", { seat: mover.seat, index: mover.view.moves.length, turn: mover.view.turn }));
+    console.log("stale turn:", await callTool("play_move", { player: mover.player, index: 0, turn: mover.view.turn + 1 }));
+    console.log("out-of-range move:", await callTool("play_move", { player: mover.player, index: mover.view.moves.length, turn: mover.view.turn }));
   }
 
   sharedTurns += ready.length > 1 ? 1 : 0;
@@ -97,7 +101,7 @@ for (; calls < CALL_LIMIT; calls++) {
 
   if (choice === undefined) throw new Error("agent turn with no legal moves");
 
-  const played = await callTool("play_move", { seat: mover.seat, index: choice.index, turn: mover.view.turn });
+  const played = await callTool("play_move", { player: mover.player, index: choice.index, turn: mover.view.turn });
 
   if (!played.ok) throw new Error(`play_move refused: ${played.text}`);
 
@@ -108,7 +112,7 @@ const finals = await Promise.all(agents.map(getView));
 
 const isOver = finals.every((view) => view.isMatchOver);
 
-console.log(`match over: ${isOver}, agent seats: ${agents.join(", ")}, agent moves: ${moves}, turns where both agents could move: ${sharedTurns}, most private notes one seat held: ${notesSeen}, tool rounds: ${calls}`);
+console.log(`match over: ${isOver}, agent players: ${agents.join(", ")}, agent moves: ${moves}, turns where both agents could move: ${sharedTurns}, most private notes one player held: ${notesSeen}, tool rounds: ${calls}`);
 
 await client.close();
 

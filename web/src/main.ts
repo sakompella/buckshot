@@ -8,8 +8,9 @@ import { AgentCall, AgentReply, type MatchSession, runTool } from "./agent/tools
 import { type AnswerError, Game } from "./bend.ts";
 import { type Board, Briefcase, Counter, GameEvent, LearnedSecret, Seat, SEATS_BY_TABLE, SeatCount, type SeatView, seatsOut, Stage } from "./domain.ts";
 import { aiPrompt, aiStep, AiSeat, begin, Controller, controllerOf, isAi, play, type Progress, promptsOf } from "./driver.ts";
+import { type Roster, rosterOf } from "./players.ts";
 import { seedRng } from "./rng.ts";
-import { describeError, eventText, itemName, moveText, seatName, secretText } from "./text.ts";
+import { describeError, eventText, itemName, moveText, secretText } from "./text.ts";
 import { titles } from "./titles.ts";
 import { ports } from "./webmcp.ts";
 
@@ -116,7 +117,7 @@ const applyResult = (model: Model, match: Session, result: Result.Result<Progres
         : {
             model: modifyFields(model, {
               maybeMatch: () => Option.some({ ...match, isAutoplay: false }),
-              maybeError: () => Option.some(describeError(error)),
+              maybeError: () => Option.some(describeError(rosterOf(match.game.seats), error)),
             }),
           },
   });
@@ -150,7 +151,7 @@ const startMatch = (model: Model): Return => {
           }),
       }),
     }),
-    onFailure: (error) => ({ model: modifyFields(model, { maybeError: () => Option.some(describeError(error)) }) }),
+    onFailure: (error) => ({ model: modifyFields(model, { maybeError: () => Option.some(describeError(rosterOf(SEATS_BY_TABLE[table]), error)) }) }),
   });
 };
 
@@ -266,6 +267,7 @@ const segmented = <A>(h: H, label: string, options: ReadonlyArray<readonly [A, s
 
 const setupView = (h: H, model: Model): Html => {
   const { table, controllers, isItemsEnabled, seed } = model.setup;
+  const roster = rosterOf(SEATS_BY_TABLE[table]);
 
   return h.section(
     [h.Class("setup"), h.AriaLabel("Match setup")],
@@ -278,12 +280,12 @@ const setupView = (h: H, model: Model): Html => {
           h.div(
             [h.Class("controllers")],
             SEATS_BY_TABLE[table].map((seat) =>
-              h.button([h.Type("button"), h.Class("controller"), h.OnClick(Message.ToggledController({ seat }))], [`${seatName(seat)}: ${controllerOf(controllers, seat)}`]),
+              h.button([h.Type("button"), h.Class("controller"), h.OnClick(Message.ToggledController({ seat }))], [`${roster.nameOf(seat)}: ${controllerOf(controllers, seat)}`]),
             ),
           ),
           model.isWebMcpAvailable || !SEATS_BY_TABLE[table].some((seat) => controllerOf(controllers, seat) === "Agent")
             ? h.empty
-            : h.p([h.Class("muted")], ["WebMCP is not available in this browser, so no agent can play the Agent seats."]),
+            : h.p([h.Class("muted")], ["WebMCP is not available in this browser, so Agent players cannot move."]),
         ],
       ),
       h.label(
@@ -299,19 +301,19 @@ const setupView = (h: H, model: Model): Html => {
 const actingSeat = (board: Board): Option.Option<Seat> =>
   Stage.matchOrElse(board.stage, { Playing: ({ seat }) => Option.some(seat) }, () => Option.none());
 
-const seatPanel = (h: H, match: Session, view: SeatView): Html => {
+const seatPanel = (h: H, roster: Roster, match: Session, view: SeatView): Html => {
   const isActing = Option.contains(actingSeat(match.game.board), view.seat);
   const isViewer = match.viewer === view.seat;
   const isOut = seatsOut(match.events).has(view.seat);
   const isJammed = Counter.guards.Jammed(view.counter);
 
   return h.article(
-    [h.Class(`seat${isActing ? " acting" : ""}${isViewer ? " viewer" : ""}${isOut ? " out" : ""}`), h.AriaLabel(seatName(view.seat))],
+    [h.Class(`seat${isActing ? " acting" : ""}${isViewer ? " viewer" : ""}${isOut ? " out" : ""}`), h.AriaLabel(roster.nameOf(view.seat))],
     [
       h.header(
         [h.Class("seat-head")],
         [
-          h.h2([], [seatName(view.seat)]),
+          h.h2([], [roster.nameOf(view.seat)]),
           h.span([h.Class("controller-tag")], [controllerOf(match.controllers, view.seat)]),
         ],
       ),
@@ -362,16 +364,16 @@ const gunView = (h: H, board: Board): Html => {
   );
 };
 
-const viewerBar = (h: H, match: Session): Html =>
+const viewerBar = (h: H, roster: Roster, match: Session): Html =>
   segmented<Viewer>(
     h,
     "View as",
-    [["Spectator", "Spectator"], ...match.game.seats.map((seat): readonly [Viewer, string] => [seat, seatName(seat)])],
+    [["Spectator", "Spectator"], ...match.game.seats.map((seat): readonly [Viewer, string] => [seat, roster.nameOf(seat)])],
     match.viewer,
     (viewer) => Message.SelectedViewer({ viewer }),
   );
 
-const movesView = (h: H, match: Session): Html => {
+const movesView = (h: H, roster: Roster, match: Session): Html => {
   const prompts = promptsOf(match.game);
   const humanPrompts = prompts.filter((prompt) => controllerOf(match.controllers, prompt.seat) === "Human");
   const viewerPrompt = Arr.findFirst(humanPrompts, (prompt) => prompt.seat === match.viewer);
@@ -382,24 +384,24 @@ const movesView = (h: H, match: Session): Html => {
   return h.section(
     [h.Class("moves"), h.AriaLabel("Moves")],
     [
-      h.h2([], [Option.match(viewerPrompt, { onNone: () => "Moves", onSome: ({ seat }) => `Your moves as ${seatName(seat)}` })]),
+      h.h2([], [Option.match(viewerPrompt, { onNone: () => "Moves", onSome: ({ seat }) => `Your moves as ${roster.nameOf(seat)}` })]),
       Option.match(viewerPrompt, {
-        onNone: () => h.p([h.Class("muted")], [match.game.pending.kind === "Finished" ? "The match is over." : "No move for the seat you are viewing."]),
+        onNone: () => h.p([h.Class("muted")], [match.game.pending.kind === "Finished" ? "The match is over." : "No move for the player you are viewing."]),
         onSome: (prompt) =>
           h.div(
             [h.Class("move-list")],
             prompt.menu.map((move, index) =>
               h.button(
                 [h.Type("button"), h.OnClick(Message.ClickedMove({ match: prompt.ticket.match, generation: prompt.ticket.generation, seat: prompt.seat, index }))],
-                [moveText(prompt.seat, move)],
+                [moveText(roster, prompt.seat, move)],
               ),
             ),
           ),
       }),
       ...waiting.map((seat) =>
-        h.p([h.Class("waiting")], [`${seatName(seat)} (human) can move. `, h.button([h.Type("button"), h.Class("link"), h.OnClick(Message.SelectedViewer({ viewer: seat }))], [`View as ${seatName(seat)}`])]),
+        h.p([h.Class("waiting")], [`${roster.nameOf(seat)} (human) can move. `, h.button([h.Type("button"), h.Class("link"), h.OnClick(Message.SelectedViewer({ viewer: seat }))], [`View as ${roster.nameOf(seat)}`])]),
       ),
-      ...agentWaiting.map((seat) => h.p([h.Class("waiting")], [`Waiting for the agent (${seatName(seat)}).`])),
+      ...agentWaiting.map((seat) => h.p([h.Class("waiting")], [`Waiting for the agent (${roster.nameOf(seat)}).`])),
       h.div(
         [h.Class("bot-controls")],
         [
@@ -411,13 +413,13 @@ const movesView = (h: H, match: Session): Html => {
   );
 };
 
-const notesView = (h: H, match: Session): Html => {
+const notesView = (h: H, roster: Roster, match: Session): Html => {
   const mine = match.learned.filter(({ seat }) => seat === match.viewer);
 
   return h.section(
     [h.Class("notes"), h.AriaLabel("Private notes")],
     [
-      h.h2([], [match.viewer === "Spectator" ? "Private notes" : `Private notes for ${seatName(match.viewer)}`]),
+      h.h2([], [match.viewer === "Spectator" ? "Private notes" : `Private notes for ${roster.nameOf(match.viewer)}`]),
       match.viewer === "Spectator"
         ? h.p([h.Class("muted")], ["Spectators see no private notes."])
         : mine.length === 0
@@ -431,7 +433,7 @@ const notesView = (h: H, match: Session): Html => {
 const isHeadline = (event: GameEvent): boolean =>
   GameEvent.matchOrElse(event, { Fired: ({ applied }) => applied > 0, Died: () => true, RoundWon: () => true, MatchConcluded: () => true }, () => false);
 
-const logView = (h: H, match: Session): Html =>
+const logView = (h: H, roster: Roster, match: Session): Html =>
   h.aside(
     [h.Class("log"), h.AriaLabel("Event log")],
     [
@@ -439,13 +441,13 @@ const logView = (h: H, match: Session): Html =>
       h.ol(
         [h.Class("log-list")],
         match.events
-          .map((event, index) => h.keyed("li")(index, [h.Class(isHeadline(event) ? "event headline" : "event")], [eventText(event)]))
+          .map((event, index) => h.keyed("li")(index, [h.Class(isHeadline(event) ? "event headline" : "event")], [eventText(roster, event)]))
           .toReversed(),
       ),
     ],
   );
 
-const resultsView = (h: H, match: Session): Html => {
+const resultsView = (h: H, roster: Roster, match: Session): Html => {
   const seats = match.game.seats;
   const standings = match.game.board.seats.toSorted((left, right) => right.cash - left.cash);
 
@@ -453,12 +455,12 @@ const resultsView = (h: H, match: Session): Html => {
     [h.Class("results"), h.AriaLabel("Results")],
     [
       h.h2([], ["Results"]),
-      h.ol([h.Class("standings")], standings.map((view) => h.li([], [`${seatName(view.seat)}: $${view.cash.toLocaleString("en-US")}`]))),
+      h.ol([h.Class("standings")], standings.map((view) => h.li([], [`${roster.nameOf(view.seat)}: $${view.cash.toLocaleString("en-US")}`]))),
       h.dl(
         [h.Class("titles")],
         titles(match.events, seats).flatMap((title) => [
           h.dt([], [title.name]),
-          h.dd([], [title.seats.length === 0 ? `Nobody (${title.description})` : `${title.seats.map(seatName).join(", ")} with ${title.score} ${title.description}`]),
+          h.dd([], [title.seats.length === 0 ? `Nobody (${title.description})` : `${title.seats.map(roster.nameOf).join(", ")} with ${title.score} ${title.description}`]),
         ]),
       ),
     ],
@@ -467,6 +469,7 @@ const resultsView = (h: H, match: Session): Html => {
 
 const matchView = (h: H, match: Session): Html => {
   const pending = match.game.pending;
+  const roster = rosterOf(match.game.seats);
 
   return h.div(
     [h.Class("match")],
@@ -474,15 +477,15 @@ const matchView = (h: H, match: Session): Html => {
       h.div(
         [h.Class("table")],
         [
-          viewerBar(h, match),
-          pending.kind === "Stuck" ? h.p([h.Class("error")], ["The machine is stuck: no seat has a legal move."]) : h.empty,
-          pending.kind === "Finished" ? resultsView(h, match) : h.empty,
+          viewerBar(h, roster, match),
+          pending.kind === "Stuck" ? h.p([h.Class("error")], ["The machine is stuck: no player has a legal move."]) : h.empty,
+          pending.kind === "Finished" ? resultsView(h, roster, match) : h.empty,
           gunView(h, match.game.board),
-          h.div([h.Class("seats")], match.game.board.seats.map((view) => seatPanel(h, match, view))),
-          h.div([h.Class("lower")], [movesView(h, match), notesView(h, match)]),
+          h.div([h.Class("seats")], match.game.board.seats.map((view) => seatPanel(h, roster, match, view))),
+          h.div([h.Class("lower")], [movesView(h, roster, match), notesView(h, roster, match)]),
         ],
       ),
-      logView(h, match),
+      logView(h, roster, match),
     ],
   );
 };

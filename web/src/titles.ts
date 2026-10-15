@@ -27,7 +27,7 @@ const used = (counts: (item: GameEvent & { readonly _tag: "Used" }) => boolean):
 
 // A Tally yields one seat per point scored, so damage repeats the shooter.
 const TALLIES: ReadonlyArray<{ readonly name: string; readonly description: string; readonly tally: Tally }> = [
-  { name: "Most damage", description: "health taken from other seats", tally: fired((shooter, target, applied) => (shooter === target ? [] : Arr.replicate(shooter, applied))) },
+  { name: "Most damage", description: "health taken from other players", tally: fired((shooter, target, applied) => (shooter === target ? [] : Arr.replicate(shooter, applied))) },
   { name: "Most hits taken", description: "live shells received", tally: fired((_, target, applied) => (applied > 0 ? [target] : [])) },
   { name: "Chimney", description: "cigarettes smoked", tally: used((use) => use.item === "Cigarettes") },
   { name: "Least careful", description: "live shells fired at themselves", tally: fired((shooter, target, _, live) => (live && shooter === target ? [shooter] : [])) },
