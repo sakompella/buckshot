@@ -6,7 +6,7 @@ import { Result, Schema } from "effect";
 
 import { AgentId } from "./agent.ts";
 import { type PriceTable, totalsBy } from "./cost.ts";
-import { type CallLine, readCalls } from "./runlog.ts";
+import { type CallLine, faultsIn, readCalls } from "./runlog.ts";
 import {
   ScheduledMatch,
   type Tournament,
@@ -48,20 +48,37 @@ export const readTournamentFile = (dir: string): Result.Result<TournamentFile, T
 
 export const tournamentOf = (file: TournamentFile): Result.Result<Tournament, TournamentError> => resolveConfig(file.config);
 
-/** Starts the directory's tournament, or confirms that this config is the one it already holds. */
-export const openTournament = (dir: string, tournament: Tournament, gitCommit: string, now: Date): Result.Result<TournamentFile, TournamentError> => {
-  if (existsSync(fileOf(dir))) {
-    return Result.flatMap(readTournamentFile(dir), (file) =>
-      isDeepStrictEqual(file.config, tournament.config) ? Result.succeed(file) : fail(`${dir} holds the tournament "${file.config.name}", made from a different config; use a new --dir, or the config it was made from`),
-    );
-  }
+/** A tournament grows by new entrants and by listed pairings after its own, so the matches it already scheduled keep their names, seats and seeds. */
+const growsInto = (before: TournamentConfig, after: TournamentConfig): boolean => {
+  const fixed = ({ entrants: _entrants, pairings: _pairings, ...rest }: TournamentConfig) => rest;
 
-  const file: TournamentFile = { format: TOURNAMENT_FORMAT, config: tournament.config, created_at: now.toISOString(), git_commit: gitCommit, schedule: scheduleOf(tournament) };
+  return (
+    !("allOf" in before.pairings) &&
+    !("allOf" in after.pairings) &&
+    isDeepStrictEqual(fixed(before), fixed(after)) &&
+    Object.entries(before.entrants).every(([name, entrant]) => isDeepStrictEqual(after.entrants[name], entrant)) &&
+    isDeepStrictEqual(after.pairings.slice(0, before.pairings.length), before.pairings)
+  );
+};
 
+const writeFile = (dir: string, file: TournamentFile) => {
   mkdirSync(dir, { recursive: true });
   writeFileSync(fileOf(dir), `${JSON.stringify(Schema.encodeSync(TournamentFile)(file), null, 2)}\n`);
 
-  return Result.succeed(file);
+  return file;
+};
+
+/** Starts the directory's tournament, confirms that this config is the one it holds, or grows it by this config's new pairings. */
+export const openTournament = (dir: string, tournament: Tournament, gitCommit: string, now: Date): Result.Result<TournamentFile, TournamentError> => {
+  if (!existsSync(fileOf(dir))) return Result.succeed(writeFile(dir, { format: TOURNAMENT_FORMAT, config: tournament.config, created_at: now.toISOString(), git_commit: gitCommit, schedule: scheduleOf(tournament) }));
+
+  return Result.flatMap(readTournamentFile(dir), (file) => {
+    if (isDeepStrictEqual(file.config, tournament.config)) return Result.succeed(file);
+
+    if (growsInto(file.config, tournament.config)) return Result.succeed(writeFile(dir, { ...file, config: tournament.config, schedule: scheduleOf(tournament) }));
+
+    return fail(`${dir} holds the tournament "${file.config.name}", made from a different config; use a new --dir, the config it was made from, or that config with entrants and listed pairings added after its own`);
+  });
 };
 
 /** What a tournament reads of a match's manifest. */
@@ -163,6 +180,9 @@ export const winnersOf = (dir: string, match: ScheduledMatch): ReadonlyArray<str
 /** The model calls of a match, each with the entrant that made it. */
 export const callsOf = (dir: string, match: ScheduledMatch): ReadonlyArray<readonly [string, CallLine]> =>
   readCalls(join(dir, match.name)).map((call) => [match.entrants[match.seats.indexOf(call.agent)] ?? call.agent, call] as const);
+
+/** The entrant each provider fault of a match stopped it on. A fault pauses a match to be resumed; it is never a move or a loss. */
+export const faultsOf = (dir: string, match: ScheduledMatch): ReadonlyArray<string> => faultsIn(join(dir, match.name)).map((agent) => match.entrants[match.seats.indexOf(agent)] ?? agent);
 
 /** Dollars spent in these matches, from their calls and the price table. */
 export const costOf = (dir: string, prices: PriceTable, matches: ReadonlyArray<ScheduledMatch>): number =>

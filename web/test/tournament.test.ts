@@ -289,6 +289,7 @@ test("an interrupted tournament and its restart finish every match once, and a f
   const call = { t: "2026-10-16T00:00:00Z", agent: opening.seats[at], position: at + 1, provider: "p", api: "a", model: entrant.model, stop_reason: "stop", usage: { input: 1000, output: 0, cacheRead: 0, cacheWrite: 0 }, tool_calls: [], text: "", thinking: "" };
 
   writeFileSync(join(dir, opening.name, "calls.jsonl"), `${JSON.stringify(call)}\n`);
+  writeFileSync(join(dir, opening.name, "events.jsonl"), `${JSON.stringify({ t: call.t, kind: "fault", agent: call.agent, player: call.agent, position: call.position, turn: 3, error: "429" })}\n`);
 
   const priced = (prices.models[entrant.model]?.input ?? NaN) * 1000 / 1_000_000;
   const report = reportOf(dir, { format: TOURNAMENT_FORMAT, config: tournament.config, created_at: "", git_commit: "", schedule }, tournament, prices, 20);
@@ -296,7 +297,7 @@ test("an interrupted tournament and its restart finish every match once, and a f
   expect(report.matches).toEqual({ scheduled: schedule.length, finished: schedule.length, scored: schedule.length });
   expect(report.excluded).toEqual([]);
   expect(report.anchor).toBe("don");
-  expect(report.cost.find((row) => row.entrant === opening.entrants[at])).toMatchObject({ calls: 1, dollars: priced });
+  expect(report.cost.find((row) => row.entrant === opening.entrants[at])).toMatchObject({ calls: 1, faults: 1, dollars: priced });
   expect(costOf(dir, prices, schedule)).toBe(priced);
 });
 
@@ -312,6 +313,26 @@ test("one directory holds one tournament", () => {
   const other = openTournament(dir, tournamentFrom(configJson({ seed: 101 })), "abc123", new Date(0));
 
   expect(Result.isFailure(other) && other.failure.message).toContain("made from a different config");
+});
+
+test("a tournament grows by entrants and by pairings listed after its own, and its scheduled matches stay as they were", () => {
+  const dir = join(mkdtempSync(join(tmpdir(), "tournament-dir-")), "t");
+  const first = tournamentFrom(configJson({ entrants: { luna: ENTRANTS.luna, don: ENTRANTS.don }, pairings: [["luna", "don"]] }));
+  const grown = tournamentFrom(configJson({ pairings: [["luna", "don"], ["haiku-5-5", "luna"], ["opus", "story"]] }));
+
+  openTournament(dir, first, "abc123", new Date(0));
+
+  const opened = openTournament(dir, grown, "def456", new Date(1));
+
+  expect(Result.isSuccess(opened) && opened.success.schedule).toEqual(scheduleOf(grown));
+  expect(scheduleOf(grown)).toEqual(expect.arrayContaining([...scheduleOf(first)]));
+  expect(JSON.parse(readFileSync(join(dir, "tournament.json"), "utf8"))).toMatchObject({ git_commit: "abc123", created_at: "1970-01-01T00:00:00.000Z" });
+
+  for (const pairings of [[["haiku-5-5", "luna"]], [["haiku-5-5", "luna"], ["luna", "don"]]]) {
+    expect(Result.isFailure(openTournament(dir, tournamentFrom(configJson({ pairings })), "abc123", new Date(0)))).toBe(true);
+  }
+
+  expect(Result.isFailure(openTournament(dir, tournamentFrom(configJson({ pairings: [["luna", "don"], ["haiku-5-5", "luna"], ["opus", "story"]], blocksPerPairing: 3 })), "abc123", new Date(0)))).toBe(true);
 });
 
 test("a finished match that disagrees with the schedule is left out, and its counts come from the manifest", () => {

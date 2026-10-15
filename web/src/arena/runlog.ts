@@ -112,6 +112,9 @@ export const entriesSentTo = (dir: string, player: Letter): ReadonlyArray<string
 
 const append = (path: string, line: string) => appendFileSync(path, `${line}\n`);
 
+/** The agent each provider fault in the run stopped the match on, one per fault line. */
+export const faultsIn = (dir: string): ReadonlyArray<AgentId> => readEvents(dir).flatMap((event) => (event.kind === "fault" && event.agent !== undefined ? [event.agent] : []));
+
 /** Cuts a line a crash left half written, so the file is whole lines again. */
 export const dropPartialLine = (path: string): void => {
   if (!existsSync(path)) return;

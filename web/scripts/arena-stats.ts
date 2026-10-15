@@ -63,9 +63,9 @@ const text = (stats: Report): string => {
       stats.interventions.map((row) => [row.entrant, String(row.matches), String(row.moves), String(row.interventions), row.rate === undefined ? "-" : percent(row.rate), String(row.reminders), String(row.matchesWithAny)]),
     )}`,
     ...(stats.flagged.length === 0 ? [] : [`Matches with a reminder or an intervention, scored all the same:\n${stats.flagged.map((row) => `  ${row.match}: ${row.entrant}, ${row.reminders} reminders, ${row.interventions} interventions`).join("\n")}`]),
-    `Cost, at src/arena/prices.json prices.\n${table(
-      ["entrant", "calls", "input", "output", "cache read", "cost"],
-      stats.cost.map((row) => [row.entrant, String(row.calls), String(row.input), String(row.output), String(row.cacheRead), row.unpriced > 0 ? `${money(row.dollars)} (${row.unpriced} unpriced)` : money(row.dollars)]),
+    `Usage and cost over every match played or started, at src/arena/prices.json prices. Faults are provider errors that paused a match; they are never losses.\n${table(
+      ["entrant", "calls", "faults", "input", "output", "reasoning", "cache read", "cache write", "cost"],
+      stats.cost.map((row) => [row.entrant, String(row.calls), String(row.faults), String(row.input), String(row.output), String(row.reasoning), String(row.cacheRead), String(row.cacheWrite), row.unpriced > 0 ? `${money(row.dollars)} (${row.unpriced} unpriced)` : money(row.dollars)]),
     )}\n  total ${money(stats.cost.reduce((total, row) => total + row.dollars, 0))}`,
     stats.notes.map((note) => `Note: ${note}`).join("\n"),
   ];

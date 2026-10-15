@@ -1,7 +1,7 @@
 import { Result } from "effect";
 
 import { type PriceTable, type Total, totalsBy } from "./cost.ts";
-import { callsOf, finishedNames, readMatch, type TournamentFile } from "./tournament-dir.ts";
+import { callsOf, faultsOf, finishedNames, readMatch, type TournamentFile } from "./tournament-dir.ts";
 import {
   fitRatings,
   headToHead,
@@ -50,7 +50,8 @@ export interface Report {
   readonly interventions: ReadonlyArray<Interventions>;
   /** The scored matches in which a model needed a reminder or an intervention. */
   readonly flagged: ReadonlyArray<{ readonly match: string; readonly entrant: string; readonly reminders: number; readonly interventions: number }>;
-  readonly cost: ReadonlyArray<{ readonly entrant: string } & Total>;
+  /** Over every scheduled match, finished or not, as cost is: the calls made and the provider faults hit. */
+  readonly cost: ReadonlyArray<{ readonly entrant: string; readonly faults: number } & Total>;
   readonly notes: ReadonlyArray<string>;
 }
 
@@ -69,6 +70,7 @@ export const reportOf = (dir: string, file: TournamentFile, tournament: Tourname
   const shareIntervals = intervalsOf(replicates.map((replicate) => new Map([...sharesByEntrant(replicate)].map(([entrant, { share }]) => [entrant, share]))));
   const ratingIntervals = intervalsOf(replicates.map((replicate) => fitRatings(replicate, anchor).entrants));
   const costs = totalsBy(prices, file.schedule.flatMap((match) => callsOf(dir, match)));
+  const faults = file.schedule.flatMap((match) => faultsOf(dir, match));
   const interventions = interventionsByEntrant(played);
 
   return {
@@ -82,7 +84,7 @@ export const reportOf = (dir: string, file: TournamentFile, tournament: Tourname
     pairings: headToHead(played).map(({ matches, entrants }) => ({ entrants: entrants.map(({ entrant }) => entrant), matches, shares: entrants })),
     interventions: interventions.toSorted((left, right) => left.entrant.localeCompare(right.entrant)),
     flagged: played.flatMap((match) => match.players.filter((player) => player.interventions + player.reminders > 0).map((player) => ({ match: match.name, entrant: player.entrant, reminders: player.reminders, interventions: player.interventions }))),
-    cost: [...shares.keys()].toSorted().map((entrant) => ({ entrant, ...(costs.get(entrant) ?? FREE) })),
+    cost: [...new Set([...shares.keys(), ...costs.keys()])].toSorted().map((entrant) => ({ entrant, faults: faults.filter((name) => name === entrant).length, ...(costs.get(entrant) ?? FREE) })),
     notes: NOTES,
   };
 };

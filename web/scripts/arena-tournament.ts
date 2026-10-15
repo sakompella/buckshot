@@ -11,7 +11,8 @@ import { costOf, finishedNames, openTournament, runPending, type Settled, winner
 // Plays a tournament: every scheduled match, as a child process running
 // scripts/arena.ts, at most --parallel at a time (1 or 2, default 2). The config
 // says who plays whom, as tournaments/cpa-medium.json does. The first run writes
-// <dir>/tournament.json, and a later run needs the same config. Keys come from
+// <dir>/tournament.json, and a later run needs the same config, or that config
+// with entrants added and listed pairings added after its own, which it schedules. Keys come from
 // the environment, and Bun loads web/.env for this script; each match gets only
 // its own PLAYER_* variables. A match that fails is reported and left, and the
 // rest go on. Rerun the same command to resume: finished matches never run
