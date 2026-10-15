@@ -39,6 +39,28 @@ export const moveText = (roster: Roster, seat: Seat, move: Move): string =>
     Steal: ({ owner, slot, item }) => `Steal ${itemName(item)} from ${roster.nameOf(owner)} (slot ${slot + 1})`,
   });
 
+/**
+ * An agent move's words, from the machine moves it chains, without slots: "Shoot Player 2" picks up the shotgun and shoots.
+ * Steps that only open an action add none: picking up the shotgun, using a jammer or adrenaline before its target, placing a drawn item.
+ */
+export const agentMoveText = (roster: Roster, seat: Seat, moves: ReadonlyArray<Move>): string => {
+  const phrases = moves.flatMap((move, index) =>
+    Move.match(move, {
+      PickUp: () => [],
+      Shoot: ({ target }) => [target === seat ? "shoot yourself" : `shoot ${roster.nameOf(target)}`],
+      UseItem: ({ item }) => (index === moves.length - 1 ? [`use ${itemName(item)}`] : []),
+      Grab: () => ["grab an item"],
+      Place: () => [],
+      JamTarget: ({ target }) => [`jam ${roster.nameOf(target)}`],
+      Steal: ({ owner, item }) => [`steal ${itemName(item)} from ${roster.nameOf(owner)}`],
+    }),
+  );
+
+  const text = phrases.join(" and ");
+
+  return `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
+};
+
 export const eventText = (roster: Roster, event: GameEvent): string =>
   GameEvent.match(event, {
     RoundBegan: ({ round, health, first }) => `Round ${round + 1} begins. Everyone has ${health} health; ${roster.nameOf(first)} starts.`,

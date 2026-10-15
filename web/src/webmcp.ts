@@ -17,6 +17,8 @@ type Handles = Runtime.EmbedHandle<typeof ports>["ports"];
 
 const refusal = (reason: string): string => replyText(AgentReply.cases.Refused.make({ reason }));
 
+const encodeCall = Schema.encodeSync(AgentCall);
+
 export const registerAgentTools = (context: WebMCP.ModelContext, handles: Handles): Promise<void> => {
   const waiting = new Map<number, (reply: AgentReply) => void>();
   let lastId = 0;
@@ -33,7 +35,7 @@ export const registerAgentTools = (context: WebMCP.ModelContext, handles: Handle
 
       waiting.set(id, (reply) => resolve(replyText(reply)));
 
-      if (Exit.isFailure(handles.agentCalled.send({ id, call }))) {
+      if (Exit.isFailure(handles.agentCalled.send({ id, call: encodeCall(call) }))) {
         waiting.delete(id);
         resolve(refusal("The call could not reach the game."));
       }
