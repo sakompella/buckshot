@@ -11,6 +11,7 @@ import { Data, Effect, Option, Result, Schema } from "effect";
 import { emptyTable, type HeadlessTable, headlessSession } from "../agent/headless.ts";
 import { type AgentCall, AgentReply, type MatchSession, replyText, RULES, runTool, tools } from "../agent/tools.ts";
 import { SEATS_BY_TABLE, SeatCount } from "../domain.ts";
+import { nextPrompt } from "../bend.ts";
 import { Controller, controllerOf, promptsOf } from "../driver.ts";
 import { Letter, rosterOf } from "../players.ts";
 import { eventText, secretText } from "../text.ts";
@@ -234,11 +235,12 @@ class Table {
     return this.match().game.seats.indexOf(this.seatOf(player)) + 1;
   }
 
-  /** The one arena player that may move: the first in table order the machine waits on, as driver.bend picks among bots. */
+  /** The one arena player that may move: among those the machine waits on, the one driver.bend serves first, so a distribution goes one grab per seat in turn. */
   onTurn(): Letter | undefined {
-    const waiting = new Set(promptsOf(this.match().game).map((prompt) => prompt.seat));
+    const players = new Map(this.arenaPlayers().map((player) => [this.seatOf(player), player]));
+    const { game } = this.match();
 
-    return this.arenaPlayers().find((player) => waiting.has(this.seatOf(player)));
+    return Option.getOrUndefined(Option.flatMap(nextPrompt(game, promptsOf(game).filter((prompt) => players.has(prompt.seat))), (prompt) => Option.fromUndefinedOr(players.get(prompt.seat))));
   }
 
   /** A player's view; "waiting" while another arena player has the turn first. */
