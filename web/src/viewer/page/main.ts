@@ -256,6 +256,8 @@ const eventItem = (event: EventLine): HTMLElement | undefined => {
       return item("move", event.turn, meta(event.t, h("span", {}, `turn ${event.turn}`), h("span", { class: "label" }, event.label), event.by !== "agent" && h("span", { class: "faint" }, event.by)));
     case "turn":
       return item("turn", event.turn, meta(event.t, h("span", {}, `turn ${event.turn} took ${(event.wall_ms / 1000).toFixed(1)} s`), !event.moved && h("span", { class: "error" }, "no move")));
+    case "reminder":
+      return item("note", event.turn, meta(event.t, `reminded to move at turn ${event.turn}`));
     case "fault":
       return item("fault", event.turn, meta(event.t, h("span", {}, `fault at turn ${event.turn}`)), h("div", {}, event.error));
     case "compaction":

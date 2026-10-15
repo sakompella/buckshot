@@ -7,11 +7,12 @@ import { type AssistantMessage, contentText, createModels, fauxAssistantMessage,
 import { ConfigProvider, Effect, Exit, Schema } from "effect";
 
 import { AGENTS, AgentId } from "../src/arena/agent.ts";
-import { agentEndpoint, providerOf } from "../src/arena/endpoints.ts";
+import { type AgentProvenance, agentEndpoint, provenanceOf, providerOf } from "../src/arena/endpoints.ts";
 import { listenForHuman } from "../src/arena/human.ts";
 import { DELIVERIES, type Delivery, INSTRUCTIONS, playMatch } from "../src/arena/match.ts";
 import { entriesSentTo } from "../src/arena/runlog.ts";
 import type { Controller } from "../src/driver.ts";
+import { fauxProvenance } from "./faux-run.ts";
 
 // The arena with faux pi-ai models, which play from their transcripts alone, so
 // these matches cost nothing. A faux player's first act probes another player's
@@ -45,7 +46,12 @@ const decide = (transcript: TranscriptContext): AssistantMessage => {
 };
 
 /** A faux match; `agents` sit at the Agent seats in table order. */
-const fauxMatch = (controllers: ReadonlyArray<Controller>, seed: string, contextWindow: number, delivery: Delivery, { dir = mkdtempSync(join(tmpdir(), "arena-test-")), agents = AGENTS }: { readonly dir?: string; readonly agents?: ReadonlyArray<AgentId> } = {}) => {
+const fauxMatch = (controllers: ReadonlyArray<Controller>, seed: string, contextWindow: number, delivery: Delivery, {
+    dir = mkdtempSync(join(tmpdir(), "arena-test-")),
+    agents = AGENTS,
+    provenance = fauxProvenance,
+  }: { readonly dir?: string; readonly agents?: ReadonlyArray<AgentId>; readonly provenance?: (modelId: string) => AgentProvenance } = {},
+) => {
   const faux = fauxProvider({ provider: "faux", models: [{ id: "faux-a", contextWindow, maxTokens: 512 }, { id: "faux-b", contextWindow, maxTokens: 512 }] });
   const models = createModels();
   const seated = agents.slice(0, controllers.filter((controller) => controller === "Agent").length);
@@ -57,12 +63,26 @@ const fauxMatch = (controllers: ReadonlyArray<Controller>, seed: string, context
     dir,
     seed,
     controllers,
-    entrants: seated.map((agent, index) => ({ agent, model: { provider: "faux", modelId: index % 2 === 0 ? "faux-a" : "faux-b" }, thinkingLevel: undefined, describe: `faux ${index}` })),
+    entrants: seated.map((agent, index) => {
+      const modelId = index % 2 === 0 ? "faux-a" : "faux-b";
+
+      return { agent, model: { provider: "faux", modelId }, thinkingLevel: undefined, provenance: provenance(modelId) };
+    }),
     models,
-    compaction: { enabled: true, reserveTokens: 1_500, keepRecentTokens: 1_500 },
     delivery,
   });
 };
+
+test("a match resumes only with the configuration it started with", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "arena-test-"));
+
+  await Effect.runPromise(fauxMatch(["Agent", "DoN"], "3", 200_000, "on-turn", { dir }));
+
+  const changed = await Effect.runPromiseExit(fauxMatch(["Agent", "DoN"], "3", 200_000, "on-turn", { dir, provenance: (modelId) => ({ ...fauxProvenance(modelId), effort: "medium" }) }));
+
+  expect(Exit.isFailure(changed) && String(changed.cause)).toContain("cannot resume with this one");
+  expect(Exit.isSuccess(await Effect.runPromiseExit(fauxMatch(["Agent", "DoN"], "3", 200_000, "on-turn", { dir })))).toBe(true);
+});
 
 test.each([
   [["Agent", "Agent"] as const, "7", "on-turn", "A,B"],
@@ -123,7 +143,7 @@ test.each([...DELIVERIES])("a human types moves into the terminal client and pla
     return connected;
   };
 
-  const result = await Effect.runPromise(playMatch({ dir, seed: "11", controllers: ["Human", "DoN", "Story"], entrants: [], connectHuman, models: createModels(), compaction: {}, delivery }));
+  const result = await Effect.runPromise(playMatch({ dir, seed: "11", controllers: ["Human", "DoN", "Story"], entrants: [], connectHuman, models: createModels(), delivery }));
   const [client] = clients;
 
   if (client === undefined) throw new Error("the arena never connected its human");
@@ -161,6 +181,21 @@ test("an endpoint is Anthropic or OpenAI Responses, from its URL and key", async
 
   expect(Exit.isSuccess(anthropic) && anthropic.value._tag).toBe("Anthropic");
   expect(Exit.isSuccess(openai) && openai.value._tag).toBe("OpenAIResponses");
+});
+
+test.each([
+  ["ANT", "claude-haiku-4-5-20251001", { level: "medium", mode: "budget", effort: null, budget_tokens: 8192 }],
+  ["ANT", "claude-haiku-5-5", { level: "medium", mode: "adaptive", effort: "medium", budget_tokens: null }],
+  ["OAI", "gpt-6-luna", { level: "medium", mode: "effort", effort: "medium", budget_tokens: null }],
+] as const)("the provenance records the thinking settings medium effort resolves to: %s %s", async (api, model, thinking) => {
+  const endpoint = await endpointFrom({ [`PLAYER_A_${api}_URL`]: CPA.url, [`PLAYER_A_${api}_KEY`]: CPA.key, PLAYER_A_MODEL: model, PLAYER_A_EFFORT: "medium" });
+
+  if (!Exit.isSuccess(endpoint)) throw new Error(String(endpoint.cause));
+
+  const provenance = provenanceOf("provider-A", endpoint.value);
+
+  expect(provenance.thinking).toEqual(thinking);
+  expect(JSON.stringify(provenance)).not.toContain(CPA.key);
 });
 
 test("a proxy's model alias plays as the catalog model it names", async () => {

@@ -1,6 +1,7 @@
-import { type Api, createProvider, type Model, type ModelThinkingLevel, type Provider } from "@earendil-works/pi-ai";
+import { type Api, clampThinkingLevel, createProvider, type Model, type ModelThinkingLevel, type Provider } from "@earendil-works/pi-ai";
 import { anthropicMessagesApi } from "@earendil-works/pi-ai/api/anthropic-messages.lazy";
 import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.lazy";
+import { DEFAULT_THINKING_BUDGETS } from "@earendil-works/pi-ai/api/simple-options";
 import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
 import { openaiProvider } from "@earendil-works/pi-ai/providers/openai";
 import type { ModelRef } from "@earendil-works/pi-durable";
@@ -127,5 +128,45 @@ export const providerOf = (providerId: string, endpoint: Endpoint): Provider => 
 
 export const modelRefOf = (providerId: string, endpoint: Endpoint): ModelRef => ({ provider: providerId, modelId: endpoint.model });
 
-/** What a manifest may show of an endpoint: never the key. */
-export const describeEndpoint = (endpoint: Endpoint) => ({ api: endpoint._tag, url: baseUrlOf(endpoint.url), model: endpoint.model, catalog_model: endpoint.catalogModel ?? null, effort: endpoint.effort ?? null });
+/** What a run records about an agent's endpoint, fixed when its match starts. Never the key, so a key can change between a crash and the resume. */
+export const AgentProvenance = Schema.Struct({
+  api: Schema.String,
+  provider: Schema.String,
+  url: Schema.NullOr(Schema.String),
+  model: Schema.String,
+  catalog_model: Schema.NullOr(Schema.String),
+  effort: Schema.NullOr(Schema.String),
+  /** How pi-ai asks the model to think at that effort: not at all, Anthropic adaptive thinking at an effort, an Anthropic thinking budget, or an OpenAI reasoning effort. */
+  thinking: Schema.Struct({ level: Schema.NullOr(Schema.String), mode: Schema.Literals(["off", "adaptive", "budget", "effort"]), effort: Schema.NullOr(Schema.String), budget_tokens: Schema.NullOr(Schema.Int) }),
+});
+
+export type AgentProvenance = typeof AgentProvenance.Type;
+
+/** The thinking settings pi-ai 1.1.0 derives from the effort and the catalog model (api/anthropic-messages.js and openai-responses.js). */
+const thinkingOf = (endpoint: Endpoint, model: Model<Api>): AgentProvenance["thinking"] => {
+  const off = { mode: "off", effort: null, budget_tokens: null } as const;
+
+  if (endpoint.effort === undefined || !model.reasoning) return { level: null, ...off };
+
+  const level = clampThinkingLevel(model, endpoint.effort);
+  const effort = model.thinkingLevelMap?.[level] ?? level;
+
+  if (level === "off") return { level, ...off };
+
+  return Endpoint.match(endpoint, {
+    Anthropic: (): AgentProvenance["thinking"] =>
+      model.compat !== undefined && "forceAdaptiveThinking" in model.compat && model.compat.forceAdaptiveThinking === true
+        ? { level, mode: "adaptive", effort, budget_tokens: null }
+        : { level, mode: "budget", effort: null, budget_tokens: (level === "xhigh" || level === "max" ? undefined : DEFAULT_THINKING_BUDGETS[level]) ?? null },
+    OpenAIResponses: (): AgentProvenance["thinking"] => ({ level, mode: "effort", effort, budget_tokens: null }),
+  });
+};
+
+/** The agent's provenance: the endpoint as the manifest shows it, and the thinking settings its effort resolves to. */
+export const provenanceOf = (providerId: string, endpoint: Endpoint): AgentProvenance => {
+  const model = catalogOf(endpoint).find((candidate) => candidate.id === catalogIdOf(endpoint));
+
+  if (model === undefined) throw new Error(`${catalogIdOf(endpoint)} left pi-ai's catalog after it was parsed`);
+
+  return { api: endpoint._tag, provider: providerId, url: baseUrlOf(endpoint.url), model: endpoint.model, catalog_model: endpoint.catalogModel ?? null, effort: endpoint.effort ?? null, thinking: thinkingOf(endpoint, model) };
+};

@@ -88,4 +88,4 @@ test("a faux match replays move for move to its final cash, extends a partial re
   writeFileSync(join(runs, "older", "manifest.json"), JSON.stringify({ status: "finished", seed: "42", controllers: ["Agent", "Agent"] }));
 
   expect(Option.getOrThrow(readRun(runs, "older", new Date()))).toEqual(Result.fail({ kind: "unreadable", id: "older", reason: "format 0 (before agent letters): not readable by this viewer" }));
-});
+}, 30_000);

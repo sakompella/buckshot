@@ -2,7 +2,7 @@ import { createModels } from "@earendil-works/pi-ai";
 import { Cause, Effect, Exit, Schema } from "effect";
 
 import { type AgentId, SeatSpec, seatingOf } from "../src/arena/agent.ts";
-import { agentEndpoint, describeEndpoint, modelRefOf, providerIdOf, providerOf } from "../src/arena/endpoints.ts";
+import { agentEndpoint, modelRefOf, provenanceOf, providerIdOf, providerOf } from "../src/arena/endpoints.ts";
 import { listenForHuman } from "../src/arena/human.ts";
 import { DELIVERIES, playMatch } from "../src/arena/match.ts";
 import type { Letter } from "../src/players.ts";
@@ -52,13 +52,13 @@ const program = Effect.gen(function* () {
 
       models.setProvider(providerOf(providerId, endpoint));
 
-      return { agent, model: modelRefOf(providerId, endpoint), thinkingLevel: endpoint.effort, describe: describeEndpoint(endpoint) };
+      return { agent, model: modelRefOf(providerId, endpoint), thinkingLevel: endpoint.effort, provenance: provenanceOf(providerId, endpoint) };
     }),
   );
 
   console.error(`arena: ${dir}, seed ${seed}, ${delivery} delivery, seating ${seating.map((seat, index) => `position ${index + 1}: ${seat}`).join(", ")}`);
 
-  return yield* playMatch({ dir, seed, controllers: seating.map((seat) => (isAgent(seat) ? "Agent" : seat)), entrants, connectHuman, models, compaction: {}, delivery });
+  return yield* playMatch({ dir, seed, controllers: seating.map((seat) => (isAgent(seat) ? "Agent" : seat)), entrants, connectHuman, models, delivery });
 });
 
 Exit.match(await Effect.runPromiseExit(program), {

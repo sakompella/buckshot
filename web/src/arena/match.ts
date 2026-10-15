@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { join, relative } from "node:path";
 
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { type AssistantMessage, contentText, type Message, type Models, type ModelThinkingLevel, Type } from "@earendil-works/pi-ai";
-import { CompactionTask, type ConversationId, createRegistry, defineDoc, defineExtension, defineTool, GenerationTask, Harness, type HarnessSettings, hook, type ModelRef } from "@earendil-works/pi-durable";
+import { type ConversationId, createRegistry, defineDoc, defineExtension, defineTool, GenerationTask, Harness, hook, type ModelRef } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import { Data, Effect, Option, Result, Schema } from "effect";
 
@@ -15,8 +15,9 @@ import { Controller, controllerOf, promptsOf } from "../driver.ts";
 import { Letter, rosterOf } from "../players.ts";
 import { eventText, secretText } from "../text.ts";
 import { AGENTS, type AgentId } from "./agent.ts";
+import { AgentProvenance } from "./endpoints.ts";
 import type { HumanLink } from "./human.ts";
-import { addTokens, agentTotals, entriesSentTo, logCall, logEvent, readCalls, RUN_FORMAT, type Sitting, Standing, writeManifest } from "./runlog.ts";
+import { addTokens, agentTotals, dropPartialLine, entriesSentTo, exportedSeqs, logCall, logEvent, readCalls, RUN_FORMAT, type Sitting, Standing, writeManifest } from "./runlog.ts";
 
 // One match in one process: the headless table, one pi-durable conversation per
 // agent in the run directory's session.sqlite, and one terminal per human. The
@@ -24,9 +25,11 @@ import { addTokens, agentTotals, entriesSentTo, logCall, logEvent, readCalls, RU
 // it sits; bots and humans take the letters left. A conversation's two tools
 // read its agent from a seat document written when it was created, so no call
 // can reach another seat. The arena sends a player its view on its turn, plays
-// forced "Grab an item" turns itself, and journals every move in the store, so a
-// rerun on the same directory rebuilds the table from the seed and the journal
-// and resumes the conversations where they stopped.
+// forced "Grab an item" turns itself, and journals every move and delivery in
+// the store, so a rerun on the same directory rebuilds the table from the seed
+// and the journal, writes any log lines a crash left out, and resumes the
+// conversations where they stopped. Compaction is off: a match's context fits
+// in every model's window, and a summary could drop or repeat log entries.
 
 const context = BACKGROUND_CONTEXT;
 
@@ -62,12 +65,12 @@ export const DELIVERIES = ["on-turn", "live"] as const;
 
 export type Delivery = (typeof DELIVERIES)[number];
 
-/** One agent: its letter, the model it plays with, and what the manifest says about it. */
+/** One agent: its letter, the model it plays with, and its provenance, which the match fixes when it starts. */
 export interface Entrant {
   readonly agent: AgentId;
   readonly model: ModelRef;
   readonly thinkingLevel: ModelThinkingLevel | undefined;
-  readonly describe: Schema.Json;
+  readonly provenance: AgentProvenance;
 }
 
 export interface ArenaMatch {
@@ -80,9 +83,10 @@ export interface ArenaMatch {
   /** Reaches the human at a Human seat, each time the match starts or resumes. Only needed when there is one. */
   readonly connectHuman?: (player: Letter) => Promise<HumanLink>;
   readonly models: Models;
-  readonly compaction: NonNullable<HarnessSettings["compaction"]>;
   /** How the log reaches players; fixed when the match starts. */
   readonly delivery: Delivery;
+  /** Called at each journal commit and log export, by a name such as "move:after-commit"; crash tests end the process there. */
+  readonly crashAt?: (point: string) => void;
 }
 
 export class ArenaFault extends Data.TaggedError("ArenaFault")<{ readonly message: string }> {}
@@ -90,6 +94,12 @@ export class ArenaFault extends Data.TaggedError("ArenaFault")<{ readonly messag
 const attempt = <A>(step: string, run: () => Promise<A>) => Effect.tryPromise({ try: run, catch: (cause) => new ArenaFault({ message: `${step}: ${String(cause)}` }) });
 
 type MoveLine = { readonly turn: number; readonly player: Letter; readonly move: number; readonly label: string; readonly by: "agent" | "human" | "forced" | "fallback" };
+
+/** Log entries sent to a player: `count` entries of its log from `from`. */
+type DeliveryLine = { readonly player: Letter; readonly via: "input" | "live" | "end"; readonly turn: number; readonly from: number; readonly count: number };
+
+/** What decides how a match plays, fixed when it starts; a resume with anything else is refused. */
+type MatchProvenance = { code_sha: string; instructions_sha: string; compaction: "off"; agents: Record<string, AgentProvenance> };
 
 type MatchState = {
   seed: string;
@@ -99,12 +109,15 @@ type MatchState = {
   delivery: Delivery;
   conversations: Record<string, ConversationId>;
   moves: Array<MoveLine>;
-  /** By agent: how many entries of its log it has been sent. */
-  delivered: Record<string, number>;
+  deliveries: Array<DeliveryLine>;
   retries: Record<string, number>;
+  provenance: MatchProvenance | null;
 };
 
-const emptyMatch = (): MatchState => ({ seed: "", controllers: [], letters: [], delivery: "on-turn", conversations: {}, moves: [], delivered: {}, retries: {} });
+const emptyMatch = (): MatchState => ({ seed: "", controllers: [], letters: [], delivery: "on-turn", conversations: {}, moves: [], deliveries: [], retries: {}, provenance: null });
+
+/** How many entries of its log a player has been sent. */
+const sentCount = (state: MatchState, player: Letter): number => state.deliveries.reduce((sent, line) => (line.player === player ? line.from + line.count : sent), 0);
 
 /** The letter at each position: the entrants' own at the Agent seats, in order, and the letters left, in order, at the others. */
 const lettersOf = (controllers: ReadonlyArray<Controller>, agents: ReadonlyArray<AgentId>): Option.Option<Array<Letter>> => {
@@ -286,7 +299,16 @@ const textOf = (message: Message): string => contentText(message.role === "assis
 /** What an event line says about the agent it is about; its player has its letter. */
 const lineOf = ({ agent, position }: Sitting) => ({ agent, player: agent, position });
 
-const seatTools = (dir: string, table: () => Table, onReply: (agent: AgentId, message: AssistantMessage) => void) => {
+/** What the seat tools need from the match around them. */
+interface SeatHost {
+  readonly table: () => Table;
+  readonly onReply: (agent: AgentId, message: AssistantMessage) => void;
+  /** Writes the journal's records that events.jsonl lacks. */
+  readonly exportJournal: (state: MatchState) => void;
+  readonly crashAt: (point: string) => void;
+}
+
+const seatTools = (dir: string, { table, onReply, exportJournal, crashAt }: SeatHost) => {
   const sittingOf = async (snapshot: Harness["snapshot"], conversationId: ConversationId): Promise<Sitting> => {
     const doc = await snapshot(SeatDoc, conversationId, context);
 
@@ -332,8 +354,11 @@ const seatTools = (dir: string, table: () => Table, onReply: (agent: AgentId, me
 
           if (!played.ok) return { content: [{ type: "text", text: played.text }], isError: true };
 
+          crashAt("move:before-commit");
           await api.commit(async (tx) => void (await tx.doc(MatchDoc)).moves.push(played.line), context);
-          logEvent(dir, "move", { ...lineOf(sitting), ...played.line });
+          crashAt("move:after-commit");
+          exportJournal((await api.snapshot(MatchDoc, context)) ?? emptyMatch());
+          crashAt("move:after-export");
 
           return { content: [{ type: "text", text: JSON.stringify({ played: played.line.label }) }], control: { terminate: true } };
         },
@@ -346,18 +371,6 @@ const seatTools = (dir: string, table: () => Table, onReply: (agent: AgentId, me
 
           logCall(dir, sitting, message);
           onReply(sitting.agent, message);
-        },
-      }),
-      hook(CompactionTask, {
-        beforeCompact: async (_compaction, api) => {
-          const sitting = await sittingOf(api.snapshot, api.conversationId);
-          const sent = (await api.snapshot(MatchDoc, context))?.delivered[sitting.agent] ?? 0;
-          const lines = table().heard(sitting.agent).slice(0, sent);
-          const roundStart = Math.max(0, lines.findLastIndex((line) => line.startsWith("Round ")));
-
-          logEvent(dir, "compaction", lineOf(sitting));
-
-          return { summary: `[Summary] You are Player ${sitting.agent}. Everything you have been sent this round, in order:\n${lines.slice(roundStart).join("\n")}` };
         },
       }),
     ],
@@ -382,27 +395,73 @@ export const RunManifest = Schema.Struct({
       models: Schema.Array(Schema.String),
       model_calls: Schema.Int,
       tool_calls: Schema.Int,
+      moves: Schema.optionalKey(Schema.Int),
+      reminders: Schema.optionalKey(Schema.Int),
+      interventions: Schema.optionalKey(Schema.Int),
       usage: Schema.Record(Schema.String, Schema.Number),
       latency_ms: Schema.Struct({ total: Schema.Number, max: Schema.Number }),
       wall_ms: Schema.Number,
     }),
   ),
+  provenance: Schema.optional(Schema.Json),
   standings: Schema.optional(Schema.Array(Standing)),
 });
 
 export type RunManifest = typeof RunManifest.Type;
 
-const sha = (text: string) => createHash("sha256").update(text).digest("hex").slice(0, 12);
+const sha = (text: string | Buffer) => createHash("sha256").update(text).digest("hex").slice(0, 12);
 
 /** For people reading a run: the agent at each Agent position, from 1. */
 const seatingIn = (state: MatchState) => Object.fromEntries(state.letters.flatMap((letter, index) => (state.controllers[index] === "Agent" ? [[String(index + 1), letter]] : [])));
+
+const WEB = new URL("../..", import.meta.url).pathname;
+
+/** The files that decide how a match plays, under web/: the generated rules, the game and agent core, this match loop and the pinned dependencies. */
+const PLAY_FILES = ["generated", "src/agent", "src/bend.ts", "src/domain.ts", "src/driver.ts", "src/players.ts", "src/rng.ts", "src/text.ts", "src/arena/agent.ts", "src/arena/match.ts", "package.json", "bun.lock"];
+
+const filesUnder = (path: string): ReadonlyArray<string> => (statSync(path).isDirectory() ? readdirSync(path).flatMap((name) => filesUnder(join(path, name))) : [path]);
+
+const codeSha = (): string => sha(Buffer.concat(PLAY_FILES.flatMap((path) => filesUnder(join(WEB, path))).toSorted().flatMap((file) => [Buffer.from(`${relative(WEB, file)}\0`), readFileSync(file), Buffer.from("\0")])));
+
+const provenanceOf = (match: ArenaMatch): MatchProvenance => ({
+  code_sha: codeSha(),
+  instructions_sha: sha(INSTRUCTIONS),
+  compaction: "off",
+  agents: Object.fromEntries(match.entrants.map((entrant) => [entrant.agent, entrant.provenance])),
+});
+
+const sameAgent = Schema.toEquivalence(Schema.NullOr(AgentProvenance));
+
+/** Where the configuration a resume brings differs from the one the match started with. */
+const changesFrom = (started: MatchProvenance, now: MatchProvenance): ReadonlyArray<string> => [
+  ...(["code_sha", "instructions_sha", "compaction"] as const).flatMap((key) => (started[key] === now[key] ? [] : [`${key} was ${started[key]}, now ${now[key]}`])),
+  ...[...new Set([...Object.keys(started.agents), ...Object.keys(now.agents)])].flatMap((agent) => {
+    const [before, after] = [started.agents[agent] ?? null, now.agents[agent] ?? null];
+
+    return sameAgent(before, after) ? [] : [`agent ${agent} was ${JSON.stringify(before)}, now ${JSON.stringify(after)}`];
+  }),
+];
+
+/** The same for every model, when a turn ends without a move. */
+export const REMINDER = "It is still your turn; call play_move with one of the listed moves.";
+
+/** The move the arena plays for a player that did not choose one: a pick seeded by the match seed, turn and player, among its moves sorted by label, so table order does not change it. */
+const interventionMove = (seed: string, turn: number, player: Letter, moves: ReadonlyArray<{ readonly move: number; readonly label: string }>): Option.Option<number> => {
+  const byLabel = moves.toSorted((a, b) => (a.label < b.label ? -1 : a.label > b.label ? 1 : 0));
+  const pick = Number.parseInt(sha(`${seed}:${turn}:${player}`).slice(0, 8), 16) % Math.max(1, byLabel.length);
+
+  return Option.map(Option.fromUndefinedOr(byLabel[pick]), ({ move }) => move);
+};
 
 /** Plays the match in `dir` to game over, starting it or resuming it from its store. */
 export const playMatch = (match: ArenaMatch) =>
   Effect.gen(function* () {
     const { dir } = match;
+    const crashAt = match.crashAt ?? (() => undefined);
 
     mkdirSync(dir, { recursive: true });
+
+    for (const file of ["events.jsonl", "calls.jsonl"]) dropPartialLine(join(dir, file));
 
     const isFresh = !existsSync(join(dir, "session.sqlite"));
     let table: Table | undefined;
@@ -413,21 +472,57 @@ export const playMatch = (match: ArenaMatch) =>
       return table;
     };
 
+    /** What every log line about one player says about it; agent lines also name the agent. */
+    const whereIs = (player: Letter) => {
+      const where = { player, position: currentTable().positionOf(player) };
+
+      return currentTable().controllerOf(player) === "Agent" ? { agent: player, ...where } : where;
+    };
+
+    const exported = exportedSeqs(dir);
+
+    /** Writes the journal's deliveries and moves that events.jsonl lacks, each with its index in the journal as seq. Each commit is exported before the next, so a crash leaves out at most one. */
+    const exportFrom = (state: MatchState) => {
+      state.deliveries.forEach((line, seq) => {
+        if (exported.deliveries.has(seq)) return;
+
+        logEvent(dir, "delivered", { ...whereIs(line.player), via: line.via, turn: line.turn, from: line.from, entries: currentTable().heard(line.player).slice(line.from, line.from + line.count), seq });
+        exported.deliveries.add(seq);
+      });
+
+      state.moves.forEach((line, seq) => {
+        if (exported.moves.has(seq)) return;
+
+        logEvent(dir, line.by === "fallback" ? "fallback" : "move", { ...whereIs(line.player), ...line, seq });
+        exported.moves.add(seq);
+      });
+    };
+
     const lastReplies = new Map<AgentId, AssistantMessage>();
-    const extension = seatTools(dir, currentTable, (agent, message) => lastReplies.set(agent, message));
+    const extension = seatTools(dir, { table: currentTable, onReply: (agent, message) => lastReplies.set(agent, message), exportJournal: exportFrom, crashAt });
     const registry = createRegistry();
 
     registry.install(extension);
 
     const storage = yield* attempt("open the store", () => openNodeSqliteStorage(join(dir, "session.sqlite")));
-    const harness = yield* attempt("open the harness", () => Harness.open(storage, { models: match.models, registry, settings: { compaction: match.compaction } }, context));
-    const journal = () => attempt("read the journal", async () => (await harness.snapshot(MatchDoc, context)) ?? emptyMatch());
-    const record = (change: (state: MatchState) => void) => attempt("write the journal", () => harness.commit(async (tx) => void change(await tx.doc(MatchDoc)), context));
+    const store = yield* attempt("open the harness", () => Harness.open(storage, { models: match.models, registry, settings: { compaction: { enabled: false } } }, context));
+    const journal = () => attempt("read the journal", async () => (await store.snapshot(MatchDoc, context)) ?? emptyMatch());
+    const record = (change: (state: MatchState) => void) => attempt("write the journal", () => store.commit(async (tx) => void change(await tx.doc(MatchDoc)), context));
 
-    /** The manifest's agents, the same shape while the match runs and after it ends. */
-    const agentsIn = (playing: Table) =>
+    /** Commits a change to the journal and writes its log line; `what` names the crash points around both. */
+    const commit = (what: string, change: (state: MatchState) => void) =>
+      Effect.gen(function* () {
+        crashAt(`${what}:before-commit`);
+        yield* record(change);
+        crashAt(`${what}:after-commit`);
+        exportFrom(yield* journal());
+        crashAt(`${what}:after-export`);
+      });
+
+    /** The manifest's agents, the same shape while the match runs and after it ends, with each endpoint as the match started with it. */
+    const agentsIn = (playing: Table, provenance: MatchProvenance) =>
       Object.fromEntries(
-        playing.arenaPlayers().flatMap((player) => (playing.controllerOf(player) === "Agent" ? [[player, { position: playing.positionOf(player), endpoint: match.entrants.find((entrant) => entrant.agent === player)?.describe ?? null, ...agentTotals(dir, player) }]] : [])),
+        playing.arenaPlayers().flatMap((player) => (playing.controllerOf(player) === "Agent" ? [[player, { position: playing.positionOf(player), endpoint: provenance.agents[player] ?? null, ...agentTotals(dir, player) }]] : [])),
       );
 
     if (isFresh) {
@@ -437,7 +532,8 @@ export const playMatch = (match: ArenaMatch) =>
 
       if (Option.isNone(letters)) return yield* new ArenaFault({ message: `${match.controllers.filter((controller) => controller === "Agent").length} Agent seats but ${match.entrants.length} entrants` });
 
-      const state: MatchState = { seed: match.seed, controllers: [...match.controllers], letters: letters.value, delivery: match.delivery, conversations: {}, moves: [], delivered: {}, retries: {} };
+      const provenance = provenanceOf(match);
+      const state: MatchState = { seed: match.seed, controllers: [...match.controllers], letters: letters.value, delivery: match.delivery, conversations: {}, moves: [], deliveries: [], retries: {}, provenance };
 
       table = new Table(state);
 
@@ -445,7 +541,7 @@ export const playMatch = (match: ArenaMatch) =>
         const sitting: Sitting = { agent: entrant.agent, position: table.positionOf(entrant.agent) };
 
         const created = yield* attempt("create a conversation", () =>
-          harness.createConversation(
+          store.createConversation(
             {
               ownership: { kind: "ownerless" },
               agent: { model: entrant.model, thinkingLevel: entrant.thinkingLevel ?? null, instructions: INSTRUCTIONS, extensions: [extension] },
@@ -468,17 +564,25 @@ export const playMatch = (match: ArenaMatch) =>
         letters: state.letters,
         delivery: match.delivery,
         seating: seatingIn(state),
-        agents: agentsIn(table),
-        instructions_sha: sha(INSTRUCTIONS),
+        agents: agentsIn(table, provenance),
+        instructions_sha: provenance.instructions_sha,
+        provenance,
       });
     } else {
       const state = yield* journal();
 
+      if (state.provenance === null) return yield* new ArenaFault({ message: "This match was started before the arena recorded its configuration, so it cannot be resumed; start a new one." });
+
+      const changes = changesFrom(state.provenance, provenanceOf(match));
+
+      if (changes.length > 0) return yield* new ArenaFault({ message: `This match started with another configuration, so it cannot resume with this one (a key may change, nothing else): ${changes.join("; ")}` });
+
       table = new Table(state);
       logEvent(dir, "resumed", { moves: state.moves.length });
+      exportFrom(state);
     }
 
-    harness.resume();
+    store.resume();
 
     const playing = currentTable();
     const humans = new Map<Letter, HumanLink>();
@@ -506,17 +610,10 @@ export const playMatch = (match: ArenaMatch) =>
         attempt("find a conversation", async () => {
           const id = state.conversations[agent];
 
-          return id === undefined ? undefined : harness.conversation(id, context);
+          return id === undefined ? undefined : store.conversation(id, context);
         }),
         (conversation) => (conversation === undefined ? Effect.fail(new ArenaFault({ message: `agent ${agent} has no conversation` })) : Effect.succeed(conversation)),
       );
-
-    /** What every log line about one player says about it; agent lines also name the agent. */
-    const whereIs = (player: Letter) => {
-      const where = { player, position: playing.positionOf(player) };
-
-      return playing.controllerOf(player) === "Agent" ? { agent: player, ...where } : where;
-    };
 
     /** Adds a message to a player's context and asks for nothing: a pi-durable write for an agent, with no model call, or a line on a human's terminal. */
     const writeTo = (state: MatchState, player: Letter, text: string, requestId: string, data: { readonly from: number; readonly count: number }) =>
@@ -534,24 +631,25 @@ export const playMatch = (match: ArenaMatch) =>
     const sendPending = (player: Letter, via: "live" | "end") =>
       Effect.gen(function* () {
         const state = yield* journal();
-        const from = state.delivered[player] ?? 0;
+        const from = sentCount(state, player);
         const entries = playing.heard(player).slice(from);
 
         if (via === "live" && entries.length === 0) return;
+
+        // A resume after the end notice went out sends it no second time.
+        if (via === "end" && state.deliveries.some((line) => line.player === player && line.via === "end")) return;
 
         // The over view's own log ends with "The match is over.", so the end notice needs no heading.
         const text = JSON.stringify(via === "end" ? { ...playing.view(player), events: entries } : { events: entries });
 
         yield* writeTo(state, player, text, `${via}-${from}`, { from, count: entries.length });
-        yield* record((next) => void (next.delivered[player] = from + entries.length));
-        logEvent(dir, "delivered", { ...whereIs(player), via, turn: playing.turn, from, entries });
+        yield* commit("delivery", (next) => void next.deliveries.push({ player, via, turn: playing.turn, from, count: entries.length }));
       });
 
     /** A human's turn: the same input an agent gets, then typed lines until one is a legal move. It waits as long as the human takes. */
     const humanTurn = (player: Letter, input: string, turn: number) =>
       Effect.gen(function* () {
         const link = yield* humanOf(player);
-        const where = whereIs(player);
         const startedAt = performance.now();
         let reply = { text: input, expectsMove: true };
 
@@ -561,15 +659,11 @@ export const playMatch = (match: ArenaMatch) =>
           const typed = (yield* attempt(`wait for Player ${player}; run again with the same --dir to resume`, () => link.nextLine())).trim();
           const played = /^\d+$/.test(typed) ? playing.tryMove(player, Number(typed), turn, "human") : { ok: false as const, text: JSON.stringify({ error: "Type the number of one of your moves." }) };
 
-          if (played.ok) {
-            yield* record((next) => void next.moves.push(played.line));
-            logEvent(dir, "move", { ...where, ...played.line });
-          } else {
-            reply = { text: played.text, expectsMove: true };
-          }
+          if (played.ok) yield* commit("move", (next) => void next.moves.push(played.line));
+          else reply = { text: played.text, expectsMove: true };
         }
 
-        logEvent(dir, "turn", { ...where, turn, wall_ms: Math.round(performance.now() - startedAt), moved: true });
+        logEvent(dir, "turn", { ...whereIs(player), turn, wall_ms: Math.round(performance.now() - startedAt), moved: true });
       });
 
     while (!playing.isOver) {
@@ -591,18 +685,19 @@ export const playMatch = (match: ArenaMatch) =>
 
         if (!played.ok) return yield* new ArenaFault({ message: played.text });
 
-        yield* record((next) => void next.moves.push(played.line));
-        logEvent(dir, "move", { ...where, ...played.line });
+        yield* commit("forced", (next) => void next.moves.push(played.line));
         continue;
       }
 
-      const from = state.delivered[player] ?? 0;
+      const from = sentCount(state, player);
       const entries = playing.heard(player).slice(from);
       const input = `Your turn.\n${JSON.stringify({ ...view, events: entries.length > 0 ? entries : undefined })}`;
+      // A resume or a retry of this turn finds its input already journaled.
+      const sentThisTurn = state.deliveries.some((line) => line.player === player && line.via === "input" && line.turn === turn);
+      const delivered = sentThisTurn ? Effect.void : commit("delivery", (next) => void next.deliveries.push({ player, via: "input", turn, from, count: entries.length }));
 
       if (playing.controllerOf(player) === "Human") {
-        yield* record((next) => void (next.delivered[player] = from + entries.length));
-        logEvent(dir, "delivered", { ...where, via: "input", turn, from, entries });
+        yield* delivered;
         yield* humanTurn(player, input, turn);
         continue;
       }
@@ -611,34 +706,50 @@ export const playMatch = (match: ArenaMatch) =>
       // The same request id after a crash finds the same submission; a retry after a model failure needs a new one.
       const retry = state.retries[String(turn)] ?? 0;
       const requestId = retry === 0 ? `turn-${turn}` : `turn-${turn}-retry-${retry}`;
-      const submittedAt = performance.now();
-      const submission = yield* attempt("submit a turn", () => conversation.submit({ type: "input", content: input, requestId }, context));
 
-      yield* record((next) => void (next.delivered[player] = from + entries.length));
-      logEvent(dir, "delivered", { ...where, via: "input", turn, from, entries });
-      yield* attempt("wait for the turn", () => submission.wait(context));
+      /** Runs the model on one input and says whether it moved. A provider error stops the match, to be resumed. */
+      const ask = (content: string, request: string, afterSubmit: Effect.Effect<void, ArenaFault>) =>
+        Effect.gen(function* () {
+          const submittedAt = performance.now();
+          const submission = yield* attempt("submit a turn", () => conversation.submit({ type: "input", content, requestId: request }, context));
 
-      const moved = playing.turn !== turn;
+          yield* afterSubmit;
+          yield* attempt("wait for the turn", () => submission.wait(context));
 
-      logEvent(dir, "turn", { ...where, turn, wall_ms: Math.round(performance.now() - submittedAt), moved });
+          const moved = playing.turn !== turn;
 
-      const reply = lastReplies.get(player);
+          logEvent(dir, "turn", { ...where, turn, wall_ms: Math.round(performance.now() - submittedAt), moved });
 
-      if (!moved && reply?.stopReason === "error") {
-        yield* record((next) => void (next.retries[String(turn)] = retry + 1));
-        logEvent(dir, "fault", { ...where, turn, error: reply.errorMessage ?? "" });
+          const reply = lastReplies.get(player);
 
-        return yield* new ArenaFault({ message: `Agent ${player} (position ${where.position}) failed at turn ${turn}: ${reply.errorMessage ?? "no message"}. Run again with the same --dir to resume.` });
-      }
+          if (!moved && reply?.stopReason === "error") {
+            yield* record((next) => void (next.retries[String(turn)] = retry + 1));
+            logEvent(dir, "fault", { ...where, turn, error: reply.errorMessage ?? "" });
 
-      if (!moved) {
-        const fallback = playing.tryMove(player, 0, turn, "fallback");
+            return yield* new ArenaFault({ message: `Agent ${player} (position ${where.position}) failed at turn ${turn}: ${reply.errorMessage ?? "no message"}. Run again with the same --dir to resume.` });
+          }
 
-        if (!fallback.ok) return yield* new ArenaFault({ message: fallback.text });
+          return moved;
+        });
 
-        yield* record((next) => void next.moves.push(fallback.line));
-        logEvent(dir, "fallback", { ...where, ...fallback.line });
-      }
+      if (yield* ask(input, requestId, Effect.andThen(Effect.sync(() => crashAt("delivery:after-submit")), delivered))) continue;
+
+      const reminder = `${requestId}-reminder`;
+
+      const reminded = Effect.sync(() => {
+        crashAt("reminder:after-submit");
+        logEvent(dir, "reminder", { ...where, turn, request: reminder });
+      });
+
+      if (yield* ask(REMINDER, reminder, reminded)) continue;
+
+      // A turn with no move after the reminder is forfeited: the arena plays for the player, and the line says so.
+      const forfeited = interventionMove(state.seed, turn, player, view.moves ?? []);
+      const played = Option.isSome(forfeited) ? playing.tryMove(player, forfeited.value, turn, "fallback") : { ok: false as const, text: `Player ${player} has no moves at turn ${turn}` };
+
+      if (!played.ok) return yield* new ArenaFault({ message: played.text });
+
+      yield* commit("fallback", (next) => void next.moves.push(played.line));
     }
 
     for (const player of playing.arenaPlayers()) yield* sendPending(player, "end");
@@ -646,16 +757,28 @@ export const playMatch = (match: ArenaMatch) =>
     for (const link of humans.values()) link.close();
 
     const final = yield* journal();
-    const audit = yield* auditOf(dir, harness, final, playing);
-    const storeUsage = yield* attempt("read usage", () => harness.usage(context));
+    const provenance = final.provenance ?? provenanceOf(match);
+    const audit = yield* auditOf(dir, store, final, playing);
+    const storeUsage = yield* attempt("read usage", () => store.usage(context));
     const someone = Option.getOrThrow(Option.fromUndefinedOr(playing.arenaPlayers()[0]));
     const standings = (playing.view(someone).standings ?? []).map((standing) => ({ ...standing, controller: final.controllers[final.letters.indexOf(standing.player)] ?? null }));
     const moves = Object.fromEntries((["agent", "human", "forced", "fallback"] as const).map((by) => [by, final.moves.filter((line) => line.by === by).length]));
-    const result = { audit, moves, standings, agents: agentsIn(playing), move_log_sha: sha(JSON.stringify(final.moves)) };
+    const result = { audit, moves, standings, agents: agentsIn(playing, provenance), move_log_sha: sha(JSON.stringify(final.moves)) };
 
     logEvent(dir, "end", { standings });
-    writeManifest(dir, { format: RUN_FORMAT, status: "finished", seed: final.seed, controllers: final.controllers, letters: final.letters, delivery: final.delivery, seating: seatingIn(final), instructions_sha: sha(INSTRUCTIONS), ...result });
-    yield* attempt("close the harness", () => harness.close(context));
+    writeManifest(dir, {
+      format: RUN_FORMAT,
+      status: "finished",
+      seed: final.seed,
+      controllers: final.controllers,
+      letters: final.letters,
+      delivery: final.delivery,
+      seating: seatingIn(final),
+      instructions_sha: provenance.instructions_sha,
+      provenance,
+      ...result,
+    });
+    yield* attempt("close the harness", () => store.close(context));
 
     return { ...result, storeUsage: Object.fromEntries(Object.entries(storeUsage.models).map(([model, spent]) => [model, { input: spent.input, output: spent.output }])), loggedUsage: addTokens(readCalls(dir)) };
   });
