@@ -71,6 +71,9 @@ export const settleDraws = (start: Progress): Result.Result<Progress, AnswerErro
   return Result.succeed(progress);
 };
 
+/** A random 32-bit match id, so a move or token from an earlier match, server process or page load never answers a later match. */
+export const randomMatchId = (): number => new DataView(crypto.getRandomValues(new Uint8Array(4)).buffer).getUint32(0);
+
 export const begin = (table: SeatCount, items: boolean, match: number, rng: Rng, controllers: ReadonlyArray<Controller>, seed: number): Result.Result<Progress, AnswerError | BendContractError> =>
   Result.flatMap(startGame(table, items, match), (step) => {
     const ais = Arr.makeBy(SEATS.length, (seat) =>

@@ -5,7 +5,7 @@ import { defineMessageUnion } from "foldkit/message";
 import { modifyFields } from "foldkit/struct";
 
 import { AgentCall, AgentReply, type MatchSession, runTool } from "./agent/tools.ts";
-import { NOTHING_REPORTED, reportedTo } from "./agent/view.ts";
+import { acknowledgedTo, NOTHING_ACKNOWLEDGED } from "./agent/view.ts";
 import { type AnswerError, Game } from "./bend.ts";
 import { type Board, Briefcase, Counter, GameEvent, LearnedSecret, Seat, SEATS_BY_TABLE, SeatCount, type SeatView, seatsOut, Stage } from "./domain.ts";
 import { aiPrompt, aiStep, AiSeat, begin, Controller, controllerOf, isAi, play, type Progress, promptsOf } from "./driver.ts";
@@ -42,7 +42,7 @@ const Session = Schema.Struct({
   controllers: Schema.Array(Controller),
   ais: Schema.Array(Schema.Option(AiSeat)),
   seed: Schema.Number,
-  reported: Schema.Array(Schema.Number),
+  acknowledged: Schema.Array(Schema.Number),
   viewer: Viewer,
   isAutoplay: Schema.Boolean,
 });
@@ -51,7 +51,8 @@ type Session = typeof Session.Type;
 
 export const Model = Schema.Struct({
   setup: Setup,
-  matchCount: Schema.Number,
+  /** The id the next match gets: random per page load, then counting up, as update must stay pure. */
+  nextMatch: Schema.Number,
   maybeMatch: Schema.Option(Session),
   maybeError: Schema.Option(Schema.String),
   isWebMcpAvailable: Schema.Boolean,
@@ -134,18 +135,17 @@ const withMatch = (model: Model, toReturn: (match: Session) => Return): Return =
 
 const startMatch = (model: Model): Return => {
   const { table, controllers, isItemsEnabled, seed } = model.setup;
-  const matchNumber = model.matchCount + 1;
 
-  return Result.match(begin(table, isItemsEnabled, matchNumber, seedRng(seed), controllers, seed), {
+  return Result.match(begin(table, isItemsEnabled, model.nextMatch, seedRng(seed), controllers, seed), {
     onSuccess: (progress) => ({
       model: modifyFields(model, {
-        matchCount: () => matchNumber,
+        nextMatch: (match) => match + 1,
         maybeError: () => Option.none(),
         maybeMatch: () =>
           Option.some({
             ...progress,
             controllers,
-            reported: NOTHING_REPORTED,
+            acknowledged: NOTHING_ACKNOWLEDGED,
             viewer: Option.getOrElse(
               Arr.findFirst(SEATS_BY_TABLE[table], (seat) => controllerOf(controllers, seat) === "Human"),
               (): Viewer => "Spectator",
@@ -184,8 +184,8 @@ const pageSession: MatchSession<Model> = {
   current: (model) => model.maybeMatch,
   start: (model, { table, isItemsEnabled, maybeSeed, controllers }) => applied(startAgentMatch(model, table, isItemsEnabled, Option.getOrElse(maybeSeed, () => model.setup.seed), controllers)),
   move: (model, move) => applied(update(model, Message.ClickedMove(move)).model),
-  report: (model, seat, eventCount) =>
-    modifyFields(model, { maybeMatch: (maybeMatch) => Option.map(maybeMatch, (match) => ({ ...match, reported: reportedTo(match.reported, seat, eventCount) })) }),
+  acknowledge: (model, seat, eventCount) =>
+    modifyFields(model, { maybeMatch: (maybeMatch) => Option.map(maybeMatch, (match) => ({ ...match, acknowledged: acknowledgedTo(match.acknowledged, seat, eventCount) })) }),
 };
 
 /** Runs one tool call over the model. */
@@ -220,14 +220,14 @@ export const update = (model: Model, message: Message): Return =>
 
 // INIT
 
-export const Flags = Schema.Struct({ isWebMcpAvailable: Schema.Boolean });
+export const Flags = Schema.Struct({ isWebMcpAvailable: Schema.Boolean, firstMatch: Schema.Number });
 
 export type Flags = typeof Flags.Type;
 
-export const init: Runtime.ApplicationInit<Model, Message, Flags> = ({ isWebMcpAvailable }) => ({
+export const init: Runtime.ApplicationInit<Model, Message, Flags> = ({ isWebMcpAvailable, firstMatch }) => ({
   model: {
     setup: { table: 2, controllers: ["DoN", "Human", "DoN", "DoN"], isItemsEnabled: false, seed: DEFAULT_SEED },
-    matchCount: 0,
+    nextMatch: firstMatch,
     maybeMatch: Option.none(),
     maybeError: Option.none(),
     isWebMcpAvailable,

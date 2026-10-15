@@ -4,6 +4,7 @@ import { Array as Arr, Option, Schema } from "effect";
 import { AgentCall, AgentReply } from "../src/agent/tools.ts";
 import { Seat, SeatCount } from "../src/domain.ts";
 import { type Controller, promptsOf } from "../src/driver.ts";
+import { type Receipt, Token } from "../src/agent/view.ts";
 import { PlayerNumber, rosterOf } from "../src/players.ts";
 import { init, Message, type Model, handleAgentCall, update } from "../src/main.ts";
 
@@ -12,22 +13,22 @@ const STEP_LIMIT = 20_000;
 const View = Schema.Struct({
   you: Schema.Number,
   status: Schema.Literals(["your turn", "waiting", "over"]),
-  turn: Schema.optionalKey(Schema.Number),
+  token: Schema.optionalKey(Token),
   moves: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 
 const parseView = Schema.decodeUnknownSync(Schema.fromJsonString(View));
 
-const blank = (): Model => init({ isWebMcpAvailable: true }).model;
+const blank = (): Model => init({ isWebMcpAvailable: true, firstMatch: 1 }).model;
 
 const call = (model: Model, request: AgentCall) => handleAgentCall(model, request);
 
-const newMatch = (players: SeatCount, items: boolean, seed: string, controllers: ReadonlyArray<Controller>): Model =>
-  call(blank(), AgentCall.cases.NewMatch.make({ players, items, seed, controllers })).state;
+const newMatch = (players: SeatCount, items: boolean, seed: number, controllers: ReadonlyArray<Controller>, model = blank()): Model =>
+  call(model, AgentCall.cases.NewMatch.make({ players, items, seed, controllers })).state;
 
 const getGame = (model: Model, player: PlayerNumber): AgentReply => call(model, AgentCall.cases.GetGame.make({ player })).reply;
 
-const play = (model: Model, player: PlayerNumber, index: number, turn: number) => call(model, AgentCall.cases.PlayMove.make({ player, index, turn }));
+const play = (model: Model, player: PlayerNumber, index: number, token: Receipt) => call(model, AgentCall.cases.PlayMove.make({ player, index, token }));
 
 const answered = (reply: AgentReply): string =>
   AgentReply.match(reply, { Answered: ({ text }) => text, Refused: ({ reason }) => expect.unreachable(`refused: ${reason}`) });
@@ -60,7 +61,7 @@ const untilAgentTurn = (start: Model): Model => {
 };
 
 test("in the page, two Agent players and a DoN player play a 3-player match to the end through the tools, with autoplay moving the bot", () => {
-  let model = untilAgentTurn(newMatch(3, true, "42", ["Agent", "Agent", "DoN"]));
+  let model = untilAgentTurn(newMatch(3, true, 42, ["Agent", "Agent", "DoN"]));
   let moves = 0;
   let sharedTurns = 0;
   const moved = new Set<PlayerNumber>();
@@ -68,8 +69,8 @@ test("in the page, two Agent players and a DoN player play a 3-player match to t
   for (; moves < STEP_LIMIT && !isOver(model); moves++) {
     const ready = agentsToMove(model);
     const player = Arr.getUnsafe(ready, moves % ready.length);
-    const { turn = expect.unreachable("a player to move has no turn"), moves: legal = [] } = viewOf(model, player);
-    const outcome = play(model, player, (moves * 7) % legal.length, turn);
+    const { token = expect.unreachable("a player to move has no token"), moves: legal = [] } = viewOf(model, player);
+    const outcome = play(model, player, (moves * 7) % legal.length, token);
 
     sharedTurns += ready.length > 1 ? 1 : 0;
     moved.add(player);
@@ -121,4 +122,13 @@ test("a tool call through update returns one reply command", () => {
   const outcome = update(blank(), Message.AgentCalled({ id: 9, call: AgentCall.cases.GetGame.make({ player: PlayerNumber.make(1) }) }));
 
   expect(outcome.commands?.map(({ name }) => name)).toEqual(["ReplyToAgent"]);
+});
+
+test("in the page, a move token from an earlier match is refused in a new match with the same seed, at the same turn", () => {
+  const first = untilAgentTurn(newMatch(2, false, 3, ["Agent", "DoN"]));
+  const { token = expect.unreachable("Player 1 has no token") } = viewOf(first, PlayerNumber.make(1));
+  const second = untilAgentTurn(newMatch(2, false, 3, ["Agent", "DoN"], first));
+
+  expect(viewOf(second, PlayerNumber.make(1)).token?.generation).toBe(token.generation);
+  expect(play(second, PlayerNumber.make(1), 0, token).reply._tag).toBe("Refused");
 });

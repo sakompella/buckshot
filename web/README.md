@@ -20,7 +20,7 @@ Checks:
 
     bun run typecheck  # tsc --noEmit, strict
     bun run lint       # oxlint with every anti-slop rule and the Effect group, --deny-warnings
-    bun run test       # plays full Story and DoN matches through bend.ts at 2, 3 and 4 players; checks stale answers are rejected; checks the agent tool contract: privacy, stale turns, and each Agent's events adding up to the whole log
+    bun run test       # plays full Story and DoN matches through bend.ts at 2, 3 and 4 players; checks stale answers are rejected; checks the agent tool contract: privacy, stale and cross-match tokens, lost replies, and each Agent's events adding up to the whole log, the end included
     bun scripts/play.ts [url] [outdir]   # headless Chrome: one human-vs-bot match by clicking, one 4-bot autoplay match
 
 ## Playing with an agent (WebMCP)
@@ -43,38 +43,62 @@ table does not have, or for a player that is not an Agent, is refused. Replies
 never show the machine's seat ids. A player's view never includes another
 player's secrets or the shell order.
 
-- `get_game(player)`: the player's view as JSON, with only what that player's screen
+- `get_game(player, token?)`: the player's view as JSON, with only what that player's screen
   shows. While it is not the player's turn it is just `{"you": 2, "status": "waiting"}`.
-  On the player's turn it has `status: "your turn"`, `turn`, `players` (health, which
-  is left out while a player is jammed, and item names, with no slots or cash),
-  `gun` (`heldBy`, and `sawed` when it is), `events` and `moves`. `events` are what
-  happened since the player's previous reply on its turn, from the start of the
-  match in the first one. They include round starts and round wins. The secrets
+  On the player's turn it has `status: "your turn"`, `token`, `players` (health, which
+  is left out while a player is jammed, item names, and `holding`, the item the player
+  drew from the briefcase and has not placed yet; no slots or cash),
+  `gun` (`heldBy` once a player has picked it up, and `sawed` when it is), `events` and
+  `moves`. `events` are what happened since the player last acknowledged events, from
+  the start of the match at first. They include round starts and round wins. The secrets
   this player heard (the magnifying glass, the phone) stand in the list just after
-  the event that told them, and no other player's secrets appear. Events are shown
-  once, so the agent remembers what it needs, as a person does. The server keeps
-  one count per Agent player of the events it has shown; a waiting reply does not
-  move it. `moves` is the list of the legal moves with the same labels as the
-  buttons; a move's number is its position in the list, from 0. Fields with
-  nothing to show are left out, with no nulls. When the match is over the view is
-  `status: "over"` and `standings`, the cash of each player; cash appears nowhere
-  else.
-- `play_move(player, index, turn?)`: plays move `index` for the player. It refuses a
-  call when it is not that player's turn, an index outside the list, or a `turn`
-  that no longer matches. It returns the player's view as `get_game` does. The bots
-  move on their own afterwards, so poll `get_game` until `status` is `"your turn"`.
+  the event that told them, and no other player's secrets appear. `moves` is the list
+  of the legal moves with the same labels as the buttons; a move's number is its
+  position in the list, from 0. Fields with nothing to show are left out, with no
+  nulls. When the match is over the view is `status: "over"` and `standings`, the
+  cash of each player; cash appears nowhere else. Until the player acknowledges them,
+  the over view also has the match's last events (the final shot, the last round's
+  prize, "The match is over.") and a `token`.
+- `play_move(player, index, token)`: plays move `index` for the player, with the
+  `token` of the view the move was chosen from. It refuses a call when it is not that
+  player's turn, an index outside the list, or a token from another player, another
+  match, or an earlier turn. A refused call plays nothing and acknowledges nothing.
+  It returns the player's view as `get_game` does. The bots move on their own
+  afterwards, so poll `get_game` until `status` is `"your turn"`.
 - `new_match(players, items, seed?, controllers?)`: starts a match with
   autoplay on. `controllers` lists one controller per player in player order, for
   example `["Agent", "Agent", "DoN"]`; each is `Agent`, `DoN`, `Story` or
-  `Human`. Without it Player 1 is the Agent and DoN plays the others. It
-  returns each player's number and controller, and the seed.
+  `Human`. Without it Player 1 is the Agent and DoN plays the others. `seed` is a
+  string holding an integer from -9007199254740991 to 9007199254740991; anything
+  else is refused. It returns each player's number and controller, and the seed,
+  which replays the match when passed back.
 
-`turn` counts every request point of the match, so any player's move advances it.
+### Tokens and acknowledgements
+
+A token such as `m3300811881t15p1e11` names the match, the request point the view's
+moves answer, the player, and the end of the view's events. Agents treat it as
+opaque: pass the token of the last view read to the next `get_game` or `play_move`
+for that player.
+
+- Reading a view changes nothing. Its events repeat in every view until a later call
+  passes its token, so a lost reply, a retry or two readers of one player lose no
+  events. Delivery is at least once until acknowledged; nothing promises exactly once.
+- A waiting view has no events and no token, and does not count as delivery.
+- The server keeps one acknowledged count per Agent player in the match. A token
+  only moves it forward: an older token changes nothing, and a token from another
+  match, another player, or a point the match has not reached is refused.
+- Every accepted move advances the request point, so a token plays at most one move.
+  Repeating a `play_move` after the turn was kept, for example after a blank fired at
+  yourself, is refused as stale instead of played twice.
+- Match ids are random: the server draws one per match, and the page draws one per
+  load and counts up from it. So a token from an earlier match is refused even with
+  the same seed and setup, and even after the server restarts or the page reloads.
+
 While several players grab items from the briefcase at once, each Agent player has
 its own moves and may answer in any order, but a move from another player between
-an agent's `get_game` and its `play_move` makes that `turn` stale. The agent
-then calls `get_game` again. When several bots can move, the lowest-numbered player goes
-first, as in `sim/bend-mp/driver.bend`.
+an agent's `get_game` and its `play_move` makes that token stale. The agent
+then calls `get_game` again for the current moves and token. When several bots can
+move, the lowest-numbered player goes first, as in `sim/bend-mp/driver.bend`.
 
 A refusal comes back as `{"error": "..."}` text, because Chrome shows the agent
 only a generic message when a tool throws. The MCP server sends the same text
@@ -87,7 +111,7 @@ runs with `Runtime.embed`, which returns the port handles. A tool sends
 `ClickedMove` the buttons send), and a `ReplyToAgent` Command emits `{id, reply}`
 on the outbound port `agentReplied`.
 
-    bun scripts/agent.ts [url] [outdir]   # headless Chrome with the flag, tools only: a 2-player match (one Agent vs DoN) and a 3-player match (two Agents and DoN), items on
+    bun scripts/agent.ts [url] [outdir]   # headless Chrome with the flag, tools only: a 2-player match (one Agent vs DoN), a 3-player match (two Agents and DoN), and that match again with the same seed, items on
 
 Chrome 155 has no `navigator.modelContextTesting`. The script calls the tools
 through `document.modelContext.getTools()` and `executeTool()` from the spec.
@@ -123,7 +147,7 @@ or add this to `~/.codex/config.toml`, with the absolute path to `web/`:
 Each launch rebuilds the rules first, which takes a few seconds. Then ask the
 agent to call `new_match` and play its player. Checks:
 
-    bun scripts/mcp-check.ts   # spawns the server with the SDK client, lists the tools, plays two Agent players against DoN to the end, and prints the reply sizes
+    bun scripts/mcp-check.ts   # spawns the server with the SDK client, lists the tools, plays two Agent players against DoN to the end with acknowledgements, checks retries, repeated moves, the final events and a token from the previous match, and prints the reply sizes
     bunx @modelcontextprotocol/inspector --cli bun scripts/mcp.ts --method tools/list
 
 The server uses `@modelcontextprotocol/server` 2.3.1, the v2 SDK. It also
@@ -133,7 +157,7 @@ answers clients that use the older `initialize` handshake.
 
 - `src/bend.ts`: the only file that writes Bend tags. It decodes every Bend
   value with a Schema, turns lists and Nats into arrays and numbers, and
-  tickets every request point (match number + generation) so a stale answer is
+  tickets every request point (match id + generation) so a stale answer is
   rejected before Bend's `answer` runs.
 - `src/driver.ts`: runs a match between controllers. Story and DoN seats decide
   through the Bend entry points that `sim/bend-mp/driver.bend` uses, each with
