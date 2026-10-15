@@ -36,16 +36,16 @@ Enable it in Chrome 149 or later (tested on 155):
 - Open `chrome://flags/#enable-webmcp-testing`, set it to Enabled and relaunch, or
 - launch with `--enable-features=WebMCPTesting`.
 
-Players are numbered 1 to N in table order, as in the game's "PLAYER 2". A
-2-player table has Player 1 and Player 2. `get_game` and `play_move` name the
-player they are for by that number (`player`: 1 to 4). A call for a number the
-table does not have, or for a player that is not an Agent, is refused. Replies
+Players are named by letter in table order: a 2-player table has Player A and
+Player B. `get_game` and `play_move` name the player they are for by its letter
+(`player`: `"A"` to `"D"`). A call for a letter the table does not have, or for a
+player that is not an Agent, is refused. Replies
 never show the machine's seat ids. A player's view never includes another
 player's secrets or the shell order.
 
 - `get_game(player)`: the player's view as JSON, with only what that player's screen
   shows. It is read-only: until some player moves, every call returns the same view.
-  While it is not the player's turn it is just `{"you": 2, "status": "waiting"}`.
+  While it is not the player's turn it is just `{"you": "B", "status": "waiting"}`.
   On the player's turn it has `status: "your turn"`, `turn`, `players` (health, which
   is left out while a player is jammed, item names, and, while players grab from the
   briefcase, `holding`, the item a player drew and has not placed yet; no slots or cash),
@@ -70,24 +70,24 @@ player's secrets or the shell order.
   still starts a new match at any time; that is a person's choice, not a tool.
   `controllers` lists one controller per player in player order, for
   example `["Agent", "Agent", "DoN"]`; each is `Agent`, `DoN`, `Story` or
-  `Human`. Without it Player 1 is the Agent and DoN plays the others. `seed` is a
+  `Human`. Without it Player A is the Agent and DoN plays the others. `seed` is a
   string holding an integer from -9007199254740991 to 9007199254740991; anything
-  else is refused. It returns each player's number and controller, and the seed,
+  else is refused. It returns each player's letter and controller, and the seed,
   which replays the match when passed back.
 
 A your-turn view in a 3-player match with items, as the MCP check prints it:
 
-    {"you":1,"status":"your turn","turn":7,
-     "players":[{"player":1,"health":4,"items":["burner phone","adrenaline","magnifying glass"]},
-                {"player":2,"health":4,"items":["magnifying glass","magnifying glass","inverter"]},
-                {"player":3,"health":4,"items":["remote","jammer","magnifying glass"]}],
-     "events":["Player 1 drew an item.","Player 1 finished grabbing.","Player 1 placed magnifying glass in slot 3.",
-               "Player 2 drew an item.","Player 2 finished grabbing.","Distribution is over.",
-               "Player 2 placed inverter in slot 3.","The shotgun is loaded: 4 live, 3 blank.","Player 1's turn."],
-     "moves":["Shoot yourself","Shoot Player 2","Shoot Player 3","Use burner phone",
-              "Steal magnifying glass from Player 2","Steal inverter from Player 2","Steal remote from Player 3",
-              "Steal jammer from Player 3 and jam Player 2","Steal jammer from Player 3 and jam Player 3",
-              "Steal magnifying glass from Player 3","Use magnifying glass"]}
+    {"you":"A","status":"your turn","turn":7,
+     "players":[{"player":"A","health":4,"items":["burner phone","adrenaline","magnifying glass"]},
+                {"player":"B","health":4,"items":["magnifying glass","magnifying glass","inverter"]},
+                {"player":"C","health":4,"items":["remote","jammer","magnifying glass"]}],
+     "events":["Player A drew an item.","Player A finished grabbing.","Player A placed magnifying glass in slot 3.",
+               "Player B drew an item.","Player B finished grabbing.","Distribution is over.",
+               "Player B placed inverter in slot 3.","The shotgun is loaded: 4 live, 3 blank.","Player A's turn."],
+     "moves":["Shoot yourself","Shoot Player B","Shoot Player C","Use burner phone",
+              "Steal magnifying glass from Player B","Steal inverter from Player B","Steal remote from Player C",
+              "Steal jammer from Player C and jam Player B","Steal jammer from Player C and jam Player C",
+              "Steal magnifying glass from Player C","Use magnifying glass"]}
 
 ### Moves
 
@@ -99,10 +99,10 @@ while the machine leaves the player partway through an action (aiming, choosing 
 jam target or an item to steal, or holding a drawn item). No rule is written in
 TypeScript.
 
-- `Shoot Player 2`, `Shoot yourself`: pick up and fire, listed only when picking up is legal.
-- `Use beer`, `Use magnifying glass`, ...; a jammer is `Jam Player 3`; adrenaline is
-  `Steal beer from Player 2` (and a stolen jammer adds its target, `Steal jammer from
-  Player 3 and jam Player 2`).
+- `Shoot Player B`, `Shoot yourself`: pick up and fire, listed only when picking up is legal.
+- `Use beer`, `Use magnifying glass`, ...; a jammer is `Jam Player C`; adrenaline is
+  `Steal beer from Player B` (and a stolen jammer adds its target, `Steal jammer from
+  Player C and jam Player B`).
 - `Grab an item`: grab, then place the drawn item in the first free slot.
 
 Labels name no slots. No rule depends on a slot: the machine and the reference rules
@@ -124,7 +124,7 @@ While several players grab items from the briefcase at once, each Agent player h
 its own moves and may answer in any order, but a move from another player between
 an agent's `get_game` and its `play_move` makes that turn stale. The agent
 then calls `get_game` again for the current moves and turn. When several bots can
-move, the lowest-numbered player goes first, as in `sim/bend-mp/driver.bend`.
+move, the first player in table order goes first, as in `sim/bend-mp/driver.bend`.
 
 A refusal comes back as `{"error": "..."}` text, because Chrome shows the agent
 only a generic message when a tool throws. The MCP server sends the same text
@@ -190,7 +190,8 @@ answers clients that use the older `initialize` handshake.
   its own coin stream. A human seat picks from the legal moves the
   machine offers. Game draws come from a seeded RNG (`src/rng.ts`).
 - `src/players.ts`: the `Roster`, the one place a table's seat ids and the
-  player numbers people and agents see (Player 1 to N, in table order) convert.
+  player letters people and agents see (Player A to D, in table order by
+  default, or from an explicit seat-to-letter assignment) convert.
   Bend and the driver keep raw seat ids; every label and tool reply goes
   through a `Roster`.
 - `src/titles.ts`: end-of-match titles from the public event log. Titles are a UI

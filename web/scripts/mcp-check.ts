@@ -8,7 +8,7 @@ import { Schema } from "effect";
 
 const CALL_LIMIT = 3_000;
 
-const RAW_SEAT = /seat|Player 0/i;
+const RAW_SEAT = /seat|Player \d/i;
 
 const View = Schema.Struct({
   status: Schema.Literals(["your turn", "waiting", "over"]),
@@ -19,7 +19,7 @@ const View = Schema.Struct({
 
 const parseView = Schema.decodeUnknownSync(Schema.fromJsonString(View));
 
-const Table = Schema.Struct({ players: Schema.Array(Schema.Struct({ player: Schema.Number, controller: Schema.String })), seed: Schema.String });
+const Table = Schema.Struct({ players: Schema.Array(Schema.Struct({ player: Schema.String, controller: Schema.String })), seed: Schema.String });
 
 const parseTable = Schema.decodeUnknownSync(Schema.fromJsonString(Table));
 
@@ -40,14 +40,14 @@ const replySizes: Array<number> = [];
 const callTool = async (name: string, input: Record<string, number | string | boolean | ReadonlyArray<string>>): Promise<{ readonly ok: boolean; readonly text: string }> => {
   const { content, isError } = parseToolText(await client.callTool({ name, arguments: input }));
 
-  if (RAW_SEAT.test(content[0].text)) throw new Error(`${name} reply names a seat or a Player 0: ${content[0].text}`);
+  if (RAW_SEAT.test(content[0].text)) throw new Error(`${name} reply names a seat or a numbered player: ${content[0].text}`);
 
   replySizes.push(content[0].text.length);
 
   return { ok: isError !== true, text: content[0].text };
 };
 
-const getView = async (player: number) => {
+const getView = async (player: string) => {
   const got = await callTool("get_game", { player });
 
   if (!got.ok) throw new Error(`get_game(${player}) failed: ${got.text}`);
@@ -58,19 +58,19 @@ const getView = async (player: number) => {
 };
 
 /** By player: the event lines of each view it moved from, then of its final view. */
-const heard = new Map<number, ReadonlyArray<string>>();
+const heard = new Map<string, ReadonlyArray<string>>();
 
-const hear = (player: number, events: ReadonlyArray<string> = []): void => {
+const hear = (player: string, events: ReadonlyArray<string> = []): void => {
   heard.set(player, [...(heard.get(player) ?? []), ...events]);
 };
 
-console.log("get_game with no match:", await callTool("get_game", { player: 1 }));
+console.log("get_game with no match:", await callTool("get_game", { player: "A" }));
 
 console.log("new_match with a Human player:", await callTool("new_match", { players: 2, items: true, controllers: ["Agent", "Human"] }));
 
-console.log("play_move with a bad argument type:", await callTool("play_move", { player: 1, move: "zero", turn: 0 }));
+console.log("play_move with a bad argument type:", await callTool("play_move", { player: "A", move: "zero", turn: 0 }));
 
-console.log("play_move without a turn:", await callTool("play_move", { player: 1, move: 0 }));
+console.log("play_move without a turn:", await callTool("play_move", { player: "A", move: 0 }));
 
 const setup = { players: 3, items: true, seed: "42", controllers: ["Agent", "Agent", "DoN"] };
 
@@ -84,7 +84,7 @@ console.log("new_match while the match runs:", replaced);
 
 const agents = parseTable(started.text).players.filter(({ controller }) => controller === "Agent").map(({ player }) => player);
 
-console.log("get_game for the DoN player:", await callTool("get_game", { player: 3 }));
+console.log("get_game for the DoN player:", await callTool("get_game", { player: "C" }));
 
 let calls = 0;
 
@@ -144,7 +144,7 @@ console.log("a your-turn reply with items:", sample);
 
 const finals = await Promise.all(agents.map(async (player) => (await getView(player)).view));
 
-finals.forEach((view, position) => hear(agents[position] ?? 0, view.events));
+agents.forEach((player, position) => hear(player, finals[position]?.events));
 
 const isOver = finals.every((view) => view.status === "over");
 
@@ -158,7 +158,7 @@ const rematch = await callTool("new_match", setup);
 
 console.log("new_match after the end:", rematch.text);
 
-const stale = await callTool("play_move", { player: agents[0] ?? 1, move: 0, turn: lastTurn });
+const stale = await callTool("play_move", { player: agents[0] ?? "A", move: 0, turn: lastTurn });
 
 console.log("a turn from the previous match, same seed:", stale.text);
 
