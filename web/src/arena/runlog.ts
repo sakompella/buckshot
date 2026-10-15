@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { Schema } from "effect";
 
+import { Letter } from "../players.ts";
 import { AgentId } from "./agent.ts";
 
 // A match's run directory, in the agent-ts layout: calls.jsonl (one line per
@@ -42,12 +43,50 @@ export const CallLine = Schema.Struct({
 
 export type CallLine = typeof CallLine.Type;
 
+/** The version of the run directory's files, which .audit/agent-arena-design.md describes; it changes when a field changes meaning or goes away. */
+export const RUN_FORMAT = 1;
+
+const Sitting = { agent: AgentId, position: Schema.Int };
+
+export const Standing = Schema.Struct({ player: Letter, cash: Schema.Number, controller: Schema.NullOr(Schema.String) });
+
+export type Standing = typeof Standing.Type;
+
+/** A move the arena journaled: an agent's own, a forced "Grab an item", or the fallback after a turn with no move. */
+export const MoveLine = Schema.Struct({
+  t: Schema.String,
+  kind: Schema.Literals(["move", "fallback"]),
+  ...Sitting,
+  turn: Schema.Int,
+  player: Letter,
+  move: Schema.Int,
+  label: Schema.String,
+  by: Schema.Literals(["agent", "forced", "fallback"]),
+});
+
+export type MoveLine = typeof MoveLine.Type;
+
+/** One line of events.jsonl, as logEvent writes it. */
+export const EventLine = Schema.Union([
+  Schema.Struct({ t: Schema.String, kind: Schema.Literal("seating"), seating: Schema.Record(Schema.String, AgentId) }),
+  Schema.Struct({ t: Schema.String, kind: Schema.Literal("delivered"), ...Sitting, via: Schema.Literals(["input", "live", "end"]), turn: Schema.Int, from: Schema.Int, entries: Schema.Array(Schema.String) }),
+  Schema.Struct({ t: Schema.String, kind: Schema.Literal("tool"), ...Sitting, name: Schema.String, call_id: Schema.String, ok: Schema.Boolean }),
+  MoveLine,
+  Schema.Struct({ t: Schema.String, kind: Schema.Literal("turn"), ...Sitting, turn: Schema.Int, wall_ms: Schema.Number, moved: Schema.Boolean }),
+  Schema.Struct({ t: Schema.String, kind: Schema.Literal("fault"), ...Sitting, turn: Schema.Int, error: Schema.String }),
+  Schema.Struct({ t: Schema.String, kind: Schema.Literal("compaction"), ...Sitting }),
+  Schema.Struct({ t: Schema.String, kind: Schema.Literal("resumed"), moves: Schema.Int }),
+  Schema.Struct({ t: Schema.String, kind: Schema.Literal("end"), standings: Schema.Array(Standing) }),
+]);
+
+export type EventLine = typeof EventLine.Type;
+
 /** The fields of an event line that totals read; the rest of each line is for people. */
-const EventLine = Schema.Struct({ kind: Schema.String, agent: Schema.optional(AgentId), wall_ms: Schema.optional(Schema.Number) });
+const TotalsFields = Schema.Struct({ kind: Schema.String, agent: Schema.optional(AgentId), wall_ms: Schema.optional(Schema.Number) });
 
 const decodeCall = Schema.decodeUnknownSync(Schema.fromJsonString(CallLine));
 
-const decodeEvent = Schema.decodeUnknownSync(Schema.fromJsonString(EventLine));
+const decodeEvent = Schema.decodeUnknownSync(Schema.fromJsonString(TotalsFields));
 
 const linesOf = (path: string): ReadonlyArray<string> => (existsSync(path) ? readFileSync(path, "utf8").split("\n").filter((line) => line !== "") : []);
 

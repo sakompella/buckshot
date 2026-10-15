@@ -3,31 +3,22 @@ import { basename, join, resolve } from "node:path";
 
 import { Option, Result, Schema } from "effect";
 
-import { DELIVERIES } from "../arena/match.ts";
-import { CallLine } from "../arena/runlog.ts";
-import { Controller } from "../driver.ts";
-import { Letter } from "../players.ts";
-import { EventLine, type JsonlLine, type MoveLine, type RunStatus, type RunSummary, type Unreadable } from "./api.ts";
+import { RunManifest } from "../arena/match.ts";
+import { CallLine, EventLine, type MoveLine, RUN_FORMAT } from "../arena/runlog.ts";
+import type { JsonlLine, RunStatus, RunSummary, Unreadable } from "./api.ts";
 
 // Reads arena run directories (src/arena/runlog.ts describes the layout) for
 // the viewer. Nothing here writes. A match may still be playing, so a JSONL
 // file can end in a line its writer has not finished.
 
-/** The fields of manifest.json, format 1, that the viewer reads. */
-const RunManifest = Schema.Struct({
-  format: Schema.Literal(1),
-  status: Schema.Literals(["running", "finished"]),
-  seed: Schema.String,
-  /** By position, in table order. */
-  controllers: Schema.Array(Controller),
-  letters: Schema.Array(Letter),
-  delivery: Schema.Literals(DELIVERIES),
-  standings: Schema.optional(Schema.Array(Schema.Struct({ player: Letter, cash: Schema.Number, controller: Schema.NullOr(Controller) }))),
-});
-
-export type RunManifest = typeof RunManifest.Type;
-
 const Versioned = Schema.Struct({ format: Schema.optional(Schema.Json) });
+
+const Endpoint = Schema.Struct({ model: Schema.String, api: Schema.String });
+
+const decodeEntry = Schema.decodeUnknownOption(Schema.Union([Endpoint, Schema.Struct({ endpoint: Endpoint })]));
+
+/** An agent's model and api from its manifest entry: the endpoint itself, or under `endpoint`. */
+const endpointOf = (entry: Schema.Json | undefined): Option.Option<typeof Endpoint.Type> => Option.map(decodeEntry(entry), (decoded) => ("endpoint" in decoded ? decoded.endpoint : decoded));
 
 /** A run is live while one of its files changed this recently: a turn can wait minutes on a slow model and its retries. */
 const LIVE_WITHIN_MS = 5 * 60_000;
@@ -69,7 +60,7 @@ const manifestOf = (dir: string): Result.Result<RunManifest, string> => {
   return Result.flatMap(Result.mapError(lineDecoder(Versioned)(text), (issue) => `manifest.json: ${issue}`), ({ format }) => {
     if (format === undefined) return Result.fail("format 0 (before agent letters): not readable by this viewer");
 
-    if (format !== 1) return Result.fail(`format ${JSON.stringify(format)}: this viewer reads format 1`);
+    if (format !== RUN_FORMAT) return Result.fail(`format ${JSON.stringify(format)}: this viewer reads format ${RUN_FORMAT}`);
 
     return Result.mapError(lineDecoder(RunManifest)(text), (issue) => `manifest.json: ${issue}`);
   });
@@ -106,9 +97,10 @@ const summaryOf = (id: string, dir: string, manifest: RunManifest, eventLines: R
   const agents = seating.flatMap(({ player, controller }) => {
     if (controller !== "Agent") return [];
 
-    const first = calls.find((call) => call.agent === player);
+    // manifest.agents is the endpoint while running and {endpoint, ...} once finished, a bare string in faux runs; the first call fills in until it has one shape.
+    const described = Option.orElse(endpointOf(manifest.agents?.[player]), () => Option.map(Option.fromUndefinedOr(calls.find((call) => call.agent === player)), ({ model, api }) => ({ model, api })));
 
-    return [first === undefined ? { agent: player } : { agent: player, model: first.model, api: first.api }];
+    return [Option.match(described, { onNone: () => ({ agent: player }), onSome: ({ model, api }) => ({ agent: player, model, api }) })];
   });
 
   const summary: RunSummary = {

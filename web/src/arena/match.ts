@@ -11,11 +11,11 @@ import { Data, Effect, Option, Result, Schema } from "effect";
 import { emptyTable, type HeadlessTable, headlessSession } from "../agent/headless.ts";
 import { type AgentCall, AgentReply, type MatchSession, replyText, RULES, runTool, tools } from "../agent/tools.ts";
 import { SEATS_BY_TABLE, SeatCount } from "../domain.ts";
-import { type Controller, controllerOf, promptsOf } from "../driver.ts";
+import { Controller, controllerOf, promptsOf } from "../driver.ts";
 import { Letter, rosterOf } from "../players.ts";
 import { eventText, secretText } from "../text.ts";
 import { AGENTS, type AgentId } from "./agent.ts";
-import { addTokens, agentTotals, logCall, logEvent, readCalls, type Sitting, writeManifest } from "./runlog.ts";
+import { addTokens, agentTotals, logCall, logEvent, readCalls, RUN_FORMAT, type Sitting, Standing, writeManifest } from "./runlog.ts";
 
 // One match in one process: the headless table, and one pi-durable conversation
 // per agent in the run directory's session.sqlite. Agent A plays as Player A
@@ -153,7 +153,7 @@ const decode = (name: string, input: Schema.Json): AgentCall => {
 type Played = { readonly ok: true; readonly text: string; readonly line: MoveLine } | { readonly ok: false; readonly text: string };
 
 /** The headless tools, with each seat named by the journal's letters instead of table order. */
-const letteredSession = (letters: ReadonlyArray<Letter>): MatchSession<HeadlessTable> => {
+export const letteredSession = (letters: ReadonlyArray<Letter>): MatchSession<HeadlessTable> => {
   const seats = SEATS_BY_TABLE[Schema.decodeUnknownSync(SeatCount)(letters.length)];
   const assignment = new Map(seats.flatMap((seat, index) => Option.toArray(Option.map(Option.fromUndefinedOr(letters[index]), (letter) => [seat, letter] as const))));
 
@@ -348,8 +348,21 @@ const seatTools = (dir: string, table: () => Table, onReply: (agent: AgentId, me
   });
 };
 
-/** The version of the run directory's files, which .audit/agent-arena-design.md describes; it changes when a field changes meaning or goes away. */
-const RUN_FORMAT = 1;
+/** The fields of manifest.json that readers of a run, such as the viewer, decode. */
+export const RunManifest = Schema.Struct({
+  format: Schema.Literal(RUN_FORMAT),
+  status: Schema.Literals(["running", "finished"]),
+  seed: Schema.String,
+  /** By position, in table order. */
+  controllers: Schema.Array(Controller),
+  letters: Schema.Array(Letter),
+  delivery: Schema.Literals(DELIVERIES),
+  /** By agent: its endpoint while running; its position, endpoint and totals once finished. */
+  agents: Schema.optional(Schema.Record(Schema.String, Schema.Json)),
+  standings: Schema.optional(Schema.Array(Standing)),
+});
+
+export type RunManifest = typeof RunManifest.Type;
 
 const sha = (text: string) => createHash("sha256").update(text).digest("hex").slice(0, 12);
 

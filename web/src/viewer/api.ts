@@ -2,7 +2,7 @@ import { Schema } from "effect";
 
 import { Total } from "../arena/cost.ts";
 import { AgentId } from "../arena/agent.ts";
-import { CallLine } from "../arena/runlog.ts";
+import { CallLine, EventLine, MoveLine, Standing } from "../arena/runlog.ts";
 import { Letter } from "../players.ts";
 
 // What the viewer's server sends and its page reads. The server encodes every
@@ -10,34 +10,6 @@ import { Letter } from "../players.ts";
 // controllers travel as strings, decoded as such from the run files on the
 // server: their schemas live in match.ts and driver.ts, which would pull the
 // arena and the rules machine into the page.
-
-const Position = Schema.Int;
-
-const Sitting = { agent: AgentId, position: Position };
-
-const Moved = Schema.Struct({ t: Schema.String, ...Sitting, turn: Schema.Int, player: Letter, move: Schema.Int, label: Schema.String, by: Schema.Literals(["agent", "forced", "fallback"]) });
-
-export const Standing = Schema.Struct({ player: Letter, cash: Schema.Number, controller: Schema.NullOr(Schema.String) });
-
-export type Standing = typeof Standing.Type;
-
-/** One line of events.jsonl, as src/arena/match.ts writes it. */
-export const EventLine = Schema.Union([
-  Schema.Struct({ t: Schema.String, kind: Schema.Literal("seating"), seating: Schema.Record(Schema.String, AgentId) }),
-  Schema.Struct({ t: Schema.String, kind: Schema.Literal("delivered"), ...Sitting, via: Schema.Literals(["input", "live", "end"]), turn: Schema.Int, from: Schema.Int, entries: Schema.Array(Schema.String) }),
-  Schema.Struct({ t: Schema.String, kind: Schema.Literal("tool"), ...Sitting, name: Schema.String, call_id: Schema.String, ok: Schema.Boolean }),
-  Schema.Struct({ ...Moved.fields, kind: Schema.Literal("move") }),
-  Schema.Struct({ ...Moved.fields, kind: Schema.Literal("fallback") }),
-  Schema.Struct({ t: Schema.String, kind: Schema.Literal("turn"), ...Sitting, turn: Schema.Int, wall_ms: Schema.Number, moved: Schema.Boolean }),
-  Schema.Struct({ t: Schema.String, kind: Schema.Literal("fault"), ...Sitting, turn: Schema.Int, error: Schema.String }),
-  Schema.Struct({ t: Schema.String, kind: Schema.Literal("compaction"), ...Sitting }),
-  Schema.Struct({ t: Schema.String, kind: Schema.Literal("resumed"), moves: Schema.Int }),
-  Schema.Struct({ t: Schema.String, kind: Schema.Literal("end"), standings: Schema.Array(Standing) }),
-]);
-
-export type EventLine = typeof EventLine.Type;
-
-export type MoveLine = Extract<EventLine, { readonly kind: "move" | "fallback" }>;
 
 /** A model call with its price from prices.json; no dollars when the table has no price for its model. */
 export const PricedCall = Schema.Struct({ call: CallLine, dollars: Schema.optional(Schema.Number) });
@@ -113,7 +85,7 @@ const Entry = Schema.Struct({ text: Schema.String, heardBy: Schema.optional(Lett
  * the move produced. The first frame is the start of the match.
  */
 export const Frame = Schema.Struct({
-  move: Schema.optional(Schema.Struct({ turn: Schema.Int, player: Letter, label: Schema.String, by: Moved.fields.by })),
+  move: Schema.optional(Schema.Struct({ turn: Schema.Int, player: Letter, label: Schema.String, by: MoveLine.fields.by })),
   /** From 1. */
   round: Schema.Int,
   /** Everyone's health when the round began. */

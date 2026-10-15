@@ -1,7 +1,8 @@
 import { Schema } from "effect";
 
 import type { Total } from "../../arena/cost.ts";
-import { type Cursors, type EventLine, type Frame, type JsonlLine, MatchResponse, type PricedCall, type Run, RunsResponse, type RunSummary } from "../api.ts";
+import type { EventLine } from "../../arena/runlog.ts";
+import { type Cursors, type Frame, type JsonlLine, MatchResponse, type PricedCall, type Run, RunsResponse, type RunSummary } from "../api.ts";
 
 // The viewer's page: the list of runs at "/", one match at "/match/<id>". A
 // live match is polled with cursors, and what arrives is appended, so scroll

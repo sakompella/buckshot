@@ -1,13 +1,14 @@
 import { Option, Result, Schema } from "effect";
 
-import { emptyTable, type HeadlessTable, headlessSession } from "../agent/headless.ts";
+import { emptyTable, type HeadlessTable } from "../agent/headless.ts";
 import { type AgentCall, AgentReply, type MatchSession, replyText, runTool, tools } from "../agent/tools.ts";
 import { agentGame, type AgentSource } from "../agent/view.ts";
-import { Counter, SEATS_BY_TABLE, SeatCount, seatsOut } from "../domain.ts";
-import { type Letter, rosterOf } from "../players.ts";
+import { letteredSession, type RunManifest } from "../arena/match.ts";
+import type { MoveLine } from "../arena/runlog.ts";
+import { Counter, seatsOut } from "../domain.ts";
+import { rosterOf } from "../players.ts";
 import { eventText, itemName, secretText } from "../text.ts";
-import type { Frame, MoveLine, PlayerAt } from "./api.ts";
-import type { RunManifest } from "./runs.ts";
+import type { Frame, PlayerAt } from "./api.ts";
 
 // A spectator's replay of a run: the match started from the manifest's seed,
 // controllers and letters, as src/arena/match.ts starts it, then each logged
@@ -26,17 +27,6 @@ export interface Replay {
   /** Set when a logged move does not replay; the replay stops there. */
   readonly divergence: Option.Option<string>;
 }
-
-/**
- * The headless tools, with each seat named by the run's letters. A copy of match.ts's private letteredSession;
- * exporting that one would remove this.
- */
-const letteredSession = (letters: ReadonlyArray<Letter>): Result.Result<MatchSession<HeadlessTable>, string> =>
-  Result.map(Result.mapError(Schema.decodeUnknownResult(SeatCount)(letters.length), () => `a table of ${letters.length} players`), (count) => {
-    const assignment = new Map(SEATS_BY_TABLE[count].flatMap((seat, index) => Option.toArray(Option.map(Option.fromUndefinedOr(letters[index]), (letter) => [seat, letter] as const))));
-
-    return { ...headlessSession, current: (table) => Option.map(headlessSession.current(table), (match) => ({ ...match, letters: assignment })) };
-  });
 
 const callOf = (name: (typeof tools)[number]["name"], input: Schema.Json): Result.Result<AgentCall, string> =>
   Result.flatMap(Result.fromNullishOr(tools.find((tool) => tool.name === name), () => `no tool ${name}`), (tool) => tool.decodeCall(input));
@@ -105,13 +95,14 @@ const playLine = (replay: Replay, line: MoveLine): Replay => {
 };
 
 /** A replay at the start of the match, or why the run cannot start one. */
-const startReplay = (setup: ReplaySetup): Result.Result<Replay, string> =>
-  Result.flatMap(letteredSession(setup.letters), (session) =>
-    Result.map(
-      Result.flatMap(callOf("new_match", { players: setup.controllers.length, items: true, seed: setup.seed, controllers: [...setup.controllers] }), (call) => run(session, emptyTable, call)),
-      (table) => ({ setup, session, table, applied: [], frames: [frameOf(undefined, sourceOf({ session, table }), undefined)], divergence: Option.none() }),
-    ),
+const startReplay = (setup: ReplaySetup): Result.Result<Replay, string> => {
+  const session = letteredSession(setup.letters);
+
+  return Result.map(
+    Result.flatMap(callOf("new_match", { players: setup.controllers.length, items: true, seed: setup.seed, controllers: [...setup.controllers] }), (call) => run(session, emptyTable, call)),
+    (table) => ({ setup, session, table, applied: [], frames: [frameOf(undefined, sourceOf({ session, table }), undefined)], divergence: Option.none() }),
   );
+};
 
 const sameMove = (left: MoveLine, right: MoveLine | undefined): boolean =>
   right !== undefined && left.turn === right.turn && left.player === right.player && left.move === right.move && left.label === right.label && left.by === right.by;
