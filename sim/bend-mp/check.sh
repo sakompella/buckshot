@@ -190,13 +190,13 @@ gate_generated() {
   fi
 }
 
-gate_ref_api() {
-  local out
-  out="$(python3 "$here/tools/ref_api.py" 2>&1)"
-  if [[ $? -eq 0 ]]; then
-    report ok "generated reference API" "$(printf '%s' "$out" | tail -1)"
+gate_laws_imports() {
+  local bad
+  bad="$(imports_under "$here/LAWS.bend" | grep -E 'import[[:space:]]+[^[:space:]]*ref/' || true)"
+  if [[ -z "$bad" ]]; then
+    report ok "LAWS.bend never imports ref/"
   else
-    report fail "generated reference API" "$(printf '%s' "$out" | tail -20)"
+    report fail "LAWS.bend never imports ref/" "$bad"
   fi
 }
 
@@ -225,10 +225,10 @@ gate_unsafe
 gate_ai_imports
 gate_sm_imports
 gate_driver_imports
+gate_laws_imports
 gate_driver_smoke
 gate_laws
 gate_generated
-gate_ref_api
 gate_proofs
 gate_roundtrip
 gate_core_scenarios
