@@ -2,7 +2,7 @@ import { Array as Arr, Option, Result } from "effect";
 
 import { type Board, Briefcase, Counter, GameEvent, type Seat, type SeatView, Secret } from "../domain.ts";
 import { type Controller, controllerOf, type Progress, promptsOf } from "../driver.ts";
-import { type PlayerNumber, playerName, type Roster, rosterOf } from "../players.ts";
+import { type Assignment, type Letter, type Player, playerName, type Roster, rosterOf } from "../players.ts";
 import { describeError, eventText, itemName, secretText } from "../text.ts";
 import { agentMoves, type Chain } from "./moves.ts";
 
@@ -10,16 +10,18 @@ import { agentMoves, type Chain } from "./moves.ts";
 // sees only what that player's screen shows: the board on the player's turn, the
 // events since its previous turn ended, and the secrets that player heard.
 // Everything comes from the match log, so reading a view changes nothing.
-// Players are numbered 1 to N in table order; the seat ids behind them never
-// leave this module. Properties that are undefined are left out of the JSON.
+// Players are named by letter, Player A to Player D; the seat ids behind them
+// never leave this module. Properties that are undefined are left out of the JSON.
 
 /** The parts of a running match the agent's view is built from. */
 export interface AgentSource extends Progress {
   readonly controllers: ReadonlyArray<Controller>;
+  /** Each seat's letter, when it is not the table order: the arena keeps an agent's letter wherever it sits. */
+  readonly letters?: Assignment;
 }
 
 export interface PlayerLine {
-  readonly player: PlayerNumber;
+  readonly player: Letter;
   /** Not on screen while the player is jammed. */
   readonly health: number | undefined;
   readonly items: ReadonlyArray<string> | undefined;
@@ -28,19 +30,19 @@ export interface PlayerLine {
 }
 
 interface Standing {
-  readonly player: PlayerNumber;
+  readonly player: Letter;
   readonly cash: number;
 }
 
 /** Not this player's turn: nothing else, so polling is cheap. */
 interface Waiting {
-  readonly you: PlayerNumber;
+  readonly you: Letter;
   readonly status: "waiting";
 }
 
 /** The screen on this player's turn. */
 interface YourTurn {
-  readonly you: PlayerNumber;
+  readonly you: Letter;
   readonly status: "your turn";
   /** Names this point of the session, so a move chosen here plays only here. */
   readonly turn: number;
@@ -52,7 +54,7 @@ interface YourTurn {
 
 /** The final standings, and the events since the player's last turn ended. */
 interface Over {
-  readonly you: PlayerNumber;
+  readonly you: Letter;
   readonly status: "over";
   readonly standings: ReadonlyArray<Standing>;
   readonly events: ReadonlyArray<string> | undefined;
@@ -70,11 +72,11 @@ const notAgent = (source: AgentSource, roster: Roster, seat: Seat): string => {
     : `${roster.nameOf(seat)} is not an Agent player. Agent players: ${agents.map(roster.nameOf).join(", ")}.`;
 };
 
-/** The seat of a player a call names, if the player is at the table and set to Agent. */
-const agentSeat = (source: AgentSource, roster: Roster, player: PlayerNumber): Result.Result<Seat, string> =>
-  Option.match(roster.seatOf(player), {
-    onNone: () => Result.fail(`There is no ${playerName(player)} at this table. The players are ${roster.players.map(playerName).join(", ")}.`),
-    onSome: (seat) => (agentSeats(source).includes(seat) ? Result.succeed(seat) : Result.fail(notAgent(source, roster, seat))),
+/** The player a call names, if the player is at the table and set to Agent. */
+const agentPlayer = (source: AgentSource, roster: Roster, letter: Letter): Result.Result<Player, string> =>
+  Option.match(roster.find(letter), {
+    onNone: () => Result.fail(`There is no ${playerName(letter)} at this table. The players are ${roster.players.map((player) => playerName(player.letter)).join(", ")}.`),
+    onSome: (player) => (agentSeats(source).includes(player.seat) ? Result.succeed(player) : Result.fail(notAgent(source, roster, player.seat))),
   });
 
 const hasTurn = (source: AgentSource, seat: Seat): boolean => promptsOf(source.game).some((prompt) => prompt.seat === seat);
@@ -117,35 +119,35 @@ const eventsSinceLastTurn = (source: AgentSource, roster: Roster, seat: Seat): R
 const gunOf = (board: Board): YourTurn["gun"] => (board.gun.sawed ? { sawed: true } : undefined);
 
 const lineOf = (roster: Roster, view: SeatView): PlayerLine => ({
-  player: roster.playerOf(view.seat),
+  player: roster.playerOf(view.seat).letter,
   health: Counter.match(view.counter, { Unjammed: ({ health }) => health, Jammed: () => undefined }),
   items: nonEmpty(view.slots.flatMap(Option.match({ onNone: () => [], onSome: (item) => [itemName(item)] }))),
   holding: Briefcase.matchOrElse(view.briefcase, { Holding: ({ item }) => itemName(item) }, () => undefined),
 });
 
 const standingsOf = (board: Board, roster: Roster): ReadonlyArray<Standing> =>
-  board.seats.toSorted((left, right) => right.cash - left.cash).map((view) => ({ player: roster.playerOf(view.seat), cash: view.cash }));
+  board.seats.toSorted((left, right) => right.cash - left.cash).map((view) => ({ player: roster.playerOf(view.seat).letter, cash: view.cash }));
 
 /** The view of one Agent player at the session's `turn`, or why there is none. */
-export const agentGame = (source: AgentSource, turn: number, player: PlayerNumber): Result.Result<AgentGame, string> => {
-  const roster = rosterOf(source.game.seats);
+export const agentGame = (source: AgentSource, turn: number, letter: Letter): Result.Result<AgentGame, string> => {
+  const roster = rosterOf(source.game.seats, source.letters);
 
-  return Result.flatMap(agentSeat(source, roster, player), (you): Result.Result<AgentGame, string> => {
+  return Result.flatMap(agentPlayer(source, roster, letter), ({ seat }): Result.Result<AgentGame, string> => {
     const { board, pending } = source.game;
 
-    if (pending.kind === "Finished") return Result.succeed({ you: player, status: "over", standings: standingsOf(board, roster), events: eventsSinceLastTurn(source, roster, you) });
+    if (pending.kind === "Finished") return Result.succeed({ you: letter, status: "over", standings: standingsOf(board, roster), events: eventsSinceLastTurn(source, roster, seat) });
 
-    if (!hasTurn(source, you)) return Result.succeed({ you: player, status: "waiting" });
+    if (!hasTurn(source, seat)) return Result.succeed({ you: letter, status: "waiting" });
 
-    return Result.mapBoth(agentMoves(source, roster, you), {
+    return Result.mapBoth(agentMoves(source, roster, seat), {
       onFailure: (error) => describeError(roster, error),
       onSuccess: (moves): AgentGame => ({
-        you: player,
+        you: letter,
         status: "your turn",
         turn,
         players: board.seats.map((view) => lineOf(roster, view)),
         gun: gunOf(board),
-        events: eventsSinceLastTurn(source, roster, you),
+        events: eventsSinceLastTurn(source, roster, seat),
         moves: moves.map(({ label }) => label),
       }),
     });
@@ -159,10 +161,10 @@ export interface SeatMove {
 }
 
 /** The chain an Agent player's move stands for, or why the move is refused. `given` must be the session's current `turn`. */
-export const agentMove = (source: AgentSource, turn: number, player: PlayerNumber, move: number, given: number): Result.Result<SeatMove, string> => {
-  const roster = rosterOf(source.game.seats);
+export const agentMove = (source: AgentSource, turn: number, letter: Letter, move: number, given: number): Result.Result<SeatMove, string> => {
+  const roster = rosterOf(source.game.seats, source.letters);
 
-  return Result.flatMap(agentSeat(source, roster, player), (seat) =>
+  return Result.flatMap(agentPlayer(source, roster, letter), ({ seat }) =>
     Result.gen(function* () {
       if (!hasTurn(source, seat)) return yield* Result.fail('It is not your turn. Call get_game and wait until status is "your turn".');
 

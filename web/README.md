@@ -36,16 +36,16 @@ Enable it in Chrome 149 or later (tested on 155):
 - Open `chrome://flags/#enable-webmcp-testing`, set it to Enabled and relaunch, or
 - launch with `--enable-features=WebMCPTesting`.
 
-Players are numbered 1 to N in table order, as in the game's "PLAYER 2". A
-2-player table has Player 1 and Player 2. `get_game` and `play_move` name the
-player they are for by that number (`player`: 1 to 4). A call for a number the
-table does not have, or for a player that is not an Agent, is refused. Replies
+Players are named by letter in table order: a 2-player table has Player A and
+Player B. `get_game` and `play_move` name the player they are for by its letter
+(`player`: `"A"` to `"D"`). A call for a letter the table does not have, or for a
+player that is not an Agent, is refused. Replies
 never show the machine's seat ids. A player's view never includes another
 player's secrets or the shell order.
 
 - `get_game(player)`: the player's view as JSON, with only what that player's screen
   shows. It is read-only: until some player moves, every call returns the same view.
-  While it is not the player's turn it is just `{"you": 2, "status": "waiting"}`.
+  While it is not the player's turn it is just `{"you": "B", "status": "waiting"}`.
   On the player's turn it has `status: "your turn"`, `turn`, `players` (health, which
   is left out while a player is jammed, item names, and, while players grab from the
   briefcase, `holding`, the item a player drew and has not placed yet; no slots or cash),
@@ -70,24 +70,24 @@ player's secrets or the shell order.
   still starts a new match at any time; that is a person's choice, not a tool.
   `controllers` lists one controller per player in player order, for
   example `["Agent", "Agent", "DoN"]`; each is `Agent`, `DoN`, `Story` or
-  `Human`. Without it Player 1 is the Agent and DoN plays the others. `seed` is a
+  `Human`. Without it Player A is the Agent and DoN plays the others. `seed` is a
   string holding an integer from -9007199254740991 to 9007199254740991; anything
-  else is refused. It returns each player's number and controller, and the seed,
+  else is refused. It returns each player's letter and controller, and the seed,
   which replays the match when passed back.
 
 A your-turn view in a 3-player match with items, as the MCP check prints it:
 
-    {"you":1,"status":"your turn","turn":7,
-     "players":[{"player":1,"health":4,"items":["burner phone","adrenaline","magnifying glass"]},
-                {"player":2,"health":4,"items":["magnifying glass","magnifying glass","inverter"]},
-                {"player":3,"health":4,"items":["remote","jammer","magnifying glass"]}],
-     "events":["Player 1 drew an item.","Player 1 finished grabbing.","Player 1 placed magnifying glass in slot 3.",
-               "Player 2 drew an item.","Player 2 finished grabbing.","Distribution is over.",
-               "Player 2 placed inverter in slot 3.","The shotgun is loaded: 4 live, 3 blank.","Player 1's turn."],
-     "moves":["Shoot yourself","Shoot Player 2","Shoot Player 3","Use burner phone",
-              "Steal magnifying glass from Player 2","Steal inverter from Player 2","Steal remote from Player 3",
-              "Steal jammer from Player 3 and jam Player 2","Steal jammer from Player 3 and jam Player 3",
-              "Steal magnifying glass from Player 3","Use magnifying glass"]}
+    {"you":"A","status":"your turn","turn":7,
+     "players":[{"player":"A","health":4,"items":["burner phone","adrenaline","magnifying glass"]},
+                {"player":"B","health":4,"items":["magnifying glass","magnifying glass","inverter"]},
+                {"player":"C","health":4,"items":["remote","jammer","magnifying glass"]}],
+     "events":["Player A drew an item.","Player A finished grabbing.","Player A placed magnifying glass in slot 3.",
+               "Player B drew an item.","Player B finished grabbing.","Distribution is over.",
+               "Player B placed inverter in slot 3.","The shotgun is loaded: 4 live, 3 blank.","Player A's turn."],
+     "moves":["Shoot yourself","Shoot Player B","Shoot Player C","Use burner phone",
+              "Steal magnifying glass from Player B","Steal inverter from Player B","Steal remote from Player C",
+              "Steal jammer from Player C and jam Player B","Steal jammer from Player C and jam Player C",
+              "Steal magnifying glass from Player C","Use magnifying glass"]}
 
 ### Moves
 
@@ -99,10 +99,10 @@ while the machine leaves the player partway through an action (aiming, choosing 
 jam target or an item to steal, or holding a drawn item). No rule is written in
 TypeScript.
 
-- `Shoot Player 2`, `Shoot yourself`: pick up and fire, listed only when picking up is legal.
-- `Use beer`, `Use magnifying glass`, ...; a jammer is `Jam Player 3`; adrenaline is
-  `Steal beer from Player 2` (and a stolen jammer adds its target, `Steal jammer from
-  Player 3 and jam Player 2`).
+- `Shoot Player B`, `Shoot yourself`: pick up and fire, listed only when picking up is legal.
+- `Use beer`, `Use magnifying glass`, ...; a jammer is `Jam Player C`; adrenaline is
+  `Steal beer from Player B` (and a stolen jammer adds its target, `Steal jammer from
+  Player C and jam Player B`).
 - `Grab an item`: grab, then place the drawn item in the first free slot.
 
 Labels name no slots. No rule depends on a slot: the machine and the reference rules
@@ -124,7 +124,7 @@ While several players grab items from the briefcase at once, each Agent player h
 its own moves and may answer in any order, but a move from another player between
 an agent's `get_game` and its `play_move` makes that turn stale. The agent
 then calls `get_game` again for the current moves and turn. When several bots can
-move, the lowest-numbered player goes first, as in `sim/bend-mp/driver.bend`.
+move, the first player in table order goes first, as in `sim/bend-mp/driver.bend`.
 
 A refusal comes back as `{"error": "..."}` text, because Chrome shows the agent
 only a generic message when a tool throws. The MCP server sends the same text
@@ -179,6 +179,25 @@ agent to call `new_match` and play its player. Checks:
 The server uses `@modelcontextprotocol/server` 2.3.1, the v2 SDK. It also
 answers clients that use the older `initialize` handshake.
 
+## Arena viewer
+
+`bun run viewer` serves a read-only site for browsing arena matches at
+http://127.0.0.1:4173/. It reads the run directories in `_work/arena` at the
+repo root (`--dir <runs dir>` picks another, `--port <n>` another port, 0 a free
+one) and binds 127.0.0.1 only, with no auth. Each run directory's
+`manifest.json`, `events.jsonl` and `calls.jsonl` are all it reads; costs come
+from `src/arena/prices.json` at each request. The list shows every match with its agents,
+seating, status and standings, and totals per agent and per model. A match page
+replays the match through the rules machine with a scrubber, and shows each
+agent's log side by side: what was delivered to it, its model calls with
+thinking, text, tool calls, tokens and cost, and its turns. A live match is
+polled and followed. Runs from before format 1 are listed as unreadable.
+
+    bun scripts/viewer-check.ts [outdir]   # headless Chrome over a temp runs dir it fills itself (two faux matches, a format-0 run and a live copy): the list, a finished match, and a live match appended while the page watches
+
+The look borrows from the studio viewer in
+[claude-paint](https://github.com/aliceisjustplaying/claude-paint) (MIT).
+
 ## Layout
 
 - `src/bend.ts`: the only file that writes Bend tags. It decodes every Bend
@@ -190,7 +209,8 @@ answers clients that use the older `initialize` handshake.
   its own coin stream. A human seat picks from the legal moves the
   machine offers. Game draws come from a seeded RNG (`src/rng.ts`).
 - `src/players.ts`: the `Roster`, the one place a table's seat ids and the
-  player numbers people and agents see (Player 1 to N, in table order) convert.
+  player letters people and agents see (Player A to D, in table order by
+  default, or from an explicit seat-to-letter assignment) convert.
   Bend and the driver keep raw seat ids; every label and tool reply goes
   through a `Roster`.
 - `src/titles.ts`: end-of-match titles from the public event log. Titles are a UI
@@ -209,3 +229,11 @@ answers clients that use the older `initialize` handshake.
 - `scripts/mcp.ts`: the stdio MCP front end.
 - `src/main.ts`: Foldkit Model, Messages, update, view, autoplay subscription.
 - `tools/oxlint/anti-slop/`: vendored anti-slop rules (see PROVENANCE.md).
+- `src/arena/cost.ts` prices model calls from `prices.json` and totals them; `scripts/arena-cost.ts` and the viewer both use it.
+- `src/viewer/runs.ts` reads run directories and their JSONL files, leaving out a last line still being written.
+- `src/viewer/api.ts` holds the schemas the viewer's server encodes and its page decodes.
+- `src/viewer/replay.ts` replays a run's moves through the rules machine into frames, extending a live run's replay as moves arrive.
+- `src/viewer/server.ts` serves the viewer's page and its JSON API, with cursors for polling.
+- `src/viewer/page/` is the viewer's page, plain TypeScript and DOM.
+- `scripts/viewer.ts` starts the viewer, and `scripts/viewer-check.ts` screenshots it in headless Chrome.
+- `test/faux-run.ts` plays a free faux arena match into a run directory, for the viewer's tests and its screenshot check.

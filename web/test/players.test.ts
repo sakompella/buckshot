@@ -1,25 +1,59 @@
 import { expect, test } from "bun:test";
-import { Array as Arr, Option, Result } from "effect";
+import { Option, Result } from "effect";
 
 import { startGame } from "../src/bend.ts";
+import { type Assignment, Letter, type Player, rosterOf } from "../src/players.ts";
 import { SEATS_BY_TABLE, SeatCount } from "../src/domain.ts";
-import { rosterOf } from "../src/players.ts";
 
-const OUT_OF_RANGE = [0, -1, 1.5, Number.NaN, 5, 100];
+const EVERY_LETTER = Letter.literals;
 
-test("at 2, 3 and 4 seats the players are exactly Player 1 to Player N in table order, and a number and its seat round-trip", () => {
+/** Every way to give `count` seats distinct letters. */
+const arrangements = (letters: ReadonlyArray<Letter>, count: number): ReadonlyArray<ReadonlyArray<Letter>> =>
+  count === 0 ? [[]] : letters.flatMap((letter) => arrangements(letters.filter((other) => other !== letter), count - 1).map((rest) => [letter, ...rest]));
+
+test("at 2, 3 and 4 seats the players are exactly Player A to Player N in table order, and a letter and its seat round-trip", () => {
   for (const table of SeatCount.literals) {
-    const roster = rosterOf(SEATS_BY_TABLE[table]);
-    const numbers = Arr.range(1, table);
+    const seats = SEATS_BY_TABLE[table];
+    const roster = rosterOf(seats);
 
-    expect(SEATS_BY_TABLE[table].map(roster.nameOf)).toEqual(numbers.map((number) => `Player ${number}`));
+    expect(seats.map(roster.nameOf)).toEqual(["Player A", "Player B", "Player C", "Player D"].slice(0, table));
 
-    for (const seat of SEATS_BY_TABLE[table]) expect(roster.seatOf(roster.playerOf(seat))).toEqual(Option.some(seat));
+    for (const seat of seats) expect(roster.find(roster.playerOf(seat).letter)).toEqual(Option.some(roster.playerOf(seat)));
 
-    for (const player of roster.players) expect(roster.seatOf(player).pipe(Option.map(roster.playerOf))).toEqual(Option.some(player));
+    for (const { letter, seat } of roster.players) expect(roster.find(letter).pipe(Option.map((player) => player.seat))).toEqual(Option.some(seat));
 
-    for (const player of [...OUT_OF_RANGE, table + 1]) expect(Option.isNone(roster.seatOf(player))).toBe(true);
+    for (const letter of EVERY_LETTER.slice(table)) expect(roster.find(letter)).toEqual(Option.none());
   }
+});
+
+test("an explicit assignment names every seat as given, whichever seats the letters sit in, and the mapping round-trips", () => {
+  for (const table of SeatCount.literals) {
+    const seats = SEATS_BY_TABLE[table];
+
+    for (const letters of arrangements(EVERY_LETTER, table)) {
+      const assignment: Assignment = new Map(seats.map((seat, position) => [seat, letters[position] ?? expect.unreachable("a letter for every seat")]));
+      const roster = rosterOf(seats, assignment);
+
+      expect(roster.players.map(({ letter }) => letter)).toEqual([...letters]);
+      expect(seats.map(roster.nameOf)).toEqual(letters.map((letter) => `Player ${letter}`));
+
+      for (const seat of seats) expect(roster.find(roster.playerOf(seat).letter)).toEqual(Option.some(roster.playerOf(seat)));
+
+      for (const { letter, seat } of roster.players) expect(roster.find(letter).pipe(Option.map((player) => player.seat))).toEqual(Option.some(seat));
+
+      for (const letter of EVERY_LETTER.filter((candidate) => !letters.includes(candidate))) expect(roster.find(letter)).toEqual(Option.none());
+    }
+  }
+});
+
+test("an assignment that leaves a seat without a letter, or gives two seats one letter, is refused", () => {
+  const [first, second] = SEATS_BY_TABLE[2];
+  const a = "A" satisfies Letter;
+
+  if (first === undefined || second === undefined) return expect.unreachable("a 2-seat table has two seats");
+
+  expect(() => rosterOf(SEATS_BY_TABLE[2], new Map([[first, a]]))).toThrow();
+  expect(() => rosterOf(SEATS_BY_TABLE[2], new Map([[first, a], [second, a]]))).toThrow();
 });
 
 test("the seats Bend deals are the seats the roster is built from", () => {
@@ -28,4 +62,14 @@ test("the seats Bend deals are the seats the roster is built from", () => {
 
     expect(game.seats).toEqual(SEATS_BY_TABLE[table]);
   }
+});
+
+test("a player found by a letter keeps that letter in its type", () => {
+  const roster = rosterOf(SEATS_BY_TABLE[2]);
+  const a: Option.Option<Player<"A">> = roster.find("A");
+
+  // @ts-expect-error Player A is not Player B.
+  const _notB: Option.Option<Player<"B">> = a;
+
+  expect(Option.map(a, ({ letter }) => letter)).toEqual(Option.some("A"));
 });

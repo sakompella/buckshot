@@ -7,7 +7,7 @@ import { AgentReply, runTool, tools } from "../src/agent/tools.ts";
 import { Game } from "../src/bend.ts";
 import { Briefcase, GameEvent, Move, type Seat, Secret, SeatCount, Stage } from "../src/domain.ts";
 import { type Controller, play as playMachine, type Progress, promptsOf } from "../src/driver.ts";
-import { rosterOf } from "../src/players.ts";
+import { Letter, rosterOf } from "../src/players.ts";
 import { nextBelow, type Rng, seedRng } from "../src/rng.ts";
 import { eventText, itemName, secretText } from "../src/text.ts";
 
@@ -16,17 +16,17 @@ import { eventText, itemName, secretText } from "../src/text.ts";
 
 const STEP_LIMIT = 20_000;
 
-const MAX_PLAYERS = 4;
+const EVERY_LETTER = Letter.literals;
 
 const View = Schema.Struct({
-  you: Schema.Number,
+  you: Schema.String,
   status: Schema.Literals(["your turn", "waiting", "over"]),
   turn: Schema.optionalKey(Schema.Number),
-  players: Schema.optionalKey(Schema.Array(Schema.Struct({ player: Schema.Number, holding: Schema.optionalKey(Schema.String) }))),
+  players: Schema.optionalKey(Schema.Array(Schema.Struct({ player: Schema.String, holding: Schema.optionalKey(Schema.String) }))),
   gun: Schema.optionalKey(Schema.Struct({ sawed: Schema.optionalKey(Schema.Literal(true)) })),
   events: Schema.optionalKey(Schema.Array(Schema.String)),
   moves: Schema.optionalKey(Schema.Array(Schema.String)),
-  standings: Schema.optionalKey(Schema.Array(Schema.Struct({ player: Schema.Number, cash: Schema.Number }))),
+  standings: Schema.optionalKey(Schema.Array(Schema.Struct({ player: Schema.String, cash: Schema.Number }))),
 });
 
 const parseView = Schema.decodeUnknownSync(Schema.fromJsonString(View));
@@ -64,18 +64,18 @@ const newMatch = (players: SeatCount, seed: number, controllers: ReadonlyArray<C
   return started.table;
 };
 
-const getGame = (table: HeadlessTable, player: number): AgentReply => call(table, "get_game", { player }).reply;
+const getGame = (table: HeadlessTable, player: string): AgentReply => call(table, "get_game", { player }).reply;
 
-const viewOf = (table: HeadlessTable, player: number) => parseView(answered(getGame(table, player)));
+const viewOf = (table: HeadlessTable, player: string) => parseView(answered(getGame(table, player)));
 
 /** A view of a player who has the turn, with its turn and moves. */
-const turnViewOf = (table: HeadlessTable, player: number) => {
+const turnViewOf = (table: HeadlessTable, player: string) => {
   const { turn, moves = [], ...view } = viewOf(table, player);
 
   return { ...view, turn: turn ?? expect.unreachable("a player to move has no turn"), moves };
 };
 
-const play = (table: HeadlessTable, player: number, move: number, turn: number): Outcome => call(table, "play_move", { player, move, turn });
+const play = (table: HeadlessTable, player: string, move: number, turn: number): Outcome => call(table, "play_move", { player, move, turn });
 
 const match = (table: HeadlessTable) => Option.getOrThrow(table.maybeMatch);
 
@@ -83,22 +83,22 @@ const isOver = (table: HeadlessTable): boolean => match(table).game.pending.kind
 
 const rosterAt = (table: HeadlessTable) => rosterOf(match(table).game.seats);
 
-const seatOfPlayer = (table: HeadlessTable, player: number) => Option.getOrThrow(rosterAt(table).seatOf(player));
+const seatOfPlayer = (table: HeadlessTable, letter: Letter) => Option.getOrThrow(rosterAt(table).find(letter)).seat;
 
-/** Replies speak of players 1 to N and never of seats. */
+/** Replies speak of the players at the table by letter and never of seats. */
 const expectOnlyPlayers = (table: HeadlessTable, reply: AgentReply): void => {
   const text = AgentReply.match(reply, { Answered: ({ text: answer }) => answer, Refused: ({ reason }) => reason });
-  const named = [...text.matchAll(/Player (\d+)/g)].map(([, number]) => Number(number));
+  const named = [...text.matchAll(/Player ([A-Z])\b/g)].map(([, letter]) => letter);
 
-  expect(text).not.toMatch(/seat/i);
-  expect(named.every((number) => number >= 1 && number <= rosterAt(table).players.length)).toBe(true);
+  expect(text).not.toMatch(/seat|Player \d/i);
+  expect(named.every((letter) => rosterAt(table).players.some((player) => player.letter === letter))).toBe(true);
 };
 
-const agentPlayers = (table: HeadlessTable): ReadonlyArray<number> =>
-  rosterAt(table).players.filter((player) => match(table).controllers[seatOfPlayer(table, player)] === "Agent");
+const agentPlayers = (table: HeadlessTable): ReadonlyArray<Letter> =>
+  rosterAt(table).players.filter(({ seat }) => match(table).controllers[seat] === "Agent").map(({ letter }) => letter);
 
-const agentsToMove = (table: HeadlessTable): ReadonlyArray<number> =>
-  promptsOf(match(table).game).map(({ seat }) => rosterAt(table).playerOf(seat)).filter((player) => agentPlayers(table).includes(player));
+const agentsToMove = (table: HeadlessTable): ReadonlyArray<Letter> =>
+  promptsOf(match(table).game).map(({ seat }) => rosterAt(table).playerOf(seat).letter).filter((player) => agentPlayers(table).includes(player));
 
 /** Plays the first Agent's first move until `isDone` holds or the match ends. */
 const playUntil = (start: HeadlessTable, isDone: (table: HeadlessTable) => boolean): HeadlessTable => {
@@ -130,7 +130,7 @@ interface Watchers {
   /** Before every move. */
   readonly check?: (table: HeadlessTable) => void;
   /** The view a player moves from. */
-  readonly onMove?: (player: number, view: ReturnType<typeof turnViewOf>) => void;
+  readonly onMove?: (player: Letter, view: ReturnType<typeof turnViewOf>) => void;
   readonly onOver?: (table: HeadlessTable) => void;
 }
 
@@ -173,7 +173,7 @@ const withoutMoves = (reply: AgentReply) => {
   return view;
 };
 
-test("on random tables of 2 to 4 players, each Agent sees the players as Player 1 to N and never another player's secrets or the hidden shells, get_game changes nothing and says the same twice, and calls for other players or other turns are refused", () => {
+test("on random tables of 2 to 4 players, each Agent sees the players as Player A to the last letter and never another player's secrets or the hidden shells, get_game changes nothing and says the same twice, and calls for other players or other turns are refused", () => {
   const otherState = match(newMatch(4, 8, ["Agent", "DoN", "DoN", "DoN"])).game.state;
   let otherAgentNotes = 0;
 
@@ -183,10 +183,10 @@ test("on random tables of 2 to 4 players, each Agent sees the players as Player 
     const roster = rosterAt(table);
     const { turn } = table;
 
-    for (const player of Arr.range(1, Math.min(roster.players.length + 1, MAX_PLAYERS))) {
+    for (const player of EVERY_LETTER) {
       if (!agents.includes(player)) {
         const outcome = play(table, player, 0, turn);
-        const isAtTable = player <= roster.players.length;
+        const isAtTable = roster.players.some(({ letter }) => letter === player);
 
         expect(refusal(getGame(table, player))).toContain(isAtTable ? "not an Agent player" : "no Player");
         expect(refusal(outcome.reply)).toContain(isAtTable ? "not an Agent player" : "no Player");
@@ -203,7 +203,7 @@ test("on random tables of 2 to 4 players, each Agent sees the players as Player 
       const ownNotes = current.learned.filter((note) => note.seat === seat);
       const hiddenSwapped = new Game(current.game.table, current.game.seats, current.game.ticket, current.game.board, current.game.pending, otherState);
 
-      otherAgentNotes += current.learned.filter((note) => note.seat !== seat && agents.includes(roster.playerOf(note.seat))).length;
+      otherAgentNotes += current.learned.filter((note) => note.seat !== seat && agents.includes(roster.playerOf(note.seat).letter)).length;
       expectOnlyPlayers(table, read.reply);
       expect(view.you).toBe(player);
       expect(read.table).toBe(table);
@@ -214,7 +214,7 @@ test("on random tables of 2 to 4 players, each Agent sees the players as Player 
       if (view.status !== "your turn") continue;
 
       expect(view.turn).toBe(turn);
-      expect(view.players?.map((entry) => entry.player)).toEqual(Arr.range(1, roster.players.length));
+      expect(view.players?.map((entry) => entry.player)).toEqual(roster.players.map(({ letter }) => letter));
 
       for (const other of [turn - 1, turn + 1]) {
         const outcome = play(table, player, 0, other);
@@ -254,13 +254,13 @@ test("a view holds only what the screen shows: a bare waiting while it is not th
   } });
 
   const table = playUntil(newMatch(2, 5, ["Agent", "DoN"]), () => false);
-  const reply = getGame(table, 1);
+  const reply = getGame(table, "A");
   const { standings, events, ...over } = parseView(answered(reply));
 
-  expect(over).toEqual({ you: 1, status: "over" });
+  expect(over).toEqual({ you: "A", status: "over" });
   expect(events?.at(-1)).toBe("The match is over.");
-  expect(standings?.map(({ player }) => player).toSorted()).toEqual([1, 2]);
-  expect(getGame(table, 1)).toEqual(reply);
+  expect(standings?.map(({ player }) => player).toSorted()).toEqual(["A", "B"]);
+  expect(getGame(table, "A")).toEqual(reply);
 }, 30_000);
 
 /** Whether the seat's last machine move left it partway through an action: aiming, choosing a target or an item to steal, or holding a drawn item. */
@@ -323,9 +323,9 @@ test("on random tables of 2 to 4 players with items, the moves list is exactly t
 test("on random tables of 2 to 4 players, an Agent's views on its turns and the final view add up to the whole log in order, with no gaps or repeats and only its own secrets: each starts where its previous turn ended, the first at the match start", () => {
   let secretsShown = 0;
   let turnsRead = 0;
-  const heard = new Map<number, Array<string>>();
+  const heard = new Map<string, Array<string>>();
 
-  const expectWholeLog = (table: HeadlessTable, player: number): void => {
+  const expectWholeLog = (table: HeadlessTable, player: Letter): void => {
     const { events, learned } = match(table);
     const seat = seatOfPlayer(table, player);
     const own = (count: number) => learned.filter((note) => note.seat === seat && note.at === count).map(({ secret }) => secretText(secret));
@@ -392,7 +392,7 @@ test("a phone clue's position counts the chambered shell as 1, as the shells fir
 test("Agent players that may move at once can answer in either order, and the later one must reread its turn", () => {
   const table = playUntil(newMatch(3, 42, ["Agent", "Agent", "DoN"]), (current) => agentsToMove(current).length === 2);
 
-  for (const [first, second] of [[1, 2], [2, 1]] as const) {
+  for (const [first, second] of [["A", "B"], ["B", "A"]] as const) {
     const before = turnViewOf(table, second);
     const afterFirst = play(table, first, 0, turnViewOf(table, first).turn).table;
 
@@ -404,13 +404,13 @@ test("Agent players that may move at once can answer in either order, and the la
 
 test("a move number outside the list, or arguments that do not fit the schema, are refused and change nothing", () => {
   const table = newMatch(2, 3, ["DoN", "Agent"]);
-  const { moves, turn } = turnViewOf(table, 2);
-  const outOfRange = play(table, 2, moves.length, turn);
+  const { moves, turn } = turnViewOf(table, "B");
+  const outOfRange = play(table, "B", moves.length, turn);
 
   expect(refusal(outOfRange.reply)).toContain("no move");
   expect(outOfRange.table).toBe(table);
 
-  for (const input of [{ player: 2, move: -1, turn }, { player: 2, move: 1.5, turn }, { player: 2, move: "zero", turn }, { player: 5, move: 0, turn }, { player: 0, move: 0, turn }, { seat: 3, move: 0, turn }, { move: 0, turn }, { player: 2, move: 0 }, { player: 2, move: 0, turn: "1" }, { player: 2, move: 0, turn: -1 }, { player: 2, move: 0, turn: 0.5 }, { player: 2, index: 0, turn }]) {
+  for (const input of [{ player: "B", move: -1, turn }, { player: "B", move: 1.5, turn }, { player: "B", move: "zero", turn }, { player: "E", move: 0, turn }, { player: "b", move: 0, turn }, { player: "", move: 0, turn }, { player: 2, move: 0, turn }, { player: 0, move: 0, turn }, { seat: 3, move: 0, turn }, { move: 0, turn }, { player: "B", move: 0 }, { player: "B", move: 0, turn: "1" }, { player: "B", move: 0, turn: -1 }, { player: "B", move: 0, turn: 0.5 }, { player: "B", index: 0, turn }]) {
     const outcome = call(table, "play_move", input);
 
     expect(refusal(outcome.reply)).toContain("Invalid arguments for play_move");
@@ -428,13 +428,20 @@ test("a move when it is not the player's turn is refused", () => {
 });
 
 test("the tools refuse without a match or without an Agent player", () => {
-  expect(refusal(getGame(emptyTable, 1))).toContain("new_match");
-  expect(refusal(play(emptyTable, 1, 0, 0).reply)).toContain("new_match");
+  expect(refusal(getGame(emptyTable, "A"))).toContain("new_match");
+  expect(refusal(play(emptyTable, "A", 0, 0).reply)).toContain("new_match");
 
   const botsOnly = newMatch(2, 1, ["DoN", "Story"]);
 
   expect(isOver(botsOnly)).toBe(true);
-  expect(refusal(getGame(botsOnly, 2))).toContain("no player is");
+  expect(refusal(getGame(botsOnly, "B"))).toContain("no player is");
+});
+
+test("a letter the table does not have is refused by name, with the players it has", () => {
+  const table = newMatch(3, 1, ["Agent", "DoN", "DoN"]);
+
+  expect(refusal(getGame(table, "D"))).toBe("There is no Player D at this table. The players are Player A, Player B, Player C.");
+  expect(refusal(play(table, "D", 0, table.turn).reply)).toBe("There is no Player D at this table. The players are Player A, Player B, Player C.");
 });
 
 test("a repeated move, or one from before a move that kept the player's turn, is refused, not played twice", () => {
@@ -444,10 +451,10 @@ test("a repeated move, or one from before a move that kept the player's turn, is
     let table = newMatch(2, seed, ["Agent", "DoN"]);
 
     for (let steps = 0; steps < STEP_LIMIT && !isOver(table); steps++) {
-      const { turn, moves } = turnViewOf(table, 1);
+      const { turn, moves } = turnViewOf(table, "A");
       const index = steps % moves.length;
-      const once = play(table, 1, index, turn);
-      const twice = play(once.table, 1, index, turn);
+      const once = play(table, "A", index, turn);
+      const twice = play(once.table, "A", index, turn);
 
       expect(refusal(twice.reply)).toMatch(isOver(once.table) ? /new_match|not your turn/ : /Stale|not your turn/);
       expect(twice.table).toBe(once.table);
@@ -462,9 +469,9 @@ test("a repeated move, or one from before a move that kept the player's turn, is
 test("new_match is refused while a match is in progress, and a turn from the finished match is refused in a rematch with the same seed and setup at the same point", () => {
   const setup = [2, 3, ["Agent", "DoN"], { items: false }] as const;
   const earlier = newMatch(...setup);
-  const sixMoves = (start: HeadlessTable) => Arr.range(1, 6).reduce((table) => play(table, 1, 0, turnViewOf(table, 1).turn).table, start);
+  const sixMoves = (start: HeadlessTable) => Arr.range(1, 6).reduce((table) => play(table, "A", 0, turnViewOf(table, "A").turn).table, start);
   const atSix = sixMoves(earlier);
-  const { turn: earlierTurn, ...earlierView } = turnViewOf(atSix, 1);
+  const { turn: earlierTurn, ...earlierView } = turnViewOf(atSix, "A");
   const refusedRestart = call(atSix, "new_match", { players: 2, items: false });
 
   expect(refusal(refusedRestart.reply)).toBe("A match is in progress; finish it first.");
@@ -472,12 +479,12 @@ test("new_match is refused while a match is in progress, and a turn from the fin
 
   const finished = playUntil(atSix, () => false);
   const later = sixMoves(newMatch(setup[0], setup[1], setup[2], { ...setup[3], on: finished }));
-  const { turn: laterTurn, ...laterView } = turnViewOf(later, 1);
+  const { turn: laterTurn, ...laterView } = turnViewOf(later, "A");
 
   expect(laterView).toEqual(earlierView);
   expect(laterTurn).toBeGreaterThan(finished.turn);
 
-  const stale = play(later, 1, 0, earlierTurn);
+  const stale = play(later, "A", 0, earlierTurn);
 
   expect(refusal(stale.reply)).toContain("Stale");
   expect(stale.table).toBe(later);
@@ -495,20 +502,20 @@ test("new_match refuses a seed that is not a safe integer, a controller list of 
   expect(refusal(call(emptyTable, "new_match", { players: 2, items: false, controllers: ["Agent", "Human"] }).reply)).toContain("Human");
 });
 
-const TableReply = Schema.Struct({ players: Schema.Array(Schema.Struct({ player: Schema.Number, controller: Schema.String })), seed: Schema.String });
+const TableReply = Schema.Struct({ players: Schema.Array(Schema.Struct({ player: Schema.String, controller: Schema.String })), seed: Schema.String });
 
 const parseTable = Schema.decodeUnknownSync(Schema.fromJsonString(TableReply));
 
-test("new_match makes Player 1 the agent and DoN the others by default, and the seed it returns replays the match, at the edges of the safe integers too", () => {
+test("new_match makes Player A the agent and DoN the others by default, and the seed it returns replays the match, at the edges of the safe integers too", () => {
   const started = call(emptyTable, "new_match", { players: 3, items: true });
   const { players, seed } = parseTable(answered(started.reply));
 
   expect(players).toEqual([
-    { player: 1, controller: "Agent" },
-    { player: 2, controller: "DoN" },
-    { player: 3, controller: "DoN" },
+    { player: "A", controller: "Agent" },
+    { player: "B", controller: "DoN" },
+    { player: "C", controller: "DoN" },
   ]);
-  expect(viewOf(call(emptyTable, "new_match", { players: 3, items: true, seed }).table, 1)).toEqual(viewOf(started.table, 1));
+  expect(viewOf(call(emptyTable, "new_match", { players: 3, items: true, seed }).table, "A")).toEqual(viewOf(started.table, "A"));
 
   for (const given of ["0", "-1", "007", "4294967296", "9007199254740991", "-9007199254740991"]) {
     const first = call(emptyTable, "new_match", { players: 2, items: true, seed: given });
@@ -517,6 +524,6 @@ test("new_match makes Player 1 the agent and DoN the others by default, and the 
 
     expect(returned).toBe(String(Number(given)));
     expect(parseTable(answered(replayed.reply)).seed).toBe(returned);
-    expect(viewOf(playUntil(replayed.table, () => false), 1)).toEqual(viewOf(playUntil(first.table, () => false), 1));
+    expect(viewOf(playUntil(replayed.table, () => false), "A")).toEqual(viewOf(playUntil(first.table, () => false), "A"));
   }
 }, 30_000);

@@ -6,7 +6,7 @@ import { play, type Progress, promptsOf } from "../driver.ts";
 import type { Roster } from "../players.ts";
 import { agentMoveText } from "../text.ts";
 
-// An Agent player moves in whole actions, such as "Shoot Player 2", where the
+// An Agent player moves in whole actions, such as "Shoot Player B", where the
 // machine asks for steps: pick up the shotgun, then shoot. Each agent move is a
 // chain of the machine's own legal moves, found by playing them on a copy of the
 // match, so no rule lives here: a chain goes on while the machine leaves the
