@@ -113,7 +113,13 @@ A turn whose only move is "Grab an item". The arena plays it for the agent or hu
 How a player's log entries reach it in the arena, set when a match starts. With on-turn delivery the new entries come with the player's next turn. With live delivery each change is sent as it happens.
 
 **Fallback move**:
-The first legal move. The arena plays it when an agent ends its turn without moving.
+The move the arena plays for an agent that ended its turn without moving, and again after the reminder: one of its legal moves, picked by a hash of the seed, turn and player.
+
+**Reminder**:
+The one fixed message an agent gets when it ends its turn without moving: "It is still your turn; call play_move with one of the listed moves."
+
+**Provenance**:
+What a match records when it starts about what decides its play: the code and instructions hashes and each agent's endpoint, model, effort and resolved thinking settings. A resume must bring the same, keys aside.
 
 **Intervention**:
 A fallback move, counted against the agent it was played for, because the agent ended its turn without a move even after the arena's one reminder. A reminder alone is not an intervention. A match with an intervention is still scored, and the tournament stats flag it.
