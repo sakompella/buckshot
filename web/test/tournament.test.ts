@@ -237,6 +237,9 @@ const writeManifest = (dir: string, tournament: Tournament, match: ScheduledMatc
   writeFileSync(join(dir, match.name, "manifest.json"), JSON.stringify(manifestOf(tournament, match, status, match.block % match.seats.length)));
 };
 
+/** No retries and no pause, so each run of runPending plays each pending match once. */
+const ONCE = { attempts: 1, pauseMs: 0 };
+
 test("an interrupted tournament and its restart finish every match once, and a failed match is the only one run again", async () => {
   const tournament = tournamentFrom(configJson({ pairings: { allOf: ["haiku-5-5", "luna", "don"], size: 2 }, blocksPerPairing: 2 }));
   const schedule = scheduleOf(tournament);
@@ -264,21 +267,21 @@ test("an interrupted tournament and its restart finish every match once, and a f
   };
 
   const broken = new Set([schedule[5]?.name ?? ""]);
-  const first = await runPending(dir, schedule, 2, fake(broken, interrupted), () => undefined, interrupted.signal);
+  const first = await runPending(dir, schedule, 2, fake(broken, interrupted), () => undefined, interrupted.signal, ONCE);
 
   expect(first.length).toBeLessThan(schedule.length);
 
-  const second = await runPending(dir, schedule, 2, fake(broken, new AbortController()), () => undefined, new AbortController().signal);
+  const second = await runPending(dir, schedule, 2, fake(broken, new AbortController()), () => undefined, new AbortController().signal, ONCE);
 
   expect(second.filter(({ status }) => status === "failed").map(({ match }) => match.name)).toEqual([...broken]);
 
-  const third = await runPending(dir, schedule, 2, fake(new Set(), new AbortController()), () => undefined, new AbortController().signal);
+  const third = await runPending(dir, schedule, 2, fake(new Set(), new AbortController()), () => undefined, new AbortController().signal, ONCE);
 
   expect(third.map(({ match }) => match.name)).toEqual([...broken]);
   expect(third.every(({ status }) => status === "finished")).toBe(true);
   expect([...ran].toSorted()).toEqual([...schedule.map((match) => match.name), ...broken].toSorted());
   expect(unfinished(schedule, new Set(schedule.map((match) => match.name)))).toEqual([]);
-  expect((await runPending(dir, schedule, 2, fake(new Set(), new AbortController()), () => undefined, new AbortController().signal)).length).toBe(0);
+  expect((await runPending(dir, schedule, 2, fake(new Set(), new AbortController()), () => undefined, new AbortController().signal, ONCE)).length).toBe(0);
 
   const [opening] = schedule;
   const at = opening?.seats.findIndex((seat) => AGENTS.some((letter) => letter === seat)) ?? -1;
@@ -301,6 +304,37 @@ test("an interrupted tournament and its restart finish every match once, and a f
   expect(costOf(dir, prices, schedule)).toBe(priced);
 });
 
+test("a failed match goes to the back of the queue and is retried, up to its attempts", async () => {
+  const tournament = tournamentFrom(configJson({ pairings: [["luna", "don"], ["haiku-5-5", "story"]], blocksPerPairing: 1 }));
+  const schedule = scheduleOf(tournament);
+  const dir = mkdtempSync(join(tmpdir(), "tournament-retry-"));
+  const [flaky, broken] = schedule;
+  const runs: Array<string> = [];
+
+  if (flaky === undefined || broken === undefined) throw new Error("too few matches scheduled");
+
+  const settled = await runPending(
+    dir,
+    schedule,
+    1,
+    async (match) => {
+      runs.push(match.name);
+
+      const fails = match.name === broken.name || (match.name === flaky.name && runs.filter((name) => name === flaky.name).length === 1);
+
+      writeManifest(dir, tournament, match, fails ? "running" : "finished");
+
+      return fails ? 1 : 0;
+    },
+    () => undefined,
+    new AbortController().signal,
+    { attempts: 3, pauseMs: 0 },
+  );
+
+  expect(runs).toEqual([flaky.name, ...schedule.slice(1).map((match) => match.name), flaky.name, broken.name, broken.name]);
+  expect(settled.filter(({ status }) => status === "finished").map(({ match }) => match.name).toSorted()).toEqual(schedule.filter((match) => match !== broken).map((match) => match.name).toSorted());
+});
+
 test("one directory holds one tournament", () => {
   const dir = join(mkdtempSync(join(tmpdir(), "tournament-dir-")), "t");
   const tournament = tournamentFrom(configJson());
@@ -315,7 +349,7 @@ test("one directory holds one tournament", () => {
   expect(Result.isFailure(other) && other.failure.message).toContain("made from a different config");
 });
 
-test("a tournament grows by entrants and by pairings listed after its own, and its scheduled matches stay as they were", () => {
+test("a tournament grows by entrants, by pairings listed after its own and by seed blocks; its scheduled matches stay as they were, first", () => {
   const dir = join(mkdtempSync(join(tmpdir(), "tournament-dir-")), "t");
   const first = tournamentFrom(configJson({ entrants: { luna: ENTRANTS.luna, don: ENTRANTS.don }, pairings: [["luna", "don"]] }));
   const grown = tournamentFrom(configJson({ pairings: [["luna", "don"], ["haiku-5-5", "luna"], ["opus", "story"]] }));
@@ -324,15 +358,23 @@ test("a tournament grows by entrants and by pairings listed after its own, and i
 
   const opened = openTournament(dir, grown, "def456", new Date(1));
 
-  expect(Result.isSuccess(opened) && opened.success.schedule).toEqual(scheduleOf(grown));
-  expect(scheduleOf(grown)).toEqual(expect.arrayContaining([...scheduleOf(first)]));
+  const schedule = Result.isSuccess(opened) ? opened.success.schedule : [];
+
+  expect(schedule.slice(0, scheduleOf(first).length)).toEqual([...scheduleOf(first)]);
+  expect(schedule.toSorted((a, b) => a.name.localeCompare(b.name))).toEqual(scheduleOf(grown).toSorted((a, b) => a.name.localeCompare(b.name)));
   expect(JSON.parse(readFileSync(join(dir, "tournament.json"), "utf8"))).toMatchObject({ git_commit: "abc123", created_at: "1970-01-01T00:00:00.000Z" });
 
   for (const pairings of [[["haiku-5-5", "luna"]], [["haiku-5-5", "luna"], ["luna", "don"]]]) {
     expect(Result.isFailure(openTournament(dir, tournamentFrom(configJson({ pairings })), "abc123", new Date(0)))).toBe(true);
   }
 
-  expect(Result.isFailure(openTournament(dir, tournamentFrom(configJson({ pairings: [["luna", "don"], ["haiku-5-5", "luna"], ["opus", "story"]], blocksPerPairing: 3 })), "abc123", new Date(0)))).toBe(true);
+  expect(Result.isFailure(openTournament(dir, tournamentFrom(configJson({ pairings: [["luna", "don"], ["haiku-5-5", "luna"], ["opus", "story"]], blocksPerPairing: 1 })), "abc123", new Date(0)))).toBe(true);
+
+  const more = tournamentFrom(configJson({ pairings: [["luna", "don"], ["haiku-5-5", "luna"], ["opus", "story"]], blocksPerPairing: 3 }));
+  const extended = openTournament(dir, more, "abc123", new Date(0));
+
+  expect(Result.isSuccess(extended) && extended.success.schedule.slice(0, schedule.length)).toEqual([...schedule]);
+  expect(Result.isSuccess(extended) && extended.success.schedule.slice(schedule.length).every((match) => match.block === 2)).toBe(true);
 });
 
 test("a finished match that disagrees with the schedule is left out, and its counts come from the manifest", () => {

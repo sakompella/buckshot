@@ -14,7 +14,6 @@ import {
   TournamentError,
   modelEntrant,
   resolveConfig,
-  runQueue,
   scheduleOf,
   unfinished,
 } from "./tournament.ts";
@@ -48,14 +47,15 @@ export const readTournamentFile = (dir: string): Result.Result<TournamentFile, T
 
 export const tournamentOf = (file: TournamentFile): Result.Result<Tournament, TournamentError> => resolveConfig(file.config);
 
-/** A tournament grows by new entrants and by listed pairings after its own, so the matches it already scheduled keep their names, seats and seeds. */
+/** A tournament grows by new entrants, listed pairings after its own and more seed blocks, so the matches it already scheduled keep their names, seats and seeds. */
 const growsInto = (before: TournamentConfig, after: TournamentConfig): boolean => {
-  const fixed = ({ entrants: _entrants, pairings: _pairings, ...rest }: TournamentConfig) => rest;
+  const fixed = ({ entrants: _entrants, pairings: _pairings, blocksPerPairing: _blocks, ...rest }: TournamentConfig) => rest;
 
   return (
     !("allOf" in before.pairings) &&
     !("allOf" in after.pairings) &&
     isDeepStrictEqual(fixed(before), fixed(after)) &&
+    after.blocksPerPairing >= before.blocksPerPairing &&
     Object.entries(before.entrants).every(([name, entrant]) => isDeepStrictEqual(after.entrants[name], entrant)) &&
     isDeepStrictEqual(after.pairings.slice(0, before.pairings.length), before.pairings)
   );
@@ -68,16 +68,20 @@ const writeFile = (dir: string, file: TournamentFile) => {
   return file;
 };
 
-/** Starts the directory's tournament, confirms that this config is the one it holds, or grows it by this config's new pairings. */
+/** Starts the directory's tournament, confirms that this config is the one it holds, or grows it: this config's new matches go after the ones scheduled, in the order scheduleOf gives them. */
 export const openTournament = (dir: string, tournament: Tournament, gitCommit: string, now: Date): Result.Result<TournamentFile, TournamentError> => {
   if (!existsSync(fileOf(dir))) return Result.succeed(writeFile(dir, { format: TOURNAMENT_FORMAT, config: tournament.config, created_at: now.toISOString(), git_commit: gitCommit, schedule: scheduleOf(tournament) }));
 
   return Result.flatMap(readTournamentFile(dir), (file) => {
     if (isDeepStrictEqual(file.config, tournament.config)) return Result.succeed(file);
 
-    if (growsInto(file.config, tournament.config)) return Result.succeed(writeFile(dir, { ...file, config: tournament.config, schedule: scheduleOf(tournament) }));
+    if (growsInto(file.config, tournament.config)) {
+      const scheduled = new Set(file.schedule.map((match) => match.name));
 
-    return fail(`${dir} holds the tournament "${file.config.name}", made from a different config; use a new --dir, the config it was made from, or that config with entrants and listed pairings added after its own`);
+      return Result.succeed(writeFile(dir, { ...file, config: tournament.config, schedule: [...file.schedule, ...scheduleOf(tournament).filter((match) => !scheduled.has(match.name))] }));
+    }
+
+    return fail(`${dir} holds the tournament "${file.config.name}", made from a different config; use a new --dir, the config it was made from, or that config with entrants, seed blocks, or listed pairings after its own added`);
   });
 };
 
@@ -193,9 +197,25 @@ export interface Settled {
   readonly status: "finished" | "failed";
 }
 
+/** What happens to a failed match: it goes to the back of the queue, for `attempts` runs in all, and its slot waits `pauseMs` first, so a provider's cooldown has fewer matches at once. */
+export interface Retry {
+  readonly attempts: number;
+  readonly pauseMs: number;
+}
+
+export const RETRY: Retry = { attempts: 3, pauseMs: 120_000 };
+
+const pause = (ms: number, stop: AbortSignal) =>
+  new Promise<void>((resume) => {
+    const timer = setTimeout(resume, ms);
+
+    stop.addEventListener("abort", () => (clearTimeout(timer), resume()), { once: true });
+  });
+
 /**
- * Runs the matches that are not finished, at most `parallel` at a time. `runOne` plays one and gives its exit code.
- * A match is finished when it exited 0 and its manifest says so; any other is left for the next run.
+ * Runs the matches that are not finished, in schedule order, at most `parallel` at a time. `runOne` plays one and gives
+ * its exit code. A match is finished when it exited 0 and its manifest says so; any other is retried as `retry` says,
+ * and then left for the next run.
  */
 export const runPending = async (
   dir: string,
@@ -204,21 +224,33 @@ export const runPending = async (
   runOne: (match: ScheduledMatch) => Promise<number>,
   onSettled: (settled: Settled) => void,
   stop: AbortSignal,
+  retry: Retry = RETRY,
 ): Promise<ReadonlyArray<Settled>> => {
   const settled: Array<Settled> = [];
+  const queue = [...unfinished(schedule, finishedNames(dir, schedule))];
+  const failures = new Map<string, number>();
 
-  await runQueue(
-    unfinished(schedule, finishedNames(dir, schedule)),
-    parallel,
-    async (match) => {
+  const slot = async (): Promise<void> => {
+    for (let match = queue.shift(); match !== undefined && !stop.aborted; match = queue.shift()) {
       const exitCode = await runOne(match);
       const result: Settled = { match, status: exitCode === 0 && isFinished(join(dir, match.name)) ? "finished" : "failed" };
 
       settled.push(result);
       onSettled(result);
-    },
-    stop,
-  );
+
+      if (result.status === "failed") {
+        const failed = (failures.get(match.name) ?? 0) + 1;
+
+        failures.set(match.name, failed);
+
+        if (failed < retry.attempts) queue.push(match);
+
+        await pause(retry.pauseMs, stop);
+      }
+    }
+  };
+
+  await Promise.all(Array.from({ length: parallel }, slot));
 
   return settled;
 };

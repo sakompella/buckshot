@@ -9,13 +9,21 @@ import type { Interval } from "../src/arena/tournament-stats.ts";
 // position and head to head, interventions, ratings and cost. Intervals are 95%
 // bootstraps over seed blocks, drawn with a seed, so a rerun prints the same
 // numbers. Finished matches whose manifest disagrees with the schedule are
-// listed and left out. Prices come from src/arena/prices.json.
-// Usage: bun scripts/arena-stats.ts <tournament dir> [--json]
+// listed and left out. Prices come from src/arena/prices.json. --among
+// reports only the matches whose entrants are all in that comma-separated list,
+// such as one phase of a tournament.
+// Usage: bun scripts/arena-stats.ts <tournament dir> [--among a,b,c] [--json]
 
-const dir = process.argv.slice(2).find((arg) => !arg.startsWith("--"));
+const args = process.argv.slice(2);
+
+const dir = args.find((arg, index) => !arg.startsWith("--") && args[index - 1] !== "--among");
+
+const amongAt = args.indexOf("--among");
+
+const among = amongAt === -1 ? undefined : new Set((args[amongAt + 1] ?? "").split(","));
 
 if (dir === undefined) {
-  console.error("Usage: bun scripts/arena-stats.ts <tournament dir> [--json]");
+  console.error("Usage: bun scripts/arena-stats.ts <tournament dir> [--among a,b,c] [--json]");
   process.exit(1);
 }
 
@@ -27,7 +35,7 @@ const tournament = Result.match(tournamentOf(file), { onFailure: (error) => { co
 
  return process.exit(1); }, onSuccess: (value) => value });
 
-const report = reportOf(dir, file, tournament, loadPrices(DEFAULT_PRICES));
+const report = reportOf(dir, among === undefined ? file : { ...file, schedule: file.schedule.filter((match) => match.entrants.every((entrant) => among.has(entrant))) }, tournament, loadPrices(DEFAULT_PRICES));
 
 const percent = (share: number): string => `${(share * 100).toFixed(1)}%`;
 

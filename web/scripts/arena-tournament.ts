@@ -5,19 +5,22 @@ import { join, resolve } from "node:path";
 import { Result } from "effect";
 
 import { DEFAULT_PRICES, loadPrices } from "../src/arena/cost.ts";
-import { checkPrices, childCommand, childEnv, parseConfig, resolveKeys, type ScheduledMatch, scheduleOf, type TournamentError } from "../src/arena/tournament.ts";
+import { checkPrices, childCommand, childEnv, parseConfig, resolveKeys, type ScheduledMatch, scheduleOf, type TournamentError, unfinished } from "../src/arena/tournament.ts";
 import { costOf, finishedNames, openTournament, runPending, type Settled, winnersOf } from "../src/arena/tournament-dir.ts";
 
-// Plays a tournament: every scheduled match, as a child process running
-// scripts/arena.ts, at most --parallel at a time (1 or 2, default 2). The config
-// says who plays whom, as tournaments/cpa-medium.json does. The first run writes
-// <dir>/tournament.json, and a later run needs the same config, or that config
-// with entrants added and listed pairings added after its own, which it schedules. Keys come from
+// Plays a tournament: every scheduled match, in schedule order, as a child
+// process running scripts/arena.ts, at most --parallel at a time (1 to 8,
+// default 5). The config says who plays whom, as tournaments/cpa-medium.json
+// does. The first run writes <dir>/tournament.json, and a later run needs the
+// same config, or one that grows it; with several configs, each grows the
+// tournament in turn, so their new matches play in that order. Keys come from
 // the environment, and Bun loads web/.env for this script; each match gets only
-// its own PLAYER_* variables. A match that fails is reported and left, and the
-// rest go on. Rerun the same command to resume: finished matches never run
-// again. Do not run two of these on one directory. --dry-run prints the schedule.
-// Usage: bun scripts/arena-tournament.ts <config.json> --dir <tournament dir> [--parallel 1|2] [--dry-run]
+// its own PLAYER_* variables. A match that fails goes to the back of the queue
+// after a pause, up to three runs, and the rest go on. Rerun the same command to
+// resume: finished matches never run again. Do not run two of these on one
+// directory. --limit plays at most that many matches. --dry-run prints the
+// schedule of the last config.
+// Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel 1-8] [--limit N] [--dry-run]
 //        bun scripts/arena-stats.ts <tournament dir> [--json]
 
 const WEB = join(import.meta.dir, "..");
@@ -30,9 +33,13 @@ const flag = (name: string): string | undefined => {
   return at === -1 ? undefined : args[at + 1];
 };
 
-const configPath = args.find((arg, index) => !arg.startsWith("--") && args[index - 1] !== "--dir" && args[index - 1] !== "--parallel");
+const VALUED = new Set(["--dir", "--parallel", "--limit"]);
 
-const parallel = Number(flag("parallel") ?? "2");
+const configPaths = args.filter((arg, index) => !arg.startsWith("--") && !VALUED.has(args[index - 1] ?? ""));
+
+const parallel = Number(flag("parallel") ?? "5");
+
+const limit = flag("limit") === undefined ? undefined : Number(flag("limit"));
 
 const exit = (message: string): never => {
   console.error(message);
@@ -42,15 +49,23 @@ const exit = (message: string): never => {
 
 const unwrap = <A>(result: Result.Result<A, TournamentError>): A => Result.match(result, { onFailure: (error) => exit(error.message), onSuccess: (value) => value });
 
-if (configPath === undefined) exit("Usage: bun scripts/arena-tournament.ts <config.json> --dir <tournament dir> [--parallel 1|2] [--dry-run]");
+if (configPaths.length === 0) exit("Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel 1-8] [--limit N] [--dry-run]");
 
-if (parallel !== 1 && parallel !== 2) exit("--parallel must be 1 or 2");
+if (!Number.isInteger(parallel) || parallel < 1 || parallel > 8) exit("--parallel must be a whole number from 1 to 8");
+
+if (limit !== undefined && (!Number.isInteger(limit) || limit < 1)) exit("--limit must be a whole number from 1");
 
 const prices = loadPrices(DEFAULT_PRICES);
 
-const tournament = unwrap(parseConfig(readFileSync(configPath ?? "", "utf8")));
+const tournaments = configPaths.map((path) => {
+  const parsed = unwrap(parseConfig(readFileSync(path, "utf8")));
 
-unwrap(checkPrices(tournament, prices));
+  unwrap(checkPrices(parsed, prices));
+
+  return parsed;
+});
+
+const tournament = tournaments.at(-1) ?? exit("no config");
 
 const money = (dollars: number): string => `$${dollars.toFixed(4)}`;
 
@@ -71,7 +86,7 @@ const gitCommit = Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: WEB }).stdo
 
 const keys = unwrap(resolveKeys(tournament.config, scheduleOf(tournament), process.env));
 
-const file = unwrap(openTournament(dir, tournament, gitCommit, new Date()));
+const file = tournaments.map((each) => unwrap(openTournament(dir, each, gitCommit, new Date()))).at(-1) ?? exit("no config");
 
 const children = new Set<ReturnType<typeof spawn>>();
 
@@ -118,20 +133,20 @@ const report = ({ match, status }: Settled) => {
 
   console.log(`[${done}/${file.schedule.length}] ${match.name} ${status}${winners}, ${money(costOf(dir, prices, [match]))}, total ${money(costOf(dir, prices, file.schedule))}`);
 
-  if (status === "failed") console.log(`${tail(match, 8)}\n  Rerun the same command to resume it.`);
+  if (status === "failed") console.log(`${tail(match, 8)}\n  It is retried after a pause, up to three runs; rerun the same command to resume it after that.`);
 };
 
-const pending = file.schedule.length - finishedNames(dir, file.schedule).size;
+const pending = unfinished(file.schedule, finishedNames(dir, file.schedule)).slice(0, limit);
 
-console.log(`${file.config.name}: ${pending} of ${file.schedule.length} matches to run, ${parallel} at a time, in ${dir}`);
+console.log(`${file.config.name}: ${pending.length} of ${file.schedule.length} matches to run, ${parallel} at a time, in ${dir}`);
 
-const settled = await runPending(dir, file.schedule, parallel, runOne, report, stop.signal);
+const settled = await runPending(dir, pending, parallel, runOne, report, stop.signal);
 
 const failed = settled.filter(({ status }) => status === "failed").length;
 
 const remaining = file.schedule.length - finishedNames(dir, file.schedule).size;
 
-console.log(`\n${settled.length - failed} matches finished, ${failed} failed, ${remaining} not finished. Total cost ${money(costOf(dir, prices, file.schedule))}.`);
+console.log(`\n${settled.length - failed} matches finished, ${failed} failed runs, ${remaining} not finished. Total cost ${money(costOf(dir, prices, file.schedule))}.`);
 
 if (remaining > 0) console.log("Rerun the same command to resume the rest.");
 

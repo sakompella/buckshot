@@ -255,12 +255,3 @@ export const childEnv = (base: Env, config: TournamentConfig, match: ScheduledMa
 export const unfinished = (schedule: ReadonlyArray<ScheduledMatch>, finished: ReadonlySet<string>): ReadonlyArray<ScheduledMatch> => schedule.filter((match) => !finished.has(match.name));
 
 /** Runs the items, at most `parallel` at a time, in order. Once `stop` aborts, no new item starts and the running ones finish. */
-export const runQueue = async <A>(items: ReadonlyArray<A>, parallel: number, run: (item: A) => Promise<void>, stop: AbortSignal): Promise<void> => {
-  const queue = items.values();
-
-  const worker = async (): Promise<void> => {
-    for (let next = queue.next(); !next.done && !stop.aborted; next = queue.next()) await run(next.value);
-  };
-
-  await Promise.all(Array.from({ length: parallel }, worker));
-};
