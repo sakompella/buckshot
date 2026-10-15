@@ -2,7 +2,7 @@ import { flow, Option, Result, Schema, SchemaTransformation } from "effect";
 
 import { SEATS_BY_TABLE, SeatCount } from "../domain.ts";
 import { Controller, controllerOf } from "../driver.ts";
-import { PlayerLetter, rosterOf } from "../players.ts";
+import { Letter, rosterOf } from "../players.ts";
 import { agentGame, agentMove, type AgentSource, type SeatMove } from "./view.ts";
 
 // The agent tools, whatever carries them: their names, descriptions and input
@@ -13,7 +13,7 @@ import { agentGame, agentMove, type AgentSource, type SeatMove } from "./view.ts
 export const RULES =
   "Buckshot: a shotgun is loaded with a hidden mix of live and blank shells, and each load is announced. On your turn you shoot a player or yourself, or use an item; a live shell does damage and a blank fired at yourself keeps your turn. The last player alive wins the round and its prize, and the most cash after the last round wins. A match has three rounds.";
 
-const PlayerArgument = PlayerLetter.annotate({ description: 'The Agent player this call is for: the letter in the player names, "A" for Player A, then "B" and so on up to the last player at the table (at most "D").' });
+const PlayerArgument = Letter.annotate({ description: 'The Agent player this call is for: the letter in the player names, "A" for Player A, then "B" and so on up to the last player at the table (at most "D").' });
 
 const GetGameArguments = Schema.Struct({ player: PlayerArgument });
 
@@ -138,7 +138,7 @@ const withSource = <S>(session: MatchSession<S>, state: S, reply: (source: Agent
   Option.match(session.current(state), { onNone: () => refused(state, NO_MATCH), onSome: reply });
 
 /** The player's view. Replying changes nothing, so a lost or repeated reply loses nothing. */
-const viewReply = <S>(session: MatchSession<S>, state: S, player: PlayerLetter): ToolOutcome<S> =>
+const viewReply = <S>(session: MatchSession<S>, state: S, player: Letter): ToolOutcome<S> =>
   withSource(session, state, (source) =>
     Result.match(agentGame(source, session.turn(state), player), {
       onSuccess: (game) => answered(state, JSON.stringify(game)),
@@ -158,7 +158,7 @@ const tableReply = <S>(session: MatchSession<S>, state: S): ToolOutcome<S> =>
     return answered(
       state,
       JSON.stringify({
-        players: source.game.seats.map((seat) => ({ player: roster.playerOf(seat), controller: controllerOf(source.controllers, seat) })),
+        players: source.game.seats.map((seat) => ({ player: roster.playerOf(seat).letter, controller: controllerOf(source.controllers, seat) })),
         seed: String(source.seed),
       }),
     );
