@@ -1,9 +1,11 @@
 # Buckshot table (web UI)
 
-A plain web UI for the Bend multiplayer rules library in `sim/bend-mp/`, built
+A web game for the Bend multiplayer rules library in `sim/bend-mp/`, built
 on Foldkit 0.167 and Effect 4 and run with bun and Vite. It builds `web.bend` to
-JavaScript and plays 2- to 4-player matches in the browser. Any player can be a
-human, a Story AI, a DoN AI or an agent (see below). The UI has no rules of its own. Legality,
+JavaScript and plays 2- to 4-player matches in the browser, on a dark top-down
+table drawn in DOM, CSS and SVG: you play by clicking the shotgun, a player's
+defibrillator, an item or the briefcase. Any player can be a human, a Story
+AI, a DoN AI or an agent (see below). The UI has no rules of its own. Legality,
 observation and privacy all come from the machine. See
 [`sim/bend-mp/README.md`](../sim/bend-mp/README.md) for the rules library.
 
@@ -21,7 +23,47 @@ Checks:
     bun run typecheck  # tsc --noEmit, strict
     bun run lint       # oxlint with every anti-slop rule and the Effect group, --deny-warnings
     bun run test       # plays full Story and DoN matches through bend.ts at 2, 3 and 4 players; checks stale answers are rejected; checks the agent tool contract: privacy, read-only get_game, stale, repeated and rematch turns, new_match refused mid-match, the moves list matching the machine's legal chains, and each Agent's events adding up to the whole log, the end included
-    bun scripts/play.ts [url] [outdir]   # headless Chrome: one human-vs-bot match by clicking, one 4-bot autoplay match
+    bun scripts/play.ts [url] [outdir]   # headless Chrome (BROWSER=firefox for Playwright Firefox): one human-vs-bot match by clicking the table, one 4-bot autoplay match
+    bun scripts/shots.ts [url] [outdir] [WxH ...]   # a screenshot of each stage of a match, at 1440x900 and 390x844 by default; MOTION=reduce for reduced motion, BROWSER=firefox for Playwright Firefox
+
+## Playing
+
+The setup screen picks the number of players, each player's controller, items
+and the seed. In a match the banner says whose view it is and the phase
+(Your turn, Grab items, Watch, Round over, Match over). Everything else is on
+the table: health is the bolts on each defibrillator, a new load is its shells
+set out in a live group and a blank group, a shot is the gun turning, its
+flash and recoil and the bolts going dark, and a private result (glass, phone)
+shows big in the middle for a moment, only to the player who learned it. Each
+of the viewer's legal moves is played by clicking the thing it acts on, which
+lifts under the pointer; the moves are buttons, so Tab and Enter play them too:
+
+| Move | Click |
+|---|---|
+| Grab | your open briefcase |
+| Place | an empty slot on your side (shown only while placing) |
+| Pick up | the shotgun |
+| Shoot, Jam | a player's defibrillator (your own to shoot yourself) |
+| Use an item | the item on your side |
+| Steal (adrenaline) | the item on another player's side |
+
+`src/board.ts` maps each move to its target. Moves that would share a target
+get plain buttons instead; the tests check that every legal move of many bot
+matches has its own target. The bots move on their own from the start of a
+match. The Menu in the corner pauses or steps them, sets their speed, switches
+whose view the table shows (hotseat), lists the controllers and WebMCP status,
+and has the event log. Animations are CSS, keyed by the event's place in the
+log so each plays once and is gone when the next step starts, and
+`prefers-reduced-motion` turns movement off.
+
+The Speed setting (Slow, Normal, Fast) scales every pause: Normal holds a load
+reveal 2.6 s, a shot 2.2 s and a round over 4.4 s, and Fast is about an eighth
+of that. ADR-0029 records why the table is 2D; a three.js version of the whole
+scene is kept unmerged on branch `web/game-3d` as a reference.
+
+Fonts are self-hosted from `@fontsource`: League Gothic (banners) and VT323
+(everything else), both under the SIL Open Font License 1.1. Every drawing is
+original CSS or SVG (ADR-0028).
 
 ## Playing with an agent (WebMCP)
 
@@ -227,7 +269,14 @@ The look borrows from the studio viewer in
   model context and carries calls through the ports. `src/main.ts` has the
   page's `MatchSession`, which moves through `ClickedMove`.
 - `scripts/mcp.ts`: the stdio MCP front end.
-- `src/main.ts`: Foldkit Model, Messages, update, view, autoplay subscription.
+- `src/model.ts`: Foldkit Model and Messages. `src/main.ts`: update, init and
+  the autoplay subscription, which pauses after each step for as long as its
+  animation needs (scaled by the speed setting).
+- `src/view.ts`: setup screen, banner, menu, round-over, private results and
+  the results. `src/board-view.ts` draws the table and its one-time effects,
+  keyed by event index; `src/board.ts` maps each legal move to the thing it is
+  played on; `src/icons.ts` has the SVG drawings; `src/styles.css` the look
+  and the animations.
 - `tools/oxlint/anti-slop/`: vendored anti-slop rules (see PROVENANCE.md).
 - `src/arena/cost.ts` prices model calls from `prices.json` and totals them; `scripts/arena-cost.ts` and the viewer both use it.
 - `src/viewer/runs.ts` reads run directories and their JSONL files, leaving out a last line still being written.

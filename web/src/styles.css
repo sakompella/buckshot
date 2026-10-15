@@ -1,22 +1,20 @@
-/* Tokens: Frost Bright palette (uncodixfy), one sans family, 4/8 spacing. */
+/* Tokens: a dark, warm room. League Gothic (OFL) for banners, VT323 (OFL) for everything else. */
 :root {
-  --bg: #f1f5f9;
-  --surface: #f8fafc;
-  --panel: #ffffff;
-  --border: #cbd5e1;
-  --text: #0f172a;
-  --muted: #475569;
-  --primary: #0f766e;
-  --primary-ink: #ffffff;
-  --live: #e11d48;
-  --blank: #94a3b8;
-  --focus: #0f766e;
-  --radius: 6px;
-  font-family: "Avenir Next", Avenir, "Helvetica Neue", sans-serif;
-  font-size: 15px;
-  line-height: 1.45;
-  color: var(--text);
-  background: var(--bg);
+  --room: #070605;
+  --panel: #14110c;
+  --edge: #4a4233;
+  --bone: #e9dcc0;
+  --dust: #a99c7e;
+  --live: #d4553f;
+  --blank: #7d9fe0;
+  --charge: #bff2a6;
+  --banner: "League Gothic", Impact, sans-serif;
+  font-family: "VT323", ui-monospace, monospace;
+  font-size: 20px;
+  line-height: 1.2;
+  color: var(--bone);
+  background: var(--room);
+  color-scheme: dark;
 }
 
 * {
@@ -25,415 +23,1217 @@
 
 body {
   margin: 0;
+  overflow: hidden;
 }
 
 h1,
-h2 {
+p,
+ol,
+ul,
+dl,
+dd {
   margin: 0;
-  font-weight: 600;
 }
 
-h1 {
-  font-size: 20px;
-}
-
-h2 {
-  font-size: 15px;
-}
-
-p {
-  margin: 0;
+button,
+input {
+  font: inherit;
+  color: inherit;
 }
 
 button {
-  font: inherit;
-  color: var(--text);
   background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 6px 12px;
+  border: 1px solid var(--edge);
+  border-radius: 2px;
+  padding: 4px 12px;
   cursor: pointer;
-  transition: background-color 120ms ease, border-color 120ms ease;
+  transition: border-color 120ms ease, background-color 120ms ease;
 }
 
 button:hover:not(:disabled) {
-  border-color: var(--muted);
+  border-color: var(--bone);
 }
 
 button:disabled {
-  color: var(--blank);
+  color: #6b604c;
   cursor: not-allowed;
 }
 
+button[aria-pressed="true"] {
+  background: var(--bone);
+  border-color: var(--bone);
+  color: var(--room);
+}
+
 button:focus-visible,
-input:focus-visible {
-  outline: 2px solid var(--focus);
+input:focus-visible,
+summary:focus-visible {
+  outline: 2px solid var(--bone);
   outline-offset: 2px;
 }
 
-button[aria-pressed="true"] {
-  background: var(--text);
-  border-color: var(--text);
-  color: var(--surface);
-}
-
-button.primary {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: var(--primary-ink);
-}
-
-button.link {
-  border: 0;
-  padding: 0;
-  background: none;
-  color: var(--primary);
-  text-decoration: underline;
-}
-
-input {
-  font: inherit;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 5px 8px;
-  background: var(--panel);
+/* Grain and scanlines over everything, kept faint so text stays readable. */
+.app::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(0deg, rgb(0 0 0 / 0.16) 0 1px, transparent 1px 3px),
+    radial-gradient(ellipse at center, transparent 55%, rgb(0 0 0 / 0.55) 100%);
+  z-index: 10;
 }
 
 .app {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 16px 24px 32px;
+  position: relative;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
 }
 
-.topbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: 16px 32px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--border);
-}
+/* SETUP */
 
 .setup {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
-  gap: 12px 24px;
-}
-
-.field {
+  height: 100%;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 24px;
+  background: radial-gradient(ellipse at 50% 35%, #2a241a 0%, var(--room) 70%);
+}
+
+.title {
+  font-family: var(--banner);
+  font-weight: 400;
+  font-size: clamp(72px, 14vw, 150px);
+  line-height: 0.9;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #cfc4ab;
+  text-shadow: 0 4px 0 #000;
+  margin-bottom: 12px;
+}
+
+.setup-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.setup-label {
+  color: var(--dust);
+  min-width: 64px;
+  text-align: right;
+}
+
+.choice {
+  display: flex;
   gap: 4px;
 }
 
-.field.check {
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  padding-bottom: 7px;
-}
-
-.field-label {
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.segmented {
-  display: flex;
-}
-
-.segmented button {
-  border-radius: 0;
-  margin-left: -1px;
-}
-
-.segmented button:first-child {
-  border-radius: var(--radius) 0 0 var(--radius);
-  margin-left: 0;
-}
-
-.segmented button:last-child {
-  border-radius: 0 var(--radius) var(--radius) 0;
+.choice button {
+  min-width: 48px;
 }
 
 .controllers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(150px, 1fr));
+  gap: 6px;
+}
+
+.controller {
   display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+}
+
+.controller strong {
+  font-weight: 400;
+  color: var(--charge);
+}
+
+.setup-note {
+  max-width: 420px;
+  color: var(--dust);
+  text-align: center;
+}
+
+.check,
+.seed-field {
+  display: flex;
+  align-items: center;
   gap: 8px;
+}
+
+.check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--bone);
 }
 
 .seed {
-  width: 120px;
+  width: 130px;
+  padding: 3px 8px;
+  background: var(--panel);
+  border: 1px solid var(--edge);
+  border-radius: 2px;
 }
 
-.empty {
-  padding: 32px 0;
-  color: var(--muted);
+.start {
+  margin-top: 8px;
+  min-width: 300px;
+  padding: 10px 24px;
+  font-family: var(--banner);
+  font-size: 36px;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: #1d1912;
 }
 
 .error {
-  margin-top: 16px;
-  padding: 8px 12px;
-  border: 1px solid var(--live);
-  border-radius: var(--radius);
+  max-width: 520px;
   color: var(--live);
-  background: var(--panel);
 }
 
-.match {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  gap: 24px;
-  padding-top: 16px;
+/* MATCH */
+
+.game {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  background: radial-gradient(ellipse 70% 60% at 50% 55%, #2c2419 0%, #120f0a 55%, var(--room) 100%);
 }
 
-.table {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-width: 0;
+/* TABLE: positions are percentages of the square stage; the cloth spans 8% to 92%. */
+
+/* Tilted away from the viewer, as if seen from the near seat. */
+/* The table fills the room at any size. It is centred by its own size, not
+   by translate, so the tilt has only one transform to compose with. */
+.stage {
+  --line: rgb(222 204 168 / 0.72);
+  --cell: 7%;
+  --size: min(calc(100vw - 16px), calc((100dvh - 60px) * 1.08));
+  position: absolute;
+  left: calc(50% - var(--size) / 2);
+  top: calc(50% + 34px - var(--size) / 2);
+  width: var(--size);
+  height: var(--size);
+  transform: perspective(calc(var(--size) * 1.6)) rotateX(30deg);
+  transform-origin: 50% 60%;
 }
 
-.gun {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 16px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-
-.shells {
-  display: flex;
-  gap: 6px;
-  min-height: 40px;
-}
-
-.shell {
-  width: 16px;
-  height: 40px;
+.cloth {
+  position: absolute;
+  inset: 8%;
   border-radius: 3px;
-  border: 2px solid var(--blank);
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.035' numOctaves='3' seed='4'/%3E%3CfeColorMatrix values='0 0 0 0 0.12 0 0 0 0 0.1 0 0 0 0 0.05 0 0 0 0.55 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E"),
+    radial-gradient(ellipse at 50% 50%, #6e6b4c 0%, #57573a 40%, #3a3a27 78%, #2a2a1c 100%);
+  box-shadow:
+    inset 0 0 0 6px #3b3a2a,
+    inset 0 0 0 8px var(--line),
+    0 0 0 10px #1c1a14,
+    0 0 0 12px #2e2b22,
+    0 24px 60px rgb(0 0 0 / 0.6);
 }
 
-.shell.live {
-  background: var(--live);
-  border-color: var(--live);
+/* Ordered-dither grain over the table; the scanlines are the room's. */
+.stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Crect width='1' height='1' fill='%23000'/%3E%3Crect x='2' y='2' width='1' height='1' fill='%23000'/%3E%3Crect x='2' width='1' height='1' fill='%23fff' opacity='.4'/%3E%3C/svg%3E");
+  opacity: 0.32;
+  mix-blend-mode: multiply;
+  z-index: 6;
 }
 
-.muted {
-  color: var(--muted);
+.plate {
+  position: absolute;
+  left: 37%;
+  top: 37%;
+  width: 26%;
+  height: 26%;
+  border-radius: 50%;
+  background: radial-gradient(circle, #4f4d3b 0 55%, #3c3b2d 56% 62%, #4a4836 63% 100%);
+  box-shadow: inset 0 0 0 3px #2b2a20, inset 0 0 18px rgb(0 0 0 / 0.5), 0 3px 0 #1e1d16;
 }
 
-.seats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px;
+.plate-light {
+  position: absolute;
+  inset: 0;
 }
 
-.seat {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+.plate-light::before {
+  content: "";
+  position: absolute;
+  left: calc(50% - 2.5%);
+  top: 2%;
+  width: 5%;
+  height: 3%;
+  background: #6fbf58;
+  box-shadow: 0 0 6px #6fbf58;
+  opacity: 0.8;
 }
 
-.seat.acting {
-  border-color: var(--primary);
-  box-shadow: inset 0 0 0 1px var(--primary);
+.zone {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
 }
 
-.seat.viewer .seat-head h2 {
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.seat-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-}
-
-.controller-tag {
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.seat-stats {
-  display: flex;
-  gap: 24px;
-}
-
-.stat {
-  display: flex;
-  flex-direction: column;
-}
-
-.stat-label {
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.stat strong {
-  font-size: 22px;
-  font-variant-numeric: tabular-nums;
-}
-
-.stat strong.hidden-stat {
-  opacity: 0.35;
-}
-
-.seat.out {
-  opacity: 0.6;
-}
-
-.slots {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
-  gap: 4px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+.zone > * {
+  pointer-events: auto;
 }
 
 .slot {
-  min-height: 28px;
-  padding: 4px;
-  font-size: 12px;
-  text-align: center;
-  border: 1px dashed var(--border);
-  border-radius: 4px;
-  overflow-wrap: anywhere;
+  position: absolute;
+  width: var(--cell);
+  height: var(--cell);
+  padding: 0;
+  border: 1.5px solid var(--line);
+  border-radius: 2px;
+  background: rgb(0 0 0 / 0.08);
 }
 
+.slot-0 { left: 27.6%; top: 76.2%; }
+.slot-1 { left: 35.2%; top: 76.2%; }
+.slot-2 { left: 27.6%; top: 83.8%; }
+.slot-3 { left: 35.2%; top: 83.8%; }
+.slot-4 { left: 57.8%; top: 76.2%; }
+.slot-5 { left: 65.4%; top: 76.2%; }
+.slot-6 { left: 57.8%; top: 83.8%; }
+.slot-7 { left: 65.4%; top: 83.8%; }
+
+.item-icon {
+  position: absolute;
+  inset: 8%;
+  width: 84%;
+  height: 84%;
+  shape-rendering: crispEdges;
+  filter: drop-shadow(0 2px 0 rgb(0 0 0 / 0.55));
+}
+
+.hot {
+  cursor: pointer;
+}
+
+/* Items lie on the cloth; an empty slot shows only while you place an item. */
 .slot.filled {
-  border-style: solid;
-  background: var(--surface);
+  border-color: transparent;
+  background: none;
 }
 
-.briefcase,
-.status,
-.turn {
-  font-size: 13px;
+.slot.hot:not(.filled) {
+  background: rgb(244 234 210 / 0.06);
 }
 
-.turn {
-  color: var(--primary);
-  font-weight: 600;
+/* Under the pointer, a thing you can use lifts off the table. */
+.slot .item-icon,
+.briefcase {
+  transition: translate 140ms ease-out, filter 140ms ease-out;
 }
 
-.lower {
+.slot.hot:is(:hover, :focus-visible) .item-icon {
+  translate: 0 -8%;
+  filter: drop-shadow(0 7px 3px rgb(0 0 0 / 0.5));
+}
+
+.slot.hot:not(.filled):is(:hover, :focus-visible) {
+  background: rgb(244 234 210 / 0.16);
+}
+
+.briefcase.hot:is(:hover, :focus-visible) {
+  translate: 0 -2%;
+  filter: drop-shadow(0 8px 4px rgb(0 0 0 / 0.5));
+}
+
+.hot:focus-visible {
+  outline: 2px solid #f4ead2;
+  outline-offset: 2px;
+}
+
+/* One plain line above your items, on the open cloth toward the plate and
+   never over the defibrillator: the left group's captions run left from the
+   slot, the right group's run right, and neither is wider than the table's
+   margin beside the items. */
+.caption {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  width: max-content;
+  max-width: min(320px, calc(var(--size) * 0.27));
+  color: #f2e6c8;
+  font-size: 19px;
+  line-height: 1.1;
+  text-shadow: 0 0 3px #000, 0 2px 0 #000, 0 0 8px #000;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 8;
+}
+
+.slot-4 .caption,
+.slot-5 .caption,
+.slot-6 .caption,
+.slot-7 .caption {
+  right: auto;
+  left: 0;
+}
+
+.slot-2 .caption,
+.slot-3 .caption,
+.slot-6 .caption,
+.slot-7 .caption {
+  bottom: calc(209% + 6px);
+}
+
+.slot:hover > .caption,
+.slot:focus-visible > .caption {
+  opacity: 1;
+}
+
+.briefcase {
+  position: absolute;
+  left: 42.5%;
+  top: 60.5%;
+  width: 15%;
+  height: 16%;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: none;
+}
+
+.briefcase-lid {
+  position: absolute;
+  inset: 0 3% 62% 3%;
+  background: linear-gradient(#2e271c, #43392a);
+  border: 1px solid #1b160f;
+  border-radius: 3px 3px 0 0;
+}
+
+.briefcase-lid::after {
+  content: "";
+  position: absolute;
+  left: 40%;
+  right: 40%;
+  top: 18%;
+  height: 22%;
+  border: 2px solid #8a7046;
+  border-bottom: 0;
+  border-radius: 4px 4px 0 0;
+}
+
+.briefcase-tray::before,
+.briefcase-tray::after {
+  content: "";
+  position: absolute;
+  top: -5px;
+  width: 12%;
+  height: 5px;
+  background: #b08d4a;
+}
+
+.briefcase-tray::before { left: 14%; }
+.briefcase-tray::after { right: 14%; }
+
+.briefcase-tray {
+  position: absolute;
+  inset: 38% 0 0 0;
+  background: #0b0906;
+  border: 4px solid #4a3f2d;
+  border-radius: 2px;
+  box-shadow: 0 3px 0 #1b160f;
+}
+
+.briefcase-tray .item-icon {
+  inset: 6% 26%;
+  width: 48%;
+  height: 88%;
+  animation: lift-out 400ms ease-out;
+}
+
+@keyframes lift-out {
+  from { opacity: 0; translate: 0 30%; }
+}
+
+.counter {
+  position: absolute;
+  left: 42.6%;
+  top: 78.5%;
+  width: 14.8%;
+  height: 13%;
   display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-  gap: 12px;
+  place-items: center;
+  background: linear-gradient(#2c2b24, #1d1c17);
+  border: 1px solid #0e0d0a;
+  border-radius: 3px;
+  box-shadow: 0 3px 0 #0e0d0a;
 }
 
-.moves,
-.notes,
-.results {
+.counter.acting {
+  box-shadow: 0 0 0 2px #e9dcc0, 0 0 14px rgb(233 220 192 / 0.4);
+}
+
+.counter-face {
+  width: 88%;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 16px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  gap: 2px;
 }
 
-.move-list {
+.counter-screen {
+  height: max(18px, calc(var(--size) * 0.042));
+  display: flex;
+  align-items: center;
+  gap: 4%;
+  padding: 0 6%;
+  background: #050605;
+  border-top: 2px solid #8fbf7c;
+  border-bottom: 2px solid #8fbf7c;
+  overflow: hidden;
+}
+
+.bolt {
+  height: 80%;
+  aspect-ratio: 18 / 28;
+  color: var(--charge);
+  filter: drop-shadow(0 0 3px rgb(191 242 166 / 0.6));
+}
+
+.bolt.spent {
+  color: #1d2b1b;
+  filter: none;
+}
+
+.bolt-icon {
+  display: block;
+  width: 100%;
+  height: 100%;
+  shape-rendering: crispEdges;
+}
+
+.bolt.drain {
+  animation: drain 900ms steps(6, end) 450ms backwards;
+}
+
+@keyframes drain {
+  0%, 30%, 60% { color: #ff8a6a; filter: drop-shadow(0 0 4px #ff6040); }
+  15%, 45%, 80% { color: #1d2b1b; filter: none; }
+}
+
+.counter-static {
+  width: 100%;
+  text-align: center;
+  color: var(--charge);
+  font-size: max(12px, calc(var(--size) * 0.018));
+  text-transform: uppercase;
+  background: repeating-linear-gradient(90deg, rgb(191 242 166 / 0.18) 0 2px, transparent 2px 5px);
+}
+
+.counter-flat {
+  width: 100%;
+  height: 2px;
+  background: var(--charge);
+}
+
+.figure {
+  position: absolute;
+  left: 36%;
+  top: 93.6%;
+  width: 28%;
+  height: 8%;
+}
+
+.figure-shoulders {
+  position: absolute;
+  inset: 34% 0 -30% 0;
+  border-radius: 48% 48% 10% 10%;
+  background: radial-gradient(ellipse at 50% 0%, #3d352b, #1a1611 70%);
+  box-shadow: inset 0 2px 0 #4a4034;
+}
+
+.figure-head {
+  position: absolute;
+  left: 39%;
+  width: 22%;
+  top: -16%;
+  aspect-ratio: 1;
+  border-radius: 40% 40% 46% 46%;
+  background: radial-gradient(circle at 50% 28%, #6f6955, #3f3a2e 75%);
+  box-shadow: 0 4px 0 #120f0b, inset 0 -3px 0 #2a261e;
+}
+
+/* Two round lenses of a mask. */
+.figure-eyes {
+  position: absolute;
+  left: 18%;
+  right: 18%;
+  top: 22%;
+  height: 26%;
+  background:
+    radial-gradient(circle at 22% 50%, #090807 0 20%, #a39b80 21% 27%, transparent 28%),
+    radial-gradient(circle at 78% 50%, #090807 0 20%, #a39b80 21% 27%, transparent 28%);
+}
+
+.is-out .figure,
+.is-out .slot {
+  opacity: 0.45;
+}
+
+.seat-target {
+  position: absolute;
+  left: 39%;
+  top: 76.5%;
+  width: 22%;
+  height: 24%;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 4px;
+}
+
+/* Under the pointer a seat warms a little; the gun turns toward it. */
+.seat-target:hover {
+  background: radial-gradient(ellipse at 50% 40%, rgb(255 190 140 / 0.14), transparent 70%);
+}
+
+.seat-target:focus-visible {
+  outline: 2px solid #f4ead2;
+  outline-offset: 2px;
+}
+
+.ghost {
+  border-color: transparent;
+  background: none;
+  pointer-events: none;
+  animation: lift-away 900ms ease-in forwards;
+}
+
+@keyframes lift-away {
+  0% { opacity: 1; translate: 0 0; scale: 1; }
+  100% { opacity: 0; translate: 0 -90%; scale: 1.5; }
+}
+
+/* THE GUN */
+
+/* The pose (which side holds it, where it points) moves by transitions, from
+   wherever the gun is; a shot adds recoil, then settles the gun on the plate. */
+.gun-rig {
+  --turn-ms: 450ms;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transform: rotate(var(--holder, 0deg)) translateY(var(--hold, 0%));
+  transition: transform var(--turn-ms) ease-in-out;
+}
+
+.gun-rig.held,
+.gun-rig.fired-a,
+.gun-rig.fired-b {
+  --hold: 4%;
+}
+
+.gun-body,
+.gun-pick {
+  position: absolute;
+  left: 46.9%;
+  top: 38%;
+  width: 6.2%;
+  height: 24%;
+  rotate: var(--gun-turn, 45deg);
+  transition: rotate var(--turn-ms) ease-in-out;
+  filter: drop-shadow(0 6px 4px rgb(0 0 0 / 0.55));
+}
+
+.gun-pick {
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  filter: none;
+  z-index: 2;
+}
+
+.gun-rig.held .gun-body {
+  --gun-turn: 180deg;
+}
+
+.gun-rig.fired-a .gun-body,
+.gun-rig.fired-b .gun-body {
+  --gun-turn: var(--aim);
+}
+
+.stage:has(.seat-target[data-aim="0"]:is(:hover, :focus-visible)) .gun-rig.held .gun-body { --gun-turn: 0deg; }
+.stage:has(.seat-target[data-aim="1"]:is(:hover, :focus-visible)) .gun-rig.held .gun-body { --gun-turn: 90deg; }
+.stage:has(.seat-target[data-aim="2"]:is(:hover, :focus-visible)) .gun-rig.held .gun-body { --gun-turn: 180deg; }
+.stage:has(.seat-target[data-aim="3"]:is(:hover, :focus-visible)) .gun-rig.held .gun-body { --gun-turn: 270deg; }
+
+/* Under the pointer, the gun lifts off the plate. */
+.stage:has(.gun-pick:is(:hover, :focus-visible)) .gun-body {
+  translate: 0 -2%;
+  scale: 1.04;
+  filter: drop-shadow(0 14px 6px rgb(0 0 0 / 0.5));
+}
+
+.gun-pick:focus-visible {
+  outline: 2px solid #f4ead2;
+}
+
+.gun-icon {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  shape-rendering: crispEdges;
+}
+
+/* After the turn: the shot and its recoil, a held beat, then back to rest. */
+.gun-rig.fired-a { animation: settle-rig-a 500ms ease-in-out 1500ms forwards; }
+.gun-rig.fired-b { animation: settle-rig-b 500ms ease-in-out 1500ms forwards; }
+.gun-rig.fired-a .gun-body { animation: settle-gun-a 500ms ease-in-out 1500ms forwards; }
+.gun-rig.fired-b .gun-body { animation: settle-gun-b 500ms ease-in-out 1500ms forwards; }
+.gun-rig.fired-a .gun-icon { animation: recoil-a 420ms ease-out var(--turn-ms); }
+.gun-rig.fired-b .gun-icon { animation: recoil-b 420ms ease-out var(--turn-ms); }
+
+@keyframes settle-rig-a { to { transform: rotate(0deg) translateY(0%); } }
+@keyframes settle-rig-b { to { transform: rotate(0deg) translateY(0%); } }
+@keyframes settle-gun-a { to { rotate: 45deg; } }
+@keyframes settle-gun-b { to { rotate: 45deg; } }
+
+/* The muzzle is at the bottom of the drawing, so the kick is up it. */
+@keyframes recoil-a {
+  0% { translate: 0 0; }
+  12% { translate: 0 -9%; }
+  100% { translate: 0 0; }
+}
+
+@keyframes recoil-b {
+  0% { translate: 0 0; }
+  12% { translate: 0 -9%; }
+  100% { translate: 0 0; }
+}
+
+/* The muzzle flash sits where the muzzle is once the gun has turned. */
+.flash {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  transform: rotate(var(--aim)) translateY(100%);
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff6d8 0 18%, #ffb45a 32%, rgb(255 120 40 / 0) 70%);
+  opacity: 0;
+  animation: flash 420ms ease-out 450ms;
+  pointer-events: none;
+}
+
+@keyframes flash {
+  0% { opacity: 1; scale: 0.6; }
+  100% { opacity: 0; scale: 1.6; }
+}
+
+/* A new load: the live shells and the blank shells in two groups on the cloth
+   in front of the plate, long enough to count, then drawn into the gun. */
+.reveal {
+  position: absolute;
+  left: 50%;
+  top: 66%;
+  translate: -50% -50%;
+  display: flex;
+  gap: max(18px, calc(var(--size) * 0.04));
+  pointer-events: none;
+  opacity: 0;
+  animation: reveal 2600ms ease-in-out forwards;
+  z-index: 5;
+}
+
+.shell-group {
+  display: flex;
+  gap: max(3px, calc(var(--size) * 0.006));
+}
+
+.shell {
+  display: block;
+  width: max(14px, calc(var(--size) * 0.026));
+  aspect-ratio: 14 / 40;
+  position: relative;
+}
+
+.shell-icon {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 285%;
+  height: 35%;
+  translate: -50% -50%;
+  rotate: -90deg;
+  shape-rendering: crispEdges;
+  filter: drop-shadow(0 3px 1px rgb(0 0 0 / 0.6));
+}
+
+@keyframes reveal {
+  0% { opacity: 0; translate: -50% -40%; }
+  8%, 76% { opacity: 1; translate: -50% -50%; scale: 1; }
+  100% { opacity: 0; translate: -50% -230%; scale: 0.3; }
+}
+
+/* A racked shell flies out of the gun, lands beside the plate, and goes. */
+.eject {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  pointer-events: none;
+  opacity: 0;
+  animation: eject 1600ms ease-out forwards;
+  z-index: 5;
+}
+
+@keyframes eject {
+  0% { opacity: 1; translate: -50% -50%; rotate: 0deg; }
+  30% { opacity: 1; translate: 150% -160%; rotate: 220deg; }
+  45%, 80% { opacity: 1; translate: 260% -60%; rotate: 290deg; }
+  100% { opacity: 0; translate: 260% -60%; rotate: 290deg; }
+}
+
+.hurt {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 40%, rgb(170 20 10 / 0.55) 100%);
+  opacity: 0;
+  animation: hurt 700ms ease-out 500ms;
+  z-index: 9;
+}
+
+@keyframes hurt {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.banner {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  width: max-content;
+  max-width: calc(100% - 140px);
+  text-align: center;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.banner > * {
+  pointer-events: auto;
+}
+
+.banner-title {
+  font-family: var(--banner);
+  font-weight: 400;
+  font-size: 44px;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #f4ecd8;
+  -webkit-text-stroke: 1px #000;
+  text-shadow: 0 0 3px #000, 0 3px 0 #000;
+}
+
+.banner-title.is-mine {
+  color: #fff8e4;
+}
+
+.hint {
+  color: var(--bone);
+  text-shadow: 0 0 3px #000, 0 2px 0 #000;
+}
+
+.pass {
+  font-family: var(--banner);
+  font-size: 24px;
+  text-transform: uppercase;
+}
+
+.loose-moves {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  justify-content: center;
+  gap: 6px;
+  z-index: 2;
 }
 
-.move-list button {
-  border-color: var(--primary);
+/* A secret the viewer just learned, held long enough to read, then gone. */
+.secret {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  transform: translate(-50%, -50%);
+  width: max-content;
+  max-width: calc(100% - 24px);
+  font-family: var(--banner);
+  font-size: clamp(44px, 9vmin, 104px);
+  line-height: 1;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #f4ecd8;
+  text-shadow: 0 3px 0 rgb(0 0 0 / 0.75), 0 0 14px rgb(0 0 0 / 0.6);
+  pointer-events: none;
+  opacity: 0;
+  animation: secret max(1200ms, calc(2600ms * var(--pace, 1))) ease-out var(--wait, 0ms) forwards;
+  z-index: 4;
 }
 
-.bot-controls {
-  display: flex;
-  gap: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
+@keyframes secret {
+  0% { opacity: 0; }
+  10%, 82% { opacity: 1; }
+  100% { opacity: 0; visibility: hidden; }
 }
 
-.notes ul {
-  margin: 0;
-  padding-left: 18px;
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.round-over {
+  position: absolute;
+  top: 38%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  animation: round-over 4400ms ease-out forwards;
+  z-index: 3;
+}
+
+.round-over-title {
+  font-family: var(--banner);
+  font-size: clamp(64px, 11vw, 120px);
+  line-height: 0.95;
+  text-transform: uppercase;
+  color: #f4ecd8;
+  -webkit-text-stroke: 1px #000;
+  text-shadow: 0 4px 0 #000;
+}
+
+.round-over-prize {
+  font-family: var(--banner);
+  font-size: clamp(30px, 5vw, 46px);
+  text-transform: uppercase;
+  color: var(--charge);
+  text-shadow: 0 3px 0 #000;
+  animation: prize 4400ms ease-out forwards;
+}
+
+/* It waits for the last shot's labels to fade first. */
+@keyframes round-over {
+  0%, 27% { opacity: 0; }
+  32%, 85% { opacity: 1; }
+  100% { opacity: 0; visibility: hidden; }
+}
+
+@keyframes prize {
+  0%, 32% { opacity: 0; transform: translateY(10px); }
+  40% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 1; }
 }
 
 .results {
-  border-color: var(--primary);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -46%);
+  width: min(560px, calc(100% - 24px));
+  max-height: calc(100% - 120px);
+  overflow-y: auto;
+  padding: 16px 20px;
+  background: rgb(12 10 7 / 0.94);
+  border: 1px solid var(--edge);
+  z-index: 3;
 }
 
 .standings {
-  margin: 0;
-  padding-left: 20px;
-  font-variant-numeric: tabular-nums;
+  padding: 0;
+  list-style: none;
+  font-family: var(--banner);
+  font-size: 30px;
+  text-transform: uppercase;
+}
+
+.standings li {
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid #2c271e;
+}
+
+.standings li:first-child {
+  color: var(--charge);
+}
+
+.standings strong {
+  font-weight: 400;
+}
+
+.awards {
+  margin-top: 14px;
+  color: var(--dust);
+}
+
+.awards summary {
+  cursor: pointer;
+  width: max-content;
 }
 
 .titles {
   display: grid;
   grid-template-columns: max-content 1fr;
-  gap: 4px 16px;
-  margin: 0;
+  gap: 2px 14px;
+  margin-top: 12px;
+  font-size: 18px;
 }
 
 .titles dt {
-  font-weight: 600;
+  color: var(--dust);
 }
 
-.titles dd {
-  margin: 0;
+.results-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
 }
 
-.log {
+/* MENU */
+
+.menu {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 4;
+  max-width: min(380px, calc(100% - 24px));
+}
+
+.menu summary {
+  margin-left: auto;
+  width: max-content;
+  padding: 2px 12px;
+  list-style: none;
+  cursor: pointer;
+  background: rgb(20 17 12 / 0.85);
+  border: 1px solid var(--edge);
+}
+
+.menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.menu-body {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: calc(100vh - 120px);
-  position: sticky;
-  top: 16px;
+  margin-top: 6px;
+  padding: 10px 12px;
+  background: rgb(12 10 7 / 0.95);
+  border: 1px solid var(--edge);
 }
 
-.log-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
+.menu-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.menu-row > span {
+  min-width: 48px;
+  color: var(--dust);
+}
+
+.menu-seats {
+  color: var(--dust);
+  font-size: 18px;
+}
+
+.log {
+  max-height: 40vh;
   overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--panel);
+  padding: 6px 0 0 0;
+  list-style: none;
+  border-top: 1px solid #2c271e;
+  font-size: 18px;
+  color: #cbbfa3;
 }
 
-.event {
-  padding: 6px 12px;
-  border-bottom: 1px solid var(--bg);
-  font-size: 14px;
+.log li + li {
+  margin-top: 2px;
 }
 
-.event.headline {
-  font-weight: 600;
-}
-
-@media (max-width: 900px) {
-  .match,
-  .lower {
-    grid-template-columns: 1fr;
+@media (max-width: 600px) {
+  /* A phone has no room beside the items, so your item's caption spans both
+     groups above them; other players' items go without. */
+  .caption {
+    width: 640%;
+    max-width: none;
+    right: auto;
+    text-align: center;
   }
 
-  .log {
-    position: static;
-    max-height: 400px;
+  .slot-0 .caption,
+  .slot-2 .caption { left: 0; }
+  .slot-1 .caption,
+  .slot-3 .caption { left: -108.6%; }
+  .slot-4 .caption,
+  .slot-6 .caption { left: -431.4%; }
+  .slot-5 .caption,
+  .slot-7 .caption { left: -540%; }
+
+  .zone:not(.pos-0) .caption {
+    display: none;
+  }
+
+  .stage {
+    --size: min(calc(100vw - 4px), calc(100dvh - 120px));
+    top: calc(50% - var(--size) / 2);
+    transform: perspective(calc(var(--size) * 2.4)) rotateX(14deg);
+  }
+
+  /* With two seats the table's sides are empty, so a tall screen crops them
+     and the seats' things grow. */
+  .stage[data-seats="2"] {
+    --size: min(calc((100vw - 8px) / 0.58), calc(100dvh - 120px));
+  }
+
+  .banner {
+    top: 52px;
+    max-width: calc(100% - 16px);
+  }
+
+  .banner-title {
+    font-size: 34px;
+  }
+
+  .hint {
+    font-size: 18px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  * {
-    transition: none !important;
+  .gun-rig,
+  .gun-body,
+  .slot .item-icon,
+  .briefcase {
+    transition: none;
   }
+
+  /* The gun jumps between poses: aiming, then back on the plate after the beat. */
+  .gun-rig.fired-a,
+  .gun-rig.fired-b,
+  .gun-rig.fired-a .gun-body,
+  .gun-rig.fired-b .gun-body {
+    animation-timing-function: steps(1, end);
+  }
+
+  .gun-rig.fired-a .gun-icon,
+  .gun-rig.fired-b .gun-icon,
+  .flash,
+  .hurt,
+  .ghost,
+  .briefcase-tray .item-icon {
+    animation: none;
+  }
+
+  .bolt.drain {
+    animation: none;
+  }
+
+  .reveal,
+  .eject,
+  .secret {
+    animation-name: appear;
+    animation-timing-function: steps(1, end);
+  }
+
+  .round-over {
+    animation-timing-function: steps(1, end);
+  }
+
+  .round-over-prize {
+    animation: none;
+  }
+
+  .phase-beat,
+  .phase-after {
+    animation-timing-function: steps(1, end);
+  }
+
+  button {
+    transition: none;
+  }
+}
+
+@keyframes appear {
+  0%, 99% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* The heading's phase waits behind "Round over" for the round-over beat. */
+.phase {
+  display: inline-grid;
+}
+
+.phase > * {
+  grid-area: 1 / 1;
+}
+
+.phase-beat {
+  animation: phase-beat 4400ms forwards;
+}
+
+.phase-after {
+  opacity: 0;
+  animation: phase-after 4400ms forwards;
+}
+
+@keyframes phase-beat {
+  0%, 85% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+@keyframes phase-after {
+  0%, 85% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* Descriptions are for pointers that hover, and step aside for the round-over beat. */
+@media (hover: none) {
+  .caption {
+    display: none;
+  }
+}
+
+.app:has(.round-over) .caption {
+  display: none;
 }
