@@ -80,6 +80,15 @@ export const eventText = (roster: Roster, event: GameEvent): string =>
     MatchConcluded: () => "The match is over.",
   });
 
+/** A secret as the table announces it, in a few words. */
+export const secretShout = (secret: Secret): string =>
+  Secret.match(secret, {
+    Glimpse: ({ shell }) => `Chambered . . . ${shell}`,
+    Clue: ({ position, shell }) => `Shell ${position + 1} . . . ${shell}`,
+    NoClue: () => "No clue",
+    EmptyBriefcase: () => "Briefcase empty",
+  });
+
 export const secretText = (secret: Secret): string =>
   Secret.match(secret, {
     Glimpse: ({ shell }) => `The chambered shell is ${shell.toLowerCase()}.`,

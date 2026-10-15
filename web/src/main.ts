@@ -6,7 +6,7 @@ import { AgentCall, AgentReply, type MatchSession, runTool } from "./agent/tools
 import type { AnswerError, Game } from "./bend.ts";
 import { GameEvent, type Seat, SEATS_BY_TABLE, type SeatCount } from "./domain.ts";
 import { aiPrompt, aiStep, begin, type Controller, controllerOf, isAi, play, type Progress } from "./driver.ts";
-import { Message, type Model, type Session, type Speed, type Viewer } from "./model.ts";
+import { Message, type Model, type Session, SPEED_FACTOR, type Viewer } from "./model.ts";
 import { rosterOf } from "./players.ts";
 import { seedRng } from "./rng.ts";
 import { describeError } from "./text.ts";
@@ -27,6 +27,7 @@ const withProgress = (match: Session, progress: Progress): Session => ({
   rng: progress.rng,
   events: progress.events,
   stepStart: match.events.length,
+  learnedStart: match.learned.length,
   learned: progress.learned,
   ais: progress.ais,
   isAutoplay: match.isAutoplay && canAiMoveAgain(progress.game, match.controllers),
@@ -82,6 +83,7 @@ const startMatch = (model: Model): Return => {
           Option.some({
             ...progress,
             stepStart: 0,
+            learnedStart: 0,
             controllers,
             viewer: Option.getOrElse(
               Arr.findFirst(SEATS_BY_TABLE[table], (seat) => controllerOf(controllers, seat) === "Human"),
@@ -182,7 +184,7 @@ const pauseAfter = (event: GameEvent): number =>
     {
       Loaded: () => 2600,
       RoundWon: () => 4400,
-      Fired: () => 1500,
+      Fired: () => 2200,
       Used: () => 1000,
       Ejected: () => 1000,
       Inverted: () => 900,
@@ -196,8 +198,6 @@ const pauseAfter = (event: GameEvent): number =>
   );
 
 const pauseAfterStep = (match: Session): number => Math.max(0, ...match.events.slice(match.stepStart).map(pauseAfter));
-
-const SPEED_FACTOR: Readonly<Record<Speed, number>> = { Slow: 1.6, Normal: 1, Fast: 0.12 };
 
 export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
   agent: Port.subscriptionEntry(ports.inbound.agentCalled, ({ id, call }) => Message.AgentCalled({ id, call })),

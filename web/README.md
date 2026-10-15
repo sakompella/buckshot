@@ -27,19 +27,24 @@ Checks:
 
 ## Playing
 
-The setup screen picks the number of players, each seat's controller, items
+The setup screen picks the number of players, each player's controller, items
 and the seed. In a match the banner says whose view it is and the phase
-(Your turn, Grab items, Watch, Match over). Each of the viewer's legal moves is
-a dashed outline on the thing it acts on:
+(Your turn, Grab items, Watch, Round over, Match over). Everything else is on
+the table: health is the bolts on each defibrillator, a new load is its shells
+set out in a live group and a blank group, a shot is the gun turning, its
+flash and recoil and the bolts going dark, and a private result (glass, phone)
+shows big in the middle for a moment, only to the player who learned it. Each
+of the viewer's legal moves is played by clicking the thing it acts on, which
+lifts under the pointer; the moves are buttons, so Tab and Enter play them too:
 
 | Move | Click |
 |---|---|
 | Grab | your open briefcase |
-| Place | an empty slot on your side |
+| Place | an empty slot on your side (shown only while placing) |
 | Pick up | the shotgun |
-| Shoot, Jam | a seat's counter |
+| Shoot, Jam | a player's defibrillator (your own to shoot yourself) |
 | Use an item | the item on your side |
-| Steal (adrenaline) | the item on another seat's side |
+| Steal (adrenaline) | the item on another player's side |
 
 `src/board.ts` maps each move to its target. Moves that would share a target
 get plain buttons instead; the tests check that every legal move of many bot

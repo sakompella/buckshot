@@ -1,10 +1,11 @@
-import { chromium, type Page } from "playwright-core";
+import { chromium, firefox, type Page } from "playwright-core";
 
 // Drives the running dev server in headless Chrome: one human-vs-DoN match
 // with items, played by clicking the things on the table (the shotgun, the
 // seats, the item slots, the briefcase), then one 4-seat all-bot match with
 // items on fast autoplay.
 // Usage: bun run dev (elsewhere), then bun scripts/play.ts [url] [outdir]
+// BROWSER=firefox uses Playwright's Firefox (FIREFOX=path to its binary if it is not the installed revision).
 
 const url = process.argv[2] ?? "http://localhost:5173/";
 
@@ -17,7 +18,10 @@ const CLICK_LIMIT = 2_000;
 /** Polls without a click before the script gives up: the bots should move well within this. */
 const IDLE_LIMIT = 400;
 
-const browser = await chromium.launch({ executablePath: chrome, headless: true });
+const browser =
+  process.env["BROWSER"] === "firefox"
+    ? await firefox.launch({ executablePath: process.env["FIREFOX"] ?? firefox.executablePath(), headless: true })
+    : await chromium.launch({ executablePath: chrome, headless: true });
 
 const page = await browser.newPage({ viewport: { width: 1360, height: 900 } });
 

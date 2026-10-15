@@ -2,11 +2,11 @@ import { Array as Arr, Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { type BoardMove, boardMoves, type Position, positionOf, Target, targetKey, viewerPrompt } from "./board.ts";
-import { Briefcase, Counter, GameEvent, type Load, type Seat, type SeatView, seatsOut, type Shell, Slot, Stage } from "./domain.ts";
+import { Briefcase, Counter, GameEvent, type Item, type Seat, type SeatView, seatsOut, type Shell, Slot, Stage } from "./domain.ts";
 import { boltIcon, gunIcon, itemIcon, shellIcon } from "./icons.ts";
 import { latestStep, Message, type Session, type StepEvent } from "./model.ts";
-import { itemName, itemNote } from "./text.ts";
 import { rosterOf } from "./players.ts";
+import { itemName, itemNote } from "./text.ts";
 
 // The table from above. Each seat's things sit in a layer turned to face its
 // edge, so one layout serves all four sides. The viewer's legal moves are
@@ -32,16 +32,20 @@ const effectKey = (table: Table, name: string, index: number): string => `${tabl
 
 const moveAt = (table: Table, target: Target): Option.Option<BoardMove> => Option.fromNullishOr(table.moves.get(targetKey(target)));
 
-const tip = (h: H, label: string, note: string): Html => h.span([h.Class("tip")], [label, note === "" ? h.empty : h.span([h.Class("tip-note")], [note])]);
+/** An item's one-line caption, shown while the pointer is on it, turned to read upright. */
+const captionOf = (h: H, item: Item, position: Position): Html => {
+  const name = itemName(item);
+
+  return h.span([h.Class("caption"), h.Style({ rotate: `-${turn(position)}` }), h.AriaHidden(true)], [`${name.charAt(0).toUpperCase()}${name.slice(1)}. ${itemNote(item)}`]);
+};
 
 /** A thing on the table: a button while a legal move is played on it, plain otherwise. */
-const thing = (h: H, table: Table, target: Target, className: string, children: ReadonlyArray<Html>, note = ""): Html =>
+const thing = (h: H, table: Table, target: Target, className: string, children: ReadonlyArray<Html>): Html =>
   Option.match(
     Option.flatMap(moveAt(table, target), (move) => Option.map(table.toMessage(move), (message) => ({ move, message }))),
     {
       onNone: () => h.div([h.Class(className)], children),
-      onSome: ({ move, message }) =>
-        h.button([h.Type("button"), h.Class(`${className} hot`), h.AriaLabel(move.label), h.OnClick(message)], [...children, tip(h, move.label, note)]),
+      onSome: ({ move, message }) => h.button([h.Type("button"), h.Class(`${className} hot`), h.AriaLabel(move.label), h.OnClick(message)], children),
     },
   );
 
@@ -86,19 +90,14 @@ const counterView = (h: H, table: Table, view: SeatView, position: Position, isA
   );
 };
 
-const slotView = (h: H, table: Table, view: SeatView, slot: Slot): Html => {
+/** An empty slot shows only while it is somewhere to place an item. */
+const slotView = (h: H, table: Table, view: SeatView, slot: Slot, position: Position): Html => {
   const target = Target.cases.Slot.make({ seat: view.seat, slot });
-  const item = Option.flatten(Arr.get(view.slots, slot));
-  const isMove = Option.isSome(moveAt(table, target));
 
-  return thing(
-    h,
-    table,
-    target,
-    `slot slot-${slot}`,
-    Option.match(item, { onNone: () => [], onSome: (shown) => [itemIcon(shown), isMove ? h.empty : tip(h, itemName(shown), itemNote(shown))] }),
-    Option.match(item, { onNone: () => "", onSome: itemNote }),
-  );
+  return Option.match(Option.flatten(Arr.get(view.slots, slot)), {
+    onNone: () => (Option.isSome(moveAt(table, target)) ? thing(h, table, target, `slot slot-${slot}`, []) : h.empty),
+    onSome: (item) => thing(h, table, target, `slot slot-${slot} filled`, [itemIcon(item), captionOf(h, item, position)]),
+  });
 };
 
 const briefcaseView = (h: H, table: Table, view: SeatView): Html =>
@@ -111,29 +110,6 @@ const briefcaseView = (h: H, table: Table, view: SeatView): Html =>
 
 const figureView = (h: H): Html =>
   h.div([h.Class("figure")], [h.span([h.Class("figure-shoulders")], []), h.span([h.Class("figure-head")], [h.span([h.Class("figure-eyes")], [])])]);
-
-/** Words that rise over a seat's counter for one event. */
-const floatText = (event: GameEvent, seat: Seat): Option.Option<readonly [string, string]> =>
-  GameEvent.matchOrElse(
-    event,
-    {
-      Fired: ({ target, shell, applied }) => (target === seat ? Option.some(shell === "Live" ? ([`Live −${applied}`, "live"] as const) : (["Blank", "blank"] as const)) : Option.none()),
-      Healed: ({ seat: healed }) => (healed === seat ? Option.some(["+1", "good"] as const) : Option.none()),
-      JamApplied: ({ target }) => (target === seat ? Option.some(["Jammed", ""] as const) : Option.none()),
-      TurnSkipped: ({ seat: skipped }) => (skipped === seat ? Option.some(["Skipped", ""] as const) : Option.none()),
-      Died: ({ seat: died }) => (died === seat ? Option.some(["Out", "live late"] as const) : Option.none()),
-      Used: ({ seat: user, owner, item }) => (user === seat ? Option.some([user === owner ? itemName(item) : `${itemName(item)}, taken`, "item"] as const) : Option.none()),
-    },
-    () => Option.none(),
-  );
-
-const seatEffects = (h: H, table: Table, seat: Seat, position: Position): ReadonlyArray<Html> =>
-  table.recent.flatMap(({ index, event }) =>
-    Option.match(floatText(event, seat), {
-      onNone: () => [],
-      onSome: ([text, tone]) => [h.keyed("p")(effectKey(table, `float-${seat}`, index), [h.Class(`float ${tone}`), h.Style({ rotate: `-${turn(position)}` }), h.AriaHidden(true)], [text])],
-    }),
-  );
 
 /** The item a seat just used, lifting off its slot. */
 const usedGhost = (h: H, table: Table, seat: Seat): Html =>
@@ -154,7 +130,7 @@ const zoneView = (h: H, table: Table, view: SeatView, position: Position): Html 
     [h.Class(`zone pos-${position}${isOut ? " is-out" : ""}`), h.Style({ rotate: turn(position) }), h.DataAttribute("pos", `${position}`)],
     [
       position === 0 ? h.empty : figureView(h),
-      ...Slot.literals.map((slot) => slotView(h, table, view, slot)),
+      ...Slot.literals.map((slot) => slotView(h, table, view, slot, position)),
       usedGhost(h, table, view.seat),
       briefcaseView(h, table, view),
       counterView(h, table, view, position, isActing),
@@ -166,23 +142,20 @@ const zoneView = (h: H, table: Table, view: SeatView, position: Position): Html 
             onSome: (message) =>
               h.button(
                 [h.Type("button"), h.Class("seat-target hot"), h.AriaLabel(move.label), h.DataAttribute("aim", `${position}`), h.OnClick(message)],
-                [h.span([h.Class("tip"), h.Style({ rotate: `-${turn(position)}` })], [move.label])],
+                [],
               ),
           }),
       }),
-      ...seatEffects(h, table, view.seat, position),
     ],
   );
 };
 
 // GUN
 
-const shellsRow = (h: H, load: Load): ReadonlyArray<Html> => [
-  ...Arr.makeBy(load.live, (): Shell => "Live"),
-  ...Arr.makeBy(load.blank, (): Shell => "Blank"),
-].map((shell) => h.span([h.Class("shell")], [shellIcon(shell)]));
+const shellGroup = (h: H, count: number, shell: Shell): Html =>
+  h.div([h.Class("shell-group")], Arr.makeBy(count, () => h.span([h.Class("shell")], [shellIcon(shell)])));
 
-/** The shells of the newest load, laid out for a moment and then gone into the gun. */
+/** The shells of the newest load, set out on the cloth in a live group and a blank group long enough to count, then gone into the gun. */
 const revealView = (h: H, table: Table): Html =>
   Option.match(lastOf(table, GameEvent.guards.Loaded), {
     onNone: () => h.empty,
@@ -190,10 +163,7 @@ const revealView = (h: H, table: Table): Html =>
       h.keyed("div")(
         effectKey(table, "reveal", index),
         [h.Class("reveal"), h.AriaHidden(true)],
-        [
-          h.p([h.Class("reveal-count")], [h.span([h.Class("live")], [`${event.load.live} live`]), " · ", h.span([h.Class("blank")], [`${event.load.blank} blank`])]),
-          h.div([h.Class("reveal-shells")], shellsRow(h, event.load)),
-        ],
+        [shellGroup(h, event.load.live, "Live"), shellGroup(h, event.load.blank, "Blank")],
       ),
   });
 
@@ -201,29 +171,17 @@ const ejectView = (h: H, table: Table): Html =>
   Option.match(lastOf(table, GameEvent.guards.Ejected), {
     onNone: () => h.empty,
     onSome: ({ index, event }) =>
-      h.keyed("div")(effectKey(table, "eject", index), [h.Class(`eject ${event.shell === "Live" ? "live" : "blank"}`), h.AriaHidden(true)], [
+      h.keyed("div")(effectKey(table, "eject", index), [h.Class("eject"), h.Role("img"), h.AriaLabel(`Racked out a ${event.shell === "Live" ? "live" : "blank"} shell`)], [
         h.span([h.Class("shell")], [shellIcon(event.shell)]),
-        h.p([h.Class("eject-text")], [event.shell === "Live" ? "Live" : "Blank"]),
       ]),
   });
 
-const centreText = (h: H, table: Table): ReadonlyArray<Html> =>
-  table.recent.flatMap(({ index, event }) =>
-    GameEvent.matchOrElse(
-      event,
-      {
-        Inverted: () => [h.keyed("p")(effectKey(table, "centre", index), [h.Class("float centre")], ["Inverted"])],
-        DirectionFlipped: () => [h.keyed("p")(effectKey(table, "centre", index), [h.Class("float centre")], ["Order reversed"])],
-      },
-      () => [],
-    ),
-  );
-
 /**
  * The gun lies across the plate. A seat aiming holds it on its side of the
- * plate, turned toward the seat under the pointer; after a shot it shows the
- * shooter's aim and recoil for a moment, then goes back to rest. A new shot
- * restarts the animation by switching between two copies of its keyframes.
+ * plate, turned toward the seat under the pointer. On a shot it turns from
+ * wherever it is to the target (a CSS transition, so a bot's shot turns as
+ * smoothly as a human's), fires and recoils, holds, then settles back on the
+ * plate. A new shot restarts the keyframes by switching between two copies.
  */
 const gunView = (h: H, table: Table): ReadonlyArray<Html> => {
   const { board } = table.match.game;
@@ -231,12 +189,15 @@ const gunView = (h: H, table: Table): ReadonlyArray<Html> => {
   const shot = lastOf(table, GameEvent.guards.Fired);
   const position = (seat: Seat): Position => positionOf(table.match, seat);
 
+  // The right-hand seat holds it at -90deg, so the gun never swings the long way round.
+  const holder = (seat: Seat): string => `${position(seat) === 3 ? -90 : position(seat) * 90}deg`;
+
   const rigStyle = Option.match(aimer, {
-    onSome: (seat) => ({ "--holder": turn(position(seat)) }),
+    onSome: (seat) => ({ "--holder": holder(seat) }),
     onNone: () =>
       Option.match(shot, {
         onNone: () => ({}),
-        onSome: ({ event }) => ({ "--holder": turn(position(event.shooter)), "--aim": `${((position(event.target) - position(event.shooter) + 4) % 4) * 90}deg` }),
+        onSome: ({ event }) => ({ "--holder": holder(event.shooter), "--aim": `${((position(event.target) - position(event.shooter) + 4) % 4) * 90}deg` }),
       }),
   });
 
@@ -262,7 +223,7 @@ const plateView = (h: H, table: Table): Html => {
     [h.Class("plate")],
     [
       ...Arr.makeBy(12, (light) => h.span([h.Class("plate-light"), h.Style({ rotate: `${light * 30}deg` })], [])),
-      h.p([h.Class("plate-count"), h.AriaLabel(`${gun.remaining} shells in the gun; last load ${gun.shown.live} live, ${gun.shown.blank} blank`)], [`${gun.remaining}`]),
+      h.p([h.Class("sr-only")], [`${gun.remaining} shells in the gun; last load ${gun.shown.live} live, ${gun.shown.blank} blank.`]),
     ],
   );
 };
@@ -305,7 +266,6 @@ export const tableView = (h: H, match: Session, matchNumber: number): Html => {
       revealView(h, table),
       ejectView(h, table),
       ...gunView(h, table),
-      ...centreText(h, table),
     ],
   );
 };

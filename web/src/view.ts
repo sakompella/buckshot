@@ -2,18 +2,23 @@ import { Array as Arr, Option } from "effect";
 import type { Document, Html, HtmlBuilder } from "foldkit/html";
 
 import type { Prompt } from "./bend.ts";
-import { GameEvent, Move, type Seat, SEATS_BY_TABLE, Stage } from "./domain.ts";
+import { GameEvent, Move, type Seat, SEATS_BY_TABLE } from "./domain.ts";
 import { aiPrompt, controllerOf, promptsOf } from "./driver.ts";
-import { latestStep, Message, type Model, type Session, type Speed, type Viewer } from "./model.ts";
+import { latestLearned, latestStep, Message, type Model, type Session, type Speed, SPEED_FACTOR, type Viewer } from "./model.ts";
 import { rosterOf } from "./players.ts";
 import { boardMoves, viewerPrompt } from "./board.ts";
 import { hurtView, tableView } from "./board-view.ts";
-import { eventText, secretText } from "./text.ts";
+import { eventText, secretShout, secretText } from "./text.ts";
 import { titles } from "./titles.ts";
 
 type H = HtmlBuilder<Message>;
 
 const cash = (amount: number): string => `$${amount.toLocaleString("en-US")}`;
+
+/** The round-over beat and the load reveal, as long as their CSS animations. */
+const ROUND_OVER_MS = 4400;
+
+const REVEAL_MS = 2600;
 
 // SETUP
 
@@ -67,28 +72,10 @@ const setupView = (h: H, model: Model): Html => {
 
 const isGrabbing = (prompt: Prompt): boolean => prompt.menu.some((move) => Move.guards.Grab(move) || Move.guards.Place(move));
 
-// The hint follows the kinds of move on offer, so it never claims a move the machine does not offer.
-const promptHint = (prompt: Prompt): string =>
-  prompt.menu.some(Move.guards.Grab)
-    ? "Open the briefcase."
-    : prompt.menu.some(Move.guards.Place)
-      ? "Put the item in an empty slot on your side."
-      : prompt.menu.some(Move.guards.Shoot)
-        ? "Choose who to shoot."
-        : prompt.menu.some(Move.guards.JamTarget)
-          ? "Choose who to jam."
-          : prompt.menu.some(Move.guards.Steal)
-            ? "Take an item from another seat."
-            : "Pick up the shotgun, or use an item.";
-
-const watchHint = (match: Session): string =>
-  Stage.match(match.game.board.stage, {
-    Playing: ({ seat }) => (seat === match.viewer ? "Your turn." : `${nameIn(match, seat)}'s turn.`),
-    Distributing: () => "Grabbing items.",
-    Loading: () => "Loading the shotgun.",
-    Setup: () => "",
-    MatchOver: () => "",
-  });
+/** Shown while aiming until the viewer has shot themselves once this match: the one move the table does not make obvious. */
+const selfShotCue = (match: Session, prompt: Prompt): boolean =>
+  prompt.menu.some((move) => Move.guards.Shoot(move) && move.target === prompt.seat) &&
+  !match.events.some((event) => GameEvent.guards.Fired(event) && event.shooter === prompt.seat && event.target === prompt.seat);
 
 const nameIn = (match: Session, seat: Seat): string => rosterOf(match.game.seats).nameOf(seat);
 
@@ -101,7 +88,7 @@ const bannerView = (h: H, model: Model, match: Session): Html => {
   const agents = prompts.filter((other) => controllerOf(match.controllers, other.seat) === "Agent").map(({ seat }) => seat);
   const isOver = match.game.pending.kind === "Finished";
   const phase = isOver ? "Match over" : Option.match(prompt, { onNone: () => "Watch", onSome: (mine) => (isGrabbing(mine) ? "Grab items" : "Your turn") });
-  const hint = isOver ? "" : Option.match(prompt, { onNone: () => watchHint(match), onSome: promptHint });
+  const isCued = Option.exists(prompt, (mine) => selfShotCue(match, mine));
 
   return h.header(
     [h.Class("banner"), h.AriaLive("polite")],
@@ -117,7 +104,7 @@ const bannerView = (h: H, model: Model, match: Session): Html => {
           ],
         }),
       ),
-      hint === "" ? h.empty : h.p([h.Class("hint")], [hint]),
+      isCued ? h.p([h.Class("hint")], ["To shoot yourself, click your own defibrillator."]) : h.empty,
       ...agents.map((seat) => h.p([h.Class("hint")], [`Waiting for the agent at ${nameIn(match, seat)}.`])),
       ...otherHumans.map((seat) => h.button([h.Type("button"), h.Class("pass"), h.OnClick(Message.SelectedViewer({ viewer: seat }))], [`Take ${nameIn(match, seat)}`])),
       Option.match(model.maybeError, { onNone: () => h.empty, onSome: (error) => h.p([h.Class("error"), h.Role("alert")], [error]) }),
@@ -143,18 +130,28 @@ const looseMovesView = (h: H, match: Session): Html =>
     },
   });
 
-const NOTES_SHOWN = 3;
+/**
+ * The latest secret the viewer learned, big in the middle of the screen for a
+ * moment. It waits for a round-over or a load reveal in the same step, so the
+ * two never cover each other.
+ */
+const secretView = (h: H, match: Session): Html =>
+  Option.match(
+    Arr.findLast(latestLearned(match), ({ learned }) => learned.seat === match.viewer),
+    {
+      onNone: () => h.empty,
+      onSome: ({ index, learned }) => {
+        const step = latestStep(match).map(({ event }) => event);
+        const waitMs = (step.some(GameEvent.guards.RoundWon) ? ROUND_OVER_MS : 0) + (step.some(GameEvent.guards.Loaded) ? REVEAL_MS : 0);
 
-const notesView = (h: H, match: Session): Html => {
-  const mine = match.learned.filter(({ seat }) => seat === match.viewer).slice(-NOTES_SHOWN);
-
-  return mine.length === 0
-    ? h.empty
-    : h.aside(
-        [h.Class("notes"), h.AriaLabel(`Private notes for ${viewerName(match)}`)],
-        [h.ul([], mine.map(({ secret }, index) => h.keyed("li")(`${match.learned.length}-${index}`, [], [secretText(secret)])))],
-      );
-};
+        return h.keyed("p")(
+          `secret-${index}`,
+          [h.Class("secret"), h.Role("status"), h.AriaLabel(secretText(learned.secret)), h.Style({ "--wait": `${waitMs}ms` })],
+          [secretShout(learned.secret)],
+        );
+      },
+    },
+  );
 
 /** The round the latest step ended, if any: the table and the heading show it for one beat. */
 const roundJustWon = (match: Session): Option.Option<{ readonly index: number; readonly seat: Seat; readonly prize: number }> =>
@@ -259,7 +256,7 @@ const matchView = (h: H, model: Model, match: Session): Html => {
       hurtView(h, match, model.matchCount),
       match.game.pending.kind === "Stuck" ? h.p([h.Class("error")], ["The machine is stuck: no seat has a legal move."]) : h.empty,
       looseMovesView(h, match),
-      notesView(h, match),
+      secretView(h, match),
       roundOverView(h, match),
       isOver ? resultsView(h, match) : h.empty,
       menuView(h, model, match),
@@ -270,7 +267,7 @@ const matchView = (h: H, model: Model, match: Session): Html => {
 export const view = (model: Model, h: H): Document => ({
   title: "Buckshot table",
   body: h.main(
-    [h.Class("app")],
+    [h.Class("app"), h.Style({ "--pace": `${SPEED_FACTOR[model.speed]}` })],
     [Option.match(model.maybeMatch, { onNone: () => setupView(h, model), onSome: (match) => matchView(h, model, match) })],
   ),
 });

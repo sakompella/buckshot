@@ -233,9 +233,6 @@ summary:focus-visible {
   inset: 8%;
   border-radius: 3px;
   background:
-    linear-gradient(45deg, transparent calc(50% - 1px), var(--line) 50%, transparent calc(50% + 1px)),
-    linear-gradient(-45deg, transparent calc(50% - 1px), var(--line) 50%, transparent calc(50% + 1px)),
-    radial-gradient(circle at 50% 50%, transparent 21%, var(--line) 21.2%, transparent 21.5%, transparent 24%, var(--line) 24.2%, transparent 24.5%),
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.035' numOctaves='3' seed='4'/%3E%3CfeColorMatrix values='0 0 0 0 0.12 0 0 0 0 0.1 0 0 0 0 0.05 0 0 0 0.55 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E"),
     radial-gradient(ellipse at 50% 50%, #6e6b4c 0%, #57573a 40%, #3a3a27 78%, #2a2a1c 100%);
   box-shadow:
@@ -246,14 +243,13 @@ summary:focus-visible {
     0 24px 60px rgb(0 0 0 / 0.6);
 }
 
-/* Ordered-dither grain and scanlines over the table. */
+/* Ordered-dither grain over the table; the scanlines are the room's. */
 .stage::after {
   content: "";
   position: absolute;
   inset: 0;
   pointer-events: none;
   background:
-    repeating-linear-gradient(0deg, rgb(0 0 0 / 0.14) 0 1px, transparent 1px 3px),
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='4' height='4'%3E%3Crect width='1' height='1' fill='%23000'/%3E%3Crect x='2' y='2' width='1' height='1' fill='%23000'/%3E%3Crect x='2' width='1' height='1' fill='%23fff' opacity='.4'/%3E%3C/svg%3E");
   opacity: 0.32;
   mix-blend-mode: multiply;
@@ -286,21 +282,6 @@ summary:focus-visible {
   background: #6fbf58;
   box-shadow: 0 0 6px #6fbf58;
   opacity: 0.8;
-}
-
-.plate-count {
-  position: absolute;
-  left: 50%;
-  bottom: 9%;
-  transform: translateX(-50%);
-  min-width: 2.2em;
-  padding: 0 4px;
-  background: #070806;
-  border: 1px solid #2b2a20;
-  color: var(--charge);
-  font-size: max(12px, calc(var(--size) * 0.018));
-  line-height: 1.1;
-  text-align: center;
 }
 
 .zone {
@@ -373,57 +354,75 @@ summary:focus-visible {
   cursor: pointer;
 }
 
-.slot.hot,
-.briefcase.hot,
-.gun-pick.hot {
-  border: 2px dashed #f4ead2;
-  background: rgb(244 234 210 / 0.08);
-  animation: beckon 1.6s ease-in-out infinite;
+/* Items lie on the cloth; an empty slot shows only while you place an item. */
+.slot.filled {
+  border-color: transparent;
+  background: none;
 }
 
-.slot.hot:hover,
-.slot.hot:focus-visible,
-.briefcase.hot:hover,
-.briefcase.hot:focus-visible,
-.gun-pick.hot:hover,
-.gun-pick.hot:focus-visible {
-  border-style: solid;
-  background: rgb(244 234 210 / 0.18);
-  animation: none;
-  outline: none;
+.slot.hot:not(.filled) {
+  background: rgb(244 234 210 / 0.06);
 }
 
-@keyframes beckon {
-  50% { border-color: rgb(244 234 210 / 0.45); }
+/* Under the pointer, a thing you can use lifts off the table. */
+.slot .item-icon,
+.briefcase {
+  transition: translate 140ms ease-out, filter 140ms ease-out;
 }
 
-.tip {
+.slot.hot:is(:hover, :focus-visible) .item-icon {
+  translate: 0 -8%;
+  filter: drop-shadow(0 7px 3px rgb(0 0 0 / 0.5));
+}
+
+.slot.hot:not(.filled):is(:hover, :focus-visible) {
+  background: rgb(244 234 210 / 0.16);
+}
+
+.briefcase.hot:is(:hover, :focus-visible) {
+  translate: 0 -2%;
+  filter: drop-shadow(0 8px 4px rgb(0 0 0 / 0.5));
+}
+
+.hot:focus-visible {
+  outline: 2px solid #f4ead2;
+  outline-offset: 2px;
+}
+
+/* One plain line under your items, never over the defibrillator: the left
+   group's captions run left from the slot, the right group's run right. */
+.caption {
   position: absolute;
-  left: 50%;
-  bottom: calc(100% + 6px);
-  translate: -50% 0;
+  top: calc(100% + 6px);
+  right: 0;
   width: max-content;
-  max-width: 240px;
-  padding: 2px 8px;
-  background: #0c0a07;
-  border: 1px solid #6d6350;
+  max-width: 300px;
   color: #f2e6c8;
   font-size: 19px;
   line-height: 1.1;
-  text-align: left;
+  text-shadow: 0 0 3px #000, 0 2px 0 #000, 0 0 8px #000;
   pointer-events: none;
   opacity: 0;
   z-index: 8;
 }
 
-.tip-note {
-  display: block;
-  font-size: 16px;
-  color: var(--dust);
+.slot-4 .caption,
+.slot-5 .caption,
+.slot-6 .caption,
+.slot-7 .caption {
+  right: auto;
+  left: 0;
 }
 
-:hover > .tip,
-:focus-visible > .tip {
+.slot-0 .caption,
+.slot-1 .caption,
+.slot-4 .caption,
+.slot-5 .caption {
+  top: calc(209% + 6px);
+}
+
+.slot:hover > .caption,
+.slot:focus-visible > .caption {
   opacity: 1;
 }
 
@@ -517,20 +516,6 @@ summary:focus-visible {
   gap: 2px;
 }
 
-.counter-name {
-  display: flex;
-  justify-content: space-between;
-  gap: 4px;
-  font-size: max(11px, calc(var(--size) * 0.017));
-  line-height: 1;
-  color: var(--bone);
-  white-space: nowrap;
-}
-
-.counter-cash {
-  color: var(--dust);
-}
-
 .counter-screen {
   height: max(18px, calc(var(--size) * 0.042));
   display: flex;
@@ -563,7 +548,7 @@ summary:focus-visible {
 }
 
 .bolt.drain {
-  animation: drain 900ms steps(6, end);
+  animation: drain 900ms steps(6, end) 450ms backwards;
 }
 
 @keyframes drain {
@@ -638,53 +623,18 @@ summary:focus-visible {
   height: 24%;
   padding: 0;
   background: none;
-  border: 2px dashed rgb(226 112 90 / 0.8);
+  border: 0;
   border-radius: 4px;
-  animation: beckon-red 1.4s ease-in-out infinite;
 }
 
-.seat-target:hover,
+/* Under the pointer a seat warms a little; the gun turns toward it. */
+.seat-target:hover {
+  background: radial-gradient(ellipse at 50% 40%, rgb(255 190 140 / 0.14), transparent 70%);
+}
+
 .seat-target:focus-visible {
-  border-style: solid;
-  border-color: #ff8a6a;
-  background: rgb(214 90 70 / 0.14);
-  animation: none;
-  outline: none;
-}
-
-@keyframes beckon-red {
-  50% { border-color: rgb(226 112 90 / 0.35); }
-}
-
-.float {
-  position: absolute;
-  left: 50%;
-  top: 70%;
-  translate: -50% 0;
-  font-family: var(--banner);
-  font-size: max(26px, calc(var(--size) * 0.05));
-  line-height: 1;
-  text-transform: uppercase;
-  white-space: nowrap;
-  color: #f4ead2;
-  text-shadow: 0 0 2px #000, 0 3px 0 #000;
-  pointer-events: none;
-  opacity: 0;
-  animation: rise 1500ms ease-out forwards;
-  z-index: 7;
-}
-
-.float.live { color: #ff7a5c; }
-.float.blank { color: var(--blank); }
-.float.good { color: var(--charge); }
-.float.item { top: 62%; font-family: inherit; font-size: max(18px, calc(var(--size) * 0.03)); text-transform: none; }
-.float.centre { top: 44%; }
-.float.late { top: 60%; animation-delay: 550ms; }
-
-@keyframes rise {
-  0% { opacity: 0; margin-top: 12px; }
-  12%, 70% { opacity: 1; margin-top: 0; }
-  100% { opacity: 0; margin-top: -28px; }
+  outline: 2px solid #f4ead2;
+  outline-offset: 2px;
 }
 
 .ghost {
@@ -701,15 +651,20 @@ summary:focus-visible {
 
 /* THE GUN */
 
+/* The pose (which side holds it, where it points) moves by transitions, from
+   wherever the gun is; a shot adds recoil, then settles the gun on the plate. */
 .gun-rig {
+  --turn-ms: 450ms;
   position: absolute;
   inset: 0;
   pointer-events: none;
   transform: rotate(var(--holder, 0deg)) translateY(var(--hold, 0%));
-  transition: transform 320ms ease-out;
+  transition: transform var(--turn-ms) ease-in-out;
 }
 
-.gun-rig.held {
+.gun-rig.held,
+.gun-rig.fired-a,
+.gun-rig.fired-b {
   --hold: 4%;
 }
 
@@ -721,12 +676,13 @@ summary:focus-visible {
   width: 6.2%;
   height: 24%;
   rotate: var(--gun-turn, 45deg);
-  transition: rotate 260ms ease-out;
+  transition: rotate var(--turn-ms) ease-in-out;
   filter: drop-shadow(0 6px 4px rgb(0 0 0 / 0.55));
 }
 
 .gun-pick {
   padding: 0;
+  border: 0;
   border-radius: 4px;
   background: none;
   filter: none;
@@ -737,15 +693,25 @@ summary:focus-visible {
   --gun-turn: 180deg;
 }
 
+.gun-rig.fired-a .gun-body,
+.gun-rig.fired-b .gun-body {
+  --gun-turn: var(--aim);
+}
+
 .stage:has(.seat-target[data-aim="0"]:is(:hover, :focus-visible)) .gun-rig.held .gun-body { --gun-turn: 0deg; }
 .stage:has(.seat-target[data-aim="1"]:is(:hover, :focus-visible)) .gun-rig.held .gun-body { --gun-turn: 90deg; }
 .stage:has(.seat-target[data-aim="2"]:is(:hover, :focus-visible)) .gun-rig.held .gun-body { --gun-turn: 180deg; }
 .stage:has(.seat-target[data-aim="3"]:is(:hover, :focus-visible)) .gun-rig.held .gun-body { --gun-turn: 270deg; }
 
-.gun-pick .tip {
-  rotate: -45deg;
-  bottom: auto;
-  top: 40%;
+/* Under the pointer, the gun lifts off the plate. */
+.stage:has(.gun-pick:is(:hover, :focus-visible)) .gun-body {
+  translate: 0 -2%;
+  scale: 1.04;
+  filter: drop-shadow(0 14px 6px rgb(0 0 0 / 0.5));
+}
+
+.gun-pick:focus-visible {
+  outline: 2px solid #f4ead2;
 }
 
 .gun-icon {
@@ -756,32 +722,33 @@ summary:focus-visible {
   shape-rendering: crispEdges;
 }
 
-.gun-rig.fired-a { animation: fired-rig-a 1500ms ease-in-out; }
-.gun-rig.fired-b { animation: fired-rig-b 1500ms ease-in-out; }
-.gun-rig.fired-a .gun-body { animation: fired-gun-a 1500ms ease-in-out; }
-.gun-rig.fired-b .gun-body { animation: fired-gun-b 1500ms ease-in-out; }
+/* After the turn: the shot and its recoil, a held beat, then back to rest. */
+.gun-rig.fired-a { animation: settle-rig-a 500ms ease-in-out 1500ms forwards; }
+.gun-rig.fired-b { animation: settle-rig-b 500ms ease-in-out 1500ms forwards; }
+.gun-rig.fired-a .gun-body { animation: settle-gun-a 500ms ease-in-out 1500ms forwards; }
+.gun-rig.fired-b .gun-body { animation: settle-gun-b 500ms ease-in-out 1500ms forwards; }
+.gun-rig.fired-a .gun-icon { animation: recoil-a 420ms ease-out var(--turn-ms); }
+.gun-rig.fired-b .gun-icon { animation: recoil-b 420ms ease-out var(--turn-ms); }
 
-@keyframes fired-rig-a {
-  0%, 70% { transform: rotate(var(--holder)) translateY(4%); }
-  100% { transform: rotate(0deg) translateY(0%); }
+@keyframes settle-rig-a { to { transform: rotate(0deg) translateY(0%); } }
+@keyframes settle-rig-b { to { transform: rotate(0deg) translateY(0%); } }
+@keyframes settle-gun-a { to { rotate: 45deg; } }
+@keyframes settle-gun-b { to { rotate: 45deg; } }
+
+/* The muzzle is at the bottom of the drawing, so the kick is up it. */
+@keyframes recoil-a {
+  0% { translate: 0 0; }
+  12% { translate: 0 -9%; }
+  100% { translate: 0 0; }
 }
 
-@keyframes fired-rig-b {
-  0%, 70% { transform: rotate(var(--holder)) translateY(4%); }
-  100% { transform: rotate(0deg) translateY(0%); }
+@keyframes recoil-b {
+  0% { translate: 0 0; }
+  12% { translate: 0 -9%; }
+  100% { translate: 0 0; }
 }
 
-@keyframes fired-gun-a {
-  0%, 70% { rotate: var(--aim); }
-  100% { rotate: 45deg; }
-}
-
-@keyframes fired-gun-b {
-  0%, 70% { rotate: var(--aim); }
-  100% { rotate: 45deg; }
-}
-
-/* The muzzle flash sits where the muzzle is at the moment of the shot. */
+/* The muzzle flash sits where the muzzle is once the gun has turned. */
 .flash {
   position: absolute;
   left: 50%;
@@ -793,7 +760,7 @@ summary:focus-visible {
   border-radius: 50%;
   background: radial-gradient(circle, #fff6d8 0 18%, #ffb45a 32%, rgb(255 120 40 / 0) 70%);
   opacity: 0;
-  animation: flash 420ms ease-out 140ms;
+  animation: flash 420ms ease-out 450ms;
   pointer-events: none;
 }
 
@@ -802,40 +769,24 @@ summary:focus-visible {
   100% { opacity: 0; scale: 1.6; }
 }
 
+/* A new load: the live shells and the blank shells in two groups on the cloth
+   in front of the plate, long enough to count, then drawn into the gun. */
 .reveal {
   position: absolute;
   left: 50%;
-  top: 50%;
+  top: 66%;
   translate: -50% -50%;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
+  gap: max(18px, calc(var(--size) * 0.04));
   pointer-events: none;
   opacity: 0;
   animation: reveal 2600ms ease-in-out forwards;
   z-index: 5;
 }
 
-.reveal-count {
-  font-family: var(--banner);
-  font-size: max(28px, calc(var(--size) * 0.055));
-  line-height: 1;
-  text-transform: uppercase;
-  white-space: nowrap;
-  color: #f4ead2;
-  text-shadow: 0 0 2px #000, 0 3px 0 #000;
-}
-
-.live { color: #ff7a5c; }
-.blank { color: var(--blank); }
-
-.reveal-shells {
+.shell-group {
   display: flex;
-  gap: max(4px, calc(var(--size) * 0.009));
-  padding: 10px 14px;
-  background: rgb(10 8 6 / 0.72);
-  border: 1px solid #3b3427;
+  gap: max(3px, calc(var(--size) * 0.006));
 }
 
 .shell {
@@ -854,39 +805,31 @@ summary:focus-visible {
   translate: -50% -50%;
   rotate: -90deg;
   shape-rendering: crispEdges;
-  filter: drop-shadow(0 2px 0 rgb(0 0 0 / 0.6));
+  filter: drop-shadow(0 3px 1px rgb(0 0 0 / 0.6));
 }
 
 @keyframes reveal {
-  0% { opacity: 0; scale: 0.96; }
-  8%, 72% { opacity: 1; scale: 1; }
-  100% { opacity: 0; scale: 0.25; }
+  0% { opacity: 0; translate: -50% -40%; }
+  8%, 76% { opacity: 1; translate: -50% -50%; scale: 1; }
+  100% { opacity: 0; translate: -50% -230%; scale: 0.3; }
 }
 
+/* A racked shell flies out of the gun, lands beside the plate, and goes. */
 .eject {
   position: absolute;
   left: 50%;
   top: 50%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
   pointer-events: none;
   opacity: 0;
-  animation: eject 1100ms ease-out forwards;
+  animation: eject 1600ms ease-out forwards;
   z-index: 5;
-}
-
-.eject-text {
-  font-family: var(--banner);
-  font-size: max(24px, calc(var(--size) * 0.045));
-  text-transform: uppercase;
-  text-shadow: 0 0 2px #000, 0 3px 0 #000;
 }
 
 @keyframes eject {
   0% { opacity: 1; translate: -50% -50%; rotate: 0deg; }
-  60% { opacity: 1; translate: 60% -110%; rotate: 200deg; }
-  100% { opacity: 0; translate: 90% -60%; rotate: 260deg; }
+  30% { opacity: 1; translate: 150% -160%; rotate: 220deg; }
+  45%, 80% { opacity: 1; translate: 260% -60%; rotate: 290deg; }
+  100% { opacity: 0; translate: 260% -60%; rotate: 290deg; }
 }
 
 .hurt {
@@ -895,7 +838,7 @@ summary:focus-visible {
   pointer-events: none;
   background: radial-gradient(ellipse at center, transparent 40%, rgb(170 20 10 / 0.55) 100%);
   opacity: 0;
-  animation: hurt 700ms ease-out 150ms;
+  animation: hurt 700ms ease-out 500ms;
   z-index: 9;
 }
 
@@ -963,21 +906,41 @@ summary:focus-visible {
   z-index: 2;
 }
 
-.notes {
+/* A secret the viewer just learned, held long enough to read, then gone. */
+.secret {
   position: absolute;
-  left: 16px;
-  bottom: 16px;
-  max-width: 300px;
-  padding: 8px 12px;
-  background: rgb(8 10 7 / 0.88);
-  border: 1px solid #3b5a37;
-  color: var(--charge);
-  z-index: 2;
+  left: 50%;
+  top: 46%;
+  transform: translate(-50%, -50%);
+  width: max-content;
+  max-width: calc(100% - 24px);
+  font-family: var(--banner);
+  font-size: clamp(44px, 9vmin, 104px);
+  line-height: 1;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #f4ecd8;
+  text-shadow: 0 3px 0 rgb(0 0 0 / 0.75), 0 0 14px rgb(0 0 0 / 0.6);
+  pointer-events: none;
+  opacity: 0;
+  animation: secret max(1200ms, calc(2600ms * var(--pace, 1))) ease-out var(--wait, 0ms) forwards;
+  z-index: 4;
 }
 
-.notes ul {
-  padding: 0;
-  list-style: none;
+@keyframes secret {
+  0% { opacity: 0; }
+  10%, 82% { opacity: 1; }
+  100% { opacity: 0; visibility: hidden; }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .round-over {
@@ -1168,32 +1131,29 @@ summary:focus-visible {
   .hint {
     font-size: 18px;
   }
-
-  .notes {
-    left: 8px;
-    right: 8px;
-    bottom: 8px;
-    max-width: none;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .gun-rig,
-  .gun-body {
+  .gun-body,
+  .slot .item-icon,
+  .briefcase {
     transition: none;
   }
 
+  /* The gun jumps between poses: aiming, then back on the plate after the beat. */
   .gun-rig.fired-a,
   .gun-rig.fired-b,
   .gun-rig.fired-a .gun-body,
-  .gun-rig.fired-b .gun-body,
+  .gun-rig.fired-b .gun-body {
+    animation-timing-function: steps(1, end);
+  }
+
+  .gun-rig.fired-a .gun-icon,
+  .gun-rig.fired-b .gun-icon,
   .flash,
   .hurt,
   .ghost,
-  .slot.hot,
-  .briefcase.hot,
-  .gun-pick.hot,
-  .seat-target,
   .briefcase-tray .item-icon {
     animation: none;
   }
@@ -1202,9 +1162,9 @@ summary:focus-visible {
     animation: none;
   }
 
-  .float,
   .reveal,
-  .eject {
+  .eject,
+  .secret {
     animation-name: appear;
     animation-timing-function: steps(1, end);
   }
@@ -1262,11 +1222,11 @@ summary:focus-visible {
 
 /* Descriptions are for pointers that hover, and step aside for the round-over beat. */
 @media (hover: none) {
-  .tip {
+  .caption {
     display: none;
   }
 }
 
-.app:has(.round-over) .tip {
+.app:has(.round-over) .caption {
   display: none;
 }

@@ -17,6 +17,9 @@ export const Speed = Schema.Literals(["Slow", "Normal", "Fast"]);
 
 export type Speed = typeof Speed.Type;
 
+/** How long autoplay's pauses and the table's held moments last at each speed, against Normal. */
+export const SPEED_FACTOR: Readonly<Record<Speed, number>> = { Slow: 1.6, Normal: 1, Fast: 0.12 };
+
 export const Setup = Schema.Struct({
   table: SeatCount,
   controllers: Schema.Array(Controller),
@@ -33,6 +36,8 @@ export const Session = Schema.Struct({
   /** Where the events of the latest step begin: the table animates them, and autoplay waits for them. */
   stepStart: Schema.Number,
   learned: Schema.Array(LearnedSecret),
+  /** Where the secrets learned in the latest step begin, so each shows once. */
+  learnedStart: Schema.Number,
   controllers: Schema.Array(Controller),
   ais: Schema.Array(Schema.Option(AiSeat)),
   seed: Schema.Number,
@@ -46,6 +51,10 @@ export interface StepEvent {
   readonly index: number;
   readonly event: GameEvent;
 }
+
+/** The secrets the latest step taught, with their places in the list. */
+export const latestLearned = (match: Session): ReadonlyArray<{ readonly index: number; readonly learned: LearnedSecret }> =>
+  match.learned.slice(match.learnedStart).map((learned, offset) => ({ index: match.learnedStart + offset, learned }));
 
 /** The latest step's events with their places in the log. */
 export const latestStep = (match: Session): ReadonlyArray<StepEvent> =>

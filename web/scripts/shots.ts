@@ -2,7 +2,7 @@ import { chromium, firefox } from "playwright-core";
 
 // Screenshots of each stage of a human-vs-DoN match with items, for judging the
 // look: setup, load reveal, grabbing, your turn, aiming, a shot, round over and
-// match over. The human picks up the shotgun and shoots the other seat when it
+// match over, and a private result if one comes up. The human picks up the shotgun and shoots the other seat when it
 // can, so every stage shows up.
 // Usage: bun run dev (elsewhere), then bun scripts/shots.ts [url] [outdir] [WIDTHxHEIGHT ...]
 // MOTION=reduce emulates prefers-reduced-motion. BROWSER=firefox uses Playwright's
@@ -62,6 +62,8 @@ const run = async (size: string): Promise<void> => {
       await shot("7-round-over");
     }
 
+    if (!taken.has("9-secret") && (await isShowing(".secret"))) await shot("9-secret");
+
     if (!taken.has("2-load-reveal") && (await isShowing(".reveal"))) {
       await page.waitForTimeout(400);
       await shot("2-load-reveal");
@@ -75,7 +77,7 @@ const run = async (size: string): Promise<void> => {
     const grab = has("Grab");
     const place = has("Place");
     const pickUp = has("Pick up");
-    const shoot = labels.find((label) => label.startsWith("Shoot Seat"));
+    const shoot = labels.find((label) => label.startsWith("Shoot Player"));
     const choice = grab ?? place ?? (pickUp !== undefined && Math.random() < 0.7 ? pickUp : undefined) ?? shoot ?? labels[Math.floor(Math.random() * labels.length)] ?? "";
 
     if (place !== undefined) await shot("3-grabbing");
@@ -92,7 +94,7 @@ const run = async (size: string): Promise<void> => {
     await onTable(choice).click({ timeout: 2_000 }).catch(() => undefined);
 
     if (choice === shoot && !taken.has("6-shot")) {
-      await page.waitForTimeout(420);
+      await page.waitForTimeout(600);
       await shot("6-shot");
     }
   }
