@@ -27,7 +27,7 @@ import { addTokens, agentTotals, logCall, logEvent, readCalls, type Sitting, wri
 const context = BACKGROUND_CONTEXT;
 
 /** The same for every player; the arena adds nothing per model. */
-export const INSTRUCTIONS = `${RULES} You are one of the players. On each of your turns you get your view as JSON: you, your player number; turn, to pass to play_move; players, with health (not shown while jammed), items and, while players grab from the briefcase, holding; gun, with sawed when it is; events, the entries of the match log you have not been sent yet; and moves, your legal moves. Play one with play_move, giving its position in moves (from 0) and the turn. get_game shows your view again. Log entries say what happened, and what only you learned from the magnifying glass or the phone. Each entry reaches you once, with your turn or in a message between turns, so remember what you need. When your only move is "Grab an item", it is played for you. Your goal is to finish the match with the most cash.`;
+export const INSTRUCTIONS = `${RULES} You are one of the players. On each of your turns you get your view as JSON: you, your player number; turn, to pass to play_move; players, with health (not shown while jammed), items and, while players grab from the briefcase, holding; gun, with sawed when it is; events, the entries of the match log you have not been sent yet; and moves, your legal moves. Play one with play_move, giving its position in moves (from 0) and the turn. get_game shows your view again, without log entries. Log entries say what happened, and what only you learned from the magnifying glass or the phone. Each entry reaches you once, with your turn or in a message between turns, so remember what you need. When your only move is "Grab an item", it is played for you. Your goal is to finish the match with the most cash.`;
 
 const GRAB = "Grab an item";
 
@@ -87,6 +87,8 @@ const View = Schema.Struct({
   you: Schema.Int,
   status: Schema.String,
   turn: Schema.optional(Schema.Int),
+  players: Schema.optional(Schema.Array(Schema.Struct({ player: Schema.Int, health: Schema.optional(Schema.Int), items: Schema.optional(Schema.Array(Schema.String)), holding: Schema.optional(Schema.String) }))),
+  gun: Schema.optional(Schema.Struct({ sawed: Schema.Boolean })),
   events: Schema.optional(Schema.Array(Schema.String)),
   moves: Schema.optional(Schema.Array(Schema.String)),
   standings: Schema.optional(Schema.Array(Schema.Struct({ player: Schema.Int, cash: Schema.Number }))),
@@ -94,7 +96,10 @@ const View = Schema.Struct({
 
 type View = typeof View.Type;
 
-const parseView = Schema.decodeUnknownSync(Schema.fromJsonString(View));
+const decodeView = Schema.decodeUnknownSync(Schema.fromJsonString(View));
+
+/** A view as the agent tools write it. A field this schema lacks is an error, so no part of a view is dropped on the way to a player. */
+const parseView = (text: string): View => decodeView(text, { onExcessProperty: "error" });
 
 const Delivered = Schema.Struct({ events: Schema.optional(Schema.Array(Schema.String)) });
 
@@ -185,6 +190,11 @@ class Table {
     return parseView(this.viewText(player));
   }
 
+  /** The view without log entries: what the tools show, since entries reach a player only through delivery. */
+  stateText(player: number): string {
+    return JSON.stringify({ ...this.view(player), events: undefined });
+  }
+
   /** Plays a move for a player if it has the turn; the caller journals the line. */
   tryMove(player: number, move: number, turn: number, by: MoveLine["by"]): Played {
     if (this.onTurn() !== player) return { ok: false, text: JSON.stringify({ error: "It is not your turn." }) };
@@ -219,19 +229,19 @@ const seatTools = (dir: string, table: () => Table, onReply: (player: number, me
     tools: [
       defineTool({
         name: "get_game",
-        description: "Your current view, as JSON.",
+        description: "Your current view, as JSON, without log entries: those reach you once, as messages.",
         parameters: Type.Object({}),
         execute: async (_args, api) => {
           const sitting = await sittingOf(api.snapshot, api.conversationId);
 
           logEvent(dir, "tool", { ...sitting, name: "get_game", call_id: api.callId, ok: true });
 
-          return { content: [{ type: "text", text: table().viewText(sitting.player) }] };
+          return { content: [{ type: "text", text: table().stateText(sitting.player) }] };
         },
       }),
       defineTool({
         name: "play_move",
-        description: "Play one of your legal moves. Returns your view after it.",
+        description: "Play one of your legal moves. Returns the move played; your next turn comes as a new message.",
         parameters: Type.Object({
           move: Type.Integer({ minimum: 0, description: "The position of the move in your view's moves list, from 0." }),
           turn: Type.Integer({ minimum: 0, description: "The turn of the view you chose the move from." }),
@@ -244,7 +254,7 @@ const seatTools = (dir: string, table: () => Table, onReply: (player: number, me
           const recorded = journal?.moves.find((line) => line.turn === args.turn && line.player === player && line.by === "agent");
 
           // A rerun after a crash finds its own move already journaled.
-          if (recorded !== undefined) return { content: [{ type: "text", text: table().viewText(player) }], control: { terminate: true } };
+          if (recorded !== undefined) return { content: [{ type: "text", text: JSON.stringify({ played: recorded.label }) }], control: { terminate: true } };
 
           const played = table().tryMove(player, args.move, args.turn, "agent");
 
@@ -255,7 +265,7 @@ const seatTools = (dir: string, table: () => Table, onReply: (player: number, me
           await api.commit(async (tx) => void (await tx.doc(MatchDoc)).moves.push(played.line), context);
           logEvent(dir, "move", { agent: sitting.agent, ...played.line });
 
-          return { content: [{ type: "text", text: played.text }], control: { terminate: true } };
+          return { content: [{ type: "text", text: JSON.stringify({ played: played.line.label }) }], control: { terminate: true } };
         },
       }),
     ],
