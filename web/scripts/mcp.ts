@@ -6,7 +6,7 @@ import { emptyTable, headlessSession } from "../src/agent/headless.ts";
 import { AgentReply, replyText, runTool, tools } from "../src/agent/tools.ts";
 
 // The stdio MCP front end for the agent tools: one headless table per process,
-// with the AI seats played in-process. Every Agent seat goes through this one
+// with the AI players played in-process. Every Agent player goes through this one
 // connection; another process has its own table. stdout carries JSON-RPC, so
 // this logs only to stderr.
 // Usage: bun run mcp (an MCP client launches it; see README.md)
