@@ -12,7 +12,7 @@ import { emptyTable, type HeadlessTable, headlessSession } from "../agent/headle
 import { type AgentCall, AgentReply, type MatchSession, replyText, RULES, runTool, tools } from "../agent/tools.ts";
 import { SEATS_BY_TABLE, SeatCount } from "../domain.ts";
 import { type Controller, controllerOf, promptsOf } from "../driver.ts";
-import { PlayerLetter, rosterOf } from "../players.ts";
+import { Letter, rosterOf } from "../players.ts";
 import { eventText, secretText } from "../text.ts";
 import { AGENTS, type AgentId } from "./agent.ts";
 import { addTokens, agentTotals, logCall, logEvent, readCalls, type Sitting, writeManifest } from "./runlog.ts";
@@ -84,13 +84,13 @@ export class ArenaFault extends Data.TaggedError("ArenaFault")<{ readonly messag
 
 const attempt = <A>(step: string, run: () => Promise<A>) => Effect.tryPromise({ try: run, catch: (cause) => new ArenaFault({ message: `${step}: ${String(cause)}` }) });
 
-type MoveLine = { readonly turn: number; readonly player: PlayerLetter; readonly move: number; readonly label: string; readonly by: "agent" | "forced" | "fallback" };
+type MoveLine = { readonly turn: number; readonly player: Letter; readonly move: number; readonly label: string; readonly by: "agent" | "forced" | "fallback" };
 
 type MatchState = {
   seed: string;
   controllers: Array<Controller>;
   /** By seat, in table order: the player's letter. */
-  letters: Array<PlayerLetter>;
+  letters: Array<Letter>;
   delivery: Delivery;
   conversations: Record<string, ConversationId>;
   moves: Array<MoveLine>;
@@ -102,7 +102,7 @@ type MatchState = {
 const emptyMatch = (): MatchState => ({ seed: "", controllers: [], letters: [], delivery: "on-turn", conversations: {}, moves: [], delivered: {}, retries: {} });
 
 /** The letter at each seat: the entrants' own at the Agent seats, in order, and the letters left, in order, at the others. */
-const lettersOf = (controllers: ReadonlyArray<Controller>, agents: ReadonlyArray<AgentId>): Option.Option<Array<PlayerLetter>> => {
+const lettersOf = (controllers: ReadonlyArray<Controller>, agents: ReadonlyArray<AgentId>): Option.Option<Array<Letter>> => {
   const spare = AGENTS.filter((letter) => !agents.includes(letter));
   const isAgent = (controller: Controller) => controller === "Agent";
 
@@ -117,14 +117,14 @@ const MatchDoc = defineDoc<MatchState>({ kind: "arena.match", version: 1, scope:
 const SeatDoc = defineDoc<{ agent: AgentId | null; position: number }>({ kind: "arena.seat", version: 1, scope: "conversation", history: "latest", fork: "initial", initial: () => ({ agent: null, position: 0 }) });
 
 const View = Schema.Struct({
-  you: PlayerLetter,
+  you: Letter,
   status: Schema.String,
   turn: Schema.optional(Schema.Int),
-  players: Schema.optional(Schema.Array(Schema.Struct({ player: PlayerLetter, health: Schema.optional(Schema.Int), items: Schema.optional(Schema.Array(Schema.String)), holding: Schema.optional(Schema.String) }))),
+  players: Schema.optional(Schema.Array(Schema.Struct({ player: Letter, health: Schema.optional(Schema.Int), items: Schema.optional(Schema.Array(Schema.String)), holding: Schema.optional(Schema.String) }))),
   gun: Schema.optional(Schema.Struct({ sawed: Schema.Boolean })),
   events: Schema.optional(Schema.Array(Schema.String)),
   moves: Schema.optional(Schema.Array(Schema.String)),
-  standings: Schema.optional(Schema.Array(Schema.Struct({ player: PlayerLetter, cash: Schema.Number }))),
+  standings: Schema.optional(Schema.Array(Schema.Struct({ player: Letter, cash: Schema.Number }))),
 });
 
 type View = typeof View.Type;
@@ -153,7 +153,7 @@ const decode = (name: string, input: Schema.Json): AgentCall => {
 type Played = { readonly ok: true; readonly text: string; readonly line: MoveLine } | { readonly ok: false; readonly text: string };
 
 /** The headless tools, with each seat named by the journal's letters instead of table order. */
-const letteredSession = (letters: ReadonlyArray<PlayerLetter>): MatchSession<HeadlessTable> => {
+const letteredSession = (letters: ReadonlyArray<Letter>): MatchSession<HeadlessTable> => {
   const seats = SEATS_BY_TABLE[Schema.decodeUnknownSync(SeatCount)(letters.length)];
   const assignment = new Map(seats.flatMap((seat, index) => Option.toArray(Option.map(Option.fromUndefinedOr(letters[index]), (letter) => [seat, letter] as const))));
 
@@ -207,45 +207,45 @@ class Table {
     return rosterOf(match.game.seats, match.letters);
   }
 
-  private seatOf(player: PlayerLetter) {
-    return Option.getOrThrow(this.roster().seatOf(player));
+  private seatOf(letter: Letter) {
+    return Option.getOrThrow(this.roster().find(letter)).seat;
   }
 
   /** The Agent players, in table order. */
-  agentPlayers(): ReadonlyArray<PlayerLetter> {
-    return this.roster().players.filter((player) => controllerOf(this.match().controllers, this.seatOf(player)) === "Agent");
+  agentPlayers(): ReadonlyArray<Letter> {
+    return this.roster().players.filter(({ seat }) => controllerOf(this.match().controllers, seat) === "Agent").map(({ letter }) => letter);
   }
 
   /** A player's position in table order, from 1. */
-  positionOf(player: PlayerLetter): number {
+  positionOf(player: Letter): number {
     return this.match().game.seats.indexOf(this.seatOf(player)) + 1;
   }
 
   /** The one Agent player that may move: the first in table order the machine waits on, as driver.bend picks among bots. */
-  onTurn(): PlayerLetter | undefined {
+  onTurn(): Letter | undefined {
     const waiting = new Set(promptsOf(this.match().game).map((prompt) => prompt.seat));
 
     return this.agentPlayers().find((player) => waiting.has(this.seatOf(player)));
   }
 
   /** A player's view; "waiting" while another Agent player has the turn first. */
-  viewText(player: PlayerLetter): string {
+  viewText(player: Letter): string {
     const text = replyText(this.run(decode("get_game", { player })));
 
     return !this.isOver && text.includes('"status":"your turn"') && this.onTurn() !== player ? JSON.stringify({ you: player, status: "waiting" }) : text;
   }
 
-  view(player: PlayerLetter): View {
+  view(player: Letter): View {
     return parseView(this.viewText(player));
   }
 
   /** The view without log entries: what the tools show, since entries reach a player only through delivery. */
-  stateText(player: PlayerLetter): string {
+  stateText(player: Letter): string {
     return JSON.stringify({ ...this.view(player), events: undefined });
   }
 
   /** Plays a move for a player if it has the turn; the caller journals the line. */
-  tryMove(player: PlayerLetter, move: number, turn: number, by: MoveLine["by"]): Played {
+  tryMove(player: Letter, move: number, turn: number, by: MoveLine["by"]): Played {
     if (this.onTurn() !== player) return { ok: false, text: JSON.stringify({ error: "It is not your turn." }) };
 
     const label = this.view(player).moves?.[move] ?? "";
@@ -257,7 +257,7 @@ class Table {
   }
 
   /** What a seat has been shown, verbatim: its secrets and the public events, in order, up to now. */
-  heard(player: PlayerLetter): ReadonlyArray<string> {
+  heard(player: Letter): ReadonlyArray<string> {
     const { events, learned } = this.match();
     const roster = this.roster();
     const seat = this.seatOf(player);
