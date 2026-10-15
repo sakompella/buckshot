@@ -1,6 +1,6 @@
 import { Array as Arr, Option, Result, Schema } from "effect";
 
-import { answerDraw, answerPrompt, type AnswerError, type Brain, type BendContractError, coinWord, decideMove, freshMind, type Game, hearNotes, Mind, type Prompt, type Step, startGame, type Ticket } from "./bend.ts";
+import { answerDraw, answerPrompt, type AnswerError, type Brain, type BendContractError, coinWord, decideMove, freshMind, type Game, hearNotes, Mind, nextPrompt, type Prompt, type Step, startGame, type Ticket } from "./bend.ts";
 import type { GameEvent, LearnedSecret, Seat, SeatCount } from "./domain.ts";
 import { nextBelow, type Rng } from "./rng.ts";
 
@@ -87,9 +87,9 @@ export const promptsOf = (game: Game): ReadonlyArray<Prompt> => (game.pending.ki
 
 export const controllerOf = (controllers: ReadonlyArray<Controller>, seat: Seat): Controller => Option.getOrElse(Arr.get(controllers, seat), (): Controller => "Human");
 
-/** The first prompt an AI must answer, if any. */
+/** The prompt an AI must answer next, if any. Among AI seats grabbing at once, Bend's order holds. */
 export const aiPrompt = (game: Game, controllers: ReadonlyArray<Controller>): Option.Option<Prompt> =>
-  Arr.findFirst(promptsOf(game), (prompt) => isAi(controllerOf(controllers, prompt.seat)));
+  nextPrompt(game, Arr.filter(promptsOf(game), (prompt) => isAi(controllerOf(controllers, prompt.seat))));
 
 /** Answers a seat's prompt, then settles the draws that follow. */
 export const play = (progress: Progress, ticket: Ticket, seat: Seat, index: number, rng: Rng): Result.Result<Progress, AnswerError> =>

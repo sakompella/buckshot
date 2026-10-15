@@ -15,6 +15,7 @@ declare const rules: {
   readonly answer: (state: BendNode, answer: bigint) => BendNode;
   readonly prompts: (state: BendNode) => BendNode;
   readonly "prompt.answer": (prompt: BendNode, index: bigint) => bigint;
+  readonly "prompt.next": (state: BendNode, prompts: BendNode) => BendNode;
   readonly hear: (notes: BendNode, seat: BendNode) => BendNode;
   readonly public_events: (notes: BendNode) => BendNode;
   readonly "mind.story": () => BendNode;

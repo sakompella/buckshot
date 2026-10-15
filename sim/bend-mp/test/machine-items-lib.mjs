@@ -8,7 +8,7 @@ import { config, round } from './reference-adapter.mjs';
 
 export const items = ['Saw', 'Glass', 'Jammer', 'Cigarettes', 'Beer', 'Phone', 'Inverter', 'Adrenaline', 'Remote'];
 
-function build(dir, name, relativeSource) {
+export function build(dir, name, relativeSource) {
   const source = fileURLToPath(new URL(relativeSource, import.meta.url));
   const output = join(dir, `${name}.mjs`);
   for (const args of [[source, '--check-only'], [source, '-o', output]]) {
