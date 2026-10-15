@@ -20,7 +20,7 @@ Checks:
 
     bun run typecheck  # tsc --noEmit, strict
     bun run lint       # oxlint with every anti-slop rule and the Effect group, --deny-warnings
-    bun run test       # plays full Story and DoN matches through bend.ts at 2, 3 and 4 seats; checks stale answers are rejected
+    bun run test       # plays full Story and DoN matches through bend.ts at 2, 3 and 4 seats; checks stale answers are rejected; checks the agent tool contract
     bun scripts/play.ts [url] [outdir]   # headless Chrome: one human-vs-bot match by clicking, one 4-bot autoplay match
 
 ## Playing with an agent (WebMCP)
@@ -53,7 +53,7 @@ includes another seat's notes or the shell order.
   autoplay on. `controllers` lists one controller per seat in seat order, for
   example `["Agent", "Agent", "DoN"]`; each is `Agent`, `DoN`, `Story` or
   `Human`. Without it the first seat is the Agent and DoN plays the others. It
-  returns each seat's number and controller.
+  returns each seat's number and controller, and the seed.
 
 `turn` counts every request point of the match, so any seat's move advances it.
 While several seats grab items from the briefcase at once, each Agent seat has
@@ -63,7 +63,8 @@ then calls `get_game` again. When several bots can move, the lowest seat goes
 first, as in `sim/bend-mp/driver.bend`.
 
 A refusal comes back as `{"error": "..."}` text, because Chrome shows the agent
-only a generic message when a tool throws.
+only a generic message when a tool throws. The MCP server sends the same text
+and also marks the result `isError`.
 
 Tools reach the game through Foldkit ports, not by touching the Model. The app
 runs with `Runtime.embed`, which returns the port handles. A tool sends
@@ -77,6 +78,43 @@ on the outbound port `agentReplied`.
 Chrome 155 has no `navigator.modelContextTesting`. The script calls the tools
 through `document.modelContext.getTools()` and `executeTool()` from the spec.
 
+## Playing with an agent (MCP server)
+
+`bun run mcp` is a stdio MCP server with the same three tools, for an MCP
+client such as Claude Code or Codex. It needs no browser. It builds the rules,
+then holds one table in the process and plays the DoN and Story seats there, so
+by the time a tool replies the bots have moved and an Agent seat has the turn
+(or the match is over). It refuses Human seats, since nothing can click them.
+
+One server process can serve several Agent seats: name each seat in `get_game`
+and `play_move`, from one agent or from several sub-agents that share the
+client's connection. Separate processes do not share a match. Two clients that
+each launch the server get two separate tables, and neither the page nor
+another process can see them.
+
+Add it to Claude Code (run in this `web/` directory, so `$PWD` is its path):
+
+    claude mcp add buckshot -- bun run --cwd "$PWD" mcp
+
+Add it to Codex the same way:
+
+    codex mcp add buckshot -- bun run --cwd "$PWD" mcp
+
+or add this to `~/.codex/config.toml`, with the absolute path to `web/`:
+
+    [mcp_servers.buckshot]
+    command = "bun"
+    args = ["run", "--cwd", "/absolute/path/to/buckshot/web", "mcp"]
+
+Each launch rebuilds the rules first, which takes a few seconds. Then ask the
+agent to call `new_match` and play its seat. Checks:
+
+    bun scripts/mcp-check.ts   # spawns the server with the SDK client, lists the tools, plays two Agent seats against DoN to the end
+    bunx @modelcontextprotocol/inspector --cli bun scripts/mcp.ts --method tools/list
+
+The server uses `@modelcontextprotocol/server` 2.3.1, the v2 SDK. It also
+answers clients that use the older `initialize` handshake.
+
 ## Layout
 
 - `src/bend.ts`: the only file that writes Bend tags. It decodes every Bend
@@ -89,8 +127,16 @@ through `document.modelContext.getTools()` and `executeTool()` from the spec.
   machine offers. Game draws come from a seeded RNG (`src/rng.ts`).
 - `src/titles.ts`: end-of-match titles from the public event log. Titles are a UI
   feature. The rules library does not compute them.
-- `src/agent.ts`: an Agent seat's view, move checks and the port schemas.
-  `src/webmcp.ts` registers the tools. `src/text.ts` has the labels shared by the
-  buttons and the agent.
+- `src/agent/`: the agent tools, with no DOM, page or MCP SDK.
+  `tools.ts` holds the tool names, descriptions, input schemas (Effect
+  Schemas, turned into JSON Schema for both front ends) and `runTool`, which
+  runs one call over a `MatchSession`. `view.ts` builds an Agent seat's view
+  and checks its moves. `headless.ts` is the session the MCP server runs: one
+  table, with the AI seats played in-process. `src/text.ts` has the labels
+  shared by the buttons and the agent.
+- `src/webmcp.ts`: the WebMCP front end. It registers the tools with the page's
+  model context and carries calls through the ports. `src/main.ts` has the
+  page's `MatchSession`, which moves through `ClickedMove`.
+- `scripts/mcp.ts`: the stdio MCP front end.
 - `src/main.ts`: Foldkit Model, Messages, update, view, autoplay subscription.
 - `tools/oxlint/anti-slop/`: vendored anti-slop rules (see PROVENANCE.md).

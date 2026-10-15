@@ -1,34 +1,13 @@
-import { Array as Arr, Option, Result, Schema } from "effect";
-import { Port } from "foldkit";
+import { Array as Arr, Option, Result } from "effect";
 
-import type { Game } from "./bend.ts";
-import { Briefcase, Counter, type GameEvent, type LearnedSecret, Seat, SeatCount, seatsOut, Stage } from "./domain.ts";
-import { Controller, controllerOf, promptsOf } from "./driver.ts";
-import { eventText, itemName, moveText, seatName, secretText } from "./text.ts";
+import type { Game } from "../bend.ts";
+import { Briefcase, Counter, type GameEvent, type LearnedSecret, type Seat, seatsOut, Stage } from "../domain.ts";
+import { type Controller, controllerOf, promptsOf } from "../driver.ts";
+import { eventText, itemName, moveText, seatName, secretText } from "../text.ts";
 
-// What the WebMCP tools say and hear. Every call names an Agent seat, and
+// An Agent seat's view and move checks. Every call names an Agent seat and
 // sees only that seat: the public board, the events everyone saw, and the
 // notes that seat heard.
-
-export const AgentCall = Schema.TaggedUnion({
-  GetGame: { seat: Seat },
-  PlayMove: { seat: Seat, index: Schema.Number, turn: Schema.optional(Schema.Number) },
-  NewMatch: { players: SeatCount, items: Schema.Boolean, seed: Schema.optional(Schema.String), controllers: Schema.optional(Schema.Array(Controller)) },
-});
-
-export type AgentCall = typeof AgentCall.Type;
-
-export const AgentReply = Schema.TaggedUnion({
-  Answered: { text: Schema.String },
-  Refused: { reason: Schema.String },
-});
-
-export type AgentReply = typeof AgentReply.Type;
-
-export const ports = {
-  inbound: { agentCalled: Port.inbound(Schema.Struct({ id: Schema.Number, call: AgentCall })) },
-  outbound: { agentReplied: Port.outbound(Schema.Struct({ id: Schema.Number, reply: AgentReply })) },
-};
 
 const RECENT_EVENTS = 20;
 
@@ -38,6 +17,7 @@ export interface AgentSource {
   readonly controllers: ReadonlyArray<Controller>;
   readonly events: ReadonlyArray<GameEvent>;
   readonly learned: ReadonlyArray<LearnedSecret>;
+  readonly seed: number;
 }
 
 export interface AgentGame {
@@ -60,8 +40,6 @@ export interface AgentGame {
   readonly recentEvents: ReadonlyArray<string>;
   readonly moves: ReadonlyArray<{ readonly index: number; readonly label: string }>;
 }
-
-export const NO_MATCH = "No match is running. Call new_match to start one.";
 
 const agentSeats = (source: AgentSource): ReadonlyArray<Seat> => source.game.seats.filter((seat) => controllerOf(source.controllers, seat) === "Agent");
 
@@ -125,8 +103,16 @@ export const agentGame = (source: AgentSource, seat: Seat): Result.Result<AgentG
     };
   });
 
+/** A move as the buttons send it: the request point it answers, and the menu index. */
+export interface SeatMove {
+  readonly match: number;
+  readonly generation: number;
+  readonly seat: Seat;
+  readonly index: number;
+}
+
 /** The click an Agent seat's move stands for, or why the move is refused. */
-export const agentMove = (source: AgentSource, seat: Seat, index: number, turn: number | undefined): Result.Result<{ match: number; generation: number; seat: Seat; index: number }, string> =>
+export const agentMove = (source: AgentSource, seat: Seat, index: number, turn: number | undefined): Result.Result<SeatMove, string> =>
   Result.flatMap(agentSeat(source, seat), () =>
     Result.gen(function* () {
       const prompt = yield* Result.fromOption(promptFor(source, seat), () => "It is not your turn. Call get_game and wait until isYourTurn is true.");
