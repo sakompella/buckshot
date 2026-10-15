@@ -93,18 +93,20 @@ def load.begin(+state: T.State) -> T.State:
 
 def initial(+config: D.Config) -> T.State:
   +table : D.Table = G.config.table(config)
-  T.State{S.World{config, True{}, 0n, 0n, False{}, 0n, D.Seat0{}, None{}, D.Clockwise{}, None{}, False{}, 0n, False{}, Nil{}, D.Load{0n, 0n}, G.decks.full()}, D.ring.fill(S.Seat, table, S.Seat{100n, S.Free{}, 0, D.slots.empty()}), T.NeedFirst{}, Nil{}, S.Grabs{False{}, D.ring.fill(Bool, table, False{}), D.ring.fill(Maybe<&2, D.Item>, table, None{}), D.ring.fill(Nat, table, 0n), D.ring.fill(Bool, table, False{})}}
+  T.State{S.World{config, True{}, 0n, 0n, False{}, 0n, D.Seat0{}, None{}, D.Clockwise{}, None{}, False{}, 0n, False{}, Nil{}, D.Load{0n, 0n}, G.decks.full()}, D.ring.fill(S.Seat, table, S.Seat{100n, S.Free{}, 0, D.slots.empty()}), T.NeedFirst{}, T.Empty{}, S.Grabs{False{}, D.ring.fill(Bool, table, False{}), D.ring.fill(Maybe<&2, D.Item>, table, None{}), D.ring.fill(Nat, table, 0n), D.ring.fill(Bool, table, False{})}}
 
 # Item distribution (D05, D06, D22, D37 grabbing rows, D55 M1, D56). Where sm
-# offers grab moves, the simple machine hands out one item per seat in turn:
-# the next seat after the last taker, in socket order, that may take. A granted
-# item goes at once into the seat's first free slot.
+# offers grab moves, the simple machine makes them itself, one sm move at a
+# time, reading the menus sm offers: the last seat to act places a granted
+# item in its first offered slot; otherwise the next seat after it, in socket
+# order, whose only move is a take, takes. So items go one per seat in turn.
 
-type Handout is Data:
+type Distribution is Data:
   Taking{seat: D.Seat}
+  Placing{seat: D.Seat, slot: D.Slot}
   Drawing{}
   Loading{}
-  Stalled{}
+  NoTaker{}
 
 def grab.check.done(+state: T.State, done: Bool) -> T.State:
   match done:
@@ -150,16 +152,8 @@ def grab.place.last(+state: T.State, +seat: D.Seat, +slot: D.Slot, last: Bool) -
 def grab.place(+state: T.State, +seat: D.Seat, +slot: D.Slot) -> T.State:
   grab.place.last(state, seat, slot, I.placing.last(T.state.records(state), seat))
 
-def grab.hold(+state: T.State, +seat: D.Seat, free: List<&2, S.GrabOption>) -> T.State:
-  match free:
-    case S.PutAt{slot} <> rest:
-      grab.place(state, seat, slot)
-    case _:
-      T.state.set_phase(state, T.Blocked{None{}})
-
 def grab.give(+state: T.State, +seat: D.Seat, +item: D.Item) -> T.State:
-  +state : T.State = T.state.emit(T.state.set_grabs(state, I.grabs.give(T.state.grabs(state), seat, item)), D.Granted{seat, item})
-  grab.hold(state, seat, I.puts(I.slot.order(), I.seat.slots(T.state.players(state), seat)))
+  T.state.emit(T.state.set_grabs(state, I.grabs.give(T.state.grabs(state), seat, item)), D.Granted{seat, item})
 
 def grab.chosen(+state: T.State, +seat: D.Seat, found: Maybe<&2, D.Item>) -> T.State:
   match found:
@@ -177,10 +171,6 @@ def grab.pool(+state: T.State, +seat: D.Seat, pool: List<&2, D.Item>) -> T.State
     case first <> second <> rest:
       T.state.set_phase(state, T.NeedItem{seat, first, second, rest})
 
-def grab.take(+state: T.State, +seat: D.Seat) -> T.State:
-  +state : T.State = T.state.set_grabs(state, I.grabs.stop_intake(T.state.grabs(state), seat))
-  grab.pool(state, seat, I.pool(T.state.records(state), seat))
-
 def grab.takes(options: List<&2, S.GrabOption>) -> Bool:
   match options:
     case S.TakeItem{} <> Nil{}:
@@ -188,12 +178,12 @@ def grab.takes(options: List<&2, S.GrabOption>) -> Bool:
     case _:
       False{}
 
-def grab.taker(seats: List<&2, D.Seat>, +needs: D.Ring<&2, List<&2, S.GrabOption>>) -> Handout:
+def grab.taker(seats: List<&2, D.Seat>, +needs: D.Ring<&2, List<&2, S.GrabOption>>) -> Distribution:
   match seats:
     case Nil{}:
-      Stalled{}
+      NoTaker{}
     case +seat <> rest:
-      Bool.pick(Handout, grab.takes(G.value.or(List<&2, S.GrabOption>, D.ring.get(List<&2, S.GrabOption>, needs, seat), Nil{})), Taking{seat}, grab.taker(rest, needs))
+      Bool.pick(Distribution, grab.takes(G.value.or(List<&2, S.GrabOption>, D.ring.get(List<&2, S.GrabOption>, needs, seat), Nil{})), Taking{seat}, grab.taker(rest, needs))
 
 # The seats after `after` in socket order, cycling, `after` last.
 def seats.after(seats: List<&2, D.Seat>, +after: D.Seat, +before: List<&2, D.Seat>) -> List<&2, D.Seat>:
@@ -204,52 +194,75 @@ def seats.after(seats: List<&2, D.Seat>, +after: D.Seat, +before: List<&2, D.Sea
       +upto : List<&2, D.Seat> = List.append(&2, D.Seat, before, [seat])
       Bool.pick(List<&2, D.Seat>, D.seat.eq(seat, after), List.append(&2, D.Seat, rest, upto), seats.after(rest, after, upto))
 
-def grab.continue.ready(+state: T.State, +after: D.Seat, distributing: Bool, holders: Bool) -> Handout:
+def grab.act.own(own: List<&2, S.GrabOption>, +seats: List<&2, D.Seat>, +needs: D.Ring<&2, List<&2, S.GrabOption>>, +after: D.Seat) -> Distribution:
+  match own:
+    case S.PutAt{slot} <> _:
+      Placing{after, slot}
+    case _:
+      grab.taker(seats, needs)
+
+def grab.act(+records: S.State, +after: D.Seat) -> Distribution:
+  +needs : D.Ring<&2, List<&2, S.GrabOption>> = I.grab.needs(records)
+  +seats : List<&2, D.Seat> = seats.after(D.table.seats(S.world.table(S.state.world(records))), after, Nil{})
+  grab.act.own(G.value.or(List<&2, S.GrabOption>, D.ring.get(List<&2, S.GrabOption>, needs, after), Nil{}), seats, needs, after)
+
+def grab.continue.ready(+records: S.State, +after: D.Seat, distributing: Bool, holders: Bool) -> Distribution:
   match distributing holders:
     case False{} False{}:
       Loading{}
     case _ _:
-      grab.taker(seats.after(D.table.seats(S.world.table(T.state.world(state))), after, Nil{}), I.grab.needs(T.state.records(state)))
+      grab.act(records, after)
 
-def grab.continue(+state: T.State, +after: D.Seat) -> Handout:
-  +grabs : S.Grabs = T.state.grabs(state)
-  grab.continue.ready(state, after, S.grabs.distributing(grabs), I.holders(D.ring.entries(Maybe<&2, D.Item>, S.grabs.holding(grabs))))
+# What follows a grab move, read from the records as sm's grab.continue
+# reads them: loading once the distribution is done and no item is held,
+# else the next grab move.
+def grab.continue(+records: S.State, +after: D.Seat) -> Distribution:
+  +grabs : S.Grabs = S.state.grabs(records)
+  grab.continue.ready(records, after, S.grabs.distributing(grabs), I.holders(D.ring.entries(Maybe<&2, D.Item>, S.grabs.holding(grabs))))
 
 # A take from a pool of two or more waits for the item draw.
-def grab.next(+state: T.State, pool: List<&2, D.Item>, +after: D.Seat) -> Handout:
+def grab.next(+records: S.State, pool: List<&2, D.Item>, +after: D.Seat) -> Distribution:
   match pool:
     case first <> second <> rest:
       Drawing{}
     case _:
-      grab.continue(state, after)
+      grab.continue(records, after)
 
-# Each take fills a slot or closes the seat's intake for this distribution, so
-# a seat takes at most 9 times and the fuel below never runs out.
-def grab.loop(fuel: Nat, +state: T.State, next: Handout) -> T.State:
+# Each seat takes at most 9 times (a take fills a slot or closes its intake)
+# and places at most 8 times, so the fuel below is never spent; spent fuel
+# stalls the machine as a seat with no move would.
+def grab.loop(fuel: Nat, +state: T.State, next: Distribution) -> T.State:
   match fuel next:
     case _ Drawing{}:
       state
     case _ Loading{}:
       load.begin(state)
-    case _ Stalled{}:
-      T.state.set_phase(state, T.Blocked{None{}})
+    case _ NoTaker{}:
+      T.state.set_phase(state, T.Stalled{})
     case 0n Taking{_}:
-      T.state.set_phase(state, T.Blocked{None{}})
+      T.state.set_phase(state, T.Stalled{})
+    case 0n Placing{_, _}:
+      T.state.set_phase(state, T.Stalled{})
     case 1n+fuel Taking{+seat}:
-      +taken : T.State = grab.take(state, seat)
-      grab.loop(fuel, taken, grab.next(taken, I.pool(T.state.records(state), seat), seat))
+      +opened : T.State = T.state.set_grabs(state, I.grabs.stop_intake(T.state.grabs(state), seat))
+      +pool : List<&2, D.Item> = I.pool(T.state.records(opened), seat)
+      +taken : T.State = grab.pool(opened, seat, pool)
+      grab.loop(fuel, taken, grab.next(T.state.records(taken), pool, seat))
+    case 1n+fuel Placing{+seat, +slot}:
+      +placed : T.State = grab.place(state, seat, slot)
+      grab.loop(fuel, placed, grab.continue(T.state.records(placed), seat))
 
 def grab.fuel(table: D.Table) -> Nat:
   match table:
     case D.TwoSeats{}:
-      18n
+      34n
     case D.ThreeSeats{}:
-      27n
+      51n
     case D.FourSeats{}:
-      36n
+      68n
 
-def grab.handout(+state: T.State, +after: D.Seat) -> T.State:
-  grab.loop(grab.fuel(S.world.table(T.state.world(state))), state, grab.continue(state, after))
+def grab.distribute(+state: T.State, +after: D.Seat) -> T.State:
+  grab.loop(grab.fuel(S.world.table(T.state.world(state))), state, grab.continue(T.state.records(state), after))
 
 def distribute.begin(+state: T.State, seats: List<&2, D.Seat>) -> T.State:
   match seats:
@@ -258,7 +271,7 @@ def distribute.begin(+state: T.State, seats: List<&2, D.Seat>) -> T.State:
     case +seat <> +rest:
       +grabs : S.Grabs = S.grabs.set_distributing(I.grabs.open_all(seat <> rest, T.state.grabs(state)), True{})
       +state : T.State = T.state.emit(T.state.set_grabs(state, grabs), D.GrabbingBegan{seat <> rest})
-      grab.handout(state, S.world.first_turn(T.state.world(state)))
+      grab.distribute(state, S.world.first_turn(T.state.world(state)))
 
 def round.reset(+state: T.State) -> T.State:
   +world : S.World = T.state.world(state)
@@ -570,7 +583,7 @@ def answer.draw(+state: T.State, value: Nat) -> T.State:
     case T.State{world, players, T.NeedTurnAmount{from, passing, winner}, notes, grabs}:
       turn.winner(T.state.set_world(state, S.world.set_item_amount(world, value)), from, passing, winner)
     case T.State{world, players, T.NeedItem{+seat, first, second, rest}, notes, grabs}:
-      grab.handout(grab.chosen(state, seat, G.nth(D.Item, first <> second <> rest, value)), seat)
+      grab.distribute(grab.chosen(state, seat, G.nth(D.Item, first <> second <> rest, value)), seat)
     case T.State{world, players, T.NeedPhone{seat, owner, slot}, notes, grabs}:
       item.clue(state, seat, owner, slot, value)
     case _:
@@ -584,9 +597,9 @@ def answer.request(+state: T.State, n: Nat, request: T.Request) -> D.Stepped<&2,
     case T.Stuck{}:
       D.Stepped{state, Nil{}}
     case T.Draw{_, range}:
-      T.state.stepped(answer.draw(T.state.set_notes(state, Nil{}), D.draw.value(range, n)))
+      T.state.stepped(answer.draw(T.state.set_log(state, T.Empty{}), D.draw.value(range, n)))
     case T.Choose{_, D.NonEmpty{_, rest}}:
-      T.state.stepped(answer.choice(T.state.set_notes(state, Nil{}), D.clamp(n, List.length(&2, T.Move, rest))))
+      T.state.stepped(answer.choice(T.state.set_log(state, T.Empty{}), D.clamp(n, List.length(&2, T.Move, rest))))
 
 def answer(+state: T.State, n: Nat) -> D.Stepped<&2, T.State>:
   answer.request(state, n, request(state))

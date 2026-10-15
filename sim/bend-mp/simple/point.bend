@@ -71,14 +71,15 @@ def picks.has(seen: List<&2, D.At<&2, D.Item>>, +owner: D.Seat, +item: D.Item) -
     case D.At{seat, x} <> rest:
       Bool.or(Bool.and(D.seat.eq(seat, owner), D.item.eq(x, item)), picks.has(rest, owner, item))
 
-# One steal per owner and distinct item other than a jammer, at the owner's
-# first slot holding it, by owner then slot.
+# One steal per owner and distinct item that opens no pick (sm never offers
+# adrenaline; a jammer is StealJam), at the owner's first slot holding it, by
+# owner then slot.
 def steal.picks(+adrenaline: D.Slot, picks: List<&2, S.StealOption>, +seen: List<&2, D.At<&2, D.Item>>) -> List<&2, T.IdleOption>:
   match picks:
     case Nil{}:
       Nil{}
     case S.Pick{+owner, +slot, +item} <> rest:
-      I.keep(T.IdleOption, Bool.not(Bool.or(D.item.eq(item, D.Jammer{}), picks.has(seen, owner, item))), T.StealWith{adrenaline, owner, slot, item}, steal.picks(adrenaline, rest, D.At{owner, item} <> seen))
+      I.keep(T.IdleOption, Bool.not(Bool.or(item.chained(item), picks.has(seen, owner, item))), T.StealWith{adrenaline, owner, slot, item}, steal.picks(adrenaline, rest, D.At{owner, item} <> seen))
 
 def steal.options(adrenaline: Maybe<&2, D.Slot>, picks: List<&2, S.StealOption>) -> List<&2, T.IdleOption>:
   match adrenaline:
@@ -159,6 +160,21 @@ def choose(seat: D.Seat, moves: List<&2, T.Move>) -> T.Request:
     case move <> rest:
       T.Choose{seat, D.NonEmpty{move, rest}}
 
+# A seat away from the table has no menu, as in sm's menu ring.
+def seated(seat: Maybe<&2, Bool>) -> Bool:
+  match seat:
+    case Some{_}:
+      True{}
+    case None{}:
+      False{}
+
+def idle.request(seated: Bool, seat: D.Seat, moves: List<&2, T.Move>) -> T.Request:
+  match seated:
+    case True{}:
+      choose(seat, moves)
+    case False{}:
+      T.Stuck{}
+
 def option.nth(options: List<&2, T.IdleOption>, n: Nat) -> Maybe<&2, T.IdleOption>:
   match options n:
     case Nil{} _:
@@ -206,10 +222,12 @@ def phase.request(phase: T.Phase, +world: S.World, +state: T.State) -> T.Request
     case T.NeedSwap{_, _, 0n}:
       T.Stuck{}
     case T.Idle{+seat}:
-      choose(seat, moves(options(state, seat)))
+      idle.request(seated(D.ring.get(Bool, D.ring.fill(Bool, S.world.table(world), True{}), seat)), seat, moves(options(state, seat)))
     case T.Ended{}:
       T.Finished{}
     case T.Blocked{_}:
+      T.Stuck{}
+    case T.Stalled{}:
       T.Stuck{}
     case T.NeedTurnAmount{_, _, _}:
       T.Draw{D.ItemAmount{}, D.table.amount_range(S.world.table(world))}
@@ -234,6 +252,8 @@ def phase.stage(phase: T.Phase) -> D.Stage:
     case T.NeedTurnAmount{_, _, _}:
       D.Distributing{}
     case T.NeedItem{_, _, _, _}:
+      D.Distributing{}
+    case T.Stalled{}:
       D.Distributing{}
     case T.NeedPhone{seat, _, _}:
       D.Playing{seat, D.Idle{}}

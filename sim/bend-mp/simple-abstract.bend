@@ -3,13 +3,15 @@ import ./domain.bend as D
 import ./sm/main.bend as M
 import ./sm/state.bend as S
 import ./sm/items.bend as I
+import ./sm/rules.bend as G
 import ./simple/main.bend as N
 import ./simple/state.bend as T
 import ./simple/point.bend as P
 
 # The bridge from the simple machine to sm. embed is the sm state a simple
-# state stands for. chain lists the sm steps of one simple answer, and walk
-# plays them on sm, step by step, failing on any step sm would not offer.
+# state stands for, and back reads it back. chain lists the sm steps of one
+# simple answer, and walk plays them on sm, step by step, failing on any step
+# sm would not offer.
 
 def embed.phase(phase: T.Phase, +records: S.State) -> S.Phase:
   match phase:
@@ -29,6 +31,8 @@ def embed.phase(phase: T.Phase, +records: S.State) -> S.Phase:
       S.Ended{}
     case T.Blocked{holder}:
       S.Blocked{holder}
+    case T.Stalled{}:
+      S.Grab{I.grab.needs(records)}
     case T.NeedTurnAmount{from, passing, winner}:
       S.NeedTurnAmount{from, passing, winner}
     case T.NeedItem{seat, first, second, rest}:
@@ -58,63 +62,6 @@ def option.steps(+seat: D.Seat, option: Maybe<&2, T.IdleOption>) -> List<&2, Ste
       [ChoiceStep{seat, D.UseItem{adrenaline, D.Adrenaline{}}}, ChoiceStep{seat, D.Steal{owner, slot, D.Jammer{}}}, ChoiceStep{seat, D.JamTarget{target}}]
     case None{}:
       Nil{}
-
-def take.unless(drawn: Bool, seat: D.Seat, rest: List<&2, Step>) -> List<&2, Step>:
-  match drawn:
-    case True{}:
-      rest
-    case False{}:
-      ChoiceStep{seat, D.Grab{}} <> rest
-
-# The grab moves of a handout, read from its notes: a take before each grant
-# (except the grant of an item draw, whose take came before the draw) and each
-# empty briefcase, and a place for each placement.
-def grab.steps(notes: List<&2, D.Note>, drawn: Bool) -> List<&2, Step>:
-  match notes:
-    case Nil{}:
-      Nil{}
-    case D.Shown{D.Granted{seat, _}} <> rest:
-      take.unless(drawn, seat, grab.steps(rest, False{}))
-    case D.Told{seat, D.EmptyBriefcase{}} <> rest:
-      ChoiceStep{seat, D.Grab{}} <> grab.steps(rest, drawn)
-    case D.Shown{D.Placed{seat, slot, _}} <> rest:
-      ChoiceStep{seat, D.Place{slot}} <> grab.steps(rest, drawn)
-    case note <> rest:
-      grab.steps(rest, drawn)
-
-# A handout that stops at an item draw ends with that seat's take.
-def grab.pending(phase: T.Phase) -> List<&2, Step>:
-  match phase:
-    case T.NeedItem{seat, _, _, _}:
-      [ChoiceStep{seat, D.Grab{}}]
-    case _:
-      Nil{}
-
-def phase.drawn(phase: T.Phase) -> Bool:
-  match phase:
-    case T.NeedItem{_, _, _, _}:
-      True{}
-    case _:
-      False{}
-
-def chain.grabs(drawn: Bool, stepped: D.Stepped<&2, T.State>) -> List<&2, Step>:
-  match stepped:
-    case D.Stepped{state, notes}:
-      List.append(&2, Step, grab.steps(notes, drawn), grab.pending(T.state.phase(state)))
-
-def chain.request(+state: T.State, +n: Nat, request: T.Request) -> List<&2, Step>:
-  match request:
-    case T.Finished{}:
-      Nil{}
-    case T.Stuck{}:
-      Nil{}
-    case T.Draw{_, _}:
-      DrawStep{n} <> chain.grabs(phase.drawn(T.state.phase(state)), N.answer(state, n))
-    case T.Choose{+seat, D.NonEmpty{_, rest}}:
-      List.append(&2, Step, option.steps(seat, P.option.nth(P.options(state, seat), D.clamp(n, List.length(&2, T.Move, rest)))), chain.grabs(False{}, N.answer(state, n)))
-
-def chain(+state: T.State, +n: Nat) -> List<&2, Step>:
-  chain.request(state, n, N.request(state))
 
 def walk.index(prompt: D.Prompt, index: Maybe<&2, Nat>) -> Maybe<&2, Nat>:
   match index:
@@ -147,16 +94,22 @@ def walk.merge(stepped: D.Stepped<&2, S.State>, rest: Maybe<&2, D.Stepped<&2, S.
     case D.Stepped{_, first} Some{D.Stepped{state, notes}}:
       Some{D.Stepped{state, List.append(&2, D.Note, first, notes)}}
 
-def walk.go(steps: List<&2, Step>, answer: Maybe<&2, Nat>, +state: S.State) -> Maybe<&2, D.Stepped<&2, S.State>>:
-  match steps answer:
-    case _ None{}:
+def walk.answer(answer: Maybe<&2, Nat>, +state: S.State, rest: S.State -> Maybe<&2, D.Stepped<&2, S.State>>) -> Maybe<&2, D.Stepped<&2, S.State>>:
+  match answer:
+    case None{}:
       None{}
-    case Nil{} Some{n}:
-      Some{M.answer(state, n)}
-    case step <> rest Some{n}:
+    case Some{n}:
       +stepped : D.Stepped<&2, S.State> = M.answer(state, n)
-      +next : S.State = M.stepped.state(stepped)
-      walk.merge(stepped, walk.go(rest, walk.legal(M.request(next), step), next))
+      walk.merge(stepped, rest(M.stepped.state(stepped)))
+
+# The steps played from a state: the notes of each sm answer in turn, and the
+# state the last one reached.
+def walk.go(steps: List<&2, Step>, +state: S.State) -> Maybe<&2, D.Stepped<&2, S.State>>:
+  match steps:
+    case Nil{}:
+      Some{D.Stepped{state, Nil{}}}
+    case +step <> rest:
+      walk.answer(walk.legal(M.request(state), step), state, next => walk.go(rest, next))
 
 # The end state carries all the notes, as a simple answer's state does.
 def walk.notes(walked: Maybe<&2, D.Stepped<&2, S.State>>) -> Maybe<&2, D.Stepped<&2, S.State>>:
@@ -171,4 +124,185 @@ def walk(+state: S.State, steps: List<&2, Step>) -> Maybe<&2, D.Stepped<&2, S.St
     case Nil{}:
       Some{D.Stepped{state, Nil{}}}
     case step <> rest:
-      walk.notes(walk.go(rest, walk.legal(M.request(state), step), state))
+      walk.notes(walk.go(step <> rest, state))
+def log.of.go(notes: List<&2, D.Note>, acc: T.Log) -> T.Log:
+  match notes:
+    case Nil{}:
+      acc
+    case note <> rest:
+      log.of.go(rest, T.Snoc{acc, note})
+
+def log.of(notes: List<&2, D.Note>) -> T.Log:
+  log.of.go(notes, T.Empty{})
+
+# Aim, JamPick and StealPick have no simple phase; they read back as Blocked.
+def back.phase(phase: S.Phase) -> T.Phase:
+  match phase:
+    case S.NeedFirst{}:
+      T.NeedFirst{}
+    case S.NeedHealth{}:
+      T.NeedHealth{}
+    case S.NeedAmount{}:
+      T.NeedAmount{}
+    case S.NeedBatch{}:
+      T.NeedBatch{}
+    case S.NeedSwap{load, shells, i}:
+      T.NeedSwap{load, shells, i}
+    case S.Idle{seat, _}:
+      T.Idle{seat}
+    case S.Ended{}:
+      T.Ended{}
+    case S.Blocked{holder}:
+      T.Blocked{holder}
+    case S.Grab{_}:
+      T.Stalled{}
+    case S.NeedTurnAmount{from, passing, winner}:
+      T.NeedTurnAmount{from, passing, winner}
+    case S.NeedItem{seat, first, second, rest}:
+      T.NeedItem{seat, first, second, rest}
+    case S.NeedPhone{seat, owner, slot}:
+      T.NeedPhone{seat, owner, slot}
+    case _:
+      T.Blocked{None{}}
+
+def back(state: S.State) -> T.State:
+  match state:
+    case S.State{world, players, phase, notes, grabs}:
+      T.State{world, players, back.phase(phase), log.of(notes), grabs}
+
+# The distribution schedule, stated over the menus sm offers at a Grab
+# point: the last seat to act places at the first Place in its menu;
+# otherwise the first seat, cycling in socket order from the one after it,
+# whose menu is a lone Grab, takes; otherwise no one moves.
+def order(table: D.Table, after: D.Seat) -> List<&2, D.Seat>:
+  match table after:
+    case D.TwoSeats{} D.Seat1{}:
+      [D.Seat3{}, D.Seat1{}]
+    case D.TwoSeats{} D.Seat3{}:
+      [D.Seat1{}, D.Seat3{}]
+    case D.ThreeSeats{} D.Seat0{}:
+      [D.Seat1{}, D.Seat2{}, D.Seat0{}]
+    case D.ThreeSeats{} D.Seat1{}:
+      [D.Seat2{}, D.Seat0{}, D.Seat1{}]
+    case D.ThreeSeats{} D.Seat2{}:
+      [D.Seat0{}, D.Seat1{}, D.Seat2{}]
+    case D.FourSeats{} D.Seat0{}:
+      [D.Seat1{}, D.Seat2{}, D.Seat3{}, D.Seat0{}]
+    case D.FourSeats{} D.Seat1{}:
+      [D.Seat2{}, D.Seat3{}, D.Seat0{}, D.Seat1{}]
+    case D.FourSeats{} D.Seat2{}:
+      [D.Seat3{}, D.Seat0{}, D.Seat1{}, D.Seat2{}]
+    case D.FourSeats{} D.Seat3{}:
+      [D.Seat0{}, D.Seat1{}, D.Seat2{}, D.Seat3{}]
+    case table _:
+      D.table.seats(table)
+
+def menu.of(+menus: D.Ring<&2, List<&2, D.Move>>, seat: D.Seat) -> List<&2, D.Move>:
+  G.value.or(List<&2, D.Move>, D.ring.get(List<&2, D.Move>, menus, seat), Nil{})
+
+def menu.takes(moves: List<&2, D.Move>) -> Bool:
+  match moves:
+    case D.Grab{} <> Nil{}:
+      True{}
+    case _:
+      False{}
+
+def taker(seats: List<&2, D.Seat>, +menus: D.Ring<&2, List<&2, D.Move>>) -> Maybe<&2, Step>:
+  match seats:
+    case Nil{}:
+      None{}
+    case +seat <> rest:
+      Bool.pick(Maybe<&2, Step>, menu.takes(menu.of(menus, seat)), Some{ChoiceStep{seat, D.Grab{}}}, taker(rest, menus))
+
+def decide.own(own: List<&2, D.Move>, +after: D.Seat, seats: List<&2, D.Seat>, +menus: D.Ring<&2, List<&2, D.Move>>) -> Maybe<&2, Step>:
+  match own:
+    case D.Place{slot} <> _:
+      Some{ChoiceStep{after, D.Place{slot}}}
+    case _:
+      taker(seats, menus)
+
+def decide(+menus: D.Ring<&2, List<&2, D.Move>>, table: D.Table, +after: D.Seat) -> Maybe<&2, Step>:
+  decide.own(menu.of(menus, after), after, order(table, after), menus)
+
+# The simple machine's bound on the grab moves of one distribution.
+def budget(table: D.Table) -> Nat:
+  match table:
+    case D.TwoSeats{}:
+      34n
+    case D.ThreeSeats{}:
+      51n
+    case D.FourSeats{}:
+      68n
+
+def decide.phase(phase: S.Phase, table: D.Table, +after: D.Seat) -> Maybe<&2, Step>:
+  match phase:
+    case S.Grab{needs}:
+      decide(I.grab.menus(needs), table, after)
+    case _:
+      None{}
+
+def sched.decide(+state: S.State, +after: D.Seat) -> Maybe<&2, Step>:
+  decide.phase(S.state.phase(state), S.world.table(S.state.world(state)), after)
+
+def sched.index(+state: S.State, index: Maybe<&2, Nat>) -> S.State:
+  match index:
+    case Some{k}:
+      M.stepped.state(M.answer(state, k))
+    case None{}:
+      S.state.set_phase(state, S.Blocked{None{}})
+
+def sched.go(fuel: Nat, step: Maybe<&2, Step>, +state: S.State) -> List<&2, Step>:
+  match fuel step:
+    case 0n _:
+      Nil{}
+    case 1n+fuel Some{ChoiceStep{+seat, +move}}:
+      +next : S.State = sched.index(state, walk.legal(M.request(state), ChoiceStep{seat, move}))
+      ChoiceStep{seat, move} <> sched.go(fuel, sched.decide(next, seat), next)
+    case 1n+fuel _:
+      Nil{}
+
+# No grab move to make ends the schedule before the fuel is read.
+def sched.start(step: Maybe<&2, Step>, +state: S.State, fuel: Nat) -> List<&2, Step>:
+  match step:
+    case None{}:
+      Nil{}
+    case Some{first}:
+      sched.go(fuel, Some{first}, state)
+
+# The grab moves sm makes after a step, from the state it reached. An item
+# draw continues its seat's turn at the briefcase; otherwise a distribution
+# starts after the round's or load's first shooter.
+def sched(+state: S.State, +after: D.Seat) -> List<&2, Step>:
+  sched.start(sched.decide(state, after), state, budget(S.world.table(S.state.world(state))))
+
+def chain.after(phase: T.Phase, +state: S.State) -> D.Seat:
+  match phase:
+    case T.NeedItem{seat, _, _, _}:
+      seat
+    case _:
+      S.world.first_turn(S.state.world(state))
+
+def chain.first(+state: T.State, +n: Nat, request: T.Request) -> List<&2, Step>:
+  match request:
+    case T.Finished{}:
+      Nil{}
+    case T.Stuck{}:
+      Nil{}
+    case T.Draw{_, _}:
+      [DrawStep{n}]
+    case T.Choose{+seat, D.NonEmpty{_, rest}}:
+      option.steps(seat, P.option.nth(P.options(state, seat), D.clamp(n, List.length(&2, T.Move, rest))))
+
+def chain.rest(+state: T.State, +first: List<&2, Step>, walked: Maybe<&2, D.Stepped<&2, S.State>>) -> List<&2, Step>:
+  match first walked:
+    case Nil{} _:
+      Nil{}
+    case _ None{}:
+      first
+    case _ Some{D.Stepped{+reached, _}}:
+      List.append(&2, Step, first, sched(reached, chain.after(T.state.phase(state), reached)))
+
+def chain(+state: T.State, +n: Nat) -> List<&2, Step>:
+  +first : List<&2, Step> = chain.first(state, n, N.request(state))
+  chain.rest(state, first, walk.go(first, embed(state)))
+

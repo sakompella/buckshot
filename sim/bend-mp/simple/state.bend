@@ -39,12 +39,26 @@ type Phase is Data:
   Idle{seat: D.Seat}
   Ended{}
   Blocked{holder: Maybe<&2, D.Seat>}
+  Stalled{}
   NeedTurnAmount{from: D.Seat, passing: Bool, winner: Maybe<&2, D.Seat>}
   NeedItem{seat: D.Seat, first: D.Item, second: D.Item, rest: List<&2, D.Item>}
   NeedPhone{seat: D.Seat, owner: D.Seat, slot: D.Slot}
 
+# The notes of the current answer, oldest first, as a list that grows at its
+# end, so a note is added without copying the earlier ones.
+type Log is Data:
+  Empty{}
+  Snoc{earlier: Log, note: D.Note}
+
+def log.list(log: Log) -> List<&2, D.Note>:
+  match log:
+    case Empty{}:
+      Nil{}
+    case Snoc{earlier, note}:
+      List.append(&2, D.Note, log.list(earlier), [note])
+
 type State is Data:
-  State{world: S.World, players: S.Players, phase: Phase, notes: List<&2, D.Note>, grabs: S.Grabs}
+  State{world: S.World, players: S.Players, phase: Phase, log: Log, grabs: S.Grabs}
 
 def state.world(value: State) -> S.World:
   match value:
@@ -53,8 +67,8 @@ def state.world(value: State) -> S.World:
 
 def state.set_world(value: State, replacement: S.World) -> State:
   match value:
-    case State{_, players, phase, notes, grabs}:
-      State{replacement, players, phase, notes, grabs}
+    case State{_, players, phase, log, grabs}:
+      State{replacement, players, phase, log, grabs}
 
 def state.players(value: State) -> S.Players:
   match value:
@@ -63,8 +77,8 @@ def state.players(value: State) -> S.Players:
 
 def state.set_players(value: State, replacement: S.Players) -> State:
   match value:
-    case State{world, _, phase, notes, grabs}:
-      State{world, replacement, phase, notes, grabs}
+    case State{world, _, phase, log, grabs}:
+      State{world, replacement, phase, log, grabs}
 
 def state.phase(value: State) -> Phase:
   match value:
@@ -73,15 +87,18 @@ def state.phase(value: State) -> Phase:
 
 def state.set_phase(value: State, replacement: Phase) -> State:
   match value:
-    case State{world, players, _, notes, grabs}:
-      State{world, players, replacement, notes, grabs}
+    case State{world, players, _, log, grabs}:
+      State{world, players, replacement, log, grabs}
+
+def state.log(value: State) -> Log:
+  match value:
+    case State{_, _, _, log, _}:
+      log
 
 def state.notes(value: State) -> List<&2, D.Note>:
-  match value:
-    case State{_, _, _, notes, _}:
-      notes
+  log.list(state.log(value))
 
-def state.set_notes(value: State, replacement: List<&2, D.Note>) -> State:
+def state.set_log(value: State, replacement: Log) -> State:
   match value:
     case State{world, players, phase, _, grabs}:
       State{world, players, phase, replacement, grabs}
@@ -93,25 +110,25 @@ def state.grabs(value: State) -> S.Grabs:
 
 def state.set_grabs(value: State, replacement: S.Grabs) -> State:
   match value:
-    case State{world, players, phase, notes, _}:
-      State{world, players, phase, notes, replacement}
+    case State{world, players, phase, log, _}:
+      State{world, players, phase, log, replacement}
 
 # The records as an sm state, for sm's pure rules (sm/items.bend), which never
-# read the phase.
+# read the phase or the notes.
 def state.records(value: State) -> S.State:
   match value:
-    case State{world, players, _, notes, grabs}:
-      S.State{world, players, S.Blocked{None{}}, notes, grabs}
+    case State{world, players, _, _, grabs}:
+      S.State{world, players, S.Blocked{None{}}, Nil{}, grabs}
 
 def state.emit(state: State, event: D.GameEvent) -> State:
   match state:
-    case State{world, players, phase, notes, grabs}:
-      State{world, players, phase, List.append(&2, D.Note, notes, [D.Shown{event}]), grabs}
+    case State{world, players, phase, log, grabs}:
+      State{world, players, phase, Snoc{log, D.Shown{event}}, grabs}
 
 def state.tell(state: State, seat: D.Seat, secret: D.Secret) -> State:
   match state:
-    case State{world, players, phase, notes, grabs}:
-      State{world, players, phase, List.append(&2, D.Note, notes, [D.Told{seat, secret}]), grabs}
+    case State{world, players, phase, log, grabs}:
+      State{world, players, phase, Snoc{log, D.Told{seat, secret}}, grabs}
 
 def state.stepped(+state: State) -> D.Stepped<&2, State>:
-  D.Stepped{state, state.notes(state)}
+  D.Stepped{state, log.list(state.log(state))}

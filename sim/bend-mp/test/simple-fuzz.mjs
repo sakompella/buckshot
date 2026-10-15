@@ -17,13 +17,14 @@ const dir = mkdtempSync(join(tmpdir(), 'bend-mp-simple-fuzz-'));
 const bridge = build(dir, 'bridge', '../simple-abstract.bend'), abstract = build(dir, 'abstract', '../abstract.bend');
 const SA = (await import(bridge)).default, A = (await import(abstract)).default;
 const N = name => SA[`simple/main.${name}`], M = name => SA[`sm/main.${name}`], D = name => SA[`domain.${name}`];
+const notesOf = s => SA['simple/state.state.notes'](s);
 const { random, randomConfig } = makeRandom(0x73696d70);
 
 const sockets = n => n === 2 ? [1, 3] : Array.from({ length: n }, (_, i) => i);
 const seatTag = s => ({ $: `domain.Seat${s}` });
 const json = x => JSON.stringify(normalize(x));
 const count = { refines: 0, valid: 0, board: 0, draws: 0, menus: 0, privacy: 0, schedule: 0 };
-const coverage = { games: 0, points: 0, finished: 0, itemDraws: 0, handouts: 0 };
+const coverage = { games: 0, points: 0, finished: 0, itemDraws: 0, distributions: 0 };
 const moveKinds = { Shoot: 0, Use: 0, Jam: 0, Steal: 0, StealJam: 0 };
 const capBound = { 2: 0, 3: 0, 4: 0 };
 
@@ -103,7 +104,7 @@ function checkPrivacy(game, s) {
   const { gun, decks } = otherHidden(s.world);
   const swapped = N('replace_hidden')(s, gun, decks);
   same('privacy', 'board', N('point')(s).board, N('point')(swapped).board, game);
-  for (const seat of game.seats) same('privacy', `hear seat ${seat}`, D('hear')(s.notes, seatTag(seat)), D('hear')(swapped.notes, seatTag(seat)), game);
+  for (const seat of game.seats) same('privacy', `hear seat ${seat}`, D('hear')(notesOf(s), seatTag(seat)), D('hear')(notesOf(swapped), seatTag(seat)), game);
 }
 
 // The state with every other seat's items gone, to see whether a take's pool
@@ -117,9 +118,9 @@ function alone(x, seat) {
 
 // Replays a chain on sm. Each take must go to the next seat after the last
 // taker that may take, cycling in socket order from the seat after the first
-// shooter; each place must be the holder's first free slot. Counts handouts
+// shooter; each place must be the holder's first free slot. Counts distributions
 // whose takes saw a pool cut by another seat's items.
-function watchHandouts(game, x, steps) {
+function watchDistributions(game, x, steps) {
   for (const step of steps) {
     let n = step.answer;
     if (kind(step) === 'ChoiceStep') {
@@ -132,14 +133,14 @@ function watchHandouts(game, x, steps) {
         same('schedule', 'take goes round-robin', order.find(s => takers.includes(s)), seatNumber(step.seat), game);
         game.lastTaker = seatNumber(step.seat);
         const pool = state => array(SA['sm/items.pool'](state, step.seat)).length;
-        if (pool(x) < pool(alone(x, seatNumber(step.seat)))) game.bound.add(game.handout);
+        if (pool(x) < pool(alone(x, seatNumber(step.seat)))) game.bound.add(game.distribution);
       }
       if (kind(step.move) === 'Place') same('schedule', 'place in the first free slot', prompt.menu.head, step.move, game);
     }
     const next = M('answer')(x, n);
     if (array(next.notes).some(note => kind(note) === 'Shown' && kind(note.event) === 'GrabbingBegan')) {
-      game.handout++;
-      coverage.handouts++;
+      game.distribution++;
+      coverage.distributions++;
       game.lastTaker = seatNumber(next.state.world.first_turn);
     }
     x = next.state;
@@ -154,7 +155,7 @@ function answerFor(request) {
 
 function play(config, label, seats) {
   const started = N('start')(config);
-  const game = { label, config, seats, tape: [], handout: 0, bound: new Set(), lastTaker: null };
+  const game = { label, config, seats, tape: [], distribution: 0, bound: new Set(), lastTaker: null };
   let s = started.state;
   const smStart = M('start')(config);
   same('refines', 'start', { state: smStart.state, notes: smStart.notes }, { state: SA.embed(s), notes: started.notes }, game);
@@ -167,6 +168,7 @@ function play(config, label, seats) {
     coverage.points++;
     const request = point.request;
     if (kind(request) === 'Finished') { coverage.finished++; break; }
+    if (kind(s.phase) === 'Stalled') throw new Mismatch(`Stalled at ${JSON.stringify(game.tape)} in ${label}`);
     if (kind(request) === 'Stuck') throw new Mismatch(`Stuck at ${JSON.stringify(game.tape)} in ${label}`);
     if (kind(request) === 'Draw') {
       same('draws', `step ${step}`, { $: 'Draw', label: request.label, range: request.range }, smPoint.request, game);
@@ -180,7 +182,7 @@ function play(config, label, seats) {
     const walked = maybe(SA.walk(x, steps));
     if (walked === null) throw new Mismatch(`walk refused the chain at step ${step} in ${label}: ${json(array(steps))}\nrepro: ${JSON.stringify({ tape: game.tape, config: normalize(config) })}`);
     same('refines', `step ${step}`, { state: SA.embed(next.state), notes: next.notes }, { state: walked.state, notes: walked.notes }, game);
-    watchHandouts(game, x, array(steps));
+    watchDistributions(game, x, array(steps));
     s = next.state;
   }
   capBound[seats.length] += game.bound.size;
@@ -200,6 +202,6 @@ try {
   rmSync(dir, { recursive: true });
 }
 if (process.exitCode !== 1) {
-  assert.ok(Object.values(moveKinds).every(n => n > 0) && coverage.itemDraws > 0 && capBound[3] + capBound[4] > 0, 'fuzz plays every kind of move, item draws and cap-bound handouts');
-  console.log(`simple fuzz: ${coverage.games} games, ${coverage.points} points, ${((performance.now() - started) / 1000).toFixed(0)} s; checks ${JSON.stringify(count)}; moves ${JSON.stringify(moveKinds)}; ${JSON.stringify(coverage)}; cap-bound handouts by seats ${JSON.stringify(capBound)}`);
+  assert.ok(Object.values(moveKinds).every(n => n > 0) && coverage.itemDraws > 0 && capBound[3] + capBound[4] > 0, 'fuzz plays every kind of move, item draws and cap-bound distributions');
+  console.log(`simple fuzz: ${coverage.games} games, ${coverage.points} points, ${((performance.now() - started) / 1000).toFixed(0)} s; checks ${JSON.stringify(count)}; moves ${JSON.stringify(moveKinds)}; ${JSON.stringify(coverage)}; cap-bound distributions by seats ${JSON.stringify(capBound)}`);
 }
