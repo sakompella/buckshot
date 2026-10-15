@@ -1,13 +1,15 @@
 import { createModels } from "@earendil-works/pi-ai";
-import { Cause, Effect, Exit } from "effect";
+import { Cause, Effect, Exit, Schema } from "effect";
 
-import { describeEndpoint, modelRefOf, PLAYER_PREFIXES, playerEndpoint, providerOf } from "../src/arena/endpoints.ts";
-import { type Entrant, playMatch } from "../src/arena/match.ts";
+import { AgentId, seatingOf } from "../src/arena/agent.ts";
+import { agentEndpoint, describeEndpoint, modelRefOf, providerIdOf, providerOf } from "../src/arena/endpoints.ts";
+import { playMatch } from "../src/arena/match.ts";
 
-// Plays one 2-player match between the two models configured in web/.env (see
-// .env.example), to game over, and writes its run directory. Rerunning with the
-// same --dir resumes the match from its store.
-// Usage: bun scripts/arena.ts [--dir ../_work/arena/<name>] [--seed N]
+// Plays one match between agents configured in web/.env (see .env.example), to
+// game over, and writes its run directory. --agents picks the agents, and
+// --rotation seats them: rotation 0 puts the first at Player 1. Rerunning with
+// the same --dir resumes the match from its store.
+// Usage: bun scripts/arena.ts [--dir ../_work/arena/<name>] [--seed N] [--agents A,B] [--rotation 0]
 
 const flag = (name: string, fallback: string): string => {
   const at = process.argv.indexOf(`--${name}`);
@@ -19,21 +21,26 @@ const dir = flag("dir", `../_work/arena/${new Date().toISOString().replaceAll(":
 
 const seed = flag("seed", String(Math.floor(Math.random() * 2 ** 31)));
 
+const agents = Schema.decodeUnknownSync(Schema.Array(AgentId))(flag("agents", "A,B").split(","));
+
+const seating = seatingOf(agents, Number(flag("rotation", "0")));
+
 const program = Effect.gen(function* () {
-  const endpoints = yield* Effect.all(PLAYER_PREFIXES.slice(0, 2).map(playerEndpoint));
   const models = createModels();
 
-  const entrants = endpoints.map((endpoint, index): Entrant => {
-    const providerId = `player-${index + 1}`;
+  const entrants = yield* Effect.forEach(seating, (agent) =>
+    Effect.map(agentEndpoint(agent), (endpoint) => {
+      const providerId = providerIdOf(agent, endpoint);
 
-    models.setProvider(providerOf(providerId, endpoint));
+      models.setProvider(providerOf(providerId, endpoint));
 
-    return { model: modelRefOf(providerId, endpoint), thinkingLevel: endpoint.effort, describe: describeEndpoint(endpoint) };
-  });
+      return { agent, model: modelRefOf(providerId, endpoint), thinkingLevel: endpoint.effort, describe: describeEndpoint(endpoint) };
+    }),
+  );
 
-  console.error(`arena: ${dir}, seed ${seed}`);
+  console.error(`arena: ${dir}, seed ${seed}, seating ${seating.map((agent, index) => `Player ${index + 1}: ${agent}`).join(", ")}`);
 
-  return yield* playMatch({ dir, seed, controllers: ["Agent", "Agent"], entrants, models, compaction: {} });
+  return yield* playMatch({ dir, seed, controllers: seating.map(() => "Agent"), entrants, models, compaction: {} });
 });
 
 Exit.match(await Effect.runPromiseExit(program), {

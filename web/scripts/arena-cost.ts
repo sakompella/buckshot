@@ -53,7 +53,7 @@ interface Total {
   unpriced: number;
 }
 
-const totals = { player: new Map<string, Total>(), match: new Map<string, Total>(), model: new Map<string, Total>() };
+const totals = { agentInMatch: new Map<string, Total>(), match: new Map<string, Total>(), agent: new Map<string, Total>(), model: new Map<string, Total>() };
 
 const tally = (table: Map<string, Total>, key: string, call: CallLine) => {
   const total = table.get(key) ?? { calls: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, dollars: 0, unpriced: 0 };
@@ -72,9 +72,10 @@ const tally = (table: Map<string, Total>, key: string, call: CallLine) => {
 
 for (const dir of roots.flatMap(matchDirs)) {
   for (const call of readCalls(dir)) {
-    tally(totals.player, `${dir} player ${call.player} (${call.model})`, call);
+    tally(totals.agentInMatch, `${dir} agent ${call.agent} as Player ${call.player} (${call.model})`, call);
     tally(totals.match, dir, call);
-    tally(totals.model, `${call.provider}/${call.model}`, call);
+    tally(totals.agent, `agent ${call.agent} (${call.model})`, call);
+    tally(totals.model, `${call.api}/${call.model}`, call);
   }
 }
 
@@ -90,8 +91,10 @@ const show = (title: string, table: Map<string, Total>) => {
 
 console.log(`Prices: ${pricesPath} (${prices.unit})`);
 
-show("Per player", totals.player);
+show("Per agent in each match", totals.agentInMatch);
 
 show("Per match", totals.match);
+
+show("Per agent", totals.agent);
 
 show("Per model", totals.model);

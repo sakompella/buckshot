@@ -13,7 +13,8 @@ import { type AgentCall, AgentReply, replyText, RULES, runTool, tools } from "..
 import { type Controller, controllerOf, promptsOf } from "../driver.ts";
 import { rosterOf } from "../players.ts";
 import { eventText, secretText } from "../text.ts";
-import { addTokens, logCall, logEvent, playerTotals, readCalls, writeManifest } from "./runlog.ts";
+import type { AgentId } from "./agent.ts";
+import { addTokens, agentTotals, logCall, logEvent, readCalls, type Sitting, writeManifest } from "./runlog.ts";
 
 // One match in one process: the headless table, and one pi-durable conversation
 // per Agent player in the run directory's session.sqlite. A conversation's two
@@ -30,8 +31,9 @@ export const INSTRUCTIONS = `${RULES} You are one of the players. On each of you
 
 const GRAB = "Grab an item";
 
-/** One Agent player: the model it plays with, and what the manifest says about it. */
+/** One agent: its letter, the model it plays with, and what the manifest says about it. */
 export interface Entrant {
+  readonly agent: AgentId;
   readonly model: ModelRef;
   readonly thinkingLevel: ModelThinkingLevel | undefined;
   readonly describe: Schema.Json;
@@ -41,7 +43,7 @@ export interface ArenaMatch {
   readonly dir: string;
   readonly seed: string;
   readonly controllers: ReadonlyArray<Controller>;
-  /** One per Agent player, in player order. */
+  /** The seating: one entrant per Agent player, from the lowest Player number up. */
   readonly entrants: ReadonlyArray<Entrant>;
   readonly models: Models;
   readonly compaction: NonNullable<HarnessSettings["compaction"]>;
@@ -53,13 +55,21 @@ const attempt = <A>(step: string, run: () => Promise<A>) => Effect.tryPromise({ 
 
 type MoveLine = { readonly turn: number; readonly player: number; readonly move: number; readonly label: string; readonly by: "agent" | "forced" | "fallback" };
 
-type MatchState = { seed: string; controllers: Array<string>; seats: Record<string, ConversationId>; moves: Array<MoveLine>; carried: Record<string, Array<string>>; retries: Record<string, number> };
+type MatchState = {
+  seed: string;
+  controllers: Array<string>;
+  seating: Record<string, AgentId>;
+  seats: Record<string, ConversationId>;
+  moves: Array<MoveLine>;
+  carried: Record<string, Array<string>>;
+  retries: Record<string, number>;
+};
 
-const emptyMatch = (): MatchState => ({ seed: "", controllers: [], seats: {}, moves: [], carried: {}, retries: {} });
+const emptyMatch = (): MatchState => ({ seed: "", controllers: [], seating: {}, seats: {}, moves: [], carried: {}, retries: {} });
 
 const MatchDoc = defineDoc<MatchState>({ kind: "arena.match", version: 1, scope: "session", initial: emptyMatch });
 
-const SeatDoc = defineDoc<{ player: number }>({ kind: "arena.seat", version: 1, scope: "conversation", history: "latest", fork: "initial", initial: () => ({ player: 0 }) });
+const SeatDoc = defineDoc<{ player: number; agent: AgentId }>({ kind: "arena.seat", version: 1, scope: "conversation", history: "latest", fork: "initial", initial: () => ({ player: 0, agent: "A" }) });
 
 const View = Schema.Struct({
   you: Schema.Int,
@@ -185,7 +195,7 @@ class Table {
 const textOf = (message: Message): string => contentText(message.role === "assistant" ? [] : message.content, "");
 
 const seatTools = (dir: string, table: () => Table, onReply: (player: number, message: AssistantMessage) => void) => {
-  const playerOf = async (snapshot: Harness["snapshot"], conversationId: ConversationId): Promise<number> => (await snapshot(SeatDoc, conversationId, context))?.player ?? 0;
+  const sittingOf = async (snapshot: Harness["snapshot"], conversationId: ConversationId): Promise<Sitting> => (await snapshot(SeatDoc, conversationId, context)) ?? { player: 0, agent: "A" };
 
   return defineExtension({
     name: "buckshot-seat",
@@ -195,11 +205,11 @@ const seatTools = (dir: string, table: () => Table, onReply: (player: number, me
         description: "Your current view, as JSON.",
         parameters: Type.Object({}),
         execute: async (_args, api) => {
-          const player = await playerOf(api.snapshot, api.conversationId);
+          const sitting = await sittingOf(api.snapshot, api.conversationId);
 
-          logEvent(dir, "tool", { player, name: "get_game", call_id: api.callId, ok: true });
+          logEvent(dir, "tool", { ...sitting, name: "get_game", call_id: api.callId, ok: true });
 
-          return { content: [{ type: "text", text: table().viewText(player) }] };
+          return { content: [{ type: "text", text: table().viewText(sitting.player) }] };
         },
       }),
       defineTool({
@@ -211,7 +221,8 @@ const seatTools = (dir: string, table: () => Table, onReply: (player: number, me
         }),
         replay: "safe",
         execute: async (args, api) => {
-          const player = await playerOf(api.snapshot, api.conversationId);
+          const sitting = await sittingOf(api.snapshot, api.conversationId);
+          const { player } = sitting;
           const journal = await api.snapshot(MatchDoc, context);
           const recorded = journal?.moves.find((line) => line.turn === args.turn && line.player === player && line.by === "agent");
 
@@ -220,12 +231,12 @@ const seatTools = (dir: string, table: () => Table, onReply: (player: number, me
 
           const played = table().tryMove(player, args.move, args.turn, "agent");
 
-          logEvent(dir, "tool", { player, name: "play_move", call_id: api.callId, ok: played.ok });
+          logEvent(dir, "tool", { ...sitting, name: "play_move", call_id: api.callId, ok: played.ok });
 
           if (!played.ok) return { content: [{ type: "text", text: played.text }], isError: true };
 
           await api.commit(async (tx) => void (await tx.doc(MatchDoc)).moves.push(played.line), context);
-          logEvent(dir, "move", played.line);
+          logEvent(dir, "move", { agent: sitting.agent, ...played.line });
 
           return { content: [{ type: "text", text: played.text }], control: { terminate: true } };
         },
@@ -234,19 +245,19 @@ const seatTools = (dir: string, table: () => Table, onReply: (player: number, me
     hooks: [
       hook(GenerationTask, {
         afterResponse: async (message: AssistantMessage, api) => {
-          const player = await playerOf(api.snapshot, api.conversationId);
+          const sitting = await sittingOf(api.snapshot, api.conversationId);
 
-          logCall(dir, player, message);
-          onReply(player, message);
+          logCall(dir, sitting, message);
+          onReply(sitting.player, message);
         },
       }),
       hook(CompactionTask, {
         beforeCompact: async (_compaction, api) => {
-          const player = await playerOf(api.snapshot, api.conversationId);
+          const { player, agent } = await sittingOf(api.snapshot, api.conversationId);
           const lines = table().heard(player);
           const roundStart = Math.max(0, lines.findLastIndex((line) => line.startsWith("Round ")));
 
-          logEvent(dir, "compaction", { player });
+          logEvent(dir, "compaction", { agent, player });
 
           return { summary: `[Summary] You are Player ${player}. Everything you have seen this round, in order:\n${lines.slice(roundStart).join("\n")}` };
         },
@@ -285,7 +296,7 @@ export const playMatch = (match: ArenaMatch) =>
     const record = (change: (state: MatchState) => void) => attempt("write the journal", () => harness.commit(async (tx) => void change(await tx.doc(MatchDoc)), context));
 
     if (isFresh) {
-      const state: MatchState = { seed: match.seed, controllers: [...match.controllers], seats: {}, moves: [], carried: {}, retries: {} };
+      const state: MatchState = { seed: match.seed, controllers: [...match.controllers], seating: {}, seats: {}, moves: [], carried: {}, retries: {} };
 
       table = new Table(state);
 
@@ -298,12 +309,14 @@ export const playMatch = (match: ArenaMatch) =>
 
         if (entrant === undefined) continue;
 
+        state.seating[String(player)] = entrant.agent;
+
         const created = yield* attempt("create a conversation", () =>
           harness.createConversation(
             {
               ownership: { kind: "ownerless" },
               agent: { model: entrant.model, thinkingLevel: entrant.thinkingLevel ?? null, instructions: INSTRUCTIONS, extensions: [extension] },
-              init: async (tx, id) => void ((await tx.doc(SeatDoc, id)).player = player),
+              init: async (tx, id) => void Object.assign(await tx.doc(SeatDoc, id), { player, agent: entrant.agent }),
             },
             context,
           ),
@@ -313,11 +326,13 @@ export const playMatch = (match: ArenaMatch) =>
       }
 
       yield* record((next) => void Object.assign(next, state));
+      logEvent(dir, "seating", { seating: state.seating });
       writeManifest(dir, {
         status: "running",
         seed: match.seed,
         controllers: [...match.controllers],
-        entrants: Object.fromEntries(players.map((player, index) => [String(player), match.entrants[index]?.describe ?? null])),
+        seating: state.seating,
+        agents: Object.fromEntries(match.entrants.map((entrant) => [entrant.agent, entrant.describe])),
         instructions_sha: sha(INSTRUCTIONS),
       });
     } else {
@@ -338,6 +353,7 @@ export const playMatch = (match: ArenaMatch) =>
 
       const view = playing.view(player);
       const turn = view.turn ?? -1;
+      const sitting: Sitting = { agent: (yield* journal()).seating[String(player)] ?? "A", player };
 
       if (view.moves?.length === 1 && view.moves[0] === GRAB) {
         const played = playing.tryMove(player, 0, turn, "forced");
@@ -364,21 +380,21 @@ export const playMatch = (match: ArenaMatch) =>
       const requestId = retry === 0 ? `turn-${turn}` : `turn-${turn}-retry-${retry}`;
       const submission = yield* attempt("submit a turn", () => conversation.submit({ type: "input", content: `Your turn.\n${JSON.stringify(input)}`, requestId }, context));
 
-      logEvent(dir, "input", { player, turn });
+      logEvent(dir, "input", { ...sitting, turn });
       yield* record((next) => void (next.carried[String(player)] = []));
       yield* attempt("wait for the turn", () => submission.wait(context));
 
       const moved = playing.turn !== turn;
 
-      logEvent(dir, "turn", { player, turn, wall_ms: Math.round(performance.now() - submittedAt), moved });
+      logEvent(dir, "turn", { ...sitting, turn, wall_ms: Math.round(performance.now() - submittedAt), moved });
 
       const reply = lastReplies.get(player);
 
       if (!moved && reply?.stopReason === "error") {
         yield* record((next) => void (next.retries[String(turn)] = retry + 1));
-        logEvent(dir, "fault", { player, turn, error: reply.errorMessage ?? "" });
+        logEvent(dir, "fault", { ...sitting, turn, error: reply.errorMessage ?? "" });
 
-        return yield* new ArenaFault({ message: `Player ${player}'s model failed at turn ${turn}: ${reply.errorMessage ?? "no message"}. Run again with the same --dir to resume.` });
+        return yield* new ArenaFault({ message: `Agent ${sitting.agent} (Player ${player}) failed at turn ${turn}: ${reply.errorMessage ?? "no message"}. Run again with the same --dir to resume.` });
       }
 
       if (!moved) {
@@ -387,20 +403,24 @@ export const playMatch = (match: ArenaMatch) =>
         if (!fallback.ok) return yield* new ArenaFault({ message: fallback.text });
 
         yield* record((next) => void next.moves.push(fallback.line));
-        logEvent(dir, "fallback", fallback.line);
+        logEvent(dir, "fallback", { agent: sitting.agent, ...fallback.line });
       }
     }
 
     const final = yield* journal();
     const audit = yield* auditOf(harness, final, playing);
     const storeUsage = yield* attempt("read usage", () => harness.usage(context));
-    const standings = playing.view(playing.agentPlayers()[0] ?? 1).standings ?? [];
+    const standings = (playing.view(playing.agentPlayers()[0] ?? 1).standings ?? []).map((standing) => ({ agent: final.seating[String(standing.player)] ?? null, ...standing }));
     const moves = { agent: final.moves.filter((line) => line.by === "agent").length, forced: final.moves.filter((line) => line.by === "forced").length, fallback: final.moves.filter((line) => line.by === "fallback").length };
-    const players = Object.fromEntries(Object.keys(final.seats).map((player) => [player, playerTotals(dir, Number(player))]));
-    const result = { audit, moves, standings, players, move_log_sha: sha(JSON.stringify(final.moves)) };
+
+    const agents = Object.fromEntries(
+      Object.entries(final.seating).map(([player, agent]) => [agent, { player: Number(player), endpoint: match.entrants.find((entrant) => entrant.agent === agent)?.describe ?? null, ...agentTotals(dir, agent) }]),
+    );
+
+    const result = { audit, moves, standings, agents, move_log_sha: sha(JSON.stringify(final.moves)) };
 
     logEvent(dir, "end", { standings });
-    writeManifest(dir, { status: "finished", seed: final.seed, controllers: final.controllers, instructions_sha: sha(INSTRUCTIONS), ...result });
+    writeManifest(dir, { status: "finished", seed: final.seed, controllers: final.controllers, seating: final.seating, instructions_sha: sha(INSTRUCTIONS), ...result });
     yield* attempt("close the harness", () => harness.close(context));
 
     return { ...result, storeUsage: Object.fromEntries(Object.entries(storeUsage.models).map(([model, spent]) => [model, { input: spent.input, output: spent.output }])), loggedUsage: addTokens(readCalls(dir)) };

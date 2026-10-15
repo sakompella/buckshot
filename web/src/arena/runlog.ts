@@ -4,6 +4,8 @@ import { join } from "node:path";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { Schema } from "effect";
 
+import { AgentId } from "./agent.ts";
+
 // A match's run directory, in the agent-ts layout: calls.jsonl (one line per
 // model reply), events.jsonl (what the arena did) and manifest.json. Usage is
 // logged raw, as the provider reported it; prices are applied later, offline,
@@ -22,6 +24,7 @@ export type Usage = typeof Usage.Type;
 
 export const CallLine = Schema.Struct({
   t: Schema.String,
+  agent: AgentId,
   player: Schema.Int,
   provider: Schema.String,
   api: Schema.String,
@@ -40,7 +43,7 @@ export const CallLine = Schema.Struct({
 export type CallLine = typeof CallLine.Type;
 
 /** The fields of an event line that totals read; the rest of each line is for people. */
-const EventLine = Schema.Struct({ kind: Schema.String, player: Schema.optional(Schema.Int), wall_ms: Schema.optional(Schema.Number) });
+const EventLine = Schema.Struct({ kind: Schema.String, agent: Schema.optional(AgentId), wall_ms: Schema.optional(Schema.Number) });
 
 const decodeCall = Schema.decodeUnknownSync(Schema.fromJsonString(CallLine));
 
@@ -52,11 +55,18 @@ export const readCalls = (dir: string): ReadonlyArray<CallLine> => linesOf(join(
 
 const append = (path: string, line: string) => appendFileSync(path, `${line}\n`);
 
-export const logCall = (dir: string, player: number, message: AssistantMessage): void => {
+/** Where an agent sits in this match. */
+export interface Sitting {
+  readonly agent: AgentId;
+  readonly player: number;
+}
+
+export const logCall = (dir: string, { agent, player }: Sitting, message: AssistantMessage): void => {
   const { input, output, cacheRead, cacheWrite, cacheWrite1h, reasoning } = message.usage;
 
   const line: CallLine = {
     t: new Date().toISOString(),
+    agent,
     player,
     provider: message.provider,
     api: message.api,
@@ -91,10 +101,10 @@ export const addTokens = (calls: ReadonlyArray<CallLine>): Tokens => ({
   reasoning: calls.reduce((total, call) => total + (call.usage.reasoning ?? 0), 0),
 });
 
-/** One player's totals for a match, recomputed from the logs, so they cover every process that played it. */
-export const playerTotals = (dir: string, player: number) => {
-  const calls = readCalls(dir).filter((call) => call.player === player);
-  const events = linesOf(join(dir, "events.jsonl")).map((line) => decodeEvent(line)).filter((event) => event.player === player);
+/** One agent's totals for a match, recomputed from the logs, so they cover every process that played it. */
+export const agentTotals = (dir: string, agent: AgentId) => {
+  const calls = readCalls(dir).filter((call) => call.agent === agent);
+  const events = linesOf(join(dir, "events.jsonl")).map((line) => decodeEvent(line)).filter((event) => event.agent === agent);
   const latencies = calls.map((call) => call.latency_ms ?? 0);
 
   return {

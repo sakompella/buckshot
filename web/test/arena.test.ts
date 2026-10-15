@@ -6,7 +6,8 @@ import { join } from "node:path";
 import { type AssistantMessage, contentText, createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall, type Message, type TranscriptContext } from "@earendil-works/pi-ai";
 import { ConfigProvider, Effect, Exit, Schema } from "effect";
 
-import { playerEndpoint } from "../src/arena/endpoints.ts";
+import { AGENTS } from "../src/arena/agent.ts";
+import { agentEndpoint } from "../src/arena/endpoints.ts";
 import { playMatch } from "../src/arena/match.ts";
 
 // The arena with faux pi-ai models, which play from their transcripts alone, so
@@ -50,7 +51,7 @@ const fauxMatch = (controllers: ReadonlyArray<"Agent" | "DoN">, seed: string, co
     dir: mkdtempSync(join(tmpdir(), "arena-test-")),
     seed,
     controllers,
-    entrants: agents.map((_, index) => ({ model: { provider: "faux", modelId: index % 2 === 0 ? "faux-a" : "faux-b" }, thinkingLevel: undefined, describe: `faux ${index}` })),
+    entrants: agents.map((_, index) => ({ agent: AGENTS[index] ?? "A", model: { provider: "faux", modelId: index % 2 === 0 ? "faux-a" : "faux-b" }, thinkingLevel: undefined, describe: `faux ${index}` })),
     models,
     compaction: { enabled: true, reserveTokens: 1_500, keepRecentTokens: 1_500 },
   });
@@ -71,7 +72,7 @@ test.each([
 
 const CPA = { url: "http://127.0.0.1:8318", key: "sk-test-secret-value" };
 
-const endpointFrom = (env: Readonly<Record<string, string>>) => Effect.runPromiseExit(playerEndpoint("PLAYER_ONE").pipe(Effect.provideService(ConfigProvider.ConfigProvider, ConfigProvider.fromEnvRecord(env))));
+const endpointFrom = (env: Readonly<Record<string, string>>) => Effect.runPromiseExit(agentEndpoint("A").pipe(Effect.provideService(ConfigProvider.ConfigProvider, ConfigProvider.fromEnvRecord(env))));
 
 const failureOf = async (env: Readonly<Record<string, string>>): Promise<string> => {
   const exit = await endpointFrom(env);
@@ -80,20 +81,20 @@ const failureOf = async (env: Readonly<Record<string, string>>): Promise<string>
 };
 
 test("an endpoint is Anthropic or OpenAI Responses, from its URL and key", async () => {
-  const anthropic = await endpointFrom({ PLAYER_ONE_ANT_URL: CPA.url, PLAYER_ONE_ANT_KEY: CPA.key, PLAYER_ONE_MODEL: "claude-haiku-5-5", PLAYER_ONE_EFFORT: "low" });
-  const openai = await endpointFrom({ PLAYER_ONE_OAI_URL: `${CPA.url}/v1`, PLAYER_ONE_OAI_KEY: CPA.key, PLAYER_ONE_MODEL: "gpt-6-luna" });
+  const anthropic = await endpointFrom({ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_ANT_KEY: CPA.key, PLAYER_A_MODEL: "claude-haiku-5-5", PLAYER_A_EFFORT: "low" });
+  const openai = await endpointFrom({ PLAYER_A_OAI_URL: `${CPA.url}/v1`, PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "gpt-6-luna" });
 
   expect(Exit.isSuccess(anthropic) && anthropic.value._tag).toBe("Anthropic");
   expect(Exit.isSuccess(openai) && openai.value._tag).toBe("OpenAIResponses");
 });
 
 test.each([
-  [{ PLAYER_ONE_ANT_URL: CPA.url, PLAYER_ONE_ANT_KEY: CPA.key, PLAYER_ONE_OAI_URL: CPA.url, PLAYER_ONE_OAI_KEY: CPA.key, PLAYER_ONE_MODEL: "claude-haiku-5-5" }, "not both"],
-  [{ PLAYER_ONE_ANT_URL: CPA.url, PLAYER_ONE_MODEL: "claude-haiku-5-5" }, "PLAYER_ONE_ANT_KEY must be set"],
-  [{ PLAYER_ONE_OAI_KEY: CPA.key, PLAYER_ONE_MODEL: "gpt-6-luna" }, "PLAYER_ONE_OAI_URL must be set"],
-  [{ PLAYER_ONE_ANT_URL: CPA.url, PLAYER_ONE_ANT_KEY: CPA.key }, "PLAYER_ONE_MODEL must be set"],
-  [{ PLAYER_ONE_ANT_URL: CPA.url, PLAYER_ONE_ANT_KEY: CPA.key, PLAYER_ONE_MODEL: "gpt-6-luna" }, "not a pi-ai Anthropic model"],
-  [{ PLAYER_ONE_MODEL: "gpt-6-luna" }, "Set PLAYER_ONE_ANT_URL and PLAYER_ONE_ANT_KEY, or PLAYER_ONE_OAI_URL and PLAYER_ONE_OAI_KEY"],
+  [{ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_ANT_KEY: CPA.key, PLAYER_A_OAI_URL: CPA.url, PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "claude-haiku-5-5" }, "not both"],
+  [{ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_MODEL: "claude-haiku-5-5" }, "PLAYER_A_ANT_KEY must be set"],
+  [{ PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "gpt-6-luna" }, "PLAYER_A_OAI_URL must be set"],
+  [{ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_ANT_KEY: CPA.key }, "PLAYER_A_MODEL must be set"],
+  [{ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_ANT_KEY: CPA.key, PLAYER_A_MODEL: "gpt-6-luna" }, "not a pi-ai Anthropic model"],
+  [{ PLAYER_A_MODEL: "gpt-6-luna" }, "Set PLAYER_A_ANT_URL and PLAYER_A_ANT_KEY, or PLAYER_A_OAI_URL and PLAYER_A_OAI_KEY"],
 ])("a bad endpoint fails naming the variable, never the key: %p", async (env, expected) => {
   const failure = await failureOf(env);
 

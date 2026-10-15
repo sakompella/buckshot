@@ -6,15 +6,15 @@ import { openaiProvider } from "@earendil-works/pi-ai/providers/openai";
 import type { ModelRef } from "@earendil-works/pi-durable";
 import { Config, Data, Effect, Option, Redacted, Schema } from "effect";
 
-// Where each player's model lives, read once from the environment (.env). A
-// player is configured by PLAYER_<N>_ANT_URL and _ANT_KEY for the Anthropic
-// Messages API, or PLAYER_<N>_OAI_URL and _OAI_KEY for the OpenAI Responses API,
-// plus PLAYER_<N>_MODEL and an optional PLAYER_<N>_EFFORT. Keys stay Redacted
-// until pi-ai asks for them, so no error or log can show one.
+import type { AgentId } from "./agent.ts";
+
+// Where each agent's model lives, read once from the environment (.env). Agent
+// A is configured by PLAYER_A_ANT_URL and _ANT_KEY for the Anthropic Messages
+// API, or PLAYER_A_OAI_URL and _OAI_KEY for the OpenAI Responses API, plus
+// PLAYER_A_MODEL and an optional PLAYER_A_EFFORT; B to D likewise. Keys stay
+// Redacted until pi-ai asks for them, so no error or log can show one.
 
 export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const satisfies ReadonlyArray<ModelThinkingLevel>;
-
-export const PLAYER_PREFIXES = ["PLAYER_ONE", "PLAYER_TWO", "PLAYER_THREE", "PLAYER_FOUR"] as const;
 
 const EndpointFields = {
   url: Schema.URL,
@@ -56,10 +56,10 @@ const catalogOf = (endpoint: Endpoint): ReadonlyArray<Model<Api>> =>
     OpenAIResponses: (): ReadonlyArray<Model<Api>> => openaiProvider().getModels(),
   });
 
-/** One player's endpoint. Its model must be in pi-ai's catalog for that API, which supplies the context window and thinking levels. */
-export const playerEndpoint = (prefix: (typeof PLAYER_PREFIXES)[number]) =>
+/** One agent's endpoint. Its model must be in pi-ai's catalog for that API, which supplies the context window and thinking levels. */
+export const agentEndpoint = (agent: AgentId) =>
   Effect.gen(function* () {
-    const name = (suffix: string) => `${prefix}_${suffix}`;
+    const name = (suffix: string) => `PLAYER_${agent}_${suffix}`;
     const anthropic = yield* credentials(name("ANT_URL"), name("ANT_KEY"));
     const openai = yield* credentials(name("OAI_URL"), name("OAI_KEY"));
 
@@ -90,7 +90,10 @@ const apiKeyAuth = (key: Redacted.Redacted<string>, source: string) => ({
   apiKey: { name: source, resolve: async () => ({ auth: { apiKey: Redacted.value(key) }, source }) },
 });
 
-/** The endpoint as a pi-ai provider with one model, under its own provider id so two players can share a model. */
+/** The provider id an agent's calls are logged under: the API and the agent, so two agents can share a model. */
+export const providerIdOf = (agent: AgentId, endpoint: Endpoint): string => Endpoint.match(endpoint, { Anthropic: () => `anthropic-${agent}`, OpenAIResponses: () => `openai-responses-${agent}` });
+
+/** The endpoint as a pi-ai provider with one model. */
 export const providerOf = (providerId: string, endpoint: Endpoint): Provider => {
   const baseUrl = baseUrlOf(endpoint.url);
   const model = catalogOf(endpoint).find((candidate) => candidate.id === endpoint.model);
