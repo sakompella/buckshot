@@ -7,7 +7,7 @@ import { AgentReply, runTool, tools } from "../src/agent/tools.ts";
 import { Game } from "../src/bend.ts";
 import { Briefcase, GameEvent, Move, type Seat, Secret, SeatCount, Stage } from "../src/domain.ts";
 import { type Controller, play as playMachine, type Progress, promptsOf } from "../src/driver.ts";
-import { PlayerLetter, rosterOf } from "../src/players.ts";
+import { Letter, rosterOf } from "../src/players.ts";
 import { nextBelow, type Rng, seedRng } from "../src/rng.ts";
 import { eventText, itemName, secretText } from "../src/text.ts";
 
@@ -16,7 +16,7 @@ import { eventText, itemName, secretText } from "../src/text.ts";
 
 const STEP_LIMIT = 20_000;
 
-const EVERY_LETTER = (["A", "B", "C", "D"] as const).map((letter) => PlayerLetter.make(letter));
+const EVERY_LETTER = Letter.literals;
 
 const View = Schema.Struct({
   you: Schema.String,
@@ -83,7 +83,7 @@ const isOver = (table: HeadlessTable): boolean => match(table).game.pending.kind
 
 const rosterAt = (table: HeadlessTable) => rosterOf(match(table).game.seats);
 
-const seatOfPlayer = (table: HeadlessTable, player: PlayerLetter) => Option.getOrThrow(rosterAt(table).seatOf(player));
+const seatOfPlayer = (table: HeadlessTable, letter: Letter) => Option.getOrThrow(rosterAt(table).find(letter)).seat;
 
 /** Replies speak of the players at the table by letter and never of seats. */
 const expectOnlyPlayers = (table: HeadlessTable, reply: AgentReply): void => {
@@ -91,14 +91,14 @@ const expectOnlyPlayers = (table: HeadlessTable, reply: AgentReply): void => {
   const named = [...text.matchAll(/Player ([A-Z])\b/g)].map(([, letter]) => letter);
 
   expect(text).not.toMatch(/seat|Player \d/i);
-  expect(named.every((letter) => rosterAt(table).players.some((player) => player === letter))).toBe(true);
+  expect(named.every((letter) => rosterAt(table).players.some((player) => player.letter === letter))).toBe(true);
 };
 
-const agentPlayers = (table: HeadlessTable): ReadonlyArray<PlayerLetter> =>
-  rosterAt(table).players.filter((player) => match(table).controllers[seatOfPlayer(table, player)] === "Agent");
+const agentPlayers = (table: HeadlessTable): ReadonlyArray<Letter> =>
+  rosterAt(table).players.filter(({ seat }) => match(table).controllers[seat] === "Agent").map(({ letter }) => letter);
 
-const agentsToMove = (table: HeadlessTable): ReadonlyArray<PlayerLetter> =>
-  promptsOf(match(table).game).map(({ seat }) => rosterAt(table).playerOf(seat)).filter((player) => agentPlayers(table).includes(player));
+const agentsToMove = (table: HeadlessTable): ReadonlyArray<Letter> =>
+  promptsOf(match(table).game).map(({ seat }) => rosterAt(table).playerOf(seat).letter).filter((player) => agentPlayers(table).includes(player));
 
 /** Plays the first Agent's first move until `isDone` holds or the match ends. */
 const playUntil = (start: HeadlessTable, isDone: (table: HeadlessTable) => boolean): HeadlessTable => {
@@ -130,7 +130,7 @@ interface Watchers {
   /** Before every move. */
   readonly check?: (table: HeadlessTable) => void;
   /** The view a player moves from. */
-  readonly onMove?: (player: PlayerLetter, view: ReturnType<typeof turnViewOf>) => void;
+  readonly onMove?: (player: Letter, view: ReturnType<typeof turnViewOf>) => void;
   readonly onOver?: (table: HeadlessTable) => void;
 }
 
@@ -186,7 +186,7 @@ test("on random tables of 2 to 4 players, each Agent sees the players as Player 
     for (const player of EVERY_LETTER) {
       if (!agents.includes(player)) {
         const outcome = play(table, player, 0, turn);
-        const isAtTable = roster.players.includes(player);
+        const isAtTable = roster.players.some(({ letter }) => letter === player);
 
         expect(refusal(getGame(table, player))).toContain(isAtTable ? "not an Agent player" : "no Player");
         expect(refusal(outcome.reply)).toContain(isAtTable ? "not an Agent player" : "no Player");
@@ -203,7 +203,7 @@ test("on random tables of 2 to 4 players, each Agent sees the players as Player 
       const ownNotes = current.learned.filter((note) => note.seat === seat);
       const hiddenSwapped = new Game(current.game.table, current.game.seats, current.game.ticket, current.game.board, current.game.pending, otherState);
 
-      otherAgentNotes += current.learned.filter((note) => note.seat !== seat && agents.includes(roster.playerOf(note.seat))).length;
+      otherAgentNotes += current.learned.filter((note) => note.seat !== seat && agents.includes(roster.playerOf(note.seat).letter)).length;
       expectOnlyPlayers(table, read.reply);
       expect(view.you).toBe(player);
       expect(read.table).toBe(table);
@@ -214,7 +214,7 @@ test("on random tables of 2 to 4 players, each Agent sees the players as Player 
       if (view.status !== "your turn") continue;
 
       expect(view.turn).toBe(turn);
-      expect(view.players?.map((entry) => entry.player)).toEqual([...roster.players]);
+      expect(view.players?.map((entry) => entry.player)).toEqual(roster.players.map(({ letter }) => letter));
 
       for (const other of [turn - 1, turn + 1]) {
         const outcome = play(table, player, 0, other);
@@ -325,7 +325,7 @@ test("on random tables of 2 to 4 players, an Agent's views on its turns and the 
   let turnsRead = 0;
   const heard = new Map<string, Array<string>>();
 
-  const expectWholeLog = (table: HeadlessTable, player: PlayerLetter): void => {
+  const expectWholeLog = (table: HeadlessTable, player: Letter): void => {
     const { events, learned } = match(table);
     const seat = seatOfPlayer(table, player);
     const own = (count: number) => learned.filter((note) => note.seat === seat && note.at === count).map(({ secret }) => secretText(secret));
