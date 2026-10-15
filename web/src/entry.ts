@@ -1,9 +1,8 @@
 import { Effect } from "effect";
 import { Runtime } from "foldkit";
 
-import { ports } from "./agent.ts";
 import { Flags, init, Message, Model, subscriptions, update, view } from "./main.ts";
-import { registerAgentTools } from "./webmcp.ts";
+import { ports, registerAgentTools } from "./webmcp.ts";
 
 const application = Runtime.makeApplication({
   Model,

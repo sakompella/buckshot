@@ -18,6 +18,9 @@ export const isAi = (controller: Controller): controller is Brain => controller 
 /** Draw answers taken in one settle before giving up; a match needs a few hundred at most. */
 const DRAW_LIMIT = 10_000;
 
+/** AI moves taken in one go before giving up; a whole match takes a few hundred. */
+const AI_MOVE_LIMIT = 10_000;
+
 const SEATS: ReadonlyArray<Seat> = [0, 1, 2, 3];
 
 /** One AI seat: its memory, and how many coins it has drawn. */
@@ -101,3 +104,22 @@ export const aiStep = (progress: Progress, prompt: Prompt): Result.Result<Progre
         play({ ...progress, ais: withAi(progress.ais, prompt.seat, { mind: choice.mind, coins: coins + 1 }) }, prompt.ticket, prompt.seat, choice.index, progress.rng),
       ),
   });
+
+/** Lets the AI seats move until an Agent or Human seat must answer, or the match is over. */
+export const playAis = (start: Progress, controllers: ReadonlyArray<Controller>): Result.Result<Progress, AnswerError> => {
+  let progress = start;
+
+  for (let moves = 0; moves < AI_MOVE_LIMIT; moves++) {
+    const prompt = aiPrompt(progress.game, controllers);
+
+    if (Option.isNone(prompt)) return Result.succeed(progress);
+
+    const stepped = aiStep(progress, prompt.value);
+
+    if (Result.isFailure(stepped)) return stepped;
+
+    progress = stepped.success;
+  }
+
+  return Result.succeed(progress);
+};

@@ -1,8 +1,19 @@
+import { Match } from "effect";
+
+import type { AnswerError } from "./bend.ts";
 import { GameEvent, type Item, Move, type Seat, Secret } from "./domain.ts";
 
 // The words the UI and the agent tools both use for seats, items, moves and events.
 
 export const seatName = (seat: Seat): string => `Seat ${seat}`;
+
+export const describeError = (error: AnswerError): string =>
+  Match.value(error).pipe(
+    Match.tag("BendContractError", ({ call, detail }) => `Bend returned an unexpected value from ${call}: ${detail}`),
+    Match.tag("StaleAnswer", () => "That move was for an earlier turn. Choose again."),
+    Match.tag("NoPrompt", ({ seat }) => `Seat ${seat} has no move right now.`),
+    Match.exhaustive,
+  );
 
 const ITEM_NAMES: Readonly<Record<Item, string>> = {
   Saw: "handsaw",
