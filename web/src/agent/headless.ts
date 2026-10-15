@@ -3,6 +3,7 @@ import { Array as Arr, Option, Result } from "effect";
 import { SEATS_BY_TABLE } from "../domain.ts";
 import { begin, type Controller, play, playAis, type Progress } from "../driver.ts";
 import { seedRng } from "../rng.ts";
+import { rosterOf } from "../players.ts";
 import { describeError } from "../text.ts";
 import type { Applied, MatchSession, MatchSetup } from "./tools.ts";
 import type { SeatMove } from "./view.ts";
@@ -34,7 +35,7 @@ const bySeat = ({ table, controllers }: MatchSetup): ReadonlyArray<Controller> =
   Arr.makeBy(4, (seat) => Option.getOrElse(Arr.findFirstIndex(SEATS_BY_TABLE[table], (tableSeat) => tableSeat === seat).pipe(Option.flatMap((position) => Arr.get(controllers, position))), (): Controller => "Human"));
 
 const start = (table: HeadlessTable, setup: MatchSetup): Applied<HeadlessTable> => {
-  if (setup.controllers.includes("Human")) return failed(table, "No one can click in the MCP server, so no seat can be Human. Use Agent, DoN or Story.");
+  if (setup.controllers.includes("Human")) return failed(table, "No one can click in the MCP server, so no player can be Human. Use Agent, DoN or Story.");
 
   const seed = Option.getOrElse(setup.maybeSeed, randomSeed);
   const matchNumber = table.matchCount + 1;
@@ -44,7 +45,7 @@ const start = (table: HeadlessTable, setup: MatchSetup): Applied<HeadlessTable> 
     Result.flatMap(begin(setup.table, setup.isItemsEnabled, matchNumber, seedRng(seed), controllers, seed), (progress) => playAis(progress, controllers)),
     {
       onSuccess: (progress) => withMatch({ ...table, matchCount: matchNumber }, { ...progress, controllers }),
-      onFailure: (error) => failed(table, describeError(error)),
+      onFailure: (error) => failed(table, describeError(rosterOf(SEATS_BY_TABLE[setup.table]), error)),
     },
   );
 };
@@ -57,7 +58,7 @@ const move = (table: HeadlessTable, { match, generation, seat, index }: SeatMove
         Result.flatMap(play(current, { match, generation }, seat, index, current.rng), (progress) => playAis(progress, current.controllers)),
         {
           onSuccess: (progress) => withMatch(table, { ...progress, controllers: current.controllers }),
-          onFailure: (error) => failed(table, describeError(error)),
+          onFailure: (error) => failed(table, describeError(rosterOf(current.game.seats), error)),
         },
       ),
   });

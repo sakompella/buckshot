@@ -1,7 +1,8 @@
 import { flow, Option, Result, Schema } from "effect";
 
-import { Seat, SEATS_BY_TABLE, SeatCount } from "../domain.ts";
+import { SEATS_BY_TABLE, SeatCount } from "../domain.ts";
 import { Controller, controllerOf } from "../driver.ts";
+import { PlayerNumber, rosterOf } from "../players.ts";
 import { type AgentSource, agentGame, agentMove, type SeatMove } from "./view.ts";
 
 // The agent tools, whatever carries them: their names, descriptions and input
@@ -10,26 +11,26 @@ import { type AgentSource, agentGame, agentMove, type SeatMove } from "./view.ts
 // runs it with runTool over its own MatchSession.
 
 const RULES =
-  "Buckshot: a shotgun is loaded with a hidden mix of live and blank shells, and each load is announced. On your turn you shoot a seat or yourself, or use an item; a live shell does damage and a blank fired at yourself keeps your turn. The last seat alive wins the round and its prize, and the most cash after the last round wins.";
+  "Buckshot: a shotgun is loaded with a hidden mix of live and blank shells, and each load is announced. On your turn you shoot a player or yourself, or use an item; a live shell does damage and a blank fired at yourself keeps your turn. The last player alive wins the round and its prize, and the most cash after the last round wins.";
 
-const SeatArgument = Seat.annotate({ description: "The Agent seat this call is for, as numbered in the seat names (Seat 0 to Seat 3)." });
+const PlayerArgument = PlayerNumber.annotate({ description: "The Agent player this call is for: the number in the player names, 1 for Player 1 up to the number of players at the table (at most 4)." });
 
-const GetGameArguments = Schema.Struct({ seat: SeatArgument });
+const GetGameArguments = Schema.Struct({ player: PlayerArgument });
 
 const PlayMoveArguments = Schema.Struct({
-  seat: SeatArgument,
+  player: PlayerArgument,
   index: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)).annotate({ description: "The index of the move in get_game's moves list." }),
   turn: Schema.optionalKey(Schema.Int.annotate({ description: "The turn value from get_game. Pass it so a stale move is refused instead of played." })),
 });
 
 const NewMatchArguments = Schema.Struct({
-  players: SeatCount.annotate({ description: "Number of seats at the table." }),
+  players: SeatCount.annotate({ description: "Number of players at the table." }),
   items: Schema.Boolean.annotate({ description: "Whether items are in play." }),
   seed: Schema.optionalKey(Schema.String.annotate({ description: "An integer seed for the shell draws, to replay a match. Optional." })),
   controllers: Schema.optionalKey(
     Schema.Array(Controller).annotate({
       description:
-        'One controller per seat, in seat order, for example ["Agent", "Agent", "DoN"]. Agent seats are played through these tools, DoN and Story are bots, Human seats wait for clicks in the browser. Optional.',
+        'One controller per player, in player order (Player 1 first), for example ["Agent", "Agent", "DoN"]. Agent players are played through these tools, DoN and Story are bots, Human players wait for clicks in the browser. Optional.',
     }),
   ),
 });
@@ -61,7 +62,7 @@ const inputSchemaOf = (schema: Schema.Top) => Schema.toJsonSchemaDocument(schema
 export const tools = [
   {
     name: "get_game",
-    description: `${RULES} Returns your seat's view as JSON: the public board, your private notes, recent events, whether it is your turn, and your legal moves as a numbered list. Only legal moves are listed. Several seats can be Agents; each sees only its own notes.`,
+    description: `${RULES} Returns your view as JSON: the public board, your private notes, recent events, whether it is your turn, and your legal moves as a numbered list. Only legal moves are listed. Several players can be Agents; each sees only its own notes.`,
     inputSchema: inputSchemaOf(GetGameArguments),
     isReadOnly: true,
     decodeCall: decoder("get_game", GetGameArguments, AgentCall.cases.GetGame.make),
@@ -69,7 +70,7 @@ export const tools = [
   {
     name: "play_move",
     description:
-      "Play one of your seat's legal moves, by its number in get_game's moves list. Only legal moves are listed, so any listed number is allowed. Fails if it is not your turn or the turn is stale; any seat's move advances the turn. Returns your seat's new view. The other seats move on their own, so call get_game until isYourTurn is true.",
+      "Play one of your legal moves, by its number in get_game's moves list. Only legal moves are listed, so any listed number is allowed. Fails if it is not your turn or the turn is stale; any player's move advances the turn. Returns your new view. The other players move on their own, so call get_game until isYourTurn is true.",
     inputSchema: inputSchemaOf(PlayMoveArguments),
     isReadOnly: false,
     decodeCall: decoder("play_move", PlayMoveArguments, AgentCall.cases.PlayMove.make),
@@ -77,7 +78,7 @@ export const tools = [
   {
     name: "new_match",
     description:
-      "Start a new match. It replaces any match in progress. By default the first seat is the Agent and DoN bots play the others; pass controllers to seat more agents. Returns each seat's number and controller, and the seed; then call get_game for an Agent seat.",
+      "Start a new match. It replaces any match in progress. By default Player 1 is the Agent and DoN bots play the others; pass controllers to make more players Agents. Returns each player's number and controller, and the seed; then call get_game for an Agent player.",
     inputSchema: inputSchemaOf(NewMatchArguments),
     isReadOnly: false,
     decodeCall: decoder("new_match", NewMatchArguments, AgentCall.cases.NewMatch.make),
@@ -88,7 +89,7 @@ export const tools = [
 export const replyText = (reply: AgentReply): string =>
   AgentReply.match(reply, { Answered: ({ text }) => text, Refused: ({ reason }) => JSON.stringify({ error: reason }) });
 
-/** A table new_match asks for. controllers has one entry per seat at the table, in seat order. */
+/** A table new_match asks for. controllers has one entry per player at the table, in table order. */
 export interface MatchSetup {
   readonly table: SeatCount;
   readonly isItemsEnabled: boolean;
@@ -122,29 +123,32 @@ const refused = <S>(state: S, reason: string): ToolOutcome<S> => ({ state, reply
 
 const answered = <S>(state: S, text: string): ToolOutcome<S> => ({ state, reply: AgentReply.cases.Answered.make({ text }) });
 
-const viewReply = <S>(session: MatchSession<S>, state: S, seat: Seat): ToolOutcome<S> =>
+const viewReply = <S>(session: MatchSession<S>, state: S, player: PlayerNumber): ToolOutcome<S> =>
   Option.match(session.current(state), {
     onNone: () => refused(state, NO_MATCH),
-    onSome: (source) => Result.match(agentGame(source, seat), { onSuccess: (game) => answered(state, JSON.stringify(game)), onFailure: (reason) => refused(state, reason) }),
+    onSome: (source) => Result.match(agentGame(source, player), { onSuccess: (game) => answered(state, JSON.stringify(game)), onFailure: (reason) => refused(state, reason) }),
   });
 
 /** Replies from the state a change left, or with the error it ran into. */
 const after = <S>({ state, maybeError }: Applied<S>, reply: (state: S) => ToolOutcome<S>): ToolOutcome<S> =>
   Option.match(maybeError, { onNone: () => reply(state), onSome: (reason) => refused(state, reason) });
 
-/** The table as new_match left it: each seat's number and controller, so the agents know which seats to name. */
+/** The table as new_match left it: each player's number and controller, so the agents know which players to name. */
 const tableReply = <S>(session: MatchSession<S>, state: S): ToolOutcome<S> =>
   Option.match(session.current(state), {
     onNone: () => refused(state, NO_MATCH),
-    onSome: (source) =>
-      answered(
+    onSome: (source) => {
+      const roster = rosterOf(source.game.seats);
+
+      return answered(
         state,
         JSON.stringify({
-          seats: source.game.seats.map((seat) => ({ seat, controller: controllerOf(source.controllers, seat) })),
+          players: source.game.seats.map((seat) => ({ player: roster.playerOf(seat), controller: controllerOf(source.controllers, seat) })),
           seed: String(source.seed),
-          hint: "Call get_game with an Agent seat's number to see that seat's view and moves.",
+          hint: "Call get_game with an Agent player's number to see that player's view and moves.",
         }),
-      ),
+      );
+    },
   });
 
 const defaultControllers = (table: SeatCount): ReadonlyArray<Controller> => SEATS_BY_TABLE[table].map((_, position): Controller => (position === 0 ? "Agent" : "DoN"));
@@ -152,14 +156,14 @@ const defaultControllers = (table: SeatCount): ReadonlyArray<Controller> => SEAT
 /** Runs one tool call over a session. */
 export const runTool = <S>(session: MatchSession<S>, state: S, call: AgentCall): ToolOutcome<S> =>
   AgentCall.match<ToolOutcome<S>>(call, {
-    GetGame: ({ seat }) => viewReply(session, state, seat),
-    PlayMove: ({ seat, index, turn }) =>
+    GetGame: ({ player }) => viewReply(session, state, player),
+    PlayMove: ({ player, index, turn }) =>
       Option.match(session.current(state), {
         onNone: () => refused(state, NO_MATCH),
         onSome: (source) =>
-          Result.match(agentMove(source, seat, index, turn), {
+          Result.match(agentMove(source, player, index, turn), {
             onFailure: (reason) => refused(state, reason),
-            onSuccess: (move) => after(session.move(state, move), (moved) => viewReply(session, moved, seat)),
+            onSuccess: (move) => after(session.move(state, move), (moved) => viewReply(session, moved, player)),
           }),
       }),
     NewMatch: ({ players, items, seed, controllers = defaultControllers(players) }) =>
@@ -167,5 +171,5 @@ export const runTool = <S>(session: MatchSession<S>, state: S, call: AgentCall):
         ? refused(state, `The seed must be an integer, not "${seed}".`)
         : controllers.length === players
           ? after(session.start(state, { table: players, isItemsEnabled: items, maybeSeed: Option.map(Option.fromUndefinedOr(seed), Number), controllers }), (started) => tableReply(session, started))
-          : refused(state, `controllers must list one controller per seat: ${players} for ${players} players, not ${controllers.length}.`),
+          : refused(state, `controllers must list one controller per player: ${players} for ${players} players, not ${controllers.length}.`),
   });
