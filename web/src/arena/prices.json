@@ -1,6 +1,6 @@
 {
   "unit": "USD per 1M tokens",
-  "note": "Edit freely; arena-cost reads this file on every run. 'input' is uncached input. A tier replaces the base rates for a call whose prompt (input + cacheRead + cacheWrite) is above inputTokensAbove. Reasoning tokens are part of output.",
+  "note": "Edit freely; scripts/arena-cost.ts reads this file on every run. Keys are model ids as calls.jsonl logs them. 'input' is uncached input. A tier replaces the base rates for a call whose prompt (input + cacheRead + cacheWrite) is above inputTokensAbove. Reasoning tokens are part of output.",
   "models": {
     "faux-a": {
       "input": 1,

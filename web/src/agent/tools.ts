@@ -10,7 +10,7 @@ import { agentGame, agentMove, type AgentSource, type SeatMove } from "./view.ts
 // the stdio MCP server) lists these tools, decodes a call with decodeCall, and
 // runs it with runTool over its own MatchSession.
 
-const RULES =
+export const RULES =
   "Buckshot: a shotgun is loaded with a hidden mix of live and blank shells, and each load is announced. On your turn you shoot a player or yourself, or use an item; a live shell does damage and a blank fired at yourself keeps your turn. The last player alive wins the round and its prize, and the most cash after the last round wins. A match has three rounds.";
 
 const PlayerArgument = PlayerNumber.annotate({ description: "The Agent player this call is for: the number in the player names, 1 for Player 1 up to the number of players at the table (at most 4)." });
