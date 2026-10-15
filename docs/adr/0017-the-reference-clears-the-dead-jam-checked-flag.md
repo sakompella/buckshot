@@ -1,0 +1,3 @@
+# The reference clears the dead jam-checked flag when a jam lifts
+
+When a jam lifts, the reference clears the jammer-checked flag as well as the jammed flag. The real game leaves it set, but reads it only while a seat is jammed, and every new jam resets it, so the leftover can never change play. The machine stores one jam value per seat (free, jammed, jammed and skipped) and cannot hold a dead bit. A fourth value for it would be a state with no meaning in the product, and the law `step_matches` compares whole states. Clearing the flag in the reference changes no behaviour: every recorded real-game item run still matches, and the comparison reads the flag only while a seat is jammed. The first item proof stage found it. This is D57 in the local decision log.
