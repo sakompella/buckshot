@@ -7,7 +7,7 @@ import { type AssistantMessage, contentText, createModels, fauxAssistantMessage,
 import { ConfigProvider, Effect, Exit, Schema } from "effect";
 
 import { AGENTS, AgentId } from "../src/arena/agent.ts";
-import { agentEndpoint } from "../src/arena/endpoints.ts";
+import { agentEndpoint, providerOf } from "../src/arena/endpoints.ts";
 import { listenForHuman } from "../src/arena/human.ts";
 import { DELIVERIES, type Delivery, INSTRUCTIONS, playMatch } from "../src/arena/match.ts";
 import { entriesSentTo } from "../src/arena/runlog.ts";
@@ -163,12 +163,24 @@ test("an endpoint is Anthropic or OpenAI Responses, from its URL and key", async
   expect(Exit.isSuccess(openai) && openai.value._tag).toBe("OpenAIResponses");
 });
 
+test("a proxy's model alias plays as the catalog model it names", async () => {
+  const alias = await endpointFrom({ PLAYER_A_OAI_URL: `${CPA.url}/v1`, PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "gpt-6-luna-fast", PLAYER_A_CATALOG_MODEL: "gpt-6-luna" });
+
+  if (!Exit.isSuccess(alias)) throw new Error(String(alias.cause));
+
+  const model = providerOf("openai-responses-A", alias.value).getModels()[0];
+
+  expect(model?.id).toBe("gpt-6-luna-fast");
+  expect(model?.contextWindow).toBeGreaterThan(0);
+});
+
 test.each([
   [{ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_ANT_KEY: CPA.key, PLAYER_A_OAI_URL: CPA.url, PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "claude-haiku-5-5" }, "not both"],
   [{ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_MODEL: "claude-haiku-5-5" }, "PLAYER_A_ANT_KEY must be set"],
   [{ PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "gpt-6-luna" }, "PLAYER_A_OAI_URL must be set"],
   [{ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_ANT_KEY: CPA.key }, "PLAYER_A_MODEL must be set"],
-  [{ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_ANT_KEY: CPA.key, PLAYER_A_MODEL: "gpt-6-luna" }, "not a pi-ai Anthropic model"],
+  [{ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_ANT_KEY: CPA.key, PLAYER_A_MODEL: "gpt-6-luna" }, "PLAYER_A_MODEL=gpt-6-luna is not a pi-ai Anthropic model"],
+  [{ PLAYER_A_OAI_URL: CPA.url, PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "gpt-6-luna-fast", PLAYER_A_CATALOG_MODEL: "gpt-6-lunar" }, "PLAYER_A_CATALOG_MODEL=gpt-6-lunar is not a pi-ai OpenAIResponses model"],
   [{ PLAYER_A_MODEL: "gpt-6-luna" }, "Set PLAYER_A_ANT_URL and PLAYER_A_ANT_KEY, or PLAYER_A_OAI_URL and PLAYER_A_OAI_KEY"],
 ])("a bad endpoint fails naming the variable, never the key: %p", async (env, expected) => {
   const failure = await failureOf(env);

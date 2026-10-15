@@ -4,4 +4,4 @@ The arena's agents are A to D, and each agent's model is configured on its own, 
 
 ## Consequences
 
-An agent is a letter, not a seat. Each match seats the agents by rotation and logs the seating, and an agent plays as the player of its letter wherever it sits. A model behind CLIProxyAPI with an id that pi-ai does not know, such as `claude-haiku-5-5-long`, cannot be used until pi-ai lists it or the arena gains an explicit model definition.
+An agent is a letter, not a seat. Each match seats the agents by rotation and logs the seating, and an agent plays as the player of its letter wherever it sits. A model behind a proxy with an id that pi-ai does not know, such as CLIProxyAPI's `gpt-6-luna-fast`, names the catalog model it stands for in `PLAYER_X_CATALOG_MODEL` (here `gpt-6-luna`). The arena sends the proxy's id and takes the context window, thinking levels and prices from the catalog model, so an alias costs no hand-written model table either.

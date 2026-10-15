@@ -11,8 +11,10 @@ import type { AgentId } from "./agent.ts";
 // Where each agent's model lives, read once from the environment (.env). Agent
 // A is configured by PLAYER_A_ANT_URL and _ANT_KEY for the Anthropic Messages
 // API, or PLAYER_A_OAI_URL and _OAI_KEY for the OpenAI Responses API, plus
-// PLAYER_A_MODEL and an optional PLAYER_A_EFFORT; B to D likewise. Keys stay
-// Redacted until pi-ai asks for them, so no error or log can show one.
+// PLAYER_A_MODEL and an optional PLAYER_A_EFFORT; B to D likewise. A model id
+// pi-ai does not list, such as a proxy's alias, names the catalog model it
+// stands for in PLAYER_A_CATALOG_MODEL. Keys stay Redacted until pi-ai asks for
+// them, so no error or log can show one.
 
 export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const satisfies ReadonlyArray<ModelThinkingLevel>;
 
@@ -20,6 +22,8 @@ const EndpointFields = {
   url: Schema.URL,
   key: Schema.Redacted(Schema.String),
   model: Schema.NonEmptyString,
+  /** The pi-ai catalog model whose context window, thinking levels and prices `model` shares, when pi-ai does not list `model` itself. */
+  catalogModel: Schema.optional(Schema.NonEmptyString),
   effort: Schema.optional(Schema.Literals(THINKING_LEVELS)),
 };
 
@@ -50,20 +54,27 @@ const credentials = (urlName: string, keyName: string) =>
     }),
   );
 
+/** The id pi-ai's catalog knows the endpoint's model by. */
+const catalogIdOf = (endpoint: Endpoint): string => endpoint.catalogModel ?? endpoint.model;
+
 const catalogOf = (endpoint: Endpoint): ReadonlyArray<Model<Api>> =>
   Endpoint.match(endpoint, {
     Anthropic: (): ReadonlyArray<Model<Api>> => anthropicProvider().getModels(),
     OpenAIResponses: (): ReadonlyArray<Model<Api>> => openaiProvider().getModels(),
   });
 
-/** One agent's endpoint. Its model must be in pi-ai's catalog for that API, which supplies the context window and thinking levels. */
+/** One agent's endpoint. Its model, or the catalog model it names, must be in pi-ai's catalog for that API, which supplies the context window and thinking levels. */
 export const agentEndpoint = (agent: AgentId) =>
   Effect.gen(function* () {
     const name = (suffix: string) => `PLAYER_${agent}_${suffix}`;
     const anthropic = yield* credentials(name("ANT_URL"), name("ANT_KEY"));
     const openai = yield* credentials(name("OAI_URL"), name("OAI_KEY"));
 
-    const settings = yield* Config.all({ model: Config.option(Config.NonEmptyString(name("MODEL"))), effort: Config.option(Config.Literals(THINKING_LEVELS, name("EFFORT"))) }).pipe(
+    const settings = yield* Config.all({
+      model: Config.option(Config.NonEmptyString(name("MODEL"))),
+      catalogModel: Config.option(Config.NonEmptyString(name("CATALOG_MODEL"))),
+      effort: Config.option(Config.Literals(THINKING_LEVELS, name("EFFORT"))),
+    }).pipe(
       Effect.mapError((error) => new EndpointConfigError({ message: error.message })),
     );
 
@@ -71,10 +82,16 @@ export const agentEndpoint = (agent: AgentId) =>
 
     if (Option.isNone(settings.model)) return yield* new EndpointConfigError({ message: `${name("MODEL")} must be set` });
 
-    const fields = { model: settings.model.value, effort: Option.getOrUndefined(settings.effort) };
+    const fields = { model: settings.model.value, catalogModel: Option.getOrUndefined(settings.catalogModel), effort: Option.getOrUndefined(settings.effort) };
+
+    const notListed = (endpoint: Endpoint): string =>
+      Option.match(settings.catalogModel, {
+        onNone: () => `${name("MODEL")}=${endpoint.model} is not a pi-ai ${endpoint._tag} model; for a proxy's alias, set ${name("CATALOG_MODEL")} to the model it stands for`,
+        onSome: (catalogModel) => `${name("CATALOG_MODEL")}=${catalogModel} is not a pi-ai ${endpoint._tag} model`,
+      });
 
     const inCatalog = (endpoint: Endpoint) =>
-      catalogOf(endpoint).some((model) => model.id === endpoint.model) ? Effect.succeed(endpoint) : Effect.fail(new EndpointConfigError({ message: `${name("MODEL")}=${endpoint.model} is not a pi-ai ${endpoint._tag} model` }));
+      catalogOf(endpoint).some((model) => model.id === catalogIdOf(endpoint)) ? Effect.succeed(endpoint) : Effect.fail(new EndpointConfigError({ message: notListed(endpoint) }));
 
     if (Option.isSome(anthropic)) return yield* inCatalog(Endpoint.cases.Anthropic.make({ ...anthropic.value, ...fields }));
 
@@ -96,11 +113,11 @@ export const providerIdOf = (agent: AgentId, endpoint: Endpoint): string => Endp
 /** The endpoint as a pi-ai provider with one model. */
 export const providerOf = (providerId: string, endpoint: Endpoint): Provider => {
   const baseUrl = baseUrlOf(endpoint.url);
-  const model = catalogOf(endpoint).find((candidate) => candidate.id === endpoint.model);
+  const model = catalogOf(endpoint).find((candidate) => candidate.id === catalogIdOf(endpoint));
 
-  if (model === undefined) throw new Error(`${endpoint.model} left pi-ai's catalog after it was parsed`);
+  if (model === undefined) throw new Error(`${catalogIdOf(endpoint)} left pi-ai's catalog after it was parsed`);
 
-  const options = { id: providerId, baseUrl, auth: apiKeyAuth(endpoint.key, providerId), models: [{ ...model, provider: providerId, baseUrl }] };
+  const options = { id: providerId, baseUrl, auth: apiKeyAuth(endpoint.key, providerId), models: [{ ...model, id: endpoint.model, provider: providerId, baseUrl }] };
 
   return Endpoint.match(endpoint, {
     Anthropic: () => createProvider({ ...options, api: anthropicMessagesApi() }),
@@ -111,4 +128,4 @@ export const providerOf = (providerId: string, endpoint: Endpoint): Provider => 
 export const modelRefOf = (providerId: string, endpoint: Endpoint): ModelRef => ({ provider: providerId, modelId: endpoint.model });
 
 /** What a manifest may show of an endpoint: never the key. */
-export const describeEndpoint = (endpoint: Endpoint) => ({ api: endpoint._tag, url: baseUrlOf(endpoint.url), model: endpoint.model, effort: endpoint.effort ?? null });
+export const describeEndpoint = (endpoint: Endpoint) => ({ api: endpoint._tag, url: baseUrlOf(endpoint.url), model: endpoint.model, catalog_model: endpoint.catalogModel ?? null, effort: endpoint.effort ?? null });
