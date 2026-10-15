@@ -190,6 +190,16 @@ gate_machine_item_fuzz() {
   fi
 }
 
+gate_simple_fuzz() {
+  local out
+  out="$(bun "$here/test/simple-fuzz.mjs" 2>&1)"
+  if [[ $? -eq 0 ]]; then
+    report ok "simple machine fuzz" "$(printf '%s' "$out" | tail -1 | cut -c1-200)"
+  else
+    report fail "simple machine fuzz" "$(printf '%s' "$out" | tail -20 | cut -c1-600)"
+  fi
+}
+
 gate_fuzz_mutations() {
   local out
   out="$(python3 "$here/tools/fuzz_mutations.py" 2>&1)"
@@ -258,6 +268,7 @@ gate_item_scenarios
 gate_machine_scenarios
 gate_machine_items
 gate_machine_item_fuzz
+gate_simple_fuzz
 gate_mutations
 gate_fuzz_mutations
 
