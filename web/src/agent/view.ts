@@ -2,7 +2,7 @@ import { Array as Arr, Option, Result } from "effect";
 
 import { type Board, Briefcase, Counter, GameEvent, type Seat, type SeatView, Secret } from "../domain.ts";
 import { type Controller, controllerOf, type Progress, promptsOf } from "../driver.ts";
-import { type PlayerLetter, playerName, type Roster, rosterOf } from "../players.ts";
+import { type Assignment, type PlayerLetter, playerName, type Roster, rosterOf } from "../players.ts";
 import { describeError, eventText, itemName, secretText } from "../text.ts";
 import { agentMoves, type Chain } from "./moves.ts";
 
@@ -16,6 +16,8 @@ import { agentMoves, type Chain } from "./moves.ts";
 /** The parts of a running match the agent's view is built from. */
 export interface AgentSource extends Progress {
   readonly controllers: ReadonlyArray<Controller>;
+  /** Each seat's letter, when it is not the table order: the arena keeps an agent's letter wherever it sits. */
+  readonly letters?: Assignment;
 }
 
 export interface PlayerLine {
@@ -128,7 +130,7 @@ const standingsOf = (board: Board, roster: Roster): ReadonlyArray<Standing> =>
 
 /** The view of one Agent player at the session's `turn`, or why there is none. */
 export const agentGame = (source: AgentSource, turn: number, player: PlayerLetter): Result.Result<AgentGame, string> => {
-  const roster = rosterOf(source.game.seats);
+  const roster = rosterOf(source.game.seats, source.letters);
 
   return Result.flatMap(agentSeat(source, roster, player), (you): Result.Result<AgentGame, string> => {
     const { board, pending } = source.game;
@@ -160,7 +162,7 @@ export interface SeatMove {
 
 /** The chain an Agent player's move stands for, or why the move is refused. `given` must be the session's current `turn`. */
 export const agentMove = (source: AgentSource, turn: number, player: PlayerLetter, move: number, given: number): Result.Result<SeatMove, string> => {
-  const roster = rosterOf(source.game.seats);
+  const roster = rosterOf(source.game.seats, source.letters);
 
   return Result.flatMap(agentSeat(source, roster, player), (seat) =>
     Result.gen(function* () {

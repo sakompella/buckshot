@@ -7,7 +7,8 @@ import { DELIVERIES, playMatch } from "../src/arena/match.ts";
 
 // Plays one match between agents configured in web/.env (see .env.example), to
 // game over, and writes its run directory. --agents picks the agents, and
-// --rotation seats them: rotation 0 puts the first at Player 1. --delivery picks
+// --rotation seats them: rotation 0 puts the first at position 1. Agent A
+// plays as Player A wherever it sits. --delivery picks
 // how the log reaches players (on-turn or live). Rerunning with the same --dir
 // resumes the match from its store, with the settings it started with.
 // Usage: bun scripts/arena.ts [--dir ../_work/arena/<name>] [--seed N] [--agents A,B] [--rotation 0] [--delivery on-turn]
@@ -41,7 +42,7 @@ const program = Effect.gen(function* () {
     }),
   );
 
-  console.error(`arena: ${dir}, seed ${seed}, ${delivery} delivery, seating ${seating.map((agent, index) => `Player ${index + 1}: ${agent}`).join(", ")}`);
+  console.error(`arena: ${dir}, seed ${seed}, ${delivery} delivery, seating ${seating.map((agent, index) => `position ${index + 1}: ${agent}`).join(", ")}`);
 
   return yield* playMatch({ dir, seed, controllers: seating.map(() => "Agent"), entrants, models, compaction: {}, delivery });
 });

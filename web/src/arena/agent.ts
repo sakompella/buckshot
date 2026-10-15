@@ -1,15 +1,18 @@
 import { Schema } from "effect";
 
-// The arena's agents are A to D. Each is one model on its own endpoint, and each
-// match seats them at Player numbers by rotation, so no agent keeps a seat.
+import { PlayerLetter } from "../players.ts";
 
-export const AGENTS = ["A", "B", "C", "D"] as const;
+// The arena's agents are A to D. Each is one model on its own endpoint and plays
+// as the player of its letter, Player A for agent A, wherever it sits. Each match
+// seats the agents by rotation, so no agent keeps a seat.
 
-export const AgentId = Schema.Literals(AGENTS);
+export const AgentId = PlayerLetter;
 
-export type AgentId = typeof AgentId.Type;
+export type AgentId = PlayerLetter;
 
-/** The agent at each Player number, from Player 1: the agents in order, rotated left by `rotation`. */
+export const AGENTS: ReadonlyArray<AgentId> = Schema.decodeUnknownSync(Schema.Array(PlayerLetter))(["A", "B", "C", "D"]);
+
+/** The agent at each seat, in table order: the agents in order, rotated left by `rotation`. */
 export const seatingOf = (agents: ReadonlyArray<AgentId>, rotation: number): ReadonlyArray<AgentId> => {
   const shift = ((rotation % agents.length) + agents.length) % agents.length;
 

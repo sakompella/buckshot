@@ -25,7 +25,7 @@ export type Usage = typeof Usage.Type;
 export const CallLine = Schema.Struct({
   t: Schema.String,
   agent: AgentId,
-  player: Schema.Int,
+  position: Schema.Int,
   provider: Schema.String,
   api: Schema.String,
   model: Schema.String,
@@ -55,19 +55,19 @@ export const readCalls = (dir: string): ReadonlyArray<CallLine> => linesOf(join(
 
 const append = (path: string, line: string) => appendFileSync(path, `${line}\n`);
 
-/** Where an agent sits in this match. */
+/** Where an agent sits in this match: its position in table order, from 1. */
 export interface Sitting {
   readonly agent: AgentId;
-  readonly player: number;
+  readonly position: number;
 }
 
-export const logCall = (dir: string, { agent, player }: Sitting, message: AssistantMessage): void => {
+export const logCall = (dir: string, { agent, position }: Sitting, message: AssistantMessage): void => {
   const { input, output, cacheRead, cacheWrite, cacheWrite1h, reasoning } = message.usage;
 
   const line: CallLine = {
     t: new Date().toISOString(),
     agent,
-    player,
+    position,
     provider: message.provider,
     api: message.api,
     model: message.model,

@@ -4,4 +4,4 @@ The arena's agents are A to D, and each agent's model is configured on its own, 
 
 ## Consequences
 
-An agent is a letter, not a seat. Each match seats the agents at Player numbers by rotation and logs the seating. A model behind CLIProxyAPI with an id that pi-ai does not know, such as `claude-haiku-5-5-long`, cannot be used until pi-ai lists it or the arena gains an explicit model definition.
+An agent is a letter, not a seat. Each match seats the agents by rotation and logs the seating, and an agent plays as the player of its letter wherever it sits. A model behind CLIProxyAPI with an id that pi-ai does not know, such as `claude-haiku-5-5-long`, cannot be used until pi-ai lists it or the arena gains an explicit model definition.
