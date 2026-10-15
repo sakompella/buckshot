@@ -21,6 +21,8 @@ const WEB = join(import.meta.dir, "..");
 
 /** Each crash point, with the occurrence to crash at. */
 const POINTS = [
+  ["start:before-commit", 1],
+  ["start:after-commit", 1],
   ["move:before-commit", 3],
   ["move:after-commit", 3],
   ["move:after-export", 3],

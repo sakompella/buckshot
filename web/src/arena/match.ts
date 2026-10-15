@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
@@ -465,7 +465,6 @@ export const playMatch = (match: ArenaMatch) =>
 
     for (const file of ["events.jsonl", "calls.jsonl"]) dropPartialLine(join(dir, file));
 
-    const isFresh = !existsSync(join(dir, "session.sqlite"));
     let table: Table | undefined;
 
     const currentTable = () => {
@@ -510,6 +509,8 @@ export const playMatch = (match: ArenaMatch) =>
     const store = yield* attempt("open the harness", () => Harness.open(storage, { models: match.models, registry, settings: { compaction: { enabled: false } } }, context));
     const journal = () => attempt("read the journal", async () => (await store.snapshot(MatchDoc, context)) ?? emptyMatch());
     const record = (change: (state: MatchState) => void) => attempt("write the journal", () => store.commit(async (tx) => void change(await tx.doc(MatchDoc)), context));
+    // A store with no match in its journal is a fresh start, also after a crash before the first commit.
+    const isFresh = (yield* journal()).controllers.length === 0;
 
     /** Commits a change to the journal and writes its log line; `what` names the crash points around both. */
     const commit = (what: string, change: (state: MatchState) => void) =>
@@ -556,20 +557,8 @@ export const playMatch = (match: ArenaMatch) =>
         state.conversations[entrant.agent] = created.id;
       }
 
-      yield* record((next) => void Object.assign(next, state));
+      yield* commit("start", (next) => void Object.assign(next, state));
       logEvent(dir, "seating", { seating: seatingIn(state) });
-      writeManifest(dir, {
-        format: RUN_FORMAT,
-        status: "running",
-        seed: match.seed,
-        controllers: [...match.controllers],
-        letters: state.letters,
-        delivery: match.delivery,
-        seating: seatingIn(state),
-        agents: agentsIn(table, provenance),
-        instructions_sha: provenance.instructions_sha,
-        provenance,
-      });
     } else {
       const state = yield* journal();
 
@@ -583,6 +572,22 @@ export const playMatch = (match: ArenaMatch) =>
       logEvent(dir, "resumed", { moves: state.moves.length });
       exportFrom(state);
     }
+
+    const started = yield* journal();
+    const provenance = Option.getOrThrow(Option.fromNullOr(started.provenance));
+
+    writeManifest(dir, {
+      format: RUN_FORMAT,
+      status: "running",
+      seed: started.seed,
+      controllers: started.controllers,
+      letters: started.letters,
+      delivery: started.delivery,
+      seating: seatingIn(started),
+      agents: agentsIn(currentTable(), provenance),
+      instructions_sha: provenance.instructions_sha,
+      provenance,
+    });
 
     store.resume();
 
@@ -759,7 +764,6 @@ export const playMatch = (match: ArenaMatch) =>
     for (const link of humans.values()) link.close();
 
     const final = yield* journal();
-    const provenance = final.provenance ?? provenanceOf(match);
     const audit = yield* auditOf(dir, store, final, playing);
     const storeUsage = yield* attempt("read usage", () => store.usage(context));
     const someone = Option.getOrThrow(Option.fromUndefinedOr(playing.arenaPlayers()[0]));
