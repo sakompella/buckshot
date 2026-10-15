@@ -998,6 +998,16 @@ summary:focus-visible {
   font-weight: 400;
 }
 
+.awards {
+  margin-top: 14px;
+  color: var(--dust);
+}
+
+.awards summary {
+  cursor: pointer;
+  width: max-content;
+}
+
 .titles {
   display: grid;
   grid-template-columns: max-content 1fr;
@@ -1082,6 +1092,28 @@ summary:focus-visible {
 }
 
 @media (max-width: 600px) {
+  /* A phone has no room beside the items, so your item's caption spans both
+     groups above them; other players' items go without. */
+  .caption {
+    width: 640%;
+    max-width: none;
+    right: auto;
+    text-align: center;
+  }
+
+  .slot-0 .caption,
+  .slot-2 .caption { left: 0; }
+  .slot-1 .caption,
+  .slot-3 .caption { left: -108.6%; }
+  .slot-4 .caption,
+  .slot-6 .caption { left: -431.4%; }
+  .slot-5 .caption,
+  .slot-7 .caption { left: -540%; }
+
+  .zone:not(.pos-0) .caption {
+    display: none;
+  }
+
   .stage {
     --size: min(calc(100vw - 4px), calc(100dvh - 120px));
     top: calc(50% - var(--size) / 2);

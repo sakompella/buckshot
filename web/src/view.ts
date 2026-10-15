@@ -42,7 +42,7 @@ const setupView = (h: H, model: Model): Html => {
       h.div(
         [h.Class("setup-row seats-row")],
         [
-          h.span([h.Class("setup-label")], ["Seats"]),
+          h.span([h.Class("setup-label")], ["Controllers"]),
           h.div(
             [h.Class("controllers")],
             seats.map((seat) =>
@@ -54,7 +54,7 @@ const setupView = (h: H, model: Model): Html => {
           ),
         ],
       ),
-      hasAgent && !model.isWebMcpAvailable ? h.p([h.Class("setup-note")], ["WebMCP is not available in this browser, so no agent can play the Agent seats."]) : h.empty,
+      hasAgent && !model.isWebMcpAvailable ? h.p([h.Class("setup-note")], ["WebMCP is not available in this browser, so Agent players cannot move."]) : h.empty,
       h.div(
         [h.Class("setup-row")],
         [
@@ -178,16 +178,22 @@ const resultsView = (h: H, match: Session): Html => {
     [h.Class("results"), h.AriaLabel("Results")],
     [
       h.ol([h.Class("standings")], standings.map((view) => h.li([], [h.span([], [nameIn(match, view.seat)]), h.strong([], [cash(view.cash)])]))),
-      h.dl(
-        [h.Class("titles")],
-        titles(match.events, match.game.seats).flatMap((title) => [
-          h.dt([], [title.name]),
-          h.dd([], [title.seats.length === 0 ? `Nobody (${title.description})` : `${title.seats.map((seat) => nameIn(match, seat)).join(", ")}: ${title.score} ${title.description}`]),
-        ]),
-      ),
       h.div(
         [h.Class("results-actions")],
-        [h.button([h.Type("button"), h.OnClick(Message.ClickedNewMatch())], ["Play again"]), h.button([h.Type("button"), h.OnClick(Message.ClickedLeaveMatch())], ["Change seats"])],
+        [h.button([h.Type("button"), h.OnClick(Message.ClickedNewMatch())], ["Play again"]), h.button([h.Type("button"), h.OnClick(Message.ClickedLeaveMatch())], ["Change players"])],
+      ),
+      h.details(
+        [h.Class("awards")],
+        [
+          h.summary([], ["Awards"]),
+          h.dl(
+            [h.Class("titles")],
+            titles(match.events, match.game.seats).flatMap((title) => [
+              h.dt([], [title.name]),
+              h.dd([], [title.seats.length === 0 ? `Nobody (${title.description})` : `${title.seats.map((seat) => nameIn(match, seat)).join(", ")}: ${title.score} ${title.description}`]),
+            ]),
+          ),
+        ],
       ),
     ],
   );

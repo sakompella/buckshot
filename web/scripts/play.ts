@@ -96,7 +96,7 @@ console.log(`human vs DoN: ${clicks} clicks, over: ${isOver}`);
 
 if (!isOver) throw new Error(`the human-vs-bot match did not finish after ${clicks} clicks`);
 
-await page.getByRole("button", { name: "Change seats" }).click();
+await page.getByRole("button", { name: "Change players" }).click();
 
 await page.getByRole("button", { name: "4", exact: true }).click();
 
