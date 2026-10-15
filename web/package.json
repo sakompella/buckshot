@@ -29,6 +29,7 @@
     "lint": "oxlint --deny-warnings",
     "typecheck": "tsc --noEmit -p .",
     "test": "bun run rules && bun test ./test",
-    "mcp": "bun run rules 1>&2 && bun scripts/mcp.ts"
+    "mcp": "bun run rules 1>&2 && bun scripts/mcp.ts",
+    "viewer": "bun run rules && bun scripts/viewer.ts"
   }
 }
