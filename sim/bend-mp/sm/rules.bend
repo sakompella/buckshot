@@ -263,35 +263,6 @@ def load.next(first: Bool, index: Nat) -> Nat:
     case False{} _:
       0n
 
-def item.disabled(rule: D.ItemRule) -> Bool:
-  match rule:
-    case D.ItemRule{enabled, _, _}:
-      Bool.not(enabled)
-
-def items.disabled(items: D.ItemRules) -> Bool:
-  match items:
-    case D.ItemRules{a, b, c, d, e, f, g, h, i}:
-      Bool.and(item.disabled(a), Bool.and(item.disabled(b), Bool.and(item.disabled(c), Bool.and(item.disabled(d), Bool.and(item.disabled(e), Bool.and(item.disabled(f), Bool.and(item.disabled(g), Bool.and(item.disabled(h), item.disabled(i)))))))))
-
-def round.no_items(round: D.RoundRules) -> Bool:
-  match round:
-    case D.RoundRules{_, _, items}:
-      items.disabled(items)
-
-def plan.no_items(plan: D.Plan) -> Bool:
-  match plan:
-    case D.OneRound{a}:
-      round.no_items(a)
-    case D.TwoRounds{a, b}:
-      Bool.and(round.no_items(a), round.no_items(b))
-    case D.ThreeRounds{a, b, c}:
-      Bool.and(round.no_items(a), Bool.and(round.no_items(b), round.no_items(c)))
-
-def config.no_items(config: D.Config) -> Bool:
-  match config:
-    case D.Config{_, plan}:
-      plan.no_items(plan)
-
 def round.next(before: Bool, index: Nat) -> Nat:
   match before:
     case True{}:
