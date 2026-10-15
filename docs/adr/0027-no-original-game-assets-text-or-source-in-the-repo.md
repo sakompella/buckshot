@@ -1,3 +1,0 @@
-# No original game assets, text or source in the repo
-
-The repository holds our code and our prose. It never holds the game's decompiled source, extracted art, audio, fonts or text. The decompiled copy, the decision log and the comparison harness live under `_work/` and `.audit/`, which git ignores. Documents may point at a file and line of the original and may describe a rule in our own words, but they do not paste it. The web UI draws its own art and uses system fonts. The names of items and rules appear because the rules need them. Rule evidence therefore cannot be reproduced from a clone alone (ADR-0020).

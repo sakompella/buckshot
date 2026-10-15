@@ -153,7 +153,7 @@ const after = <S>({ state, maybeError }: Applied<S>, reply: (state: S) => ToolOu
 /** The table as new_match left it: each player's letter and controller, so the agents know which players to name. */
 const tableReply = <S>(session: MatchSession<S>, state: S): ToolOutcome<S> =>
   withSource(session, state, (source) => {
-    const roster = rosterOf(source.game.seats);
+    const roster = rosterOf(source.game.seats, source.letters);
 
     return answered(
       state,

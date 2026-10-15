@@ -72,7 +72,7 @@ const tally = (table: Map<string, Total>, key: string, call: CallLine) => {
 
 for (const dir of roots.flatMap(matchDirs)) {
   for (const call of readCalls(dir)) {
-    tally(totals.agentInMatch, `${dir} agent ${call.agent} as Player ${call.player} (${call.model})`, call);
+    tally(totals.agentInMatch, `${dir} agent ${call.agent} at position ${call.position} (${call.model})`, call);
     tally(totals.match, dir, call);
     tally(totals.agent, `agent ${call.agent} (${call.model})`, call);
     tally(totals.model, `${call.api}/${call.model}`, call);

@@ -8,4 +8,4 @@ The machine is trusted because `LAWS.bend` states laws over every config, state 
 
 ## Consequences
 
-What a reader must still trust is the law statements, the mapping from machine state to reference state, the reference against the real game (ADR-0020), the text search for `@unsafe`, and the checkers. The full gate takes several minutes.
+What a reader must still trust is the law statements, the mapping from machine state to reference state, the reference against the real game (ADR-0021), the text search for `@unsafe`, and the checkers. The full gate takes several minutes.

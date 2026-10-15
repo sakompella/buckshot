@@ -14,9 +14,9 @@ _Avoid_: slot (a slot holds an item)
 The fixed number that identifies a seat inside the machine: 1 and 3 at a table of two, 0 to 2 at three, 0 to 3 at four. It is never shown to people or agents.
 _Avoid_: seat number, seat id
 
-**Player**:
-The name a seat goes by in a match, Player A to Player D in table order. Everything shown to people and agents uses it. In the arena a player keeps its agent's letter wherever it sits.
-_Avoid_: Player 1 to 4, seat number
+**Player A to Player D**:
+The name a seat goes by in a match: a letter, from A in table order unless the caller assigns the letters. In the arena, agent A is Player A wherever it sits. Everything shown to people and agents uses it.
+_Avoid_: seat number, Player 1
 
 **Controller**:
 Who plays a seat: Human, Story, DoN or Agent.
@@ -45,7 +45,7 @@ One answer to the machine's prompt, such as picking up the shotgun.
 _Avoid_: action
 
 **Move**:
-A whole action a player chooses, such as "Shoot Player 2". It is made of one or more steps.
+A whole action a player chooses, such as "Shoot Player B". It is made of one or more steps.
 _Avoid_: step, action
 
 **Turn**:
@@ -78,11 +78,15 @@ _Avoid_: turn (the session's counter, which a move names)
 ### The arena
 
 **Agent**:
-A player whose moves come through the agent tools instead of clicks or a bot. In the arena an agent is one of A to D, a model on its own endpoint.
-_Avoid_: bot, player (when the letter is meant)
+A player whose moves come through the agent tools instead of clicks or a bot. In the arena an agent is one of A to D, a model on its own endpoint, and plays as the player of its letter.
+_Avoid_: bot
+
+**Position**:
+A player's place in table order in one match, from 1. Arena logs and seating use it; agents never see it.
+_Avoid_: seat (the machine's own)
 
 **Seating**:
-Which agent sits at which place in table order in one match. It rotates between matches.
+Which agent is at which position in one match. It rotates between matches.
 
 **Forced turn**:
 A turn whose only move is "Grab an item". The arena plays it for the agent.

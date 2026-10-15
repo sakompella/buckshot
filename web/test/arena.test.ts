@@ -6,15 +6,17 @@ import { join } from "node:path";
 import { type AssistantMessage, contentText, createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall, type Message, type TranscriptContext } from "@earendil-works/pi-ai";
 import { ConfigProvider, Effect, Exit, Schema } from "effect";
 
-import { AGENTS } from "../src/arena/agent.ts";
+import { AGENTS, AgentId } from "../src/arena/agent.ts";
 import { agentEndpoint } from "../src/arena/endpoints.ts";
 import { type Delivery, playMatch } from "../src/arena/match.ts";
 
 // The arena with faux pi-ai models, which play from their transcripts alone, so
 // these matches cost nothing. A faux player's first act probes another player's
 // view; the seat tools take no player, so the probe must still return its own.
+// The audit checks that every view an agent got names it by its own letter, so
+// agents seated out of letter order check that letters follow agents, not seats.
 
-const View = Schema.Struct({ you: Schema.Int, turn: Schema.optional(Schema.Int), moves: Schema.optional(Schema.Array(Schema.String)) });
+const View = Schema.Struct({ you: Schema.String, turn: Schema.optional(Schema.Int), moves: Schema.optional(Schema.Array(Schema.String)) });
 
 const parseView = Schema.decodeUnknownSync(Schema.fromJsonString(View));
 
@@ -32,17 +34,18 @@ const decide = (transcript: TranscriptContext): AssistantMessage => {
 
   if (last === undefined || last.role === "assistant" || !(last.role === "toolResult" || textOf(last).startsWith("Your turn."))) return fauxAssistantMessage(fauxText("Done."));
 
-  if (last.role === "toolResult") return last.isError ? fauxAssistantMessage([fauxToolCall("get_game", { player: 1 })], { stopReason: "toolUse" }) : play(textOf(last));
+  if (last.role === "toolResult") return last.isError ? fauxAssistantMessage([fauxToolCall("get_game", { player: "A" })], { stopReason: "toolUse" }) : play(textOf(last));
 
   const isFirst = transcript.messages.filter((message) => message.role === "user" && textOf(message).startsWith("Your turn.")).length === 1;
 
-  return isFirst ? fauxAssistantMessage([fauxToolCall("get_game", { player: 2 })], { stopReason: "toolUse" }) : play(textOf(last));
+  return isFirst ? fauxAssistantMessage([fauxToolCall("get_game", { player: "B" })], { stopReason: "toolUse" }) : play(textOf(last));
 };
 
-const fauxMatch = (controllers: ReadonlyArray<"Agent" | "DoN">, seed: string, contextWindow: number, delivery: Delivery, dir = mkdtempSync(join(tmpdir(), "arena-test-"))) => {
+/** A faux match; `agents` sit at the Agent seats in table order. */
+const fauxMatch = (controllers: ReadonlyArray<"Agent" | "DoN">, seed: string, contextWindow: number, delivery: Delivery, { dir = mkdtempSync(join(tmpdir(), "arena-test-")), agents = AGENTS }: { readonly dir?: string; readonly agents?: ReadonlyArray<AgentId> } = {}) => {
   const faux = fauxProvider({ provider: "faux", models: [{ id: "faux-a", contextWindow, maxTokens: 512 }, { id: "faux-b", contextWindow, maxTokens: 512 }] });
   const models = createModels();
-  const agents = controllers.filter((controller) => controller === "Agent");
+  const seated = agents.slice(0, controllers.filter((controller) => controller === "Agent").length);
 
   faux.setResponses(Array.from({ length: 5_000 }, () => decide));
   models.setProvider(faux.provider);
@@ -51,7 +54,7 @@ const fauxMatch = (controllers: ReadonlyArray<"Agent" | "DoN">, seed: string, co
     dir,
     seed,
     controllers,
-    entrants: agents.map((_, index) => ({ agent: AGENTS[index] ?? "A", model: { provider: "faux", modelId: index % 2 === 0 ? "faux-a" : "faux-b" }, thinkingLevel: undefined, describe: `faux ${index}` })),
+    entrants: seated.map((agent, index) => ({ agent, model: { provider: "faux", modelId: index % 2 === 0 ? "faux-a" : "faux-b" }, thinkingLevel: undefined, describe: `faux ${index}` })),
     models,
     compaction: { enabled: true, reserveTokens: 1_500, keepRecentTokens: 1_500 },
     delivery,
@@ -59,10 +62,10 @@ const fauxMatch = (controllers: ReadonlyArray<"Agent" | "DoN">, seed: string, co
 };
 
 test.each([
-  [["Agent", "Agent"] as const, "7", "on-turn"],
-  [["Agent", "Agent", "DoN"] as const, "42", "live"],
-] as const)("faux players play %p, seed %s, to game over, each seeing only its own seat, with %s delivery", async (controllers, seed, delivery) => {
-  const result = await Effect.runPromise(fauxMatch(controllers, seed, 6_000, delivery));
+  [["Agent", "Agent"] as const, "7", "on-turn", "A,B"],
+  [["Agent", "Agent", "DoN"] as const, "42", "live", "B,A"],
+] as const)("faux players play %p, seed %s, to game over, each seeing only its own seat, with %s delivery, agents %s", async (controllers, seed, delivery, agents) => {
+  const result = await Effect.runPromise(fauxMatch(controllers, seed, 6_000, delivery, { agents: Schema.decodeUnknownSync(Schema.Array(AgentId))(agents.split(",")) }));
   const stored = Object.values(result.storeUsage);
 
   expect(result.audit).toEqual({ over: true, every_view_is_own_player: true, delivered_is_own_log_exactly: true, replay_matches: true });
@@ -83,8 +86,8 @@ const deliveriesIn = (dir: string) => {
 
 test("live and on-turn delivery send each player the same entries, in the same order, at different times", async () => {
   const dirs = { onTurn: mkdtempSync(join(tmpdir(), "arena-on-turn-")), live: mkdtempSync(join(tmpdir(), "arena-live-")) };
-  const onTurn = await Effect.runPromise(fauxMatch(["Agent", "DoN", "Agent"], "5", 200_000, "on-turn", dirs.onTurn));
-  const live = await Effect.runPromise(fauxMatch(["Agent", "DoN", "Agent"], "5", 200_000, "live", dirs.live));
+  const onTurn = await Effect.runPromise(fauxMatch(["Agent", "DoN", "Agent"], "5", 200_000, "on-turn", { dir: dirs.onTurn }));
+  const live = await Effect.runPromise(fauxMatch(["Agent", "DoN", "Agent"], "5", 200_000, "live", { dir: dirs.live }));
   const [sentOnTurn, sentLive] = [deliveriesIn(dirs.onTurn), deliveriesIn(dirs.live)];
 
   expect(live.move_log_sha).toBe(onTurn.move_log_sha);
@@ -98,7 +101,7 @@ test("live and on-turn delivery send each player the same entries, in the same o
 
 const CPA = { url: "http://127.0.0.1:8318", key: "sk-test-secret-value" };
 
-const endpointFrom = (env: Readonly<Record<string, string>>) => Effect.runPromiseExit(agentEndpoint("A").pipe(Effect.provideService(ConfigProvider.ConfigProvider, ConfigProvider.fromEnvRecord(env))));
+const endpointFrom = (env: Readonly<Record<string, string>>) => Effect.runPromiseExit(agentEndpoint(Schema.decodeUnknownSync(AgentId)("A")).pipe(Effect.provideService(ConfigProvider.ConfigProvider, ConfigProvider.fromEnvRecord(env))));
 
 const failureOf = async (env: Readonly<Record<string, string>>): Promise<string> => {
   const exit = await endpointFrom(env);

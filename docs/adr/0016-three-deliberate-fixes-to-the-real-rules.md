@@ -1,6 +1,6 @@
 # Three deliberate fixes to the real game's rules
 
-The models follow the real rules except for three fixes, each for a bug that changes game state, not for presentation, transport or timing. Both models carry them, and the comparison harness (ADR-0020) carries the same edits, so the laws and the harness stay exact.
+The models follow the real rules except for three fixes, each for a bug that changes game state, not for presentation, transport or timing. Both models carry them, and the comparison harness (ADR-0021) carries the same edits, so the laws and the harness stay exact.
 
 - **M1, distribution can stall.** With custom item caps, the last placement can leave no seat grabbing while distribution stays open, and no reload follows. After the seats with nothing eligible are ended, the game's own finished check runs again, and the reload follows if it passes.
 - **M3, new-round grabbers.** At a new round the real game picks which seats get items before it clears old inventories. With custom settings that can skip a seat or the whole first distribution. The models pick after clearing, with the new round's settings.
