@@ -213,7 +213,7 @@ const manifestOf = (tournament: Tournament, match: ScheduledMatch, status: "fini
   const agents = Object.fromEntries(match.seats.flatMap((seat, index) => {
     const entrant = tournament.config.entrants[match.entrants[index] ?? ""];
 
-    return entrant !== undefined && "model" in entrant ? [[seat, { endpoint: { model: entrant.model, effort: entrant.effort } }]] : [];
+    return entrant !== undefined && "model" in entrant ? [[seat, { model: entrant.model, effort: entrant.effort }]] : [];
   }));
 
   const manifest = {
@@ -223,7 +223,8 @@ const manifestOf = (tournament: Tournament, match: ScheduledMatch, status: "fini
     controllers: match.seats.map((seat) => (seat === "DoN" || seat === "Story" ? seat : "Agent")),
     letters,
     delivery: "on-turn",
-    agents,
+    provenance: { agents },
+    agents: Object.fromEntries(Object.keys(agents).map((seat) => [seat, { moves: 2, reminders: 1, interventions: 1 }])),
     standings: letters.map((player, index) => ({ player, cash: index === winner ? 150_000 : 0, controller: null })),
   };
 
@@ -313,7 +314,7 @@ test("one directory holds one tournament", () => {
   expect(Result.isFailure(other) && other.failure.message).toContain("made from a different config");
 });
 
-test("a finished match that disagrees with the schedule is left out, and counts come from events when the manifest lacks them", () => {
+test("a finished match that disagrees with the schedule is left out, and its counts come from the manifest", () => {
   const tournament = tournamentFrom(configJson({ pairings: [["luna", "don"]], blocksPerPairing: 1 }));
   const dir = mkdtempSync(join(tmpdir(), "tournament-read-"));
   const [match] = scheduleOf(tournament);
@@ -322,33 +323,18 @@ test("a finished match that disagrees with the schedule is left out, and counts 
 
   writeManifest(dir, tournament, match, "finished");
 
-  const event = (kind: string, fields: Readonly<Record<string, string>>) => JSON.stringify({ t: "2026-10-16T00:00:00Z", kind, ...fields });
-
-  writeFileSync(join(dir, match.name, "events.jsonl"), [
-    event("move", { agent: "A", player: "A", by: "agent" }),
-    event("move", { agent: "A", player: "A", by: "agent" }),
-    event("move", { agent: "A", player: "A", by: "forced" }),
-    event("reminder", { agent: "A", player: "A" }),
-    event("fallback", { agent: "A", player: "A", by: "fallback" }),
-    event("move", { player: "B", by: "forced" }),
-  ].join("\n"));
-
   const played = readMatch(dir, tournament, match);
-  const own = Result.isSuccess(played) ? played.success.players[match.entrants.indexOf("luna")] : undefined;
 
-  expect(own).toMatchObject({ entrant: "luna", moves: 2, reminders: 1, interventions: 1 });
+  expect(Result.isSuccess(played) && played.success.players).toEqual([
+    { entrant: "luna", share: expect.any(Number), moves: 2, reminders: 1, interventions: 1 },
+    { entrant: "don", share: expect.any(Number), moves: 0, reminders: 0, interventions: 0 },
+  ].toSorted((a, b) => match.entrants.indexOf(a.entrant) - match.entrants.indexOf(b.entrant)));
 
   const manifest = JSON.parse(readFileSync(join(dir, match.name, "manifest.json"), "utf8"));
   const write = (changes: Readonly<Record<string, Schema.Json>>) => writeFileSync(join(dir, match.name, "manifest.json"), JSON.stringify({ ...manifest, ...changes }));
 
-  write({ agents: { A: { endpoint: { model: "gpt-6-luna", effort: "low" }, moves: 7, reminders: 0, interventions: 3 } } });
-  expect(Result.isSuccess(readMatch(dir, tournament, match))).toBe(false);
-
-  write({ agents: { A: { endpoint: { model: "gpt-6-luna", effort: "high" }, moves: 7, reminders: 0, interventions: 3 } } });
-
-  const counted = readMatch(dir, tournament, match);
-
-  expect(Result.isSuccess(counted) && counted.success.players[match.entrants.indexOf("luna")]).toMatchObject({ moves: 7, reminders: 0, interventions: 3 });
+  write({ provenance: { agents: { A: { model: "gpt-6-luna", effort: "low" } } } });
+  expect(Result.isFailure(readMatch(dir, tournament, match))).toBe(true);
 
   write({ provenance: { agents: { A: { model: "claude-haiku-5-5", effort: "high" } } } });
   expect(Result.isFailure(readMatch(dir, tournament, match))).toBe(true);

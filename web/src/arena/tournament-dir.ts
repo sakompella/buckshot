@@ -64,8 +64,8 @@ export const openTournament = (dir: string, tournament: Tournament, gitCommit: s
   return Result.succeed(file);
 };
 
-/** What the manifest says that a tournament reads. Fields a newer arena adds are optional, so manifests from before them still read. */
-const Described = Schema.Struct({ model: Schema.String, effort: Schema.optional(Schema.NullOr(Schema.String)) });
+/** What a tournament reads of a match's manifest. */
+const Described = Schema.Struct({ model: Schema.String, effort: Schema.NullOr(Schema.String) });
 
 const MatchManifest = Schema.Struct({
   status: Schema.String,
@@ -74,11 +74,8 @@ const MatchManifest = Schema.Struct({
   letters: Schema.Array(Schema.String),
   delivery: Schema.String,
   standings: Schema.optional(Schema.Array(Schema.Struct({ player: Schema.String, cash: Schema.Number }))),
-  provenance: Schema.optional(Schema.Struct({ agents: Schema.Record(Schema.String, Described) })),
-  agents: Schema.Record(
-    Schema.String,
-    Schema.Struct({ endpoint: Schema.optional(Described), moves: Schema.optional(Schema.Int), reminders: Schema.optional(Schema.Int), interventions: Schema.optional(Schema.Int) }),
-  ),
+  provenance: Schema.Struct({ agents: Schema.Record(Schema.String, Described) }),
+  agents: Schema.Record(Schema.String, Schema.Struct({ moves: Schema.Int, reminders: Schema.Int, interventions: Schema.Int })),
 });
 
 type MatchManifest = typeof MatchManifest.Type;
@@ -112,13 +109,13 @@ export const manifestProblems = (tournament: Tournament, match: ScheduledMatch, 
 
     if (!isLetter(seat) || entrant === undefined) return [];
 
-    const played = manifest.provenance?.agents[seat] ?? manifest.agents[seat]?.endpoint;
+    const played = manifest.provenance.agents[seat];
 
     if (played === undefined) return [`the manifest does not say which model agent ${seat} played`];
 
     return [
       ...(played.model === entrant.model ? [] : [`agent ${seat} played ${played.model}, the schedule says ${entrant.model}`]),
-      ...((played.effort ?? null) === entrant.effort ? [] : [`agent ${seat} played at effort ${played.effort ?? "unset"}, the schedule says ${entrant.effort}`]),
+      ...(played.effort === entrant.effort ? [] : [`agent ${seat} played at effort ${played.effort ?? "unset"}, the schedule says ${entrant.effort}`]),
       ...(manifest.letters[index] === seat ? [] : [`position ${index + 1} is player ${manifest.letters[index] ?? "none"}, the schedule says ${seat}`]),
     ];
   });
@@ -131,23 +128,8 @@ export const manifestProblems = (tournament: Tournament, match: ScheduledMatch, 
   ];
 };
 
-const EventLine = Schema.Struct({ kind: Schema.String, agent: Schema.optional(Schema.String), player: Schema.optional(Schema.String), by: Schema.optional(Schema.String) });
-
-const readEvents = (dir: string) => {
-  const path = join(dir, "events.jsonl");
-
-  return existsSync(path)
-    ? readFileSync(path, "utf8").split("\n").filter((line) => line !== "").map((line) => Schema.decodeUnknownSync(Schema.fromJsonString(EventLine))(line))
-    : [];
-};
-
-/** What one model did in a match: the manifest's counts, or the events' for a manifest from before them. */
-const countsOf = (manifest: MatchManifest, events: ReadonlyArray<typeof EventLine.Type>, letter: string) => {
-  const own = manifest.agents[letter];
-  const ofKind = (kind: string, by?: string) => events.filter((event) => event.kind === kind && (event.agent ?? event.player) === letter && (by === undefined || event.by === by)).length;
-
-  return { moves: own?.moves ?? ofKind("move", "agent"), reminders: own?.reminders ?? ofKind("reminder"), interventions: own?.interventions ?? ofKind("fallback") };
-};
+/** What one entrant did in a match, from the manifest; a bot's counts are zero. */
+const countsOf = (manifest: MatchManifest, seat: string) => manifest.agents[seat] ?? { moves: 0, reminders: 0, interventions: 0 };
 
 /** Each player's share of the win, in table order, from the manifest's standings. */
 const sharesOf = (match: ScheduledMatch, manifest: MatchManifest): Result.Result<ReadonlyArray<number>, string> => {
@@ -166,9 +148,7 @@ export const readMatch = (dir: string, tournament: Tournament, match: ScheduledM
     if (problems.length > 0) return yield* Result.fail(problems);
 
     const shares = yield* Result.mapError(sharesOf(match, manifest), (message) => [message]);
-    const events = readEvents(matchDir);
-
-    const players: ReadonlyArray<Player> = match.entrants.map((entrant, index) => ({ entrant, share: shares[index] ?? 0, ...countsOf(manifest, events, match.seats[index] ?? "") }));
+    const players: ReadonlyArray<Player> = match.entrants.map((entrant, index) => ({ entrant, share: shares[index] ?? 0, ...countsOf(manifest, match.seats[index] ?? "") }));
 
     return { name: match.name, pairing: match.pairing, block: match.block, players };
   });
