@@ -1,12 +1,13 @@
 import { Array as Arr, Option, Result } from "effect";
 
-import { type Seat, SEATS_BY_TABLE } from "../domain.ts";
-import { begin, type Controller, play, playAis, type Progress } from "../driver.ts";
+import { SEATS_BY_TABLE } from "../domain.ts";
+import { begin, type Controller, playAis, type Progress } from "../driver.ts";
 import { seedRng } from "../rng.ts";
 import { rosterOf } from "../players.ts";
 import { describeError } from "../text.ts";
+import { playChain } from "./moves.ts";
 import type { Applied, MatchSession, MatchSetup } from "./tools.ts";
-import { NOTHING_REPORTED, reportedTo, type SeatMove } from "./view.ts";
+import type { SeatMove } from "./view.ts";
 
 // Matches with no page: the MCP server holds one HeadlessTable, and runTool
 // changes it. The AI seats move as soon as it is their turn, so every reply
@@ -15,22 +16,22 @@ import { NOTHING_REPORTED, reportedTo, type SeatMove } from "./view.ts";
 export interface HeadlessMatch extends Progress {
   /** By seat, as in the page's Session. */
   readonly controllers: ReadonlyArray<Controller>;
-  /** By seat: the events each Agent seat has been shown, as in AgentSource. */
-  readonly reported: ReadonlyArray<number>;
 }
 
 export interface HeadlessTable {
   readonly matchCount: number;
+  /** The session's turn: the AI seats move only inside a start or a move, so one step for each covers every change. */
+  readonly turn: number;
   readonly maybeMatch: Option.Option<HeadlessMatch>;
 }
 
-export const emptyTable: HeadlessTable = { matchCount: 0, maybeMatch: Option.none() };
+export const emptyTable: HeadlessTable = { matchCount: 0, turn: 0, maybeMatch: Option.none() };
 
 const randomSeed = (): number => Math.floor(Math.random() * 2 ** 31);
 
 const failed = (table: HeadlessTable, reason: string): Applied<HeadlessTable> => ({ state: table, maybeError: Option.some(reason) });
 
-const withMatch = (table: HeadlessTable, match: HeadlessMatch): Applied<HeadlessTable> => ({ state: { ...table, maybeMatch: Option.some(match) }, maybeError: Option.none() });
+const withMatch = (table: HeadlessTable, match: HeadlessMatch): Applied<HeadlessTable> => ({ state: { ...table, turn: table.turn + 1, maybeMatch: Option.some(match) }, maybeError: Option.none() });
 
 /** Seats the table's controllers by seat; the seats not at the table are never asked. */
 const bySeat = ({ table, controllers }: MatchSetup): ReadonlyArray<Controller> =>
@@ -46,28 +47,23 @@ const start = (table: HeadlessTable, setup: MatchSetup): Applied<HeadlessTable> 
   return Result.match(
     Result.flatMap(begin(setup.table, setup.isItemsEnabled, matchNumber, seedRng(seed), controllers, seed), (progress) => playAis(progress, controllers)),
     {
-      onSuccess: (progress) => withMatch({ ...table, matchCount: matchNumber }, { ...progress, controllers, reported: NOTHING_REPORTED }),
+      onSuccess: (progress) => withMatch({ ...table, matchCount: matchNumber }, { ...progress, controllers }),
       onFailure: (error) => failed(table, describeError(rosterOf(SEATS_BY_TABLE[setup.table]), error)),
     },
   );
 };
 
-const move = (table: HeadlessTable, { match, generation, seat, index }: SeatMove): Applied<HeadlessTable> =>
+const move = (table: HeadlessTable, { seat, chain }: SeatMove): Applied<HeadlessTable> =>
   Option.match(table.maybeMatch, {
     onNone: () => failed(table, "No match is running."),
     onSome: (current) =>
       Result.match(
-        Result.flatMap(play(current, { match, generation }, seat, index, current.rng), (progress) => playAis(progress, current.controllers)),
+        Result.flatMap(playChain(current, seat, chain), (progress) => playAis(progress, current.controllers)),
         {
-          onSuccess: (progress) => withMatch(table, { ...progress, controllers: current.controllers, reported: current.reported }),
+          onSuccess: (progress) => withMatch(table, { ...progress, controllers: current.controllers }),
           onFailure: (error) => failed(table, describeError(rosterOf(current.game.seats), error)),
         },
       ),
   });
 
-const report = (table: HeadlessTable, seat: Seat, eventCount: number): HeadlessTable => ({
-  ...table,
-  maybeMatch: Option.map(table.maybeMatch, (match) => ({ ...match, reported: reportedTo(match.reported, seat, eventCount) })),
-});
-
-export const headlessSession: MatchSession<HeadlessTable> = { current: (table) => table.maybeMatch, start, move, report };
+export const headlessSession: MatchSession<HeadlessTable> = { current: (table) => table.maybeMatch, turn: (table) => table.turn, start, move };
