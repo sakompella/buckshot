@@ -1,7 +1,9 @@
 // Throwaway prototype check: runs arena.ts on 2, 3 and 4 player tables. Each
 // table runs twice from scratch, which must give the same move log, and once
 // more that crashes right after an input is submitted and is then resumed from
-// its store, which must give that same move log too.
+// its store, which must give that same move log too. In fresh runs the usage
+// in calls.jsonl must equal the store's own usage totals. Then it prices every
+// run with cost.ts.
 // Usage: bun proto/arena-pi/check.ts
 
 import { rmSync } from "node:fs";
@@ -12,7 +14,7 @@ const tables = [
   { controllers: "Agent,Agent,Agent,Agent", seed: "9", crashAt: 40 },
 ];
 
-interface Report { readonly checks: Record<string, boolean>; readonly moveLogSha: string; readonly moves: Record<string, number>; readonly modelCalls: number; readonly compactions: Record<string, number> }
+interface Report { readonly checks: Record<string, boolean>; readonly logsMatchStore: boolean; readonly moveLogSha: string; readonly moves: Record<string, number>; readonly modelCalls: number; readonly compactions: Record<string, number> }
 
 const arena = async (dir: string, controllers: string, seed: string, crashAt = 0): Promise<{ readonly code: number; readonly report: Report | undefined }> => {
   const child = Bun.spawn(["nice", "-n", "10", "bun", new URL("arena.ts", import.meta.url).pathname, "--dir", dir, "--controllers", controllers, "--seed", seed, "--crash-at-submit", String(crashAt)], { stdout: "pipe", stderr: "inherit" });
@@ -34,9 +36,12 @@ for (const { controllers, seed, crashAt } of tables) {
   const failed = [first, second, resumed].flatMap(({ report }) => Object.entries(report?.checks ?? { noReport: false }).filter(([, ok]) => !ok).map(([name]) => name));
   const isRepeated = first.report?.moveLogSha === second.report?.moveLogSha;
   const isResumedSame = crashed.code === 3 && resumed.report?.moveLogSha === first.report?.moveLogSha;
+  const isLogged = [first, second].every(({ report }) => report?.logsMatchStore === true);
 
-  isGreen &&= failed.length === 0 && isRepeated && isResumedSame;
-  console.log(JSON.stringify({ controllers, seed, failed, isRepeated, crashExit: crashed.code, isResumedSame, moves: first.report?.moves, modelCalls: first.report?.modelCalls, compactions: first.report?.compactions }));
+  isGreen &&= failed.length === 0 && isRepeated && isResumedSame && isLogged;
+  console.log(JSON.stringify({ controllers, seed, failed, isRepeated, crashExit: crashed.code, isResumedSame, isLogged, resumedLogsMatchStore: resumed.report?.logsMatchStore, moves: first.report?.moves, modelCalls: first.report?.modelCalls, compactions: first.report?.compactions }));
 }
 
+const cost = Bun.spawn(["bun", new URL("cost.ts", import.meta.url).pathname, "/tmp/arena-pi"], { stdout: "inherit", stderr: "inherit" });
+isGreen &&= (await cost.exited) === 0;
 process.exit(isGreen ? 0 : 1);

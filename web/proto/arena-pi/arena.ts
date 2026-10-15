@@ -1,8 +1,8 @@
-import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { type AssistantMessage, createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall, type Message, type TranscriptContext, Type } from "@earendil-works/pi-ai";
-import { CompactionTask, createRegistry, defineDoc, defineExtension, defineTool, GenerationTask, Harness, hook } from "@earendil-works/pi-durable";
+import { CompactionTask, type ConversationId, createRegistry, defineDoc, defineExtension, defineTool, GenerationTask, Harness, hook } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
 import { Option, Result } from "effect";
 
@@ -18,8 +18,11 @@ import { eventText, secretText } from "../../src/text.ts";
 // conversation is created. The arena submits a player's view as input on its
 // turn, plays forced "Grab an item" turns itself, and journals every move in
 // the store, so a restart rebuilds the table from the seed and the moves and
-// resumes the conversations. A faux pi-ai model plays from the transcript only.
-// Usage: bun proto/arena-pi/arena.ts --dir /tmp/x [--controllers Agent,Agent,DoN] [--seed 42] [--window 6000] [--crash-at-submit N]
+// resumes the conversations. Each Agent player has its own model; here faux
+// pi-ai models that play from the transcript only. The run directory gets
+// agent-ts style logs: calls.jsonl (one line per model reply, with raw usage),
+// events.jsonl and manifest.json (per-player totals). Nothing is capped.
+// Usage: bun proto/arena-pi/arena.ts --dir /tmp/x [--controllers Agent,Agent,DoN] [--models faux-a,faux-b] [--seed 42] [--window 6000] [--crash-at-submit N]
 
 const flag = (name: string, fallback: string): string => {
   const index = process.argv.indexOf(`--${name}`);
@@ -29,12 +32,15 @@ const flag = (name: string, fallback: string): string => {
 const context = BACKGROUND_CONTEXT;
 const dir = flag("dir", `/tmp/arena-pi-${Date.now()}`);
 const controllers = flag("controllers", "Agent,Agent,DoN").split(",");
+const modelIds = flag("models", "faux-a,faux-b").split(",");
 const seed = flag("seed", "42");
 const contextWindow = Number(flag("window", "6000"));
 const crashAtSubmit = Number(flag("crash-at-submit", "0"));
 mkdirSync(dir, { recursive: true });
 
 const log = (file: string, line: object) => appendFileSync(join(dir, file), `${JSON.stringify({ t: new Date().toISOString(), ...line })}\n`);
+const readLines = (file: string): Array<Record<string, never>> =>
+  existsSync(join(dir, file)) ? readFileSync(join(dir, file), "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line) as Record<string, never>) : [];
 
 const decode = (name: string, input: unknown): AgentCall => {
   const tool = tools.find((candidate) => candidate.name === name);
@@ -52,8 +58,8 @@ const run = (call: AgentCall): AgentReply => {
 const match = () => Option.getOrThrow(table.maybeMatch);
 const isOver = () => match().game.pending.kind === "Finished";
 
-interface MoveLine { readonly turn: number; readonly player: number; readonly move: number; readonly label: string; readonly by: "agent" | "forced" | "fallback" }
-interface MatchState { seed: string; controllers: Array<string>; seats: Record<string, string>; moves: Array<MoveLine>; carried: Record<string, Array<string>>; submits: number }
+type MoveLine = { readonly turn: number; readonly player: number; readonly move: number; readonly label: string; readonly by: "agent" | "forced" | "fallback" };
+type MatchState = { seed: string; controllers: Array<string>; seats: Record<string, ConversationId>; moves: Array<MoveLine>; carried: Record<string, Array<string>>; submits: number };
 
 const MatchDoc = defineDoc<MatchState>({ kind: "arena.match", version: 1, scope: "session", initial: () => ({ seed: "", controllers: [], seats: {}, moves: [], carried: {}, submits: 0 }) });
 const SeatDoc = defineDoc<{ player: number }>({ kind: "arena.seat", version: 1, scope: "conversation", history: "latest", fork: "initial", initial: () => ({ player: 0 }) });
@@ -89,8 +95,8 @@ const tryMove = (player: number, move: number, turn: number, by: MoveLine["by"])
   return { ok: true, text: replyText(reply), line: { turn, player, move, label, by } };
 };
 
-const seatOf = async (api: { conversationId: string; snapshot: Harness["snapshot"] }): Promise<number> =>
-  (await api.snapshot(SeatDoc, api.conversationId as never, context))?.player ?? 0;
+const seatOf = async (api: { conversationId: ConversationId; snapshot: Harness["snapshot"] }): Promise<number> =>
+  (await api.snapshot(SeatDoc, api.conversationId, context))?.player ?? 0;
 
 /** What a seat has been shown, verbatim: its secrets and the public events, in order, up to now. */
 const heardSoFar = (player: number): Array<string> => {
@@ -109,14 +115,20 @@ const SeatTools = defineExtension({
       name: "get_game",
       description: "Your view of the match as JSON. Your turn's view lists your legal moves and the turn number to pass to play_move.",
       parameters: Type.Object({}),
-      execute: async (_args, api) => ({ content: [{ type: "text", text: viewText(await seatOf(api)) }] }),
+      execute: async (_args, api) => {
+        const player = await seatOf(api);
+        log("events.jsonl", { kind: "tool", player, name: "get_game", call_id: api.callId, ok: true });
+        return { content: [{ type: "text", text: viewText(player) }] };
+      },
     }),
     defineTool({
       name: "play_move",
       description: "Play move number `move` (its position in the view's moves list, from 0), with the `turn` of the view you chose it from.",
       parameters: Type.Object({ move: Type.Integer({ minimum: 0 }), turn: Type.Integer({ minimum: 0 }) }),
       execute: async (args, api) => {
-        const played = tryMove(await seatOf(api), args.move, args.turn, "agent");
+        const player = await seatOf(api);
+        const played = tryMove(player, args.move, args.turn, "agent");
+        log("events.jsonl", { kind: "tool", player, name: "play_move", call_id: api.callId, ok: played.ok });
         if (!played.ok) return { content: [{ type: "text", text: played.text }], isError: true };
         await api.commit(async (tx) => void (await tx.doc(MatchDoc)).moves.push(played.line), context);
         log("events.jsonl", { kind: "move", ...played.line });
@@ -127,8 +139,22 @@ const SeatTools = defineExtension({
   hooks: [
     hook(GenerationTask, {
       afterResponse: async (message: AssistantMessage, api) => {
-        const tools = message.content.flatMap((block) => (block.type === "toolCall" ? [{ name: block.name, arguments: block.arguments }] : []));
-        log("calls.jsonl", { player: await seatOf(api), model: message.model, stop_reason: message.stopReason, usage: message.usage, tool_calls: tools });
+        const blocks = message.content;
+        const { input, output, cacheRead, cacheWrite, cacheWrite1h, reasoning } = message.usage;
+        log("calls.jsonl", {
+          player: await seatOf(api),
+          provider: message.provider,
+          model: message.model,
+          response_model: message.responseModel,
+          thinking_level: message.thinkingLevel,
+          stop_reason: message.stopReason,
+          error: message.errorMessage,
+          latency_ms: message.durationMs,
+          usage: { input, output, cacheRead, cacheWrite, cacheWrite1h, reasoning },
+          tool_calls: blocks.flatMap((block) => (block.type === "toolCall" ? [{ name: block.name, arguments: block.arguments }] : [])),
+          text: blocks.flatMap((block) => (block.type === "text" ? [block.text] : [])).join(""),
+          thinking: blocks.flatMap((block) => (block.type === "thinking" ? [block.thinking] : [])).join(""),
+        });
         return undefined;
       },
     }),
@@ -162,7 +188,7 @@ const decide = (transcript: TranscriptContext): AssistantMessage => {
   return fauxAssistantMessage(fauxText("Done."));
 };
 
-const faux = fauxProvider({ provider: "faux-arena", models: [{ id: "faux-player", contextWindow, maxTokens: 512 }] });
+const faux = fauxProvider({ provider: "faux-arena", models: modelIds.map((id) => ({ id, contextWindow, maxTokens: 512 })) });
 faux.setResponses(Array.from({ length: 20_000 }, () => decide));
 const models = createModels();
 models.setProvider(faux.provider);
@@ -182,16 +208,16 @@ const PROMPT = "You are playing Buckshot. Call play_move with a move from your v
 if (isFresh) {
   const state: MatchState = { seed, controllers, seats: {}, moves: [], carried: {}, submits: 0 };
   startTable(state);
-  for (const player of agentPlayers()) {
+  for (const [index, player] of agentPlayers().entries()) {
     const created = await harness.createConversation({
       ownership: { kind: "ownerless" },
-      agent: { model: { provider: "faux-arena", modelId: "faux-player" }, instructions: PROMPT, extensions: [SeatTools] },
+      agent: { model: { provider: "faux-arena", modelId: modelIds[index % modelIds.length] ?? "" }, instructions: PROMPT, extensions: [SeatTools] },
       init: async (tx, id) => void ((await tx.doc(SeatDoc, id)).player = player),
     }, context);
     state.seats[String(player)] = created.id;
   }
   await harness.commit(async (tx) => void Object.assign(await tx.doc(MatchDoc), state), context);
-  writeFileSync(join(dir, "manifest.json"), `${JSON.stringify({ status: "running", seed, controllers, model: "faux-arena/faux-player", context_window: contextWindow })}\n`);
+  writeFileSync(join(dir, "manifest.json"), `${JSON.stringify({ status: "running", seed, controllers, models: modelIds, context_window: contextWindow })}\n`);
 } else {
   const state = (await harness.snapshot(MatchDoc, context))!;
   startTable(state as MatchState);
@@ -219,6 +245,8 @@ while (!isOver()) {
   const conversation = (await harness.conversation(state.seats[String(player)] as never, context))!;
   const input = { ...view, events: [...(state.carried[String(player)] ?? []), ...(view.events ?? [])] };
   const submission = await conversation.submit({ type: "input", content: `Your turn.\n${JSON.stringify(input)}`, requestId: `turn-${turn}` }, context);
+  log("events.jsonl", { kind: "input", player, turn, request_id: `turn-${turn}` });
+  const submittedAt = performance.now();
   await journal((next) => {
     next.carried[String(player)] = [];
     next.submits += 1;
@@ -228,10 +256,13 @@ while (!isOver()) {
     process.exit(3);
   }
   await submission.wait(context);
-  if (table.turn === turn) {
+  const moved = table.turn !== turn;
+  log("events.jsonl", { kind: "turn", player, turn, wall_ms: Math.round(performance.now() - submittedAt), moved });
+  if (!moved) {
     const fallback = tryMove(player, 0, turn, "fallback");
     if (!fallback.ok) throw new Error(fallback.text);
     await journal((next) => void next.moves.push(fallback.line));
+    log("events.jsonl", { kind: "fallback", ...fallback.line });
   }
 }
 
@@ -260,26 +291,57 @@ const live = { events: match().events.length, standings: viewText(agentPlayers()
 startTable(final);
 const replayed = { events: match().events.length, standings: viewText(agentPlayers()[0] ?? 1) };
 
+const usageKeys = ["input", "output", "cacheRead", "cacheWrite", "reasoning"] as const;
+type Tokens = Record<(typeof usageKeys)[number], number>;
+interface CallLine { readonly player: number; readonly provider: string; readonly model: string; readonly latency_ms?: number; readonly usage: Partial<Tokens>; readonly tool_calls: ReadonlyArray<unknown> }
+interface EventLine { readonly kind: string; readonly player?: number; readonly wall_ms?: number }
+
+const addTokens = (lines: ReadonlyArray<CallLine>): Tokens =>
+  Object.fromEntries(usageKeys.map((key) => [key, lines.reduce((total, line) => total + (line.usage[key] ?? 0), 0)])) as Tokens;
+
+/** Per-player totals, computed from the run's own logs so that they and the logs cannot disagree. */
+const playerTotals = () => {
+  const calls = readLines("calls.jsonl") as unknown as ReadonlyArray<CallLine>;
+  const events = readLines("events.jsonl") as unknown as ReadonlyArray<EventLine>;
+  return Object.fromEntries(Object.keys(final.seats).map((player) => {
+    const mine = calls.filter((call) => String(call.player) === player);
+    const mineEvents = events.filter((event) => String(event.player) === player);
+    return [player, {
+      models: [...new Set(mine.map((call) => `${call.provider}/${call.model}`))],
+      model_calls: mine.length,
+      tool_calls: mineEvents.filter((event) => event.kind === "tool").length,
+      usage: addTokens(mine),
+      latency_ms: { total: mine.reduce((total, call) => total + (call.latency_ms ?? 0), 0), max: Math.max(0, ...mine.map((call) => call.latency_ms ?? 0)) },
+      wall_ms: mineEvents.filter((event) => event.kind === "turn").reduce((total, event) => total + (event.wall_ms ?? 0), 0),
+    }];
+  }));
+};
+
 const usage = await harness.usage(context);
+const loggedByModel = (key: string) => addTokens((readLines("calls.jsonl") as unknown as ReadonlyArray<CallLine>).filter((call) => `${call.provider}/${call.model}` === key));
 const checks = {
   over: isOver(),
   everyViewIsOwnPlayer: Object.entries(transcripts).every(([player, messages]) => viewsIn(messages).every((view) => view.you === Number(player))),
   heardIsOwnLogExactly: Object.entries(transcripts).every(([player, messages]) => JSON.stringify([...inputsIn(messages).flatMap((view) => view.events ?? []), ...(final.carried[player] ?? []), ...finalEvents(Number(player))]) === JSON.stringify(heardSoFar(Number(player)))),
   replayMatches: JSON.stringify(live) === JSON.stringify(replayed),
 };
+const logsMatchStore = Object.entries(usage.models).every(([key, spent]) => loggedByModel(key).input === spent.input && loggedByModel(key).output === spent.output);
 const byWho = (by: MoveLine["by"]) => final.moves.filter((line) => line.by === by).length;
+const players = playerTotals();
 const report = {
   checks,
+  logsMatchStore,
   seed,
   controllers,
   moves: { agent: byWho("agent"), forced: byWho("forced"), fallback: byWho("fallback") },
   modelCalls: faux.state.callCount,
   compactions,
-  usage: Object.fromEntries(Object.entries(usage.models).map(([model, spent]) => [model, { input: spent.input, output: spent.output, cost: spent.cost.total }])),
+  players,
   moveLogSha: new Bun.CryptoHasher("sha256").update(JSON.stringify(final.moves)).digest("hex").slice(0, 12),
   standings: JSON.parse(live.standings).standings,
 };
-writeFileSync(join(dir, "manifest.json"), `${JSON.stringify({ status: "finished", seed, controllers, model: "faux-arena/faux-player", context_window: contextWindow, report })}\n`);
+log("events.jsonl", { kind: "end", standings: report.standings });
+writeFileSync(join(dir, "manifest.json"), `${JSON.stringify({ status: "finished", seed, controllers, context_window: contextWindow, seats: final.seats, players, moves: report.moves, standings: report.standings, move_log_sha: report.moveLogSha }, null, 2)}\n`);
 await harness.close(context);
 console.log(JSON.stringify(report));
 process.exit(Object.values(checks).every(Boolean) ? 0 : 1);
