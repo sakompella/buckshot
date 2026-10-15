@@ -6,7 +6,6 @@ import ./ref/rules.bend as G
 import ./sm/main.bend as M
 import ./sm/state.bend as S
 import ./sm/rules.bend as Q
-import ./sm/point.bend as V
 import ./sm/items.bend as I
 import ./primitive.bend as P
 import ./ref/items.bend as RI
@@ -15,13 +14,10 @@ def CoreSeat() -> Data:
   S.Seat
 
 
-def seats.slots(seats: D.Ring<&2, CoreSeat>) -> D.Ring<&2, D.Slots>:
-  S.players.slots(seats)
-
 def players(+seats: D.Ring<&2, CoreSeat>) -> S.Players:
   seats
 
-# The no-item scope's seat: unjammed (only an item jams), inventory empty.
+# A free seat: unjammed (only an item jams), inventory empty.
 def seat.free(+seat: CoreSeat) -> CoreSeat:
   S.Seat{S.seat.health(seat), S.Free{}, S.seat.cash(seat), D.slots.empty()}
 
@@ -29,7 +25,7 @@ def seat.free(+seat: CoreSeat) -> CoreSeat:
 def seat.jams(+seat: CoreSeat) -> CoreSeat:
   S.Seat{S.seat.health(seat), S.seat.jam(seat), S.seat.cash(seat), D.slots.empty()}
 
-# The no-item scope's Players, whatever the seats say.
+# The seats as free seats, whatever they hold.
 def players.free(+seats: D.Ring<&2, CoreSeat>) -> S.Players:
   match seats:
     case D.Duo{a, b}:
@@ -48,16 +44,13 @@ def players.jams(+seats: D.Ring<&2, CoreSeat>) -> S.Players:
     case D.Quad{a, b, c, d}:
       D.Quad{seat.jams(a), seat.jams(b), seat.jams(c), seat.jams(d)}
 
-# The seats' health, cash and jams, read through the no-item and jam-law
+# The seats' health and jams, read through the free-seat and jam-law
 # views so they stay definitionally equal to those views' fields.
 def seats.health(+seats: D.Ring<&2, CoreSeat>) -> D.Ring<&2, Nat>:
   S.players.health(players.free(seats))
 
 def seats.jam(+seats: D.Ring<&2, CoreSeat>) -> D.Ring<&2, S.Jam>:
   S.players.jam(players.jams(seats))
-
-def seats.cash(+seats: D.Ring<&2, CoreSeat>) -> D.Ring<&2, U32>:
-  S.players.cash(players.free(seats))
 
 # The reference's (is_jammed, jammer_checked) pair of a jam. Free reads as
 # (False, False); the reference clears the bit when a jam lifts (D57).
@@ -68,7 +61,7 @@ def jam.checked(jam: S.Jam) -> Bool:
     case _:
       False{}
 
-# Host props of one seat in the no-item scope: unjammed, empty slots, not grabbing.
+# Host props of a free seat: unjammed, empty slots, not grabbing.
 def seat.props(seat: CoreSeat) -> H.Props:
   match seat:
     case S.Seat{hp, _, cash, sl}:
@@ -166,13 +159,11 @@ def host.at(world: S.World, +seats: D.Ring<&2, CoreSeat>, +grabs: S.Grabs, +hold
     case S.World{+config, before, round, index, first, hp, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}:
       H.Host{config, before, round, index, first, hp, recipient, turn, direction, died, checking, amount, S.grabs.distributing(grabs), saw, gun, shown, decks(deck), props.at(seats, grabs, holder), progress.at(seats, grabs)}
 
-# No-item scope: the Host of pack(world, seats, phase, _) whose phase's
-# turn.holder is holder. It is ref(pack(..))'s host by definition, so the two
-# never need a roundtrip rewrite.
+# The Host of free seats whose turn holder is holder.
 def host.held(world: S.World, +seats: D.Ring<&2, CoreSeat>, holder: Maybe<&2, D.Seat>) -> H.Host:
   host.at(world, core(players.free(seats)), grabs(seats), holder)
 
-# The no-item Host between requests or at a phase no seat acts in.
+# The Host of free seats between requests or at a phase no seat acts in.
 def host(world: S.World, +seats: D.Ring<&2, CoreSeat>) -> H.Host:
   host.held(world, seats, None{})
 
@@ -240,33 +231,14 @@ def ran(result: D.Ran<&2, S.State>) -> D.Ran<&2, R.RefState>:
     case D.Ran{state, notes, tape}:
       D.Ran{ref(state), notes, tape}
 
-# A machine state from its parts, for every config.
-def assemble(world: S.World, +seats: D.Ring<&2, CoreSeat>, grabs: S.Grabs, phase: S.Phase, notes: List<&2, D.Note>) -> S.State:
-  S.State{world, players(seats), phase, notes, grabs}
-
-# No-item scope (B1): empty slots and the initial Grabs, whatever the seats'
-# slots say. The B1 proofs are stated over pack.
-def pack(world: S.World, +seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>) -> S.State:
-  S.State{world, players.free(seats), phase, notes, grabs(seats)}
-
-
-def World() -> Data:
-  S.World
-
 def Seats() -> Data:
   D.Ring<&2, CoreSeat>
 
 def Notes() -> Data:
   List<&2, D.Note>
 
-def table(world: S.World) -> D.Table:
-  S.world.table(world)
-
 def RefStep() -> Data:
   D.Stepped<&2, R.RefState>
-
-def Phase() -> Data:
-  S.Phase
 
 def Ref() -> Data:
   R.RefState
@@ -274,9 +246,6 @@ def Ref() -> Data:
 def ref_answer(state: R.RefState, n: Nat) -> D.Stepped<&2, R.RefState>:
   R.answer(state, n)
 
-
-def ref_stepped(state: R.RefState) -> D.Stepped<&2, R.RefState>:
-  R.stepped(state)
 
 def health_entries(entries: List<&2, D.At<&2, CoreSeat>>) -> List<&2, D.At<&2, Nat>>:
   match entries:
@@ -292,82 +261,25 @@ def props_entries(entries: List<&2, D.At<&2, CoreSeat>>) -> List<&2, D.At<&2, H.
     case D.At{seat, props} <> rest:
       D.At{seat, seat.props(props)} <> props_entries(rest)
 
-# Host props of the entries when holder holds the turn.
-def props_entries.held(entries: List<&2, D.At<&2, CoreSeat>>, +holder: Maybe<&2, D.Seat>) -> List<&2, D.At<&2, H.Props>>:
-  match entries:
-    case Nil{}:
-      Nil{}
-    case D.At{+seat, S.Seat{hp, +jam, cash, sl}} <> rest:
-      D.At{seat, H.Props{hp, S.jam.jammed(jam), jam.checked(jam), cash, D.slots.empty(), False{}, None{}, turn.held(holder, seat)}} <> props_entries.held(rest, holder)
-
-def machine_shots(seats: D.Ring<&2, CoreSeat>) -> List<&2, D.Move>:
-  Q.aim.moves(Q.targets(D.ring.entries(Nat, seats.health(seats))))
-
-def ref_shots(+seats: D.Ring<&2, CoreSeat>, holder: Maybe<&2, D.Seat>) -> List<&2, D.Move>:
-  R.shot_moves(G.living(D.ring.entries(H.Props, props.at(core(players.free(seats)), grabs(seats), holder))))
-
 def machine_step_state(result: D.Stepped<&2, S.State>) -> S.State:
   match result:
     case D.Stepped{state, _}:
       state
-
-def ref_point(state: R.RefState) -> D.Point:
-  R.point(state)
 
 def ref_step_point(result: D.Stepped<&2, R.RefState>) -> D.Point:
   match result:
     case D.Stepped{state, _}:
       R.point(state)
 
-def aim_successor(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +seat: D.Seat) -> S.State:
-  pack(world, seats, S.Aim{seat}, [D.Shown{D.PickedUp{seat}}])
-
 def machine_point(state: S.State) -> D.Point:
   M.point(state)
 
-
-def world_for(+world: S.World, +seats: D.Ring<&2, CoreSeat>) -> S.World:
-  S.world.set_config(world, D.Config{D.ring.table(CoreSeat, seats), S.world.plan(world)})
 
 def machine_request(state: S.State) -> D.Request:
   M.request(state)
 
 def ref_request(state: R.RefState) -> D.Request:
   R.request(state)
-
-def raw_state(world: S.World, seats: D.Ring<&2, CoreSeat>, +phase: S.Phase, notes: List<&2, D.Note>) -> R.RefState:
-  +h : H.Host = host.held(world, seats, turn.holder(phase))
-  R.RefState{h, frame(phase, h), notes}
-
-
-def machine_stage(phase: S.Phase) -> D.Stage:
-  V.phase.stage(phase)
-
-def ref_phase_stage(+world: S.World, +seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>) -> D.Stage:
-  R.stage(raw_state(world, seats, phase, notes))
-
-def seat.view(seat: CoreSeat) -> D.SeatView:
-  match seat:
-    case S.Seat{hp, jam, cash, sl}:
-      D.SeatView{D.counter.of(False{}, hp), D.slots.empty(), cash, D.NotGrabbing{}}
-
-def seat.views(seats: D.Ring<&2, CoreSeat>) -> D.Ring<&2, D.SeatView>:
-  match seats:
-    case D.Duo{a, b}:
-      D.Duo{seat.view(a), seat.view(b)}
-    case D.Trio{a, b, c}:
-      D.Trio{seat.view(a), seat.view(b), seat.view(c)}
-    case D.Quad{a, b, c, d}:
-      D.Quad{seat.view(a), seat.view(b), seat.view(c), seat.view(d)}
-
-def board_at(+world: S.World, seats: D.Ring<&2, CoreSeat>, stage: D.Stage) -> D.Board:
-  D.Board{D.RoundView{S.world.round_index(world), D.plan.length(S.world.plan(world)), S.world.round_health(world)}, seat.views(seats), D.GunView{S.world.shown(world), List.length(&2, D.Shell, S.world.gun(world)), S.world.sawed(world)}, S.world.direction(world), stage}
-
-def machine_board(state: S.State) -> D.Board:
-  V.board(state)
-
-def ref_board(state: R.RefState) -> D.Board:
-  R.board(state)
 
 def observation(state: S.State, seat: D.Seat) -> D.Obs:
   D.observe(M.point(state), seat)
@@ -376,58 +288,8 @@ def ref_observation(state: R.RefState, seat: D.Seat) -> D.Obs:
   D.observe(R.point(state), seat)
 
 
-def batch_stage(deck: List<&2, H.Batch>) -> D.Stage:
-  R.stage(R.RefState{H.host.initial(D.config.default(D.TwoSeats{})), batch.frame(deck), Nil{}})
-
-
-def batch_frame_stage(+h: H.Host, deck: List<&2, H.Batch>, notes: List<&2, D.Note>) -> {R.stage(R.RefState{h, batch.frame(deck), notes}) == D.Loading{} : D.Stage}:
-  match deck:
-    case Nil{}:
-      {==}
-    case a <> Nil{}:
-      {==}
-    case a <> b <> rest:
-      {==}
-
-def batch_stage_matches(+world: S.World, +seats: D.Ring<&2, CoreSeat>, notes: List<&2, D.Note>) -> {ref_phase_stage(world, seats, S.NeedBatch{}, notes) == D.Loading{} : D.Stage}:
-  batch_frame_stage(host(world, seats), H.host.deck(host(world, seats)), notes)
-
-
-# B1 normal phase: an Idle phase offers only the gun, and a swap at index 0 or a
-# phase outside the no-item scope becomes Blocked.
-def canonical_phase(phase: S.Phase) -> S.Phase:
-  match phase:
-    case S.Idle{seat, _}:
-      S.Idle{seat, D.NonEmpty{S.TakeGun{}, Nil{}}}
-    case S.NeedSwap{load, shells, 0n}:
-      S.Blocked{None{}}
-    case S.NeedTurnAmount{_, _, _}:
-      S.Blocked{None{}}
-    case S.Grab{_}:
-      S.Blocked{None{}}
-    case S.NeedItem{_, _, _, _}:
-      S.Blocked{None{}}
-    case S.NeedPhone{_, _, _}:
-      S.Blocked{None{}}
-    case S.JamPick{_, _}:
-      S.Blocked{None{}}
-    case S.StealPick{_, _}:
-      S.Blocked{None{}}
-    case phase:
-      phase
-
-def canonical_state(+world: S.World, +seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>) -> S.State:
-  pack(world_for(world, seats), seats, canonical_phase(phase), notes)
-
 def ref_batch_length(deck: List<&2, S.Batch>) -> Nat:
   List.length(&2, H.Batch, batches(deck))
-
-def ref_batch_request(world: S.World, seats: D.Ring<&2, CoreSeat>, deck: List<&2, S.Batch>, notes: List<&2, D.Note>) -> D.Request:
-  R.request(R.RefState{host(world, seats), batch.frame(batches(deck)), notes})
-
-def machine_batch_request(deck: List<&2, S.Batch>) -> D.Request:
-  V.batch.request(List.length(&2, S.Batch, deck))
-
 
 def heard(state: S.State, seat: D.Seat) -> List<&2, D.Heard>:
   D.hear(S.state.notes(state), seat)
@@ -445,85 +307,8 @@ def subtract_zero(n: Nat) -> Nat:
   G.subtract(n, 0n)
 
 
-# The only moves the core machine offers: pick up when idle, shoot when aiming.
-def core_move(mode: D.Mode, move: D.Move) -> Bool:
-  match mode move:
-    case D.Idle{} D.PickUp{}:
-      True{}
-    case D.Aiming{} D.Shoot{target}:
-      True{}
-    case _ _:
-      False{}
-
-def choices_shape(+mode: D.Mode, choices: List<&2, D.Choice>) -> Bool:
-  match choices:
-    case Nil{}:
-      True{}
-    case D.Choice{seat, index, move} <> rest:
-      Bool.and(core_move(mode, move), choices_shape(mode, rest))
-
-def maybe_shape(mode: D.Mode, choice: Maybe<&2, D.Choice>) -> Bool:
-  match choice:
-    case None{}:
-      True{}
-    case Some{D.Choice{seat, index, move}}:
-      core_move(mode, move)
-
-def menu_choices(+world: S.World, +seat: D.Seat, moves: List<&2, D.Move>) -> List<&2, D.Choice>:
-  D.choices.flatten(D.ring.entries(List<&2, D.Move>, D.ring.set(List<&2, D.Move>, D.ring.fill(List<&2, D.Move>, S.world.table(world), Nil{}), seat, moves)))
-
 def verify(state: R.RefState, choice: D.Choice) -> Bool:
   R.VerifyPacket(state, choice)
-
-def choice_move(choice: D.Choice) -> D.Move:
-  match choice:
-    case D.Choice{_, _, move}:
-      move
-
-def has_turn(state: R.RefState, seat: D.Seat) -> Bool:
-  R.props.has_turn(H.host.props(R.host(state), seat))
-
-
-def resolved_shape(mode: D.Mode, resolved: D.Resolved) -> Bool:
-  match resolved:
-    case D.Chose{D.Choice{seat, index, move}}:
-      core_move(mode, move)
-    case _:
-      True{}
-
-def play_mode(aiming: Bool) -> D.Mode:
-  match aiming:
-    case False{}:
-      D.Idle{}
-    case True{}:
-      D.Aiming{}
-
-def play_moves(aiming: Bool, seats: D.Ring<&2, CoreSeat>) -> List<&2, D.Move>:
-  match aiming:
-    case False{}:
-      [D.PickUp{}]
-    case True{}:
-      machine_shots(seats)
-
-def play_menus(+world: S.World, +seat: D.Seat, moves: List<&2, D.Move>) -> D.Ring<&2, List<&2, D.Move>>:
-  D.ring.set(List<&2, D.Move>, D.ring.fill(List<&2, D.Move>, S.world.table(world), Nil{}), seat, moves)
-
-def Request() -> Data:
-  D.Request
-
-
-def target_choices(options: List<&2, S.TargetOption>, +seat: D.Seat, index: Nat) -> List<&2, D.Choice>:
-  D.choices.of(Q.aim.moves(options), seat, index)
-
-def target_options(seats: D.Ring<&2, CoreSeat>) -> List<&2, S.TargetOption>:
-  Q.targets(D.ring.entries(Nat, seats.health(seats)))
-
-
-def resolved_choice_shape(mode: D.Mode, picked: Maybe<&2, D.Choice>) -> Bool:
-  resolved_shape(mode, D.resolve.choice(picked))
-
-def smart_request_shape(mode: D.Mode, +menus: D.Ring<&2, List<&2, D.Move>>, n: Nat, any: Bool) -> Bool:
-  resolved_shape(mode, D.resolve(D.request.choose.any(any, menus), n))
 
 def ref_shell_nth(shells: List<&2, D.Shell>, index: Nat) -> Maybe<&2, D.Shell>:
   G.nth(D.Shell, shells, index)
@@ -870,9 +655,6 @@ def grant.give.jams(world: S.World, +seats: D.Ring<&2, CoreSeat>, seat: D.Seat, 
 def grant.dispatch(state: R.RefState) -> R.RefState:
   R.dispatch(state)
 
-def grant.settle(fuel: Nat, state: R.RefState) -> R.RefState:
-  R.settle(fuel, state)
-
 def grant.pass_case(+world: S.World, result: GrantCase, +seat: D.Seat, notes: List<&2, D.Note>) -> R.RefState:
   match result:
     case GrantAct{seats}:
@@ -900,16 +682,6 @@ def grant.once_claim(result: GrantCase, +seat: D.Seat) -> Type:
     case GrantAct{_}:
       Unit
 
-# No-item scope: every seat is Free, so a grant gives the turn at once.
-def grant.pass.free(world: S.World, +seats: D.Ring<&2, CoreSeat>, seat: D.Seat, notes: List<&2, D.Note>) -> R.RefState:
-  R.RefState{host(world, seats), R.PassTurn{seat}, notes}
-
-def grant.give(world: S.World, seats: D.Ring<&2, CoreSeat>, seat: D.Seat, notes: List<&2, D.Note>) -> R.RefState:
-  R.RefState{host(world, seats), R.GiveTurnPermissions{seat}, notes}
-
-def grant.given(world: S.World, seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>, seat: D.Seat) -> S.State:
-  M.give_turn(pack(world, seats, phase, notes), seat)
-
 def ref_subtract(left: Nat, right: Nat) -> Nat:
   G.subtract(left, right)
 
@@ -918,76 +690,6 @@ def ref_shot_health(shell: D.Shell, hp: Nat, damage: D.Damage) -> Nat:
 
 def ref_shot_passes(shell: D.Shell, same: Bool) -> Bool:
   Bool.not(Bool.and(same, Bool.not(G.shell.live(shell))))
-
-type Prefix is Data:
-  Prefix{host: H.Host, notes: List<&2, D.Note>}
-
-def prefix(state: R.RefState) -> Prefix:
-  match state:
-    case R.RefState{host, _, notes}:
-      Prefix{host, notes}
-
-def machine_prefix(state: S.State) -> Prefix:
-  prefix(ref(state))
-
-def ref_death_first(state: S.State, seat: D.Seat, checking: Bool) -> Prefix:
-  prefix(R.DeathRequest.first(ref(state), seat, checking))
-
-def ref_death(state: S.State, target: D.Seat, shell: D.Shell, health: Nat) -> Prefix:
-  prefix(R.DeathRequest.health(ref(state), R.Shot{D.Seat0{}, target, shell, D.Single{}, 0n}, health))
-
-def final_condition(+world: S.World) -> Bool:
-  Nat.is_eq(1n+S.world.round_index(world), D.plan.length(S.world.plan(world)))
-
-def raw_win(world: S.World, seats: D.Ring<&2, CoreSeat>, seat: D.Seat, notes: List<&2, D.Note>) -> R.RefState:
-  R.RefState{host(world, seats), R.WinRoutine{seat}, notes}
-
-def won_host(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +seat: D.Seat) -> H.Host:
-  +h : H.Host = host(world, seats)
-  H.host.set_props(h, seat, H.props.award(H.host.props(h, seat), D.prize(S.world.round_index(world))))
-
-def expected_win(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, notes: List<&2, D.Note>) -> R.RefState:
-  R.RefState{won_host(world, seats, seat), R.Await{D.Finished{}, D.MatchOver{}, R.PlayerMove{D.Idle{}}}, List.append(&2, D.Note, List.append(&2, D.Note, notes, [D.Shown{D.RoundWon{seat, D.prize(S.world.round_index(world))}}]), [D.Shown{D.MatchConcluded{}}])}
-
-def ref_win(world: S.World, seats: D.Ring<&2, CoreSeat>, seat: D.Seat, notes: List<&2, D.Note>, fuel: Nat) -> R.RefState:
-  R.settle(fuel, raw_win(world, seats, seat, notes))
-
-def ref_win_gate(world: S.World, seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, notes: List<&2, D.Note>, k: Nat, final: Bool) -> R.RefState:
-  R.settle(2n+k, R.LoopBackAfterWinRoutine.final(R.WinRoutine(raw_win(world, seats, seat, notes), seat), final))
-
-def ref_finished(h: H.Host, notes: List<&2, D.Note>, fuel: Nat) -> R.RefState:
-  R.settle(fuel, R.RefState{h, R.Await{D.Finished{}, D.MatchOver{}, R.PlayerMove{D.Idle{}}}, notes})
-
-def machine_win_gate(+world: S.World, seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, phase: S.Phase, notes: List<&2, D.Note>, final: Bool) -> R.RefState:
-  +state : S.State = pack(world, seats, phase, notes)
-  +players : S.Players = S.state.players(state)
-  +prize : U32 = D.prize(S.world.round_index(world))
-  cash : U32 = Q.value.or(U32, D.ring.get(U32, S.players.cash(players), seat), 0)
-  players : S.Players = S.players.set_cash(players, seat, U32.add(cash, prize))
-  ref(M.win.final(S.state.emit(S.state.set_players(state, players), D.RoundWon{seat, prize}), final))
-
-def finished(h: H.Host, notes: List<&2, D.Note>) -> R.RefState:
-  R.RefState{h, R.Await{D.Finished{}, D.MatchOver{}, R.PlayerMove{D.Idle{}}}, notes}
-
-def win_notes(+world: S.World, +seat: D.Seat, notes: List<&2, D.Note>) -> List<&2, D.Note>:
-  List.append(&2, D.Note, List.append(&2, D.Note, notes, [D.Shown{D.RoundWon{seat, D.prize(S.world.round_index(world))}}]), [D.Shown{D.MatchConcluded{}}])
-
-def machine_health_write(+world: S.World, +seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>, +seat: D.Seat, health: Nat) -> S.State:
-  +players : S.Players = players.free(seats)
-  pack : S.State = pack(world, seats, phase, notes)
-  S.state.set_players(pack, S.players.set_health(players, seat, health))
-
-def ref_health_write(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +phase: S.Phase, notes: List<&2, D.Note>, +seat: D.Seat, health: Nat) -> R.RefState:
-  +h : H.Host = host.held(world, seats, turn.holder(phase))
-  R.with_host(raw_state(world, seats, phase, notes), H.host.set_props(h, seat, H.props.set_health(H.host.props(h, seat), health)))
-
-def ref_written_death(world: S.World, seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>, +target: D.Seat, shell: D.Shell, +health: Nat) -> Prefix:
-  prefix(R.DeathRequest.health(ref_health_write(world, seats, phase, notes, target, health), R.Shot{D.Seat0{}, target, shell, D.Single{}, 0n}, health))
-
-def normalize(state: S.State) -> S.State:
-  match state:
-    case S.State{world, players, phase, notes, _}:
-      canonical_state(world, core(players), phase, notes)
 
 # What a phase asks of the World: NeedFirst has a round left to begin, and the
 # seat an Idle or Aim phase waits on holds world.turn.
@@ -1011,23 +713,8 @@ def ref_run(fuel: Nat, state: R.RefState, tape: List<&2, Nat>) -> D.Ran<&2, R.Re
 def RefRan() -> Data:
   D.Ran<&2, R.RefState>
 
-def observation_board(pair: D.Obs & List<&2, D.Heard>) -> D.Board:
-  match pair:
-    case (D.Obs{seat, board}, heard):
-      board
-
 def point_of_ref(state: S.State) -> D.Point:
   R.point(ref(state))
-
-def support.round(plan: D.Plan, index: Nat) -> D.RoundRules:
-  H.rules.found(D.plan.round(plan, index))
-
-def support.current_items(world: S.World, seats: D.Ring<&2, CoreSeat>) -> D.ItemRules:
-  H.rules.items(H.host.rules(host(world, seats)))
-
-def support.items(round: D.RoundRules) -> D.ItemRules:
-  H.rules.items(round)
-
 
 def ref_driver(fuel: Nat, request: D.Request, +state: R.RefState, tape: List<&2, Nat>) -> D.Ran<&2, R.RefState>:
   match fuel request tape:
@@ -1102,123 +789,6 @@ def pending.batch_exposed(h: H.Host, deck: List<&2, H.Batch>, notes: List<&2, D.
   pending.state(h, pending(batch.frame(deck)), notes)
 
 
-def items_disabled(items: D.ItemRules) -> Bool:
-  Q.items.disabled(items)
-
-def item_disabled(items: D.ItemRules, item: D.Item) -> Bool:
-  Q.item.disabled(D.rules.item(items, item))
-
-def disabled_rule(rule: D.ItemRule) -> Bool:
-  Q.item.disabled(rule)
-
-def eligible_rule(rule: D.ItemRule, dealt: Bool, own: Nat, total: Nat) -> Bool:
-  G.eligible.rule(rule, dealt, own, total)
-
-
-def current_items(+world: S.World, seats: D.Ring<&2, CoreSeat>) -> D.ItemRules:
-  H.rules.items(H.host.rules(host(world, seats)))
-
-def pool_rule(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, +item: D.Item) -> Bool:
-  G.eligible.rule(D.rules.item(current_items(world, seats), item), D.item.dealt_at(H.host.table(host(world, seats)), item), G.props.item_count(H.host.props(host(world, seats), seat), item), G.table.item_count(D.ring.entries(H.Props, H.host.seats(host(world, seats))), item))
-
-def ref_pool(+world: S.World, +seats: D.Ring<&2, CoreSeat>, seat: D.Seat, items: List<&2, D.Item>) -> List<&2, D.Item>:
-  G.GetItemToGrab.pool(items, host(world, seats), seat)
-
-def ref_pool_step(+world: S.World, +seats: D.Ring<&2, CoreSeat>, seat: D.Seat, item: D.Item, rest: List<&2, D.Item>, keep: Bool) -> List<&2, D.Item>:
-  G.GetItemToGrab.put(keep, item, ref_pool(world, seats, seat, rest))
-
-
-def pool_own(+world: S.World, seats: D.Ring<&2, CoreSeat>, seat: D.Seat, +item: D.Item) -> Nat:
-  G.props.item_count(H.host.props(host(world, seats), seat), item)
-
-def pool_total(+world: S.World, seats: D.Ring<&2, CoreSeat>, +item: D.Item) -> Nat:
-  G.table.item_count(D.ring.entries(H.Props, H.host.seats(host(world, seats))), item)
-
-
-def pool_dealt(world: S.World, seats: D.Ring<&2, CoreSeat>, item: D.Item) -> Bool:
-  D.item.dealt_at(H.host.table(host(world, seats)), item)
-
-
-def rule_off(rule: D.ItemRule) -> D.ItemRule:
-  match rule:
-    case D.ItemRule{_, cap, global_cap}:
-      D.ItemRule{False{}, cap, global_cap}
-
-def items_off(items: D.ItemRules) -> D.ItemRules:
-  match items:
-    case D.ItemRules{a, b, c, d, e, f, g, h, i}:
-      D.ItemRules{rule_off(a), rule_off(b), rule_off(c), rule_off(d), rule_off(e), rule_off(f), rule_off(g), rule_off(h), rule_off(i)}
-
-def pool_rules(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, items: List<&2, D.Item>, +rules: D.ItemRules) -> List<&2, D.Item>:
-  match items:
-    case Nil{}:
-      Nil{}
-    case +item <> rest:
-      G.GetItemToGrab.put(G.eligible.rule(D.rules.item(rules, item), pool_dealt(world, seats, item), pool_own(world, seats, seat, item), pool_total(world, seats, item)), item, pool_rules(world, seats, seat, rest, rules))
-
-def pool_put(keep: Bool, item: D.Item, rest: List<&2, D.Item>) -> List<&2, D.Item>:
-  G.GetItemToGrab.put(keep, item, rest)
-
-
-def swap_state(world: S.World, seats: D.Ring<&2, CoreSeat>, load: D.Load, shells: List<&2, D.Shell>, i: Nat, notes: List<&2, D.Note>) -> S.State:
-  pack(world, seats, S.NeedSwap{load, shells, i}, notes)
-
-def swap_answer(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +load: D.Load, +shells: List<&2, D.Shell>, +i: Nat, +notes: List<&2, D.Note>, n: Nat) -> D.Stepped<&2, R.RefState>:
-  stepped(M.answer(swap_state(world, seats, load, shells, i, notes), n))
-
-def swap_point(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +load: D.Load, +shells: List<&2, D.Shell>, +i: Nat, +notes: List<&2, D.Note>, n: Nat) -> D.Point:
-  M.point(M.stepped.state(M.answer(swap_state(world, seats, load, shells, i, notes), n)))
-
-def raw_swap(world: S.World, seats: D.Ring<&2, CoreSeat>, load: D.Load, shells: List<&2, D.Shell>, i: Nat, notes: List<&2, D.Note>) -> R.RefState:
-  raw_state(world, seats, S.NeedSwap{load, shells, i}, notes)
-
-def ref_swap_step(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +load: D.Load, +shells: List<&2, D.Shell>, +i: Nat, +j: Nat) -> D.Stepped<&2, R.RefState>:
-  R.stepped(R.settle(96n, R.answer.draw(raw_swap(world, seats, load, shells, i, Nil{}), j, R.ShuffleSwapResult{load, shells, i})))
-
-def ref_swap_index(i: Nat) -> Nat:
-  G.subtract(i, 1n)
-
-def swap_raw_result(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +load: D.Load, shells: List<&2, D.Shell>, i: Nat) -> D.Stepped<&2, R.RefState>:
-  R.stepped(raw_swap(world, seats, load, shells, i, Nil{}))
-
-
-def ref_shuffle_step(world: S.World, seats: D.Ring<&2, CoreSeat>, load: D.Load, shells: List<&2, D.Shell>, i: Nat) -> D.Stepped<&2, R.RefState>:
-  R.stepped(R.settle(96n, R.RefState{host(world, seats), R.GenerateRandomSequence{R.Shuffle{load, shells, i}}, Nil{}}))
-
-
-def raw_swap_width(world: S.World, seats: D.Ring<&2, CoreSeat>, +load: D.Load, +shells: List<&2, D.Shell>, i: Nat, width: Nat, notes: List<&2, D.Note>) -> R.RefState:
-  R.RefState{host(world, seats), R.Await{D.Draw{D.ShuffleSwap{}, D.Range{0n, width}}, D.Loading{}, R.ShuffleSwapResult{load, shells, i}}, notes}
-
-def ref_swap_answer_width(world: S.World, seats: D.Ring<&2, CoreSeat>, load: D.Load, shells: List<&2, D.Shell>, i: Nat, width: Nat, notes: List<&2, D.Note>, n: Nat) -> D.Stepped<&2, R.RefState>:
-  R.answer(raw_swap_width(world, seats, load, shells, i, width, notes), n)
-
-def swap_value(width: Nat, n: Nat) -> Nat:
-  D.draw.value(D.Range{0n, width}, n)
-
-def machine_swap_state(world: S.World, seats: D.Ring<&2, CoreSeat>, load: D.Load, shells: List<&2, D.Shell>, i: Nat, notes: List<&2, D.Note>, n: Nat) -> S.State:
-  M.stepped.state(M.answer(swap_state(world, seats, load, shells, i, notes), n))
-
-def swap_result_state(world: S.World, seats: D.Ring<&2, CoreSeat>, load: D.Load, shells: List<&2, D.Shell>, i: Nat) -> S.State:
-  swap_state(world, seats, load, shells, i, Nil{})
-
-def swap_result_state_stepped(world: S.World, seats: D.Ring<&2, CoreSeat>, load: D.Load, shells: List<&2, D.Shell>, i: Nat) -> D.Stepped<&2, R.RefState>:
-  stepped(S.state.stepped(swap_result_state(world, seats, load, shells, i)))
-
-
-def swap_raw_result_width(world: S.World, seats: D.Ring<&2, CoreSeat>, load: D.Load, shells: List<&2, D.Shell>, i: Nat, width: Nat) -> D.Stepped<&2, R.RefState>:
-  R.stepped(raw_swap_width(world, seats, load, shells, i, width, Nil{}))
-
-
-def machine_ref_step(state: S.State) -> D.Stepped<&2, R.RefState>:
-  stepped(S.state.stepped(state))
-
-def step_point(result: D.Stepped<&2, S.State>) -> D.Point:
-  M.point(M.stepped.state(result))
-
-def machine_answer(state: S.State, n: Nat) -> D.Stepped<&2, S.State>:
-  M.answer(state, n)
-
-
 def ref_rules_found(found: Maybe<&2, D.RoundRules>) -> D.RoundRules:
   H.rules.found(found)
 
@@ -1244,93 +814,6 @@ def machine_world_load(world: S.World) -> D.LoadRule:
   Q.world.load_rule(world)
 
 
-def health_state(world: S.World, seats: D.Ring<&2, CoreSeat>, notes: List<&2, D.Note>) -> S.State:
-  pack(world, seats, S.NeedHealth{}, notes)
-
-def health_world(world: S.World, value: Nat) -> S.World:
-  S.world.set_round_health(world, value)
-
-def ref_amount_rule(rule: D.LoadRule) -> D.AmountRule:
-  G.load.amount(rule)
-
-def machine_amount_rule(rule: D.LoadRule) -> D.AmountRule:
-  Q.load.amount(rule)
-
-def current_amount(world: S.World) -> D.AmountRule:
-  Q.load.amount(Q.world.load_rule(world))
-
-def ref_health_value(+world: S.World, +seats: D.Ring<&2, CoreSeat>, value: Nat) -> D.Stepped<&2, R.RefState>:
-  R.stepped(R.settle(96n, R.RefState{host(health_world(world, value), seats), R.GetRandomItemGrabAmount{R.PacketSort_StartRound{}}, Nil{}}))
-
-def machine_health_value(+world: S.World, seats: D.Ring<&2, CoreSeat>, value: Nat) -> D.Stepped<&2, R.RefState>:
-  machine_ref_step(M.health.chosen(health_state(world, seats, Nil{}), value))
-
-def ref_amount_await(world: S.World, seats: D.Ring<&2, CoreSeat>) -> D.Stepped<&2, R.RefState>:
-  R.stepped(raw_state(world, seats, S.NeedAmount{}, Nil{}))
-
-def machine_amount_await(world: S.World, seats: D.Ring<&2, CoreSeat>) -> D.Stepped<&2, R.RefState>:
-  machine_ref_step(pack(world, seats, S.NeedAmount{}, Nil{}))
-
-def ref_amount_from_rule(world: S.World, seats: D.Ring<&2, CoreSeat>, rule: D.AmountRule) -> D.Stepped<&2, R.RefState>:
-  R.stepped(R.settle(95n, R.GetRandomItemGrabAmount.rule(R.RefState{host(world, seats), R.GetRandomItemGrabAmount{R.PacketSort_StartRound{}}, Nil{}}, R.PacketSort_StartRound{}, rule)))
-
-def machine_amount_from_rule(world: S.World, seats: D.Ring<&2, CoreSeat>, rule: D.AmountRule) -> D.Stepped<&2, R.RefState>:
-  machine_ref_step(M.amount.rule(pack(world, seats, S.NeedHealth{}, Nil{}), rule))
-
-
-def can_grab(props: CoreSeat, new_round: Bool) -> Bool:
-  G.props.can_grab(seat.props(props), new_round)
-
-def pool_nonempty(items: List<&2, D.Item>) -> Bool:
-  G.nonempty(D.Item, items)
-
-def grab_entries(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +new_round: Bool, entries: List<&2, D.At<&2, CoreSeat>>, +rules: D.ItemRules) -> List<&2, D.Seat>:
-  match entries:
-    case Nil{}:
-      Nil{}
-    case D.At{+seat, props} <> rest:
-      G.turn_ring.put(Bool.and(can_grab(props, new_round), pool_nonempty(pool_rules(world, seats, seat, D.item.order(), rules))), seat, grab_entries(world, seats, new_round, rest, rules))
-
-def grab_put(keep: Bool, seat: D.Seat, rest: List<&2, D.Seat>) -> List<&2, D.Seat>:
-  G.turn_ring.put(keep, seat, rest)
-
-def ref_grab_entries(+world: S.World, +seats: D.Ring<&2, CoreSeat>, new_round: Bool, entries: List<&2, D.At<&2, CoreSeat>>) -> List<&2, D.Seat>:
-  G.GetSocketsToBeginItemGrabbingOn.go(props_entries(entries), host(world, seats), new_round)
-
-def ref_grab_seats(+world: S.World, +seats: D.Ring<&2, CoreSeat>, new_round: Bool, amount: Nat) -> List<&2, D.Seat>:
-  G.GetSocketsToBeginItemGrabbingOn(host(world, seats), new_round, amount)
-
-
-def reset_world(world: S.World) -> S.World:
-  S.world.set_direction(S.world.set_checking_first_death(world, True{}), D.Clockwise{})
-
-def reset_seat(seat: CoreSeat, health: Nat) -> CoreSeat:
-  match seat:
-    case S.Seat{_, _, cash, sl}:
-      S.Seat{health, S.Free{}, cash, sl}
-
-def reset_seats(seats: D.Ring<&2, CoreSeat>, +health: Nat) -> D.Ring<&2, CoreSeat>:
-  match seats:
-    case D.Duo{a, b}:
-      D.Duo{reset_seat(a, health), reset_seat(b, health)}
-    case D.Trio{a, b, c}:
-      D.Trio{reset_seat(a, health), reset_seat(b, health), reset_seat(c, health)}
-    case D.Quad{a, b, c, d}:
-      D.Quad{reset_seat(a, health), reset_seat(b, health), reset_seat(c, health), reset_seat(d, health)}
-
-def reset_notes(+world: S.World, notes: List<&2, D.Note>) -> List<&2, D.Note>:
-  List.append(&2, D.Note, notes, [D.Shown{D.RoundBegan{S.world.round_index(world), S.world.round_health(world), S.world.first_turn(world)}}])
-
-def ref_reset(fuel: Nat, world: S.World, seats: D.Ring<&2, CoreSeat>, notes: List<&2, D.Note>) -> R.RefState:
-  R.settle(fuel, R.RefState{host(world, seats), R.PacketSort_StartRound{}, notes})
-
-def ref_load_begin(fuel: Nat, world: S.World, seats: D.Ring<&2, CoreSeat>, notes: List<&2, D.Note>) -> R.RefState:
-  R.settle(fuel, R.RefState{host(world, seats), R.MainRoutine_LoadShotgun{}, notes})
-
-def ref_begin_grabbing(fuel: Nat, world: S.World, seats: D.Ring<&2, CoreSeat>, notes: List<&2, D.Note>, selected: List<&2, D.Seat>) -> R.RefState:
-  R.settle(fuel, R.RefState{host(world, seats), R.BeginItemGrabbingForSockets{selected}, notes})
-
-
 # The state M.round.reset hands to item distribution, as round.reset builds it.
 def reset.state(+state: S.State) -> S.State:
   +world : S.World = S.state.world(state)
@@ -1338,55 +821,11 @@ def reset.state(+state: S.State) -> S.State:
   +world : S.World = S.world.set_direction(S.world.set_checking_first_death(world, True{}), D.Clockwise{})
   S.state.emit(S.state.set_players(S.state.set_world(state, world), players), D.RoundBegan{S.world.round_index(world), S.world.round_health(world), S.world.first_turn(world)})
 
-def reset.amount(+state: S.State) -> Nat:
-  S.world.item_amount(S.world.set_direction(S.world.set_checking_first_death(S.state.world(state), True{}), D.Clockwise{}))
-
-def machine_round_reset(world: S.World, seats: D.Ring<&2, CoreSeat>, +phase: S.Phase, notes: List<&2, D.Note>) -> S.State:
-  M.round.reset(pack(world, seats, phase, notes))
-
-def machine_load_after_reset(+world: S.World, +seats: D.Ring<&2, CoreSeat>, phase: S.Phase, +notes: List<&2, D.Note>) -> S.State:
-  M.load.begin(pack(reset_world(world), reset_seats(seats, S.world.round_health(world)), phase, reset_notes(world, notes)))
-
 def ref_next_load(first: Bool, index: Nat) -> Nat:
   R.IncrementActiveSequenceIndex(first, index)
 
 def machine_next_load(first: Bool, index: Nat) -> Nat:
   Q.load.next(first, index)
-
-def loaded_world(+world: S.World) -> S.World:
-  S.world.set_first_sequence(S.world.set_load_index(world, Q.load.next(S.world.first_sequence(world), S.world.load_index(world))), False{})
-
-def machine_load_begin(world: S.World, seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>) -> S.State:
-  M.load.begin(pack(world, seats, phase, notes))
-
-def machine_need_batch(world: S.World, seats: D.Ring<&2, CoreSeat>, notes: List<&2, D.Note>) -> S.State:
-  pack(world, seats, S.NeedBatch{}, notes)
-
-def shuffle_world(world: S.World, +load: D.Load, shells: List<&2, D.Shell>) -> S.World:
-  S.world.set_shown(S.world.set_gun(world, shells), load)
-
-def loaded_notes(notes: List<&2, D.Note>, load: D.Load) -> List<&2, D.Note>:
-  List.append(&2, D.Note, notes, [D.Shown{D.Loaded{load}}])
-
-def ref_shuffle_silent(fuel: Nat, world: S.World, seats: D.Ring<&2, CoreSeat>, load: D.Load, shells: List<&2, D.Shell>, i: Nat, notes: List<&2, D.Note>) -> R.RefState:
-  R.settle(fuel, R.RefState{host(world, seats), R.GenerateRandomSequence{R.Shuffle{load, shells, i}}, notes})
-
-def machine_shuffle(world: S.World, seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>, load: D.Load, shells: List<&2, D.Shell>, i: Nat) -> S.State:
-  M.shuffle(pack(world, seats, phase, notes), load, shells, i)
-
-
-def ref_swap_final_answer(world: S.World, seats: D.Ring<&2, CoreSeat>, load: D.Load, shells: List<&2, D.Shell>, notes: List<&2, D.Note>, n: Nat) -> D.Stepped<&2, R.RefState>:
-  R.answer(raw_swap(world, seats, load, shells, 1n, notes), n)
-
-def ref_shuffle_stepped(fuel: Nat, world: S.World, seats: D.Ring<&2, CoreSeat>, load: D.Load, shells: List<&2, D.Shell>, notes: List<&2, D.Note>) -> D.Stepped<&2, R.RefState>:
-  R.stepped(ref_shuffle_silent(fuel, world, seats, load, shells, 0n, notes))
-
-
-def ref_step_point_commutes(+state: R.RefState) -> {ref_step_point(R.stepped(state)) == R.point(state) : D.Point}:
-  match state:
-    case R.RefState{host, frame, notes}:
-      {==}
-
 
 def ref_load_actual(rule: D.LoadRule, sampled: D.Load) -> D.Load:
   G.load.custom(rule, sampled)
@@ -1440,75 +879,6 @@ def machine_batch_remove(deck: List<&2, S.Batch>, index: Nat) -> List<&2, H.Batc
   batches(Q.remove(S.Batch, deck, index))
 
 
-def ref_host_deck(world: S.World, seats: D.Ring<&2, CoreSeat>) -> List<&2, H.Batch>:
-  H.host.deck(host(world, seats))
-
-def ref_remove_deck(deck: List<&2, H.Batch>, index: Nat) -> List<&2, H.Batch>:
-  G.remove(H.Batch, deck, index)
-
-def machine_remove_world(+world: S.World, index: Nat) -> S.World:
-  S.world.set_deck(world, Q.remove(S.Batch, S.world.deck(world), index))
-
-def ref_shuffle_pending(fuel: Nat, world: S.World, seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>, load: D.Load, shells: List<&2, D.Shell>, i: Nat) -> R.RefState:
-  R.settle(fuel, R.RefState{host(world, seats), R.GenerateRandomSequence{R.Shuffle{load, shells, i}}, notes})
-
-
-def ref_set_deck(+world: S.World, seats: D.Ring<&2, CoreSeat>, deck: List<&2, H.Batch>) -> H.Host:
-  H.host.set_deck(host(world, seats), deck)
-
-def ref_removed_host(+world: S.World, +seats: D.Ring<&2, CoreSeat>, index: Nat) -> H.Host:
-  H.host.set_deck(host(world, seats), G.remove(H.Batch, H.host.deck(host(world, seats)), index))
-
-def ref_batch_continuation(fuel: Nat, h: H.Host, +load: D.Load, notes: List<&2, D.Note>) -> R.RefState:
-  +shells : List<&2, D.Shell> = G.load.shells(load)
-  R.settle(fuel, R.RefState{h, R.GenerateRandomSequence{R.Shuffle{load, shells, G.subtract(List.length(&2, D.Shell, shells), 1n)}}, notes})
-
-def ref_batch_found(fuel: Nat, world: S.World, seats: D.Ring<&2, CoreSeat>, +index: Nat, selected: Maybe<&2, S.Batch>, notes: List<&2, D.Note>) -> R.RefState:
-  R.settle(fuel, R.GenerateRandomSequence.batch(R.RefState{host(world, seats), R.GenerateRandomSequence{R.BatchChosen{index}}, notes}, index, found_batch(selected)))
-
-def machine_batch_found(world: S.World, seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>, index: Nat, selected: Maybe<&2, S.Batch>) -> S.State:
-  M.batch.found(pack(world, seats, phase, notes), index, selected)
-
-
-def machine_deck_remove(deck: List<&2, S.Batch>, index: Nat) -> List<&2, S.Batch>:
-  Q.remove(S.Batch, deck, index)
-
-
-def ref_host_batch_nth(+world: S.World, seats: D.Ring<&2, CoreSeat>, index: Nat) -> Maybe<&2, H.Batch>:
-  G.nth(H.Batch, H.host.deck(host(world, seats)), index)
-
-def ref_nth_batch(deck: List<&2, H.Batch>, index: Nat) -> Maybe<&2, H.Batch>:
-  G.nth(H.Batch, deck, index)
-
-def machine_batch_lookup(+world: S.World, index: Nat) -> Maybe<&2, S.Batch>:
-  Q.nth(S.Batch, S.world.deck(world), index)
-
-def ref_batch_found_ref(fuel: Nat, world: S.World, seats: D.Ring<&2, CoreSeat>, +index: Nat, selected: Maybe<&2, H.Batch>, notes: List<&2, D.Note>) -> R.RefState:
-  R.settle(fuel, R.GenerateRandomSequence.batch(R.RefState{host(world, seats), R.GenerateRandomSequence{R.BatchChosen{index}}, notes}, index, selected))
-
-def ref_batch_chosen(fuel: Nat, world: S.World, seats: D.Ring<&2, CoreSeat>, index: Nat, notes: List<&2, D.Note>) -> R.RefState:
-  R.settle(fuel, R.RefState{host(world, seats), R.GenerateRandomSequence{R.BatchChosen{index}}, notes})
-
-def machine_batch(world: S.World, seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>, index: Nat) -> S.State:
-  M.batch(pack(world, seats, phase, notes), index)
-
-
-def raw_batch_width(world: S.World, seats: D.Ring<&2, CoreSeat>, width: Nat, notes: List<&2, D.Note>) -> R.RefState:
-  R.RefState{host(world, seats), R.Await{D.Draw{D.SequenceBatch{}, D.Range{0n, width}}, D.Loading{}, R.SequenceBatchResult{}}, notes}
-
-def ref_batch_answer_width(world: S.World, seats: D.Ring<&2, CoreSeat>, width: Nat, notes: List<&2, D.Note>, n: Nat) -> D.Stepped<&2, R.RefState>:
-  R.answer(raw_batch_width(world, seats, width, notes), n)
-
-def machine_batch_answer_width(world: S.World, seats: D.Ring<&2, CoreSeat>, +width: Nat, notes: List<&2, D.Note>, n: Nat) -> D.Stepped<&2, R.RefState>:
-  stepped(M.answer.request(pack(world, seats, S.NeedBatch{}, notes), n, D.Draw{D.SequenceBatch{}, D.Range{0n, width}}))
-
-def batch_answer(world: S.World, seats: D.Ring<&2, CoreSeat>, notes: List<&2, D.Note>, n: Nat) -> D.Stepped<&2, R.RefState>:
-  stepped(M.answer(pack(world, seats, S.NeedBatch{}, notes), n))
-
-def batch_value(width: Nat, n: Nat) -> Nat:
-  D.clamp(n, 1n+width)
-
-
 def RefDecks() -> Data:
   H.Decks
 
@@ -1526,255 +896,6 @@ def ref_full_decks() -> H.Decks:
 
 def machine_full_decks() -> H.Decks:
   decks(Q.decks.full())
-
-def ref_refill_host(world: S.World, seats: D.Ring<&2, CoreSeat>) -> H.Host:
-  H.host.set_decks(host(world, seats), H.MakeSequenceCopies())
-
-def ref_set_decks(world: S.World, seats: D.Ring<&2, CoreSeat>, decks: H.Decks) -> H.Host:
-  H.host.set_decks(host(world, seats), decks)
-
-def machine_refill_world(world: S.World) -> S.World:
-  S.world.set_decks(world, Q.decks.full())
-
-
-def ref_ready(fuel: Nat, world: S.World, seats: D.Ring<&2, CoreSeat>, notes: List<&2, D.Note>) -> R.RefState:
-  +h : H.Host = host(world, seats)
-  R.settle(fuel, R.GenerateRandomSequence.request(R.RefState{h, R.GenerateRandomSequence{R.SelectBatch{}}, notes}, H.host.deck(h)))
-
-def ref_ready_host(fuel: Nat, +h: H.Host, notes: List<&2, D.Note>) -> R.RefState:
-  R.settle(fuel, R.GenerateRandomSequence.request(R.RefState{h, R.GenerateRandomSequence{R.SelectBatch{}}, notes}, H.host.deck(h)))
-
-def machine_ready(+world: S.World, seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>) -> S.State:
-  M.load.ready(pack(world, seats, phase, notes), S.world.deck(world))
-
-def ref_select(fuel: Nat, world: S.World, seats: D.Ring<&2, CoreSeat>, notes: List<&2, D.Note>) -> R.RefState:
-  R.settle(fuel, R.RefState{host(world, seats), R.GenerateRandomSequence{R.SelectBatch{}}, notes})
-
-def machine_refill(+world: S.World, seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>) -> S.State:
-  M.load.refill(pack(world, seats, phase, notes), S.world.deck(world))
-
-
-def ref_loading_next(fuel: Nat, world: S.World, seats: D.Ring<&2, CoreSeat>, notes: List<&2, D.Note>, index: Nat) -> R.RefState:
-  +h : H.Host = H.host.set_first_sequence(H.host.set_load_index(host(world, seats), index), False{})
-  R.settle(fuel, R.RefState{h, R.GenerateRandomSequence{R.SelectBatch{}}, notes})
-
-
-def amount_world(world: S.World, value: Nat) -> S.World:
-  S.world.set_item_amount(world, value)
-
-
-def ref_amount_begin(fuel: Nat, world: S.World, seats: D.Ring<&2, CoreSeat>, notes: List<&2, D.Note>) -> R.RefState:
-  R.settle(fuel, R.RefState{host(world, seats), R.GetRandomItemGrabAmount{R.PacketSort_StartRound{}}, notes})
-
-def ref_amount_rule_state(fuel: Nat, world: S.World, seats: D.Ring<&2, CoreSeat>, rule: D.AmountRule, notes: List<&2, D.Note>) -> R.RefState:
-  R.settle(fuel, R.GetRandomItemGrabAmount.rule(R.RefState{host(world, seats), R.GetRandomItemGrabAmount{R.PacketSort_StartRound{}}, notes}, R.PacketSort_StartRound{}, rule))
-
-def machine_amount_rule_state(world: S.World, seats: D.Ring<&2, CoreSeat>, phase: S.Phase, rule: D.AmountRule, notes: List<&2, D.Note>) -> S.State:
-  M.amount.rule(pack(world, seats, phase, notes), rule)
-
-def machine_amount_begin(world: S.World, seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>) -> S.State:
-  M.amount.begin(pack(world, seats, phase, notes))
-
-
-def amount_state(world: S.World, seats: D.Ring<&2, CoreSeat>, notes: List<&2, D.Note>) -> S.State:
-  pack(world, seats, S.NeedAmount{}, notes)
-
-def amount_answer(world: S.World, seats: D.Ring<&2, CoreSeat>, notes: List<&2, D.Note>, n: Nat) -> D.Stepped<&2, R.RefState>:
-  stepped(M.answer(amount_state(world, seats, notes), n))
-
-def amount_value(+world: S.World, n: Nat) -> Nat:
-  D.draw.value(D.table.amount_range(S.world.table(world)), n)
-
-def health_answer(world: S.World, seats: D.Ring<&2, CoreSeat>, notes: List<&2, D.Note>, n: Nat) -> D.Stepped<&2, R.RefState>:
-  stepped(M.answer(health_state(world, seats, notes), n))
-
-def health_value(+world: S.World, n: Nat) -> Nat:
-  D.draw.value(D.table.health_range(S.world.table(world)), n)
-
-
-def ref_round_health(rules: D.RoundRules) -> D.HealthRule:
-  H.rules.health(rules)
-
-def machine_round_health(rules: D.RoundRules) -> D.HealthRule:
-  Q.round.health(rules)
-
-def ref_current_health(world: S.World, seats: D.Ring<&2, CoreSeat>) -> D.HealthRule:
-  H.rules.health(H.host.rules(host(world, seats)))
-
-def machine_current_health(world: S.World) -> D.HealthRule:
-  Q.round.health(Q.world.rules(world))
-
-def ref_health_begin(fuel: Nat, world: S.World, seats: D.Ring<&2, CoreSeat>, notes: List<&2, D.Note>) -> R.RefState:
-  R.settle(fuel, R.RefState{host(world, seats), R.GenerateRandomRound{}, notes})
-
-def ref_health_rule_state(fuel: Nat, world: S.World, seats: D.Ring<&2, CoreSeat>, rule: D.HealthRule, notes: List<&2, D.Note>) -> R.RefState:
-  R.settle(fuel, R.GenerateRandomRound.rule(R.RefState{host(world, seats), R.GenerateRandomRound{}, notes}, rule))
-
-def machine_health_rule_state(world: S.World, seats: D.Ring<&2, CoreSeat>, phase: S.Phase, rule: D.HealthRule, notes: List<&2, D.Note>) -> S.State:
-  M.health.rule(pack(world, seats, phase, notes), rule)
-
-def machine_health_begin(world: S.World, seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>) -> S.State:
-  M.health.begin(pack(world, seats, phase, notes))
-
-def ref_next_round(before: Bool, index: Nat) -> Nat:
-  G.next_round(before, index)
-
-def machine_next_round(before: Bool, index: Nat) -> Nat:
-  Q.round.next(before, index)
-
-def first_world(+world: S.World, seat: D.Seat) -> S.World:
-  +world : S.World = S.world.set_round_index(world, Q.round.next(S.world.before_round(world), S.world.round_index(world)))
-  world : S.World = S.world.set_before_round(world, False{})
-  S.world.set_first_sequence(S.world.set_first_turn(world, seat), True{})
-
-
-def ref_first_chosen(fuel: Nat, world: S.World, seats: D.Ring<&2, CoreSeat>, seat: D.Seat, notes: List<&2, D.Note>) -> R.RefState:
-  R.settle(fuel, R.RefState{host(world, seats), R.MainRoutine_StartRound{R.FirstChosen{seat}}, notes})
-
-def ref_first_next(fuel: Nat, world: S.World, seats: D.Ring<&2, CoreSeat>, seat: D.Seat, notes: List<&2, D.Note>, index: Nat) -> R.RefState:
-  h : H.Host = H.host.set_round_index(host(world, seats), index)
-  h : H.Host = H.host.set_before_round(h, False{})
-  h : H.Host = H.host.set_first_turn(h, seat)
-  h : H.Host = H.host.set_first_sequence(h, True{})
-  R.settle(fuel, R.RefState{h, R.GenerateRandomRound{}, notes})
-
-def machine_first_chosen(world: S.World, seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>, seat: D.Seat) -> S.State:
-  M.first.chosen(pack(world, seats, phase, notes), seat)
-
-def ref_seat_nth(seats: List<&2, D.Seat>, index: Nat) -> Maybe<&2, D.Seat>:
-  G.nth(D.Seat, seats, index)
-
-def machine_seat_nth(seats: List<&2, D.Seat>, index: Nat) -> Maybe<&2, D.Seat>:
-  Q.nth(D.Seat, seats, index)
-
-def ref_seat_default(seat: Maybe<&2, D.Seat>) -> D.Seat:
-  G.seat.default(seat)
-
-def machine_seat_default(seat: Maybe<&2, D.Seat>) -> D.Seat:
-  Q.value.or(D.Seat, seat, D.Seat0{})
-
-def ref_first_seat(table: D.Table, value: Nat) -> D.Seat:
-  ref_seat_default(ref_seat_nth(D.table.seats(table), value))
-
-def machine_first_seat(table: D.Table, value: Nat) -> D.Seat:
-  machine_seat_default(machine_seat_nth(D.table.seats(table), value))
-
-def ref_first_range(table: D.Table) -> D.Range:
-  D.Range{0n, G.subtract(D.table.count(table), 2n)}
-
-def machine_first_range(table: D.Table) -> D.Range:
-  V.first.range(table)
-
-def first_value(world: S.World, n: Nat) -> Nat:
-  D.draw.value(V.first.range(S.world.table(world)), n)
-
-def first_answer_world(world: S.World, seats: D.Ring<&2, CoreSeat>, n: Nat) -> S.World:
-  +w : S.World = world_for(world, seats)
-  first_world(w, machine_first_seat(S.world.table(w), first_value(w, n)))
-
-def first_state(world: S.World, seats: D.Ring<&2, CoreSeat>, notes: List<&2, D.Note>) -> S.State:
-  pack(world, seats, S.NeedFirst{}, notes)
-
-def first_answer(world: S.World, seats: D.Ring<&2, CoreSeat>, notes: List<&2, D.Note>, n: Nat) -> D.Stepped<&2, R.RefState>:
-  stepped(M.answer(first_state(world, seats, notes), n))
-
-def ref_first_answer_range(world: S.World, seats: D.Ring<&2, CoreSeat>, notes: List<&2, D.Note>, n: Nat, range: D.Range) -> D.Stepped<&2, R.RefState>:
-  R.answer(R.RefState{host(world, seats), R.Await{D.Draw{D.FirstSeat{}, range}, D.Setup{}, R.FirstSeatResult{}}, notes}, n)
-
-def preserve.plan(config: D.Config) -> D.Plan:
-  match config:
-    case D.Config{_, plan}:
-      plan
-
-
-def preserve.reset_seats(seats: D.Ring<&2, CoreSeat>, +hp: Nat) -> D.Ring<&2, CoreSeat>:
-  match seats:
-    case D.Duo{S.Seat{_, _, p1, s1}, S.Seat{_, _, p3, s3}}:
-      D.Duo{S.Seat{hp, S.Free{}, p1, s1}, S.Seat{hp, S.Free{}, p3, s3}}
-    case D.Trio{S.Seat{_, _, p0, s0}, S.Seat{_, _, p1, s1}, S.Seat{_, _, p2, s2}}:
-      D.Trio{S.Seat{hp, S.Free{}, p0, s0}, S.Seat{hp, S.Free{}, p1, s1}, S.Seat{hp, S.Free{}, p2, s2}}
-    case D.Quad{S.Seat{_, _, p0, s0}, S.Seat{_, _, p1, s1}, S.Seat{_, _, p2, s2}, S.Seat{_, _, p3, s3}}:
-      D.Quad{S.Seat{hp, S.Free{}, p0, s0}, S.Seat{hp, S.Free{}, p1, s1}, S.Seat{hp, S.Free{}, p2, s2}, S.Seat{hp, S.Free{}, p3, s3}}
-
-def preserve.reset_world(world: S.World) -> S.World:
-  S.world.set_direction(S.world.set_checking_first_death(world, True{}), D.Clockwise{})
-
-def preserve.reset_notes(+world: S.World, notes: List<&2, D.Note>) -> List<&2, D.Note>:
-  +world : S.World = preserve.reset_world(world)
-  List.append(&2, D.Note, notes, [D.Shown{D.RoundBegan{S.world.round_index(world), S.world.round_health(world), S.world.first_turn(world)}}])
-
-def preserve.load_world(+world: S.World) -> S.World:
-  S.world.set_first_sequence(S.world.set_load_index(world, Q.load.next(S.world.first_sequence(world), S.world.load_index(world))), False{})
-
-def preserve.first_world(+world: S.World, seat: D.Seat) -> S.World:
-  S.world.set_first_sequence(S.world.set_first_turn(S.world.set_before_round(S.world.set_round_index(world, Q.round.next(S.world.before_round(world), S.world.round_index(world))), False{}), seat), True{})
-
-
-type SetupPhase is Data:
-  SetupFirst{}
-  SetupHealth{}
-  SetupAmount{}
-
-def preserve.phase(phase: SetupPhase) -> S.Phase:
-  match phase:
-    case SetupFirst{}:
-      S.NeedFirst{}
-    case SetupHealth{}:
-      S.NeedHealth{}
-    case SetupAmount{}:
-      S.NeedAmount{}
-
-def idle.normal(+world: S.World, seats: D.Ring<&2, CoreSeat>, seat: D.Seat, notes: List<&2, D.Note>) -> S.State:
-  canonical_state(world, seats, S.Idle{seat, D.NonEmpty{S.TakeGun{}, Nil{}}}, notes)
-
-def idle.expected(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +seat: D.Seat) -> D.Stepped<&2, S.State>:
-  S.state.stepped(aim_successor(world, seats, seat))
-
-def idle.current(world: S.World, seat: D.Seat) -> Bool:
-  R.current.eq(S.world.turn(world), seat)
-
-
-def ref_first_begin(fuel: Nat, world: S.World, seats: D.Ring<&2, CoreSeat>, notes: List<&2, D.Note>) -> R.RefState:
-  R.settle(fuel, R.RefState{host(world, seats), R.MainRoutine_StartRound{R.BeginRound{}}, notes})
-
-def machine_first_begin(world: S.World, seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>) -> S.State:
-  M.first.begin(pack(world, seats, phase, notes))
-
-def zero_swap(state: S.State) -> Bool:
-  match state:
-    case S.State{world, players, S.NeedSwap{load, shells, 0n}, notes, grabs}:
-      True{}
-    case _:
-      False{}
-# Item phases are outside the no-item scope: the normal form maps them to Blocked.
-def item_phase(state: S.State) -> Bool:
-  match state:
-    case S.State{_, _, S.NeedTurnAmount{_, _, _}, _, _}:
-      True{}
-    case S.State{_, _, S.Grab{_}, _, _}:
-      True{}
-    case S.State{_, _, S.NeedItem{_, _, _, _}, _, _}:
-      True{}
-    case S.State{_, _, S.NeedPhone{_, _, _}, _, _}:
-      True{}
-    case S.State{_, _, S.JamPick{_, _}, _, _}:
-      True{}
-    case S.State{_, _, S.StealPick{_, _}, _, _}:
-      True{}
-    case _:
-      False{}
-
-def turn.machine_living(entries: List<&2, D.At<&2, CoreSeat>>) -> List<&2, D.Seat>:
-  Q.living(health_entries(entries))
-
-def turn.source_living(entries: List<&2, D.At<&2, CoreSeat>>) -> List<&2, D.Seat>:
-  G.living(props_entries(entries))
-
-def turn.source_only(seats: List<&2, D.Seat>) -> Maybe<&2, D.Seat>:
-  G.CheckIfUserHasWon.result(seats)
-
-def turn.source_winner(world: S.World, seats: D.Ring<&2, CoreSeat>) -> Maybe<&2, D.Seat>:
-  G.CheckIfUserHasWon(host(world, seats))
 
 def turn.source_rules_found(found: Maybe<&2, D.RoundRules>) -> D.RoundRules:
   H.rules.found(found)
@@ -1794,209 +915,19 @@ def turn.source_amount_rule(world: S.World, seats: D.Ring<&2, CoreSeat>) -> D.Am
 def turn.source_amount_of(rule: D.LoadRule) -> D.AmountRule:
   G.load.amount(rule)
 
-def turn.source_recipient(passing: Bool, current: D.Seat, next: D.Seat) -> D.Seat:
-  R.MainRoutine_UserEndTurn.recipient(passing, current, next)
-
-def turn.ref_end(world: S.World, seats: D.Ring<&2, CoreSeat>, from: D.Seat, passing: Bool, empty: Bool, winner: Maybe<&2, D.Seat>, notes: List<&2, D.Note>, fuel: Nat) -> R.RefState:
-  R.settle(fuel, R.RefState{host(world, seats), R.UserEndTurn_Packet{R.EndPacket{from, passing, empty, winner}}, notes})
-
-def turn.ref_rule(world: S.World, seats: D.Ring<&2, CoreSeat>, +from: D.Seat, +passing: Bool, +empty: Bool, +winner: Maybe<&2, D.Seat>, notes: List<&2, D.Note>, fuel: Nat, rule: D.AmountRule) -> R.RefState:
-  R.settle(fuel, R.UserEndTurn_Packet.amount(R.RefState{host(world, seats), R.UserEndTurn_Packet{R.EndPacket{from, passing, empty, winner}}, notes}, R.EndPacket{from, passing, empty, winner}, rule))
-
-def turn.ref_main(world: S.World, seats: D.Ring<&2, CoreSeat>, from: D.Seat, passing: Bool, empty: Bool, winner: Maybe<&2, D.Seat>, notes: List<&2, D.Note>, fuel: Nat) -> R.RefState:
-  R.settle(fuel, R.RefState{host(world, seats), R.MainRoutine_UserEndTurn{R.EndPacket{from, passing, empty, winner}}, notes})
-
-def turn.ref_live(world: S.World, seats: D.Ring<&2, CoreSeat>, +from: D.Seat, +passing: Bool, +empty: Bool, +winner: Maybe<&2, D.Seat>, notes: List<&2, D.Note>, fuel: Nat, live: Bool) -> R.RefState:
-  R.settle(fuel, R.UserEndTurn_Packet.live(R.RefState{host(world, seats), R.UserEndTurn_Packet{R.EndPacket{from, passing, empty, winner}}, notes}, R.EndPacket{from, passing, empty, winner}, live))
-
-def turn.ref_probe(world: S.World, seats: D.Ring<&2, CoreSeat>) -> Bool:
-  G.nonempty(D.Seat, G.GetSocketsToBeginItemGrabbingOn(host(world, seats), False{}, 1n))
-
-def turn.ref_pass(world: S.World, seats: D.Ring<&2, CoreSeat>, +from: D.Seat, +passing: Bool, notes: List<&2, D.Note>, k: Nat, recipient: D.Seat) -> R.RefState:
-  R.settle(6n+k, R.MainRoutine_UserEndTurn.pass(R.RefState{host(world, seats), R.MainRoutine_UserEndTurn{R.EndPacket{from, passing, False{}, None{}}}, notes}, False{}, recipient))
-
-def turn.positive_result(world: S.World, seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>, +recipient: D.Seat) -> R.RefState:
-  ref(M.grant(pack(S.world.set_first_turn(world, recipient), seats, phase, notes), recipient))
-
-def turn.machine_winner_case(world: S.World, seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>, from: D.Seat, passing: Bool, winner: Maybe<&2, D.Seat>) -> R.RefState:
-  ref(M.turn.winner(pack(world, seats, phase, notes), from, passing, winner))
-
-def turn.ref_actual(+world: S.World, +seats: D.Ring<&2, CoreSeat>, from: D.Seat, passing: Bool, empty: Bool, notes: List<&2, D.Note>, fuel: Nat) -> R.RefState:
-  turn.ref_end(world, seats, from, passing, empty, turn.source_winner(world, seats), notes, fuel)
-
-# What M.turn.end reaches once the packet's amount rule is known
-# (turn.packet with its rule abstracted).
-def turn.machine_amount_state(world: S.World, +seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>, from: D.Seat, passing: Bool, +rule: D.AmountRule) -> S.State:
-  +state : S.State = pack(world, seats, phase, notes)
-  +winner : Maybe<&2, D.Seat> = Q.winner(seats.health(seats))
-  M.turn.live(state, from, passing, winner, rule, I.amount.live(rule, S.grabs.distributing(S.state.grabs(state)), I.reload.wanted(state, winner)))
-
-def turn.machine_amount_case(world: S.World, seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>, from: D.Seat, passing: Bool, rule: D.AmountRule) -> R.RefState:
-  ref(turn.machine_amount_state(world, seats, phase, notes, from, passing, rule))
-
-def shot.prefix(+state: S.State, +shooter: D.Seat, +target: D.Seat, +shell: D.Shell, rest: List<&2, D.Shell>) -> S.State:
-  +world : S.World = S.state.world(state)
-  +ps : S.Players = S.state.players(state)
-  +damage : D.Damage = Q.captured(S.world.sawed(world))
-  +before : Nat = Q.value.or(Nat, D.ring.get(Nat, S.players.health(ps), target), 100n)
-  +health : Nat = Q.shot.health(shell, before, damage)
-  +ps : S.Players = S.players.set_health(ps, target, health)
-  world : S.World = S.world.set_sawed(S.world.set_gun(world, rest), False{})
-  state : S.State = S.state.emit(S.state.set_players(S.state.set_world(state, world), ps), D.Fired{shooter, target, shell, damage, Q.subtract(before, health), health})
-  M.death(state, target, shell, health)
-
-def shot.health_at(seat: CoreSeat, hp: Nat) -> CoreSeat:
-  match seat:
-    case S.Seat{_, jam, cash, sl}:
-      S.Seat{hp, jam, cash, sl}
-
-def shot.health_write(+seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, hp: Nat) -> D.Ring<&2, CoreSeat>:
-  D.ring.set(CoreSeat, seats, seat, shot.health_at(value.or(CoreSeat, D.ring.get(CoreSeat, seats, seat), S.Seat{100n, S.Free{}, 0, D.slots.empty()}), hp))
-
-def shot.cash_at(seat: CoreSeat, prize: U32) -> CoreSeat:
-  match seat:
-    case S.Seat{hp, jam, cash, sl}:
-      S.Seat{hp, jam, U32.add(cash, prize), sl}
-
-def shot.cash_write(+seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, prize: U32) -> D.Ring<&2, CoreSeat>:
-  D.ring.set(CoreSeat, seats, seat, shot.cash_at(value.or(CoreSeat, D.ring.get(CoreSeat, seats, seat), S.Seat{100n, S.Free{}, 0, D.slots.empty()}), prize))
-
-def turn.ref_probe_list(seats: List<&2, D.Seat>) -> Bool:
-  G.nonempty(D.Seat, seats)
-
-def turn.ref_reload_grab(world: S.World, seats: D.Ring<&2, CoreSeat>, from: D.Seat, passing: Bool, notes: List<&2, D.Note>, fuel: Nat, grabbers: List<&2, D.Seat>) -> R.RefState:
-  R.settle(fuel, R.RefState{host(world, seats), R.BeginItemGrabbingForSockets{grabbers}, notes})
-
-def turn.ref_reload_pass(world: S.World, seats: D.Ring<&2, CoreSeat>, +from: D.Seat, +passing: Bool, notes: List<&2, D.Note>, k: Nat, recipient: D.Seat) -> R.RefState:
-  R.settle(12n+k, R.MainRoutine_UserEndTurn.pass(R.RefState{host(world, seats), R.MainRoutine_UserEndTurn{R.EndPacket{from, passing, True{}, None{}}}, notes}, True{}, recipient))
-
-def turn.reload_result(world: S.World, seats: D.Ring<&2, CoreSeat>, phase: S.Phase, notes: List<&2, D.Note>, recipient: D.Seat) -> R.RefState:
-  ref(M.reload.begin(pack(S.world.set_first_turn(world, recipient), seats, phase, notes)))
-
-def win.awarded(+state: S.State, +seat: D.Seat) -> S.State:
-  +world : S.World = S.state.world(state)
-  +ps : S.Players = S.state.players(state)
-  +prize : U32 = D.prize(S.world.round_index(world))
-  cash : U32 = Q.value.or(U32, D.ring.get(U32, S.players.cash(ps), seat), 0)
-  ps : S.Players = S.players.set_cash(ps, seat, U32.add(cash, prize))
-  S.state.emit(S.state.set_players(state, ps), D.RoundWon{seat, prize})
-
-def win.source_gate(world: S.World, seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, notes: List<&2, D.Note>, k: Nat, final: Bool) -> R.RefState:
-  R.settle(21n+k, R.LoopBackAfterWinRoutine.final(R.WinRoutine(raw_win(world, seats, seat, notes), seat), final))
-
-def win.award_notes(+world: S.World, +seat: D.Seat, notes: List<&2, D.Note>) -> List<&2, D.Note>:
-  List.append(&2, D.Note, notes, [D.Shown{D.RoundWon{seat, D.prize(S.world.round_index(world))}}])
-
-def win.source_awarded(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, phase: S.Phase, notes: List<&2, D.Note>) -> R.RefState:
-  R.WinRoutine(raw_win(world, seats, seat, notes), seat)
-
-
 def machine_ran_state(ran: D.Ran<&2, S.State>) -> S.State:
   match ran:
     case D.Ran{state, _, _}:
       state
 
-def ref_ran_point(ran: D.Ran<&2, R.RefState>) -> D.Point:
-  match ran:
-    case D.Ran{state, _, _}:
-      R.point(state)
-
-# Aim step: the reference and machine pieces of one shot, named for the proof.
-def aim.state(world: S.World, +seats: D.Ring<&2, CoreSeat>, seat: D.Seat, notes: List<&2, D.Note>) -> S.State:
-  pack(world, seats, S.Aim{seat}, notes)
-
-def aim.menus(+world: S.World, seats: D.Ring<&2, CoreSeat>, +actor: D.Seat) -> D.Ring<&2, List<&2, D.Move>>:
-  D.ring.set(List<&2, D.Move>, D.ring.fill(List<&2, D.Move>, S.world.table(world), Nil{}), actor, ref_shots(seats, Some{actor}))
-
-def aim.ref_await(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +actor: D.Seat) -> R.RefState:
-  R.RefState{host.held(world, seats, Some{actor}), R.Await{D.Choose{aim.menus(world, seats, actor)}, D.Playing{actor, D.Aiming{}}, R.PlayerMove{D.Aiming{}}}, Nil{}}
-
-def aim.ref_pick(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +actor: D.Seat, choice: D.Choice) -> D.Stepped<&2, R.RefState>:
-  R.stepped(R.settle(96n, R.answer.move(aim.ref_await(world, seats, actor), choice)))
-
-def aim.ref_accepting(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +actor: D.Seat, choice: D.Choice, accepted: Bool) -> D.Stepped<&2, R.RefState>:
-  R.stepped(R.settle(96n, R.answer.move.accepted(aim.ref_await(world, seats, actor), choice, accepted)))
-
-def aim.psv(world: S.World, seats: D.Ring<&2, CoreSeat>, +actor: D.Seat, target: D.Seat, index: Nat) -> R.RefState:
-  R.RefState{host.held(world, seats, Some{actor}), R.PacketSort_Verification{D.Choice{actor, index, D.Shoot{target}}}, Nil{}}
-
-def ref_settle(fuel: Nat, state: R.RefState) -> R.RefState:
-  R.settle(fuel, state)
-
-def aim.so_world(+world: S.World, self_live: Bool) -> S.World:
-  match self_live:
-    case True{}:
-      S.world.set_sawed(world, False{})
-    case False{}:
-      world
-
-def aim.self_live(actor: D.Seat, target: D.Seat, shell: D.Shell) -> Bool:
-  Bool.and(D.seat.eq(actor, target), G.shell.live(shell))
-
-def aim.mid_fuel(self_live: Bool) -> Nat:
-  match self_live:
-    case True{}:
-      92n
-    case False{}:
-      93n
-
-def aim.before(seats: D.Ring<&2, CoreSeat>, target: D.Seat) -> Nat:
-  Q.value.or(Nat, D.ring.get(Nat, seats.health(seats), target), 100n)
-
-def aim.ref_damage(+world: S.World) -> D.Damage:
-  G.damage(S.world.sawed(world))
-
-def aim.machine_damage(+world: S.World) -> D.Damage:
-  Q.captured(S.world.sawed(world))
-
-def aim.ref_hp(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +target: D.Seat, +shell: D.Shell) -> Nat:
-  ref_shot_health(shell, aim.before(seats, target), aim.ref_damage(world))
-
-def aim.machine_hp(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +target: D.Seat, +shell: D.Shell) -> Nat:
-  Q.shot.health(shell, aim.before(seats, target), aim.machine_damage(world))
-
-def aim.rs_mid(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +actor: D.Seat, +target: D.Seat, +shell: D.Shell, +rest: List<&2, D.Shell>, +hp: Nat, d: Nat, +dmg: D.Damage) -> R.RefState:
-  R.RefState{host(aim.so_world(S.world.set_gun(world, shell <> rest), aim.self_live(actor, target, shell)), shot.health_write(seats, target, hp)), R.DeathRequest{R.Shot{actor, target, shell, dmg, List.length(&2, D.Shell, rest)}}, [D.Shown{D.Fired{actor, target, shell, dmg, d, hp}}]}
-
-def aim.ms_mid(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +actor: D.Seat, +target: D.Seat, +shell: D.Shell, rest: List<&2, D.Shell>, phase: S.Phase, +hp: Nat, d: Nat, +dmg: D.Damage) -> S.State:
-  M.death(S.State{S.world.set_sawed(S.world.set_gun(world, rest), False{}), S.players.set_health(players.free(seats), target, hp), phase, [D.Shown{D.Fired{actor, target, shell, dmg, d, hp}}], grabs(seats)}, target, shell, hp)
-
-def aim.ue_state(+world: S.World, +seats: D.Ring<&2, CoreSeat>, notes: List<&2, D.Note>, +from: D.Seat, +passing: Bool) -> R.RefState:
-  R.RefState{host(world, seats), R.UserEndTurn_Packet{R.EndPacket{from, passing, Nat.is_eq(List.length(&2, D.Shell, S.world.gun(world)), 0n), turn.source_winner(world, seats)}}, notes}
-
-def aim.loop_state(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, notes: List<&2, D.Note>) -> R.RefState:
-  R.frame(R.WinRoutine(raw_win(world, seats, seat, notes), seat), R.MainRoutine_StartRound{R.BeginRound{}})
-
-def aim.loop_expected(+world: S.World, +seats: D.Ring<&2, CoreSeat>, +seat: D.Seat, notes: List<&2, D.Note>) -> R.RefState:
-  R.RefState{host(world, shot.cash_write(seats, seat, D.prize(S.world.round_index(world)))), R.MainRoutine_StartRound{R.BeginRound{}}, win.award_notes(world, seat, notes)}
-
-
 # ============================================================================
-# Every-config interface. Valid is the request-point invariant for item
-# configs; the B1 Valid above keeps the no-item scope until the laws are lifted.
+# Every-config interface: the request-point invariant Valid and the claims
+# built on it.
 # ============================================================================
-
-def RefFrame() -> Data:
-  R.Frame
-
-def RefItemPacket() -> Data:
-  R.ItemPacket
-
-def RefEndPacket() -> Data:
-  R.EndPacket
-
-def RefShot() -> Data:
-  R.Shot
-
-def Grabs() -> Data:
-  S.Grabs
 
 # A Bool fact as a proposition.
 def Holds(b: Bool) -> Data:
   {b == True{} : Bool}
-
-def gun_length(+s: S.State) -> Nat:
-  List.length(&2, D.Shell, S.world.gun(S.state.world(s)))
 
 def bounded(+s: S.State) -> Bool:
   Nat.is_lt(S.world.round_index(S.state.world(s)), D.plan.length(S.world.plan(S.state.world(s))))
@@ -2111,11 +1042,6 @@ def valid.shape(+s: S.State, valid: Valid(s)) -> Shape(s):
     case Tuple{_, Tuple{x, _}}:
       x
 
-def valid.bounded(+s: S.State, valid: Valid(s)) -> Holds(bounded(s)):
-  match valid:
-    case Tuple{_, Tuple{_, Tuple{x, _}}}:
-      x
-
 def valid.ready(+s: S.State, valid: Valid(s)) -> Holds(items_ready(S.state.phase(s), S.state.world(s))):
   match valid:
     case Tuple{_, Tuple{_, Tuple{_, x}}}:
@@ -2157,129 +1083,6 @@ def close(fuel: Nat, +s: S.State, f: R.Frame) -> R.RefState:
 
 def Closure(+N: Nat, +s: S.State, +f: R.Frame, +out: S.State) -> Type:
   @+k:Nat -> {close(Nat.add(N, k), s, f) == ref(out) : R.RefState}
-
-# Packets and the nested frames the closure table names.
-def end_packet(+s: S.State, from: D.Seat, passing: Bool, winner: Maybe<&2, D.Seat>) -> R.EndPacket:
-  R.EndPacket{from, passing, Nat.is_eq(gun_length(s), 0n), winner}
-
-def item_packet(seat: D.Seat, owner: D.Seat, slot: D.Slot, item: D.Item, ending: Bool, phone: Maybe<&2, D.Secret>) -> R.ItemPacket:
-  R.ItemPacket{seat, owner, slot, item, ending, phone}
-
-def phone_packet(seat: D.Seat, owner: D.Seat, slot: D.Slot) -> R.ItemPacket:
-  R.ItemPacket{seat, owner, slot, D.Phone{}, False{}, None{}}
-
-def shot(shooter: D.Seat, target: D.Seat, shell: D.Shell, damage: D.Damage, after_length: Nat) -> R.Shot:
-  R.Shot{shooter, target, shell, damage, after_length}
-
-def frame_Shuffle(load: D.Load, shells: List<&2, D.Shell>, i: Nat) -> R.Frame:
-  R.GenerateRandomSequence{R.Shuffle{load, shells, i}}
-
-def frame_BatchChosen(index: Nat) -> R.Frame:
-  R.GenerateRandomSequence{R.BatchChosen{index}}
-
-def frame_SelectBatch() -> R.Frame:
-  R.GenerateRandomSequence{R.SelectBatch{}}
-
-def frame_BeginRound() -> R.Frame:
-  R.MainRoutine_StartRound{R.BeginRound{}}
-
-def frame_FirstChosen(seat: D.Seat) -> R.Frame:
-  R.MainRoutine_StartRound{R.FirstChosen{seat}}
-
-def frame_PhoneShell(packet: R.ItemPacket, index: Nat) -> R.Frame:
-  R._GetBurnerPhone_Shell{packet, index}
-
-# Closure contexts: equality-only facts about the state a continuation runs
-# on. They hold Shape and the seated actors; a closure proof that needs more
-# takes it as an extra premise. Caps and inventories are never here.
-def Context(+s: S.State) -> Data:
-  Shape(s)
-
-def SeatContext(+s: S.State, +seat: D.Seat) -> Data:
-  Sigma<&2, &2, Shape(s), _ => P.seated(S.world.table(S.state.world(s)), seat)>
-
-def PairContext(+s: S.State, +seat: D.Seat, +other: D.Seat) -> Data:
-  Sigma<&2, &2, Shape(s), _ => Sigma<&2, &2, P.seated(S.world.table(S.state.world(s)), seat), _ => P.seated(S.world.table(S.state.world(s)), other)>>
-
-def context.shape(+s: S.State, ok: Context(s)) -> Shape(s):
-  ok
-
-def seat_context.shape(+s: S.State, +seat: D.Seat, ok: SeatContext(s, seat)) -> Shape(s):
-  match ok:
-    case Tuple{x, _}:
-      x
-
-def seat_context.seated(+s: S.State, +seat: D.Seat, ok: SeatContext(s, seat)) -> P.seated(S.world.table(S.state.world(s)), seat):
-  match ok:
-    case Tuple{_, x}:
-      x
-
-def pair_context.shape(+s: S.State, +seat: D.Seat, +other: D.Seat, ok: PairContext(s, seat, other)) -> Shape(s):
-  match ok:
-    case Tuple{x, _}:
-      x
-
-def pair_context.seated(+s: S.State, +seat: D.Seat, +other: D.Seat, ok: PairContext(s, seat, other)) -> P.seated(S.world.table(S.state.world(s)), seat):
-  match ok:
-    case Tuple{_, Tuple{x, _}}:
-      x
-
-def pair_context.other(+s: S.State, +seat: D.Seat, +other: D.Seat, ok: PairContext(s, seat, other)) -> P.seated(S.world.table(S.state.world(s)), other):
-  match ok:
-    case Tuple{_, Tuple{_, x}}:
-      x
-
-# Named contexts of the closure recipes (proof-plan section 2).
-def GiveContext(+s: S.State, +seat: D.Seat) -> Data:
-  SeatContext(s, seat)
-
-def GrantContext(+s: S.State, +seat: D.Seat) -> Data:
-  SeatContext(s, seat)
-
-def ShuffleContext(+s: S.State) -> Data:
-  Context(s)
-
-def BatchContext(+s: S.State) -> Data:
-  Context(s)
-
-def LoadContext(+s: S.State) -> Data:
-  Context(s)
-
-def BeginContext(+s: S.State) -> Data:
-  Context(s)
-
-def ResetContext(+s: S.State) -> Data:
-  Context(s)
-
-def AmountContext(+s: S.State) -> Data:
-  Context(s)
-
-def HealthContext(+s: S.State) -> Data:
-  Context(s)
-
-def FirstChosenContext(+s: S.State, +seat: D.Seat) -> Data:
-  SeatContext(s, seat)
-
-def FirstContext(+s: S.State) -> Data:
-  Context(s)
-
-def WinContext(+s: S.State, +seat: D.Seat) -> Data:
-  SeatContext(s, seat)
-
-def TurnContext(+s: S.State, +from: D.Seat) -> Data:
-  SeatContext(s, from)
-
-def EndItemContext(+s: S.State, +seat: D.Seat) -> Data:
-  SeatContext(s, seat)
-
-def ItemContext(+s: S.State, +seat: D.Seat, +owner: D.Seat) -> Data:
-  PairContext(s, seat, owner)
-
-def JamContext(+s: S.State, +seat: D.Seat, +target: D.Seat) -> Data:
-  PairContext(s, seat, target)
-
-def GrabContext(+s: S.State, +seat: D.Seat) -> Data:
-  SeatContext(s, seat)
 
 # BEGIN GENERATED REF API (tools/ref_api.py)
 
