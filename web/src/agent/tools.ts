@@ -2,7 +2,7 @@ import { flow, Option, Result, Schema, SchemaTransformation } from "effect";
 
 import { SEATS_BY_TABLE, SeatCount } from "../domain.ts";
 import { Controller, controllerOf } from "../driver.ts";
-import { PlayerNumber, rosterOf } from "../players.ts";
+import { PlayerLetter, rosterOf } from "../players.ts";
 import { agentGame, agentMove, type AgentSource, type SeatMove } from "./view.ts";
 
 // The agent tools, whatever carries them: their names, descriptions and input
@@ -13,7 +13,7 @@ import { agentGame, agentMove, type AgentSource, type SeatMove } from "./view.ts
 const RULES =
   "Buckshot: a shotgun is loaded with a hidden mix of live and blank shells, and each load is announced. On your turn you shoot a player or yourself, or use an item; a live shell does damage and a blank fired at yourself keeps your turn. The last player alive wins the round and its prize, and the most cash after the last round wins. A match has three rounds.";
 
-const PlayerArgument = PlayerNumber.annotate({ description: "The Agent player this call is for: the number in the player names, 1 for Player 1 up to the number of players at the table (at most 4)." });
+const PlayerArgument = PlayerLetter.annotate({ description: 'The Agent player this call is for: the letter in the player names, "A" for Player A, then "B" and so on up to the last player at the table (at most "D").' });
 
 const GetGameArguments = Schema.Struct({ player: PlayerArgument });
 
@@ -39,7 +39,7 @@ const NewMatchArguments = Schema.Struct({
   controllers: Schema.optionalKey(
     Schema.Array(Controller).annotate({
       description:
-        'One controller per player, in player order (Player 1 first), for example ["Agent", "Agent", "DoN"]. Agent players are played through these tools, DoN and Story are bots, Human players wait for clicks in the browser. Optional.',
+        'One controller per player, in player order (Player A first), for example ["Agent", "Agent", "DoN"]. Agent players are played through these tools, DoN and Story are bots, Human players wait for clicks in the browser. Optional.',
     }),
   ),
 });
@@ -71,7 +71,7 @@ const inputSchemaOf = (schema: Schema.Top) => Schema.toJsonSchemaDocument(schema
 export const tools = [
   {
     name: "get_game",
-    description: `${RULES} Returns your view as JSON, without any field that has nothing to show. Reading it changes nothing: until a player moves, every call returns the same view. When it is not your turn the view is just {"status":"waiting"}: call get_game again in a moment. On your turn it is what your screen shows: status "your turn"; turn, to pass to play_move; players with health (not shown while jammed), item names, and, while players grab from the briefcase, holding, the item a player drew and has not placed yet; gun, with sawed when it is; events, what happened since your previous turn ended (your last move first, then the others' moves; from the match start on your first turn), with what only you learned from the magnifying glass or the phone in its place (a load's live and blank counts, round wins and prizes, and round starts are events; turn order is clockwise at each round's start and changes only when an event says so); and moves, your legal moves, played by their position in the list, from 0. Each move is a whole action: "Shoot Player 2" picks up the shotgun and fires, "Grab an item" draws one and puts it in a free slot. Events are not shown again on a later turn, so remember what you need. When the match is over the view is "over" with the events since your last turn ended and the final standings, which show each player's cash. Several players can be Agents; each sees only its own secrets.`,
+    description: `${RULES} Returns your view as JSON, without any field that has nothing to show. Reading it changes nothing: until a player moves, every call returns the same view. When it is not your turn the view is just {"status":"waiting"}: call get_game again in a moment. On your turn it is what your screen shows: status "your turn"; turn, to pass to play_move; players with health (not shown while jammed), item names, and, while players grab from the briefcase, holding, the item a player drew and has not placed yet; gun, with sawed when it is; events, what happened since your previous turn ended (your last move first, then the others' moves; from the match start on your first turn), with what only you learned from the magnifying glass or the phone in its place (a load's live and blank counts, round wins and prizes, and round starts are events; turn order is clockwise at each round's start and changes only when an event says so); and moves, your legal moves, played by their position in the list, from 0. Each move is a whole action: "Shoot Player B" picks up the shotgun and fires, "Grab an item" draws one and puts it in a free slot. Events are not shown again on a later turn, so remember what you need. When the match is over the view is "over" with the events since your last turn ended and the final standings, which show each player's cash. Several players can be Agents; each sees only its own secrets.`,
     inputSchema: inputSchemaOf(GetGameArguments),
     isReadOnly: true,
     decodeCall: decoder("get_game", GetGameArguments, AgentCall.cases.GetGame.make),
@@ -87,7 +87,7 @@ export const tools = [
   {
     name: "new_match",
     description:
-      "Start a new match. Refused while a match is in progress: finish it first. By default Player 1 is the Agent and DoN bots play the others; pass controllers to make more players Agents. Returns each player's number and controller, and the seed; then call get_game for an Agent player.",
+      "Start a new match. Refused while a match is in progress: finish it first. By default Player A is the Agent and DoN bots play the others; pass controllers to make more players Agents. Returns each player's letter and controller, and the seed; then call get_game for an Agent player.",
     inputSchema: inputSchemaOf(NewMatchArguments),
     isReadOnly: false,
     decodeCall: decoder("new_match", NewMatchArguments, AgentCall.cases.NewMatch.make),
@@ -138,7 +138,7 @@ const withSource = <S>(session: MatchSession<S>, state: S, reply: (source: Agent
   Option.match(session.current(state), { onNone: () => refused(state, NO_MATCH), onSome: reply });
 
 /** The player's view. Replying changes nothing, so a lost or repeated reply loses nothing. */
-const viewReply = <S>(session: MatchSession<S>, state: S, player: PlayerNumber): ToolOutcome<S> =>
+const viewReply = <S>(session: MatchSession<S>, state: S, player: PlayerLetter): ToolOutcome<S> =>
   withSource(session, state, (source) =>
     Result.match(agentGame(source, session.turn(state), player), {
       onSuccess: (game) => answered(state, JSON.stringify(game)),
@@ -150,7 +150,7 @@ const viewReply = <S>(session: MatchSession<S>, state: S, player: PlayerNumber):
 const after = <S>({ state, maybeError }: Applied<S>, reply: (state: S) => ToolOutcome<S>): ToolOutcome<S> =>
   Option.match(maybeError, { onNone: () => reply(state), onSome: (reason) => refused(state, reason) });
 
-/** The table as new_match left it: each player's number and controller, so the agents know which players to name. */
+/** The table as new_match left it: each player's letter and controller, so the agents know which players to name. */
 const tableReply = <S>(session: MatchSession<S>, state: S): ToolOutcome<S> =>
   withSource(session, state, (source) => {
     const roster = rosterOf(source.game.seats);

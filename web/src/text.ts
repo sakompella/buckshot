@@ -40,7 +40,7 @@ export const moveText = (roster: Roster, seat: Seat, move: Move): string =>
   });
 
 /**
- * An agent move's words, from the machine moves it chains, without slots: "Shoot Player 2" picks up the shotgun and shoots.
+ * An agent move's words, from the machine moves it chains, without slots: "Shoot Player B" picks up the shotgun and shoots.
  * Steps that only open an action add none: picking up the shotgun, using a jammer or adrenaline before its target, placing a drawn item.
  */
 export const agentMoveText = (roster: Roster, seat: Seat, moves: ReadonlyArray<Move>): string => {

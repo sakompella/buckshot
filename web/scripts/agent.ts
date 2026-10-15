@@ -28,10 +28,10 @@ const parseView = Schema.decodeUnknownSync(Schema.fromJsonString(View));
 
 const problems: Array<string> = [];
 
-// Anything that names a seat or a Player 0, where people and agents should only see Player 1 to N.
+// Anything that names a seat or a numbered player, where people and agents should only see Player A to D.
 const leaks: Array<string> = [];
 
-const RAW_SEAT = /seat|Player 0/i;
+const RAW_SEAT = /seat|Player \d/i;
 
 const watch = (page: Page): void => {
   page.on("console", (message) => {
@@ -65,7 +65,7 @@ const callTool = async (page: Page, name: string, input: Record<string, number |
 const shot = async (page: Page, name: string): Promise<void> => {
   const shown = await page.locator("body").innerText();
 
-  if (RAW_SEAT.test(shown)) leaks.push(`${name}: ${shown.match(/.*(?:seat|Player 0).*/i)?.[0]}`);
+  if (RAW_SEAT.test(shown)) leaks.push(`${name}: ${shown.match(/.*(?:seat|Player \d).*/i)?.[0]}`);
 
   await page.screenshot({ path: `${outdir}/${name}.png`, fullPage: true });
 };
@@ -79,9 +79,9 @@ const plainPage = await plain.newPage({ viewport: { width: 1360, height: 900 } }
 
 await plainPage.goto(url);
 
-await plainPage.getByRole("button", { name: "Player 2: DoN" }).click();
+await plainPage.getByRole("button", { name: "Player B: DoN" }).click();
 
-await plainPage.getByRole("button", { name: "Player 2: Agent" }).waitFor();
+await plainPage.getByRole("button", { name: "Player B: Agent" }).waitFor();
 
 await shot(plainPage, "01-no-webmcp-hint");
 
@@ -105,28 +105,28 @@ console.log("registered tools:", JSON.stringify(tools, null, 2));
 
 await shot(page, "02-flag-on-empty");
 
-console.log("get_game with no match:", await callTool(page, "get_game", { player: 1 }));
+console.log("get_game with no match:", await callTool(page, "get_game", { player: "A" }));
 
-console.log("play_move with no match:", await callTool(page, "play_move", { player: 1, move: 0, turn: 0 }));
+console.log("play_move with no match:", await callTool(page, "play_move", { player: "A", move: 0, turn: 0 }));
 
-console.log("play_move without a turn:", await callTool(page, "play_move", { player: 1, move: 0 }));
+console.log("play_move without a turn:", await callTool(page, "play_move", { player: "A", move: 0 }));
 
 console.log("new_match with a bad seed:", await callTool(page, "new_match", { players: 2, items: true, seed: "abc" }));
 
 console.log("new_match with too few controllers:", await callTool(page, "new_match", { players: 3, items: true, controllers: ["Agent"] }));
 
-const Table = Schema.Struct({ players: Schema.Array(Schema.Struct({ player: Schema.Number, controller: Schema.String })) });
+const Table = Schema.Struct({ players: Schema.Array(Schema.Struct({ player: Schema.String, controller: Schema.String })) });
 
 const parseTable = Schema.decodeUnknownSync(Schema.fromJsonString(Table));
 
 /** By player: the event lines of each view it moved from, then of its final view. */
-const heard = new Map<number, ReadonlyArray<string>>();
+const heard = new Map<string, ReadonlyArray<string>>();
 
-const hear = (player: number, events: ReadonlyArray<string> = []): void => {
+const hear = (player: string, events: ReadonlyArray<string> = []): void => {
   heard.set(player, [...(heard.get(player) ?? []), ...events]);
 };
 
-const getView = async (player: number) => {
+const getView = async (player: string) => {
   const got = await callTool(page, "get_game", { player });
 
   if (!got.ok) throw new Error(`get_game(${player}) failed: ${got.text}`);
@@ -240,7 +240,7 @@ const playMatch = async (name: string, input: Record<string, number | string | b
 
   const finals = await Promise.all(agents.map(getView));
 
-  finals.forEach((view, position) => hear(agents[position] ?? 0, view.events));
+  agents.forEach((player, position) => hear(player, finals[position]?.events));
 
   const isOver = finals.every((view) => view.status === "over");
   const isTailHeard = agents.every((player) => heard.get(player)?.at(-1) === "The match is over.");
@@ -250,7 +250,7 @@ const playMatch = async (name: string, input: Record<string, number | string | b
     `${name}: match over: ${isOver}, last event heard by every agent: ${isTailHeard}, match start heard once: ${isStartHeardOnce}, agent players: ${agents.join(", ")}, agent moves: ${moves}, turns where several agents could move: ${sharedTurns}, stale retries: ${staleRetries}, tool rounds: ${calls}`,
   );
 
-  console.log(`${name} play_move after the end:`, await callTool(page, "play_move", { player: agents[0] ?? 1, move: 0, turn: lastTurn }));
+  console.log(`${name} play_move after the end:`, await callTool(page, "play_move", { player: agents[0] ?? "A", move: 0, turn: lastTurn }));
 
   await shot(page, `${name}-4-match-over`);
 
@@ -267,7 +267,7 @@ const isRematchOver = await playMatch("rematch", { players: 3, items: true, seed
 
 console.log("console problems:", problems);
 
-console.log("seat or Player 0 shown:", leaks);
+console.log("seat or numbered player shown:", leaks);
 
 await browser.close();
 
