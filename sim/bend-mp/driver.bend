@@ -7,7 +7,7 @@ import ./ai/don.bend as Don
 
 # The controller of a match. It makes no game decisions: it answers the
 # machine's random draws from a counter-hashed game stream, asks the seat that
-# acts for a decision (lowest socket first when several can), lifts the AI's
+# acts for a decision (one grab per seat in turn when several can), lifts the AI's
 # index to a tape answer with prompt.answer, applies it with the machine's
 # answer, and routes the notes to each seat with hear. Every AI has its own
 # random stream, a counter hashed with the match seed and its socket.
@@ -222,13 +222,82 @@ def step.prompt(+prompt: D.Prompt, run: Run) -> Run:
       +minds : D.Ring<&2, Mind> = minds
       step.asked(rng.coin(rng, seat), prompt, seat, state, or.default(Mind, D.ring.get(Mind, minds, seat), StoryMind{Story.fresh()}), or.default(List<&2, D.Heard>, D.ring.get(List<&2, D.Heard>, heard, seat), Nil{}), minds, heard, rounds, cash, verbose, trace)
 
-# Several seats can act while items are handed out: the lowest socket goes first.
-def step.choose(prompts: List<&2, D.Prompt>, run: Run) -> Run:
+def run.state(run: Run) -> S.State:
+  match run:
+    case Run{state, _, _, _, _, _, _, _}:
+      state
+
+def seat.rank(seat: D.Seat) -> Nat:
+  match seat:
+    case D.Seat0{}:
+      0n
+    case D.Seat1{}:
+      1n
+    case D.Seat2{}:
+      2n
+    case D.Seat3{}:
+      3n
+
+def prompt.holds(prompt: D.Prompt) -> Bool:
+  match prompt:
+    case D.Prompt{_, _, D.NonEmpty{D.Place{_}, _}}:
+      True{}
+    case _:
+      False{}
+
+def prompt.granted(+grabs: S.Grabs, prompt: D.Prompt) -> Nat:
+  or.default(Nat, D.ring.get(Nat, S.grabs.granted(grabs), prompt.seat(prompt)), 0n)
+
+# The prompts of the seats after `first` in socket order, then the rest.
+def prompts.after(prompts: List<&2, D.Prompt>, +first: D.Seat, +before: List<&2, D.Prompt>) -> List<&2, D.Prompt>:
   match prompts:
     case Nil{}:
+      before
+    case +prompt <> +rest:
+      Bool.pick(List<&2, D.Prompt>, Nat.is_lt(seat.rank(first), seat.rank(prompt.seat(prompt))), List.append(&2, D.Prompt, prompt <> rest, before), prompts.after(rest, first, List.append(&2, D.Prompt, before, [prompt])))
+
+def prompt.better.holding(+grabs: S.Grabs, +best: D.Prompt, +next: D.Prompt, best_holds: Bool, next_holds: Bool) -> D.Prompt:
+  match best_holds next_holds:
+    case True{} _:
+      best
+    case False{} True{}:
+      next
+    case False{} False{}:
+      Bool.pick(D.Prompt, Nat.is_lt(prompt.granted(grabs, next), prompt.granted(grabs, best)), next, best)
+
+def prompt.better(+grabs: S.Grabs, +best: D.Prompt, +next: D.Prompt) -> D.Prompt:
+  prompt.better.holding(grabs, best, next, prompt.holds(best), prompt.holds(next))
+
+def prompt.best(prompts: List<&2, D.Prompt>, +grabs: S.Grabs, +best: D.Prompt) -> D.Prompt:
+  match prompts:
+    case Nil{}:
+      best
+    case next <> rest:
+      prompt.best(rest, grabs, prompt.better(grabs, best, next))
+
+# Several seats can grab at once while items are handed out. A seat holding an
+# item places it; otherwise the seat with the fewest grants this distribution
+# grabs, ties going to the first seat after the first shooter in socket order.
+# That is one grab per seat in turn, the simple machine's order (ADR-0033).
+def prompt.first(+grabs: S.Grabs, ordered: List<&2, D.Prompt>) -> Maybe<&2, D.Prompt>:
+  match ordered:
+    case Nil{}:
+      None{}
+    case head <> rest:
+      Some{prompt.best(rest, grabs, head)}
+
+def prompt.next(+state: S.State, prompts: List<&2, D.Prompt>) -> Maybe<&2, D.Prompt>:
+  prompt.first(S.state.grabs(state), prompts.after(prompts, S.world.first_turn(S.state.world(state)), Nil{}))
+
+def step.chosen(next: Maybe<&2, D.Prompt>, run: Run) -> Run:
+  match next:
+    case None{}:
       run
-    case prompt <> rest:
+    case Some{prompt}:
       step.prompt(prompt, run)
+
+def step.choose(prompts: List<&2, D.Prompt>, +run: Run) -> Run:
+  step.chosen(prompt.next(run.state(run), prompts), run)
 
 def run.request(run: Run) -> D.Request:
   match run:
