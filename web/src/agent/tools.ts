@@ -64,7 +64,7 @@ export const tools = [
     name: "get_game",
     description: `${RULES} Returns your view as JSON, without any field that has nothing to show. When it is not your turn the view is just {"status":"waiting"}: call get_game again in a moment. On your turn it is what your screen shows: status "your turn"; turn, to pass to play_move; players with health (not shown while jammed) and item names; gun, with who holds it and sawed when it is; events, what happened since your previous view on your turn, from the start of the match in the first one, with what only you learned from the magnifying glass or the phone in its place (a load's live and blank counts, round wins and prizes, and round starts are events; turn order is clockwise at each round's start and changes only when an event says so); and moves, your legal moves, played by their position in the list, from 0. Events are shown once, so remember what you need. When the match is over the view is "over" with the final standings, which show each player's cash. Several players can be Agents; each sees only its own secrets and events.`,
     inputSchema: inputSchemaOf(GetGameArguments),
-    isReadOnly: true,
+    isReadOnly: false,
     decodeCall: decoder("get_game", GetGameArguments, AgentCall.cases.GetGame.make),
   },
   {
