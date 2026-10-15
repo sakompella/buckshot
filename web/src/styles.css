@@ -295,33 +295,6 @@ summary:focus-visible {
   pointer-events: auto;
 }
 
-/* The painted outline around each seat's area, and the lane from its counter to the plate. */
-.zone::before {
-  content: "";
-  position: absolute;
-  left: 25.8%;
-  top: 74.4%;
-  width: 48.4%;
-  height: 18.2%;
-  border: 1.5px solid var(--line);
-  border-radius: 2px;
-  opacity: 0.6;
-  pointer-events: none;
-}
-
-.zone::after {
-  content: "";
-  position: absolute;
-  left: 42.3%;
-  top: 62%;
-  width: 15.4%;
-  height: 12.4%;
-  border: 1.5px solid var(--line);
-  border-bottom: 0;
-  opacity: 0.6;
-  pointer-events: none;
-}
-
 .slot {
   position: absolute;
   width: var(--cell);
@@ -389,14 +362,16 @@ summary:focus-visible {
   outline-offset: 2px;
 }
 
-/* One plain line under your items, never over the defibrillator: the left
-   group's captions run left from the slot, the right group's run right. */
+/* One plain line above your items, on the open cloth toward the plate and
+   never over the defibrillator: the left group's captions run left from the
+   slot, the right group's run right, and neither is wider than the table's
+   margin beside the items. */
 .caption {
   position: absolute;
-  top: calc(100% + 6px);
+  bottom: calc(100% + 6px);
   right: 0;
   width: max-content;
-  max-width: 300px;
+  max-width: min(320px, calc(var(--size) * 0.27));
   color: #f2e6c8;
   font-size: 19px;
   line-height: 1.1;
@@ -414,11 +389,11 @@ summary:focus-visible {
   left: 0;
 }
 
-.slot-0 .caption,
-.slot-1 .caption,
-.slot-4 .caption,
-.slot-5 .caption {
-  top: calc(209% + 6px);
+.slot-2 .caption,
+.slot-3 .caption,
+.slot-6 .caption,
+.slot-7 .caption {
+  bottom: calc(209% + 6px);
 }
 
 .slot:hover > .caption,
