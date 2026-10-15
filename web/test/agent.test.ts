@@ -14,6 +14,7 @@ const View = Schema.Struct({
   you: Schema.Number,
   status: Schema.Literals(["your turn", "waiting", "over"]),
   turn: Schema.optionalKey(Schema.Number),
+  players: Schema.optionalKey(Schema.Array(Schema.Struct({ player: Schema.Number, holding: Schema.optionalKey(Schema.String) }))),
   moves: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 
@@ -23,12 +24,12 @@ const blank = (): Model => init({ isWebMcpAvailable: true }).model;
 
 const call = (model: Model, request: AgentCall) => handleAgentCall(model, request);
 
-const newMatch = (players: SeatCount, items: boolean, seed: string, controllers: ReadonlyArray<Controller>): Model =>
-  call(blank(), AgentCall.cases.NewMatch.make({ players, items, seed, controllers })).state;
+const newMatch = (players: SeatCount, items: boolean, seed: number, controllers: ReadonlyArray<Controller>, model = blank()): Model =>
+  call(model, AgentCall.cases.NewMatch.make({ players, items, seed, controllers })).state;
 
 const getGame = (model: Model, player: PlayerNumber): AgentReply => call(model, AgentCall.cases.GetGame.make({ player })).reply;
 
-const play = (model: Model, player: PlayerNumber, index: number, turn: number) => call(model, AgentCall.cases.PlayMove.make({ player, index, turn }));
+const play = (model: Model, player: PlayerNumber, move: number, turn: number) => call(model, AgentCall.cases.PlayMove.make({ player, move, turn }));
 
 const answered = (reply: AgentReply): string =>
   AgentReply.match(reply, { Answered: ({ text }) => text, Refused: ({ reason }) => expect.unreachable(`refused: ${reason}`) });
@@ -61,7 +62,7 @@ const untilAgentTurn = (start: Model): Model => {
 };
 
 test("in the page, two Agent players and a DoN player play a 3-player match to the end through the tools, with autoplay moving the bot", () => {
-  let model = untilAgentTurn(newMatch(3, true, "42", ["Agent", "Agent", "DoN"]));
+  let model = untilAgentTurn(newMatch(3, true, 42, ["Agent", "Agent", "DoN"]));
   let moves = 0;
   let sharedTurns = 0;
   const moved = new Set<PlayerNumber>();
@@ -122,4 +123,29 @@ test("a tool call through update returns one reply command", () => {
   const outcome = update(blank(), Message.AgentCalled({ id: 9, call: AgentCall.cases.GetGame.make({ player: PlayerNumber.make(1) }) }));
 
   expect(outcome.commands?.map(({ name }) => name)).toEqual(["ReplyToAgent"]);
+});
+
+test("in the page, new_match is refused while a match runs, the Restart match button still starts one, and a turn from before the restart is refused at the same point of the same seed", () => {
+  const first = untilAgentTurn(newMatch(2, false, 3, ["Agent", "DoN"]));
+  const { turn = expect.unreachable("Player 1 has no turn"), ...before } = viewOf(first, PlayerNumber.make(1));
+  const refused = call(first, AgentCall.cases.NewMatch.make({ players: 2, items: false, seed: 3, controllers: ["Agent", "DoN"] }));
+
+  expect(refused.reply).toEqual(AgentReply.cases.Refused.make({ reason: "A match is in progress; finish it first." }));
+  expect(refused.state).toBe(first);
+
+  const restarted = untilAgentTurn(update(first, Message.ClickedNewMatch()).model);
+  const { turn: laterTurn, ...after } = viewOf(restarted, PlayerNumber.make(1));
+
+  expect(after).toEqual(before);
+  expect(laterTurn).toBeGreaterThan(turn);
+  expect(play(restarted, PlayerNumber.make(1), 0, turn).reply._tag).toBe("Refused");
+});
+
+test("in the page, an Agent sees the item a Human player drew and has not placed yet", () => {
+  const model = newMatch(2, true, 5, ["Human", "Agent"]);
+  const human = Option.getOrThrow(rosterOf(match(model).game.seats).seatOf(1));
+  const grab = Arr.findFirst(promptsOf(match(model).game), ({ seat }) => seat === human).pipe(Option.getOrThrow);
+  const holding = update(model, Message.ClickedMove({ ...grab.ticket, seat: human, index: 0 })).model;
+
+  expect(viewOf(holding, PlayerNumber.make(2)).players?.[0]?.holding).toBeString();
 });

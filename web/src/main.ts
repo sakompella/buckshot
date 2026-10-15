@@ -2,8 +2,8 @@ import { Array as Arr, Duration, Effect, Option, Predicate, Result, Schema, Stre
 import { Command, Port, Runtime, Subscription, type Update } from "foldkit";
 import { modifyFields } from "foldkit/struct";
 
+import { playChain } from "./agent/moves.ts";
 import { AgentCall, AgentReply, type MatchSession, runTool } from "./agent/tools.ts";
-import { NOTHING_REPORTED, reportedTo } from "./agent/view.ts";
 import type { AnswerError, Game } from "./bend.ts";
 import { GameEvent, type Seat, SEATS_BY_TABLE, type SeatCount } from "./domain.ts";
 import { aiPrompt, aiStep, begin, type Controller, controllerOf, isAi, play, type Progress } from "./driver.ts";
@@ -47,6 +47,7 @@ const applyResult = (model: Model, match: Session, result: Result.Result<Progres
   Result.match(result, {
     onSuccess: (progress) => ({
       model: modifyFields(model, {
+        turn: (turn) => turn + 1,
         maybeMatch: () => Option.some(withProgress(match, progress)),
         maybeError: () => Option.none(),
       }),
@@ -79,6 +80,7 @@ const startMatch = (model: Model): Return => {
     onSuccess: (progress) => ({
       model: modifyFields(model, {
         matchCount: () => matchNumber,
+        turn: (turn) => turn + 1,
         maybeError: () => Option.none(),
         maybeMatch: () =>
           Option.some({
@@ -86,7 +88,6 @@ const startMatch = (model: Model): Return => {
             stepStart: 0,
             learnedStart: 0,
             controllers,
-            reported: NOTHING_REPORTED,
             viewer: Option.getOrElse(
               Arr.findFirst(SEATS_BY_TABLE[table], (seat) => controllerOf(controllers, seat) === "Human"),
               (): Viewer => "Spectator",
@@ -121,13 +122,12 @@ const startAgentMatch = (model: Model, table: SeatCount, isItemsEnabled: boolean
 
 const applied = (model: Model) => ({ state: model, maybeError: model.maybeError });
 
-/** The agent tools' view of the page: moves go through the same ClickedMove the buttons send. */
+/** The agent tools' view of the page. A move's steps are played at once, so a failed step leaves the match as it was. */
 const pageSession: MatchSession<Model> = {
   current: (model) => model.maybeMatch,
+  turn: (model) => model.turn,
   start: (model, { table, isItemsEnabled, maybeSeed, controllers }) => applied(startAgentMatch(model, table, isItemsEnabled, Option.getOrElse(maybeSeed, () => model.setup.seed), controllers)),
-  move: (model, move) => applied(update(model, Message.ClickedMove(move)).model),
-  report: (model, seat, eventCount) =>
-    modifyFields(model, { maybeMatch: (maybeMatch) => Option.map(maybeMatch, (match) => ({ ...match, reported: reportedTo(match.reported, seat, eventCount) })) }),
+  move: (model, { seat, chain }) => applied(withMatch(model, (match) => applyResult(model, match, playChain(progressOf(match), seat, chain))).model),
 };
 
 /** Runs one tool call over the model. */
@@ -173,6 +173,7 @@ export const init: Runtime.ApplicationInit<Model, Message, Flags> = ({ isWebMcpA
     setup: { table: 2, controllers: ["DoN", "Human", "DoN", "DoN"], isItemsEnabled: true, seed: DEFAULT_SEED },
     speed: "Normal",
     matchCount: 0,
+    turn: 0,
     maybeMatch: Option.none(),
     maybeError: Option.none(),
     isWebMcpAvailable,

@@ -41,8 +41,6 @@ export const Session = Schema.Struct({
   controllers: Schema.Array(Controller),
   ais: Schema.Array(Schema.Option(AiSeat)),
   seed: Schema.Number,
-  /** How many events each Agent player has been told about, by seat. */
-  reported: Schema.Array(Schema.Number),
   viewer: Viewer,
   isAutoplay: Schema.Boolean,
 });
@@ -66,6 +64,8 @@ export const Model = Schema.Struct({
   setup: Setup,
   speed: Speed,
   matchCount: Schema.Number,
+  /** Advances with every accepted move and every new match, so an agent's turn never repeats on this page. */
+  turn: Schema.Number,
   maybeMatch: Schema.Option(Session),
   maybeError: Schema.Option(Schema.String),
   isWebMcpAvailable: Schema.Boolean,
