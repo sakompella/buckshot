@@ -313,7 +313,7 @@ const showMatch = async (id: string) => {
     const model = first.run.agents.find((candidate) => candidate.agent === agent)?.model ?? "";
     const column = { sums: h("div", { class: "sums" }), body: h("div", { class: "column-body" }) };
 
-    logs.append(h("div", { class: "column" }, h("div", { class: "column-head" }, h("div", { class: "who" }, h("span", { class: `player-${agent}` }, `Agent ${agent}`), h("span", { class: "dim" }, ` ${model}`)), column.sums), column.body));
+    logs.append(h("div", { class: "column" }, h("div", { class: "column-head" }, h("div", { class: "who" }, h("span", { class: `player-${agent}` }, `Player ${agent}`), h("span", { class: "dim" }, ` ${model}`)), column.sums), column.body));
     columns.set(agent, column);
 
     return column;
@@ -365,7 +365,7 @@ const showMatch = async (id: string) => {
       if (line.kind !== "read") continue;
 
       const event = line.value;
-      const agents = "agent" in event ? [event.agent] : [...columns.keys()];
+      const agents = "player" in event ? [event.player] : [...columns.keys()];
 
       for (const agent of agents) {
         const item = eventItem(event);
