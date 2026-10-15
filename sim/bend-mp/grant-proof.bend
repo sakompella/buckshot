@@ -2,7 +2,6 @@ import Base
 import ./abstract.bend as A
 import ./domain.bend as D
 import ./sm/state.bend as S
-import ./sm/main.bend as M
 import ./sm/rules.bend as Q
 
 def ref_pass(+world: S.World, +seats: A.Seats(), +seat: D.Seat, +notes: A.Notes()) -> {A.grant.dispatch(A.grant.pass(world, seats, seat, notes)) == A.grant.pass_case(world, A.grant.jam(seats, seat), seat, notes) : A.Ref()}:

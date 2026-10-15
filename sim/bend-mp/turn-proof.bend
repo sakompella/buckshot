@@ -413,8 +413,8 @@ def begin.eq(+s: S.State, +nr: Bool, +amount: Nat, +shape: A.Shape(s)) -> {G.Get
           begin.go_eq(s0, D.table.seats(S.world.table(w)), nr, shape)
 
 # The end of a turn: MainRoutine_UserEndTurn vs turn.winner, and
-# UserEndTurn_Packet vs turn.packet. The win (WinRoutine onward) is a premise
-# until the round-start closure is proven.
+# UserEndTurn_Packet vs turn.packet. The win (WinRoutine onward) is a premise,
+# discharged in round-proof.bend.
 
 def WinClosure() -> Type:
   @+s:S.State -> @+seat:D.Seat -> @+shape:A.Shape(s) -> @+k:Nat -> {R.settle(Nat.add(23n, k), R.RefState{qh(s), R.WinRoutine{seat}, S.state.notes(s)}) == A.ref(M.win(s, seat)) : R.RefState}
@@ -536,7 +536,7 @@ def packet.close(+s: S.State, +from: D.Seat, +passing: Bool, +winner: Maybe<&2, 
   Equal.trans(R.RefState, packet.at(Nat.add(24n, k), qh(s), pkt, S.state.notes(s), rule_r), packet.at(Nat.add(24n, k), qh(s), pkt, S.state.notes(s), rule_m), A.ref(M.turn.packet(s, from, passing, winner)), Equal.cong(D.AmountRule, R.RefState, x => packet.at(Nat.add(24n, k), qh(s), pkt, S.state.notes(s), x), rule_r, rule_m, rule.eq(s)), packet.rule(rule_m, s, from, passing, winner, k, shape, rule.eq(s), win))
 
 # Part 3 for the turn end: every successor is a valid request point, given
-# that the win's successor is (premise until the round start is proven).
+# that the win's successor is (a premise, discharged in round-proof.bend).
 
 def WinValid() -> Type:
   @+s:S.State -> @+seat:D.Seat -> @+vpre:LP.VPre(s) -> A.Valid(M.win(s, seat))
