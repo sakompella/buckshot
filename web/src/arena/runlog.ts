@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { Schema } from "effect";
 
+import { Letter } from "../players.ts";
 import { AgentId } from "./agent.ts";
 
 // A match's run directory, in the agent-ts layout: calls.jsonl (one line per
@@ -43,7 +44,7 @@ export const CallLine = Schema.Struct({
 export type CallLine = typeof CallLine.Type;
 
 /** The fields of an event line that totals read; the rest of each line is for people. */
-const EventLine = Schema.Struct({ kind: Schema.String, agent: Schema.optional(AgentId), wall_ms: Schema.optional(Schema.Number) });
+const EventLine = Schema.Struct({ kind: Schema.String, agent: Schema.optional(AgentId), player: Schema.optional(Letter), wall_ms: Schema.optional(Schema.Number), entries: Schema.optional(Schema.Array(Schema.String)) });
 
 const decodeCall = Schema.decodeUnknownSync(Schema.fromJsonString(CallLine));
 
@@ -52,6 +53,11 @@ const decodeEvent = Schema.decodeUnknownSync(Schema.fromJsonString(EventLine));
 const linesOf = (path: string): ReadonlyArray<string> => (existsSync(path) ? readFileSync(path, "utf8").split("\n").filter((line) => line !== "") : []);
 
 export const readCalls = (dir: string): ReadonlyArray<CallLine> => linesOf(join(dir, "calls.jsonl")).map((line) => decodeCall(line));
+
+const readEvents = (dir: string) => linesOf(join(dir, "events.jsonl")).map((line) => decodeEvent(line));
+
+/** Every log entry the arena sent a player, in order, as its delivered lines record them. */
+export const entriesSentTo = (dir: string, player: Letter): ReadonlyArray<string> => readEvents(dir).flatMap((event) => (event.kind === "delivered" && event.player === player ? (event.entries ?? []) : []));
 
 const append = (path: string, line: string) => appendFileSync(path, `${line}\n`);
 
@@ -104,7 +110,7 @@ export const addTokens = (calls: ReadonlyArray<CallLine>): Tokens => ({
 /** One agent's totals for a match, recomputed from the logs, so they cover every process that played it. */
 export const agentTotals = (dir: string, agent: AgentId) => {
   const calls = readCalls(dir).filter((call) => call.agent === agent);
-  const events = linesOf(join(dir, "events.jsonl")).map((line) => decodeEvent(line)).filter((event) => event.agent === agent);
+  const events = readEvents(dir).filter((event) => event.agent === agent);
   const latencies = calls.map((call) => call.latency_ms ?? 0);
 
   return {

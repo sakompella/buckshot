@@ -15,16 +15,18 @@ import { type Controller, controllerOf, promptsOf } from "../driver.ts";
 import { Letter, rosterOf } from "../players.ts";
 import { eventText, secretText } from "../text.ts";
 import { AGENTS, type AgentId } from "./agent.ts";
-import { addTokens, agentTotals, logCall, logEvent, readCalls, type Sitting, writeManifest } from "./runlog.ts";
+import type { HumanLink } from "./human.ts";
+import { addTokens, agentTotals, entriesSentTo, logCall, logEvent, readCalls, type Sitting, writeManifest } from "./runlog.ts";
 
-// One match in one process: the headless table, and one pi-durable conversation
-// per agent in the run directory's session.sqlite. Agent A plays as Player A
-// wherever it sits; bots take the letters left. A conversation's two tools read
-// its agent from a seat document written when it was created, so no call can
-// reach another seat. The arena submits a player's view on its turn,
-// plays forced "Grab an item" turns itself, and journals every move in the
-// store, so a rerun on the same directory rebuilds the table from the seed and
-// the journal and resumes the conversations where they stopped.
+// One match in one process: the headless table, one pi-durable conversation per
+// agent in the run directory's session.sqlite, and one terminal per human. The
+// table plays the DoN and Story seats itself. Agent A plays as Player A wherever
+// it sits; bots and humans take the letters left. A conversation's two tools
+// read its agent from a seat document written when it was created, so no call
+// can reach another seat. The arena sends a player its view on its turn, plays
+// forced "Grab an item" turns itself, and journals every move in the store, so a
+// rerun on the same directory rebuilds the table from the seed and the journal
+// and resumes the conversations where they stopped.
 
 const context = BACKGROUND_CONTEXT;
 
@@ -71,9 +73,12 @@ export interface Entrant {
 export interface ArenaMatch {
   readonly dir: string;
   readonly seed: string;
+  /** Who plays each position, in table order. The table plays DoN and Story; the arena plays Agent and Human seats. */
   readonly controllers: ReadonlyArray<Controller>;
   /** One entrant per Agent seat, in table order. */
   readonly entrants: ReadonlyArray<Entrant>;
+  /** Reaches the human at a Human seat, each time the match starts or resumes. Only needed when there is one. */
+  readonly connectHuman?: (player: Letter) => Promise<HumanLink>;
   readonly models: Models;
   readonly compaction: NonNullable<HarnessSettings["compaction"]>;
   /** How the log reaches players; fixed when the match starts. */
@@ -84,7 +89,7 @@ export class ArenaFault extends Data.TaggedError("ArenaFault")<{ readonly messag
 
 const attempt = <A>(step: string, run: () => Promise<A>) => Effect.tryPromise({ try: run, catch: (cause) => new ArenaFault({ message: `${step}: ${String(cause)}` }) });
 
-type MoveLine = { readonly turn: number; readonly player: Letter; readonly move: number; readonly label: string; readonly by: "agent" | "forced" | "fallback" };
+type MoveLine = { readonly turn: number; readonly player: Letter; readonly move: number; readonly label: string; readonly by: "agent" | "human" | "forced" | "fallback" };
 
 type MatchState = {
   seed: string;
@@ -101,7 +106,7 @@ type MatchState = {
 
 const emptyMatch = (): MatchState => ({ seed: "", controllers: [], letters: [], delivery: "on-turn", conversations: {}, moves: [], delivered: {}, retries: {} });
 
-/** The letter at each seat: the entrants' own at the Agent seats, in order, and the letters left, in order, at the others. */
+/** The letter at each position: the entrants' own at the Agent seats, in order, and the letters left, in order, at the others. */
 const lettersOf = (controllers: ReadonlyArray<Controller>, agents: ReadonlyArray<AgentId>): Option.Option<Array<Letter>> => {
   const spare = AGENTS.filter((letter) => !agents.includes(letter));
   const isAgent = (controller: Controller) => controller === "Agent";
@@ -165,10 +170,14 @@ class Table {
   private state: HeadlessTable = emptyTable;
   private readonly session: MatchSession<HeadlessTable>;
 
-  /** Starts the match from the journal's seed and replays its moves. */
+  /** By position: who plays it, as the arena sees it. */
+  private readonly controllers: ReadonlyArray<Controller>;
+
+  /** Starts the match from the journal's seed and replays its moves. The table moves Human seats only through the tools, as it does Agent seats. */
   constructor(journal: MatchState) {
     this.session = letteredSession(journal.letters);
-    this.run(decode("new_match", { players: journal.controllers.length, items: true, seed: journal.seed, controllers: journal.controllers }));
+    this.controllers = journal.controllers;
+    this.run(decode("new_match", { players: journal.controllers.length, items: true, seed: journal.seed, controllers: journal.controllers.map((controller) => (controller === "Human" ? "Agent" : controller)) }));
 
     for (const line of journal.moves) {
       const reply = this.run(decode("play_move", { player: line.player, move: line.move, turn: line.turn }));
@@ -211,9 +220,13 @@ class Table {
     return Option.getOrThrow(this.roster().find(letter)).seat;
   }
 
-  /** The Agent players, in table order. */
-  agentPlayers(): ReadonlyArray<Letter> {
+  /** The players the arena plays, Agent and Human, in table order. */
+  arenaPlayers(): ReadonlyArray<Letter> {
     return this.roster().players.filter(({ seat }) => controllerOf(this.match().controllers, seat) === "Agent").map(({ letter }) => letter);
+  }
+
+  controllerOf(player: Letter): Controller {
+    return Option.getOrThrow(Option.fromUndefinedOr(this.controllers[this.positionOf(player) - 1]));
   }
 
   /** A player's position in table order, from 1. */
@@ -221,14 +234,14 @@ class Table {
     return this.match().game.seats.indexOf(this.seatOf(player)) + 1;
   }
 
-  /** The one Agent player that may move: the first in table order the machine waits on, as driver.bend picks among bots. */
+  /** The one arena player that may move: the first in table order the machine waits on, as driver.bend picks among bots. */
   onTurn(): Letter | undefined {
     const waiting = new Set(promptsOf(this.match().game).map((prompt) => prompt.seat));
 
-    return this.agentPlayers().find((player) => waiting.has(this.seatOf(player)));
+    return this.arenaPlayers().find((player) => waiting.has(this.seatOf(player)));
   }
 
-  /** A player's view; "waiting" while another Agent player has the turn first. */
+  /** A player's view; "waiting" while another arena player has the turn first. */
   viewText(player: Letter): string {
     const text = replyText(this.run(decode("get_game", { player })));
 
@@ -383,7 +396,15 @@ export const playMatch = (match: ArenaMatch) =>
     const journal = () => attempt("read the journal", async () => (await harness.snapshot(MatchDoc, context)) ?? emptyMatch());
     const record = (change: (state: MatchState) => void) => attempt("write the journal", () => harness.commit(async (tx) => void change(await tx.doc(MatchDoc)), context));
 
+    /** The manifest's agents, the same shape while the match runs and after it ends. */
+    const agentsIn = (playing: Table) =>
+      Object.fromEntries(
+        playing.arenaPlayers().flatMap((player) => (playing.controllerOf(player) === "Agent" ? [[player, { position: playing.positionOf(player), endpoint: match.entrants.find((entrant) => entrant.agent === player)?.describe ?? null, ...agentTotals(dir, player) }]] : [])),
+      );
+
     if (isFresh) {
+      if (!match.controllers.some((controller) => controller === "Agent" || controller === "Human")) return yield* new ArenaFault({ message: "The arena plays Agent and Human seats; a match needs at least one." });
+
       const letters = lettersOf(match.controllers, match.entrants.map((entrant) => entrant.agent));
 
       if (Option.isNone(letters)) return yield* new ArenaFault({ message: `${match.controllers.filter((controller) => controller === "Agent").length} Agent seats but ${match.entrants.length} entrants` });
@@ -419,7 +440,7 @@ export const playMatch = (match: ArenaMatch) =>
         letters: state.letters,
         delivery: match.delivery,
         seating: seatingIn(state),
-        agents: Object.fromEntries(match.entrants.map((entrant) => [entrant.agent, entrant.describe])),
+        agents: agentsIn(table),
         instructions_sha: sha(INSTRUCTIONS),
       });
     } else {
@@ -432,6 +453,25 @@ export const playMatch = (match: ArenaMatch) =>
     harness.resume();
 
     const playing = currentTable();
+    const humans = new Map<Letter, HumanLink>();
+
+    for (const player of playing.arenaPlayers().filter((candidate) => playing.controllerOf(candidate) === "Human")) {
+      const { connectHuman } = match;
+
+      if (connectHuman === undefined) return yield* new ArenaFault({ message: `Player ${player} is Human, and this arena has no way to reach a human` });
+
+      const link = yield* attempt(`connect Player ${player}`, () => connectHuman(player));
+
+      // A human reads the same instructions an agent is given, once per terminal.
+      yield* attempt(`write to Player ${player}`, () => link.send({ text: INSTRUCTIONS, expectsMove: false }));
+      humans.set(player, link);
+    }
+
+    const humanOf = (player: Letter) => {
+      const link = humans.get(player);
+
+      return link === undefined ? Effect.fail(new ArenaFault({ message: `Player ${player} has no terminal` })) : Effect.succeed(link);
+    };
 
     const conversationOf = (state: MatchState, agent: AgentId) =>
       Effect.flatMap(
@@ -443,104 +483,147 @@ export const playMatch = (match: ArenaMatch) =>
         (conversation) => (conversation === undefined ? Effect.fail(new ArenaFault({ message: `agent ${agent} has no conversation` })) : Effect.succeed(conversation)),
       );
 
-    const sittingOf = (agent: AgentId): Sitting => ({ agent, position: playing.positionOf(agent) });
+    /** What every log line about one player says about it; agent lines also name the agent. */
+    const whereIs = (player: Letter) => {
+      const where = { player, position: playing.positionOf(player) };
 
-    /** Writes the log entries an agent has not been sent into its context, with no model call; at the end, with the final view. */
-    const sendPending = (agent: AgentId, via: "live" | "end") =>
+      return playing.controllerOf(player) === "Agent" ? { agent: player, ...where } : where;
+    };
+
+    /** Adds a message to a player's context and asks for nothing: a pi-durable write for an agent, with no model call, or a line on a human's terminal. */
+    const writeTo = (state: MatchState, player: Letter, text: string, requestId: string, data: { readonly from: number; readonly count: number }) =>
+      playing.controllerOf(player) === "Human"
+        ? Effect.flatMap(humanOf(player), (link) => attempt(`write to Player ${player}`, () => link.send({ text, expectsMove: false })))
+        : Effect.flatMap(conversationOf(state, player), (conversation) =>
+            attempt("write events", async () => {
+              const written = await conversation.submit({ type: "write", requestId, entry: { kind: "arena.events", model: [{ role: "user", content: text, timestamp: Date.now() }], data } }, context);
+
+              await written.wait(context);
+            }),
+          );
+
+    /** Sends a player the log entries it has not been sent; at the end, with the final view. */
+    const sendPending = (player: Letter, via: "live" | "end") =>
       Effect.gen(function* () {
         const state = yield* journal();
-        const from = state.delivered[agent] ?? 0;
-        const entries = playing.heard(agent).slice(from);
+        const from = state.delivered[player] ?? 0;
+        const entries = playing.heard(player).slice(from);
 
         if (via === "live" && entries.length === 0) return;
 
-        const content = via === "end" ? `The match is over.\n${JSON.stringify({ ...playing.view(agent), events: entries })}` : JSON.stringify({ events: entries });
-        const conversation = yield* conversationOf(state, agent);
+        // The over view's own log ends with "The match is over.", so the end notice needs no heading.
+        const text = JSON.stringify(via === "end" ? { ...playing.view(player), events: entries } : { events: entries });
 
-        const written = yield* attempt("write events", () =>
-          conversation.submit({ type: "write", requestId: `${via}-${from}`, entry: { kind: "arena.events", model: [{ role: "user", content, timestamp: Date.now() }], data: { from, count: entries.length } } }, context),
-        );
+        yield* writeTo(state, player, text, `${via}-${from}`, { from, count: entries.length });
+        yield* record((next) => void (next.delivered[player] = from + entries.length));
+        logEvent(dir, "delivered", { ...whereIs(player), via, turn: playing.turn, from, entries });
+      });
 
-        yield* attempt("place events", () => written.wait(context));
-        yield* record((next) => void (next.delivered[agent] = from + entries.length));
-        logEvent(dir, "delivered", { ...sittingOf(agent), via, turn: playing.turn, from, entries });
+    /** A human's turn: the same input an agent gets, then typed lines until one is a legal move. It waits as long as the human takes. */
+    const humanTurn = (player: Letter, input: string, turn: number) =>
+      Effect.gen(function* () {
+        const link = yield* humanOf(player);
+        const where = whereIs(player);
+        const startedAt = performance.now();
+        let reply = { text: input, expectsMove: true };
+
+        while (playing.turn === turn) {
+          yield* attempt(`write to Player ${player}`, () => link.send(reply));
+
+          const typed = (yield* attempt(`wait for Player ${player}; run again with the same --dir to resume`, () => link.nextLine())).trim();
+          const played = /^\d+$/.test(typed) ? playing.tryMove(player, Number(typed), turn, "human") : { ok: false as const, text: JSON.stringify({ error: "Type the number of one of your moves." }) };
+
+          if (played.ok) {
+            yield* record((next) => void next.moves.push(played.line));
+            logEvent(dir, "move", { ...where, ...played.line });
+          } else {
+            reply = { text: played.text, expectsMove: true };
+          }
+        }
+
+        logEvent(dir, "turn", { ...where, turn, wall_ms: Math.round(performance.now() - startedAt), moved: true });
       });
 
     while (!playing.isOver) {
       if ((yield* journal()).delivery === "live") {
-        for (const agent of playing.agentPlayers()) yield* sendPending(agent, "live");
+        for (const player of playing.arenaPlayers()) yield* sendPending(player, "live");
       }
 
-      const agent = playing.onTurn();
+      const player = playing.onTurn();
 
-      if (agent === undefined) return yield* new ArenaFault({ message: "no Agent player has the turn, but the match is not over" });
+      if (player === undefined) return yield* new ArenaFault({ message: "no Agent or Human player has the turn, but the match is not over" });
 
-      const view = playing.view(agent);
+      const view = playing.view(player);
       const turn = view.turn ?? -1;
       const state = yield* journal();
-      const sitting = sittingOf(agent);
+      const where = whereIs(player);
 
       if (view.moves?.length === 1 && view.moves[0] === GRAB) {
-        const played = playing.tryMove(agent, 0, turn, "forced");
+        const played = playing.tryMove(player, 0, turn, "forced");
 
         if (!played.ok) return yield* new ArenaFault({ message: played.text });
 
         yield* record((next) => void next.moves.push(played.line));
-        logEvent(dir, "move", { ...sitting, ...played.line });
+        logEvent(dir, "move", { ...where, ...played.line });
         continue;
       }
 
-      const conversation = yield* conversationOf(state, agent);
-      const from = state.delivered[agent] ?? 0;
-      const entries = playing.heard(agent).slice(from);
-      const input = { ...view, events: entries.length > 0 ? entries : undefined };
+      const from = state.delivered[player] ?? 0;
+      const entries = playing.heard(player).slice(from);
+      const input = `Your turn.\n${JSON.stringify({ ...view, events: entries.length > 0 ? entries : undefined })}`;
+
+      if (playing.controllerOf(player) === "Human") {
+        yield* record((next) => void (next.delivered[player] = from + entries.length));
+        logEvent(dir, "delivered", { ...where, via: "input", turn, from, entries });
+        yield* humanTurn(player, input, turn);
+        continue;
+      }
+
+      const conversation = yield* conversationOf(state, player);
       // The same request id after a crash finds the same submission; a retry after a model failure needs a new one.
       const retry = state.retries[String(turn)] ?? 0;
       const requestId = retry === 0 ? `turn-${turn}` : `turn-${turn}-retry-${retry}`;
       const submittedAt = performance.now();
-      const submission = yield* attempt("submit a turn", () => conversation.submit({ type: "input", content: `Your turn.\n${JSON.stringify(input)}`, requestId }, context));
+      const submission = yield* attempt("submit a turn", () => conversation.submit({ type: "input", content: input, requestId }, context));
 
-      yield* record((next) => void (next.delivered[agent] = from + entries.length));
-      logEvent(dir, "delivered", { ...sitting, via: "input", turn, from, entries });
+      yield* record((next) => void (next.delivered[player] = from + entries.length));
+      logEvent(dir, "delivered", { ...where, via: "input", turn, from, entries });
       yield* attempt("wait for the turn", () => submission.wait(context));
 
       const moved = playing.turn !== turn;
 
-      logEvent(dir, "turn", { ...sitting, turn, wall_ms: Math.round(performance.now() - submittedAt), moved });
+      logEvent(dir, "turn", { ...where, turn, wall_ms: Math.round(performance.now() - submittedAt), moved });
 
-      const reply = lastReplies.get(agent);
+      const reply = lastReplies.get(player);
 
       if (!moved && reply?.stopReason === "error") {
         yield* record((next) => void (next.retries[String(turn)] = retry + 1));
-        logEvent(dir, "fault", { ...sitting, turn, error: reply.errorMessage ?? "" });
+        logEvent(dir, "fault", { ...where, turn, error: reply.errorMessage ?? "" });
 
-        return yield* new ArenaFault({ message: `Agent ${agent} (position ${sitting.position}) failed at turn ${turn}: ${reply.errorMessage ?? "no message"}. Run again with the same --dir to resume.` });
+        return yield* new ArenaFault({ message: `Agent ${player} (position ${where.position}) failed at turn ${turn}: ${reply.errorMessage ?? "no message"}. Run again with the same --dir to resume.` });
       }
 
       if (!moved) {
-        const fallback = playing.tryMove(agent, 0, turn, "fallback");
+        const fallback = playing.tryMove(player, 0, turn, "fallback");
 
         if (!fallback.ok) return yield* new ArenaFault({ message: fallback.text });
 
         yield* record((next) => void next.moves.push(fallback.line));
-        logEvent(dir, "fallback", { ...sitting, ...fallback.line });
+        logEvent(dir, "fallback", { ...where, ...fallback.line });
       }
     }
 
-    for (const agent of playing.agentPlayers()) yield* sendPending(agent, "end");
+    for (const player of playing.arenaPlayers()) yield* sendPending(player, "end");
+
+    for (const link of humans.values()) link.close();
 
     const final = yield* journal();
-    const audit = yield* auditOf(harness, final, playing);
+    const audit = yield* auditOf(dir, harness, final, playing);
     const storeUsage = yield* attempt("read usage", () => harness.usage(context));
-    const someAgent = Option.getOrThrow(Option.fromUndefinedOr(playing.agentPlayers()[0]));
-    const standings = (playing.view(someAgent).standings ?? []).map((standing) => ({ ...standing, controller: final.controllers[final.letters.indexOf(standing.player)] ?? null }));
-    const moves = { agent: final.moves.filter((line) => line.by === "agent").length, forced: final.moves.filter((line) => line.by === "forced").length, fallback: final.moves.filter((line) => line.by === "fallback").length };
-
-    const agents = Object.fromEntries(
-      playing.agentPlayers().map((agent) => [agent, { position: playing.positionOf(agent), endpoint: match.entrants.find((entrant) => entrant.agent === agent)?.describe ?? null, ...agentTotals(dir, agent) }]),
-    );
-
-    const result = { audit, moves, standings, agents, move_log_sha: sha(JSON.stringify(final.moves)) };
+    const someone = Option.getOrThrow(Option.fromUndefinedOr(playing.arenaPlayers()[0]));
+    const standings = (playing.view(someone).standings ?? []).map((standing) => ({ ...standing, controller: final.controllers[final.letters.indexOf(standing.player)] ?? null }));
+    const moves = Object.fromEntries((["agent", "human", "forced", "fallback"] as const).map((by) => [by, final.moves.filter((line) => line.by === by).length]));
+    const result = { audit, moves, standings, agents: agentsIn(playing), move_log_sha: sha(JSON.stringify(final.moves)) };
 
     logEvent(dir, "end", { standings });
     writeManifest(dir, { format: RUN_FORMAT, status: "finished", seed: final.seed, controllers: final.controllers, letters: final.letters, delivery: final.delivery, seating: seatingIn(final), instructions_sha: sha(INSTRUCTIONS), ...result });
@@ -550,14 +633,15 @@ export const playMatch = (match: ArenaMatch) =>
   });
 
 /**
- * Checks the match from the store, not from arena memory: every view a seat was given is its own, the entries it was sent
- * add up to its own log exactly, with no gaps or repeats, and the seed and journal replay to the same end.
+ * Checks the match from the store, not from arena memory: every view an agent was given is its own, the entries each
+ * player was sent add up to its own log exactly, with no gaps or repeats, and the seed and journal replay to the same end.
+ * A human's transcript is what its terminal was sent, as events.jsonl logs it.
  */
-const auditOf = (harness: Harness, final: MatchState, table: Table) =>
+const auditOf = (dir: string, harness: Harness, final: MatchState, table: Table) =>
   Effect.gen(function* () {
     const transcripts: Array<{ readonly agent: AgentId; readonly messages: ReadonlyArray<Message> }> = [];
 
-    for (const agent of table.agentPlayers()) {
+    for (const agent of table.arenaPlayers().filter((player) => table.controllerOf(player) === "Agent")) {
       const id = final.conversations[agent];
 
       if (id === undefined) return yield* new ArenaFault({ message: `agent ${agent} has no conversation` });
@@ -578,12 +662,13 @@ const auditOf = (harness: Harness, final: MatchState, table: Table) =>
 
     const viewsOf = (messages: ReadonlyArray<Message>) => messages.flatMap((message) => (message.role === "user" || message.role === "toolResult" ? Option.toArray(viewIn(textOf(message))) : []));
     const deliveredOf = (messages: ReadonlyArray<Message>) => messages.flatMap((message) => (message.role === "user" ? (parseDelivery(textOf(message)).events ?? []) : []));
+    const sentTo = (player: Letter) => Option.match(Option.fromUndefinedOr(transcripts.find(({ agent }) => agent === player)), { onNone: () => entriesSentTo(dir, player), onSome: ({ messages }) => deliveredOf(messages) });
     const replayed = new Table(final);
 
     return {
       over: table.isOver,
       every_view_is_own_player: transcripts.every(({ agent, messages }) => viewsOf(messages).every((view) => view.you === agent)),
-      delivered_is_own_log_exactly: transcripts.every(({ agent, messages }) => JSON.stringify(deliveredOf(messages)) === JSON.stringify(table.heard(agent))),
-      replay_matches: replayed.events === table.events && transcripts.every(({ agent }) => replayed.viewText(agent) === table.viewText(agent)),
+      delivered_is_own_log_exactly: table.arenaPlayers().every((player) => JSON.stringify(sentTo(player)) === JSON.stringify(table.heard(player))),
+      replay_matches: replayed.events === table.events && table.arenaPlayers().every((player) => replayed.viewText(player) === table.viewText(player)),
     };
   });
