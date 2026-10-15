@@ -2,24 +2,17 @@ import Base
 import ./abstract.bend as A
 import ./domain.bend as D
 import ./sm/state.bend as S
-import ./sm/items.bend as I
 import ./sm/main.bend as M
 import ./sm/rules.bend as Q
 import ./ref/main.bend as R
-import ./ref/state.bend as H
 import ./ref/rules.bend as G
-import ./ref/items.bend as RI
 import ./core-proof.bend as C
-import ./grab-proof.bend as GP
 import ./item-step-proof.bend as ISP
 import ./load-proof.bend as LP
-import ./turn-proof.bend as T
-import ./primitive.bend as P
 import ./use-proof.bend as U
-import ./shot-proof.bend as SP
 
 # The load draws with items: the batch index and each shuffle swap, answered
-# into stage 2's load closures (LP.batch.close, LP.shuffle.close).
+# into load-proof.bend's load closures (LP.batch.close, LP.shuffle.close).
 
 def batch.answer(+w: S.World, +p: S.Players, +n0: A.Notes(), +g: S.Grabs, +n: Nat, +shape: A.Shape(S.State{w, p, S.NeedBatch{}, n0, g})) -> {A.ref_answer(A.ref(S.State{w, p, S.NeedBatch{}, n0, g}), n) == A.stepped(M.answer(S.State{w, p, S.NeedBatch{}, n0, g}, n)) : A.RefStep()}:
   match w:

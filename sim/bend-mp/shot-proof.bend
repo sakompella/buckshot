@@ -1,8 +1,6 @@
 import Base
 import ./abstract.bend as A
 import ./domain.bend as D
-import ./sm/state.bend as S
-import ./sm/main.bend as M
 import ./sm/rules.bend as Q
 
 def subtract_matches(+left: Nat, +right: Nat) -> {Q.subtract(left, right) == A.ref_subtract(left, right) : Nat}:

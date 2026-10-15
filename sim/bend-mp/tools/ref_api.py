@@ -1,11 +1,11 @@
-"""Generate abstract.bend's reference API section.
+"""Generate A-level wrappers for the reference, for abstract.bend.
 
-Proof packages may not import ref/; abstract.bend is the only bridge. This
-script mirrors every reference def and constructor as a thin A-level wrapper,
-so a package that needs a reference function never edits abstract.bend.
+Not part of check.sh: proof files import ref/ directly, so abstract.bend
+carries no generated section. Run this only if you want thin
+A-level wrappers again (removed in 4a1e122 because almost none were called).
 
-    python3 tools/ref_api.py          # fail if abstract.bend differs
-    python3 tools/ref_api.py --write  # rewrite the generated section in place
+    python3 tools/ref_api.py          # print the section
+    python3 tools/ref_api.py --write  # (re)write it at the end of abstract.bend
 
 Names: ref_main.X, ref_items.X, ref_rules.X, ref_state.X wrap the reference
 module's def X; frame_X and cont_X build the Frame and Continuation
@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import argparse
 import re
-import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent.parent
@@ -109,24 +108,19 @@ def section() -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Generate abstract.bend's reference API section."
+        description="Append the reference API section to abstract.bend, or print it."
     )
-    parser.add_argument("--write", action="store_true", help="rewrite abstract.bend")
+    parser.add_argument("--write", action="store_true", help="append to abstract.bend")
     args = parser.parse_args()
-    text = ABSTRACT.read_text()
-    start, end = text.index(BEGIN), text.index(END) + len(END)
-    fresh = text[:start] + section() + text[end:]
-    if args.write:
-        ABSTRACT.write_text(fresh)
-        print("rewrote the generated reference API section")
+    if not args.write:
+        print(section(), end="")
         return 0
-    if fresh != text:
-        print(
-            "abstract.bend differs from tools/ref_api.py; run with --write",
-            file=sys.stderr,
-        )
-        return 1
-    print("generated reference API section matches tools/ref_api.py")
+    text = ABSTRACT.read_text()
+    if BEGIN in text:
+        start, end = text.index(BEGIN), text.index(END) + len(END)
+        text = text[:start] + text[end:]
+    ABSTRACT.write_text(text.rstrip("\n") + "\n\n" + section())
+    print("wrote the generated reference API section to abstract.bend")
     return 0
 
 

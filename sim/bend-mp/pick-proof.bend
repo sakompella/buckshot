@@ -9,14 +9,12 @@ import ./ref/main.bend as R
 import ./ref/state.bend as H
 import ./ref/rules.bend as G
 import ./ref/items.bend as RI
-import ./core-proof.bend as C
 import ./grab-proof.bend as GP
 import ./item-step-proof.bend as ISP
 import ./load-proof.bend as LP
 import ./turn-proof.bend as T
 import ./primitive.bend as P
 import ./use-proof.bend as U
-import ./shot-proof.bend as SP
 import ./aim-proof.bend as AP
 
 # JamPick: the jam choice, the jammer write, then the resume.

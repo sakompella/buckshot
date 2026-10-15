@@ -123,8 +123,7 @@ def draw.answer(range: D.Range, word: U32) -> Nat:
 # Matches
 # =======
 
-# Items off keeps the machine inside what it supports. config(table, True) is
-# the default customization.
+# Every item off. config(table, True) is the default customization.
 def config.no_items() -> D.ItemRules:
   +off : D.ItemRule = D.ItemRule{False{}, 0n, 0n}
   D.ItemRules{off, off, off, off, off, off, off, off, off}

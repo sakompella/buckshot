@@ -15,9 +15,6 @@ import ./core-proof.bend as C
 # Internal lemmas toward step_matches for item configs, under A.Valid.
 # Bodies marked generated in tools/proof_cases.py are owned by that script.
 
-# The no-item Valid is a special case of Valid: its normal form packs
-# empty slots, initial Grabs and a world tied to the seat ring.
-
 # Part 1 of Simulation at the handout's request points: the
 # reference's answer equals the machine's, mapped.
 

@@ -1,13 +1,11 @@
 import Base
 import ./grant-proof.bend as GrantProof
-import ./shot-proof.bend as ShotProof
 import ./abstract.bend as A
 import ./domain.bend as D
 import ./sm/state.bend as S
 import ./sm/main.bend as M
 import ./sm/rules.bend as Q
 import ./sm/point.bend as PView
-import ./sm/items.bend as I
 
 def batch_length(+deck: List<&2, S.Batch>) -> {A.ref_batch_length(deck) == List.length(&2, S.Batch, deck) : Nat}:
   match deck:
