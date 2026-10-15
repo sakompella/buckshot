@@ -66,6 +66,8 @@ type RawMaybe<A> = RawSome<A> | RawNone;
 const rawMaybe = <A>(item: Schema.Codec<A>): Schema.Codec<RawMaybe<A>> =>
   Schema.Union([Schema.Struct({ $: Schema.Literal("Some"), value: item }), Schema.Struct({ $: Schema.Literal("None") })]);
 
+const arrayToList = <A>(items: ReadonlyArray<A>): RawList<A> => items.reduceRight<RawList<A>>((tail, head) => ({ $: "Con", head, tail }), { $: "Nil" });
+
 const maybeToOption = <A>(maybe: RawMaybe<A>): Option.Option<A> => (maybe.$ === "Some" ? Option.some(maybe.value) : Option.none());
 
 const Nat = Schema.BigInt;
@@ -491,6 +493,8 @@ const decodePoint = decode(RawPoint, "point");
 
 const decodePrompts = decode(RawPromptList, "prompts");
 
+const decodeNextPrompt = decode(rawMaybe(RawPrompt), "prompt.next");
+
 const decodeEvents = decode(RawEventList, "public_events");
 
 const decodeDecision = decode(RawDecision, "mind.decide");
@@ -589,6 +593,17 @@ export const answerPrompt = (game: Game, ticket: Ticket, seat: Seat, index: numb
 
     return yield* stepFrom(current.table, nextTicket(current.ticket), rules.answer(current.state, rules["prompt.answer"](prompt.raw, BigInt(index))));
   });
+
+/**
+ * Which of these prompts the Bend driver serves first (R.prompt.next in
+ * sim/bend-mp/driver.bend): a seat holding an item places it, otherwise the
+ * seat with the fewest grants this distribution grabs, ties going to the first
+ * seat after the first shooter. A malformed answer is a Bend contract bug and throws.
+ */
+export const nextPrompt = (game: Game, prompts: ReadonlyArray<Prompt>): Option.Option<Prompt> =>
+  maybeToOption(Result.getOrThrow(decodeNextPrompt(rules["prompt.next"](game.state, arrayToList(prompts.map(({ raw }) => raw)))))).pipe(
+    Option.flatMap(({ seat }) => Arr.findFirst(prompts, (prompt) => prompt.seat === seatOf(seat))),
+  );
 
 // AI seats
 // ========
