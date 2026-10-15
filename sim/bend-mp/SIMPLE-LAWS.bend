@@ -58,3 +58,15 @@ law simple_privacy:
   for +seat: D.Seat
   for same_length: {List.length(&2, D.Shell, S.world.gun(T.state.world(state))) == List.length(&2, D.Shell, gun) : Nat}
   {(D.Obs{seat, P.board(state)}, D.hear(T.state.notes(state), seat)) == (D.Obs{seat, P.board(N.replace_hidden(state, gun, decks))}, D.hear(T.state.notes(N.replace_hidden(state, gun, decks)), seat)) : D.Obs & List<&2, D.Heard>}
+
+# A legal player gesture at an Idle point (sm choice steps through Aim,
+# JamPick and StealPick to the next other point) that uses first slots
+# stands for a simple move: the move is in the simple menu, and the gesture
+# starts that move's chain. Later-slot copies and other grab schedules are
+# the excluded sm behaviours.
+law simple_complete:
+  for +state: T.State
+  for +steps: List<&2, SA.Step>
+  for gesture: {SA.gesture(SA.embed(state), steps) == True{} : Bool}
+  for first: {SA.first_slots(SA.embed(state), steps) == True{} : Bool}
+  {SA.recovered(state, steps) == True{} : Bool}

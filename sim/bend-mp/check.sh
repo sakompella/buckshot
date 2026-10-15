@@ -8,7 +8,7 @@ BEND="${BEND:-bend}"
 export BEND
 
 required_laws=(step_matches run_matches reachable_valid start_matches games_match state_roundtrip jam_skip_once turn_traversal observe_matches legal_exact legal_accepted privacy)
-required_simple_laws=(simple_start simple_refines simple_roundtrip simple_valid simple_reachable_valid simple_run_refines simple_observe simple_privacy)
+required_simple_laws=(simple_start simple_refines simple_roundtrip simple_valid simple_reachable_valid simple_run_refines simple_observe simple_privacy simple_complete)
 
 failed=0
 report() {
