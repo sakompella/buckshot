@@ -10,7 +10,7 @@ import { agentGame, agentMove, type AgentSource, type SeatMove } from "./view.ts
 // the stdio MCP server) lists these tools, decodes a call with decodeCall, and
 // runs it with runTool over its own MatchSession.
 
-const RULES =
+export const RULES =
   "Buckshot: a shotgun is loaded with a hidden mix of live and blank shells, and each load is announced. On your turn you shoot a player or yourself, or use an item; a live shell does damage and a blank fired at yourself keeps your turn. The last player alive wins the round and its prize, and the most cash after the last round wins. A match has three rounds.";
 
 const PlayerArgument = PlayerLetter.annotate({ description: 'The Agent player this call is for: the letter in the player names, "A" for Player A, then "B" and so on up to the last player at the table (at most "D").' });
@@ -153,7 +153,7 @@ const after = <S>({ state, maybeError }: Applied<S>, reply: (state: S) => ToolOu
 /** The table as new_match left it: each player's letter and controller, so the agents know which players to name. */
 const tableReply = <S>(session: MatchSession<S>, state: S): ToolOutcome<S> =>
   withSource(session, state, (source) => {
-    const roster = rosterOf(source.game.seats);
+    const roster = rosterOf(source.game.seats, source.letters);
 
     return answered(
       state,
