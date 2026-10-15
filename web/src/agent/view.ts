@@ -1,6 +1,6 @@
 import { Array as Arr, Option, Result } from "effect";
 
-import { type Board, Briefcase, Counter, GameEvent, type Seat, type SeatView, Secret, Stage } from "../domain.ts";
+import { type Board, Briefcase, Counter, GameEvent, type Seat, type SeatView, Secret } from "../domain.ts";
 import { type Controller, controllerOf, type Progress, promptsOf } from "../driver.ts";
 import { type PlayerNumber, playerName, type Roster, rosterOf } from "../players.ts";
 import { describeError, eventText, itemName, secretText } from "../text.ts";
@@ -45,7 +45,7 @@ interface YourTurn {
   /** Names this point of the session, so a move chosen here plays only here. */
   readonly turn: number;
   readonly players: ReadonlyArray<PlayerLine>;
-  readonly gun: { readonly heldBy: PlayerNumber | undefined; readonly sawed: true | undefined } | undefined;
+  readonly gun: { readonly sawed: true } | undefined;
   readonly events: ReadonlyArray<string> | undefined;
   readonly moves: ReadonlyArray<string>;
 }
@@ -114,12 +114,7 @@ const eventsSinceLastTurn = (source: AgentSource, roster: Roster, seat: Seat): R
   return nonEmpty(log.slice(lastMove).map(({ text }) => text));
 };
 
-const gunOf = (board: Board, roster: Roster): YourTurn["gun"] => {
-  const heldBy = Stage.matchOrElse(board.stage, { Playing: ({ seat, mode }) => (mode === "Aiming" ? Option.some(roster.playerOf(seat)) : Option.none()) }, () => Option.none<PlayerNumber>());
-  const sawed = board.gun.sawed ? true : undefined;
-
-  return Option.isNone(heldBy) && sawed === undefined ? undefined : { heldBy: Option.getOrUndefined(heldBy), sawed };
-};
+const gunOf = (board: Board): YourTurn["gun"] => (board.gun.sawed ? { sawed: true } : undefined);
 
 const lineOf = (roster: Roster, view: SeatView): PlayerLine => ({
   player: roster.playerOf(view.seat),
@@ -149,7 +144,7 @@ export const agentGame = (source: AgentSource, turn: number, player: PlayerNumbe
         status: "your turn",
         turn,
         players: board.seats.map((view) => lineOf(roster, view)),
-        gun: gunOf(board, roster),
+        gun: gunOf(board),
         events: eventsSinceLastTurn(source, roster, you),
         moves: moves.map(({ label }) => label),
       }),

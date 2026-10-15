@@ -23,7 +23,7 @@ const View = Schema.Struct({
   status: Schema.Literals(["your turn", "waiting", "over"]),
   turn: Schema.optionalKey(Schema.Number),
   players: Schema.optionalKey(Schema.Array(Schema.Struct({ player: Schema.Number, holding: Schema.optionalKey(Schema.String) }))),
-  gun: Schema.optionalKey(Schema.Struct({ heldBy: Schema.optionalKey(Schema.Number) })),
+  gun: Schema.optionalKey(Schema.Struct({ sawed: Schema.optionalKey(Schema.Literal(true)) })),
   events: Schema.optionalKey(Schema.Array(Schema.String)),
   moves: Schema.optionalKey(Schema.Array(Schema.String)),
   standings: Schema.optionalKey(Schema.Array(Schema.Struct({ player: Schema.Number, cash: Schema.Number }))),
@@ -232,7 +232,6 @@ test("on random tables of 2 to 4 players, each Agent sees the players as Player 
 test("a view holds only what the screen shows: a bare waiting while it is not the player's turn, no cash or nulls until the match is over, no drawn item, since the bots and the agents here place what they draw before anyone looks, and the final standings with every player's cash", () => {
   playRandomTables(77, 3, { check: (table) => {
     const { board } = match(table).game;
-    const roster = rosterAt(table);
 
     for (const player of agentPlayers(table)) {
       const text = answered(getGame(table, player));
@@ -245,11 +244,10 @@ test("a view holds only what the screen shows: a bare waiting while it is not th
         continue;
       }
 
-      const holder = Stage.matchOrElse(board.stage, { Playing: ({ seat, mode }) => (mode === "Aiming" ? roster.playerOf(seat) : undefined) }, () => undefined);
       const holdings = board.seats.map((seat) => Briefcase.matchOrElse(seat.briefcase, { Holding: ({ item }) => itemName(item) }, () => undefined));
 
       expect(text).not.toContain("cash");
-      expect(view.gun?.heldBy).toBe(holder);
+      expect(view.gun?.sawed).toBe(board.gun.sawed ? true : undefined);
       expect(view.players?.map(({ holding }) => holding)).toEqual(holdings);
       expect(holdings.every((holding) => holding === undefined)).toBe(true);
     }
