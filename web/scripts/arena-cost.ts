@@ -3,7 +3,8 @@ import { join } from "node:path";
 
 import { Schema } from "effect";
 
-import { type CallLine, readCalls } from "../src/arena/runlog.ts";
+import { DEFAULT_PRICES, loadPrices, type Total, totalsBy } from "../src/arena/cost.ts";
+import { readCalls } from "../src/arena/runlog.ts";
 
 // Prices arena runs offline, from their calls.jsonl and a price table, so a new
 // price only means running this again. Each argument is a match directory (it
@@ -12,22 +13,11 @@ import { type CallLine, readCalls } from "../src/arena/runlog.ts";
 // the agents they played.
 // Usage: bun scripts/arena-cost.ts <dir>... [--prices src/arena/prices.json]
 
-const Rates = Schema.Struct({ input: Schema.Number, output: Schema.Number, cacheRead: Schema.Number, cacheWrite: Schema.Number });
-
-const PriceTable = Schema.Struct({
-  unit: Schema.String,
-  models: Schema.Record(Schema.String, Schema.Struct({ ...Rates.fields, tiers: Schema.optional(Schema.Array(Schema.Struct({ ...Rates.fields, inputTokensAbove: Schema.Number }))), source: Schema.String })),
-});
-
 const pricesAt = process.argv.indexOf("--prices");
 
-const pricesPath = pricesAt === -1 ? new URL("../src/arena/prices.json", import.meta.url).pathname : (process.argv[pricesAt + 1] ?? "");
+const pricesPath = pricesAt === -1 ? DEFAULT_PRICES : (process.argv[pricesAt + 1] ?? "");
 
-const prices = Schema.decodeUnknownSync(Schema.fromJsonString(PriceTable))(readFileSync(pricesPath, "utf8"));
-
-const Seats = Schema.Struct({ controllers: Schema.Array(Schema.String) });
-
-const decodeSeats = Schema.decodeUnknownSync(Schema.fromJsonString(Seats));
+const prices = loadPrices(pricesPath);
 
 const roots = process.argv.slice(2).filter((arg, index, args) => arg !== "--prices" && args[index - 1] !== "--prices");
 
@@ -36,72 +26,23 @@ const matchDirs = (root: string): ReadonlyArray<string> =>
     ? [root]
     : readdirSync(root, { withFileTypes: true }).flatMap((entry) => (entry.isDirectory() ? matchDirs(join(root, entry.name)) : []));
 
-/** The call's cost in dollars, or undefined when the table has no price for its model. */
-const costOf = (call: CallLine): number | undefined => {
-  const price = prices.models[call.model];
+const dirs = roots.flatMap(matchDirs);
 
-  if (price === undefined) return undefined;
+const calls = dirs.flatMap((dir) => readCalls(dir).map((call) => ({ dir, call })));
 
-  const prompt = call.usage.input + call.usage.cacheRead + call.usage.cacheWrite;
-  const rates = price.tiers?.findLast((tier) => prompt > tier.inputTokensAbove) ?? price;
+const decodeSeats = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Struct({ controllers: Schema.Array(Schema.String) })));
 
-  return (call.usage.input * rates.input + call.usage.output * rates.output + call.usage.cacheRead * rates.cacheRead + call.usage.cacheWrite * rates.cacheWrite) / 1_000_000;
-};
+/** The bots and humans in each match. */
+const others = dirs.flatMap((dir) =>
+  decodeSeats(readFileSync(join(dir, "manifest.json"), "utf8")).controllers.flatMap((controller, index) => (controller === "Agent" ? [] : [{ dir, controller, position: index + 1 }])),
+);
 
-interface Total {
-  calls: number;
-  input: number;
-  output: number;
-  cacheRead: number;
-  cacheWrite: number;
-  reasoning: number;
-  dollars: number;
-  unpriced: number;
-}
+const FREE: Total = { calls: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, dollars: 0, unpriced: 0 };
 
-const totals = { entrantInMatch: new Map<string, Total>(), match: new Map<string, Total>(), entrant: new Map<string, Total>(), model: new Map<string, Total>() };
+/** A table with a row at no cost for each key it lacks. */
+const withFree = (keys: ReadonlyArray<string>, table: ReadonlyMap<string, Total>): ReadonlyMap<string, Total> => new Map([...table, ...keys.flatMap((key) => (table.has(key) ? [] : [[key, FREE] as const]))]);
 
-const totalIn = (table: Map<string, Total>, key: string): Total => {
-  const total = table.get(key) ?? { calls: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, dollars: 0, unpriced: 0 };
-
-  table.set(key, total);
-
-  return total;
-};
-
-const tally = (table: Map<string, Total>, key: string, call: CallLine) => {
-  const total = totalIn(table, key);
-  const dollars = costOf(call);
-
-  total.calls += 1;
-  total.input += call.usage.input;
-  total.output += call.usage.output;
-  total.cacheRead += call.usage.cacheRead;
-  total.cacheWrite += call.usage.cacheWrite;
-  total.reasoning += call.usage.reasoning ?? 0;
-  total.dollars += dollars ?? 0;
-  total.unpriced += dollars === undefined ? 1 : 0;
-};
-
-for (const dir of roots.flatMap(matchDirs)) {
-  totalIn(totals.match, dir);
-
-  for (const [index, controller] of decodeSeats(readFileSync(join(dir, "manifest.json"), "utf8")).controllers.entries()) {
-    if (controller === "Agent") continue;
-
-    totalIn(totals.entrantInMatch, `${dir} ${controller} at position ${index + 1}`);
-    totalIn(totals.entrant, controller);
-  }
-
-  for (const call of readCalls(dir)) {
-    tally(totals.entrantInMatch, `${dir} agent ${call.agent} at position ${call.position} (${call.model})`, call);
-    tally(totals.match, dir, call);
-    tally(totals.entrant, `agent ${call.agent} (${call.model})`, call);
-    tally(totals.model, `${call.api}/${call.model}`, call);
-  }
-}
-
-const show = (title: string, table: Map<string, Total>) => {
+const show = (title: string, table: ReadonlyMap<string, Total>) => {
   console.log(`\n${title}`);
 
   for (const [key, total] of table) {
@@ -113,10 +54,16 @@ const show = (title: string, table: Map<string, Total>) => {
 
 console.log(`Prices: ${pricesPath} (${prices.unit})`);
 
-show("Per entrant in each match", totals.entrantInMatch);
+show(
+  "Per entrant in each match",
+  withFree(
+    others.map(({ dir, controller, position }) => `${dir} ${controller} at position ${position}`),
+    totalsBy(prices, calls.map(({ dir, call }) => [`${dir} agent ${call.agent} at position ${call.position} (${call.model})`, call])),
+  ),
+);
 
-show("Per match", totals.match);
+show("Per match", withFree(dirs, totalsBy(prices, calls.map(({ dir, call }) => [dir, call]))));
 
-show("Per entrant", totals.entrant);
+show("Per entrant", withFree(others.map(({ controller }) => controller), totalsBy(prices, calls.map(({ call }) => [`agent ${call.agent} (${call.model})`, call]))));
 
-show("Per model", totals.model);
+show("Per model", totalsBy(prices, calls.map(({ call }) => [`${call.api}/${call.model}`, call])));

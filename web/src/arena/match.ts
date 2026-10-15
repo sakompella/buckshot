@@ -11,12 +11,12 @@ import { Data, Effect, Option, Result, Schema } from "effect";
 import { emptyTable, type HeadlessTable, headlessSession } from "../agent/headless.ts";
 import { type AgentCall, AgentReply, type MatchSession, replyText, RULES, runTool, tools } from "../agent/tools.ts";
 import { SEATS_BY_TABLE, SeatCount } from "../domain.ts";
-import { type Controller, controllerOf, promptsOf } from "../driver.ts";
+import { Controller, controllerOf, promptsOf } from "../driver.ts";
 import { Letter, rosterOf } from "../players.ts";
 import { eventText, secretText } from "../text.ts";
 import { AGENTS, type AgentId } from "./agent.ts";
 import type { HumanLink } from "./human.ts";
-import { addTokens, agentTotals, entriesSentTo, logCall, logEvent, readCalls, type Sitting, writeManifest } from "./runlog.ts";
+import { addTokens, agentTotals, entriesSentTo, logCall, logEvent, readCalls, RUN_FORMAT, type Sitting, Standing, writeManifest } from "./runlog.ts";
 
 // One match in one process: the headless table, one pi-durable conversation per
 // agent in the run directory's session.sqlite, and one terminal per human. The
@@ -158,7 +158,7 @@ const decode = (name: string, input: Schema.Json): AgentCall => {
 type Played = { readonly ok: true; readonly text: string; readonly line: MoveLine } | { readonly ok: false; readonly text: string };
 
 /** The headless tools, with each seat named by the journal's letters instead of table order. */
-const letteredSession = (letters: ReadonlyArray<Letter>): MatchSession<HeadlessTable> => {
+export const letteredSession = (letters: ReadonlyArray<Letter>): MatchSession<HeadlessTable> => {
   const seats = SEATS_BY_TABLE[Schema.decodeUnknownSync(SeatCount)(letters.length)];
   const assignment = new Map(seats.flatMap((seat, index) => Option.toArray(Option.map(Option.fromUndefinedOr(letters[index]), (letter) => [seat, letter] as const))));
 
@@ -283,6 +283,9 @@ class Table {
 /** Text blocks only: thinking stays out, so a view can only come from what the arena or a tool wrote. */
 const textOf = (message: Message): string => contentText(message.role === "assistant" ? [] : message.content, "");
 
+/** What an event line says about the agent it is about; its player has its letter. */
+const lineOf = ({ agent, position }: Sitting) => ({ agent, player: agent, position });
+
 const seatTools = (dir: string, table: () => Table, onReply: (agent: AgentId, message: AssistantMessage) => void) => {
   const sittingOf = async (snapshot: Harness["snapshot"], conversationId: ConversationId): Promise<Sitting> => {
     const doc = await snapshot(SeatDoc, conversationId, context);
@@ -302,7 +305,7 @@ const seatTools = (dir: string, table: () => Table, onReply: (agent: AgentId, me
         execute: async (_args, api) => {
           const sitting = await sittingOf(api.snapshot, api.conversationId);
 
-          logEvent(dir, "tool", { ...sitting, name: "get_game", call_id: api.callId, ok: true });
+          logEvent(dir, "tool", { ...lineOf(sitting), name: "get_game", call_id: api.callId, ok: true });
 
           return { content: [{ type: "text", text: table().stateText(sitting.agent) }] };
         },
@@ -325,12 +328,12 @@ const seatTools = (dir: string, table: () => Table, onReply: (agent: AgentId, me
 
           const played = table().tryMove(sitting.agent, args.move, args.turn, "agent");
 
-          logEvent(dir, "tool", { ...sitting, name: "play_move", call_id: api.callId, ok: played.ok });
+          logEvent(dir, "tool", { ...lineOf(sitting), name: "play_move", call_id: api.callId, ok: played.ok });
 
           if (!played.ok) return { content: [{ type: "text", text: played.text }], isError: true };
 
           await api.commit(async (tx) => void (await tx.doc(MatchDoc)).moves.push(played.line), context);
-          logEvent(dir, "move", { ...sitting, ...played.line });
+          logEvent(dir, "move", { ...lineOf(sitting), ...played.line });
 
           return { content: [{ type: "text", text: JSON.stringify({ played: played.line.label }) }], control: { terminate: true } };
         },
@@ -352,7 +355,7 @@ const seatTools = (dir: string, table: () => Table, onReply: (agent: AgentId, me
           const lines = table().heard(sitting.agent).slice(0, sent);
           const roundStart = Math.max(0, lines.findLastIndex((line) => line.startsWith("Round ")));
 
-          logEvent(dir, "compaction", { ...sitting });
+          logEvent(dir, "compaction", lineOf(sitting));
 
           return { summary: `[Summary] You are Player ${sitting.agent}. Everything you have been sent this round, in order:\n${lines.slice(roundStart).join("\n")}` };
         },
@@ -361,8 +364,33 @@ const seatTools = (dir: string, table: () => Table, onReply: (agent: AgentId, me
   });
 };
 
-/** The version of the run directory's files, which .audit/agent-arena-design.md describes; it changes when a field changes meaning or goes away. */
-const RUN_FORMAT = 1;
+/** The fields of manifest.json that readers of a run, such as the viewer, decode. */
+export const RunManifest = Schema.Struct({
+  format: Schema.Literal(RUN_FORMAT),
+  status: Schema.Literals(["running", "finished"]),
+  seed: Schema.String,
+  /** By position, in table order. */
+  controllers: Schema.Array(Controller),
+  letters: Schema.Array(Letter),
+  delivery: Schema.Literals(DELIVERIES),
+  /** By agent: its position, endpoint and totals, the same shape while running and once finished. The totals are zero at start. */
+  agents: Schema.Record(
+    Schema.String,
+    Schema.Struct({
+      position: Schema.Int,
+      endpoint: Schema.Json,
+      models: Schema.Array(Schema.String),
+      model_calls: Schema.Int,
+      tool_calls: Schema.Int,
+      usage: Schema.Record(Schema.String, Schema.Number),
+      latency_ms: Schema.Struct({ total: Schema.Number, max: Schema.Number }),
+      wall_ms: Schema.Number,
+    }),
+  ),
+  standings: Schema.optional(Schema.Array(Standing)),
+});
+
+export type RunManifest = typeof RunManifest.Type;
 
 const sha = (text: string) => createHash("sha256").update(text).digest("hex").slice(0, 12);
 
