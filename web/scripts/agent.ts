@@ -3,7 +3,7 @@ import { chromium, type Page } from "playwright-core";
 
 // Plays three matches with items through the WebMCP tools only, in headless
 // Chrome with the WebMCP testing feature: a 2-player match with one Agent player
-// against DoN, a 3-player match with two Agent players and one DoN player, and that match again with the same seed, where the first match's tokens must be refused. Chrome 155 has no navigator.modelContextTesting,
+// against DoN, a 3-player match with two Agent players and one DoN player, and that match again with the same seed, where the first match's last turn must be refused. Chrome 155 has no navigator.modelContextTesting,
 // so the tools run through document.modelContext.getTools() and executeTool(), as the spec defines.
 // Usage: bun run dev -- --port 5177 (elsewhere), then bun scripts/agent.ts [url] [outdir]
 
@@ -19,7 +19,7 @@ const POLL_MS = 100;
 
 const View = Schema.Struct({
   status: Schema.Literals(["your turn", "waiting", "over"]),
-  token: Schema.optionalKey(Schema.String),
+  turn: Schema.optionalKey(Schema.Number),
   events: Schema.optionalKey(Schema.Array(Schema.String)),
   moves: Schema.optionalKey(Schema.Array(Schema.String)),
 });
@@ -107,9 +107,9 @@ await shot(page, "02-flag-on-empty");
 
 console.log("get_game with no match:", await callTool(page, "get_game", { player: 1 }));
 
-console.log("play_move with no match:", await callTool(page, "play_move", { player: 1, index: 0, token: "m1t0p1e0" }));
+console.log("play_move with no match:", await callTool(page, "play_move", { player: 1, move: 0, turn: 0 }));
 
-console.log("play_move without a token:", await callTool(page, "play_move", { player: 1, index: 0 }));
+console.log("play_move without a turn:", await callTool(page, "play_move", { player: 1, move: 0 }));
 
 console.log("new_match with a bad seed:", await callTool(page, "new_match", { players: 2, items: true, seed: "abc" }));
 
@@ -119,29 +119,23 @@ const Table = Schema.Struct({ players: Schema.Array(Schema.Struct({ player: Sche
 
 const parseTable = Schema.decodeUnknownSync(Schema.fromJsonString(Table));
 
-/** By player: the token of the last view read, acknowledged by the next call, and every event line read so far. */
-const tokens = new Map<number, string>();
-
+/** By player: the event lines of each view it moved from, then of its final view. */
 const heard = new Map<number, ReadonlyArray<string>>();
 
-const read = (player: number, text: string) => {
-  const view = parseView(text);
-
-  heard.set(player, [...(heard.get(player) ?? []), ...(view.events ?? [])]);
-
-  if (view.token !== undefined) tokens.set(player, view.token);
-
-  return view;
+const hear = (player: number, events: ReadonlyArray<string> = []): void => {
+  heard.set(player, [...(heard.get(player) ?? []), ...events]);
 };
 
 const getView = async (player: number) => {
-  const token = tokens.get(player);
-  const got = await callTool(page, "get_game", token === undefined ? { player } : { player, token });
+  const got = await callTool(page, "get_game", { player });
 
   if (!got.ok) throw new Error(`get_game(${player}) failed: ${got.text}`);
 
-  return read(player, got.text);
+  return parseView(got.text);
 };
+
+/** The last turn an agent moved at, kept across matches to check that a rematch refuses it. */
+let lastTurn = -1;
 
 /** Starts a match and plays every Agent player through the tools until the match is over. */
 const playMatch = async (name: string, input: Record<string, number | string | boolean | ReadonlyArray<string>>): Promise<boolean> => {
@@ -151,9 +145,8 @@ const playMatch = async (name: string, input: Record<string, number | string | b
 
   if (!started.ok) throw new Error(`new_match refused: ${started.text}`);
 
-  const earlierTokens = new Map(tokens);
+  const earlierTurn = lastTurn;
 
-  tokens.clear();
   heard.clear();
 
   const table = parseTable(started.text).players;
@@ -187,9 +180,9 @@ const playMatch = async (name: string, input: Record<string, number | string | b
 
     if (mover === undefined) throw new Error("no ready agent to move");
 
-    const { token, moves: legal = [] } = mover.view;
+    const { turn, moves: legal = [] } = mover.view;
 
-    if (token === undefined) throw new Error("an agent with the turn has no token");
+    if (turn === undefined) throw new Error("an agent with the turn has no turn number");
 
     if (!isFirstTurnShown) {
       isFirstTurnShown = true;
@@ -201,21 +194,21 @@ const playMatch = async (name: string, input: Record<string, number | string | b
     if (!isStaleChecked) {
       isStaleChecked = true;
 
-      const retried = await callTool(page, "get_game", { player: mover.player });
+      const refusedRestart = await callTool(page, "new_match", input);
 
-      if (retried.text !== (await callTool(page, "get_game", { player: mover.player })).text) throw new Error("a repeated get_game reply differs");
+      console.log(`${name} new_match while the match runs:`, refusedRestart);
 
-      console.log(`${name} out-of-range move:`, await callTool(page, "play_move", { player: mover.player, index: legal.length, token }));
-      console.log(`${name} bad argument type:`, await callTool(page, "play_move", { player: mover.player, index: "zero", token }));
+      if (refusedRestart.ok) throw new Error("new_match replaced a running match");
 
-      const earlier = earlierTokens.get(mover.player);
+      console.log(`${name} out-of-range move:`, await callTool(page, "play_move", { player: mover.player, move: legal.length, turn }));
+      console.log(`${name} bad argument type:`, await callTool(page, "play_move", { player: mover.player, move: "zero", turn }));
 
-      if (earlier !== undefined) {
-        const crossMatch = await callTool(page, "play_move", { player: mover.player, index: 0, token: earlier });
+      if (earlierTurn >= 0) {
+        const crossMatch = await callTool(page, "play_move", { player: mover.player, move: 0, turn: earlierTurn });
 
-        console.log(`${name} token from the previous match:`, crossMatch);
+        console.log(`${name} turn from the previous match:`, crossMatch);
 
-        if (crossMatch.ok) throw new Error("a token from the previous match was played");
+        if (crossMatch.ok) throw new Error("a turn from the previous match was played");
       }
     }
 
@@ -223,10 +216,10 @@ const playMatch = async (name: string, input: Record<string, number | string | b
 
     if (legal.length === 0) throw new Error("agent turn with no legal moves");
 
-    const index = (moves * 5 + 1) % legal.length;
-    const played = await callTool(page, "play_move", { player: mover.player, index, token });
+    const move = (moves * 5 + 1) % legal.length;
+    const played = await callTool(page, "play_move", { player: mover.player, move, turn });
 
-    // Another player can move between get_game and play_move while several players grab at once; read again.
+    // The bots move between get_game and play_move while several players grab at once; read again.
     if (played.text.includes("Stale move")) {
       staleRetries += 1;
       continue;
@@ -234,33 +227,36 @@ const playMatch = async (name: string, input: Record<string, number | string | b
 
     if (!played.ok) throw new Error(`play_move refused: ${played.text}`);
 
-    const repeated = await callTool(page, "play_move", { player: mover.player, index, token });
+    const repeated = await callTool(page, "play_move", { player: mover.player, move, turn });
 
     if (repeated.ok) throw new Error(`a repeated play_move was played twice: ${repeated.text}`);
 
-    read(mover.player, played.text);
+    hear(mover.player, mover.view.events);
+    lastTurn = turn;
     moves += 1;
 
     if (moves === 12) await shot(page, `${name}-3-mid-match`);
   }
 
   const finals = await Promise.all(agents.map(getView));
+
+  finals.forEach((view, position) => hear(agents[position] ?? 0, view.events));
+
   const isOver = finals.every((view) => view.status === "over");
   const isTailHeard = agents.every((player) => heard.get(player)?.at(-1) === "The match is over.");
-  const acknowledged = await Promise.all(agents.map(getView));
-  const isTailAcknowledged = acknowledged.every((view) => view.status === "over" && view.events === undefined && view.token === undefined);
+  const isStartHeardOnce = agents.every((player) => (heard.get(player) ?? []).filter((line) => line.startsWith("Round 1 begins")).length === 1);
 
   console.log(
-    `${name}: match over: ${isOver}, last event heard by every agent: ${isTailHeard}, nothing left after acknowledging: ${isTailAcknowledged}, agent players: ${agents.join(", ")}, agent moves: ${moves}, turns where several agents could move: ${sharedTurns}, stale retries: ${staleRetries}, tool rounds: ${calls}`,
+    `${name}: match over: ${isOver}, last event heard by every agent: ${isTailHeard}, match start heard once: ${isStartHeardOnce}, agent players: ${agents.join(", ")}, agent moves: ${moves}, turns where several agents could move: ${sharedTurns}, stale retries: ${staleRetries}, tool rounds: ${calls}`,
   );
 
-  console.log(`${name} play_move after the end:`, await callTool(page, "play_move", { player: agents[0] ?? 1, index: 0, token: tokens.get(agents[0] ?? 1) ?? "" }));
+  console.log(`${name} play_move after the end:`, await callTool(page, "play_move", { player: agents[0] ?? 1, move: 0, turn: lastTurn }));
 
   await shot(page, `${name}-4-match-over`);
 
   console.log(`${name} results shown:`, await page.locator("section.results").count());
 
-  return isOver && isTailHeard && isTailAcknowledged;
+  return isOver && isTailHeard && isStartHeardOnce;
 };
 
 const isDuelOver = await playMatch("duel", { players: 2, items: true, seed: "42" });

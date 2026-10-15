@@ -4,7 +4,6 @@ import { Array as Arr, Option, Schema } from "effect";
 import { AgentCall, AgentReply } from "../src/agent/tools.ts";
 import { Seat, SeatCount } from "../src/domain.ts";
 import { type Controller, promptsOf } from "../src/driver.ts";
-import { type Receipt, Token } from "../src/agent/view.ts";
 import { PlayerNumber, rosterOf } from "../src/players.ts";
 import { init, Message, type Model, handleAgentCall, update } from "../src/main.ts";
 
@@ -13,13 +12,14 @@ const STEP_LIMIT = 20_000;
 const View = Schema.Struct({
   you: Schema.Number,
   status: Schema.Literals(["your turn", "waiting", "over"]),
-  token: Schema.optionalKey(Token),
+  turn: Schema.optionalKey(Schema.Number),
+  players: Schema.optionalKey(Schema.Array(Schema.Struct({ player: Schema.Number, holding: Schema.optionalKey(Schema.String) }))),
   moves: Schema.optionalKey(Schema.Array(Schema.String)),
 });
 
 const parseView = Schema.decodeUnknownSync(Schema.fromJsonString(View));
 
-const blank = (): Model => init({ isWebMcpAvailable: true, firstMatch: 1 }).model;
+const blank = (): Model => init({ isWebMcpAvailable: true }).model;
 
 const call = (model: Model, request: AgentCall) => handleAgentCall(model, request);
 
@@ -28,7 +28,7 @@ const newMatch = (players: SeatCount, items: boolean, seed: number, controllers:
 
 const getGame = (model: Model, player: PlayerNumber): AgentReply => call(model, AgentCall.cases.GetGame.make({ player })).reply;
 
-const play = (model: Model, player: PlayerNumber, index: number, token: Receipt) => call(model, AgentCall.cases.PlayMove.make({ player, index, token }));
+const play = (model: Model, player: PlayerNumber, move: number, turn: number) => call(model, AgentCall.cases.PlayMove.make({ player, move, turn }));
 
 const answered = (reply: AgentReply): string =>
   AgentReply.match(reply, { Answered: ({ text }) => text, Refused: ({ reason }) => expect.unreachable(`refused: ${reason}`) });
@@ -69,8 +69,8 @@ test("in the page, two Agent players and a DoN player play a 3-player match to t
   for (; moves < STEP_LIMIT && !isOver(model); moves++) {
     const ready = agentsToMove(model);
     const player = Arr.getUnsafe(ready, moves % ready.length);
-    const { token = expect.unreachable("a player to move has no token"), moves: legal = [] } = viewOf(model, player);
-    const outcome = play(model, player, (moves * 7) % legal.length, token);
+    const { turn = expect.unreachable("a player to move has no turn"), moves: legal = [] } = viewOf(model, player);
+    const outcome = play(model, player, (moves * 7) % legal.length, turn);
 
     sharedTurns += ready.length > 1 ? 1 : 0;
     moved.add(player);
@@ -124,11 +124,27 @@ test("a tool call through update returns one reply command", () => {
   expect(outcome.commands?.map(({ name }) => name)).toEqual(["ReplyToAgent"]);
 });
 
-test("in the page, a move token from an earlier match is refused in a new match with the same seed, at the same turn", () => {
+test("in the page, new_match is refused while a match runs, the Restart match button still starts one, and a turn from before the restart is refused at the same point of the same seed", () => {
   const first = untilAgentTurn(newMatch(2, false, 3, ["Agent", "DoN"]));
-  const { token = expect.unreachable("Player 1 has no token") } = viewOf(first, PlayerNumber.make(1));
-  const second = untilAgentTurn(newMatch(2, false, 3, ["Agent", "DoN"], first));
+  const { turn = expect.unreachable("Player 1 has no turn"), ...before } = viewOf(first, PlayerNumber.make(1));
+  const refused = call(first, AgentCall.cases.NewMatch.make({ players: 2, items: false, seed: 3, controllers: ["Agent", "DoN"] }));
 
-  expect(viewOf(second, PlayerNumber.make(1)).token?.generation).toBe(token.generation);
-  expect(play(second, PlayerNumber.make(1), 0, token).reply._tag).toBe("Refused");
+  expect(refused.reply).toEqual(AgentReply.cases.Refused.make({ reason: "A match is in progress; finish it first." }));
+  expect(refused.state).toBe(first);
+
+  const restarted = untilAgentTurn(update(first, Message.ClickedNewMatch()).model);
+  const { turn: laterTurn, ...after } = viewOf(restarted, PlayerNumber.make(1));
+
+  expect(after).toEqual(before);
+  expect(laterTurn).toBeGreaterThan(turn);
+  expect(play(restarted, PlayerNumber.make(1), 0, turn).reply._tag).toBe("Refused");
+});
+
+test("in the page, an Agent sees the item a Human player drew and has not placed yet", () => {
+  const model = newMatch(2, true, 5, ["Human", "Agent"]);
+  const human = Option.getOrThrow(rosterOf(match(model).game.seats).seatOf(1));
+  const grab = Arr.findFirst(promptsOf(match(model).game), ({ seat }) => seat === human).pipe(Option.getOrThrow);
+  const holding = update(model, Message.ClickedMove({ ...grab.ticket, seat: human, index: 0 })).model;
+
+  expect(viewOf(holding, PlayerNumber.make(2)).players?.[0]?.holding).toBeString();
 });

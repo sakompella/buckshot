@@ -1,7 +1,6 @@
 import { Effect } from "effect";
 import { Runtime } from "foldkit";
 
-import { randomMatchId } from "./driver.ts";
 import { Flags, init, Message, Model, subscriptions, update, view } from "./main.ts";
 import { ports, registerAgentTools } from "./webmcp.ts";
 
@@ -24,6 +23,6 @@ const application = Runtime.makeApplication({
 const modelContext = document.modelContext;
 
 // The runtime is embedded, not run, so the tools can talk to it through its ports.
-const { ports: handles } = Runtime.embed(application, { flags: Effect.succeed({ isWebMcpAvailable: modelContext !== undefined, firstMatch: randomMatchId() }) });
+const { ports: handles } = Runtime.embed(application, { flags: Effect.succeed({ isWebMcpAvailable: modelContext !== undefined }) });
 
 if (modelContext !== undefined) registerAgentTools(modelContext, handles).catch((error: Error) => console.error("WebMCP registration failed", error));

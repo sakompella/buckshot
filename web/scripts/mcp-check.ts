@@ -3,7 +3,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
 import { Schema } from "effect";
 
 // Spawns the stdio MCP server, lists its tools, and plays a 3-player match with
-// items to the end: two Agent players through the tools, one DoN player in the server.
+// items to the end: two Agent players through the tools, one DoN player in the server, then a rematch.
 // Usage: bun run rules, then bun scripts/mcp-check.ts
 
 const CALL_LIMIT = 3_000;
@@ -12,7 +12,7 @@ const RAW_SEAT = /seat|Player 0/i;
 
 const View = Schema.Struct({
   status: Schema.Literals(["your turn", "waiting", "over"]),
-  token: Schema.optionalKey(Schema.String),
+  turn: Schema.optionalKey(Schema.Number),
   events: Schema.optionalKey(Schema.Array(Schema.String)),
   moves: Schema.optionalKey(Schema.Array(Schema.String)),
 });
@@ -47,41 +47,40 @@ const callTool = async (name: string, input: Record<string, number | string | bo
   return { ok: isError !== true, text: content[0].text };
 };
 
-/** By player: the token of the last view read, acknowledged by the next call, and every event line read so far. */
-const tokens = new Map<number, string>();
-
-const heard = new Map<number, ReadonlyArray<string>>();
-
 const getView = async (player: number) => {
-  const token = tokens.get(player);
-  const got = await callTool("get_game", token === undefined ? { player } : { player, token });
+  const got = await callTool("get_game", { player });
 
   if (!got.ok) throw new Error(`get_game(${player}) failed: ${got.text}`);
 
-  return read(player, got.text);
+  if ((await callTool("get_game", { player })).text !== got.text) throw new Error(`a repeated get_game(${player}) differs`);
+
+  return { text: got.text, view: parseView(got.text) };
 };
 
-const read = (player: number, text: string) => {
-  const view = parseView(text);
+/** By player: the event lines of each view it moved from, then of its final view. */
+const heard = new Map<number, ReadonlyArray<string>>();
 
-  heard.set(player, [...(heard.get(player) ?? []), ...(view.events ?? [])]);
-
-  if (view.token !== undefined) tokens.set(player, view.token);
-
-  return view;
+const hear = (player: number, events: ReadonlyArray<string> = []): void => {
+  heard.set(player, [...(heard.get(player) ?? []), ...events]);
 };
 
 console.log("get_game with no match:", await callTool("get_game", { player: 1 }));
 
 console.log("new_match with a Human player:", await callTool("new_match", { players: 2, items: true, controllers: ["Agent", "Human"] }));
 
-console.log("play_move with a bad argument type:", await callTool("play_move", { player: 1, index: "zero", token: "m1t0p1e0" }));
+console.log("play_move with a bad argument type:", await callTool("play_move", { player: 1, move: "zero", turn: 0 }));
 
-console.log("play_move without a token:", await callTool("play_move", { player: 1, index: 0 }));
+console.log("play_move without a turn:", await callTool("play_move", { player: 1, move: 0 }));
 
-const started = await callTool("new_match", { players: 3, items: true, seed: "42", controllers: ["Agent", "Agent", "DoN"] });
+const setup = { players: 3, items: true, seed: "42", controllers: ["Agent", "Agent", "DoN"] };
+
+const started = await callTool("new_match", setup);
 
 console.log("new_match:", started.text);
+
+const replaced = await callTool("new_match", setup);
+
+console.log("new_match while the match runs:", replaced);
 
 const agents = parseTable(started.text).players.filter(({ controller }) => controller === "Agent").map(({ player }) => player);
 
@@ -93,14 +92,14 @@ let moves = 0;
 
 let sharedTurns = 0;
 
-let isStaleChecked = false;
-
 let longestEvents = 0;
 
-const firstViewSeen = new Set<number>();
+let lastTurn = 0;
+
+let sample = "";
 
 for (; calls < CALL_LIMIT; calls++) {
-  const views = await Promise.all(agents.map(async (player) => ({ player, view: await getView(player) })));
+  const views = await Promise.all(agents.map(async (player) => ({ player, ...(await getView(player)) })));
 
   if (views.some(({ view }) => view.status === "over")) break;
 
@@ -110,70 +109,58 @@ for (; calls < CALL_LIMIT; calls++) {
   // The DoN player moves inside the server before any reply, so an Agent always has the turn.
   if (mover === undefined) throw new Error("no Agent player has the turn, but the match is not over");
 
-  const { token, moves: legal = [] } = mover.view;
+  const { turn, events, moves: legal = [] } = mover.view;
 
-  if (token === undefined) throw new Error("an agent with the turn has no token");
+  if (turn === undefined) throw new Error("an agent with the turn has no turn number");
 
-  for (const { player, view } of ready) {
-    const isFirstView = !firstViewSeen.has(player);
+  if (!heard.has(mover.player) && !events?.[0]?.startsWith("Round 1 begins")) throw new Error(`the first view of player ${mover.player} does not start at the match start: ${JSON.stringify(events)}`);
 
-    firstViewSeen.add(player);
+  if (moves === 0) console.log("out-of-range move:", await callTool("play_move", { player: mover.player, move: legal.length, turn }));
 
-    // A player's first view on its turn starts from the match start.
-    if (isFirstView && !view.events?.[0]?.startsWith("Round 1 begins")) throw new Error(`the first view of player ${player} does not start at the match start: ${JSON.stringify(view.events)}`);
+  if (sample === "" && legal.some((label) => label.startsWith("Use"))) sample = mover.text;
 
-    longestEvents = Math.max(longestEvents, view.events?.length ?? 0);
-  }
-
-  if (!isStaleChecked) {
-    isStaleChecked = true;
-
-    const retried = await callTool("get_game", { player: mover.player });
-
-    if (retried.text !== (await callTool("get_game", { player: mover.player })).text) throw new Error("a repeated get_game reply differs");
-
-    console.log("lost reply, retried:", retried.text.slice(0, 200));
-    console.log("out-of-range move:", await callTool("play_move", { player: mover.player, index: legal.length, token }));
-  }
-
+  longestEvents = Math.max(longestEvents, events?.length ?? 0);
   sharedTurns += ready.length > 1 ? 1 : 0;
+  hear(mover.player, events);
 
   if (legal.length === 0) throw new Error("agent turn with no legal moves");
 
-  const index = (moves * 5 + 1) % legal.length;
-  const played = await callTool("play_move", { player: mover.player, index, token });
+  const move = (moves * 5 + 1) % legal.length;
+  const played = await callTool("play_move", { player: mover.player, move, turn });
 
   if (!played.ok) throw new Error(`play_move refused: ${played.text}`);
 
-  const repeated = await callTool("play_move", { player: mover.player, index, token });
+  const repeated = await callTool("play_move", { player: mover.player, move, turn });
 
   if (repeated.ok) throw new Error(`a repeated play_move was played twice: ${repeated.text}`);
 
   if (moves === 0) console.log("repeated move:", repeated.text);
 
-  read(mover.player, played.text);
+  lastTurn = turn;
   moves += 1;
 }
 
-const finals = await Promise.all(agents.map(getView));
+console.log("a your-turn reply with items:", sample);
+
+const finals = await Promise.all(agents.map(async (player) => (await getView(player)).view));
+
+finals.forEach((view, position) => hear(agents[position] ?? 0, view.events));
 
 const isOver = finals.every((view) => view.status === "over");
 
 const isTailHeard = agents.every((player) => heard.get(player)?.at(-1) === "The match is over.");
 
-const acknowledged = await Promise.all(agents.map(getView));
+const isEachLineOnce = agents.every((player) => (heard.get(player) ?? []).filter((line) => line.startsWith("Round 1 begins")).length === 1);
 
-const isTailAcknowledged = acknowledged.every((view) => view.status === "over" && view.events === undefined && view.token === undefined);
+console.log(`match over: ${isOver}, last event heard by every agent: ${isTailHeard}, match start heard once: ${isEachLineOnce}, agent players: ${agents.join(", ")}, agent moves: ${moves}, turns where both agents could move: ${sharedTurns}, most events in one view: ${longestEvents}, tool rounds: ${calls}`);
 
-console.log(`match over: ${isOver}, last event heard by every agent: ${isTailHeard}, nothing left after acknowledging: ${isTailAcknowledged}, agent players: ${agents.join(", ")}, agent moves: ${moves}, turns where both agents could move: ${sharedTurns}, most events in one view: ${longestEvents}, tool rounds: ${calls}`);
+const rematch = await callTool("new_match", setup);
 
-const earlierToken = tokens.get(agents[0] ?? 1) ?? "";
+console.log("new_match after the end:", rematch.text);
 
-await callTool("new_match", { players: 3, items: true, seed: "42", controllers: ["Agent", "Agent", "DoN"] });
+const stale = await callTool("play_move", { player: agents[0] ?? 1, move: 0, turn: lastTurn });
 
-const replayed = await callTool("get_game", { player: agents[0] ?? 1, token: earlierToken });
-
-console.log("a token from the previous match, same seed:", replayed.text);
+console.log("a turn from the previous match, same seed:", stale.text);
 
 const bySize = replySizes.toSorted((left, right) => left - right);
 
@@ -181,4 +168,4 @@ console.log(`reply characters: median ${bySize[Math.floor(bySize.length / 2)]}, 
 
 await client.close();
 
-if (!isOver || !isTailHeard || !isTailAcknowledged || replayed.ok) process.exit(1);
+if (replaced.ok || !isOver || !isTailHeard || !isEachLineOnce || !rematch.ok || stale.ok) process.exit(1);
