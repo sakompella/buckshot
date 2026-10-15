@@ -55,7 +55,7 @@ const cuts = { events: midLine(full.events, 0.3), calls: midLine(full.calls, 0.3
 
 const finished = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Record(Schema.String, Schema.Json)))(readFileSync(join(source, "manifest.json"), "utf8"));
 
-const running = { ...Object.fromEntries(["format", "seed", "controllers", "letters", "delivery", "seating"].map((key) => [key, finished[key] ?? null])), status: "running" };
+const running = { ...Object.fromEntries(["format", "seed", "controllers", "letters", "delivery", "seating", "agents"].map((key) => [key, finished[key] ?? null])), status: "running" };
 
 mkdirSync(live);
 

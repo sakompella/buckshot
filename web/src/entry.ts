@@ -1,7 +1,11 @@
+import "@fontsource/league-gothic/400.css";
+import "@fontsource/vt323/400.css";
 import { Effect } from "effect";
 import { Runtime } from "foldkit";
 
-import { Flags, init, Message, Model, subscriptions, update, view } from "./main.ts";
+import { Flags, init, subscriptions, update } from "./main.ts";
+import { Message, Model } from "./model.ts";
+import { view } from "./view.ts";
 import { ports, registerAgentTools } from "./webmcp.ts";
 
 const application = Runtime.makeApplication({

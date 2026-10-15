@@ -28,6 +28,21 @@ const ITEM_NAMES: Readonly<Record<Item, string>> = {
 
 export const itemName = (item: Item): string => ITEM_NAMES[item];
 
+const ITEM_NOTES: Readonly<Record<Item, string>> = {
+  Saw: "Cuts the barrel down: the next shot does double damage.",
+  Glass: "Shows you the shell in the chamber.",
+  Jammer: "Pick a player; they skip their next turn.",
+  Cigarettes: "Gives back one charge.",
+  Beer: "Racks the chambered shell out of the gun.",
+  Phone: "Tells you about one shell further down.",
+  Inverter: "Flips the chambered shell between live and blank.",
+  Adrenaline: "Take an item from another player and use it at once.",
+  Remote: "Reverses the turn order.",
+};
+
+/** A one-line description of what an item does, for the table's tooltips. */
+export const itemNote = (item: Item): string => ITEM_NOTES[item];
+
 export const moveText = (roster: Roster, seat: Seat, move: Move): string =>
   Move.match(move, {
     PickUp: () => "Pick up the shotgun",
@@ -98,4 +113,13 @@ export const secretText = (secret: Secret): string =>
     Clue: ({ position, shell }) => `The ${ordinal(position)} shell is ${shell.toLowerCase()}.`,
     NoClue: () => "The phone gave no clue.",
     EmptyBriefcase: () => "The briefcase was empty.",
+  });
+
+/** A secret as the table announces it, in a few words. */
+export const secretShout = (secret: Secret): string =>
+  Secret.match(secret, {
+    Glimpse: ({ shell }) => `Chambered . . . ${shell}`,
+    Clue: ({ position, shell }) => `${ordinal(position)} shell . . . ${shell}`,
+    NoClue: () => "No clue",
+    EmptyBriefcase: () => "Briefcase empty",
   });

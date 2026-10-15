@@ -2,7 +2,8 @@ import { expect, test } from "bun:test";
 import { Array as Arr, Option } from "effect";
 
 import { controllerOf, promptsOf } from "../src/driver.ts";
-import { init, Message, type Model, update } from "../src/main.ts";
+import { init, update } from "../src/main.ts";
+import { Message, type Model } from "../src/model.ts";
 
 const TICK_LIMIT = 5_000;
 
@@ -22,7 +23,7 @@ const humanPrompt = (model: Model) =>
 const pendingKind = (model: Model): string | undefined => Option.getOrUndefined(model.maybeMatch)?.game.pending.kind;
 
 test("autoplay switches off as soon as the match finishes", () => {
-  let model = send(started(["DoN", "Story", "DoN", "Story"]), Message.ToggledAutoplay());
+  let model = started(["DoN", "Story", "DoN", "Story"]);
 
   for (let ticks = 0; ticks < TICK_LIMIT && pendingKind(model) !== "Finished"; ticks++) {
     expect(autoplaying(model)).toBe(true);
@@ -34,7 +35,7 @@ test("autoplay switches off as soon as the match finishes", () => {
 });
 
 test("autoplay stays armed on a human turn and the AI moves on after the human answers", () => {
-  let model = send(started(["DoN", "Human", "DoN", "DoN"]), Message.ToggledAutoplay());
+  let model = started(["DoN", "Human", "DoN", "DoN"]);
 
   for (let steps = 0; steps < TICK_LIMIT && Option.isNone(humanPrompt(model)); steps++) model = send(model, Message.TickedAutoplay());
 
@@ -64,14 +65,15 @@ test("autoplay cannot be switched on at a table with no AI seat", () => {
   expect(autoplaying(model)).toBe(false);
 });
 
-test("a new match starts with autoplay off", () => {
-  const model = send(send(started(["DoN", "Story", "DoN", "Story"]), Message.ToggledAutoplay()), Message.ClickedNewMatch());
+test("a new match starts with the bots moving, and the toggle pauses them", () => {
+  const model = started(["DoN", "Story", "DoN", "Story"]);
 
-  expect(autoplaying(model)).toBe(false);
+  expect(autoplaying(model)).toBe(true);
+  expect(autoplaying(send(model, Message.ToggledAutoplay()))).toBe(false);
 });
 
 test("a click on a menu the game has moved past changes nothing and keeps autoplay on", () => {
-  let model = send(started(["DoN", "Human", "DoN", "DoN"]), Message.ToggledAutoplay());
+  let model = started(["DoN", "Human", "DoN", "DoN"]);
 
   for (let steps = 0; steps < TICK_LIMIT && Option.isNone(humanPrompt(model)); steps++) model = send(model, Message.TickedAutoplay());
 
