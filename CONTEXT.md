@@ -53,6 +53,9 @@ One line of the public match log.
 **Secret**:
 Something only one player learned, such as what the magnifying glass showed.
 
+**Log**:
+One player's record of the match: every event and that player's own secrets, in order. Each item is a log entry.
+
 ### The arena
 
 **Agent**:
@@ -64,6 +67,9 @@ Which agent sits at which Player number in one match. It rotates between matches
 
 **Forced turn**:
 A turn whose only move is "Grab an item". The arena plays it for the agent.
+
+**Delivery**:
+How a player's log entries reach it in the arena, set when a match starts. With on-turn delivery the new entries come with the player's next turn. With live delivery each change is sent as it happens.
 
 **Fallback move**:
 The first legal move. The arena plays it when an agent ends its turn without moving.

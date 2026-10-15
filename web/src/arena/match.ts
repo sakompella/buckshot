@@ -27,9 +27,17 @@ import { addTokens, agentTotals, logCall, logEvent, readCalls, type Sitting, wri
 const context = BACKGROUND_CONTEXT;
 
 /** The same for every player; the arena adds nothing per model. */
-export const INSTRUCTIONS = `${RULES} You are one of the players. On each of your turns you get your view as JSON: you, your player number; turn, to pass to play_move; players, with health (not shown while jammed), items and, while players grab from the briefcase, holding; gun, with sawed when it is; events, what happened since your previous turn, with what only you learned from the magnifying glass or the phone; and moves, your legal moves. Play one with play_move, giving its position in moves (from 0) and the turn. get_game shows your view again. Events are not shown again, so remember what you need. When your only move is "Grab an item", it is played for you and its events come with your next turn. Your goal is to finish the match with the most cash.`;
+export const INSTRUCTIONS = `${RULES} You are one of the players. On each of your turns you get your view as JSON: you, your player number; turn, to pass to play_move; players, with health (not shown while jammed), items and, while players grab from the briefcase, holding; gun, with sawed when it is; events, the entries of the match log you have not been sent yet; and moves, your legal moves. Play one with play_move, giving its position in moves (from 0) and the turn. get_game shows your view again. Log entries say what happened, and what only you learned from the magnifying glass or the phone. Each entry reaches you once, with your turn or in a message between turns, so remember what you need. When your only move is "Grab an item", it is played for you. Your goal is to finish the match with the most cash.`;
 
 const GRAB = "Grab an item";
+
+/**
+ * How a player's log reaches it. "on-turn": the entries since its last delivery come with its next turn. "live": each
+ * change is written into its context as it happens, with no model call, and its turn brings only the view.
+ */
+export const DELIVERIES = ["on-turn", "live"] as const;
+
+export type Delivery = (typeof DELIVERIES)[number];
 
 /** One agent: its letter, the model it plays with, and what the manifest says about it. */
 export interface Entrant {
@@ -47,6 +55,8 @@ export interface ArenaMatch {
   readonly entrants: ReadonlyArray<Entrant>;
   readonly models: Models;
   readonly compaction: NonNullable<HarnessSettings["compaction"]>;
+  /** How the log reaches players; fixed when the match starts. */
+  readonly delivery: Delivery;
 }
 
 export class ArenaFault extends Data.TaggedError("ArenaFault")<{ readonly message: string }> {}
@@ -58,14 +68,16 @@ type MoveLine = { readonly turn: number; readonly player: number; readonly move:
 type MatchState = {
   seed: string;
   controllers: Array<string>;
+  delivery: Delivery;
   seating: Record<string, AgentId>;
   seats: Record<string, ConversationId>;
   moves: Array<MoveLine>;
-  carried: Record<string, Array<string>>;
+  /** By player: how many entries of its log it has been sent. */
+  delivered: Record<string, number>;
   retries: Record<string, number>;
 };
 
-const emptyMatch = (): MatchState => ({ seed: "", controllers: [], seating: {}, seats: {}, moves: [], carried: {}, retries: {} });
+const emptyMatch = (): MatchState => ({ seed: "", controllers: [], delivery: "on-turn", seating: {}, seats: {}, moves: [], delivered: {}, retries: {} });
 
 const MatchDoc = defineDoc<MatchState>({ kind: "arena.match", version: 1, scope: "session", initial: emptyMatch });
 
@@ -83,6 +95,11 @@ const View = Schema.Struct({
 type View = typeof View.Type;
 
 const parseView = Schema.decodeUnknownSync(Schema.fromJsonString(View));
+
+const Delivered = Schema.Struct({ events: Schema.optional(Schema.Array(Schema.String)) });
+
+/** The log entries a user message carried: a turn input, a live write or the end notice. */
+const parseDelivery = (text: string) => (text.includes("{") ? Schema.decodeUnknownSync(Schema.fromJsonString(Delivered))(text.slice(text.indexOf("{"))) : { events: undefined });
 
 /** The view in a message that carries one: a turn input ("Your turn.\n{...}") or a tool result. */
 const viewIn = (text: string): Option.Option<View> => (text.includes('"you"') ? Option.some(parseView(text.slice(text.indexOf("{")))) : Option.none());
@@ -254,12 +271,13 @@ const seatTools = (dir: string, table: () => Table, onReply: (player: number, me
       hook(CompactionTask, {
         beforeCompact: async (_compaction, api) => {
           const { player, agent } = await sittingOf(api.snapshot, api.conversationId);
-          const lines = table().heard(player);
+          const sent = (await api.snapshot(MatchDoc, context))?.delivered[String(player)] ?? 0;
+          const lines = table().heard(player).slice(0, sent);
           const roundStart = Math.max(0, lines.findLastIndex((line) => line.startsWith("Round ")));
 
           logEvent(dir, "compaction", { agent, player });
 
-          return { summary: `[Summary] You are Player ${player}. Everything you have seen this round, in order:\n${lines.slice(roundStart).join("\n")}` };
+          return { summary: `[Summary] You are Player ${player}. Everything you have been sent this round, in order:\n${lines.slice(roundStart).join("\n")}` };
         },
       }),
     ],
@@ -296,7 +314,7 @@ export const playMatch = (match: ArenaMatch) =>
     const record = (change: (state: MatchState) => void) => attempt("write the journal", () => harness.commit(async (tx) => void change(await tx.doc(MatchDoc)), context));
 
     if (isFresh) {
-      const state: MatchState = { seed: match.seed, controllers: [...match.controllers], seating: {}, seats: {}, moves: [], carried: {}, retries: {} };
+      const state: MatchState = { seed: match.seed, controllers: [...match.controllers], delivery: match.delivery, seating: {}, seats: {}, moves: [], delivered: {}, retries: {} };
 
       table = new Table(state);
 
@@ -331,6 +349,7 @@ export const playMatch = (match: ArenaMatch) =>
         status: "running",
         seed: match.seed,
         controllers: [...match.controllers],
+        delivery: match.delivery,
         seating: state.seating,
         agents: Object.fromEntries(match.entrants.map((entrant) => [entrant.agent, entrant.describe])),
         instructions_sha: sha(INSTRUCTIONS),
@@ -346,42 +365,75 @@ export const playMatch = (match: ArenaMatch) =>
 
     const playing = currentTable();
 
+    const conversationOf = (state: MatchState, player: number) =>
+      Effect.flatMap(
+        attempt("find a conversation", async () => {
+          const id = state.seats[String(player)];
+
+          return id === undefined ? undefined : harness.conversation(id, context);
+        }),
+        (conversation) => (conversation === undefined ? Effect.fail(new ArenaFault({ message: `Player ${player} has no conversation` })) : Effect.succeed(conversation)),
+      );
+
+    const sittingOf = (state: MatchState, player: number): Sitting => ({ agent: state.seating[String(player)] ?? "A", player });
+
+    /** Writes the log entries a player has not been sent into its context, with no model call; at the end, with the final view. */
+    const sendPending = (player: number, via: "live" | "end") =>
+      Effect.gen(function* () {
+        const state = yield* journal();
+        const from = state.delivered[String(player)] ?? 0;
+        const entries = playing.heard(player).slice(from);
+
+        if (via === "live" && entries.length === 0) return;
+
+        const content = via === "end" ? `The match is over.\n${JSON.stringify({ ...playing.view(player), events: entries })}` : JSON.stringify({ events: entries });
+        const conversation = yield* conversationOf(state, player);
+
+        const written = yield* attempt("write events", () =>
+          conversation.submit({ type: "write", requestId: `${via}-${from}`, entry: { kind: "arena.events", model: [{ role: "user", content, timestamp: Date.now() }], data: { from, count: entries.length } } }, context),
+        );
+
+        yield* attempt("place events", () => written.wait(context));
+        yield* record((next) => void (next.delivered[String(player)] = from + entries.length));
+        logEvent(dir, "delivered", { ...sittingOf(state, player), via, turn: playing.turn, from, entries });
+      });
+
     while (!playing.isOver) {
+      if ((yield* journal()).delivery === "live") {
+        for (const player of playing.agentPlayers()) yield* sendPending(player, "live");
+      }
+
       const player = playing.onTurn();
 
       if (player === undefined) return yield* new ArenaFault({ message: "no Agent player has the turn, but the match is not over" });
 
       const view = playing.view(player);
       const turn = view.turn ?? -1;
-      const sitting: Sitting = { agent: (yield* journal()).seating[String(player)] ?? "A", player };
+      const state = yield* journal();
+      const sitting = sittingOf(state, player);
 
       if (view.moves?.length === 1 && view.moves[0] === GRAB) {
         const played = playing.tryMove(player, 0, turn, "forced");
 
         if (!played.ok) return yield* new ArenaFault({ message: played.text });
 
-        yield* record((next) => {
-          next.moves.push(played.line);
-          next.carried[String(player)] = [...(next.carried[String(player)] ?? []), ...(view.events ?? [])];
-        });
+        yield* record((next) => void next.moves.push(played.line));
+        logEvent(dir, "move", { agent: sitting.agent, ...played.line });
         continue;
       }
 
-      const state = yield* journal();
-      const conversationId = state.seats[String(player)];
-      const conversation = conversationId === undefined ? undefined : yield* attempt("find a conversation", () => harness.conversation(conversationId, context));
-
-      if (conversation === undefined) return yield* new ArenaFault({ message: `Player ${player} has no conversation` });
-
-      const input = { ...view, events: [...(state.carried[String(player)] ?? []), ...(view.events ?? [])] };
-      const submittedAt = performance.now();
+      const conversation = yield* conversationOf(state, player);
+      const from = state.delivered[String(player)] ?? 0;
+      const entries = playing.heard(player).slice(from);
+      const input = { ...view, events: entries.length > 0 ? entries : undefined };
       // The same request id after a crash finds the same submission; a retry after a model failure needs a new one.
       const retry = state.retries[String(turn)] ?? 0;
       const requestId = retry === 0 ? `turn-${turn}` : `turn-${turn}-retry-${retry}`;
+      const submittedAt = performance.now();
       const submission = yield* attempt("submit a turn", () => conversation.submit({ type: "input", content: `Your turn.\n${JSON.stringify(input)}`, requestId }, context));
 
-      logEvent(dir, "input", { ...sitting, turn });
-      yield* record((next) => void (next.carried[String(player)] = []));
+      yield* record((next) => void (next.delivered[String(player)] = from + entries.length));
+      logEvent(dir, "delivered", { ...sitting, via: "input", turn, from, entries });
       yield* attempt("wait for the turn", () => submission.wait(context));
 
       const moved = playing.turn !== turn;
@@ -407,6 +459,8 @@ export const playMatch = (match: ArenaMatch) =>
       }
     }
 
+    for (const player of playing.agentPlayers()) yield* sendPending(player, "end");
+
     const final = yield* journal();
     const audit = yield* auditOf(harness, final, playing);
     const storeUsage = yield* attempt("read usage", () => harness.usage(context));
@@ -420,15 +474,15 @@ export const playMatch = (match: ArenaMatch) =>
     const result = { audit, moves, standings, agents, move_log_sha: sha(JSON.stringify(final.moves)) };
 
     logEvent(dir, "end", { standings });
-    writeManifest(dir, { status: "finished", seed: final.seed, controllers: final.controllers, seating: final.seating, instructions_sha: sha(INSTRUCTIONS), ...result });
+    writeManifest(dir, { status: "finished", seed: final.seed, controllers: final.controllers, delivery: final.delivery, seating: final.seating, instructions_sha: sha(INSTRUCTIONS), ...result });
     yield* attempt("close the harness", () => harness.close(context));
 
     return { ...result, storeUsage: Object.fromEntries(Object.entries(storeUsage.models).map(([model, spent]) => [model, { input: spent.input, output: spent.output }])), loggedUsage: addTokens(readCalls(dir)) };
   });
 
 /**
- * Checks the match from the store, not from arena memory: every view a seat was given is its own, the events it was given
- * add up to its own log exactly, and the seed and journal replay to the same end.
+ * Checks the match from the store, not from arena memory: every view a seat was given is its own, the entries it was sent
+ * add up to its own log exactly, with no gaps or repeats, and the seed and journal replay to the same end.
  */
 const auditOf = (harness: Harness, final: MatchState, table: Table) =>
   Effect.gen(function* () {
@@ -450,22 +504,14 @@ const auditOf = (harness: Harness, final: MatchState, table: Table) =>
     }
 
     const viewsOf = (messages: ReadonlyArray<Message>) => messages.flatMap((message) => (message.role === "user" || message.role === "toolResult" ? Option.toArray(viewIn(textOf(message))) : []));
-
-    // A turn retried after a model failure is input twice; its first input is the one that carried its events.
-    const inputEventsOf = (messages: ReadonlyArray<Message>) => {
-      const inputs = messages.flatMap((message) => (message.role === "user" && textOf(message).startsWith("Your turn.") ? Option.toArray(viewIn(textOf(message))) : []));
-
-      return inputs.flatMap((view, index) => (inputs.findIndex((earlier) => earlier.turn === view.turn) === index ? (view.events ?? []) : []));
-    };
-
+    const deliveredOf = (messages: ReadonlyArray<Message>) => messages.flatMap((message) => (message.role === "user" ? (parseDelivery(textOf(message)).events ?? []) : []));
     const replayed = new Table(final);
+    const someAgent = table.agentPlayers()[0] ?? 1;
 
     return {
       over: table.isOver,
       every_view_is_own_player: transcripts.every(({ player, messages }) => viewsOf(messages).every((view) => view.you === player)),
-      heard_is_own_log_exactly: transcripts.every(
-        ({ player, messages }) => JSON.stringify([...inputEventsOf(messages), ...(final.carried[String(player)] ?? []), ...(table.view(player).events ?? [])]) === JSON.stringify(table.heard(player)),
-      ),
-      replay_matches: replayed.events === table.events && replayed.viewText(table.agentPlayers()[0] ?? 1) === table.viewText(table.agentPlayers()[0] ?? 1),
+      delivered_is_own_log_exactly: transcripts.every(({ player, messages }) => JSON.stringify(deliveredOf(messages)) === JSON.stringify(table.heard(player))),
+      replay_matches: replayed.events === table.events && replayed.viewText(someAgent) === table.viewText(someAgent),
     };
   });
