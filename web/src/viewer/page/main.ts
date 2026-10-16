@@ -133,7 +133,7 @@ const showList = async () => {
       { class: "list" },
       nav("/", leaderboard),
       h("h1", {}, "Arena runs"),
-      h("div", { class: "filters" }, pick("model"), h("span", { class: "dim" }, "vs"), pick("vs"), pick("family"), pick("effort")),
+      h("div", { class: "filters" }, pick("family"), pick("model"), pick("effort"), h("span", { class: "dim" }, "vs"), pick("vs"), pick("vsEffort")),
       h("table", { class: "runs" }, head, body),
       h("div", { class: "totals" }, totalsTable("Per model and effort", totals.byEffort), totalsTable("Per model", totals.byModel)),
     ),
@@ -371,7 +371,7 @@ const showMatch = async (id: string) => {
     const played = first.run.agents.find((candidate) => candidate.agent === agent) ?? {};
     const column = { sums: h("div", { class: "sums" }), body: h("div", { class: "column-body" }) };
 
-    logs.append(h("div", { class: "column" }, h("div", { class: "column-head" }, h("div", { class: "who" }, h("span", { class: `player-${agent}` }, `Player ${agent}`), ...modelLabel(played)), column.sums), column.body));
+    logs.append(h("div", { class: "column" }, h("div", { class: "column-head" }, h("div", { class: "who" }, h("span", { class: `player-${agent}` }, `Player ${agent}`), " ", ...modelLabel(played)), column.sums), column.body));
     columns.set(agent, column);
 
     return column;

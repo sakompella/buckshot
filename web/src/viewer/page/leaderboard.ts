@@ -47,7 +47,7 @@ const rowOf = (row: LeaderboardRow): HTMLElement => {
 export const showLeaderboard = async () => {
   const { name, seeds, matches, anchor, rows, notes } = decodeLeaderboard(await fetchText("/api/leaderboard"));
   const query = new URLSearchParams(location.search);
-  let filter = { ...filterFromQuery(query), vs: "" };
+  let filter = { ...filterFromQuery(query), vs: "", vsEffort: "" };
   let order: LeaderboardOrder = orderFromQuery(query);
   let best = query.get("best") === "1";
   const head = h("thead", {});

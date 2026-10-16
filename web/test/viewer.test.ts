@@ -228,23 +228,31 @@ const luna = "gpt-6-luna";
 
 const matches = (filter: Partial<Filter>, agents: ReadonlyArray<Played>) => runMatches({ ...NO_FILTER, ...filter }, agents);
 
-test("a head to head needs two agents, family and effort narrow the agents that count, and no filter shows every run", () => {
+test("a head to head needs two agents, each with the effort asked of it; family and effort belong to the first; no filter shows every run", () => {
   const sweep = [{ model: haiku, effort: "low" }, { model: sonnet, effort: "high" }];
+  const mirror = [{ model: haiku, effort: "low" }, { model: haiku, effort: "high" }];
 
   expect(matches({}, [])).toBe(true);
   expect(matches({ model: haiku, vs: sonnet }, sweep)).toBe(true);
   expect(matches({ model: sonnet, vs: haiku }, sweep)).toBe(true);
   expect(matches({ model: haiku, vs: luna }, sweep)).toBe(false);
   expect(matches({ model: haiku, vs: haiku }, sweep)).toBe(false);
-  expect(matches({ model: haiku, vs: haiku }, [{ model: haiku, effort: "low" }, { model: haiku, effort: "high" }])).toBe(true);
+  expect(matches({ model: haiku, vs: haiku }, mirror)).toBe(true);
 
   expect(matches({ family: "claude-haiku" }, sweep)).toBe(true);
   expect(matches({ family: "gpt" }, sweep)).toBe(false);
   expect(matches({ family: "claude-haiku", effort: "high" }, sweep)).toBe(false);
   expect(matches({ effort: "high", model: sonnet }, sweep)).toBe(true);
   expect(matches({ effort: "low", model: sonnet }, sweep)).toBe(false);
-  expect(matches({ effort: "low", model: haiku, vs: sonnet }, sweep)).toBe(false);
   expect(matches({ effort: "high" }, [{ model: undefined }])).toBe(false);
+
+  expect(matches({ model: haiku, effort: "low", vs: sonnet }, sweep)).toBe(true);
+  expect(matches({ model: haiku, effort: "high", vs: sonnet }, sweep)).toBe(false);
+  expect(matches({ model: haiku, vs: sonnet, vsEffort: "high" }, sweep)).toBe(true);
+  expect(matches({ model: haiku, vs: sonnet, vsEffort: "low" }, sweep)).toBe(false);
+  expect(matches({ model: haiku, effort: "low", vs: haiku, vsEffort: "high" }, mirror)).toBe(true);
+  expect(matches({ model: haiku, effort: "low", vs: haiku, vsEffort: "high" }, mirror.toReversed())).toBe(true);
+  expect(matches({ model: haiku, effort: "high", vs: haiku }, [{ model: haiku, effort: "low" }, { model: haiku, effort: "low" }])).toBe(false);
 });
 
 const row = (entrant: string, model: string, effort: string | undefined, fields: Partial<LeaderboardRow>): LeaderboardRow => ({

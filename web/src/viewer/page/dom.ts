@@ -51,7 +51,7 @@ export const nav = (current: "/" | "/leaderboard", leaderboard: boolean): HTMLEl
 
 export type Field = (typeof FILTER_FIELDS)[number];
 
-const PLACEHOLDERS = { model: "Any model", vs: "vs any model", family: "Any family", effort: "Any effort" } as const satisfies Record<Field, string>;
+const PLACEHOLDERS = { family: "Any family", model: "Any model", effort: "Any effort", vs: "Any opponent model", vsEffort: "Any opponent effort" } as const satisfies Record<Field, string>;
 
 const distinct = (values: ReadonlyArray<string | undefined>): ReadonlyArray<string> => [...new Set(values.flatMap((value) => (value === undefined ? [] : [value])))];
 
@@ -64,6 +64,7 @@ const valuesOf = (field: Field, played: ReadonlyArray<Played>): ReadonlyArray<st
     case "family":
       return distinct(played.flatMap(({ model }) => (model === undefined ? [] : [modelFamily(model)]))).toSorted();
     case "effort":
+    case "vsEffort":
       return distinct(played.map(({ effort }) => effort)).toSorted((left, right) => effortRank(left) - effortRank(right));
     default: {
       const _exhaustive: never = field;
@@ -81,6 +82,7 @@ const textOf = (field: Field, value: string): string => {
     case "family":
       return value;
     case "effort":
+    case "vsEffort":
       return effortName(value);
     default: {
       const _exhaustive: never = field;

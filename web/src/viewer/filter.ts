@@ -3,17 +3,22 @@ import { modelFamily } from "../arena/model-names.ts";
 // What the run list and the leaderboard are narrowed to, kept in the query
 // string beside the sort. Each field is empty for "any".
 
-export const FILTER_FIELDS = ["model", "vs", "family", "effort"] as const;
+export const FILTER_FIELDS = ["family", "model", "effort", "vs", "vsEffort"] as const;
+
+const FIRST_FIELDS = ["family", "model", "effort"] as const;
+
+const SECOND_FIELDS = ["vs", "vsEffort"] as const;
 
 export type Filter = Readonly<Record<(typeof FILTER_FIELDS)[number], string>>;
 
-export const NO_FILTER: Filter = { model: "", vs: "", family: "", effort: "" };
+export const NO_FILTER: Filter = { family: "", model: "", effort: "", vs: "", vsEffort: "" };
 
 export const filterFromQuery = (query: URLSearchParams): Filter => ({
-  model: query.get("model") ?? "",
-  vs: query.get("vs") ?? "",
   family: query.get("family") ?? "",
+  model: query.get("model") ?? "",
   effort: query.get("effort") ?? "",
+  vs: query.get("vs") ?? "",
+  vsEffort: query.get("vsEffort") ?? "",
 });
 
 export const writeFilter = (query: URLSearchParams, filter: Filter): void => {
@@ -29,28 +34,25 @@ export interface Played {
   readonly effort?: string | undefined;
 }
 
-const hasFamilyAndEffort = (filter: Filter, { model, effort }: Played): boolean =>
-  (filter.family === "" || (model !== undefined && modelFamily(model) === filter.family)) && (filter.effort === "" || effort === filter.effort);
+type Wants = (played: Played) => boolean;
 
-/** One row of the leaderboard: its family, effort and model, when it is the one the model filter names. */
-export const rowMatches = (filter: Filter, played: Played): boolean => hasFamilyAndEffort(filter, played) && (filter.model === "" || played.model === filter.model);
+/** The agent the filter looks for: the family, model and effort given, all of one agent. */
+const first = (filter: Filter): Wants => ({ model, effort }) =>
+  (filter.family === "" || (model !== undefined && modelFamily(model) === filter.family)) && (filter.model === "" || model === filter.model) && (filter.effort === "" || effort === filter.effort);
 
-/** Each wanted model is played by an agent of its own, so a head to head needs two agents, even of one model. */
-const playedEach = (agents: ReadonlyArray<Played>, wanted: ReadonlyArray<string>): boolean => {
-  const [model, ...rest] = wanted;
+/** The agent it plays against: the model and effort given. */
+const second = (filter: Filter): Wants => ({ model, effort }) => (filter.vs === "" || model === filter.vs) && (filter.vsEffort === "" || effort === filter.vsEffort);
 
-  return model === undefined || agents.some((agent, index) => agent.model === model && playedEach(agents.toSpliced(index, 1), rest));
+/** One row of the leaderboard: the agent the filter looks for. */
+export const rowMatches = (filter: Filter, played: Played): boolean => first(filter)(played);
+
+/** Each wanted agent is played by one of its own, so a head to head needs two agents, even of one model. */
+const playedEach = (agents: ReadonlyArray<Played>, wanted: ReadonlyArray<Wants>): boolean => {
+  const [next, ...rest] = wanted;
+
+  return next === undefined || agents.some((agent, index) => next(agent) && playedEach(agents.toSpliced(index, 1), rest));
 };
 
-/**
- * A run whose agents are the filter's: its family and effort narrow the agents that count, the model and vs
- * must each be played by one of them, and with neither some agent must be left.
- */
-export const runMatches = (filter: Filter, agents: ReadonlyArray<Played>): boolean => {
-  const counted = agents.filter((agent) => hasFamilyAndEffort(filter, agent));
-  const wanted = [filter.model, filter.vs].filter((model) => model !== "");
-
-  if (wanted.length > 0) return playedEach(counted, wanted);
-
-  return filter.family === "" && filter.effort === "" ? true : counted.length > 0;
-};
+/** A run with the agent the filter looks for and, when it names one, another that plays against it. */
+export const runMatches = (filter: Filter, agents: ReadonlyArray<Played>): boolean =>
+  playedEach(agents, [...(FIRST_FIELDS.some((field) => filter[field] !== "") ? [first(filter)] : []), ...(SECOND_FIELDS.some((field) => filter[field] !== "") ? [second(filter)] : [])]);
