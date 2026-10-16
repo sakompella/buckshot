@@ -47,15 +47,16 @@ export const readTournamentFile = (dir: string): Result.Result<TournamentFile, T
 
 export const tournamentOf = (file: TournamentFile): Result.Result<Tournament, TournamentError> => resolveConfig(file.config);
 
-/** A tournament grows by new entrants, listed pairings after its own and more seed blocks, so the matches it already scheduled keep their names, seats and seeds. */
+/** A tournament grows by new entrants and endpoints, listed pairings after its own and more seed blocks, so the matches it already scheduled keep their names, seats, seeds and endpoints. */
 const growsInto = (before: TournamentConfig, after: TournamentConfig): boolean => {
-  const fixed = ({ entrants: _entrants, pairings: _pairings, blocksPerPairing: _blocks, ...rest }: TournamentConfig) => rest;
+  const fixed = ({ endpoints: _endpoints, entrants: _entrants, pairings: _pairings, blocksPerPairing: _blocks, ...rest }: TournamentConfig) => rest;
 
   return (
     !("allOf" in before.pairings) &&
     !("allOf" in after.pairings) &&
     isDeepStrictEqual(fixed(before), fixed(after)) &&
     after.blocksPerPairing >= before.blocksPerPairing &&
+    Object.entries(before.endpoints).every(([name, endpoint]) => isDeepStrictEqual(after.endpoints[name], endpoint)) &&
     Object.entries(before.entrants).every(([name, entrant]) => isDeepStrictEqual(after.entrants[name], entrant)) &&
     isDeepStrictEqual(after.pairings.slice(0, before.pairings.length), before.pairings)
   );

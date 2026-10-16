@@ -448,7 +448,7 @@ test("one directory holds one tournament", () => {
   expect(Result.isFailure(other) && other.failure.message).toContain("made from a different config");
 });
 
-test("a tournament grows by entrants, by pairings listed after its own and by seed blocks, its scheduled matches stay first and unchanged, and a config it grew from opens it as it is", () => {
+test("a tournament grows by entrants and their endpoints, by pairings listed after its own and by seed blocks, its scheduled matches stay first and unchanged, and a config it grew from opens it as it is", () => {
   const dir = join(mkdtempSync(join(tmpdir(), "tournament-dir-")), "t");
   const first = tournamentFrom(configJson({ entrants: { luna: ENTRANTS.luna, don: ENTRANTS.don }, pairings: [["luna", "don"]] }));
   const grown = tournamentFrom(configJson({ pairings: [["luna", "don"], ["haiku-5-5", "luna"], ["opus", "story"]] }));
@@ -477,6 +477,14 @@ test("a tournament grows by entrants, by pairings listed after its own and by se
 
   expect(Result.isSuccess(extended) && extended.success.schedule.slice(0, schedule.length)).toEqual([...schedule]);
   expect(Result.isSuccess(extended) && extended.success.schedule.slice(schedule.length).every((match) => match.block === 2)).toBe(true);
+
+  const withRouter = { ...ENDPOINTS, router: { api: "openai-responses", url: "http://localhost:20128/v1", keyEnv: "ROUTER_KEY" } };
+
+  const routed = (endpoints: Readonly<Record<string, Schema.Json>>) =>
+    tournamentFrom(configJson({ endpoints, entrants: { ...ENTRANTS, routed: { endpoint: "router", model: "oc/routed", catalogModel: "gpt-6-luna", effort: "high" } }, pairings: [["luna", "don"], ["haiku-5-5", "luna"], ["opus", "story"], ["routed", "luna"]], blocksPerPairing: 3 }));
+
+  expect(Result.isSuccess(openTournament(dir, routed(withRouter), "abc123", new Date(0)))).toBe(true);
+  expect(Result.isFailure(openTournament(dir, routed({ ...withRouter, "cpa-openai": { ...ENDPOINTS["cpa-openai"], url: "http://127.0.0.1:9999/v1" } }), "abc123", new Date(0)))).toBe(true);
 });
 
 test("a finished match that disagrees with the schedule is left out, and its counts come from the manifest", () => {
