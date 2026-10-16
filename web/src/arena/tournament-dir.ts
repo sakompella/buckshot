@@ -4,6 +4,7 @@ import { isDeepStrictEqual } from "node:util";
 
 import { Option, Result, Schema } from "effect";
 
+import { SeatCount } from "../domain.ts";
 import { AgentId } from "./agent.ts";
 import { type PriceTable, totalsBy } from "./cost.ts";
 import { type CallLine, endingFault, faultsIn, faultsSinceLastMove, readCalls } from "./runlog.ts";
@@ -17,6 +18,7 @@ import {
   scheduleOf,
   unfinished,
 } from "./tournament.ts";
+import { firstPositionOf } from "./seeds.ts";
 import { type PlayedMatch, type Player, winShares } from "./tournament-stats.ts";
 
 // A tournament directory: tournament.json and one directory per scheduled match,
@@ -97,7 +99,7 @@ const MatchManifest = Schema.Struct({
   letters: Schema.Array(Schema.String),
   delivery: Schema.String,
   standings: Schema.optional(Schema.Array(Schema.Struct({ player: Schema.String, cash: Schema.Number }))),
-  provenance: Schema.Struct({ agents: Schema.Record(Schema.String, Described) }),
+  provenance: Schema.Struct({ code_sha: Schema.String, agents: Schema.Record(Schema.String, Described) }),
   agents: Schema.Record(Schema.String, Schema.Struct({ moves: Schema.Int, reminders: Schema.Int, interventions: Schema.Int })),
 });
 
@@ -161,6 +163,8 @@ const sharesOf = (match: ScheduledMatch, manifest: MatchManifest): Result.Result
   return cash.every((amount) => amount !== undefined) ? Result.succeed(winShares(cash)) : Result.fail("the standings do not cover every player");
 };
 
+const decodeSeatCount = Schema.decodeUnknownResult(SeatCount);
+
 /** A finished match as a played one, or why it is left out. */
 export const readMatch = (dir: string, tournament: Tournament, match: ScheduledMatch): Result.Result<PlayedMatch, ReadonlyArray<string>> =>
   Result.gen(function* () {
@@ -171,9 +175,10 @@ export const readMatch = (dir: string, tournament: Tournament, match: ScheduledM
     if (problems.length > 0) return yield* Result.fail(problems);
 
     const shares = yield* Result.mapError(sharesOf(match, manifest), (message) => [message]);
+    const table = yield* Result.mapError(decodeSeatCount(match.seats.length), () => [`${match.seats.length} seats is not a table size`]);
     const players: ReadonlyArray<Player> = match.entrants.map((entrant, index) => ({ entrant, share: shares[index] ?? 0, ...countsOf(manifest, match.seats[index] ?? "") }));
 
-    return { name: match.name, pairing: match.pairing, block: match.block, players };
+    return { name: match.name, pairing: match.pairing, seed: match.seed, code: manifest.provenance.code_sha, starter: firstPositionOf(match.seed, table), players };
   });
 
 /** The entrants that won a finished match, from its manifest alone, even when the match is left out of the stats. */

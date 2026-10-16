@@ -1,6 +1,6 @@
 // The statistics of a tournament, as pure functions of its scored matches.
-// Confidence intervals bootstrap over seed blocks: a unit is one (pairing,
-// block), because the matches of a block share a seed and are not independent.
+// Confidence intervals bootstrap over seeds: a seed fixes the deal of round 1,
+// so the matches played at one seed, in any pairing, are not independent.
 
 /** One player of a scored match. `share` is its part of the win: 1, or 1/k when k players tied on cash. */
 export interface Player {
@@ -15,7 +15,11 @@ export interface Player {
 export interface PlayedMatch {
   readonly name: string;
   readonly pairing: number;
-  readonly block: number;
+  readonly seed: number;
+  /** The code the match was played under, from its manifest. */
+  readonly code: string;
+  /** The position, from 1, that starts round 1. The seed decides it. */
+  readonly starter: number;
   readonly players: ReadonlyArray<Player>;
 }
 
@@ -80,6 +84,52 @@ export const sharesByPosition = (matches: ReadonlyArray<PlayedMatch>): ReadonlyA
   [...groupBy(seatsOf(matches), ({ player, size, position }) => JSON.stringify([player.entrant, size, position])).values()]
     .flatMap((seats) => (seats[0] === undefined ? [] : [{ entrant: seats[0].player.entrant, size: seats[0].size, position: seats[0].position, ...shareOf(seats) }]))
     .toSorted((left, right) => left.entrant.localeCompare(right.entrant) || left.size - right.size || left.position - right.position);
+
+export interface CodeVersion {
+  readonly code: string;
+  readonly matches: number;
+  readonly entrants: ReadonlyArray<string>;
+}
+
+export const codeVersions = (matches: ReadonlyArray<PlayedMatch>): ReadonlyArray<CodeVersion> =>
+  [...groupBy(matches, (match) => match.code)]
+    .map(([code, played]) => ({ code, matches: played.length, entrants: [...new Set(played.flatMap((match) => match.players.map((player) => player.entrant)))].toSorted() }))
+    .toSorted((left, right) => left.code.localeCompare(right.code));
+
+export interface VersionShare extends Share {
+  readonly entrant: string;
+  readonly code: string;
+}
+
+export const sharesByVersion = (matches: ReadonlyArray<PlayedMatch>): ReadonlyArray<VersionShare> =>
+  [...groupBy(seatsOf(matches), ({ match, player }) => JSON.stringify([player.entrant, match.code])).values()]
+    .flatMap((seats) => (seats[0] === undefined ? [] : [{ entrant: seats[0].player.entrant, code: seats[0].match.code, ...shareOf(seats) }]))
+    .toSorted((left, right) => left.entrant.localeCompare(right.entrant) || left.code.localeCompare(right.code));
+
+export interface StarterRate {
+  readonly size: number;
+  readonly matches: number;
+  /** How many matches each position started, from position 1. */
+  readonly started: ReadonlyArray<number>;
+  readonly wins: number;
+  /** The share of matches won by the player who started round 1. */
+  readonly rate: number;
+}
+
+export const starterRates = (matches: ReadonlyArray<PlayedMatch>): ReadonlyArray<StarterRate> =>
+  [...groupBy(matches, (match) => match.players.length)]
+    .map(([size, played]) => {
+      const wins = sum(played.map((match) => match.players[match.starter - 1]?.share ?? 0));
+
+      return {
+        size,
+        matches: played.length,
+        started: Array.from({ length: size }, (_, index) => played.filter((match) => match.starter === index + 1).length),
+        wins,
+        rate: wins / played.length,
+      };
+    })
+    .toSorted((left, right) => left.size - right.size);
 
 export interface HeadToHead {
   readonly pairing: number;
@@ -234,12 +284,12 @@ const randomFrom = (seed: number): (() => number) => {
   };
 };
 
-/** Resamples of the matches: seed blocks drawn with replacement, each with all its matches. */
+/** Resamples of the matches: seeds drawn with replacement, each with every match played at it, in any pairing. */
 export const resamples = (matches: ReadonlyArray<PlayedMatch>, count: number, seed: number): ReadonlyArray<ReadonlyArray<PlayedMatch>> => {
-  const blocks = [...groupBy(matches, (match) => `${match.pairing}:${match.block}`).values()];
+  const bySeed = [...groupBy(matches, (match) => match.seed).values()];
   const random = randomFrom(seed);
 
-  return Array.from({ length: count }, () => Array.from({ length: blocks.length }, () => blocks[Math.floor(random() * blocks.length)] ?? []).flat());
+  return Array.from({ length: count }, () => Array.from({ length: bySeed.length }, () => bySeed[Math.floor(random() * bySeed.length)] ?? []).flat());
 };
 
 const quantile = (sorted: ReadonlyArray<number>, level: number): number => {
@@ -249,12 +299,12 @@ const quantile = (sorted: ReadonlyArray<number>, level: number): number => {
   return (sorted[below] ?? 0) + ((sorted[Math.ceil(at)] ?? 0) - (sorted[below] ?? 0)) * (at - below);
 };
 
-/** The central 95% of each entrant's statistic over the resamples that have the entrant. */
+/** The central 95% of each named statistic (an entrant's, for instance) over the resamples that have it. */
 export const intervalsOf = (replicates: ReadonlyArray<ReadonlyMap<string, number>>): ReadonlyMap<string, Interval> =>
   new Map(
-    [...groupBy(replicates.flatMap((replicate) => [...replicate]), ([entrant]) => entrant)].map(([entrant, values]) => {
+    [...groupBy(replicates.flatMap((replicate) => [...replicate]), ([name]) => name)].map(([name, values]) => {
       const sorted = values.map(([, value]) => value).toSorted((left, right) => left - right);
 
-      return [entrant, { low: quantile(sorted, 0.025), high: quantile(sorted, 0.975) }] as const;
+      return [name, { low: quantile(sorted, 0.025), high: quantile(sorted, 0.975) }] as const;
     }),
   );

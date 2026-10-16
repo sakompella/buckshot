@@ -12,7 +12,7 @@ import { checkPrices, childCommand, childEnv, parseConfig, resolveKeys, type Sch
 import { balancedSeeds, firstPositionOf } from "../src/arena/seeds.ts";
 import { cooldownOf, costOf, openTournament, RATE_LIMIT_WAIT_SECONDS, readMatch, runPending, type Scheduling, TOURNAMENT_FORMAT } from "../src/arena/tournament-dir.ts";
 import { reportOf } from "../src/arena/tournament-report.ts";
-import { fitRatings, ELO_PER_NAT, intervalsOf, type PlayedMatch, resamples, sharesByEntrant, winShares } from "../src/arena/tournament-stats.ts";
+import { codeVersions, fitRatings, ELO_PER_NAT, intervalsOf, type PlayedMatch, resamples, sharesByEntrant, sharesByVersion, starterRates, winShares } from "../src/arena/tournament-stats.ts";
 
 // The tournament's schedule, config checks, stats and runner. No model is called:
 // matches are played by fakes that write the manifests an arena match would.
@@ -161,7 +161,7 @@ const syntheticMatches = (seed: number): ReadonlyArray<PlayedMatch> => {
     const draw = random() * weights.reduce((total, weight) => total + weight, 0);
     const winner = weights.findIndex((_, index) => weights.slice(0, index + 1).reduce((total, weight) => total + weight, 0) > draw);
 
-    return { name: match.name, pairing: match.pairing, block: match.block, players: match.entrants.map((entrant, index) => ({ entrant, share: index === winner ? 1 : 0, moves: 10, reminders: 0, interventions: 0 })) };
+    return { name: match.name, pairing: match.pairing, seed: match.seed, code: "abc123", starter: firstPositionOf(match.seed, 3), players: match.entrants.map((entrant, index) => ({ entrant, share: index === winner ? 1 : 0, moves: 10, reminders: 0, interventions: 0 })) };
   });
 };
 
@@ -200,6 +200,71 @@ test("the same seed gives the same intervals, and win shares sum to one per matc
   expect([...sharesByEntrant(matches).values()].reduce((total, { wins }) => total + wins, 0)).toBe(matches.length);
 });
 
+test("a resample holds whole seeds, each as often as it was drawn", () => {
+  const matches = syntheticMatches(3);
+  const perSeed = matches.filter((match) => match.seed === matches[0]?.seed).length;
+
+  for (const resample of resamples(matches, 20, 1)) {
+    expect(resample.length).toBe(matches.length);
+
+    for (const seed of new Set(resample.map((match) => match.seed))) expect(resample.filter((match) => match.seed === seed).length % perSeed).toBe(0);
+  }
+});
+
+test("when the matches of a seed agree, a resample over seeds gives a wider interval than one over matches", () => {
+  const random = randomFrom(11);
+
+  const matches: ReadonlyArray<PlayedMatch> = Array.from({ length: 200 }, (_, index) => {
+    const seed = index % 10;
+    const firstWins = random() < (seed % 2 === 0 ? 0.85 : 0.15);
+
+    return { name: `m${index}`, pairing: Math.floor(index / 10), seed, code: "v1", starter: 1, players: [firstWins ? 1 : 0, firstWins ? 0 : 1].map((share, at) => ({ entrant: at === 0 ? "a" : "b", share, moves: 1, reminders: 0, interventions: 0 })) };
+  });
+
+  const widthOf = (played: ReadonlyArray<PlayedMatch>) => {
+    const interval = intervalsOf(resamples(played, 500, 1).map((resample) => new Map([...sharesByEntrant(resample)].map(([entrant, { share }]) => [entrant, share])))).get("a");
+
+    return (interval?.high ?? NaN) - (interval?.low ?? NaN);
+  };
+
+  expect(widthOf(matches)).toBeGreaterThan(2 * widthOf(matches.map((match, index) => ({ ...match, seed: index }))));
+});
+
+test("the round 1 starter's rate counts the matches its player won, a tie by its share, for each table size", () => {
+  const played = (starter: number, shares: ReadonlyArray<number>): PlayedMatch => ({
+    name: "m",
+    pairing: 0,
+    seed: 0,
+    code: "v1",
+    starter,
+    players: shares.map((share, at) => ({ entrant: `e${at}`, share, moves: 1, reminders: 0, interventions: 0 })),
+  });
+
+  expect(starterRates([played(1, [1, 0]), played(1, [0, 1]), played(2, [0, 1]), played(2, [0.5, 0.5]), played(3, [0, 0, 1])])).toEqual([
+    { size: 2, matches: 4, started: [2, 2], wins: 2.5, rate: 0.625 },
+    { size: 3, matches: 1, started: [0, 0, 1], wins: 1, rate: 1 },
+  ]);
+});
+
+test("matches are grouped by the code they were played under, and an entrant's share is split by it", () => {
+  const played = (code: string, shares: ReadonlyArray<readonly [string, number]>): PlayedMatch => ({
+    name: "m",
+    pairing: 0,
+    seed: 0,
+    code,
+    starter: 1,
+    players: shares.map(([entrant, share]) => ({ entrant, share, moves: 1, reminders: 0, interventions: 0 })),
+  });
+
+  const matches = [played("v1", [["a", 1], ["b", 0]]), played("v1", [["a", 0], ["b", 1]]), played("v1", [["a", 1], ["b", 0]]), played("v2", [["a", 0], ["c", 1]])];
+
+  expect(codeVersions(matches)).toEqual([
+    { code: "v1", matches: 3, entrants: ["a", "b"] },
+    { code: "v2", matches: 1, entrants: ["a", "c"] },
+  ]);
+  expect(sharesByVersion(matches).filter(({ entrant }) => entrant === "a").map(({ code, matches: count, share }) => [code, count, share])).toEqual([["v1", 3, 2 / 3], ["v2", 1, 0]]);
+});
+
 // The fake arena: a child that writes the manifest a finished match would.
 
 const lettersOf = (match: ScheduledMatch) => {
@@ -224,7 +289,7 @@ const manifestOf = (tournament: Tournament, match: ScheduledMatch, status: "fini
     controllers: match.seats.map((seat) => (seat === "DoN" || seat === "Story" ? seat : "Agent")),
     letters,
     delivery: "on-turn",
-    provenance: { agents },
+    provenance: { code_sha: "abc123", agents },
     agents: Object.fromEntries(Object.keys(agents).map((seat) => [seat, { moves: 2, reminders: 1, interventions: 1 }])),
     standings: letters.map((player, index) => ({ player, cash: index === winner ? 150_000 : 0, controller: null })),
   };
@@ -300,6 +365,10 @@ test("an interrupted tournament and its restart finish every match once, and a f
 
   expect(report.matches).toEqual({ scheduled: schedule.length, finished: schedule.length, scored: schedule.length });
   expect(report.excluded).toEqual([]);
+  expect(report.seeds).toBe(new Set(schedule.map((match) => match.seed)).size);
+  expect(report.starters.map(({ size, started }) => [size, started])).toEqual([[2, [1, 2].map((position) => schedule.filter((match) => firstPositionOf(match.seed, 2) === position).length)]]);
+  expect(report.versions.map(({ code, matches }) => [code, matches])).toEqual([["abc123", schedule.length]]);
+  expect(report.versionShares).toEqual([]);
   expect(report.anchor).toBe("don");
   expect(report.cost.find((row) => row.entrant === opening.entrants[at])).toMatchObject({ calls: 1, faults: 1, dollars: priced });
   expect(costOf(dir, prices, schedule)).toBe(priced);
