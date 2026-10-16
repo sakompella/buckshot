@@ -1,0 +1,1265 @@
+{
+  "name": "cpa-tiers",
+  "seed": 3000,
+  "delivery": "on-turn",
+  "endpoints": {
+    "cpa-anthropic": {
+      "api": "anthropic",
+      "url": "http://127.0.0.1:8318",
+      "keyEnv": "CPA_KEY"
+    },
+    "cpa-openai": {
+      "api": "openai-responses",
+      "url": "http://127.0.0.1:8318/v1",
+      "keyEnv": "CPA_KEY"
+    },
+    "9router-openai": {
+      "api": "openai-responses",
+      "url": "http://localhost:20128/v1",
+      "keyEnv": "NINEROUTER_KEY"
+    }
+  },
+  "entrants": {
+    "claude-haiku-4-5-20251001": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "effort": "medium"
+    },
+    "claude-haiku-5-5": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-5-5",
+      "effort": "medium"
+    },
+    "gpt-6-luna": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6-luna",
+      "effort": "medium"
+    },
+    "claude-sonnet-5-5": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-sonnet-5-5",
+      "effort": "medium"
+    },
+    "claude-opus-5-5": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-opus-5-5",
+      "effort": "medium"
+    },
+    "gpt-6.1-sol": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6.1-sol",
+      "effort": "medium"
+    },
+    "gpt-6-astra": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6-astra",
+      "effort": "medium"
+    },
+    "deepseek-v4.1-flash": {
+      "endpoint": "9router-openai",
+      "model": "oc/deepseek-v4.1-flash-free",
+      "catalogModel": "opencode/deepseek-v4.1-flash",
+      "effort": "medium"
+    },
+    "claude-haiku-4-5-20251001-off": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "effort": "off"
+    },
+    "claude-haiku-4-5-20251001-low": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "effort": "low"
+    },
+    "claude-haiku-4-5-20251001-high": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "effort": "high"
+    },
+    "claude-haiku-5-5-low": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-5-5",
+      "effort": "low"
+    },
+    "claude-haiku-5-5-high": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-5-5",
+      "effort": "high"
+    },
+    "claude-haiku-5-5-xhigh": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-5-5",
+      "effort": "xhigh"
+    },
+    "claude-haiku-5-5-max": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-5-5",
+      "effort": "max"
+    },
+    "claude-sonnet-5-5-low": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-sonnet-5-5",
+      "effort": "low"
+    },
+    "claude-sonnet-5-5-high": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-sonnet-5-5",
+      "effort": "high"
+    },
+    "claude-sonnet-5-5-xhigh": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-sonnet-5-5",
+      "effort": "xhigh"
+    },
+    "claude-sonnet-5-5-max": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-sonnet-5-5",
+      "effort": "max"
+    },
+    "claude-haiku-5-5-off": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-5-5",
+      "effort": "off"
+    },
+    "claude-sonnet-5-5-off": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-sonnet-5-5",
+      "effort": "off"
+    },
+    "claude-haiku-4-5-20251001-minimal": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "effort": "minimal"
+    },
+    "gpt-6-luna-off": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6-luna",
+      "effort": "off"
+    },
+    "gpt-6-luna-low": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6-luna",
+      "effort": "low"
+    },
+    "gpt-6-luna-high": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6-luna",
+      "effort": "high"
+    },
+    "gpt-6-luna-xhigh": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6-luna",
+      "effort": "xhigh"
+    },
+    "gpt-6-luna-max": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6-luna",
+      "effort": "max"
+    }
+  },
+  "pairings": [
+    [
+      "claude-haiku-4-5-20251001",
+      "claude-haiku-5-5"
+    ],
+    [
+      "claude-haiku-4-5-20251001",
+      "gpt-6-luna"
+    ],
+    [
+      "claude-haiku-5-5",
+      "gpt-6-luna"
+    ],
+    [
+      "claude-sonnet-5-5",
+      "claude-opus-5-5"
+    ],
+    [
+      "claude-sonnet-5-5",
+      "gpt-6.1-sol"
+    ],
+    [
+      "claude-sonnet-5-5",
+      "gpt-6-astra"
+    ],
+    [
+      "claude-opus-5-5",
+      "gpt-6.1-sol"
+    ],
+    [
+      "claude-opus-5-5",
+      "gpt-6-astra"
+    ],
+    [
+      "gpt-6.1-sol",
+      "gpt-6-astra"
+    ],
+    [
+      "claude-haiku-4-5-20251001",
+      "claude-sonnet-5-5"
+    ],
+    [
+      "claude-haiku-4-5-20251001",
+      "claude-opus-5-5"
+    ],
+    [
+      "claude-haiku-4-5-20251001",
+      "gpt-6.1-sol"
+    ],
+    [
+      "claude-haiku-4-5-20251001",
+      "gpt-6-astra"
+    ],
+    [
+      "claude-haiku-5-5",
+      "claude-sonnet-5-5"
+    ],
+    [
+      "claude-haiku-5-5",
+      "claude-opus-5-5"
+    ],
+    [
+      "claude-haiku-5-5",
+      "gpt-6.1-sol"
+    ],
+    [
+      "claude-haiku-5-5",
+      "gpt-6-astra"
+    ],
+    [
+      "gpt-6-luna",
+      "claude-sonnet-5-5"
+    ],
+    [
+      "gpt-6-luna",
+      "claude-opus-5-5"
+    ],
+    [
+      "gpt-6-luna",
+      "gpt-6.1-sol"
+    ],
+    [
+      "gpt-6-luna",
+      "gpt-6-astra"
+    ],
+    [
+      "claude-haiku-4-5-20251001",
+      "deepseek-v4.1-flash"
+    ],
+    [
+      "claude-haiku-5-5",
+      "deepseek-v4.1-flash"
+    ],
+    [
+      "claude-sonnet-5-5",
+      "deepseek-v4.1-flash"
+    ],
+    [
+      "claude-opus-5-5",
+      "deepseek-v4.1-flash"
+    ],
+    [
+      "gpt-6-luna",
+      "deepseek-v4.1-flash"
+    ],
+    [
+      "gpt-6.1-sol",
+      "deepseek-v4.1-flash"
+    ],
+    [
+      "gpt-6-astra",
+      "deepseek-v4.1-flash"
+    ],
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-off",
+        "claude-haiku-4-5-20251001-low"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-off",
+        "claude-haiku-4-5-20251001"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-off",
+        "claude-haiku-4-5-20251001-high"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-low",
+        "claude-haiku-4-5-20251001"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-low",
+        "claude-haiku-4-5-20251001-high"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001",
+        "claude-haiku-4-5-20251001-high"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-low",
+        "claude-haiku-5-5"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-low",
+        "claude-haiku-5-5-high"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-low",
+        "claude-haiku-5-5-xhigh"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-low",
+        "claude-haiku-5-5-max"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5",
+        "claude-haiku-5-5-high"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5",
+        "claude-haiku-5-5-xhigh"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5",
+        "claude-haiku-5-5-max"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-high",
+        "claude-haiku-5-5-xhigh"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-high",
+        "claude-haiku-5-5-max"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-xhigh",
+        "claude-haiku-5-5-max"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5-low",
+        "claude-sonnet-5-5"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5-low",
+        "claude-sonnet-5-5-high"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5-low",
+        "claude-sonnet-5-5-xhigh"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5-low",
+        "claude-sonnet-5-5-max"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5",
+        "claude-sonnet-5-5-high"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5",
+        "claude-sonnet-5-5-xhigh"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5",
+        "claude-sonnet-5-5-max"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5-high",
+        "claude-sonnet-5-5-xhigh"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5-high",
+        "claude-sonnet-5-5-max"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5-xhigh",
+        "claude-sonnet-5-5-max"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-off",
+        "claude-haiku-5-5-low"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-off",
+        "claude-haiku-5-5"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-off",
+        "claude-haiku-5-5-high"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-off",
+        "claude-haiku-5-5-xhigh"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-off",
+        "claude-haiku-5-5-max"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5-off",
+        "claude-sonnet-5-5-low"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5-off",
+        "claude-sonnet-5-5"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5-off",
+        "claude-sonnet-5-5-high"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5-off",
+        "claude-sonnet-5-5-xhigh"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5-off",
+        "claude-sonnet-5-5-max"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-off",
+        "claude-haiku-4-5-20251001-minimal"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-minimal",
+        "claude-haiku-4-5-20251001-low"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-minimal",
+        "claude-haiku-4-5-20251001"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-minimal",
+        "claude-haiku-4-5-20251001-high"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6-luna-off",
+        "gpt-6-luna-low"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6-luna-off",
+        "gpt-6-luna"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6-luna-off",
+        "gpt-6-luna-high"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6-luna-off",
+        "gpt-6-luna-xhigh"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6-luna-off",
+        "gpt-6-luna-max"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6-luna-low",
+        "gpt-6-luna"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6-luna-low",
+        "gpt-6-luna-high"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6-luna-low",
+        "gpt-6-luna-xhigh"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6-luna-low",
+        "gpt-6-luna-max"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6-luna",
+        "gpt-6-luna-high"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6-luna",
+        "gpt-6-luna-xhigh"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6-luna",
+        "gpt-6-luna-max"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6-luna-high",
+        "gpt-6-luna-xhigh"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6-luna-high",
+        "gpt-6-luna-max"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6-luna-xhigh",
+        "gpt-6-luna-max"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    }
+  ],
+  "blocksPerPairing": 10
+}
