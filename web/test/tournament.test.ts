@@ -3,13 +3,13 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { ConfigProvider, Effect, Exit, Redacted, Result, type Schema } from "effect";
+import { ConfigProvider, Effect, Exit, Option, Redacted, Result, type Schema } from "effect";
 
 import { AGENTS } from "../src/arena/agent.ts";
 import { DEFAULT_PRICES, loadPrices } from "../src/arena/cost.ts";
 import { agentEndpoint } from "../src/arena/endpoints.ts";
 import { checkPrices, childCommand, childEnv, parseConfig, resolveKeys, type ScheduledMatch, scheduleOf, type Tournament, unfinished } from "../src/arena/tournament.ts";
-import { costOf, openTournament, readMatch, runPending, TOURNAMENT_FORMAT } from "../src/arena/tournament-dir.ts";
+import { cooldownOf, costOf, openTournament, RATE_LIMIT_WAIT_SECONDS, readMatch, runPending, TOURNAMENT_FORMAT } from "../src/arena/tournament-dir.ts";
 import { reportOf } from "../src/arena/tournament-report.ts";
 import { fitRatings, ELO_PER_NAT, intervalsOf, type PlayedMatch, resamples, sharesByEntrant, winShares } from "../src/arena/tournament-stats.ts";
 
@@ -341,6 +341,54 @@ test("a model at its usage limit holds back its matches until the reset, other m
   coolDown(earlier, lunaFirst, 1);
 
   expect((await playAll(earlier, finish(earlier))).runs).toEqual([...claude, lunaFirst, lunaSecond].map((match) => match.name));
+});
+
+test.each([
+  ['openai-responses-A API error (429): {"code":"model_cooldown","reset_seconds":90}', 90],
+  ['openai-responses-A API error (503): {"error":{"message":"[oc/deepseek-v4.1-flash-free] Rate limited (reset after 1h 2m 3s)"}}', 3723],
+  ['openai-responses-A API error (429): {"error":{"message":"Too many requests"}}', RATE_LIMIT_WAIT_SECONDS],
+  ['429 {"type":"error","error":{"type":"rate_limit_error","message":"Number of requests has exceeded your rate limit"}}', RATE_LIMIT_WAIT_SECONDS],
+  ['openai-responses-A API error (503): {"message":"server_is_overloaded"}', undefined],
+])("a fault holds back the model for the reset its error gives, any 429 for a while, and nothing else: %s", (error, seconds) => {
+  const tournament = tournamentFrom(configJson({ pairings: [["luna", "haiku-5-5"]], blocksPerPairing: 1 }));
+  const [match] = scheduleOf(tournament);
+  const dir = mkdtempSync(join(tmpdir(), "tournament-limit-"));
+  const at = Date.parse("2026-10-16T01:00:00Z");
+
+  if (match === undefined) throw new Error("no match");
+
+  mkdirSync(join(dir, match.name));
+  writeFileSync(join(dir, match.name, "events.jsonl"), `${JSON.stringify({ t: new Date(at).toISOString(), kind: "fault", agent: match.seats[match.entrants.indexOf("luna")], error })}\n`);
+
+  expect(Option.getOrUndefined(cooldownOf(dir, tournament.config, match, at))).toEqual(seconds === undefined ? undefined : { model: "gpt-6-luna", until: at + 1000 * seconds });
+});
+
+test("a capped model plays at most that many matches at once, and the other slots go on", async () => {
+  const tournament = tournamentFrom(configJson({ pairings: [["luna", "haiku-5-5"], ["haiku-5-5", "sonnet"]], blocksPerPairing: 2 }));
+  const schedule = scheduleOf(tournament);
+  const dir = mkdtempSync(join(tmpdir(), "tournament-cap-"));
+  const playing = { luna: 0, all: 0, mostLuna: 0, mostAll: 0 };
+
+  const runOne = async (match: ScheduledMatch) => {
+    const luna = match.entrants.includes("luna") ? 1 : 0;
+
+    playing.luna += luna;
+    playing.all += 1;
+    playing.mostLuna = Math.max(playing.mostLuna, playing.luna);
+    playing.mostAll = Math.max(playing.mostAll, playing.all);
+    await Bun.sleep(20);
+    writeManifest(dir, tournament, match, "finished");
+    playing.luna -= luna;
+    playing.all -= 1;
+
+    return 0;
+  };
+
+  const settled = await runPending(dir, tournament.config, schedule, 3, runOne, () => undefined, new AbortController().signal, ONCE, new Map([["gpt-6-luna", 1]]));
+
+  expect(settled.filter(({ status }) => status === "finished").length).toBe(schedule.length);
+  expect(playing.mostLuna).toBe(1);
+  expect(playing.mostAll).toBe(3);
 });
 
 test("a stop during a failed match's pause ends the run at once", async () => {

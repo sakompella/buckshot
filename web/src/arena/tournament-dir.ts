@@ -193,7 +193,7 @@ export const faultsOf = (dir: string, match: ScheduledMatch): ReadonlyArray<stri
 export const costOf = (dir: string, prices: PriceTable, matches: ReadonlyArray<ScheduledMatch>): number =>
   [...totalsBy(prices, matches.flatMap((match) => callsOf(dir, match))).values()].reduce((total, entrant) => total + entrant.dollars, 0);
 
-/** A model its provider refuses until a time, after a usage limit. */
+/** A model its provider refuses until a time, after a usage or rate limit. */
 export interface Cooldown {
   readonly model: string;
   /** Milliseconds since the epoch. */
@@ -208,14 +208,29 @@ const UsageLimit = Schema.Union([
 
 const decodeUsageLimit = Schema.decodeUnknownOption(Schema.fromJsonString(UsageLimit));
 
-/** The cooldown the match's last run ended on, while it lasts: a fault whose error carries a usage limit, for the model of the agent it stopped. */
+/** How long a model waits after a 429 that gives no reset time. */
+export const RATE_LIMIT_WAIT_SECONDS = 120;
+
+/**
+ * The seconds until a provider takes the model again, when the error is a usage or rate limit: a usage limit with its
+ * reset, a router's "reset after 1m 30s" (9router, once every account of a model is limited), or else any 429, which
+ * waits RATE_LIMIT_WAIT_SECONDS. pi-ai shows the status as "API error (429)" for OpenAI and first for Anthropic.
+ */
+const limitSecondsOf = (error: string): Option.Option<number> => {
+  const usageLimit = Option.map(decodeUsageLimit(error.slice(error.indexOf("{"))), (limit) => ("code" in limit ? limit.reset_seconds : limit.resets_in_seconds));
+  const routerLimit = Option.map(Option.fromNullishOr(/reset after (?:(\d+)h ?)?(?:(\d+)m ?)?(?:(\d+)s)?/.exec(error)), ([, hours = "0", minutes = "0", seconds = "0"]) => 3600 * Number(hours) + 60 * Number(minutes) + Number(seconds));
+  const rateLimit = /^429 |API error \(429\)/.test(error) ? Option.some(RATE_LIMIT_WAIT_SECONDS) : Option.none();
+
+  return Option.firstSomeOf([usageLimit, routerLimit, rateLimit]);
+};
+
+/** The cooldown the match's last run ended on, while it lasts: a fault whose error is a usage or rate limit, for the model of the agent it stopped. */
 export const cooldownOf = (dir: string, config: TournamentConfig, match: ScheduledMatch, now: number): Option.Option<Cooldown> =>
   Option.flatMap(endingFault(join(dir, match.name)), (fault) => {
     const entrant = modelEntrant(config, match.entrants[match.seats.indexOf(fault.agent)] ?? "");
-    const limit = decodeUsageLimit(fault.error.slice(fault.error.indexOf("{")));
 
     return Option.filter(
-      Option.flatMap(limit, (refusal) => (entrant === undefined ? Option.none() : Option.some({ model: entrant.model, until: Date.parse(fault.t) + 1000 * ("code" in refusal ? refusal.reset_seconds : refusal.resets_in_seconds) }))),
+      Option.flatMap(limitSecondsOf(fault.error), (seconds) => (entrant === undefined ? Option.none() : Option.some({ model: entrant.model, until: Date.parse(fault.t) + 1000 * seconds }))),
       ({ until }) => until > now,
     );
   });
@@ -250,7 +265,7 @@ const pause = (ms: number, stop: AbortSignal) =>
  * its exit code. A match is finished when it exited 0 and its manifest says so. One stopped by a model's usage limit
  * goes back to the front of the queue, and no match with that model starts until the reset; the cooldowns of earlier
  * runs are read from the matches' logs at the start. Any other failure is retried as `retry` says, and then left for the
- * next run.
+ * next run. `caps` holds the most matches a model plays at once, for a model with a tight rate limit.
  */
 export const runPending = async (
   dir: string,
@@ -261,14 +276,27 @@ export const runPending = async (
   onSettled: (settled: Settled) => void,
   stop: AbortSignal,
   retry: Retry = RETRY,
+  caps: ReadonlyMap<string, number> = new Map(),
 ): Promise<ReadonlyArray<Settled>> => {
   const settled: Array<Settled> = [];
   const queue = [...unfinished(schedule, finishedNames(dir, schedule))];
   const failures = new Map<string, number>();
   const coolingUntil = new Map<string, number>();
 
+  const playing = new Map<string, number>();
+
+  const modelsOf = (match: ScheduledMatch) => new Set(match.entrants.flatMap((name) => modelEntrant(config, name)?.model ?? []));
   const cool = ({ model, until }: Cooldown) => coolingUntil.set(model, Math.max(until, coolingUntil.get(model) ?? 0));
-  const isReady = (match: ScheduledMatch) => match.entrants.every((name) => (coolingUntil.get(modelEntrant(config, name)?.model ?? "") ?? 0) <= Date.now());
+  const isReady = (match: ScheduledMatch) => [...modelsOf(match)].every((model) => (coolingUntil.get(model) ?? 0) <= Date.now() && (playing.get(model) ?? 0) < (caps.get(model) ?? Infinity));
+
+  const countPlaying = (match: ScheduledMatch, change: 1 | -1) => {
+    for (const model of modelsOf(match)) playing.set(model, (playing.get(model) ?? 0) + change);
+  };
+
+  // A slot with nothing to start waits until a reset, a minute, or the end of a
+  // match, which can free a capped model.
+  let matchEnded = new AbortController();
+
   const nextReset = () => Math.min(...[...coolingUntil.values()].filter((until) => until > Date.now()));
 
   for (const match of queue) Option.match(cooldownOf(dir, config, match, Date.now()), { onNone: () => undefined, onSome: cool });
@@ -279,11 +307,15 @@ export const runPending = async (
       const match = at === -1 ? undefined : queue.splice(at, 1)[0];
 
       if (match === undefined) {
-        await pause(Math.min(IDLE_MS, nextReset() - Date.now()), stop);
+        await pause(Math.min(IDLE_MS, nextReset() - Date.now()), AbortSignal.any([stop, matchEnded.signal]));
         continue;
       }
 
+      countPlaying(match, 1);
       const exitCode = await runOne(match);
+      countPlaying(match, -1);
+      matchEnded.abort();
+      matchEnded = new AbortController();
       const cooldown = cooldownOf(dir, config, match, Date.now());
 
       const result: Settled =
