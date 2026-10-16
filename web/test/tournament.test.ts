@@ -9,7 +9,7 @@ import { AGENTS } from "../src/arena/agent.ts";
 import { DEFAULT_PRICES, loadPrices } from "../src/arena/cost.ts";
 import { agentEndpoint } from "../src/arena/endpoints.ts";
 import { checkPrices, childCommand, childEnv, parseConfig, resolveKeys, type ScheduledMatch, scheduleOf, type Tournament, unfinished } from "../src/arena/tournament.ts";
-import { cooldownOf, costOf, openTournament, RATE_LIMIT_WAIT_SECONDS, readMatch, runPending, TOURNAMENT_FORMAT } from "../src/arena/tournament-dir.ts";
+import { cooldownOf, costOf, openTournament, RATE_LIMIT_WAIT_SECONDS, readMatch, runPending, type Scheduling, TOURNAMENT_FORMAT } from "../src/arena/tournament-dir.ts";
 import { reportOf } from "../src/arena/tournament-report.ts";
 import { fitRatings, ELO_PER_NAT, intervalsOf, type PlayedMatch, resamples, sharesByEntrant, winShares } from "../src/arena/tournament-stats.ts";
 
@@ -267,21 +267,21 @@ test("an interrupted tournament and its restart finish every match once, and a f
   };
 
   const broken = new Set([schedule[5]?.name ?? ""]);
-  const first = await runPending(dir, tournament.config, schedule, 2, fake(broken, interrupted), () => undefined, interrupted.signal, ONCE);
+  const first = await runPending(dir, tournament.config, schedule, 2, fake(broken, interrupted), () => undefined, interrupted.signal, { retry: ONCE });
 
   expect(first.length).toBeLessThan(schedule.length);
 
-  const second = await runPending(dir, tournament.config, schedule, 2, fake(broken, new AbortController()), () => undefined, new AbortController().signal, ONCE);
+  const second = await runPending(dir, tournament.config, schedule, 2, fake(broken, new AbortController()), () => undefined, new AbortController().signal, { retry: ONCE });
 
   expect(second.filter(({ status }) => status === "failed").map(({ match }) => match.name)).toEqual([...broken]);
 
-  const third = await runPending(dir, tournament.config, schedule, 2, fake(new Set(), new AbortController()), () => undefined, new AbortController().signal, ONCE);
+  const third = await runPending(dir, tournament.config, schedule, 2, fake(new Set(), new AbortController()), () => undefined, new AbortController().signal, { retry: ONCE });
 
   expect(third.map(({ match }) => match.name)).toEqual([...broken]);
   expect(third.every(({ status }) => status === "finished")).toBe(true);
   expect([...ran].toSorted()).toEqual([...schedule.map((match) => match.name), ...broken].toSorted());
   expect(unfinished(schedule, new Set(schedule.map((match) => match.name)))).toEqual([]);
-  expect((await runPending(dir, tournament.config, schedule, 2, fake(new Set(), new AbortController()), () => undefined, new AbortController().signal, ONCE)).length).toBe(0);
+  expect((await runPending(dir, tournament.config, schedule, 2, fake(new Set(), new AbortController()), () => undefined, new AbortController().signal, { retry: ONCE })).length).toBe(0);
 
   const [opening] = schedule;
   const at = opening?.seats.findIndex((seat) => AGENTS.some((letter) => letter === seat)) ?? -1;
@@ -323,7 +323,7 @@ test("a model at its usage limit holds back its matches until the reset, other m
 
   const playAll = async (dir: string, runOne: (match: ScheduledMatch) => number) => {
     const runs: Array<string> = [];
-    const settled = await runPending(dir, tournament.config, schedule, 1, async (match) => (runs.push(match.name), runOne(match)), () => undefined, new AbortController().signal, { attempts: 1, pauseMs: 60_000 });
+    const settled = await runPending(dir, tournament.config, schedule, 1, async (match) => (runs.push(match.name), runOne(match)), () => undefined, new AbortController().signal, { retry: { attempts: 1, pauseMs: 60_000 } });
 
     return { runs, settled };
   };
@@ -386,6 +386,34 @@ test("each refusal in a row doubles the wait after a 429 without a reset, and a 
   expect(waitAfter(Array.from({ length: 9 }, () => "fault"))).toBe(16 * RATE_LIMIT_WAIT_SECONDS);
 });
 
+test("a match with a model in last starts only when no other can, and a forgotten cooldown does not hold its model back", async () => {
+  const tournament = tournamentFrom(configJson({ pairings: [["luna", "haiku-5-5"], ["haiku-5-5", "sonnet"]], blocksPerPairing: 1 }));
+  const schedule = scheduleOf(tournament);
+  const [lunaFirst, lunaSecond, ...claude] = schedule;
+
+  if (lunaFirst === undefined || lunaSecond === undefined || claude.length !== 2) throw new Error("the schedule is not two luna matches, then two others");
+
+  const playAll = async (dir: string, scheduling: Scheduling) => {
+    const runs: Array<string> = [];
+
+    await runPending(dir, tournament.config, schedule, 1, async (match) => (runs.push(match.name), writeManifest(dir, tournament, match, "finished"), 0), () => undefined, new AbortController().signal, scheduling);
+
+    return runs;
+  };
+
+  const lunaLast = await playAll(mkdtempSync(join(tmpdir(), "tournament-last-")), { last: new Set(["gpt-6-luna"]) });
+
+  expect(lunaLast).toEqual([...claude, lunaFirst, lunaSecond].map((match) => match.name));
+
+  const resetEarly = mkdtempSync(join(tmpdir(), "tournament-forget-"));
+  const error = `openai-responses-A API error (429): ${JSON.stringify({ code: "model_cooldown", reset_seconds: 3600 })}`;
+
+  mkdirSync(join(resetEarly, lunaFirst.name));
+  writeFileSync(join(resetEarly, lunaFirst.name, "events.jsonl"), `${JSON.stringify({ t: new Date().toISOString(), kind: "fault", agent: lunaFirst.seats[lunaFirst.entrants.indexOf("luna")], error })}\n`);
+
+  expect(await playAll(resetEarly, { forget: new Set(["gpt-6-luna"]) })).toEqual(schedule.map((match) => match.name));
+});
+
 test("a capped model plays at most that many matches at once, and the other slots go on", async () => {
   const tournament = tournamentFrom(configJson({ pairings: [["luna", "haiku-5-5"], ["haiku-5-5", "sonnet"]], blocksPerPairing: 2 }));
   const schedule = scheduleOf(tournament);
@@ -407,7 +435,7 @@ test("a capped model plays at most that many matches at once, and the other slot
     return 0;
   };
 
-  const settled = await runPending(dir, tournament.config, schedule, 3, runOne, () => undefined, new AbortController().signal, ONCE, new Map([["gpt-6-luna", 1]]));
+  const settled = await runPending(dir, tournament.config, schedule, 3, runOne, () => undefined, new AbortController().signal, { retry: ONCE, caps: new Map([["gpt-6-luna", 1]]) });
 
   expect(settled.filter(({ status }) => status === "finished").length).toBe(schedule.length);
   expect(playing.mostLuna).toBe(1);
@@ -420,7 +448,7 @@ test("a stop during a failed match's pause ends the run at once", async () => {
   const stop = new AbortController();
   const started = Date.now();
 
-  await runPending(dir, tournament.config, scheduleOf(tournament), 1, async () => (stop.abort(), 1), () => undefined, stop.signal, { attempts: 3, pauseMs: 60_000 });
+  await runPending(dir, tournament.config, scheduleOf(tournament), 1, async () => (stop.abort(), 1), () => undefined, stop.signal, { retry: { attempts: 3, pauseMs: 60_000 } });
 
   expect(Date.now() - started).toBeLessThan(5_000);
 });
@@ -450,7 +478,7 @@ test("a failed match goes to the back of the queue and is retried, up to its att
     },
     () => undefined,
     new AbortController().signal,
-    { attempts: 3, pauseMs: 0 },
+    { retry: { attempts: 3, pauseMs: 0 } },
   );
 
   expect(runs).toEqual([flaky.name, ...schedule.slice(1).map((match) => match.name), flaky.name, broken.name, broken.name]);

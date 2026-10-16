@@ -6,7 +6,7 @@ import { Option, Result } from "effect";
 
 import { DEFAULT_PRICES, loadPrices } from "../src/arena/cost.ts";
 import { checkPrices, childCommand, childEnv, parseConfig, resolveKeys, type ScheduledMatch, scheduleOf, type TournamentError, unfinished } from "../src/arena/tournament.ts";
-import { cooldownOf, costOf, faultsOf, finishedNames, openTournament, RETRY, runPending, type Settled, winnersOf } from "../src/arena/tournament-dir.ts";
+import { cooldownOf, costOf, faultsOf, finishedNames, openTournament, runPending, type Settled, winnersOf } from "../src/arena/tournament-dir.ts";
 
 // Plays a tournament: every scheduled match, in schedule order, as a child
 // process running scripts/arena.ts, at most --parallel at a time (default 5).
@@ -18,13 +18,17 @@ import { cooldownOf, costOf, faultsOf, finishedNames, openTournament, RETRY, run
 // own PLAYER_* variables. A match stopped by a model's usage or rate limit (a
 // 429) waits for the reset, with every match of that model, and does not count
 // as failed; other matches fill the slots. --cap <model>=N, given once per
-// model, plays at most N matches of that model at once. A match that fails goes
-// to the back of the queue after a pause, up to three runs, and the rest go on.
-// Rerun the same command to resume: finished matches never run again. Do not
-// run two of these on one directory. --limit plays at most that many matches.
-// The runner appends a line to <dir>/PROGRESS.md when it starts, every 30
-// minutes and when it ends. --dry-run prints the schedule of the last config.
-// Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel N] [--cap <model>=N]... [--limit N] [--dry-run]
+// model, plays at most N matches of that model at once; --last <model> starts
+// its matches only when no other match can; --forget-cooldown <model> ignores
+// the model's recorded cooldowns at the start, after its provider reset early.
+// A match that fails goes to the back of the queue after a pause, up to three
+// runs, and the rest go on. Rerun the same command to resume: finished matches
+// never run again. Do not run two of these on one directory. --limit plays at
+// most that many matches. The runner appends a line to <dir>/PROGRESS.md when
+// it starts, every 30 minutes and when it ends. --dry-run prints the schedule
+// of the last config.
+// Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel N] [--cap <model>=N]... [--last <model>]...
+//          [--forget-cooldown <model>]... [--limit N] [--dry-run]
 //        bun scripts/arena-stats.ts <tournament dir> [--json]
 
 const WEB = join(import.meta.dir, "..");
@@ -37,7 +41,7 @@ const flag = (name: string): string | undefined => {
   return at === -1 ? undefined : args[at + 1];
 };
 
-const VALUED = new Set(["--dir", "--parallel", "--limit", "--cap"]);
+const VALUED = new Set(["--dir", "--parallel", "--limit", "--cap", "--last", "--forget-cooldown"]);
 
 const configPaths = args.filter((arg, index) => !arg.startsWith("--") && !VALUED.has(args[index - 1] ?? ""));
 
@@ -45,7 +49,8 @@ const parallel = Number(flag("parallel") ?? "5");
 
 const limit = flag("limit") === undefined ? undefined : Number(flag("limit"));
 
-const capArgs = args.flatMap((arg, index) => (arg === "--cap" ? [args[index + 1] ?? ""] : []));
+/** The values of a flag given once per value, as --cap is. */
+const repeated = (name: string): ReadonlyArray<string> => args.flatMap((arg, index) => (arg === `--${name}` ? [args[index + 1] ?? ""] : []));
 
 const exit = (message: string): never => {
   console.error(message);
@@ -55,19 +60,23 @@ const exit = (message: string): never => {
 
 const unwrap = <A>(result: Result.Result<A, TournamentError>): A => Result.match(result, { onFailure: (error) => exit(error.message), onSuccess: (value) => value });
 
-if (configPaths.length === 0) exit("Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel N] [--cap <model>=N]... [--limit N] [--dry-run]");
+if (configPaths.length === 0) exit("Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel N] [--cap <model>=N]... [--last <model>]... [--forget-cooldown <model>]... [--limit N] [--dry-run]");
 
 if (!Number.isInteger(parallel) || parallel < 1) exit("--parallel must be a whole number from 1");
 
 if (limit !== undefined && (!Number.isInteger(limit) || limit < 1)) exit("--limit must be a whole number from 1");
 
 const caps = new Map(
-  capArgs.map((cap) => {
+  repeated("cap").map((cap) => {
     const [, model = "", most = ""] = /^(.+)=([1-9]\d*)$/.exec(cap) ?? exit(`--cap takes <model>=<matches at once>, not "${cap}"`);
 
     return [model, Number(most)] as const;
   }),
 );
+
+const last = new Set(repeated("last"));
+
+const forget = new Set(repeated("forget-cooldown"));
 
 const prices = loadPrices(DEFAULT_PRICES);
 
@@ -188,13 +197,13 @@ const settle = (settled: Settled) => {
 
 const pending = unfinished(file.schedule, finishedNames(dir, file.schedule)).slice(0, limit);
 
-console.log(`${file.config.name}: ${pending.length} of ${file.schedule.length} matches to run, ${parallel} at a time${[...caps].map(([model, most]) => `, at most ${most} with ${model}`).join("")}, in ${dir}`);
+console.log(`${file.config.name}: ${pending.length} of ${file.schedule.length} matches to run, ${parallel} at a time${[...caps].map(([model, most]) => `, at most ${most} with ${model}`).join("")}${[...last].map((model) => `, ${model} last`).join("")}${[...forget].map((model) => `, ${model}'s recorded cooldowns ignored`).join("")}, in ${dir}`);
 
 noteProgress("started");
 
 const every30Minutes = setInterval(() => noteProgress("check"), 30 * 60 * 1000);
 
-const settled = await runPending(dir, file.config, pending, parallel, runOne, settle, stop.signal, RETRY, caps);
+const settled = await runPending(dir, file.config, pending, parallel, runOne, settle, stop.signal, { caps, last, forget });
 
 clearInterval(every30Minutes);
 

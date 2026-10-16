@@ -267,12 +267,20 @@ const pause = (ms: number, stop: AbortSignal) =>
     stop.addEventListener("abort", () => (clearTimeout(timer), resume()), { once: true });
   });
 
+/** How runPending treats models: `caps` holds the most matches a model plays at once, for a model with a tight rate limit; a match with a model in `last` starts only when no other match can; a recorded cooldown of a model in `forget` is not read at the start, as when its provider reset early. */
+export interface Scheduling {
+  readonly retry?: Retry;
+  readonly caps?: ReadonlyMap<string, number>;
+  readonly last?: ReadonlySet<string>;
+  readonly forget?: ReadonlySet<string>;
+}
+
 /**
  * Runs the matches that are not finished, in schedule order, at most `parallel` at a time. `runOne` plays one and gives
  * its exit code. A match is finished when it exited 0 and its manifest says so. One stopped by a model's usage limit
  * goes back to the front of the queue, and no match with that model starts until the reset; the cooldowns of earlier
  * runs are read from the matches' logs at the start. Any other failure is retried as `retry` says, and then left for the
- * next run. `caps` holds the most matches a model plays at once, for a model with a tight rate limit.
+ * next run.
  */
 export const runPending = async (
   dir: string,
@@ -282,8 +290,7 @@ export const runPending = async (
   runOne: (match: ScheduledMatch) => Promise<number>,
   onSettled: (settled: Settled) => void,
   stop: AbortSignal,
-  retry: Retry = RETRY,
-  caps: ReadonlyMap<string, number> = new Map(),
+  { retry = RETRY, caps = new Map(), last = new Set(), forget = new Set() }: Scheduling = {},
 ): Promise<ReadonlyArray<Settled>> => {
   const settled: Array<Settled> = [];
   const queue = [...unfinished(schedule, finishedNames(dir, schedule))];
@@ -295,6 +302,7 @@ export const runPending = async (
   const modelsOf = (match: ScheduledMatch) => new Set(match.entrants.flatMap((name) => modelEntrant(config, name)?.model ?? []));
   const cool = ({ model, until }: Cooldown) => coolingUntil.set(model, Math.max(until, coolingUntil.get(model) ?? 0));
   const isReady = (match: ScheduledMatch) => [...modelsOf(match)].every((model) => (coolingUntil.get(model) ?? 0) <= Date.now() && (playing.get(model) ?? 0) < (caps.get(model) ?? Infinity));
+  const isLast = (match: ScheduledMatch) => [...modelsOf(match)].some((model) => last.has(model));
 
   const countPlaying = (match: ScheduledMatch, change: 1 | -1) => {
     for (const model of modelsOf(match)) playing.set(model, (playing.get(model) ?? 0) + change);
@@ -306,11 +314,12 @@ export const runPending = async (
 
   const nextReset = () => Math.min(...[...coolingUntil.values()].filter((until) => until > Date.now()));
 
-  for (const match of queue) Option.match(cooldownOf(dir, config, match, Date.now()), { onNone: () => undefined, onSome: cool });
+  for (const match of queue) Option.match(Option.filter(cooldownOf(dir, config, match, Date.now()), ({ model }) => !forget.has(model)), { onNone: () => undefined, onSome: cool });
 
   const slot = async (): Promise<void> => {
     while (queue.length > 0 && !stop.aborted) {
-      const at = queue.findIndex(isReady);
+      const first = queue.findIndex((candidate) => isReady(candidate) && !isLast(candidate));
+      const at = first === -1 ? queue.findIndex(isReady) : first;
       const match = at === -1 ? undefined : queue.splice(at, 1)[0];
 
       if (match === undefined) {
