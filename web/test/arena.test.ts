@@ -187,8 +187,10 @@ test.each([
   ["ANT", "claude-haiku-4-5-20251001", { level: "medium", mode: "budget", effort: null, budget_tokens: 8192 }],
   ["ANT", "claude-haiku-5-5", { level: "medium", mode: "adaptive", effort: "medium", budget_tokens: null }],
   ["OAI", "gpt-6-luna", { level: "medium", mode: "effort", effort: "medium", budget_tokens: null }],
+  ["OAI", "opencode/deepseek-v4.1-flash", { level: "high", mode: "effort", effort: "high", budget_tokens: null }],
 ] as const)("the provenance records the thinking settings medium effort resolves to: %s %s", async (api, model, thinking) => {
-  const endpoint = await endpointFrom({ [`PLAYER_A_${api}_URL`]: CPA.url, [`PLAYER_A_${api}_KEY`]: CPA.key, PLAYER_A_MODEL: model, PLAYER_A_EFFORT: "medium" });
+  const catalogModel = model.includes("/") ? { PLAYER_A_CATALOG_MODEL: model } : {};
+  const endpoint = await endpointFrom({ [`PLAYER_A_${api}_URL`]: CPA.url, [`PLAYER_A_${api}_KEY`]: CPA.key, PLAYER_A_MODEL: model, ...catalogModel, PLAYER_A_EFFORT: "medium" });
 
   if (!Exit.isSuccess(endpoint)) throw new Error(String(endpoint.cause));
 
@@ -209,6 +211,20 @@ test("a proxy's model alias plays as the catalog model it names", async () => {
   expect(model?.contextWindow).toBeGreaterThan(0);
 });
 
+test("a router's model plays as a model of the pi-ai provider its catalog model names", async () => {
+  const routed = await endpointFrom({ PLAYER_A_OAI_URL: "http://localhost:20128/v1", PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "oc/deepseek-v4.1-flash-free", PLAYER_A_CATALOG_MODEL: "opencode/deepseek-v4.1-flash" });
+
+  if (!Exit.isSuccess(routed)) throw new Error(String(routed.cause));
+
+  const model = providerOf("openai-responses-A", routed.value).getModels()[0];
+
+  expect(model?.id).toBe("oc/deepseek-v4.1-flash-free");
+  expect(model?.baseUrl).toBe("http://localhost:20128/v1");
+  expect(model?.contextWindow).toBe(1_000_000);
+  expect(model?.api).toBe("openai-responses");
+  expect(provenanceOf("openai-responses-A", routed.value).catalog_model).toBe("opencode/deepseek-v4.1-flash");
+});
+
 test.each([
   [{ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_ANT_KEY: CPA.key, PLAYER_A_OAI_URL: CPA.url, PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "claude-haiku-5-5" }, "not both"],
   [{ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_MODEL: "claude-haiku-5-5" }, "PLAYER_A_ANT_KEY must be set"],
@@ -216,6 +232,8 @@ test.each([
   [{ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_ANT_KEY: CPA.key }, "PLAYER_A_MODEL must be set"],
   [{ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_ANT_KEY: CPA.key, PLAYER_A_MODEL: "gpt-6-luna" }, "PLAYER_A_MODEL=gpt-6-luna is not a pi-ai Anthropic model"],
   [{ PLAYER_A_OAI_URL: CPA.url, PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "gpt-6-luna-fast", PLAYER_A_CATALOG_MODEL: "gpt-6-lunar" }, "PLAYER_A_CATALOG_MODEL=gpt-6-lunar is not a pi-ai OpenAIResponses model"],
+  [{ PLAYER_A_OAI_URL: CPA.url, PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "ds", PLAYER_A_CATALOG_MODEL: "opencode/deepseek-v9" }, "PLAYER_A_CATALOG_MODEL=opencode/deepseek-v9 is not a pi-ai OpenAIResponses model"],
+  [{ PLAYER_A_OAI_URL: CPA.url, PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "ds", PLAYER_A_CATALOG_MODEL: "nowhere/deepseek-v4.1-flash" }, "PLAYER_A_CATALOG_MODEL=nowhere/deepseek-v4.1-flash is not a pi-ai OpenAIResponses model"],
   [{ PLAYER_A_MODEL: "gpt-6-luna" }, "Set PLAYER_A_ANT_URL and PLAYER_A_ANT_KEY, or PLAYER_A_OAI_URL and PLAYER_A_OAI_KEY"],
 ])("a bad endpoint fails naming the variable, never the key: %p", async (env, expected) => {
   const failure = await failureOf(env);

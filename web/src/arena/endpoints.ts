@@ -2,6 +2,7 @@ import { type Api, clampThinkingLevel, createProvider, type Model, type ModelThi
 import { anthropicMessagesApi } from "@earendil-works/pi-ai/api/anthropic-messages.lazy";
 import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.lazy";
 import { DEFAULT_THINKING_BUDGETS } from "@earendil-works/pi-ai/api/simple-options";
+import { getBuiltinModels, getBuiltinProviders } from "@earendil-works/pi-ai/providers/all";
 import { anthropicProvider } from "@earendil-works/pi-ai/providers/anthropic";
 import { openaiProvider } from "@earendil-works/pi-ai/providers/openai";
 import type { ModelRef } from "@earendil-works/pi-durable";
@@ -14,8 +15,11 @@ import type { AgentId } from "./agent.ts";
 // API, or PLAYER_A_OAI_URL and _OAI_KEY for the OpenAI Responses API, plus
 // PLAYER_A_MODEL and an optional PLAYER_A_EFFORT; B to D likewise. A model id
 // pi-ai does not list, such as a proxy's alias, names the catalog model it
-// stands for in PLAYER_A_CATALOG_MODEL. Keys stay Redacted until pi-ai asks for
-// them, so no error or log can show one.
+// stands for in PLAYER_A_CATALOG_MODEL: a model of the endpoint's API, or a
+// model of another pi-ai provider after its name and a slash, such as
+// opencode/deepseek-v4.1-flash for a router that serves it on the OpenAI
+// Responses API. Keys stay Redacted until pi-ai asks for them, so no error or
+// log can show one.
 
 export const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const satisfies ReadonlyArray<ModelThinkingLevel>;
 
@@ -55,14 +59,32 @@ const credentials = (urlName: string, keyName: string) =>
     }),
   );
 
-/** The id pi-ai's catalog knows the endpoint's model by. */
-const catalogIdOf = (endpoint: Endpoint): string => endpoint.catalogModel ?? endpoint.model;
-
-const catalogOf = (endpoint: Endpoint): ReadonlyArray<Model<Api>> =>
+const ownCatalogOf = (endpoint: Endpoint): ReadonlyArray<Model<Api>> =>
   Endpoint.match(endpoint, {
     Anthropic: (): ReadonlyArray<Model<Api>> => anthropicProvider().getModels(),
     OpenAIResponses: (): ReadonlyArray<Model<Api>> => openaiProvider().getModels(),
   });
+
+const builtinProvider = (name: string) => getBuiltinProviders().find((provider) => provider === name);
+
+/** The pi-ai catalog model the endpoint's model plays as: its catalog model, from the provider it names before a slash or else from the endpoint's API, or the model itself. */
+const catalogModelOf = (endpoint: Endpoint): Model<Api> | undefined => {
+  const [, providerName = "", id = ""] = /^([^/]+)\/(.+)$/.exec(endpoint.catalogModel ?? "") ?? [];
+  const provider = builtinProvider(providerName);
+
+  if (provider !== undefined) return getBuiltinModels(provider).find((model) => model.id === id);
+
+  return ownCatalogOf(endpoint).find((model) => model.id === (endpoint.catalogModel ?? endpoint.model));
+};
+
+/** The endpoint's catalog model, which agentEndpoint has checked is listed. */
+const listedModelOf = (endpoint: Endpoint): Model<Api> => {
+  const model = catalogModelOf(endpoint);
+
+  if (model === undefined) throw new Error(`${endpoint.catalogModel ?? endpoint.model} left pi-ai's catalog after it was parsed`);
+
+  return model;
+};
 
 /** One agent's endpoint. Its model, or the catalog model it names, must be in pi-ai's catalog for that API, which supplies the context window and thinking levels. */
 export const agentEndpoint = (agent: AgentId) =>
@@ -88,11 +110,10 @@ export const agentEndpoint = (agent: AgentId) =>
     const notListed = (endpoint: Endpoint): string =>
       Option.match(settings.catalogModel, {
         onNone: () => `${name("MODEL")}=${endpoint.model} is not a pi-ai ${endpoint._tag} model; for a proxy's alias, set ${name("CATALOG_MODEL")} to the model it stands for`,
-        onSome: (catalogModel) => `${name("CATALOG_MODEL")}=${catalogModel} is not a pi-ai ${endpoint._tag} model`,
+        onSome: (catalogModel) => `${name("CATALOG_MODEL")}=${catalogModel} is not a pi-ai ${endpoint._tag} model, nor a model of the pi-ai provider named before a slash`,
       });
 
-    const inCatalog = (endpoint: Endpoint) =>
-      catalogOf(endpoint).some((model) => model.id === catalogIdOf(endpoint)) ? Effect.succeed(endpoint) : Effect.fail(new EndpointConfigError({ message: notListed(endpoint) }));
+    const inCatalog = (endpoint: Endpoint) => (catalogModelOf(endpoint) === undefined ? Effect.fail(new EndpointConfigError({ message: notListed(endpoint) })) : Effect.succeed(endpoint));
 
     if (Option.isSome(anthropic)) return yield* inCatalog(Endpoint.cases.Anthropic.make({ ...anthropic.value, ...fields }));
 
@@ -114,15 +135,17 @@ export const providerIdOf = (agent: AgentId, endpoint: Endpoint): string => Endp
 /** The endpoint as a pi-ai provider with one model. */
 export const providerOf = (providerId: string, endpoint: Endpoint): Provider => {
   const baseUrl = baseUrlOf(endpoint.url);
-  const model = catalogOf(endpoint).find((candidate) => candidate.id === catalogIdOf(endpoint));
-
-  if (model === undefined) throw new Error(`${catalogIdOf(endpoint)} left pi-ai's catalog after it was parsed`);
-
-  const options = { id: providerId, baseUrl, auth: apiKeyAuth(endpoint.key, providerId), models: [{ ...model, id: endpoint.model, provider: providerId, baseUrl }] };
+  const model = { ...listedModelOf(endpoint), id: endpoint.model, provider: providerId, baseUrl };
+  const options = { id: providerId, baseUrl, auth: apiKeyAuth(endpoint.key, providerId) };
 
   return Endpoint.match(endpoint, {
-    Anthropic: () => createProvider({ ...options, api: anthropicMessagesApi() }),
-    OpenAIResponses: () => createProvider({ ...options, api: openAIResponsesApi() }),
+    // SAFETY: a catalog model from another provider can list another API, such
+    // as openai-completions for a model a router serves on the Responses API.
+    // The model takes the endpoint's API and keeps its compat flags, which say
+    // what the model upstream accepts; each API reads only the flags it knows.
+    Anthropic: (): Provider => createProvider({ ...options, models: [{ ...model, api: "anthropic-messages" } as Model<"anthropic-messages">], api: anthropicMessagesApi() }),
+    // SAFETY: as above.
+    OpenAIResponses: (): Provider => createProvider({ ...options, models: [{ ...model, api: "openai-responses" } as Model<"openai-responses">], api: openAIResponsesApi() }),
   });
 };
 
@@ -164,9 +187,5 @@ const thinkingOf = (endpoint: Endpoint, model: Model<Api>): AgentProvenance["thi
 
 /** The agent's provenance: the endpoint as the manifest shows it, and the thinking settings its effort resolves to. */
 export const provenanceOf = (providerId: string, endpoint: Endpoint): AgentProvenance => {
-  const model = catalogOf(endpoint).find((candidate) => candidate.id === catalogIdOf(endpoint));
-
-  if (model === undefined) throw new Error(`${catalogIdOf(endpoint)} left pi-ai's catalog after it was parsed`);
-
-  return { api: endpoint._tag, provider: providerId, url: baseUrlOf(endpoint.url), model: endpoint.model, catalog_model: endpoint.catalogModel ?? null, effort: endpoint.effort ?? null, thinking: thinkingOf(endpoint, model) };
+  return { api: endpoint._tag, provider: providerId, url: baseUrlOf(endpoint.url), model: endpoint.model, catalog_model: endpoint.catalogModel ?? null, effort: endpoint.effort ?? null, thinking: thinkingOf(endpoint, listedModelOf(endpoint)) };
 };
