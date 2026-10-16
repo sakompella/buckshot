@@ -58,6 +58,8 @@ const plus = (total: Total, dollars: number | undefined, call: CallLine): Total 
   unpriced: total.unpriced + (dollars === undefined ? 1 : 0),
 });
 
+export const totalOf = (prices: PriceTable, calls: ReadonlyArray<CallLine>): Total => calls.reduce((total, call) => plus(total, costOf(prices, call), call), EMPTY);
+
 /** Totals per key, in the order each key first appears. */
 export const totalsBy = <K extends string>(prices: PriceTable, keyed: ReadonlyArray<readonly [K, CallLine]>): ReadonlyMap<K, Total> => {
   const totals = new Map<K, Total>();

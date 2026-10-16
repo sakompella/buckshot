@@ -89,8 +89,26 @@ a {
 
 .filters {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 10px;
   margin-bottom: 14px;
+}
+
+.nav {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.nav a {
+  color: var(--faint);
+  text-decoration: none;
+}
+
+.nav a[aria-current="page"] {
+  color: var(--fg);
+  font-weight: 600;
 }
 
 select {
@@ -182,8 +200,9 @@ body.match {
 
 .match-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 14px;
+  gap: 4px 14px;
   padding: 10px 18px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
@@ -567,4 +586,68 @@ button:hover {
 th[aria-sort="ascending"] .sort,
 th[aria-sort="descending"] .sort {
   color: var(--fg);
+}
+
+/* A model by its name, with its effort as a badge of its own */
+
+.effort {
+  margin-left: 6px;
+  padding: 0 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--dim);
+  font: 10px/16px var(--mono);
+  white-space: nowrap;
+}
+
+.effort.unset {
+  color: var(--faint);
+  border-style: dashed;
+}
+
+.model {
+  color: var(--fg);
+}
+
+.match-header .players {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.match-header .players .effort {
+  margin-right: 10px;
+}
+
+.view {
+  display: flex;
+  margin-left: auto;
+}
+
+.view button:first-child {
+  border-radius: 4px 0 0 4px;
+}
+
+.view button:last-child {
+  border-left: 0;
+  border-radius: 0 4px 4px 0;
+}
+
+.view button[aria-pressed="true"] {
+  background: var(--line);
+  border-color: var(--faint);
+}
+
+.leaderboard th:nth-child(n + 3),
+.leaderboard td.number {
+  text-align: right;
+}
+
+.leaderboard td {
+  vertical-align: baseline;
+}
+
+.leaderboard td .faint {
+  font-size: 11px;
 }

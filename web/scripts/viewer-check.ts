@@ -57,7 +57,7 @@ const cuts = { events: midLine(full.events, 0.3), calls: midLine(full.calls, 0.3
 
 const finished = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Record(Schema.String, Schema.Json)))(readFileSync(join(source, "manifest.json"), "utf8"));
 
-const running = { ...Object.fromEntries(["format", "seed", "controllers", "letters", "delivery", "seating"].map((key) => [key, finished[key] ?? null])), status: "running" };
+const running = { ...Object.fromEntries(["format", "seed", "controllers", "letters", "delivery", "seating", "agents"].map((key) => [key, finished[key] ?? null])), status: "running" };
 
 mkdirSync(live);
 
@@ -111,6 +111,23 @@ try {
   await page.goto(`${base}?sort=started&dir=asc`);
   await page.locator(".runs tbody tr").first().waitFor();
   check((await page.locator(".runs tbody tr").first().textContent())?.includes("faux-") === true && (await page.locator('th[aria-sort="ascending"]').textContent())?.includes("Started") === true, "a sort in the query string is applied on load");
+
+  await page.goto(base);
+  await page.locator(".runs tbody tr").first().waitFor();
+  await page.locator('select[data-field="model"]').selectOption("faux-a");
+  check(page.url().endsWith("?model=faux-a"), "picking a model puts it in the query string");
+  await page.locator('select[data-field="vs"]').selectOption("faux-b");
+  check(page.url().endsWith("?model=faux-a&vs=faux-b") && (await page.locator(".runs tbody tr").count()) === 3, "a head to head keeps the runs where both models played, and drops the unreadable one");
+  await page.goto(`${base}?model=faux-a&vs=faux-a`);
+  await page.locator(".runs").waitFor();
+  check((await page.locator(".runs tbody tr").count()) === 0, "a head to head of one model needs two agents of it");
+  await page.goto(`${base}?family=faux-b&effort=high`);
+  await page.locator(".runs").waitFor();
+  check((await page.locator(".runs tbody tr").count()) === 0 && (await page.locator('select[data-field="effort"]').inputValue()) === "high", "a filter on an effort no run has shows nothing, and its picker still says which");
+  await page.goto(base);
+  await page.locator(".runs tbody tr").first().waitFor();
+  check((await page.locator(".runs tbody tr").first().locator(".model").first().textContent()) === "faux-a" && (await page.locator(".runs tbody tr .effort.unset").count()) > 0, "each agent shows its model and an effort of its own, unset when the manifest has none");
+  check((await page.locator("nav a").count()) === 1, "with no tournament.json there is no leaderboard link");
 
   await page.goto(`${base}match/faux-live`);
   await page.locator("body[data-polling=stopped]").waitFor();

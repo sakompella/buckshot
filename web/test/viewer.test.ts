@@ -6,7 +6,10 @@ import { join } from "node:path";
 import { Option, Result, Schema } from "effect";
 
 import type { CallLine, EventLine } from "../src/arena/runlog.ts";
-import type { JsonlLine, PricedRun, Run } from "../src/viewer/api.ts";
+import { EFFORTS, effortName, modelFamily, modelName } from "../src/arena/model-names.ts";
+import type { JsonlLine, LeaderboardRow, PricedRun, Run } from "../src/viewer/api.ts";
+import { type Filter, NO_FILTER, type Played, runMatches } from "../src/viewer/filter.ts";
+import { bestPerModel, type LeaderboardOrder, rowsShown } from "../src/viewer/leaderboard.ts";
 import { afterClick, LIVE_FIRST, orderFromQuery, orderRuns, type RunOrder, writeOrder } from "../src/viewer/order.ts";
 import { callsByTurn, reasoningOf } from "../src/viewer/reasoning.ts";
 import { replayOf } from "../src/viewer/replay.ts";
@@ -111,6 +114,7 @@ const call = (fields: Partial<CallLine>): CallLine => ({
 test("reasoning is named for what the provider's API returned, and says so when only a token count came back", () => {
   expect(reasoningOf(call({ thinking: "weighing the shells" }))).toEqual({ kind: "text", label: "thinking", text: "weighing the shells" });
   expect(reasoningOf(call({ api: "openai-responses", thinking: "**Choosing beer**" }))).toEqual({ kind: "text", label: "reasoning summary", text: "**Choosing beer**" });
+  expect(reasoningOf(call({ api: "openai-responses", model: "oc/deepseek-v4.1-flash-free", thinking: "Let me analyze this." }))).toEqual({ kind: "text", label: "thinking", text: "Let me analyze this." });
   expect(reasoningOf(call({ api: "openai-responses", usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, reasoning: 52 } }))).toEqual({ kind: "tokens", tokens: 52 });
   expect(reasoningOf(call({ thinking: "  \n", usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, reasoning: 0 } }))).toEqual({ kind: "none" });
 });
@@ -202,4 +206,81 @@ test("the sort lives in the query string beside the filters, and a header click 
   writeOrder(query, LIVE_FIRST);
 
   expect(query.toString()).toBe("model=gpt");
+});
+
+test("a model shows under its name and an unknown one under its id; an effort of off shows as none, and efforts run weakest first", () => {
+  expect(modelName("claude-haiku-4-5-20251001")).toBe("claude-haiku 4.5");
+  expect(modelName("oc/deepseek-v4.1-flash-free")).toBe("deepseek v4.1");
+  expect(modelName("some-new-model")).toBe("some-new-model");
+  expect(modelName("__proto__")).toBe("__proto__");
+  expect(modelFamily("gpt-6-astra")).toBe(modelFamily("gpt-6.1-sol"));
+  expect(modelFamily("some-new-model")).toBe("some-new-model");
+  expect(effortName("off")).toBe("none");
+  expect(effortName("xhigh")).toBe("xhigh");
+  expect(EFFORTS.indexOf("low")).toBeLessThan(EFFORTS.indexOf("high"));
+});
+
+const haiku = "claude-haiku-5-5";
+
+const sonnet = "claude-sonnet-5-5";
+
+const luna = "gpt-6-luna";
+
+const matches = (filter: Partial<Filter>, agents: ReadonlyArray<Played>) => runMatches({ ...NO_FILTER, ...filter }, agents);
+
+test("a head to head needs two agents, family and effort narrow the agents that count, and no filter shows every run", () => {
+  const sweep = [{ model: haiku, effort: "low" }, { model: sonnet, effort: "high" }];
+
+  expect(matches({}, [])).toBe(true);
+  expect(matches({ model: haiku, vs: sonnet }, sweep)).toBe(true);
+  expect(matches({ model: sonnet, vs: haiku }, sweep)).toBe(true);
+  expect(matches({ model: haiku, vs: luna }, sweep)).toBe(false);
+  expect(matches({ model: haiku, vs: haiku }, sweep)).toBe(false);
+  expect(matches({ model: haiku, vs: haiku }, [{ model: haiku, effort: "low" }, { model: haiku, effort: "high" }])).toBe(true);
+
+  expect(matches({ family: "claude-haiku" }, sweep)).toBe(true);
+  expect(matches({ family: "gpt" }, sweep)).toBe(false);
+  expect(matches({ family: "claude-haiku", effort: "high" }, sweep)).toBe(false);
+  expect(matches({ effort: "high", model: sonnet }, sweep)).toBe(true);
+  expect(matches({ effort: "low", model: sonnet }, sweep)).toBe(false);
+  expect(matches({ effort: "low", model: haiku, vs: sonnet }, sweep)).toBe(false);
+  expect(matches({ effort: "high" }, [{ model: undefined }])).toBe(false);
+});
+
+const row = (entrant: string, model: string, effort: string | undefined, fields: Partial<LeaderboardRow>): LeaderboardRow => ({
+  entrant,
+  model,
+  effort,
+  matches: 10,
+  wins: 5,
+  share: 0.5,
+  rating: 0,
+  moves: 100,
+  interventions: 0,
+  cost: { calls: 10, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, dollars: 1, unpriced: 0 },
+  ...fields,
+});
+
+const board = [
+  row("haiku-low", haiku, "low", { rating: 40, cost: { calls: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, dollars: 0, unpriced: 0 } }),
+  row("haiku-high", haiku, "high", { rating: 90, matches: 30, interventions: 2 }),
+  row("sonnet", sonnet, "medium", { rating: 60, cost: { calls: 4, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, dollars: 0, unpriced: 4 } }),
+  row("don", "DoN", undefined, { rating: 0, cost: { calls: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, dollars: 0, unpriced: 0 } }),
+];
+
+const shown = (filter: Partial<Filter>, best: boolean, order: LeaderboardOrder) => rowsShown(board, { filter: { ...NO_FILTER, ...filter }, best, order }).map((entry) => entry.entrant);
+
+test("the leaderboard is best rating first, filters by family, model and effort, keeps each model's best effort on request, and sorts a column either way with rows lacking it last", () => {
+  expect(shown({}, false, { kind: "default" })).toEqual(["haiku-high", "sonnet", "haiku-low", "don"]);
+  expect(shown({ family: "claude-haiku" }, false, { kind: "default" })).toEqual(["haiku-high", "haiku-low"]);
+  expect(shown({ effort: "medium" }, false, { kind: "default" })).toEqual(["sonnet"]);
+  expect(shown({ model: sonnet, family: "claude-haiku" }, false, { kind: "default" })).toEqual([]);
+  expect(bestPerModel(board).map((entry) => entry.entrant)).toEqual(["haiku-high", "sonnet", "don"]);
+  expect(shown({}, true, { kind: "default" })).toEqual(["haiku-high", "sonnet", "don"]);
+
+  expect(shown({}, false, { kind: "by", column: "effort", direction: "asc" })).toEqual(["haiku-low", "sonnet", "haiku-high", "don"]);
+  expect(shown({}, false, { kind: "by", column: "effort", direction: "desc" })).toEqual(["haiku-high", "sonnet", "haiku-low", "don"]);
+  expect(shown({}, false, { kind: "by", column: "cost", direction: "desc" })).toEqual(["haiku-high", "haiku-low", "don", "sonnet"]);
+  expect(shown({}, false, { kind: "by", column: "matches", direction: "desc" })[0]).toBe("haiku-high");
+  expect(shown({}, false, { kind: "by", column: "model", direction: "asc" })).toEqual(["haiku-high", "haiku-low", "sonnet", "don"]);
 });

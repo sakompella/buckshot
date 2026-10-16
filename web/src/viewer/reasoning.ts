@@ -1,19 +1,23 @@
+import { type ReasoningText, reasoningTextOf } from "../arena/model-names.ts";
 import type { CallLine, EventLine, MoveLine } from "../arena/runlog.ts";
 
 // What a model call shows of its reasoning, and which call belongs to which
 // move. The run log keeps only text: calls.jsonl has the thinking text pi-ai
 // collected and the provider's reasoning token count, never encrypted content.
 
-/** The name the provider's API gives reasoning text it returns: Anthropic thinking blocks, or OpenAI Responses reasoning summaries. */
-const textLabelOf = (api: string): "thinking" | "reasoning summary" => (api === "openai-responses" ? "reasoning summary" : "thinking");
+/**
+ * What the reasoning text of a call is. A listed model says; any other is named for its API: OpenAI's Responses API
+ * returns summaries only, Anthropic thinking blocks are thinking.
+ */
+const textLabelOf = ({ model, api }: CallLine): ReasoningText => reasoningTextOf(model) ?? (api === "openai-responses" ? "reasoning summary" : "thinking");
 
 export type Reasoning =
-  | { readonly kind: "text"; readonly label: "thinking" | "reasoning summary"; readonly text: string }
+  | { readonly kind: "text"; readonly label: ReasoningText; readonly text: string }
   | { readonly kind: "tokens"; readonly tokens: number }
   | { readonly kind: "none" };
 
 export const reasoningOf = (call: CallLine): Reasoning => {
-  if (call.thinking.trim() !== "") return { kind: "text", label: textLabelOf(call.api), text: call.thinking };
+  if (call.thinking.trim() !== "") return { kind: "text", label: textLabelOf(call), text: call.thinking };
 
   const tokens = call.usage.reasoning ?? 0;
 

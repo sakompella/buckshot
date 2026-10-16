@@ -1,26 +1,16 @@
 import { Schema } from "effect";
 
-import type { Total } from "../../arena/cost.ts";
 import type { CallLine, EventLine } from "../../arena/runlog.ts";
 import { type Cursors, type Frame, type JsonlLine, MatchResponse, type PricedCall, type PricedRun, type Run, RunsResponse, type RunSummary } from "../api.ts";
+import { filterFromQuery, runMatches, writeFilter } from "../filter.ts";
 import { afterClick, orderFromQuery, orderRuns, type RunOrder, type SortColumn, writeOrder } from "../order.ts";
 import { callsByTurn, type Reasoning, reasoningOf, tokensLabel } from "../reasoning.ts";
+import { type Child, count, dollars, effortBadge, fetchText, type Field, h, modelLabel, modelText, nav, picker, sortHeader } from "./dom.ts";
+import { showLeaderboard } from "./leaderboard.ts";
 
 // The viewer's page: the list of runs at "/", one match at "/match/<id>". A
 // live match is polled with cursors, and what arrives is appended, so scroll
 // positions and the selected step stay where they are.
-
-type Child = Node | string | undefined | false;
-
-const h = <K extends keyof HTMLElementTagNameMap>(tag: K, attributes: Readonly<Record<string, string>> = {}, ...children: ReadonlyArray<Child>): HTMLElementTagNameMap[K] => {
-  const element = document.createElement(tag);
-
-  for (const [name, value] of Object.entries(attributes)) element.setAttribute(name, value);
-
-  for (const child of children) if (child !== undefined && child !== false) element.append(child);
-
-  return element;
-};
 
 const svg = (tag: string, attributes: Readonly<Record<string, string>>): SVGElement => {
   const element = document.createElementNS("http://www.w3.org/2000/svg", tag);
@@ -37,22 +27,9 @@ const NEAR_BOTTOM_PX = 40;
 
 const cash = (amount: number) => `$${amount.toLocaleString("en-US")}`;
 
-const dollars = (amount: number) => `$${amount.toFixed(4)}`;
-
-const count = (amount: number) => amount.toLocaleString("en-US");
-
 const clock = (t: string) => t.slice(11, 23);
 
 const day = (t: string) => new Date(t).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
-
-const fetchText = async (url: string): Promise<string> => {
-  const response = await fetch(url);
-  const text = await response.text();
-
-  if (!response.ok) throw new Error(text);
-
-  return text;
-};
 
 const decodeRuns = Schema.decodeUnknownSync(Schema.fromJsonString(RunsResponse));
 
@@ -63,17 +40,17 @@ const statusBadge = (status: RunSummary["status"]): HTMLElement => (status === "
 const standingsText = (run: RunSummary): HTMLElement =>
   h("span", {}, ...(run.standings ?? []).flatMap((standing, index) => [index > 0 && h("span", { class: "faint" }, " · "), h("span", { class: index === 0 ? "winner" : "" }, `${standing.player} ${cash(standing.cash)}`)]));
 
-const totalsRow = (label: string, total: Total): HTMLElement =>
+const totalsRow = ({ model, effort, total }: RunsResponse["totals"]["byEffort"][number]): HTMLElement =>
   h(
     "tr",
     {},
-    h("td", {}, label),
+    h("td", {}, modelText(model), effort !== undefined && effortBadge(effort)),
     ...[total.calls, total.input, total.output, total.reasoning, total.cacheRead, total.cacheWrite].map((value) => h("td", { class: "number" }, count(value))),
     h("td", { class: "number" }, total.unpriced === total.calls ? "no price" : dollars(total.dollars)),
     h("td", { class: "number faint" }, total.unpriced > 0 && total.unpriced < total.calls ? `${total.unpriced} unpriced` : ""),
   );
 
-const totalsTable = (title: string, rows: RunsResponse["totals"]["agents"]): HTMLElement =>
+const totalsTable = (title: string, rows: RunsResponse["totals"]["byEffort"]): HTMLElement =>
   h(
     "section",
     {},
@@ -82,7 +59,7 @@ const totalsTable = (title: string, rows: RunsResponse["totals"]["agents"]): HTM
       "table",
       {},
       h("thead", {}, h("tr", {}, ...["", "calls", "input", "output", "reasoning", "cache read", "cache write", "cost", ""].map((name) => h("th", { class: name === "" ? "" : "number" }, name)))),
-      h("tbody", {}, ...rows.map(({ label, total }) => totalsRow(label, total))),
+      h("tbody", {}, ...rows.map(totalsRow)),
     ),
   );
 
@@ -95,7 +72,7 @@ const runRow = (run: PricedRun): HTMLElement =>
     {},
     h("td", { class: "dim" }, day(run.started)),
     h("td", {}, h("a", { href: `/match/${encodeURIComponent(run.id)}` }, run.id)),
-    h("td", {}, ...run.agents.map((agent) => h("div", {}, h("span", { class: `player-${agent.agent}` }, agent.agent), " ", h("span", { class: "dim" }, agent.model ?? "no calls yet")))),
+    h("td", {}, ...run.agents.map((agent) => h("div", {}, h("span", { class: `player-${agent.agent}` }, agent.agent), " ", ...modelLabel(agent)))),
     h("td", { class: "mono" }, ...run.seating.map((seat, index) => h("div", {}, h("span", { class: "faint" }, `${index + 1} `), seat.controller === "Agent" ? h("span", { class: `player-${seat.player}` }, seat.player) : h("span", { class: "dim" }, `${seat.player} ${seat.controller}`)))),
     h("td", { class: "mono dim" }, run.seed),
     h("td", { class: "dim" }, run.delivery),
@@ -118,63 +95,47 @@ const COLUMNS: ReadonlyArray<readonly [string, SortColumn | undefined]> = [
 ];
 
 const showList = async () => {
-  const { runs, totals } = decodeRuns(await fetchText("/api/runs"));
-  const readable = runs.flatMap((run) => (run.kind === "readable" ? [run] : []));
-  const query = new URLSearchParams(location.search);
-  const choice = { model: query.get("model") ?? "", agent: query.get("agent") ?? "" };
-  const models = [...new Set(readable.flatMap((run) => run.agents.flatMap((agent) => (agent.model === undefined ? [] : [agent.model]))))].toSorted();
-  const letters = [...new Set(readable.flatMap((run) => run.agents.map((agent) => agent.agent)))].toSorted();
+  const { runs, totals, leaderboard } = decodeRuns(await fetchText("/api/runs"));
+  const played = runs.flatMap((run) => (run.kind === "readable" ? run.agents : []));
+  let filter = filterFromQuery(new URLSearchParams(location.search));
+  let order: RunOrder = orderFromQuery(new URLSearchParams(location.search));
   const body = h("tbody", {});
   const head = h("thead", {});
-  let order: RunOrder = orderFromQuery(query);
 
-  const select = (name: "model" | "agent", label: string, options: ReadonlyArray<string>) => {
-    const element = h("select", { "aria-label": label }, h("option", { value: "" }, label), ...options.map((option) => h("option", { value: option }, option)));
+  const isShown = (run: Run) => (run.kind === "unreadable" ? Object.values(filter).every((value) => value === "") : runMatches(filter, run.agents));
 
-    element.value = choice[name];
-    element.addEventListener("change", () => {
-      choice[name] = element.value;
-      render();
-    });
-
-    return element;
-  };
-
-  const isShown = (run: Run) =>
-    run.kind === "unreadable" ? choice.model === "" && choice.agent === "" : run.agents.some((agent) => (choice.agent === "" || agent.agent === choice.agent) && (choice.model === "" || agent.model === choice.model));
-
-  const headerCell = ([name, column]: (typeof COLUMNS)[number]): HTMLElement => {
-    if (column === undefined) return h("th", {}, name);
-
-    const active = order.kind === "by" && order.column === column ? order.direction : undefined;
-    const button = h("button", { type: "button", class: "sort" }, name, active !== undefined && h("span", { class: "arrow" }, active === "asc" ? " ▲" : " ▼"));
-
-    button.addEventListener("click", () => {
-      order = afterClick(order, column);
-      render();
-    });
-
-    return h("th", { "aria-sort": active === undefined ? "none" : active === "asc" ? "ascending" : "descending" }, button);
+  const sortBy = (column: SortColumn) => {
+    order = afterClick(order, column);
+    render();
   };
 
   const render = () => {
-    const next = new URLSearchParams(Object.entries(choice).filter(([, value]) => value !== ""));
+    const next = new URLSearchParams();
 
+    writeFilter(next, filter);
     writeOrder(next, order);
     history.replaceState(null, "", next.size === 0 ? location.pathname : `?${next}`);
-    head.replaceChildren(h("tr", {}, ...COLUMNS.map(headerCell)));
+    head.replaceChildren(h("tr", {}, ...COLUMNS.map(([name, column]) => sortHeader(name, column, order, sortBy))));
     body.replaceChildren(...orderRuns(runs.filter(isShown), order).map((run) => (run.kind === "readable" ? runRow(run) : h("tr", { class: "unreadable" }, h("td", {}, ""), h("td", {}, run.id), h("td", { colspan: "7" }, run.reason)))));
   };
+
+  const choose = (field: Field, value: string) => {
+    filter = { ...filter, [field]: value };
+    render();
+  };
+
+  const pick = (field: Field) => picker(field, filter, played, choose);
 
   render();
   document.body.replaceChildren(
     h(
       "main",
       { class: "list" },
+      nav("/", leaderboard),
       h("h1", {}, "Arena runs"),
-      h("div", { class: "filters" }, select("model", "Any model", models), select("agent", "Any agent", letters)),
+      h("div", { class: "filters" }, pick("model"), h("span", { class: "dim" }, "vs"), pick("vs"), pick("family"), pick("effort")),
       h("table", { class: "runs" }, head, body),
-      h("div", { class: "totals" }, totalsTable("Per agent", totals.agents), totalsTable("Per model", totals.models)),
+      h("div", { class: "totals" }, totalsTable("Per model and effort", totals.byEffort), totalsTable("Per model", totals.byModel)),
     ),
   );
 };
@@ -407,10 +368,10 @@ const showMatch = async (id: string) => {
 
     if (existing !== undefined) return existing;
 
-    const model = first.run.agents.find((candidate) => candidate.agent === agent)?.model ?? "";
+    const played = first.run.agents.find((candidate) => candidate.agent === agent) ?? {};
     const column = { sums: h("div", { class: "sums" }), body: h("div", { class: "column-body" }) };
 
-    logs.append(h("div", { class: "column" }, h("div", { class: "column-head" }, h("div", { class: "who" }, h("span", { class: `player-${agent}` }, `Player ${agent}`), h("span", { class: "dim" }, ` ${model}`)), column.sums), column.body));
+    logs.append(h("div", { class: "column" }, h("div", { class: "column-head" }, h("div", { class: "who" }, h("span", { class: `player-${agent}` }, `Player ${agent}`), ...modelLabel(played)), column.sums), column.body));
     columns.set(agent, column);
 
     return column;
@@ -466,6 +427,7 @@ const showMatch = async (id: string) => {
       h("span", { class: "dim" }, `${run.delivery} delivery`),
       statusBadge(run.status),
       standingsText(run),
+      h("span", { class: "players" }, ...run.agents.flatMap((agent) => [h("span", { class: `player-${agent.agent}` }, agent.agent), ...modelLabel(agent)])),
     );
     divergence.replaceChildren(update.divergence === undefined ? "" : h("div", { class: "divergence" }, `replay stopped: ${update.divergence}`));
 
@@ -567,6 +529,6 @@ const showMatch = async (id: string) => {
 
 const route = location.pathname.match(/^\/match\/([^/]+)$/);
 
-const shown = route?.[1] === undefined ? showList() : showMatch(decodeURIComponent(route[1]));
+const shown = route?.[1] !== undefined ? showMatch(decodeURIComponent(route[1])) : location.pathname === "/leaderboard" ? showLeaderboard() : showList();
 
 shown.catch((error: Error) => document.body.replaceChildren(h("main", { class: "list" }, h("h1", {}, "Could not load"), h("p", { class: "dim mono" }, error.message))));
