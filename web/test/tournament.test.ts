@@ -304,6 +304,17 @@ test("an interrupted tournament and its restart finish every match once, and a f
   expect(costOf(dir, prices, schedule)).toBe(priced);
 });
 
+test("a stop during a failed match's pause ends the run at once", async () => {
+  const tournament = tournamentFrom(configJson({ pairings: [["luna", "don"]], blocksPerPairing: 1 }));
+  const dir = mkdtempSync(join(tmpdir(), "tournament-stop-"));
+  const stop = new AbortController();
+  const started = Date.now();
+
+  await runPending(dir, scheduleOf(tournament), 1, async () => (stop.abort(), 1), () => undefined, stop.signal, { attempts: 3, pauseMs: 60_000 });
+
+  expect(Date.now() - started).toBeLessThan(5_000);
+});
+
 test("a failed match goes to the back of the queue and is retried, up to its attempts", async () => {
   const tournament = tournamentFrom(configJson({ pairings: [["luna", "don"], ["haiku-5-5", "story"]], blocksPerPairing: 1 }));
   const schedule = scheduleOf(tournament);

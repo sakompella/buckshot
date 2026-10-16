@@ -208,6 +208,8 @@ export const RETRY: Retry = { attempts: 3, pauseMs: 120_000 };
 
 const pause = (ms: number, stop: AbortSignal) =>
   new Promise<void>((resume) => {
+    if (stop.aborted) return resume();
+
     const timer = setTimeout(resume, ms);
 
     stop.addEventListener("abort", () => (clearTimeout(timer), resume()), { once: true });
