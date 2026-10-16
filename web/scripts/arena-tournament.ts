@@ -20,7 +20,8 @@ import { cooldownOf, costOf, faultsOf, finishedNames, openTournament, runPending
 // as failed; other matches fill the slots. --cap <model>=N, given once per
 // model, plays at most N matches of that model at once; --last <model> starts
 // its matches only when no other match can; --forget-cooldown <model> ignores
-// the model's recorded cooldowns at the start, after its provider reset early.
+// the model's recorded cooldowns at the start, after its provider reset early;
+// --skip <entrant> leaves that entrant's matches unplayed this run.
 // A match that fails goes to the back of the queue after a pause, up to three
 // runs, and the rest go on. Rerun the same command to resume: finished matches
 // never run again. Do not run two of these on one directory. --limit plays at
@@ -28,7 +29,7 @@ import { cooldownOf, costOf, faultsOf, finishedNames, openTournament, runPending
 // it starts, every 30 minutes and when it ends. --dry-run prints the schedule
 // of the last config.
 // Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel N] [--cap <model>=N]... [--last <model>]...
-//          [--forget-cooldown <model>]... [--limit N] [--dry-run]
+//          [--forget-cooldown <model>]... [--skip <entrant>]... [--limit N] [--dry-run]
 //        bun scripts/arena-stats.ts <tournament dir> [--json]
 
 const WEB = join(import.meta.dir, "..");
@@ -41,7 +42,7 @@ const flag = (name: string): string | undefined => {
   return at === -1 ? undefined : args[at + 1];
 };
 
-const VALUED = new Set(["--dir", "--parallel", "--limit", "--cap", "--last", "--forget-cooldown"]);
+const VALUED = new Set(["--dir", "--parallel", "--limit", "--cap", "--last", "--forget-cooldown", "--skip"]);
 
 const configPaths = args.filter((arg, index) => !arg.startsWith("--") && !VALUED.has(args[index - 1] ?? ""));
 
@@ -60,7 +61,7 @@ const exit = (message: string): never => {
 
 const unwrap = <A>(result: Result.Result<A, TournamentError>): A => Result.match(result, { onFailure: (error) => exit(error.message), onSuccess: (value) => value });
 
-if (configPaths.length === 0) exit("Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel N] [--cap <model>=N]... [--last <model>]... [--forget-cooldown <model>]... [--limit N] [--dry-run]");
+if (configPaths.length === 0) exit("Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel N] [--cap <model>=N]... [--last <model>]... [--forget-cooldown <model>]... [--skip <entrant>]... [--limit N] [--dry-run]");
 
 if (!Number.isInteger(parallel) || parallel < 1) exit("--parallel must be a whole number from 1");
 
@@ -78,6 +79,8 @@ const last = new Set(repeated("last"));
 
 const forget = new Set(repeated("forget-cooldown"));
 
+const skipped = new Set(repeated("skip"));
+
 const prices = loadPrices(DEFAULT_PRICES);
 
 const tournaments = configPaths.map((path) => {
@@ -94,11 +97,11 @@ const money = (dollars: number): string => `$${dollars.toFixed(4)}`;
 
 if (args.includes("--dry-run")) {
   const schedule = scheduleOf(tournament);
-  const { name, seed, delivery, blocksPerPairing } = tournament.config;
+  const { name, delivery, blocksPerPairing } = tournament.config;
 
-  console.log(`${name}: ${tournament.pairings.length} pairings, ${blocksPerPairing} block${blocksPerPairing === 1 ? "" : "s"} each, ${schedule.length} matches, ${delivery} delivery, seeds ${seed} to ${seed + blocksPerPairing - 1}`);
+  console.log(`${name}: ${tournament.pairings.length} pairings, ${blocksPerPairing} block${blocksPerPairing === 1 ? "" : "s"} each, ${schedule.length} matches, ${delivery} delivery`);
 
-  for (const [index, pairing] of tournament.pairings.entries()) console.log(`  ${pairing.join(" vs ")}: ${schedule.filter((match) => match.pairing === index).length} matches`);
+  for (const [index, pairing] of tournament.pairings.entries()) console.log(`  ${pairing.join(" vs ")}: ${schedule.filter((match) => match.pairing === index).length} matches, seeds ${tournament.seeds[index]?.slice(0, blocksPerPairing).join(", ")}`);
 
   process.exit(0);
 }
@@ -195,7 +198,9 @@ const settle = (settled: Settled) => {
   report(settled);
 };
 
-const pending = unfinished(file.schedule, finishedNames(dir, file.schedule)).slice(0, limit);
+const isPlayed = (match: ScheduledMatch) => !match.entrants.some((entrant) => skipped.has(entrant));
+
+const pending = unfinished(file.schedule, finishedNames(dir, file.schedule)).filter(isPlayed).slice(0, limit);
 
 console.log(`${file.config.name}: ${pending.length} of ${file.schedule.length} matches to run, ${parallel} at a time${[...caps].map(([model, most]) => `, at most ${most} with ${model}`).join("")}${[...last].map((model) => `, ${model} last`).join("")}${[...forget].map((model) => `, ${model}'s recorded cooldowns ignored`).join("")}, in ${dir}`);
 
@@ -209,7 +214,8 @@ clearInterval(every30Minutes);
 
 const failed = settled.filter(({ status }) => status === "failed").length;
 
-const remaining = file.schedule.length - finishedNames(dir, file.schedule).size;
+// Skipped matches do not count, so a run that skips an entrant ends with exit 0 once the rest are finished.
+const remaining = unfinished(file.schedule, finishedNames(dir, file.schedule)).filter(isPlayed).length;
 
 console.log(`\n${settled.length - failed} matches finished, ${failed} failed runs, ${remaining} not finished. Total cost ${money(costOf(dir, prices, file.schedule))}.`);
 

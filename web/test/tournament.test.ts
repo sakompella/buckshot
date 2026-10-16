@@ -9,6 +9,7 @@ import { AGENTS } from "../src/arena/agent.ts";
 import { DEFAULT_PRICES, loadPrices } from "../src/arena/cost.ts";
 import { agentEndpoint } from "../src/arena/endpoints.ts";
 import { checkPrices, childCommand, childEnv, parseConfig, resolveKeys, type ScheduledMatch, scheduleOf, type Tournament, unfinished } from "../src/arena/tournament.ts";
+import { balancedSeeds, firstPositionOf } from "../src/arena/seeds.ts";
 import { cooldownOf, costOf, openTournament, RATE_LIMIT_WAIT_SECONDS, readMatch, runPending, type Scheduling, TOURNAMENT_FORMAT } from "../src/arena/tournament-dir.ts";
 import { reportOf } from "../src/arena/tournament-report.ts";
 import { fitRatings, ELO_PER_NAT, intervalsOf, type PlayedMatch, resamples, sharesByEntrant, winShares } from "../src/arena/tournament-stats.ts";
@@ -497,6 +498,48 @@ test("one directory holds one tournament", () => {
   const other = openTournament(dir, tournamentFrom(configJson({ seed: 101 })), "abc123", new Date(0));
 
   expect(Result.isFailure(other) && other.failure.message).toContain("made from a different config");
+});
+
+test("balanced block seeds start every position as evenly as they can in every prefix, after the kept ones", () => {
+  for (const table of [2, 3, 4] as const) {
+    for (const blocks of [1, 4, 7, 10]) {
+      const from = 1000 * table + blocks;
+      const keep = blocks > 2 ? [from - 1] : [];
+      const seeds = balancedSeeds(table, blocks, from, keep);
+
+      expect(seeds.length).toBe(blocks);
+      expect(new Set(seeds).size).toBe(blocks);
+      expect(seeds.slice(0, keep.length)).toEqual(keep);
+
+      for (let length = keep.length + 1; length <= blocks; length++) {
+        const started = Array.from({ length: table }, (_, position) => seeds.slice(0, length).filter((seed) => firstPositionOf(seed, table) === position + 1).length);
+
+        expect(Math.max(...started) - Math.min(...started)).toBeLessThanOrEqual(1);
+      }
+    }
+  }
+});
+
+test("a pairing that lists its block seeds plays its blocks at them, and a tournament grows by such a pairing", () => {
+  const seeded = { entrants: ["haiku-5-5", "sonnet"], seeds: [7, 3] };
+  const tournament = tournamentFrom(configJson({ pairings: [["luna", "don"], seeded] }));
+  const schedule = scheduleOf(tournament);
+
+  expect(schedule.filter((match) => match.pairing === 0).map((match) => match.seed)).toEqual([100, 100, 101, 101]);
+  expect(schedule.filter((match) => match.pairing === 1).map((match) => [match.block, match.seed])).toEqual([[0, 7], [0, 7], [1, 3], [1, 3]]);
+
+  expect(errorOf(configJson({ pairings: [{ ...seeded, seeds: [7] }] }))).toContain("lists 1 seeds for 2 blocks");
+  expect(errorOf(configJson({ pairings: [{ ...seeded, seeds: [7, 7] }] }))).toContain("lists the seed 7 twice");
+  expect(scheduleOf(tournamentFrom(configJson({ pairings: { allOf: ["luna", "opus"], size: 2, seeds: [5, 9] } }))).map((match) => match.seed)).toEqual([5, 5, 9, 9]);
+
+  const dir = join(mkdtempSync(join(tmpdir(), "tournament-seeded-")), "t");
+  const first = tournamentFrom(configJson({ pairings: [["luna", "don"]] }));
+
+  openTournament(dir, first, "abc123", new Date(0));
+
+  const grown = openTournament(dir, tournament, "abc123", new Date(0));
+
+  expect(Result.isSuccess(grown) && grown.success.schedule).toEqual([...scheduleOf(first), ...schedule.filter((match) => match.pairing === 1)]);
 });
 
 test("a tournament grows by entrants and their endpoints, by pairings listed after its own and by seed blocks, its scheduled matches stay first and unchanged, and a config it grew from opens it as it is", () => {

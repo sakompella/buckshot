@@ -20,13 +20,18 @@ const ModelEntrant = Schema.Struct({ endpoint: Schema.NonEmptyString, model: Sch
 
 const BotEntrant = Schema.Struct({ bot: Schema.Literals(BOTS) });
 
+/** The seeds of a pairing's blocks, in block order, when they are not the config's seed plus the block, as from balancedSeeds in seeds.ts. */
+const BlockSeeds = Schema.Array(Schema.Int);
+
+const SeededPairing = Schema.Struct({ entrants: Schema.Array(EntrantName), seeds: BlockSeeds });
+
 export const TournamentConfig = Schema.Struct({
   name: Schema.NonEmptyString,
   seed: Schema.Int,
   delivery: Schema.Literals(DELIVERIES),
   endpoints: Schema.Record(Schema.String, TournamentEndpoint),
   entrants: Schema.Record(EntrantName, Schema.Union([ModelEntrant, BotEntrant])),
-  pairings: Schema.Union([Schema.Array(Schema.Array(EntrantName)), Schema.Struct({ allOf: Schema.Array(EntrantName), size: Schema.Literals([2, 3, 4]) })]),
+  pairings: Schema.Union([Schema.Array(Schema.Union([Schema.Array(EntrantName), SeededPairing])), Schema.Struct({ allOf: Schema.Array(EntrantName), size: Schema.Literals([2, 3, 4]), seeds: Schema.optional(BlockSeeds) })]),
   blocksPerPairing: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
 });
 
@@ -100,13 +105,33 @@ const allOfPairings = (config: TournamentConfig, allOf: ReadonlyArray<EntrantNam
   return Result.succeed(combinations(allOf, size).filter((pairing) => hasModel(config, pairing)));
 };
 
-const pairingsOf = (config: TournamentConfig): Result.Result<ReadonlyArray<Pairing>, TournamentError> =>
-  "allOf" in config.pairings ? allOfPairings(config, config.pairings.allOf, config.pairings.size) : explicitPairings(config, config.pairings);
+/** Each pairing with the seeds of its blocks: the ones it lists, or else the config's seed plus the block. */
+const seededPairingsOf = (config: TournamentConfig): Result.Result<ReadonlyArray<readonly [Pairing, ReadonlyArray<number>]>, TournamentError> => {
+  const consecutive = Array.from({ length: config.blocksPerPairing }, (_, block) => config.seed + block);
+
+  if ("allOf" in config.pairings) {
+    const seeds = config.pairings.seeds ?? consecutive;
+
+    return Result.map(allOfPairings(config, config.pairings.allOf, config.pairings.size), (pairings) => pairings.map((pairing) => [pairing, seeds] as const));
+  }
+
+  const listed = config.pairings.map((item) => ("entrants" in item ? ([item.entrants, item.seeds] as const) : ([item, consecutive] as const)));
+
+  return Result.map(
+    explicitPairings(
+      config,
+      listed.map(([pairing]) => pairing),
+    ),
+    () => listed,
+  );
+};
 
 /** The config, once every entrant, endpoint and pairing in it is known to exist. */
 export interface Tournament {
   readonly config: TournamentConfig;
   readonly pairings: ReadonlyArray<Pairing>;
+  /** The seeds of each pairing's blocks, in pairing order. */
+  readonly seeds: ReadonlyArray<ReadonlyArray<number>>;
 }
 
 /** A config whose every entrant, endpoint and pairing exists. */
@@ -116,12 +141,22 @@ export const resolveConfig = (config: TournamentConfig): Result.Result<Tournamen
       if (isModel(entrant) && config.endpoints[entrant.endpoint] === undefined) return yield* fail(`entrant "${name}" uses the unknown endpoint "${entrant.endpoint}"`);
     }
 
-    const pairings = yield* pairingsOf(config);
+    const seeded = yield* seededPairingsOf(config);
+    const pairings = seeded.map(([pairing]) => pairing);
     const repeated = duplicateIn(pairings.map((pairing) => pairing.join(",")));
 
     if (repeated !== undefined) return yield* fail(`the pairing (${repeated}) is listed twice`);
 
-    return { config, pairings };
+    for (const [index, [pairing, seeds]] of seeded.entries()) {
+      const label = `pairing ${index + 1} (${pairing.join(", ")})`;
+      const twice = duplicateIn(seeds.map(String));
+
+      if (seeds.length < config.blocksPerPairing) return yield* fail(`${label} lists ${seeds.length} seeds for ${config.blocksPerPairing} blocks`);
+
+      if (twice !== undefined) return yield* fail(`${label} lists the seed ${twice} twice`);
+    }
+
+    return { config, pairings, seeds: seeded.map(([, seeds]) => seeds) };
   });
 
 /** Decodes a config from its JSON text. A mistyped key is an error, and so is a name that points at nothing. */
@@ -161,7 +196,7 @@ export type ScheduledMatch = typeof ScheduledMatch.Type;
 type Seat = typeof Seat.Type;
 
 /** A seed block is one seed and every permutation of the pairing's seats. */
-const blockOf = ({ config }: Tournament, pairing: Pairing, pairingIndex: number, block: number): ReadonlyArray<ScheduledMatch> => {
+const blockOf = ({ config }: Tournament, pairing: Pairing, pairingIndex: number, block: number, seed: number): ReadonlyArray<ScheduledMatch> => {
   const letters = AgentId.literals.values();
 
   const seated = pairing.flatMap((name): ReadonlyArray<readonly [Seat, EntrantName]> => {
@@ -182,7 +217,7 @@ const blockOf = ({ config }: Tournament, pairing: Pairing, pairingIndex: number,
     name: [...pairing, `b${block}`, `p${index}`].join("_"),
     pairing: pairingIndex,
     block,
-    seed: config.seed + block,
+    seed,
     seats: table.map(([seat]) => seat),
     entrants: table.map(([, name]) => name),
   }));
@@ -190,7 +225,14 @@ const blockOf = ({ config }: Tournament, pairing: Pairing, pairingIndex: number,
 
 /** Block by block, so a tournament stopped half way has balanced pairings. */
 export const scheduleOf = (tournament: Tournament): ReadonlyArray<ScheduledMatch> =>
-  Array.from({ length: tournament.config.blocksPerPairing }, (_, block) => tournament.pairings.flatMap((pairing, index) => blockOf(tournament, pairing, index, block))).flat();
+  Array.from({ length: tournament.config.blocksPerPairing }, (_, block) =>
+    tournament.pairings.flatMap((pairing, index) => {
+      // resolveConfig checks that every pairing has a seed for every block.
+      const seed = tournament.seeds[index]?.[block];
+
+      return seed === undefined ? [] : blockOf(tournament, pairing, index, block, seed);
+    }),
+  ).flat();
 
 export type Env = Readonly<Record<string, string | undefined>>;
 

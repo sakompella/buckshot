@@ -200,6 +200,19 @@ test.each([
   expect(JSON.stringify(provenance)).not.toContain(CPA.key);
 });
 
+test.each([
+  ["claude-haiku-4-5-20251001", "off", { level: "off", mode: "off", effort: null, budget_tokens: null }],
+  ["claude-haiku-4-5-20251001", "max", { level: "high", mode: "budget", effort: null, budget_tokens: 16384 }],
+  ["claude-haiku-5-5", "off", { level: "off", mode: "adaptive", effort: "high", budget_tokens: null }],
+  ["claude-sonnet-5-5", "xhigh", { level: "xhigh", mode: "adaptive", effort: "xhigh", budget_tokens: null }],
+] as const)("the provenance records the thinking settings pi-ai sent CLIProxyAPI for %s at effort %s", async (model, effort, thinking) => {
+  const endpoint = await endpointFrom({ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_ANT_KEY: CPA.key, PLAYER_A_MODEL: model, PLAYER_A_EFFORT: effort });
+
+  if (!Exit.isSuccess(endpoint)) throw new Error(String(endpoint.cause));
+
+  expect(provenanceOf("provider-A", endpoint.value).thinking).toEqual(thinking);
+});
+
 test("a proxy's model alias plays as the catalog model it names", async () => {
   const alias = await endpointFrom({ PLAYER_A_OAI_URL: `${CPA.url}/v1`, PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "gpt-6-luna-fast", PLAYER_A_CATALOG_MODEL: "gpt-6-luna" });
 
