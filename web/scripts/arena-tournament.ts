@@ -198,9 +198,9 @@ const settle = (settled: Settled) => {
   report(settled);
 };
 
-const pending = unfinished(file.schedule, finishedNames(dir, file.schedule))
-  .filter((match) => !match.entrants.some((entrant) => skipped.has(entrant)))
-  .slice(0, limit);
+const isPlayed = (match: ScheduledMatch) => !match.entrants.some((entrant) => skipped.has(entrant));
+
+const pending = unfinished(file.schedule, finishedNames(dir, file.schedule)).filter(isPlayed).slice(0, limit);
 
 console.log(`${file.config.name}: ${pending.length} of ${file.schedule.length} matches to run, ${parallel} at a time${[...caps].map(([model, most]) => `, at most ${most} with ${model}`).join("")}${[...last].map((model) => `, ${model} last`).join("")}${[...forget].map((model) => `, ${model}'s recorded cooldowns ignored`).join("")}, in ${dir}`);
 
@@ -214,7 +214,8 @@ clearInterval(every30Minutes);
 
 const failed = settled.filter(({ status }) => status === "failed").length;
 
-const remaining = file.schedule.length - finishedNames(dir, file.schedule).size;
+// Skipped matches do not count, so a run that skips an entrant ends with exit 0 once the rest are finished.
+const remaining = unfinished(file.schedule, finishedNames(dir, file.schedule)).filter(isPlayed).length;
 
 console.log(`\n${settled.length - failed} matches finished, ${failed} failed runs, ${remaining} not finished. Total cost ${money(costOf(dir, prices, file.schedule))}.`);
 
