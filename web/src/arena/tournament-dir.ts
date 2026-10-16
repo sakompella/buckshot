@@ -6,7 +6,7 @@ import { Option, Result, Schema } from "effect";
 
 import { AgentId } from "./agent.ts";
 import { type PriceTable, totalsBy } from "./cost.ts";
-import { type CallLine, endingFault, faultsIn, readCalls } from "./runlog.ts";
+import { type CallLine, endingFault, faultsIn, faultsSinceLastMove, readCalls } from "./runlog.ts";
 import {
   ScheduledMatch,
   type Tournament,
@@ -209,18 +209,23 @@ const UsageLimit = Schema.Union([
 
 const decodeUsageLimit = Schema.decodeUnknownOption(Schema.fromJsonString(UsageLimit));
 
-/** How long a model waits after a 429 that gives no reset time. */
+/** How long a model waits after a 429 that gives no reset time. Each further refusal of the match, with no move between, doubles the wait, at most MOST_DOUBLINGS times. */
 export const RATE_LIMIT_WAIT_SECONDS = 120;
+
+const MOST_DOUBLINGS = 4;
+
+/** pi-ai shows the status as "API error (429)" for OpenAI and first for Anthropic. */
+const isRateLimit = (error: string): boolean => /^429 |API error \(429\)/.test(error);
 
 /**
  * The seconds until a provider takes the model again, when the error is a usage or rate limit: a usage limit with its
  * reset, a router's "reset after 1m 30s" (9router, once every account of a model is limited), or else any 429, which
- * waits RATE_LIMIT_WAIT_SECONDS. pi-ai shows the status as "API error (429)" for OpenAI and first for Anthropic.
+ * waits RATE_LIMIT_WAIT_SECONDS, doubled for each earlier refusal in a row.
  */
-const limitSecondsOf = (error: string): Option.Option<number> => {
+const limitSecondsOf = (error: string, refusals: number): Option.Option<number> => {
   const usageLimit = Option.map(decodeUsageLimit(error.slice(error.indexOf("{"))), (limit) => ("code" in limit ? limit.reset_seconds : limit.resets_in_seconds));
   const routerLimit = Option.map(Option.fromNullishOr(/reset after (?:(\d+)h ?)?(?:(\d+)m ?)?(?:(\d+)s)?/.exec(error)), ([, hours = "0", minutes = "0", seconds = "0"]) => 3600 * Number(hours) + 60 * Number(minutes) + Number(seconds));
-  const rateLimit = /^429 |API error \(429\)/.test(error) ? Option.some(RATE_LIMIT_WAIT_SECONDS) : Option.none();
+  const rateLimit = isRateLimit(error) ? Option.some(RATE_LIMIT_WAIT_SECONDS * 2 ** Math.min(refusals - 1, MOST_DOUBLINGS)) : Option.none();
 
   return Option.firstSomeOf([usageLimit, routerLimit, rateLimit]);
 };
@@ -229,9 +234,10 @@ const limitSecondsOf = (error: string): Option.Option<number> => {
 export const cooldownOf = (dir: string, config: TournamentConfig, match: ScheduledMatch, now: number): Option.Option<Cooldown> =>
   Option.flatMap(endingFault(join(dir, match.name)), (fault) => {
     const entrant = modelEntrant(config, match.entrants[match.seats.indexOf(fault.agent)] ?? "");
+    const refusals = faultsSinceLastMove(join(dir, match.name)).filter((earlier) => earlier.agent === fault.agent && isRateLimit(earlier.error)).length;
 
     return Option.filter(
-      Option.flatMap(limitSecondsOf(fault.error), (seconds) => (entrant === undefined ? Option.none() : Option.some({ model: entrant.model, until: Date.parse(fault.t) + 1000 * seconds }))),
+      Option.flatMap(limitSecondsOf(fault.error, refusals), (seconds) => (entrant === undefined ? Option.none() : Option.some({ model: entrant.model, until: Date.parse(fault.t) + 1000 * seconds }))),
       ({ until }) => until > now,
     );
   });

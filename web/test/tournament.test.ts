@@ -363,6 +363,29 @@ test.each([
   expect(Option.getOrUndefined(cooldownOf(dir, tournament.config, match, at))).toEqual(seconds === undefined ? undefined : { model: "gpt-6-luna", until: at + 1000 * seconds });
 });
 
+test("each refusal in a row doubles the wait after a 429 without a reset, and a move starts it over", () => {
+  const tournament = tournamentFrom(configJson({ pairings: [["luna", "haiku-5-5"]], blocksPerPairing: 1 }));
+  const [match] = scheduleOf(tournament);
+  const dir = mkdtempSync(join(tmpdir(), "tournament-backoff-"));
+  const at = Date.parse("2026-10-16T01:00:00Z");
+
+  if (match === undefined) throw new Error("no match");
+
+  const agent = match.seats[match.entrants.indexOf("luna")];
+  const line = (kind: string) => JSON.stringify({ t: new Date(at).toISOString(), kind, agent, error: 'openai-responses-A API error (429): {"message":"Rate limit exceeded. Please try again later."}' });
+
+  const waitAfter = (kinds: ReadonlyArray<string>) => {
+    mkdirSync(join(dir, match.name), { recursive: true });
+    writeFileSync(join(dir, match.name, "events.jsonl"), `${kinds.map(line).join("\n")}\n`);
+
+    return Option.match(cooldownOf(dir, tournament.config, match, at), { onNone: () => 0, onSome: ({ until }) => (until - at) / 1000 });
+  };
+
+  expect(waitAfter(["fault", "resumed", "fault", "resumed", "fault"])).toBe(4 * RATE_LIMIT_WAIT_SECONDS);
+  expect(waitAfter(["fault", "resumed", "move", "fault"])).toBe(RATE_LIMIT_WAIT_SECONDS);
+  expect(waitAfter(Array.from({ length: 9 }, () => "fault"))).toBe(16 * RATE_LIMIT_WAIT_SECONDS);
+});
+
 test("a capped model plays at most that many matches at once, and the other slots go on", async () => {
   const tournament = tournamentFrom(configJson({ pairings: [["luna", "haiku-5-5"], ["haiku-5-5", "sonnet"]], blocksPerPairing: 2 }));
   const schedule = scheduleOf(tournament);

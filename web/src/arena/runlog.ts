@@ -124,6 +124,14 @@ export const endingFault = (dir: string): Option.Option<{ readonly t: string; re
   return last?.kind === "fault" && last.t !== undefined && last.agent !== undefined && last.error !== undefined ? Option.some({ t: last.t, agent: last.agent, error: last.error }) : Option.none();
 };
 
+/** The faults logged since the match's last move: one per run that stopped before the match got further. */
+export const faultsSinceLastMove = (dir: string): ReadonlyArray<{ readonly agent: AgentId; readonly error: string }> => {
+  const events = readEvents(dir);
+  const lastMove = events.findLastIndex((event) => event.kind === "move");
+
+  return events.slice(lastMove + 1).flatMap((event) => (event.kind === "fault" && event.agent !== undefined && event.error !== undefined ? [{ agent: event.agent, error: event.error }] : []));
+};
+
 /** Cuts a line a crash left half written, so the file is whole lines again. */
 export const dropPartialLine = (path: string): void => {
   if (!existsSync(path)) return;
