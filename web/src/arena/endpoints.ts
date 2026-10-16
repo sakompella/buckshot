@@ -1,4 +1,4 @@
-import { type Api, clampThinkingLevel, createProvider, type Model, type ModelThinkingLevel, type Provider } from "@earendil-works/pi-ai";
+import { type Api, clampThinkingLevel, createProvider, type Model, type ModelThinkingLevel, type Provider, type ProviderStreams } from "@earendil-works/pi-ai";
 import { anthropicMessagesApi } from "@earendil-works/pi-ai/api/anthropic-messages.lazy";
 import { openAIResponsesApi } from "@earendil-works/pi-ai/api/openai-responses.lazy";
 import { DEFAULT_THINKING_BUDGETS } from "@earendil-works/pi-ai/api/simple-options";
@@ -132,6 +132,39 @@ const apiKeyAuth = (key: Redacted.Redacted<string>, source: string) => ({
 /** The provider id an agent's calls are logged under: the API and the agent, so two agents can share a model. */
 export const providerIdOf = (agent: AgentId, endpoint: Endpoint): string => Endpoint.match(endpoint, { Anthropic: () => `anthropic-${agent}`, OpenAIResponses: () => `openai-responses-${agent}` });
 
+/** A Messages API request, by the parts that carry thinking and effort; the rest passes through. */
+const MessagesRequest = Schema.StructWithRest(
+  Schema.Struct({
+    output_config: Schema.optional(Schema.Unknown),
+    messages: Schema.Array(Schema.StructWithRest(Schema.Struct({ role: Schema.String, output_config: Schema.optional(Schema.Unknown) }), [Schema.Record(Schema.String, Schema.Unknown)])),
+  }),
+  [Schema.Record(Schema.String, Schema.Unknown)],
+);
+
+type MessagesRequest = typeof MessagesRequest.Type;
+
+/**
+ * Effort off for a Claude model whose effort pi-ai sets per message. pi-ai always asks such a model to think
+ * adaptively, at effort high when no effort is given, so this rewrites each request it builds: thinking disabled, and
+ * no effort, neither the request's nor the per-message ones pi-ai puts before the assistant turns and at the end.
+ */
+const withThinkingDisabled = (api: ProviderStreams): ProviderStreams => {
+  const disabled = ({ output_config: _effort, messages, ...request }: MessagesRequest) => ({
+    ...request,
+    thinking: { type: "disabled" },
+    messages: messages.filter((message) => !(message.role === "system" && message.output_config !== undefined)),
+  });
+
+  return {
+    ...api,
+    streamSimple: (model, context, options) =>
+      api.streamSimple(model, context, {
+        ...options,
+        onPayload: async (payload, model) => disabled(Schema.decodeUnknownSync(MessagesRequest)((await options?.onPayload?.(payload, model)) ?? payload)),
+      }),
+  };
+};
+
 /** The endpoint as a pi-ai provider with one model. */
 export const providerOf = (providerId: string, endpoint: Endpoint): Provider => {
   const baseUrl = baseUrlOf(endpoint.url);
@@ -143,7 +176,12 @@ export const providerOf = (providerId: string, endpoint: Endpoint): Provider => 
     // as openai-completions for a model a router serves on the Responses API.
     // The model takes the endpoint's API and keeps its compat flags, which say
     // what the model upstream accepts; each API reads only the flags it knows.
-    Anthropic: (): Provider => createProvider({ ...options, models: [{ ...model, api: "anthropic-messages" } as Model<"anthropic-messages">], api: anthropicMessagesApi() }),
+    Anthropic: (): Provider =>
+      createProvider({
+        ...options,
+        models: [{ ...model, api: "anthropic-messages" } as Model<"anthropic-messages">],
+        api: endpoint.effort === "off" && setsEffortPerMessage(model) ? withThinkingDisabled(anthropicMessagesApi()) : anthropicMessagesApi(),
+      }),
     // SAFETY: as above.
     OpenAIResponses: (): Provider => createProvider({ ...options, models: [{ ...model, api: "openai-responses" } as Model<"openai-responses">], api: openAIResponsesApi() }),
   });
@@ -174,14 +212,9 @@ const thinkingOf = (endpoint: Endpoint, model: Model<Api>): AgentProvenance["thi
   if (endpoint.effort === undefined || !model.reasoning) return { level: null, ...off };
 
   // pi-durable passes no reasoning option at effort off, so pi-ai does not clamp
-  // it. Claude models whose effort pi-ai sets per message still think
-  // adaptively then, at pi-ai's default effort, high.
-  if (endpoint.effort === "off") {
-    return Endpoint.match(endpoint, {
-      Anthropic: (): AgentProvenance["thinking"] => (setsEffortPerMessage(model) ? { level: "off", mode: "adaptive", effort: "high", budget_tokens: null } : { level: "off", ...off }),
-      OpenAIResponses: (): AgentProvenance["thinking"] => ({ level: "off", ...off }),
-    });
-  }
+  // it, and providerOf disables the thinking pi-ai would still ask some Claude
+  // models for.
+  if (endpoint.effort === "off") return { level: "off", ...off };
 
   const level = clampThinkingLevel(model, endpoint.effort);
   const effort = model.thinkingLevelMap?.[level] ?? level;
