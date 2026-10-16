@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -267,21 +267,21 @@ test("an interrupted tournament and its restart finish every match once, and a f
   };
 
   const broken = new Set([schedule[5]?.name ?? ""]);
-  const first = await runPending(dir, schedule, 2, fake(broken, interrupted), () => undefined, interrupted.signal, ONCE);
+  const first = await runPending(dir, tournament.config, schedule, 2, fake(broken, interrupted), () => undefined, interrupted.signal, ONCE);
 
   expect(first.length).toBeLessThan(schedule.length);
 
-  const second = await runPending(dir, schedule, 2, fake(broken, new AbortController()), () => undefined, new AbortController().signal, ONCE);
+  const second = await runPending(dir, tournament.config, schedule, 2, fake(broken, new AbortController()), () => undefined, new AbortController().signal, ONCE);
 
   expect(second.filter(({ status }) => status === "failed").map(({ match }) => match.name)).toEqual([...broken]);
 
-  const third = await runPending(dir, schedule, 2, fake(new Set(), new AbortController()), () => undefined, new AbortController().signal, ONCE);
+  const third = await runPending(dir, tournament.config, schedule, 2, fake(new Set(), new AbortController()), () => undefined, new AbortController().signal, ONCE);
 
   expect(third.map(({ match }) => match.name)).toEqual([...broken]);
   expect(third.every(({ status }) => status === "finished")).toBe(true);
   expect([...ran].toSorted()).toEqual([...schedule.map((match) => match.name), ...broken].toSorted());
   expect(unfinished(schedule, new Set(schedule.map((match) => match.name)))).toEqual([]);
-  expect((await runPending(dir, schedule, 2, fake(new Set(), new AbortController()), () => undefined, new AbortController().signal, ONCE)).length).toBe(0);
+  expect((await runPending(dir, tournament.config, schedule, 2, fake(new Set(), new AbortController()), () => undefined, new AbortController().signal, ONCE)).length).toBe(0);
 
   const [opening] = schedule;
   const at = opening?.seats.findIndex((seat) => AGENTS.some((letter) => letter === seat)) ?? -1;
@@ -304,13 +304,52 @@ test("an interrupted tournament and its restart finish every match once, and a f
   expect(costOf(dir, prices, schedule)).toBe(priced);
 });
 
+test("a model at its usage limit holds back its matches until the reset, other matches fill the slot, and the wait is no failed run", async () => {
+  const tournament = tournamentFrom(configJson({ pairings: [["luna", "haiku-5-5"], ["haiku-5-5", "sonnet"]], blocksPerPairing: 1 }));
+  const schedule = scheduleOf(tournament);
+  const [lunaFirst, lunaSecond, ...claude] = schedule;
+
+  if (lunaFirst === undefined || lunaSecond === undefined || claude.length !== 2) throw new Error("the schedule is not two luna matches, then two others");
+
+  /** The fault line a match's run ends on when CLIProxyAPI reports luna at its usage limit for `seconds`. */
+  const coolDown = (dir: string, match: ScheduledMatch, seconds: number) => {
+    const agent = match.seats[match.entrants.indexOf("luna")];
+    const error = `openai-responses-A API error (429): ${JSON.stringify({ code: "model_cooldown", model: "gpt-6-luna", reset_seconds: seconds })}`;
+
+    mkdirSync(join(dir, match.name), { recursive: true });
+    writeFileSync(join(dir, match.name, "events.jsonl"), `${JSON.stringify({ t: new Date().toISOString(), kind: "fault", agent, player: agent, position: 1, turn: 4, error })}\n`);
+    writeManifest(dir, tournament, match, "running");
+  };
+
+  const playAll = async (dir: string, runOne: (match: ScheduledMatch) => number) => {
+    const runs: Array<string> = [];
+    const settled = await runPending(dir, tournament.config, schedule, 1, async (match) => (runs.push(match.name), runOne(match)), () => undefined, new AbortController().signal, { attempts: 1, pauseMs: 60_000 });
+
+    return { runs, settled };
+  };
+
+  const finish = (dir: string) => (match: ScheduledMatch) => (writeManifest(dir, tournament, match, "finished"), 0);
+
+  const inRun = mkdtempSync(join(tmpdir(), "tournament-cooldown-"));
+  const played = await playAll(inRun, (match) => (match === lunaFirst && !existsSync(join(inRun, match.name)) ? (coolDown(inRun, match, 1), 1) : finish(inRun)(match)));
+
+  expect(played.runs).toEqual([lunaFirst, ...claude, lunaFirst, lunaSecond].map((match) => match.name));
+  expect(played.settled.map(({ status }) => status)).toEqual(["cooling", "finished", "finished", "finished", "finished"]);
+
+  const earlier = mkdtempSync(join(tmpdir(), "tournament-cooldown-"));
+
+  coolDown(earlier, lunaFirst, 1);
+
+  expect((await playAll(earlier, finish(earlier))).runs).toEqual([...claude, lunaFirst, lunaSecond].map((match) => match.name));
+});
+
 test("a stop during a failed match's pause ends the run at once", async () => {
   const tournament = tournamentFrom(configJson({ pairings: [["luna", "don"]], blocksPerPairing: 1 }));
   const dir = mkdtempSync(join(tmpdir(), "tournament-stop-"));
   const stop = new AbortController();
   const started = Date.now();
 
-  await runPending(dir, scheduleOf(tournament), 1, async () => (stop.abort(), 1), () => undefined, stop.signal, { attempts: 3, pauseMs: 60_000 });
+  await runPending(dir, tournament.config, scheduleOf(tournament), 1, async () => (stop.abort(), 1), () => undefined, stop.signal, { attempts: 3, pauseMs: 60_000 });
 
   expect(Date.now() - started).toBeLessThan(5_000);
 });
@@ -326,6 +365,7 @@ test("a failed match goes to the back of the queue and is retried, up to its att
 
   const settled = await runPending(
     dir,
+    tournament.config,
     schedule,
     1,
     async (match) => {

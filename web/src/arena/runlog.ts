@@ -2,7 +2,7 @@ import { appendFileSync, existsSync, readFileSync, truncateSync, writeFileSync }
 import { join } from "node:path";
 
 import type { AssistantMessage } from "@earendil-works/pi-ai";
-import { Schema } from "effect";
+import { Option, Schema } from "effect";
 
 import { Letter } from "../players.ts";
 import { AgentId } from "./agent.ts";
@@ -93,6 +93,8 @@ const ReadFields = Schema.Struct({
   by: Schema.optional(Schema.String),
   seq: Schema.optional(Schema.Int),
   request: Schema.optional(Schema.String),
+  t: Schema.optional(Schema.String),
+  error: Schema.optional(Schema.String),
   wall_ms: Schema.optional(Schema.Number),
   entries: Schema.optional(Schema.Array(Schema.String)),
 });
@@ -114,6 +116,13 @@ const append = (path: string, line: string) => appendFileSync(path, `${line}\n`)
 
 /** The agent each provider fault in the run stopped the match on, one per fault line. */
 export const faultsIn = (dir: string): ReadonlyArray<AgentId> => readEvents(dir).flatMap((event) => (event.kind === "fault" && event.agent !== undefined ? [event.agent] : []));
+
+/** The fault a run of the match ended on: its last event line, when that is a fault. A resume writes "resumed" first, so an older fault is never the last line of a run that got further. */
+export const endingFault = (dir: string): Option.Option<{ readonly t: string; readonly agent: AgentId; readonly error: string }> => {
+  const last = readEvents(dir).at(-1);
+
+  return last?.kind === "fault" && last.t !== undefined && last.agent !== undefined && last.error !== undefined ? Option.some({ t: last.t, agent: last.agent, error: last.error }) : Option.none();
+};
 
 /** Cuts a line a crash left half written, so the file is whole lines again. */
 export const dropPartialLine = (path: string): void => {

@@ -2,23 +2,27 @@ import { spawn } from "node:child_process";
 import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 
-import { Result } from "effect";
+import { Option, Result } from "effect";
 
 import { DEFAULT_PRICES, loadPrices } from "../src/arena/cost.ts";
 import { checkPrices, childCommand, childEnv, parseConfig, resolveKeys, type ScheduledMatch, scheduleOf, type TournamentError, unfinished } from "../src/arena/tournament.ts";
-import { costOf, faultsOf, finishedNames, openTournament, runPending, type Settled, winnersOf } from "../src/arena/tournament-dir.ts";
+import { cooldownOf, costOf, faultsOf, finishedNames, openTournament, runPending, type Settled, winnersOf } from "../src/arena/tournament-dir.ts";
 
 // Plays a tournament: every scheduled match, in schedule order, as a child
-// process running scripts/arena.ts, at most --parallel at a time (default
-// 5). The config says who plays whom, as tournaments/cpa-medium.json does. The first run writes <dir>/tournament.json, and a later run needs the
-// same config, or one that grows it; with several configs, each grows the
-// tournament in turn, so their new matches play in that order. Keys come from
-// the environment, and Bun loads web/.env for this script; each match gets only
-// its own PLAYER_* variables. A match that fails goes to the back of the queue
-// after a pause, up to three runs, and the rest go on. Rerun the same command to
-// resume: finished matches never run again. Do not run two of these on one
-// directory. --limit plays at most that many matches. The runner appends a line to <dir>/PROGRESS.md when it starts, every 30
-// minutes and when it ends. --dry-run prints the schedule of the last config.
+// process running scripts/arena.ts, at most --parallel at a time (default 5).
+// The config says who plays whom, as tournaments/cpa-medium.json does. The
+// first run writes <dir>/tournament.json, and a later run needs the same
+// config, or one that grows it; with several configs, each grows the tournament
+// in turn, so their new matches play in that order. Keys come from the
+// environment, and Bun loads web/.env for this script; each match gets only its
+// own PLAYER_* variables. A match stopped by a model's usage limit waits for
+// the reset, with every match of that model, and does not count as failed;
+// other matches fill the slots. A match that fails goes to the back of the
+// queue after a pause, up to three runs, and the rest go on. Rerun the same
+// command to resume: finished matches never run again. Do not run two of these
+// on one directory. --limit plays at most that many matches. The runner appends
+// a line to <dir>/PROGRESS.md when it starts, every 30 minutes and when it
+// ends. --dry-run prints the schedule of the last config.
 // Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel N] [--limit N] [--dry-run]
 //        bun scripts/arena-stats.ts <tournament dir> [--json]
 
@@ -125,12 +129,17 @@ const tail = (match: ScheduledMatch, lines: number): string => {
   return text.slice(-lines).map((line) => `    ${line}`).join("\n");
 };
 
-const report = ({ match, status }: Settled) => {
+const clock = (time: number): string => new Date(time).toLocaleString("sv-SE").slice(0, 16);
+
+const report = (settled: Settled) => {
+  const { match, status } = settled;
   const done = finishedNames(dir, file.schedule).size;
   const winning = status === "finished" ? winnersOf(dir, match) : [];
   const winners = winning.length === 0 ? "" : `, won by ${winning.join(" and ")}`;
 
   console.log(`[${done}/${file.schedule.length}] ${match.name} ${status}${winners}, ${money(costOf(dir, prices, [match]))}, total ${money(costOf(dir, prices, file.schedule))}`);
+
+  if (settled.status === "cooling") console.log(`  ${settled.cooldown.model} is at its usage limit until ${clock(settled.cooldown.until)}; its matches wait, and this one resumes then.`);
 
   if (status === "failed") console.log(`${tail(match, 8)}\n  It is retried after a pause, up to three runs; rerun the same command to resume it after that.`);
 };
@@ -151,10 +160,12 @@ const noteProgress = (event: string) => {
   const finished = finishedNames(dir, file.schedule);
   const faults = file.schedule.reduce((total, match) => total + faultsOf(dir, match).length, 0);
   const byPhase = phases.map(({ label, names }) => `${label} ${names.filter((name) => finished.has(name)).length}/${names.length}`).join(", ");
+  const cooling = new Map(file.schedule.flatMap((match) => Option.toArray(cooldownOf(dir, file.config, match, Date.now())).map(({ model, until }) => [model, until] as const)));
+  const waiting = [...cooling].map(([model, until]) => `${model} until ${clock(until)}`).join(", ");
 
   appendFileSync(
     join(dir, "PROGRESS.md"),
-    `- ${new Date().toLocaleString("sv-SE").slice(0, 16)} runner ${event}: ${finished.size}/${file.schedule.length} finished (${byPhase}); ${children.size} running; ${failedRuns} failed runs since ${startedAt.toLocaleString("sv-SE").slice(0, 16)}; ${faults} provider faults in all; ${money(costOf(dir, prices, file.schedule))} at list prices\n`,
+    `- ${clock(Date.now())} runner ${event}: ${finished.size}/${file.schedule.length} finished (${byPhase}); ${children.size} running; ${failedRuns} failed runs since ${clock(startedAt.getTime())}; ${faults} provider faults in all;${waiting === "" ? "" : ` at the usage limit: ${waiting};`} ${money(costOf(dir, prices, file.schedule))} at list prices\n`,
   );
 };
 
@@ -172,7 +183,7 @@ noteProgress("started");
 
 const every30Minutes = setInterval(() => noteProgress("check"), 30 * 60 * 1000);
 
-const settled = await runPending(dir, pending, parallel, runOne, settle, stop.signal);
+const settled = await runPending(dir, file.config, pending, parallel, runOne, settle, stop.signal);
 
 clearInterval(every30Minutes);
 

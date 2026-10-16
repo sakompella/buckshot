@@ -2,11 +2,11 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
-import { Result, Schema } from "effect";
+import { Option, Result, Schema } from "effect";
 
 import { AgentId } from "./agent.ts";
 import { type PriceTable, totalsBy } from "./cost.ts";
-import { type CallLine, faultsIn, readCalls } from "./runlog.ts";
+import { type CallLine, endingFault, faultsIn, readCalls } from "./runlog.ts";
 import {
   ScheduledMatch,
   type Tournament,
@@ -193,10 +193,37 @@ export const faultsOf = (dir: string, match: ScheduledMatch): ReadonlyArray<stri
 export const costOf = (dir: string, prices: PriceTable, matches: ReadonlyArray<ScheduledMatch>): number =>
   [...totalsBy(prices, matches.flatMap((match) => callsOf(dir, match))).values()].reduce((total, entrant) => total + entrant.dollars, 0);
 
-export interface Settled {
-  readonly match: ScheduledMatch;
-  readonly status: "finished" | "failed";
+/** A model its provider refuses until a time, after a usage limit. */
+export interface Cooldown {
+  readonly model: string;
+  /** Milliseconds since the epoch. */
+  readonly until: number;
 }
+
+/** A provider's usage-limit refusal, with the seconds until it resets: CLIProxyAPI's model cooldown, or the upstream limit it passes on. */
+const UsageLimit = Schema.Union([
+  Schema.Struct({ code: Schema.Literal("model_cooldown"), reset_seconds: Schema.Number }),
+  Schema.Struct({ type: Schema.Literal("usage_limit_reached"), resets_in_seconds: Schema.Number }),
+]);
+
+const decodeUsageLimit = Schema.decodeUnknownOption(Schema.fromJsonString(UsageLimit));
+
+/** The cooldown the match's last run ended on, while it lasts: a fault whose error carries a usage limit, for the model of the agent it stopped. */
+export const cooldownOf = (dir: string, config: TournamentConfig, match: ScheduledMatch, now: number): Option.Option<Cooldown> =>
+  Option.flatMap(endingFault(join(dir, match.name)), (fault) => {
+    const entrant = modelEntrant(config, match.entrants[match.seats.indexOf(fault.agent)] ?? "");
+    const limit = decodeUsageLimit(fault.error.slice(fault.error.indexOf("{")));
+
+    return Option.filter(
+      Option.flatMap(limit, (refusal) => (entrant === undefined ? Option.none() : Option.some({ model: entrant.model, until: Date.parse(fault.t) + 1000 * ("code" in refusal ? refusal.reset_seconds : refusal.resets_in_seconds) }))),
+      ({ until }) => until > now,
+    );
+  });
+
+export type Settled =
+  | { readonly match: ScheduledMatch; readonly status: "finished" | "failed" }
+  /** Stopped by a model's usage limit: it waits for the reset, and the stop is not a failed run. */
+  | { readonly match: ScheduledMatch; readonly status: "cooling"; readonly cooldown: Cooldown };
 
 /** What happens to a failed match: it goes to the back of the queue, for `attempts` runs in all, and its slot waits `pauseMs` first, so a provider's cooldown has fewer matches at once. */
 export interface Retry {
@@ -205,6 +232,9 @@ export interface Retry {
 }
 
 export const RETRY: Retry = { attempts: 3, pauseMs: 120_000 };
+
+/** How long a slot with no match to start waits before it looks again, at most. */
+const IDLE_MS = 60_000;
 
 const pause = (ms: number, stop: AbortSignal) =>
   new Promise<void>((resume) => {
@@ -217,11 +247,14 @@ const pause = (ms: number, stop: AbortSignal) =>
 
 /**
  * Runs the matches that are not finished, in schedule order, at most `parallel` at a time. `runOne` plays one and gives
- * its exit code. A match is finished when it exited 0 and its manifest says so; any other is retried as `retry` says,
- * and then left for the next run.
+ * its exit code. A match is finished when it exited 0 and its manifest says so. One stopped by a model's usage limit
+ * goes back to the front of the queue, and no match with that model starts until the reset; the cooldowns of earlier
+ * runs are read from the matches' logs at the start. Any other failure is retried as `retry` says, and then left for the
+ * next run.
  */
 export const runPending = async (
   dir: string,
+  config: TournamentConfig,
   schedule: ReadonlyArray<ScheduledMatch>,
   parallel: number,
   runOne: (match: ScheduledMatch) => Promise<number>,
@@ -232,14 +265,39 @@ export const runPending = async (
   const settled: Array<Settled> = [];
   const queue = [...unfinished(schedule, finishedNames(dir, schedule))];
   const failures = new Map<string, number>();
+  const coolingUntil = new Map<string, number>();
+
+  const cool = ({ model, until }: Cooldown) => coolingUntil.set(model, Math.max(until, coolingUntil.get(model) ?? 0));
+  const isReady = (match: ScheduledMatch) => match.entrants.every((name) => (coolingUntil.get(modelEntrant(config, name)?.model ?? "") ?? 0) <= Date.now());
+  const nextReset = () => Math.min(...[...coolingUntil.values()].filter((until) => until > Date.now()));
+
+  for (const match of queue) Option.match(cooldownOf(dir, config, match, Date.now()), { onNone: () => undefined, onSome: cool });
 
   const slot = async (): Promise<void> => {
-    for (let match = queue.shift(); match !== undefined && !stop.aborted; match = queue.shift()) {
+    while (queue.length > 0 && !stop.aborted) {
+      const at = queue.findIndex(isReady);
+      const match = at === -1 ? undefined : queue.splice(at, 1)[0];
+
+      if (match === undefined) {
+        await pause(Math.min(IDLE_MS, nextReset() - Date.now()), stop);
+        continue;
+      }
+
       const exitCode = await runOne(match);
-      const result: Settled = { match, status: exitCode === 0 && isFinished(join(dir, match.name)) ? "finished" : "failed" };
+      const cooldown = cooldownOf(dir, config, match, Date.now());
+
+      const result: Settled =
+        exitCode === 0 && isFinished(join(dir, match.name))
+          ? { match, status: "finished" }
+          : Option.match(cooldown, { onNone: () => ({ match, status: "failed" as const }), onSome: (value) => ({ match, status: "cooling" as const, cooldown: value }) });
 
       settled.push(result);
       onSettled(result);
+
+      if (result.status === "cooling") {
+        cool(result.cooldown);
+        queue.unshift(match);
+      }
 
       if (result.status === "failed") {
         const failed = (failures.get(match.name) ?? 0) + 1;
