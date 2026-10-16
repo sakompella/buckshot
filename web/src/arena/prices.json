@@ -132,6 +132,13 @@
         }
       ],
       "source": "CLIProxyAPI alias for gpt-6-luna on a faster service tier; priced as gpt-6-luna from the pi-ai 1.1.0 catalog, copied 2026-10-15. A priority tier may cost more; not checked."
+    },
+    "oc/deepseek-v4.1-flash-free": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "source": "free: DeepSeek V4.1 Flash Free on OpenCode Zen, through 9router; the paid deepseek-v4.1-flash lists $0.30 input, $1.20 output, $0.006 cached read, https://opencode.ai/docs/zen/#pricing, 2026-10-16"
     }
   }
 }
