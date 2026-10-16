@@ -9,9 +9,8 @@ import { checkPrices, childCommand, childEnv, parseConfig, resolveKeys, type Sch
 import { costOf, faultsOf, finishedNames, openTournament, runPending, type Settled, winnersOf } from "../src/arena/tournament-dir.ts";
 
 // Plays a tournament: every scheduled match, in schedule order, as a child
-// process running scripts/arena.ts, at most --parallel at a time (1 to 32,
-// default 5). The config says who plays whom, as tournaments/cpa-medium.json
-// does. The first run writes <dir>/tournament.json, and a later run needs the
+// process running scripts/arena.ts, at most --parallel at a time (default
+// 5). The config says who plays whom, as tournaments/cpa-medium.json does. The first run writes <dir>/tournament.json, and a later run needs the
 // same config, or one that grows it; with several configs, each grows the
 // tournament in turn, so their new matches play in that order. Keys come from
 // the environment, and Bun loads web/.env for this script; each match gets only
@@ -20,7 +19,7 @@ import { costOf, faultsOf, finishedNames, openTournament, runPending, type Settl
 // resume: finished matches never run again. Do not run two of these on one
 // directory. --limit plays at most that many matches. The runner appends a line to <dir>/PROGRESS.md when it starts, every 30
 // minutes and when it ends. --dry-run prints the schedule of the last config.
-// Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel 1-32] [--limit N] [--dry-run]
+// Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel N] [--limit N] [--dry-run]
 //        bun scripts/arena-stats.ts <tournament dir> [--json]
 
 const WEB = join(import.meta.dir, "..");
@@ -49,9 +48,9 @@ const exit = (message: string): never => {
 
 const unwrap = <A>(result: Result.Result<A, TournamentError>): A => Result.match(result, { onFailure: (error) => exit(error.message), onSuccess: (value) => value });
 
-if (configPaths.length === 0) exit("Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel 1-32] [--limit N] [--dry-run]");
+if (configPaths.length === 0) exit("Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel N] [--limit N] [--dry-run]");
 
-if (!Number.isInteger(parallel) || parallel < 1 || parallel > 32) exit("--parallel must be a whole number from 1 to 32");
+if (!Number.isInteger(parallel) || parallel < 1) exit("--parallel must be a whole number from 1");
 
 if (limit !== undefined && (!Number.isInteger(limit) || limit < 1)) exit("--limit must be a whole number from 1");
 
