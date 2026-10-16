@@ -97,11 +97,11 @@ const money = (dollars: number): string => `$${dollars.toFixed(4)}`;
 
 if (args.includes("--dry-run")) {
   const schedule = scheduleOf(tournament);
-  const { name, seed, delivery, blocksPerPairing } = tournament.config;
+  const { name, delivery, blocksPerPairing } = tournament.config;
 
-  console.log(`${name}: ${tournament.pairings.length} pairings, ${blocksPerPairing} block${blocksPerPairing === 1 ? "" : "s"} each, ${schedule.length} matches, ${delivery} delivery, seeds ${seed} to ${seed + blocksPerPairing - 1}`);
+  console.log(`${name}: ${tournament.pairings.length} pairings, ${blocksPerPairing} block${blocksPerPairing === 1 ? "" : "s"} each, ${schedule.length} matches, ${delivery} delivery`);
 
-  for (const [index, pairing] of tournament.pairings.entries()) console.log(`  ${pairing.join(" vs ")}: ${schedule.filter((match) => match.pairing === index).length} matches`);
+  for (const [index, pairing] of tournament.pairings.entries()) console.log(`  ${pairing.join(" vs ")}: ${schedule.filter((match) => match.pairing === index).length} matches, seeds ${tournament.seeds[index]?.slice(0, blocksPerPairing).join(", ")}`);
 
   process.exit(0);
 }
