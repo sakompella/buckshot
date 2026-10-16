@@ -230,110 +230,474 @@
       "gpt-6-astra",
       "deepseek-v4.1-flash"
     ],
-    [
-      "claude-haiku-4-5-20251001-off",
-      "claude-haiku-4-5-20251001-low"
-    ],
-    [
-      "claude-haiku-4-5-20251001-off",
-      "claude-haiku-4-5-20251001"
-    ],
-    [
-      "claude-haiku-4-5-20251001-off",
-      "claude-haiku-4-5-20251001-high"
-    ],
-    [
-      "claude-haiku-4-5-20251001-low",
-      "claude-haiku-4-5-20251001"
-    ],
-    [
-      "claude-haiku-4-5-20251001-low",
-      "claude-haiku-4-5-20251001-high"
-    ],
-    [
-      "claude-haiku-4-5-20251001",
-      "claude-haiku-4-5-20251001-high"
-    ],
-    [
-      "claude-haiku-5-5-low",
-      "claude-haiku-5-5"
-    ],
-    [
-      "claude-haiku-5-5-low",
-      "claude-haiku-5-5-high"
-    ],
-    [
-      "claude-haiku-5-5-low",
-      "claude-haiku-5-5-xhigh"
-    ],
-    [
-      "claude-haiku-5-5-low",
-      "claude-haiku-5-5-max"
-    ],
-    [
-      "claude-haiku-5-5",
-      "claude-haiku-5-5-high"
-    ],
-    [
-      "claude-haiku-5-5",
-      "claude-haiku-5-5-xhigh"
-    ],
-    [
-      "claude-haiku-5-5",
-      "claude-haiku-5-5-max"
-    ],
-    [
-      "claude-haiku-5-5-high",
-      "claude-haiku-5-5-xhigh"
-    ],
-    [
-      "claude-haiku-5-5-high",
-      "claude-haiku-5-5-max"
-    ],
-    [
-      "claude-haiku-5-5-xhigh",
-      "claude-haiku-5-5-max"
-    ],
-    [
-      "claude-sonnet-5-5-low",
-      "claude-sonnet-5-5"
-    ],
-    [
-      "claude-sonnet-5-5-low",
-      "claude-sonnet-5-5-high"
-    ],
-    [
-      "claude-sonnet-5-5-low",
-      "claude-sonnet-5-5-xhigh"
-    ],
-    [
-      "claude-sonnet-5-5-low",
-      "claude-sonnet-5-5-max"
-    ],
-    [
-      "claude-sonnet-5-5",
-      "claude-sonnet-5-5-high"
-    ],
-    [
-      "claude-sonnet-5-5",
-      "claude-sonnet-5-5-xhigh"
-    ],
-    [
-      "claude-sonnet-5-5",
-      "claude-sonnet-5-5-max"
-    ],
-    [
-      "claude-sonnet-5-5-high",
-      "claude-sonnet-5-5-xhigh"
-    ],
-    [
-      "claude-sonnet-5-5-high",
-      "claude-sonnet-5-5-max"
-    ],
-    [
-      "claude-sonnet-5-5-xhigh",
-      "claude-sonnet-5-5-max"
-    ]
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-off",
+        "claude-haiku-4-5-20251001-low"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-off",
+        "claude-haiku-4-5-20251001"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-off",
+        "claude-haiku-4-5-20251001-high"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-low",
+        "claude-haiku-4-5-20251001"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-low",
+        "claude-haiku-4-5-20251001-high"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001",
+        "claude-haiku-4-5-20251001-high"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-low",
+        "claude-haiku-5-5"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-low",
+        "claude-haiku-5-5-high"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-low",
+        "claude-haiku-5-5-xhigh"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-low",
+        "claude-haiku-5-5-max"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5",
+        "claude-haiku-5-5-high"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5",
+        "claude-haiku-5-5-xhigh"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5",
+        "claude-haiku-5-5-max"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-high",
+        "claude-haiku-5-5-xhigh"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-high",
+        "claude-haiku-5-5-max"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-xhigh",
+        "claude-haiku-5-5-max"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5-low",
+        "claude-sonnet-5-5"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5-low",
+        "claude-sonnet-5-5-high"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5-low",
+        "claude-sonnet-5-5-xhigh"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5-low",
+        "claude-sonnet-5-5-max"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5",
+        "claude-sonnet-5-5-high"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5",
+        "claude-sonnet-5-5-xhigh"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5",
+        "claude-sonnet-5-5-max"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5-high",
+        "claude-sonnet-5-5-xhigh"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5-high",
+        "claude-sonnet-5-5-max"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5-xhigh",
+        "claude-sonnet-5-5-max"
+      ],
+      "seeds": [
+        3000,
+        3010,
+        3011,
+        3012,
+        3014,
+        3013,
+        3015,
+        3017,
+        3016,
+        3018
+      ]
+    }
   ],
   "blocksPerPairing": 10
 }
