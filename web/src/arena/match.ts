@@ -418,12 +418,13 @@ const seatingIn = (state: MatchState) => Object.fromEntries(state.letters.flatMa
 
 const WEB = new URL("../..", import.meta.url).pathname;
 
-/** The files that decide how a match plays, under web/: the generated rules, the game and agent core, this match loop and the pinned dependencies. */
-const PLAY_FILES = ["generated", "src/agent", "src/bend.ts", "src/domain.ts", "src/driver.ts", "src/players.ts", "src/rng.ts", "src/text.ts", "src/arena/agent.ts", "src/arena/match.ts", "package.json", "bun.lock"];
+/** The files that decide how a match plays, under web/: the generated rules, the game and agent core, this match loop, the requests each model is sent and the pinned dependencies. */
+const PLAY_FILES = ["generated", "src/agent", "src/bend.ts", "src/domain.ts", "src/driver.ts", "src/players.ts", "src/rng.ts", "src/text.ts", "src/arena/agent.ts", "src/arena/endpoints.ts", "src/arena/match.ts", "package.json", "bun.lock"];
 
 const filesUnder = (path: string): ReadonlyArray<string> => (statSync(path).isDirectory() ? readdirSync(path).flatMap((name) => filesUnder(join(path, name))) : [path]);
 
-const codeSha = (): string => sha(Buffer.concat(PLAY_FILES.flatMap((path) => filesUnder(join(WEB, path))).toSorted().flatMap((file) => [Buffer.from(`${relative(WEB, file)}\0`), readFileSync(file), Buffer.from("\0")])));
+/** The code version a match started now records, and must find again to resume. */
+export const codeSha = (): string => sha(Buffer.concat(PLAY_FILES.flatMap((path) => filesUnder(join(WEB, path))).toSorted().flatMap((file) => [Buffer.from(`${relative(WEB, file)}\0`), readFileSync(file), Buffer.from("\0")])));
 
 const provenanceOf = (match: ArenaMatch): MatchProvenance => ({
   code_sha: codeSha(),

@@ -203,14 +203,63 @@ test.each([
 test.each([
   ["claude-haiku-4-5-20251001", "off", { level: "off", mode: "off", effort: null, budget_tokens: null }],
   ["claude-haiku-4-5-20251001", "max", { level: "high", mode: "budget", effort: null, budget_tokens: 16384 }],
-  ["claude-haiku-5-5", "off", { level: "off", mode: "adaptive", effort: "high", budget_tokens: null }],
+  ["claude-haiku-5-5", "off", { level: "off", mode: "off", effort: null, budget_tokens: null }],
   ["claude-sonnet-5-5", "xhigh", { level: "xhigh", mode: "adaptive", effort: "xhigh", budget_tokens: null }],
-] as const)("the provenance records the thinking settings pi-ai sent CLIProxyAPI for %s at effort %s", async (model, effort, thinking) => {
+] as const)("the provenance records the thinking settings the arena sent CLIProxyAPI for %s at effort %s", async (model, effort, thinking) => {
   const endpoint = await endpointFrom({ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_ANT_KEY: CPA.key, PLAYER_A_MODEL: model, PLAYER_A_EFFORT: effort });
 
   if (!Exit.isSuccess(endpoint)) throw new Error(String(endpoint.cause));
 
   expect(provenanceOf("provider-A", endpoint.value).thinking).toEqual(thinking);
+});
+
+/** The first Messages API request an endpoint sends, as pi-durable asks for a reply: with no reasoning option at effort off. */
+const firstRequestAt = async (model: string, effort: "off" | "low") => {
+  const requests: Array<unknown> = [];
+
+  const server = Bun.serve({
+    port: 0,
+    fetch: async (request) => {
+      requests.push(await request.json());
+
+      return Response.json({ type: "error", error: { type: "invalid_request_error", message: "refused by the test" } }, { status: 400 });
+    },
+  });
+
+  const endpoint = await endpointFrom({ PLAYER_A_ANT_URL: server.url.href, PLAYER_A_ANT_KEY: CPA.key, PLAYER_A_MODEL: model, PLAYER_A_EFFORT: effort });
+
+  if (!Exit.isSuccess(endpoint)) throw new Error(String(endpoint.cause));
+
+  const models = createModels();
+
+  models.setProvider(providerOf("anthropic-A", endpoint.value));
+
+  const listed = models.getModel("anthropic-A", model);
+
+  if (listed === undefined) throw new Error(`${model} is not listed`);
+
+  await models.completeSimple(listed, { messages: [{ role: "user", content: "Your turn.", timestamp: 0 }] }, effort === "off" ? {} : { reasoning: effort });
+  await server.stop(true);
+
+  return Schema.decodeUnknownSync(SentRequest)(requests[0]);
+};
+
+const SentRequest = Schema.Struct({
+  thinking: Schema.optional(Schema.Struct({ type: Schema.String })),
+  output_config: Schema.optional(Schema.Struct({ effort: Schema.String })),
+  messages: Schema.Array(Schema.Struct({ output_config: Schema.optional(Schema.Struct({ effort: Schema.String })) })),
+});
+
+test.each([
+  ["claude-haiku-5-5", "off", "disabled", []],
+  ["claude-sonnet-5-5", "off", "disabled", []],
+  ["claude-haiku-4-5-20251001", "off", "disabled", []],
+  ["claude-sonnet-5-5", "low", "adaptive", ["high", "low"]],
+] as const)("%s at effort %s asks for thinking %s, at the efforts %j", async (model, effort, thinking, efforts) => {
+  const request = await firstRequestAt(model, effort);
+
+  expect(request.thinking?.type).toBe(thinking);
+  expect([request.output_config, ...request.messages.map((message) => message.output_config)].flatMap((config) => (config === undefined ? [] : [config.effort]))).toEqual([...efforts]);
 });
 
 test("a proxy's model alias plays as the catalog model it names", async () => {
