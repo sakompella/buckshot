@@ -349,7 +349,7 @@ test("one directory holds one tournament", () => {
   expect(Result.isFailure(other) && other.failure.message).toContain("made from a different config");
 });
 
-test("a tournament grows by entrants, by pairings listed after its own and by seed blocks; its scheduled matches stay as they were, first", () => {
+test("a tournament grows by entrants, by pairings listed after its own and by seed blocks, its scheduled matches stay first and unchanged, and a config it grew from opens it as it is", () => {
   const dir = join(mkdtempSync(join(tmpdir(), "tournament-dir-")), "t");
   const first = tournamentFrom(configJson({ entrants: { luna: ENTRANTS.luna, don: ENTRANTS.don }, pairings: [["luna", "don"]] }));
   const grown = tournamentFrom(configJson({ pairings: [["luna", "don"], ["haiku-5-5", "luna"], ["opus", "story"]] }));
@@ -360,6 +360,8 @@ test("a tournament grows by entrants, by pairings listed after its own and by se
 
   const schedule = Result.isSuccess(opened) ? opened.success.schedule : [];
 
+  expect(openTournament(dir, first, "abc123", new Date(0))).toEqual(opened);
+
   expect(schedule.slice(0, scheduleOf(first).length)).toEqual([...scheduleOf(first)]);
   expect(schedule.toSorted((a, b) => a.name.localeCompare(b.name))).toEqual(scheduleOf(grown).toSorted((a, b) => a.name.localeCompare(b.name)));
   expect(JSON.parse(readFileSync(join(dir, "tournament.json"), "utf8"))).toMatchObject({ git_commit: "abc123", created_at: "1970-01-01T00:00:00.000Z" });
@@ -368,7 +370,8 @@ test("a tournament grows by entrants, by pairings listed after its own and by se
     expect(Result.isFailure(openTournament(dir, tournamentFrom(configJson({ pairings })), "abc123", new Date(0)))).toBe(true);
   }
 
-  expect(Result.isFailure(openTournament(dir, tournamentFrom(configJson({ pairings: [["luna", "don"], ["haiku-5-5", "luna"], ["opus", "story"]], blocksPerPairing: 1 })), "abc123", new Date(0)))).toBe(true);
+  expect(openTournament(dir, tournamentFrom(configJson({ pairings: [["luna", "don"], ["haiku-5-5", "luna"], ["opus", "story"]], blocksPerPairing: 1 })), "abc123", new Date(0))).toEqual(opened);
+  expect(Result.isFailure(openTournament(dir, tournamentFrom(configJson({ pairings: [["luna", "don"], ["haiku-5-5", "luna"], ["opus", "story"]], delivery: "live" })), "abc123", new Date(0)))).toBe(true);
 
   const more = tournamentFrom(configJson({ pairings: [["luna", "don"], ["haiku-5-5", "luna"], ["opus", "story"]], blocksPerPairing: 3 }));
   const extended = openTournament(dir, more, "abc123", new Date(0));

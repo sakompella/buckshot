@@ -73,7 +73,8 @@ export const openTournament = (dir: string, tournament: Tournament, gitCommit: s
   if (!existsSync(fileOf(dir))) return Result.succeed(writeFile(dir, { format: TOURNAMENT_FORMAT, config: tournament.config, created_at: now.toISOString(), git_commit: gitCommit, schedule: scheduleOf(tournament) }));
 
   return Result.flatMap(readTournamentFile(dir), (file) => {
-    if (isDeepStrictEqual(file.config, tournament.config)) return Result.succeed(file);
+    // A config the tournament has already grown from is part of it, as when a run with several configs is repeated.
+    if (isDeepStrictEqual(file.config, tournament.config) || growsInto(tournament.config, file.config)) return Result.succeed(file);
 
     if (growsInto(file.config, tournament.config)) {
       const scheduled = new Set(file.schedule.map((match) => match.name));

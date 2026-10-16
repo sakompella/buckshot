@@ -1,12 +1,12 @@
 import { spawn } from "node:child_process";
-import { closeSync, mkdirSync, openSync, readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync } from "node:fs";
+import { basename, join, resolve } from "node:path";
 
 import { Result } from "effect";
 
 import { DEFAULT_PRICES, loadPrices } from "../src/arena/cost.ts";
 import { checkPrices, childCommand, childEnv, parseConfig, resolveKeys, type ScheduledMatch, scheduleOf, type TournamentError, unfinished } from "../src/arena/tournament.ts";
-import { costOf, finishedNames, openTournament, runPending, type Settled, winnersOf } from "../src/arena/tournament-dir.ts";
+import { costOf, faultsOf, finishedNames, openTournament, runPending, type Settled, winnersOf } from "../src/arena/tournament-dir.ts";
 
 // Plays a tournament: every scheduled match, in schedule order, as a child
 // process running scripts/arena.ts, at most --parallel at a time (1 to 8,
@@ -18,8 +18,8 @@ import { costOf, finishedNames, openTournament, runPending, type Settled, winner
 // its own PLAYER_* variables. A match that fails goes to the back of the queue
 // after a pause, up to three runs, and the rest go on. Rerun the same command to
 // resume: finished matches never run again. Do not run two of these on one
-// directory. --limit plays at most that many matches. --dry-run prints the
-// schedule of the last config.
+// directory. --limit plays at most that many matches. The runner appends a line to <dir>/PROGRESS.md when it starts, every 30
+// minutes and when it ends. --dry-run prints the schedule of the last config.
 // Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel 1-8] [--limit N] [--dry-run]
 //        bun scripts/arena-stats.ts <tournament dir> [--json]
 
@@ -136,11 +136,46 @@ const report = ({ match, status }: Settled) => {
   if (status === "failed") console.log(`${tail(match, 8)}\n  It is retried after a pause, up to three runs; rerun the same command to resume it after that.`);
 };
 
+/** Each config's own matches, the ones it added to the tournament, for the progress lines. */
+const phases = configPaths.map((path, index) => {
+  const before = new Set(index === 0 ? [] : scheduleOf(tournaments[index - 1] ?? tournament).map((match) => match.name));
+
+  return { label: basename(path, ".json"), names: scheduleOf(tournaments[index] ?? tournament).flatMap((match) => (before.has(match.name) ? [] : [match.name])) };
+});
+
+const startedAt = new Date();
+
+let failedRuns = 0;
+
+/** Appends one line to <dir>/PROGRESS.md, so the tournament's progress is on disk without anyone watching it. */
+const noteProgress = (event: string) => {
+  const finished = finishedNames(dir, file.schedule);
+  const faults = file.schedule.reduce((total, match) => total + faultsOf(dir, match).length, 0);
+  const byPhase = phases.map(({ label, names }) => `${label} ${names.filter((name) => finished.has(name)).length}/${names.length}`).join(", ");
+
+  appendFileSync(
+    join(dir, "PROGRESS.md"),
+    `- ${new Date().toLocaleString("sv-SE").slice(0, 16)} runner ${event}: ${finished.size}/${file.schedule.length} finished (${byPhase}); ${children.size} running; ${failedRuns} failed runs since ${startedAt.toLocaleString("sv-SE").slice(0, 16)}; ${faults} provider faults in all; ${money(costOf(dir, prices, file.schedule))} at list prices\n`,
+  );
+};
+
+const settle = (settled: Settled) => {
+  if (settled.status === "failed") failedRuns += 1;
+
+  report(settled);
+};
+
 const pending = unfinished(file.schedule, finishedNames(dir, file.schedule)).slice(0, limit);
 
 console.log(`${file.config.name}: ${pending.length} of ${file.schedule.length} matches to run, ${parallel} at a time, in ${dir}`);
 
-const settled = await runPending(dir, pending, parallel, runOne, report, stop.signal);
+noteProgress("started");
+
+const every30Minutes = setInterval(() => noteProgress("check"), 30 * 60 * 1000);
+
+const settled = await runPending(dir, pending, parallel, runOne, settle, stop.signal);
+
+clearInterval(every30Minutes);
 
 const failed = settled.filter(({ status }) => status === "failed").length;
 
@@ -151,5 +186,7 @@ console.log(`\n${settled.length - failed} matches finished, ${failed} failed run
 if (remaining > 0) console.log("Rerun the same command to resume the rest.");
 
 console.log(`Stats: bun scripts/arena-stats.ts ${dir}`);
+
+noteProgress("ended");
 
 process.exitCode = remaining > 0 ? 1 : 0;
