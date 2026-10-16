@@ -132,43 +132,65 @@ const apiKeyAuth = (key: Redacted.Redacted<string>, source: string) => ({
 /** The provider id an agent's calls are logged under: the API and the agent, so two agents can share a model. */
 export const providerIdOf = (agent: AgentId, endpoint: Endpoint): string => Endpoint.match(endpoint, { Anthropic: () => `anthropic-${agent}`, OpenAIResponses: () => `openai-responses-${agent}` });
 
+/** The API, with each request pi-ai builds read by `schema` and replaced by what `rewrite` makes of it. */
+const rewriting = <A>(api: ProviderStreams, schema: Schema.Decoder<A>, rewrite: (request: A) => object): ProviderStreams => ({
+  ...api,
+  streamSimple: (model, context, options) =>
+    api.streamSimple(model, context, {
+      ...options,
+      onPayload: async (payload, model) => rewrite(Schema.decodeUnknownSync(schema)((await options?.onPayload?.(payload, model)) ?? payload)),
+    }),
+});
+
+const Rest = [Schema.Record(Schema.String, Schema.Unknown)] as const;
+
 /** A Messages API request, by the parts that carry thinking and effort; the rest passes through. */
 const MessagesRequest = Schema.StructWithRest(
   Schema.Struct({
     output_config: Schema.optional(Schema.Unknown),
-    messages: Schema.Array(Schema.StructWithRest(Schema.Struct({ role: Schema.String, output_config: Schema.optional(Schema.Unknown) }), [Schema.Record(Schema.String, Schema.Unknown)])),
+    messages: Schema.Array(Schema.StructWithRest(Schema.Struct({ role: Schema.String, output_config: Schema.optional(Schema.Unknown) }), Rest)),
   }),
-  [Schema.Record(Schema.String, Schema.Unknown)],
+  Rest,
 );
 
-type MessagesRequest = typeof MessagesRequest.Type;
+/**
+ * What a Claude model whose effort pi-ai sets per message is asked for at effort off. Claude Sonnet 5.5 rejects
+ * thinking disabled and takes "between_tools" in its place, which turns off only its thinking before the first tool
+ * call (platform.claude.com/docs/en/build-with-claude/thinking, read 2026-10-16).
+ */
+const thinkingOffType = (catalogModel: Model<Api>): "disabled" | "between_tools" => (catalogModel.id === "claude-sonnet-5-5" ? "between_tools" : "disabled");
 
 /**
  * Effort off for a Claude model whose effort pi-ai sets per message. pi-ai always asks such a model to think
- * adaptively, at effort high when no effort is given, so this rewrites each request it builds: thinking disabled, and
- * no effort, neither the request's nor the per-message ones pi-ai puts before the assistant turns and at the end.
+ * adaptively, at effort high when no effort is given, so this rewrites each request it builds: thinking off, and no
+ * effort, neither the request's nor the per-message ones pi-ai puts before the assistant turns and at the end.
  */
-const withThinkingDisabled = (api: ProviderStreams): ProviderStreams => {
-  const disabled = ({ output_config: _effort, messages, ...request }: MessagesRequest) => ({
+const withThinkingOff = (api: ProviderStreams, type: "disabled" | "between_tools"): ProviderStreams =>
+  rewriting(api, MessagesRequest, ({ output_config: _effort, messages, ...request }) => ({
     ...request,
-    thinking: { type: "disabled" },
+    thinking: { type },
     messages: messages.filter((message) => !(message.role === "system" && message.output_config !== undefined)),
-  });
+  }));
 
-  return {
-    ...api,
-    streamSimple: (model, context, options) =>
-      api.streamSimple(model, context, {
-        ...options,
-        onPayload: async (payload, model) => disabled(Schema.decodeUnknownSync(MessagesRequest)((await options?.onPayload?.(payload, model)) ?? payload)),
-      }),
-  };
-};
+/** A Responses API request, by its reasoning settings; the rest passes through. */
+const ResponsesRequest = Schema.StructWithRest(Schema.Struct({ reasoning: Schema.optional(Schema.StructWithRest(Schema.Struct({ summary: Schema.optional(Schema.Unknown) }), Rest)) }), Rest);
+
+/**
+ * Whether the model is asked for OpenAI's detailed reasoning summary. A model of another provider served on the
+ * Responses API by a router, such as DeepSeek through 9router, keeps pi-ai's "auto": it returns its own reasoning
+ * text, and whether the router accepts "detailed" is untested.
+ */
+const asksDetailedSummaries = (catalogModel: Model<Api>): boolean => catalogModel.provider === "openai";
+
+/** The most detailed reasoning summary OpenAI offers, in place of pi-ai's "auto", on every request that asks for one. */
+const withDetailedSummaries = (api: ProviderStreams): ProviderStreams =>
+  rewriting(api, ResponsesRequest, (request) => (request.reasoning?.summary === undefined ? request : { ...request, reasoning: { ...request.reasoning, summary: "detailed" } }));
 
 /** The endpoint as a pi-ai provider with one model. */
 export const providerOf = (providerId: string, endpoint: Endpoint): Provider => {
   const baseUrl = baseUrlOf(endpoint.url);
-  const model = { ...listedModelOf(endpoint), id: endpoint.model, provider: providerId, baseUrl };
+  const catalogModel = listedModelOf(endpoint);
+  const model = { ...catalogModel, id: endpoint.model, provider: providerId, baseUrl };
   const options = { id: providerId, baseUrl, auth: apiKeyAuth(endpoint.key, providerId) };
 
   return Endpoint.match(endpoint, {
@@ -180,10 +202,10 @@ export const providerOf = (providerId: string, endpoint: Endpoint): Provider => 
       createProvider({
         ...options,
         models: [{ ...model, api: "anthropic-messages" } as Model<"anthropic-messages">],
-        api: endpoint.effort === "off" && setsEffortPerMessage(model) ? withThinkingDisabled(anthropicMessagesApi()) : anthropicMessagesApi(),
+        api: endpoint.effort === "off" && setsEffortPerMessage(model) ? withThinkingOff(anthropicMessagesApi(), thinkingOffType(catalogModel)) : anthropicMessagesApi(),
       }),
     // SAFETY: as above.
-    OpenAIResponses: (): Provider => createProvider({ ...options, models: [{ ...model, api: "openai-responses" } as Model<"openai-responses">], api: openAIResponsesApi() }),
+    OpenAIResponses: (): Provider => createProvider({ ...options, models: [{ ...model, api: "openai-responses" } as Model<"openai-responses">], api: asksDetailedSummaries(catalogModel) ? withDetailedSummaries(openAIResponsesApi()) : openAIResponsesApi() }),
   });
 };
 
@@ -197,24 +219,40 @@ export const AgentProvenance = Schema.Struct({
   model: Schema.String,
   catalog_model: Schema.NullOr(Schema.String),
   effort: Schema.NullOr(Schema.String),
-  /** How pi-ai asks the model to think at that effort: not at all, Anthropic adaptive thinking at an effort, an Anthropic thinking budget, or an OpenAI reasoning effort. */
-  thinking: Schema.Struct({ level: Schema.NullOr(Schema.String), mode: Schema.Literals(["off", "adaptive", "budget", "effort"]), effort: Schema.NullOr(Schema.String), budget_tokens: Schema.NullOr(Schema.Int) }),
+  /**
+   * How the model is asked to think at that effort: not at all, only between tool calls (Claude Sonnet 5.5 at off),
+   * Anthropic adaptive thinking at an effort, an Anthropic thinking budget, or an OpenAI reasoning effort. `summary` is
+   * the reasoning text asked for: Anthropic's summarized thinking, OpenAI's detailed summary, pi-ai's "auto" for
+   * another provider's model on the Responses API, or none.
+   */
+  thinking: Schema.Struct({
+    level: Schema.NullOr(Schema.String),
+    mode: Schema.Literals(["off", "between_tools", "adaptive", "budget", "effort"]),
+    effort: Schema.NullOr(Schema.String),
+    budget_tokens: Schema.NullOr(Schema.Int),
+    summary: Schema.NullOr(Schema.Literals(["summarized", "detailed", "auto"])),
+  }),
 });
 
 export type AgentProvenance = typeof AgentProvenance.Type;
 
 const setsEffortPerMessage = (model: Model<Api>): boolean => model.compat !== undefined && "supportsMidConvoEffort" in model.compat && model.compat.supportsMidConvoEffort === true;
 
-/** The thinking settings pi-ai 1.1.0 derives from the effort and the catalog model (api/anthropic-messages.js and openai-responses.js). */
+/** The thinking settings the arena asks for at the effort, as pi-ai 1.1.0 derives them from the catalog model (api/anthropic-messages.js and openai-responses.js) and providerOf rewrites them. */
 const thinkingOf = (endpoint: Endpoint, model: Model<Api>): AgentProvenance["thinking"] => {
-  const off = { mode: "off", effort: null, budget_tokens: null } as const;
+  const off = { mode: "off", effort: null, budget_tokens: null, summary: null } as const;
 
   if (endpoint.effort === undefined || !model.reasoning) return { level: null, ...off };
 
   // pi-durable passes no reasoning option at effort off, so pi-ai does not clamp
-  // it, and providerOf disables the thinking pi-ai would still ask some Claude
+  // it, and providerOf turns off the thinking pi-ai would still ask some Claude
   // models for.
-  if (endpoint.effort === "off") return { level: "off", ...off };
+  if (endpoint.effort === "off") {
+    return Endpoint.match(endpoint, {
+      Anthropic: (): AgentProvenance["thinking"] => ({ level: "off", ...off, mode: setsEffortPerMessage(model) && thinkingOffType(model) === "between_tools" ? "between_tools" : "off" }),
+      OpenAIResponses: (): AgentProvenance["thinking"] => ({ level: "off", ...off }),
+    });
+  }
 
   const level = clampThinkingLevel(model, endpoint.effort);
   const effort = model.thinkingLevelMap?.[level] ?? level;
@@ -224,9 +262,9 @@ const thinkingOf = (endpoint: Endpoint, model: Model<Api>): AgentProvenance["thi
   return Endpoint.match(endpoint, {
     Anthropic: (): AgentProvenance["thinking"] =>
       model.compat !== undefined && "forceAdaptiveThinking" in model.compat && model.compat.forceAdaptiveThinking === true
-        ? { level, mode: "adaptive", effort, budget_tokens: null }
-        : { level, mode: "budget", effort: null, budget_tokens: (level === "xhigh" || level === "max" ? undefined : DEFAULT_THINKING_BUDGETS[level]) ?? null },
-    OpenAIResponses: (): AgentProvenance["thinking"] => ({ level, mode: "effort", effort, budget_tokens: null }),
+        ? { level, mode: "adaptive", effort, budget_tokens: null, summary: "summarized" }
+        : { level, mode: "budget", effort: null, budget_tokens: (level === "xhigh" || level === "max" ? undefined : DEFAULT_THINKING_BUDGETS[level]) ?? null, summary: "summarized" },
+    OpenAIResponses: (): AgentProvenance["thinking"] => ({ level, mode: "effort", effort, budget_tokens: null, summary: asksDetailedSummaries(model) ? "detailed" : "auto" }),
   });
 };
 

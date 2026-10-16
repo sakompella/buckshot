@@ -184,10 +184,10 @@ test("an endpoint is Anthropic or OpenAI Responses, from its URL and key", async
 });
 
 test.each([
-  ["ANT", "claude-haiku-4-5-20251001", { level: "medium", mode: "budget", effort: null, budget_tokens: 8192 }],
-  ["ANT", "claude-haiku-5-5", { level: "medium", mode: "adaptive", effort: "medium", budget_tokens: null }],
-  ["OAI", "gpt-6-luna", { level: "medium", mode: "effort", effort: "medium", budget_tokens: null }],
-  ["OAI", "opencode/deepseek-v4.1-flash", { level: "high", mode: "effort", effort: "high", budget_tokens: null }],
+  ["ANT", "claude-haiku-4-5-20251001", { level: "medium", mode: "budget", effort: null, budget_tokens: 8192, summary: "summarized" }],
+  ["ANT", "claude-haiku-5-5", { level: "medium", mode: "adaptive", effort: "medium", budget_tokens: null, summary: "summarized" }],
+  ["OAI", "gpt-6-luna", { level: "medium", mode: "effort", effort: "medium", budget_tokens: null, summary: "detailed" }],
+  ["OAI", "opencode/deepseek-v4.1-flash", { level: "high", mode: "effort", effort: "high", budget_tokens: null, summary: "auto" }],
 ] as const)("the provenance records the thinking settings medium effort resolves to: %s %s", async (api, model, thinking) => {
   const catalogModel = model.includes("/") ? { PLAYER_A_CATALOG_MODEL: model } : {};
   const endpoint = await endpointFrom({ [`PLAYER_A_${api}_URL`]: CPA.url, [`PLAYER_A_${api}_KEY`]: CPA.key, PLAYER_A_MODEL: model, ...catalogModel, PLAYER_A_EFFORT: "medium" });
@@ -201,10 +201,11 @@ test.each([
 });
 
 test.each([
-  ["claude-haiku-4-5-20251001", "off", { level: "off", mode: "off", effort: null, budget_tokens: null }],
-  ["claude-haiku-4-5-20251001", "max", { level: "high", mode: "budget", effort: null, budget_tokens: 16384 }],
-  ["claude-haiku-5-5", "off", { level: "off", mode: "off", effort: null, budget_tokens: null }],
-  ["claude-sonnet-5-5", "xhigh", { level: "xhigh", mode: "adaptive", effort: "xhigh", budget_tokens: null }],
+  ["claude-haiku-4-5-20251001", "off", { level: "off", mode: "off", effort: null, budget_tokens: null, summary: null }],
+  ["claude-haiku-4-5-20251001", "max", { level: "high", mode: "budget", effort: null, budget_tokens: 16384, summary: "summarized" }],
+  ["claude-haiku-5-5", "off", { level: "off", mode: "off", effort: null, budget_tokens: null, summary: null }],
+  ["claude-sonnet-5-5", "off", { level: "off", mode: "between_tools", effort: null, budget_tokens: null, summary: null }],
+  ["claude-sonnet-5-5", "xhigh", { level: "xhigh", mode: "adaptive", effort: "xhigh", budget_tokens: null, summary: "summarized" }],
 ] as const)("the provenance records the thinking settings the arena sent CLIProxyAPI for %s at effort %s", async (model, effort, thinking) => {
   const endpoint = await endpointFrom({ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_ANT_KEY: CPA.key, PLAYER_A_MODEL: model, PLAYER_A_EFFORT: effort });
 
@@ -213,8 +214,8 @@ test.each([
   expect(provenanceOf("provider-A", endpoint.value).thinking).toEqual(thinking);
 });
 
-/** The first Messages API request an endpoint sends, as pi-durable asks for a reply: with no reasoning option at effort off. */
-const firstRequestAt = async (model: string, effort: "off" | "low") => {
+/** The first request an endpoint sends, as pi-durable asks for a reply: with no reasoning option at effort off. */
+const firstRequestAt = async (api: "ANT" | "OAI", model: string, effort: "off" | "low" | "medium") => {
   const requests: Array<unknown> = [];
 
   const server = Bun.serve({
@@ -226,15 +227,16 @@ const firstRequestAt = async (model: string, effort: "off" | "low") => {
     },
   });
 
-  const endpoint = await endpointFrom({ PLAYER_A_ANT_URL: server.url.href, PLAYER_A_ANT_KEY: CPA.key, PLAYER_A_MODEL: model, PLAYER_A_EFFORT: effort });
+  const endpoint = await endpointFrom({ [`PLAYER_A_${api}_URL`]: server.url.href, [`PLAYER_A_${api}_KEY`]: CPA.key, PLAYER_A_MODEL: model, PLAYER_A_EFFORT: effort });
 
   if (!Exit.isSuccess(endpoint)) throw new Error(String(endpoint.cause));
 
   const models = createModels();
+  const providerId = api === "ANT" ? "anthropic-A" : "openai-responses-A";
 
-  models.setProvider(providerOf("anthropic-A", endpoint.value));
+  models.setProvider(providerOf(providerId, endpoint.value));
 
-  const listed = models.getModel("anthropic-A", model);
+  const listed = models.getModel(providerId, model);
 
   if (listed === undefined) throw new Error(`${model} is not listed`);
 
@@ -244,22 +246,32 @@ const firstRequestAt = async (model: string, effort: "off" | "low") => {
   return Schema.decodeUnknownSync(SentRequest)(requests[0]);
 };
 
+const Effort = Schema.Struct({ effort: Schema.String });
+
 const SentRequest = Schema.Struct({
   thinking: Schema.optional(Schema.Struct({ type: Schema.String })),
-  output_config: Schema.optional(Schema.Struct({ effort: Schema.String })),
-  messages: Schema.Array(Schema.Struct({ output_config: Schema.optional(Schema.Struct({ effort: Schema.String })) })),
+  output_config: Schema.optional(Effort),
+  messages: Schema.optional(Schema.Array(Schema.Struct({ output_config: Schema.optional(Effort) }))),
+  reasoning: Schema.optional(Schema.Struct({ summary: Schema.optional(Schema.String) })),
 });
 
 test.each([
   ["claude-haiku-5-5", "off", "disabled", []],
-  ["claude-sonnet-5-5", "off", "disabled", []],
+  ["claude-sonnet-5-5", "off", "between_tools", []],
   ["claude-haiku-4-5-20251001", "off", "disabled", []],
   ["claude-sonnet-5-5", "low", "adaptive", ["high", "low"]],
 ] as const)("%s at effort %s asks for thinking %s, at the efforts %j", async (model, effort, thinking, efforts) => {
-  const request = await firstRequestAt(model, effort);
+  const request = await firstRequestAt("ANT", model, effort);
 
   expect(request.thinking?.type).toBe(thinking);
-  expect([request.output_config, ...request.messages.map((message) => message.output_config)].flatMap((config) => (config === undefined ? [] : [config.effort]))).toEqual([...efforts]);
+  expect([request.output_config, ...(request.messages ?? []).map((message) => message.output_config)].flatMap((config) => (config === undefined ? [] : [config.effort]))).toEqual([...efforts]);
+});
+
+test.each([
+  ["medium", "detailed"],
+  ["off", undefined],
+] as const)("gpt-6-luna at effort %s asks for the reasoning summary %s", async (effort, summary) => {
+  expect((await firstRequestAt("OAI", "gpt-6-luna", effort)).reasoning?.summary).toBe(summary);
 });
 
 test("a proxy's model alias plays as the catalog model it names", async () => {
