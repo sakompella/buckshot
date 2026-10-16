@@ -495,3 +495,76 @@ button:hover {
 .item.note {
   color: var(--faint);
 }
+
+/* Reasoning: under each agent move in the step list, and in each call in an agent's column */
+
+.cot {
+  margin: 3px 0;
+}
+
+.cot-label {
+  font: 10px var(--mono);
+  color: var(--faint);
+  letter-spacing: 0.04em;
+}
+
+.cot.none {
+  font: 11px var(--mono);
+  color: var(--faint);
+}
+
+.reasoning {
+  margin: 2px 0 2px 38px;
+  font-size: 12px;
+}
+
+.reasoning .cot.thinking {
+  margin: 4px 0;
+  padding: 0 0 0 10px;
+  font: 11px/1.45 var(--mono);
+}
+
+.reasoning .cot.text {
+  margin: 4px 0;
+  font: 12px/1.45 system-ui, -apple-system, sans-serif;
+  color: var(--fg);
+}
+
+.cot-text.collapsed {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+.reasoning .cot-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.cot-toggle {
+  margin-top: 2px;
+  padding: 0 6px;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: 10px var(--mono);
+}
+
+.item .cot-label {
+  margin-bottom: 1px;
+}
+
+.sort {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+}
+
+.sort:hover,
+th[aria-sort="ascending"] .sort,
+th[aria-sort="descending"] .sort {
+  color: var(--fg);
+}

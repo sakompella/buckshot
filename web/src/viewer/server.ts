@@ -1,6 +1,6 @@
 import { Option, Result, Schema } from "effect";
 
-import { costOf, DEFAULT_PRICES, loadPrices, type PriceTable, type Total, totalsBy } from "../arena/cost.ts";
+import { costOf, DEFAULT_PRICES, EMPTY, loadPrices, type PriceTable, type Total, totalsBy } from "../arena/cost.ts";
 import type { CallLine } from "../arena/runlog.ts";
 import { Cursors, type JsonlLine, MatchResponse, type PricedCall, RunsResponse } from "./api.ts";
 import page from "./page/index.html";
@@ -30,7 +30,7 @@ const runsResponse = (runsDir: string, prices: PriceTable) => {
   const calls = readable.flatMap(callsOf);
 
   return encodeRuns({
-    runs: [...readable.map((run) => run.summary), ...runs.flatMap((run) => (Result.isFailure(run) ? [run.failure] : []))],
+    runs: [...readable.map((run) => ({ ...run.summary, cost: totalsBy(prices, callsOf(run).map((call) => [run.id, call])).get(run.id) ?? EMPTY })), ...runs.flatMap((run) => (Result.isFailure(run) ? [run.failure] : []))],
     totals: {
       agents: labelled(totalsBy(prices, calls.map((call) => [`${call.agent} ${call.model}`, call]))),
       models: labelled(totalsBy(prices, calls.map((call) => [`${call.api}/${call.model}`, call]))),

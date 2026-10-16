@@ -48,11 +48,16 @@ export const RunSummary = Schema.Struct({
 
 export type RunSummary = typeof RunSummary.Type;
 
+/** A run as the list shows it: with what its calls cost, by prices.json. */
+export const PricedRun = Schema.Struct({ ...RunSummary.fields, cost: Total });
+
+export type PricedRun = typeof PricedRun.Type;
+
 export const Unreadable = Schema.Struct({ kind: Schema.Literal("unreadable"), id: Schema.String, reason: Schema.String });
 
 export type Unreadable = typeof Unreadable.Type;
 
-export const Run = Schema.Union([RunSummary, Unreadable]);
+export const Run = Schema.Union([PricedRun, Unreadable]);
 
 export type Run = typeof Run.Type;
 

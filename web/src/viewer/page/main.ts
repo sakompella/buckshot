@@ -1,8 +1,10 @@
 import { Schema } from "effect";
 
 import type { Total } from "../../arena/cost.ts";
-import type { EventLine } from "../../arena/runlog.ts";
-import { type Cursors, type Frame, type JsonlLine, MatchResponse, type PricedCall, type Run, RunsResponse, type RunSummary } from "../api.ts";
+import type { CallLine, EventLine } from "../../arena/runlog.ts";
+import { type Cursors, type Frame, type JsonlLine, MatchResponse, type PricedCall, type PricedRun, type Run, RunsResponse, type RunSummary } from "../api.ts";
+import { afterClick, orderFromQuery, orderRuns, type RunOrder, type SortColumn, writeOrder } from "../order.ts";
+import { callsByTurn, type Reasoning, reasoningOf, tokensLabel } from "../reasoning.ts";
 
 // The viewer's page: the list of runs at "/", one match at "/match/<id>". A
 // live match is polled with cursors, and what arrives is appended, so scroll
@@ -84,7 +86,10 @@ const totalsTable = (title: string, rows: RunsResponse["totals"]["agents"]): HTM
     ),
   );
 
-const runRow = (run: RunSummary): HTMLElement =>
+const costText = ({ cost }: PricedRun): HTMLElement =>
+  h("span", {}, cost.calls === 0 ? "" : cost.unpriced === cost.calls ? "no price" : dollars(cost.dollars), cost.unpriced > 0 && cost.unpriced < cost.calls && h("span", { class: "faint" }, ` +${cost.unpriced} unpriced`));
+
+const runRow = (run: PricedRun): HTMLElement =>
   h(
     "tr",
     {},
@@ -96,7 +101,21 @@ const runRow = (run: RunSummary): HTMLElement =>
     h("td", { class: "dim" }, run.delivery),
     h("td", {}, statusBadge(run.status)),
     h("td", {}, standingsText(run)),
+    h("td", { class: "mono dim" }, costText(run)),
   );
+
+/** The list's columns, each with the sort a click on its header picks, when it has one. */
+const COLUMNS: ReadonlyArray<readonly [string, SortColumn | undefined]> = [
+  ["Started", "started"],
+  ["Run", undefined],
+  ["Agents", undefined],
+  ["Seating", undefined],
+  ["Seed", "seed"],
+  ["Delivery", undefined],
+  ["Status", "status"],
+  ["Standings", "winner"],
+  ["Cost", "cost"],
+];
 
 const showList = async () => {
   const { runs, totals } = decodeRuns(await fetchText("/api/runs"));
@@ -106,6 +125,8 @@ const showList = async () => {
   const models = [...new Set(readable.flatMap((run) => run.agents.flatMap((agent) => (agent.model === undefined ? [] : [agent.model]))))].toSorted();
   const letters = [...new Set(readable.flatMap((run) => run.agents.map((agent) => agent.agent)))].toSorted();
   const body = h("tbody", {});
+  const head = h("thead", {});
+  let order: RunOrder = orderFromQuery(query);
 
   const select = (name: "model" | "agent", label: string, options: ReadonlyArray<string>) => {
     const element = h("select", { "aria-label": label }, h("option", { value: "" }, label), ...options.map((option) => h("option", { value: option }, option)));
@@ -122,11 +143,27 @@ const showList = async () => {
   const isShown = (run: Run) =>
     run.kind === "unreadable" ? choice.model === "" && choice.agent === "" : run.agents.some((agent) => (choice.agent === "" || agent.agent === choice.agent) && (choice.model === "" || agent.model === choice.model));
 
+  const headerCell = ([name, column]: (typeof COLUMNS)[number]): HTMLElement => {
+    if (column === undefined) return h("th", {}, name);
+
+    const active = order.kind === "by" && order.column === column ? order.direction : undefined;
+    const button = h("button", { type: "button", class: "sort" }, name, active !== undefined && h("span", { class: "arrow" }, active === "asc" ? " ▲" : " ▼"));
+
+    button.addEventListener("click", () => {
+      order = afterClick(order, column);
+      render();
+    });
+
+    return h("th", { "aria-sort": active === undefined ? "none" : active === "asc" ? "ascending" : "descending" }, button);
+  };
+
   const render = () => {
     const next = new URLSearchParams(Object.entries(choice).filter(([, value]) => value !== ""));
 
+    writeOrder(next, order);
     history.replaceState(null, "", next.size === 0 ? location.pathname : `?${next}`);
-    body.replaceChildren(...runs.filter(isShown).map((run) => (run.kind === "readable" ? runRow(run) : h("tr", { class: "unreadable" }, h("td", {}, ""), h("td", {}, run.id), h("td", { colspan: "6" }, run.reason)))));
+    head.replaceChildren(h("tr", {}, ...COLUMNS.map(headerCell)));
+    body.replaceChildren(...orderRuns(runs.filter(isShown), order).map((run) => (run.kind === "readable" ? runRow(run) : h("tr", { class: "unreadable" }, h("td", {}, ""), h("td", {}, run.id), h("td", { colspan: "7" }, run.reason)))));
   };
 
   render();
@@ -136,7 +173,7 @@ const showList = async () => {
       { class: "list" },
       h("h1", {}, "Arena runs"),
       h("div", { class: "filters" }, select("model", "Any model", models), select("agent", "Any agent", letters)),
-      h("table", { class: "runs" }, h("thead", {}, h("tr", {}, ...["Started", "Run", "Agents", "Seating", "Seed", "Delivery", "Status", "Standings"].map((name) => h("th", {}, name)))), body),
+      h("table", { class: "runs" }, head, body),
       h("div", { class: "totals" }, totalsTable("Per agent", totals.agents), totalsTable("Per model", totals.models)),
     ),
   );
@@ -198,6 +235,63 @@ const healthStrip = (frames: ReadonlyArray<Frame>, selected: number): HTMLElemen
   );
 };
 
+/** Text longer than this, or than this many lines, is cut to a few lines with a button for the rest. */
+const COLLAPSE_CHARS = 180;
+
+const COLLAPSE_LINES = 3;
+
+/** A label over some text; with `collapse`, long text is cut to a few lines and a button shows the rest. */
+const labelled = (kind: "thinking" | "text", label: string, text: string, collapse: boolean): HTMLElement => {
+  const long = collapse && (text.length > COLLAPSE_CHARS || text.split("\n").length > COLLAPSE_LINES);
+  const body = h("div", { class: long ? "cot-text collapsed" : "cot-text" }, text);
+  const block = h("div", { class: `cot ${kind}` }, h("div", { class: "cot-label" }, label), body);
+
+  if (long) {
+    const toggle = h("button", { type: "button", class: "cot-toggle", "aria-expanded": "false" }, "more");
+
+    toggle.addEventListener("click", (event) => {
+      event.stopPropagation();
+
+      const collapsed = body.classList.toggle("collapsed");
+
+      toggle.textContent = collapsed ? "more" : "less";
+      toggle.setAttribute("aria-expanded", String(!collapsed));
+    });
+    block.append(toggle);
+  }
+
+  return block;
+};
+
+const reasoningBlock = (reasoning: Reasoning, collapse: boolean): HTMLElement | undefined => {
+  switch (reasoning.kind) {
+    case "text":
+      return labelled("thinking", reasoning.label, reasoning.text, collapse);
+    case "tokens":
+      return h("div", { class: "cot none" }, tokensLabel(reasoning.tokens));
+    case "none":
+      return undefined;
+    default: {
+      const _exhaustive: never = reasoning;
+
+      return _exhaustive;
+    }
+  }
+};
+
+/** What a call logged of its reasoning, then the text it said aloud. */
+const reasoningBlocks = (call: CallLine, collapse: boolean): ReadonlyArray<HTMLElement> => [
+  reasoningBlock(reasoningOf(call), collapse),
+  call.text.trim() === "" ? undefined : labelled("text", "text", call.text, collapse),
+].flatMap((block) => (block === undefined ? [] : [block]));
+
+/** The reasoning behind one move: every call its agent made for it, with a note when none logged any. */
+const stepReasoning = (calls: ReadonlyArray<CallLine>): ReadonlyArray<HTMLElement> => {
+  const blocks = calls.flatMap((call) => reasoningBlocks(call, true));
+
+  return blocks.length === 0 ? [h("div", { class: "cot none" }, "no reasoning")] : blocks;
+};
+
 const stepOf = (frame: Frame, index: number): HTMLElement =>
   h(
     "div",
@@ -210,6 +304,7 @@ const stepOf = (frame: Frame, index: number): HTMLElement =>
       frame.move !== undefined && h("span", { class: "label" }, frame.move.label),
       frame.move !== undefined && frame.move.by !== "agent" && h("span", { class: "by" }, frame.move.by),
     ),
+    frame.move !== undefined && (frame.move.by === "agent" || frame.move.by === "fallback") && h("div", { class: "reasoning" }),
     frame.entries.length > 0 && h("div", { class: "entries" }, ...frame.entries.map((entry) => (entry.heardBy === undefined ? h("div", {}, entry.text) : h("div", { class: "secret" }, entry.text, h("span", { class: "faint" }, ` heard by ${entry.heardBy}`))))),
   );
 
@@ -228,8 +323,7 @@ const callItem = ({ call, dollars: price }: PricedCall): HTMLElement =>
       h("span", {}, `in ${count(call.usage.input)} out ${count(call.usage.output)}${call.usage.reasoning ? ` r ${count(call.usage.reasoning)}` : ""} cache ${count(call.usage.cacheRead)}/${count(call.usage.cacheWrite)}`),
       h("span", {}, price === undefined ? "no price" : dollars(price)),
     ),
-    call.thinking !== "" && h("div", { class: "thinking" }, call.thinking),
-    call.text !== "" && h("div", { class: "text" }, call.text),
+    ...reasoningBlocks(call, false),
     call.tool_calls.length > 0 && h("div", { class: "chips" }, ...call.tool_calls.map((tool) => h("span", { class: "chip" }, `${tool.name} ${JSON.stringify(tool.arguments)}`))),
     call.error !== undefined && h("div", { class: "error" }, call.error),
   );
@@ -306,6 +400,7 @@ const showMatch = async (id: string) => {
   const steps = h("div", { class: "steps" });
   const logs = h("section", { class: "logs" });
   const columns = new Map<string, Column>();
+  const seen = { events: new Array<EventLine>(), calls: new Array<CallLine>() };
 
   const columnOf = (agent: string): Column => {
     const existing = columns.get(agent);
@@ -344,6 +439,21 @@ const showMatch = async (id: string) => {
     }
   };
 
+  /** Fills each agent move's reasoning slot from the calls that led to it, as calls and moves arrive. */
+  const showReasoning = () => {
+    const byTurn = callsByTurn(seen.events, seen.calls);
+
+    frames.forEach((frame, index) => {
+      const slot = steps.children[index]?.querySelector<HTMLElement>(".reasoning");
+      const calls = frame.move === undefined ? undefined : byTurn.get(frame.move.turn);
+
+      if (slot === null || slot === undefined || calls === undefined || slot.dataset["calls"] === String(calls.length)) return;
+
+      slot.dataset["calls"] = String(calls.length);
+      slot.replaceChildren(...stepReasoning(calls));
+    });
+  };
+
   const apply = (update: MatchResponse) => {
     const following = selected === frames.length - 1 || frames.length === 0;
     const pinned = [...columns.values()].filter(({ body }) => frames.length === 0 || body.scrollHeight - body.scrollTop - body.clientHeight < NEAR_BOTTOM_PX);
@@ -360,13 +470,18 @@ const showMatch = async (id: string) => {
     divergence.replaceChildren(update.divergence === undefined ? "" : h("div", { class: "divergence" }, `replay stopped: ${update.divergence}`));
 
     for (const line of update.calls) {
-      if (line.kind === "read") insertByTime(columnOf(line.value.call.agent).body, callItem(line.value));
+      if (line.kind === "read") {
+        seen.calls.push(line.value.call);
+        insertByTime(columnOf(line.value.call.agent).body, callItem(line.value));
+      }
     }
 
     for (const line of update.events) {
       if (line.kind !== "read") continue;
 
       const event = line.value;
+
+      seen.events.push(event);
       const agents = "player" in event ? [event.player] : [...columns.keys()];
 
       for (const agent of agents) {
@@ -386,6 +501,7 @@ const showMatch = async (id: string) => {
 
     steps.append(...update.frames.map((frame, offset) => stepOf(frame, frames.length + offset)));
     frames.push(...update.frames);
+    showReasoning();
     range.max = String(Math.max(0, frames.length - 1));
     select(following ? frames.length - 1 : selected, { scrollLogs: false });
 
