@@ -9,4 +9,4 @@ When a match starts, its journal records what decides how it plays: a hash of th
 
 ## Consequences
 
-A match from before this record cannot be resumed; it is started again. Any edit to a file in the code hash, `bun.lock` included, makes the matches it would resume refuse to run, so a tournament is finished on the code it started with.
+A match from before this record cannot be resumed; it is started again. Any edit to a file in the code hash, `bun.lock` included, makes the matches it would resume refuse to run, so each match is finished on the code it started with, from a checkout of that code when the tournament has moved on (ADR-0041).
