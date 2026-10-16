@@ -2,13 +2,14 @@ import { Result } from "effect";
 
 import { DEFAULT_PRICES, loadPrices } from "../src/arena/cost.ts";
 import { readTournamentFile, tournamentOf } from "../src/arena/tournament-dir.ts";
-import { type Report, reportOf } from "../src/arena/tournament-report.ts";
+import { FEW_SEEDS, type Report, reportOf } from "../src/arena/tournament-report.ts";
 import type { Interval } from "../src/arena/tournament-stats.ts";
 
 // Reports a tournament directory: wins and win share per entrant, overall, by
-// position and head to head, interventions, ratings and cost. Intervals are 95%
-// bootstraps over seed blocks, drawn with a seed, so a rerun prints the same
-// numbers. Finished matches whose manifest disagrees with the schedule are
+// position and head to head, interventions, ratings, the seat terms, the round 1
+// starter's win rate, the code versions played under, and cost. Intervals are 95% bootstraps clustered by seed
+// (whole seeds are drawn, with every match played at them), drawn with a seed,
+// so a rerun prints the same numbers. Finished matches whose manifest disagrees with the schedule are
 // listed and left out. Prices come from src/arena/prices.json. --among
 // reports only the matches whose entrants are all in that comma-separated list,
 // such as one phase of a tournament.
@@ -58,12 +59,21 @@ const text = (stats: Report): string => {
 
   const sections = [
     `Tournament ${stats.name}: ${matches.finished} of ${matches.scheduled} matches finished, ${matches.scored} scored, ${matches.finished - matches.scored} left out.`,
+    `Intervals are 95% bootstraps clustered by seed: whole seeds are drawn with replacement, with every match played at them. The data has ${stats.seeds} seeds.${stats.seeds < FEW_SEEDS ? " With so few seeds the intervals are rough." : ""}`,
+    stats.versions.length === 1
+      ? `Every scored match was played under the code ${stats.versions[0]?.code}.`
+      : `Scored matches by the code they were played under.\n${stats.versions.map((version) => `  ${version.code}: ${version.matches} matches, ${version.entrants.join(", ")}`).join("\n")}`,
+    ...(stats.versionShares.length === 0 ? [] : [`Win share per code version, for the entrants that played under more than one.\n${table(["entrant", "code", "matches", "share", "95% CI"], stats.versionShares.map((row) => [row.entrant, row.code, String(row.matches), percent(row.share), between(row.interval, percent)]))}`]),
     ...(stats.excluded.length === 0 ? [] : [`Left out, because the manifest disagrees with the schedule:\n${stats.excluded.map(({ match, problems }) => `  ${match}: ${problems.join("; ")}`).join("\n")}`]),
     `Win share and rating, best rating first. Expected is the share at equal strength. Ratings are on the Elo scale with ${stats.anchor ?? "the mean of all entrants"} at 0.\n${table(
       ["entrant", "matches", "wins", "share", "expected", "95% CI", "rating", "95% CI"],
       stats.entrants.map((row) => [row.entrant, String(row.matches), row.wins.toFixed(1), percent(row.share), percent(row.expected), between(row.shareInterval, percent), elo(row.rating), between(row.ratingInterval, elo)]),
     )}`,
-    `Seat advantage over the first position, on the Elo scale.\n${table(["table", "position", "rating"], stats.seatTerms.map((seat) => [`${seat.size} players`, String(seat.position), elo(seat.rating)]))}`,
+    `Seat advantage over the first position, on the Elo scale.\n${table(["table", "position", "rating", "95% CI"], stats.seatTerms.map((seat) => [`${seat.size} players`, String(seat.position), elo(seat.rating), between(seat.interval, elo)]))}`,
+    `Round 1 starter: the share of matches won by the player who started round 1. Started is the matches each position started, from position 1.\n${table(
+      ["table", "matches", "started", "share", "95% CI"],
+      stats.starters.map((row) => [`${row.size} players`, String(row.matches), row.started.join("/"), percent(row.rate), between(row.interval, percent)]),
+    )}`,
     `Win share by position.\n${table(["entrant", "table", "position", "matches", "share"], stats.byPosition.map((row) => [row.entrant, `${row.size} players`, String(row.position), String(row.matches), percent(row.share)]))}`,
     `Head to head, by pairing.\n${stats.pairings.map((pairing) => `  ${pairing.entrants.join(" vs ")}: ${pairing.matches} matches, ${pairing.shares.map(({ entrant, share }) => `${entrant} ${percent(share)}`).join(", ")}`).join("\n")}`,
     `Interventions. The rate is interventions over the entrant's own moves plus interventions.\n${table(
