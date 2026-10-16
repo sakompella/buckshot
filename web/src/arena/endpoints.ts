@@ -165,11 +165,23 @@ export const AgentProvenance = Schema.Struct({
 
 export type AgentProvenance = typeof AgentProvenance.Type;
 
+const setsEffortPerMessage = (model: Model<Api>): boolean => model.compat !== undefined && "supportsMidConvoEffort" in model.compat && model.compat.supportsMidConvoEffort === true;
+
 /** The thinking settings pi-ai 1.1.0 derives from the effort and the catalog model (api/anthropic-messages.js and openai-responses.js). */
 const thinkingOf = (endpoint: Endpoint, model: Model<Api>): AgentProvenance["thinking"] => {
   const off = { mode: "off", effort: null, budget_tokens: null } as const;
 
   if (endpoint.effort === undefined || !model.reasoning) return { level: null, ...off };
+
+  // pi-durable passes no reasoning option at effort off, so pi-ai does not clamp
+  // it. Claude models whose effort pi-ai sets per message still think
+  // adaptively then, at pi-ai's default effort, high.
+  if (endpoint.effort === "off") {
+    return Endpoint.match(endpoint, {
+      Anthropic: (): AgentProvenance["thinking"] => (setsEffortPerMessage(model) ? { level: "off", mode: "adaptive", effort: "high", budget_tokens: null } : { level: "off", ...off }),
+      OpenAIResponses: (): AgentProvenance["thinking"] => ({ level: "off", ...off }),
+    });
+  }
 
   const level = clampThinkingLevel(model, endpoint.effort);
   const effort = model.thinkingLevelMap?.[level] ?? level;
