@@ -113,6 +113,15 @@ const readManifest = (dir: string): Result.Result<MatchManifest, string> => {
 
 const StatusOnly = Schema.Struct({ status: Schema.String });
 
+const CodeOnly = Schema.Struct({ provenance: Schema.Struct({ code_sha: Schema.String }) });
+
+/** The code version a match started under, as its manifest records it; none before it starts. */
+export const startedUnder = (dir: string, match: ScheduledMatch): Option.Option<string> => {
+  const path = join(dir, match.name, "manifest.json");
+
+  return existsSync(path) ? Option.map(Result.getSuccess(Schema.decodeUnknownResult(Schema.fromJsonString(CodeOnly))(readFileSync(path, "utf8"))), ({ provenance }) => provenance.code_sha) : Option.none();
+};
+
 const isFinished = (matchDir: string): boolean => {
   const path = join(matchDir, "manifest.json");
 

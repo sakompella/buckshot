@@ -10,7 +10,7 @@ import { DEFAULT_PRICES, loadPrices } from "../src/arena/cost.ts";
 import { agentEndpoint } from "../src/arena/endpoints.ts";
 import { checkPrices, childCommand, childEnv, parseConfig, resolveKeys, type ScheduledMatch, scheduleOf, type Tournament, unfinished } from "../src/arena/tournament.ts";
 import { balancedSeeds, firstPositionOf } from "../src/arena/seeds.ts";
-import { cooldownOf, costOf, openTournament, RATE_LIMIT_WAIT_SECONDS, readMatch, runPending, type Scheduling, TOURNAMENT_FORMAT } from "../src/arena/tournament-dir.ts";
+import { cooldownOf, costOf, openTournament, RATE_LIMIT_WAIT_SECONDS, readMatch, runPending, type Scheduling, startedUnder, TOURNAMENT_FORMAT } from "../src/arena/tournament-dir.ts";
 import { reportOf } from "../src/arena/tournament-report.ts";
 import { codeVersions, fitRatings, ELO_PER_NAT, intervalsOf, type PlayedMatch, resamples, sharesByEntrant, sharesByVersion, starterRates, winShares } from "../src/arena/tournament-stats.ts";
 
@@ -587,6 +587,19 @@ test("balanced block seeds start every position as evenly as they can in every p
       }
     }
   }
+});
+
+test("a match started under a code version is resumed under it, and a match not yet started under none", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tournament-code-"));
+  const [started, fresh] = scheduleOf(tournamentFrom(configJson({ pairings: [["luna", "don"]] })));
+
+  if (started === undefined || fresh === undefined) throw new Error("the schedule has fewer than two matches");
+
+  mkdirSync(join(dir, started.name));
+  writeFileSync(join(dir, started.name, "manifest.json"), JSON.stringify({ status: "running", provenance: { code_sha: "51b8366684f0", agents: {} } }));
+
+  expect(startedUnder(dir, started)).toEqual(Option.some("51b8366684f0"));
+  expect(startedUnder(dir, fresh)).toEqual(Option.none());
 });
 
 test("a pairing that lists its block seeds plays its blocks at them, and a tournament grows by such a pairing", () => {

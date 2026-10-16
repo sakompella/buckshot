@@ -6,7 +6,8 @@ import { Option, Result } from "effect";
 
 import { DEFAULT_PRICES, loadPrices } from "../src/arena/cost.ts";
 import { checkPrices, childCommand, childEnv, parseConfig, resolveKeys, type ScheduledMatch, scheduleOf, type TournamentError, unfinished } from "../src/arena/tournament.ts";
-import { cooldownOf, costOf, faultsOf, finishedNames, openTournament, runPending, type Settled, winnersOf } from "../src/arena/tournament-dir.ts";
+import { codeSha } from "../src/arena/match.ts";
+import { cooldownOf, costOf, faultsOf, finishedNames, openTournament, runPending, type Settled, startedUnder, winnersOf } from "../src/arena/tournament-dir.ts";
 
 // Plays a tournament: every scheduled match, in schedule order, as a child
 // process running scripts/arena.ts, at most --parallel at a time (default 5).
@@ -22,6 +23,10 @@ import { cooldownOf, costOf, faultsOf, finishedNames, openTournament, runPending
 // its matches only when no other match can; --forget-cooldown <model> ignores
 // the model's recorded cooldowns at the start, after its provider reset early;
 // --skip <entrant> leaves that entrant's matches unplayed this run.
+// A match resumes under the code version it started under (its manifest's
+// code_sha), so a tournament can span versions: --code <code_sha>=<web dir>,
+// once per older version, names a checkout of it to resume its matches from,
+// and without one they wait. New matches start under this checkout's code.
 // A match that fails goes to the back of the queue after a pause, up to three
 // runs, and the rest go on. Rerun the same command to resume: finished matches
 // never run again. Do not run two of these on one directory. --limit plays at
@@ -29,7 +34,7 @@ import { cooldownOf, costOf, faultsOf, finishedNames, openTournament, runPending
 // it starts, every 30 minutes and when it ends. --dry-run prints the schedule
 // of the last config.
 // Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel N] [--cap <model>=N]... [--last <model>]...
-//          [--forget-cooldown <model>]... [--skip <entrant>]... [--limit N] [--dry-run]
+//          [--forget-cooldown <model>]... [--skip <entrant>]... [--code <code_sha>=<web dir>]... [--limit N] [--dry-run]
 //        bun scripts/arena-stats.ts <tournament dir> [--json]
 
 const WEB = join(import.meta.dir, "..");
@@ -42,7 +47,7 @@ const flag = (name: string): string | undefined => {
   return at === -1 ? undefined : args[at + 1];
 };
 
-const VALUED = new Set(["--dir", "--parallel", "--limit", "--cap", "--last", "--forget-cooldown", "--skip"]);
+const VALUED = new Set(["--dir", "--parallel", "--limit", "--cap", "--last", "--forget-cooldown", "--skip", "--code"]);
 
 const configPaths = args.filter((arg, index) => !arg.startsWith("--") && !VALUED.has(args[index - 1] ?? ""));
 
@@ -61,7 +66,7 @@ const exit = (message: string): never => {
 
 const unwrap = <A>(result: Result.Result<A, TournamentError>): A => Result.match(result, { onFailure: (error) => exit(error.message), onSuccess: (value) => value });
 
-if (configPaths.length === 0) exit("Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel N] [--cap <model>=N]... [--last <model>]... [--forget-cooldown <model>]... [--skip <entrant>]... [--limit N] [--dry-run]");
+if (configPaths.length === 0) exit("Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel N] [--cap <model>=N]... [--last <model>]... [--forget-cooldown <model>]... [--skip <entrant>]... [--code <code_sha>=<web dir>]... [--limit N] [--dry-run]");
 
 if (!Number.isInteger(parallel) || parallel < 1) exit("--parallel must be a whole number from 1");
 
@@ -80,6 +85,17 @@ const last = new Set(repeated("last"));
 const forget = new Set(repeated("forget-cooldown"));
 
 const skipped = new Set(repeated("skip"));
+
+const CODE = codeSha();
+
+/** Checkouts of older code versions, by code_sha, for the matches that started under them. */
+const checkouts = new Map(
+  repeated("code").map((entry) => {
+    const [, code = "", web = ""] = /^([0-9a-f]+)=(.+)$/.exec(entry) ?? exit(`--code takes <code_sha>=<web dir>, not "${entry}"`);
+
+    return [code, resolve(web)] as const;
+  }),
+);
 
 const prices = loadPrices(DEFAULT_PRICES);
 
@@ -126,6 +142,10 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   });
 }
 
+/** The web dir whose code a match plays under: this one for a new match or one of this version, else a checkout of the version it started under. */
+const webOf = (match: ScheduledMatch): string | undefined =>
+  Option.match(startedUnder(dir, match), { onNone: () => WEB, onSome: (code) => (code === CODE ? WEB : checkouts.get(code)) });
+
 /** One match as a child process, which gives its exit code. Its output is appended to the match's arena.log. */
 const runOne = (match: ScheduledMatch): Promise<number> =>
   new Promise((done) => {
@@ -135,7 +155,7 @@ const runOne = (match: ScheduledMatch): Promise<number> =>
 
     const log = openSync(join(matchDir, "arena.log"), "a");
     const [command = "nice", ...rest] = childCommand(matchDir, file.config, match);
-    const child = spawn(command, rest, { cwd: WEB, env: childEnv(process.env, file.config, match, keys), stdio: ["ignore", log, log] });
+    const child = spawn(command, rest, { cwd: webOf(match) ?? WEB, env: childEnv(process.env, file.config, match, keys), stdio: ["ignore", log, log] });
 
     children.add(child);
     child.on("close", (code) => {
@@ -200,9 +220,17 @@ const settle = (settled: Settled) => {
 
 const isPlayed = (match: ScheduledMatch) => !match.entrants.some((entrant) => skipped.has(entrant));
 
-const pending = unfinished(file.schedule, finishedNames(dir, file.schedule)).filter(isPlayed).slice(0, limit);
+const played = unfinished(file.schedule, finishedNames(dir, file.schedule)).filter(isPlayed);
 
-console.log(`${file.config.name}: ${pending.length} of ${file.schedule.length} matches to run, ${parallel} at a time${[...caps].map(([model, most]) => `, at most ${most} with ${model}`).join("")}${[...last].map((model) => `, ${model} last`).join("")}${[...forget].map((model) => `, ${model}'s recorded cooldowns ignored`).join("")}, in ${dir}`);
+const pending = played.filter((match) => webOf(match) !== undefined).slice(0, limit);
+
+console.log(`${file.config.name}: ${pending.length} of ${file.schedule.length} matches to run, ${parallel} at a time${[...caps].map(([model, most]) => `, at most ${most} with ${model}`).join("")}${[...last].map((model) => `, ${model} last`).join("")}${[...forget].map((model) => `, ${model}'s recorded cooldowns ignored`).join("")}, in ${dir}, new matches under code ${CODE}${[...checkouts].map(([code, web]) => `, code ${code} from ${web}`).join("")}`);
+
+const waitingCodes = played.flatMap((match) => (webOf(match) === undefined ? Option.toArray(startedUnder(dir, match)) : []));
+
+for (const code of new Set(waitingCodes)) {
+  console.log(`  ${waitingCodes.filter((each) => each === code).length} matches started under code ${code} wait for a checkout of it: --code ${code}=<web dir>`);
+}
 
 noteProgress("started");
 
