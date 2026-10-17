@@ -157,38 +157,38 @@
       "effort": "max"
     },
     "gpt-5.6-terra-off": {
-      "endpoint": "9router-openai",
-      "model": "cx/gpt-5.6-terra",
+      "endpoint": "cpa-openai",
+      "model": "gpt-5.6-terra",
       "catalogModel": "openai/gpt-5.6-terra",
       "effort": "off"
     },
     "gpt-5.6-terra-low": {
-      "endpoint": "9router-openai",
-      "model": "cx/gpt-5.6-terra",
+      "endpoint": "cpa-openai",
+      "model": "gpt-5.6-terra",
       "catalogModel": "openai/gpt-5.6-terra",
       "effort": "low"
     },
     "gpt-5.6-terra": {
-      "endpoint": "9router-openai",
-      "model": "cx/gpt-5.6-terra",
+      "endpoint": "cpa-openai",
+      "model": "gpt-5.6-terra",
       "catalogModel": "openai/gpt-5.6-terra",
       "effort": "medium"
     },
     "gpt-5.6-terra-high": {
-      "endpoint": "9router-openai",
-      "model": "cx/gpt-5.6-terra",
+      "endpoint": "cpa-openai",
+      "model": "gpt-5.6-terra",
       "catalogModel": "openai/gpt-5.6-terra",
       "effort": "high"
     },
     "gpt-5.6-terra-xhigh": {
-      "endpoint": "9router-openai",
-      "model": "cx/gpt-5.6-terra",
+      "endpoint": "cpa-openai",
+      "model": "gpt-5.6-terra",
       "catalogModel": "openai/gpt-5.6-terra",
       "effort": "xhigh"
     },
     "gpt-5.6-terra-max": {
-      "endpoint": "9router-openai",
-      "model": "cx/gpt-5.6-terra",
+      "endpoint": "cpa-openai",
+      "model": "gpt-5.6-terra",
       "catalogModel": "openai/gpt-5.6-terra",
       "effort": "max"
     },
