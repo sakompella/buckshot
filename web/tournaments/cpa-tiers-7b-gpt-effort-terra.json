@@ -156,12 +156,6 @@
       "model": "gpt-6-luna",
       "effort": "max"
     },
-    "gpt-5.6-terra-off": {
-      "endpoint": "cpa-openai",
-      "model": "gpt-5.6-terra",
-      "catalogModel": "openai/gpt-5.6-terra",
-      "effort": "off"
-    },
     "gpt-5.6-terra-low": {
       "endpoint": "cpa-openai",
       "model": "gpt-5.6-terra",
@@ -1282,96 +1276,6 @@
       "entrants": [
         "gpt-6-luna-xhigh",
         "gpt-6-luna-max"
-      ],
-      "seeds": [
-        3000,
-        3010,
-        3011,
-        3012,
-        3014,
-        3013,
-        3015,
-        3017,
-        3016,
-        3018
-      ]
-    },
-    {
-      "entrants": [
-        "gpt-5.6-terra-off",
-        "gpt-5.6-terra-low"
-      ],
-      "seeds": [
-        3000,
-        3010,
-        3011,
-        3012,
-        3014,
-        3013,
-        3015,
-        3017,
-        3016,
-        3018
-      ]
-    },
-    {
-      "entrants": [
-        "gpt-5.6-terra-off",
-        "gpt-5.6-terra"
-      ],
-      "seeds": [
-        3000,
-        3010,
-        3011,
-        3012,
-        3014,
-        3013,
-        3015,
-        3017,
-        3016,
-        3018
-      ]
-    },
-    {
-      "entrants": [
-        "gpt-5.6-terra-off",
-        "gpt-5.6-terra-high"
-      ],
-      "seeds": [
-        3000,
-        3010,
-        3011,
-        3012,
-        3014,
-        3013,
-        3015,
-        3017,
-        3016,
-        3018
-      ]
-    },
-    {
-      "entrants": [
-        "gpt-5.6-terra-off",
-        "gpt-5.6-terra-xhigh"
-      ],
-      "seeds": [
-        3000,
-        3010,
-        3011,
-        3012,
-        3014,
-        3013,
-        3015,
-        3017,
-        3016,
-        3018
-      ]
-    },
-    {
-      "entrants": [
-        "gpt-5.6-terra-off",
-        "gpt-5.6-terra-max"
       ],
       "seeds": [
         3000,
