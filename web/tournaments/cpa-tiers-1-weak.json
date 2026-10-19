@@ -1,0 +1,49 @@
+{
+  "name": "cpa-tiers",
+  "seed": 3000,
+  "delivery": "on-turn",
+  "endpoints": {
+    "cpa-anthropic": {
+      "api": "anthropic",
+      "url": "http://127.0.0.1:8318",
+      "keyEnv": "CPA_KEY"
+    },
+    "cpa-openai": {
+      "api": "openai-responses",
+      "url": "http://127.0.0.1:8318/v1",
+      "keyEnv": "CPA_KEY"
+    }
+  },
+  "entrants": {
+    "claude-haiku-4-5-20251001": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "effort": "medium"
+    },
+    "claude-haiku-5-5": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-5-5",
+      "effort": "medium"
+    },
+    "gpt-6-luna": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6-luna",
+      "effort": "medium"
+    }
+  },
+  "pairings": [
+    [
+      "claude-haiku-4-5-20251001",
+      "claude-haiku-5-5"
+    ],
+    [
+      "claude-haiku-4-5-20251001",
+      "gpt-6-luna"
+    ],
+    [
+      "claude-haiku-5-5",
+      "gpt-6-luna"
+    ]
+  ],
+  "blocksPerPairing": 10
+}

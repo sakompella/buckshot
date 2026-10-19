@@ -1,6 +1,6 @@
 # Players get no budgets
 
-The arena enforces no token, cost, time or step budget on a player. Fairness comes from the same instructions, the same two tools and seat rotation, and usage is recorded so it can be compared afterwards (ADR-0008). The arena plays a fallback move (the first legal move) only when a model ends its turn without moving. When the provider fails, the match stops as a fault that can be resumed: a provider outage must not turn into moves.
+The arena enforces no token, cost, time or step budget on a player. Fairness comes from the same instructions, the same two tools and seat rotation, and usage is recorded so it can be compared afterwards (ADR-0008). The arena plays a fallback move only when a model ends its turn without moving, even after one reminder (ADR-0038). When the provider fails, the match stops as a fault that can be resumed: a provider outage must not turn into moves.
 
 ## Considered Options
 

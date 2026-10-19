@@ -69,7 +69,7 @@ const frameOf = (before: AgentSource | undefined, after: AgentSource, move: Fram
 /** The label the machine gives a move now: what match.ts logged as the move's label when it was played. */
 const labelOf = (replay: Replay, line: MoveLine): string =>
   Result.match(agentGame(sourceOf(replay), replay.session.turn(replay.table), line.player), {
-    onSuccess: (game) => (game.status === "your turn" ? (game.moves[line.move] ?? "") : ""),
+    onSuccess: (game) => (game.status === "your turn" ? (game.moves[line.move]?.label ?? "") : ""),
     onFailure: () => "",
   });
 

@@ -7,11 +7,12 @@ import { type AssistantMessage, contentText, createModels, fauxAssistantMessage,
 import { ConfigProvider, Effect, Exit, Schema } from "effect";
 
 import { AGENTS, AgentId } from "../src/arena/agent.ts";
-import { agentEndpoint } from "../src/arena/endpoints.ts";
+import { type AgentProvenance, agentEndpoint, provenanceOf, providerOf } from "../src/arena/endpoints.ts";
 import { listenForHuman } from "../src/arena/human.ts";
 import { DELIVERIES, type Delivery, INSTRUCTIONS, playMatch } from "../src/arena/match.ts";
 import { entriesSentTo } from "../src/arena/runlog.ts";
 import type { Controller } from "../src/driver.ts";
+import { fauxProvenance } from "./faux-run.ts";
 
 // The arena with faux pi-ai models, which play from their transcripts alone, so
 // these matches cost nothing. A faux player's first act probes another player's
@@ -19,7 +20,7 @@ import type { Controller } from "../src/driver.ts";
 // The audit checks that every view an agent got names it by its own letter, so
 // agents seated out of letter order check that letters follow agents, not seats.
 
-const View = Schema.Struct({ you: Schema.String, turn: Schema.optional(Schema.Int), moves: Schema.optional(Schema.Array(Schema.String)) });
+const View = Schema.Struct({ you: Schema.String, turn: Schema.optional(Schema.Int), moves: Schema.optional(Schema.Array(Schema.Struct({ move: Schema.Int, label: Schema.String }))) });
 
 const parseView = Schema.decodeUnknownSync(Schema.fromJsonString(View));
 
@@ -45,7 +46,12 @@ const decide = (transcript: TranscriptContext): AssistantMessage => {
 };
 
 /** A faux match; `agents` sit at the Agent seats in table order. */
-const fauxMatch = (controllers: ReadonlyArray<Controller>, seed: string, contextWindow: number, delivery: Delivery, { dir = mkdtempSync(join(tmpdir(), "arena-test-")), agents = AGENTS }: { readonly dir?: string; readonly agents?: ReadonlyArray<AgentId> } = {}) => {
+const fauxMatch = (controllers: ReadonlyArray<Controller>, seed: string, contextWindow: number, delivery: Delivery, {
+    dir = mkdtempSync(join(tmpdir(), "arena-test-")),
+    agents = AGENTS,
+    provenance = fauxProvenance,
+  }: { readonly dir?: string; readonly agents?: ReadonlyArray<AgentId>; readonly provenance?: (modelId: string) => AgentProvenance } = {},
+) => {
   const faux = fauxProvider({ provider: "faux", models: [{ id: "faux-a", contextWindow, maxTokens: 512 }, { id: "faux-b", contextWindow, maxTokens: 512 }] });
   const models = createModels();
   const seated = agents.slice(0, controllers.filter((controller) => controller === "Agent").length);
@@ -57,12 +63,26 @@ const fauxMatch = (controllers: ReadonlyArray<Controller>, seed: string, context
     dir,
     seed,
     controllers,
-    entrants: seated.map((agent, index) => ({ agent, model: { provider: "faux", modelId: index % 2 === 0 ? "faux-a" : "faux-b" }, thinkingLevel: undefined, describe: `faux ${index}` })),
+    entrants: seated.map((agent, index) => {
+      const modelId = index % 2 === 0 ? "faux-a" : "faux-b";
+
+      return { agent, model: { provider: "faux", modelId }, thinkingLevel: undefined, provenance: provenance(modelId) };
+    }),
     models,
-    compaction: { enabled: true, reserveTokens: 1_500, keepRecentTokens: 1_500 },
     delivery,
   });
 };
+
+test("a match resumes only with the configuration it started with", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "arena-test-"));
+
+  await Effect.runPromise(fauxMatch(["Agent", "DoN"], "3", 200_000, "on-turn", { dir }));
+
+  const changed = await Effect.runPromiseExit(fauxMatch(["Agent", "DoN"], "3", 200_000, "on-turn", { dir, provenance: (modelId) => ({ ...fauxProvenance(modelId), effort: "medium" }) }));
+
+  expect(Exit.isFailure(changed) && String(changed.cause)).toContain("cannot resume with this one");
+  expect(Exit.isSuccess(await Effect.runPromiseExit(fauxMatch(["Agent", "DoN"], "3", 200_000, "on-turn", { dir })))).toBe(true);
+});
 
 test.each([
   [["Agent", "Agent"] as const, "7", "on-turn", "A,B"],
@@ -123,7 +143,7 @@ test.each([...DELIVERIES])("a human types moves into the terminal client and pla
     return connected;
   };
 
-  const result = await Effect.runPromise(playMatch({ dir, seed: "11", controllers: ["Human", "DoN", "Story"], entrants: [], connectHuman, models: createModels(), compaction: {}, delivery }));
+  const result = await Effect.runPromise(playMatch({ dir, seed: "11", controllers: ["Human", "DoN", "Story"], entrants: [], connectHuman, models: createModels(), delivery }));
   const [client] = clients;
 
   if (client === undefined) throw new Error("the arena never connected its human");
@@ -163,12 +183,141 @@ test("an endpoint is Anthropic or OpenAI Responses, from its URL and key", async
   expect(Exit.isSuccess(openai) && openai.value._tag).toBe("OpenAIResponses");
 });
 
+test("rotating only a provider key preserves resume provenance", async () => {
+  const env = { PLAYER_A_OAI_URL: CPA.url, PLAYER_A_MODEL: "gpt-6-luna", PLAYER_A_EFFORT: "medium" };
+  const before = await endpointFrom({ ...env, PLAYER_A_OAI_KEY: "old-test-key" });
+  const after = await endpointFrom({ ...env, PLAYER_A_OAI_KEY: "rotated-test-key" });
+
+  if (!Exit.isSuccess(before) || !Exit.isSuccess(after)) throw new Error("test endpoints failed");
+
+  expect(provenanceOf("provider-A", before.value)).toEqual(provenanceOf("provider-A", after.value));
+});
+
+test.each([
+  ["ANT", "claude-haiku-4-5-20251001", { level: "medium", mode: "budget", effort: null, budget_tokens: 8192, summary: "summarized" }],
+  ["ANT", "claude-haiku-5-5", { level: "medium", mode: "adaptive", effort: "medium", budget_tokens: null, summary: "summarized" }],
+  ["OAI", "gpt-6-luna", { level: "medium", mode: "effort", effort: "medium", budget_tokens: null, summary: "detailed" }],
+  ["OAI", "opencode/deepseek-v4.1-flash", { level: "high", mode: "effort", effort: "high", budget_tokens: null, summary: "auto" }],
+] as const)("the provenance records the thinking settings medium effort resolves to: %s %s", async (api, model, thinking) => {
+  const catalogModel = model.includes("/") ? { PLAYER_A_CATALOG_MODEL: model } : {};
+  const endpoint = await endpointFrom({ [`PLAYER_A_${api}_URL`]: CPA.url, [`PLAYER_A_${api}_KEY`]: CPA.key, PLAYER_A_MODEL: model, ...catalogModel, PLAYER_A_EFFORT: "medium" });
+
+  if (!Exit.isSuccess(endpoint)) throw new Error(String(endpoint.cause));
+
+  const provenance = provenanceOf("provider-A", endpoint.value);
+
+  expect(provenance.thinking).toEqual(thinking);
+  expect(JSON.stringify(provenance)).not.toContain(CPA.key);
+});
+
+test.each([
+  ["claude-haiku-4-5-20251001", "off", { level: "off", mode: "off", effort: null, budget_tokens: null, summary: null }],
+  ["claude-haiku-4-5-20251001", "max", { level: "high", mode: "budget", effort: null, budget_tokens: 16384, summary: "summarized" }],
+  ["claude-haiku-5-5", "off", { level: "off", mode: "off", effort: null, budget_tokens: null, summary: null }],
+  ["claude-sonnet-5-5", "off", { level: "off", mode: "between_tools", effort: null, budget_tokens: null, summary: null }],
+  ["claude-sonnet-5-5", "xhigh", { level: "xhigh", mode: "adaptive", effort: "xhigh", budget_tokens: null, summary: "summarized" }],
+] as const)("the provenance records the thinking settings the arena sent CLIProxyAPI for %s at effort %s", async (model, effort, thinking) => {
+  const endpoint = await endpointFrom({ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_ANT_KEY: CPA.key, PLAYER_A_MODEL: model, PLAYER_A_EFFORT: effort });
+
+  if (!Exit.isSuccess(endpoint)) throw new Error(String(endpoint.cause));
+
+  expect(provenanceOf("provider-A", endpoint.value).thinking).toEqual(thinking);
+});
+
+/** The first request an endpoint sends, as pi-durable asks for a reply: with no reasoning option at effort off. */
+const firstRequestAt = async (api: "ANT" | "OAI", model: string, effort: "off" | "low" | "medium") => {
+  const requests: Array<unknown> = [];
+
+  const server = Bun.serve({
+    port: 0,
+    fetch: async (request) => {
+      requests.push(await request.json());
+
+      return Response.json({ type: "error", error: { type: "invalid_request_error", message: "refused by the test" } }, { status: 400 });
+    },
+  });
+
+  const endpoint = await endpointFrom({ [`PLAYER_A_${api}_URL`]: server.url.href, [`PLAYER_A_${api}_KEY`]: CPA.key, PLAYER_A_MODEL: model, PLAYER_A_EFFORT: effort });
+
+  if (!Exit.isSuccess(endpoint)) throw new Error(String(endpoint.cause));
+
+  const models = createModels();
+  const providerId = api === "ANT" ? "anthropic-A" : "openai-responses-A";
+
+  models.setProvider(providerOf(providerId, endpoint.value));
+
+  const listed = models.getModel(providerId, model);
+
+  if (listed === undefined) throw new Error(`${model} is not listed`);
+
+  await models.completeSimple(listed, { messages: [{ role: "user", content: "Your turn.", timestamp: 0 }] }, effort === "off" ? {} : { reasoning: effort });
+  await server.stop(true);
+
+  return Schema.decodeUnknownSync(SentRequest)(requests[0]);
+};
+
+const Effort = Schema.Struct({ effort: Schema.String });
+
+const SentRequest = Schema.Struct({
+  thinking: Schema.optional(Schema.Struct({ type: Schema.String })),
+  output_config: Schema.optional(Effort),
+  messages: Schema.optional(Schema.Array(Schema.Struct({ output_config: Schema.optional(Effort) }))),
+  reasoning: Schema.optional(Schema.Struct({ summary: Schema.optional(Schema.String) })),
+});
+
+test.each([
+  ["claude-haiku-5-5", "off", "disabled", []],
+  ["claude-sonnet-5-5", "off", "between_tools", []],
+  ["claude-haiku-4-5-20251001", "off", "disabled", []],
+  ["claude-sonnet-5-5", "low", "adaptive", ["high", "low"]],
+] as const)("%s at effort %s asks for thinking %s, at the efforts %j", async (model, effort, thinking, efforts) => {
+  const request = await firstRequestAt("ANT", model, effort);
+
+  expect(request.thinking?.type).toBe(thinking);
+  expect([request.output_config, ...(request.messages ?? []).map((message) => message.output_config)].flatMap((config) => (config === undefined ? [] : [config.effort]))).toEqual([...efforts]);
+});
+
+test.each([
+  ["medium", "detailed"],
+  ["off", undefined],
+] as const)("gpt-6-luna at effort %s asks for the reasoning summary %s", async (effort, summary) => {
+  expect((await firstRequestAt("OAI", "gpt-6-luna", effort)).reasoning?.summary).toBe(summary);
+});
+
+test("a proxy's model alias plays as the catalog model it names", async () => {
+  const alias = await endpointFrom({ PLAYER_A_OAI_URL: `${CPA.url}/v1`, PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "gpt-6-luna-fast", PLAYER_A_CATALOG_MODEL: "gpt-6-luna" });
+
+  if (!Exit.isSuccess(alias)) throw new Error(String(alias.cause));
+
+  const model = providerOf("openai-responses-A", alias.value).getModels()[0];
+
+  expect(model?.id).toBe("gpt-6-luna-fast");
+  expect(model?.contextWindow).toBeGreaterThan(0);
+});
+
+test("a router's model plays as a model of the pi-ai provider its catalog model names", async () => {
+  const routed = await endpointFrom({ PLAYER_A_OAI_URL: "http://localhost:20128/v1", PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "oc/deepseek-v4.1-flash-free", PLAYER_A_CATALOG_MODEL: "opencode/deepseek-v4.1-flash" });
+
+  if (!Exit.isSuccess(routed)) throw new Error(String(routed.cause));
+
+  const model = providerOf("openai-responses-A", routed.value).getModels()[0];
+
+  expect(model?.id).toBe("oc/deepseek-v4.1-flash-free");
+  expect(model?.baseUrl).toBe("http://localhost:20128/v1");
+  expect(model?.contextWindow).toBe(1_000_000);
+  expect(model?.api).toBe("openai-responses");
+  expect(provenanceOf("openai-responses-A", routed.value).catalog_model).toBe("opencode/deepseek-v4.1-flash");
+});
+
 test.each([
   [{ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_ANT_KEY: CPA.key, PLAYER_A_OAI_URL: CPA.url, PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "claude-haiku-5-5" }, "not both"],
   [{ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_MODEL: "claude-haiku-5-5" }, "PLAYER_A_ANT_KEY must be set"],
   [{ PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "gpt-6-luna" }, "PLAYER_A_OAI_URL must be set"],
   [{ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_ANT_KEY: CPA.key }, "PLAYER_A_MODEL must be set"],
-  [{ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_ANT_KEY: CPA.key, PLAYER_A_MODEL: "gpt-6-luna" }, "not a pi-ai Anthropic model"],
+  [{ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_ANT_KEY: CPA.key, PLAYER_A_MODEL: "gpt-6-luna" }, "PLAYER_A_MODEL=gpt-6-luna is not a pi-ai Anthropic model"],
+  [{ PLAYER_A_OAI_URL: CPA.url, PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "gpt-6-luna-fast", PLAYER_A_CATALOG_MODEL: "gpt-6-lunar" }, "PLAYER_A_CATALOG_MODEL=gpt-6-lunar is not a pi-ai OpenAIResponses model"],
+  [{ PLAYER_A_OAI_URL: CPA.url, PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "ds", PLAYER_A_CATALOG_MODEL: "opencode/deepseek-v9" }, "PLAYER_A_CATALOG_MODEL=opencode/deepseek-v9 is not a pi-ai OpenAIResponses model"],
+  [{ PLAYER_A_OAI_URL: CPA.url, PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "ds", PLAYER_A_CATALOG_MODEL: "nowhere/deepseek-v4.1-flash" }, "PLAYER_A_CATALOG_MODEL=nowhere/deepseek-v4.1-flash is not a pi-ai OpenAIResponses model"],
   [{ PLAYER_A_MODEL: "gpt-6-luna" }, "Set PLAYER_A_ANT_URL and PLAYER_A_ANT_KEY, or PLAYER_A_OAI_URL and PLAYER_A_OAI_KEY"],
 ])("a bad endpoint fails naming the variable, never the key: %p", async (env, expected) => {
   const failure = await failureOf(env);

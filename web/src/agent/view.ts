@@ -49,7 +49,7 @@ interface YourTurn {
   readonly players: ReadonlyArray<PlayerLine>;
   readonly gun: { readonly sawed: true } | undefined;
   readonly events: ReadonlyArray<string> | undefined;
-  readonly moves: ReadonlyArray<string>;
+  readonly moves: ReadonlyArray<{ readonly move: number; readonly label: string }>;
 }
 
 /** The final standings, and the events since the player's last turn ended. */
@@ -148,7 +148,7 @@ export const agentGame = (source: AgentSource, turn: number, letter: Letter): Re
         players: board.seats.map((view) => lineOf(roster, view)),
         gun: gunOf(board),
         events: eventsSinceLastTurn(source, roster, seat),
-        moves: moves.map(({ label }) => label),
+        moves: moves.map(({ label }, move) => ({ move, label })),
       }),
     });
   });
