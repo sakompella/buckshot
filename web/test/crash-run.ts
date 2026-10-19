@@ -10,7 +10,7 @@ import { fauxProvenance } from "./faux-run.ts";
 // so a resumed match plays the same moves as one never stopped.
 // Usage: bun test/crash-run.ts <dir> <point|none> <occurrence>
 
-const [dir = "", point = "none", occurrence = "1"] = process.argv.slice(2);
+const [dir = "", point = "none", occurrence = "1", signal = "exit"] = process.argv.slice(2);
 
 const CRASH_EXIT = 86;
 
@@ -39,7 +39,13 @@ const faux = fauxProvider({ provider: "faux", models: [{ id: "faux-a", contextWi
 
 const models = createModels();
 
-faux.setResponses(Array.from({ length: 5_000 }, () => decide));
+faux.setResponses(Array.from({ length: 5_000 }, () => async (transcript) => {
+  if (point === "model:in-flight") process.kill(process.pid, "SIGKILL");
+
+  if (point === "model:fault") return fauxAssistantMessage("", { stopReason: "error", errorMessage: "503 faux provider unavailable" });
+
+  return decide(transcript);
+}));
 
 models.setProvider(faux.provider);
 
@@ -50,11 +56,14 @@ await Effect.runPromise(
     dir,
     seed: "5",
     controllers: ["Agent", "DoN"],
-    entrants: (["A"] as const).map((agent) => ({ agent, model: { provider: "faux", modelId: "faux-a" }, thinkingLevel: undefined, provenance: fauxProvenance("faux-a") })),
+    entrants: (["A"] as const).map((agent) => ({ agent, model: { provider: "faux", modelId: "faux-a" }, thinkingLevel: undefined, provenance: { ...fauxProvenance("faux-a"), effort: process.env.CRASH_TEST_EFFORT ?? null } })),
     models,
     delivery: "on-turn",
     crashAt: (at) => {
-      if (at === point && ++seen === Number(occurrence)) process.exit(CRASH_EXIT);
+      if (at === point && ++seen === Number(occurrence)) {
+        if (signal === "SIGTERM" || signal === "SIGKILL") process.kill(process.pid, signal);
+        else process.exit(CRASH_EXIT);
+      }
     },
   }),
 );

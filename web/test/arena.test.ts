@@ -183,6 +183,16 @@ test("an endpoint is Anthropic or OpenAI Responses, from its URL and key", async
   expect(Exit.isSuccess(openai) && openai.value._tag).toBe("OpenAIResponses");
 });
 
+test("rotating only a provider key preserves resume provenance", async () => {
+  const env = { PLAYER_A_OAI_URL: CPA.url, PLAYER_A_MODEL: "gpt-6-luna", PLAYER_A_EFFORT: "medium" };
+  const before = await endpointFrom({ ...env, PLAYER_A_OAI_KEY: "old-test-key" });
+  const after = await endpointFrom({ ...env, PLAYER_A_OAI_KEY: "rotated-test-key" });
+
+  if (!Exit.isSuccess(before) || !Exit.isSuccess(after)) throw new Error("test endpoints failed");
+
+  expect(provenanceOf("provider-A", before.value)).toEqual(provenanceOf("provider-A", after.value));
+});
+
 test.each([
   ["ANT", "claude-haiku-4-5-20251001", { level: "medium", mode: "budget", effort: null, budget_tokens: 8192, summary: "summarized" }],
   ["ANT", "claude-haiku-5-5", { level: "medium", mode: "adaptive", effort: "medium", budget_tokens: null, summary: "summarized" }],

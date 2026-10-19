@@ -1,6 +1,7 @@
+import { Database } from "bun:sqlite";
 import { beforeAll, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { appendFileSync, mkdtempSync, readFileSync } from "node:fs";
+import { appendFileSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -23,6 +24,12 @@ const WEB = join(import.meta.dir, "..");
 const POINTS = [
   ["start:before-commit", 1],
   ["start:after-commit", 1],
+  ["start:after-export", 1],
+  ["delivery:before-commit", 3],
+  ["delivery:after-export", 3],
+  ["forced:after-export", 2],
+  ["fallback:before-commit", 1],
+  ["fallback:after-export", 1],
   ["move:before-commit", 3],
   ["move:after-commit", 3],
   ["move:after-export", 3],
@@ -35,7 +42,7 @@ const POINTS = [
   ["delivery:after-commit", 25],
 ] as const;
 
-const play = async (dir: string, point: string, occurrence: number): Promise<number> => Bun.spawn(["bun", "test/crash-run.ts", dir, point, String(occurrence)], { cwd: WEB, stdout: "ignore", stderr: "inherit" }).exited;
+const play = async (dir: string, point: string, occurrence: number, signal = "exit"): Promise<number> => Bun.spawn(["nice", "-n", "10", "bun", "test/crash-run.ts", dir, point, String(occurrence), signal], { cwd: WEB, env: { ...process.env, CRASH_TEST_EFFORT: undefined }, stdout: "ignore", stderr: "pipe" }).exited;
 
 const readManifest = (dir: string) => Schema.decodeUnknownSync(Schema.fromJsonString(RunManifest))(readFileSync(join(dir, "manifest.json"), "utf8"));
 
@@ -105,3 +112,107 @@ test.each(CASES.map(({ name }) => name))("a crash at %s resumes to the match a r
   expect(replay.applied.length).toBe(moveSeqs.length);
   expect(replay.frames.at(-1)?.entries.map((entry) => entry.text)).toContain("The match is over.");
 });
+
+test.each(["SIGTERM", "SIGKILL", "model:in-flight"])("a %s stop resumes without repeating work", async (signal) => {
+  const dir = join(root, signal);
+
+  expect(await play(dir, signal === "model:in-flight" ? signal : "move:after-commit", 3, signal)).not.toBe(0);
+  expect(await play(dir, "none", 0)).toBe(0);
+  expect(moveLogSha(dir)).toBe(moveLogSha(baseline));
+  expect(exportedSha(dir)).toBe(moveLogSha(dir));
+  expect(entriesSentTo(dir, "A")).toEqual(entriesSentTo(baseline, "A"));
+  const seqs = seqsOf(dir, ["move", "fallback"]);
+
+  expect(seqs).toEqual(seqs.map((_, index) => index));
+}, 30_000);
+
+test("resuming a finished match makes no model calls, moves or deliveries", async () => {
+  const before = readManifest(baseline);
+  const calls = readFileSync(join(baseline, "calls.jsonl"), "utf8");
+  const moves = movesOf(eventsOf(baseline));
+  const deliveries = seqsOf(baseline, ["delivered"]);
+
+  expect(await play(baseline, "none", 0)).toBe(0);
+  expect(readManifest(baseline)).toEqual(before);
+  expect(readFileSync(join(baseline, "calls.jsonl"), "utf8")).toBe(calls);
+  expect(movesOf(eventsOf(baseline))).toEqual(moves);
+  expect(seqsOf(baseline, ["delivered"])).toEqual(deliveries);
+}, 30_000);
+
+test("a changed agent provenance is refused before more calls or moves, naming the changed fields", async () => {
+  const dir = join(root, "provenance");
+
+  expect(await play(dir, "move:after-export", 3)).toBe(CRASH_EXIT);
+  const calls = readFileSync(join(dir, "calls.jsonl"), "utf8");
+  const moves = movesOf(eventsOf(dir));
+
+  const refused = Bun.spawn(["nice", "-n", "10", "bun", "test/crash-run.ts", dir], {
+    cwd: WEB, env: { ...process.env, CRASH_TEST_EFFORT: "medium" }, stdout: "ignore", stderr: "pipe",
+  });
+
+  expect(await refused.exited).not.toBe(0);
+  const error = await new Response(refused.stderr).text();
+
+  expect(error).toContain("cannot resume");
+  expect(error).toContain("agent A");
+  expect(error).toContain("effort");
+  expect(readFileSync(join(dir, "calls.jsonl"), "utf8")).toBe(calls);
+  expect(movesOf(eventsOf(dir))).toEqual(moves);
+  expect(await play(dir, "none", 0)).toBe(0);
+  expect(moveLogSha(dir)).toBe(moveLogSha(baseline));
+}, 30_000);
+
+test.each(["before-commit", "after-commit", "after-export"])("the final notice resumes at delivery %s without sending it twice", async (boundary) => {
+  const dir = join(root, `final-${boundary}`);
+  const occurrence = seqsOf(baseline, ["delivered"]).length;
+
+  expect(await play(dir, `delivery:${boundary}`, occurrence)).toBe(CRASH_EXIT);
+  expect(await play(dir, "none", 0)).toBe(0);
+  expect(moveLogSha(dir)).toBe(moveLogSha(baseline));
+  expect(entriesSentTo(dir, "A")).toEqual(entriesSentTo(baseline, "A"));
+  expect(seqsOf(dir, ["delivered"])).toEqual(seqsOf(baseline, ["delivered"]));
+}, 30_000);
+
+test("a journal started under another code_sha refuses to resume and names both versions", async () => {
+  const dir = join(root, "old-code");
+
+  expect(await play(dir, "move:after-export", 3)).toBe(CRASH_EXIT);
+  const code = Schema.decodeUnknownSync(Schema.Struct({ provenance: Schema.Struct({ code_sha: Schema.String }) }))(readManifest(dir)).provenance.code_sha;
+  const old = "000000000000";
+  const db = new Database(join(dir, "session.sqlite"));
+
+  try {
+    expect(db.query("UPDATE document_revisions SET content = replace(content, ?, ?) WHERE content LIKE ?").run(code, old, `%${code}%`).changes).toBeGreaterThan(0);
+  } finally {
+    db.close();
+  }
+
+  const refused = Bun.spawn(["nice", "-n", "10", "bun", "test/crash-run.ts", dir], { cwd: WEB, stdout: "ignore", stderr: "pipe" });
+
+  expect(await refused.exited).not.toBe(0);
+  const error = await new Response(refused.stderr).text();
+
+  expect(error).toContain(`code_sha was ${old}, now ${code}`);
+}, 30_000);
+
+test("a truncated manifest is rebuilt from the journal after a stop", async () => {
+  const dir = join(root, "manifest-write");
+
+  expect(await play(dir, "move:after-export", 3)).toBe(CRASH_EXIT);
+  writeFileSync(join(dir, "manifest.json"), '{"status":"run');
+  expect(await play(dir, "none", 0)).toBe(0);
+  expect(readManifest(dir).status).toBe("finished");
+  expect(moveLogSha(dir)).toBe(moveLogSha(baseline));
+  expect(exportedSha(dir)).toBe(moveLogSha(dir));
+}, 30_000);
+
+test("a provider fault resumes the interrupted turn without losing or duplicating a delivery", async () => {
+  const dir = join(root, "provider-fault");
+
+  expect(await play(dir, "model:fault", 0)).not.toBe(0);
+  expect(readFileSync(join(dir, "events.jsonl"), "utf8")).toContain("503 faux provider unavailable");
+  expect(await play(dir, "none", 0)).toBe(0);
+  expect(moveLogSha(dir)).toBe(moveLogSha(baseline));
+  expect(exportedSha(dir)).toBe(moveLogSha(dir));
+  expect(entriesSentTo(dir, "A")).toEqual(entriesSentTo(baseline, "A"));
+}, 30_000);

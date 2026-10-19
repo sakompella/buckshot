@@ -523,6 +523,54 @@ test("a stop during a failed match's pause ends the run at once", async () => {
   expect(Date.now() - started).toBeLessThan(5_000);
 });
 
+test("a restarted runner gets a fresh three-run failure allowance", async () => {
+  const tournament = tournamentFrom(configJson({ pairings: [["luna", "don"]], blocksPerPairing: 1 }));
+  const schedule = scheduleOf(tournament).slice(0, 1);
+  const dir = mkdtempSync(join(tmpdir(), "tournament-restart-retry-"));
+
+  const runThree = () => runPending(dir, tournament.config, schedule, 1, async (candidate) => (writeManifest(dir, tournament, candidate, "running"), 1), () => undefined, new AbortController().signal, { retry: { attempts: 3, pauseMs: 0 } });
+
+  expect((await runThree()).map(({ status }) => status)).toEqual(["failed", "failed", "failed"]);
+  expect((await runThree()).map(({ status }) => status)).toEqual(["failed", "failed", "failed"]);
+});
+
+test("restart scheduling preserves last priority and can forget persisted cooldowns", async () => {
+  const tournament = tournamentFrom(configJson({ pairings: [["luna", "haiku-5-5"], ["haiku-5-5", "sonnet"]], blocksPerPairing: 1 }));
+  const schedule = scheduleOf(tournament);
+  const [lunaFirst, lunaSecond, ...other] = schedule;
+  const dir = mkdtempSync(join(tmpdir(), "tournament-restart-scheduling-"));
+
+  if (lunaFirst === undefined || lunaSecond === undefined || other.length !== 2) throw new Error("unexpected schedule");
+
+  const lunaSeat = lunaFirst.seats[lunaFirst.entrants.indexOf("luna")];
+  const error = `openai-responses-A API error (429): ${JSON.stringify({ code: "model_cooldown", model: "gpt-6-luna", reset_seconds: 3600 })}`;
+
+  mkdirSync(join(dir, lunaFirst.name));
+  writeFileSync(join(dir, lunaFirst.name, "events.jsonl"), `${JSON.stringify({ t: new Date().toISOString(), kind: "fault", agent: lunaSeat, error })}\n`);
+
+  const runs: Array<string> = [];
+
+  const stop = new AbortController();
+
+  const resumedRuns = await runPending(dir, tournament.config, schedule, 1, async (match) => {
+    runs.push(match.name);
+    writeManifest(dir, tournament, match, "finished");
+
+    if (runs.length === other.length) stop.abort();
+
+    return 0;
+  }, () => undefined, stop.signal, { last: new Set(["gpt-6-luna"]) });
+
+  expect(runs).toEqual(other.map(({ name }) => name));
+  expect(resumedRuns.every(({ status }) => status === "finished")).toBe(true);
+
+  const restart = new AbortController();
+  runs.length = 0;
+  const afterForget = await runPending(dir, tournament.config, schedule, 1, async (match) => (runs.push(match.name), writeManifest(dir, tournament, match, "finished"), 0), () => undefined, restart.signal, { forget: new Set(["gpt-6-luna"]) });
+  expect(runs).toEqual([lunaFirst.name, lunaSecond.name]);
+  expect(afterForget.every(({ status }) => status === "finished")).toBe(true);
+});
+
 test("a failed match goes to the back of the queue and is retried, up to its attempts", async () => {
   const tournament = tournamentFrom(configJson({ pairings: [["luna", "don"], ["haiku-5-5", "story"]], blocksPerPairing: 1 }));
   const schedule = scheduleOf(tournament);
