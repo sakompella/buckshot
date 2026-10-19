@@ -40,7 +40,9 @@ const live = join(dir, "live-copy");
 
 const full = { events: readFileSync(join(source, "events.jsonl")), calls: readFileSync(join(source, "calls.jsonl")) };
 
-const expected = { steps: movesOf(readJsonl(full.events.toString("utf8"), decodeEventLine)).length + 1, calls: full.calls.toString("utf8").split("\n").length - 1 };
+const moves = movesOf(readJsonl(full.events.toString("utf8"), decodeEventLine));
+
+const expected = { steps: moves.length + 1, calls: full.calls.toString("utf8").split("\n").length - 1, reasoned: moves.filter((move) => move.by === "agent").length };
 
 /** A byte offset near `fraction` of the file that falls inside a line. */
 const midLine = (bytes: Buffer, fraction: number) => {
@@ -94,13 +96,46 @@ try {
   await page.locator(".runs tbody tr").first().waitFor();
   check((await page.locator(".runs tr.unreadable").count()) === 1, "the format-0 run is listed as unreadable");
   check((await page.locator(".runs .badge-live").count()) === 1, "live-copy is LIVE");
+  check((await page.locator(".runs tbody tr").first().locator(".badge-live").count()) === 1, "with no sort, the live run is listed first");
   await page.screenshot({ path: `${outdir}/list.png` });
+
+  await page.getByRole("button", { name: "Status" }).click();
+  check(page.url().endsWith("?sort=status&dir=asc"), "clicking Status puts the sort in the query string");
+  check((await page.locator(".runs tbody tr").first().locator(".badge-live").count()) === 1 && (await page.locator(".runs tbody tr").last().getAttribute("class")) === "unreadable", "sorted by status, live is first and the unreadable run last");
+  check((await page.locator('th[aria-sort="ascending"]').textContent())?.includes("Status") === true, "the sorted column's header says so");
+  await page.getByRole("button", { name: "Cost" }).click();
+  check(page.url().endsWith("?sort=cost&dir=desc"), "clicking Cost sorts it most expensive first");
+  await page.getByRole("button", { name: "Cost" }).click();
+  await page.getByRole("button", { name: "Cost" }).click();
+  check(!page.url().includes("sort="), "a third click on a header goes back to live first");
+  await page.goto(`${base}?sort=started&dir=asc`);
+  await page.locator(".runs tbody tr").first().waitFor();
+  check((await page.locator(".runs tbody tr").first().textContent())?.includes("faux-") === true && (await page.locator('th[aria-sort="ascending"]').textContent())?.includes("Started") === true, "a sort in the query string is applied on load");
+
+  await page.goto(base);
+  await page.locator(".runs tbody tr").first().waitFor();
+  await page.locator('select[data-field="model"]').selectOption("faux-a");
+  check(page.url().endsWith("?model=faux-a"), "picking a model puts it in the query string");
+  await page.locator('select[data-field="vs"]').selectOption("faux-b");
+  check(page.url().endsWith("?model=faux-a&vs=faux-b") && (await page.locator(".runs tbody tr").count()) === 3, "a head to head keeps the runs where both models played, and drops the unreadable one");
+  await page.goto(`${base}?model=faux-a&vs=faux-a`);
+  await page.locator(".runs").waitFor();
+  check((await page.locator(".runs tbody tr").count()) === 0, "a head to head of one model needs two agents of it");
+  await page.goto(`${base}?family=faux-b&effort=high`);
+  await page.locator(".runs").waitFor();
+  check((await page.locator(".runs tbody tr").count()) === 0 && (await page.locator('select[data-field="effort"]').inputValue()) === "high", "a filter on an effort no run has shows nothing, and its picker still says which");
+  await page.goto(base);
+  await page.locator(".runs tbody tr").first().waitFor();
+  check((await page.locator(".runs tbody tr").first().locator(".model").first().textContent()) === "faux-a" && (await page.locator(".runs tbody tr .effort.unset").count()) > 0, "each agent shows its model and an effort of its own, unset when the manifest has none");
+  check((await page.locator("nav a").count()) === 1, "with no tournament.json there is no leaderboard link");
 
   await page.goto(`${base}match/faux-live`);
   await page.locator("body[data-polling=stopped]").waitFor();
   const shown = await counts();
 
   check(shown.steps === expected.steps && shown.calls === expected.calls, `the finished match shows all ${expected.steps} steps and ${expected.calls} calls, and stops polling`);
+  check((await page.locator(".step .reasoning .cot.thinking").count()) === expected.reasoned, `each of the ${expected.reasoned} agent moves shows its thinking under it`);
+  check((await page.locator(".step .reasoning .cot-label").first().textContent()) === "thinking", "a faux agent's reasoning is labelled thinking");
   await page.locator('.step[data-index="60"]').click();
   check((await page.locator(".position").textContent()) === `60 / ${expected.steps - 1}`, "clicking a step selects it");
   await page.screenshot({ path: `${outdir}/finished.png` });
@@ -132,6 +167,7 @@ try {
 
   check(after.steps > before.steps && after.calls > before.calls, `steps ${before.steps} -> ${after.steps}, calls ${before.calls} -> ${after.calls}`);
   check(after.steps === expected.steps && after.calls === expected.calls, "the live page followed to the last step and call");
+  check((await page.locator(".step .reasoning .cot.thinking").count()) === expected.reasoned, "every agent move of the live page got its reasoning as the calls arrived");
   check((await page.locator(".step.selected").getAttribute("data-index")) === String(expected.steps - 1), "the scrubber followed the new steps");
   check(await page.evaluate(() => [...document.querySelectorAll<HTMLElement>(".column-body")].every((body) => body.scrollHeight - body.scrollTop - body.clientHeight < 40)), "each agent column stayed pinned to its newest entry");
   await page.screenshot({ path: `${outdir}/live-after.png` });

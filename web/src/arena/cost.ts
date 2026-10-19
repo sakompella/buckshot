@@ -45,7 +45,7 @@ export const Total = Schema.Struct({
 
 export type Total = typeof Total.Type;
 
-const EMPTY: Total = { calls: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, dollars: 0, unpriced: 0 };
+export const EMPTY: Total = { calls: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, dollars: 0, unpriced: 0 };
 
 const plus = (total: Total, dollars: number | undefined, call: CallLine): Total => ({
   calls: total.calls + 1,
@@ -57,6 +57,8 @@ const plus = (total: Total, dollars: number | undefined, call: CallLine): Total 
   dollars: total.dollars + (dollars ?? 0),
   unpriced: total.unpriced + (dollars === undefined ? 1 : 0),
 });
+
+export const totalOf = (prices: PriceTable, calls: ReadonlyArray<CallLine>): Total => calls.reduce((total, call) => plus(total, costOf(prices, call), call), EMPTY);
 
 /** Totals per key, in the order each key first appears. */
 export const totalsBy = <K extends string>(prices: PriceTable, keyed: ReadonlyArray<readonly [K, CallLine]>): ReadonlyMap<K, Total> => {

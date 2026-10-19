@@ -40,32 +40,77 @@ export const RunSummary = Schema.Struct({
   delivery: Schema.String,
   /** In table order: each position's player and controller. */
   seating: Schema.Array(Schema.Struct({ player: Letter, controller: Schema.String })),
-  /** The model each agent played with, from its calls; none before its first call. */
-  agents: Schema.Array(Schema.Struct({ agent: AgentId, model: Schema.optional(Schema.String), api: Schema.optional(Schema.String) })),
+  /** The model each agent played with, and its effort (a pi thinking level) when the manifest has one; the model is from its calls until the manifest has an endpoint. */
+  agents: Schema.Array(Schema.Struct({ agent: AgentId, model: Schema.optional(Schema.String), api: Schema.optional(Schema.String), effort: Schema.optional(Schema.String) })),
   /** Winner first; only once the match is finished. */
   standings: Schema.optional(Schema.Array(Standing)),
 });
 
 export type RunSummary = typeof RunSummary.Type;
 
+/** A run as the list shows it: with what its calls cost, by prices.json. */
+export const PricedRun = Schema.Struct({ ...RunSummary.fields, cost: Total });
+
+export type PricedRun = typeof PricedRun.Type;
+
 export const Unreadable = Schema.Struct({ kind: Schema.Literal("unreadable"), id: Schema.String, reason: Schema.String });
 
 export type Unreadable = typeof Unreadable.Type;
 
-export const Run = Schema.Union([RunSummary, Unreadable]);
+export const Run = Schema.Union([PricedRun, Unreadable]);
 
 export type Run = typeof Run.Type;
 
-const Labelled = Schema.Struct({ label: Schema.String, total: Total });
+/** What the calls of one model cost; of one model at one effort when `effort` is there. */
+const ModelTotal = Schema.Struct({ model: Schema.String, effort: Schema.optional(Schema.String), total: Total });
 
 export const RunsResponse = Schema.Struct({
   /** Newest first. */
   runs: Schema.Array(Run),
-  /** Across the readable runs: by agent and model, and by api and model. */
-  totals: Schema.Struct({ agents: Schema.Array(Labelled), models: Schema.Array(Labelled) }),
+  /** Whether the runs are a tournament's, so there is a leaderboard to show. */
+  leaderboard: Schema.Boolean,
+  /** Across the readable runs, by model and effort, and by model alone; by model name, then weakest effort first. */
+  totals: Schema.Struct({ byEffort: Schema.Array(ModelTotal), byModel: Schema.Array(ModelTotal) }),
 });
 
 export type RunsResponse = typeof RunsResponse.Type;
+
+const Interval = Schema.Struct({ low: Schema.Number, high: Schema.Number });
+
+/** One entrant of a tournament, rated over its finished matches; cost covers every match it played or started. */
+export const LeaderboardRow = Schema.Struct({
+  entrant: Schema.String,
+  /** The model's id, or the bot's name. */
+  model: Schema.String,
+  /** A pi thinking level, from the tournament's config; a bot has none. */
+  effort: Schema.optional(Schema.String),
+  matches: Schema.Int,
+  wins: Schema.Number,
+  share: Schema.Number,
+  shareInterval: Schema.optional(Interval),
+  rating: Schema.Number,
+  ratingInterval: Schema.optional(Interval),
+  moves: Schema.Int,
+  interventions: Schema.Int,
+  cost: Total,
+});
+
+export type LeaderboardRow = typeof LeaderboardRow.Type;
+
+export const LeaderboardResponse = Schema.Struct({
+  name: Schema.String,
+  /** The seeds the intervals resample. */
+  seeds: Schema.Int,
+  matches: Schema.Struct({ scheduled: Schema.Int, finished: Schema.Int, scored: Schema.Int }),
+  /** The entrant rated 0; the mean of all entrants when none. */
+  anchor: Schema.optional(Schema.String),
+  /** Best rating first. */
+  rows: Schema.Array(LeaderboardRow),
+  /** What to keep in mind reading the numbers, as arena-stats prints them. */
+  notes: Schema.Array(Schema.String),
+});
+
+export type LeaderboardResponse = typeof LeaderboardResponse.Type;
 
 const PlayerAt = Schema.Struct({
   player: Letter,
