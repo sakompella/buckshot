@@ -13,11 +13,11 @@ import type { JsonlLine, RunStatus, RunSummary, Unreadable } from "./api.ts";
 
 const Versioned = Schema.Struct({ format: Schema.optional(Schema.Json) });
 
-const Endpoint = Schema.Struct({ model: Schema.String, api: Schema.String });
+const Endpoint = Schema.Struct({ model: Schema.String, api: Schema.String, effort: Schema.optional(Schema.NullOr(Schema.String)) });
 
 const decodeEntry = Schema.decodeUnknownOption(Schema.Union([Endpoint, Schema.Struct({ endpoint: Endpoint })]));
 
-/** An agent's model and api from its manifest entry: the endpoint itself, or under `endpoint`. */
+/** An agent's model, api and effort from its manifest entry: the endpoint itself, or under `endpoint`. */
 const endpointOf = (entry: Schema.Json | undefined): Option.Option<typeof Endpoint.Type> => Option.map(decodeEntry(entry), (decoded) => ("endpoint" in decoded ? decoded.endpoint : decoded));
 
 /** A run is live while one of its files changed this recently: a turn can wait minutes on a slow model and its retries. */
@@ -98,9 +98,9 @@ const summaryOf = (id: string, dir: string, manifest: RunManifest, eventLines: R
     if (controller !== "Agent") return [];
 
     // manifest.agents is the endpoint while running and {endpoint, ...} once finished, a bare string in faux runs; the first call fills in until it has one shape.
-    const described = Option.orElse(endpointOf(manifest.agents?.[player]), () => Option.map(Option.fromUndefinedOr(calls.find((call) => call.agent === player)), ({ model, api }) => ({ model, api })));
+    const described = Option.orElse(endpointOf(manifest.agents?.[player]), () => Option.map(Option.fromUndefinedOr(calls.find((call) => call.agent === player)), ({ model, api }) => ({ model, api, effort: undefined })));
 
-    return [Option.match(described, { onNone: () => ({ agent: player }), onSome: ({ model, api }) => ({ agent: player, model, api }) })];
+    return [Option.match(described, { onNone: () => ({ agent: player }), onSome: ({ model, api, effort }) => ({ agent: player, model, api, effort: effort ?? undefined }) })];
   });
 
   const summary: RunSummary = {
