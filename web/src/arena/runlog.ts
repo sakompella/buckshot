@@ -1,8 +1,8 @@
-import { appendFileSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, readFileSync, truncateSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import type { AssistantMessage } from "@earendil-works/pi-ai";
-import { Schema } from "effect";
+import { Option, Schema } from "effect";
 
 import { Letter } from "../players.ts";
 import { AgentId } from "./agent.ts";
@@ -10,7 +10,9 @@ import { AgentId } from "./agent.ts";
 // A match's run directory, in the agent-ts layout: calls.jsonl (one line per
 // model reply), events.jsonl (what the arena did) and manifest.json. Usage is
 // logged raw, as the provider reported it; prices are applied later, offline,
-// by scripts/arena-cost.ts.
+// by scripts/arena-cost.ts. Move and delivered lines are exports of the match
+// journal, numbered by `seq`, their index in it, so a resume can write the ones
+// a crash left out without writing any twice.
 
 export const Usage = Schema.Struct({
   input: Schema.Number,
@@ -53,7 +55,7 @@ export const Standing = Schema.Struct({ player: Letter, cash: Schema.Number, con
 
 export type Standing = typeof Standing.Type;
 
-/** A move the arena journaled: an agent's or a human's own, a forced "Grab an item", or the fallback after a turn with no move. */
+/** A move the arena journaled: an agent's or a human's own, a forced "Grab an item", or the fallback (an intervention) after a turn with no move. */
 export const MoveLine = Schema.Struct({
   t: Schema.String,
   kind: Schema.Literals(["move", "fallback"]),
@@ -62,6 +64,7 @@ export const MoveLine = Schema.Struct({
   move: Schema.Int,
   label: Schema.String,
   by: Schema.Literals(["agent", "human", "forced", "fallback"]),
+  seq: Schema.optional(Schema.Int),
 });
 
 export type MoveLine = typeof MoveLine.Type;
@@ -69,10 +72,11 @@ export type MoveLine = typeof MoveLine.Type;
 /** One line of events.jsonl, as logEvent writes it. */
 export const EventLine = Schema.Union([
   Schema.Struct({ t: Schema.String, kind: Schema.Literal("seating"), seating: Schema.Record(Schema.String, AgentId) }),
-  Schema.Struct({ t: Schema.String, kind: Schema.Literal("delivered"), ...Sitting, via: Schema.Literals(["input", "live", "end"]), turn: Schema.Int, from: Schema.Int, entries: Schema.Array(Schema.String) }),
+  Schema.Struct({ t: Schema.String, kind: Schema.Literal("delivered"), ...Sitting, via: Schema.Literals(["input", "live", "end"]), turn: Schema.Int, from: Schema.Int, entries: Schema.Array(Schema.String), seq: Schema.optional(Schema.Int) }),
   Schema.Struct({ t: Schema.String, kind: Schema.Literal("tool"), ...Sitting, name: Schema.String, call_id: Schema.String, ok: Schema.Boolean }),
   MoveLine,
   Schema.Struct({ t: Schema.String, kind: Schema.Literal("turn"), ...Sitting, turn: Schema.Int, wall_ms: Schema.Number, moved: Schema.Boolean }),
+  Schema.Struct({ t: Schema.String, kind: Schema.Literal("reminder"), ...Sitting, turn: Schema.Int, request: Schema.String }),
   Schema.Struct({ t: Schema.String, kind: Schema.Literal("fault"), ...Sitting, turn: Schema.Int, error: Schema.String }),
   Schema.Struct({ t: Schema.String, kind: Schema.Literal("compaction"), ...Sitting }),
   Schema.Struct({ t: Schema.String, kind: Schema.Literal("resumed"), moves: Schema.Int }),
@@ -82,7 +86,18 @@ export const EventLine = Schema.Union([
 export type EventLine = typeof EventLine.Type;
 
 /** The fields of an event line that totals and the audit read. */
-const ReadFields = Schema.Struct({ kind: Schema.String, agent: Schema.optional(AgentId), player: Schema.optional(Letter), wall_ms: Schema.optional(Schema.Number), entries: Schema.optional(Schema.Array(Schema.String)) });
+const ReadFields = Schema.Struct({
+  kind: Schema.String,
+  agent: Schema.optional(AgentId),
+  player: Schema.optional(Letter),
+  by: Schema.optional(Schema.String),
+  seq: Schema.optional(Schema.Int),
+  request: Schema.optional(Schema.String),
+  t: Schema.optional(Schema.String),
+  error: Schema.optional(Schema.String),
+  wall_ms: Schema.optional(Schema.Number),
+  entries: Schema.optional(Schema.Array(Schema.String)),
+});
 
 const decodeCall = Schema.decodeUnknownSync(Schema.fromJsonString(CallLine));
 
@@ -98,6 +113,41 @@ const readEvents = (dir: string) => linesOf(join(dir, "events.jsonl")).map((line
 export const entriesSentTo = (dir: string, player: Letter): ReadonlyArray<string> => readEvents(dir).flatMap((event) => (event.kind === "delivered" && event.player === player ? (event.entries ?? []) : []));
 
 const append = (path: string, line: string) => appendFileSync(path, `${line}\n`);
+
+/** The agent each provider fault in the run stopped the match on, one per fault line. */
+export const faultsIn = (dir: string): ReadonlyArray<AgentId> => readEvents(dir).flatMap((event) => (event.kind === "fault" && event.agent !== undefined ? [event.agent] : []));
+
+/** The fault a run of the match ended on: its last event line, when that is a fault. A resume writes "resumed" first, so an older fault is never the last line of a run that got further. */
+export const endingFault = (dir: string): Option.Option<{ readonly t: string; readonly agent: AgentId; readonly error: string }> => {
+  const last = readEvents(dir).at(-1);
+
+  return last?.kind === "fault" && last.t !== undefined && last.agent !== undefined && last.error !== undefined ? Option.some({ t: last.t, agent: last.agent, error: last.error }) : Option.none();
+};
+
+/** The faults logged since the match's last move: one per run that stopped before the match got further. */
+export const faultsSinceLastMove = (dir: string): ReadonlyArray<{ readonly agent: AgentId; readonly error: string }> => {
+  const events = readEvents(dir);
+  const lastMove = events.findLastIndex((event) => event.kind === "move");
+
+  return events.slice(lastMove + 1).flatMap((event) => (event.kind === "fault" && event.agent !== undefined && event.error !== undefined ? [{ agent: event.agent, error: event.error }] : []));
+};
+
+/** Cuts a line a crash left half written, so the file is whole lines again. */
+export const dropPartialLine = (path: string): void => {
+  if (!existsSync(path)) return;
+
+  const text = readFileSync(path);
+
+  if (text.length > 0 && text[text.length - 1] !== 0x0a) truncateSync(path, text.lastIndexOf(0x0a) + 1);
+};
+
+/** The journal records events.jsonl already has: move and fallback lines by their seq in the journal's moves, delivered lines by theirs in its deliveries. */
+export const exportedSeqs = (dir: string) => {
+  const events = readEvents(dir);
+  const seqsOf = (kinds: ReadonlyArray<string>) => new Set(events.flatMap((event) => (kinds.includes(event.kind) && event.seq !== undefined ? [event.seq] : [])));
+
+  return { moves: seqsOf(["move", "fallback"]), deliveries: seqsOf(["delivered"]) };
+};
 
 /** Where an agent sits in this match: its position in table order, from 1. */
 export interface Sitting {
@@ -155,6 +205,9 @@ export const agentTotals = (dir: string, agent: AgentId) => {
     models: [...new Set(calls.map((call) => `${call.provider}/${call.model}`))],
     model_calls: calls.length,
     tool_calls: events.filter((event) => event.kind === "tool").length,
+    moves: events.filter((event) => event.kind === "move" && event.by === "agent").length,
+    reminders: new Set(events.flatMap((event) => (event.kind === "reminder" ? [event.request] : []))).size,
+    interventions: events.filter((event) => event.kind === "fallback").length,
     usage: addTokens(calls),
     latency_ms: { total: latencies.reduce((total, latency) => total + latency, 0), max: Math.max(0, ...latencies) },
     wall_ms: events.reduce((total, event) => total + (event.kind === "turn" ? (event.wall_ms ?? 0) : 0), 0),

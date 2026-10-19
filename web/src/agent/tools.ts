@@ -11,7 +11,7 @@ import { agentGame, agentMove, type AgentSource, type SeatMove } from "./view.ts
 // runs it with runTool over its own MatchSession.
 
 export const RULES =
-  "Buckshot: a shotgun is loaded with a hidden mix of live and blank shells, and each load is announced. On your turn you shoot a player or yourself, or use an item; a live shell does damage and a blank fired at yourself keeps your turn. The last player alive wins the round and its prize, and the most cash after the last round wins. A match has three rounds.";
+  "Buckshot: a shotgun is loaded with a hidden mix of live and blank shells, and each load is announced. On your turn you shoot a player or yourself, or use an item; a live shell does damage and a blank fired at yourself keeps your turn. All players return alive at each round start. A round ends only when one player remains alive. That player wins the round and its prize, and the most cash after the last round wins. A match has three rounds.";
 
 const PlayerArgument = Letter.annotate({ description: 'The Agent player this call is for: the letter in the player names, "A" for Player A, then "B" and so on up to the last player at the table (at most "D").' });
 
@@ -21,7 +21,7 @@ const Count = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 
 const PlayMoveArguments = Schema.Struct({
   player: PlayerArgument,
-  move: Count.annotate({ description: "The position of the move in the view's moves list, from 0." }),
+  move: Count.annotate({ description: "The number of the move, from the view's moves." }),
   turn: Count.annotate({ description: "The turn of the view the move was chosen from. Any other turn is refused." }),
 });
 
@@ -71,7 +71,7 @@ const inputSchemaOf = (schema: Schema.Top) => Schema.toJsonSchemaDocument(schema
 export const tools = [
   {
     name: "get_game",
-    description: `${RULES} Returns your view as JSON, without any field that has nothing to show. Reading it changes nothing: until a player moves, every call returns the same view. When it is not your turn the view is just {"status":"waiting"}: call get_game again in a moment. On your turn it is what your screen shows: status "your turn"; turn, to pass to play_move; players with health (not shown while jammed), item names, and, while players grab from the briefcase, holding, the item a player drew and has not placed yet; gun, with sawed when it is; events, what happened since your previous turn ended (your last move first, then the others' moves; from the match start on your first turn), with what only you learned from the magnifying glass or the phone in its place (a load's live and blank counts, round wins and prizes, and round starts are events; turn order is clockwise at each round's start and changes only when an event says so); and moves, your legal moves, played by their position in the list, from 0. Each move is a whole action: "Shoot Player B" picks up the shotgun and fires, "Grab an item" draws one and puts it in a free slot. Events are not shown again on a later turn, so remember what you need. When the match is over the view is "over" with the events since your last turn ended and the final standings, which show each player's cash. Several players can be Agents; each sees only its own secrets.`,
+    description: `${RULES} Returns your view as JSON, without any field that has nothing to show. Reading it changes nothing: until a player moves, every call returns the same view. When it is not your turn the view is just {"status":"waiting"}: call get_game again in a moment. On your turn it is what your screen shows: status "your turn"; turn, to pass to play_move; players with health (not shown while jammed), item names, and, while players grab from the briefcase, holding, the item a player drew and has not placed yet; gun, with sawed when it is; events, what happened since your previous turn ended (your last move first, then the others' moves; from the match start on your first turn), with what only you learned from the magnifying glass or the phone in its place (a load's live and blank counts, round wins and prizes, and round starts are events; turn order is clockwise at each round's start and changes only when an event says so); and moves, your legal moves, each with its number (move) and its words (label). Each move is a whole action: "Shoot Player B" picks up the shotgun and fires, "Grab an item" draws one and puts it in a free slot. Events are not shown again on a later turn, so remember what you need. When the match is over the view is "over" with the events since your last turn ended and the final standings, which show each player's cash. Several players can be Agents; each sees only its own secrets.`,
     inputSchema: inputSchemaOf(GetGameArguments),
     isReadOnly: true,
     decodeCall: decoder("get_game", GetGameArguments, AgentCall.cases.GetGame.make),
@@ -79,7 +79,7 @@ export const tools = [
   {
     name: "play_move",
     description:
-      'Play one of your legal moves, by its position in the view\'s moves list, from 0, with the turn from that view. Refused, playing nothing, if it is not your turn or the turn is not the current one: every move by any player and every new match starts a new turn, so a repeated move or one from an earlier view or match is refused. After a refusal call get_game for the current moves and turn. Returns your view as get_game does. The other players move on their own, so call get_game until status is "your turn".',
+      'Play one of your legal moves, by its number from the view\'s moves, with the turn from that view. Refused, playing nothing, if it is not your turn or the turn is not the current one: every move by any player and every new match starts a new turn, so a repeated move or one from an earlier view or match is refused. After a refusal call get_game for the current moves and turn. Returns your view as get_game does. The other players move on their own, so call get_game until status is "your turn".',
     inputSchema: inputSchemaOf(PlayMoveArguments),
     isReadOnly: false,
     decodeCall: decoder("play_move", PlayMoveArguments, AgentCall.cases.PlayMove.make),

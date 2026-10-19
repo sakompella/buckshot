@@ -14,7 +14,7 @@ const View = Schema.Struct({
   status: Schema.Literals(["your turn", "waiting", "over"]),
   turn: Schema.optionalKey(Schema.Number),
   events: Schema.optionalKey(Schema.Array(Schema.String)),
-  moves: Schema.optionalKey(Schema.Array(Schema.String)),
+  moves: Schema.optionalKey(Schema.Array(Schema.Struct({ move: Schema.Int, label: Schema.String }))),
 });
 
 const parseView = Schema.decodeUnknownSync(Schema.fromJsonString(View));
@@ -117,7 +117,7 @@ for (; calls < CALL_LIMIT; calls++) {
 
   if (moves === 0) console.log("out-of-range move:", await callTool("play_move", { player: mover.player, move: legal.length, turn }));
 
-  if (sample === "" && legal.some((label) => label.startsWith("Use"))) sample = mover.text;
+  if (sample === "" && legal.some(({ label }) => label.startsWith("Use"))) sample = mover.text;
 
   longestEvents = Math.max(longestEvents, events?.length ?? 0);
   sharedTurns += ready.length > 1 ? 1 : 0;
