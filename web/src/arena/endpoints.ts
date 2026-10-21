@@ -13,7 +13,10 @@ import type { AgentId } from "./agent.ts";
 // Where each agent's model lives, read once from the environment (.env). Agent
 // A is configured by PLAYER_A_ANT_URL and _ANT_KEY for the Anthropic Messages
 // API, or PLAYER_A_OAI_URL and _OAI_KEY for the OpenAI Responses API, plus
-// PLAYER_A_MODEL and an optional PLAYER_A_EFFORT; B to D likewise. A model id
+// PLAYER_A_MODEL and an optional PLAYER_A_EFFORT; B to D likewise. An optional
+// PLAYER_A_CPA_AUTH_ID pins every request of the agent to one CLIProxyAPI
+// account, by sending its id in X-CPA-Auth-ID; without it no header is sent and
+// the proxy picks the account. A model id
 // pi-ai does not list, such as a proxy's alias, names the catalog model it
 // stands for in PLAYER_A_CATALOG_MODEL: a model of the endpoint's API, or a
 // model of another pi-ai provider after its name and a slash, such as
@@ -30,6 +33,8 @@ const EndpointFields = {
   /** The pi-ai catalog model whose context window, thinking levels and prices `model` shares, when pi-ai does not list `model` itself. */
   catalogModel: Schema.optional(Schema.NonEmptyString),
   effort: Schema.optional(Schema.Literals(THINKING_LEVELS)),
+  /** The CLIProxyAPI account every request is pinned to. An id, not a secret. */
+  cpaAuthId: Schema.optional(Schema.NonEmptyString),
 };
 
 export const Endpoint = Schema.TaggedUnion({
@@ -97,6 +102,7 @@ export const agentEndpoint = (agent: AgentId) =>
       model: Config.option(Config.NonEmptyString(name("MODEL"))),
       catalogModel: Config.option(Config.NonEmptyString(name("CATALOG_MODEL"))),
       effort: Config.option(Config.Literals(THINKING_LEVELS, name("EFFORT"))),
+      cpaAuthId: Config.option(Config.NonEmptyString(name("CPA_AUTH_ID"))),
     }).pipe(
       Effect.mapError((error) => new EndpointConfigError({ message: error.message })),
     );
@@ -105,7 +111,7 @@ export const agentEndpoint = (agent: AgentId) =>
 
     if (Option.isNone(settings.model)) return yield* new EndpointConfigError({ message: `${name("MODEL")} must be set` });
 
-    const fields = { model: settings.model.value, catalogModel: Option.getOrUndefined(settings.catalogModel), effort: Option.getOrUndefined(settings.effort) };
+    const fields = { model: settings.model.value, catalogModel: Option.getOrUndefined(settings.catalogModel), effort: Option.getOrUndefined(settings.effort), cpaAuthId: Option.getOrUndefined(settings.cpaAuthId) };
 
     const notListed = (endpoint: Endpoint): string =>
       Option.match(settings.catalogModel, {
@@ -125,8 +131,19 @@ export const agentEndpoint = (agent: AgentId) =>
 /** The base URL as the SDKs want it, without a trailing slash. */
 const baseUrlOf = (url: URL): string => url.href.replace(/\/$/, "");
 
-const apiKeyAuth = (key: Redacted.Redacted<string>, source: string) => ({
-  apiKey: { name: source, resolve: async () => ({ auth: { apiKey: Redacted.value(key) }, source }) },
+/** The header CLIProxyAPI reads to serve a request from one account. */
+export const CPA_AUTH_ID_HEADER = "X-CPA-Auth-ID";
+
+/** The key, and the account pin when the endpoint has one, as pi-ai resolves them for every request. createProvider's own `headers` option is never sent. */
+const requestAuth = (endpoint: Endpoint, source: string) => ({
+  apiKey: {
+    name: source,
+    resolve: async () => {
+      const auth = { apiKey: Redacted.value(endpoint.key) };
+
+      return { auth: endpoint.cpaAuthId === undefined ? auth : { ...auth, headers: { [CPA_AUTH_ID_HEADER]: endpoint.cpaAuthId } }, source };
+    },
+  },
 });
 
 /** The provider id an agent's calls are logged under: the API and the agent, so two agents can share a model. */
@@ -191,7 +208,7 @@ export const providerOf = (providerId: string, endpoint: Endpoint): Provider => 
   const baseUrl = baseUrlOf(endpoint.url);
   const catalogModel = listedModelOf(endpoint);
   const model = { ...catalogModel, id: endpoint.model, provider: providerId, baseUrl };
-  const options = { id: providerId, baseUrl, auth: apiKeyAuth(endpoint.key, providerId) };
+  const options = { id: providerId, baseUrl, auth: requestAuth(endpoint, providerId) };
 
   return Endpoint.match(endpoint, {
     // SAFETY: a catalog model from another provider can list another API, such
@@ -219,6 +236,8 @@ export const AgentProvenance = Schema.Struct({
   model: Schema.String,
   catalog_model: Schema.NullOr(Schema.String),
   effort: Schema.NullOr(Schema.String),
+  /** The CLIProxyAPI account the agent is pinned to; absent when it is not, as before the pin existed. */
+  cpa_auth_id: Schema.optionalKey(Schema.String),
   /**
    * How the model is asked to think at that effort: not at all, only between tool calls (Claude Sonnet 5.5 at off),
    * Anthropic adaptive thinking at an effort, an Anthropic thinking budget, or an OpenAI reasoning effort. `summary` is
@@ -270,5 +289,7 @@ const thinkingOf = (endpoint: Endpoint, model: Model<Api>): AgentProvenance["thi
 
 /** The agent's provenance: the endpoint as the manifest shows it, and the thinking settings its effort resolves to. */
 export const provenanceOf = (providerId: string, endpoint: Endpoint): AgentProvenance => {
-  return { api: endpoint._tag, provider: providerId, url: baseUrlOf(endpoint.url), model: endpoint.model, catalog_model: endpoint.catalogModel ?? null, effort: endpoint.effort ?? null, thinking: thinkingOf(endpoint, listedModelOf(endpoint)) };
+  const provenance = { api: endpoint._tag, provider: providerId, url: baseUrlOf(endpoint.url), model: endpoint.model, catalog_model: endpoint.catalogModel ?? null, effort: endpoint.effort ?? null, thinking: thinkingOf(endpoint, listedModelOf(endpoint)) };
+
+  return endpoint.cpaAuthId === undefined ? provenance : { ...provenance, cpa_auth_id: endpoint.cpaAuthId };
 };

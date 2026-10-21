@@ -5,7 +5,7 @@ import { basename, join, resolve } from "node:path";
 import { Option, Result } from "effect";
 
 import { DEFAULT_PRICES, loadPrices } from "../src/arena/cost.ts";
-import { checkPrices, childCommand, childEnv, parseConfig, resolveKeys, type ScheduledMatch, scheduleOf, type TournamentError, unfinished } from "../src/arena/tournament.ts";
+import { checkPrices, childCommand, childEnv, parseConfig, resolveKeys, type ScheduledMatch, type MatchAccounts, scheduleOf, type TournamentError, unfinished } from "../src/arena/tournament.ts";
 import { codeSha } from "../src/arena/match.ts";
 import { cooldownOf, costOf, faultsOf, finishedNames, openTournament, runPending, type Settled, startedUnder, winnersOf } from "../src/arena/tournament-dir.ts";
 
@@ -17,7 +17,8 @@ import { cooldownOf, costOf, faultsOf, finishedNames, openTournament, runPending
 // in turn, so their new matches play in that order. Keys come from the
 // environment, and Bun loads web/.env for this script; each match gets only its
 // own PLAYER_* variables. A match stopped by a model's usage or rate limit (a
-// 429) waits for the reset, with every match of that model, and does not count
+// 429) waits for the reset, with matches on that model/account pair when pinned,
+// or every match of that model otherwise, and does not count
 // as failed; other matches fill the slots. --cap <model>=N, given once per
 // model, plays at most N matches of that model at once; --last <model> starts
 // its matches only when no other match can; --forget-cooldown <model> ignores
@@ -147,7 +148,7 @@ const webOf = (match: ScheduledMatch): string | undefined =>
   Option.match(startedUnder(dir, match), { onNone: () => WEB, onSome: (code) => (code === CODE ? WEB : checkouts.get(code)) });
 
 /** One match as a child process, which gives its exit code. Its output is appended to the match's arena.log. */
-const runOne = (match: ScheduledMatch): Promise<number> =>
+const runOne = (match: ScheduledMatch, accounts: MatchAccounts): Promise<number> =>
   new Promise((done) => {
     const matchDir = join(dir, match.name);
 
@@ -155,7 +156,7 @@ const runOne = (match: ScheduledMatch): Promise<number> =>
 
     const log = openSync(join(matchDir, "arena.log"), "a");
     const [command = "nice", ...rest] = childCommand(matchDir, file.config, match);
-    const child = spawn(command, rest, { cwd: webOf(match) ?? WEB, env: childEnv(process.env, file.config, match, keys), stdio: ["ignore", log, log] });
+    const child = spawn(command, rest, { cwd: webOf(match) ?? WEB, env: childEnv(process.env, file.config, match, keys, accounts), stdio: ["ignore", log, log] });
 
     children.add(child);
     child.on("close", (code) => {
@@ -182,7 +183,7 @@ const report = (settled: Settled) => {
 
   console.log(`[${done}/${file.schedule.length}] ${match.name} ${status}${winners}, ${money(costOf(dir, prices, [match]))}, total ${money(costOf(dir, prices, file.schedule))}`);
 
-  if (settled.status === "cooling") console.log(`  ${settled.cooldown.model} is at its usage limit until ${clock(settled.cooldown.until)}; its matches wait, and this one resumes then.`);
+  if (settled.status === "cooling") console.log(`  ${settled.cooldown.model}${settled.cooldown.account === undefined ? "" : ` on ${settled.cooldown.account}`} is at its usage limit until ${clock(settled.cooldown.until)}; its matches wait, and this one resumes then.`);
 
   if (status === "failed") console.log(`${tail(match, 8)}\n  It is retried after a pause, up to three runs; rerun the same command to resume it after that.`);
 };
@@ -203,7 +204,7 @@ const noteProgress = (event: string) => {
   const finished = finishedNames(dir, file.schedule);
   const faults = file.schedule.reduce((total, match) => total + faultsOf(dir, match).length, 0);
   const byPhase = phases.map(({ label, names }) => `${label} ${names.filter((name) => finished.has(name)).length}/${names.length}`).join(", ");
-  const cooling = new Map(file.schedule.flatMap((match) => Option.toArray(cooldownOf(dir, file.config, match, Date.now())).map(({ model, until }) => [model, until] as const)));
+  const cooling = new Map(file.schedule.flatMap((match) => Option.toArray(cooldownOf(dir, file.config, match, Date.now())).map(({ model, account, until }) => [account === undefined ? model : `${model} on ${account}`, until] as const)));
   const waiting = [...cooling].map(([model, until]) => `${model} until ${clock(until)}`).join(", ");
 
   appendFileSync(

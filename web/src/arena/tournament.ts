@@ -14,7 +14,7 @@ export const BOTS = ["DoN", "Story"] as const;
 
 const EntrantName = Schema.String.check(Schema.isPattern(/^[a-z0-9][a-z0-9.-]*$/));
 
-const TournamentEndpoint = Schema.Struct({ api: Schema.Literals(["anthropic", "openai-responses"]), url: Schema.NonEmptyString, keyEnv: Schema.NonEmptyString });
+const TournamentEndpoint = Schema.Struct({ api: Schema.Literals(["anthropic", "openai-responses"]), url: Schema.NonEmptyString, keyEnv: Schema.NonEmptyString, accounts: Schema.optional(Schema.NonEmptyArray(Schema.NonEmptyString)) });
 
 const ModelEntrant = Schema.Struct({ endpoint: Schema.NonEmptyString, model: Schema.NonEmptyString, catalogModel: Schema.optional(Schema.NonEmptyString), effort: Schema.Literals(THINKING_LEVELS) });
 
@@ -246,6 +246,35 @@ export const botEntrant = (config: TournamentConfig, name: string): (typeof BOTS
 /** The endpoint a model entrant plays through. */
 const endpointOf = (config: TournamentConfig, name: string) => config.endpoints[modelEntrant(config, name)?.endpoint ?? ""];
 
+/** Per-agent account ids fixed for one match, absent for endpoints without a pool. */
+export type MatchAccounts = Readonly<Record<string, string>>;
+
+/** Assign each configured agent an available account with the fewest running matches. Config order breaks ties. */
+export const assignAccounts = (
+  config: TournamentConfig,
+  match: ScheduledMatch,
+  isCooling: (model: string, account: string) => boolean,
+  running: (account: string) => number,
+): MatchAccounts | undefined => {
+  const assigned: Record<string, string> = {};
+
+  for (const [index, seat] of match.seats.entries()) {
+    const name = match.entrants[index] ?? "";
+    const entrant = modelEntrant(config, name);
+    const accounts = endpointOf(config, name)?.accounts;
+
+    if (entrant === undefined || accounts === undefined) continue;
+
+    const account = accounts.filter((id) => !isCooling(entrant.model, id)).toSorted((a, b) => running(a) - running(b))[0];
+
+    if (account === undefined) return undefined;
+
+    assigned[seat] = account;
+  }
+
+  return assigned;
+};
+
 /** Each key variable the model entrants of the schedule use, read from the environment. A missing one is named, never shown. */
 export const resolveKeys = (config: TournamentConfig, schedule: ReadonlyArray<ScheduledMatch>, env: Env): Result.Result<ReadonlyMap<string, Redacted.Redacted<string>>, TournamentError> => {
   const variables = [...new Set(schedule.flatMap((match) => match.entrants.flatMap((name) => endpointOf(config, name)?.keyEnv ?? [])))];
@@ -268,7 +297,7 @@ export const childCommand = (matchDir: string, config: TournamentConfig, match: 
 ];
 
 /** The runner's environment, without any PLAYER_* variable, plus the PLAYER_<letter>_* variables of this match's model entrants. */
-export const childEnv = (base: Env, config: TournamentConfig, match: ScheduledMatch, keys: ReadonlyMap<string, Redacted.Redacted<string>>): Env => {
+export const childEnv = (base: Env, config: TournamentConfig, match: ScheduledMatch, keys: ReadonlyMap<string, Redacted.Redacted<string>>, accounts: MatchAccounts = {}): Env => {
   const inherited = Object.entries(base).filter(([name]) => !name.startsWith("PLAYER_"));
 
   const seats = match.seats.flatMap((seat, index) => {
@@ -287,6 +316,7 @@ export const childEnv = (base: Env, config: TournamentConfig, match: ScheduledMa
       [`${prefix}MODEL`, entrant.model],
       ...(entrant.catalogModel === undefined ? [] : [[`${prefix}CATALOG_MODEL`, entrant.catalogModel]]),
       [`${prefix}EFFORT`, entrant.effort],
+      ...(accounts[seat] === undefined ? [] : [[`${prefix}CPA_AUTH_ID`, accounts[seat]]]),
     ] as const;
   });
 

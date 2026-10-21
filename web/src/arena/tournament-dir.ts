@@ -10,6 +10,8 @@ import { type PriceTable, totalsBy } from "./cost.ts";
 import { type CallLine, endingFault, faultsIn, faultsSinceLastMove, readCalls } from "./runlog.ts";
 import {
   ScheduledMatch,
+  assignAccounts,
+  type MatchAccounts,
   type Tournament,
   TournamentConfig,
   TournamentError,
@@ -122,6 +124,19 @@ export const startedUnder = (dir: string, match: ScheduledMatch): Option.Option<
   return existsSync(path) ? Option.map(Result.getSuccess(Schema.decodeUnknownResult(Schema.fromJsonString(CodeOnly))(readFileSync(path, "utf8"))), ({ provenance }) => provenance.code_sha) : Option.none();
 };
 
+const AccountProvenance = Schema.Struct({ provenance: Schema.Struct({ agents: Schema.Record(Schema.String, Schema.Struct({ cpa_auth_id: Schema.optional(Schema.String) })) }) });
+
+/** A started match keeps exactly its recorded pins, including no pins on older matches. */
+export const recordedAccounts = (dir: string, match: ScheduledMatch): MatchAccounts | undefined => {
+  const path = join(dir, match.name, "manifest.json");
+
+  if (!existsSync(path)) return undefined;
+
+  const manifest = Schema.decodeUnknownSync(Schema.fromJsonString(AccountProvenance))(readFileSync(path, "utf8"));
+
+  return Object.fromEntries(Object.entries(manifest.provenance.agents).flatMap(([agent, provenance]) => provenance.cpa_auth_id === undefined ? [] : [[agent, provenance.cpa_auth_id]]));
+};
+
 const isFinished = (matchDir: string): boolean => {
   const path = join(matchDir, "manifest.json");
 
@@ -211,6 +226,7 @@ export const costOf = (dir: string, prices: PriceTable, matches: ReadonlyArray<S
 /** A model its provider refuses until a time, after a usage or rate limit. */
 export interface Cooldown {
   readonly model: string;
+  readonly account?: string;
   /** Milliseconds since the epoch. */
   readonly until: number;
 }
@@ -248,10 +264,17 @@ const limitSecondsOf = (error: string, refusals: number): Option.Option<number> 
 export const cooldownOf = (dir: string, config: TournamentConfig, match: ScheduledMatch, now: number): Option.Option<Cooldown> =>
   Option.flatMap(endingFault(join(dir, match.name)), (fault) => {
     const entrant = modelEntrant(config, match.entrants[match.seats.indexOf(fault.agent)] ?? "");
+    const account = recordedAccounts(dir, match)?.[fault.agent];
     const refusals = faultsSinceLastMove(join(dir, match.name)).filter((earlier) => earlier.agent === fault.agent && isRateLimit(earlier.error)).length;
 
     return Option.filter(
-      Option.flatMap(limitSecondsOf(fault.error, refusals), (seconds) => (entrant === undefined ? Option.none() : Option.some({ model: entrant.model, until: Date.parse(fault.t) + 1000 * seconds }))),
+      Option.flatMap(limitSecondsOf(fault.error, refusals), (seconds) => {
+        if (entrant === undefined) return Option.none();
+
+        const cooldown = { model: entrant.model, until: Date.parse(fault.t) + 1000 * seconds };
+
+        return Option.some(account === undefined ? cooldown : { ...cooldown, account });
+      }),
       ({ until }) => until > now,
     );
   });
@@ -292,8 +315,8 @@ export interface Scheduling {
 /**
  * Runs the matches that are not finished, in schedule order, at most `parallel` at a time. `runOne` plays one and gives
  * its exit code. A match is finished when it exited 0 and its manifest says so. One stopped by a model's usage limit
- * goes back to the front of the queue, and no match with that model starts until the reset; the cooldowns of earlier
- * runs are read from the matches' logs at the start. Any other failure is retried as `retry` says, and then left for the
+ * goes back to the front of the queue. Its model/account pair waits until reset when pinned, otherwise its model
+ * waits. Earlier cooldowns are read from the matches' logs at the start. Any other failure is retried as `retry` says, and then left for the
  * next run.
  */
 export const runPending = async (
@@ -301,7 +324,7 @@ export const runPending = async (
   config: TournamentConfig,
   schedule: ReadonlyArray<ScheduledMatch>,
   parallel: number,
-  runOne: (match: ScheduledMatch) => Promise<number>,
+  runOne: (match: ScheduledMatch, accounts: MatchAccounts) => Promise<number>,
   onSettled: (settled: Settled) => void,
   stop: AbortSignal,
   { retry = RETRY, caps = new Map(), last = new Set(), forget = new Set() }: Scheduling = {},
@@ -314,12 +337,37 @@ export const runPending = async (
   const playing = new Map<string, number>();
 
   const modelsOf = (match: ScheduledMatch) => new Set(match.entrants.flatMap((name) => modelEntrant(config, name)?.model ?? []));
-  const cool = ({ model, until }: Cooldown) => coolingUntil.set(model, Math.max(until, coolingUntil.get(model) ?? 0));
-  const isReady = (match: ScheduledMatch) => [...modelsOf(match)].every((model) => (coolingUntil.get(model) ?? 0) <= Date.now() && (playing.get(model) ?? 0) < (caps.get(model) ?? Infinity));
+  const cooldownKey = (model: string, account?: string) => JSON.stringify([model, account ?? null]);
+
+  const cool = ({ model, account, until }: Cooldown) => {
+    const key = cooldownKey(model, account);
+
+    coolingUntil.set(key, Math.max(until, coolingUntil.get(key) ?? 0));
+  };
+
+  const isCooling = (model: string, account?: string) => (coolingUntil.get(cooldownKey(model, account)) ?? 0) > Date.now();
+  const assigned = new Map<string, MatchAccounts>();
+  const accountLoad = new Map<string, number>();
+  const accountsFor = (match: ScheduledMatch) => assigned.get(match.name) ?? assignAccounts(config, match, isCooling, (account) => accountLoad.get(account) ?? 0);
+
+  const isReady = (match: ScheduledMatch) => {
+    if (![...modelsOf(match)].every((model) => !isCooling(model) && (playing.get(model) ?? 0) < (caps.get(model) ?? Infinity))) return false;
+
+    const accounts = accountsFor(match);
+
+    return accounts !== undefined && match.seats.every((seat, index) => {
+      const entrant = modelEntrant(config, match.entrants[index] ?? "");
+
+      return entrant === undefined || !isCooling(entrant.model, accounts[seat]);
+    });
+  };
+
   const isLast = (match: ScheduledMatch) => [...modelsOf(match)].some((model) => last.has(model));
 
   const countPlaying = (match: ScheduledMatch, change: 1 | -1) => {
     for (const model of modelsOf(match)) playing.set(model, (playing.get(model) ?? 0) + change);
+
+    for (const account of new Set(Object.values(assigned.get(match.name) ?? {}))) accountLoad.set(account, (accountLoad.get(account) ?? 0) + change);
   };
 
   // A slot with nothing to start waits until a reset, a minute, or the end of a
@@ -328,7 +376,13 @@ export const runPending = async (
 
   const nextReset = () => Math.min(...[...coolingUntil.values()].filter((until) => until > Date.now()));
 
-  for (const match of queue) Option.match(Option.filter(cooldownOf(dir, config, match, Date.now()), ({ model }) => !forget.has(model)), { onNone: () => undefined, onSome: cool });
+  for (const match of queue) {
+    const accounts = recordedAccounts(dir, match);
+
+    if (accounts !== undefined) assigned.set(match.name, accounts);
+
+    Option.match(Option.filter(cooldownOf(dir, config, match, Date.now()), ({ model }) => !forget.has(model)), { onNone: () => undefined, onSome: cool });
+  }
 
   const slot = async (): Promise<void> => {
     while (queue.length > 0 && !stop.aborted) {
@@ -341,8 +395,13 @@ export const runPending = async (
         continue;
       }
 
+      const accounts = accountsFor(match);
+
+      if (accounts === undefined) throw new Error("a ready match has no available accounts");
+
+      assigned.set(match.name, accounts);
       countPlaying(match, 1);
-      const exitCode = await runOne(match);
+      const exitCode = await runOne(match, accounts);
       countPlaying(match, -1);
       matchEnded.abort();
       matchEnded = new AbortController();
