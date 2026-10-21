@@ -1,0 +1,33 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
+
+export const list = xs => xs.reduceRight((tail, head) => ({ $: 'Con', head, tail }), { $: 'Nil' });
+export const array = xs => { const out = []; for (; xs.$ === 'Con'; xs = xs.tail) out.push(xs.head); return out; };
+export const bool = value => Boolean(value);
+export function load() {
+  const dir = mkdtempSync(join(tmpdir(), 'backshot-'));
+  const file = join(dir, 'search.mjs');
+  const build = spawnSync(process.env.BEND ?? 'bend', [new URL('./search.bend', import.meta.url).pathname, '-o', file], { encoding: 'utf8' });
+  if (build.status !== 0) { rmSync(dir, { recursive: true, force: true }); throw Error(build.stdout + build.stderr); }
+  return import(file).then(({ default: lib }) => ({ lib, close: () => rmSync(dir, { recursive: true, force: true }) }));
+}
+const itemCodes = { a: 2, b: 3, f: 4, c: 5, e: 6, h: 7, s: 8, i: 9, m: 10 };
+export const items = text => list([...text.toLowerCase()].flatMap(c => c in itemCodes ? [BigInt(itemCodes[c])] : []));
+export function position(lib, input, fixed) {
+  const n = (key, fallback) => BigInt(input[key] ?? fallback);
+  const shell = { unknown: 0n, live: 1n, blank: 2n }[input.shell ?? 'unknown'];
+  if (shell === undefined) throw Error('shell must be unknown, live or blank');
+  for (const key of ['maxHealth', 'dealerHp', 'playerHp', 'live', 'blank', 'cuffs']) {
+    if (key in input && (!Number.isSafeInteger(input[key]) || input[key] < 0)) throw Error(`${key} must be a nonnegative safe integer`);
+  }
+  if (fixed && (n('live', 1) + n('blank', 1) > 8n || n('cuffs', 0) > 2n ||
+    shell === 1n && n('live', 1) === 0n || shell === 2n && n('blank', 1) === 0n)) throw Error('inconsistent shell counts or cuffs');
+  return lib['state.initial'](bool(fixed), bool(input.playerTurn ?? true), n('maxHealth', 3), n('dealerHp', 3), n('playerHp', 3), n('live', 1), n('blank', 1), shell, n('cuffs', 0), bool(input.sawed ?? false), items(input.dealerItems ?? ''), items(input.playerItems ?? ''));
+}
+export function plain(lib, result) {
+  if (result.$ === 'Fail') return { error: result.error };
+  const a = result.value;
+  return { move: a.move.$ === 'None' ? null : lib['model.move.name'](a.move.value), value: lib['rational.show'](a.value), path: array(a.path).map(lib['model.move.name']), nodes: Number(a.nodes) };
+}
