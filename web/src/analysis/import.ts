@@ -97,8 +97,8 @@ export const importTournaments = ({ database, sources, skipped = {} }: ImportOpt
         };
 
         // The same tournament imported from another directory: its earlier paths are no longer its source.
-        const underDir = (path: string) => path.startsWith(`${dir}/`);
-        const stale = db.query<{ path: string }, [string]>("SELECT path FROM source_files WHERE tournament_id = ?").all(tournamentId).filter(({ path }) => !underDir(path));
+        const sourcePaths = new Set([tournamentPath, ...file.schedule.flatMap(({ name }) => ["manifest.json", "events.jsonl", "calls.jsonl"].map((leaf) => join(dir, name, leaf)))]);
+        const stale = db.query<{ path: string }, [string]>("SELECT path FROM source_files WHERE tournament_id = ?").all(tournamentId).filter(({ path }) => !sourcePaths.has(path));
 
         for (const { path } of stale) {
           db.query("UPDATE source_records SET current = 0 WHERE path = ?").run(path);

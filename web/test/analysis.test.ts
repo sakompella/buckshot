@@ -264,3 +264,22 @@ test("a truncated but legal move prefix with an end marker and matching current 
     expect(rowsOf(database, "SELECT message FROM issues")).toEqual([{ message: "Replay did not reach a finished match" }]);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+test("importing a tournament from a directory that contains its earlier source retires the earlier source files and observations", async () => {
+  const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
+
+  try {
+    const { source } = await probeTournament(root, "medium");
+    const database = join(root, "analysis.sqlite");
+    importTournaments({ database, sources: [source] });
+    cpSync(join(source, "tournament.json"), join(root, "tournament.json"));
+    cpSync(join(source, "a_b_b0_p0"), join(root, "a_b_b0_p0"), { recursive: true });
+    importTournaments({ database, sources: [root] });
+    expect(rowsOf(database, "SELECT t.source_dir AS tournament, m.source_dir AS match FROM matches m JOIN tournaments t ON t.id = m.tournament_id")).toEqual([{ tournament: root, match: join(root, "a_b_b0_p0") }]);
+    expect(rowsOf(database, "SELECT path FROM source_files ORDER BY path")).toEqual(["a_b_b0_p0/calls.jsonl", "a_b_b0_p0/events.jsonl", "a_b_b0_p0/manifest.json", "tournament.json"].map((leaf) => ({ path: join(root, leaf) })));
+    expect(rowsOf(database, "SELECT COUNT(*) AS n FROM source_records WHERE current = 1 AND path LIKE '" + source + "/%'")).toEqual([{ n: 0 }]);
+    expect(rowsOf(database, "SELECT COUNT(*) AS n FROM source_records WHERE current = 0 AND path LIKE '" + source + "/%'")).not.toEqual([{ n: 0 }]);
+    expect(rowsOf(database, "SELECT COUNT(*) AS n FROM issues")).toEqual([{ n: 0 }]);
+    expect(rowsOf(database, "PRAGMA foreign_key_check")).toEqual([]);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
