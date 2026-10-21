@@ -529,6 +529,21 @@ export const playMatch = (match: ArenaMatch) =>
         playing.arenaPlayers().flatMap((player) => (playing.controllerOf(player) === "Agent" ? [[player, { position: playing.positionOf(player), endpoint: provenance.agents[player] ?? null, ...agentTotals(dir, player) }]] : [])),
       );
 
+    const writeRunningManifest = (state: MatchState, provenance: MatchProvenance) => {
+      writeManifest(dir, {
+        format: RUN_FORMAT,
+        status: "running",
+        seed: state.seed,
+        controllers: state.controllers,
+        letters: state.letters,
+        delivery: state.delivery,
+        seating: seatingIn(state),
+        agents: agentsIn(currentTable(), provenance),
+        instructions_sha: provenance.instructions_sha,
+        provenance,
+      });
+    };
+
     if (isFresh) {
       if (!match.controllers.some((controller) => controller === "Agent" || controller === "Human")) return yield* new ArenaFault({ message: "The arena plays Agent and Human seats; a match needs at least one." });
 
@@ -558,6 +573,8 @@ export const playMatch = (match: ArenaMatch) =>
         state.conversations[entrant.agent] = created.id;
       }
 
+      // Publish the pin before committing it, so a restart cannot choose a new account for an existing journal.
+      writeRunningManifest(state, provenance);
       yield* commit("start", (next) => void Object.assign(next, state));
       logEvent(dir, "seating", { seating: seatingIn(state) });
     } else {
@@ -577,18 +594,7 @@ export const playMatch = (match: ArenaMatch) =>
     const started = yield* journal();
     const provenance = Option.getOrThrow(Option.fromNullOr(started.provenance));
 
-    writeManifest(dir, {
-      format: RUN_FORMAT,
-      status: "running",
-      seed: started.seed,
-      controllers: started.controllers,
-      letters: started.letters,
-      delivery: started.delivery,
-      seating: seatingIn(started),
-      agents: agentsIn(currentTable(), provenance),
-      instructions_sha: provenance.instructions_sha,
-      provenance,
-    });
+    writeRunningManifest(started, provenance);
 
     store.resume();
 
