@@ -12,7 +12,7 @@ bun scripts/arena-import.ts --db /absolute/path/to/buckshot.sqlite \
   /absolute/path/to/tournament-1 /absolute/path/to/tournament-2 /absolute/path/to/tournament-3
 ```
 
-`--skips` is optional. It takes a JSON object mapping absolute tournament paths to arrays of exact scheduled match names. This is an explicit disposition, not a guess based on missing files. Keep this local file beside the database and record its evidence in the validation report. Tournament 1's documented 123 skipped matches include 41 started partial matches and 82 never-started matches. The partial matches retain their moves and costs.
+`--skips` is optional. It takes a JSON object of the form `{absoluteTournamentPath: {matchName: reason}}`: each absolute tournament path maps to its exact scheduled match names, and each match name maps to the reason it is not scored. The reason is stored in `matches.status_reason`, so every skip keeps its own. This is an explicit disposition, not a guess based on missing files. Keep this local file beside the database and record its evidence in the validation report. A skipped match that has logs, finished or not, is stored as `partial` and keeps its moves and costs, but it is never scored. Two committed lists feed the file: tournament 1's 123 skipped matches (41 started and partial, 82 never started) and tournament 3's 6 matches past its 40-match cap (5 unfinished, 1 finished).
 
 Run the same command after more matches finish. Unchanged matches are not replayed. Changed matches refresh in a transaction per tournament. Stable IDs derive from the tournament's creation date and name, the scheduled match name, and the observation's position. Copies of the same tournament should not be imported as separate tournaments. The database retains previous raw observations when files change. Analytical tables describe the latest imported snapshot, not every historical snapshot.
 
@@ -38,7 +38,7 @@ Live files are read once per match. A snapshot can straddle an append or manifes
 
 IDs are SHA-256 strings. Indexes cover model and effort, tournament/seed/pairing/block, code, entrant, match/turn/player and decision-call joins. A seed-block ID includes tournament, pairing, block and seed. Keep this relationship when resampling results. Do not treat seat swaps as independent seeds.
 
-`matches.status` is `completed`, `partial`, `unstarted` or `skipped`. An explicitly skipped match that already has logs stays `partial`, with `disposition = 'skipped'`. A failed call does not make a match a loss. Its status is `failed`; it and any later calls remain separate observations. Raw fault, reminder and resumed events remain in `source_records`. Retries internal to an SDK request that did not emit a call line are not invented.
+`matches.status` is `completed`, `partial`, `unstarted` or `skipped`. `completed` means finished and not skipped, so it is the scored set. An explicitly skipped match that already has logs stays `partial`, with `disposition = 'skipped'`, even if it finished. A skipped match with no logs is `skipped`. A failed call does not make a match a loss. Its status is `failed`; it and any later calls remain separate observations. Raw fault, reminder and resumed events remain in `source_records`. Retries internal to an SDK request that did not emit a call line are not invented.
 
 Missing values are SQL NULL. Zero usage remains zero. `reasoning_tokens` is NULL when the provider did not report it. A match with no calls has NULL cost and token totals. Check `unpriced_calls` before treating known cost as full cost. Costs use the existing `arena/cost.ts` and its tier rules. They are estimates at list prices, not subscription charges.
 
@@ -117,22 +117,29 @@ Legal alternatives and own-player views support future opportunity-conditioned s
 
 Rebuilt on 2026-10-21 into a new file, then swapped in. The import took about 10 minutes. `PRAGMA integrity_check` returned `ok`, and `issues` is empty.
 
-| Tournament | Scheduled | Completed (scored) | Partial | Skipped, never started | Unstarted | Replay validated | List-price cost, including partial work |
+| Tournament | Scheduled | Completed (scored) | Partial, skipped (unscored) | Skipped, never started | Unstarted | Replay validated | List-price cost, including partial work |
 |---|---|---|---|---|---|---|---|
 | tournament-1 (`cpa-tiers`) | 2,140 | 2,017 | 41 | 82 | 0 | 2,058 | $971.5335 |
 | tournament-2 (`opus-effort`) | 80 | 80 | 0 | 0 | 0 | 80 | $58.8854 |
-| tournament-3 (`astra-vs-opus-xhigh`) | 60 | 41 | 5 | 0 | 14 | 46 | $42.4880 |
-| Total | 2,280 | 2,138 | 46 | 82 | 14 | 2,184 | $1,072.91 |
+| tournament-3 (`astra-vs-opus-xhigh`) | 60 | 40 | 6 | 0 | 14 | 46 | $42.4880 |
+| Total | 2,280 | 2,137 | 47 | 82 | 14 | 2,184 | $1,072.91 |
 
 - Every started match (2,184) replayed and validated against the generated rules. The 96 matches with no logs have replay status `unavailable`. There are 210,678 decisions. Every call has a list price.
 - Tournaments 1 and 2 match the tournament reports and the first build exactly: 2,017 and 80 scored matches, $971.5335 and $58.8854.
-- Tournament 3 grew after the first build, which had 39 scored, 3 partial, $39.94. Its runner ended at 41 of 60 finished and $42.4880 at list prices, the same as the database. The 40-match cap only stopped new starts, so matches already in flight finished and later ones stayed partial. This is the only difference from the first build.
-- The `--skips` file held tournament 1's 123 documented skips. All 123 carry `disposition = 'skipped'` with the reason `explicit --skips file`: 41 are `partial` and keep their moves and costs, 82 are `skipped`. No other match has a disposition. Tournament 1 and 2 are `completed`. Tournament 3 stays `partial`.
+- Tournament 3 has 40 scored matches, Opus 22 and Astra 18, matching the 40-match result in `results.md`. Of its other 20 matches, 6 are past the 40-match cap and carry a skip disposition: 5 unfinished and 1 finished, all stored as `partial` and unscored. The other 14 never started. The finished 41st match came from an uncapped run between 9:20 and 9:23 PM Pacific time. Aditya ruled that matches past the cap are unscored, so it keeps its moves and costs but has no win share. The $42.4880 list-price cost includes all 46 started matches. The first build had 39 scored, 3 partial and $39.94.
+- The rebuild and these checks ran on the Mac, which holds the tournament directories: `PRAGMA integrity_check` returned `ok`, `issues` is empty and all 2,184 started matches replayed. Rebuilding on another machine needs its own copy of the tournament directories.
+- The `--skips` file held 129 skips in all: tournament 1's 123 and tournament 3's 6. All 129 carry `disposition = 'skipped'` and the reason from their committed list. Tournament 1's 41 started matches and tournament 3's 6 are `partial`, and tournament 1's 82 never-started matches are `skipped`. No other match has a disposition. Tournaments 1 and 2 are `completed`. Tournament 3 stays `partial`.
 
-The skips file holds absolute local paths, so it is not committed. `web/src/analysis/tournament-1-skipped.json` is the committed list of names. Build the file from it:
+The skips file holds absolute local paths, so it is not committed. The two committed lists hold only match names and reasons: `web/src/analysis/tournament-1-skipped.json` (123 matches) and `web/src/analysis/tournament-3-over-cap.json` (6 matches). Build the file from both, giving each tournament its absolute path:
 
 ```sh
-bun -e 'const s = await Bun.file("web/src/analysis/tournament-1-skipped.json").json(); console.log(JSON.stringify({ "/absolute/path/to/tournament-1": s.matches }))' > skips.json
+bun -e '
+const entry = async (f) => { const l = await Bun.file(f).json(); return Object.fromEntries(l.matches.map((m) => [m, l.reason])); };
+console.log(JSON.stringify({
+  "/absolute/path/to/tournament-1": await entry("web/src/analysis/tournament-1-skipped.json"),
+  "/absolute/path/to/tournament-3": await entry("web/src/analysis/tournament-3-over-cap.json"),
+}));
+' > skips.json
 ```
 
 Tournament 3's account ids contain emails, so provenance stays in the database and out of committed files.
