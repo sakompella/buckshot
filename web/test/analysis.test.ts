@@ -21,7 +21,7 @@ test("refreshes resumed logs without duplicating calls, retains bad observations
     const callsPath = join(match, "calls.jsonl");
     const events = readFileSync(eventsPath, "utf8");
     const calls = readFileSync(callsPath, "utf8");
-    const refresh = () => importTournaments({ database, sources: [source], skipped: { [source]: ["b_a_b0_p1"] } });
+    const refresh = () => importTournaments({ database, sources: [source], skipped: { [source]: { b_a_b0_p1: "never played" } } });
 
     const snapshot = () => {
       const db = openAnalysis(database);
@@ -87,5 +87,30 @@ test("refreshes resumed logs without duplicating calls, retains bad observations
     rmSync(database);
     refresh();
     expect(snapshot()).toEqual(complete);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("a finished match with an explicit skip keeps its moves and costs but is not scored, and each skip keeps its own reason", async () => {
+  const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
+  const source = join(root, "tournament");
+  const database = join(root, "analysis.sqlite");
+  mkdirSync(source);
+
+  try {
+    await playFauxRun(join(source, "a_b_b0_p0"), ["Agent", "Agent"], "on-turn");
+    const schedule = [{ name: "a_b_b0_p0", pairing: 0, block: 0, seed: 42, seats: ["A", "B"], entrants: ["a", "b"] }, { name: "b_a_b0_p1", pairing: 0, block: 0, seed: 42, seats: ["B", "A"], entrants: ["b", "a"] }];
+    writeFileSync(join(source, "tournament.json"), JSON.stringify({ format: 1, created_at: "2026-01-01T00:00:00Z", git_commit: "test", config: { name: "test", seed: 42, delivery: "on-turn", endpoints: { fake: { api: "anthropic", url: "http://invalid", keyEnv: "UNUSED" } }, entrants: { a: { endpoint: "fake", model: "faux-a", effort: "medium" }, b: { endpoint: "fake", model: "faux-b", effort: "medium" } }, pairings: [["a", "b"]], blocksPerPairing: 1 }, schedule }));
+    importTournaments({ database, sources: [source], skipped: { [source]: { a_b_b0_p0: "over the cap", b_a_b0_p1: "never played" } } });
+    const db = openAnalysis(database);
+
+    try {
+      expect(db.query("SELECT name,status,disposition,status_reason FROM matches ORDER BY name").all()).toEqual([
+        { name: "a_b_b0_p0", status: "partial", disposition: "skipped", status_reason: "over the cap" },
+        { name: "b_a_b0_p1", status: "skipped", disposition: "skipped", status_reason: "never played" },
+      ]);
+      expect(db.query("SELECT COUNT(*) AS n FROM match_seats WHERE win_share IS NOT NULL").get()).toEqual({ n: 0 });
+      expect(db.query("SELECT COUNT(*) > 0 AS has FROM calls").get()).toEqual({ has: 1 });
+      expect(db.query("SELECT status FROM tournaments").get()).toEqual({ status: "completed" });
+    } finally { db.close(); }
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

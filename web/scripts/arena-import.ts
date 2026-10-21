@@ -12,6 +12,6 @@ if (values.db === undefined || positionals.length === 0) {
   process.exit(1);
 }
 
-const skipped = values.skips === undefined ? {} : Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Record(Schema.String, Schema.Array(Schema.String))))(readFileSync(values.skips, "utf8"));
+const skipped = values.skips === undefined ? {} : Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Record(Schema.String, Schema.Record(Schema.String, Schema.String))))(readFileSync(values.skips, "utf8"));
 
 importTournaments({ database: values.db, sources: positionals, skipped });

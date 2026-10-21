@@ -40,8 +40,8 @@ interface Observation<A> { readonly value: A; readonly record: string; readonly 
 export interface ImportOptions {
   readonly database: string;
   readonly sources: ReadonlyArray<string>;
-  /** Explicit match names only. Unstarted work is not evidence of a skip. */
-  readonly skipped?: Readonly<Record<string, ReadonlyArray<string>>>;
+  /** Tournament directory to scheduled match name to the reason it is not scored. Unstarted work is not evidence of a skip. */
+  readonly skipped?: Readonly<Record<string, Readonly<Record<string, string>>>>;
 }
 
 export const openAnalysis = (path: string): Database => {
@@ -114,8 +114,9 @@ export const importTournaments = ({ database, sources, skipped = {} }: ImportOpt
           const manifestText = textOf(manifestPath);
           const eventText = textOf(eventsPath);
           const callText = textOf(callsPath);
-          const isSkipped = (skipped[dir] ?? []).includes(match.name);
-          const fingerprint = sha(json([importerHash, json(match), manifestText, eventText, callText, priceHash, isSkipped]));
+          const skipReason = skipped[dir]?.[match.name];
+          const isSkipped = skipReason !== undefined;
+          const fingerprint = sha(json([importerHash, json(match), manifestText, eventText, callText, priceHash, skipReason ?? null]));
           const previous = db.query<{ fingerprint: string }, [string]>("SELECT fingerprint FROM matches WHERE id = ?").get(matchId);
 
           if (previous?.fingerprint === fingerprint) continue;
@@ -132,8 +133,8 @@ export const importTournaments = ({ database, sources, skipped = {} }: ImportOpt
 
           const parsed = manifestText === undefined ? undefined : decodeManifest(manifestText);
           const manifest = parsed !== undefined && Result.isSuccess(parsed) ? parsed.success : undefined;
-          const status = manifest?.status === "finished" ? "completed" : manifestText !== undefined || eventText !== undefined || callText !== undefined ? "partial" : isSkipped ? "skipped" : "unstarted";
-          put("matches", { id: matchId, tournament_id: tournamentId, name: match.name, pairing: match.pairing, block: match.block, seed: match.seed, seed_block_id: sha(json([tournamentId, match.pairing, match.block, match.seed])), status, disposition: isSkipped ? "skipped" : null, status_reason: isSkipped ? "explicit --skips file" : null, started_at: null, ended_at: null, code_hash: null, rules_hash: null, instructions_hash: null, source_dir: matchDir, schedule_json: json(match), manifest_json: manifestText ?? null, source_record: null, fingerprint, replay_status: manifest === undefined ? "unavailable" : "pending", replay_error: null });
+          const status = manifest?.status === "finished" && !isSkipped ? "completed" : manifestText !== undefined || eventText !== undefined || callText !== undefined ? "partial" : isSkipped ? "skipped" : "unstarted";
+          put("matches", { id: matchId, tournament_id: tournamentId, name: match.name, pairing: match.pairing, block: match.block, seed: match.seed, seed_block_id: sha(json([tournamentId, match.pairing, match.block, match.seed])), status, disposition: isSkipped ? "skipped" : null, status_reason: skipReason ?? null, started_at: null, ended_at: null, code_hash: null, rules_hash: null, instructions_hash: null, source_dir: matchDir, schedule_json: json(match), manifest_json: manifestText ?? null, source_record: null, fingerprint, replay_status: manifest === undefined ? "unavailable" : "pending", replay_error: null });
           const provenanceObject = manifest?.provenance ?? null;
           const provenance = Schema.decodeUnknownOption(Schema.Struct({ code_sha: Schema.String, instructions_sha: Schema.String }))(provenanceObject);
           db.query("UPDATE matches SET code_hash = ?, instructions_hash = ? WHERE id = ?").run(Option.isSome(provenance) ? provenance.value.code_sha : null, Option.isSome(provenance) ? provenance.value.instructions_sha : null, matchId);
