@@ -17,14 +17,21 @@ const itemCodes = { a: 2, b: 3, f: 4, c: 5, e: 6, h: 7, s: 8, i: 9, m: 10 };
 export const items = text => list([...text.toLowerCase()].flatMap(c => c in itemCodes ? [BigInt(itemCodes[c])] : []));
 export function position(lib, input, fixed) {
   const n = (key, fallback) => BigInt(input[key] ?? fallback);
-  const shell = { unknown: 0n, live: 1n, blank: 2n }[input.shell ?? 'unknown'];
-  if (shell === undefined) throw Error('shell must be unknown, live or blank');
+  const shells = { unknown: 0n, live: 1n, blank: 2n };
+  const shellName = input.shell ?? 'unknown';
+  if (typeof shellName !== 'string' || !Object.hasOwn(shells, shellName)) throw Error('shell must be unknown, live or blank');
+  const shell = shells[shellName];
+  const flag = (key, fallback) => {
+    const value = input[key] ?? fallback;
+    if (typeof value !== 'boolean') throw Error(`${key} must be true or false`);
+    return value;
+  };
   for (const key of ['maxHealth', 'dealerHp', 'playerHp', 'live', 'blank', 'cuffs']) {
     if (key in input && (!Number.isSafeInteger(input[key]) || input[key] < 0)) throw Error(`${key} must be a nonnegative safe integer`);
   }
   if (fixed && (n('live', 1) + n('blank', 1) > 8n || n('cuffs', 0) > 2n ||
     shell === 1n && n('live', 1) === 0n || shell === 2n && n('blank', 1) === 0n)) throw Error('inconsistent shell counts or cuffs');
-  return lib['state.initial'](bool(fixed), bool(input.playerTurn ?? true), n('maxHealth', 3), n('dealerHp', 3), n('playerHp', 3), n('live', 1), n('blank', 1), shell, n('cuffs', 0), bool(input.sawed ?? false), items(input.dealerItems ?? ''), items(input.playerItems ?? ''));
+  return lib['state.initial'](bool(fixed), flag('playerTurn', true), n('maxHealth', 3), n('dealerHp', 3), n('playerHp', 3), n('live', 1), n('blank', 1), shell, n('cuffs', 0), flag('sawed', false), items(input.dealerItems ?? ''), items(input.playerItems ?? ''));
 }
 export function plain(lib, result) {
   if (result.$ === 'Fail') return { error: result.error };

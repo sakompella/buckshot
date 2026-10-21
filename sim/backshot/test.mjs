@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { load, position, plain, bool, array } from './runtime.mjs';
+const MOVE = { dealer: 0, player: 1, adrenaline: 2, beer: 3, phone: 4, cigarettes: 5, medicine: 6, handcuffs: 7, saw: 8, inverter: 9, glass: 10 };
 const { lib: L, close } = await load();
 try {
 const run = (input, fixed = false, depth = 18) => plain(L, L.search(bool(fixed), BigInt(depth), position(L, input, fixed)));
@@ -86,9 +88,21 @@ assert.equal(L['heuristic.obvious'](false,state({playerTurn:false,dealerHp:1,pla
 // Spec 5.5: a contradicted known shell adds +-1,000,000 as one term; it does not replace the score.
 const score=(input,m)=>rational(L['heuristic.score'](state(input,false),BigInt(m)));
 const contradicted={live:2,blank:2,shell:'live',playerHp:2,dealerItems:'s'};
-assert.deepEqual(score(contradicted,8),[-999860n,1n]);
-assert.deepEqual(score(contradicted,0),[90n,1n]);
-assert.deepEqual(score({live:1,blank:0,shell:'live',dealerHp:0},1),[100n,1n]);
+assert.deepEqual(score(contradicted,MOVE.saw),[-999860n,1n]);
+assert.deepEqual(score(contradicted,MOVE.dealer),[90n,1n]);
+assert.deepEqual(score({live:1,blank:0,shell:'live',dealerHp:0},MOVE.player),[100n,1n]);
+// Input boundary: wrong types are rejected rather than coerced.
+for (const fixed of [true, false]) {
+ for (const bad of [{playerTurn:'false'},{playerTurn:0},{sawed:'false'},{sawed:1},{shell:'toString'},{shell:'__proto__'},{shell:1},{live:1.5},{blank:-1},{live:'2'}]) {
+  assert.throws(() => position(L, bad, fixed), JSON.stringify(bad));
+ }
+}
+const cli = (args, input = '{}') => spawnSync(process.execPath, [new URL('./cli.mjs', import.meta.url).pathname, ...args], { input, encoding: 'utf8' });
+for (const args of [['--refrence','--depth=0'],['--depth='],['--depth=x'],['--depth=-1'],['--depth=1.5'],['--depth=0','extra']]) {
+ assert.notEqual(cli(args).status, 0, args.join(' '));
+}
+assert.equal(cli(['--reference','--depth=0']).status, 0);
+
 const glass=outcomes({live:1,blank:1},10)[0].state;
 assert.equal(glass.live,0n);
 assert.equal(L['state.total'](glass),2n);
