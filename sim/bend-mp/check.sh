@@ -87,6 +87,16 @@ gate_simple_imports() {
   fi
 }
 
+gate_player_imports() {
+  local bad
+  bad="$(imports_under "$here/player" | grep -vE ':[0-9]+:[[:space:]]*import[[:space:]]+(Base|(\.\./domain\.bend|\.\./sm/(state|rules|items)\.bend|\.\./simple/[A-Za-z0-9_-]+\.bend|\./[A-Za-z0-9_-]+\.bend)[[:space:]]+as[[:space:]]+[A-Za-z0-9_]+)[[:space:]]*$' || true)"
+  if [[ -z "$bad" ]]; then
+    report ok "player/ imports only Base, domain, sm's state, rules and items, simple/ and siblings"
+  else
+    report fail "player/ imports only Base, domain, sm's state, rules and items, simple/ and siblings" "$bad"
+  fi
+}
+
 gate_driver_imports() {
   local bad
   bad="$(imports_under "$here/driver.bend" | grep -E 'import[[:space:]]+[^[:space:]]*(ref/|abstract\.bend)' || true)"
@@ -215,6 +225,16 @@ gate_simple_fuzz() {
   fi
 }
 
+gate_player() {
+  local out
+  out="$(bun "$here/test/player.mjs" 2>&1)"
+  if [[ $? -eq 0 ]]; then
+    report ok "minimax player properties" "$(printf '%s' "$out" | tail -1 | cut -c1-200)"
+  else
+    report fail "minimax player properties" "$(printf '%s' "$out" | tail -20 | cut -c1-600)"
+  fi
+}
+
 gate_fuzz_mutations() {
   local out
   out="$(python3 "$here/tools/fuzz_mutations.py" 2>&1)"
@@ -300,6 +320,7 @@ gate_unsafe
 gate_ai_imports
 gate_sm_imports
 gate_simple_imports
+gate_player_imports
 gate_driver_imports
 gate_laws_imports
 gate_simple_laws_imports
@@ -317,6 +338,7 @@ gate_machine_scenarios
 gate_machine_items
 gate_machine_item_fuzz
 gate_simple_fuzz
+gate_player
 gate_mutations
 gate_fuzz_mutations
 gate_simple_mutations

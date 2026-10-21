@@ -28,7 +28,8 @@ Out of scope are graphics, animation, sound, networking, the lobby, seat shuffli
 - `ai/story.bend` and `ai/don.bend` are the two dealer AIs.
 - `driver.bend` is the controller that plays whole matches. `view.bend` renders them as text.
 - `main.bend` is a command line entry that plays matches and prints win rates. `web.bend` is the entry that the web UI builds to JavaScript.
-- `test/` holds scenario tests, the item law fuzz, a driver smoke test, a round trip test of the domain types, and the simple machine's smoke test and fuzz.
+- `player/` is the depth-limited minimax player over the simple machine (ADR-0043). It decides from one seat's public information and its own log. See `player/README.md`.
+- `test/` holds scenario tests, the item law fuzz, a driver smoke test, a round trip test of the domain types, the simple machine's smoke test and fuzz, and the player's property tests (`test/player.mjs`).
 - `tools/` and `mutate.py` hold the generators and the bug-planting checks.
 - `check.sh` runs every gate.
 
@@ -36,7 +37,7 @@ When several seats can grab at once, the driver serves one grab per seat in turn
 
 The machine keeps fixed seat identity. Two seats use sockets 1 and 3. Three seats use 0 to 2, and four seats use 0 to 3.
 
-Five modules keep to import rules that `check.sh` enforces. `ai/` imports only the domain. `sm/` imports only the domain and its own files. `simple/` imports only the domain, `sm/`'s state, rules and items, and its own files. `driver.bend` never imports `ref/` or `abstract.bend`. An AI therefore sees only its prompt, the public board and what it heard, and a wrong decision can only come from AI code. `LAWS.bend` never imports `ref/`, so every law is stated over the machine and the mapping in `abstract.bend`.
+Six modules keep to import rules that `check.sh` enforces. `ai/` imports only the domain. `sm/` imports only the domain and its own files. `simple/` imports only the domain, `sm/`'s state, rules and items, and its own files. `player/` imports what `simple/` may, plus `simple/` itself and its own files. `driver.bend` never imports `ref/` or `abstract.bend`. An AI therefore sees only its prompt, the public board and what it heard, and a wrong decision can only come from AI code. `LAWS.bend` never imports `ref/`, so every law is stated over the machine and the mapping in `abstract.bend`.
 
 ## Answers
 
@@ -185,7 +186,7 @@ It takes about 7 to 8 minutes on a Mac, and about 1.5 minutes on a 7-core Linux 
 
 1. `domain.bend` type-checks and its proofs check.
 2. No `@unsafe` and no unfinished `def name?(` hole anywhere under this directory.
-3. The import rules for `ai/`, `sm/`, `simple/`, `driver.bend` and `LAWS.bend`.
+3. The import rules for `ai/`, `sm/`, `simple/`, `player/`, `driver.bend` and `LAWS.bend`.
 4. The driver smoke test and the simple machine's smoke test. 64 matches at each table size finish with none stuck and no fuel spent.
 5. All twelve required laws are present in `LAWS.bend`.
 6. The generated proof bodies match their script.
@@ -194,6 +195,7 @@ It takes about 7 to 8 minutes on a Mac, and about 1.5 minutes on a 7-core Linux 
 9. The reference's core and item scenarios.
 10. The machine's core and item scenarios.
 11. The item law fuzz, and the simple machine fuzz. At every point of seeded random games it checks that the simple answer is a chain of the machine's legal steps that lands on the mapped next state with the same notes, and that the mapped state is valid. It also checks that boards, draws, menus, privacy and the distribution order agree.
+   Then the player's property tests on positions from seeded random games. `PLAYER_GAMES` sets the games for each table size (default 2); see `player/README.md`.
 12. The machine mutations and the item fuzz mutations.
 
 Run only the proof kernel.

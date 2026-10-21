@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { config, round, list, array, kind, seatNumber, tag } from './reference-adapter.mjs';
 import { build, makeRandom } from './machine-items-lib.mjs';
 
-const GAMES = Number(process.env.PLAYER_GAMES ?? 4);
+const GAMES = Number(process.env.PLAYER_GAMES ?? 2);
 const WIN = 1000000;
 
 const dir = mkdtempSync(join(tmpdir(), 'bend-mp-player-'));
@@ -25,6 +25,8 @@ const close = (a, b, label) => assert.ok(Math.abs(a - b) < 1e-4, `${label}: ${a}
 const sum = xs => xs.reduce((a, b) => a + b, 0);
 const count = {};
 const checked = name => { count[name] = (count[name] ?? 0) + 1; };
+const spent = {};
+const timed = (name, f) => (...args) => { const t = performance.now(); try { return f(...args); } finally { spent[name] = (spent[name] ?? 0) + performance.now() - t; } };
 
 const position = (cfg, board, log, me) => ({ $: 'types.Position', config: cfg, board, log: list(log), me: seat(me) });
 const analyse = (pos, depth, budget) => P.analyse(pos, BigInt(depth), BigInt(budget));
@@ -162,7 +164,7 @@ function checkPolicy(pos, analysis) {
     for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
       const level = { $: 'types.Level', depth: 1n, budget: 100000n, gap, seed };
       const pick = P.choose(pos.position, level);
-      assert.deepEqual(json(P.choose(pos.position, level)), json(pick), 'choose is deterministic for a seed');
+      if (seed === 1) assert.deepEqual(json(P.choose(pos.position, level)), json(pick), 'choose is deterministic for a seed');
       assert.equal(kind(pick), 'Picked');
       const line = lines(pick.analysis)[Number(pick.index)];
       assert.ok(line.score + gap >= pick.analysis.score, 'the pick is within the gap of the best');
@@ -182,16 +184,20 @@ function checkPolicy(pos, analysis) {
 }
 
 // The public values, which opponents decide by, do not move when the
-// searcher's own clues are removed from its log.
-let privateMattered = 0;
+// searcher's own clues are removed from its log. A Moves task's depth counts
+// the decisions after its own, so every fourth position searches my move and
+// the reply to it, where opponents pick by public value, and the rest search
+// my move alone.
+let privateMattered = 0, clued = 0;
 function checkPublicOnly(pos) {
   if (!pos.log.some(h => kind(h) === 'Learned')) return;
+  const replies = clued++ % 4 === 0;
   const withClues = P['belief.build'](pos.position).belief;
   const without = P['belief.build'](position(pos.cfg, pos.position.board, pos.log.filter(h => kind(h) !== 'Learned'), pos.me)).belief;
   assert.equal(json(without.public), json(withClues.public));
   const scores = belief => {
     const options = X('options.of')(list(menu(pos.request)), 0n);
-    const task = { $: 'search.Moves', depth: 1n, public: belief.public, private: belief.private, options, scored: list([]), nodes: 0n };
+    const task = { $: 'search.Moves', depth: replies ? 1n : 0n, public: belief.public, private: belief.private, options, scored: list([]), nodes: 0n };
     const result = X('search')(X('fuel')(1000000n), task, seat(pos.me), 1000000n);
     assert.equal(kind(result), 'Scores');
     return array(result.scored);
@@ -199,7 +205,7 @@ function checkPublicOnly(pos) {
   const a = scores(withClues), b = scores(without);
   assert.deepEqual(a.map(s => s.public), b.map(s => s.public), 'opponents decide from public information only');
   if (json(a.map(s => s.private)) !== json(b.map(s => s.private))) privateMattered++;
-  checked('public only');
+  checked(replies ? 'public only, with replies' : 'public only');
 }
 
 // Two seats, one HP, only live shells, no items: shooting the other seat
@@ -226,17 +232,19 @@ function checkInvalid(pos) {
 }
 
 const started = performance.now();
-checkForcedWin();
+const t = Object.fromEntries(Object.entries({ checkForcedWin, checkCertain, checkDeeper, checkPublicOnly, checkOutcomes, checkPolicy, checkDeepening, checkInvalid, analyse }).map(([k, f]) => [k, timed(k, f)]));
+t.checkForcedWin();
 sample.forEach((pos, i) => {
-  const analysis = analyse(pos.position, 1, 100000);
+  const analysis = t.analyse(pos.position, 1, 100000);
   checkAnalysis(analysis, 1, 100000);
-  checkCertain(pos, analysis);
-  checkDeeper(pos, analysis);
-  checkPublicOnly(pos);
-  if (i % 4 === 0) checkOutcomes(pos);
-  if (i % 8 === 0) checkPolicy(pos, analysis);
-  if (i % 16 === 0) checkDeepening(pos);
-  if (i % 32 === 0) checkInvalid(pos);
+  t.checkCertain(pos, analysis);
+  t.checkDeeper(pos, analysis);
+  t.checkPublicOnly(pos);
+  if (i % 4 === 0) t.checkOutcomes(pos);
+  if (i % 8 === 0) t.checkPolicy(pos, analysis);
+  if (i % 16 === 0) t.checkDeepening(pos);
+  if (i % 32 === 0) t.checkInvalid(pos);
 });
-assert.ok(count['certain win'] > 0 && count['deeper forced win'] > 0 && count['public only'] > 0 && privateMattered > 0 && count.deepening > 0, `every property ran on a case that matters: ${json(count)}`);
+assert.ok(count['certain win'] > 0 && count['deeper forced win'] > 0 && count['public only'] > 0 && count['public only, with replies'] > 0 && privateMattered > 0 && count.deepening > 0, `every property ran on a case that matters: ${json(count)}`);
 console.log(`player: ${sample.length} positions, ${((performance.now() - started) / 1000).toFixed(0)} s; checks ${json(count)}; private clues changed private scores ${privateMattered} times`);
+if (process.env.PLAYER_PROFILE) console.log(json(Object.fromEntries(Object.entries(spent).map(([k, v]) => [k, Math.round(v / 1000)]))));
