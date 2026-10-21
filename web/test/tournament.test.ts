@@ -8,9 +8,9 @@ import { ConfigProvider, Effect, Exit, Option, Redacted, Result, type Schema } f
 import { AGENTS } from "../src/arena/agent.ts";
 import { DEFAULT_PRICES, loadPrices } from "../src/arena/cost.ts";
 import { agentEndpoint } from "../src/arena/endpoints.ts";
-import { checkPrices, childCommand, childEnv, parseConfig, resolveKeys, type ScheduledMatch, scheduleOf, type Tournament, unfinished } from "../src/arena/tournament.ts";
+import { assignAccounts, checkPrices, childCommand, childEnv, parseConfig, resolveKeys, type ScheduledMatch, scheduleOf, type Tournament, unfinished } from "../src/arena/tournament.ts";
 import { balancedSeeds, firstPositionOf } from "../src/arena/seeds.ts";
-import { cooldownOf, costOf, openTournament, RATE_LIMIT_WAIT_SECONDS, readMatch, runPending, type Scheduling, startedUnder, TOURNAMENT_FORMAT } from "../src/arena/tournament-dir.ts";
+import { cooldownOf, costOf, openTournament, recordedAccounts, RATE_LIMIT_WAIT_SECONDS, readMatch, runPending, type Scheduling, startedUnder, TOURNAMENT_FORMAT } from "../src/arena/tournament-dir.ts";
 import { reportOf } from "../src/arena/tournament-report.ts";
 import { codeVersions, fitRatings, ELO_PER_NAT, intervalsOf, type PlayedMatch, resamples, sharesByEntrant, sharesByVersion, starterRates, winShares } from "../src/arena/tournament-stats.ts";
 
@@ -786,4 +786,212 @@ test("the example tournament's models all start as arena agents from the variabl
 
     expect(Exit.isSuccess(exit) ? "ok" : `${match.name} ${letter}: ${String(exit.cause)}`).toBe("ok");
   }
+});
+
+const pinnedTournament = () => tournamentFrom(configJson({
+  endpoints: { ...ENDPOINTS, "cpa-openai": { ...ENDPOINTS["cpa-openai"], accounts: ["account-a", "account-b"] } },
+  pairings: [["luna", "don"]],
+}));
+
+test("account assignment excludes cooling accounts and minimizes running matches for every pool state", () => {
+  const tournament = pinnedTournament();
+  const match = scheduleOf(tournament)[0];
+
+  if (match === undefined) throw new Error("no match");
+
+  for (const a of [0, 1, 3]) for (const b of [0, 1, 3]) for (const cooling of [[], ["account-a"], ["account-b"], ["account-a", "account-b"]]) {
+    const loads = new Map([["account-a", a], ["account-b", b]]);
+    const assigned = assignAccounts(tournament.config, match, (_model, id) => cooling.includes(id), (id) => loads.get(id) ?? 0);
+    const available = [...loads].filter(([id]) => !cooling.includes(id));
+
+    if (available.length === 0) expect(assigned).toBeUndefined();
+    else {
+      const id = assigned?.A ?? "";
+
+      expect(cooling).not.toContain(id);
+      expect(loads.get(id)).toBe(Math.min(...available.map(([, load]) => load)));
+    }
+  }
+
+  const unpinned = tournamentFrom(configJson({ pairings: [["luna", "don"]] }));
+
+  expect(assignAccounts(unpinned.config, match, () => true, () => 0)).toEqual({});
+});
+
+test("account ids travel only in the child environment, and unconfigured agents inherit no pin", () => {
+  const tournament = pinnedTournament();
+  const match = scheduleOf(tournament)[0];
+
+  if (match === undefined) throw new Error("no match");
+
+  const keys = new Map([["CPA_KEY", Redacted.make("key")]]);
+  const base = { PLAYER_A_CPA_AUTH_ID: "inherited-account" };
+
+  expect(childEnv(base, tournament.config, match, keys, { A: "account-b" }).PLAYER_A_CPA_AUTH_ID).toBe("account-b");
+  expect(childEnv(base, tournament.config, match, keys).PLAYER_A_CPA_AUTH_ID).toBeUndefined();
+  expect(childCommand("/tmp/match", tournament.config, match).join(" ")).not.toContain("account-b");
+  expect(Result.isFailure(parseConfig(configJson({ endpoints: { ...ENDPOINTS, "cpa-openai": { ...ENDPOINTS["cpa-openai"], accounts: [] } } })))).toBe(true);
+});
+
+/** A pinned match's manifest and the usage-limit fault which stopped it. */
+const pinAndCool = (dir: string, tournament: Tournament, match: ScheduledMatch, account: string) => {
+  writeManifest(dir, tournament, match, "running");
+  const path = join(dir, match.name, "manifest.json");
+  const manifest = JSON.parse(readFileSync(path, "utf8"));
+
+  manifest.provenance.agents.A.cpa_auth_id = account;
+  writeFileSync(path, JSON.stringify(manifest));
+  writeFileSync(join(dir, match.name, "events.jsonl"), `${JSON.stringify({ t: new Date().toISOString(), kind: "fault", agent: "A", error: 'API error (429): {"code":"model_cooldown","reset_seconds":3600}' })}\n`);
+};
+
+test("a pinned refusal cools only its model/account pair; new games use the other account and a resume keeps its pin", async () => {
+  const tournament = pinnedTournament();
+  const schedule = scheduleOf(tournament);
+  const stopped = schedule[0];
+  const dir = mkdtempSync(join(tmpdir(), "tournament-pins-"));
+  const stop = new AbortController();
+
+  if (stopped === undefined) throw new Error("no match");
+
+  pinAndCool(dir, tournament, stopped, "account-a");
+  expect(Option.getOrThrow(cooldownOf(dir, tournament.config, stopped, Date.now()))).toMatchObject({ model: "gpt-6-luna", account: "account-a" });
+
+  const runs: Array<string> = [];
+
+  await runPending(dir, tournament.config, schedule, 1, async (match, accounts) => {
+    expect(accounts).toEqual({ A: "account-b" });
+    runs.push(match.name);
+    writeManifest(dir, tournament, match, "finished");
+    stop.abort();
+
+    return 0;
+  }, () => undefined, stop.signal);
+  expect(runs).toEqual(schedule.slice(1, 2).map((match) => match.name));
+
+  const resumed: Array<string> = [];
+
+  await runPending(dir, tournament.config, [stopped], 1, async (match, accounts) => {
+    resumed.push(accounts.A ?? "");
+    writeManifest(dir, tournament, match, "finished");
+
+    return 0;
+  }, () => undefined, new AbortController().signal, { forget: new Set(["gpt-6-luna"]) });
+  expect(resumed).toEqual(["account-a"]);
+});
+
+test("all cooling accounts hold new games back while an unrelated model still plays", async () => {
+  const base = pinnedTournament();
+  const tournament = { ...base, pairings: [["luna", "don"], ["haiku-5-5", "story"]], seeds: [[100, 101], [100, 101]], config: { ...base.config, pairings: [["luna", "don"], ["haiku-5-5", "story"]] } };
+  const schedule = scheduleOf(tournament);
+  const [first, second] = schedule;
+  const dir = mkdtempSync(join(tmpdir(), "tournament-all-pins-cooling-"));
+  const stop = new AbortController();
+
+  if (first === undefined || second === undefined) throw new Error("too few matches");
+
+  pinAndCool(dir, tournament, first, "account-a");
+  pinAndCool(dir, tournament, second, "account-b");
+
+  const runs: Array<string> = [];
+  const fresh = schedule.find((match) => match.name !== first.name && match.name !== second.name && match.entrants.includes("luna"));
+  // Another seed block supplies new games which must not get either cooling account.
+  expect(fresh).toBeDefined();
+
+  await runPending(dir, tournament.config, schedule, 2, async (match, accounts) => {
+    runs.push(match.name);
+    expect(match.entrants).not.toContain("luna");
+    expect(accounts).toEqual({});
+    writeManifest(dir, tournament, match, "finished");
+    stop.abort();
+
+    return 0;
+  }, () => undefined, stop.signal);
+  expect(runs.length).toBeGreaterThan(0);
+});
+
+test("a match started without pins stays unpinned when its current endpoint lists accounts", async () => {
+  const tournament = pinnedTournament();
+  const match = scheduleOf(tournament)[0];
+  const dir = mkdtempSync(join(tmpdir(), "tournament-legacy-pin-"));
+
+  if (match === undefined) throw new Error("no match");
+
+  writeManifest(dir, tournament, match, "running");
+  await runPending(dir, tournament.config, [match], 1, async (candidate, accounts) => {
+    expect(accounts).toEqual({});
+    writeManifest(dir, tournament, candidate, "finished");
+
+    return 0;
+  }, () => undefined, new AbortController().signal);
+});
+
+test("simultaneous matches spread over the least-loaded account", async () => {
+  const tournament = pinnedTournament();
+  const schedule = scheduleOf(tournament).slice(0, 2);
+  const dir = mkdtempSync(join(tmpdir(), "tournament-pin-load-"));
+  const pins: Array<string> = [];
+  let release: () => void = () => undefined;
+  const bothStarted = new Promise<void>((resolve) => { release = resolve; });
+
+  await runPending(dir, tournament.config, schedule, 2, async (match, accounts) => {
+    pins.push(accounts.A ?? "");
+
+    if (pins.length === 2) release();
+
+    await bothStarted;
+    writeManifest(dir, tournament, match, "finished");
+
+    return 0;
+  }, () => undefined, new AbortController().signal);
+  expect(pins.toSorted()).toEqual(["account-a", "account-b"]);
+});
+
+test("a refusal during this run leaves other accounts playing and keeps the paused match pinned", async () => {
+  const tournament = pinnedTournament();
+  const schedule = scheduleOf(tournament);
+  const first = schedule[0];
+  const dir = mkdtempSync(join(tmpdir(), "tournament-live-pin-cooldown-"));
+  const stop = new AbortController();
+  const pins: Array<string> = [];
+
+  if (first === undefined) throw new Error("no match");
+
+  const settled = await runPending(dir, tournament.config, schedule, 1, async (match, accounts) => {
+    pins.push(accounts.A ?? "");
+
+    if (match === first) {
+      pinAndCool(dir, tournament, match, accounts.A ?? "");
+
+      return 1;
+    }
+
+    writeManifest(dir, tournament, match, "finished");
+    stop.abort();
+
+    return 0;
+  }, () => undefined, stop.signal);
+
+  expect(pins).toEqual(["account-a", "account-b"]);
+  expect(settled.map(({ status }) => status)).toEqual(["cooling", "finished"]);
+});
+
+test("an existing tournament can add account pins for new matches without changing old matches or an existing pool", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tournament-add-pool-"));
+  const before = tournamentFrom(configJson({ pairings: [["luna", "don"]] }));
+  const pinned = pinnedTournament();
+  const started = scheduleOf(before)[0];
+
+  if (started === undefined) throw new Error("no match");
+
+  openTournament(dir, before, "old", new Date(0));
+  writeManifest(dir, before, started, "running");
+  const upgraded = openTournament(dir, pinned, "new", new Date(1));
+
+  expect(Result.isSuccess(upgraded)).toBe(true);
+  expect(Result.isSuccess(upgraded) && upgraded.success.schedule).toEqual(scheduleOf(before));
+  expect(recordedAccounts(dir, started)).toEqual({});
+  const changed = tournamentFrom(configJson({ endpoints: { ...ENDPOINTS, "cpa-openai": { ...ENDPOINTS["cpa-openai"], accounts: ["account-c"] } }, pairings: [["luna", "don"]] }));
+
+  expect(Result.isFailure(openTournament(dir, changed, "new", new Date(2)))).toBe(true);
+  expect(Result.isSuccess(openTournament(dir, before, "old", new Date(2)))).toBe(true);
 });

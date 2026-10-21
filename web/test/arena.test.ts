@@ -50,7 +50,8 @@ const fauxMatch = (controllers: ReadonlyArray<Controller>, seed: string, context
     dir = mkdtempSync(join(tmpdir(), "arena-test-")),
     agents = AGENTS,
     provenance = fauxProvenance,
-  }: { readonly dir?: string; readonly agents?: ReadonlyArray<AgentId>; readonly provenance?: (modelId: string) => AgentProvenance } = {},
+    crashAt,
+  }: { readonly dir?: string; readonly agents?: ReadonlyArray<AgentId>; readonly provenance?: (modelId: string) => AgentProvenance; readonly crashAt?: (point: string) => void } = {},
 ) => {
   const faux = fauxProvider({ provider: "faux", models: [{ id: "faux-a", contextWindow, maxTokens: 512 }, { id: "faux-b", contextWindow, maxTokens: 512 }] });
   const models = createModels();
@@ -70,6 +71,7 @@ const fauxMatch = (controllers: ReadonlyArray<Controller>, seed: string, context
     }),
     models,
     delivery,
+    crashAt: crashAt ?? (() => undefined),
   });
 };
 
@@ -82,6 +84,30 @@ test("a match resumes only with the configuration it started with", async () => 
 
   expect(Exit.isFailure(changed) && String(changed.cause)).toContain("cannot resume with this one");
   expect(Exit.isSuccess(await Effect.runPromiseExit(fauxMatch(["Agent", "DoN"], "3", 200_000, "on-turn", { dir })))).toBe(true);
+});
+
+test("a match records its account pin and refuses a different account on resume", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "arena-pin-test-"));
+  const pinned = (account: string) => (modelId: string) => ({ ...fauxProvenance(modelId), cpa_auth_id: account });
+
+  await Effect.runPromise(fauxMatch(["Agent", "DoN"], "3", 200_000, "on-turn", { dir, provenance: pinned("account-a") }));
+  const manifest = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Struct({ provenance: Schema.Struct({ agents: Schema.Record(Schema.String, Schema.Struct({ cpa_auth_id: Schema.String })) }) })))(readFileSync(join(dir, "manifest.json"), "utf8"));
+
+  expect(manifest.provenance.agents.A?.cpa_auth_id).toBe("account-a");
+  const changed = await Effect.runPromiseExit(fauxMatch(["Agent", "DoN"], "3", 200_000, "on-turn", { dir, provenance: pinned("account-b") }));
+
+  expect(Exit.isFailure(changed) && String(changed.cause)).toContain("cannot resume with this one");
+  expect(Exit.isSuccess(await Effect.runPromiseExit(fauxMatch(["Agent", "DoN"], "3", 200_000, "on-turn", { dir, provenance: pinned("account-a") })))).toBe(true);
+});
+
+test.each(["start:before-commit", "start:after-commit"])("the pin is recoverable from the manifest at %s", async (point) => {
+  const dir = mkdtempSync(join(tmpdir(), "arena-start-pin-"));
+  const provenance = (modelId: string) => ({ ...fauxProvenance(modelId), cpa_auth_id: "account-a" });
+
+  await Effect.runPromiseExit(fauxMatch(["Agent", "DoN"], "3", 200_000, "on-turn", { dir, provenance, crashAt: (at) => { if (at === point) throw new Error("crash"); } }));
+  const manifest = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Struct({ provenance: Schema.Struct({ agents: Schema.Record(Schema.String, Schema.Struct({ cpa_auth_id: Schema.String })) }) })))(readFileSync(join(dir, "manifest.json"), "utf8"));
+
+  expect(manifest.provenance.agents.A?.cpa_auth_id).toBe("account-a");
 });
 
 test.each([
@@ -224,20 +250,26 @@ test.each([
   expect(provenanceOf("provider-A", endpoint.value).thinking).toEqual(thinking);
 });
 
-/** The first request an endpoint sends, as pi-durable asks for a reply: with no reasoning option at effort off. */
-const firstRequestAt = async (api: "ANT" | "OAI", model: string, effort: "off" | "low" | "medium") => {
-  const requests: Array<unknown> = [];
+/** What a local server received: the request body, and the account pin header if it carried one. */
+interface Received {
+  readonly body: unknown;
+  readonly cpaAuthId: string | null;
+}
+
+/** The requests an endpoint sends for `replies` replies, as pi-durable asks for each: with no reasoning option at effort off. */
+const requestsSentAt = async (api: "ANT" | "OAI", model: string, effort: "off" | "low" | "medium", extraEnv: Readonly<Record<string, string>> = {}, replies = 1) => {
+  const requests: Array<Received> = [];
 
   const server = Bun.serve({
     port: 0,
     fetch: async (request) => {
-      requests.push(await request.json());
+      requests.push({ body: await request.json(), cpaAuthId: request.headers.get("X-CPA-Auth-ID") });
 
       return Response.json({ type: "error", error: { type: "invalid_request_error", message: "refused by the test" } }, { status: 400 });
     },
   });
 
-  const endpoint = await endpointFrom({ [`PLAYER_A_${api}_URL`]: server.url.href, [`PLAYER_A_${api}_KEY`]: CPA.key, PLAYER_A_MODEL: model, PLAYER_A_EFFORT: effort });
+  const endpoint = await endpointFrom({ [`PLAYER_A_${api}_URL`]: server.url.href, [`PLAYER_A_${api}_KEY`]: CPA.key, PLAYER_A_MODEL: model, PLAYER_A_EFFORT: effort, ...extraEnv });
 
   if (!Exit.isSuccess(endpoint)) throw new Error(String(endpoint.cause));
 
@@ -250,11 +282,15 @@ const firstRequestAt = async (api: "ANT" | "OAI", model: string, effort: "off" |
 
   if (listed === undefined) throw new Error(`${model} is not listed`);
 
-  await models.completeSimple(listed, { messages: [{ role: "user", content: "Your turn.", timestamp: 0 }] }, effort === "off" ? {} : { reasoning: effort });
+  for (let reply = 0; reply < replies; reply++) await models.completeSimple(listed, { messages: [{ role: "user", content: "Your turn.", timestamp: 0 }] }, effort === "off" ? {} : { reasoning: effort });
+
   await server.stop(true);
 
-  return Schema.decodeUnknownSync(SentRequest)(requests[0]);
+  return requests;
 };
+
+/** The first request an endpoint sends. */
+const firstRequestAt = async (api: "ANT" | "OAI", model: string, effort: "off" | "low" | "medium") => Schema.decodeUnknownSync(SentRequest)((await requestsSentAt(api, model, effort))[0]?.body);
 
 const Effort = Schema.Struct({ effort: Schema.String });
 
@@ -282,6 +318,33 @@ test.each([
   ["off", undefined],
 ] as const)("gpt-6-luna at effort %s asks for the reasoning summary %s", async (effort, summary) => {
   expect((await firstRequestAt("OAI", "gpt-6-luna", effort)).reasoning?.summary).toBe(summary);
+});
+
+test.each([
+  ["ANT", "claude-haiku-5-5"],
+  ["OAI", "gpt-6-luna"],
+] as const)("a %s endpoint with PLAYER_A_CPA_AUTH_ID pins every request to the account, and one without sends no pin", async (api, model) => {
+  const pinned = await requestsSentAt(api, model, "low", { PLAYER_A_CPA_AUTH_ID: "claude-account-2.json" }, 2);
+  const unpinned = await requestsSentAt(api, model, "low", {}, 2);
+
+  expect(pinned.map((received) => received.cpaAuthId)).toEqual(["claude-account-2.json", "claude-account-2.json"]);
+  expect(unpinned.map((received) => received.cpaAuthId)).toEqual([null, null]);
+});
+
+test("the account pin is recorded in the provenance only when set, never with the key", async () => {
+  const env = { PLAYER_A_OAI_URL: CPA.url, PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "gpt-6-luna", PLAYER_A_EFFORT: "medium" };
+  const pinned = await endpointFrom({ ...env, PLAYER_A_CPA_AUTH_ID: "codex-account-1.json" });
+  const unpinned = await endpointFrom(env);
+
+  if (!Exit.isSuccess(pinned) || !Exit.isSuccess(unpinned)) throw new Error("test endpoints failed");
+
+  expect(provenanceOf("provider-A", pinned.value).cpa_auth_id).toBe("codex-account-1.json");
+  expect("cpa_auth_id" in provenanceOf("provider-A", unpinned.value)).toBe(false);
+  expect(JSON.stringify(provenanceOf("provider-A", pinned.value))).not.toContain(CPA.key);
+});
+
+test("a blank PLAYER_A_CPA_AUTH_ID pins nothing", async () => {
+  expect((await requestsSentAt("OAI", "gpt-6-luna", "low", { PLAYER_A_CPA_AUTH_ID: "" })).map((received) => received.cpaAuthId)).toEqual([null]);
 });
 
 test("a proxy's model alias plays as the catalog model it names", async () => {
