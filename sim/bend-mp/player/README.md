@@ -1,6 +1,6 @@
 # Multiplayer search player
 
-A pure Bend 2 player for `../simple/`, separate from the single-player simulator. See [ADR-0043](../../../docs/adr/0043-a-bounded-player-searches-beliefs-over-the-simple-machine.md).
+A pure Bend 2 player for `../simple/`, separate from the single-player simulator. See [ADR-0043](../../../docs/adr/0043-minimax-player.md).
 
 ## Input and output
 

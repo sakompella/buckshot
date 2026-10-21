@@ -1,4 +1,4 @@
-# A bounded player searches beliefs over the simple machine
+# Minimax player
 
 The multiplayer player in `sim/bend-mp/player/` searches whole moves of the simple machine. Its input contains only the match configuration, the public board, and one player's complete log of public events and own secrets. It cannot receive a machine state or an RNG. Beliefs contain synthetic simple states reconstructed from that input, not copies of the host's hidden state.
 
