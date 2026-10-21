@@ -5,8 +5,8 @@ Prints every Claude and Codex account's windows, then exits 0 when the run may g
 Claude: the least-used Claude account must be below LIMIT on every window it reports (a window whose reset has
 passed counts as 0; an account with no 5h signal counts as over). Codex: with --claude-only it is not checked,
 because pinned matches pause per account in the arena itself (ADR-0042); otherwise at least one Codex account must
-be below 100% on every window. A Codex account with no quota data at all (CPA keeps it in memory, so a CPA restart
-empties it) does not block. An unreadable API stops the run. Claude's 7-day window is checked only when CPA
+be below 100% on every window. An account with no quota data at all does not block: CPA keeps quota in memory, so
+a CPA restart, or a reset before the account's next reply, empties it. An unreadable API stops the run. Claude's 7-day window is checked only when CPA
 reports it, which it currently does not.
 
     python3 tools/arena/quota_guard.py LIMIT --mgmt-file PATH [--hub URL] [--claude-only]
@@ -39,7 +39,7 @@ def account_ok(provider: str, signals: dict, limit: float, now: float) -> tuple[
             ok = ok and not required
             continue
         used = 0.0 if reset and float(reset) <= now else float(util) / scale
-        when = time.strftime("%a %-I:%M %p", time.localtime(float(reset))) if reset else "-"
+        when = time.strftime("%b %-d %-I:%M %p", time.localtime(float(reset))) if reset else "-"
         cells.append(f"{name} {used:.2f} (resets {when})")
         ok = ok and used < limit
     return ok, "; ".join(cells)
@@ -67,9 +67,10 @@ def main() -> int:
             continue
         signals = (f.get("quota") or {}).get("signals") or {}
         number = len(verdicts[provider]) + 1
-        if provider == "codex" and not signals:
+        if not signals:
+            # CPA keeps quota in memory and drops it on a restart or after a reset until the next reply.
             verdicts[provider].append(True)
-            print(f"codex {number}: no quota data yet")
+            print(f"{provider} {number}: no quota data yet")
             continue
         ok, cells = account_ok(provider, signals, args.limit if provider == "claude" else 1.0, now)
         verdicts[provider].append(ok)

@@ -1,6 +1,6 @@
 # Running the arena
 
-The arena plays language models against each other at the Buckshot table through the agent tools. Its code is in `web/src/arena/` and `web/scripts/arena*.ts`; the decisions are ADR-0035 to ADR-0042 in `docs/adr/`. This page is the runbook. The results so far are in [results.md](results.md).
+The arena plays language models against each other at the Buckshot table through the agent tools. Its code is in `web/src/arena/` and `web/scripts/arena*.ts`; the decisions are ADR-0035 to ADR-0042 and ADR-0044 to ADR-0046 in `docs/adr/`. This page is the runbook. The results so far are in [results.md](results.md).
 
 ## Endpoints
 - Models are reached through CLIProxyAPI (CPA), hosted on hp-server at `https://hub.dog-minnow.ts.net`.

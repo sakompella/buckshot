@@ -315,6 +315,17 @@ gate_simple_mutations() {
   fi
 }
 
+gate_backshot() {
+  local out
+  out="$(bun "$here/../backshot/test.mjs" 2>&1)"
+  if [[ $? -eq 0 ]]; then
+    report ok "backshot search" "$(printf '%s' "$out" | tail -1)"
+  else
+    report fail "backshot search" "$(printf '%s' "$out" | tail -20)"
+  fi
+}
+
+gate_backshot
 gate_domain
 gate_unsafe
 gate_ai_imports

@@ -1,3 +1,0 @@
-# The machine offers only moves a normal client can make
-
-At each request point the machine's choices are exactly the moves an unmodified client can make in that state, so an illegal move cannot be built. The reference states the host's acceptance rules as a predicate. The law `legal_accepted` says the host accepts every move the machine offers, and `legal_exact` says the two models offer equal menus. The effects of moves only a modified client can send are out of scope, because no law exercises them. Inputs are typed packets, so a malformed one, such as a grid index out of range, is unrepresentable. The host's own quirks stay. The burner phone's range, for one, is kept as likely intended.
