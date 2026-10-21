@@ -115,4 +115,24 @@ Legal alternatives and own-player views support future opportunity-conditioned s
 
 ## Validation
 
-The local report is `_work/arena/analysis/VALIDATION.md`. It records the source snapshot, table counts, usage and costs, report comparisons and discrepancies. Tournament 1's 2,017 completed matches and $971.5335 agree with its progress report. Tournament 2 has 80 completed matches and $58.8854. Tournament 3 is live; historical reports and its 40-match cap do not describe all 60 scheduled entries. Its three partial matches and unstarted work remain distinct from scored results. Detailed database validation results are recorded after import in the local report.
+Rebuilt on 2026-10-21 into a new file, then swapped in. The import took about 10 minutes. `PRAGMA integrity_check` returned `ok`, and `issues` is empty.
+
+| Tournament | Scheduled | Completed (scored) | Partial | Skipped, never started | Unstarted | Replay validated | List-price cost, including partial work |
+|---|---|---|---|---|---|---|---|
+| tournament-1 (`cpa-tiers`) | 2,140 | 2,017 | 41 | 82 | 0 | 2,058 | $971.5335 |
+| tournament-2 (`opus-effort`) | 80 | 80 | 0 | 0 | 0 | 80 | $58.8854 |
+| tournament-3 (`astra-vs-opus-xhigh`) | 60 | 41 | 5 | 0 | 14 | 46 | $42.4880 |
+| Total | 2,280 | 2,138 | 46 | 82 | 14 | 2,184 | $1,072.91 |
+
+- Every started match (2,184) replayed and validated against the generated rules. The 96 matches with no logs have replay status `unavailable`. There are 210,678 decisions. Every call has a list price.
+- Tournaments 1 and 2 match the tournament reports and the first build exactly: 2,017 and 80 scored matches, $971.5335 and $58.8854.
+- Tournament 3 grew after the first build, which had 39 scored, 3 partial, $39.94. Its runner ended at 41 of 60 finished and $42.4880 at list prices, the same as the database. The 40-match cap only stopped new starts, so matches already in flight finished and later ones stayed partial. This is the only difference from the first build.
+- The `--skips` file held tournament 1's 123 documented skips. All 123 carry `disposition = 'skipped'` with the reason `explicit --skips file`: 41 are `partial` and keep their moves and costs, 82 are `skipped`. No other match has a disposition. Tournament 1 and 2 are `completed`. Tournament 3 stays `partial`.
+
+The skips file holds absolute local paths, so it is not committed. `web/src/analysis/tournament-1-skipped.json` is the committed list of names. Build the file from it:
+
+```sh
+bun -e 'const s = await Bun.file("web/src/analysis/tournament-1-skipped.json").json(); console.log(JSON.stringify({ "/absolute/path/to/tournament-1": s.matches }))' > skips.json
+```
+
+Tournament 3's account ids contain emails, so provenance stays in the database and out of committed files.
