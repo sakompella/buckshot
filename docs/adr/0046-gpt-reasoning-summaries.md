@@ -1,4 +1,4 @@
-# GPT reasoning is asked for as detailed summaries and stored as returned
+# GPT reasoning summaries
 
 Every GPT request asks for `reasoning.summary: "detailed"`. The arena stores exactly the summary text that comes back, with its encrypted reasoning item, and adds nothing to it. An audit found that the very short GPT summaries are what the provider sends:
 - headings only for gpt-6-luna, gpt-5.6-terra and gpt-6-astra;

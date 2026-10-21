@@ -1,4 +1,4 @@
-# Code from unlicensed sources is rewritten clean-room
+# Clean-room rewrites
 
 A source with no license grant is all rights reserved, so a direct port is a derivative we may not publish. Its ideas are instead rewritten clean-room:
 - **One agent** reads the source and writes a behaviour specification. It describes inputs, state, rules, search, constants, quirks, and worked examples computed by running the original. It copies no code and no identifiers beyond the game's own terms.

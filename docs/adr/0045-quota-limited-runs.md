@@ -1,4 +1,4 @@
-# Quota-limited runs stop for good at a quota line
+# Quota-limited runs
 
 The model subscriptions are shared with other work, so long arena runs go through `tools/arena/run-quota-limited.sh`. The rules are:
 

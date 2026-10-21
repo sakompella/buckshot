@@ -1,4 +1,4 @@
-# Effort levels are compared with medium and their neighbouring levels
+# Effort sweep pairings
 
 An effort sweep for a model whose medium entrant already has cross-model ratings plays each new level against medium and against the next level up and down. For Opus 5.5 that's low–medium, medium–high, medium–xhigh, high–xhigh, then medium–max and xhigh–max. That's 6 pairings instead of the 10 of a full round robin. Each pairing plays the same 10 seeds in both seat orders, and the seeds are fixed before any match is played. A follow-up matchup against another model reuses that model's earlier seeds first, for a matched comparison, then adds fresh seeds in a fixed order up to a fixed cap.
 
