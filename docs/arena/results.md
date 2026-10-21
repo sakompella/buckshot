@@ -4,15 +4,13 @@ This page summarizes the tournaments run so far, the findings about model reason
 
 Ratings are Bradley-Terry on an Elo scale, per configuration (model + endpoint + effort), with 95% bootstrap CIs clustered by seed. Each pairing plays 10 seeds in both seat orders, 20 matches, unless stated otherwise. With 10 seeds, close rankings aren't reliable. "Medium" also isn't equal compute across providers.
 
-## Status (2026-10-20, 8:30 PM PDT)
-- **tournament-1** (`_work/arena/tournament-1`): finished. 123 matches were skipped (DeepSeek and Astra), and they're still in its `tournament.json`.
+## Status (2026-10-20, 9:15 PM PDT): all work stopped
+- **Nothing is running.** No arena jobs, runners, agents or heartbeats.
+- **tournament-1** (`_work/arena/tournament-1`): finished. 123 scheduled matches are unplayed, the DeepSeek and Astra ones: 41 started and are partial, and 82 never started.
 - **tournament-2** (`_work/arena/tournament-2`, config `web/tournaments/opus-effort.json`): stage A is finished. Stage B, the max pairings, hasn't started and needs the user's go-ahead.
-- **tournament-3** (`_work/arena/tournament-3`, config `web/tournaments/astra-opus-xhigh.json`): running, capped at 40 matches.
-  - The live copy of the config adds the Codex account pool.
-  - It runs from a detached checkout at `ec711b3` (code `3c9b98f8b3f4`) under launchd `com.aditya.buckshot-astra-opus`.
-  - Seed 3028's first match started on code `9e7d7ff22891` and resumes from the `agents/arena-design` worktree (`--code`).
-  - Seed 3030's two matches were stopped by the cap and aren't scored.
-  - The final numbers replace the interim ones below when it ends.
+- **tournament-3** (`_work/arena/tournament-3`, config `web/tournaments/astra-opus-xhigh.json`): stopped at 38 of its 40 capped matches. See below for how to finish it.
+- **Where the data is:** all tournament data lives in the `agents/arena-design` worktree (`~/.t3/worktrees/buckshot/t3-1427bb8e/_work/arena/`). That worktree also serves as the `--code 9e7d7ff22891` checkout. Keep it.
+- **In progress:** work on other branches is listed in [../work-in-progress.md](../work-in-progress.md).
 
 ## tournament-1: cross-model and effort sweeps
 2,017 matches, $971.53. Code versions `51b8366684f0` and `9e7d7ff22891`; the only request difference is the GPT reasoning summary (`auto` vs `detailed`).
@@ -106,14 +104,31 @@ Head to head:
 
 Stage B would add medium–max and xhigh–max: 40 matches, about $355–370 (max matches take about an hour each), about 1.5–2.5 days at the Claude line. Measured quota use was about 0.0115 of a Claude 5h window per dollar on one account and 0.0080 on the other.
 
-## tournament-3: Opus 5.5 xhigh vs Astra medium (interim)
-The seeds were fixed in advance: 3000–3009 first (tournament-1's Opus medium vs Astra seeds, for a matched comparison), then 3020–3029.
+## tournament-3: Opus 5.5 xhigh vs Astra medium (38 of 40)
+- **Seeds:** fixed in advance. First 3000–3009, which are tournament-1's Opus medium vs Astra seeds, for a matched comparison. Then 3020–3029. Capped at 40 matches.
+- **Codex accounts:** Astra was pinned to one Codex account per match (ADR-0042) from match 38 on.
 
-At 39 finished matches:
-- **Complete pairs:** 18. Opus xhigh 20, Astra 16: Opus share 55.6%, 95% CI 38.9–72.2%.
+**Results, within the cap:**
+- **All 38 matches:** Opus xhigh 22, Astra 16 (57.9%).
+- **The 18 complete seed pairs:** Opus 20 of 36, 55.6%, 95% CI 38.9–72.2%. Opus won both games on 6 seeds, Astra on 4, and 8 split.
 - **Matched against Opus medium** on seeds 3000–3009: 10/20 vs 9/20, a difference of +5%, 95% CI −15% to +25%.
-- **So far:** inconclusive. xhigh shows no measurable gain over medium against Astra.
-- **Astra's reasoning:** it reasons very little at medium; only about 1k reasoning tokens over 850 calls.
+- **Verdict:** inconclusive. xhigh shows no measurable gain over medium against Astra.
+- **Cost:** $39.94: Opus $29.16, Astra $10.78. Astra reasons very little at medium: about 1k reasoning tokens over 850 calls.
+
+**Outside the cap:** seed 3030's first match (`b20_p0`) ran because of a cap bug, and Astra won it. It isn't counted. Its second match never started.
+- **The bug:** while an old-code match waits for its `--code` checkout, the runner leaves it out of its pending list. So `--limit` picked a match past the cap.
+- **Avoiding it:** always pass every needed `--code` when using a cap.
+
+**Why it stopped (8:58 PM).** The quota guard counted Claude account 1 as over the limit because CPA had no quota data for it after its 8:30 PM reset. Real use was below the line. `tools/arena/quota_guard.py` now treats an account with no data as not blocking.
+
+**Finishing it.** 2 matches are left: `b18_p0` (seed 3028, started on code `9e7d7ff22891`, unpinned) and `b19_p1` (seed 3029, pinned to Codex account 1).
+1. Recreate `_work/arena/tournament-3/.mgmt` (the CPA management password, mode 600). Add the two Codex account ids to the run's copy of the config under `cpa-openai.accounts`. The live copy in the tournament directory already has them.
+2. From `main` (play code `3c9b98f8b3f4`), run:
+
+       bun scripts/arena-tournament.ts <t3>/astra-opus-xhigh.json --dir <t3> --parallel 2 --limit 2 --code 9e7d7ff22891=<t3-1427bb8e>/web
+
+   Run it under `tools/arena/run-quota-limited.sh` with `CAP=40` and that `--code` in `CODE`.
+3. Then rerun `tools/arena/seed_pairs.py` with `--baseline` tournament-1.
 
 ## Reasoning findings
 - **GPT reasoning summaries are short upstream.** Nothing is lost in CPA, pi-ai or the arena.
@@ -133,10 +148,11 @@ At 39 finished matches:
 - **How other benchmarks pair entrants:** Kaggle Game Arena plays a round robin with seat swaps. LMArena samples pairs adaptively. Effort variants appear as separate entrants elsewhere, but no benchmark found plays a model's own effort levels against each other. Here, neighbouring effort levels plus medium carry the most information per game.
 
 ## Open work
-1. tournament-3: final report when it ends.
+1. tournament-3: play the last 2 matches (see above), then update its numbers here.
 2. tournament-2 stage B: needs the user's go-ahead.
 3. gpt-5.6-luna effort sweep: a medium entrant, placement against the medium models, then low–max. About 160 matches on Codex quota. `none` needs the CPA patch.
 4. tournament-1 leftovers: 3 Astra vs haiku 4.5 matches (cheap; restores seed balance) and 20 vs DeepSeek (free tier refusing).
 5. `web/src/arena/runlog.ts`: join thinking blocks with `"\n\n"`. About 1.9% of saved texts run headings together. This changes the code hash.
 6. An optional, separately labelled entrant with a `reason` field. Check its effect on play with paired seeds before rating it.
-7. Remove the worktrees `t3-1427bb8e` (`agents/arena-design`, nothing unmerged), `t3-code-51b8366684f0` and the tournament-3 runner checkout once no match needs them.
+7. Keep the `t3-1427bb8e` worktree: it holds the tournament data and the `9e7d7ff22891` code. tournament-1's old code `51b8366684f0` is commit `5e6f1b1`; check it out again only to resume its 41 partial matches.
+8. Fit the minimax player's evaluator weights from the analysis database before tuning anything by hand.
