@@ -286,14 +286,24 @@ def node.request(request: T.Request, depth: Nat, +public: List<&2, A.World>, +pr
     case _ _:
       node.leaf(public, private, nodes, me)
 
+# A move that won the round is a leaf with its exact value, even when the
+# next round began without a draw and already waits on a choice.
+def node.ended(ended: Maybe<&2, U32>, +state: T.State, depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +nodes: Nat, +me: D.Seat) -> Task:
+  match ended:
+    case Some{_}:
+      node.leaf(public, private, nodes, me)
+    case None{}:
+      node.request(M.request(state), depth, public, private, nodes, me)
+
 # What a node does: a choice with depth left is a decision; the end of the
-# round, a reload or no depth left is evaluated.
+# round, a reload or no depth left is evaluated. RoundWon is public, so the
+# first world's notes speak for every world.
 def node.task(depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +nodes: Nat, +me: D.Seat) -> Task:
   match public:
     case Nil{}:
       Known{Value{0, 0, Nil{}, nodes}}
     case A.World{+state, _} <> _:
-      node.request(M.request(state), depth, public, private, nodes, me)
+      node.ended(E.exact(T.state.notes(state), me), state, depth, public, private, nodes, me)
 
 # A move costs one node per world it is played in. A move the budget cannot
 # pay for spends the iteration.

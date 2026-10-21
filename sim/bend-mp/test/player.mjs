@@ -222,6 +222,71 @@ function checkForcedWin() {
   checked('forced win scenario');
 }
 
+// Plays cfg with every draw answered 0 and the menu index `pick(request,
+// choices)` at each choice, and returns the first choice point where `stop`
+// holds, as the mover sees it.
+function scripted(cfg, players, pick, stop) {
+  let stepped = S('start')(cfg), state = stepped.state;
+  const logs = Object.fromEntries(sockets(players).map(s => [s, []]));
+  const hear = notes => { for (const s of sockets(players)) logs[s].push(...array(D('hear')(notes, seat(s)))); };
+  hear(stepped.notes);
+  for (let choices = 0, step = 0; step < 5000; step++) {
+    const point = S('point')(state), request = point.request;
+    let answer = 0;
+    if (kind(request) === 'Choose') {
+      const me = seatNumber(request.seat), log = [...logs[me]];
+      const at = { cfg, state, me, request, log, choices, loads: log.filter(h => kind(h) === 'Witnessed' && kind(h.event) === 'Loaded').length, position: position(cfg, point.board, log, me) };
+      if (stop(at)) return at;
+      answer = pick(request, choices++);
+    } else assert.equal(kind(request), 'Draw', 'a scripted game ends at a choice');
+    stepped = S('answer')(state, BigInt(answer));
+    state = stepped.state;
+    hear(stepped.notes);
+  }
+  assert.fail('a scripted game never stopped');
+}
+const shootAt = (request, target) => menu(request).findIndex(m => kind(m) === 'Shoot' && seatNumber(m.target) === target);
+const shootOther = request => shootAt(request, seatNumber(request.seat) === 1 ? 3 : 1);
+
+// Two rounds of single live shells and no items. The seventh shot is at the
+// shooter itself, so the eighth leaves 2 HP against 1 HP, and the next round
+// loads its last batch without a draw. Winning the round must stay a leaf
+// with its exact value, not a choice of the next round.
+function checkRoundEnd() {
+  const cfg = config(2, [round({ health: 5 }), round({ health: 5 })]);
+  const pos = scripted(cfg, 2, (request, n) => n === 6 ? shootAt(request, seatNumber(request.seat)) : shootOther(request), at => at.choices === 7);
+  const win = shootOther(pos.request);
+  const played = S('answer')(pos.state, BigInt(win));
+  assert.ok(array(D('public_events')(played.notes)).some(e => kind(e) === 'RoundWon'), 'the shot wins the round');
+  assert.equal(kind(S('request')(played.state)), 'Choose', 'the next round needs no draw');
+  for (const depth of [1, 2, 3]) {
+    const analysis = analyse(pos.position, depth, 100000);
+    checkAnalysis(analysis, depth, 100000);
+    const line = lines(analysis)[win];
+    assert.equal(line.score, WIN, `a round win is exact at depth ${depth}`);
+    assert.equal(array(line.pv).length, 1, 'the search stops at the round win');
+  }
+  checked('round end without a draw');
+}
+
+// One round of random shells with no damage that counts: 10,000 HP and no
+// items, always shooting the other seat, past 100 loads. The deck posterior
+// multiplies a draw probability per load and must stay normalized.
+function checkLongHistory() {
+  const cfg = config(2, [round({ health: 10000, live: null, blank: 0, amount: 0 })]);
+  const pos = scripted(cfg, 2, shootOther, at => at.loads >= 100);
+  const built = P['belief.build'](pos.position);
+  assert.equal(kind(built), 'Built', built.reason);
+  for (const worlds of [array(built.belief.public), array(built.belief.private)]) {
+    assert.ok(worlds.length > 0 && worlds.every(w => Number.isFinite(w.weight) && w.weight > 0), 'every world weight is positive and finite');
+    close(sum(worlds.map(w => w.weight)), 1, 'a long history belief is normalized');
+  }
+  const analysis = analyse(pos.position, 1, 100000);
+  checkAnalysis(analysis, 1, 100000);
+  assert.ok(Math.abs(analysis.score - WIN / 2) < WIN / 20, `equal seats score near even, not ${analysis.score}`);
+  checked('long history');
+}
+
 function checkInvalid(pos) {
   const other = sockets(pos.cfg.table.$.endsWith('TwoSeats') ? 2 : pos.cfg.table.$.endsWith('ThreeSeats') ? 3 : 4).find(s => s !== pos.me);
   const analysis = analyse({ ...pos.position, me: seat(other) }, 1, 1000);
@@ -232,8 +297,10 @@ function checkInvalid(pos) {
 }
 
 const started = performance.now();
-const t = Object.fromEntries(Object.entries({ checkForcedWin, checkCertain, checkDeeper, checkPublicOnly, checkOutcomes, checkPolicy, checkDeepening, checkInvalid, analyse }).map(([k, f]) => [k, timed(k, f)]));
+const t = Object.fromEntries(Object.entries({ checkForcedWin, checkRoundEnd, checkLongHistory, checkCertain, checkDeeper, checkPublicOnly, checkOutcomes, checkPolicy, checkDeepening, checkInvalid, analyse }).map(([k, f]) => [k, timed(k, f)]));
 t.checkForcedWin();
+t.checkRoundEnd();
+t.checkLongHistory();
 sample.forEach((pos, i) => {
   const analysis = t.analyse(pos.position, 1, 100000);
   checkAnalysis(analysis, 1, 100000);

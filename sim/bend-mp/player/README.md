@@ -23,7 +23,7 @@ The searcher maximizes its private value. An opponent takes the move with the lo
 After a move, worlds are grouped by what the public and the searcher observe. Only the phone's draw is expanded as chance. A node is a leaf, valued by the static evaluation, in three cases:
 
 - **No depth left.**
-- **The round ended.** The value is exact: 1,000,000 if `me` won the round, 0 if not.
+- **The round ended.** The value is exact: 1,000,000 if `me` won the round, 0 if not. This holds even when the next round began without a draw and already waits on a choice.
 - **A reload has begun.** A move that empties the gun, by a shot or an ejected shell, stops at the reload's first draw (`NeedTurnAmount`, `NeedItem`, `NeedBatch` or `NeedSwap`). The state is valued as it stands, before the new items and batch, so the search never looks past the end of a batch. Expanding a reload's item draws and shuffle multiplies the branches by every item and batch combination, far beyond any useful budget.
 
 ## Modules
@@ -62,6 +62,7 @@ Inside `nix develop`, from the repository root:
 - A budget-limited run equals a fresh run to its finished depth.
 - `choose` is deterministic for a seed and stays within the gap, and `regret` is 0 for the best move and absent past the menu.
 - Public scores, which opponents decide by, do not change when `me`'s clues are removed from the log.
-- A scripted forced win, and that a seat which is not to move gets no analysis.
+- Scripted games: a forced win; a round won where the next round starts without a draw, which stays exact at depths 1 to 3; and a belief past 100 loads, which stays normalized.
+- A seat which is not to move gets no analysis.
 
 `PLAYER_GAMES` sets the games for each table size (default 2, about a minute). Use `PLAYER_GAMES=4` for an occasional deeper run of about two minutes. `PLAYER_PROFILE=1` also prints the seconds spent in each check.
