@@ -60,7 +60,16 @@ const growsInto = (before: TournamentConfig, after: TournamentConfig): boolean =
     !("allOf" in after.pairings) &&
     isDeepStrictEqual(fixed(before), fixed(after)) &&
     after.blocksPerPairing >= before.blocksPerPairing &&
-    Object.entries(before.endpoints).every(([name, endpoint]) => isDeepStrictEqual(after.endpoints[name], endpoint)) &&
+    Object.entries(before.endpoints).every(([name, endpoint]) => {
+      const next = after.endpoints[name];
+
+      if (next === undefined) return false;
+
+      const { accounts: previousAccounts, ...previousConnection } = endpoint;
+      const { accounts: nextAccounts, ...nextConnection } = next;
+
+      return isDeepStrictEqual(previousConnection, nextConnection) && (previousAccounts === undefined || isDeepStrictEqual(previousAccounts, nextAccounts));
+    }) &&
     Object.entries(before.entrants).every(([name, entrant]) => isDeepStrictEqual(after.entrants[name], entrant)) &&
     isDeepStrictEqual(after.pairings.slice(0, before.pairings.length), before.pairings)
   );

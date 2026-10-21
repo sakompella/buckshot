@@ -10,7 +10,7 @@ import { DEFAULT_PRICES, loadPrices } from "../src/arena/cost.ts";
 import { agentEndpoint } from "../src/arena/endpoints.ts";
 import { assignAccounts, checkPrices, childCommand, childEnv, parseConfig, resolveKeys, type ScheduledMatch, scheduleOf, type Tournament, unfinished } from "../src/arena/tournament.ts";
 import { balancedSeeds, firstPositionOf } from "../src/arena/seeds.ts";
-import { cooldownOf, costOf, openTournament, RATE_LIMIT_WAIT_SECONDS, readMatch, runPending, type Scheduling, startedUnder, TOURNAMENT_FORMAT } from "../src/arena/tournament-dir.ts";
+import { cooldownOf, costOf, openTournament, recordedAccounts, RATE_LIMIT_WAIT_SECONDS, readMatch, runPending, type Scheduling, startedUnder, TOURNAMENT_FORMAT } from "../src/arena/tournament-dir.ts";
 import { reportOf } from "../src/arena/tournament-report.ts";
 import { codeVersions, fitRatings, ELO_PER_NAT, intervalsOf, type PlayedMatch, resamples, sharesByEntrant, sharesByVersion, starterRates, winShares } from "../src/arena/tournament-stats.ts";
 
@@ -973,4 +973,25 @@ test("a refusal during this run leaves other accounts playing and keeps the paus
 
   expect(pins).toEqual(["account-a", "account-b"]);
   expect(settled.map(({ status }) => status)).toEqual(["cooling", "finished"]);
+});
+
+test("an existing tournament can add account pins for new matches without changing old matches or an existing pool", () => {
+  const dir = mkdtempSync(join(tmpdir(), "tournament-add-pool-"));
+  const before = tournamentFrom(configJson({ pairings: [["luna", "don"]] }));
+  const pinned = pinnedTournament();
+  const started = scheduleOf(before)[0];
+
+  if (started === undefined) throw new Error("no match");
+
+  openTournament(dir, before, "old", new Date(0));
+  writeManifest(dir, before, started, "running");
+  const upgraded = openTournament(dir, pinned, "new", new Date(1));
+
+  expect(Result.isSuccess(upgraded)).toBe(true);
+  expect(Result.isSuccess(upgraded) && upgraded.success.schedule).toEqual(scheduleOf(before));
+  expect(recordedAccounts(dir, started)).toEqual({});
+  const changed = tournamentFrom(configJson({ endpoints: { ...ENDPOINTS, "cpa-openai": { ...ENDPOINTS["cpa-openai"], accounts: ["account-c"] } }, pairings: [["luna", "don"]] }));
+
+  expect(Result.isFailure(openTournament(dir, changed, "new", new Date(2)))).toBe(true);
+  expect(Result.isSuccess(openTournament(dir, before, "old", new Date(2)))).toBe(true);
 });
