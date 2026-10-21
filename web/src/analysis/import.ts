@@ -35,6 +35,13 @@ const ValidationManifest = Schema.Struct({
 
 const validateManifest = Schema.decodeUnknownOption(Schema.fromJsonString(ValidationManifest));
 
+/** Why a finished manifest can't be scored: its standings must cover each seated player exactly once. */
+const scoringProblem = (standings: ReadonlyArray<{ readonly player: string }> | undefined, players: ReadonlyArray<string>): string | undefined => {
+  if (standings === undefined) return "Finished manifest has no standings";
+
+  return standings.length === players.length && players.every((player) => standings.filter((standing) => standing.player === player).length === 1) ? undefined : "Finished manifest standings do not cover each player exactly once";
+};
+
 interface Observation<A> { readonly value: A; readonly record: string; readonly line: number }
 
 export interface ImportOptions {
@@ -89,6 +96,15 @@ export const importTournaments = ({ database, sources, skipped = {} }: ImportOpt
           return id;
         };
 
+        // The same tournament imported from another directory: its earlier paths are no longer its source.
+        const underDir = (path: string) => path.startsWith(`${dir}/`);
+        const stale = db.query<{ path: string }, [string]>("SELECT path FROM source_files WHERE tournament_id = ?").all(tournamentId).filter(({ path }) => !underDir(path));
+
+        for (const { path } of stale) {
+          db.query("UPDATE source_records SET current = 0 WHERE path = ?").run(path);
+          db.query("DELETE FROM source_files WHERE path = ?").run(path);
+        }
+
         put("tournaments", { id: tournamentId, name: file.config.name, source_dir: dir, created_at: file.created_at, git_commit: file.git_commit, status: "partial", config_json: json(file.config), source_record: sha(json([tournamentPath, 1, tournamentText])) });
         observe(tournamentPath, tournamentText, null);
         record(tournamentPath, 1, tournamentText);
@@ -116,7 +132,10 @@ export const importTournaments = ({ database, sources, skipped = {} }: ImportOpt
           const callText = textOf(callsPath);
           const skipReason = skipped[dir]?.[match.name];
           const isSkipped = skipReason !== undefined;
-          const fingerprint = sha(json([importerHash, json(match), manifestText, eventText, callText, priceHash, skipReason ?? null]));
+          // Checked against this tournament's config before the fingerprint, so a config change that alters the result refreshes the match.
+          const validation = manifestText === undefined ? Option.none() : validateManifest(manifestText);
+          const manifestMismatches = Option.isSome(validation) ? manifestProblems(tournament, match, validation.value) : [];
+          const fingerprint = sha(json([importerHash, json(match), manifestText, eventText, callText, priceHash, skipReason ?? null, matchDir, manifestMismatches]));
           const previous = db.query<{ fingerprint: string }, [string]>("SELECT fingerprint FROM matches WHERE id = ?").get(matchId);
 
           if (previous?.fingerprint === fingerprint) continue;
@@ -133,7 +152,9 @@ export const importTournaments = ({ database, sources, skipped = {} }: ImportOpt
 
           const parsed = manifestText === undefined ? undefined : decodeManifest(manifestText);
           const manifest = parsed !== undefined && Result.isSuccess(parsed) ? parsed.success : undefined;
-          const status = manifest?.status === "finished" && !isSkipped ? "completed" : manifestText !== undefined || eventText !== undefined || callText !== undefined ? "partial" : isSkipped ? "skipped" : "unstarted";
+          const unscorable = manifest?.status === "finished" ? scoringProblem(manifest.standings, match.entrants.map((_, index) => manifest.letters[index] ?? match.seats[index] ?? "")) : undefined;
+          // A finished, unskipped match with complete standings becomes completed only after its replay and end event check out, below.
+          const status = manifestText !== undefined || eventText !== undefined || callText !== undefined ? "partial" : isSkipped ? "skipped" : "unstarted";
           put("matches", { id: matchId, tournament_id: tournamentId, name: match.name, pairing: match.pairing, block: match.block, seed: match.seed, seed_block_id: sha(json([tournamentId, match.pairing, match.block, match.seed])), status, disposition: isSkipped ? "skipped" : null, status_reason: skipReason ?? null, started_at: null, ended_at: null, code_hash: null, rules_hash: null, instructions_hash: null, source_dir: matchDir, schedule_json: json(match), manifest_json: manifestText ?? null, source_record: null, fingerprint, replay_status: manifest === undefined ? "unavailable" : "pending", replay_error: null });
           const provenanceObject = manifest?.provenance ?? null;
           const provenance = Schema.decodeUnknownOption(Schema.Struct({ code_sha: Schema.String, instructions_sha: Schema.String }))(provenanceObject);
@@ -145,9 +166,10 @@ export const importTournaments = ({ database, sources, skipped = {} }: ImportOpt
             db.query("UPDATE matches SET source_record = ? WHERE id = ?").run(id, matchId);
 
             if (parsed !== undefined && Result.isFailure(parsed)) issue(`Manifest: ${parsed.failure.message}`, matchId, id);
-            const validation = validateManifest(manifestText);
 
-            if (Option.isSome(validation)) for (const message of manifestProblems(tournament, match, validation.value)) issue(message, matchId, id);
+            for (const message of manifestMismatches) issue(message, matchId, id);
+
+            if (unscorable !== undefined) issue(unscorable, matchId, id);
           }
 
           const readLines = <A>(path: string, text: string | undefined, decode: (raw: string) => Result.Result<A, Schema.SchemaError>): ReadonlyArray<Observation<A>> => {
@@ -173,11 +195,15 @@ export const importTournaments = ({ database, sources, skipped = {} }: ImportOpt
           const calls = readLines(callsPath, callText, decodeCall);
           const ended = events.some(({ value }) => value.kind === "end");
 
+          let unverified = !ended;
+
           if (manifest?.status === "finished" && !ended) issue("Finished manifest without end event in snapshot", matchId);
 
           if (manifest?.status === "running" && ended) issue("End event with running manifest in snapshot; refresh after writer finishes", matchId);
 
           db.query("UPDATE matches SET started_at = ?, ended_at = ? WHERE id = ?").run(events[0]?.value.t ?? null, events.findLast(({ value }) => value.kind === "end")?.value.t ?? null, matchId);
+
+          const shares = new Map<number, number | null>();
 
           for (const [index, name] of match.entrants.entries()) {
             const player = manifest?.letters[index] ?? match.seats[index];
@@ -186,7 +212,8 @@ export const importTournaments = ({ database, sources, skipped = {} }: ImportOpt
             const cash = manifest?.standings?.find((standing) => standing.player === player)?.cash;
             const high = manifest?.standings === undefined ? undefined : Math.max(...manifest.standings.map((standing) => standing.cash));
             const winners = manifest?.standings?.filter((standing) => standing.cash === high).length;
-            put("match_seats", { match_id: matchId, position: index + 1, entrant_id: sha(`${tournamentId}\0${name}`), player, cash: cash ?? null, win_share: status !== "completed" || cash === undefined || winners === undefined ? null : cash === high ? 1 / winners : 0, provenance_json: json(provenanceObject) });
+            put("match_seats", { match_id: matchId, position: index + 1, entrant_id: sha(`${tournamentId}\0${name}`), player, cash: cash ?? null, win_share: null, provenance_json: json(provenanceObject) });
+            shares.set(index + 1, cash === undefined || winners === undefined ? null : cash === high ? 1 / winners : 0);
 
             if (manifest !== undefined && (manifest.letters[index] !== match.seats[index] || manifest.seed !== String(match.seed))) issue(`Schedule differs from manifest at position ${index + 1}`, matchId);
           }
@@ -259,6 +286,8 @@ export const importTournaments = ({ database, sources, skipped = {} }: ImportOpt
           }
 
           if (replayError !== null) issue(`Replay: ${replayError}`, matchId);
+
+          if (replayError !== null || Option.isNone(replay)) unverified = true;
           db.query("UPDATE matches SET replay_status = ?, replay_error = ? WHERE id = ?").run(replayError !== null ? "diverged" : manifest === undefined ? "unavailable" : "validated", replayError, matchId);
 
           for (const [ordinal, observation] of calls.entries()) {
@@ -283,9 +312,27 @@ export const importTournaments = ({ database, sources, skipped = {} }: ImportOpt
 
             if (Option.isSome(replay) && replayError === null) {
               const last = replay.value.frames.at(-1);
+              const current = replay.value.session.current(replay.value.table);
 
-              for (const standing of manifest.standings ?? []) if (last?.players.find(({ player }) => player === standing.player)?.cash !== standing.cash) issue(`Replayed cash differs for ${standing.player}`, matchId);
+              if (Option.isNone(current) || current.value.game.pending.kind !== "Finished") {
+                issue("Replay did not reach a finished match", matchId);
+                unverified = true;
+              }
+
+
+              for (const standing of manifest.standings ?? []) {
+                if (last?.players.find(({ player }) => player === standing.player)?.cash !== standing.cash) {
+                  issue(`Replayed cash differs for ${standing.player}`, matchId);
+                  unverified = true;
+                }
+              }
             }
+          }
+
+          if (manifest?.status === "finished" && !isSkipped && unscorable === undefined && !unverified) {
+            db.query("UPDATE matches SET status = 'completed' WHERE id = ?").run(matchId);
+
+            for (const [position, share] of shares) db.query("UPDATE match_seats SET win_share = ? WHERE match_id = ? AND position = ?").run(share, matchId, position);
           }
         }
 

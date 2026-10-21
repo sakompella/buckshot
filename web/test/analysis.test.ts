@@ -1,9 +1,12 @@
 import { expect, test } from "bun:test";
-import { appendFileSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { Option, Result } from "effect";
+
 import { importTournaments, openAnalysis } from "../src/analysis/import.ts";
+import { replayOf } from "../src/viewer/replay.ts";
 import { playFauxRun } from "./faux-run.ts";
 
 test("refreshes resumed logs without duplicating calls, retains bad observations, and rebuilds the same projections", async () => {
@@ -112,5 +115,152 @@ test("a finished match with an explicit skip keeps its moves and costs but is no
       expect(db.query("SELECT COUNT(*) > 0 AS has FROM calls").get()).toEqual({ has: 1 });
       expect(db.query("SELECT status FROM tournaments").get()).toEqual({ status: "completed" });
     } finally { db.close(); }
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+const probeTournament = async (root: string, effort: string) => {
+  const source = join(root, "source");
+  const name = "a_b_b0_p0";
+  mkdirSync(source);
+  await playFauxRun(join(source, name), ["Agent", "Agent"], "on-turn");
+  const manifestPath = join(source, name, "manifest.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+
+  for (const agent of Object.values<{ effort: string | null }>(manifest.provenance.agents)) agent.effort = "medium";
+
+  writeFileSync(manifestPath, JSON.stringify(manifest));
+  const configured = (aEffort: string) => ({ format: 1, created_at: "2026-01-01T00:00:00Z", git_commit: "test", config: { name: "probe", seed: 42, delivery: "on-turn", endpoints: { fake: { api: "anthropic", url: "http://invalid", keyEnv: "UNUSED" } }, entrants: { a: { endpoint: "fake", model: "faux-a", effort: aEffort }, b: { endpoint: "fake", model: "faux-b", effort: "medium" } }, pairings: [["a", "b"]], blocksPerPairing: 1 }, schedule: [{ name, pairing: 0, block: 0, seed: 42, seats: ["A", "B"], entrants: ["a", "b"] }] });
+  const configure = (aEffort: string) => writeFileSync(join(source, "tournament.json"), JSON.stringify(configured(aEffort)));
+  configure(effort);
+
+  return { source, manifestPath, configure };
+};
+
+const rowsOf = (database: string, sql: string) => {
+  const db = openAnalysis(database);
+
+  try { return db.query(sql).all(); } finally { db.close(); }
+};
+
+test("a changed tournament config revalidates unchanged matches, as a fresh rebuild does", async () => {
+  const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
+
+  try {
+    const { source, configure } = await probeTournament(root, "medium");
+    const database = join(root, "analysis.sqlite");
+    const fresh = join(root, "fresh.sqlite");
+    importTournaments({ database, sources: [source] });
+    expect(rowsOf(database, "SELECT message FROM issues")).toEqual([]);
+    configure("high");
+    importTournaments({ database, sources: [source] });
+    importTournaments({ database: fresh, sources: [source] });
+    expect(rowsOf(database, "SELECT message FROM issues")).toEqual([{ message: "agent A played at effort medium, the schedule says high" }]);
+    expect(rowsOf(database, "SELECT message FROM issues")).toEqual(rowsOf(fresh, "SELECT message FROM issues"));
+    configure("medium");
+    importTournaments({ database, sources: [source] });
+    expect(rowsOf(database, "SELECT message FROM issues")).toEqual([]);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("importing the same tournament from a new directory leaves every row and source observation pointing at the new one", async () => {
+  const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
+
+  try {
+    const { source } = await probeTournament(root, "medium");
+    const database = join(root, "analysis.sqlite");
+    const relocated = join(root, "relocated");
+    importTournaments({ database, sources: [source] });
+    const before = rowsOf(database, "SELECT id,tournament_id FROM matches");
+    const decisions = rowsOf(database, "SELECT COUNT(*) AS n FROM decisions");
+    cpSync(source, relocated, { recursive: true });
+    importTournaments({ database, sources: [relocated] });
+    expect(rowsOf(database, "SELECT id,tournament_id FROM matches")).toEqual(before);
+    expect(rowsOf(database, "SELECT COUNT(*) AS n FROM tournaments")).toEqual([{ n: 1 }]);
+    expect(rowsOf(database, "SELECT COUNT(*) AS n FROM decisions")).toEqual(decisions);
+    expect(rowsOf(database, "SELECT t.source_dir AS tournament, m.source_dir AS match FROM matches m JOIN tournaments t ON t.id = m.tournament_id")).toEqual([{ tournament: relocated, match: join(relocated, "a_b_b0_p0") }]);
+    expect(rowsOf(database, "SELECT COUNT(*) AS n FROM source_files WHERE path NOT LIKE '" + relocated + "/%'")).toEqual([{ n: 0 }]);
+    expect(rowsOf(database, "SELECT COUNT(*) AS n FROM source_records WHERE current = 1 AND path NOT LIKE '" + relocated + "/%'")).toEqual([{ n: 0 }]);
+    expect(rowsOf(database, "SELECT COUNT(*) AS n FROM issues")).toEqual([{ n: 0 }]);
+    expect(rowsOf(database, "PRAGMA foreign_key_check")).toEqual([]);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("a finished match whose standings do not cover every player is reported and not counted as completed or scored", async () => {
+  const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
+
+  try {
+    const { source, manifestPath } = await probeTournament(root, "medium");
+    const database = join(root, "analysis.sqlite");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    const standings = manifest.standings;
+
+    for (const [label, broken] of [["no standings", undefined], ["one player", standings.slice(0, 1)], ["a repeated player", [standings[0], standings[0]]], ["an unscheduled player", [standings[0], { ...standings[1], player: "C" }]]] as const) {
+      writeFileSync(manifestPath, JSON.stringify({ ...manifest, standings: broken }));
+      importTournaments({ database, sources: [source] });
+      expect([label, rowsOf(database, "SELECT status FROM matches")]).toEqual([label, [{ status: "partial" }]]);
+      expect([label, rowsOf(database, "SELECT COUNT(*) AS n FROM issues WHERE message LIKE 'Finished manifest%'")]).toEqual([label, [{ n: 1 }]]);
+      expect(rowsOf(database, "SELECT COUNT(*) AS n FROM match_seats WHERE win_share IS NOT NULL")).toEqual([{ n: 0 }]);
+      expect(rowsOf(database, "SELECT status FROM tournaments")).toEqual([{ status: "partial" }]);
+    }
+
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+    importTournaments({ database, sources: [source] });
+    expect(rowsOf(database, "SELECT status FROM matches")).toEqual([{ status: "completed" }]);
+    expect(rowsOf(database, "SELECT COUNT(*) AS n FROM issues")).toEqual([{ n: 0 }]);
+    expect(rowsOf(database, "SELECT COUNT(*) AS n FROM match_seats WHERE win_share IS NOT NULL")).toEqual([{ n: 2 }]);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("a finished match is scored only when its replay and end event confirm the manifest", async () => {
+  const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
+
+  try {
+    const { source, manifestPath } = await probeTournament(root, "medium");
+    const database = join(root, "analysis.sqlite");
+    const eventsPath = join(source, "a_b_b0_p0", "events.jsonl");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    const events = readFileSync(eventsPath, "utf8");
+    const scored = () => rowsOf(database, "SELECT m.status, COUNT(s.win_share) AS shares FROM matches m JOIN match_seats s ON s.match_id = m.id GROUP BY m.id");
+    importTournaments({ database, sources: [source] });
+    expect(scored()).toEqual([{ status: "completed", shares: 2 }]);
+
+    writeFileSync(manifestPath, JSON.stringify({ ...manifest, standings: manifest.standings.map((standing: { cash: number }, index: number) => ({ ...standing, cash: standing.cash + index + 1 })) }));
+    importTournaments({ database, sources: [source] });
+    expect(scored()).toEqual([{ status: "partial", shares: 0 }]);
+    expect(rowsOf(database, "SELECT COUNT(*) AS n FROM issues WHERE message LIKE 'Replayed cash differs%'")).toEqual([{ n: 2 }]);
+
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+    writeFileSync(eventsPath, events.split("\n").filter((line) => !line.includes('"kind":"end"')).join("\n"));
+    importTournaments({ database, sources: [source] });
+    expect(scored()).toEqual([{ status: "partial", shares: 0 }]);
+    expect(rowsOf(database, "SELECT message FROM issues")).toEqual([{ message: "Finished manifest without end event in snapshot" }]);
+
+    writeFileSync(eventsPath, events);
+    importTournaments({ database, sources: [source] });
+    expect(scored()).toEqual([{ status: "completed", shares: 2 }]);
+    expect(rowsOf(database, "SELECT COUNT(*) AS n FROM issues")).toEqual([{ n: 0 }]);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("a truncated but legal move prefix with an end marker and matching current cash is not a finished match", async () => {
+  const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
+
+  try {
+    const { source, manifestPath } = await probeTournament(root, "medium");
+    const database = join(root, "analysis.sqlite");
+    const eventsPath = join(source, "a_b_b0_p0", "events.jsonl");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    const lines = readFileSync(eventsPath, "utf8").split("\n");
+    const lastMove = lines.findLastIndex((line) => line.includes('"kind":"move"'));
+    const moves = lines.flatMap((line) => line.includes('"kind":"move"') ? [JSON.parse(line)] : []);
+    const prefix = replayOf(replayOf(Option.none(), manifest, []).pipe(Result.getOrThrow, Option.some), manifest, moves.slice(0, -1)).pipe(Result.getOrThrow);
+    const cash = prefix.frames.at(-1)?.players ?? [];
+    expect(cash.length).toBe(2);
+    writeFileSync(eventsPath, lines.filter((_, index) => index !== lastMove).join("\n"));
+    writeFileSync(manifestPath, JSON.stringify({ ...manifest, standings: manifest.standings.map((standing: { player: string }) => ({ ...standing, cash: cash.find(({ player }) => player === standing.player)?.cash })) }));
+    importTournaments({ database, sources: [source] });
+    expect(rowsOf(database, "SELECT status FROM matches")).toEqual([{ status: "partial" }]);
+    expect(rowsOf(database, "SELECT COUNT(*) AS n FROM match_seats WHERE win_share IS NOT NULL")).toEqual([{ n: 0 }]);
+    expect(rowsOf(database, "SELECT message FROM issues")).toEqual([{ message: "Replay did not reach a finished match" }]);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
