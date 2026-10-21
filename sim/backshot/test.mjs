@@ -83,6 +83,12 @@ assert.equal(run({live:2,blank:1,playerItems:'h',cuffs:2},true).value.includes('
 assert.equal(run({dealerHp:0,playerHp:0},true).value,'1/2');
 assert.equal(L['heuristic.obvious'](true,state({playerTurn:false,dealerHp:1,playerHp:2,shell:'live',dealerItems:'s'})).value,8n);
 assert.equal(L['heuristic.obvious'](false,state({playerTurn:false,dealerHp:1,playerHp:2,shell:'live',dealerItems:'s'},false)).value,1n);
+// Spec 5.5: a contradicted known shell adds +-1,000,000 as one term; it does not replace the score.
+const score=(input,m)=>rational(L['heuristic.score'](state(input,false),BigInt(m)));
+const contradicted={live:2,blank:2,shell:'live',playerHp:2,dealerItems:'s'};
+assert.deepEqual(score(contradicted,8),[-999860n,1n]);
+assert.deepEqual(score(contradicted,0),[90n,1n]);
+assert.deepEqual(score({live:1,blank:0,shell:'live',dealerHp:0},1),[100n,1n]);
 const glass=outcomes({live:1,blank:1},10)[0].state;
 assert.equal(glass.live,0n);
 assert.equal(L['state.total'](glass),2n);

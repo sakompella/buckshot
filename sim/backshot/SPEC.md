@@ -153,13 +153,24 @@ For every candidate move m (2.2 order; including ones the filter will drop): app
 
 ### 5.5 Predicted score of (move, outcome position), "child" = the outcome; "turn" below = the child's turn
 score = base + known + other + usage − sawpen − lowpen + 100 × P/(P+D)
+
+The score is always this sum. No term overrides the others. The ±1,000,000 values below are finite terms that are added like any other, not results that replace the whole score.
 - base: −1,000,000 if Player hp = 0, else +1,000,000 if Dealer hp = 0, else 0. (P+D=0 → ABORT.)
 - known and other only if L+B ≠ 0 in the child:
-  - known: slot 0 live → ±200 (+ for Player's turn, − for Dealer's); then Player's turn and move ≠ shoot-dealer → return −1,000,000 instead; Dealer's turn and move ≠ shoot-player → +1,000,000. Slot 0 blank → ±100; Player's turn and move ≠ shoot-player → −1,000,000; Dealer's turn and move ≠ shoot-dealer → +1,000,000. Unknown → c = L/(L+B); if (Player's turn and move = shoot-dealer) or (Dealer's turn and move = shoot-player) c×100; result c. ("return" replaces the ±200/±100, it is not added to it.)
-  - other: only if slot 0 unknown and L/(L+B) ≥ 1/2: if (Player's turn and move = shoot-dealer) or (Dealer's turn and move = shoot-player): 100×(L−B); else 0.
+  - known is the following subscore, which then enters the sum:
+    - Slot 0 live: if (Player's turn and move = shoot-dealer) or (Dealer's turn and move = shoot-player), known = +200 on the Player's turn and −200 on the Dealer's turn. Otherwise the move contradicts the known live shell and known = −1,000,000 on the Player's turn, +1,000,000 on the Dealer's turn.
+    - Slot 0 blank: if (Player's turn and move = shoot-player) or (Dealer's turn and move = shoot-dealer), known = +100 on the Player's turn and −100 on the Dealer's turn. Otherwise known = −1,000,000 on the Player's turn, +1,000,000 on the Dealer's turn.
+    - Slot 0 unknown: c = L/(L+B); known = c×100 if (Player's turn and move = shoot-dealer) or (Dealer's turn and move = shoot-player), else c.
+    - Contradiction replaces only known. base, other, usage, sawpen, lowpen and the health-share term are still computed and added, so the final score is usually not exactly ±1,000,000. Two sentinels can also cancel: base +1,000,000 (Dealer hp 0) plus known −1,000,000 (Player's turn, contradicting move) leaves the other terms.
+- other: only if slot 0 unknown and L/(L+B) ≥ 1/2: if (Player's turn and move = shoot-dealer) or (Dealer's turn and move = shoot-player): 100×(L−B); else 0.
 - usage: beer: 250 if slot 0 unknown and L<B else 0. Cigarettes: 150 × (max − hp of the child's-turn side). Saw: 250 if slot 0 live; else 100 if L ≥ B; else 0. Handcuffs: 250 if L+B = 2 else 100. Glass: 2500. All other moves 0.
 - sawpen: 150 if (Player's turn, Dealer holds a saw, Player hp ≤ 2) or (Dealer's turn, Player holds a saw, Dealer hp ≤ 2).
 - lowpen: 100 if the turn side has hp = 1.
+
+Worked examples of the additive sentinel. Each is the score of one child position for the named move:
+- Player's turn, max 3, Dealer hp 3, Player hp 2, L2 B2, slot 0 live, Dealer holds a saw, move = hand saw. base 0; known −1,000,000 (saw contradicts a known live shell); other 0 (slot 0 is known); usage +250 (saw, slot 0 live); sawpen 150 (Dealer holds a saw and Player hp ≤ 2); lowpen 0; health share 100×2/5 = 40. Score = −1,000,000 + 250 − 150 + 40 = **−999,860**. The same child scored for shoot-dealer is +200 − 150 + 40 = **90**.
+- Player's turn, Dealer hp 0, Player hp 3, L1 B0, slot 0 live, move = shoot-player. base +1,000,000; known −1,000,000; usage 0; health share 100×3/3 = 100. Score = **100**.
+
 Unused code: a per-item material table and the transposition table, never applied.
 
 ## 6. Edge cases and quirks (reasoned)
