@@ -24,7 +24,7 @@ After a move, worlds are grouped by what the public and the searcher observe. On
 
 - **No depth left.**
 - **The round ended.** The value is exact: 1,000,000 if `me` won the round, 0 if not. This holds even when the next round began without a draw and already waits on a choice.
-- **A reload has begun.** A move that empties the gun, by a shot or an ejected shell, stops at the reload's first draw (`NeedTurnAmount`, `NeedItem`, `NeedBatch` or `NeedSwap`). The state is valued as it stands, before the new items and batch, so the search never looks past the end of a batch. Expanding a reload's item draws and shuffle multiplies the branches by every item and batch combination, far beyond any useful budget.
+- **A reload needs a draw.** A move that empties the gun, by a shot or an ejected shell, stops at the reload's first draw (`NeedTurnAmount`, `NeedItem`, `NeedBatch` or `NeedSwap`). The state is valued at that point, before the draw is resolved. A fully deterministic reload can finish in the same answer, and search continues at its next choice. Expanding random item and batch draws multiplies the branches beyond a useful budget.
 
 ## Modules
 
