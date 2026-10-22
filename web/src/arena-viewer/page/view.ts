@@ -7,8 +7,12 @@ import { type Derived, derive } from "./derived.ts";
 import { breakdownView, heatRowsOf } from "./heat.ts";
 import { interestingView, picksOf } from "./interesting.ts";
 import { leaderboardView } from "./leaderboard.ts";
+import { matchesView } from "./matches.ts";
 import { Message, type Model, TABS, type Viewport } from "./model.ts";
+import { reliabilityView } from "./reliability.ts";
+import { replayView } from "./replay.ts";
 import { scatterView } from "./scatter.ts";
+import { seatsView } from "./seats.ts";
 
 type H = HtmlBuilder<Message>;
 
@@ -109,7 +113,30 @@ const overviewView = (h: H, model: Model, derived: Derived): Html =>
     ],
   );
 
-const comingView = (h: H, title: string): Html => h.section([], [h.h2([], [title]), h.p([h.Class("sub")], ["This tab is still being ported."])]);
+const lazyMatches = createLazy();
+
+const lazySeats = createLazy();
+
+const lazyReliability = createLazy();
+
+const lazyReplay = createLazy();
+
+// The filters apply to the whole tab, so each tab places them above the content they filter.
+const tabView = (h: H, model: Model, derived: Derived): Html => {
+  switch (model.tab) {
+    case "overview":
+      return overviewView(h, model, derived);
+    case "matches":
+      return lazyMatches((d: Derived, filter: Model["filter"], list: Model["matchList"]) => matchesView(h, filtersView(h, d, filter), d.matches, list), [derived, model.filter, model.matchList]);
+    case "seats":
+      return lazySeats((d: Derived, filter: Model["filter"]) => seatsView(h, filtersView(h, d, filter), d), [derived, model.filter]);
+    case "reliability":
+      return lazyReliability(
+        (d: Derived, filter: Model["filter"], tip: Model["maybeRateTip"]) => reliabilityView(h, filtersView(h, d, filter), d.decisions, d.seats, d.keep, tip),
+        [derived, model.filter, model.maybeRateTip],
+      );
+  }
+};
 
 const navView = (h: H, model: Model): Html =>
   h.nav(
@@ -122,22 +149,32 @@ const navView = (h: H, model: Model): Html =>
 
 const isPinned = (model: Model): boolean => Option.isSome(model.scatter.maybePin) || Option.isSome(model.scatter.maybeHover);
 
-export const view = (model: Model, h: H): Document => ({
-  title: "Buckshot arena",
-  body: h.main(
-    // Touch has no hover: a tap pins a point, and a tap anywhere outside the chart unpins it.
-    isPinned(model) ? [h.OnClick(Message.ClickedOutsideChart())] : [],
-    AsyncData.matchData(model.data, {
-      onEmpty: () => [h.p([h.Class("k")], ["Loading the analysis database…"])],
-      onFailure: (error) => [h.p([h.Class("k")], [`Could not load the analysis database: ${error}`])],
-      onData: (loaded) => {
-        const derived = derive(loaded, model.filter);
+export const view = (model: Model, h: H): Document =>
+  AsyncData.matchData(model.data, {
+    onEmpty: () => ({ title: "Buckshot arena", body: h.main([], [h.p([h.Class("k")], ["Loading the analysis database…"])]) }),
+    onFailure: (error) => ({ title: "Buckshot arena", body: h.main([], [h.p([h.Class("k")], [`Could not load the analysis database: ${error}`])]) }),
+    onData: (loaded) => {
+      const derived = derive(loaded, model.filter);
 
-        return [
-          navView(h, model),
-          model.tab === "overview" ? overviewView(h, model, derived) : comingView(h, TABS.find(([tab]) => tab === model.tab)?.[1] ?? ""),
-        ];
-      },
-    }),
-  ),
-});
+      const replay = Option.match(model.maybeReplay, {
+        onNone: () => h.empty,
+        onSome: (open) =>
+          lazyReplay(
+            (shown: typeof open, data: Model["matches"][string] | undefined, viewport: Viewport) => replayView(h, shown, data, derived.allMatches, viewport),
+            [open, model.matches[open.id], model.viewport],
+          ),
+      });
+
+      return {
+        title: "Buckshot arena",
+        body: h.div(
+          [],
+          [
+            // Touch has no hover: a tap pins a point, and a tap anywhere outside the chart unpins it.
+            h.main(isPinned(model) ? [h.OnClick(Message.ClickedOutsideChart())] : [], [navView(h, model), tabView(h, model, derived)]),
+            replay,
+          ],
+        ),
+      };
+    },
+  });

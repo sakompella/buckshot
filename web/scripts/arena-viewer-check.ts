@@ -3,8 +3,8 @@ import { join } from "node:path";
 
 import { type Browser, chromium, type Page } from "playwright-core";
 
-// Clicks through the arena viewer's Overview in headless Chromium at desktop,
-// phone and tablet widths and saves screenshots. Pointed at the old viewer too,
+// Clicks through the arena viewer's tabs and replay in headless Chromium at
+// desktop, phone and tablet widths and saves screenshots. Pointed at the old viewer too,
 // it gives the pictures to compare against.
 // Usage: bun scripts/arena-viewer-check.ts <url> [outdir]
 
@@ -50,7 +50,7 @@ const openOverview = async (page: Page) => {
 // Visible controls smaller than 44px either way (heat cells and leaderboard squares are left out).
 const smallTargets = (page: Page) =>
   page.evaluate(() =>
-    [...document.querySelectorAll("nav button, .toggle button, .chip, .switch, select")].flatMap((element) => {
+    [...document.querySelectorAll("nav button, .toggle button, .chip, .switch, select, input:not([type=checkbox]), .stepper button, .modal .x")].flatMap((element) => {
       const box = element.getBoundingClientRect();
 
       return box.width > 0 && (box.height < 44 || box.width < 44) ? [`${element.className || element.tagName} ${element.textContent?.slice(0, 20)} ${Math.round(box.width)}x${Math.round(box.height)}`] : [];
@@ -104,6 +104,47 @@ const checkDesktop = async (browser: Browser) => {
   await page.locator(".drillin .sq i").first().hover();
   console.log("drill → tip:", await tipOf(page));
   await page.locator(".lb").first().screenshot({ path: shot("leaderboard") });
+
+  for (const [card, name] of [
+    [0, "replay"],
+    [4, "replay-blunder"],
+  ] as const) {
+    await page.locator(".icard").nth(card).click();
+    await page.waitForSelector(".modal .step");
+
+    for (let step = 0; step < (card === 0 ? 6 : 0); step++) await page.keyboard.press("ArrowRight");
+
+    console.log(name, "steps", await countOf(page, ".modal .step"), "| on:", await textOf(page, ".modal .step.on .h"), "| reasoning blocks", await countOf(page, ".modal .step.on pre"), "| same-seed chips", await countOf(page, ".seedrow .chip"));
+    await page.locator(".modal").screenshot({ path: shot(name) });
+    await page.keyboard.press("Escape");
+  }
+
+  await page.locator(".flagged tr.row").first().click();
+  await page.waitForSelector(".modal .step.on");
+  console.log("focused move", await textOf(page, ".modal .step.on .h"));
+  await page.locator(".seedrow .chip").first().click();
+  await page.waitForSelector(".modal .step");
+  await settled(page);
+  console.log("after same-seed chip:", await textOf(page, ".mhead h2"));
+  await page.keyboard.press("Escape");
+
+  for (const [tab, selector] of [
+    ["matches", "tbody tr.row"],
+    ["seats", "tbody tr"],
+    ["reliability", "tbody tr"],
+  ] as const) {
+    await page.goto(`${base}/#${tab}`);
+    await page.waitForSelector(selector, { timeout: 120_000 });
+    console.log(tab, selector, await countOf(page, selector));
+    await page.screenshot({ path: shot(tab), fullPage: true });
+  }
+
+  await page.locator("tbody td[data-label='failed calls']").first().hover();
+  console.log("reliability tip:", await tipOf(page));
+  await page.goto(`${base}/#matches`);
+  await page.locator("tbody tr.row").first().click();
+  await page.waitForSelector(".modal .step");
+  console.log("matches → modal", await textOf(page, ".mhead h2"));
   await page.close();
 };
 
@@ -125,6 +166,27 @@ const checkTouch = async (browser: Browser, name: string, width: number, height:
   await settled(page);
   await heat(page).locator(".heatscroll").evaluate((element) => element.scrollTo({ left: 200 }));
   await heat(page).screenshot({ path: shot(`${name}-heat-items`) });
+  await page.locator(".icard").first().tap();
+  await page.waitForSelector(".modal .step");
+
+  const box = await page.locator(".modal").boundingBox();
+  const before = await textOf(page, ".modal .stepper .k");
+
+  await page.locator(".stepper button", { hasText: "Next" }).tap();
+  await page.locator(".stepper button", { hasText: "Next" }).tap();
+  await settled(page);
+  console.log(name, "replay", `${box?.width}x${box?.height}`, "| stepper", before, "→", await textOf(page, ".modal .stepper .k"), "| on:", await textOf(page, ".modal .step.on .h"), "| small targets", await smallTargets(page));
+  await page.screenshot({ path: shot(`${name}-replay`) });
+  await page.goBack();
+  console.log(name, "back closes replay:", (await countOf(page, ".modal")) === 0);
+
+  for (const tab of ["matches", "seats", "reliability"]) {
+    await page.goto(`${base}/#${tab}`);
+    await page.waitForSelector("tbody tr", { timeout: 120_000 });
+    console.log(name, tab, "overflow", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page));
+    await page.screenshot({ path: shot(`${name}-${tab}`), fullPage: true });
+  }
+
   await context.close();
 };
 

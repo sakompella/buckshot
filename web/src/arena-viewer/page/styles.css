@@ -120,6 +120,8 @@ table.heat td.total { font-weight: 600; text-align: center; padding: 3px 10px; }
 
 /* replay modal */
 .overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.72); z-index: 30; display: flex; align-items: center; justify-content: center; }
+.overlay > .backdrop { position: absolute; inset: 0; }
+body:has(.overlay) { overflow: hidden; }
 .modal { position: relative; width: min(1320px, 96vw); height: 90vh; background: #050505; border: 1px solid var(--line); border-radius: 6px; padding: 18px 22px; display: flex; flex-direction: column; }
 .modal .x { position: absolute; right: 14px; top: 10px; background: none; border: 0; color: var(--mut); font-size: 16px; cursor: pointer; }
 .mhead h2 { padding-right: 30px; margin-bottom: 2px; }

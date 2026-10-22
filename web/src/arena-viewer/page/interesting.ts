@@ -2,10 +2,11 @@ import { Option } from "effect";
 import { AsyncData } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { type MatchDetail, patternBit, type Step } from "../api.ts";
+import { patternBit } from "../api.ts";
 import { colorOf, fmtUsd, keyOf, labelOf, type MatchRow, type SeatFull, sumOf, winnerOf } from "./data.ts";
 import { type Derived, memoLast } from "./derived.ts";
 import { Message, type Model } from "./model.ts";
+import { moveStripView } from "./replay.ts";
 
 type H = HtmlBuilder<Message>;
 
@@ -107,54 +108,6 @@ export const picksOf = memoLast((derived: Derived): ReadonlyArray<Pick> => {
   return picks;
 });
 
-/** The model moves a replay steps through: forced moves are left out. */
-export const stepsOf = (detail: MatchDetail): ReadonlyArray<Step> => detail.decisions.filter(({ byWhom }) => byWhom !== "forced");
-
-/** The shell a move fired, if it was a shot. */
-export const shotOf = (step: Step): "live" | "blank" | null => {
-  const shot = / shot [^:]*: (live|blank)/.exec(step.outcome.join(" "));
-
-  if (shot === null) return null;
-
-  return shot[1] === "live" ? "live" : "blank";
-};
-
-export const seatColor = (detail: MatchDetail, player: string): string => {
-  const seat = detail.seats.find((candidate) => candidate.player === player);
-
-  return seat === undefined ? "#999" : colorOf(seat.model, seat.effort);
-};
-
-/** A compact strip of one match: a tick per model move, tall for a live shot, short for a blank, a dot for anything else. */
-export const moveStripView = (h: H, detail: MatchDetail, width: number, height = 26): Html => {
-  const steps = stepsOf(detail);
-  const x = (index: number) => 2 + (index / Math.max(1, steps.length - 1)) * (width - 4);
-
-  return h.div(
-    [],
-    [
-      h.svg(
-        [h.Width(`${width}`), h.Height(`${height}`)],
-        [
-          ...steps.flatMap((step, index) =>
-            index > 0 && step.round !== steps[index - 1]?.round ? [h.line([h.X1(`${x(index - 0.5)}`), h.X2(`${x(index - 0.5)}`), h.Y1("0"), h.Y2(`${height}`), h.Stroke("#333")], [])] : [],
-          ),
-          ...steps.map((step, index) => {
-            const shot = shotOf(step);
-            const color = seatColor(detail, step.player);
-    
-            if (shot === null) return h.circle([h.Cx(`${x(index)}`), h.Cy(`${height - 4}`), h.R("1.3"), h.Fill(color), h.Opacity("0.6")], []);
-    
-            const tall = shot === "live" ? height - 4 : (height - 4) / 2.6;
-    
-            return h.rect([h.X(`${x(index) - 1}`), h.Y(`${height - 2 - tall}`), h.Width("2"), h.Height(`${tall}`), h.Fill(color)], []);
-          }),
-        ],
-      ),
-    ],
-  );
-};
-
 const CARD_MIN = 260;
 
 const CARD_GAP = 14;
@@ -163,7 +116,7 @@ const CARD_GAP = 14;
 const stripWidth = (width: number): number => {
   const columns = Math.max(1, Math.floor((width + CARD_GAP) / (CARD_MIN + CARD_GAP)));
 
-  return Math.max(0, Math.floor((width - CARD_GAP * (columns - 1)) / columns - 28 - 2));
+  return Math.floor((width - CARD_GAP * (columns - 1)) / columns - 28 - 2);
 };
 
 const cardView = (h: H, pick: Pick, data: Model["matches"][string] | undefined, width: number): Html => {
