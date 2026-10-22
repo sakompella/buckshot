@@ -46,7 +46,7 @@ Scope:
    - Haiku 5.5 max cost 9 times as much as xhigh ($95 against $11 in all) and won less, 9 of 20 against xhigh head to head.
 9. **Sonnet at max effort sometimes never reaches a move.**
    - 4 calls stopped at the 128,000-token output cap after about 16 minutes each, at about $1.30 apiece.
-   - A max seat costs $4.60 per match and spends 37 minutes waiting on the model, against $0.48 for xhigh.
+   - A max seat costs $4.20 per match and spends 37 minutes waiting on the model, against $0.48 for xhigh.
 10. **Sonnet "off" still thinks.** 57% of its "off" replies carry reasoning tokens, 113 on average, more than low's 74. Haiku 5.5 and Luna at off have none. Effort labels do not mean the same thing across models.
 11. **Sonnet at max thinks longer when behind.** It writes 18.6k characters of reasoning per call at −2 HP, against 5.3k at +2. Xhigh goes from 2.1k to 0.66k, and medium is flat. Hard positions are a confound.
 12. **Astra barely thinks and still wins.**
