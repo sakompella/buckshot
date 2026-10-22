@@ -1,6 +1,6 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { linScale } from "./charts.ts";
+import { chartWidth, figureView, linScale } from "./charts.ts";
 import { addTo, type BlockTally, blockRate, colorOfKey, fmtCI, groupBy, keyOf, labelOf, type Rate, type SeatFull, unique } from "./data.ts";
 import { type Derived, memoLast } from "./derived.ts";
 import type { Message } from "./model.ts";
@@ -28,6 +28,8 @@ interface Block {
 interface GroupRow {
   readonly name: string;
   readonly rate: Rate;
+  /** The same share with an interval that draws seeds, which every pairing shares and which fix the starter. */
+  readonly bySeed: Rate;
   readonly blocks: number;
 }
 
@@ -70,17 +72,26 @@ const blocksOf = (games: ReadonlyArray<Game>) => {
   return { blocks, partial, crossCode };
 };
 
-/** The mean of `value` over the blocks' games, with a bootstrap over the blocks. */
-const shareOver = (blocks: ReadonlyArray<Block>, value: (game: Game) => number): Rate => {
+const blockOf = (block: Block) => block.id;
+
+const seedOf = (block: Block) => String(block.games[0].first.seed);
+
+/** The mean of `value` over the blocks' games, with a bootstrap that draws whole `unitOf` groups of blocks. */
+const shareOver = (blocks: ReadonlyArray<Block>, value: (game: Game) => number, unitOf: (block: Block) => string): Rate => {
   const tally: BlockTally = new Map();
 
-  for (const block of blocks) for (const game of block.games) addTo(tally, block.id, value(game), 1);
+  for (const block of blocks) for (const game of block.games) addTo(tally, unitOf(block), value(game), 1);
 
   return blockRate(tally, 1000);
 };
 
 const groupedRows = (blocks: ReadonlyArray<Block>, value: (game: Game) => number): ReadonlyArray<GroupRow> => {
-  const row = (name: string, members: ReadonlyArray<Block>): GroupRow => ({ name, rate: shareOver(members, value), blocks: members.length });
+  const row = (name: string, members: ReadonlyArray<Block>): GroupRow => ({
+    name,
+    rate: shareOver(members, value, blockOf),
+    bySeed: shareOver(members, value, seedOf),
+    blocks: members.length,
+  });
 
   const tournaments = unique(blocks.map(({ tournament }) => tournament)).toSorted();
   const cohorts = unique(blocks.flatMap(({ cohort }) => (cohort === null ? [] : [cohort]))).toSorted();
@@ -184,11 +195,11 @@ const storyRows = (games: ReadonlyArray<Game>) => {
 const MIN_SEED_BLOCKS = 5;
 
 const perSeedRows = (blocks: ReadonlyArray<Block>) => {
-  const bySeed = groupBy(blocks, ({ games }) => games[0].first.seed);
+  const bySeed = groupBy(blocks, seedOf);
   const kept = [...bySeed].filter(([, members]) => members.length >= MIN_SEED_BLOCKS);
 
   return {
-    rows: kept.map(([seed, members]) => ({ seed, blocks: members.length, rate: shareOver(members, starterShare) })).toSorted((left, right) => right.rate.rate - left.rate.rate),
+    rows: kept.map(([seed, members]) => ({ seed, blocks: members.length, rate: shareOver(members, starterShare, blockOf) })).toSorted((left, right) => right.rate.rate - left.rate.rate),
     leftOut: bySeed.size - kept.length,
   };
 };
@@ -236,7 +247,7 @@ const groupTableView = (h: H, rows: ReadonlyArray<GroupRow>, [shareLabel, otherL
   h.table(
     [h.Class("rows")],
     [
-      h.thead([], [h.tr([], ["Group", "Complete blocks", "Matches", shareLabel, "95% CI", otherLabel].map((title) => h.th([], [title])))]),
+      h.thead([], [h.tr([], ["Group", "Complete blocks", "Seeds", "Matches", shareLabel, "95% CI, seeds drawn", "95% CI, blocks drawn", otherLabel].map((title) => h.th([], [title])))]),
       h.tbody(
         [],
         rows.map((row) =>
@@ -245,9 +256,11 @@ const groupTableView = (h: H, rows: ReadonlyArray<GroupRow>, [shareLabel, otherL
             [
               h.td([], [row.name]),
               h.td([h.DataAttribute("label", "blocks")], [String(row.blocks)]),
+              h.td([h.DataAttribute("label", "seeds")], [String(row.bySeed.blocks)]),
               h.td([h.DataAttribute("label", "matches")], [String(row.rate.n)]),
               h.td([h.DataAttribute("label", shareLabel)], [h.b([], [pct(row.rate.rate)])]),
-              h.td([h.DataAttribute("label", "95% CI")], [interval(row.rate)]),
+              h.td([h.DataAttribute("label", "95% CI, seeds drawn")], [interval(row.bySeed)]),
+              h.td([h.DataAttribute("label", "95% CI, blocks drawn")], [interval(row.rate)]),
               h.td([h.DataAttribute("label", otherLabel)], [pct(1 - row.rate.rate)]),
             ],
           ),
@@ -351,7 +364,7 @@ const comebackView = (h: H, rows: ReadonlyArray<{ readonly label: string; readon
 };
 
 /** The round-1 starter's win share on each seed, best first, against the share over every seed. */
-const perSeedView = (h: H, rows: ReadonlyArray<{ readonly seed: number; readonly blocks: number; readonly rate: Rate }>, overall: Rate | undefined, width: number): Html => {
+const perSeedView = (h: H, rows: ReadonlyArray<{ readonly seed: string; readonly blocks: number; readonly rate: Rate }>, overall: Rate | undefined, width: number): Html => {
   if (rows.length === 0) return h.div([h.Class("empty")], ["No seed has enough complete blocks for this filter."]);
 
   const [rowHeight, top, bottom, left, right] = [19, 30, 6, 42, 46];
@@ -375,7 +388,7 @@ const perSeedView = (h: H, rows: ReadonlyArray<{ readonly seed: number; readonly
         ? h.empty
         : h.line([h.X1(S(x.at(overall.rate))), h.X2(S(x.at(overall.rate))), h.Y1(String(top - 4)), h.Y2(String(height - bottom)), h.Stroke(WON), h.StrokeOpacity("0.6"), h.StrokeDasharray("2 3")], []),
       ...rows.flatMap(({ seed, blocks, rate }, index) => [
-        h.text([h.X(String(left - 8)), h.Y(S(rowY(index) + 4)), h.TextAnchor("end")], [String(seed)]),
+        h.text([h.X(String(left - 8)), h.Y(S(rowY(index) + 4)), h.TextAnchor("end")], [seed]),
         h.line([h.X1(S(x.at(rate.lo))), h.X2(S(x.at(rate.hi))), h.Y1(S(rowY(index))), h.Y2(S(rowY(index))), h.Stroke("#8b8b8b"), h.StrokeWidth("1.5")], []),
         h.circle([h.Cx(S(x.at(rate.rate))), h.Cy(S(rowY(index))), h.R("4.5"), h.Fill(WON), h.Stroke("#000")], [h.title([], [`seed ${seed}: ${pct(rate.rate)} over ${blocks} complete blocks, 95% CI ${interval(rate)}`])]),
         h.text([h.X(String(width - right + 8)), h.Y(S(rowY(index) + 4)), h.Class("val")], [pct(rate.rate)]),
@@ -383,13 +396,6 @@ const perSeedView = (h: H, rows: ReadonlyArray<{ readonly seed: number; readonly
     ],
   );
 };
-
-const CHART_GAP = 28;
-
-/** A chart's width: three to a row on a wide screen, else one. */
-const chartWidth = (width: number, contentWidth: number): number => (width > 1024 ? Math.floor((contentWidth - 2 * CHART_GAP) / 3) : contentWidth);
-
-const figureView = (h: H, title: string, note: string, chart: Html): Html => h.figure([], [h.h3([], [title]), h.p([h.Class("sub")], [note]), chart]);
 
 /** The Seats tab, laid out for a viewport `width` wide with `content` pixels inside main's padding. */
 export const seatsView = (h: H, filters: Html, derived: Derived, width: number, content: number): Html => {
@@ -401,7 +407,10 @@ export const seatsView = (h: H, filters: Html, derived: Derived, width: number, 
   const [allStarters] = starter;
   const story = stories.find(([group]) => group === ALL_SCORED)?.[1];
   const decided = (story?.roundOneWinner ?? 0) + (story?.lostRoundOne ?? 0);
-  const blocksNote = (row: GroupRow | undefined) => (row === undefined ? "" : `${row.blocks.toLocaleString()} complete seed blocks · 95% CI ${interval(row.rate)}`);
+
+  const blocksNote = (row: GroupRow | undefined) =>
+    row === undefined ? "" : `${row.blocks.toLocaleString()} complete blocks at ${row.bySeed.blocks} seeds · 95% CI by seeds ${interval(row.bySeed)}`;
+
   const leftOut = perSeed.leftOut > 0 ? ` ${perSeed.leftOut} seeds with fewer than ${MIN_SEED_BLOCKS} complete blocks are left out.` : "";
 
   return h.div(
@@ -421,7 +430,7 @@ export const seatsView = (h: H, filters: Html, derived: Derived, width: number, 
             ],
           ),
           h.div(
-            [h.Class("seatcharts")],
+            [h.Class("chartrow")],
             [
               figureView(h, "Round 1 to the match", "Where the round-1 winner's matches end up; the bright cap is the sweeps.", flowView(h, story, figure)),
               figureView(h, "Comebacks", "Win share by the worst health gap a player faced in the final round.", comebackView(h, comebacks, figure)),

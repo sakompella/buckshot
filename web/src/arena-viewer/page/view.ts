@@ -136,8 +136,9 @@ const tabView = (h: H, model: Model, derived: Derived): Html => {
       ]);
     case "reliability":
       return lazyReliability(
-        (d: Derived, filter: Model["filter"], tip: Model["maybeRateTip"]) => reliabilityView(h, filtersView(h, d, filter), d.decisions, d.seats, d.keep, tip),
-        [derived, model.filter, model.maybeRateTip],
+        (d: Derived, filter: Model["filter"], tip: Model["maybeRateTip"], viewport: Viewport) =>
+          reliabilityView(h, filtersView(h, d, filter), d.decisions, d.seats, d.keep, tip, viewport.width, contentWidth(viewport)),
+        [derived, model.filter, model.maybeRateTip, model.viewport],
       );
   }
 };

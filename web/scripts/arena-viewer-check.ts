@@ -131,7 +131,7 @@ const checkDesktop = async (browser: Browser) => {
   for (const [tab, selector] of [
     ["matches", "tbody tr.row"],
     ["seats", ".bignum"],
-    ["reliability", "tbody tr"],
+    ["reliability", ".chartrow figure"],
   ] as const) {
     await page.goto(`${base}/#${tab}`);
     await page.waitForSelector(selector, { timeout: 120_000 });
@@ -139,6 +139,7 @@ const checkDesktop = async (browser: Browser) => {
     await page.screenshot({ path: shot(tab), fullPage: true });
   }
 
+  await page.locator("details.tables > summary").click();
   await page.locator("tbody td[data-label='failed calls']").first().hover();
   console.log("reliability tip:", await tipOf(page));
   await page.goto(`${base}/#matches`);
@@ -183,7 +184,7 @@ const checkTouch = async (browser: Browser, name: string, width: number, height:
   for (const [tab, selector] of [
     ["matches", "tbody tr"],
     ["seats", ".bignum"],
-    ["reliability", "tbody tr"],
+    ["reliability", ".chartrow figure"],
   ] as const) {
     await page.goto(`${base}/#${tab}`);
     await page.waitForSelector(selector, { timeout: 120_000 });

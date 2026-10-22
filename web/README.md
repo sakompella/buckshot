@@ -254,9 +254,10 @@ analysis database (`scripts/arena-import.ts` builds it; see
 `docs/arena/database.md`) at http://127.0.0.1:8790/ by default, with no auth.
 The Overview tab has the cost vs rating scatter, the breakdown heatmaps, a few
 interesting matches and the leaderboard by cohort. Matches lists every started
-match, Seats charts the table position and round-1 starter effects (the tables
-are folded under the charts), and Reliability has failed calls, faults and extra replies per config. A match row, an
-interesting match or a flagged move opens its replay: health through the match,
+match, Seats charts the table position and round-1 starter effects, and
+Reliability charts failed calls, faults and the time they cost per config. Both
+fold their full tables under the charts. A match row, an interesting match or a
+flagged move opens its replay: health through the match,
 each player's view at the chosen move, and every model move with its reasoning.
 The arrow keys step through it, and Escape, a click outside or the back gesture
 closes it. Items are drawn with the table's own icons from `src/icons.ts`. It is
