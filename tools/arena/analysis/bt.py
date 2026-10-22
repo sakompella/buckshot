@@ -3,8 +3,9 @@
 A game's first-listed player wins with probability p = 1 / (1 + exp(-eta)),
     eta = theta[first] - theta[second] + seat + sign * delta[pair],
 and its win share w in [0, 1] counts as w wins and 1 - w losses (a split is half each). The fit is the most
-probable parameters under Gaussian priors: a weak one on every theta (it only fixes the zero of the scale), and
-delta ~ N(0, tau^2), so tau = 0 means no pair terms and a small tau means strongly shrunk ones.
+probable parameters under Gaussian regularization: a mean-zero prior on every theta (standard deviation 3, which
+also shrinks rating differences slightly; ratings are reported with the entrants' mean at 0), and delta ~ N(0, tau^2),
+so tau = 0 means no pair terms and a small tau means strongly shrunk ones.
 """
 
 import math

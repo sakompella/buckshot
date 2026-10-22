@@ -9,6 +9,9 @@ from dataclasses import dataclass
 
 DB = "/home/aditya/repos/projects/buckshot/_work/arena/analysis/buckshot.sqlite"
 
+# Its free tier refused requests, so its scored games are not a random sample of what was scheduled: every analysis skips them.
+SKIPPED_MODEL = "deepseek"
+
 STARTS = re.compile(r"Round 1 begins\. Everyone has \d+ health; Player (\w) starts\.")
 
 
@@ -83,6 +86,8 @@ def scored_games(db: sqlite3.Connection) -> list[Game]:
         "SELECT m.id, t.name, m.seed_block_id, m.seed, m.code_hash FROM matches m JOIN tournaments t ON t.id = m.tournament_id WHERE m.status = 'completed' ORDER BY m.id"
     ):
         (_, _, letter_a, share_a, a, model_a, effort_a), (_, _, letter_b, _, b, model_b, effort_b) = by_match[match]
+        if SKIPPED_MODEL in model_a or SKIPPED_MODEL in model_b:
+            continue
         letter_of = {letter_a: 1, letter_b: 2}
         games.append(
             Game(block, cohort_of(tournament, model_a, model_b, effort_a, effort_b), tournament, code, seed, a, b, share_a, letter_of[starters[match]], shooters[match])

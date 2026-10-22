@@ -9,7 +9,6 @@ import bt
 import cv
 import seats
 from load import Game, blocks_of
-from matchups import sign_test
 
 
 def game(block, first, second, share_first, seed=1, starter=1, cohort="c"):
@@ -133,13 +132,6 @@ class Seats(unittest.TestCase):
         self.assertAlmostEqual(out["seat"], 0.0)
         self.assertAlmostEqual(out["start"], 0.5)
         self.assertAlmostEqual(out["starter"], 1.0)
-
-
-class Tests(unittest.TestCase):
-    def test_sign_test(self):
-        self.assertAlmostEqual(sign_test(5, 10), 1.0)
-        self.assertAlmostEqual(sign_test(10, 10), 2 / 1024)
-        self.assertTrue(math.isclose(sign_test(0, 10), sign_test(10, 10)))
 
 
 if __name__ == "__main__":

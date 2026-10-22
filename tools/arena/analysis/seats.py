@@ -49,7 +49,10 @@ def mean(values: list[float]) -> float:
 
 
 def estimates(blocks: list[Block]) -> dict[str, float]:
-    """Position 1's share and the starter's, plus the two effects with the other held equal.
+    """Position 1's share and the starter's, plus a descriptive additive split of block shares by who starts.
+
+    Every seed has one starter position, so a starter effect cannot be told from a seed effect; the split describes
+    these seed blocks and only the seed-drawn intervals reach beyond them.
 
     With a1 and a2 the mean share of position 1 over blocks where position 1 / 2 starts,
     seat = (a1 + a2) / 2 - 1/2 and starter = (a1 - a2) / 2, each strata weighted equally.

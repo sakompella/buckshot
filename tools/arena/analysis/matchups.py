@@ -9,7 +9,6 @@ are 95% bootstraps over seed blocks, drawn with a fixed RNG seed so a rerun prin
 """
 
 import argparse
-import math
 import random
 import statistics
 
@@ -19,7 +18,7 @@ import cv
 import seats
 import tournament3
 from fmt import frac, pct, pp, signed, span, table
-from load import Game, blocks_of, cohort_of, cohorts, connect, scored_games
+from load import SKIPPED_MODEL, Game, blocks_of, cohort_of, cohorts, connect, scored_games
 
 START, END = "<!-- tables:start -->", "<!-- tables:end -->"
 
@@ -32,7 +31,9 @@ def coverage(db, by_cohort: dict[str, list[Game]]) -> str:
         """SELECT m.status, m.disposition, t.name, a.model, b.model, a.effort, b.effort
            FROM matches m JOIN tournaments t ON t.id = m.tournament_id
            JOIN match_seats sa ON sa.match_id = m.id AND sa.position = 1 JOIN entrants a ON a.id = sa.entrant_id
-           JOIN match_seats sb ON sb.match_id = m.id AND sb.position = 2 JOIN entrants b ON b.id = sb.entrant_id"""
+           JOIN match_seats sb ON sb.match_id = m.id AND sb.position = 2 JOIN entrants b ON b.id = sb.entrant_id
+           WHERE a.model NOT LIKE ? AND b.model NOT LIKE ?""",
+        (f"%{SKIPPED_MODEL}%", f"%{SKIPPED_MODEL}%"),
     ):
         tournament, model_a, model_b, effort_a, effort_b = seat
         try:
@@ -122,8 +123,8 @@ def ratings_and_pairs(name: str, games: list[Game], draws: int, rng: random.Rand
             [f"{low} vs {high}", frac(won, n), pct(expected / n), pp((won - expected) / n), span(boot.interval(effect_draws[(low, high)]), pp)]
         )
     out.append(f"\n#### {name}: observed pairs against the fitted ratings\n")
-    out.append("Win share is the first-named entrant's. Difference is observed minus fitted, in percentage points.\n")
-    out.append(table(["pair", "wins/matches = observed share", "fitted share", "difference (pp)", "95% CI"], pair_rows))
+    out.append("Win share is the first-named entrant's. Difference is observed minus fitted, in percentage points. These are descriptive residuals of a regularized fit, not tests of a zero pair effect: the prior forces residuals (a pair at the end of a chain of pairs is pulled to its fit), so the bootstrap range is not a calibrated interval around zero. Pair effects are judged by the held-out test below.\n")
+    out.append(table(["pair", "wins/matches = observed share", "fitted share", "difference (pp)", "bootstrap range of the difference (descriptive)"], pair_rows))
     return "\n".join(out)
 
 
@@ -152,18 +153,13 @@ def sensitivity(games: list[Game], names: set[str], elo: dict[str, float]) -> st
 
 # ---- pair effects against ratings alone
 
-def sign_test(agree: int, total: int) -> float:
-    """Two-sided exact p of this many agreements or fewer/more out of total at probability 1/2."""
-    tail = sum(math.comb(total, k) for k in range(max(agree, total - agree), total + 1)) / 2**total
-    return min(1.0, 2 * tail)
-
-
 def reverse_pairs(games: list[Game]) -> tuple[int, int, list[float], list[float]]:
     """For each pair, the first-seated entrant's observed minus fitted share when A sat first, and when B sat first.
 
     A real matchup effect that favours A shows as positive for A first and negative for B first, so the reverse
     ordered pairs should have opposite signs. The fit has a seat term and a round 1 starter term, so neither edge
-    fakes it. Under no matchup effect the two signs are independent and half the pairs are opposite.
+    fakes it. The counts are descriptive only: the two orders of a block share a seed and the ratings are fitted
+    jointly, so the signs are not independent and no test is made.
     """
     names = {n for g in games for n in (g.first, g.second)}
     fitted = bt.fit(bt.cells_of(games, starter=True), seat=True, start=True, entrants=names)
@@ -188,7 +184,7 @@ def reverse_pairs(games: list[Game]) -> tuple[int, int, list[float], list[float]
 
 def reverse_row(name: str, opposite: int, both: int, xs: list[float], ys: list[float]) -> list[str]:
     correlation = statistics.correlation(xs, ys) if len(xs) > 2 else float("nan")
-    return [name, f"{opposite}/{both} = {pct(opposite / both)}", f"{sign_test(opposite, both):.2f}", f"{correlation:+.2f}"]
+    return [name, f"{opposite}/{both} = {pct(opposite / both)}", f"{correlation:+.2f}"]
 
 
 def antisymmetry(games: list[Game]) -> float:
@@ -251,9 +247,9 @@ def matchup_test(by_cohort: dict[str, list[Game]], rng: random.Random, draws: in
             rows,
         ),
         "\nLoss is the mean held-out log loss per match, in nats, over repeats of 10-fold cross-validation over whole seed blocks (a fair coin scores 0.6931). Gain is ratings-only loss minus nested loss, so positive means pair effects helped. A cohort keeps its pair effects only when the lower end of the interval is above 0.",
-        "\nReverse pairs: opposite signs for the entrant seated first, observed minus fitted with seat and round 1 starter terms, when A sat first and when B sat first.\n",
+        "\nReverse pairs: opposite signs for the entrant seated first, observed minus fitted with seat and round 1 starter terms, when A sat first and when B sat first. The counts and correlations are descriptive; the signs are not independent (shared seeds, jointly fitted ratings), so no test is made.\n",
         table(
-            ["cohort", "pairs with opposite signs", "sign-test p", "correlation of A-first effect with minus B-first effect"],
+            ["cohort", "pairs with opposite signs", "correlation of A-first effect with minus B-first effect"],
             [reverse_row(*row) for row in reverse_rows]
             + [reverse_row("all cohorts pooled", sum(r[1] for r in reverse_rows), sum(r[2] for r in reverse_rows), [x for r in reverse_rows for x in r[3]], [y for r in reverse_rows for y in r[4]])],
         ),
@@ -266,7 +262,8 @@ def matchup_test(by_cohort: dict[str, list[Game]], rng: random.Random, draws: in
 
 # ---- seats and starters
 
-def seat_rows(groups: list[tuple[str, list[seats.Block]]], draws: int, rng: random.Random, extra: dict[str, int]) -> str:
+def seat_rows(groups: list[tuple[str, list[seats.Block]]], draws: int, rng: random.Random, extra: dict[str, int], position_only: bool = False) -> str:
+    """The headline interval draws seeds (every block played at a seed, in any pairing); seed blocks are the second column."""
     position, starter, effects = [], [], []
     for name, blocks in groups:
         if not blocks:
@@ -275,19 +272,19 @@ def seat_rows(groups: list[tuple[str, list[seats.Block]]], draws: int, rng: rand
         by_block, by_seed = seats.bootstrap(blocks, draws, rng), seats.bootstrap(blocks, draws, rng, by_seed=True)
         matches = 2 * len(blocks)
         left = f" ({extra[name]} matches in half blocks left out)" if extra.get(name) else ""
-        label = f"{name}: {len(blocks)} blocks{left}"
-        position.append([label, frac(sum(b.first_wins for b in blocks), matches), span(by_block["first"]), span(by_seed["first"])])
-        starter.append([name, frac(sum(b.starter_wins for b in blocks), matches), span(by_block["starter"]), span(by_seed["starter"]), f"{sum(b.starter == 1 for b in blocks)}/{len(blocks)}"])
+        label = f"{name}: {len(blocks)} blocks, {len({b.seed for b in blocks})} seeds{left}"
+        position.append([label, frac(sum(b.first_wins for b in blocks), matches), span(by_seed["first"]), span(by_block["first"])])
+        starter.append([name, frac(sum(b.starter_wins for b in blocks), matches), span(by_seed["starter"]), span(by_block["starter"]), f"{sum(b.starter == 1 for b in blocks)}/{len(blocks)}"])
         if "seat" in point:
-            effects.append([name, f"{pp(point['seat'])}", span(by_block.get("seat"), pp), span(by_seed.get("seat"), pp), f"{pp(point['start'])}", span(by_block.get("start"), pp), span(by_seed.get("start"), pp)])
-    return "\n\n".join(
-        [
-            "Position 1:\n\n" + table(["group", "position 1 wins/matches = share", "95% CI, seed blocks drawn", "95% CI, seeds drawn (sensitivity)"], position),
-            "Round 1 starter:\n\n" + table(["group", "starter wins/matches = share", "95% CI, seed blocks drawn", "95% CI, seeds drawn (sensitivity)", "blocks where position 1 starts"], starter),
-            "Position and starter effects with the other held equal, in percentage points:\n\n"
-            + table(["group", "position effect", "95% CI, blocks", "95% CI, seeds (sensitivity)", "starter effect", "95% CI, blocks", "95% CI, seeds (sensitivity)"], effects),
+            effects.append([name, pp(point["seat"]), span(by_seed.get("seat"), pp), span(by_block.get("seat"), pp), pp(point["start"]), span(by_seed.get("start"), pp), span(by_block.get("start"), pp)])
+    parts = ["Position 1:\n\n" + table(["group", "position 1 wins/matches = share", "95% CI, seeds drawn", "95% CI, seed blocks drawn"], position)]
+    if not position_only:
+        parts += [
+            "Round 1 starter:\n\n" + table(["group", "starter wins/matches = share", "95% CI, seeds drawn", "95% CI, seed blocks drawn", "blocks where position 1 starts"], starter),
+            "Position and starter effects, in percentage points: a descriptive additive split of block shares by which position starts. Every seed has one starter position, so starter and seed effects are not separated; the seeds-drawn interval is the one that reaches beyond these seeds.\n\n"
+            + table(["group", "position effect", "95% CI, seeds drawn", "95% CI, seed blocks drawn", "starter effect", "95% CI, seeds drawn", "95% CI, seed blocks drawn"], effects),
         ]
-    )
+    return "\n\n".join(parts)
 
 
 def by_seed_table(blocks: list[seats.Block]) -> str:
@@ -320,8 +317,8 @@ def seat_section(by_cohort: dict[str, list[Game]], model_of: dict[str, str], dra
             "#### Overall and per cohort\n",
             seat_rows([("all cohorts", everything), *per_cohort], draws, rng, {"all cohorts": sum(extra.values()), **extra}),
             "\n#### Per model\n",
-            "A block counts for every model that plays in it; a matched block gives one position-1 share for both sides, so this says how large the position edge is in games that involve the model, not which side of the board benefits.\n",
-            seat_rows(per_model, draws, rng, {}),
+            "A block counts for every model that plays in it; a matched block gives one position-1 share for both sides, so this says how large the position edge is in games that involve the model, not which side of the board benefits. Starter figures per model are not reported: a model's blocks cover a handful of seeds, and the starter's result depends on the seed (see below).\n",
+            seat_rows(per_model, draws, rng, {}, position_only=True),
             "\n#### Per code hash, all cohorts\n",
             seat_rows([(f"code `{code}`", [b for b in everything if b.code == code]) for code in sorted({b.code for b in everything}) if sum(b.code == code for b in everything) >= 10], draws, rng, {}),
             "Codes with fewer than 10 complete blocks (`3c9b98f8b3f4` has 1, and 1 block mixes two codes) are left out.",
