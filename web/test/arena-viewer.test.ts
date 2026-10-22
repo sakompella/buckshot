@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 
 import { roundStory, ShellTracker } from "../src/arena-viewer/analysis.ts";
-import { type BlockTally, blockRate, bradleyTerry, type Game, quantile, rng } from "../src/arena-viewer/page/data.ts";
+import { type BlockTally, blockRate, bradleyTerry, colorOf, type Game, quantile, rng } from "../src/arena-viewer/page/data.ts";
 
 const randomGames = (seed: number): ReadonlyArray<Game> => {
   const random = rng(seed);
@@ -116,4 +116,37 @@ test("the round story infers the last round's winner from final cash", () => {
     ok: true,
   });
   expect(roundStory(events, new Map([["A", 30_000], ["B", 70_000]])).ok).toBe(false);
+});
+
+const hsl = (hex: string) => {
+  const [r = 0, g = 0, b = 0] = [1, 3, 5].map((start) => Number.parseInt(hex.slice(start, start + 2), 16) / 255);
+  const high = Math.max(r, g, b);
+  const low = Math.min(r, g, b);
+  const lightness = (high + low) / 2;
+  const span = high - low;
+  const sector = high === r ? ((g - b) / span + 6) % 6 : high === g ? (b - r) / span + 2 : (r - g) / span + 4;
+
+  return { hue: sector * 60, saturation: span / (1 - Math.abs(2 * lightness - 1)), lightness };
+};
+
+test("Claude models are orange and GPT models blue, each family brightest and most saturated for its strongest model", () => {
+  const families = [
+    { strongestFirst: ["claude-opus-5-5", "claude-haiku-5-5", "claude-sonnet-5-5", "claude-haiku-4-5"], hues: [18, 40] },
+    { strongestFirst: ["gpt-6-astra", "gpt-6.1-sol", "gpt-5.6-terra", "gpt-6-luna"], hues: [195, 225] },
+  ];
+
+  for (const { strongestFirst, hues } of families) {
+    const tones = strongestFirst.map((model) => hsl(colorOf(model)));
+
+    for (const tone of tones) {
+      expect(tone.hue).toBeGreaterThanOrEqual(hues[0] ?? 0);
+      expect(tone.hue).toBeLessThanOrEqual(hues[1] ?? 0);
+      expect(tone.lightness).toBeGreaterThan(0.4);
+    }
+
+    for (const [weaker, stronger] of tones.slice(1).map((tone, index) => [tone, tones[index]] as const)) {
+      expect(stronger?.lightness ?? 0).toBeGreaterThan(weaker.lightness + 0.05);
+      expect(stronger?.saturation ?? 0).toBeGreaterThan(weaker.saturation);
+    }
+  }
 });

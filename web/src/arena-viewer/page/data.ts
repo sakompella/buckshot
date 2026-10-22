@@ -24,23 +24,21 @@ interface Base {
   readonly tone: readonly [number, number, number];
 }
 
-// Claude is warm and GPT is blue, and brightness follows strength: within each family the strongest model by the
-// merged cross-model Bradley-Terry order (docs/arena/analysis/matchups.md) is brightest and most saturated:
+// Every Claude model is orange and every GPT model blue; the hues stay inside each family's band (sRGB HSL hue 24-30
+// for Claude, 199-206 for GPT). Within a family the strongest model by the merged cross-model Bradley-Terry order
+// (docs/arena/analysis/matchups.md) is brightest and most saturated, one even step apart:
 // GPT Astra +165, Sol +67, Terra -44, Luna -244; Claude Opus +96, Haiku 5.5 +57, Sonnet +37, Haiku 4.5 -134.
-// Each model also has its own hue so neighbours in the order stay apart: GPT cyan, azure, indigo, slate;
-// Claude gold, orange, coral, rust. Effort keeps the hue and shifts lightness a smaller step, brighter for higher effort.
+// Every effort of a model has the model's colour.
 const BASES: ReadonlyArray<Base> = [
-  { id: "claude-opus-5-5", name: "Opus 5.5", tone: [0.86, 0.16, 88] },
-  { id: "claude-haiku-5-5", name: "Haiku 5.5", tone: [0.76, 0.17, 58] },
-  { id: "claude-sonnet-5-5", name: "Sonnet 5.5", tone: [0.68, 0.19, 27] },
-  { id: "claude-haiku-4-5", name: "Haiku 4.5", tone: [0.6, 0.1, 50] },
-  { id: "gpt-6-astra", name: "GPT-6 Astra", tone: [0.86, 0.13, 205] },
-  { id: "gpt-6.1-sol", name: "GPT-6.1 Sol", tone: [0.74, 0.15, 245] },
-  { id: "gpt-5.6-terra", name: "GPT-5.6 Terra", tone: [0.66, 0.17, 280] },
-  { id: "gpt-6-luna", name: "GPT-6 Luna", tone: [0.62, 0.045, 245] },
+  { id: "claude-opus-5-5", name: "Opus 5.5", tone: [0.79, 0.15, 62] },
+  { id: "claude-haiku-5-5", name: "Haiku 5.5", tone: [0.715, 0.14, 58] },
+  { id: "claude-sonnet-5-5", name: "Sonnet 5.5", tone: [0.64, 0.12, 56] },
+  { id: "claude-haiku-4-5", name: "Haiku 4.5", tone: [0.565, 0.095, 54] },
+  { id: "gpt-6-astra", name: "GPT-6 Astra", tone: [0.82, 0.11, 230] },
+  { id: "gpt-6.1-sol", name: "GPT-6.1 Sol", tone: [0.745, 0.11, 236] },
+  { id: "gpt-5.6-terra", name: "GPT-5.6 Terra", tone: [0.67, 0.1, 240] },
+  { id: "gpt-6-luna", name: "GPT-6 Luna", tone: [0.595, 0.08, 242] },
 ];
-
-const EFFORT_STEP = 0.015;
 
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
 
@@ -69,17 +67,14 @@ const baseOf = (model: string): Base | undefined => BASES.find(({ id }) => model
 
 export const baseName = (model: string): string => baseOf(model)?.name ?? model;
 
-const effortIndex = (effort: string): number => EFFORTS.findIndex((known) => known === effort);
-
-export const colorOf = (model: string, effort?: string): string => {
+export const colorOf = (model: string): string => {
   const base = baseOf(model);
 
   if (base === undefined) return "#999";
 
   const [lightness, chroma, hue] = base.tone;
-  const shift = effort === undefined ? 0 : (Math.max(0, effortIndex(effort)) - 3) * EFFORT_STEP;
 
-  return oklch(lightness + shift, chroma, hue);
+  return oklch(lightness, chroma, hue);
 };
 
 export const isClaude = (model: string): boolean => model.startsWith("claude");
@@ -99,11 +94,7 @@ export const labelOf = (key: string): string => {
   return `${baseName(model)} ${effort}`;
 };
 
-export const colorOfKey = (key: string): string => {
-  const [model, effort] = splitKey(key);
-
-  return colorOf(model, effort);
-};
+export const colorOfKey = (key: string): string => colorOf(splitKey(key)[0]);
 
 export const baseOrder = (model: string): number => {
   const index = BASES.findIndex(({ id }) => model.includes(id));
@@ -357,7 +348,7 @@ export const modelStats = (seats: ReadonlyArray<SeatFull>, isByCohort = false): 
         model: first.model,
         effort: first.effort,
         label: labelOf(keyOf(first)),
-        color: colorOf(first.model, first.effort),
+        color: colorOf(first.model),
         dash: DASH.get(first.effort) ?? "",
         started,
         scored,
