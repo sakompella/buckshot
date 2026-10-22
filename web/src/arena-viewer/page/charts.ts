@@ -87,3 +87,10 @@ export const toggleView = <A extends string>(h: H, value: A, options: ReadonlyAr
     [h.Class("toggle")],
     options.map(([option, label]) => h.button([h.Type("button"), h.Class(option === value ? "on" : ""), h.OnClick(toMessage(option))], [label])),
   );
+
+const CHART_GAP = 28;
+
+/** A chart's width in a `.chartrow`: three to a row on a wide screen, else the whole content width. */
+export const chartWidth = (width: number, contentWidth: number): number => (width > 1024 ? Math.floor((contentWidth - 2 * CHART_GAP) / 3) : contentWidth);
+
+export const figureView = (h: H, title: string, note: string, chart: Html): Html => h.figure([], [h.h3([], [title]), h.p([h.Class("sub")], [note]), chart]);

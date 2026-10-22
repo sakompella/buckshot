@@ -313,12 +313,13 @@ const pause = (ms: number, stop: AbortSignal) =>
     stop.addEventListener("abort", () => (clearTimeout(timer), resume()), { once: true });
   });
 
-/** How runPending treats models: `caps` holds the most matches a model plays at once, for a model with a tight rate limit; a match with a model in `last` starts only when no other match can; a recorded cooldown of a model in `forget` is not read at the start, as when its provider reset early. */
+/** How runPending treats models: `caps` holds the most matches a model plays at once, for a model with a tight rate limit; a match with a model in `last` starts only when no other match can; a recorded cooldown of a model in `forget` is not read at the start, as when its provider reset early; a new match pins the `prefer` accounts first among equally loaded ones, as when the operator picks the account that resets soonest. */
 export interface Scheduling {
   readonly retry?: Retry;
   readonly caps?: ReadonlyMap<string, number>;
   readonly last?: ReadonlySet<string>;
   readonly forget?: ReadonlySet<string>;
+  readonly prefer?: ReadonlyArray<string>;
 }
 
 /**
@@ -336,7 +337,7 @@ export const runPending = async (
   runOne: (match: ScheduledMatch, accounts: MatchAccounts) => Promise<number>,
   onSettled: (settled: Settled) => void,
   stop: AbortSignal,
-  { retry = RETRY, caps = new Map(), last = new Set(), forget = new Set() }: Scheduling = {},
+  { retry = RETRY, caps = new Map(), last = new Set(), forget = new Set(), prefer = [] }: Scheduling = {},
 ): Promise<ReadonlyArray<Settled>> => {
   const settled: Array<Settled> = [];
   const queue = [...unfinished(schedule, finishedNames(dir, schedule))];
@@ -357,7 +358,7 @@ export const runPending = async (
   const isCooling = (model: string, account?: string) => (coolingUntil.get(cooldownKey(model, account)) ?? 0) > Date.now();
   const assigned = new Map<string, MatchAccounts>();
   const accountLoad = new Map<string, number>();
-  const accountsFor = (match: ScheduledMatch) => assigned.get(match.name) ?? assignAccounts(config, match, isCooling, (account) => accountLoad.get(account) ?? 0);
+  const accountsFor = (match: ScheduledMatch) => assigned.get(match.name) ?? assignAccounts(config, match, isCooling, (account) => accountLoad.get(account) ?? 0, prefer);
 
   const isReady = (match: ScheduledMatch) => {
     if (![...modelsOf(match)].every((model) => !isCooling(model) && (playing.get(model) ?? 0) < (caps.get(model) ?? Infinity))) return false;

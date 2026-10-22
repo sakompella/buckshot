@@ -51,7 +51,8 @@ tr.sel td { background: #111; }
 .hero .lead { color: var(--mut); font-size: 17px; margin: 14px 0 0; }
 .stats { display: grid; grid-template-columns: auto auto; gap: 2px 34px; margin: 0; font: 12px ui-monospace, Menlo, monospace; }
 .stats dt { color: var(--mut); } .stats dd { margin: 0; text-align: right; }
-.lbbar { display: flex; gap: 14px; align-items: center; margin: 10px 0; }
+.lbbar { display: flex; flex-wrap: wrap; column-gap: 14px; row-gap: 2px; align-items: baseline; margin: 10px 0; }
+.lbbar .k { white-space: nowrap; }
 .toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 4px; overflow: hidden; }
 .toggle button { border-radius: 0; font-size: 12px; padding: 3px 10px; }
 .toggle button.on { background: var(--fg); color: #000; }
@@ -83,10 +84,10 @@ nav + section, nav + div > section:first-child { border-top: 0; margin-top: 0; p
 .bignums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; margin-bottom: 34px; }
 .bignum { display: flex; flex-direction: column; gap: 4px; border-left: 2px solid var(--line); padding-left: 14px; }
 .bignum b { font-size: 46px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
-.seatcharts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; align-items: start; }
-.seatcharts figure { margin: 0; min-width: 0; }
-.seatcharts h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
-.seatcharts .sub { margin-bottom: 12px; }
+.chartrow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; align-items: start; }
+.chartrow figure { margin: 0; min-width: 0; }
+.chartrow h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+.chartrow .sub { margin-bottom: 12px; }
 svg .big { font-size: 20px; font-weight: 600; fill: var(--fg); font-variant-numeric: tabular-nums; }
 details.tables { margin-top: 34px; }
 details.tables > summary { color: var(--mut); font-size: 13px; }
@@ -186,7 +187,7 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
 
 /* tablet */
 @media (max-width: 1024px) {
-  .seatcharts { grid-template-columns: minmax(0, 1fr); gap: 30px; }
+  .chartrow { grid-template-columns: minmax(0, 1fr); gap: 30px; }
   main { padding: 16px 20px 60px; }
   .stepper { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; }
   .stepper button { background: #0d0d0d; border: 1px solid var(--line); color: var(--fg); font: inherit; border-radius: 6px; padding: 0 16px; min-width: 96px; min-height: 44px; cursor: pointer; }

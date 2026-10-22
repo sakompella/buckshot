@@ -249,13 +249,16 @@ const endpointOf = (config: TournamentConfig, name: string) => config.endpoints[
 /** Per-agent account ids fixed for one match, absent for endpoints without a pool. */
 export type MatchAccounts = Readonly<Record<string, string>>;
 
-/** Assign each configured agent an available account with the fewest running matches. Config order breaks ties. */
+/** Assign each configured agent an available account with the fewest running matches. Ties go to the `preferred` accounts in their order, then to config order. */
 export const assignAccounts = (
   config: TournamentConfig,
   match: ScheduledMatch,
   isCooling: (model: string, account: string) => boolean,
   running: (account: string) => number,
+  preferred: ReadonlyArray<string> = [],
 ): MatchAccounts | undefined => {
+  const rank = (account: string) => (preferred.includes(account) ? preferred.indexOf(account) : preferred.length);
+
   const assigned: Record<string, string> = {};
 
   for (const [index, seat] of match.seats.entries()) {
@@ -265,7 +268,7 @@ export const assignAccounts = (
 
     if (entrant === undefined || accounts === undefined) continue;
 
-    const account = accounts.filter((id) => !isCooling(entrant.model, id)).toSorted((a, b) => running(a) - running(b))[0];
+    const account = accounts.filter((id) => !isCooling(entrant.model, id)).toSorted((a, b) => running(a) - running(b) || rank(a) - rank(b))[0];
 
     if (account === undefined) return undefined;
 
