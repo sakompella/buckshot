@@ -259,8 +259,9 @@ has failed calls, faults and extra replies per config. A match row, an
 interesting match or a flagged move opens its replay: health through the match,
 each player's view at the chosen move, and every model move with its reasoning.
 The arrow keys step through it, and Escape, a click outside or the back gesture
-closes it. It is a Foldkit app; the server loads every seat at start and works
-out the per-move analysis once.
+closes it. Items are drawn with the table's own icons from `src/icons.ts`. It is
+a Foldkit app; the server loads every seat at start and works out the per-move
+analysis once.
 
     bun scripts/arena-viewer-check.ts <url> [outdir]   # headless Chrome at desktop, phone and tablet widths: hovers, taps and screenshots
 

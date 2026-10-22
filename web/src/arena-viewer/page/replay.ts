@@ -4,6 +4,7 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 
 import type { Call, MatchDetail, Step } from "../api.ts";
 import { linScale } from "./charts.ts";
+import { itemIconOf } from "./items.ts";
 import { colorOf, fmtCount, fmtSec, fmtPct, fmtTime, fmtUsd, keyOf, labelOf, type MatchRow, sumOf, unique } from "./data.ts";
 import { type MatchData, Message, type Replay, type Viewport } from "./model.ts";
 
@@ -167,7 +168,7 @@ const stateView = (h: H, detail: MatchDetail, steps: ReadonlyArray<Step>, step: 
             " ",
             h.span([h.Class("k")], [labelOf(keyOf(seat))]),
             h.div([h.Class("hp")], Array.from({ length: most }, (_bolt, index) => h.i(index < health ? [h.Class("full"), h.Style({ background: color })] : [], []))),
-            h.div([h.Class("items")], (seen?.items ?? []).map((item) => h.span([h.Class("tag")], [item]))),
+            h.div([h.Class("items")], (seen?.items ?? []).map((item) => h.span([h.Class("tag")], [itemIconOf(h, item), item]))),
           ],
         );
       }),
