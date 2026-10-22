@@ -187,7 +187,7 @@ export const groupBy = <A, K>(items: Iterable<A>, keyOfItem: (item: A) => K): Ma
 
 export const unique = <A>(items: Iterable<A>): Array<A> => [...new Set(items)];
 
-export const quantile = (sorted: ReadonlyArray<number>, p: number): number => {
+export const quantile = (sorted: ArrayLike<number>, p: number): number => {
   if (sorted.length === 0) return Number.NaN;
 
   const at = (sorted.length - 1) * p;
@@ -250,34 +250,54 @@ export interface Rate {
   readonly blocks: number;
 }
 
+// Every bootstrap draws from rng(7) from the start, so the draws are generated once and kept, as the generator's
+// 31-bit states, and extended when a bootstrap needs more.
+let draws = new Int32Array(0);
+
+const drawsFor = (count: number): Int32Array => {
+  if (draws.length >= count) return draws;
+
+  const random = rng(7);
+  const more = new Int32Array(Math.max(count, 2 * draws.length));
+
+  for (let index = 0; index < more.length; index++) more[index] = random() * 0x80000000;
+
+  draws = more;
+
+  return draws;
+};
+
 /** A ratio of sums with a 95% percentile bootstrap that resamples seed blocks. */
 export const blockRate = (tally: BlockTally, reps = 400): Rate => {
   const blocks = [...tally.values()];
-  const k = sumOf(blocks.map(([hits]) => hits));
-  const n = sumOf(blocks.map(([, trials]) => trials));
+  const blockHits = Float64Array.from(blocks, ([hits]) => hits);
+  const blockTrials = Float64Array.from(blocks, ([, trials]) => trials);
+  const k = sumOf(blockHits);
+  const n = sumOf(blockTrials);
 
   if (n === 0) return { k, n, rate: Number.NaN, lo: Number.NaN, hi: Number.NaN, blocks: blocks.length };
 
-  const random = rng(7);
-  const rates: Array<number> = [];
+  const states = drawsFor(reps * blocks.length);
+  const rates = new Float64Array(reps);
+  let count = 0;
 
   for (let rep = 0; rep < reps; rep++) {
     let hits = 0;
     let trials = 0;
 
-    for (let draw = 0; draw < blocks.length; draw++) {
-      const [blockHits = 0, blockTrials = 0] = blocks[Math.floor(random() * blocks.length)] ?? [];
+    for (let draw = rep * blocks.length; draw < (rep + 1) * blocks.length; draw++) {
+      const block = Math.floor(((states[draw] ?? 0) / 0x80000000) * blocks.length);
 
-      hits += blockHits;
-      trials += blockTrials;
+      hits += blockHits[block] ?? 0;
+      trials += blockTrials[block] ?? 0;
     }
 
-    if (trials > 0) rates.push(hits / trials);
+    if (trials > 0) rates[count++] = hits / trials;
   }
 
-  rates.sort((left, right) => left - right);
+  const sorted = rates.subarray(0, count).sort();
 
-  return { k, n, rate: k / n, lo: quantile(rates, 0.025), hi: quantile(rates, 0.975), blocks: blocks.length };
+  return { k, n, rate: k / n, lo: quantile(sorted, 0.025), hi: quantile(sorted, 0.975), blocks: blocks.length };
 };
 
 /** A bootstrap of a cell with no events, or only events, collapses to a point. */
@@ -388,36 +408,79 @@ export interface Game {
   readonly sa: number;
 }
 
-/**
- * Bradley-Terry with fractional wins, fitted by minorization-maximization on an Elo scale with mean 0.
- * One virtual drawn game against a fixed average player keeps every rating finite.
- */
-export const bradleyTerry = (games: ReadonlyArray<Game>): Map<string, number> => {
+/** Games between configs numbered by first appearance, so many resamples can be fitted without building maps. */
+export interface NumberedGames {
+  readonly ids: ReadonlyArray<string>;
+  readonly a: Int32Array;
+  readonly b: Int32Array;
+  readonly sa: Float64Array;
+}
+
+export const numberGames = (games: ReadonlyArray<Game>): NumberedGames => {
   const ids = unique(games.flatMap(({ a, b }) => [a, b]));
-  let strength = new Map(ids.map((id) => [id, 1]));
-  const strengthOf = (id: string) => strength.get(id) ?? 1;
+  const numberOf = new Map(ids.map((id, index) => [id, index]));
+  const numbered = (id: string) => numberOf.get(id) ?? -1;
 
-  for (let iteration = 0; iteration < 300; iteration++) {
-    const wins = new Map(ids.map((id) => [id, 0.5]));
-    const denominators = new Map(ids.map((id) => [id, 1 / (strengthOf(id) + 1)]));
+  return { ids, a: Int32Array.from(games, ({ a }) => numbered(a)), b: Int32Array.from(games, ({ b }) => numbered(b)), sa: Float64Array.from(games, ({ sa }) => sa) };
+};
 
-    for (const { a, b, sa } of games) {
-      const share = 1 / (strengthOf(a) + strengthOf(b));
+/**
+ * Bradley-Terry with fractional wins over the games at `rows`, fitted by minorization-maximization on an Elo scale
+ * with mean 0. One virtual drawn game against a fixed average player keeps every rating finite. Rates only the
+ * configs the rows mention, in order of first appearance. Each iteration only needs the games per pair and the wins
+ * per config, so they are counted once.
+ */
+export const fitGames = (games: NumberedGames, rows: ArrayLike<number>): Map<string, number> => {
+  const size = games.ids.length;
+  const present: Array<number> = [];
+  const isPresent = new Uint8Array(size);
+  const wins = new Float64Array(size).fill(0.5);
+  const pairGames = new Float64Array(size * size);
 
-      wins.set(a, (wins.get(a) ?? 0) + sa);
-      wins.set(b, (wins.get(b) ?? 0) + 1 - sa);
-      denominators.set(a, (denominators.get(a) ?? 0) + share);
-      denominators.set(b, (denominators.get(b) ?? 0) + share);
+  for (let index = 0; index < rows.length; index++) {
+    const row = rows[index] ?? 0;
+    const a = games.a[row] ?? 0;
+    const b = games.b[row] ?? 0;
+    const sa = games.sa[row] ?? 0;
+
+    for (const id of [a, b]) {
+      if (isPresent[id] === 0) {
+        isPresent[id] = 1;
+        present.push(id);
+      }
     }
 
-    strength = new Map(ids.map((id) => [id, (wins.get(id) ?? 0) / (denominators.get(id) ?? 1)]));
+    wins[a] = (wins[a] ?? 0) + sa;
+    wins[b] = (wins[b] ?? 0) + 1 - sa;
+    pairGames[Math.min(a, b) * size + Math.max(a, b)] = (pairGames[Math.min(a, b) * size + Math.max(a, b)] ?? 0) + 1;
   }
 
-  const ratings = ids.map((id) => [id, 400 * Math.log10(strengthOf(id))] as const);
+  const pairs = present.flatMap((x) => present.flatMap((y) => (x < y && (pairGames[x * size + y] ?? 0) > 0 ? [y * size + x] : [])));
+  const strength = new Float64Array(size).fill(1);
+  const denominators = new Float64Array(size);
+
+  for (let iteration = 0; iteration < 300; iteration++) {
+    for (const id of present) denominators[id] = 1 / ((strength[id] ?? 1) + 1);
+
+    for (const pair of pairs) {
+      const x = pair % size;
+      const y = Math.floor(pair / size);
+      const share = (pairGames[x * size + y] ?? 0) / ((strength[x] ?? 1) + (strength[y] ?? 1));
+
+      denominators[x] = (denominators[x] ?? 0) + share;
+      denominators[y] = (denominators[y] ?? 0) + share;
+    }
+
+    for (const id of present) strength[id] = (wins[id] ?? 0) / (denominators[id] ?? 1);
+  }
+
+  const ratings = present.map((id) => [games.ids[id] ?? "", 400 * Math.log10(strength[id] ?? 1)] as const);
   const mean = meanOf(ratings.map(([, rating]) => rating));
 
   return new Map(ratings.map(([id, rating]) => [id, rating - mean]));
 };
+
+export const bradleyTerry = (games: ReadonlyArray<Game>): Map<string, number> => fitGames(numberGames(games), Int32Array.from(games.keys()));
 
 /** Completed two-player matches, as their two seats in table order. */
 export const pairsOf = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<readonly [SeatFull, SeatFull]> =>

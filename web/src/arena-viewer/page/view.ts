@@ -100,16 +100,19 @@ const lazyInteresting = createLazy();
 
 const lazyLeaderboard = createLazy();
 
+// A lazy slot reuses its last view only when the view function and every argument are the same references, so
+// each slot is handed a module-level function, never an arrow made during the render.
+
 const overviewView = (h: H, model: Model, derived: Derived): Html =>
   h.div(
     [],
     [
-      lazyHero((d: Derived) => heroView(h, d), [derived]),
-      lazyFilters((d: Derived, filter: Model["filter"]) => filtersView(h, d, filter), [derived, model.filter]),
-      h.div([h.Class("card")], [lazyScatter((d: Derived, scatter: Model["scatter"], width: number) => scatterView(h, d.pooled, d.ratings, scatter, width), [derived, model.scatter, cardWidth(model.viewport)])]),
-      lazyBreakdown((d: Derived, heat: Model["heat"]) => breakdownView(h, d, heat), [derived, model.heat]),
-      lazyInteresting((d: Derived, matches: Model["matches"], width: number) => interestingView(h, picksOf(d), matches, width), [derived, model.matches, contentWidth(model.viewport)]),
-      lazyLeaderboard((d: Derived, leaderboard: Model["leaderboard"]) => leaderboardView(h, d.byCohort, d.matchSeats, d.items, leaderboard), [derived, model.leaderboard]),
+      lazyHero(heroView, [h, derived]),
+      lazyFilters(filtersView, [h, derived, model.filter]),
+      h.div([h.Class("card")], [lazyScatter(scatterView, [h, derived.pooled, derived.ratings, model.scatter, cardWidth(model.viewport)])]),
+      lazyBreakdown(breakdownView, [h, derived, model.heat]),
+      lazyInteresting(interestingView, [h, picksOf(derived), model.matches, contentWidth(model.viewport)]),
+      lazyLeaderboard(leaderboardView, [h, derived.byCohort, derived.matchSeats, derived.items, model.leaderboard]),
     ],
   );
 
@@ -121,25 +124,24 @@ const lazyReliability = createLazy();
 
 const lazyReplay = createLazy();
 
+const matchesTab = (h: H, derived: Derived, filter: Model["filter"], list: Model["matchList"]): Html => matchesView(h, filtersView(h, derived, filter), derived.matches, list);
+
+const seatsTab = (h: H, derived: Derived, filter: Model["filter"], viewport: Viewport): Html => seatsView(h, filtersView(h, derived, filter), derived, viewport.width, contentWidth(viewport));
+
+const reliabilityTab = (h: H, derived: Derived, filter: Model["filter"], tip: Model["maybeRateTip"], viewport: Viewport): Html =>
+  reliabilityView(h, filtersView(h, derived, filter), derived.decisions, derived.seats, derived.keep, tip, viewport.width, contentWidth(viewport));
+
 // The filters apply to the whole tab, so each tab places them above the content they filter.
 const tabView = (h: H, model: Model, derived: Derived): Html => {
   switch (model.tab) {
     case "overview":
       return overviewView(h, model, derived);
     case "matches":
-      return lazyMatches((d: Derived, filter: Model["filter"], list: Model["matchList"]) => matchesView(h, filtersView(h, d, filter), d.matches, list), [derived, model.filter, model.matchList]);
+      return lazyMatches(matchesTab, [h, derived, model.filter, model.matchList]);
     case "seats":
-      return lazySeats((d: Derived, filter: Model["filter"], viewport: Viewport) => seatsView(h, filtersView(h, d, filter), d, viewport.width, contentWidth(viewport)), [
-        derived,
-        model.filter,
-        model.viewport,
-      ]);
+      return lazySeats(seatsTab, [h, derived, model.filter, model.viewport]);
     case "reliability":
-      return lazyReliability(
-        (d: Derived, filter: Model["filter"], tip: Model["maybeRateTip"], viewport: Viewport) =>
-          reliabilityView(h, filtersView(h, d, filter), d.decisions, d.seats, d.keep, tip, viewport.width, contentWidth(viewport)),
-        [derived, model.filter, model.maybeRateTip, model.viewport],
-      );
+      return lazyReliability(reliabilityTab, [h, derived, model.filter, model.maybeRateTip, model.viewport]);
   }
 };
 
@@ -163,11 +165,7 @@ export const view = (model: Model, h: H): Document =>
 
       const replay = Option.match(model.maybeReplay, {
         onNone: () => h.empty,
-        onSome: (open) =>
-          lazyReplay(
-            (shown: typeof open, data: Model["matches"][string] | undefined, viewport: Viewport) => replayView(h, shown, data, derived.allMatches, viewport),
-            [open, model.matches[open.id], model.viewport],
-          ),
+        onSome: (open) => lazyReplay(replayView, [h, open, model.matches[open.id], derived.allMatches, model.viewport]),
       });
 
       return {

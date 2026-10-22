@@ -42,7 +42,7 @@ interface ItemTally {
 }
 
 /** Per cohort and config. A steal with adrenaline counts as an adrenaline use and, separately, as a steal of the item taken. */
-const itemSummaries = (decisions: Decisions, seats: ReadonlyArray<SeatFull>, keep: ReadonlyArray<boolean>): ReadonlyMap<string, ItemSummary> => {
+const itemSummaries = (decisions: Decisions, seats: ReadonlyArray<SeatFull>): ReadonlyMap<string, ItemSummary> => {
   const tallies = new Map<string, ItemTally>();
 
   const tallyOf = (seat: SeatFull): ItemTally => {
@@ -61,7 +61,7 @@ const itemSummaries = (decisions: Decisions, seats: ReadonlyArray<SeatFull>, kee
   decisions.seat.forEach((seatIndex, move) => {
     const seat = seats[seatIndex];
 
-    if (seat === undefined || keep[seatIndex] !== true) return;
+    if (seat === undefined) return;
 
     const tally = tallyOf(seat);
     const legalUse = decisions.legalUse[move] ?? 0;
@@ -77,9 +77,7 @@ const itemSummaries = (decisions: Decisions, seats: ReadonlyArray<SeatFull>, kee
     });
   });
 
-  seats.forEach((seat, seatIndex) => {
-    if (keep[seatIndex] !== true) return;
-
+  seats.forEach((seat) => {
     const tally = tallyOf(seat);
 
     // "Use X" moves only ever spend own copies; each adrenaline steal spends one own adrenaline. Overuse is reported, not clamped.
@@ -126,16 +124,31 @@ export interface Derived {
   readonly ratings: ReadonlyMap<string, number>;
   readonly matches: ReadonlyArray<MatchRow>;
   readonly allMatches: ReadonlyArray<MatchRow>;
+  /** Every cohort and config, whether the filter keeps it or not. */
   readonly items: ReadonlyMap<string, ItemSummary>;
 }
+
+// A filter keeps or drops whole configs of a cohort, so whatever is grouped by cohort and config is worked out
+// once for every seat and then picked by the filter.
 
 const ratingsOf = memoLast((seats: ReadonlyArray<SeatFull>) => approxRatings(seats));
 
 const allMatchesOf = memoLast((seats: ReadonlyArray<SeatFull>) => matchRows(seats));
 
+const byCohortOf = memoLast((seats: ReadonlyArray<SeatFull>) => modelStats(seats, true));
+
+const itemsOf = memoLast((decisions: Decisions, seats: ReadonlyArray<SeatFull>) => itemSummaries(decisions, seats));
+
+const pooledOf = memoLast((seats: ReadonlyArray<SeatFull>, cohort: string) => modelStats(cohort === "all" ? seats : seats.filter((seat) => seat.cohort === cohort)));
+
+const passes = (filter: Filter, seat: SeatFull): boolean =>
+  (filter.cohort === "all" || seat.cohort === filter.cohort) && !filter.offEfforts.includes(seat.effort) && !filter.offModels.includes(baseName(seat.model));
+
+const passingConfigs = (stats: ReadonlyArray<ModelStats>, filter: Filter) => stats.filter(({ started: [first] }) => first !== undefined && passes(filter, first));
+
 export const derive = memoLast((loaded: Loaded, filter: Filter): Derived => {
   const { seats, decisions } = loaded;
-  const keep = seats.map((seat) => (filter.cohort === "all" || seat.cohort === filter.cohort) && !filter.offEfforts.includes(seat.effort) && !filter.offModels.includes(baseName(seat.model)));
+  const keep = seats.map((seat) => passes(filter, seat));
   const filtered = seats.filter((_seat, index) => keep[index]);
   const kept = new Set(filtered.map(({ matchId }) => matchId));
   const matchSeats = seats.filter(({ matchId }) => kept.has(matchId));
@@ -146,11 +159,11 @@ export const derive = memoLast((loaded: Loaded, filter: Filter): Derived => {
     keep,
     filtered,
     matchSeats,
-    byCohort: modelStats(filtered, true),
-    pooled: modelStats(filtered),
+    byCohort: passingConfigs(byCohortOf(seats), filter),
+    pooled: passingConfigs(pooledOf(seats, filter.cohort), filter),
     ratings: ratingsOf(seats),
     matches: matchRows(matchSeats),
     allMatches: allMatchesOf(seats),
-    items: itemSummaries(decisions, seats, keep),
+    items: itemsOf(decisions, seats),
   };
 });
