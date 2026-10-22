@@ -75,6 +75,7 @@ Codex isn't checked there: use account pins, so a full Codex account pauses only
       python3 tools/arena/seed_pairs.py <dir> <entrant> <opponent> [--baseline <dir> <entrant> <opponent>]
 
   It gives the win share over complete seed pairs and compares the same seeds against another tournament.
+- **Matchups, seat and starter effects:** `python3 tools/arena/analysis/matchups.py --doc docs/arena/analysis/matchups.md` reads the analysis database and rewrites the tables of [analysis/matchups.md](analysis/matchups.md). It takes about 7 minutes under `nice` and counts as a heavy job.
 - **Cost:**
 
       bun scripts/arena-cost.ts <dir>
