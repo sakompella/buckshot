@@ -122,6 +122,9 @@ Stage B would add medium–max and xhigh–max: 40 matches, about $355–370 (ma
 - **An account with no quota data isn't over the limit.** `tools/arena/quota_guard.py` now treats it as not blocking; the old rule caused a false stop at 8:58 PM.
 - **List accounts on every endpoint,** Claude as well as Codex, so both sides of each new match are pinned from the start.
 
+## Beliefs and items
+What each model knew about the chamber when it shot, whether it acted on it, what became of its items, and how consistently it chose in repeated positions: [analysis/beliefs-and-items.md](analysis/beliefs-and-items.md).
+
 ## Reasoning findings
 - **GPT reasoning summaries are short upstream.** Nothing is lost in CPA, pi-ai or the arena.
   - A census of 50,904 saved calls and 36 raw streaming probes showed every summary delta equals the final item; there's no raw reasoning text.
