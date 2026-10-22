@@ -130,7 +130,7 @@ const checkDesktop = async (browser: Browser) => {
 
   for (const [tab, selector] of [
     ["matches", "tbody tr.row"],
-    ["seats", "tbody tr"],
+    ["seats", ".bignum"],
     ["reliability", "tbody tr"],
   ] as const) {
     await page.goto(`${base}/#${tab}`);
@@ -180,12 +180,20 @@ const checkTouch = async (browser: Browser, name: string, width: number, height:
   await page.goBack();
   console.log(name, "back closes replay:", (await countOf(page, ".modal")) === 0);
 
-  for (const tab of ["matches", "seats", "reliability"]) {
+  for (const [tab, selector] of [
+    ["matches", "tbody tr"],
+    ["seats", ".bignum"],
+    ["reliability", "tbody tr"],
+  ] as const) {
     await page.goto(`${base}/#${tab}`);
-    await page.waitForSelector("tbody tr", { timeout: 120_000 });
+    await page.waitForSelector(selector, { timeout: 120_000 });
     console.log(name, tab, "overflow", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page));
     await page.screenshot({ path: shot(`${name}-${tab}`), fullPage: true });
   }
+
+  await page.evaluate(() => scrollTo(0, 3000));
+  await page.locator("nav button", { hasText: "Matches" }).tap();
+  console.log(name, "a tab opens at its top:", await page.evaluate(() => scrollY) === 0);
 
   await context.close();
 };
