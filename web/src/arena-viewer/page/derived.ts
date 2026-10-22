@@ -141,7 +141,22 @@ const byCohortOf = memoLast((seats: ReadonlyArray<SeatFull>) => modelStats(seats
 
 const itemsOf = memoLast((decisions: Decisions, seats: ReadonlyArray<SeatFull>) => itemSummaries(decisions, seats));
 
-const pooledOf = memoLast((seats: ReadonlyArray<SeatFull>, cohort: string) => modelStats(cohort === "all" ? seats : seats.filter((seat) => seat.cohort === cohort)));
+// Every config pooled over one cohort or all of them, kept per cohort so switching back is free.
+const pooledByCohort = memoLast((seats: ReadonlyArray<SeatFull>) => {
+  const pooled = new Map<string, ReadonlyArray<ModelStats>>();
+
+  return (cohort: string): ReadonlyArray<ModelStats> => {
+    const known = pooled.get(cohort);
+
+    if (known) return known;
+
+    const fresh = modelStats(cohort === "all" ? seats : seats.filter((seat) => seat.cohort === cohort));
+
+    pooled.set(cohort, fresh);
+
+    return fresh;
+  };
+});
 
 const passes = (filter: Filter, seat: SeatFull): boolean =>
   (filter.cohort === "all" || seat.cohort === filter.cohort) && !filter.offEfforts.includes(seat.effort) && !filter.offModels.includes(baseName(seat.model));
@@ -162,7 +177,7 @@ export const derive = memoLast((loaded: Loaded, filter: Filter): Derived => {
     filtered,
     matchSeats,
     byCohort: passingConfigs(byCohortOf(seats), filter),
-    pooled: passingConfigs(pooledOf(seats, filter.cohort), filter),
+    pooled: passingConfigs(pooledByCohort(seats)(filter.cohort), filter),
     ratings: ratingsOf(seats),
     matches: matchRows(matchSeats),
     allMatches: allMatchesOf(seats),
