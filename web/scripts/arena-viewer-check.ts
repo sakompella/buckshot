@@ -41,10 +41,13 @@ const countOf = async (page: Page, selector: string) => {
 
 const heat = (page: Page) => page.locator("section").filter({ has: page.locator("table.heat") });
 
+// Prints what the default filter shows, then switches every config on: the effort-sweep and small ones too.
 const openOverview = async (page: Page) => {
   await page.goto(`${base}/#overview`);
   await page.waitForSelector("table.heat tbody tr", { timeout: 120_000 });
   await page.waitForSelector(".icard svg rect", { timeout: 60_000 });
+  console.log("default configs: scatter points", await countOf(page, ".card svg g.pt"), "heat rows", await countOf(page, "table.heat tbody tr"), "|", await textOf(page, ".filters .switch"));
+  await page.getByRole("switch", { name: /all configs/ }).check();
 };
 
 // Visible controls smaller than 44px either way (heat cells and leaderboard squares are left out).
@@ -76,6 +79,17 @@ const checkDesktop = async (browser: Browser) => {
   console.log("medium only labels", await countOf(page, ".card svg g.ptlabel"), "| all efforts on:", await page.getByRole("switch", { name: /all efforts/ }).isChecked());
   await scatter.screenshot({ path: shot("scatter-medium") });
   await page.getByRole("switch", { name: /medium only/ }).uncheck();
+
+  for (const [axis, name] of [
+    ["Moves", "moves"],
+    ["Output tokens", "tokens"],
+    ["Cost", "cost"],
+  ] as const) {
+    await scatter.getByRole("button", { name: axis, exact: true }).click();
+    await settled(page);
+    console.log("axis", name, "|", await textOf(page, ".card h2"), "| points", await countOf(page, ".card svg g.pt"));
+    await scatter.screenshot({ path: shot(`scatter-${name}`) });
+  }
 
   for (const [mode, name] of [
     ["Win share vs opponent", "opp"],

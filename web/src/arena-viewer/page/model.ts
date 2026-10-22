@@ -24,8 +24,11 @@ export const Loaded = Schema.Struct({ seats: Schema.Array(SeatFull), decisions: 
 
 export type Loaded = typeof Loaded.Type;
 
-/** Which seats the tabs count: one cohort or all, minus the efforts and models switched off. */
-export const Filter = Schema.Struct({ cohort: Schema.String, offEfforts: Schema.Array(Schema.String), offModels: Schema.Array(Schema.String) });
+/**
+ * Which seats the tabs count: one cohort or all, minus the efforts and models switched off. Unless isAllConfigs,
+ * only the main configs count (see mainConfigsOf).
+ */
+export const Filter = Schema.Struct({ cohort: Schema.String, offEfforts: Schema.Array(Schema.String), offModels: Schema.Array(Schema.String), isAllConfigs: Schema.Boolean });
 
 export type Filter = typeof Filter.Type;
 
@@ -34,7 +37,12 @@ export const ScatterShow = Schema.Literals(["kept", "all", "medium"]);
 
 export type ScatterShow = typeof ScatterShow.Type;
 
-export const Scatter = Schema.Struct({ show: ScatterShow, maybeHover: Schema.Option(Schema.String), maybePin: Schema.Option(Schema.String) });
+/** What the scatter's x axis measures per player per match: cost, model moves or output tokens. */
+export const ScatterAxis = Schema.Literals(["cost", "moves", "tokens"]);
+
+export type ScatterAxis = typeof ScatterAxis.Type;
+
+export const Scatter = Schema.Struct({ show: ScatterShow, axis: ScatterAxis, maybeHover: Schema.Option(Schema.String), maybePin: Schema.Option(Schema.String) });
 
 export const HeatMode = Schema.Literals(["opp", "items", "choices", "style"]);
 
@@ -104,7 +112,9 @@ export const Message = defineMessageUnion({
   SelectedCohort: { cohort: Schema.String },
   ToggledEffort: { effort: Schema.String },
   ToggledModel: { name: Schema.String },
+  ToggledAllConfigs: {},
   SelectedScatterShow: { show: ScatterShow },
+  SelectedScatterAxis: { axis: ScatterAxis },
   HoveredPoint: { key: Schema.String },
   LeftPoint: {},
   ClickedPoint: { key: Schema.String },

@@ -2,8 +2,9 @@ import { Option } from "effect";
 import { AsyncData } from "foldkit";
 import { createLazy, type Document, type Html, type HtmlBuilder } from "foldkit/html";
 
-import { baseName, baseOrder, colorOf, EFFORTS, fmtCount, sumOf, unique } from "./data.ts";
-import { type Derived, derive } from "./derived.ts";
+import { baseName, baseOrder, colorOf, EFFORTS, fmtCount, keyOf, sumOf, unique } from "./data.ts";
+import { switchView } from "./charts.ts";
+import { type Derived, derive, mainConfigsOf } from "./derived.ts";
 import { breakdownView, heatRowsOf } from "./heat.ts";
 import { interestingView, picksOf } from "./interesting.ts";
 import { leaderboardView } from "./leaderboard.ts";
@@ -36,6 +37,8 @@ const filtersView = (h: H, derived: Derived, filter: Model["filter"]): Html => {
   const models = unique(seats.map(({ model }) => model)).toSorted((left, right) => baseOrder(left) - baseOrder(right));
   const names = unique(models.map((model) => baseName(model)));
   const matchesIn = (cohort: string) => new Set(seats.filter((seat) => seat.cohort === cohort).map(({ matchId }) => matchId)).size;
+  const main = mainConfigsOf(seats);
+  const hidden = unique(seats.map(keyOf)).filter((key) => !main.has(key)).length;
 
   return h.div(
     [h.Class("filters")],
@@ -61,6 +64,7 @@ const filtersView = (h: H, derived: Derived, filter: Model["filter"]): Html => {
           h.button([h.Type("button"), h.Class(`chip ${filter.offEfforts.includes(effort) ? "" : "on"}`), h.OnClick(Message.ToggledEffort({ effort }))], [effort]),
         ),
       ),
+      hidden > 0 ? switchView(h, filter.isAllConfigs, filter.isAllConfigs ? "all configs" : `all configs (${hidden} hidden)`, Message.ToggledAllConfigs()) : h.empty,
     ],
   );
 };

@@ -1,5 +1,5 @@
 import { type Decisions, ITEMS } from "../api.ts";
-import { addTo, approxRatings, baseName, type BlockTally, blockRate, keyOf, type MatchRow, matchRows, type ModelStats, modelStats, type Rate, type SeatFull } from "./data.ts";
+import { addTo, approxRatings, baseName, type BlockTally, blockRate, groupBy, keyOf, type MatchRow, matchRows, type ModelStats, modelStats, type Rate, type SeatFull } from "./data.ts";
 import type { Filter, Loaded } from "./model.ts";
 
 // What the tabs show, worked out from the loaded data and the filter. Each is
@@ -158,14 +158,32 @@ const pooledByCohort = memoLast((seats: ReadonlyArray<SeatFull>) => {
   };
 });
 
-const passes = (filter: Filter, seat: SeatFull): boolean =>
-  (filter.cohort === "all" || seat.cohort === filter.cohort) && !filter.offEfforts.includes(seat.effort) && !filter.offModels.includes(baseName(seat.model));
+/** A main config has at least this many scored matches. */
+const MIN_SCORED = 20;
 
-const passingConfigs = (stats: ReadonlyArray<ModelStats>, filter: Filter) => stats.filter(({ started: [first] }) => first !== undefined && passes(filter, first));
+/**
+ * The configs shown by default: those with a scored match against another model and at least MIN_SCORED scored
+ * matches. The rest only played their own model's effort sweep, or too few matches.
+ */
+export const mainConfigsOf = memoLast((seats: ReadonlyArray<SeatFull>): ReadonlySet<string> => {
+  const modelsIn = new Map([...groupBy(seats, ({ matchId }) => matchId)].map(([matchId, both]) => [matchId, new Set(both.map(({ model }) => model)).size]));
+  const scored = [...groupBy(seats.filter(({ status }) => status === "completed"), keyOf)];
+
+  return new Set(scored.flatMap(([key, played]) => (new Set(played.map(({ matchId }) => matchId)).size >= MIN_SCORED && played.some(({ matchId }) => (modelsIn.get(matchId) ?? 0) > 1) ? [key] : [])));
+});
+
+const passes = (filter: Filter, main: ReadonlySet<string>, seat: SeatFull): boolean =>
+  (filter.cohort === "all" || seat.cohort === filter.cohort) &&
+  !filter.offEfforts.includes(seat.effort) &&
+  !filter.offModels.includes(baseName(seat.model)) &&
+  (filter.isAllConfigs || main.has(keyOf(seat)));
+
+const passingConfigs = (stats: ReadonlyArray<ModelStats>, filter: Filter, main: ReadonlySet<string>) => stats.filter(({ started: [first] }) => first !== undefined && passes(filter, main, first));
 
 export const derive = memoLast((loaded: Loaded, filter: Filter): Derived => {
   const { seats, decisions } = loaded;
-  const keep = seats.map((seat) => passes(filter, seat));
+  const main = mainConfigsOf(seats);
+  const keep = seats.map((seat) => passes(filter, main, seat));
   const filtered = seats.filter((_seat, index) => keep[index]);
   const kept = new Set(filtered.map(({ matchId }) => matchId));
   const matchSeats = seats.filter(({ matchId }) => kept.has(matchId));
@@ -176,8 +194,8 @@ export const derive = memoLast((loaded: Loaded, filter: Filter): Derived => {
     keep,
     filtered,
     matchSeats,
-    byCohort: passingConfigs(byCohortOf(seats), filter),
-    pooled: passingConfigs(pooledByCohort(seats)(filter.cohort), filter),
+    byCohort: passingConfigs(byCohortOf(seats), filter, main),
+    pooled: passingConfigs(pooledByCohort(seats)(filter.cohort), filter, main),
     ratings: ratingsOf(seats),
     matches: matchRows(matchSeats),
     allMatches: allMatchesOf(seats),
