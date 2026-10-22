@@ -20,7 +20,7 @@ root provides it.
 
 Checks:
 
-    bun run typecheck  # tsc --noEmit, strict
+    bun run typecheck  # tsrs --noEmit, strict (tsrs is the Rust port of tsc)
     bun run lint       # oxlint with every anti-slop rule and the Effect group, --deny-warnings
     bun run test       # plays full Story and DoN matches through bend.ts at 2, 3 and 4 players; checks stale answers are rejected; checks the agent tool contract: privacy, read-only get_game, stale, repeated and rematch turns, new_match refused mid-match, the moves list matching the machine's legal chains, and each Agent's events adding up to the whole log, the end included
     bun scripts/play.ts [url] [outdir]   # headless Chrome (BROWSER=firefox for Playwright Firefox): one human-vs-bot match by clicking the table, one 4-bot autoplay match
