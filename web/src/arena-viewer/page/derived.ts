@@ -1,5 +1,5 @@
 import { type Decisions, ITEMS } from "../api.ts";
-import { addTo, approxRatings, baseName, type BlockTally, blockRate, keyOf, type MatchRow, matchRows, type ModelStats, modelStats, type Rate, type SeatFull } from "./data.ts";
+import { addTo, approxRatings, baseName, type BlockTally, blockRate, groupBy, keyOf, type MatchRow, matchRows, type ModelStats, modelStats, type Rate, type SeatFull } from "./data.ts";
 import type { Filter, Loaded } from "./model.ts";
 
 // What the tabs show, worked out from the loaded data and the filter. Each is
@@ -42,7 +42,7 @@ interface ItemTally {
 }
 
 /** Per cohort and config. A steal with adrenaline counts as an adrenaline use and, separately, as a steal of the item taken. */
-const itemSummaries = (decisions: Decisions, seats: ReadonlyArray<SeatFull>, keep: ReadonlyArray<boolean>): ReadonlyMap<string, ItemSummary> => {
+const itemSummaries = (decisions: Decisions, seats: ReadonlyArray<SeatFull>): ReadonlyMap<string, ItemSummary> => {
   const tallies = new Map<string, ItemTally>();
 
   const tallyOf = (seat: SeatFull): ItemTally => {
@@ -58,12 +58,14 @@ const itemSummaries = (decisions: Decisions, seats: ReadonlyArray<SeatFull>, kee
     return fresh;
   };
 
+  const tallyOfSeat = seats.map(tallyOf);
+
   decisions.seat.forEach((seatIndex, move) => {
     const seat = seats[seatIndex];
+    const tally = tallyOfSeat[seatIndex];
 
-    if (seat === undefined || keep[seatIndex] !== true) return;
+    if (seat === undefined || tally === undefined) return;
 
-    const tally = tallyOf(seat);
     const legalUse = decisions.legalUse[move] ?? 0;
     const legalSteal = decisions.legalSteal[move] ?? 0;
 
@@ -77,9 +79,7 @@ const itemSummaries = (decisions: Decisions, seats: ReadonlyArray<SeatFull>, kee
     });
   });
 
-  seats.forEach((seat, seatIndex) => {
-    if (keep[seatIndex] !== true) return;
-
+  seats.forEach((seat) => {
     const tally = tallyOf(seat);
 
     // "Use X" moves only ever spend own copies; each adrenaline steal spends one own adrenaline. Overuse is reported, not clamped.
@@ -126,16 +126,64 @@ export interface Derived {
   readonly ratings: ReadonlyMap<string, number>;
   readonly matches: ReadonlyArray<MatchRow>;
   readonly allMatches: ReadonlyArray<MatchRow>;
+  /** Every cohort and config, whether the filter keeps it or not. */
   readonly items: ReadonlyMap<string, ItemSummary>;
 }
+
+// A filter keeps or drops whole configs of a cohort, so whatever is grouped by cohort and config is worked out
+// once for every seat and then picked by the filter.
 
 const ratingsOf = memoLast((seats: ReadonlyArray<SeatFull>) => approxRatings(seats));
 
 const allMatchesOf = memoLast((seats: ReadonlyArray<SeatFull>) => matchRows(seats));
 
+const byCohortOf = memoLast((seats: ReadonlyArray<SeatFull>) => modelStats(seats, true));
+
+const itemsOf = memoLast((decisions: Decisions, seats: ReadonlyArray<SeatFull>) => itemSummaries(decisions, seats));
+
+// Every config pooled over one cohort or all of them, kept per cohort so switching back is free.
+const pooledByCohort = memoLast((seats: ReadonlyArray<SeatFull>) => {
+  const pooled = new Map<string, ReadonlyArray<ModelStats>>();
+
+  return (cohort: string): ReadonlyArray<ModelStats> => {
+    const known = pooled.get(cohort);
+
+    if (known) return known;
+
+    const fresh = modelStats(cohort === "all" ? seats : seats.filter((seat) => seat.cohort === cohort));
+
+    pooled.set(cohort, fresh);
+
+    return fresh;
+  };
+});
+
+/** A main config has at least this many scored matches. */
+const MIN_SCORED = 20;
+
+/**
+ * The configs shown by default: those with a scored match against another model and at least MIN_SCORED scored
+ * matches. The rest only played their own model's effort sweep, or too few matches.
+ */
+export const mainConfigsOf = memoLast((seats: ReadonlyArray<SeatFull>): ReadonlySet<string> => {
+  const modelsIn = new Map([...groupBy(seats, ({ matchId }) => matchId)].map(([matchId, both]) => [matchId, new Set(both.map(({ model }) => model)).size]));
+  const scored = [...groupBy(seats.filter(({ status }) => status === "completed"), keyOf)];
+
+  return new Set(scored.flatMap(([key, played]) => (new Set(played.map(({ matchId }) => matchId)).size >= MIN_SCORED && played.some(({ matchId }) => (modelsIn.get(matchId) ?? 0) > 1) ? [key] : [])));
+});
+
+const passes = (filter: Filter, main: ReadonlySet<string>, seat: SeatFull): boolean =>
+  (filter.cohort === "all" || seat.cohort === filter.cohort) &&
+  !filter.offEfforts.includes(seat.effort) &&
+  !filter.offModels.includes(baseName(seat.model)) &&
+  (filter.isAllConfigs || main.has(keyOf(seat)));
+
+const passingConfigs = (stats: ReadonlyArray<ModelStats>, filter: Filter, main: ReadonlySet<string>) => stats.filter(({ started: [first] }) => first !== undefined && passes(filter, main, first));
+
 export const derive = memoLast((loaded: Loaded, filter: Filter): Derived => {
   const { seats, decisions } = loaded;
-  const keep = seats.map((seat) => (filter.cohort === "all" || seat.cohort === filter.cohort) && !filter.offEfforts.includes(seat.effort) && !filter.offModels.includes(baseName(seat.model)));
+  const main = mainConfigsOf(seats);
+  const keep = seats.map((seat) => passes(filter, main, seat));
   const filtered = seats.filter((_seat, index) => keep[index]);
   const kept = new Set(filtered.map(({ matchId }) => matchId));
   const matchSeats = seats.filter(({ matchId }) => kept.has(matchId));
@@ -146,11 +194,11 @@ export const derive = memoLast((loaded: Loaded, filter: Filter): Derived => {
     keep,
     filtered,
     matchSeats,
-    byCohort: modelStats(filtered, true),
-    pooled: modelStats(filtered),
+    byCohort: passingConfigs(byCohortOf(seats), filter, main),
+    pooled: passingConfigs(pooledByCohort(seats)(filter.cohort), filter, main),
     ratings: ratingsOf(seats),
     matches: matchRows(matchSeats),
     allMatches: allMatchesOf(seats),
-    items: itemSummaries(decisions, seats, keep),
+    items: itemsOf(decisions, seats),
   };
 });

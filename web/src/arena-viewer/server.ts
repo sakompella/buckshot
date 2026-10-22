@@ -177,10 +177,15 @@ const matchDetail = (db: Database, id: string): MatchDetail | null => {
   return { match: match.value, seats, decisions: drafts.map(({ step, outcome, calls: linked }) => ({ ...step, outcome, calls: linked })), unlinked, story };
 };
 
-const gzipped = (body: string) => Bun.gzipSync(new TextEncoder().encode(body));
+const JSON_TYPE = { "content-type": "application/json" };
 
-const json = (body: string | Uint8Array<ArrayBuffer>, isGzipped = false) =>
-  new Response(body, { headers: isGzipped ? { "content-type": "application/json", "content-encoding": "gzip" } : { "content-type": "application/json" } });
+/** A JSON body encoded once, and gzipped once for the clients that accept it. */
+const encodedBody = (body: string) => ({ body, gzipped: Bun.gzipSync(new TextEncoder().encode(body)) });
+
+const json = (request: Request, { body, gzipped }: ReturnType<typeof encodedBody>) =>
+  /\bgzip\b/.test(request.headers.get("accept-encoding") ?? "")
+    ? new Response(gzipped, { headers: { ...JSON_TYPE, "content-encoding": "gzip", vary: "accept-encoding" } })
+    : new Response(body, { headers: { ...JSON_TYPE, vary: "accept-encoding" } });
 
 /** Loads and analyses the database once, then serves the page and the API. */
 export const serveArenaViewer = (dbPath: string, hostname: string, port: number) => {
@@ -201,10 +206,10 @@ export const serveArenaViewer = (dbPath: string, hostname: string, port: number)
     return extra === undefined ? [] : [{ ...row, ...extra }];
   });
 
-  const seatsBody = gzipped(encodeSeats(seats));
-  const decisionsBody = gzipped(encodeDecisions(decisions));
+  const seatsBody = encodedBody(encodeSeats(seats));
+  const decisionsBody = encodedBody(encodeDecisions(decisions));
 
-  console.log(`loaded ${seats.length} seats in ${Math.round(performance.now() - started)} ms; decisions payload ${(decisionsBody.length / 1e6).toFixed(1)} MB gzipped`);
+  console.log(`loaded ${seats.length} seats in ${Math.round(performance.now() - started)} ms; decisions payload ${(decisionsBody.gzipped.length / 1e6).toFixed(1)} MB gzipped`);
 
   return Bun.serve({
     hostname,
@@ -212,12 +217,12 @@ export const serveArenaViewer = (dbPath: string, hostname: string, port: number)
     development: false,
     routes: {
       "/": page,
-      "/api/seats": () => json(seatsBody, true),
-      "/api/decisions": () => json(decisionsBody, true),
+      "/api/seats": (request) => json(request, seatsBody),
+      "/api/decisions": (request) => json(request, decisionsBody),
       "/api/match": (request) => {
         const detail = matchDetail(db, new URL(request.url).searchParams.get("id") ?? "");
 
-        return detail === null ? new Response("not found", { status: 404 }) : json(encodeMatch(detail));
+        return detail === null ? new Response("not found", { status: 404 }) : new Response(encodeMatch(detail), { headers: JSON_TYPE });
       },
     },
   });

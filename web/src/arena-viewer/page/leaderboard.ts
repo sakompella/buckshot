@@ -2,7 +2,7 @@ import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { anchorId, tipView } from "./charts.ts";
-import { baseName, bradleyTerry, fmtCount, fmtPct, fmtSec, fmtUsd, groupBy, isClaude, keyOf, labelOf, type ModelStats, pairsOf, quantile, rng, type SeatFull, sumOf, unique } from "./data.ts";
+import { baseName, fitGames, fmtCount, fmtPct, fmtSec, fmtUsd, groupBy, isClaude, keyOf, labelOf, type ModelStats, numberGames, pairsOf, quantile, rng, type SeatFull, sumOf, unique } from "./data.ts";
 import { type ItemSummary, memoLast } from "./derived.ts";
 import { itemIconOf } from "./items.ts";
 import { Message, type Model } from "./model.ts";
@@ -67,15 +67,21 @@ const cohortRatings = (seats: ReadonlyArray<SeatFull>): CohortRatings => {
 
   for (let part = 0; part < parts; part++) {
     const partGames = games.filter(({ a }) => group.get(a) === part);
-    const point = bradleyTerry(partGames);
-    const blocks = [...groupBy(partGames, ({ block }) => block).values()];
+    const numbered = numberGames(partGames);
+    const point = fitGames(numbered, Int32Array.from(partGames.keys()));
+    const blocks = [...groupBy(partGames.keys(), (index) => partGames[index]?.block).values()];
     const random = rng(3);
     const draws = new Map<string, Array<number>>();
 
     for (let rep = 0; rep < 200; rep++) {
       const sample = Array.from({ length: blocks.length }, () => blocks[Math.floor(random() * blocks.length)] ?? []).flat();
 
-      for (const [key, rating] of bradleyTerry(sample)) draws.set(key, [...(draws.get(key) ?? []), rating]);
+      for (const [key, rating] of fitGames(numbered, sample)) {
+        const keyDraws = draws.get(key);
+
+        if (keyDraws) keyDraws.push(rating);
+        else draws.set(key, [rating]);
+      }
     }
 
     for (const [key, rating] of point) {
@@ -96,13 +102,29 @@ interface Cohort {
   readonly scoredMatches: number;
 }
 
+// The bootstraps are the page's slowest work. A filter changes few cohorts' matches, so each fit is kept by its matches.
+const fitted = new Map<string, CohortRatings>();
+
+const cohortRatingsOf = (seats: ReadonlyArray<SeatFull>): CohortRatings => {
+  const matches = seats.map(({ matchId }) => matchId).join();
+  const known = fitted.get(matches);
+
+  if (known) return known;
+
+  const fresh = cohortRatings(seats);
+
+  fitted.set(matches, fresh);
+
+  return fresh;
+};
+
 const cohortsOf = memoLast((stats: ReadonlyArray<ModelStats>, seats: ReadonlyArray<SeatFull>): ReadonlyArray<Cohort> =>
   [...groupBy(
     stats.filter(({ scored }) => scored.length > 0),
     ({ cohort }) => cohort,
   )]
     .map(([cohort, configs]) => {
-      const { ratings, parts } = cohortRatings(seats.filter((seat) => seat.cohort === cohort));
+      const { ratings, parts } = cohortRatingsOf(seats.filter((seat) => seat.cohort === cohort));
       const ratingOf = (m: ModelStats) => ratings.get(m.key);
 
       return {
