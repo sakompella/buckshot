@@ -133,6 +133,7 @@ export const Message = defineMessageUnion({
   PlacedTip: {},
   CompletedHistoryChange: {},
   CompletedStepScroll: {},
+  CompletedScroll: {},
 });
 
 export type Message = typeof Message.Type;

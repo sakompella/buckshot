@@ -78,6 +78,18 @@ tr.drill td { background: #050505; white-space: normal; text-align: left; }
 
 pre { white-space: pre-wrap; word-break: break-word; background: #0a0a0a; border: 1px solid #1d1d1d; border-radius: 6px; padding: 8px 10px; font: 12px/1.45 ui-monospace, Menlo, monospace; color: #cfcfcf; margin: 4px 0 8px; }
 details summary { cursor: pointer; margin: 4px 0; }
+/* A tab's first section sits right under the nav, which already draws the rule. */
+nav + section, nav + div > section:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
+.bignums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; margin-bottom: 34px; }
+.bignum { display: flex; flex-direction: column; gap: 4px; border-left: 2px solid var(--line); padding-left: 14px; }
+.bignum b { font-size: 46px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
+.seatcharts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; align-items: start; }
+.seatcharts figure { margin: 0; min-width: 0; }
+.seatcharts h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+.seatcharts .sub { margin-bottom: 12px; }
+svg .big { font-size: 20px; font-weight: 600; fill: var(--fg); font-variant-numeric: tabular-nums; }
+details.tables { margin-top: 34px; }
+details.tables > summary { color: var(--mut); font-size: 13px; }
 svg .cell { fill: #fff; stroke: #000; stroke-width: 2.5px; paint-order: stroke; }
 svg text { pointer-events: none; }
 .track { min-width: 180px; }
@@ -174,6 +186,7 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
 
 /* tablet */
 @media (max-width: 1024px) {
+  .seatcharts { grid-template-columns: minmax(0, 1fr); gap: 30px; }
   main { padding: 16px 20px 60px; }
   .stepper { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; }
   .stepper button { background: #0d0d0d; border: 1px solid var(--line); color: var(--fg); font: inherit; border-radius: 6px; padding: 0 16px; min-width: 96px; min-height: 44px; cursor: pointer; }
@@ -197,6 +210,8 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
 
 /* phone, DeepSWE's sm breakpoint */
 @media (max-width: 639px) {
+  .bignums { grid-template-columns: minmax(0, 1fr); gap: 16px; margin-bottom: 24px; }
+  .bignum b { font-size: 36px; }
   main { padding: 0 12px 60px; }
   nav { position: sticky; top: 0; z-index: 25; background: var(--bg); margin: 0 -12px 14px; padding: 4px 12px; gap: 2px; overflow-x: auto; }
   nav .brand { display: none; }

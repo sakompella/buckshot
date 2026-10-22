@@ -66,6 +66,12 @@ const LeaveReplayHistory = Command.define("LeaveReplayHistory", {
   }).pipe(Effect.as(Message.CompletedHistoryChange())),
 });
 
+// A tab opens at its top, not at the scroll position the last tab was left at.
+const ScrollToTop = Command.define("ScrollToTop", {
+  messages: [Message.CompletedScroll],
+  execute: Effect.sync(() => scrollTo(0, 0)).pipe(Effect.as(Message.CompletedScroll())),
+});
+
 /** Asks for every match detail in `ids` the model does not have yet. */
 const withMatches = (model: Model, ids: ReadonlyArray<string>): Return => {
   const missing = ids.filter((id) => model.matches[id] === undefined);
@@ -116,8 +122,8 @@ const withFilter = (model: Model, change: (filter: Filter) => Filter): Return =>
 export const update = (model: Model, message: Message): Return =>
   Message.match<Return>(message, {
     ResizedViewport: (viewport) => ({ model: modifyFields(model, { viewport: () => viewport }) }),
-    ClickedTab: ({ tab }) => ({ model: modifyFields(model, { tab: () => tab, maybeRateTip: () => Option.none() }), commands: [WriteHash({ tab })] }),
-    NavigatedToTab: ({ tab }) => ({ model: modifyFields(model, { tab: () => tab }) }),
+    ClickedTab: ({ tab }) => ({ model: modifyFields(model, { tab: () => tab, maybeRateTip: () => Option.none() }), commands: [WriteHash({ tab }), ScrollToTop()] }),
+    NavigatedToTab: ({ tab }) => ({ model: modifyFields(model, { tab: () => tab }), commands: [ScrollToTop()] }),
     CompletedHashWrite: () => ({ model }),
     SucceededLoad: ({ loaded }) => withPickedMatches(modifyFields(model, { data: () => AsyncData.succeed(loaded) })),
     FailedLoad: ({ error }) => ({ model: modifyFields(model, { data: () => AsyncData.fail(error) }) }),
@@ -157,6 +163,7 @@ export const update = (model: Model, message: Message): Return =>
     PlacedTip: () => ({ model }),
     CompletedHistoryChange: () => ({ model }),
     CompletedStepScroll: () => ({ model }),
+    CompletedScroll: () => ({ model }),
   });
 
 // INIT
