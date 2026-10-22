@@ -17,36 +17,28 @@ export const DASH: ReadonlyMap<string, string> = new Map([
   ["max", "9 2 2 2"],
 ]);
 
-type Family = "claude" | "gpt";
-
 interface Base {
   readonly id: string;
   readonly name: string;
-  readonly family: Family;
-  /** Strength within the family, strongest first. */
-  readonly rank: number;
+  /** OKLCH lightness, chroma and hue. */
+  readonly tone: readonly [number, number, number];
 }
 
-// Brightness follows strength. Within each family (Claude oranges, GPT blues) the strongest model by the merged
-// cross-model Bradley-Terry order (docs/arena/analysis/matchups.md) is brightest and most saturated:
+// Claude is warm and GPT is blue, and brightness follows strength: within each family the strongest model by the
+// merged cross-model Bradley-Terry order (docs/arena/analysis/matchups.md) is brightest and most saturated:
 // GPT Astra +165, Sol +67, Terra -44, Luna -244; Claude Opus +96, Haiku 5.5 +57, Sonnet +37, Haiku 4.5 -134.
-// Effort keeps the hue and shifts lightness a smaller step, brighter for higher effort.
+// Each model also has its own hue so neighbours in the order stay apart: GPT cyan, azure, indigo, slate;
+// Claude gold, orange, coral, rust. Effort keeps the hue and shifts lightness a smaller step, brighter for higher effort.
 const BASES: ReadonlyArray<Base> = [
-  { id: "claude-opus-5-5", name: "Opus 5.5", family: "claude", rank: 0 },
-  { id: "claude-haiku-5-5", name: "Haiku 5.5", family: "claude", rank: 1 },
-  { id: "claude-sonnet-5-5", name: "Sonnet 5.5", family: "claude", rank: 2 },
-  { id: "claude-haiku-4-5", name: "Haiku 4.5", family: "claude", rank: 3 },
-  { id: "gpt-6-astra", name: "GPT-6 Astra", family: "gpt", rank: 0 },
-  { id: "gpt-6.1-sol", name: "GPT-6.1 Sol", family: "gpt", rank: 1 },
-  { id: "gpt-5.6-terra", name: "GPT-5.6 Terra", family: "gpt", rank: 2 },
-  { id: "gpt-6-luna", name: "GPT-6 Luna", family: "gpt", rank: 3 },
+  { id: "claude-opus-5-5", name: "Opus 5.5", tone: [0.86, 0.16, 88] },
+  { id: "claude-haiku-5-5", name: "Haiku 5.5", tone: [0.76, 0.17, 58] },
+  { id: "claude-sonnet-5-5", name: "Sonnet 5.5", tone: [0.68, 0.19, 27] },
+  { id: "claude-haiku-4-5", name: "Haiku 4.5", tone: [0.6, 0.1, 50] },
+  { id: "gpt-6-astra", name: "GPT-6 Astra", tone: [0.86, 0.13, 205] },
+  { id: "gpt-6.1-sol", name: "GPT-6.1 Sol", tone: [0.74, 0.15, 245] },
+  { id: "gpt-5.6-terra", name: "GPT-5.6 Terra", tone: [0.66, 0.17, 280] },
+  { id: "gpt-6-luna", name: "GPT-6 Luna", tone: [0.62, 0.045, 245] },
 ];
-
-const FAMILY: Readonly<Record<Family, { readonly hue: number; readonly chroma: number }>> = { claude: { hue: 50, chroma: 0.19 }, gpt: { hue: 248, chroma: 0.16 } };
-
-const RANK_LIGHTNESS = [0.82, 0.735, 0.65, 0.57];
-
-const RANK_CHROMA = [1, 0.75, 0.55, 0.38];
 
 const EFFORT_STEP = 0.015;
 
@@ -84,10 +76,10 @@ export const colorOf = (model: string, effort?: string): string => {
 
   if (base === undefined) return "#999";
 
-  const family = FAMILY[base.family];
+  const [lightness, chroma, hue] = base.tone;
   const shift = effort === undefined ? 0 : (Math.max(0, effortIndex(effort)) - 3) * EFFORT_STEP;
 
-  return oklch((RANK_LIGHTNESS[base.rank] ?? 0.6) + shift, family.chroma * (RANK_CHROMA[base.rank] ?? 0.5), family.hue);
+  return oklch(lightness + shift, chroma, hue);
 };
 
 export const isClaude = (model: string): boolean => model.startsWith("claude");
