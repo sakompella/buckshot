@@ -1,6 +1,6 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { linScale } from "./charts.ts";
+import { chartWidth, figureView, linScale } from "./charts.ts";
 import { addTo, type BlockTally, blockRate, colorOfKey, fmtCI, groupBy, keyOf, labelOf, type Rate, type SeatFull, unique } from "./data.ts";
 import { type Derived, memoLast } from "./derived.ts";
 import type { Message } from "./model.ts";
@@ -397,13 +397,6 @@ const perSeedView = (h: H, rows: ReadonlyArray<{ readonly seed: string; readonly
   );
 };
 
-const CHART_GAP = 28;
-
-/** A chart's width: three to a row on a wide screen, else one. */
-const chartWidth = (width: number, contentWidth: number): number => (width > 1024 ? Math.floor((contentWidth - 2 * CHART_GAP) / 3) : contentWidth);
-
-const figureView = (h: H, title: string, note: string, chart: Html): Html => h.figure([], [h.h3([], [title]), h.p([h.Class("sub")], [note]), chart]);
-
 /** The Seats tab, laid out for a viewport `width` wide with `content` pixels inside main's padding. */
 export const seatsView = (h: H, filters: Html, derived: Derived, width: number, content: number): Html => {
   const { games, partial, crossCode, position, starter, firstStarts, configs, stories, perSeed, comebacks } = seatsOf(derived);
@@ -437,7 +430,7 @@ export const seatsView = (h: H, filters: Html, derived: Derived, width: number, 
             ],
           ),
           h.div(
-            [h.Class("seatcharts")],
+            [h.Class("chartrow")],
             [
               figureView(h, "Round 1 to the match", "Where the round-1 winner's matches end up; the bright cap is the sweeps.", flowView(h, story, figure)),
               figureView(h, "Comebacks", "Win share by the worst health gap a player faced in the final round.", comebackView(h, comebacks, figure)),

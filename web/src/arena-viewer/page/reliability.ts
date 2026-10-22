@@ -2,7 +2,7 @@ import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import type { Decisions } from "../api.ts";
-import { anchorId, tipView } from "./charts.ts";
+import { anchorId, chartWidth, figureView, linScale, tipView } from "./charts.ts";
 import { addTo, type BlockTally, blockRate, colorOf, colorOfKey, fmtTime, fmtUsd, isDegenerate, keyOf, labelOf, type Rate, type SeatFull, sumOf } from "./data.ts";
 import { memoLast } from "./derived.ts";
 import { Message, type Model } from "./model.ts";
@@ -157,11 +157,118 @@ const tipOf = (h: H, rows: ReadonlyArray<Row>, cell: Model["maybeRateTip"]): Htm
     },
   });
 
-export const reliabilityView = (h: H, filters: Html, decisions: Decisions, seats: ReadonlyArray<SeatFull>, keep: ReadonlyArray<boolean>, tip: Model["maybeRateTip"]): Html => {
+/** One config's value in a bar chart, with its interval when it has one. */
+interface Bar {
+  readonly value: number;
+  readonly lo: number;
+  readonly hi: number;
+  readonly text: string;
+}
+
+/** Ticks at a round step from 0 to the first step at or above `max`. */
+const axisTicks = (max: number): ReadonlyArray<number> => {
+  if (!(max > 0)) return [0, 1];
+
+  const raw = max / 4;
+  const power = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map((factor) => factor * power).find((candidate) => candidate >= raw) ?? raw;
+
+  return Array.from({ length: Math.ceil(max / step) + 1 }, (_, index) => index * step);
+};
+
+const ROW_HEIGHT = 18;
+
+const GROUP_HEIGHT = 26;
+
+/** One bar per config in table order, with a heading row per tournament when there are several. */
+const configBarsView = (h: H, rows: ReadonlyArray<Row>, hasTournaments: boolean, barOf: (row: Row) => Bar, tick: (value: number) => string, width: number): Html => {
+  if (rows.length === 0) return h.div([h.Class("empty")], ["No configs for this filter."]);
+
+  const bars = rows.map(barOf);
+  const ticks = axisTicks(Math.max(0, ...bars.map(({ value, hi }) => (Number.isNaN(hi) ? (Number.isNaN(value) ? 0 : value) : hi))));
+  const labelWidth = Math.min(width * 0.42, 8 + 6.6 * Math.max(...rows.map(({ key }) => labelOf(key).length)));
+  const x = linScale(0, ticks.at(-1) ?? 1, labelWidth + 8, width - 50, ticks);
+  const headings: Array<{ readonly name: string; readonly y: number }> = [];
+  const placed: Array<{ readonly row: Row; readonly bar: Bar; readonly y: number }> = [];
+  const top = 22;
+  let y = top;
+
+  bars.forEach((bar, index) => {
+    const row = rows[index];
+
+    if (row === undefined) return;
+
+    if (hasTournaments && rows[index - 1]?.tournament !== row.tournament) {
+      headings.push({ name: row.tournament, y: y + GROUP_HEIGHT - 8 });
+      y += GROUP_HEIGHT;
+    }
+
+    placed.push({ row, bar, y: y + ROW_HEIGHT / 2 });
+    y += ROW_HEIGHT;
+  });
+
+  return h.svg(
+    [h.Width(String(width)), h.Height(String(y + 4))],
+    [
+      ...x.ticks.map((value) =>
+        h.g(
+          [],
+          [
+            h.line([h.Class("grid"), h.X1(String(x.at(value))), h.X2(String(x.at(value))), h.Y1(String(top - 4)), h.Y2(String(y))], []),
+            h.text([h.X(String(x.at(value))), h.Y(String(top - 9)), h.TextAnchor("middle")], [tick(value)]),
+          ],
+        ),
+      ),
+      ...headings.map(({ name, y: headingY }) => h.text([h.X("0"), h.Y(String(headingY)), h.Class("small")], [name])),
+      ...placed.map(({ row, bar, y: rowY }) =>
+        h.g(
+          [],
+          [
+            h.text([h.X(String(labelWidth)), h.Y(String(rowY + 4)), h.TextAnchor("end"), h.Style({ fill: colorOfKey(row.key) })], [labelOf(row.key)]),
+            Number.isNaN(bar.value)
+              ? h.empty
+              : h.rect(
+                  [h.X(String(x.at(0))), h.Y(String(rowY - 5)), h.Width(String(Math.max(1, x.at(bar.value) - x.at(0)))), h.Height("10"), h.Fill(colorOfKey(row.key)), h.Opacity("0.85")],
+                  [h.title([], [`${labelOf(row.key)}, ${row.tournament}: ${bar.text}`])],
+                ),
+            Number.isNaN(bar.lo) ? h.empty : h.line([h.X1(String(x.at(bar.lo))), h.X2(String(x.at(bar.hi))), h.Y1(String(rowY)), h.Y2(String(rowY)), h.Stroke("#fff"), h.StrokeWidth("1.2")], []),
+            h.text([h.X(String(width - 44)), h.Y(String(rowY + 4)), h.Class("val")], [Number.isNaN(bar.value) ? "–" : bar.text]),
+          ],
+        ),
+      ),
+    ],
+  );
+};
+
+const rateBar = (rate: Rate, scale: number, digits: number, unit: string): Bar => ({
+  value: rate.n > 0 ? rate.rate * scale : Number.NaN,
+  lo: rate.n > 0 && !isDegenerate(rate) ? rate.lo * scale : Number.NaN,
+  hi: rate.n > 0 && !isDegenerate(rate) ? rate.hi * scale : Number.NaN,
+  text: `${(rate.rate * scale).toFixed(digits)}${unit}`,
+});
+
+const timeBar = ({ failedTime, returnedTime }: Row): Bar => {
+  const share = failedTime + returnedTime > 0 ? failedTime / (failedTime + returnedTime) : Number.NaN;
+
+  return { value: share * 100, lo: Number.NaN, hi: Number.NaN, text: `${(share * 100).toFixed(1)}%` };
+};
+
+/** The Reliability tab, laid out for a viewport `width` wide with `content` pixels inside main's padding. */
+export const reliabilityView = (
+  h: H,
+  filters: Html,
+  decisions: Decisions,
+  seats: ReadonlyArray<SeatFull>,
+  keep: ReadonlyArray<boolean>,
+  tip: Model["maybeRateTip"],
+  width: number,
+  content: number,
+): Html => {
   const rows = rowsOf(decisions, seats, keep);
   const worst = worstOf(decisions, seats, keep);
   const hasTournaments = new Set(rows.map(({ tournament }) => tournament)).size > 1;
   const total = (pick: (row: Row) => number) => sumOf(rows.map(pick));
+  const figure = chartWidth(width, content);
   const overhead = rows.filter((row) => row.failedCost > 0 || row.failedTime > 0).toSorted((left, right) => right.failedTime - left.failedTime);
 
   return h.div(
@@ -173,72 +280,92 @@ export const reliabilityView = (h: H, filters: Html, decisions: Decisions, seats
           h.h2([], ["Reliability"]),
           h.p([h.Class("sub")], ["Kept apart from skill; all started matches. Faults, reminders and extra replies are per 1,000 model-chosen moves."]),
           filters,
-          h.table(
-            [h.Class("rows")],
+          h.div(
+            [h.Class("chartrow")],
             [
-              h.thead(
-                [],
-                [
-                  h.tr(
-                    [],
-                    [
-                      h.th([], ["Config"]),
-                      h.th([], ["Replies"]),
-                      h.th([], ["Model moves"]),
-                      ...COLUMNS.map((column) => h.th(column.title === "" ? [] : [h.Title(column.title)], [column.header])),
-                      h.th([], ["Fallback moves"]),
-                    ],
-                  ),
-                ],
-              ),
-              h.tbody(
-                [],
-                rows.flatMap((row, index) => [
-                  hasTournaments && (index === 0 || rows[index - 1]?.tournament !== row.tournament) ? h.tr([h.Class("group")], [h.td([h.Colspan(9)], [row.tournament])]) : h.empty,
-                  h.tr(
-                    [],
-                    [
-                      h.td([h.Style({ color: colorOfKey(row.key) })], [labelOf(row.key)]),
-                      h.td([h.DataAttribute("label", "replies")], [row.calls.toLocaleString()]),
-                      h.td([h.DataAttribute("label", "moves")], [row.moves.toLocaleString()]),
-                      ...COLUMNS.map((column) => rateCellView(h, row, column)),
-                      h.td([h.DataAttribute("label", "fallbacks")], [String(row.fallbacks)]),
-                    ],
-                  ),
-                ]),
-              ),
+              figureView(h, "Failed calls", "Share of replies that failed, with a 95% interval over seed blocks.", configBarsView(h, rows, hasTournaments, ({ rates }) => rateBar(rates.failed, 100, 1, "%"), (value) => `${value}%`, figure)),
+              figureView(h, "Faults", "Provider errors per 1,000 model-chosen moves.", configBarsView(h, rows, hasTournaments, ({ rates }) => rateBar(rates.faults, 1000, 1, ""), String, figure)),
+              figureView(h, "Time lost to failed calls", "Failed calls' share of recorded call latency.", configBarsView(h, rows, hasTournaments, timeBar, (value) => `${value}%`, figure)),
             ],
           ),
         ],
       ),
-      h.section(
-        [],
+      h.details(
+        [h.Class("tables")],
         [
-          h.h2([], ["Failed-call overhead"]),
-          h.p(
-            [h.Class("sub")],
+          h.summary([], ["The numbers as tables"]),
+          h.section(
+            [],
             [
-              `Failed calls cost ${fmtUsd(total(({ failedCost }) => failedCost))} and ${hours(total(({ failedTime }) => failedTime))} recorded latency, against ${fmtUsd(total(({ returnedCost }) => returnedCost))} and ${hours(total(({ returnedTime }) => returnedTime))} for returned calls (list-price estimate).`,
-            ],
-          ),
-          h.table(
-            [h.Class("rows")],
-            [
-              h.thead([], [h.tr([], ["Config", "Failed cost", "Failed time", "Returned cost", "Returned time"].map((title) => h.th([], [title])))]),
-              h.tbody(
-                [],
-                overhead.map((row) =>
-                  h.tr(
+              h.h2([], ["Per config"]),
+              h.table(
+                [h.Class("rows")],
+                [
+                  h.thead(
                     [],
                     [
-                      h.td([h.Style({ color: colorOfKey(row.key) })], [labelOf(row.key), hasTournaments ? h.span([h.Class("pm")], [` · ${row.tournament}`]) : h.empty]),
-                      h.td([h.DataAttribute("label", "failed cost")], [fmtUsd(row.failedCost)]),
-                      h.td([h.DataAttribute("label", "failed time")], [hours(row.failedTime)]),
-                      h.td([h.DataAttribute("label", "returned cost")], [fmtUsd(row.returnedCost)]),
-                      h.td([h.DataAttribute("label", "returned time")], [hours(row.returnedTime)]),
+                      h.tr(
+                        [],
+                        [
+                          h.th([], ["Config"]),
+                          h.th([], ["Replies"]),
+                          h.th([], ["Model moves"]),
+                          ...COLUMNS.map((column) => h.th(column.title === "" ? [] : [h.Title(column.title)], [column.header])),
+                          h.th([], ["Fallback moves"]),
+                        ],
+                      ),
                     ],
                   ),
-                ),
+                  h.tbody(
+                    [],
+                    rows.flatMap((row, index) => [
+                      hasTournaments && (index === 0 || rows[index - 1]?.tournament !== row.tournament) ? h.tr([h.Class("group")], [h.td([h.Colspan(9)], [row.tournament])]) : h.empty,
+                      h.tr(
+                        [],
+                        [
+                          h.td([h.Style({ color: colorOfKey(row.key) })], [labelOf(row.key)]),
+                          h.td([h.DataAttribute("label", "replies")], [row.calls.toLocaleString()]),
+                          h.td([h.DataAttribute("label", "moves")], [row.moves.toLocaleString()]),
+                          ...COLUMNS.map((column) => rateCellView(h, row, column)),
+                          h.td([h.DataAttribute("label", "fallbacks")], [String(row.fallbacks)]),
+                        ],
+                      ),
+                    ]),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          h.section(
+            [],
+            [
+              h.h2([], ["Failed-call overhead"]),
+              h.p(
+                [h.Class("sub")],
+                [
+                  `Failed calls cost ${fmtUsd(total(({ failedCost }) => failedCost))} and ${hours(total(({ failedTime }) => failedTime))} recorded latency, against ${fmtUsd(total(({ returnedCost }) => returnedCost))} and ${hours(total(({ returnedTime }) => returnedTime))} for returned calls (list-price estimate).`,
+                ],
+              ),
+              h.table(
+                [h.Class("rows")],
+                [
+                  h.thead([], [h.tr([], ["Config", "Failed cost", "Failed time", "Returned cost", "Returned time"].map((title) => h.th([], [title])))]),
+                  h.tbody(
+                    [],
+                    overhead.map((row) =>
+                      h.tr(
+                        [],
+                        [
+                          h.td([h.Style({ color: colorOfKey(row.key) })], [labelOf(row.key), hasTournaments ? h.span([h.Class("pm")], [` · ${row.tournament}`]) : h.empty]),
+                          h.td([h.DataAttribute("label", "failed cost")], [fmtUsd(row.failedCost)]),
+                          h.td([h.DataAttribute("label", "failed time")], [hours(row.failedTime)]),
+                          h.td([h.DataAttribute("label", "returned cost")], [fmtUsd(row.returnedCost)]),
+                          h.td([h.DataAttribute("label", "returned time")], [hours(row.returnedTime)]),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
