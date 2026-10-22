@@ -58,12 +58,14 @@ const itemSummaries = (decisions: Decisions, seats: ReadonlyArray<SeatFull>): Re
     return fresh;
   };
 
+  const tallyOfSeat = seats.map(tallyOf);
+
   decisions.seat.forEach((seatIndex, move) => {
     const seat = seats[seatIndex];
+    const tally = tallyOfSeat[seatIndex];
 
-    if (seat === undefined) return;
+    if (seat === undefined || tally === undefined) return;
 
-    const tally = tallyOf(seat);
     const legalUse = decisions.legalUse[move] ?? 0;
     const legalSteal = decisions.legalSteal[move] ?? 0;
 

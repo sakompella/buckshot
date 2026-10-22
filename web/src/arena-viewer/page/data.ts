@@ -155,7 +155,9 @@ export const fmtSec = (ms: number | null | undefined): string => {
   return ms >= 10_000 ? `${(ms / 1000).toFixed(0)}s` : `${(ms / 1000).toFixed(1)}s`;
 };
 
-export const fmtTime = (iso: string): string => new Date(iso).toLocaleString("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+const PACIFIC_TIME = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+
+export const fmtTime = (iso: string): string => PACIFIC_TIME.format(new Date(iso));
 
 export const fmtRating = (rating: number): string => `${rating >= 0 ? "+" : ""}${rating.toFixed(0)}`;
 
