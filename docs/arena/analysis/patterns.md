@@ -73,7 +73,7 @@ Scope:
 
 - Using the handsaw on an unknown chamber is common to every model (34–66% of saws), not a habit of one.
 - Sawing a known live shell when a saw is legal is also common (53–61% for every model).
-- Ejecting a known live shell with beer happens for every model (6–15% of beers).
+- Ejecting a known live shell with beer happens for every model (7–15% of beers).
 
 ## Claude calls mention an organization instruction
 
