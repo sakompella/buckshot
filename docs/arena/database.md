@@ -12,7 +12,7 @@ bun scripts/arena-import.ts --db /absolute/path/to/buckshot.sqlite \
   /absolute/path/to/tournament-1 /absolute/path/to/tournament-2 /absolute/path/to/tournament-3
 ```
 
-`--skips` is optional. It takes a JSON object of the form `{absoluteTournamentPath: {matchName: reason}}`: each absolute tournament path maps to its exact scheduled match names, and each match name maps to the reason it is not scored. The reason is stored in `matches.status_reason`, so every skip keeps its own. This is an explicit disposition, not a guess based on missing files. Keep this local file beside the database and record its evidence in the validation report. A skipped match that has logs, finished or not, is stored as `partial` and keeps its moves and costs, but it is never scored. Two committed lists feed the file: tournament 1's 123 skipped matches (41 started and partial, 82 never started) and tournament 3's 5 unfinished matches past its 40-match cap.
+`--skips` is optional. It takes a JSON object of the form `{absoluteTournamentPath: {matchName: reason}}`: each absolute tournament path maps to its exact scheduled match names, and each match name maps to the reason it is not scored. The reason is stored in `matches.status_reason`, so every skip keeps its own. This is an explicit disposition, not a guess based on missing files. Keep this local file beside the database and record its evidence in the validation report. A skipped match that has logs, finished or not, is stored as `partial` and keeps its moves and costs, but it is never scored. Two committed lists feed the file: tournament 1's 120 skipped matches (38 started and partial, 82 never started) and tournament 3's 5 unfinished matches past its 40-match cap.
 
 Run the same command after more matches finish. Unchanged matches are not replayed. A match is unchanged only if its files, schedule entry, skip reason, source directory and the result of checking its manifest against the tournament's configuration are all the same, so changing a tournament's configuration or importing a copy from a new directory refreshes the affected matches. Changed matches refresh in a transaction per tournament. Stable IDs derive from the tournament's creation date and name, the scheduled match name, and the observation's position. Copies of the same tournament should not be imported as separate tournaments. Importing the same tournament from a new directory moves it: its rows point at the new paths, and the observations at the old paths stay as history but are no longer current. The database retains previous raw observations when files change. Analytical tables describe the latest imported snapshot, not every historical snapshot.
 
@@ -115,22 +115,22 @@ Legal alternatives and own-player views support future opportunity-conditioned s
 
 ## Validation
 
-Rebuilt on 2026-10-21 into a new file, then swapped in. The import took about 10 minutes on the Mac and 30 on hp. Scoring seed 3030's finished match was an incremental re-import of a copy, about 2 minutes. `PRAGMA integrity_check` returned `ok`, and `issues` is empty.
+Rebuilt on 2026-10-21 into a new file, then swapped in. The import took about 10 minutes on the Mac and 30 on hp. Scoring seed 3030's finished match was an incremental re-import of a copy, about 2 minutes. On 2026-10-22 the tournament-1 leftovers (60 new terra matches and 3 resumed Astra vs haiku 4.5 matches) were added the same way, in 3.5 minutes on hp, and the old file was kept as `buckshot.pre-leftovers.sqlite`. `PRAGMA integrity_check` returned `ok`, the foreign key check was clean and `issues` is empty. The figures below are after that import.
 
 | Tournament | Scheduled | Completed (scored) | Partial, skipped (unscored) | Skipped, never started | Unstarted | Replay validated | List-price cost, including partial work |
 |---|---|---|---|---|---|---|---|
-| tournament-1 (`cpa-tiers`) | 2,140 | 2,017 | 41 | 82 | 0 | 2,058 | $971.5335 |
+| tournament-1 (`cpa-tiers`) | 2,200 | 2,080 | 38 | 82 | 0 | 2,118 | $991.0948 |
 | tournament-2 (`opus-effort`) | 80 | 80 | 0 | 0 | 0 | 80 | $58.8854 |
 | tournament-3 (`astra-vs-opus-xhigh`) | 60 | 41 | 5 | 0 | 14 | 46 | $42.4880 |
-| Total | 2,280 | 2,138 | 46 | 82 | 14 | 2,184 | $1,072.91 |
+| Total | 2,340 | 2,201 | 43 | 82 | 14 | 2,244 | $1,092.47 |
 
-- Every started match (2,184) replayed and validated against the generated rules. The 96 matches with no logs have replay status `unavailable`. There are 210,678 decisions. Every call has a list price.
-- Tournaments 1 and 2 match the tournament reports and the first build exactly: 2,017 and 80 scored matches, $971.5335 and $58.8854.
+- Every started match (2,244) replayed and validated against the generated rules. The 96 matches with no logs have replay status `unavailable`. There are 216,291 decisions. Every call has a list price.
+- Tournament 2 and tournament 1's first 2,017 scored matches match the tournament reports and the first build exactly: $971.5335 and $58.8854. The leftovers added 63 scored matches, $19.56.
 - Tournament 3 has 41 scored matches, Opus 22 and Astra 19, matching `results.md`. The 41st is seed 3030's first match, which finished during an uncapped run between 9:20 and 9:23 PM Pacific time; Aditya ruled that it counts. The other 5 matches past the 40-match cap never finished. They carry a skip disposition, are stored as `partial` and are unscored. The other 14 never started. The $42.4880 list-price cost includes all 46 started matches. The first build had 39 scored, 3 partial and $39.94.
-- The rebuild and these checks ran on the Mac, which holds the tournament directories: `PRAGMA integrity_check` returned `ok`, `issues` is empty and all 2,184 started matches replayed. Rebuilding on another machine needs its own copy of the tournament directories.
-- The `--skips` file held 128 skips in all: tournament 1's 123 and tournament 3's 5. All 128 carry `disposition = 'skipped'` and the reason from their committed list. Tournament 1's 41 started matches and tournament 3's 5 are `partial`, and tournament 1's 82 never-started matches are `skipped`. No other match has a disposition. Tournaments 1 and 2 are `completed`. Tournament 3 stays `partial`.
+- The 2026-10-21 rebuild and its checks ran on the Mac, which holds the tournament directories: `PRAGMA integrity_check` returned `ok`, `issues` is empty and all 2,184 started matches replayed. Rebuilding on another machine needs its own copy of the tournament directories.
+- The `--skips` file now holds 125 skips: tournament 1's 120 and tournament 3's 5. All 125 carry `disposition = 'skipped'` and the reason from their committed list. Tournament 1's 38 started matches and tournament 3's 5 are `partial`, and tournament 1's 82 never-started matches are `skipped`. No other match has a disposition. Tournaments 1 and 2 are `completed`. Tournament 3 stays `partial`.
 
-The skips file holds absolute local paths, so it is not committed. The two committed lists hold only match names and reasons: `web/src/analysis/tournament-1-skipped.json` (123 matches) and `web/src/analysis/tournament-3-over-cap.json` (5 matches). Build the file from both, giving each tournament its absolute path:
+The skips file holds absolute local paths, so it is not committed. The two committed lists hold only match names and reasons: `web/src/analysis/tournament-1-skipped.json` (120 matches) and `web/src/analysis/tournament-3-over-cap.json` (5 matches). Build the file from both, giving each tournament its absolute path:
 
 ```sh
 bun -e '
