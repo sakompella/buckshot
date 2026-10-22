@@ -4,6 +4,7 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 import { anchorId, tipView } from "./charts.ts";
 import { baseName, bradleyTerry, fmtCount, fmtPct, fmtSec, fmtUsd, groupBy, isClaude, keyOf, labelOf, type ModelStats, pairsOf, quantile, rng, type SeatFull, sumOf, unique } from "./data.ts";
 import { type ItemSummary, memoLast } from "./derived.ts";
+import { itemIconOf } from "./items.ts";
 import { Message, type Model } from "./model.ts";
 
 type H = HtmlBuilder<Message>;
@@ -224,7 +225,7 @@ const rowView = (h: H, m: ModelStats, rating: Rating | undefined, item: ItemSumm
       h.td([h.DataAttribute("label", "out tok")], [fmtCount(m.avgOut)]),
       h.td(
         [h.DataAttribute("label", "fav"), h.Title(favorite === null ? "" : `${favorite.k} of ${favorite.n} legal moves`)],
-        favorite === null ? ["–"] : [`${favorite.item} `, h.span([h.Class("pm")], [fmtPct(favorite.rate)])],
+        favorite === null ? ["–"] : [itemIconOf(h, favorite.item), `${favorite.item} `, h.span([h.Class("pm")], [fmtPct(favorite.rate)])],
       ),
     ],
   );
