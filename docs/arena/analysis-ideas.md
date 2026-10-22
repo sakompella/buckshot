@@ -50,3 +50,21 @@ Reasoning text is a returned summary, not the model's full reasoning. Claude ret
 | Advice crossover | One model writes a playbook, another plays with it | 1–2 weeks |
 | Betrayal table | Three or four models at one table: who attacks or spares whom | 1–2 weeks |
 | Spectator prediction game | Viewers bet play money on the next move or round winner (a prerecorded version needs only replays) | 3–5 days |
+
+## More charts from existing traces
+
+Proposed for the viewer; quick read-only counts over scored matches unless noted.
+
+| Chart | Question | Signal |
+|---|---|---|
+| Menu-size heat map per model | With more options, does a model still just shoot? | shots are 66.8% of choices with 3 legal moves, 19.9% with 6, 9.7% with 10 |
+| Move transition matrix | Which combinations do models play (saw then shoot, glass then shoot self)? | 7,098 handsaw→opponent-shot pairs, 2,590 glass→self-shot |
+| Run-length curves | Who keeps control of the table? | 37,607 same-player runs, 6,359 of 5+ moves, longest 12 |
+| Cost concentration (Lorenz) | Where does the spend go? | top 1% of calls are 37.9% of spend, top 10% are 69.8% (all calls) |
+| Winner vs loser cost | Did the winner spend more? | winner spent more in 1,315 of 2,138 matches (61.5%) |
+| Reasoning frequency vs length by effort | Does more effort think more often or longer? | Sonnet replies with reasoning tokens: 57.5% at low, 89.2% at max, 57.2% at off |
+| Cache share by move number | How much of the prompt is reread? | cache reads are 91.1% of prompt tokens (all calls) |
+| Moves in wins vs losses | How much work does winning take? | median 25 agent moves in wins, 23 in losses |
+| Targeting when behind | Does trailing change whom a model shoots? | self-shots 34.3% behind, 26.9% level, 24.5% ahead (health known in both views only; 16,222 shots lack it) |
+
+Avoid an inferred win-probability timeline until a predictive model is fitted and calibrated on held-out seeds.
