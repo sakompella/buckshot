@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 
 import { roundStory, ShellTracker } from "../src/arena-viewer/analysis.ts";
-import { type BlockTally, blockRate, bradleyTerry, colorOf, type Game, quantile, rng } from "../src/arena-viewer/page/data.ts";
+import type { Seat } from "../src/arena-viewer/api.ts";
+import { type BlockTally, blockRate, bradleyTerry, colorOf, type Game, quantile, rng, withCohorts } from "../src/arena-viewer/page/data.ts";
 
 const randomGames = (seed: number): ReadonlyArray<Game> => {
   const random = rng(seed);
@@ -149,4 +150,65 @@ test("Claude models are orange and GPT models blue, each family brightest and mo
       expect(stronger?.saturation ?? 0).toBeGreaterThan(weaker.saturation);
     }
   }
+});
+
+const SEAT: Seat = {
+  tournament: "t",
+  matchId: "",
+  matchName: "",
+  status: "completed",
+  startedAt: "",
+  seed: 1,
+  seedBlock: "",
+  codeHash: "",
+  model: "",
+  effort: "medium",
+  player: "A",
+  position: 0,
+  winShare: 1,
+  cash: 0,
+  calls: 0,
+  cost: 0,
+  inp: 0,
+  outp: 0,
+  cr: 0,
+  cw: 0,
+  rt: 0,
+  lat: 0,
+  failed: 0,
+  fcost: 0,
+  flat: 0,
+  rcost: 0,
+  rlat: 0,
+  rsHidden: 0,
+  rsText: 0,
+  multiTool: 0,
+  moves: 0,
+  acquired: [],
+  used: [],
+  stolen: [],
+  faults: 0,
+  reminders: 0,
+  fallbacks: 0,
+  story: null,
+  round: 0,
+  low: null,
+};
+
+test("a cohort is the kind of comparison, pooled over code hashes, and named for it", () => {
+  const match = (matchId: string, tournament: string, codeHash: string, ...configs: ReadonlyArray<readonly [string, string]>) =>
+    configs.map(([model, effort], position) => ({ ...SEAT, matchId, tournament, codeHash, model, effort, position }));
+
+  const seats = [
+    ...match("a", "one", "old", ["claude-opus-5-5", "medium"], ["gpt-6-astra", "medium"]),
+    ...match("b", "one", "new", ["claude-sonnet-5-5", "medium"], ["gpt-6-luna", "medium"]),
+    ...match("c", "one", "old", ["claude-sonnet-5-5", "low"], ["claude-sonnet-5-5", "high"]),
+    ...match("d", "one", "new", ["claude-sonnet-5-5", "max"], ["claude-sonnet-5-5", "medium"]),
+    ...match("e", "two", "new", ["gpt-6-astra", "medium"], ["claude-opus-5-5", "xhigh"]),
+    ...match("f", "two", "old", ["claude-opus-5-5", "xhigh"], ["gpt-6-astra", "medium"]),
+  ];
+
+  const cohortOf = new Map(withCohorts(seats).map(({ matchId, cohort }) => [matchId, cohort]));
+
+  expect([..."abcdef"].map((matchId) => cohortOf.get(matchId))).toEqual(["Cross-model (medium)", "Cross-model (medium)", "Sonnet efforts", "Sonnet efforts", "Opus xhigh vs Astra", "Opus xhigh vs Astra"]);
 });
