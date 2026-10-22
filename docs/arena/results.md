@@ -6,13 +6,13 @@ Ratings are Bradley-Terry on an Elo scale, per configuration (model + endpoint +
 
 ## Status (2026-10-20, 9:55 PM PDT)
 - **Nothing is running.** No arena jobs, runners, agents or heartbeats.
-- **tournament-1** (`_work/arena/tournament-1`): finished. 123 scheduled matches are unplayed, the DeepSeek and Astra ones: 41 started and are partial, and 82 never started.
+- **tournament-1** (`_work/arena/tournament-1`): finished. 120 scheduled matches are unplayed, all against DeepSeek: 38 started and are partial, and 82 never started. The leftover Astra and terra matches finished on 2026-10-22 (below).
 - **tournament-2** (`_work/arena/tournament-2`, config `web/tournaments/opus-effort.json`): stage A is finished. Stage B, the max pairings, hasn't started and needs the user's go-ahead.
 - **tournament-3** (`_work/arena/tournament-3`, config `web/tournaments/astra-opus-xhigh.json`): finished, 40 of 40 capped matches.
 - **Where the data is:** all tournament data lives in the `agents/arena-design` worktree (`~/.t3/worktrees/buckshot/t3-1427bb8e/_work/arena/`). That worktree also serves as the `--code 9e7d7ff22891` checkout. Keep it.
 
 ## tournament-1: cross-model and effort sweeps
-2,017 matches, $971.53. Code versions `51b8366684f0` and `9e7d7ff22891`; the only request difference is the GPT reasoning summary (`auto` vs `detailed`).
+2,080 matches, $991.09. Code versions `51b8366684f0` and `9e7d7ff22891`; the only request difference is the GPT reasoning summary (`auto` vs `detailed`). The 60 leftover terra matches below ran under `3c9b98f8b3f4`. The tables below cover the first 2,017 matches and are not refitted.
 
 ### All models at medium effort
 | Entrant | Matches | Win share | 95% CI | Rating |
@@ -25,6 +25,12 @@ Ratings are Bradley-Terry on an Elo scale, per configuration (model + endpoint +
 | gpt-5.6-terra | 80 | 46.3% | 33.3% to 59.4% | -41 |
 | claude-haiku-4-5-20251001 | 117 | 29.9% | 21.9% to 37.3% | -129 |
 | gpt-6-luna | 140 | 17.9% | 12.0% to 25.0% | -235 |
+
+**Leftovers, finished 2026-10-22** (63 matches, about $19.6; all replay-validated). Each pairing is 20 matches. Scores are matches won, first-named entrant first:
+- gpt-5.6-terra vs gpt-6-astra: 5–15
+- gpt-5.6-terra vs claude-opus-5-5: 8–12
+- gpt-5.6-terra vs claude-haiku-4-5: 14–6
+- gpt-6-astra vs claude-haiku-4-5: 17–3, after the 3 unfinished matches resumed (Astra 2, haiku 4.5 1 of them)
 
 ### Effort sweeps (each model round-robin against its own effort levels; no suffix = medium)
 ### gpt-6-luna
@@ -153,7 +159,7 @@ The Claude subscription account behind CPA carries organization-level instructio
 ## Open work
 1. tournament-2 stage B: needs the user's go-ahead.
 2. gpt-5.6-luna effort sweep: a medium entrant, placement against the medium models, then low–max. About 160 matches on Codex quota. `none` needs the CPA patch.
-3. tournament-1 leftovers: 3 Astra vs haiku 4.5 matches (cheap; restores seed balance) and 20 vs DeepSeek (free tier refusing).
+3. tournament-1 leftovers: 20 matches per pairing against DeepSeek (free tier refusing). Refit the medium table with the 63 new matches.
 4. `web/src/arena/runlog.ts`: join thinking blocks with `"\n\n"`. About 1.9% of saved texts run headings together. This changes the code hash.
 5. An optional, separately labelled entrant with a `reason` field. Check its effect on play with paired seeds before rating it.
 6. Keep the `t3-1427bb8e` worktree: it holds the tournament data and the `9e7d7ff22891` code. tournament-1's old code `51b8366684f0` is commit `5e6f1b1`; check it out again only to resume its 41 partial matches.

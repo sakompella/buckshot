@@ -793,23 +793,23 @@ const pinnedTournament = () => tournamentFrom(configJson({
   pairings: [["luna", "don"]],
 }));
 
-test("account assignment excludes cooling accounts and minimizes running matches for every pool state", () => {
+test("account assignment excludes cooling accounts, minimizes running matches and breaks ties by preference, then config order, for every pool state", () => {
   const tournament = pinnedTournament();
   const match = scheduleOf(tournament)[0];
 
   if (match === undefined) throw new Error("no match");
 
-  for (const a of [0, 1, 3]) for (const b of [0, 1, 3]) for (const cooling of [[], ["account-a"], ["account-b"], ["account-a", "account-b"]]) {
+  for (const a of [0, 1, 3]) for (const b of [0, 1, 3]) for (const cooling of [[], ["account-a"], ["account-b"], ["account-a", "account-b"]]) for (const preferred of [[], ["account-b"], ["account-b", "account-a"], ["account-unknown", "account-a"]]) {
     const loads = new Map([["account-a", a], ["account-b", b]]);
-    const assigned = assignAccounts(tournament.config, match, (_model, id) => cooling.includes(id), (id) => loads.get(id) ?? 0);
+    const assigned = assignAccounts(tournament.config, match, (_model, id) => cooling.includes(id), (id) => loads.get(id) ?? 0, preferred);
     const available = [...loads].filter(([id]) => !cooling.includes(id));
 
     if (available.length === 0) expect(assigned).toBeUndefined();
     else {
-      const id = assigned?.A ?? "";
+      const least = Math.min(...available.map(([, load]) => load));
+      const tied = available.flatMap(([id, load]) => (load === least ? [id] : []));
 
-      expect(cooling).not.toContain(id);
-      expect(loads.get(id)).toBe(Math.min(...available.map(([, load]) => load)));
+      expect(assigned?.A).toBe(preferred.find((id) => tied.includes(id)) ?? tied[0]);
     }
   }
 
