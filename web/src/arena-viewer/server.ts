@@ -1,0 +1,224 @@
+import { Database } from "bun:sqlite";
+
+import { Option, Schema } from "effect";
+
+import { analyse, decodeVisible, roundStory, ShellTracker } from "./analysis.ts";
+import { Call, Decisions, MatchDetail, MatchSeat, MatchSummary, type PlayerState, SeatRow, SeatsResponse, type Step } from "./api.ts";
+import page from "./page/index.html";
+
+// The arena viewer's server: the page, and a read-only JSON API over the arena
+// analysis database. It never selects match_seats.provenance_json, which holds
+// an account email. DeepSeek is left out entirely: a match with a DeepSeek seat
+// is dropped here, so no tab, cohort, rating or total sees it.
+
+const NOT_DEEPSEEK = `m.id not in (select x.match_id from match_seats x join entrants y on y.id = x.entrant_id where y.model = 'oc/deepseek-v4.1-flash-free')`;
+
+// One row per player per started match.
+const SEATS_SQL = `with cs as (select match_id, player, count(*) calls, sum(cost_usd) cost, sum(input_tokens) inp, sum(output_tokens) outp,
+     sum(cache_read_tokens) cr, sum(cache_write_tokens) cw, sum(reasoning_tokens) rt,
+     sum(latency_ms) lat, sum(status = 'failed') failed,
+     sum(case when status = 'failed' then coalesce(cost_usd, 0) else 0 end) fcost, sum(case when status = 'failed' then coalesce(latency_ms, 0) else 0 end) flat,
+     sum(case when status != 'failed' then coalesce(cost_usd, 0) else 0 end) rcost, sum(case when status != 'failed' then coalesce(latency_ms, 0) else 0 end) rlat,
+     sum(reasoning_tokens > 0 and coalesce(reasoning_text, '') = '') rsHidden, sum(coalesce(reasoning_text, '') != '') rsText,
+     sum(json_valid(tool_calls_json) and json_array_length(tool_calls_json) > 1) multiTool
+   from calls group by match_id, player),
+   ds as (select match_id, player, sum(by_whom = 'agent') moves from decisions group by match_id, player)
+   select t.name tournament, m.id matchId, m.name matchName, m.status, m.started_at startedAt, m.seed, m.seed_block_id seedBlock,
+     substr(m.code_hash, 1, 8) codeHash, e.model, e.effort, ms.player, ms.position, ms.win_share winShare, ms.cash,
+     cs.calls, cs.cost, cs.inp, cs.outp, cs.cr, cs.cw, cs.rt, cs.lat, cs.failed, cs.fcost, cs.flat, cs.rcost, cs.rlat, cs.rsHidden, cs.rsText, cs.multiTool, ds.moves
+   from match_seats ms join matches m on m.id = ms.match_id join tournaments t on t.id = m.tournament_id
+   join entrants e on e.id = ms.entrant_id
+   left join cs on cs.match_id = m.id and cs.player = ms.player
+   left join ds on ds.match_id = m.id and ds.player = ms.player
+   where m.status in ('completed', 'partial') and ${NOT_DEEPSEEK} order by m.started_at, ms.position`;
+
+const decodeSeatRow = Schema.decodeUnknownSync(SeatRow);
+
+const decodeSummary = Schema.decodeUnknownOption(MatchSummary);
+
+const decodeMatchSeat = Schema.decodeUnknownSync(MatchSeat);
+
+const decodeCall = Schema.decodeUnknownSync(Call);
+
+const DecisionRow = Schema.Struct({
+  id: Schema.String,
+  ordinal: Schema.Number,
+  turn: Schema.Number,
+  player: Schema.String,
+  byWhom: Schema.Literals(["agent", "fallback", "forced"]),
+  label: Schema.String,
+  visible: Schema.NullOr(Schema.String),
+});
+
+const decodeDecisionRow = Schema.decodeUnknownSync(DecisionRow);
+
+const encodeSeats = Schema.encodeSync(Schema.fromJsonString(SeatsResponse));
+
+const encodeDecisions = Schema.encodeSync(Schema.fromJsonString(Decisions));
+
+const encodeMatch = Schema.encodeSync(Schema.fromJsonString(MatchDetail));
+
+// A move's outcome is the start of its player's next window, up to the first line by someone else or a new round, distribution or load.
+const isOutcomeEnd = (text: string, player: string): boolean =>
+  (text.startsWith("Player ") && !text.startsWith(`Player ${player} `)) || /^(Round \d+ begins|Item distribution|The shotgun is loaded)/.test(text);
+
+interface StepDraft {
+  readonly step: Omit<Step, "outcome" | "calls">;
+  readonly events: ReadonlyArray<string>;
+  /** Where this player's previous decision is. */
+  readonly previous: number | undefined;
+  readonly outcome: Array<string>;
+  readonly calls: Array<Call>;
+}
+
+const matchDetail = (db: Database, id: string): MatchDetail | null => {
+  const match = decodeSummary(
+    db
+      .query(`select m.id, m.name, m.status, m.seed, m.started_at startedAt, m.ended_at endedAt, t.name tournament from matches m join tournaments t on t.id = m.tournament_id where m.id = ? and ${NOT_DEEPSEEK}`)
+      .get(id),
+  );
+
+  if (Option.isNone(match)) return null;
+
+  const seats = db
+    .query(`select ms.player, ms.position, ms.cash, ms.win_share winShare, e.model, e.effort from match_seats ms join entrants e on e.id = ms.entrant_id where match_id = ? order by position`)
+    .all(id)
+    .map((row) => decodeMatchSeat(row));
+
+  // Each player's view is the concatenation of its own decisions' event windows, so shells and rounds are tracked per player.
+  const trackers = new Map<string, ShellTracker>();
+  const lastOf = new Map<string, number>();
+  const roundOf = new Map<string, number>();
+  const healthOf = new Map<string, number>();
+
+  const drafts = db
+    .query(`select id, ordinal, turn, player, by_whom byWhom, label, visible_json visible from decisions where match_id = ? order by ordinal`)
+    .all(id)
+    .map((raw, index): StepDraft => {
+      const row = decodeDecisionRow(raw);
+      const visible = row.visible === null ? null : decodeVisible(row.visible);
+      const events = visible?.events ?? [];
+      const tracker = trackers.get(row.player) ?? new ShellTracker();
+      const previous = lastOf.get(row.player);
+
+      trackers.set(row.player, tracker);
+      lastOf.set(row.player, index);
+
+      for (const text of events) {
+        tracker.event(text);
+        const round = /^Round (\d+) begins/.exec(text);
+
+        if (round) roundOf.set(row.player, Number(round[1]));
+      }
+
+      const chamber = tracker.chamber();
+
+      const players = (visible?.players ?? []).map((seen): PlayerState => {
+        const health = seen.health ?? healthOf.get(seen.player) ?? 0;
+
+        healthOf.set(seen.player, health);
+
+        return { player: seen.player, health, items: seen.items ?? [] };
+      });
+
+      const { visible: _visible, ...decision } = row;
+
+      return {
+        step: {
+          ...decision,
+          round: roundOf.get(row.player) ?? 1,
+          players,
+          live: tracker.live,
+          blank: tracker.blank,
+          known: chamber !== null && (chamber.by === "glass" || chamber.by === "phone") ? chamber.known : null,
+        },
+        events,
+        previous,
+        outcome: [],
+        calls: [],
+      };
+    });
+
+  for (const draft of drafts) {
+    const before = draft.previous === undefined ? undefined : drafts[draft.previous];
+
+    if (before === undefined) continue;
+
+    const end = draft.events.findIndex((text) => isOutcomeEnd(text, before.step.player));
+
+    before.outcome.push(...(end === -1 ? draft.events : draft.events.slice(0, end)).filter((text) => !text.endsWith(" picked up the shotgun.")));
+  }
+
+  const byId = new Map(drafts.map((draft) => [draft.step.id, draft]));
+  const unlinked: Array<Call> = [];
+
+  const calls = db.query(
+    `select decision_id decisionId, player, t, status, error, latency_ms latency, input_tokens inp, output_tokens outp,
+       cache_read_tokens cr, cache_write_tokens cw, reasoning_tokens rt, cost_usd cost,
+       reasoning_text reasoning, response_text response, tool_calls_json tools
+     from calls where match_id = ? order by ordinal`,
+  );
+
+  for (const raw of calls.all(id)) {
+    const call = decodeCall(raw);
+    const draft = call.decisionId === null ? undefined : byId.get(call.decisionId);
+
+    (draft?.calls ?? unlinked).push(call);
+  }
+
+  // One player's windows in order are its whole view; mixing both players' windows misorders round lines.
+  const first = seats[0]?.player;
+
+  const story = roundStory(
+    drafts.filter(({ step }) => step.player === first).flatMap(({ events }) => events),
+    new Map(seats.map((seat) => [seat.player, seat.cash ?? 0])),
+  );
+
+  return { match: match.value, seats, decisions: drafts.map(({ step, outcome, calls: linked }) => ({ ...step, outcome, calls: linked })), unlinked, story };
+};
+
+const gzipped = (body: string) => Bun.gzipSync(new TextEncoder().encode(body));
+
+const json = (body: string | Uint8Array<ArrayBuffer>, isGzipped = false) =>
+  new Response(body, { headers: isGzipped ? { "content-type": "application/json", "content-encoding": "gzip" } : { "content-type": "application/json" } });
+
+/** Loads and analyses the database once, then serves the page and the API. */
+export const serveArenaViewer = (dbPath: string, hostname: string, port: number) => {
+  const db = new Database(dbPath, { readonly: true });
+  const started = performance.now();
+
+  const rows = db
+    .query(SEATS_SQL)
+    .all()
+    .map((row) => decodeSeatRow(row));
+
+  const seatIndex = new Map(rows.map((row, index) => [`${row.matchId}|${row.player}`, index]));
+  const { decisions, seats: analysed } = analyse(db, rows, seatIndex);
+
+  const seats = rows.flatMap((row, index) => {
+    const extra = analysed[index];
+
+    return extra === undefined ? [] : [{ ...row, ...extra }];
+  });
+
+  const seatsBody = gzipped(encodeSeats(seats));
+  const decisionsBody = gzipped(encodeDecisions(decisions));
+
+  console.log(`loaded ${seats.length} seats in ${Math.round(performance.now() - started)} ms; decisions payload ${(decisionsBody.length / 1e6).toFixed(1)} MB gzipped`);
+
+  return Bun.serve({
+    hostname,
+    port,
+    development: false,
+    routes: {
+      "/": page,
+      "/api/seats": () => json(seatsBody, true),
+      "/api/decisions": () => json(decisionsBody, true),
+      "/api/match": (request) => {
+        const detail = matchDetail(db, new URL(request.url).searchParams.get("id") ?? "");
+
+        return detail === null ? new Response("not found", { status: 404 }) : json(encodeMatch(detail));
+      },
+    },
+  });
+};

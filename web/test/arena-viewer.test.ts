@@ -1,0 +1,81 @@
+import { expect, test } from "bun:test";
+
+import { roundStory, ShellTracker } from "../src/arena-viewer/analysis.ts";
+import { bradleyTerry, type Game, rng } from "../src/arena-viewer/page/data.ts";
+
+const randomGames = (seed: number): ReadonlyArray<Game> => {
+  const random = rng(seed);
+  const players = ["a", "b", "c", "d", "e"];
+  const pick = () => players[Math.floor(random() * players.length)] ?? "a";
+
+  return Array.from({ length: 40 }, () => [pick(), pick()] as const).flatMap(([a, b]) => (a === b ? [] : [{ a, b, sa: [0, 0.5, 1][Math.floor(random() * 3)] ?? 0 }]));
+};
+
+test("Bradley-Terry ratings have mean 0 and do not depend on which side a game lists first", () => {
+  for (let seed = 1; seed <= 20; seed++) {
+    const games = randomGames(seed);
+    const ratings = bradleyTerry(games);
+    const swapped = bradleyTerry(games.map(({ a, b, sa }) => ({ a: b, b: a, sa: 1 - sa })));
+    const values = [...ratings.values()];
+
+    expect(Math.abs(values.reduce((total, value) => total + value, 0))).toBeLessThan(1e-6);
+
+    for (const [id, rating] of ratings) expect(swapped.get(id) ?? Number.NaN).toBeCloseTo(rating, 6);
+  }
+});
+
+test("Bradley-Terry ranks a player that wins more of the same games higher", () => {
+  const games = [
+    { a: "x", b: "y", sa: 1 },
+    { a: "x", b: "y", sa: 1 },
+    { a: "x", b: "y", sa: 0 },
+  ];
+
+  const ratings = bradleyTerry(games);
+
+  expect(ratings.get("x") ?? 0).toBeGreaterThan(ratings.get("y") ?? 0);
+  expect(bradleyTerry([...games, { a: "x", b: "y", sa: 1 }]).get("x") ?? 0).toBeGreaterThan(ratings.get("x") ?? 0);
+});
+
+test("the shell tracker knows the chamber from a glass, a phone and the count", () => {
+  const tracker = new ShellTracker();
+
+  tracker.event("The shotgun is loaded: 1 live, 2 blank.");
+  expect(tracker.chamber()?.pLive).toBeCloseTo(1 / 3);
+
+  tracker.event("The chambered shell is blank.");
+  expect(tracker.chamber()).toEqual({ known: "blank", by: "glass", pLive: 0 });
+
+  tracker.event("Player A shot Player B: blank.");
+  tracker.event("The 2nd shell is blank.");
+  expect(tracker.chamber()).toEqual({ known: "live", by: "count", pLive: 1 });
+
+  tracker.event("Player A inverted the chambered shell.");
+  expect(tracker.chamber()).toEqual({ known: "blank", by: "count", pLive: 0 });
+
+  tracker.event("Player A racked out a blank shell.");
+  tracker.event("Player A shot Player B: blank.");
+  expect(tracker.chamber()).toBeNull();
+  expect(tracker.checks).toEqual({ ok: 3, bad: 0 });
+});
+
+test("the round story infers the last round's winner from final cash", () => {
+  const events = [
+    "Round 1 begins. Everyone has 2 health; Player B starts.",
+    "Player B wins the round and $10,000.",
+    "Round 2 begins. Everyone has 4 health; Player A starts.",
+    "Player A wins the round and $20,000.",
+    "Round 3 begins. Everyone has 5 health; Player A starts.",
+  ];
+
+  expect(roundStory(events, new Map([["A", 20_000], ["B", 70_000]]))).toEqual({
+    starter: "B",
+    rounds: [
+      { winner: "B", prize: 10_000, inferred: false },
+      { winner: "A", prize: 20_000, inferred: false },
+      { winner: "B", prize: 60_000, inferred: true },
+    ],
+    ok: true,
+  });
+  expect(roundStory(events, new Map([["A", 30_000], ["B", 70_000]])).ok).toBe(false);
+});
