@@ -100,6 +100,8 @@ interface Cohort {
   readonly ratings: ReadonlyMap<string, Rating>;
   readonly parts: number;
   readonly scoredMatches: number;
+  /** One model's effort sweep rather than cross-model games. */
+  readonly isSweep: boolean;
 }
 
 // The bootstraps are the page's slowest work. A filter changes few cohorts' matches, so each fit is kept by its matches.
@@ -124,7 +126,8 @@ const cohortsOf = memoLast((stats: ReadonlyArray<ModelStats>, seats: ReadonlyArr
     ({ cohort }) => cohort,
   )]
     .map(([cohort, configs]) => {
-      const { ratings, parts } = cohortRatingsOf(seats.filter((seat) => seat.cohort === cohort));
+      const cohortSeats = seats.filter((seat) => seat.cohort === cohort);
+      const { ratings, parts } = cohortRatingsOf(cohortSeats);
       const ratingOf = (m: ModelStats) => ratings.get(m.key);
 
       return {
@@ -133,6 +136,7 @@ const cohortsOf = memoLast((stats: ReadonlyArray<ModelStats>, seats: ReadonlyArr
         ratings,
         parts,
         scoredMatches: new Set(configs.flatMap(({ scored }) => scored.map(({ matchId }) => matchId))).size,
+        isSweep: new Set(cohortSeats.map(({ model }) => model)).size === 1,
       };
     })
     .toSorted((left, right) => right.scoredMatches - left.scoredMatches),
@@ -255,13 +259,23 @@ const rowView = (h: H, m: ModelStats, rating: Rating | undefined, item: ItemSumm
 
 const HEADERS = ["Model", "", "Win share", "BT rating", "Avg cost", "Per move", "Time / move", "Out tok", "Favorite item"];
 
-export const leaderboardView = (h: H, stats: ReadonlyArray<ModelStats>, seats: ReadonlyArray<SeatFull>, items: ReadonlyMap<string, ItemSummary>, leaderboard: Model["leaderboard"]): Html =>
+// Without 'all configs' a sweep usually keeps only its medium row, which has nothing to be ranked against.
+const isShown = (cohort: Cohort, isAllConfigs: boolean): boolean => isAllConfigs || !cohort.isSweep || cohort.configs.length > 1;
+
+export const leaderboardView = (
+  h: H,
+  stats: ReadonlyArray<ModelStats>,
+  seats: ReadonlyArray<SeatFull>,
+  items: ReadonlyMap<string, ItemSummary>,
+  leaderboard: Model["leaderboard"],
+  isAllConfigs: boolean,
+): Html =>
   h.section(
     [h.Class("lb")],
     [
       h.h2([], ["Leaderboard by cohort"]),
       h.p([h.Class("sub")], ["Bradley-Terry within each cohort; intervals are 95% bootstraps over seed blocks."]),
-      ...cohortsOf(stats, seats).map(({ cohort, configs, ratings, parts, scoredMatches }) =>
+      ...cohortsOf(stats, seats).filter((cohort) => isShown(cohort, isAllConfigs)).map(({ cohort, configs, ratings, parts, scoredMatches }) =>
         h.keyed("div")(
           cohort,
           [],

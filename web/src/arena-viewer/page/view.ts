@@ -116,7 +116,7 @@ const overviewView = (h: H, model: Model, derived: Derived): Html =>
       h.div([h.Class("card")], [lazyScatter(scatterView, [h, derived.pooled, derived.ratings, model.scatter, cardWidth(model.viewport)])]),
       lazyBreakdown(breakdownView, [h, derived, model.heat]),
       lazyInteresting(interestingView, [h, picksOf(derived), model.matches, contentWidth(model.viewport)]),
-      lazyLeaderboard(leaderboardView, [h, derived.byCohort, derived.matchSeats, derived.items, model.leaderboard]),
+      lazyLeaderboard(leaderboardView, [h, derived.byCohort, derived.matchSeats, derived.items, model.leaderboard, model.filter.isAllConfigs]),
     ],
   );
 

@@ -260,8 +260,11 @@ fold their full tables under the charts. A match row, an interesting match or a
 flagged move opens its replay: health through the match,
 each player's view at the chosen move, and every model move with its reasoning.
 The arrow keys step through it, and Escape, a click outside or the back gesture
-closes it. Items are drawn with the table's own icons from `src/icons.ts`. It is
-a Foldkit app; the server loads every seat at start and works out the per-move
+closes it. By default every tab shows only configs with at least 20 scored
+matches and one against another model; the 'all configs' switch adds the rest,
+and the effort-sweep leaderboards with them. Items are drawn with the table's own
+icons from `src/icons.ts`, except the saw, beer and jammer, which the viewer
+draws side on. It is a Foldkit app; the server loads every seat at start and works out the per-move
 analysis once.
 
     bun scripts/arena-viewer-check.ts <url> [outdir]   # headless Chrome at desktop, phone and tablet widths: hovers, taps and screenshots
