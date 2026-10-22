@@ -8,17 +8,17 @@ DeepSeek (`deepseek-v4.1-flash`) is left out entirely. Every match with a DeepSe
 
 - **Acting on a known shell.** Opus 5.5 at every effort, Astra, Sol and Sonnet almost never shoot against a chamber they know. Opus shot the opponent on a known blank or itself on a known live 1 time in 1,134 such shots in tournament 2, and 0 in 327 in tournament 3. Haiku 4.5 at every effort often does. So do Haiku 5.5 and Luna, most at off, low and medium; their rates fall steadily with effort but stay above the others at max. Among the medium cross-model games:
   - Luna shot itself on a known live 14% of the time (74/547).
-  - Haiku 4.5 shot the opponent on a known blank with shells still to come 34% of the time (67/199). For Haiku 5.5 it was 17% (36/209), and for Luna 25% (69/280).
-- **The last shell.** Shooting the opponent with a known blank is most common on the gun's last shell. In the replays a blank shot at yourself always kept the move, also across the reload (430/430), and a blank at the opponent always passed it. The last-shell rate is 52–85% for Haiku 4.5, Haiku 5.5 and Luna at medium. It is 8.5% (8/94) for Sonnet medium and 1.1% (1/95) for Opus medium.
-- **Phone clues are kept worse than magnifier clues.** Over all models in the medium cross-model games, a chamber known from the glass was shot against 1.8% of the time (41/2,232), and one known from the phone 8.1% (62/768). The effort sweeps show the same, 2.9% (196/6,839) against 13% (309/2,455). Luna medium: glass 1.8% (6/333), phone 38% (38/100).
+  - Haiku 4.5 shot the opponent on a known blank with shells still to come 32% of the time (74/228). For Haiku 5.5 it was 17% (36/209), and for Luna 25% (69/280).
+- **The last shell.** Shooting the opponent with a known blank is most common on the gun's last shell. In the replays a blank shot at yourself always kept the move, also across the reload (430/430), and a blank at the opponent always passed it. The last-shell rate is 52–70% for Haiku 4.5, Haiku 5.5 and Luna at medium. It is 8.5% (8/94) for Sonnet medium and 1.8% (2/113) for Opus medium.
+- **Phone clues are kept worse than magnifier clues.** Over all models in the medium cross-model games, a chamber known from the glass was shot against 1.8% of the time (46/2,524), and one known from the phone 8.7% (74/853). The effort sweeps show the same, 2.9% (196/6,839) against 13% (309/2,455). Luna medium: glass 1.8% (6/333), phone 38% (38/100).
 - **Forgetting with time.** Glass clues are acted against more as moves pass. In the effort sweeps it is 2.0% (74/3,712) on the very next move, 3.6% (84/2,361) one move later and 4.9% (37/754) after two or three. Phone clues are acted against at 10–15% at every distance, already 11% (49/444) on the next move. That points to the offset reasoning, not memory.
-- **How often an item settles the chamber.** About a quarter of every model's shots are at a chamber known from its own glass or phone: 20% (274/1,369) for Haiku 4.5 up to 27% (476/1,751) for Sonnet in the medium cross-model games. About a third more are known from counting. Blind shots taken while holding a magnifier are rare, at most 3.1% (22/703, Haiku 4.5).
+- **How often an item settles the chamber.** About a quarter of every model's shots are at a chamber known from its own glass or phone: 20% (328/1,616) for Haiku 4.5 up to 27% (476/1,751) for Sonnet in the medium cross-model games. About a third more are known from counting. Blind shots taken while holding a magnifier are rare, at most 3.1% (24/820, Haiku 4.5).
 - **Items.**
   - Models use 46–68% of the items they place.
   - 5–10% are stolen with adrenaline. 11–31% are still held when their owner dies, and 5–23% when the round ends.
-  - 84–96% of deaths leave at least one unused item, about three on average, most often an inverter or a beer.
+  - 84–95% of deaths leave at least one unused item, about three on average, most often an inverter or a beer.
   - Items are used early when they are used at all. The median is one of the owner's own decisions after placement, about six or seven accepted moves.
-- **Favourite items.** By the rate of using an item when it is a legal move, the magnifier is the favourite for 7 of the 8 medium models (49–68%). Terra prefers the jammer, 70% (105/151) at medium and 60–74% at every effort. The inverter is the least used item for every model: 7–17% of the decisions where it is legal at medium, and 24–45% of the inverters placed are ever used. With adrenaline, the jammer and the magnifier are what models steal. Astra also steals cigarettes, 28% (52/189).
+- **Favourite items.** By the rate of using an item when it is a legal move, the magnifier is the favourite for 7 of the 8 medium models (48–68%). Terra prefers the jammer, 67% (204/306) at medium and 60–74% at every effort. The inverter is the least used item for every model: 7–17% of the decisions where it is legal at medium, and 24–45% of the inverters placed are ever used. With adrenaline, the jammer and the magnifier are what models steal. Astra also steals cigarettes, 27% (61/228).
 - **Same position, same choice.** About a quarter to a third of decisions (11–43% by model, exact positions) fall in a position the same model met again: same board, same log since the load, same menu. Opus medium and xhigh in tournaments 2 and 3 are the exception: one pairing alone gives few repeats. Two decisions in the same position differ:
   - 4.9% of the time for Astra and 7.7% for Sol;
   - 11–12% for Opus and Sonnet;
@@ -28,7 +28,6 @@ DeepSeek (`deepseek-v4.1-flash`) is left out entirely. Every match with a DeepSe
   - Sol's variants agree with each other about as often as each agrees with itself: 84–92% across, 88–94% within.
   - Opus's do too: medium vs xhigh 89% across against 89–92% within.
   - Sonnet max plays differently from the other Sonnet levels, 66–78% across against 88–92% within. So do Haiku 5.5 off (59–69% against 76–84%) and Luna low against Luna max (50% against 67% and 81%).
-- **Code versions** change none of these rates beyond their intervals (last table).
 
 ## How it was measured
 
@@ -39,14 +38,14 @@ DeepSeek (`deepseek-v4.1-flash`) is left out entirely. Every match with a DeepSe
 - **Moves since the clue:** accepted moves by either player, forced grabs included, between the move that produced the clue and the shot. 0 is the very next move.
 - **Item fates:** a ledger follows each placed item through the public log. Its owner uses it, or it is stolen with adrenaline, or it is still held when the owner dies, or it is still held when the round or match ends (censored). At every decision the ledger must match the board slot by slot.
 - **Use when legal:** at each agent decision, whether a move that spends the item is on the menu, and whether the player chose it. "Jam Player X" spends a jammer. Steals are counted separately from the player's own items.
-- **Same position:** two decisions share an *exact* position when all of these are the same: the board (health, jam state, items, cash, round, saw, and the live and blank counts shown at the load), the deciding player's whole log since the load, the legal moves, and the code and instructions hashes. Players are named relative to the decider, never by letter. A looser *belief* position replaces the log with the public and private shell beliefs, plus how many clue items each opponent used this load.
+- **Same position:** two decisions share an *exact* position when all of these are the same: the board (health, jam state, items, cash, round, saw, and the live and blank counts shown at the load), the deciding player's whole log since the load, the legal moves, and the instructions. Players are named relative to the decider, never by letter. A looser *belief* position replaces the log with the public and private shell beliefs, plus how many clue items each opponent used this load.
 
-**Counted.** Completed (scored) matches only, and only the agents' own moves. Forced grabs and the two fallback moves are not counted. Models are `entrants.model` plus effort. Cohorts are never pooled: tournament 1's medium cross-model games, tournament 1's effort sweeps, tournament 2 (Opus effort) and tournament 3 (Opus xhigh vs Astra). The same model and effort appear as separate rows in different cohorts.
+**Counted.** Completed (scored) matches only, and only the agents' own moves. Forced grabs and the two fallback moves are not counted. Models are `entrants.model` plus effort. Code versions are pooled. Cohorts are never pooled: tournament 1's medium cross-model games, tournament 1's effort sweeps, tournament 2 (Opus effort) and tournament 3 (Opus xhigh vs Astra). The same model and effort appear as separate rows in different cohorts.
 
 **Intervals.** Every rate is numerator/denominator with a 95% percentile interval from 2,000 resamples of seed blocks (`matches.seed_block_id`) within the row, never of single matches or moves. The resampler is seeded, so a rerun prints the same intervals. For consistency and agreement, the interval is over pairs of distinct decisions: a pair weighs the product of its two blocks' resample counts, and a decision never pairs with its own copy. Without that, a block drawn twice would agree with itself. The non-modal share has no interval for that reason.
 
 **Checks.**
-- On all 109,672 non-forced decisions of the 2,184 replay-validated matches, the true gun was one of the orders the player's log allows. The true gun was read only for this check and is not stored. Every chamber the player's log called certain was right.
+- On all 112,548 non-forced decisions of the 2,244 replay-validated matches, the true gun was one of the orders the player's log allows. The true gun was read only for this check and is not stored. Every chamber the player's log called certain was right. The previous build (2,184 matches) was verified in full. For the rebuild, the verify ran on a 200-match sample.
 - The item ledger agreed with the board's slots at every decision of every match, with no contradictions.
 - `web/test/knowledge.test.ts` checks hand-computed histories:
   - a phone clue keeping its offset through two shots;
@@ -68,7 +67,6 @@ DeepSeek (`deepseek-v4.1-flash`) is left out entirely. Every match with a DeepSe
 - "Public" certainty assumes the player counts shells. Most shots against a known shell come from counting, mainly on the last shell, not from forgotten clues.
 - Keeping the move with a self-shot blank is measured from the replays (two players, opponent not jammed). With a jammed opponent, a blank at the opponent skips their turn and costs the jam instead.
 - The effort sweeps pair each level with every other level of the same model, so their opponents differ from the cross-model games. Opus low in tournament 2 played only medium (20 matches), and tournament 3 is one pairing. Both have almost no repeated positions.
-- The two tournament 1 code versions differ only in GPT reasoning summaries. Tournament 3's three matches on `3c9b98f8b3f4` are too few to compare.
 - Partial and skipped matches are left out, as are forced grabs and fallback moves.
 
 ## Reproduce
@@ -85,12 +83,12 @@ Generated by `scripts/arena-knowledge-report.ts`.
 
 ## Coverage
 
-| Cohort | Matches | Seed blocks | Agent decisions | Shots | Shots with a certain chamber | Code versions |
-|---|---|---|---|---|---|---|
-| t1 cross-model medium | 497 | 250 | 24806 | 11973 | 7088 | 51b8366684f0, 9e7d7ff22891 |
-| t1 effort sweep | 1500 | 750 | 77111 | 36566 | 21623 | 51b8366684f0, 9e7d7ff22891 |
-| t2 opus effort | 80 | 40 | 3865 | 1838 | 1134 | 9e7d7ff22891 |
-| t3 astra vs opus xhigh | 41 | 21 | 2085 | 1001 | 613 | 3c9b98f8b3f4, 9e7d7ff22891 |
+| Cohort | Matches | Seed blocks | Agent decisions | Shots | Shots with a certain chamber |
+|---|---|---|---|---|---|
+| t1 cross-model medium | 560 | 280 | 27819 | 13480 | 7982 |
+| t1 effort sweep | 1500 | 750 | 77111 | 36566 | 21623 |
+| t2 opus effort | 80 | 40 | 3865 | 1838 | 1134 |
+| t3 astra vs opus xhigh | 41 | 21 | 2085 | 1001 | 613 |
 
 ## Shots with a certain chamber
 
@@ -100,12 +98,12 @@ Shooting the opponent on a known blank and yourself on a known live. Certainty i
 
 | Model | Opponent on known blank, not the last shell | Opponent on known blank, last shell | Self on known live |
 |---|---|---|---|
-| claude-haiku-4-5-20251001 medium | 34% (67/199) [26%, 43%] | 61% (54/88) [51%, 72%] | 2.9% (11/379) [1.3%, 5.1%] |
+| claude-haiku-4-5-20251001 medium | 32% (74/228) [25%, 41%] | 62% (62/100) [52%, 71%] | 3.8% (18/468) [1.9%, 6.2%] |
 | claude-haiku-5-5 medium | 17% (36/209) [11%, 24%] | 70% (74/106) [59%, 80%] | 0.4% (3/671) [0%, 1.0%] |
-| claude-opus-5-5 medium | 0% (0/238) [0%, 0%] | 1.1% (1/95) [0%, 3.6%] | 0.2% (1/648) [0%, 0.5%] |
+| claude-opus-5-5 medium | 0% (0/270) [0%, 0%] | 1.8% (2/113) [0%, 4.5%] | 0.1% (1/747) [0%, 0.4%] |
 | claude-sonnet-5-5 medium | 0% (0/245) [0%, 0%] | 8.5% (8/94) [3.3%, 14%] | 0.7% (5/751) [0.1%, 1.3%] |
-| gpt-5.6-terra medium | 4.4% (6/136) [1.5%, 8.3%] | 13% (10/79) [4.4%, 22%] | 1.2% (4/321) [0.3%, 2.5%] |
-| gpt-6-astra medium | 0% (0/190) [0%, 0%] | 0.9% (1/113) [0%, 2.9%] | 0% (0/555) [0%, 0%] |
+| gpt-5.6-terra medium | 4.7% (12/255) [2.3%, 7.7%] | 13% (20/154) [6.8%, 20%] | 1.0% (6/589) [0.3%, 1.9%] |
+| gpt-6-astra medium | 0% (0/212) [0%, 0%] | 0.8% (1/128) [0%, 2.6%] | 0% (0/671) [0%, 0%] |
 | gpt-6-luna medium | 25% (69/280) [20%, 31%] | 52% (71/136) [43%, 61%] | 14% (74/547) [10%, 16%] |
 | gpt-6.1-sol medium | 0.8% (2/236) [0%, 2.1%] | 6.7% (7/104) [1.9%, 13%] | 0% (0/668) [0%, 0%] |
 
@@ -169,7 +167,7 @@ Shots against the known shell, by source. A clue taken with adrenaline counts wi
 
 | Cohort | public | glass | phone | combined |
 |---|---|---|---|---|
-| t1 cross-model medium | 9.8% (400/4075) [8.5%, 11%] | 1.8% (41/2232) [1.3%, 2.5%] | 8.1% (62/768) [6.1%, 10%] | 7.7% (1/13) [0%, 19%] |
+| t1 cross-model medium | 9.2% (424/4590) [8.0%, 10%] | 1.8% (46/2524) [1.2%, 2.5%] | 8.7% (74/853) [6.7%, 11%] | 6.7% (1/15) [0%, 18%] |
 | t1 effort sweep | 15% (1840/12279) [14%, 16%] | 2.9% (196/6839) [2.3%, 3.4%] | 13% (309/2455) [11%, 14%] | 4.0% (2/50) [0%, 9.3%] |
 | t2 opus effort | 0.2% (1/589) [0%, 0.5%] | 0% (0/367) [0%, 0%] | 0% (0/176) [0%, 0%] | 0% (0/2) [0%, 0%] |
 | t3 astra vs opus xhigh | 0.3% (1/339) [0%, 1.0%] | 0% (0/199) [0%, 0%] | 0% (0/73) [0%, 0%] | 0% (0/2) [0%, 0%] |
@@ -178,12 +176,12 @@ Shots against the known shell, by source. A clue taken with adrenaline counts wi
 
 | Model | glass | phone |
 |---|---|---|
-| claude-haiku-4-5-20251001 medium | 11% (25/226) [7.0%, 15%] | 25% (12/48) [13%, 38%] |
+| claude-haiku-4-5-20251001 medium | 11% (30/269) [7.3%, 15%] | 29% (17/59) [17%, 40%] |
 | claude-haiku-5-5 medium | 3.5% (10/283) [1.8%, 5.6%] | 4.3% (5/116) [0.9%, 8.4%] |
-| claude-opus-5-5 medium | 0% (0/265) [0%, 0%] | 0.8% (1/118) [0%, 2.6%] |
+| claude-opus-5-5 medium | 0% (0/307) [0%, 0%] | 0.7% (1/136) [0%, 2.2%] |
 | claude-sonnet-5-5 medium | 0% (0/357) [0%, 0%] | 0.8% (1/119) [0%, 2.8%] |
-| gpt-5.6-terra medium | 0% (0/202) [0%, 0%] | 8.5% (4/47) [2.0%, 18%] |
-| gpt-6-astra medium | 0% (0/256) [0%, 0%] | 0% (0/100) [0%, 0%] |
+| gpt-5.6-terra medium | 0% (0/362) [0%, 0%] | 13% (11/86) [5.6%, 22%] |
+| gpt-6-astra medium | 0% (0/303) [0%, 0%] | 0% (0/117) [0%, 0%] |
 | gpt-6-luna medium | 1.8% (6/333) [0.6%, 3.4%] | 38% (38/100) [30%, 46%] |
 | gpt-6.1-sol medium | 0% (0/310) [0%, 0%] | 0.8% (1/120) [0%, 2.7%] |
 
@@ -249,7 +247,7 @@ Shots against a chamber known from a clue (glass or phone), by the accepted move
 
 | Cohort | 0 | 1 | 2–3 | 4+ |
 |---|---|---|---|---|
-| t1 cross-model medium | 1.1% (14/1331) [0.5%, 1.6%] | 2.8% (21/744) [1.6%, 4.2%] | 3.8% (6/156) [1.3%, 7.2%] | 0% (0/1) [0%, 0%] |
+| t1 cross-model medium | 1.3% (19/1513) [0.7%, 1.9%] | 2.5% (21/837) [1.4%, 3.8%] | 3.5% (6/173) [1.1%, 6.6%] | 0% (0/1) [0%, 0%] |
 | t1 effort sweep | 2.0% (74/3712) [1.4%, 2.6%] | 3.6% (84/2361) [2.7%, 4.5%] | 4.9% (37/754) [3.4%, 6.5%] | 8.3% (1/12) [0%, 27%] |
 | t2 opus effort | 0% (0/188) [0%, 0%] | 0% (0/133) [0%, 0%] | 0% (0/46) [0%, 0%] | – |
 | t3 astra vs opus xhigh | 0% (0/118) [0%, 0%] | 0% (0/67) [0%, 0%] | 0% (0/14) [0%, 0%] | – |
@@ -258,7 +256,7 @@ Shots against a chamber known from a clue (glass or phone), by the accepted move
 
 | Cohort | 0 | 1 | 2–3 | 4+ |
 |---|---|---|---|---|
-| t1 cross-model medium | 5.5% (7/127) [2.2%, 9.7%] | 9.1% (17/186) [5.0%, 14%] | 5.6% (14/252) [2.8%, 9.1%] | 12% (24/203) [7.6%, 16%] |
+| t1 cross-model medium | 5.4% (8/148) [2.0%, 9.0%] | 9.7% (20/206) [5.8%, 14%] | 6.8% (19/281) [3.7%, 10%] | 12% (27/218) [8.2%, 17%] |
 | t1 effort sweep | 11% (49/444) [8.3%, 14%] | 10% (56/551) [7.8%, 13%] | 13% (116/876) [11%, 16%] | 15% (88/584) [12%, 18%] |
 | t2 opus effort | 0% (0/36) [0%, 0%] | 0% (0/46) [0%, 0%] | 0% (0/69) [0%, 0%] | 0% (0/25) [0%, 0%] |
 | t3 astra vs opus xhigh | 0% (0/9) [0%, 0%] | 0% (0/14) [0%, 0%] | 0% (0/29) [0%, 0%] | 0% (0/21) [0%, 0%] |
@@ -271,12 +269,12 @@ Each agent shot by what the player knew of the chamber: a clue from its own item
 
 | Model | Known from a clue | Known from the count | Unknown | Blind with a glass in hand |
 |---|---|---|---|---|
-| claude-haiku-4-5-20251001 medium | 20% (274/1369) [18%, 22%] | 29% (392/1369) [26%, 31%] | 51% (703/1369) [49%, 53%] | 3.1% (22/703) [1.5%, 4.9%] |
+| claude-haiku-4-5-20251001 medium | 20% (328/1616) [18%, 22%] | 29% (468/1616) [27%, 31%] | 51% (820/1616) [49%, 53%] | 2.9% (24/820) [1.6%, 4.5%] |
 | claude-haiku-5-5 medium | 25% (404/1597) [23%, 28%] | 36% (582/1597) [34%, 39%] | 38% (611/1597) [36%, 41%] | 0.8% (5/611) [0.2%, 1.7%] |
-| claude-opus-5-5 medium | 26% (388/1503) [24%, 28%] | 39% (593/1503) [37%, 42%] | 35% (522/1503) [33%, 37%] | 0% (0/522) [0%, 0%] |
+| claude-opus-5-5 medium | 26% (448/1731) [24%, 28%] | 39% (682/1731) [37%, 41%] | 35% (601/1731) [33%, 37%] | 0% (0/601) [0%, 0%] |
 | claude-sonnet-5-5 medium | 27% (476/1751) [25%, 30%] | 35% (614/1751) [33%, 37%] | 38% (661/1751) [36%, 40%] | 0.3% (2/661) [0%, 0.8%] |
-| gpt-5.6-terra medium | 26% (249/956) [23%, 30%] | 30% (287/956) [27%, 33%] | 44% (420/956) [40%, 48%] | 0.7% (3/420) [0%, 1.5%] |
-| gpt-6-astra medium | 25% (358/1408) [23%, 28%] | 36% (500/1408) [33%, 38%] | 39% (550/1408) [36%, 42%] | 0% (0/550) [0%, 0%] |
+| gpt-5.6-terra medium | 26% (450/1732) [23%, 28%] | 32% (548/1732) [29%, 34%] | 42% (734/1732) [40%, 45%] | 0.4% (3/734) [0%, 0.9%] |
+| gpt-6-astra medium | 25% (422/1664) [23%, 28%] | 35% (589/1664) [33%, 37%] | 39% (653/1664) [37%, 42%] | 0% (0/653) [0%, 0%] |
 | gpt-6-luna medium | 25% (433/1712) [23%, 27%] | 31% (530/1712) [29%, 33%] | 44% (749/1712) [42%, 46%] | 0.7% (5/749) [0%, 1.6%] |
 | gpt-6.1-sol medium | 26% (431/1677) [24%, 28%] | 34% (577/1677) [33%, 36%] | 40% (669/1677) [38%, 42%] | 0% (0/669) [0%, 0%] |
 
@@ -342,12 +340,12 @@ Each item a player placed, by how it left: used by its owner, stolen with adrena
 
 | Model | Used | Stolen | Held at death | Held at round end | Own turns held before use, mean (median) | Accepted moves to use, median |
 |---|---|---|---|---|---|---|
-| claude-haiku-4-5-20251001 medium | 47% (1273/2728) [44%, 49%] | 7.3% (200/2728) [6.4%, 8.4%] | 30% (822/2728) [27%, 33%] | 16% (433/2728) [14%, 18%] | 1.37 (1) | 6 |
+| claude-haiku-4-5-20251001 medium | 47% (1511/3246) [45%, 49%] | 7.6% (246/3246) [6.7%, 8.5%] | 30% (976/3246) [27%, 33%] | 16% (513/3246) [14%, 18%] | 1.35 (1) | 6 |
 | claude-haiku-5-5 medium | 57% (1903/3317) [55%, 59%] | 7.3% (243/3317) [6.6%, 8.2%] | 20% (658/3317) [18%, 22%] | 15% (513/3317) [13%, 17%] | 1.57 (1) | 7 |
-| claude-opus-5-5 medium | 57% (1604/2833) [55%, 58%] | 6.8% (193/2833) [5.8%, 7.8%] | 18% (513/2833) [16%, 21%] | 18% (523/2833) [16%, 21%] | 1.68 (1) | 7 |
+| claude-opus-5-5 medium | 57% (1858/3285) [55%, 58%] | 7.0% (230/3285) [6.1%, 7.9%] | 18% (588/3285) [16%, 20%] | 19% (609/3285) [16%, 21%] | 1.66 (1) | 7 |
 | claude-sonnet-5-5 medium | 54% (1755/3253) [51%, 56%] | 7.0% (228/3253) [6.3%, 7.7%] | 21% (684/3253) [18%, 24%] | 18% (586/3253) [16%, 20%] | 1.71 (1) | 7 |
-| gpt-5.6-terra medium | 52% (936/1791) [50%, 55%] | 8.2% (146/1791) [7.0%, 9.3%] | 23% (407/1791) [20%, 26%] | 17% (302/1791) [14%, 20%] | 1.52 (1) | 6 |
-| gpt-6-astra medium | 57% (1517/2665) [55%, 59%] | 7.0% (187/2665) [6.1%, 8.0%] | 15% (390/2665) [13%, 17%] | 21% (571/2665) [19%, 24%] | 1.69 (1) | 7 |
+| gpt-5.6-terra medium | 53% (1669/3160) [51%, 55%] | 8.1% (257/3160) [7.3%, 9.1%] | 23% (723/3160) [20%, 26%] | 16% (511/3160) [14%, 19%] | 1.50 (1) | 6 |
+| gpt-6-astra medium | 56% (1798/3191) [54%, 58%] | 7.0% (223/3191) [6.1%, 7.9%] | 16% (497/3191) [13%, 18%] | 21% (673/3191) [19%, 23%] | 1.67 (1) | 7 |
 | gpt-6-luna medium | 62% (2028/3279) [59%, 64%] | 6.0% (197/3279) [5.3%, 6.7%] | 25% (824/3279) [23%, 28%] | 7.0% (230/3279) [5.5%, 8.6%] | 1.61 (1) | 6 |
 | gpt-6.1-sol medium | 56% (1817/3253) [54%, 58%] | 7.0% (227/3253) [6.2%, 7.8%] | 19% (605/3253) [16%, 21%] | 19% (604/3253) [17%, 21%] | 1.62 (1) | 7 |
 
@@ -413,12 +411,12 @@ Agent decisions where using an own item is a legal move, and the share that use 
 
 | Model | magnifying glass | burner phone | handsaw | beer | inverter | cigarettes | jammer |
 |---|---|---|---|---|---|---|---|
-| claude-haiku-4-5-20251001 medium | 61% (220/358) [55%, 68%] | 16% (139/858) [13%, 20%] | 36% (206/574) [32%, 40%] | 18% (170/934) [15%, 22%] | 12% (125/1022) [10%, 15%] | 19% (133/706) [16%, 22%] | 39% (148/377) [34%, 46%] |
+| claude-haiku-4-5-20251001 medium | 62% (263/423) [57%, 68%] | 16% (163/1024) [13%, 19%] | 36% (242/671) [33%, 40%] | 19% (203/1077) [16%, 22%] | 12% (143/1180) [10%, 14%] | 19% (160/840) [16%, 22%] | 38% (170/447) [33%, 44%] |
 | claude-haiku-5-5 medium | 65% (283/435) [60%, 70%] | 29% (257/886) [25%, 33%] | 32% (262/808) [30%, 35%] | 24% (262/1111) [21%, 27%] | 12% (174/1419) [11%, 14%] | 26% (214/834) [23%, 29%] | 46% (203/446) [41%, 50%] |
-| claude-opus-5-5 medium | 57% (235/415) [52%, 61%] | 33% (234/716) [29%, 38%] | 25% (209/836) [23%, 28%] | 19% (219/1125) [17%, 22%] | 13% (153/1160) [12%, 15%] | 33% (204/626) [29%, 36%] | 39% (162/419) [35%, 43%] |
+| claude-opus-5-5 medium | 55% (271/494) [51%, 59%] | 32% (264/832) [28%, 37%] | 26% (248/947) [24%, 29%] | 19% (244/1282) [17%, 21%] | 13% (183/1373) [12%, 15%] | 34% (243/712) [31%, 38%] | 37% (178/483) [33%, 41%] |
 | claude-sonnet-5-5 medium | 67% (281/422) [61%, 72%] | 24% (241/991) [21%, 28%] | 26% (238/925) [24%, 28%] | 21% (256/1221) [18%, 24%] | 7.1% (108/1512) [6.0%, 8.4%] | 34% (230/679) [29%, 39%] | 34% (175/514) [30%, 39%] |
-| gpt-5.6-terra medium | 57% (180/317) [51%, 63%] | 15% (97/658) [11%, 19%] | 36% (134/371) [32%, 41%] | 19% (109/586) [14%, 24%] | 9.7% (82/845) [7.7%, 12%] | 13% (84/624) [11%, 17%] | 70% (105/151) [58%, 83%] |
-| gpt-6-astra medium | 49% (219/443) [45%, 54%] | 38% (256/681) [34%, 42%] | 25% (220/865) [23%, 28%] | 13% (167/1277) [11%, 16%] | 12% (145/1207) [11%, 13%] | 33% (175/525) [29%, 39%] | 35% (141/404) [32%, 39%] |
+| gpt-5.6-terra medium | 59% (321/540) [55%, 64%] | 15% (177/1215) [12%, 18%] | 36% (234/659) [33%, 39%] | 19% (193/1001) [16%, 24%] | 9.1% (132/1454) [7.5%, 11%] | 14% (151/1111) [11%, 17%] | 67% (204/306) [59%, 74%] |
+| gpt-6-astra medium | 48% (258/535) [44%, 53%] | 37% (299/807) [33%, 41%] | 26% (260/992) [24%, 28%] | 13% (189/1473) [11%, 15%] | 12% (165/1416) [10%, 13%] | 34% (217/632) [30%, 39%] | 36% (172/483) [33%, 39%] |
 | gpt-6-luna medium | 68% (319/469) [63%, 73%] | 36% (305/841) [33%, 40%] | 34% (277/822) [31%, 36%] | 29% (306/1039) [27%, 33%] | 16% (215/1325) [13%, 19%] | 20% (199/981) [18%, 23%] | 39% (181/462) [34%, 45%] |
 | gpt-6.1-sol medium | 51% (277/548) [46%, 55%] | 35% (272/784) [31%, 39%] | 28% (249/891) [26%, 30%] | 14% (178/1265) [12%, 16%] | 12% (169/1420) [11%, 13%] | 35% (228/653) [30%, 40%] | 40% (182/457) [36%, 44%] |
 
@@ -484,12 +482,12 @@ Agent decisions where stealing an item with adrenaline is legal, and the share t
 
 | Model | magnifying glass | burner phone | handsaw | beer | inverter | cigarettes | jammer |
 |---|---|---|---|---|---|---|---|
-| claude-haiku-4-5-20251001 medium | 17% (29/174) [11%, 25%] | 0.6% (2/339) [0%, 1.6%] | 14% (28/204) [9.6%, 18%] | 3.2% (12/375) [1.6%, 4.8%] | 4.5% (19/423) [2.7%, 6.5%] | 4.0% (9/225) [1.9%, 6.7%] | 34% (33/97) [24%, 47%] |
+| claude-haiku-4-5-20251001 medium | 18% (35/196) [12%, 25%] | 1.0% (4/407) [0.2%, 2.1%] | 17% (41/246) [12%, 22%] | 3.5% (15/426) [1.8%, 5.6%] | 4.9% (24/491) [3.0%, 6.9%] | 3.5% (10/282) [1.6%, 5.9%] | 35% (38/109) [26%, 45%] |
 | claude-haiku-5-5 medium | 27% (47/176) [20%, 36%] | 10% (34/335) [7.1%, 14%] | 28% (47/168) [21%, 36%] | 8.5% (30/355) [5.8%, 11%] | 6.0% (23/381) [4.2%, 8.2%] | 15% (40/266) [11%, 20%] | 28% (27/96) [19%, 40%] |
-| claude-opus-5-5 medium | 34% (39/114) [26%, 42%] | 5.8% (18/312) [3.2%, 8.6%] | 20% (32/164) [15%, 25%] | 4.9% (17/344) [2.7%, 7.5%] | 8.3% (30/362) [6.0%, 11%] | 9.2% (22/239) [5.9%, 13%] | 34% (30/89) [26%, 43%] |
+| claude-opus-5-5 medium | 34% (46/134) [26%, 43%] | 5.8% (21/362) [3.3%, 8.8%] | 20% (36/179) [16%, 25%] | 6.2% (24/387) [3.9%, 8.7%] | 8.3% (36/432) [6.1%, 10%] | 10% (28/276) [6.7%, 14%] | 34% (36/105) [25%, 45%] |
 | claude-sonnet-5-5 medium | 39% (85/217) [33%, 46%] | 2.3% (10/433) [0.9%, 4.1%] | 12% (34/274) [8.7%, 17%] | 2.6% (11/421) [1.3%, 4.2%] | 3.6% (21/584) [2.3%, 5.3%] | 6.4% (27/422) [4.4%, 8.7%] | 19% (38/197) [14%, 25%] |
-| gpt-5.6-terra medium | 31% (33/108) [24%, 38%] | 1.1% (2/189) [0%, 3.0%] | 25% (42/168) [19%, 33%] | 3.8% (8/210) [1.5%, 6.7%] | 4.4% (12/270) [2.4%, 7.0%] | 5.9% (10/169) [2.9%, 10%] | 60% (38/63) [45%, 79%] |
-| gpt-6-astra medium | 35% (39/112) [26%, 46%] | 3.5% (10/289) [1.5%, 6.2%] | 21% (30/144) [17%, 25%] | 1.8% (5/273) [0.4%, 3.7%] | 8.5% (27/317) [6.0%, 11%] | 28% (52/189) [21%, 35%] | 39% (31/80) [29%, 49%] |
+| gpt-5.6-terra medium | 29% (58/197) [24%, 36%] | 2.2% (8/359) [0.9%, 4.0%] | 24% (73/298) [20%, 29%] | 5.9% (22/376) [3.4%, 8.7%] | 3.1% (16/514) [1.8%, 4.8%] | 4.1% (14/343) [2.3%, 6.4%] | 59% (66/111) [49%, 71%] |
+| gpt-6-astra medium | 32% (48/149) [24%, 42%] | 2.8% (10/362) [1.2%, 4.8%] | 20% (35/172) [16%, 24%] | 2.7% (9/336) [1.2%, 4.4%] | 9.0% (38/423) [6.6%, 11%] | 27% (61/228) [21%, 33%] | 38% (37/98) [30%, 47%] |
 | gpt-6-luna medium | 20% (46/230) [15%, 25%] | 6.3% (25/400) [3.9%, 9.1%] | 10% (25/241) [7.0%, 14%] | 8.0% (32/402) [5.2%, 11%] | 6.5% (34/520) [4.4%, 9.0%] | 5.2% (17/328) [3.1%, 7.2%] | 34% (47/138) [28%, 43%] |
 | gpt-6.1-sol medium | 35% (41/117) [27%, 46%] | 5.9% (20/341) [3.6%, 8.8%] | 24% (47/197) [20%, 29%] | 4.2% (13/309) [2.1%, 6.9%] | 10% (42/416) [7.7%, 12%] | 19% (52/268) [15%, 26%] | 35% (47/133) [29%, 42%] |
 
@@ -555,12 +553,12 @@ Share of placed items used by their owner, by item. Adrenaline counts as used wh
 
 | Model | magnifying glass | burner phone | handsaw | beer | inverter | cigarettes | jammer | adrenaline |
 |---|---|---|---|---|---|---|---|---|
-| claude-haiku-4-5-20251001 medium | 71% (220/310) [66%, 76%] | 36% (139/383) [31%, 42%] | 60% (206/344) [54%, 66%] | 43% (170/400) [37%, 48%] | 30% (125/412) [25%, 35%] | 47% (133/282) [41%, 54%] | 60% (148/247) [55%, 65%] | 38% (132/350) [34%, 42%] |
+| claude-haiku-4-5-20251001 medium | 69% (263/382) [64%, 74%] | 36% (163/450) [31%, 42%] | 59% (242/407) [54%, 65%] | 43% (203/476) [38%, 47%] | 30% (143/483) [25%, 34%] | 47% (160/341) [41%, 53%] | 58% (170/295) [53%, 62%] | 41% (167/412) [36%, 45%] |
 | claude-haiku-5-5 medium | 68% (283/415) [65%, 72%] | 56% (257/458) [50%, 62%] | 62% (262/426) [58%, 66%] | 55% (262/474) [51%, 60%] | 38% (174/462) [34%, 42%] | 60% (214/354) [55%, 66%] | 64% (203/317) [59%, 69%] | 60% (248/411) [55%, 66%] |
-| claude-opus-5-5 medium | 68% (235/346) [62%, 73%] | 59% (234/399) [53%, 65%] | 56% (209/371) [52%, 61%] | 50% (219/436) [46%, 55%] | 40% (153/385) [36%, 44%] | 65% (204/312) [61%, 70%] | 65% (162/248) [60%, 71%] | 56% (188/336) [51%, 61%] |
+| claude-opus-5-5 medium | 67% (271/402) [62%, 72%] | 58% (264/456) [53%, 63%] | 58% (248/427) [54%, 63%] | 49% (244/498) [44%, 53%] | 40% (183/457) [36%, 44%] | 67% (243/365) [62%, 71%] | 63% (178/283) [58%, 68%] | 57% (227/397) [53%, 61%] |
 | claude-sonnet-5-5 medium | 73% (281/383) [69%, 78%] | 54% (241/444) [50%, 59%] | 57% (238/416) [53%, 62%] | 50% (256/508) [44%, 56%] | 24% (108/446) [20%, 29%] | 66% (230/346) [61%, 72%] | 66% (175/267) [60%, 71%] | 51% (226/443) [46%, 57%] |
-| gpt-5.6-terra medium | 72% (180/251) [66%, 77%] | 39% (97/248) [31%, 48%] | 65% (134/205) [60%, 72%] | 44% (109/245) [36%, 53%] | 30% (82/274) [24%, 36%] | 44% (84/190) [36%, 51%] | 70% (105/150) [64%, 76%] | 64% (145/228) [58%, 70%] |
-| gpt-6-astra medium | 72% (219/305) [66%, 77%] | 67% (256/383) [61%, 72%] | 58% (220/377) [54%, 63%] | 39% (167/433) [33%, 44%] | 39% (145/369) [35%, 43%] | 64% (175/273) [58%, 70%] | 64% (141/221) [58%, 69%] | 64% (194/304) [58%, 69%] |
+| gpt-5.6-terra medium | 73% (321/441) [69%, 77%] | 41% (177/435) [34%, 48%] | 65% (234/362) [60%, 69%] | 46% (193/422) [39%, 52%] | 28% (132/475) [23%, 33%] | 46% (151/326) [40%, 52%] | 73% (204/281) [68%, 77%] | 61% (257/418) [57%, 66%] |
+| gpt-6-astra medium | 70% (258/368) [65%, 75%] | 66% (299/453) [61%, 71%] | 58% (260/448) [54%, 62%] | 38% (189/503) [33%, 43%] | 38% (165/440) [34%, 41%] | 65% (217/334) [60%, 69%] | 65% (172/264) [60%, 70%] | 62% (238/381) [58%, 68%] |
 | gpt-6-luna medium | 78% (319/410) [74%, 81%] | 65% (305/472) [60%, 69%] | 65% (277/429) [60%, 69%] | 63% (306/482) [59%, 68%] | 45% (215/479) [38%, 51%] | 58% (199/345) [52%, 63%] | 68% (181/265) [62%, 74%] | 57% (226/397) [51%, 63%] |
 | gpt-6.1-sol medium | 69% (277/400) [64%, 74%] | 60% (272/455) [55%, 65%] | 58% (249/432) [53%, 62%] | 40% (178/450) [35%, 45%] | 36% (169/473) [32%, 40%] | 64% (228/356) [59%, 69%] | 64% (182/285) [59%, 69%] | 65% (262/402) [60%, 70%] |
 
@@ -626,12 +624,12 @@ Deaths, the share with at least one unused item, and the items held per death.
 
 | Model | Deaths with an item held | Items held per death | Items held at death, most common |
 |---|---|---|---|
-| claude-haiku-4-5-20251001 medium | 90% (203/226) [86%, 93%] | 3.64 (822/226) [3.35, 3.95] | inverter 168, burner phone 151, beer 144 |
+| claude-haiku-4-5-20251001 medium | 91% (245/270) [87%, 94%] | 3.61 (976/270) [3.35, 3.88] | inverter 197, burner phone 181, beer 171 |
 | claude-haiku-5-5 medium | 92% (178/194) [88%, 95%] | 3.39 (658/194) [3.13, 3.65] | inverter 129, beer 106, adrenaline 105 |
-| claude-opus-5-5 medium | 92% (141/153) [88%, 96%] | 3.35 (513/153) [3.07, 3.65] | inverter 120, beer 93, adrenaline 70 |
+| claude-opus-5-5 medium | 91% (161/176) [88%, 95%] | 3.34 (588/176) [3.07, 3.62] | inverter 140, beer 110, adrenaline 79 |
 | claude-sonnet-5-5 medium | 92% (177/193) [87%, 96%] | 3.54 (684/193) [3.23, 3.86] | inverter 172, beer 125, adrenaline 125 |
-| gpt-5.6-terra medium | 96% (115/120) [92%, 99%] | 3.39 (407/120) [3.01, 3.82] | inverter 88, burner phone 80, beer 76 |
-| gpt-6-astra medium | 93% (120/129) [88%, 97%] | 3.02 (390/129) [2.72, 3.34] | inverter 102, beer 94, adrenaline 49 |
+| gpt-5.6-terra medium | 93% (202/217) [89%, 96%] | 3.33 (723/217) [3.02, 3.65] | inverter 165, burner phone 134, beer 134 |
+| gpt-6-astra medium | 94% (144/154) [89%, 97%] | 3.23 (497/154) [2.90, 3.59] | inverter 126, beer 111, adrenaline 67 |
 | gpt-6-luna medium | 84% (254/301) [81%, 88%] | 2.74 (824/301) [2.54, 2.93] | inverter 180, beer 137, adrenaline 127 |
 | gpt-6.1-sol medium | 95% (167/175) [92%, 98%] | 3.46 (605/175) [3.18, 3.74] | inverter 142, beer 114, burner phone 78 |
 
@@ -697,12 +695,12 @@ Agent decisions grouped by the deciding player's own position. Exact: the same b
 
 | Cohort | Model | Positions seen twice or more | Coverage | Non-modal choices | Two differ |
 |---|---|---|---|---|---|
-| t1 cross-model medium | claude-haiku-4-5-20251001 medium | 218 | 23% (619/2642) | 19% (119/619) | 36% over 218 positions [30%, 42%] |
+| t1 cross-model medium | claude-haiku-4-5-20251001 medium | 225 | 21% (643/3127) | 19% (124/643) | 36% over 225 positions [30%, 42%] |
 | t1 cross-model medium | claude-haiku-5-5 medium | 256 | 22% (758/3500) | 12% (94/758) | 22% over 256 positions [18%, 27%] |
-| t1 cross-model medium | claude-opus-5-5 medium | 327 | 30% (942/3107) | 6.1% (57/942) | 11% over 327 positions [8.7%, 14%] |
+| t1 cross-model medium | claude-opus-5-5 medium | 327 | 26% (942/3589) | 6.1% (57/942) | 11% over 327 positions [8.7%, 14%] |
 | t1 cross-model medium | claude-sonnet-5-5 medium | 307 | 26% (895/3506) | 5.9% (53/895) | 12% over 307 positions [8.7%, 15%] |
-| t1 cross-model medium | gpt-5.6-terra medium | 119 | 16% (306/1892) | 12% (36/306) | 24% over 119 positions [17%, 30%] |
-| t1 cross-model medium | gpt-6-astra medium | 326 | 34% (980/2925) | 2.6% (25/980) | 4.9% over 326 positions [3.4%, 6.8%] |
+| t1 cross-model medium | gpt-5.6-terra medium | 224 | 16% (546/3401) | 12% (65/546) | 24% over 224 positions [18%, 30%] |
+| t1 cross-model medium | gpt-6-astra medium | 331 | 29% (991/3462) | 2.5% (25/991) | 4.9% over 331 positions [3.4%, 6.6%] |
 | t1 cross-model medium | gpt-6-luna medium | 259 | 20% (754/3740) | 17% (131/754) | 32% over 259 positions [27%, 36%] |
 | t1 cross-model medium | gpt-6.1-sol medium | 337 | 27% (960/3494) | 4.7% (45/960) | 7.7% over 337 positions [6.2%, 12%] |
 | t1 effort sweep | claude-haiku-4-5-20251001 high | 84 | 11% (228/2083) | 17% (38/228) | 34% over 84 positions [24%, 40%] |
@@ -749,12 +747,12 @@ Agent decisions grouped by the deciding player's own position. Exact: the same b
 
 | Cohort | Model | Positions seen twice or more | Coverage | Non-modal choices | Two differ |
 |---|---|---|---|---|---|
-| t1 cross-model medium | claude-haiku-4-5-20251001 medium | 237 | 25% (673/2642) | 19% (128/673) | 36% over 237 positions [30%, 41%] |
+| t1 cross-model medium | claude-haiku-4-5-20251001 medium | 244 | 22% (697/3127) | 19% (133/697) | 36% over 244 positions [30%, 42%] |
 | t1 cross-model medium | claude-haiku-5-5 medium | 284 | 24% (845/3500) | 12% (99/845) | 20% over 284 positions [17%, 25%] |
-| t1 cross-model medium | claude-opus-5-5 medium | 347 | 33% (1023/3107) | 5.9% (60/1023) | 10% over 347 positions [8.4%, 13%] |
+| t1 cross-model medium | claude-opus-5-5 medium | 347 | 29% (1023/3589) | 5.9% (60/1023) | 10% over 347 positions [8.3%, 13%] |
 | t1 cross-model medium | claude-sonnet-5-5 medium | 333 | 28% (967/3506) | 6.2% (60/967) | 13% over 333 positions [9.3%, 16%] |
-| t1 cross-model medium | gpt-5.6-terra medium | 123 | 17% (321/1892) | 12% (37/321) | 24% over 123 positions [17%, 29%] |
-| t1 cross-model medium | gpt-6-astra medium | 344 | 35% (1024/2925) | 2.6% (27/1024) | 5.3% over 344 positions [3.5%, 6.9%] |
+| t1 cross-model medium | gpt-5.6-terra medium | 240 | 17% (589/3401) | 12% (70/589) | 24% over 240 positions [18%, 29%] |
+| t1 cross-model medium | gpt-6-astra medium | 349 | 30% (1035/3462) | 2.6% (27/1035) | 5.2% over 349 positions [3.4%, 6.8%] |
 | t1 cross-model medium | gpt-6-luna medium | 281 | 22% (808/3740) | 17% (139/808) | 31% over 281 positions [27%, 37%] |
 | t1 cross-model medium | gpt-6.1-sol medium | 362 | 30% (1036/3494) | 4.4% (46/1036) | 7.5% over 362 positions [6.1%, 11%] |
 | t1 effort sweep | claude-haiku-4-5-20251001 high | 91 | 12% (244/2083) | 17% (42/244) | 35% over 91 positions [25%, 41%] |
@@ -884,18 +882,3 @@ For each pair of one model's effort levels in the same cohort, exact positions b
 | t2 opus effort | claude-opus-5-5 low vs claude-opus-5-5 medium | 181 | 85% over 181 positions [81%, 89%] | 100% over 1 positions [100%, 100%] | 96% over 106 positions [91%, 99%] |
 | t2 opus effort | claude-opus-5-5 low vs claude-opus-5-5 xhigh | 139 | 83% over 139 positions [74%, 88%] | – | 91% over 88 positions [77%, 98%] |
 | t2 opus effort | claude-opus-5-5 medium vs claude-opus-5-5 xhigh | 294 | 89% over 294 positions [87%, 91%] | 92% over 158 positions [89%, 97%] | 89% over 119 positions [79%, 97%] |
-
-## Code versions
-
-The main rates within each cohort by code version, pooled over models.
-
-| Cohort | Code | Against a known shell | Shots known from a clue | Matches |
-|---|---|---|---|---|
-| t1 cross-model medium | 51b8366684f0 | 7.3% (437/5981) [6.3%, 8.5%] | 25% (2526/10094) [24%, 26%] | 417 |
-| t1 cross-model medium | 9e7d7ff22891 | 6.1% (67/1107) [4.5%, 8.1%] | 26% (487/1879) [23%, 29%] | 80 |
-| t1 effort sweep | 51b8366684f0 | 11% (41/357) [7.5%, 16%] | 17% (116/696) [14%, 20%] | 37 |
-| t1 effort sweep | 9e7d7ff22891 | 11% (2306/21266) [9.9%, 12%] | 26% (9228/35870) [25%, 26%] | 1463 |
-| t2 opus effort | 9e7d7ff22891 | 0.1% (1/1134) [0%, 0.3%] | 30% (545/1838) [27%, 33%] | 80 |
-| t3 astra vs opus xhigh | 3c9b98f8b3f4 | 0% (0/35) [0%, 0%] | 27% (17/62) [18%, 31%] | 3 |
-| t3 astra vs opus xhigh | 9e7d7ff22891 | 0.2% (1/578) [0%, 0.6%] | 27% (257/939) [24%, 31%] | 38 |
-

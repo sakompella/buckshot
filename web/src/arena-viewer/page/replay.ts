@@ -27,7 +27,7 @@ export const shotOf = (step: Step): "live" | "blank" | null => {
 export const seatColor = (detail: MatchDetail, player: string): string => {
   const seat = detail.seats.find((candidate) => candidate.player === player);
 
-  return seat === undefined ? "#999" : colorOf(seat.model, seat.effort);
+  return seat === undefined ? "#999" : colorOf(seat.model);
 };
 
 /** A compact strip of one match: a tick per model move, tall for a live shot, short for a blank, a dot for anything else. */
@@ -159,7 +159,7 @@ const stateView = (h: H, detail: MatchDetail, steps: ReadonlyArray<Step>, step: 
       ...detail.seats.map((seat) => {
         const seen = step.players.find(({ player }) => player === seat.player);
         const health = seen?.health ?? 0;
-        const color = colorOf(seat.model, seat.effort);
+        const color = colorOf(seat.model);
 
         return h.div(
           [h.Class(step.player === seat.player ? "on" : ""), h.Style({ "border-color": color })],
@@ -271,7 +271,7 @@ const sameSeedView = (h: H, detail: MatchDetail, allMatches: ReadonlyArray<Match
           h.span([h.Class("k")], [`seed ${detail.match.seed} vs ${labelOf(keyOf(fixed))}:`]),
           ...chips.map(({ match, other }) => {
             const share = other.winShare ?? 0;
-            const color = colorOf(other.model, other.effort);
+            const color = colorOf(other.model);
             const isScored = match.status === "completed";
             const mark = !isScored ? "·" : share >= 1 ? "W" : share > 0 ? "½" : "L";
 
@@ -304,7 +304,7 @@ const detailView = (h: H, replay: Replay, detail: MatchDetail, allMatches: Reado
       [
         h.h2(
           [],
-          detail.seats.map((seat, index) => h.span([], [index > 0 ? " vs " : h.empty, h.span([h.Style({ color: colorOf(seat.model, seat.effort) })], [labelOf(keyOf(seat))])])),
+          detail.seats.map((seat, index) => h.span([], [index > 0 ? " vs " : h.empty, h.span([h.Style({ color: colorOf(seat.model) })], [labelOf(keyOf(seat))])])),
         ),
         h.span(
           [h.Class("k")],

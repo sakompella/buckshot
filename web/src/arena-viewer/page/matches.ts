@@ -36,7 +36,7 @@ const rowView = (h: H, match: MatchRow): Html =>
       h.td([h.Class("tour"), h.DataAttribute("label", "tournament")], [match.tournament]),
       h.td([h.DataAttribute("label", "seed")], [String(match.seed)]),
       ...[match.seats[0], match.seats[1]].map((seat) =>
-        seat === undefined ? h.td([h.Class("seat")], ["–"]) : h.td([h.Class("seat"), h.Style({ color: colorOf(seat.model, seat.effort) })], [`${seat.player} · ${labelOf(keyOf(seat))}`]),
+        seat === undefined ? h.td([h.Class("seat")], ["–"]) : h.td([h.Class("seat"), h.Style({ color: colorOf(seat.model) })], [`${seat.player} · ${labelOf(keyOf(seat))}`]),
       ),
       h.td([h.Class("res")], [resultOf(match)]),
       h.td([h.DataAttribute("label", "moves")], [String(sumOf(match.seats.map(({ moves }) => moves ?? 0)))]),

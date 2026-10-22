@@ -387,7 +387,7 @@ export const reliabilityView = (
                     String(move),
                     [h.Class("row"), h.OnClick(Message.ClickedMatch({ id: seat.matchId, maybeFocus: Option.fromUndefinedOr(decisions.ord[move]) }))],
                     [
-                      h.td([h.Style({ color: colorOf(seat.model, seat.effort) })], [labelOf(keyOf(seat))]),
+                      h.td([h.Style({ color: colorOf(seat.model) })], [labelOf(keyOf(seat))]),
                       h.td([h.DataAttribute("label", "started")], [fmtTime(seat.startedAt)]),
                       h.td([h.DataAttribute("label", "seed")], [String(seat.seed)]),
                       h.td([h.DataAttribute("label", "move")], [String(decisions.moveNo[move] ?? "")]),
