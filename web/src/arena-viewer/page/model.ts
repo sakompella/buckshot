@@ -56,9 +56,16 @@ export const Heat = Schema.Struct({
 
 export const Leaderboard = Schema.Struct({ maybeOpen: Schema.Option(Schema.String), maybeTip: Schema.Option(Schema.String) });
 
-export const Replay = Schema.Struct({ id: Schema.String, maybeFocus: Schema.Option(Schema.Number), at: Schema.Number });
+/** An open replay. Until a move is chosen, it shows the first model move at or after the focus ordinal. */
+export const Replay = Schema.Struct({ id: Schema.String, maybeFocus: Schema.Option(Schema.Number), maybeAt: Schema.Option(Schema.Number) });
 
 export type Replay = typeof Replay.Type;
+
+/** The Matches tab's search and how many rows it shows. */
+export const MatchList = Schema.Struct({ query: Schema.String, limit: Schema.Number });
+
+/** A reliability cell with its tooltip open: a row (tournament and config) and a column. */
+export const RateCell = Schema.Struct({ row: Schema.String, column: Schema.String });
 
 export const MatchData = AsyncData.Schema(MatchDetail, Schema.String).schema;
 
@@ -76,6 +83,8 @@ export const Model = Schema.Struct({
   scatter: Scatter,
   heat: Heat,
   leaderboard: Leaderboard,
+  matchList: MatchList,
+  maybeRateTip: Schema.Option(RateCell),
   /** Each match detail asked for, by match id. */
   matches: Schema.Record(Schema.String, MatchData),
   maybeReplay: Schema.Option(Replay),
@@ -114,7 +123,16 @@ export const Message = defineMessageUnion({
   SucceededMatch: { id: Schema.String, detail: MatchDetail },
   FailedMatch: { id: Schema.String, error: Schema.String },
   ClosedReplay: {},
+  NavigatedBack: {},
+  SteppedReplay: { delta: Schema.Number },
+  SelectedStep: { index: Schema.Number },
+  ChangedMatchQuery: { query: Schema.String },
+  ClickedShowMore: {},
+  HoveredRate: { row: Schema.String, column: Schema.String },
+  LeftRate: {},
   PlacedTip: {},
+  CompletedHistoryChange: {},
+  CompletedStepScroll: {},
 });
 
 export type Message = typeof Message.Type;
