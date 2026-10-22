@@ -1,0 +1,139 @@
+import { Schema } from "effect";
+import { AsyncData } from "foldkit";
+import { defineMessageUnion } from "foldkit/message";
+
+import { Decisions, MatchDetail, Seat } from "../api.ts";
+
+// MODEL
+
+export const Tab = Schema.Literals(["overview", "matches", "seats", "reliability"]);
+
+export type Tab = typeof Tab.Type;
+
+export const TABS: ReadonlyArray<readonly [Tab, string]> = [
+  ["overview", "Overview"],
+  ["matches", "Matches"],
+  ["seats", "Seats"],
+  ["reliability", "Reliability"],
+];
+
+export const SeatFull = Schema.Struct({ ...Seat.fields, cohort: Schema.String });
+
+/** The database as the page holds it: every seat with its cohort, and the agent moves' columns. */
+export const Loaded = Schema.Struct({ seats: Schema.Array(SeatFull), decisions: Decisions });
+
+export type Loaded = typeof Loaded.Type;
+
+/** Which seats the tabs count: one cohort or all, minus the efforts and models switched off. */
+export const Filter = Schema.Struct({ cohort: Schema.String, offEfforts: Schema.Array(Schema.String), offModels: Schema.Array(Schema.String) });
+
+export type Filter = typeof Filter.Type;
+
+/** Which configs the cost scatter shows: the kept efforts (see keepVariants), every effort, or medium only. */
+export const ScatterShow = Schema.Literals(["kept", "all", "medium"]);
+
+export type ScatterShow = typeof ScatterShow.Type;
+
+export const Scatter = Schema.Struct({ show: ScatterShow, maybeHover: Schema.Option(Schema.String), maybePin: Schema.Option(Schema.String) });
+
+export const HeatMode = Schema.Literals(["opp", "items", "choices", "style"]);
+
+export type HeatMode = typeof HeatMode.Type;
+
+export const HeatCellId = Schema.Struct({ row: Schema.String, col: Schema.String });
+
+/** The moves behind one choice-pattern cell: one config, one pattern bit. */
+export const Flagged = Schema.Struct({ key: Schema.String, bit: Schema.Number, title: Schema.String });
+
+export const Heat = Schema.Struct({
+  mode: HeatMode,
+  /** "rating", "model", "cost" or a column id. */
+  sort: Schema.String,
+  isBestOnly: Schema.Boolean,
+  maybeTip: Schema.Option(HeatCellId),
+  maybeFlagged: Schema.Option(Flagged),
+});
+
+export const Leaderboard = Schema.Struct({ maybeOpen: Schema.Option(Schema.String), maybeTip: Schema.Option(Schema.String) });
+
+/** An open replay. Until a move is chosen, it shows the first model move at or after the focus ordinal. */
+export const Replay = Schema.Struct({ id: Schema.String, maybeFocus: Schema.Option(Schema.Number), maybeAt: Schema.Option(Schema.Number) });
+
+export type Replay = typeof Replay.Type;
+
+/** The Matches tab's search and how many rows it shows. */
+export const MatchList = Schema.Struct({ query: Schema.String, limit: Schema.Number });
+
+/** A reliability cell with its tooltip open: a row (tournament and config) and a column. */
+export const RateCell = Schema.Struct({ row: Schema.String, column: Schema.String });
+
+export const MatchData = AsyncData.Schema(MatchDetail, Schema.String).schema;
+
+export type MatchData = typeof MatchData.Type;
+
+export const Viewport = Schema.Struct({ width: Schema.Number, height: Schema.Number });
+
+export type Viewport = typeof Viewport.Type;
+
+export const Model = Schema.Struct({
+  viewport: Viewport,
+  tab: Tab,
+  data: AsyncData.Schema(Loaded, Schema.String).schema,
+  filter: Filter,
+  scatter: Scatter,
+  heat: Heat,
+  leaderboard: Leaderboard,
+  matchList: MatchList,
+  maybeRateTip: Schema.Option(RateCell),
+  /** Each match detail asked for, by match id. */
+  matches: Schema.Record(Schema.String, MatchData),
+  maybeReplay: Schema.Option(Replay),
+});
+
+export type Model = typeof Model.Type;
+
+// MESSAGE
+
+export const Message = defineMessageUnion({
+  ResizedViewport: { width: Schema.Number, height: Schema.Number },
+  ClickedTab: { tab: Tab },
+  NavigatedToTab: { tab: Tab },
+  CompletedHashWrite: {},
+  SucceededLoad: { loaded: Loaded },
+  FailedLoad: { error: Schema.String },
+  SelectedCohort: { cohort: Schema.String },
+  ToggledEffort: { effort: Schema.String },
+  ToggledModel: { name: Schema.String },
+  SelectedScatterShow: { show: ScatterShow },
+  HoveredPoint: { key: Schema.String },
+  LeftPoint: {},
+  ClickedPoint: { key: Schema.String },
+  ClickedOutsideChart: {},
+  SelectedHeatMode: { mode: HeatMode },
+  ClickedHeatColumn: { column: Schema.String },
+  ToggledBestOnly: {},
+  HoveredCell: { row: Schema.String, col: Schema.String },
+  LeftCell: {},
+  ClickedPatternCell: { key: Schema.String, bit: Schema.Number, title: Schema.String },
+  ClosedFlagged: {},
+  ClickedLeaderboardRow: { id: Schema.String },
+  HoveredSquare: { matchId: Schema.String },
+  LeftSquare: {},
+  ClickedMatch: { id: Schema.String, maybeFocus: Schema.Option(Schema.Number) },
+  SucceededMatch: { id: Schema.String, detail: MatchDetail },
+  FailedMatch: { id: Schema.String, error: Schema.String },
+  ClosedReplay: {},
+  NavigatedBack: {},
+  SteppedReplay: { delta: Schema.Number },
+  SelectedStep: { index: Schema.Number },
+  ChangedMatchQuery: { query: Schema.String },
+  ClickedShowMore: {},
+  HoveredRate: { row: Schema.String, column: Schema.String },
+  LeftRate: {},
+  PlacedTip: {},
+  CompletedHistoryChange: {},
+  CompletedStepScroll: {},
+  CompletedScroll: {},
+});
+
+export type Message = typeof Message.Type;

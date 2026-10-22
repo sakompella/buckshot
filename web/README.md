@@ -20,7 +20,7 @@ root provides it.
 
 Checks:
 
-    bun run typecheck  # tsc --noEmit, strict
+    bun run typecheck  # tsrs --noEmit, strict (tsrs is the Rust port of tsc)
     bun run lint       # oxlint with every anti-slop rule and the Effect group, --deny-warnings
     bun run test       # plays full Story and DoN matches through bend.ts at 2, 3 and 4 players; checks stale answers are rejected; checks the agent tool contract: privacy, read-only get_game, stale, repeated and rematch turns, new_match refused mid-match, the moves list matching the machine's legal chains, and each Agent's events adding up to the whole log, the end included
     bun scripts/play.ts [url] [outdir]   # headless Chrome (BROWSER=firefox for Playwright Firefox): one human-vs-bot match by clicking the table, one 4-bot autoplay match
@@ -247,6 +247,32 @@ polled and followed. Runs from before format 1 are listed as unreadable.
 The look borrows from the studio viewer in
 [claude-paint](https://github.com/aliceisjustplaying/claude-paint) (MIT).
 
+## Arena analysis viewer
+
+`bun scripts/arena-viewer.ts <db> [host] [port]` serves charts over the arena
+analysis database (`scripts/arena-import.ts` builds it; see
+`docs/arena/database.md`) at http://127.0.0.1:8790/ by default, with no auth.
+The Overview tab has the cost vs rating scatter, the breakdown heatmaps, a few
+interesting matches and the leaderboard by cohort. Matches lists every started
+match, Seats charts the table position and round-1 starter effects, and
+Reliability charts failed calls, faults and the time they cost per config. Both
+fold their full tables under the charts. A match row, an interesting match or a
+flagged move opens its replay: health through the match,
+each player's view at the chosen move, and every model move with its reasoning.
+The arrow keys step through it, and Escape, a click outside or the back gesture
+closes it. Items are drawn with the table's own icons from `src/icons.ts`. It is
+a Foldkit app; the server loads every seat at start and works out the per-move
+analysis once.
+
+    bun scripts/arena-viewer-check.ts <url> [outdir]   # headless Chrome at desktop, phone and tablet widths: hovers, taps and screenshots
+
+The shared copy runs on hp-server at http://100.108.62.24:8790/, from the main
+checkout's `web/`. Its PID is in `_work/arena/viewer.pid` and its log in
+`_work/arena/viewer.log`. To restart it after a merge, from the repository root:
+
+    kill "$(cat _work/arena/viewer.pid)"
+    cd web && setsid -f sh -c 'echo $$ > ../_work/arena/viewer.pid; exec bun scripts/arena-viewer.ts ../_work/arena/analysis/buckshot.sqlite 100.108.62.24 8790 > ../_work/arena/viewer.log 2>&1' < /dev/null
+
 ## Layout
 
 - `src/bend.ts`: the only file that writes Bend tags. It decodes every Bend
@@ -293,3 +319,5 @@ The look borrows from the studio viewer in
 - `src/viewer/page/` is the viewer's page, plain TypeScript and DOM.
 - `scripts/viewer.ts` starts the viewer, and `scripts/viewer-check.ts` screenshots it in headless Chrome.
 - `test/faux-run.ts` plays a free faux arena match into a run directory, for the viewer's tests and its screenshot check.
+- `src/arena-viewer/server.ts` serves the arena analysis viewer's page and JSON API; `analysis.ts` replays each seat's visible events to tag its moves (known shells, item use, choice patterns); `api.ts` holds the schemas both sides use.
+- `src/arena-viewer/page/` is that viewer's Foldkit page: `model.ts` and `main.ts` the state and updates, one module per chart or tab, hand-drawn SVG, and `replay.ts` the replay.
