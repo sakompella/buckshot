@@ -44,7 +44,7 @@ const filtersView = (h: H, derived: Derived, filter: Model["filter"]): Html => {
     [h.Class("filters")],
     [
       h.select(
-        [h.Title("tournament · gameplay code hash · pairing kind"), h.Value(filter.cohort), h.OnChange((cohort) => Message.SelectedCohort({ cohort }))],
+        [h.Title("the kind of comparison"), h.Value(filter.cohort), h.OnChange((cohort) => Message.SelectedCohort({ cohort }))],
         [h.option([h.Value("all")], ["All cohorts"]), ...cohorts.map((cohort) => h.option([h.Value(cohort), h.Selected(cohort === filter.cohort)], [`${cohort} (${matchesIn(cohort)})`]))],
       ),
       h.span(
