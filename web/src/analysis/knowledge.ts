@@ -321,9 +321,9 @@ export const relativeText = (roster: Roster, seat: Seat, text: string): string =
 };
 
 export interface PositionKeys {
-  /** The board, cash and round, the player's whole log since the load, and its legal moves. */
+  /** The board, the load shown, cash and round, the player's whole log since the load, and its legal moves. */
   readonly exact: string;
-  /** The board, cash and round, the public and private shell beliefs, what each opponent has learned with items this load, and the legal moves. */
+  /** The board, the load shown, cash and round, the public and private shell beliefs, what each opponent has learned with items this load, and the legal moves. */
   readonly belief: string;
 }
 
@@ -338,6 +338,7 @@ export const positionKeys = (roster: Roster, seat: Seat, board: Board, log: Read
   const table = {
     round: [board.round.index, board.round.health],
     players: ordered.map((view) => [view.counter, view.slots.flatMap((slot) => Option.toArray(slot)).toSorted(), view.cash]),
+    shown: [board.gun.shown.live, board.gun.shown.blank],
     sawed: board.gun.sawed,
     moves: legal.map((label) => relativeText(roster, seat, label)).toSorted(),
     version,

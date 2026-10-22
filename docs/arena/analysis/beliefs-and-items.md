@@ -39,7 +39,7 @@ DeepSeek (`deepseek-v4.1-flash`) is left out entirely. Every match with a DeepSe
 - **Moves since the clue:** accepted moves by either player, forced grabs included, between the move that produced the clue and the shot. 0 is the very next move.
 - **Item fates:** a ledger follows each placed item through the public log. Its owner uses it, or it is stolen with adrenaline, or it is still held when the owner dies, or it is still held when the round or match ends (censored). At every decision the ledger must match the board slot by slot.
 - **Use when legal:** at each agent decision, whether a move that spends the item is on the menu, and whether the player chose it. "Jam Player X" spends a jammer. Steals are counted separately from the player's own items.
-- **Same position:** two decisions share an *exact* position when all of these are the same: the board (health, jam state, items, cash, round, saw), the deciding player's whole log since the load, the legal moves, and the code and instructions hashes. Players are named relative to the decider, never by letter. A looser *belief* position replaces the log with the public and private shell beliefs, plus how many clue items each opponent used this load.
+- **Same position:** two decisions share an *exact* position when all of these are the same: the board (health, jam state, items, cash, round, saw, and the live and blank counts shown at the load), the deciding player's whole log since the load, the legal moves, and the code and instructions hashes. Players are named relative to the decider, never by letter. A looser *belief* position replaces the log with the public and private shell beliefs, plus how many clue items each opponent used this load.
 
 **Counted.** Completed (scored) matches only, and only the agents' own moves. Forced grabs and the two fallback moves are not counted. Models are `entrants.model` plus effort. Cohorts are never pooled: tournament 1's medium cross-model games, tournament 1's effort sweeps, tournament 2 (Opus effort) and tournament 3 (Opus xhigh vs Astra). The same model and effort appear as separate rows in different cohorts.
 
@@ -243,7 +243,7 @@ Shots against the known shell, by source. A clue taken with adrenaline counts wi
 
 ## By accepted moves since the clue
 
-Shots against a chamber known from a clue (glass, phone or combined), by the accepted moves of either player between the clue and the shot. 0 is the very next move.
+Shots against a chamber known from a clue (glass or phone), by the accepted moves of either player between the clue and the shot. 0 is the very next move.
 
 ### glass
 
@@ -691,7 +691,7 @@ Deaths, the share with at least one unused item, and the items held per death.
 
 ## Same-position consistency
 
-Agent decisions grouped by the deciding player's own position. Exact: the same board, cash and round, the same log since the load, the same legal moves, code and instructions. Belief: the same board, cash, round, legal moves and versions, the same public and private shell beliefs, and the same count of clue items each opponent used this load. Players are named relative to the decider. Coverage is the share of decisions in a position seen at least twice. Non-modal is the share of those decisions that differ from their position's most common choice; it has no interval, because resampling blocks duplicates decisions and a copy always matches the mode. Two differ is the chance two different decisions in a position differ, averaged over positions, with an interval over pairs of distinct decisions.
+Agent decisions grouped by the deciding player's own position. Exact: the same board, cash and round, the same log since the load, the same legal moves, code and instructions. Belief: the same board, load shown, cash, round, legal moves and versions, the same public and private shell beliefs, and the same count of clue items each opponent used this load. Players are named relative to the decider. Coverage is the share of decisions in a position seen at least twice. Non-modal is the share of those decisions that differ from their position's most common choice; it has no interval, because resampling blocks duplicates decisions and a copy always matches the mode. Two differ is the chance two different decisions in a position differ, averaged over positions, with an interval over pairs of distinct decisions.
 
 ### Exact positions
 
@@ -749,46 +749,46 @@ Agent decisions grouped by the deciding player's own position. Exact: the same b
 
 | Cohort | Model | Positions seen twice or more | Coverage | Non-modal choices | Two differ |
 |---|---|---|---|---|---|
-| t1 cross-model medium | claude-haiku-4-5-20251001 medium | 238 | 26% (676/2642) | 19% (129/676) | 36% over 238 positions [30%, 41%] |
-| t1 cross-model medium | claude-haiku-5-5 medium | 285 | 24% (847/3500) | 12% (99/847) | 20% over 285 positions [17%, 25%] |
-| t1 cross-model medium | claude-opus-5-5 medium | 350 | 33% (1029/3107) | 5.8% (60/1029) | 10.0% over 350 positions [8.3%, 13%] |
-| t1 cross-model medium | claude-sonnet-5-5 medium | 334 | 28% (969/3506) | 6.2% (60/969) | 13% over 334 positions [9.3%, 16%] |
-| t1 cross-model medium | gpt-5.6-terra medium | 125 | 17% (325/1892) | 12% (38/325) | 24% over 125 positions [17%, 30%] |
+| t1 cross-model medium | claude-haiku-4-5-20251001 medium | 237 | 25% (673/2642) | 19% (128/673) | 36% over 237 positions [30%, 41%] |
+| t1 cross-model medium | claude-haiku-5-5 medium | 284 | 24% (845/3500) | 12% (99/845) | 20% over 284 positions [17%, 25%] |
+| t1 cross-model medium | claude-opus-5-5 medium | 347 | 33% (1023/3107) | 5.9% (60/1023) | 10% over 347 positions [8.4%, 13%] |
+| t1 cross-model medium | claude-sonnet-5-5 medium | 333 | 28% (967/3506) | 6.2% (60/967) | 13% over 333 positions [9.3%, 16%] |
+| t1 cross-model medium | gpt-5.6-terra medium | 123 | 17% (321/1892) | 12% (37/321) | 24% over 123 positions [17%, 29%] |
 | t1 cross-model medium | gpt-6-astra medium | 344 | 35% (1024/2925) | 2.6% (27/1024) | 5.3% over 344 positions [3.5%, 6.9%] |
-| t1 cross-model medium | gpt-6-luna medium | 282 | 22% (810/3740) | 17% (139/810) | 31% over 282 positions [26%, 37%] |
-| t1 cross-model medium | gpt-6.1-sol medium | 362 | 30% (1037/3494) | 4.4% (46/1037) | 7.5% over 362 positions [6.1%, 11%] |
+| t1 cross-model medium | gpt-6-luna medium | 281 | 22% (808/3740) | 17% (139/808) | 31% over 281 positions [27%, 37%] |
+| t1 cross-model medium | gpt-6.1-sol medium | 362 | 30% (1036/3494) | 4.4% (46/1036) | 7.5% over 362 positions [6.1%, 11%] |
 | t1 effort sweep | claude-haiku-4-5-20251001 high | 91 | 12% (244/2083) | 17% (42/244) | 35% over 91 positions [25%, 41%] |
 | t1 effort sweep | claude-haiku-4-5-20251001 low | 107 | 13% (271/2125) | 17% (45/271) | 31% over 107 positions [25%, 38%] |
 | t1 effort sweep | claude-haiku-4-5-20251001 medium | 112 | 14% (308/2175) | 14% (43/308) | 28% over 112 positions [20%, 34%] |
 | t1 effort sweep | claude-haiku-4-5-20251001 minimal | 121 | 15% (322/2080) | 15% (49/322) | 32% over 121 positions [22%, 36%] |
 | t1 effort sweep | claude-haiku-4-5-20251001 off | 110 | 14% (297/2173) | 18% (53/297) | 33% over 110 positions [28%, 42%] |
-| t1 effort sweep | claude-haiku-5-5 high | 226 | 25% (622/2513) | 9.2% (57/622) | 19% over 226 positions [13%, 23%] |
+| t1 effort sweep | claude-haiku-5-5 high | 223 | 25% (616/2513) | 9.3% (57/616) | 19% over 223 positions [13%, 24%] |
 | t1 effort sweep | claude-haiku-5-5 low | 261 | 28% (715/2513) | 10% (72/715) | 21% over 261 positions [15%, 24%] |
 | t1 effort sweep | claude-haiku-5-5 max | 292 | 31% (793/2573) | 9.2% (73/793) | 19% over 292 positions [14%, 22%] |
 | t1 effort sweep | claude-haiku-5-5 medium | 245 | 27% (679/2558) | 8.8% (60/679) | 17% over 245 positions [13%, 21%] |
-| t1 effort sweep | claude-haiku-5-5 off | 275 | 30% (724/2387) | 12% (86/724) | 22% over 275 positions [17%, 28%] |
-| t1 effort sweep | claude-haiku-5-5 xhigh | 306 | 31% (790/2534) | 7.7% (61/790) | 14% over 306 positions [11%, 18%] |
+| t1 effort sweep | claude-haiku-5-5 off | 273 | 30% (720/2387) | 12% (86/720) | 22% over 273 positions [17%, 28%] |
+| t1 effort sweep | claude-haiku-5-5 xhigh | 304 | 31% (785/2534) | 7.6% (60/785) | 14% over 304 positions [11%, 17%] |
 | t1 effort sweep | claude-sonnet-5-5 high | 326 | 37% (898/2455) | 5.8% (52/898) | 12% over 326 positions [7.5%, 14%] |
 | t1 effort sweep | claude-sonnet-5-5 low | 263 | 33% (769/2338) | 8.3% (64/769) | 17% over 263 positions [12%, 19%] |
-| t1 effort sweep | claude-sonnet-5-5 max | 333 | 40% (1022/2568) | 5.4% (55/1022) | 12% over 333 positions [7.7%, 13%] |
-| t1 effort sweep | claude-sonnet-5-5 medium | 294 | 35% (863/2495) | 6.0% (52/863) | 12% over 294 positions [8.5%, 15%] |
+| t1 effort sweep | claude-sonnet-5-5 max | 332 | 40% (1020/2568) | 5.4% (55/1020) | 12% over 332 positions [7.7%, 13%] |
+| t1 effort sweep | claude-sonnet-5-5 medium | 294 | 35% (862/2495) | 6.0% (52/862) | 12% over 294 positions [8.5%, 15%] |
 | t1 effort sweep | claude-sonnet-5-5 off | 334 | 42% (1021/2415) | 6.5% (66/1021) | 13% over 334 positions [9.6%, 16%] |
-| t1 effort sweep | claude-sonnet-5-5 xhigh | 281 | 36% (869/2439) | 5.8% (50/869) | 12% over 281 positions [8.5%, 14%] |
+| t1 effort sweep | claude-sonnet-5-5 xhigh | 280 | 36% (867/2439) | 5.8% (50/867) | 12% over 280 positions [8.5%, 14%] |
 | t1 effort sweep | gpt-5.6-terra high | 140 | 21% (388/1886) | 13% (52/388) | 27% over 140 positions [19%, 31%] |
-| t1 effort sweep | gpt-5.6-terra low | 174 | 23% (424/1852) | 14% (58/424) | 26% over 174 positions [19%, 34%] |
-| t1 effort sweep | gpt-5.6-terra max | 208 | 26% (559/2170) | 8.9% (50/559) | 19% over 208 positions [12%, 22%] |
+| t1 effort sweep | gpt-5.6-terra low | 173 | 23% (422/1852) | 14% (58/422) | 26% over 173 positions [20%, 34%] |
+| t1 effort sweep | gpt-5.6-terra max | 208 | 26% (558/2170) | 9.0% (50/558) | 19% over 208 positions [12%, 22%] |
 | t1 effort sweep | gpt-5.6-terra medium | 176 | 25% (453/1792) | 13% (57/453) | 23% over 176 positions [19%, 31%] |
-| t1 effort sweep | gpt-5.6-terra xhigh | 156 | 20% (407/2030) | 12% (50/407) | 26% over 156 positions [19%, 31%] |
+| t1 effort sweep | gpt-5.6-terra xhigh | 156 | 20% (405/2030) | 12% (50/405) | 26% over 156 positions [19%, 32%] |
 | t1 effort sweep | gpt-6-luna high | 159 | 15% (421/2829) | 17% (73/421) | 31% over 159 positions [26%, 38%] |
 | t1 effort sweep | gpt-6-luna low | 193 | 17% (508/2920) | 20% (102/508) | 38% over 193 positions [31%, 46%] |
-| t1 effort sweep | gpt-6-luna max | 170 | 16% (472/2936) | 12% (55/472) | 24% over 170 positions [18%, 28%] |
-| t1 effort sweep | gpt-6-luna medium | 154 | 14% (413/2866) | 17% (69/413) | 31% over 154 positions [23%, 39%] |
-| t1 effort sweep | gpt-6-luna off | 178 | 16% (464/2888) | 18% (83/464) | 34% over 178 positions [28%, 41%] |
-| t1 effort sweep | gpt-6-luna xhigh | 166 | 16% (445/2792) | 14% (62/445) | 26% over 166 positions [19%, 34%] |
+| t1 effort sweep | gpt-6-luna max | 170 | 16% (471/2936) | 12% (55/471) | 24% over 170 positions [18%, 28%] |
+| t1 effort sweep | gpt-6-luna medium | 148 | 14% (400/2866) | 17% (69/400) | 32% over 148 positions [24%, 40%] |
+| t1 effort sweep | gpt-6-luna off | 175 | 16% (458/2888) | 18% (82/458) | 34% over 175 positions [27%, 41%] |
+| t1 effort sweep | gpt-6-luna xhigh | 161 | 16% (435/2792) | 14% (62/435) | 27% over 161 positions [19%, 34%] |
 | t1 effort sweep | gpt-6.1-sol high | 316 | 43% (845/1951) | 5.4% (46/845) | 10% over 316 positions [7.6%, 13%] |
 | t1 effort sweep | gpt-6.1-sol low | 305 | 44% (820/1851) | 4.5% (37/820) | 8.9% over 305 positions [6.1%, 11%] |
-| t1 effort sweep | gpt-6.1-sol max | 340 | 45% (931/2054) | 5.6% (52/931) | 12% over 340 positions [8.0%, 14%] |
-| t1 effort sweep | gpt-6.1-sol medium | 293 | 43% (823/1907) | 4.3% (35/823) | 8.9% over 293 positions [5.8%, 11%] |
+| t1 effort sweep | gpt-6.1-sol max | 339 | 45% (929/2054) | 5.6% (52/929) | 12% over 339 positions [8.0%, 14%] |
+| t1 effort sweep | gpt-6.1-sol medium | 292 | 43% (821/1907) | 4.3% (35/821) | 9.0% over 292 positions [5.8%, 11%] |
 | t1 effort sweep | gpt-6.1-sol xhigh | 304 | 42% (821/1963) | 6.5% (53/821) | 11% over 304 positions [8.8%, 17%] |
 | t2 opus effort | claude-opus-5-5 high | 158 | 33% (319/970) | 5.3% (17/319) | 10% over 158 positions [4.0%, 25%] |
 | t2 opus effort | claude-opus-5-5 low | 3 | 1.3% (6/468) | 0% (0/6) | 0% over 3 positions [0%, 0%] |

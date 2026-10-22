@@ -283,7 +283,7 @@ const BINS: ReadonlyArray<readonly [string, (moves: number) => boolean]> = [
 
 print("## By accepted moves since the clue");
 
-print("Shots against a chamber known from a clue (glass, phone or combined), by the accepted moves of either player between the clue and the shot. 0 is the very next move.");
+print("Shots against a chamber known from a clue (glass or phone), by the accepted moves of either player between the clue and the shot. 0 is the very next move.");
 
 for (const source of ["glass", "phone"]) {
   print(`### ${source}`);
@@ -497,7 +497,7 @@ const interval = (rows: ReadonlyArray<Decision>, label: string, statistic: (weig
 print("## Same-position consistency");
 
 print(
-  "Agent decisions grouped by the deciding player's own position. Exact: the same board, cash and round, the same log since the load, the same legal moves, code and instructions. Belief: the same board, cash, round, legal moves and versions, the same public and private shell beliefs, and the same count of clue items each opponent used this load. Players are named relative to the decider. Coverage is the share of decisions in a position seen at least twice. Non-modal is the share of those decisions that differ from their position's most common choice; it has no interval, because resampling blocks duplicates decisions and a copy always matches the mode. Two differ is the chance two different decisions in a position differ, averaged over positions, with an interval over pairs of distinct decisions.",
+  "Agent decisions grouped by the deciding player's own position. Exact: the same board, cash and round, the same log since the load, the same legal moves, code and instructions. Belief: the same board, load shown, cash, round, legal moves and versions, the same public and private shell beliefs, and the same count of clue items each opponent used this load. Players are named relative to the decider. Coverage is the share of decisions in a position seen at least twice. Non-modal is the share of those decisions that differ from their position's most common choice; it has no interval, because resampling blocks duplicates decisions and a copy always matches the mode. Two differ is the chance two different decisions in a position differ, averaged over positions, with an interval over pairs of distinct decisions.",
 );
 
 for (const key of ["exact_key", "belief_key"] as const) {

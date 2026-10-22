@@ -238,3 +238,21 @@ test("a position's keys do not depend on the players' letters", () => {
 
   expect(other.exact).not.toBe(asA.exact);
 });
+
+test("belief positions with the same shells left differ by the load shown", () => {
+  const roster = rosterOf([ME, THEM]);
+
+  const keysAfter = (load: { readonly live: number; readonly blank: number }, shots: ReadonlyArray<"Live" | "Blank">) => {
+    const log = loadLog([loaded(load.live, load.blank), ...shots.map((shell) => fired(ME, THEM, shell))], [], ME);
+    const orders = { public: belief.orders(log, false), private: belief.orders(log, true) };
+    const table = board([["Beer"], ["Saw"]]);
+
+    return { orders, keys: positionKeys(roster, ME, { ...table, gun: { shown: load, remaining: 1, sawed: false } }, log, orders, ["Shoot Player B", "Shoot yourself"], ["code", "instructions"]) };
+  };
+
+  const fromThreeLive = keysAfter({ live: 3, blank: 1 }, ["Live", "Live", "Blank"]);
+  const fromOneLive = keysAfter({ live: 1, blank: 2 }, ["Blank", "Blank"]);
+
+  expect(fromThreeLive.orders).toEqual(fromOneLive.orders);
+  expect(fromThreeLive.keys.belief).not.toBe(fromOneLive.keys.belief);
+});
