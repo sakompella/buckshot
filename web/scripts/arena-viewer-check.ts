@@ -46,8 +46,9 @@ const openOverview = async (page: Page) => {
   await page.goto(`${base}/#overview`);
   await page.waitForSelector("table.heat tbody tr", { timeout: 120_000 });
   await page.waitForSelector(".icard svg rect", { timeout: 60_000 });
-  console.log("default configs: scatter points", await countOf(page, ".card svg g.pt"), "heat rows", await countOf(page, "table.heat tbody tr"), "|", await textOf(page, ".filters .switch"));
+  console.log("default configs: scatter points", await countOf(page, ".card svg g.pt"), "heat rows", await countOf(page, "table.heat tbody tr"), "leaderboards", await countOf(page, "table.lbt"), "|", await textOf(page, ".filters .switch"));
   await page.getByRole("switch", { name: /all configs/ }).check();
+  console.log("all configs: leaderboards", await countOf(page, "table.lbt"));
 };
 
 // Visible controls smaller than 44px either way (heat cells and leaderboard squares are left out).
