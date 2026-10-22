@@ -129,7 +129,11 @@ const tabView = (h: H, model: Model, derived: Derived): Html => {
     case "matches":
       return lazyMatches((d: Derived, filter: Model["filter"], list: Model["matchList"]) => matchesView(h, filtersView(h, d, filter), d.matches, list), [derived, model.filter, model.matchList]);
     case "seats":
-      return lazySeats((d: Derived, filter: Model["filter"]) => seatsView(h, filtersView(h, d, filter), d), [derived, model.filter]);
+      return lazySeats((d: Derived, filter: Model["filter"], viewport: Viewport) => seatsView(h, filtersView(h, d, filter), d, viewport.width, contentWidth(viewport)), [
+        derived,
+        model.filter,
+        model.viewport,
+      ]);
     case "reliability":
       return lazyReliability(
         (d: Derived, filter: Model["filter"], tip: Model["maybeRateTip"]) => reliabilityView(h, filtersView(h, d, filter), d.decisions, d.seats, d.keep, tip),
