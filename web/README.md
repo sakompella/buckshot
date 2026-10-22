@@ -264,7 +264,8 @@ closes it. By default every tab shows only configs with at least 20 scored
 matches and one against another model; the 'all configs' switch adds the rest,
 and the effort-sweep leaderboards with them. Items are drawn with the table's own
 icons from `src/icons.ts`, except the saw, beer and jammer, which the viewer
-draws side on. It is a Foldkit app; the server loads every seat at start and works out the per-move
+draws after the game's own: a folding saw, a blue-label can and a flat jammer with a
+green screen. It is a Foldkit app; the server loads every seat at start and works out the per-move
 analysis once.
 
     bun scripts/arena-viewer-check.ts <url> [outdir]   # headless Chrome at desktop, phone and tablet widths: hovers, taps and screenshots

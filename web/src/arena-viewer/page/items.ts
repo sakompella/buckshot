@@ -9,8 +9,9 @@ import type { Message } from "./model.ts";
 type H = HtmlBuilder<Message>;
 
 // The table's own item drawings (src/icons.ts), found by the names the arena's events use, except the saw, the beer
-// and the jammer, which the viewer draws side on as a hand saw, a beer can and a handheld antenna jammer: at the
-// viewer's 14 to 24 px they read better than the table's top-down shapes. Original drawings, in the table's palette.
+// and the jammer, which the viewer draws after the game's own: a folding pruning saw with a red grip, a silver can
+// with a blue star label, and a flat black jammer with a green screen and a row of pale keys. At the viewer's 14 to
+// 24 px these read better than the table's top-down shapes. Original drawings, in the table's palette.
 
 const INK = "#14110c";
 
@@ -27,59 +28,60 @@ const box = (x: number, y: number, width: number, height: number, fill: string, 
 const dot = (cx: number, cy: number, r: number, fill: string, stroke = "none", width = 0): Html =>
   ih.circle([ih.Cx(`${cx}`), ih.Cy(`${cy}`), ih.R(`${r}`), ih.Fill(fill), ih.Stroke(stroke), ih.StrokeWidth(`${width}`)], []);
 
-// The saw's toothed edge runs from the heel (21, 22) to the tip (2, 17.6), one tooth hooked down every 2 px.
-const TEETH = Array.from({ length: 10 }, (_tooth, index) => {
-  const at = (share: number) => [21 - 19 * share, 22 - 4.4 * share] as const;
-  const [x1, y1] = at(index / 10);
-  const [x2, y2] = at((index + 0.6) / 10);
+// The saw is drawn level and then tipped. Its teeth show along the seam where the folded blade meets the grip, the
+// curve from (6, 16.4) through (16, 12) to (26, 15.2).
+const seamAt = (share: number) =>
+  [(1 - share) ** 2 * 6 + 2 * share * (1 - share) * 16 + share ** 2 * 26, (1 - share) ** 2 * 16.4 + 2 * share * (1 - share) * 12 + share ** 2 * 15.2] as const;
 
-  return `L${x1.toFixed(2)} ${y1.toFixed(2)} L${x2.toFixed(2)} ${(y2 + 2).toFixed(2)}`;
+const TEETH = Array.from({ length: 11 }, (_tooth, index) => {
+  const [x1, y1] = seamAt((index + 0.5) / 12);
+  const [x2, y2] = seamAt((index + 1.5) / 12);
+
+  return `L${x1.toFixed(2)} ${y1.toFixed(2)} L${((x1 + x2) / 2).toFixed(2)} ${((y1 + y2) / 2 + 1.5).toFixed(2)}`;
 }).join(" ");
 
-const handSaw = (): ReadonlyArray<Html> => [
-  path(`M2 13.6 L21 9 ${TEETH} L2 17.6 Z`, "#a7a89f", INK, 1),
-  path("M3.5 14.2 L20 10.3", "none", LIGHT, 1.2),
-  path("M20 8 L28 6.5 Q31.5 6.5 31.5 10 L31.5 23 Q31.5 26.5 28 26.5 L20 24 Z", "#8a4f2e", INK, 1),
-  box(23.5, 11, 4.6, 10.5, "#1f140e", 2.2, INK, 0.8),
-  path("M21.5 9.3 L28 8.2", "none", LIGHT, 1),
-  path("M30.2 11 L30.2 23", "none", SHADE, 1.2),
-  dot(21.6, 12.2, 0.9, "#c9b27a", INK, 0.5),
-  dot(21.6, 20.4, 0.9, "#c9b27a", INK, 0.5),
+const pruningSaw = (): ReadonlyArray<Html> => [
+  ih.g(
+    [ih.Attribute("transform", "rotate(-22 16 16)")],
+    [
+      path("M6 16.4 Q16 12 26 15.2 Q17 25 6 16.4 Z", "#b4b4ab", INK, 1),
+      path(`M6 16.4 ${TEETH} L26 15.2`, "none", INK, 0.7),
+      path("M8 18 Q15 22.5 22 18.5", "none", SHADE, 1),
+      path("M1.5 13.5 Q16 5.5 30.5 12 L30 16.6 Q16 10.8 2.5 18.4 Z", "#a1281f", INK, 1),
+      path("M3.5 13.6 Q16 7.4 28.5 12.4", "none", LIGHT, 1),
+      path("M1.5 13.5 Q3.5 12.3 6 11.3 L6.6 16.3 Q4.3 17.2 2.5 18.4 Z", "#2a2a28", INK, 1),
+      path("M23 9.6 Q27 10.4 30.5 12 L30 16.6 Q26.8 15.3 23.4 14.6 Z", "#2a2a28", INK, 1),
+      dot(26.8, 12.8, 1, "#9a5a34", INK, 0.5),
+    ],
+  ),
 ];
 
 const beerCan = (): ReadonlyArray<Html> => [
-  path("M9 7.5 L9 27 Q9 29.5 12 29.5 L20 29.5 Q23 29.5 23 27 L23 7.5 Z", "#b9b6ab", INK, 1),
-  box(9, 11.5, 14, 13.5, "#a3342a"),
-  path("M9 18.5 Q12.5 16 16 18.5 T23 18.5", "none", "#e6d9ad", 1.6),
-  dot(16, 14.4, 1.6, "#e6d9ad"),
-  path("M9 11.5 L23 11.5 M9 25 L23 25", "none", "#4a1a14", 0.8),
+  path("M9 7.5 L9 27 Q9 29.5 12 29.5 L20 29.5 Q23 29.5 23 27 L23 7.5 Z", "#c4c2ba", INK, 1),
+  path("M9 17.5 L11.5 17.5 Q11.5 11 16 11 Q20.5 11 20.5 17.5 L23 17.5 L23 25 L9 25 Z", "#2f56a6"),
+  path("M16.00 11.80 L16.85 14.23 L19.42 14.29 L17.38 15.86 L18.12 18.33 L16.00 16.87 L13.88 18.33 L14.62 15.86 L12.58 14.29 L15.15 14.23 Z", "#e8e8e2"),
+  path("M10.5 20.5 L21.5 20.5 M11.5 22.6 L20.5 22.6", "none", "#e8e8e2", 1),
+  path("M9 24 L23 24", "none", "#1a2f63", 0.8),
   path("M11.2 9 L11.2 28", "none", LIGHT, 1.8),
   path("M21 9 L21 28", "none", SHADE, 2.2),
   path("M9 7.5 L9 27 Q9 29.5 12 29.5 L20 29.5 Q23 29.5 23 27 L23 7.5", "none", INK, 1),
-  ih.ellipse([ih.Cx("16"), ih.Cy("7.5"), ih.Rx("7"), ih.Ry("2"), ih.Fill("#d8d4c8"), ih.Stroke(INK), ih.StrokeWidth("1")], []),
+  ih.ellipse([ih.Cx("16"), ih.Cy("7.5"), ih.Rx("7"), ih.Ry("2"), ih.Fill("#dcdad2"), ih.Stroke(INK), ih.StrokeWidth("1")], []),
   ih.ellipse([ih.Cx("17.2"), ih.Cy("7.2"), ih.Rx("2.4"), ih.Ry("0.8"), ih.Fill("#6f6b62")], []),
 ];
 
 const jammer = (): ReadonlyArray<Html> => [
-  ...(
-    [
-      [8.5, 3],
-      [13, 6.5],
-      [19, 4.5],
-      [23.5, 1.5],
-    ] as const
-  ).flatMap(([x, top]) => [box(x - 1.1, top, 2.2, 14 - top, "#2b2a25", 1.1, INK, 0.8), box(x - 1.7, 11.5, 3.4, 2.5, "#7d7b6c", 0.6, INK, 0.7)]),
-  box(5, 13.5, 22, 16.5, "#5b5947", 2.5, INK, 1),
-  path("M7 15 L25 15", "none", LIGHT, 1.2),
-  path("M7 28.6 L25 28.6", "none", SHADE, 1.2),
-  box(8, 17, 10, 6.5, "#1d2a1b", 1, INK, 0.9),
-  path("M10 21.8 L10 20.6 M12.5 21.8 L12.5 19.4 M15 21.8 L15 18.4", "none", "#7fd06a", 1.3),
-  dot(22.5, 18.6, 1.9, "#c1493a", INK, 0.8),
-  box(20.6, 22, 3.8, 2.4, "#a3a393", 1, INK, 0.7),
-  path("M8 26.4 L24 26.4", "none", INK, 1),
+  box(3.5, 4, 25, 24.5, "#2c2b27", 2.5, INK, 1),
+  path("M5.5 5.6 L26.5 5.6", "none", LIGHT, 1),
+  path("M5.5 27 L26.5 27", "none", SHADE, 1.2),
+  box(6.5, 7, 19, 13, "#0f1a10", 1, INK, 0.9),
+  path("M9.5 9 L9.5 18 M8.8 10 L9.5 10 M8.8 12 L9.5 12 M8.8 14 L9.5 14 M8.8 16 L9.5 16", "none", "#c9c6b8", 0.6),
+  ih.circle([ih.Cx("17.5"), ih.Cy("13.5"), ih.R("4"), ih.Fill("none"), ih.Stroke("#58d84a"), ih.StrokeWidth("0.9")], []),
+  path("M15 11 L20 16 M20 11 L15 16", "none", "#7cff63", 0.9),
+  ...[6.5, 10.1, 13.7, 17.3].map((x) => box(x, 22, 3, 3.6, "#cdbfa6", 0.6, INK, 0.7)),
+  box(22.2, 22.6, 3, 2.6, "#e0a92a", 0.5, INK, 0.7),
 ];
 
-const VIEWER_DRAWINGS: Partial<Readonly<Record<Item, () => ReadonlyArray<Html>>>> = { Saw: handSaw, Beer: beerCan, Jammer: jammer };
+const VIEWER_DRAWINGS: Partial<Readonly<Record<Item, () => ReadonlyArray<Html>>>> = { Saw: pruningSaw, Beer: beerCan, Jammer: jammer };
 
 const drawingOf = (item: Item): Html => {
   const drawing = VIEWER_DRAWINGS[item];
