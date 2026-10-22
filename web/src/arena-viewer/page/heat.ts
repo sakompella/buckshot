@@ -1,9 +1,9 @@
 import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { ITEMS, type Pattern, patternBit } from "../api.ts";
+import { type Decisions, ITEMS, type Pattern, patternBit } from "../api.ts";
 import { anchorId, switchView, tipView, toggleView } from "./charts.ts";
-import { baseName, baseOrder, fmtPct, fmtRating, fmtTime, fmtUsd, isClaude, keyOf, type MatchRow, unique } from "./data.ts";
+import { baseName, baseOrder, fmtPct, fmtRating, fmtTime, fmtUsd, isClaude, keyOf, type MatchRow, type SeatFull, unique } from "./data.ts";
 import { type Derived, memoLast } from "./derived.ts";
 import { itemIconOf } from "./items.ts";
 import { type HeatMode, Message, type Model } from "./model.ts";
@@ -133,17 +133,29 @@ interface Tally {
   readonly seats: Set<number>;
 }
 
-const tallies = memoLast((derived: Derived): ReadonlyMap<string, Tally> => {
-  const { decisions, seats, keep } = derived;
+const CHOICE_BITS = CHOICES.map(([pattern]) => patternBit(pattern));
+
+const emptyTally = (): Tally => ({ use: ITEMS.map(() => [0, 0]), pattern: CHOICES.map(() => [0, 0]), shots: 0, atOpp: 0, moves: 0, items: 0, jams: 0, steals: 0, seats: new Set<number>() });
+
+/** Per cohort and config, as ModelStats ids. A filter keeps or drops whole cohort configs, so these are counted once. */
+const cohortTallies = memoLast((decisions: Decisions, seats: ReadonlyArray<SeatFull>): ReadonlyMap<string, Tally> => {
   const out = new Map<string, Tally>();
 
-  decisions.seat.forEach((seatIndex, move) => {
-    const seat = seats[seatIndex];
+  const tallyOfSeat = seats.map((seat) => {
+    const id = `${seat.cohort}||${keyOf(seat)}`;
+    const tally = out.get(id) ?? emptyTally();
 
-    if (seat === undefined || keep[seatIndex] !== true) return;
+    out.set(id, tally);
 
-    const key = keyOf(seat);
-    const tally = out.get(key) ?? { use: ITEMS.map(() => [0, 0]), pattern: CHOICES.map(() => [0, 0]), shots: 0, atOpp: 0, moves: 0, items: 0, jams: 0, steals: 0, seats: new Set<number>() };
+    return tally;
+  });
+
+  for (let move = 0; move < decisions.seat.length; move++) {
+    const seatIndex = decisions.seat[move] ?? -1;
+    const tally = tallyOfSeat[seatIndex];
+
+    if (tally === undefined) continue;
+
     const legalUse = decisions.legalUse[move] ?? 0;
     const chances = decisions.opp[move] ?? 0;
     const taken = decisions.pick[move] ?? 0;
@@ -151,25 +163,26 @@ const tallies = memoLast((derived: Derived): ReadonlyMap<string, Tally> => {
     const stolen = decisions.stealItem[move] ?? -1;
     const shot = decisions.shot[move] ?? 0;
 
-    out.set(key, tally);
+    for (let index = 0; index < tally.use.length; index++) {
+      const counts = tally.use[index];
 
-    tally.use.forEach((counts, index) => {
-      if (legalUse & (1 << index)) {
+      if (counts && legalUse & (1 << index)) {
         counts[1]++;
 
         if (used === index) counts[0]++;
       }
-    });
+    }
 
-    CHOICES.forEach(([pattern], index) => {
+    for (let index = 0; index < CHOICE_BITS.length; index++) {
       const counts = tally.pattern[index];
+      const bit = CHOICE_BITS[index] ?? 0;
 
-      if (counts && chances & patternBit(pattern)) {
+      if (counts && chances & bit) {
         counts[1]++;
 
-        if (taken & patternBit(pattern)) counts[0]++;
+        if (taken & bit) counts[0]++;
       }
-    });
+    }
 
     tally.moves++;
     tally.seats.add(seatIndex);
@@ -185,7 +198,45 @@ const tallies = memoLast((derived: Derived): ReadonlyMap<string, Tally> => {
     if (used === JAMMER || stolen === JAMMER) tally.jams++;
 
     if (stolen >= 0) tally.steals++;
+  }
+
+  return out;
+});
+
+const addCounts = (into: Array<[number, number]>, counts: ReadonlyArray<readonly [number, number]>) =>
+  counts.forEach(([k, n], index) => {
+    const total = into[index];
+
+    if (total) {
+      total[0] += k;
+      total[1] += n;
+    }
   });
+
+/** Per config, over the cohorts the filter keeps. */
+const tallies = memoLast((derived: Derived): ReadonlyMap<string, Tally> => {
+  const perCohort = cohortTallies(derived.decisions, derived.seats);
+  const out = new Map<string, Tally>();
+
+  for (const m of derived.byCohort) {
+    const part = perCohort.get(m.id);
+
+    if (part === undefined || part.moves === 0) continue;
+
+    const tally = out.get(m.key) ?? emptyTally();
+
+    out.set(m.key, tally);
+    addCounts(tally.use, part.use);
+    addCounts(tally.pattern, part.pattern);
+    tally.shots += part.shots;
+    tally.atOpp += part.atOpp;
+    tally.moves += part.moves;
+    tally.items += part.items;
+    tally.jams += part.jams;
+    tally.steals += part.steals;
+
+    for (const seat of part.seats) tally.seats.add(seat);
+  }
 
   return out;
 });
