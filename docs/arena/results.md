@@ -104,19 +104,19 @@ Head to head:
 
 Stage B would add medium–max and xhigh–max: 40 matches, about $355–370 (max matches take about an hour each), about 1.5–2.5 days at the Claude line. Measured quota use was about 0.0115 of a Claude 5h window per dollar on one account and 0.0080 on the other.
 
-## tournament-3: Opus 5.5 xhigh vs Astra medium (finished, 40 matches)
-- **Seeds:** fixed in advance. First 3000–3009, which are tournament-1's Opus medium vs Astra seeds, for a matched comparison. Then 3020–3029. Capped at 40 matches.
+## tournament-3: Opus 5.5 xhigh vs Astra medium (finished, 41 matches)
+- **Seeds:** fixed in advance. First 3000–3009, which are tournament-1's Opus medium vs Astra seeds, for a matched comparison. Then 3020–3029. Capped at 40 matches; Aditya later ruled that the one finished match past the cap also counts.
 - **Codex accounts:** Astra was pinned to one Codex account per match (ADR-0042) from match 38 on. Opus was never pinned.
 - **The last 2 matches** ran with no quota line. Seed 3028's first match started on code `9e7d7ff22891` without a pin, and CPA may have moved it to the other Codex account while account 1 was full. Seed 3029's second match stayed pinned and waited for account 1 to reset.
 
-**Results (20 complete seed pairs):**
-- **Overall:** Opus xhigh 22, Astra 18. Opus share 55.0%, 95% CI 40.0–70.0% (seed-pair bootstrap).
-- **Per seed:** Opus won both games on 6 seeds, Astra on 4, and 10 split. Seat 2 won 16 of 40.
+**Results (20 complete seed pairs plus seed 3030's first match):**
+- **Overall:** Opus xhigh 22, Astra 19. Opus share 53.7%, 95% CI 38.1–69.0% (seed bootstrap over 21 seeds). On the 20 complete pairs alone it was 22–18, 55.0%, CI 40.0–70.0%.
+- **Per seed:** Opus won both games on 6 seeds, Astra on 4, and 10 split. Astra won seed 3030's only game. Seat 2 won 17 of 41.
 - **Matched against Opus medium** on seeds 3000–3009: 10/20 vs 9/20, a difference of +5%, 95% CI −15% to +25%.
 - **Verdict:** inconclusive. The data rules out neither model being somewhat stronger, and xhigh shows no measurable gain over medium against Astra.
-- **Cost:** $40.62 at list prices: Opus $29.42, Astra $11.20. Astra reasons very little at medium: about 3k reasoning tokens over 1,077 calls.
+- **Cost:** $41.11 at list prices: Opus $29.75, Astra $11.36. Astra reasons very little at medium: about 3k reasoning tokens over 1,077 calls.
 
-**Outside the cap.** Seed 3030's first match finished (Astra won), and 5 more matches (seeds 3030–3032) started during a brief uncapped run. None of them is scored, and they cost $1.87 together. The partial ones stay in the tournament directory, unfinished.
+**Outside the cap.** A brief uncapped run started 6 matches (seeds 3030–3032). Seed 3030's first match finished and is scored above. The other 5 never finished, are not scored, and cost $1.38 together. They stay in the tournament directory, unfinished.
 
 **Lessons:**
 - **Pass every needed `--code` when using a cap.** While an old-code match waits for its checkout, the runner leaves it off its pending list, so `--limit` picks a match past the cap.
