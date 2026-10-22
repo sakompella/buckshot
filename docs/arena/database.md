@@ -119,13 +119,13 @@ Rebuilt on 2026-10-21 into a new file, then swapped in. The import took about 10
 
 | Tournament | Scheduled | Completed (scored) | Partial, skipped (unscored) | Skipped, never started | Unstarted | Replay validated | List-price cost, including partial work |
 |---|---|---|---|---|---|---|---|
-| tournament-1 (`cpa-tiers`) | 2,200 | 2,080 | 38 | 82 | 0 | 2,118 | $991.0948 |
+| tournament-1 (`cpa-tiers`) | 2,200 | 2,080 | 38 | 82 | 0 | 2,118 | $934.4558 |
 | tournament-2 (`opus-effort`) | 80 | 80 | 0 | 0 | 0 | 80 | $58.8854 |
 | tournament-3 (`astra-vs-opus-xhigh`) | 60 | 41 | 5 | 0 | 14 | 46 | $42.4880 |
-| Total | 2,340 | 2,201 | 43 | 82 | 14 | 2,244 | $1,092.47 |
+| Total | 2,340 | 2,201 | 43 | 82 | 14 | 2,244 | $1,035.83 |
 
 - Every started match (2,244) replayed and validated against the generated rules. The 96 matches with no logs have replay status `unavailable`. There are 216,291 decisions. Every call has a list price.
-- Tournament 2 and tournament 1's first 2,017 scored matches match the tournament reports and the first build exactly: $971.5335 and $58.8854. The leftovers added 63 scored matches, $19.56.
+- Tournament 2 and tournament 1's first 2,017 scored matches match the tournament reports and the first build exactly: $971.5335 and $58.8854. The leftovers added 63 scored matches, $19.56. On 2026-10-22 Sonnet 5.5's cache-read price was corrected from $0.20 to $0.10 per million tokens (Anthropic's pricing page), and the database was rebuilt clean: only Sonnet's cost changed, $579.48 to $522.84, so tournament 1 is now $934.46 and the total $1,035.83 (earlier figures in this section are before the correction).
 - Tournament 3 has 41 scored matches, Opus 22 and Astra 19, matching `results.md`. The 41st is seed 3030's first match, which finished during an uncapped run between 9:20 and 9:23 PM Pacific time; Aditya ruled that it counts. The other 5 matches past the 40-match cap never finished. They carry a skip disposition, are stored as `partial` and are unscored. The other 14 never started. The $42.4880 list-price cost includes all 46 started matches. The first build had 39 scored, 3 partial and $39.94.
 - The 2026-10-21 rebuild and its checks ran on the Mac, which holds the tournament directories: `PRAGMA integrity_check` returned `ok`, `issues` is empty and all 2,184 started matches replayed. Rebuilding on another machine needs its own copy of the tournament directories.
 - The `--skips` file now holds 125 skips: tournament 1's 120 and tournament 3's 5. All 125 carry `disposition = 'skipped'` and the reason from their committed list. Tournament 1's 38 started matches and tournament 3's 5 are `partial`, and tournament 1's 82 never-started matches are `skipped`. No other match has a disposition. Tournaments 1 and 2 are `completed`. Tournament 3 stays `partial`.

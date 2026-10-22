@@ -12,7 +12,7 @@ Ratings are Bradley-Terry on an Elo scale, per configuration (model + endpoint +
 - **Where the data is:** all tournament data lives in the `agents/arena-design` worktree (`~/.t3/worktrees/buckshot/t3-1427bb8e/_work/arena/`). That worktree also serves as the `--code 9e7d7ff22891` checkout. Keep it.
 
 ## tournament-1: cross-model and effort sweeps
-2,080 matches, $991.09. Code versions `51b8366684f0` and `9e7d7ff22891`; the only request difference is the GPT reasoning summary (`auto` vs `detailed`). The 60 leftover terra matches below ran under `3c9b98f8b3f4`. The tables below cover the first 2,017 matches and are not refitted.
+2,080 matches, $934.46. Code versions `51b8366684f0` and `9e7d7ff22891`; the only request difference is the GPT reasoning summary (`auto` vs `detailed`). The 60 leftover terra matches below ran under `3c9b98f8b3f4`. The tables below cover the first 2,017 matches and are not refitted.
 
 ### All models at medium effort
 | Entrant | Matches | Win share | 95% CI | Rating |
