@@ -20,7 +20,7 @@
     "@types/bun": "1.4.2",
     "oxlint": "1.87.0",
     "playwright-core": "1.64.0",
-    "typescript": "7.0.2",
+    "tsrs": "0.18.0-ts7.1.0-dev.20260929",
     "vite": "8.3.4",
     "webmcp-types": "0.1.10"
   },
@@ -29,7 +29,7 @@
     "dev": "bun run rules && vite --port 5173 --strictPort",
     "build": "bun run rules && vite build",
     "lint": "oxlint --deny-warnings",
-    "typecheck": "tsc --noEmit -p .",
+    "typecheck": "tsrs --noEmit -p .",
     "test": "bun run rules && bun test ./test",
     "mcp": "bun run rules 1>&2 && bun scripts/mcp.ts",
     "viewer": "bun run rules && bun scripts/viewer.ts"

@@ -224,13 +224,33 @@ def deck.load(decks: List<&2, Deck>, +table: D.Table, +rule: D.LoadRule, +shown:
       +batches : List<&2, S.Batch> = deck.batches(G.batches(D.table.deck(table), 0n), mask)
       deck.load(rest, table, rule, shown, deck.matches(batches, rule, shown, mask, F32.div(weight, F32.from_nat(List.length(&2, S.Batch, batches))), acc))
 
+def deck.mass(decks: List<&2, Deck>) -> F32:
+  match decks:
+    case Nil{}:
+      0.0
+    case Deck{_, weight} <> rest:
+      F32.add(weight, deck.mass(rest))
+
+def deck.scaled(decks: List<&2, Deck>, +total: F32) -> List<&2, Deck>:
+  match decks:
+    case Nil{}:
+      Nil{}
+    case Deck{mask, weight} <> rest:
+      Deck{mask, F32.div(weight, total)} <> deck.scaled(rest, total)
+
+# Renormalizing after each load keeps the ratios between decks, which is all
+# the posterior needs. Without it the product of draw probabilities over a
+# long match underflows F32 to zero.
+def deck.normalize(+decks: List<&2, Deck>) -> List<&2, Deck>:
+  deck.scaled(decks, deck.mass(decks))
+
 def deck.log(log: List<&2, D.Heard>, +world: S.World, decks: List<&2, Deck>) -> List<&2, Deck>:
   match log:
     case Nil{}:
       decks
     case D.Witnessed{D.Loaded{+load}} <> rest:
       +next : S.World = world.event(D.Loaded{load}, world)
-      deck.log(rest, next, deck.load(decks, S.world.table(world), G.world.load_rule(next), load, Nil{}))
+      deck.log(rest, next, deck.normalize(deck.load(decks, S.world.table(world), G.world.load_rule(next), load, Nil{})))
     case D.Witnessed{event} <> rest:
       deck.log(rest, world.event(event, world), decks)
     case D.Learned{_} <> rest:
