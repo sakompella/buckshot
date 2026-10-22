@@ -116,7 +116,7 @@ const CARD_GAP = 14;
 const stripWidth = (width: number): number => {
   const columns = Math.max(1, Math.floor((width + CARD_GAP) / (CARD_MIN + CARD_GAP)));
 
-  return Math.floor((width - CARD_GAP * (columns - 1)) / columns - 28 - 2);
+  return Math.max(0, Math.floor((width - CARD_GAP * (columns - 1)) / columns - 28 - 2));
 };
 
 const cardView = (h: H, pick: Pick, data: Model["matches"][string] | undefined, width: number): Html => {

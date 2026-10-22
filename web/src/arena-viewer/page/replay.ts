@@ -46,11 +46,11 @@ export const moveStripView = (h: H, detail: MatchDetail, width: number, height =
           ...steps.map((step, index) => {
             const shot = shotOf(step);
             const color = seatColor(detail, step.player);
-    
+
             if (shot === null) return h.circle([h.Cx(`${x(index)}`), h.Cy(`${height - 4}`), h.R("1.3"), h.Fill(color), h.Opacity("0.6")], []);
-    
+
             const tall = shot === "live" ? height - 4 : (height - 4) / 2.6;
-    
+
             return h.rect([h.X(`${x(index) - 1}`), h.Y(`${height - 2 - tall}`), h.Width("2"), h.Height(`${tall}`), h.Fill(color)], []);
           }),
         ],
@@ -86,7 +86,7 @@ const healthView = (h: H, detail: MatchDetail, steps: ReadonlyArray<Step>, at: n
   const x = linScale(0, Math.max(1, steps.length - 1), left, width - right, []);
   const y = linScale(0, most, height - bottom, top, Array.from({ length: most + 1 }, (_tick, index) => index));
   const isRoundStart = (index: number) => index > 0 && steps[index]?.round !== steps[index - 1]?.round;
-  
+
   const lines = detail.seats.map(({ player }, index) => {
     const ys = steps.map((step) => y.at(step.players.find((seen) => seen.player === player)?.health ?? 0) + (index > 0 ? 1.5 : -1.5));
     const color = seatColor(detail, player);
