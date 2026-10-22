@@ -10,7 +10,6 @@ Ratings are Bradley-Terry on an Elo scale, per configuration (model + endpoint +
 - **tournament-2** (`_work/arena/tournament-2`, config `web/tournaments/opus-effort.json`): stage A is finished. Stage B, the max pairings, hasn't started and needs the user's go-ahead.
 - **tournament-3** (`_work/arena/tournament-3`, config `web/tournaments/astra-opus-xhigh.json`): finished, 40 of 40 capped matches.
 - **Where the data is:** all tournament data lives in the `agents/arena-design` worktree (`~/.t3/worktrees/buckshot/t3-1427bb8e/_work/arena/`). That worktree also serves as the `--code 9e7d7ff22891` checkout. Keep it.
-- **In progress:** work on other branches is listed in [../work-in-progress.md](../work-in-progress.md).
 
 ## tournament-1: cross-model and effort sweeps
 2,017 matches, $971.53. Code versions `51b8366684f0` and `9e7d7ff22891`; the only request difference is the GPT reasoning summary (`auto` vs `detailed`).

@@ -2,7 +2,7 @@
 
 Research on Buckshot Roulette: a multiplayer rules library in Bend, a browser table, agent tools, and an arena where models play each other.
 
-- **Unfinished work** and what each branch needs next: `docs/work-in-progress.md`. Read it before starting anything.
+- **Unfinished work** and what each branch needs next: `_work/work-in-progress.md` (local, gitignored). Read it first when it exists.
 - **Rules live only in Bend** (`sim/bend-mp/`). TypeScript may call Bend exports but never re-implements rules.
 - **Never commit** decompiled game code, original game assets or text, raw tournament data, or anything under `_work/` or `.audit/`. Account ids and emails stay out of committed files.
 - **Toolchain:** `nix develop` gives the pinned Bend 2.0.36, bun and Python.
