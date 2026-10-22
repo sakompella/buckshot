@@ -5,6 +5,7 @@ import { ITEMS, type Pattern, patternBit } from "../api.ts";
 import { anchorId, switchView, tipView, toggleView } from "./charts.ts";
 import { baseName, baseOrder, fmtPct, fmtRating, fmtTime, fmtUsd, isClaude, keyOf, type MatchRow, unique } from "./data.ts";
 import { type Derived, memoLast } from "./derived.ts";
+import { itemIconOf } from "./items.ts";
 import { type HeatMode, Message, type Model } from "./model.ts";
 
 type H = HtmlBuilder<Message>;
@@ -25,6 +26,8 @@ interface HeatCol {
   readonly id: string;
   readonly label: string;
   readonly title: string;
+  /** The item a column counts, drawn above its label. */
+  readonly item?: string;
 }
 
 interface HeatCell {
@@ -236,7 +239,7 @@ const favoriteOf = (tally: Tally): number => {
 const columnsOf = (mode: HeatMode, matches: ReadonlyArray<MatchRow>): ReadonlyArray<HeatCol> => {
   if (mode === "opp") return opponentColumns(matches);
 
-  if (mode === "items") return ITEM_SHORT.map((label, index) => ({ id: String(index), label, title: ITEMS[index] ?? "" }));
+  if (mode === "items") return ITEMS.map((item, index) => ({ id: String(index), label: ITEM_SHORT[index] ?? item, title: item, item }));
 
   return mode === "choices" ? CHOICES.map(([pattern, label, title]) => ({ id: String(patternBit(pattern)), label, title })) : STYLE.map(({ id, label, title }) => ({ id, label, title }));
 };
@@ -312,8 +315,11 @@ const heatmapView = (h: H, derived: Derived, heat: Model["heat"]): Html => {
   const sorted = sortedRows(shown, heat.sort, (row) => cellOfRow(row, heat.sort)?.value ?? -1);
   const hiddenRows = rows.length - new Set(rows.map((row) => row.model)).size;
 
-  const header = (id: string, label: string, title: string, extra = "") =>
-    h.th([h.Title(title), h.Class(`${extra} sortable ${heat.sort === id && id !== "rating" ? "sorted" : ""}`), h.OnClick(Message.ClickedHeatColumn({ column: id }))], [label]);
+  const header = (id: string, label: string, title: string, extra = "", item?: string) =>
+    h.th(
+      [h.Title(title), h.Class(`${extra} sortable ${heat.sort === id && id !== "rating" ? "sorted" : ""}`), h.OnClick(Message.ClickedHeatColumn({ column: id }))],
+      item === undefined ? [label] : [itemIconOf(h, item), label],
+    );
 
   const tip = Option.flatMap(heat.maybeTip, ({ row, col }) => {
     const shownRow = shown.find((candidate) => candidate.key === row);
@@ -345,7 +351,7 @@ const heatmapView = (h: H, derived: Derived, heat: Model["heat"]): Html => {
                     [],
                     [
                       header("model", "Model", "", "left"),
-                      ...columns.map((col) => header(col.id, col.label, col.title)),
+                      ...columns.map((col) => header(col.id, col.label, col.title, "", col.item)),
                       header("rating", "Rating (approx.)", "cross-model Bradley-Terry; effort rows add their offset from medium within their own sweep"),
                       header("cost", "$/match", "avg list-price cost per player per scored match"),
                     ],
