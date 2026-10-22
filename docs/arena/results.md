@@ -125,6 +125,14 @@ Stage B would add medium–max and xhigh–max: 40 matches, about $355–370 (ma
 ## Beliefs and items
 What each model knew about the chamber when it shot, whether it acted on it, what became of its items, and how consistently it chose in repeated positions: [analysis/beliefs-and-items.md](analysis/beliefs-and-items.md).
 
+## Other analyses
+- **Matchups:** ratings within each cohort, no matchup effects, seat and round-1 starter effects: [analysis/matchups.md](analysis/matchups.md).
+- **Play patterns:** reviewed habits per model, from the traces: [analysis/patterns.md](analysis/patterns.md).
+- **Ideas not yet built:** [analysis-ideas.md](analysis-ideas.md).
+
+## Known confound: an extra system prompt on Claude calls
+The Claude subscription account behind CPA carries organization-level instructions about a LibKey scholarly-article connector, and they reach every Claude request sent through CPA. The arena's own prompts never contain them. 38 Claude calls in 38 matches mention them (Sonnet max 25, Sonnet xhigh 2, Haiku 5.5 max 11), always to say they don't apply; other calls likely carried them silently. GPT calls never saw them. The effect on play is probably small, but Claude and GPT did not get identical prompts. To remove it, turn off the account's organization instructions or use an account without them before the next tournament.
+
 ## Reasoning findings
 - **GPT reasoning summaries are short upstream.** Nothing is lost in CPA, pi-ai or the arena.
   - A census of 50,904 saved calls and 36 raw streaming probes showed every summary delta equals the final item; there's no raw reasoning text.
