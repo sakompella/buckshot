@@ -247,6 +247,17 @@ polled and followed. Runs from before format 1 are listed as unreadable.
 The look borrows from the studio viewer in
 [claude-paint](https://github.com/aliceisjustplaying/claude-paint) (MIT).
 
+## Arena analysis viewer
+
+`bun scripts/arena-viewer.ts <db> [host] [port]` serves charts over the arena
+analysis database (`scripts/arena-import.ts` builds it; see
+`docs/arena/database.md`) at http://127.0.0.1:8790/ by default, with no auth.
+The Overview tab has the cost vs rating scatter, the breakdown heatmaps, a few
+interesting matches and the leaderboard by cohort. It is a Foldkit app; the
+server loads every seat at start and works out the per-move analysis once.
+
+    bun scripts/arena-viewer-check.ts <url> [outdir]   # headless Chrome at desktop, phone and tablet widths: hovers, taps and screenshots
+
 ## Layout
 
 - `src/bend.ts`: the only file that writes Bend tags. It decodes every Bend
@@ -293,3 +304,5 @@ The look borrows from the studio viewer in
 - `src/viewer/page/` is the viewer's page, plain TypeScript and DOM.
 - `scripts/viewer.ts` starts the viewer, and `scripts/viewer-check.ts` screenshots it in headless Chrome.
 - `test/faux-run.ts` plays a free faux arena match into a run directory, for the viewer's tests and its screenshot check.
+- `src/arena-viewer/server.ts` serves the arena analysis viewer's page and JSON API; `analysis.ts` replays each seat's visible events to tag its moves (known shells, item use, choice patterns); `api.ts` holds the schemas both sides use.
+- `src/arena-viewer/page/` is that viewer's Foldkit page: `model.ts` and `main.ts` the state and updates, one module per chart, hand-drawn SVG.
