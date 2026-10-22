@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 
 import { roundStory, ShellTracker } from "../src/arena-viewer/analysis.ts";
-import { bradleyTerry, type Game, rng } from "../src/arena-viewer/page/data.ts";
+import { type BlockTally, blockRate, bradleyTerry, type Game, quantile, rng } from "../src/arena-viewer/page/data.ts";
 
 const randomGames = (seed: number): ReadonlyArray<Game> => {
   const random = rng(seed);
@@ -35,6 +35,44 @@ test("Bradley-Terry ranks a player that wins more of the same games higher", () 
 
   expect(ratings.get("x") ?? 0).toBeGreaterThan(ratings.get("y") ?? 0);
   expect(bradleyTerry([...games, { a: "x", b: "y", sa: 1 }]).get("x") ?? 0).toBeGreaterThan(ratings.get("x") ?? 0);
+});
+
+// The bootstrap as written out plainly: every resample draws from a fresh rng(7).
+const plainBlockRate = (tally: BlockTally, reps: number) => {
+  const blocks = [...tally.values()];
+  const random = rng(7);
+  const rates: Array<number> = [];
+
+  for (let rep = 0; rep < reps; rep++) {
+    let hits = 0;
+    let trials = 0;
+
+    for (let draw = 0; draw < blocks.length; draw++) {
+      const [blockHits = 0, blockTrials = 0] = blocks[Math.floor(random() * blocks.length)] ?? [];
+
+      hits += blockHits;
+      trials += blockTrials;
+    }
+
+    if (trials > 0) rates.push(hits / trials);
+  }
+
+  rates.sort((left, right) => left - right);
+
+  return { lo: quantile(rates, 0.025), hi: quantile(rates, 0.975) };
+};
+
+test("the block bootstrap's kept draws give the same interval as drawing afresh, whatever sizes came before", () => {
+  const random = rng(11);
+
+  for (let round = 0; round < 60; round++) {
+    const size = 1 + Math.floor(random() * (round % 2 === 0 ? 40 : 900));
+    const reps = [200, 300, 400, 1000][round % 4] ?? 200;
+    const tally: BlockTally = new Map(Array.from({ length: size }, (_block, index) => [String(index), [Math.floor(random() * 3) / 2, 1 + Math.floor(random() * 3)]]));
+    const { lo, hi } = blockRate(tally, reps);
+
+    expect({ lo, hi }).toEqual(plainBlockRate(tally, reps));
+  }
 });
 
 test("the shell tracker knows the chamber from a glass, a phone and the count", () => {
