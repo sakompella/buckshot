@@ -264,6 +264,13 @@ out the per-move analysis once.
 
     bun scripts/arena-viewer-check.ts <url> [outdir]   # headless Chrome at desktop, phone and tablet widths: hovers, taps and screenshots
 
+The shared copy runs on hp-server at http://100.108.62.24:8790/, from the main
+checkout's `web/`. Its PID is in `_work/arena/viewer.pid` and its log in
+`_work/arena/viewer.log`. To restart it after a merge, from the repository root:
+
+    kill "$(cat _work/arena/viewer.pid)"
+    cd web && setsid -f sh -c 'echo $$ > ../_work/arena/viewer.pid; exec bun scripts/arena-viewer.ts ../_work/arena/analysis/buckshot.sqlite 100.108.62.24 8790 > ../_work/arena/viewer.log 2>&1' < /dev/null
+
 ## Layout
 
 - `src/bend.ts`: the only file that writes Bend tags. It decodes every Bend
