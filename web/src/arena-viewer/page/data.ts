@@ -26,20 +26,19 @@ interface Base {
   readonly tone: readonly [number, number, number];
 }
 
-// Every Claude model is orange and every GPT model blue; the hues stay inside each family's band (sRGB HSL hue 24-30
-// for Claude, 199-206 for GPT). Within a family the strongest model by the merged cross-model Bradley-Terry order
-// (docs/arena/analysis/matchups.md) is brightest and most saturated, one even step apart:
-// GPT Astra +165, Sol +67, Terra -44, Luna -244; Claude Opus +96, Haiku 5.5 +57, Sonnet +37, Haiku 4.5 -134.
-// Every effort of a model has the model's colour.
+// Every Claude model is orange and every GPT model blue (sRGB HSL hue 18-36 for Claude, 196-218 for GPT). Within a
+// family the strongest model by the merged cross-model Bradley-Terry order (docs/arena/analysis/matchups.md) is
+// brightest and most saturated, and each step down is clearly darker (contrast on black about 14, 10, 6 and 4 to 1):
+// GPT Astra, Sol, Terra, Luna; Claude Opus, Haiku 5.5, Sonnet, Haiku 4.5. Every effort of a model has its colour.
 const BASES: ReadonlyArray<Base> = [
-  { id: "claude-opus-5-5", name: "Opus 5.5", short: "Opus", tone: [0.79, 0.15, 62] },
-  { id: "claude-haiku-5-5", name: "Haiku 5.5", short: "Haiku 5.5", tone: [0.715, 0.14, 58] },
-  { id: "claude-sonnet-5-5", name: "Sonnet 5.5", short: "Sonnet", tone: [0.64, 0.12, 56] },
-  { id: "claude-haiku-4-5", name: "Haiku 4.5", short: "Haiku 4.5", tone: [0.565, 0.095, 54] },
-  { id: "gpt-6-astra", name: "GPT-6 Astra", short: "Astra", tone: [0.82, 0.11, 230] },
-  { id: "gpt-6.1-sol", name: "GPT-6.1 Sol", short: "Sol", tone: [0.745, 0.11, 236] },
-  { id: "gpt-5.6-terra", name: "GPT-5.6 Terra", short: "Terra", tone: [0.67, 0.1, 240] },
-  { id: "gpt-6-luna", name: "GPT-6 Luna", short: "Luna", tone: [0.595, 0.08, 242] },
+  { id: "claude-opus-5-5", name: "Opus 5.5", short: "Opus", tone: [0.868, 0.115, 75.8] },
+  { id: "claude-haiku-5-5", name: "Haiku 5.5", short: "Haiku 5.5", tone: [0.763, 0.151, 56.7] },
+  { id: "claude-sonnet-5-5", name: "Sonnet 5.5", short: "Sonnet", tone: [0.647, 0.17, 42.4] },
+  { id: "claude-haiku-4-5", name: "Haiku 4.5", short: "Haiku 4.5", tone: [0.536, 0.126, 43.2] },
+  { id: "gpt-6-astra", name: "GPT-6 Astra", short: "Astra", tone: [0.89, 0.073, 224.2] },
+  { id: "gpt-6.1-sol", name: "GPT-6.1 Sol", short: "Sol", tone: [0.741, 0.131, 240.2] },
+  { id: "gpt-5.6-terra", name: "GPT-5.6 Terra", short: "Terra", tone: [0.594, 0.179, 257.7] },
+  { id: "gpt-6-luna", name: "GPT-6 Luna", short: "Luna", tone: [0.523, 0.091, 259.8] },
 ];
 
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));

@@ -146,7 +146,7 @@ test("Claude models are orange and GPT models blue, each family brightest and mo
     }
 
     for (const [weaker, stronger] of tones.slice(1).map((tone, index) => [tone, tones[index]] as const)) {
-      expect(stronger?.lightness ?? 0).toBeGreaterThan(weaker.lightness + 0.05);
+      expect(stronger?.lightness ?? 0).toBeGreaterThan(weaker.lightness + 0.08);
       expect(stronger?.saturation ?? 0).toBeGreaterThan(weaker.saturation);
     }
   }
