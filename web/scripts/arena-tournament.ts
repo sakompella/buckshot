@@ -23,7 +23,8 @@ import { cooldownOf, costOf, faultsOf, finishedNames, openTournament, runPending
 // model, plays at most N matches of that model at once; --last <model> starts
 // its matches only when no other match can; --forget-cooldown <model> ignores
 // the model's recorded cooldowns at the start, after its provider reset early;
-// --skip <entrant> leaves that entrant's matches unplayed this run.
+// --skip <entrant> leaves that entrant's matches unplayed this run; --prefer-account <CPA auth id>, in order of
+// preference, pins new matches to those accounts first when accounts are equally loaded.
 // A match resumes under the code version it started under (its manifest's
 // code_sha), so a tournament can span versions: --code <code_sha>=<web dir>,
 // once per older version, names a checkout of it to resume its matches from,
@@ -35,7 +36,7 @@ import { cooldownOf, costOf, faultsOf, finishedNames, openTournament, runPending
 // it starts, every 30 minutes and when it ends. --dry-run prints the schedule
 // of the last config.
 // Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel N] [--cap <model>=N]... [--last <model>]...
-//          [--forget-cooldown <model>]... [--skip <entrant>]... [--code <code_sha>=<web dir>]... [--limit N] [--dry-run]
+//          [--forget-cooldown <model>]... [--skip <entrant>]... [--prefer-account <id>]... [--code <code_sha>=<web dir>]... [--limit N] [--dry-run]
 //        bun scripts/arena-stats.ts <tournament dir> [--json]
 
 const WEB = join(import.meta.dir, "..");
@@ -48,7 +49,7 @@ const flag = (name: string): string | undefined => {
   return at === -1 ? undefined : args[at + 1];
 };
 
-const VALUED = new Set(["--dir", "--parallel", "--limit", "--cap", "--last", "--forget-cooldown", "--skip", "--code"]);
+const VALUED = new Set(["--dir", "--parallel", "--limit", "--cap", "--last", "--forget-cooldown", "--skip", "--prefer-account", "--code"]);
 
 const configPaths = args.filter((arg, index) => !arg.startsWith("--") && !VALUED.has(args[index - 1] ?? ""));
 
@@ -67,7 +68,7 @@ const exit = (message: string): never => {
 
 const unwrap = <A>(result: Result.Result<A, TournamentError>): A => Result.match(result, { onFailure: (error) => exit(error.message), onSuccess: (value) => value });
 
-if (configPaths.length === 0) exit("Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel N] [--cap <model>=N]... [--last <model>]... [--forget-cooldown <model>]... [--skip <entrant>]... [--code <code_sha>=<web dir>]... [--limit N] [--dry-run]");
+if (configPaths.length === 0) exit("Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel N] [--cap <model>=N]... [--last <model>]... [--forget-cooldown <model>]... [--skip <entrant>]... [--prefer-account <id>]... [--code <code_sha>=<web dir>]... [--limit N] [--dry-run]");
 
 if (!Number.isInteger(parallel) || parallel < 1) exit("--parallel must be a whole number from 1");
 
@@ -86,6 +87,8 @@ const last = new Set(repeated("last"));
 const forget = new Set(repeated("forget-cooldown"));
 
 const skipped = new Set(repeated("skip"));
+
+const prefer = repeated("prefer-account");
 
 const CODE = codeSha();
 
@@ -237,7 +240,7 @@ noteProgress("started");
 
 const every30Minutes = setInterval(() => noteProgress("check"), 30 * 60 * 1000);
 
-const settled = await runPending(dir, file.config, pending, parallel, runOne, settle, stop.signal, { caps, last, forget });
+const settled = await runPending(dir, file.config, pending, parallel, runOne, settle, stop.signal, { caps, last, forget, prefer });
 
 clearInterval(every30Minutes);
 

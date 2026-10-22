@@ -26,6 +26,7 @@ The arena plays language models against each other at the Buckshot table through
 - **Flags:**
   - `--limit N`: plays at most N matches, the first unfinished in schedule order. The runner exits 1 while matches remain.
   - `--cap <model>=N`, `--last <model>`, `--skip <entrant>`, `--forget-cooldown <model>`.
+  - `--prefer-account <id>`, repeated in order of preference: a new match pins to these accounts first when accounts are equally loaded. With `--parallel 1 --limit 1`, rerun with a fresh order before each match, such as the account whose window resets first.
   - `--code <code_sha>=<web dir>`: see code versions below.
 - **Where the data goes:** keep tournament directories under `_work/arena/`, which is gitignored. They hold raw harness data: journals, per-call logs with reasoning text, and costs. None of it is committed.
 
