@@ -4,7 +4,7 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { patternBit } from "../api.ts";
 import { colorOf, fmtUsd, keyOf, labelOf, type MatchRow, type SeatFull, sumOf, winnerOf } from "./data.ts";
-import { type Derived, memoLast } from "./derived.ts";
+import { type Derived, memoLast, ratingsOf } from "./derived.ts";
 import { Message, type Model } from "./model.ts";
 import { moveStripView } from "./replay.ts";
 
@@ -48,7 +48,9 @@ const cashDeficit = (match: MatchRow, winner: SeatFull): readonly [number, numbe
 const GLASS_BLANK_OPP = patternBit("glassBlankOpp");
 
 export const picksOf = memoLast((derived: Derived): ReadonlyArray<Pick> => {
-  const { matches, ratings, decisions, seats, keep } = derived;
+  const { matches, decisions, seats, keep } = derived;
+  // The picks are about winning, so the Wins / Cash choice leaves them alone.
+  const ratings = ratingsOf(seats)("wins");
   const done = matches.filter((match) => match.status === "completed" && match.seats.length === 2);
 
   const won = done.flatMap((match) => {
