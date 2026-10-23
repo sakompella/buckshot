@@ -26,7 +26,12 @@ export const Ranking = Schema.Literals(["elo", "rank"]);
 
 export type Ranking = typeof Ranking.Type;
 
-export const SeatFull = Schema.Struct({ ...Seat.fields, cohort: Schema.String });
+/** What ratings count: each match's win share, or each player's pot share (its cash over the match's cash). */
+export const Basis = Schema.Literals(["wins", "cash"]);
+
+export type Basis = typeof Basis.Type;
+
+export const SeatFull = Schema.Struct({ ...Seat.fields, cohort: Schema.String, potShare: Schema.NullOr(Schema.Number) });
 
 /** The database as the page holds it: every seat with its cohort, and the agent moves' columns. */
 export const Loaded = Schema.Struct({ seats: Schema.Array(SeatFull), decisions: Decisions });
@@ -97,6 +102,7 @@ export const Model = Schema.Struct({
   data: AsyncData.Schema(Loaded, Schema.String).schema,
   filter: Filter,
   ranking: Ranking,
+  basis: Basis,
   scatter: Scatter,
   heat: Heat,
   leaderboard: Leaderboard,
@@ -122,6 +128,7 @@ export const Message = defineMessageUnion({
   ToggledModel: { name: Schema.String },
   ToggledAllConfigs: {},
   SelectedRanking: { ranking: Ranking },
+  SelectedBasis: { basis: Basis },
   SelectedScatterShow: { show: ScatterShow },
   SelectedScatterAxis: { axis: ScatterAxis },
   HoveredPoint: { key: Schema.String },

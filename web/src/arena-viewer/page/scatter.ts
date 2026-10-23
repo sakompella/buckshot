@@ -1,11 +1,11 @@
 import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { anchorId, logScale, linScale, rankingView, switchView, tipView, toggleView } from "./charts.ts";
-import { baseName, DEFAULT_EFFORT, fmtCount, groupBy, fmtPct, fmtRating, fmtUsd, isClaude, type ModelStats } from "./data.ts";
+import { anchorId, logScale, linScale, ratingToggles, switchView, tipView, toggleView } from "./charts.ts";
+import { baseName, DEFAULT_EFFORT, eloName, fmtCount, groupBy, fmtPct, fmtRating, fmtUsd, isClaude, type ModelStats } from "./data.ts";
 import { leader, measureText, placeLabels, uncrowded } from "./labels.ts";
 import { memoLast } from "./derived.ts";
-import { Message, type Model, type Ranking, type ScatterAxis } from "./model.ts";
+import { type Basis, Message, type Model, type Ranking, type ScatterAxis } from "./model.ts";
 import type { Rating } from "./ratings.ts";
 
 type H = HtmlBuilder<Message>;
@@ -274,12 +274,13 @@ export const scatterView = (
   ratings: ReadonlyMap<string, Rating>,
   ranks: ReadonlyMap<string, number>,
   ranking: Ranking,
+  basis: Basis,
   scatter: Model["scatter"],
   width: number,
 ): Html => {
   const axis = AXES[scatter.axis];
-  const yLabel = ranking === "elo" ? "Elo" : "Rank";
-  const title = `${axis.label} vs ${ranking === "elo" ? "Elo" : "rank"}`;
+  const yLabel = ranking === "elo" ? eloName(basis) : "Rank";
+  const title = `${axis.label} vs ${ranking === "elo" ? eloName(basis) : "rank"}`;
   const byAxis = pointsOf(stats, ratings, ranks);
   const every = byAxis[scatter.axis];
   const kept = keptKeysOf(byAxis.cost);
@@ -295,7 +296,7 @@ export const scatterView = (
     [h.Class("ctl")],
     [
       toggleView(h, scatter.axis, AXIS_OPTIONS, (option) => Message.SelectedScatterAxis({ axis: option })),
-      rankingView(h, ranking),
+      ...ratingToggles(h, ranking, basis),
       hidden > 0 ? switchView(h, scatter.show === "all", `all efforts (${hidden} hidden)`, Message.SelectedScatterShow({ show: scatter.show === "all" ? "kept" : "all" })) : h.empty,
       switchView(h, scatter.show === "medium", "medium only", Message.SelectedScatterShow({ show: scatter.show === "medium" ? "kept" : "medium" })),
     ],
@@ -415,7 +416,7 @@ export const scatterView = (
           tipView(h, anchorId("pt", point.m.key), [
             h.b([], [point.m.label]),
             h.br([]),
-            `rank ${point.rank} · Elo ${fmtRating(point.rating)} · ${fmtPct(point.m.winShare)} wins of ${point.m.scored.length}`,
+            `rank ${point.rank} · ${eloName(basis)} ${fmtRating(point.rating)} · ${fmtPct(point.m.winShare)} wins, ${fmtPct(point.m.potShare)} of the pot, over ${point.m.scored.length} matches`,
             h.br([]),
             axis.perMatch(point.x),
           ]),

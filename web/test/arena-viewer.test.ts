@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 
 import { roundStory, ShellTracker } from "../src/arena-viewer/analysis.ts";
 import type { Seat } from "../src/arena-viewer/api.ts";
-import { type BlockTally, blockRate, colorOf, quantile, rankOrder, rng, withCohorts } from "../src/arena-viewer/page/data.ts";
+import { type BlockTally, blockRate, colorOf, groupBy, modelStats, quantile, rankOrder, rng, withCohorts } from "../src/arena-viewer/page/data.ts";
 import { bradleyTerry, type Game, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 
 const randomGames = (seed: number): ReadonlyArray<Game> => {
@@ -290,27 +290,92 @@ test("pooled ratings cover every config of a completed match, over every tournam
     const split = (config: string, winShare: number, position: number) => {
       const [model = "", effort = ""] = config.split("-");
 
-      return { ...SEAT, matchId: `m${index}`, tournament: `t${index % 2}`, seedBlock: `block${Math.floor(index / 2)}`, model, effort, position, winShare, cohort: "" };
+      return { ...SEAT, matchId: `m${index}`, tournament: `t${index % 2}`, seedBlock: `block${Math.floor(index / 2)}`, model, effort, position, winShare, cohort: "", potShare: null };
     };
 
     return [split(a, aWins ? 1 : 0, 0), split(b, aWins ? 0 : 1, 1)];
   }).flat();
 
-  const partial = { ...SEAT, matchId: "partial", model: "c", effort: "low", status: "partial" as const, cohort: "" };
-  const ratings = pooledRatings([...seats, partial, { ...partial, model: "d", player: "B", position: 1 }]);
+  const partial = { ...SEAT, matchId: "partial", model: "c", effort: "low", status: "partial" as const, cohort: "", potShare: null };
+  const ratings = pooledRatings([...seats, partial, { ...partial, model: "d", player: "B", position: 1 }], "wins");
 
   expect([...ratings.keys()].toSorted()).toEqual(TRUE_ELO.map(([id]) => id.replace("-", "|")).toSorted());
 
   for (const { lo, hi } of ratings.values()) expect(lo).toBeLessThan(hi);
 });
 
-test("rank order puts higher win share first, breaks ties by Elo, and keeps every config once", () => {
+// Two-player matches over the sweeps' pairings, each with a pot of its own, the winner taking `winnerShare` of it.
+const playedSeats = (seed: number, winnerShare: number) => {
+  const random = rng(seed);
+  const strength = new Map(TRUE_ELO);
+
+  const seats = Array.from({ length: 60 }, (_match, index) => {
+    const [a, b] = PAIRINGS[index % PAIRINGS.length] ?? ["", ""];
+    const pot = [150_000, 225_000, 300_000][Math.floor(random() * 3)] ?? 225_000;
+    const aWins = random() < 1 / (1 + 10 ** (((strength.get(b) ?? 0) - (strength.get(a) ?? 0)) / 400));
+
+    const seatOf = (config: string, isWinner: boolean, position: number): Seat => {
+      const [model = "", effort = ""] = config.split("-");
+
+      return { ...SEAT, matchId: `m${index}`, tournament: `t${index % 2}`, seedBlock: `block${Math.floor(index / 2)}`, model, effort, position, winShare: isWinner ? 1 : 0, cash: isWinner ? winnerShare * pot : (1 - winnerShare) * pot };
+    };
+
+    return [seatOf(a, aWins, 0), seatOf(b, !aWins, 1)];
+  }).flat();
+
+  return withCohorts(seats);
+};
+
+test("when every match is a sweep, cash ratings equal win ratings", () => {
+  for (let seed = 1; seed <= 5; seed++) {
+    const seats = playedSeats(seed, 1);
+    const wins = pooledRatings(seats, "wins");
+    const cash = pooledRatings(seats, "cash");
+
+    expect([...cash.keys()].toSorted()).toEqual([...wins.keys()].toSorted());
+
+    for (const [key, rating] of wins) {
+      expect(cash.get(key)?.rating ?? Number.NaN).toBeCloseTo(rating.rating, 6);
+      expect(cash.get(key)?.lo ?? Number.NaN).toBeCloseTo(rating.lo, 6);
+      expect(cash.get(key)?.hi ?? Number.NaN).toBeCloseTo(rating.hi, 6);
+    }
+  }
+});
+
+test("when losers bank part of the pot, cash ratings keep the order of win ratings but sit closer together", () => {
+  for (let seed = 1; seed <= 5; seed++) {
+    const seats = playedSeats(seed, 2 / 3);
+    const wins = pooledRatings(seats, "wins");
+    const cash = pooledRatings(seats, "cash");
+    const spread = (ratings: ReadonlyMap<string, { readonly rating: number }>) => Math.max(...[...ratings.values()].map(({ rating }) => rating)) - Math.min(...[...ratings.values()].map(({ rating }) => rating));
+    const order = (ratings: ReadonlyMap<string, { readonly rating: number }>) => [...ratings].toSorted(([, left], [, right]) => left.rating - right.rating).map(([key]) => key);
+
+    expect(order(cash)).toEqual(order(wins));
+    expect(spread(cash)).toBeLessThan(spread(wins));
+  }
+});
+
+test("a config's pot share is its cash over the match's cash, averaged over scored matches", () => {
+  const seats = playedSeats(1, 2 / 3);
+
+  for (const match of groupBy(seats, ({ matchId }) => matchId).values()) {
+    expect(match.reduce((total, seat) => total + (seat.potShare ?? 0), 0)).toBeCloseTo(1, 12);
+  }
+
+  for (const config of modelStats(seats)) {
+    const wins = config.scored.filter(({ winShare }) => winShare === 1).length;
+
+    expect(config.potShare).toBeCloseTo((wins * (2 / 3) + (config.scored.length - wins) / 3) / config.scored.length, 12);
+  }
+});
+
+test("rank order puts higher share first, breaks ties by Elo, and keeps every config once", () => {
   const random = rng(5);
 
   for (let round = 0; round < 50; round++) {
     // Win shares on a coarse grid so ties are common.
     const configs = Array.from({ length: 1 + Math.floor(random() * 12) }, (_config, index) => ({ label: `c${index}`, winShare: Math.floor(random() * 5) / 4, elo: Math.round(random() * 400 - 200) }));
-    const ordered = rankOrder(configs, ({ elo }) => elo);
+    const ordered = rankOrder(configs, ({ winShare }) => winShare, ({ elo }) => elo);
 
     expect(ordered.map(({ label }) => label).toSorted()).toEqual(configs.map(({ label }) => label).toSorted());
 

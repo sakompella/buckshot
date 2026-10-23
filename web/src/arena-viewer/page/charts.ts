@@ -2,7 +2,7 @@ import { Effect, Schema } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 import { Mount } from "foldkit";
 
-import { Message, type Ranking } from "./model.ts";
+import { type Basis, Message, type Ranking } from "./model.ts";
 
 type H = HtmlBuilder<Message>;
 
@@ -92,8 +92,16 @@ const RANKINGS: ReadonlyArray<readonly [Ranking, string]> = [
   ["rank", "Rank"],
 ];
 
-/** The page-wide choice between Elo and rank, drawn wherever ratings show. */
-export const rankingView = (h: H, ranking: Ranking): Html => toggleView(h, ranking, RANKINGS, (option) => Message.SelectedRanking({ ranking: option }));
+const BASES: ReadonlyArray<readonly [Basis, string]> = [
+  ["wins", "Wins"],
+  ["cash", "Cash"],
+];
+
+/** The page-wide choices for ratings, drawn wherever they show: what they count (wins or cash), and Elo or rank. */
+export const ratingToggles = (h: H, ranking: Ranking, basis: Basis): ReadonlyArray<Html> => [
+  toggleView(h, basis, BASES, (option) => Message.SelectedBasis({ basis: option })),
+  toggleView(h, ranking, RANKINGS, (option) => Message.SelectedRanking({ ranking: option })),
+];
 
 const CHART_GAP = 28;
 
