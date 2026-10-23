@@ -1,4 +1,5 @@
 import { Database } from "bun:sqlite";
+import crypto from "node:crypto";
 
 import { Option, Schema } from "effect";
 
@@ -187,6 +188,28 @@ const json = (request: Request, { body, gzipped }: ReturnType<typeof encodedBody
     ? new Response(gzipped, { headers: { ...JSON_TYPE, "content-encoding": "gzip", vary: "accept-encoding" } })
     : new Response(body, { headers: { ...JSON_TYPE, vary: "accept-encoding" } });
 
+const digest = (text: string) => new Bun.CryptoHasher("sha256").update(text).digest();
+
+/**
+ * With ARENA_VIEWER_PASSWORD set, the API asks for it through the browser's basic-auth prompt; the username is ignored.
+ * The page shell itself holds no data.
+ */
+const guarded = (handler: (request: Request) => Response) => {
+  const password = process.env["ARENA_VIEWER_PASSWORD"];
+
+  if (password === undefined || password === "") return handler;
+
+  const expected = digest(password);
+
+  return (request: Request) => {
+    const given = Buffer.from((request.headers.get("authorization") ?? "").replace(/^Basic /, ""), "base64").toString().replace(/^[^:]*:/, "");
+
+    return crypto.timingSafeEqual(digest(given), expected)
+      ? handler(request)
+      : new Response("password required", { status: 401, headers: { "www-authenticate": 'Basic realm="Buckshot arena"' } });
+  };
+};
+
 /** Loads and analyses the database once, then serves the page and the API. */
 export const serveArenaViewer = (dbPath: string, hostname: string, port: number) => {
   const db = new Database(dbPath, { readonly: true });
@@ -217,13 +240,13 @@ export const serveArenaViewer = (dbPath: string, hostname: string, port: number)
     development: false,
     routes: {
       "/": page,
-      "/api/seats": (request) => json(request, seatsBody),
-      "/api/decisions": (request) => json(request, decisionsBody),
-      "/api/match": (request) => {
+      "/api/seats": guarded((request) => json(request, seatsBody)),
+      "/api/decisions": guarded((request) => json(request, decisionsBody)),
+      "/api/match": guarded((request) => {
         const detail = matchDetail(db, new URL(request.url).searchParams.get("id") ?? "");
 
         return detail === null ? new Response("not found", { status: 404 }) : new Response(encodeMatch(detail), { headers: JSON_TYPE });
-      },
+      }),
     },
   });
 };
