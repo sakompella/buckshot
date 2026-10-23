@@ -46,7 +46,7 @@ Build with the pinned dev shell, from the repository root:
 
     nix develop -c bend sim/bend-mp/player/main.bend -o /tmp/buckshot-player.mjs
 
-The default export is the Bend export table, as in `../web.bend`. Call `analyse`, `choose` and `regret` from that table. Domain tags are `../domain.*`, simple move tags are `../simple/state.*`, and player types have their module prefix. JavaScript callers only marshal values and call exports. They do not rebuild rules or beliefs. This task does not wire the player into the web or arena.
+The default export is the Bend export table, as in `../web.bend`. Call `analyse`, `choose` and `regret` from that table. Domain tags are `../domain.*`, simple move tags are `../simple/state.*`, and player types have their module prefix. JavaScript callers only marshal values and call exports. They do not rebuild rules or beliefs. The player is not wired into the web table or the arena's play. The analysis scripts call it through `../analysis.bend` (`web/src/analysis/player.ts`), which sits beside `../web.bend` so that its domain tags are `domain.*`, the same as the rules build's: a board or config from that build passes in unchanged.
 
 ## Verification
 

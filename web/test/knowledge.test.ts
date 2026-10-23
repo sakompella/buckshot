@@ -6,33 +6,32 @@ import { join } from "node:path";
 import { Option } from "effect";
 
 import {
-  type BeliefModule,
   emptyLedger,
   itemMoveOf,
   knowledgeOf,
   knownText,
   ledgerMismatch,
   ledgerStep,
-  loadBelief,
   loadLog,
   positionKeys,
   shotOf,
   stolenClue,
   summaryOf,
 } from "../src/analysis/knowledge.ts";
+import { loadPlayer, type Player } from "../src/analysis/player.ts";
 import { type Board, Briefcase, Counter, GameEvent, type Item, type LearnedSecret, type Seat, Secret, Stage } from "../src/domain.ts";
 import { rosterOf } from "../src/players.ts";
 
 // Own-information histories with known answers: each test builds a player's log
 // by hand and checks the shell belief Bend's player module returns for it.
 
-let belief: BeliefModule;
+let belief: Player;
 
 beforeAll(async () => {
   const dir = mkdtempSync(join(tmpdir(), "buckshot-knowledge-test-"));
 
   try {
-    belief = await loadBelief(dir);
+    belief = await loadPlayer(dir);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

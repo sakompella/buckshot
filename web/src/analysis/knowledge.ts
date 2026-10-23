@@ -1,124 +1,29 @@
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
-import { join } from "node:path";
 
 import { Option } from "effect";
 
 import { type Board, type GameEvent as Event, GameEvent, type Item, type LearnedSecret, type Seat, Secret, type Shell } from "../domain.ts";
 import { type Roster } from "../players.ts";
 import { eventText, itemName, secretText } from "../text.ts";
+import { type Orders, type OwnEntry, ownLog, type Player } from "./player.ts";
 
 // One player's own information at a decision, rebuilt from its log: the public
 // events and the secrets that player heard. The shell belief comes from the
 // minimax player's belief module in Bend (sim/bend-mp/player/belief.bend), which
 // enumerates the shell orders the log allows, with multiplicity. Nothing here
 // knows how a shot, a beer or an inverter changes the gun; it only marshals the
-// log into Bend and reads marginals off the orders Bend returns. The hidden gun
-// and other players' secrets never enter.
-
-const PINNED_BEND = "/nix/store/szxlh9bw7pb8jp7gp8biw6j84r0fc2i3-bend-2.0.36/bin/bend";
-
-const PLAYER_SOURCE = new URL("../../../sim/bend-mp/player/main.bend", import.meta.url).pathname;
-
-export interface BendNode {
-  readonly $: string;
-}
-
-interface PlayerExports {
-  readonly "belief.orders.log": (log: BendNode, isPrivate: boolean, current: BendNode) => BendNode;
-}
-
-/** Shell orders a log allows, each a string such as "LBL" from the chamber out. Repeated orders carry their weight. */
-export type Orders = ReadonlyArray<string>;
-
-export interface BeliefModule {
-  readonly orders: (log: ReadonlyArray<OwnEntry>, isPrivate: boolean) => Orders;
-}
-
-const bendList = (items: ReadonlyArray<BendNode>): BendNode => items.reduceRight<BendNode>((tail, head) => ({ $: "Con", head, tail }), { $: "Nil" });
-
-const nodesOf = (list: BendNode): ReadonlyArray<BendNode> => {
-  const nodes: Array<BendNode> = [];
-  let rest = list;
-
-  while (rest.$ === "Con" && "head" in rest && "tail" in rest) {
-    // SAFETY: a Bend cons cell's head and tail are Bend values.
-    nodes.push(rest.head as BendNode);
-    // SAFETY: as above.
-    rest = rest.tail as BendNode;
-  }
-
-  return nodes;
-};
-
-const tag = (name: string, fields: Readonly<Record<string, BendNode | bigint>> = {}): BendNode => ({ $: `../domain.${name}`, ...fields });
-
-const seatNode = (seat: Seat): BendNode => tag(`Seat${seat}`);
-
-const shellNode = (shell: Shell): BendNode => tag(shell);
-
-/**
- * The log entries Bend's shell belief reads (belief.bend, orders.event and orders.secret): loads, shots, ejected shells,
- * inversions, and the magnifier's and phone's clues. Every other entry leaves the orders as they are, so it is left out.
- */
-const nodeOf = (entry: OwnEntry): Option.Option<BendNode> =>
-  entry.kind === "event"
-    ? GameEvent.matchOrElse(
-        entry.event,
-        {
-          Loaded: ({ load }) => Option.some(tag("Loaded", { load: tag("Load", { live: BigInt(load.live), blank: BigInt(load.blank) }) })),
-          Fired: ({ shooter, target, shell, captured, applied, health }) =>
-            Option.some(tag("Fired", { shooter: seatNode(shooter), target: seatNode(target), shell: shellNode(shell), captured: tag(captured), applied: BigInt(applied), health: BigInt(health) })),
-          Ejected: ({ seat, shell }) => Option.some(tag("Ejected", { seat: seatNode(seat), shell: shellNode(shell) })),
-          Inverted: ({ seat }) => Option.some(tag("Inverted", { seat: seatNode(seat) })),
-        },
-        () => Option.none(),
-      ).pipe(Option.map((event) => tag("Witnessed", { event })))
-    : Secret.match(entry.secret, {
-        Glimpse: ({ shell }) => Option.some(tag("Glimpse", { shell: shellNode(shell) })),
-        Clue: ({ position, shell }) => Option.some(tag("Clue", { position: BigInt(position), shell: shellNode(shell) })),
-        NoClue: () => Option.none(),
-        EmptyBriefcase: () => Option.none(),
-      }).pipe(Option.map((secret) => tag("Learned", { secret })));
-
-const orderText = (order: BendNode): string => nodesOf(order).map((shell) => (shell.$.endsWith(".Live") ? "L" : "B")).join("");
-
-/** Builds the player's Bend module into `dir` (with $BEND, else `bend` on PATH, else the pinned build) and wraps its shell belief. */
-export const loadBelief = async (dir: string): Promise<BeliefModule> => {
-  const bend = process.env["BEND"] ?? Bun.which("bend") ?? (existsSync(PINNED_BEND) ? PINNED_BEND : undefined);
-
-  if (bend === undefined) throw new Error("bend not found: set BEND to a Bend 2.0.36 binary");
-
-  const output = join(dir, "player.mjs");
-  const build = Bun.spawnSync([bend, PLAYER_SOURCE, "-o", output], { stdout: "pipe", stderr: "pipe" });
-
-  if (build.exitCode !== 0) throw new Error(`Bend player build failed:\n${build.stdout.toString()}${build.stderr.toString()}`);
-
-  const loaded: { readonly default: PlayerExports } = await import(output);
-  const ordersLog = loaded.default["belief.orders.log"];
-
-  return { orders: (log, isPrivate) => nodesOf(ordersLog(bendList(log.flatMap((entry) => Option.toArray(nodeOf(entry)))), isPrivate, bendList([]))).map(orderText) };
-};
+// log into Bend (through ./player.ts) and reads marginals off the orders Bend
+// returns. The hidden gun and other players' secrets never enter.
 
 // A player's own log
 // ==================
 
-/** One entry of a player's log: a public event, or a secret only that player heard. `index` is its place in the match's events or learned secrets. */
-export type OwnEntry = { readonly kind: "event"; readonly event: Event; readonly index: number } | { readonly kind: "secret"; readonly secret: Secret; readonly index: number };
-
-/**
- * The seat's log from the latest load on, in the order the seat heard it: each event, then the secrets heard after it.
- * A secret's `at` counts the events before it, as the driver records it. Empty before the first load.
- */
+/** The seat's log from the latest load on, in the order the seat heard it. Empty before the first load. */
 export const loadLog = (events: ReadonlyArray<Event>, learned: ReadonlyArray<LearnedSecret>, seat: Seat): ReadonlyArray<OwnEntry> => {
   const from = events.findLastIndex(GameEvent.guards.Loaded);
+  const log = ownLog(events, learned, seat);
 
-  if (from < 0) return [];
-
-  const heardAt = (count: number): ReadonlyArray<OwnEntry> =>
-    learned.flatMap((note, index): ReadonlyArray<OwnEntry> => (note.seat === seat && note.at === count ? [{ kind: "secret", secret: note.secret, index }] : []));
-
-  return events.slice(from).flatMap((event, offset): ReadonlyArray<OwnEntry> => [{ kind: "event", event, index: from + offset }, ...heardAt(from + offset + 1)]);
+  return from < 0 ? [] : log.slice(log.findIndex((entry) => entry.kind === "event" && entry.index === from));
 };
 
 /** A shell clue: the magnifier shows the chamber, the phone a later shell. */
@@ -187,7 +92,7 @@ export interface Knowledge {
   readonly clue: Option.Option<number>;
 }
 
-export const knowledgeOf = (belief: BeliefModule, log: ReadonlyArray<OwnEntry>): Knowledge => {
+export const knowledgeOf = (belief: Pick<Player, "orders">, log: ReadonlyArray<OwnEntry>): Knowledge => {
   const publicSummary = summaryOf(belief.orders(log, false));
   const privateSummary = summaryOf(belief.orders(log, true));
   const chamber = certainAt(privateSummary, 0);
