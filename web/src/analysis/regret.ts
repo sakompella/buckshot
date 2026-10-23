@@ -25,7 +25,11 @@ export type Regret =
       readonly best: MoveValue;
       readonly chosen: MoveValue;
       readonly regret: number;
-      /** Both scores are certain, 0 or a win, so every line they rest on ends the round. Certain values that mix wins and losses count as not exact. */
+      /**
+       * Proven exact: both scores are 0 or a win, which only a settled round gives (a dead player's 0 is a certain loss). False means not
+       * proven, not heuristic: at 1 health each, with one live and one blank shell left, shooting the other player settles the round on
+       * every path, yet its 500,000 is not marked exact.
+       */
       readonly exact: boolean;
       readonly depth: number;
       readonly limited: boolean;

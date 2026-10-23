@@ -11,7 +11,7 @@ A score is the deciding player's chance of winning the current round, in million
 - **Searched:** the search finished at least one depth. Regret is set, and is 0 for the best move.
 - **Fallback:** no depth finished, because the node budget ran out first or the run asked for depth 0. Every move gets the same static value; the regret is NULL, never 0.
 - **Invalid:** the player could not build a belief from the log; the reason is stored and there is no regret.
-- **Exact:** both the best and the chosen score are 0 or 1,000,000, so every line they rest on ends the round. A certain value that mixes wins and losses (say a coin-flip shot that ends the round either way) is marked not exact. Treat only exact rows as solved.
+- **Exact:** both the best and the chosen score are 0 or 1,000,000. Only a settled round gives those scores: a win, or a loss, which a dead player's 0 always is. Treat only exact rows as solved. `exact = 0` means not proven exact, not heuristic. Take both players at 1 health with one live and one blank shell left. Shooting the other player settles the round on every path, but its score of 500,000 is a mix of a win and a loss, so the row is not marked exact. The search does not report which values are settled, and changing the evaluator is out of scope for #3.
 
 ## The `regret` table
 
@@ -25,7 +25,7 @@ The script writes to the `regret` table of the derived database named by `--out`
 | `max_depth`, `budget` | The run's depth limit (decisions, by every player) and node budget. |
 | `status` | `searched`, `fallback` or `invalid`. |
 | `values_json` | Every legal move with its score, in the machine's order. |
-| `best`, `best_score`, `chosen_score`, `regret`, `exact` | Set only when searched. Ties go to the first move. |
+| `best`, `best_score`, `chosen_score`, `regret`, `exact` | Set only when searched. Ties go to the first move. `exact` is 1 when proven exact, 0 when not proven (see above). |
 | `depth`, `limited` | The depth the search finished, and whether the budget stopped it there. |
 | `nodes`, `ms` | Nodes expanded and milliseconds spent on the decision. |
 
@@ -39,7 +39,7 @@ From `web/`, after `bun run rules`:
 
     nice -n 10 bun scripts/arena-regret.ts --db <buckshot.sqlite> --out <derived>.sqlite --match <match name> [--depth 6] [--budget 20000]
 
-`web/test/regret.test.ts` checks known positions (a forced win, a certain loss, a round-ending shot, the fallback, another player's secret) and that the script scores every agent decision of a faux match.
+`web/test/regret.test.ts` checks known positions: a forced win, a certain loss, a round-ending shot, the fallback, and another player's secret. It also runs the script on recorded matches that reach a forced win and a certain loss, and checks the stored rows, and on a faux match imported from an arena run.
 
 ## Limits
 
