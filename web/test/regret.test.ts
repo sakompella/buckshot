@@ -251,3 +251,37 @@ test("the script stores known values of recorded decisions, from the mover's sid
     rmSync(root, { recursive: true, force: true });
   }
 }, 120_000);
+
+test("two shards write one output file together, each match once, and a rerun scores nothing", async () => {
+  const root = mkdtempSync(join(tmpdir(), "buckshot-regret-shards-"));
+  const database = join(root, "analysis.sqlite");
+  const derived = join(root, "derived.sqlite");
+
+  try {
+    writeRecorded(database, RECORDED);
+
+    const run = (...selection: ReadonlyArray<string>) =>
+      Bun.spawn(["nice", "-n", "10", "bun", "scripts/arena-regret.ts", "--db", database, "--out", derived, ...selection, "--depth", "3", "--budget", "20000"], { cwd: join(import.meta.dir, ".."), stdout: "ignore", stderr: "pipe" });
+
+    const decisionsOf = async (child: ReturnType<typeof run>): Promise<number> => {
+      const [code, report] = await Promise.all([child.exited, new Response(child.stderr).text()]);
+      expect(code).toBe(0);
+
+      return JSON.parse(report.trim().split("\n").at(-1) ?? "null").decisions;
+    };
+
+    const shards = await Promise.all([decisionsOf(run("--all", "--shard", "1/2")), decisionsOf(run("--all", "--shard", "2/2"))]);
+
+    // Matches go to shards in name order: "lost" and "winning_shot" to the first, "self_shot" to the second.
+    expect(shards).toEqual([21, 14]);
+    expect(await decisionsOf(run("--all"))).toBe(0);
+
+    const out = new Database(derived, { readonly: true });
+    const scored = out.query<{ match_id: string; n: number }, []>("SELECT match_id, COUNT(*) AS n FROM regret GROUP BY match_id ORDER BY match_id").all();
+    out.close();
+
+    expect(scored).toEqual([{ match_id: "lost", n: 7 }, { match_id: "self_shot", n: 14 }, { match_id: "winning_shot", n: 14 }]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}, 120_000);
