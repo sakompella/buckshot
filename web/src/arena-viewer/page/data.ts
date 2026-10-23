@@ -183,14 +183,18 @@ export const quantile = (sorted: ArrayLike<number>, p: number): number => {
   return low + (high - low) * (at - Math.floor(at));
 };
 
-/** A deterministic generator, so intervals do not flicker between renders. */
+/** A deterministic generator (mulberry32: 32-bit state, exact integer arithmetic), so intervals do not flicker between renders. */
 export const rng = (seed: number) => {
-  let state = seed;
+  let state = seed | 0;
 
   return () => {
-    state = (state * 1103515245 + 12345) & 0x7fffffff;
+    state = (state + 0x6d2b79f5) | 0;
 
-    return state / 0x80000000;
+    let mixed = Math.imul(state ^ (state >>> 15), 1 | state);
+
+    mixed = (mixed + Math.imul(mixed ^ (mixed >>> 7), 61 | mixed)) ^ mixed;
+
+    return ((mixed ^ (mixed >>> 14)) >>> 0) / 4294967296;
   };
 };
 
@@ -201,7 +205,7 @@ export type SeatFull = Seat & { readonly cohort: string };
 
 const shortName = (model: string): string => baseOf(model)?.short ?? model;
 
-export const crossModelCohort = (effort: string): string => `Cross-model (${effort})`;
+const crossModelCohort = (effort: string): string => `Cross-model (${effort})`;
 
 // A sweep is named for its model. A cross-model tournament with one effort throughout is "Cross-model (<effort>)",
 // and a smaller one lists its configs, those off the default effort first: "Opus xhigh vs Astra".
@@ -265,8 +269,8 @@ export interface Rate {
   readonly blocks: number;
 }
 
-// Every bootstrap draws from rng(7) from the start, so the draws are generated once and kept, as the generator's
-// 31-bit states, and extended when a bootstrap needs more.
+// Every bootstrap draws from rng(7) from the start, so the draws are generated once and kept, as 31-bit integers
+// (the generator's draws scaled), and extended when a bootstrap needs more.
 let draws = new Int32Array(0);
 
 const drawsFor = (count: number): Int32Array => {
@@ -420,125 +424,3 @@ export const rankOrder = <A extends { readonly winShare: number; readonly label:
   configs.toSorted((left, right) => right.winShare - left.winShare || eloOf(right) - eloOf(left) || left.label.localeCompare(right.label));
 
 export const winnerOf = (match: MatchRow): SeatFull | undefined => match.seats.find(({ winShare }) => (winShare ?? 0) >= 1);
-
-// RATINGS
-
-/** One scored two-player match: a's win share against b. */
-export interface Game {
-  readonly a: string;
-  readonly b: string;
-  readonly sa: number;
-}
-
-/** Games between configs numbered by first appearance, so many resamples can be fitted without building maps. */
-export interface NumberedGames {
-  readonly ids: ReadonlyArray<string>;
-  readonly a: Int32Array;
-  readonly b: Int32Array;
-  readonly sa: Float64Array;
-}
-
-export const numberGames = (games: ReadonlyArray<Game>): NumberedGames => {
-  const ids = unique(games.flatMap(({ a, b }) => [a, b]));
-  const numberOf = new Map(ids.map((id, index) => [id, index]));
-  const numbered = (id: string) => numberOf.get(id) ?? -1;
-
-  return { ids, a: Int32Array.from(games, ({ a }) => numbered(a)), b: Int32Array.from(games, ({ b }) => numbered(b)), sa: Float64Array.from(games, ({ sa }) => sa) };
-};
-
-/**
- * Bradley-Terry with fractional wins over the games at `rows`, fitted by minorization-maximization on an Elo scale
- * with mean 0. One virtual drawn game against a fixed average player keeps every rating finite. Rates only the
- * configs the rows mention, in order of first appearance. Each iteration only needs the games per pair and the wins
- * per config, so they are counted once.
- */
-export const fitGames = (games: NumberedGames, rows: ArrayLike<number>): Map<string, number> => {
-  const size = games.ids.length;
-  const present: Array<number> = [];
-  const isPresent = new Uint8Array(size);
-  const wins = new Float64Array(size).fill(0.5);
-  const pairGames = new Float64Array(size * size);
-
-  for (let index = 0; index < rows.length; index++) {
-    const row = rows[index] ?? 0;
-    const a = games.a[row] ?? 0;
-    const b = games.b[row] ?? 0;
-    const sa = games.sa[row] ?? 0;
-
-    for (const id of [a, b]) {
-      if (isPresent[id] === 0) {
-        isPresent[id] = 1;
-        present.push(id);
-      }
-    }
-
-    wins[a] = (wins[a] ?? 0) + sa;
-    wins[b] = (wins[b] ?? 0) + 1 - sa;
-    pairGames[Math.min(a, b) * size + Math.max(a, b)] = (pairGames[Math.min(a, b) * size + Math.max(a, b)] ?? 0) + 1;
-  }
-
-  const pairs = present.flatMap((x) => present.flatMap((y) => (x < y && (pairGames[x * size + y] ?? 0) > 0 ? [y * size + x] : [])));
-  const strength = new Float64Array(size).fill(1);
-  const denominators = new Float64Array(size);
-
-  for (let iteration = 0; iteration < 300; iteration++) {
-    for (const id of present) denominators[id] = 1 / ((strength[id] ?? 1) + 1);
-
-    for (const pair of pairs) {
-      const x = pair % size;
-      const y = Math.floor(pair / size);
-      const share = (pairGames[x * size + y] ?? 0) / ((strength[x] ?? 1) + (strength[y] ?? 1));
-
-      denominators[x] = (denominators[x] ?? 0) + share;
-      denominators[y] = (denominators[y] ?? 0) + share;
-    }
-
-    for (const id of present) strength[id] = (wins[id] ?? 0) / (denominators[id] ?? 1);
-  }
-
-  const ratings = present.map((id) => [games.ids[id] ?? "", 400 * Math.log10(strength[id] ?? 1)] as const);
-  const mean = meanOf(ratings.map(([, rating]) => rating));
-
-  return new Map(ratings.map(([id, rating]) => [id, rating - mean]));
-};
-
-export const bradleyTerry = (games: ReadonlyArray<Game>): Map<string, number> => fitGames(numberGames(games), Int32Array.from(games.keys()));
-
-/** Completed two-player matches, as their two seats in table order. */
-export const pairsOf = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<readonly [SeatFull, SeatFull]> =>
-  [...groupBy(
-    seats.filter(({ status }) => status === "completed"),
-    ({ matchId }) => matchId,
-  ).values()].flatMap((matchSeats) => {
-    const [first, second] = matchSeats;
-
-    return matchSeats.length === 2 && first !== undefined && second !== undefined ? [[first, second] as const] : [];
-  });
-
-/**
- * One approximate scale. Effort sweeps only play their own model, so a pooled fit stretches them. Instead:
- * Bradley-Terry over all cross-model games, and per model over its effort-sweep games; an effort row is its model's
- * medium cross-model rating plus its offset from medium within the sweep. Rows with no sweep keep their cross-model rating.
- */
-export const approxRatings = (seats: ReadonlyArray<SeatFull>): ReadonlyMap<string, number> => {
-  const pairs = pairsOf(seats);
-  const gameOf = ([x, y]: readonly [SeatFull, SeatFull]): Game => ({ a: keyOf(x), b: keyOf(y), sa: x.winShare ?? 0 });
-  const ratings = bradleyTerry(pairs.filter(([x, y]) => x.model !== y.model).map(gameOf));
-
-  const sweeps = groupBy(
-    pairs.filter(([x, y]) => x.model === y.model),
-    ([x]) => x.model,
-  );
-
-  for (const [model, sweepPairs] of sweeps) {
-    const anchor = ratings.get(`${model}|${DEFAULT_EFFORT}`);
-    const sweep = bradleyTerry(sweepPairs.map(gameOf));
-    const middle = sweep.get(`${model}|${DEFAULT_EFFORT}`);
-
-    if (anchor === undefined || middle === undefined) continue;
-
-    for (const [key, rating] of sweep) ratings.set(key, anchor + rating - middle);
-  }
-
-  return ratings;
-};

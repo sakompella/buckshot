@@ -58,7 +58,7 @@ export const picksOf = memoLast((derived: Derived): ReadonlyArray<Pick> => {
     return winner === undefined || loser === undefined ? [] : [{ match, winner, loser }];
   });
 
-  const ratingOf = (seat: SeatFull) => ratings.get(keyOf(seat)) ?? 0;
+  const ratingOf = (seat: SeatFull) => ratings.get(keyOf(seat))?.rating ?? 0;
   const picks: Array<Pick> = [];
 
   // Comeback: the winner's worst health deficit in the deciding round, then its worst cash deficit after a round.
