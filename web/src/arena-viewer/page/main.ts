@@ -117,7 +117,7 @@ const withPickedMatches = (model: Model): Return =>
   AsyncData.matchData(model.data, {
     onEmpty: (): Return => ({ model }),
     onFailure: (): Return => ({ model }),
-    onData: (loaded) => withMatches(model, picksOf(derive(loaded, model.filter)).map(({ match }) => match.matchId)),
+    onData: (loaded) => withMatches(model, picksOf(derive(loaded, model.filter, model.basis)).map(({ match }) => match.matchId)),
   });
 
 const toggled = (values: ReadonlyArray<string>, value: string): ReadonlyArray<string> => (values.includes(value) ? values.filter((other) => other !== value) : [...values, value]);
@@ -163,6 +163,7 @@ export const update = (model: Model, message: Message): Return =>
     ToggledModel: ({ name }) => withFilter(model, (filter) => ({ ...filter, offModels: toggled(filter.offModels, name) })),
     ToggledAllConfigs: () => withFilter(model, (filter) => ({ ...filter, isAllConfigs: !filter.isAllConfigs })),
     SelectedRanking: ({ ranking }) => ({ model: modifyFields(model, { ranking: () => ranking }) }),
+    SelectedBasis: ({ basis }) => ({ model: modifyFields(model, { basis: () => basis }) }),
     SelectedScatterShow: ({ show }) => ({ model: modifyFields(model, { scatter: (scatter) => ({ ...scatter, show }) }) }),
     SelectedScatterAxis: ({ axis }) => ({ model: modifyFields(model, { scatter: (scatter) => ({ ...scatter, axis }) }) }),
     HoveredPoint: ({ key }) => ({ model: modifyFields(model, { scatter: (scatter) => ({ ...scatter, maybeHover: Option.some(key) }) }) }),
@@ -212,6 +213,7 @@ const init: Runtime.ApplicationInit<Model, Message, Flags> = ({ viewport }) => (
     data: AsyncData.Loading(),
     filter: { cohort: "all", offEfforts: [], offModels: [], isAllConfigs: true },
     ranking: "elo",
+    basis: "wins",
     scatter: { show: "kept", axis: "cost", maybeHover: Option.none(), maybePin: Option.none() },
     heat: { mode: "opp", sort: "rating", isBestOnly: false, maybeTip: Option.none(), maybeFlagged: Option.none() },
     leaderboard: { maybeOpen: Option.none(), maybeTip: Option.none() },
