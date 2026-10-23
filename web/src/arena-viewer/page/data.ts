@@ -410,6 +410,13 @@ export const matchRows = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<MatchRo
     return first === undefined ? [] : [{ matchId: first.matchId, seats: ordered, startedAt: first.startedAt, tournament: first.tournament, status: first.status, seed: first.seed }];
   });
 
+/**
+ * Configs in place order for the "Rank" view: highest observed win share (mean over scored matches) first. Ties go
+ * to the higher Elo, then the label, so the places 1, 2, 3… are always distinct.
+ */
+export const rankOrder = <A extends { readonly winShare: number; readonly label: string }>(configs: ReadonlyArray<A>, eloOf: (config: A) => number): ReadonlyArray<A> =>
+  configs.toSorted((left, right) => right.winShare - left.winShare || eloOf(right) - eloOf(left) || left.label.localeCompare(right.label));
+
 export const winnerOf = (match: MatchRow): SeatFull | undefined => match.seats.find(({ winShare }) => (winShare ?? 0) >= 1);
 
 // RATINGS
