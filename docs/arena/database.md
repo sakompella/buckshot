@@ -1,6 +1,6 @@
 # Tournament database
 
-The internal analytical database is `_work/arena/analysis/buckshot.sqlite` in the main checkout. It is Git-ignored. Original tournament directories remain the source of truth. Nothing is published, and the importer never writes to a tournament directory.
+The internal analytical database is `_work/arena/analysis/buckshot.sqlite` in the main checkout. It is Git-ignored. Original tournament directories remain the source of truth. It isn't published openly: the arena viewer shares it behind a password, with a copy that has every email and account id redacted as its download (`web/README.md`). The importer never writes to a tournament directory.
 
 ## Import and rebuild
 
