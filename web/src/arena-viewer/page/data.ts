@@ -201,6 +201,8 @@ export type SeatFull = Seat & { readonly cohort: string };
 
 const shortName = (model: string): string => baseOf(model)?.short ?? model;
 
+export const crossModelCohort = (effort: string): string => `Cross-model (${effort})`;
+
 // A sweep is named for its model. A cross-model tournament with one effort throughout is "Cross-model (<effort>)",
 // and a smaller one lists its configs, those off the default effort first: "Opus xhigh vs Astra".
 const cohortName = (seats: ReadonlyArray<Seat>): string => {
@@ -210,7 +212,7 @@ const cohortName = (seats: ReadonlyArray<Seat>): string => {
 
   if (models.length === 1) return `${shortName(models[0] ?? "")} efforts`;
 
-  if (configs.length > 2 && efforts.length === 1) return `Cross-model (${efforts[0] ?? ""})`;
+  if (configs.length > 2 && efforts.length === 1) return crossModelCohort(efforts[0] ?? "");
 
   return configs
     .toSorted(([, left], [, right]) => Number(left === DEFAULT_EFFORT) - Number(right === DEFAULT_EFFORT))

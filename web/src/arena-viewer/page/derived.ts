@@ -1,5 +1,5 @@
 import { type Decisions, ITEMS } from "../api.ts";
-import { addTo, approxRatings, baseName, type BlockTally, blockRate, groupBy, keyOf, type MatchRow, matchRows, type ModelStats, modelStats, rankOrder, type Rate, type SeatFull } from "./data.ts";
+import { addTo, approxRatings, baseName, type BlockTally, blockRate, crossModelCohort, DEFAULT_EFFORT, groupBy, keyOf, type MatchRow, matchRows, type ModelStats, modelStats, rankOrder, type Rate, type SeatFull } from "./data.ts";
 import type { Filter, Loaded } from "./model.ts";
 
 // What the page shows, worked out from the loaded data and the filter. Each is
@@ -124,7 +124,11 @@ export interface Derived {
   readonly pooled: ReadonlyArray<ModelStats>;
   /** One approximate scale fitted on every seat: filters pick rows, not the scale. */
   readonly ratings: ReadonlyMap<string, number>;
-  /** Each config's place by win share in the cohort pooled, among all its rated configs whatever the filter (see rankOrder). */
+  /**
+   * Each config's place by win share in the chosen cohort, among all its rated configs whatever the filter (see
+   * rankOrder). "All cohorts" takes the medium cross-model cohort's places: pooling every cohort would count effort
+   * sweeps' self-play, so configs outside that cohort have no place.
+   */
   readonly ranks: ReadonlyMap<string, number>;
   /** Every config pooled over each cohort and over all of them, whatever the filter: the scatter's fixed axes. */
   readonly everyPooled: ReadonlyArray<ModelStats>;
@@ -217,7 +221,7 @@ export const derive = memoLast((loaded: Loaded, filter: Filter): Derived => {
     byCohort: passingConfigs(byCohortOf(seats), filter, main),
     pooled: passingConfigs(inCohort, filter, main),
     ratings,
-    ranks: ranksOf(inCohort, ratings),
+    ranks: ranksOf(filter.cohort === "all" ? pooledByCohort(seats)(crossModelCohort(DEFAULT_EFFORT)) : inCohort, ratings),
     everyPooled: everyPooledOf(seats),
     everyByCohort: byCohortOf(seats),
     matches: matchRows(matchSeats),

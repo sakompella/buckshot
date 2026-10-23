@@ -67,12 +67,15 @@ interface Point {
   /** The x axis value. */
   readonly x: number;
   readonly rating: number;
-  /** The place by win share, 1 first. */
-  readonly rank: number;
+  /** The place by win share, 1 first; none outside the ranked cohort (see Derived.ranks). */
+  readonly rank: number | undefined;
 }
 
+// Rank mode only draws ranked points (see rankedOf); an unranked one sorts last.
+const placeOf = (point: Point): number => point.rank ?? Number.POSITIVE_INFINITY;
+
 /** Higher is better on either ranking. */
-const scoreOf = (point: Point, ranking: Ranking): number => (ranking === "elo" ? point.rating : -point.rank);
+const scoreOf = (point: Point, ranking: Ranking): number => (ranking === "elo" ? point.rating : -placeOf(point));
 
 const dominates = (other: Point, point: Point, ranking: Ranking) =>
   other.x <= point.x && scoreOf(other, ranking) >= scoreOf(point, ranking) && (other.x < point.x || scoreOf(other, ranking) > scoreOf(point, ranking));
@@ -125,7 +128,7 @@ const pointsOf = memoLast(
         const rank = ranks.get(m.key);
         const x = AXES[axis].valueOf(m);
 
-        return rating !== undefined && rank !== undefined && x > 0 && m.scored.length > 0 ? [{ m, x, rating, rank }] : [];
+        return rating !== undefined && x > 0 && m.scored.length > 0 ? [{ m, x, rating, rank }] : [];
       });
 
     return { cost: on("cost"), moves: on("moves"), tokens: on("tokens") };
@@ -151,6 +154,8 @@ const shownOf = memoLast((every: ReadonlyArray<Point>, kept: ReadonlyArray<strin
 
   return kept.flatMap((key) => every.filter((point) => point.m.key === key));
 });
+
+const rankedOf = memoLast((points: ReadonlyArray<Point>): ReadonlyArray<Point> => points.filter(({ rank }) => rank !== undefined));
 
 const L = 46;
 
@@ -222,7 +227,7 @@ const yScaleOf = (ranking: Ranking, elo: readonly [number, number], places: numb
   );
 };
 
-const yValueOf = (point: Point, ranking: Ranking): number => (ranking === "elo" ? point.rating : point.rank);
+const yValueOf = (point: Point, ranking: Ranking): number => (ranking === "elo" ? point.rating : placeOf(point));
 
 const fmtY = (value: number, ranking: Ranking): string => (ranking === "elo" ? fmtRating(value) : String(value));
 
@@ -282,7 +287,8 @@ export const scatterView = (
   const byAxis = pointsOf(stats, ratings, ranks);
   const every = byAxis[scatter.axis];
   const kept = keptKeysOf(byAxis.cost);
-  const points = shownOf(every, kept, scatter.show);
+  const shown = shownOf(every, kept, scatter.show);
+  const points = ranking === "rank" ? rankedOf(shown) : shown;
   const layout = layoutOf(points, width, scatter.axis, ranking, domainOf(everyConfig, ratings), ranks.size);
   const hidden = every.filter((point) => !kept.includes(point.m.key)).length;
   const activeKey = Option.orElse(scatter.maybeHover, () => scatter.maybePin);
@@ -414,7 +420,7 @@ export const scatterView = (
           tipView(h, anchorId("pt", point.m.key), [
             h.b([], [point.m.label]),
             h.br([]),
-            `rank ${point.rank} · Elo ${fmtRating(point.rating)} · ${fmtPct(point.m.winShare)} wins of ${point.m.scored.length}`,
+            `rank ${point.rank ?? "–"} · Elo ${fmtRating(point.rating)} · ${fmtPct(point.m.winShare)} wins of ${point.m.scored.length}`,
             h.br([]),
             axis.perMatch(point.x),
           ]),
