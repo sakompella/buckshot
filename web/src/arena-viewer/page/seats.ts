@@ -390,7 +390,7 @@ const perSeedView = (h: H, rows: ReadonlyArray<{ readonly seed: string; readonly
 };
 
 /** The Seats tab, laid out for a viewport `width` wide with `content` pixels inside main's padding. */
-export const seatsView = (h: H, filters: Html, derived: Derived, width: number, content: number): Html => {
+export const seatsView = (h: H, derived: Derived, width: number, content: number): Html => {
   const { games, partial, position, starter, firstStarts, configs, stories, perSeed, comebacks } = seatsOf(derived);
   const left = partial > 0 ? `; ${partial} incomplete blocks left out` : "";
   const figure = chartWidth(width, content);
@@ -407,10 +407,10 @@ export const seatsView = (h: H, filters: Html, derived: Derived, width: number, 
   return h.div(
     [],
     [
+      h.h2([], ["Seats"]),
       h.p([h.Class("sub")], ["Filters pick focal players: a match is in if either player passes; both players count."]),
-      filters,
-      h.section(
-        [h.Class("seatstory")],
+      h.div(
+        [],
         [
           h.div(
             [h.Class("bignums")],

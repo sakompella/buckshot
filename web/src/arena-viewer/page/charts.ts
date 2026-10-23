@@ -2,7 +2,7 @@ import { Effect, Schema } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 import { Mount } from "foldkit";
 
-import { Message } from "./model.ts";
+import { Message, type Ranking } from "./model.ts";
 
 type H = HtmlBuilder<Message>;
 
@@ -19,15 +19,14 @@ export const linScale = (d0: number, d1: number, r0: number, r1: number, ticks: 
   ticks,
 });
 
+/** Ticks at 1, 2 and 5 times each power of ten in the domain. */
 export const logScale = (d0: number, d1: number, r0: number, r1: number): Scale => {
   const l0 = Math.log10(d0);
   const l1 = Math.log10(d1);
-  const span = l1 - l0;
-  const steps = span > 3 ? [1] : span > 1.5 ? [1, 3] : [1, 2, 5];
   const ticks: Array<number> = [];
 
   for (let exponent = Math.floor(l0); exponent <= Math.ceil(l1); exponent++) {
-    for (const step of steps) {
+    for (const step of [1, 2, 5]) {
       const value = Number((step * 10 ** exponent).toPrecision(3));
 
       if (value >= d0 * 0.999 && value <= d1 * 1.001) ticks.push(value);
@@ -87,6 +86,14 @@ export const toggleView = <A extends string>(h: H, value: A, options: ReadonlyAr
     [h.Class("toggle")],
     options.map(([option, label]) => h.button([h.Type("button"), h.Class(option === value ? "on" : ""), h.OnClick(toMessage(option))], [label])),
   );
+
+const RANKINGS: ReadonlyArray<readonly [Ranking, string]> = [
+  ["elo", "Elo"],
+  ["rank", "Rank"],
+];
+
+/** The page-wide choice between Elo and rank, drawn wherever ratings show. */
+export const rankingView = (h: H, ranking: Ranking): Html => toggleView(h, ranking, RANKINGS, (option) => Message.SelectedRanking({ ranking: option }));
 
 const CHART_GAP = 28;
 

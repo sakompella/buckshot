@@ -9,7 +9,7 @@ import { breakdownView, heatRowsOf } from "./heat.ts";
 import { interestingView, picksOf } from "./interesting.ts";
 import { leaderboardView } from "./leaderboard.ts";
 import { matchesView } from "./matches.ts";
-import { Message, type Model, TABS, type Viewport } from "./model.ts";
+import { Message, type Model, type Ranking, type Section, SECTIONS, type Viewport } from "./model.ts";
 import { reliabilityView } from "./reliability.ts";
 import { replayView } from "./replay.ts";
 import { scatterView } from "./scatter.ts";
@@ -69,7 +69,7 @@ const filtersView = (h: H, derived: Derived, filter: Model["filter"]): Html => {
   );
 };
 
-// OVERVIEW
+// HERO
 
 const heroView = (h: H, derived: Derived): Html => {
   const scored = derived.matches.filter(({ status }) => status === "completed").length;
@@ -92,7 +92,13 @@ const heroView = (h: H, derived: Derived): Html => {
   );
 };
 
+// A lazy slot reuses its last view only when the view function and every argument are the same references, so
+// each slot is handed a module-level function, never an arrow made during the render, and only the parts of the
+// model its section reads.
+
 const lazyHero = createLazy();
+
+const lazyNav = createLazy();
 
 const lazyFilters = createLazy();
 
@@ -102,62 +108,50 @@ const lazyBreakdown = createLazy();
 
 const lazyInteresting = createLazy();
 
-const lazyLeaderboard = createLazy();
-
-// A lazy slot reuses its last view only when the view function and every argument are the same references, so
-// each slot is handed a module-level function, never an arrow made during the render.
-
-const overviewView = (h: H, model: Model, derived: Derived): Html =>
-  h.div(
-    [],
-    [
-      lazyHero(heroView, [h, derived]),
-      lazyFilters(filtersView, [h, derived, model.filter]),
-      h.div([h.Class("card")], [lazyScatter(scatterView, [h, derived.pooled, derived.ratings, model.scatter, cardWidth(model.viewport)])]),
-      lazyBreakdown(breakdownView, [h, derived, model.heat]),
-      lazyInteresting(interestingView, [h, picksOf(derived), model.matches, contentWidth(model.viewport)]),
-      lazyLeaderboard(leaderboardView, [h, derived.byCohort, derived.matchSeats, derived.items, model.leaderboard, model.filter.isAllConfigs]),
-    ],
-  );
-
-const lazyMatches = createLazy();
-
 const lazySeats = createLazy();
 
 const lazyReliability = createLazy();
 
+const lazyMatches = createLazy();
+
+const lazyLeaderboard = createLazy();
+
 const lazyReplay = createLazy();
 
-const matchesTab = (h: H, derived: Derived, filter: Model["filter"], list: Model["matchList"]): Html => matchesView(h, filtersView(h, derived, filter), derived.matches, list);
-
-const seatsTab = (h: H, derived: Derived, filter: Model["filter"], viewport: Viewport): Html => seatsView(h, filtersView(h, derived, filter), derived, viewport.width, contentWidth(viewport));
-
-const reliabilityTab = (h: H, derived: Derived, filter: Model["filter"], tip: Model["maybeRateTip"], viewport: Viewport): Html =>
-  reliabilityView(h, filtersView(h, derived, filter), derived.decisions, derived.seats, derived.keep, tip, viewport.width, contentWidth(viewport));
-
-// The filters apply to the whole tab, so each tab places them above the content they filter.
-const tabView = (h: H, model: Model, derived: Derived): Html => {
-  switch (model.tab) {
-    case "overview":
-      return overviewView(h, model, derived);
-    case "matches":
-      return lazyMatches(matchesTab, [h, derived, model.filter, model.matchList]);
-    case "seats":
-      return lazySeats(seatsTab, [h, derived, model.filter, model.viewport]);
-    case "reliability":
-      return lazyReliability(reliabilityTab, [h, derived, model.filter, model.maybeRateTip, model.viewport]);
-  }
-};
-
-const navView = (h: H, model: Model): Html =>
+const navView = (h: H): Html =>
   h.nav(
     [],
     [
       h.span([h.Class("brand")], ["Buckshot arena"]),
-      ...TABS.map(([tab, label]) => h.button([h.Type("button"), h.Class(model.tab === tab ? "on" : ""), h.OnClick(Message.ClickedTab({ tab }))], [label])),
+      ...SECTIONS.map(([section, label]) => h.a([h.Href(`#${section}`), h.OnClick(Message.ClickedJump({ section }), { defaultAction: "Prevent" })], [label])),
       h.a([h.Class("download"), h.Href("/api/db")], ["Database (SQLite)"]),
     ],
   );
+
+const scatterCard = (h: H, derived: Derived, ranking: Ranking, scatter: Model["scatter"], width: number): Html =>
+  h.div([h.Class("card")], [scatterView(h, derived.pooled, derived.everyPooled, derived.ratings, derived.ranks, ranking, scatter, width)]);
+
+const sectionView = (h: H, section: Section, content: Html): Html => h.section([h.Id(section), h.Class("part")], [content]);
+
+const pageView = (h: H, model: Model, derived: Derived): Html => {
+  const content = contentWidth(model.viewport);
+
+  return h.div(
+    [],
+    [
+      lazyHero(heroView, [h, derived]),
+      // The jump menu and the filters stay at the top; the filters apply to every section.
+      h.div([h.Class("top")], [lazyNav(navView, [h]), lazyFilters(filtersView, [h, derived, model.filter])]),
+      sectionView(h, "scatter", lazyScatter(scatterCard, [h, derived, model.ranking, model.scatter, cardWidth(model.viewport)])),
+      sectionView(h, "breakdown", lazyBreakdown(breakdownView, [h, derived, model.heat, model.ranking])),
+      sectionView(h, "interesting", lazyInteresting(interestingView, [h, picksOf(derived), model.matches, content])),
+      sectionView(h, "seats", lazySeats(seatsView, [h, derived, model.viewport.width, content])),
+      sectionView(h, "reliability", lazyReliability(reliabilityView, [h, derived.decisions, derived.seats, derived.keep, model.maybeRateTip, model.viewport.width, content])),
+      sectionView(h, "matches", lazyMatches(matchesView, [h, derived.matches, model.matchList])),
+      sectionView(h, "leaderboards", lazyLeaderboard(leaderboardView, [h, derived.byCohort, derived.everyByCohort, derived.matchSeats, derived.items, model.leaderboard, model.filter.isAllConfigs, model.ranking])),
+    ],
+  );
+};
 
 const isPinned = (model: Model): boolean => Option.isSome(model.scatter.maybePin) || Option.isSome(model.scatter.maybeHover);
 
@@ -179,7 +173,7 @@ export const view = (model: Model, h: H): Document =>
           [],
           [
             // Touch has no hover: a tap pins a point, and a tap anywhere outside the chart unpins it.
-            h.main(isPinned(model) ? [h.OnClick(Message.ClickedOutsideChart())] : [], [navView(h, model), tabView(h, model, derived)]),
+            h.main(isPinned(model) ? [h.OnClick(Message.ClickedOutsideChart())] : [], [pageView(h, model, derived)]),
             replay,
           ],
         ),

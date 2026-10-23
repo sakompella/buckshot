@@ -12,12 +12,16 @@ section { border-top: 1px solid var(--line); padding-top: 28px; margin-top: 28px
 .grid2 > section { min-width: 0; }
 .empty { color: var(--mut); padding: 40px 0; }
 
-nav { display: flex; gap: 4px; align-items: center; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
-nav .brand { font-weight: 600; margin-right: 18px; }
-nav .download { margin-left: auto; color: var(--mut); font-size: 13px; }
-nav button, .toggle button, .chip, .more { background: none; border: 1px solid transparent; color: var(--mut); font: inherit; padding: 4px 10px; border-radius: 6px; cursor: pointer; }
-nav button.on { color: var(--fg); background: #141414; border-color: var(--line); }
-.filters { display: flex; gap: 10px 14px; flex-wrap: wrap; align-items: center; margin: 0 0 22px; }
+/* The jump menu and the filters stay at the top of a wide screen; below that only the jump menu does. */
+.top { position: sticky; top: 0; z-index: 25; background: var(--bg); margin: 0 -36px; padding: 8px 36px 12px; border-bottom: 1px solid var(--line); }
+.top + .part { border-top: 0; }
+nav { display: flex; gap: 2px; align-items: center; margin-bottom: 8px; }
+nav .brand { font-weight: 600; margin-right: 14px; }
+nav a { display: inline-flex; align-items: center; color: var(--mut); text-decoration: none; font-size: 13px; padding: 4px 9px; border-radius: 6px; white-space: nowrap; }
+nav a:hover { color: var(--fg); background: #141414; }
+nav .download { margin-left: auto; }
+.toggle button, .chip, .more { background: none; border: 1px solid transparent; color: var(--mut); font: inherit; padding: 4px 10px; border-radius: 6px; cursor: pointer; }
+.filters { display: flex; gap: 10px 14px; flex-wrap: wrap; align-items: center; margin: 0; }
 .chips { display: flex; gap: 4px; flex-wrap: wrap; }
 .chip { font-size: 12px; padding: 2px 8px; border-color: var(--line); color: var(--dim); }
 .chip.on { color: var(--fg); }
@@ -47,7 +51,7 @@ th:first-child, td:first-child { text-align: left; }
 tr.row:hover td { background: #0b0b0b; cursor: pointer; }
 tr.sel td { background: #111; }
 
-.hero { display: flex; justify-content: space-between; align-items: flex-end; padding: 36px 0 26px; border-bottom: 1px solid var(--line); margin-bottom: 30px; }
+.hero { display: flex; justify-content: space-between; align-items: flex-end; padding: 36px 0 26px; }
 .hero .title { font-size: 52px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; }
 .hero .lead { color: var(--mut); font-size: 17px; margin: 14px 0 0; }
 .stats { display: grid; grid-template-columns: auto auto; gap: 2px 34px; margin: 0; font: 12px ui-monospace, Menlo, monospace; }
@@ -80,8 +84,6 @@ tr.drill td { background: #050505; white-space: normal; text-align: left; }
 
 pre { white-space: pre-wrap; word-break: break-word; background: #0a0a0a; border: 1px solid #1d1d1d; border-radius: 6px; padding: 8px 10px; font: 12px/1.45 ui-monospace, Menlo, monospace; color: #cfcfcf; margin: 4px 0 8px; }
 details summary { cursor: pointer; margin: 4px 0; }
-/* A tab's first section sits right under the nav, which already draws the rule. */
-nav + section, nav + div > section:first-child { border-top: 0; margin-top: 0; padding-top: 0; }
 .bignums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; margin-bottom: 34px; }
 .bignum { display: flex; flex-direction: column; gap: 4px; border-left: 2px solid var(--line); padding-left: 14px; }
 .bignum b { font-size: 46px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
@@ -178,8 +180,9 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
 
 /* touch screens: 44px targets */
 @media (pointer: coarse) {
-  nav button, .toggle button, .chip, .more, select, input:not([type="checkbox"]), .switch, .stepper button, .seedrow .chip { min-height: 44px; }
+  nav a, .toggle button, .chip, .more, select, input:not([type="checkbox"]), .switch, .stepper button, .seedrow .chip { min-height: 44px; }
   .chip { padding: 0 12px; min-width: 44px; }
+  .toggle button { min-width: 44px; }
   .modal .x { width: 44px; height: 44px; right: 4px; top: 4px; }
   table.heat td.cellv, table.heat td.left, table.heat td.total { height: 44px; }
   .sq i { width: 22px; height: 22px; }
@@ -188,6 +191,9 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
 
 /* tablet */
 @media (max-width: 1024px) {
+  .top { display: contents; position: static; }
+  nav { position: sticky; top: 0; z-index: 25; background: var(--bg); margin: 0 -20px 14px; padding: 4px 20px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+  .filters { margin-bottom: 4px; }
   .chartrow { grid-template-columns: minmax(0, 1fr); gap: 30px; }
   main { padding: 16px 20px 60px; }
   .stepper { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; }
@@ -215,9 +221,9 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
   .bignums { grid-template-columns: minmax(0, 1fr); gap: 16px; margin-bottom: 24px; }
   .bignum b { font-size: 36px; }
   main { padding: 0 12px 60px; }
-  nav { position: sticky; top: 0; z-index: 25; background: var(--bg); margin: 0 -12px 14px; padding: 4px 12px; gap: 2px; overflow-x: auto; }
+  nav { margin: 0 -12px 14px; padding: 4px 12px; }
   nav .brand { display: none; }
-  nav button { flex: 1 0 auto; padding: 4px 8px; }
+  nav a { flex: 1 0 auto; justify-content: center; padding: 4px 8px; }
   .hero { display: block; padding: 18px 0 18px; margin-bottom: 18px; }
   .hero .title { font-size: 34px; }
   .hero .lead { font-size: 15px; margin-top: 10px; }
@@ -225,7 +231,7 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
   section { padding-top: 20px; margin-top: 20px; }
   .card { padding: 12px 10px; margin-bottom: 18px; }
   .sub { font-size: 12.5px; margin-bottom: 12px; }
-  .filters { gap: 8px; margin-bottom: 16px; }
+  .filters { gap: 8px; }
   .filters select { width: 100%; }
   .chips { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; scrollbar-width: none; }
   .chips .chip { flex: none; }

@@ -6,16 +6,25 @@ import { Decisions, MatchDetail, Seat } from "../api.ts";
 
 // MODEL
 
-export const Tab = Schema.Literals(["overview", "matches", "seats", "reliability"]);
+/** The page's sections below the hero, in page order; each is an in-page anchor. */
+export const Section = Schema.Literals(["scatter", "breakdown", "interesting", "seats", "reliability", "matches", "leaderboards"]);
 
-export type Tab = typeof Tab.Type;
+export type Section = typeof Section.Type;
 
-export const TABS: ReadonlyArray<readonly [Tab, string]> = [
-  ["overview", "Overview"],
-  ["matches", "Matches"],
+export const SECTIONS: ReadonlyArray<readonly [Section, string]> = [
+  ["scatter", "Scatter"],
+  ["breakdown", "Breakdown"],
+  ["interesting", "Interesting"],
   ["seats", "Seats"],
   ["reliability", "Reliability"],
+  ["matches", "Matches"],
+  ["leaderboards", "Leaderboards"],
 ];
+
+/** How ratings show: the Bradley-Terry rating on an Elo scale, or the place by observed win share (see rankOrder). */
+export const Ranking = Schema.Literals(["elo", "rank"]);
+
+export type Ranking = typeof Ranking.Type;
 
 export const SeatFull = Schema.Struct({ ...Seat.fields, cohort: Schema.String });
 
@@ -25,7 +34,7 @@ export const Loaded = Schema.Struct({ seats: Schema.Array(SeatFull), decisions: 
 export type Loaded = typeof Loaded.Type;
 
 /**
- * Which seats the tabs count: one cohort or all, minus the efforts and models switched off. Unless isAllConfigs,
+ * Which seats the page counts: one cohort or all, minus the efforts and models switched off. Unless isAllConfigs,
  * only the main configs count (see mainConfigsOf).
  */
 export const Filter = Schema.Struct({ cohort: Schema.String, offEfforts: Schema.Array(Schema.String), offModels: Schema.Array(Schema.String), isAllConfigs: Schema.Boolean });
@@ -69,7 +78,7 @@ export const Replay = Schema.Struct({ id: Schema.String, maybeFocus: Schema.Opti
 
 export type Replay = typeof Replay.Type;
 
-/** The Matches tab's search and how many rows it shows. */
+/** The match list's search and how many rows it shows. */
 export const MatchList = Schema.Struct({ query: Schema.String, limit: Schema.Number });
 
 /** A reliability cell with its tooltip open: a row (tournament and config) and a column. */
@@ -85,9 +94,9 @@ export type Viewport = typeof Viewport.Type;
 
 export const Model = Schema.Struct({
   viewport: Viewport,
-  tab: Tab,
   data: AsyncData.Schema(Loaded, Schema.String).schema,
   filter: Filter,
+  ranking: Ranking,
   scatter: Scatter,
   heat: Heat,
   leaderboard: Leaderboard,
@@ -104,15 +113,15 @@ export type Model = typeof Model.Type;
 
 export const Message = defineMessageUnion({
   ResizedViewport: { width: Schema.Number, height: Schema.Number },
-  ClickedTab: { tab: Tab },
-  NavigatedToTab: { tab: Tab },
-  CompletedHashWrite: {},
+  ClickedJump: { section: Section },
+  NavigatedToHash: {},
   SucceededLoad: { loaded: Loaded },
   FailedLoad: { error: Schema.String },
   SelectedCohort: { cohort: Schema.String },
   ToggledEffort: { effort: Schema.String },
   ToggledModel: { name: Schema.String },
   ToggledAllConfigs: {},
+  SelectedRanking: { ranking: Ranking },
   SelectedScatterShow: { show: ScatterShow },
   SelectedScatterAxis: { axis: ScatterAxis },
   HoveredPoint: { key: Schema.String },

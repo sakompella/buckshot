@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import { type Browser, chromium, type Page } from "playwright-core";
 
-// Clicks through the arena viewer's tabs and replay in headless Chromium at
+// Clicks through the arena viewer's page, its jump menu and replay in headless Chromium at
 // desktop, phone and tablet widths and saves screenshots. Pointed at the old viewer too,
 // it gives the pictures to compare against.
 // Usage: bun scripts/arena-viewer-check.ts <url> [outdir]
@@ -15,11 +15,22 @@ const errors: Array<string> = [];
 
 const shot = (name: string) => join(outdir, `${name}.png`);
 
+// A full-page screenshot shrinks the window to 1x1 for a moment, which draws the charts at a negative width.
+let isShootingFullPage = false;
+
 const watch = (page: Page, name: string) => {
   page.on("pageerror", (error) => errors.push(`${name}: ${error.message}`));
   page.on("console", (message) => {
-    if (message.type() === "error") errors.push(`${name}: ${message.text().slice(0, 200)}`);
+    if (message.type() === "error" && !isShootingFullPage) errors.push(`${name}: ${message.text().slice(0, 200)}`);
   });
+};
+
+const fullPageShot = async (page: Page, name: string) => {
+  isShootingFullPage = true;
+  await page.screenshot({ path: shot(name), fullPage: true });
+  // Console messages arrive a little after the page logs them.
+  await page.waitForTimeout(500);
+  isShootingFullPage = false;
 };
 
 // The page renders on the next animation frame after a message, so reads wait two frames.
@@ -42,9 +53,12 @@ const countOf = async (page: Page, selector: string) => {
 const heat = (page: Page) => page.locator("section").filter({ has: page.locator("table.heat") });
 
 // Prints what the default filter shows (every config), then what switching 'all configs' off hides, and switches it back on.
-const openOverview = async (page: Page) => {
-  await page.goto(`${base}/#overview`);
-  await page.waitForSelector("table.heat tbody tr", { timeout: 120_000 });
+const openPage = async (page: Page) => {
+  const started = Date.now();
+
+  await page.goto(`${base}/`);
+  await page.waitForSelector("table.lbt", { timeout: 120_000 });
+  console.log("every section drawn in", Date.now() - started, "ms");
   await page.waitForSelector(".icard svg rect", { timeout: 60_000 });
 
   const counts = async () => ["scatter points", await countOf(page, ".card svg g.pt"), "heat rows", await countOf(page, "table.heat tbody tr"), "leaderboards", await countOf(page, "table.lbt"), "|", await textOf(page, ".filters .switch")];
@@ -59,21 +73,124 @@ const openOverview = async (page: Page) => {
 // Visible controls smaller than 44px either way (heat cells and leaderboard squares are left out).
 const smallTargets = (page: Page) =>
   page.evaluate(() =>
-    [...document.querySelectorAll("nav button, .toggle button, .chip, .switch, select, input:not([type=checkbox]), .stepper button, .modal .x")].flatMap((element) => {
+    [...document.querySelectorAll("nav a, .toggle button, .chip, .switch, select, input:not([type=checkbox]), .stepper button, .modal .x")].flatMap((element) => {
       const box = element.getBoundingClientRect();
 
       return box.width > 0 && (box.height < 44 || box.width < 44) ? [`${element.className || element.tagName} ${element.textContent?.slice(0, 20)} ${Math.round(box.width)}x${Math.round(box.height)}`] : [];
     }),
   );
 
+const SECTIONS = ["scatter", "breakdown", "interesting", "seats", "reliability", "matches", "leaderboards"] as const;
+
+// How far a section's top sits below the sticky bar after a jump (0 or 1 is right), and whether the URL names it.
+const jumpedTo = (page: Page, section: string) =>
+  page.evaluate((id) => {
+    const bar = [...document.querySelectorAll(".top, nav")].find((element) => getComputedStyle(element).position === "sticky");
+    const top = document.getElementById(id)?.getBoundingClientRect().top ?? Number.NaN;
+
+    return `${id}: ${Math.round(top - (bar?.getBoundingClientRect().bottom ?? 0))}px below the bar, hash ${location.hash}`;
+  }, section);
+
+const checkJumps = async (page: Page, name: string, isTouch: boolean) => {
+  for (const section of SECTIONS) {
+    const link = page.locator("nav a", { hasText: new RegExp(`^${section}$`, "i") });
+
+    await (isTouch ? link.tap() : link.click());
+    await settled(page);
+    console.log(name, "jump", await jumpedTo(page, section));
+
+    if (section === "seats" || section === "reliability" || section === "matches") await page.screenshot({ path: shot(`${name}-${section}`) });
+  }
+};
+
+// The rating axis's tick labels from the top down.
+const yTicks = (page: Page) =>
+  page.evaluate(() =>
+    [...document.querySelectorAll(".card svg > g > text[text-anchor=end]")]
+      .map((text) => ({ y: Number(text.getAttribute("y")), label: text.textContent ?? "" }))
+      .toSorted((left, right) => left.y - right.y)
+      .map(({ label }) => label)
+      .slice(0, 6)
+      .join(" "),
+  );
+
+// The scatter's gridlines and tick labels: a filter must leave them where they are.
+const axesOf = (page: Page) =>
+  page.evaluate(() => {
+    const chart = document.querySelector(".card svg");
+    const lines = [...(chart?.querySelectorAll("line") ?? [])].filter((line) => line.getAttribute("stroke") === null);
+    const vertical = lines.flatMap((line) => (line.getAttribute("x1") === line.getAttribute("x2") ? [Math.round(Number(line.getAttribute("x1")))] : []));
+    const horizontal = lines.flatMap((line) => (line.getAttribute("y1") === line.getAttribute("y2") ? [Math.round(Number(line.getAttribute("y1")))] : []));
+    const labels = [...(chart?.querySelectorAll("text") ?? [])].flatMap((text) => (text.closest(".ptlabel") === null ? [text.textContent] : []));
+
+    return `${vertical.length} vertical lines at ${vertical.join(",")} | ${horizontal.length} horizontal | labels ${labels.join(" ")}`;
+  });
+
+// Turning chips and switches on and off shows and hides points but moves no axis.
+const checkFixedAxes = async (page: Page, scatter: ReturnType<Page["locator"]>) => {
+  const filters = page.locator(".filters");
+
+  const steps: ReadonlyArray<readonly [string, () => Promise<void>]> = [
+    ["max off", () => filters.getByRole("button", { name: "max", exact: true }).click()],
+    ["Opus off", () => filters.getByRole("button", { name: /Opus/ }).click()],
+    ["medium only", () => scatter.getByRole("switch", { name: /medium only/ }).check()],
+    ["back", () => scatter.getByRole("switch", { name: /medium only/ }).uncheck()],
+    ["Opus on", () => filters.getByRole("button", { name: /Opus/ }).click()],
+  ];
+
+  for (const [axis, name] of [
+    ["Cost", "cost"],
+    ["Moves", "moves"],
+  ] as const) {
+    await scatter.getByRole("button", { name: axis, exact: true }).click();
+    await settled(page);
+
+    const before = await axesOf(page);
+
+    console.log(name, "axes:", before);
+    await scatter.screenshot({ path: shot(`scatter-${name}-max-on`) });
+
+    for (const [label, step] of steps) {
+      await step();
+      await settled(page);
+      console.log(name, label, "| points", await countOf(page, ".card svg g.pt"), "| axes unchanged:", (await axesOf(page)) === before);
+
+      if (label === "max off") await scatter.screenshot({ path: shot(`scatter-${name}-max-off`) });
+    }
+
+    await filters.getByRole("button", { name: "max", exact: true }).click();
+    await settled(page);
+    console.log(name, "max on again | axes unchanged:", (await axesOf(page)) === before);
+  }
+};
+
+// A screenshot of an element taller than the window is stitched while scrolling, so the sticky bar would cover part of it.
+const UNSTICK = ".top, nav { position: static !important; }";
+
+// One choice drives the scatter, the heatmap and the leaderboards: each section's toggle shows it.
+const checkRanking = async (page: Page, scatter: ReturnType<Page["locator"]>) => {
+  const ranking = async () => [await textOf(page, ".card h2"), "| y ticks", await yTicks(page), "| heat header", await textOf(page, "table.heat thead th:nth-last-child(2)"), "| heat first row", await textOf(page, "table.heat tbody tr"), "| leaderboard first row", await textOf(page, "table.lbt tbody tr.row"), "| toggles on", (await page.locator(".toggle button.on", { hasText: /^(Elo|Rank)$/ }).allInnerTexts()).join(" ")];
+
+  console.log("Elo:", ...(await ranking()));
+  await scatter.getByRole("button", { name: "Rank", exact: true }).click();
+  await settled(page);
+  console.log("Rank:", ...(await ranking()));
+  await scatter.screenshot({ path: shot("scatter-rank") });
+  await heat(page).screenshot({ path: shot("heat-rank") });
+  await page.locator(".lb").screenshot({ path: shot("leaderboard-rank"), style: UNSTICK });
+  await page.locator(".lb").getByRole("button", { name: "Elo", exact: true }).click();
+  await settled(page);
+  console.log("back to Elo from the leaderboard:", await textOf(page, ".card h2"));
+};
+
 const checkDesktop = async (browser: Browser) => {
   const page = await browser.newPage({ viewport: { width: 1500, height: 1000 } });
   const scatter = page.locator(".card").first();
 
   watch(page, "desktop");
-  await openOverview(page);
+  await openPage(page);
   console.log("scatter points", await countOf(page, ".card svg g[style*=pointer]"), "labels", await countOf(page, ".card svg g.ptlabel"), "| toggles:", await textOf(page, ".card .ctl"));
-  await page.screenshot({ path: shot("overview"), fullPage: true });
+  await fullPageShot(page, "page");
   await scatter.screenshot({ path: shot("scatter") });
   await page.locator(".card svg g[style*=pointer]").nth(3).hover();
   console.log("hover point → tip:", await tipOf(page));
@@ -96,6 +213,9 @@ const checkDesktop = async (browser: Browser) => {
     console.log("axis", name, "|", await textOf(page, ".card h2"), "| points", await countOf(page, ".card svg g.pt"));
     await scatter.screenshot({ path: shot(`scatter-${name}`) });
   }
+
+  await checkFixedAxes(page, scatter);
+  await checkRanking(page, scatter);
 
   for (const [mode, name] of [
     ["Win share vs opponent", "opp"],
@@ -123,7 +243,7 @@ const checkDesktop = async (browser: Browser) => {
   await page.locator("table.lbt tr.row").first().click();
   await page.locator(".drillin .sq i").first().hover();
   console.log("drill → tip:", await tipOf(page));
-  await page.locator(".lb").first().screenshot({ path: shot("leaderboard") });
+  await page.locator(".lb").first().screenshot({ path: shot("leaderboard"), style: UNSTICK });
 
   for (const [card, name] of [
     [0, "replay"],
@@ -148,24 +268,23 @@ const checkDesktop = async (browser: Browser) => {
   console.log("after same-seed chip:", await textOf(page, ".mhead h2"));
   await page.keyboard.press("Escape");
 
-  for (const [tab, selector] of [
-    ["matches", "tbody tr.row"],
-    ["seats", ".bignum"],
-    ["reliability", ".chartrow figure"],
-  ] as const) {
-    await page.goto(`${base}/#${tab}`);
-    await page.waitForSelector(selector, { timeout: 120_000 });
-    console.log(tab, selector, await countOf(page, selector));
-    await page.screenshot({ path: shot(tab), fullPage: true });
-  }
-
-  await page.locator("details.tables > summary").click();
-  await page.locator("tbody td[data-label='failed calls']").first().hover();
+  console.log("matches", await countOf(page, "#matches tbody tr.row"), "| seats", await countOf(page, "#seats .bignum"), "| reliability charts", await countOf(page, "#reliability .chartrow figure"));
+  await checkJumps(page, "desktop", false);
+  console.log("the filters stay in view:", await page.evaluate(() => Math.round(document.querySelector(".filters")?.getBoundingClientRect().top ?? -1)), "px from the top at scroll", await page.evaluate(() => Math.round(scrollY)));
+  await page.locator("#reliability details.tables > summary").click();
+  await page.locator("#reliability tbody td[data-label='failed calls']").first().hover();
   console.log("reliability tip:", await tipOf(page));
-  await page.goto(`${base}/#matches`);
-  await page.locator("tbody tr.row").first().click();
+  await page.locator("#matches tbody tr.row").first().click();
   await page.waitForSelector(".modal .step");
   console.log("matches → modal", await textOf(page, ".mhead h2"));
+  await page.keyboard.press("Escape");
+
+  // An old tab link, or a section link, lands on its section once the data is in.
+  await page.goto(`${base}/#reliability`);
+  await page.waitForSelector("#reliability .chartrow figure", { timeout: 120_000 });
+  await settled(page);
+  await settled(page);
+  console.log("deep link", await jumpedTo(page, "reliability"));
   await page.close();
 };
 
@@ -175,9 +294,9 @@ const checkTouch = async (browser: Browser, name: string, width: number, height:
   const stickyModelColumn = () => page.evaluate(() => getComputedStyle(document.querySelector("table.heat td.left") ?? document.body).position);
 
   watch(page, name);
-  await openOverview(page);
+  await openPage(page);
   console.log(name, "overflow", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page), "| heat model column", await stickyModelColumn(), "| scatter labels", await countOf(page, ".card svg g.ptlabel"));
-  await page.screenshot({ path: shot(`${name}-overview`), fullPage: true });
+  await fullPageShot(page, `${name}-page`);
   await page.locator(".card svg g[style*=pointer]").nth(3).tap();
   console.log(name, "tap point → tip:", await tipOf(page));
   await page.locator(".card").first().screenshot({ path: shot(`${name}-scatter`) });
@@ -201,20 +320,12 @@ const checkTouch = async (browser: Browser, name: string, width: number, height:
   await page.goBack();
   console.log(name, "back closes replay:", (await countOf(page, ".modal")) === 0);
 
-  for (const [tab, selector] of [
-    ["matches", "tbody tr"],
-    ["seats", ".bignum"],
-    ["reliability", ".chartrow figure"],
-  ] as const) {
-    await page.goto(`${base}/#${tab}`);
-    await page.waitForSelector(selector, { timeout: 120_000 });
-    console.log(name, tab, "overflow", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page));
-    await page.screenshot({ path: shot(`${name}-${tab}`), fullPage: true });
-  }
-
-  await page.evaluate(() => scrollTo(0, 3000));
-  await page.locator("nav button", { hasText: "Matches" }).tap();
-  console.log(name, "a tab opens at its top:", await page.evaluate(() => scrollY) === 0);
+  await checkJumps(page, name, true);
+  console.log(name, "overflow after every section", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page));
+  await heat(page).getByRole("button", { name: "Rank", exact: true }).tap();
+  await settled(page);
+  console.log(name, "rank y ticks", await yTicks(page));
+  await page.locator(".card").first().screenshot({ path: shot(`${name}-scatter-rank`) });
 
   await context.close();
 };

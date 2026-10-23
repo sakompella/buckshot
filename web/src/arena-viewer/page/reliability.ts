@@ -46,7 +46,7 @@ interface Row extends Tally {
   readonly rates: Readonly<Record<ColumnId, Rate>>;
 }
 
-const rowsOf = memoLast((decisions: Decisions, seats: ReadonlyArray<SeatFull>, keep: ReadonlyArray<boolean>): ReadonlyArray<Row> => {
+const tallyRows = (decisions: Decisions, seats: ReadonlyArray<SeatFull>, keep: ReadonlyArray<boolean>): ReadonlyArray<Row> => {
   // Per seat: replies linked to a move, and how many of them failed.
   const linked = new Map<number, [number, number]>();
 
@@ -112,7 +112,12 @@ const rowsOf = memoLast((decisions: Decisions, seats: ReadonlyArray<SeatFull>, k
       },
     }))
     .toSorted((left, right) => left.tournament.localeCompare(right.tournament) || right.rates.failed.rate - left.rates.failed.rate);
-});
+};
+
+const rowsOf = memoLast(tallyRows);
+
+/** Every config whatever the filter: the charts' fixed scales. */
+const everyRowOf = memoLast((decisions: Decisions, seats: ReadonlyArray<SeatFull>) => tallyRows(decisions, seats, seats.map(() => true)));
 
 /** The 25 kept moves with the most replies beyond the first, among those with more than three. */
 const worstOf = memoLast((decisions: Decisions, seats: ReadonlyArray<SeatFull>, keep: ReadonlyArray<boolean>) =>
@@ -180,13 +185,18 @@ const ROW_HEIGHT = 18;
 
 const GROUP_HEIGHT = 26;
 
-/** One bar per config in table order, with a heading row per tournament when there are several. */
-const configBarsView = (h: H, rows: ReadonlyArray<Row>, hasTournaments: boolean, barOf: (row: Row) => Bar, tick: (value: number) => string, width: number): Html => {
+const barEnd = ({ value, hi }: Bar): number => (Number.isNaN(hi) ? (Number.isNaN(value) ? 0 : value) : hi);
+
+/**
+ * One bar per config in table order, with a heading row per tournament when there are several. The scale and the
+ * label column fit `every` row, whatever the filter, so a filter only adds or removes bars.
+ */
+const configBarsView = (h: H, rows: ReadonlyArray<Row>, every: ReadonlyArray<Row>, hasTournaments: boolean, barOf: (row: Row) => Bar, tick: (value: number) => string, width: number): Html => {
   if (rows.length === 0) return h.div([h.Class("empty")], ["No configs for this filter."]);
 
   const bars = rows.map(barOf);
-  const ticks = axisTicks(Math.max(0, ...bars.map(({ value, hi }) => (Number.isNaN(hi) ? (Number.isNaN(value) ? 0 : value) : hi))));
-  const labelWidth = Math.min(width * 0.42, 8 + 6.6 * Math.max(...rows.map(({ key }) => labelOf(key).length)));
+  const ticks = axisTicks(Math.max(0, ...every.map((row) => barEnd(barOf(row)))));
+  const labelWidth = Math.min(width * 0.42, 8 + 6.6 * Math.max(...every.map(({ key }) => labelOf(key).length)));
   const x = linScale(0, ticks.at(-1) ?? 1, labelWidth + 8, width - 50, ticks);
   const headings: Array<{ readonly name: string; readonly y: number }> = [];
   const placed: Array<{ readonly row: Row; readonly bar: Bar; readonly y: number }> = [];
@@ -253,10 +263,9 @@ const timeBar = ({ failedTime, returnedTime }: Row): Bar => {
   return { value: share * 100, lo: Number.NaN, hi: Number.NaN, text: `${(share * 100).toFixed(1)}%` };
 };
 
-/** The Reliability tab, laid out for a viewport `width` wide with `content` pixels inside main's padding. */
+/** The reliability section, laid out for a viewport `width` wide with `content` pixels inside main's padding. */
 export const reliabilityView = (
   h: H,
-  filters: Html,
   decisions: Decisions,
   seats: ReadonlyArray<SeatFull>,
   keep: ReadonlyArray<boolean>,
@@ -265,6 +274,7 @@ export const reliabilityView = (
   content: number,
 ): Html => {
   const rows = rowsOf(decisions, seats, keep);
+  const every = everyRowOf(decisions, seats);
   const worst = worstOf(decisions, seats, keep);
   const hasTournaments = new Set(rows.map(({ tournament }) => tournament)).size > 1;
   const total = (pick: (row: Row) => number) => sumOf(rows.map(pick));
@@ -274,18 +284,17 @@ export const reliabilityView = (
   return h.div(
     [],
     [
-      h.section(
+      h.div(
         [],
         [
           h.h2([], ["Reliability"]),
           h.p([h.Class("sub")], ["Kept apart from skill; all started matches. Faults, reminders and extra replies are per 1,000 model-chosen moves."]),
-          filters,
           h.div(
             [h.Class("chartrow")],
             [
-              figureView(h, "Failed calls", "Share of replies that failed, with a 95% interval over seed blocks.", configBarsView(h, rows, hasTournaments, ({ rates }) => rateBar(rates.failed, 100, 1, "%"), (value) => `${value}%`, figure)),
-              figureView(h, "Faults", "Provider errors per 1,000 model-chosen moves.", configBarsView(h, rows, hasTournaments, ({ rates }) => rateBar(rates.faults, 1000, 1, ""), String, figure)),
-              figureView(h, "Time lost to failed calls", "Failed calls' share of recorded call latency.", configBarsView(h, rows, hasTournaments, timeBar, (value) => `${value}%`, figure)),
+              figureView(h, "Failed calls", "Share of replies that failed, with a 95% interval over seed blocks.", configBarsView(h, rows, every, hasTournaments, ({ rates }) => rateBar(rates.failed, 100, 1, "%"), (value) => `${value}%`, figure)),
+              figureView(h, "Faults", "Provider errors per 1,000 model-chosen moves.", configBarsView(h, rows, every, hasTournaments, ({ rates }) => rateBar(rates.faults, 1000, 1, ""), String, figure)),
+              figureView(h, "Time lost to failed calls", "Failed calls' share of recorded call latency.", configBarsView(h, rows, every, hasTournaments, timeBar, (value) => `${value}%`, figure)),
             ],
           ),
         ],

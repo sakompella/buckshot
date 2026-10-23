@@ -144,4 +144,4 @@ const cardView = (h: H, pick: Pick, data: Model["matches"][string] | undefined, 
 export const interestingView = (h: H, picks: ReadonlyArray<Pick>, matches: Model["matches"], width: number): Html =>
   picks.length === 0
     ? h.empty
-    : h.section([], [h.h2([], ["Interesting matches"]), h.div([h.Class("igrid")], picks.map((pick) => cardView(h, pick, matches[pick.match.matchId], width)))]);
+    : h.div([], [h.h2([], ["Interesting matches"]), h.div([h.Class("igrid")], picks.map((pick) => cardView(h, pick, matches[pick.match.matchId], width)))]);
