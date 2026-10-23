@@ -2,11 +2,11 @@ import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { type Decisions, ITEMS, type Pattern, patternBit } from "../api.ts";
-import { anchorId, switchView, tipView, toggleView } from "./charts.ts";
+import { anchorId, rankingView, switchView, tipView, toggleView } from "./charts.ts";
 import { baseName, baseOrder, fmtPct, fmtRating, fmtTime, fmtUsd, isClaude, keyOf, type MatchRow, type SeatFull, unique } from "./data.ts";
 import { type Derived, memoLast } from "./derived.ts";
 import { itemIconOf } from "./items.ts";
-import { type HeatMode, Message, type Model } from "./model.ts";
+import { type HeatMode, Message, type Model, type Ranking } from "./model.ts";
 
 type H = HtmlBuilder<Message>;
 
@@ -19,8 +19,13 @@ export interface HeatRow {
   readonly label: string;
   readonly color: string;
   readonly rating: number;
+  /** The place by win share, 1 first. */
+  readonly rank: number;
   readonly cost: number;
 }
+
+/** Higher is better on either ranking. */
+const scoreOf = (row: HeatRow, ranking: Ranking): number => (ranking === "elo" ? row.rating : -row.rank);
 
 interface HeatCol {
   readonly id: string;
@@ -336,25 +341,27 @@ const cellAt = (derived: Derived, mode: HeatMode, row: HeatRow, col: string): He
 export const heatRowsOf = memoLast((derived: Derived): ReadonlyArray<HeatRow> =>
   derived.pooled.flatMap((m) => {
     const rating = derived.ratings.get(m.key);
+    const rank = derived.ranks.get(m.key);
 
-    return rating === undefined || m.scored.length === 0 ? [] : [{ key: m.key, model: m.model, label: m.label, color: m.color, rating, cost: m.avgCost }];
+    return rating === undefined || rank === undefined ? [] : [{ key: m.key, model: m.model, label: m.label, color: m.color, rating, rank, cost: m.avgCost }];
   }),
 );
 
-const sortedRows = (rows: ReadonlyArray<HeatRow>, sort: string, valueOf: (row: HeatRow) => number): ReadonlyArray<HeatRow> => {
+/** `rows` come best first by the ranking, which is the "rating" sort. */
+const sortedRows = (rows: ReadonlyArray<HeatRow>, sort: string, ranking: Ranking, valueOf: (row: HeatRow) => number): ReadonlyArray<HeatRow> => {
   if (sort === "rating") return rows;
 
   if (sort === "model") return rows.toSorted((left, right) => left.label.localeCompare(right.label));
 
   if (sort === "cost") return rows.toSorted((left, right) => (left.cost || Infinity) - (right.cost || Infinity));
 
-  return rows.toSorted((left, right) => valueOf(right) - valueOf(left) || right.rating - left.rating);
+  return rows.toSorted((left, right) => valueOf(right) - valueOf(left) || scoreOf(right, ranking) - scoreOf(left, ranking));
 };
 
-const heatmapView = (h: H, derived: Derived, heat: Model["heat"]): Html => {
+const heatmapView = (h: H, derived: Derived, heat: Model["heat"], ranking: Ranking): Html => {
   const rows = heatRowsOf(derived);
-  const byRating = rows.toSorted((left, right) => right.rating - left.rating);
-  // The best row per model keeps each model's highest-rated effort.
+  const byRating = rows.toSorted((left, right) => scoreOf(right, ranking) - scoreOf(left, ranking));
+  // The best row per model keeps each model's best effort by the ranking.
   const shown = heat.isBestOnly ? byRating.filter((row, index) => byRating.findIndex((other) => other.model === row.model) === index) : byRating;
   const columns = columnsOf(heat.mode, derived.matches);
   const cells = new Map(shown.map((row) => [row.key, new Map(columns.map((col) => [col.id, cellAt(derived, heat.mode, row, col.id)]))]));
@@ -363,7 +370,7 @@ const heatmapView = (h: H, derived: Derived, heat: Model["heat"]): Html => {
   const logs = shown.filter((row) => row.cost > 0).map((row) => Math.log(row.cost));
   const low = Math.min(...logs);
   const high = Math.max(...logs);
-  const sorted = sortedRows(shown, heat.sort, (row) => cellOfRow(row, heat.sort)?.value ?? -1);
+  const sorted = sortedRows(shown, heat.sort, ranking, (row) => cellOfRow(row, heat.sort)?.value ?? -1);
   const hiddenRows = rows.length - new Set(rows.map((row) => row.model)).size;
 
   const header = (id: string, label: string, title: string, extra = "", item?: string) =>
@@ -386,6 +393,7 @@ const heatmapView = (h: H, derived: Derived, heat: Model["heat"]): Html => {
         [h.Class("ctl heatctl")],
         [
           toggleView(h, heat.mode, MODES, (mode) => Message.SelectedHeatMode({ mode })),
+          rankingView(h, ranking),
           hiddenRows > 0 ? switchView(h, heat.isBestOnly, `best row per model${heat.isBestOnly ? ` (${hiddenRows} effort rows hidden)` : ""}`, Message.ToggledBestOnly()) : h.empty,
         ],
       ),
@@ -403,7 +411,9 @@ const heatmapView = (h: H, derived: Derived, heat: Model["heat"]): Html => {
                     [
                       header("model", "Model", "", "left"),
                       ...columns.map((col) => header(col.id, col.label, col.title, "", col.item)),
-                      header("rating", "Rating (approx.)", "cross-model Bradley-Terry; effort rows add their offset from medium within their own sweep"),
+                      ranking === "elo"
+                        ? header("rating", "Elo (approx.)", "cross-model Bradley-Terry; effort rows add their offset from medium within their own sweep")
+                        : header("rating", "Rank", "place by observed win share among all the cohort's configs, before the filters; ties go to the higher Elo"),
                       header("cost", "$/match", "avg list-price cost per player per scored match"),
                     ],
                   ),
@@ -436,7 +446,7 @@ const heatmapView = (h: H, derived: Derived, heat: Model["heat"]): Html => {
                           [cell.text],
                         );
                       }),
-                      h.td([h.Class("total")], [fmtRating(row.rating)]),
+                      h.td([h.Class("total")], [ranking === "elo" ? fmtRating(row.rating) : String(row.rank)]),
                       h.td([h.Class("cellv"), h.Style(row.cost > 0 ? costShade((Math.log(row.cost) - low) / (high - low || 1)) : EMPTY_SHADE)], [row.cost > 0 ? fmtUsd(row.cost) : "–"]),
                     ],
                   ),
@@ -512,12 +522,12 @@ const flaggedView = (h: H, derived: Derived, flagged: { readonly key: string; re
   );
 };
 
-export const breakdownView = (h: H, derived: Derived, heat: Model["heat"]): Html =>
-  h.section(
+export const breakdownView = (h: H, derived: Derived, heat: Model["heat"], ranking: Ranking): Html =>
+  h.div(
     [],
     [
       h.h2([], ["Breakdown"]),
-      heatmapView(h, derived, heat),
+      heatmapView(h, derived, heat, ranking),
       heat.mode === "choices" ? Option.match(heat.maybeFlagged, { onNone: () => h.empty, onSome: (flagged) => flaggedView(h, derived, flagged) }) : h.empty,
     ],
   );

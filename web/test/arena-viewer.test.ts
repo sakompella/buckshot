@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 
 import { roundStory, ShellTracker } from "../src/arena-viewer/analysis.ts";
 import type { Seat } from "../src/arena-viewer/api.ts";
-import { type BlockTally, blockRate, bradleyTerry, colorOf, type Game, quantile, rng, withCohorts } from "../src/arena-viewer/page/data.ts";
+import { type BlockTally, blockRate, bradleyTerry, colorOf, type Game, quantile, rankOrder, rng, withCohorts } from "../src/arena-viewer/page/data.ts";
 
 const randomGames = (seed: number): ReadonlyArray<Game> => {
   const random = rng(seed);
@@ -211,4 +211,28 @@ test("a cohort is the kind of comparison, pooled over code hashes, and named for
   const cohortOf = new Map(withCohorts(seats).map(({ matchId, cohort }) => [matchId, cohort]));
 
   expect([..."abcdef"].map((matchId) => cohortOf.get(matchId))).toEqual(["Cross-model (medium)", "Cross-model (medium)", "Sonnet efforts", "Sonnet efforts", "Opus xhigh vs Astra", "Opus xhigh vs Astra"]);
+});
+
+test("rank order puts higher win share first, breaks ties by Elo, and keeps every config once", () => {
+  const random = rng(5);
+
+  for (let round = 0; round < 50; round++) {
+    // Win shares on a coarse grid so ties are common.
+    const configs = Array.from({ length: 1 + Math.floor(random() * 12) }, (_config, index) => ({ label: `c${index}`, winShare: Math.floor(random() * 5) / 4, elo: Math.round(random() * 400 - 200) }));
+    const ordered = rankOrder(configs, ({ elo }) => elo);
+
+    expect(ordered.map(({ label }) => label).toSorted()).toEqual(configs.map(({ label }) => label).toSorted());
+
+    ordered.slice(1).forEach((config, index) => {
+      const above = ordered[index];
+
+      expect(above).toBeDefined();
+
+      if (above === undefined) return;
+
+      expect(above.winShare).toBeGreaterThanOrEqual(config.winShare);
+
+      if (above.winShare === config.winShare) expect(above.elo).toBeGreaterThanOrEqual(config.elo);
+    });
+  }
 });

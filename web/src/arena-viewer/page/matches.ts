@@ -44,15 +44,14 @@ const rowView = (h: H, match: MatchRow): Html =>
     ],
   );
 
-export const matchesView = (h: H, filters: Html, matches: ReadonlyArray<MatchRow>, list: Model["matchList"]): Html => {
+export const matchesView = (h: H, matches: ReadonlyArray<MatchRow>, list: Model["matchList"]): Html => {
   const rows = rowsOf(matches, list.query);
 
-  return h.section(
+  return h.div(
     [],
     [
       h.h2([], ["Matches"]),
       h.p([h.Class("sub")], ["Every started match; times are Pacific."]),
-      filters,
       h.div(
         [h.Class("bar")],
         [

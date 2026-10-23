@@ -8,7 +8,7 @@ import { withCohorts } from "./data.ts";
 import { derive } from "./derived.ts";
 import { picksOf } from "./interesting.ts";
 import { MORE_ROWS } from "./matches.ts";
-import { type Filter, Message, Model, Tab, type Viewport } from "./model.ts";
+import { type Filter, Message, Model, Section, type Viewport } from "./model.ts";
 import { replayIndex, stepsOf } from "./replay.ts";
 import { view } from "./view.ts";
 
@@ -45,10 +45,44 @@ const LoadMatch = Command.define("LoadMatch", {
     ),
 });
 
-const WriteHash = Command.define("WriteHash", {
-  args: { tab: Tab },
-  messages: [Message.CompletedHashWrite],
-  execute: ({ tab }) => Effect.sync(() => history.replaceState(null, "", `#${tab}`)).pipe(Effect.as(Message.CompletedHashWrite())),
+const sectionOfHash = (hash: string): Option.Option<Section> => Schema.decodeUnknownOption(Section)(hash.replace(/^#/, ""));
+
+// The bar that stays at the top: the jump menu and filters together on a wide screen, the jump menu alone below.
+const stickyHeight = (): number => {
+  const sticky = [...document.querySelectorAll(".top, nav")].find((element) => getComputedStyle(element).position === "sticky");
+
+  return sticky?.getBoundingClientRect().height ?? 0;
+};
+
+const scrollToSection = (section: Section) => {
+  const target = document.getElementById(section);
+
+  // The section's top rule tucks under the bar's own.
+  if (target !== null) scrollTo(0, target.getBoundingClientRect().top + scrollY - stickyHeight() + 1);
+};
+
+/** Scrolls a section's heading to just below the sticky bar and puts the section in the URL. */
+const JumpTo = Command.define("JumpTo", {
+  args: { section: Section },
+  messages: [Message.CompletedScroll],
+  execute: ({ section }) =>
+    Effect.sync(() => {
+      history.replaceState(history.state, "", `#${section}`);
+      scrollToSection(section);
+    }).pipe(Effect.as(Message.CompletedScroll())),
+});
+
+const nextFrame = Effect.callback<void>((resume) => {
+  requestAnimationFrame(() => requestAnimationFrame(() => resume(Effect.void)));
+});
+
+/** Scrolls to the section the URL names once the page has drawn it: the browser's own jump came before the data. */
+const ScrollToHash = Command.define("ScrollToHash", {
+  messages: [Message.CompletedScroll],
+  execute: nextFrame.pipe(
+    Effect.map(() => Option.map(sectionOfHash(location.hash), scrollToSection)),
+    Effect.as(Message.CompletedScroll()),
+  ),
 });
 
 // An open replay owns one history entry, so the phone's back gesture closes it instead of leaving the page.
@@ -64,12 +98,6 @@ const LeaveReplayHistory = Command.define("LeaveReplayHistory", {
   execute: Effect.sync(() => {
     if (Schema.is(ReplayHistory)(history.state)) history.back();
   }).pipe(Effect.as(Message.CompletedHistoryChange())),
-});
-
-// A tab opens at its top, not at the scroll position the last tab was left at.
-const ScrollToTop = Command.define("ScrollToTop", {
-  messages: [Message.CompletedScroll],
-  execute: Effect.sync(() => scrollTo(0, 0)).pipe(Effect.as(Message.CompletedScroll())),
 });
 
 /** Asks for every match detail in `ids` the model does not have yet. */
@@ -122,15 +150,19 @@ const withFilter = (model: Model, change: (filter: Filter) => Filter): Return =>
 export const update = (model: Model, message: Message): Return =>
   Message.match<Return>(message, {
     ResizedViewport: (viewport) => ({ model: modifyFields(model, { viewport: () => viewport }) }),
-    ClickedTab: ({ tab }) => ({ model: modifyFields(model, { tab: () => tab, maybeRateTip: () => Option.none() }), commands: [WriteHash({ tab }), ScrollToTop()] }),
-    NavigatedToTab: ({ tab }) => ({ model: modifyFields(model, { tab: () => tab }), commands: [ScrollToTop()] }),
-    CompletedHashWrite: () => ({ model }),
-    SucceededLoad: ({ loaded }) => withPickedMatches(modifyFields(model, { data: () => AsyncData.succeed(loaded) })),
+    ClickedJump: ({ section }) => ({ model, commands: [JumpTo({ section })] }),
+    NavigatedToHash: () => ({ model, commands: [ScrollToHash()] }),
+    SucceededLoad: ({ loaded }) => {
+      const loadedModel = withPickedMatches(modifyFields(model, { data: () => AsyncData.succeed(loaded) }));
+
+      return { ...loadedModel, commands: [...(loadedModel.commands ?? []), ScrollToHash()] };
+    },
     FailedLoad: ({ error }) => ({ model: modifyFields(model, { data: () => AsyncData.fail(error) }) }),
     SelectedCohort: ({ cohort }) => withFilter(model, (filter) => ({ ...filter, cohort })),
     ToggledEffort: ({ effort }) => withFilter(model, (filter) => ({ ...filter, offEfforts: toggled(filter.offEfforts, effort) })),
     ToggledModel: ({ name }) => withFilter(model, (filter) => ({ ...filter, offModels: toggled(filter.offModels, name) })),
     ToggledAllConfigs: () => withFilter(model, (filter) => ({ ...filter, isAllConfigs: !filter.isAllConfigs })),
+    SelectedRanking: ({ ranking }) => ({ model: modifyFields(model, { ranking: () => ranking }) }),
     SelectedScatterShow: ({ show }) => ({ model: modifyFields(model, { scatter: (scatter) => ({ ...scatter, show }) }) }),
     SelectedScatterAxis: ({ axis }) => ({ model: modifyFields(model, { scatter: (scatter) => ({ ...scatter, axis }) }) }),
     HoveredPoint: ({ key }) => ({ model: modifyFields(model, { scatter: (scatter) => ({ ...scatter, maybeHover: Option.some(key) }) }) }),
@@ -170,18 +202,16 @@ export const update = (model: Model, message: Message): Return =>
 
 // INIT
 
-const tabOfHash = (hash: string): Option.Option<Tab> => Schema.decodeUnknownOption(Tab)(hash.replace(/^#/, ""));
-
-const Flags = Schema.Struct({ viewport: Schema.Struct({ width: Schema.Number, height: Schema.Number }), hash: Schema.String });
+const Flags = Schema.Struct({ viewport: Schema.Struct({ width: Schema.Number, height: Schema.Number }) });
 
 type Flags = typeof Flags.Type;
 
-const init: Runtime.ApplicationInit<Model, Message, Flags> = ({ viewport, hash }) => ({
+const init: Runtime.ApplicationInit<Model, Message, Flags> = ({ viewport }) => ({
   model: {
     viewport,
-    tab: Option.getOrElse(tabOfHash(hash), (): Tab => "overview"),
     data: AsyncData.Loading(),
     filter: { cohort: "all", offEfforts: [], offModels: [], isAllConfigs: true },
+    ranking: "elo",
     scatter: { show: "kept", axis: "cost", maybeHover: Option.none(), maybePin: Option.none() },
     heat: { mode: "opp", sort: "rating", isBestOnly: false, maybeTip: Option.none(), maybeFlagged: Option.none() },
     leaderboard: { maybeOpen: Option.none(), maybeTip: Option.none() },
@@ -220,9 +250,7 @@ const subscriptions = Subscription.make<Model, Message>()((entry) => ({
         ),
     },
   ),
-  hash: Subscription.persistentEntry(
-    Dom.streamFromEventFilterMap({ target: window, type: "hashchange", filterMapEvent: () => Option.map(tabOfHash(location.hash), (tab) => Message.NavigatedToTab({ tab })) }),
-  ),
+  hash: Subscription.persistentEntry(Dom.streamFromEvent({ target: window, type: "hashchange", mapEvent: () => Message.NavigatedToHash() })),
 }));
 
 const application = Runtime.makeApplication({
@@ -235,4 +263,4 @@ const application = Runtime.makeApplication({
   container: document.getElementById("root"),
 });
 
-Runtime.run(application, { flags: Effect.sync(() => ({ viewport: viewportNow(), hash: location.hash })) });
+Runtime.run(application, { flags: Effect.sync(() => ({ viewport: viewportNow() })) });
