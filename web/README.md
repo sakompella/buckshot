@@ -270,10 +270,11 @@ fractionally, a Gaussian prior (standard deviation 3 nats) keeps it finite, the
 scale has mean 0, and the 95% intervals refit 200 resamples of whole seed blocks.
 Effort sweeps join the other models through their medium configs, so one scale
 covers every config and no filter changes it. Rank is a place 1, 2, 3, ... for
-every config. Under one cohort it is the place by observed win share (the mean
-over scored matches) among all of that cohort's configs before the chip and switch
-filters, ties going to the higher Elo. Under "All cohorts" it is the place by Elo,
-since pooling every cohort's win shares would count the effort sweeps' self-play.
+every config. The leaderboards rank by observed win share (the mean over scored
+matches) within each cohort, among all of its configs before the chip and switch
+filters, ties going to the higher Elo. The scatter and heatmap do the same under one
+cohort. Under "All cohorts" they rank by the pooled Elo instead, since pooling every
+cohort's win shares would count the effort sweeps' self-play.
 
 A match row, an interesting match or a
 flagged move opens its replay: health through the match,

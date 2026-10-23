@@ -59,17 +59,6 @@ const PAIRINGS: ReadonlyArray<readonly [string, string]> = [
   ["a-medium", "b-medium"],
 ];
 
-/** A generator whose consecutive draws are independent enough to play games from; rng's are too correlated for that. */
-const mulberry32 = (seed: number) => () => {
-  seed = (seed + 0x6d2b79f5) | 0;
-
-  let mixed = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-
-  mixed = (mixed + Math.imul(mixed ^ (mixed >>> 7), 61 | mixed)) ^ mixed;
-
-  return ((mixed ^ (mixed >>> 14)) >>> 0) / 4294967296;
-};
-
 const playedGames = (random: () => number, perPairing: number): ReadonlyArray<Game> => {
   const elo = new Map(TRUE_ELO);
   const strength = (id: string) => elo.get(id) ?? 0;
@@ -81,11 +70,31 @@ const playedGames = (random: () => number, perPairing: number): ReadonlyArray<Ga
 
 test("one pooled Bradley-Terry fit recovers known strengths, including configs that only met their own model", () => {
   for (let seed = 1; seed <= 10; seed++) {
-    const ratings = bradleyTerry(playedGames(mulberry32(seed), 1000));
+    const ratings = bradleyTerry(playedGames(rng(seed), 1000));
     const mean = TRUE_ELO.reduce((total, [, elo]) => total + elo, 0) / TRUE_ELO.length;
 
     for (const [id, elo] of TRUE_ELO) expect(Math.abs((ratings.get(id) ?? Number.NaN) - (elo - mean))).toBeLessThan(35);
   }
+});
+
+test("a block bootstrap's resamples include every block about equally often", () => {
+  const blocks = 1000;
+  const reps = 400;
+  const random = rng(3);
+  const included = new Float64Array(blocks);
+
+  for (let draw = 0; draw < blocks * reps; draw++) {
+    const block = Math.floor(random() * blocks);
+
+    included[block] = (included[block] ?? 0) + 1;
+  }
+
+  const perRep = Array.from(included, (count) => count / reps);
+  const spread = Math.sqrt(perRep.reduce((total, value) => total + (value - 1) ** 2, 0) / blocks);
+
+  expect(Math.min(...perRep)).toBeGreaterThan(0.8);
+  expect(Math.max(...perRep)).toBeLessThan(1.2);
+  expect(spread).toBeLessThan(0.1);
 });
 
 test("a config that wins every game is rated high but finite", () => {

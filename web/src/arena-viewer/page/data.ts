@@ -183,14 +183,18 @@ export const quantile = (sorted: ArrayLike<number>, p: number): number => {
   return low + (high - low) * (at - Math.floor(at));
 };
 
-/** A deterministic generator, so intervals do not flicker between renders. */
+/** A deterministic generator (mulberry32: 32-bit state, exact integer arithmetic), so intervals do not flicker between renders. */
 export const rng = (seed: number) => {
-  let state = seed;
+  let state = seed | 0;
 
   return () => {
-    state = (state * 1103515245 + 12345) & 0x7fffffff;
+    state = (state + 0x6d2b79f5) | 0;
 
-    return state / 0x80000000;
+    let mixed = Math.imul(state ^ (state >>> 15), 1 | state);
+
+    mixed = (mixed + Math.imul(mixed ^ (mixed >>> 7), 61 | mixed)) ^ mixed;
+
+    return ((mixed ^ (mixed >>> 14)) >>> 0) / 4294967296;
   };
 };
 
@@ -265,8 +269,8 @@ export interface Rate {
   readonly blocks: number;
 }
 
-// Every bootstrap draws from rng(7) from the start, so the draws are generated once and kept, as the generator's
-// 31-bit states, and extended when a bootstrap needs more.
+// Every bootstrap draws from rng(7) from the start, so the draws are generated once and kept, as 31-bit integers
+// (the generator's draws scaled), and extended when a bootstrap needs more.
 let draws = new Int32Array(0);
 
 const drawsFor = (count: number): Int32Array => {
