@@ -2,7 +2,8 @@ import { expect, test } from "bun:test";
 
 import { roundStory, ShellTracker } from "../src/arena-viewer/analysis.ts";
 import type { Seat } from "../src/arena-viewer/api.ts";
-import { type BlockTally, blockRate, bradleyTerry, colorOf, type Game, quantile, rankOrder, rng, withCohorts } from "../src/arena-viewer/page/data.ts";
+import { type BlockTally, blockRate, colorOf, quantile, rankOrder, rng, withCohorts } from "../src/arena-viewer/page/data.ts";
+import { bradleyTerry, type Game, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 
 const randomGames = (seed: number): ReadonlyArray<Game> => {
   const random = rng(seed);
@@ -36,6 +37,63 @@ test("Bradley-Terry ranks a player that wins more of the same games higher", () 
 
   expect(ratings.get("x") ?? 0).toBeGreaterThan(ratings.get("y") ?? 0);
   expect(bradleyTerry([...games, { a: "x", b: "y", sa: 1 }]).get("x") ?? 0).toBeGreaterThan(ratings.get("x") ?? 0);
+});
+
+// Two models' effort sweeps joined only through their medium configs: the shape of the real data.
+const TRUE_ELO: ReadonlyArray<readonly [string, number]> = [
+  ["a-low", -120],
+  ["a-medium", 40],
+  ["a-high", 90],
+  ["b-low", -60],
+  ["b-medium", 10],
+  ["b-high", 40],
+];
+
+const PAIRINGS: ReadonlyArray<readonly [string, string]> = [
+  ["a-low", "a-medium"],
+  ["a-medium", "a-high"],
+  ["a-low", "a-high"],
+  ["b-low", "b-medium"],
+  ["b-medium", "b-high"],
+  ["b-low", "b-high"],
+  ["a-medium", "b-medium"],
+];
+
+/** A generator whose consecutive draws are independent enough to play games from; rng's are too correlated for that. */
+const mulberry32 = (seed: number) => () => {
+  seed = (seed + 0x6d2b79f5) | 0;
+
+  let mixed = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+
+  mixed = (mixed + Math.imul(mixed ^ (mixed >>> 7), 61 | mixed)) ^ mixed;
+
+  return ((mixed ^ (mixed >>> 14)) >>> 0) / 4294967296;
+};
+
+const playedGames = (random: () => number, perPairing: number): ReadonlyArray<Game> => {
+  const elo = new Map(TRUE_ELO);
+  const strength = (id: string) => elo.get(id) ?? 0;
+
+  return PAIRINGS.flatMap(([a, b]) =>
+    Array.from({ length: perPairing }, () => ({ a, b, sa: random() < 1 / (1 + 10 ** ((strength(b) - strength(a)) / 400)) ? 1 : 0 })),
+  );
+};
+
+test("one pooled Bradley-Terry fit recovers known strengths, including configs that only met their own model", () => {
+  for (let seed = 1; seed <= 10; seed++) {
+    const ratings = bradleyTerry(playedGames(mulberry32(seed), 1000));
+    const mean = TRUE_ELO.reduce((total, [, elo]) => total + elo, 0) / TRUE_ELO.length;
+
+    for (const [id, elo] of TRUE_ELO) expect(Math.abs((ratings.get(id) ?? Number.NaN) - (elo - mean))).toBeLessThan(35);
+  }
+});
+
+test("a config that wins every game is rated high but finite", () => {
+  const ratings = bradleyTerry(Array.from({ length: 30 }, () => ({ a: "x", b: "y", sa: 1 })));
+
+  expect(ratings.get("x") ?? 0).toBeGreaterThan(100);
+  expect(Number.isFinite(ratings.get("x"))).toBe(true);
+  expect(Number.isFinite(ratings.get("y"))).toBe(true);
 });
 
 // The bootstrap as written out plainly: every resample draws from a fresh rng(7).
@@ -211,6 +269,30 @@ test("a cohort is the kind of comparison, pooled over code hashes, and named for
   const cohortOf = new Map(withCohorts(seats).map(({ matchId, cohort }) => [matchId, cohort]));
 
   expect([..."abcdef"].map((matchId) => cohortOf.get(matchId))).toEqual(["Cross-model (medium)", "Cross-model (medium)", "Sonnet efforts", "Sonnet efforts", "Opus xhigh vs Astra", "Opus xhigh vs Astra"]);
+});
+
+test("pooled ratings cover every config of a completed match, over every tournament, with an interval around each", () => {
+  const random = rng(4);
+
+  const seats = Array.from({ length: 60 }, (_match, index) => {
+    const [a, b] = PAIRINGS[index % PAIRINGS.length] ?? ["", ""];
+    const aWins = random() < 0.5;
+
+    const split = (config: string, winShare: number, position: number) => {
+      const [model = "", effort = ""] = config.split("-");
+
+      return { ...SEAT, matchId: `m${index}`, tournament: `t${index % 2}`, seedBlock: `block${Math.floor(index / 2)}`, model, effort, position, winShare, cohort: "" };
+    };
+
+    return [split(a, aWins ? 1 : 0, 0), split(b, aWins ? 0 : 1, 1)];
+  }).flat();
+
+  const partial = { ...SEAT, matchId: "partial", model: "c", effort: "low", status: "partial" as const, cohort: "" };
+  const ratings = pooledRatings([...seats, partial, { ...partial, model: "d", player: "B", position: 1 }]);
+
+  expect([...ratings.keys()].toSorted()).toEqual(TRUE_ELO.map(([id]) => id.replace("-", "|")).toSorted());
+
+  for (const { lo, hi } of ratings.values()) expect(lo).toBeLessThan(hi);
 });
 
 test("rank order puts higher win share first, breaks ties by Elo, and keeps every config once", () => {
