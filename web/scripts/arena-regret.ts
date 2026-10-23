@@ -49,9 +49,11 @@ if (!Number.isSafeInteger(limits.depth) || !Number.isSafeInteger(limits.budget) 
 
 /** Shard `number` of `count`, counted from 1. */
 const shard = (() => {
-  const [, number = NaN, count = NaN] = /^(\d+)\/(\d+)$/.exec(values.shard ?? "1/1")?.map(Number) ?? [];
+  const parsed = /^(\d+)\/(\d+)$/.exec(values.shard ?? "1/1");
+  const number = Number(parsed?.[1]);
+  const count = Number(parsed?.[2]);
 
-  if (number < 1 || number > count) {
+  if (parsed === null || number < 1 || number > count) {
     console.error(`--shard takes K/N with 1 <= K <= N, not ${values.shard}.`);
     process.exit(1);
   }
@@ -189,8 +191,8 @@ for (const [index, match] of matches.entries()) {
     scoreMatch(match);
   } catch (error) {
     // One bad match must not stop the shard for hours; it is listed again at the end and a rerun retries it.
-    failed.push(match.name);
-    console.error(`FAILED ${match.name}: ${error instanceof Error ? error.message : String(error)}`);
+    failed.push(match.id);
+    console.error(`FAILED ${match.name} (${match.id}): ${error instanceof Error ? error.message : String(error)}`);
   }
 
   if (values.all === true) console.error(`shard ${shard.number}/${shard.count}: match ${index + 1}/${matches.length}, ${times.length} decisions scored`);
