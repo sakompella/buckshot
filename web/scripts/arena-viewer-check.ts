@@ -80,7 +80,7 @@ const smallTargets = (page: Page) =>
     }),
   );
 
-const SECTIONS = ["scatter", "breakdown", "interesting", "seats", "reliability", "matches", "leaderboards"] as const;
+const SECTIONS = ["scatter", "interesting", "seats", "reliability", "matches", "leaderboards", "breakdown"] as const;
 
 // How far a section's top sits below the sticky bar after a jump (0 or 1 is right), and whether the URL names it.
 const jumpedTo = (page: Page, section: string) =>

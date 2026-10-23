@@ -253,9 +253,9 @@ The look borrows from the studio viewer in
 analysis database (`scripts/arena-import.ts` builds it; see
 `docs/arena/database.md`) at http://127.0.0.1:8790/ by default, with no auth.
 It is one long page: the hero numbers, the cost, moves or output tokens vs rating
-scatter, the breakdown heatmaps, a few interesting matches, the table position and
-round-1 starter charts, the reliability charts (failed calls, faults and the time
-they cost per config), the match list and the leaderboard by cohort. Seats and
+scatter, a few interesting matches, the table position and round-1 starter
+charts, the reliability charts (failed calls, faults and the time they cost per
+config), the match list, the leaderboard by cohort and, last, the breakdown heatmaps. Seats and
 reliability fold their full tables under the charts. A jump menu at the top links
 to each section's anchor (`#scatter`, `#seats`, `#matches`, ...), and the filter bar
 under it applies to the whole page; on a wide screen both stay at the top. The
