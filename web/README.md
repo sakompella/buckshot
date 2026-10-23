@@ -267,7 +267,9 @@ rating columns), an Elo / Rank toggle switches all of them. Elo is the
 Bradley-Terry rating. Rank is a place 1, 2, 3, ... by observed win share (the
 mean over scored matches) among all of the cohort's configs before the chip and
 switch filters, ties going to the higher Elo; the scatter and heatmap rank the
-configs pooled over the chosen cohort, or over every cohort for "All cohorts".
+configs pooled over the chosen cohort. "All cohorts" uses the medium cross-model
+cohort's places, since pooling every cohort would count the effort sweeps' self-play;
+configs outside that cohort show "–" in the heatmap and drop off the rank scatter.
 
 A match row, an interesting match or a
 flagged move opens its replay: health through the match,

@@ -176,14 +176,14 @@ const UNSTICK = ".top, nav { position: static !important; }";
 
 // One choice drives the scatter, the heatmap and the leaderboards: each section's toggle shows it.
 const checkRanking = async (page: Page, scatter: ReturnType<Page["locator"]>) => {
-  const ranking = async () => [await textOf(page, ".card h2"), "| y ticks", await yTicks(page), "| heat header", await textOf(page, "table.heat thead th:nth-last-child(2)"), "| heat first row", await textOf(page, "table.heat tbody tr"), "| leaderboard first row", await textOf(page, "table.lbt tbody tr.row"), "| toggles on", (await page.locator(".toggle button.on", { hasText: /^(Elo|Rank)$/ }).allInnerTexts()).join(" ")];
+  const ranking = async () => [await textOf(page, ".card h2"), "| y ticks", await yTicks(page), "| heat header", await textOf(page, "table.heat thead th:nth-last-child(2)"), "| heat first row", await textOf(page, "table.heat tbody tr"), "| unranked heat rows", (await page.locator("table.heat td.total").allInnerTexts()).filter((text) => text === "–").length, "| leaderboard first row", await textOf(page, "table.lbt tbody tr.row"), "| toggles on", (await page.locator(".toggle button.on", { hasText: /^(Elo|Rank)$/ }).allInnerTexts()).join(" ")];
 
   console.log("Elo:", ...(await ranking()));
   await scatter.getByRole("button", { name: "Rank", exact: true }).click();
   await settled(page);
   console.log("Rank:", ...(await ranking()));
   await scatter.screenshot({ path: shot("scatter-rank") });
-  await heat(page).screenshot({ path: shot("heat-rank") });
+  await heat(page).screenshot({ path: shot("heat-rank"), style: UNSTICK });
   await page.locator(".lb").screenshot({ path: shot("leaderboard-rank"), style: UNSTICK });
   await page.locator(".lb").getByRole("button", { name: "Elo", exact: true }).click();
   await settled(page);
