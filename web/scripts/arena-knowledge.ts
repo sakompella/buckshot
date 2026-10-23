@@ -17,13 +17,13 @@ import {
   type Ledger,
   ledgerMismatch,
   ledgerStep,
-  loadBelief,
   loadLog,
   positionKeys,
   relativeText,
   shotOf,
   stolenClue,
 } from "../src/analysis/knowledge.ts";
+import { loadPlayer } from "../src/analysis/player.ts";
 import { RunManifest } from "../src/arena/match.ts";
 import { MoveLine } from "../src/arena/runlog.ts";
 import { GameEvent, type Seat, Secret } from "../src/domain.ts";
@@ -59,7 +59,7 @@ const source = new Database(resolve(values.db), { readonly: true });
 
 const scratch = mkdtempSync(join(tmpdir(), "buckshot-knowledge-"));
 
-const belief = await loadBelief(scratch).finally(() => rmSync(scratch, { recursive: true, force: true }));
+const belief = await loadPlayer(scratch).finally(() => rmSync(scratch, { recursive: true, force: true }));
 
 const decodeManifest = Schema.decodeUnknownSync(Schema.fromJsonString(RunManifest));
 
