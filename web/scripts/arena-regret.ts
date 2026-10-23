@@ -15,24 +15,28 @@ import { rosterOf } from "../src/players.ts";
 import { agentMoveText } from "../src/text.ts";
 import { replayOf } from "../src/viewer/replay.ts";
 
-// Scores every agent decision of one match with the minimax player
-// (src/analysis/regret.ts) and writes the rows to the `regret` table of a
-// derived database. The analysis database (docs/arena/database.md) is opened
-// read only. Each decision's position is the deciding player's own log and the
-// public board, rebuilt by replaying the match as scripts/arena-knowledge.ts
-// does; forced grabs and fallback moves are not scored. Each row is committed as
-// it is scored, and a rerun skips the decisions already scored with the same
-// player version, depth and budget. See docs/arena/analysis/regret.md.
+// Scores every agent decision of one match, or of every replay-validated match,
+// with the minimax player (src/analysis/regret.ts) and writes the rows to the
+// `regret` table of a derived database. The analysis database
+// (docs/arena/database.md) is opened read only. Each decision's position is the
+// deciding player's own log and the public board, rebuilt by replaying the match
+// as scripts/arena-knowledge.ts does; forced grabs and fallback moves are not
+// scored. Each row is committed as it is scored, and a rerun skips the decisions
+// already scored with the same player version, depth and budget. Shards split
+// the matches between processes that may share one output file (WAL, so their
+// writes queue). See docs/arena/analysis/regret.md.
 //
-//   bun scripts/arena-regret.ts --db <buckshot.sqlite> --out <derived.sqlite> --match <match name> [--depth 6] [--budget 20000]
+//   bun scripts/arena-regret.ts --db <buckshot.sqlite> --out <derived.sqlite> (--match <match name> | --all [--shard K/N]) [--depth 6] [--budget 20000]
+
+const USAGE = "Usage: bun scripts/arena-regret.ts --db <database> --out <derived.sqlite> (--match <match name> | --all [--shard K/N]) [--depth N] [--budget N]";
 
 const { values } = parseArgs({
   args: process.argv.slice(2),
-  options: { db: { type: "string" }, out: { type: "string" }, match: { type: "string" }, depth: { type: "string", default: "6" }, budget: { type: "string", default: "20000" } },
+  options: { db: { type: "string" }, out: { type: "string" }, match: { type: "string" }, all: { type: "boolean" }, shard: { type: "string" }, depth: { type: "string", default: "6" }, budget: { type: "string", default: "20000" } },
 });
 
-if (values.db === undefined || values.out === undefined || values.match === undefined) {
-  console.error("Usage: bun scripts/arena-regret.ts --db <database> --out <derived.sqlite> --match <match name> [--depth N] [--budget N]");
+if (values.db === undefined || values.out === undefined || (values.match === undefined) === (values.all !== true) || (values.shard !== undefined && values.all !== true)) {
+  console.error(USAGE);
   process.exit(1);
 }
 
@@ -43,7 +47,22 @@ if (!Number.isSafeInteger(limits.depth) || !Number.isSafeInteger(limits.budget) 
   process.exit(1);
 }
 
+/** Shard `number` of `count`, counted from 1. */
+const shard = (() => {
+  const [, number = NaN, count = NaN] = /^(\d+)\/(\d+)$/.exec(values.shard ?? "1/1")?.map(Number) ?? [];
+
+  if (number < 1 || number > count) {
+    console.error(`--shard takes K/N with 1 <= K <= N, not ${values.shard}.`);
+    process.exit(1);
+  }
+
+  return { number, count };
+})();
+
 const source = new Database(resolve(values.db), { readonly: true });
+
+// The importer may be writing the analysis database; wait for it instead of failing.
+source.exec("PRAGMA busy_timeout = 30000");
 
 const scratch = mkdtempSync(join(tmpdir(), "buckshot-regret-"));
 
@@ -59,6 +78,7 @@ const decodeLetter = Schema.decodeUnknownSync(Schema.Literals(["A", "B", "C", "D
 
 interface MatchRow {
   readonly id: string;
+  readonly name: string;
   readonly manifest_json: string;
 }
 
@@ -71,22 +91,26 @@ interface DecisionRow {
   readonly raw: string;
 }
 
-const match = source.query<MatchRow, [string]>("SELECT id, manifest_json FROM matches WHERE name = ? AND manifest_json IS NOT NULL AND replay_status = 'validated'").get(values.match);
+const matches = source
+  .query<MatchRow, []>(
+    `SELECT m.id, m.name, m.manifest_json FROM matches m JOIN tournaments t ON t.id = m.tournament_id
+     WHERE m.manifest_json IS NOT NULL AND m.replay_status = 'validated' ORDER BY t.name, m.name`,
+  )
+  .all()
+  .filter((match) => values.all === true || match.name === values.match)
+  .filter((_, index) => index % shard.count === shard.number - 1);
 
-if (match === null) {
+if (values.all !== true && matches.length === 0) {
   console.error(`No replay-validated match named ${values.match}.`);
   process.exit(1);
 }
-
-const decisions = source
-  .query<DecisionRow, [string]>("SELECT d.ordinal, d.player, d.label, d.by_whom, d.legal_json, r.raw FROM decisions d JOIN source_records r ON r.id = d.source_record WHERE d.match_id = ? ORDER BY d.ordinal")
-  .all(match.id);
 
 mkdirSync(dirname(resolve(values.out)), { recursive: true });
 
 const out = new Database(resolve(values.out), { create: true, strict: true });
 
 out.exec(`
+  PRAGMA busy_timeout = 30000;
   PRAGMA journal_mode = WAL;
   CREATE TABLE IF NOT EXISTS regret (
     match_id TEXT, ordinal INTEGER, player TEXT, label TEXT,
@@ -113,39 +137,63 @@ const put = (row: Readonly<Record<string, string | number | null>>): void => {
   out.query(`INSERT INTO regret (${keys.join(",")}) VALUES (${keys.map(() => "?").join(",")})`).run(...Object.values(row));
 };
 
-const manifest = decodeManifest(match.manifest_json);
-const moves: Array<MoveLine> = [];
-let replay = Result.getOrThrow(replayOf(Option.none(), manifest, []));
-const current = (): AgentSource => Option.getOrThrow(replay.session.current(replay.table));
-const roster = rosterOf(current().game.seats, current().letters);
 const times: Array<number> = [];
 
-const done = new Set(
-  out
-    .query<{ ordinal: number }, [string, string, number, number]>("SELECT ordinal FROM regret WHERE match_id = ? AND evaluator = ? AND max_depth = ? AND budget = ?")
-    .all(match.id, player.version, limits.depth, limits.budget)
-    .map(({ ordinal }) => ordinal),
-);
+/** Scores the agent decisions of a match that the output does not hold yet. */
+const scoreMatch = (match: MatchRow): void => {
+  const decisions = source
+    .query<DecisionRow, [string]>("SELECT d.ordinal, d.player, d.label, d.by_whom, d.legal_json, r.raw FROM decisions d JOIN source_records r ON r.id = d.source_record WHERE d.match_id = ? ORDER BY d.ordinal")
+    .all(match.id);
 
-for (const decision of decisions) {
-  if (decision.by_whom === "agent" && !done.has(decision.ordinal)) {
-    const before = current();
-    const me = Option.getOrThrow(roster.find(decodeLetter(decision.player))).seat;
-    // The arena plays every match with items (src/viewer/replay.ts starts it so).
-    const input = { table: before.game.table, items: true, board: boardOf(before.game), log: ownLog(before.events, before.learned, me), me };
-    const menu = decodeMenu(decision.legal_json).map(({ label }) => label);
-    const started = performance.now();
-    const regret = regretOf(player.analyse(input, limits), (steps) => agentMoveText(roster, me, steps), menu, decision.label);
-    const ms = performance.now() - started;
-    times.push(ms);
+  const done = new Set(
+    out
+      .query<{ ordinal: number }, [string, string, number, number]>("SELECT ordinal FROM regret WHERE match_id = ? AND evaluator = ? AND max_depth = ? AND budget = ?")
+      .all(match.id, player.version, limits.depth, limits.budget)
+      .map(({ ordinal }) => ordinal),
+  );
 
-    put({ match_id: match.id, ordinal: decision.ordinal, player: decision.player, label: decision.label, evaluator: player.version, max_depth: limits.depth, budget: limits.budget, status: regret.status, nodes: regret.nodes, ms, ...scored(regret) });
+  if (decisions.every((decision) => decision.by_whom !== "agent" || done.has(decision.ordinal))) return;
+
+  const manifest = decodeManifest(match.manifest_json);
+  const moves: Array<MoveLine> = [];
+  let replay = Result.getOrThrow(replayOf(Option.none(), manifest, []));
+  const current = (): AgentSource => Option.getOrThrow(replay.session.current(replay.table));
+  const roster = rosterOf(current().game.seats, current().letters);
+
+  for (const decision of decisions) {
+    if (decision.by_whom === "agent" && !done.has(decision.ordinal)) {
+      const before = current();
+      const me = Option.getOrThrow(roster.find(decodeLetter(decision.player))).seat;
+      // The arena plays every match with items (src/viewer/replay.ts starts it so).
+      const input = { table: before.game.table, items: true, board: boardOf(before.game), log: ownLog(before.events, before.learned, me), me };
+      const menu = decodeMenu(decision.legal_json).map(({ label }) => label);
+      const started = performance.now();
+      const regret = regretOf(player.analyse(input, limits), (steps) => agentMoveText(roster, me, steps), menu, decision.label);
+      const ms = performance.now() - started;
+      times.push(ms);
+
+      put({ match_id: match.id, ordinal: decision.ordinal, player: decision.player, label: decision.label, evaluator: player.version, max_depth: limits.depth, budget: limits.budget, status: regret.status, nodes: regret.nodes, ms, ...scored(regret) });
+    }
+
+    moves.push(decodeMove(decision.raw));
+    replay = Result.getOrThrow(replayOf(Option.some(replay), manifest, moves));
+
+    if (Option.isSome(replay.divergence)) throw new Error(`${match.name}: ${Option.getOrThrow(replay.divergence)}`);
+  }
+};
+
+const failed: Array<string> = [];
+
+for (const [index, match] of matches.entries()) {
+  try {
+    scoreMatch(match);
+  } catch (error) {
+    // One bad match must not stop the shard for hours; it is listed again at the end and a rerun retries it.
+    failed.push(match.name);
+    console.error(`FAILED ${match.name}: ${error instanceof Error ? error.message : String(error)}`);
   }
 
-  moves.push(decodeMove(decision.raw));
-  replay = Result.getOrThrow(replayOf(Option.some(replay), manifest, moves));
-
-  if (Option.isSome(replay.divergence)) throw new Error(`${values.match}: ${Option.getOrThrow(replay.divergence)}`);
+  if (values.all === true) console.error(`shard ${shard.number}/${shard.count}: match ${index + 1}/${matches.length}, ${times.length} decisions scored`);
 }
 
 out.close();
@@ -156,4 +204,6 @@ const sorted = times.toSorted((a, b) => a - b);
 
 const at = (share: number) => Math.round(sorted[Math.min(sorted.length - 1, Math.floor(share * sorted.length))] ?? 0);
 
-console.error(JSON.stringify({ decisions: times.length, ms: { mean: Math.round(times.reduce((sum, ms) => sum + ms, 0) / Math.max(1, times.length)), p50: at(0.5), p95: at(0.95), max: at(1) } }));
+console.error(JSON.stringify({ decisions: times.length, failed, ms: { mean: Math.round(times.reduce((sum, ms) => sum + ms, 0) / Math.max(1, times.length)), p50: at(0.5), p95: at(0.95), max: at(1) } }));
+
+if (failed.length > 0) process.exit(1);
