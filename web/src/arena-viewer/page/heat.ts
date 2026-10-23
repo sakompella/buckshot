@@ -19,14 +19,13 @@ export interface HeatRow {
   readonly label: string;
   readonly color: string;
   readonly rating: number;
-  /** The place by win share, 1 first. */
-  /** None outside the ranked cohort (see Derived.ranks). */
-  readonly rank: number | undefined;
+  /** The place, 1 first (see Derived.ranks). */
+  readonly rank: number;
   readonly cost: number;
 }
 
-/** Higher is better on either ranking; an unranked row sorts last. */
-const scoreOf = (row: HeatRow, ranking: Ranking): number => (ranking === "elo" ? row.rating : -(row.rank ?? Number.POSITIVE_INFINITY));
+/** Higher is better on either ranking. */
+const scoreOf = (row: HeatRow, ranking: Ranking): number => (ranking === "elo" ? row.rating : -row.rank);
 
 interface HeatCol {
   readonly id: string;
@@ -341,10 +340,10 @@ const cellAt = (derived: Derived, mode: HeatMode, row: HeatRow, col: string): He
 
 export const heatRowsOf = memoLast((derived: Derived): ReadonlyArray<HeatRow> =>
   derived.pooled.flatMap((m) => {
-    const rating = derived.ratings.get(m.key);
+    const rating = derived.ratings.get(m.key)?.rating;
     const rank = derived.ranks.get(m.key);
 
-    return rating === undefined || m.scored.length === 0 ? [] : [{ key: m.key, model: m.model, label: m.label, color: m.color, rating, rank, cost: m.avgCost }];
+    return rating === undefined || rank === undefined || m.scored.length === 0 ? [] : [{ key: m.key, model: m.model, label: m.label, color: m.color, rating, rank, cost: m.avgCost }];
   }),
 );
 
@@ -413,8 +412,8 @@ const heatmapView = (h: H, derived: Derived, heat: Model["heat"], ranking: Ranki
                       header("model", "Model", "", "left"),
                       ...columns.map((col) => header(col.id, col.label, col.title, "", col.item)),
                       ranking === "elo"
-                        ? header("rating", "Elo (approx.)", "cross-model Bradley-Terry; effort rows add their offset from medium within their own sweep")
-                        : header("rating", "Rank", "place by observed win share among all the cohort's configs, before the filters; ties go to the higher Elo. All cohorts takes the medium cross-model places; other configs show –"),
+                        ? header("rating", "Elo", "Bradley-Terry rating fitted over every match of every tournament")
+                        : header("rating", "Rank", "place by observed win share among all the cohort's configs, before the filters; ties go to the higher Elo. All cohorts ranks by Elo"),
                       header("cost", "$/match", "avg list-price cost per player per scored match"),
                     ],
                   ),
@@ -447,7 +446,7 @@ const heatmapView = (h: H, derived: Derived, heat: Model["heat"], ranking: Ranki
                           [cell.text],
                         );
                       }),
-                      h.td([h.Class("total")], [ranking === "elo" ? fmtRating(row.rating) : String(row.rank ?? "–")]),
+                      h.td([h.Class("total")], [ranking === "elo" ? fmtRating(row.rating) : String(row.rank)]),
                       h.td([h.Class("cellv"), h.Style(row.cost > 0 ? costShade((Math.log(row.cost) - low) / (high - low || 1)) : EMPTY_SHADE)], [row.cost > 0 ? fmtUsd(row.cost) : "–"]),
                     ],
                   ),
