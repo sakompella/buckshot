@@ -1,6 +1,7 @@
 import { type Decisions, ITEMS } from "../api.ts";
-import { addTo, approxRatings, baseName, type BlockTally, blockRate, crossModelCohort, DEFAULT_EFFORT, groupBy, keyOf, type MatchRow, matchRows, type ModelStats, modelStats, rankOrder, type Rate, type SeatFull } from "./data.ts";
+import { addTo, baseName, type BlockTally, blockRate, groupBy, keyOf, type MatchRow, matchRows, type ModelStats, modelStats, rankOrder, type Rate, type SeatFull } from "./data.ts";
 import type { Filter, Loaded } from "./model.ts";
+import { pooledRatings, type Rating } from "./ratings.ts";
 
 // What the page shows, worked out from the loaded data and the filter. Each is
 // recomputed only when its inputs change, so hovering a chart stays cheap.
@@ -122,12 +123,11 @@ export interface Derived {
   readonly matchSeats: ReadonlyArray<SeatFull>;
   readonly byCohort: ReadonlyArray<ModelStats>;
   readonly pooled: ReadonlyArray<ModelStats>;
-  /** One approximate scale fitted on every seat: filters pick rows, not the scale. */
-  readonly ratings: ReadonlyMap<string, number>;
+  /** One rating per config, fitted over every match of every tournament: filters pick rows, not the scale. */
+  readonly ratings: ReadonlyMap<string, Rating>;
   /**
-   * Each config's place by win share in the chosen cohort, among all its rated configs whatever the filter (see
-   * rankOrder). "All cohorts" takes the medium cross-model cohort's places: pooling every cohort would count effort
-   * sweeps' self-play, so configs outside that cohort have no place.
+   * Each config's place among all the chosen cohort's configs whatever the filter: by win share within one cohort
+   * (see rankOrder), by rating under "All cohorts", since pooling every cohort would count effort sweeps' self-play.
    */
   readonly ranks: ReadonlyMap<string, number>;
   /** Every config pooled over each cohort and over all of them, whatever the filter: the scatter's fixed axes. */
@@ -143,7 +143,7 @@ export interface Derived {
 // A filter keeps or drops whole configs of a cohort, so whatever is grouped by cohort and config is worked out
 // once for every seat and then picked by the filter.
 
-const ratingsOf = memoLast((seats: ReadonlyArray<SeatFull>) => approxRatings(seats));
+const ratingsOf = memoLast((seats: ReadonlyArray<SeatFull>) => pooledRatings(seats));
 
 const allMatchesOf = memoLast((seats: ReadonlyArray<SeatFull>) => matchRows(seats));
 
@@ -190,10 +190,12 @@ const passes = (filter: Filter, main: ReadonlySet<string>, seat: SeatFull): bool
 
 const passingConfigs = (stats: ReadonlyArray<ModelStats>, filter: Filter, main: ReadonlySet<string>) => stats.filter(({ started: [first] }) => first !== undefined && passes(filter, main, first));
 
-const ranksOf = memoLast((pooled: ReadonlyArray<ModelStats>, ratings: ReadonlyMap<string, number>): ReadonlyMap<string, number> => {
+const ranksOf = memoLast((pooled: ReadonlyArray<ModelStats>, ratings: ReadonlyMap<string, Rating>, cohort: string): ReadonlyMap<string, number> => {
   const rated = pooled.filter((m) => m.scored.length > 0 && ratings.has(m.key));
+  const eloOf = (m: ModelStats) => ratings.get(m.key)?.rating ?? 0;
+  const ordered = cohort === "all" ? rated.toSorted((left, right) => eloOf(right) - eloOf(left) || left.label.localeCompare(right.label)) : rankOrder(rated, eloOf);
 
-  return new Map(rankOrder(rated, (m) => ratings.get(m.key) ?? 0).map((m, index) => [m.key, index + 1]));
+  return new Map(ordered.map((m, index) => [m.key, index + 1]));
 });
 
 const everyPooledOf = memoLast((seats: ReadonlyArray<SeatFull>): ReadonlyArray<ModelStats> => {
@@ -221,7 +223,7 @@ export const derive = memoLast((loaded: Loaded, filter: Filter): Derived => {
     byCohort: passingConfigs(byCohortOf(seats), filter, main),
     pooled: passingConfigs(inCohort, filter, main),
     ratings,
-    ranks: ranksOf(filter.cohort === "all" ? pooledByCohort(seats)(crossModelCohort(DEFAULT_EFFORT)) : inCohort, ratings),
+    ranks: ranksOf(inCohort, ratings, filter.cohort),
     everyPooled: everyPooledOf(seats),
     everyByCohort: byCohortOf(seats),
     matches: matchRows(matchSeats),

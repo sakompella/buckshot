@@ -12,6 +12,11 @@ const base = process.argv[2] ?? "http://127.0.0.1:8790";
 const outdir = process.argv[3] ?? "/tmp/arena-viewer-shots";
 const chrome = process.env["CHROME"] ?? "/etc/profiles/per-user/aditya/bin/chromium";
 const errors: Array<string> = [];
+const failures: Array<string> = [];
+
+const expectThat = (isOk: boolean, what: string) => {
+  if (!isOk) failures.push(what);
+};
 
 const shot = (name: string) => join(outdir, `${name}.png`);
 
@@ -160,7 +165,11 @@ const checkFixedAxes = async (page: Page, scatter: ReturnType<Page["locator"]>) 
     for (const [label, step] of steps) {
       await step();
       await settled(page);
-      console.log(name, label, "| points", await countOf(page, ".card svg g.pt"), "| axes unchanged:", (await axesOf(page)) === before, "| reliability scales unchanged:", (await reliabilityScales(page)) === scales);
+      const isSame = (await axesOf(page)) === before;
+      const isScaleSame = (await reliabilityScales(page)) === scales;
+
+      console.log(name, label, "| points", await countOf(page, ".card svg g.pt"), "| axes unchanged:", isSame, "| reliability scales unchanged:", isScaleSame);
+      expectThat(isSame && isScaleSame, `${name} axes moved after ${label}`);
 
       if (label === "max off") await scatter.screenshot({ path: shot(`scatter-${name}-max-off`) });
     }
@@ -168,6 +177,7 @@ const checkFixedAxes = async (page: Page, scatter: ReturnType<Page["locator"]>) 
     await filters.getByRole("button", { name: "max", exact: true }).click();
     await settled(page);
     console.log(name, "max on again | axes unchanged:", (await axesOf(page)) === before);
+    expectThat((await axesOf(page)) === before, `${name} axes moved after max came back on`);
   }
 };
 
@@ -188,6 +198,38 @@ const checkRanking = async (page: Page, scatter: ReturnType<Page["locator"]>) =>
   await page.locator(".lb").getByRole("button", { name: "Elo", exact: true }).click();
   await settled(page);
   console.log("back to Elo from the leaderboard:", await textOf(page, ".card h2"));
+};
+
+// Under every cohort choice and either ranking, every config the page draws has an Elo and a rank: no dash in the
+// heatmap or the leaderboards, and the same points in the scatter. In Elo the cohort choice leaves the axes where they are.
+const checkEveryConfigRated = async (page: Page, scatter: ReturnType<Page["locator"]>) => {
+  const cohorts = await page.locator(".filters select option").evaluateAll((options) => options.map((option) => option.getAttribute("value") ?? ""));
+  const dashes = (selector: string) => page.locator(selector).evaluateAll((cells) => cells.filter((cell) => cell.textContent?.trim() === "–").length);
+  const axesByCohort = new Set<string>();
+
+  for (const cohort of cohorts) {
+    await page.locator(".filters select").selectOption(cohort);
+
+    for (const ranking of ["Elo", "Rank"] as const) {
+      await scatter.getByRole("button", { name: ranking, exact: true }).click();
+      await settled(page);
+
+      const rows = await countOf(page, "table.heat tbody tr");
+      const missing = (await dashes("table.heat td.total")) + (await dashes(`table.lbt td[data-label="${ranking === "Elo" ? "Elo" : "rank"}"]`));
+      const points = await countOf(page, ".card svg g.pt");
+      const unlisted = await page.locator("table.heat td.total").evaluateAll((cells) => cells.filter((cell) => cell.textContent?.trim() === "").length);
+
+      console.log("cohort", cohort, ranking, "| heat rows", rows, "| scatter points", points, "| rows without a rating", missing + unlisted);
+      expectThat(missing + unlisted === 0, `${cohort} ${ranking}: a config shows a dash instead of a rating`);
+
+      if (ranking === "Elo" && points > 0) axesByCohort.add(await axesOf(page));
+    }
+  }
+
+  expectThat(axesByCohort.size <= 1, `scatter axes moved with the cohort choice (${axesByCohort.size} different sets)`);
+  await page.locator(".filters select").selectOption("all");
+  await scatter.getByRole("button", { name: "Elo", exact: true }).click();
+  await settled(page);
 };
 
 const checkDesktop = async (browser: Browser) => {
@@ -223,6 +265,7 @@ const checkDesktop = async (browser: Browser) => {
 
   await checkFixedAxes(page, scatter);
   await checkRanking(page, scatter);
+  await checkEveryConfigRated(page, scatter);
 
   for (const [mode, name] of [
     ["Win share vs opponent", "opp"],
@@ -351,6 +394,10 @@ for (const [name, width, height] of [
   await checkTouch(browser, name, width, height);
 }
 
+console.log("failed checks", failures);
+
 console.log("errors", errors, "| negative widths while a screenshot resized the window:", screenshotResizeErrors);
 
 await browser.close();
+
+if (failures.length > 0 || errors.length > 0) process.exitCode = 1;

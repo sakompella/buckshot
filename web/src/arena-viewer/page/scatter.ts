@@ -6,10 +6,11 @@ import { baseName, DEFAULT_EFFORT, fmtCount, groupBy, fmtPct, fmtRating, fmtUsd,
 import { leader, measureText, placeLabels, uncrowded } from "./labels.ts";
 import { memoLast } from "./derived.ts";
 import { Message, type Model, type Ranking, type ScatterAxis } from "./model.ts";
+import type { Rating } from "./ratings.ts";
 
 type H = HtmlBuilder<Message>;
 
-// Average cost, model moves or output tokens against the approximate Elo or the rank, one point per config, labelled
+// Average cost, model moves or output tokens against the Elo or the rank, one point per config, labelled
 // as on DeepSWE: the model's name, its effort below in small caps. The dashed line is the frontier: no other point is
 // both lower on the x axis and higher rated (or ranked).
 
@@ -67,15 +68,12 @@ interface Point {
   /** The x axis value. */
   readonly x: number;
   readonly rating: number;
-  /** The place by win share, 1 first; none outside the ranked cohort (see Derived.ranks). */
-  readonly rank: number | undefined;
+  /** The place, 1 first (see Derived.ranks). */
+  readonly rank: number;
 }
 
-// Rank mode only draws ranked points (see rankedOf); an unranked one sorts last.
-const placeOf = (point: Point): number => point.rank ?? Number.POSITIVE_INFINITY;
-
 /** Higher is better on either ranking. */
-const scoreOf = (point: Point, ranking: Ranking): number => (ranking === "elo" ? point.rating : -placeOf(point));
+const scoreOf = (point: Point, ranking: Ranking): number => (ranking === "elo" ? point.rating : -point.rank);
 
 const dominates = (other: Point, point: Point, ranking: Ranking) =>
   other.x <= point.x && scoreOf(other, ranking) >= scoreOf(point, ranking) && (other.x < point.x || scoreOf(other, ranking) > scoreOf(point, ranking));
@@ -121,14 +119,14 @@ const MONO = "ui-monospace, SFMono-Regular, Menlo, monospace";
 const halo = (width: number) => ({ "paint-order": "stroke", stroke: "#000", "stroke-width": `${width}`, "stroke-linejoin": "round" });
 
 const pointsOf = memoLast(
-  (stats: ReadonlyArray<ModelStats>, ratings: ReadonlyMap<string, number>, ranks: ReadonlyMap<string, number>): Readonly<Record<ScatterAxis, ReadonlyArray<Point>>> => {
+  (stats: ReadonlyArray<ModelStats>, ratings: ReadonlyMap<string, Rating>, ranks: ReadonlyMap<string, number>): Readonly<Record<ScatterAxis, ReadonlyArray<Point>>> => {
     const on = (axis: ScatterAxis): ReadonlyArray<Point> =>
       stats.flatMap((m) => {
-        const rating = ratings.get(m.key);
+        const rating = ratings.get(m.key)?.rating;
         const rank = ranks.get(m.key);
         const x = AXES[axis].valueOf(m);
 
-        return rating !== undefined && x > 0 && m.scored.length > 0 ? [{ m, x, rating, rank }] : [];
+        return rating !== undefined && rank !== undefined && x > 0 && m.scored.length > 0 ? [{ m, x, rating, rank }] : [];
       });
 
     return { cost: on("cost"), moves: on("moves"), tokens: on("tokens") };
@@ -155,8 +153,6 @@ const shownOf = memoLast((every: ReadonlyArray<Point>, kept: ReadonlyArray<strin
   return kept.flatMap((key) => every.filter((point) => point.m.key === key));
 });
 
-const rankedOf = memoLast((points: ReadonlyArray<Point>): ReadonlyArray<Point> => points.filter(({ rank }) => rank !== undefined));
-
 const L = 46;
 
 const T = 40;
@@ -172,12 +168,12 @@ interface Domain {
   readonly elo: readonly [number, number];
 }
 
-const domainOf = memoLast((every: ReadonlyArray<ModelStats>, ratings: ReadonlyMap<string, number>): Domain => {
+const domainOf = memoLast((every: ReadonlyArray<ModelStats>, ratings: ReadonlyMap<string, Rating>): Domain => {
   const rated = every.filter((m) => m.scored.length > 0 && ratings.has(m.key));
   const extent = (values: ReadonlyArray<number>): readonly [number, number] => [Math.min(...values), Math.max(...values)];
   const xOf = (axis: ScatterAxis) => extent(rated.flatMap((m) => (AXES[axis].valueOf(m) > 0 ? [AXES[axis].valueOf(m)] : [])));
 
-  return { x: { cost: xOf("cost"), moves: xOf("moves"), tokens: xOf("tokens") }, elo: extent(rated.map((m) => ratings.get(m.key) ?? 0)) };
+  return { x: { cost: xOf("cost"), moves: xOf("moves"), tokens: xOf("tokens") }, elo: extent(rated.map((m) => ratings.get(m.key)?.rating ?? 0)) };
 });
 
 const xScaleOf = (axis: Axis, least: number, most: number, left: number, right: number) => {
@@ -227,7 +223,7 @@ const yScaleOf = (ranking: Ranking, elo: readonly [number, number], places: numb
   );
 };
 
-const yValueOf = (point: Point, ranking: Ranking): number => (ranking === "elo" ? point.rating : placeOf(point));
+const yValueOf = (point: Point, ranking: Ranking): number => (ranking === "elo" ? point.rating : point.rank);
 
 const fmtY = (value: number, ranking: Ranking): string => (ranking === "elo" ? fmtRating(value) : String(value));
 
@@ -275,20 +271,19 @@ export const scatterView = (
   h: H,
   stats: ReadonlyArray<ModelStats>,
   everyConfig: ReadonlyArray<ModelStats>,
-  ratings: ReadonlyMap<string, number>,
+  ratings: ReadonlyMap<string, Rating>,
   ranks: ReadonlyMap<string, number>,
   ranking: Ranking,
   scatter: Model["scatter"],
   width: number,
 ): Html => {
   const axis = AXES[scatter.axis];
-  const yLabel = ranking === "elo" ? "Elo (approx.)" : "Rank by win share";
-  const title = `${axis.label} vs ${ranking === "elo" ? "Elo (approx.)" : "rank"}`;
+  const yLabel = ranking === "elo" ? "Elo" : "Rank";
+  const title = `${axis.label} vs ${ranking === "elo" ? "Elo" : "rank"}`;
   const byAxis = pointsOf(stats, ratings, ranks);
   const every = byAxis[scatter.axis];
   const kept = keptKeysOf(byAxis.cost);
-  const shown = shownOf(every, kept, scatter.show);
-  const points = ranking === "rank" ? rankedOf(shown) : shown;
+  const points = shownOf(every, kept, scatter.show);
   const layout = layoutOf(points, width, scatter.axis, ranking, domainOf(everyConfig, ratings), ranks.size);
   const hidden = every.filter((point) => !kept.includes(point.m.key)).length;
   const activeKey = Option.orElse(scatter.maybeHover, () => scatter.maybePin);
@@ -420,7 +415,7 @@ export const scatterView = (
           tipView(h, anchorId("pt", point.m.key), [
             h.b([], [point.m.label]),
             h.br([]),
-            `rank ${point.rank ?? "–"} · Elo ${fmtRating(point.rating)} · ${fmtPct(point.m.winShare)} wins of ${point.m.scored.length}`,
+            `rank ${point.rank} · Elo ${fmtRating(point.rating)} · ${fmtPct(point.m.winShare)} wins of ${point.m.scored.length}`,
             h.br([]),
             axis.perMatch(point.x),
           ]),

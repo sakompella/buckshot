@@ -263,13 +263,18 @@ scatter's axes span every config in every cohort, so a filter only shows or hide
 points; the reliability bars keep one scale the same way.
 
 Wherever ratings show (the scatter's y axis, the heatmap's and the leaderboards'
-rating columns), an Elo / Rank toggle switches all of them. Elo is the
-Bradley-Terry rating. Rank is a place 1, 2, 3, ... by observed win share (the
-mean over scored matches) among all of the cohort's configs before the chip and
-switch filters, ties going to the higher Elo; the scatter and heatmap rank the
-configs pooled over the chosen cohort. "All cohorts" uses the medium cross-model
-cohort's places, since pooling every cohort would count the effort sweeps' self-play;
-configs outside that cohort show "–" in the heatmap and drop off the rank scatter.
+rating columns), an Elo / Rank toggle switches all of them. Elo is one
+Bradley-Terry rating per config, fitted once at load over every completed
+two-player match of every tournament (`page/ratings.ts`): win shares count
+fractionally, a Gaussian prior (standard deviation 3 nats) keeps it finite, the
+scale has mean 0, and the 95% intervals refit 200 resamples of whole seed blocks.
+Effort sweeps join the other models through their medium configs, so one scale
+covers every config and no filter changes it. Rank is a place 1, 2, 3, ... for
+every config. The leaderboards rank by observed win share (the mean over scored
+matches) within each cohort, among all of its configs before the chip and switch
+filters, ties going to the higher Elo. The scatter and heatmap do the same under one
+cohort. Under "All cohorts" they rank by the pooled Elo instead, since pooling every
+cohort's win shares would count the effort sweeps' self-play.
 
 A match row, an interesting match or a
 flagged move opens its replay: health through the match,
