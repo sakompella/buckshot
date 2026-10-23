@@ -9,7 +9,7 @@ import { breakdownView, heatRowsOf } from "./heat.ts";
 import { interestingView, picksOf } from "./interesting.ts";
 import { leaderboardView } from "./leaderboard.ts";
 import { matchesView } from "./matches.ts";
-import { Message, type Model, type Ranking, type Section, SECTIONS, type Viewport } from "./model.ts";
+import { type Basis, Message, type Model, type Ranking, type Section, SECTIONS, type Viewport } from "./model.ts";
 import { reliabilityView } from "./reliability.ts";
 import { replayView } from "./replay.ts";
 import { scatterView } from "./scatter.ts";
@@ -128,8 +128,8 @@ const navView = (h: H): Html =>
     ],
   );
 
-const scatterCard = (h: H, derived: Derived, ranking: Ranking, scatter: Model["scatter"], width: number): Html =>
-  h.div([h.Class("card")], [scatterView(h, derived.pooled, derived.everyPooled, derived.ratings, derived.ranks, ranking, scatter, width)]);
+const scatterCard = (h: H, derived: Derived, ranking: Ranking, basis: Basis, scatter: Model["scatter"], width: number): Html =>
+  h.div([h.Class("card")], [scatterView(h, derived.pooled, derived.everyPooled, derived.ratings, derived.ranks, ranking, basis, scatter, width)]);
 
 const sectionView = (h: H, section: Section, content: Html): Html => h.section([h.Id(section), h.Class("part")], [content]);
 
@@ -142,12 +142,12 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
       lazyHero(heroView, [h, derived]),
       // The jump menu and the filters stay at the top; the filters apply to every section.
       h.div([h.Class("top")], [lazyNav(navView, [h]), lazyFilters(filtersView, [h, derived, model.filter])]),
-      sectionView(h, "scatter", lazyScatter(scatterCard, [h, derived, model.ranking, model.scatter, cardWidth(model.viewport)])),
+      sectionView(h, "scatter", lazyScatter(scatterCard, [h, derived, model.ranking, model.basis, model.scatter, cardWidth(model.viewport)])),
       sectionView(h, "interesting", lazyInteresting(interestingView, [h, picksOf(derived), model.matches, content])),
       sectionView(h, "seats", lazySeats(seatsView, [h, derived, model.viewport.width, content])),
       sectionView(h, "reliability", lazyReliability(reliabilityView, [h, derived.decisions, derived.seats, derived.keep, model.maybeRateTip, model.viewport.width, content])),
       sectionView(h, "matches", lazyMatches(matchesView, [h, derived.matches, model.matchList])),
-      sectionView(h, "leaderboards", lazyLeaderboard(leaderboardView, [h, derived.byCohort, derived.everyByCohort, derived.ratings, derived.matchSeats, derived.items, model.leaderboard, model.filter.isAllConfigs, model.ranking])),
+      sectionView(h, "leaderboards", lazyLeaderboard(leaderboardView, [h, derived.byCohort, derived.everyByCohort, derived.ratings, derived.matchSeats, derived.items, model.leaderboard, model.filter.isAllConfigs, model.ranking, model.basis])),
       sectionView(h, "breakdown", lazyBreakdown(breakdownView, [h, derived, model.heat, model.ranking])),
     ],
   );
@@ -160,7 +160,7 @@ export const view = (model: Model, h: H): Document =>
     onEmpty: () => ({ title: "Buckshot arena", body: h.main([], [h.p([h.Class("k")], ["Loading the analysis database…"])]) }),
     onFailure: (error) => ({ title: "Buckshot arena", body: h.main([], [h.p([h.Class("k")], [`Could not load the analysis database: ${error}`])]) }),
     onData: (loaded) => {
-      const derived = derive(loaded, model.filter);
+      const derived = derive(loaded, model.filter, model.basis);
 
       const replay = Option.match(model.maybeReplay, {
         onNone: () => h.empty,

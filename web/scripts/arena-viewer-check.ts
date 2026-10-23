@@ -200,36 +200,96 @@ const checkRanking = async (page: Page, scatter: ReturnType<Page["locator"]>) =>
   console.log("back to Elo from the leaderboard:", await textOf(page, ".card h2"));
 };
 
-// Under every cohort choice and either ranking, every config the page draws has an Elo and a rank: no dash in the
-// heatmap or the leaderboards, and the same points in the scatter. In Elo the cohort choice leaves the axes where they are.
+// Under every cohort choice, either rating basis and either ranking, every config the page draws has an Elo and a
+// rank: no dash in the heatmap or the leaderboards, and the same points in the scatter. In Elo the cohort choice
+// leaves the axes where they are.
 const checkEveryConfigRated = async (page: Page, scatter: ReturnType<Page["locator"]>) => {
   const cohorts = await page.locator(".filters select option").evaluateAll((options) => options.map((option) => option.getAttribute("value") ?? ""));
   const dashes = (selector: string) => page.locator(selector).evaluateAll((cells) => cells.filter((cell) => cell.textContent?.trim() === "–").length);
-  const axesByCohort = new Set<string>();
 
-  for (const cohort of cohorts) {
-    await page.locator(".filters select").selectOption(cohort);
+  for (const basis of ["Wins", "Cash"] as const) {
+    const axesByCohort = new Set<string>();
 
-    for (const ranking of ["Elo", "Rank"] as const) {
-      await scatter.getByRole("button", { name: ranking, exact: true }).click();
-      await settled(page);
+    await scatter.getByRole("button", { name: basis, exact: true }).click();
 
-      const rows = await countOf(page, "table.heat tbody tr");
-      const missing = (await dashes("table.heat td.total")) + (await dashes(`table.lbt td[data-label="${ranking === "Elo" ? "Elo" : "rank"}"]`));
-      const points = await countOf(page, ".card svg g.pt");
-      const unlisted = await page.locator("table.heat td.total").evaluateAll((cells) => cells.filter((cell) => cell.textContent?.trim() === "").length);
+    for (const cohort of cohorts) {
+      await page.locator(".filters select").selectOption(cohort);
 
-      console.log("cohort", cohort, ranking, "| heat rows", rows, "| scatter points", points, "| rows without a rating", missing + unlisted);
-      expectThat(missing + unlisted === 0, `${cohort} ${ranking}: a config shows a dash instead of a rating`);
+      for (const ranking of ["Elo", "Rank"] as const) {
+        await scatter.getByRole("button", { name: ranking, exact: true }).click();
+        await settled(page);
 
-      if (ranking === "Elo" && points > 0) axesByCohort.add(await axesOf(page));
+        const label = ranking === "Rank" ? "rank" : basis === "Wins" ? "Elo" : "Cash Elo";
+        const rows = await countOf(page, "table.heat tbody tr");
+        const missing = (await dashes("table.heat td.total")) + (await dashes(`table.lbt td[data-label="${label}"]`));
+        const points = await countOf(page, ".card svg g.pt");
+        const unlisted = await page.locator("table.heat td.total").evaluateAll((cells) => cells.filter((cell) => cell.textContent?.trim() === "").length);
+
+        console.log("cohort", cohort, basis, ranking, "| heat rows", rows, "| scatter points", points, "| rows without a rating", missing + unlisted);
+        expectThat(missing + unlisted === 0, `${cohort} ${basis} ${ranking}: a config shows a dash instead of a rating`);
+
+        if (ranking === "Elo" && points > 0) axesByCohort.add(await axesOf(page));
+      }
     }
+
+    expectThat(axesByCohort.size <= 1, `${basis} scatter axes moved with the cohort choice (${axesByCohort.size} different sets)`);
+    await page.locator(".filters select").selectOption("all");
   }
 
-  expectThat(axesByCohort.size <= 1, `scatter axes moved with the cohort choice (${axesByCohort.size} different sets)`);
-  await page.locator(".filters select").selectOption("all");
+  await scatter.getByRole("button", { name: "Wins", exact: true }).click();
   await scatter.getByRole("button", { name: "Elo", exact: true }).click();
   await settled(page);
+};
+
+// The Wins / Cash choice drives the scatter, the heatmap and the leaderboards together, the leaderboards show every
+// config's pot share beside its win share, and the axes stay put under filters on the cash rating too.
+const checkCash = async (page: Page, scatter: ReturnType<Page["locator"]>) => {
+  const views = async () => ({
+    scatter: await textOf(page, ".card h2"),
+    heat: await textOf(page, "table.heat thead th:nth-last-child(2)"),
+    leaderboard: await textOf(page, "table.lbt thead th:nth-child(5)"),
+    firstRow: await textOf(page, "table.lbt tbody tr.row"),
+    heatFirstRow: await textOf(page, "table.heat tbody tr"),
+    toggles: await page.locator(".toggle button.on", { hasText: /^(Wins|Cash)$/ }).allInnerTexts(),
+  });
+
+  const wins = await views();
+
+  console.log("Wins:", wins);
+  await scatter.getByRole("button", { name: "Cash", exact: true }).click();
+  await settled(page);
+
+  const cash = await views();
+
+  console.log("Cash:", cash);
+  expectThat(cash.scatter.includes("Cash Elo") && cash.heat === "Cash Elo" && cash.leaderboard === "Cash Elo", "the Cash choice did not reach the scatter, the heatmap and the leaderboards");
+  expectThat(!wins.scatter.includes("Cash") && wins.heat === "Elo" && wins.leaderboard === "Elo", "the page does not start on the win rating");
+  expectThat(cash.firstRow !== wins.firstRow && cash.heatFirstRow !== wins.heatFirstRow, "the cash rating left the leaderboard or heatmap rows as they were");
+  expectThat(cash.toggles.length === 3 && cash.toggles.every((text) => text === "Cash"), `Cash toggles on: ${cash.toggles.join(" ")}`);
+
+  const pots = await page.locator('table.lbt td[data-label="pot share"]').allInnerTexts();
+  const rows = await countOf(page, "table.lbt tbody tr.row");
+
+  console.log("pot share cells", pots.length, "of", rows, "rows, first", pots.slice(0, 6).join(" "));
+  expectThat(pots.length === rows && pots.every((text) => /^\d+%$/.test(text.trim())), "a leaderboard row has no pot share");
+
+  await page.locator(".lb").getByRole("button", { name: "Rank", exact: true }).click();
+  await settled(page);
+  console.log("Cash rank:", await textOf(page, "table.lbt tbody tr.row"), "| heat header", await textOf(page, "table.heat thead th:nth-last-child(2)"));
+  await scatter.screenshot({ path: shot("scatter-cash-rank") });
+  await page.locator(".lb").getByRole("button", { name: "Elo", exact: true }).click();
+  await settled(page);
+  await scatter.screenshot({ path: shot("scatter-cash") });
+  await heat(page).screenshot({ path: shot("heat-cash"), style: UNSTICK });
+  await page.locator(".lb").screenshot({ path: shot("leaderboard-cash"), style: UNSTICK });
+  await checkFixedAxes(page, scatter);
+
+  await heat(page).getByRole("button", { name: "Wins", exact: true }).click();
+  await settled(page);
+
+  const back = await views();
+
+  expectThat(JSON.stringify(back) === JSON.stringify(wins), "Wins did not bring the page back to how it started");
 };
 
 const checkDesktop = async (browser: Browser) => {
@@ -265,6 +325,7 @@ const checkDesktop = async (browser: Browser) => {
 
   await checkFixedAxes(page, scatter);
   await checkRanking(page, scatter);
+  await checkCash(page, scatter);
   await checkEveryConfigRated(page, scatter);
 
   for (const [mode, name] of [
@@ -376,6 +437,10 @@ const checkTouch = async (browser: Browser, name: string, width: number, height:
   await settled(page);
   console.log(name, "rank y ticks", await yTicks(page));
   await page.locator(".card").first().screenshot({ path: shot(`${name}-scatter-rank`) });
+  await heat(page).getByRole("button", { name: "Cash", exact: true }).tap();
+  await settled(page);
+  console.log(name, "cash rank y ticks", await yTicks(page), "| overflow", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page));
+  await page.locator(".card").first().screenshot({ path: shot(`${name}-scatter-cash-rank`) });
 
   await context.close();
 };

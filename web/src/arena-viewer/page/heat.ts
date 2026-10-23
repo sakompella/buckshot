@@ -2,8 +2,8 @@ import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { type Decisions, ITEMS, type Pattern, patternBit } from "../api.ts";
-import { anchorId, rankingView, switchView, tipView, toggleView } from "./charts.ts";
-import { baseName, baseOrder, fmtPct, fmtRating, fmtTime, fmtUsd, isClaude, keyOf, type MatchRow, type SeatFull, unique } from "./data.ts";
+import { anchorId, ratingToggles, switchView, tipView, toggleView } from "./charts.ts";
+import { baseName, baseOrder, eloName, fmtPct, fmtRating, fmtTime, fmtUsd, isClaude, keyOf, type MatchRow, type SeatFull, shareName, unique } from "./data.ts";
 import { type Derived, memoLast } from "./derived.ts";
 import { itemIconOf } from "./items.ts";
 import { type HeatMode, Message, type Model, type Ranking } from "./model.ts";
@@ -393,7 +393,7 @@ const heatmapView = (h: H, derived: Derived, heat: Model["heat"], ranking: Ranki
         [h.Class("ctl heatctl")],
         [
           toggleView(h, heat.mode, MODES, (mode) => Message.SelectedHeatMode({ mode })),
-          rankingView(h, ranking),
+          ...ratingToggles(h, ranking, derived.basis),
           hiddenRows > 0 ? switchView(h, heat.isBestOnly, `best row per model${heat.isBestOnly ? ` (${hiddenRows} effort rows hidden)` : ""}`, Message.ToggledBestOnly()) : h.empty,
         ],
       ),
@@ -412,8 +412,8 @@ const heatmapView = (h: H, derived: Derived, heat: Model["heat"], ranking: Ranki
                       header("model", "Model", "", "left"),
                       ...columns.map((col) => header(col.id, col.label, col.title, "", col.item)),
                       ranking === "elo"
-                        ? header("rating", "Elo", "Bradley-Terry rating fitted over every match of every tournament")
-                        : header("rating", "Rank", "place by observed win share among all the cohort's configs, before the filters; ties go to the higher Elo. All cohorts ranks by Elo"),
+                        ? header("rating", eloName(derived.basis), `Bradley-Terry rating fitted over every match of every tournament, on ${shareName(derived.basis)}`)
+                        : header("rating", "Rank", `place by observed ${shareName(derived.basis)} among all the cohort's configs, before the filters; ties go to the higher ${eloName(derived.basis)}. All cohorts ranks by ${eloName(derived.basis)}`),
                       header("cost", "$/match", "avg list-price cost per player per scored match"),
                     ],
                   ),

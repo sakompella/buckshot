@@ -1,6 +1,7 @@
-import { groupBy, keyOf, meanOf, quantile, rng, type SeatFull, unique } from "./data.ts";
+import { groupBy, keyOf, meanOf, quantile, rng, type SeatFull, seatShare, unique } from "./data.ts";
+import type { Basis } from "./model.ts";
 
-// The one rating the whole page reads: Bradley-Terry over every scored two-player match of every tournament.
+// The ratings the whole page reads: Bradley-Terry over every scored two-player match of every tournament.
 
 /** One scored two-player match: a's win share against b. */
 export interface Game {
@@ -164,10 +165,11 @@ const BOOTSTRAP_REPS = 200;
 /**
  * Every config's rating from one fit over all the seats' completed two-player matches, with 95% percentile
  * intervals from refitting resamples of whole seed blocks. Effort sweeps join the other models through their
- * medium configs, so one scale covers every config.
+ * medium configs, so one scale covers every config. The fit counts each match as the basis's share: win shares, or
+ * pot shares for a cash rating.
  */
-export const pooledRatings = (seats: ReadonlyArray<SeatFull>): ReadonlyMap<string, Rating> => {
-  const games = pairsOf(seats).map(([x, y]): BlockGame => ({ a: keyOf(x), b: keyOf(y), sa: x.winShare ?? 0, block: x.seedBlock }));
+export const pooledRatings = (seats: ReadonlyArray<SeatFull>, basis: Basis): ReadonlyMap<string, Rating> => {
+  const games = pairsOf(seats).map(([x, y]): BlockGame => ({ a: keyOf(x), b: keyOf(y), sa: seatShare(x, basis), block: x.seedBlock }));
   const numbered = numberGames(games);
   const point = fitGames(numbered, Int32Array.from(games.keys()));
   const blocks = [...groupBy(games.keys(), (index) => games[index]?.block).values()];

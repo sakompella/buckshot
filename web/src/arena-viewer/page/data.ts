@@ -1,4 +1,5 @@
 import type { Seat } from "../api.ts";
+import type { Basis } from "./model.ts";
 
 // The page's numbers: model labels and colours, cohorts, per-config stats, ratings and intervals.
 
@@ -145,6 +146,10 @@ export const fmtTime = (iso: string): string => PACIFIC_TIME.format(new Date(iso
 
 export const fmtRating = (rating: number): string => `${rating >= 0 ? "+" : ""}${rating.toFixed(0)}`;
 
+export const eloName = (basis: Basis): string => (basis === "wins" ? "Elo" : "Cash Elo");
+
+export const shareName = (basis: Basis): string => (basis === "wins" ? "win share" : "pot share");
+
 // GROUPS AND SUMS
 
 export const sumOf = (values: Iterable<number>): number => {
@@ -200,8 +205,14 @@ export const rng = (seed: number) => {
 
 // COHORTS
 
-/** A seat with its cohort: the kind of comparison its match is part of, over every code version and run. */
-export type SeatFull = Seat & { readonly cohort: string };
+/**
+ * A seat with its cohort, the kind of comparison its match is part of over every code version and run, and its pot
+ * share: its cash over the match's total cash, null when it has no cash recorded.
+ */
+export type SeatFull = Seat & { readonly cohort: string; readonly potShare: number | null };
+
+/** What a rating counts: each player's win share of a match, or its pot share. */
+export const seatShare = (seat: SeatFull, basis: Basis): number => (basis === "wins" ? seat.winShare : seat.potShare) ?? 0;
 
 const shortName = (model: string): string => baseOf(model)?.short ?? model;
 
@@ -233,7 +244,9 @@ export const withCohorts = (seats: ReadonlyArray<Seat>): ReadonlyArray<SeatFull>
     return `${first?.tournament ?? ""}|${isSweep ? (first?.model ?? "") : ""}`;
   };
 
-  const matches = [...groupBy(seats, ({ matchId }) => matchId).values()];
+  const byMatch = groupBy(seats, ({ matchId }) => matchId);
+  const matches = [...byMatch.values()];
+  const potOf = new Map([...byMatch].map(([matchId, matchSeats]) => [matchId, sumOf(matchSeats.map(({ cash }) => cash ?? 0))]));
 
   const cohortOf = new Map(
     [...groupBy(matches, comparisonOf).values()].flatMap((group) => {
@@ -243,7 +256,7 @@ export const withCohorts = (seats: ReadonlyArray<Seat>): ReadonlyArray<SeatFull>
     }),
   );
 
-  return seats.map((seat) => ({ ...seat, cohort: cohortOf.get(seat.matchId) ?? "" }));
+  return seats.map((seat) => ({ ...seat, cohort: cohortOf.get(seat.matchId) ?? "", potShare: seat.cash === null ? null : seat.cash / (potOf.get(seat.matchId) ?? 1) }));
 };
 
 // INTERVALS
@@ -347,6 +360,8 @@ export interface ModelStats {
   /** Completed matches only. */
   readonly scored: ReadonlyArray<SeatFull>;
   readonly winShare: number;
+  /** Mean pot share over scored matches. */
+  readonly potShare: number;
   /** Observed win share with a seed-block bootstrap interval. */
   readonly win: Rate;
   /** Every started match, failed calls included. */
@@ -387,6 +402,7 @@ export const modelStats = (seats: ReadonlyArray<SeatFull>, isByCohort = false): 
         started,
         scored,
         winShare: scoredMean(({ winShare }) => winShare),
+        potShare: scoredMean(({ potShare }) => potShare),
         win: blockRate(wins),
         totalCost: sumOf(started.map(({ cost }) => cost ?? 0)),
         costs,
@@ -416,11 +432,14 @@ export const matchRows = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<MatchRo
     return first === undefined ? [] : [{ matchId: first.matchId, seats: ordered, startedAt: first.startedAt, tournament: first.tournament, status: first.status, seed: first.seed }];
   });
 
+/** A config's observed share on a basis: the mean over its scored matches. */
+export const configShare = (config: Pick<ModelStats, "winShare" | "potShare">, basis: Basis): number => (basis === "wins" ? config.winShare : config.potShare);
+
 /**
- * Configs in place order for the "Rank" view: highest observed win share (mean over scored matches) first. Ties go
- * to the higher Elo, then the label, so the places 1, 2, 3… are always distinct.
+ * Configs in place order for the "Rank" view: highest observed share (mean over scored matches) first. Ties go to
+ * the higher Elo, then the label, so the places 1, 2, 3… are always distinct.
  */
-export const rankOrder = <A extends { readonly winShare: number; readonly label: string }>(configs: ReadonlyArray<A>, eloOf: (config: A) => number): ReadonlyArray<A> =>
-  configs.toSorted((left, right) => right.winShare - left.winShare || eloOf(right) - eloOf(left) || left.label.localeCompare(right.label));
+export const rankOrder = <A extends { readonly label: string }>(configs: ReadonlyArray<A>, shareOf: (config: A) => number, eloOf: (config: A) => number): ReadonlyArray<A> =>
+  configs.toSorted((left, right) => shareOf(right) - shareOf(left) || eloOf(right) - eloOf(left) || left.label.localeCompare(right.label));
 
 export const winnerOf = (match: MatchRow): SeatFull | undefined => match.seats.find(({ winShare }) => (winShare ?? 0) >= 1);
