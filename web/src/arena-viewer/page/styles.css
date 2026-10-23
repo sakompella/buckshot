@@ -14,6 +14,7 @@ section { border-top: 1px solid var(--line); padding-top: 28px; margin-top: 28px
 
 nav { display: flex; gap: 4px; align-items: center; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
 nav .brand { font-weight: 600; margin-right: 18px; }
+nav .download { margin-left: auto; color: var(--mut); font-size: 13px; }
 nav button, .toggle button, .chip, .more { background: none; border: 1px solid transparent; color: var(--mut); font: inherit; padding: 4px 10px; border-radius: 6px; cursor: pointer; }
 nav button.on { color: var(--fg); background: #141414; border-color: var(--line); }
 .filters { display: flex; gap: 10px 14px; flex-wrap: wrap; align-items: center; margin: 0 0 22px; }

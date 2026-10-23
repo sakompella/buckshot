@@ -155,6 +155,7 @@ const navView = (h: H, model: Model): Html =>
     [
       h.span([h.Class("brand")], ["Buckshot arena"]),
       ...TABS.map(([tab, label]) => h.button([h.Type("button"), h.Class(model.tab === tab ? "on" : ""), h.OnClick(Message.ClickedTab({ tab }))], [label])),
+      h.a([h.Class("download"), h.Href("/api/db")], ["Database (SQLite)"]),
     ],
   );
 

@@ -241,6 +241,13 @@ export const serveArenaViewer = (dbPath: string, hostname: string, port: number)
     routes: {
       "/": page,
       "/api/seats": guarded((request) => json(request, seatsBody)),
+      "/api/db": guarded(() => {
+        const download = process.env["ARENA_VIEWER_DOWNLOAD"];
+
+        return download === undefined || download === ""
+          ? new Response("no download configured", { status: 404 })
+          : new Response(Bun.file(download), { headers: { "content-disposition": 'attachment; filename="buckshot.sqlite"' } });
+      }),
       "/api/decisions": guarded((request) => json(request, decisionsBody)),
       "/api/match": guarded((request) => {
         const detail = matchDetail(db, new URL(request.url).searchParams.get("id") ?? "");

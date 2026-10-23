@@ -279,7 +279,7 @@ checkout's `web/`. Its PID is in `_work/arena/viewer.pid` and its log in
     kill "$(cat _work/arena/viewer.pid)"
     cd web && setsid -f sh -c 'echo $$ > ../_work/arena/viewer.pid; set -a; . ../_work/arena/viewer.env; set +a; exec bun scripts/arena-viewer.ts ../_work/arena/analysis/buckshot.sqlite 100.108.62.24 8790 > ../_work/arena/viewer.log 2>&1' < /dev/null
 
-With `ARENA_VIEWER_PASSWORD` set (the shared copy keeps it in the gitignored `_work/arena/viewer.env`), the API asks for that password through the browser's sign-in prompt; leave the username empty. Without it the viewer is open.
+With `ARENA_VIEWER_PASSWORD` set (the shared copy keeps it in the gitignored `_work/arena/viewer.env`), the API asks for that password through the browser's sign-in prompt; leave the username empty. Without it the viewer is open. With `ARENA_VIEWER_DOWNLOAD` set to a database file, the nav links to it as a download behind the same password; the shared copy serves `_work/arena/analysis/buckshot.public.sqlite`, a copy with every email and account id redacted (`match_seats.provenance_json` emptied, email-bearing JSON strings replaced by "[redacted]") and vacuumed.
 
 ## Layout
 
