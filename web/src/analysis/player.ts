@@ -113,7 +113,7 @@ export const boardOf = (game: Game): BendNode => {
 };
 
 /** What the player may know at a decision: the match's rules, the public board, and the deciding seat's own log. */
-export interface Position {
+export interface PlayerInput {
   readonly table: SeatCount;
   readonly items: boolean;
   readonly board: BendNode;
@@ -121,7 +121,7 @@ export interface Position {
   readonly me: Seat;
 }
 
-const positionNode = ({ table, items, board, log, me }: Position): BendNode =>
+const inputNode = ({ table, items, board, log, me }: PlayerInput): BendNode =>
   // SAFETY: the fields are player/types.Position's, each a Bend value; BendNode names only the tag.
   ({ $: "player/types.Position", config: rules.config({ $: TABLES[table] }, items), board, log: logNode(log), me: seatNode(me) }) as BendNode;
 
@@ -195,7 +195,7 @@ export type Analysis =
       readonly kind: "analysed";
       readonly lines: ReadonlyArray<Line>;
       readonly best: number;
-      /** Decisions searched; 0 with `limited` set is the fallback, the static value before any move given to every move. */
+      /** Decisions searched. At 0 every move has the static value before any move: the fallback when `limited` is set, or a search asked for no depth. */
       readonly depth: number;
       /** The node budget ran out before the next depth finished. */
       readonly limited: boolean;
@@ -223,12 +223,17 @@ const analysisOf = (raw: typeof RawAnalysis.Type): Analysis =>
 // The player
 // ==========
 
+/** A search's bounds: at most `depth` decisions, by every player, and at most `budget` expanded nodes. */
+export interface Limits {
+  readonly depth: number;
+  readonly budget: number;
+}
+
 export interface Player {
   /** Names the build: a hash of the compiled player, so that scores from different versions are never mixed. */
   readonly version: string;
   readonly orders: (log: ReadonlyArray<OwnEntry>, isPrivate: boolean) => Orders;
-  /** Searches at most `depth` decisions deep and expands at most `budget` nodes. */
-  readonly analyse: (position: Position, depth: number, budget: number) => Analysis;
+  readonly analyse: (input: PlayerInput, limits: Limits) => Analysis;
 }
 
 /** Builds the player into `dir` (with $BEND, else `bend` on PATH, else the pinned build) and wraps its exports. */
@@ -248,6 +253,6 @@ export const loadPlayer = async (dir: string): Promise<Player> => {
   return {
     version: createHash("sha256").update(readFileSync(output)).digest("hex").slice(0, 16),
     orders: (log, isPrivate) => nodesOf(exports.orders(logNode(log), isPrivate)).map(orderText),
-    analyse: (position, depth, budget) => analysisOf(decodeAnalysis(exports.analyse(positionNode(position), BigInt(depth), BigInt(budget)))),
+    analyse: (input, { depth, budget }) => analysisOf(decodeAnalysis(exports.analyse(inputNode(input), BigInt(depth), BigInt(budget)))),
   };
 };

@@ -7,8 +7,8 @@ import { Database } from "bun:sqlite";
 import { Option, Result, Schema } from "effect";
 
 import { type AgentSource } from "../src/agent/view.ts";
-import { boardOf, loadPlayer, ownLog } from "../src/analysis/player.ts";
-import { type Limits, type Regret, regretAt } from "../src/analysis/regret.ts";
+import { boardOf, type Limits, loadPlayer, ownLog } from "../src/analysis/player.ts";
+import { type Regret, regretOf } from "../src/analysis/regret.ts";
 import { RunManifest } from "../src/arena/match.ts";
 import { MoveLine } from "../src/arena/runlog.ts";
 import { rosterOf } from "../src/players.ts";
@@ -20,8 +20,9 @@ import { replayOf } from "../src/viewer/replay.ts";
 // derived database. The analysis database (docs/arena/database.md) is opened
 // read only. Each decision's position is the deciding player's own log and the
 // public board, rebuilt by replaying the match as scripts/arena-knowledge.ts
-// does; forced grabs and fallback moves are not scored. A rerun replaces the
-// match's rows for the same player version, depth and budget.
+// does; forced grabs and fallback moves are not scored. Each row is committed as
+// it is scored, and a rerun skips the decisions already scored with the same
+// player version, depth and budget. See docs/arena/analysis/regret.md.
 //
 //   bun scripts/arena-regret.ts --db <buckshot.sqlite> --out <derived.sqlite> --match <match name> [--depth 6] [--budget 20000]
 
@@ -36,6 +37,11 @@ if (values.db === undefined || values.out === undefined || values.match === unde
 }
 
 const limits: Limits = { depth: Number(values.depth), budget: Number(values.budget) };
+
+if (!Number.isSafeInteger(limits.depth) || !Number.isSafeInteger(limits.budget) || limits.depth < 0 || limits.budget < 0) {
+  console.error("--depth and --budget take whole numbers of at least 0.");
+  process.exit(1);
+}
 
 const source = new Database(resolve(values.db), { readonly: true });
 
@@ -96,7 +102,7 @@ const scored = (regret: Regret) => {
     case "searched":
       return { values_json: JSON.stringify(regret.values), best: regret.best.label, best_score: regret.best.score, chosen_score: regret.chosen.score, regret: regret.regret, exact: regret.exact ? 1 : 0, depth: regret.depth, limited: regret.limited ? 1 : 0 };
     case "fallback":
-      return { values_json: JSON.stringify(regret.values), depth: 0, limited: 1 };
+      return { values_json: JSON.stringify(regret.values), depth: 0, limited: regret.limited ? 1 : 0 };
     case "invalid":
       return { reason: regret.reason };
   }
@@ -104,7 +110,7 @@ const scored = (regret: Regret) => {
 
 const put = (row: Readonly<Record<string, string | number | null>>): void => {
   const keys = Object.keys(row);
-  out.query(`INSERT OR REPLACE INTO regret (${keys.join(",")}) VALUES (${keys.map(() => "?").join(",")})`).run(...Object.values(row));
+  out.query(`INSERT INTO regret (${keys.join(",")}) VALUES (${keys.map(() => "?").join(",")})`).run(...Object.values(row));
 };
 
 const manifest = decodeManifest(match.manifest_json);
@@ -114,17 +120,22 @@ const current = (): AgentSource => Option.getOrThrow(replay.session.current(repl
 const roster = rosterOf(current().game.seats, current().letters);
 const times: Array<number> = [];
 
-out.exec("BEGIN");
+const done = new Set(
+  out
+    .query<{ ordinal: number }, [string, string, number, number]>("SELECT ordinal FROM regret WHERE match_id = ? AND evaluator = ? AND max_depth = ? AND budget = ?")
+    .all(match.id, player.version, limits.depth, limits.budget)
+    .map(({ ordinal }) => ordinal),
+);
 
 for (const decision of decisions) {
-  if (decision.by_whom === "agent") {
+  if (decision.by_whom === "agent" && !done.has(decision.ordinal)) {
     const before = current();
     const me = Option.getOrThrow(roster.find(decodeLetter(decision.player))).seat;
     // The arena plays every match with items (src/viewer/replay.ts starts it so).
-    const position = { table: before.game.table, items: true, board: boardOf(before.game), log: ownLog(before.events, before.learned, me), me };
+    const input = { table: before.game.table, items: true, board: boardOf(before.game), log: ownLog(before.events, before.learned, me), me };
     const menu = decodeMenu(decision.legal_json).map(({ label }) => label);
     const started = performance.now();
-    const regret = regretAt(player, position, limits, (steps) => agentMoveText(roster, me, steps), menu, decision.label);
+    const regret = regretOf(player.analyse(input, limits), (steps) => agentMoveText(roster, me, steps), menu, decision.label);
     const ms = performance.now() - started;
     times.push(ms);
 
@@ -136,8 +147,6 @@ for (const decision of decisions) {
 
   if (Option.isSome(replay.divergence)) throw new Error(`${values.match}: ${Option.getOrThrow(replay.divergence)}`);
 }
-
-out.exec("COMMIT");
 
 out.close();
 

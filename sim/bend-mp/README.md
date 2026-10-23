@@ -27,7 +27,7 @@ Out of scope are graphics, animation, sound, networking, the lobby, seat shuffli
 - `LAWS.bend` states the laws. `PROOF.bend` proves them, using `step-proof.bend` (the run, start and game laws), `accept-proof.bend` (`legal_accepted`), `roundtrip-proof.bend` (`state_roundtrip`), `items-proof.bend` and the phase proofs it calls (listed below), and `core-proof.bend`, `grant-proof.bend`, `shot-proof.bend` and `primitive.bend`.
 - `ai/story.bend` and `ai/don.bend` are the two dealer AIs.
 - `driver.bend` is the controller that plays whole matches. `view.bend` renders them as text.
-- `main.bend` is a command line entry that plays matches and prints win rates. `web.bend` is the entry that the web UI builds to JavaScript.
+- `main.bend` is a command line entry that plays matches and prints win rates. `web.bend` is the entry that the web UI builds to JavaScript. `analysis.bend` is the player's entry for the arena's analysis scripts.
 - `player/` is the depth-limited minimax player over the simple machine (ADR-0043). It decides from one seat's public information and its own log. See `player/README.md`.
 - `test/` holds scenario tests, the item law fuzz, a driver smoke test, a round trip test of the domain types, the simple machine's smoke test and fuzz, and the player's property tests (`test/player.mjs`).
 - `tools/` and `mutate.py` hold the generators and the bug-planting checks.

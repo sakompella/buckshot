@@ -9,13 +9,13 @@ How good each agent move was, by the minimax player in `sim/bend-mp/player/` ([A
 A score is the deciding player's chance of winning the current round, in millionths. Divide by 10,000 for a percentage; a regret of 10,000 is one percentage point. Opponents are modelled as minimizing it from public information.
 
 - **Searched:** the search finished at least one depth. Regret is set, and is 0 for the best move.
-- **Fallback:** the node budget ran out before depth 1 finished. Every move gets the same static value; the regret is NULL, never 0.
+- **Fallback:** no depth finished, because the node budget ran out first or the run asked for depth 0. Every move gets the same static value; the regret is NULL, never 0.
 - **Invalid:** the player could not build a belief from the log; the reason is stored and there is no regret.
 - **Exact:** both the best and the chosen score are 0 or 1,000,000, so every line they rest on ends the round. A certain value that mixes wins and losses (say a coin-flip shot that ends the round either way) is marked not exact. Treat only exact rows as solved.
 
 ## The `regret` table
 
-The script writes to the `regret` table of the derived database named by `--out`, creating it if needed and leaving other tables alone, so it can share a file with the knowledge tables. Rows are keyed by match, ordinal, player version, depth limit and budget, so a rerun replaces its own rows and runs with other settings sit beside them.
+The script writes to the `regret` table of the derived database named by `--out`, creating it if needed and leaving other tables alone, so it can share a file with the knowledge tables. Rows are keyed by match, ordinal, player version, depth limit and budget. Each row is committed as it is scored, and a rerun skips the decisions already scored with the same key, so an interrupted run resumes where it stopped. Runs with other settings sit beside it.
 
 | Column | Meaning |
 |---|---|
