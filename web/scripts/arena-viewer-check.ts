@@ -15,23 +15,23 @@ const errors: Array<string> = [];
 
 const shot = (name: string) => join(outdir, `${name}.png`);
 
-// A full-page screenshot shrinks the window to 1x1 for a moment, which draws the charts at a negative width.
-let isShootingFullPage = false;
+// A screenshot of the full page, or of an element taller than the window, shrinks the window to 1x1 for a moment,
+// and the charts drawn at that size get negative widths. Those are counted apart from the other errors.
+const SCREENSHOT_RESIZE = /attribute width: A negative value is not valid/;
+
+let screenshotResizeErrors = 0;
 
 const watch = (page: Page, name: string) => {
   page.on("pageerror", (error) => errors.push(`${name}: ${error.message}`));
   page.on("console", (message) => {
-    if (message.type() === "error" && !isShootingFullPage) errors.push(`${name}: ${message.text().slice(0, 200)}`);
+    if (message.type() !== "error") return;
+
+    if (SCREENSHOT_RESIZE.test(message.text())) screenshotResizeErrors++;
+    else errors.push(`${name}: ${message.text().slice(0, 200)}`);
   });
 };
 
-const fullPageShot = async (page: Page, name: string) => {
-  isShootingFullPage = true;
-  await page.screenshot({ path: shot(name), fullPage: true });
-  // Console messages arrive a little after the page logs them.
-  await page.waitForTimeout(500);
-  isShootingFullPage = false;
-};
+const fullPageShot = (page: Page, name: string) => page.screenshot({ path: shot(name), fullPage: true });
 
 // The page renders on the next animation frame after a message, so reads wait two frames.
 const settled = (page: Page) => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -106,7 +106,7 @@ const checkJumps = async (page: Page, name: string, isTouch: boolean) => {
 // The rating axis's tick labels from the top down.
 const yTicks = (page: Page) =>
   page.evaluate(() =>
-    [...document.querySelectorAll(".card svg > g > text[text-anchor=end]")]
+    [...document.querySelectorAll(".card svg > g:not(.ptlabel) > text[text-anchor=end]")]
       .map((text) => ({ y: Number(text.getAttribute("y")), label: text.textContent ?? "" }))
       .toSorted((left, right) => left.y - right.y)
       .map(({ label }) => label)
@@ -126,6 +126,9 @@ const axesOf = (page: Page) =>
     return `${vertical.length} vertical lines at ${vertical.join(",")} | ${horizontal.length} horizontal | labels ${labels.join(" ")}`;
   });
 
+const reliabilityScales = (page: Page) =>
+  page.evaluate(() => [...document.querySelectorAll("#reliability .chartrow svg")].map((chart) => [...chart.querySelectorAll("text[text-anchor=middle]")].map((text) => text.textContent).join(" ")).join(" | "));
+
 // Turning chips and switches on and off shows and hides points but moves no axis.
 const checkFixedAxes = async (page: Page, scatter: ReturnType<Page["locator"]>) => {
   const filters = page.locator(".filters");
@@ -137,6 +140,10 @@ const checkFixedAxes = async (page: Page, scatter: ReturnType<Page["locator"]>) 
     ["back", () => scatter.getByRole("switch", { name: /medium only/ }).uncheck()],
     ["Opus on", () => filters.getByRole("button", { name: /Opus/ }).click()],
   ];
+
+  const scales = await reliabilityScales(page);
+
+  console.log("reliability scales:", scales);
 
   for (const [axis, name] of [
     ["Cost", "cost"],
@@ -153,7 +160,7 @@ const checkFixedAxes = async (page: Page, scatter: ReturnType<Page["locator"]>) 
     for (const [label, step] of steps) {
       await step();
       await settled(page);
-      console.log(name, label, "| points", await countOf(page, ".card svg g.pt"), "| axes unchanged:", (await axesOf(page)) === before);
+      console.log(name, label, "| points", await countOf(page, ".card svg g.pt"), "| axes unchanged:", (await axesOf(page)) === before, "| reliability scales unchanged:", (await reliabilityScales(page)) === scales);
 
       if (label === "max off") await scatter.screenshot({ path: shot(`scatter-${name}-max-off`) });
     }
@@ -344,6 +351,6 @@ for (const [name, width, height] of [
   await checkTouch(browser, name, width, height);
 }
 
-console.log("errors", errors);
+console.log("errors", errors, "| negative widths while a screenshot resized the window:", screenshotResizeErrors);
 
 await browser.close();

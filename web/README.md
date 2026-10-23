@@ -252,17 +252,30 @@ The look borrows from the studio viewer in
 `bun scripts/arena-viewer.ts <db> [host] [port]` serves charts over the arena
 analysis database (`scripts/arena-import.ts` builds it; see
 `docs/arena/database.md`) at http://127.0.0.1:8790/ by default, with no auth.
-The Overview tab has the cost vs rating scatter, the breakdown heatmaps, a few
-interesting matches and the leaderboard by cohort. Matches lists every started
-match, Seats charts the table position and round-1 starter effects, and
-Reliability charts failed calls, faults and the time they cost per config. Both
-fold their full tables under the charts. A match row, an interesting match or a
+It is one long page: the hero numbers, the cost, moves or output tokens vs rating
+scatter, the breakdown heatmaps, a few interesting matches, the table position and
+round-1 starter charts, the reliability charts (failed calls, faults and the time
+they cost per config), the match list and the leaderboard by cohort. Seats and
+reliability fold their full tables under the charts. A jump menu at the top links
+to each section's anchor (`#scatter`, `#seats`, `#matches`, ...), and the filter bar
+under it applies to the whole page; on a wide screen both stay at the top. The
+scatter's axes span every config in every cohort, so a filter only shows or hides
+points; the reliability bars keep one scale the same way.
+
+Wherever ratings show (the scatter's y axis, the heatmap's and the leaderboards'
+rating columns), an Elo / Rank toggle switches all of them. Elo is the
+Bradley-Terry rating. Rank is a place 1, 2, 3, ... by observed win share (the
+mean over scored matches) among all of the cohort's configs before the chip and
+switch filters, ties going to the higher Elo; the scatter and heatmap rank the
+configs pooled over the chosen cohort, or over every cohort for "All cohorts".
+
+A match row, an interesting match or a
 flagged move opens its replay: health through the match,
 each player's view at the chosen move, and every model move with its reasoning.
 The arrow keys step through it, and Escape, a click outside or the back gesture
 closes it. A cohort is one kind of comparison, pooled over code versions and runs: the
 medium cross-model games, each model's effort sweep, and each smaller
-tournament's pairing ("Opus xhigh vs Astra"). Every tab shows every config by
+tournament's pairing ("Opus xhigh vs Astra"). The page shows every config by
 default; switching 'all configs' off keeps only configs with at least 20 scored
 matches and one against another model, and hides the effort-sweep leaderboards. Items are drawn with the table's own
 icons from `src/icons.ts`, except the saw, beer and jammer, which the viewer
@@ -270,7 +283,7 @@ draws after the game's own: a folding saw, a blue-label can and a flat jammer wi
 green screen. It is a Foldkit app; the server loads every seat at start and works out the per-move
 analysis once.
 
-    bun scripts/arena-viewer-check.ts <url> [outdir]   # headless Chrome at desktop, phone and tablet widths: hovers, taps and screenshots
+    bun scripts/arena-viewer-check.ts <url> [outdir]   # headless Chrome at desktop, phone and tablet widths: hovers, taps, jumps, the ranking toggle, fixed axes and screenshots
 
 The shared copy runs on hp-server at http://100.108.62.24:8790/, from the main
 checkout's `web/`. Its PID is in `_work/arena/viewer.pid` and its log in
@@ -328,4 +341,4 @@ With `ARENA_VIEWER_PASSWORD` set (the shared copy keeps it in the gitignored `_w
 - `scripts/viewer.ts` starts the viewer, and `scripts/viewer-check.ts` screenshots it in headless Chrome.
 - `test/faux-run.ts` plays a free faux arena match into a run directory, for the viewer's tests and its screenshot check.
 - `src/arena-viewer/server.ts` serves the arena analysis viewer's page and JSON API; `analysis.ts` replays each seat's visible events to tag its moves (known shells, item use, choice patterns); `api.ts` holds the schemas both sides use.
-- `src/arena-viewer/page/` is that viewer's Foldkit page: `model.ts` and `main.ts` the state and updates, one module per chart or tab, hand-drawn SVG, and `replay.ts` the replay.
+- `src/arena-viewer/page/` is that viewer's Foldkit page: `model.ts` and `main.ts` the state and updates, one module per chart or section, hand-drawn SVG, and `replay.ts` the replay.
