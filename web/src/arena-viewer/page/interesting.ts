@@ -132,7 +132,7 @@ const cardView = (h: H, pick: Pick, data: Model["matches"][string] | undefined, 
         [h.Class("ivs")],
         pick.match.seats.flatMap((seat, index) => [
           index > 0 ? h.span([h.Class("k")], [" vs "]) : h.empty,
-          h.span([h.Style({ color: colorOf(seat.model, seat.effort), "font-weight": seat === winner ? "600" : "400" })], [labelOf(keyOf(seat))]),
+          h.span([h.Style({ color: colorOf(seat.model), "font-weight": seat === winner ? "600" : "400" })], [labelOf(keyOf(seat))]),
         ]),
       ),
       h.div([h.Class("k")], [pick.stat]),

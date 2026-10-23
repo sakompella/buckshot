@@ -17,11 +17,11 @@ interface Game {
   readonly second: SeatFull;
 }
 
-/** A seed block with both seat orders scored. A block whose two games ran under different code hashes has no cohort. */
+/** A seed block with both seat orders scored. */
 interface Block {
   readonly id: string;
   readonly tournament: string;
-  readonly cohort: string | null;
+  readonly cohort: string;
   readonly games: readonly [Game, Game];
 }
 
@@ -52,7 +52,6 @@ const gamesOf = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<Game> =>
 const blocksOf = (games: ReadonlyArray<Game>) => {
   const blocks: Array<Block> = [];
   let partial = 0;
-  let crossCode = 0;
 
   for (const [id, pair] of groupBy(games, ({ first }) => first.seedBlock)) {
     const [one, two, ...rest] = pair;
@@ -62,14 +61,10 @@ const blocksOf = (games: ReadonlyArray<Game>) => {
       continue;
     }
 
-    const isOneCohort = one.first.cohort === two.first.cohort;
-
-    if (!isOneCohort) crossCode++;
-
-    blocks.push({ id, tournament: one.first.tournament, cohort: isOneCohort ? one.first.cohort : null, games: [one, two] });
+    blocks.push({ id, tournament: one.first.tournament, cohort: one.first.cohort, games: [one, two] });
   }
 
-  return { blocks, partial, crossCode };
+  return { blocks, partial };
 };
 
 const blockOf = (block: Block) => block.id;
@@ -94,7 +89,7 @@ const groupedRows = (blocks: ReadonlyArray<Block>, value: (game: Game) => number
   });
 
   const tournaments = unique(blocks.map(({ tournament }) => tournament)).toSorted();
-  const cohorts = unique(blocks.flatMap(({ cohort }) => (cohort === null ? [] : [cohort]))).toSorted();
+  const cohorts = unique(blocks.map(({ cohort }) => cohort)).toSorted();
 
   return [
     row("All complete seed blocks", blocks),
@@ -125,8 +120,6 @@ const configRows = (blocks: ReadonlyArray<Block>, focal: ReadonlySet<SeatFull>) 
   const rows = new Map<string, ConfigRow>();
 
   for (const { id, cohort, games } of blocks) {
-    if (cohort === null) continue;
-
     const [one, two] = games;
 
     for (const seat of [one.first, one.second]) {
@@ -226,13 +219,12 @@ const comebackRows = (games: ReadonlyArray<Game>) => {
 
 const seatsOf = memoLast((derived: Derived) => {
   const games = gamesOf(derived.matchSeats);
-  const { blocks, partial, crossCode } = blocksOf(games);
+  const { blocks, partial } = blocksOf(games);
   const startered = blocks.filter((block) => block.games.every((game) => !Number.isNaN(starterShare(game))));
 
   return {
     games,
     partial,
-    crossCode,
     position: groupedRows(blocks, ({ first }) => first.winShare ?? 0),
     starter: groupedRows(startered, starterShare),
     firstStarts: games.filter(({ first }) => first.story?.starter === first.player).length,
@@ -399,9 +391,8 @@ const perSeedView = (h: H, rows: ReadonlyArray<{ readonly seed: string; readonly
 
 /** The Seats tab, laid out for a viewport `width` wide with `content` pixels inside main's padding. */
 export const seatsView = (h: H, filters: Html, derived: Derived, width: number, content: number): Html => {
-  const { games, partial, crossCode, position, starter, firstStarts, configs, stories, perSeed, comebacks } = seatsOf(derived);
+  const { games, partial, position, starter, firstStarts, configs, stories, perSeed, comebacks } = seatsOf(derived);
   const left = partial > 0 ? `; ${partial} incomplete blocks left out` : "";
-  const cross = crossCode > 0 ? ` ${crossCode} block spanning two code hashes is in no cohort row.` : "";
   const figure = chartWidth(width, content);
   const [allPositions] = position;
   const [allStarters] = starter;
@@ -449,7 +440,7 @@ export const seatsView = (h: H, filters: Html, derived: Derived, width: number, 
               h.h2([], ["Table position"]),
               h.p(
                 [h.Class("sub")],
-                [`Position 1 is a table seat, not the first mover (it starts round 1 in ${firstStarts.toLocaleString()} of ${games.length.toLocaleString()}); averaged within seed blocks${left}.${cross}`],
+                [`Position 1 is a table seat, not the first mover (it starts round 1 in ${firstStarts.toLocaleString()} of ${games.length.toLocaleString()}); averaged within seed blocks${left}.`],
               ),
               groupTableView(h, position, ["Position 1 share", "Position 2 share"]),
             ],

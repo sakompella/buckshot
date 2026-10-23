@@ -44,7 +44,7 @@ const filtersView = (h: H, derived: Derived, filter: Model["filter"]): Html => {
     [h.Class("filters")],
     [
       h.select(
-        [h.Title("tournament · gameplay code hash · pairing kind"), h.Value(filter.cohort), h.OnChange((cohort) => Message.SelectedCohort({ cohort }))],
+        [h.Title("the kind of comparison"), h.Value(filter.cohort), h.OnChange((cohort) => Message.SelectedCohort({ cohort }))],
         [h.option([h.Value("all")], ["All cohorts"]), ...cohorts.map((cohort) => h.option([h.Value(cohort), h.Selected(cohort === filter.cohort)], [`${cohort} (${matchesIn(cohort)})`]))],
       ),
       h.span(
@@ -155,6 +155,7 @@ const navView = (h: H, model: Model): Html =>
     [
       h.span([h.Class("brand")], ["Buckshot arena"]),
       ...TABS.map(([tab, label]) => h.button([h.Type("button"), h.Class(model.tab === tab ? "on" : ""), h.OnClick(Message.ClickedTab({ tab }))], [label])),
+      h.a([h.Class("download"), h.Href("/api/db")], ["Database (SQLite)"]),
     ],
   );
 

@@ -181,7 +181,7 @@ const init: Runtime.ApplicationInit<Model, Message, Flags> = ({ viewport, hash }
     viewport,
     tab: Option.getOrElse(tabOfHash(hash), (): Tab => "overview"),
     data: AsyncData.Loading(),
-    filter: { cohort: "all", offEfforts: [], offModels: [], isAllConfigs: false },
+    filter: { cohort: "all", offEfforts: [], offModels: [], isAllConfigs: true },
     scatter: { show: "kept", axis: "cost", maybeHover: Option.none(), maybePin: Option.none() },
     heat: { mode: "opp", sort: "rating", isBestOnly: false, maybeTip: Option.none(), maybeFlagged: Option.none() },
     leaderboard: { maybeOpen: Option.none(), maybeTip: Option.none() },

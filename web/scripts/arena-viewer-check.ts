@@ -41,14 +41,19 @@ const countOf = async (page: Page, selector: string) => {
 
 const heat = (page: Page) => page.locator("section").filter({ has: page.locator("table.heat") });
 
-// Prints what the default filter shows, then switches every config on: the effort-sweep and small ones too.
+// Prints what the default filter shows (every config), then what switching 'all configs' off hides, and switches it back on.
 const openOverview = async (page: Page) => {
   await page.goto(`${base}/#overview`);
   await page.waitForSelector("table.heat tbody tr", { timeout: 120_000 });
   await page.waitForSelector(".icard svg rect", { timeout: 60_000 });
-  console.log("default configs: scatter points", await countOf(page, ".card svg g.pt"), "heat rows", await countOf(page, "table.heat tbody tr"), "leaderboards", await countOf(page, "table.lbt"), "|", await textOf(page, ".filters .switch"));
-  await page.getByRole("switch", { name: /all configs/ }).check();
-  console.log("all configs: leaderboards", await countOf(page, "table.lbt"));
+
+  const counts = async () => ["scatter points", await countOf(page, ".card svg g.pt"), "heat rows", await countOf(page, "table.heat tbody tr"), "leaderboards", await countOf(page, "table.lbt"), "|", await textOf(page, ".filters .switch")];
+  const allConfigs = page.getByRole("switch", { name: /all configs/ });
+
+  console.log("default (all configs):", ...(await counts()));
+  await allConfigs.uncheck();
+  console.log("main configs only:", ...(await counts()));
+  await allConfigs.check();
 };
 
 // Visible controls smaller than 44px either way (heat cells and leaderboard squares are left out).

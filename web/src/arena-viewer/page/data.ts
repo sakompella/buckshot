@@ -20,27 +20,26 @@ export const DASH: ReadonlyMap<string, string> = new Map([
 interface Base {
   readonly id: string;
   readonly name: string;
+  /** The name within its family, for cohort names. */
+  readonly short: string;
   /** OKLCH lightness, chroma and hue. */
   readonly tone: readonly [number, number, number];
 }
 
-// Claude is warm and GPT is blue, and brightness follows strength: within each family the strongest model by the
-// merged cross-model Bradley-Terry order (docs/arena/analysis/matchups.md) is brightest and most saturated:
-// GPT Astra +165, Sol +67, Terra -44, Luna -244; Claude Opus +96, Haiku 5.5 +57, Sonnet +37, Haiku 4.5 -134.
-// Each model also has its own hue so neighbours in the order stay apart: GPT cyan, azure, indigo, slate;
-// Claude gold, orange, coral, rust. Effort keeps the hue and shifts lightness a smaller step, brighter for higher effort.
+// Every Claude model is orange and every GPT model blue (sRGB HSL hue 18-36 for Claude, 196-218 for GPT). Within a
+// family the strongest model by the merged cross-model Bradley-Terry order (docs/arena/analysis/matchups.md) is
+// brightest and most saturated, and each step down is clearly darker (contrast on black about 14, 10, 6 and 4 to 1):
+// GPT Astra, Sol, Terra, Luna; Claude Opus, Haiku 5.5, Sonnet, Haiku 4.5. Every effort of a model has its colour.
 const BASES: ReadonlyArray<Base> = [
-  { id: "claude-opus-5-5", name: "Opus 5.5", tone: [0.86, 0.16, 88] },
-  { id: "claude-haiku-5-5", name: "Haiku 5.5", tone: [0.76, 0.17, 58] },
-  { id: "claude-sonnet-5-5", name: "Sonnet 5.5", tone: [0.68, 0.19, 27] },
-  { id: "claude-haiku-4-5", name: "Haiku 4.5", tone: [0.6, 0.1, 50] },
-  { id: "gpt-6-astra", name: "GPT-6 Astra", tone: [0.86, 0.13, 205] },
-  { id: "gpt-6.1-sol", name: "GPT-6.1 Sol", tone: [0.74, 0.15, 245] },
-  { id: "gpt-5.6-terra", name: "GPT-5.6 Terra", tone: [0.66, 0.17, 280] },
-  { id: "gpt-6-luna", name: "GPT-6 Luna", tone: [0.62, 0.045, 245] },
+  { id: "claude-opus-5-5", name: "Opus 5.5", short: "Opus", tone: [0.868, 0.115, 75.8] },
+  { id: "claude-haiku-5-5", name: "Haiku 5.5", short: "Haiku 5.5", tone: [0.763, 0.151, 56.7] },
+  { id: "claude-sonnet-5-5", name: "Sonnet 5.5", short: "Sonnet", tone: [0.647, 0.17, 42.4] },
+  { id: "claude-haiku-4-5", name: "Haiku 4.5", short: "Haiku 4.5", tone: [0.536, 0.126, 43.2] },
+  { id: "gpt-6-astra", name: "GPT-6 Astra", short: "Astra", tone: [0.89, 0.073, 224.2] },
+  { id: "gpt-6.1-sol", name: "GPT-6.1 Sol", short: "Sol", tone: [0.741, 0.131, 240.2] },
+  { id: "gpt-5.6-terra", name: "GPT-5.6 Terra", short: "Terra", tone: [0.594, 0.179, 257.7] },
+  { id: "gpt-6-luna", name: "GPT-6 Luna", short: "Luna", tone: [0.523, 0.091, 259.8] },
 ];
-
-const EFFORT_STEP = 0.015;
 
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
 
@@ -69,17 +68,14 @@ const baseOf = (model: string): Base | undefined => BASES.find(({ id }) => model
 
 export const baseName = (model: string): string => baseOf(model)?.name ?? model;
 
-const effortIndex = (effort: string): number => EFFORTS.findIndex((known) => known === effort);
-
-export const colorOf = (model: string, effort?: string): string => {
+export const colorOf = (model: string): string => {
   const base = baseOf(model);
 
   if (base === undefined) return "#999";
 
   const [lightness, chroma, hue] = base.tone;
-  const shift = effort === undefined ? 0 : (Math.max(0, effortIndex(effort)) - 3) * EFFORT_STEP;
 
-  return oklch(lightness + shift, chroma, hue);
+  return oklch(lightness, chroma, hue);
 };
 
 export const isClaude = (model: string): boolean => model.startsWith("claude");
@@ -99,11 +95,7 @@ export const labelOf = (key: string): string => {
   return `${baseName(model)} ${effort}`;
 };
 
-export const colorOfKey = (key: string): string => {
-  const [model, effort] = splitKey(key);
-
-  return colorOf(model, effort);
-};
+export const colorOfKey = (key: string): string => colorOf(splitKey(key)[0]);
 
 export const baseOrder = (model: string): number => {
   const index = BASES.findIndex(({ id }) => model.includes(id));
@@ -204,17 +196,44 @@ export const rng = (seed: number) => {
 
 // COHORTS
 
-/** A seat with its cohort: one tournament, one gameplay code hash and one kind of pairing. */
+/** A seat with its cohort: the kind of comparison its match is part of, over every code version and run. */
 export type SeatFull = Seat & { readonly cohort: string };
 
-/** Rankings and rates are only compared within a cohort: cross-model games, or one model's effort sweep. */
-export const withCohorts = (seats: ReadonlyArray<Seat>): ReadonlyArray<SeatFull> => {
-  const cohortOf = new Map(
-    [...groupBy(seats, ({ matchId }) => matchId)].map(([matchId, matchSeats]) => {
-      const [first] = matchSeats;
-      const isSweep = matchSeats.every(({ model }) => model === first?.model);
+const shortName = (model: string): string => baseOf(model)?.short ?? model;
 
-      return [matchId, `${first?.tournament ?? ""} · ${first?.codeHash ?? ""} · ${isSweep ? `${baseName(first?.model ?? "")} efforts` : "cross-model"}`];
+// A sweep is named for its model. A cross-model tournament with one effort throughout is "Cross-model (<effort>)",
+// and a smaller one lists its configs, those off the default effort first: "Opus xhigh vs Astra".
+const cohortName = (seats: ReadonlyArray<Seat>): string => {
+  const models = unique(seats.map(({ model }) => model));
+  const configs = unique(seats.map(keyOf)).map(splitKey);
+  const efforts = unique(configs.map(([, effort]) => effort));
+
+  if (models.length === 1) return `${shortName(models[0] ?? "")} efforts`;
+
+  if (configs.length > 2 && efforts.length === 1) return `Cross-model (${efforts[0] ?? ""})`;
+
+  return configs
+    .toSorted(([, left], [, right]) => Number(left === DEFAULT_EFFORT) - Number(right === DEFAULT_EFFORT))
+    .map(([model, effort]) => (effort === DEFAULT_EFFORT ? shortName(model) : `${shortName(model)} ${effort}`))
+    .join(" vs ");
+};
+
+/** Rankings and rates are only compared within a cohort: one tournament's cross-model games, or one model's effort sweep. */
+export const withCohorts = (seats: ReadonlyArray<Seat>): ReadonlyArray<SeatFull> => {
+  const comparisonOf = (matchSeats: ReadonlyArray<Seat>) => {
+    const [first] = matchSeats;
+    const isSweep = matchSeats.every(({ model }) => model === first?.model);
+
+    return `${first?.tournament ?? ""}|${isSweep ? (first?.model ?? "") : ""}`;
+  };
+
+  const matches = [...groupBy(seats, ({ matchId }) => matchId).values()];
+
+  const cohortOf = new Map(
+    [...groupBy(matches, comparisonOf).values()].flatMap((group) => {
+      const name = cohortName(group.flat());
+
+      return group.flatMap((matchSeats) => matchSeats.map(({ matchId }) => [matchId, name] as const));
     }),
   );
 
@@ -357,7 +376,7 @@ export const modelStats = (seats: ReadonlyArray<SeatFull>, isByCohort = false): 
         model: first.model,
         effort: first.effort,
         label: labelOf(keyOf(first)),
-        color: colorOf(first.model, first.effort),
+        color: colorOf(first.model),
         dash: DASH.get(first.effort) ?? "",
         started,
         scored,
