@@ -162,6 +162,7 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
 .step { border-top: 1px solid #141414; padding: 5px 4px; cursor: pointer; font-size: 13px; }
 .step .h { display: flex; gap: 10px; align-items: baseline; }
 .step .right { margin-left: auto; }
+.tag.regret.exact { color: var(--fg); border-color: var(--fg); }
 .step.on { background: #0e0e0e; outline: 1px solid #2a2a2a; }
 .step .sd { cursor: auto; margin: 6px 0 4px 10px; }
 .step pre.reply { color: #a9a9a9; }

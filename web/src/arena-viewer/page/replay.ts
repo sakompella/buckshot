@@ -5,7 +5,7 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 import type { Call, MatchDetail, Step } from "../api.ts";
 import { linScale } from "./charts.ts";
 import { itemIconOf } from "./items.ts";
-import { colorOf, fmtCount, fmtSec, fmtPct, fmtTime, fmtUsd, keyOf, labelOf, type MatchRow, sumOf, unique } from "./data.ts";
+import { colorOf, fmtCount, fmtPoints, fmtSec, fmtPct, fmtTime, fmtUsd, keyOf, labelOf, type MatchRow, sumOf, unique } from "./data.ts";
 import { type MatchData, Message, type Replay, type Viewport } from "./model.ts";
 
 type H = HtmlBuilder<Message>;
@@ -209,11 +209,31 @@ const callView = (h: H, call: Call): Html => {
   );
 };
 
+/** A model move's regret; only a proven exact one is marked exact. */
+const regretTag = (h: H, step: Step): Html =>
+  step.regret === null
+    ? h.empty
+    : h.span([h.Class(step.regret.exact ? "tag regret exact" : "tag regret")], [`regret ${fmtPoints(step.regret.points)}${step.regret.exact ? " · exact" : ""}`]);
+
+const regretLine = (h: H, step: Step): Html => {
+  const { regret } = step;
+
+  if (regret === null) return h.empty;
+
+  return h.div(
+    [h.Class("k")],
+    [
+      `Best move ${regret.best} ${fmtPoints(regret.bestScore)}%, chosen ${fmtPoints(regret.chosenScore)}% · depth ${regret.depth}${regret.limited ? ", stopped by the node budget" : ""}`,
+      regret.exact ? " · proven exact" : " · not proven exact",
+    ],
+  );
+};
+
 const stepDetailView = (h: H, step: Step): Html =>
   h.keyed("div")(
     `detail-${step.id}`,
     [h.Class("sd"), h.OnMount(ScrollStepIntoView())],
-    [...(step.outcome.length > 0 ? [h.div([h.Class("k")], [step.outcome.join(" ")])] : []), ...step.calls.map((call) => callView(h, call))],
+    [...(step.outcome.length > 0 ? [h.div([h.Class("k")], [step.outcome.join(" ")])] : []), regretLine(h, step), ...step.calls.map((call) => callView(h, call))],
   );
 
 const stepView = (h: H, detail: MatchDetail, step: Step, index: number, at: number): Html =>
@@ -228,6 +248,7 @@ const stepView = (h: H, detail: MatchDetail, step: Step, index: number, at: numb
           h.b([h.Style({ color: seatColor(detail, step.player) })], [step.player]),
           h.span([], [step.label]),
           step.byWhom === "agent" ? h.empty : h.span([h.Class("tag")], [step.byWhom]),
+          regretTag(h, step),
           h.span([h.Class("k right")], [step.outcome.find((line) => / shot /.test(line))?.replace(/^.*?: /, "") ?? ""]),
         ],
       ),

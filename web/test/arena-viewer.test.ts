@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 
 import { roundStory, ShellTracker } from "../src/arena-viewer/analysis.ts";
 import type { Seat } from "../src/arena-viewer/api.ts";
-import { type BlockTally, blockRate, colorOf, groupBy, modelStats, quantile, rankOrder, rng, withCohorts } from "../src/arena-viewer/page/data.ts";
+import { type BlockTally, blockRate, colorOf, groupBy, modelStats, quantile, rankOrder, regretStats, rng, withCohorts } from "../src/arena-viewer/page/data.ts";
 import { bradleyTerry, type Game, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 
 const randomGames = (seed: number): ReadonlyArray<Game> => {
@@ -257,6 +257,7 @@ const SEAT: Seat = {
   faults: 0,
   reminders: 0,
   fallbacks: 0,
+  regret: null,
   story: null,
   round: 0,
   low: null,
@@ -391,4 +392,12 @@ test("rank order puts higher share first, breaks ties by Elo, and keeps every co
       if (above.winShare === config.winShare) expect(above.elo).toBeGreaterThanOrEqual(config.elo);
     });
   }
+});
+
+test("a config's regret weights every searched move equally, whichever seat it came from, and is null with none", () => {
+  const seats = [{ regret: { moves: 1, total: 10, exact: 1 } }, { regret: { moves: 3, total: 2, exact: 0 } }, { regret: null }];
+
+  expect(regretStats(seats)).toEqual({ moves: 4, mean: 3, exactShare: 0.25 });
+  expect(regretStats([{ regret: null }])).toBeNull();
+  expect(regretStats([])).toBeNull();
 });
