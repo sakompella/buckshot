@@ -57,10 +57,15 @@ class Pattern:
     matches: Callable[[Move], bool]  # the ones where it did
 
 
+def is_luna(move: Move) -> bool:
+    return move.config.startswith("gpt-6-luna ")
+
+
 PATTERNS = [
     Pattern("Invert the last shell and shoot yourself, known live (2)", lambda m: m.chamber == "Live" and m.shells_left == 1 and "Inverter" in m.legal_items, lambda m: m.item == "Inverter" and m.shoots_self_next),
-    Pattern("Smoke at full health (4)", lambda m: m.full_health and m.can_use("Cigarettes"), lambda m: m.item == "Cigarettes"),
-    Pattern("Smoke at full health, opponent holds adrenaline (4)", lambda m: m.full_health and m.can_use("Cigarettes") and "Adrenaline" in m.opponent_items, lambda m: m.item == "Cigarettes"),
+    Pattern("Smoke at full health, outside Luna (4)", lambda m: m.full_health and m.can_use("Cigarettes") and not is_luna(m), lambda m: m.item == "Cigarettes"),
+    Pattern("Smoke at full health, outside Luna, opponent holds adrenaline (4)", lambda m: m.full_health and m.can_use("Cigarettes") and not is_luna(m) and "Adrenaline" in m.opponent_items, lambda m: m.item == "Cigarettes"),
+    Pattern("Smoke at full health, Luna (4)", lambda m: m.full_health and m.can_use("Cigarettes") and is_luna(m), lambda m: m.item == "Cigarettes"),
     Pattern("Shoot yourself, unknown chamber, under half live (6)", lambda m: m.unknown_count_known and 2 * (m.live_count or 0) < m.shells_left, lambda m: m.shot == "self"),
     Pattern("Shoot yourself on a certain live, from the count (7)", lambda m: m.shot is not None and m.chamber == "Live" and m.source == "public", lambda m: m.shot == "self"),
     Pattern("Shoot yourself on a certain live, from the glass", lambda m: m.shot is not None and m.chamber == "Live" and m.source == "glass", lambda m: m.shot == "self"),
@@ -87,7 +92,7 @@ class Row:
 
 
 def load(regret_path: Path, knowledge_path: Path, depth: int, budget: int) -> list[Move]:
-    """The searched agent decisions of finished matches. Full health is the round's highest health seen in any decision of it."""
+    """The searched agent decisions of finished matches. Full health is the round's highest health seen in any decision of it, which equals the health every seat starts the round with."""
     db = connect(str(regret_path))
     db.row_factory = sqlite3.Row
     db.execute("ATTACH DATABASE ? AS k", (f"file:{knowledge_path}?mode=ro",))
