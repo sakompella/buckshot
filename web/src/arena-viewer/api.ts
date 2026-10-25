@@ -69,7 +69,16 @@ export const SeatAnalysis = Schema.Struct({
 
 export type SeatAnalysis = typeof SeatAnalysis.Type;
 
-export const Seat = Schema.Struct({ ...SeatRow.fields, ...SeatAnalysis.fields });
+/**
+ * A seat's searched agent moves: how many, their regret summed in percentage points of the round win chance, and how
+ * many of them are proven exact (docs/arena/analysis/regret.md). Null when the viewer has no regret database or the
+ * seat has no searched move.
+ */
+export const SeatRegret = Schema.Struct({ moves: Schema.Number, total: Schema.Number, exact: Schema.Number });
+
+export type SeatRegret = typeof SeatRegret.Type;
+
+export const Seat = Schema.Struct({ ...SeatRow.fields, ...SeatAnalysis.fields, regret: Schema.NullOr(SeatRegret) });
 
 export type Seat = typeof Seat.Type;
 
@@ -159,6 +168,23 @@ export type PlayerState = typeof PlayerState.Type;
  * by original type, and the chambered shell if glass or phone told it. A view can omit a jammed player's health,
  * so the last known value is carried forward. outcome is the public events the move caused.
  */
+/**
+ * What the minimax player made of one searched agent move, in percentage points of the round win chance: the regret,
+ * the best move's score and the chosen move's. exact is true only for a proven settled round; false means not proven
+ * exact, not that the score is a guess. depth is how deep the search got, and limited whether the node budget stopped it.
+ */
+export const MoveRegret = Schema.Struct({
+  points: Schema.Number,
+  exact: Schema.Boolean,
+  best: Schema.String,
+  bestScore: Schema.Number,
+  chosenScore: Schema.Number,
+  depth: Schema.Number,
+  limited: Schema.Boolean,
+});
+
+export type MoveRegret = typeof MoveRegret.Type;
+
 export const Step = Schema.Struct({
   id: Schema.String,
   ordinal: Schema.Number,
@@ -171,6 +197,7 @@ export const Step = Schema.Struct({
   live: Schema.Number,
   blank: Schema.Number,
   known: Schema.NullOr(Shell),
+  regret: Schema.NullOr(MoveRegret),
   outcome: Schema.Array(Schema.String),
   calls: Schema.Array(Call),
 });

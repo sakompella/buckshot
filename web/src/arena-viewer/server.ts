@@ -6,6 +6,7 @@ import { Option, Schema } from "effect";
 import { analyse, decodeVisible, roundStory, ShellTracker } from "./analysis.ts";
 import { Call, Decisions, MatchDetail, MatchSeat, MatchSummary, type PlayerState, SeatRow, SeatsResponse, type Step } from "./api.ts";
 import page from "./page/index.html";
+import { openRegret, type Regret } from "./regret.ts";
 
 // The arena viewer's server: the page, and a read-only JSON API over the arena
 // analysis database. It never selects match_seats.provenance_json, which holds
@@ -72,7 +73,7 @@ interface StepDraft {
   readonly calls: Array<Call>;
 }
 
-const matchDetail = (db: Database, id: string): MatchDetail | null => {
+const matchDetail = (db: Database, regret: Regret | null, id: string): MatchDetail | null => {
   const match = decodeSummary(
     db
       .query(`select m.id, m.name, m.status, m.seed, m.started_at startedAt, m.ended_at endedAt, t.name tournament from matches m join tournaments t on t.id = m.tournament_id where m.id = ? and ${NOT_DEEPSEEK}`)
@@ -85,6 +86,8 @@ const matchDetail = (db: Database, id: string): MatchDetail | null => {
     .query(`select ms.player, ms.position, ms.cash, ms.win_share winShare, e.model, e.effort from match_seats ms join entrants e on e.id = ms.entrant_id where match_id = ? order by position`)
     .all(id)
     .map((row) => decodeMatchSeat(row));
+
+  const regretOf = regret?.moves(id);
 
   // Each player's view is the concatenation of its own decisions' event windows, so shells and rounds are tracked per player.
   const trackers = new Map<string, ShellTracker>();
@@ -132,6 +135,7 @@ const matchDetail = (db: Database, id: string): MatchDetail | null => {
           live: tracker.live,
           blank: tracker.blank,
           known: chamber !== null && (chamber.by === "glass" || chamber.by === "phone") ? chamber.known : null,
+          regret: regretOf?.get(row.ordinal) ?? null,
         },
         events,
         previous,
@@ -210,9 +214,10 @@ const guarded = (handler: (request: Request) => Response) => {
   };
 };
 
-/** Loads and analyses the database once, then serves the page and the API. */
-export const serveArenaViewer = (dbPath: string, hostname: string, port: number) => {
+/** Loads and analyses the database once, then serves the page and the API. With a regret database, seats and moves carry their regret. */
+export const serveArenaViewer = (dbPath: string, hostname: string, port: number, regretPath?: string) => {
   const db = new Database(dbPath, { readonly: true });
+  const regret = regretPath === undefined ? null : openRegret(regretPath);
   const started = performance.now();
 
   const rows = db
@@ -223,10 +228,12 @@ export const serveArenaViewer = (dbPath: string, hostname: string, port: number)
   const seatIndex = new Map(rows.map((row, index) => [`${row.matchId}|${row.player}`, index]));
   const { decisions, seats: analysed } = analyse(db, rows, seatIndex);
 
+  const regretOfSeat = regret?.seats();
+
   const seats = rows.flatMap((row, index) => {
     const extra = analysed[index];
 
-    return extra === undefined ? [] : [{ ...row, ...extra }];
+    return extra === undefined ? [] : [{ ...row, ...extra, regret: regretOfSeat?.get(`${row.matchId}|${row.player}`) ?? null }];
   });
 
   const seatsBody = encodedBody(encodeSeats(seats));
@@ -250,7 +257,7 @@ export const serveArenaViewer = (dbPath: string, hostname: string, port: number)
       }),
       "/api/decisions": guarded((request) => json(request, decisionsBody)),
       "/api/match": guarded((request) => {
-        const detail = matchDetail(db, new URL(request.url).searchParams.get("id") ?? "");
+        const detail = matchDetail(db, regret, new URL(request.url).searchParams.get("id") ?? "");
 
         return detail === null ? new Response("not found", { status: 404 }) : new Response(encodeMatch(detail), { headers: JSON_TYPE });
       }),

@@ -292,6 +292,79 @@ const checkCash = async (page: Page, scatter: ReturnType<Page["locator"]>) => {
   expectThat(JSON.stringify(back) === JSON.stringify(wins), "Wins did not bring the page back to how it started");
 };
 
+const REGRET_TAG = /^regret \d+\.\d( · exact)?$/;
+
+const regretTags = (page: Page) => page.locator(".modal .step .tag.regret");
+
+// With a regret database every leaderboard row has its mean regret, better models have less of it, and the replay marks
+// each model move with its regret: a proven exact one apart from the rest, and the open move says which it is.
+// Without one the page shows no regret at all.
+const checkRegret = async (page: Page) => {
+  const hasRegret = (await page.locator("table.lbt thead th", { hasText: /^Regret$/ }).count()) > 0;
+  const cells = page.locator('table.lbt td[data-label="regret"]');
+
+  if (!hasRegret) {
+    expectThat((await cells.count()) === 0, "a viewer without regret shows a regret cell");
+    console.log("no regret database: no regret column");
+
+    return;
+  }
+
+  const texts = await cells.allInnerTexts();
+  const rows = await countOf(page, "table.lbt tbody tr.row");
+
+  console.log("regret cells", texts.length, "of", rows, "rows, first", texts.slice(0, 6).join(" "), "| title", await cells.first().getAttribute("title"));
+  expectThat(texts.length === rows && texts.every((text) => /^\d+\.\d$/.test(text.trim())), "a leaderboard row has no mean regret");
+  expectThat(/^[\d,]+ moves · \d+% proven exact$/.test((await cells.first().getAttribute("title")) ?? ""), "a regret cell does not say how many moves and how many are proven exact");
+
+  const means = await page.locator("table.lbt").evaluateAll((tables) =>
+    tables.map((table) => Object.fromEntries([...table.querySelectorAll("tr.row")].map((row) => [row.querySelector("td")?.textContent?.trim() ?? "", Number(row.querySelector('td[data-label="regret"]')?.textContent)]))),
+  );
+
+  const cross = means.find((table) => "Opus 5.5 [medium]" in table && "Haiku 4.5 [medium]" in table);
+
+  console.log("cross-model medium regret: Opus", cross?.["Opus 5.5 [medium]"], "Haiku 4.5", cross?.["Haiku 4.5 [medium]"]);
+  expectThat((cross?.["Opus 5.5 [medium]"] ?? Number.NaN) < (cross?.["Haiku 4.5 [medium]"] ?? Number.NaN), "Opus does not have less mean regret than Haiku 4.5");
+  await page.locator(".lb").first().screenshot({ path: shot("leaderboard-regret"), style: UNSTICK });
+
+  let exact = 0;
+  let notExact = 0;
+
+  for (const row of [0, 1, 2, 3, 4]) {
+    await page.locator("#matches tbody tr.row").nth(row).click();
+    await page.waitForSelector(".modal .step");
+
+    const tags = await regretTags(page).allInnerTexts();
+    const steps = await countOf(page, ".modal .step");
+
+    expectThat(tags.length > 0 && tags.every((text) => REGRET_TAG.test(text.trim())), `match ${row}: regret tags ${tags.slice(0, 3).join(" | ")}`);
+    expectThat(tags.length <= steps, `match ${row}: more regret tags than moves`);
+    exact += tags.filter((text) => text.includes("exact")).length;
+    notExact += tags.filter((text) => !text.includes("exact")).length;
+
+    for (const kind of ["exact", "not exact"] as const) {
+      const step = page.locator(".modal .step").filter({ has: kind === "exact" ? page.locator(".tag.regret.exact") : page.locator(".tag.regret:not(.exact)") }).first();
+
+      if ((await step.count()) === 0) continue;
+
+      await step.click();
+      await settled(page);
+
+      const detail = await textOf(page, ".modal .step.on .sd");
+      const says = /not proven exact/.test(detail) ? "not exact" : /proven exact/.test(detail) ? "exact" : "neither";
+
+      expectThat(/Best move .+ chosen [\d.]+% · depth \d/.test(detail) && says === kind, `match ${row}: a ${kind} move's detail says ${says}: ${detail.slice(0, 120)}`);
+
+      if (row === 0) await page.locator(".modal").screenshot({ path: shot(`replay-regret-${kind.replace(" ", "-")}`) });
+    }
+
+    console.log("match", row, "regret tags", tags.length, "of", steps, "steps, first", tags.slice(0, 3).join(" | "));
+    await page.keyboard.press("Escape");
+  }
+
+  expectThat(exact > 0 && notExact > 0, `exact and other regret tags both show: ${exact} exact, ${notExact} not`);
+};
+
 const checkDesktop = async (browser: Browser) => {
   const page = await browser.newPage({ viewport: { width: 1500, height: 1000 } });
   const scatter = page.locator(".card").first();
@@ -327,6 +400,7 @@ const checkDesktop = async (browser: Browser) => {
   await checkRanking(page, scatter);
   await checkCash(page, scatter);
   await checkEveryConfigRated(page, scatter);
+  await checkRegret(page);
 
   for (const [mode, name] of [
     ["Win share vs opponent", "opp"],
@@ -417,6 +491,7 @@ const checkTouch = async (browser: Browser, name: string, width: number, height:
   await settled(page);
   await heat(page).locator(".heatscroll").evaluate((element) => element.scrollTo({ left: 200 }));
   await heat(page).screenshot({ path: shot(`${name}-heat-items`) });
+  await page.locator("table.lbt").first().screenshot({ path: shot(`${name}-leaderboard`) });
   await page.locator(".icard").first().tap();
   await page.waitForSelector(".modal .step");
 
@@ -428,6 +503,11 @@ const checkTouch = async (browser: Browser, name: string, width: number, height:
   await settled(page);
   console.log(name, "replay", `${box?.width}x${box?.height}`, "| stepper", before, "→", await textOf(page, ".modal .stepper .k"), "| on:", await textOf(page, ".modal .step.on .h"), "| small targets", await smallTargets(page));
   await page.screenshot({ path: shot(`${name}-replay`) });
+
+  const crowded = await page.locator(".modal .step .h").evaluateAll((headers) => headers.filter((header) => header.scrollWidth > header.clientWidth).length);
+
+  console.log(name, "regret tags", await regretTags(page).count(), "| move headers wider than the modal", crowded);
+  expectThat(crowded === 0, `${name}: a move header overflows with its regret tag`);
   await page.goBack();
   console.log(name, "back closes replay:", (await countOf(page, ".modal")) === 0);
 

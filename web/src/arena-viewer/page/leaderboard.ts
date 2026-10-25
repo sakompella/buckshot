@@ -2,7 +2,7 @@ import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { anchorId, ratingToggles, tipView } from "./charts.ts";
-import { baseName, configShare, eloName, fmtCount, fmtPct, fmtSec, fmtUsd, groupBy, isClaude, keyOf, labelOf, type ModelStats, rankOrder, type SeatFull, shareName, sumOf } from "./data.ts";
+import { baseName, configShare, eloName, fmtCount, fmtPct, fmtPoints, fmtSec, fmtUsd, groupBy, isClaude, keyOf, labelOf, type ModelStats, rankOrder, type SeatFull, shareName, sumOf } from "./data.ts";
 import { type ItemSummary, memoLast } from "./derived.ts";
 import { itemIconOf } from "./items.ts";
 import { type Basis, Message, type Model, type Ranking } from "./model.ts";
@@ -115,8 +115,6 @@ const drillView = (h: H, m: ModelStats, seats: ReadonlyArray<SeatFull>, maybeTip
   );
 };
 
-const COLUMNS = 10;
-
 /** How a row shows its standing: its Elo with an interval, or its place. */
 type Standing = { readonly elo: Rating | undefined } | { readonly place: number };
 
@@ -128,7 +126,13 @@ const standingView = (h: H, standing: Standing): ReadonlyArray<Html | string> =>
   return elo === undefined ? ["–"] : [`${elo.rating >= 0 ? "+" : ""}${elo.rating.toFixed(0)} `, h.span([h.Class("pm")], [`[${elo.lo.toFixed(0)}, ${elo.hi.toFixed(0)}]`])];
 };
 
-const rowView = (h: H, m: ModelStats, standing: Standing, basis: Basis, item: ItemSummary | undefined, isOpen: boolean): Html => {
+const regretCell = (h: H, m: ModelStats): Html =>
+  h.td(
+    [h.DataAttribute("label", "regret"), h.Title(m.regret === null ? "" : `${m.regret.moves.toLocaleString()} moves · ${fmtPct(m.regret.exactShare)} proven exact`)],
+    [m.regret === null ? "–" : fmtPoints(m.regret.mean)],
+  );
+
+const rowView = (h: H, m: ModelStats, standing: Standing, basis: Basis, item: ItemSummary | undefined, isOpen: boolean, hasRegret: boolean): Html => {
   const { lo, hi } = m.win;
   const moves = sumOf(m.scored.map((seat) => seat.moves ?? 0));
   const cost = sumOf(m.scored.map((seat) => seat.cost ?? 0));
@@ -151,6 +155,7 @@ const rowView = (h: H, m: ModelStats, standing: Standing, basis: Basis, item: It
       h.td([h.Class("ws"), h.Title(`${fmtPct(lo)}–${fmtPct(hi)}`)], [h.b([], [fmtPct(m.winShare)]), " ", h.span([h.Class("pm")], [`${m.win.k.toFixed(m.win.k % 1 ? 1 : 0)}/${m.win.n}`])]),
       h.td([h.DataAttribute("label", "pot share")], [fmtPct(m.potShare)]),
       h.td([h.DataAttribute("label", "place" in standing ? "rank" : eloName(basis))], standingView(h, standing)),
+      ...(hasRegret ? [regretCell(h, m)] : []),
       h.td([h.DataAttribute("label", "cost")], [fmtUsd(m.avgCost)]),
       h.td([h.DataAttribute("label", "per move")], [fmtUsd(moves > 0 ? cost / moves : null)]),
       h.td([h.DataAttribute("label", "time")], [fmtSec(moves > 0 ? sumOf(m.scored.map((seat) => seat.lat ?? 0)) / moves : null)]),
@@ -163,12 +168,25 @@ const rowView = (h: H, m: ModelStats, standing: Standing, basis: Basis, item: It
   );
 };
 
-const headersOf = (ranking: Ranking, basis: Basis): ReadonlyArray<string> => ["Model", "", "Win share", "Pot share", ranking === "elo" ? eloName(basis) : "Rank", "Avg cost", "Per move", "Time / move", "Out tok", "Favorite item"];
+const headersOf = (ranking: Ranking, basis: Basis, hasRegret: boolean): ReadonlyArray<string> => [
+  "Model",
+  "",
+  "Win share",
+  "Pot share",
+  ranking === "elo" ? eloName(basis) : "Rank",
+  ...(hasRegret ? ["Regret"] : []),
+  "Avg cost",
+  "Per move",
+  "Time / move",
+  "Out tok",
+  "Favorite item",
+];
 
 // Without 'all configs' a sweep usually keeps only its medium row, which has nothing to be ranked against.
 const isShown = (cohort: Cohort, isAllConfigs: boolean): boolean => isAllConfigs || !cohort.isSweep || cohort.configs.length > 1;
 
-const cohortView = (h: H, { cohort, configs: byElo, places, scoredMatches }: Cohort, ratings: ReadonlyMap<string, Rating>, seats: ReadonlyArray<SeatFull>, items: ReadonlyMap<string, ItemSummary>, leaderboard: Model["leaderboard"], ranking: Ranking, basis: Basis): Html => {
+const cohortView = (h: H, { cohort, configs: byElo, places, scoredMatches }: Cohort, ratings: ReadonlyMap<string, Rating>, seats: ReadonlyArray<SeatFull>, items: ReadonlyMap<string, ItemSummary>, leaderboard: Model["leaderboard"], ranking: Ranking, basis: Basis, hasRegret: boolean): Html => {
+  const columns = hasRegret ? 11 : 10;
   const placeOf = (m: ModelStats) => places.get(m.key) ?? 0;
   const configs = ranking === "elo" ? byElo : byElo.toSorted((left, right) => placeOf(left) - placeOf(right));
 
@@ -183,7 +201,7 @@ const cohortView = (h: H, { cohort, configs: byElo, places, scoredMatches }: Coh
           h.table(
             [h.Class("lbt rows")],
             [
-              h.thead([], [h.tr([], headersOf(ranking, basis).map((label, index) => h.th(index === 1 ? [h.Class("barcol")] : [], [label])))]),
+              h.thead([], [h.tr([], headersOf(ranking, basis, hasRegret).map((label, index) => h.th(index === 1 ? [h.Class("barcol")] : [], [label])))]),
               h.tbody(
                 [],
                 configs.flatMap((m) => {
@@ -191,8 +209,8 @@ const cohortView = (h: H, { cohort, configs: byElo, places, scoredMatches }: Coh
                   const standing: Standing = ranking === "elo" ? { elo: ratings.get(m.key) } : { place: placeOf(m) };
 
                   return [
-                    rowView(h, m, standing, basis, items.get(m.id), isOpen),
-                    isOpen ? h.keyed("tr")(`drill-${m.id}`, [h.Class("drill")], [h.td([h.Colspan(COLUMNS)], [drillView(h, m, seats, leaderboard.maybeTip)])]) : h.empty,
+                    rowView(h, m, standing, basis, items.get(m.id), isOpen, hasRegret),
+                    isOpen ? h.keyed("tr")(`drill-${m.id}`, [h.Class("drill")], [h.td([h.Colspan(columns)], [drillView(h, m, seats, leaderboard.maybeTip)])]) : h.empty,
                   ];
                 }),
               ),
@@ -204,7 +222,7 @@ const cohortView = (h: H, { cohort, configs: byElo, places, scoredMatches }: Coh
                     [
                       h.td([], []),
                       h.td([h.Class("barcol")], [h.div([h.Class("axis")], [0, 25, 50, 75, 100].map((tick) => h.span([h.Style({ left: `${tick}%` })], [`${tick}%`])))]),
-                      h.td([h.Colspan(COLUMNS - 2)], []),
+                      h.td([h.Colspan(columns - 2)], []),
                     ],
                   ),
                 ],
@@ -228,8 +246,10 @@ export const leaderboardView = (
   isAllConfigs: boolean,
   ranking: Ranking,
   basis: Basis,
-): Html =>
-  h.div(
+): Html => {
+  const hasRegret = every.some(({ regret }) => regret !== null);
+
+  return h.div(
     [h.Class("lb")],
     [
       h.div([h.Class("lbbar")], [h.h2([], ["Leaderboard by cohort"]), ...ratingToggles(h, ranking, basis)]),
@@ -241,11 +261,13 @@ export const leaderboardView = (
               ? `${eloName(basis)} is one Bradley-Terry rating fitted over every match of every tournament, on ${shareName(basis)}; intervals are 95% bootstraps over seed blocks.`
               : `Rank is the place by observed ${shareName(basis)} among all of a cohort's configs, before the filters; ties go to the higher ${eloName(basis)}.`,
             " Pot share is a config's cash over the match's cash, averaged over scored matches.",
+            hasRegret ? " Regret is the mean percentage points of round win chance a move gave up against the best move the minimax player found; lower is better." : "",
           ].join(""),
         ],
       ),
       ...cohortsOf(stats, every, seats, ratings, basis).filter((cohort) => isShown(cohort, isAllConfigs)).map((cohortRow) =>
-        cohortView(h, cohortRow, ratings, seats, items, leaderboard, ranking, basis),
+        cohortView(h, cohortRow, ratings, seats, items, leaderboard, ranking, basis, hasRegret),
       ),
     ],
   );
+};
