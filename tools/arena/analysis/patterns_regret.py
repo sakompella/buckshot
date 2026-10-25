@@ -37,6 +37,7 @@ class Move:
     sawed: bool
     shot: str | None  # "self" or "opponent"
     item: str | None
+    stolen: bool  # the item was taken with adrenaline
     legal_items: frozenset[str]
     opponent_items: frozenset[str]
     full_health: bool
@@ -63,9 +64,9 @@ def is_luna(move: Move) -> bool:
 
 PATTERNS = [
     Pattern("Invert the last shell and shoot yourself, known live (2)", lambda m: m.chamber == "Live" and m.shells_left == 1 and "Inverter" in m.legal_items, lambda m: m.item == "Inverter" and m.shoots_self_next),
-    Pattern("Smoke at full health, outside Luna (4)", lambda m: m.full_health and m.can_use("Cigarettes") and not is_luna(m), lambda m: m.item == "Cigarettes"),
-    Pattern("Smoke at full health, outside Luna, opponent holds adrenaline (4)", lambda m: m.full_health and m.can_use("Cigarettes") and not is_luna(m) and "Adrenaline" in m.opponent_items, lambda m: m.item == "Cigarettes"),
-    Pattern("Smoke at full health, Luna (4)", lambda m: m.full_health and m.can_use("Cigarettes") and is_luna(m), lambda m: m.item == "Cigarettes"),
+    Pattern("Smoke at full health, outside Luna (4)", lambda m: m.full_health and "Cigarettes" in m.legal_items and not is_luna(m), lambda m: m.item == "Cigarettes" and not m.stolen),
+    Pattern("Smoke at full health, outside Luna, opponent holds adrenaline (4)", lambda m: m.full_health and "Cigarettes" in m.legal_items and not is_luna(m) and "Adrenaline" in m.opponent_items, lambda m: m.item == "Cigarettes" and not m.stolen),
+    Pattern("Smoke at full health, Luna (4)", lambda m: m.full_health and "Cigarettes" in m.legal_items and is_luna(m), lambda m: m.item == "Cigarettes" and not m.stolen),
     Pattern("Shoot yourself, unknown chamber, under half live (6)", lambda m: m.unknown_count_known and 2 * (m.live_count or 0) < m.shells_left, lambda m: m.shot == "self"),
     Pattern("Shoot yourself on a certain live, from the count (7)", lambda m: m.shot is not None and m.chamber == "Live" and m.source == "public", lambda m: m.shot == "self"),
     Pattern("Shoot yourself on a certain live, from the glass", lambda m: m.shot is not None and m.chamber == "Live" and m.source == "glass", lambda m: m.shot == "self"),
@@ -92,13 +93,13 @@ class Row:
 
 
 def load(regret_path: Path, knowledge_path: Path, depth: int, budget: int) -> list[Move]:
-    """The searched agent decisions of finished matches. Full health is the round's highest health seen in any decision of it, which equals the health every seat starts the round with."""
+    """The searched agent decisions of finished matches. Full health is the round's highest health seen in any decision of it, which equals the health every seat starts the round with. The health list starts with the deciding player."""
     db = connect(str(regret_path))
     db.row_factory = sqlite3.Row
     db.execute("ATTACH DATABASE ? AS k", (f"file:{knowledge_path}?mode=ro",))
     rows = db.execute(
         """WITH seen AS (
-             SELECT match_id, ordinal, player, by_whom, round, remaining, chamber, source, private_live_min, private_live_max, sawed, shot, item,
+             SELECT match_id, ordinal, player, by_whom, round, remaining, chamber, source, private_live_min, private_live_max, sawed, shot, item, item_stolen,
                     legal_items_json, opponent_items_json, json_extract(health_json, '$[0].health') AS health_a, json_extract(health_json, '$[1].health') AS health_b,
                     LEAD(player) OVER later AS next_player, LEAD(shot) OVER later AS next_shot
              FROM k.decisions WINDOW later AS (PARTITION BY match_id ORDER BY ordinal)
@@ -106,9 +107,9 @@ def load(regret_path: Path, knowledge_path: Path, depth: int, budget: int) -> li
              SELECT *, MAX(MAX(COALESCE(health_a, 0), COALESCE(health_b, 0))) OVER (PARTITION BY match_id, round) AS round_best
              FROM seen
            )
-           SELECT p.model || ' ' || p.effort AS config, r.regret, d.remaining, d.chamber, d.source, d.private_live_min, d.private_live_max, d.sawed, d.shot, d.item,
+           SELECT p.model || ' ' || p.effort AS config, r.regret, d.remaining, d.chamber, d.source, d.private_live_min, d.private_live_max, d.sawed, d.shot, d.item, d.item_stolen,
                   d.legal_items_json, d.opponent_items_json, d.next_player, d.next_shot, d.player,
-                  CASE d.player WHEN 'A' THEN d.health_a ELSE d.health_b END = d.round_best AS full_health
+                  d.health_a = d.round_best AS full_health
            FROM regret r
            JOIN k.matches m ON m.match_id = r.match_id AND m.status = 'completed'
            JOIN healthy d ON d.match_id = r.match_id AND d.ordinal = r.ordinal AND d.by_whom = 'agent'
@@ -121,7 +122,7 @@ def load(regret_path: Path, knowledge_path: Path, depth: int, budget: int) -> li
         Move(
             r["config"], r["regret"], r["remaining"], r["chamber"], r["source"],
             r["private_live_min"] if r["private_live_min"] == r["private_live_max"] else None,
-            bool(r["sawed"]), r["shot"], r["item"],
+            bool(r["sawed"]), r["shot"], r["item"], bool(r["item_stolen"]),
             frozenset(json.loads(r["legal_items_json"])), frozenset(json.loads(r["opponent_items_json"])),
             bool(r["full_health"]), r["next_player"] == r["player"] and r["next_shot"] == "self",
         )

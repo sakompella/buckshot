@@ -18,6 +18,7 @@ def move(config="opus high", regret=0, **fields):
         "sawed": False,
         "shot": None,
         "item": None,
+        "stolen": False,
         "legal_items": frozenset(),
         "opponent_items": frozenset(),
         "full_health": False,
@@ -54,13 +55,13 @@ class Load(unittest.TestCase):
         knowledge = sqlite3.connect(directory / "knowledge.sqlite")
         knowledge.executescript(
             """CREATE TABLE matches (match_id TEXT, status TEXT);
-               CREATE TABLE players (match_id TEXT, player TEXT, model TEXT, effort TEXT);
+               CREATE TABLE players (match_id TEXT, player TEXT, position INTEGER, model TEXT, effort TEXT);
                CREATE TABLE decisions (match_id TEXT, ordinal INTEGER, player TEXT, by_whom TEXT, round INTEGER, remaining INTEGER, chamber TEXT, source TEXT,
-                 private_live_min INTEGER, private_live_max INTEGER, sawed INTEGER, shot TEXT, item TEXT, legal_items_json TEXT, opponent_items_json TEXT, health_json TEXT)"""
+                 private_live_min INTEGER, private_live_max INTEGER, sawed INTEGER, shot TEXT, item TEXT, item_stolen INTEGER, legal_items_json TEXT, opponent_items_json TEXT, health_json TEXT)"""
         )
         knowledge.execute("INSERT INTO matches VALUES ('m', 'completed')")
-        knowledge.executemany("INSERT INTO players VALUES ('m', ?, 'opus', 'high')", [("A",), ("B",)])
-        knowledge.executemany("INSERT INTO decisions VALUES ('m', ?, ?, ?, 0, 2, NULL, NULL, 1, 1, 0, ?, ?, ?, '[]', ?)", decisions)
+        knowledge.executemany("INSERT INTO players VALUES ('m', ?, ?, 'opus', 'high')", [("A", 2), ("B", 1)])
+        knowledge.executemany("INSERT INTO decisions VALUES ('m', ?, ?, ?, 0, 2, NULL, NULL, 1, 1, 0, ?, ?, NULL, ?, '[]', ?)", decisions)
         knowledge.commit()
         scored = sqlite3.connect(directory / "regret.sqlite")
         scored.execute("CREATE TABLE regret (match_id TEXT, ordinal INTEGER, max_depth INTEGER, budget INTEGER, status TEXT, regret INTEGER)")
@@ -68,9 +69,9 @@ class Load(unittest.TestCase):
         scored.commit()
         return directory / "regret.sqlite", directory / "knowledge.sqlite"
 
-    def test_reads_full_health_and_whether_the_same_player_shoots_itself_next(self):
-        def health(a, b):
-            return json.dumps([{"_tag": "Unjammed", "health": a}, {"_tag": "Unjammed", "health": b}])
+    def test_reads_full_health_of_the_deciding_player_and_whether_the_same_player_shoots_itself_next(self):
+        def health(own, other):
+            return json.dumps([{"_tag": "Unjammed", "health": own}, {"_tag": "Unjammed", "health": other}])
 
         with tempfile.TemporaryDirectory() as directory:
             regret_db, knowledge_db = self.build(
@@ -78,8 +79,8 @@ class Load(unittest.TestCase):
                 [
                     (0, "A", "agent", None, "Inverter", '["Inverter"]', health(4, 3)),
                     (1, "A", "agent", "self", None, "[]", health(4, 3)),
-                    (2, "B", "agent", None, None, "[]", health(2, 3)),
-                    (3, "B", "forced", None, None, "[]", health(2, 3)),
+                    (2, "B", "agent", None, None, "[]", health(2, 4)),
+                    (3, "B", "forced", None, None, "[]", health(2, 4)),
                 ],
             )
             moves = pr.load(regret_db, knowledge_db, 6, 20000)

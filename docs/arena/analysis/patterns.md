@@ -85,9 +85,9 @@ Each choice pattern above that is a single move, checked against [regret](regret
 | pattern | matched | mean regret | other applicable | mean regret | same configs |
 |---|---|---|---|---|---|
 | Invert the last shell and shoot yourself, known live (2) | 200 | 10.1 | 2,658 | 1.5 | 1.4 |
-| Smoke at full health, outside Luna (4) | 1,713 | 0.4 | 9,420 | 1.8 | 1.5 |
-| Smoke at full health, outside Luna, opponent holds adrenaline (4) | 493 | 0.5 | 3,364 | 2.0 | 1.8 |
-| Smoke at full health, Luna (4) | 383 | 1.0 | 2,306 | 2.8 | 2.5 |
+| Smoke at full health, outside Luna (4) | 80 | 1.2 | 8,925 | 1.5 | 1.0 |
+| Smoke at full health, outside Luna, opponent holds adrenaline (4) | 76 | 1.1 | 3,733 | 1.8 | 1.2 |
+| Smoke at full health, Luna (4) | 84 | 4.1 | 2,503 | 2.4 | 2.8 |
 | Shoot yourself, unknown chamber, under half live (6) | 1,424 | 5.4 | 1,620 | 4.6 | 3.3 |
 | Shoot yourself on a certain live, from the count (7) | 399 | 27.3 | 11,195 | 1.7 | 2.3 |
 | Shoot yourself on a certain live, from the glass | 13 | 22.7 | 6,202 | 2.7 | 6.2 |
@@ -103,9 +103,9 @@ Each choice pattern above that is a single move, checked against [regret](regret
 <!-- regret:end -->
 
 - **Costly.** Shooting yourself on a shell you can prove live averages 27 points when proven by the count, against 1.7 for the other shots there. The glass (23, only 13 shots) and phone (25) rows are as bad. Shooting the opponent on the last shell's certain blank is mildly worse than the rest, 3.7 against 2.2. Shooting the opponent on a certain blank before the last shell costs 19 against 0.8. Inverting a known live last shell to keep the turn costs 10 against 1.5, and a self-shot with the gun sawed 10 against 2.9. Throwing a beer at a certain live costs 6 against 3 for the rest.
-- **Cost little.** Smoking at full health averages 0.4 points outside Luna, 0.5 while the opponent holds adrenaline, and 1.0 for Luna, against 1.8, 2.0 and 2.8 for the other moves there. Using the phone with two or fewer shells left averages 2.5. Sawing an unknown chamber averages 1.7, and sawing a certain live 0.3.
-- **No clear gap.** Shooting yourself at exactly half live is 4.3 against 3.8 for shooting the opponent. The self-shot the Haiku models skip, an unknown chamber under half live, is 5.4 against 4.6, so skipping it shows no cost here.
-- **Limits.** The item rows (smoking, phone, saws) are only as good as the evaluator's untrained item weights, so "cost little" there means the evaluator values the item little. Shots on the last shell end at the next reload, which the search scores as a static leaf. Many of the other rows have more than three shells left, where most searches stop early. The smoking count outside Luna, 1,713 decisions, is far above the 79 in pattern 4. Full health here is the round's starting health, checked against the round-begins events, so the rule is the same. Whatever narrows the older count to 79 is not reproduced here.
+- **Cost little.** Using the phone with two or fewer shells left averages 2.5. Sawing an unknown chamber averages 1.7, and sawing a certain live 0.3.
+- **No clear gap.** Smoking your own cigarettes at full health averages 1.2 points outside Luna (1.1 while the opponent holds adrenaline), against 1.5 for the other moves there. Luna's 84 such smokes average 4.1 against 2.4, which is a small sample. Shooting yourself at exactly half live is 4.3 against 3.8 for shooting the opponent. The self-shot the Haiku models skip, an unknown chamber under half live, is 5.4 against 4.6, so skipping it shows no cost here.
+- **Limits.** The item rows (smoking, phone, saws) are only as good as the evaluator's untrained item weights, so "cost little" there means the evaluator values the item little. Shots on the last shell end at the next reload, which the search scores as a static leaf. Many of the other rows have more than three shells left, where most searches stop early. Smoking counts only the player's own cigarettes, not ones stolen with adrenaline: 80 decisions outside Luna and 84 for Luna, near the 79 and 84 in pattern 4.
 
 Rerun with `python3 tools/arena/analysis/patterns_regret.py --doc docs/arena/analysis/patterns.md`.
 
