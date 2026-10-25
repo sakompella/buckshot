@@ -144,6 +144,9 @@ const PACIFIC_TIME = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_A
 
 export const fmtTime = (iso: string): string => PACIFIC_TIME.format(new Date(iso));
 
+/** Regret and regret scores are percentage points of the round win chance. */
+export const fmtPoints = (value: number): string => value.toFixed(1);
+
 export const fmtRating = (rating: number): string => `${rating >= 0 ? "+" : ""}${rating.toFixed(0)}`;
 
 export const eloName = (basis: Basis): string => (basis === "wins" ? "Elo" : "Cash Elo");
@@ -362,6 +365,8 @@ export interface ModelStats {
   readonly winShare: number;
   /** Mean pot share over scored matches. */
   readonly potShare: number;
+  /** Over scored matches; null when the viewer has no regret. */
+  readonly regret: RegretStats | null;
   /** Observed win share with a seed-block bootstrap interval. */
   readonly win: Rate;
   /** Every started match, failed calls included. */
@@ -403,6 +408,7 @@ export const modelStats = (seats: ReadonlyArray<SeatFull>, isByCohort = false): 
         scored,
         winShare: scoredMean(({ winShare }) => winShare),
         potShare: scoredMean(({ potShare }) => potShare),
+        regret: regretStats(scored),
         win: blockRate(wins),
         totalCost: sumOf(started.map(({ cost }) => cost ?? 0)),
         costs,
@@ -431,6 +437,20 @@ export const matchRows = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<MatchRo
 
     return first === undefined ? [] : [{ matchId: first.matchId, seats: ordered, startedAt: first.startedAt, tournament: first.tournament, status: first.status, seed: first.seed }];
   });
+
+/** Regret of a config's searched moves: their mean in points, and the share of them that are proven exact. Null with no searched move. */
+export interface RegretStats {
+  readonly moves: number;
+  readonly mean: number;
+  readonly exactShare: number;
+}
+
+export const regretStats = (seats: ReadonlyArray<Pick<SeatFull, "regret">>): RegretStats | null => {
+  const totals = seats.flatMap(({ regret }) => (regret === null ? [] : [regret]));
+  const moves = sumOf(totals.map((total) => total.moves));
+
+  return moves === 0 ? null : { moves, mean: sumOf(totals.map((total) => total.total)) / moves, exactShare: sumOf(totals.map((total) => total.exact)) / moves };
+};
 
 /** A config's observed share on a basis: the mean over its scored matches. */
 export const configShare = (config: Pick<ModelStats, "winShare" | "potShare">, basis: Basis): number => (basis === "wins" ? config.winShare : config.potShare);

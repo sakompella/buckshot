@@ -124,5 +124,9 @@ What a match records when it starts about what decides its play: the code and in
 **Intervention**:
 A fallback move, counted against the agent it was played for, because the agent ended its turn without a move even after the arena's one reminder. A reminder alone is not an intervention. A match with an intervention is still scored, and the tournament stats flag it.
 
+**Regret**:
+How much a move gave up: the best legal move's score minus the chosen move's, from the minimax player's search over the deciding player's own information, in percentage points of the round win chance. It is exact when both scores are a settled round's win or loss; any other regret is not proven exact, which is not the same as a guess. See `docs/arena/analysis/regret.md`.
+_Avoid_: blunder score, error
+
 **Pot share**:
 A player's cash at the end of a match divided by all the cash in that match: 1 for a sweep, less when the loser banked round prizes. The viewer's cash rating is a Bradley-Terry fit on it.

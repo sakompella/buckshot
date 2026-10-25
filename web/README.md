@@ -249,7 +249,7 @@ The look borrows from the studio viewer in
 
 ## Arena analysis viewer
 
-`bun scripts/arena-viewer.ts <db> [host] [port]` serves charts over the arena
+`bun scripts/arena-viewer.ts <db> [host] [port] [--regret <regret db>]` serves charts over the arena
 analysis database (`scripts/arena-import.ts` builds it; see
 `docs/arena/database.md`) at http://127.0.0.1:8790/ by default, with no auth.
 It is one long page: the hero numbers, the cost, moves or output tokens vs rating
@@ -281,6 +281,16 @@ under one cohort. Under "All cohorts" they rank by the pooled Elo instead, since
 pooling every cohort's shares would count the effort sweeps' self-play. The
 interesting matches always judge underdogs by the win rating.
 
+`--regret` names the derived database with the `regret` table
+(`docs/arena/analysis/regret.md`), opened read only. Without it the viewer runs as
+before and shows no regret. With it, each leaderboard row has a Regret column, the
+mean percentage points of round win chance a model's moves gave up over its scored
+matches (hover for the move count and the share proven exact), and each model move in
+a replay has a regret tag. A move proven exact is marked "exact" and the rest are not;
+the open move says its best move, both scores, search depth and whether the node
+budget stopped it. The table can hold runs with other settings; the viewer reads the
+run with the most searched moves, so scores never mix. Moves with no search have no tag.
+
 A match row, an interesting match or a
 flagged move opens its replay: health through the match,
 each player's view at the chosen move, and every model move with its reasoning.
@@ -302,7 +312,7 @@ checkout's `web/`. Its PID is in `_work/arena/viewer.pid` and its log in
 `_work/arena/viewer.log`. To restart it after a merge, from the repository root:
 
     kill "$(cat _work/arena/viewer.pid)"
-    cd web && setsid -f sh -c 'echo $$ > ../_work/arena/viewer.pid; set -a; . ../_work/arena/viewer.env; set +a; exec bun scripts/arena-viewer.ts ../_work/arena/analysis/buckshot.sqlite 100.108.62.24 8790 > ../_work/arena/viewer.log 2>&1' < /dev/null
+    cd web && setsid -f sh -c 'echo $$ > ../_work/arena/viewer.pid; set -a; . ../_work/arena/viewer.env; set +a; exec bun scripts/arena-viewer.ts ../_work/arena/analysis/buckshot.sqlite 100.108.62.24 8790 --regret ../_work/arena/analysis/derived/regret.sqlite > ../_work/arena/viewer.log 2>&1' < /dev/null
 
 With `ARENA_VIEWER_PASSWORD` set (the shared copy keeps it in the gitignored `_work/arena/viewer.env`), the API asks for that password through the browser's sign-in prompt; leave the username empty. Without it the viewer is open. With `ARENA_VIEWER_DOWNLOAD` set to a database file, the nav links to it as a download behind the same password; the shared copy serves `_work/arena/analysis/buckshot.public.sqlite`, a copy with every email and account id redacted, built with `python3 tools/arena/redact_database.py <db> <out>` (rebuild it after every database swap).
 
@@ -352,5 +362,5 @@ With `ARENA_VIEWER_PASSWORD` set (the shared copy keeps it in the gitignored `_w
 - `src/viewer/page/` is the viewer's page, plain TypeScript and DOM.
 - `scripts/viewer.ts` starts the viewer, and `scripts/viewer-check.ts` screenshots it in headless Chrome.
 - `test/faux-run.ts` plays a free faux arena match into a run directory, for the viewer's tests and its screenshot check.
-- `src/arena-viewer/server.ts` serves the arena analysis viewer's page and JSON API; `analysis.ts` replays each seat's visible events to tag its moves (known shells, item use, choice patterns); `api.ts` holds the schemas both sides use.
+- `src/arena-viewer/server.ts` serves the arena analysis viewer's page and JSON API; `analysis.ts` replays each seat's visible events to tag its moves (known shells, item use, choice patterns); `regret.ts` reads the optional regret database; `api.ts` holds the schemas both sides use.
 - `src/arena-viewer/page/` is that viewer's Foldkit page: `model.ts` and `main.ts` the state and updates, one module per chart or section, hand-drawn SVG, and `replay.ts` the replay.
