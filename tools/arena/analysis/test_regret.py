@@ -22,15 +22,15 @@ def databases(directory: Path, players, decisions, scores, matches=None):
     knowledge.commit()
     scored = sqlite3.connect(directory / "regret.sqlite")
     scored.execute(
-        "CREATE TABLE regret (match_id TEXT, ordinal INTEGER, evaluator TEXT, max_depth INTEGER, budget INTEGER, status TEXT, regret INTEGER, exact INTEGER, depth INTEGER)"
+        "CREATE TABLE regret (match_id TEXT, ordinal INTEGER, evaluator TEXT, max_depth INTEGER, budget INTEGER, status TEXT, regret INTEGER, exact INTEGER, limited INTEGER)"
     )
     scored.executemany("INSERT INTO regret VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", scores)
     scored.commit()
     return directory / "regret.sqlite", directory / "knowledge.sqlite"
 
 
-def score(match, ordinal, regret_value, exact=0, status="searched", evaluator="e", reached=6):
-    return (match, ordinal, evaluator, 6, 20000, status, regret_value, exact, reached)
+def score(match, ordinal, regret_value, exact=0, status="searched", evaluator="e", limited=0):
+    return (match, ordinal, evaluator, 6, 20000, status, regret_value, exact, limited)
 
 
 class Percentile(unittest.TestCase):
@@ -50,13 +50,13 @@ class Load(unittest.TestCase):
         loaded = self.load(
             players=[("m1", "A", "opus", "high"), ("m1", "B", "sol", "low")],
             decisions=[("m1", 0, "A", "agent", "Shoot player +1", 3), ("m1", 1, "B", "agent", "Use beer", 1)],
-            scores=[score("m1", 0, 250000, exact=1), score("m1", 1, 0, reached=4)],
+            scores=[score("m1", 0, 250000, exact=1), score("m1", 1, 0, limited=1)],
         )
         self.assertEqual(
             loaded.decisions,
-            [regret.Decision("opus", "high", 3, True, 250000, True, True), regret.Decision("sol", "low", 1, False, 0, False, False)],
+            [regret.Decision("opus", "high", 3, True, 250000, True, False), regret.Decision("sol", "low", 1, False, 0, False, True)],
         )
-        self.assertEqual(loaded.unsearched, 0)
+        self.assertEqual((loaded.unsearched, loaded.unscored), (0, 0))
 
     def test_leaves_out_deepseek_matches_forced_moves_and_unfinished_matches(self):
         loaded = self.load(
@@ -67,14 +67,14 @@ class Load(unittest.TestCase):
         )
         self.assertEqual(loaded.decisions, [])
 
-    def test_counts_unsearched_decisions_apart_instead_of_as_zero_regret(self):
+    def test_counts_unsearched_and_unscored_decisions_apart_instead_of_as_zero_regret(self):
         loaded = self.load(
             players=[("m1", "A", "opus", "high")],
-            decisions=[("m1", 0, "A", "agent", "Use beer", 2), ("m1", 1, "A", "agent", "Use beer", 2)],
+            decisions=[("m1", 0, "A", "agent", "Use beer", 2), ("m1", 1, "A", "agent", "Use beer", 2), ("m1", 2, "A", "agent", "Use beer", 2)],
             scores=[score("m1", 0, None, status="fallback"), score("m1", 1, 100)],
         )
         self.assertEqual([d.regret for d in loaded.decisions], [100])
-        self.assertEqual(loaded.unsearched, 1)
+        self.assertEqual((loaded.unsearched, loaded.unscored), (1, 1))
 
     def test_refuses_to_mix_evaluators(self):
         with self.assertRaises(SystemExit):
@@ -87,7 +87,7 @@ class Load(unittest.TestCase):
 
 class Summary(unittest.TestCase):
     def test_mean_tail_and_exact_share(self):
-        rows = [regret.Decision("m", "e", 1, True, value, exact, True) for value, exact in [(0, True), (0, False), (0, False), (0, False), (100000, False)]]
+        rows = [regret.Decision("m", "e", 1, True, value, exact, False) for value, exact in [(0, True), (0, False), (0, False), (0, False), (100000, False)]]
         summary = regret.summarise(rows)
         self.assertEqual((summary.count, summary.exact), (5, 0.2))
         self.assertAlmostEqual(summary.mean, 20000)

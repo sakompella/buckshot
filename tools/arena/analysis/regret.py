@@ -37,13 +37,14 @@ class Decision:
     shot: bool
     regret: int
     exact: bool
-    full_depth: bool
+    limited: bool
 
 
 @dataclass(frozen=True)
 class Loaded:
     decisions: list[Decision]
     unsearched: int
+    unscored: int
 
 
 @dataclass(frozen=True)
@@ -74,7 +75,7 @@ def load(regret_path: Path, knowledge_path: Path, depth: int, budget: int) -> Lo
     db.row_factory = sqlite3.Row
     db.execute("ATTACH DATABASE ? AS k", (f"file:{knowledge_path}?mode=ro",))
     rows = db.execute(
-        """SELECT p.model, p.effort, d.remaining, d.choice, r.status, r.regret, r.exact, r.depth, r.evaluator
+        """SELECT p.model, p.effort, d.remaining, d.choice, r.status, r.regret, r.exact, r.limited, r.evaluator
            FROM regret r
            JOIN k.matches m ON m.match_id = r.match_id AND m.status = 'completed'
            JOIN k.decisions d ON d.match_id = r.match_id AND d.ordinal = r.ordinal AND d.by_whom = 'agent'
@@ -84,10 +85,17 @@ def load(regret_path: Path, knowledge_path: Path, depth: int, budget: int) -> Lo
     ).fetchall()
     if len({row["evaluator"] for row in rows}) > 1:
         raise SystemExit(f"{regret_path} holds rows of several evaluators at depth {depth} and budget {budget}; they must not be mixed.")
+    unscored = db.execute(
+        """SELECT COUNT(*) FROM k.decisions d JOIN k.matches m ON m.match_id = d.match_id AND m.status = 'completed'
+           WHERE d.by_whom = 'agent' AND d.match_id NOT IN (SELECT match_id FROM k.players WHERE model LIKE ?)
+             AND NOT EXISTS (SELECT 1 FROM regret r WHERE r.match_id = d.match_id AND r.ordinal = d.ordinal AND r.max_depth = ? AND r.budget = ?)""",
+        (f"%{SKIPPED_MODEL}%", depth, budget),
+    ).fetchone()[0]
     searched = [row for row in rows if row["status"] == "searched"]
     return Loaded(
-        [Decision(r["model"], r["effort"], r["remaining"], r["choice"].startswith("Shoot"), r["regret"], bool(r["exact"]), r["depth"] == depth) for r in searched],
+        [Decision(r["model"], r["effort"], r["remaining"], r["choice"].startswith("Shoot"), r["regret"], bool(r["exact"]), bool(r["limited"])) for r in searched],
         len(rows) - len(searched),
+        unscored,
     )
 
 
@@ -109,22 +117,22 @@ def by_config(decisions: list[Decision]) -> str:
 
 
 def by_shells_left(decisions: list[Decision]) -> str:
-    """Shots and item moves apart, by shells left in the gun when the player chose. Most searches with many shells left stop at the budget before full depth."""
+    """Shots and item moves apart, by shells left in the gun when the player chose. Most searches with many shells left are stopped by the node budget."""
     rows = []
     for left in sorted({d.shells_left for d in decisions}):
         at = [d for d in decisions if d.shells_left == left]
-        row = [str(left), pct(sum(d.full_depth for d in at) / len(at))]
+        row = [str(left), pct(sum(d.limited for d in at) / len(at))]
         for shot in (True, False):
-            s = summarise([d for d in decisions if d.shells_left == left and d.shot == shot])
+            s = summarise([d for d in at if d.shot == shot])
             row += [f"{s.count:,}", points(s.mean), points(s.p90)]
         rows.append(row)
-    return table(["shells left", "full depth", "shots", "mean", "90th percentile", "item moves", "mean", "90th percentile"], rows)
+    return table(["shells left", "stopped by budget", "shots", "mean", "90th percentile", "item moves", "mean", "90th percentile"], rows)
 
 
 def report(loaded: Loaded) -> str:
     decisions = loaded.decisions
     return (
-        f"{len(decisions):,} searched decisions; {loaded.unsearched:,} left out for having no search.\n\n"
+        f"{len(decisions):,} searched decisions; {loaded.unsearched:,} left out for having no search; {loaded.unscored:,} agent decisions with no row.\n\n"
         f"### Regret by config\n\n{by_config(decisions)}\n\n"
         f"### Regret by shells left in the gun\n\n{by_shells_left(decisions)}\n"
     )

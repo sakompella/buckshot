@@ -52,19 +52,19 @@ With `--doc` it rewrites the tables at the end of this page. `python3 -m unittes
 
 ## Results
 
-A casual pass over the full run: counts and means, no intervals. It covers the 110,880 agent decisions of the 2,181 finished matches with no DeepSeek seat, as in [matchups.md](matchups.md). Every one was searched, none fell back. A config is a model with its effort, pooled over the tournaments it played in. Regret is in percentage points of the round win chance, as above. Mean regret over all decisions is 2.5 points and the 90th percentile 6.8. 64% of decisions have a regret of 0 and 11% are exact.
+This is a casual pass over the full run, with counts and means and no intervals. It covers the 110,880 agent decisions of the 2,181 finished matches in the database now with no DeepSeek seat (DeepSeek is left out as in [matchups.md](matchups.md)). Every one has a row, every row was searched, and none fell back. The 112,546 rows of the run also hold DeepSeek's matches and unfinished ones. A config is a model with its effort, pooled over the tournaments it played in. Regret is in percentage points of the round win chance, as above. Mean regret over all decisions is 2.5 points and the 90th percentile 6.8. 11% of the decisions are exact.
 
-1. **Regret orders the models the way the ratings do.**
+1. **Regret and the ratings agree at the ends.**
    - At medium effort the mean regret is Opus 1.1, Sol 1.4, Astra 1.4, Sonnet 2.0, Haiku 5.5 2.0, Terra 2.7, Luna 4.0 and Haiku 4.5 4.9 points.
-   - The cross-model ratings in [matchups.md](matchups.md) put the same three on top (Astra, Opus, Sol) and Luna and Haiku 4.5 at the bottom, in the other order. Regret uses no match results, so it agrees from the other side.
-2. **More effort lowers regret, except for Sol and Opus.**
-   - Haiku 5.5 goes from 3.7 at off to 1.0 at max, Sonnet from 2.3 to 0.9, Luna from 4.0 to 2.2, Terra from 3.1 at low to 1.5 at max. Haiku 4.5 moves less, from 6.0 at off to 4.5 at high. The 90th percentile falls with it: Haiku 5.5 10.1 to 3.2, Sonnet 7.2 to 2.7.
-   - Sol (1.2 to 1.5) and Opus (1.0 to 1.2) are flat. Sol is flat in the rating sweep too. Opus is not: its xhigh rating is far above its low, yet its regret moves by 0.2 points. Regret does not explain that gap.
+   - The cross-model ratings in [matchups.md](matchups.md) put the same three on top (Astra first) and Luna and Haiku 4.5 at the bottom, in the other order. The five in between overlap in rating, and regret does not separate them further. Regret uses no match results, so it agrees from the other side.
+2. **More effort mostly lowers regret. Sol and Opus barely move.**
+   - Haiku 5.5 goes from 3.7 at off to 1.0 at max, Sonnet from 2.3 to 0.9, Luna from 4.0 to 2.2, Terra from 3.1 at low to 1.5 at max. Haiku 4.5 moves less, from 6.0 at off to 4.5 at high. The steps are not always in order: Luna is 4.0 at off and 4.3 at low. The 90th percentile falls with it: Haiku 5.5 10.1 to 3.2, Sonnet 7.2 to 2.7.
+   - Sol (1.2 to 1.5) and Opus (1.0 to 1.2) change by 0.3 points or less. Sol is flat in the rating sweep too. Opus is not: its xhigh rating is far above its low, yet its regret moves by 0.2 points. Regret does not explain that gap.
 
 **Near reloads (for [#4](https://github.com/sakompella/buckshot/issues/4)).** Regret concentrates in shots with two or three shells left in the gun.
 - Those shots average 4.7 and 4.0 points, with a 90th percentile of 15.5 and 13.4. A shot with one shell left averages 1.9 and one with five left 2.1.
 - Item moves stay between 1.7 and 2.4 at every distance. In this cut they show no sign of a reload effect.
-- The rise is not the node budget. Searches with two or three shells left reach full depth 94% and 72% of the time, against 99.9% at one shell left.
+- The node budget does not explain the rise. It stopped 6% and 28% of the searches with two and three shells left, against 0.1% at one shell left.
 - This shows where regret is, not why. A shot with two left ends the search at the reload one shot later, so the static leaf is a possible cause. Real mistakes on near-even shells are another. The table cannot tell them apart, which is what #4 measures. Sample shots at two and three shells left first.
 
 ## Limits
@@ -79,7 +79,7 @@ A casual pass over the full run: counts and means, no intervals. It covers the 1
 ## Tables
 
 <!-- tables:start -->
-110,880 searched decisions; 0 left out for having no search.
+110,880 searched decisions; 0 left out for having no search; 0 agent decisions with no row.
 
 ### Regret by config
 
@@ -127,12 +127,12 @@ A casual pass over the full run: counts and means, no intervals. It covers the 1
 
 ### Regret by shells left in the gun
 
-| shells left | full depth | shots | mean | 90th percentile | item moves | mean | 90th percentile |
+| shells left | stopped by budget | shots | mean | 90th percentile | item moves | mean | 90th percentile |
 |---|---|---|---|---|---|---|---|
-| 1 | 99.9% | 11,831 | 1.9 | 4.0 | 5,312 | 2.0 | 6.7 |
-| 2 | 93.8% | 11,525 | 4.7 | 15.5 | 9,516 | 1.7 | 5.6 |
-| 3 | 72.1% | 11,192 | 4.0 | 13.4 | 13,414 | 1.7 | 5.3 |
-| 4 | 43.4% | 8,795 | 2.7 | 8.2 | 12,354 | 1.8 | 5.4 |
-| 5 | 14.5% | 6,073 | 2.1 | 7.0 | 10,374 | 2.0 | 5.1 |
-| 6 | 3.4% | 3,469 | 1.9 | 5.7 | 7,025 | 2.4 | 4.5 |
+| 1 | 0.1% | 11,831 | 1.9 | 4.0 | 5,312 | 2.0 | 6.7 |
+| 2 | 6.2% | 11,525 | 4.7 | 15.5 | 9,516 | 1.7 | 5.6 |
+| 3 | 27.9% | 11,192 | 4.0 | 13.4 | 13,414 | 1.7 | 5.3 |
+| 4 | 56.6% | 8,795 | 2.7 | 8.2 | 12,354 | 1.8 | 5.4 |
+| 5 | 85.5% | 6,073 | 2.1 | 7.0 | 10,374 | 2.0 | 5.1 |
+| 6 | 96.6% | 3,469 | 1.9 | 5.7 | 7,025 | 2.4 | 4.5 |
 <!-- tables:end -->
