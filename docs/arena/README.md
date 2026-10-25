@@ -78,6 +78,7 @@ Codex isn't checked there: use account pins, so a full Codex account pauses only
   It gives the win share over complete seed pairs and compares the same seeds against another tournament.
 - **Matchups, seat and starter effects:** `python3 tools/arena/analysis/matchups.py --doc docs/arena/analysis/matchups.md` reads the analysis database and rewrites the tables of [analysis/matchups.md](analysis/matchups.md). It takes about 7 minutes under `nice` and counts as a heavy job.
 - **Regret:** `bun scripts/arena-regret.ts --db <buckshot.sqlite> --out <derived.sqlite> --match <name>` scores one match's agent moves with the minimax player, about a third of a second per decision. `python3 tools/arena/analysis/regret.py --doc docs/arena/analysis/regret.md` rewrites the summary tables of [analysis/regret.md](analysis/regret.md) from the stored rows.
+- **Patterns against regret:** `python3 tools/arena/analysis/patterns_regret.py --doc docs/arena/analysis/patterns.md` rewrites the table in [analysis/patterns.md](analysis/patterns.md) that sets each single-move choice pattern against regret, from the regret and knowledge databases, read only, in a few seconds.
 - **Cost:**
 
       bun scripts/arena-cost.ts <dir>

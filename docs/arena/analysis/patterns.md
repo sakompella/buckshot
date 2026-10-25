@@ -75,6 +75,39 @@ Scope:
 - Sawing a known live shell when a saw is legal is also common (53–61% for every model).
 - Ejecting a known live shell with beer happens for every model (7–15% of beers).
 
+## Patterns against regret
+
+Each choice pattern above that is a single move, checked against [regret](regret.md): the minimax player's score of the move, in percentage points of the round win chance, from the deciding player's own information. A row takes the decisions where the pattern could have happened, splits them into those it matched and the rest, and gives the mean regret of each. "Same configs" is the mean of the rest for the same model and effort mix as the matched ones, so a weak model's share does not explain a gap. Numbers in brackets are the pattern's number above. The certain-live rows pool all models, where pattern 7 is Luna's, and the certain-blank rows belong to the known-shell measures of [beliefs-and-items.md](beliefs-and-items.md). The patterns that are not a single move are not in the table, the clue source `combined` is left out, and rates may differ slightly from the counts above where the definitions differ. The three last rows are in the section above on things that are not patterns. Casual pass: means over 110,880 searched decisions, no intervals, DeepSeek left out.
+
+<!-- regret:start -->
+110,880 searched decisions.
+
+| pattern | matched | mean regret | other applicable | mean regret | same configs |
+|---|---|---|---|---|---|
+| Invert the last shell and shoot yourself, known live (2) | 200 | 10.1 | 2,658 | 1.5 | 1.4 |
+| Smoke at full health (4) | 2,096 | 0.5 | 11,726 | 2.0 | 1.7 |
+| Smoke at full health, opponent holds adrenaline (4) | 602 | 0.5 | 4,181 | 2.1 | 1.9 |
+| Shoot yourself, unknown chamber, under half live (6) | 1,424 | 5.4 | 1,620 | 4.6 | 3.3 |
+| Shoot yourself on a certain live, from the count (7) | 399 | 27.3 | 11,195 | 1.7 | 2.3 |
+| Shoot yourself on a certain live, from the glass | 13 | 22.7 | 6,202 | 2.7 | 6.2 |
+| Shoot yourself on a certain live, from the phone | 88 | 24.8 | 1,598 | 1.9 | 3.0 |
+| Shoot the opponent on a certain blank, not the last shell | 1,030 | 19.3 | 6,679 | 0.8 | 1.2 |
+| Shoot the opponent on a certain blank, last shell | 1,363 | 3.7 | 2,763 | 2.2 | 3.0 |
+| Use the phone with two or fewer shells left (16) | 464 | 2.5 | 9,438 | 3.2 | 5.2 |
+| Shoot yourself at exactly half live, no saw (17) | 1,596 | 4.3 | 4,668 | 3.8 | 3.1 |
+| Shoot yourself with the gun sawed (17) | 109 | 10.2 | 9,100 | 2.9 | 3.7 |
+| Saw an unknown chamber (not a pattern) | 4,707 | 1.7 | 15,129 | 3.2 | 3.6 |
+| Saw a certain live (not a pattern) | 4,132 | 0.3 | 2,197 | 5.5 | 3.8 |
+| Beer a certain live (not a pattern) | 753 | 5.9 | 9,034 | 2.9 | 3.6 |
+<!-- regret:end -->
+
+- **Costly.** Shooting yourself on a shell you can prove live averages 27 points when proven by the count, against 1.7 for the other shots there. The glass (23, only 13 shots) and phone (25) rows are as bad. Shooting the opponent on the last shell's certain blank is mildly worse than the rest, 3.7 against 2.2. Shooting the opponent on a certain blank before the last shell costs 19 against 0.8. Inverting a known live last shell to keep the turn costs 10 against 1.5, and a self-shot with the gun sawed 10 against 2.9. Throwing a beer at a certain live costs 6 against 3 for the rest.
+- **Cost little.** Smoking at full health averages 0.5 points, also while the opponent holds adrenaline, against 2.0 for the other moves there. Using the phone with two or fewer shells left averages 2.5. Sawing an unknown chamber averages 1.7, and sawing a certain live 0.3.
+- **No clear gap.** Shooting yourself at exactly half live is 4.3 against 3.8 for shooting the opponent. The self-shot the Haiku models skip, an unknown chamber under half live, is 5.4 against 4.6, so skipping it shows no cost here.
+- **Limits.** The item rows (smoking, phone, saws) are only as good as the evaluator's untrained item weights, so "cost little" there means the evaluator values the item little. Shots on the last shell end at the next reload, which the search scores as a static leaf. Many of the other rows have more than three shells left, where most searches stop early. The smoking count here, 2,096 decisions, is far above the 79 outside Luna in pattern 4. Here full health is the round's highest health seen in any decision of that round. The older count could not be reproduced with that rule.
+
+Rerun with `python3 tools/arena/analysis/patterns_regret.py --doc docs/arena/analysis/patterns.md`.
+
 ## Claude calls mention an organization instruction
 
 Some Sonnet and Haiku 5.5 replies at high effort mention an instruction about "LibKey" scholarly-research access and then set it aside. This happened in 38 calls in 38 matches: Sonnet max 25, Sonnet xhigh 2 and Haiku 5.5 max 11, mostly on the model's first move of a match. The arena prompt stored with each of those matches does not contain it. So it was added after the request left the arena, on the model-provider side. It only shows up where long reasoning restates the system prompt, so it probably reached every Claude call. No effect on play was seen.
