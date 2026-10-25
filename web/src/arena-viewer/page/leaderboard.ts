@@ -186,7 +186,7 @@ const headersOf = (ranking: Ranking, basis: Basis, hasRegret: boolean): Readonly
 const isShown = (cohort: Cohort, isAllConfigs: boolean): boolean => isAllConfigs || !cohort.isSweep || cohort.configs.length > 1;
 
 const cohortView = (h: H, { cohort, configs: byElo, places, scoredMatches }: Cohort, ratings: ReadonlyMap<string, Rating>, seats: ReadonlyArray<SeatFull>, items: ReadonlyMap<string, ItemSummary>, leaderboard: Model["leaderboard"], ranking: Ranking, basis: Basis, hasRegret: boolean): Html => {
-  const columns = hasRegret ? 11 : 10;
+  const headers = headersOf(ranking, basis, hasRegret);
   const placeOf = (m: ModelStats) => places.get(m.key) ?? 0;
   const configs = ranking === "elo" ? byElo : byElo.toSorted((left, right) => placeOf(left) - placeOf(right));
 
@@ -201,7 +201,7 @@ const cohortView = (h: H, { cohort, configs: byElo, places, scoredMatches }: Coh
           h.table(
             [h.Class("lbt rows")],
             [
-              h.thead([], [h.tr([], headersOf(ranking, basis, hasRegret).map((label, index) => h.th(index === 1 ? [h.Class("barcol")] : [], [label])))]),
+              h.thead([], [h.tr([], headers.map((label, index) => h.th(index === 1 ? [h.Class("barcol")] : [], [label])))]),
               h.tbody(
                 [],
                 configs.flatMap((m) => {
@@ -210,7 +210,7 @@ const cohortView = (h: H, { cohort, configs: byElo, places, scoredMatches }: Coh
 
                   return [
                     rowView(h, m, standing, basis, items.get(m.id), isOpen, hasRegret),
-                    isOpen ? h.keyed("tr")(`drill-${m.id}`, [h.Class("drill")], [h.td([h.Colspan(columns)], [drillView(h, m, seats, leaderboard.maybeTip)])]) : h.empty,
+                    isOpen ? h.keyed("tr")(`drill-${m.id}`, [h.Class("drill")], [h.td([h.Colspan(headers.length)], [drillView(h, m, seats, leaderboard.maybeTip)])]) : h.empty,
                   ];
                 }),
               ),
@@ -222,7 +222,7 @@ const cohortView = (h: H, { cohort, configs: byElo, places, scoredMatches }: Coh
                     [
                       h.td([], []),
                       h.td([h.Class("barcol")], [h.div([h.Class("axis")], [0, 25, 50, 75, 100].map((tick) => h.span([h.Style({ left: `${tick}%` })], [`${tick}%`])))]),
-                      h.td([h.Colspan(columns - 2)], []),
+                      h.td([h.Colspan(headers.length - 2)], []),
                     ],
                   ),
                 ],

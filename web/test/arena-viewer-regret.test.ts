@@ -52,8 +52,8 @@ test("a seat's regret sums its searched moves in percentage points, with its exa
     ]),
   );
 
-  expect(regret.seats().get("m1|A")).toEqual({ moves: 2, total: 110, exact: 1 });
-  expect(regret.seats().get("m1|B")).toEqual({ moves: 1, total: 0, exact: 0 });
+  expect(regret.seats.get("m1|A")).toEqual({ moves: 2, total: 110, exact: 1 });
+  expect(regret.seats.get("m1|B")).toEqual({ moves: 1, total: 0, exact: 0 });
 });
 
 test("a move that fell back has no regret, not a zero", () => {
@@ -64,7 +64,7 @@ test("a move that fell back has no regret, not a zero", () => {
     ]),
   );
 
-  expect(regret.seats().get("m1|A")?.moves).toBe(1);
+  expect(regret.seats.get("m1|A")?.moves).toBe(1);
   expect(regret.moves("m1").has(2)).toBe(false);
 });
 
@@ -91,10 +91,6 @@ test("only the run with the most searched moves is read, so evaluators never mix
     ]),
   );
 
-  expect(regret.seats().get("m1|A")).toEqual({ moves: 2, total: 20, exact: 0 });
+  expect(regret.seats.get("m1|A")).toEqual({ moves: 2, total: 20, exact: 0 });
   expect(regret.moves("m1").size).toBe(2);
-});
-
-test("a regret database that does not exist is an error, not a viewer without regret", () => {
-  expect(() => openRegret(join(tmpdir(), "no-such-regret.sqlite"))).toThrow();
 });

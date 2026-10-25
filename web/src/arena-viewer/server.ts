@@ -228,12 +228,10 @@ export const serveArenaViewer = (dbPath: string, hostname: string, port: number,
   const seatIndex = new Map(rows.map((row, index) => [`${row.matchId}|${row.player}`, index]));
   const { decisions, seats: analysed } = analyse(db, rows, seatIndex);
 
-  const regretOfSeat = regret?.seats();
-
   const seats = rows.flatMap((row, index) => {
     const extra = analysed[index];
 
-    return extra === undefined ? [] : [{ ...row, ...extra, regret: regretOfSeat?.get(`${row.matchId}|${row.player}`) ?? null }];
+    return extra === undefined ? [] : [{ ...row, ...extra, regret: regret?.seats.get(`${row.matchId}|${row.player}`) ?? null }];
   });
 
   const seatsBody = encodedBody(encodeSeats(seats));

@@ -213,7 +213,7 @@ const callView = (h: H, call: Call): Html => {
 const regretTag = (h: H, step: Step): Html =>
   step.regret === null
     ? h.empty
-    : h.span([h.Class(`tag regret ${step.regret.exact ? "exact" : ""}`)], [`regret ${fmtPoints(step.regret.points)}${step.regret.exact ? " · exact" : ""}`]);
+    : h.span([h.Class(step.regret.exact ? "tag regret exact" : "tag regret")], [`regret ${fmtPoints(step.regret.points)}${step.regret.exact ? " · exact" : ""}`]);
 
 const regretLine = (h: H, step: Step): Html => {
   const { regret } = step;

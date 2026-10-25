@@ -33,7 +33,7 @@ const decodeMove = Schema.decodeUnknownSync(MoveRow);
 
 export interface Regret {
   /** Searched moves per seat, keyed by `${matchId}|${player}`. */
-  readonly seats: () => Map<string, SeatRegret>;
+  readonly seats: ReadonlyMap<string, SeatRegret>;
   /** One match's searched moves, keyed by the decision's ordinal. */
   readonly moves: (matchId: string) => Map<number, MoveRegret>;
 }
@@ -58,14 +58,13 @@ export const openRegret = (path: string): Regret => {
   );
 
   return {
-    seats: () =>
-      new Map(
-        seatTotals.all(...inRun).map((raw) => {
-          const row = decodeSeatTotal(raw);
+    seats: new Map(
+      seatTotals.all(...inRun).map((raw) => {
+        const row = decodeSeatTotal(raw);
 
-          return [`${row.matchId}|${row.player}`, { moves: row.moves, total: row.total / POINT, exact: row.exact }];
-        }),
-      ),
+        return [`${row.matchId}|${row.player}`, { moves: row.moves, total: row.total / POINT, exact: row.exact }];
+      }),
+    ),
     moves: (matchId) =>
       new Map(
         matchMoves.all(matchId, ...inRun).map((raw) => {
