@@ -100,16 +100,16 @@ def load(regret_path: Path, knowledge_path: Path, depth: int, budget: int) -> li
     rows = db.execute(
         """WITH seen AS (
              SELECT match_id, ordinal, player, by_whom, round, remaining, chamber, source, private_live_min, private_live_max, sawed, shot, item, item_stolen,
-                    legal_items_json, opponent_items_json, json_extract(health_json, '$[0].health') AS health_a, json_extract(health_json, '$[1].health') AS health_b,
+                    legal_items_json, opponent_items_json, json_extract(health_json, '$[0].health') AS own_health, json_extract(health_json, '$[1].health') AS other_health,
                     LEAD(player) OVER later AS next_player, LEAD(shot) OVER later AS next_shot
              FROM k.decisions WINDOW later AS (PARTITION BY match_id ORDER BY ordinal)
            ), healthy AS (
-             SELECT *, MAX(MAX(COALESCE(health_a, 0), COALESCE(health_b, 0))) OVER (PARTITION BY match_id, round) AS round_best
+             SELECT *, MAX(MAX(COALESCE(own_health, 0), COALESCE(other_health, 0))) OVER (PARTITION BY match_id, round) AS round_best
              FROM seen
            )
            SELECT p.model || ' ' || p.effort AS config, r.regret, d.remaining, d.chamber, d.source, d.private_live_min, d.private_live_max, d.sawed, d.shot, d.item, d.item_stolen,
                   d.legal_items_json, d.opponent_items_json, d.next_player, d.next_shot, d.player,
-                  d.health_a = d.round_best AS full_health
+                  d.own_health = d.round_best AS full_health
            FROM regret r
            JOIN k.matches m ON m.match_id = r.match_id AND m.status = 'completed'
            JOIN healthy d ON d.match_id = r.match_id AND d.ordinal = r.ordinal AND d.by_whom = 'agent'
