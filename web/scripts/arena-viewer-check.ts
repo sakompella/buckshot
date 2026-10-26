@@ -248,7 +248,7 @@ const checkEveryConfigRated = async (page: Page, scatter: ReturnType<Page["locat
 const ratingViews = async (page: Page) => ({
   scatter: await textOf(page, ".card h2"),
   heat: await textOf(page, "table.heat thead th:nth-last-child(2)"),
-  leaderboard: await textOf(page, "table.lbt thead th:nth-child(6)"),
+  leaderboard: await textOf(page, "table.lbt thead th.rating"),
   firstRow: await textOf(page, "table.lbt tbody tr.row"),
   heatFirstRow: await textOf(page, "table.heat tbody tr"),
   toggles: await page.locator(".toggle button.on", { hasText: /^(Wins|Cash|Rounds)$/ }).allInnerTexts(),
@@ -425,20 +425,17 @@ const checkDesktop = async (browser: Browser) => {
   console.log("scatter points", await countOf(page, ".card svg g[style*=pointer]"), "labels", await countOf(page, ".card svg g.ptlabel"), "| toggles:", await textOf(page, ".card .ctl"));
   await fullPageShot(page, "page");
   await scatter.screenshot({ path: shot("scatter") });
-  await page.locator(".card svg g[style*=pointer]").nth(3).hover();
+  await page.locator(".card svg g[style*=pointer]").nth(3).hover({ force: true });
   console.log("hover point → tip:", await tipOf(page));
   await page.mouse.move(0, 0);
-  await page.getByRole("switch", { name: /all efforts/ }).check();
-  console.log("all efforts labels", await countOf(page, ".card svg g.ptlabel"));
-  await scatter.screenshot({ path: shot("scatter-all") });
   await page.getByRole("switch", { name: /medium only/ }).check();
-  console.log("medium only labels", await countOf(page, ".card svg g.ptlabel"), "| all efforts on:", await page.getByRole("switch", { name: /all efforts/ }).isChecked());
+  console.log("medium only labels", await countOf(page, ".card svg g.ptlabel"));
   await scatter.screenshot({ path: shot("scatter-medium") });
   await page.getByRole("switch", { name: /medium only/ }).uncheck();
 
   for (const [axis, name] of [
     ["Moves", "moves"],
-    ["Output tokens", "tokens"],
+    ["Tokens", "tokens"],
     ["Cost", "cost"],
   ] as const) {
     await scatter.getByRole("button", { name: axis, exact: true }).click();
@@ -534,7 +531,7 @@ const checkTouch = async (browser: Browser, name: string, width: number, height:
   await openPage(page);
   console.log(name, "overflow", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page), "| heat model column", await stickyModelColumn(), "| scatter labels", await countOf(page, ".card svg g.ptlabel"));
   await fullPageShot(page, `${name}-page`);
-  await page.locator(".card svg g[style*=pointer]").nth(3).tap();
+  await page.locator(".card svg g[style*=pointer]").nth(3).tap({ force: true });
   console.log(name, "tap point → tip:", await tipOf(page));
   await page.locator(".card").first().screenshot({ path: shot(`${name}-scatter`) });
   await page.locator(".hero").tap();

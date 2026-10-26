@@ -1,7 +1,7 @@
 import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { anchorId, ratingToggles, tipView } from "./charts.ts";
+import { anchorId, pressable, ratingToggles, tipView } from "./charts.ts";
 import { baseName, configShare, eloName, fmtCount, fmtPct, fmtPoints, fmtSec, fmtUsd, groupBy, isClaude, keyOf, labelOf, type ModelStats, rankOrder, type SeatFull, shareName, sumOf } from "./data.ts";
 import { type ItemSummary, memoLast } from "./derived.ts";
 import { itemIconOf } from "./items.ts";
@@ -60,7 +60,7 @@ const drillView = (h: H, m: ModelStats, seats: ReadonlyArray<SeatFull>, maybeTip
 
   const groups = [...groupBy(games, ({ opponent }) => keyOf(opponent))]
     .map(([key, rows]) => ({ key, rows, share: sumOf(rows.map(({ seat }) => seat.winShare ?? 0)) / rows.length }))
-    .toSorted((left, right) => right.share - left.share);
+    .toSorted((left, right) => right.rows.length - left.rows.length || right.share - left.share);
 
   const fill = (seat: SeatFull) => {
     const share = seat.winShare ?? 0;
@@ -140,7 +140,7 @@ const rowView = (h: H, m: ModelStats, standing: Standing, basis: Basis, item: It
 
   return h.keyed("tr")(
     m.id,
-    [h.Class(`row ${isOpen ? "sel" : ""}`), h.OnClick(Message.ClickedLeaderboardRow({ id: m.id }))],
+    [h.Class(`row ${isOpen ? "sel" : ""} ${m.win.n < FEW_MATCHES ? "few" : ""}`), h.AriaExpanded(isOpen), ...pressable(h, Message.ClickedLeaderboardRow({ id: m.id }))],
     [
       h.td([], [h.span([h.Class(`dot ${isClaude(m.model) ? "a" : "o"}`), h.Style({ background: m.color })], []), `${baseName(m.model)} `, h.span([h.Class("eff")], [`[${m.effort}]`])]),
       h.td(
@@ -153,8 +153,8 @@ const rowView = (h: H, m: ModelStats, standing: Standing, basis: Basis, item: It
         ],
       ),
       h.td([h.Class("ws"), h.Title(`${fmtPct(lo)}–${fmtPct(hi)}`)], [h.b([], [fmtPct(m.winShare)]), " ", h.span([h.Class("pm")], [`${m.win.k.toFixed(m.win.k % 1 ? 1 : 0)}/${m.win.n}`])]),
-      h.td([h.DataAttribute("label", "pot share")], [fmtPct(m.potShare)]),
-      h.td([h.DataAttribute("label", "round share")], [fmtPct(m.roundShare)]),
+      basis === "cash" ? h.td([h.DataAttribute("label", "pot share")], [fmtPct(m.potShare)]) : h.empty,
+      basis === "rounds" ? h.td([h.DataAttribute("label", "round share")], [fmtPct(m.roundShare)]) : h.empty,
       h.td([h.DataAttribute("label", "place" in standing ? "rank" : eloName(basis))], standingView(h, standing)),
       ...(hasRegret ? [regretCell(h, m)] : []),
       h.td([h.DataAttribute("label", "cost")], [fmtUsd(m.avgCost)]),
@@ -173,8 +173,7 @@ const headersOf = (ranking: Ranking, basis: Basis, hasRegret: boolean): Readonly
   "Model",
   "",
   "Win share",
-  "Pot share",
-  "Round share",
+  ...SHARE_HEADERS[basis],
   ranking === "elo" ? eloName(basis) : "Rank",
   ...(hasRegret ? ["Regret"] : []),
   "Avg cost",
@@ -183,6 +182,24 @@ const headersOf = (ranking: Ranking, basis: Basis, hasRegret: boolean): Readonly
   "Out tok",
   "Favorite item",
 ];
+
+/** The share column beside the win share, for the rating's basis. */
+const SHARE_HEADERS = { wins: [], cash: ["Pot share"], rounds: ["Round share"] } satisfies Record<Basis, ReadonlyArray<string>>;
+
+/** Rows with fewer scored matches than this are faded: their shares swing widely. */
+const FEW_MATCHES = 20;
+
+const HEADER_TITLES = new Map([
+  ["Pot share", "a config's cash over the match's cash, averaged over scored matches"],
+  ["Round share", "the rounds a config won over the rounds it played"],
+  ["Regret", "mean points of round win chance a move gave up against the minimax player's best move; lower is better"],
+]);
+
+const headerView = (h: H, label: string, index: number): Html => {
+  const title = HEADER_TITLES.get(label);
+
+  return h.th(index === 1 ? [h.Class("barcol")] : label === "Rank" || label.endsWith("Elo") ? [h.Class("rating")] : title === undefined ? [] : [h.Title(title)], [label]);
+};
 
 // Without 'all configs' a sweep usually keeps only its medium row, which has nothing to be ranked against.
 const isShown = (cohort: Cohort, isAllConfigs: boolean): boolean => isAllConfigs || !cohort.isSweep || cohort.configs.length > 1;
@@ -203,7 +220,7 @@ const cohortView = (h: H, { cohort, configs: byElo, places, scoredMatches }: Coh
           h.table(
             [h.Class("lbt rows")],
             [
-              h.thead([], [h.tr([], headers.map((label, index) => h.th(index === 1 ? [h.Class("barcol")] : [], [label])))]),
+              h.thead([], [h.tr([], headers.map((label, index) => headerView(h, label, index)))]),
               h.tbody(
                 [],
                 configs.flatMap((m) => {
@@ -254,17 +271,13 @@ export const leaderboardView = (
   return h.div(
     [h.Class("lb")],
     [
-      h.div([h.Class("lbbar")], [h.h2([], ["Leaderboard by cohort"]), ...ratingToggles(h, ranking, basis)]),
+      h.div([h.Class("lbbar")], [h.h2([], ["Leaderboards"]), ...ratingToggles(h, ranking, basis)]),
       h.p(
         [h.Class("sub")],
         [
-          [
-            ranking === "elo"
-              ? `${eloName(basis)} is one Bradley-Terry rating fitted over every match of every tournament, on ${shareName(basis)}; intervals are 95% bootstraps over seed blocks.`
-              : `Rank is the place by observed ${shareName(basis)} among all of a cohort's configs, before the filters; ties go to the higher ${eloName(basis)}.`,
-            " Pot share is a config's cash over the match's cash, averaged over scored matches. Round share is the rounds a config won over the rounds it played, where the match's events give every round.",
-            hasRegret ? " Regret is the mean percentage points of round win chance a move gave up against the best move the minimax player found; lower is better." : "",
-          ].join(""),
+          ranking === "elo"
+            ? `${eloName(basis)} is one Bradley-Terry rating over every match, on ${shareName(basis)}; intervals are 95% bootstraps over seed blocks.`
+            : `Rank is the place by observed ${shareName(basis)} within each cohort; ties go to the higher ${eloName(basis)}.`,
         ],
       ),
       ...cohortsOf(stats, every, seats, ratings, basis).filter((cohort) => isShown(cohort, isAllConfigs)).map((cohortRow) =>

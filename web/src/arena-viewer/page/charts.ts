@@ -1,4 +1,4 @@
-import { Effect, Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 import { Mount } from "foldkit";
 
@@ -35,6 +35,10 @@ export const logScale = (d0: number, d1: number, r0: number, r1: number): Scale 
 
   return { at: (value) => r0 + ((Math.log10(Math.max(value, d0)) - l0) / (l1 - l0 || 1)) * (r1 - r0), ticks };
 };
+
+/** A click target that is not a button: it takes focus, and Enter or Space press it. */
+export const pressable = (h: H, message: Message) =>
+  [h.OnClick(message), h.Tabindex(0), h.Role("button"), h.OnKeyDownSelfPreventDefault((key) => (key === "Enter" || key === " " ? Option.some(message) : Option.none()))] as const;
 
 /** An id for an element a tooltip points at, from any key. */
 export const anchorId = (...parts: ReadonlyArray<string | number>): string => `a-${parts.join("-").replaceAll(/[^\w-]/g, "_")}`;

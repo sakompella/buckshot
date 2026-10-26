@@ -2,19 +2,18 @@ import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import type { Decisions } from "../api.ts";
-import { anchorId, chartWidth, figureView, linScale, tipView } from "./charts.ts";
+import { anchorId, chartWidth, figureView, linScale, pressable, tipView } from "./charts.ts";
 import { addTo, type BlockTally, blockRate, colorOf, colorOfKey, fmtTime, fmtUsd, isDegenerate, keyOf, labelOf, type Rate, type SeatFull, sumOf } from "./data.ts";
 import { memoLast } from "./derived.ts";
 import { Message, type Model } from "./model.ts";
 
 type H = HtmlBuilder<Message>;
 
-// Infrastructure and protocol reliability, kept apart from skill, per tournament and config.
+// Infrastructure and protocol reliability, kept apart from skill, per config.
 
 const hours = (ms: number) => `${(ms / 3.6e6).toFixed(2)} h`;
 
 interface Tally {
-  readonly tournament: string;
   readonly key: string;
   readonly failed: BlockTally;
   readonly faults: BlockTally;
@@ -61,11 +60,10 @@ const tallyRows = (decisions: Decisions, seats: ReadonlyArray<SeatFull>, keep: R
   seats.forEach((seat, index) => {
     if (keep[index] !== true) return;
 
-    const id = `${seat.tournament}||${keyOf(seat)}`;
+    const id = keyOf(seat);
 
     const tally = tallies.get(id) ?? {
-      tournament: seat.tournament,
-      key: keyOf(seat),
+      key: id,
       failed: new Map(),
       faults: new Map(),
       reminders: new Map(),
@@ -111,7 +109,7 @@ const tallyRows = (decisions: Decisions, seats: ReadonlyArray<SeatFull>, keep: R
         extraFailed: blockRate(tally.extraFailed, 300),
       },
     }))
-    .toSorted((left, right) => left.tournament.localeCompare(right.tournament) || right.rates.failed.rate - left.rates.failed.rate);
+    .toSorted((left, right) => right.rates.failed.rate - left.rates.failed.rate);
 };
 
 const rowsOf = memoLast(tallyRows);
@@ -183,22 +181,19 @@ const axisTicks = (max: number): ReadonlyArray<number> => {
 
 const ROW_HEIGHT = 18;
 
-const GROUP_HEIGHT = 26;
-
 const barEnd = ({ value, hi }: Bar): number => (Number.isNaN(hi) ? (Number.isNaN(value) ? 0 : value) : hi);
 
 /**
- * One bar per config in table order, with a heading row per tournament when there are several. The scale and the
- * label column fit `every` row, whatever the filter, so a filter only adds or removes bars.
+ * One bar per config in table order. The scale and the label column fit `every` row, whatever the filter, so a filter
+ * only adds or removes bars.
  */
-const configBarsView = (h: H, rows: ReadonlyArray<Row>, every: ReadonlyArray<Row>, hasTournaments: boolean, barOf: (row: Row) => Bar, tick: (value: number) => string, width: number): Html => {
+const configBarsView = (h: H, rows: ReadonlyArray<Row>, every: ReadonlyArray<Row>, barOf: (row: Row) => Bar, tick: (value: number) => string, width: number): Html => {
   if (rows.length === 0) return h.div([h.Class("empty")], ["No configs for this filter."]);
 
   const bars = rows.map(barOf);
   const ticks = axisTicks(Math.max(0, ...every.map((row) => barEnd(barOf(row)))));
   const labelWidth = Math.min(width * 0.42, 8 + 6.6 * Math.max(...every.map(({ key }) => labelOf(key).length)));
   const x = linScale(0, ticks.at(-1) ?? 1, labelWidth + 8, width - 50, ticks);
-  const headings: Array<{ readonly name: string; readonly y: number }> = [];
   const placed: Array<{ readonly row: Row; readonly bar: Bar; readonly y: number }> = [];
   const top = 22;
   let y = top;
@@ -207,11 +202,6 @@ const configBarsView = (h: H, rows: ReadonlyArray<Row>, every: ReadonlyArray<Row
     const row = rows[index];
 
     if (row === undefined) return;
-
-    if (hasTournaments && rows[index - 1]?.tournament !== row.tournament) {
-      headings.push({ name: row.tournament, y: y + GROUP_HEIGHT - 8 });
-      y += GROUP_HEIGHT;
-    }
 
     placed.push({ row, bar, y: y + ROW_HEIGHT / 2 });
     y += ROW_HEIGHT;
@@ -229,7 +219,6 @@ const configBarsView = (h: H, rows: ReadonlyArray<Row>, every: ReadonlyArray<Row
           ],
         ),
       ),
-      ...headings.map(({ name, y: headingY }) => h.text([h.X("0"), h.Y(String(headingY)), h.Class("small")], [name])),
       ...placed.map(({ row, bar, y: rowY }) =>
         h.g(
           [],
@@ -239,7 +228,7 @@ const configBarsView = (h: H, rows: ReadonlyArray<Row>, every: ReadonlyArray<Row
               ? h.empty
               : h.rect(
                   [h.X(String(x.at(0))), h.Y(String(rowY - 5)), h.Width(String(Math.max(1, x.at(bar.value) - x.at(0)))), h.Height("10"), h.Fill(colorOfKey(row.key)), h.Opacity("0.85")],
-                  [h.title([], [`${labelOf(row.key)}, ${row.tournament}: ${bar.text}`])],
+                  [h.title([], [`${labelOf(row.key)}: ${bar.text}`])],
                 ),
             Number.isNaN(bar.lo) ? h.empty : h.line([h.X1(String(x.at(bar.lo))), h.X2(String(x.at(bar.hi))), h.Y1(String(rowY)), h.Y2(String(rowY)), h.Stroke("#fff"), h.StrokeWidth("1.2")], []),
             h.text([h.X(String(width - 44)), h.Y(String(rowY + 4)), h.Class("val")], [Number.isNaN(bar.value) ? "–" : bar.text]),
@@ -276,7 +265,6 @@ export const reliabilityView = (
   const rows = rowsOf(decisions, seats, keep);
   const every = everyRowOf(decisions, seats);
   const worst = worstOf(decisions, seats, keep);
-  const hasTournaments = new Set(rows.map(({ tournament }) => tournament)).size > 1;
   const total = (pick: (row: Row) => number) => sumOf(rows.map(pick));
   const figure = chartWidth(width, content);
   const overhead = rows.filter((row) => row.failedCost > 0 || row.failedTime > 0).toSorted((left, right) => right.failedTime - left.failedTime);
@@ -288,13 +276,12 @@ export const reliabilityView = (
         [],
         [
           h.h2([], ["Reliability"]),
-          h.p([h.Class("sub")], ["Kept apart from skill; all started matches. Faults, reminders and extra replies are per 1,000 model-chosen moves."]),
           h.div(
             [h.Class("chartrow")],
             [
-              figureView(h, "Failed calls", "Share of replies that failed, with a 95% interval over seed blocks.", configBarsView(h, rows, every, hasTournaments, ({ rates }) => rateBar(rates.failed, 100, 1, "%"), (value) => `${value}%`, figure)),
-              figureView(h, "Faults", "Provider errors per 1,000 model-chosen moves.", configBarsView(h, rows, every, hasTournaments, ({ rates }) => rateBar(rates.faults, 1000, 1, ""), String, figure)),
-              figureView(h, "Time lost to failed calls", "Failed calls' share of recorded call latency.", configBarsView(h, rows, every, hasTournaments, timeBar, (value) => `${value}%`, figure)),
+              figureView(h, "Failed calls", "Share of replies.", configBarsView(h, rows, every, ({ rates }) => rateBar(rates.failed, 100, 1, "%"), (value) => `${value}%`, figure)),
+              figureView(h, "Faults", "Provider errors per 1,000 moves.", configBarsView(h, rows, every, ({ rates }) => rateBar(rates.faults, 1000, 1, ""), String, figure)),
+              figureView(h, "Time lost to failed calls", "Share of call latency.", configBarsView(h, rows, every, timeBar, (value) => `${value}%`, figure)),
             ],
           ),
         ],
@@ -327,8 +314,7 @@ export const reliabilityView = (
                   ),
                   h.tbody(
                     [],
-                    rows.flatMap((row, index) => [
-                      hasTournaments && (index === 0 || rows[index - 1]?.tournament !== row.tournament) ? h.tr([h.Class("group")], [h.td([h.Colspan(9)], [row.tournament])]) : h.empty,
+                    rows.map((row) =>
                       h.tr(
                         [],
                         [
@@ -339,7 +325,7 @@ export const reliabilityView = (
                           h.td([h.DataAttribute("label", "fallbacks")], [String(row.fallbacks)]),
                         ],
                       ),
-                    ]),
+                    ),
                   ),
                 ],
               ),
@@ -365,7 +351,7 @@ export const reliabilityView = (
                       h.tr(
                         [],
                         [
-                          h.td([h.Style({ color: colorOfKey(row.key) })], [labelOf(row.key), hasTournaments ? h.span([h.Class("pm")], [` · ${row.tournament}`]) : h.empty]),
+                          h.td([h.Style({ color: colorOfKey(row.key) })], [labelOf(row.key)]),
                           h.td([h.DataAttribute("label", "failed cost")], [fmtUsd(row.failedCost)]),
                           h.td([h.DataAttribute("label", "failed time")], [hours(row.failedTime)]),
                           h.td([h.DataAttribute("label", "returned cost")], [fmtUsd(row.returnedCost)]),
@@ -378,33 +364,33 @@ export const reliabilityView = (
               ),
             ],
           ),
-        ],
-      ),
-      h.section(
-        [],
-        [
-          h.h2([], ["Moves with the most extra replies"]),
-          h.p([h.Class("sub")], ["Top 25 model-chosen moves by linked replies beyond the first."]),
-          h.table(
-            [h.Class("rows")],
+          h.section(
+            [],
             [
-              h.thead([], [h.tr([], ["Config", "Started", "Seed", "Move", "Extra replies", "Of them failed"].map((title) => h.th([], [title])))]),
-              h.tbody(
-                [],
-                worst.map(({ move, seat, extra }) =>
-                  h.keyed("tr")(
-                    String(move),
-                    [h.Class("row"), h.OnClick(Message.ClickedMatch({ id: seat.matchId, maybeFocus: Option.fromUndefinedOr(decisions.ord[move]) }))],
-                    [
-                      h.td([h.Style({ color: colorOf(seat.model) })], [labelOf(keyOf(seat))]),
-                      h.td([h.DataAttribute("label", "started")], [fmtTime(seat.startedAt)]),
-                      h.td([h.DataAttribute("label", "seed")], [String(seat.seed)]),
-                      h.td([h.DataAttribute("label", "move")], [String(decisions.moveNo[move] ?? "")]),
-                      h.td([h.DataAttribute("label", "extra")], [String(extra)]),
-                      h.td([h.DataAttribute("label", "failed")], [String(decisions.failedCalls[move] ?? "")]),
-                    ],
+              h.h2([], ["Moves with the most extra replies"]),
+              h.p([h.Class("sub")], ["Top 25 model-chosen moves by linked replies beyond the first."]),
+              h.table(
+                [h.Class("rows")],
+                [
+                  h.thead([], [h.tr([], ["Config", "Started", "Seed", "Move", "Extra replies", "Of them failed"].map((title) => h.th([], [title])))]),
+                  h.tbody(
+                    [],
+                    worst.map(({ move, seat, extra }) =>
+                      h.keyed("tr")(
+                        String(move),
+                        [h.Class("row"), ...pressable(h, Message.ClickedMatch({ id: seat.matchId, maybeFocus: Option.fromUndefinedOr(decisions.ord[move]) }))],
+                        [
+                          h.td([h.Style({ color: colorOf(seat.model) })], [labelOf(keyOf(seat))]),
+                          h.td([h.DataAttribute("label", "started")], [fmtTime(seat.startedAt)]),
+                          h.td([h.DataAttribute("label", "seed")], [String(seat.seed)]),
+                          h.td([h.DataAttribute("label", "move")], [String(decisions.moveNo[move] ?? "")]),
+                          h.td([h.DataAttribute("label", "extra")], [String(extra)]),
+                          h.td([h.DataAttribute("label", "failed")], [String(decisions.failedCalls[move] ?? "")]),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ],
           ),

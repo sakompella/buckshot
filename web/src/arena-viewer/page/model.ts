@@ -46,13 +46,13 @@ export const Filter = Schema.Struct({ cohort: Schema.String, offEfforts: Schema.
 
 export type Filter = typeof Filter.Type;
 
-/** Which configs the cost scatter shows: the kept efforts (see keepVariants), every effort, or medium only. */
-export const ScatterShow = Schema.Literals(["kept", "all", "medium"]);
+/** Which configs the cost scatter shows: every effort, or medium only. */
+export const ScatterShow = Schema.Literals(["all", "medium"]);
 
 export type ScatterShow = typeof ScatterShow.Type;
 
-/** What the scatter's x axis measures per player per match: cost, model moves or output tokens. */
-export const ScatterAxis = Schema.Literals(["cost", "moves", "tokens"]);
+/** What the scatter's x axis measures per player per match: cost, model moves or output tokens, or the mean regret per move. */
+export const ScatterAxis = Schema.Literals(["cost", "moves", "tokens", "regret"]);
 
 export type ScatterAxis = typeof ScatterAxis.Type;
 
