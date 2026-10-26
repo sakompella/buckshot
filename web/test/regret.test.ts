@@ -10,7 +10,7 @@ import { Option, Result } from "effect";
 
 import { agentGame } from "../src/agent/view.ts";
 import { importTournaments, openAnalysis } from "../src/analysis/import.ts";
-import { boardOf, type Limits, loadPlayer, ownLog, type Player, type PlayerInput } from "../src/analysis/player.ts";
+import { boardOf, type Limits, loadPlayer, ownLog, type Player, type PlayerInput, type Reload } from "../src/analysis/player.ts";
 import { regretOf, WIN } from "../src/analysis/regret.ts";
 import { type MoveLine } from "../src/arena/runlog.ts";
 import { answerDraw, answerPrompt, type Game, startGame } from "../src/bend.ts";
@@ -73,7 +73,7 @@ const regretAt = (played: Played, limits: Limits, chosen: string) => {
   const labelOf = (steps: ReadonlyArray<Move>) => agentMoveText(rosterOf(played.game.seats), me, steps);
   const menu = ["Shoot yourself", `Shoot ${rosterOf(played.game.seats).nameOf(me === 1 ? 3 : 1)}`];
 
-  return regretOf(player.analyse(inputOf(played), limits), labelOf, menu, chosen);
+  return regretOf(player.analyse(inputOf(played), limits, STATIC), labelOf, menu, chosen);
 };
 
 // Both players at 1 health, and two shells left that the count shows are live. Player B moves.
@@ -83,6 +83,8 @@ const FORCED_WIN = [1, 0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 1, 3, 1, 0, 0, 0, 0, 5, 1, 
 const CERTAIN_LOSS = [0, 1, 0, 4, 1, 0, 0, 0, 1, 7, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0];
 
 const LIMITS: Limits = { depth: 3, budget: 100_000 };
+
+const STATIC: Reload = { rule: "static" };
 
 test("a forced win: shooting yourself on a known live shell costs the whole win", () => {
   const played = play(FORCED_WIN);
@@ -128,7 +130,19 @@ test("another player's secret never reaches the player; the mover's own does", (
   expect(regretAt(heardBy(3), LIMITS, "Shoot yourself").status).toBe("invalid");
 });
 
-test("the script scores every agent decision of a recorded match once, and stores a fallback with no regret", async () => {
+test("the deal rules reach the player: alike where no line reloads, invalid beyond two seats or with no deals", () => {
+  const input = inputOf(play(FORCED_WIN));
+  const dealt: ReadonlyArray<Reload> = [{ rule: "expected-deal" }, { rule: "sampled", samples: 4 }];
+
+  for (const reload of dealt) {
+    expect(player.analyse(input, LIMITS, reload)).toEqual(player.analyse(input, LIMITS, STATIC));
+    expect(player.analyse({ ...input, table: 3 }, LIMITS, reload)).toEqual({ kind: "invalid", reason: "a leaf that deals the reload takes two seats only", nodes: 0 });
+  }
+
+  expect(player.analyse(input, LIMITS, { rule: "sampled", samples: 0 }).kind).toBe("invalid");
+});
+
+test("the script scores every agent decision of a recorded match once, stores a fallback with no regret, and keeps reload rules apart", async () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-regret-script-"));
   const source = join(root, "tournament");
   const database = join(root, "analysis.sqlite");
@@ -141,8 +155,16 @@ test("the script scores every agent decision of a recorded match once, and store
     writeFileSync(join(source, "tournament.json"), JSON.stringify({ format: 1, created_at: "2026-01-01T00:00:00Z", git_commit: "test", config: { name: "test", seed: 42, delivery: "on-turn", endpoints: { fake: { api: "anthropic", url: "http://invalid", keyEnv: "UNUSED" } }, entrants: { a: { endpoint: "fake", model: "faux-a", effort: "medium" }, b: { endpoint: "fake", model: "faux-b", effort: "medium" } }, pairings: [["a", "b"]], blocksPerPairing: 1 }, schedule }));
     importTournaments({ database, sources: [source], skipped: {} });
 
-    const score = async (budget: number) => {
-      const run = Bun.spawn(["nice", "-n", "10", "bun", "scripts/arena-regret.ts", "--db", database, "--out", derived, "--match", "a_b_b0_p0", "--depth", "2", "--budget", String(budget)], { cwd: join(import.meta.dir, ".."), stdout: "ignore", stderr: "pipe" });
+    // A table from before the reload rule, with one row of another match.
+    const before = new Database(derived, { create: true });
+    before.exec(`CREATE TABLE regret (match_id TEXT, ordinal INTEGER, player TEXT, label TEXT, evaluator TEXT, max_depth INTEGER, budget INTEGER,
+      status TEXT, reason TEXT, values_json TEXT, best TEXT, best_score INTEGER, chosen_score INTEGER, regret INTEGER, exact INTEGER,
+      depth INTEGER, limited INTEGER, nodes INTEGER, ms REAL, PRIMARY KEY (match_id, ordinal, evaluator, max_depth, budget));
+      INSERT INTO regret (match_id, ordinal, evaluator, max_depth, budget, status) VALUES ('older', 0, 'old', 2, 1, 'fallback');`);
+    before.close();
+
+    const score = async (budget: number, ...reload: ReadonlyArray<string>) => {
+      const run = Bun.spawn(["nice", "-n", "10", "bun", "scripts/arena-regret.ts", "--db", database, "--out", derived, "--match", "a_b_b0_p0", "--depth", "2", "--budget", String(budget), ...reload], { cwd: join(import.meta.dir, ".."), stdout: "ignore", stderr: "pipe" });
       expect(await run.exited).toBe(0);
     };
 
@@ -150,19 +172,31 @@ test("the script scores every agent decision of a recorded match once, and store
     // A rerun with the same settings skips the scored decisions; a budget of one node leaves only the fallback.
     await score(2000);
     await score(1);
+    await score(1, "--reload", "expected-deal");
+    await score(2000, "--reload", "sampled", "--samples", "8");
 
     const analysis = new Database(database, { readonly: true });
     const agent = analysis.query<{ ordinal: number; label: string }, []>("SELECT ordinal, label FROM decisions WHERE by_whom = 'agent' ORDER BY ordinal").all();
     analysis.close();
     const out = new Database(derived, { readonly: true });
-    const rows = out.query<{ ordinal: number; label: string; status: string; regret: number | null; values_json: string }, []>("SELECT ordinal, label, status, regret, values_json FROM regret WHERE budget = 2000 ORDER BY ordinal").all();
-    const fallbacks = out.query<{ status: string; regret: number | null }, []>("SELECT status, regret FROM regret WHERE budget = 1").all();
+    const searched = (reload: string) => out.query<{ ordinal: number; label: string; status: string; regret: number | null; values_json: string }, [string]>("SELECT ordinal, label, status, regret, values_json FROM regret WHERE budget = 2000 AND reload = ? ORDER BY ordinal").all(reload);
+    const rows = searched("static");
+    const sampled = searched("sampled");
+    const fallbacks = (reload: string) => out.query<{ status: string; regret: number | null }, [string]>("SELECT status, regret FROM regret WHERE budget = 1 AND match_id != 'older' AND reload = ?").all(reload);
+    const older = out.query<{ match_id: string; reload: string; samples: number }, []>("SELECT match_id, reload, samples FROM regret WHERE evaluator = 'old'").all();
+    const samples = out.query<{ reload: string; samples: number }, []>("SELECT DISTINCT reload, samples FROM regret WHERE budget = 2000 ORDER BY reload").all();
+    const staticFallbacks = fallbacks("static");
+    const expectedFallbacks = fallbacks("expected-deal");
     out.close();
 
-    expect(fallbacks).toEqual(agent.map(() => ({ status: "fallback", regret: null })));
+    expect(older).toEqual([{ match_id: "older", reload: "static", samples: 0 }]);
+    expect(samples).toEqual([{ reload: "sampled", samples: 8 }, { reload: "static", samples: 0 }]);
+    expect(staticFallbacks).toEqual(agent.map(() => ({ status: "fallback", regret: null })));
+    expect(expectedFallbacks).toEqual(staticFallbacks);
     expect(agent.length).toBeGreaterThan(0);
     expect(rows.map(({ ordinal, label }) => ({ ordinal, label }))).toEqual(agent);
-    expect(rows.every((row) => row.status === "searched" && row.regret !== null && row.regret >= 0)).toBe(true);
+    expect(sampled.map(({ ordinal, label }) => ({ ordinal, label }))).toEqual(agent);
+    expect([...rows, ...sampled].every((row) => row.status === "searched" && row.regret !== null && row.regret >= 0)).toBe(true);
     expect(rows.every((row) => JSON.parse(row.values_json).some((value: { label: string }) => value.label === row.label))).toBe(true);
   } finally {
     rmSync(root, { recursive: true, force: true });
