@@ -9,8 +9,8 @@ import random
 
 import boot
 import bt
-from fmt import pct, table
-from load import Game, blocks_of
+from fmt import table
+from load import CROSS_MODEL, Game, blocks_of
 
 OPUS, ASTRA = "claude-opus-5-5-xhigh", "gpt-6-astra"
 OPUS_MEDIUM = "claude-opus-5-5"
@@ -71,7 +71,7 @@ def matched(t3: list[Game], baseline: list[Game], draws: int, rng: random.Random
 
 def report(games: list[Game], draws: int, rng: random.Random) -> str:
     t3 = [g for g in games if g.cohort == "tournament 3"]
-    baseline = [g for g in games if g.cohort == "cpa-tiers medium cross-model" and {g.first, g.second} == {OPUS_MEDIUM, ASTRA}]
+    baseline = [g for g in games if g.cohort == CROSS_MODEL and {g.first, g.second} == {OPUS_MEDIUM, ASTRA}]
     complete = [g for g in t3 if len(blocks_of(t3)[g.block]) == 2]
     rows = [
         ["41 matches, 21 seed blocks (seed 3030 half)", *estimate(t3, draws, rng)],
@@ -84,11 +84,4 @@ def report(games: list[Game], draws: int, rng: random.Random) -> str:
         table(["matched seeds", "Opus xhigh wins", "Opus medium wins", "difference in share (95% CI, seeds drawn)"], [matched(t3, baseline, draws, rng)]),
         "\nThe matched seeds are 3000 to 3009, so the matched estimate is the same whether tournament 3 counts 40 or 41 matches.",
     ]
-    by_code = {}
-    for g in t3:
-        row = by_code.setdefault(g.code, [0.0, 0.0])
-        row[0] += 1
-        row[1] += opus_share(g)
-    out.append("\n#### By code hash\n")
-    out.append(table(["code hash", "Opus xhigh wins/matches = share"], [[f"`{c}`", f"{w:g}/{n:g} = {pct(w / n)}"] for c, (n, w) in sorted(by_code.items())]))
     return "\n".join(out)

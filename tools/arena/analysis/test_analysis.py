@@ -3,6 +3,7 @@
 import math
 import random
 import unittest
+from dataclasses import replace
 
 import boot
 import bt
@@ -12,7 +13,7 @@ from load import Game, blocks_of
 
 
 def game(block, first, second, share_first, seed=1, starter=1, cohort="c"):
-    return Game(block, cohort, "t", "code", seed, first, second, share_first, starter, starter)
+    return Game(block, cohort, "t", "code", seed, first, second, share_first, share_first, starter, starter)
 
 
 def swapped_block(block, a, b, share_a_first, share_a_second, seed=1, starter=1):
@@ -35,6 +36,11 @@ class Bradley(unittest.TestCase):
         split = [game(f"b{i}", "a", "b", 0.5) for i in range(10)]
         fitted = bt.fit(bt.cells_of(split))
         self.assertAlmostEqual(fitted.theta["a"], fitted.theta["b"], places=6)
+
+    def test_a_cash_rating_counts_the_pot_share(self):
+        games = [replace(game(f"b{i}", "a", "b", 1.0), pot_first=0.6) for i in range(100)]
+        fitted = bt.fit(bt.cells_of(games, share=lambda g: g.pot_first))
+        self.assertAlmostEqual(bt.sigmoid(fitted.theta["a"] - fitted.theta["b"]), 0.6, places=2)
 
     def test_ratings_have_mean_zero_on_the_elo_scale(self):
         games = [game("1", "a", "b", 1.0), game("2", "b", "c", 1.0), game("3", "a", "c", 1.0), game("4", "b", "a", 0.0)]

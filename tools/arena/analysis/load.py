@@ -12,6 +12,10 @@ DB = "/home/aditya/repos/projects/buckshot/_work/arena/analysis/buckshot.sqlite"
 # Its free tier refused requests, so its scored games are not a random sample of what was scheduled: every analysis skips them.
 SKIPPED_MODEL = "deepseek"
 
+# Tournament 1's cross-model games (medium effort, plus two Sonnet max games against Opus) and tournament 4's samples.
+CROSS_MODEL = "cpa-tiers cross-model"
+CROSS_SAMPLES = "tournament 4"
+
 STARTS = re.compile(r"Round 1 begins\. Everyone has \d+ health; Player (\w) starts\.")
 
 
@@ -27,6 +31,7 @@ class Game:
     first: str
     second: str
     share_first: float
+    pot_first: float  # position 1's cash over the match's total cash
     starter: int  # the position, 1 or 2, whose player opens round 1
     first_shot: int  # the position of the first player to shoot in the match
 
@@ -36,16 +41,17 @@ def connect(path: str = DB) -> sqlite3.Connection:
 
 
 def cohort_of(tournament: str, model_a: str, model_b: str, effort_a: str, effort_b: str) -> str:
-    """Matches are compared only inside a cohort: a model's own effort levels, medium across models, or one tournament."""
+    """Seat and pair figures compare matches only inside a cohort: a model's own effort levels, tournament 1's cross-model games, or one tournament."""
     if tournament == "cpa-tiers":
         if model_a == model_b:
             return f"cpa-tiers sweep {model_a}"
-        if effort_a == effort_b == "medium":
-            return "cpa-tiers medium cross-model"
+        return CROSS_MODEL
     elif tournament == "opus-effort":
         return "opus-effort"
     elif tournament == "astra-vs-opus-xhigh":
         return "tournament 3"
+    elif tournament == "cross-samples":
+        return CROSS_SAMPLES
     raise ValueError(f"no cohort for {tournament}: {model_a} {effort_a} vs {model_b} {effort_b}")
 
 
@@ -74,7 +80,7 @@ def first_shooters(db: sqlite3.Connection) -> dict[str, int]:
 def scored_games(db: sqlite3.Connection) -> list[Game]:
     starters, shooters = round_one_starters(db), first_shooters(db)
     seats = db.execute(
-        """SELECT s.match_id, s.position, s.player, s.win_share, e.name, e.model, e.effort
+        """SELECT s.match_id, s.position, s.player, s.win_share, s.cash, e.name, e.model, e.effort
            FROM match_seats s JOIN entrants e ON e.id = s.entrant_id JOIN matches m ON m.id = s.match_id
            WHERE m.status = 'completed' ORDER BY s.match_id, s.position"""
     ).fetchall()
@@ -85,12 +91,12 @@ def scored_games(db: sqlite3.Connection) -> list[Game]:
     for match, tournament, block, seed, code in db.execute(
         "SELECT m.id, t.name, m.seed_block_id, m.seed, m.code_hash FROM matches m JOIN tournaments t ON t.id = m.tournament_id WHERE m.status = 'completed' ORDER BY m.id"
     ):
-        (_, _, letter_a, share_a, a, model_a, effort_a), (_, _, letter_b, _, b, model_b, effort_b) = by_match[match]
+        (_, _, letter_a, share_a, cash_a, a, model_a, effort_a), (_, _, letter_b, _, cash_b, b, model_b, effort_b) = by_match[match]
         if SKIPPED_MODEL in model_a or SKIPPED_MODEL in model_b:
             continue
         letter_of = {letter_a: 1, letter_b: 2}
         games.append(
-            Game(block, cohort_of(tournament, model_a, model_b, effort_a, effort_b), tournament, code, seed, a, b, share_a, letter_of[starters[match]], shooters[match])
+            Game(block, cohort_of(tournament, model_a, model_b, effort_a, effort_b), tournament, code, seed, a, b, share_a, cash_a / (cash_a + cash_b), letter_of[starters[match]], shooters[match])
         )
     return games
 

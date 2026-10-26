@@ -7,7 +7,7 @@ Ideas for using the tournament data, collected 2026-10-21. Most came from a GPT-
 ## Built or in progress
 
 - **Viewer** (local, `_work/arena/viewer/`): leaderboard with Bradley-Terry ratings, choice patterns, item use, seats, cost, reliability, head to head, match explorer.
-- **Matchups** (branch `analysis/matchups`): ratings per cohort, matchup effects, seat advantage, tournament 3 estimates.
+- **Matchups** (branch `analysis/matchups`): pooled ratings, matchup effects, seat advantage, tournament 3 estimates.
 - **Beliefs and items** (branch `analysis/beliefs-and-items`): each player's own information per decision through Bend replay; information retention, item flow, same-position consistency.
 
 ## From existing traces, no minimax
