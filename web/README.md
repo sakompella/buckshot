@@ -252,14 +252,14 @@ The look borrows from the studio viewer in
 `bun scripts/arena-viewer.ts <db> [host] [port] [--regret <regret db>]` serves charts over the arena
 analysis database (`scripts/arena-import.ts` builds it; see
 `docs/arena/database.md`) at http://127.0.0.1:8790/ by default, with no auth.
-It is one long page: the hero numbers, the cost, moves or output tokens vs rating
-scatter, a few interesting matches, the table position and round-1 starter
-charts, the reliability charts (failed calls, faults and the time they cost per
-config), the match list, the leaderboard by cohort and, last, the breakdown heatmaps. Seats and
+It is one long page: the hero numbers, the cost, moves, output tokens or mean regret
+vs rating scatter, each model's rating across its efforts, a few interesting matches, the table position and round-1 starter
+charts, the reliability charts (failed calls, faults and the time they cost, one bar per
+config pooled over every tournament), the newest matches, the leaderboard by cohort and, last, the breakdown heatmaps. Seats and
 reliability fold their full tables under the charts. A jump menu at the top links
 to each section's anchor (`#scatter`, `#seats`, `#matches`, ...), and the filter bar
 under it applies to the whole page; on a wide screen both stay at the top. The
-scatter's axes span every config in every cohort, so a filter only shows or hides
+scatter's and the effort chart's axes span every config in every cohort, so a filter only shows or hides
 points; the reliability bars keep one scale the same way.
 
 Wherever ratings show (the scatter's y axis, the heatmap's and the leaderboards'
@@ -289,8 +289,8 @@ interesting matches always judge underdogs by the win rating.
 (`docs/arena/analysis/regret.md`), opened read only. Without it the viewer runs as
 before and shows no regret. With it, each leaderboard row has a Regret column, the
 mean percentage points of round win chance a model's moves gave up over its scored
-matches (hover for the move count and the share proven exact), and each model move in
-a replay has a regret tag. A move proven exact is marked "exact" and the rest are not;
+matches (hover for the move count and the share proven exact), the scatter has a Regret axis, and each model move in
+a replay has a regret tag, filled in when the move gave up 5 points or more. A move proven exact is marked "exact" and the rest are not;
 the open move says its best move, both scores, search depth and whether the node
 budget stopped it. The table can hold runs with other settings; the viewer reads the
 run with the most searched moves, so scores never mix. Moves with no search have no tag.

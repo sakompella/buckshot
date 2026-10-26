@@ -2,7 +2,7 @@ import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { type Decisions, ITEMS, type Pattern, patternBit } from "../api.ts";
-import { anchorId, ratingToggles, switchView, tipView, toggleView } from "./charts.ts";
+import { anchorId, pressable, ratingToggles, switchView, tipView, toggleView } from "./charts.ts";
 import { baseName, baseOrder, eloName, fmtPct, fmtRating, fmtTime, fmtUsd, isClaude, keyOf, type MatchRow, type SeatFull, shareName, unique } from "./data.ts";
 import { type Derived, memoLast } from "./derived.ts";
 import { itemIconOf } from "./items.ts";
@@ -54,7 +54,7 @@ const TIERS: ReadonlyArray<readonly [number, string, string]> = [
   [0, "#262626", "#a8a8a8"],
 ];
 
-const EMPTY_SHADE = { background: "#101010", color: "#555" };
+const EMPTY_SHADE = { background: "#101010", color: "#8b8b8b" };
 
 const tierOf = (value: number, best: number) => {
   if (value <= 0 || best <= 0) return EMPTY_SHADE;
@@ -62,19 +62,6 @@ const tierOf = (value: number, best: number) => {
   const [, background, color] = TIERS.find(([share]) => value / best >= share) ?? ["", "#262626", "#a8a8a8"];
 
   return { background, color };
-};
-
-// Cost is not a score, so it gets its own log-scaled green ramp: dark is cheap, bright is expensive.
-const COST_RAMP = ["#0f1a14", "#1d4a33", "#2f7d52", "#5cc488"].map((hex) => [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16)));
-
-const costShade = (share: number) => {
-  const at = Math.min(1, Math.max(0, share)) * (COST_RAMP.length - 1);
-  const index = Math.min(COST_RAMP.length - 2, Math.floor(at));
-  const from = COST_RAMP[index] ?? [];
-  const to = COST_RAMP[index + 1] ?? [];
-  const rgb = from.map((channel, k) => Math.round(channel + ((to[k] ?? channel) - channel) * (at - index)));
-
-  return { background: `rgb(${rgb.join(",")})`, color: share >= 0.8 ? "#000" : "#e8e8e8" };
 };
 
 const ITEM_SHORT = ["glass", "phone", "saw", "beer", "cigs", "inverter", "jammer", "adrenaline"];
@@ -367,15 +354,12 @@ const heatmapView = (h: H, derived: Derived, heat: Model["heat"], ranking: Ranki
   const cells = new Map(shown.map((row) => [row.key, new Map(columns.map((col) => [col.id, cellAt(derived, heat.mode, row, col.id)]))]));
   const cellOfRow = (row: HeatRow, col: string) => cells.get(row.key)?.get(col) ?? null;
   const best = new Map(columns.map((col) => [col.id, Math.max(0, ...shown.map((row) => cellOfRow(row, col.id)?.value ?? 0))]));
-  const logs = shown.filter((row) => row.cost > 0).map((row) => Math.log(row.cost));
-  const low = Math.min(...logs);
-  const high = Math.max(...logs);
   const sorted = sortedRows(shown, heat.sort, ranking, (row) => cellOfRow(row, heat.sort)?.value ?? -1);
   const hiddenRows = rows.length - new Set(rows.map((row) => row.model)).size;
 
   const header = (id: string, label: string, title: string, extra = "", item?: string) =>
     h.th(
-      [h.Title(title), h.Class(`${extra} sortable ${heat.sort === id && id !== "rating" ? "sorted" : ""}`), h.OnClick(Message.ClickedHeatColumn({ column: id }))],
+      [h.Title(title), h.Class(`${extra} sortable ${heat.sort === id && id !== "rating" ? "sorted" : ""}`), ...pressable(h, Message.ClickedHeatColumn({ column: id }))],
       item === undefined ? [label] : [itemIconOf(h, item), label],
     );
 
@@ -438,16 +422,16 @@ const heatmapView = (h: H, derived: Derived, heat: Model["heat"], ranking: Ranki
                           [
                             h.Id(anchorId("cell", row.key, col.id)),
                             h.Class(`cellv ${Option.isSome(cell.maybeClick) ? "click" : ""} ${cell.isRinged ? "ring" : ""}`),
-                            h.Style({ ...shade, opacity: cell.isFaint ? "0.45" : "1" }),
+                            h.Style(cell.isFaint ? { background: `color-mix(in srgb, ${shade.background} 45%, #000)`, color: "#fff" } : shade),
                             h.OnMouseEnter(Message.HoveredCell({ row: row.key, col: col.id })),
                             h.OnMouseLeave(Message.LeftCell()),
-                            ...Option.toArray(Option.map(cell.maybeClick, (message) => h.OnClick(message))),
+                            ...Option.match(cell.maybeClick, { onNone: () => [], onSome: (message) => pressable(h, message) }),
                           ],
                           [cell.text],
                         );
                       }),
                       h.td([h.Class("total")], [ranking === "elo" ? fmtRating(row.rating) : String(row.rank)]),
-                      h.td([h.Class("cellv"), h.Style(row.cost > 0 ? costShade((Math.log(row.cost) - low) / (high - low || 1)) : EMPTY_SHADE)], [row.cost > 0 ? fmtUsd(row.cost) : "–"]),
+                      h.td([h.Class("cost")], [row.cost > 0 ? fmtUsd(row.cost) : "–"]),
                     ],
                   ),
                 ),
@@ -505,7 +489,7 @@ const flaggedView = (h: H, derived: Derived, flagged: { readonly key: string; re
                 : [
                     h.keyed("tr")(
                       move,
-                      [h.Class("row"), h.OnClick(Message.ClickedMatch({ id: seat.matchId, maybeFocus: Option.fromUndefinedOr(derived.decisions.ord[move]) }))],
+                      [h.Class("row"), ...pressable(h, Message.ClickedMatch({ id: seat.matchId, maybeFocus: Option.fromUndefinedOr(derived.decisions.ord[move]) }))],
                       [
                         h.td([], [fmtTime(seat.startedAt)]),
                         h.td([h.DataAttribute("label", "seed")], [String(seat.seed)]),

@@ -2,10 +2,10 @@ import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { anchorId, logScale, linScale, ratingToggles, switchView, tipView, toggleView } from "./charts.ts";
-import { baseName, DEFAULT_EFFORT, eloName, fmtCount, groupBy, fmtPct, fmtRating, fmtUsd, isClaude, type ModelStats } from "./data.ts";
+import { baseName, DEFAULT_EFFORT, eloName, fmtCount, fmtPct, fmtRating, fmtUsd, isClaude, type ModelStats } from "./data.ts";
 import { leader, measureText, placeLabels, uncrowded } from "./labels.ts";
 import { memoLast } from "./derived.ts";
-import { type Basis, Message, type Model, type Ranking, type ScatterAxis } from "./model.ts";
+import { type Basis, Message, type Model, type Ranking, type ScatterAxis, type ScatterShow } from "./model.ts";
 import type { Rating } from "./ratings.ts";
 
 type H = HtmlBuilder<Message>;
@@ -14,15 +14,13 @@ type H = HtmlBuilder<Message>;
 // as on DeepSWE: the model's name, its effort below in small caps. The dashed line is the frontier: no other point is
 // both lower on the x axis and higher rated (or ranked).
 
-/** Effort variants within this many rating points of the model's default effort are hidden (in doubt, show the default). */
-const VARIANT_TOLERANCE = 25;
-
 interface Axis {
   /** The switch's label, and the chart title's first word. */
   readonly label: string;
   readonly axisLabel: string;
   readonly isLog: boolean;
-  readonly valueOf: (m: ModelStats) => number;
+  /** A config's place on the axis, or null with nothing to place: no cost, tokens or moves, or no searched move. */
+  readonly valueOf: (m: ModelStats) => number | null;
   /** The crosshair's reading. */
   readonly format: (value: number) => string;
   readonly tick: (value: number) => string;
@@ -30,13 +28,15 @@ interface Axis {
   readonly perMatch: (value: number) => string;
 }
 
+const positive = (value: number): number | null => (value > 0 ? value : null);
+
 // Output tokens include reasoning tokens, as the providers report them.
-const AXES: Readonly<Record<ScatterAxis, Axis>> = {
+export const AXES: Readonly<Record<ScatterAxis, Axis>> = {
   cost: {
     label: "Cost",
     axisLabel: "Avg cost per player per match (log)",
     isLog: true,
-    valueOf: (m) => m.avgCost,
+    valueOf: (m) => positive(m.avgCost),
     format: fmtUsd,
     tick: (value) => `$${value}`,
     perMatch: (value) => `${fmtUsd(value)} per match`,
@@ -45,23 +45,32 @@ const AXES: Readonly<Record<ScatterAxis, Axis>> = {
     label: "Moves",
     axisLabel: "Avg model moves per player per match",
     isLog: false,
-    valueOf: (m) => m.avgMoves,
+    valueOf: (m) => positive(m.avgMoves),
     format: (value) => value.toFixed(1),
     tick: String,
     perMatch: (value) => `${value.toFixed(1)} moves per match`,
   },
   tokens: {
-    label: "Output tokens",
+    label: "Tokens",
     axisLabel: "Avg output tokens per player per match (log)",
     isLog: true,
-    valueOf: (m) => m.avgOut,
+    valueOf: (m) => positive(m.avgOut),
     format: fmtCount,
     tick: (value) => (value >= 1e6 ? `${value / 1e6}M` : value >= 1e3 ? `${value / 1e3}k` : String(value)),
     perMatch: (value) => `${fmtCount(value)} output tokens per match`,
   },
+  regret: {
+    label: "Regret",
+    axisLabel: "Mean regret per move (points of round win chance)",
+    isLog: false,
+    valueOf: (m) => m.regret?.mean ?? null,
+    format: (value) => value.toFixed(2),
+    tick: String,
+    perMatch: (value) => `${value.toFixed(2)} points of regret per move`,
+  },
 };
 
-const AXIS_OPTIONS: ReadonlyArray<readonly [ScatterAxis, string]> = (["cost", "moves", "tokens"] as const).map((axis) => [axis, AXES[axis].label]);
+const axisOptions = (hasRegret: boolean): ReadonlyArray<readonly [ScatterAxis, string]> => (hasRegret ? (["cost", "moves", "tokens", "regret"] as const) : (["cost", "moves", "tokens"] as const)).map((axis) => [axis, AXES[axis].label]);
 
 interface Point {
   readonly m: ModelStats;
@@ -77,24 +86,6 @@ const scoreOf = (point: Point, ranking: Ranking): number => (ranking === "elo" ?
 
 const dominates = (other: Point, point: Point, ranking: Ranking) =>
   other.x <= point.x && scoreOf(other, ranking) >= scoreOf(point, ranking) && (other.x < point.x || scoreOf(other, ranking) > scoreOf(point, ranking));
-
-// RuneBench's rule: a variant is shown only if it is not within tolerance of the default and no row of its family
-// dominates it; the default is hidden only when a shown variant dominates it. Always judged by Elo, so the ranking
-// toggle moves points but never hides or shows one.
-const keepVariants = (points: ReadonlyArray<Point>): ReadonlyArray<Point> => {
-  const families = groupBy(points, (point) => point.m.model);
-
-  return [...families.values()].flatMap((family) => {
-    const standard = family.find((point) => point.m.effort === DEFAULT_EFFORT);
-
-    const kept = family.filter(
-      (variant) =>
-        variant !== standard && !(standard !== undefined && Math.abs(variant.rating - standard.rating) < VARIANT_TOLERANCE) && !family.some((other) => other !== variant && dominates(other, variant, "elo")),
-    );
-
-    return standard !== undefined && !kept.some((variant) => dominates(variant, standard, "elo")) ? [standard, ...kept] : kept;
-  });
-};
 
 const frontierOf = (points: ReadonlyArray<Point>, ranking: Ranking) =>
   points.filter((point) => !points.some((other) => other !== point && dominates(other, point, ranking))).toSorted((left, right) => left.x - right.x);
@@ -126,10 +117,10 @@ const pointsOf = memoLast(
         const rank = ranks.get(m.key);
         const x = AXES[axis].valueOf(m);
 
-        return rating !== undefined && rank !== undefined && x > 0 && m.scored.length > 0 ? [{ m, x, rating, rank }] : [];
+        return rating !== undefined && rank !== undefined && x !== null && m.scored.length > 0 ? [{ m, x, rating, rank }] : [];
       });
 
-    return { cost: on("cost"), moves: on("moves"), tokens: on("tokens") };
+    return { cost: on("cost"), moves: on("moves"), tokens: on("tokens"), regret: on("regret") };
   },
 );
 
@@ -142,16 +133,7 @@ const linearTicks = (low: number, high: number, count: number): ReadonlyArray<nu
   return Array.from({ length: Math.floor(high / step) - Math.ceil(low / step) + 1 }, (_tick, index) => (Math.ceil(low / step) + index) * step);
 };
 
-// The kept variants are chosen by cost on every axis, so switching the axis moves points but never hides or shows one.
-const keptKeysOf = memoLast((byCost: ReadonlyArray<Point>): ReadonlyArray<string> => keepVariants(byCost).map(({ m }) => m.key));
-
-const shownOf = memoLast((every: ReadonlyArray<Point>, kept: ReadonlyArray<string>, show: string): ReadonlyArray<Point> => {
-  if (show === "all") return every;
-
-  if (show === "medium") return every.filter((point) => point.m.effort === DEFAULT_EFFORT);
-
-  return kept.flatMap((key) => every.filter((point) => point.m.key === key));
-});
+const shownOf = memoLast((every: ReadonlyArray<Point>, show: ScatterShow): ReadonlyArray<Point> => (show === "medium" ? every.filter((point) => point.m.effort === DEFAULT_EFFORT) : every));
 
 const L = 46;
 
@@ -171,15 +153,23 @@ interface Domain {
 const domainOf = memoLast((every: ReadonlyArray<ModelStats>, ratings: ReadonlyMap<string, Rating>): Domain => {
   const rated = every.filter((m) => m.scored.length > 0 && ratings.has(m.key));
   const extent = (values: ReadonlyArray<number>): readonly [number, number] => [Math.min(...values), Math.max(...values)];
-  const xOf = (axis: ScatterAxis) => extent(rated.flatMap((m) => (AXES[axis].valueOf(m) > 0 ? [AXES[axis].valueOf(m)] : [])));
 
-  return { x: { cost: xOf("cost"), moves: xOf("moves"), tokens: xOf("tokens") }, elo: extent(rated.map((m) => ratings.get(m.key)?.rating ?? 0)) };
+  const xOf = (axis: ScatterAxis) =>
+    extent(
+      rated.flatMap((m) => {
+        const value = AXES[axis].valueOf(m);
+
+        return value === null ? [] : [value];
+      }),
+    );
+
+  return { x: { cost: xOf("cost"), moves: xOf("moves"), tokens: xOf("tokens"), regret: xOf("regret") }, elo: extent(rated.map((m) => ratings.get(m.key)?.rating ?? 0)) };
 });
 
 const xScaleOf = (axis: Axis, least: number, most: number, left: number, right: number) => {
   if (axis.isLog) return logScale(stepPast(least, "down"), stepPast(most, "up"), left, right);
 
-  const pad = Math.max((most - least) * 0.06, 1);
+  const pad = (most - least) * 0.06 || 1;
 
   return linScale(least - pad, most + pad, left, right, linearTicks(least - pad, most + pad, 9));
 };
@@ -254,13 +244,13 @@ const layoutOf = memoLast((points: ReadonlyArray<Point>, width: number, scatterA
   const frontier = frontierOf(points, ranking);
   const placed = placeLabels(at, { left: L, right: width - 2, top: T, bottom: height - B });
 
-  // On a phone the frontier is labelled first, then medium effort, then by rating; crowded points are left to tapping.
+  // Where labels collide the frontier is labelled first, then medium effort, then by rating; the rest are left to hovering or tapping.
   const priority = points
     .map((point, index) => ({ index, order: (frontier.includes(point) ? 2e4 : 0) + (point.m.effort === DEFAULT_EFFORT ? 1e4 : 0) + scoreOf(point, ranking) }))
     .toSorted((left, right) => right.order - left.order)
     .map(({ index }) => index);
 
-  return { isPhone, type, height, right, x, xLabels, y, at, labels: isPhone ? uncrowded(placed, priority) : placed, frontier };
+  return { isPhone, type, height, right, x, xLabels, y, at, labels: uncrowded(placed, priority), frontier };
 });
 
 const textAt = (h: H, x: number, y: number, anchor: string, style: Readonly<Record<string, string>>, text: string): Html =>
@@ -283,10 +273,8 @@ export const scatterView = (
   const title = `${axis.label} vs ${ranking === "elo" ? eloName(basis) : "rank"}`;
   const byAxis = pointsOf(stats, ratings, ranks);
   const every = byAxis[scatter.axis];
-  const kept = keptKeysOf(byAxis.cost);
-  const points = shownOf(every, kept, scatter.show);
+  const points = shownOf(every, scatter.show);
   const layout = layoutOf(points, width, scatter.axis, ranking, domainOf(everyConfig, ratings), ranks.size);
-  const hidden = every.filter((point) => !kept.includes(point.m.key)).length;
   const activeKey = Option.orElse(scatter.maybeHover, () => scatter.maybePin);
   const active = Option.flatMap(activeKey, (key) => Option.fromUndefinedOr(points.find((point) => point.m.key === key)));
   const isDimmed = (point: Point) => Option.exists(active, (shown) => shown.m.model !== point.m.model);
@@ -295,10 +283,9 @@ export const scatterView = (
   const controls = h.div(
     [h.Class("ctl")],
     [
-      toggleView(h, scatter.axis, AXIS_OPTIONS, (option) => Message.SelectedScatterAxis({ axis: option })),
+      toggleView(h, scatter.axis, axisOptions(everyConfig.some(({ regret }) => regret !== null)), (option) => Message.SelectedScatterAxis({ axis: option })),
       ...ratingToggles(h, ranking, basis),
-      hidden > 0 ? switchView(h, scatter.show === "all", `all efforts (${hidden} hidden)`, Message.SelectedScatterShow({ show: scatter.show === "all" ? "kept" : "all" })) : h.empty,
-      switchView(h, scatter.show === "medium", "medium only", Message.SelectedScatterShow({ show: scatter.show === "medium" ? "kept" : "medium" })),
+      switchView(h, scatter.show === "medium", "medium only", Message.SelectedScatterShow({ show: scatter.show === "medium" ? "all" : "medium" })),
     ],
   );
 

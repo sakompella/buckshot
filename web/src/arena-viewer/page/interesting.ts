@@ -3,6 +3,7 @@ import { AsyncData } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { patternBit } from "../api.ts";
+import { pressable } from "./charts.ts";
 import { colorOf, fmtUsd, keyOf, labelOf, type MatchRow, type SeatFull, sumOf, winnerOf } from "./data.ts";
 import { type Derived, memoLast, ratingsOf } from "./derived.ts";
 import { Message, type Model } from "./model.ts";
@@ -127,7 +128,7 @@ const cardView = (h: H, pick: Pick, data: Model["matches"][string] | undefined, 
 
   return h.keyed("div")(
     pick.title,
-    [h.Class("icard"), h.OnClick(Message.ClickedMatch({ id: pick.match.matchId, maybeFocus: pick.maybeFocus }))],
+    [h.Class("icard"), ...pressable(h, Message.ClickedMatch({ id: pick.match.matchId, maybeFocus: pick.maybeFocus }))],
     [
       h.div([h.Class("ititle")], [pick.title]),
       h.div(
