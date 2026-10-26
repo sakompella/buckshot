@@ -401,3 +401,70 @@ test("a config's regret weights every searched move equally, whichever seat it c
   expect(regretStats([{ regret: null }])).toBeNull();
   expect(regretStats([])).toBeNull();
 });
+
+// Two-player matches over the sweeps' pairings where every match lasts `rounds` rounds and the winner takes `winnerRounds` of them.
+const playedRoundSeats = (seed: number, rounds: number, winnerRounds: number, isStoryOk = true) => {
+  const random = rng(seed);
+  const strength = new Map(TRUE_ELO);
+
+  const seats = Array.from({ length: 60 }, (_match, index) => {
+    const [a, b] = PAIRINGS[index % PAIRINGS.length] ?? ["", ""];
+    const aWins = random() < 1 / (1 + 10 ** (((strength.get(b) ?? 0) - (strength.get(a) ?? 0)) / 400));
+    const winner = aWins ? "A" : "B";
+    const story = { starter: "A", ok: isStoryOk, rounds: Array.from({ length: rounds }, (_round, round) => ({ winner: round < winnerRounds ? winner : aWins ? "B" : "A", prize: 1, inferred: false })) };
+
+    const seatOf = (config: string, player: string, position: number): Seat => {
+      const [model = "", effort = ""] = config.split("-");
+
+      return { ...SEAT, matchId: `m${index}`, tournament: `t${index % 2}`, seedBlock: `block${Math.floor(index / 2)}`, model, effort, player, position, winShare: winner === player ? 1 : 0, cash: winner === player ? 2 : 1, story };
+    };
+
+    return [seatOf(a, "A", 0), seatOf(b, "B", 1)];
+  }).flat();
+
+  return withCohorts(seats);
+};
+
+test("when every match is a single round, rounds ratings equal win ratings", () => {
+  for (let seed = 1; seed <= 5; seed++) {
+    const seats = playedRoundSeats(seed, 1, 1);
+    const wins = pooledRatings(seats, "wins");
+    const rounds = pooledRatings(seats, "rounds");
+
+    expect([...rounds.keys()].toSorted()).toEqual([...wins.keys()].toSorted());
+
+    for (const [key, rating] of wins) {
+      expect(rounds.get(key)?.rating ?? Number.NaN).toBeCloseTo(rating.rating, 6);
+      expect(rounds.get(key)?.lo ?? Number.NaN).toBeCloseTo(rating.lo, 6);
+      expect(rounds.get(key)?.hi ?? Number.NaN).toBeCloseTo(rating.hi, 6);
+    }
+  }
+});
+
+test("when losers win rounds, rounds ratings keep the order of win ratings but sit closer together", () => {
+  for (let seed = 1; seed <= 5; seed++) {
+    const seats = playedRoundSeats(seed, 3, 2);
+    const wins = pooledRatings(seats, "wins");
+    const rounds = pooledRatings(seats, "rounds");
+    const spread = (ratings: ReadonlyMap<string, { readonly rating: number }>) => Math.max(...[...ratings.values()].map(({ rating }) => rating)) - Math.min(...[...ratings.values()].map(({ rating }) => rating));
+    const order = (ratings: ReadonlyMap<string, { readonly rating: number }>) => [...ratings].toSorted(([, left], [, right]) => left.rating - right.rating).map(([key]) => key);
+
+    expect(order(rounds)).toEqual(order(wins));
+    expect(spread(rounds)).toBeLessThan(spread(wins));
+  }
+});
+
+test("rounds ratings leave out matches whose round winners are not all known", () => {
+  const known = playedRoundSeats(1, 3, 2);
+  const unknown = playedRoundSeats(2, 3, 3, false).map((seat) => ({ ...seat, matchId: `unknown-${seat.matchId}` }));
+
+  expect(pooledRatings([...known, ...unknown], "rounds")).toEqual(pooledRatings(known, "rounds"));
+});
+
+test("a config's round share is the rounds it won over the rounds it played", () => {
+  for (const config of modelStats(playedRoundSeats(1, 3, 2))) {
+    const wins = config.scored.filter(({ winShare }) => winShare === 1).length;
+
+    expect(config.roundShare).toBeCloseTo((wins * 2 + (config.scored.length - wins)) / (3 * config.scored.length), 12);
+  }
+});

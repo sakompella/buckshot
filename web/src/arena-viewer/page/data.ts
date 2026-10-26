@@ -1,4 +1,4 @@
-import type { Seat } from "../api.ts";
+import type { Seat, Story } from "../api.ts";
 import type { Basis } from "./model.ts";
 
 // The page's numbers: model labels and colours, cohorts, per-config stats, ratings and intervals.
@@ -149,9 +149,9 @@ export const fmtPoints = (value: number): string => value.toFixed(1);
 
 export const fmtRating = (rating: number): string => `${rating >= 0 ? "+" : ""}${rating.toFixed(0)}`;
 
-export const eloName = (basis: Basis): string => (basis === "wins" ? "Elo" : "Cash Elo");
+export const eloName = (basis: Basis): string => ({ wins: "Elo", cash: "Cash Elo", rounds: "Rounds Elo" })[basis];
 
-export const shareName = (basis: Basis): string => (basis === "wins" ? "win share" : "pot share");
+export const shareName = (basis: Basis): string => ({ wins: "win share", cash: "pot share", rounds: "round share" })[basis];
 
 // GROUPS AND SUMS
 
@@ -214,8 +214,14 @@ export const rng = (seed: number) => {
  */
 export type SeatFull = Seat & { readonly cohort: string; readonly potShare: number | null };
 
-/** What a rating counts: each player's win share of a match, or its pot share. */
-export const seatShare = (seat: SeatFull, basis: Basis): number => (basis === "wins" ? seat.winShare : seat.potShare) ?? 0;
+/** What a rating counts per match: each player's win share of it, or its pot share. A rounds rating counts rounds instead (see knownRounds). */
+export const seatShare = (seat: SeatFull, basis: Exclude<Basis, "rounds">): number => (basis === "wins" ? seat.winShare : seat.potShare) ?? 0;
+
+/** A match's rounds with their winners, or none when the events do not give every round (Story.ok). */
+export const knownRounds = (seat: Pick<Seat, "story">): Story["rounds"] => (seat.story?.ok ? seat.story.rounds : []);
+
+/** What each known round of a match was to a seat: 1 for a round it won, 0 for one it lost. */
+export const roundResults = (seat: Pick<Seat, "story" | "player">): ReadonlyArray<number> => knownRounds(seat).map(({ winner }) => (winner === seat.player ? 1 : 0));
 
 const shortName = (model: string): string => baseOf(model)?.short ?? model;
 
@@ -365,6 +371,8 @@ export interface ModelStats {
   readonly winShare: number;
   /** Mean pot share over scored matches. */
   readonly potShare: number;
+  /** Rounds won over rounds played, in the scored matches whose rounds are known. */
+  readonly roundShare: number;
   /** Over scored matches; null when the viewer has no regret. */
   readonly regret: RegretStats | null;
   /** Observed win share with a seed-block bootstrap interval. */
@@ -408,6 +416,7 @@ export const modelStats = (seats: ReadonlyArray<SeatFull>, isByCohort = false): 
         scored,
         winShare: scoredMean(({ winShare }) => winShare),
         potShare: scoredMean(({ potShare }) => potShare),
+        roundShare: meanOf(scored.flatMap(roundResults)),
         regret: regretStats(scored),
         win: blockRate(wins),
         totalCost: sumOf(started.map(({ cost }) => cost ?? 0)),
@@ -453,7 +462,7 @@ export const regretStats = (seats: ReadonlyArray<Pick<SeatFull, "regret">>): Reg
 };
 
 /** A config's observed share on a basis: the mean over its scored matches. */
-export const configShare = (config: Pick<ModelStats, "winShare" | "potShare">, basis: Basis): number => (basis === "wins" ? config.winShare : config.potShare);
+export const configShare = (config: Pick<ModelStats, "winShare" | "potShare" | "roundShare">, basis: Basis): number => ({ wins: config.winShare, cash: config.potShare, rounds: config.roundShare })[basis];
 
 /**
  * Configs in place order for the "Rank" view: highest observed share (mean over scored matches) first. Ties go to

@@ -66,10 +66,14 @@ const openPage = async (page: Page) => {
   console.log("every section drawn in", Date.now() - started, "ms");
   await page.waitForSelector(".icard svg rect", { timeout: 60_000 });
 
-  const counts = async () => ["scatter points", await countOf(page, ".card svg g.pt"), "heat rows", await countOf(page, "table.heat tbody tr"), "leaderboards", await countOf(page, "table.lbt"), "|", await textOf(page, ".filters .switch")];
+  const counts = async () => ["scatter points", await countOf(page, ".card svg g.pt"), "heat rows", await countOf(page, "table.heat tbody tr"), "leaderboards", await countOf(page, "table.lbt"), "|", await page.locator(".filters .switch").allInnerTexts()];
   const allConfigs = page.getByRole("switch", { name: /all configs/ });
 
   console.log("default (all configs):", ...(await counts()));
+
+  // The switch is drawn only while some config is hidden, which no config is once every config has cross-model games.
+  if ((await allConfigs.count()) === 0) return;
+
   await allConfigs.uncheck();
   console.log("main configs only:", ...(await counts()));
   await allConfigs.check();
@@ -207,7 +211,7 @@ const checkEveryConfigRated = async (page: Page, scatter: ReturnType<Page["locat
   const cohorts = await page.locator(".filters select option").evaluateAll((options) => options.map((option) => option.getAttribute("value") ?? ""));
   const dashes = (selector: string) => page.locator(selector).evaluateAll((cells) => cells.filter((cell) => cell.textContent?.trim() === "–").length);
 
-  for (const basis of ["Wins", "Cash"] as const) {
+  for (const basis of ["Wins", "Cash", "Rounds"] as const) {
     const axesByCohort = new Set<string>();
 
     await scatter.getByRole("button", { name: basis, exact: true }).click();
@@ -219,7 +223,7 @@ const checkEveryConfigRated = async (page: Page, scatter: ReturnType<Page["locat
         await scatter.getByRole("button", { name: ranking, exact: true }).click();
         await settled(page);
 
-        const label = ranking === "Rank" ? "rank" : basis === "Wins" ? "Elo" : "Cash Elo";
+        const label = ranking === "Rank" ? "rank" : basis === "Wins" ? "Elo" : `${basis} Elo`;
         const rows = await countOf(page, "table.heat tbody tr");
         const missing = (await dashes("table.heat td.total")) + (await dashes(`table.lbt td[data-label="${label}"]`));
         const points = await countOf(page, ".card svg g.pt");
@@ -241,25 +245,25 @@ const checkEveryConfigRated = async (page: Page, scatter: ReturnType<Page["locat
   await settled(page);
 };
 
+const ratingViews = async (page: Page) => ({
+  scatter: await textOf(page, ".card h2"),
+  heat: await textOf(page, "table.heat thead th:nth-last-child(2)"),
+  leaderboard: await textOf(page, "table.lbt thead th:nth-child(6)"),
+  firstRow: await textOf(page, "table.lbt tbody tr.row"),
+  heatFirstRow: await textOf(page, "table.heat tbody tr"),
+  toggles: await page.locator(".toggle button.on", { hasText: /^(Wins|Cash|Rounds)$/ }).allInnerTexts(),
+});
+
 // The Wins / Cash choice drives the scatter, the heatmap and the leaderboards together, the leaderboards show every
 // config's pot share beside its win share, and the axes stay put under filters on the cash rating too.
 const checkCash = async (page: Page, scatter: ReturnType<Page["locator"]>) => {
-  const views = async () => ({
-    scatter: await textOf(page, ".card h2"),
-    heat: await textOf(page, "table.heat thead th:nth-last-child(2)"),
-    leaderboard: await textOf(page, "table.lbt thead th:nth-child(5)"),
-    firstRow: await textOf(page, "table.lbt tbody tr.row"),
-    heatFirstRow: await textOf(page, "table.heat tbody tr"),
-    toggles: await page.locator(".toggle button.on", { hasText: /^(Wins|Cash)$/ }).allInnerTexts(),
-  });
-
-  const wins = await views();
+  const wins = await ratingViews(page);
 
   console.log("Wins:", wins);
   await scatter.getByRole("button", { name: "Cash", exact: true }).click();
   await settled(page);
 
-  const cash = await views();
+  const cash = await ratingViews(page);
 
   console.log("Cash:", cash);
   expectThat(cash.scatter.includes("Cash Elo") && cash.heat === "Cash Elo" && cash.leaderboard === "Cash Elo", "the Cash choice did not reach the scatter, the heatmap and the leaderboards");
@@ -287,9 +291,48 @@ const checkCash = async (page: Page, scatter: ReturnType<Page["locator"]>) => {
   await heat(page).getByRole("button", { name: "Wins", exact: true }).click();
   await settled(page);
 
-  const back = await views();
+  const back = await ratingViews(page);
 
   expectThat(JSON.stringify(back) === JSON.stringify(wins), "Wins did not bring the page back to how it started");
+};
+
+// Rounds is the third rating choice: it reaches the scatter, the heatmap and the leaderboards, every leaderboard row shows
+// a round share, and the click that first fits it is timed.
+const checkRounds = async (page: Page, scatter: ReturnType<Page["locator"]>) => {
+  const wins = await ratingViews(page);
+  const clicked = Date.now();
+
+  await scatter.getByRole("button", { name: "Rounds", exact: true }).click();
+  await settled(page);
+  console.log("Rounds fitted and drawn in", Date.now() - clicked, "ms");
+
+  const rounds = await ratingViews(page);
+
+  console.log("Rounds:", rounds);
+  expectThat(rounds.scatter.includes("Rounds Elo") && rounds.heat === "Rounds Elo" && rounds.leaderboard === "Rounds Elo", "the Rounds choice did not reach the scatter, the heatmap and the leaderboards");
+  expectThat(rounds.firstRow !== wins.firstRow && rounds.heatFirstRow !== wins.heatFirstRow, "the rounds rating left the leaderboard or heatmap rows as they were");
+  expectThat(rounds.toggles.length === 3 && rounds.toggles.every((text) => text === "Rounds"), `Rounds toggles on: ${rounds.toggles.join(" ")}`);
+
+  const shares = await page.locator('table.lbt td[data-label="round share"]').allInnerTexts();
+  const rows = await countOf(page, "table.lbt tbody tr.row");
+
+  console.log("round share cells", shares.length, "of", rows, "rows, first", shares.slice(0, 6).join(" "));
+  expectThat(shares.length === rows && shares.every((text) => /^\d+%$/.test(text.trim())), "a leaderboard row has no round share");
+
+  await page.locator(".lb").getByRole("button", { name: "Rank", exact: true }).click();
+  await settled(page);
+  console.log("Rounds rank:", await textOf(page, "table.lbt tbody tr.row"), "| heat header", await textOf(page, "table.heat thead th:nth-last-child(2)"));
+  await scatter.screenshot({ path: shot("scatter-rounds-rank") });
+  await page.locator(".lb").getByRole("button", { name: "Elo", exact: true }).click();
+  await settled(page);
+  await scatter.screenshot({ path: shot("scatter-rounds") });
+  await heat(page).screenshot({ path: shot("heat-rounds"), style: UNSTICK });
+  await page.locator(".lb").screenshot({ path: shot("leaderboard-rounds"), style: UNSTICK });
+  await checkFixedAxes(page, scatter);
+
+  await heat(page).getByRole("button", { name: "Wins", exact: true }).click();
+  await settled(page);
+  expectThat(JSON.stringify(await ratingViews(page)) === JSON.stringify(wins), "Wins did not bring the page back to how it started after Rounds");
 };
 
 const REGRET_TAG = /^regret \d+\.\d( · exact)?$/;
@@ -407,6 +450,7 @@ const checkDesktop = async (browser: Browser) => {
   await checkFixedAxes(page, scatter);
   await checkRanking(page, scatter);
   await checkCash(page, scatter);
+  await checkRounds(page, scatter);
   await checkEveryConfigRated(page, scatter);
   await checkRegret(page);
 
@@ -529,6 +573,10 @@ const checkTouch = async (browser: Browser, name: string, width: number, height:
   await settled(page);
   console.log(name, "cash rank y ticks", await yTicks(page), "| overflow", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page));
   await page.locator(".card").first().screenshot({ path: shot(`${name}-scatter-cash-rank`) });
+  await heat(page).getByRole("button", { name: "Rounds", exact: true }).tap();
+  await settled(page);
+  console.log(name, "rounds rank y ticks", await yTicks(page), "| overflow", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page));
+  await page.locator(".card").first().screenshot({ path: shot(`${name}-scatter-rounds-rank`) });
 
   await context.close();
 };

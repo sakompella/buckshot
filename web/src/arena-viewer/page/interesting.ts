@@ -49,7 +49,7 @@ const GLASS_BLANK_OPP = patternBit("glassBlankOpp");
 
 export const picksOf = memoLast((derived: Derived): ReadonlyArray<Pick> => {
   const { matches, decisions, seats, keep } = derived;
-  // The picks are about winning, so the Wins / Cash choice leaves them alone.
+  // The picks are about winning, so the Wins / Cash / Rounds choice leaves them alone.
   const ratings = ratingsOf(seats)("wins");
   const done = matches.filter((match) => match.status === "completed" && match.seats.length === 2);
 

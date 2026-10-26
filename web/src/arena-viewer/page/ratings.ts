@@ -1,4 +1,4 @@
-import { groupBy, keyOf, meanOf, quantile, rng, type SeatFull, seatShare, unique } from "./data.ts";
+import { groupBy, keyOf, meanOf, quantile, rng, roundResults, type SeatFull, seatShare, unique } from "./data.ts";
 import type { Basis } from "./model.ts";
 
 // The ratings the whole page reads: Bradley-Terry over every scored two-player match of every tournament.
@@ -154,6 +154,13 @@ const pairsOf = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<readonly [SeatFu
     return matchSeats.length === 2 && first !== undefined && second !== undefined ? [[first, second] as const] : [];
   });
 
+/** What one match adds to a fit: its share on the basis, or with rounds, a game for each of its rounds. */
+const gamesOf = ([x, y]: readonly [SeatFull, SeatFull], basis: Basis): ReadonlyArray<BlockGame> => {
+  const game = (sa: number): BlockGame => ({ a: keyOf(x), b: keyOf(y), sa, block: x.seedBlock });
+
+  return basis === "rounds" ? roundResults(x).map(game) : [game(seatShare(x, basis))];
+};
+
 export interface Rating {
   readonly rating: number;
   readonly lo: number;
@@ -165,11 +172,12 @@ const BOOTSTRAP_REPS = 200;
 /**
  * Every config's rating from one fit over all the seats' completed two-player matches, with 95% percentile
  * intervals from refitting resamples of whole seed blocks. Effort sweeps join the other models through their
- * medium configs, so one scale covers every config. The fit counts each match as the basis's share: win shares, or
- * pot shares for a cash rating.
+ * medium configs, so one scale covers every config. The fit counts each match as the basis's share: win shares,
+ * or pot shares for a cash rating. A rounds rating counts each round as a game, in the matches whose rounds are known;
+ * its resamples still take whole seed blocks, since a match's rounds are not independent.
  */
 export const pooledRatings = (seats: ReadonlyArray<SeatFull>, basis: Basis): ReadonlyMap<string, Rating> => {
-  const games = pairsOf(seats).map(([x, y]): BlockGame => ({ a: keyOf(x), b: keyOf(y), sa: seatShare(x, basis), block: x.seedBlock }));
+  const games = pairsOf(seats).flatMap((pair) => gamesOf(pair, basis));
   const numbered = numberGames(games);
   const point = fitGames(numbered, Int32Array.from(games.keys()));
   const blocks = [...groupBy(games.keys(), (index) => games[index]?.block).values()];

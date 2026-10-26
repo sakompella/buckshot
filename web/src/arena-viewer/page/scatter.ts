@@ -416,7 +416,7 @@ export const scatterView = (
           tipView(h, anchorId("pt", point.m.key), [
             h.b([], [point.m.label]),
             h.br([]),
-            `rank ${point.rank} · ${eloName(basis)} ${fmtRating(point.rating)} · ${fmtPct(point.m.winShare)} wins, ${fmtPct(point.m.potShare)} of the pot, over ${point.m.scored.length} matches`,
+            `rank ${point.rank} · ${eloName(basis)} ${fmtRating(point.rating)} · ${fmtPct(point.m.winShare)} wins, ${fmtPct(point.m.potShare)} of the pot, ${fmtPct(point.m.roundShare)} of rounds won, over ${point.m.scored.length} matches`,
             h.br([]),
             axis.perMatch(point.x),
           ]),
