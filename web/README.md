@@ -263,7 +263,7 @@ scatter's axes span every config in every cohort, so a filter only shows or hide
 points; the reliability bars keep one scale the same way.
 
 Wherever ratings show (the scatter's y axis, the heatmap's and the leaderboards'
-rating columns), a Wins / Cash toggle and an Elo / Rank toggle switch all of them.
+rating columns), a Wins / Cash / Rounds toggle and an Elo / Rank toggle switch all of them.
 Elo is one Bradley-Terry rating per config, fitted over every completed
 two-player match of every tournament (`page/ratings.ts`): win shares count
 fractionally, a Gaussian prior (standard deviation 3 nats) keeps it finite, the
@@ -272,11 +272,15 @@ Effort sweeps join the other models through their medium configs, so one scale
 covers every config and no filter changes it. Cash is the same fit with pot
 shares in place of win shares: a player's pot share is its cash over the match's
 cash, and the leaderboards show each config's pot share, averaged over its scored
-matches, beside its win share. The cash fit runs the first time Cash is chosen, so
-the first load pays only for the win fit. Rank is a place 1, 2, 3, ... for every
-config. The leaderboards rank by the observed share (win or pot, the mean over
-scored matches) within each cohort, among all of its configs before the chip and
-switch filters, ties going to the higher Elo. The scatter and heatmap do the same
+matches, beside its win share. Rounds is the same fit with each round of a match
+as one game, its winner read from the public events (a match whose rounds the
+events do not give in full is left out), and the leaderboards show each config's
+round share, the rounds it won over the rounds it played. Its resamples still take
+whole seed blocks, since a match's rounds are not independent. The cash and rounds
+fits run the first time each is chosen, so the first load pays only for the win
+fit. Rank is a place 1, 2, 3, ... for every config. The leaderboards rank by the
+observed share (win, pot or round) within each cohort, among all of its configs
+before the chip and switch filters, ties going to the higher Elo. The scatter and heatmap do the same
 under one cohort. Under "All cohorts" they rank by the pooled Elo instead, since
 pooling every cohort's shares would count the effort sweeps' self-play. The
 interesting matches always judge underdogs by the win rating.

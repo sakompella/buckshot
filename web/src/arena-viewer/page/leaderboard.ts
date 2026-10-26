@@ -154,6 +154,7 @@ const rowView = (h: H, m: ModelStats, standing: Standing, basis: Basis, item: It
       ),
       h.td([h.Class("ws"), h.Title(`${fmtPct(lo)}–${fmtPct(hi)}`)], [h.b([], [fmtPct(m.winShare)]), " ", h.span([h.Class("pm")], [`${m.win.k.toFixed(m.win.k % 1 ? 1 : 0)}/${m.win.n}`])]),
       h.td([h.DataAttribute("label", "pot share")], [fmtPct(m.potShare)]),
+      h.td([h.DataAttribute("label", "round share")], [fmtPct(m.roundShare)]),
       h.td([h.DataAttribute("label", "place" in standing ? "rank" : eloName(basis))], standingView(h, standing)),
       ...(hasRegret ? [regretCell(h, m)] : []),
       h.td([h.DataAttribute("label", "cost")], [fmtUsd(m.avgCost)]),
@@ -173,6 +174,7 @@ const headersOf = (ranking: Ranking, basis: Basis, hasRegret: boolean): Readonly
   "",
   "Win share",
   "Pot share",
+  "Round share",
   ranking === "elo" ? eloName(basis) : "Rank",
   ...(hasRegret ? ["Regret"] : []),
   "Avg cost",
@@ -260,7 +262,7 @@ export const leaderboardView = (
             ranking === "elo"
               ? `${eloName(basis)} is one Bradley-Terry rating fitted over every match of every tournament, on ${shareName(basis)}; intervals are 95% bootstraps over seed blocks.`
               : `Rank is the place by observed ${shareName(basis)} among all of a cohort's configs, before the filters; ties go to the higher ${eloName(basis)}.`,
-            " Pot share is a config's cash over the match's cash, averaged over scored matches.",
+            " Pot share is a config's cash over the match's cash, averaged over scored matches. Round share is the rounds a config won over the rounds it played, where the match's events give every round.",
             hasRegret ? " Regret is the mean percentage points of round win chance a move gave up against the best move the minimax player found; lower is better." : "",
           ].join(""),
         ],

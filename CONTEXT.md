@@ -130,3 +130,6 @@ _Avoid_: blunder score, error
 
 **Pot share**:
 A player's cash at the end of a match divided by all the cash in that match: 1 for a sweep, less when the loser banked round prizes. The viewer's cash rating is a Bradley-Terry fit on it.
+
+**Round share**:
+The rounds a player won divided by the rounds it played, where the match's public events give every round winner. The viewer's rounds rating is a Bradley-Terry fit that counts each round as one game.
