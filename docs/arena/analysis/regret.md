@@ -141,9 +141,9 @@ This is a casual pass over the full run, with counts and means and no intervals.
 
 Does a model play the short early rounds differently from the later, item-heavy ones? This is a casual pass for [#14](https://github.com/sakompella/buckshot/issues/14), with counts in brackets and no intervals. It covers the same 2,471 finished matches with no DeepSeek seat. Round winners come from the public lines of the match events, as the viewer reads them; the last round's winner is inferred from final cash when its line is missing. Rounds are numbered from 1. A win rate is the share of its rounds a config won, against whoever it met, so it also reflects the opponents' strength.
 
-1. **No config wins one round number more than another.**
+1. **No config's win rate clearly changes by round.**
    - Pooled over efforts, a model's win rate moves by 4 points or less between rounds for six of the eight models. Astra goes from 58.4% to 62.6% over 219 rounds, and Haiku 4.5 from 46.8% to 42.9% and back to 44.5% over 616.
-   - Per config the cells hold 30 to 280 rounds, so a gap of 10 points is within noise at 110 rounds. A one-off chi-square test across rounds, run outside the script, finds 2 of the 38 configs below p = 0.05 (Haiku 5.5 off and max). About 2 are expected by chance.
+   - Per config the cells hold 30 to 280 rounds, so gaps of 10 points are common at 110 rounds and say little. The largest runs are Haiku 5.5 off, at 47.3%, 31.8% and 29.1% over 110 rounds each, and Haiku 5.5 max at 50.9%, 68.2% and 56.4%. Neither is a steady trend across the other efforts.
 2. **Regret is flat across rounds, except that round 1 shots are a little worse.**
    - Mean regret over all moves is 2.6, 2.4 and 2.5 points in rounds 1, 2 and 3. Models keep their order in every round: the same three, Opus, Astra and Sol, are lowest and Haiku 4.5 is highest.
    - Shots cost 3.4 points in round 1 against 2.9 and 3.1 later. Item moves stay at 1.8 to 1.9. The table does not say why. Decisions of one match are not independent, so the gap is small evidence.
