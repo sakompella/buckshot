@@ -48,7 +48,7 @@ const AXES: Readonly<Record<ScatterAxis, Axis>> = {
     perMatch: (value) => `${value.toFixed(1)} moves per match`,
   },
   tokens: {
-    label: "Output tokens",
+    label: "Tokens",
     axisLabel: "Avg output tokens per player per match (log)",
     isLog: true,
     valueOf: (m) => m.avgOut,
@@ -56,9 +56,18 @@ const AXES: Readonly<Record<ScatterAxis, Axis>> = {
     tick: (value) => (value >= 1e6 ? `${value / 1e6}M` : value >= 1e3 ? `${value / 1e3}k` : String(value)),
     perMatch: (value) => `${fmtCount(value)} output tokens per match`,
   },
+  regret: {
+    label: "Regret",
+    axisLabel: "Mean regret per move (points of round win chance)",
+    isLog: false,
+    valueOf: (m) => m.regret?.mean ?? 0,
+    format: (value) => value.toFixed(2),
+    tick: String,
+    perMatch: (value) => `${value.toFixed(2)} points of regret per move`,
+  },
 };
 
-const AXIS_OPTIONS: ReadonlyArray<readonly [ScatterAxis, string]> = (["cost", "moves", "tokens"] as const).map((axis) => [axis, AXES[axis].label]);
+const axisOptions = (hasRegret: boolean): ReadonlyArray<readonly [ScatterAxis, string]> => (hasRegret ? (["cost", "moves", "tokens", "regret"] as const) : (["cost", "moves", "tokens"] as const)).map((axis) => [axis, AXES[axis].label]);
 
 interface Point {
   readonly m: ModelStats;
@@ -108,7 +117,7 @@ const pointsOf = memoLast(
         return rating !== undefined && rank !== undefined && x > 0 && m.scored.length > 0 ? [{ m, x, rating, rank }] : [];
       });
 
-    return { cost: on("cost"), moves: on("moves"), tokens: on("tokens") };
+    return { cost: on("cost"), moves: on("moves"), tokens: on("tokens"), regret: on("regret") };
   },
 );
 
@@ -143,13 +152,13 @@ const domainOf = memoLast((every: ReadonlyArray<ModelStats>, ratings: ReadonlyMa
   const extent = (values: ReadonlyArray<number>): readonly [number, number] => [Math.min(...values), Math.max(...values)];
   const xOf = (axis: ScatterAxis) => extent(rated.flatMap((m) => (AXES[axis].valueOf(m) > 0 ? [AXES[axis].valueOf(m)] : [])));
 
-  return { x: { cost: xOf("cost"), moves: xOf("moves"), tokens: xOf("tokens") }, elo: extent(rated.map((m) => ratings.get(m.key)?.rating ?? 0)) };
+  return { x: { cost: xOf("cost"), moves: xOf("moves"), tokens: xOf("tokens"), regret: xOf("regret") }, elo: extent(rated.map((m) => ratings.get(m.key)?.rating ?? 0)) };
 });
 
 const xScaleOf = (axis: Axis, least: number, most: number, left: number, right: number) => {
   if (axis.isLog) return logScale(stepPast(least, "down"), stepPast(most, "up"), left, right);
 
-  const pad = Math.max((most - least) * 0.06, 1);
+  const pad = (most - least) * 0.06 || 1;
 
   return linScale(least - pad, most + pad, left, right, linearTicks(least - pad, most + pad, 9));
 };
@@ -224,13 +233,13 @@ const layoutOf = memoLast((points: ReadonlyArray<Point>, width: number, scatterA
   const frontier = frontierOf(points, ranking);
   const placed = placeLabels(at, { left: L, right: width - 2, top: T, bottom: height - B });
 
-  // On a phone the frontier is labelled first, then medium effort, then by rating; crowded points are left to tapping.
+  // Where labels collide the frontier is labelled first, then medium effort, then by rating; the rest are left to hovering or tapping.
   const priority = points
     .map((point, index) => ({ index, order: (frontier.includes(point) ? 2e4 : 0) + (point.m.effort === DEFAULT_EFFORT ? 1e4 : 0) + scoreOf(point, ranking) }))
     .toSorted((left, right) => right.order - left.order)
     .map(({ index }) => index);
 
-  return { isPhone, type, height, right, x, xLabels, y, at, labels: isPhone ? uncrowded(placed, priority) : placed, frontier };
+  return { isPhone, type, height, right, x, xLabels, y, at, labels: uncrowded(placed, priority), frontier };
 });
 
 const textAt = (h: H, x: number, y: number, anchor: string, style: Readonly<Record<string, string>>, text: string): Html =>
@@ -263,7 +272,7 @@ export const scatterView = (
   const controls = h.div(
     [h.Class("ctl")],
     [
-      toggleView(h, scatter.axis, AXIS_OPTIONS, (option) => Message.SelectedScatterAxis({ axis: option })),
+      toggleView(h, scatter.axis, axisOptions(everyConfig.some(({ regret }) => regret !== null)), (option) => Message.SelectedScatterAxis({ axis: option })),
       ...ratingToggles(h, ranking, basis),
       switchView(h, scatter.show === "medium", "medium only", Message.SelectedScatterShow({ show: scatter.show === "medium" ? "all" : "medium" })),
     ],

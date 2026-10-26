@@ -1,4 +1,4 @@
-:root { --bg: #000; --fg: #ececec; --mut: #8b8b8b; --dim: #5a5a5a; --grid: #1c1c1c; --line: #262626; color-scheme: dark; }
+:root { --bg: #000; --fg: #ececec; --mut: #8b8b8b; --dim: #7a7a7a; --grid: #1c1c1c; --line: #262626; color-scheme: dark; }
 * { box-sizing: border-box; }
 :focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 tr:focus-visible td { background: #111; }

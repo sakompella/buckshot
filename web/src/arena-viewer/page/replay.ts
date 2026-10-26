@@ -175,7 +175,7 @@ const stateView = (h: H, detail: MatchDetail, steps: ReadonlyArray<Step>, step: 
       h.div(
         [h.Class("shells")],
         [
-          h.span([h.Class("k")], [`shells ${step.player}'s view`]),
+          h.span([h.Class("k")], [`${step.player}'s view of the shells`]),
           h.div([], [...Array.from({ length: step.live }, () => h.i([h.Class("live")], [])), ...Array.from({ length: step.blank }, () => h.i([], []))]),
           h.span([h.Class("k")], [`${step.live} live · ${step.blank} blank${step.known === null ? "" : ` · chamber ${step.known}`}`]),
         ],

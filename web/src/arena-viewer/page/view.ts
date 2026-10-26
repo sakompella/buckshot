@@ -5,6 +5,7 @@ import { createLazy, type Document, type Html, type HtmlBuilder } from "foldkit/
 import { baseName, baseOrder, colorOf, EFFORTS, fmtCount, keyOf, sumOf, unique } from "./data.ts";
 import { switchView } from "./charts.ts";
 import { type Derived, derive, mainConfigsOf } from "./derived.ts";
+import { effortView } from "./effort.ts";
 import { breakdownView, heatRowsOf } from "./heat.ts";
 import { interestingView, picksOf } from "./interesting.ts";
 import { leaderboardView } from "./leaderboard.ts";
@@ -104,6 +105,8 @@ const lazyFilters = createLazy();
 
 const lazyScatter = createLazy();
 
+const lazyEffort = createLazy();
+
 const lazyBreakdown = createLazy();
 
 const lazyInteresting = createLazy();
@@ -131,6 +134,8 @@ const navView = (h: H): Html =>
 const scatterCard = (h: H, derived: Derived, ranking: Ranking, basis: Basis, scatter: Model["scatter"], width: number): Html =>
   h.div([h.Class("card")], [scatterView(h, derived.pooled, derived.everyPooled, derived.ratings, derived.ranks, ranking, basis, scatter, width)]);
 
+const effortCard = (h: H, derived: Derived, basis: Basis, width: number): Html => h.div([h.Class("card")], [effortView(h, derived.pooled, derived.ratings, basis, width)]);
+
 const sectionView = (h: H, section: Section, content: Html): Html => h.section([h.Id(section), h.Class("part")], [content]);
 
 const pageView = (h: H, model: Model, derived: Derived): Html => {
@@ -142,7 +147,7 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
       lazyHero(heroView, [h, derived]),
       // The jump menu and the filters stay at the top; the filters apply to every section.
       h.div([h.Class("top")], [lazyNav(navView, [h]), lazyFilters(filtersView, [h, derived, model.filter])]),
-      sectionView(h, "scatter", lazyScatter(scatterCard, [h, derived, model.ranking, model.basis, model.scatter, cardWidth(model.viewport)])),
+      sectionView(h, "scatter", h.div([], [lazyScatter(scatterCard, [h, derived, model.ranking, model.basis, model.scatter, cardWidth(model.viewport)]), lazyEffort(effortCard, [h, derived, model.basis, cardWidth(model.viewport)])])),
       sectionView(h, "interesting", lazyInteresting(interestingView, [h, picksOf(derived), model.matches, content])),
       sectionView(h, "seats", lazySeats(seatsView, [h, derived, model.viewport.width, content])),
       sectionView(h, "reliability", lazyReliability(reliabilityView, [h, derived.decisions, derived.seats, derived.keep, model.maybeRateTip, model.viewport.width, content])),

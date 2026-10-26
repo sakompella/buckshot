@@ -435,7 +435,7 @@ const checkDesktop = async (browser: Browser) => {
 
   for (const [axis, name] of [
     ["Moves", "moves"],
-    ["Output tokens", "tokens"],
+    ["Tokens", "tokens"],
     ["Cost", "cost"],
   ] as const) {
     await scatter.getByRole("button", { name: axis, exact: true }).click();

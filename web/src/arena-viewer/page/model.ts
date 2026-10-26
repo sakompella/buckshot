@@ -51,8 +51,8 @@ export const ScatterShow = Schema.Literals(["all", "medium"]);
 
 export type ScatterShow = typeof ScatterShow.Type;
 
-/** What the scatter's x axis measures per player per match: cost, model moves or output tokens. */
-export const ScatterAxis = Schema.Literals(["cost", "moves", "tokens"]);
+/** What the scatter's x axis measures per player per match: cost, model moves or output tokens, or the mean regret per move. */
+export const ScatterAxis = Schema.Literals(["cost", "moves", "tokens", "regret"]);
 
 export type ScatterAxis = typeof ScatterAxis.Type;
 

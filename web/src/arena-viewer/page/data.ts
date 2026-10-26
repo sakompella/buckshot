@@ -227,7 +227,7 @@ export const knownRounds = (seat: Pick<Seat, "story">): Story["rounds"] => (seat
 /** What each known round of a match was to a seat: 1 for a round it won, 0 for one it lost. */
 export const roundResults = (seat: Pick<Seat, "story" | "player">): ReadonlyArray<number> => knownRounds(seat).map(({ winner }) => (winner === seat.player ? 1 : 0));
 
-const shortName = (model: string): string => baseOf(model)?.short ?? model;
+export const shortName = (model: string): string => baseOf(model)?.short ?? model;
 
 const crossModelCohort = (effort: string): string => `Cross-model (${effort})`;
 
