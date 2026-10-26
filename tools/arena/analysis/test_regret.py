@@ -22,15 +22,15 @@ def databases(directory: Path, players, decisions, scores, matches=None):
     knowledge.commit()
     scored = sqlite3.connect(directory / "regret.sqlite")
     scored.execute(
-        "CREATE TABLE regret (match_id TEXT, ordinal INTEGER, evaluator TEXT, max_depth INTEGER, budget INTEGER, status TEXT, regret INTEGER, exact INTEGER, limited INTEGER)"
+        "CREATE TABLE regret (match_id TEXT, ordinal INTEGER, evaluator TEXT, max_depth INTEGER, budget INTEGER, reload TEXT, samples INTEGER, status TEXT, regret INTEGER, exact INTEGER, limited INTEGER)"
     )
-    scored.executemany("INSERT INTO regret VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", scores)
+    scored.executemany("INSERT INTO regret VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", scores)
     scored.commit()
     return directory / "regret.sqlite", directory / "knowledge.sqlite"
 
 
-def score(match, ordinal, regret_value, exact=0, status="searched", evaluator="e", limited=0):
-    return (match, ordinal, evaluator, 6, 20000, status, regret_value, exact, limited)
+def score(match, ordinal, regret_value, exact=0, status="searched", evaluator="e", limited=0, reload="static", samples=0):
+    return (match, ordinal, evaluator, 6, 20000, reload, samples, status, regret_value, exact, limited)
 
 
 class Percentile(unittest.TestCase):
@@ -83,6 +83,24 @@ class Load(unittest.TestCase):
                 decisions=[("m1", 0, "A", "agent", "Use beer", 2, 1), ("m1", 1, "A", "agent", "Use beer", 2, 1)],
                 scores=[score("m1", 0, 1, evaluator="old"), score("m1", 1, 1, evaluator="new")],
             )
+
+    def test_reads_one_reload_rule(self):
+        loaded = self.load(
+            players=[("m1", "A", "opus", "high")],
+            decisions=[("m1", 0, "A", "agent", "Use beer", 2, 1), ("m1", 1, "A", "agent", "Use beer", 2, 1)],
+            scores=[score("m1", 0, 1), score("m1", 0, 7, reload="expected-deal"), score("m1", 0, 9, reload="sampled", samples=256)],
+        )
+        self.assertEqual([d.regret for d in loaded.decisions], [1])
+        self.assertEqual(loaded.unscored, 1)
+
+
+class RunSamples(unittest.TestCase):
+    def test_a_sampled_run_defaults_to_the_scripts_count_and_other_rules_take_none(self):
+        self.assertEqual((regret.run_samples("sampled", None), regret.run_samples("sampled", 64), regret.run_samples("static", None)), (256, 64, 0))
+        with self.assertRaises(SystemExit):
+            regret.run_samples("expected-deal", 64)
+        with self.assertRaises(SystemExit):
+            regret.run_samples("sampled", 0)
 
 
 class Summary(unittest.TestCase):
