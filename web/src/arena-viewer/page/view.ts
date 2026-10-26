@@ -36,7 +36,7 @@ const filtersView = (h: H, derived: Derived, filter: Model["filter"]): Html => {
   const cohorts = unique(seats.map(({ cohort }) => cohort)).toSorted();
   const models = unique(seats.map(({ model }) => model)).toSorted((left, right) => baseOrder(left) - baseOrder(right));
   const names = unique(models.map((model) => baseName(model)));
-  const matchesIn = (cohort: string) => new Set(seats.filter((seat) => seat.cohort === cohort).map(({ matchId }) => matchId)).size;
+  const matchesIn = (cohort: string) => new Set(seats.filter((seat) => seat.cohort === cohort && seat.status === "completed").map(({ matchId }) => matchId)).size;
   const main = mainConfigsOf(seats);
   const hidden = unique(seats.map(keyOf)).filter((key) => !main.has(key)).length;
 
@@ -122,7 +122,7 @@ const navView = (h: H): Html =>
   h.nav(
     [],
     [
-      h.span([h.Class("brand")], ["Buckshot arena"]),
+      h.span([h.Class("brand")], ["Buckshot Arena"]),
       ...SECTIONS.map(([section, label]) => h.a([h.Href(`#${section}`), h.OnClick(Message.ClickedJump({ section }), { defaultAction: "Prevent" })], [label])),
       h.a([h.Class("download"), h.Href("/api/db")], ["Database (SQLite)"]),
     ],
@@ -157,8 +157,8 @@ const isPinned = (model: Model): boolean => Option.isSome(model.scatter.maybePin
 
 export const view = (model: Model, h: H): Document =>
   AsyncData.matchData(model.data, {
-    onEmpty: () => ({ title: "Buckshot arena", body: h.main([], [h.p([h.Class("k")], ["Loading the analysis database…"])]) }),
-    onFailure: (error) => ({ title: "Buckshot arena", body: h.main([], [h.p([h.Class("k")], [`Could not load the analysis database: ${error}`])]) }),
+    onEmpty: () => ({ title: "Buckshot Arena", body: h.main([], [h.p([h.Class("k")], ["Loading the analysis database…"])]) }),
+    onFailure: (error) => ({ title: "Buckshot Arena", body: h.main([], [h.p([h.Class("k")], [`Could not load the analysis database: ${error}`])]) }),
     onData: (loaded) => {
       const derived = derive(loaded, model.filter, model.basis);
 
@@ -168,7 +168,7 @@ export const view = (model: Model, h: H): Document =>
       });
 
       return {
-        title: "Buckshot arena",
+        title: "Buckshot Arena",
         body: h.div(
           [],
           [

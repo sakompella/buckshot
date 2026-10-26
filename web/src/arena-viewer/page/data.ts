@@ -29,17 +29,17 @@ interface Base {
 
 // Every Claude model is orange and every GPT model blue (sRGB HSL hue 18-36 for Claude, 196-218 for GPT). Within a
 // family the strongest model by the merged cross-model Bradley-Terry order (docs/arena/analysis/matchups.md) is
-// brightest and most saturated, and each step down is clearly darker (contrast on black about 14, 10, 6 and 4 to 1):
+// brightest and most saturated, and each step down is clearly darker (contrast on black about 14, 9, 5 and 4.5 to 1, so the darkest still reads as small text):
 // GPT Astra, Sol, Terra, Luna; Claude Opus, Haiku 5.5, Sonnet, Haiku 4.5. Every effort of a model has its colour.
 const BASES: ReadonlyArray<Base> = [
   { id: "claude-opus-5-5", name: "Opus 5.5", short: "Opus", tone: [0.868, 0.115, 75.8] },
   { id: "claude-haiku-5-5", name: "Haiku 5.5", short: "Haiku 5.5", tone: [0.763, 0.151, 56.7] },
   { id: "claude-sonnet-5-5", name: "Sonnet 5.5", short: "Sonnet", tone: [0.647, 0.17, 42.4] },
-  { id: "claude-haiku-4-5", name: "Haiku 4.5", short: "Haiku 4.5", tone: [0.536, 0.126, 43.2] },
+  { id: "claude-haiku-4-5", name: "Haiku 4.5", short: "Haiku 4.5", tone: [0.59, 0.14, 50] },
   { id: "gpt-6-astra", name: "GPT-6 Astra", short: "Astra", tone: [0.89, 0.073, 224.2] },
   { id: "gpt-6.1-sol", name: "GPT-6.1 Sol", short: "Sol", tone: [0.741, 0.131, 240.2] },
   { id: "gpt-5.6-terra", name: "GPT-5.6 Terra", short: "Terra", tone: [0.594, 0.179, 257.7] },
-  { id: "gpt-6-luna", name: "GPT-6 Luna", short: "Luna", tone: [0.523, 0.091, 259.8] },
+  { id: "gpt-6-luna", name: "GPT-6 Luna", short: "Luna", tone: [0.554, 0.124, 250] },
 ];
 
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
@@ -147,7 +147,11 @@ export const fmtTime = (iso: string): string => PACIFIC_TIME.format(new Date(iso
 /** Regret and regret scores are percentage points of the round win chance. */
 export const fmtPoints = (value: number): string => value.toFixed(1);
 
-export const fmtRating = (rating: number): string => `${rating >= 0 ? "+" : ""}${rating.toFixed(0)}`;
+export const fmtRating = (rating: number): string => {
+  const rounded = Math.round(rating) || 0;
+
+  return `${rounded >= 0 ? "+" : ""}${rounded}`;
+};
 
 export const eloName = (basis: Basis): string => ({ wins: "Elo", cash: "Cash Elo", rounds: "Rounds Elo" })[basis];
 
@@ -436,7 +440,7 @@ export interface MatchRow {
   /** In table order. */
   readonly seats: ReadonlyArray<SeatFull>;
   readonly startedAt: string;
-  readonly tournament: string;
+  readonly cohort: string;
   readonly status: string;
   readonly seed: number;
 }
@@ -446,7 +450,7 @@ export const matchRows = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<MatchRo
     const ordered = matchSeats.toSorted((left, right) => left.position - right.position);
     const [first] = ordered;
 
-    return first === undefined ? [] : [{ matchId: first.matchId, seats: ordered, startedAt: first.startedAt, tournament: first.tournament, status: first.status, seed: first.seed }];
+    return first === undefined ? [] : [{ matchId: first.matchId, seats: ordered, startedAt: first.startedAt, cohort: first.cohort, status: first.status, seed: first.seed }];
   });
 
 /** Regret of a config's searched moves: their mean in points, and the share of them that are proven exact. Null with no searched move. */

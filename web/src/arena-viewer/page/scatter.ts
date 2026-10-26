@@ -2,10 +2,10 @@ import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { anchorId, logScale, linScale, ratingToggles, switchView, tipView, toggleView } from "./charts.ts";
-import { baseName, DEFAULT_EFFORT, eloName, fmtCount, groupBy, fmtPct, fmtRating, fmtUsd, isClaude, type ModelStats } from "./data.ts";
+import { baseName, DEFAULT_EFFORT, eloName, fmtCount, fmtPct, fmtRating, fmtUsd, isClaude, type ModelStats } from "./data.ts";
 import { leader, measureText, placeLabels, uncrowded } from "./labels.ts";
 import { memoLast } from "./derived.ts";
-import { type Basis, Message, type Model, type Ranking, type ScatterAxis } from "./model.ts";
+import { type Basis, Message, type Model, type Ranking, type ScatterAxis, type ScatterShow } from "./model.ts";
 import type { Rating } from "./ratings.ts";
 
 type H = HtmlBuilder<Message>;
@@ -13,9 +13,6 @@ type H = HtmlBuilder<Message>;
 // Average cost, model moves or output tokens against the Elo or the rank, one point per config, labelled
 // as on DeepSWE: the model's name, its effort below in small caps. The dashed line is the frontier: no other point is
 // both lower on the x axis and higher rated (or ranked).
-
-/** Effort variants within this many rating points of the model's default effort are hidden (in doubt, show the default). */
-const VARIANT_TOLERANCE = 25;
 
 interface Axis {
   /** The switch's label, and the chart title's first word. */
@@ -78,24 +75,6 @@ const scoreOf = (point: Point, ranking: Ranking): number => (ranking === "elo" ?
 const dominates = (other: Point, point: Point, ranking: Ranking) =>
   other.x <= point.x && scoreOf(other, ranking) >= scoreOf(point, ranking) && (other.x < point.x || scoreOf(other, ranking) > scoreOf(point, ranking));
 
-// RuneBench's rule: a variant is shown only if it is not within tolerance of the default and no row of its family
-// dominates it; the default is hidden only when a shown variant dominates it. Always judged by Elo, so the ranking
-// toggle moves points but never hides or shows one.
-const keepVariants = (points: ReadonlyArray<Point>): ReadonlyArray<Point> => {
-  const families = groupBy(points, (point) => point.m.model);
-
-  return [...families.values()].flatMap((family) => {
-    const standard = family.find((point) => point.m.effort === DEFAULT_EFFORT);
-
-    const kept = family.filter(
-      (variant) =>
-        variant !== standard && !(standard !== undefined && Math.abs(variant.rating - standard.rating) < VARIANT_TOLERANCE) && !family.some((other) => other !== variant && dominates(other, variant, "elo")),
-    );
-
-    return standard !== undefined && !kept.some((variant) => dominates(variant, standard, "elo")) ? [standard, ...kept] : kept;
-  });
-};
-
 const frontierOf = (points: ReadonlyArray<Point>, ranking: Ranking) =>
   points.filter((point) => !points.some((other) => other !== point && dominates(other, point, ranking))).toSorted((left, right) => left.x - right.x);
 
@@ -142,16 +121,7 @@ const linearTicks = (low: number, high: number, count: number): ReadonlyArray<nu
   return Array.from({ length: Math.floor(high / step) - Math.ceil(low / step) + 1 }, (_tick, index) => (Math.ceil(low / step) + index) * step);
 };
 
-// The kept variants are chosen by cost on every axis, so switching the axis moves points but never hides or shows one.
-const keptKeysOf = memoLast((byCost: ReadonlyArray<Point>): ReadonlyArray<string> => keepVariants(byCost).map(({ m }) => m.key));
-
-const shownOf = memoLast((every: ReadonlyArray<Point>, kept: ReadonlyArray<string>, show: string): ReadonlyArray<Point> => {
-  if (show === "all") return every;
-
-  if (show === "medium") return every.filter((point) => point.m.effort === DEFAULT_EFFORT);
-
-  return kept.flatMap((key) => every.filter((point) => point.m.key === key));
-});
+const shownOf = memoLast((every: ReadonlyArray<Point>, show: ScatterShow): ReadonlyArray<Point> => (show === "medium" ? every.filter((point) => point.m.effort === DEFAULT_EFFORT) : every));
 
 const L = 46;
 
@@ -283,10 +253,8 @@ export const scatterView = (
   const title = `${axis.label} vs ${ranking === "elo" ? eloName(basis) : "rank"}`;
   const byAxis = pointsOf(stats, ratings, ranks);
   const every = byAxis[scatter.axis];
-  const kept = keptKeysOf(byAxis.cost);
-  const points = shownOf(every, kept, scatter.show);
+  const points = shownOf(every, scatter.show);
   const layout = layoutOf(points, width, scatter.axis, ranking, domainOf(everyConfig, ratings), ranks.size);
-  const hidden = every.filter((point) => !kept.includes(point.m.key)).length;
   const activeKey = Option.orElse(scatter.maybeHover, () => scatter.maybePin);
   const active = Option.flatMap(activeKey, (key) => Option.fromUndefinedOr(points.find((point) => point.m.key === key)));
   const isDimmed = (point: Point) => Option.exists(active, (shown) => shown.m.model !== point.m.model);
@@ -297,8 +265,7 @@ export const scatterView = (
     [
       toggleView(h, scatter.axis, AXIS_OPTIONS, (option) => Message.SelectedScatterAxis({ axis: option })),
       ...ratingToggles(h, ranking, basis),
-      hidden > 0 ? switchView(h, scatter.show === "all", `all efforts (${hidden} hidden)`, Message.SelectedScatterShow({ show: scatter.show === "all" ? "kept" : "all" })) : h.empty,
-      switchView(h, scatter.show === "medium", "medium only", Message.SelectedScatterShow({ show: scatter.show === "medium" ? "kept" : "medium" })),
+      switchView(h, scatter.show === "medium", "medium only", Message.SelectedScatterShow({ show: scatter.show === "medium" ? "all" : "medium" })),
     ],
   );
 

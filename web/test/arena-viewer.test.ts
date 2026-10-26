@@ -165,6 +165,19 @@ test("the shell tracker knows the chamber from a glass, a phone and the count", 
   expect(tracker.checks).toEqual({ ok: 3, bad: 0 });
 });
 
+test("the shell tracker knows when the chambered shell is the load's last", () => {
+  const tracker = new ShellTracker();
+
+  tracker.event("The shotgun is loaded: 1 live, 1 blank.");
+  expect(tracker.isLastShell()).toBe(false);
+
+  tracker.event("Player A racked out a live shell.");
+  expect(tracker.isLastShell()).toBe(true);
+
+  tracker.event("The shotgun is loaded: 2 live, 2 blank.");
+  expect(tracker.isLastShell()).toBe(false);
+});
+
 test("the round story infers the last round's winner from final cash", () => {
   const events = [
     "Round 1 begins. Everyone has 2 health; Player B starts.",

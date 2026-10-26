@@ -3,7 +3,7 @@ import { AsyncData, Mount } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import type { Call, MatchDetail, Step } from "../api.ts";
-import { linScale } from "./charts.ts";
+import { linScale, pressable } from "./charts.ts";
 import { itemIconOf } from "./items.ts";
 import { colorOf, fmtCount, fmtPoints, fmtSec, fmtPct, fmtTime, fmtUsd, keyOf, labelOf, type MatchRow, sumOf, unique } from "./data.ts";
 import { type MatchData, Message, type Replay, type Viewport } from "./model.ts";
@@ -209,11 +209,14 @@ const callView = (h: H, call: Call): Html => {
   );
 };
 
-/** A model move's regret; only a proven exact one is marked exact. */
+/** Regret in points from which a move's tag stands out as a blunder. */
+const BIG_REGRET = 5;
+
+/** A model move's regret; only a proven exact one is marked exact, and a big one stands out. */
 const regretTag = (h: H, step: Step): Html =>
   step.regret === null
     ? h.empty
-    : h.span([h.Class(step.regret.exact ? "tag regret exact" : "tag regret")], [`regret ${fmtPoints(step.regret.points)}${step.regret.exact ? " · exact" : ""}`]);
+    : h.span([h.Class(`tag regret ${step.regret.exact ? "exact" : ""} ${step.regret.points >= BIG_REGRET ? "big" : ""}`)], [`regret ${fmtPoints(step.regret.points)}${step.regret.exact ? " · exact" : ""}`]);
 
 const regretLine = (h: H, step: Step): Html => {
   const { regret } = step;
@@ -239,7 +242,7 @@ const stepDetailView = (h: H, step: Step): Html =>
 const stepView = (h: H, detail: MatchDetail, step: Step, index: number, at: number): Html =>
   h.keyed("div")(
     step.id,
-    [h.Class(`step ${index === at ? "on" : ""}`), h.OnClick(Message.SelectedStep({ index }))],
+    [h.Class(`step ${index === at ? "on" : ""}`), ...pressable(h, Message.SelectedStep({ index }))],
     [
       h.div(
         [h.Class("h")],
@@ -287,26 +290,29 @@ const sameSeedView = (h: H, detail: MatchDetail, allMatches: ReadonlyArray<Match
     [h.Class("seedrow")],
     groups.map(({ fixed, chips }) =>
       h.div(
-        [h.Class("chips")],
+        [h.Class("seedgroup")],
         [
           h.span([h.Class("k")], [`seed ${detail.match.seed} vs ${labelOf(keyOf(fixed))}:`]),
-          ...chips.map(({ match, other }) => {
-            const share = other.winShare ?? 0;
-            const color = colorOf(other.model);
-            const isScored = match.status === "completed";
-            const mark = !isScored ? "·" : share >= 1 ? "W" : share > 0 ? "½" : "L";
+          h.div(
+            [h.Class("chips")],
+            chips.map(({ match, other }) => {
+              const share = other.winShare ?? 0;
+              const color = colorOf(other.model);
+              const isScored = match.status === "completed";
+              const mark = !isScored ? "·" : share >= 1 ? "W" : share > 0 ? "½" : "L";
 
-            return h.button(
-              [
-                h.Type("button"),
-                h.Class("chip on"),
-                h.Title(isScored ? `${fmtPct(share)} win share` : "unscored"),
-                h.Style(share >= 1 ? { color, "border-color": color } : { color }),
-                h.OnClick(Message.ClickedMatch({ id: match.matchId, maybeFocus: Option.none() })),
-              ],
-              [`${labelOf(keyOf(other))} ${mark}`],
-            );
-          }),
+              return h.button(
+                [
+                  h.Type("button"),
+                  h.Class("chip on"),
+                  h.Title(isScored ? `${fmtPct(share)} win share` : "unscored"),
+                  h.Style(share >= 1 ? { color, "border-color": color } : { color }),
+                  h.OnClick(Message.ClickedMatch({ id: match.matchId, maybeFocus: Option.none() })),
+                ],
+                [`${labelOf(keyOf(other))} ${mark}`],
+              );
+            }),
+          ),
         ],
       ),
     ),
@@ -318,6 +324,7 @@ const detailView = (h: H, replay: Replay, detail: MatchDetail, allMatches: Reado
   const at = replayIndex(replay, steps);
   const step = steps[at];
   const cost = sumOf(detail.decisions.flatMap(({ calls }) => calls.map((call) => call.cost ?? 0)));
+  const cohort = allMatches.find(({ matchId }) => matchId === detail.match.id)?.cohort;
 
   return [
     h.div(
@@ -329,7 +336,7 @@ const detailView = (h: H, replay: Replay, detail: MatchDetail, allMatches: Reado
         ),
         h.span(
           [h.Class("k")],
-          [`${detail.match.tournament} · seed ${detail.match.seed} · ${fmtTime(detail.match.startedAt)} · ${steps.length} moves · ${fmtUsd(cost)} · `, h.b([h.Class("res")], [resultOf(detail)])],
+          [`${cohort === undefined ? "" : `${cohort} · `}seed ${detail.match.seed} · ${fmtTime(detail.match.startedAt)} · ${steps.length} moves · ${fmtUsd(cost)} · `, h.b([h.Class("res")], [resultOf(detail)])],
         ),
       ],
     ),
@@ -382,7 +389,7 @@ export const replayView = (h: H, replay: Replay, data: MatchData | undefined, al
     [h.Class("overlay")],
     [
       h.div([h.Class("backdrop"), h.OnClick(Message.ClosedReplay())], []),
-      h.div([h.Class("modal")], [h.button([h.Type("button"), h.Class("x"), h.AriaLabel("Close"), h.OnClick(Message.ClosedReplay())], ["✕"]), ...body]),
+      h.div([h.Class("modal"), h.Role("dialog"), h.AriaModal(true), h.AriaLabel("Match replay")], [h.button([h.Type("button"), h.Class("x"), h.AriaLabel("Close"), h.OnClick(Message.ClosedReplay())], ["✕"]), ...body]),
     ],
   );
 };

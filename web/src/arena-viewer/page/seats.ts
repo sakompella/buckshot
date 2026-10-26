@@ -20,7 +20,6 @@ interface Game {
 /** A seed block with both seat orders scored. */
 interface Block {
   readonly id: string;
-  readonly tournament: string;
   readonly cohort: string;
   readonly games: readonly [Game, Game];
 }
@@ -61,7 +60,7 @@ const blocksOf = (games: ReadonlyArray<Game>) => {
       continue;
     }
 
-    blocks.push({ id, tournament: one.first.tournament, cohort: one.first.cohort, games: [one, two] });
+    blocks.push({ id, cohort: one.first.cohort, games: [one, two] });
   }
 
   return { blocks, partial };
@@ -88,12 +87,10 @@ const groupedRows = (blocks: ReadonlyArray<Block>, value: (game: Game) => number
     blocks: members.length,
   });
 
-  const tournaments = unique(blocks.map(({ tournament }) => tournament)).toSorted();
   const cohorts = unique(blocks.map(({ cohort }) => cohort)).toSorted();
 
   return [
     row("All complete seed blocks", blocks),
-    ...tournaments.map((tournament) => row(`Tournament ${tournament}`, blocks.filter((block) => block.tournament === tournament))),
     ...cohorts.map((cohort) => row(`Cohort ${cohort}`, blocks.filter((block) => block.cohort === cohort))),
   ];
 };
@@ -402,30 +399,29 @@ export const seatsView = (h: H, derived: Derived, width: number, content: number
   const blocksNote = (row: GroupRow | undefined) =>
     row === undefined ? "" : `${row.blocks.toLocaleString()} complete blocks at ${row.bySeed.blocks} seeds · 95% CI by seeds ${interval(row.bySeed)}`;
 
-  const leftOut = perSeed.leftOut > 0 ? ` ${perSeed.leftOut} seeds with fewer than ${MIN_SEED_BLOCKS} complete blocks are left out.` : "";
+  const leftOut = perSeed.leftOut > 0 ? ` ${perSeed.leftOut} seeds under ${MIN_SEED_BLOCKS} blocks left out.` : "";
 
   return h.div(
     [],
     [
       h.h2([], ["Seats"]),
-      h.p([h.Class("sub")], ["Filters pick focal players: a match is in if either player passes; both players count."]),
       h.div(
         [],
         [
           h.div(
             [h.Class("bignums")],
             [
-              bigNumberView(h, pct(allPositions?.rate.rate ?? Number.NaN), "win share at table position 1", blocksNote(allPositions)),
               bigNumberView(h, pct(allStarters?.rate.rate ?? Number.NaN), "win share of the round-1 starter", blocksNote(allStarters)),
+              bigNumberView(h, pct(allPositions?.rate.rate ?? Number.NaN), "win share at table position 1", blocksNote(allPositions)),
               bigNumberView(h, pct(decided === 0 ? Number.NaN : (story?.roundOneWinner ?? 0) / decided), "of matches won by the round-1 winner", `${(story?.roundOneWinner ?? 0).toLocaleString()} of ${decided.toLocaleString()} decided matches`),
             ],
           ),
           h.div(
             [h.Class("chartrow")],
             [
-              figureView(h, "Round 1 to the match", "Where the round-1 winner's matches end up; the bright cap is the sweeps.", flowView(h, story, figure)),
-              figureView(h, "Comebacks", "Win share by the worst health gap a player faced in the final round.", comebackView(h, comebacks, figure)),
-              figureView(h, "The starter's edge per seed", `The round-1 starter's win share on each seed; the dotted line is every seed together.${leftOut}`, perSeedView(h, perSeed.rows, allStarters?.rate, figure)),
+              figureView(h, "Round 1 to the match", "Bright cap: sweeps.", flowView(h, story, figure)),
+              figureView(h, "Comebacks", "By the worst health gap in the final round.", comebackView(h, comebacks, figure)),
+              figureView(h, "The starter's edge per seed", `Dotted line: every seed.${leftOut}`, perSeedView(h, perSeed.rows, allStarters?.rate, figure)),
             ],
           ),
         ],

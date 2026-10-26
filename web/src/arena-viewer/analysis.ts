@@ -90,6 +90,11 @@ export class ShellTracker {
     if (isShot) this.sawed = false;
   }
 
+  /** Whether the chambered shell is the load's last, so shooting it ends the load whoever it hits. */
+  isLastShell(): boolean {
+    return this.total - this.cursor === 1;
+  }
+
   /** The chambered shell, or null when the load is spent. */
   chamber(): Chamber | null {
     if (this.cursor >= this.total) return null;
@@ -389,12 +394,14 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
 
     if (chamber) {
       const byItem = chamber.by === "glass" || chamber.by === "phone";
+      // The regret search rates shooting the opponent with a load's last blank close to best, unlike an earlier blank.
+      const isFreeBlank = chamber.known === "blank" && canOpp && !tracker.isLastShell();
 
-      flag("knownBlankOpp", byItem && chamber.known === "blank" && canOpp, isOpp);
-      flag("glassBlankOpp", chamber.by === "glass" && chamber.known === "blank" && canOpp, isOpp);
+      flag("knownBlankOpp", byItem && isFreeBlank, isOpp);
+      flag("glassBlankOpp", chamber.by === "glass" && isFreeBlank, isOpp);
       flag("knownLiveSelf", byItem && chamber.known === "live" && canSelf, isSelf);
       flag("countLiveSelf", chamber.by === "count" && chamber.known === "live" && canSelf, isSelf);
-      flag("countBlankOpp", chamber.by === "count" && chamber.known === "blank" && canOpp, isOpp);
+      flag("countBlankOpp", chamber.by === "count" && isFreeBlank, isOpp);
       flag("sawSelf", tracker.sawed && chamber.known !== "blank" && canSelf, isSelf);
       flag("oddsLiveSelf", chamber.known === null && chamber.pLive > 0.5 && canSelf, isSelf);
       flag("oddsBlankOpp", chamber.known === null && chamber.pLive < 0.5 && canOpp, isOpp);
