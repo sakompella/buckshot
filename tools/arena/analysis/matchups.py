@@ -61,12 +61,11 @@ def coverage(db, by_cohort: dict[str, list[Game]]) -> str:
                 f"{sizes.count(2)} / {sizes.count(1)}",
                 f"{len(per_pair)}/{len(entrants) * (len(entrants) - 1) // 2}",
                 f"{counts[0]} / {statistics.median(counts):g} / {counts[-1]}",
-                str(len({g.code for g in games})),
                 "yes" if len(parts) == 1 else f"no, {len(parts)} groups",
                 ", ".join(f"{n} {s}" for s, n in sorted(scheduled.get(name, {}).items())),
             ]
         )
-    header = ["cohort", "entrants", "scored matches", "complete / half blocks", "pairs played", "matches per pair min / median / max", "code versions", "connected", "scheduled by status"]
+    header = ["cohort", "entrants", "scored matches", "complete / half blocks", "pairs played", "matches per pair min / median / max", "connected", "scheduled by status"]
     return table(header, rows) + f"\n\nMatches outside every cohort: {sum(scheduled.get('(outside every cohort)', {}).values())}."
 
 

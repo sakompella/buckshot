@@ -165,7 +165,7 @@ One table per cohort, ranked by the pooled rating, as the viewer's leaderboards 
 <!-- leaderboard:end -->
 
 ## tournament-1: cross-model and effort sweeps
-2,080 matches, $934.46. Two code versions; the only request difference is the GPT reasoning summary (`auto` vs `detailed`). The 60 leftover terra matches below ran under a third.
+2,080 matches, $934.46. The only request difference between its two runs of the arena is the GPT reasoning summary (`auto` vs `detailed`).
 
 **Leftovers, finished 2026-10-22** (63 matches, about $19.6; all replay-validated). Each pairing is 20 matches. Scores are matches won, first-named entrant first:
 - gpt-5.6-terra vs gpt-6-astra: 5–15
@@ -266,5 +266,5 @@ The Claude subscription account behind CPA carries organization-level instructio
 3. tournament-1 leftovers: 20 matches per pairing against DeepSeek (free tier refusing). Refit the medium table with the 63 new matches.
 4. `web/src/arena/runlog.ts`: join thinking blocks with `"\n\n"`. About 1.9% of saved texts run headings together. This changes the code hash.
 5. An optional, separately labelled entrant with a `reason` field. Check its effect on play with paired seeds before rating it.
-6. Keep the `t3-1427bb8e` worktree: it holds the tournament data and the current code checkout. tournament-1's old code version is an earlier commit in git history; check it out again only to resume its 41 partial matches.
+6. Keep the `t3-1427bb8e` worktree: it holds the tournament data and the current code checkout. its 41 partial tournament-1 matches need the older arena code from git history to resume.
 7. Fit the minimax player's evaluator weights from the analysis database before tuning anything by hand.

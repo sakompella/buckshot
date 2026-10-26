@@ -7,14 +7,14 @@ Ratings, pair effects, seat and round 1 starter effects for the scored arena mat
 ## Findings
 
 **Ratings are pooled.** One Bradley-Terry fit covers every scored match of every tournament, so all 38 configs share one Elo scale with the mean at 0, as in the viewer. Tournament 4 gave every config games against other models, so no rating leans on an assumption that effort gaps carry across opponents. `results.md` and the viewer show the same ratings. A second fit on pot share (a config's cash over the match's cash, which credits the round prizes a loser banks) gives the cash rating. Cohorts, now only a way to group matches, are: tournament 1's cross-model games, each model's own effort sweep (six of them), tournament 2's Opus effort games, tournament 3 and tournament 4's cross-model samples.
-- **Coverage.** The cross-model cohort has 9 configs and 562 matches over 29 of the 36 pairs. Eight are the medium configs; Sonnet max only has 2 games there (both lost to Opus). Every sweep is a full round robin with 20 matches per pair. Opus effort plays 4 of its 6 pairs. Tournament 4 has 288 matches: 37 configs, each against 5 others, 10 matches per pair on seeds 3000 to 3009.
+- **Coverage.** The cross-model cohort has 9 configs and 562 matches over 29 of the 36 pairs. Eight are the medium configs; Sonnet max only has 2 games there (both lost to Opus). Every sweep is a full round robin with 20 matches per pair. Opus effort plays 4 of its 6 pairs. Tournament 4 has 288 matches in 144 seat-swapped blocks: 37 configs, each playing 5 others (10 matches) on seeds 3000 to 3009.
 - **Cross-model medium configs**, win rating (95% CI by seed blocks): astra +174 (+129 to +226), opus +98 (+50 to +148), sol +84 (+41 to +130), sonnet +43 (+1 to +87), haiku 5.5 +42 (+5 to +82), terra -25 (-71 to +17), haiku 4.5 -138 (-190 to -88), luna -226 (-290 to -175). Astra stands above and luna and haiku 4.5 below; the five in between overlap. Drawing seeds instead of blocks moves the intervals modestly.
-- **Top and bottom of all 38.** Opus xhigh +205 (+125 to +290), Sonnet max +191 (+110 to +283), astra +174 and Sol max +164 lead. Luna low -317, luna off -311 and haiku 4.5 off -302 trail. Effort configs have about 90 to 110 matches each, so their intervals are about 150 to 200 Elo wide.
+- **Top and bottom of all 38.** Opus xhigh +205 (+125 to +290), Sonnet max +191 (+110 to +283), astra +174 and Sol max +164 lead. Luna low -317, luna off -311 and haiku 4.5 off -302 trail. Effort configs have 30 to 110 matches each, so their intervals are about 150 to 200 Elo wide.
 - **Effort.** Within each model the top level is xhigh or max in six of seven models with a sweep or effort tournament: luna xhigh +0 and max -18 against medium -226, sonnet max +191 against medium +43, haiku 5.5 xhigh +130, terra max +34, sol max +164, Opus xhigh +205. Haiku 4.5 has no such level; its top is minimal (-133) and medium (-138). Off or low is the bottom level in six of seven: luna low -317, haiku 4.5 off -302, haiku 5.5 off -72, sonnet low -14, terra low -59 and Opus low -1. Sol is the exception: medium +84 sits at the bottom of a flat range up to +164, and the intervals overlap. The order of neighbouring levels is mostly inside the intervals.
 - **Cash.** Cash ratings spread about two thirds as far as win ratings (+128 to -205 against +205 to -317), because losers bank round prizes. Pot shares run from 31.4% (luna low) to 64.7% (luna xhigh). The two ratings agree on the leaders (Sonnet max +128, Opus xhigh +109, Sol max +108) and the trailers (luna low -205). A config can win less than it earns: Opus low wins 43.3% of its 30 matches yet takes 55.8% of the pot (cash +67, win -1), and terra high wins 44.4% and takes 49.6% (cash +13, win -42). Haiku 5.5 xhigh is the reverse: 62.7% of wins, 54.0% of the pot, cash +29 against win +130.
 
 **Matchup effects: none worth keeping.** The observed pair share minus the share fitted by the pooled ratings is small and is reported as a descriptive residual. It is not a test: the ratings are regularized, so residuals are forced (a pair at the end of a chain of pairs is pulled to its fit), and the bootstrap range around a residual is not a calibrated interval around zero. The largest cross-model residual over a full 20-match pair is haiku 4.5 against sonnet (2/20 observed against 26% fitted); the pair of 2 Opus against Sonnet max games is too thin to read.
-- The test is held-out prediction. Whole seed blocks were held out (5 repeats of 10-fold cross-validation, with the shrinkage chosen inside each training set from 0 to 1.6, so no held-out block picks it). In every tested cohort the nested pair-effect model scored no better than ratings alone: the gain per match is between -0.0067 and -0.0001 nats, and the lower end of its interval is never above 0. The shrinkage chose 0 (ratings only) in most folds for the cross-model cohort, haiku 5.5, terra and Opus. So **no cohort keeps pair effects**. Tournament 3 has one pair, and tournament 4 has one 10-match sample per pair, so neither is tested.
+- The test is held-out prediction. Whole seed blocks were held out (5 repeats of 10-fold cross-validation, with the shrinkage chosen inside each training set from 0 to 1.6, so no held-out block picks it). In every tested cohort the nested pair-effect model scored no better than ratings alone: the gain per match is between -0.0067 and -0.0001 nats, and the lower end of its interval is never above 0. The shrinkage chose 0 (ratings only) in most folds for the cross-model cohort, haiku 5.5, terra and Opus. So **no cohort keeps pair effects**. Tournament 3 has one pair, and tournament 4 has one seat-swapped block per pair, so neither is tested.
 - The same holds when the ratings also have a seat term and a round 1 starter term, which on their own lower the cross-model loss from 0.5954 to 0.5793 per match.
 - Reverse pairs, described and not tested: for the entrant seated first, a real matchup effect should show the opposite sign when A sat first and when B sat first. 44 of 108 pairs (40.7%) do, with a correlation of -0.22 between the A-first effect and minus the B-first effect (a negative value means the two orders lean the same way). The signs are not independent (the two orders of a block share a seed, seeds are reused across pairings, and the ratings are fitted jointly), so no test is made. The two entrants' effects in a pair sum to zero to rounding (4e-17) because every match's shares sum to 1.
 - With 20 matches per pair, only large pair effects could show.
@@ -42,8 +42,7 @@ Ratings, pair effects, seat and round 1 starter effects for the scored arena mat
 - **Shared seeds.** The seed block id includes the pairing, but every pairing of a tournament plays the same seeds (tournament 1's cross-model games use 10 seeds, each sweep 10, tournament 4 the same 10), so blocks of different pairings share deals. Seed-block intervals therefore understate the uncertainty of position and starter effects, which is why the seeds-drawn interval is the headline there (about 10 to 19 clusters, so it is rough). Rating intervals hardly change.
 - **Unmatched blocks.** One half block (tournament 3's seed 3030, 1 match) cannot be matched and is left out of every seat figure.
 - **Power.** The held-out test can rule out large pair effects only; "none kept" is not "none exist". Cohorts with 40 blocks (Opus effort) are the weakest, and a pair-effect model with 4 pairs is almost saturated.
-- **Thin cells.** Tournament 4 has 10 matches per pair, so one pair says little; its value is that it links every config to the others. Sonnet max's rating rests on its 8 tournament-4 matches and 2 tournament-1 games.
-- **Code versions.** The matches span four code versions, and the pooled fit does not separate them. A code-stratified refit of the pooled ratings is not possible: the main version alone leaves out ten configs, and without their links the rest cannot be put on the same scale. Earlier cohort fits that could be refitted moved by about 11 Elo at most.
+- **Thin cells.** Tournament 4 has one seat-swapped block (2 matches) per pair, so one pair says little; its value is that it links every config to the others. Sonnet max's rating rests on its 8 tournament-4 matches and 2 tournament-1 games.
 - **Position and starter overlap** because the seed fixes the starter's position, and tournament 1's seeds 3000 to 3009 start position 2 six times in ten.
 - **No replays.** Everything comes from standings, cash, seating and the public round 1 line; no moves were reviewed.
 
@@ -52,18 +51,18 @@ Ratings, pair effects, seat and round 1 starter effects for the scored arena mat
 <!-- tables:start -->
 ### Schedule coverage
 
-| cohort | entrants | scored matches | complete / half blocks | pairs played | matches per pair min / median / max | code versions | connected | scheduled by status |
-|---|---|---|---|---|---|---|---|---|
-| cpa-tiers cross-model | 9 | 562 | 281 / 0 | 29/36 | 2 / 20 / 20 | 4 | yes | 562 completed, 138 skipped (skipped) |
-| cpa-tiers sweep claude-haiku-4-5-20251001 | 5 | 200 | 100 / 0 | 10/10 | 20 / 20 / 20 | 2 | yes | 200 completed |
-| cpa-tiers sweep claude-haiku-5-5 | 6 | 300 | 150 / 0 | 15/15 | 20 / 20 / 20 | 2 | yes | 300 completed |
-| cpa-tiers sweep claude-sonnet-5-5 | 6 | 300 | 150 / 0 | 15/15 | 20 / 20 / 20 | 2 | yes | 300 completed |
-| cpa-tiers sweep gpt-5.6-terra | 5 | 200 | 100 / 0 | 10/10 | 20 / 20 / 20 | 1 | yes | 200 completed |
-| cpa-tiers sweep gpt-6-luna | 6 | 300 | 150 / 0 | 15/15 | 20 / 20 / 20 | 1 | yes | 300 completed |
-| cpa-tiers sweep gpt-6.1-sol | 5 | 200 | 100 / 0 | 10/10 | 20 / 20 / 20 | 1 | yes | 200 completed |
-| opus-effort | 4 | 80 | 40 / 0 | 4/6 | 20 / 20 / 20 | 1 | yes | 80 completed |
-| tournament 3 | 2 | 41 | 20 / 1 | 1/1 | 41 / 41 / 41 | 2 | yes | 41 completed, 5 partial (skipped), 14 unstarted |
-| tournament 4 | 37 | 288 | 144 / 0 | 144/666 | 2 / 2 / 2 | 1 | yes | 288 completed |
+| cohort | entrants | scored matches | complete / half blocks | pairs played | matches per pair min / median / max | connected | scheduled by status |
+|---|---|---|---|---|---|---|---|
+| cpa-tiers cross-model | 9 | 562 | 281 / 0 | 29/36 | 2 / 20 / 20 | yes | 562 completed, 138 skipped (skipped) |
+| cpa-tiers sweep claude-haiku-4-5-20251001 | 5 | 200 | 100 / 0 | 10/10 | 20 / 20 / 20 | yes | 200 completed |
+| cpa-tiers sweep claude-haiku-5-5 | 6 | 300 | 150 / 0 | 15/15 | 20 / 20 / 20 | yes | 300 completed |
+| cpa-tiers sweep claude-sonnet-5-5 | 6 | 300 | 150 / 0 | 15/15 | 20 / 20 / 20 | yes | 300 completed |
+| cpa-tiers sweep gpt-5.6-terra | 5 | 200 | 100 / 0 | 10/10 | 20 / 20 / 20 | yes | 200 completed |
+| cpa-tiers sweep gpt-6-luna | 6 | 300 | 150 / 0 | 15/15 | 20 / 20 / 20 | yes | 300 completed |
+| cpa-tiers sweep gpt-6.1-sol | 5 | 200 | 100 / 0 | 10/10 | 20 / 20 / 20 | yes | 200 completed |
+| opus-effort | 4 | 80 | 40 / 0 | 4/6 | 20 / 20 / 20 | yes | 80 completed |
+| tournament 3 | 2 | 41 | 20 / 1 | 1/1 | 41 / 41 / 41 | yes | 41 completed, 5 partial (skipped), 14 unstarted |
+| tournament 4 | 37 | 288 | 144 / 0 | 144/666 | 2 / 2 / 2 | yes | 288 completed |
 
 Matches outside every cohort: 0.
 
