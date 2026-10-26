@@ -52,18 +52,18 @@ With `--doc` it rewrites the tables at the end of this page. The by-round tables
 
 ## Results
 
-This is a casual pass over the full run, with counts and means and no intervals. It covers the 110,880 agent decisions of the 2,181 finished matches in the database now with no DeepSeek seat (DeepSeek is left out as in [matchups.md](matchups.md)). Every one has a row, every row was searched, and none fell back. The 112,546 rows of the run also hold DeepSeek's matches and unfinished ones. A config is a model with its effort, pooled over the tournaments it played in. Regret is in percentage points of the round win chance, as above. Mean regret over all decisions is 2.5 points and the 90th percentile 6.8. 11% of the decisions are exact.
+This is a casual pass over the full run, with counts and means and no intervals. It covers the 125,150 agent decisions of the 2,471 finished matches in the database now with no DeepSeek seat (DeepSeek is left out as in [matchups.md](matchups.md)). Every one has a row, every row was searched, and none fell back. The 126,816 rows of the run also hold DeepSeek's matches and unfinished ones. A config is a model with its effort, pooled over the tournaments it played in. Regret is in percentage points of the round win chance, as above. Mean regret over all decisions is 2.5 points and the 90th percentile 6.8. 11% of the decisions are exact.
 
 1. **Regret and the ratings agree at the ends.**
-   - At medium effort the mean regret is Opus 1.1, Sol 1.4, Astra 1.4, Sonnet 2.0, Haiku 5.5 2.0, Terra 2.7, Luna 4.0 and Haiku 4.5 4.9 points.
+   - At medium effort the mean regret is Opus 1.1, Sol 1.4, Astra 1.4, Haiku 5.5 1.9, Sonnet 2.0, Terra 2.7, Luna 4.0 and Haiku 4.5 4.8 points.
    - The cross-model ratings in [matchups.md](matchups.md) put the same three on top (Astra first) and Luna and Haiku 4.5 at the bottom, in the other order. The five in between overlap in rating, and regret does not separate them further. Regret uses no match results, so it agrees from the other side.
 2. **More effort mostly lowers regret. Sol and Opus barely move.**
-   - Haiku 5.5 goes from 3.7 at off to 1.0 at max, Sonnet from 2.3 to 0.9, Luna from 4.0 to 2.2, Terra from 3.1 at low to 1.5 at max. Haiku 4.5 moves less, from 6.0 at off to 4.5 at high. The steps are not always in order: Luna is 4.0 at off and 4.3 at low. The 90th percentile falls with it: Haiku 5.5 10.1 to 3.2, Sonnet 7.2 to 2.7.
+   - Haiku 5.5 goes from 3.8 at off to 1.0 at max, Sonnet from 2.3 to 0.8, Luna from 4.0 to 2.2, Terra from 3.1 at low to 1.5 at max. Haiku 4.5 moves less, from 6.0 at off to 4.5 at high. The steps are not always in order: Luna is 4.0 at off and 4.4 at low. The 90th percentile falls with it: Haiku 5.5 10.4 to 3.2, Sonnet 7.3 to 2.6.
    - Sol (1.2 to 1.5) and Opus (1.0 to 1.2) change by 0.3 points or less. Sol is flat in the rating sweep too. Opus is not: its xhigh rating is far above its low, yet its regret moves by 0.2 points. Regret does not explain that gap.
 
 **Near reloads (for [#4](https://github.com/sakompella/buckshot/issues/4)).** Regret concentrates in shots with two or three shells left in the gun.
-- Those shots average 4.7 and 4.0 points, with a 90th percentile of 15.5 and 13.4. A shot with one shell left averages 1.9 and one with five left 2.1.
-- Item moves stay between 1.7 and 2.4 at every distance. In this cut they show no sign of a reload effect.
+- Those shots average 4.7 and 4.0 points, with a 90th percentile of 15.5 and 13.3. A shot with one shell left averages 1.8 and one with five left 2.1.
+- Item moves stay between 1.7 and 2.3 at every distance. In this cut they show no sign of a reload effect.
 - The node budget does not explain the rise. It stopped 6% and 28% of the searches with two and three shells left, against 0.1% at one shell left.
 - This shows where regret is, not why. A shot with two left ends the search at the reload one shot later, so the static leaf is a possible cause. Real mistakes on near-even shells are another. The table cannot tell them apart, which is what #4 measures. Sample shots at two and three shells left first.
 
@@ -79,67 +79,67 @@ This is a casual pass over the full run, with counts and means and no intervals.
 ## Tables
 
 <!-- tables:start -->
-110,880 searched decisions; 0 left out for having no search; 0 agent decisions with no row.
+125,150 searched decisions; 0 left out for having no search; 0 agent decisions with no row.
 
 ### Regret by config
 
 | model | effort | decisions | mean regret | 90th percentile | exact |
 |---|---|---|---|---|---|
-| claude-opus-5-5 | low | 468 | 1.2 | 4.0 | 9.2% |
-| claude-opus-5-5 | medium | 5,047 | 1.1 | 3.5 | 12.0% |
-| claude-opus-5-5 | high | 970 | 1.0 | 3.8 | 7.3% |
+| claude-opus-5-5 | low | 680 | 1.2 | 4.0 | 10.1% |
+| claude-opus-5-5 | medium | 6,074 | 1.1 | 3.5 | 12.2% |
+| claude-opus-5-5 | high | 1,198 | 1.1 | 3.9 | 8.8% |
 | claude-opus-5-5 | xhigh | 2,024 | 1.0 | 3.4 | 11.6% |
-| gpt-6.1-sol | low | 1,851 | 1.5 | 4.6 | 10.6% |
-| gpt-6.1-sol | medium | 5,401 | 1.4 | 4.3 | 12.2% |
-| gpt-6.1-sol | high | 1,951 | 1.3 | 4.5 | 11.5% |
-| gpt-6.1-sol | xhigh | 1,963 | 1.2 | 4.2 | 11.9% |
-| gpt-6.1-sol | max | 2,054 | 1.3 | 4.6 | 12.3% |
-| gpt-6-astra | medium | 4,492 | 1.4 | 4.0 | 12.4% |
-| claude-sonnet-5-5 | off | 2,415 | 2.3 | 7.2 | 11.4% |
-| claude-sonnet-5-5 | low | 2,338 | 2.2 | 6.6 | 11.2% |
-| claude-sonnet-5-5 | medium | 6,001 | 2.0 | 6.1 | 12.4% |
-| claude-sonnet-5-5 | high | 2,455 | 1.7 | 5.3 | 10.5% |
-| claude-sonnet-5-5 | xhigh | 2,439 | 1.0 | 3.5 | 12.1% |
-| claude-sonnet-5-5 | max | 2,568 | 0.9 | 2.7 | 15.4% |
-| claude-haiku-5-5 | off | 2,387 | 3.7 | 10.1 | 8.0% |
-| claude-haiku-5-5 | low | 2,513 | 2.2 | 6.1 | 9.1% |
-| claude-haiku-5-5 | medium | 6,058 | 2.0 | 5.4 | 11.7% |
-| claude-haiku-5-5 | high | 2,513 | 1.5 | 4.4 | 10.9% |
-| claude-haiku-5-5 | xhigh | 2,534 | 1.1 | 3.6 | 12.0% |
-| claude-haiku-5-5 | max | 2,573 | 1.0 | 3.2 | 12.4% |
-| gpt-5.6-terra | low | 1,852 | 3.1 | 10.0 | 9.6% |
-| gpt-5.6-terra | medium | 5,193 | 2.7 | 7.8 | 10.3% |
-| gpt-5.6-terra | high | 1,886 | 2.6 | 7.9 | 11.6% |
-| gpt-5.6-terra | xhigh | 2,030 | 2.1 | 6.1 | 10.4% |
-| gpt-5.6-terra | max | 2,170 | 1.5 | 4.2 | 10.0% |
-| gpt-6-luna | off | 2,888 | 4.0 | 11.8 | 7.4% |
-| gpt-6-luna | low | 2,920 | 4.3 | 13.0 | 8.7% |
-| gpt-6-luna | medium | 6,606 | 4.0 | 12.1 | 8.8% |
-| gpt-6-luna | high | 2,829 | 3.2 | 9.9 | 11.5% |
-| gpt-6-luna | xhigh | 2,792 | 2.5 | 6.9 | 13.5% |
-| gpt-6-luna | max | 2,936 | 2.2 | 6.4 | 12.7% |
-| claude-haiku-4-5-20251001 | off | 2,173 | 6.0 | 17.6 | 6.5% |
-| claude-haiku-4-5-20251001 | minimal | 2,080 | 4.7 | 13.8 | 6.6% |
-| claude-haiku-4-5-20251001 | low | 2,125 | 5.1 | 16.3 | 8.8% |
-| claude-haiku-4-5-20251001 | medium | 5,302 | 4.9 | 14.5 | 7.5% |
-| claude-haiku-4-5-20251001 | high | 2,083 | 4.5 | 12.5 | 8.4% |
-| all |  | 110,880 | 2.5 | 6.8 | 10.7% |
+| gpt-6-astra | medium | 5,393 | 1.4 | 3.9 | 13.1% |
+| gpt-6.1-sol | low | 2,085 | 1.5 | 4.6 | 11.4% |
+| gpt-6.1-sol | medium | 6,351 | 1.4 | 4.3 | 12.2% |
+| gpt-6.1-sol | high | 2,199 | 1.3 | 4.5 | 12.0% |
+| gpt-6.1-sol | xhigh | 2,195 | 1.2 | 4.2 | 12.4% |
+| gpt-6.1-sol | max | 2,309 | 1.4 | 4.6 | 12.9% |
+| claude-sonnet-5-5 | off | 2,659 | 2.3 | 7.3 | 11.4% |
+| claude-sonnet-5-5 | low | 2,614 | 2.2 | 6.6 | 11.4% |
+| claude-sonnet-5-5 | medium | 6,836 | 2.0 | 6.0 | 12.5% |
+| claude-sonnet-5-5 | high | 2,690 | 1.7 | 5.4 | 10.9% |
+| claude-sonnet-5-5 | xhigh | 2,668 | 1.0 | 3.6 | 12.3% |
+| claude-sonnet-5-5 | max | 2,801 | 0.8 | 2.6 | 15.5% |
+| claude-haiku-5-5 | off | 2,601 | 3.8 | 10.4 | 8.0% |
+| claude-haiku-5-5 | low | 2,771 | 2.3 | 6.2 | 9.7% |
+| claude-haiku-5-5 | medium | 6,957 | 1.9 | 5.3 | 11.6% |
+| claude-haiku-5-5 | high | 2,746 | 1.5 | 4.4 | 10.5% |
+| claude-haiku-5-5 | xhigh | 2,750 | 1.1 | 3.6 | 12.2% |
+| claude-haiku-5-5 | max | 2,811 | 1.0 | 3.2 | 12.9% |
+| gpt-5.6-terra | low | 2,111 | 3.1 | 9.7 | 9.9% |
+| gpt-5.6-terra | medium | 6,038 | 2.7 | 7.7 | 10.5% |
+| gpt-5.6-terra | high | 2,144 | 2.6 | 8.0 | 11.0% |
+| gpt-5.6-terra | xhigh | 2,334 | 2.0 | 5.9 | 10.6% |
+| gpt-5.6-terra | max | 2,489 | 1.5 | 4.3 | 9.8% |
+| gpt-6-luna | off | 3,162 | 4.0 | 11.8 | 7.1% |
+| gpt-6-luna | low | 3,183 | 4.4 | 13.2 | 8.9% |
+| gpt-6-luna | medium | 7,436 | 4.0 | 12.2 | 9.0% |
+| gpt-6-luna | high | 3,087 | 3.2 | 10.2 | 11.5% |
+| gpt-6-luna | xhigh | 3,084 | 2.5 | 7.0 | 13.5% |
+| gpt-6-luna | max | 3,195 | 2.2 | 6.3 | 12.3% |
+| claude-haiku-4-5-20251001 | off | 2,402 | 6.0 | 17.6 | 6.3% |
+| claude-haiku-4-5-20251001 | minimal | 2,334 | 4.6 | 13.6 | 6.6% |
+| claude-haiku-4-5-20251001 | low | 2,345 | 4.9 | 15.1 | 8.5% |
+| claude-haiku-4-5-20251001 | medium | 6,120 | 4.8 | 14.2 | 7.5% |
+| claude-haiku-4-5-20251001 | high | 2,274 | 4.5 | 12.3 | 8.2% |
+| all |  | 125,150 | 2.5 | 6.8 | 10.8% |
 
 ### Regret by shells left in the gun
 
 | shells left | stopped by budget | shots | mean | 90th percentile | item moves | mean | 90th percentile |
 |---|---|---|---|---|---|---|---|
-| 1 | 0.1% | 11,831 | 1.9 | 4.0 | 5,312 | 2.0 | 6.7 |
-| 2 | 6.2% | 11,525 | 4.7 | 15.5 | 9,516 | 1.7 | 5.6 |
-| 3 | 27.9% | 11,192 | 4.0 | 13.4 | 13,414 | 1.7 | 5.3 |
-| 4 | 56.6% | 8,795 | 2.7 | 8.2 | 12,354 | 1.8 | 5.4 |
-| 5 | 85.5% | 6,073 | 2.1 | 7.0 | 10,374 | 2.0 | 5.1 |
-| 6 | 96.6% | 3,469 | 1.9 | 5.7 | 7,025 | 2.4 | 4.5 |
+| 1 | 0.1% | 13,361 | 1.8 | 3.6 | 5,923 | 1.9 | 6.7 |
+| 2 | 6.1% | 13,018 | 4.7 | 15.5 | 10,767 | 1.7 | 5.5 |
+| 3 | 27.8% | 12,592 | 4.0 | 13.3 | 15,190 | 1.7 | 5.2 |
+| 4 | 56.6% | 9,969 | 2.7 | 8.2 | 13,997 | 1.8 | 5.4 |
+| 5 | 85.1% | 6,868 | 2.1 | 7.2 | 11,602 | 2.0 | 5.2 |
+| 6 | 96.6% | 3,928 | 1.8 | 5.4 | 7,935 | 2.3 | 4.5 |
 <!-- tables:end -->
 
 ## By round
 
-Does a model play the short early rounds differently from the later, item-heavy ones? This is a casual pass for [#14](https://github.com/sakompella/buckshot/issues/14), with counts in brackets and no intervals. It covers the 2,471 finished matches with no DeepSeek seat. That is more than the 110,880-decision cut above, because it adds the 288 matches of the cross-samples tournament. Round winners come from the public lines of the match events, as the viewer reads them; the last round's winner is inferred from final cash when its line is missing. Rounds are numbered from 1. A win rate is the share of its rounds a config won, against whoever it met, so it also reflects the opponents' strength.
+Does a model play the short early rounds differently from the later, item-heavy ones? This is a casual pass for [#14](https://github.com/sakompella/buckshot/issues/14), with counts in brackets and no intervals. It covers the same 2,471 finished matches with no DeepSeek seat. Round winners come from the public lines of the match events, as the viewer reads them; the last round's winner is inferred from final cash when its line is missing. Rounds are numbered from 1. A win rate is the share of its rounds a config won, against whoever it met, so it also reflects the opponents' strength.
 
 1. **No config wins one round number more than another.**
    - Pooled over efforts, a model's win rate moves by 4 points or less between rounds for six of the eight models. Astra goes from 58.4% to 62.6% over 219 rounds, and Haiku 4.5 from 46.8% to 42.9% and back to 44.5% over 616.
