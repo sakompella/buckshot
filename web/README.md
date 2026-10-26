@@ -311,14 +311,11 @@ analysis once.
 
     bun scripts/arena-viewer-check.ts <url> [outdir]   # headless Chrome at desktop, phone and tablet widths: hovers, taps, jumps, the ranking toggle, fixed axes and screenshots
 
-The shared copy runs on hp-server at http://100.108.62.24:8790/, from the main
-checkout's `web/`. Its PID is in `_work/arena/viewer.pid` and its log in
-`_work/arena/viewer.log`. To restart it after a merge, from the repository root:
+The shared copy runs on hp-server as the user service `buckshot-viewer` (unit file in `~/.config/systemd/user/`), bound to 127.0.0.1:8790 from the main checkout's `web/`, with its log in `_work/arena/viewer.log`. `tailscale serve --bg --https=8443 http://127.0.0.1:8790` makes it reachable on the tailnet only, at https://hp-server.dog-minnow.ts.net:8443/. To restart it after a merge:
 
-    kill "$(cat _work/arena/viewer.pid)"
-    cd web && setsid -f sh -c 'echo $$ > ../_work/arena/viewer.pid; set -a; . ../_work/arena/viewer.env; set +a; exec bun scripts/arena-viewer.ts ../_work/arena/analysis/buckshot.sqlite 100.108.62.24 8790 --regret ../_work/arena/analysis/derived/regret.sqlite > ../_work/arena/viewer.log 2>&1' < /dev/null
+    XDG_RUNTIME_DIR=/run/user/$(id -u) systemctl --user restart buckshot-viewer
 
-With `ARENA_VIEWER_PASSWORD` set (the shared copy keeps it in the gitignored `_work/arena/viewer.env`), the API asks for that password through the browser's sign-in prompt; leave the username empty. Without it the viewer is open. With `ARENA_VIEWER_DOWNLOAD` set to a database file, the nav links to it as a download behind the same password; the shared copy serves `_work/arena/analysis/buckshot.public.sqlite`, a copy with every email and account id redacted, built with `python3 tools/arena/redact_database.py <db> <out>` (rebuild it after every database swap).
+With `ARENA_VIEWER_PASSWORD` set, the API asks for that password through the browser's sign-in prompt (leave the username empty); without it the viewer is open, as the shared copy is. With `ARENA_VIEWER_DOWNLOAD` set to a database file, the nav links to it as a download; the shared copy serves `_work/arena/analysis/buckshot.public.sqlite`, a copy with every email and account id redacted, built with `python3 tools/arena/redact_database.py <db> <out>` (rebuild it after every database swap).
 
 ## Layout
 
