@@ -90,11 +90,6 @@ export class ShellTracker {
     if (isShot) this.sawed = false;
   }
 
-  /** Whether the chambered shell is the load's last, so shooting it ends the load whoever it hits. */
-  isLastShell(): boolean {
-    return this.total - this.cursor === 1;
-  }
-
   /** The chambered shell, or null when the load is spent. */
   chamber(): Chamber | null {
     if (this.cursor >= this.total) return null;
@@ -118,6 +113,31 @@ export class ShellTracker {
     return { known: null, by: null, pLive };
   }
 }
+
+/**
+ * The shot and glass patterns a move had the chance to show, given the chamber as the player knows it: each pattern,
+ * whether it was available, and whether the move took it. A blank shot at oneself keeps the turn, across a reload too.
+ */
+export const chamberPatterns = (chamber: Chamber, isSawed: boolean, legal: ReadonlySet<string>, label: string): ReadonlyArray<readonly [Pattern, boolean, boolean]> => {
+  const canSelf = legal.has("Shoot yourself");
+  const canOpp = [...legal].some((move) => move.startsWith("Shoot Player "));
+  const isSelf = label === "Shoot yourself";
+  const isOpp = label.startsWith("Shoot Player ");
+  const byItem = chamber.by === "glass" || chamber.by === "phone";
+
+  return [
+    ["knownBlankOpp", byItem && chamber.known === "blank" && canOpp, isOpp],
+    ["glassBlankOpp", chamber.by === "glass" && chamber.known === "blank" && canOpp, isOpp],
+    ["knownLiveSelf", byItem && chamber.known === "live" && canSelf, isSelf],
+    ["countLiveSelf", chamber.by === "count" && chamber.known === "live" && canSelf, isSelf],
+    ["countBlankOpp", chamber.by === "count" && chamber.known === "blank" && canOpp, isOpp],
+    ["sawSelf", isSawed && chamber.known !== "blank" && canSelf, isSelf],
+    ["oddsLiveSelf", chamber.known === null && chamber.pLive > 0.5 && canSelf, isSelf],
+    ["oddsBlankOpp", chamber.known === null && chamber.pLive < 0.5 && canOpp, isOpp],
+    ["tieSelf", chamber.known === null && chamber.pLive === 0.5 && canSelf, isSelf],
+    ["glassKnown", chamber.known !== null && legal.has("Use magnifying glass"), label === "Use magnifying glass"],
+  ];
+};
 
 const sumOf = (values: ReadonlyArray<number>): number => values.reduce((total, value) => total + value, 0);
 
@@ -376,8 +396,6 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
     moveNo++;
     const legal = new Set(decodeLegal(row.legal ?? "[]").map(({ label }) => label));
     const legalLabels = [...legal];
-    const canSelf = legal.has("Shoot yourself");
-    const canOpp = legalLabels.some((label) => label.startsWith("Shoot Player "));
     const isSelf = row.label === "Shoot yourself";
     const isOpp = row.label.startsWith("Shoot Player ");
     const chamber = tracker.chamber();
@@ -392,22 +410,7 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
       if (isChosen) taken |= patternBit(pattern);
     };
 
-    if (chamber) {
-      const byItem = chamber.by === "glass" || chamber.by === "phone";
-      // The regret search rates shooting the opponent with a load's last blank close to best, unlike an earlier blank.
-      const isFreeBlank = chamber.known === "blank" && canOpp && !tracker.isLastShell();
-
-      flag("knownBlankOpp", byItem && isFreeBlank, isOpp);
-      flag("glassBlankOpp", chamber.by === "glass" && isFreeBlank, isOpp);
-      flag("knownLiveSelf", byItem && chamber.known === "live" && canSelf, isSelf);
-      flag("countLiveSelf", chamber.by === "count" && chamber.known === "live" && canSelf, isSelf);
-      flag("countBlankOpp", chamber.by === "count" && isFreeBlank, isOpp);
-      flag("sawSelf", tracker.sawed && chamber.known !== "blank" && canSelf, isSelf);
-      flag("oddsLiveSelf", chamber.known === null && chamber.pLive > 0.5 && canSelf, isSelf);
-      flag("oddsBlankOpp", chamber.known === null && chamber.pLive < 0.5 && canOpp, isOpp);
-      flag("tieSelf", chamber.known === null && chamber.pLive === 0.5 && canSelf, isSelf);
-      flag("glassKnown", chamber.known !== null && legal.has("Use magnifying glass"), row.label === "Use magnifying glass");
-    }
+    if (chamber) for (const [pattern, isAvailable, isChosen] of chamberPatterns(chamber, tracker.sawed, legal, row.label)) flag(pattern, isAvailable, isChosen);
 
     // Inverting a known live shell, then shooting the opponent with the now blank shell: checked at the next shot.
     if (pendingInvert && (pendingInvert.load !== tracker.loadNo || pendingInvert.cursor !== tracker.cursor || tracker.inversions !== pendingInvert.inversions + 1)) pendingInvert = null;

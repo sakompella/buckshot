@@ -1,9 +1,10 @@
 import { expect, test } from "bun:test";
 
-import { roundStory, ShellTracker } from "../src/arena-viewer/analysis.ts";
+import { chamberPatterns, roundStory, ShellTracker } from "../src/arena-viewer/analysis.ts";
 import type { Seat } from "../src/arena-viewer/api.ts";
 import { type BlockTally, blockRate, colorOf, groupBy, modelStats, quantile, rankOrder, regretStats, rng, withCohorts } from "../src/arena-viewer/page/data.ts";
 import { bradleyTerry, type Game, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
+import { AXES } from "../src/arena-viewer/page/scatter.ts";
 
 const randomGames = (seed: number): ReadonlyArray<Game> => {
   const random = rng(seed);
@@ -165,17 +166,17 @@ test("the shell tracker knows the chamber from a glass, a phone and the count", 
   expect(tracker.checks).toEqual({ ok: 3, bad: 0 });
 });
 
-test("the shell tracker knows when the chambered shell is the load's last", () => {
+test("shooting the opponent with a known blank is flagged on a load's last shell too, since a blank at oneself keeps the turn", () => {
   const tracker = new ShellTracker();
 
   tracker.event("The shotgun is loaded: 1 live, 1 blank.");
-  expect(tracker.isLastShell()).toBe(false);
+  tracker.event("Player A shot Player B: live.");
+  tracker.event("The chambered shell is blank.");
 
-  tracker.event("Player A racked out a live shell.");
-  expect(tracker.isLastShell()).toBe(true);
+  const chamber = tracker.chamber();
+  const patterns = chamber === null ? [] : chamberPatterns(chamber, false, new Set(["Shoot yourself", "Shoot Player B"]), "Shoot Player B");
 
-  tracker.event("The shotgun is loaded: 2 live, 2 blank.");
-  expect(tracker.isLastShell()).toBe(false);
+  expect(patterns.filter(([, isAvailable, isChosen]) => isAvailable && isChosen).map(([pattern]) => pattern)).toEqual(["knownBlankOpp", "glassBlankOpp"]);
 });
 
 test("the round story infers the last round's winner from final cash", () => {
@@ -437,6 +438,14 @@ const playedRoundSeats = (seed: number, rounds: number, winnerRounds: number, is
 
   return withCohorts(seats);
 };
+
+test("the scatter's regret axis places a config with no searched move nowhere and a measured zero at zero", () => {
+  const [unsearched, flawless, flawed] = modelStats(
+    [null, { moves: 4, total: 0, exact: 4 }, { moves: 2, total: 3, exact: 0 }].map((regret, index) => ({ ...SEAT, matchId: `m${index}`, effort: `e${index}`, cohort: "", potShare: null, regret })),
+  );
+
+  expect([unsearched, flawless, flawed].map((config) => (config === undefined ? undefined : AXES.regret.valueOf(config)))).toEqual([null, 0, 1.5]);
+});
 
 test("when every match is a single round, rounds ratings equal win ratings", () => {
   for (let seed = 1; seed <= 5; seed++) {

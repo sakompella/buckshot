@@ -19,7 +19,8 @@ interface Axis {
   readonly label: string;
   readonly axisLabel: string;
   readonly isLog: boolean;
-  readonly valueOf: (m: ModelStats) => number;
+  /** A config's place on the axis, or null with nothing to place: no cost, tokens or moves, or no searched move. */
+  readonly valueOf: (m: ModelStats) => number | null;
   /** The crosshair's reading. */
   readonly format: (value: number) => string;
   readonly tick: (value: number) => string;
@@ -27,13 +28,15 @@ interface Axis {
   readonly perMatch: (value: number) => string;
 }
 
+const positive = (value: number): number | null => (value > 0 ? value : null);
+
 // Output tokens include reasoning tokens, as the providers report them.
-const AXES: Readonly<Record<ScatterAxis, Axis>> = {
+export const AXES: Readonly<Record<ScatterAxis, Axis>> = {
   cost: {
     label: "Cost",
     axisLabel: "Avg cost per player per match (log)",
     isLog: true,
-    valueOf: (m) => m.avgCost,
+    valueOf: (m) => positive(m.avgCost),
     format: fmtUsd,
     tick: (value) => `$${value}`,
     perMatch: (value) => `${fmtUsd(value)} per match`,
@@ -42,7 +45,7 @@ const AXES: Readonly<Record<ScatterAxis, Axis>> = {
     label: "Moves",
     axisLabel: "Avg model moves per player per match",
     isLog: false,
-    valueOf: (m) => m.avgMoves,
+    valueOf: (m) => positive(m.avgMoves),
     format: (value) => value.toFixed(1),
     tick: String,
     perMatch: (value) => `${value.toFixed(1)} moves per match`,
@@ -51,7 +54,7 @@ const AXES: Readonly<Record<ScatterAxis, Axis>> = {
     label: "Tokens",
     axisLabel: "Avg output tokens per player per match (log)",
     isLog: true,
-    valueOf: (m) => m.avgOut,
+    valueOf: (m) => positive(m.avgOut),
     format: fmtCount,
     tick: (value) => (value >= 1e6 ? `${value / 1e6}M` : value >= 1e3 ? `${value / 1e3}k` : String(value)),
     perMatch: (value) => `${fmtCount(value)} output tokens per match`,
@@ -60,7 +63,7 @@ const AXES: Readonly<Record<ScatterAxis, Axis>> = {
     label: "Regret",
     axisLabel: "Mean regret per move (points of round win chance)",
     isLog: false,
-    valueOf: (m) => m.regret?.mean ?? 0,
+    valueOf: (m) => m.regret?.mean ?? null,
     format: (value) => value.toFixed(2),
     tick: String,
     perMatch: (value) => `${value.toFixed(2)} points of regret per move`,
@@ -114,7 +117,7 @@ const pointsOf = memoLast(
         const rank = ranks.get(m.key);
         const x = AXES[axis].valueOf(m);
 
-        return rating !== undefined && rank !== undefined && x > 0 && m.scored.length > 0 ? [{ m, x, rating, rank }] : [];
+        return rating !== undefined && rank !== undefined && x !== null && m.scored.length > 0 ? [{ m, x, rating, rank }] : [];
       });
 
     return { cost: on("cost"), moves: on("moves"), tokens: on("tokens"), regret: on("regret") };
@@ -150,7 +153,15 @@ interface Domain {
 const domainOf = memoLast((every: ReadonlyArray<ModelStats>, ratings: ReadonlyMap<string, Rating>): Domain => {
   const rated = every.filter((m) => m.scored.length > 0 && ratings.has(m.key));
   const extent = (values: ReadonlyArray<number>): readonly [number, number] => [Math.min(...values), Math.max(...values)];
-  const xOf = (axis: ScatterAxis) => extent(rated.flatMap((m) => (AXES[axis].valueOf(m) > 0 ? [AXES[axis].valueOf(m)] : [])));
+
+  const xOf = (axis: ScatterAxis) =>
+    extent(
+      rated.flatMap((m) => {
+        const value = AXES[axis].valueOf(m);
+
+        return value === null ? [] : [value];
+      }),
+    );
 
   return { x: { cost: xOf("cost"), moves: xOf("moves"), tokens: xOf("tokens"), regret: xOf("regret") }, elo: extent(rated.map((m) => ratings.get(m.key)?.rating ?? 0)) };
 });
