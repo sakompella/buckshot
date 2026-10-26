@@ -38,6 +38,7 @@ class Decision:
     regret: int
     exact: bool
     limited: bool
+    round: int  # from 1
 
 
 @dataclass(frozen=True)
@@ -75,7 +76,7 @@ def load(regret_path: Path, knowledge_path: Path, depth: int, budget: int) -> Lo
     db.row_factory = sqlite3.Row
     db.execute("ATTACH DATABASE ? AS k", (f"file:{knowledge_path}?mode=ro",))
     rows = db.execute(
-        """SELECT p.model, p.effort, d.remaining, d.choice, r.status, r.regret, r.exact, r.limited, r.evaluator
+        """SELECT p.model, p.effort, d.round + 1 AS round, d.remaining, d.choice, r.status, r.regret, r.exact, r.limited, r.evaluator
            FROM regret r
            JOIN k.matches m ON m.match_id = r.match_id AND m.status = 'completed'
            JOIN k.decisions d ON d.match_id = r.match_id AND d.ordinal = r.ordinal AND d.by_whom = 'agent'
@@ -93,7 +94,7 @@ def load(regret_path: Path, knowledge_path: Path, depth: int, budget: int) -> Lo
     ).fetchone()[0]
     searched = [row for row in rows if row["status"] == "searched"]
     return Loaded(
-        [Decision(r["model"], r["effort"], r["remaining"], r["choice"].startswith("Shoot"), r["regret"], bool(r["exact"]), bool(r["limited"])) for r in searched],
+        [Decision(r["model"], r["effort"], r["remaining"], r["choice"].startswith("Shoot"), r["regret"], bool(r["exact"]), bool(r["limited"]), r["round"]) for r in searched],
         len(rows) - len(searched),
         unscored,
     )

@@ -238,6 +238,8 @@ const cohortName = (seats: ReadonlyArray<Seat>): string => {
 
   if (configs.length > 2 && efforts.length === 1) return crossModelCohort(efforts[0] ?? "");
 
+  if (configs.length > 2) return "Efforts vs other models";
+
   return configs
     .toSorted(([, left], [, right]) => Number(left === DEFAULT_EFFORT) - Number(right === DEFAULT_EFFORT))
     .map(([model, effort]) => (effort === DEFAULT_EFFORT ? shortName(model) : `${shortName(model)} ${effort}`))

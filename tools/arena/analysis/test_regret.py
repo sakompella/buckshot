@@ -14,11 +14,11 @@ def databases(directory: Path, players, decisions, scores, matches=None):
     knowledge.executescript(
         """CREATE TABLE matches (match_id TEXT, status TEXT);
            CREATE TABLE players (match_id TEXT, player TEXT, model TEXT, effort TEXT);
-           CREATE TABLE decisions (match_id TEXT, ordinal INTEGER, player TEXT, by_whom TEXT, choice TEXT, remaining INTEGER)"""
+           CREATE TABLE decisions (match_id TEXT, ordinal INTEGER, player TEXT, by_whom TEXT, choice TEXT, remaining INTEGER, round INTEGER)"""
     )
     knowledge.executemany("INSERT INTO matches VALUES (?, ?)", matches or [("m1", "completed")])
     knowledge.executemany("INSERT INTO players VALUES (?, ?, ?, ?)", players)
-    knowledge.executemany("INSERT INTO decisions VALUES (?, ?, ?, ?, ?, ?)", decisions)
+    knowledge.executemany("INSERT INTO decisions VALUES (?, ?, ?, ?, ?, ?, ?)", decisions)
     knowledge.commit()
     scored = sqlite3.connect(directory / "regret.sqlite")
     scored.execute(
@@ -49,19 +49,19 @@ class Load(unittest.TestCase):
     def test_keeps_agent_decisions_of_completed_matches_with_their_config(self):
         loaded = self.load(
             players=[("m1", "A", "opus", "high"), ("m1", "B", "sol", "low")],
-            decisions=[("m1", 0, "A", "agent", "Shoot player +1", 3), ("m1", 1, "B", "agent", "Use beer", 1)],
+            decisions=[("m1", 0, "A", "agent", "Shoot player +1", 3, 0), ("m1", 1, "B", "agent", "Use beer", 1, 1)],
             scores=[score("m1", 0, 250000, exact=1), score("m1", 1, 0, limited=1)],
         )
         self.assertEqual(
             loaded.decisions,
-            [regret.Decision("opus", "high", 3, True, 250000, True, False), regret.Decision("sol", "low", 1, False, 0, False, True)],
+            [regret.Decision("opus", "high", 3, True, 250000, True, False, 1), regret.Decision("sol", "low", 1, False, 0, False, True, 2)],
         )
         self.assertEqual((loaded.unsearched, loaded.unscored), (0, 0))
 
     def test_leaves_out_deepseek_matches_forced_moves_and_unfinished_matches(self):
         loaded = self.load(
             players=[("m1", "A", "opus", "high"), ("m1", "B", "deepseek-v4", "medium"), ("m2", "A", "opus", "high"), ("m3", "A", "opus", "high")],
-            decisions=[("m1", 0, "A", "agent", "Use beer", 2), ("m2", 0, "A", "forced", "Grab an item", 2), ("m3", 0, "A", "agent", "Use beer", 2)],
+            decisions=[("m1", 0, "A", "agent", "Use beer", 2, 1), ("m2", 0, "A", "forced", "Grab an item", 2, 1), ("m3", 0, "A", "agent", "Use beer", 2, 1)],
             scores=[score("m1", 0, 5), score("m2", 0, 0), score("m3", 0, 5)],
             matches=[("m1", "completed"), ("m2", "completed"), ("m3", "partial")],
         )
@@ -70,7 +70,7 @@ class Load(unittest.TestCase):
     def test_counts_unsearched_and_unscored_decisions_apart_instead_of_as_zero_regret(self):
         loaded = self.load(
             players=[("m1", "A", "opus", "high")],
-            decisions=[("m1", 0, "A", "agent", "Use beer", 2), ("m1", 1, "A", "agent", "Use beer", 2), ("m1", 2, "A", "agent", "Use beer", 2)],
+            decisions=[("m1", 0, "A", "agent", "Use beer", 2, 1), ("m1", 1, "A", "agent", "Use beer", 2, 1), ("m1", 2, "A", "agent", "Use beer", 2, 1)],
             scores=[score("m1", 0, None, status="fallback"), score("m1", 1, 100)],
         )
         self.assertEqual([d.regret for d in loaded.decisions], [100])
@@ -80,14 +80,14 @@ class Load(unittest.TestCase):
         with self.assertRaises(SystemExit):
             self.load(
                 players=[("m1", "A", "opus", "high")],
-                decisions=[("m1", 0, "A", "agent", "Use beer", 2), ("m1", 1, "A", "agent", "Use beer", 2)],
+                decisions=[("m1", 0, "A", "agent", "Use beer", 2, 1), ("m1", 1, "A", "agent", "Use beer", 2, 1)],
                 scores=[score("m1", 0, 1, evaluator="old"), score("m1", 1, 1, evaluator="new")],
             )
 
 
 class Summary(unittest.TestCase):
     def test_mean_tail_and_exact_share(self):
-        rows = [regret.Decision("m", "e", 1, True, value, exact, False) for value, exact in [(0, True), (0, False), (0, False), (0, False), (100000, False)]]
+        rows = [regret.Decision("m", "e", 1, True, value, exact, False, 1) for value, exact in [(0, True), (0, False), (0, False), (0, False), (100000, False)]]
         summary = regret.summarise(rows)
         self.assertEqual((summary.count, summary.exact), (5, 0.2))
         self.assertAlmostEqual(summary.mean, 20000)
