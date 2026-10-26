@@ -223,9 +223,27 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
   .lbt .axis span:nth-child(even) { display: none; }
 }
 
-@media (min-width: 640px) and (max-width: 1024px) {
-  table.matchrows .tour { display: none; }
-  table.matchrows td.when { white-space: nowrap; }
+@media (max-width: 1024px) {
+  /* wide tables become compact rows: the first cell is the title, the rest wrap below it with their labels */
+  table.rows, table.rows tbody { display: block; }
+  table.rows thead, table.rows tfoot { display: none; }
+  table.rows tr { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 14px; padding: 10px 2px; border-bottom: 1px solid #161616; }
+  table.rows td { display: block; padding: 0; border: 0; text-align: left; white-space: nowrap; font-size: 12.5px; }
+  table.rows td:first-child { flex: 1 0 100%; font-size: 14px; white-space: normal; }
+  table.rows td[data-label]::before { content: attr(data-label) " "; color: var(--mut); font-size: 11.5px; }
+  table.rows td br { display: none; }
+  table.rows td .pm { margin-left: 3px; }
+  table.rows tr.row:hover td { background: none; }
+  table.rows tr.group { padding-top: 18px; border-bottom-color: var(--line); }
+  table.rows tr.drill { display: block; padding: 0; }
+  table.rows tr.drill td { display: block; }
+  table.lbt.rows td:first-child { flex: 1 1 auto; }
+  table.lbt.rows td.barcol { order: 1; flex: 1 0 100%; width: auto; padding: 4px 0; }
+  table.lbt.rows td[data-label] { order: 2; }
+  .track { min-width: 0; }
+  table.matchrows td:first-child { flex: 0 0 auto; font-size: 12.5px; color: var(--mut); }
+  table.matchrows td.seat { order: -2; flex: 1 0 100%; font-size: 13.5px; }
+  table.matchrows td.res { order: -1; font-weight: 500; }
 }
 
 /* phone, DeepSWE's sm breakpoint */
@@ -256,26 +274,6 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
   table.heat th { max-width: 64px; font-size: 10.5px; }
   table.heat td.cellv { min-width: 48px; }
 
-  /* wide tables become compact rows: the first cell is the title, the rest wrap below it with their labels */
-  table.rows, table.rows tbody { display: block; }
-  table.rows thead, table.rows tfoot { display: none; }
-  table.rows tr { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 14px; padding: 10px 2px; border-bottom: 1px solid #161616; }
-  table.rows td { display: block; padding: 0; border: 0; text-align: left; white-space: nowrap; font-size: 12.5px; }
-  table.rows td:first-child { flex: 1 0 100%; font-size: 14px; white-space: normal; }
-  table.rows td[data-label]::before { content: attr(data-label) " "; color: var(--mut); font-size: 11.5px; }
-  table.rows td br { display: none; }
-  table.rows td .pm { margin-left: 3px; }
-  table.rows tr.row:hover td { background: none; }
-  table.rows tr.group { padding-top: 18px; border-bottom-color: var(--line); }
-  table.rows tr.drill { display: block; padding: 0; }
-  table.rows tr.drill td { display: block; }
-  table.lbt.rows td:first-child { flex: 1 1 auto; }
-  table.lbt.rows td.barcol { order: 1; flex: 1 0 100%; width: auto; padding: 4px 0; }
-  table.lbt.rows td[data-label] { order: 2; }
-  .track { min-width: 0; }
-  table.matchrows td:first-child { flex: 0 0 auto; font-size: 12.5px; color: var(--mut); }
-  table.matchrows td.seat { order: -2; flex: 1 0 100%; font-size: 13.5px; }
-  table.matchrows td.res { order: -1; font-weight: 500; }
   .opp { grid-template-columns: 1fr auto; gap: 4px 10px; padding: 6px 0; }
   .opp .sq { grid-column: 1 / -1; }
   .flagged { max-height: none; }

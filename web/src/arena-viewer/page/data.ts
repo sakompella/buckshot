@@ -29,7 +29,7 @@ interface Base {
 
 // Every Claude model is orange and every GPT model blue (sRGB HSL hue 18-36 for Claude, 196-218 for GPT). Within a
 // family the strongest model by the merged cross-model Bradley-Terry order (docs/arena/analysis/matchups.md) is
-// brightest and most saturated, and each step down is clearly darker (contrast on black about 14, 9, 5 and 4.5 to 1, so the darkest still reads as small text):
+// brightest and most saturated, and each step down is clearly darker (contrast on black about 14, 9, 6 and 4.6 to 1, so the darkest still reads as small text):
 // GPT Astra, Sol, Terra, Luna; Claude Opus, Haiku 5.5, Sonnet, Haiku 4.5. Every effort of a model has its colour.
 const BASES: ReadonlyArray<Base> = [
   { id: "claude-opus-5-5", name: "Opus 5.5", short: "Opus", tone: [0.868, 0.115, 75.8] },
@@ -38,8 +38,8 @@ const BASES: ReadonlyArray<Base> = [
   { id: "claude-haiku-4-5", name: "Haiku 4.5", short: "Haiku 4.5", tone: [0.59, 0.14, 50] },
   { id: "gpt-6-astra", name: "GPT-6 Astra", short: "Astra", tone: [0.89, 0.073, 224.2] },
   { id: "gpt-6.1-sol", name: "GPT-6.1 Sol", short: "Sol", tone: [0.741, 0.131, 240.2] },
-  { id: "gpt-5.6-terra", name: "GPT-5.6 Terra", short: "Terra", tone: [0.594, 0.179, 257.7] },
-  { id: "gpt-6-luna", name: "GPT-6 Luna", short: "Luna", tone: [0.554, 0.124, 250] },
+  { id: "gpt-5.6-terra", name: "GPT-5.6 Terra", short: "Terra", tone: [0.638, 0.144, 250] },
+  { id: "gpt-6-luna", name: "GPT-6 Luna", short: "Luna", tone: [0.563, 0.128, 250] },
 ];
 
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));

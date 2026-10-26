@@ -422,7 +422,7 @@ const heatmapView = (h: H, derived: Derived, heat: Model["heat"], ranking: Ranki
                           [
                             h.Id(anchorId("cell", row.key, col.id)),
                             h.Class(`cellv ${Option.isSome(cell.maybeClick) ? "click" : ""} ${cell.isRinged ? "ring" : ""}`),
-                            h.Style(cell.isFaint ? { background: `color-mix(in srgb, ${shade.background} 45%, #000)`, color: "#c8c8c8" } : shade),
+                            h.Style(cell.isFaint ? { background: `color-mix(in srgb, ${shade.background} 45%, #000)`, color: "#fff" } : shade),
                             h.OnMouseEnter(Message.HoveredCell({ row: row.key, col: col.id })),
                             h.OnMouseLeave(Message.LeftCell()),
                             ...Option.match(cell.maybeClick, { onNone: () => [], onSome: (message) => pressable(h, message) }),

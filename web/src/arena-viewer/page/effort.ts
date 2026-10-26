@@ -66,7 +66,7 @@ export const effortView = (h: H, stats: ReadonlyArray<ModelStats>, ratings: Read
   const every = [...ratings.values()];
   const low = Math.floor(Math.min(...every.map(({ lo }) => lo)) / 100) * 100;
   const high = Math.ceil(Math.max(...every.map(({ hi }) => hi)) / 100) * 100;
-  const right = isNarrow ? 64 : 110;
+  const right = isNarrow ? 78 : 110;
   const height = isNarrow ? 300 : 360;
   const x = linScale(0, Math.max(1, efforts.length - 1), L, width - right, []);
   const ticks = Array.from({ length: Math.floor((high - low) / 100) + 1 }, (_, index) => low + index * 100);
