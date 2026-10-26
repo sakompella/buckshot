@@ -9,10 +9,12 @@ type Level is Data:
   Level{depth: Nat, budget: Nat, gap: U32, seed: U32}
 
 # How a leaf at a reload is valued: by the static evaluation before the draw,
-# or by that evaluation's expectation over every distinct deal (deal.bend).
+# by that evaluation's expectation over every distinct deal, or by its mean
+# over `count` deals drawn at random (deal.bend).
 type Reload is Data:
   Static{}
   ExpectedDeal{}
+  Sampled{count: Nat}
 
 type Line is Data:
   Line{index: Nat, move: T.Move, score: U32, pv: List<&2, T.Move>}

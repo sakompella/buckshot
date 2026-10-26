@@ -30,6 +30,7 @@ const timed = (name, f) => (...args) => { const t = performance.now(); try { ret
 
 const position = (cfg, board, log, me) => ({ $: 'types.Position', config: cfg, board, log: list(log), me: seat(me) });
 const STATIC = { $: 'types.Static' }, EXPECTED_DEAL = { $: 'types.ExpectedDeal' };
+const sampled = count => ({ $: 'types.Sampled', count: BigInt(count) });
 const analyse = (pos, depth, budget, reload = STATIC) => P.analyse(pos, BigInt(depth), BigInt(budget), reload);
 const lines = analysis => array(analysis.lines);
 const menu = request => [request.moves.head, ...array(request.moves.tail)];
@@ -296,15 +297,23 @@ const gunOf = state => array(state.world.gun);
 const allAlike = shells => shells.length > 0 && shells.every(s => kind(s) === kind(shells[0]));
 const worlds = weighted => list(weighted.map(([state, weight]) => ({ $: 'types.World', state, weight })));
 const expectedDeal = (publicWorlds, privateWorlds, me) => P['deal.expected'](worlds(publicWorlds), worlds(privateWorlds), seat(me));
+const sampledDeal = (publicWorlds, privateWorlds, me, count) => P['deal.sampled'](worlds(publicWorlds), worlds(privateWorlds), seat(me), BigInt(count));
+const SAMPLES = 400;
 
-// Plays every draw sequence from `state` to the next choice, with no merging,
-// and averages the static value over them.
-function plainDeal(state, me, p = 1) {
+// Plays every draw sequence from `state` to the next choice, with no merging:
+// each deal's probability and static value.
+function plainDeals(state, me, p = 1) {
   const request = S('request')(state);
-  if (kind(request) !== 'Draw') return p * E('state')(state, seat(me), allAlike(gunOf(state)));
+  if (kind(request) !== 'Draw') return [[p, E('state')(state, seat(me), allAlike(gunOf(state)))]];
   const values = Number(request.range.extra) + 2;
-  return sum(Array.from({ length: values }, (_, k) => plainDeal(S('answer')(state, BigInt(k)).state, me, p / values)));
+  return Array.from({ length: values }, (_, k) => plainDeals(S('answer')(state, BigInt(k)).state, me, p / values)).flat();
 }
+
+const plainDeal = (state, me) => sum(plainDeals(state, me).map(([p, value]) => p * value));
+const variance = (state, me) => {
+  const mean = plainDeal(state, me);
+  return sum(plainDeals(state, me).map(([p, value]) => p * (value - mean) ** 2));
+};
 
 // Two seats, a fixed load of one live and one blank, and one item each from
 // saw and beer. A shot on the last shell reloads: the four ways of dealing
@@ -359,7 +368,14 @@ function checkMergedDeal() {
           const mixed = 0.25 * plainDeal(previous, me) + 0.75 * plain;
           const both = expectedDeal([[state, 1]], [[previous, 0.25], [state, 0.75]], me);
           assert.ok(Math.abs(both.public - plain) < 1e-3 * plain && Math.abs(both.private - mixed) < 1e-3 * mixed, `private ${both.private} vs plain ${mixed}`);
+          const drawnBoth = sampledDeal([[state, 1]], [[previous, 0.25], [state, 0.75]], me, SAMPLES);
+          const mixedSpread = Math.sqrt(0.25 ** 2 * variance(previous, me) + 0.75 ** 2 * variance(state, me)) / Math.sqrt(SAMPLES);
+          assert.ok(Math.abs(drawnBoth.private - mixed) <= 4 * mixedSpread + 1e-3 * mixed, `sampled private ${drawnBoth.private} vs plain ${mixed}`);
         }
+        // Sampled deals come from the same distribution: their mean lies within four standard errors of it.
+        const spread = Math.sqrt(variance(state, me) / SAMPLES);
+        const drawn = sampledDeal([[state, 1]], [[state, 1]], me, SAMPLES);
+        assert.ok(Math.abs(drawn.public - plain) <= 4 * spread + 1e-3 * plain && drawn.private === drawn.public, `sampled ${drawn.public} vs plain ${plain}, standard error ${spread}`);
         previous = state;
         reloads++;
         checked('merged deal');
@@ -374,11 +390,12 @@ function checkMergedDeal() {
 }
 
 // With more shells than decisions to search, no line reaches a reload, so
-// the two rules score alike.
+// every rule scores alike.
 function checkNoReload(pos) {
   const depth = 2;
   if (!pos.cfg.table.$.endsWith('TwoSeats') || gunOf(pos.state).length <= depth) return;
-  assert.deepEqual(json(analyse(pos.position, depth, 100000, EXPECTED_DEAL)), json(analyse(pos.position, depth, 100000)), 'no reload in reach, no difference');
+  const plain = json(analyse(pos.position, depth, 100000));
+  for (const reload of [EXPECTED_DEAL, sampled(4)]) assert.deepEqual(json(analyse(pos.position, depth, 100000, reload)), plain, 'no reload in reach, no difference');
   checked('no reload in reach');
 }
 
@@ -386,7 +403,8 @@ function checkInvalid(pos) {
   const other = sockets(pos.cfg.table.$.endsWith('TwoSeats') ? 2 : pos.cfg.table.$.endsWith('ThreeSeats') ? 3 : 4).find(s => s !== pos.me);
   const analysis = analyse({ ...pos.position, me: seat(other) }, 1, 1000);
   assert.equal(kind(analysis), 'Invalid', 'only the player to move is analysed');
-  if (!pos.cfg.table.$.endsWith('TwoSeats')) assert.equal(kind(analyse(pos.position, 1, 1000, EXPECTED_DEAL)), 'Invalid', 'the expected-deal leaf takes two seats only');
+  if (!pos.cfg.table.$.endsWith('TwoSeats')) for (const reload of [EXPECTED_DEAL, sampled(4)]) assert.equal(kind(analyse(pos.position, 1, 1000, reload)), 'Invalid', 'a leaf that deals the reload takes two seats only');
+  assert.equal(kind(analyse(pos.position, 1, 1000, sampled(0))), 'Invalid', 'the sampled leaf needs a deal');
   assert.equal(kind(P.choose({ ...pos.position, me: seat(other) }, { $: 'types.Level', depth: 1n, budget: 1000n, gap: 0, seed: 0 })), 'Unavailable');
   assert.equal(kind(P.regret(analysis, 0n)), 'None');
   checked('invalid');

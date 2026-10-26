@@ -5,8 +5,8 @@ import { Schema } from "effect";
 import type { MoveRegret, SeatRegret } from "./api.ts";
 
 // The regret table of the derived database that tools/arena builds (docs/arena/analysis/regret.md), read only. The
-// table can hold runs with several evaluators, depth limits, budgets or reload rules; scores of different runs never mix, so the
-// viewer reads the run with the most searched moves. Scores are millionths of the round win chance, shown as points.
+// table can hold runs with several evaluators, depth limits, budgets, reload rules or sample counts; scores of different
+// runs never mix, so the viewer reads the run with the most searched moves. Scores are millionths of the round win chance, shown as points.
 
 const POINT = 10_000;
 
@@ -23,7 +23,7 @@ const MoveRow = Schema.Struct({
   limited: Schema.Number,
 });
 
-const RunRow = Schema.NullOr(Schema.Struct({ evaluator: Schema.String, depth: Schema.Number, budget: Schema.Number, reload: Schema.String }));
+const RunRow = Schema.NullOr(Schema.Struct({ evaluator: Schema.String, depth: Schema.Number, budget: Schema.Number, reload: Schema.String, samples: Schema.Number }));
 
 const decodeRun = Schema.decodeUnknownSync(RunRow);
 
@@ -42,19 +42,19 @@ export const openRegret = (path: string): Regret => {
   const db = new Database(path, { readonly: true });
 
   const run = decodeRun(
-    db.query(`select evaluator, max_depth depth, budget, reload from regret where status = 'searched' group by evaluator, max_depth, budget, reload order by count(*) desc limit 1`).get(),
+    db.query(`select evaluator, max_depth depth, budget, reload, samples from regret where status = 'searched' group by evaluator, max_depth, budget, reload, samples order by count(*) desc limit 1`).get(),
   );
 
-  const inRun = [run?.evaluator ?? null, run?.depth ?? null, run?.budget ?? null, run?.reload ?? null];
+  const inRun = [run?.evaluator ?? null, run?.depth ?? null, run?.budget ?? null, run?.reload ?? null, run?.samples ?? null];
 
   const seatTotals = db.query(
     `select match_id matchId, player, count(*) moves, sum(regret) total, sum(exact) exact from regret
-     where status = 'searched' and evaluator is ? and max_depth is ? and budget is ? and reload is ? group by match_id, player`,
+     where status = 'searched' and evaluator is ? and max_depth is ? and budget is ? and reload is ? and samples is ? group by match_id, player`,
   );
 
   const matchMoves = db.query(
     `select ordinal, regret, exact, best, best_score bestScore, chosen_score chosenScore, depth, limited from regret
-     where match_id = ? and status = 'searched' and evaluator is ? and max_depth is ? and budget is ? and reload is ?`,
+     where match_id = ? and status = 'searched' and evaluator is ? and max_depth is ? and budget is ? and reload is ? and samples is ?`,
   );
 
   return {

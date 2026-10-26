@@ -230,20 +230,33 @@ export interface Limits {
 }
 
 /**
- * How the search values a reload it stops at: the static evaluation before the draw, or that evaluation averaged over every distinct deal
- * of the reload (two seats only; at three or four the analysis is invalid). See docs/arena/analysis/regret.md.
+ * How the search values a reload it stops at: the static evaluation before the draw, that evaluation averaged over every distinct deal
+ * of the reload, or its mean over `samples` deals drawn at random (both two seats only; at three or four the analysis is invalid).
+ * See docs/arena/analysis/regret.md.
  */
-export const RELOAD_RULES = ["static", "expected-deal"] as const;
+export const RELOAD_RULES = ["static", "expected-deal", "sampled"] as const;
 
 export type ReloadRule = (typeof RELOAD_RULES)[number];
 
-const RELOAD_TAGS = { static: "player/types.Static", "expected-deal": "player/types.ExpectedDeal" } as const satisfies Readonly<Record<ReloadRule, string>>;
+export type Reload = { readonly rule: "static" } | { readonly rule: "expected-deal" } | { readonly rule: "sampled"; readonly samples: number };
+
+const reloadNode = (reload: Reload): BendNode => {
+  switch (reload.rule) {
+    case "static":
+      return { $: "player/types.Static" };
+    case "expected-deal":
+      return { $: "player/types.ExpectedDeal" };
+    case "sampled":
+      // SAFETY: count is player/types.Sampled's one field, a Nat; BendNode names only the tag.
+      return { $: "player/types.Sampled", count: BigInt(reload.samples) } as BendNode;
+  }
+};
 
 export interface Player {
   /** Names the build: a hash of the compiled player, so that scores from different versions are never mixed. */
   readonly version: string;
   readonly orders: (log: ReadonlyArray<OwnEntry>, isPrivate: boolean) => Orders;
-  readonly analyse: (input: PlayerInput, limits: Limits, reload: ReloadRule) => Analysis;
+  readonly analyse: (input: PlayerInput, limits: Limits, reload: Reload) => Analysis;
 }
 
 /** Builds the player into `dir` (with $BEND, else `bend` on PATH, else the pinned build) and wraps its exports. */
@@ -263,6 +276,6 @@ export const loadPlayer = async (dir: string): Promise<Player> => {
   return {
     version: createHash("sha256").update(readFileSync(output)).digest("hex").slice(0, 16),
     orders: (log, isPrivate) => nodesOf(exports.orders(logNode(log), isPrivate)).map(orderText),
-    analyse: (input, { depth, budget }, reload) => analysisOf(decodeAnalysis(exports.analyse(inputNode(input), BigInt(depth), BigInt(budget), { $: RELOAD_TAGS[reload] }))),
+    analyse: (input, { depth, budget }, reload) => analysisOf(decodeAnalysis(exports.analyse(inputNode(input), BigInt(depth), BigInt(budget), reloadNode(reload)))),
   };
 };

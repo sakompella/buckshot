@@ -7,7 +7,7 @@ reads them. Regret comes from the regret and knowledge databases, as in regret.p
 Matches with a DeepSeek seat and unfinished matches are left out, and so are matches whose prizes do not add up to the
 final cash.
 
-    python3 tools/arena/analysis/by_round.py [--db PATH] [--regret PATH] [--knowledge PATH] [--depth 6] [--budget 20000] [--reload static] [--doc docs/arena/analysis/regret.md]
+    python3 tools/arena/analysis/by_round.py [--db PATH] [--regret PATH] [--knowledge PATH] [--depth 6] [--budget 20000] [--reload static] [--samples 256] [--doc docs/arena/analysis/regret.md]
 """
 
 import argparse
@@ -169,10 +169,11 @@ def main() -> None:
     parser.add_argument("--knowledge", type=Path, default=DERIVED / "knowledge.sqlite")
     parser.add_argument("--depth", type=int, default=6)
     parser.add_argument("--budget", type=int, default=20000)
-    parser.add_argument("--reload", choices=["static", "expected-deal"], default="static")
+    parser.add_argument("--reload", choices=["static", "expected-deal", "sampled"], default="static")
+    parser.add_argument("--samples", type=int, help="deals per leaf of a sampled run, 256 by default")
     parser.add_argument("--doc", type=Path)
     args = parser.parse_args()
-    text = report(load_results(args.db, args.knowledge), regret.load(args.regret, args.knowledge, args.depth, args.budget, args.reload).decisions)
+    text = report(load_results(args.db, args.knowledge), regret.load(args.regret, args.knowledge, args.depth, args.budget, args.reload, regret.run_samples(args.reload, args.samples)).decisions)
     if args.doc is None:
         print(text)
     else:

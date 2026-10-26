@@ -314,11 +314,17 @@ def chamber.known(shells: List<&2, D.Shell>) -> Bool:
       +live : Nat = shells.live(shells)
       Bool.or(Nat.is_eq(live, 0n), Nat.is_eq(live, List.length(&2, D.Shell, shells)))
 
-def sums.add(sums: Sums, +public: F32, +private: F32, +state: T.State, +me: D.Seat) -> Sums:
+# The static value of a state a deal ended at.
+def deal.value(+state: T.State, +me: D.Seat) -> F32:
+  U32.to_f32(E.state(state, me, chamber.known(S.world.gun(T.state.world(state)))))
+
+def sums.scaled(sums: Sums, +public: F32, +private: F32, +value: F32) -> Sums:
   match sums:
     case Sums{p, q}:
-      +value : F32 = U32.to_f32(E.state(state, me, chamber.known(S.world.gun(T.state.world(state)))))
       Sums{F32.add(p, F32.mul(public, value)), F32.add(q, F32.mul(private, value))}
+
+def sums.add(sums: Sums, +public: F32, +private: F32, +state: T.State, +me: D.Seat) -> Sums:
+  sums.scaled(sums, public, private, deal.value(state, me))
 
 def done.value(done: List<&2, Dealt>, +me: D.Seat, sums: Sums) -> Sums:
   match done:
@@ -367,8 +373,64 @@ def dealt.value(frontier: Frontier, +me: D.Seat) -> Sums:
     case Frontier{_, loads, done}:
       loads.value(Map.values(&2, AtLoad, loads), me, done.value(done, me, Sums{0.0, 0.0}))
 
+# The start of each deal: the belief's worlds, merged by key.
+def starts(+public: List<&2, A.World>, +private: List<&2, A.World>) -> Map<&2, Dealt>:
+  insert.worlds(private, True{}, insert.worlds(public, False{}, Map.new(&2, Dealt)))
+
 # Probability times static value over every distinct deal after a reload,
 # under the public and the private belief.
 def expected(+public: List<&2, A.World>, +private: List<&2, A.World>, +me: D.Seat) -> Sums:
-  +start : Map<&2, Dealt> = insert.worlds(private, True{}, insert.worlds(public, False{}, Map.new(&2, Dealt)))
-  dealt.value(deal(deal.fuel(), Frontier{start, Map.new(&2, AtLoad), Nil{}}, True{}), me)
+  dealt.value(deal(deal.fuel(), Frontier{starts(public, private), Map.new(&2, AtLoad), Nil{}}, True{}), me)
+
+# Sampled deals
+# =============
+#
+# The sampled leaf averages the same static value over `count` deals drawn at
+# random from each start, rather than over every deal. Each start's deals are
+# seeded by its key, so a leaf draws the same deals whenever it is valued.
+
+def mix(+x: U32) -> U32:
+  +x1 : U32 = U32.xor(x, U32.shrn(x, 16n))
+  +x2 : U32 = U32.mul(x1, 2146121005)
+  +x3 : U32 = U32.xor(x2, U32.shrn(x2, 15n))
+  +x4 : U32 = U32.mul(x3, 2221713035)
+  U32.xor(x4, U32.shrn(x4, 16n))
+
+def key.seed(key: String, +seed: U32) -> U32:
+  match key:
+    case SNil{}:
+      seed
+    case SCon{Chr{code}, rest}:
+      key.seed(rest, mix(U32.xor(seed, code)))
+
+# Word `n` of the deal's stream answers its n-th draw, each value equally likely.
+def sample.deal(fuel: Nat, request: T.Request, +state: T.State, +seed: U32, +n: U32) -> T.State:
+  match fuel request:
+    case 1n+(+fuel) T.Draw{_, D.Range{_, extra}}:
+      +k : U32 = U32.mod(mix(U32.xor(seed, mix(n))), U32.from_nat(2n+extra))
+      +next : T.State = answered(M.answer(state, U32.to_nat(k)))
+      sample.deal(fuel, M.request(next), next, seed, (n + 1 : U32))
+    case _ _:
+      state
+
+# The static values of `count` deals drawn from one start, summed.
+def sample.sum(count: Nat, +state: T.State, +seed: U32, +me: D.Seat, +sum: F32) -> F32:
+  match count:
+    case 0n:
+      sum
+    case 1n+(+k):
+      sample.sum(k, state, seed, me, F32.add(sum, deal.value(sample.deal(deal.fuel(), M.request(state), state, mix(U32.xor(seed, U32.from_nat(k))), 0), me)))
+
+# 2166136261 is the FNV offset basis, an arbitrary nonzero start.
+def sampled.starts(starts: List<&2, Dealt>, +count: Nat, +me: D.Seat, sums: Sums) -> Sums:
+  match starts:
+    case Nil{}:
+      sums
+    case Dealt{+state, public, private} <> rest:
+      +sum : F32 = sample.sum(count, state, key.seed(key(state, True{}), 2166136261), me, 0.0)
+      sampled.starts(rest, count, me, sums.scaled(sums, public, private, F32.div(sum, F32.from_nat(count))))
+
+# Probability times the mean static value of `count` sampled deals from each
+# start, under the public and the private belief. `count` is at least one.
+def sampled(+public: List<&2, A.World>, +private: List<&2, A.World>, +me: D.Seat, +count: Nat) -> Sums:
+  sampled.starts(Map.values(&2, Dealt, starts(public, private)), count, me, Sums{0.0, 0.0})

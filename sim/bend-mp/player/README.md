@@ -26,14 +26,17 @@ After a move, worlds are grouped by what the public and the searcher observe. On
 - **The round ended.** The value is exact: 1,000,000 if `me` won the round, 0 if not. This holds even when the next round began without a draw and already waits on a choice.
 - **A reload needs a draw.** A move that empties the gun, by a shot or an ejected shell, stops at the reload's first draw (`NeedTurnAmount`, `NeedItem`, `NeedBatch` or `NeedSwap`). A fully deterministic reload can finish in the same answer, and search continues at its next choice. Expanding random item and batch draws multiplies the branches beyond a useful budget. The `reload` argument says how the leaf is valued:
   - `Static`: the state as it stands, before the draw is resolved. `choose` always uses it.
-  - `ExpectedDeal` (two seats only; at three or four `analyse` is invalid): the static evaluation averaged over every distinct deal, as `deal.bend` enumerates it. The machine answers each draw with every value until the next choice. States that differ only in where items sit in the slots, or in the order of the shells, are merged, so each deal is carried once with its probability. The batch and the shuffle read and write no slot, so each load is drawn once for all the ways the items came out. The leaf costs no nodes, so both rules search the same tree. It is slow: see `docs/arena/analysis/regret.md`.
+  - `ExpectedDeal` (two seats only; at three or four `analyse` is invalid): the static evaluation averaged over every distinct deal, as `deal.bend` enumerates it. The machine answers each draw with every value until the next choice. States that differ only in where items sit in the slots, or in the order of the shells, are merged, so each deal is carried once with its probability. The batch and the shuffle read and write no slot, so each load is drawn once for all the ways the items came out. It is exact and slow: see `docs/arena/analysis/regret.md`.
+  - `Sampled{count}` (two seats only; at least one deal): the static evaluation averaged over `count` deals drawn at random, each draw answered with a value picked uniformly as the machine asks for it. Each start of the deal seeds its own draws from its key, so a leaf draws the same deals whenever it is valued.
+
+  A deal leaf costs no nodes, so every rule searches the same tree.
 
 ## Modules
 
 - `belief.bend` reconstructs synthetic states from public information, enumerates shell orders, replays observations and groups outcomes.
 - `evaluation.bend` holds all starting weights and the static win-share estimate.
 - `search.bend` does bounded paranoid expectiminimax and iterative deepening.
-- `deal.bend` enumerates a reload's deals for the expected-deal leaf.
+- `deal.bend` enumerates or samples a reload's deals for the deal leaves.
 - `policy.bend` selects a move from completed analysis.
 - `main.bend` is the stable export entry point.
 
@@ -67,6 +70,6 @@ Inside `nix develop`, from the repository root:
 - Public scores, which opponents decide by, do not change when `me`'s clues are removed from the log.
 - Scripted games: a forced win; a round won where the next round starts without a draw, which stays exact at depths 1 to 3; and a belief past 100 loads, which stays normalized.
 - A seat which is not to move gets no analysis.
-- The expected-deal leaf: on a fixed load of one live and one blank shell with saw and beer as the only items, a shot on the last shell scores the mean of the static values of the four deals, played out by hand. On small decks it equals a plain enumeration of every draw sequence, with no merging. With more shells than the search's depth both rules score alike, and at three or four seats it is invalid.
+- The expected-deal leaf: on a fixed load of one live and one blank shell with saw and beer as the only items, a shot on the last shell scores the mean of the static values of the four deals, played out by hand. On small decks it equals a plain enumeration of every draw sequence, with no merging. Sampled deals' mean lies within four standard errors of the exact one, the error taken from the plain enumeration. With more shells than the search's depth every rule scores alike, and at three or four seats both deal leaves are invalid.
 
 `PLAYER_GAMES` sets the games for each table size (default 2, about a minute). Use `PLAYER_GAMES=4` for an occasional deeper run of about two minutes. `PLAYER_PROFILE=1` also prints the seconds spent in each check.

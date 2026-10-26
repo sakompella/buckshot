@@ -39,7 +39,7 @@ The part of a round when players grab items from the briefcase and place them. I
 _Avoid_: handout
 
 **Deal**:
-Every random draw from a load running out to the next choice: the item amount, the items each player takes, and the next load's batch and shuffle. The minimax player's expected-deal reload rule averages over the deals.
+Every random draw from a load running out to the next choice: the item amount, the items each player takes, and the next load's batch and shuffle. The minimax player's expected-deal and sampled reload rules average over the deals, the first over all of them and the second over a random sample.
 _Avoid_: distribution (only the items)
 
 ### Moving

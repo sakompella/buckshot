@@ -300,6 +300,8 @@ def node.reload(reload: A.Reload, +public: List<&2, A.World>, +private: List<&2,
       node.leaf(public, private, nodes, me)
     case A.ExpectedDeal{}:
       node.expected(L.expected(public, private, me), private, nodes)
+    case A.Sampled{count}:
+      node.expected(L.sampled(public, private, me, count), private, nodes)
 
 # Only a reload leaves a node at a draw: the phone's draw is expanded by
 # settle, and a round's opening draws follow its end, which is a leaf first.
@@ -545,16 +547,25 @@ def analyse.built(built: B.Built, depth: Nat, +budget: Nat, +reload: A.Reload) -
     case B.Rejected{reason}:
       A.Invalid{reason, 0n}
 
+def analyse.dealt(table: D.Table, +position: A.Position, depth: Nat, +budget: Nat, +reload: A.Reload) -> A.Analysis:
+  match table:
+    case D.TwoSeats{}:
+      analyse.built(B.build(position), depth, budget, reload)
+    case D.ThreeSeats{}:
+      A.Invalid{"a leaf that deals the reload takes two seats only", 0n}
+    case D.FourSeats{}:
+      A.Invalid{"a leaf that deals the reload takes two seats only", 0n}
+
 def analyse.table(table: D.Table, +position: A.Position, depth: Nat, +budget: Nat, +reload: A.Reload) -> A.Analysis:
-  match table reload:
-    case _ A.Static{}:
+  match reload:
+    case A.Static{}:
       analyse.built(B.build(position), depth, budget, reload)
-    case D.TwoSeats{} A.ExpectedDeal{}:
-      analyse.built(B.build(position), depth, budget, reload)
-    case D.ThreeSeats{} A.ExpectedDeal{}:
-      A.Invalid{"the expected-deal leaf takes two seats only", 0n}
-    case D.FourSeats{} A.ExpectedDeal{}:
-      A.Invalid{"the expected-deal leaf takes two seats only", 0n}
+    case A.ExpectedDeal{}:
+      analyse.dealt(table, position, depth, budget, reload)
+    case A.Sampled{0n}:
+      A.Invalid{"the sampled leaf needs at least one deal", 0n}
+    case A.Sampled{1n+more}:
+      analyse.dealt(table, position, depth, budget, A.Sampled{1n+more})
 
 def analyse(position: A.Position, depth: Nat, +budget: Nat, +reload: A.Reload) -> A.Analysis:
   match position:

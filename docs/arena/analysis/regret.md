@@ -13,11 +13,13 @@ A score is the deciding player's chance of winning the current round, in million
 - **Invalid:** the player could not build a belief from the log; the reason is stored and there is no regret.
 - **Exact:** both the best and the chosen score are 0 or 1,000,000. Only a settled round gives those scores: a win, or a loss, which a dead player's 0 always is. Treat only exact rows as solved. `exact = 0` means not proven exact, not heuristic. Take both players at 1 health with one live and one blank shell left. Shooting the other player settles the round on every path, but its score of 500,000 is a mix of a win and a loss, so the row is not marked exact. The search does not report which values are settled, and changing the evaluator is out of scope for #3.
 
-`--reload` picks how a search values a reload it stops at ([#4](https://github.com/sakompella/buckshot/issues/4)). `static`, the default, is the static evaluation before the draw. `expected-deal` averages that evaluation over every distinct deal of the reload: the item amount, the items each seat takes, the batch and the shuffle, each answered with every value by the rules machine and weighted by its chance. Deals are counted as multisets: where items sit in the slots and the order of the shells do not tell two deals apart, since the static evaluation reads neither. It works at two seats only; at three or four every decision is invalid. Both rules search the same tree and spend the same nodes, so where no line reaches a reload they give the same scores.
+`--reload` picks how a search values a reload it stops at ([#4](https://github.com/sakompella/buckshot/issues/4)). `static`, the default, is the static evaluation before the draw. `expected-deal` averages that evaluation over every distinct deal of the reload: the item amount, the items each seat takes, the batch and the shuffle, each answered with every value by the rules machine and weighted by its chance. Deals are counted as multisets: where items sit in the slots and the order of the shells do not tell two deals apart, since the static evaluation reads neither. `sampled` averages it over `--samples` deals (256 by default) drawn at random as the machine asks for them, so from the same distribution. The draws are seeded by the state the deal starts from, so a rerun gives the same rows. Both deal rules work at two seats only; at three or four every decision is invalid. Every rule searches the same tree and spends the same nodes, so where no line reaches a reload they give the same scores.
+
+The exact rule is the reference and the sampled rule is the one to run over many decisions ([#17](https://github.com/sakompella/buckshot/issues/17)): on real leaves it is about 700 times faster and agrees with the exact value within its standard error (see Runtime).
 
 ## The `regret` table
 
-The script writes to the `regret` table of the derived database named by `--out`, creating it if needed and leaving other tables alone, so it can share a file with the knowledge tables. Rows are keyed by match, ordinal, player version, depth limit, budget and reload rule. Each row is committed as it is scored, and a rerun skips the decisions already scored with the same key, so an interrupted run resumes where it stopped, and new matches are the only work left after an import. Runs with other settings sit beside it. Shards may write one file together: it is in WAL mode and each write waits up to 30 s for the other.
+The script writes to the `regret` table of the derived database named by `--out`, creating it if needed and leaving other tables alone, so it can share a file with the knowledge tables. Rows are keyed by match, ordinal, player version, depth limit, budget, reload rule and sample count. Each row is committed as it is scored, and a rerun skips the decisions already scored with the same key, so an interrupted run resumes where it stopped, and new matches are the only work left after an import. Runs with other settings sit beside it. Shards may write one file together: it is in WAL mode and each write waits up to 30 s for the other.
 
 | Column | Meaning |
 |---|---|
@@ -25,7 +27,7 @@ The script writes to the `regret` table of the derived database named by `--out`
 | `player`, `label` | The deciding player's letter and the move it chose. |
 | `evaluator` | A hash of the compiled player. Never mix rows with different values. |
 | `max_depth`, `budget` | The run's depth limit (decisions, by every player) and node budget. |
-| `reload` | `static` or `expected-deal`. A table from before this column is rebuilt with every old row `static` the next time the script opens it; the viewer and the Python reports read this column, so run the script once on an older file before they read it. The reports take `--reload` (default `static`) and read one rule's rows. |
+| `reload`, `samples` | `static`, `expected-deal` or `sampled`, and the deals per leaf of a sampled run (0 for the other rules). A table from before these columns (as on `main` before them) is rebuilt with every old row `static` the next time the script opens it; the viewer and the Python reports read this column, so run the script once on an older file before they read it. The reports take `--reload` (default `static`) and, for a sampled run, `--samples` (default 256), and read one run's rows. |
 | `status` | `searched`, `fallback` or `invalid`. |
 | `values_json` | Every legal move with its score, in the machine's order. |
 | `best`, `best_score`, `chosen_score`, `regret`, `exact` | Set only when searched. Ties go to the first move. `exact` is 1 when proven exact, 0 when not proven (see above). |
@@ -42,14 +44,21 @@ The expected-deal rule is far slower, because each reload leaf enumerates the de
 - A search reached 28 to 138 reload leaves with 2 shells left (6 to 34 distinct), and 70 to 2,053 with 3 (9 to 387 distinct).
 - So one decision takes about 50 minutes to 4 hours with 2 shells left, and 1.5 to 36 hours with 3. The static rule took 5 to 305 ms on the same decisions.
 
-Even valuing each distinct leaf once per search would leave 10 minutes to 7 hours per decision. The rule is exact but suits single positions, not a run over many decisions. The sums are 32-bit floats, which differ from an exact sum by up to about 200 millionths on a full deal, well under one point.
+Even valuing each distinct leaf once per search would leave 10 minutes to 7 hours per decision. The rule is exact but suits single positions, not a run over many decisions.
+
+The sampled rule with 256 deals, on the same 12 decisions:
+
+- One reload leaf took 100 to 221 ms, median 126 ms, against 39 to 128 s for the exact value.
+- One decision took 3 to 16 s with 2 shells left and 10 to 251 s with 3. That is about 120 ms per reload leaf the search reaches. Leaves are not cached within a search.
+- On two leaves of each decision, 24 in all, the sampled value was within one standard error of the exact one 18 times and within two 23 times. The largest gap was 2.3 standard errors. One leaf's standard error was 0.13 to 0.28 points.
+- The best move was the same as under the static rule in all 12 decisions, but the scores of the moves that reach a reload changed. The sums are 32-bit floats, which differ from an exact sum by up to about 200 millionths on a full deal, well under one point.
 
 ## Reproduce
 
 From `web/`, after `bun run rules`:
 
-    nice -n 10 bun scripts/arena-regret.ts --db <buckshot.sqlite> --out <derived>.sqlite --match <match name> [--depth 6] [--budget 20000] [--reload static]
-    nice -n 10 bun scripts/arena-regret.ts --db <buckshot.sqlite> --out <derived>.sqlite --all [--shard K/N] [--depth 6] [--budget 20000] [--reload static]
+    nice -n 10 bun scripts/arena-regret.ts --db <buckshot.sqlite> --out <derived>.sqlite --match <match name> [--depth 6] [--budget 20000] [--reload static] [--samples 256]
+    nice -n 10 bun scripts/arena-regret.ts --db <buckshot.sqlite> --out <derived>.sqlite --all [--shard K/N] [--depth 6] [--budget 20000] [--reload static] [--samples 256]
 
 `--all` takes every replay-validated match in tournament and match name order. `--shard K/N` (K from 1) keeps every Nth match, so N processes can run side by side on one `--out` file. A match that fails is logged and skipped, the shard exits 1 at the end, and a rerun retries it. Progress is one stderr line per match.
 
