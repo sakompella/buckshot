@@ -22,6 +22,7 @@ nav a:hover { color: var(--fg); background: #141414; }
 nav .download { margin-left: auto; }
 .toggle button, .chip, .more { background: none; border: 1px solid transparent; color: var(--mut); font: inherit; padding: 4px 10px; border-radius: 6px; cursor: pointer; }
 .filters { display: flex; gap: 10px 14px; flex-wrap: wrap; align-items: center; margin: 0; }
+.filters select { max-width: 100%; }
 .chips { display: flex; gap: 4px; flex-wrap: wrap; }
 .chip { font-size: 12px; padding: 2px 8px; border-color: var(--line); color: var(--dim); }
 .chip.on { color: var(--fg); }
