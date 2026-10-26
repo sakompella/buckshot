@@ -123,8 +123,6 @@ const out = new Database(resolve(values.out), { create: true, strict: true });
 
 out.exec("PRAGMA busy_timeout = 30000; PRAGMA journal_mode = WAL;");
 
-const COLUMNS = "match_id, ordinal, player, label, evaluator, max_depth, budget, status, reason, values_json, best, best_score, chosen_score, regret, exact, depth, limited, nodes, ms";
-
 const CREATE = `CREATE TABLE IF NOT EXISTS regret (
     match_id TEXT, ordinal INTEGER, player TEXT, label TEXT,
     evaluator TEXT, max_depth INTEGER, budget INTEGER, reload TEXT NOT NULL,
@@ -135,10 +133,10 @@ const CREATE = `CREATE TABLE IF NOT EXISTS regret (
 // A table from before the reload rule holds static rows only. It is rebuilt with the rule in its key, once, while other shards wait.
 out
   .transaction(() => {
-    const columns = out.query<{ name: string }, []>("SELECT name FROM pragma_table_info('regret')").all();
+    const columns = out.query<{ name: string }, []>("SELECT name FROM pragma_table_info('regret')").all().map(({ name }) => name);
 
-    if (columns.length > 0 && !columns.some(({ name }) => name === "reload")) {
-      out.exec(`ALTER TABLE regret RENAME TO regret_before_reload; ${CREATE}; INSERT INTO regret (${COLUMNS}, reload) SELECT ${COLUMNS}, 'static' FROM regret_before_reload; DROP TABLE regret_before_reload;`);
+    if (columns.length > 0 && !columns.includes("reload")) {
+      out.exec(`ALTER TABLE regret RENAME TO regret_before_reload; ${CREATE}; INSERT INTO regret (${columns.join(", ")}, reload) SELECT ${columns.join(", ")}, 'static' FROM regret_before_reload; DROP TABLE regret_before_reload;`);
     }
 
     out.exec(CREATE);

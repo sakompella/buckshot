@@ -25,7 +25,7 @@ The script writes to the `regret` table of the derived database named by `--out`
 | `player`, `label` | The deciding player's letter and the move it chose. |
 | `evaluator` | A hash of the compiled player. Never mix rows with different values. |
 | `max_depth`, `budget` | The run's depth limit (decisions, by every player) and node budget. |
-| `reload` | `static` or `expected-deal`. A table from before this column is rebuilt with every old row `static` the next time the script opens it. |
+| `reload` | `static` or `expected-deal`. A table from before this column is rebuilt with every old row `static` the next time the script opens it; the viewer and the Python reports read this column, so run the script once on an older file before they read it. The reports take `--reload` (default `static`) and read one rule's rows. |
 | `status` | `searched`, `fallback` or `invalid`. |
 | `values_json` | Every legal move with its score, in the machine's order. |
 | `best`, `best_score`, `chosen_score`, `regret`, `exact` | Set only when searched. Ties go to the first move. `exact` is 1 when proven exact, 0 when not proven (see above). |
@@ -35,6 +35,14 @@ The script writes to the `regret` table of the derived database named by `--out`
 ## Runtime
 
 With the defaults, depth 6 and a budget of 20,000 nodes, 7 matches (352 decisions) on hp-server took 344 ms per decision on average: median 274 ms, 95th percentile 804 ms, max 1,070 ms. 39% of the searches were stopped by the budget, at depth 2 to 5. At that rate the 112,546 agent decisions take about 11 hours in one process.
+
+The expected-deal rule is far slower, because each reload leaf enumerates the deal exactly. On 12 agent shots from finished two-seat matches, 6 with 2 shells left and 6 with 3, sampled with a fixed seed, at depth 6 and 20,000 nodes on hp-server:
+
+- One reload leaf took 39 to 114 s, median 88 s. Nearly all of it goes to dealing the items; drawing the load and valuing the deals take about a second.
+- A search reached 28 to 138 reload leaves with 2 shells left (6 to 34 distinct), and 70 to 2,053 with 3 (9 to 387 distinct).
+- So one decision takes about 50 minutes to 4 hours with 2 shells left, and 1.5 to 36 hours with 3. The static rule took 5 to 305 ms on the same decisions.
+
+Even valuing each distinct leaf once per search would leave 10 minutes to 7 hours per decision. The rule is exact but suits single positions, not a run over many decisions. The sums are 32-bit floats, which differ from an exact sum by up to about 200 millionths on a full deal, well under one point.
 
 ## Reproduce
 

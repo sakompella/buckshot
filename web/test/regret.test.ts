@@ -128,6 +128,13 @@ test("another player's secret never reaches the player; the mover's own does", (
   expect(regretAt(heardBy(3), LIMITS, "Shoot yourself").status).toBe("invalid");
 });
 
+test("the expected-deal rule reaches the player: alike where no line reloads, invalid beyond two seats", () => {
+  const input = inputOf(play(FORCED_WIN));
+
+  expect(player.analyse(input, LIMITS, "expected-deal")).toEqual(player.analyse(input, LIMITS, "static"));
+  expect(player.analyse({ ...input, table: 3 }, LIMITS, "expected-deal")).toEqual({ kind: "invalid", reason: "the expected-deal leaf takes two seats only", nodes: 0 });
+});
+
 test("the script scores every agent decision of a recorded match once, stores a fallback with no regret, and keeps reload rules apart", async () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-regret-script-"));
   const source = join(root, "tournament");

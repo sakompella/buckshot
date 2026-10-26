@@ -294,7 +294,8 @@ function checkLongHistory() {
 const E = name => P[`evaluation.${name}`];
 const gunOf = state => array(state.world.gun);
 const allAlike = shells => shells.length > 0 && shells.every(s => kind(s) === kind(shells[0]));
-const dealt = (state, me) => P['deal.expected'](list([{ $: 'types.World', state, weight: 1 }]), list([]), seat(me)).public;
+const worlds = weighted => list(weighted.map(([state, weight]) => ({ $: 'types.World', state, weight })));
+const expectedDeal = (publicWorlds, privateWorlds, me) => P['deal.expected'](worlds(publicWorlds), worlds(privateWorlds), seat(me));
 
 // Plays every draw sequence from `state` to the next choice, with no merging,
 // and averages the static value over them.
@@ -344,14 +345,22 @@ function checkMergedDeal() {
   const items = { saw: { per_player: 2 }, jammer: { per_player: 1, on_table: 1 }, beer: {} };
   for (const amount of [1, 2]) {
     const cfg = config(2, [round({ health: 4, live: 2, blank: 1, amount, items })]);
-    let stepped = S('start')(cfg), state = stepped.state, reloads = 0;
+    let state = S('start')(cfg).state, reloads = 0, previous = null;
     for (let step = 0; step < 400 && reloads < 3; step++) {
       const request = S('request')(state);
       if (kind(request) !== 'Choose' && kind(request) !== 'Draw') break;
       if (kind(request) === 'Draw' && gunOf(state).length === 0 && kind(S('stage')(state)) !== 'Playing') {
         const me = 1 + 2 * (step % 2);
         const plain = plainDeal(state, me);
-        assert.ok(Math.abs(dealt(state, me) - plain) < 1e-3 * plain, `merged ${dealt(state, me)} vs plain ${plain}`);
+        const merged = expectedDeal([[state, 1]], [], me).public;
+        assert.ok(Math.abs(merged - plain) < 1e-3 * plain, `merged ${merged} vs plain ${plain}`);
+        if (previous) {
+          // The private belief is weighed in the same pass: here over this reload and the one before.
+          const mixed = 0.25 * plainDeal(previous, me) + 0.75 * plain;
+          const both = expectedDeal([[state, 1]], [[previous, 0.25], [state, 0.75]], me);
+          assert.ok(Math.abs(both.public - plain) < 1e-3 * plain && Math.abs(both.private - mixed) < 1e-3 * mixed, `private ${both.private} vs plain ${mixed}`);
+        }
+        previous = state;
         reloads++;
         checked('merged deal');
         while (kind(S('request')(state)) === 'Draw') state = S('answer')(state, BigInt(random() % (Number(S('request')(state).range.extra) + 2))).state;
@@ -364,12 +373,12 @@ function checkMergedDeal() {
   }
 }
 
-// With fewer shells than decisions to search, no line reaches a reload, so
+// With more shells than decisions to search, no line reaches a reload, so
 // the two rules score alike.
 function checkNoReload(pos) {
-  const shells = gunOf(pos.state).length;
-  if (pos.cfg.table.$.endsWith('TwoSeats') === false || shells <= 2) return;
-  assert.deepEqual(json(analyse(pos.position, 2, 100000, EXPECTED_DEAL)), json(analyse(pos.position, 2, 100000)), 'no reload in reach, no difference');
+  const depth = 2;
+  if (!pos.cfg.table.$.endsWith('TwoSeats') || gunOf(pos.state).length <= depth) return;
+  assert.deepEqual(json(analyse(pos.position, depth, 100000, EXPECTED_DEAL)), json(analyse(pos.position, depth, 100000)), 'no reload in reach, no difference');
   checked('no reload in reach');
 }
 

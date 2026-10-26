@@ -84,13 +84,14 @@ class Load(unittest.TestCase):
                 scores=[score("m1", 0, 1, evaluator="old"), score("m1", 1, 1, evaluator="new")],
             )
 
-    def test_refuses_to_mix_reload_rules(self):
-        with self.assertRaises(SystemExit):
-            self.load(
-                players=[("m1", "A", "opus", "high")],
-                decisions=[("m1", 0, "A", "agent", "Use beer", 2, 1)],
-                scores=[score("m1", 0, 1), score("m1", 0, 1, reload="expected-deal")],
-            )
+    def test_reads_one_reload_rule(self):
+        loaded = self.load(
+            players=[("m1", "A", "opus", "high")],
+            decisions=[("m1", 0, "A", "agent", "Use beer", 2, 1), ("m1", 1, "A", "agent", "Use beer", 2, 1)],
+            scores=[score("m1", 0, 1), score("m1", 0, 7, reload="expected-deal")],
+        )
+        self.assertEqual([d.regret for d in loaded.decisions], [1])
+        self.assertEqual(loaded.unscored, 1)
 
 
 class Summary(unittest.TestCase):

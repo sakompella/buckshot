@@ -280,18 +280,19 @@ def node.leaf(+public: List<&2, A.World>, private: List<&2, A.World>, +nodes: Na
   +value : U32 = static(public, me)
   Known{Value{value, static.private(private, me, value), Nil{}, nodes}}
 
-def expected.private(worlds: List<&2, A.World>, +sum: F32, +public: U32) -> U32:
+# With no private worlds the private value is the public one, as in static.private.
+def expected.private(worlds: List<&2, A.World>, +private: F32, +public: U32) -> U32:
   match worlds:
     case Nil{}:
       public
     case _:
-      millionths(sum)
+      millionths(private)
 
 def node.expected(sums: L.Sums, private: List<&2, A.World>, +nodes: Nat) -> Task:
   match sums:
-    case L.Sums{public, sum}:
+    case L.Sums{public, of_private}:
       +value : U32 = millionths(public)
-      Known{Value{value, expected.private(private, sum, value), Nil{}, nodes}}
+      Known{Value{value, expected.private(private, of_private, value), Nil{}, nodes}}
 
 def node.reload(reload: A.Reload, +public: List<&2, A.World>, +private: List<&2, A.World>, +nodes: Nat, +me: D.Seat) -> Task:
   match reload:
@@ -550,7 +551,9 @@ def analyse.table(table: D.Table, +position: A.Position, depth: Nat, +budget: Na
       analyse.built(B.build(position), depth, budget, reload)
     case D.TwoSeats{} A.ExpectedDeal{}:
       analyse.built(B.build(position), depth, budget, reload)
-    case _ A.ExpectedDeal{}:
+    case D.ThreeSeats{} A.ExpectedDeal{}:
+      A.Invalid{"the expected-deal leaf takes two seats only", 0n}
+    case D.FourSeats{} A.ExpectedDeal{}:
       A.Invalid{"the expected-deal leaf takes two seats only", 0n}
 
 def analyse(position: A.Position, depth: Nat, +budget: Nat, +reload: A.Reload) -> A.Analysis:

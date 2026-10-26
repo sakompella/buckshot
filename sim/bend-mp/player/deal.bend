@@ -7,7 +7,7 @@ import ../simple/main.bend as M
 import ./types.bend as A
 import ./evaluation.bend as E
 
-# The expected-deal leaf (#4, two seats only). A reload's draws (the item
+# The expected-deal leaf (two seats only). A reload's draws (the item
 # amount, each item taken, the batch and the shuffle) are answered with every
 # value, each equally likely, by the simple machine itself, until the next
 # choice. States the draws reach are merged when they differ only in where a
@@ -84,18 +84,18 @@ def put.load(load: D.Load, rest: String) -> String:
     case D.Load{live, blank}:
       put.nat(live, put.nat(blank, rest))
 
-def live(shells: List<&2, D.Shell>) -> Nat:
+def shells.live(shells: List<&2, D.Shell>) -> Nat:
   match shells:
     case Nil{}:
       0n
     case D.Live{} <> rest:
-      1n+live(rest)
+      1n+shells.live(rest)
     case D.Blank{} <> rest:
-      live(rest)
+      shells.live(rest)
 
 # The gun by its counts, not its order.
 def put.shells(+shells: List<&2, D.Shell>, rest: String) -> String:
-  +live : Nat = live(shells)
+  +live : Nat = shells.live(shells)
   put.nat(live, put.nat(Nat.sub(List.length(&2, D.Shell, shells), live), rest))
 
 def put.items(items: List<&2, D.Item>, rest: String) -> String:
@@ -264,34 +264,37 @@ def frontier.done(frontier: Frontier, +public: F32, +private: F32, +state: T.Sta
 
 # A state at a draw is expanded into the next frontier, or with `split` set
 # and the items placed, set aside to draw its load once for every outcome.
-# Any other state ends its deal. With `last` set every state ends, so
-# leftover draws are valued as they stand rather than dropped.
-def frontier.one(request: T.Request, stage: D.Stage, +split: Bool, +last: Bool, +state: T.State, +public: F32, +private: F32, frontier: Frontier) -> Frontier:
-  match request stage split last:
-    case T.Draw{_, _} D.Loading{} True{} False{}:
+# Any other state ends its deal.
+def frontier.one(request: T.Request, stage: D.Stage, +split: Bool, +state: T.State, +public: F32, +private: F32, frontier: Frontier) -> Frontier:
+  match request stage split:
+    case T.Draw{_, _} D.Loading{} True{}:
       frontier.load(frontier, public, private, state)
-    case T.Draw{_, D.Range{_, extra}} _ _ False{}:
+    case T.Draw{_, D.Range{_, extra}} _ _:
       frontier.draw(frontier, 2n+extra, public, private, state)
-    case _ _ _ _:
+    case _ _ _:
       frontier.done(frontier, public, private, state)
 
-def expand(pending: List<&2, Dealt>, +split: Bool, +last: Bool, frontier: Frontier) -> Frontier:
+def expand(pending: List<&2, Dealt>, +split: Bool, frontier: Frontier) -> Frontier:
   match pending:
     case Nil{}:
       frontier
     case Dealt{+state, +public, +private} <> rest:
-      expand(rest, split, last, frontier.one(M.request(state), M.stage(state), split, last, state, public, private, frontier))
+      expand(rest, split, frontier.one(M.request(state), M.stage(state), split, state, public, private, frontier))
 
 # A two-seat deal draws at most once for the amount, eight times for items,
-# once for the batch and nine times for the shuffle, so the fuel is never spent.
+# once for the batch and nine times for the shuffle, so the fuel is never
+# spent. If it were, the states left would be valued as they stand.
+def deal.fuel() -> Nat:
+  64n
+
 def deal(fuel: Nat, frontier: Frontier, +split: Bool) -> Frontier:
   match fuel frontier:
     case _ Frontier{MTip{}, loads, done}:
       Frontier{MTip{}, loads, done}
     case 0n Frontier{next, loads, done}:
-      expand(Map.values(&2, Dealt, next), split, True{}, Frontier{Map.new(&2, Dealt), loads, done})
+      Frontier{Map.new(&2, Dealt), loads, List.append(&2, Dealt, Map.values(&2, Dealt, next), done)}
     case 1n+(+fuel) Frontier{next, loads, done}:
-      deal(fuel, expand(Map.values(&2, Dealt, next), split, False{}, Frontier{Map.new(&2, Dealt), loads, done}), split)
+      deal(fuel, expand(Map.values(&2, Dealt, next), split, Frontier{Map.new(&2, Dealt), loads, done}), split)
 
 def frontier.finished(frontier: Frontier) -> List<&2, Dealt>:
   match frontier:
@@ -308,7 +311,7 @@ def chamber.known(shells: List<&2, D.Shell>) -> Bool:
     case Nil{}:
       False{}
     case +shells:
-      +live : Nat = live(shells)
+      +live : Nat = shells.live(shells)
       Bool.or(Nat.is_eq(live, 0n), Nat.is_eq(live, List.length(&2, D.Shell, shells)))
 
 def sums.add(sums: Sums, +public: F32, +private: F32, +state: T.State, +me: D.Seat) -> Sums:
@@ -356,7 +359,7 @@ def loads.value(loads: List<&2, AtLoad>, +me: D.Seat, sums: Sums) -> Sums:
     case Nil{}:
       sums
     case AtLoad{state, outcomes} <> rest:
-      +finals : List<&2, Dealt> = frontier.finished(deal(64n, Frontier{insert(Map.new(&2, Dealt), state, 1.0, 1.0), Map.new(&2, AtLoad), Nil{}}, False{}))
+      +finals : List<&2, Dealt> = frontier.finished(deal(deal.fuel(), Frontier{insert(Map.new(&2, Dealt), state, 1.0, 1.0), Map.new(&2, AtLoad), Nil{}}, False{}))
       loads.value(rest, me, finals.value(finals, outcomes, me, sums))
 
 def dealt.value(frontier: Frontier, +me: D.Seat) -> Sums:
@@ -368,4 +371,4 @@ def dealt.value(frontier: Frontier, +me: D.Seat) -> Sums:
 # under the public and the private belief.
 def expected(+public: List<&2, A.World>, +private: List<&2, A.World>, +me: D.Seat) -> Sums:
   +start : Map<&2, Dealt> = insert.worlds(private, True{}, insert.worlds(public, False{}, Map.new(&2, Dealt)))
-  dealt.value(deal(64n, Frontier{start, Map.new(&2, AtLoad), Nil{}}, True{}), me)
+  dealt.value(deal(deal.fuel(), Frontier{start, Map.new(&2, AtLoad), Nil{}}, True{}), me)

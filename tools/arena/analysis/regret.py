@@ -6,7 +6,7 @@ read-only and prints markdown tables. With --doc FILE the tables replace the tex
 that file. A config is a model with its effort. Regret is in percentage points of the deciding player's chance to win the
 round. Matches with a DeepSeek seat, unfinished matches and forced or fallback moves are left out.
 
-    python3 tools/arena/analysis/regret.py [--regret PATH] [--knowledge PATH] [--depth 6] [--budget 20000] [--doc docs/arena/analysis/regret.md]
+    python3 tools/arena/analysis/regret.py [--regret PATH] [--knowledge PATH] [--depth 6] [--budget 20000] [--reload static] [--doc docs/arena/analysis/regret.md]
 """
 
 import argparse
@@ -70,27 +70,27 @@ def summarise(decisions: list[Decision]) -> Summary:
     return Summary(len(regrets), sum(regrets) / len(regrets), percentile(regrets, 0.9), sum(d.exact for d in decisions) / len(decisions))
 
 
-def load(regret_path: Path, knowledge_path: Path, depth: int, budget: int) -> Loaded:
-    """The scored agent decisions of finished matches, with the deciding player's config and the shells left in the gun."""
+def load(regret_path: Path, knowledge_path: Path, depth: int, budget: int, reload: str = "static") -> Loaded:
+    """The scored agent decisions of finished matches under one reload rule, with the deciding player's config and the shells left in the gun."""
     db = connect(str(regret_path))
     db.row_factory = sqlite3.Row
     db.execute("ATTACH DATABASE ? AS k", (f"file:{knowledge_path}?mode=ro",))
     rows = db.execute(
-        """SELECT p.model, p.effort, d.round + 1 AS round, d.remaining, d.choice, r.status, r.regret, r.exact, r.limited, r.evaluator, r.reload
+        """SELECT p.model, p.effort, d.round + 1 AS round, d.remaining, d.choice, r.status, r.regret, r.exact, r.limited, r.evaluator
            FROM regret r
            JOIN k.matches m ON m.match_id = r.match_id AND m.status = 'completed'
            JOIN k.decisions d ON d.match_id = r.match_id AND d.ordinal = r.ordinal AND d.by_whom = 'agent'
            JOIN k.players p ON p.match_id = d.match_id AND p.player = d.player
-           WHERE r.max_depth = ? AND r.budget = ? AND r.match_id NOT IN (SELECT match_id FROM k.players WHERE model LIKE ?)""",
-        (depth, budget, f"%{SKIPPED_MODEL}%"),
+           WHERE r.max_depth = ? AND r.budget = ? AND r.reload = ? AND r.match_id NOT IN (SELECT match_id FROM k.players WHERE model LIKE ?)""",
+        (depth, budget, reload, f"%{SKIPPED_MODEL}%"),
     ).fetchall()
-    if len({(row["evaluator"], row["reload"]) for row in rows}) > 1:
-        raise SystemExit(f"{regret_path} holds rows of several evaluators or reload rules at depth {depth} and budget {budget}; they must not be mixed.")
+    if len({row["evaluator"] for row in rows}) > 1:
+        raise SystemExit(f"{regret_path} holds rows of several evaluators at depth {depth}, budget {budget} and reload {reload}; they must not be mixed.")
     unscored = db.execute(
         """SELECT COUNT(*) FROM k.decisions d JOIN k.matches m ON m.match_id = d.match_id AND m.status = 'completed'
            WHERE d.by_whom = 'agent' AND d.match_id NOT IN (SELECT match_id FROM k.players WHERE model LIKE ?)
-             AND NOT EXISTS (SELECT 1 FROM regret r WHERE r.match_id = d.match_id AND r.ordinal = d.ordinal AND r.max_depth = ? AND r.budget = ?)""",
-        (f"%{SKIPPED_MODEL}%", depth, budget),
+             AND NOT EXISTS (SELECT 1 FROM regret r WHERE r.match_id = d.match_id AND r.ordinal = d.ordinal AND r.max_depth = ? AND r.budget = ? AND r.reload = ?)""",
+        (f"%{SKIPPED_MODEL}%", depth, budget, reload),
     ).fetchone()[0]
     searched = [row for row in rows if row["status"] == "searched"]
     return Loaded(
@@ -145,9 +145,10 @@ def main() -> None:
     parser.add_argument("--knowledge", type=Path, default=DERIVED / "knowledge.sqlite")
     parser.add_argument("--depth", type=int, default=6)
     parser.add_argument("--budget", type=int, default=20000)
+    parser.add_argument("--reload", choices=["static", "expected-deal"], default="static")
     parser.add_argument("--doc", type=Path)
     args = parser.parse_args()
-    text = report(load(args.regret, args.knowledge, args.depth, args.budget))
+    text = report(load(args.regret, args.knowledge, args.depth, args.budget, args.reload))
     if args.doc is None:
         print(text)
     else:
