@@ -123,7 +123,7 @@ export interface Derived {
   readonly matchSeats: ReadonlyArray<SeatFull>;
   readonly byCohort: ReadonlyArray<ModelStats>;
   readonly pooled: ReadonlyArray<ModelStats>;
-  /** What the ratings count: win shares or pot shares. */
+  /** What the ratings count: win shares, pot shares or rounds. */
   readonly basis: Basis;
   /** One rating per config on that basis, fitted over every match of every tournament: filters pick rows, not the scale. */
   readonly ratings: ReadonlyMap<string, Rating>;
