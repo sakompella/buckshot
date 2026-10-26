@@ -4,11 +4,12 @@ This page summarizes the tournaments run so far, the findings about model reason
 
 Ratings are Bradley-Terry on an Elo scale, per configuration (model + endpoint + effort), with 95% bootstrap CIs clustered by seed. Each pairing plays 10 seeds in both seat orders, 20 matches, unless stated otherwise. With 10 seeds, close rankings aren't reliable. "Medium" also isn't equal compute across providers.
 
-## Status (2026-10-20, 9:55 PM PDT)
+## Status (2026-10-26)
 - **Nothing is running.** No arena jobs, runners, agents or heartbeats.
 - **tournament-1** (`_work/arena/tournament-1`): finished. 120 scheduled matches are unplayed, all against DeepSeek: 38 started and are partial, and 82 never started. The leftover Astra and terra matches finished on 2026-10-22 (below).
 - **tournament-2** (`_work/arena/tournament-2`, config `web/tournaments/opus-effort.json`): stage A is finished. Stage B, the max pairings, hasn't started and needs the user's go-ahead.
 - **tournament-3** (`_work/arena/tournament-3`, config `web/tournaments/astra-opus-xhigh.json`): finished, 40 of 40 capped matches.
+- **tournament-4** (`_work/arena/tournament-4`): finished, 288 of 288 (below). The 138 Sonnet max matches once scheduled in tournament-1 were cut when tournament-4 took over its cross-model games; the import skips them.
 - **Where the data is:** all tournament data lives in the `agents/arena-design` worktree (`~/.t3/worktrees/buckshot/t3-1427bb8e/_work/arena/`). That worktree also serves as the `--code 9e7d7ff22891` checkout. Keep it.
 
 ## tournament-1: cross-model and effort sweeps
@@ -127,6 +128,24 @@ Stage B would add medium–max and xhigh–max: 40 matches, about $355–370 (ma
 - **Pass every needed `--code` when using a cap.** While an old-code match waits for its checkout, the runner leaves it off its pending list, so `--limit` picks a match past the cap.
 - **An account with no quota data isn't over the limit.** `tools/arena/quota_guard.py` now treats it as not blocking; the old rule caused a false stop at 8:58 PM.
 - **List accounts on every endpoint,** Claude as well as Codex, so both sides of each new match are pinned from the start.
+
+## tournament-4: cross-model samples (finished 2026-10-25, 288 matches)
+
+Every config that had only played its own model's effort sweep played 10 matches against other models at medium effort: 5 seat-swapped pairs, each against a different opponent, seeds 3000–3009. Sonnet max played 8 here; its other 2 (both lost to Opus) are in tournament-1. 288 matches, no failed runs, $108.96 at list prices. With these, every config has cross-model games, so the pooled rating no longer leans on the effort sweeps alone.
+
+Wins out of 10 (Sonnet max: of 8 here):
+
+| model | wins by effort |
+|---|---|
+| Haiku 4.5 | off 2/10, minimal 4/10, low 4/10, high 0/10 |
+| Haiku 5.5 | off 3/10, low 8/10, high 4/10, xhigh 4/10, max 7/10 |
+| Opus 5.5 | low 6/10, high 6/10 |
+| Sonnet 5.5 | off 7/10, low 5/10, high 6/10, xhigh 5/10, max 8/8 |
+| Terra | low 5/10, high 3/10, xhigh 3/10, max 5/10 |
+| Luna | off 1/10, low 1/10, high 4/10, xhigh 5/10, max 2/10 |
+| Sol | low 6/10, high 6/10, xhigh 7/10, max 8/10 |
+
+Ten games per config is a small sample: read single cells as rough. Two patterns stand out. Haiku 4.5 at high won none of its 10. Sol stays strong at every effort (6–8 of 10). The pooled ratings over all tournaments are in the viewer, and in [matchups.md](analysis/matchups.md) once it is refreshed.
 
 ## Beliefs and items
 What each model knew about the chamber when it shot, whether it acted on it, what became of its items, and how consistently it chose in repeated positions: [analysis/beliefs-and-items.md](analysis/beliefs-and-items.md).
