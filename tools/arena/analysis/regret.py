@@ -76,7 +76,7 @@ def load(regret_path: Path, knowledge_path: Path, depth: int, budget: int) -> Lo
     db.row_factory = sqlite3.Row
     db.execute("ATTACH DATABASE ? AS k", (f"file:{knowledge_path}?mode=ro",))
     rows = db.execute(
-        """SELECT p.model, p.effort, d.round + 1 AS round, d.remaining, d.choice, r.status, r.regret, r.exact, r.limited, r.evaluator
+        """SELECT p.model, p.effort, d.round + 1 AS round, d.remaining, d.choice, r.status, r.regret, r.exact, r.limited, r.evaluator, r.reload
            FROM regret r
            JOIN k.matches m ON m.match_id = r.match_id AND m.status = 'completed'
            JOIN k.decisions d ON d.match_id = r.match_id AND d.ordinal = r.ordinal AND d.by_whom = 'agent'
@@ -84,8 +84,8 @@ def load(regret_path: Path, knowledge_path: Path, depth: int, budget: int) -> Lo
            WHERE r.max_depth = ? AND r.budget = ? AND r.match_id NOT IN (SELECT match_id FROM k.players WHERE model LIKE ?)""",
         (depth, budget, f"%{SKIPPED_MODEL}%"),
     ).fetchall()
-    if len({row["evaluator"] for row in rows}) > 1:
-        raise SystemExit(f"{regret_path} holds rows of several evaluators at depth {depth} and budget {budget}; they must not be mixed.")
+    if len({(row["evaluator"], row["reload"]) for row in rows}) > 1:
+        raise SystemExit(f"{regret_path} holds rows of several evaluators or reload rules at depth {depth} and budget {budget}; they must not be mixed.")
     unscored = db.execute(
         """SELECT COUNT(*) FROM k.decisions d JOIN k.matches m ON m.match_id = d.match_id AND m.status = 'completed'
            WHERE d.by_whom = 'agent' AND d.match_id NOT IN (SELECT match_id FROM k.players WHERE model LIKE ?)

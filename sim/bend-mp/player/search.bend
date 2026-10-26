@@ -6,6 +6,7 @@ import ./types.bend as A
 import ./belief.bend as B
 import ./evaluation.bend as E
 import ../sm/items.bend as I
+import ./deal.bend as L
 
 # Bounded paranoid expectiminimax over a belief (ADR-0043). A node holds the
 # public belief and the searcher's private belief. The searcher maximizes its
@@ -279,31 +280,55 @@ def node.leaf(+public: List<&2, A.World>, private: List<&2, A.World>, +nodes: Na
   +value : U32 = static(public, me)
   Known{Value{value, static.private(private, me, value), Nil{}, nodes}}
 
-def node.request(request: T.Request, depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +nodes: Nat, +me: D.Seat) -> Task:
+def expected.private(worlds: List<&2, A.World>, +sum: F32, +public: U32) -> U32:
+  match worlds:
+    case Nil{}:
+      public
+    case _:
+      millionths(sum)
+
+def node.expected(sums: L.Sums, private: List<&2, A.World>, +nodes: Nat) -> Task:
+  match sums:
+    case L.Sums{public, sum}:
+      +value : U32 = millionths(public)
+      Known{Value{value, expected.private(private, sum, value), Nil{}, nodes}}
+
+def node.reload(reload: A.Reload, +public: List<&2, A.World>, +private: List<&2, A.World>, +nodes: Nat, +me: D.Seat) -> Task:
+  match reload:
+    case A.Static{}:
+      node.leaf(public, private, nodes, me)
+    case A.ExpectedDeal{}:
+      node.expected(L.expected(public, private, me), private, nodes)
+
+# Only a reload leaves a node at a draw: the phone's draw is expanded by
+# settle, and a round's opening draws follow its end, which is a leaf first.
+def node.request(request: T.Request, depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +nodes: Nat, +me: D.Seat, +reload: A.Reload) -> Task:
   match request depth:
     case T.Choose{seat, D.NonEmpty{move, rest}} 1n+child:
       Decide{D.seat.eq(seat, me), Moves{child, public, private, options.of(move <> rest, 0n), Nil{}, nodes}}
+    case T.Draw{_, _} _:
+      node.reload(reload, public, private, nodes, me)
     case _ _:
       node.leaf(public, private, nodes, me)
 
 # A move that won the round is a leaf with its exact value, even when the
 # next round began without a draw and already waits on a choice.
-def node.ended(ended: Maybe<&2, U32>, +state: T.State, depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +nodes: Nat, +me: D.Seat) -> Task:
+def node.ended(ended: Maybe<&2, U32>, +state: T.State, depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +nodes: Nat, +me: D.Seat, +reload: A.Reload) -> Task:
   match ended:
     case Some{_}:
       node.leaf(public, private, nodes, me)
     case None{}:
-      node.request(M.request(state), depth, public, private, nodes, me)
+      node.request(M.request(state), depth, public, private, nodes, me, reload)
 
 # What a node does: a choice with depth left is a decision; the end of the
 # round, a reload or no depth left is evaluated. RoundWon is public, so the
 # first world's notes speak for every world.
-def node.task(depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +nodes: Nat, +me: D.Seat) -> Task:
+def node.task(depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +nodes: Nat, +me: D.Seat, +reload: A.Reload) -> Task:
   match public:
     case Nil{}:
       Known{Value{0, 0, Nil{}, nodes}}
     case A.World{+state, _} <> _:
-      node.ended(E.exact(T.state.notes(state), me), state, depth, public, private, nodes, me)
+      node.ended(E.exact(T.state.notes(state), me), state, depth, public, private, nodes, me, reload)
 
 # A move costs one node per world it is played in. A move the budget cannot
 # pay for spends the iteration.
@@ -400,29 +425,29 @@ def decide(mine: Bool, result: Searched) -> Searched:
 
 # One def runs every step, so the recursion has one fuel. Each step spends a
 # unit, and a step that cannot run spends the iteration.
-def search(fuel: Nat, task: Task, +me: D.Seat, +budget: Nat) -> Searched:
+def search(fuel: Nat, task: Task, +me: D.Seat, +budget: Nat, +reload: A.Reload) -> Searched:
   match fuel task:
     case 0n task:
       Spent{task.nodes(task)}
     case _ Known{result}:
       result
     case 1n+(+fuel) Node{depth, public, private, nodes}:
-      search(fuel, node.task(depth, public, private, nodes, me), me, budget)
+      search(fuel, node.task(depth, public, private, nodes, me, reload), me, budget, reload)
     case 1n+(+fuel) Decide{mine, moves}:
-      decide(mine, search(fuel, moves, me, budget))
+      decide(mine, search(fuel, moves, me, budget, reload))
     case _ Moves{_, _, _, Nil{}, scored, nodes}:
       Scores{List.reverse(&2, Scored, scored), nodes}
     case 1n+(+fuel) Moves{+depth, +public, +private, Option{+index, move} <> options, scored, nodes}:
       +branches : Task = moves.task(depth, public, private, index, nodes, me, budget)
-      search(fuel, Scoring{depth, public, private, Option{index, move}, search(fuel, branches, me, budget), options, scored}, me, budget)
+      search(fuel, Scoring{depth, public, private, Option{index, move}, search(fuel, branches, me, budget, reload), options, scored}, me, budget, reload)
     case 1n+(+fuel) Scoring{depth, public, private, option, result, options, scored}:
-      search(fuel, scoring.next(depth, public, private, option, result, options, scored), me, budget)
+      search(fuel, scoring.next(depth, public, private, option, result, options, scored), me, budget, reload)
     case _ Branches{_, Nil{}, sum, nodes}:
       sum.value(sum, nodes)
     case 1n+(+fuel) Branches{+depth, Branch{public, private, public_p, private_p} <> branches, sum, nodes}:
-      search(fuel, Adding{depth, public_p, private_p, search(fuel, Node{depth, public, private, nodes}, me, budget), branches, sum}, me, budget)
+      search(fuel, Adding{depth, public_p, private_p, search(fuel, Node{depth, public, private, nodes}, me, budget, reload), branches, sum}, me, budget, reload)
     case 1n+(+fuel) Adding{depth, public_p, private_p, result, branches, sum}:
-      search(fuel, adding.next(depth, public_p, private_p, result, branches, sum), me, budget)
+      search(fuel, adding.next(depth, public_p, private_p, result, branches, sum), me, budget, reload)
 
 def line.of(scored: Scored) -> A.Line:
   match scored:
@@ -471,53 +496,64 @@ def fuel(budget: Nat) -> Nat:
 
 # Iterative deepening. `attempt` is the search to `depth` decisions; only a
 # finished one replaces `completed`, and the node count runs on across depths.
-def deepen(steps: Nat, attempt: Searched, completed: A.Analysis, +depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +options: List<&2, Option>, +me: D.Seat, +budget: Nat) -> A.Analysis:
+def deepen(steps: Nat, attempt: Searched, completed: A.Analysis, +depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +options: List<&2, Option>, +me: D.Seat, +budget: Nat, +reload: A.Reload) -> A.Analysis:
   match steps attempt:
     case _ Spent{nodes}:
       analysis.limited(completed, nodes)
     case 0n Scores{scored, nodes}:
       analysed(lines.of(scored), nodes, depth, False{})
     case 1n+rest Scores{scored, +nodes}:
-      +next : Searched = search(fuel(budget), Moves{depth, public, private, options, Nil{}, nodes}, me, budget)
-      deepen(rest, next, analysed(lines.of(scored), nodes, depth, False{}), 1n+depth, public, private, options, me, budget)
+      +next : Searched = search(fuel(budget), Moves{depth, public, private, options, Nil{}, nodes}, me, budget, reload)
+      deepen(rest, next, analysed(lines.of(scored), nodes, depth, False{}), 1n+depth, public, private, options, me, budget, reload)
     case _ Value{_, _, _, nodes}:
       analysis.limited(completed, nodes)
 
-def root(depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +options: List<&2, Option>, +me: D.Seat, +budget: Nat) -> A.Analysis:
+def root(depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +options: List<&2, Option>, +me: D.Seat, +budget: Nat, +reload: A.Reload) -> A.Analysis:
   match depth:
     case 0n:
       analysed(lines.static(options, static(private, me)), 0n, 0n, False{})
     case 1n+rest:
-      +first : Searched = search(fuel(budget), Moves{0n, public, private, options, Nil{}, 0n}, me, budget)
-      deepen(rest, first, analysed(lines.static(options, static(private, me)), 0n, 0n, True{}), 1n, public, private, options, me, budget)
+      +first : Searched = search(fuel(budget), Moves{0n, public, private, options, Nil{}, 0n}, me, budget, reload)
+      deepen(rest, first, analysed(lines.static(options, static(private, me)), 0n, 0n, True{}), 1n, public, private, options, me, budget, reload)
 
-def root.turn(mine: Bool, depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +options: List<&2, Option>, +me: D.Seat, +budget: Nat) -> A.Analysis:
+def root.turn(mine: Bool, depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +options: List<&2, Option>, +me: D.Seat, +budget: Nat, +reload: A.Reload) -> A.Analysis:
   match mine:
     case True{}:
-      root(depth, public, private, options, me, budget)
+      root(depth, public, private, options, me, budget, reload)
     case False{}:
       A.Invalid{"it is not this player's turn", 0n}
 
-def root.request(request: T.Request, depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +me: D.Seat, +budget: Nat) -> A.Analysis:
+def root.request(request: T.Request, depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +me: D.Seat, +budget: Nat, +reload: A.Reload) -> A.Analysis:
   match request:
     case T.Choose{seat, D.NonEmpty{move, rest}}:
-      root.turn(D.seat.eq(seat, me), depth, public, private, options.of(move <> rest, 0n), me, budget)
+      root.turn(D.seat.eq(seat, me), depth, public, private, options.of(move <> rest, 0n), me, budget, reload)
     case _:
       A.Invalid{"the position is not a choice", 0n}
 
-def root.belief(public: List<&2, A.World>, +private: List<&2, A.World>, depth: Nat, +me: D.Seat, +budget: Nat) -> A.Analysis:
+def root.belief(public: List<&2, A.World>, +private: List<&2, A.World>, depth: Nat, +me: D.Seat, +budget: Nat, +reload: A.Reload) -> A.Analysis:
   match public:
     case Nil{}:
       A.Invalid{"public log has no consistent shell/deck belief", 0n}
     case A.World{+state, +weight} <> +rest:
-      root.request(M.request(state), depth, A.World{state, weight} <> rest, private, me, budget)
+      root.request(M.request(state), depth, A.World{state, weight} <> rest, private, me, budget, reload)
 
-def analyse.built(built: B.Built, depth: Nat, +budget: Nat) -> A.Analysis:
+def analyse.built(built: B.Built, depth: Nat, +budget: Nat, +reload: A.Reload) -> A.Analysis:
   match built:
     case B.Built{A.Belief{public, private, me, _}}:
-      root.belief(public, private, depth, me, budget)
+      root.belief(public, private, depth, me, budget, reload)
     case B.Rejected{reason}:
       A.Invalid{reason, 0n}
 
-def analyse(+position: A.Position, depth: Nat, +budget: Nat) -> A.Analysis:
-  analyse.built(B.build(position), depth, budget)
+def analyse.table(table: D.Table, +position: A.Position, depth: Nat, +budget: Nat, +reload: A.Reload) -> A.Analysis:
+  match table reload:
+    case _ A.Static{}:
+      analyse.built(B.build(position), depth, budget, reload)
+    case D.TwoSeats{} A.ExpectedDeal{}:
+      analyse.built(B.build(position), depth, budget, reload)
+    case _ A.ExpectedDeal{}:
+      A.Invalid{"the expected-deal leaf takes two seats only", 0n}
+
+def analyse(position: A.Position, depth: Nat, +budget: Nat, +reload: A.Reload) -> A.Analysis:
+  match position:
+    case A.Position{D.Config{+table, plan}, board, log, me}:
+      analyse.table(table, A.Position{D.Config{table, plan}, board, log, me}, depth, budget, reload)

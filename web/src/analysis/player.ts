@@ -20,7 +20,7 @@ const PINNED_BEND = "/nix/store/szxlh9bw7pb8jp7gp8biw6j84r0fc2i3-bend-2.0.36/bin
 const PLAYER_SOURCE = new URL("../../../sim/bend-mp/analysis.bend", import.meta.url).pathname;
 
 interface PlayerExports {
-  readonly analyse: (position: BendNode, depth: bigint, budget: bigint) => BendNode;
+  readonly analyse: (position: BendNode, depth: bigint, budget: bigint, reload: BendNode) => BendNode;
   readonly orders: (log: BendNode, isPrivate: boolean) => BendNode;
 }
 
@@ -229,11 +229,21 @@ export interface Limits {
   readonly budget: number;
 }
 
+/**
+ * How the search values a reload it stops at: the static evaluation before the draw, or that evaluation averaged over every distinct deal
+ * of the reload (two seats only; at three or four the analysis is invalid). See docs/arena/analysis/regret.md.
+ */
+export const RELOAD_RULES = ["static", "expected-deal"] as const;
+
+export type ReloadRule = (typeof RELOAD_RULES)[number];
+
+const RELOAD_TAGS = { static: "player/types.Static", "expected-deal": "player/types.ExpectedDeal" } as const satisfies Readonly<Record<ReloadRule, string>>;
+
 export interface Player {
   /** Names the build: a hash of the compiled player, so that scores from different versions are never mixed. */
   readonly version: string;
   readonly orders: (log: ReadonlyArray<OwnEntry>, isPrivate: boolean) => Orders;
-  readonly analyse: (input: PlayerInput, limits: Limits) => Analysis;
+  readonly analyse: (input: PlayerInput, limits: Limits, reload: ReloadRule) => Analysis;
 }
 
 /** Builds the player into `dir` (with $BEND, else `bend` on PATH, else the pinned build) and wraps its exports. */
@@ -253,6 +263,6 @@ export const loadPlayer = async (dir: string): Promise<Player> => {
   return {
     version: createHash("sha256").update(readFileSync(output)).digest("hex").slice(0, 16),
     orders: (log, isPrivate) => nodesOf(exports.orders(logNode(log), isPrivate)).map(orderText),
-    analyse: (input, { depth, budget }) => analysisOf(decodeAnalysis(exports.analyse(inputNode(input), BigInt(depth), BigInt(budget)))),
+    analyse: (input, { depth, budget }, reload) => analysisOf(decodeAnalysis(exports.analyse(inputNode(input), BigInt(depth), BigInt(budget), { $: RELOAD_TAGS[reload] }))),
   };
 };

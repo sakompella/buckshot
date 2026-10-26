@@ -73,7 +73,7 @@ const regretAt = (played: Played, limits: Limits, chosen: string) => {
   const labelOf = (steps: ReadonlyArray<Move>) => agentMoveText(rosterOf(played.game.seats), me, steps);
   const menu = ["Shoot yourself", `Shoot ${rosterOf(played.game.seats).nameOf(me === 1 ? 3 : 1)}`];
 
-  return regretOf(player.analyse(inputOf(played), limits), labelOf, menu, chosen);
+  return regretOf(player.analyse(inputOf(played), limits, "static"), labelOf, menu, chosen);
 };
 
 // Both players at 1 health, and two shells left that the count shows are live. Player B moves.
@@ -128,7 +128,7 @@ test("another player's secret never reaches the player; the mover's own does", (
   expect(regretAt(heardBy(3), LIMITS, "Shoot yourself").status).toBe("invalid");
 });
 
-test("the script scores every agent decision of a recorded match once, and stores a fallback with no regret", async () => {
+test("the script scores every agent decision of a recorded match once, stores a fallback with no regret, and keeps reload rules apart", async () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-regret-script-"));
   const source = join(root, "tournament");
   const database = join(root, "analysis.sqlite");
@@ -141,8 +141,16 @@ test("the script scores every agent decision of a recorded match once, and store
     writeFileSync(join(source, "tournament.json"), JSON.stringify({ format: 1, created_at: "2026-01-01T00:00:00Z", git_commit: "test", config: { name: "test", seed: 42, delivery: "on-turn", endpoints: { fake: { api: "anthropic", url: "http://invalid", keyEnv: "UNUSED" } }, entrants: { a: { endpoint: "fake", model: "faux-a", effort: "medium" }, b: { endpoint: "fake", model: "faux-b", effort: "medium" } }, pairings: [["a", "b"]], blocksPerPairing: 1 }, schedule }));
     importTournaments({ database, sources: [source], skipped: {} });
 
-    const score = async (budget: number) => {
-      const run = Bun.spawn(["nice", "-n", "10", "bun", "scripts/arena-regret.ts", "--db", database, "--out", derived, "--match", "a_b_b0_p0", "--depth", "2", "--budget", String(budget)], { cwd: join(import.meta.dir, ".."), stdout: "ignore", stderr: "pipe" });
+    // A table from before the reload rule, with one row of another match.
+    const before = new Database(derived, { create: true });
+    before.exec(`CREATE TABLE regret (match_id TEXT, ordinal INTEGER, player TEXT, label TEXT, evaluator TEXT, max_depth INTEGER, budget INTEGER,
+      status TEXT, reason TEXT, values_json TEXT, best TEXT, best_score INTEGER, chosen_score INTEGER, regret INTEGER, exact INTEGER,
+      depth INTEGER, limited INTEGER, nodes INTEGER, ms REAL, PRIMARY KEY (match_id, ordinal, evaluator, max_depth, budget));
+      INSERT INTO regret (match_id, ordinal, evaluator, max_depth, budget, status) VALUES ('older', 0, 'old', 2, 1, 'fallback');`);
+    before.close();
+
+    const score = async (budget: number, reload = "static") => {
+      const run = Bun.spawn(["nice", "-n", "10", "bun", "scripts/arena-regret.ts", "--db", database, "--out", derived, "--match", "a_b_b0_p0", "--depth", "2", "--budget", String(budget), "--reload", reload], { cwd: join(import.meta.dir, ".."), stdout: "ignore", stderr: "pipe" });
       expect(await run.exited).toBe(0);
     };
 
@@ -150,16 +158,24 @@ test("the script scores every agent decision of a recorded match once, and store
     // A rerun with the same settings skips the scored decisions; a budget of one node leaves only the fallback.
     await score(2000);
     await score(1);
+    await score(1, "expected-deal");
 
     const analysis = new Database(database, { readonly: true });
     const agent = analysis.query<{ ordinal: number; label: string }, []>("SELECT ordinal, label FROM decisions WHERE by_whom = 'agent' ORDER BY ordinal").all();
     analysis.close();
     const out = new Database(derived, { readonly: true });
     const rows = out.query<{ ordinal: number; label: string; status: string; regret: number | null; values_json: string }, []>("SELECT ordinal, label, status, regret, values_json FROM regret WHERE budget = 2000 ORDER BY ordinal").all();
-    const fallbacks = out.query<{ status: string; regret: number | null }, []>("SELECT status, regret FROM regret WHERE budget = 1").all();
+    const fallbacks = (reload: string) => out.query<{ status: string; regret: number | null }, [string]>("SELECT status, regret FROM regret WHERE budget = 1 AND evaluator != 'old' AND reload = ?").all(reload);
+    const older = out.query<{ match_id: string; reload: string }, []>("SELECT match_id, reload FROM regret WHERE evaluator = 'old'").all();
+    const reloads = out.query<{ reload: string }, []>("SELECT DISTINCT reload FROM regret WHERE budget = 2000").all();
+    const staticFallbacks = fallbacks("static");
+    const expectedFallbacks = fallbacks("expected-deal");
     out.close();
 
-    expect(fallbacks).toEqual(agent.map(() => ({ status: "fallback", regret: null })));
+    expect(older).toEqual([{ match_id: "older", reload: "static" }]);
+    expect(reloads).toEqual([{ reload: "static" }]);
+    expect(staticFallbacks).toEqual(agent.map(() => ({ status: "fallback", regret: null })));
+    expect(expectedFallbacks).toEqual(staticFallbacks);
     expect(agent.length).toBeGreaterThan(0);
     expect(rows.map(({ ordinal, label }) => ({ ordinal, label }))).toEqual(agent);
     expect(rows.every((row) => row.status === "searched" && row.regret !== null && row.regret >= 0)).toBe(true);

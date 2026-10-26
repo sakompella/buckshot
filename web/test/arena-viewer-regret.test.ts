@@ -7,10 +7,10 @@ import { join } from "node:path";
 import { openRegret } from "../src/arena-viewer/regret.ts";
 
 const SCHEMA = `create table regret (
-  match_id text, ordinal integer, player text, label text, evaluator text, max_depth integer, budget integer,
+  match_id text, ordinal integer, player text, label text, evaluator text, max_depth integer, budget integer, reload text,
   status text, reason text, values_json text, best text, best_score integer, chosen_score integer, regret integer, exact integer,
   depth integer, limited integer, nodes integer, ms real,
-  primary key (match_id, ordinal, evaluator, max_depth, budget))`;
+  primary key (match_id, ordinal, evaluator, max_depth, budget, reload))`;
 
 interface Row {
   readonly match: string;
@@ -20,7 +20,7 @@ interface Row {
   readonly best: number;
   readonly chosen: number;
   readonly exact?: boolean;
-  readonly run?: readonly [string, number, number];
+  readonly run?: readonly [string, number, number, string];
 }
 
 const regretFile = (rows: ReadonlyArray<Row>): string => {
@@ -29,13 +29,13 @@ const regretFile = (rows: ReadonlyArray<Row>): string => {
 
   db.run(SCHEMA);
 
-  const insert = db.query(`insert into regret values (?, ?, ?, 'chosen move', ?, ?, ?, ?, null, '[]', 'best move', ?, ?, ?, ?, 4, 1, 0, 0)`);
+  const insert = db.query(`insert into regret values (?, ?, ?, 'chosen move', ?, ?, ?, ?, ?, null, '[]', 'best move', ?, ?, ?, ?, 4, 1, 0, 0)`);
 
   for (const row of rows) {
-    const [evaluator, depth, budget] = row.run ?? ["v1", 6, 20000];
+    const [evaluator, depth, budget, reload] = row.run ?? ["v1", 6, 20000, "static"];
     const searched = (row.status ?? "searched") === "searched";
 
-    insert.run(row.match, row.ordinal, row.player, evaluator, depth, budget, row.status ?? "searched", searched ? row.best : null, searched ? row.chosen : null, searched ? row.best - row.chosen : null, searched ? Number(row.exact ?? false) : null);
+    insert.run(row.match, row.ordinal, row.player, evaluator, depth, budget, reload, row.status ?? "searched", searched ? row.best : null, searched ? row.chosen : null, searched ? row.best - row.chosen : null, searched ? Number(row.exact ?? false) : null);
   }
 
   db.close();
@@ -81,13 +81,14 @@ test("a move shows its regret, whether it is exact and the scores in percentage 
   expect(regret.moves("other").size).toBe(0);
 });
 
-test("only the run with the most searched moves is read, so evaluators never mix", () => {
+test("only the run with the most searched moves is read, so evaluators and reload rules never mix", () => {
   const regret = openRegret(
     regretFile([
       { match: "m1", ordinal: 1, player: "A", best: 600_000, chosen: 500_000 },
       { match: "m1", ordinal: 2, player: "A", best: 600_000, chosen: 500_000 },
-      { match: "m1", ordinal: 1, player: "A", best: 900_000, chosen: 100_000, run: ["v2", 6, 20000] },
-      { match: "m1", ordinal: 1, player: "A", best: 900_000, chosen: 100_000, run: ["v1", 3, 20000] },
+      { match: "m1", ordinal: 1, player: "A", best: 900_000, chosen: 100_000, run: ["v2", 6, 20000, "static"] },
+      { match: "m1", ordinal: 1, player: "A", best: 900_000, chosen: 100_000, run: ["v1", 3, 20000, "static"] },
+      { match: "m1", ordinal: 1, player: "A", best: 900_000, chosen: 100_000, run: ["v1", 6, 20000, "expected-deal"] },
     ]),
   );
 

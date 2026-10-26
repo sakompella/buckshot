@@ -13,9 +13,11 @@ A score is the deciding player's chance of winning the current round, in million
 - **Invalid:** the player could not build a belief from the log; the reason is stored and there is no regret.
 - **Exact:** both the best and the chosen score are 0 or 1,000,000. Only a settled round gives those scores: a win, or a loss, which a dead player's 0 always is. Treat only exact rows as solved. `exact = 0` means not proven exact, not heuristic. Take both players at 1 health with one live and one blank shell left. Shooting the other player settles the round on every path, but its score of 500,000 is a mix of a win and a loss, so the row is not marked exact. The search does not report which values are settled, and changing the evaluator is out of scope for #3.
 
+`--reload` picks how a search values a reload it stops at ([#4](https://github.com/sakompella/buckshot/issues/4)). `static`, the default, is the static evaluation before the draw. `expected-deal` averages that evaluation over every distinct deal of the reload: the item amount, the items each seat takes, the batch and the shuffle, each answered with every value by the rules machine and weighted by its chance. Deals are counted as multisets: where items sit in the slots and the order of the shells do not tell two deals apart, since the static evaluation reads neither. It works at two seats only; at three or four every decision is invalid. Both rules search the same tree and spend the same nodes, so where no line reaches a reload they give the same scores.
+
 ## The `regret` table
 
-The script writes to the `regret` table of the derived database named by `--out`, creating it if needed and leaving other tables alone, so it can share a file with the knowledge tables. Rows are keyed by match, ordinal, player version, depth limit and budget. Each row is committed as it is scored, and a rerun skips the decisions already scored with the same key, so an interrupted run resumes where it stopped, and new matches are the only work left after an import. Runs with other settings sit beside it. Shards may write one file together: it is in WAL mode and each write waits up to 30 s for the other.
+The script writes to the `regret` table of the derived database named by `--out`, creating it if needed and leaving other tables alone, so it can share a file with the knowledge tables. Rows are keyed by match, ordinal, player version, depth limit, budget and reload rule. Each row is committed as it is scored, and a rerun skips the decisions already scored with the same key, so an interrupted run resumes where it stopped, and new matches are the only work left after an import. Runs with other settings sit beside it. Shards may write one file together: it is in WAL mode and each write waits up to 30 s for the other.
 
 | Column | Meaning |
 |---|---|
@@ -23,6 +25,7 @@ The script writes to the `regret` table of the derived database named by `--out`
 | `player`, `label` | The deciding player's letter and the move it chose. |
 | `evaluator` | A hash of the compiled player. Never mix rows with different values. |
 | `max_depth`, `budget` | The run's depth limit (decisions, by every player) and node budget. |
+| `reload` | `static` or `expected-deal`. A table from before this column is rebuilt with every old row `static` the next time the script opens it. |
 | `status` | `searched`, `fallback` or `invalid`. |
 | `values_json` | Every legal move with its score, in the machine's order. |
 | `best`, `best_score`, `chosen_score`, `regret`, `exact` | Set only when searched. Ties go to the first move. `exact` is 1 when proven exact, 0 when not proven (see above). |
@@ -37,8 +40,8 @@ With the defaults, depth 6 and a budget of 20,000 nodes, 7 matches (352 decision
 
 From `web/`, after `bun run rules`:
 
-    nice -n 10 bun scripts/arena-regret.ts --db <buckshot.sqlite> --out <derived>.sqlite --match <match name> [--depth 6] [--budget 20000]
-    nice -n 10 bun scripts/arena-regret.ts --db <buckshot.sqlite> --out <derived>.sqlite --all [--shard K/N] [--depth 6] [--budget 20000]
+    nice -n 10 bun scripts/arena-regret.ts --db <buckshot.sqlite> --out <derived>.sqlite --match <match name> [--depth 6] [--budget 20000] [--reload static]
+    nice -n 10 bun scripts/arena-regret.ts --db <buckshot.sqlite> --out <derived>.sqlite --all [--shard K/N] [--depth 6] [--budget 20000] [--reload static]
 
 `--all` takes every replay-validated match in tournament and match name order. `--shard K/N` (K from 1) keeps every Nth match, so N processes can run side by side on one `--out` file. A match that fails is logged and skipped, the shard exits 1 at the end, and a rerun retries it. Progress is one stderr line per match.
 
@@ -70,7 +73,7 @@ This is a casual pass over the full run, with counts and means and no intervals.
 ## Limits
 
 - The value is the chance of winning the round, not the match's cash.
-- Reloads are leaves: a move that empties the gun is valued before the next load is drawn.
+- Reloads are leaves: with the default rule a move that empties the gun is valued before the next load is drawn. The expected-deal rule averages over the deal, but still stops at the next choice.
 - The static evaluation's item weights are untrained starting values, so heuristic regrets carry its biases. Read small regrets with care.
 - Regret is a mean over decisions, not over matches. Decisions of one match are not independent, and a config's opponents differ between tournaments. Treat gaps of a few tenths of a point as noise.
 - A regret of 0 means the chosen move tied the best score at the depth reached, not that it was proven right. Only the 11% of exact rows are.

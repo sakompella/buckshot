@@ -29,7 +29,8 @@ const spent = {};
 const timed = (name, f) => (...args) => { const t = performance.now(); try { return f(...args); } finally { spent[name] = (spent[name] ?? 0) + performance.now() - t; } };
 
 const position = (cfg, board, log, me) => ({ $: 'types.Position', config: cfg, board, log: list(log), me: seat(me) });
-const analyse = (pos, depth, budget) => P.analyse(pos, BigInt(depth), BigInt(budget));
+const STATIC = { $: 'types.Static' }, EXPECTED_DEAL = { $: 'types.ExpectedDeal' };
+const analyse = (pos, depth, budget, reload = STATIC) => P.analyse(pos, BigInt(depth), BigInt(budget), reload);
 const lines = analysis => array(analysis.lines);
 const menu = request => [request.moves.head, ...array(request.moves.tail)];
 
@@ -198,7 +199,7 @@ function checkPublicOnly(pos) {
   const scores = belief => {
     const options = X('options.of')(list(menu(pos.request)), 0n);
     const task = { $: 'search.Moves', depth: replies ? 1n : 0n, public: belief.public, private: belief.private, options, scored: list([]), nodes: 0n };
-    const result = X('search')(X('fuel')(1000000n), task, seat(pos.me), 1000000n);
+    const result = X('search')(X('fuel')(1000000n), task, seat(pos.me), 1000000n, STATIC);
     assert.equal(kind(result), 'Scores');
     return array(result.scored);
   };
@@ -287,20 +288,108 @@ function checkLongHistory() {
   checked('long history');
 }
 
+// The expected-deal leaf
+// ======================
+
+const E = name => P[`evaluation.${name}`];
+const gunOf = state => array(state.world.gun);
+const allAlike = shells => shells.length > 0 && shells.every(s => kind(s) === kind(shells[0]));
+const dealt = (state, me) => P['deal.expected'](list([{ $: 'types.World', state, weight: 1 }]), list([]), seat(me)).public;
+
+// Plays every draw sequence from `state` to the next choice, with no merging,
+// and averages the static value over them.
+function plainDeal(state, me, p = 1) {
+  const request = S('request')(state);
+  if (kind(request) !== 'Draw') return p * E('state')(state, seat(me), allAlike(gunOf(state)));
+  const values = Number(request.range.extra) + 2;
+  return sum(Array.from({ length: values }, (_, k) => plainDeal(S('answer')(state, BigInt(k)).state, me, p / values)));
+}
+
+// Two seats, a fixed load of one live and one blank, and one item each from
+// saw and beer. A shot on the last shell reloads: the four ways of dealing
+// (saw or beer to each seat) are equally likely, and the batch and the
+// shuffle change nothing the static evaluation reads.
+function checkHandDeal() {
+  const cfg = config(2, [round({ health: 3, live: 1, blank: 1, amount: 1, items: { saw: {}, beer: {} } })]);
+  const pos = scripted(cfg, 2, shootOther, at => gunOf(at.state).length === 1);
+  let reloads = 0;
+  for (const [index, move] of menu(pos.request).entries()) {
+    if (kind(move) !== 'Shoot') continue;
+    const played = S('answer')(pos.state, BigInt(index)).state;
+    assert.equal(kind(S('request')(played)), 'Draw', 'the last shell reloads');
+    const deals = [[0, 0], [0, 1], [1, 0], [1, 1]].map(items => {
+      let state = played;
+      const left = [...items];
+      for (let request = S('request')(state); kind(request) === 'Draw'; request = S('request')(state)) {
+        const item = kind(request.label) === 'ItemChoice';
+        if (item) assert.equal(Number(request.range.extra), 0, 'each seat draws from saw and beer');
+        state = S('answer')(state, BigInt(item ? left.shift() : 0)).state;
+      }
+      assert.equal(left.length, 0, 'each seat draws once');
+      return E('state')(state, seat(pos.me), false) / 4;
+    });
+    const line = lines(analyse(pos.position, 1, 100000, EXPECTED_DEAL))[index];
+    close(line.score, Math.round(sum(deals)), 'the expected deal is the mean over the four deals');
+    reloads++;
+  }
+  assert.ok(reloads > 0);
+  checked('expected deal by hand');
+}
+
+// Merging states that differ only in slot order and shell order, and drawing
+// each load once for all its item outcomes, give the plain enumeration's value.
+// Amounts of one and two, a jammer capped at one on the table, and a fixed
+// three-shell load keep the plain tree small.
+function checkMergedDeal() {
+  const items = { saw: { per_player: 2 }, jammer: { per_player: 1, on_table: 1 }, beer: {} };
+  for (const amount of [1, 2]) {
+    const cfg = config(2, [round({ health: 4, live: 2, blank: 1, amount, items })]);
+    let stepped = S('start')(cfg), state = stepped.state, reloads = 0;
+    for (let step = 0; step < 400 && reloads < 3; step++) {
+      const request = S('request')(state);
+      if (kind(request) !== 'Choose' && kind(request) !== 'Draw') break;
+      if (kind(request) === 'Draw' && gunOf(state).length === 0 && kind(S('stage')(state)) !== 'Playing') {
+        const me = 1 + 2 * (step % 2);
+        const plain = plainDeal(state, me);
+        assert.ok(Math.abs(dealt(state, me) - plain) < 1e-3 * plain, `merged ${dealt(state, me)} vs plain ${plain}`);
+        reloads++;
+        checked('merged deal');
+        while (kind(S('request')(state)) === 'Draw') state = S('answer')(state, BigInt(random() % (Number(S('request')(state).range.extra) + 2))).state;
+        continue;
+      }
+      const answer = kind(request) === 'Choose' ? random() % menu(request).length : random() % (Number(request.range.extra) + 2);
+      state = S('answer')(state, BigInt(answer)).state;
+    }
+    assert.ok(reloads > 0, `amount ${amount} reached a reload`);
+  }
+}
+
+// With fewer shells than decisions to search, no line reaches a reload, so
+// the two rules score alike.
+function checkNoReload(pos) {
+  const shells = gunOf(pos.state).length;
+  if (pos.cfg.table.$.endsWith('TwoSeats') === false || shells <= 2) return;
+  assert.deepEqual(json(analyse(pos.position, 2, 100000, EXPECTED_DEAL)), json(analyse(pos.position, 2, 100000)), 'no reload in reach, no difference');
+  checked('no reload in reach');
+}
+
 function checkInvalid(pos) {
   const other = sockets(pos.cfg.table.$.endsWith('TwoSeats') ? 2 : pos.cfg.table.$.endsWith('ThreeSeats') ? 3 : 4).find(s => s !== pos.me);
   const analysis = analyse({ ...pos.position, me: seat(other) }, 1, 1000);
   assert.equal(kind(analysis), 'Invalid', 'only the player to move is analysed');
+  if (!pos.cfg.table.$.endsWith('TwoSeats')) assert.equal(kind(analyse(pos.position, 1, 1000, EXPECTED_DEAL)), 'Invalid', 'the expected-deal leaf takes two seats only');
   assert.equal(kind(P.choose({ ...pos.position, me: seat(other) }, { $: 'types.Level', depth: 1n, budget: 1000n, gap: 0, seed: 0 })), 'Unavailable');
   assert.equal(kind(P.regret(analysis, 0n)), 'None');
   checked('invalid');
 }
 
 const started = performance.now();
-const t = Object.fromEntries(Object.entries({ checkForcedWin, checkRoundEnd, checkLongHistory, checkCertain, checkDeeper, checkPublicOnly, checkOutcomes, checkPolicy, checkDeepening, checkInvalid, analyse }).map(([k, f]) => [k, timed(k, f)]));
+const t = Object.fromEntries(Object.entries({ checkForcedWin, checkRoundEnd, checkLongHistory, checkHandDeal, checkMergedDeal, checkNoReload, checkCertain, checkDeeper, checkPublicOnly, checkOutcomes, checkPolicy, checkDeepening, checkInvalid, analyse }).map(([k, f]) => [k, timed(k, f)]));
 t.checkForcedWin();
 t.checkRoundEnd();
 t.checkLongHistory();
+t.checkHandDeal();
+t.checkMergedDeal();
 sample.forEach((pos, i) => {
   const analysis = t.analyse(pos.position, 1, 100000);
   checkAnalysis(analysis, 1, 100000);
@@ -308,10 +397,11 @@ sample.forEach((pos, i) => {
   t.checkDeeper(pos, analysis);
   t.checkPublicOnly(pos);
   if (i % 4 === 0) t.checkOutcomes(pos);
+  if (i % 4 === 1) t.checkNoReload(pos);
   if (i % 8 === 0) t.checkPolicy(pos, analysis);
   if (i % 16 === 0) t.checkDeepening(pos);
   if (i % 32 === 0) t.checkInvalid(pos);
 });
-assert.ok(count['certain win'] > 0 && count['deeper forced win'] > 0 && count['public only'] > 0 && count['public only, with replies'] > 0 && privateMattered > 0 && count.deepening > 0, `every property ran on a case that matters: ${json(count)}`);
+assert.ok(count['certain win'] > 0 && count['deeper forced win'] > 0 && count['public only'] > 0 && count['public only, with replies'] > 0 && privateMattered > 0 && count.deepening > 0 && count['no reload in reach'] > 0, `every property ran on a case that matters: ${json(count)}`);
 console.log(`player: ${sample.length} positions, ${((performance.now() - started) / 1000).toFixed(0)} s; checks ${json(count)}; private clues changed private scores ${privateMattered} times`);
 if (process.env.PLAYER_PROFILE) console.log(json(Object.fromEntries(Object.entries(spent).map(([k, v]) => [k, Math.round(v / 1000)]))));

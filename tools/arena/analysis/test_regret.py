@@ -22,15 +22,15 @@ def databases(directory: Path, players, decisions, scores, matches=None):
     knowledge.commit()
     scored = sqlite3.connect(directory / "regret.sqlite")
     scored.execute(
-        "CREATE TABLE regret (match_id TEXT, ordinal INTEGER, evaluator TEXT, max_depth INTEGER, budget INTEGER, status TEXT, regret INTEGER, exact INTEGER, limited INTEGER)"
+        "CREATE TABLE regret (match_id TEXT, ordinal INTEGER, evaluator TEXT, max_depth INTEGER, budget INTEGER, reload TEXT, status TEXT, regret INTEGER, exact INTEGER, limited INTEGER)"
     )
-    scored.executemany("INSERT INTO regret VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", scores)
+    scored.executemany("INSERT INTO regret VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", scores)
     scored.commit()
     return directory / "regret.sqlite", directory / "knowledge.sqlite"
 
 
-def score(match, ordinal, regret_value, exact=0, status="searched", evaluator="e", limited=0):
-    return (match, ordinal, evaluator, 6, 20000, status, regret_value, exact, limited)
+def score(match, ordinal, regret_value, exact=0, status="searched", evaluator="e", limited=0, reload="static"):
+    return (match, ordinal, evaluator, 6, 20000, reload, status, regret_value, exact, limited)
 
 
 class Percentile(unittest.TestCase):
@@ -82,6 +82,14 @@ class Load(unittest.TestCase):
                 players=[("m1", "A", "opus", "high")],
                 decisions=[("m1", 0, "A", "agent", "Use beer", 2, 1), ("m1", 1, "A", "agent", "Use beer", 2, 1)],
                 scores=[score("m1", 0, 1, evaluator="old"), score("m1", 1, 1, evaluator="new")],
+            )
+
+    def test_refuses_to_mix_reload_rules(self):
+        with self.assertRaises(SystemExit):
+            self.load(
+                players=[("m1", "A", "opus", "high")],
+                decisions=[("m1", 0, "A", "agent", "Use beer", 2, 1)],
+                scores=[score("m1", 0, 1), score("m1", 0, 1, reload="expected-deal")],
             )
 
 
