@@ -48,7 +48,7 @@ The summary tables below come from the regret and knowledge databases, read only
 
     python3 tools/arena/analysis/regret.py [--regret <derived>/regret.sqlite] [--knowledge <derived>/knowledge.sqlite] [--doc docs/arena/analysis/regret.md]
 
-With `--doc` it rewrites the tables at the end of this page. `python3 -m unittest discover -s tools/arena/analysis` runs its tests.
+With `--doc` it rewrites the tables at the end of this page. The by-round tables come from `tools/arena/analysis/by_round.py`, which also reads the analysis database for round winners (`--db`) and rewrites the tables of the last section the same way. `python3 -m unittest discover -s tools/arena/analysis` runs its tests.
 
 ## Results
 
@@ -136,3 +136,85 @@ This is a casual pass over the full run, with counts and means and no intervals.
 | 5 | 85.5% | 6,073 | 2.1 | 7.0 | 10,374 | 2.0 | 5.1 |
 | 6 | 96.6% | 3,469 | 1.9 | 5.7 | 7,025 | 2.4 | 4.5 |
 <!-- tables:end -->
+
+## By round
+
+Does a model play the short early rounds differently from the later, item-heavy ones? This is a casual pass for [#14](https://github.com/sakompella/buckshot/issues/14), with counts in brackets and no intervals. It covers the 2,471 finished matches with no DeepSeek seat. That is more than the 110,880-decision cut above, because it adds the 288 matches of the cross-samples tournament. Round winners come from the public lines of the match events, as the viewer reads them; the last round's winner is inferred from final cash when its line is missing. Rounds are numbered from 1. A win rate is the share of its rounds a config won, against whoever it met, so it also reflects the opponents' strength.
+
+1. **No config wins one round number more than another.**
+   - Pooled over efforts, a model's win rate moves by 4 points or less between rounds for six of the eight models. Astra goes from 58.4% to 62.6% over 219 rounds, and Haiku 4.5 from 46.8% to 42.9% and back to 44.5% over 616.
+   - Per config the cells hold 30 to 280 rounds, so a gap of 10 points is within noise at 110 rounds. A one-off chi-square test across rounds, run outside the script, finds 2 of the 38 configs below p = 0.05 (Haiku 5.5 off and max). About 2 are expected by chance.
+2. **Regret is flat across rounds, except that round 1 shots are a little worse.**
+   - Mean regret over all moves is 2.6, 2.4 and 2.5 points in rounds 1, 2 and 3. Models keep their order in every round: the same three, Opus, Astra and Sol, are lowest and Haiku 4.5 is highest.
+   - Shots cost 3.4 points in round 1 against 2.9 and 3.1 later. Item moves stay at 1.8 to 1.9. The table does not say why. Decisions of one match are not independent, so the gap is small evidence.
+   - Round 3 is often a dead rubber, since prizes are 70k, 75k and 80k and a 2-0 lead settles the winner ([patterns.md](patterns.md)). A one-off check outside the script finds round 3 regret no worse after a 2-0 lead than after a 1-1 split: 2.5 points over 20,905 decisions against 2.4 over 21,039.
+
+<!-- by-round:start -->
+7,413 rounds of finished matches; 0 matches left out because their round winners did not match the final cash.
+
+### Win rate and regret by round, per model
+
+| model | effort | round 1 win rate | round 1 mean regret | round 2 win rate | round 2 mean regret | round 3 win rate | round 3 mean regret |
+|---|---|---|---|---|---|---|---|
+| claude-opus-5-5 | all | 55.1% (399) | 1.0 (3,186) | 54.9% (399) | 1.1 (3,518) | 52.6% (399) | 1.2 (3,272) |
+| gpt-6-astra | all | 58.4% (219) | 1.5 (1,724) | 62.6% (219) | 1.2 (1,872) | 62.6% (219) | 1.4 (1,797) |
+| gpt-6.1-sol | all | 53.2% (616) | 1.3 (4,604) | 55.0% (616) | 1.4 (5,548) | 52.8% (616) | 1.4 (4,987) |
+| claude-sonnet-5-5 | all | 51.0% (826) | 1.9 (6,078) | 50.6% (826) | 1.7 (7,472) | 52.2% (826) | 1.6 (6,718) |
+| claude-haiku-5-5 | all | 51.2% (828) | 2.0 (6,424) | 50.7% (828) | 1.7 (7,168) | 49.2% (828) | 2.1 (7,044) |
+| gpt-5.6-terra | all | 48.9% (616) | 2.6 (4,709) | 50.0% (616) | 2.4 (5,207) | 50.6% (616) | 2.3 (5,200) |
+| gpt-6-luna | all | 43.9% (822) | 3.8 (7,230) | 44.5% (822) | 3.3 (8,305) | 45.6% (822) | 3.4 (7,612) |
+| claude-haiku-4-5-20251001 | all | 46.8% (616) | 4.9 (5,056) | 42.9% (616) | 4.6 (5,387) | 44.5% (616) | 5.2 (5,032) |
+| all |  | - | 2.6 (39,011) | - | 2.4 (44,477) | - | 2.5 (41,662) |
+
+### Mean regret by round and kind of move
+
+| round | all moves | shots | item moves |
+|---|---|---|---|
+| 1 | 2.6 (39,011) | 3.4 (19,198) | 1.8 (19,813) |
+| 2 | 2.4 (44,477) | 2.9 (20,900) | 1.9 (23,577) |
+| 3 | 2.5 (41,662) | 3.1 (19,638) | 1.9 (22,024) |
+
+### Win rate and regret by round, per config
+
+| model | effort | round 1 win rate | round 1 mean regret | round 2 win rate | round 2 mean regret | round 3 win rate | round 3 mean regret |
+|---|---|---|---|---|---|---|---|
+| claude-opus-5-5 | low | 46.7% (30) | 1.4 (223) | 63.3% (30) | 1.2 (252) | 56.7% (30) | 0.9 (205) |
+| claude-opus-5-5 | medium | 57.1% (238) | 1.1 (1,947) | 55.5% (238) | 1.1 (2,113) | 52.9% (238) | 1.3 (2,014) |
+| claude-opus-5-5 | high | 48.0% (50) | 1.0 (350) | 54.0% (50) | 1.0 (450) | 42.0% (50) | 1.2 (398) |
+| claude-opus-5-5 | xhigh | 56.8% (81) | 0.9 (666) | 50.6% (81) | 1.1 (703) | 56.8% (81) | 1.0 (655) |
+| gpt-6-astra | medium | 58.4% (219) | 1.5 (1,724) | 62.6% (219) | 1.2 (1,872) | 62.6% (219) | 1.4 (1,797) |
+| gpt-6.1-sol | low | 53.3% (90) | 1.3 (649) | 47.8% (90) | 1.9 (766) | 48.9% (90) | 1.4 (670) |
+| gpt-6.1-sol | medium | 55.1% (256) | 1.5 (2,063) | 60.9% (256) | 1.3 (2,241) | 53.1% (256) | 1.4 (2,047) |
+| gpt-6.1-sol | high | 53.3% (90) | 1.4 (644) | 48.9% (90) | 1.2 (878) | 44.4% (90) | 1.4 (677) |
+| gpt-6.1-sol | xhigh | 47.8% (90) | 1.2 (629) | 48.9% (90) | 1.3 (802) | 57.8% (90) | 1.2 (764) |
+| gpt-6.1-sol | max | 53.3% (90) | 1.0 (619) | 57.8% (90) | 1.6 (861) | 58.9% (90) | 1.4 (829) |
+| claude-sonnet-5-5 | off | 51.8% (110) | 2.5 (795) | 39.1% (110) | 2.5 (991) | 47.3% (110) | 2.0 (873) |
+| claude-sonnet-5-5 | low | 46.4% (110) | 2.4 (726) | 35.5% (110) | 2.0 (979) | 45.5% (110) | 2.2 (909) |
+| claude-sonnet-5-5 | medium | 45.7% (276) | 2.4 (2,000) | 54.3% (276) | 2.0 (2,526) | 54.0% (276) | 1.8 (2,310) |
+| claude-sonnet-5-5 | high | 50.9% (110) | 1.8 (846) | 55.5% (110) | 1.6 (1,034) | 44.5% (110) | 1.7 (810) |
+| claude-sonnet-5-5 | xhigh | 57.3% (110) | 1.1 (835) | 49.1% (110) | 1.2 (977) | 52.7% (110) | 0.9 (856) |
+| claude-sonnet-5-5 | max | 61.8% (110) | 0.8 (876) | 64.5% (110) | 0.8 (965) | 66.4% (110) | 0.9 (960) |
+| claude-haiku-5-5 | off | 47.3% (110) | 4.3 (805) | 31.8% (110) | 3.1 (903) | 29.1% (110) | 4.0 (893) |
+| claude-haiku-5-5 | low | 50.0% (110) | 2.0 (866) | 42.7% (110) | 2.4 (935) | 53.6% (110) | 2.5 (970) |
+| claude-haiku-5-5 | medium | 52.2% (278) | 2.0 (2,140) | 52.2% (278) | 1.8 (2,411) | 49.3% (278) | 2.1 (2,406) |
+| claude-haiku-5-5 | high | 52.7% (110) | 1.5 (863) | 51.8% (110) | 1.5 (944) | 52.7% (110) | 1.6 (939) |
+| claude-haiku-5-5 | xhigh | 52.7% (110) | 1.0 (877) | 55.5% (110) | 1.0 (951) | 53.6% (110) | 1.2 (922) |
+| claude-haiku-5-5 | max | 50.9% (110) | 1.1 (873) | 68.2% (110) | 0.9 (1,024) | 56.4% (110) | 1.0 (914) |
+| gpt-5.6-terra | low | 42.2% (90) | 3.5 (643) | 46.7% (90) | 2.9 (732) | 47.8% (90) | 3.0 (736) |
+| gpt-5.6-terra | medium | 46.9% (256) | 3.0 (1,887) | 49.6% (256) | 2.6 (2,099) | 48.4% (256) | 2.4 (2,052) |
+| gpt-5.6-terra | high | 50.0% (90) | 2.7 (699) | 48.9% (90) | 2.3 (732) | 50.0% (90) | 2.8 (713) |
+| gpt-5.6-terra | xhigh | 56.7% (90) | 1.8 (730) | 54.4% (90) | 2.1 (783) | 53.3% (90) | 2.2 (821) |
+| gpt-5.6-terra | max | 52.2% (90) | 1.3 (750) | 51.1% (90) | 1.5 (861) | 57.8% (90) | 1.5 (878) |
+| gpt-6-luna | off | 30.0% (110) | 5.1 (996) | 35.5% (110) | 3.6 (1,111) | 35.5% (110) | 3.5 (1,055) |
+| gpt-6-luna | low | 30.0% (110) | 4.8 (1,030) | 39.1% (110) | 4.1 (1,157) | 25.5% (110) | 4.2 (996) |
+| gpt-6-luna | medium | 36.4% (272) | 4.3 (2,258) | 33.1% (272) | 3.9 (2,680) | 34.6% (272) | 3.8 (2,498) |
+| gpt-6-luna | high | 52.7% (110) | 3.0 (957) | 55.5% (110) | 3.3 (1,122) | 58.2% (110) | 3.4 (1,008) |
+| gpt-6-luna | xhigh | 63.6% (110) | 2.5 (991) | 60.9% (110) | 2.3 (1,047) | 69.1% (110) | 2.6 (1,046) |
+| gpt-6-luna | max | 61.8% (110) | 2.2 (998) | 60.0% (110) | 2.1 (1,188) | 67.3% (110) | 2.3 (1,009) |
+| claude-haiku-4-5-20251001 | off | 36.7% (90) | 6.1 (764) | 33.3% (90) | 5.3 (827) | 38.9% (90) | 6.7 (811) |
+| claude-haiku-4-5-20251001 | minimal | 51.1% (90) | 5.2 (806) | 46.7% (90) | 4.2 (810) | 52.2% (90) | 4.5 (718) |
+| claude-haiku-4-5-20251001 | low | 48.9% (90) | 4.7 (767) | 47.8% (90) | 4.6 (803) | 56.7% (90) | 5.4 (775) |
+| claude-haiku-4-5-20251001 | medium | 46.5% (256) | 4.7 (1,990) | 38.3% (256) | 4.8 (2,114) | 40.6% (256) | 4.7 (2,016) |
+| claude-haiku-4-5-20251001 | high | 51.1% (90) | 4.3 (729) | 56.7% (90) | 4.0 (833) | 41.1% (90) | 5.3 (712) |
+| all |  | - | 2.6 (39,011) | - | 2.4 (44,477) | - | 2.5 (41,662) |
+<!-- by-round:end -->
