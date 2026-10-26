@@ -45,8 +45,8 @@ def pair_of(a: str, b: str) -> tuple[str, str]:
 Cells = dict[tuple, list[float]]
 
 
-def cells_of(games: list[Game], weights: dict | None = None, unit=lambda game: game.block, starter: bool = False) -> Cells:
-    """Games grouped by who sat first; `weights` counts each resampling unit's repeats (a block unless `unit` says seed)."""
+def cells_of(games: list[Game], weights: dict | None = None, unit=lambda game: game.block, starter: bool = False, share=lambda game: game.share_first) -> Cells:
+    """Games grouped by who sat first; `weights` counts each resampling unit's repeats (a block unless `unit` says seed). `share` is what a game counts: its win share, or its pot share."""
     cells: Cells = {}
     for game in games:
         count = 1 if weights is None else weights.get(unit(game), 0)
@@ -54,7 +54,7 @@ def cells_of(games: list[Game], weights: dict | None = None, unit=lambda game: g
             key = (game.first, game.second, int(game.starter == 1)) if starter else (game.first, game.second)
             cell = cells.setdefault(key, [0.0, 0.0])
             cell[0] += count
-            cell[1] += count * game.share_first
+            cell[1] += count * share(game)
     return cells
 
 

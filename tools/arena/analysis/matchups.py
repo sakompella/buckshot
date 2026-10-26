@@ -2,7 +2,7 @@
 """Matchup analysis of the scored arena matches: ratings per cohort, pair effects, seat and starter effects.
 
 Reads the analysis database read-only and prints markdown tables. With --doc FILE the tables replace the text
-between the tables markers of that file. Cohorts (see load.cohort_of) are never pooled into one ranking. Intervals
+between the tables markers of that file. Ratings come from one pooled fit over every scored match; cohorts (see load.cohort_of) group matches only for pair effects and seat figures. Intervals
 are 95% bootstraps over seed blocks, drawn with a fixed RNG seed so a rerun prints the same numbers.
 
     python3 tools/arena/analysis/matchups.py [--db PATH] [--draws 2000] [--doc docs/arena/analysis/matchups.md]
@@ -52,9 +52,6 @@ def coverage(db, by_cohort: dict[str, list[Game]]) -> str:
             per_pair[pair] = per_pair.get(pair, 0) + 1
         counts = sorted(per_pair.values())
         sizes = [len(b) for b in blocks_of(games).values()]
-        codes = {}
-        for g in games:
-            codes[g.code] = codes.get(g.code, 0) + 1
         parts = bt.components(games)
         rows.append(
             [
@@ -64,41 +61,53 @@ def coverage(db, by_cohort: dict[str, list[Game]]) -> str:
                 f"{sizes.count(2)} / {sizes.count(1)}",
                 f"{len(per_pair)}/{len(entrants) * (len(entrants) - 1) // 2}",
                 f"{counts[0]} / {statistics.median(counts):g} / {counts[-1]}",
-                ", ".join(f"`{c}` {n}" for c, n in sorted(codes.items())),
+                str(len({g.code for g in games})),
                 "yes" if len(parts) == 1 else f"no, {len(parts)} groups",
                 ", ".join(f"{n} {s}" for s, n in sorted(scheduled.get(name, {}).items())),
             ]
         )
-    header = ["cohort", "entrants", "scored matches", "complete / half blocks", "pairs played", "matches per pair min / median / max", "matches by code hash", "connected", "scheduled by status"]
+    header = ["cohort", "entrants", "scored matches", "complete / half blocks", "pairs played", "matches per pair min / median / max", "code versions", "connected", "scheduled by status"]
     return table(header, rows) + f"\n\nMatches outside every cohort: {sum(scheduled.get('(outside every cohort)', {}).values())}."
 
 
-# ---- ratings and observed pairs
+# ---- pooled ratings and observed pairs
 
-def summarize(cells: bt.Cells, names: set[str]):
-    """Elo ratings, and for each pair the games, the first-named entrant's observed wins and its fitted wins."""
-    fitted = bt.fit(cells, entrants=names)
+SHARES = {"wins": lambda game: game.share_first, "cash": lambda game: game.pot_first}
+
+
+def summarize(cells: bt.Cells, theta: dict[str, float]):
+    """For each pair, the games, the first-named entrant's observed wins and its wins fitted by the pooled ratings."""
     pairs = {}
     for low, high in sorted({bt.pair_of(*key) for key in cells}):
         forward = cells.get((low, high), [0.0, 0.0])
         backward = cells.get((high, low), [0.0, 0.0])
         n = forward[0] + backward[0]
-        pairs[(low, high)] = (n, forward[1] + backward[0] - backward[1], n * bt.sigmoid(fitted.theta[low] - fitted.theta[high]))
-    return fitted.elo(), pairs
+        pairs[(low, high)] = (n, forward[1] + backward[0] - backward[1], n * bt.sigmoid(theta[low] - theta[high]))
+    return pairs
 
 
-def ratings_and_pairs(name: str, games: list[Game], draws: int, rng: random.Random) -> str:
+def pooled_ratings(games: list[Game], by_cohort: dict[str, list[Game]], draws: int, rng: random.Random) -> tuple[str, dict[str, str]]:
+    """One fit over every scored match, on win shares and again on pot shares, and each pair's residual against it.
+
+    The same resampled blocks refit both, so the two ratings' intervals are comparable. Returns the ratings table
+    and the observed-pair tables of the cohorts in `by_cohort`.
+    """
     names = {n for g in games for n in (g.first, g.second)}
-    elo, pairs = summarize(bt.cells_of(games), names)
+    fits = {basis: bt.fit(bt.cells_of(games, share=share), entrants=names) for basis, share in SHARES.items()}
+    elo = {basis: fitted.elo() for basis, fitted in fits.items()}
     ids = sorted(blocks_of(games))
-    rating_draws: dict[str, list[float]] = {}
-    effect_draws: dict[tuple[str, str], list[float]] = {}
+    rating_draws = {basis: {} for basis in SHARES}
+    effect_draws: dict[str, dict[tuple[str, str], list[float]]] = {name: {} for name in by_cohort}
     for _ in range(draws):
-        sample_elo, sample_pairs = summarize(bt.cells_of(games, boot.weights(ids, rng)), names)
-        for entrant, value in sample_elo.items():
-            rating_draws.setdefault(entrant, []).append(value)
-        for pair, (n, won, expected) in sample_pairs.items():
-            effect_draws.setdefault(pair, []).append((won - expected) / n)
+        weights = boot.weights(ids, rng)
+        for basis, share in SHARES.items():
+            sample = bt.fit(bt.cells_of(games, weights, share=share), entrants=names)
+            for entrant, value in sample.elo().items():
+                rating_draws[basis].setdefault(entrant, []).append(value)
+            if basis == "wins":
+                for name, cohort_games in by_cohort.items():
+                    for pair, (n, won, expected) in summarize(bt.cells_of(cohort_games, weights), sample.theta).items():
+                        effect_draws[name].setdefault(pair, []).append((won - expected) / n)
     seeds = sorted({g.seed for g in games})
     seed_draws: dict[str, list[float]] = {}
     for _ in range(draws):
@@ -107,48 +116,42 @@ def ratings_and_pairs(name: str, games: list[Game], draws: int, rng: random.Rand
             seed_draws.setdefault(entrant, []).append(value)
     totals: dict[str, list[float]] = {}
     for g in games:
-        for entrant, share in ((g.first, g.share_first), (g.second, 1 - g.share_first)):
-            row = totals.setdefault(entrant, [0.0, 0.0])
+        for entrant, share, pot in ((g.first, g.share_first, g.pot_first), (g.second, 1 - g.share_first, 1 - g.pot_first)):
+            row = totals.setdefault(entrant, [0.0, 0.0, 0.0])
             row[0] += 1
             row[1] += share
+            row[2] += pot
     rows = [
-        [e, frac(totals[e][1], totals[e][0]), f"{elo[e]:+.0f}", span(boot.interval(rating_draws[e]), signed), span(boot.interval(seed_draws[e]), signed)]
-        for e in sorted(elo, key=lambda e: -elo[e])
+        [
+            e,
+            frac(totals[e][1], totals[e][0]),
+            signed(elo["wins"][e]),
+            span(boot.interval(rating_draws["wins"][e]), signed),
+            span(boot.interval(seed_draws[e]), signed),
+            pct(totals[e][2] / totals[e][0]),
+            signed(elo["cash"][e]),
+            span(boot.interval(rating_draws["cash"][e]), signed),
+        ]
+        for e in sorted(names, key=lambda e: -elo["wins"][e])
     ]
-    out = [f"#### {name}: ratings\n", table(["entrant", "wins/matches = win share", "rating (Elo, mean 0)", "95% CI, seed blocks drawn", "95% CI, seeds drawn (sensitivity)"], rows)]
-    out.append(sensitivity(games, names, elo))
-    pair_rows = []
-    for (low, high), (n, won, expected) in pairs.items():
-        pair_rows.append(
-            [f"{low} vs {high}", frac(won, n), pct(expected / n), pp((won - expected) / n), span(boot.interval(effect_draws[(low, high)]), pp)]
-        )
-    out.append(f"\n#### {name}: observed pairs against the fitted ratings\n")
-    out.append("Win share is the first-named entrant's. Difference is observed minus fitted, in percentage points. These are descriptive residuals of a regularized fit, not tests of a zero pair effect: the prior forces residuals (a pair at the end of a chain of pairs is pulled to its fit), so the bootstrap range is not a calibrated interval around zero. Pair effects are judged by the held-out test below.\n")
-    out.append(table(["pair", "wins/matches = observed share", "fitted share", "difference (pp)", "bootstrap range of the difference (descriptive)"], pair_rows))
-    return "\n".join(out)
+    header = ["config", "wins/matches = win share", "rating (Elo, mean 0)", "95% CI, seed blocks drawn", "95% CI, seeds drawn (sensitivity)", "pot share", "cash rating (Elo, mean 0)", "95% CI, seed blocks drawn"]
+    text = "\n".join([table(header, rows), sensitivity(games, names, elo["wins"])])
+    pair_header = ["pair", "wins/matches = observed share", "fitted share", "difference (pp)", "bootstrap range of the difference (descriptive)"]
+    pair_tables = {}
+    for name, cohort_games in by_cohort.items():
+        pair_rows = [
+            [f"{low} vs {high}", frac(won, n), pct(expected / n), pp((won - expected) / n), span(boot.interval(effect_draws[name][(low, high)]), pp)]
+            for (low, high), (n, won, expected) in summarize(bt.cells_of(cohort_games), fits["wins"].theta).items()
+        ]
+        pair_tables[name] = f"#### {name}\n\n" + table(pair_header, pair_rows)
+    return text, pair_tables
 
 
 def sensitivity(games: list[Game], names: set[str], elo: dict[str, float]) -> str:
-    """How far the ratings move with a seat term, and with only the cohort's main code hash."""
-    lines = []
+    """How far the pooled ratings move with a seat and starter term."""
     extra = bt.fit(bt.cells_of(games, starter=True), seat=True, start=True, entrants=names)
     moved = max(abs(extra.elo()[e] - elo[e]) for e in elo)
-    lines.append(f"With a seat term and a round 1 starter term in the fit (position 1 {extra.seat * bt.ELO:+.0f} Elo, the starter {extra.start * bt.ELO:+.0f} Elo) the largest rating change is {moved:.1f} Elo.")
-    codes = {}
-    for g in games:
-        codes[g.code] = codes.get(g.code, 0) + 1
-    if len(codes) > 1:
-        main = max(codes, key=codes.get)
-        kept = [g for g in games if g.code == main]
-        left = sorted(names - {n for g in kept for n in (g.first, g.second)})
-        if len(bt.components(kept)) != 1:
-            lines.append(f"The {len(kept)} matches under code `{main}` alone do not connect the cohort, so there is no code-stratified refit.")
-        else:
-            only = bt.fit(bt.cells_of(kept)).elo()
-            shared = [e for e in only]
-            full = {e: elo[e] - sum(elo[s] for s in shared) / len(shared) for e in shared}
-            lines.append(f"Fitting only the {len(kept)} matches under code `{main}` (leaving out {len(games) - len(kept)} matches{' and the entrant ' + ', '.join(left) if left else ''}) moves no remaining rating by more than {max(abs(only[e] - full[e]) for e in shared):.1f} Elo.")
-    return "\n" + " ".join(lines) + "\n"
+    return f"\nWith a seat term and a round 1 starter term in the fit (position 1 {extra.seat * bt.ELO:+.0f} Elo, the starter {extra.start * bt.ELO:+.0f} Elo) the largest rating change is {moved:.1f} Elo.\n"
 
 
 # ---- pair effects against ratings alone
@@ -319,9 +322,6 @@ def seat_section(by_cohort: dict[str, list[Game]], model_of: dict[str, str], dra
             "\n#### Per model\n",
             "A block counts for every model that plays in it; a matched block gives one position-1 share for both sides, so this says how large the position edge is in games that involve the model, not which side of the board benefits. Starter figures per model are not reported: a model's blocks cover a handful of seeds, and the starter's result depends on the seed (see below).\n",
             seat_rows(per_model, draws, rng, {}, position_only=True),
-            "\n#### Per code hash, all cohorts\n",
-            seat_rows([(f"code `{code}`", [b for b in everything if b.code == code]) for code in sorted({b.code for b in everything}) if sum(b.code == code for b in everything) >= 10], draws, rng, {}),
-            "Codes with fewer than 10 complete blocks (`3c9b98f8b3f4` has 1, and 1 block mixes two codes) are left out.",
             "\n#### Per seed, all cohorts\n",
             "Cohorts reuse seeds 3000 to 3018 (tournament 3 adds 3020 to 3029), so a seed's starter result pools many pairings.\n",
             by_seed_table(everything),
@@ -348,11 +348,15 @@ def main() -> None:
     by_cohort = cohorts(games)
     model_of = dict(db.execute("SELECT DISTINCT name, model FROM entrants"))
     rng = random.Random(20261021)
+    pair_cohorts = {k: v for k, v in by_cohort.items() if k not in ("tournament 3", "tournament 4")}
+    pooled_text, pair_tables = pooled_ratings(games, pair_cohorts, args.draws, rng)
     parts = [
         "### Schedule coverage\n", coverage(db, by_cohort),
-        "\n### Ratings and observed pairs\n",
-        *[ratings_and_pairs(name, g, args.draws, rng) for name, g in by_cohort.items() if name != "tournament 3"],
-        "\n### Pair effects against ratings alone\n", matchup_test({k: v for k, v in by_cohort.items() if k != "tournament 3"}, rng, args.draws, args.repeats),
+        "\n### Pooled ratings\n", pooled_text,
+        "\n### Observed pairs against the pooled ratings\n",
+        "Win share is the first-named entrant's. Difference is observed minus fitted, in percentage points. These are descriptive residuals of a regularized fit, not tests of a zero pair effect: the prior forces residuals (a pair at the end of a chain of pairs is pulled to its fit), so the bootstrap range is not a calibrated interval around zero. Pair effects are judged by the held-out test below. Every resample refits the pooled ratings.\n",
+        *pair_tables.values(),
+        "\n### Pair effects against ratings alone\n", matchup_test(pair_cohorts, rng, args.draws, args.repeats),
         "\n### Seat and round 1 starter\n", first_shooter_check(games), "", seat_section(by_cohort, model_of, args.draws, rng),
         "\n### Tournament 3\n", tournament3.report(games, args.draws, rng),
     ]

@@ -3,7 +3,7 @@
 Patterns in how the models played and reasoned in the arena. Each one was found in the traces and then checked again with an independent query against the analysis database ([database.md](../database.md)) and the derived `knowledge.sqlite` ([beliefs-and-items.md](beliefs-and-items.md)). This is a casual pass: counts and rates, no intervals. Treat any gap of a few points on 20–100 seats as noise.
 
 Scope:
-- Decision rates use the 2,118 scored matches with no DeepSeek seat.
+- Decision rates use the 2,471 scored matches with no DeepSeek seat.
 - Call counts (tokens, costs, tool calls, reasoning text) include every started match.
 - "Known" means the deciding player's own log proves the shell. A shot's result is read from the log that follows it.
 - Effort comparisons use each model's own effort sweep, except where a tournament is named. Saved reasoning is provider-returned text and often a summary, so quotes are short and paraphrase-like.
