@@ -15,6 +15,7 @@ import { reliabilityView } from "./reliability.ts";
 import { replayView } from "./replay.ts";
 import { scatterView } from "./scatter.ts";
 import { seatsView } from "./seats.ts";
+import { type UpsetBin, upsetOf, upsetView } from "./upset.ts";
 
 type H = HtmlBuilder<Message>;
 
@@ -107,6 +108,8 @@ const lazyScatter = createLazy();
 
 const lazyEffort = createLazy();
 
+const lazyUpset = createLazy();
+
 const lazyBreakdown = createLazy();
 
 const lazyInteresting = createLazy();
@@ -136,6 +139,8 @@ const scatterCard = (h: H, derived: Derived, ranking: Ranking, basis: Basis, sca
 
 const effortCard = (h: H, derived: Derived, basis: Basis, width: number): Html => h.div([h.Class("card")], [effortView(h, derived.pooled, derived.ratings, basis, width)]);
 
+const upsetCard = (h: H, bins: ReadonlyArray<UpsetBin>, width: number): Html => h.div([h.Class("card")], [upsetView(h, bins, width)]);
+
 const sectionView = (h: H, section: Section, content: Html): Html => h.section([h.Id(section), h.Class("part")], [content]);
 
 const pageView = (h: H, model: Model, derived: Derived): Html => {
@@ -147,7 +152,7 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
       lazyHero(heroView, [h, derived]),
       // The jump menu and the filters stay at the top; the filters apply to every section.
       h.div([h.Class("top")], [lazyNav(navView, [h]), lazyFilters(filtersView, [h, derived, model.filter])]),
-      sectionView(h, "scatter", h.div([], [lazyScatter(scatterCard, [h, derived, model.ranking, model.basis, model.scatter, cardWidth(model.viewport)]), lazyEffort(effortCard, [h, derived, model.basis, cardWidth(model.viewport)])])),
+      sectionView(h, "scatter", h.div([], [lazyScatter(scatterCard, [h, derived, model.ranking, model.basis, model.scatter, cardWidth(model.viewport)]), lazyEffort(effortCard, [h, derived, model.basis, cardWidth(model.viewport)]), lazyUpset(upsetCard, [h, upsetOf(derived), cardWidth(model.viewport)])])),
       sectionView(h, "interesting", lazyInteresting(interestingView, [h, picksOf(derived), model.matches, content])),
       sectionView(h, "seats", lazySeats(seatsView, [h, derived, model.viewport.width, content])),
       sectionView(h, "reliability", lazyReliability(reliabilityView, [h, derived.decisions, derived.seats, derived.keep, model.maybeRateTip, model.viewport.width, content])),
