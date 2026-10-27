@@ -2,9 +2,10 @@ import { expect, test } from "bun:test";
 
 import { chamberPatterns, roundStory, ShellTracker } from "../src/arena-viewer/analysis.ts";
 import type { Seat } from "../src/arena-viewer/api.ts";
-import { type BlockTally, blockRate, colorOf, groupBy, modelStats, quantile, rankOrder, regretStats, rng, withCohorts } from "../src/arena-viewer/page/data.ts";
+import { type BlockTally, blockRate, colorOf, groupBy, matchRows, modelStats, quantile, rankOrder, regretStats, rng, withCohorts } from "../src/arena-viewer/page/data.ts";
 import { bradleyTerry, type Game, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 import { AXES } from "../src/arena-viewer/page/scatter.ts";
+import { upsetBins, winChance } from "../src/arena-viewer/page/upset.ts";
 
 const randomGames = (seed: number): ReadonlyArray<Game> => {
   const random = rng(seed);
@@ -489,4 +490,55 @@ test("a config's round share is the rounds it won over the rounds it played", ()
 
     expect(config.roundShare).toBeCloseTo((wins * 2 + (config.scored.length - wins)) / (3 * config.scored.length), 12);
   }
+});
+
+// Two-player matches of the "strong" config against the "weak" one, the strong one winning `strongWins` of `count`.
+const upsetSeats = (count: number, strongWins: number) =>
+  withCohorts(
+    Array.from({ length: count }, (_match, index) => {
+      const isStrong = index < strongWins;
+
+      return [
+        { ...SEAT, matchId: `m${index}`, seedBlock: `block${index}`, model: "strong", position: 0, winShare: isStrong ? 1 : 0 },
+        { ...SEAT, matchId: `m${index}`, seedBlock: `block${index}`, model: "weak", position: 1, winShare: isStrong ? 0 : 1 },
+      ];
+    }).flat(),
+  );
+
+const RATINGS = new Map([
+  ["strong|medium", { rating: 100, lo: 90, hi: 110 }],
+  ["weak|medium", { rating: -100, lo: -110, hi: -90 }],
+]);
+
+test("the upset curve scores the higher-rated config's wins whichever seat it sat in", () => {
+  const seats = upsetSeats(32, 24);
+  const swapped = seats.map((seat) => ({ ...seat, position: 1 - seat.position }));
+
+  for (const played of [seats, swapped]) {
+    const [bin, ...others] = upsetBins(matchRows(played), RATINGS);
+
+    expect(others).toEqual([]);
+    expect(bin?.rate.rate).toBeCloseTo(0.75, 9);
+    expect(bin?.gap).toBe(200);
+    expect(bin?.expected).toBeCloseTo(winChance(200), 9);
+  }
+});
+
+test("the upset curve leaves out matches between equal ratings, unfinished matches and too few matches", () => {
+  const equal = new Map([...RATINGS].map(([key, rating]) => [key, { ...rating, rating: 0 }]));
+  const unfinished = upsetSeats(40, 30).map((seat) => ({ ...seat, status: "partial" as const }));
+
+  expect(upsetBins(matchRows(upsetSeats(40, 30)), equal)).toEqual([]);
+  expect(upsetBins(matchRows(unfinished), RATINGS)).toEqual([]);
+  expect(upsetBins(matchRows(upsetSeats(19, 10)), RATINGS)).toEqual([]);
+});
+
+test("the upset curve cuts matches into groups of near-equal size, widest gap last", () => {
+  const gaps = Array.from({ length: 160 }, (_, index) => index);
+  const seats = withCohorts(gaps.flatMap((gap) => [{ ...SEAT, matchId: `m${gap}`, seedBlock: `b${gap}`, model: `s${gap}`, position: 0 }, { ...SEAT, matchId: `m${gap}`, seedBlock: `b${gap}`, model: "base", position: 1, winShare: 0 }]));
+  const ratings = new Map([["base|medium", { rating: 0, lo: 0, hi: 0 }], ...gaps.map((gap) => [`s${gap}|medium`, { rating: gap + 1, lo: 0, hi: 0 }] as const)]);
+  const bins = upsetBins(matchRows(seats), ratings);
+
+  expect(bins.map(({ rate }) => rate.n)).toEqual(Array.from({ length: 8 }, () => 20));
+  expect(bins.map(({ gap }) => gap)).toEqual(bins.map(({ gap }) => gap).toSorted((left, right) => left - right));
 });
