@@ -1,6 +1,6 @@
 # Regret
 
-How good each agent move was, by the minimax player in `sim/bend-mp/player/` ([ADR-0043](../../adr/0043-minimax-player.md)). For every agent decision the player scores each legal move from the deciding player's own information. Regret is the best move's score minus the chosen move's score. The script scores one match, or every match of the analysis database, split over shards.
+How good each agent move was, by the minimax player in `sim/bend-mp/player/` ([ADR-0043](../../adr/0043-minimax-player.md)). For every agent decision the player scores each legal move from the deciding player's own information. Regret is the best move's score minus the chosen move's score. The script scores one match, every match of the analysis database split over shards, or the decisions a list names.
 
 ## How it is measured
 
@@ -59,8 +59,9 @@ From `web/`, after `bun run rules`:
 
     nice -n 10 bun scripts/arena-regret.ts --db <buckshot.sqlite> --out <derived>.sqlite --match <match name> [--depth 6] [--budget 20000] [--reload static] [--samples 256]
     nice -n 10 bun scripts/arena-regret.ts --db <buckshot.sqlite> --out <derived>.sqlite --all [--shard K/N] [--depth 6] [--budget 20000] [--reload static] [--samples 256]
+    nice -n 10 bun scripts/arena-regret.ts --db <buckshot.sqlite> --out <derived>.sqlite --decisions <list> [--depth 6] [--budget 20000] [--reload static] [--samples 256]
 
-`--all` takes every replay-validated match in tournament and match name order. `--shard K/N` (K from 1) keeps every Nth match, so N processes can run side by side on one `--out` file. A match that fails is logged and skipped, the shard exits 1 at the end, and a rerun retries it. Progress is one stderr line per match.
+`--decisions` takes a text file with one `<match id> <ordinal>` line per decision, the ids of the analysis database. Each must be an agent decision of a replay-validated match, or the script stops before scoring. `--all` takes every replay-validated match in tournament and match name order. `--shard K/N` (K from 1) keeps every Nth match, so N processes can run side by side on one `--out` file. A match that fails is logged and skipped, the shard exits 1 at the end, and a rerun retries it. Progress is one stderr line per match.
 
 `web/test/regret.test.ts` checks known positions: a forced win, a certain loss, a round-ending shot, the fallback, and another player's secret. It also runs the script on recorded matches that reach a forced win and a certain loss, and checks the stored rows, on a faux match imported from an arena run, and on two shards writing one file.
 
@@ -68,7 +69,7 @@ The summary tables below come from the regret and knowledge databases, read only
 
     python3 tools/arena/analysis/regret.py [--regret <derived>/regret.sqlite] [--knowledge <derived>/knowledge.sqlite] [--doc docs/arena/analysis/regret.md]
 
-With `--doc` it rewrites the tables at the end of this page. The by-round tables come from `tools/arena/analysis/by_round.py`, which also reads the analysis database for round winners (`--db`) and rewrites the tables of the last section the same way. `python3 -m unittest discover -s tools/arena/analysis` runs its tests.
+With `--doc` it rewrites the tables at the end of this page. `tools/arena/analysis/reload_bias.py` draws the stratified lists for `--decisions` (`sample`) and rewrites the tables of the Reload bias section from a `sampled` run (`report --doc`), reading the sampled and static runs read only. The by-round tables come from `tools/arena/analysis/by_round.py`, which also reads the analysis database for round winners (`--db`) and rewrites the tables of the last section the same way. `python3 -m unittest discover -s tools/arena/analysis` runs its tests.
 
 ## Results
 
@@ -85,7 +86,65 @@ This is a casual pass over the full run, with counts and means and no intervals.
 - Those shots average 4.7 and 4.0 points, with a 90th percentile of 15.5 and 13.3. A shot with one shell left averages 1.8 and one with five left 2.1.
 - Item moves stay between 1.7 and 2.3 at every distance. In this cut they show no sign of a reload effect.
 - The node budget does not explain the rise. It stopped 6% and 28% of the searches with two and three shells left, against 0.1% at one shell left.
-- This shows where regret is, not why. A shot with two left ends the search at the reload one shot later, so the static leaf is a possible cause. Real mistakes on near-even shells are another. The table cannot tell them apart, which is what #4 measures. Sample shots at two and three shells left first.
+- This shows where regret is, not why. A shot with two left ends the search at the reload one shot later, so the static leaf is a possible cause. Real mistakes on near-even shells are another. The table cannot tell them apart, which is what #4 measures. The Reload bias section below has the answer.
+
+## Reload bias
+
+Does the static leaf bias regret near reloads ([#4](https://github.com/sakompella/buckshot/issues/4), [#17](https://github.com/sakompella/buckshot/issues/17))? 2,853 agent decisions of the run above were scored again with the `sampled` rule (64 deals per leaf, depth 6, 20,000 nodes) and set beside the static score of the same decision, matched by match, ordinal, depth and budget. The sample covers two-seat matches only, with no DeepSeek seat, and is stratified by shells left in the gun, shot or item move, and model. The means below weight each stratum by its size in the whole run of 125,150 decisions, and the intervals are 95%. Both rules search the same tree, so every difference comes from the leaf. On 38 decisions scored with 256 deals as well, 64 deals cost 0.04 ± 0.07 points of regret more than 256, so 64 are enough. The sampled rule is still the static evaluation after a drawn deal, not the truth: lower regret under it means the static leaf and the draw disagree, and the draw is the better-informed of the two.
+
+1. **A reload is in reach for most decisions.**
+   - In 78.7% of all decisions the gun holds no more shells than the static search finished decisions, so some line of the search empties it. Shots and item moves with 1 to 3 shells left are always in reach, and moves with 6 are almost never.
+   - Where none is in reach the two rules gave the same scores in all 222 sampled decisions. Where one is, a score changed in 69% of the decisions overall, and the best move changed in 11%.
+2. **The static leaf overstates regret near reloads, by about 0.4 points overall.**
+   - Mean regret falls from 2.50 to 2.07 points (-0.43 ± 0.08). With 3 or fewer shells left it falls by 0.64 ± 0.12 from 2.73, and with 4 or more by 0.16 ± 0.10 from 2.19.
+   - The largest cell is shots with 2 shells left: 4.59 to 3.35 (-1.24 ± 0.35), and the best move changes in 17%. Item moves with 2 left fall from 1.73 to 0.94 (-0.79 ± 0.22). Shots overall move by -0.46 ± 0.12 and item moves by -0.40 ± 0.11, so item moves are not the main victim.
+   - About half of the extra regret that 2-shell shots show over 1-shell shots is the leaf (2.21 static, 1.18 sampled). The other half stays, so the leaf does not explain the bump on its own.
+3. **Model rankings do not change.** Every model's mean regret falls by 0.3 to 0.6 points. The order is the same except the top two, Opus and Sol (1.19 and 1.22 static, 0.86 and 0.84 sampled), which are within noise.
+4. **Moves that spend an item score lower under the sampled rule, and shots at the opponent higher.** Over the sampled moves whose score changed, unweighted, the mean shift is -2.6 points for steals, -2.0 for cigarettes, -1.8 for the magnifying glass, -1.2 for beer, -0.7 for the handsaw and -0.2 for the inverter, and +0.3 for shooting the opponent. The shift does not follow the item weights of the evaluation (beer at 25 moves more than the handsaw at 65), so a term for the value of coming items would not obviously recover it.
+
+**Recommendation: keep the static leaf as the default.**
+- The bias is real below 4 shells left, but it does not change which models look good, and the item-value guess is not borne out: shots are as affected as item moves.
+- Do not add an expected item value to the leaf. Nothing here says that term is the missing part, and the shifts above do not track item weights.
+- Do not search the draws over the whole run. The sampled rule took 27.6 s per decision on average over this sample against 0.24 s static. Weighted to the run, that is about 1,000 hours in one process, about 170 for the 43,069 decisions with 2 or fewer shells left.
+- When a number for decisions with 1 to 3 shells left is quoted, read static regret as about 0.6 to 1.2 points high, or score that subset with `--reload sampled`.
+
+<!-- reload-bias:start -->
+2,853 decisions scored under both rules, drawn from the run's 125,150. 0 searched a different tree under the two rules.
+A score changed in 2,379 of 2,631 scored decisions where the gun held no more shells than the static search finished decisions, and in 0 of 222 where it held more.
+On 38 decisions scored with 256 samples as well, mean regret with 64 minus with 256 is +0.04 ± 0.07 points.
+
+### By shells left in the gun
+
+| kind | shells left | decisions | reload within depth | scored | score changed | static regret | sampled regret | sampled minus static | best move changed |
+|---|---|---|---|---|---|---|---|---|---|
+| shot | 1 | 13,361 | 100.0% | 303 | 96.9% | 2.38 | 2.17 | -0.22 ± 0.29 | 19.3% |
+| shot | 2 | 13,018 | 100.0% | 553 | 90.9% | 4.59 | 3.35 | -1.24 ± 0.35 | 17.1% |
+| shot | 3 | 12,592 | 100.0% | 553 | 91.5% | 3.45 | 2.87 | -0.58 ± 0.24 | 13.1% |
+| shot | 4 | 9,969 | 96.1% | 217 | 80.0% | 2.47 | 2.45 | -0.02 ± 0.27 | 10.8% |
+| shot | 5 | 6,868 | 62.6% | 118 | 48.0% | 2.78 | 2.60 | -0.18 ± 0.22 | 1.6% |
+| shot | 6 | 3,928 | 9.4% | 52 | 6.3% | 4.10 | 4.10 | -0.00 ± 0.01 | 0.0% |
+| shot | all | 59,736 | 89.1% | 1,796 | 80.1% | 3.26 | 2.80 | -0.46 ± 0.12 | 12.8% |
+| item move | 1 | 5,923 | 100.0% | 203 | 100.0% | 2.22 | 1.82 | -0.40 ± 0.45 | 14.3% |
+| item move | 2 | 10,767 | 100.0% | 353 | 94.2% | 1.73 | 0.94 | -0.79 ± 0.22 | 13.8% |
+| item move | 3 | 15,190 | 100.0% | 244 | 93.2% | 1.78 | 1.24 | -0.54 ± 0.29 | 21.3% |
+| item move | 4 | 13,997 | 77.5% | 129 | 52.0% | 1.70 | 1.22 | -0.48 ± 0.31 | 5.2% |
+| item move | 5 | 11,602 | 21.5% | 83 | 13.6% | 1.81 | 1.76 | -0.05 ± 0.11 | 0.4% |
+| item move | 6 | 7,935 | 0.5% | 45 | 0.0% | 1.80 | 1.80 | +0.00 ± 0.00 | 0.0% |
+| item move | all | 65,414 | 69.2% | 1,057 | 59.7% | 1.80 | 1.40 | -0.40 ± 0.11 | 9.7% |
+
+### By model
+
+| model | scored | static regret | rank | sampled regret | rank |
+|---|---|---|---|---|---|
+| claude-opus-5-5 | 347 | 1.19 | 1 | 0.86 | 2 |
+| gpt-6.1-sol | 348 | 1.22 | 2 | 0.84 | 1 |
+| gpt-5.6-terra | 365 | 1.84 | 3 | 1.40 | 3 |
+| gpt-6-astra | 359 | 1.94 | 4 | 1.44 | 4 |
+| claude-sonnet-5-5 | 355 | 2.03 | 5 | 1.62 | 5 |
+| claude-haiku-5-5 | 360 | 2.20 | 6 | 1.87 | 6 |
+| gpt-6-luna | 358 | 3.34 | 7 | 2.84 | 7 |
+| claude-haiku-4-5-20251001 | 361 | 5.19 | 8 | 4.60 | 8 |
+<!-- reload-bias:end -->
 
 ## Limits
 
