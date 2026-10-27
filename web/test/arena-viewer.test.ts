@@ -5,7 +5,7 @@ import type { Seat } from "../src/arena-viewer/api.ts";
 import { type BlockTally, blockRate, colorOf, groupBy, matchRows, modelStats, quantile, rankOrder, regretStats, rng, withCohorts } from "../src/arena-viewer/page/data.ts";
 import { type Decisions, NO_GAP } from "../src/arena-viewer/api.ts";
 import { pressureCurves, relativeLine } from "../src/arena-viewer/page/pressure.ts";
-import { bradleyTerry, type Game, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
+import { bradleyTerry, expectedShare, type Game, pooledRatings, surprises } from "../src/arena-viewer/page/ratings.ts";
 import { betterShare, bucketsOf, type Duel, luckByConfig } from "../src/arena-viewer/page/luck.ts";
 import { ODDS_BINS, oddsBinOf, selfShotTallies } from "../src/arena-viewer/page/odds.ts";
 import { failuresByHour } from "../src/arena-viewer/page/failures-over-time.ts";
@@ -630,4 +630,24 @@ test("failures by hour pool a model's efforts into the hour each match started, 
     { hour: hour + 1, calls: 40, failed: 0 },
   ]);
   expect(failuresByHour(seats, [true, true, true, false]).has("other")).toBe(false);
+});
+
+test("surprises compare each config's share with the ratings' prediction, from both sides of a game", () => {
+  const ratings = new Map([["x|", 0], ["y|", 0], ["z|", 400]]);
+
+  const games: ReadonlyArray<Game> = [
+    { a: "x|", b: "y|", sa: 1 },
+    { a: "x|", b: "y|", sa: 0 },
+    { a: "z|", b: "x|", sa: 0 },
+  ];
+
+  const table = surprises(games, ratings, (config) => config.toUpperCase());
+  const xVersusY = table.get("x|")?.get("Y|");
+  const xVersusZ = table.get("x|")?.get("Z|");
+
+  expect(xVersusY).toEqual({ observed: 0.5, expected: 0.5, games: 2 });
+  expect(xVersusZ?.observed).toBe(1);
+  expect(xVersusZ?.expected).toBeCloseTo(1 - expectedShare(400, 0), 12);
+  expect(table.get("z|")?.get("X|")?.observed).toBe(0);
+  expect(surprises(games, new Map([["x|", 0]]), (config) => config).size).toBe(0);
 });

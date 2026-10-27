@@ -161,6 +161,53 @@ const gamesOf = ([x, y]: readonly [SeatFull, SeatFull], basis: Basis): ReadonlyA
   return basis === "rounds" ? roundResults(x).map(game) : [game(seatShare(x, basis))];
 };
 
+/** Every completed two-player match in `seats`, as the games a rating on `basis` counts. */
+export const gamesOfSeats = (seats: ReadonlyArray<SeatFull>, basis: Basis): ReadonlyArray<BlockGame> => pairsOf(seats).flatMap((pair) => gamesOf(pair, basis));
+
+/** The share a config rated `rating` is expected to take from one rated `opponent`: the model the ratings are fitted to. */
+export const expectedShare = (rating: number, opponent: number): number => 1 / (1 + 10 ** ((opponent - rating) / 400));
+
+export interface Surprise {
+  /** The config's mean share of these games. */
+  readonly observed: number;
+  /** The mean share the ratings predict for the same games. */
+  readonly expected: number;
+  readonly games: number;
+}
+
+/**
+ * Per config and opponent group, how far its share beat what the ratings predict for those games. A game counts
+ * for both its configs. Configs without a rating are left out.
+ */
+export const surprises = (games: ReadonlyArray<Game>, ratings: ReadonlyMap<string, number>, groupOf: (config: string) => string): ReadonlyMap<string, ReadonlyMap<string, Surprise>> => {
+  const sums = new Map<string, Map<string, { observed: number; expected: number; games: number }>>();
+
+  const add = (config: string, opponent: string, observed: number, expected: number) => {
+    const row = sums.get(config) ?? new Map<string, { observed: number; expected: number; games: number }>();
+    const cell = row.get(groupOf(opponent)) ?? { observed: 0, expected: 0, games: 0 };
+
+    cell.observed += observed;
+    cell.expected += expected;
+    cell.games++;
+    row.set(groupOf(opponent), cell);
+    sums.set(config, row);
+  };
+
+  for (const { a, b, sa } of games) {
+    const ratingA = ratings.get(a);
+    const ratingB = ratings.get(b);
+
+    if (ratingA === undefined || ratingB === undefined) continue;
+
+    const expected = expectedShare(ratingA, ratingB);
+
+    add(a, b, sa, expected);
+    add(b, a, 1 - sa, 1 - expected);
+  }
+
+  return new Map([...sums].map(([config, row]) => [config, new Map([...row].map(([group, { observed, expected, games }]) => [group, { observed: observed / games, expected: expected / games, games }]))]));
+};
+
 export interface Rating {
   readonly rating: number;
   readonly lo: number;
@@ -177,7 +224,7 @@ const BOOTSTRAP_REPS = 200;
  * its resamples still take whole seed blocks, since a match's rounds are not independent.
  */
 export const pooledRatings = (seats: ReadonlyArray<SeatFull>, basis: Basis): ReadonlyMap<string, Rating> => {
-  const games = pairsOf(seats).flatMap((pair) => gamesOf(pair, basis));
+  const games = gamesOfSeats(seats, basis);
   const numbered = numberGames(games);
   const point = fitGames(numbered, Int32Array.from(games.keys()));
   const blocks = [...groupBy(games.keys(), (index) => games[index]?.block).values()];
