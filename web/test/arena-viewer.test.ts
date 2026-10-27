@@ -10,6 +10,7 @@ import { betterShare, bucketsOf, type Duel, luckByConfig } from "../src/arena-vi
 import { ODDS_BINS, oddsBinOf, selfShotTallies } from "../src/arena-viewer/page/odds.ts";
 import { failuresByHour } from "../src/arena-viewer/page/failures-over-time.ts";
 import { momentumOf } from "../src/arena-viewer/page/momentum.ts";
+import { turningPoints } from "../src/arena-viewer/page/replay.ts";
 import { AXES } from "../src/arena-viewer/page/scatter.ts";
 import { upsetBins, winChance } from "../src/arena-viewer/page/upset.ts";
 
@@ -673,4 +674,13 @@ test("the two seats of a match split round 3 between them at 1-1", () => {
 
   expect([a?.n, b?.n]).toEqual([1, 1]);
   expect((a?.k ?? 0) + (b?.k ?? 0)).toBe(1);
+});
+
+test("turning points are the biggest blunders, biggest first, and none when no move gave up 5 points", () => {
+  const stepWith = (points: number | null) => ({ regret: points === null ? null : { points } });
+  const steps = [4.9, null, 12, 5, 30, 12, 8].map(stepWith);
+
+  expect(turningPoints(steps)).toEqual([4, 2, 5]);
+  expect(turningPoints(steps, 10)).toEqual([4, 2, 5, 6, 3]);
+  expect(turningPoints([4.9, null, 0].map(stepWith))).toEqual([]);
 });
