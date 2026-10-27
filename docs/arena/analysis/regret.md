@@ -90,23 +90,23 @@ This is a casual pass over the full run, with counts and means and no intervals.
 
 ## Reload bias
 
-Does the static leaf bias regret near reloads ([#4](https://github.com/sakompella/buckshot/issues/4), [#17](https://github.com/sakompella/buckshot/issues/17))? 2,853 agent decisions of the run above were scored again with the `sampled` rule (64 deals per leaf, depth 6, 20,000 nodes) and set beside the static score of the same decision, matched by match, ordinal, depth and budget. The sample covers two-seat matches only, with no DeepSeek seat, and is stratified by shells left in the gun, shot or item move, and model. The means below weight each stratum by its size in the whole run of 125,150 decisions, and the intervals are 95%. Both rules search the same tree, so every difference comes from the leaf. On 38 decisions scored with 256 deals as well, 64 deals cost 0.04 ± 0.07 points of regret more than 256, so 64 are enough. The sampled rule is still the static evaluation after a drawn deal, not the truth: lower regret under it means the static leaf and the draw disagree, and the draw is the better-informed of the two.
+This measures the bias of the static leaf near reloads ([#4](https://github.com/sakompella/buckshot/issues/4), [#17](https://github.com/sakompella/buckshot/issues/17)). 2,853 agent decisions of the run above were scored again with the `sampled` rule (64 deals per leaf, depth 6, 20,000 nodes) and set beside the static score of the same decision, matched by match, ordinal, depth and budget. The sample covers two-seat matches only, with no DeepSeek seat, and is stratified by shells left in the gun, shot or item move, and model. The means below weight each stratum by its size in the whole run of 125,150 decisions, and the intervals are 95%. Both rules search the same tree, so every difference comes from the leaf. On 38 decisions scored with 256 deals as well, 64 deals cost 0.04 ± 0.07 points of regret more than 256, so 64 are enough. The exact rule of #4 takes hours per decision (see Runtime), so this uses the sampled rule, which matched the exact value on 24 leaves within noise. It is still the static evaluation after a drawn deal and not the truth. Lower regret under it means the static leaf and the draw disagree, and the draw sees more.
 
 1. **A reload is in reach for most decisions.**
-   - In 78.7% of all decisions the gun holds no more shells than the static search finished decisions, so some line of the search empties it. Shots and item moves with 1 to 3 shells left are always in reach, and moves with 6 are almost never.
-   - Where none is in reach the two rules gave the same scores in all 222 sampled decisions. Where one is, a score changed in 69% of the decisions overall, and the best move changed in 11%.
+   - In 78.7% of all decisions the gun holds no more shells than the depth the static search reached, so some line of the search empties it. Shots and item moves with 1 to 3 shells left are always in reach. With 6 left, 9% of shots and 0.5% of item moves are.
+   - Where none is in reach the two rules gave the same scores in all 222 sampled decisions. Where one is, a score changed in 2,379 of 2,631 sampled decisions (90%). Over all decisions the best move changed in 11%.
 2. **The static leaf overstates regret near reloads, by about 0.4 points overall.**
    - Mean regret falls from 2.50 to 2.07 points (-0.43 ± 0.08). With 3 or fewer shells left it falls by 0.64 ± 0.12 from 2.73, and with 4 or more by 0.16 ± 0.10 from 2.19.
-   - The largest cell is shots with 2 shells left: 4.59 to 3.35 (-1.24 ± 0.35), and the best move changes in 17%. Item moves with 2 left fall from 1.73 to 0.94 (-0.79 ± 0.22). Shots overall move by -0.46 ± 0.12 and item moves by -0.40 ± 0.11, so item moves are not the main victim.
+   - The largest cell is shots with 2 shells left, from 4.59 to 3.35 (-1.24 ± 0.35), and the best move changes in 17%. Item moves with 2 left fall from 1.73 to 0.94 (-0.79 ± 0.22). Shots overall move by -0.46 ± 0.12 and item moves by -0.40 ± 0.11, so item moves are not the main victim.
    - About half of the extra regret that 2-shell shots show over 1-shell shots is the leaf (2.21 static, 1.18 sampled). The other half stays, so the leaf does not explain the bump on its own.
-3. **Model rankings do not change.** Every model's mean regret falls by 0.3 to 0.6 points. The order is the same except the top two, Opus and Sol (1.19 and 1.22 static, 0.86 and 0.84 sampled), which are within noise.
-4. **Moves that spend an item score lower under the sampled rule, and shots at the opponent higher.** Over the sampled moves whose score changed, unweighted, the mean shift is -2.6 points for steals, -2.0 for cigarettes, -1.8 for the magnifying glass, -1.2 for beer, -0.7 for the handsaw and -0.2 for the inverter, and +0.3 for shooting the opponent. The shift does not follow the item weights of the evaluation (beer at 25 moves more than the handsaw at 65), so a term for the value of coming items would not obviously recover it.
+3. **Model rankings hold.** Every model's mean regret falls by 0.3 to 0.6 points. The order is the same except that the top two, Opus and Sol, swap (1.19 and 1.22 static, 0.86 and 0.84 sampled), a gap within noise.
+4. **Moves that spend an item score lower under the sampled rule, and shots at the opponent higher.** Over the sampled moves whose score changed, unweighted, the mean shift is -2.6 points for steals, -2.0 for cigarettes, -1.8 for the magnifying glass, -1.2 for beer, -0.7 for the handsaw and -0.2 for the inverter, and +0.3 for shooting the opponent. The shift does not follow the item weights of the evaluation. Beer, at 25, moves more than the handsaw, at 65. So a term for the value of coming items would not obviously recover it.
 
-**Recommendation: keep the static leaf as the default.**
-- The bias is real below 4 shells left, but it does not change which models look good, and the item-value guess is not borne out: shots are as affected as item moves.
+**Recommendation.** Keep the static leaf as the default.
+- The bias shows below 4 shells left, but it does not change which models look good. The guess that item moves are the most affected is not borne out, since shots are as affected.
 - Do not add an expected item value to the leaf. Nothing here says that term is the missing part, and the shifts above do not track item weights.
 - Do not search the draws over the whole run. The sampled rule took 27.6 s per decision on average over this sample against 0.24 s static. Weighted to the run, that is about 1,000 hours in one process, about 170 for the 43,069 decisions with 2 or fewer shells left.
-- When a number for decisions with 1 to 3 shells left is quoted, read static regret as about 0.6 to 1.2 points high, or score that subset with `--reload sampled`.
+- When a number for decisions with 1 to 3 shells left is quoted, read static regret as high by 0.6 points on average over 1 to 3 shells left. The gap is 0.2 to 0.4 at 1 shell, 0.8 to 1.2 at 2 and 0.5 to 0.6 at 3. Or score that subset with `--reload sampled`.
 
 <!-- reload-bias:start -->
 2,853 decisions scored under both rules, drawn from the run's 125,150. 0 searched a different tree under the two rules.
@@ -122,7 +122,7 @@ On 38 decisions scored with 256 samples as well, mean regret with 64 minus with 
 | shot | 3 | 12,592 | 100.0% | 553 | 91.5% | 3.45 | 2.87 | -0.58 ± 0.24 | 13.1% |
 | shot | 4 | 9,969 | 96.1% | 217 | 80.0% | 2.47 | 2.45 | -0.02 ± 0.27 | 10.8% |
 | shot | 5 | 6,868 | 62.6% | 118 | 48.0% | 2.78 | 2.60 | -0.18 ± 0.22 | 1.6% |
-| shot | 6 | 3,928 | 9.4% | 52 | 6.3% | 4.10 | 4.10 | -0.00 ± 0.01 | 0.0% |
+| shot | 6 | 3,928 | 9.4% | 52 | 6.3% | 4.10 | 4.10 | +0.00 ± 0.01 | 0.0% |
 | shot | all | 59,736 | 89.1% | 1,796 | 80.1% | 3.26 | 2.80 | -0.46 ± 0.12 | 12.8% |
 | item move | 1 | 5,923 | 100.0% | 203 | 100.0% | 2.22 | 1.82 | -0.40 ± 0.45 | 14.3% |
 | item move | 2 | 10,767 | 100.0% | 353 | 94.2% | 1.73 | 0.94 | -0.79 ± 0.22 | 13.8% |

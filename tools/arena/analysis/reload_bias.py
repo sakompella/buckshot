@@ -21,8 +21,7 @@ from pathlib import Path
 
 from fmt import pct, table
 from load import SKIPPED_MODEL, connect
-
-DERIVED = Path("/home/aditya/repos/projects/buckshot/_work/arena/analysis/derived")
+from regret import DERIVED, POINT
 
 # Decisions to draw for each (shells left, shot, reachable) cell. Where a line can empty the gun, a scored decision costs seconds to minutes, more with more
 # shells left and for item moves, so the quotas shrink with the distance. Where none can, the two rules score alike by construction: a check only.
@@ -106,8 +105,6 @@ def draw(decisions: list[Decision], per_cell: dict[tuple[int, bool, bool], int],
 # Summary
 # =======
 
-POINT = 10_000  # scores are in millionths of a round win
-
 
 @dataclass(frozen=True)
 class Pair:
@@ -184,12 +181,12 @@ def sizes_of(run: list[Decision]) -> Sizes:
     return Counter(d.stratum for d in run)
 
 
-def points(value: float) -> str:
+def two_places(value: float) -> str:
     return f"{value:.2f}"
 
 
 def signed(e: Estimate) -> str:
-    return f"{e.mean:+.2f} ± {e.half_width:.2f}"
+    return f"{round(e.mean, 2) + 0.0:+.2f} ± {e.half_width:.2f}"
 
 
 def by_cell(sample: list[Pair], run: list[Decision], sizes: Sizes) -> str:
@@ -210,8 +207,8 @@ def by_cell(sample: list[Pair], run: list[Decision], sizes: Sizes) -> str:
                     pct(sum(d.shells_left <= d.depth for d in everyone) / len(everyone)),
                     f"{len(scored):,}",
                     pct(mean(lambda p: p.reloads).mean),
-                    points(mean(lambda p: p.static_regret).mean),
-                    points(mean(lambda p: p.sampled_regret).mean),
+                    two_places(mean(lambda p: p.static_regret).mean),
+                    two_places(mean(lambda p: p.sampled_regret).mean),
                     signed(mean(lambda p: p.sampled_regret - p.static_regret)),
                     pct(mean(lambda p: p.best_moved).mean),
                 ]
@@ -227,7 +224,7 @@ def by_model(sample: list[Pair], sizes: Sizes) -> str:
     sampled = {m: mean(m, lambda p: p.sampled_regret) for m in models}
     rank = lambda means: {m: 1 + sum(means[other] < means[m] for other in models) for m in models}
     static_rank, sampled_rank = rank(static), rank(sampled)
-    rows = [[m, str(sum(p.model == m for p in sample)), points(static[m]), str(static_rank[m]), points(sampled[m]), str(sampled_rank[m])] for m in sorted(models, key=static.__getitem__)]
+    rows = [[m, str(sum(p.model == m for p in sample)), two_places(static[m]), str(static_rank[m]), two_places(sampled[m]), str(sampled_rank[m])] for m in sorted(models, key=static.__getitem__)]
     return table(["model", "scored", "static regret", "rank", "sampled regret", "rank"], rows)
 
 
