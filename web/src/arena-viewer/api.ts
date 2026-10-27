@@ -86,10 +86,15 @@ export const SeatsResponse = Schema.Array(Seat);
 
 const Column = Schema.Array(Schema.Number);
 
+/** A move's `gap` when the player has no single opponent to compare with. */
+export const NO_GAP = 99;
+
 /**
  * One entry per agent move, column by column. seat indexes the seats response.
  * opp and pick are bit masks over PATTERNS: a pattern's chance came up, and the move took it.
- * rt is -1 when a call did not report reasoning tokens. shot: 0 none, 1 the opponent, 2 itself.
+ * rt is -1 when a call did not report reasoning tokens. out is the output tokens of every call of the move. gap is the
+ * player's health minus its opponent's, or NO_GAP at a table of more than two or when a view omits a health.
+ * shot: 0 none, 1 the opponent, 2 itself.
  * useItem and stealItem index ITEMS, or are -1.
  */
 export const Decisions = Schema.Struct({
@@ -101,6 +106,8 @@ export const Decisions = Schema.Struct({
   failedCalls: Column,
   rt: Column,
   rc: Column,
+  out: Column,
+  gap: Column,
   cost: Column,
   lat: Column,
   tok: Column,

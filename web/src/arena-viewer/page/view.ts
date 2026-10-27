@@ -11,6 +11,7 @@ import { interestingView, picksOf } from "./interesting.ts";
 import { leaderboardView } from "./leaderboard.ts";
 import { matchesView } from "./matches.ts";
 import { type Basis, Message, type Model, type Ranking, type Section, SECTIONS, type Viewport } from "./model.ts";
+import { pressureView } from "./pressure.ts";
 import { reliabilityView } from "./reliability.ts";
 import { replayView } from "./replay.ts";
 import { scatterView } from "./scatter.ts";
@@ -113,6 +114,8 @@ const lazyInteresting = createLazy();
 
 const lazySeats = createLazy();
 
+const lazyPressure = createLazy();
+
 const lazyReliability = createLazy();
 
 const lazyMatches = createLazy();
@@ -150,6 +153,7 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
       sectionView(h, "scatter", h.div([], [lazyScatter(scatterCard, [h, derived, model.ranking, model.basis, model.scatter, cardWidth(model.viewport)]), lazyEffort(effortCard, [h, derived, model.basis, cardWidth(model.viewport)])])),
       sectionView(h, "interesting", lazyInteresting(interestingView, [h, picksOf(derived), model.matches, content])),
       sectionView(h, "seats", lazySeats(seatsView, [h, derived, model.viewport.width, content])),
+      sectionView(h, "pressure", lazyPressure(pressureView, [h, derived.decisions, derived.seats, derived.keep, model.viewport.width, content])),
       sectionView(h, "reliability", lazyReliability(reliabilityView, [h, derived.decisions, derived.seats, derived.keep, model.maybeRateTip, model.viewport.width, content])),
       sectionView(h, "matches", lazyMatches(matchesView, [h, derived.matches, model.matchList])),
       sectionView(h, "leaderboards", lazyLeaderboard(leaderboardView, [h, derived.byCohort, derived.everyByCohort, derived.ratings, derived.matchSeats, derived.items, model.leaderboard, model.filter.isAllConfigs, model.ranking, model.basis])),

@@ -3,6 +3,8 @@ import { expect, test } from "bun:test";
 import { chamberPatterns, roundStory, ShellTracker } from "../src/arena-viewer/analysis.ts";
 import type { Seat } from "../src/arena-viewer/api.ts";
 import { type BlockTally, blockRate, colorOf, groupBy, modelStats, quantile, rankOrder, regretStats, rng, withCohorts } from "../src/arena-viewer/page/data.ts";
+import { type Decisions, NO_GAP } from "../src/arena-viewer/api.ts";
+import { pressureCurves, relativeLine } from "../src/arena-viewer/page/pressure.ts";
 import { bradleyTerry, type Game, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 import { AXES } from "../src/arena-viewer/page/scatter.ts";
 
@@ -489,4 +491,29 @@ test("a config's round share is the rounds it won over the rounds it played", ()
 
     expect(config.roundShare).toBeCloseTo((wins * 2 + (config.scored.length - wins)) / (3 * config.scored.length), 12);
   }
+});
+
+const movesAtGaps = (gaps: ReadonlyArray<number>, out: number): Decisions => ({
+  seat: gaps.map(() => 0),
+  gap: [...gaps],
+  out: gaps.map(() => out),
+  ord: [], moveNo: [], opp: [], pick: [], failedCalls: [], rt: [], rc: [], cost: [], lat: [], tok: [], calls: [], legalUse: [], legalSteal: [], useItem: [], stealItem: [], shot: [],
+  checks: { ok: 0, bad: 0 },
+});
+
+test("pressure curves pool the gaps beyond the ends, skip moves with no gap and seats the filter drops, and leave out thin points", () => {
+  const seats = [{ model: "m", effort: "high" }];
+  const gaps = [...Array.from({ length: 30 }, () => -3), ...Array.from({ length: 30 }, () => -2), ...Array.from({ length: 29 }, () => 0), ...Array.from({ length: 40 }, () => NO_GAP)];
+  const curves = pressureCurves(movesAtGaps(gaps, 50), seats, [true]);
+
+  expect(curves.get("m|high")).toEqual([{ gap: -2, moves: 60, tokens: 50 }]);
+  expect(pressureCurves(movesAtGaps(gaps, 50), seats, [false]).size).toBe(0);
+});
+
+test("a pressure line is read against its level-health point and has none without one", () => {
+  const point = (gap: number, tokens: number) => ({ gap, moves: 100, tokens });
+
+  expect(relativeLine([point(-2, 300), point(0, 100), point(2, 50)])?.points.map(({ ratio }) => ratio)).toEqual([3, 1, 0.5]);
+  expect(relativeLine([point(-2, 300), point(2, 50)])).toBeNull();
+  expect(relativeLine([point(0, 100)])).toBeNull();
 });
