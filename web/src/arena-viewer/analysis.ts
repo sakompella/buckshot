@@ -2,7 +2,7 @@ import type { Database } from "bun:sqlite";
 
 import { Schema } from "effect";
 
-import { type Decisions, ITEMS, type Pattern, patternBit, type SeatAnalysis, type Shell, type Story } from "./api.ts";
+import { type Decisions, ITEMS, NO_GAP, type Pattern, patternBit, type SeatAnalysis, type Shell, type Story } from "./api.ts";
 
 // Per-decision columns for choice patterns, items, reasoning and compute, worked out once at server start.
 // Each player's view is rebuilt by joining the event windows of its own decisions in order: a decision's events
@@ -208,6 +208,7 @@ const PerDecisionRow = Schema.Struct({
   rt: Schema.NullOr(Schema.Number),
   nulls: Schema.Number,
   rc: Schema.Number,
+  out: Schema.Number,
   cost: Schema.NullOr(Schema.Number),
   lat: Schema.NullOr(Schema.Number),
   calls: Schema.Number,
@@ -295,7 +296,7 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
     db
       .query(
         `select decision_id d, sum(reasoning_tokens) rt, sum(reasoning_tokens is null) nulls, sum(length(coalesce(reasoning_text, ''))) rc,
-           sum(cost_usd) cost, sum(latency_ms) lat, count(*) calls, sum(status = 'failed') failed,
+           sum(coalesce(output_tokens, 0)) out, sum(cost_usd) cost, sum(latency_ms) lat, count(*) calls, sum(status = 'failed') failed,
            sum(coalesce(input_tokens, 0) + coalesce(output_tokens, 0) + coalesce(cache_read_tokens, 0) + coalesce(cache_write_tokens, 0)) tok
          from calls where decision_id is not null group by decision_id`,
       )
@@ -303,12 +304,12 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
       .map((raw) => {
         const row = decodePerDecision(raw);
 
-        return [row.d, { rt: row.nulls === 0 ? (row.rt ?? 0) : -1, rc: row.rc, cost: row.cost ?? 0, lat: row.lat ?? 0, tok: row.tok, calls: row.calls, failed: row.failed }] as const;
+        return [row.d, { rt: row.nulls === 0 ? (row.rt ?? 0) : -1, rc: row.rc, out: row.out, cost: row.cost ?? 0, lat: row.lat ?? 0, tok: row.tok, calls: row.calls, failed: row.failed }] as const;
       }),
   );
 
   const extra = seats.map(() => emptySeat());
-  const columns: MutableColumns = { seat: [], ord: [], moveNo: [], opp: [], pick: [], failedCalls: [], rt: [], rc: [], cost: [], lat: [], tok: [], calls: [], legalUse: [], legalSteal: [], useItem: [], stealItem: [], shot: [], odds: [] };
+  const columns: MutableColumns = { seat: [], ord: [], moveNo: [], opp: [], pick: [], failedCalls: [], rt: [], rc: [], out: [], gap: [], cost: [], lat: [], tok: [], calls: [], legalUse: [], legalSteal: [], useItem: [], stealItem: [], shot: [], odds: [] };
   const checks = { ok: 0, bad: 0 };
   const shellsLeft: Array<number> = [];
 
@@ -461,6 +462,8 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
     columns.pick.push(taken);
     columns.rt.push(calls?.rt ?? -1);
     columns.rc.push(calls?.rc ?? 0);
+    columns.out.push(calls?.out ?? 0);
+    columns.gap.push(visible.players.length === 2 && ownHealth !== undefined && opponentHealth !== undefined ? ownHealth - opponentHealth : NO_GAP);
     columns.cost.push(calls?.cost ?? 0);
     columns.lat.push(calls?.lat ?? 0);
     columns.tok.push(calls?.tok ?? 0);
