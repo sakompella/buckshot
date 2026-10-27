@@ -4,8 +4,9 @@ import { createLazy, type Document, type Html, type HtmlBuilder } from "foldkit/
 
 import { baseName, baseOrder, colorOf, EFFORTS, fmtCount, keyOf, sumOf, unique } from "./data.ts";
 import { switchView } from "./charts.ts";
-import { type Derived, derive, mainConfigsOf } from "./derived.ts";
+import { type Derived, derive, mainConfigsOf, ratingsOf } from "./derived.ts";
 import { effortView } from "./effort.ts";
+import { blundersView, everyRateFor, galleryFor, ratesFor } from "./blunders.ts";
 import { breakdownView, heatRowsOf } from "./heat.ts";
 import { interestingView, picksOf } from "./interesting.ts";
 import { luckView } from "./luck.ts";
@@ -116,6 +117,8 @@ const lazySpend = createLazy();
 
 const lazyBreakdown = createLazy();
 
+const lazyBlunders = createLazy();
+
 const lazyInteresting = createLazy();
 
 const lazyLuck = createLazy();
@@ -149,6 +152,9 @@ const upsetCard = (h: H, bins: ReadonlyArray<UpsetBin>, width: number): Html => 
 
 const spendCard = (h: H, derived: Derived): Html => h.div([h.Class("card")], [spendView(h, derived.pooled)]);
 
+const blundersCard = (h: H, derived: Derived, width: number, content: number): Html =>
+  blundersView(h, ratesFor(derived.seats, derived.keep, derived.blunders), everyRateFor(derived.seats, derived.blunders), galleryFor(derived.seats, derived.keep, ratingsOf(derived.seats)("wins"), derived.blunders), width, content);
+
 const sectionView = (h: H, section: Section, content: Html): Html => h.section([h.Id(section), h.Class("part")], [content]);
 
 const pageView = (h: H, model: Model, derived: Derived): Html => {
@@ -163,6 +169,7 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
       sectionView(h, "scatter", h.div([], [lazyScatter(scatterCard, [h, derived, model.ranking, model.basis, model.scatter, cardWidth(model.viewport)]), lazyEffort(effortCard, [h, derived, model.basis, cardWidth(model.viewport)]), lazyUpset(upsetCard, [h, upsetOf(derived), cardWidth(model.viewport)]), lazySpend(spendCard, [h, derived])])),
       sectionView(h, "interesting", lazyInteresting(interestingView, [h, picksOf(derived), model.matches, content])),
       sectionView(h, "luck", lazyLuck(luckView, [h, derived.matches, derived.pooled, model.viewport.width, content, cardWidth(model.viewport)])),
+      sectionView(h, "blunders", lazyBlunders(blundersCard, [h, derived, model.viewport.width, content])),
       sectionView(h, "seats", lazySeats(seatsView, [h, derived, model.viewport.width, content])),
       sectionView(h, "reliability", lazyReliability(reliabilityView, [h, derived.decisions, derived.seats, derived.keep, model.maybeRateTip, model.viewport.width, content])),
       sectionView(h, "matches", lazyMatches(matchesView, [h, derived.matches, model.matchList])),

@@ -137,7 +137,8 @@ table.heat td.click:hover, table.heat td.ring { outline: 1.5px solid #fff; outli
 table.heat td.total { font-weight: 600; text-align: center; padding: 3px 10px; }
 
 /* interesting matches */
-.igrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.igrid, .bgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.bgrid { grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); margin-bottom: 18px; }
 .icard { border: 1px solid var(--line); border-radius: 4px; padding: 12px 14px 8px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
 .icard:hover { border-color: #444; background: #070707; }
 .ititle { font-weight: 600; }

@@ -115,6 +115,28 @@ export const Decisions = Schema.Struct({
 
 export type Decisions = typeof Decisions.Type;
 
+/** A searched move that gave up at least this many points of the round win chance is a blunder. */
+export const BLUNDER_POINTS = 10;
+
+/**
+ * Every blunder, column by column: seat indexes the seats response, ord is the decision's ordinal, points its regret,
+ * and chosen and best index labels (the move taken and the best legal move). Scores are percentage points of the round
+ * win chance. Empty without a regret database.
+ */
+export const Blunders = Schema.Struct({
+  labels: Schema.Array(Schema.String),
+  seat: Column,
+  ord: Column,
+  points: Column,
+  exact: Column,
+  chosen: Column,
+  best: Column,
+  bestScore: Column,
+  chosenScore: Column,
+});
+
+export type Blunders = typeof Blunders.Type;
+
 /** Bit order of Decisions' opp and pick masks. */
 export const PATTERNS = [
   "knownBlankOpp",
