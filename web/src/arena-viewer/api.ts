@@ -101,7 +101,9 @@ export type Seat = typeof Seat.Type;
 
 export const SeatsResponse = Schema.Array(Seat);
 
-const Column = Schema.Array(Schema.Number);
+// A column holds one number per agent move, over a hundred thousand of them: one type check per column decodes it many
+// times faster than a schema per element.
+const Column = Schema.declare((input: unknown): input is ReadonlyArray<number> => Array.isArray(input) && input.every(Number.isFinite));
 
 /** A move's `gap` when the player has no single opponent to compare with. */
 export const NO_GAP = 99;

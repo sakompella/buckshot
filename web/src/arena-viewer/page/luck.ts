@@ -136,10 +136,15 @@ const bucketsView = (h: H, buckets: ReadonlyArray<GapBucket>, width: number): Ht
       ...buckets.flatMap(({ rate, ...bucket }, index) => {
         const centre = L + slot * (index + 0.5);
 
-        return [
+        // A filter can leave a gap with no matches: it keeps its label and count but has no bar.
+        const drawn = rate.n === 0 ? [] : [
           h.rect([h.X(S(centre - bar / 2)), h.Y(S(y.at(rate.rate))), h.Width(S(bar)), h.Height(S(y.at(0) - y.at(rate.rate))), h.Fill("#cfcfcf"), h.Rx("2")], [h.title([], [`${rate.k} of ${rate.n} matches, 95% CI ${pct(rate.lo)}–${pct(rate.hi)}`])]),
           h.line([h.X1(S(centre)), h.X2(S(centre)), h.Y1(S(y.at(rate.lo))), h.Y2(S(y.at(rate.hi))), h.Stroke("#000"), h.StrokeWidth("1.5")], []),
           h.text([h.X(S(centre)), h.Y(S(y.at(rate.hi) - 6)), h.TextAnchor("middle"), h.Class("val")], [pct(rate.rate)]),
+        ];
+
+        return [
+          ...drawn,
           h.text([h.X(S(centre)), h.Y(String(height - B + 16)), h.TextAnchor("middle")], [gapName({ ...bucket, rate })]),
           h.text([h.X(S(centre)), h.Y(String(height - B + 30)), h.TextAnchor("middle"), h.Class("dimtext")], [`n ${rate.n}`]),
         ];

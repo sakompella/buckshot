@@ -85,6 +85,11 @@ const ScrollToHash = Command.define("ScrollToHash", {
   ),
 });
 
+const AwaitFirstPaint = Command.define("AwaitFirstPaint", {
+  messages: [Message.CompletedFirstPaint],
+  execute: nextFrame.pipe(Effect.as(Message.CompletedFirstPaint())),
+});
+
 // An open replay owns one history entry, so the phone's back gesture closes it instead of leaving the page.
 const ReplayHistory = Schema.Struct({ replay: Schema.Literal(true) });
 
@@ -155,8 +160,9 @@ export const update = (model: Model, message: Message): Return =>
     SucceededLoad: ({ loaded }) => {
       const loadedModel = withPickedMatches(modifyFields(model, { data: () => AsyncData.succeed(loaded) }));
 
-      return { ...loadedModel, commands: [...(loadedModel.commands ?? []), ScrollToHash()] };
+      return { ...loadedModel, commands: [...(loadedModel.commands ?? []), AwaitFirstPaint()] };
     },
+    CompletedFirstPaint: () => ({ model: modifyFields(model, { isFirstPaintDone: () => true }), commands: [ScrollToHash()] }),
     FailedLoad: ({ error }) => ({ model: modifyFields(model, { data: () => AsyncData.fail(error) }) }),
     SelectedCohort: ({ cohort }) => withFilter(model, (filter) => ({ ...filter, cohort })),
     ToggledEffort: ({ effort }) => withFilter(model, (filter) => ({ ...filter, offEfforts: toggled(filter.offEfforts, effort) })),
@@ -221,6 +227,7 @@ const init: Runtime.ApplicationInit<Model, Message, Flags> = ({ viewport }) => (
     maybeRateTip: Option.none(),
     matches: {},
     maybeReplay: Option.none(),
+    isFirstPaintDone: false,
   },
   commands: [LoadData()],
 });

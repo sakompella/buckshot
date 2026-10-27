@@ -109,6 +109,7 @@ const checkJumps = async (page: Page, name: string, isTouch: boolean) => {
     console.log(name, "jump", await jumpedTo(page, section));
 
     await page.locator(`#${section}`).screenshot({ path: shot(`${name}-${section}`) });
+    expectThat((await page.locator(`#${section}`).innerText()).trim() !== "", `${name}: the ${section} section is empty`);
   }
 };
 

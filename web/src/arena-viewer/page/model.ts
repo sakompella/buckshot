@@ -119,6 +119,8 @@ export const Model = Schema.Struct({
   /** Each match detail asked for, by match id. */
   matches: Schema.Record(Schema.String, MatchData),
   maybeReplay: Schema.Option(Replay),
+  /** Whether the page has painted once with the data. Most sections that came with the analysis ideas wait for it, so the first paint is as quick as before them. */
+  isFirstPaintDone: Schema.Boolean,
 });
 
 export type Model = typeof Model.Type;
@@ -168,6 +170,7 @@ export const Message = defineMessageUnion({
   CompletedHistoryChange: {},
   CompletedStepScroll: {},
   CompletedScroll: {},
+  CompletedFirstPaint: {},
 });
 
 export type Message = typeof Message.Type;
