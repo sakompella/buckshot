@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { chamberPatterns, roundStory, ShellTracker } from "../src/arena-viewer/analysis.ts";
 import type { Seat } from "../src/arena-viewer/api.ts";
 import { type BlockTally, blockRate, colorOf, groupBy, modelStats, quantile, rankOrder, regretStats, rng, withCohorts } from "../src/arena-viewer/page/data.ts";
+import { momentumOf } from "../src/arena-viewer/page/momentum.ts";
 import { bradleyTerry, type Game, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 import { AXES } from "../src/arena-viewer/page/scatter.ts";
 
@@ -489,4 +490,26 @@ test("a config's round share is the rounds it won over the rounds it played", ()
 
     expect(config.roundShare).toBeCloseTo((wins * 2 + (config.scored.length - wins)) / (3 * config.scored.length), 12);
   }
+});
+
+test("momentum counts round 2 after a round-1 win, and round 3 only when the first two rounds were split", () => {
+  const seat = (winners: ReadonlyArray<string>, seedBlock: string) => ({
+    player: "a",
+    seedBlock,
+    story: { starter: "a", rounds: winners.map((winner) => ({ winner, prize: 1, inferred: false })), ok: true },
+  });
+
+  const momentum = momentumOf([seat(["a", "a", "b"], "s1"), seat(["a", "b", "a"], "s1"), seat(["b", "a", "a"], "s2"), seat(["b", "b", "b"], "s2"), seat(["a", "b", "b"], "s3")]);
+
+  expect([momentum.afterWin.k, momentum.afterWin.n]).toEqual([1, 3]);
+  expect([momentum.decider.k, momentum.decider.n]).toEqual([2, 3]);
+});
+
+test("the two seats of a match split round 3 between them at 1-1", () => {
+  const rounds = ["a", "b", "b"].map((winner) => ({ winner, prize: 1, inferred: false }));
+  const story = { starter: "a", rounds, ok: true };
+  const [a, b] = ["a", "b"].map((player) => momentumOf([{ player, seedBlock: "s", story }]).decider);
+
+  expect([a?.n, b?.n]).toEqual([1, 1]);
+  expect((a?.k ?? 0) + (b?.k ?? 0)).toBe(1);
 });
