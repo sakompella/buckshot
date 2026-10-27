@@ -103,6 +103,15 @@ figure.lanes { margin: 36px 0 0; }
 figure.lanes h3 { margin-top: 0; }
 .chartrow h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
 .chartrow .sub { margin-bottom: 12px; }
+.chartrow .wide { grid-column: span 2; }
+.fate-legend { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 0 0 18px; color: var(--mut); font-size: 13px; }
+.fate-legend i { display: inline-block; width: 22px; height: 10px; margin-right: 6px; background: var(--fg); }
+.fates { display: grid; grid-template-columns: max-content minmax(0, 1fr) 3.5ch; gap: 4px 10px; align-items: center; font-size: 12px; }
+.fate { display: contents; }
+.fate-name { text-align: right; white-space: nowrap; }
+.fate-bar { display: flex; height: 12px; background: #0d0d0d; }
+.fate-bar i { display: block; height: 100%; }
+.fate-val { font-variant-numeric: tabular-nums; }
 svg .big { font-size: 20px; font-weight: 600; fill: var(--fg); font-variant-numeric: tabular-nums; }
 details.tables { margin-top: 34px; }
 details.tables > summary { color: var(--mut); font-size: 13px; }
@@ -222,6 +231,7 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
   .luckrow { grid-template-columns: minmax(0, 1fr); gap: 24px; }
   .luckbig { gap: 16px; }
   .chartpair { grid-template-columns: minmax(0, 1fr); gap: 30px; }
+  .chartrow .wide { grid-column: auto; }
   main { padding: 16px 20px 60px; }
   nav .brand { display: none; }
   .seedgroup { display: block; }

@@ -7,6 +7,7 @@ import { switchView } from "./charts.ts";
 import { type Derived, derive, mainConfigsOf, ratingsOf } from "./derived.ts";
 import { effortView } from "./effort.ts";
 import { blundersView, everyRateFor, galleryFor, ratesFor } from "./blunders.ts";
+import { fatesView } from "./fates.ts";
 import { breakdownView, heatRowsOf } from "./heat.ts";
 import { interestingView, picksOf } from "./interesting.ts";
 import { luckView } from "./luck.ts";
@@ -137,6 +138,8 @@ const lazyPressure = createLazy();
 
 const lazyRubbers = createLazy();
 
+const lazyFates = createLazy();
+
 const lazyReliability = createLazy();
 
 const lazyMatches = createLazy();
@@ -189,6 +192,7 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
       sectionView(h, "odds", lazyOdds(oddsCard, [h, derived, cardWidth(model.viewport)])),
       sectionView(h, "pressure", lazyPressure(pressureView, [h, derived.decisions, derived.seats, derived.keep, model.viewport.width, content])),
       sectionView(h, "rubbers", h.div([h.Class("card")], [lazyRubbers(rubbersView, [h, rubberRows(derived.filtered), cardWidth(model.viewport)])])),
+      sectionView(h, "items", lazyFates(fatesView, [h, derived.seats, derived.filtered])),
       sectionView(h, "reliability", lazyReliability(reliabilityView, [h, derived.decisions, derived.seats, derived.keep, model.maybeRateTip, model.viewport.width, content])),
       sectionView(h, "matches", lazyMatches(matchesView, [h, derived.matches, model.matchList])),
       sectionView(h, "leaderboards", lazyLeaderboard(leaderboardView, [h, derived.byCohort, derived.everyByCohort, derived.ratings, derived.matchSeats, derived.items, model.leaderboard, model.filter.isAllConfigs, model.ranking, model.basis])),
