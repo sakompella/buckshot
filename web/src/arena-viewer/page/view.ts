@@ -16,6 +16,7 @@ import { leaderboardView } from "./leaderboard.ts";
 import { oddsView } from "./odds.ts";
 import { mistakesView } from "./mistakes.ts";
 import { matchesView } from "./matches.ts";
+import { momentumView } from "./momentum.ts";
 import { type Basis, Message, type Model, type Ranking, type Section, SECTIONS, type Viewport } from "./model.ts";
 import { pressureView } from "./pressure.ts";
 import { reliabilityView } from "./reliability.ts";
@@ -121,6 +122,8 @@ const lazyUpset = createLazy();
 
 const lazySpend = createLazy();
 
+const lazyMomentum = createLazy();
+
 const lazyBreakdown = createLazy();
 
 const lazyBlunders = createLazy();
@@ -177,6 +180,8 @@ const oddsCard = (h: H, derived: Derived, width: number): Html => h.div([h.Class
 
 const dealsCard = (h: H, derived: Derived, width: number): Html => h.div([h.Class("card")], [dealsView(h, derived, width)]);
 
+const momentumCard = (h: H, derived: Derived, width: number): Html => h.div([h.Class("card")], [momentumView(h, derived.pooled, width)]);
+
 const sectionView = (h: H, section: Section, content: Html): Html => h.section([h.Id(section), h.Class("part")], [content]);
 
 const pageView = (h: H, model: Model, derived: Derived): Html => {
@@ -188,7 +193,7 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
       lazyHero(heroView, [h, derived]),
       // The jump menu and the filters stay at the top; the filters apply to every section.
       h.div([h.Class("top")], [lazyNav(navView, [h]), lazyFilters(filtersView, [h, derived, model.filter])]),
-      sectionView(h, "scatter", h.div([], [lazyScatter(scatterCard, [h, derived, model.ranking, model.basis, model.scatter, cardWidth(model.viewport)]), lazyEffort(effortCard, [h, derived, model.basis, cardWidth(model.viewport)]), lazyUpset(upsetCard, [h, upsetOf(derived), cardWidth(model.viewport)]), lazySpend(spendCard, [h, derived])])),
+      sectionView(h, "scatter", h.div([], [lazyScatter(scatterCard, [h, derived, model.ranking, model.basis, model.scatter, cardWidth(model.viewport)]), lazyEffort(effortCard, [h, derived, model.basis, cardWidth(model.viewport)]), lazyUpset(upsetCard, [h, upsetOf(derived), cardWidth(model.viewport)]), lazySpend(spendCard, [h, derived]), lazyMomentum(momentumCard, [h, derived, cardWidth(model.viewport)])])),
       sectionView(h, "interesting", lazyInteresting(interestingView, [h, picksOf(derived), model.matches, content])),
       sectionView(h, "luck", lazyLuck(luckView, [h, derived.matches, derived.pooled, model.viewport.width, content, cardWidth(model.viewport)])),
       sectionView(h, "blunders", lazyBlunders(blundersCard, [h, derived, model.viewport.width, content])),

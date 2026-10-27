@@ -9,6 +9,7 @@ import { bradleyTerry, expectedShare, type Game, pooledRatings, surprises } from
 import { betterShare, bucketsOf, type Duel, luckByConfig } from "../src/arena-viewer/page/luck.ts";
 import { ODDS_BINS, oddsBinOf, selfShotTallies } from "../src/arena-viewer/page/odds.ts";
 import { failuresByHour } from "../src/arena-viewer/page/failures-over-time.ts";
+import { momentumOf } from "../src/arena-viewer/page/momentum.ts";
 import { AXES } from "../src/arena-viewer/page/scatter.ts";
 import { upsetBins, winChance } from "../src/arena-viewer/page/upset.ts";
 
@@ -650,4 +651,26 @@ test("surprises compare each config's share with the ratings' prediction, from b
   expect(xVersusZ?.expected).toBeCloseTo(1 - expectedShare(400, 0), 12);
   expect(table.get("z|")?.get("X|")?.observed).toBe(0);
   expect(surprises(games, new Map([["x|", 0]]), (config) => config).size).toBe(0);
+});
+
+test("momentum counts round 2 after a round-1 win, and round 3 only when the first two rounds were split", () => {
+  const seat = (winners: ReadonlyArray<string>, seedBlock: string) => ({
+    player: "a",
+    seedBlock,
+    story: { starter: "a", rounds: winners.map((winner) => ({ winner, prize: 1, inferred: false })), ok: true },
+  });
+
+  const momentum = momentumOf([seat(["a", "a", "b"], "s1"), seat(["a", "b", "a"], "s1"), seat(["b", "a", "a"], "s2"), seat(["b", "b", "b"], "s2"), seat(["a", "b", "b"], "s3")]);
+
+  expect([momentum.afterWin.k, momentum.afterWin.n]).toEqual([1, 3]);
+  expect([momentum.decider.k, momentum.decider.n]).toEqual([2, 3]);
+});
+
+test("the two seats of a match split round 3 between them at 1-1", () => {
+  const rounds = ["a", "b", "b"].map((winner) => ({ winner, prize: 1, inferred: false }));
+  const story = { starter: "a", rounds, ok: true };
+  const [a, b] = ["a", "b"].map((player) => momentumOf([{ player, seedBlock: "s", story }]).decider);
+
+  expect([a?.n, b?.n]).toEqual([1, 1]);
+  expect((a?.k ?? 0) + (b?.k ?? 0)).toBe(1);
 });
