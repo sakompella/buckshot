@@ -90,6 +90,7 @@ const Column = Schema.Array(Schema.Number);
  * One entry per agent move, column by column. seat indexes the seats response.
  * opp and pick are bit masks over PATTERNS: a pattern's chance came up, and the move took it.
  * rt is -1 when a call did not report reasoning tokens. shot: 0 none, 1 the opponent, 2 itself.
+ * odds is, for a shot the player had no glass or phone clue for, the whole percent chance it counted the chambered shell live; else -1.
  * useItem and stealItem index ITEMS, or are -1.
  */
 export const Decisions = Schema.Struct({
@@ -110,6 +111,7 @@ export const Decisions = Schema.Struct({
   useItem: Column,
   stealItem: Column,
   shot: Column,
+  odds: Column,
   checks: Schema.Struct({ ok: Schema.Number, bad: Schema.Number }),
 });
 

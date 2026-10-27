@@ -306,7 +306,7 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
   );
 
   const extra = seats.map(() => emptySeat());
-  const columns: MutableColumns = { seat: [], ord: [], moveNo: [], opp: [], pick: [], failedCalls: [], rt: [], rc: [], cost: [], lat: [], tok: [], calls: [], legalUse: [], legalSteal: [], useItem: [], stealItem: [], shot: [] };
+  const columns: MutableColumns = { seat: [], ord: [], moveNo: [], opp: [], pick: [], failedCalls: [], rt: [], rc: [], cost: [], lat: [], tok: [], calls: [], legalUse: [], legalSteal: [], useItem: [], stealItem: [], shot: [], odds: [] };
   const checks = { ok: 0, bad: 0 };
 
   const seatsOf = new Map<string, Array<number>>();
@@ -467,6 +467,7 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
     columns.useItem.push(steal >= 0 ? ADRENALINE : used);
     columns.stealItem.push(steal);
     columns.shot.push(isOpp ? 1 : isSelf ? 2 : 0);
+    columns.odds.push(chamber !== null && (isSelf || isOpp) && chamber.by !== "glass" && chamber.by !== "phone" ? Math.round(chamber.pLive * 100) : -1);
   }
 
   finishSeat();
