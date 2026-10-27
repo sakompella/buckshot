@@ -4,7 +4,8 @@ import crypto from "node:crypto";
 import { Option, Schema } from "effect";
 
 import { analyse, decodeVisible, roundStory, ShellTracker } from "./analysis.ts";
-import { Call, Decisions, MatchDetail, MatchSeat, MatchSummary, type PlayerState, SeatRow, SeatsResponse, type Step } from "./api.ts";
+import { Call, Consistency, Decisions, MatchDetail, MatchSeat, MatchSummary, type PlayerState, SeatRow, SeatsResponse, type Step } from "./api.ts";
+import { openConsistency } from "./consistency.ts";
 import page from "./page/index.html";
 import { openRegret, type Regret } from "./regret.ts";
 
@@ -55,6 +56,8 @@ const DecisionRow = Schema.Struct({
 const decodeDecisionRow = Schema.decodeUnknownSync(DecisionRow);
 
 const encodeSeats = Schema.encodeSync(Schema.fromJsonString(SeatsResponse));
+
+const encodeConsistency = Schema.encodeSync(Schema.fromJsonString(Schema.Array(Consistency)));
 
 const encodeDecisions = Schema.encodeSync(Schema.fromJsonString(Decisions));
 
@@ -214,8 +217,11 @@ const guarded = (handler: (request: Request) => Response) => {
   };
 };
 
-/** Loads and analyses the database once, then serves the page and the API. With a regret database, seats and moves carry their regret. */
-export const serveArenaViewer = (dbPath: string, hostname: string, port: number, regretPath?: string) => {
+/**
+ * Loads and analyses the database once, then serves the page and the API. With a regret database, seats and moves carry their regret.
+ * With a knowledge database, the page shows how consistent each config is.
+ */
+export const serveArenaViewer = (dbPath: string, hostname: string, port: number, regretPath?: string, knowledgePath?: string) => {
   const db = new Database(dbPath, { readonly: true });
   const regret = regretPath === undefined ? null : openRegret(regretPath);
   const started = performance.now();
@@ -236,6 +242,7 @@ export const serveArenaViewer = (dbPath: string, hostname: string, port: number,
 
   const seatsBody = encodedBody(encodeSeats(seats));
   const decisionsBody = encodedBody(encodeDecisions(decisions));
+  const consistencyBody = encodedBody(encodeConsistency(knowledgePath === undefined ? [] : openConsistency(knowledgePath)));
 
   console.log(`loaded ${seats.length} seats in ${Math.round(performance.now() - started)} ms; decisions payload ${(decisionsBody.gzipped.length / 1e6).toFixed(1)} MB gzipped`);
 
@@ -254,6 +261,7 @@ export const serveArenaViewer = (dbPath: string, hostname: string, port: number,
           : new Response(Bun.file(download), { headers: { "content-disposition": 'attachment; filename="buckshot.sqlite"' } });
       }),
       "/api/decisions": guarded((request) => json(request, decisionsBody)),
+      "/api/consistency": guarded((request) => json(request, consistencyBody)),
       "/api/match": guarded((request) => {
         const detail = matchDetail(db, regret, new URL(request.url).searchParams.get("id") ?? "");
 

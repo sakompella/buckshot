@@ -116,6 +116,7 @@ const itemSummaries = (decisions: Decisions, seats: ReadonlyArray<SeatFull>): Re
 export interface Derived {
   readonly seats: ReadonlyArray<SeatFull>;
   readonly decisions: Decisions;
+  readonly consistency: Loaded["consistency"];
   /** Whether each seat, by index, passes the filter. */
   readonly keep: ReadonlyArray<boolean>;
   readonly filtered: ReadonlyArray<SeatFull>;
@@ -222,7 +223,7 @@ const everyPooledOf = memoLast((seats: ReadonlyArray<SeatFull>): ReadonlyArray<M
 });
 
 export const derive = memoLast((loaded: Loaded, filter: Filter, basis: Basis): Derived => {
-  const { seats, decisions } = loaded;
+  const { seats, decisions, consistency } = loaded;
   const main = mainConfigsOf(seats);
   const keep = seats.map((seat) => passes(filter, main, seat));
   const filtered = seats.filter((_seat, index) => keep[index]);
@@ -234,6 +235,7 @@ export const derive = memoLast((loaded: Loaded, filter: Filter, basis: Basis): D
   return {
     seats,
     decisions,
+    consistency,
     keep,
     filtered,
     matchSeats,

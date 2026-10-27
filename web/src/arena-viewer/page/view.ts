@@ -4,6 +4,7 @@ import { createLazy, type Document, type Html, type HtmlBuilder } from "foldkit/
 
 import { baseName, baseOrder, colorOf, EFFORTS, fmtCount, keyOf, sumOf, unique } from "./data.ts";
 import { switchView } from "./charts.ts";
+import { consistencyView } from "./consistency.ts";
 import { type Derived, derive, mainConfigsOf } from "./derived.ts";
 import { effortView } from "./effort.ts";
 import { breakdownView, heatRowsOf } from "./heat.ts";
@@ -107,6 +108,8 @@ const lazyScatter = createLazy();
 
 const lazyEffort = createLazy();
 
+const lazyConsistency = createLazy();
+
 const lazyBreakdown = createLazy();
 
 const lazyInteresting = createLazy();
@@ -147,7 +150,18 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
       lazyHero(heroView, [h, derived]),
       // The jump menu and the filters stay at the top; the filters apply to every section.
       h.div([h.Class("top")], [lazyNav(navView, [h]), lazyFilters(filtersView, [h, derived, model.filter])]),
-      sectionView(h, "scatter", h.div([], [lazyScatter(scatterCard, [h, derived, model.ranking, model.basis, model.scatter, cardWidth(model.viewport)]), lazyEffort(effortCard, [h, derived, model.basis, cardWidth(model.viewport)])])),
+      sectionView(
+        h,
+        "scatter",
+        h.div(
+          [],
+          [
+            lazyScatter(scatterCard, [h, derived, model.ranking, model.basis, model.scatter, cardWidth(model.viewport)]),
+            lazyEffort(effortCard, [h, derived, model.basis, cardWidth(model.viewport)]),
+            lazyConsistency(consistencyView, [h, derived.pooled, derived.consistency, cardWidth(model.viewport)]),
+          ],
+        ),
+      ),
       sectionView(h, "interesting", lazyInteresting(interestingView, [h, picksOf(derived), model.matches, content])),
       sectionView(h, "seats", lazySeats(seatsView, [h, derived, model.viewport.width, content])),
       sectionView(h, "reliability", lazyReliability(reliabilityView, [h, derived.decisions, derived.seats, derived.keep, model.maybeRateTip, model.viewport.width, content])),
