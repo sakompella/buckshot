@@ -58,7 +58,7 @@ export type ScatterAxis = typeof ScatterAxis.Type;
 
 export const Scatter = Schema.Struct({ show: ScatterShow, axis: ScatterAxis, maybeHover: Schema.Option(Schema.String), maybePin: Schema.Option(Schema.String) });
 
-export const HeatMode = Schema.Literals(["opp", "items", "choices", "style"]);
+export const HeatMode = Schema.Literals(["opp", "surprise", "items", "choices", "style"]);
 
 export type HeatMode = typeof HeatMode.Type;
 
