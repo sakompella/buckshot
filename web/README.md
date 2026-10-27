@@ -262,6 +262,11 @@ under it applies to the whole page; on a wide screen both stay at the top. The
 scatter's and the effort chart's axes span every config in every cohort, so a filter only shows or hides
 points; the reliability bars keep one scale the same way.
 
+The breakdown's "Beats the ratings" mode shows, for each config and opponent model with at least 10 games, its
+share minus the share the pooled ratings predict for those same games, in points. Lighter beat the prediction,
+darker fell short. The pair-effect test in `docs/arena/analysis/matchups.md` found no such effect worth keeping,
+so most cells are noise.
+
 Wherever ratings show (the scatter's y axis, the heatmap's and the leaderboards'
 rating columns), a Wins / Cash / Rounds toggle and an Elo / Rank toggle switch all of them.
 Elo is one Bradley-Terry rating per config, fitted over every completed

@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { chamberPatterns, roundStory, ShellTracker } from "../src/arena-viewer/analysis.ts";
 import type { Seat } from "../src/arena-viewer/api.ts";
 import { type BlockTally, blockRate, colorOf, groupBy, modelStats, quantile, rankOrder, regretStats, rng, withCohorts } from "../src/arena-viewer/page/data.ts";
-import { bradleyTerry, type Game, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
+import { bradleyTerry, expectedShare, type Game, pooledRatings, surprises } from "../src/arena-viewer/page/ratings.ts";
 import { AXES } from "../src/arena-viewer/page/scatter.ts";
 
 const randomGames = (seed: number): ReadonlyArray<Game> => {
@@ -489,4 +489,24 @@ test("a config's round share is the rounds it won over the rounds it played", ()
 
     expect(config.roundShare).toBeCloseTo((wins * 2 + (config.scored.length - wins)) / (3 * config.scored.length), 12);
   }
+});
+
+test("surprises compare each config's share with the ratings' prediction, from both sides of a game", () => {
+  const ratings = new Map([["x|", 0], ["y|", 0], ["z|", 400]]);
+
+  const games: ReadonlyArray<Game> = [
+    { a: "x|", b: "y|", sa: 1 },
+    { a: "x|", b: "y|", sa: 0 },
+    { a: "z|", b: "x|", sa: 0 },
+  ];
+
+  const table = surprises(games, ratings, (config) => config.toUpperCase());
+  const xVersusY = table.get("x|")?.get("Y|");
+  const xVersusZ = table.get("x|")?.get("Z|");
+
+  expect(xVersusY).toEqual({ observed: 0.5, expected: 0.5, games: 2 });
+  expect(xVersusZ?.observed).toBe(1);
+  expect(xVersusZ?.expected).toBeCloseTo(1 - expectedShare(400, 0), 12);
+  expect(table.get("z|")?.get("X|")?.observed).toBe(0);
+  expect(surprises(games, new Map([["x|", 0]]), (config) => config).size).toBe(0);
 });
