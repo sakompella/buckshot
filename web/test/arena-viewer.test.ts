@@ -4,6 +4,7 @@ import { chamberPatterns, roundStory, ShellTracker } from "../src/arena-viewer/a
 import type { Seat } from "../src/arena-viewer/api.ts";
 import { type BlockTally, blockRate, colorOf, groupBy, modelStats, quantile, rankOrder, regretStats, rng, withCohorts } from "../src/arena-viewer/page/data.ts";
 import { bradleyTerry, expectedShare, type Game, pooledRatings, surprises } from "../src/arena-viewer/page/ratings.ts";
+import { turningPoints } from "../src/arena-viewer/page/replay.ts";
 import { AXES } from "../src/arena-viewer/page/scatter.ts";
 
 const randomGames = (seed: number): ReadonlyArray<Game> => {
@@ -509,4 +510,13 @@ test("surprises compare each config's share with the ratings' prediction, from b
   expect(xVersusZ?.expected).toBeCloseTo(1 - expectedShare(400, 0), 12);
   expect(table.get("z|")?.get("X|")?.observed).toBe(0);
   expect(surprises(games, new Map([["x|", 0]]), (config) => config).size).toBe(0);
+});
+
+test("turning points are the biggest blunders, biggest first, and none when no move gave up 5 points", () => {
+  const stepWith = (points: number | null) => ({ regret: points === null ? null : { points } });
+  const steps = [4.9, null, 12, 5, 30, 12, 8].map(stepWith);
+
+  expect(turningPoints(steps)).toEqual([4, 2, 5]);
+  expect(turningPoints(steps, 10)).toEqual([4, 2, 5, 6, 3]);
+  expect(turningPoints([4.9, null, 0].map(stepWith))).toEqual([]);
 });

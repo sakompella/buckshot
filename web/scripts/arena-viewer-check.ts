@@ -496,6 +496,15 @@ const checkDesktop = async (browser: Browser) => {
   await page.locator(".flagged tr.row").first().click();
   await page.waitForSelector(".modal .step.on");
   console.log("focused move", await textOf(page, ".modal .step.on .h"));
+
+  const turning = page.locator(".modal .turning .chip");
+  const rings = await countOf(page, ".modal .chart circle");
+
+  console.log("turning points", await countOf(page, ".modal .turning .chip"), "| blunder rings", rings);
+  expectThat((await turning.count()) > 0 && rings >= (await turning.count()), "the replay of a flagged move has no turning points on its health chart");
+  await turning.first().click();
+  console.log("turning point opens", await textOf(page, ".modal .step.on .h"));
+  await page.locator(".modal").screenshot({ path: shot("replay-turning-points") });
   await page.locator(".seedrow .chip").first().click();
   await page.waitForSelector(".modal .step");
   await settled(page);
