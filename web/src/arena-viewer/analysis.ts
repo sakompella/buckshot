@@ -283,6 +283,8 @@ export interface Analysis {
   readonly decisions: Decisions;
   /** In the order of the seats analysed. */
   readonly seats: ReadonlyArray<SeatAnalysis>;
+  /** Shells left in the gun at each of the decisions' agent moves, the chambered one included. */
+  readonly shellsLeft: ReadonlyArray<number>;
 }
 
 export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: ReadonlyMap<string, number>): Analysis => {
@@ -308,6 +310,7 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
   const extra = seats.map(() => emptySeat());
   const columns: MutableColumns = { seat: [], ord: [], moveNo: [], opp: [], pick: [], failedCalls: [], rt: [], rc: [], cost: [], lat: [], tok: [], calls: [], legalUse: [], legalSteal: [], useItem: [], stealItem: [], shot: [] };
   const checks = { ok: 0, bad: 0 };
+  const shellsLeft: Array<number> = [];
 
   const seatsOf = new Map<string, Array<number>>();
 
@@ -467,6 +470,7 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
     columns.useItem.push(steal >= 0 ? ADRENALINE : used);
     columns.stealItem.push(steal);
     columns.shot.push(isOpp ? 1 : isSelf ? 2 : 0);
+    shellsLeft.push(tracker.total - tracker.cursor);
   }
 
   finishSeat();
@@ -503,5 +507,5 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
 
   console.log(`analysis: ${columns.seat.length} agent moves in ${Math.round(performance.now() - started)} ms; known-shell predictions matched ${checks.ok}, contradicted ${checks.bad}`);
 
-  return { decisions: { ...columns, checks }, seats: extra };
+  return { decisions: { ...columns, checks }, seats: extra, shellsLeft };
 };

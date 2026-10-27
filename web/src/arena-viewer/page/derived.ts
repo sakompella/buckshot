@@ -1,4 +1,4 @@
-import { type Decisions, ITEMS } from "../api.ts";
+import { type Decisions, ITEMS, type Mistakes } from "../api.ts";
 import { addTo, baseName, type BlockTally, blockRate, configShare, groupBy, keyOf, type MatchRow, matchRows, type ModelStats, modelStats, rankOrder, type Rate, type SeatFull } from "./data.ts";
 import type { Basis, Filter, Loaded } from "./model.ts";
 import { pooledRatings, type Rating } from "./ratings.ts";
@@ -116,6 +116,7 @@ const itemSummaries = (decisions: Decisions, seats: ReadonlyArray<SeatFull>): Re
 export interface Derived {
   readonly seats: ReadonlyArray<SeatFull>;
   readonly decisions: Decisions;
+  readonly mistakes: Mistakes;
   /** Whether each seat, by index, passes the filter. */
   readonly keep: ReadonlyArray<boolean>;
   readonly filtered: ReadonlyArray<SeatFull>;
@@ -222,7 +223,7 @@ const everyPooledOf = memoLast((seats: ReadonlyArray<SeatFull>): ReadonlyArray<M
 });
 
 export const derive = memoLast((loaded: Loaded, filter: Filter, basis: Basis): Derived => {
-  const { seats, decisions } = loaded;
+  const { seats, decisions, mistakes } = loaded;
   const main = mainConfigsOf(seats);
   const keep = seats.map((seat) => passes(filter, main, seat));
   const filtered = seats.filter((_seat, index) => keep[index]);
@@ -234,6 +235,7 @@ export const derive = memoLast((loaded: Loaded, filter: Filter, basis: Basis): D
   return {
     seats,
     decisions,
+    mistakes,
     keep,
     filtered,
     matchSeats,
