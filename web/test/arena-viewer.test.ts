@@ -5,6 +5,7 @@ import type { Seat } from "../src/arena-viewer/api.ts";
 import { type BlockTally, blockRate, colorOf, groupBy, matchRows, modelStats, quantile, rankOrder, regretStats, rng, withCohorts } from "../src/arena-viewer/page/data.ts";
 import { bradleyTerry, type Game, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 import { betterShare, bucketsOf, type Duel, luckByConfig } from "../src/arena-viewer/page/luck.ts";
+import { ODDS_BINS, oddsBinOf, selfShotTallies } from "../src/arena-viewer/page/odds.ts";
 import { AXES } from "../src/arena-viewer/page/scatter.ts";
 import { upsetBins, winChance } from "../src/arena-viewer/page/upset.ts";
 
@@ -561,4 +562,24 @@ test("luck counts a win by the player with more regret, and ignores ties", () =>
 
   expect(byConfig.get("a|medium")).toMatchObject({ matches: 3, luckyWins: 1, unluckyLosses: 1 });
   expect(byConfig.get("b|medium")).toMatchObject({ matches: 5, luckyWins: 1, unluckyLosses: 1 });
+});
+
+test("odds bins cover every whole percent once, with the ends and even odds on their own", () => {
+  for (let percent = 0; percent <= 100; percent++) {
+    const hits = ODDS_BINS.filter(({ low, high }) => percent >= low && percent <= high);
+
+    expect(hits).toHaveLength(1);
+  }
+
+  expect(ODDS_BINS[oddsBinOf(50)]?.label).toBe("50");
+  expect(oddsBinOf(-1)).toBe(-1);
+});
+
+test("self-shot tallies count shots with odds per config and bin, and skip clued shots and filtered seats", () => {
+  const seat = (model: string) => ({ model, effort: "medium" });
+  const decisions = { odds: [0, 0, 50, -1, 100, 0], seat: [0, 0, 0, 0, 1, 1], shot: [2, 1, 1, 2, 2, 2] };
+  const tallies = selfShotTallies(decisions, [seat("a"), seat("b")], [true, false]);
+
+  expect([...tallies.keys()]).toEqual(["a|medium"]);
+  expect(tallies.get("a|medium")?.map(({ self, shots }) => [self, shots])).toEqual([[1, 2], [0, 0], [0, 0], [0, 1], [0, 0], [0, 0]]);
 });

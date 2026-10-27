@@ -11,6 +11,7 @@ import { breakdownView, heatRowsOf } from "./heat.ts";
 import { interestingView, picksOf } from "./interesting.ts";
 import { luckView } from "./luck.ts";
 import { leaderboardView } from "./leaderboard.ts";
+import { oddsView } from "./odds.ts";
 import { matchesView } from "./matches.ts";
 import { type Basis, Message, type Model, type Ranking, type Section, SECTIONS, type Viewport } from "./model.ts";
 import { reliabilityView } from "./reliability.ts";
@@ -125,6 +126,8 @@ const lazyLuck = createLazy();
 
 const lazySeats = createLazy();
 
+const lazyOdds = createLazy();
+
 const lazyReliability = createLazy();
 
 const lazyMatches = createLazy();
@@ -155,6 +158,8 @@ const spendCard = (h: H, derived: Derived): Html => h.div([h.Class("card")], [sp
 const blundersCard = (h: H, derived: Derived, width: number, content: number): Html =>
   blundersView(h, ratesFor(derived.seats, derived.keep, derived.blunders), everyRateFor(derived.seats, derived.blunders), galleryFor(derived.seats, derived.keep, ratingsOf(derived.seats)("wins"), derived.blunders), width, content);
 
+const oddsCard = (h: H, derived: Derived, width: number): Html => h.div([h.Class("card")], [oddsView(h, derived.decisions, derived.seats, derived.keep, derived.pooled, width)]);
+
 const sectionView = (h: H, section: Section, content: Html): Html => h.section([h.Id(section), h.Class("part")], [content]);
 
 const pageView = (h: H, model: Model, derived: Derived): Html => {
@@ -171,6 +176,7 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
       sectionView(h, "luck", lazyLuck(luckView, [h, derived.matches, derived.pooled, model.viewport.width, content, cardWidth(model.viewport)])),
       sectionView(h, "blunders", lazyBlunders(blundersCard, [h, derived, model.viewport.width, content])),
       sectionView(h, "seats", lazySeats(seatsView, [h, derived, model.viewport.width, content])),
+      sectionView(h, "odds", lazyOdds(oddsCard, [h, derived, cardWidth(model.viewport)])),
       sectionView(h, "reliability", lazyReliability(reliabilityView, [h, derived.decisions, derived.seats, derived.keep, model.maybeRateTip, model.viewport.width, content])),
       sectionView(h, "matches", lazyMatches(matchesView, [h, derived.matches, model.matchList])),
       sectionView(h, "leaderboards", lazyLeaderboard(leaderboardView, [h, derived.byCohort, derived.everyByCohort, derived.ratings, derived.matchSeats, derived.items, model.leaderboard, model.filter.isAllConfigs, model.ranking, model.basis])),
