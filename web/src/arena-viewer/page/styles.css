@@ -91,6 +91,10 @@ details summary { cursor: pointer; margin: 4px 0; }
 .bignums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; margin-bottom: 34px; }
 .bignum { display: flex; flex-direction: column; gap: 4px; border-left: 2px solid var(--line); padding-left: 14px; }
 .bignum b { font-size: 46px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
+.luckrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 28px; align-items: start; margin-bottom: 26px; }
+.luckrow figure { margin: 0; min-width: 0; }
+.luckbig { display: flex; flex-direction: column; gap: 28px; }
+svg .dimtext { fill: var(--dim); font-size: 11px; }
 .chartrow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; align-items: start; }
 .chartrow figure { margin: 0; min-width: 0; }
 .chartrow h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
@@ -203,6 +207,8 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
   nav { position: sticky; top: 0; z-index: 25; background: var(--bg); margin: 0 -20px 14px; padding: 4px 20px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
   .filters { margin-bottom: 4px; }
   .chartrow { grid-template-columns: minmax(0, 1fr); gap: 30px; }
+  .luckrow { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .luckbig { gap: 16px; }
   main { padding: 16px 20px 60px; }
   nav .brand { display: none; }
   .seedgroup { display: block; }
