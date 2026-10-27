@@ -8,6 +8,22 @@ const Count = Schema.NullOr(Schema.Number);
 /** A tally per item, in ITEMS order. */
 const PerItem = Schema.Array(Schema.Number);
 
+/**
+ * How consistent one config is: over the positions it met at least twice, the chance two of its decisions in the same
+ * position chose the same move, with a 95% interval over positions. Pooled over every tournament.
+ */
+export const Consistency = Schema.Struct({
+  model: Schema.String,
+  effort: Schema.String,
+  positions: Schema.Number,
+  decisions: Schema.Number,
+  agree: Schema.Number,
+  lo: Schema.Number,
+  hi: Schema.Number,
+});
+
+export type Consistency = typeof Consistency.Type;
+
 export const ITEMS = ["magnifying glass", "burner phone", "handsaw", "beer", "cigarettes", "inverter", "jammer", "adrenaline"] as const;
 
 export const Round = Schema.Struct({ winner: Schema.String, prize: Schema.Number, inferred: Schema.Boolean });

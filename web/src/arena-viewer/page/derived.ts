@@ -118,6 +118,7 @@ export interface Derived {
   readonly decisions: Decisions;
   readonly blunders: Blunders;
   readonly mistakes: Mistakes;
+  readonly consistency: Loaded["consistency"];
   /** Whether each seat, by index, passes the filter. */
   readonly keep: ReadonlyArray<boolean>;
   readonly filtered: ReadonlyArray<SeatFull>;
@@ -224,7 +225,7 @@ const everyPooledOf = memoLast((seats: ReadonlyArray<SeatFull>): ReadonlyArray<M
 });
 
 export const derive = memoLast((loaded: Loaded, filter: Filter, basis: Basis): Derived => {
-  const { seats, decisions, blunders, mistakes } = loaded;
+  const { seats, decisions, blunders, mistakes, consistency } = loaded;
   const main = mainConfigsOf(seats);
   const keep = seats.map((seat) => passes(filter, main, seat));
   const filtered = seats.filter((_seat, index) => keep[index]);
@@ -238,6 +239,7 @@ export const derive = memoLast((loaded: Loaded, filter: Filter, basis: Basis): D
     decisions,
     blunders,
     mistakes,
+    consistency,
     keep,
     filtered,
     matchSeats,

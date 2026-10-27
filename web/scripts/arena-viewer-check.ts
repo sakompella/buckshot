@@ -112,10 +112,10 @@ const checkJumps = async (page: Page, name: string, isTouch: boolean) => {
   }
 };
 
-// The rating axis's tick labels from the top down.
+// The scatter's rating axis tick labels from the top down.
 const yTicks = (page: Page) =>
   page.evaluate(() =>
-    [...document.querySelectorAll(".card svg > g:not(.ptlabel) > text[text-anchor=end]")]
+    [...document.querySelectorAll("#scatter .card:first-child svg > g:not(.ptlabel) > text[text-anchor=end]")]
       .map((text) => ({ y: Number(text.getAttribute("y")), label: text.textContent ?? "" }))
       .toSorted((left, right) => left.y - right.y)
       .map(({ label }) => label)

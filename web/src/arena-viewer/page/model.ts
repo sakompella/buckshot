@@ -2,7 +2,7 @@ import { Schema } from "effect";
 import { AsyncData } from "foldkit";
 import { defineMessageUnion } from "foldkit/message";
 
-import { Blunders, Decisions, MatchDetail, Mistakes, Seat } from "../api.ts";
+import { Blunders, Consistency, Decisions, MatchDetail, Mistakes, Seat } from "../api.ts";
 
 // MODEL
 
@@ -41,8 +41,8 @@ export type Basis = typeof Basis.Type;
 
 export const SeatFull = Schema.Struct({ ...Seat.fields, cohort: Schema.String, potShare: Schema.NullOr(Schema.Number) });
 
-/** The database as the page holds it: every seat with its cohort, the agent moves' columns, the blunders and the regret of the searched moves. */
-export const Loaded = Schema.Struct({ seats: Schema.Array(SeatFull), decisions: Decisions, blunders: Blunders, mistakes: Mistakes });
+/** The database as the page holds it: every seat with its cohort, the agent moves' columns, the blunders, the regret of the searched moves, and each config's consistency (empty without a knowledge database). */
+export const Loaded = Schema.Struct({ seats: Schema.Array(SeatFull), decisions: Decisions, blunders: Blunders, mistakes: Mistakes, consistency: Schema.Array(Consistency) });
 
 export type Loaded = typeof Loaded.Type;
 
