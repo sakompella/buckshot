@@ -8,6 +8,7 @@ import { pressureCurves, relativeLine } from "../src/arena-viewer/page/pressure.
 import { bradleyTerry, type Game, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 import { betterShare, bucketsOf, type Duel, luckByConfig } from "../src/arena-viewer/page/luck.ts";
 import { ODDS_BINS, oddsBinOf, selfShotTallies } from "../src/arena-viewer/page/odds.ts";
+import { failuresByHour } from "../src/arena-viewer/page/failures-over-time.ts";
 import { AXES } from "../src/arena-viewer/page/scatter.ts";
 import { upsetBins, winChance } from "../src/arena-viewer/page/upset.ts";
 
@@ -610,4 +611,23 @@ test("a pressure line is read against its level-health point and has none withou
   expect(relativeLine([point(-2, 300), point(0, 100), point(2, 50)])?.points.map(({ ratio }) => ratio)).toEqual([3, 1, 0.5]);
   expect(relativeLine([point(-2, 300), point(2, 50)])).toBeNull();
   expect(relativeLine([point(0, 100)])).toBeNull();
+});
+
+test("failures by hour pool a model's efforts into the hour each match started, and leave out seats the filter drops", () => {
+  const seatAt = (startedAt: string, model: string, effort: string, calls: number, failed: number) => ({ ...SEAT, startedAt, model, effort, calls, failed, cohort: "", potShare: null });
+
+  const seats = [
+    seatAt("2026-10-16T10:05:00Z", "m", "low", 100, 10),
+    seatAt("2026-10-16T10:55:00Z", "m", "high", 50, 5),
+    seatAt("2026-10-16T11:00:00Z", "m", "low", 40, 0),
+    seatAt("2026-10-16T10:30:00Z", "other", "low", 30, 30),
+  ];
+
+  const hour = Date.parse("2026-10-16T10:00:00Z") / 3.6e6;
+
+  expect(failuresByHour(seats, [true, true, true, false]).get("m")).toEqual([
+    { hour, calls: 150, failed: 15 },
+    { hour: hour + 1, calls: 40, failed: 0 },
+  ]);
+  expect(failuresByHour(seats, [true, true, true, false]).has("other")).toBe(false);
 });

@@ -99,6 +99,8 @@ svg .dimtext { fill: var(--dim); font-size: 11px; }
 .chartpair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; align-items: start; }
 .chartpair h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
 .chartrow figure { margin: 0; min-width: 0; }
+figure.lanes { margin: 36px 0 0; }
+figure.lanes h3 { margin-top: 0; }
 .chartrow h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
 .chartrow .sub { margin-bottom: 12px; }
 svg .big { font-size: 20px; font-weight: 600; fill: var(--fg); font-variant-numeric: tabular-nums; }
