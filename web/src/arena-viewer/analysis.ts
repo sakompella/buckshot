@@ -213,6 +213,7 @@ const PerDecisionRow = Schema.Struct({
   calls: Schema.Number,
   failed: Schema.Number,
   tok: Schema.Number,
+  outp: Schema.Number,
 });
 
 const DecisionRow = Schema.Struct({
@@ -254,6 +255,7 @@ interface SeatTally {
   fallbacks: number;
   story: Story | null;
   round: number;
+  roundThree: [number, number] | null;
   low: [number, number, number] | null;
 }
 
@@ -266,6 +268,7 @@ const emptySeat = (): SeatTally => ({
   fallbacks: 0,
   story: null,
   round: 0,
+  roundThree: null,
   low: null,
 });
 
@@ -294,14 +297,15 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
       .query(
         `select decision_id d, sum(reasoning_tokens) rt, sum(reasoning_tokens is null) nulls, sum(length(coalesce(reasoning_text, ''))) rc,
            sum(cost_usd) cost, sum(latency_ms) lat, count(*) calls, sum(status = 'failed') failed,
-           sum(coalesce(input_tokens, 0) + coalesce(output_tokens, 0) + coalesce(cache_read_tokens, 0) + coalesce(cache_write_tokens, 0)) tok
+           sum(coalesce(input_tokens, 0) + coalesce(output_tokens, 0) + coalesce(cache_read_tokens, 0) + coalesce(cache_write_tokens, 0)) tok,
+           sum(coalesce(output_tokens, 0)) outp
          from calls where decision_id is not null group by decision_id`,
       )
       .all()
       .map((raw) => {
         const row = decodePerDecision(raw);
 
-        return [row.d, { rt: row.nulls === 0 ? (row.rt ?? 0) : -1, rc: row.rc, cost: row.cost ?? 0, lat: row.lat ?? 0, tok: row.tok, calls: row.calls, failed: row.failed }] as const;
+        return [row.d, { rt: row.nulls === 0 ? (row.rt ?? 0) : -1, rc: row.rc, cost: row.cost ?? 0, lat: row.lat ?? 0, tok: row.tok, outp: row.outp, calls: row.calls, failed: row.failed }] as const;
       }),
   );
 
@@ -449,6 +453,12 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
     if (legalLabels.some((label) => label.startsWith("Steal "))) legalUse |= 1 << ADRENALINE;
 
     const calls = perDecision.get(row.id);
+
+    if (seat.round === 3) {
+      const [moves, outputTokens] = seat.roundThree ?? [0, 0];
+
+      seat.roundThree = [moves + 1, outputTokens + (calls?.outp ?? 0)];
+    }
 
     columns.seat.push(seatAt);
     columns.ord.push(row.ord);

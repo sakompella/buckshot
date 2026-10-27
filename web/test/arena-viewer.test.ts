@@ -274,6 +274,7 @@ const SEAT: Seat = {
   regret: null,
   story: null,
   round: 0,
+  roundThree: null,
   low: null,
 };
 
