@@ -89,7 +89,7 @@ const smallTargets = (page: Page) =>
     }),
   );
 
-const SECTIONS = ["scatter", "interesting", "blunders", "mistakes", "seats", "rubbers", "items", "deals", "reliability", "matches", "leaderboards", "breakdown"] as const;
+const SECTIONS = ["scatter", "interesting", "luck", "seats", "deals", "blunders", "mistakes", "odds", "items", "pressure", "rubbers", "reliability", "matches", "leaderboards", "breakdown"] as const;
 
 // How far a section's top sits below the sticky bar after a jump (0 or 1 is right), and whether the URL names it.
 const jumpedTo = (page: Page, section: string) =>
@@ -108,7 +108,7 @@ const checkJumps = async (page: Page, name: string, isTouch: boolean) => {
     await settled(page);
     console.log(name, "jump", await jumpedTo(page, section));
 
-    if (section === "mistakes" || section === "seats" || section === "rubbers" || section === "items" || section === "reliability" || section === "matches") await page.screenshot({ path: shot(`${name}-${section}`) });
+    await page.locator(`#${section}`).screenshot({ path: shot(`${name}-${section}`) });
   }
 };
 
