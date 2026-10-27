@@ -3,7 +3,7 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { type Decisions, ITEMS, type Pattern, patternBit } from "../api.ts";
 import { anchorId, pressable, ratingToggles, switchView, tipView, toggleView } from "./charts.ts";
-import { baseName, baseOrder, eloName, fmtPct, fmtRating, fmtTime, fmtUsd, isClaude, keyOf, type MatchRow, type SeatFull, shareName, unique } from "./data.ts";
+import { baseName, baseOrder, eloName, fmtCount, fmtPct, fmtRating, fmtTime, fmtUsd, isClaude, keyOf, type MatchRow, type SeatFull, shareName, unique } from "./data.ts";
 import { type Derived, memoLast } from "./derived.ts";
 import { itemIconOf } from "./items.ts";
 import { type HeatMode, Message, type Model, type Ranking } from "./model.ts";
@@ -39,12 +39,14 @@ interface HeatCell {
   readonly value: number;
   readonly text: string;
   readonly tip: string;
+  /** The games, moves or player-matches the value is over. */
+  readonly n: number;
   readonly isFaint: boolean;
   readonly isRinged: boolean;
   readonly maybeClick: Option.Option<Message>;
 }
 
-const cellOf = (value: number, text: string, tip: string, isFaint = false, isRinged = false, maybeClick: Option.Option<Message> = Option.none()): HeatCell => ({ value, text, tip, isFaint, isRinged, maybeClick });
+const cellOf = (value: number, text: string, tip: string, n: number, isFaint = false, isRinged = false, maybeClick: Option.Option<Message> = Option.none()): HeatCell => ({ value, text, tip, n, isFaint, isRinged, maybeClick });
 
 const TIERS: ReadonlyArray<readonly [number, string, string]> = [
   [0.9, "#e8e8e8", "#000"],
@@ -291,7 +293,7 @@ const cellAt = (derived: Derived, mode: HeatMode, row: HeatRow, col: string): He
   if (mode === "opp") {
     const counts = versus(derived.matches).get(row.key)?.get(col);
 
-    return counts === undefined ? null : cellOf(counts[0] / counts[1], fmtPct(counts[0] / counts[1]), `vs ${col}: ${fmtPct(counts[0] / counts[1])} of ${counts[1]}`, counts[1] < MIN_N);
+    return counts === undefined ? null : cellOf(counts[0] / counts[1], fmtPct(counts[0] / counts[1]), `vs ${col}: ${fmtPct(counts[0] / counts[1])} of ${counts[1]}`, counts[1], counts[1] < MIN_N);
   }
 
   const tally = tallies(derived).get(row.key);
@@ -302,7 +304,7 @@ const cellAt = (derived: Derived, mode: HeatMode, row: HeatRow, col: string): He
     const index = Number(col);
     const [k, n] = tally.use[index] ?? [0, 0];
 
-    return n === 0 ? null : cellOf(k / n, fmtPct(k / n), `${ITEMS[index] ?? ""}: used ${k.toLocaleString()} of ${n.toLocaleString()} moves where legal`, n < MIN_LEGAL, favoriteOf(tally) === index);
+    return n === 0 ? null : cellOf(k / n, fmtPct(k / n), `${ITEMS[index] ?? ""}: used ${k.toLocaleString()} of ${n.toLocaleString()} moves where legal`, n, n < MIN_LEGAL, favoriteOf(tally) === index);
   }
 
   if (mode === "choices") {
@@ -312,7 +314,7 @@ const cellAt = (derived: Derived, mode: HeatMode, row: HeatRow, col: string): He
     const title = CHOICES[index]?.[1] ?? "";
     const maybeClick = k > 0 ? Option.some(Message.ClickedPatternCell({ key: row.key, bit, title: `${row.label} · ${title}` })) : Option.none();
 
-    return n === 0 ? null : cellOf(k / n, fmtPct(k / n), `${title}: ${k} of ${n}`, n < MIN_N, false, maybeClick);
+    return n === 0 ? null : cellOf(k / n, fmtPct(k / n), `${title}: ${k} of ${n}`, n, n < MIN_N, false, maybeClick);
   }
 
   const column = STYLE.find(({ id }) => id === col);
@@ -322,7 +324,7 @@ const cellAt = (derived: Derived, mode: HeatMode, row: HeatRow, col: string): He
   const value = column.valueOf(tally);
   const text = column.isShare ? fmtPct(value) : value.toFixed(1);
 
-  return cellOf(value, text, `${column.title}: ${text} · ${tally.seats.size} player-matches`);
+  return cellOf(value, text, `${column.title}: ${text} · ${tally.seats.size} player-matches`, tally.seats.size);
 };
 
 export const heatRowsOf = memoLast((derived: Derived): ReadonlyArray<HeatRow> =>
@@ -427,7 +429,7 @@ const heatmapView = (h: H, derived: Derived, heat: Model["heat"], ranking: Ranki
                             h.OnMouseLeave(Message.LeftCell()),
                             ...Option.match(cell.maybeClick, { onNone: () => [], onSome: (message) => pressable(h, message) }),
                           ],
-                          [cell.text],
+                          [cell.text, h.span([h.Class("n")], [fmtCount(cell.n)])],
                         );
                       }),
                       h.td([h.Class("total")], [ranking === "elo" ? fmtRating(row.rating) : String(row.rank)]),
