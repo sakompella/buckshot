@@ -89,7 +89,7 @@ const smallTargets = (page: Page) =>
     }),
   );
 
-const SECTIONS = ["scatter", "interesting", "seats", "reliability", "matches", "leaderboards", "breakdown"] as const;
+const SECTIONS = ["scatter", "interesting", "seats", "items", "reliability", "matches", "leaderboards", "breakdown"] as const;
 
 // How far a section's top sits below the sticky bar after a jump (0 or 1 is right), and whether the URL names it.
 const jumpedTo = (page: Page, section: string) =>
@@ -108,7 +108,7 @@ const checkJumps = async (page: Page, name: string, isTouch: boolean) => {
     await settled(page);
     console.log(name, "jump", await jumpedTo(page, section));
 
-    if (section === "seats" || section === "reliability" || section === "matches") await page.screenshot({ path: shot(`${name}-${section}`) });
+    if (section === "seats" || section === "items" || section === "reliability" || section === "matches") await page.screenshot({ path: shot(`${name}-${section}`) });
   }
 };
 
@@ -502,7 +502,7 @@ const checkDesktop = async (browser: Browser) => {
   console.log("after same-seed chip:", await textOf(page, ".mhead h2"));
   await page.keyboard.press("Escape");
 
-  console.log("matches", await countOf(page, "#matches tbody tr.row"), "| seats", await countOf(page, "#seats .bignum"), "| reliability charts", await countOf(page, "#reliability .chartrow figure"));
+  console.log("matches", await countOf(page, "#matches tbody tr.row"), "| seats", await countOf(page, "#seats .bignum"), "| item fate rows", await countOf(page, "#items .fate"), "| reliability charts", await countOf(page, "#reliability .chartrow figure"));
   await checkJumps(page, "desktop", false);
   console.log("the filters stay in view:", await page.evaluate(() => Math.round(document.querySelector(".filters")?.getBoundingClientRect().top ?? -1)), "px from the top at scroll", await page.evaluate(() => Math.round(scrollY)));
   await page.locator("#reliability details.tables > summary").click();
