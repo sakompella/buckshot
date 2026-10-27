@@ -253,7 +253,7 @@ The look borrows from the studio viewer in
 analysis database (`scripts/arena-import.ts` builds it; see
 `docs/arena/database.md`) at http://127.0.0.1:8790/ by default, with no auth.
 It is one long page: the hero numbers, the cost, moves, output tokens or mean regret
-vs rating scatter, each model's rating across its efforts, a few interesting matches, the table position and round-1 starter
+vs rating scatter, each model's rating across its efforts, a few interesting matches, the costliest blunders with each config's blunder rate (the share of its searched moves that gave up 10 or more points), the table position and round-1 starter
 charts, the reliability charts (failed calls, faults and the time they cost, one bar per
 config pooled over every tournament), the newest matches, the leaderboard by cohort and, last, the breakdown heatmaps. Seats and
 reliability fold their full tables under the charts. A jump menu at the top links

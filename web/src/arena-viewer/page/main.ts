@@ -3,7 +3,7 @@ import { HttpClient, HttpClientResponse } from "effect/http";
 import { AsyncData, Command, Dom, Http, Runtime, Subscription, type Update } from "foldkit";
 import { modifyFields } from "foldkit/struct";
 
-import { Decisions, MatchDetail, SeatsResponse } from "../api.ts";
+import { Blunders, Decisions, MatchDetail, SeatsResponse } from "../api.ts";
 import { withCohorts } from "./data.ts";
 import { derive } from "./derived.ts";
 import { picksOf } from "./interesting.ts";
@@ -27,8 +27,8 @@ const getJson = <A, I>(url: string, schema: Schema.Codec<A, I>) =>
 
 const LoadData = Command.define("LoadData", {
   messages: [Message.SucceededLoad, Message.FailedLoad],
-  execute: Effect.all([getJson("/api/seats", SeatsResponse), getJson("/api/decisions", Decisions)], { concurrency: 2 }).pipe(
-    Effect.map(([seats, decisions]) => Message.SucceededLoad({ loaded: { seats: withCohorts(seats), decisions } })),
+  execute: Effect.all([getJson("/api/seats", SeatsResponse), getJson("/api/decisions", Decisions), getJson("/api/blunders", Blunders)], { concurrency: 3 }).pipe(
+    Effect.map(([seats, decisions, blunders]) => Message.SucceededLoad({ loaded: { seats: withCohorts(seats), decisions, blunders } })),
     Effect.catch((error) => Effect.succeed(Message.FailedLoad({ error: describe(error) }))),
     Effect.provide(Http.layer),
   ),

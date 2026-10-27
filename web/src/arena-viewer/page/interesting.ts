@@ -2,7 +2,6 @@ import { Option } from "effect";
 import { AsyncData } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { patternBit } from "../api.ts";
 import { pressable } from "./charts.ts";
 import { colorOf, fmtUsd, keyOf, labelOf, type MatchRow, type SeatFull, sumOf, winnerOf } from "./data.ts";
 import { type Derived, memoLast, ratingsOf } from "./derived.ts";
@@ -46,10 +45,8 @@ const cashDeficit = (match: MatchRow, winner: SeatFull): readonly [number, numbe
   return worst;
 };
 
-const GLASS_BLANK_OPP = patternBit("glassBlankOpp");
-
 export const picksOf = memoLast((derived: Derived): ReadonlyArray<Pick> => {
-  const { matches, decisions, seats, keep } = derived;
+  const { matches, seats } = derived;
   // The picks are about winning, so the Wins / Cash / Rounds choice leaves them alone.
   const ratings = ratingsOf(seats)("wins");
   const done = matches.filter((match) => match.status === "completed" && match.seats.length === 2);
@@ -87,26 +84,6 @@ export const picksOf = memoLast((derived: Derived): ReadonlyArray<Pick> => {
   const priciest = maxBy(done, (match) => sumOf(match.seats.map(({ cost }) => cost ?? 0)));
 
   if (priciest !== null) picks.push({ title: "Most expensive", stat: fmtUsd(priciest.value), match: priciest.item, maybeFocus: Option.none() });
-
-  const byId = new Map(done.map((match) => [match.matchId, match]));
-  let blunder: { readonly move: number; readonly score: number } | null = null;
-
-  for (const [move, seatIndex] of decisions.seat.entries()) {
-    const seat = seats[seatIndex];
-
-    if (seat === undefined || !((decisions.pick[move] ?? 0) & GLASS_BLANK_OPP) || keep[seatIndex] !== true || !byId.has(seat.matchId) || (seat.winShare ?? 0) > 0) continue;
-
-    // Prefer a move with reasoning text to read, then the strongest config.
-    const score = ratingOf(seat) + ((decisions.rc[move] ?? 0) > 0 ? 1e6 : 0);
-
-    if (blunder === null || score > blunder.score) blunder = { move, score };
-  }
-
-  const blunderSeat = blunder === null ? undefined : seats[decisions.seat[blunder.move] ?? -1];
-  const blunderMatch = blunderSeat === undefined ? undefined : byId.get(blunderSeat.matchId);
-
-  if (blunder !== null && blunderSeat !== undefined && blunderMatch !== undefined)
-    picks.push({ title: "Known-blank blunder", stat: `${labelOf(keyOf(blunderSeat))} saw a blank, shot the opponent, lost`, match: blunderMatch, maybeFocus: Option.fromUndefinedOr(decisions.ord[blunder.move]) });
 
   return picks;
 });

@@ -161,7 +161,7 @@ const tipOf = (h: H, rows: ReadonlyArray<Row>, cell: Model["maybeRateTip"]): Htm
   });
 
 /** One config's value in a bar chart, with its interval when it has one. */
-interface Bar {
+export interface Bar {
   readonly value: number;
   readonly lo: number;
   readonly hi: number;
@@ -187,14 +187,14 @@ const barEnd = ({ value, hi }: Bar): number => (Number.isNaN(hi) ? (Number.isNaN
  * One bar per config in table order. The scale and the label column fit `every` row, whatever the filter, so a filter
  * only adds or removes bars.
  */
-const configBarsView = (h: H, rows: ReadonlyArray<Row>, every: ReadonlyArray<Row>, barOf: (row: Row) => Bar, tick: (value: number) => string, width: number): Html => {
+export const configBarsView = <R extends { readonly key: string }>(h: H, rows: ReadonlyArray<R>, every: ReadonlyArray<R>, barOf: (row: R) => Bar, tick: (value: number) => string, width: number): Html => {
   if (rows.length === 0) return h.div([h.Class("empty")], ["No configs for this filter."]);
 
   const bars = rows.map(barOf);
   const ticks = axisTicks(Math.max(0, ...every.map((row) => barEnd(barOf(row)))));
   const labelWidth = Math.min(width * 0.42, 8 + 6.6 * Math.max(...every.map(({ key }) => labelOf(key).length)));
   const x = linScale(0, ticks.at(-1) ?? 1, labelWidth + 8, width - 50, ticks);
-  const placed: Array<{ readonly row: Row; readonly bar: Bar; readonly y: number }> = [];
+  const placed: Array<{ readonly row: R; readonly bar: Bar; readonly y: number }> = [];
   const top = 22;
   let y = top;
 
@@ -239,7 +239,7 @@ const configBarsView = (h: H, rows: ReadonlyArray<Row>, every: ReadonlyArray<Row
   );
 };
 
-const rateBar = (rate: Rate, scale: number, digits: number, unit: string): Bar => ({
+export const rateBar = (rate: Rate, scale: number, digits: number, unit: string): Bar => ({
   value: rate.n > 0 ? rate.rate * scale : Number.NaN,
   lo: rate.n > 0 && !isDegenerate(rate) ? rate.lo * scale : Number.NaN,
   hi: rate.n > 0 && !isDegenerate(rate) ? rate.hi * scale : Number.NaN,
