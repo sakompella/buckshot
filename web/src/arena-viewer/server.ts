@@ -4,8 +4,9 @@ import crypto from "node:crypto";
 import { Option, Schema } from "effect";
 
 import { analyse, decodeVisible, roundStory, ShellTracker } from "./analysis.ts";
-import { Blunders, Call, Decisions, MatchDetail, MatchSeat, MatchSummary, type PlayerState, SeatRow, SeatsResponse, type Step } from "./api.ts";
+import { Blunders, Call, Decisions, MatchDetail, MatchSeat, MatchSummary, Mistakes, type PlayerState, SeatRow, SeatsResponse, type Step } from "./api.ts";
 import { findBlunders } from "./blunders.ts";
+import { mistakesOf } from "./mistakes.ts";
 import page from "./page/index.html";
 import { openRegret, type Regret } from "./regret.ts";
 
@@ -60,6 +61,8 @@ const encodeSeats = Schema.encodeSync(Schema.fromJsonString(SeatsResponse));
 const encodeDecisions = Schema.encodeSync(Schema.fromJsonString(Decisions));
 
 const encodeBlunders = Schema.encodeSync(Schema.fromJsonString(Blunders));
+
+const encodeMistakes = Schema.encodeSync(Schema.fromJsonString(Mistakes));
 
 const encodeMatch = Schema.encodeSync(Schema.fromJsonString(MatchDetail));
 
@@ -229,7 +232,7 @@ export const serveArenaViewer = (dbPath: string, hostname: string, port: number,
     .map((row) => decodeSeatRow(row));
 
   const seatIndex = new Map(rows.map((row, index) => [`${row.matchId}|${row.player}`, index]));
-  const { decisions, seats: analysed } = analyse(db, rows, seatIndex);
+  const { decisions, seats: analysed, shellsLeft } = analyse(db, rows, seatIndex);
 
   const seats = rows.flatMap((row, index) => {
     const extra = analysed[index];
@@ -240,6 +243,14 @@ export const serveArenaViewer = (dbPath: string, hostname: string, port: number,
   const seatsBody = encodedBody(encodeSeats(seats));
   const decisionsBody = encodedBody(encodeDecisions(decisions));
   const blundersBody = encodedBody(encodeBlunders(findBlunders(db, regret, seatIndex)));
+
+  const mistakesBody = encodedBody(
+    encodeMistakes(
+      regret === null
+        ? { seat: [], left: [], isShot: [], points: [] }
+        : mistakesOf(decisions, shellsLeft, (seat) => rows[seat]?.matchId ?? "", (matchId) => regret.moves(matchId)),
+    ),
+  );
 
   console.log(`loaded ${seats.length} seats in ${Math.round(performance.now() - started)} ms; decisions payload ${(decisionsBody.gzipped.length / 1e6).toFixed(1)} MB gzipped`);
 
@@ -259,6 +270,7 @@ export const serveArenaViewer = (dbPath: string, hostname: string, port: number,
       }),
       "/api/decisions": guarded((request) => json(request, decisionsBody)),
       "/api/blunders": guarded((request) => json(request, blundersBody)),
+      "/api/mistakes": guarded((request) => json(request, mistakesBody)),
       "/api/match": guarded((request) => {
         const detail = matchDetail(db, regret, new URL(request.url).searchParams.get("id") ?? "");
 

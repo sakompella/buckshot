@@ -139,6 +139,14 @@ export const Blunders = Schema.Struct({
 
 export type Blunders = typeof Blunders.Type;
 
+/**
+ * The regret of each searched agent move, column by column. seat indexes the seats response. left is the shells left
+ * in the gun, the chambered one included; isShot is 1 for a shot and 0 for any other move; points is the regret.
+ */
+export const Mistakes = Schema.Struct({ seat: Column, left: Column, isShot: Column, points: Column });
+
+export type Mistakes = typeof Mistakes.Type;
+
 /** Bit order of Decisions' opp and pick masks. */
 export const PATTERNS = [
   "knownBlankOpp",

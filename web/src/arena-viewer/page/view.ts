@@ -12,6 +12,7 @@ import { interestingView, picksOf } from "./interesting.ts";
 import { luckView } from "./luck.ts";
 import { leaderboardView } from "./leaderboard.ts";
 import { oddsView } from "./odds.ts";
+import { mistakesView } from "./mistakes.ts";
 import { matchesView } from "./matches.ts";
 import { type Basis, Message, type Model, type Ranking, type Section, SECTIONS, type Viewport } from "./model.ts";
 import { reliabilityView } from "./reliability.ts";
@@ -124,6 +125,8 @@ const lazyInteresting = createLazy();
 
 const lazyLuck = createLazy();
 
+const lazyMistakes = createLazy();
+
 const lazySeats = createLazy();
 
 const lazyOdds = createLazy();
@@ -175,6 +178,7 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
       sectionView(h, "interesting", lazyInteresting(interestingView, [h, picksOf(derived), model.matches, content])),
       sectionView(h, "luck", lazyLuck(luckView, [h, derived.matches, derived.pooled, model.viewport.width, content, cardWidth(model.viewport)])),
       sectionView(h, "blunders", lazyBlunders(blundersCard, [h, derived, model.viewport.width, content])),
+      sectionView(h, "mistakes", lazyMistakes(mistakesView, [h, derived.mistakes, derived.seats, derived.keep, model.viewport.width, cardWidth(model.viewport)])),
       sectionView(h, "seats", lazySeats(seatsView, [h, derived, model.viewport.width, content])),
       sectionView(h, "odds", lazyOdds(oddsCard, [h, derived, cardWidth(model.viewport)])),
       sectionView(h, "reliability", lazyReliability(reliabilityView, [h, derived.decisions, derived.seats, derived.keep, model.maybeRateTip, model.viewport.width, content])),

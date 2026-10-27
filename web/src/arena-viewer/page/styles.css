@@ -96,6 +96,8 @@ details summary { cursor: pointer; margin: 4px 0; }
 .luckbig { display: flex; flex-direction: column; gap: 28px; }
 svg .dimtext { fill: var(--dim); font-size: 11px; }
 .chartrow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; align-items: start; }
+.chartpair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; align-items: start; }
+.chartpair h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
 .chartrow figure { margin: 0; min-width: 0; }
 .chartrow h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
 .chartrow .sub { margin-bottom: 12px; }
@@ -217,6 +219,7 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
   .chartrow { grid-template-columns: minmax(0, 1fr); gap: 30px; }
   .luckrow { grid-template-columns: minmax(0, 1fr); gap: 24px; }
   .luckbig { gap: 16px; }
+  .chartpair { grid-template-columns: minmax(0, 1fr); gap: 30px; }
   main { padding: 16px 20px 60px; }
   nav .brand { display: none; }
   .seedgroup { display: block; }
