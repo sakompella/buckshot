@@ -254,7 +254,7 @@ analysis database (`scripts/arena-import.ts` builds it; see
 `docs/arena/database.md`) at http://127.0.0.1:8790/ by default, with no auth.
 It is one long page: the hero numbers, the cost, moves, output tokens or mean regret
 vs rating scatter, each model's rating across its efforts, how often the higher-rated player wins at each rating gap, against the Bradley-Terry curve, a few interesting matches, luck vs play (how often the player with more regret still won), each model's mean regret per move by shells left in the gun (with `--regret`), the costliest blunders with each config's blunder rate (the share of its searched moves that gave up 10 or more points), the table position and round-1 starter
-charts, how often each model shoots itself by the odds it counts, thinking under pressure (output tokens per move by health gap, one panel per model), the reliability charts (failed calls, faults and the time they cost, one bar per
+charts, how often each model shoots itself by the odds it counts, thinking under pressure (output tokens per move by health gap, one panel per model), the dead rubbers chart (output tokens per move in round 3 after 1–1 against after one player won both rounds, one row per config), the reliability charts (failed calls, faults and the time they cost, one bar per
 config pooled over every tournament), the newest matches, the leaderboard by cohort and, last, the breakdown heatmaps. Seats and
 reliability fold their full tables under the charts. A jump menu at the top links
 to each section's anchor (`#scatter`, `#seats`, `#matches`, ...), and the filter bar

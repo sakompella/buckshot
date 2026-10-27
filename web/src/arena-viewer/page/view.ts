@@ -18,6 +18,7 @@ import { type Basis, Message, type Model, type Ranking, type Section, SECTIONS, 
 import { pressureView } from "./pressure.ts";
 import { reliabilityView } from "./reliability.ts";
 import { replayView } from "./replay.ts";
+import { rubberRows, rubbersView } from "./rubbers.ts";
 import { scatterView } from "./scatter.ts";
 import { seatsView } from "./seats.ts";
 import { type UpsetBin, upsetOf, upsetView } from "./upset.ts";
@@ -134,6 +135,8 @@ const lazyOdds = createLazy();
 
 const lazyPressure = createLazy();
 
+const lazyRubbers = createLazy();
+
 const lazyReliability = createLazy();
 
 const lazyMatches = createLazy();
@@ -185,6 +188,7 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
       sectionView(h, "seats", lazySeats(seatsView, [h, derived, model.viewport.width, content])),
       sectionView(h, "odds", lazyOdds(oddsCard, [h, derived, cardWidth(model.viewport)])),
       sectionView(h, "pressure", lazyPressure(pressureView, [h, derived.decisions, derived.seats, derived.keep, model.viewport.width, content])),
+      sectionView(h, "rubbers", h.div([h.Class("card")], [lazyRubbers(rubbersView, [h, rubberRows(derived.filtered), cardWidth(model.viewport)])])),
       sectionView(h, "reliability", lazyReliability(reliabilityView, [h, derived.decisions, derived.seats, derived.keep, model.maybeRateTip, model.viewport.width, content])),
       sectionView(h, "matches", lazyMatches(matchesView, [h, derived.matches, model.matchList])),
       sectionView(h, "leaderboards", lazyLeaderboard(leaderboardView, [h, derived.byCohort, derived.everyByCohort, derived.ratings, derived.matchSeats, derived.items, model.leaderboard, model.filter.isAllConfigs, model.ranking, model.basis])),

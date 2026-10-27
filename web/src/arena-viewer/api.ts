@@ -54,7 +54,7 @@ export const SeatRow = Schema.Struct({
 
 export type SeatRow = typeof SeatRow.Type;
 
-/** What the server's analysis adds to a seat. low is the worst health deficit in the last round it saw: own health, opponent health, round. */
+/** What the server's analysis adds to a seat. low is the worst health deficit in the last round it saw: own health, opponent health, round. roundThree is the agent moves of round 3 and the output tokens of the calls linked to them, or null when the seat made none. */
 export const SeatAnalysis = Schema.Struct({
   acquired: PerItem,
   used: PerItem,
@@ -64,6 +64,7 @@ export const SeatAnalysis = Schema.Struct({
   fallbacks: Schema.Number,
   story: Schema.NullOr(Story),
   round: Schema.Number,
+  roundThree: Schema.NullOr(Schema.Tuple([Schema.Number, Schema.Number])),
   low: Schema.NullOr(Schema.Tuple([Schema.Number, Schema.Number, Schema.Number])),
 });
 

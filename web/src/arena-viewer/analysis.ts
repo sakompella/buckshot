@@ -255,6 +255,7 @@ interface SeatTally {
   fallbacks: number;
   story: Story | null;
   round: number;
+  roundThree: [number, number] | null;
   low: [number, number, number] | null;
 }
 
@@ -267,6 +268,7 @@ const emptySeat = (): SeatTally => ({
   fallbacks: 0,
   story: null,
   round: 0,
+  roundThree: null,
   low: null,
 });
 
@@ -453,6 +455,12 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
     if (legalLabels.some((label) => label.startsWith("Steal "))) legalUse |= 1 << ADRENALINE;
 
     const calls = perDecision.get(row.id);
+
+    if (seat.round === 3) {
+      const [moves, outputTokens] = seat.roundThree ?? [0, 0];
+
+      seat.roundThree = [moves + 1, outputTokens + (calls?.out ?? 0)];
+    }
 
     columns.seat.push(seatAt);
     columns.ord.push(row.ord);
