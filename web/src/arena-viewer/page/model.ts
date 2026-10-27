@@ -7,7 +7,7 @@ import { Blunders, Decisions, MatchDetail, Mistakes, Seat } from "../api.ts";
 // MODEL
 
 /** The page's sections below the hero, in page order; each is an in-page anchor. */
-export const Section = Schema.Literals(["scatter", "interesting", "mistakes", "blunders", "luck", "seats", "items", "rubbers", "pressure", "odds", "reliability", "matches", "leaderboards", "breakdown"]);
+export const Section = Schema.Literals(["scatter", "interesting", "mistakes", "blunders", "luck", "seats", "deals", "items", "rubbers", "pressure", "odds", "reliability", "matches", "leaderboards", "breakdown"]);
 
 export type Section = typeof Section.Type;
 
@@ -22,6 +22,7 @@ export const SECTIONS: ReadonlyArray<readonly [Section, string]> = [
   ["pressure", "Pressure"],
   ["rubbers", "Dead rubbers"],
   ["items", "Items"],
+  ["deals", "Deals"],
   ["reliability", "Reliability"],
   ["matches", "Matches"],
   ["leaderboards", "Leaderboards"],

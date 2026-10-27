@@ -5,6 +5,7 @@ import { createLazy, type Document, type Html, type HtmlBuilder } from "foldkit/
 import { baseName, baseOrder, colorOf, EFFORTS, fmtCount, keyOf, sumOf, unique } from "./data.ts";
 import { switchView } from "./charts.ts";
 import { type Derived, derive, mainConfigsOf, ratingsOf } from "./derived.ts";
+import { dealsView } from "./deals.ts";
 import { effortView } from "./effort.ts";
 import { blundersView, everyRateFor, galleryFor, ratesFor } from "./blunders.ts";
 import { fatesView } from "./fates.ts";
@@ -140,6 +141,8 @@ const lazyRubbers = createLazy();
 
 const lazyFates = createLazy();
 
+const lazyDeals = createLazy();
+
 const lazyReliability = createLazy();
 
 const lazyMatches = createLazy();
@@ -172,6 +175,8 @@ const blundersCard = (h: H, derived: Derived, width: number, content: number): H
 
 const oddsCard = (h: H, derived: Derived, width: number): Html => h.div([h.Class("card")], [oddsView(h, derived.decisions, derived.seats, derived.keep, derived.pooled, width)]);
 
+const dealsCard = (h: H, derived: Derived, width: number): Html => h.div([h.Class("card")], [dealsView(h, derived, width)]);
+
 const sectionView = (h: H, section: Section, content: Html): Html => h.section([h.Id(section), h.Class("part")], [content]);
 
 const pageView = (h: H, model: Model, derived: Derived): Html => {
@@ -193,6 +198,7 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
       sectionView(h, "pressure", lazyPressure(pressureView, [h, derived.decisions, derived.seats, derived.keep, model.viewport.width, content])),
       sectionView(h, "rubbers", h.div([h.Class("card")], [lazyRubbers(rubbersView, [h, rubberRows(derived.filtered), cardWidth(model.viewport)])])),
       sectionView(h, "items", lazyFates(fatesView, [h, derived.seats, derived.filtered])),
+      sectionView(h, "deals", lazyDeals(dealsCard, [h, derived, cardWidth(model.viewport)])),
       sectionView(h, "reliability", lazyReliability(reliabilityView, [h, derived.decisions, derived.seats, derived.keep, model.maybeRateTip, model.viewport.width, content])),
       sectionView(h, "matches", lazyMatches(matchesView, [h, derived.matches, model.matchList])),
       sectionView(h, "leaderboards", lazyLeaderboard(leaderboardView, [h, derived.byCohort, derived.everyByCohort, derived.ratings, derived.matchSeats, derived.items, model.leaderboard, model.filter.isAllConfigs, model.ranking, model.basis])),
