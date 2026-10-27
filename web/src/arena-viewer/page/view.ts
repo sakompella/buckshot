@@ -8,6 +8,7 @@ import { type Derived, derive, mainConfigsOf } from "./derived.ts";
 import { effortView } from "./effort.ts";
 import { breakdownView, heatRowsOf } from "./heat.ts";
 import { interestingView, picksOf } from "./interesting.ts";
+import { luckView } from "./luck.ts";
 import { leaderboardView } from "./leaderboard.ts";
 import { matchesView } from "./matches.ts";
 import { type Basis, Message, type Model, type Ranking, type Section, SECTIONS, type Viewport } from "./model.ts";
@@ -114,6 +115,8 @@ const lazyBreakdown = createLazy();
 
 const lazyInteresting = createLazy();
 
+const lazyLuck = createLazy();
+
 const lazySeats = createLazy();
 
 const lazyReliability = createLazy();
@@ -154,6 +157,7 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
       h.div([h.Class("top")], [lazyNav(navView, [h]), lazyFilters(filtersView, [h, derived, model.filter])]),
       sectionView(h, "scatter", h.div([], [lazyScatter(scatterCard, [h, derived, model.ranking, model.basis, model.scatter, cardWidth(model.viewport)]), lazyEffort(effortCard, [h, derived, model.basis, cardWidth(model.viewport)]), lazyUpset(upsetCard, [h, upsetOf(derived), cardWidth(model.viewport)])])),
       sectionView(h, "interesting", lazyInteresting(interestingView, [h, picksOf(derived), model.matches, content])),
+      sectionView(h, "luck", lazyLuck(luckView, [h, derived.matches, derived.pooled, model.viewport.width, content, cardWidth(model.viewport)])),
       sectionView(h, "seats", lazySeats(seatsView, [h, derived, model.viewport.width, content])),
       sectionView(h, "reliability", lazyReliability(reliabilityView, [h, derived.decisions, derived.seats, derived.keep, model.maybeRateTip, model.viewport.width, content])),
       sectionView(h, "matches", lazyMatches(matchesView, [h, derived.matches, model.matchList])),

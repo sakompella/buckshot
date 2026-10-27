@@ -4,6 +4,7 @@ import { chamberPatterns, roundStory, ShellTracker } from "../src/arena-viewer/a
 import type { Seat } from "../src/arena-viewer/api.ts";
 import { type BlockTally, blockRate, colorOf, groupBy, matchRows, modelStats, quantile, rankOrder, regretStats, rng, withCohorts } from "../src/arena-viewer/page/data.ts";
 import { bradleyTerry, type Game, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
+import { betterShare, bucketsOf, type Duel, luckByConfig } from "../src/arena-viewer/page/luck.ts";
 import { AXES } from "../src/arena-viewer/page/scatter.ts";
 import { upsetBins, winChance } from "../src/arena-viewer/page/upset.ts";
 
@@ -541,4 +542,23 @@ test("the upset curve cuts matches into groups of near-equal size, widest gap la
 
   expect(bins.map(({ rate }) => rate.n)).toEqual(Array.from({ length: 8 }, () => 20));
   expect(bins.map(({ gap }) => gap)).toEqual(bins.map(({ gap }) => gap).toSorted((left, right) => left - right));
+});
+
+// A duel between configs `winner` and `loser`, each with a mean regret per move of `moves` moves.
+const duelOf = (winner: readonly [string, number], loser: readonly [string, number], block = "b"): Duel => {
+  const seat = ([config, mean]: readonly [string, number], winShare: number) => ({ ...SEAT, cohort: "c", potShare: null, model: config, effort: "medium", seedBlock: block, winShare, regret: { moves: 10, total: mean * 10, exact: 0 } });
+
+  return { winner: seat(winner, 1), loser: seat(loser, 0) };
+};
+
+test("luck counts a win by the player with more regret, and ignores ties", () => {
+  const duels = [duelOf(["a", 1], ["b", 3]), duelOf(["a", 4], ["b", 2]), duelOf(["b", 2], ["b", 2]), duelOf(["b", 5], ["a", 1])];
+
+  expect(betterShare(duels, "mean")).toEqual({ k: 1, n: 3 });
+  expect(bucketsOf(duels).map(({ rate }) => rate.n)).toEqual([0, 0, 0, 2, 1]);
+
+  const byConfig = new Map(luckByConfig(duels, () => true).map((row) => [row.key, row]));
+
+  expect(byConfig.get("a|medium")).toMatchObject({ matches: 3, luckyWins: 1, unluckyLosses: 1 });
+  expect(byConfig.get("b|medium")).toMatchObject({ matches: 5, luckyWins: 1, unluckyLosses: 1 });
 });
