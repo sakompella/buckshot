@@ -4,6 +4,7 @@ import { chamberPatterns, roundStory, ShellTracker } from "../src/arena-viewer/a
 import type { Seat } from "../src/arena-viewer/api.ts";
 import { type BlockTally, blockRate, colorOf, groupBy, modelStats, quantile, rankOrder, regretStats, rng, withCohorts } from "../src/arena-viewer/page/data.ts";
 import { bradleyTerry, type Game, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
+import { turningPoints } from "../src/arena-viewer/page/replay.ts";
 import { AXES } from "../src/arena-viewer/page/scatter.ts";
 
 const randomGames = (seed: number): ReadonlyArray<Game> => {
@@ -489,4 +490,13 @@ test("a config's round share is the rounds it won over the rounds it played", ()
 
     expect(config.roundShare).toBeCloseTo((wins * 2 + (config.scored.length - wins)) / (3 * config.scored.length), 12);
   }
+});
+
+test("turning points are the biggest blunders, biggest first, and none when no move gave up 5 points", () => {
+  const stepWith = (points: number | null) => ({ regret: points === null ? null : { points } });
+  const steps = [4.9, null, 12, 5, 30, 12, 8].map(stepWith);
+
+  expect(turningPoints(steps)).toEqual([4, 2, 5]);
+  expect(turningPoints(steps, 10)).toEqual([4, 2, 5, 6, 3]);
+  expect(turningPoints([4.9, null, 0].map(stepWith))).toEqual([]);
 });
