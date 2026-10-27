@@ -190,6 +190,13 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
 .switch:has(input:checked) { color: var(--fg); }
 .stepper { display: none; }
 
+.spendbar { display: flex; gap: 2px; height: 34px; margin: 4px 0 16px; }
+.spendbar .seg { min-width: 1px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #000; font-size: 12px; font-weight: 600; line-height: 34px; text-indent: 6px; }
+.spendrows { display: grid; grid-template-columns: max-content 1fr max-content; gap: 6px 14px; align-items: center; font-size: 13px; font-variant-numeric: tabular-nums; }
+.spendrows .track { height: 10px; }
+.spendrows .track span { display: block; height: 100%; border-radius: 1px; }
+.spendrows .amt { text-align: right; }
+
 /* touch screens: 44px targets */
 @media (pointer: coarse) {
   nav a, .toggle button, .chip, .more, select, input:not([type="checkbox"]), .switch, .stepper button, .seedrow .chip { min-height: 44px; }
