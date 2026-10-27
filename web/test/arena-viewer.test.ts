@@ -4,6 +4,7 @@ import { chamberPatterns, roundStory, ShellTracker } from "../src/arena-viewer/a
 import type { Seat } from "../src/arena-viewer/api.ts";
 import { type BlockTally, blockRate, colorOf, groupBy, modelStats, quantile, rankOrder, regretStats, rng, withCohorts } from "../src/arena-viewer/page/data.ts";
 import { bradleyTerry, type Game, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
+import { failuresByHour } from "../src/arena-viewer/page/failures-over-time.ts";
 import { AXES } from "../src/arena-viewer/page/scatter.ts";
 
 const randomGames = (seed: number): ReadonlyArray<Game> => {
@@ -489,4 +490,23 @@ test("a config's round share is the rounds it won over the rounds it played", ()
 
     expect(config.roundShare).toBeCloseTo((wins * 2 + (config.scored.length - wins)) / (3 * config.scored.length), 12);
   }
+});
+
+test("failures by hour pool a model's efforts into the hour each match started, and leave out seats the filter drops", () => {
+  const seatAt = (startedAt: string, model: string, effort: string, calls: number, failed: number) => ({ ...SEAT, startedAt, model, effort, calls, failed, cohort: "", potShare: null });
+
+  const seats = [
+    seatAt("2026-10-16T10:05:00Z", "m", "low", 100, 10),
+    seatAt("2026-10-16T10:55:00Z", "m", "high", 50, 5),
+    seatAt("2026-10-16T11:00:00Z", "m", "low", 40, 0),
+    seatAt("2026-10-16T10:30:00Z", "other", "low", 30, 30),
+  ];
+
+  const hour = Date.parse("2026-10-16T10:00:00Z") / 3.6e6;
+
+  expect(failuresByHour(seats, [true, true, true, false]).get("m")).toEqual([
+    { hour, calls: 150, failed: 15 },
+    { hour: hour + 1, calls: 40, failed: 0 },
+  ]);
+  expect(failuresByHour(seats, [true, true, true, false]).has("other")).toBe(false);
 });

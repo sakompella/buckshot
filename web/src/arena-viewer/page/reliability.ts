@@ -5,6 +5,7 @@ import type { Decisions } from "../api.ts";
 import { anchorId, chartWidth, figureView, linScale, pressable, tipView } from "./charts.ts";
 import { addTo, type BlockTally, blockRate, colorOf, colorOfKey, fmtTime, fmtUsd, isDegenerate, keyOf, labelOf, type Rate, type SeatFull, sumOf } from "./data.ts";
 import { memoLast } from "./derived.ts";
+import { failuresByHour, failuresOverTimeView } from "./failures-over-time.ts";
 import { Message, type Model } from "./model.ts";
 
 type H = HtmlBuilder<Message>;
@@ -113,6 +114,10 @@ const tallyRows = (decisions: Decisions, seats: ReadonlyArray<SeatFull>, keep: R
 };
 
 const rowsOf = memoLast(tallyRows);
+
+const hourlyOf = memoLast(failuresByHour);
+
+const everyHourlyOf = memoLast((seats: ReadonlyArray<SeatFull>) => failuresByHour(seats, seats.map(() => true)));
 
 /** Every config whatever the filter: the charts' fixed scales. */
 const everyRowOf = memoLast((decisions: Decisions, seats: ReadonlyArray<SeatFull>) => tallyRows(decisions, seats, seats.map(() => true)));
@@ -284,6 +289,7 @@ export const reliabilityView = (
               figureView(h, "Time lost to failed calls", "Share of call latency.", configBarsView(h, rows, every, timeBar, (value) => `${value}%`, figure)),
             ],
           ),
+          failuresOverTimeView(h, everyHourlyOf(seats), hourlyOf(seats, keep), content),
         ],
       ),
       h.details(

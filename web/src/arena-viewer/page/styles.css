@@ -93,6 +93,8 @@ details summary { cursor: pointer; margin: 4px 0; }
 .bignum b { font-size: 46px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
 .chartrow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; align-items: start; }
 .chartrow figure { margin: 0; min-width: 0; }
+figure.lanes { margin: 36px 0 0; }
+figure.lanes h3 { margin-top: 0; }
 .chartrow h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
 .chartrow .sub { margin-bottom: 12px; }
 svg .big { font-size: 20px; font-weight: 600; fill: var(--fg); font-variant-numeric: tabular-nums; }
