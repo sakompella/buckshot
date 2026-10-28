@@ -249,15 +249,31 @@ The look borrows from the studio viewer in
 
 ## Arena analysis viewer
 
-For a section-by-section tour of what each chart shows and how to read it, see [`docs/arena/viewer-walkthrough.md`](../docs/arena/viewer-walkthrough.md).
-
-`bun scripts/arena-viewer.ts <db> [host] [port] [--regret <regret db>]` serves charts over the arena
+`bun scripts/arena-viewer.ts <db> [host] [port] [--regret <regret db>] [--knowledge <knowledge db>]` serves charts over the arena
 analysis database (`scripts/arena-import.ts` builds it; see
 `docs/arena/database.md`) at http://127.0.0.1:8790/ by default, with no auth.
-It is one long page: the hero numbers, the cost, moves, output tokens or mean regret
-vs rating scatter, each model's rating across its efforts, a few interesting matches, the table position and round-1 starter
-charts, the reliability charts (failed calls, faults and the time they cost, one bar per
-config pooled over every tournament), the newest matches, the leaderboard by cohort and, last, the breakdown heatmaps. Seats and
+It is one long page, in this order:
+
+- the hero numbers;
+- Scatter: the cost, moves, output tokens or mean regret vs rating scatter, each model's rating across its efforts,
+  and where the money went (each config's share of the spend);
+- a few interesting matches;
+- Luck: how often the player with more regret still won, how often the higher-rated player wins at each rating gap
+  against the Bradley-Terry curve, and momentum (round 2 after a round-1 win, round 3 at 1-1);
+- Seats: the table position and round-1 starter charts, then same deal (each seed's results per config, from table
+  position 1 and 2);
+- with `--regret`, the costliest blunders with each config's blunder rate (the share of its searched moves that gave
+  up 10 or more points), and each model's mean regret per move by shells left in the gun; with `--knowledge` (the
+  database `scripts/arena-knowledge.ts` builds) each config's chance of repeating its move in a repeated position;
+- how often each model shoots itself by the odds it counts, and item fates (what became of the items each config
+  received: used, stolen by the opponent or left unused, per config and per item, over completed two-player matches);
+- thinking under pressure (output tokens per move by health gap, one panel per model), and dead rubbers (output
+  tokens per move in round 3 after 1-1 against after one player won both rounds, one row per config);
+- the reliability charts (failed calls, faults and the time they cost, one bar per config pooled over every
+  tournament, and each model's failed replies by the hour);
+- the newest matches, the leaderboard by cohort and, last, the breakdown heatmaps.
+
+Seats and
 reliability fold their full tables under the charts. A jump menu at the top links
 to each section's anchor (`#scatter`, `#seats`, `#matches`, ...), and the filter bar
 under it applies to the whole page; on a wide screen both stay at the top. The

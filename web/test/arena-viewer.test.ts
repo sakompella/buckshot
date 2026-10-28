@@ -2,10 +2,17 @@ import { expect, test } from "bun:test";
 
 import { chamberPatterns, roundStory, ShellTracker } from "../src/arena-viewer/analysis.ts";
 import type { Seat } from "../src/arena-viewer/api.ts";
-import { type BlockTally, blockRate, colorOf, groupBy, modelStats, quantile, rankOrder, regretStats, rng, withCohorts } from "../src/arena-viewer/page/data.ts";
+import { type BlockTally, blockRate, colorOf, groupBy, matchRows, modelStats, quantile, rankOrder, regretStats, rng, withCohorts } from "../src/arena-viewer/page/data.ts";
+import { type Decisions, NO_GAP } from "../src/arena-viewer/api.ts";
+import { pressureCurves, relativeLine } from "../src/arena-viewer/page/pressure.ts";
 import { bradleyTerry, expectedShare, type Game, pooledRatings, surprises } from "../src/arena-viewer/page/ratings.ts";
+import { betterShare, bucketsOf, type Duel, luckByConfig } from "../src/arena-viewer/page/luck.ts";
+import { ODDS_BINS, oddsBinOf, selfShotTallies } from "../src/arena-viewer/page/odds.ts";
+import { failuresByHour } from "../src/arena-viewer/page/failures-over-time.ts";
+import { momentumOf } from "../src/arena-viewer/page/momentum.ts";
 import { turningPoints } from "../src/arena-viewer/page/replay.ts";
 import { AXES } from "../src/arena-viewer/page/scatter.ts";
+import { upsetBins, winChance } from "../src/arena-viewer/page/upset.ts";
 
 const randomGames = (seed: number): ReadonlyArray<Game> => {
   const random = rng(seed);
@@ -275,6 +282,7 @@ const SEAT: Seat = {
   regret: null,
   story: null,
   round: 0,
+  roundThree: null,
   low: null,
 };
 
@@ -492,6 +500,140 @@ test("a config's round share is the rounds it won over the rounds it played", ()
   }
 });
 
+// Two-player matches of the "strong" config against the "weak" one, the strong one winning `strongWins` of `count`.
+const upsetSeats = (count: number, strongWins: number) =>
+  withCohorts(
+    Array.from({ length: count }, (_match, index) => {
+      const isStrong = index < strongWins;
+
+      return [
+        { ...SEAT, matchId: `m${index}`, seedBlock: `block${index}`, model: "strong", position: 0, winShare: isStrong ? 1 : 0 },
+        { ...SEAT, matchId: `m${index}`, seedBlock: `block${index}`, model: "weak", position: 1, winShare: isStrong ? 0 : 1 },
+      ];
+    }).flat(),
+  );
+
+const RATINGS = new Map([
+  ["strong|medium", { rating: 100, lo: 90, hi: 110 }],
+  ["weak|medium", { rating: -100, lo: -110, hi: -90 }],
+]);
+
+test("the upset curve scores the higher-rated config's wins whichever seat it sat in", () => {
+  const seats = upsetSeats(32, 24);
+  const swapped = seats.map((seat) => ({ ...seat, position: 1 - seat.position }));
+
+  for (const played of [seats, swapped]) {
+    const [bin, ...others] = upsetBins(matchRows(played), RATINGS);
+
+    expect(others).toEqual([]);
+    expect(bin?.rate.rate).toBeCloseTo(0.75, 9);
+    expect(bin?.gap).toBe(200);
+    expect(bin?.expected).toBeCloseTo(winChance(200), 9);
+  }
+});
+
+test("the upset curve leaves out matches between equal ratings, unfinished matches and too few matches", () => {
+  const equal = new Map([...RATINGS].map(([key, rating]) => [key, { ...rating, rating: 0 }]));
+  const unfinished = upsetSeats(40, 30).map((seat) => ({ ...seat, status: "partial" as const }));
+
+  expect(upsetBins(matchRows(upsetSeats(40, 30)), equal)).toEqual([]);
+  expect(upsetBins(matchRows(unfinished), RATINGS)).toEqual([]);
+  expect(upsetBins(matchRows(upsetSeats(19, 10)), RATINGS)).toEqual([]);
+});
+
+test("the upset curve cuts matches into groups of near-equal size, widest gap last", () => {
+  const gaps = Array.from({ length: 160 }, (_, index) => index);
+  const seats = withCohorts(gaps.flatMap((gap) => [{ ...SEAT, matchId: `m${gap}`, seedBlock: `b${gap}`, model: `s${gap}`, position: 0 }, { ...SEAT, matchId: `m${gap}`, seedBlock: `b${gap}`, model: "base", position: 1, winShare: 0 }]));
+  const ratings = new Map([["base|medium", { rating: 0, lo: 0, hi: 0 }], ...gaps.map((gap) => [`s${gap}|medium`, { rating: gap + 1, lo: 0, hi: 0 }] as const)]);
+  const bins = upsetBins(matchRows(seats), ratings);
+
+  expect(bins.map(({ rate }) => rate.n)).toEqual(Array.from({ length: 8 }, () => 20));
+  expect(bins.map(({ gap }) => gap)).toEqual(bins.map(({ gap }) => gap).toSorted((left, right) => left - right));
+});
+
+// A duel between configs `winner` and `loser`, each with a mean regret per move of `moves` moves.
+const duelOf = (winner: readonly [string, number], loser: readonly [string, number], block = "b"): Duel => {
+  const seat = ([config, mean]: readonly [string, number], winShare: number) => ({ ...SEAT, cohort: "c", potShare: null, model: config, effort: "medium", seedBlock: block, winShare, regret: { moves: 10, total: mean * 10, exact: 0 } });
+
+  return { winner: seat(winner, 1), loser: seat(loser, 0) };
+};
+
+test("luck counts a win by the player with more regret, and ignores ties", () => {
+  const duels = [duelOf(["a", 1], ["b", 3]), duelOf(["a", 4], ["b", 2]), duelOf(["b", 2], ["b", 2]), duelOf(["b", 5], ["a", 1])];
+
+  expect(betterShare(duels, "mean")).toEqual({ k: 1, n: 3 });
+  expect(bucketsOf(duels).map(({ rate }) => rate.n)).toEqual([0, 0, 0, 2, 1]);
+
+  const byConfig = new Map(luckByConfig(duels, () => true).map((row) => [row.key, row]));
+
+  expect(byConfig.get("a|medium")).toMatchObject({ matches: 3, luckyWins: 1, unluckyLosses: 1 });
+  expect(byConfig.get("b|medium")).toMatchObject({ matches: 5, luckyWins: 1, unluckyLosses: 1 });
+});
+
+test("odds bins cover every whole percent once, with the ends and even odds on their own", () => {
+  for (let percent = 0; percent <= 100; percent++) {
+    const hits = ODDS_BINS.filter(({ low, high }) => percent >= low && percent <= high);
+
+    expect(hits).toHaveLength(1);
+  }
+
+  expect(ODDS_BINS[oddsBinOf(50)]?.label).toBe("50");
+  expect(oddsBinOf(-1)).toBe(-1);
+});
+
+test("self-shot tallies count shots with odds per config and bin, and skip clued shots and filtered seats", () => {
+  const seat = (model: string) => ({ model, effort: "medium" });
+  const decisions = { odds: [0, 0, 50, -1, 100, 0], seat: [0, 0, 0, 0, 1, 1], shot: [2, 1, 1, 2, 2, 2] };
+  const tallies = selfShotTallies(decisions, [seat("a"), seat("b")], [true, false]);
+
+  expect([...tallies.keys()]).toEqual(["a|medium"]);
+  expect(tallies.get("a|medium")?.map(({ self, shots }) => [self, shots])).toEqual([[1, 2], [0, 0], [0, 0], [0, 1], [0, 0], [0, 0]]);
+});
+
+const movesAtGaps = (gaps: ReadonlyArray<number>, out: number): Decisions => ({
+  seat: gaps.map(() => 0),
+  gap: [...gaps],
+  out: gaps.map(() => out),
+  ord: [], moveNo: [], opp: [], pick: [], failedCalls: [], rt: [], rc: [], cost: [], lat: [], tok: [], calls: [], legalUse: [], legalSteal: [], useItem: [], stealItem: [], shot: [], odds: [],
+  checks: { ok: 0, bad: 0 },
+});
+
+test("pressure curves pool the gaps beyond the ends, skip moves with no gap and seats the filter drops, and leave out thin points", () => {
+  const seats = [{ model: "m", effort: "high" }];
+  const gaps = [...Array.from({ length: 30 }, () => -3), ...Array.from({ length: 30 }, () => -2), ...Array.from({ length: 29 }, () => 0), ...Array.from({ length: 40 }, () => NO_GAP)];
+  const curves = pressureCurves(movesAtGaps(gaps, 50), seats, [true]);
+
+  expect(curves.get("m|high")).toEqual([{ gap: -2, moves: 60, tokens: 50 }]);
+  expect(pressureCurves(movesAtGaps(gaps, 50), seats, [false]).size).toBe(0);
+});
+
+test("a pressure line is read against its level-health point and has none without one", () => {
+  const point = (gap: number, tokens: number) => ({ gap, moves: 100, tokens });
+
+  expect(relativeLine([point(-2, 300), point(0, 100), point(2, 50)])?.points.map(({ ratio }) => ratio)).toEqual([3, 1, 0.5]);
+  expect(relativeLine([point(-2, 300), point(2, 50)])).toBeNull();
+  expect(relativeLine([point(0, 100)])).toBeNull();
+});
+
+test("failures by hour pool a model's efforts into the hour each match started, and leave out seats the filter drops", () => {
+  const seatAt = (startedAt: string, model: string, effort: string, calls: number, failed: number) => ({ ...SEAT, startedAt, model, effort, calls, failed, cohort: "", potShare: null });
+
+  const seats = [
+    seatAt("2026-10-16T10:05:00Z", "m", "low", 100, 10),
+    seatAt("2026-10-16T10:55:00Z", "m", "high", 50, 5),
+    seatAt("2026-10-16T11:00:00Z", "m", "low", 40, 0),
+    seatAt("2026-10-16T10:30:00Z", "other", "low", 30, 30),
+  ];
+
+  const hour = Date.parse("2026-10-16T10:00:00Z") / 3.6e6;
+
+  expect(failuresByHour(seats, [true, true, true, false]).get("m")).toEqual([
+    { hour, calls: 150, failed: 15 },
+    { hour: hour + 1, calls: 40, failed: 0 },
+  ]);
+  expect(failuresByHour(seats, [true, true, true, false]).has("other")).toBe(false);
+});
+
 test("surprises compare each config's share with the ratings' prediction, from both sides of a game", () => {
   const ratings = new Map([["x|", 0], ["y|", 0], ["z|", 400]]);
 
@@ -510,6 +652,28 @@ test("surprises compare each config's share with the ratings' prediction, from b
   expect(xVersusZ?.expected).toBeCloseTo(1 - expectedShare(400, 0), 12);
   expect(table.get("z|")?.get("X|")?.observed).toBe(0);
   expect(surprises(games, new Map([["x|", 0]]), (config) => config).size).toBe(0);
+});
+
+test("momentum counts round 2 after a round-1 win, and round 3 only when the first two rounds were split", () => {
+  const seat = (winners: ReadonlyArray<string>, seedBlock: string) => ({
+    player: "a",
+    seedBlock,
+    story: { starter: "a", rounds: winners.map((winner) => ({ winner, prize: 1, inferred: false })), ok: true },
+  });
+
+  const momentum = momentumOf([seat(["a", "a", "b"], "s1"), seat(["a", "b", "a"], "s1"), seat(["b", "a", "a"], "s2"), seat(["b", "b", "b"], "s2"), seat(["a", "b", "b"], "s3")]);
+
+  expect([momentum.afterWin.k, momentum.afterWin.n]).toEqual([1, 3]);
+  expect([momentum.decider.k, momentum.decider.n]).toEqual([2, 3]);
+});
+
+test("the two seats of a match split round 3 between them at 1-1", () => {
+  const rounds = ["a", "b", "b"].map((winner) => ({ winner, prize: 1, inferred: false }));
+  const story = { starter: "a", rounds, ok: true };
+  const [a, b] = ["a", "b"].map((player) => momentumOf([{ player, seedBlock: "s", story }]).decider);
+
+  expect([a?.n, b?.n]).toEqual([1, 1]);
+  expect((a?.k ?? 0) + (b?.k ?? 0)).toBe(1);
 });
 
 test("turning points are the biggest blunders, biggest first, and none when no move gave up 5 points", () => {
