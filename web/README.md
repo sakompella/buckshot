@@ -252,149 +252,42 @@ The look borrows from the studio viewer in
 `bun scripts/arena-viewer.ts <db> [host] [port] [--regret <regret db>] [--knowledge <knowledge db>]` serves charts over the arena
 analysis database (`scripts/arena-import.ts` builds it; see
 `docs/arena/database.md`) at http://127.0.0.1:8790/ by default, with no auth.
-It is one long page, in this order:
+It is one long page in six groups, in this order:
 
 - the hero numbers;
-- Scatter: the cost, moves, output tokens or mean regret vs rating scatter, each model's rating across its efforts,
-  and where the money went (each config's share of the spend);
-- a few interesting matches;
-- Results: how often the player with higher estimated regret still won (per move, in total, and without tiny gaps), how
-  often the higher-rated player wins at each rating gap, rated by fits that held the match's seed block out, against the
-  Bradley-Terry curve, and results after round 1 (round 2 after a round-1 win, round 3 at 1-1);
-- Seats: the table position and round-1 starter charts, then each seed's results per config, from table position 1
-  and 2;
-- with `--regret`, the costliest blunders with each config's blunder rate (the share of its searched moves that gave
-  up 10 or more points), and each model's mean regret per move by shells left in the gun; with `--knowledge` (the
-  database `scripts/arena-knowledge.ts` builds) each config's chance of repeating its move in a repeated position, in
-  the chosen cohort, with the seed-block interval `docs/arena/analysis/beliefs-and-items.md` uses;
-- how often each config shoots itself by the odds it counts (one panel per model, a line per effort), and item fates (what became of the items each config
-  received: used, stolen by the opponent or left unused, per config and per item, over completed two-player matches);
-- output tokens per move by health gap, one panel per model), and dead rubbers (output
-  tokens per move in round 3 after 1-1 against after one player won both rounds, one row per config);
-- the reliability charts (failed calls, faults and the time they cost, one bar per config pooled over every
-  tournament, and each model's failed replies by the hour each call was logged);
-- the newest matches, the leaderboard by cohort and, last, the breakdown heatmaps.
+- Results: the cost, moves, output tokens or mean regret vs rating scatter, each model's rating across its efforts,
+  how often the higher-rated player wins at each rating gap (rated by fits that held the match's seed block out,
+  against the Bradley-Terry curve);
+- Watch a match: a few interesting matches and, with `--regret`, the costliest blunders, each marked exact or
+  estimated;
+- Decisions: how often each config shoots itself by the odds it counts (one panel per model, a line per effort);
+  with `--regret`, each model's mean regret per move by shells left in the gun and each config's blunder rate (the
+  share of its searched moves that gave up 10 or more points); item fates (used, stolen by the opponent or left
+  unused, per config and per item); with `--knowledge` (the database `scripts/arena-knowledge.ts` builds) each
+  config's chance of repeating its move in a repeated position, in the chosen cohort, with the seed-block interval
+  `docs/arena/analysis/beliefs-and-items.md` uses; and how often the player with higher estimated regret still won;
+- Rounds: the table position and round-1 starter charts, results after round 1 (round 2 after a round-1 win, with
+  each config's round 2 and 1-1 round 3 folded below), output tokens per move by health gap and dead rubbers
+  (round 3 at 1-1 against after 2-0);
+- Reliability: service failures (failed calls, the time they cost, and each model's failed replies by the hour each
+  call was logged) apart from model failures (turns ended without a move), one bar per config, then where the money
+  went (each config's share of the list-price usage);
+- Details: the leaderboard by cohort, the newest matches, each seed's results per config from table position 1
+  and 2 and, last, the breakdown heatmaps.
 
-Seats and
-reliability fold their full tables under the charts. A jump menu at the top links
-to each section's anchor (`#scatter`, `#seats`, `#matches`, ...), and its Tour button starts a guided tour: each
+Seats and reliability fold their full tables under the charts. The jump menu at the top links to the six groups
+(`#results`, `#watch`, `#decisions`, `#rounds`, `#reliability`, `#details`); every section keeps its own anchor
+(`#scatter`, `#seats`, `#matches`, ...), so older links still land. Its Tour button starts a guided tour: each
 step scrolls to a section or control, highlights it and shows a short card, with Back, Next and Close, the arrow
 keys and Escape (`page/tour.ts` holds the steps). The filter bar
 under it applies to the whole page; on a wide screen both stay at the top, and
-the jump menu marks the section in view. On a phone or tablet the filters fold
+the jump menu marks the group in view. On a phone or tablet the filters fold
 into one line that says what they keep, and a tap opens them; on a phone the
-scatter's choices are menus, so the chart starts on the first screen. A tap on
-a chart mark shows the title a mouse would hover, in a bar at the bottom. The
-scatter's and the effort chart's axes span every config in every cohort, so a filter only shows or hides
-points; the reliability bars keep one scale the same way.
+scatter's choices are menus, so the chart starts on the first screen, and charts
+too narrow to name their lines at the ends key them below.
 
-The breakdown's "Beats the ratings" mode shows, for each config and opponent model with at least 10 games, its
-share minus the share the pooled ratings predict for those same games, in points. Lighter beat the prediction,
-darker fell short. The pair-effect test in `docs/arena/analysis/matchups.md` found no such effect worth keeping,
-so most cells are noise.
-
-Wherever ratings show (the scatter's y axis, the heatmap's and the leaderboards'
-rating columns), a Round wins / Match wins / Cash toggle and an Elo / Rank toggle
-switch all of them. Round wins is the default. Each is one Bradley-Terry rating
-per config, fitted over every completed two-player match of every tournament
-(`page/ratings.ts`): shares count fractionally, a Gaussian prior (standard
-deviation 3 nats) keeps it finite, the scale has mean 0, and the 95% intervals
-refit 200 resamples of whole seed blocks. Effort sweeps join the other models
-through their medium configs, so one scale covers every config and no filter
-changes it. Round wins counts each round of a match as one game, its winner read
-from the public events (a match whose rounds the events do not give in full is
-left out), and the leaderboards show each config's round wins, the rounds it won
-over the rounds it played. Its resamples still take whole seed blocks, since a
-match's rounds are not independent. Match wins counts each match's win share.
-Cash counts pot shares: a player's pot share is its cash over the match's cash,
-and the leaderboards show each config's pot share, averaged over its scored
-matches. The leaderboards always show the match win share. The match wins and
-cash fits run the first time each is chosen, so the first load pays only for the
-round fit. Rank is a place 1, 2, 3, ... for every config. The leaderboards rank by the
-observed share (round, match or pot) within each cohort, among all of its configs
-before the chip and switch filters, ties going to the higher Elo. The scatter and heatmap do the same
-under one cohort. Under "All cohorts" they rank by the pooled Elo instead, since
-pooling every cohort's shares would count the effort sweeps' self-play. The
-interesting matches always judge underdogs by the round rating.
-
-`--regret` names the derived database with the `regret` table
-(`docs/arena/analysis/regret.md`), opened read only. Without it the viewer runs as
-before and shows no regret. With it, each leaderboard row has a Regret column, the
-mean percentage points of round win chance a model's moves gave up over its scored
-matches (hover for the move count and the share proven exact), the scatter has a Regret axis, and each model move in
-a replay has a regret tag, filled in when the move gave up 5 points or more. A move proven exact is marked "exact" and the rest are not;
-the open move says its best move, both scores, search depth and whether the node
-budget stopped it. The table can hold runs with other settings; the viewer reads the
-run with the most searched moves, so scores never mix. Moves with no search have no tag.
-
-A match row, an interesting match or a
-flagged move opens its replay: health through the match,
-each player's view at the chosen move, and every model move with its reasoning.
-The arrow keys step through it, and Escape, a click outside or the back gesture
-closes it. A cohort is one kind of comparison, pooled over tournaments, code versions and
-runs: every match between different models is in "Cross-model", and every match
-of one model against itself is in that model's effort sweep ("Opus efforts").
-Nothing on the page splits by tournament. The page shows every config by
-default; switching 'all configs' off keeps only configs with at least 20 scored
-matches and one against another model, and hides the effort-sweep leaderboards. Items are drawn with the table's own
-icons from `src/icons.ts`, except the saw, beer and jammer, which the viewer
-draws after the game's own: a folding saw, a blue-label can and a flat jammer with a
-green screen. It is a Foldkit app; the server loads every seat at start and works out the per-move
-analysis once.
-
-    bun scripts/arena-viewer-check.ts <url> [outdir]   # headless Chrome at desktop, phone and tablet widths: hovers, taps, jumps, the ranking toggle, fixed axes and screenshots
-
-The shared copy runs on hp-server as the user service `buckshot-viewer` (unit file in `~/.config/systemd/user/`), bound to 127.0.0.1:8790 from the main checkout's `web/`, with its log in `_work/arena/viewer.log`. `tailscale serve --bg --https=8443 http://127.0.0.1:8790` makes it reachable on the tailnet only, at https://hp-server.dog-minnow.ts.net:8443/. To restart it after a merge:
-
-    XDG_RUNTIME_DIR=/run/user/$(id -u) systemctl --user restart buckshot-viewer
-
-With `ARENA_VIEWER_PASSWORD` set, the API asks for that password through the browser's sign-in prompt (leave the username empty); without it the viewer is open, as the shared copy is. With `ARENA_VIEWER_DOWNLOAD` set to a database file, the nav links to it as a download; the shared copy serves `_work/arena/analysis/buckshot.public.sqlite`, a copy with every email and account id redacted, built with `python3 tools/arena/redact_database.py <db> <out>` (rebuild it after every database swap).
-
-## Layout
-
-- `src/bend.ts`: the only file that writes Bend tags. It decodes every Bend
-  value with a Schema, turns lists and Nats into arrays and numbers, and
-  tickets every request point (match id + generation) so a stale answer is
-  rejected before Bend's `answer` runs.
-- `src/driver.ts`: runs a match between controllers. Story and DoN seats decide
-  through the Bend entry points that `sim/bend-mp/driver.bend` uses, each with
-  its own coin stream. A human seat picks from the legal moves the
-  machine offers. Game draws come from a seeded RNG (`src/rng.ts`).
-- `src/players.ts`: the `Roster`, the one place a table's seat ids and the
-  player letters people and agents see (Player A to D, in table order by
-  default, or from an explicit seat-to-letter assignment) convert.
-  Bend and the driver keep raw seat ids; every label and tool reply goes
-  through a `Roster`.
-- `src/titles.ts`: end-of-match titles from the public event log. Titles are a UI
-  feature. The rules library does not compute them.
-- `src/agent/`: the agent tools, with no DOM, page or MCP SDK.
-  `tools.ts` holds the tool names, descriptions, input schemas (Effect
-  Schemas, turned into JSON Schema for both front ends) and `runTool`, which
-  runs one call over a `MatchSession`. `view.ts` builds an Agent player's view
-  from the match log and checks its moves. `moves.ts` chains the machine's
-  steps into whole agent moves. `headless.ts` is the session the MCP server runs: one
-  table, with the AI players played in-process. `src/text.ts` has the words
-  the buttons and the agent share, and the agent move labels.
-- `src/webmcp.ts`: the WebMCP front end. It registers the tools with the page's
-  model context and carries calls through the ports. `src/main.ts` has the
-  page's `MatchSession`, which moves through `ClickedMove`.
-- `scripts/mcp.ts`: the stdio MCP front end.
-- `src/model.ts`: Foldkit Model and Messages. `src/main.ts`: update, init and
-  the autoplay subscription, which pauses after each step for as long as its
-  animation needs (scaled by the speed setting).
-- `src/view.ts`: setup screen, banner, menu, round-over, private results and
-  the results. `src/board-view.ts` draws the table and its one-time effects,
-  keyed by event index; `src/board.ts` maps each legal move to the thing it is
-  played on; `src/icons.ts` has the SVG drawings; `src/styles.css` the look
-  and the animations.
-- `tools/oxlint/anti-slop/`: vendored anti-slop rules (see PROVENANCE.md).
-- `src/arena/cost.ts` prices model calls from `prices.json` and totals them; `scripts/arena-cost.ts` and the viewer both use it.
-- `src/viewer/runs.ts` reads run directories and their JSONL files, leaving out a last line still being written.
-- `src/viewer/api.ts` holds the schemas the viewer's server encodes and its page decodes.
-- `src/viewer/replay.ts` replays a run's moves through the rules machine into frames, extending a live run's replay as moves arrive.
-- `src/viewer/server.ts` serves the viewer's page and its JSON API, with cursors for polling.
-- `src/viewer/page/` is the viewer's page, plain TypeScript and DOM.
-- `scripts/viewer.ts` starts the viewer, and `scripts/viewer-check.ts` screenshots it in headless Chrome.
-- `test/faux-run.ts` plays a free faux arena match into a run directory, for the viewer's tests and its screenshot check.
-- `src/arena-viewer/server.ts` serves the arena analysis viewer's page and JSON API; `analysis.ts` replays each seat's visible events to tag its moves (known shells, item use, choice patterns); `regret.ts` reads the optional regret database; `api.ts` holds the schemas both sides use.
-- `src/arena-viewer/page/` is that viewer's Foldkit page: `model.ts` and `main.ts` the state and updates, one module per chart or section, hand-drawn SVG, and `replay.ts` the replay.
+Chart marks mean the same everywhere: a solid dot is a config's value, a ring the same config in a second situation,
+a coloured dash an effort, and a grey dashed line a reference. The important marks share one tip: the mouse shows
+it, and a click, a tap or Enter pins it, with the sample behind the mark. A scatter tap picks the nearest point
+within a fingertip, and a seed cell answers a tap anywhere in it. Other titled marks show their title in a bar at
+the bottom when tapped. 

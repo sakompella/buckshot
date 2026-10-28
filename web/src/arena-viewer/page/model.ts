@@ -6,27 +6,28 @@ import { Blunders, Consistency, Decisions, MatchDetail, Mistakes, Seat } from ".
 
 // MODEL
 
-/** The page's sections below the hero, in page order; each is an in-page anchor. */
-export const Section = Schema.Literals(["scatter", "interesting", "luck", "seats", "deals", "blunders", "mistakes", "odds", "items", "pressure", "rubbers", "reliability", "matches", "leaderboards", "breakdown"]);
+/** The page's groups below the hero, in page order: the jump menu's links, and the sections the reader can be in. */
+export const Group = Schema.Literals(["results", "watch", "decisions", "rounds", "reliability", "details"]);
+
+export type Group = typeof Group.Type;
+
+/** The sections inside the groups, each an in-page anchor; links to them from before the groups still land. */
+export const Section = Schema.Literals(["scatter", "interesting", "blunders", "odds", "mistakes", "items", "luck", "seats", "pressure", "rubbers", "reliability", "leaderboards", "matches", "deals", "breakdown"]);
 
 export type Section = typeof Section.Type;
 
-export const SECTIONS: ReadonlyArray<readonly [Section, string]> = [
-  ["scatter", "Scatter"],
-  ["interesting", "Interesting"],
-  ["luck", "Results"],
-  ["seats", "Seats"],
-  ["deals", "Seeds"],
-  ["blunders", "Blunders"],
-  ["mistakes", "Mistakes"],
-  ["odds", "Odds"],
-  ["items", "Items"],
-  ["pressure", "Tokens"],
-  ["rubbers", "Dead rubbers"],
-  ["reliability", "Reliability"],
-  ["matches", "Matches"],
-  ["leaderboards", "Leaderboards"],
-  ["breakdown", "Breakdown"],
+/** Anything a link can jump to: a group or a section. */
+export const Target = Schema.Union([Group, Section]);
+
+export type Target = typeof Target.Type;
+
+export const GROUPS: ReadonlyArray<{ readonly group: Group; readonly label: string; readonly sections: ReadonlyArray<Section> }> = [
+  { group: "results", label: "Results", sections: ["scatter"] },
+  { group: "watch", label: "Watch a match", sections: ["interesting", "blunders"] },
+  { group: "decisions", label: "Decisions", sections: ["odds", "mistakes", "items", "luck"] },
+  { group: "rounds", label: "Rounds", sections: ["seats", "pressure", "rubbers"] },
+  { group: "reliability", label: "Reliability", sections: ["reliability"] },
+  { group: "details", label: "Details", sections: ["leaderboards", "matches", "deals", "breakdown"] },
 ];
 
 /** How ratings show: the Bradley-Terry rating on an Elo scale, or the place by observed win share (see rankOrder). */
@@ -106,6 +107,11 @@ export type Replay = typeof Replay.Type;
 /** The match list's search and how many rows it shows. */
 export const MatchList = Schema.Struct({ query: Schema.String, limit: Schema.Number });
 
+/** A chart mark's tip: the id of the mark it points at, and what the mark means with its sample size. */
+export const MarkTip = Schema.Struct({ anchor: Schema.String, text: Schema.String });
+
+export type MarkTip = typeof MarkTip.Type;
+
 /** A reliability cell with its tooltip open: a row (a config) and a column. */
 export const RateCell = Schema.Struct({ row: Schema.String, column: Schema.String });
 
@@ -138,10 +144,12 @@ export const Model = Schema.Struct({
   leaderboard: Leaderboard,
   matchList: MatchList,
   maybeRateTip: Schema.Option(RateCell),
+  /** The chart mark the mouse is over, and the one a click, tap or Enter pinned; the hovered one shows first. */
+  markTip: Schema.Struct({ maybeHover: Schema.Option(MarkTip), maybePin: Schema.Option(MarkTip) }),
   /** The text of a chart mark a touch tapped: its SVG title or title attribute, which only a mouse can hover. */
   maybeTappedTitle: Schema.Option(Schema.String),
-  /** The section the reader is in, marked in the jump menu. */
-  maybeSection: Schema.Option(Section),
+  /** The group the reader is in, marked in the jump menu. */
+  maybeGroup: Schema.Option(Group),
   /** Whether a phone shows the filters, not just their summary. */
   isFiltersOpen: Schema.Boolean,
   /** Each match detail asked for, by match id. */
@@ -158,7 +166,7 @@ export type Model = typeof Model.Type;
 
 export const Message = defineMessageUnion({
   ResizedViewport: { width: Schema.Number, height: Schema.Number },
-  ClickedJump: { section: Section },
+  ClickedJump: { target: Target },
   NavigatedToHash: {},
   SucceededLoad: { loaded: Loaded },
   FailedLoad: { error: Schema.String },
@@ -167,7 +175,7 @@ export const Message = defineMessageUnion({
   ToggledModel: { name: Schema.String },
   ToggledAllConfigs: {},
   ToggledFilters: {},
-  ScrolledInto: { section: Section },
+  ScrolledInto: { group: Group },
   TappedTitle: { text: Schema.String },
   ClearedTappedTitle: {},
   SelectedRanking: { ranking: Ranking },
@@ -178,6 +186,9 @@ export const Message = defineMessageUnion({
   LeftPoint: {},
   ClickedPoint: { key: Schema.String },
   ClickedOutsideChart: {},
+  HoveredMark: { tip: MarkTip },
+  LeftMark: {},
+  ClickedMark: { tip: MarkTip },
   SelectedHeatMode: { mode: HeatMode },
   ClickedHeatColumn: { column: Schema.String },
   ToggledBestOnly: {},

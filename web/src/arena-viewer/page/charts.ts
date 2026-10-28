@@ -43,6 +43,62 @@ export const pressable = (h: H, message: Message) =>
 /** An id for an element a tooltip points at, from any key. */
 export const anchorId = (...parts: ReadonlyArray<string | number>): string => `a-${parts.join("-").replaceAll(/[^\w-]/g, "_")}`;
 
+// Marks mean the same on every chart: a solid dot is a config's own value, a ring the same config in a second
+// situation, a coloured dash an effort, and a grey dashed line a reference (a model's prediction, an even split, an
+// overall level). Intervals are thin lines through the mark.
+
+export const REFERENCE = "#8b8b8b";
+
+export const REFERENCE_DASH = "4 3";
+
+/**
+ * Gives a chart mark the page's shared tip, the scatter's way: the mouse shows it, and a click, a tap or Enter pins it.
+ * A dense mark (an hour's bar, a seed's cell) stays out of the tab order, so the keyboard does not step through hundreds.
+ */
+export const markTip = (h: H, anchor: string, text: string, isFocusable = true) => {
+  const tip = { anchor, text };
+
+  return [
+    h.Id(anchor),
+    h.Role("button"),
+    h.AriaLabel(text),
+    h.OnMouseEnter(Message.HoveredMark({ tip })),
+    h.OnMouseLeave(Message.LeftMark()),
+    h.OnClick(Message.ClickedMark({ tip }), { propagation: "Stop" }),
+    ...(isFocusable
+      ? [
+          h.Tabindex(0),
+          h.OnFocus(Message.HoveredMark({ tip })),
+          h.OnBlur(Message.LeftMark()),
+          h.OnKeyDownSelfPreventDefault((key) => (key === "Enter" || key === " " ? Option.some(Message.ClickedMark({ tip })) : Option.none())),
+        ]
+      : []),
+  ];
+};
+
+/** One line in a key: its name, colour and dash. */
+export interface KeyLine {
+  readonly label: string;
+  readonly color: string;
+  readonly dash: string;
+}
+
+/** A key of line samples, for a phone chart too narrow to name its lines at their ends. */
+export const lineKeyView = (h: H, lines: ReadonlyArray<KeyLine>): Html =>
+  h.div(
+    [h.Class("legend linekey")],
+    lines.map(({ label, color, dash }) =>
+      h.span([h.Style({ color })], [h.svg([h.Width("22"), h.Height("8")], [h.line([h.X1("0"), h.X2("22"), h.Y1("4"), h.Y2("4"), h.Stroke(color), h.StrokeWidth("1.8"), h.StrokeDasharray(dash)], [])]), label]),
+    ),
+  );
+
+/** A finger's reach around a small mark. */
+const HIT_RADIUS = 11;
+
+/** A dot with the shared tip, inside a clear circle wide enough to tap. `look` draws the dot itself. */
+export const tippedDot = (h: H, anchor: string, text: string, cx: string, cy: string, look: ReadonlyArray<Parameters<H["circle"]>[0][number]>): Html =>
+  h.g(markTip(h, anchor, text), [h.circle([h.Cx(cx), h.Cy(cy), h.R(String(HIT_RADIUS)), h.Fill("transparent")], []), h.circle([h.Cx(cx), h.Cy(cy), ...look], [])]);
+
 const TIP_GAP_X = 14;
 
 const TIP_GAP_Y = 12;
@@ -55,9 +111,17 @@ const PlaceTip = Mount.define("PlaceTip", {
   messages: [Message.PlacedTip],
   execute: ({ element, anchor }) =>
     Effect.sync(() => {
-      const target = document.getElementById(anchor);
+      const place = () => {
+        const target = document.getElementById(anchor);
 
-      if (target !== null && element instanceof HTMLElement) {
+        // A tip whose mark is gone (filtered out, or the tip replaced) stops following the page.
+        if (target === null || !element.isConnected || !(element instanceof HTMLElement)) {
+          removeEventListener("scroll", place);
+          removeEventListener("resize", place);
+
+          return;
+        }
+
         const box = target.getBoundingClientRect();
         const own = element.getBoundingClientRect();
         const x = box.left + box.width / 2;
@@ -67,7 +131,12 @@ const PlaceTip = Mount.define("PlaceTip", {
         element.style.left = `${Math.max(MARGIN, Math.min(x + TIP_GAP_X, innerWidth - own.width - MARGIN))}px`;
         element.style.top = `${top}px`;
         element.style.visibility = "visible";
-      }
+      };
+
+      // A pinned tip follows its mark as the page scrolls or turns.
+      addEventListener("scroll", place, { passive: true });
+      addEventListener("resize", place);
+      place();
 
       return Message.PlacedTip();
     }),

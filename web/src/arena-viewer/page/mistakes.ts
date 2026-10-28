@@ -1,7 +1,7 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import type { Mistakes } from "../api.ts";
-import { linScale } from "./charts.ts";
+import { anchorId, lineKeyView, linScale, tippedDot } from "./charts.ts";
 import { spreadLabels } from "./effort.ts";
 import { baseName, baseOrder, colorOf, fmtCount, fmtPoints, shortName } from "./data.ts";
 import type { Message } from "./model.ts";
@@ -65,7 +65,7 @@ const B = 40;
 const L = 40;
 
 const panelView = (h: H, title: string, lines: ReadonlyArray<ShellLine>, top: number, width: number, isNarrow: boolean): Html => {
-  const right = isNarrow ? 70 : 100;
+  const right = isNarrow ? 14 : 100;
   const height = isNarrow ? 240 : 280;
   const x = linScale(1, MOST_LEFT, L, width - right, []);
   const y = linScale(0, top, height - B, T, []);
@@ -98,15 +98,20 @@ const panelView = (h: H, title: string, lines: ReadonlyArray<ShellLine>, top: nu
             return [
               h.path([h.D(points.map(({ left, mean }, at) => `${at === 0 ? "M" : "L"}${x.at(left)},${y.at(mean)}`).join(" ")), h.Fill("none"), h.Stroke(color), h.StrokeWidth("1.8")], []),
               ...points.map(({ left, moves, mean }) =>
-                h.circle([h.Cx(String(x.at(left))), h.Cy(String(y.at(mean))), h.R("3.2"), h.Fill(color)], [h.title([], [`${baseName(model)} · ${left} left · ${fmtPoints(mean)} points over ${fmtCount(moves)} moves`])]),
+                tippedDot(h, anchorId("mistakes", title, model, left), `${baseName(model)} · ${title.toLowerCase()} · ${left} left · ${fmtPoints(mean)} points over ${fmtCount(moves)} moves`, String(x.at(left)), String(y.at(mean)), [h.R("3.2"), h.Fill(color)]),
               ),
-              // A label pushed off its line's end gets a leader back to it.
-              h.path([h.D(`M${x.at(points.at(-1)?.left ?? MOST_LEFT) + 4},${y.at(points.at(-1)?.mean ?? 0)} L${x.at(points.at(-1)?.left ?? MOST_LEFT) + 8},${labelYs[index] ?? 0} h3`), h.Fill("none"), h.Stroke(color), h.StrokeOpacity("0.6")], []),
-              h.text([h.X(String(x.at(points.at(-1)?.left ?? MOST_LEFT) + 13)), h.Y(String((labelYs[index] ?? 0) + 4)), h.Style({ fill: color }), h.Class("lbl")], [isNarrow ? shortName(model) : baseName(model)]),
+              // A label pushed off its line's end gets a leader back to it; a phone keys the lines below instead.
+              ...(isNarrow
+                ? []
+                : [
+                    h.path([h.D(`M${x.at(points.at(-1)?.left ?? MOST_LEFT) + 4},${y.at(points.at(-1)?.mean ?? 0)} L${x.at(points.at(-1)?.left ?? MOST_LEFT) + 8},${labelYs[index] ?? 0} h3`), h.Fill("none"), h.Stroke(color), h.StrokeOpacity("0.6")], []),
+                    h.text([h.X(String(x.at(points.at(-1)?.left ?? MOST_LEFT) + 13)), h.Y(String((labelYs[index] ?? 0) + 4)), h.Style({ fill: color }), h.Class("lbl")], [baseName(model)]),
+                  ]),
             ];
           }),
         ],
       ),
+      isNarrow ? lineKeyView(h, lines.toSorted((left, right) => (right.points.at(-1)?.mean ?? 0) - (left.points.at(-1)?.mean ?? 0)).map(({ model }) => ({ label: shortName(model), color: colorOf(model), dash: "" }))) : h.empty,
     ],
   );
 };
@@ -123,7 +128,8 @@ export const mistakesView = (h: H, mistakes: Mistakes, seats: ReadonlyArray<{ re
   return h.div(
     [h.Class("card")],
     [
-      h.div([h.Class("lbbar")], [h.h2([], ["Where mistakes happen"]), h.span([h.Class("k")], ["mean regret per move, in points"])]),
+      h.div([h.Class("lbbar")], [h.h2([], ["Regret by shells left"]), h.span([h.Class("k")], ["mean regret per move, in points"])]),
+      h.p([h.Class("sub")], ["Near a reload the estimate runs high, most on shots with 2 shells left."]),
       mistakes.seat.length === 0
         ? h.div([h.Class("empty")], ["Start the viewer with --regret to see regret."])
         : h.div([h.Class("chartpair")], [panelView(h, "Shots", shellLines(mistakes, seats, keep, true), top, panelWidth, viewportWidth < 600), panelView(h, "Other moves", shellLines(mistakes, seats, keep, false), top, panelWidth, viewportWidth < 600)]),

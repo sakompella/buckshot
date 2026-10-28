@@ -1,7 +1,7 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import type { Decisions } from "../api.ts";
-import { chartWidth, linScale } from "./charts.ts";
+import { anchorId, chartWidth, lineKeyView, linScale, tippedDot } from "./charts.ts";
 import { baseName, baseOrder, colorOf, DASH, EFFORTS, groupBy, keyOf, labelOf, type SeatFull } from "./data.ts";
 import { memoLast } from "./derived.ts";
 import type { Message } from "./model.ts";
@@ -106,15 +106,26 @@ export const oddsPanels = (tallies: ReadonlyMap<string, ReadonlyArray<{ readonly
     .map(([model, own]) => ({ model, lines: own.toSorted((left, right) => EFFORT_ORDER.indexOf(left.effort) - EFFORT_ORDER.indexOf(right.effort)) }));
 };
 
+/** A panel narrower than this keys its lines below instead of naming them at their ends. */
+const KEYED_BELOW = 480;
+
+/** The tip at one dot: every effort drawn on that spot, since the dot drawn last would hide the others from a tap. */
+const spotText = (lines: ReadonlyArray<OddsLine>, bin: number, isSameSpot: (share: number) => boolean): string =>
+  `chance live ${ODDS_BINS[bin]?.label}: ` +
+  lines
+    .flatMap(({ key, points }) => points.filter((point) => point.bin === bin && isSameSpot(point.share)).map(({ self, shots, share }) => `${labelOf(key)} · ${self} of ${shots} shots at itself (${Math.round(share * 100)}%)`))
+    .join("; ");
+
 const panelView = (h: H, model: string, lines: ReadonlyArray<OddsLine>, width: number): Html => {
-  const right = 62;
+  const isKeyedBelow = width < KEYED_BELOW;
+  const right = isKeyedBelow ? 14 : 62;
   const height = 240;
   const x = linScale(0, ODDS_BINS.length - 1, L + 8, width - right - 10, []);
   const y = linScale(0, 1, height - B, T, [0, 0.25, 0.5, 0.75, 1]);
   const color = colorOf(model);
   const labelYs = spreadLabels(lines.map(({ points }) => y.at(points.at(-1)?.share ?? 0)), height - B);
 
-  return h.svg(
+  const chart = h.svg(
     [h.Width(String(width)), h.Height(String(height))],
     [
       ...y.ticks.map((tick) =>
@@ -130,14 +141,20 @@ const panelView = (h: H, model: string, lines: ReadonlyArray<OddsLine>, width: n
       h.text([h.X(String((L + width - right) / 2)), h.Y(String(height - 6)), h.TextAnchor("middle"), h.Class("small")], ["chance the chambered shell is live"]),
       ...lines.flatMap(({ key, effort, points }, index) => [
         h.path([h.D(points.map(({ bin, share }, at) => `${at === 0 ? "M" : "L"}${x.at(bin)},${y.at(share)}`).join(" ")), h.Fill("none"), h.Stroke(color), h.StrokeWidth("1.6"), h.StrokeDasharray(DASH.get(effort) ?? "")], []),
-        ...points.map(({ bin, self, shots, share }) =>
-          h.circle([h.Cx(String(x.at(bin))), h.Cy(String(y.at(share))), h.R("3"), h.Fill(color)], [h.title([], [`${labelOf(key)} · chance live ${ODDS_BINS[bin]?.label} · ${self} of ${shots} shots at itself (${Math.round(share * 100)}%)`])]),
+        ...points.map(({ bin, share }) =>
+          tippedDot(h, anchorId("odds", key, bin), spotText(lines, bin, (other) => Math.abs(y.at(other) - y.at(share)) < 1), String(x.at(bin)), String(y.at(share)), [h.R("3"), h.Fill(color)]),
         ),
-        h.path([h.D(`M${x.at(points.at(-1)?.bin ?? 0) + 3},${y.at(points.at(-1)?.share ?? 0)} L${width - right + 6},${labelYs[index] ?? 0} h2`), h.Fill("none"), h.Stroke(color), h.StrokeOpacity("0.6")], []),
-        h.text([h.X(String(width - right + 10)), h.Y(String((labelYs[index] ?? 0) + 4)), h.Style({ fill: color }), h.Class("small")], [effort]),
+        ...(isKeyedBelow
+          ? []
+          : [
+              h.path([h.D(`M${x.at(points.at(-1)?.bin ?? 0) + 3},${y.at(points.at(-1)?.share ?? 0)} L${width - right + 6},${labelYs[index] ?? 0} h2`), h.Fill("none"), h.Stroke(color), h.StrokeOpacity("0.6")], []),
+              h.text([h.X(String(width - right + 10)), h.Y(String((labelYs[index] ?? 0) + 4)), h.Style({ fill: color }), h.Class("small")], [effort]),
+            ]),
       ]),
     ],
   );
+
+  return isKeyedBelow ? h.div([], [chart, lineKeyView(h, lines.toSorted((left, right) => EFFORT_ORDER.indexOf(left.effort) - EFFORT_ORDER.indexOf(right.effort)).map(({ effort }) => ({ label: effort, color, dash: DASH.get(effort) ?? "" })))]) : chart;
 };
 
 export const oddsView = (h: H, decisions: Decisions, seats: ReadonlyArray<SeatFull>, keep: ReadonlyArray<boolean>, width: number, content: number): Html => {
