@@ -1,6 +1,6 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { logScale } from "./charts.ts";
+import { anchorId, logScale, tippedDot } from "./charts.ts";
 import { addTo, type BlockTally, blockRate, colorOfKey, groupBy, keyOf, knownRounds, labelOf, type Rate, type SeatFull } from "./data.ts";
 import { memoLast } from "./derived.ts";
 import type { Message } from "./model.ts";
@@ -76,7 +76,7 @@ export const rubbersView = (h: H, rows: ReadonlyArray<RubberRow>, width: number)
   return h.div(
     [h.Class("chart")],
     [
-      h.div([h.Class("lbbar")], [h.h2([], ["Dead rubbers"]), h.span([h.Class("k")], ["tokens per move, \u25CB after 1\u20131, \u25CF decided"])]),
+      h.div([h.Class("lbbar")], [h.h2([], ["Dead rubbers"]), h.span([h.Class("k")], ["output tokens per move in round 3"]), h.span([h.Class("k")], ["\u25CB at 1\u20131 \u00B7 \u25CF after 2\u20130"])]),
       rows.length === 0
         ? h.div([h.Class("empty")], ["No configs have enough round 3 moves for this filter."])
         : h.svg(
@@ -95,11 +95,13 @@ export const rubbersView = (h: H, rows: ReadonlyArray<RubberRow>, width: number)
                   [
                     h.text([h.X("0"), h.Y(String(y + 4)), h.Style({ fill: color })], [labelOf(row.key)]),
                     h.line([h.X1(String(x.at(row.level.rate))), h.X2(String(x.at(row.decided.rate))), h.Y1(String(y)), h.Y2(String(y)), h.Stroke(color), h.StrokeOpacity("0.5"), h.StrokeWidth("2")], []),
-                    h.circle([h.Cx(String(x.at(row.level.rate))), h.Cy(String(y)), h.R("4"), h.Fill("#000"), h.Stroke(color), h.StrokeWidth("1.8")], []),
-                    h.circle(
-                      [h.Cx(String(x.at(row.decided.rate))), h.Cy(String(y)), h.R("4"), h.Fill(color)],
-                      [h.title([], [`${labelOf(row.key)}: ${Math.round(row.level.rate)} tokens per move after 1\u20131 (${row.level.n} moves), ${Math.round(row.decided.rate)} once decided (${row.decided.n} moves)`])],
-                    ),
+                    tippedDot(h, anchorId("rubbers", row.key, "level"), `${labelOf(row.key)}: ${Math.round(row.level.rate)} tokens per move in round 3 at 1\u20131 (${row.level.n} moves)`, String(x.at(row.level.rate)), String(y), [
+                      h.R("4"),
+                      h.Fill("#000"),
+                      h.Stroke(color),
+                      h.StrokeWidth("1.8"),
+                    ]),
+                    tippedDot(h, anchorId("rubbers", row.key, "decided"), `${labelOf(row.key)}: ${Math.round(row.decided.rate)} tokens per move in round 3 after 2\u20130 (${row.decided.n} moves)`, String(x.at(row.decided.rate)), String(y), [h.R("4"), h.Fill(color)]),
                     h.text([h.X(String(Math.max(x.at(row.level.rate), x.at(row.decided.rate)) + 10)), h.Y(String(y + 4)), h.Style({ fill: "var(--mut)" })], [fmtChange(change(row))]),
                   ],
                 );

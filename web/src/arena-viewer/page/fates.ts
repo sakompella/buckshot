@@ -1,6 +1,7 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { ITEMS, type Seat } from "../api.ts";
+import { anchorId, markTip } from "./charts.ts";
 import { colorOfKey, groupBy, keyOf, labelOf, type SeatFull, sumOf } from "./data.ts";
 import { memoLast } from "./derived.ts";
 import { itemIconOf } from "./items.ts";
@@ -87,7 +88,7 @@ const rowsOf = (seats: ReadonlyArray<SeatFull>, focal: ReadonlyArray<SeatFull>) 
 
 const OPACITY = { used: "0.95", stolen: "0.5", unused: "0.2" } as const;
 
-const rowView = (h: H, { color, fates, tip }: Row, label: ReadonlyArray<Html | string>): Html => {
+const rowView = (h: H, { name, color, fates, tip }: Row, label: ReadonlyArray<Html | string>): Html => {
   const received = receivedOf(fates);
 
   return h.div(
@@ -95,7 +96,7 @@ const rowView = (h: H, { color, fates, tip }: Row, label: ReadonlyArray<Html | s
     [
       h.span([h.Class("fate-name"), h.Style({ color })], label),
       h.span(
-        [h.Class("fate-bar"), h.Title(tip)],
+        [h.Class("fate-bar"), ...markTip(h, anchorId("fate", name), tip)],
         (["used", "stolen", "unused"] as const).map((fate) => h.i([h.Style({ width: `${(fates[fate] / received * 100).toFixed(2)}%`, background: color, opacity: OPACITY[fate] })], [])),
       ),
       h.span([h.Class("fate-val")], [pct(fates.unused / received)]),

@@ -1,6 +1,6 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { chartWidth, linScale } from "./charts.ts";
+import { anchorId, chartWidth, linScale, markTip } from "./charts.ts";
 import { addTo, type BlockTally, blockRate, type MatchRow, type Rate, type SeatFull, winnerOf } from "./data.ts";
 import type { Message } from "./model.ts";
 
@@ -106,7 +106,18 @@ const bucketsView = (h: H, buckets: ReadonlyArray<GapBucket>, width: number): Ht
 
         // A filter can leave a gap with no matches: it keeps its label and count but has no bar.
         const drawn = rate.n === 0 ? [] : [
-          h.rect([h.X(S(centre - bar / 2)), h.Y(S(y.at(rate.rate))), h.Width(S(bar)), h.Height(S(y.at(0) - y.at(rate.rate))), h.Fill("#cfcfcf"), h.Rx("2")], [h.title([], [`${rate.k} of ${rate.n} matches, 95% CI ${pct(rate.lo)}–${pct(rate.hi)}`])]),
+          h.rect(
+            [
+              ...markTip(h, anchorId("luck", index), `gap ${gapName({ ...bucket, rate })}: the lower-regret player won ${rate.k} of ${rate.n} matches, 95% CI ${pct(rate.lo)}–${pct(rate.hi)}`),
+              h.X(S(centre - bar / 2)),
+              h.Y(S(y.at(rate.rate))),
+              h.Width(S(bar)),
+              h.Height(S(y.at(0) - y.at(rate.rate))),
+              h.Fill("#cfcfcf"),
+              h.Rx("2"),
+            ],
+            [],
+          ),
           h.line([h.X1(S(centre)), h.X2(S(centre)), h.Y1(S(y.at(rate.lo))), h.Y2(S(y.at(rate.hi))), h.Stroke("#000"), h.StrokeWidth("1.5")], []),
           h.text([h.X(S(centre)), h.Y(S(y.at(rate.hi) - 6)), h.TextAnchor("middle"), h.Class("val")], [pct(rate.rate)]),
         ];

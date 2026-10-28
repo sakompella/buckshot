@@ -2,7 +2,7 @@ import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import type { Decisions } from "../api.ts";
-import { anchorId, chartWidth, figureView, linScale, pressable, tipView } from "./charts.ts";
+import { anchorId, chartWidth, figureView, linScale, markTip, pressable, tipView } from "./charts.ts";
 import { addTo, type BlockTally, blockRate, colorOf, colorOfKey, fmtTime, fmtUsd, isDegenerate, keyOf, labelOf, type Rate, type SeatFull, sumOf } from "./data.ts";
 import { memoLast } from "./derived.ts";
 import { failuresByHour, failuresOverTimeView } from "./failures-over-time.ts";
@@ -171,6 +171,8 @@ export interface Bar {
   readonly lo: number;
   readonly hi: number;
   readonly text: string;
+  /** What the shared tip says: the value with its sample and interval. */
+  readonly tip: string;
 }
 
 /** Ticks at a round step from 0 to the first step at or above `max`. */
@@ -192,7 +194,7 @@ const barEnd = ({ value, hi }: Bar): number => (Number.isNaN(hi) ? (Number.isNaN
  * One bar per config in table order. The scale and the label column fit `every` row, whatever the filter, so a filter
  * only adds or removes bars.
  */
-export const configBarsView = <R extends { readonly key: string }>(h: H, rows: ReadonlyArray<R>, every: ReadonlyArray<R>, barOf: (row: R) => Bar, tick: (value: number) => string, width: number): Html => {
+export const configBarsView = <R extends { readonly key: string }>(h: H, chartId: string, rows: ReadonlyArray<R>, every: ReadonlyArray<R>, barOf: (row: R) => Bar, tick: (value: number) => string, width: number): Html => {
   if (rows.length === 0) return h.div([h.Class("empty")], ["No configs for this filter."]);
 
   const bars = rows.map(barOf);
@@ -224,17 +226,16 @@ export const configBarsView = <R extends { readonly key: string }>(h: H, rows: R
           ],
         ),
       ),
+      // A row answers a tap anywhere along it, so a short bar is as easy to pick as a long one.
       ...placed.map(({ row, bar, y: rowY }) =>
         h.g(
-          [],
+          Number.isNaN(bar.value) ? [] : markTip(h, anchorId("bar", chartId, row.key), `${labelOf(row.key)}: ${bar.tip}`),
           [
+            h.rect([h.X("0"), h.Y(String(rowY - ROW_HEIGHT / 2)), h.Width(String(width)), h.Height(String(ROW_HEIGHT)), h.Fill("transparent")], []),
             h.text([h.X(String(labelWidth)), h.Y(String(rowY + 4)), h.TextAnchor("end"), h.Style({ fill: colorOfKey(row.key) })], [labelOf(row.key)]),
             Number.isNaN(bar.value)
               ? h.empty
-              : h.rect(
-                  [h.X(String(x.at(0))), h.Y(String(rowY - 5)), h.Width(String(Math.max(1, x.at(bar.value) - x.at(0)))), h.Height("10"), h.Fill(colorOfKey(row.key)), h.Opacity("0.85")],
-                  [h.title([], [`${labelOf(row.key)}: ${bar.text}`])],
-                ),
+              : h.rect([h.X(String(x.at(0))), h.Y(String(rowY - 5)), h.Width(String(Math.max(1, x.at(bar.value) - x.at(0)))), h.Height("10"), h.Fill(colorOfKey(row.key)), h.Opacity("0.85")], []),
             Number.isNaN(bar.lo) ? h.empty : h.line([h.X1(String(x.at(bar.lo))), h.X2(String(x.at(bar.hi))), h.Y1(String(rowY)), h.Y2(String(rowY)), h.Stroke("#fff"), h.StrokeWidth("1.2")], []),
             h.text([h.X(String(width - 44)), h.Y(String(rowY + 4)), h.Class("val")], [Number.isNaN(bar.value) ? "–" : bar.text]),
           ],
@@ -244,17 +245,25 @@ export const configBarsView = <R extends { readonly key: string }>(h: H, rows: R
   );
 };
 
-export const rateBar = (rate: Rate, scale: number, digits: number, unit: string): Bar => ({
-  value: rate.n > 0 ? rate.rate * scale : Number.NaN,
-  lo: rate.n > 0 && !isDegenerate(rate) ? rate.lo * scale : Number.NaN,
-  hi: rate.n > 0 && !isDegenerate(rate) ? rate.hi * scale : Number.NaN,
-  text: `${(rate.rate * scale).toFixed(digits)}${unit}`,
-});
+/** A rate as a bar: `noun` names what it counts out of, for the tip. */
+export const rateBar = (rate: Rate, scale: number, digits: number, unit: string, noun: string): Bar => {
+  const shown = (value: number) => `${(value * scale).toFixed(digits)}${unit}`;
+  const hasInterval = rate.n > 0 && !isDegenerate(rate);
+
+  return {
+    value: rate.n > 0 ? rate.rate * scale : Number.NaN,
+    lo: hasInterval ? rate.lo * scale : Number.NaN,
+    hi: hasInterval ? rate.hi * scale : Number.NaN,
+    text: shown(rate.rate),
+    tip: `${shown(rate.rate)} · ${Number(rate.k.toFixed(1)).toLocaleString()} of ${rate.n.toLocaleString()} ${noun}${hasInterval ? `, 95% CI ${shown(rate.lo)}–${shown(rate.hi)}` : ""}`,
+  };
+};
 
 const timeBar = ({ failedTime, returnedTime }: Row): Bar => {
   const share = failedTime + returnedTime > 0 ? failedTime / (failedTime + returnedTime) : Number.NaN;
+  const text = `${(share * 100).toFixed(1)}%`;
 
-  return { value: share * 100, lo: Number.NaN, hi: Number.NaN, text: `${(share * 100).toFixed(1)}%` };
+  return { value: share * 100, lo: Number.NaN, hi: Number.NaN, text, tip: `${text} · ${hours(failedTime)} of ${hours(failedTime + returnedTime)} call latency` };
 };
 
 /** The reliability section, laid out for a viewport `width` wide with `content` pixels inside main's padding. */
@@ -272,6 +281,7 @@ export const reliabilityView = (
   const worst = worstOf(decisions, seats, keep);
   const total = (pick: (row: Row) => number) => sumOf(rows.map(pick));
   const figure = chartWidth(width, content);
+  const fallbacks = total(({ fallbacks: count }) => count);
   const overhead = rows.filter((row) => row.failedCost > 0 || row.failedTime > 0).toSorted((left, right) => right.failedTime - left.failedTime);
 
   return h.div(
@@ -280,16 +290,28 @@ export const reliabilityView = (
       h.div(
         [],
         [
-          h.h2([], ["Reliability"]),
+          h.h2([], ["Service failures"]),
+          h.p([h.Class("sub")], ["Calls the provider or the shared hub refused or dropped, mostly quota limits: not the model's play."]),
           h.div(
             [h.Class("chartrow")],
             [
-              figureView(h, "Failed calls", "Share of replies.", configBarsView(h, rows, every, ({ rates }) => rateBar(rates.failed, 100, 1, "%"), (value) => `${value}%`, figure)),
-              figureView(h, "Faults", "Provider errors per 1,000 moves.", configBarsView(h, rows, every, ({ rates }) => rateBar(rates.faults, 1000, 1, ""), String, figure)),
-              figureView(h, "Time lost to failed calls", "Share of call latency.", configBarsView(h, rows, every, timeBar, (value) => `${value}%`, figure)),
+              figureView(h, "Failed calls", "Share of replies.", configBarsView(h, "failed", rows, every, ({ rates }) => rateBar(rates.failed, 100, 1, "%", "replies"), (value) => `${value}%`, figure)),
+              figureView(h, "Time lost to failed calls", "Share of call latency.", configBarsView(h, "time", rows, every, timeBar, (value) => `${value}%`, figure)),
             ],
           ),
           failuresOverTimeView(h, everyHourlyOf(seats), hourlyOf(seats, keep), content),
+          h.h2([h.Class("subhead")], ["Model failures"]),
+          h.div(
+            [h.Class("chartrow")],
+            [
+              figureView(
+                h,
+                "Turns ended without a move",
+                `Reminders per 1,000 moves; ${fallbacks === 0 ? "no" : fallbacks.toLocaleString()} fallback ${fallbacks === 1 ? "move" : "moves"} after a second miss.`,
+                configBarsView(h, "reminders", rows, every, ({ rates }) => rateBar(rates.reminders, 1000, 1, "", "moves"), String, figure),
+              ),
+            ],
+          ),
         ],
       ),
       h.details(

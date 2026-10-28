@@ -1,9 +1,20 @@
 import { expect, test } from "bun:test";
 
-import { SECTIONS } from "../src/arena-viewer/page/model.ts";
+import { GROUPS, Section } from "../src/arena-viewer/page/model.ts";
 import { TOUR } from "../src/arena-viewer/page/tour.ts";
 
-const pageOrder = SECTIONS.map(([section]) => section);
+const pageOrder: ReadonlyArray<string> = GROUPS.flatMap(({ sections }) => sections);
+
+test("every section sits in exactly one group", () => {
+  expect(pageOrder.toSorted()).toEqual([...Section.literals].toSorted());
+});
+
+// The sections the jump menu linked to before the page had groups: shared links to them must still land.
+test("every section an old link names is still on the page", () => {
+  const linked = ["scatter", "interesting", "luck", "seats", "deals", "blunders", "mistakes", "odds", "items", "pressure", "rubbers", "reliability", "matches", "leaderboards", "breakdown"];
+
+  expect(linked.filter((section) => !pageOrder.includes(section))).toEqual([]);
+});
 
 test("the tour visits every section, in page order", () => {
   const anchors = TOUR.map(({ anchor }) => pageOrder.indexOf(anchor));

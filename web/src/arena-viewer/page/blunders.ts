@@ -124,27 +124,24 @@ const cardView = (h: H, card: BlunderCard): Html =>
         [h.Class("k")],
         [
           `Round win chance ${fmtPoints(card.bestScore)}% → ${fmtPoints(card.chosenScore)}% `,
-          h.span([h.Class(`tag regret big ${card.isExact ? "exact" : ""}`)], [`−${fmtPoints(card.points)}${card.isExact ? " · exact" : ""}`]),
+          h.span([h.Class(`tag regret big ${card.isExact ? "exact" : ""}`)], [`−${fmtPoints(card.points)} · ${card.isExact ? "exact" : "estimated"}`]),
         ],
       ),
     ],
   );
 
-/** The blunders section: the costliest blunders as cards that open the replay at the move, and every config's blunder rate. */
-export const blundersView = (h: H, rates: ReadonlyArray<BlunderRate>, every: ReadonlyArray<BlunderRate>, cards: ReadonlyArray<BlunderCard>, width: number, content: number): Html =>
+/** The costliest blunders as cards that open the replay at the move. */
+export const blunderCardsView = (h: H, cards: ReadonlyArray<BlunderCard>): Html =>
+  cards.length === 0 ? h.empty : h.div([], [h.h2([], ["Blunders"]), h.div([h.Class("bgrid")], cards.map((card) => cardView(h, card)))]);
+
+/** Every config's blunder rate, on a scale fixed by every config whatever the filter. */
+export const blunderRatesView = (h: H, rates: ReadonlyArray<BlunderRate>, every: ReadonlyArray<BlunderRate>, width: number, content: number): Html =>
   rates.length === 0
     ? h.empty
     : h.div(
-        [],
+        [h.Class("card chart")],
         [
-          h.h2([], ["Blunders"]),
-          h.div([h.Class("bgrid")], cards.map((card) => cardView(h, card))),
-          h.div(
-            [h.Class("chart")],
-            [
-              h.h3([], [`Moves that gave up ${BLUNDER_POINTS}+ points`]),
-              configBarsView(h, rates, every, (row) => rateBar(row.rate, 100, 1, "%"), (value) => `${value}%`, Math.min(content, chartWidth(width, content) * 2)),
-            ],
-          ),
+          h.div([h.Class("lbbar")], [h.h2([], ["Blunder rate"]), h.span([h.Class("k")], [`share of searched moves that gave up ${BLUNDER_POINTS}+ points`])]),
+          configBarsView(h, "blunders", rates, every, (row) => rateBar(row.rate, 100, 1, "%", "searched moves"), (value) => `${value}%`, Math.min(content, chartWidth(width, content) * 2)),
         ],
       );

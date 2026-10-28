@@ -1,7 +1,7 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import type { Message } from "./model.ts";
-import { linScale } from "./charts.ts";
+import { anchorId, linScale, markTip } from "./charts.ts";
 import { baseName, baseOrder, colorOf, fmtTime, groupBy, type SeatFull } from "./data.ts";
 
 type H = HtmlBuilder<Message>;
@@ -111,13 +111,14 @@ export const failuresOverTimeView = (h: H, every: ReadonlyMap<string, ReadonlyAr
                       : [
                           h.rect(
                             [
+                              ...markTip(h, anchorId("hour", model, bucket.hour), `${baseName(model)}, ${fmtTime(new Date(bucket.hour * HOUR_MS).toISOString())}: ${bucket.failed} of ${bucket.calls} replies failed (${(share * 100).toFixed(1)}%)`, false),
                               h.X(String(x.at(bucket.hour))),
                               h.Y(String(base - Math.max(1, (share / top) * LANE_HEIGHT))),
                               h.Width(String(barWidth)),
                               h.Height(String(Math.max(1, (share / top) * LANE_HEIGHT))),
                               h.Fill(colorOf(model)),
                             ],
-                            [h.title([], [`${baseName(model)}, ${fmtTime(new Date(bucket.hour * HOUR_MS).toISOString())}: ${bucket.failed} of ${bucket.calls} replies failed (${(share * 100).toFixed(1)}%)`])],
+                            [],
                           ),
                         ];
                   }),

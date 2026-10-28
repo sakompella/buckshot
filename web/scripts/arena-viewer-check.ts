@@ -3,6 +3,7 @@ import { join } from "node:path";
 
 import { type Browser, chromium, type Page } from "playwright-core";
 
+import { GROUPS, Section } from "../src/arena-viewer/page/model.ts";
 import { TOUR } from "../src/arena-viewer/page/tour.ts";
 
 // Clicks through the arena viewer's page, its jump menu and replay in headless Chromium at
@@ -75,7 +76,7 @@ const countOf = async (page: Page, selector: string) => {
   return page.locator(selector).count();
 };
 
-const heat = (page: Page) => page.locator("section").filter({ has: page.locator("table.heat") });
+const heat = (page: Page) => page.locator("#breakdown");
 
 const loadPage = async (page: Page) => {
   await page.goto(`${base}/`);
@@ -113,9 +114,9 @@ const smallTargets = (page: Page) =>
     }),
   );
 
-const SECTIONS = ["scatter", "interesting", "luck", "seats", "deals", "blunders", "mistakes", "odds", "items", "pressure", "rubbers", "reliability", "matches", "leaderboards", "breakdown"] as const;
+const SECTIONS = Section.literals;
 
-// How far a section's top sits below the sticky bar after a jump (0 or 1 is right), and whether the URL names it.
+// How far a group's or a section's top sits below the sticky bar after a jump (0 or 1 is right), and whether the URL names it.
 const jumpedTo = (page: Page, section: string) =>
   page.evaluate((id) => {
     const bar = [...document.querySelectorAll(".top, nav")].find((element) => getComputedStyle(element).position === "sticky");
@@ -132,34 +133,63 @@ const captureBaseline = async (browser: Browser, viewport: Viewport) => {
   await loadPage(page);
   await page.screenshot({ path: shot(`${name}-page`), fullPage: true });
 
-  for (const section of SECTIONS) {
+  // GROUPS is what the jump menu and the tour order rely on; the page must put each section where it says.
+  for (const { group, sections } of GROUPS) {
+    for (const section of sections) {
+      expectThat((await page.locator(`#${group} #${section}, #${group}#${section}`).count()) === 1, `${name}: #${section} is not in the ${group} group`);
+    }
+  }
+
+  for (const section of [...GROUPS.map(({ group }) => group), ...SECTIONS]) {
     const target = page.locator(`#${section}`);
 
     if ((await target.count()) === 0) {
-      failures.push(`${name}: section #${section} is missing`);
+      failures.push(`${name}: #${section} is missing`);
       continue;
     }
 
-    await target.screenshot({ path: shot(`${name}-${section}`) });
-    expectThat((await target.innerText()).trim() !== "", `${name}: the ${section} section is empty`);
+    await target.screenshot({ path: shot(`${name}-${section}`), style: UNSTICK });
+    expectThat((await target.innerText()).trim() !== "", `${name}: #${section} is empty`);
   }
 
   await page.context().close();
 };
 
+// Each group's link lands its heading just under the sticky bar, and so does a link to any section, old links included.
 const checkJumps = async (page: Page, name: string, isTouch: boolean) => {
-  for (const section of SECTIONS) {
-    const link = page.locator(`nav a[href="#${section}"]`);
+  // The heading's top rule tucks under the bar's own, so -1 is right too.
+  const landed = (text: string) => /: -?[01]px below/.test(text);
+
+  for (const { group } of GROUPS) {
+    const link = page.locator(`nav a[href="#${group}"]`);
 
     if ((await link.count()) === 0) {
-      failures.push(`${name}: the jump menu has no link to #${section}`);
+      failures.push(`${name}: the jump menu has no link to #${group}`);
       continue;
     }
 
     await (isTouch ? link.tap() : link.click());
     await settled(page);
-    console.log(name, "jump", await jumpedTo(page, section));
+
+    const jumped = await jumpedTo(page, group);
+
+    console.log(name, "jump", jumped, "| menu marks", await textOf(page, "nav a.on").catch(() => "none"));
+    expectThat(landed(jumped), `${name}: the ${group} link lands at ${jumped}`);
   }
+
+  for (const section of SECTIONS) {
+    await page.evaluate((id) => {
+      location.hash = id;
+    }, section);
+    await settled(page);
+    await settled(page);
+
+    const jumped = await jumpedTo(page, section);
+
+    expectThat(landed(jumped), `${name}: a link to #${section} lands at ${jumped}`);
+  }
+
+  console.log(name, "every section link landed under the bar");
 };
 
 // The scatter's rating axis tick labels from the top down.
@@ -560,6 +590,21 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
     console.log("after same-seed chip:", await textOf(page, ".mhead h2"));
     await page.keyboard.press("Escape");
   });
+  await check("mark tip by keyboard", async () => {
+    const mark = page.locator("#scatter svg g[role=button]").first();
+
+    await mark.focus();
+    console.log("focus a mark → tip:", await tipOf(page));
+    await page.keyboard.press("Enter");
+    await mark.blur();
+
+    const pinned = await tipOf(page);
+
+    console.log("Enter pins it, and it stays after the focus leaves → tip:", pinned);
+    expectThat(pinned === (await mark.getAttribute("aria-label")), "a mark pinned by Enter left no tip of its own");
+    await page.locator(".hero").click();
+    expectThat((await tipOf(page)) === "none", "a click outside left the pinned tip");
+  });
   await check("section counts", async () => console.log("matches", await countOf(page, "#matches tbody tr.row"), "| seats", await countOf(page, "#seats .bignum"), "| item fate rows", await countOf(page, "#items .fate"), "| reliability charts", await countOf(page, "#reliability .chartrow figure")));
   await check("jump menu", () => checkJumps(page, viewport.name, false));
   await check("sticky filters", async () => console.log("the filters stay in view:", await page.evaluate(() => Math.round(document.querySelector(".filters")?.getBoundingClientRect().top ?? -1)), "px from the top at scroll", await page.evaluate(() => Math.round(scrollY))));
@@ -636,17 +681,40 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
       await page.locator(".filtersum").tap();
     }
   });
-  await check("titled mark tap", async () => {
-    // A mark that names itself only in an SVG title shows that title when tapped.
-    await page.locator("#luck svg circle:has(title)").first().tap({ force: true });
-    console.log(name, "tap a titled mark →", await textOf(page, ".tip.tapped").catch(() => "none"));
-    expectThat((await countOf(page, ".tip.tapped")) === 1, `${name}: tapping a titled mark shows no tip`);
-    await page.locator(".hero").tap();
-    expectThat((await countOf(page, ".tip.tapped")) === 0, `${name}: a tap outside leaves the titled mark's tip`);
+  await check("mark tap", async () => {
+    // A chart mark pins the shared tip, with its sample, and a tap outside clears it.
+    for (const selector of ["#luck svg rect[role=button]", "#rubbers svg g[role=button]", "#deals svg g[role=button]"]) {
+      await page.locator(selector).first().scrollIntoViewIfNeeded();
+      await page.locator(selector).first().tap({ force: true });
+
+      const tip = await tipOf(page);
+
+      console.log(name, "tap", selector, "→", tip);
+      expectThat(tip !== "none" && /\d/.test(tip), `${name}: tapping ${selector} shows no tip with a count`);
+
+      // The pinned tip follows its mark as the page scrolls.
+      await page.mouse.wheel(0, 120);
+      await settled(page);
+
+      const gap = await page.evaluate((mark) => {
+        const [anchor, tip] = [document.querySelector(mark)?.getBoundingClientRect(), document.querySelector(".tip")?.getBoundingClientRect()];
+
+        return anchor === undefined || tip === undefined ? Number.NaN : Math.abs(tip.top - (anchor.top + anchor.height / 2));
+      }, selector);
+
+      expectThat(gap < 200, `${name}: the tip of ${selector} stayed put while the page scrolled (${gap}px from its mark)`);
+      await page.locator(".hero").tap();
+      expectThat((await tipOf(page)) === "none", `${name}: a tap outside leaves the tip of ${selector}`);
+    }
   });
   await check("scatter tap", async () => {
     await page.locator(".card svg g[style*=pointer]").nth(3).tap({ force: true });
     console.log(name, "tap point → tip:", await tipOf(page));
+    await page.locator("#luck svg rect[role=button]").first().tap({ force: true });
+    expectThat((await page.locator(".tip").count()) === 1, `${name}: pinning a mark left the scatter's pin up too`);
+    await page.locator(".hero").tap();
+    await page.locator(".card svg g[style*=pointer]").nth(3).scrollIntoViewIfNeeded();
+    await page.locator(".card svg g[style*=pointer]").nth(3).tap({ force: true });
     await page.locator(".card").first().screenshot({ path: shot(`${name}-scatter`) });
     await page.locator(".hero").tap();
     console.log(name, "tap outside clears the tip:", (await tipOf(page)) === "none");
@@ -713,7 +781,8 @@ const checkOptionalFailure = async (browser: Browser) => {
   const notes = await page.getByText(/^Could not load the /).allInnerTexts();
 
   console.log("with blunders and consistency failing:", notes, "| leaderboards", await countOf(page, "table.lbt"));
-  expectThat(notes.length === 2 && (await page.locator("#blunders").getByText(/^Could not load/).count()) === 1, "a failed optional endpoint did not leave a note in its own section");
+  // Blunders feed two sections: the cards and the blunder rate.
+  expectThat(notes.length === 3 && (await page.locator("#blunders").getByText(/^Could not load/).count()) === 1 && (await page.locator("#mistakes").getByText(/^Could not load/).count()) === 1, "a failed optional endpoint did not leave a note in its own section");
   await page.context().close();
 };
 

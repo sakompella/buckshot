@@ -1,6 +1,6 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { linScale } from "./charts.ts";
+import { anchorId, linScale, REFERENCE, REFERENCE_DASH, tippedDot } from "./charts.ts";
 import { addTo, type BlockTally, blockRate, fmtPct, keyOf, type MatchRow, meanOf, type Rate, type SeatFull, sumOf } from "./data.ts";
 import { type Derived, memoLast } from "./derived.ts";
 import type { Message } from "./model.ts";
@@ -126,16 +126,20 @@ export const upsetView = (h: H, bins: ReadonlyArray<UpsetBin>, width: number): H
               ...gapTicks.map((tick) => h.text([h.X(String(x.at(tick))), h.Y(String(height - B + 18)), h.TextAnchor("middle")], [String(tick)])),
               h.text([h.X(String((L + width - right) / 2)), h.Y(String(height - 6)), h.TextAnchor("middle")], ["Elo gap between the players, rated without the match's seed block"]),
               h.text([h.X(String(L)), h.Y(String(T - 10)), h.TextAnchor("start")], ["higher-rated player's win share"]),
-              h.path([h.D(curve), h.Fill("none"), h.Stroke("#8b8b8b"), h.StrokeWidth("1.6"), h.StrokeDasharray("5 4")], []),
+              h.path([h.D(curve), h.Fill("none"), h.Stroke(REFERENCE), h.StrokeWidth("1.6"), h.StrokeDasharray(REFERENCE_DASH)], []),
               ...(isNarrow ? [] : [h.text([h.X(String(width - right + 8)), h.Y(String(y.at(winChance(gapMax)) + 4))], ["Elo model"])]),
-              ...bins.map(({ gap, expected, rate }) =>
+              ...bins.map(({ gap, expected, rate }, index) =>
                 h.g(
                   [],
                   [
                     h.line([h.X1(String(x.at(gap))), h.X2(String(x.at(gap))), h.Y1(String(y.at(rate.lo))), h.Y2(String(y.at(rate.hi))), h.Stroke("#ececec"), h.StrokeOpacity("0.4"), h.StrokeWidth("3")], []),
-                    h.circle(
-                      [h.Cx(String(x.at(gap))), h.Cy(String(y.at(rate.rate))), h.R("4.5"), h.Fill("#ececec")],
-                      [h.title([], [`${rate.n} matches, about ${Math.round(gap)} Elo apart · higher-rated won ${fmtPct(rate.rate)} [${fmtPct(rate.lo)}, ${fmtPct(rate.hi)}] · Elo model ${fmtPct(expected)}`])],
+                    tippedDot(
+                      h,
+                      anchorId("upset", index),
+                      `${rate.n} matches, about ${Math.round(gap)} Elo apart · higher-rated won ${fmtPct(rate.rate)} [${fmtPct(rate.lo)}, ${fmtPct(rate.hi)}] · Elo model ${fmtPct(expected)}`,
+                      String(x.at(gap)),
+                      String(y.at(rate.rate)),
+                      [h.R("4.5"), h.Fill("#ececec")],
                     ),
                   ],
                 ),

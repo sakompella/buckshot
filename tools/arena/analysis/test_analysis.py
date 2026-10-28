@@ -108,6 +108,15 @@ class CrossValidation(unittest.TestCase):
         self.assertEqual(set(losses["nested"]), set(blocks_of(games)))
         self.assertEqual(sum(chosen.values()), 5)
 
+    def test_pair_effects_can_be_limited_to_pairs_repeated_across_blocks(self):
+        games = [
+            *swapped_block("single", "a", "c", 1.0, 1.0),
+            *swapped_block("repeat-1", "a", "b", 1.0, 1.0),
+            *swapped_block("repeat-2", "a", "b", 1.0, 1.0),
+        ]
+        fitted = cv.fit_on(blocks_of(games), ["single", "repeat-1", "repeat-2"], {"a", "b", "c"}, 0.4, False, {("a", "b")})
+        self.assertEqual(set(fitted.delta), {("a", "b")})
+
 
 class Seats(unittest.TestCase):
     MODELS = {"a": "m", "b": "n"}

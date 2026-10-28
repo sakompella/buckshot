@@ -1,6 +1,6 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { chartWidth, figureView, linScale } from "./charts.ts";
+import { anchorId, chartWidth, figureView, linScale, REFERENCE, REFERENCE_DASH, tippedDot } from "./charts.ts";
 import { addTo, type BlockTally, blockRate, colorOfKey, fmtCI, groupBy, keyOf, labelOf, type Rate, type SeatFull, unique } from "./data.ts";
 import { type Derived, memoLast } from "./derived.ts";
 import type { Message } from "./model.ts";
@@ -331,7 +331,7 @@ const comebackView = (h: H, rows: ReadonlyArray<{ readonly label: string; readon
         h.g(
           [],
           [
-            h.line([h.Class("grid"), h.X1(String(left)), h.X2(String(width - right)), h.Y1(S(y.at(tick))), h.Y2(S(y.at(tick))), ...(tick === 0.5 ? [h.StrokeDasharray("4 3")] : [])], []),
+            h.line([...(tick === 0.5 ? [h.Stroke(REFERENCE), h.StrokeDasharray(REFERENCE_DASH)] : [h.Class("grid")]), h.X1(String(left)), h.X2(String(width - right)), h.Y1(S(y.at(tick))), h.Y2(S(y.at(tick)))], []),
             h.text([h.X(String(left - 6)), h.Y(S(y.at(tick) + 4)), h.TextAnchor("end")], [`${tick * 100}%`]),
           ],
         ),
@@ -368,18 +368,18 @@ const perSeedView = (h: H, rows: ReadonlyArray<{ readonly seed: string; readonly
         h.g(
           [],
           [
-            h.line([h.Class("grid"), h.X1(S(x.at(tick))), h.X2(S(x.at(tick))), h.Y1(String(top - 4)), h.Y2(String(height - bottom)), ...(tick === 0.5 ? [h.StrokeDasharray("4 3")] : [])], []),
+            h.line([...(tick === 0.5 ? [h.Stroke(REFERENCE), h.StrokeDasharray(REFERENCE_DASH)] : [h.Class("grid")]), h.X1(S(x.at(tick))), h.X2(S(x.at(tick))), h.Y1(String(top - 4)), h.Y2(String(height - bottom))], []),
             h.text([h.X(S(x.at(tick))), h.Y(String(top - 10)), h.TextAnchor("middle")], [`${tick * 100}%`]),
           ],
         ),
       ),
       overall === undefined || overall.n === 0
         ? h.empty
-        : h.line([h.X1(S(x.at(overall.rate))), h.X2(S(x.at(overall.rate))), h.Y1(String(top - 4)), h.Y2(String(height - bottom)), h.Stroke(WON), h.StrokeOpacity("0.6"), h.StrokeDasharray("2 3")], []),
+        : h.line([h.X1(S(x.at(overall.rate))), h.X2(S(x.at(overall.rate))), h.Y1(String(top - 4)), h.Y2(String(height - bottom)), h.Stroke(REFERENCE), h.StrokeDasharray(REFERENCE_DASH)], []),
       ...rows.flatMap(({ seed, blocks, rate }, index) => [
         h.text([h.X(String(left - 8)), h.Y(S(rowY(index) + 4)), h.TextAnchor("end")], [seed]),
         h.line([h.X1(S(x.at(rate.lo))), h.X2(S(x.at(rate.hi))), h.Y1(S(rowY(index))), h.Y2(S(rowY(index))), h.Stroke("#8b8b8b"), h.StrokeWidth("1.5")], []),
-        h.circle([h.Cx(S(x.at(rate.rate))), h.Cy(S(rowY(index))), h.R("4.5"), h.Fill(WON), h.Stroke("#000")], [h.title([], [`seed ${seed}: ${pct(rate.rate)} over ${blocks} complete blocks, 95% CI ${interval(rate)}`])]),
+        tippedDot(h, anchorId("seed", seed), `seed ${seed}: the starter won ${pct(rate.rate)} over ${blocks} complete blocks, 95% CI ${interval(rate)}`, S(x.at(rate.rate)), S(rowY(index)), [h.R("4.5"), h.Fill(WON), h.Stroke("#000")]),
         h.text([h.X(String(width - right + 8)), h.Y(S(rowY(index) + 4)), h.Class("val")], [pct(rate.rate)]),
       ]),
     ],

@@ -8,7 +8,7 @@ import { withCohorts } from "./data.ts";
 import { derive } from "./derived.ts";
 import { picksOf } from "./interesting.ts";
 import { MORE_ROWS } from "./matches.ts";
-import { type Filter, Message, Model, Section, type Viewport } from "./model.ts";
+import { type Filter, Group, Message, Model, Target, type Viewport } from "./model.ts";
 import { replayIndex, stepsOf } from "./replay.ts";
 import { PlaceTour, TOUR, tourKeyMessage } from "./tour.ts";
 import { stickyHeight, view } from "./view.ts";
@@ -56,45 +56,45 @@ const LoadMatch = Command.define("LoadMatch", {
     ),
 });
 
-const sectionOfHash = (hash: string): Option.Option<Section> => Schema.decodeUnknownOption(Section)(hash.replace(/^#/, ""));
+const targetOfHash = (hash: string): Option.Option<Target> => Schema.decodeUnknownOption(Target)(hash.replace(/^#/, ""));
 
-const scrollToSection = (section: Section) => {
-  const target = document.getElementById(section);
+const scrollToTarget = (id: Target) => {
+  const target = document.getElementById(id);
 
-  // The section's top rule tucks under the bar's own.
+  // The target's top rule tucks under the bar's own.
   if (target !== null) scrollTo(0, target.getBoundingClientRect().top + scrollY - stickyHeight() + 1);
 };
 
-/** Scrolls a section's heading to just below the sticky bar and puts the section in the URL. */
+/** Scrolls a group's or a section's heading to just below the sticky bar and puts it in the URL. */
 const JumpTo = Command.define("JumpTo", {
-  args: { section: Section },
+  args: { target: Target },
   messages: [Message.CompletedScroll],
-  execute: ({ section }) =>
+  execute: ({ target }) =>
     Effect.sync(() => {
-      history.replaceState(history.state, "", `#${section}`);
-      scrollToSection(section);
+      history.replaceState(history.state, "", `#${target}`);
+      scrollToTarget(target);
     }).pipe(Effect.as(Message.CompletedScroll())),
 });
 
-/** Keeps the current section's link in view in a jump menu wider than the screen. */
+/** Keeps the current group's link in view in a jump menu wider than the screen. */
 const RevealNavLink = Command.define("RevealNavLink", {
-  args: { section: Section },
+  args: { group: Group },
   messages: [Message.CompletedScroll],
-  execute: ({ section }) =>
+  execute: ({ group }) =>
     Effect.sync(() => {
       const nav = document.querySelector("nav");
-      const link = nav?.querySelector(`a[href="#${section}"]`);
+      const link = nav?.querySelector(`a[href="#${group}"]`);
 
       if (nav instanceof HTMLElement && link instanceof HTMLElement) nav.scrollTo({ left: link.offsetLeft - (nav.clientWidth - link.offsetWidth) / 2, behavior: "smooth" });
     }).pipe(Effect.as(Message.CompletedScroll())),
 });
 
-/** The last section whose top has passed under the sticky bar. */
-const sectionInView = (): Option.Option<Message> => {
+/** The last group whose top has passed under the sticky bar. */
+const groupInView = (): Option.Option<Message> => {
   const line = stickyHeight() + 8;
-  const passed = [...document.querySelectorAll("section.part[id]")].filter((section) => section.getBoundingClientRect().top <= line).at(-1);
+  const passed = [...document.querySelectorAll("section.part[id]")].filter((group) => group.getBoundingClientRect().top <= line).at(-1);
 
-  return Option.map(sectionOfHash(passed?.id ?? ""), (section) => Message.ScrolledInto({ section }));
+  return Option.map(Schema.decodeUnknownOption(Group)(passed?.id), (group) => Message.ScrolledInto({ group }));
 };
 
 const nextFrame = Effect.callback<void>((resume) => {
@@ -105,7 +105,7 @@ const nextFrame = Effect.callback<void>((resume) => {
 const ScrollToHash = Command.define("ScrollToHash", {
   messages: [Message.CompletedScroll],
   execute: nextFrame.pipe(
-    Effect.map(() => Option.map(sectionOfHash(location.hash), scrollToSection)),
+    Effect.map(() => Option.map(targetOfHash(location.hash), scrollToTarget)),
     Effect.as(Message.CompletedScroll()),
   ),
 });
@@ -169,13 +169,22 @@ const withReplayMove = (model: Model, choose: (at: number) => number): Return =>
   });
 
 const openReplay = (model: Model, id: string, maybeFocus: Option.Option<number>): Return => {
-  const opened = withMatches(modifyFields(model, { maybeReplay: () => Option.some({ id, maybeFocus, maybeAt: Option.none() }), maybeTappedTitle: () => Option.none() }), [id]);
+  const opened = withMatches(
+    modifyFields(model, {
+      maybeReplay: () => Option.some({ id, maybeFocus, maybeAt: Option.none() }),
+      maybeTappedTitle: () => Option.none(),
+      markTip: () => ({ maybeHover: Option.none(), maybePin: Option.none() }),
+    }),
+    [id],
+  );
 
   // Opening another match from a replay reuses its history entry.
   return Option.isSome(model.maybeReplay) ? opened : { ...opened, commands: [...(opened.commands ?? []), PushReplayHistory()] };
 };
 
-const withFilter = (model: Model, change: (filter: Filter) => Filter): Return => withPickedMatches(modifyFields(model, { filter: change }));
+// A filter can remove the pinned mark or change what it counts, so the tip goes.
+const withFilter = (model: Model, change: (filter: Filter) => Filter): Return =>
+  withPickedMatches(modifyFields(model, { filter: change, markTip: () => ({ maybeHover: Option.none(), maybePin: Option.none() }) }));
 
 export const update = (model: Model, message: Message): Return =>
   Message.match<Return>(message, {
@@ -183,7 +192,7 @@ export const update = (model: Model, message: Message): Return =>
       model: modifyFields(model, { viewport: () => viewport }),
       commands: Option.match(model.maybeTour, { onNone: () => [], onSome: ({ step }) => [PlaceTour({ step })] }),
     }),
-    ClickedJump: ({ section }) => ({ model, commands: [JumpTo({ section })] }),
+    ClickedJump: ({ target }) => ({ model, commands: [JumpTo({ target })] }),
     NavigatedToHash: () => ({ model, commands: [ScrollToHash()] }),
     SucceededLoad: ({ loaded }) => {
       const loadedModel = withPickedMatches(modifyFields(model, { data: () => AsyncData.succeed(loaded) }));
@@ -196,8 +205,8 @@ export const update = (model: Model, message: Message): Return =>
     ToggledEffort: ({ effort }) => withFilter(model, (filter) => ({ ...filter, offEfforts: toggled(filter.offEfforts, effort) })),
     ToggledModel: ({ name }) => withFilter(model, (filter) => ({ ...filter, offModels: toggled(filter.offModels, name) })),
     ToggledAllConfigs: () => withFilter(model, (filter) => ({ ...filter, isAllConfigs: !filter.isAllConfigs })),
-    ScrolledInto: ({ section }) =>
-      Option.contains(model.maybeSection, section) ? { model } : { model: modifyFields(model, { maybeSection: () => Option.some(section) }), commands: [RevealNavLink({ section })] },
+    ScrolledInto: ({ group }) =>
+      Option.contains(model.maybeGroup, group) ? { model } : { model: modifyFields(model, { maybeGroup: () => Option.some(group) }), commands: [RevealNavLink({ group })] },
     ToggledFilters: () => ({ model: modifyFields(model, { isFiltersOpen: (isOpen) => !isOpen }) }),
     TappedTitle: ({ text }) => ({ model: modifyFields(model, { maybeTappedTitle: () => Option.some(text) }) }),
     ClearedTappedTitle: () => ({ model: modifyFields(model, { maybeTappedTitle: () => Option.none() }) }),
@@ -208,9 +217,22 @@ export const update = (model: Model, message: Message): Return =>
     HoveredPoint: ({ key }) => ({ model: modifyFields(model, { scatter: (scatter) => ({ ...scatter, maybeHover: Option.some(key) }) }) }),
     LeftPoint: () => ({ model: modifyFields(model, { scatter: (scatter) => ({ ...scatter, maybeHover: Option.none() }) }) }),
     ClickedPoint: ({ key }) => ({
-      model: modifyFields(model, { scatter: (scatter) => ({ ...scatter, maybePin: Option.exists(scatter.maybePin, (pinned) => pinned === key) ? Option.none() : Option.some(key) }) }),
+      model: modifyFields(model, {
+        scatter: (scatter) => ({ ...scatter, maybePin: Option.exists(scatter.maybePin, (pinned) => pinned === key) ? Option.none() : Option.some(key) }),
+        markTip: () => ({ maybeHover: Option.none(), maybePin: Option.none() }),
+      }),
     }),
-    ClickedOutsideChart: () => ({ model: modifyFields(model, { scatter: (scatter) => ({ ...scatter, maybePin: Option.none(), maybeHover: Option.none() }) }) }),
+    ClickedOutsideChart: () => ({
+      model: modifyFields(model, { scatter: (scatter) => ({ ...scatter, maybePin: Option.none(), maybeHover: Option.none() }), markTip: () => ({ maybeHover: Option.none(), maybePin: Option.none() }) }),
+    }),
+    HoveredMark: ({ tip }) => ({ model: modifyFields(model, { markTip: (markTip) => ({ ...markTip, maybeHover: Option.some(tip) }) }) }),
+    LeftMark: () => ({ model: modifyFields(model, { markTip: (markTip) => ({ ...markTip, maybeHover: Option.none() }) }) }),
+    ClickedMark: ({ tip }) => ({
+      model: modifyFields(model, {
+        markTip: ({ maybePin }) => ({ maybeHover: Option.none(), maybePin: Option.exists(maybePin, ({ anchor }) => anchor === tip.anchor) ? Option.none() : Option.some(tip) }),
+        scatter: (scatter) => ({ ...scatter, maybePin: Option.none(), maybeHover: Option.none() }),
+      }),
+    }),
     SelectedHeatMode: ({ mode }) => ({ model: modifyFields(model, { heat: (heat) => ({ ...heat, mode, maybeFlagged: Option.none(), maybeTip: Option.none() }) }) }),
     ClickedHeatColumn: ({ column }) => ({ model: modifyFields(model, { heat: (heat) => ({ ...heat, sort: column }) }) }),
     ToggledBestOnly: () => ({ model: modifyFields(model, { heat: (heat) => ({ ...heat, isBestOnly: !heat.isBestOnly }) }) }),
@@ -274,7 +296,8 @@ const init: Runtime.ApplicationInit<Model, Message, Flags> = ({ viewport }) => (
     matchList: { query: "", limit: 25 },
     maybeRateTip: Option.none(),
     maybeTappedTitle: Option.none(),
-    maybeSection: Option.some("scatter"),
+    markTip: { maybeHover: Option.none(), maybePin: Option.none() },
+    maybeGroup: Option.some("results"),
     isFiltersOpen: false,
     matches: {},
     maybeReplay: Option.none(),
@@ -324,7 +347,7 @@ const subscriptions = Subscription.make<Model, Message>()((entry) => ({
         ),
     },
   ),
-  scroll: Subscription.persistentEntry(Dom.streamFromEventFilterMap({ target: window, type: "scroll", filterMapEvent: sectionInView })),
+  scroll: Subscription.persistentEntry(Dom.streamFromEventFilterMap({ target: window, type: "scroll", filterMapEvent: groupInView })),
   tappedTitle: Subscription.persistentEntry(Dom.streamFromEventFilterMap({ target: window, type: "pointerup", filterMapEvent: tappedTitleMessage })),
   tourKeys: entry(
     { isTourOpen: Schema.Boolean },

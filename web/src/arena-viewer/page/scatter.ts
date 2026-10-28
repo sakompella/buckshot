@@ -1,7 +1,7 @@
 import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { anchorId, logScale, linScale, ratingSelects, ratingToggles, selectView, switchView, tipView, toggleView } from "./charts.ts";
+import { anchorId, linScale, logScale, ratingSelects, ratingToggles, REFERENCE, REFERENCE_DASH, selectView, switchView, tipView, toggleView } from "./charts.ts";
 import { baseName, DEFAULT_EFFORT, eloName, fmtCount, fmtPct, fmtRating, fmtUsd, isClaude, type ModelStats } from "./data.ts";
 import { leader, measureText, placeLabels, uncrowded } from "./labels.ts";
 import { memoLast } from "./derived.ts";
@@ -27,6 +27,50 @@ interface Axis {
   /** The tooltip's line for a point. */
   readonly perMatch: (value: number) => string;
 }
+
+// TAP CELLS
+
+interface Spot {
+  readonly x: number;
+  readonly y: number;
+}
+
+/** How far from a point a tap or the mouse still picks it: a fingertip's width. */
+export const TAP_REACH = 22;
+
+const CELL_SIDES = 24;
+
+/** The part of the convex polygon `cell` nearer `own` than `other`: one Sutherland–Hodgman pass over their bisector. */
+const nearerHalf = (cell: ReadonlyArray<Spot>, own: Spot, other: Spot): ReadonlyArray<Spot> => {
+  const [dx, dy] = [other.x - own.x, other.y - own.y];
+  const [mx, my] = [(own.x + other.x) / 2, (own.y + other.y) / 2];
+  const side = ({ x, y }: Spot) => (x - mx) * dx + (y - my) * dy;
+
+  return cell.flatMap((from, index) => {
+    const to = cell[(index + 1) % cell.length] ?? from;
+    const [a, b] = [side(from), side(to)];
+    const kept = a <= 0 ? [from] : [];
+
+    if ((a <= 0) === (b <= 0)) return kept;
+
+    const t = a / (a - b);
+
+    return [...kept, { x: from.x + t * (to.x - from.x), y: from.y + t * (to.y - from.y) }];
+  });
+};
+
+/**
+ * Each point's tap area: the places within `reach` of it that are nearer it than any other point, as a polygon. The
+ * cells never overlap, so a tap among crowded points picks the nearest one, not the one drawn last.
+ */
+export const tapCells = (points: ReadonlyArray<Spot>, reach: number): ReadonlyArray<ReadonlyArray<Spot>> =>
+  points.map((own, index) => {
+    const around: ReadonlyArray<Spot> = Array.from({ length: CELL_SIDES }, (_, step) => ({ x: own.x + reach * Math.cos((2 * Math.PI * step) / CELL_SIDES), y: own.y + reach * Math.sin((2 * Math.PI * step) / CELL_SIDES) }));
+
+    return points.reduce((cell, other, at) => (at === index || (other.x === own.x && other.y === own.y) ? cell : nearerHalf(cell, own, other)), around);
+  });
+
+const cellPath = (cell: ReadonlyArray<Spot>): string => (cell.length < 3 ? "" : `M${cell.map(({ x, y }) => `${x.toFixed(1)},${y.toFixed(1)}`).join("L")}Z`);
 
 const positive = (value: number): number | null => (value > 0 ? value : null);
 
@@ -331,6 +375,8 @@ export const scatterView = (
       : [h.line([h.X1(`${segment.x1}`), h.Y1(`${segment.y1}`), h.X2(`${segment.x2}`), h.Y2(`${segment.y2}`), h.Stroke(point.m.color), h.StrokeOpacity("0.35"), h.Style(dim(point))], [])];
   });
 
+  const cells = tapCells(at, TAP_REACH);
+
   const dots = points.map((point, index) => {
     const spot = at[index];
     const isOn = Option.exists(active, (shown) => shown === point);
@@ -349,7 +395,7 @@ export const scatterView = (
         h.OnClick(Message.ClickedPoint({ key: point.m.key }), { propagation: "Stop" }),
       ],
       [
-        h.circle([h.Cx(`${spot.x}`), h.Cy(`${spot.y}`), h.R("14"), h.Fill("transparent")], []),
+        h.path([h.D(cellPath(cells[index] ?? [])), h.Fill("transparent")], []),
         isClaude(point.m.model)
           ? h.circle([h.Cx(`${spot.x}`), h.Cy(`${spot.y}`), h.R(`${r}`), h.Fill(point.m.color), h.Stroke("#000")], [])
           : h.rect([h.X(`${spot.x - r}`), h.Y(`${spot.y - r}`), h.Width(`${2 * r}`), h.Height(`${2 * r}`), h.Rx("1.5"), h.Fill(point.m.color), h.Stroke("#000")], []),
@@ -390,10 +436,10 @@ export const scatterView = (
             [
               h.D(frontier.map((point, index) => `${index === 0 ? "M" : "L"}${x.at(point.x)},${y.at(yValueOf(point, ranking))}`).join("")),
               h.Fill("none"),
-              h.Stroke("#777"),
+              h.Stroke(REFERENCE),
               h.StrokeOpacity("0.6"),
               h.StrokeWidth("1.25"),
-              h.StrokeDasharray("3 4"),
+              h.StrokeDasharray(REFERENCE_DASH),
             ],
             [],
           ),

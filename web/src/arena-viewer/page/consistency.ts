@@ -1,7 +1,7 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import type { Consistency } from "../api.ts";
-import { linScale } from "./charts.ts";
+import { anchorId, linScale, tippedDot } from "./charts.ts";
 import { baseName, colorOf, EFFORTS, fmtPct, groupBy, keyOf, type ModelStats, shortName } from "./data.ts";
 import type { Message } from "./model.ts";
 
@@ -79,10 +79,10 @@ export const consistencyView = (h: H, stats: ReadonlyArray<ModelStats>, consiste
                   [
                     h.text([h.X(String(left - 8)), h.Y(String(y + 4)), h.TextAnchor("end"), h.Style({ fill: color })], [label]),
                     h.line([h.X1(String(x.at(config.lo))), h.X2(String(x.at(config.hi))), h.Y1(String(y)), h.Y2(String(y)), h.Stroke(color), h.StrokeOpacity("0.4"), h.StrokeWidth("3")], []),
-                    h.circle(
-                      [h.Cx(String(x.at(config.agree))), h.Cy(String(y)), h.R("3.5"), h.Fill(color)],
-                      [h.title([], [`${label} · ${fmtPct(config.agree)} [${fmtPct(config.lo)}, ${fmtPct(config.hi)}] over ${config.positions} positions, ${config.decisions} decisions`])],
-                    ),
+                    tippedDot(h, anchorId("consistency", keyOf(config)), `${label} · ${fmtPct(config.agree)} [${fmtPct(config.lo)}, ${fmtPct(config.hi)}] over ${config.positions} positions, ${config.decisions} decisions`, String(x.at(config.agree)), String(y), [
+                      h.R("3.5"),
+                      h.Fill(color),
+                    ]),
                     h.text([h.X(String(width - right + 8)), h.Y(String(y + 4))], [String(config.positions)]),
                   ],
                 );

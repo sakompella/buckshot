@@ -1,6 +1,6 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { linScale } from "./charts.ts";
+import { anchorId, linScale, tippedDot } from "./charts.ts";
 import { baseName, baseOrder, EFFORTS, eloName, fmtRating, groupBy, type ModelStats, shortName } from "./data.ts";
 import type { Basis, Message } from "./model.ts";
 import type { Rating } from "./ratings.ts";
@@ -100,7 +100,7 @@ export const effortView = (h: H, stats: ReadonlyArray<ModelStats>, ratings: Read
                     [],
                     [
                       h.line([h.X1(String(xOf(m.effort))), h.X2(String(xOf(m.effort))), h.Y1(String(y.at(rating.lo))), h.Y2(String(y.at(rating.hi))), h.Stroke(color), h.StrokeOpacity("0.35"), h.StrokeWidth("3")], []),
-                      h.circle([h.Cx(String(xOf(m.effort))), h.Cy(String(y.at(rating.rating))), h.R("3.5"), h.Fill(color)], [h.title([], [`${m.label} · ${fmtRating(rating.rating)} [${fmtRating(rating.lo)}, ${fmtRating(rating.hi)}]`])]),
+                      tippedDot(h, anchorId("effort", m.key), `${m.label} · ${fmtRating(rating.rating)} [${fmtRating(rating.lo)}, ${fmtRating(rating.hi)}] over ${m.scored.length.toLocaleString()} matches`, String(xOf(m.effort)), String(y.at(rating.rating)), [h.R("3.5"), h.Fill(color)]),
                     ],
                   ),
                 ),
