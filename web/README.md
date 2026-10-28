@@ -278,7 +278,11 @@ reliability fold their full tables under the charts. A jump menu at the top link
 to each section's anchor (`#scatter`, `#seats`, `#matches`, ...), and its Tour button starts a guided tour: each
 step scrolls to a section or control, highlights it and shows a short card, with Back, Next and Close, the arrow
 keys and Escape (`page/tour.ts` holds the steps). The filter bar
-under it applies to the whole page; on a wide screen both stay at the top. The
+under it applies to the whole page; on a wide screen both stay at the top, and
+the jump menu marks the section in view. On a phone or tablet the filters fold
+into one line that says what they keep, and a tap opens them; on a phone the
+scatter's choices are menus, so the chart starts on the first screen. A tap on
+a chart mark shows the title a mouse would hover, in a bar at the bottom. The
 scatter's and the effort chart's axes span every config in every cohort, so a filter only shows or hides
 points; the reliability bars keep one scale the same way.
 
