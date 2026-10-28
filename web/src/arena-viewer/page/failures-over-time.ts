@@ -6,7 +6,8 @@ import { baseName, baseOrder, colorOf, fmtTime, groupBy, type SeatFull } from ".
 
 type H = HtmlBuilder<Message>;
 
-// When calls failed: one lane per model, a bar per hour. Provider incidents show as the same hours failing in every lane of a family.
+// When calls failed: one lane per model, a bar per hour of the calls' own log times. Provider incidents show as the same
+// hours failing in every lane of a family.
 
 const HOUR_MS = 3.6e6;
 
@@ -14,26 +15,25 @@ const HOUR_MS = 3.6e6;
 const MIN_CALLS = 20;
 
 export interface HourBucket {
-  /** Hours since the epoch, in UTC, of the match starts it counts. */
+  /** Hours since the epoch, in UTC. */
   readonly hour: number;
   readonly calls: number;
   readonly failed: number;
 }
 
-/** Each model's replies and failed replies by the hour its matches started, hours in order. A match counts whole at its start. */
-export const failuresByHour = (seats: ReadonlyArray<SeatFull>, keep: ReadonlyArray<boolean>): ReadonlyMap<string, ReadonlyArray<HourBucket>> => {
+/** Each model's replies and failed replies by the hour each was logged, hours in order. */
+export const failuresByHour = (seats: ReadonlyArray<Pick<SeatFull, "model" | "callHours">>, keep: ReadonlyArray<boolean>): ReadonlyMap<string, ReadonlyArray<HourBucket>> => {
   const kept = seats.filter((_, index) => keep[index] === true);
 
   return new Map(
     [...groupBy(kept, ({ model }) => model)].map(([model, modelSeats]) => {
       const byHour = new Map<number, { calls: number; failed: number }>();
 
-      for (const seat of modelSeats) {
-        const hour = Math.floor(Date.parse(seat.startedAt) / HOUR_MS);
+      for (const [hour, calls, failed] of modelSeats.flatMap(({ callHours }) => callHours)) {
         const bucket = byHour.get(hour) ?? { calls: 0, failed: 0 };
 
-        bucket.calls += seat.calls ?? 0;
-        bucket.failed += seat.failed ?? 0;
+        bucket.calls += calls;
+        bucket.failed += failed;
         byHour.set(hour, bucket);
       }
 
@@ -82,7 +82,7 @@ export const failuresOverTimeView = (h: H, every: ReadonlyMap<string, ReadonlyAr
     [h.Class("lanes")],
     [
       h.h3([], ["Failed calls by hour"]),
-      h.p([h.Class("sub")], [`Share of replies, by the hour a match started. Every lane tops out at ${Math.round(top * 100)}%.`]),
+      h.p([h.Class("sub")], [`Share of replies that failed, by the hour each was logged. Every lane tops out at ${Math.round(top * 100)}%.`]),
       lanes.length === 0
         ? h.div([h.Class("empty")], ["No configs for this filter."])
         : h.svg(

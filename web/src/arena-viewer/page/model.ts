@@ -14,14 +14,14 @@ export type Section = typeof Section.Type;
 export const SECTIONS: ReadonlyArray<readonly [Section, string]> = [
   ["scatter", "Scatter"],
   ["interesting", "Interesting"],
-  ["luck", "Luck"],
+  ["luck", "Results"],
   ["seats", "Seats"],
-  ["deals", "Deals"],
+  ["deals", "Seeds"],
   ["blunders", "Blunders"],
   ["mistakes", "Mistakes"],
   ["odds", "Odds"],
   ["items", "Items"],
-  ["pressure", "Pressure"],
+  ["pressure", "Tokens"],
   ["rubbers", "Dead rubbers"],
   ["reliability", "Reliability"],
   ["matches", "Matches"],
@@ -41,8 +41,20 @@ export type Basis = typeof Basis.Type;
 
 export const SeatFull = Schema.Struct({ ...Seat.fields, cohort: Schema.String, potShare: Schema.NullOr(Schema.Number) });
 
-/** The database as the page holds it: every seat with its cohort, the agent moves' columns, the blunders, the regret of the searched moves, and each config's consistency (empty without a knowledge database). */
-export const Loaded = Schema.Struct({ seats: Schema.Array(SeatFull), decisions: Decisions, blunders: Blunders, mistakes: Mistakes, consistency: Schema.Array(Consistency) });
+/** An optional section's data, or why it could not be loaded: its failure leaves the rest of the page standing. */
+const OptionalData = <A, I>(schema: Schema.Codec<A, I>) => AsyncData.Schema(schema, Schema.String).schema;
+
+/**
+ * The database as the page holds it: every seat with its cohort and the agent moves' columns, which every section needs;
+ * then the blunders, the regret of the searched moves, and each config's consistency (empty without a knowledge database).
+ */
+export const Loaded = Schema.Struct({
+  seats: Schema.Array(SeatFull),
+  decisions: Decisions,
+  blunders: OptionalData(Blunders),
+  mistakes: OptionalData(Mistakes),
+  consistency: OptionalData(Schema.Array(Consistency)),
+});
 
 export type Loaded = typeof Loaded.Type;
 

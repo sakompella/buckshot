@@ -9,7 +9,7 @@ import type { Message } from "./model.ts";
 
 type H = HtmlBuilder<Message>;
 
-// Thinking under pressure: output tokens per model move at each health gap, as a multiple of what the config writes when
+// Output tokens by health gap: output tokens per model move at each health gap, as a multiple of what the config writes when
 // the health is level. One panel per model and a line per effort; a line's label gives its tokens per move when level.
 // Two-player matches only. The gaps beyond the ends count in the end points, and a point under MIN_MOVES moves is left out.
 
@@ -148,7 +148,7 @@ export const pressureView = (h: H, decisions: Decisions, seats: ReadonlyArray<Se
   return h.div(
     [],
     [
-      h.h2([], ["Thinking under pressure"]),
+      h.h2([], ["Output tokens by health gap"]),
       h.p([h.Class("sub")], ["Output tokens per model move by health gap, yours minus the opponent's, as a multiple of the level-health move. Labels give tokens per move when level."]),
       panels.length === 0
         ? h.div([h.Class("empty")], ["No model has enough two-player moves in this filter."])

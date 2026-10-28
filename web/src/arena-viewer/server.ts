@@ -8,6 +8,7 @@ import { Blunders, Call, Consistency, Decisions, MatchDetail, MatchSeat, MatchSu
 import { findBlunders } from "./blunders.ts";
 import { mistakesOf } from "./mistakes.ts";
 import { openConsistency } from "./consistency.ts";
+import { groupBy, withCohorts } from "./page/data.ts";
 import page from "./page/index.html";
 import { openRegret, type Regret } from "./regret.ts";
 
@@ -44,6 +45,8 @@ const decodeSummary = Schema.decodeUnknownOption(MatchSummary);
 const decodeMatchSeat = Schema.decodeUnknownSync(MatchSeat);
 
 const decodeCall = Schema.decodeUnknownSync(Call);
+
+const decodeCallHourRow = Schema.decodeUnknownSync(Schema.Struct({ matchId: Schema.String, player: Schema.String, hour: Schema.Number, calls: Schema.Number, failed: Schema.Number }));
 
 const DecisionRow = Schema.Struct({
   id: Schema.String,
@@ -240,10 +243,19 @@ export const serveArenaViewer = (dbPath: string, hostname: string, port: number,
   const seatIndex = new Map(rows.map((row, index) => [`${row.matchId}|${row.player}`, index]));
   const { decisions, seats: analysed, shellsLeft } = analyse(db, rows, seatIndex);
 
+  const callHours = groupBy(
+    db
+      .query(`select match_id matchId, player, cast(strftime('%s', t) / 3600 as integer) hour, count(*) calls, sum(status = 'failed') failed from calls group by match_id, player, hour order by hour`)
+      .all()
+      .map((row) => decodeCallHourRow(row)),
+    ({ matchId, player }) => `${matchId}|${player}`,
+  );
+
   const seats = rows.flatMap((row, index) => {
     const extra = analysed[index];
+    const key = `${row.matchId}|${row.player}`;
 
-    return extra === undefined ? [] : [{ ...row, ...extra, regret: regret?.seats.get(`${row.matchId}|${row.player}`) ?? null }];
+    return extra === undefined ? [] : [{ ...row, ...extra, regret: regret?.seats.get(key) ?? null, callHours: (callHours.get(key) ?? []).map(({ hour, calls, failed }) => [hour, calls, failed] as const) }];
   });
 
   const seatsBody = encodedBody(encodeSeats(seats));
@@ -258,7 +270,8 @@ export const serveArenaViewer = (dbPath: string, hostname: string, port: number,
     ),
   );
 
-  const consistencyBody = encodedBody(encodeConsistency(knowledgePath === undefined ? [] : openConsistency(knowledgePath)));
+  const shown = new Map(withCohorts(seats).map(({ matchId, cohort, seedBlock }) => [matchId, { cohort, seedBlock }]));
+  const consistencyBody = encodedBody(encodeConsistency(knowledgePath === undefined ? [] : openConsistency(knowledgePath, shown)));
 
   console.log(`loaded ${seats.length} seats in ${Math.round(performance.now() - started)} ms; decisions payload ${(decisionsBody.gzipped.length / 1e6).toFixed(1)} MB gzipped`);
 

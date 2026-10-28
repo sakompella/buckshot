@@ -6,7 +6,8 @@ import type { Message } from "./model.ts";
 
 type H = HtmlBuilder<Message>;
 
-// Momentum: does winning round 1 carry into round 2, and who wins the decider at 1-1? One row per config.
+// Results after round 1: how often a config wins round 2 after winning round 1, and round 3 at 1-1. One row per config.
+// Descriptive only: opponents, seeds and which matches reach each state differ between rows.
 
 /** A config's chance of the round after a lead, and at 1-1, each a rate over its scored matches with seed-block intervals. */
 export interface Momentum {
@@ -71,7 +72,7 @@ export const momentumView = (h: H, stats: ReadonlyArray<ModelStats>, width: numb
     [
       h.div(
         [h.Class("lbbar")],
-        [h.h2([], ["Momentum"]), h.span([h.Class("k")], ["● wins round 2 after winning round 1"]), h.span([h.Class("k")], ["◇ wins round 3 when it is 1–1"]), h.span([h.Class("k")], ["| its round share"])],
+        [h.h2([], ["Results after round 1"]), h.span([h.Class("k")], ["● wins round 2 after winning round 1"]), h.span([h.Class("k")], ["◇ wins round 3 when it is 1–1"]), h.span([h.Class("k")], ["| its round share"])],
       ),
       rows.length === 0
         ? h.div([h.Class("empty")], ["No config has matches with known rounds in this filter."])

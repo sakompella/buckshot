@@ -68,19 +68,13 @@ export const TOUR: ReadonlyArray<TourStep> = [
     anchor: "luck",
     focus: "#luck .luckrow",
     title: "Won with higher estimated regret",
-    text: "How often the player whose moves gave up more estimated win chance still won the match, and the better player's win share by the gap. The bars rise with the gap, but an estimate is not a measure of luck.",
-  },
-  {
-    anchor: "luck",
-    focus: "#luck .luckrow + .card",
-    title: "Won with higher regret, per config",
-    text: "Per config, the share of its matches it won with more regret per move, and the share it lost with less. Faded rows rest on few matches.",
+    text: "How often the player whose moves gave up more estimated round-win chance still won the match, per move, in total and without tiny gaps, and the lower-regret player's win share by the gap. An estimate is not a measure of luck.",
   },
   {
     anchor: "luck",
     focus: "#luck > div > .card:nth-child(2)",
     title: "Rating gap and results",
-    text: "How often the higher-rated config won, by rating gap, against the Bradley-Terry curve. The ratings are fitted on these same matches, so this shows the spread, not a test on new games.",
+    text: "How often the higher-rated config won, by rating gap, against the Bradley-Terry curve. Each match is rated by a fit that held its seed block out, so the curve is tested on matches the ratings did not see.",
   },
   {
     anchor: "luck",
@@ -122,13 +116,13 @@ export const TOUR: ReadonlyArray<TourStep> = [
     anchor: "mistakes",
     focus: "#mistakes > div > .card:nth-child(2)",
     title: "Same position, same move",
-    text: "How often a config chose the same move when it met the same position again, with the count of repeated positions. It measures steadiness, not good play.",
+    text: "How often a config chose the same move when it met the same position again, in the chosen cohort, with the count of repeated positions. It measures steadiness, not good play.",
   },
   {
     anchor: "odds",
-    focus: "#odds .card",
+    focus: "#odds .chartrow figure:first-child",
     title: "Playing the odds",
-    text: "How often a model shoots itself against the chance, by its own count, that the shell is live, one line per model at one effort. A model that counts shells shoots itself on a sure blank.",
+    text: "How often a config shoots itself against the chance, by its own count, that the shell is live, one panel per model and a line per effort. A model that counts shells shoots itself on a sure blank.",
   },
   {
     anchor: "items",
@@ -139,7 +133,7 @@ export const TOUR: ReadonlyArray<TourStep> = [
   {
     anchor: "pressure",
     focus: "#pressure .chartrow figure:first-child",
-    title: "Thinking under pressure",
+    title: "Output tokens by health gap",
     text: "Output tokens per move by health gap, as a multiple of the config's own amount at level health, one panel per model. A line sloping down writes less when ahead, though positions behind are also harder.",
   },
   {
@@ -157,8 +151,8 @@ export const TOUR: ReadonlyArray<TourStep> = [
   {
     anchor: "reliability",
     focus: "#reliability .lanes",
-    title: "Failures by match-start hour",
-    text: "Each model's failed replies, filed under the hour their match started. Lanes failing in the same hours point to an outage rather than a weak model.",
+    title: "Failed calls by hour",
+    text: "Each model's failed replies, by the hour each call was logged. Lanes failing in the same hours point to an outage rather than a weak model.",
   },
   {
     anchor: "matches",

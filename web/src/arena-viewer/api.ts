@@ -9,10 +9,11 @@ const Count = Schema.NullOr(Schema.Number);
 const PerItem = Schema.Array(Schema.Number);
 
 /**
- * How consistent one config is: over the positions it met at least twice, the chance two of its decisions in the same
- * position chose the same move, with a 95% interval over positions. Pooled over every tournament.
+ * How consistent one config is in one cohort, or over every cohort ("all"): over the positions it met at least twice, the
+ * chance two of its decisions in the same position chose the same move, with a 95% seed-block bootstrap interval.
  */
 export const Consistency = Schema.Struct({
+  cohort: Schema.String,
   model: Schema.String,
   effort: Schema.String,
   positions: Schema.Number,
@@ -95,7 +96,10 @@ export const SeatRegret = Schema.Struct({ moves: Schema.Number, total: Schema.Nu
 
 export type SeatRegret = typeof SeatRegret.Type;
 
-export const Seat = Schema.Struct({ ...SeatRow.fields, ...SeatAnalysis.fields, regret: Schema.NullOr(SeatRegret) });
+/** A seat's calls in one hour, by the time each call was logged: hours since the epoch in UTC, calls, failed calls. */
+export const CallHour = Schema.Tuple([Schema.Number, Schema.Number, Schema.Number]);
+
+export const Seat = Schema.Struct({ ...SeatRow.fields, ...SeatAnalysis.fields, regret: Schema.NullOr(SeatRegret), callHours: Schema.Array(CallHour) });
 
 export type Seat = typeof Seat.Type;
 

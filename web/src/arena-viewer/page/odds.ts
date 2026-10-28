@@ -1,16 +1,15 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import type { Decisions } from "../api.ts";
-import { linScale } from "./charts.ts";
-import { baseName, DEFAULT_EFFORT, groupBy, keyOf, type ModelStats, type SeatFull, shortName } from "./data.ts";
+import { chartWidth, linScale } from "./charts.ts";
+import { baseName, baseOrder, colorOf, DASH, EFFORTS, groupBy, keyOf, labelOf, type SeatFull } from "./data.ts";
 import { memoLast } from "./derived.ts";
 import type { Message } from "./model.ts";
 
 type H = HtmlBuilder<Message>;
 
 // Playing the odds: for a shot with no glass or phone clue, how often a config shot itself, by the chance it counted the
-// chambered shell live. A blank at oneself keeps the turn and a live one costs health, so the rule of thumb is a step:
-// shoot yourself below 50% and the opponent above it.
+// chambered shell live. One panel per model and a line per effort, every config the filter keeps.
 
 /** Chance-live bins in whole percent, ends inclusive. The ends and the even odds are bins of their own: counting shells shows there. */
 export const ODDS_BINS: ReadonlyArray<{ readonly label: string; readonly low: number; readonly high: number }> = [
@@ -86,71 +85,72 @@ const spreadLabels = (ys: ReadonlyArray<number>, bottom: number): ReadonlyArray<
 
 const talliesOf = memoLast(selfShotTallies);
 
-/** Each model's medium config, or its most-shot config where it has no medium, so the lines are models and not every effort. */
-export const mainConfigPerModel = (configs: ReadonlyArray<ModelStats>, shotsOf: (key: string) => number): ReadonlyArray<ModelStats> =>
-  [...groupBy(configs, ({ model }) => model).values()].flatMap((own) => {
-    const medium = own.find(({ effort }) => effort === DEFAULT_EFFORT);
-    const [most] = own.toSorted((left, right) => shotsOf(right.key) - shotsOf(left.key));
+const EFFORT_ORDER: ReadonlyArray<string> = EFFORTS;
 
-    return medium ?? most ?? [];
-  });
+interface OddsLine {
+  readonly key: string;
+  readonly effort: string;
+  readonly points: ReadonlyArray<{ readonly bin: number; readonly self: number; readonly shots: number; readonly share: number }>;
+}
 
-/** One line per model, at medium. Each stays within its bins that have enough shots. */
-export const oddsView = (h: H, decisions: Decisions, seats: ReadonlyArray<SeatFull>, keep: ReadonlyArray<boolean>, configs: ReadonlyArray<ModelStats>, width: number): Html => {
-  const isNarrow = width < 600;
-  const tallies = talliesOf(decisions, seats, keep);
-  const right = isNarrow ? 66 : 120;
-  const height = isNarrow ? 300 : 360;
-  const x = linScale(0, ODDS_BINS.length - 1, L + 8, width - right - 14, []);
-  const y = linScale(0, 1, height - B, T, [0, 0.25, 0.5, 0.75, 1]);
-
-  const shots = (key: string) => (tallies.get(key) ?? []).reduce((total, bin) => total + bin.shots, 0);
-
-  const lines = mainConfigPerModel(configs, shots).flatMap((m) => {
-    const bins = tallies.get(m.key) ?? [];
+/** Each model's configs as lines, its efforts in order; a line keeps the bins with enough shots, and needs two of them. */
+export const oddsPanels = (tallies: ReadonlyMap<string, ReadonlyArray<{ readonly self: number; readonly shots: number }>>): ReadonlyArray<{ readonly model: string; readonly lines: ReadonlyArray<OddsLine> }> => {
+  const lines = [...tallies].flatMap(([key, bins]): ReadonlyArray<OddsLine> => {
     const points = bins.flatMap(({ self, shots }, bin) => (shots >= MIN_SHOTS ? [{ bin, self, shots, share: self / shots }] : []));
 
-    return points.length > 1 ? [{ m, points }] : [];
+    return points.length > 1 ? [{ key, effort: key.split("|")[1] ?? "", points }] : [];
   });
 
+  return [...groupBy(lines, ({ key }) => key.split("|")[0] ?? "")]
+    .toSorted(([left], [right]) => baseOrder(left) - baseOrder(right) || left.localeCompare(right))
+    .map(([model, own]) => ({ model, lines: own.toSorted((left, right) => EFFORT_ORDER.indexOf(left.effort) - EFFORT_ORDER.indexOf(right.effort)) }));
+};
+
+const panelView = (h: H, model: string, lines: ReadonlyArray<OddsLine>, width: number): Html => {
+  const right = 62;
+  const height = 240;
+  const x = linScale(0, ODDS_BINS.length - 1, L + 8, width - right - 10, []);
+  const y = linScale(0, 1, height - B, T, [0, 0.25, 0.5, 0.75, 1]);
+  const color = colorOf(model);
   const labelYs = spreadLabels(lines.map(({ points }) => y.at(points.at(-1)?.share ?? 0)), height - B);
-  const rule = ODDS_BINS.map(({ low }, bin) => `${bin === 0 ? "M" : "L"}${x.at(bin)},${y.at(low < 50 ? 1 : low === 50 ? 0.5 : 0)}`).join(" ");
+
+  return h.svg(
+    [h.Width(String(width)), h.Height(String(height))],
+    [
+      ...y.ticks.map((tick) =>
+        h.g(
+          [],
+          [
+            h.line([h.Class("grid"), h.X1(String(L)), h.X2(String(width - right)), h.Y1(String(y.at(tick))), h.Y2(String(y.at(tick)))], []),
+            h.text([h.X(String(L - 6)), h.Y(String(y.at(tick) + 4)), h.TextAnchor("end")], [`${tick * 100}%`]),
+          ],
+        ),
+      ),
+      ...ODDS_BINS.map(({ label }, bin) => h.text([h.X(String(x.at(bin))), h.Y(String(height - B + 18)), h.TextAnchor("middle"), h.Class("small")], [label])),
+      h.text([h.X(String((L + width - right) / 2)), h.Y(String(height - 6)), h.TextAnchor("middle"), h.Class("small")], ["chance the chambered shell is live"]),
+      ...lines.flatMap(({ key, effort, points }, index) => [
+        h.path([h.D(points.map(({ bin, share }, at) => `${at === 0 ? "M" : "L"}${x.at(bin)},${y.at(share)}`).join(" ")), h.Fill("none"), h.Stroke(color), h.StrokeWidth("1.6"), h.StrokeDasharray(DASH.get(effort) ?? "")], []),
+        ...points.map(({ bin, self, shots, share }) =>
+          h.circle([h.Cx(String(x.at(bin))), h.Cy(String(y.at(share))), h.R("3"), h.Fill(color)], [h.title([], [`${labelOf(key)} · chance live ${ODDS_BINS[bin]?.label} · ${self} of ${shots} shots at itself (${Math.round(share * 100)}%)`])]),
+        ),
+        h.text([h.X(String(width - right + 7)), h.Y(String((labelYs[index] ?? 0) + 4)), h.Style({ fill: color }), h.Class("small")], [effort]),
+      ]),
+    ],
+  );
+};
+
+export const oddsView = (h: H, decisions: Decisions, seats: ReadonlyArray<SeatFull>, keep: ReadonlyArray<boolean>, width: number, content: number): Html => {
+  const panels = oddsPanels(talliesOf(decisions, seats, keep));
+  const figure = chartWidth(width, content);
 
   return h.div(
-    [h.Class("chart")],
+    [],
     [
-      h.div([h.Class("lbbar")], [h.h2([], ["Playing the odds"])]),
-      h.p([h.Class("sub")], ["How often each model, at medium effort, shoots itself, by the chance the chambered shell is live as it counts the shells. The grey line is the rule of thumb. Shots with no glass or phone clue."]),
-      lines.length === 0
+      h.h2([], ["Playing the odds"]),
+      h.p([h.Class("sub")], ["How often each config shoots itself, by the chance the chambered shell is live as it counts the shells. One panel per model, a line per effort. Shots with no glass or phone clue."]),
+      panels.length === 0
         ? h.div([h.Class("empty")], ["No config in this filter has enough shots."])
-        : h.svg(
-            [h.Width(String(width)), h.Height(String(height))],
-            [
-              ...y.ticks.map((tick) =>
-                h.g(
-                  [],
-                  [
-                    h.line([h.Class("grid"), h.X1(String(L)), h.X2(String(width - right)), h.Y1(String(y.at(tick))), h.Y2(String(y.at(tick)))], []),
-                    h.text([h.X(String(L - 6)), h.Y(String(y.at(tick) + 4)), h.TextAnchor("end")], [`${tick * 100}%`]),
-                  ],
-                ),
-              ),
-              ...ODDS_BINS.map(({ label }, bin) => h.text([h.X(String(x.at(bin))), h.Y(String(height - B + 18)), h.TextAnchor("middle")], [label])),
-              h.text([h.X(String((L + width - right) / 2)), h.Y(String(height - 6)), h.TextAnchor("middle")], ["chance the chambered shell is live"]),
-              h.path([h.D(rule), h.Fill("none"), h.Stroke("#555"), h.StrokeWidth("1.2"), h.StrokeDasharray("4 4")], []),
-              ...lines.flatMap(({ m, points }, index) => {
-                const color = m.color;
-
-                return [
-                  h.path([h.D(points.map(({ bin, share }, at) => `${at === 0 ? "M" : "L"}${x.at(bin)},${y.at(share)}`).join(" ")), h.Fill("none"), h.Stroke(color), h.StrokeWidth("1.6"), h.StrokeDasharray(m.dash)], []),
-                  ...points.map(({ bin, self, shots, share }) =>
-                    h.circle([h.Cx(String(x.at(bin))), h.Cy(String(y.at(share))), h.R("3.2"), h.Fill(color)], [h.title([], [`${m.label} · chance live ${ODDS_BINS[bin]?.label} · ${self} of ${shots} shots at itself (${Math.round(share * 100)}%)`])]),
-                  ),
-                  h.text([h.X(String(width - right + 8)), h.Y(String((labelYs[index] ?? 0) + 4)), h.Style({ fill: color }), h.Class("lbl")], [isNarrow ? shortName(m.model) : baseName(m.model)]),
-                ];
-              }),
-            ],
-          ),
+        : h.div([h.Class("chartrow")], panels.map(({ model, lines }) => h.figure([], [h.h3([], [baseName(model)]), panelView(h, model, lines, figure)]))),
     ],
   );
 };

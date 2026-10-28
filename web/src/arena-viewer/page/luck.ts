@@ -1,13 +1,14 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { chartWidth, linScale } from "./charts.ts";
-import { addTo, type BlockTally, blockRate, colorOfKey, keyOf, labelOf, type MatchRow, type ModelStats, type Rate, type SeatFull, shortName, winnerOf } from "./data.ts";
+import { addTo, type BlockTally, blockRate, type MatchRow, type Rate, type SeatFull, winnerOf } from "./data.ts";
 import type { Message } from "./model.ts";
 
 type H = HtmlBuilder<Message>;
 
-// Luck vs play: how often the player who gave up more win chance still won. Regret is the minimax player's verdict on each
-// move (docs/arena/analysis/regret.md), so "played better" here means "gave up less win chance", not "won".
+// Won with higher estimated regret: how often the player who gave up more estimated round-win chance still won the match.
+// Regret is an evaluator's estimate per move (docs/arena/analysis/regret.md), with depth limits and its own objective, so
+// a win against lower regret is a disagreement between the estimate and the result, not a measurement of luck.
 
 /** A decided two-player match whose seats both have searched moves. */
 export interface Duel {
@@ -28,20 +29,21 @@ export type Measure = "mean" | "total";
 
 const regretOf = ({ regret }: SeatFull, measure: Measure): number => (regret === null ? Number.NaN : measure === "mean" ? regret.total / regret.moves : regret.total);
 
-/** Loser's regret minus winner's: positive when the winner played better, zero when it is a tie. */
+/** Loser's regret minus winner's: positive when the winner had the lower regret, zero when it is a tie. */
 export const gapOf = ({ winner, loser }: Duel, measure: Measure): number => regretOf(loser, measure) - regretOf(winner, measure);
 
-/** Duels that one player played better; a tie has no better player. */
-const separated = (duels: ReadonlyArray<Duel>, measure: Measure): ReadonlyArray<Duel> => duels.filter((duel) => gapOf(duel, measure) !== 0);
+/** Duels where one player had lower regret by more than `minGap`; a tie has no lower player. */
+const separated = (duels: ReadonlyArray<Duel>, measure: Measure, minGap = 0): ReadonlyArray<Duel> =>
+  duels.filter((duel) => gapOf(duel, measure) !== 0 && Math.abs(gapOf(duel, measure)) >= minGap);
 
 export interface Share {
   readonly k: number;
   readonly n: number;
 }
 
-/** The share of duels the better player won. */
-export const betterShare = (duels: ReadonlyArray<Duel>, measure: Measure): Share => {
-  const decided = separated(duels, measure);
+/** The share of duels won by the player with lower regret, counting only gaps of at least `minGap`. */
+export const betterShare = (duels: ReadonlyArray<Duel>, measure: Measure, minGap = 0): Share => {
+  const decided = separated(duels, measure, minGap);
 
   return { k: decided.filter((duel) => gapOf(duel, measure) > 0).length, n: decided.length };
 };
@@ -52,7 +54,7 @@ export const GAP_EDGES: ReadonlyArray<number> = [0, 0.5, 1, 2, 4];
 export interface GapBucket {
   readonly from: number;
   readonly to: number | null;
-  /** The better player's win share, with a seed-block interval. */
+  /** The win share of the player with lower regret, with a seed-block interval. */
   readonly rate: Rate;
 }
 
@@ -71,46 +73,12 @@ export const bucketsOf = (duels: ReadonlyArray<Duel>): ReadonlyArray<GapBucket> 
     return { from, to, rate: blockRate(tally) };
   });
 
-export interface ConfigLuck {
-  readonly key: string;
-  readonly matches: number;
-  /** Matches won while playing worse than the opponent. */
-  readonly luckyWins: number;
-  /** Matches lost while playing better than the opponent. */
-  readonly unluckyLosses: number;
-}
-
-/** Each config's luck over every duel it played, the luckiest first. A config that plays itself is counted on both sides. */
-export const luckByConfig = (duels: ReadonlyArray<Duel>, isFocal: (key: string) => boolean): ReadonlyArray<ConfigLuck> => {
-  const rows = new Map<string, { matches: number; luckyWins: number; unluckyLosses: number }>();
-  const rowOf = (key: string) => rows.get(key) ?? (rows.set(key, { matches: 0, luckyWins: 0, unluckyLosses: 0 }), rows.get(key));
-
-  for (const duel of duels) {
-    const gap = gapOf(duel, "mean");
-    const [won, lost] = [rowOf(keyOf(duel.winner)), rowOf(keyOf(duel.loser))];
-
-    if (won === undefined || lost === undefined) continue;
-
-    won.matches++;
-    lost.matches++;
-
-    if (gap < 0) {
-      won.luckyWins++;
-      lost.unluckyLosses++;
-    }
-  }
-
-  return [...rows]
-    .flatMap(([key, row]) => (isFocal(key) ? [{ key, ...row }] : []))
-    .toSorted((left, right) => (right.luckyWins - right.unluckyLosses) / right.matches - (left.luckyWins - left.unluckyLosses) / left.matches);
-};
-
 const pct = (value: number): string => `${(value * 100).toFixed(0)}%`;
 
 const S = (value: number): string => value.toFixed(1);
 
 const bigNumberView = (h: H, share: Share, label: string): Html =>
-  h.div([h.Class("bignum")], [h.b([], [pct(share.k / share.n)]), h.span([h.Class("lbl")], [label]), h.span([h.Class("pm")], [`${share.k.toLocaleString()} of ${share.n.toLocaleString()} decided matches`])]);
+  h.div([h.Class("bignum")], [h.b([], [share.n === 0 ? "–" : pct(share.k / share.n)]), h.span([h.Class("lbl")], [label]), h.span([h.Class("pm")], [`${share.k.toLocaleString()} of ${share.n.toLocaleString()} decided matches`])]);
 
 const gapName = ({ from, to }: GapBucket): string => (to === null ? `${from}+` : from === 0 ? `under ${to}` : `${from}–${to}`);
 
@@ -153,82 +121,37 @@ const bucketsView = (h: H, buckets: ReadonlyArray<GapBucket>, width: number): Ht
   );
 };
 
-/** Matches under which a config's luck row fades: its shares rest on a few games. */
-const FEW = 20;
+/** A gap in mean regret under this many points per move is left out of the sensitivity check: the first bucket below. */
+const TINY_GAP = GAP_EDGES[1] ?? 0;
 
-const rowsView = (h: H, rows: ReadonlyArray<ConfigLuck>, width: number): Html => {
-  const isNarrow = width < 600;
-  const [L, R, T] = [isNarrow ? 122 : 150, isNarrow ? 28 : 40, 34];
-  const step = 22;
-  const height = T + rows.length * step + 4;
-  const reach = Math.max(0.05, ...rows.flatMap((row) => [row.luckyWins / row.matches, row.unluckyLosses / row.matches]));
-  const half = (width - L - R) / 2;
-  const mid = L + half;
-  const x = linScale(0, reach, 0, half - 34, []);
-  const name = (key: string) => (isNarrow ? `${shortName(key.split("|")[0] ?? "")} ${key.split("|")[1] ?? ""}` : labelOf(key));
-
-  return h.svg(
-    [h.Width(String(width)), h.Height(String(height))],
-    [
-      h.text([h.X(S(mid - 8)), h.Y("14"), h.TextAnchor("end"), h.Class("dimtext")], ["← lost though better"]),
-      h.text([h.X(S(mid + 8)), h.Y("14"), h.Class("dimtext")], ["won though worse →"]),
-      h.line([h.X1(S(mid)), h.X2(S(mid)), h.Y1(String(T - 6)), h.Y2(String(height)), h.Stroke("#3a3a3a")], []),
-      ...rows.flatMap((row, index) => {
-        const top = T + index * step;
-        const color = colorOfKey(row.key);
-        const [lucky, unlucky] = [row.luckyWins / row.matches, row.unluckyLosses / row.matches];
-
-        return [
-          h.g(
-            [h.Opacity(row.matches < FEW ? "0.45" : "1")],
-            [
-              h.text([h.X(String(L - 8)), h.Y(S(top + 12)), h.TextAnchor("end"), h.Style({ fill: color })], [name(row.key)]),
-              h.rect([h.X(S(mid - x.at(unlucky))), h.Y(S(top + 3)), h.Width(S(x.at(unlucky))), h.Height("13"), h.Fill(color), h.FillOpacity("0.4")], [h.title([], [`${labelOf(row.key)}: lost ${row.unluckyLosses} of ${row.matches} matches while playing better`])]),
-              h.rect([h.X(S(mid)), h.Y(S(top + 3)), h.Width(S(x.at(lucky))), h.Height("13"), h.Fill(color)], [h.title([], [`${labelOf(row.key)}: won ${row.luckyWins} of ${row.matches} matches while playing worse`])]),
-              h.text([h.X(S(mid - x.at(unlucky) - 4)), h.Y(S(top + 13)), h.TextAnchor("end"), h.Class("dimtext")], [pct(unlucky)]),
-              h.text([h.X(S(mid + x.at(lucky) + 4)), h.Y(S(top + 13)), h.Class("dimtext")], [pct(lucky)]),
-            ],
-          ),
-        ];
-      }),
-    ],
-  );
-};
-
-export const luckView = (h: H, matches: ReadonlyArray<MatchRow>, configs: ReadonlyArray<ModelStats>, width: number, content: number, card: number): Html => {
+export const luckView = (h: H, matches: ReadonlyArray<MatchRow>, width: number, content: number): Html => {
   const duels = duelsOf(matches);
   const isNarrow = width <= 1024;
   const side = chartWidth(width, content);
-  const focal = new Set(configs.map(({ key }) => key));
-  const rows = luckByConfig(duels, (key) => focal.has(key));
-  const [mean, total] = [betterShare(duels, "mean"), betterShare(duels, "total")];
+  const higher = ({ k, n }: Share): Share => ({ k: n - k, n });
 
   return h.div(
     [],
     [
-      h.h2([], ["Luck vs play"]),
+      h.h2([], ["Won with higher estimated regret"]),
+      h.p([h.Class("sub")], ["Regret estimates round-win chance, not match-win chance."]),
       duels.length === 0
         ? h.div([h.Class("empty")], ["No match with searched moves on both sides. Start the viewer with --regret."])
         : h.div(
-            [],
+            [h.Class("luckrow")],
             [
               h.div(
-                [h.Class("luckrow")],
+                [h.Class("luckbig")],
                 [
-                  h.div(
-                    [h.Class("luckbig")],
-                    [
-                      bigNumberView(h, { k: mean.n - mean.k, n: mean.n }, "of matches went to the player who gave up more win chance per move"),
-                      bigNumberView(h, { k: total.n - total.k, n: total.n }, "went to the one who gave up more in total"),
-                    ],
-                  ),
-                  h.figure(
-                    [],
-                    [h.h3([], ["Better play wins more often"]), h.p([h.Class("sub")], ["The better player's win share by the gap in regret per move, in points."]), bucketsView(h, bucketsOf(duels), isNarrow ? content : content - side - 28)],
-                  ),
+                  bigNumberView(h, higher(betterShare(duels, "mean")), "of decided matches went to the player with higher regret per move"),
+                  bigNumberView(h, higher(betterShare(duels, "total")), "went to the one with higher total regret"),
+                  bigNumberView(h, higher(betterShare(duels, "mean", TINY_GAP)), `per move, leaving out gaps under ${TINY_GAP} points`),
                 ],
               ),
-              h.div([h.Class("card")], [h.h3([], ["Who got lucky"]), rowsView(h, rows, card)]),
+              h.figure(
+                [],
+                [h.h3([], ["Regret gap and result"]), h.p([h.Class("sub")], ["Win share of the player with lower regret, by the gap in regret per move, in points."]), bucketsView(h, bucketsOf(duels), isNarrow ? content : content - side - 28)],
+              ),
             ],
           ),
     ],
