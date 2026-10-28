@@ -1,4 +1,4 @@
-import { type Blunders, type Decisions, ITEMS, type Mistakes } from "../api.ts";
+import { type Decisions, ITEMS } from "../api.ts";
 import { addTo, baseName, type BlockTally, blockRate, configShare, groupBy, keyOf, type MatchRow, matchRows, type ModelStats, modelStats, rankOrder, type Rate, type SeatFull } from "./data.ts";
 import type { Basis, Filter, Loaded } from "./model.ts";
 import { pooledRatings, type Rating } from "./ratings.ts";
@@ -116,8 +116,8 @@ const itemSummaries = (decisions: Decisions, seats: ReadonlyArray<SeatFull>): Re
 export interface Derived {
   readonly seats: ReadonlyArray<SeatFull>;
   readonly decisions: Decisions;
-  readonly blunders: Blunders;
-  readonly mistakes: Mistakes;
+  readonly blunders: Loaded["blunders"];
+  readonly mistakes: Loaded["mistakes"];
   readonly consistency: Loaded["consistency"];
   /** Whether each seat, by index, passes the filter. */
   readonly keep: ReadonlyArray<boolean>;

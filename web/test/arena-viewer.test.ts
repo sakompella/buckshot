@@ -2,12 +2,12 @@ import { expect, test } from "bun:test";
 
 import { chamberPatterns, roundStory, ShellTracker } from "../src/arena-viewer/analysis.ts";
 import type { Seat } from "../src/arena-viewer/api.ts";
-import { type BlockTally, blockRate, colorOf, groupBy, matchRows, modelStats, quantile, rankOrder, regretStats, rng, withCohorts } from "../src/arena-viewer/page/data.ts";
+import { type BlockTally, blockRate, colorOf, groupBy, matchRows, modelStats, quantile, rankOrder, regretStats, rng, type SeatFull, withCohorts } from "../src/arena-viewer/page/data.ts";
 import { type Decisions, NO_GAP } from "../src/arena-viewer/api.ts";
 import { pressureCurves, relativeLine } from "../src/arena-viewer/page/pressure.ts";
-import { bradleyTerry, expectedShare, type Game, pooledRatings, surprises } from "../src/arena-viewer/page/ratings.ts";
-import { betterShare, bucketsOf, type Duel, luckByConfig } from "../src/arena-viewer/page/luck.ts";
-import { ODDS_BINS, oddsBinOf, selfShotTallies } from "../src/arena-viewer/page/odds.ts";
+import { bradleyTerry, expectedShare, type Game, heldOutRatings, pooledRatings, surprises } from "../src/arena-viewer/page/ratings.ts";
+import { betterShare, bucketsOf, type Duel } from "../src/arena-viewer/page/luck.ts";
+import { ODDS_BINS, oddsBinOf, oddsPanels, selfShotTallies } from "../src/arena-viewer/page/odds.ts";
 import { failuresByHour } from "../src/arena-viewer/page/failures-over-time.ts";
 import { momentumOf } from "../src/arena-viewer/page/momentum.ts";
 import { turningPoints } from "../src/arena-viewer/page/replay.ts";
@@ -284,6 +284,7 @@ const SEAT: Seat = {
   round: 0,
   roundThree: null,
   low: null,
+  callHours: [],
 };
 
 test("a cohort is the kind of comparison, pooled over code hashes, and named for it", () => {
@@ -448,6 +449,16 @@ const playedRoundSeats = (seed: number, rounds: number, winnerRounds: number, is
   return withCohorts(seats);
 };
 
+// The viewer check used to require Opus's mean regret below Haiku 4.5's on the live data; on fixed data it is a property of modelStats.
+test("a config's mean regret comes from its own scored seats, so a lower-regret config shows the lower mean", () => {
+  const seatOf = (model: string, matchId: string, player: string, total: number): SeatFull => ({ ...SEAT, cohort: "c", potShare: null, matchId, player, model, regret: { moves: 10, total, exact: 0 } });
+  const seats = [seatOf("claude-opus-5-5", "m1", "A", 20), seatOf("claude-haiku-4-5-20251001", "m1", "B", 60), seatOf("claude-opus-5-5", "m2", "B", 40), seatOf("claude-haiku-4-5-20251001", "m2", "A", 80)];
+  const meanOf = (model: string) => modelStats(seats).find((config) => config.model === model)?.regret?.mean;
+
+  expect(meanOf("claude-opus-5-5")).toBe(3);
+  expect(meanOf("claude-haiku-4-5-20251001")).toBe(7);
+});
+
 test("the scatter's regret axis places a config with no searched move nowhere and a measured zero at zero", () => {
   const [unsearched, flawless, flawed] = modelStats(
     [null, { moves: 4, total: 0, exact: 4 }, { moves: 2, total: 3, exact: 0 }].map((regret, index) => ({ ...SEAT, matchId: `m${index}`, effort: `e${index}`, cohort: "", potShare: null, regret })),
@@ -518,12 +529,22 @@ const RATINGS = new Map([
   ["weak|medium", { rating: -100, lo: -110, hi: -90 }],
 ]);
 
+test("a match's held-out ratings do not depend on its own seed block's results", () => {
+  const seats = upsetSeats(40, 30);
+  const flipped = seats.map((seat) => (seat.seedBlock === "block3" ? { ...seat, winShare: 1 - (seat.winShare ?? 0) } : seat));
+  const strongIn = (played: ReadonlyArray<SeatFull>, block: string) => heldOutRatings(played, "wins")(block).get("strong|medium")?.rating;
+
+  expect(strongIn(flipped, "block3")).toBe(strongIn(seats, "block3"));
+  expect(strongIn(flipped, "block4")).not.toBe(strongIn(seats, "block4"));
+  expect(strongIn(seats, "block3")).toBeGreaterThan(0);
+});
+
 test("the upset curve scores the higher-rated config's wins whichever seat it sat in", () => {
   const seats = upsetSeats(32, 24);
   const swapped = seats.map((seat) => ({ ...seat, position: 1 - seat.position }));
 
   for (const played of [seats, swapped]) {
-    const [bin, ...others] = upsetBins(matchRows(played), RATINGS);
+    const [bin, ...others] = upsetBins(matchRows(played), () => RATINGS);
 
     expect(others).toEqual([]);
     expect(bin?.rate.rate).toBeCloseTo(0.75, 9);
@@ -536,16 +557,16 @@ test("the upset curve leaves out matches between equal ratings, unfinished match
   const equal = new Map([...RATINGS].map(([key, rating]) => [key, { ...rating, rating: 0 }]));
   const unfinished = upsetSeats(40, 30).map((seat) => ({ ...seat, status: "partial" as const }));
 
-  expect(upsetBins(matchRows(upsetSeats(40, 30)), equal)).toEqual([]);
-  expect(upsetBins(matchRows(unfinished), RATINGS)).toEqual([]);
-  expect(upsetBins(matchRows(upsetSeats(19, 10)), RATINGS)).toEqual([]);
+  expect(upsetBins(matchRows(upsetSeats(40, 30)), () => equal)).toEqual([]);
+  expect(upsetBins(matchRows(unfinished), () => RATINGS)).toEqual([]);
+  expect(upsetBins(matchRows(upsetSeats(19, 10)), () => RATINGS)).toEqual([]);
 });
 
 test("the upset curve cuts matches into groups of near-equal size, widest gap last", () => {
   const gaps = Array.from({ length: 160 }, (_, index) => index);
   const seats = withCohorts(gaps.flatMap((gap) => [{ ...SEAT, matchId: `m${gap}`, seedBlock: `b${gap}`, model: `s${gap}`, position: 0 }, { ...SEAT, matchId: `m${gap}`, seedBlock: `b${gap}`, model: "base", position: 1, winShare: 0 }]));
   const ratings = new Map([["base|medium", { rating: 0, lo: 0, hi: 0 }], ...gaps.map((gap) => [`s${gap}|medium`, { rating: gap + 1, lo: 0, hi: 0 }] as const)]);
-  const bins = upsetBins(matchRows(seats), ratings);
+  const bins = upsetBins(matchRows(seats), () => ratings);
 
   expect(bins.map(({ rate }) => rate.n)).toEqual(Array.from({ length: 8 }, () => 20));
   expect(bins.map(({ gap }) => gap)).toEqual(bins.map(({ gap }) => gap).toSorted((left, right) => left - right));
@@ -558,16 +579,12 @@ const duelOf = (winner: readonly [string, number], loser: readonly [string, numb
   return { winner: seat(winner, 1), loser: seat(loser, 0) };
 };
 
-test("luck counts a win by the player with more regret, and ignores ties", () => {
-  const duels = [duelOf(["a", 1], ["b", 3]), duelOf(["a", 4], ["b", 2]), duelOf(["b", 2], ["b", 2]), duelOf(["b", 5], ["a", 1])];
+test("the regret check counts wins by the player with lower regret, ignores ties, and can leave out small gaps", () => {
+  const duels = [duelOf(["a", 1], ["b", 3]), duelOf(["a", 4], ["b", 2]), duelOf(["b", 2], ["b", 2]), duelOf(["b", 5], ["a", 1]), duelOf(["a", 1], ["b", 1.25])];
 
-  expect(betterShare(duels, "mean")).toEqual({ k: 1, n: 3 });
-  expect(bucketsOf(duels).map(({ rate }) => rate.n)).toEqual([0, 0, 0, 2, 1]);
-
-  const byConfig = new Map(luckByConfig(duels, () => true).map((row) => [row.key, row]));
-
-  expect(byConfig.get("a|medium")).toMatchObject({ matches: 3, luckyWins: 1, unluckyLosses: 1 });
-  expect(byConfig.get("b|medium")).toMatchObject({ matches: 5, luckyWins: 1, unluckyLosses: 1 });
+  expect(betterShare(duels, "mean")).toEqual({ k: 2, n: 4 });
+  expect(betterShare(duels, "mean", 0.5)).toEqual({ k: 1, n: 3 });
+  expect(bucketsOf(duels).map(({ rate }) => rate.n)).toEqual([1, 0, 0, 2, 1]);
 });
 
 test("odds bins cover every whole percent once, with the ends and even odds on their own", () => {
@@ -588,6 +605,17 @@ test("self-shot tallies count shots with odds per config and bin, and skip clued
 
   expect([...tallies.keys()]).toEqual(["a|medium"]);
   expect(tallies.get("a|medium")?.map(({ self, shots }) => [self, shots])).toEqual([[1, 2], [0, 0], [0, 0], [0, 1], [0, 0], [0, 0]]);
+});
+
+test("playing the odds keeps every effort the filter keeps, named as itself, with or without medium", () => {
+  const seats = ["low", "medium", "high", "max"].map((effort) => ({ model: "claude-opus-5-5", effort }));
+  // Each config shoots itself 30 times at 0% live and 30 times at 100% live.
+  const odds = seats.flatMap((_seat, index) => Array.from({ length: 120 }, (_, shot) => ({ index, percent: shot < 60 ? 0 : 100, isSelf: shot % 2 === 0 })));
+  const decisions = { odds: odds.map(({ percent }) => percent), seat: odds.map(({ index }) => index), shot: odds.map(({ isSelf }) => (isSelf ? 2 : 1)) };
+  const effortsOf = (keep: ReadonlyArray<boolean>) => oddsPanels(selfShotTallies(decisions, seats, keep)).map(({ model, lines }) => [model, lines.map(({ effort }) => effort)]);
+
+  expect(effortsOf([true, true, true, true])).toEqual([["claude-opus-5-5", ["low", "medium", "high", "max"]]]);
+  expect(effortsOf([true, false, true, true])).toEqual([["claude-opus-5-5", ["low", "high", "max"]]]);
 });
 
 const movesAtGaps = (gaps: ReadonlyArray<number>, out: number): Decisions => ({
@@ -615,23 +643,20 @@ test("a pressure line is read against its level-health point and has none withou
   expect(relativeLine([point(0, 100)])).toBeNull();
 });
 
-test("failures by hour pool a model's efforts into the hour each match started, and leave out seats the filter drops", () => {
-  const seatAt = (startedAt: string, model: string, effort: string, calls: number, failed: number) => ({ ...SEAT, startedAt, model, effort, calls, failed, cohort: "", potShare: null });
-
-  const seats = [
-    seatAt("2026-10-16T10:05:00Z", "m", "low", 100, 10),
-    seatAt("2026-10-16T10:55:00Z", "m", "high", 50, 5),
-    seatAt("2026-10-16T11:00:00Z", "m", "low", 40, 0),
-    seatAt("2026-10-16T10:30:00Z", "other", "low", 30, 30),
-  ];
-
+test("failures by hour pool a model's efforts into the hour each call was logged, and leave out seats the filter drops", () => {
   const hour = Date.parse("2026-10-16T10:00:00Z") / 3.6e6;
 
-  expect(failuresByHour(seats, [true, true, true, false]).get("m")).toEqual([
+  const seats = [
+    { model: "m", callHours: [[hour, 100, 10], [hour + 1, 40, 0]] as const },
+    { model: "m", callHours: [[hour, 50, 5]] as const },
+    { model: "other", callHours: [[hour, 30, 30]] as const },
+  ];
+
+  expect(failuresByHour(seats, [true, true, false]).get("m")).toEqual([
     { hour, calls: 150, failed: 15 },
     { hour: hour + 1, calls: 40, failed: 0 },
   ]);
-  expect(failuresByHour(seats, [true, true, true, false]).has("other")).toBe(false);
+  expect(failuresByHour(seats, [true, true, false]).has("other")).toBe(false);
 });
 
 test("surprises compare each config's share with the ratings' prediction, from both sides of a game", () => {

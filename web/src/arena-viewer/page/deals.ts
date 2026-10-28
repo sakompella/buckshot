@@ -6,9 +6,9 @@ import type { Message } from "./model.ts";
 
 type H = HtmlBuilder<Message>;
 
-// Same deal, different players: each seed is one shuffle that every pairing plays from both table positions, so a row
-// shows what the deal does and what the players do. Cells are a config's wins on that seed; the rows run from the
-// seeds that favour table position 1 to the ones that favour position 2.
+// Results on each seed, split by table position: each seed is one shuffle, played by whichever pairings the schedule
+// gave it, so a row shows what the deal does and what the players do. Cells are a config's wins on that seed; the rows
+// run from the seeds that favour table position 1 to the ones that favour position 2.
 
 export interface Tally {
   readonly wins: number;
@@ -115,8 +115,8 @@ export const dealsView = (h: H, derived: Derived, width: number): Html => {
   return h.div(
     [h.Class("chart")],
     [
-      h.div([h.Class("lbbar")], [h.h2([], ["Same deal, different players"])]),
-      h.p([h.Class("sub")], ["One row per seed, played by every pairing from both seats. Top half of a cell: the config's wins seated at table position 1. Bottom half: position 2. Lighter is more wins."]),
+      h.div([h.Class("lbbar")], [h.h2([], ["Results on each seed, split by table position"])]),
+      h.p([h.Class("sub")], ["One row per seed and code version, over the matches played on it. Top half of a cell: the config's wins seated at table position 1. Bottom half: position 2. Lighter is more wins."]),
       deals.length === 0
         ? h.div([h.Class("empty")], ["No seed has enough scored matches for this filter."])
         : h.div(

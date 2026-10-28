@@ -3,70 +3,146 @@ import { Database } from "bun:sqlite";
 import { Schema } from "effect";
 
 import type { Consistency } from "./api.ts";
+import { groupBy, quantile, rng } from "./page/data.ts";
 
 // How often a config repeats itself, from the knowledge database that scripts/arena-knowledge.ts builds. An exact_key
 // names one position: the same board, cash, round, log since the load, legal moves, code and instructions. Within one
 // config, the chance that two different decisions in the same position chose the same move, averaged over positions.
+// The estimate and its interval are the ones docs/arena/analysis/beliefs-and-items.md reports.
 
 /** A config needs this many repeated positions to be shown. */
 const MIN_POSITIONS = 30;
 
-const Z = 1.96;
+const DRAWS = 1000;
 
-const PositionRow = Schema.Struct({ model: Schema.String, effort: Schema.String, counts: Schema.String });
-
-const decodeRow = Schema.decodeUnknownSync(PositionRow);
-
-/** The chance two different decisions chose the same move, given how many decisions chose each move. */
-export const agreement = (counts: ReadonlyArray<number>): number => {
-  const decisions = counts.reduce((sum, count) => sum + count, 0);
-
-  return counts.reduce((sum, count) => sum + count * (count - 1), 0) / (decisions * (decisions - 1));
-};
+/** One decision in a repeated position: the move it chose and the seed block of its match. */
+export interface Repeat {
+  readonly choice: string;
+  readonly block: string;
+}
 
 /**
- * One config's repeated positions, each as its decisions' counts per move. Every position weighs the same, so the
- * few positions every match opens with do not drown the rest. The interval is the normal one over positions.
+ * One config's repeated positions, and the seed blocks of all its decisions, which a resample draws from. Every position weighs the same, so the few positions every match opens with do not
+ * drown the rest. The interval is a 95% percentile bootstrap that resamples seed blocks. Within a resample a pair of
+ * distinct decisions weighs the product of its blocks' counts and a decision never pairs with itself, so a block drawn
+ * twice cannot agree with its own copy.
  */
-export const consistencyOf = (positions: ReadonlyArray<ReadonlyArray<number>>): Pick<Consistency, "positions" | "decisions" | "agree" | "lo" | "hi"> => {
-  const shares = positions.map(agreement);
-  const mean = shares.reduce((sum, share) => sum + share, 0) / shares.length;
-  const variance = shares.reduce((sum, share) => sum + (share - mean) ** 2, 0) / (shares.length - 1);
-  const margin = Z * Math.sqrt(variance / shares.length);
+export const consistencyOf = (positions: ReadonlyArray<ReadonlyArray<Repeat>>, everyBlock: Iterable<string> = positions.flat().map(({ block }) => block)): Pick<Consistency, "positions" | "decisions" | "agree" | "lo" | "hi"> => {
+  const blockIds = new Map<string, number>();
+  const idOf = (ids: Map<string, number>, value: string) => ids.get(value) ?? (ids.set(value, ids.size), ids.size - 1);
 
-  return {
-    positions: positions.length,
-    decisions: positions.reduce((sum, counts) => sum + counts.reduce((total, count) => total + count, 0), 0),
-    agree: mean,
-    lo: Math.max(0, mean - margin),
-    hi: Math.min(1, mean + margin),
+  for (const block of everyBlock) idOf(blockIds, block);
+
+  // Every decision in one run, each position's from its start to the next one's; a choice is numbered within its position.
+  const decisions = positions.flat();
+  const starts = new Int32Array(positions.length + 1);
+
+  positions.forEach((repeats, index) => (starts[index + 1] = (starts[index] ?? 0) + repeats.length));
+
+  const blocks = Int32Array.from(decisions, ({ block }) => idOf(blockIds, block));
+
+  const choices = Int32Array.from(
+    positions.flatMap((repeats) => {
+      const local = new Map<string, number>();
+
+      return repeats.map(({ choice }) => idOf(local, choice));
+    }),
+  );
+
+  const sums = new Float64Array(decisions.length);
+  const squares = new Float64Array(decisions.length);
+
+  const meanOver = (weights: Float64Array): number => {
+    let [total, counted] = [0, 0];
+
+    for (let position = 0; position < positions.length; position++) {
+      const [from, to] = [starts[position] ?? 0, starts[position + 1] ?? 0];
+
+      sums.fill(0, 0, to - from);
+      squares.fill(0, 0, to - from);
+
+      for (let index = from; index < to; index++) {
+        const weight = weights[blocks[index] ?? 0] ?? 0;
+        const choice = choices[index] ?? 0;
+
+        sums[choice] = (sums[choice] ?? 0) + weight;
+        squares[choice] = (squares[choice] ?? 0) + weight * weight;
+      }
+
+      let [agreeing, weight, square] = [0, 0, 0];
+
+      for (let choice = 0; choice < to - from; choice++) {
+        agreeing += (sums[choice] ?? 0) ** 2 - (squares[choice] ?? 0);
+        weight += sums[choice] ?? 0;
+        square += squares[choice] ?? 0;
+      }
+
+      const pairs = weight * weight - square;
+
+      if (pairs > 0) {
+        total += agreeing / pairs;
+        counted++;
+      }
+    }
+
+    return counted === 0 ? Number.NaN : total / counted;
   };
+
+  const random = rng(11);
+
+  const draws = Array.from({ length: DRAWS }, () => {
+    const weights = new Float64Array(blockIds.size);
+
+    for (let draw = 0; draw < blockIds.size; draw++) {
+      const block = Math.floor(random() * blockIds.size);
+
+      weights[block] = (weights[block] ?? 0) + 1;
+    }
+
+    return meanOver(weights);
+  })
+    .filter((value) => !Number.isNaN(value))
+    .toSorted((left, right) => left - right);
+
+  return { positions: positions.length, decisions: decisions.length, agree: meanOver(new Float64Array(blockIds.size).fill(1)), lo: quantile(draws, 0.025), hi: quantile(draws, 0.975) };
 };
 
-/** Every config's consistency, read only. Matches with a DeepSeek seat are left out, as in the rest of the viewer. */
-export const openConsistency = (path: string): ReadonlyArray<Consistency> => {
+const DecisionRow = Schema.Struct({ matchId: Schema.String, model: Schema.String, effort: Schema.String, position: Schema.String, choice: Schema.String });
+
+const decodeRow = Schema.decodeUnknownSync(DecisionRow);
+
+/** A match the viewer shows: its cohort and seed block. */
+export interface ShownMatch {
+  readonly cohort: string;
+  readonly seedBlock: string;
+}
+
+/**
+ * Every config's consistency in each cohort and over all of them ("all"), read only. Only the agents' own moves in the
+ * matches the viewer shows count, so DeepSeek's matches are left out here as everywhere.
+ */
+export const openConsistency = (path: string, shown: ReadonlyMap<string, ShownMatch>): ReadonlyArray<Consistency> => {
   const db = new Database(path, { readonly: true });
 
-  // counts: the decisions that chose each move, comma separated, of a position the config met at least twice.
   const rows = db
-    .query(
-      `select model, effort, group_concat(moves) counts from (
-         select p.model, p.effort, d.exact_key position, d.choice, count(*) moves from decisions d join players p on p.match_id = d.match_id and p.player = d.player
-         where d.by_whom = 'agent' and d.match_id not in (select match_id from players where model = 'oc/deepseek-v4.1-flash-free')
-         group by p.model, p.effort, d.exact_key, d.choice)
-       group by model, effort, position having sum(moves) >= 2`,
-    )
+    .query(`select d.match_id matchId, p.model, p.effort, d.exact_key position, d.choice from decisions d join players p on p.match_id = d.match_id and p.player = d.player where d.by_whom = 'agent'`)
     .all()
     .map((raw) => decodeRow(raw));
 
-  const positionsOf = new Map<string, { readonly model: string; readonly effort: string; readonly positions: Array<ReadonlyArray<number>> }>();
+  db.close();
 
-  for (const { model, effort, counts } of rows) {
-    const config = positionsOf.get(`${model}|${effort}`) ?? { model, effort, positions: [] };
+  const scoped = rows.flatMap((row) => {
+    const match = shown.get(row.matchId);
 
-    config.positions.push(counts.split(",").map(Number));
-    positionsOf.set(`${model}|${effort}`, config);
-  }
+    return match === undefined ? [] : [match.cohort, "all"].map((cohort) => ({ cohort, row, repeat: { choice: row.choice, block: match.seedBlock } }));
+  });
 
-  return [...positionsOf.values()].flatMap(({ model, effort, positions }) => (positions.length < MIN_POSITIONS ? [] : [{ model, effort, ...consistencyOf(positions) }]));
+  return [...groupBy(scoped, ({ cohort, row }) => `${cohort}|${row.model}|${row.effort}`).values()].flatMap((config) => {
+    const [first] = config;
+    const repeated = [...groupBy(config, ({ row }) => row.position).values()].filter((decisions) => decisions.length >= 2);
+
+    return first === undefined || repeated.length < MIN_POSITIONS
+      ? []
+      : [{ cohort: first.cohort, model: first.row.model, effort: first.row.effort, ...consistencyOf(repeated.map((decisions) => decisions.map(({ repeat }) => repeat)), new Set(config.map(({ repeat }) => repeat.block))) }];
+  });
 };

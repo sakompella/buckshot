@@ -258,19 +258,21 @@ It is one long page, in this order:
 - Scatter: the cost, moves, output tokens or mean regret vs rating scatter, each model's rating across its efforts,
   and where the money went (each config's share of the spend);
 - a few interesting matches;
-- Luck: how often the player with more regret still won, how often the higher-rated player wins at each rating gap
-  against the Bradley-Terry curve, and momentum (round 2 after a round-1 win, round 3 at 1-1);
-- Seats: the table position and round-1 starter charts, then same deal (each seed's results per config, from table
-  position 1 and 2);
+- Results: how often the player with higher estimated regret still won (per move, in total, and without tiny gaps), how
+  often the higher-rated player wins at each rating gap, rated by fits that held the match's seed block out, against the
+  Bradley-Terry curve, and results after round 1 (round 2 after a round-1 win, round 3 at 1-1);
+- Seats: the table position and round-1 starter charts, then each seed's results per config, from table position 1
+  and 2;
 - with `--regret`, the costliest blunders with each config's blunder rate (the share of its searched moves that gave
   up 10 or more points), and each model's mean regret per move by shells left in the gun; with `--knowledge` (the
-  database `scripts/arena-knowledge.ts` builds) each config's chance of repeating its move in a repeated position;
-- how often each model shoots itself by the odds it counts, and item fates (what became of the items each config
+  database `scripts/arena-knowledge.ts` builds) each config's chance of repeating its move in a repeated position, in
+  the chosen cohort, with the seed-block interval `docs/arena/analysis/beliefs-and-items.md` uses;
+- how often each config shoots itself by the odds it counts (one panel per model, a line per effort), and item fates (what became of the items each config
   received: used, stolen by the opponent or left unused, per config and per item, over completed two-player matches);
-- thinking under pressure (output tokens per move by health gap, one panel per model), and dead rubbers (output
+- output tokens per move by health gap, one panel per model), and dead rubbers (output
   tokens per move in round 3 after 1-1 against after one player won both rounds, one row per config);
 - the reliability charts (failed calls, faults and the time they cost, one bar per config pooled over every
-  tournament, and each model's failed replies by the hour);
+  tournament, and each model's failed replies by the hour each call was logged);
 - the newest matches, the leaderboard by cohort and, last, the breakdown heatmaps.
 
 Seats and

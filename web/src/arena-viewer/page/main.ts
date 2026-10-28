@@ -25,9 +25,19 @@ const getJson = <A, I>(url: string, schema: Schema.Codec<A, I>) =>
     Effect.flatMap((body) => Schema.decodeUnknownEffect(schema)(body)),
   );
 
+/** An optional section's data: its failure is kept for the section to show, and the page loads without it. */
+const getOptional = <A, I>(url: string, schema: Schema.Codec<A, I>) =>
+  getJson(url, schema).pipe(
+    Effect.map((data) => AsyncData.succeed<A, string>(data)),
+    Effect.catch((error) => Effect.succeed(AsyncData.fail<string, A>(describe(error)))),
+  );
+
 const LoadData = Command.define("LoadData", {
   messages: [Message.SucceededLoad, Message.FailedLoad],
-  execute: Effect.all([getJson("/api/seats", SeatsResponse), getJson("/api/decisions", Decisions), getJson("/api/blunders", Blunders), getJson("/api/mistakes", Mistakes), getJson("/api/consistency", Schema.Array(Consistency))], { concurrency: 5 }).pipe(
+  execute: Effect.all(
+    [getJson("/api/seats", SeatsResponse), getJson("/api/decisions", Decisions), getOptional("/api/blunders", Blunders), getOptional("/api/mistakes", Mistakes), getOptional("/api/consistency", Schema.Array(Consistency))],
+    { concurrency: 5 },
+  ).pipe(
     Effect.map(([seats, decisions, blunders, mistakes, consistency]) => Message.SucceededLoad({ loaded: { seats: withCohorts(seats), decisions, blunders, mistakes, consistency } })),
     Effect.catch((error) => Effect.succeed(Message.FailedLoad({ error: describe(error) }))),
     Effect.provide(Http.layer),
