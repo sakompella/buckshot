@@ -153,9 +153,9 @@ export const fmtRating = (rating: number): string => {
   return `${rounded >= 0 ? "+" : ""}${rounded}`;
 };
 
-export const eloName = (basis: Basis): string => ({ wins: "Elo", cash: "Cash Elo", rounds: "Rounds Elo" })[basis];
+export const eloName = (basis: Basis): string => ({ rounds: "Round Elo", matches: "Match Elo", cash: "Cash Elo" })[basis];
 
-export const shareName = (basis: Basis): string => ({ wins: "win share", cash: "pot share", rounds: "round share" })[basis];
+export const shareName = (basis: Basis): string => ({ rounds: "round win share", matches: "match win share", cash: "pot share" })[basis];
 
 // GROUPS AND SUMS
 
@@ -219,7 +219,7 @@ export const rng = (seed: number) => {
 export type SeatFull = Seat & { readonly cohort: string; readonly potShare: number | null };
 
 /** What a rating counts per match: each player's win share of it, or its pot share. A rounds rating counts rounds instead (see knownRounds). */
-export const seatShare = (seat: SeatFull, basis: Exclude<Basis, "rounds">): number => (basis === "wins" ? seat.winShare : seat.potShare) ?? 0;
+export const seatShare = (seat: SeatFull, basis: Exclude<Basis, "rounds">): number => (basis === "matches" ? seat.winShare : seat.potShare) ?? 0;
 
 /** A match's rounds with their winners, or none when the events do not give every round (Story.ok). */
 export const knownRounds = (seat: Pick<Seat, "story">): Story["rounds"] => (seat.story?.ok ? seat.story.rounds : []);
@@ -439,7 +439,7 @@ export const regretStats = (seats: ReadonlyArray<Pick<SeatFull, "regret">>): Reg
 };
 
 /** A config's observed share on a basis: the mean over its scored matches. */
-export const configShare = (config: Pick<ModelStats, "winShare" | "potShare" | "roundShare">, basis: Basis): number => ({ wins: config.winShare, cash: config.potShare, rounds: config.roundShare })[basis];
+export const configShare = (config: Pick<ModelStats, "winShare" | "potShare" | "roundShare">, basis: Basis): number => ({ rounds: config.roundShare, matches: config.winShare, cash: config.potShare })[basis];
 
 /**
  * Configs in place order for the "Rank" view: highest observed share (mean over scored matches) first. Ties go to

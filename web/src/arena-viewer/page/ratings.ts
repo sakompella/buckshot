@@ -96,6 +96,33 @@ const fitGames = (games: NumberedGames, rows: ArrayLike<number>): Map<string, nu
   }
 
   const size = present.length;
+
+  // The likelihood depends on a pair's games only through their count and summed share, so each step visits pairs, not games.
+  const pairOf = new Int32Array(size * size).fill(-1);
+  const pairX: Array<number> = [];
+  const pairY: Array<number> = [];
+  const pairGames: Array<number> = [];
+  const pairShare: Array<number> = [];
+
+  for (let index = 0; index < rows.length; index++) {
+    const row = rows[index] ?? 0;
+    const x = slot[games.a[row] ?? 0] ?? 0;
+    const y = slot[games.b[row] ?? 0] ?? 0;
+    const known = pairOf[x * size + y] ?? -1;
+    const pair = known === -1 ? pairX.length : known;
+
+    if (known === -1) {
+      pairOf[x * size + y] = pair;
+      pairX.push(x);
+      pairY.push(y);
+      pairGames.push(0);
+      pairShare.push(0);
+    }
+
+    pairGames[pair] = (pairGames[pair] ?? 0) + 1;
+    pairShare[pair] = (pairShare[pair] ?? 0) + (games.sa[row] ?? 0);
+  }
+
   const strength = new Float64Array(size);
   const gradient = new Float64Array(size);
   const curvature = new Float64Array(size * size);
@@ -108,15 +135,16 @@ const fitGames = (games: NumberedGames, rows: ArrayLike<number>): Map<string, nu
 
     for (let id = 0; id < size; id++) curvature[id * size + id] = precision;
 
-    for (let index = 0; index < rows.length; index++) {
-      const row = rows[index] ?? 0;
-      const x = slot[games.a[row] ?? 0] ?? 0;
-      const y = slot[games.b[row] ?? 0] ?? 0;
+    for (let pair = 0; pair < pairX.length; pair++) {
+      const x = pairX[pair] ?? 0;
+      const y = pairY[pair] ?? 0;
+      const count = pairGames[pair] ?? 0;
       const expected = 1 / (1 + Math.exp((strength[y] ?? 0) - (strength[x] ?? 0)));
-      const weight = expected * (1 - expected);
+      const weight = count * expected * (1 - expected);
+      const surplus = (pairShare[pair] ?? 0) - count * expected;
 
-      gradient[x] = (gradient[x] ?? 0) + (games.sa[row] ?? 0) - expected;
-      gradient[y] = (gradient[y] ?? 0) - (games.sa[row] ?? 0) + expected;
+      gradient[x] = (gradient[x] ?? 0) + surplus;
+      gradient[y] = (gradient[y] ?? 0) - surplus;
       curvature[x * size + x] = (curvature[x * size + x] ?? 0) + weight;
       curvature[y * size + y] = (curvature[y * size + y] ?? 0) + weight;
       curvature[x * size + y] = (curvature[x * size + y] ?? 0) - weight;

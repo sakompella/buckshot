@@ -313,7 +313,7 @@ test("pooled ratings cover every config of a completed match, over every tournam
   }).flat();
 
   const partial = { ...SEAT, matchId: "partial", model: "c", effort: "low", status: "partial" as const, cohort: "", potShare: null };
-  const ratings = pooledRatings([...seats, partial, { ...partial, model: "d", player: "B", position: 1 }], "wins");
+  const ratings = pooledRatings([...seats, partial, { ...partial, model: "d", player: "B", position: 1 }], "matches");
 
   expect([...ratings.keys()].toSorted()).toEqual(TRUE_ELO.map(([id]) => id.replace("-", "|")).toSorted());
 
@@ -345,7 +345,7 @@ const playedSeats = (seed: number, winnerShare: number) => {
 test("when every match is a sweep, cash ratings equal win ratings", () => {
   for (let seed = 1; seed <= 5; seed++) {
     const seats = playedSeats(seed, 1);
-    const wins = pooledRatings(seats, "wins");
+    const wins = pooledRatings(seats, "matches");
     const cash = pooledRatings(seats, "cash");
 
     expect([...cash.keys()].toSorted()).toEqual([...wins.keys()].toSorted());
@@ -361,7 +361,7 @@ test("when every match is a sweep, cash ratings equal win ratings", () => {
 test("when losers bank part of the pot, cash ratings keep the order of win ratings but sit closer together", () => {
   for (let seed = 1; seed <= 5; seed++) {
     const seats = playedSeats(seed, 2 / 3);
-    const wins = pooledRatings(seats, "wins");
+    const wins = pooledRatings(seats, "matches");
     const cash = pooledRatings(seats, "cash");
     const spread = (ratings: ReadonlyMap<string, { readonly rating: number }>) => Math.max(...[...ratings.values()].map(({ rating }) => rating)) - Math.min(...[...ratings.values()].map(({ rating }) => rating));
     const order = (ratings: ReadonlyMap<string, { readonly rating: number }>) => [...ratings].toSorted(([, left], [, right]) => left.rating - right.rating).map(([key]) => key);
@@ -451,7 +451,7 @@ test("the scatter's regret axis places a config with no searched move nowhere an
 test("when every match is a single round, rounds ratings equal win ratings", () => {
   for (let seed = 1; seed <= 5; seed++) {
     const seats = playedRoundSeats(seed, 1, 1);
-    const wins = pooledRatings(seats, "wins");
+    const wins = pooledRatings(seats, "matches");
     const rounds = pooledRatings(seats, "rounds");
 
     expect([...rounds.keys()].toSorted()).toEqual([...wins.keys()].toSorted());
@@ -467,7 +467,7 @@ test("when every match is a single round, rounds ratings equal win ratings", () 
 test("when losers win rounds, rounds ratings keep the order of win ratings but sit closer together", () => {
   for (let seed = 1; seed <= 5; seed++) {
     const seats = playedRoundSeats(seed, 3, 2);
-    const wins = pooledRatings(seats, "wins");
+    const wins = pooledRatings(seats, "matches");
     const rounds = pooledRatings(seats, "rounds");
     const spread = (ratings: ReadonlyMap<string, { readonly rating: number }>) => Math.max(...[...ratings.values()].map(({ rating }) => rating)) - Math.min(...[...ratings.values()].map(({ rating }) => rating));
     const order = (ratings: ReadonlyMap<string, { readonly rating: number }>) => [...ratings].toSorted(([, left], [, right]) => left.rating - right.rating).map(([key]) => key);

@@ -213,7 +213,7 @@ const init: Runtime.ApplicationInit<Model, Message, Flags> = ({ viewport }) => (
     data: AsyncData.Loading(),
     filter: { cohort: "all", offEfforts: [], offModels: [], isAllConfigs: true },
     ranking: "elo",
-    basis: "wins",
+    basis: "rounds",
     scatter: { show: "all", axis: "cost", maybeHover: Option.none(), maybePin: Option.none() },
     heat: { mode: "opp", sort: "rating", isBestOnly: false, maybeTip: Option.none(), maybeFlagged: Option.none() },
     leaderboard: { maybeOpen: Option.none(), maybeTip: Option.none() },

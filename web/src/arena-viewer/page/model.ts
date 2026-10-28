@@ -26,8 +26,8 @@ export const Ranking = Schema.Literals(["elo", "rank"]);
 
 export type Ranking = typeof Ranking.Type;
 
-/** What ratings count: each match's win share, each player's pot share (its cash over the match's cash), or each round as one game. */
-export const Basis = Schema.Literals(["wins", "cash", "rounds"]);
+/** What ratings count: each round as one game, each match's win share, or each player's pot share (its cash over the match's cash). */
+export const Basis = Schema.Literals(["rounds", "matches", "cash"]);
 
 export type Basis = typeof Basis.Type;
 

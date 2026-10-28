@@ -270,27 +270,28 @@ darker fell short. The pair-effect test in `docs/arena/analysis/matchups.md` fou
 so most cells are noise.
 
 Wherever ratings show (the scatter's y axis, the heatmap's and the leaderboards'
-rating columns), a Wins / Cash / Rounds toggle and an Elo / Rank toggle switch all of them.
-Elo is one Bradley-Terry rating per config, fitted over every completed
-two-player match of every tournament (`page/ratings.ts`): win shares count
-fractionally, a Gaussian prior (standard deviation 3 nats) keeps it finite, the
-scale has mean 0, and the 95% intervals refit 200 resamples of whole seed blocks.
-Effort sweeps join the other models through their medium configs, so one scale
-covers every config and no filter changes it. Cash is the same fit with pot
-shares in place of win shares: a player's pot share is its cash over the match's
-cash, and the leaderboards show each config's pot share, averaged over its scored
-matches, beside its win share. Rounds is the same fit with each round of a match
-as one game, its winner read from the public events (a match whose rounds the
-events do not give in full is left out), and the leaderboards show each config's
-round share, the rounds it won over the rounds it played. Its resamples still take
-whole seed blocks, since a match's rounds are not independent. The cash and rounds
-fits run the first time each is chosen, so the first load pays only for the win
-fit. Rank is a place 1, 2, 3, ... for every config. The leaderboards rank by the
-observed share (win, pot or round) within each cohort, among all of its configs
+rating columns), a Round wins / Match wins / Cash toggle and an Elo / Rank toggle
+switch all of them. Round wins is the default. Each is one Bradley-Terry rating
+per config, fitted over every completed two-player match of every tournament
+(`page/ratings.ts`): shares count fractionally, a Gaussian prior (standard
+deviation 3 nats) keeps it finite, the scale has mean 0, and the 95% intervals
+refit 200 resamples of whole seed blocks. Effort sweeps join the other models
+through their medium configs, so one scale covers every config and no filter
+changes it. Round wins counts each round of a match as one game, its winner read
+from the public events (a match whose rounds the events do not give in full is
+left out), and the leaderboards show each config's round wins, the rounds it won
+over the rounds it played. Its resamples still take whole seed blocks, since a
+match's rounds are not independent. Match wins counts each match's win share.
+Cash counts pot shares: a player's pot share is its cash over the match's cash,
+and the leaderboards show each config's pot share, averaged over its scored
+matches. The leaderboards always show the match win share. The match wins and
+cash fits run the first time each is chosen, so the first load pays only for the
+round fit. Rank is a place 1, 2, 3, ... for every config. The leaderboards rank by the
+observed share (round, match or pot) within each cohort, among all of its configs
 before the chip and switch filters, ties going to the higher Elo. The scatter and heatmap do the same
 under one cohort. Under "All cohorts" they rank by the pooled Elo instead, since
 pooling every cohort's shares would count the effort sweeps' self-play. The
-interesting matches always judge underdogs by the win rating.
+interesting matches always judge underdogs by the round rating.
 
 `--regret` names the derived database with the `regret` table
 (`docs/arena/analysis/regret.md`), opened read only. Without it the viewer runs as

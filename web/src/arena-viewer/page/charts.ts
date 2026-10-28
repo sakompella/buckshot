@@ -97,12 +97,12 @@ const RANKINGS: ReadonlyArray<readonly [Ranking, string]> = [
 ];
 
 const BASES: ReadonlyArray<readonly [Basis, string]> = [
-  ["wins", "Wins"],
+  ["rounds", "Round wins"],
+  ["matches", "Match wins"],
   ["cash", "Cash"],
-  ["rounds", "Rounds"],
 ];
 
-/** The page-wide choices for ratings, drawn wherever they show: what they count (wins, cash or rounds), and Elo or rank. */
+/** The page-wide choices for ratings, drawn wherever they show: what they count (round wins, match wins or cash), and Elo or rank. */
 export const ratingToggles = (h: H, ranking: Ranking, basis: Basis): ReadonlyArray<Html> => [
   toggleView(h, basis, BASES, (option) => Message.SelectedBasis({ basis: option })),
   toggleView(h, ranking, RANKINGS, (option) => Message.SelectedRanking({ ranking: option })),
