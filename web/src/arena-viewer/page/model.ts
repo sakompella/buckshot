@@ -109,6 +109,16 @@ export const MatchList = Schema.Struct({ query: Schema.String, limit: Schema.Num
 /** A reliability cell with its tooltip open: a row (tournament and config) and a column. */
 export const RateCell = Schema.Struct({ row: Schema.String, column: Schema.String });
 
+/** Where the tour's highlighted element sits, in page coordinates. */
+export const TourBox = Schema.Struct({ top: Schema.Number, left: Schema.Number, width: Schema.Number, height: Schema.Number });
+
+export type TourBox = typeof TourBox.Type;
+
+/** The open tour: the step shown (an index into TOUR in tour.ts) and, once measured, its highlight and whether the card fits just under it. */
+export const Tour = Schema.Struct({ step: Schema.Number, maybeBox: Schema.Option(TourBox), isCardUnder: Schema.Boolean });
+
+export type Tour = typeof Tour.Type;
+
 export const MatchData = AsyncData.Schema(MatchDetail, Schema.String).schema;
 
 export type MatchData = typeof MatchData.Type;
@@ -133,6 +143,7 @@ export const Model = Schema.Struct({
   maybeReplay: Schema.Option(Replay),
   /** Whether the page has painted once with the data. Most sections that came with the analysis ideas wait for it, so the first paint is as quick as before them. */
   isFirstPaintDone: Schema.Boolean,
+  maybeTour: Schema.Option(Tour),
 });
 
 export type Model = typeof Model.Type;
@@ -183,6 +194,10 @@ export const Message = defineMessageUnion({
   CompletedStepScroll: {},
   CompletedScroll: {},
   CompletedFirstPaint: {},
+  ClickedTour: {},
+  SteppedTour: { delta: Schema.Number },
+  ClosedTour: {},
+  PlacedTour: { step: Schema.Number, maybeBox: Schema.Option(TourBox), isCardUnder: Schema.Boolean },
 });
 
 export type Message = typeof Message.Type;

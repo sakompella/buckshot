@@ -277,7 +277,9 @@ It is one long page, in this order:
 
 Seats and
 reliability fold their full tables under the charts. A jump menu at the top links
-to each section's anchor (`#scatter`, `#seats`, `#matches`, ...), and the filter bar
+to each section's anchor (`#scatter`, `#seats`, `#matches`, ...), and its Tour button starts a guided tour: each
+step scrolls to a section or control, highlights it and shows a short card, with Back, Next and Close, the arrow
+keys and Escape (`page/tour.ts` holds the steps). The filter bar
 under it applies to the whole page; on a wide screen both stay at the top. The
 scatter's and the effort chart's axes span every config in every cohort, so a filter only shows or hides
 points; the reliability bars keep one scale the same way.

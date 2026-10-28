@@ -3,6 +3,8 @@ import { join } from "node:path";
 
 import { type Browser, chromium, type Page } from "playwright-core";
 
+import { TOUR } from "../src/arena-viewer/page/tour.ts";
+
 // Clicks through the arena viewer's page, its jump menu and replay in headless Chromium at
 // desktop, phone and tablet widths and saves screenshots. Pointed at the old viewer too,
 // it gives the pictures to compare against.
@@ -576,7 +578,31 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
     await settled(page);
     console.log("deep link", await jumpedTo(page, "reliability"));
   });
+  await check("tour", () => checkTour(page, viewport.name));
   await page.close();
+};
+
+// Steps through the whole tour by keyboard: every step must highlight an element the page draws, inside the page's
+// width, and Escape must close it.
+const checkTour = async (page: Page, name: string) => {
+  await page.locator("nav .tourstart").click();
+
+  for (const [index, step] of TOUR.entries()) {
+    if (index > 0) await page.keyboard.press("ArrowRight");
+
+    await settled(page);
+
+    const drawn = await page.evaluate((focus) => [...document.querySelectorAll(focus)].some((element) => element.getBoundingClientRect().height > 0), step.focus);
+    const box = await page.locator(".tour-focus").boundingBox();
+    const width = await page.evaluate(() => document.documentElement.clientWidth);
+
+    expectThat(drawn, `${name}: tour step "${step.title}" finds nothing drawn at ${step.focus}`);
+    expectThat(box !== null && box.x + box.width <= width + 8, `${name}: tour step "${step.title}" highlights outside the page`);
+    await page.screenshot({ path: shot(`${name}-tour-${String(index + 1).padStart(2, "0")}`) });
+  }
+
+  await page.keyboard.press("Escape");
+  console.log(name, "tour steps", TOUR.length, "| closed by Escape:", (await countOf(page, ".tour-layer")) === 0);
 };
 
 const checkTouch = async (browser: Browser, viewport: Viewport) => {
@@ -640,6 +666,7 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
     console.log(name, "rounds rank y ticks", await yTicks(page), "| overflow", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page));
     await page.locator(".card").first().screenshot({ path: shot(`${name}-scatter-rounds-rank`) });
   });
+  await check("tour", () => checkTour(page, name));
 
   await page.context().close();
 };
