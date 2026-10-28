@@ -2,6 +2,7 @@ import { Option } from "effect";
 import { AsyncData } from "foldkit";
 import { createLazy, type Document, type Html, type HtmlBuilder } from "foldkit/html";
 
+import type { Blunders } from "../api.ts";
 import { baseName, baseOrder, colorOf, EFFORTS, fmtCount, keyOf, sumOf, unique } from "./data.ts";
 import { switchView } from "./charts.ts";
 import { consistencyView } from "./consistency.ts";
@@ -185,10 +186,16 @@ const upsetCard = (h: H, bins: ReadonlyArray<UpsetBin>, width: number): Html => 
 
 const spendCard = (h: H, derived: Derived): Html => h.div([h.Class("card")], [spendView(h, derived.pooled)]);
 
-const blundersCard = (h: H, derived: Derived, width: number, content: number): Html =>
-  blundersView(h, ratesFor(derived.seats, derived.keep, derived.blunders), everyRateFor(derived.seats, derived.blunders), galleryFor(derived.seats, derived.keep, ratingsOf(derived.seats)("wins"), derived.blunders), width, content);
+const blundersCard = (h: H, derived: Derived, blunders: Blunders, width: number, content: number): Html =>
+  blundersView(h, ratesFor(derived.seats, derived.keep, blunders), everyRateFor(derived.seats, blunders), galleryFor(derived.seats, derived.keep, ratingsOf(derived.seats)("wins"), blunders), width, content);
 
-const oddsCard = (h: H, derived: Derived, width: number): Html => h.div([h.Class("card")], [oddsView(h, derived.decisions, derived.seats, derived.keep, derived.pooled, width)]);
+/** An optional section's view, or, when its data did not load, a note in its place. */
+const optionalView = <A>(h: H, data: AsyncData.AsyncData<A, string>, what: string, draw: (loaded: A) => Html): Html =>
+  AsyncData.matchData(data, {
+    onEmpty: () => h.empty,
+    onFailure: (error) => h.div([h.Class("card")], [h.p([h.Class("k")], [`Could not load the ${what}: ${error}`])]),
+    onData: draw,
+  });
 
 const dealsCard = (h: H, derived: Derived, width: number): Html => h.div([h.Class("card")], [dealsView(h, derived, width)]);
 
@@ -208,12 +215,24 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
       h.div([h.Class("top")], [lazyNav(navView, [h]), lazyFilters(filtersView, [h, derived, model.filter])]),
       sectionView(h, "scatter", h.div([], [lazyScatter(scatterCard, [h, derived, model.ranking, model.basis, model.scatter, cardWidth(model.viewport)]), lazyEffort(effortCard, [h, derived, model.basis, cardWidth(model.viewport)]), afterFirstPaint(() => lazySpend(spendCard, [h, derived]))])),
       sectionView(h, "interesting", lazyInteresting(interestingView, [h, picksOf(derived), model.matches, content])),
-      sectionView(h, "luck", afterFirstPaint(() => h.div([], [lazyLuck(luckView, [h, derived.matches, derived.pooled, model.viewport.width, content, cardWidth(model.viewport)]), lazyUpset(upsetCard, [h, upsetOf(derived), cardWidth(model.viewport)]), lazyMomentum(momentumCard, [h, derived, cardWidth(model.viewport)])]))),
+      sectionView(h, "luck", afterFirstPaint(() => h.div([], [lazyLuck(luckView, [h, derived.matches, model.viewport.width, content]), lazyUpset(upsetCard, [h, upsetOf(derived), cardWidth(model.viewport)]), lazyMomentum(momentumCard, [h, derived, cardWidth(model.viewport)])]))),
       sectionView(h, "seats", lazySeats(seatsView, [h, derived, model.viewport.width, content])),
       sectionView(h, "deals", afterFirstPaint(() => lazyDeals(dealsCard, [h, derived, cardWidth(model.viewport)]))),
-      sectionView(h, "blunders", afterFirstPaint(() => lazyBlunders(blundersCard, [h, derived, model.viewport.width, content]))),
-      sectionView(h, "mistakes", afterFirstPaint(() => h.div([], [lazyMistakes(mistakesView, [h, derived.mistakes, derived.seats, derived.keep, model.viewport.width, cardWidth(model.viewport)]), lazyConsistency(consistencyView, [h, derived.pooled, derived.consistency, cardWidth(model.viewport)])]))),
-      sectionView(h, "odds", afterFirstPaint(() => lazyOdds(oddsCard, [h, derived, cardWidth(model.viewport)]))),
+      sectionView(h, "blunders", afterFirstPaint(() => optionalView(h, derived.blunders, "blunders", (blunders) => lazyBlunders(blundersCard, [h, derived, blunders, model.viewport.width, content])))),
+      sectionView(
+        h,
+        "mistakes",
+        afterFirstPaint(() =>
+          h.div(
+            [],
+            [
+              optionalView(h, derived.mistakes, "regret by shells left", (mistakes) => lazyMistakes(mistakesView, [h, mistakes, derived.seats, derived.keep, model.viewport.width, cardWidth(model.viewport)])),
+              optionalView(h, derived.consistency, "consistency", (consistency) => lazyConsistency(consistencyView, [h, derived.pooled, consistency, model.filter.cohort, cardWidth(model.viewport)])),
+            ],
+          ),
+        ),
+      ),
+      sectionView(h, "odds", afterFirstPaint(() => lazyOdds(oddsView, [h, derived.decisions, derived.seats, derived.keep, model.viewport.width, content]))),
       sectionView(h, "items", afterFirstPaint(() => lazyFates(fatesView, [h, derived.seats, derived.filtered]))),
       sectionView(h, "pressure", afterFirstPaint(() => lazyPressure(pressureView, [h, derived.decisions, derived.seats, derived.keep, model.viewport.width, content]))),
       sectionView(h, "rubbers", afterFirstPaint(() => h.div([h.Class("card")], [lazyRubbers(rubbersView, [h, rubberRows(derived.filtered), cardWidth(model.viewport)])]))),

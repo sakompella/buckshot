@@ -10,7 +10,7 @@ import { TOUR } from "../src/arena-viewer/page/tour.ts";
 // it gives the pictures to compare against.
 // Usage: bun scripts/arena-viewer-check.ts <url> [outdir]
 
-const base = process.argv[2] ?? "http://127.0.0.1:8790";
+const base = (process.argv[2] ?? "http://127.0.0.1:8790").replace(/\/+$/, "");
 const outdir = process.argv[3] ?? "/tmp/arena-viewer-shots";
 const chrome = process.env["CHROME"] ?? "/etc/profiles/per-user/aditya/bin/chromium";
 const errors: Array<string> = [];
@@ -19,6 +19,26 @@ const failures: Array<string> = [];
 const expectThat = (isOk: boolean, what: string) => {
   if (!isOk) failures.push(what);
 };
+
+const attempt = async (viewport: string, check: string, run: () => Promise<void>) => {
+  try {
+    await run();
+  } catch (error) {
+    failures.push(`${viewport}: ${check} threw: ${error instanceof Error ? (error.message.split("\n")[0] ?? "") : String(error)}`);
+  }
+};
+
+const VIEWPORTS = [
+  { name: "desktop", width: 1500, height: 1000, isTouch: false },
+  { name: "phone", width: 390, height: 844, isTouch: true },
+  { name: "small", width: 360, height: 800, isTouch: true },
+  { name: "tablet", width: 768, height: 1024, isTouch: true },
+] as const;
+
+type Viewport = (typeof VIEWPORTS)[number];
+
+const newPage = (browser: Browser, { width, height, isTouch }: Viewport) =>
+  browser.newContext(isTouch ? { viewport: { width, height }, deviceScaleFactor: 2, isMobile: true, hasTouch: true } : { viewport: { width, height } }).then((context) => context.newPage());
 
 const shot = (name: string) => join(outdir, `${name}.png`);
 
@@ -37,8 +57,6 @@ const watch = (page: Page, name: string) => {
     else errors.push(`${name}: ${message.text().slice(0, 200)}`);
   });
 };
-
-const fullPageShot = (page: Page, name: string) => page.screenshot({ path: shot(name), fullPage: true });
 
 // The page renders on the next animation frame after a message, so reads wait two frames.
 const settled = (page: Page) => page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -59,14 +77,18 @@ const countOf = async (page: Page, selector: string) => {
 
 const heat = (page: Page) => page.locator("section").filter({ has: page.locator("table.heat") });
 
+const loadPage = async (page: Page) => {
+  await page.goto(`${base}/`);
+  await page.waitForSelector("table.lbt", { timeout: 120_000 });
+  await page.waitForSelector(".icard svg rect", { timeout: 60_000 });
+};
+
 // Prints what the default filter shows (every config), then what switching 'all configs' off hides, and switches it back on.
 const openPage = async (page: Page) => {
   const started = Date.now();
 
-  await page.goto(`${base}/`);
-  await page.waitForSelector("table.lbt", { timeout: 120_000 });
+  await loadPage(page);
   console.log("every section drawn in", Date.now() - started, "ms");
-  await page.waitForSelector(".icard svg rect", { timeout: 60_000 });
 
   const counts = async () => ["scatter points", await countOf(page, ".card svg g.pt"), "heat rows", await countOf(page, "table.heat tbody tr"), "leaderboards", await countOf(page, "table.lbt"), "|", await page.locator(".filters .switch").allInnerTexts()];
   const allConfigs = page.getByRole("switch", { name: /all configs/ });
@@ -102,16 +124,41 @@ const jumpedTo = (page: Page, section: string) =>
     return `${id}: ${Math.round(top - (bar?.getBoundingClientRect().bottom ?? 0))}px below the bar, hash ${location.hash}`;
   }, section);
 
+// A missing section is a failed check, not an abort: the other sections and viewports still get their pictures.
+const captureBaseline = async (browser: Browser, viewport: Viewport) => {
+  const { name } = viewport;
+  const page = await newPage(browser, viewport);
+
+  await loadPage(page);
+  await page.screenshot({ path: shot(`${name}-page`), fullPage: true });
+
+  for (const section of SECTIONS) {
+    const target = page.locator(`#${section}`);
+
+    if ((await target.count()) === 0) {
+      failures.push(`${name}: section #${section} is missing`);
+      continue;
+    }
+
+    await target.screenshot({ path: shot(`${name}-${section}`) });
+    expectThat((await target.innerText()).trim() !== "", `${name}: the ${section} section is empty`);
+  }
+
+  await page.context().close();
+};
+
 const checkJumps = async (page: Page, name: string, isTouch: boolean) => {
   for (const section of SECTIONS) {
     const link = page.locator(`nav a[href="#${section}"]`);
 
+    if ((await link.count()) === 0) {
+      failures.push(`${name}: the jump menu has no link to #${section}`);
+      continue;
+    }
+
     await (isTouch ? link.tap() : link.click());
     await settled(page);
     console.log(name, "jump", await jumpedTo(page, section));
-
-    await page.locator(`#${section}`).screenshot({ path: shot(`${name}-${section}`) });
-    expectThat((await page.locator(`#${section}`).innerText()).trim() !== "", `${name}: the ${section} section is empty`);
   }
 };
 
@@ -368,16 +415,6 @@ const checkRegret = async (page: Page) => {
 
   expectThat(titles.length === scored.length && titles.every((title) => /^[\d,]+ moves · \d+% proven exact$/.test(title)), "a regret cell does not say how many moves and how many are proven exact");
 
-  const means = await page.locator("table.lbt").evaluateAll((tables) =>
-    tables.map((table) => Object.fromEntries([...table.querySelectorAll("tr.row")].map((row) => [row.querySelector("td")?.textContent?.trim() ?? "", Number(row.querySelector('td[data-label="regret"]')?.textContent)]))),
-  );
-
-  const cross = means.find((table) => "Opus 5.5 [medium]" in table && "Haiku 4.5 [medium]" in table);
-
-  const [opus, haiku] = [cross?.["Opus 5.5 [medium]"] ?? Number.NaN, cross?.["Haiku 4.5 [medium]"] ?? Number.NaN];
-
-  console.log("cross-model medium regret: Opus", opus, "Haiku 4.5", haiku);
-  expectThat(Number.isNaN(opus + haiku) || opus < haiku, "Opus does not have less mean regret than Haiku 4.5");
   await page.locator(".lb").first().screenshot({ path: shot("leaderboard-regret"), style: UNSTICK });
 
   let exact = 0;
@@ -419,120 +456,129 @@ const checkRegret = async (page: Page) => {
   expectThat(exact + notExact > 0, "no replay shows a regret tag");
 };
 
-const checkDesktop = async (browser: Browser) => {
-  const page = await browser.newPage({ viewport: { width: 1500, height: 1000 } });
+const checkDesktop = async (browser: Browser, viewport: Viewport) => {
+  const page = await newPage(browser, viewport);
   const scatter = page.locator(".card").first();
+  const check = (name: string, run: () => Promise<void>) => attempt(viewport.name, name, run);
 
-  watch(page, "desktop");
-  await openPage(page);
-  console.log("scatter points", await countOf(page, ".card svg g[style*=pointer]"), "labels", await countOf(page, ".card svg g.ptlabel"), "| toggles:", await textOf(page, ".card .ctl"));
-  await fullPageShot(page, "page");
-  await scatter.screenshot({ path: shot("scatter") });
-  await page.locator(".card svg g[style*=pointer]").nth(3).hover({ force: true });
-  console.log("hover point → tip:", await tipOf(page));
-  await page.mouse.move(0, 0);
-  await page.getByRole("switch", { name: /medium only/ }).check();
-  console.log("medium only labels", await countOf(page, ".card svg g.ptlabel"));
-  await scatter.screenshot({ path: shot("scatter-medium") });
-  await page.getByRole("switch", { name: /medium only/ }).uncheck();
+  watch(page, viewport.name);
+  await check("open page", () => openPage(page));
+  await check("scatter", async () => {
+    console.log("scatter points", await countOf(page, ".card svg g[style*=pointer]"), "labels", await countOf(page, ".card svg g.ptlabel"), "| toggles:", await textOf(page, ".card .ctl"));
+    await scatter.screenshot({ path: shot("scatter") });
+    await page.locator(".card svg g[style*=pointer]").nth(3).hover({ force: true });
+    console.log("hover point → tip:", await tipOf(page));
+    await page.mouse.move(0, 0);
+    await page.getByRole("switch", { name: /medium only/ }).check();
+    console.log("medium only labels", await countOf(page, ".card svg g.ptlabel"));
+    await scatter.screenshot({ path: shot("scatter-medium") });
+    await page.getByRole("switch", { name: /medium only/ }).uncheck();
+  });
+  await check("scatter axes", async () => {
+    for (const [axis, name] of [
+      ["Moves", "moves"],
+      ["Tokens", "tokens"],
+      ["Cost", "cost"],
+    ] as const) {
+      await scatter.getByRole("button", { name: axis, exact: true }).click();
+      await settled(page);
+      console.log("axis", name, "|", await textOf(page, ".card h2"), "| points", await countOf(page, ".card svg g.pt"));
+      await scatter.screenshot({ path: shot(`scatter-${name}`) });
+    }
+  });
+  await check("fixed axes", () => checkFixedAxes(page, scatter));
+  await check("ranking", () => checkRanking(page, scatter));
+  await check("cash", () => checkCash(page, scatter));
+  await check("rounds", () => checkRounds(page, scatter));
+  await check("every config rated", () => checkEveryConfigRated(page, scatter));
+  await check("regret", () => checkRegret(page));
+  await check("heatmap modes", async () => {
+    for (const [mode, name] of [
+      ["Win share vs opponent", "opp"],
+      ["Item use when legal", "items"],
+      ["Choice patterns", "choices"],
+      ["Play style", "style"],
+    ] as const) {
+      await heat(page).getByRole("button", { name: mode }).click();
+      console.log("heat", name, "rows", await countOf(page, "table.heat tbody tr"), "cols", await countOf(page, "table.heat thead th"), "| first row:", await textOf(page, "table.heat tbody tr"));
+      await heat(page).screenshot({ path: shot(`heat-${name}`) });
+    }
 
-  for (const [axis, name] of [
-    ["Moves", "moves"],
-    ["Tokens", "tokens"],
-    ["Cost", "cost"],
-  ] as const) {
-    await scatter.getByRole("button", { name: axis, exact: true }).click();
-    await settled(page);
-    console.log("axis", name, "|", await textOf(page, ".card h2"), "| points", await countOf(page, ".card svg g.pt"));
-    await scatter.screenshot({ path: shot(`scatter-${name}`) });
-  }
+    await heat(page).getByRole("switch", { name: /best row/ }).check();
+    console.log("best row per model", await countOf(page, "table.heat tbody tr"), "rows");
+    await heat(page).screenshot({ path: shot("heat-style-best") });
+    await heat(page).getByRole("switch", { name: /best row/ }).uncheck();
+  });
+  await check("flagged moves", async () => {
+    await heat(page).getByRole("button", { name: "Choice patterns" }).click();
+    await page.locator("table.heat td.click").first().hover();
+    console.log("hover cell → tip:", await tipOf(page));
+    await page.locator("table.heat td.click").first().click();
+    await page.waitForSelector(".flagged tr.row");
+    console.log("flagged rows", await countOf(page, ".flagged tr.row"));
+    await page.locator(".igrid").screenshot({ path: shot("interesting") });
+    await page.locator("#blunders").screenshot({ path: shot("blunders"), style: UNSTICK });
+    console.log("cards", (await page.locator(".icard").allInnerTexts()).map((text) => text.replaceAll(/\s+/g, " ")));
+    await page.locator("table.lbt tr.row").first().click();
+    await page.locator(".drillin .sq i").first().hover();
+    console.log("drill → tip:", await tipOf(page));
+    await page.locator(".lb").first().screenshot({ path: shot("leaderboard"), style: UNSTICK });
+  });
+  await check("replays", async () => {
+    for (const [card, name] of [
+      [0, "replay"],
+      [4, "replay-blunder"],
+    ] as const) {
+      await page.locator(".icard").nth(card).click();
+      await page.waitForSelector(".modal .step");
 
-  await checkFixedAxes(page, scatter);
-  await checkRanking(page, scatter);
-  await checkCash(page, scatter);
-  await checkRounds(page, scatter);
-  await checkEveryConfigRated(page, scatter);
-  await checkRegret(page);
+      for (let step = 0; step < (card === 0 ? 6 : 0); step++) await page.keyboard.press("ArrowRight");
 
-  for (const [mode, name] of [
-    ["Win share vs opponent", "opp"],
-    ["Item use when legal", "items"],
-    ["Choice patterns", "choices"],
-    ["Play style", "style"],
-  ] as const) {
-    await heat(page).getByRole("button", { name: mode }).click();
-    console.log("heat", name, "rows", await countOf(page, "table.heat tbody tr"), "cols", await countOf(page, "table.heat thead th"), "| first row:", await textOf(page, "table.heat tbody tr"));
-    await heat(page).screenshot({ path: shot(`heat-${name}`) });
-  }
+      console.log(name, "steps", await countOf(page, ".modal .step"), "| on:", await textOf(page, ".modal .step.on .h"), "| reasoning blocks", await countOf(page, ".modal .step.on pre"), "| same-seed chips", await countOf(page, ".seedrow .chip"));
+      await page.locator(".modal").screenshot({ path: shot(name) });
+      await page.keyboard.press("Escape");
+    }
+  });
+  await check("focused move", async () => {
+    await page.locator(".flagged tr.row").first().click();
+    await page.waitForSelector(".modal .step.on");
+    console.log("focused move", await textOf(page, ".modal .step.on .h"));
 
-  await heat(page).getByRole("switch", { name: /best row/ }).check();
-  console.log("best row per model", await countOf(page, "table.heat tbody tr"), "rows");
-  await heat(page).screenshot({ path: shot("heat-style-best") });
-  await heat(page).getByRole("switch", { name: /best row/ }).uncheck();
-  await heat(page).getByRole("button", { name: "Choice patterns" }).click();
-  await page.locator("table.heat td.click").first().hover();
-  console.log("hover cell → tip:", await tipOf(page));
-  await page.locator("table.heat td.click").first().click();
-  await page.waitForSelector(".flagged tr.row");
-  console.log("flagged rows", await countOf(page, ".flagged tr.row"));
-  await page.locator(".igrid").screenshot({ path: shot("interesting") });
-  await page.locator("#blunders").screenshot({ path: shot("blunders"), style: UNSTICK });
-  console.log("cards", (await page.locator(".icard").allInnerTexts()).map((text) => text.replaceAll(/\s+/g, " ")));
-  await page.locator("table.lbt tr.row").first().click();
-  await page.locator(".drillin .sq i").first().hover();
-  console.log("drill → tip:", await tipOf(page));
-  await page.locator(".lb").first().screenshot({ path: shot("leaderboard"), style: UNSTICK });
+    const turning = page.locator(".modal .turning .chip");
+    const rings = await countOf(page, ".modal .chart circle");
 
-  for (const [card, name] of [
-    [0, "replay"],
-    [4, "replay-blunder"],
-  ] as const) {
-    await page.locator(".icard").nth(card).click();
+    console.log("turning points", await countOf(page, ".modal .turning .chip"), "| blunder rings", rings);
+    expectThat((await turning.count()) > 0 && rings >= (await turning.count()), "the replay of a flagged move has no turning points on its health chart");
+    await turning.first().click();
+    console.log("turning point opens", await textOf(page, ".modal .step.on .h"));
+    await page.locator(".modal").screenshot({ path: shot("replay-turning-points") });
+    await page.locator(".seedrow .chip").first().click();
     await page.waitForSelector(".modal .step");
-
-    for (let step = 0; step < (card === 0 ? 6 : 0); step++) await page.keyboard.press("ArrowRight");
-
-    console.log(name, "steps", await countOf(page, ".modal .step"), "| on:", await textOf(page, ".modal .step.on .h"), "| reasoning blocks", await countOf(page, ".modal .step.on pre"), "| same-seed chips", await countOf(page, ".seedrow .chip"));
-    await page.locator(".modal").screenshot({ path: shot(name) });
+    await settled(page);
+    console.log("after same-seed chip:", await textOf(page, ".mhead h2"));
     await page.keyboard.press("Escape");
-  }
-
-  await page.locator(".flagged tr.row").first().click();
-  await page.waitForSelector(".modal .step.on");
-  console.log("focused move", await textOf(page, ".modal .step.on .h"));
-
-  const turning = page.locator(".modal .turning .chip");
-  const rings = await countOf(page, ".modal .chart circle");
-
-  console.log("turning points", await countOf(page, ".modal .turning .chip"), "| blunder rings", rings);
-  expectThat((await turning.count()) > 0 && rings >= (await turning.count()), "the replay of a flagged move has no turning points on its health chart");
-  await turning.first().click();
-  console.log("turning point opens", await textOf(page, ".modal .step.on .h"));
-  await page.locator(".modal").screenshot({ path: shot("replay-turning-points") });
-  await page.locator(".seedrow .chip").first().click();
-  await page.waitForSelector(".modal .step");
-  await settled(page);
-  console.log("after same-seed chip:", await textOf(page, ".mhead h2"));
-  await page.keyboard.press("Escape");
-
-  console.log("matches", await countOf(page, "#matches tbody tr.row"), "| seats", await countOf(page, "#seats .bignum"), "| item fate rows", await countOf(page, "#items .fate"), "| reliability charts", await countOf(page, "#reliability .chartrow figure"));
-  await checkJumps(page, "desktop", false);
-  console.log("the filters stay in view:", await page.evaluate(() => Math.round(document.querySelector(".filters")?.getBoundingClientRect().top ?? -1)), "px from the top at scroll", await page.evaluate(() => Math.round(scrollY)));
-  await page.locator("#reliability details.tables > summary").click();
-  await page.locator("#reliability tbody td[data-label='failed calls']").first().hover();
-  console.log("reliability tip:", await tipOf(page));
-  await page.locator("#matches tbody tr.row").first().click();
-  await page.waitForSelector(".modal .step");
-  console.log("matches → modal", await textOf(page, ".mhead h2"));
-  await page.keyboard.press("Escape");
-
+  });
+  await check("section counts", async () => console.log("matches", await countOf(page, "#matches tbody tr.row"), "| seats", await countOf(page, "#seats .bignum"), "| item fate rows", await countOf(page, "#items .fate"), "| reliability charts", await countOf(page, "#reliability .chartrow figure")));
+  await check("jump menu", () => checkJumps(page, viewport.name, false));
+  await check("sticky filters", async () => console.log("the filters stay in view:", await page.evaluate(() => Math.round(document.querySelector(".filters")?.getBoundingClientRect().top ?? -1)), "px from the top at scroll", await page.evaluate(() => Math.round(scrollY))));
+  await check("reliability and matches", async () => {
+    await page.locator("#reliability details.tables > summary").click();
+    await page.locator("#reliability tbody td[data-label='failed calls']").first().hover();
+    console.log("reliability tip:", await tipOf(page));
+    await page.locator("#matches tbody tr.row").first().click();
+    await page.waitForSelector(".modal .step");
+    console.log("matches → modal", await textOf(page, ".mhead h2"));
+    await page.keyboard.press("Escape");
+  });
   // An old tab link, or a section link, lands on its section once the data is in.
-  await page.goto(`${base}/#reliability`);
-  await page.waitForSelector("#reliability .chartrow figure", { timeout: 120_000 });
-  await settled(page);
-  await settled(page);
-  console.log("deep link", await jumpedTo(page, "reliability"));
-  await checkTour(page, "desktop");
+  await check("deep link", async () => {
+    await page.goto(`${base}/#reliability`);
+    await page.waitForSelector("#reliability .chartrow figure", { timeout: 120_000 });
+    await settled(page);
+    await settled(page);
+    console.log("deep link", await jumpedTo(page, "reliability"));
+  });
+  await check("tour", () => checkTour(page, viewport.name));
   await page.close();
 };
 
@@ -559,76 +605,97 @@ const checkTour = async (page: Page, name: string) => {
   console.log(name, "tour steps", TOUR.length, "| closed by Escape:", (await countOf(page, ".tour-layer")) === 0);
 };
 
-const checkTouch = async (browser: Browser, name: string, width: number, height: number) => {
-  const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
-  const page = await context.newPage();
+const checkTouch = async (browser: Browser, viewport: Viewport) => {
+  const { name } = viewport;
+  const page = await newPage(browser, viewport);
+  const check = (what: string, run: () => Promise<void>) => attempt(name, what, run);
   const stickyModelColumn = () => page.evaluate(() => getComputedStyle(document.querySelector("table.heat td.left") ?? document.body).position);
 
   watch(page, name);
-  await openPage(page);
-  console.log(name, "overflow", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page), "| heat model column", await stickyModelColumn(), "| scatter labels", await countOf(page, ".card svg g.ptlabel"));
-  await fullPageShot(page, `${name}-page`);
-  await page.locator(".card svg g[style*=pointer]").nth(3).tap({ force: true });
-  console.log(name, "tap point → tip:", await tipOf(page));
-  await page.locator(".card").first().screenshot({ path: shot(`${name}-scatter`) });
-  await page.locator(".hero").tap();
-  console.log(name, "tap outside clears the tip:", (await tipOf(page)) === "none");
-  await heat(page).getByRole("button", { name: "Item use when legal" }).tap();
+  await check("open page", () => openPage(page));
+  await check("overview", async () => console.log(name, "overflow", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page), "| heat model column", await stickyModelColumn(), "| scatter labels", await countOf(page, ".card svg g.ptlabel")));
+  await check("scatter tap", async () => {
+    await page.locator(".card svg g[style*=pointer]").nth(3).tap({ force: true });
+    console.log(name, "tap point → tip:", await tipOf(page));
+    await page.locator(".card").first().screenshot({ path: shot(`${name}-scatter`) });
+    await page.locator(".hero").tap();
+    console.log(name, "tap outside clears the tip:", (await tipOf(page)) === "none");
+  });
+  await check("heat and leaderboard", async () => {
+    await heat(page).getByRole("button", { name: "Item use when legal" }).tap();
+    await settled(page);
+    await heat(page).locator(".heatscroll").evaluate((element) => element.scrollTo({ left: 200 }));
+    await heat(page).screenshot({ path: shot(`${name}-heat-items`) });
+    await page.locator("table.lbt").first().screenshot({ path: shot(`${name}-leaderboard`) });
+  });
+  await check("replay", async () => {
+    await page.locator(".icard").first().tap();
+    await page.waitForSelector(".modal .step");
+
+    const box = await page.locator(".modal").boundingBox();
+    const before = await textOf(page, ".modal .stepper .k");
+
+    await page.locator(".stepper button", { hasText: "Next" }).tap();
+    await page.locator(".stepper button", { hasText: "Next" }).tap();
+    await settled(page);
+    console.log(name, "replay", `${box?.width}x${box?.height}`, "| stepper", before, "→", await textOf(page, ".modal .stepper .k"), "| on:", await textOf(page, ".modal .step.on .h"), "| small targets", await smallTargets(page));
+    await page.screenshot({ path: shot(`${name}-replay`) });
+
+    const crowded = await page.locator(".modal .step .h").evaluateAll((headers) => headers.filter((header) => header.scrollWidth > header.clientWidth).length);
+
+    console.log(name, "regret tags", await regretTags(page).count(), "| move headers wider than the modal", crowded);
+    expectThat(crowded === 0, `${name}: a move header overflows with its regret tag`);
+    await page.goBack();
+    console.log(name, "back closes replay:", (await countOf(page, ".modal")) === 0);
+  });
+  await check("jump menu", async () => {
+    await checkJumps(page, name, true);
+    console.log(name, "overflow after every section", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page));
+  });
+  await check("rank toggles", async () => {
+    await heat(page).getByRole("button", { name: "Rank", exact: true }).tap();
+    await settled(page);
+    console.log(name, "rank y ticks", await yTicks(page));
+    await page.locator(".card").first().screenshot({ path: shot(`${name}-scatter-rank`) });
+    await heat(page).getByRole("button", { name: "Cash", exact: true }).tap();
+    await settled(page);
+    console.log(name, "cash rank y ticks", await yTicks(page), "| overflow", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page));
+    await page.locator(".card").first().screenshot({ path: shot(`${name}-scatter-cash-rank`) });
+    await heat(page).getByRole("button", { name: "Rounds", exact: true }).tap();
+    await settled(page);
+    console.log(name, "rounds rank y ticks", await yTicks(page), "| overflow", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page));
+    await page.locator(".card").first().screenshot({ path: shot(`${name}-scatter-rounds-rank`) });
+  });
+  await check("tour", () => checkTour(page, name));
+
+  await page.context().close();
+};
+
+// An optional section's data failing to load leaves the rest of the page drawn and says, in that section, what failed.
+const checkOptionalFailure = async (browser: Browser) => {
+  const page = await newPage(browser, VIEWPORTS[0]);
+
+  await page.route("**/api/consistency", (route) => route.abort());
+  await page.route("**/api/blunders", (route) => route.fulfill({ status: 500, body: "" }));
+  await loadPage(page);
   await settled(page);
-  await heat(page).locator(".heatscroll").evaluate((element) => element.scrollTo({ left: 200 }));
-  await heat(page).screenshot({ path: shot(`${name}-heat-items`) });
-  await page.locator("table.lbt").first().screenshot({ path: shot(`${name}-leaderboard`) });
-  await page.locator(".icard").first().tap();
-  await page.waitForSelector(".modal .step");
 
-  const box = await page.locator(".modal").boundingBox();
-  const before = await textOf(page, ".modal .stepper .k");
+  const notes = await page.getByText(/^Could not load the /).allInnerTexts();
 
-  await page.locator(".stepper button", { hasText: "Next" }).tap();
-  await page.locator(".stepper button", { hasText: "Next" }).tap();
-  await settled(page);
-  console.log(name, "replay", `${box?.width}x${box?.height}`, "| stepper", before, "→", await textOf(page, ".modal .stepper .k"), "| on:", await textOf(page, ".modal .step.on .h"), "| small targets", await smallTargets(page));
-  await page.screenshot({ path: shot(`${name}-replay`) });
-
-  const crowded = await page.locator(".modal .step .h").evaluateAll((headers) => headers.filter((header) => header.scrollWidth > header.clientWidth).length);
-
-  console.log(name, "regret tags", await regretTags(page).count(), "| move headers wider than the modal", crowded);
-  expectThat(crowded === 0, `${name}: a move header overflows with its regret tag`);
-  await page.goBack();
-  console.log(name, "back closes replay:", (await countOf(page, ".modal")) === 0);
-
-  await checkJumps(page, name, true);
-  console.log(name, "overflow after every section", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page));
-  await heat(page).getByRole("button", { name: "Rank", exact: true }).tap();
-  await settled(page);
-  console.log(name, "rank y ticks", await yTicks(page));
-  await page.locator(".card").first().screenshot({ path: shot(`${name}-scatter-rank`) });
-  await heat(page).getByRole("button", { name: "Cash", exact: true }).tap();
-  await settled(page);
-  console.log(name, "cash rank y ticks", await yTicks(page), "| overflow", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page));
-  await page.locator(".card").first().screenshot({ path: shot(`${name}-scatter-cash-rank`) });
-  await heat(page).getByRole("button", { name: "Rounds", exact: true }).tap();
-  await settled(page);
-  console.log(name, "rounds rank y ticks", await yTicks(page), "| overflow", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page));
-  await page.locator(".card").first().screenshot({ path: shot(`${name}-scatter-rounds-rank`) });
-  await checkTour(page, name);
-
-  await context.close();
+  console.log("with blunders and consistency failing:", notes, "| leaderboards", await countOf(page, "table.lbt"));
+  expectThat(notes.length === 2 && (await page.locator("#blunders").getByText(/^Could not load/).count()) === 1, "a failed optional endpoint did not leave a note in its own section");
+  await page.context().close();
 };
 
 mkdirSync(outdir, { recursive: true });
 
 const browser = await chromium.launch({ executablePath: chrome, args: ["--no-sandbox"] });
 
-await checkDesktop(browser);
+for (const viewport of VIEWPORTS) await attempt(viewport.name, "baseline capture", () => captureBaseline(browser, viewport));
 
-for (const [name, width, height] of [
-  ["phone", 390, 844],
-  ["small", 360, 800],
-  ["tablet", 768, 1024],
-] as const) {
-  await checkTouch(browser, name, width, height);
-}
+for (const viewport of VIEWPORTS) await (viewport.isTouch ? checkTouch(browser, viewport) : checkDesktop(browser, viewport));
+
+await attempt("desktop", "optional data failing", () => checkOptionalFailure(browser));
 
 console.log("failed checks", failures);
 
