@@ -3,7 +3,7 @@ import { HttpClient, HttpClientResponse } from "effect/http";
 import { AsyncData, Command, Dom, Http, Runtime, Subscription, type Update } from "foldkit";
 import { modifyFields } from "foldkit/struct";
 
-import { Decisions, MatchDetail, SeatsResponse } from "../api.ts";
+import { Blunders, Consistency, Decisions, MatchDetail, Mistakes, SeatsResponse } from "../api.ts";
 import { withCohorts } from "./data.ts";
 import { derive } from "./derived.ts";
 import { picksOf } from "./interesting.ts";
@@ -27,8 +27,8 @@ const getJson = <A, I>(url: string, schema: Schema.Codec<A, I>) =>
 
 const LoadData = Command.define("LoadData", {
   messages: [Message.SucceededLoad, Message.FailedLoad],
-  execute: Effect.all([getJson("/api/seats", SeatsResponse), getJson("/api/decisions", Decisions)], { concurrency: 2 }).pipe(
-    Effect.map(([seats, decisions]) => Message.SucceededLoad({ loaded: { seats: withCohorts(seats), decisions } })),
+  execute: Effect.all([getJson("/api/seats", SeatsResponse), getJson("/api/decisions", Decisions), getJson("/api/blunders", Blunders), getJson("/api/mistakes", Mistakes), getJson("/api/consistency", Schema.Array(Consistency))], { concurrency: 5 }).pipe(
+    Effect.map(([seats, decisions, blunders, mistakes, consistency]) => Message.SucceededLoad({ loaded: { seats: withCohorts(seats), decisions, blunders, mistakes, consistency } })),
     Effect.catch((error) => Effect.succeed(Message.FailedLoad({ error: describe(error) }))),
     Effect.provide(Http.layer),
   ),
@@ -83,6 +83,11 @@ const ScrollToHash = Command.define("ScrollToHash", {
     Effect.map(() => Option.map(sectionOfHash(location.hash), scrollToSection)),
     Effect.as(Message.CompletedScroll()),
   ),
+});
+
+const AwaitFirstPaint = Command.define("AwaitFirstPaint", {
+  messages: [Message.CompletedFirstPaint],
+  execute: nextFrame.pipe(Effect.as(Message.CompletedFirstPaint())),
 });
 
 // An open replay owns one history entry, so the phone's back gesture closes it instead of leaving the page.
@@ -155,8 +160,9 @@ export const update = (model: Model, message: Message): Return =>
     SucceededLoad: ({ loaded }) => {
       const loadedModel = withPickedMatches(modifyFields(model, { data: () => AsyncData.succeed(loaded) }));
 
-      return { ...loadedModel, commands: [...(loadedModel.commands ?? []), ScrollToHash()] };
+      return { ...loadedModel, commands: [...(loadedModel.commands ?? []), AwaitFirstPaint()] };
     },
+    CompletedFirstPaint: () => ({ model: modifyFields(model, { isFirstPaintDone: () => true }), commands: [ScrollToHash()] }),
     FailedLoad: ({ error }) => ({ model: modifyFields(model, { data: () => AsyncData.fail(error) }) }),
     SelectedCohort: ({ cohort }) => withFilter(model, (filter) => ({ ...filter, cohort })),
     ToggledEffort: ({ effort }) => withFilter(model, (filter) => ({ ...filter, offEfforts: toggled(filter.offEfforts, effort) })),
@@ -221,6 +227,7 @@ const init: Runtime.ApplicationInit<Model, Message, Flags> = ({ viewport }) => (
     maybeRateTip: Option.none(),
     matches: {},
     maybeReplay: Option.none(),
+    isFirstPaintDone: false,
   },
   commands: [LoadData()],
 });

@@ -4,7 +4,10 @@ import crypto from "node:crypto";
 import { Option, Schema } from "effect";
 
 import { analyse, decodeVisible, roundStory, ShellTracker } from "./analysis.ts";
-import { Call, Decisions, MatchDetail, MatchSeat, MatchSummary, type PlayerState, SeatRow, SeatsResponse, type Step } from "./api.ts";
+import { Blunders, Call, Consistency, Decisions, MatchDetail, MatchSeat, MatchSummary, Mistakes, type PlayerState, SeatRow, SeatsResponse, type Step } from "./api.ts";
+import { findBlunders } from "./blunders.ts";
+import { mistakesOf } from "./mistakes.ts";
+import { openConsistency } from "./consistency.ts";
 import page from "./page/index.html";
 import { openRegret, type Regret } from "./regret.ts";
 
@@ -56,7 +59,13 @@ const decodeDecisionRow = Schema.decodeUnknownSync(DecisionRow);
 
 const encodeSeats = Schema.encodeSync(Schema.fromJsonString(SeatsResponse));
 
+const encodeConsistency = Schema.encodeSync(Schema.fromJsonString(Schema.Array(Consistency)));
+
 const encodeDecisions = Schema.encodeSync(Schema.fromJsonString(Decisions));
+
+const encodeBlunders = Schema.encodeSync(Schema.fromJsonString(Blunders));
+
+const encodeMistakes = Schema.encodeSync(Schema.fromJsonString(Mistakes));
 
 const encodeMatch = Schema.encodeSync(Schema.fromJsonString(MatchDetail));
 
@@ -214,8 +223,11 @@ const guarded = (handler: (request: Request) => Response) => {
   };
 };
 
-/** Loads and analyses the database once, then serves the page and the API. With a regret database, seats and moves carry their regret. */
-export const serveArenaViewer = (dbPath: string, hostname: string, port: number, regretPath?: string) => {
+/**
+ * Loads and analyses the database once, then serves the page and the API. With a regret database, seats and moves carry their regret.
+ * With a knowledge database, the page shows how consistent each config is.
+ */
+export const serveArenaViewer = (dbPath: string, hostname: string, port: number, regretPath?: string, knowledgePath?: string) => {
   const db = new Database(dbPath, { readonly: true });
   const regret = regretPath === undefined ? null : openRegret(regretPath);
   const started = performance.now();
@@ -226,7 +238,7 @@ export const serveArenaViewer = (dbPath: string, hostname: string, port: number,
     .map((row) => decodeSeatRow(row));
 
   const seatIndex = new Map(rows.map((row, index) => [`${row.matchId}|${row.player}`, index]));
-  const { decisions, seats: analysed } = analyse(db, rows, seatIndex);
+  const { decisions, seats: analysed, shellsLeft } = analyse(db, rows, seatIndex);
 
   const seats = rows.flatMap((row, index) => {
     const extra = analysed[index];
@@ -236,6 +248,17 @@ export const serveArenaViewer = (dbPath: string, hostname: string, port: number,
 
   const seatsBody = encodedBody(encodeSeats(seats));
   const decisionsBody = encodedBody(encodeDecisions(decisions));
+  const blundersBody = encodedBody(encodeBlunders(findBlunders(db, regret, seatIndex)));
+
+  const mistakesBody = encodedBody(
+    encodeMistakes(
+      regret === null
+        ? { seat: [], left: [], isShot: [], points: [] }
+        : mistakesOf(decisions, shellsLeft, (seat) => rows[seat]?.matchId ?? "", (matchId) => regret.moves(matchId)),
+    ),
+  );
+
+  const consistencyBody = encodedBody(encodeConsistency(knowledgePath === undefined ? [] : openConsistency(knowledgePath)));
 
   console.log(`loaded ${seats.length} seats in ${Math.round(performance.now() - started)} ms; decisions payload ${(decisionsBody.gzipped.length / 1e6).toFixed(1)} MB gzipped`);
 
@@ -254,6 +277,9 @@ export const serveArenaViewer = (dbPath: string, hostname: string, port: number,
           : new Response(Bun.file(download), { headers: { "content-disposition": 'attachment; filename="buckshot.sqlite"' } });
       }),
       "/api/decisions": guarded((request) => json(request, decisionsBody)),
+      "/api/blunders": guarded((request) => json(request, blundersBody)),
+      "/api/mistakes": guarded((request) => json(request, mistakesBody)),
+      "/api/consistency": guarded((request) => json(request, consistencyBody)),
       "/api/match": guarded((request) => {
         const detail = matchDetail(db, regret, new URL(request.url).searchParams.get("id") ?? "");
 

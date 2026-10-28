@@ -32,7 +32,7 @@ interface Line {
 }
 
 /** End labels from the top down, pushed apart so none overlaps the one above. */
-const spreadLabels = (ys: ReadonlyArray<number>): ReadonlyArray<number> => {
+export const spreadLabels = (ys: ReadonlyArray<number>): ReadonlyArray<number> => {
   const order = ys.map((y, index) => ({ y, index })).toSorted((left, right) => left.y - right.y);
   const placed = ys.map(() => 0);
   let last = Number.NEGATIVE_INFINITY;
