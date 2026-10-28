@@ -72,6 +72,27 @@ const JumpTo = Command.define("JumpTo", {
     }).pipe(Effect.as(Message.CompletedScroll())),
 });
 
+/** Keeps the current section's link in view in a jump menu wider than the screen. */
+const RevealNavLink = Command.define("RevealNavLink", {
+  args: { section: Section },
+  messages: [Message.CompletedScroll],
+  execute: ({ section }) =>
+    Effect.sync(() => {
+      const nav = document.querySelector("nav");
+      const link = nav?.querySelector(`a[href="#${section}"]`);
+
+      if (nav instanceof HTMLElement && link instanceof HTMLElement) nav.scrollTo({ left: link.offsetLeft - (nav.clientWidth - link.offsetWidth) / 2, behavior: "smooth" });
+    }).pipe(Effect.as(Message.CompletedScroll())),
+});
+
+/** The last section whose top has passed under the sticky bar. */
+const sectionInView = (): Option.Option<Message> => {
+  const line = stickyHeight() + 8;
+  const passed = [...document.querySelectorAll("section.part[id]")].filter((section) => section.getBoundingClientRect().top <= line).at(-1);
+
+  return Option.map(sectionOfHash(passed?.id ?? ""), (section) => Message.ScrolledInto({ section }));
+};
+
 const nextFrame = Effect.callback<void>((resume) => {
   requestAnimationFrame(() => requestAnimationFrame(() => resume(Effect.void)));
 });
@@ -168,6 +189,11 @@ export const update = (model: Model, message: Message): Return =>
     ToggledEffort: ({ effort }) => withFilter(model, (filter) => ({ ...filter, offEfforts: toggled(filter.offEfforts, effort) })),
     ToggledModel: ({ name }) => withFilter(model, (filter) => ({ ...filter, offModels: toggled(filter.offModels, name) })),
     ToggledAllConfigs: () => withFilter(model, (filter) => ({ ...filter, isAllConfigs: !filter.isAllConfigs })),
+    ScrolledInto: ({ section }) =>
+      Option.contains(model.maybeSection, section) ? { model } : { model: modifyFields(model, { maybeSection: () => Option.some(section) }), commands: [RevealNavLink({ section })] },
+    ToggledFilters: () => ({ model: modifyFields(model, { isFiltersOpen: (isOpen) => !isOpen }) }),
+    TappedTitle: ({ text }) => ({ model: modifyFields(model, { maybeTappedTitle: () => Option.some(text) }) }),
+    ClearedTappedTitle: () => ({ model: modifyFields(model, { maybeTappedTitle: () => Option.none() }) }),
     SelectedRanking: ({ ranking }) => ({ model: modifyFields(model, { ranking: () => ranking }) }),
     SelectedBasis: ({ basis }) => ({ model: modifyFields(model, { basis: () => basis }) }),
     SelectedScatterShow: ({ show }) => ({ model: modifyFields(model, { scatter: (scatter) => ({ ...scatter, show }) }) }),
@@ -225,6 +251,9 @@ const init: Runtime.ApplicationInit<Model, Message, Flags> = ({ viewport }) => (
     leaderboard: { maybeOpen: Option.none(), maybeTip: Option.none() },
     matchList: { query: "", limit: 25 },
     maybeRateTip: Option.none(),
+    maybeTappedTitle: Option.none(),
+    maybeSection: Option.none(),
+    isFiltersOpen: false,
     matches: {},
     maybeReplay: Option.none(),
     isFirstPaintDone: false,
@@ -244,6 +273,19 @@ const replayKeyMessage = (key: string): Option.Option<Message> => {
   return key === "ArrowLeft" || key === "ArrowUp" ? Option.some(Message.SteppedReplay({ delta: -1 })) : Option.none();
 };
 
+// Controls answer a tap themselves; a tap anywhere else shows the nearest title, or clears the one shown.
+const tappedTitleMessage = (event: PointerEvent): Option.Option<Message> => {
+  if (event.pointerType !== "touch" || !(event.target instanceof Element) || event.target.closest("button, a, select, input, label, summary, [role=button], .tip") !== null) return Option.none();
+
+  for (let element: Element | null = event.target; element !== null; element = element.parentElement) {
+    const text = element.querySelector(":scope > title")?.textContent ?? element.getAttribute("title");
+
+    if (text) return Option.some(Message.TappedTitle({ text }));
+  }
+
+  return Option.some(Message.ClearedTappedTitle());
+};
+
 const subscriptions = Subscription.make<Model, Message>()((entry) => ({
   resize: Subscription.persistentEntry(Dom.streamFromEvent({ target: window, type: "resize", mapEvent: () => Message.ResizedViewport(viewportNow()) })),
   back: Subscription.persistentEntry(Dom.streamFromEvent({ target: window, type: "popstate", mapEvent: () => Message.NavigatedBack() })),
@@ -259,6 +301,8 @@ const subscriptions = Subscription.make<Model, Message>()((entry) => ({
         ),
     },
   ),
+  scroll: Subscription.persistentEntry(Dom.streamFromEventFilterMap({ target: window, type: "scroll", filterMapEvent: sectionInView })),
+  tappedTitle: Subscription.persistentEntry(Dom.streamFromEventFilterMap({ target: window, type: "pointerup", filterMapEvent: tappedTitleMessage })),
   hash: Subscription.persistentEntry(Dom.streamFromEvent({ target: window, type: "hashchange", mapEvent: () => Message.NavigatedToHash() })),
 }));
 

@@ -543,7 +543,33 @@ const checkTouch = async (browser: Browser, name: string, width: number, height:
   watch(page, name);
   await openPage(page);
   console.log(name, "overflow", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page), "| heat model column", await stickyModelColumn(), "| scatter labels", await countOf(page, ".card svg g.ptlabel"));
+  await page.screenshot({ path: shot(`${name}-first-screen`) });
+
+  const chartTop = await page.evaluate(() => document.querySelector(".card svg")?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY);
+
+  console.log(name, "first chart starts at", Math.round(chartTop), "px of", height);
+  expectThat(chartTop < height * 0.6, `${name}: the first chart starts below the first screen's upper 60%`);
+
+  // A phone or tablet folds the filters into one line that says what they keep; a tap opens them.
+  if (width <= 1024) {
+    console.log(name, "filters line:", await textOf(page, ".filtersum"), "| chips shown", await page.locator(".filters .chip").first().isVisible());
+    await page.locator(".filtersum").tap();
+    await settled(page);
+    expectThat(await page.locator(".filters .chip").first().isVisible(), `${name}: tapping the filters line does not show the chips`);
+    await page.locator(".filters .chip", { hasText: "Opus 5.5" }).tap();
+    console.log(name, "filters line after Opus off:", await textOf(page, ".filtersum"));
+    await page.locator(".filters .chip", { hasText: "Opus 5.5" }).tap();
+    await page.locator(".filtersum").tap();
+  }
+
   await fullPageShot(page, `${name}-page`);
+
+  // A mark that names itself only in an SVG title shows that title when tapped.
+  await page.locator("#luck svg circle:has(title)").first().tap({ force: true });
+  console.log(name, "tap a titled mark →", await textOf(page, ".tip.tapped").catch(() => "none"));
+  expectThat((await countOf(page, ".tip.tapped")) === 1, `${name}: tapping a titled mark shows no tip`);
+  await page.locator(".hero").tap();
+  expectThat((await countOf(page, ".tip.tapped")) === 0, `${name}: a tap outside leaves the titled mark's tip`);
   await page.locator(".card svg g[style*=pointer]").nth(3).tap({ force: true });
   console.log(name, "tap point → tip:", await tipOf(page));
   await page.locator(".card").first().screenshot({ path: shot(`${name}-scatter`) });

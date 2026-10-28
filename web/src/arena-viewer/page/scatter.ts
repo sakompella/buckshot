@@ -1,7 +1,7 @@
 import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { anchorId, logScale, linScale, ratingToggles, switchView, tipView, toggleView } from "./charts.ts";
+import { anchorId, logScale, linScale, ratingSelects, ratingToggles, selectView, switchView, tipView, toggleView } from "./charts.ts";
 import { baseName, DEFAULT_EFFORT, eloName, fmtCount, fmtPct, fmtRating, fmtUsd, isClaude, type ModelStats } from "./data.ts";
 import { leader, measureText, placeLabels, uncrowded } from "./labels.ts";
 import { memoLast } from "./derived.ts";
@@ -101,7 +101,10 @@ const stepPast = (value: number, direction: "down" | "up"): number => {
 
 // DeepSWE's chart type sizes (px), on desktop and below its 640px breakpoint. Its phone chart scales a 440px-wide
 // drawing down to the screen; this one draws at the real width, so the phone sizes stay readable as they are.
-const TYPE = { desktop: { title: 14, tick: 12, axis: 13, name: 12.5, eff: 9 }, phone: { title: 12, tick: 10, axis: 11, name: 11, eff: 8.5 } };
+const TYPE = { desktop: { title: 14, tick: 12, axis: 13, name: 12.5, eff: 10 }, phone: { title: 12, tick: 10, axis: 11, name: 11, eff: 9.5 } };
+
+/** Below this chart width the controls are menus and the type is the phone's. */
+const NARROW = 640;
 
 const SANS = '-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif';
 
@@ -221,7 +224,7 @@ const layoutOf = memoLast((points: ReadonlyArray<Point>, width: number, scatterA
   if (points.length === 0) return null;
 
   const axis = AXES[scatterAxis];
-  const isPhone = width < 640;
+  const isPhone = width < NARROW;
   const type = isPhone ? TYPE.phone : TYPE.desktop;
   const height = isPhone ? Math.round(Math.max(380, Math.min(480, width * 1.25))) : Math.round(Math.min(Math.max(width, 600), 960) / 1.6);
   const right = isPhone ? 12 : 24;
@@ -280,11 +283,14 @@ export const scatterView = (
   const isDimmed = (point: Point) => Option.exists(active, (shown) => shown.m.model !== point.m.model);
   const dim = (point: Point) => (isDimmed(point) ? { opacity: "0.55", filter: "grayscale(1)" } : {});
 
+  const axes = axisOptions(everyConfig.some(({ regret }) => regret !== null));
+  const selectAxis = (option: ScatterAxis) => Message.SelectedScatterAxis({ axis: option });
+
+  // A phone has no room for three rows of buttons above the chart, so the same choices are menus on one row.
   const controls = h.div(
-    [h.Class("ctl")],
+    [h.Class(width < NARROW ? "ctl menus" : "ctl")],
     [
-      toggleView(h, scatter.axis, axisOptions(everyConfig.some(({ regret }) => regret !== null)), (option) => Message.SelectedScatterAxis({ axis: option })),
-      ...ratingToggles(h, ranking, basis),
+      ...(width < NARROW ? [selectView(h, "x axis", scatter.axis, axes, selectAxis), ...ratingSelects(h, ranking, basis)] : [toggleView(h, scatter.axis, axes, selectAxis), ...ratingToggles(h, ranking, basis)]),
       switchView(h, scatter.show === "medium", "medium only", Message.SelectedScatterShow({ show: scatter.show === "medium" ? "all" : "medium" })),
     ],
   );

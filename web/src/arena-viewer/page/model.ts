@@ -116,6 +116,12 @@ export const Model = Schema.Struct({
   leaderboard: Leaderboard,
   matchList: MatchList,
   maybeRateTip: Schema.Option(RateCell),
+  /** The text of a chart mark a touch tapped: its SVG title or title attribute, which only a mouse can hover. */
+  maybeTappedTitle: Schema.Option(Schema.String),
+  /** The section the reader is in, marked in the jump menu. */
+  maybeSection: Schema.Option(Section),
+  /** Whether a phone shows the filters, not just their summary. */
+  isFiltersOpen: Schema.Boolean,
   /** Each match detail asked for, by match id. */
   matches: Schema.Record(Schema.String, MatchData),
   maybeReplay: Schema.Option(Replay),
@@ -137,6 +143,10 @@ export const Message = defineMessageUnion({
   ToggledEffort: { effort: Schema.String },
   ToggledModel: { name: Schema.String },
   ToggledAllConfigs: {},
+  ToggledFilters: {},
+  ScrolledInto: { section: Section },
+  TappedTitle: { text: Schema.String },
+  ClearedTappedTitle: {},
   SelectedRanking: { ranking: Ranking },
   SelectedBasis: { basis: Basis },
   SelectedScatterShow: { show: ScatterShow },
