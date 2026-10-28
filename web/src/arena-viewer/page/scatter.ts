@@ -197,7 +197,7 @@ const yScaleOf = (ranking: Ranking, elo: readonly [number, number], places: numb
   if (ranking === "rank") {
     const step = [1, 2, 5, 10].find((candidate) => ((bottom - top) / places) * candidate >= 18) ?? 10;
 
-    return linScale(0.5, places + 0.5, top, bottom, [1, ...Array.from({ length: Math.floor(places / step) }, (_tick, index) => (index + 1) * step).filter((tick) => tick > 1)]);
+    return linScale(0.5, places + 0.5, top, bottom, [1, ...Array.from({ length: Math.floor(places / step) }, (_tick, index) => (index + 1) * step).filter((tick) => tick > step / 2 + 1)]);
   }
 
   const low = Math.floor((elo[0] - 30) / 50) * 50;
