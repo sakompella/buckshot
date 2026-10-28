@@ -159,7 +159,7 @@ const withReplayMove = (model: Model, choose: (at: number) => number): Return =>
   });
 
 const openReplay = (model: Model, id: string, maybeFocus: Option.Option<number>): Return => {
-  const opened = withMatches(modifyFields(model, { maybeReplay: () => Option.some({ id, maybeFocus, maybeAt: Option.none() }) }), [id]);
+  const opened = withMatches(modifyFields(model, { maybeReplay: () => Option.some({ id, maybeFocus, maybeAt: Option.none() }), maybeTappedTitle: () => Option.none() }), [id]);
 
   // Opening another match from a replay reuses its history entry.
   return Option.isSome(model.maybeReplay) ? opened : { ...opened, commands: [...(opened.commands ?? []), PushReplayHistory()] };

@@ -27,7 +27,7 @@ nav .download { margin-left: auto; }
 .filters { display: flex; gap: 10px 14px; flex-wrap: wrap; align-items: center; margin: 0; }
 .filters select { max-width: 100%; }
 .filtersum { display: none; }
-body:has(.tip.tapped) .tip:not(.tapped) { display: none; }
+body:has(.tip.tapped) .tip:not(.tapped), body:has(.overlay) .tip.tapped { display: none; }
 .tip.tapped { left: 8px; right: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); max-width: none; font-size: 13px; padding: 10px 12px; }
 .chips { display: flex; gap: 4px; flex-wrap: wrap; }
 .chip { font-size: 12px; padding: 2px 8px; border-color: var(--line); color: var(--dim); }
@@ -319,6 +319,8 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
   input[type="text"], input:not([type]) { width: 100%; }
   .toggle { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; width: 100%; }
   .toggle button { padding: 6px 8px; }
+  .heatctl > .toggle:first-child { display: flex; overflow-x: auto; scrollbar-width: none; }
+  .heatctl > .toggle:first-child button { flex: none; white-space: nowrap; }
 
   .heatscroll { max-height: 70svh; overflow: auto; }
   table.heat td.left { white-space: normal; min-width: 112px; max-width: 132px; font-size: 11px; line-height: 1.25; padding: 3px 8px 3px 0; }
