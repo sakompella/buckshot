@@ -86,7 +86,7 @@ export type Replay = typeof Replay.Type;
 /** The match list's search and how many rows it shows. */
 export const MatchList = Schema.Struct({ query: Schema.String, limit: Schema.Number });
 
-/** A reliability cell with its tooltip open: a row (tournament and config) and a column. */
+/** A reliability cell with its tooltip open: a row (a config) and a column. */
 export const RateCell = Schema.Struct({ row: Schema.String, column: Schema.String });
 
 export const MatchData = AsyncData.Schema(MatchDetail, Schema.String).schema;

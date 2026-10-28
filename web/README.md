@@ -306,9 +306,10 @@ A match row, an interesting match or a
 flagged move opens its replay: health through the match,
 each player's view at the chosen move, and every model move with its reasoning.
 The arrow keys step through it, and Escape, a click outside or the back gesture
-closes it. A cohort is one kind of comparison, pooled over code versions and runs: the
-medium cross-model games, each model's effort sweep, and each smaller
-tournament's pairing ("Opus xhigh vs Astra"). The page shows every config by
+closes it. A cohort is one kind of comparison, pooled over tournaments, code versions and
+runs: every match between different models is in "Cross-model", and every match
+of one model against itself is in that model's effort sweep ("Opus efforts").
+Nothing on the page splits by tournament. The page shows every config by
 default; switching 'all configs' off keeps only configs with at least 20 scored
 matches and one against another model, and hides the effort-sweep leaderboards. Items are drawn with the table's own
 icons from `src/icons.ts`, except the saw, beer and jammer, which the viewer

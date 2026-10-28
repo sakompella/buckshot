@@ -278,7 +278,7 @@ const SEAT: Seat = {
   low: null,
 };
 
-test("a cohort is the kind of comparison, pooled over code hashes, and named for it", () => {
+test("a cohort is the kind of comparison, pooled over tournaments and code hashes, and named for it", () => {
   const match = (matchId: string, tournament: string, codeHash: string, ...configs: ReadonlyArray<readonly [string, string]>) =>
     configs.map(([model, effort], position) => ({ ...SEAT, matchId, tournament, codeHash, model, effort, position }));
 
@@ -286,14 +286,14 @@ test("a cohort is the kind of comparison, pooled over code hashes, and named for
     ...match("a", "one", "old", ["claude-opus-5-5", "medium"], ["gpt-6-astra", "medium"]),
     ...match("b", "one", "new", ["claude-sonnet-5-5", "medium"], ["gpt-6-luna", "medium"]),
     ...match("c", "one", "old", ["claude-sonnet-5-5", "low"], ["claude-sonnet-5-5", "high"]),
-    ...match("d", "one", "new", ["claude-sonnet-5-5", "max"], ["claude-sonnet-5-5", "medium"]),
+    ...match("d", "two", "new", ["claude-sonnet-5-5", "max"], ["claude-sonnet-5-5", "medium"]),
     ...match("e", "two", "new", ["gpt-6-astra", "medium"], ["claude-opus-5-5", "xhigh"]),
-    ...match("f", "two", "old", ["claude-opus-5-5", "xhigh"], ["gpt-6-astra", "medium"]),
+    ...match("f", "three", "old", ["claude-opus-5-5", "xhigh"], ["claude-opus-5-5", "low"]),
   ];
 
   const cohortOf = new Map(withCohorts(seats).map(({ matchId, cohort }) => [matchId, cohort]));
 
-  expect([..."abcdef"].map((matchId) => cohortOf.get(matchId))).toEqual(["Cross-model (medium)", "Cross-model (medium)", "Sonnet efforts", "Sonnet efforts", "Opus xhigh vs Astra", "Opus xhigh vs Astra"]);
+  expect([..."abcdef"].map((matchId) => cohortOf.get(matchId))).toEqual(["Cross-model", "Cross-model", "Sonnet efforts", "Sonnet efforts", "Cross-model", "Opus efforts"]);
 });
 
 test("pooled ratings cover every config of a completed match, over every tournament, with an interval around each", () => {

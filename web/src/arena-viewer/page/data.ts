@@ -229,45 +229,16 @@ export const roundResults = (seat: Pick<Seat, "story" | "player">): ReadonlyArra
 
 export const shortName = (model: string): string => baseOf(model)?.short ?? model;
 
-const crossModelCohort = (effort: string): string => `Cross-model (${effort})`;
-
-// A sweep is named for its model. A cross-model tournament with one effort throughout is "Cross-model (<effort>)",
-// and a smaller one lists its configs, those off the default effort first: "Opus xhigh vs Astra".
-const cohortName = (seats: ReadonlyArray<Seat>): string => {
-  const models = unique(seats.map(({ model }) => model));
-  const configs = unique(seats.map(keyOf)).map(splitKey);
-  const efforts = unique(configs.map(([, effort]) => effort));
-
-  if (models.length === 1) return `${shortName(models[0] ?? "")} efforts`;
-
-  if (configs.length > 2 && efforts.length === 1) return crossModelCohort(efforts[0] ?? "");
-
-  if (configs.length > 2) return "Efforts vs other models";
-
-  return configs
-    .toSorted(([, left], [, right]) => Number(left === DEFAULT_EFFORT) - Number(right === DEFAULT_EFFORT))
-    .map(([model, effort]) => (effort === DEFAULT_EFFORT ? shortName(model) : `${shortName(model)} ${effort}`))
-    .join(" vs ");
-};
-
-/** Rankings and rates are only compared within a cohort: one tournament's cross-model games, or one model's effort sweep. */
+/** Rankings and rates are only compared within a cohort: the cross-model games, or one model's effort sweep, from every tournament. */
 export const withCohorts = (seats: ReadonlyArray<Seat>): ReadonlyArray<SeatFull> => {
-  const comparisonOf = (matchSeats: ReadonlyArray<Seat>) => {
-    const [first] = matchSeats;
-    const isSweep = matchSeats.every(({ model }) => model === first?.model);
-
-    return `${first?.tournament ?? ""}|${isSweep ? (first?.model ?? "") : ""}`;
-  };
-
   const byMatch = groupBy(seats, ({ matchId }) => matchId);
-  const matches = [...byMatch.values()];
   const potOf = new Map([...byMatch].map(([matchId, matchSeats]) => [matchId, sumOf(matchSeats.map(({ cash }) => cash ?? 0))]));
 
   const cohortOf = new Map(
-    [...groupBy(matches, comparisonOf).values()].flatMap((group) => {
-      const name = cohortName(group.flat());
+    [...byMatch].map(([matchId, matchSeats]) => {
+      const models = unique(matchSeats.map(({ model }) => model));
 
-      return group.flatMap((matchSeats) => matchSeats.map(({ matchId }) => [matchId, name] as const));
+      return [matchId, models.length === 1 ? `${shortName(models[0] ?? "")} efforts` : "Cross-model"] as const;
     }),
   );
 
