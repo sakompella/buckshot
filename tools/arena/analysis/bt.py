@@ -80,7 +80,7 @@ class Fit:
         return {name: (value - mean) * ELO for name, value in self.theta.items()}
 
 
-def fit(cells: Cells, tau: float = 0.0, seat: bool = False, start: bool = False, theta_sd: float = 3.0, entrants: set[str] = frozenset()) -> Fit:
+def fit(cells: Cells, tau: float = 0.0, seat: bool = False, start: bool = False, theta_sd: float = 3.0, entrants: set[str] = frozenset(), pair_terms: set[tuple[str, str]] | None = None) -> Fit:
     """Newton steps on the log posterior; `entrants` without a game get theta 0."""
     names = sorted({name for key in cells for name in key[:2]} | set(entrants))
     column = {("theta", name): i for i, name in enumerate(names)}
@@ -92,7 +92,10 @@ def fit(cells: Cells, tau: float = 0.0, seat: bool = False, start: bool = False,
         column[("start", "")] = len(column)
         penalty.append(0.0)
     if tau > 0:
-        for pair in sorted({pair_of(*key[:2]) for key in cells}):
+        pairs = {pair_of(*key[:2]) for key in cells}
+        if pair_terms is not None:
+            pairs &= pair_terms
+        for pair in sorted(pairs):
             column[("delta", pair)] = len(column)
             penalty.append(1 / tau**2)
     size = len(column)
@@ -105,7 +108,7 @@ def fit(cells: Cells, tau: float = 0.0, seat: bool = False, start: bool = False,
             row[column[("seat", "")]] = 1.0
         if start:
             row[column[("start", "")]] = 1.0 if key[2] else -1.0
-        if tau > 0:
+        if tau > 0 and (pair_terms is None or (low, high) in pair_terms):
             row[column[("delta", (low, high))]] = 1.0 if first == low else -1.0
         design[key] = row
     x = [0.0] * size

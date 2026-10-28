@@ -1,5 +1,6 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
+import { anchorId, markTip } from "./charts.ts";
 import { colorOfKey, fmtPct, groupBy, keyOf, labelOf, type MatchRow, type SeatFull } from "./data.ts";
 import { type Derived, memoLast } from "./derived.ts";
 import type { Message } from "./model.ts";
@@ -95,6 +96,9 @@ const HALF = 9;
 
 const MIN_CELL = 16;
 
+/** A phone's cells are wider, so a finger can pick one; the chart scrolls sideways instead. */
+const MIN_TOUCH_CELL = 24;
+
 const MAX_CELL = 30;
 
 const tallyText = ({ wins, games }: Tally): string => (games === 0 ? "did not play" : `won ${Number(wins.toFixed(1))} of ${games}`);
@@ -108,7 +112,7 @@ export const dealsView = (h: H, derived: Derived, width: number): Html => {
   const nameOf = (deal: Deal) => ((seedCount.get(deal.seed)?.length ?? 1) > 1 ? `${deal.seed} · ${DAY.format(new Date(deal.startedAt))}` : String(deal.seed));
 
   const head = Math.max(...keys.map((key) => labelOf(key).length), 0) * 7 + 12;
-  const cell = Math.max(MIN_CELL, Math.min(MAX_CELL, Math.floor((width - LABEL) / Math.max(keys.length, 1))));
+  const cell = Math.max(width < 600 ? MIN_TOUCH_CELL : MIN_CELL, Math.min(MAX_CELL, Math.floor((width - LABEL) / Math.max(keys.length, 1))));
   const columnX = (index: number) => LABEL + index * cell;
   const chartWidth = columnX(keys.length);
 
@@ -142,22 +146,25 @@ export const dealsView = (h: H, derived: Derived, width: number): Html => {
                         h.text([h.X("0"), h.Y(String(top + 15)), h.Class("lbl")], [nameOf(deal)]),
                         h.text([h.X(String(LABEL - 8)), h.Y(String(top + 15)), h.TextAnchor("end"), h.Class("val")], [fmtPct(deal.firstShare)]),
                         ...keys.flatMap((key, index) => {
-                          const result = deal.cells.get(key) ?? { first: EMPTY, second: EMPTY };
+                          const result = deal.cells.get(key);
                           const x = columnX(index) + 1;
 
-                          return [
+                          if (result === undefined) return [];
+
+                          const halves = [
                             { tally: result.first, offset: 0 },
                             { tally: result.second, offset: HALF + 1 },
                           ].flatMap(({ tally, offset }) =>
-                            tally.games === 0
-                              ? []
-                              : [
-                                  h.rect(
-                                    [h.X(String(x)), h.Y(String(top + offset + 1)), h.Width(String(cell - 2)), h.Height(String(HALF)), h.Fill(shade(share(tally)))],
-                                    [h.title([], [`${labelOf(key)} on seed ${nameOf(deal)}: ${tallyText(result.first)} at position 1, ${tallyText(result.second)} at position 2`])],
-                                  ),
-                                ],
+                            tally.games === 0 ? [] : [h.rect([h.X(String(x)), h.Y(String(top + offset + 1)), h.Width(String(cell - 2)), h.Height(String(HALF)), h.Fill(shade(share(tally)))], [])],
                           );
+
+                          // The whole cell answers a tap, not just the half that was played.
+                          return [
+                            h.g(markTip(h, anchorId("deal", deal.id, key), `${labelOf(key)} on seed ${nameOf(deal)}: ${tallyText(result.first)} at position 1, ${tallyText(result.second)} at position 2`, false), [
+                              h.rect([h.X(String(x - 1)), h.Y(String(top)), h.Width(String(cell)), h.Height(String(ROW)), h.Fill("transparent")], []),
+                              ...halves,
+                            ]),
+                          ];
                         }),
                       ],
                     );

@@ -1,7 +1,7 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { type Decisions, NO_GAP } from "../api.ts";
-import { chartWidth, linScale, logScale } from "./charts.ts";
+import { anchorId, chartWidth, linScale, logScale, REFERENCE, REFERENCE_DASH, tippedDot } from "./charts.ts";
 import { baseName, baseOrder, colorOf, DASH, EFFORTS, fmtCount, groupBy, keyOf, labelOf, type SeatFull } from "./data.ts";
 import { memoLast } from "./derived.ts";
 import { spreadLabels } from "./effort.ts";
@@ -116,7 +116,7 @@ const panelView = (h: H, { model, lines }: Panel, width: number): Html => {
         h.g(
           [],
           [
-            h.line([h.Class("grid"), h.X1(String(left)), h.X2(String(width - right)), h.Y1(String(y.at(tick))), h.Y2(String(y.at(tick))), ...(tick === 1 ? [h.StrokeDasharray("4 3")] : [])], []),
+            h.line([...(tick === 1 ? [h.Stroke(REFERENCE), h.StrokeDasharray(REFERENCE_DASH)] : [h.Class("grid")]), h.X1(String(left)), h.X2(String(width - right)), h.Y1(String(y.at(tick))), h.Y2(String(y.at(tick)))], []),
             h.text([h.X(String(left - 6)), h.Y(String(y.at(tick) + 4)), h.TextAnchor("end")], [ratioName(tick)]),
           ],
         ),
@@ -130,9 +130,13 @@ const panelView = (h: H, { model, lines }: Panel, width: number): Html => {
           [],
         ),
         ...points.map(({ gap, moves, tokens, ratio }) =>
-          h.circle(
-            [h.Cx(String(x.at(gap))), h.Cy(String(y.at(ratio))), h.R("3"), h.Fill(color)],
-            [h.title([], [`${labelOf(key)} · gap ${gapName(gap)} · ${fmtCount(tokens)} tokens per move, ${ratioName(ratio)} its level-health ${fmtCount(level)} · ${moves.toLocaleString()} moves`])],
+          tippedDot(
+            h,
+            anchorId("pressure", key, gap),
+            `${labelOf(key)} · gap ${gapName(gap)} · ${fmtCount(tokens)} tokens per move, ${ratioName(ratio)} its level-health ${fmtCount(level)} · ${moves.toLocaleString()} moves`,
+            String(x.at(gap)),
+            String(y.at(ratio)),
+            [h.R("3"), h.Fill(color)],
           ),
         ),
         h.path([h.D(`M${x.at(points.at(-1)?.gap ?? 0) + 3},${y.at(points.at(-1)?.ratio ?? 1)} L${width - right + 6},${labelYs[index] ?? 0} h2`), h.Fill("none"), h.Stroke(color), h.StrokeOpacity("0.6")], []),

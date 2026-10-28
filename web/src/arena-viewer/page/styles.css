@@ -10,6 +10,12 @@ h3 { font-size: 15px; font-weight: 600; margin: 18px 0 6px; }
 .k { color: var(--mut); font-size: 12px; }
 .pm { color: var(--dim); font-size: 11px; }
 section { border-top: 1px solid var(--line); padding-top: 28px; margin-top: 28px; }
+/* A group's heading, then its sections; the first section's rule would double the group's own. */
+section.part { border-top-color: #3a3a3a; margin-top: 56px; }
+h1.ghead { font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mut); margin: 0 0 18px; }
+h1.ghead + section { border-top: 0; margin-top: 0; padding-top: 0; }
+/* The jump menu right above names the first group, so its heading is only for screen readers. */
+.top + .part > h1.ghead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
 .grid2 > section { min-width: 0; }
 .empty { color: var(--mut); padding: 40px 0; }
@@ -50,6 +56,8 @@ svg .grid { stroke: var(--grid); }
 .chart { position: relative; }
 .tip { position: fixed; pointer-events: none; background: #111; border: 1px solid #2a2a2a; border-radius: 6px; padding: 6px 9px; font-size: 12px; z-index: 40; max-width: min(360px, calc(100vw - 16px)); }
 .legend { color: var(--mut); font-size: 12px; display: flex; gap: 14px; flex-wrap: wrap; margin: 6px 0 10px; }
+.linekey { gap: 4px 14px; }
+.linekey svg { vertical-align: middle; margin-right: 5px; }
 
 table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 th { font-weight: 500; color: var(--mut); text-align: right; padding: 9px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; font-size: 12px; }
@@ -104,6 +112,7 @@ svg .dimtext { fill: var(--dim); font-size: 11px; }
 .chartpair h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
 .chartrow figure { margin: 0; min-width: 0; }
 figure.lanes { margin: 36px 0 0; }
+h2.subhead { margin-top: 40px; }
 figure.lanes h3 { margin-top: 0; }
 .chartrow h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
 .chartrow .sub { margin-bottom: 12px; }
@@ -118,9 +127,11 @@ figure.lanes h3 { margin-top: 0; }
 .fate-val { font-variant-numeric: tabular-nums; }
 svg .big { font-size: 20px; font-weight: 600; fill: var(--fg); font-variant-numeric: tabular-nums; }
 details.tables { margin-top: 34px; }
+details.fold > summary { color: var(--mut); font-size: 13px; }
 details.tables > summary { color: var(--mut); font-size: 13px; }
 svg .cell { fill: #fff; stroke: #000; stroke-width: 2.5px; paint-order: stroke; }
 svg text { pointer-events: none; }
+[role="button"] { cursor: pointer; }
 .track { min-width: 180px; }
 .dim { color: var(--dim); }
 tr.group td { color: var(--fg); font-weight: 600; padding-top: 18px; border-bottom: 1px solid var(--line); text-align: left; }
@@ -306,6 +317,7 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
   .hero .lead { font-size: 14px; margin-top: 6px; }
   .stats { grid-template-columns: auto auto auto auto; gap: 0 12px; margin-top: 8px; justify-content: start; }
   section { padding-top: 20px; margin-top: 20px; }
+  section.part { margin-top: 36px; }
   .card { padding: 12px 10px; margin-bottom: 18px; }
   .sub { font-size: 12.5px; margin-bottom: 12px; }
   .filters { gap: 8px; }

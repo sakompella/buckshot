@@ -1,6 +1,6 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { linScale } from "./charts.ts";
+import { anchorId, linScale, REFERENCE, tippedDot } from "./charts.ts";
 import { addTo, baseOrder, type BlockTally, blockRate, EFFORTS, fmtCI, type ModelStats, type Rate, roundResults, type SeatFull } from "./data.ts";
 import type { Message } from "./model.ts";
 
@@ -60,6 +60,7 @@ const tipOf = (name: string, rate: Rate): string => `${name}: ${percent(rate.rat
 
 export const momentumView = (h: H, stats: ReadonlyArray<ModelStats>, width: number): Html => {
   const rows = rowsOf(stats);
+  const { afterWin } = momentumOf(stats.flatMap(({ scored }) => scored));
   const isNarrow = width < 600;
   const left = isNarrow ? 146 : 170;
   const right = 12;
@@ -72,37 +73,47 @@ export const momentumView = (h: H, stats: ReadonlyArray<ModelStats>, width: numb
     [
       h.div(
         [h.Class("lbbar")],
-        [h.h2([], ["Results after round 1"]), h.span([h.Class("k")], ["● wins round 2 after winning round 1"]), h.span([h.Class("k")], ["○ wins round 3 when it is 1–1"]), h.span([h.Class("k")], ["| its round share"])],
+        [h.h2([], ["Results after round 1"])],
       ),
+      afterWin.n === 0 ? h.empty : h.p([h.Class("sub")], [`The round 1 winner took round 2 in ${percent(afterWin.rate)} of ${afterWin.n.toLocaleString()} matches (${fmtCI(afterWin)}).`]),
       rows.length === 0
         ? h.div([h.Class("empty")], ["No config has matches with known rounds in this filter."])
-        : h.svg(
-            [h.Width(String(width)), h.Height(String(height))],
+        : h.details(
+            [h.Class("fold")],
             [
-              ...x.ticks.map((tick) =>
-                h.g(
-                  [],
-                  [
-                    h.line([h.Class("grid"), h.X1(String(x.at(tick))), h.X2(String(x.at(tick))), h.Y1(String(T)), h.Y2(String(height - B))], []),
-                    h.text([h.X(String(x.at(tick))), h.Y(String(height - B + 16)), h.TextAnchor("middle")], [percent(tick)]),
-                  ],
-                ),
-              ),
-              ...rows.flatMap(({ m, momentum }, index) => {
-                const dot = (rate: Rate, dy: number, isRing: boolean, name: string): Html =>
-                  h.circle(
-                    [h.Cx(String(x.at(rate.rate))), h.Cy(String(y(index) + dy)), h.R("3.5"), h.Fill(isRing ? "#000" : m.color), h.Stroke(m.color), h.StrokeWidth("1.5")],
-                    [h.title([], [`${m.label} · ${tipOf(name, rate)}`])],
-                  );
+              h.summary([], [`Each config (${rows.length})`]),
+              h.div([h.Class("legend")], [h.span([], ["● wins round 2 after winning round 1"]), h.span([], ["○ wins round 3 when it is 1–1"]), h.span([], ["| its round share"])]),
+              h.svg(
+                [h.Width(String(width)), h.Height(String(height))],
+                [
+                  ...x.ticks.map((tick) =>
+                    h.g(
+                      [],
+                      [
+                        h.line([h.Class("grid"), h.X1(String(x.at(tick))), h.X2(String(x.at(tick))), h.Y1(String(T)), h.Y2(String(height - B))], []),
+                        h.text([h.X(String(x.at(tick))), h.Y(String(height - B + 16)), h.TextAnchor("middle")], [percent(tick)]),
+                      ],
+                    ),
+                  ),
+                  ...rows.flatMap(({ m, momentum }, index) => {
+                    const dot = (rate: Rate, dy: number, isRing: boolean, name: string): Html =>
+                      tippedDot(h, anchorId("momentum", m.key, isRing ? "ring" : "dot"), `${m.label} · ${tipOf(name, rate)}`, String(x.at(rate.rate)), String(y(index) + dy), [
+                        h.R("3.5"),
+                        h.Fill(isRing ? "#000" : m.color),
+                        h.Stroke(m.color),
+                        h.StrokeWidth("1.5"),
+                      ]);
 
-                return [
-                  h.text([h.X(String(left - 8)), h.Y(String(y(index) + 4)), h.TextAnchor("end"), h.Style({ fill: m.color }), h.Class("lbl")], [m.label]),
-                  h.line([h.X1(String(x.at(m.roundShare))), h.X2(String(x.at(m.roundShare))), h.Y1(String(y(index) - 9)), h.Y2(String(y(index) + 9)), h.Stroke("#8b8b8b"), h.StrokeWidth("1.5")], []),
-                  h.line([h.X1(String(x.at(momentum.afterWin.rate))), h.X2(String(x.at(momentum.decider.rate))), h.Y1(String(y(index) - 3)), h.Y2(String(y(index) + 3)), h.Stroke(m.color), h.StrokeOpacity("0.5"), h.StrokeWidth("1.5")], []),
-                  dot(momentum.afterWin, -3, false, "wins round 2 after winning round 1"),
-                  dot(momentum.decider, 3, true, "wins round 3 at 1–1"),
-                ];
-              }),
+                    return [
+                      h.text([h.X(String(left - 8)), h.Y(String(y(index) + 4)), h.TextAnchor("end"), h.Style({ fill: m.color }), h.Class("lbl")], [m.label]),
+                      h.line([h.X1(String(x.at(m.roundShare))), h.X2(String(x.at(m.roundShare))), h.Y1(String(y(index) - 9)), h.Y2(String(y(index) + 9)), h.Stroke(REFERENCE), h.StrokeWidth("1.5")], []),
+                      h.line([h.X1(String(x.at(momentum.afterWin.rate))), h.X2(String(x.at(momentum.decider.rate))), h.Y1(String(y(index) - 3)), h.Y2(String(y(index) + 3)), h.Stroke(m.color), h.StrokeOpacity("0.5"), h.StrokeWidth("1.5")], []),
+                      dot(momentum.afterWin, -3, false, "wins round 2 after winning round 1"),
+                      dot(momentum.decider, 3, true, "wins round 3 at 1–1"),
+                    ];
+                  }),
+                ],
+              ),
             ],
           ),
     ],
