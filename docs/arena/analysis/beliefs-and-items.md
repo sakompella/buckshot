@@ -6,12 +6,15 @@ DeepSeek (`deepseek-v4.1-flash`) is left out entirely. Every match with a DeepSe
 
 ## Summary
 
-- **Acting on a known shell.** Opus 5.5 at every effort, Astra, Sol and Sonnet almost never shoot against a chamber they know. Opus shot the opponent on a known blank or itself on a known live 1 time in 1,134 such shots in tournament 2, and 0 in 327 in tournament 3. Haiku 4.5 at every effort often does. So do Haiku 5.5 and Luna, most at off, low and medium; their rates fall steadily with effort but stay above the others at max. Among the medium cross-model games:
+Scope: the 2,181 scored matches of the four cohorts in the Coverage table, with no DeepSeek seat, from the knowledge database built on 2026-10-22. The analysis database now holds 2,471 scored matches; those added or finished since are not in these figures or tables.
+
+
+- **Acting on a known shell.** Opus 5.5 at every effort, Astra, Sol and Sonnet almost never shoot against a chamber they know. Opus shot the opponent on a known blank or itself on a known live 1 time in 1,134 such shots in its effort games, and 0 in 327 against Astra at xhigh. Haiku 4.5 at every effort often does. So do Haiku 5.5 and Luna, most at off, low and medium; their rates fall steadily with effort but stay above the others at max. Among the medium cross-model games:
   - Luna shot itself on a known live 14% of the time (74/547).
   - Haiku 4.5 shot the opponent on a known blank with shells still to come 32% of the time (74/228). For Haiku 5.5 it was 17% (36/209), and for Luna 25% (69/280).
 - **The last shell.** Shooting the opponent with a known blank is most common on the gun's last shell. In the replays a blank shot at yourself always kept the move, also across the reload (430/430), and a blank at the opponent always passed it. The last-shell rate is 52–70% for Haiku 4.5, Haiku 5.5 and Luna at medium. It is 8.5% (8/94) for Sonnet medium and 1.8% (2/113) for Opus medium.
 - **Phone clues are kept worse than magnifier clues.** Over all models in the medium cross-model games, a chamber known from the glass was shot against 1.8% of the time (46/2,524), and one known from the phone 8.7% (74/853). The effort sweeps show the same, 2.9% (196/6,839) against 13% (309/2,455). Luna medium: glass 1.8% (6/333), phone 38% (38/100).
-- **Forgetting with time.** Glass clues are acted against more as moves pass. In the effort sweeps it is 2.0% (74/3,712) on the very next move, 3.6% (84/2,361) one move later and 4.9% (37/754) after two or three. Phone clues are acted against at 10–15% at every distance, already 11% (49/444) on the next move. That points to the offset reasoning, not memory.
+- **More errors after more intervening moves.** Glass clues are acted against more as moves pass. In the effort sweeps it is 2.0% (74/3,712) on the very next move, 3.6% (84/2,361) one move later and 4.9% (37/754) after two or three. Phone clues are acted against at 10–15% at every distance, already 11% (49/444) on the next move. The pattern does not separate memory from a changing position. Misreading the phone's offset is one hypothesis, not an established cause.
 - **How often an item settles the chamber.** About a quarter of every model's shots are at a chamber known from its own glass or phone: 20% (328/1,616) for Haiku 4.5 up to 27% (476/1,751) for Sonnet in the medium cross-model games. About a third more are known from counting. Blind shots taken while holding a magnifier are rare, at most 3.1% (24/820, Haiku 4.5).
 - **Items.**
   - Models use 46–68% of the items they place.
@@ -19,7 +22,7 @@ DeepSeek (`deepseek-v4.1-flash`) is left out entirely. Every match with a DeepSe
   - 84–95% of deaths leave at least one unused item, about three on average, most often an inverter or a beer.
   - Items are used early when they are used at all. The median is one of the owner's own decisions after placement, about six or seven accepted moves.
 - **Favourite items.** By the rate of using an item when it is a legal move, the magnifier is the favourite for 7 of the 8 medium models (48–68%). Terra prefers the jammer, 67% (204/306) at medium and 60–74% at every effort. The inverter is the least used item for every model: 7–17% of the decisions where it is legal at medium, and 24–45% of the inverters placed are ever used. With adrenaline, the jammer and the magnifier are what models steal. Astra also steals cigarettes, 27% (61/228).
-- **Same position, same choice.** About a quarter to a third of decisions (11–43% by model, exact positions) fall in a position the same model met again: same board, same log since the load, same menu. Opus medium and xhigh in tournaments 2 and 3 are the exception: one pairing alone gives few repeats. Two decisions in the same position differ:
+- **Same position, same choice.** About a quarter to a third of decisions (11–43% by model, exact positions) fall in a position the same model met again: same board, same log since the load, same menu. Opus medium and xhigh in the Opus effort and Opus-against-Astra cohorts are the exception: one pairing alone gives few repeats. Two decisions in the same position differ:
   - 4.9% of the time for Astra and 7.7% for Sol;
   - 11–12% for Opus and Sonnet;
   - 22–24% for Haiku 5.5 and Terra;
@@ -40,7 +43,7 @@ DeepSeek (`deepseek-v4.1-flash`) is left out entirely. Every match with a DeepSe
 - **Use when legal:** at each agent decision, whether a move that spends the item is on the menu, and whether the player chose it. "Jam Player X" spends a jammer. Steals are counted separately from the player's own items.
 - **Same position:** two decisions share an *exact* position when all of these are the same: the board (health, jam state, items, cash, round, saw, and the live and blank counts shown at the load), the deciding player's whole log since the load, the legal moves, and the instructions. Players are named relative to the decider, never by letter. A looser *belief* position replaces the log with the public and private shell beliefs, plus how many clue items each opponent used this load.
 
-**Counted.** Completed (scored) matches only, and only the agents' own moves. Forced grabs and the two fallback moves are not counted. Models are `entrants.model` plus effort. Code versions are pooled. Cohorts are never pooled: tournament 1's medium cross-model games, tournament 1's effort sweeps, tournament 2 (Opus effort) and tournament 3 (Opus xhigh vs Astra). The same model and effort appear as separate rows in different cohorts.
+**Counted.** Completed (scored) matches only, and only the agents' own moves. Forced grabs and the two fallback moves are not counted. Models are `entrants.model` plus effort. Code versions are pooled. A cohort is one kind of comparison, pooled across every tournament that played it: the medium cross-model games, the effort sweeps, the Opus effort games and Opus xhigh against Astra. Cohorts are never split by tournament. The same model and effort appear as separate rows in different cohorts.
 
 **Intervals.** Every rate is numerator/denominator with a 95% percentile interval from 2,000 resamples of seed blocks (`matches.seed_block_id`) within the row, never of single matches or moves. The resampler is seeded, so a rerun prints the same intervals. For consistency and agreement, the interval is over pairs of distinct decisions: a pair weighs the product of its two blocks' resample counts, and a decision never pairs with its own copy. Without that, a block drawn twice would agree with itself. The non-modal share has no interval for that reason.
 
@@ -66,7 +69,7 @@ DeepSeek (`deepseek-v4.1-flash`) is left out entirely. Every match with a DeepSe
 - Views are reconstructed from the logs with today's rules, as in the analysis database. They are not the prompts the models saw. A model that misread its log is judged by what the log showed.
 - "Public" certainty assumes the player counts shells. Most shots against a known shell come from counting, mainly on the last shell, not from forgotten clues.
 - Keeping the move with a self-shot blank is measured from the replays (two players, opponent not jammed). With a jammed opponent, a blank at the opponent skips their turn and costs the jam instead.
-- The effort sweeps pair each level with every other level of the same model, so their opponents differ from the cross-model games. Opus low in tournament 2 played only medium (20 matches), and tournament 3 is one pairing. Both have almost no repeated positions.
+- The effort sweeps pair each level with every other level of the same model, so their opponents differ from the cross-model games. Opus low in the Opus effort games played only medium (20 matches), and Opus against Astra is one pairing. Both have almost no repeated positions.
 - Partial and skipped matches are left out, as are forced grabs and fallback moves.
 
 ## Reproduce
@@ -79,7 +82,7 @@ From `web/`, after `bun run rules` (Bend comes from `$BEND`, `bend` on PATH or t
 
 # Tables
 
-Generated by `scripts/arena-knowledge-report.ts`.
+Generated by `scripts/arena-knowledge-report.ts`. The cohort labels below (t1, t2, t3) are from the build before cohorts were pooled by comparison kind. They name the same four comparison kinds, and the tables do not yet include games added since.
 
 ## Coverage
 

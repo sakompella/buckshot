@@ -1,8 +1,10 @@
 # Arena results
 
-This page summarizes the tournaments run so far, the findings about model reasoning, and the open work. The raw data stays under `_work/arena/`, which isn't committed. See [README.md](README.md) for how to run and resume. All costs are theoretical: list prices for usage on subscription plans.
+This page summarizes the tournaments run so far, the findings about model reasoning, and the open work. The raw data stays under `_work/arena/`, which isn't committed. See [README.md](README.md) for how to run and resume. All costs are list-price costs: list prices applied to usage on subscription plans, not money paid.
 
 Ratings are one Bradley-Terry fit over every scored match of every tournament, on an Elo scale with the mean at 0, per configuration (model + endpoint + effort). So one rating scale covers every config, as in the viewer. A second fit on pot share (a config's cash over the match's cash, which also credits round prizes a loser banked) gives the cash rating. 95% intervals are in [matchups.md](analysis/matchups.md). Each pairing plays 10 seeds in both seat orders, 20 matches, unless stated otherwise. With 10 seeds, close rankings aren't reliable. "Medium" also isn't equal compute across providers.
+
+Scope: 2,471 scored matches with no DeepSeek seat, as of 2026-10-26.
 
 ## Status (2026-10-26)
 - **Nothing is running.** No arena jobs, runners, agents or heartbeats.
@@ -165,9 +167,9 @@ One table per cohort, ranked by the pooled rating, as the viewer's leaderboards 
 <!-- leaderboard:end -->
 
 ## tournament-1: cross-model and effort sweeps
-2,080 matches, $934.46. The only request difference between its two runs of the arena is the GPT reasoning summary (`auto` vs `detailed`).
+2,080 matches, list-price cost $934.46. The only request difference between its two runs of the arena is the GPT reasoning summary (`auto` vs `detailed`).
 
-**Leftovers, finished 2026-10-22** (63 matches, about $19.6; all replay-validated). Each pairing is 20 matches. Scores are matches won, first-named entrant first:
+**Leftovers, finished 2026-10-22** (63 matches, list-price cost about $19.6; all replay-validated). Each pairing is 20 matches. Scores are matches won, first-named entrant first:
 - gpt-5.6-terra vs gpt-6-astra: 5–15
 - gpt-5.6-terra vs claude-opus-5-5: 8–12
 - gpt-5.6-terra vs claude-haiku-4-5: 14–6
@@ -177,13 +179,13 @@ One table per cohort, ranked by the pooled rating, as the viewer's leaderboards 
 Each model plays a round robin against its own effort levels (no suffix = medium). Their ratings, pooled with every cross-model game, are in the leaderboard above.
 
 Takeaways:
-- xhigh is generally the best level. max rarely beats it clearly and costs about 10× more.
+- xhigh is generally the best level. max rarely beats it clearly and has about 10 times the list-price cost.
 - luna gains the most from effort. sol barely changes except at max.
 - True off clearly hurts haiku 4.5 and 5.5. haiku 4.5's minimal plays like its medium.
 - sonnet 5.5's off is "requested off" (`between_tools`).
 
 ## tournament-2: Opus 5.5 effort, stage A
-80 matches, $58.89. Each new level plays medium and its neighbouring level: low–medium, medium–high, medium–xhigh, high–xhigh.
+80 matches, list-price cost $58.89. Each new level plays medium and its neighbouring level: low–medium, medium–high, medium–xhigh, high–xhigh.
 
 Ratings are in the leaderboard above.
 
@@ -193,7 +195,7 @@ Head to head:
 - xhigh beat medium 65–35;
 - xhigh beat high 65–35.
 
-Stage B would add medium–max and xhigh–max: 40 matches, about $355–370 (max matches take about an hour each), about 1.5–2.5 days at the Claude line. Measured quota use was about 0.0115 of a Claude 5h window per dollar on one account and 0.0080 on the other.
+Stage B would add medium–max and xhigh–max: 40 matches, list-price cost about $355–370 (max matches take about an hour each), about 1.5–2.5 days at the Claude line. Measured quota use was about 0.0115 of a Claude 5h window per dollar on one account and 0.0080 on the other.
 
 ## tournament-3: Opus 5.5 xhigh vs Astra medium (finished, 41 matches)
 - **Seeds:** fixed in advance. First 3000–3009, which are tournament-1's Opus medium vs Astra seeds, for a matched comparison. Then 3020–3029. Capped at 40 matches; Aditya later ruled that the one finished match past the cap also counts.
@@ -205,9 +207,9 @@ Stage B would add medium–max and xhigh–max: 40 matches, about $355–370 (ma
 - **Per seed:** Opus won both games on 6 seeds, Astra on 4, and 10 split. Astra won seed 3030's only game. Seat 2 won 17 of 41.
 - **Matched against Opus medium** on seeds 3000–3009: 10/20 vs 9/20, a difference of +5%, 95% CI −15% to +25%.
 - **Verdict:** inconclusive. The data rules out neither model being somewhat stronger, and xhigh shows no measurable gain over medium against Astra.
-- **Cost:** $41.11 at list prices: Opus $29.75, Astra $11.36. Astra reasons very little at medium: about 3k reasoning tokens over 1,077 calls.
+- **List-price cost:** $41.11: Opus $29.75, Astra $11.36. Astra reports few reasoning tokens at medium: about 3k over 1,077 calls.
 
-**Outside the cap.** A brief uncapped run started 6 matches (seeds 3030–3032). Seed 3030's first match finished and is scored above. The other 5 never finished, are not scored, and cost $1.38 together. They stay in the tournament directory, unfinished.
+**Outside the cap.** A brief uncapped run started 6 matches (seeds 3030–3032). Seed 3030's first match finished and is scored above. The other 5 never finished, are not scored, and have a list-price cost of $1.38 together. They stay in the tournament directory, unfinished.
 
 **Lessons:**
 - **Pass every needed `--code` when using a cap.** While an old-code match waits for its checkout, the runner leaves it off its pending list, so `--limit` picks a match past the cap.
@@ -216,7 +218,7 @@ Stage B would add medium–max and xhigh–max: 40 matches, about $355–370 (ma
 
 ## tournament-4: cross-model samples (finished 2026-10-25, 288 matches)
 
-Every config that had only played its own model's effort sweep played 10 matches against other models at medium effort: 5 seat-swapped pairs, each against a different opponent, seeds 3000–3009. Sonnet max played 8 here; its other 2 (both lost to Opus) are in tournament-1. 288 matches, no failed runs, $108.96 at list prices. With these, every config has cross-model games, so the pooled rating no longer leans on the effort sweeps alone.
+Every config that had only played its own model's effort sweep played 10 matches against other models at medium effort: 5 seat-swapped pairs, each against a different opponent, seeds 3000–3009. Sonnet max played 8 here; its other 2 (both lost to Opus) are in tournament-1. 288 matches, no failed runs, list-price cost $108.96. With these, every config has cross-model games, so the pooled rating no longer leans on the effort sweeps alone.
 
 Wins out of 10 (Sonnet max: of 8 here):
 

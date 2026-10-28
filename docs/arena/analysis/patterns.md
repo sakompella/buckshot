@@ -3,8 +3,9 @@
 Patterns in how the models played and reasoned in the arena. Each one was found in the traces and then checked again with an independent query against the analysis database ([database.md](../database.md)) and the derived `knowledge.sqlite` ([beliefs-and-items.md](beliefs-and-items.md)). This is a casual pass: counts and rates, no intervals. Treat any gap of a few points on 20–100 seats as noise.
 
 Scope:
-- Decision rates use the 2,471 scored matches with no DeepSeek seat.
-- Call counts (tokens, costs, tool calls, reasoning text) include every started match.
+- **Data.** Only the table and prose of "Patterns against regret" use the 2,471 scored matches with no DeepSeek seat, as of 2026-10-26. Every other count and rate on this page was taken from 2,118 such matches around 2026-10-22 and was not refreshed. Where the two disagree, trust the regret section.
+- Decision rates count scored matches with no DeepSeek seat.
+- Call counts (tokens, list-price costs, tool calls, reasoning text) include every started match.
 - "Known" means the deciding player's own log proves the shell. A shot's result is read from the log that follows it.
 - Effort comparisons use each model's own effort sweep, except where a tournament is named. Saved reasoning is provider-returned text and often a summary, so quotes are short and paraphrase-like.
 
@@ -27,7 +28,7 @@ Scope:
 6. **The Haiku models rarely take a likely-free self-shot.** The case: an unknown chamber, the live count known exactly, and under 50% live.
    - Haiku 5.5 shoots itself 14% of the time (58/413) and Haiku 4.5 23% (118/509).
    - The others do so 49–70% of the time: Opus 112/161, Astra 57/81, Sol 225/347, Sonnet 374/575, Terra 171/325, Luna 270/546.
-7. **Luna does not count shells.**
+7. **Luna often acts against shells known from counting.** The behaviour is measured. The cause is not: a failure to count is one guess.
    - It shoots itself into a shell the public log proves live: off 58/226, low 64/215, medium 106/553, high 21/272, xhigh 18/313, max 15/309. When the magnifier showed live it almost never does (0–3%).
    - At medium it gives reasoning tokens to only 42% of calls. Moves with no reasoning do this 25% of the time (82/325), against 11% (24/228) with reasoning.
    - 40 of its 92 self-inflicted deaths were on a provably live last shell.
@@ -43,13 +44,13 @@ Scope:
    | Terra | 80 | low .40, medium .45, high .46, max .59, xhigh .60 |
    | Opus, tournament 2 | 20–60 | low .35, high .45, medium .48, xhigh .65 |
 
-   - Haiku 5.5 max cost 9 times as much as xhigh ($95 against $11 in all) and won less, 9 of 20 against xhigh head to head.
+   - Haiku 5.5 max had 9 times the list-price cost of xhigh ($95 against $11 in all) and won less, 9 of 20 against xhigh head to head.
 9. **Sonnet at max effort sometimes never reaches a move.**
-   - 4 calls stopped at the 128,000-token output cap after about 16 minutes each, at about $1.30 apiece.
-   - A max seat costs $4.20 per match and spends 37 minutes waiting on the model, against $0.48 for xhigh.
+   - 4 calls stopped at the 128,000-token output cap after about 16 minutes each, at a list-price cost of about $1.30 apiece.
+   - A max seat has a list-price cost of $4.20 per match and spends 37 minutes waiting on the model, against $0.48 for xhigh.
 10. **Sonnet "off" still thinks.** 57% of its "off" replies carry reasoning tokens, 113 on average, more than low's 74. Haiku 5.5 and Luna at off have none. Effort labels do not mean the same thing across models.
 11. **Sonnet at max thinks longer when behind.** It writes 18.6k characters of reasoning per call at −2 HP, against 5.3k at +2. Xhigh goes from 2.1k to 0.66k, and medium is flat. Hard positions are a confound.
-12. **Astra barely thinks and still wins.**
+12. **Astra reports few reasoning tokens and still wins.** The provider returns token counts and short summaries, which are not the whole of its internal computation.
     - 3,663 of its 4,075 replies have 0 reasoning tokens, and the most in any reply is 131. Its only reasoning text is 234 short titles, such as "Inverting blank .6".
     - It wins .72 in the cross-model games (luna 19/20) and .46 against Opus xhigh (n=41).
 13. **Talk about what the opponent knows grows with effort.**
@@ -107,7 +108,7 @@ Each choice pattern above that is a single move, checked against [regret](regret
 - **No clear gap.** Smoking your own cigarettes at full health averages 1.3 points outside Luna (1.2 while the opponent holds adrenaline), against 1.5 for the other moves there. Luna's 95 such smokes average 4.2 against 2.4, which is a small sample. Shooting yourself at exactly half live is 4.3 against 3.7 for shooting the opponent. The self-shot the Haiku models skip, an unknown chamber under half live, is 5.5 against 4.6, so skipping it shows no cost here.
 - **Limits.** The item rows (smoking, phone, saws) are only as good as the evaluator's untrained item weights, so "cost little" there means the evaluator values the item little. Shots on the last shell end at the next reload, which the search scores as a static leaf. Many of the other rows have more than three shells left, where most searches stop early. Smoking counts only the player's own cigarettes, not ones stolen with adrenaline: 92 decisions outside Luna and 95 for Luna; pattern 4's counts of 79 and 84 above were not refreshed.
 
-Rerun with `python3 tools/arena/analysis/patterns_regret.py --doc docs/arena/analysis/patterns.md`. Only this table and its prose were refreshed on the full data (tournament 4 included); the other figures in this page are from the earlier data.
+Rerun with `python3 tools/arena/analysis/patterns_regret.py --doc docs/arena/analysis/patterns.md`. This table and its prose use the full data. The scope at the top of this page says what the rest uses.
 
 ## Claude calls mention an organization instruction
 
