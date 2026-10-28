@@ -72,7 +72,7 @@ export const momentumView = (h: H, stats: ReadonlyArray<ModelStats>, width: numb
     [
       h.div(
         [h.Class("lbbar")],
-        [h.h2([], ["Results after round 1"]), h.span([h.Class("k")], ["● wins round 2 after winning round 1"]), h.span([h.Class("k")], ["◇ wins round 3 when it is 1–1"]), h.span([h.Class("k")], ["| its round share"])],
+        [h.h2([], ["Results after round 1"]), h.span([h.Class("k")], ["● wins round 2 after winning round 1"]), h.span([h.Class("k")], ["○ wins round 3 when it is 1–1"]), h.span([h.Class("k")], ["| its round share"])],
       ),
       rows.length === 0
         ? h.div([h.Class("empty")], ["No config has matches with known rounds in this filter."])

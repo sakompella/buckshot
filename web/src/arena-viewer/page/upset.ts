@@ -65,9 +65,9 @@ export const upsetBins = (matches: ReadonlyArray<MatchRow>, ratingsFor: RatingsF
   });
 };
 
-const heldOutOf = memoLast((seats: ReadonlyArray<SeatFull>) => heldOutRatings(seats, "wins"));
+const heldOutOf = memoLast((seats: ReadonlyArray<SeatFull>) => heldOutRatings(seats, "matches"));
 
-/** The page's groups: about winning, so the Wins / Cash / Rounds choice leaves them alone. */
+/** The page's groups: about winning matches, so they take the match rating whatever the rating choice. */
 export const upsetOf = memoLast((derived: Derived): ReadonlyArray<UpsetBin> => upsetBins(derived.matches, heldOutOf(derived.seats)));
 
 const T = 24;

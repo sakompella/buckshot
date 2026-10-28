@@ -133,7 +133,8 @@ const panelView = (h: H, model: string, lines: ReadonlyArray<OddsLine>, width: n
         ...points.map(({ bin, self, shots, share }) =>
           h.circle([h.Cx(String(x.at(bin))), h.Cy(String(y.at(share))), h.R("3"), h.Fill(color)], [h.title([], [`${labelOf(key)} · chance live ${ODDS_BINS[bin]?.label} · ${self} of ${shots} shots at itself (${Math.round(share * 100)}%)`])]),
         ),
-        h.text([h.X(String(width - right + 7)), h.Y(String((labelYs[index] ?? 0) + 4)), h.Style({ fill: color }), h.Class("small")], [effort]),
+        h.path([h.D(`M${x.at(points.at(-1)?.bin ?? 0) + 3},${y.at(points.at(-1)?.share ?? 0)} L${width - right + 6},${labelYs[index] ?? 0} h2`), h.Fill("none"), h.Stroke(color), h.StrokeOpacity("0.6")], []),
+        h.text([h.X(String(width - right + 10)), h.Y(String((labelYs[index] ?? 0) + 4)), h.Style({ fill: color }), h.Class("small")], [effort]),
       ]),
     ],
   );

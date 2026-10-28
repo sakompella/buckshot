@@ -153,8 +153,8 @@ const rowView = (h: H, m: ModelStats, standing: Standing, basis: Basis, item: It
         ],
       ),
       h.td([h.Class("ws"), h.Title(`${fmtPct(lo)}–${fmtPct(hi)}`)], [h.b([], [fmtPct(m.winShare)]), " ", h.span([h.Class("pm")], [`${m.win.k.toFixed(m.win.k % 1 ? 1 : 0)}/${m.win.n}`])]),
+      basis === "rounds" ? h.td([h.DataAttribute("label", "round wins")], [fmtPct(m.roundShare)]) : h.empty,
       basis === "cash" ? h.td([h.DataAttribute("label", "pot share")], [fmtPct(m.potShare)]) : h.empty,
-      basis === "rounds" ? h.td([h.DataAttribute("label", "round share")], [fmtPct(m.roundShare)]) : h.empty,
       h.td([h.DataAttribute("label", "place" in standing ? "rank" : eloName(basis))], standingView(h, standing)),
       ...(hasRegret ? [regretCell(h, m)] : []),
       h.td([h.DataAttribute("label", "cost")], [fmtUsd(m.avgCost)]),
@@ -172,7 +172,7 @@ const rowView = (h: H, m: ModelStats, standing: Standing, basis: Basis, item: It
 const headersOf = (ranking: Ranking, basis: Basis, hasRegret: boolean): ReadonlyArray<string> => [
   "Model",
   "",
-  "Win share",
+  "Match wins",
   ...SHARE_HEADERS[basis],
   ranking === "elo" ? eloName(basis) : "Rank",
   ...(hasRegret ? ["Regret"] : []),
@@ -183,15 +183,15 @@ const headersOf = (ranking: Ranking, basis: Basis, hasRegret: boolean): Readonly
   "Favorite item",
 ];
 
-/** The share column beside the win share, for the rating's basis. */
-const SHARE_HEADERS = { wins: [], cash: ["Pot share"], rounds: ["Round share"] } satisfies Record<Basis, ReadonlyArray<string>>;
+/** The share column beside the match win share, for the rating's basis. */
+const SHARE_HEADERS = { rounds: ["Round wins"], matches: [], cash: ["Pot share"] } satisfies Record<Basis, ReadonlyArray<string>>;
 
 /** Rows with fewer scored matches than this are faded: their shares swing widely. */
 const FEW_MATCHES = 20;
 
 const HEADER_TITLES = new Map([
   ["Pot share", "a config's cash over the match's cash, averaged over scored matches"],
-  ["Round share", "the rounds a config won over the rounds it played"],
+  ["Round wins", "the rounds a config won over the rounds it played"],
   ["Regret", "mean points of round win chance a move gave up against the minimax player's best move; lower is better"],
 ]);
 

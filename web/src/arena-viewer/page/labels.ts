@@ -183,8 +183,13 @@ export const placeLabels = (points: ReadonlyArray<LabelPoint>, area: Box): Reado
     segments[label.idx] = segmentOf(label.dotX, label.dotY, label.current, label.w, label.h);
   };
 
+  // What two placed labels cost each other: overlap, crossing leaders and leaders through a box.
+  const between = (box: Box, segment: Segment, otherBox: Box, otherSegment: Segment): number =>
+    overlap(box, otherBox) * 4 + (segmentsCross(segment, otherSegment) ? 150 : 0) + (segmentHitsBox(segment, otherBox) ? 60 : 0) + (segmentHitsBox(otherSegment, box) ? 60 : 0);
+
   // Overlaps cost more than any clear spot; among clear spots the distance term keeps labels close to their dot.
-  const costAt = (label: Label, candidate: Candidate): number => {
+  // `apart` leaves one other label out, for searching two labels' places together.
+  const costAt = (label: Label, candidate: Candidate, apart?: Label): number => {
     const box = boxOf(candidate, label.w, label.h);
     const segment = segmentOf(label.dotX, label.dotY, candidate, label.w, label.h);
     let cost = candidate.gap * 2.2 + candidate.side;
@@ -193,15 +198,9 @@ export const placeLabels = (points: ReadonlyArray<LabelPoint>, area: Box): Reado
       const otherBox = boxes[other.idx];
       const otherSegment = segments[other.idx];
 
-      if (other === label || otherBox === undefined || otherSegment === undefined) return;
+      if (other === label || other === apart || otherBox === undefined || otherSegment === undefined) return;
 
-      cost += overlap(box, otherBox) * 4;
-
-      if (segmentsCross(segment, otherSegment)) cost += 150;
-
-      if (segmentHitsBox(segment, otherBox)) cost += 60;
-
-      if (segmentHitsBox(otherSegment, box)) cost += 60;
+      cost += between(box, segment, otherBox, otherSegment);
     });
 
     dots.forEach((dot, index) => {
@@ -258,18 +257,19 @@ export const placeLabels = (points: ReadonlyArray<LabelPoint>, area: Box): Reado
         let best = start;
         let bestCost = costAt(a, a.current) + costAt(b, b.current);
 
-        for (const candidateA of a.candidates) {
-          a.current = candidateA;
-          refresh(a);
+        // Each label's cost against the rest is the same whatever the other of the two does, so it is counted once per place.
+        const placesOf = (label: Label, other: Label) =>
+          label.candidates.map((candidate) => ({ candidate, alone: costAt(label, candidate, other), box: boxOf(candidate, label.w, label.h), segment: segmentOf(label.dotX, label.dotY, candidate, label.w, label.h) }));
 
-          for (const candidateB of b.candidates) {
-            b.current = candidateB;
-            refresh(b);
-            const cost = costAt(a, candidateA) + costAt(b, candidateB);
+        const placesB = placesOf(b, a);
+
+        for (const placeA of placesOf(a, b)) {
+          for (const placeB of placesB) {
+            const cost = placeA.alone + placeB.alone + 2 * between(placeA.box, placeA.segment, placeB.box, placeB.segment);
 
             if (cost < bestCost - 1e-6) {
               bestCost = cost;
-              best = [candidateA, candidateB];
+              best = [placeA.candidate, placeB.candidate];
             }
           }
         }

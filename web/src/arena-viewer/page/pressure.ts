@@ -135,7 +135,8 @@ const panelView = (h: H, { model, lines }: Panel, width: number): Html => {
             [h.title([], [`${labelOf(key)} · gap ${gapName(gap)} · ${fmtCount(tokens)} tokens per move, ${ratioName(ratio)} its level-health ${fmtCount(level)} · ${moves.toLocaleString()} moves`])],
           ),
         ),
-        h.text([h.X(String(width - right + 7)), h.Y(String((labelYs[index] ?? 0) + 4)), h.Style({ fill: color }), h.Class("small")], [`${effort} ${fmtCount(level)}`]),
+        h.path([h.D(`M${x.at(points.at(-1)?.gap ?? 0) + 3},${y.at(points.at(-1)?.ratio ?? 1)} L${width - right + 6},${labelYs[index] ?? 0} h2`), h.Fill("none"), h.Stroke(color), h.StrokeOpacity("0.6")], []),
+        h.text([h.X(String(width - right + 10)), h.Y(String((labelYs[index] ?? 0) + 4)), h.Style({ fill: color }), h.Class("small")], [`${effort} ${fmtCount(level)}`]),
       ]),
     ],
   );

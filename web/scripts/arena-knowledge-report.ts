@@ -3,6 +3,7 @@ import { parseArgs } from "node:util";
 
 import { Database } from "bun:sqlite";
 
+import { shortName } from "../src/arena-viewer/page/data.ts";
 import type { Item } from "../src/domain.ts";
 import { itemName } from "../src/text.ts";
 
@@ -11,7 +12,9 @@ import { itemName } from "../src/text.ts";
 // moves count; forced grabs and fallback moves do not. Matches with a DeepSeek
 // seat are left out. Every rate is
 // numerator/denominator with a 95% interval from resampling seed blocks
-// (matches.seed_block_id) within the row's cohort, never single matches.
+// (matches.seed_block_id) within the row's cohort, never single matches. A cohort is
+// one kind of comparison pooled over every tournament: all cross-model matches, or
+// all of one model's matches against itself. It comes from each match's players.
 //
 //   bun scripts/arena-knowledge-report.ts --db <knowledge.sqlite> [--draws 2000]
 
@@ -29,7 +32,19 @@ const db = new Database(resolve(values.db), { readonly: true });
 /** DeepSeek's matches are left out of every table, its opponents' moves in them too. */
 const EXCLUDED = "SELECT match_id FROM players WHERE model LIKE '%deepseek%'";
 
-const COHORTS = ["t1 cross-model medium", "t1 effort sweep", "t2 opus effort", "t3 astra vs opus xhigh"];
+const cohortByMatch: ReadonlyMap<string, string> = (() => {
+  const modelsByMatch = new Map<string, Set<string>>();
+
+  for (const { match_id, model } of db.query<{ match_id: string; model: string }, []>(`SELECT match_id, model FROM players WHERE match_id NOT IN (${EXCLUDED})`).all()) {
+    modelsByMatch.set(match_id, (modelsByMatch.get(match_id) ?? new Set()).add(model));
+  }
+
+  return new Map([...modelsByMatch].map(([matchId, models]) => [matchId, models.size === 1 ? `${shortName([...models][0] ?? "")} efforts` : "Cross-model"]));
+})();
+
+const cohortOf = (matchId: string): string => cohortByMatch.get(matchId) ?? "";
+
+const COHORTS = ["Cross-model", ...[...new Set(cohortByMatch.values())].filter((cohort) => cohort !== "Cross-model").toSorted()];
 
 const ITEMS: ReadonlyArray<Item> = ["Glass", "Phone", "Saw", "Beer", "Inverter", "Cigarettes", "Jammer", "Adrenaline"];
 
@@ -59,15 +74,17 @@ interface Decision {
 }
 
 const decisions = db
-  .query<Decision, []>(
-    `SELECT d.match_id, d.ordinal, m.cohort, m.code_hash, m.seed_block_id AS block, p.model || ' ' || p.effort AS model, d.choice, d.chamber, d.remaining, d.source,
+  .query<Omit<Decision, "cohort">, []>(
+    `SELECT d.match_id, d.ordinal, m.code_hash, m.seed_block_id AS block, p.model || ' ' || p.effort AS model, d.choice, d.chamber, d.remaining, d.source,
        d.clue_via_adrenaline AS via, d.moves_since_clue AS since, d.shot, d.item, d.item_stolen AS stolen, d.legal_items_json, d.own_items_json, d.exact_key, d.belief_key
      FROM decisions d JOIN matches m ON m.match_id = d.match_id JOIN players p ON p.match_id = d.match_id AND p.player = d.player
      WHERE m.status = 'completed' AND m.match_id NOT IN (${EXCLUDED}) AND d.by_whom = 'agent'`,
   )
-  .all();
+  .all()
+  .map((row) => ({ ...row, cohort: cohortOf(row.match_id) }));
 
 interface ItemRow {
+  readonly match_id: string;
   readonly cohort: string;
   readonly block: string;
   readonly model: string;
@@ -78,13 +95,15 @@ interface ItemRow {
 }
 
 const items = db
-  .query<ItemRow, []>(
-    `SELECT m.cohort, m.seed_block_id AS block, p.model || ' ' || p.effort AS model, i.item, i.end, i.moves_held, i.own_decisions_held
+  .query<Omit<ItemRow, "cohort">, []>(
+    `SELECT i.match_id, m.seed_block_id AS block, p.model || ' ' || p.effort AS model, i.item, i.end, i.moves_held, i.own_decisions_held
      FROM items i JOIN matches m ON m.match_id = i.match_id JOIN players p ON p.match_id = i.match_id AND p.player = i.player WHERE m.status = 'completed' AND m.match_id NOT IN (${EXCLUDED})`,
   )
-  .all();
+  .all()
+  .map((row) => ({ ...row, cohort: cohortOf(row.match_id) }));
 
 interface DeathRow {
+  readonly match_id: string;
   readonly cohort: string;
   readonly block: string;
   readonly model: string;
@@ -92,11 +111,12 @@ interface DeathRow {
 }
 
 const deaths = db
-  .query<DeathRow, []>(
-    `SELECT m.cohort, m.seed_block_id AS block, p.model || ' ' || p.effort AS model, x.items_held
+  .query<Omit<DeathRow, "cohort">, []>(
+    `SELECT x.match_id, m.seed_block_id AS block, p.model || ' ' || p.effort AS model, x.items_held
      FROM deaths x JOIN matches m ON m.match_id = x.match_id JOIN players p ON p.match_id = x.match_id AND p.player = x.player WHERE m.status = 'completed' AND m.match_id NOT IN (${EXCLUDED})`,
   )
-  .all();
+  .all()
+  .map((row) => ({ ...row, cohort: cohortOf(row.match_id) }));
 
 // Statistics
 // ==========
