@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
@@ -15,8 +15,8 @@ import { rosterOf } from "../src/players.ts";
 import { agentMoveText } from "../src/text.ts";
 import { replayOf } from "../src/viewer/replay.ts";
 
-// Scores every agent decision of one match, or of every replay-validated match,
-// with the minimax player (src/analysis/regret.ts) and writes the rows to the
+// Scores every agent decision of one match, of every replay-validated match, or of
+// the decisions a list names, with the minimax player (src/analysis/regret.ts) and writes the rows to the
 // `regret` table of a derived database. The analysis database
 // (docs/arena/database.md) is opened read only. Each decision's position is the
 // deciding player's own log and the public board, rebuilt by replaying the match
@@ -28,16 +28,16 @@ import { replayOf } from "../src/viewer/replay.ts";
 // the matches between processes that may share one output file (WAL, so their
 // writes queue). See docs/arena/analysis/regret.md.
 //
-//   bun scripts/arena-regret.ts --db <buckshot.sqlite> --out <derived.sqlite> (--match <match name> | --all [--shard K/N]) [--depth 6] [--budget 20000] [--reload static] [--samples 256]
+//   bun scripts/arena-regret.ts --db <buckshot.sqlite> --out <derived.sqlite> (--match <match name> | --all [--shard K/N] | --decisions <list>) [--depth 6] [--budget 20000] [--reload static] [--samples 256]
 
-const USAGE = "Usage: bun scripts/arena-regret.ts --db <database> --out <derived.sqlite> (--match <match name> | --all [--shard K/N]) [--depth N] [--budget N] [--reload static|expected-deal|sampled] [--samples N]";
+const USAGE = "Usage: bun scripts/arena-regret.ts --db <database> --out <derived.sqlite> (--match <match name> | --all [--shard K/N] | --decisions <list>) [--depth N] [--budget N] [--reload static|expected-deal|sampled] [--samples N]";
 
 const { values } = parseArgs({
   args: process.argv.slice(2),
-  options: { db: { type: "string" }, out: { type: "string" }, match: { type: "string" }, all: { type: "boolean" }, shard: { type: "string" }, depth: { type: "string", default: "6" }, budget: { type: "string", default: "20000" }, reload: { type: "string", default: "static" }, samples: { type: "string" } },
+  options: { db: { type: "string" }, out: { type: "string" }, match: { type: "string" }, all: { type: "boolean" }, decisions: { type: "string" }, shard: { type: "string" }, depth: { type: "string", default: "6" }, budget: { type: "string", default: "20000" }, reload: { type: "string", default: "static" }, samples: { type: "string" } },
 });
 
-if (values.db === undefined || values.out === undefined || (values.match === undefined) === (values.all !== true) || (values.shard !== undefined && values.all !== true)) {
+if (values.db === undefined || values.out === undefined || [values.match !== undefined, values.all === true, values.decisions !== undefined].filter(Boolean).length !== 1 || (values.shard !== undefined && values.all !== true)) {
   console.error(USAGE);
   process.exit(1);
 }
@@ -128,18 +128,54 @@ interface DecisionRow {
   readonly raw: string;
 }
 
+/** The decisions a list names, one `<match id> <ordinal>` per line, by match. Absent when the run scores one match or every match. */
+const listed = ((path: string | undefined): ReadonlyMap<string, ReadonlySet<number>> | undefined => {
+  if (path === undefined) return undefined;
+
+  const byMatch = new Map<string, Set<number>>();
+
+  for (const line of readFileSync(resolve(path), "utf8").split("\n").filter((text) => text.trim() !== "")) {
+    const parsed = /^(\S+) (\d+)$/.exec(line.trim());
+
+    if (parsed === null) {
+      console.error(`--decisions takes lines of "<match id> <ordinal>", not "${line}".`);
+      process.exit(1);
+    }
+
+    byMatch.set(parsed[1] ?? "", (byMatch.get(parsed[1] ?? "") ?? new Set()).add(Number(parsed[2])));
+  }
+
+  return byMatch;
+})(values.decisions);
+
 const matches = source
   .query<MatchRow, []>(
     `SELECT m.id, m.name, m.manifest_json FROM matches m JOIN tournaments t ON t.id = m.tournament_id
      WHERE m.manifest_json IS NOT NULL AND m.replay_status = 'validated' ORDER BY t.name, m.name`,
   )
   .all()
-  .filter((match) => values.all === true || match.name === values.match)
+  .filter((match) => values.all === true || (listed === undefined ? match.name === values.match : listed.has(match.id)))
   .filter((_, index) => index % shard.count === shard.number - 1);
 
-if (values.all !== true && matches.length === 0) {
+if (values.match !== undefined && matches.length === 0) {
   console.error(`No replay-validated match named ${values.match}.`);
   process.exit(1);
+}
+
+if (listed !== undefined) {
+  const agentOrdinals = (id: string): ReadonlySet<number> =>
+    new Set(source.query<{ ordinal: number }, [string]>("SELECT ordinal FROM decisions WHERE match_id = ? AND by_whom = 'agent'").all(id).map(({ ordinal }) => ordinal));
+
+  const unknown = [...listed].flatMap(([id, ordinals]) => {
+    const agent = matches.some((match) => match.id === id) ? agentOrdinals(id) : new Set<number>();
+
+    return [...ordinals].flatMap((ordinal) => (agent.has(ordinal) ? [] : [`${id} ${ordinal}`]));
+  });
+
+  if (unknown.length > 0) {
+    console.error(`--decisions names decisions that are not agent decisions of a replay-validated match: ${unknown.slice(0, 5).join(", ")}${unknown.length > 5 ? ", ..." : ""}.`);
+    process.exit(1);
+  }
 }
 
 mkdirSync(dirname(resolve(values.out)), { recursive: true });
@@ -200,7 +236,9 @@ const scoreMatch = (match: MatchRow): void => {
       .map(({ ordinal }) => ordinal),
   );
 
-  if (decisions.every((decision) => decision.by_whom !== "agent" || done.has(decision.ordinal))) return;
+  const wanted = (decision: DecisionRow): boolean => decision.by_whom === "agent" && (listed?.get(match.id)?.has(decision.ordinal) ?? true) && !done.has(decision.ordinal);
+
+  if (!decisions.some(wanted)) return;
 
   const manifest = decodeManifest(match.manifest_json);
   const moves: Array<MoveLine> = [];
@@ -209,7 +247,7 @@ const scoreMatch = (match: MatchRow): void => {
   const roster = rosterOf(current().game.seats, current().letters);
 
   for (const decision of decisions) {
-    if (decision.by_whom === "agent" && !done.has(decision.ordinal)) {
+    if (wanted(decision)) {
       const before = current();
       const me = Option.getOrThrow(roster.find(decodeLetter(decision.player))).seat;
       // The arena plays every match with items (src/viewer/replay.ts starts it so).
@@ -241,7 +279,7 @@ for (const [index, match] of matches.entries()) {
     console.error(`FAILED ${match.name} (${match.id}): ${error instanceof Error ? error.message : String(error)}`);
   }
 
-  if (values.all === true) console.error(`shard ${shard.number}/${shard.count}: match ${index + 1}/${matches.length}, ${times.length} decisions scored`);
+  if (values.match === undefined) console.error(`shard ${shard.number}/${shard.count}: match ${index + 1}/${matches.length}, ${times.length} decisions scored`);
 }
 
 out.close();

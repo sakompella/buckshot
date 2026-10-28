@@ -60,6 +60,19 @@ export const moveStripView = (h: H, detail: MatchDetail, width: number, height =
   );
 };
 
+/** Regret in points from which a move stands out as a blunder, in its tag and on the health chart. */
+const BIG_REGRET = 5;
+
+const TURNING_POINTS = 3;
+
+/** The indexes of the moves that gave up the most round win chance, biggest first; none below the blunder line. */
+export const turningPoints = (steps: ReadonlyArray<{ readonly regret: { readonly points: number } | null }>, count = TURNING_POINTS): ReadonlyArray<number> =>
+  steps
+    .flatMap((step, index) => (step.regret !== null && step.regret.points >= BIG_REGRET ? [{ index, points: step.regret.points }] : []))
+    .toSorted((a, b) => b.points - a.points || a.index - b.index)
+    .slice(0, count)
+    .map(({ index }) => index);
+
 /** The move a replay shows: the one chosen, else the first model move at or after the focus. */
 export const replayIndex = (replay: Replay, steps: ReadonlyArray<Step>): number =>
   Option.getOrElse(replay.maybeAt, () =>
@@ -110,6 +123,25 @@ const healthView = (h: H, detail: MatchDetail, steps: ReadonlyArray<Step>, at: n
     );
   });
 
+  // A ring on the mover's line for each blunder, bigger for a bigger one; the turning points are filled.
+  const turning = turningPoints(steps);
+
+  const blunders = steps.flatMap((step, index) => {
+    if (step.regret === null || step.regret.points < BIG_REGRET) return [];
+
+    const color = seatColor(detail, step.player);
+    const seat = detail.seats.findIndex(({ player }) => player === step.player);
+    const mine = step.players.find(({ player }) => player === step.player)?.health ?? 0;
+    const radius = 4 + Math.min(step.regret.points, 50) / 10;
+
+    return [
+      h.circle(
+        [h.Cx(String(x.at(index))), h.Cy(String(y.at(mine) + (seat > 0 ? 1.5 : -1.5))), h.R(String(radius)), h.Stroke(color), h.StrokeWidth("1.5"), h.Fill(turning.includes(index) ? color : "#000"), h.FillOpacity(turning.includes(index) ? "0.85" : "0.6")],
+        [h.title([], [`${step.player}: ${step.label} · gave up ${fmtPoints(step.regret.points)} points`])],
+      ),
+    ];
+  });
+
   // One click target per move, so a click anywhere on the chart picks the nearest move.
   const targets = steps.map((_step, index) => {
     const from = index === 0 ? 0 : x.at(index - 0.5);
@@ -142,9 +174,44 @@ const healthView = (h: H, detail: MatchDetail, steps: ReadonlyArray<Step>, at: n
             h.text([h.X(String(x.at(steps.findIndex((step) => step.round === round)) + 3)), h.Y(String(height - 6)), h.Class("small")], [`R${round}`]),
           ),
           ...lines,
+          ...blunders,
           h.line([h.X1(String(x.at(at))), h.X2(String(x.at(at))), h.Y1(String(top)), h.Y2(String(height - bottom)), h.Stroke("#ececec"), h.StrokeOpacity("0.8")], []),
           ...targets,
         ],
+      ),
+    ],
+  );
+};
+
+/** The biggest blunders of the match, each a jump to its move. */
+const turningPointsView = (h: H, detail: MatchDetail, steps: ReadonlyArray<Step>, at: number): Html => {
+  const turning = turningPoints(steps);
+
+  if (turning.length === 0) return h.empty;
+
+  return h.div(
+    [h.Class("turning")],
+    [
+      h.span([h.Class("k")], ["Turning points"]),
+      h.div(
+        [h.Class("chips")],
+        turning.flatMap((index) => {
+          const step = steps[index];
+
+          return step?.regret === undefined || step.regret === null
+            ? []
+            : [
+                h.button(
+                  [
+                    h.Type("button"),
+                    h.Class(`chip ${index === at ? "on" : ""}`),
+                    h.Style({ color: seatColor(detail, step.player), "border-color": index === at ? seatColor(detail, step.player) : "" }),
+                    h.OnClick(Message.SelectedStep({ index })),
+                  ],
+                  [`R${step.round} ${step.player} · ${step.label} · −${fmtPoints(step.regret.points)}`],
+                ),
+              ];
+        }),
       ),
     ],
   );
@@ -208,9 +275,6 @@ const callView = (h: H, call: Call): Html => {
     ],
   );
 };
-
-/** Regret in points from which a move's tag stands out as a blunder. */
-const BIG_REGRET = 5;
 
 /** A model move's regret; only a proven exact one is marked exact, and a big one stands out. */
 const regretTag = (h: H, step: Step): Html =>
@@ -348,6 +412,7 @@ const detailView = (h: H, replay: Replay, detail: MatchDetail, allMatches: Reado
           [h.Class("mleft")],
           [
             healthView(h, detail, steps, at, chartWidth(viewport)),
+            turningPointsView(h, detail, steps, at),
             h.div(
               [h.Class("rounds")],
               detail.story.rounds.map((round, index) =>

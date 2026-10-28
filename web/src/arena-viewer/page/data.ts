@@ -84,7 +84,7 @@ export const isClaude = (model: string): boolean => model.startsWith("claude");
 /** A config: one model at one effort. */
 export const keyOf = (seat: { readonly model: string; readonly effort: string }): string => `${seat.model}|${seat.effort}`;
 
-const splitKey = (key: string): readonly [string, string] => {
+export const splitKey = (key: string): readonly [string, string] => {
   const [model = "", effort = ""] = key.split("|");
 
   return [model, effort];

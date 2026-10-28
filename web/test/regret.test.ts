@@ -286,6 +286,45 @@ test("the script stores known values of recorded decisions, from the mover's sid
   }
 }, 120_000);
 
+test("a decision list scores exactly the listed agent decisions, and rejects one that is not an agent decision", async () => {
+  const root = mkdtempSync(join(tmpdir(), "buckshot-regret-list-"));
+  const database = join(root, "analysis.sqlite");
+  const derived = join(root, "derived.sqlite");
+  const list = join(root, "decisions.txt");
+
+  try {
+    writeRecorded(database, RECORDED);
+
+    const analysis = new Database(database, { readonly: true });
+    const agent = (name: string) => analysis.query<{ ordinal: number }, [string]>("SELECT ordinal FROM decisions WHERE match_id = ? AND by_whom = 'agent' ORDER BY ordinal").all(name).map(({ ordinal }) => ordinal);
+    const lost = agent("lost");
+    const selfShot = agent("self_shot");
+    const forced = analysis.query<{ ordinal: number }, []>("SELECT ordinal FROM decisions WHERE match_id = 'lost' AND by_whom = 'forced' LIMIT 1").get();
+    analysis.close();
+    expect(forced).not.toBeNull();
+
+    const score = async (lines: ReadonlyArray<string>) => {
+      writeFileSync(list, lines.join("\n"));
+      const run = Bun.spawn(["nice", "-n", "10", "bun", "scripts/arena-regret.ts", "--db", database, "--out", derived, "--decisions", list, "--depth", "3", "--budget", "20000"], { cwd: join(import.meta.dir, ".."), stdout: "ignore", stderr: "pipe" });
+
+      return run.exited;
+    };
+
+    const ordinals = { first: lost.at(0) ?? assert.fail("a match with agent decisions"), last: lost.at(-1) ?? assert.fail("a match with agent decisions"), second: selfShot.at(1) ?? assert.fail("a match with agent decisions") };
+    expect(await score([`lost ${ordinals.first}`, `lost ${ordinals.last}`, `self_shot ${ordinals.second}`, ""])).toBe(0);
+
+    const out = new Database(derived, { readonly: true });
+    const scored = out.query<{ match_id: string; ordinal: number }, []>("SELECT match_id, ordinal FROM regret ORDER BY match_id, ordinal").all();
+    out.close();
+
+    expect(scored).toEqual([{ match_id: "lost", ordinal: ordinals.first }, { match_id: "lost", ordinal: ordinals.last }, { match_id: "self_shot", ordinal: ordinals.second }]);
+    expect(await score([`lost ${forced?.ordinal}`])).toBe(1);
+    expect(await score(["no_such_match 0"])).toBe(1);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}, 120_000);
+
 test("two shards write one output file together, each match once, and a rerun scores nothing", async () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-regret-shards-"));
   const database = join(root, "analysis.sqlite");

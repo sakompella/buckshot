@@ -3,10 +3,11 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { type Decisions, ITEMS, type Pattern, patternBit } from "../api.ts";
 import { anchorId, pressable, ratingToggles, switchView, tipView, toggleView } from "./charts.ts";
-import { baseName, baseOrder, eloName, fmtPct, fmtRating, fmtTime, fmtUsd, isClaude, keyOf, type MatchRow, type SeatFull, shareName, unique } from "./data.ts";
+import { baseName, baseOrder, eloName, fmtCount, fmtPct, fmtRating, fmtTime, fmtUsd, isClaude, keyOf, type MatchRow, type SeatFull, shareName, splitKey, unique } from "./data.ts";
 import { type Derived, memoLast } from "./derived.ts";
 import { itemIconOf } from "./items.ts";
 import { type HeatMode, Message, type Model, type Ranking } from "./model.ts";
+import { gamesOfSeats, surprises } from "./ratings.ts";
 
 type H = HtmlBuilder<Message>;
 
@@ -39,12 +40,14 @@ interface HeatCell {
   readonly value: number;
   readonly text: string;
   readonly tip: string;
+  /** The games, moves or player-matches the value is over. */
+  readonly n: number;
   readonly isFaint: boolean;
   readonly isRinged: boolean;
   readonly maybeClick: Option.Option<Message>;
 }
 
-const cellOf = (value: number, text: string, tip: string, isFaint = false, isRinged = false, maybeClick: Option.Option<Message> = Option.none()): HeatCell => ({ value, text, tip, isFaint, isRinged, maybeClick });
+const cellOf = (value: number, text: string, tip: string, n: number, isFaint = false, isRinged = false, maybeClick: Option.Option<Message> = Option.none()): HeatCell => ({ value, text, tip, n, isFaint, isRinged, maybeClick });
 
 const TIERS: ReadonlyArray<readonly [number, string, string]> = [
   [0.9, "#e8e8e8", "#000"],
@@ -62,6 +65,25 @@ const tierOf = (value: number, best: number) => {
   const [, background, color] = TIERS.find(([share]) => value / best >= share) ?? ["", "#262626", "#a8a8a8"];
 
   return { background, color };
+};
+
+/** A surprise this big, in share, gets the ramp's ends. */
+const SURPRISE_SPAN = 0.15;
+
+const GREY_MID = "#3a3a3a";
+
+/** Grey around a mid-dark zero: lighter for a pair that beat the ratings, darker for one that fell short. */
+const divergingShade = (surprise: number) => {
+  const strength = Math.round(Math.min(1, Math.abs(surprise) / SURPRISE_SPAN) * 100);
+  const isUp = surprise >= 0;
+
+  return { background: `color-mix(in srgb, ${isUp ? "#e8e8e8" : "#0a0a0a"} ${strength}%, ${GREY_MID})`, color: isUp && strength >= 50 ? "#000" : "#f2f2f2" };
+};
+
+const signedPoints = (share: number): string => {
+  const points = Math.round(share * 100);
+
+  return points === 0 ? "0" : `${points < 0 ? "−" : "+"}${Math.abs(points)}`;
 };
 
 const ITEM_SHORT = ["glass", "phone", "saw", "beer", "cigs", "inverter", "jammer", "adrenaline"];
@@ -108,6 +130,7 @@ const STYLE: ReadonlyArray<StyleColumn> = [
 
 const MODES: ReadonlyArray<readonly [HeatMode, string]> = [
   ["opp", "Win share vs opponent"],
+  ["surprise", "Beats the ratings"],
   ["items", "Item use when legal"],
   ["choices", "Choice patterns"],
   ["style", "Play style"],
@@ -259,6 +282,18 @@ const versus = memoLast((matches: ReadonlyArray<MatchRow>): ReadonlyMap<string, 
   return out;
 });
 
+/** Each config's share against each opponent model, against what the ratings predict for those games. */
+const surpriseTable = memoLast((derived: Derived) =>
+  surprises(
+    gamesOfSeats(
+      derived.matches.flatMap(({ seats }) => seats),
+      derived.basis,
+    ),
+    new Map([...derived.ratings].map(([key, { rating }]) => [key, rating])),
+    (key) => baseName(splitKey(key)[0]),
+  ),
+);
+
 const opponentColumns = memoLast((matches: ReadonlyArray<MatchRow>): ReadonlyArray<HeatCol> =>
   unique(
     unique(matches.flatMap((match) => match.seats.map(({ model }) => model)))
@@ -280,7 +315,7 @@ const favoriteOf = (tally: Tally): number => {
 };
 
 const columnsOf = (mode: HeatMode, matches: ReadonlyArray<MatchRow>): ReadonlyArray<HeatCol> => {
-  if (mode === "opp") return opponentColumns(matches);
+  if (mode === "opp" || mode === "surprise") return opponentColumns(matches);
 
   if (mode === "items") return ITEMS.map((item, index) => ({ id: String(index), label: ITEM_SHORT[index] ?? item, title: item, item }));
 
@@ -291,7 +326,17 @@ const cellAt = (derived: Derived, mode: HeatMode, row: HeatRow, col: string): He
   if (mode === "opp") {
     const counts = versus(derived.matches).get(row.key)?.get(col);
 
-    return counts === undefined ? null : cellOf(counts[0] / counts[1], fmtPct(counts[0] / counts[1]), `vs ${col}: ${fmtPct(counts[0] / counts[1])} of ${counts[1]}`, counts[1] < MIN_N);
+    return counts === undefined ? null : cellOf(counts[0] / counts[1], fmtPct(counts[0] / counts[1]), `vs ${col}: ${fmtPct(counts[0] / counts[1])} of ${counts[1]}`, counts[1], counts[1] < MIN_N);
+  }
+
+  if (mode === "surprise") {
+    const cell = surpriseTable(derived).get(row.key)?.get(col);
+
+    if (cell === undefined || cell.games < MIN_N) return null;
+
+    const surprise = cell.observed - cell.expected;
+
+    return cellOf(surprise, signedPoints(surprise), `vs ${col}: ${fmtPct(cell.observed)} ${shareName(derived.basis)}, ${fmtPct(cell.expected)} expected from the ratings · ${cell.games} games`, cell.games);
   }
 
   const tally = tallies(derived).get(row.key);
@@ -302,7 +347,7 @@ const cellAt = (derived: Derived, mode: HeatMode, row: HeatRow, col: string): He
     const index = Number(col);
     const [k, n] = tally.use[index] ?? [0, 0];
 
-    return n === 0 ? null : cellOf(k / n, fmtPct(k / n), `${ITEMS[index] ?? ""}: used ${k.toLocaleString()} of ${n.toLocaleString()} moves where legal`, n < MIN_LEGAL, favoriteOf(tally) === index);
+    return n === 0 ? null : cellOf(k / n, fmtPct(k / n), `${ITEMS[index] ?? ""}: used ${k.toLocaleString()} of ${n.toLocaleString()} moves where legal`, n, n < MIN_LEGAL, favoriteOf(tally) === index);
   }
 
   if (mode === "choices") {
@@ -312,7 +357,7 @@ const cellAt = (derived: Derived, mode: HeatMode, row: HeatRow, col: string): He
     const title = CHOICES[index]?.[1] ?? "";
     const maybeClick = k > 0 ? Option.some(Message.ClickedPatternCell({ key: row.key, bit, title: `${row.label} · ${title}` })) : Option.none();
 
-    return n === 0 ? null : cellOf(k / n, fmtPct(k / n), `${title}: ${k} of ${n}`, n < MIN_N, false, maybeClick);
+    return n === 0 ? null : cellOf(k / n, fmtPct(k / n), `${title}: ${k} of ${n}`, n, n < MIN_N, false, maybeClick);
   }
 
   const column = STYLE.find(({ id }) => id === col);
@@ -322,7 +367,7 @@ const cellAt = (derived: Derived, mode: HeatMode, row: HeatRow, col: string): He
   const value = column.valueOf(tally);
   const text = column.isShare ? fmtPct(value) : value.toFixed(1);
 
-  return cellOf(value, text, `${column.title}: ${text} · ${tally.seats.size} player-matches`);
+  return cellOf(value, text, `${column.title}: ${text} · ${tally.seats.size} player-matches`, tally.seats.size);
 };
 
 export const heatRowsOf = memoLast((derived: Derived): ReadonlyArray<HeatRow> =>
@@ -416,7 +461,7 @@ const heatmapView = (h: H, derived: Derived, heat: Model["heat"], ranking: Ranki
 
                         if (cell === null) return h.td([h.Class("cellv none")], ["–"]);
 
-                        const shade = tierOf(cell.value, best.get(col.id) ?? 0);
+                        const shade = heat.mode === "surprise" ? divergingShade(cell.value) : tierOf(cell.value, best.get(col.id) ?? 0);
 
                         return h.td(
                           [
@@ -427,7 +472,7 @@ const heatmapView = (h: H, derived: Derived, heat: Model["heat"], ranking: Ranki
                             h.OnMouseLeave(Message.LeftCell()),
                             ...Option.match(cell.maybeClick, { onNone: () => [], onSome: (message) => pressable(h, message) }),
                           ],
-                          [cell.text],
+                          [cell.text, h.span([h.Class("n")], [fmtCount(cell.n)])],
                         );
                       }),
                       h.td([h.Class("total")], [ranking === "elo" ? fmtRating(row.rating) : String(row.rank)]),
