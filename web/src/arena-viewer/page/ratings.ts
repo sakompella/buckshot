@@ -3,11 +3,12 @@ import type { Basis } from "./model.ts";
 
 // The ratings the whole page reads: Bradley-Terry over every scored two-player match of every tournament.
 
-/** One scored two-player match: a's win share against b. */
+/** One scored two-player match: a's share against b. With a weight, it stands for that many games with that mean share. */
 export interface Game {
   readonly a: string;
   readonly b: string;
   readonly sa: number;
+  readonly weight?: number;
 }
 
 /** A game with the seed block it was played in, which a bootstrap resamples whole. */
@@ -21,6 +22,7 @@ interface NumberedGames {
   readonly a: Int32Array;
   readonly b: Int32Array;
   readonly sa: Float64Array;
+  readonly weight: Float64Array;
 }
 
 const numberGames = (games: ReadonlyArray<Game>): NumberedGames => {
@@ -28,7 +30,7 @@ const numberGames = (games: ReadonlyArray<Game>): NumberedGames => {
   const numberOf = new Map(ids.map((id, index) => [id, index]));
   const numbered = (id: string) => numberOf.get(id) ?? -1;
 
-  return { ids, a: Int32Array.from(games, ({ a }) => numbered(a)), b: Int32Array.from(games, ({ b }) => numbered(b)), sa: Float64Array.from(games, ({ sa }) => sa) };
+  return { ids, a: Int32Array.from(games, ({ a }) => numbered(a)), b: Int32Array.from(games, ({ b }) => numbered(b)), sa: Float64Array.from(games, ({ sa }) => sa), weight: Float64Array.from(games, ({ weight = 1 }) => weight) };
 };
 
 const ELO_PER_NAT = 400 / Math.LN10;
@@ -96,6 +98,33 @@ const fitGames = (games: NumberedGames, rows: ArrayLike<number>): Map<string, nu
   }
 
   const size = present.length;
+
+  // The likelihood depends on a pair's games only through their count and summed share, so each step visits pairs, not games.
+  const pairOf = new Int32Array(size * size).fill(-1);
+  const pairX: Array<number> = [];
+  const pairY: Array<number> = [];
+  const pairGames: Array<number> = [];
+  const pairShare: Array<number> = [];
+
+  for (let index = 0; index < rows.length; index++) {
+    const row = rows[index] ?? 0;
+    const x = slot[games.a[row] ?? 0] ?? 0;
+    const y = slot[games.b[row] ?? 0] ?? 0;
+    const known = pairOf[x * size + y] ?? -1;
+    const pair = known === -1 ? pairX.length : known;
+
+    if (known === -1) {
+      pairOf[x * size + y] = pair;
+      pairX.push(x);
+      pairY.push(y);
+      pairGames.push(0);
+      pairShare.push(0);
+    }
+
+    pairGames[pair] = (pairGames[pair] ?? 0) + (games.weight[row] ?? 1);
+    pairShare[pair] = (pairShare[pair] ?? 0) + (games.sa[row] ?? 0) * (games.weight[row] ?? 1);
+  }
+
   const strength = new Float64Array(size);
   const gradient = new Float64Array(size);
   const curvature = new Float64Array(size * size);
@@ -108,15 +137,16 @@ const fitGames = (games: NumberedGames, rows: ArrayLike<number>): Map<string, nu
 
     for (let id = 0; id < size; id++) curvature[id * size + id] = precision;
 
-    for (let index = 0; index < rows.length; index++) {
-      const row = rows[index] ?? 0;
-      const x = slot[games.a[row] ?? 0] ?? 0;
-      const y = slot[games.b[row] ?? 0] ?? 0;
+    for (let pair = 0; pair < pairX.length; pair++) {
+      const x = pairX[pair] ?? 0;
+      const y = pairY[pair] ?? 0;
+      const count = pairGames[pair] ?? 0;
       const expected = 1 / (1 + Math.exp((strength[y] ?? 0) - (strength[x] ?? 0)));
-      const weight = expected * (1 - expected);
+      const weight = count * expected * (1 - expected);
+      const surplus = (pairShare[pair] ?? 0) - count * expected;
 
-      gradient[x] = (gradient[x] ?? 0) + (games.sa[row] ?? 0) - expected;
-      gradient[y] = (gradient[y] ?? 0) - (games.sa[row] ?? 0) + expected;
+      gradient[x] = (gradient[x] ?? 0) + surplus;
+      gradient[y] = (gradient[y] ?? 0) - surplus;
       curvature[x * size + x] = (curvature[x * size + x] ?? 0) + weight;
       curvature[y * size + y] = (curvature[y * size + y] ?? 0) + weight;
       curvature[x * size + y] = (curvature[x * size + y] ?? 0) - weight;
@@ -154,11 +184,15 @@ const pairsOf = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<readonly [SeatFu
     return matchSeats.length === 2 && first !== undefined && second !== undefined ? [[first, second] as const] : [];
   });
 
-/** What one match adds to a fit: its share on the basis, or with rounds, a game for each of its rounds. */
+/** What one match adds to a fit: its share on the basis, or with rounds, its known rounds as that many games. */
 const gamesOf = ([x, y]: readonly [SeatFull, SeatFull], basis: Basis): ReadonlyArray<BlockGame> => {
-  const game = (sa: number): BlockGame => ({ a: keyOf(x), b: keyOf(y), sa, block: x.seedBlock });
+  const game = (sa: number, weight = 1): BlockGame => ({ a: keyOf(x), b: keyOf(y), sa, weight, block: x.seedBlock });
 
-  return basis === "rounds" ? roundResults(x).map(game) : [game(seatShare(x, basis))];
+  if (basis !== "rounds") return [game(seatShare(x, basis))];
+
+  const rounds = roundResults(x);
+
+  return rounds.length === 0 ? [] : [game(meanOf(rounds), rounds.length)];
 };
 
 /** Every completed two-player match in `seats`, as the games a rating on `basis` counts. */
@@ -182,18 +216,18 @@ export interface Surprise {
 export const surprises = (games: ReadonlyArray<Game>, ratings: ReadonlyMap<string, number>, groupOf: (config: string) => string): ReadonlyMap<string, ReadonlyMap<string, Surprise>> => {
   const sums = new Map<string, Map<string, { observed: number; expected: number; games: number }>>();
 
-  const add = (config: string, opponent: string, observed: number, expected: number) => {
+  const add = (config: string, opponent: string, observed: number, expected: number, weight: number) => {
     const row = sums.get(config) ?? new Map<string, { observed: number; expected: number; games: number }>();
     const cell = row.get(groupOf(opponent)) ?? { observed: 0, expected: 0, games: 0 };
 
-    cell.observed += observed;
-    cell.expected += expected;
-    cell.games++;
+    cell.observed += observed * weight;
+    cell.expected += expected * weight;
+    cell.games += weight;
     row.set(groupOf(opponent), cell);
     sums.set(config, row);
   };
 
-  for (const { a, b, sa } of games) {
+  for (const { a, b, sa, weight = 1 } of games) {
     const ratingA = ratings.get(a);
     const ratingB = ratings.get(b);
 
@@ -201,8 +235,8 @@ export const surprises = (games: ReadonlyArray<Game>, ratings: ReadonlyMap<strin
 
     const expected = expectedShare(ratingA, ratingB);
 
-    add(a, b, sa, expected);
-    add(b, a, 1 - sa, 1 - expected);
+    add(a, b, sa, expected, weight);
+    add(b, a, 1 - sa, 1 - expected, weight);
   }
 
   return new Map([...sums].map(([config, row]) => [config, new Map([...row].map(([group, { observed, expected, games }]) => [group, { observed: observed / games, expected: expected / games, games }]))]));

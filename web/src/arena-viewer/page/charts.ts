@@ -91,21 +91,33 @@ export const toggleView = <A extends string>(h: H, value: A, options: ReadonlyAr
     options.map(([option, label]) => h.button([h.Type("button"), h.Class(option === value ? "on" : ""), h.OnClick(toMessage(option))], [label])),
   );
 
+/** The same choice as toggleView, as a native menu, for a phone row with no room for buttons. */
+export const selectView = <A extends string>(h: H, label: string, value: A, options: ReadonlyArray<readonly [A, string]>, toMessage: (value: A) => Message): Html =>
+  h.select(
+    [h.AriaLabel(label), h.OnChange((chosen) => toMessage(options.find(([option]) => option === chosen)?.[0] ?? value))],
+    options.map(([option, optionLabel]) => h.option([h.Value(option), h.Selected(option === value)], [optionLabel])),
+  );
+
 const RANKINGS: ReadonlyArray<readonly [Ranking, string]> = [
   ["elo", "Elo"],
   ["rank", "Rank"],
 ];
 
 const BASES: ReadonlyArray<readonly [Basis, string]> = [
-  ["wins", "Wins"],
+  ["rounds", "Round wins"],
+  ["matches", "Match wins"],
   ["cash", "Cash"],
-  ["rounds", "Rounds"],
 ];
 
-/** The page-wide choices for ratings, drawn wherever they show: what they count (wins, cash or rounds), and Elo or rank. */
+/** The page-wide choices for ratings, drawn wherever they show: what they count (round wins, match wins or cash), and Elo or rank. */
 export const ratingToggles = (h: H, ranking: Ranking, basis: Basis): ReadonlyArray<Html> => [
   toggleView(h, basis, BASES, (option) => Message.SelectedBasis({ basis: option })),
   toggleView(h, ranking, RANKINGS, (option) => Message.SelectedRanking({ ranking: option })),
+];
+
+export const ratingSelects = (h: H, ranking: Ranking, basis: Basis): ReadonlyArray<Html> => [
+  selectView(h, "what the ratings count", basis, BASES, (option) => Message.SelectedBasis({ basis: option })),
+  selectView(h, "Elo or rank", ranking, RANKINGS, (option) => Message.SelectedRanking({ ranking: option })),
 ];
 
 const CHART_GAP = 28;

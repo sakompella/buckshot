@@ -34,8 +34,8 @@ export const Ranking = Schema.Literals(["elo", "rank"]);
 
 export type Ranking = typeof Ranking.Type;
 
-/** What ratings count: each match's win share, each player's pot share (its cash over the match's cash), or each round as one game. */
-export const Basis = Schema.Literals(["wins", "cash", "rounds"]);
+/** What ratings count: each round as one game, each match's win share, or each player's pot share (its cash over the match's cash). */
+export const Basis = Schema.Literals(["rounds", "matches", "cash"]);
 
 export type Basis = typeof Basis.Type;
 
@@ -106,7 +106,7 @@ export type Replay = typeof Replay.Type;
 /** The match list's search and how many rows it shows. */
 export const MatchList = Schema.Struct({ query: Schema.String, limit: Schema.Number });
 
-/** A reliability cell with its tooltip open: a row (tournament and config) and a column. */
+/** A reliability cell with its tooltip open: a row (a config) and a column. */
 export const RateCell = Schema.Struct({ row: Schema.String, column: Schema.String });
 
 /** Where the tour's highlighted element sits, in page coordinates. */
@@ -138,6 +138,12 @@ export const Model = Schema.Struct({
   leaderboard: Leaderboard,
   matchList: MatchList,
   maybeRateTip: Schema.Option(RateCell),
+  /** The text of a chart mark a touch tapped: its SVG title or title attribute, which only a mouse can hover. */
+  maybeTappedTitle: Schema.Option(Schema.String),
+  /** The section the reader is in, marked in the jump menu. */
+  maybeSection: Schema.Option(Section),
+  /** Whether a phone shows the filters, not just their summary. */
+  isFiltersOpen: Schema.Boolean,
   /** Each match detail asked for, by match id. */
   matches: Schema.Record(Schema.String, MatchData),
   maybeReplay: Schema.Option(Replay),
@@ -160,6 +166,10 @@ export const Message = defineMessageUnion({
   ToggledEffort: { effort: Schema.String },
   ToggledModel: { name: Schema.String },
   ToggledAllConfigs: {},
+  ToggledFilters: {},
+  ScrolledInto: { section: Section },
+  TappedTitle: { text: Schema.String },
+  ClearedTappedTitle: {},
   SelectedRanking: { ranking: Ranking },
   SelectedBasis: { basis: Basis },
   SelectedScatterShow: { show: ScatterShow },

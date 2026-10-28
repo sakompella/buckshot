@@ -24,6 +24,7 @@ import {
   stolenClue,
 } from "../src/analysis/knowledge.ts";
 import { loadPlayer } from "../src/analysis/player.ts";
+import { shortName } from "../src/arena-viewer/page/data.ts";
 import { RunManifest } from "../src/arena/match.ts";
 import { MoveLine } from "../src/arena/runlog.ts";
 import { GameEvent, type Seat, Secret } from "../src/domain.ts";
@@ -97,17 +98,11 @@ interface DecisionRow {
   readonly raw: string;
 }
 
-/** The comparison a match belongs to. Cohorts are never pooled: tournament 1's medium cross-model games, its effort sweeps, tournament 2 and tournament 3. */
-const cohortOf = (tournament: string, seats: ReadonlyArray<SeatRow>): string => {
-  if (tournament === "opus-effort") return "t2 opus effort";
+/** The comparison a match belongs to: every match between different models, or every match of one model against itself (an effort sweep), from every tournament. Same rule as the arena viewer's cohorts. */
+const cohortOf = (seats: ReadonlyArray<SeatRow>): string => {
+  const models = [...new Set(seats.map((seat) => seat.model ?? ""))];
 
-  if (tournament === "astra-vs-opus-xhigh") return "t3 astra vs opus xhigh";
-
-  const models = new Set(seats.map((seat) => seat.model));
-
-  if (models.size === 1) return "t1 effort sweep";
-
-  return seats.every((seat) => seat.effort === "medium") ? "t1 cross-model medium" : "t1 other";
+  return models.length === 1 ? `${shortName(models[0] ?? "")} efforts` : "Cross-model";
 };
 
 const matches = source
@@ -201,7 +196,7 @@ for (const [count, match] of matches.entries()) {
 
   const ownBetween = (player: string, after: number, before: number): number => (agentOrdinals.get(player) ?? []).filter((ordinal) => ordinal > after && ordinal < before).length;
 
-  put("matches", { match_id: match.id, name: match.name, tournament: match.tournament, cohort: cohortOf(match.tournament, seats), status: match.status, code_hash: match.code_hash, instructions_hash: match.instructions_hash, seed: match.seed, seed_block_id: match.seed_block_id, pairing: match.pairing });
+  put("matches", { match_id: match.id, name: match.name, tournament: match.tournament, cohort: cohortOf(seats), status: match.status, code_hash: match.code_hash, instructions_hash: match.instructions_hash, seed: match.seed, seed_block_id: match.seed_block_id, pairing: match.pairing });
 
   for (const seat of seats) put("players", { match_id: match.id, player: seat.player, position: seat.position, entrant: seat.entrant, model: seat.model, effort: seat.effort });
 

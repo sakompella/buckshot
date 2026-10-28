@@ -53,18 +53,40 @@ const cardWidth = (viewport: Viewport): number => Math.max(0, contentWidth(viewp
 
 // FILTERS
 
-const filtersView = (h: H, derived: Derived, filter: Model["filter"]): Html => {
+/** Which of `every` are on, in the fewest names: all, the ones on, or all but the ones off. */
+const keptOf = (every: ReadonlyArray<string>, off: ReadonlyArray<string>, noun: string): string => {
+  const on = every.filter((value) => !off.includes(value));
+  const offShown = every.filter((value) => off.includes(value));
+
+  if (offShown.length === 0) return `all ${noun}`;
+
+  if (on.length === 0) return `no ${noun}`;
+
+  return on.length <= offShown.length ? on.join(", ") : `${noun} but ${offShown.join(", ")}`;
+};
+
+const filtersView = (h: H, derived: Derived, filter: Model["filter"], isOpen: boolean): Html => {
   const { seats } = derived;
   const cohorts = unique(seats.map(({ cohort }) => cohort)).toSorted();
   const models = unique(seats.map(({ model }) => model)).toSorted((left, right) => baseOrder(left) - baseOrder(right));
   const names = unique(models.map((model) => baseName(model)));
+  const efforts = EFFORTS.filter((effort) => seats.some((seat) => seat.effort === effort));
   const matchesIn = (cohort: string) => new Set(seats.filter((seat) => seat.cohort === cohort && seat.status === "completed").map(({ matchId }) => matchId)).size;
   const main = mainConfigsOf(seats);
   const hidden = unique(seats.map(keyOf)).filter((key) => !main.has(key)).length;
 
+  // A phone or tablet shows one line saying what the filters keep, and the filters themselves only when it is tapped.
+  const summary = [
+    filter.cohort === "all" ? "All cohorts" : filter.cohort,
+    keptOf(names, filter.offModels, "models"),
+    keptOf(efforts, filter.offEfforts, "efforts"),
+    ...(hidden > 0 && !filter.isAllConfigs ? [`${hidden} configs hidden`] : []),
+  ].join(" · ");
+
   return h.div(
-    [h.Class("filters")],
+    [h.Class(isOpen ? "filters open" : "filters")],
     [
+      h.button([h.Type("button"), h.Class("filtersum"), h.AriaExpanded(isOpen), h.OnClick(Message.ToggledFilters())], [h.span([], [summary]), h.span([h.Class("k")], [isOpen ? "done" : "change"])]),
       h.select(
         [h.Title("the kind of comparison"), h.Value(filter.cohort), h.OnChange((cohort) => Message.SelectedCohort({ cohort }))],
         [h.option([h.Value("all")], ["All cohorts"]), ...cohorts.map((cohort) => h.option([h.Value(cohort), h.Selected(cohort === filter.cohort)], [`${cohort} (${matchesIn(cohort)})`]))],
@@ -82,9 +104,7 @@ const filtersView = (h: H, derived: Derived, filter: Model["filter"]): Html => {
       ),
       h.span(
         [h.Class("chips")],
-        EFFORTS.filter((effort) => seats.some((seat) => seat.effort === effort)).map((effort) =>
-          h.button([h.Type("button"), h.Class(`chip ${filter.offEfforts.includes(effort) ? "" : "on"}`), h.OnClick(Message.ToggledEffort({ effort }))], [effort]),
-        ),
+        efforts.map((effort) => h.button([h.Type("button"), h.Class(`chip ${filter.offEfforts.includes(effort) ? "" : "on"}`), h.OnClick(Message.ToggledEffort({ effort }))], [effort])),
       ),
       hidden > 0 ? switchView(h, filter.isAllConfigs, filter.isAllConfigs ? "all configs" : `all configs (${hidden} hidden)`, Message.ToggledAllConfigs()) : h.empty,
     ],
@@ -107,7 +127,7 @@ const heroView = (h: H, derived: Derived): Html => {
           ...stat("scored matches", scored.toLocaleString()),
           ...stat("configs", String(heatRowsOf(derived).length)),
           ...stat("model moves", fmtCount(sumOf(derived.pooled.flatMap(({ started }) => started.map(({ moves }) => moves ?? 0))))),
-          ...stat("spent", `$${Math.round(sumOf(derived.pooled.map(({ totalCost }) => totalCost))).toLocaleString()}`),
+          ...stat("list-price cost", `$${Math.round(sumOf(derived.pooled.map(({ totalCost }) => totalCost))).toLocaleString()}`),
         ],
       ),
     ],
@@ -166,12 +186,14 @@ const lazyLeaderboard = createLazy();
 
 const lazyReplay = createLazy();
 
-const navView = (h: H): Html =>
+const navView = (h: H, maybeSection: Option.Option<Section>): Html =>
   h.nav(
     [],
     [
       h.span([h.Class("brand")], ["Buckshot Arena"]),
-      ...SECTIONS.map(([section, label]) => h.a([h.Href(`#${section}`), h.OnClick(Message.ClickedJump({ section }), { defaultAction: "Prevent" })], [label])),
+      ...SECTIONS.map(([section, label]) =>
+        h.a([h.Href(`#${section}`), ...(Option.contains(maybeSection, section) ? [h.Class("on"), h.AriaCurrent("location")] : []), h.OnClick(Message.ClickedJump({ section }), { defaultAction: "Prevent" })], [label]),
+      ),
       h.button([h.Type("button"), h.Class("tourstart"), h.OnClick(Message.ClickedTour())], ["Tour"]),
       h.a([h.Class("download"), h.Href("/api/db")], ["Database (SQLite)"]),
     ],
@@ -187,7 +209,7 @@ const upsetCard = (h: H, bins: ReadonlyArray<UpsetBin>, width: number): Html => 
 const spendCard = (h: H, derived: Derived): Html => h.div([h.Class("card")], [spendView(h, derived.pooled)]);
 
 const blundersCard = (h: H, derived: Derived, blunders: Blunders, width: number, content: number): Html =>
-  blundersView(h, ratesFor(derived.seats, derived.keep, blunders), everyRateFor(derived.seats, blunders), galleryFor(derived.seats, derived.keep, ratingsOf(derived.seats)("wins"), blunders), width, content);
+  blundersView(h, ratesFor(derived.seats, derived.keep, blunders), everyRateFor(derived.seats, blunders), galleryFor(derived.seats, derived.keep, ratingsOf(derived.seats)("rounds"), blunders), width, content);
 
 /** An optional section's view, or, when its data did not load, a note in its place. */
 const optionalView = <A>(h: H, data: AsyncData.AsyncData<A, string>, what: string, draw: (loaded: A) => Html): Html =>
@@ -212,7 +234,7 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
     [
       lazyHero(heroView, [h, derived]),
       // The jump menu and the filters stay at the top; the filters apply to every section.
-      h.div([h.Class("top")], [lazyNav(navView, [h]), lazyFilters(filtersView, [h, derived, model.filter])]),
+      h.div([h.Class("top")], [lazyNav(navView, [h, model.maybeSection]), lazyFilters(filtersView, [h, derived, model.filter, model.isFiltersOpen])]),
       sectionView(h, "scatter", h.div([], [lazyScatter(scatterCard, [h, derived, model.ranking, model.basis, model.scatter, cardWidth(model.viewport)]), lazyEffort(effortCard, [h, derived, model.basis, cardWidth(model.viewport)]), afterFirstPaint(() => lazySpend(spendCard, [h, derived]))])),
       sectionView(h, "interesting", lazyInteresting(interestingView, [h, picksOf(derived), model.matches, content])),
       sectionView(h, "luck", afterFirstPaint(() => h.div([], [lazyLuck(luckView, [h, derived.matches, model.viewport.width, content]), lazyUpset(upsetCard, [h, upsetOf(derived), cardWidth(model.viewport)]), lazyMomentum(momentumCard, [h, derived, cardWidth(model.viewport)])]))),
@@ -266,6 +288,7 @@ export const view = (model: Model, h: H): Document =>
             // Touch has no hover: a tap pins a point, and a tap anywhere outside the chart unpins it.
             h.main(isPinned(model) ? [h.OnClick(Message.ClickedOutsideChart())] : [], [pageView(h, model, derived)]),
             replay,
+            Option.match(model.maybeTappedTitle, { onNone: () => h.empty, onSome: (text) => h.div([h.Class("tip tapped"), h.Role("status")], [text]) }),
             Option.match(model.maybeTour, { onNone: () => h.empty, onSome: (tour) => tourView(h, tour, model.viewport.width) }),
           ],
         ),

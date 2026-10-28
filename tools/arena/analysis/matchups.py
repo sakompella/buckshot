@@ -2,7 +2,7 @@
 """Matchup analysis of the scored arena matches: ratings per cohort, pair effects, seat and starter effects.
 
 Reads the analysis database read-only and prints markdown tables. With --doc FILE the tables replace the text
-between the tables markers of that file. Ratings come from one pooled fit over every scored match; cohorts (see load.cohort_of) group matches only for pair effects and seat figures. Intervals
+between the tables markers of that file. Ratings come from one pooled fit over every scored match; cohorts (see cohort_of below) group matches only for pair effects and seat figures. Intervals
 are 95% bootstraps over seed blocks, drawn with a fixed RNG seed so a rerun prints the same numbers.
 
     python3 tools/arena/analysis/matchups.py [--db PATH] [--draws 2000] [--doc docs/arena/analysis/matchups.md]
@@ -11,6 +11,7 @@ are 95% bootstraps over seed blocks, drawn with a fixed RNG seed so a rerun prin
 import argparse
 import random
 import statistics
+from dataclasses import replace
 
 import boot
 import bt
@@ -18,9 +19,28 @@ import cv
 import seats
 import tournament3
 from fmt import frac, pct, pp, signed, span, table
-from load import SKIPPED_MODEL, Game, blocks_of, cohort_of, cohorts, connect, scored_games
+from load import SKIPPED_MODEL, Game, blocks_of, cohorts, connect, scored_games
 
 START, END = "<!-- tables:start -->", "<!-- tables:end -->"
+
+# Cohort names, as in the arena viewer: the model's short name within its family.
+SHORT_NAMES = {
+    "claude-opus-5-5": "Opus",
+    "claude-haiku-5-5": "Haiku 5.5",
+    "claude-sonnet-5-5": "Sonnet",
+    "claude-haiku-4-5": "Haiku 4.5",
+    "gpt-6-astra": "Astra",
+    "gpt-6.1-sol": "Sol",
+    "gpt-5.6-terra": "Terra",
+    "gpt-6-luna": "Luna",
+}
+
+
+def cohort_of(model_a: str, model_b: str) -> str:
+    """Pairs and seats are compared only inside a cohort, one kind of comparison pooled over every tournament: all matches between different models, or all of one model's matches against itself."""
+    if model_a != model_b:
+        return "Cross-model"
+    return next(f"{short} efforts" for model, short in SHORT_NAMES.items() if model in model_a)
 
 
 # ---- coverage
@@ -28,18 +48,14 @@ START, END = "<!-- tables:start -->", "<!-- tables:end -->"
 def coverage(db, by_cohort: dict[str, list[Game]]) -> str:
     scheduled: dict[str, dict[str, int]] = {}
     for status, disposition, *seat in db.execute(
-        """SELECT m.status, m.disposition, t.name, a.model, b.model, a.effort, b.effort
-           FROM matches m JOIN tournaments t ON t.id = m.tournament_id
+        """SELECT m.status, m.disposition, a.model, b.model
+           FROM matches m
            JOIN match_seats sa ON sa.match_id = m.id AND sa.position = 1 JOIN entrants a ON a.id = sa.entrant_id
            JOIN match_seats sb ON sb.match_id = m.id AND sb.position = 2 JOIN entrants b ON b.id = sb.entrant_id
            WHERE a.model NOT LIKE ? AND b.model NOT LIKE ?""",
         (f"%{SKIPPED_MODEL}%", f"%{SKIPPED_MODEL}%"),
     ):
-        tournament, model_a, model_b, effort_a, effort_b = seat
-        try:
-            cohort = cohort_of(tournament, model_a, model_b, effort_a, effort_b)
-        except ValueError:
-            cohort = "(outside every cohort)"
+        cohort = cohort_of(*seat)
         label = status if disposition is None else f"{status} ({disposition})"
         scheduled.setdefault(cohort, {}).setdefault(label, 0)
         scheduled[cohort][label] += 1
@@ -66,7 +82,7 @@ def coverage(db, by_cohort: dict[str, list[Game]]) -> str:
             ]
         )
     header = ["cohort", "entrants", "scored matches", "complete / half blocks", "pairs played", "matches per pair min / median / max", "connected", "scheduled by status"]
-    return table(header, rows) + f"\n\nMatches outside every cohort: {sum(scheduled.get('(outside every cohort)', {}).values())}."
+    return table(header, rows)
 
 
 # ---- pooled ratings and observed pairs
@@ -343,21 +359,21 @@ def main() -> None:
     parser.add_argument("--doc")
     args = parser.parse_args()
     db = connect(args.db) if args.db else connect()
-    games = scored_games(db)
-    by_cohort = cohorts(games)
     model_of = dict(db.execute("SELECT DISTINCT name, model FROM entrants"))
+    tournament_games = scored_games(db)
+    games = [replace(game, cohort=cohort_of(model_of[game.first], model_of[game.second])) for game in tournament_games]
+    by_cohort = cohorts(games)
     rng = random.Random(20261021)
-    pair_cohorts = {k: v for k, v in by_cohort.items() if k not in ("tournament 3", "tournament 4")}
-    pooled_text, pair_tables = pooled_ratings(games, pair_cohorts, args.draws, rng)
+    pooled_text, pair_tables = pooled_ratings(games, by_cohort, args.draws, rng)
     parts = [
         "### Schedule coverage\n", coverage(db, by_cohort),
         "\n### Pooled ratings\n", pooled_text,
         "\n### Observed pairs against the pooled ratings\n",
         "Win share is the first-named entrant's. Difference is observed minus fitted, in percentage points. These are descriptive residuals of a regularized fit, not tests of a zero pair effect: the prior forces residuals (a pair at the end of a chain of pairs is pulled to its fit), so the bootstrap range is not a calibrated interval around zero. Pair effects are judged by the held-out test below. Every resample refits the pooled ratings.\n",
         *pair_tables.values(),
-        "\n### Pair effects against ratings alone\n", matchup_test(pair_cohorts, rng, args.draws, args.repeats),
+        "\n### Pair effects against ratings alone\n", matchup_test(by_cohort, rng, args.draws, args.repeats),
         "\n### Seat and round 1 starter\n", first_shooter_check(games), "", seat_section(by_cohort, model_of, args.draws, rng),
-        "\n### Tournament 3\n", tournament3.report(games, args.draws, rng),
+        "\n### Tournament 3\n", tournament3.report(tournament_games, args.draws, rng),
     ]
     text = "\n".join(parts) + "\n"
     if args.doc:

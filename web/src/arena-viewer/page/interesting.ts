@@ -50,8 +50,8 @@ const GLASS_BLANK_OPP = patternBit("glassBlankOpp");
 
 export const picksOf = memoLast((derived: Derived): ReadonlyArray<Pick> => {
   const { matches, decisions, seats, keep } = derived;
-  // The picks are about winning, so the Wins / Cash / Rounds choice leaves them alone.
-  const ratings = ratingsOf(seats)("wins");
+  // The picks judge underdogs by the default round rating whatever the rating choice, so the page fits one rating at load.
+  const ratings = ratingsOf(seats)("rounds");
   const done = matches.filter((match) => match.status === "completed" && match.seats.length === 2);
 
   const won = done.flatMap((match) => {

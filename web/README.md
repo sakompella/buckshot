@@ -280,7 +280,11 @@ reliability fold their full tables under the charts. A jump menu at the top link
 to each section's anchor (`#scatter`, `#seats`, `#matches`, ...), and its Tour button starts a guided tour: each
 step scrolls to a section or control, highlights it and shows a short card, with Back, Next and Close, the arrow
 keys and Escape (`page/tour.ts` holds the steps). The filter bar
-under it applies to the whole page; on a wide screen both stay at the top. The
+under it applies to the whole page; on a wide screen both stay at the top, and
+the jump menu marks the section in view. On a phone or tablet the filters fold
+into one line that says what they keep, and a tap opens them; on a phone the
+scatter's choices are menus, so the chart starts on the first screen. A tap on
+a chart mark shows the title a mouse would hover, in a bar at the bottom. The
 scatter's and the effort chart's axes span every config in every cohort, so a filter only shows or hides
 points; the reliability bars keep one scale the same way.
 
@@ -290,27 +294,28 @@ darker fell short. The pair-effect test in `docs/arena/analysis/matchups.md` fou
 so most cells are noise.
 
 Wherever ratings show (the scatter's y axis, the heatmap's and the leaderboards'
-rating columns), a Wins / Cash / Rounds toggle and an Elo / Rank toggle switch all of them.
-Elo is one Bradley-Terry rating per config, fitted over every completed
-two-player match of every tournament (`page/ratings.ts`): win shares count
-fractionally, a Gaussian prior (standard deviation 3 nats) keeps it finite, the
-scale has mean 0, and the 95% intervals refit 200 resamples of whole seed blocks.
-Effort sweeps join the other models through their medium configs, so one scale
-covers every config and no filter changes it. Cash is the same fit with pot
-shares in place of win shares: a player's pot share is its cash over the match's
-cash, and the leaderboards show each config's pot share, averaged over its scored
-matches, beside its win share. Rounds is the same fit with each round of a match
-as one game, its winner read from the public events (a match whose rounds the
-events do not give in full is left out), and the leaderboards show each config's
-round share, the rounds it won over the rounds it played. Its resamples still take
-whole seed blocks, since a match's rounds are not independent. The cash and rounds
-fits run the first time each is chosen, so the first load pays only for the win
-fit. Rank is a place 1, 2, 3, ... for every config. The leaderboards rank by the
-observed share (win, pot or round) within each cohort, among all of its configs
+rating columns), a Round wins / Match wins / Cash toggle and an Elo / Rank toggle
+switch all of them. Round wins is the default. Each is one Bradley-Terry rating
+per config, fitted over every completed two-player match of every tournament
+(`page/ratings.ts`): shares count fractionally, a Gaussian prior (standard
+deviation 3 nats) keeps it finite, the scale has mean 0, and the 95% intervals
+refit 200 resamples of whole seed blocks. Effort sweeps join the other models
+through their medium configs, so one scale covers every config and no filter
+changes it. Round wins counts each round of a match as one game, its winner read
+from the public events (a match whose rounds the events do not give in full is
+left out), and the leaderboards show each config's round wins, the rounds it won
+over the rounds it played. Its resamples still take whole seed blocks, since a
+match's rounds are not independent. Match wins counts each match's win share.
+Cash counts pot shares: a player's pot share is its cash over the match's cash,
+and the leaderboards show each config's pot share, averaged over its scored
+matches. The leaderboards always show the match win share. The match wins and
+cash fits run the first time each is chosen, so the first load pays only for the
+round fit. Rank is a place 1, 2, 3, ... for every config. The leaderboards rank by the
+observed share (round, match or pot) within each cohort, among all of its configs
 before the chip and switch filters, ties going to the higher Elo. The scatter and heatmap do the same
 under one cohort. Under "All cohorts" they rank by the pooled Elo instead, since
 pooling every cohort's shares would count the effort sweeps' self-play. The
-interesting matches always judge underdogs by the win rating.
+interesting matches always judge underdogs by the round rating.
 
 `--regret` names the derived database with the `regret` table
 (`docs/arena/analysis/regret.md`), opened read only. Without it the viewer runs as
@@ -326,9 +331,10 @@ A match row, an interesting match or a
 flagged move opens its replay: health through the match,
 each player's view at the chosen move, and every model move with its reasoning.
 The arrow keys step through it, and Escape, a click outside or the back gesture
-closes it. A cohort is one kind of comparison, pooled over code versions and runs: the
-medium cross-model games, each model's effort sweep, and each smaller
-tournament's pairing ("Opus xhigh vs Astra"). The page shows every config by
+closes it. A cohort is one kind of comparison, pooled over tournaments, code versions and
+runs: every match between different models is in "Cross-model", and every match
+of one model against itself is in that model's effort sweep ("Opus efforts").
+Nothing on the page splits by tournament. The page shows every config by
 default; switching 'all configs' off keeps only configs with at least 20 scored
 matches and one against another model, and hides the effort-sweep leaderboards. Items are drawn with the table's own
 icons from `src/icons.ts`, except the saw, beer and jammer, which the viewer

@@ -261,7 +261,7 @@ const checkEveryConfigRated = async (page: Page, scatter: ReturnType<Page["locat
   const cohorts = await page.locator(".filters select option").evaluateAll((options) => options.map((option) => option.getAttribute("value") ?? ""));
   const dashes = (selector: string) => page.locator(selector).evaluateAll((cells) => cells.filter((cell) => cell.textContent?.trim() === "–").length);
 
-  for (const basis of ["Wins", "Cash", "Rounds"] as const) {
+  for (const basis of ["Round wins", "Match wins", "Cash"] as const) {
     const axesByCohort = new Set<string>();
 
     await scatter.getByRole("button", { name: basis, exact: true }).click();
@@ -273,7 +273,7 @@ const checkEveryConfigRated = async (page: Page, scatter: ReturnType<Page["locat
         await scatter.getByRole("button", { name: ranking, exact: true }).click();
         await settled(page);
 
-        const label = ranking === "Rank" ? "rank" : basis === "Wins" ? "Elo" : `${basis} Elo`;
+        const label = ranking === "Rank" ? "rank" : ELO_NAMES[basis];
         const rows = await countOf(page, "table.heat tbody tr");
         const missing = (await dashes("table.heat td.total")) + (await dashes(`table.lbt td[data-label="${label}"]`));
         const points = await countOf(page, ".card svg g.pt");
@@ -290,10 +290,12 @@ const checkEveryConfigRated = async (page: Page, scatter: ReturnType<Page["locat
     await page.locator(".filters select").selectOption("all");
   }
 
-  await scatter.getByRole("button", { name: "Wins", exact: true }).click();
+  await scatter.getByRole("button", { name: "Round wins", exact: true }).click();
   await scatter.getByRole("button", { name: "Elo", exact: true }).click();
   await settled(page);
 };
+
+const ELO_NAMES = { "Round wins": "Round Elo", "Match wins": "Match Elo", Cash: "Cash Elo" } as const;
 
 const ratingViews = async (page: Page) => ({
   scatter: await textOf(page, ".card h2"),
@@ -301,15 +303,15 @@ const ratingViews = async (page: Page) => ({
   leaderboard: await textOf(page, "table.lbt thead th.rating"),
   firstRow: await textOf(page, "table.lbt tbody tr.row"),
   heatFirstRow: await textOf(page, "table.heat tbody tr"),
-  toggles: await page.locator(".toggle button.on", { hasText: /^(Wins|Cash|Rounds)$/ }).allInnerTexts(),
+  toggles: await page.locator(".toggle button.on", { hasText: /^(Round wins|Match wins|Cash)$/ }).allInnerTexts(),
 });
 
-// The Wins / Cash choice drives the scatter, the heatmap and the leaderboards together, the leaderboards show every
-// config's pot share beside its win share, and the axes stay put under filters on the cash rating too.
+// The Round wins / Cash choice drives the scatter, the heatmap and the leaderboards together, the leaderboards show every
+// config's pot share beside its match win share, and the axes stay put under filters on the cash rating too.
 const checkCash = async (page: Page, scatter: ReturnType<Page["locator"]>) => {
-  const wins = await ratingViews(page);
+  const rounds = await ratingViews(page);
 
-  console.log("Wins:", wins);
+  console.log("Round wins:", rounds);
   await scatter.getByRole("button", { name: "Cash", exact: true }).click();
   await settled(page);
 
@@ -317,8 +319,8 @@ const checkCash = async (page: Page, scatter: ReturnType<Page["locator"]>) => {
 
   console.log("Cash:", cash);
   expectThat(cash.scatter.includes("Cash Elo") && cash.heat === "Cash Elo" && cash.leaderboard === "Cash Elo", "the Cash choice did not reach the scatter, the heatmap and the leaderboards");
-  expectThat(!wins.scatter.includes("Cash") && wins.heat === "Elo" && wins.leaderboard === "Elo", "the page does not start on the win rating");
-  expectThat(cash.firstRow !== wins.firstRow && cash.heatFirstRow !== wins.heatFirstRow, "the cash rating left the leaderboard or heatmap rows as they were");
+  expectThat(rounds.scatter.includes("Round Elo") && rounds.heat === "Round Elo" && rounds.leaderboard === "Round Elo", "the page does not start on the round rating");
+  expectThat(cash.firstRow !== rounds.firstRow && cash.heatFirstRow !== rounds.heatFirstRow, "the cash rating left the leaderboard or heatmap rows as they were");
   expectThat(cash.toggles.length === 3 && cash.toggles.every((text) => text === "Cash"), `Cash toggles on: ${cash.toggles.join(" ")}`);
 
   const pots = await page.locator('table.lbt td[data-label="pot share"]').allInnerTexts();
@@ -338,51 +340,51 @@ const checkCash = async (page: Page, scatter: ReturnType<Page["locator"]>) => {
   await page.locator(".lb").screenshot({ path: shot("leaderboard-cash"), style: UNSTICK });
   await checkFixedAxes(page, scatter);
 
-  await heat(page).getByRole("button", { name: "Wins", exact: true }).click();
+  await heat(page).getByRole("button", { name: "Round wins", exact: true }).click();
   await settled(page);
 
   const back = await ratingViews(page);
 
-  expectThat(JSON.stringify(back) === JSON.stringify(wins), "Wins did not bring the page back to how it started");
+  expectThat(JSON.stringify(back) === JSON.stringify(rounds), "Round wins did not bring the page back to how it started");
 };
 
-// Rounds is the third rating choice: it reaches the scatter, the heatmap and the leaderboards, every leaderboard row shows
-// a round share, and the click that first fits it is timed.
-const checkRounds = async (page: Page, scatter: ReturnType<Page["locator"]>) => {
-  const wins = await ratingViews(page);
-  const clicked = Date.now();
-
-  await scatter.getByRole("button", { name: "Rounds", exact: true }).click();
-  await settled(page);
-  console.log("Rounds fitted and drawn in", Date.now() - clicked, "ms");
-
+// The page starts on round wins, with every leaderboard row's round wins. Match wins is fitted on its first click, which
+// is timed, and reaches the scatter, the heatmap and the leaderboards.
+const checkMatchWins = async (page: Page, scatter: ReturnType<Page["locator"]>) => {
   const rounds = await ratingViews(page);
-
-  console.log("Rounds:", rounds);
-  expectThat(rounds.scatter.includes("Rounds Elo") && rounds.heat === "Rounds Elo" && rounds.leaderboard === "Rounds Elo", "the Rounds choice did not reach the scatter, the heatmap and the leaderboards");
-  expectThat(rounds.firstRow !== wins.firstRow && rounds.heatFirstRow !== wins.heatFirstRow, "the rounds rating left the leaderboard or heatmap rows as they were");
-  expectThat(rounds.toggles.length === 3 && rounds.toggles.every((text) => text === "Rounds"), `Rounds toggles on: ${rounds.toggles.join(" ")}`);
-
-  const shares = await page.locator('table.lbt td[data-label="round share"]').allInnerTexts();
+  const shares = await page.locator('table.lbt td[data-label="round wins"]').allInnerTexts();
   const rows = await countOf(page, "table.lbt tbody tr.row");
 
-  console.log("round share cells", shares.length, "of", rows, "rows, first", shares.slice(0, 6).join(" "));
-  expectThat(shares.length === rows && shares.every((text) => /^\d+%$/.test(text.trim())), "a leaderboard row has no round share");
+  console.log("round wins cells", shares.length, "of", rows, "rows, first", shares.slice(0, 6).join(" "));
+  expectThat(shares.length === rows && shares.every((text) => /^\d+%$/.test(text.trim())), "a leaderboard row has no round wins");
+
+  const clicked = Date.now();
+
+  await scatter.getByRole("button", { name: "Match wins", exact: true }).click();
+  await settled(page);
+  console.log("Match wins fitted and drawn in", Date.now() - clicked, "ms");
+
+  const matches = await ratingViews(page);
+
+  console.log("Match wins:", matches);
+  expectThat(matches.scatter.includes("Match Elo") && matches.heat === "Match Elo" && matches.leaderboard === "Match Elo", "the Match wins choice did not reach the scatter, the heatmap and the leaderboards");
+  expectThat(matches.firstRow !== rounds.firstRow && matches.heatFirstRow !== rounds.heatFirstRow, "the match rating left the leaderboard or heatmap rows as they were");
+  expectThat(matches.toggles.length === 3 && matches.toggles.every((text) => text === "Match wins"), `Match wins toggles on: ${matches.toggles.join(" ")}`);
 
   await page.locator(".lb").getByRole("button", { name: "Rank", exact: true }).click();
   await settled(page);
-  console.log("Rounds rank:", await textOf(page, "table.lbt tbody tr.row"), "| heat header", await textOf(page, "table.heat thead th:nth-last-child(2)"));
-  await scatter.screenshot({ path: shot("scatter-rounds-rank") });
+  console.log("Match wins rank:", await textOf(page, "table.lbt tbody tr.row"), "| heat header", await textOf(page, "table.heat thead th:nth-last-child(2)"));
+  await scatter.screenshot({ path: shot("scatter-matches-rank") });
   await page.locator(".lb").getByRole("button", { name: "Elo", exact: true }).click();
   await settled(page);
-  await scatter.screenshot({ path: shot("scatter-rounds") });
-  await heat(page).screenshot({ path: shot("heat-rounds"), style: UNSTICK });
-  await page.locator(".lb").screenshot({ path: shot("leaderboard-rounds"), style: UNSTICK });
+  await scatter.screenshot({ path: shot("scatter-matches") });
+  await heat(page).screenshot({ path: shot("heat-matches"), style: UNSTICK });
+  await page.locator(".lb").screenshot({ path: shot("leaderboard-matches"), style: UNSTICK });
   await checkFixedAxes(page, scatter);
 
-  await heat(page).getByRole("button", { name: "Wins", exact: true }).click();
+  await heat(page).getByRole("button", { name: "Round wins", exact: true }).click();
   await settled(page);
-  expectThat(JSON.stringify(await ratingViews(page)) === JSON.stringify(wins), "Wins did not bring the page back to how it started after Rounds");
+  expectThat(JSON.stringify(await ratingViews(page)) === JSON.stringify(rounds), "Round wins did not bring the page back to how it started after Match wins");
 };
 
 const REGRET_TAG = /^regret \d+\.\d( · exact)?$/;
@@ -489,7 +491,7 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
   await check("fixed axes", () => checkFixedAxes(page, scatter));
   await check("ranking", () => checkRanking(page, scatter));
   await check("cash", () => checkCash(page, scatter));
-  await check("rounds", () => checkRounds(page, scatter));
+  await check("match wins", () => checkMatchWins(page, scatter));
   await check("every config rated", () => checkEveryConfigRated(page, scatter));
   await check("regret", () => checkRegret(page));
   await check("heatmap modes", async () => {
@@ -606,7 +608,7 @@ const checkTour = async (page: Page, name: string) => {
 };
 
 const checkTouch = async (browser: Browser, viewport: Viewport) => {
-  const { name } = viewport;
+  const { name, width, height } = viewport;
   const page = await newPage(browser, viewport);
   const check = (what: string, run: () => Promise<void>) => attempt(name, what, run);
   const stickyModelColumn = () => page.evaluate(() => getComputedStyle(document.querySelector("table.heat td.left") ?? document.body).position);
@@ -614,6 +616,34 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
   watch(page, name);
   await check("open page", () => openPage(page));
   await check("overview", async () => console.log(name, "overflow", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page), "| heat model column", await stickyModelColumn(), "| scatter labels", await countOf(page, ".card svg g.ptlabel")));
+  await check("first screen and filters", async () => {
+    await page.screenshot({ path: shot(`${name}-first-screen`) });
+
+    const chartTop = await page.evaluate(() => document.querySelector(".card svg")?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY);
+
+    console.log(name, "first chart starts at", Math.round(chartTop), "px of", height);
+    expectThat(chartTop < height * 0.6, `${name}: the first chart starts below the first screen's upper 60%`);
+
+    // A phone or tablet folds the filters into one line that says what they keep; a tap opens them.
+    if (width <= 1024) {
+      console.log(name, "filters line:", await textOf(page, ".filtersum"), "| chips shown", await page.locator(".filters .chip").first().isVisible());
+      await page.locator(".filtersum").tap();
+      await settled(page);
+      expectThat(await page.locator(".filters .chip").first().isVisible(), `${name}: tapping the filters line does not show the chips`);
+      await page.locator(".filters .chip", { hasText: "Opus 5.5" }).tap();
+      console.log(name, "filters line after Opus off:", await textOf(page, ".filtersum"));
+      await page.locator(".filters .chip", { hasText: "Opus 5.5" }).tap();
+      await page.locator(".filtersum").tap();
+    }
+  });
+  await check("titled mark tap", async () => {
+    // A mark that names itself only in an SVG title shows that title when tapped.
+    await page.locator("#luck svg circle:has(title)").first().tap({ force: true });
+    console.log(name, "tap a titled mark →", await textOf(page, ".tip.tapped").catch(() => "none"));
+    expectThat((await countOf(page, ".tip.tapped")) === 1, `${name}: tapping a titled mark shows no tip`);
+    await page.locator(".hero").tap();
+    expectThat((await countOf(page, ".tip.tapped")) === 0, `${name}: a tap outside leaves the titled mark's tip`);
+  });
   await check("scatter tap", async () => {
     await page.locator(".card svg g[style*=pointer]").nth(3).tap({ force: true });
     console.log(name, "tap point → tip:", await tipOf(page));
@@ -661,10 +691,10 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
     await settled(page);
     console.log(name, "cash rank y ticks", await yTicks(page), "| overflow", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page));
     await page.locator(".card").first().screenshot({ path: shot(`${name}-scatter-cash-rank`) });
-    await heat(page).getByRole("button", { name: "Rounds", exact: true }).tap();
+    await heat(page).getByRole("button", { name: "Match wins", exact: true }).tap();
     await settled(page);
-    console.log(name, "rounds rank y ticks", await yTicks(page), "| overflow", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page));
-    await page.locator(".card").first().screenshot({ path: shot(`${name}-scatter-rounds-rank`) });
+    console.log(name, "match rank y ticks", await yTicks(page), "| overflow", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page));
+    await page.locator(".card").first().screenshot({ path: shot(`${name}-scatter-matches-rank`) });
   });
   await check("tour", () => checkTour(page, name));
 
