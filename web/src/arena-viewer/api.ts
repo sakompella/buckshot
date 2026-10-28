@@ -8,6 +8,22 @@ const Count = Schema.NullOr(Schema.Number);
 /** A tally per item, in ITEMS order. */
 const PerItem = Schema.Array(Schema.Number);
 
+/**
+ * How consistent one config is: over the positions it met at least twice, the chance two of its decisions in the same
+ * position chose the same move, with a 95% interval over positions. Pooled over every tournament.
+ */
+export const Consistency = Schema.Struct({
+  model: Schema.String,
+  effort: Schema.String,
+  positions: Schema.Number,
+  decisions: Schema.Number,
+  agree: Schema.Number,
+  lo: Schema.Number,
+  hi: Schema.Number,
+});
+
+export type Consistency = typeof Consistency.Type;
+
 export const ITEMS = ["magnifying glass", "burner phone", "handsaw", "beer", "cigarettes", "inverter", "jammer", "adrenaline"] as const;
 
 export const Round = Schema.Struct({ winner: Schema.String, prize: Schema.Number, inferred: Schema.Boolean });
@@ -54,7 +70,7 @@ export const SeatRow = Schema.Struct({
 
 export type SeatRow = typeof SeatRow.Type;
 
-/** What the server's analysis adds to a seat. low is the worst health deficit in the last round it saw: own health, opponent health, round. */
+/** What the server's analysis adds to a seat. low is the worst health deficit in the last round it saw: own health, opponent health, round. roundThree is the agent moves of round 3 and the output tokens of the calls linked to them, or null when the seat made none. */
 export const SeatAnalysis = Schema.Struct({
   acquired: PerItem,
   used: PerItem,
@@ -64,6 +80,7 @@ export const SeatAnalysis = Schema.Struct({
   fallbacks: Schema.Number,
   story: Schema.NullOr(Story),
   round: Schema.Number,
+  roundThree: Schema.NullOr(Schema.Tuple([Schema.Number, Schema.Number])),
   low: Schema.NullOr(Schema.Tuple([Schema.Number, Schema.Number, Schema.Number])),
 });
 
@@ -84,12 +101,20 @@ export type Seat = typeof Seat.Type;
 
 export const SeatsResponse = Schema.Array(Seat);
 
-const Column = Schema.Array(Schema.Number);
+// A column holds one number per agent move, over a hundred thousand of them: one type check per column decodes it many
+// times faster than a schema per element.
+const Column = Schema.declare((input: unknown): input is ReadonlyArray<number> => Array.isArray(input) && input.every(Number.isFinite));
+
+/** A move's `gap` when the player has no single opponent to compare with. */
+export const NO_GAP = 99;
 
 /**
  * One entry per agent move, column by column. seat indexes the seats response.
  * opp and pick are bit masks over PATTERNS: a pattern's chance came up, and the move took it.
- * rt is -1 when a call did not report reasoning tokens. shot: 0 none, 1 the opponent, 2 itself.
+ * rt is -1 when a call did not report reasoning tokens. out is the output tokens of every call of the move. gap is the
+ * player's health minus its opponent's, or NO_GAP at a table of more than two or when a view omits a health.
+ * shot: 0 none, 1 the opponent, 2 itself.
+ * odds is, for a shot the player had no glass or phone clue for, the whole percent chance it counted the chambered shell live; else -1.
  * useItem and stealItem index ITEMS, or are -1.
  */
 export const Decisions = Schema.Struct({
@@ -101,6 +126,8 @@ export const Decisions = Schema.Struct({
   failedCalls: Column,
   rt: Column,
   rc: Column,
+  out: Column,
+  gap: Column,
   cost: Column,
   lat: Column,
   tok: Column,
@@ -110,10 +137,41 @@ export const Decisions = Schema.Struct({
   useItem: Column,
   stealItem: Column,
   shot: Column,
+  odds: Column,
   checks: Schema.Struct({ ok: Schema.Number, bad: Schema.Number }),
 });
 
 export type Decisions = typeof Decisions.Type;
+
+/** A searched move that gave up at least this many points of the round win chance is a blunder. */
+export const BLUNDER_POINTS = 10;
+
+/**
+ * Every blunder, column by column: seat indexes the seats response, ord is the decision's ordinal, points its regret,
+ * and chosen and best index labels (the move taken and the best legal move). Scores are percentage points of the round
+ * win chance. Empty without a regret database.
+ */
+export const Blunders = Schema.Struct({
+  labels: Schema.Array(Schema.String),
+  seat: Column,
+  ord: Column,
+  points: Column,
+  exact: Column,
+  chosen: Column,
+  best: Column,
+  bestScore: Column,
+  chosenScore: Column,
+});
+
+export type Blunders = typeof Blunders.Type;
+
+/**
+ * The regret of each searched agent move, column by column. seat indexes the seats response. left is the shells left
+ * in the gun, the chambered one included; isShot is 1 for a shot and 0 for any other move; points is the regret.
+ */
+export const Mistakes = Schema.Struct({ seat: Column, left: Column, isShot: Column, points: Column });
+
+export type Mistakes = typeof Mistakes.Type;
 
 /** Bit order of Decisions' opp and pick masks. */
 export const PATTERNS = [

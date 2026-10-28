@@ -89,7 +89,7 @@ const smallTargets = (page: Page) =>
     }),
   );
 
-const SECTIONS = ["scatter", "interesting", "seats", "reliability", "matches", "leaderboards", "breakdown"] as const;
+const SECTIONS = ["scatter", "interesting", "luck", "seats", "deals", "blunders", "mistakes", "odds", "items", "pressure", "rubbers", "reliability", "matches", "leaderboards", "breakdown"] as const;
 
 // How far a section's top sits below the sticky bar after a jump (0 or 1 is right), and whether the URL names it.
 const jumpedTo = (page: Page, section: string) =>
@@ -102,20 +102,21 @@ const jumpedTo = (page: Page, section: string) =>
 
 const checkJumps = async (page: Page, name: string, isTouch: boolean) => {
   for (const section of SECTIONS) {
-    const link = page.locator("nav a", { hasText: new RegExp(`^${section}$`, "i") });
+    const link = page.locator(`nav a[href="#${section}"]`);
 
     await (isTouch ? link.tap() : link.click());
     await settled(page);
     console.log(name, "jump", await jumpedTo(page, section));
 
-    if (section === "seats" || section === "reliability" || section === "matches") await page.screenshot({ path: shot(`${name}-${section}`) });
+    await page.locator(`#${section}`).screenshot({ path: shot(`${name}-${section}`) });
+    expectThat((await page.locator(`#${section}`).innerText()).trim() !== "", `${name}: the ${section} section is empty`);
   }
 };
 
-// The rating axis's tick labels from the top down.
+// The scatter's rating axis tick labels from the top down.
 const yTicks = (page: Page) =>
   page.evaluate(() =>
-    [...document.querySelectorAll(".card svg > g:not(.ptlabel) > text[text-anchor=end]")]
+    [...document.querySelectorAll("#scatter .card:first-child svg > g:not(.ptlabel) > text[text-anchor=end]")]
       .map((text) => ({ y: Number(text.getAttribute("y")), label: text.textContent ?? "" }))
       .toSorted((left, right) => left.y - right.y)
       .map(({ label }) => label)
@@ -473,6 +474,7 @@ const checkDesktop = async (browser: Browser) => {
   await page.waitForSelector(".flagged tr.row");
   console.log("flagged rows", await countOf(page, ".flagged tr.row"));
   await page.locator(".igrid").screenshot({ path: shot("interesting") });
+  await page.locator("#blunders").screenshot({ path: shot("blunders"), style: UNSTICK });
   console.log("cards", (await page.locator(".icard").allInnerTexts()).map((text) => text.replaceAll(/\s+/g, " ")));
   await page.locator("table.lbt tr.row").first().click();
   await page.locator(".drillin .sq i").first().hover();
@@ -511,7 +513,7 @@ const checkDesktop = async (browser: Browser) => {
   console.log("after same-seed chip:", await textOf(page, ".mhead h2"));
   await page.keyboard.press("Escape");
 
-  console.log("matches", await countOf(page, "#matches tbody tr.row"), "| seats", await countOf(page, "#seats .bignum"), "| reliability charts", await countOf(page, "#reliability .chartrow figure"));
+  console.log("matches", await countOf(page, "#matches tbody tr.row"), "| seats", await countOf(page, "#seats .bignum"), "| item fate rows", await countOf(page, "#items .fate"), "| reliability charts", await countOf(page, "#reliability .chartrow figure"));
   await checkJumps(page, "desktop", false);
   console.log("the filters stay in view:", await page.evaluate(() => Math.round(document.querySelector(".filters")?.getBoundingClientRect().top ?? -1)), "px from the top at scroll", await page.evaluate(() => Math.round(scrollY)));
   await page.locator("#reliability details.tables > summary").click();

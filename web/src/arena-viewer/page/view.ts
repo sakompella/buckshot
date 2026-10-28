@@ -4,17 +4,29 @@ import { createLazy, type Document, type Html, type HtmlBuilder } from "foldkit/
 
 import { baseName, baseOrder, colorOf, EFFORTS, fmtCount, keyOf, sumOf, unique } from "./data.ts";
 import { switchView } from "./charts.ts";
-import { type Derived, derive, mainConfigsOf } from "./derived.ts";
+import { consistencyView } from "./consistency.ts";
+import { type Derived, derive, mainConfigsOf, ratingsOf } from "./derived.ts";
+import { dealsView } from "./deals.ts";
 import { effortView } from "./effort.ts";
+import { blundersView, everyRateFor, galleryFor, ratesFor } from "./blunders.ts";
+import { fatesView } from "./fates.ts";
 import { breakdownView, heatRowsOf } from "./heat.ts";
 import { interestingView, picksOf } from "./interesting.ts";
+import { luckView } from "./luck.ts";
 import { leaderboardView } from "./leaderboard.ts";
+import { oddsView } from "./odds.ts";
+import { mistakesView } from "./mistakes.ts";
 import { matchesView } from "./matches.ts";
+import { momentumView } from "./momentum.ts";
 import { type Basis, Message, type Model, type Ranking, type Section, SECTIONS, type Viewport } from "./model.ts";
+import { pressureView } from "./pressure.ts";
 import { reliabilityView } from "./reliability.ts";
 import { replayView } from "./replay.ts";
+import { rubberRows, rubbersView } from "./rubbers.ts";
 import { scatterView } from "./scatter.ts";
 import { seatsView } from "./seats.ts";
+import { type UpsetBin, upsetOf, upsetView } from "./upset.ts";
+import { spendView } from "./spend.ts";
 
 type H = HtmlBuilder<Message>;
 
@@ -107,11 +119,35 @@ const lazyScatter = createLazy();
 
 const lazyEffort = createLazy();
 
+const lazyUpset = createLazy();
+
+const lazySpend = createLazy();
+
+const lazyMomentum = createLazy();
+
+const lazyConsistency = createLazy();
+
 const lazyBreakdown = createLazy();
+
+const lazyBlunders = createLazy();
 
 const lazyInteresting = createLazy();
 
+const lazyLuck = createLazy();
+
+const lazyMistakes = createLazy();
+
 const lazySeats = createLazy();
+
+const lazyOdds = createLazy();
+
+const lazyPressure = createLazy();
+
+const lazyRubbers = createLazy();
+
+const lazyFates = createLazy();
+
+const lazyDeals = createLazy();
 
 const lazyReliability = createLazy();
 
@@ -136,10 +172,24 @@ const scatterCard = (h: H, derived: Derived, ranking: Ranking, basis: Basis, sca
 
 const effortCard = (h: H, derived: Derived, basis: Basis, width: number): Html => h.div([h.Class("card")], [effortView(h, derived.pooled, derived.ratings, basis, width)]);
 
+const upsetCard = (h: H, bins: ReadonlyArray<UpsetBin>, width: number): Html => h.div([h.Class("card")], [upsetView(h, bins, width)]);
+
+const spendCard = (h: H, derived: Derived): Html => h.div([h.Class("card")], [spendView(h, derived.pooled)]);
+
+const blundersCard = (h: H, derived: Derived, width: number, content: number): Html =>
+  blundersView(h, ratesFor(derived.seats, derived.keep, derived.blunders), everyRateFor(derived.seats, derived.blunders), galleryFor(derived.seats, derived.keep, ratingsOf(derived.seats)("wins"), derived.blunders), width, content);
+
+const oddsCard = (h: H, derived: Derived, width: number): Html => h.div([h.Class("card")], [oddsView(h, derived.decisions, derived.seats, derived.keep, derived.pooled, width)]);
+
+const dealsCard = (h: H, derived: Derived, width: number): Html => h.div([h.Class("card")], [dealsView(h, derived, width)]);
+
+const momentumCard = (h: H, derived: Derived, width: number): Html => h.div([h.Class("card")], [momentumView(h, derived.pooled, width)]);
+
 const sectionView = (h: H, section: Section, content: Html): Html => h.section([h.Id(section), h.Class("part")], [content]);
 
 const pageView = (h: H, model: Model, derived: Derived): Html => {
   const content = contentWidth(model.viewport);
+  const afterFirstPaint = (draw: () => Html): Html => (model.isFirstPaintDone ? draw() : h.empty);
 
   return h.div(
     [],
@@ -147,9 +197,17 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
       lazyHero(heroView, [h, derived]),
       // The jump menu and the filters stay at the top; the filters apply to every section.
       h.div([h.Class("top")], [lazyNav(navView, [h]), lazyFilters(filtersView, [h, derived, model.filter])]),
-      sectionView(h, "scatter", h.div([], [lazyScatter(scatterCard, [h, derived, model.ranking, model.basis, model.scatter, cardWidth(model.viewport)]), lazyEffort(effortCard, [h, derived, model.basis, cardWidth(model.viewport)])])),
+      sectionView(h, "scatter", h.div([], [lazyScatter(scatterCard, [h, derived, model.ranking, model.basis, model.scatter, cardWidth(model.viewport)]), lazyEffort(effortCard, [h, derived, model.basis, cardWidth(model.viewport)]), afterFirstPaint(() => lazySpend(spendCard, [h, derived]))])),
       sectionView(h, "interesting", lazyInteresting(interestingView, [h, picksOf(derived), model.matches, content])),
+      sectionView(h, "luck", afterFirstPaint(() => h.div([], [lazyLuck(luckView, [h, derived.matches, derived.pooled, model.viewport.width, content, cardWidth(model.viewport)]), lazyUpset(upsetCard, [h, upsetOf(derived), cardWidth(model.viewport)]), lazyMomentum(momentumCard, [h, derived, cardWidth(model.viewport)])]))),
       sectionView(h, "seats", lazySeats(seatsView, [h, derived, model.viewport.width, content])),
+      sectionView(h, "deals", afterFirstPaint(() => lazyDeals(dealsCard, [h, derived, cardWidth(model.viewport)]))),
+      sectionView(h, "blunders", afterFirstPaint(() => lazyBlunders(blundersCard, [h, derived, model.viewport.width, content]))),
+      sectionView(h, "mistakes", afterFirstPaint(() => h.div([], [lazyMistakes(mistakesView, [h, derived.mistakes, derived.seats, derived.keep, model.viewport.width, cardWidth(model.viewport)]), lazyConsistency(consistencyView, [h, derived.pooled, derived.consistency, cardWidth(model.viewport)])]))),
+      sectionView(h, "odds", afterFirstPaint(() => lazyOdds(oddsCard, [h, derived, cardWidth(model.viewport)]))),
+      sectionView(h, "items", afterFirstPaint(() => lazyFates(fatesView, [h, derived.seats, derived.filtered]))),
+      sectionView(h, "pressure", afterFirstPaint(() => lazyPressure(pressureView, [h, derived.decisions, derived.seats, derived.keep, model.viewport.width, content]))),
+      sectionView(h, "rubbers", afterFirstPaint(() => h.div([h.Class("card")], [lazyRubbers(rubbersView, [h, rubberRows(derived.filtered), cardWidth(model.viewport)])]))),
       sectionView(h, "reliability", lazyReliability(reliabilityView, [h, derived.decisions, derived.seats, derived.keep, model.maybeRateTip, model.viewport.width, content])),
       sectionView(h, "matches", lazyMatches(matchesView, [h, derived.matches, model.matchList])),
       sectionView(h, "leaderboards", lazyLeaderboard(leaderboardView, [h, derived.byCohort, derived.everyByCohort, derived.ratings, derived.matchSeats, derived.items, model.leaderboard, model.filter.isAllConfigs, model.ranking, model.basis])),

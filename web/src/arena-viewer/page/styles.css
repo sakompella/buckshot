@@ -91,10 +91,27 @@ details summary { cursor: pointer; margin: 4px 0; }
 .bignums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; margin-bottom: 34px; }
 .bignum { display: flex; flex-direction: column; gap: 4px; border-left: 2px solid var(--line); padding-left: 14px; }
 .bignum b { font-size: 46px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
+.luckrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 28px; align-items: start; margin-bottom: 26px; }
+.luckrow figure { margin: 0; min-width: 0; }
+.luckbig { display: flex; flex-direction: column; gap: 28px; }
+svg .dimtext { fill: var(--dim); font-size: 11px; }
 .chartrow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; align-items: start; }
+.chartpair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; align-items: start; }
+.chartpair h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
 .chartrow figure { margin: 0; min-width: 0; }
+figure.lanes { margin: 36px 0 0; }
+figure.lanes h3 { margin-top: 0; }
 .chartrow h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
 .chartrow .sub { margin-bottom: 12px; }
+.chartrow .wide { grid-column: span 2; }
+.fate-legend { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 0 0 18px; color: var(--mut); font-size: 13px; }
+.fate-legend i { display: inline-block; width: 22px; height: 10px; margin-right: 6px; background: var(--fg); }
+.fates { display: grid; grid-template-columns: max-content minmax(0, 1fr) 3.5ch; gap: 4px 10px; align-items: center; font-size: 12px; }
+.fate { display: contents; }
+.fate-name { text-align: right; white-space: nowrap; }
+.fate-bar { display: flex; height: 12px; background: #0d0d0d; }
+.fate-bar i { display: block; height: 100%; }
+.fate-val { font-variant-numeric: tabular-nums; }
 svg .big { font-size: 20px; font-weight: 600; fill: var(--fg); font-variant-numeric: tabular-nums; }
 details.tables { margin-top: 34px; }
 details.tables > summary { color: var(--mut); font-size: 13px; }
@@ -135,7 +152,8 @@ table.heat td.click:hover, table.heat td.ring { outline: 1.5px solid #fff; outli
 table.heat td.total { font-weight: 600; text-align: center; padding: 3px 10px; }
 
 /* interesting matches */
-.igrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.igrid, .bgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.bgrid { grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); margin-bottom: 18px; }
 .icard { border: 1px solid var(--line); border-radius: 4px; padding: 12px 14px 8px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
 .icard:hover { border-color: #444; background: #070707; }
 .ititle { font-weight: 600; }
@@ -188,6 +206,13 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
 .switch:has(input:checked) { color: var(--fg); }
 .stepper { display: none; }
 
+.spendbar { display: flex; gap: 2px; height: 34px; margin: 4px 0 16px; }
+.spendbar .seg { min-width: 1px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #000; font-size: 12px; font-weight: 600; line-height: 34px; text-indent: 6px; }
+.spendrows { display: grid; grid-template-columns: max-content 1fr max-content; gap: 6px 14px; align-items: center; font-size: 13px; font-variant-numeric: tabular-nums; }
+.spendrows .track { height: 10px; }
+.spendrows .track span { display: block; height: 100%; border-radius: 1px; }
+.spendrows .amt { text-align: right; }
+
 /* touch screens: 44px targets */
 @media (pointer: coarse) {
   nav a, .toggle button, .chip, .more, select, input:not([type="checkbox"]), .switch, .stepper button, .seedrow .chip { min-height: 44px; }
@@ -205,6 +230,10 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
   nav { position: sticky; top: 0; z-index: 25; background: var(--bg); margin: 0 -20px 14px; padding: 4px 20px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
   .filters { margin-bottom: 4px; }
   .chartrow { grid-template-columns: minmax(0, 1fr); gap: 30px; }
+  .luckrow { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+  .luckbig { gap: 16px; }
+  .chartpair { grid-template-columns: minmax(0, 1fr); gap: 30px; }
+  .chartrow .wide { grid-column: auto; }
   main { padding: 16px 20px 60px; }
   nav .brand { display: none; }
   .seedgroup { display: block; }
