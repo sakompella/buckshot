@@ -249,8 +249,6 @@ The look borrows from the studio viewer in
 
 ## Arena analysis viewer
 
-For a section-by-section tour of what each chart shows and how to read it, see [`docs/arena/viewer-walkthrough.md`](../docs/arena/viewer-walkthrough.md).
-
 `bun scripts/arena-viewer.ts <db> [host] [port] [--regret <regret db>]` serves charts over the arena
 analysis database (`scripts/arena-import.ts` builds it; see
 `docs/arena/database.md`) at http://127.0.0.1:8790/ by default, with no auth.
