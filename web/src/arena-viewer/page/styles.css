@@ -27,6 +27,7 @@ nav .download { margin-left: auto; }
 .filters { display: flex; gap: 10px 14px; flex-wrap: wrap; align-items: center; margin: 0; }
 .filters select { max-width: 100%; }
 .filtersum { display: none; }
+body:has(.tip.tapped) .tip:not(.tapped) { display: none; }
 .tip.tapped { left: 8px; right: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); max-width: none; font-size: 13px; padding: 10px 12px; }
 .chips { display: flex; gap: 4px; flex-wrap: wrap; }
 .chip { font-size: 12px; padding: 2px 8px; border-color: var(--line); color: var(--dim); }
@@ -227,6 +228,7 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
   .step .h { min-height: 44px; align-items: center; }
   details > summary { min-height: 44px; display: flex; align-items: center; }
   table.heat th.sortable { height: 44px; }
+  table.heat td .n { position: static; display: block; text-align: right; margin: 1px -5px -2px 0; }
 }
 
 /* a narrow desktop: the leaderboard's bar gives up room to its columns */
@@ -332,13 +334,17 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
   .mhead h2 { font-size: 16px; }
   .mhead .k { font-size: 11.5px; }
   .mbody { display: flex; flex-direction: column; gap: 0; margin-top: 6px; }
+  .modal { overflow-y: auto; }
+  .mbody { flex: none; }
   .mleft { flex: none; overflow: visible; }
-  .mright { flex: 1 1 auto; min-height: 160px; border-left: 0; padding-left: 0; border-top: 1px solid var(--line); margin-top: 10px; }
+  .mright { flex: none; overflow: visible; border-left: 0; padding-left: 0; border-top: 1px solid var(--line); margin-top: 10px; }
+  .modal { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  .stepper { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2; margin: 0; background: #050505; border-top: 1px solid var(--line); padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); }
   .rounds { font-size: 12px; gap: 10px; margin-top: 6px; }
   .state { gap: 8px; margin-top: 8px; font-size: 12px; }
   .hp i { width: 12px; }
-  .stepper { margin: 8px 0 0; }
   .stepper button { flex: 1; }
+  .step { scroll-margin-bottom: 72px; }
   pre { font-size: 11.5px; }
 }
 

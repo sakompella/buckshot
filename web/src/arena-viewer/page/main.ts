@@ -264,7 +264,7 @@ const init: Runtime.ApplicationInit<Model, Message, Flags> = ({ viewport }) => (
     matchList: { query: "", limit: 25 },
     maybeRateTip: Option.none(),
     maybeTappedTitle: Option.none(),
-    maybeSection: Option.none(),
+    maybeSection: Option.some("scatter"),
     isFiltersOpen: false,
     matches: {},
     maybeReplay: Option.none(),
@@ -286,12 +286,12 @@ const replayKeyMessage = (key: string): Option.Option<Message> => {
   return key === "ArrowLeft" || key === "ArrowUp" ? Option.some(Message.SteppedReplay({ delta: -1 })) : Option.none();
 };
 
-// Controls answer a tap themselves; a tap anywhere else shows the nearest title, or clears the one shown.
+// Controls answer a tap themselves; a tap anywhere else shows the nearest title (or a heat cell's data-tip), or clears the one shown.
 const tappedTitleMessage = (event: PointerEvent): Option.Option<Message> => {
   if (event.pointerType !== "touch" || !(event.target instanceof Element) || event.target.closest("button, a, select, input, label, summary, [role=button], .tip") !== null) return Option.none();
 
   for (let element: Element | null = event.target; element !== null; element = element.parentElement) {
-    const text = element.querySelector(":scope > title")?.textContent ?? element.getAttribute("title");
+    const text = element.getAttribute("data-tip") ?? element.querySelector(":scope > title")?.textContent ?? element.getAttribute("title");
 
     if (text) return Option.some(Message.TappedTitle({ text }));
   }

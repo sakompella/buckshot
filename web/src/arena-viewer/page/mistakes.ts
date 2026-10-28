@@ -100,7 +100,9 @@ const panelView = (h: H, title: string, lines: ReadonlyArray<ShellLine>, top: nu
               ...points.map(({ left, moves, mean }) =>
                 h.circle([h.Cx(String(x.at(left))), h.Cy(String(y.at(mean))), h.R("3.2"), h.Fill(color)], [h.title([], [`${baseName(model)} · ${left} left · ${fmtPoints(mean)} points over ${fmtCount(moves)} moves`])]),
               ),
-              h.text([h.X(String(x.at(points.at(-1)?.left ?? MOST_LEFT) + 8)), h.Y(String((labelYs[index] ?? 0) + 4)), h.Style({ fill: color }), h.Class("lbl")], [isNarrow ? shortName(model) : baseName(model)]),
+              // A label pushed off its line's end gets a leader back to it.
+              h.path([h.D(`M${x.at(points.at(-1)?.left ?? MOST_LEFT) + 4},${y.at(points.at(-1)?.mean ?? 0)} L${x.at(points.at(-1)?.left ?? MOST_LEFT) + 8},${labelYs[index] ?? 0} h3`), h.Fill("none"), h.Stroke(color), h.StrokeOpacity("0.6")], []),
+              h.text([h.X(String(x.at(points.at(-1)?.left ?? MOST_LEFT) + 13)), h.Y(String((labelYs[index] ?? 0) + 4)), h.Style({ fill: color }), h.Class("lbl")], [isNarrow ? shortName(model) : baseName(model)]),
             ];
           }),
         ],

@@ -52,7 +52,17 @@ const cardWidth = (viewport: Viewport): number => Math.max(0, contentWidth(viewp
 
 // FILTERS
 
-const countOf = (on: number, every: number, noun: string): string => (on === every ? `all ${noun}` : `${on} of ${every} ${noun}`);
+/** Which of `every` are on, in the fewest names: all, the ones on, or all but the ones off. */
+const keptOf = (every: ReadonlyArray<string>, off: ReadonlyArray<string>, noun: string): string => {
+  const on = every.filter((value) => !off.includes(value));
+  const offShown = every.filter((value) => off.includes(value));
+
+  if (offShown.length === 0) return `all ${noun}`;
+
+  if (on.length === 0) return `no ${noun}`;
+
+  return on.length <= offShown.length ? on.join(", ") : `${noun} but ${offShown.join(", ")}`;
+};
 
 const filtersView = (h: H, derived: Derived, filter: Model["filter"], isOpen: boolean): Html => {
   const { seats } = derived;
@@ -63,14 +73,12 @@ const filtersView = (h: H, derived: Derived, filter: Model["filter"], isOpen: bo
   const matchesIn = (cohort: string) => new Set(seats.filter((seat) => seat.cohort === cohort && seat.status === "completed").map(({ matchId }) => matchId)).size;
   const main = mainConfigsOf(seats);
   const hidden = unique(seats.map(keyOf)).filter((key) => !main.has(key)).length;
-  const onNames = names.filter((name) => !filter.offModels.includes(name));
-  const onEfforts = efforts.filter((effort) => !filter.offEfforts.includes(effort));
 
   // A phone or tablet shows one line saying what the filters keep, and the filters themselves only when it is tapped.
   const summary = [
     filter.cohort === "all" ? "All cohorts" : filter.cohort,
-    onNames.length <= 2 ? onNames.join(", ") || "no models" : countOf(onNames.length, names.length, "models"),
-    onEfforts.length <= 2 ? onEfforts.join(", ") || "no efforts" : countOf(onEfforts.length, efforts.length, "efforts"),
+    keptOf(names, filter.offModels, "models"),
+    keptOf(efforts, filter.offEfforts, "efforts"),
     ...(hidden > 0 && !filter.isAllConfigs ? [`${hidden} configs hidden`] : []),
   ].join(" · ");
 
