@@ -1,15 +1,16 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { linScale } from "./charts.ts";
-import { addTo, type BlockTally, blockRate, fmtPct, keyOf, type MatchRow, meanOf, type Rate, sumOf } from "./data.ts";
-import { type Derived, memoLast, ratingsOf } from "./derived.ts";
+import { addTo, type BlockTally, blockRate, fmtPct, keyOf, type MatchRow, meanOf, type Rate, type SeatFull, sumOf } from "./data.ts";
+import { type Derived, memoLast } from "./derived.ts";
 import type { Message } from "./model.ts";
-import type { Rating } from "./ratings.ts";
+import { heldOutRatings } from "./ratings.ts";
 
 type H = HtmlBuilder<Message>;
 
-// How much skill matters: matches grouped by the rating gap between the players, each group's share won by the
-// higher-rated one, against what the ratings predict.
+// Rating gap and results: matches grouped by the rating gap between the players, each group's share won by the
+// higher-rated one, against what the ratings predict. Each match is rated by a fit that held its seed block out
+// (heldOutRatings), so the curve checks predictions on matches the ratings did not see.
 
 /** The Bradley-Terry chance that a player rated `gap` Elo above its opponent wins. */
 export const winChance = (gap: number): number => 1 / (1 + 10 ** (-gap / 400));
@@ -33,9 +34,13 @@ const BINS = 8;
 
 const MIN_PER_BIN = 20;
 
+/** The ratings a match is judged by, given its seed block. */
+export type RatingsFor = (block: string) => ReadonlyMap<string, { readonly rating: number }>;
+
 /** Each completed two-player match between configs of different ratings, as the higher-rated seat's result. */
-const favouriteGames = (matches: ReadonlyArray<MatchRow>, ratings: ReadonlyMap<string, Rating>): ReadonlyArray<FavouriteGame> =>
+const favouriteGames = (matches: ReadonlyArray<MatchRow>, ratingsFor: RatingsFor): ReadonlyArray<FavouriteGame> =>
   matches.flatMap(({ status, seats: [first, second, ...rest] }) => {
+    const ratings = ratingsFor(first?.seedBlock ?? "");
     const firstRating = first && ratings.get(keyOf(first))?.rating;
     const secondRating = second && ratings.get(keyOf(second))?.rating;
 
@@ -47,8 +52,8 @@ const favouriteGames = (matches: ReadonlyArray<MatchRow>, ratings: ReadonlyMap<s
   });
 
 /** The games sorted by gap and cut into equal-sized groups, so every group's interval is about as wide. */
-export const upsetBins = (matches: ReadonlyArray<MatchRow>, ratings: ReadonlyMap<string, Rating>): ReadonlyArray<UpsetBin> => {
-  const games = favouriteGames(matches, ratings).toSorted((left, right) => left.gap - right.gap);
+export const upsetBins = (matches: ReadonlyArray<MatchRow>, ratingsFor: RatingsFor): ReadonlyArray<UpsetBin> => {
+  const games = favouriteGames(matches, ratingsFor).toSorted((left, right) => left.gap - right.gap);
   const count = Math.min(BINS, Math.floor(games.length / MIN_PER_BIN));
 
   return Array.from({ length: count }, (_group, index) => games.slice(Math.floor((index * games.length) / count), Math.floor(((index + 1) * games.length) / count))).map((group) => {
@@ -60,8 +65,10 @@ export const upsetBins = (matches: ReadonlyArray<MatchRow>, ratings: ReadonlyMap
   });
 };
 
+const heldOutOf = memoLast((seats: ReadonlyArray<SeatFull>) => heldOutRatings(seats, "matches"));
+
 /** The page's groups: about winning matches, so they take the match rating whatever the rating choice. */
-export const upsetOf = memoLast((derived: Derived): ReadonlyArray<UpsetBin> => upsetBins(derived.matches, ratingsOf(derived.seats)("matches")));
+export const upsetOf = memoLast((derived: Derived): ReadonlyArray<UpsetBin> => upsetBins(derived.matches, heldOutOf(derived.seats)));
 
 const T = 24;
 
@@ -93,7 +100,7 @@ export const upsetView = (h: H, bins: ReadonlyArray<UpsetBin>, width: number): H
       h.div(
         [h.Class("lbbar")],
         [
-          h.h2([], ["How much skill matters"]),
+          h.h2([], ["Rating gap and results"]),
           ...(widestBin === undefined
             ? []
             : [
@@ -117,7 +124,7 @@ export const upsetView = (h: H, bins: ReadonlyArray<UpsetBin>, width: number): H
                 ),
               ),
               ...gapTicks.map((tick) => h.text([h.X(String(x.at(tick))), h.Y(String(height - B + 18)), h.TextAnchor("middle")], [String(tick)])),
-              h.text([h.X(String((L + width - right) / 2)), h.Y(String(height - 6)), h.TextAnchor("middle")], ["Elo gap between the players"]),
+              h.text([h.X(String((L + width - right) / 2)), h.Y(String(height - 6)), h.TextAnchor("middle")], ["Elo gap between the players, rated without the match's seed block"]),
               h.text([h.X(String(L)), h.Y(String(T - 10)), h.TextAnchor("start")], ["higher-rated player's win share"]),
               h.path([h.D(curve), h.Fill("none"), h.Stroke("#8b8b8b"), h.StrokeWidth("1.6"), h.StrokeDasharray("5 4")], []),
               ...(isNarrow ? [] : [h.text([h.X(String(width - right + 8)), h.Y(String(y.at(winChance(gapMax)) + 4))], ["Elo model"])]),

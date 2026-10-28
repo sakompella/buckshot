@@ -284,3 +284,24 @@ export const pooledRatings = (seats: ReadonlyArray<SeatFull>, basis: Basis): Rea
     }),
   );
 };
+
+/** How many folds the held-out ratings deal seed blocks into. */
+const FOLDS = 5;
+
+/**
+ * Ratings that never saw a match's own seed block: the blocks are dealt into FOLDS folds in order, and each fold's
+ * matches are rated by one fit over the other folds. By seed block; a config absent from the other folds has no rating.
+ */
+export const heldOutRatings = (seats: ReadonlyArray<SeatFull>, basis: Basis): ((block: string) => ReadonlyMap<string, { readonly rating: number }>) => {
+  const games = gamesOfSeats(seats, basis);
+  const numbered = numberGames(games);
+  const foldOf = new Map(unique(games.map(({ block }) => block)).toSorted().map((block, index) => [block, index % FOLDS]));
+
+  const fits = Array.from({ length: FOLDS }, (_, fold) => {
+    const training = Int32Array.from(games.keys()).filter((index) => foldOf.get(games[index]?.block ?? "") !== fold);
+
+    return new Map([...fitGames(numbered, training)].map(([key, rating]) => [key, { rating }]));
+  });
+
+  return (block) => fits[foldOf.get(block) ?? -1] ?? new Map();
+};
