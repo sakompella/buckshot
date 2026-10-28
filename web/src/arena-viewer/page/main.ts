@@ -10,7 +10,8 @@ import { picksOf } from "./interesting.ts";
 import { MORE_ROWS } from "./matches.ts";
 import { type Filter, Message, Model, Section, type Viewport } from "./model.ts";
 import { replayIndex, stepsOf } from "./replay.ts";
-import { view } from "./view.ts";
+import { PlaceTour, TOUR, tourKeyMessage } from "./tour.ts";
+import { stickyHeight, view } from "./view.ts";
 
 // The arena viewer's page: a Foldkit application over the viewer's JSON API.
 
@@ -46,13 +47,6 @@ const LoadMatch = Command.define("LoadMatch", {
 });
 
 const sectionOfHash = (hash: string): Option.Option<Section> => Schema.decodeUnknownOption(Section)(hash.replace(/^#/, ""));
-
-// The bar that stays at the top: the jump menu and filters together on a wide screen, the jump menu alone below.
-const stickyHeight = (): number => {
-  const sticky = [...document.querySelectorAll(".top, nav")].find((element) => getComputedStyle(element).position === "sticky");
-
-  return sticky?.getBoundingClientRect().height ?? 0;
-};
 
 const scrollToSection = (section: Section) => {
   const target = document.getElementById(section);
@@ -154,7 +148,10 @@ const withFilter = (model: Model, change: (filter: Filter) => Filter): Return =>
 
 export const update = (model: Model, message: Message): Return =>
   Message.match<Return>(message, {
-    ResizedViewport: (viewport) => ({ model: modifyFields(model, { viewport: () => viewport }) }),
+    ResizedViewport: (viewport) => ({
+      model: modifyFields(model, { viewport: () => viewport }),
+      commands: Option.match(model.maybeTour, { onNone: () => [], onSome: ({ step }) => [PlaceTour({ step })] }),
+    }),
     ClickedJump: ({ section }) => ({ model, commands: [JumpTo({ section })] }),
     NavigatedToHash: () => ({ model, commands: [ScrollToHash()] }),
     SucceededLoad: ({ loaded }) => {
@@ -205,6 +202,21 @@ export const update = (model: Model, message: Message): Return =>
     CompletedHistoryChange: () => ({ model }),
     CompletedStepScroll: () => ({ model }),
     CompletedScroll: () => ({ model }),
+    ClickedTour: () => ({ model: modifyFields(model, { maybeTour: () => Option.some({ step: 0, maybeBox: Option.none(), isCardUnder: false }) }), commands: [PlaceTour({ step: 0 })] }),
+    SteppedTour: ({ delta }) =>
+      Option.match(model.maybeTour, {
+        onNone: (): Return => ({ model }),
+        onSome: (tour): Return => {
+          const step = Math.max(0, Math.min(TOUR.length - 1, tour.step + delta));
+
+          return step === tour.step ? { model } : { model: modifyFields(model, { maybeTour: () => Option.some({ ...tour, step }) }), commands: [PlaceTour({ step })] };
+        },
+      }),
+    ClosedTour: () => ({ model: modifyFields(model, { maybeTour: () => Option.none() }) }),
+    // A placement for a step the tour has already left is dropped.
+    PlacedTour: ({ step, maybeBox, isCardUnder }) => ({
+      model: modifyFields(model, { maybeTour: (maybeTour) => Option.map(maybeTour, (tour) => (tour.step === step ? { ...tour, maybeBox, isCardUnder } : tour)) }),
+    }),
   });
 
 // INIT
@@ -228,6 +240,7 @@ const init: Runtime.ApplicationInit<Model, Message, Flags> = ({ viewport }) => (
     matches: {},
     maybeReplay: Option.none(),
     isFirstPaintDone: false,
+    maybeTour: Option.none(),
   },
   commands: [LoadData()],
 });
@@ -256,6 +269,17 @@ const subscriptions = Subscription.make<Model, Message>()((entry) => ({
         Stream.when(
           Dom.streamFromEventFilterMapPreventDefault({ target: window, type: "keydown", filterMapEvent: (event) => replayKeyMessage(event.key) }),
           Effect.sync(() => isReplayOpen),
+        ),
+    },
+  ),
+  tourKeys: entry(
+    { isTourOpen: Schema.Boolean },
+    {
+      modelToDependencies: (model) => ({ isTourOpen: Option.isSome(model.maybeTour) }),
+      dependenciesToStream: ({ isTourOpen }) =>
+        Stream.when(
+          Dom.streamFromEventFilterMapPreventDefault({ target: window, type: "keydown", filterMapEvent: (event) => tourKeyMessage(event.key) }),
+          Effect.sync(() => isTourOpen),
         ),
     },
   ),
