@@ -25,6 +25,7 @@ import { replayView } from "./replay.ts";
 import { rubberRows, rubbersView } from "./rubbers.ts";
 import { scatterView } from "./scatter.ts";
 import { seatsView } from "./seats.ts";
+import { tourView } from "./tour.ts";
 import { type UpsetBin, upsetOf, upsetView } from "./upset.ts";
 import { spendView } from "./spend.ts";
 
@@ -37,6 +38,13 @@ export const contentWidth = ({ width }: Viewport): number => {
   const padding = width < 640 ? 12 : width <= 1024 ? 20 : 36;
 
   return Math.min(width, 1500) - 2 * padding;
+};
+
+/** The bar that stays at the top: the jump menu and filters together on a wide screen, the jump menu alone below. */
+export const stickyHeight = (): number => {
+  const sticky = [...document.querySelectorAll(".top, nav")].find((element) => getComputedStyle(element).position === "sticky");
+
+  return sticky?.getBoundingClientRect().height ?? 0;
 };
 
 /** The width inside a .card: its padding and border. */
@@ -163,6 +171,7 @@ const navView = (h: H): Html =>
     [
       h.span([h.Class("brand")], ["Buckshot Arena"]),
       ...SECTIONS.map(([section, label]) => h.a([h.Href(`#${section}`), h.OnClick(Message.ClickedJump({ section }), { defaultAction: "Prevent" })], [label])),
+      h.button([h.Type("button"), h.Class("tourstart"), h.OnClick(Message.ClickedTour())], ["Tour"]),
       h.a([h.Class("download"), h.Href("/api/db")], ["Database (SQLite)"]),
     ],
   );
@@ -238,6 +247,7 @@ export const view = (model: Model, h: H): Document =>
             // Touch has no hover: a tap pins a point, and a tap anywhere outside the chart unpins it.
             h.main(isPinned(model) ? [h.OnClick(Message.ClickedOutsideChart())] : [], [pageView(h, model, derived)]),
             replay,
+            Option.match(model.maybeTour, { onNone: () => h.empty, onSome: (tour) => tourView(h, tour, model.viewport.width) }),
           ],
         ),
       };
