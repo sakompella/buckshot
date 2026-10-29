@@ -53,19 +53,6 @@
     {
       "entrants": [
         "claude-opus-5-5-xhigh",
-        "gpt-6-astra"
-      ],
-      "seeds": [
-        4030,
-        4028,
-        4031,
-        4029,
-        4032
-      ]
-    },
-    {
-      "entrants": [
-        "claude-opus-5-5-xhigh",
         "gpt-6.1-sol-max"
       ],
       "seeds": [
