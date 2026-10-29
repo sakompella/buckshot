@@ -26,7 +26,7 @@ export const TOUR: ReadonlyArray<TourStep> = [
     anchor: "scatter",
     focus: ".filters",
     title: "Filters",
-    text: "The cohort menu and the model and effort chips apply to the whole page; on a phone they fold into one line, and a tap opens them. A cohort is one kind of comparison, the cross-model games or one model's effort sweep, from every tournament, so pick one to compare like with like.",
+    text: "The model and effort chips apply to the whole page; on a phone they fold into one line, and a tap opens them. Every scored match from every tournament is pooled.",
   },
   {
     anchor: "scatter",
@@ -45,18 +45,6 @@ export const TOUR: ReadonlyArray<TourStep> = [
     focus: "#scatter > div > .card:nth-child(1)",
     title: "Cost, Moves, Tokens, Regret",
     text: "Each point is a config, a model at one effort; the x axis is its cost, model moves or output tokens per match, or its regret, an estimate of the round win chance its moves gave up (lower is better). Look for configs rated alike that sit far apart.",
-  },
-  {
-    anchor: "scatter",
-    focus: "#scatter > div > .card:nth-child(2)",
-    title: "Effort vs Elo",
-    text: "One line per model across its efforts, from off to max, each rating with its interval. Trust only steps larger than the intervals.",
-  },
-  {
-    anchor: "scatter",
-    focus: "#scatter > div > .card:nth-child(3)",
-    title: "Rating gap and results",
-    text: "How often the higher-rated config won, by rating gap, against the Bradley-Terry curve. Each match is rated by a fit that held its seed block out, so the curve is tested on matches the ratings did not see.",
   },
   {
     anchor: "interesting",
@@ -98,7 +86,7 @@ export const TOUR: ReadonlyArray<TourStep> = [
     anchor: "items",
     focus: "#items > div > .card",
     title: "Same position, same move",
-    text: "How often a config chose the same move when it met the same position again, in the chosen cohort, with the count of repeated positions. It measures steadiness, not good play.",
+    text: "How often a config chose the same move when it met the same position again, with the count of repeated positions. It measures steadiness, not good play.",
   },
   {
     anchor: "luck",

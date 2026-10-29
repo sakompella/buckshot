@@ -218,15 +218,13 @@ const axesOf = (page: Page) =>
 const reliabilityScales = (page: Page) =>
   page.evaluate(() => [...document.querySelectorAll("#reliability .chartrow svg")].map((chart) => [...chart.querySelectorAll("text[text-anchor=middle]")].map((text) => text.textContent).join(" ")).join(" | "));
 
-// Turning chips and switches on and off shows and hides points but moves no axis.
+// Turning chips on and off shows and hides points but moves no axis.
 const checkFixedAxes = async (page: Page, scatter: ReturnType<Page["locator"]>) => {
   const filters = page.locator(".filters");
 
   const steps: ReadonlyArray<readonly [string, () => Promise<void>]> = [
     ["max off", () => filters.getByRole("button", { name: "max", exact: true }).click()],
     ["Opus off", () => filters.getByRole("button", { name: /Opus/ }).click()],
-    ["medium only", () => scatter.getByRole("switch", { name: /medium only/ }).check()],
-    ["back", () => scatter.getByRole("switch", { name: /medium only/ }).uncheck()],
     ["Opus on", () => filters.getByRole("button", { name: /Opus/ }).click()],
   ];
 
@@ -276,6 +274,10 @@ const checkRanking = async (page: Page, scatter: ReturnType<Page["locator"]>) =>
   await scatter.getByRole("button", { name: "Rank", exact: true }).click();
   await settled(page);
   console.log("Rank:", ...(await ranking()));
+
+  const places = (await yTicks(page)).split(" ").map(Number);
+
+  expectThat(places.length > 1 && places.every((place, index) => index === 0 || place - (places[index - 1] ?? 0) === (places[1] ?? 0) - (places[0] ?? 0)), `rank ticks are not evenly spaced: ${places.join(" ")}`);
   await scatter.screenshot({ path: shot("scatter-rank") });
   await heat(page).screenshot({ path: shot("heat-rank"), style: UNSTICK });
   await page.locator(".lb").screenshot({ path: shot("leaderboard-rank"), style: UNSTICK });
@@ -284,40 +286,27 @@ const checkRanking = async (page: Page, scatter: ReturnType<Page["locator"]>) =>
   console.log("back to Elo from the leaderboard:", await textOf(page, ".card h2"));
 };
 
-// Under every cohort choice, either rating basis and either ranking, every config the page draws has an Elo and a
-// rank: no dash in the heatmap or the leaderboards, and the same points in the scatter. In Elo the cohort choice
-// leaves the axes where they are.
+// Under either rating basis and either ranking, every config the page draws has an Elo and a rank: no dash in the
+// heatmap or the leaderboards.
 const checkEveryConfigRated = async (page: Page, scatter: ReturnType<Page["locator"]>) => {
-  const cohorts = await page.locator(".filters select option").evaluateAll((options) => options.map((option) => option.getAttribute("value") ?? ""));
   const dashes = (selector: string) => page.locator(selector).evaluateAll((cells) => cells.filter((cell) => cell.textContent?.trim() === "–").length);
 
   for (const basis of ["Round wins", "Match wins", "Cash"] as const) {
-    const axesByCohort = new Set<string>();
-
     await scatter.getByRole("button", { name: basis, exact: true }).click();
 
-    for (const cohort of cohorts) {
-      await page.locator(".filters select").selectOption(cohort);
+    for (const ranking of ["Elo", "Rank"] as const) {
+      await scatter.getByRole("button", { name: ranking, exact: true }).click();
+      await settled(page);
 
-      for (const ranking of ["Elo", "Rank"] as const) {
-        await scatter.getByRole("button", { name: ranking, exact: true }).click();
-        await settled(page);
+      const label = ranking === "Rank" ? "rank" : ELO_NAMES[basis];
+      const rows = await countOf(page, "table.heat tbody tr");
+      const missing = (await dashes("table.heat td.total")) + (await dashes(`table.lbt td[data-label="${label}"]`));
+      const points = await countOf(page, ".card svg g.pt");
+      const unlisted = await page.locator("table.heat td.total").evaluateAll((cells) => cells.filter((cell) => cell.textContent?.trim() === "").length);
 
-        const label = ranking === "Rank" ? "rank" : ELO_NAMES[basis];
-        const rows = await countOf(page, "table.heat tbody tr");
-        const missing = (await dashes("table.heat td.total")) + (await dashes(`table.lbt td[data-label="${label}"]`));
-        const points = await countOf(page, ".card svg g.pt");
-        const unlisted = await page.locator("table.heat td.total").evaluateAll((cells) => cells.filter((cell) => cell.textContent?.trim() === "").length);
-
-        console.log("cohort", cohort, basis, ranking, "| heat rows", rows, "| scatter points", points, "| rows without a rating", missing + unlisted);
-        expectThat(missing + unlisted === 0, `${cohort} ${basis} ${ranking}: a config shows a dash instead of a rating`);
-
-        if (ranking === "Elo" && points > 0) axesByCohort.add(await axesOf(page));
-      }
+      console.log(basis, ranking, "| heat rows", rows, "| scatter points", points, "| rows without a rating", missing + unlisted);
+      expectThat(missing + unlisted === 0, `${basis} ${ranking}: a config shows a dash instead of a rating`);
     }
-
-    expectThat(axesByCohort.size <= 1, `${basis} scatter axes moved with the cohort choice (${axesByCohort.size} different sets)`);
-    await page.locator(".filters select").selectOption("all");
   }
 
   await scatter.getByRole("button", { name: "Round wins", exact: true }).click();
@@ -417,13 +406,13 @@ const checkMatchWins = async (page: Page, scatter: ReturnType<Page["locator"]>) 
   expectThat(JSON.stringify(await ratingViews(page)) === JSON.stringify(rounds), "Round wins did not bring the page back to how it started after Match wins");
 };
 
-const REGRET_TAG = /^regret \d+\.\d( · exact)?$/;
+const REGRET_TAG = /^−\d+\.\d$/;
 
 const regretTags = (page: Page) => page.locator(".modal .step .tag.regret");
 
 // With a regret database every leaderboard row shows its mean regret, or a dash when none of its moves were searched, and
-// the replay marks each searched model move with its regret: a proven exact one apart from the rest, and the open move
-// says which it is. Without one the page shows no regret at all.
+// the replay's move list tags each searched model move that gave up a real share of the win chance: a proven exact one
+// apart from the rest, and the chosen move's folded evaluator line says which it is. Without one the page shows no regret.
 const checkRegret = async (page: Page) => {
   const hasRegret = (await page.locator("table.lbt thead th", { hasText: /^Regret$/ }).count()) > 0;
   const cells = page.locator('table.lbt td[data-label="regret"]');
@@ -456,13 +445,13 @@ const checkRegret = async (page: Page) => {
     await page.locator("#matches tbody tr.row").nth(row).click();
     await page.waitForSelector(".modal .step");
 
-    const tags = await regretTags(page).allInnerTexts();
+    const tags = await regretTags(page).evaluateAll((found) => found.map((tag) => ({ text: tag.textContent ?? "", isExact: tag.classList.contains("exact") })));
     const steps = await countOf(page, ".modal .step");
 
-    expectThat(tags.every((text) => REGRET_TAG.test(text.trim())), `match ${row}: regret tags ${tags.slice(0, 3).join(" | ")}`);
+    expectThat(tags.every(({ text }) => REGRET_TAG.test(text.trim())), `match ${row}: regret tags ${tags.slice(0, 3).map(({ text }) => text).join(" | ")}`);
     expectThat(tags.length <= steps, `match ${row}: more regret tags than moves`);
-    exact += tags.filter((text) => text.includes("exact")).length;
-    notExact += tags.filter((text) => !text.includes("exact")).length;
+    exact += tags.filter(({ isExact }) => isExact).length;
+    notExact += tags.filter(({ isExact }) => !isExact).length;
 
     for (const kind of ["exact", "not exact"] as const) {
       const step = page.locator(".modal .step").filter({ has: kind === "exact" ? page.locator(".tag.regret.exact") : page.locator(".tag.regret:not(.exact)") }).first();
@@ -472,7 +461,7 @@ const checkRegret = async (page: Page) => {
       await step.click();
       await settled(page);
 
-      const detail = await textOf(page, ".modal .step.on .sd");
+      const detail = ((await page.locator(".modal .sel").textContent()) ?? "").replaceAll(/\s+/g, " ");
       const says = /not proven exact/.test(detail) ? "not exact" : /proven exact/.test(detail) ? "exact" : "neither";
 
       expectThat(/Best move .+ chosen [\d.]+% · depth \d/.test(detail) && says === kind, `match ${row}: a ${kind} move's detail says ${says}: ${detail.slice(0, 120)}`);
@@ -480,7 +469,7 @@ const checkRegret = async (page: Page) => {
       if (row === 0) await page.locator(".modal").screenshot({ path: shot(`replay-regret-${kind.replace(" ", "-")}`) });
     }
 
-    console.log("match", row, "regret tags", tags.length, "of", steps, "steps, first", tags.slice(0, 3).join(" | "));
+    console.log("match", row, "regret tags", tags.length, "of", steps, "steps, first", tags.slice(0, 3).map(({ text }) => text).join(" | "));
     await page.keyboard.press("Escape");
   }
 
@@ -501,10 +490,6 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
     await page.locator(".card svg g[style*=pointer]").nth(3).hover({ force: true });
     console.log("hover point → tip:", await tipOf(page));
     await page.mouse.move(0, 0);
-    await page.getByRole("switch", { name: /medium only/ }).check();
-    console.log("medium only labels", await countOf(page, ".card svg g.ptlabel"));
-    await scatter.screenshot({ path: shot("scatter-medium") });
-    await page.getByRole("switch", { name: /medium only/ }).uncheck();
   });
   await check("scatter axes", async () => {
     for (const [axis, name] of [
@@ -566,7 +551,7 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
 
       for (let step = 0; step < (card === 0 ? 6 : 0); step++) await page.keyboard.press("ArrowRight");
 
-      console.log(name, "steps", await countOf(page, ".modal .step"), "| on:", await textOf(page, ".modal .step.on .h"), "| reasoning blocks", await countOf(page, ".modal .step.on pre"), "| same-seed chips", await countOf(page, ".seedrow .chip"));
+      console.log(name, "steps", await countOf(page, ".modal .step"), "| on:", await textOf(page, ".modal .step.on"), "| reasoning blocks", await countOf(page, ".modal .sel pre"), "| same-seed chips", await countOf(page, ".seedrow .chip"));
       await page.locator(".modal").screenshot({ path: shot(name) });
       await page.keyboard.press("Escape");
     }
@@ -574,7 +559,7 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
   await check("focused move", async () => {
     await page.locator(".flagged tr.row").first().click();
     await page.waitForSelector(".modal .step.on");
-    console.log("focused move", await textOf(page, ".modal .step.on .h"));
+    console.log("focused move", await textOf(page, ".modal .step.on"));
 
     const turning = page.locator(".modal .turning .chip");
     const rings = await countOf(page, ".modal .chart circle");
@@ -582,8 +567,9 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
     console.log("turning points", await countOf(page, ".modal .turning .chip"), "| blunder rings", rings);
     expectThat((await turning.count()) > 0 && rings >= (await turning.count()), "the replay of a flagged move has no turning points on its health chart");
     await turning.first().click();
-    console.log("turning point opens", await textOf(page, ".modal .step.on .h"));
+    console.log("turning point opens", await textOf(page, ".modal .step.on"));
     await page.locator(".modal").screenshot({ path: shot("replay-turning-points") });
+    await page.locator(".modal details.seeds > summary").click();
     await page.locator(".seedrow .chip").first().click();
     await page.waitForSelector(".modal .step");
     await settled(page);
@@ -591,7 +577,7 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
     await page.keyboard.press("Escape");
   });
   await check("mark tip by keyboard", async () => {
-    const mark = page.locator("#scatter svg g[role=button]").first();
+    const mark = page.locator("#rubbers svg g[role=button]").first();
 
     await mark.focus();
     console.log("focus a mark → tip:", await tipOf(page));
@@ -736,13 +722,13 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
     await page.locator(".stepper button", { hasText: "Next" }).tap();
     await page.locator(".stepper button", { hasText: "Next" }).tap();
     await settled(page);
-    console.log(name, "replay", `${box?.width}x${box?.height}`, "| stepper", before, "→", await textOf(page, ".modal .stepper .k"), "| on:", await textOf(page, ".modal .step.on .h"), "| small targets", await smallTargets(page));
+    console.log(name, "replay", `${box?.width}x${box?.height}`, "| stepper", before, "→", await textOf(page, ".modal .stepper .k"), "| on:", await textOf(page, ".modal .step.on"), "| small targets", await smallTargets(page));
     await page.screenshot({ path: shot(`${name}-replay`) });
 
-    const crowded = await page.locator(".modal .step .h").evaluateAll((headers) => headers.filter((header) => header.scrollWidth > header.clientWidth).length);
+    const crowded = await page.locator(".modal .step").evaluateAll((headers) => headers.filter((header) => header.scrollWidth > header.clientWidth).length);
 
-    console.log(name, "regret tags", await regretTags(page).count(), "| move headers wider than the modal", crowded);
-    expectThat(crowded === 0, `${name}: a move header overflows with its regret tag`);
+    console.log(name, "regret tags", await regretTags(page).count(), "| move rows wider than the list", crowded);
+    expectThat(crowded === 0, `${name}: a move row overflows with its regret tag`);
     await page.goBack();
     console.log(name, "back closes replay:", (await countOf(page, ".modal")) === 0);
   });

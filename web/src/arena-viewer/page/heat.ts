@@ -152,12 +152,12 @@ const CHOICE_BITS = CHOICES.map(([pattern]) => patternBit(pattern));
 
 const emptyTally = (): Tally => ({ use: ITEMS.map(() => [0, 0]), pattern: CHOICES.map(() => [0, 0]), shots: 0, atOpp: 0, moves: 0, items: 0, jams: 0, steals: 0, seats: new Set<number>() });
 
-/** Per cohort and config, as ModelStats ids. A filter keeps or drops whole cohort configs, so these are counted once. */
-const cohortTallies = memoLast((decisions: Decisions, seats: ReadonlyArray<SeatFull>): ReadonlyMap<string, Tally> => {
+/** Per config key. A filter keeps or drops whole configs, so these are counted once. */
+const configTallies = memoLast((decisions: Decisions, seats: ReadonlyArray<SeatFull>): ReadonlyMap<string, Tally> => {
   const out = new Map<string, Tally>();
 
   const tallyOfSeat = seats.map((seat) => {
-    const id = `${seat.cohort}||${keyOf(seat)}`;
+    const id = keyOf(seat);
     const tally = out.get(id) ?? emptyTally();
 
     out.set(id, tally);
@@ -218,42 +218,15 @@ const cohortTallies = memoLast((decisions: Decisions, seats: ReadonlyArray<SeatF
   return out;
 });
 
-const addCounts = (into: Array<[number, number]>, counts: ReadonlyArray<readonly [number, number]>) =>
-  counts.forEach(([k, n], index) => {
-    const total = into[index];
-
-    if (total) {
-      total[0] += k;
-      total[1] += n;
-    }
-  });
-
-/** Per config, over the cohorts the filter keeps. */
+/** Per config the filter keeps. */
 const tallies = memoLast((derived: Derived): ReadonlyMap<string, Tally> => {
-  const perCohort = cohortTallies(derived.decisions, derived.seats);
-  const out = new Map<string, Tally>();
+  const perConfig = configTallies(derived.decisions, derived.seats);
 
-  for (const m of derived.byCohort) {
-    const part = perCohort.get(m.id);
+  return new Map(derived.pooled.flatMap(({ key }) => {
+    const tally = perConfig.get(key);
 
-    if (part === undefined || part.moves === 0) continue;
-
-    const tally = out.get(m.key) ?? emptyTally();
-
-    out.set(m.key, tally);
-    addCounts(tally.use, part.use);
-    addCounts(tally.pattern, part.pattern);
-    tally.shots += part.shots;
-    tally.atOpp += part.atOpp;
-    tally.moves += part.moves;
-    tally.items += part.items;
-    tally.jams += part.jams;
-    tally.steals += part.steals;
-
-    for (const seat of part.seats) tally.seats.add(seat);
-  }
-
-  return out;
+    return tally === undefined || tally.moves === 0 ? [] : [[key, tally] as const];
+  }));
 });
 
 /** Each config's win share against each opponent model: hits and games. */
@@ -442,7 +415,7 @@ const heatmapView = (h: H, derived: Derived, heat: Model["heat"], ranking: Ranki
                       ...columns.map((col) => header(col.id, col.label, col.title, "", col.item)),
                       ranking === "elo"
                         ? header("rating", eloName(derived.basis), `Bradley-Terry rating fitted over every match of every tournament, on ${shareName(derived.basis)}`)
-                        : header("rating", "Rank", `place by observed ${shareName(derived.basis)} among all the cohort's configs, before the filters; ties go to the higher ${eloName(derived.basis)}. All cohorts ranks by ${eloName(derived.basis)}`),
+                        : header("rating", "Rank", `place by ${eloName(derived.basis)} among all configs, before the filters`),
                       header("cost", "$/match", "avg list-price cost per player per scored match"),
                     ],
                   ),

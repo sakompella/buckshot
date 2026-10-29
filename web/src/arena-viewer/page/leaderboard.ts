@@ -2,42 +2,15 @@ import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { anchorId, pressable, ratingToggles, tipView } from "./charts.ts";
-import { baseName, configShare, eloName, fmtCount, fmtPct, fmtPoints, fmtSec, fmtUsd, groupBy, isClaude, keyOf, labelOf, type ModelStats, rankOrder, type SeatFull, shareName, sumOf } from "./data.ts";
-import { type ItemSummary, memoLast } from "./derived.ts";
+import { baseName, eloName, fmtCount, fmtPct, fmtPoints, fmtSec, fmtUsd, groupBy, isClaude, keyOf, labelOf, type ModelStats, type SeatFull, shareName, sumOf } from "./data.ts";
+import type { ItemSummary } from "./derived.ts";
 import { itemIconOf } from "./items.ts";
 import { type Basis, Message, type Model, type Ranking } from "./model.ts";
 import type { Rating } from "./ratings.ts";
 
 type H = HtmlBuilder<Message>;
 
-// One table per cohort, ranked by the pooled Bradley-Terry rating (Elo) or by observed share within the cohort.
-
-interface Cohort {
-  readonly cohort: string;
-  readonly configs: ReadonlyArray<ModelStats>;
-  /** Each config's place by observed share among all the cohort's configs, whatever the filter (see rankOrder). */
-  readonly places: ReadonlyMap<string, number>;
-  readonly scoredMatches: number;
-  /** One model's effort sweep rather than cross-model games. */
-  readonly isSweep: boolean;
-}
-
-const cohortsOf = memoLast((stats: ReadonlyArray<ModelStats>, every: ReadonlyArray<ModelStats>, seats: ReadonlyArray<SeatFull>, ratings: ReadonlyMap<string, Rating>, basis: Basis): ReadonlyArray<Cohort> => {
-  const eloOf = (m: ModelStats) => ratings.get(m.key)?.rating ?? 0;
-
-  return [...groupBy(
-    stats.filter(({ scored }) => scored.length > 0),
-    ({ cohort }) => cohort,
-  )]
-    .map(([cohort, configs]) => ({
-      cohort,
-      configs: configs.toSorted((left, right) => eloOf(right) - eloOf(left)),
-      places: new Map(rankOrder(every.filter((m) => m.cohort === cohort && m.scored.length > 0), (m) => configShare(m, basis), eloOf).map((m, index) => [m.key, index + 1])),
-      scoredMatches: new Set(configs.flatMap(({ scored }) => scored.map(({ matchId }) => matchId))).size,
-      isSweep: new Set(seats.flatMap((seat) => (seat.cohort === cohort ? [seat.model] : []))).size === 1,
-    }))
-    .toSorted((left, right) => right.scoredMatches - left.scoredMatches);
-});
+// One table, ranked by the pooled Bradley-Terry rating (Elo); Rank shows each config's place by it.
 
 const resultOf = (seat: SeatFull): string => {
   const share = seat.winShare ?? 0;
@@ -116,10 +89,10 @@ const drillView = (h: H, m: ModelStats, seats: ReadonlyArray<SeatFull>, maybeTip
 };
 
 /** How a row shows its standing: its Elo with an interval, or its place. */
-type Standing = { readonly elo: Rating | undefined } | { readonly place: number };
+type Standing = { readonly elo: Rating | undefined } | { readonly place: number | undefined };
 
 const standingView = (h: H, standing: Standing): ReadonlyArray<Html | string> => {
-  if ("place" in standing) return [String(standing.place)];
+  if ("place" in standing) return [standing.place === undefined ? "–" : String(standing.place)];
 
   const { elo } = standing;
 
@@ -201,19 +174,38 @@ const headerView = (h: H, label: string, index: number): Html => {
   return h.th(index === 1 ? [h.Class("barcol")] : label === "Rank" || label.endsWith("Elo") ? [h.Class("rating")] : title === undefined ? [] : [h.Title(title)], [label]);
 };
 
-// Without 'all configs' a sweep usually keeps only its medium row, which has nothing to be ranked against.
-const isShown = (cohort: Cohort, isAllConfigs: boolean): boolean => isAllConfigs || !cohort.isSweep || cohort.configs.length > 1;
+/** Configs with a scored match, by rank; the unranked (no rating) last, by label. */
+export const inRankOrder = (stats: ReadonlyArray<ModelStats>, ranks: ReadonlyMap<string, number>): ReadonlyArray<ModelStats> =>
+  stats.filter(({ scored }) => scored.length > 0).toSorted((left, right) => (ranks.get(left.key) ?? Number.POSITIVE_INFINITY) - (ranks.get(right.key) ?? Number.POSITIVE_INFINITY) || left.label.localeCompare(right.label));
 
-const cohortView = (h: H, { cohort, configs: byElo, places, scoredMatches }: Cohort, ratings: ReadonlyMap<string, Rating>, seats: ReadonlyArray<SeatFull>, items: ReadonlyMap<string, ItemSummary>, leaderboard: Model["leaderboard"], ranking: Ranking, basis: Basis, hasRegret: boolean): Html => {
+export const leaderboardView = (
+  h: H,
+  stats: ReadonlyArray<ModelStats>,
+  every: ReadonlyArray<ModelStats>,
+  ranks: ReadonlyMap<string, number>,
+  ratings: ReadonlyMap<string, Rating>,
+  seats: ReadonlyArray<SeatFull>,
+  items: ReadonlyMap<string, ItemSummary>,
+  leaderboard: Model["leaderboard"],
+  ranking: Ranking,
+  basis: Basis,
+): Html => {
+  const hasRegret = every.some(({ regret }) => regret !== null);
   const headers = headersOf(ranking, basis, hasRegret);
-  const placeOf = (m: ModelStats) => places.get(m.key) ?? 0;
-  const configs = ranking === "elo" ? byElo : byElo.toSorted((left, right) => placeOf(left) - placeOf(right));
+  const configs = inRankOrder(stats, ranks);
 
-  return h.keyed("div")(
-    cohort,
-    [],
+  return h.div(
+    [h.Class("lb")],
     [
-      h.div([h.Class("lbbar")], [h.b([], [cohort]), h.span([h.Class("k")], [`${scoredMatches} scored matches`])]),
+      h.div([h.Class("lbbar")], [h.h2([], ["Leaderboards"]), ...ratingToggles(h, ranking, basis)]),
+      h.p(
+        [h.Class("sub")],
+        [
+          ranking === "elo"
+            ? `${eloName(basis)} is one Bradley-Terry rating over every match, on ${shareName(basis)}; intervals are 95% bootstraps over seed blocks.`
+            : `Rank is the place by ${eloName(basis)} among all configs, whatever the filter.`,
+        ],
+      ),
       h.div(
         [h.Class("card")],
         [
@@ -225,7 +217,7 @@ const cohortView = (h: H, { cohort, configs: byElo, places, scoredMatches }: Coh
                 [],
                 configs.flatMap((m) => {
                   const isOpen = Option.exists(leaderboard.maybeOpen, (open) => open === m.id);
-                  const standing: Standing = ranking === "elo" ? { elo: ratings.get(m.key) } : { place: placeOf(m) };
+                  const standing: Standing = ranking === "elo" ? { elo: ratings.get(m.key) } : { place: ranks.get(m.key) };
 
                   return [
                     rowView(h, m, standing, basis, items.get(m.id), isOpen, hasRegret),
@@ -249,39 +241,6 @@ const cohortView = (h: H, { cohort, configs: byElo, places, scoredMatches }: Coh
             ],
           ),
         ],
-      ),
-    ],
-  );
-};
-
-export const leaderboardView = (
-  h: H,
-  stats: ReadonlyArray<ModelStats>,
-  every: ReadonlyArray<ModelStats>,
-  ratings: ReadonlyMap<string, Rating>,
-  seats: ReadonlyArray<SeatFull>,
-  items: ReadonlyMap<string, ItemSummary>,
-  leaderboard: Model["leaderboard"],
-  isAllConfigs: boolean,
-  ranking: Ranking,
-  basis: Basis,
-): Html => {
-  const hasRegret = every.some(({ regret }) => regret !== null);
-
-  return h.div(
-    [h.Class("lb")],
-    [
-      h.div([h.Class("lbbar")], [h.h2([], ["Leaderboards"]), ...ratingToggles(h, ranking, basis)]),
-      h.p(
-        [h.Class("sub")],
-        [
-          ranking === "elo"
-            ? `${eloName(basis)} is one Bradley-Terry rating over every match, on ${shareName(basis)}; intervals are 95% bootstraps over seed blocks.`
-            : `Rank is the place by observed ${shareName(basis)} within each cohort; ties go to the higher ${eloName(basis)}.`,
-        ],
-      ),
-      ...cohortsOf(stats, every, seats, ratings, basis).filter((cohort) => isShown(cohort, isAllConfigs)).map((cohortRow) =>
-        cohortView(h, cohortRow, ratings, seats, items, leaderboard, ranking, basis, hasRegret),
       ),
     ],
   );

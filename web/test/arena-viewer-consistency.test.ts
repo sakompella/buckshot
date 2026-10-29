@@ -29,8 +29,7 @@ const SCHEMA = `create table players (match_id text, player text, model text, ef
   create table decisions (match_id text, ordinal integer, player text, by_whom text, choice text, exact_key text)`;
 
 /**
- * Thirty positions, each met by four matches of the config "steady". In cohort A its two matches always choose the same move;
- * in cohort B they never do. A fifth match, not one the viewer shows, and a forced move count nowhere.
+ * Thirty positions, each met by four matches of the config "steady": three choose the same move, one another. A fifth match, not one the viewer shows, and a forced move count nowhere.
  */
 const knowledgeFile = (): string => {
   const path = join(mkdtempSync(join(tmpdir(), "knowledge-")), "knowledge.sqlite");
@@ -56,19 +55,16 @@ const knowledgeFile = (): string => {
 };
 
 const SHOWN = new Map([
-  ["a1", { cohort: "A", seedBlock: "s1" }],
-  ["a2", { cohort: "A", seedBlock: "s2" }],
-  ["b1", { cohort: "B", seedBlock: "s3" }],
-  ["b2", { cohort: "B", seedBlock: "s4" }],
+  ["a1", "s1"],
+  ["a2", "s2"],
+  ["b1", "s3"],
+  ["b2", "s4"],
 ]);
 
-test("each cohort gets its own agreement, and all cohorts pool them, counting agent moves of the viewer's matches only", () => {
+test("a config's agreement pools its decisions, counting agent moves of the viewer's matches only", () => {
   const rows = openConsistency(knowledgeFile(), SHOWN);
-  const of = (cohort: string) => rows.find((row) => row.cohort === cohort);
 
-  expect(rows.map(({ cohort }) => cohort).toSorted()).toEqual(["A", "B", "all"]);
-  expect(of("A")).toMatchObject({ model: "steady", effort: "medium", positions: 30, decisions: 60, agree: 1 });
-  expect(of("B")).toMatchObject({ positions: 30, decisions: 60, agree: 0 });
   // Three of four decisions shoot: three agreeing pairs of six.
-  expect(of("all")).toMatchObject({ positions: 30, decisions: 120, agree: 0.5 });
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toMatchObject({ model: "steady", effort: "medium", positions: 30, decisions: 120, agree: 0.5 });
 });

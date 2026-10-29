@@ -8,14 +8,14 @@ import { Blunders, Call, Consistency, Decisions, MatchDetail, MatchSeat, MatchSu
 import { findBlunders } from "./blunders.ts";
 import { mistakesOf } from "./mistakes.ts";
 import { openConsistency } from "./consistency.ts";
-import { groupBy, withCohorts } from "./page/data.ts";
+import { groupBy } from "./page/data.ts";
 import page from "./page/index.html";
 import { openRegret, type Regret } from "./regret.ts";
 
 // The arena viewer's server: the page, and a read-only JSON API over the arena
 // analysis database. It never selects match_seats.provenance_json, which holds
 // an account email. DeepSeek is left out entirely: a match with a DeepSeek seat
-// is dropped here, so no tab, cohort, rating or total sees it.
+// is dropped here, so no tab, rating or total sees it.
 
 const NOT_DEEPSEEK = `m.id not in (select x.match_id from match_seats x join entrants y on y.id = x.entrant_id where y.model = 'oc/deepseek-v4.1-flash-free')`;
 
@@ -270,8 +270,8 @@ export const serveArenaViewer = (dbPath: string, hostname: string, port: number,
     ),
   );
 
-  const shown = new Map(withCohorts(seats).map(({ matchId, cohort, seedBlock }) => [matchId, { cohort, seedBlock }]));
-  const consistencyBody = encodedBody(encodeConsistency(knowledgePath === undefined ? [] : openConsistency(knowledgePath, shown)));
+  const seedBlocks = new Map(seats.map(({ matchId, seedBlock }) => [matchId, seedBlock]));
+  const consistencyBody = encodedBody(encodeConsistency(knowledgePath === undefined ? [] : openConsistency(knowledgePath, seedBlocks)));
 
   console.log(`loaded ${seats.length} seats in ${Math.round(performance.now() - started)} ms; decisions payload ${(decisionsBody.gzipped.length / 1e6).toFixed(1)} MB gzipped`);
 

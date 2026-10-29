@@ -16,7 +16,7 @@ const rowsOf = memoLast((matches: ReadonlyArray<MatchRow>, query: string): Reado
   const needle = query.trim().toLowerCase();
 
   return matches
-    .filter((match) => needle === "" || match.seats.some((seat) => labelOf(keyOf(seat)).toLowerCase().includes(needle)) || String(match.seed).includes(needle) || match.cohort.toLowerCase().includes(needle))
+    .filter((match) => needle === "" || match.seats.some((seat) => labelOf(keyOf(seat)).toLowerCase().includes(needle)) || String(match.seed).includes(needle))
     .toSorted((left, right) => right.startedAt.localeCompare(left.startedAt));
 });
 
@@ -34,7 +34,6 @@ const rowView = (h: H, match: MatchRow): Html =>
     [h.Class("row"), ...pressable(h, Message.ClickedMatch({ id: match.matchId, maybeFocus: Option.none() }))],
     [
       h.td([h.Class("when")], [fmtTime(match.startedAt)]),
-      h.td([h.Class("tour"), h.DataAttribute("label", "cohort")], [match.cohort]),
       h.td([h.DataAttribute("label", "seed")], [String(match.seed)]),
       ...[match.seats[0], match.seats[1]].map((seat) =>
         seat === undefined ? h.td([h.Class("seat")], ["–"]) : h.td([h.Class("seat"), h.Style({ color: colorOf(seat.model) })], [`${seat.player} · ${labelOf(keyOf(seat))}`]),
@@ -56,14 +55,14 @@ export const matchesView = (h: H, matches: ReadonlyArray<MatchRow>, list: Model[
       h.div(
         [h.Class("bar")],
         [
-          h.input([h.Placeholder("filter by model, seed or cohort"), h.Value(list.query), h.OnInput((query) => Message.ChangedMatchQuery({ query }))]),
+          h.input([h.Placeholder("filter by model or seed"), h.Value(list.query), h.OnInput((query) => Message.ChangedMatchQuery({ query }))]),
           h.span([h.Class("k")], [`${rows.length.toLocaleString()} matches`]),
         ],
       ),
       h.table(
         [h.Class("rows matchrows")],
         [
-          h.thead([], [h.tr([], ["Started", "Cohort", "Seed", "Seat 1", "Seat 2", "Result", "Moves", "Cost"].map((title) => h.th(title === "Cohort" ? [h.Class("tour")] : [], [title])))]),
+          h.thead([], [h.tr([], ["Started", "Seed", "Seat 1", "Seat 2", "Result", "Moves", "Cost"].map((title) => h.th([], [title])))]),
           h.tbody([], rows.slice(0, list.limit).map((match) => rowView(h, match))),
         ],
       ),
