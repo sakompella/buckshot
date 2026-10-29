@@ -30,7 +30,7 @@ export const GROUPS: ReadonlyArray<{ readonly group: Group; readonly label: stri
   { group: "details", label: "Details", sections: ["leaderboards", "matches", "deals", "breakdown"] },
 ];
 
-/** How ratings show: the Bradley-Terry rating on an Elo scale, or the place by observed win share (see rankOrder). */
+/** How ratings show: the Bradley-Terry rating on an Elo scale, or its place, best first. */
 export const Ranking = Schema.Literals(["elo", "rank"]);
 
 export type Ranking = typeof Ranking.Type;
@@ -40,13 +40,13 @@ export const Basis = Schema.Literals(["rounds", "matches", "cash"]);
 
 export type Basis = typeof Basis.Type;
 
-export const SeatFull = Schema.Struct({ ...Seat.fields, cohort: Schema.String, potShare: Schema.NullOr(Schema.Number) });
+export const SeatFull = Schema.Struct({ ...Seat.fields, potShare: Schema.NullOr(Schema.Number) });
 
 /** An optional section's data, or why it could not be loaded: its failure leaves the rest of the page standing. */
 const OptionalData = <A, I>(schema: Schema.Codec<A, I>) => AsyncData.Schema(schema, Schema.String).schema;
 
 /**
- * The database as the page holds it: every seat with its cohort and the agent moves' columns, which every section needs;
+ * The database as the page holds it: every seat with its pot share and the agent moves' columns, which every section needs;
  * then the blunders, the regret of the searched moves, and each config's consistency (empty without a knowledge database).
  */
 export const Loaded = Schema.Struct({
@@ -60,24 +60,19 @@ export const Loaded = Schema.Struct({
 export type Loaded = typeof Loaded.Type;
 
 /**
- * Which seats the page counts: one cohort or all, minus the efforts and models switched off. Unless isAllConfigs,
+ * Which seats the page counts: all, minus the efforts and models switched off. Unless isAllConfigs,
  * only the main configs count (see mainConfigsOf).
  */
-export const Filter = Schema.Struct({ cohort: Schema.String, offEfforts: Schema.Array(Schema.String), offModels: Schema.Array(Schema.String), isAllConfigs: Schema.Boolean });
+export const Filter = Schema.Struct({ offEfforts: Schema.Array(Schema.String), offModels: Schema.Array(Schema.String), isAllConfigs: Schema.Boolean });
 
 export type Filter = typeof Filter.Type;
-
-/** Which configs the cost scatter shows: every effort, or medium only. */
-export const ScatterShow = Schema.Literals(["all", "medium"]);
-
-export type ScatterShow = typeof ScatterShow.Type;
 
 /** What the scatter's x axis measures per player per match: cost, model moves or output tokens, or the mean regret per move. */
 export const ScatterAxis = Schema.Literals(["cost", "moves", "tokens", "regret"]);
 
 export type ScatterAxis = typeof ScatterAxis.Type;
 
-export const Scatter = Schema.Struct({ show: ScatterShow, axis: ScatterAxis, maybeHover: Schema.Option(Schema.String), maybePin: Schema.Option(Schema.String) });
+export const Scatter = Schema.Struct({ axis: ScatterAxis, maybeHover: Schema.Option(Schema.String), maybePin: Schema.Option(Schema.String) });
 
 export const HeatMode = Schema.Literals(["opp", "surprise", "items", "choices", "style"]);
 
@@ -170,7 +165,6 @@ export const Message = defineMessageUnion({
   NavigatedToHash: {},
   SucceededLoad: { loaded: Loaded },
   FailedLoad: { error: Schema.String },
-  SelectedCohort: { cohort: Schema.String },
   ToggledEffort: { effort: Schema.String },
   ToggledModel: { name: Schema.String },
   ToggledAllConfigs: {},
@@ -180,7 +174,6 @@ export const Message = defineMessageUnion({
   ClearedTappedTitle: {},
   SelectedRanking: { ranking: Ranking },
   SelectedBasis: { basis: Basis },
-  SelectedScatterShow: { show: ScatterShow },
   SelectedScatterAxis: { axis: ScatterAxis },
   HoveredPoint: { key: Schema.String },
   LeftPoint: {},

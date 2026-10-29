@@ -8,7 +8,6 @@ import { switchView, tipView } from "./charts.ts";
 import { consistencyView } from "./consistency.ts";
 import { type Derived, derive, mainConfigsOf, ratingsOf } from "./derived.ts";
 import { dealsView } from "./deals.ts";
-import { effortView } from "./effort.ts";
 import { blunderCardsView, blunderRatesView, everyRateFor, galleryFor, ratesFor } from "./blunders.ts";
 import { fatesView } from "./fates.ts";
 import { breakdownView, heatRowsOf } from "./heat.ts";
@@ -27,7 +26,6 @@ import { rubberRows, rubbersView } from "./rubbers.ts";
 import { scatterView } from "./scatter.ts";
 import { seatsView } from "./seats.ts";
 import { tourView } from "./tour.ts";
-import { type UpsetBin, upsetOf, upsetView } from "./upset.ts";
 import { spendView } from "./spend.ts";
 
 type H = HtmlBuilder<Message>;
@@ -67,17 +65,14 @@ const keptOf = (every: ReadonlyArray<string>, off: ReadonlyArray<string>, noun: 
 
 const filtersView = (h: H, derived: Derived, filter: Model["filter"], isOpen: boolean): Html => {
   const { seats } = derived;
-  const cohorts = unique(seats.map(({ cohort }) => cohort)).toSorted();
   const models = unique(seats.map(({ model }) => model)).toSorted((left, right) => baseOrder(left) - baseOrder(right));
   const names = unique(models.map((model) => baseName(model)));
   const efforts = EFFORTS.filter((effort) => seats.some((seat) => seat.effort === effort));
-  const matchesIn = (cohort: string) => new Set(seats.filter((seat) => seat.cohort === cohort && seat.status === "completed").map(({ matchId }) => matchId)).size;
   const main = mainConfigsOf(seats);
   const hidden = unique(seats.map(keyOf)).filter((key) => !main.has(key)).length;
 
   // A phone or tablet shows one line saying what the filters keep, and the filters themselves only when it is tapped.
   const summary = [
-    filter.cohort === "all" ? "All cohorts" : filter.cohort,
     keptOf(names, filter.offModels, "models"),
     keptOf(efforts, filter.offEfforts, "efforts"),
     ...(hidden > 0 && !filter.isAllConfigs ? [`${hidden} configs hidden`] : []),
@@ -87,10 +82,6 @@ const filtersView = (h: H, derived: Derived, filter: Model["filter"], isOpen: bo
     [h.Class(isOpen ? "filters open" : "filters")],
     [
       h.button([h.Type("button"), h.Class("filtersum"), h.AriaExpanded(isOpen), h.OnClick(Message.ToggledFilters())], [h.span([], [summary]), h.span([h.Class("k")], [isOpen ? "done" : "change"])]),
-      h.select(
-        [h.Title("the kind of comparison"), h.Value(filter.cohort), h.OnChange((cohort) => Message.SelectedCohort({ cohort }))],
-        [h.option([h.Value("all")], ["All cohorts"]), ...cohorts.map((cohort) => h.option([h.Value(cohort), h.Selected(cohort === filter.cohort)], [`${cohort} (${matchesIn(cohort)})`]))],
-      ),
       h.span(
         [h.Class("chips")],
         names.map((name) => {
@@ -146,10 +137,6 @@ const lazyFilters = createLazy();
 
 const lazyScatter = createLazy();
 
-const lazyEffort = createLazy();
-
-const lazyUpset = createLazy();
-
 const lazySpend = createLazy();
 
 const lazyMomentum = createLazy();
@@ -204,10 +191,6 @@ const navView = (h: H, maybeGroup: Option.Option<Group>): Html =>
 const scatterCard = (h: H, derived: Derived, ranking: Ranking, basis: Basis, scatter: Model["scatter"], width: number): Html =>
   h.div([h.Class("card")], [scatterView(h, derived.pooled, derived.everyPooled, derived.ratings, derived.ranks, ranking, basis, scatter, width)]);
 
-const effortCard = (h: H, derived: Derived, basis: Basis, width: number): Html => h.div([h.Class("card")], [effortView(h, derived.pooled, derived.ratings, basis, width)]);
-
-const upsetCard = (h: H, bins: ReadonlyArray<UpsetBin>, width: number): Html => h.div([h.Class("card")], [upsetView(h, bins, width)]);
-
 const spendCard = (h: H, derived: Derived): Html => h.div([h.Class("card")], [spendView(h, derived.pooled)]);
 
 const blunderCardsCard = (h: H, derived: Derived, blunders: Blunders): Html => blunderCardsView(h, galleryFor(derived.seats, derived.keep, ratingsOf(derived.seats)("rounds"), blunders));
@@ -253,8 +236,6 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
             [],
             [
               lazyScatter(scatterCard, [h, derived, model.ranking, model.basis, model.scatter, card]),
-              lazyEffort(effortCard, [h, derived, model.basis, card]),
-              afterFirstPaint(() => lazyUpset(upsetCard, [h, upsetOf(derived), card])),
             ],
           ),
         ),
@@ -286,7 +267,7 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
               [],
               [
                 lazyFates(fatesView, [h, derived.seats, derived.filtered]),
-                optionalView(h, derived.consistency, "consistency", (consistency) => lazyConsistency(consistencyView, [h, derived.pooled, consistency, model.filter.cohort, card])),
+                optionalView(h, derived.consistency, "consistency", (consistency) => lazyConsistency(consistencyView, [h, derived.pooled, consistency, card])),
               ],
             ),
           ),
@@ -314,7 +295,7 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
         afterFirstPaint(() => lazySpend(spendCard, [h, derived])),
       ]),
       groupView(h, "details", [
-        sectionView(h, "leaderboards", lazyLeaderboard(leaderboardView, [h, derived.byCohort, derived.everyByCohort, derived.ratings, derived.matchSeats, derived.items, model.leaderboard, model.filter.isAllConfigs, model.ranking, model.basis])),
+        sectionView(h, "leaderboards", lazyLeaderboard(leaderboardView, [h, derived.pooled, derived.everyPooled, derived.ranks, derived.ratings, derived.matchSeats, derived.items, model.leaderboard, model.ranking, model.basis])),
         sectionView(h, "matches", lazyMatches(matchesView, [h, derived.matches, model.matchList])),
         sectionView(h, "deals", afterFirstPaint(() => lazyDeals(dealsCard, [h, derived, card]))),
         sectionView(h, "breakdown", lazyBreakdown(breakdownView, [h, derived, model.heat, model.ranking])),

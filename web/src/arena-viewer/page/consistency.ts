@@ -7,9 +7,9 @@ import type { Message } from "./model.ts";
 
 type H = HtmlBuilder<Message>;
 
-// Is a config steady? The chance that two of its decisions in the same position chose the same move, within the chosen
-// cohort, one row per config, the steadiest model first. The axis spans every cohort's intervals whatever the filter,
-// so a filter only shows or hides rows and moves their points.
+// Is a config steady? The chance that two of its decisions in the same position chose the same move, one row per
+// config, the steadiest model first. The axis spans every config's interval whatever the filter, so a filter only
+// shows or hides rows and moves their points.
 
 const ROW = 15;
 
@@ -30,12 +30,12 @@ const modelsByAgreement = (rows: ReadonlyArray<Consistency>): ReadonlyArray<Read
     .toSorted((left, right) => right.mean - left.mean)
     .map(({ configs }) => configs.toSorted((left, right) => effortOrder(left.effort) - effortOrder(right.effort)));
 
-export const consistencyView = (h: H, stats: ReadonlyArray<ModelStats>, consistency: ReadonlyArray<Consistency>, cohort: string, width: number): Html => {
+export const consistencyView = (h: H, stats: ReadonlyArray<ModelStats>, consistency: ReadonlyArray<Consistency>, width: number): Html => {
   if (consistency.length === 0) return h.empty;
 
   const isNarrow = width < 600;
   const shown = new Set(stats.map(({ key }) => key));
-  const models = modelsByAgreement(consistency.filter((row) => row.cohort === cohort && shown.has(keyOf(row)))).map((configs) => configs.map((config) => ({ ...config, key: keyOf(config) })));
+  const models = modelsByAgreement(consistency.filter((row) => shown.has(keyOf(row)))).map((configs) => configs.map((config) => ({ ...config, key: keyOf(config) })));
   const left = isNarrow ? 120 : 150;
   const right = isNarrow ? 34 : 44;
   const low = Math.floor(Math.min(...consistency.map(({ lo }) => lo)) / STEP) * STEP;
