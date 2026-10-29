@@ -31,7 +31,6 @@ nav a.on { color: var(--fg); box-shadow: inset 0 -2px 0 var(--fg); border-radius
 nav .download { margin-left: auto; }
 .toggle button, .chip, .more { background: none; border: 1px solid transparent; color: var(--mut); font: inherit; padding: 4px 10px; border-radius: 6px; cursor: pointer; }
 .filters { display: flex; gap: 10px 14px; flex-wrap: wrap; align-items: center; margin: 0; }
-.filters select { max-width: 100%; }
 .filtersum { display: none; }
 body:has(.tip.tapped) .tip:not(.tapped), body:has(.overlay) .tip.tapped { display: none; }
 .tip.tapped { left: 8px; right: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); max-width: none; font-size: 13px; padding: 10px 12px; }
@@ -321,7 +320,6 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
   .card { padding: 12px 10px; margin-bottom: 18px; }
   .sub { font-size: 12.5px; margin-bottom: 12px; }
   .filters { gap: 8px; }
-  .filters select { width: 100%; }
   .ctl.menus { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr) minmax(0, 0.8fr); gap: 8px; }
   .ctl.menus select { width: 100%; min-width: 0; }
   .ctl.menus .switch { grid-column: 1 / -1; }

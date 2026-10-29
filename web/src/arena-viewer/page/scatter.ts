@@ -1,11 +1,11 @@
 import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { anchorId, linScale, logScale, ratingSelects, ratingToggles, REFERENCE, REFERENCE_DASH, selectView, switchView, tipView, toggleView } from "./charts.ts";
+import { anchorId, linScale, logScale, ratingSelects, ratingToggles, REFERENCE, REFERENCE_DASH, selectView, tipView, toggleView } from "./charts.ts";
 import { baseName, DEFAULT_EFFORT, eloName, fmtCount, fmtPct, fmtRating, fmtUsd, isClaude, type ModelStats } from "./data.ts";
 import { leader, measureText, placeLabels, uncrowded } from "./labels.ts";
 import { memoLast } from "./derived.ts";
-import { type Basis, Message, type Model, type Ranking, type ScatterAxis, type ScatterShow } from "./model.ts";
+import { type Basis, Message, type Model, type Ranking, type ScatterAxis } from "./model.ts";
 import type { Rating } from "./ratings.ts";
 
 type H = HtmlBuilder<Message>;
@@ -180,8 +180,6 @@ const linearTicks = (low: number, high: number, count: number): ReadonlyArray<nu
   return Array.from({ length: Math.floor(high / step) - Math.ceil(low / step) + 1 }, (_tick, index) => (Math.ceil(low / step) + index) * step);
 };
 
-const shownOf = memoLast((every: ReadonlyArray<Point>, show: ScatterShow): ReadonlyArray<Point> => (show === "medium" ? every.filter((point) => point.m.effort === DEFAULT_EFFORT) : every));
-
 const L = 46;
 
 const T = 40;
@@ -189,8 +187,8 @@ const T = 40;
 const B = 52;
 
 /**
- * The axes' extent, from every config in every cohort whatever the filter, so a filter only shows or hides points.
- * Rank runs from 1 to the number of rated configs in the chosen cohort.
+ * The axes' extent, from every config whatever the filter, so a filter only shows or hides points.
+ * Rank runs from 1 to the number of rated configs.
  */
 interface Domain {
   readonly x: Readonly<Record<ScatterAxis, readonly [number, number]>>;
@@ -239,12 +237,10 @@ const labeledTicks = (ticks: ReadonlyArray<number>, at: (value: number) => numbe
   return new Set(placed.map(({ value }) => value));
 };
 
-/** The rating axis: Elo grows upward in 50-point steps; rank counts down from 1 at the top, one tick per place while they fit. */
+/** The rating axis: Elo grows upward in 50-point steps; rank counts down from 1 at the top, with evenly spaced round ticks. */
 const yScaleOf = (ranking: Ranking, elo: readonly [number, number], places: number, top: number, bottom: number, isPhone: boolean) => {
   if (ranking === "rank") {
-    const step = [1, 2, 5, 10].find((candidate) => ((bottom - top) / places) * candidate >= 18) ?? 10;
-
-    return linScale(0.5, places + 0.5, top, bottom, [1, ...Array.from({ length: Math.floor(places / step) }, (_tick, index) => (index + 1) * step).filter((tick) => tick > step / 2 + 1)]);
+    return linScale(0.5, places + 0.5, top, bottom, linearTicks(1, places, Math.floor((bottom - top) / 36)));
   }
 
   const low = Math.floor((elo[0] - 30) / 50) * 50;
@@ -319,8 +315,7 @@ export const scatterView = (
   const yLabel = ranking === "elo" ? eloName(basis) : "Rank";
   const title = `${axis.label} vs ${ranking === "elo" ? eloName(basis) : "rank"}`;
   const byAxis = pointsOf(stats, ratings, ranks);
-  const every = byAxis[scatter.axis];
-  const points = shownOf(every, scatter.show);
+  const points = byAxis[scatter.axis];
   const layout = layoutOf(points, width, scatter.axis, ranking, domainOf(everyConfig, ratings), ranks.size);
   const activeKey = Option.orElse(scatter.maybeHover, () => scatter.maybePin);
   const active = Option.flatMap(activeKey, (key) => Option.fromUndefinedOr(points.find((point) => point.m.key === key)));
@@ -333,10 +328,7 @@ export const scatterView = (
   // A phone has no room for three rows of buttons above the chart, so the same choices are menus on one row.
   const controls = h.div(
     [h.Class(width < NARROW ? "ctl menus" : "ctl")],
-    [
-      ...(width < NARROW ? [selectView(h, "x axis", scatter.axis, axes, selectAxis), ...ratingSelects(h, ranking, basis)] : [toggleView(h, scatter.axis, axes, selectAxis), ...ratingToggles(h, ranking, basis)]),
-      switchView(h, scatter.show === "medium", "medium only", Message.SelectedScatterShow({ show: scatter.show === "medium" ? "all" : "medium" })),
-    ],
+    width < NARROW ? [selectView(h, "x axis", scatter.axis, axes, selectAxis), ...ratingSelects(h, ranking, basis)] : [toggleView(h, scatter.axis, axes, selectAxis), ...ratingToggles(h, ranking, basis)],
   );
 
   if (layout === null) return h.div([h.Class("chart")], [h.div([h.Class("lbbar")], [h.h2([], [title])]), controls, h.div([h.Class("empty")], ["No scored matches for this filter."])]);

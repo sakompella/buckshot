@@ -218,15 +218,13 @@ const axesOf = (page: Page) =>
 const reliabilityScales = (page: Page) =>
   page.evaluate(() => [...document.querySelectorAll("#reliability .chartrow svg")].map((chart) => [...chart.querySelectorAll("text[text-anchor=middle]")].map((text) => text.textContent).join(" ")).join(" | "));
 
-// Turning chips and switches on and off shows and hides points but moves no axis.
+// Turning chips on and off shows and hides points but moves no axis.
 const checkFixedAxes = async (page: Page, scatter: ReturnType<Page["locator"]>) => {
   const filters = page.locator(".filters");
 
   const steps: ReadonlyArray<readonly [string, () => Promise<void>]> = [
     ["max off", () => filters.getByRole("button", { name: "max", exact: true }).click()],
     ["Opus off", () => filters.getByRole("button", { name: /Opus/ }).click()],
-    ["medium only", () => scatter.getByRole("switch", { name: /medium only/ }).check()],
-    ["back", () => scatter.getByRole("switch", { name: /medium only/ }).uncheck()],
     ["Opus on", () => filters.getByRole("button", { name: /Opus/ }).click()],
   ];
 
@@ -276,6 +274,10 @@ const checkRanking = async (page: Page, scatter: ReturnType<Page["locator"]>) =>
   await scatter.getByRole("button", { name: "Rank", exact: true }).click();
   await settled(page);
   console.log("Rank:", ...(await ranking()));
+
+  const places = (await yTicks(page)).split(" ").map(Number);
+
+  expectThat(places.length > 1 && places.every((place, index) => index === 0 || place - (places[index - 1] ?? 0) === (places[1] ?? 0) - (places[0] ?? 0)), `rank ticks are not evenly spaced: ${places.join(" ")}`);
   await scatter.screenshot({ path: shot("scatter-rank") });
   await heat(page).screenshot({ path: shot("heat-rank"), style: UNSTICK });
   await page.locator(".lb").screenshot({ path: shot("leaderboard-rank"), style: UNSTICK });
@@ -284,40 +286,27 @@ const checkRanking = async (page: Page, scatter: ReturnType<Page["locator"]>) =>
   console.log("back to Elo from the leaderboard:", await textOf(page, ".card h2"));
 };
 
-// Under every cohort choice, either rating basis and either ranking, every config the page draws has an Elo and a
-// rank: no dash in the heatmap or the leaderboards, and the same points in the scatter. In Elo the cohort choice
-// leaves the axes where they are.
+// Under either rating basis and either ranking, every config the page draws has an Elo and a rank: no dash in the
+// heatmap or the leaderboards.
 const checkEveryConfigRated = async (page: Page, scatter: ReturnType<Page["locator"]>) => {
-  const cohorts = await page.locator(".filters select option").evaluateAll((options) => options.map((option) => option.getAttribute("value") ?? ""));
   const dashes = (selector: string) => page.locator(selector).evaluateAll((cells) => cells.filter((cell) => cell.textContent?.trim() === "–").length);
 
   for (const basis of ["Round wins", "Match wins", "Cash"] as const) {
-    const axesByCohort = new Set<string>();
-
     await scatter.getByRole("button", { name: basis, exact: true }).click();
 
-    for (const cohort of cohorts) {
-      await page.locator(".filters select").selectOption(cohort);
+    for (const ranking of ["Elo", "Rank"] as const) {
+      await scatter.getByRole("button", { name: ranking, exact: true }).click();
+      await settled(page);
 
-      for (const ranking of ["Elo", "Rank"] as const) {
-        await scatter.getByRole("button", { name: ranking, exact: true }).click();
-        await settled(page);
+      const label = ranking === "Rank" ? "rank" : ELO_NAMES[basis];
+      const rows = await countOf(page, "table.heat tbody tr");
+      const missing = (await dashes("table.heat td.total")) + (await dashes(`table.lbt td[data-label="${label}"]`));
+      const points = await countOf(page, ".card svg g.pt");
+      const unlisted = await page.locator("table.heat td.total").evaluateAll((cells) => cells.filter((cell) => cell.textContent?.trim() === "").length);
 
-        const label = ranking === "Rank" ? "rank" : ELO_NAMES[basis];
-        const rows = await countOf(page, "table.heat tbody tr");
-        const missing = (await dashes("table.heat td.total")) + (await dashes(`table.lbt td[data-label="${label}"]`));
-        const points = await countOf(page, ".card svg g.pt");
-        const unlisted = await page.locator("table.heat td.total").evaluateAll((cells) => cells.filter((cell) => cell.textContent?.trim() === "").length);
-
-        console.log("cohort", cohort, basis, ranking, "| heat rows", rows, "| scatter points", points, "| rows without a rating", missing + unlisted);
-        expectThat(missing + unlisted === 0, `${cohort} ${basis} ${ranking}: a config shows a dash instead of a rating`);
-
-        if (ranking === "Elo" && points > 0) axesByCohort.add(await axesOf(page));
-      }
+      console.log(basis, ranking, "| heat rows", rows, "| scatter points", points, "| rows without a rating", missing + unlisted);
+      expectThat(missing + unlisted === 0, `${basis} ${ranking}: a config shows a dash instead of a rating`);
     }
-
-    expectThat(axesByCohort.size <= 1, `${basis} scatter axes moved with the cohort choice (${axesByCohort.size} different sets)`);
-    await page.locator(".filters select").selectOption("all");
   }
 
   await scatter.getByRole("button", { name: "Round wins", exact: true }).click();
@@ -501,10 +490,6 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
     await page.locator(".card svg g[style*=pointer]").nth(3).hover({ force: true });
     console.log("hover point → tip:", await tipOf(page));
     await page.mouse.move(0, 0);
-    await page.getByRole("switch", { name: /medium only/ }).check();
-    console.log("medium only labels", await countOf(page, ".card svg g.ptlabel"));
-    await scatter.screenshot({ path: shot("scatter-medium") });
-    await page.getByRole("switch", { name: /medium only/ }).uncheck();
   });
   await check("scatter axes", async () => {
     for (const [axis, name] of [
@@ -591,7 +576,7 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
     await page.keyboard.press("Escape");
   });
   await check("mark tip by keyboard", async () => {
-    const mark = page.locator("#scatter svg g[role=button]").first();
+    const mark = page.locator("#rubbers svg g[role=button]").first();
 
     await mark.focus();
     console.log("focus a mark → tip:", await tipOf(page));

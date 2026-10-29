@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 
 import { chamberPatterns, roundStory, ShellTracker } from "../src/arena-viewer/analysis.ts";
 import type { Seat } from "../src/arena-viewer/api.ts";
-import { type BlockTally, blockRate, colorOf, groupBy, matchRows, modelStats, quantile, rankOrder, regretStats, rng, type SeatFull, withCohorts } from "../src/arena-viewer/page/data.ts";
+import { type BlockTally, blockRate, colorOf, groupBy, matchRows, modelStats, quantile, regretStats, rng, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { type Decisions, NO_GAP } from "../src/arena-viewer/api.ts";
 import { pressureCurves, relativeLine } from "../src/arena-viewer/page/pressure.ts";
 import { bradleyTerry, expectedShare, type Game, heldOutRatings, pooledRatings, surprises } from "../src/arena-viewer/page/ratings.ts";
@@ -287,24 +287,6 @@ const SEAT: Seat = {
   callHours: [],
 };
 
-test("a cohort is the kind of comparison, pooled over tournaments and code hashes, and named for it", () => {
-  const match = (matchId: string, tournament: string, codeHash: string, ...configs: ReadonlyArray<readonly [string, string]>) =>
-    configs.map(([model, effort], position) => ({ ...SEAT, matchId, tournament, codeHash, model, effort, position }));
-
-  const seats = [
-    ...match("a", "one", "old", ["claude-opus-5-5", "medium"], ["gpt-6-astra", "medium"]),
-    ...match("b", "one", "new", ["claude-sonnet-5-5", "medium"], ["gpt-6-luna", "medium"]),
-    ...match("c", "one", "old", ["claude-sonnet-5-5", "low"], ["claude-sonnet-5-5", "high"]),
-    ...match("d", "two", "new", ["claude-sonnet-5-5", "max"], ["claude-sonnet-5-5", "medium"]),
-    ...match("e", "two", "new", ["gpt-6-astra", "medium"], ["claude-opus-5-5", "xhigh"]),
-    ...match("f", "three", "old", ["claude-opus-5-5", "xhigh"], ["claude-opus-5-5", "low"]),
-  ];
-
-  const cohortOf = new Map(withCohorts(seats).map(({ matchId, cohort }) => [matchId, cohort]));
-
-  expect([..."abcdef"].map((matchId) => cohortOf.get(matchId))).toEqual(["Cross-model", "Cross-model", "Sonnet efforts", "Sonnet efforts", "Cross-model", "Opus efforts"]);
-});
-
 test("pooled ratings cover every config of a completed match, over every tournament, with an interval around each", () => {
   const random = rng(4);
 
@@ -315,13 +297,13 @@ test("pooled ratings cover every config of a completed match, over every tournam
     const split = (config: string, winShare: number, position: number) => {
       const [model = "", effort = ""] = config.split("-");
 
-      return { ...SEAT, matchId: `m${index}`, tournament: `t${index % 2}`, seedBlock: `block${Math.floor(index / 2)}`, model, effort, position, winShare, cohort: "", potShare: null };
+      return { ...SEAT, matchId: `m${index}`, tournament: `t${index % 2}`, seedBlock: `block${Math.floor(index / 2)}`, model, effort, position, winShare, potShare: null };
     };
 
     return [split(a, aWins ? 1 : 0, 0), split(b, aWins ? 0 : 1, 1)];
   }).flat();
 
-  const partial = { ...SEAT, matchId: "partial", model: "c", effort: "low", status: "partial" as const, cohort: "", potShare: null };
+  const partial = { ...SEAT, matchId: "partial", model: "c", effort: "low", status: "partial" as const, potShare: null };
   const ratings = pooledRatings([...seats, partial, { ...partial, model: "d", player: "B", position: 1 }], "matches");
 
   expect([...ratings.keys()].toSorted()).toEqual(TRUE_ELO.map(([id]) => id.replace("-", "|")).toSorted());
@@ -348,7 +330,7 @@ const playedSeats = (seed: number, winnerShare: number) => {
     return [seatOf(a, aWins, 0), seatOf(b, !aWins, 1)];
   }).flat();
 
-  return withCohorts(seats);
+  return withPotShares(seats);
 };
 
 test("when every match is a sweep, cash ratings equal win ratings", () => {
@@ -394,30 +376,6 @@ test("a config's pot share is its cash over the match's cash, averaged over scor
   }
 });
 
-test("rank order puts higher share first, breaks ties by Elo, and keeps every config once", () => {
-  const random = rng(5);
-
-  for (let round = 0; round < 50; round++) {
-    // Win shares on a coarse grid so ties are common.
-    const configs = Array.from({ length: 1 + Math.floor(random() * 12) }, (_config, index) => ({ label: `c${index}`, winShare: Math.floor(random() * 5) / 4, elo: Math.round(random() * 400 - 200) }));
-    const ordered = rankOrder(configs, ({ winShare }) => winShare, ({ elo }) => elo);
-
-    expect(ordered.map(({ label }) => label).toSorted()).toEqual(configs.map(({ label }) => label).toSorted());
-
-    ordered.slice(1).forEach((config, index) => {
-      const above = ordered[index];
-
-      expect(above).toBeDefined();
-
-      if (above === undefined) return;
-
-      expect(above.winShare).toBeGreaterThanOrEqual(config.winShare);
-
-      if (above.winShare === config.winShare) expect(above.elo).toBeGreaterThanOrEqual(config.elo);
-    });
-  }
-});
-
 test("a config's regret weights every searched move equally, whichever seat it came from, and is null with none", () => {
   const seats = [{ regret: { moves: 1, total: 10, exact: 1 } }, { regret: { moves: 3, total: 2, exact: 0 } }, { regret: null }];
 
@@ -446,12 +404,12 @@ const playedRoundSeats = (seed: number, rounds: number, winnerRounds: number, is
     return [seatOf(a, "A", 0), seatOf(b, "B", 1)];
   }).flat();
 
-  return withCohorts(seats);
+  return withPotShares(seats);
 };
 
 // The viewer check used to require Opus's mean regret below Haiku 4.5's on the live data; on fixed data it is a property of modelStats.
 test("a config's mean regret comes from its own scored seats, so a lower-regret config shows the lower mean", () => {
-  const seatOf = (model: string, matchId: string, player: string, total: number): SeatFull => ({ ...SEAT, cohort: "c", potShare: null, matchId, player, model, regret: { moves: 10, total, exact: 0 } });
+  const seatOf = (model: string, matchId: string, player: string, total: number): SeatFull => ({ ...SEAT, potShare: null, matchId, player, model, regret: { moves: 10, total, exact: 0 } });
   const seats = [seatOf("claude-opus-5-5", "m1", "A", 20), seatOf("claude-haiku-4-5-20251001", "m1", "B", 60), seatOf("claude-opus-5-5", "m2", "B", 40), seatOf("claude-haiku-4-5-20251001", "m2", "A", 80)];
   const meanOf = (model: string) => modelStats(seats).find((config) => config.model === model)?.regret?.mean;
 
@@ -461,7 +419,7 @@ test("a config's mean regret comes from its own scored seats, so a lower-regret 
 
 test("the scatter's regret axis places a config with no searched move nowhere and a measured zero at zero", () => {
   const [unsearched, flawless, flawed] = modelStats(
-    [null, { moves: 4, total: 0, exact: 4 }, { moves: 2, total: 3, exact: 0 }].map((regret, index) => ({ ...SEAT, matchId: `m${index}`, effort: `e${index}`, cohort: "", potShare: null, regret })),
+    [null, { moves: 4, total: 0, exact: 4 }, { moves: 2, total: 3, exact: 0 }].map((regret, index) => ({ ...SEAT, matchId: `m${index}`, effort: `e${index}`, potShare: null, regret })),
   );
 
   expect([unsearched, flawless, flawed].map((config) => (config === undefined ? undefined : AXES.regret.valueOf(config)))).toEqual([null, 0, 1.5]);
@@ -513,7 +471,7 @@ test("a config's round share is the rounds it won over the rounds it played", ()
 
 // Two-player matches of the "strong" config against the "weak" one, the strong one winning `strongWins` of `count`.
 const upsetSeats = (count: number, strongWins: number) =>
-  withCohorts(
+  withPotShares(
     Array.from({ length: count }, (_match, index) => {
       const isStrong = index < strongWins;
 
@@ -564,7 +522,7 @@ test("the upset curve leaves out matches between equal ratings, unfinished match
 
 test("the upset curve cuts matches into groups of near-equal size, widest gap last", () => {
   const gaps = Array.from({ length: 160 }, (_, index) => index);
-  const seats = withCohorts(gaps.flatMap((gap) => [{ ...SEAT, matchId: `m${gap}`, seedBlock: `b${gap}`, model: `s${gap}`, position: 0 }, { ...SEAT, matchId: `m${gap}`, seedBlock: `b${gap}`, model: "base", position: 1, winShare: 0 }]));
+  const seats = withPotShares(gaps.flatMap((gap) => [{ ...SEAT, matchId: `m${gap}`, seedBlock: `b${gap}`, model: `s${gap}`, position: 0 }, { ...SEAT, matchId: `m${gap}`, seedBlock: `b${gap}`, model: "base", position: 1, winShare: 0 }]));
   const ratings = new Map([["base|medium", { rating: 0, lo: 0, hi: 0 }], ...gaps.map((gap) => [`s${gap}|medium`, { rating: gap + 1, lo: 0, hi: 0 }] as const)]);
   const bins = upsetBins(matchRows(seats), () => ratings);
 
@@ -574,7 +532,7 @@ test("the upset curve cuts matches into groups of near-equal size, widest gap la
 
 // A duel between configs `winner` and `loser`, each with a mean regret per move of `moves` moves.
 const duelOf = (winner: readonly [string, number], loser: readonly [string, number], block = "b"): Duel => {
-  const seat = ([config, mean]: readonly [string, number], winShare: number) => ({ ...SEAT, cohort: "c", potShare: null, model: config, effort: "medium", seedBlock: block, winShare, regret: { moves: 10, total: mean * 10, exact: 0 } });
+  const seat = ([config, mean]: readonly [string, number], winShare: number) => ({ ...SEAT, potShare: null, model: config, effort: "medium", seedBlock: block, winShare, regret: { moves: 10, total: mean * 10, exact: 0 } });
 
   return { winner: seat(winner, 1), loser: seat(loser, 0) };
 };

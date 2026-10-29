@@ -9,11 +9,10 @@ const Count = Schema.NullOr(Schema.Number);
 const PerItem = Schema.Array(Schema.Number);
 
 /**
- * How consistent one config is in one cohort, or over every cohort ("all"): over the positions it met at least twice, the
+ * How consistent one config is: over the positions it met at least twice, the
  * chance two of its decisions in the same position chose the same move, with a 95% seed-block bootstrap interval.
  */
 export const Consistency = Schema.Struct({
-  cohort: Schema.String,
   model: Schema.String,
   effort: Schema.String,
   positions: Schema.Number,

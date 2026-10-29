@@ -1,5 +1,5 @@
 import { type Decisions, ITEMS } from "../api.ts";
-import { addTo, baseName, type BlockTally, blockRate, configShare, groupBy, keyOf, type MatchRow, matchRows, type ModelStats, modelStats, rankOrder, type Rate, type SeatFull } from "./data.ts";
+import { addTo, baseName, type BlockTally, blockRate, groupBy, keyOf, type MatchRow, matchRows, type ModelStats, modelStats, type Rate, type SeatFull } from "./data.ts";
 import type { Basis, Filter, Loaded } from "./model.ts";
 import { pooledRatings, type Rating } from "./ratings.ts";
 
@@ -42,12 +42,12 @@ interface ItemTally {
   readonly bad: Array<number>;
 }
 
-/** Per cohort and config. A steal with adrenaline counts as an adrenaline use and, separately, as a steal of the item taken. */
+/** Per config. A steal with adrenaline counts as an adrenaline use and, separately, as a steal of the item taken. */
 const itemSummaries = (decisions: Decisions, seats: ReadonlyArray<SeatFull>): ReadonlyMap<string, ItemSummary> => {
   const tallies = new Map<string, ItemTally>();
 
   const tallyOf = (seat: SeatFull): ItemTally => {
-    const id = `${seat.cohort}||${keyOf(seat)}`;
+    const id = keyOf(seat);
     const known = tallies.get(id);
 
     if (known) return known;
@@ -124,29 +124,23 @@ export interface Derived {
   readonly filtered: ReadonlyArray<SeatFull>;
   /** Both seats of any match where either seat passes the filter, so opponents stay visible. */
   readonly matchSeats: ReadonlyArray<SeatFull>;
-  readonly byCohort: ReadonlyArray<ModelStats>;
   readonly pooled: ReadonlyArray<ModelStats>;
   /** What the ratings count: win shares, pot shares or rounds. */
   readonly basis: Basis;
   /** One rating per config on that basis, fitted over every match of every tournament: filters pick rows, not the scale. */
   readonly ratings: ReadonlyMap<string, Rating>;
-  /**
-   * Each config's place among all the chosen cohort's configs whatever the filter: by observed share within one
-   * cohort (see rankOrder), by rating under "All cohorts", since pooling every cohort would count effort sweeps' self-play.
-   */
+  /** Each config's place by rating among all configs, whatever the filter. */
   readonly ranks: ReadonlyMap<string, number>;
-  /** Every config pooled over each cohort and over all of them, whatever the filter: the scatter's fixed axes. */
+  /** Every config, whatever the filter: the scatter's fixed axes. */
   readonly everyPooled: ReadonlyArray<ModelStats>;
-  /** Every config of every cohort, whatever the filter: leaderboard places. */
-  readonly everyByCohort: ReadonlyArray<ModelStats>;
   readonly matches: ReadonlyArray<MatchRow>;
   readonly allMatches: ReadonlyArray<MatchRow>;
-  /** Every cohort and config, whether the filter keeps it or not. */
+  /** Every config, whether the filter keeps it or not. */
   readonly items: ReadonlyMap<string, ItemSummary>;
 }
 
-// A filter keeps or drops whole configs of a cohort, so whatever is grouped by cohort and config is worked out
-// once for every seat and then picked by the filter.
+// A filter keeps or drops whole configs, so whatever is grouped by config is worked out once for every seat and then
+// picked by the filter.
 
 // Each basis is fitted when first asked for, and kept, so the load pays only for the win ratings and switching back is free.
 export const ratingsOf = memoLast((seats: ReadonlyArray<SeatFull>) => {
@@ -167,26 +161,9 @@ export const ratingsOf = memoLast((seats: ReadonlyArray<SeatFull>) => {
 
 const allMatchesOf = memoLast((seats: ReadonlyArray<SeatFull>) => matchRows(seats));
 
-const byCohortOf = memoLast((seats: ReadonlyArray<SeatFull>) => modelStats(seats, true));
+const everyPooledOf = memoLast((seats: ReadonlyArray<SeatFull>) => modelStats(seats));
 
 const itemsOf = memoLast((decisions: Decisions, seats: ReadonlyArray<SeatFull>) => itemSummaries(decisions, seats));
-
-// Every config pooled over one cohort or all of them, kept per cohort so switching back is free.
-const pooledByCohort = memoLast((seats: ReadonlyArray<SeatFull>) => {
-  const pooled = new Map<string, ReadonlyArray<ModelStats>>();
-
-  return (cohort: string): ReadonlyArray<ModelStats> => {
-    const known = pooled.get(cohort);
-
-    if (known) return known;
-
-    const fresh = modelStats(cohort === "all" ? seats : seats.filter((seat) => seat.cohort === cohort));
-
-    pooled.set(cohort, fresh);
-
-    return fresh;
-  };
-});
 
 /** A main config has at least this many scored matches. */
 const MIN_SCORED = 20;
@@ -203,25 +180,17 @@ export const mainConfigsOf = memoLast((seats: ReadonlyArray<SeatFull>): Readonly
 });
 
 const passes = (filter: Filter, main: ReadonlySet<string>, seat: SeatFull): boolean =>
-  (filter.cohort === "all" || seat.cohort === filter.cohort) &&
   !filter.offEfforts.includes(seat.effort) &&
   !filter.offModels.includes(baseName(seat.model)) &&
   (filter.isAllConfigs || main.has(keyOf(seat)));
 
 const passingConfigs = (stats: ReadonlyArray<ModelStats>, filter: Filter, main: ReadonlySet<string>) => stats.filter(({ started: [first] }) => first !== undefined && passes(filter, main, first));
 
-const ranksOf = memoLast((pooled: ReadonlyArray<ModelStats>, ratings: ReadonlyMap<string, Rating>, cohort: string, basis: Basis): ReadonlyMap<string, number> => {
-  const rated = pooled.filter((m) => m.scored.length > 0 && ratings.has(m.key));
+const ranksOf = memoLast((pooled: ReadonlyArray<ModelStats>, ratings: ReadonlyMap<string, Rating>): ReadonlyMap<string, number> => {
   const eloOf = (m: ModelStats) => ratings.get(m.key)?.rating ?? 0;
-  const ordered = cohort === "all" ? rated.toSorted((left, right) => eloOf(right) - eloOf(left) || left.label.localeCompare(right.label)) : rankOrder(rated, (m) => configShare(m, basis), eloOf);
+  const ordered = pooled.filter((m) => m.scored.length > 0 && ratings.has(m.key)).toSorted((left, right) => eloOf(right) - eloOf(left) || left.label.localeCompare(right.label));
 
   return new Map(ordered.map((m, index) => [m.key, index + 1]));
-});
-
-const everyPooledOf = memoLast((seats: ReadonlyArray<SeatFull>): ReadonlyArray<ModelStats> => {
-  const pooledIn = pooledByCohort(seats);
-
-  return ["all", ...new Set(seats.map(({ cohort }) => cohort))].flatMap(pooledIn);
 });
 
 export const derive = memoLast((loaded: Loaded, filter: Filter, basis: Basis): Derived => {
@@ -231,7 +200,7 @@ export const derive = memoLast((loaded: Loaded, filter: Filter, basis: Basis): D
   const filtered = seats.filter((_seat, index) => keep[index]);
   const kept = new Set(filtered.map(({ matchId }) => matchId));
   const matchSeats = seats.filter(({ matchId }) => kept.has(matchId));
-  const inCohort = pooledByCohort(seats)(filter.cohort);
+  const every = everyPooledOf(seats);
   const ratings = ratingsOf(seats)(basis);
 
   return {
@@ -243,13 +212,11 @@ export const derive = memoLast((loaded: Loaded, filter: Filter, basis: Basis): D
     keep,
     filtered,
     matchSeats,
-    byCohort: passingConfigs(byCohortOf(seats), filter, main),
-    pooled: passingConfigs(inCohort, filter, main),
+    pooled: passingConfigs(every, filter, main),
     basis,
     ratings,
-    ranks: ranksOf(inCohort, ratings, filter.cohort, basis),
-    everyPooled: everyPooledOf(seats),
-    everyByCohort: byCohortOf(seats),
+    ranks: ranksOf(every, ratings),
+    everyPooled: every,
     matches: matchRows(matchSeats),
     allMatches: allMatchesOf(seats),
     items: itemsOf(decisions, seats),
