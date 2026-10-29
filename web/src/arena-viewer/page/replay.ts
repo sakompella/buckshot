@@ -2,15 +2,16 @@ import { Effect, Option } from "effect";
 import { AsyncData, Mount } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import type { Call, MatchDetail, Step } from "../api.ts";
+import type { Call, MatchDetail, MoveRegret, Step } from "../api.ts";
 import { linScale, pressable } from "./charts.ts";
-import { itemIconOf } from "./items.ts";
-import { colorOf, fmtCount, fmtPoints, fmtSec, fmtPct, fmtTime, fmtUsd, keyOf, labelOf, type MatchRow, sumOf, unique } from "./data.ts";
+import { baseName, colorOf, fmtCount, fmtPoints, fmtSec, fmtPct, fmtTime, fmtUsd, keyOf, labelOf, type MatchRow, sumOf, unique } from "./data.ts";
 import { type MatchData, Message, type Replay, type Viewport } from "./model.ts";
+import { tableView } from "./table.ts";
 
 type H = HtmlBuilder<Message>;
 
-// The replay: health through the match, the state at the chosen move, and every model move with its reasoning.
+// The replay: the table before the chosen move, what that move did, health through the match and every model move.
+// The evaluator's numbers, the model's reasoning and the same-seed matches stay folded until opened.
 
 /** The model moves a replay steps through: forced moves are left out. */
 export const stepsOf = (detail: MatchDetail): ReadonlyArray<Step> => detail.decisions.filter(({ byWhom }) => byWhom !== "forced");
@@ -63,6 +64,9 @@ export const moveStripView = (h: H, detail: MatchDetail, width: number, height =
 /** Regret in points from which a move stands out as a blunder, in its tag and on the health chart. */
 const BIG_REGRET = 5;
 
+/** Regret in points below which the move list leaves a move untagged, so the tags mark the few real mistakes. */
+const MINOR_REGRET = 2;
+
 const TURNING_POINTS = 3;
 
 /** The indexes of the moves that gave up the most round win chance, biggest first; none below the blunder line. */
@@ -90,11 +94,22 @@ const resultOf = (detail: MatchDetail): string => {
   return winner === undefined ? "split" : `${labelOf(keyOf(winner))} wins`;
 };
 
-/** The replay's left column, as styles.css lays out .modal and .mbody: full width on a phone, else half the modal. */
-const chartWidth = ({ width }: Viewport): number => (width < 640 ? width - 24 : Math.floor((Math.min(1320, 0.96 * width) - 2 * 22 - 2 - 22) / 2));
+/** Each player's short name, the model alone, unless two seats share a model and need their efforts to tell apart. */
+const shortNamesOf = (detail: MatchDetail): ReadonlyMap<string, string> => {
+  const bases = detail.seats.map(({ model }) => baseName(model));
+
+  return new Map(detail.seats.map((seat, index) => [seat.player, bases.indexOf(bases[index] ?? "") === bases.lastIndexOf(bases[index] ?? "") ? (bases[index] ?? seat.player) : labelOf(keyOf(seat))]));
+};
+
+/** The health chart's width, as styles.css lays out .modal and .mbody: one full-screen column up to a tablet, else half the modal. */
+const chartWidth = ({ width }: Viewport): number => {
+  if (width < 640) return width - 24;
+
+  return width <= 1024 ? width - 2 * 16 : Math.floor((Math.min(1320, 0.96 * width) - 2 * 22 - 2 - 22) / 2);
+};
 
 const healthView = (h: H, detail: MatchDetail, steps: ReadonlyArray<Step>, at: number, width: number): Html => {
-  const height = width < 500 ? 130 : 170;
+  const height = width < 500 ? 110 : 140;
   const [left, right, top, bottom] = [26, 18, 10, 22];
   const most = Math.max(1, ...steps.flatMap(({ players }) => players.map(({ health }) => health)));
   const x = linScale(0, Math.max(1, steps.length - 1), left, width - right, []);
@@ -184,7 +199,7 @@ const healthView = (h: H, detail: MatchDetail, steps: ReadonlyArray<Step>, at: n
 };
 
 /** The biggest blunders of the match, each a jump to its move. */
-const turningPointsView = (h: H, detail: MatchDetail, steps: ReadonlyArray<Step>, at: number): Html => {
+const turningPointsView = (h: H, detail: MatchDetail, names: ReadonlyMap<string, string>, steps: ReadonlyArray<Step>, at: number): Html => {
   const turning = turningPoints(steps);
 
   if (turning.length === 0) return h.empty;
@@ -208,7 +223,7 @@ const turningPointsView = (h: H, detail: MatchDetail, steps: ReadonlyArray<Step>
                     h.Style({ color: seatColor(detail, step.player), "border-color": index === at ? seatColor(detail, step.player) : "" }),
                     h.OnClick(Message.SelectedStep({ index })),
                   ],
-                  [`R${step.round} ${step.player} · ${step.label} · −${fmtPoints(step.regret.points)}`],
+                  [`R${step.round} ${names.get(step.player) ?? step.player} · ${step.label} · −${fmtPoints(step.regret.points)}`],
                 ),
               ];
         }),
@@ -217,46 +232,45 @@ const turningPointsView = (h: H, detail: MatchDetail, steps: ReadonlyArray<Step>
   );
 };
 
-const stateView = (h: H, detail: MatchDetail, steps: ReadonlyArray<Step>, step: Step): Html => {
+const nameView = (h: H, detail: MatchDetail, names: ReadonlyMap<string, string>, player: string): Html =>
+  h.b([h.Class("who"), h.Style({ color: seatColor(detail, player) })], [names.get(player) ?? player]);
+
+/** The table just before the chosen move, as its mover saw it; what the move did is the selected view's. */
+const boardView = (h: H, detail: MatchDetail, steps: ReadonlyArray<Step>, step: Step, names: ReadonlyMap<string, string>): Html => {
   const most = Math.max(1, ...steps.filter(({ round }) => round === step.round).flatMap(({ players }) => players.map(({ health }) => health)));
 
-  return h.div(
-    [h.Class("state")],
-    [
-      ...detail.seats.map((seat) => {
-        const seen = step.players.find(({ player }) => player === seat.player);
-        const health = seen?.health ?? 0;
-        const color = colorOf(seat.model);
+  return tableView(h, {
+    seats: detail.seats.map((seat) => {
+      const seen = step.players.find(({ player }) => player === seat.player);
 
-        return h.div(
-          [h.Class(step.player === seat.player ? "on" : ""), h.Style({ "border-color": color })],
-          [
-            h.b([h.Style({ color })], [seat.player]),
-            " ",
-            h.span([h.Class("k")], [labelOf(keyOf(seat))]),
-            h.div([h.Class("hp")], Array.from({ length: most }, (_bolt, index) => h.i(index < health ? [h.Class("full"), h.Style({ background: color })] : [], []))),
-            h.div([h.Class("items")], (seen?.items ?? []).map((item) => h.span([h.Class("tag")], [itemIconOf(h, item), item]))),
-          ],
-        );
-      }),
-      h.div(
-        [h.Class("shells")],
-        [
-          h.span([h.Class("k")], [`${step.player}'s view of the shells`]),
-          h.div([], [...Array.from({ length: step.live }, () => h.i([h.Class("live")], [])), ...Array.from({ length: step.blank }, () => h.i([], []))]),
-          h.span([h.Class("k")], [`${step.live} live · ${step.blank} blank${step.known === null ? "" : ` · chamber ${step.known}`}`]),
-        ],
-      ),
-    ],
-  );
+      return { letter: seat.player, name: names.get(seat.player) ?? seat.player, color: colorOf(seat.model), health: seen?.health ?? 0, items: seen?.items ?? [], isActing: seat.player === step.player };
+    }),
+    maxHealth: most,
+    live: step.live,
+    blank: step.blank,
+    known: step.known,
+    viewer: names.get(step.player) ?? step.player,
+    action: h.div([h.Class("action")], [nameView(h, detail, names, step.player), " chose ", h.span([], [step.label])]),
+  });
 };
 
-// The open move's detail is new each time the move changes, so mounting it is when to bring it into view.
+// The chosen row holds an empty marker that mounts when the row is chosen, so mounting is when to bring the row into
+// view; the row itself stays, and keeps keyboard focus. Only the move list scrolls: on a phone the modal scrolls too,
+// and moving it would take the table out of sight at every step.
 const ScrollStepIntoView = Mount.define("ScrollStepIntoView", {
   messages: [Message.CompletedStepScroll],
   execute: ({ element }) =>
     Effect.sync(() => {
-      element.closest(".step")?.scrollIntoView({ block: "nearest" });
+      const list = element.closest(".moves");
+      const chosen = element.closest(".step");
+
+      if (list !== null && chosen !== null) {
+        const [row, box] = [chosen.getBoundingClientRect(), list.getBoundingClientRect()];
+        const header = list.querySelector(".roundh")?.getBoundingClientRect().height ?? 0;
+
+        if (row.top < box.top + header) list.scrollTop -= box.top + header - row.top;
+        else if (row.bottom > box.bottom) list.scrollTop += row.bottom - box.bottom;
+      }
 
       return Message.CompletedStepScroll();
     }),
@@ -276,51 +290,99 @@ const callView = (h: H, call: Call): Html => {
   );
 };
 
-/** A model move's regret; only a proven exact one is marked exact, and a big one stands out. */
-const regretTag = (h: H, step: Step): Html =>
-  step.regret === null
-    ? h.empty
-    : h.span([h.Class(`tag regret ${step.regret.exact ? "exact" : ""} ${step.regret.points >= BIG_REGRET ? "big" : ""}`)], [`regret ${fmtPoints(step.regret.points)}${step.regret.exact ? " · exact" : ""}`]);
-
-const regretLine = (h: H, step: Step): Html => {
-  const { regret } = step;
-
-  if (regret === null) return h.empty;
-
-  return h.div(
+const regretLine = (h: H, regret: MoveRegret): Html =>
+  h.div(
     [h.Class("k")],
     [
       `Best move ${regret.best} ${fmtPoints(regret.bestScore)}%, chosen ${fmtPoints(regret.chosenScore)}% · depth ${regret.depth}${regret.limited ? ", stopped by the node budget" : ""}`,
       regret.exact ? " · proven exact" : " · not proven exact",
     ],
   );
+
+const regretSummary = (regret: MoveRegret): string => {
+  if (regret.points >= MINOR_REGRET) return `Gave up ${fmtPoints(regret.points)} points of round win chance; the evaluator's best was ${regret.best}.`;
+
+  return regret.points > 0 ? `Within ${fmtPoints(regret.points)} points of the evaluator's best move.` : "As good as the evaluator's best move.";
 };
 
-const stepDetailView = (h: H, step: Step): Html =>
-  h.keyed("div")(
-    `detail-${step.id}`,
-    [h.Class("sd"), h.OnMount(ScrollStepIntoView())],
-    [...(step.outcome.length > 0 ? [h.div([h.Class("k")], [step.outcome.join(" ")])] : []), regretLine(h, step), ...step.calls.map((call) => callView(h, call))],
-  );
+/** What the chosen move did, then the evaluator's numbers and the model's calls, each folded. */
+const selectedView = (h: H, detail: MatchDetail, step: Step, names: ReadonlyMap<string, string>): Html => {
+  const { regret } = step;
+  const shot = shotOf(step);
+  const latency = sumOf(step.calls.map(({ latency }) => latency ?? 0));
+  const cost = sumOf(step.calls.map((call) => call.cost ?? 0));
 
-const stepView = (h: H, detail: MatchDetail, step: Step, index: number, at: number): Html =>
-  h.keyed("div")(
-    step.id,
-    [h.Class(`step ${index === at ? "on" : ""}`), ...pressable(h, Message.SelectedStep({ index }))],
+  return h.div(
+    [h.Class("sel")],
     [
       h.div(
-        [h.Class("h")],
+        [h.Class("selh")],
         [
-          h.span([h.Class("k")], [`R${step.round}`]),
-          h.b([h.Style({ color: seatColor(detail, step.player) })], [step.player]),
+          nameView(h, detail, names, step.player),
           h.span([], [step.label]),
           step.byWhom === "agent" ? h.empty : h.span([h.Class("tag")], [step.byWhom]),
-          regretTag(h, step),
-          h.span([h.Class("k right")], [step.outcome.find((line) => / shot /.test(line))?.replace(/^.*?: /, "") ?? ""]),
+          shot === null ? h.empty : h.span([h.Class(`shot ${shot}`)], [shot]),
+          regret === null || regret.points < MINOR_REGRET ? h.empty : h.span([h.Class(`tag regret ${regret.points >= BIG_REGRET ? "big" : ""}`)], [`−${fmtPoints(regret.points)}`]),
         ],
       ),
-      index === at ? stepDetailView(h, step) : h.empty,
+      step.outcome.length > 0 ? h.div([h.Class("outcome")], [h.span([h.Class("k")], ["Outcome: "]), step.outcome.join(" ")]) : h.empty,
+      regret === null
+        ? h.div([h.Class("k")], ["Not searched by the evaluator."])
+        : h.details([h.Class("fold")], [h.summary([], [regretSummary(regret)]), regretLine(h, regret)]),
+      step.calls.length === 0
+        ? h.empty
+        : h.details(
+            [h.Class("fold")],
+            [h.summary([], [`Model reasoning · ${step.calls.length === 1 ? "1 call" : `${step.calls.length} calls`} · ${fmtSec(latency)} · ${fmtUsd(cost)}`]), ...step.calls.map((call) => callView(h, call))],
+          ),
     ],
+  );
+};
+
+/** A model move's regret in the list, only from MINOR_REGRET up; a proven exact one is marked apart. */
+const regretTag = (h: H, regret: MoveRegret | null): Html =>
+  regret === null || regret.points < MINOR_REGRET
+    ? h.empty
+    : h.span(
+        [h.Class(`tag regret ${regret.exact ? "exact" : ""} ${regret.points >= BIG_REGRET ? "big" : ""}`), h.Title(`gave up ${fmtPoints(regret.points)} points · ${regret.exact ? "proven exact" : "not proven exact"}`)],
+        [`−${fmtPoints(regret.points)}`],
+      );
+
+const stepView = (h: H, detail: MatchDetail, names: ReadonlyMap<string, string>, step: Step, index: number, at: number): Html => {
+  const isOn = index === at;
+  const shot = shotOf(step);
+
+  return h.keyed("div")(
+    step.id,
+    [h.Class(`step ${isOn ? "on" : ""}`), ...(isOn ? [h.AriaCurrent("step")] : []), ...pressable(h, Message.SelectedStep({ index }))],
+    [
+      h.span([h.Class("n")], [isOn ? h.keyed("span")(`${step.id}-on`, [h.OnMount(ScrollStepIntoView())], []) : h.empty, `${index + 1}`]),
+      nameView(h, detail, names, step.player),
+      h.span([h.Class("label"), h.Title(step.label)], [step.label, step.byWhom === "agent" ? h.empty : h.span([h.Class("tag")], [step.byWhom])]),
+      shot === null ? h.empty : h.span([h.Class(`shot ${shot}`)], [shot]),
+      regretTag(h, step.regret),
+    ],
+  );
+};
+
+/** Every model move, under a heading per round that says who won it. */
+const movesView = (h: H, detail: MatchDetail, names: ReadonlyMap<string, string>, steps: ReadonlyArray<Step>, at: number): Html =>
+  h.div(
+    [h.Class("moves"), h.AriaLabel("Moves")],
+    unique(steps.map(({ round }) => round)).flatMap((round) => {
+      const result = detail.story.rounds[round - 1];
+
+      return [
+        h.div(
+          [h.Class("roundh")],
+          [
+            h.span([], [`Round ${round}`]),
+            result === undefined ? h.empty : h.span([h.Class("k")], [nameView(h, detail, names, result.winner), ` won +$${result.prize.toLocaleString()}`]),
+          ],
+        ),
+        ...steps.flatMap((step, index) => (step.round === round ? [stepView(h, detail, names, step, index, at)] : [])),
+      ];
+    }),
   );
 
 /** The other matches on this seed and code hash where one of this match's configs held the same table position. */
@@ -350,36 +412,44 @@ const sameSeedView = (h: H, detail: MatchDetail, allMatches: ReadonlyArray<Match
 
   if (groups.length === 0) return h.empty;
 
-  return h.div(
-    [h.Class("seedrow")],
-    groups.map(({ fixed, chips }) =>
-      h.div(
-        [h.Class("seedgroup")],
-        [
-          h.span([h.Class("k")], [`seed ${detail.match.seed} vs ${labelOf(keyOf(fixed))}:`]),
-          h.div(
-            [h.Class("chips")],
-            chips.map(({ match, other }) => {
-              const share = other.winShare ?? 0;
-              const color = colorOf(other.model);
-              const isScored = match.status === "completed";
-              const mark = !isScored ? "·" : share >= 1 ? "W" : share > 0 ? "½" : "L";
+  const count = sumOf(groups.map(({ chips }) => chips.length));
 
-              return h.button(
-                [
-                  h.Type("button"),
-                  h.Class("chip on"),
-                  h.Title(isScored ? `${fmtPct(share)} win share` : "unscored"),
-                  h.Style(share >= 1 ? { color, "border-color": color } : { color }),
-                  h.OnClick(Message.ClickedMatch({ id: match.matchId, maybeFocus: Option.none() })),
-                ],
-                [`${labelOf(keyOf(other))} ${mark}`],
-              );
-            }),
+  return h.details(
+    [h.Class("fold seeds")],
+    [
+      h.summary([], [`Same seed · ${count === 1 ? "1 other match" : `${count} other matches`}`]),
+      h.div(
+        [h.Class("seedrow")],
+        groups.map(({ fixed, chips }) =>
+          h.div(
+            [h.Class("seedgroup")],
+            [
+              h.span([h.Class("k")], [`vs ${labelOf(keyOf(fixed))}:`]),
+              h.div(
+                [h.Class("chips")],
+                chips.map(({ match, other }) => {
+                  const share = other.winShare ?? 0;
+                  const color = colorOf(other.model);
+                  const isScored = match.status === "completed";
+                  const mark = !isScored ? "·" : share >= 1 ? "W" : share > 0 ? "½" : "L";
+
+                  return h.button(
+                    [
+                      h.Type("button"),
+                      h.Class("chip on"),
+                      h.Title(isScored ? `${fmtPct(share)} win share` : "unscored"),
+                      h.Style(share >= 1 ? { color, "border-color": color } : { color }),
+                      h.OnClick(Message.ClickedMatch({ id: match.matchId, maybeFocus: Option.none() })),
+                    ],
+                    [`${labelOf(keyOf(other))} ${mark}`],
+                  );
+                }),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
-    ),
+    ],
   );
 };
 
@@ -387,6 +457,7 @@ const detailView = (h: H, replay: Replay, detail: MatchDetail, allMatches: Reado
   const steps = stepsOf(detail);
   const at = replayIndex(replay, steps);
   const step = steps[at];
+  const names = shortNamesOf(detail);
   const cost = sumOf(detail.decisions.flatMap(({ calls }) => calls.map((call) => call.cost ?? 0)));
 
   return [
@@ -395,7 +466,9 @@ const detailView = (h: H, replay: Replay, detail: MatchDetail, allMatches: Reado
       [
         h.h2(
           [],
-          detail.seats.map((seat, index) => h.span([], [index > 0 ? " vs " : h.empty, h.span([h.Style({ color: colorOf(seat.model) })], [labelOf(keyOf(seat))])])),
+          detail.seats.map((seat, index) =>
+            h.span([], [index > 0 ? " vs " : h.empty, h.span([h.Style({ color: colorOf(seat.model) })], [labelOf(keyOf(seat))]), h.span([h.Class("letter")], [seat.player])]),
+          ),
         ),
         h.span(
           [h.Class("k")],
@@ -410,28 +483,34 @@ const detailView = (h: H, replay: Replay, detail: MatchDetail, allMatches: Reado
         h.div(
           [h.Class("mleft")],
           [
-            healthView(h, detail, steps, at, chartWidth(viewport)),
-            turningPointsView(h, detail, steps, at),
-            h.div(
-              [h.Class("rounds")],
-              detail.story.rounds.map((round, index) =>
-                h.span([], [`R${index + 1} `, h.b([h.Style({ color: seatColor(detail, round.winner) })], [round.winner]), ` +$${round.prize.toLocaleString()}`]),
-              ),
-            ),
-            step === undefined ? h.empty : stateView(h, detail, steps, step),
             h.div(
               [h.Class("stepper")],
               [
-                h.button([h.Type("button"), h.Disabled(at === 0), h.OnClick(Message.SteppedReplay({ delta: -1 }))], ["‹ Prev"]),
-                h.span([h.Class("k")], [`move ${at + 1} of ${steps.length}`]),
-                h.button([h.Type("button"), h.Disabled(at >= steps.length - 1), h.OnClick(Message.SteppedReplay({ delta: 1 }))], ["Next ›"]),
+                h.button([h.Type("button"), h.AriaLabel("Previous move"), h.Disabled(at === 0), h.OnClick(Message.SteppedReplay({ delta: -1 }))], ["‹ Prev"]),
+                h.span([h.Class("k")], [step === undefined ? "" : `move ${at + 1} of ${steps.length} · round ${step.round}`]),
+                h.button([h.Type("button"), h.AriaLabel("Next move"), h.Disabled(at >= steps.length - 1), h.OnClick(Message.SteppedReplay({ delta: 1 }))], ["Next ›"]),
               ],
             ),
+            ...(step === undefined ? [] : [boardView(h, detail, steps, step, names), selectedView(h, detail, step, names)]),
           ],
         ),
         h.div(
           [h.Class("mright")],
-          steps.map((each, index) => stepView(h, detail, each, index, at)),
+          [
+            h.div(
+              [h.Class("timeline")],
+              [
+                healthView(h, detail, steps, at, chartWidth(viewport)),
+                turningPointsView(h, detail, names, steps, at),
+                h.div(
+                  [h.Class("rounds")],
+                  detail.story.rounds.map((round, index) => h.span([], [`R${index + 1} `, nameView(h, detail, names, round.winner), ` +$${round.prize.toLocaleString()}`])),
+                ),
+              ],
+            ),
+            h.div([h.Class("k legend")], [`−N: points of round win chance the move gave up, marked from ${fmtPoints(MINOR_REGRET)}; outlined when proven exact.`]),
+            movesView(h, detail, names, steps, at),
+          ],
         ),
       ],
     ),
