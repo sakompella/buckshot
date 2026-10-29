@@ -11,6 +11,8 @@ import { ODDS_BINS, oddsBinOf, oddsPanels, selfShotTallies } from "../src/arena-
 import { failuresByHour } from "../src/arena-viewer/page/failures-over-time.ts";
 import { momentumOf } from "../src/arena-viewer/page/momentum.ts";
 import { turningPoints } from "../src/arena-viewer/page/replay.ts";
+import { ranksOf } from "../src/arena-viewer/page/derived.ts";
+import { inRankOrder } from "../src/arena-viewer/page/leaderboard.ts";
 import { AXES } from "../src/arena-viewer/page/scatter.ts";
 import { upsetBins, winChance } from "../src/arena-viewer/page/upset.ts";
 
@@ -666,4 +668,16 @@ test("turning points are the biggest blunders, biggest first, and none when no m
   expect(turningPoints(steps)).toEqual([4, 2, 5]);
   expect(turningPoints(steps, 10)).toEqual([4, 2, 5, 6, 3]);
   expect(turningPoints([4.9, null, 0].map(stepWith))).toEqual([]);
+});
+
+test("ranks go to rated configs by rating, equal ratings by label; a config without a rating has no rank and the leaderboard lists it last", () => {
+  const configs = ["delta", "alpha", "charlie", "bravo"];
+  const seats = configs.map((model, index) => ({ ...SEAT, matchId: `m${index}`, model, potShare: null }));
+  const stats = modelStats(seats);
+  const rated = (rating: number) => ({ rating, lo: rating, hi: rating });
+  const ratings = new Map([["charlie|medium", rated(5)], ["bravo|medium", rated(5)], ["alpha|medium", rated(-20)]]);
+  const ranks = ranksOf(stats, ratings);
+
+  expect([...ranks]).toEqual([["bravo|medium", 1], ["charlie|medium", 2], ["alpha|medium", 3]]);
+  expect(inRankOrder(stats, ranks).map(({ model }) => model)).toEqual(["bravo", "charlie", "alpha", "delta"]);
 });

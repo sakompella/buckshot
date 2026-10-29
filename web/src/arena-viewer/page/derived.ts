@@ -186,7 +186,8 @@ const passes = (filter: Filter, main: ReadonlySet<string>, seat: SeatFull): bool
 
 const passingConfigs = (stats: ReadonlyArray<ModelStats>, filter: Filter, main: ReadonlySet<string>) => stats.filter(({ started: [first] }) => first !== undefined && passes(filter, main, first));
 
-const ranksOf = memoLast((pooled: ReadonlyArray<ModelStats>, ratings: ReadonlyMap<string, Rating>): ReadonlyMap<string, number> => {
+/** Each rated config's place by rating, ties by label so places are distinct; a config without a rating has none. */
+export const ranksOf = memoLast((pooled: ReadonlyArray<ModelStats>, ratings: ReadonlyMap<string, Rating>): ReadonlyMap<string, number> => {
   const eloOf = (m: ModelStats) => ratings.get(m.key)?.rating ?? 0;
   const ordered = pooled.filter((m) => m.scored.length > 0 && ratings.has(m.key)).toSorted((left, right) => eloOf(right) - eloOf(left) || left.label.localeCompare(right.label));
 

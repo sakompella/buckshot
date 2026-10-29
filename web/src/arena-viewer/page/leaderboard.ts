@@ -89,10 +89,10 @@ const drillView = (h: H, m: ModelStats, seats: ReadonlyArray<SeatFull>, maybeTip
 };
 
 /** How a row shows its standing: its Elo with an interval, or its place. */
-type Standing = { readonly elo: Rating | undefined } | { readonly place: number };
+type Standing = { readonly elo: Rating | undefined } | { readonly place: number | undefined };
 
 const standingView = (h: H, standing: Standing): ReadonlyArray<Html | string> => {
-  if ("place" in standing) return [String(standing.place)];
+  if ("place" in standing) return [standing.place === undefined ? "–" : String(standing.place)];
 
   const { elo } = standing;
 
@@ -174,6 +174,10 @@ const headerView = (h: H, label: string, index: number): Html => {
   return h.th(index === 1 ? [h.Class("barcol")] : label === "Rank" || label.endsWith("Elo") ? [h.Class("rating")] : title === undefined ? [] : [h.Title(title)], [label]);
 };
 
+/** Configs with a scored match, by rank; the unranked (no rating) last, by label. */
+export const inRankOrder = (stats: ReadonlyArray<ModelStats>, ranks: ReadonlyMap<string, number>): ReadonlyArray<ModelStats> =>
+  stats.filter(({ scored }) => scored.length > 0).toSorted((left, right) => (ranks.get(left.key) ?? Number.POSITIVE_INFINITY) - (ranks.get(right.key) ?? Number.POSITIVE_INFINITY) || left.label.localeCompare(right.label));
+
 export const leaderboardView = (
   h: H,
   stats: ReadonlyArray<ModelStats>,
@@ -188,8 +192,7 @@ export const leaderboardView = (
 ): Html => {
   const hasRegret = every.some(({ regret }) => regret !== null);
   const headers = headersOf(ranking, basis, hasRegret);
-  const eloOf = (m: ModelStats) => ratings.get(m.key)?.rating ?? 0;
-  const configs = stats.filter(({ scored }) => scored.length > 0).toSorted((left, right) => eloOf(right) - eloOf(left));
+  const configs = inRankOrder(stats, ranks);
 
   return h.div(
     [h.Class("lb")],
@@ -214,7 +217,7 @@ export const leaderboardView = (
                 [],
                 configs.flatMap((m) => {
                   const isOpen = Option.exists(leaderboard.maybeOpen, (open) => open === m.id);
-                  const standing: Standing = ranking === "elo" ? { elo: ratings.get(m.key) } : { place: ranks.get(m.key) ?? 0 };
+                  const standing: Standing = ranking === "elo" ? { elo: ratings.get(m.key) } : { place: ranks.get(m.key) };
 
                   return [
                     rowView(h, m, standing, basis, items.get(m.id), isOpen, hasRegret),
