@@ -69,7 +69,7 @@ The summary tables below come from the regret and knowledge databases, read only
 
     python3 tools/arena/analysis/regret.py [--regret <derived>/regret.sqlite] [--knowledge <derived>/knowledge.sqlite] [--doc docs/arena/analysis/regret.md]
 
-With `--doc` it rewrites the tables at the end of this page. `tools/arena/analysis/reload_bias.py` draws the stratified lists for `--decisions` (`sample`) and rewrites the tables of the Reload bias section from a `sampled` run (`report --doc`), reading the sampled and static runs read only. The by-round tables come from `tools/arena/analysis/by_round.py`, which also reads the analysis database for round winners (`--db`) and rewrites the tables of the last section the same way. `python3 -m unittest discover -s tools/arena/analysis` runs its tests.
+With `--doc` it rewrites the tables at the end of this page. `tools/arena/analysis/reload_bias.py` draws the stratified lists for `--decisions` (`sample`) and rewrites the tables of the Reload bias section from a `sampled` run (`report --doc`), reading the sampled and static runs read only. The by-round tables come from `tools/arena/analysis/by_round.py`, which also reads the analysis database for round winners (`--db`) and rewrites the tables of the last section the same way. `tools/arena/analysis/regret_depth.py` does the same for the Deeper search section: `sample` draws the lists, to run with `--depth 8 --budget 200000`, and `report --doc` rewrites its tables from the deep run (`regret-depth.sqlite`). `python3 -m unittest discover -s tools/arena/analysis` runs its tests.
 
 ## Results
 
@@ -146,6 +146,70 @@ On 38 decisions scored with 256 samples as well, mean regret with 64 minus with 
 | claude-haiku-4-5-20251001 | 361 | 5.19 | 8 | 4.60 | 8 |
 <!-- reload-bias:end -->
 
+## Deeper search
+
+This checks whether regret holds up when the search goes deeper. 40% of the production searches (depth 6, 20,000 nodes) stop on the budget before depth 6. 2,880 agent decisions of the run above were scored again at depth 8 with 200,000 nodes, ten times the budget, under the static reload rule. Each is set beside the production score of the same decision, matched by match and ordinal. The sample covers two-seat matches with no DeepSeek seat and is stratified by shells left in the gun, shot or item move, and model. As in the reload-bias run, the means weight each stratum by its size in the whole run of 125,150 decisions, and the intervals are 95%. The new build rescored 120 of the decisions at depth 6 and 20,000 nodes, and every score, node count and depth matched the production rows. The deep run took 3.3 CPU hours, 4.1 s per decision on average against 0.34 s for production. Both searches use the static leaf, so this tests the horizon only. It does not test the leaf, which the Reload bias section does.
+
+1. **The best move changes in 13.0 ± 1.2% of decisions, mostly with 4 or more shells left.**
+   - With 3 or fewer shells left it changes in 3.8% of decisions, and with 4 or more in 25.0%. With 1 or 2 shells left almost nothing changes, since the reload ends every line within depth 6.
+   - Item moves change most: 16% of those with 3 shells left, 29% with 4, 34% with 5 and 37% with 6. Shots with 4 to 6 left change in 11% to 15%.
+   - In 8.9% of decisions the deep search scores the old best move strictly lower than its own best move, by 3.0 points on average. The other changes are ties that now break the other way.
+2. **Mean regret does not move.**
+   - It goes from 2.56 to 2.63 points (+0.07 ± 0.10). Shots change by +0.18 ± 0.12 and item moves by -0.04 ± 0.15. The share of agent moves with zero regret is 64.8% at depth 6 and 66.4% at depth 8.
+   - Single decisions move more than the mean does. 13.4% change by at least a point, 6.6% up and 6.8% down, so they cancel.
+   - No cell by shells left moves outside its interval except shots with 5 left (+0.52 ± 0.38), one of 12 cells. Decisions whose production search stopped on the budget change by +0.38 ± 0.46, and those that reached depth 6 by +0.14 ± 0.16.
+3. **Model order holds.** All eight models keep their rank. Each mean moves by 0.07 points or less, except Haiku 4.5, which rises by 0.51 ± 0.31 from 6.05 to 6.56. The top two are Astra and Opus at 1.09 and 1.12, as close as before.
+4. **The budget still stops 30% of the searches, most of them with many shells left.** The budget stops 29.9% of the depth 8 searches in the sample, against 40.2% at depth 6.
+   - Shots with 1 to 3 shells left are stopped in under 7% of searches, with 4 left in 22.5%, with 5 left in 43.6% and with 6 left in 75.6%. Item moves are stopped in 24% with 3 left, 50% with 4, 84% with 5 and 95% with 6.
+   - The searches gain 2.0 decisions of depth on average. With 5 or 6 shells left most still end before depth 8, so those rows compare horizons of about 6 and 7.
+
+**Reading it.** The production mean regrets and the model ranking do not depend on the node budget, so keep depth 6 with 20,000 nodes. A single item move with 4 or more shells left is another matter. Its best move changes in a third of cases under a deeper search, so read its regret as a mean over many decisions, never as a verdict on one.
+
+<!-- regret-depth:start -->
+2,880 decisions scored at depth 8 with 200,000 nodes and at depth 6 with 20,000, drawn from the run's 125,150.
+Over the run the best move changes in 13.0% of decisions, and in 8.9% the deep search scores the old best move strictly lower than its own. Mean regret goes from 2.56 to 2.63 points (+0.07 ± 0.10).
+The budget still stops 29.9% of the depth 8 searches, against 40.2% at depth 6.
+
+### By shells left in the gun
+
+| kind | shells left | decisions | scored | depth 6 limited | depth 8 limited | extra depth | regret at 6 | regret at 8 | 8 minus 6 | best move changed | best move strictly worse at 8 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| shot | 1 | 13,361 | 140 | 0.0% | 0.0% | 2.00 | 1.40 | 1.40 | +0.00 ± 0.00 | 0.0% | 0.0% |
+| shot | 2 | 13,018 | 200 | 2.2% | 0.7% | 2.02 | 6.15 | 6.15 | +0.00 ± 0.00 | 0.0% | 0.0% |
+| shot | 3 | 12,592 | 280 | 12.1% | 6.4% | 2.06 | 4.62 | 4.83 | +0.21 ± 0.41 | 1.4% | 0.2% |
+| shot | 4 | 9,969 | 280 | 33.7% | 22.5% | 2.10 | 2.89 | 3.30 | +0.41 ± 0.42 | 11.0% | 8.1% |
+| shot | 5 | 6,868 | 280 | 71.7% | 43.6% | 2.21 | 1.62 | 2.14 | +0.52 ± 0.38 | 15.1% | 13.1% |
+| shot | 6 | 3,928 | 260 | 89.7% | 75.6% | 2.05 | 1.80 | 1.94 | +0.14 ± 0.38 | 11.5% | 11.1% |
+| shot | all | 59,736 | 1,440 | 22.8% | 15.2% | 2.06 | 3.41 | 3.60 | +0.18 ± 0.12 | 4.6% | 3.6% |
+| item move | 1 | 5,923 | 140 | 0.0% | 0.0% | 2.00 | 2.59 | 2.59 | +0.00 ± 0.00 | 0.0% | 0.0% |
+| item move | 2 | 10,767 | 200 | 10.5% | 4.5% | 2.08 | 1.30 | 1.39 | +0.09 ± 0.14 | 0.5% | 0.0% |
+| item move | 3 | 15,190 | 280 | 42.1% | 23.8% | 2.21 | 1.39 | 1.39 | +0.00 ± 0.29 | 16.2% | 6.9% |
+| item move | 4 | 13,997 | 280 | 73.3% | 50.1% | 2.21 | 1.87 | 1.74 | -0.13 ± 0.41 | 29.1% | 21.9% |
+| item move | 5 | 11,602 | 280 | 95.3% | 83.6% | 1.92 | 2.27 | 2.27 | +0.01 ± 0.49 | 34.4% | 26.1% |
+| item move | 6 | 7,935 | 260 | 99.4% | 95.0% | 1.54 | 1.69 | 1.47 | -0.21 ± 0.40 | 37.2% | 23.6% |
+| item move | all | 65,414 | 1,440 | 56.1% | 43.3% | 2.04 | 1.78 | 1.74 | -0.04 ± 0.15 | 20.7% | 13.8% |
+
+### By how the production search ended
+
+| production search | scored | regret at 6 | regret at 8 | 8 minus 6 | best move changed | depth 8 limited |
+|---|---|---|---|---|---|---|
+| reached depth 6 | 1,445 | 2.49 | 2.63 | +0.14 ± 0.16 | 3.2% | 0.0% |
+| stopped by the budget | 1,435 | 3.01 | 3.39 | +0.38 ± 0.46 | 25.5% | 66.4% |
+
+### By model
+
+| model | scored | regret at 6 | rank | regret at 8 | rank | 8 minus 6 |
+|---|---|---|---|---|---|---|
+| gpt-6-astra | 362 | 1.16 | 1 | 1.09 | 1 | -0.07 ± 0.25 |
+| claude-opus-5-5 | 358 | 1.18 | 2 | 1.12 | 2 | -0.06 ± 0.19 |
+| gpt-6.1-sol | 358 | 1.50 | 3 | 1.45 | 3 | -0.05 ± 0.23 |
+| claude-sonnet-5-5 | 362 | 1.62 | 4 | 1.58 | 4 | -0.04 ± 0.20 |
+| claude-haiku-5-5 | 358 | 1.82 | 5 | 1.87 | 5 | +0.05 ± 0.32 |
+| gpt-5.6-terra | 362 | 2.31 | 6 | 2.38 | 6 | +0.07 ± 0.28 |
+| gpt-6-luna | 362 | 3.47 | 7 | 3.52 | 7 | +0.04 ± 0.24 |
+| claude-haiku-4-5-20251001 | 358 | 6.05 | 8 | 6.56 | 8 | +0.51 ± 0.31 |
+<!-- regret-depth:end -->
+
 ## Limits
 
 - The value is the chance of winning the round, not the match's cash.
@@ -153,7 +217,7 @@ On 38 decisions scored with 256 samples as well, mean regret with 64 minus with 
 - The static evaluation's item weights are untrained starting values, so heuristic regrets carry its biases. Read small regrets with care.
 - Regret is a mean over decisions, not over matches. Decisions of one match are not independent, and a config's opponents differ between tournaments. Treat gaps of a few tenths of a point as noise.
 - A regret of 0 means the chosen move tied the best score at the depth reached, not that it was proven right. Only the 11% of exact rows are.
-- 40% of the searches were stopped by the budget at depth 1 to 5. With four or more shells left most are, so those rows compare shallower searches.
+- 40% of the searches were stopped by the budget at depth 1 to 5. With four or more shells left most are, so those rows compare shallower searches. A search to depth 8 with ten times the budget leaves the mean regrets and the model order unchanged (Deeper search), but still stops 30% of the time.
 
 ## Tables
 
