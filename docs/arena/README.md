@@ -96,7 +96,7 @@ Codex isn't checked there: use account pins, so a full Codex account pauses only
 - **Claude 5.5 models:** `adaptive` thinking with an effort and `display: "summarized"` (their default `omitted` returns no text).
   - haiku 5.5 off sends `disabled`.
   - sonnet 5.5 off sends `between_tools`.
-  - opus 5.5 can't turn thinking off.
+  - opus 5.5 off sends `disabled`. The hub accepted it in a probe on 2026-10-29 (HTTP 200, no thinking block); `between_tools` is rejected with a 400.
 - **claude-haiku-4-5:** thinking budgets.
 - **GPT models:** `reasoning.effort` and `reasoning.summary: "detailed"`.
   - CPA rewrites effort `none` to `low` for gpt-5.6 models. The upstream accepts it; a CPA patch is in progress.

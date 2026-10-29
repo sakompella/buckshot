@@ -94,6 +94,12 @@
       "endpoint": "cpa-openai",
       "model": "gpt-6-luna",
       "effort": "medium"
+    },
+    "gpt-6.1-terra": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6.1-terra",
+      "effort": "medium",
+      "catalogModel": "openai/gpt-5.6-terra"
     }
   },
   "pairings": [
@@ -320,6 +326,24 @@
       ],
       "seeds": [
         4022
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-high",
+        "gpt-6.1-terra"
+      ],
+      "seeds": [
+        4024
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5-low",
+        "gpt-6.1-terra"
+      ],
+      "seeds": [
+        4020
       ]
     }
   ],
