@@ -111,17 +111,11 @@ const DecisionRow = Schema.Struct({ matchId: Schema.String, model: Schema.String
 
 const decodeRow = Schema.decodeUnknownSync(DecisionRow);
 
-/** A match the viewer shows: its cohort and seed block. */
-export interface ShownMatch {
-  readonly cohort: string;
-  readonly seedBlock: string;
-}
-
 /**
- * Every config's consistency in each cohort and over all of them ("all"), read only. Only the agents' own moves in the
- * matches the viewer shows count, so DeepSeek's matches are left out here as everywhere.
+ * Every config's consistency, read only. Only the agents' own moves in the matches the viewer shows count, so
+ * DeepSeek's matches are left out here as everywhere. `seedBlocks` maps each shown match to its seed block.
  */
-export const openConsistency = (path: string, shown: ReadonlyMap<string, ShownMatch>): ReadonlyArray<Consistency> => {
+export const openConsistency = (path: string, seedBlocks: ReadonlyMap<string, string>): ReadonlyArray<Consistency> => {
   const db = new Database(path, { readonly: true });
 
   const rows = db
@@ -132,17 +126,17 @@ export const openConsistency = (path: string, shown: ReadonlyMap<string, ShownMa
   db.close();
 
   const scoped = rows.flatMap((row) => {
-    const match = shown.get(row.matchId);
+    const block = seedBlocks.get(row.matchId);
 
-    return match === undefined ? [] : [match.cohort, "all"].map((cohort) => ({ cohort, row, repeat: { choice: row.choice, block: match.seedBlock } }));
+    return block === undefined ? [] : [{ row, repeat: { choice: row.choice, block } }];
   });
 
-  return [...groupBy(scoped, ({ cohort, row }) => `${cohort}|${row.model}|${row.effort}`).values()].flatMap((config) => {
+  return [...groupBy(scoped, ({ row }) => `${row.model}|${row.effort}`).values()].flatMap((config) => {
     const [first] = config;
     const repeated = [...groupBy(config, ({ row }) => row.position).values()].filter((decisions) => decisions.length >= 2);
 
     return first === undefined || repeated.length < MIN_POSITIONS
       ? []
-      : [{ cohort: first.cohort, model: first.row.model, effort: first.row.effort, ...consistencyOf(repeated.map((decisions) => decisions.map(({ repeat }) => repeat)), new Set(config.map(({ repeat }) => repeat.block))) }];
+      : [{ model: first.row.model, effort: first.row.effort, ...consistencyOf(repeated.map((decisions) => decisions.map(({ repeat }) => repeat)), new Set(config.map(({ repeat }) => repeat.block))) }];
   });
 };

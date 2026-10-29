@@ -4,7 +4,7 @@ import { AsyncData, Command, Dom, Http, Runtime, Subscription, type Update } fro
 import { modifyFields } from "foldkit/struct";
 
 import { Blunders, Consistency, Decisions, MatchDetail, Mistakes, SeatsResponse } from "../api.ts";
-import { withCohorts } from "./data.ts";
+import { withPotShares } from "./data.ts";
 import { derive } from "./derived.ts";
 import { picksOf } from "./interesting.ts";
 import { MORE_ROWS } from "./matches.ts";
@@ -39,7 +39,7 @@ const LoadData = Command.define("LoadData", {
     [getJson("/api/seats", SeatsResponse), getJson("/api/decisions", Decisions), getOptional("/api/blunders", Blunders), getOptional("/api/mistakes", Mistakes), getOptional("/api/consistency", Schema.Array(Consistency))],
     { concurrency: 5 },
   ).pipe(
-    Effect.map(([seats, decisions, blunders, mistakes, consistency]) => Message.SucceededLoad({ loaded: { seats: withCohorts(seats), decisions, blunders, mistakes, consistency } })),
+    Effect.map(([seats, decisions, blunders, mistakes, consistency]) => Message.SucceededLoad({ loaded: { seats: withPotShares(seats), decisions, blunders, mistakes, consistency } })),
     Effect.catch((error) => Effect.succeed(Message.FailedLoad({ error: describe(error) }))),
     Effect.provide(Http.layer),
   ),
@@ -201,7 +201,6 @@ export const update = (model: Model, message: Message): Return =>
     },
     CompletedFirstPaint: () => ({ model: modifyFields(model, { isFirstPaintDone: () => true }), commands: [ScrollToHash()] }),
     FailedLoad: ({ error }) => ({ model: modifyFields(model, { data: () => AsyncData.fail(error) }) }),
-    SelectedCohort: ({ cohort }) => withFilter(model, (filter) => ({ ...filter, cohort })),
     ToggledEffort: ({ effort }) => withFilter(model, (filter) => ({ ...filter, offEfforts: toggled(filter.offEfforts, effort) })),
     ToggledModel: ({ name }) => withFilter(model, (filter) => ({ ...filter, offModels: toggled(filter.offModels, name) })),
     ToggledAllConfigs: () => withFilter(model, (filter) => ({ ...filter, isAllConfigs: !filter.isAllConfigs })),
@@ -212,7 +211,6 @@ export const update = (model: Model, message: Message): Return =>
     ClearedTappedTitle: () => ({ model: modifyFields(model, { maybeTappedTitle: () => Option.none() }) }),
     SelectedRanking: ({ ranking }) => ({ model: modifyFields(model, { ranking: () => ranking }) }),
     SelectedBasis: ({ basis }) => ({ model: modifyFields(model, { basis: () => basis }) }),
-    SelectedScatterShow: ({ show }) => ({ model: modifyFields(model, { scatter: (scatter) => ({ ...scatter, show }) }) }),
     SelectedScatterAxis: ({ axis }) => ({ model: modifyFields(model, { scatter: (scatter) => ({ ...scatter, axis }) }) }),
     HoveredPoint: ({ key }) => ({ model: modifyFields(model, { scatter: (scatter) => ({ ...scatter, maybeHover: Option.some(key) }) }) }),
     LeftPoint: () => ({ model: modifyFields(model, { scatter: (scatter) => ({ ...scatter, maybeHover: Option.none() }) }) }),
@@ -287,10 +285,10 @@ const init: Runtime.ApplicationInit<Model, Message, Flags> = ({ viewport }) => (
   model: {
     viewport,
     data: AsyncData.Loading(),
-    filter: { cohort: "all", offEfforts: [], offModels: [], isAllConfigs: true },
+    filter: { offEfforts: [], offModels: [], isAllConfigs: true },
     ranking: "elo",
     basis: "rounds",
-    scatter: { show: "all", axis: "cost", maybeHover: Option.none(), maybePin: Option.none() },
+    scatter: { axis: "cost", maybeHover: Option.none(), maybePin: Option.none() },
     heat: { mode: "opp", sort: "rating", isBestOnly: false, maybeTip: Option.none(), maybeFlagged: Option.none() },
     leaderboard: { maybeOpen: Option.none(), maybeTip: Option.none() },
     matchList: { query: "", limit: 25 },

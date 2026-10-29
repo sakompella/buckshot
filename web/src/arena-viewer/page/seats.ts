@@ -1,7 +1,7 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { anchorId, chartWidth, figureView, linScale, REFERENCE, REFERENCE_DASH, tippedDot } from "./charts.ts";
-import { addTo, type BlockTally, blockRate, colorOfKey, fmtCI, groupBy, keyOf, labelOf, type Rate, type SeatFull, unique } from "./data.ts";
+import { addTo, type BlockTally, blockRate, colorOfKey, fmtCI, groupBy, keyOf, labelOf, type Rate, type SeatFull } from "./data.ts";
 import { type Derived, memoLast } from "./derived.ts";
 import type { Message } from "./model.ts";
 
@@ -20,12 +20,10 @@ interface Game {
 /** A seed block with both seat orders scored. */
 interface Block {
   readonly id: string;
-  readonly cohort: string;
   readonly games: readonly [Game, Game];
 }
 
 interface GroupRow {
-  readonly name: string;
   readonly rate: Rate;
   /** The same share with an interval that draws seeds, which every pairing shares and which fix the starter. */
   readonly bySeed: Rate;
@@ -60,7 +58,7 @@ const blocksOf = (games: ReadonlyArray<Game>) => {
       continue;
     }
 
-    blocks.push({ id, cohort: one.first.cohort, games: [one, two] });
+    blocks.push({ id, games: [one, two] });
   }
 
   return { blocks, partial };
@@ -79,21 +77,11 @@ const shareOver = (blocks: ReadonlyArray<Block>, value: (game: Game) => number, 
   return blockRate(tally, 1000);
 };
 
-const groupedRows = (blocks: ReadonlyArray<Block>, value: (game: Game) => number): ReadonlyArray<GroupRow> => {
-  const row = (name: string, members: ReadonlyArray<Block>): GroupRow => ({
-    name,
-    rate: shareOver(members, value, blockOf),
-    bySeed: shareOver(members, value, seedOf),
-    blocks: members.length,
-  });
-
-  const cohorts = unique(blocks.map(({ cohort }) => cohort)).toSorted();
-
-  return [
-    row("All complete seed blocks", blocks),
-    ...cohorts.map((cohort) => row(`Cohort ${cohort}`, blocks.filter((block) => block.cohort === cohort))),
-  ];
-};
+const groupedRow = (blocks: ReadonlyArray<Block>, value: (game: Game) => number): GroupRow => ({
+  rate: shareOver(blocks, value, blockOf),
+  bySeed: shareOver(blocks, value, seedOf),
+  blocks: blocks.length,
+});
 
 /** The round-1 starter's win share, or NaN when the story does not name a starter. */
 const starterShare = ({ first, second }: Game): number => {
@@ -105,7 +93,6 @@ const starterShare = ({ first, second }: Game): number => {
 };
 
 interface ConfigRow {
-  readonly cohort: string;
   readonly key: string;
   readonly difference: BlockTally;
   one: number;
@@ -116,7 +103,7 @@ interface ConfigRow {
 const configRows = (blocks: ReadonlyArray<Block>, focal: ReadonlySet<SeatFull>) => {
   const rows = new Map<string, ConfigRow>();
 
-  for (const { id, cohort, games } of blocks) {
+  for (const { id, games } of blocks) {
     const [one, two] = games;
 
     for (const seat of [one.first, one.second]) {
@@ -125,10 +112,9 @@ const configRows = (blocks: ReadonlyArray<Block>, focal: ReadonlySet<SeatFull>) 
       const key = keyOf(seat);
       const asFirst = keyOf(one.first) === key ? one.first : two.first;
       const asSecond = keyOf(one.second) === key ? one.second : two.second;
-      const rowId = `${cohort}||${key}`;
-      const row = rows.get(rowId) ?? { cohort, key, difference: new Map(), one: 0, two: 0, n: 0 };
+      const row = rows.get(key) ?? { key, difference: new Map(), one: 0, two: 0, n: 0 };
 
-      rows.set(rowId, row);
+      rows.set(key, row);
       addTo(row.difference, id, (asFirst.winShare ?? 0) - (asSecond.winShare ?? 0), 1);
       row.one += asFirst.winShare ?? 0;
       row.two += asSecond.winShare ?? 0;
@@ -138,7 +124,7 @@ const configRows = (blocks: ReadonlyArray<Block>, focal: ReadonlySet<SeatFull>) 
 
   return [...rows.values()]
     .map((row) => ({ ...row, rate: blockRate(row.difference, 1000) }))
-    .toSorted((left, right) => left.cohort.localeCompare(right.cohort) || right.rate.rate - left.rate.rate);
+    .toSorted((left, right) => right.rate.rate - left.rate.rate);
 };
 
 interface StoryRow {
@@ -149,36 +135,29 @@ interface StoryRow {
   bad: number;
 }
 
-const ALL_SCORED = "All scored matches";
-
-const storyRows = (games: ReadonlyArray<Game>) => {
-  const rows = new Map<string, StoryRow>();
+const storyRow = (games: ReadonlyArray<Game>): StoryRow => {
+  const row: StoryRow = { n: 0, roundOneWinner: 0, lostRoundOne: 0, sweeps: 0, bad: 0 };
 
   for (const { first, second } of games) {
     const story = first.story;
     const winner = (first.winShare ?? 0) >= 1 ? first.player : (second.winShare ?? 0) >= 1 ? second.player : null;
 
-    for (const group of [ALL_SCORED, first.cohort]) {
-      const row = rows.get(group) ?? { n: 0, roundOneWinner: 0, lostRoundOne: 0, sweeps: 0, bad: 0 };
+    row.n++;
 
-      rows.set(group, row);
-      row.n++;
-
-      if (story === null || !story.ok) {
-        row.bad++;
-        continue;
-      }
-
-      if (winner === null) continue;
-
-      if (story.rounds[0]?.winner === winner) row.roundOneWinner++;
-      else row.lostRoundOne++;
-
-      if (story.rounds.every((round) => round.winner === winner)) row.sweeps++;
+    if (story === null || !story.ok) {
+      row.bad++;
+      continue;
     }
+
+    if (winner === null) continue;
+
+    if (story.rounds[0]?.winner === winner) row.roundOneWinner++;
+    else row.lostRoundOne++;
+
+    if (story.rounds.every((round) => round.winner === winner)) row.sweeps++;
   }
 
-  return [...rows].toSorted(([left], [right]) => (left === ALL_SCORED ? -1 : right === ALL_SCORED ? 1 : left.localeCompare(right)));
+  return row;
 };
 
 /** Seeds with fewer complete blocks than this are left out of the per-seed chart. */
@@ -222,28 +201,27 @@ const seatsOf = memoLast((derived: Derived) => {
   return {
     games,
     partial,
-    position: groupedRows(blocks, ({ first }) => first.winShare ?? 0),
-    starter: groupedRows(startered, starterShare),
+    position: groupedRow(blocks, ({ first }) => first.winShare ?? 0),
+    starter: groupedRow(startered, starterShare),
     firstStarts: games.filter(({ first }) => first.story?.starter === first.player).length,
     configs: configRows(blocks, new Set(derived.filtered)),
-    stories: storyRows(games),
+    story: storyRow(games),
     perSeed: perSeedRows(startered),
     comebacks: comebackRows(games),
   };
 });
 
-const groupTableView = (h: H, rows: ReadonlyArray<GroupRow>, [shareLabel, otherLabel]: readonly [string, string]): Html =>
+const groupTableView = (h: H, row: GroupRow, [shareLabel, otherLabel]: readonly [string, string]): Html =>
   h.table(
     [h.Class("rows")],
     [
-      h.thead([], [h.tr([], ["Group", "Complete blocks", "Seeds", "Matches", shareLabel, "95% CI, seeds drawn", "95% CI, blocks drawn", otherLabel].map((title) => h.th([], [title])))]),
+      h.thead([], [h.tr([], ["Complete blocks", "Seeds", "Matches", shareLabel, "95% CI, seeds drawn", "95% CI, blocks drawn", otherLabel].map((title) => h.th([], [title])))]),
       h.tbody(
         [],
-        rows.map((row) =>
+        [
           h.tr(
             [],
             [
-              h.td([], [row.name]),
               h.td([h.DataAttribute("label", "blocks")], [String(row.blocks)]),
               h.td([h.DataAttribute("label", "seeds")], [String(row.bySeed.blocks)]),
               h.td([h.DataAttribute("label", "matches")], [String(row.rate.n)]),
@@ -253,7 +231,7 @@ const groupTableView = (h: H, rows: ReadonlyArray<GroupRow>, [shareLabel, otherL
               h.td([h.DataAttribute("label", otherLabel)], [pct(1 - row.rate.rate)]),
             ],
           ),
-        ),
+        ],
       ),
     ],
   );
@@ -388,16 +366,12 @@ const perSeedView = (h: H, rows: ReadonlyArray<{ readonly seed: string; readonly
 
 /** The Seats tab, laid out for a viewport `width` wide with `content` pixels inside main's padding. */
 export const seatsView = (h: H, derived: Derived, width: number, content: number): Html => {
-  const { games, partial, position, starter, firstStarts, configs, stories, perSeed, comebacks } = seatsOf(derived);
+  const { games, partial, position: allPositions, starter: allStarters, firstStarts, configs, story, perSeed, comebacks } = seatsOf(derived);
   const left = partial > 0 ? `; ${partial} incomplete blocks left out` : "";
   const figure = chartWidth(width, content);
-  const [allPositions] = position;
-  const [allStarters] = starter;
-  const story = stories.find(([group]) => group === ALL_SCORED)?.[1];
-  const decided = (story?.roundOneWinner ?? 0) + (story?.lostRoundOne ?? 0);
+  const decided = story.roundOneWinner + story.lostRoundOne;
 
-  const blocksNote = (row: GroupRow | undefined) =>
-    row === undefined ? "" : `${row.blocks.toLocaleString()} complete blocks at ${row.bySeed.blocks} seeds · 95% CI by seeds ${interval(row.bySeed)}`;
+  const blocksNote = (row: GroupRow) => `${row.blocks.toLocaleString()} complete blocks at ${row.bySeed.blocks} seeds · 95% CI by seeds ${interval(row.bySeed)}`;
 
   const leftOut = perSeed.leftOut > 0 ? ` ${perSeed.leftOut} seeds under ${MIN_SEED_BLOCKS} blocks left out.` : "";
 
@@ -411,9 +385,9 @@ export const seatsView = (h: H, derived: Derived, width: number, content: number
           h.div(
             [h.Class("bignums")],
             [
-              bigNumberView(h, pct(allStarters?.rate.rate ?? Number.NaN), "win share of the round-1 starter", blocksNote(allStarters)),
-              bigNumberView(h, pct(allPositions?.rate.rate ?? Number.NaN), "win share at table position 1", blocksNote(allPositions)),
-              bigNumberView(h, pct(decided === 0 ? Number.NaN : (story?.roundOneWinner ?? 0) / decided), "of matches won by the round-1 winner", `${(story?.roundOneWinner ?? 0).toLocaleString()} of ${decided.toLocaleString()} decided matches`),
+              bigNumberView(h, pct(allStarters.rate.rate), "win share of the round-1 starter", blocksNote(allStarters)),
+              bigNumberView(h, pct(allPositions.rate.rate), "win share at table position 1", blocksNote(allPositions)),
+              bigNumberView(h, pct(decided === 0 ? Number.NaN : story.roundOneWinner / decided), "of matches won by the round-1 winner", `${story.roundOneWinner.toLocaleString()} of ${decided.toLocaleString()} decided matches`),
             ],
           ),
           h.div(
@@ -421,7 +395,7 @@ export const seatsView = (h: H, derived: Derived, width: number, content: number
             [
               figureView(h, "Round 1 to the match", "Bright cap: sweeps.", flowView(h, story, figure)),
               figureView(h, "Comebacks", "By the worst health gap in the final round.", comebackView(h, comebacks, figure)),
-              figureView(h, "The starter's edge per seed", `Dotted line: every seed.${leftOut}`, perSeedView(h, perSeed.rows, allStarters?.rate, figure)),
+              figureView(h, "The starter's edge per seed", `Dotted line: every seed.${leftOut}`, perSeedView(h, perSeed.rows, allStarters.rate, figure)),
             ],
           ),
         ],
@@ -438,7 +412,7 @@ export const seatsView = (h: H, derived: Derived, width: number, content: number
                 [h.Class("sub")],
                 [`Position 1 is a table seat, not the first mover (it starts round 1 in ${firstStarts.toLocaleString()} of ${games.length.toLocaleString()}); averaged within seed blocks${left}.`],
               ),
-              groupTableView(h, position, ["Position 1 share", "Position 2 share"]),
+              groupTableView(h, allPositions, ["Position 1 share", "Position 2 share"]),
             ],
           ),
           h.section(
@@ -446,7 +420,7 @@ export const seatsView = (h: H, derived: Derived, width: number, content: number
             [
               h.h2([], ["Round-1 starter"]),
               h.p([h.Class("sub")], ["Win share of the player who starts round 1, over complete seed blocks."]),
-              groupTableView(h, starter, ["Starter share", "Other player"]),
+              groupTableView(h, allStarters, ["Starter share", "Other player"]),
             ],
           ),
           h.section(
@@ -460,8 +434,7 @@ export const seatsView = (h: H, derived: Derived, width: number, content: number
                   h.thead([], [h.tr([], ["Config", "Blocks", "Position 1 share", "Position 2 share", "Position 1 − 2", "95% CI"].map((title) => h.th([], [title])))]),
                   h.tbody(
                     [],
-                    configs.flatMap((row, index) => [
-                      index === 0 || configs[index - 1]?.cohort !== row.cohort ? h.tr([h.Class("group")], [h.td([h.Colspan(6)], [row.cohort])]) : h.empty,
+                    configs.map((row) =>
                       h.tr(
                         [],
                         [
@@ -473,7 +446,7 @@ export const seatsView = (h: H, derived: Derived, width: number, content: number
                           h.td([h.DataAttribute("label", "95% CI")], [`${points(row.rate.lo)} to ${points(row.rate.hi)}`]),
                         ],
                       ),
-                    ]),
+                    ),
                   ),
                 ],
               ),
@@ -489,23 +462,22 @@ export const seatsView = (h: H, derived: Derived, width: number, content: number
                 [
                   h.thead(
                     [],
-                    [h.tr([], ["Group", "Scored matches", "Round-1 winner won the match", "Winner lost round 1", "Sweeps", "Prizes check failed"].map((title) => h.th([], [title])))],
+                    [h.tr([], ["Scored matches", "Round-1 winner won the match", "Winner lost round 1", "Sweeps", "Prizes check failed"].map((title) => h.th([], [title])))],
                   ),
                   h.tbody(
                     [],
-                    stories.map(([group, row]) =>
+                    [
                       h.tr(
                         [],
                         [
-                          h.td([], [group]),
-                          h.td([h.DataAttribute("label", "scored")], [String(row.n)]),
-                          h.td([h.DataAttribute("label", "round-1 winner won")], [`${row.roundOneWinner} `, h.span([h.Class("pm")], [pct(row.roundOneWinner / (row.roundOneWinner + row.lostRoundOne))])]),
-                          h.td([h.DataAttribute("label", "winner lost round 1")], [String(row.lostRoundOne)]),
-                          h.td([h.DataAttribute("label", "sweeps")], [String(row.sweeps)]),
-                          h.td([h.DataAttribute("label", "prizes check failed")], [String(row.bad)]),
+                          h.td([h.DataAttribute("label", "scored")], [String(story.n)]),
+                          h.td([h.DataAttribute("label", "round-1 winner won")], [`${story.roundOneWinner} `, h.span([h.Class("pm")], [pct(story.roundOneWinner / (story.roundOneWinner + story.lostRoundOne))])]),
+                          h.td([h.DataAttribute("label", "winner lost round 1")], [String(story.lostRoundOne)]),
+                          h.td([h.DataAttribute("label", "sweeps")], [String(story.sweeps)]),
+                          h.td([h.DataAttribute("label", "prizes check failed")], [String(story.bad)]),
                         ],
                       ),
-                    ),
+                    ],
                   ),
                 ],
               ),

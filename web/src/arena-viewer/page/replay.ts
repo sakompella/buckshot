@@ -388,7 +388,6 @@ const detailView = (h: H, replay: Replay, detail: MatchDetail, allMatches: Reado
   const at = replayIndex(replay, steps);
   const step = steps[at];
   const cost = sumOf(detail.decisions.flatMap(({ calls }) => calls.map((call) => call.cost ?? 0)));
-  const cohort = allMatches.find(({ matchId }) => matchId === detail.match.id)?.cohort;
 
   return [
     h.div(
@@ -400,7 +399,7 @@ const detailView = (h: H, replay: Replay, detail: MatchDetail, allMatches: Reado
         ),
         h.span(
           [h.Class("k")],
-          [`${cohort === undefined ? "" : `${cohort} · `}seed ${detail.match.seed} · ${fmtTime(detail.match.startedAt)} · ${steps.length} moves · ${fmtUsd(cost)} · `, h.b([h.Class("res")], [resultOf(detail)])],
+          [`seed ${detail.match.seed} · ${fmtTime(detail.match.startedAt)} · ${steps.length} moves · ${fmtUsd(cost)} · `, h.b([h.Class("res")], [resultOf(detail)])],
         ),
       ],
     ),
