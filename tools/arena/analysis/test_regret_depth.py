@@ -32,8 +32,8 @@ class Draw(unittest.TestCase):
         self.assertEqual(rd.draw(self.decisions, {(1, True): 9}, 2, seed=5), rd.draw(self.decisions, {(1, True): 9}, 2, seed=5))
 
 
-def pair(shells_left=2, shot=True, model="m", regret=1.0, deep_regret=1.0):
-    return rd.Pair(shells_left, shot, model, regret, deep_regret, 6, 8, False, False, False, 0.0)
+def pair(shells_left=2, shot=True, model="m", regret=1.0, deep_regret=1.0, limited=False, ordinal=0):
+    return rd.Pair(f"{model}-{ordinal}", ordinal, shells_left, shot, model, regret, deep_regret, 6, 8, limited, False, False, 0.0)
 
 
 class Estimate(unittest.TestCase):
@@ -42,9 +42,23 @@ class Estimate(unittest.TestCase):
         sizes = {(2, True, "a"): 900, (2, True, "b"): 100}
         self.assertAlmostEqual(rd.estimate(sample, lambda p: p.deep_regret, sizes).mean, 1.0)
 
-    def test_ignores_strata_it_has_no_sample_of(self):
+    def test_refuses_a_population_stratum_the_sample_misses_or_holds_once(self):
         sizes = {(2, True, "a"): 10, (2, True, "b"): 1_000_000}
-        self.assertAlmostEqual(rd.estimate([pair(model="a", deep_regret=4.0)], lambda p: p.deep_regret, sizes).mean, 4.0)
+        with self.assertRaises(ValueError):
+            rd.estimate([pair(model="a", ordinal=0), pair(model="a", ordinal=1)], lambda p: p.deep_regret, sizes)
+        with self.assertRaises(ValueError):
+            rd.estimate([pair(model="a", ordinal=0), pair(model="a", ordinal=1), pair(model="b")], lambda p: p.deep_regret, sizes)
+
+    def test_refuses_a_sampled_stratum_outside_the_population(self):
+        with self.assertRaises(ValueError):
+            rd.estimate([pair(model="a", ordinal=0), pair(model="a", ordinal=1), pair(model="b", ordinal=0), pair(model="b", ordinal=1)], lambda p: p.deep_regret, {(2, True, "a"): 10})
+
+    def test_a_domain_across_strata_weights_by_the_domain_members_of_each_stratum(self):
+        """Limited decisions are 90% of stratum a and 10% of stratum b, with regret 0 in a and 10 in b, so their true mean is (90 * 0 + 10 * 10) / 100 = 1."""
+        sizes = {(2, True, "a"): 100, (2, True, "b"): 100}
+        sample = [pair(model=m, ordinal=i, regret=10.0 if m == "b" else 0.0, limited=i < (9 if m == "a" else 1)) for m in "ab" for i in range(10)]
+        limited = rd.estimate(sample, lambda p: p.regret * p.limited, sizes, domain_size=100).mean
+        self.assertAlmostEqual(limited, 1.0)
 
 
 def values(*scores):
@@ -81,15 +95,42 @@ class Pairs(unittest.TestCase):
         )
         self.assertEqual(
             found,
-            [rd.Pair(2, True, "opus", 0.0, 0.0, 6, 8, False, False, False, 0.0), rd.Pair(3, False, "opus", 20.0, 15.0, 3, 6, True, True, True, 15.0)],
+            [rd.Pair("m1", 0, 2, True, "opus", 0.0, 0.0, 6, 8, False, False, False, 0.0), rd.Pair("m1", 1, 3, False, "opus", 20.0, 15.0, 3, 6, True, True, True, 15.0)],
         )
 
-    def test_leaves_out_other_settings_and_decisions_the_production_run_has_not_scored(self):
-        found = self.read(
-            production_rows=[("m1", 0, 6, 20000, values(1, 2), "move 1", 2, 0, 6, 0)],
-            deep_rows=[("m1", 1, 8, 200000, values(1, 2), "move 1", 2, 0, 8, 0), ("m1", 0, 6, 20000, values(1, 2), "move 1", 2, 0, 6, 0)],
-        )
-        self.assertEqual(found, [])
+    def test_ignores_other_settings_but_fails_on_a_deep_row_it_cannot_match(self):
+        production = [("m1", 0, 6, 20000, values(1, 2), "move 1", 2, 0, 6, 0)]
+        other_setting = ("m1", 1, 6, 20000, values(1, 2), "move 1", 2, 0, 6, 0)
+        matched = ("m1", 0, 8, 200000, values(1, 2), "move 1", 2, 0, 8, 0)
+        self.assertEqual(len(self.read(production, [matched, other_setting])), 1)
+        with self.assertRaises(ValueError):
+            self.read(production, [matched, ("m1", 1, 8, 200000, values(1, 2), "move 1", 2, 0, 8, 0)])
+
+    def test_fails_on_a_deep_row_that_was_not_searched(self):
+        with tempfile.TemporaryDirectory() as directory:
+            paths = write_runs(Path(directory), [("m1", 0, 6, 20000, values(1, 2), "move 1", 2, 0, 6, 0)], [("m1", 0, 8, 200000, values(1, 2), "move 1", 2, 0, 8, 0)])
+            sqlite3.connect(paths[0]).execute("UPDATE regret SET status = 'skipped'").connection.commit()
+            with self.assertRaises(ValueError):
+                rd.pairs(*paths)
+
+
+class CheckSample(unittest.TestCase):
+    def test_accepts_exactly_the_drawn_decisions_with_the_production_limit(self):
+        sample = [pair(ordinal=0, limited=True), pair(ordinal=1)]
+        ids = {("m-0", 0), ("m-1", 1)}
+        rd.check_sample(sample, ids, {("m-0", 0): True, ("m-1", 1): False})
+
+    def test_rejects_missing_foreign_and_repeated_decisions_and_a_different_limit(self):
+        sample = [pair(ordinal=0), pair(ordinal=1)]
+        limits = {("m-0", 0): False, ("m-1", 1): False}
+        for expected, found, limit in (
+            ({("m-0", 0), ("m-1", 1), ("m-2", 2)}, sample, limits),
+            ({("m-0", 0)}, sample, limits),
+            ({("m-0", 0), ("m-1", 1)}, [*sample, sample[0]], limits),
+            ({("m-0", 0), ("m-1", 1)}, sample, {**limits, ("m-1", 1): True}),
+        ):
+            with self.assertRaises(ValueError):
+                rd.check_sample(found, expected, limit)
 
 
 if __name__ == "__main__":

@@ -148,31 +148,31 @@ On 38 decisions scored with 256 samples as well, mean regret with 64 minus with 
 
 ## Deeper search
 
-This checks whether regret holds up when the search goes deeper. 40% of the production searches (depth 6, 20,000 nodes) stop on the budget before depth 6. 2,880 agent decisions of the run above were scored again at depth 8 with 200,000 nodes, ten times the budget, under the static reload rule. Each is set beside the production score of the same decision, matched by match and ordinal. The sample covers two-seat matches with no DeepSeek seat and is stratified by shells left in the gun, shot or item move, and model. As in the reload-bias run, the means weight each stratum by its size in the whole run of 125,150 decisions, and the intervals are 95%. The new build rescored 120 of the decisions at depth 6 and 20,000 nodes, and every score, node count and depth matched the production rows. The deep run took 3.3 CPU hours, 4.1 s per decision on average against 0.34 s for production. Both searches use the static leaf, so this tests the horizon only. It does not test the leaf, which the Reload bias section does.
+This checks whether regret holds up when the search goes deeper. 40% of the production searches (depth 6, 20,000 nodes) stop on the budget before depth 6. 2,880 agent decisions of the run above were scored again at depth 8 with 200,000 nodes, ten times the budget, under the static reload rule. Each is set beside the production score of the same decision, matched by match and ordinal. The sample covers two-seat matches with no DeepSeek seat and is stratified by shells left in the gun, shot or item move, and model. As in the reload-bias run, the means weight each stratum by its size in the whole run of 125,150 decisions. The intervals are 95% normal intervals over decisions, stratified, for this fixed run only. They leave out variation between matches, seed blocks and tournaments, so they do not say how the numbers would move on new matches. The new build rescored 120 of the decisions at depth 6 and 20,000 nodes, and every score, node count and depth matched the production rows. The deep run took 3.3 CPU hours, 4.1 s per decision on average against 0.34 s for production. Both searches use the static leaf, so this tests the horizon only. It does not test the leaf, which the Reload bias section does.
 
-1. **The best move changes in 13.0 ± 1.2% of decisions, mostly with 4 or more shells left.**
+1. **The chosen best move's label changes in 13.0 ± 1.2% of decisions, mostly with 4 or more shells left.**
    - With 3 or fewer shells left it changes in 3.8% of decisions, and with 4 or more in 25.0%. With 1 or 2 shells left almost nothing changes, since the reload ends every line within depth 6.
    - Item moves change most: 16% of those with 3 shells left, 29% with 4, 34% with 5 and 37% with 6. Shots with 4 to 6 left change in 11% to 15%.
-   - In 8.9% of decisions the deep search scores the old best move strictly lower than its own best move, by 3.0 points on average. The other changes are ties that now break the other way.
-2. **Mean regret does not move.**
-   - It goes from 2.56 to 2.63 points (+0.07 ± 0.10). Shots change by +0.18 ± 0.12 and item moves by -0.04 ± 0.15. The share of agent moves with zero regret is 64.8% at depth 6 and 66.4% at depth 8.
+   - In 8.9% of decisions the deep search scores the production search's chosen best move strictly lower than its own best move, by 3.0 points on average. In the other 4.1% the old chosen best move ties the deep best, so only the label switched. This compares chosen labels, not the sets of tied best moves, so it does not show whether either set changed.
+2. **Mean regret moves little in this sample.**
+   - It goes from 2.56 to 2.63 points (+0.07 ± 0.10). An interval that holds zero does not show the means are equal. Shots change by +0.18 ± 0.12 and item moves by -0.04 ± 0.15. The share of agent moves with zero regret is 64.8% at depth 6 and 66.4% at depth 8.
    - Single decisions move more than the mean does. 13.4% change by at least a point, 6.6% up and 6.8% down, so they cancel.
-   - No cell by shells left moves outside its interval except shots with 5 left (+0.52 ± 0.38), one of 12 cells. Decisions whose production search stopped on the budget change by +0.38 ± 0.46, and those that reached depth 6 by +0.14 ± 0.16.
-3. **Model order holds.** All eight models keep their rank. Each mean moves by 0.07 points or less, except Haiku 4.5, which rises by 0.51 ± 0.31 from 6.05 to 6.56. The top two are Astra and Opus at 1.09 and 1.12, as close as before.
+   - No cell by shells left moves outside its interval except shots with 5 left (+0.52 ± 0.38), one of 12 cells. Decisions whose production search stopped on the budget change by +0.16 ± 0.23, and those that reached depth 6 by +0.01 ± 0.06. These two means weight each limit status by its own size in each stratum.
+3. **The sample's model order is the same at both depths.** All eight models keep their rank in the point estimates. The intervals overlap for neighbours, so this is no proof that the order is stable: rank uncertainty was not computed. Each mean moves by 0.07 points or less, except Haiku 4.5, which rises by 0.51 ± 0.31 from 6.05 to 6.56. The top two are Astra and Opus at 1.09 and 1.12, as close as before.
 4. **The budget still stops 30% of the searches, most of them with many shells left.** The budget stops 29.9% of the depth 8 searches in the sample, against 40.2% at depth 6.
    - Shots with 1 to 3 shells left are stopped in under 7% of searches, with 4 left in 22.5%, with 5 left in 43.6% and with 6 left in 75.6%. Item moves are stopped in 24% with 3 left, 50% with 4, 84% with 5 and 95% with 6.
    - The searches gain 2.0 decisions of depth on average. With 5 or 6 shells left most still end before depth 8, so those rows compare horizons of about 6 and 7.
 
-**Reading it.** The production mean regrets and the model ranking do not depend on the node budget, so keep depth 6 with 20,000 nodes. A single item move with 4 or more shells left is another matter. Its best move changes in a third of cases under a deeper search, so read its regret as a mean over many decisions, never as a verdict on one.
+**Reading it.** In this fixed run, depth 8 with ten times the budget gives similar mean regrets and the same observed model order as the production run. Depth and budget changed together and the budget still stops 30% of the searches, so this does not separate their effects, show that regret is free of the node budget, or show that the ranking would hold on new matches. Production keeps depth 6 with 20,000 nodes as the cheaper setting, not as a setting shown to be sufficient. A single item move with 4 or more shells left is another matter. Its best move changes in a third of cases under a deeper search, so read its regret as a mean over many decisions, never as a verdict on one.
 
 <!-- regret-depth:start -->
 2,880 decisions scored at depth 8 with 200,000 nodes and at depth 6 with 20,000, drawn from the run's 125,150.
-Over the run the best move changes in 13.0% of decisions, and in 8.9% the deep search scores the old best move strictly lower than its own. Mean regret goes from 2.56 to 2.63 points (+0.07 ± 0.10).
+Over the run the chosen best move's label changes in 13.0% of decisions, and in 8.9% the deep search scores the old chosen best move strictly lower than its own. Mean regret goes from 2.56 to 2.63 points (+0.07 ± 0.10).
 The budget still stops 29.9% of the depth 8 searches, against 40.2% at depth 6.
 
 ### By shells left in the gun
 
-| kind | shells left | decisions | scored | depth 6 limited | depth 8 limited | extra depth | regret at 6 | regret at 8 | 8 minus 6 | best move changed | best move strictly worse at 8 |
+| kind | shells left | decisions | scored | depth 6 limited | depth 8 limited | extra depth | regret at 6 | regret at 8 | 8 minus 6 | best label changed | chosen best strictly worse at 8 |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | shot | 1 | 13,361 | 140 | 0.0% | 0.0% | 2.00 | 1.40 | 1.40 | +0.00 ± 0.00 | 0.0% | 0.0% |
 | shot | 2 | 13,018 | 200 | 2.2% | 0.7% | 2.02 | 6.15 | 6.15 | +0.00 ± 0.00 | 0.0% | 0.0% |
@@ -191,10 +191,10 @@ The budget still stops 29.9% of the depth 8 searches, against 40.2% at depth 6.
 
 ### By how the production search ended
 
-| production search | scored | regret at 6 | regret at 8 | 8 minus 6 | best move changed | depth 8 limited |
+| production search | scored | regret at 6 | regret at 8 | 8 minus 6 | best label changed | depth 8 limited |
 |---|---|---|---|---|---|---|
-| reached depth 6 | 1,445 | 2.49 | 2.63 | +0.14 ± 0.16 | 3.2% | 0.0% |
-| stopped by the budget | 1,435 | 3.01 | 3.39 | +0.38 ± 0.46 | 25.5% | 66.4% |
+| reached depth 6 | 1,445 | 2.75 | 2.75 | +0.01 ± 0.06 | 0.8% | 0.0% |
+| stopped by the budget | 1,435 | 2.27 | 2.43 | +0.16 ± 0.23 | 31.4% | 75.0% |
 
 ### By model
 
@@ -216,8 +216,9 @@ The budget still stops 29.9% of the depth 8 searches, against 40.2% at depth 6.
 - Reloads are leaves: with the default rule a move that empties the gun is valued before the next load is drawn. The expected-deal rule averages over the deal, but still stops at the next choice.
 - The static evaluation's item weights are untrained starting values, so heuristic regrets carry its biases. Read small regrets with care.
 - Regret is a mean over decisions, not over matches. Decisions of one match are not independent, and a config's opponents differ between tournaments. Treat gaps of a few tenths of a point as noise.
+- The intervals in Deeper search cover only the sampled decisions of this fixed run. They do not cover matches, seed blocks, tournaments or future play.
 - A regret of 0 means the chosen move tied the best score at the depth reached, not that it was proven right. Only the 11% of exact rows are.
-- 40% of the searches were stopped by the budget at depth 1 to 5. With four or more shells left most are, so those rows compare shallower searches. A search to depth 8 with ten times the budget leaves the mean regrets and the model order unchanged (Deeper search), but still stops 30% of the time.
+- 40% of the searches were stopped by the budget at depth 1 to 5. With four or more shells left most are, so those rows compare shallower searches. A search to depth 8 with ten times the budget gives similar mean regrets and the same observed model order in a sample of this run (Deeper search), but still stops 30% of the time.
 
 ## Tables
 
