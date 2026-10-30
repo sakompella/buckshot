@@ -91,17 +91,32 @@ const drillView = (h: H, m: ModelStats, seats: ReadonlyArray<SeatFull>, maybeTip
 const ratingView = (h: H, elo: Rating | undefined): ReadonlyArray<Html | string> =>
   elo === undefined ? ["–"] : [`${elo.rating >= 0 ? "+" : ""}${elo.rating.toFixed(0)} `, h.span([h.Class("pm")], [`[${elo.lo.toFixed(0)}, ${elo.hi.toFixed(0)}]`])];
 
-const regretCell = (h: H, m: ModelStats): Html =>
-  h.td(
-    [h.DataAttribute("label", "regret"), h.Title(m.regret === null ? "" : `${m.regret.moves.toLocaleString()} moves · ${fmtPct(m.regret.exactShare)} proven exact`)],
-    [m.regret === null ? "–" : fmtPoints(m.regret.mean)],
-  );
+interface Detail {
+  readonly label: string;
+  readonly title: string;
+  readonly content: ReadonlyArray<Html | string>;
+}
 
-const rowView = (h: H, m: ModelStats, elo: Rating | undefined, item: ItemSummary | undefined, isOpen: boolean, hasRegret: boolean): Html => {
+const detailsOf = (h: H, m: ModelStats, item: ItemSummary | undefined, hasRegret: boolean): ReadonlyArray<Detail> => {
   const { lo, hi } = m.win;
   const moves = sumOf(m.scored.map((seat) => seat.moves ?? 0));
   const cost = sumOf(m.scored.map((seat) => seat.cost ?? 0));
   const favorite = item?.favorite ?? null;
+
+  return [
+    { label: "match wins", title: `${fmtPct(lo)}–${fmtPct(hi)}`, content: [h.b([], [fmtPct(m.winShare)]), " ", h.span([h.Class("pm")], [`${m.win.k.toFixed(m.win.k % 1 ? 1 : 0)}/${m.win.n}`])] },
+    { label: "round wins", title: "", content: [fmtPct(m.roundShare)] },
+    { label: "cash share", title: "", content: [fmtPct(m.potShare)] },
+    ...(hasRegret ? [{ label: "regret", title: m.regret === null ? "" : `${m.regret.moves.toLocaleString()} moves · ${fmtPct(m.regret.exactShare)} proven exact`, content: [m.regret === null ? "–" : fmtPoints(m.regret.mean)] }] : []),
+    { label: "per move", title: "", content: [fmtUsd(moves > 0 ? cost / moves : null)] },
+    { label: "time", title: "", content: [fmtSec(moves > 0 ? sumOf(m.scored.map((seat) => seat.lat ?? 0)) / moves : null)] },
+    { label: "out tok", title: "", content: [fmtCount(m.avgOut)] },
+    { label: "fav", title: favorite === null ? "" : `${favorite.k} of ${favorite.n} legal moves`, content: favorite === null ? ["–"] : [itemIconOf(h, favorite.item), `${favorite.item} `, h.span([h.Class("pm")], [fmtPct(favorite.rate)])] },
+  ];
+};
+
+const rowView = (h: H, m: ModelStats, elo: Rating | undefined, details: ReadonlyArray<Detail>, isOpen: boolean): Html => {
+  const { lo, hi } = m.win;
 
   return h.keyed("tr")(
     m.id,
@@ -109,6 +124,8 @@ const rowView = (h: H, m: ModelStats, elo: Rating | undefined, item: ItemSummary
     [
       h.td([], [h.span([h.Class(`dot ${isClaude(m.model) ? "a" : "o"}`), h.Style({ background: m.color })], []), `${baseName(m.model)} `, h.span([h.Class("eff")], [`[${m.effort}]`])]),
       h.td([h.DataAttribute("label", "round elo")], ratingView(h, elo)),
+      h.td([h.DataAttribute("label", "matches")], [m.scored.length.toLocaleString()]),
+      h.td([h.DataAttribute("label", "cost")], [fmtUsd(m.avgCost)]),
       h.td(
         [h.Class("barcol")],
         [
@@ -118,38 +135,31 @@ const rowView = (h: H, m: ModelStats, elo: Rating | undefined, item: ItemSummary
           ),
         ],
       ),
-      h.td([h.Class("ws"), h.DataAttribute("label", "match wins"), h.Title(`${fmtPct(lo)}–${fmtPct(hi)}`)], [h.b([], [fmtPct(m.winShare)]), " ", h.span([h.Class("pm")], [`${m.win.k.toFixed(m.win.k % 1 ? 1 : 0)}/${m.win.n}`])]),
-      h.td([h.DataAttribute("label", "round wins")], [fmtPct(m.roundShare)]),
-      h.td([h.DataAttribute("label", "cash share")], [fmtPct(m.potShare)]),
-      ...(hasRegret ? [regretCell(h, m)] : []),
-      h.td([h.DataAttribute("label", "cost")], [fmtUsd(m.avgCost)]),
-      h.td([h.DataAttribute("label", "per move")], [fmtUsd(moves > 0 ? cost / moves : null)]),
-      h.td([h.DataAttribute("label", "time")], [fmtSec(moves > 0 ? sumOf(m.scored.map((seat) => seat.lat ?? 0)) / moves : null)]),
-      h.td([h.DataAttribute("label", "out tok")], [fmtCount(m.avgOut)]),
-      h.td(
-        [h.DataAttribute("label", "fav"), h.Title(favorite === null ? "" : `${favorite.k} of ${favorite.n} legal moves`)],
-        favorite === null ? ["–"] : [itemIconOf(h, favorite.item), `${favorite.item} `, h.span([h.Class("pm")], [fmtPct(favorite.rate)])],
-      ),
+      ...details.map(({ label, title, content }) => h.td([h.Class("detail"), h.DataAttribute("label", label), ...(title === "" ? [] : [h.Title(title)])], [...content])),
     ],
   );
 };
 
+const detailsView = (h: H, details: ReadonlyArray<Detail>): Html =>
+  h.dl([h.Class("drillstats")], details.flatMap(({ label, title, content }) => [h.dt([], [label]), h.dd(title === "" ? [] : [h.Title(title)], [...content])]));
+
 const headersOf = (hasRegret: boolean): ReadonlyArray<string> => [
   "Model",
   "Round Elo",
+  "Matches",
+  "Avg cost",
   "",
   "Match wins",
   "Round wins",
   "Cash share",
   ...(hasRegret ? ["Regret"] : []),
-  "Avg cost",
   "Per move",
   "Time / move",
   "Out tok",
   "Favorite item",
 ];
 
-const BAR_COLUMN = 2;
+const BAR_COLUMN = 4;
 
 /** Rows with fewer scored matches than this are faded: their shares swing widely. */
 const FEW_MATCHES = 20;
@@ -202,9 +212,11 @@ export const leaderboardView = (
                 configs.flatMap((m) => {
                   const isOpen = Option.exists(leaderboard.maybeOpen, (open) => open === m.id);
 
+                  const details = detailsOf(h, m, items.get(m.id), hasRegret);
+
                   return [
-                    rowView(h, m, ratings.get(m.key), items.get(m.id), isOpen, hasRegret),
-                    isOpen ? h.keyed("tr")(`drill-${m.id}`, [h.Class("drill")], [h.td([h.Colspan(headers.length)], [drillView(h, m, seats, leaderboard.maybeTip)])]) : h.empty,
+                    rowView(h, m, ratings.get(m.key), details, isOpen),
+                    isOpen ? h.keyed("tr")(`drill-${m.id}`, [h.Class("drill")], [h.td([h.Colspan(headers.length)], [detailsView(h, details), drillView(h, m, seats, leaderboard.maybeTip)])]) : h.empty,
                   ];
                 }),
               ),

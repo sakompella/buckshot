@@ -32,7 +32,7 @@ export const TOUR: ReadonlyArray<TourStep> = [
     anchor: "leaderboards",
     focus: "#leaderboards .lbt thead, #leaderboards .lbt tbody tr:first-child",
     title: "Leaderboard columns",
-    text: "Per config: its Round Elo, one Bradley-Terry rating pooled over every tournament, then match wins with an interval, round wins, cash share, Regret, cost per match and per move, time per move, output tokens and the favourite item. Check the Round Elo intervals before calling a small gap real.",
+    text: "Per config: its Round Elo, one Bradley-Terry rating pooled over every tournament, its matches and cost per match, then match wins with an interval, round wins, cash share, Regret, cost per move, time per move, output tokens and the favourite item. On a phone the row keeps the first four, and a tap shows the rest.",
   },
   {
     anchor: "leaderboards",
@@ -116,7 +116,7 @@ export const TOUR: ReadonlyArray<TourStep> = [
     anchor: "breakdown",
     focus: "#breakdown > div",
     title: "The numbers as tables",
-    text: "The failures, the seats and each config's win share against each opponent model fold into tables at the end. In the heatmap a click on a column head sorts by it, and the small grey number in each cell is the sample behind it.",
+    text: "The failures, the seats and each config's win share against each opponent model fold into tables at the end; a click on a title opens one. Inside the open heatmap a click on a column head sorts by it, and the small grey number in each cell is the sample behind it.",
   },
 ];
 

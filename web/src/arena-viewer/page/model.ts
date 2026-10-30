@@ -9,7 +9,7 @@ export const Group = Schema.Literals(["standings", "watch", "decisions", "health
 
 export type Group = typeof Group.Type;
 
-/** The sections inside the groups, each an in-page anchor; links to them from before the groups still land. */
+/** The sections inside the groups, each an in-page anchor; a link to one the page no longer has lands at its MOVED_TARGETS entry. */
 export const Section = Schema.Literals(["leaderboards", "scatter", "interesting", "matches", "odds", "items", "reliability", "seats", "breakdown"]);
 
 export type Section = typeof Section.Type;
@@ -18,17 +18,24 @@ export const Target = Schema.Union([Group, Section]);
 
 export type Target = typeof Target.Type;
 
+export const MOVED_TARGETS: ReadonlyMap<string, Target> = new Map([
+  ["results", "standings"],
+  ["rounds", "seats"],
+  ["details", "leaderboards"],
+  ["blunders", "interesting"],
+  ["mistakes", "odds"],
+  ["luck", "odds"],
+  ["pressure", "seats"],
+  ["rubbers", "seats"],
+  ["deals", "matches"],
+]);
+
 export const GROUPS: ReadonlyArray<{ readonly group: Group; readonly label: string; readonly sections: ReadonlyArray<Section> }> = [
   { group: "standings", label: "Standings", sections: ["leaderboards", "scatter"] },
   { group: "watch", label: "Matches", sections: ["interesting", "matches"] },
   { group: "decisions", label: "How they play", sections: ["odds", "items"] },
   { group: "health", label: "Run health", sections: ["reliability", "seats", "breakdown"] },
 ];
-
-/** What ratings count: each round as one game, each match's win share, or each player's pot share (its cash over the match's cash). */
-export const Basis = Schema.Literals(["rounds", "matches", "cash"]);
-
-export type Basis = typeof Basis.Type;
 
 export const SeatFull = Schema.Struct({ ...Seat.fields, potShare: Schema.NullOr(Schema.Number) });
 

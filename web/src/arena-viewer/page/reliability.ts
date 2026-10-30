@@ -162,7 +162,7 @@ const tipOf = (h: H, rows: ReadonlyArray<Row>, cell: Model["maybeRateTip"]): Htm
     },
   });
 
-export interface Bar {
+interface Bar {
   readonly value: number;
   readonly lo: number;
   readonly hi: number;
@@ -189,7 +189,7 @@ const barEnd = ({ value, hi }: Bar): number => (Number.isNaN(hi) ? (Number.isNaN
  * One bar per config in table order. The scale and the label column fit `every` row, whatever the filter, so a filter
  * only adds or removes bars.
  */
-export const configBarsView = <R extends { readonly key: string }>(h: H, chartId: string, rows: ReadonlyArray<R>, every: ReadonlyArray<R>, barOf: (row: R) => Bar, tick: (value: number) => string, width: number): Html => {
+const configBarsView = <R extends { readonly key: string }>(h: H, chartId: string, rows: ReadonlyArray<R>, every: ReadonlyArray<R>, barOf: (row: R) => Bar, tick: (value: number) => string, width: number): Html => {
   if (rows.length === 0) return h.div([h.Class("empty")], ["No configs for this filter."]);
 
   const bars = rows.map(barOf);
@@ -240,7 +240,7 @@ export const configBarsView = <R extends { readonly key: string }>(h: H, chartId
 };
 
 /** A rate as a bar: `noun` names what it counts out of, for the tip. */
-export const rateBar = (rate: Rate, scale: number, digits: number, unit: string, noun: string): Bar => {
+const rateBar = (rate: Rate, scale: number, digits: number, unit: string, noun: string): Bar => {
   const shown = (value: number) => `${(value * scale).toFixed(digits)}${unit}`;
   const hasInterval = rate.n > 0 && !isDegenerate(rate);
 

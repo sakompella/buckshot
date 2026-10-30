@@ -7,7 +7,7 @@ import { type Browser, chromium, type Page } from "playwright-core";
 import { Blunders, MatchDetail } from "../src/arena-viewer/api.ts";
 import { anchorId } from "../src/arena-viewer/page/charts.ts";
 import { baseName } from "../src/arena-viewer/page/data.ts";
-import { GROUPS, Section } from "../src/arena-viewer/page/model.ts";
+import { GROUPS, MOVED_TARGETS, Section } from "../src/arena-viewer/page/model.ts";
 import { TOUR } from "../src/arena-viewer/page/tour.ts";
 import { coverageOfMatch, type RegretCoverage, withoutRegret } from "./arena-viewer-regret-coverage.ts";
 
@@ -199,7 +199,19 @@ const checkJumps = async (page: Page, name: string, isTouch: boolean) => {
     expectThat(landed(jumped), `${name}: a link to #${section} lands at ${jumped}`);
   }
 
-  console.log(name, "every section link landed under the bar");
+  for (const [old, target] of MOVED_TARGETS) {
+    await page.evaluate((id) => {
+      location.hash = id;
+    }, old);
+    await settled(page);
+    await settled(page);
+
+    const jumped = await jumpedTo(page, target);
+
+    expectThat(landed(jumped), `${name}: an old link to #${old} lands at ${jumped}`);
+  }
+
+  console.log(name, "every section link, old ones included, landed under the bar");
 };
 
 const yTicks = (page: Page) =>
@@ -743,6 +755,22 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
     await heat(page).locator(".heatscroll").evaluate((element) => element.scrollTo({ left: 200 }));
     await heat(page).screenshot({ path: shot(`${name}-heat`) });
     await page.locator("table.lbt").first().screenshot({ path: shot(`${name}-leaderboard`) });
+
+    if (width < 640) {
+      const tallest = await page.locator("table.lbt tbody tr.row").evaluateAll((rows) => Math.max(...rows.map((row) => row.getBoundingClientRect().height)));
+      const row = page.locator("table.lbt tbody tr.row").first();
+
+      await row.tap();
+      await settled(page);
+
+      const details = await page.locator("table.lbt .drillstats dt").allInnerTexts();
+
+      console.log(name, "tallest leaderboard row", Math.round(tallest), "px | drill-down details", details.join(", "));
+      expectThat(tallest <= 80, `${name}: a leaderboard row is ${Math.round(tallest)}px tall`);
+      expectThat(["match wins", "round wins", "cash share", "per move", "time", "out tok", "fav"].every((label) => details.includes(label)), `${name}: the drill-down lacks a leaderboard detail: ${details.join(", ")}`);
+      await page.locator("table.lbt").first().screenshot({ path: shot(`${name}-leaderboard-open`) });
+      await row.tap();
+    }
   });
   await check("replay", async () => {
     await page.locator(".icard").first().tap();

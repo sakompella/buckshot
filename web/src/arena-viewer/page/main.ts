@@ -8,7 +8,7 @@ import { withPotShares } from "./data.ts";
 import { derive } from "./derived.ts";
 import { picksOf } from "./interesting.ts";
 import { MORE_ROWS } from "./matches.ts";
-import { type Filter, Group, Message, Model, Target, type Viewport } from "./model.ts";
+import { type Filter, Group, Message, Model, MOVED_TARGETS, Target, type Viewport } from "./model.ts";
 import { replayIndex, stepsOf } from "./replay.ts";
 import { PlaceTour, TOUR, tourKeyMessage } from "./tour.ts";
 import { stickyHeight, view } from "./view.ts";
@@ -50,7 +50,11 @@ const LoadMatch = Command.define("LoadMatch", {
     ),
 });
 
-const targetOfHash = (hash: string): Option.Option<Target> => Schema.decodeUnknownOption(Target)(hash.replace(/^#/, ""));
+const targetOfHash = (hash: string): Option.Option<Target> => {
+  const id = hash.replace(/^#/, "");
+
+  return Option.orElse(Schema.decodeUnknownOption(Target)(id), () => Option.fromUndefinedOr(MOVED_TARGETS.get(id)));
+};
 
 const scrollToTarget = (id: Target) => {
   const target = document.getElementById(id);
