@@ -26,7 +26,7 @@ The prose summary written for the earlier 2,471-match scope is removed. Its figu
 **Intervals.** Every rate is numerator/denominator with a 95% percentile interval from 2,000 resamples of seed blocks (`matches.seed_block_id`) within the row, never of single matches or moves. The resampler is seeded, so a rerun prints the same intervals. For consistency and agreement, the interval is over pairs of distinct decisions: a pair weighs the product of its two blocks' resample counts, and a decision never pairs with its own copy. Without that, a block drawn twice would agree with itself. The non-modal share has no interval for that reason.
 
 **Checks.**
-- On all 112,548 non-forced decisions of the 2,244 replay-validated matches, the true gun was one of the orders the player's log allows. The true gun was read only for this check and is not stored. Every chamber the player's log called certain was right. The previous build (2,184 matches) was verified in full. For the rebuild, the verify ran on a 200-match sample.
+- On all 130,000 non-forced decisions of the 2,596 replay-validated matches of the 2026-10-30 snapshot (`--verify`, 29 minutes), the true gun was one of the orders the player's log allows (0 outside), and every chamber the log called certain was right (0 wrong). The true gun was read only for this check and is not stored. Earlier builds were verified the same way on their own scope.
 - The item ledger agreed with the board's slots at every decision of every match, with no contradictions.
 - `web/test/knowledge.test.ts` checks hand-computed histories:
   - a phone clue keeping its offset through two shots;
