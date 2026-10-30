@@ -217,6 +217,11 @@ body:has(.overlay) { overflow: hidden; }
 .modal details.fold > summary::-webkit-details-marker { display: none; }
 .modal details.fold > summary::before { content: "▸"; display: inline-block; width: 1em; color: var(--dim); }
 .modal details.fold[open] > summary::before { content: "▾"; }
+.cands ol { list-style: none; margin: 4px 0; padding: 0; }
+.cands .cand { display: flex; gap: 8px; align-items: baseline; padding: 3px 0; border-bottom: 1px solid var(--line); }
+.cands .cand .label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.cands .cand .pct { font-variant-numeric: tabular-nums; }
+.cands .cand.chosen { font-weight: bold; }
 
 /* every model move, a bounded list that scrolls on its own */
 .mright .legend { font-size: 11.5px; margin-top: 8px; }
