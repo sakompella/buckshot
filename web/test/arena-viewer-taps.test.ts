@@ -8,7 +8,6 @@ interface Point {
   readonly y: number;
 }
 
-/** Whether `point` is inside the convex polygon `cell`: on the same side of every edge. */
 const isInside = (cell: ReadonlyArray<Point>, point: Point): boolean => {
   const sides = cell.map((from, index) => {
     const to = cell[(index + 1) % cell.length] ?? from;
@@ -21,7 +20,6 @@ const isInside = (cell: ReadonlyArray<Point>, point: Point): boolean => {
 
 const distance = (a: Point, b: Point): number => Math.hypot(a.x - b.x, a.y - b.y);
 
-// A tap picks the nearest point within reach, and no point beyond it: the cells never overlap.
 test("a tap lands in the cell of the nearest point within reach, and in no other cell", () => {
   const random = rng(7);
 

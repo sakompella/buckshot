@@ -10,13 +10,8 @@ import { tableView } from "./table.ts";
 
 type H = HtmlBuilder<Message>;
 
-// The replay: the table before the chosen move, what that move did, health through the match and every model move.
-// The evaluator's numbers, the model's reasoning and the same-seed matches stay folded until opened.
-
-/** The model moves a replay steps through: forced moves are left out. */
 export const stepsOf = (detail: MatchDetail): ReadonlyArray<Step> => detail.decisions.filter(({ byWhom }) => byWhom !== "forced");
 
-/** The shell a move fired, if it was a shot. */
 export const shotOf = (step: Step): "live" | "blank" | null => {
   const shot = / shot [^:]*: (live|blank)/.exec(step.outcome.join(" "));
 
@@ -69,7 +64,6 @@ const MINOR_REGRET = 2;
 
 const TURNING_POINTS = 3;
 
-/** The indexes of the moves that gave up the most round win chance, biggest first; none below the blunder line. */
 export const turningPoints = (steps: ReadonlyArray<{ readonly regret: { readonly points: number } | null }>, count = TURNING_POINTS): ReadonlyArray<number> =>
   steps
     .flatMap((step, index) => (step.regret !== null && step.regret.points >= BIG_REGRET ? [{ index, points: step.regret.points }] : []))
@@ -94,7 +88,6 @@ const resultOf = (detail: MatchDetail): string => {
   return winner === undefined ? "split" : `${labelOf(keyOf(winner))} wins`;
 };
 
-/** Each player's short name, the model alone, unless two seats share a model and need their efforts to tell apart. */
 const shortNamesOf = (detail: MatchDetail): ReadonlyMap<string, string> => {
   const bases = detail.seats.map(({ model }) => baseName(model));
 
@@ -138,7 +131,6 @@ const healthView = (h: H, detail: MatchDetail, steps: ReadonlyArray<Step>, at: n
     );
   });
 
-  // A ring on the mover's line for each blunder, bigger for a bigger one; the turning points are filled.
   const turning = turningPoints(steps);
 
   const blunders = steps.flatMap((step, index) => {
@@ -157,7 +149,6 @@ const healthView = (h: H, detail: MatchDetail, steps: ReadonlyArray<Step>, at: n
     ];
   });
 
-  // One click target per move, so a click anywhere on the chart picks the nearest move.
   const targets = steps.map((_step, index) => {
     const from = index === 0 ? 0 : x.at(index - 0.5);
     const to = index === steps.length - 1 ? width : x.at(index + 0.5);
@@ -198,7 +189,6 @@ const healthView = (h: H, detail: MatchDetail, steps: ReadonlyArray<Step>, at: n
   );
 };
 
-/** The biggest blunders of the match, each a jump to its move. */
 const turningPointsView = (h: H, detail: MatchDetail, names: ReadonlyMap<string, string>, steps: ReadonlyArray<Step>, at: number): Html => {
   const turning = turningPoints(steps);
 
@@ -254,9 +244,14 @@ const boardView = (h: H, detail: MatchDetail, steps: ReadonlyArray<Step>, step: 
   });
 };
 
-// The chosen row holds an empty marker that mounts when the row is chosen, so mounting is when to bring the row into
-// view; the row itself stays, and keeps keyboard focus. Only the move list scrolls: on a phone the modal scrolls too,
-// and moving it would take the table out of sight at every step.
+const scrollListToRow = (list: Element, row: Element): void => {
+  const [rowBox, listBox] = [row.getBoundingClientRect(), list.getBoundingClientRect()];
+  const header = list.querySelector(".roundh")?.getBoundingClientRect().height ?? 0;
+
+  if (rowBox.top < listBox.top + header) list.scrollTop -= listBox.top + header - rowBox.top;
+  else if (rowBox.bottom > listBox.bottom) list.scrollTop += rowBox.bottom - listBox.bottom;
+};
+
 const ScrollStepIntoView = Mount.define("ScrollStepIntoView", {
   messages: [Message.CompletedStepScroll],
   execute: ({ element }) =>
@@ -264,13 +259,7 @@ const ScrollStepIntoView = Mount.define("ScrollStepIntoView", {
       const list = element.closest(".moves");
       const chosen = element.closest(".step");
 
-      if (list !== null && chosen !== null) {
-        const [row, box] = [chosen.getBoundingClientRect(), list.getBoundingClientRect()];
-        const header = list.querySelector(".roundh")?.getBoundingClientRect().height ?? 0;
-
-        if (row.top < box.top + header) list.scrollTop -= box.top + header - row.top;
-        else if (row.bottom > box.bottom) list.scrollTop += row.bottom - box.bottom;
-      }
+      if (list !== null && chosen !== null) scrollListToRow(list, chosen);
 
       return Message.CompletedStepScroll();
     }),
@@ -305,7 +294,6 @@ const regretSummary = (regret: MoveRegret): string => {
   return regret.points > 0 ? `Within ${fmtPoints(regret.points)} points of the evaluator's best move.` : "As good as the evaluator's best move.";
 };
 
-/** What the chosen move did, then the evaluator's numbers and the model's calls, each folded. */
 const selectedView = (h: H, detail: MatchDetail, step: Step, names: ReadonlyMap<string, string>): Html => {
   const { regret } = step;
   const shot = shotOf(step);
@@ -365,7 +353,6 @@ const stepView = (h: H, detail: MatchDetail, names: ReadonlyMap<string, string>,
   );
 };
 
-/** Every model move, under a heading per round that says who won it. */
 const movesView = (h: H, detail: MatchDetail, names: ReadonlyMap<string, string>, steps: ReadonlyArray<Step>, at: number): Html =>
   h.div(
     [h.Class("moves"), h.AriaLabel("Moves")],

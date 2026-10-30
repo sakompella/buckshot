@@ -6,19 +6,15 @@ import type { Message } from "./model.ts";
 
 type H = HtmlBuilder<Message>;
 
-// Where the money went: every config's share of the spend, as one bar and a ranking of the biggest.
-
 export interface Spend {
   readonly key: string;
   readonly model: string;
   readonly label: string;
   readonly color: string;
   readonly cost: number;
-  /** Of the spend of all the configs given. */
   readonly share: number;
 }
 
-/** Each config that cost anything, biggest first, with its share of the total. */
 export const spendOf = (stats: ReadonlyArray<Pick<ModelStats, "key" | "model" | "label" | "color" | "totalCost">>): ReadonlyArray<Spend> => {
   const paid = stats.filter(({ totalCost }) => totalCost > 0);
   const total = sumOf(paid.map(({ totalCost }) => totalCost));

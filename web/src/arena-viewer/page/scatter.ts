@@ -15,20 +15,15 @@ type H = HtmlBuilder<Message>;
 // both lower on the x axis and higher rated (or ranked).
 
 interface Axis {
-  /** The switch's label, and the chart title's first word. */
   readonly label: string;
   readonly axisLabel: string;
   readonly isLog: boolean;
   /** A config's place on the axis, or null with nothing to place: no cost, tokens or moves, or no searched move. */
   readonly valueOf: (m: ModelStats) => number | null;
-  /** The crosshair's reading. */
   readonly format: (value: number) => string;
   readonly tick: (value: number) => string;
-  /** The tooltip's line for a point. */
   readonly perMatch: (value: number) => string;
 }
-
-// TAP CELLS
 
 interface Spot {
   readonly x: number;
@@ -118,14 +113,11 @@ const axisOptions = (hasRegret: boolean): ReadonlyArray<readonly [ScatterAxis, s
 
 interface Point {
   readonly m: ModelStats;
-  /** The x axis value. */
   readonly x: number;
   readonly rating: number;
-  /** The place, 1 first (see Derived.ranks). */
   readonly rank: number;
 }
 
-/** Higher is better on either ranking. */
 const scoreOf = (point: Point, ranking: Ranking): number => (ranking === "elo" ? point.rating : -point.rank);
 
 const dominates = (other: Point, point: Point, ranking: Ranking) =>
@@ -299,7 +291,6 @@ const layoutOf = memoLast((points: ReadonlyArray<Point>, width: number, scatterA
 const textAt = (h: H, x: number, y: number, anchor: string, style: Readonly<Record<string, string>>, text: string): Html =>
   h.text([h.X(`${x}`), h.Y(`${y}`), h.TextAnchor(anchor), h.Style(style)], [text]);
 
-/** The scatter card's chart, `width` wide. */
 export const scatterView = (
   h: H,
   stats: ReadonlyArray<ModelStats>,
