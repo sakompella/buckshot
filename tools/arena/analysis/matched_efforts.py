@@ -1,35 +1,39 @@
 #!/usr/bin/env python3
-"""Do effort gains survive matching on the opponent? Round win rates of one model's efforts against the same external configs.
+"""Coverage and sensitivity of effort comparisons: round win rates of one model's efforts against the same external configs.
 
 Within each model, every effort is compared with the reference effort (medium) in three layers, each on its own support:
-pooled (every external match of either effort), common opponents (only opponent configs both efforts faced, equal weight per
-opponent config, so both efforts are scored on the same mix), and strict blocks (only the same opponent config, seed and seat
-position in both efforts, one paired difference per block). A cell nobody played is left out, never read as 0.
-Round winners come from by_round.py, so rounds are primary and match win shares secondary. Intervals resample seed blocks (strict
-layer: seeds of one opponent) within each opponent config and appear only when there are at least MIN_UNITS of them.
-Games between two efforts of one model and games with a DeepSeek seat are left out. The database is opened read-only. With --doc
-FILE the tables replace the text between the matched-efforts markers of that file.
+pooled (every external match of either effort), common opponents (only opponent configs both efforts faced in at least
+MIN_MATCHES matches, equal weight per opponent config, so both efforts are scored on the same mix), and strict blocks (the same
+opponent config, seed and seat position in both efforts; pairs are averaged per opponent, then equally over opponents). A cell
+nobody played is left out, never read as 0. Rounds are primary (round winners come from by_round.py), match win shares secondary.
+The comparison is run on every scored match and again on the matches that started at or after REQUEST_CHANGE, so each period's
+ratings, counts and coverage describe only that period. Intervals resample seeds, jointly across opponents and both efforts, and
+appear only when each effort has at least MIN_UNITS distinct seeds in the support. Games between two efforts of one model and
+games with a DeepSeek seat are left out. The database is opened read-only. With --doc FILE the tables replace the text between the
+matched-efforts markers of that file.
 
-    python3 tools/arena/analysis/matched_efforts.py [--db PATH] [--draws 2000] [--since ISO] [--doc docs/arena/analysis/matched-efforts.md]
+    python3 tools/arena/analysis/matched_efforts.py [--db PATH] [--draws 2000] [--doc docs/arena/analysis/matched-efforts.md]
 """
 
 import argparse
 import random
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Callable
 
 import boot
 import bt
 import by_round
-from fmt import pct, pp, signed, table
+from fmt import pp, signed, table
 from load import DB, SKIPPED_MODEL, connect
 
 START, END = "<!-- matched-efforts:start -->", "<!-- matched-efforts:end -->"
 
 REFERENCE = "medium"
 MIN_MATCHES = 2  # matches per effort and opponent config before the config counts as common support
-MIN_UNITS = 20  # independent seed blocks (strict layer: seeds) before an interval is shown
+MIN_UNITS = 20  # distinct seeds in each effort's support before an interval is shown
+REQUEST_CHANGE = datetime(2026, 10, 16, 14, 48, 44, tzinfo=timezone.utc)  # commit time of the change to the requests each model is sent: reasoning summary mode and, for Sonnet at off, the thinking type
 EFFORTS = ("off", "minimal", "low", "medium", "high", "xhigh", "max")
 
 
@@ -45,8 +49,7 @@ class Seat:
     """One seat of one scored match. `rounds` says per round whether this seat won it, or is None when the winners cannot be read."""
 
     match: str
-    block: str
-    started: str
+    started: datetime
     seed: int
     position: int
     focal: Config
@@ -57,9 +60,8 @@ class Seat:
 
 @dataclass(frozen=True)
 class Scored:
-    """A seat's contribution to one rate: `num` over `den`, from one seed block and one strict key."""
+    """A seat's contribution to one rate: `num` over `den`, from one seed and seat position."""
 
-    block: str
     key: tuple[int, int]  # seed, position
     num: float
     den: int
@@ -86,31 +88,42 @@ def rate(units: list[Scored]) -> float:
 
 # ---- loading
 
-def load_seats(db, since: str = "") -> tuple[list[Seat], int]:
-    """Both seats of every scored match without a DeepSeek seat that started at or after `since`, and how many DeepSeek matches were left out."""
+def parse_time(text: str) -> datetime:
+    """A stored or given time with its offset; a time without one is an error, not a guess."""
+    parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        raise ValueError(f"time without an offset: {text}")
+    return parsed
+
+
+def load_seats(db) -> tuple[list[Seat], int]:
+    """Both seats of every scored match without a DeepSeek seat, and how many DeepSeek matches were left out."""
     cash: dict[str, dict[str, float]] = defaultdict(dict)
     rows = db.execute(
-        """SELECT s.match_id, m.seed_block_id, m.started_at, m.seed, s.position, s.player, s.win_share, s.cash, e.model, e.effort, e.endpoint_category
+        """SELECT s.match_id, m.started_at, m.seed, s.position, s.player, s.win_share, s.cash, e.model, e.effort, e.endpoint_category
            FROM match_seats s JOIN entrants e ON e.id = s.entrant_id JOIN matches m ON m.id = s.match_id
-           WHERE m.status = 'completed' AND m.started_at >= ? ORDER BY s.match_id, s.position""",
-        (since,),
+           WHERE m.status = 'completed' ORDER BY s.match_id, s.position"""
     ).fetchall()
     by_match: dict[str, list[tuple]] = defaultdict(list)
     for row in rows:
         by_match[row[0]].append(row)
-        cash[row[0]][row[5]] = row[7]
+        cash[row[0]][row[4]] = row[6]
     lines = by_round.public_lines(db)
     seats, skipped = [], 0
     for match, pair in by_match.items():
-        if any(SKIPPED_MODEL in row[8] for row in pair):
+        if any(SKIPPED_MODEL in row[7] for row in pair):
             skipped += 1
             continue
         winners = by_round.round_winners(lines.get(match, []), cash[match])
-        configs = [Config(row[8], row[9], row[10]) for row in pair]
+        configs = [Config(row[7], row[8], row[9]) for row in pair]
         for row, focal, opponent in zip(pair, configs, reversed(configs)):
-            rounds = None if winners is None else tuple(winners[n] == row[5] for n in sorted(winners))
-            seats.append(Seat(match, row[1], row[2], row[3], row[4], focal, opponent, row[6], rounds))
+            rounds = None if winners is None else tuple(winners[n] == row[4] for n in sorted(winners))
+            seats.append(Seat(match, parse_time(row[1]), row[2], row[3], focal, opponent, row[5], rounds))
     return seats, skipped
+
+
+def since(seats: list[Seat], start: datetime) -> list[Seat]:
+    return [s for s in seats if s.started >= start]
 
 
 # ---- layers
@@ -124,7 +137,7 @@ def arms(seats: list[Seat], metric: Metric) -> dict[Config, Cells]:
     out: dict[Config, Cells] = defaultdict(lambda: defaultdict(list))
     for seat in external(seats):
         if (value := metric(seat)) is not None and value[1] > 0:
-            out[seat.focal][seat.opponent].append(Scored(seat.block, (seat.seed, seat.position), *value))
+            out[seat.focal][seat.opponent].append(Scored((seat.seed, seat.position), *value))
     return out
 
 
@@ -136,44 +149,49 @@ def equal_configs(support: set[Config]) -> dict[Config, float]:
     return {o: 1 / len(support) for o in support}
 
 
-def equal_models(support: set[Config]) -> dict[Config, float]:
-    models = {o.model for o in support}
-    return {o: 1 / len(models) / sum(p.model == o.model for p in support) for o in support}
-
-
-def medium_opponents(support: set[Config]) -> dict[Config, float]:
-    return equal_configs({o for o in support if o.effort == REFERENCE}) if any(o.effort == REFERENCE for o in support) else {}
-
-
-MIXES = {"config": equal_configs, "model": equal_models, "medium opponents": medium_opponents}
-
-
 def standardized(cells: Cells, weights: dict[Config, float]) -> float:
     return sum(w * rate(cells[o]) for o, w in weights.items())
 
 
-def blocks_of(units: list[Scored]) -> list[list[Scored]]:
-    out: dict[str, list[Scored]] = defaultdict(list)
-    for u in units:
-        out[u.block].append(u)
-    return list(out.values())
+def seeds_of(units: list[Scored]) -> set[int]:
+    return {u.key[0] for u in units}
+
+
+def seed_draws(seeds: set[int], rng: random.Random, draws: int):
+    """Resamples of the seeds: how often each is drawn, so one seed counts the same in every cell and both efforts."""
+    ordered = sorted(seeds)
+    for _ in range(draws):
+        yield Counter(rng.choices(ordered, k=len(ordered)))
+
+
+def interval_of(replicates: list[float], draws: int) -> tuple[float, float] | None:
+    """The central 95%, when at least half the resamples left every cell with data."""
+    return boot.interval(replicates) if len(replicates) * 2 >= draws else None
 
 
 def common_interval(a: Cells, b: Cells, weights: dict[Config, float], rng: random.Random, draws: int) -> tuple[float, float] | None:
-    by_arm = [{o: blocks_of(cells[o]) for o in weights} for cells in (a, b)]
-    if min(sum(len(v) for v in arm.values()) for arm in by_arm) < MIN_UNITS:
+    units = {o: (a[o], b[o]) for o in weights}
+    if min(len(seeds_of([u for pair in units.values() for u in pair[arm]])) for arm in (0, 1)) < MIN_UNITS:
         return None
+    all_seeds = seeds_of([u for pair in units.values() for arm in pair for u in arm])
 
-    def resampled(blocks: list[list[Scored]]) -> float:
-        return rate([u for _ in blocks for u in rng.choice(blocks)])
+    def resampled(cell: list[Scored], count: Counter) -> float | None:
+        den = sum(count[u.key[0]] * u.den for u in cell)
+        return sum(count[u.key[0]] * u.num for u in cell) / den if den else None
 
-    return boot.interval([sum(w * (resampled(by_arm[0][o]) - resampled(by_arm[1][o])) for o, w in weights.items()) for _ in range(draws)])
+    replicates = []
+    for count in seed_draws(all_seeds, rng, draws):
+        parts = [(w, resampled(units[o][0], count), resampled(units[o][1], count)) for o, w in weights.items()]
+        if all(x is not None and y is not None for _, x, y in parts):
+            replicates.append(sum(w * (x - y) for w, x, y in parts))
+    return interval_of(replicates, draws)
 
 
 @dataclass(frozen=True)
 class Pooled:
     n: int
     n_ref: int
+    seeds: int  # distinct seeds of the effort's matches
     rate: float
     rate_ref: float
 
@@ -181,16 +199,13 @@ class Pooled:
 @dataclass(frozen=True)
 class Common:
     opponents: int
-    models: int
     n: int
     n_ref: int
-    empirical: float  # count weighted over the common opponents: each effort has its own mix, so not comparable
-    empirical_ref: float
+    seeds: int  # distinct seeds of the effort's matches on the common opponents
     rate: float  # equal weight per opponent config
     rate_ref: float
     interval: tuple[float, float] | None
-    mixes: dict[str, float | None]  # difference under the other weightings; None where the mix has no opponent
-    outside: int  # matches against opponents outside the common support, not counted above
+    outside: int  # the effort's matches against opponents outside the common support, not counted above
     outside_ref: int
 
 
@@ -208,7 +223,7 @@ class Strict:
 
 def pooled(a: Cells, b: Cells) -> Pooled | None:
     flat = lambda cells: [u for units in cells.values() for u in units]
-    return Pooled(len(flat(a)), len(flat(b)), rate(flat(a)), rate(flat(b))) if flat(a) and flat(b) else None
+    return Pooled(len(flat(a)), len(flat(b)), len(seeds_of(flat(a))), rate(flat(a)), rate(flat(b))) if flat(a) and flat(b) else None
 
 
 def common(a: Cells, b: Cells, rng: random.Random, draws: int) -> Common | None:
@@ -217,11 +232,10 @@ def common(a: Cells, b: Cells, rng: random.Random, draws: int) -> Common | None:
         return None
     flat = lambda cells: [u for o in support for u in cells[o]]
     weights = equal_configs(support)
-    mixes = {name: (standardized(a, w) - standardized(b, w) if (w := mix(support)) else None) for name, mix in MIXES.items() if name != "config"}
     outside = lambda cells: sum(len(u) for o, u in cells.items() if o not in support)
     return Common(
-        len(support), len({o.model for o in support}), len(flat(a)), len(flat(b)), rate(flat(a)), rate(flat(b)),
-        standardized(a, weights), standardized(b, weights), common_interval(a, b, weights, rng, draws), mixes, outside(a), outside(b),
+        len(support), len(flat(a)), len(flat(b)), len(seeds_of(flat(a))), standardized(a, weights), standardized(b, weights),
+        common_interval(a, b, weights, rng, draws), outside(a), outside(b),
     )
 
 
@@ -234,27 +248,32 @@ def key_rates(units: list[Scored]) -> dict[tuple[int, int], float]:
 
 
 def strict(a: Cells, b: Cells, rng: random.Random, draws: int) -> Strict | None:
-    """Paired differences per (opponent, seed, position), averaged within an opponent seed, then equally over opponents."""
-    diffs: dict[Config, dict[int, list[float]]] = {}
+    """Paired differences per (opponent, seed, position), averaged within an opponent, then equally over opponents."""
+    pairs: list[tuple[Config, int, float]] = []
     for o in a.keys() & b.keys():
         ra, rb = key_rates(a[o]), key_rates(b[o])
-        for key in ra.keys() & rb.keys():
-            diffs.setdefault(o, {}).setdefault(key[0], []).append(ra[key] - rb[key])
-    if not diffs:
+        pairs += [(o, key[0], ra[key] - rb[key]) for key in ra.keys() & rb.keys()]
+    if not pairs:
         return None
-    mean = lambda xs: sum(xs) / len(xs)
-    flat = lambda by_seed: [d for ds in by_seed.values() for d in ds]
-    estimate = lambda units: mean([mean([d for ds in by_seed for d in ds]) for by_seed in units.values()])
-    units = {o: list(by_seed.values()) for o, by_seed in diffs.items()}
-    all_diffs = [d for by_seed in diffs.values() for d in flat(by_seed)]
-    seeds = sum(len(u) for u in units.values())
+    opponents = {o for o, _, _ in pairs}
+
+    def estimate(count: Counter | None) -> float | None:
+        means = []
+        for o in opponents:
+            weighted = [(1 if count is None else count[seed], d) for p, seed, d in pairs if p == o]
+            total = sum(w for w, _ in weighted)
+            if not total:
+                return None
+            means.append(sum(w * d for w, d in weighted) / total)
+        return sum(means) / len(means)
+
+    seeds = {seed for _, seed, _ in pairs}
     interval = None
-    if seeds >= MIN_UNITS:
-        interval = boot.interval([estimate({o: [rng.choice(u) for _ in u] for o, u in units.items()}) for _ in range(draws)])
-    return Strict(
-        len(all_diffs), len(diffs), seeds, estimate(units), interval,
-        sum(d > 0 for d in all_diffs), sum(d == 0 for d in all_diffs), sum(d < 0 for d in all_diffs),
-    )
+    if len(seeds) >= MIN_UNITS:
+        replicates = [e for count in seed_draws(seeds, rng, draws) if (e := estimate(count)) is not None]
+        interval = interval_of(replicates, draws)
+    diffs = [d for _, _, d in pairs]
+    return Strict(len(pairs), len(opponents), len(seeds), estimate(None), interval, sum(d > 0 for d in diffs), sum(d == 0 for d in diffs), sum(d < 0 for d in diffs))
 
 
 @dataclass(frozen=True)
@@ -264,7 +283,7 @@ class Row:
     pooled: Pooled | None
     common: Common | None
     strict: Strict | None
-    elo: float | None  # pooled Bradley-Terry rating difference to the reference, from every scored match
+    elo: float | None  # Bradley-Terry rating difference to the reference, fitted on the same period's matches
 
 
 def compare(seats: list[Seat], metric: Metric, elo: dict[tuple[str, str], float], draws: int, seed: int = 0) -> list[Row]:
@@ -285,7 +304,7 @@ def compare(seats: list[Seat], metric: Metric, elo: dict[tuple[str, str], float]
 # ---- rendering
 
 def ratings(seats: list[Seat]) -> dict[tuple[str, str], float]:
-    """Pooled Bradley-Terry rating (Elo) of each model and effort over every scored match, fitted as leaderboard.py does but without its cohort labels."""
+    """Bradley-Terry rating (Elo) of each model and effort over the given seats, fitted as leaderboard.py does but without its cohort labels."""
     cells: bt.Cells = {}
     for seat in seats:
         if seat.position == 1:
@@ -309,7 +328,7 @@ def strict_text(s: Strict | None) -> str:
 def common_text(c: Common | None) -> str:
     if c is None:
         return "none"
-    return f"{pp(c.rate - c.rate_ref)}{interval_text(c.interval)} ({c.opponents} configs, {c.n:,}/{c.n_ref:,})"
+    return f"{pp(c.rate - c.rate_ref)}{interval_text(c.interval)} ({c.opponents} configs, {c.n:,}/{c.n_ref:,} matches, {c.seeds} seeds; {c.outside:,}/{c.outside_ref:,} outside)"
 
 
 def effort_table(rows: list[Row]) -> str:
@@ -317,74 +336,43 @@ def effort_table(rows: list[Row]) -> str:
         p = r.pooled
         return [
             r.model, r.effort,
-            "-" if p is None else f"{pp(p.rate - p.rate_ref)} ({p.n:,}/{p.n_ref:,})",
+            "-" if p is None else f"{pp(p.rate - p.rate_ref)} ({p.n:,}/{p.n_ref:,} matches, {p.seeds} seeds)",
             "-" if r.elo is None else signed(r.elo),
             common_text(r.common), strict_text(r.strict),
         ]
 
-    header = ["model", "effort", "pooled diff (matches)", "pooled rating diff (Elo)", "common opponents diff (matches)", "strict blocks"]
+    header = ["model", "effort", "pooled diff", "rating diff (Elo)", "common opponents diff", "strict blocks diff"]
     return table(header, [cells(r) for r in rows])
 
 
-def support_table(rows: list[Row]) -> str:
-    def cells(r: Row) -> list[str]:
-        c = r.common
-        if c is None:
-            return [r.model, r.effort, "-", "-", "-", "-"]
-        mixes = " / ".join("-" if v is None else pp(v) for v in c.mixes.values())
-        return [r.model, r.effort, f"{pct(c.empirical)} vs {pct(c.empirical_ref)}", f"{pct(c.rate)} vs {pct(c.rate_ref)}", mixes, f"{c.outside:,}/{c.outside_ref:,}"]
-
-    header = ["model", "effort", "count-weighted rates on common opponents", "equal-config rates", f"diff by weighting: {' / '.join(k for k in MIXES if k != 'config')}", "matches outside the common support"]
-    return table(header, [cells(r) for r in rows])
-
-
-def coverage(seats: list[Seat], skipped: int) -> str:
+def coverage(seats: list[Seat]) -> str:
     matches = {s.match for s in seats}
     same = {s.match for s in seats if s.focal.model == s.opponent.model}
     unreadable = {s.match for s in seats if s.rounds is None}
     empty = {s.match for s in seats if s.rounds == ()}
     return (
-        f"{len(matches) + skipped:,} scored matches; {skipped:,} with a DeepSeek seat, {len(same):,} between two efforts of one model "
-        f"and {len(unreadable):,} with unreadable round winners (and {len(empty):,} with no rounds) are left out of the layers they cannot enter; "
-        f"{len(matches) - len(same):,} external matches remain."
+        f"{len(matches):,} scored matches, of which {len(same):,} are between two efforts of one model and {len(matches) - len(same):,} are external. "
+        f"{len(unreadable):,} have unreadable round winners and {len(empty):,} have no rounds; they stay out of the round layers."
     )
 
 
-def by_effort(rows: list[Row]) -> str:
-    """Per effort, the models' differences averaged with equal weight per model, and how many models are positive."""
-    out = []
-    for effort in EFFORTS:
-        group = [r for r in rows if r.effort == effort]
-        layers = {
-            "pooled": [r.pooled.rate - r.pooled.rate_ref for r in group if r.pooled],
-            "common": [r.common.rate - r.common.rate_ref for r in group if r.common],
-            "strict": [r.strict.diff for r in group if r.strict],
-        }
-        if group:
-            out.append([effort, *(f"{pp(sum(v) / len(v))} ({sum(x > 0 for x in v)}/{len(v)} up)" if v else "-" for v in layers.values())])
-    return table(["effort", "pooled", "common opponents", "strict blocks"], out)
-
-
-def signs(rows: list[Row]) -> str:
-    """How often the matched layers keep the sign of the pooled difference."""
-    def agree(layer) -> str:
-        pairs = [(r.pooled.rate - r.pooled.rate_ref, d) for r in rows if r.pooled and (d := layer(r)) is not None]
-        return f"{sum(x * y > 0 for x, y in pairs)} of {len(pairs)}"
-
-    intervals = sum(1 for r in rows for x in (r.common, r.strict) if x is not None and x.interval is not None)
+def chronology(seats: list[Seat]) -> str:
+    """External seats before and after REQUEST_CHANGE, medium against the other efforts."""
+    counts = Counter((s.focal.effort == REFERENCE, s.started >= REQUEST_CHANGE) for s in external(seats))
     return (
-        f"{len(rows)} effort comparisons. Sign kept from the pooled difference: common opponents {agree(lambda r: r.common and r.common.rate - r.common.rate_ref)}, "
-        f"strict blocks {agree(lambda r: r.strict and r.strict.diff)}. Intervals shown: {intervals}."
+        f"External seats at {REFERENCE}: {counts[True, False]:,} before the change and {counts[True, True]:,} after. "
+        f"External seats at the other efforts: {counts[False, False]:,} before and {counts[False, True]:,} after."
     )
 
 
-def report(db, draws: int, since: str) -> str:
-    seats, skipped = load_seats(db, since)
-    elo = ratings(seats)
-    parts = [coverage(seats, skipped)]
-    for title, name in (("Round win rate (primary)", "rounds"), ("Match win share (secondary)", "matches")):
-        rows = compare(seats, METRICS[name], elo, draws)
-        parts.append(f"### {title}\n\n{signs(rows)}\n\n{by_effort(rows)}\n\n{effort_table(rows)}\n\n#### Common support and weightings\n\n{support_table(rows)}")
+def report(db, draws: int) -> str:
+    seats, skipped = load_seats(db)
+    parts = [f"Matches with a DeepSeek seat ({skipped:,}) are left out.", chronology(seats)]
+    for period, group in (("All matches", seats), (f"Matches started on or after {REQUEST_CHANGE:%Y-%m-%d %H:%M} UTC", since(seats, REQUEST_CHANGE))):
+        elo = ratings(group)
+        parts.append(f"## {period}\n\n{coverage(group)}")
+        for title, name in (("Round win rate (primary)", "rounds"), ("Match win share (secondary)", "matches")):
+            parts.append(f"### {title}\n\n{effort_table(compare(group, METRICS[name], elo, draws))}")
     return "\n\n".join(parts) + "\n"
 
 
@@ -392,10 +380,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--db", default=DB)
     parser.add_argument("--draws", type=int, default=2000)
-    parser.add_argument("--since", default="", help="only matches that started at or after this ISO time")
     parser.add_argument("--doc")
     args = parser.parse_args()
-    text = report(connect(args.db), args.draws, args.since)
+    text = report(connect(args.db), args.draws)
     if args.doc:
         doc = open(args.doc).read()
         head, rest = doc.split(START)
