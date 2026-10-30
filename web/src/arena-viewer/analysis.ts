@@ -27,18 +27,14 @@ export interface Chamber {
 /** One player's knowledge of the gun, fed that player's events in order. */
 export class ShellTracker {
   roundHealth = 0;
-  /** Shells left by original type, the chambered one included. */
   live = 0;
   blank = 0;
   cursor = 0;
   total = 0;
-  /** Whether the chambered shell was flipped after it reached the chamber. */
   inverted = false;
   sawed = false;
-  /** The current type of each shell this player was told, by its place in the load. */
   readonly known = new Map<number, { shell: Shell; by: Clue }>();
   readonly checks = { ok: 0, bad: 0 };
-  /** Which load this is; with the cursor it names the shell in the chamber. */
   loadNo = 0;
   /** Inversions seen, so a pending inverter use can tell its own inversion from later ones. */
   inversions = 0;
@@ -187,7 +183,6 @@ export const roundStory = (events: Iterable<string>, cash: ReadonlyMap<string, n
   return { starter, rounds, ok: [...residual.values()].every((left) => left === 0) };
 };
 
-/** The seats the analysis works over: their order is the seats response's order. */
 export interface SeatKey {
   readonly matchId: string;
   readonly player: string;
@@ -196,7 +191,6 @@ export interface SeatKey {
 
 const VisiblePlayer = Schema.Struct({ player: Schema.String, health: Schema.optional(Schema.Number), items: Schema.optional(Schema.Array(Schema.String)) });
 
-/** What a decision showed its player: the database's visible_json. */
 export const Visible = Schema.fromJsonString(Schema.Struct({ you: Schema.String, players: Schema.Array(VisiblePlayer), events: Schema.optional(Schema.Array(Schema.String)) }));
 
 export const decodeVisible = Schema.decodeUnknownSync(Visible);
@@ -245,7 +239,6 @@ const ADRENALINE = itemIndex("adrenaline");
 
 const JAMMER = itemIndex("jammer");
 
-/** A seat's analysis while the decisions are read. */
 interface SeatTally {
   acquired: Array<number>;
   used: Array<number>;
@@ -284,7 +277,6 @@ interface PendingInvert {
 /** Works out the decision columns and each seat's analysis. seatIndex maps `matchId|player` to a place in seats. */
 export interface Analysis {
   readonly decisions: Decisions;
-  /** In the order of the seats analysed. */
   readonly seats: ReadonlyArray<SeatAnalysis>;
   /** Shells left in the gun at each of the decisions' agent moves, the chambered one included. */
   readonly shellsLeft: ReadonlyArray<number>;
@@ -488,7 +480,6 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
   finishSeat();
   finishMatch();
 
-  // Faults and reminders come from each match's events.jsonl, keyed by seat position.
   const seatBySource = new Map(
     db
       .query(`select m.source_dir dir, s.position pos, m.id, s.player from matches m join match_seats s on s.match_id = m.id where m.status in ('completed', 'partial')`)

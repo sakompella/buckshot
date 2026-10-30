@@ -19,7 +19,6 @@ import { openRegret, type Regret } from "./regret.ts";
 
 const NOT_DEEPSEEK = `m.id not in (select x.match_id from match_seats x join entrants y on y.id = x.entrant_id where y.model = 'oc/deepseek-v4.1-flash-free')`;
 
-// One row per player per started match.
 const SEATS_SQL = `with cs as (select match_id, player, count(*) calls, sum(cost_usd) cost, sum(input_tokens) inp, sum(output_tokens) outp,
      sum(cache_read_tokens) cr, sum(cache_write_tokens) cw, sum(reasoning_tokens) rt,
      sum(latency_ms) lat, sum(status = 'failed') failed,
@@ -79,7 +78,6 @@ const isOutcomeEnd = (text: string, player: string): boolean =>
 interface StepDraft {
   readonly step: Omit<Step, "outcome" | "calls">;
   readonly events: ReadonlyArray<string>;
-  /** Where this player's previous decision is. */
   readonly previous: number | undefined;
   readonly outcome: Array<string>;
   readonly calls: Array<Call>;
@@ -196,7 +194,6 @@ const matchDetail = (db: Database, regret: Regret | null, id: string): MatchDeta
 
 const JSON_TYPE = { "content-type": "application/json" };
 
-/** A JSON body encoded once, and gzipped once for the clients that accept it. */
 const encodedBody = (body: string) => ({ body, gzipped: Bun.gzipSync(new TextEncoder().encode(body)) });
 
 const json = (request: Request, { body, gzipped }: ReturnType<typeof encodedBody>) =>

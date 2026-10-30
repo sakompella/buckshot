@@ -6,7 +6,6 @@ import { pooledRatings, type Rating } from "./ratings.ts";
 // What the page shows, worked out from the loaded data and the filter. Each is
 // recomputed only when its inputs change, so hovering a chart stays cheap.
 
-/** Remembers the last result, recomputing only when an argument changes identity. */
 export const memoLast = <Args extends ReadonlyArray<object | string | number | boolean>, Result>(compute: (...args: Args) => Result) => {
   let last: { readonly args: Args; readonly result: Result } | undefined;
 
@@ -22,14 +21,10 @@ export const memoLast = <Args extends ReadonlyArray<object | string | number | b
 };
 
 export interface ItemSummary {
-  /** Uses of each item over the agent moves where using it was legal. */
   readonly useLegal: ReadonlyArray<Rate>;
-  /** Own copies used over copies acquired. */
   readonly acqUse: ReadonlyArray<Rate>;
-  /** Steals of each item over the moves where stealing it was legal. */
   readonly steal: ReadonlyArray<Rate>;
   readonly favorite: { readonly item: string; readonly rate: number; readonly k: number; readonly n: number } | null;
-  /** Player-matches that used more copies than they acquired. */
   readonly violations: ReadonlyArray<number>;
 }
 
@@ -119,23 +114,17 @@ export interface Derived {
   readonly blunders: Loaded["blunders"];
   readonly mistakes: Loaded["mistakes"];
   readonly consistency: Loaded["consistency"];
-  /** Whether each seat, by index, passes the filter. */
   readonly keep: ReadonlyArray<boolean>;
   readonly filtered: ReadonlyArray<SeatFull>;
-  /** Both seats of any match where either seat passes the filter, so opponents stay visible. */
   readonly matchSeats: ReadonlyArray<SeatFull>;
   readonly pooled: ReadonlyArray<ModelStats>;
-  /** What the ratings count: win shares, pot shares or rounds. */
   readonly basis: Basis;
   /** One rating per config on that basis, fitted over every match of every tournament: filters pick rows, not the scale. */
   readonly ratings: ReadonlyMap<string, Rating>;
-  /** Each config's place by rating among all configs, whatever the filter. */
   readonly ranks: ReadonlyMap<string, number>;
-  /** Every config, whatever the filter: the scatter's fixed axes. */
   readonly everyPooled: ReadonlyArray<ModelStats>;
   readonly matches: ReadonlyArray<MatchRow>;
   readonly allMatches: ReadonlyArray<MatchRow>;
-  /** Every config, whether the filter keeps it or not. */
   readonly items: ReadonlyMap<string, ItemSummary>;
 }
 
@@ -165,7 +154,6 @@ const everyPooledOf = memoLast((seats: ReadonlyArray<SeatFull>) => modelStats(se
 
 const itemsOf = memoLast((decisions: Decisions, seats: ReadonlyArray<SeatFull>) => itemSummaries(decisions, seats));
 
-/** A main config has at least this many scored matches. */
 const MIN_SCORED = 20;
 
 /**
