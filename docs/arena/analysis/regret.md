@@ -159,7 +159,7 @@ This checks whether regret holds up when the search goes deeper. 40% of the prod
    - Single decisions move more than the mean does. 13.4% change by at least a point, 6.6% up and 6.8% down, so they cancel.
    - No cell by shells left moves outside its interval except shots with 5 left (+0.52 ± 0.38), one of 12 cells. Decisions whose production search stopped on the budget change by +0.16 ± 0.23, and those that reached depth 6 by +0.01 ± 0.06. These two means weight each limit status by its own size in each stratum.
 3. **The sample's model order is the same at both depths.** All eight models keep their rank in the point estimates. The intervals overlap for neighbours, so this is no proof that the order is stable: rank uncertainty was not computed. Each mean moves by 0.07 points or less, except Haiku 4.5, which rises by 0.51 ± 0.31 from 6.05 to 6.56. The top two are Astra and Opus at 1.09 and 1.12, as close as before.
-4. **The budget still stops 30% of the searches, most of them with many shells left.** The budget stops 29.9% of the depth 8 searches in the sample, against 40.2% at depth 6.
+4. **The budget still stops 30% of the searches, most of them with many shells left.** The population-weighted estimate for this fixed run is 29.9% budget-limited at depth 8, against 40.2% at depth 6.
    - Shots with 1 to 3 shells left are stopped in under 7% of searches, with 4 left in 22.5%, with 5 left in 43.6% and with 6 left in 75.6%. Item moves are stopped in 24% with 3 left, 50% with 4, 84% with 5 and 95% with 6.
    - The searches gain 2.0 decisions of depth on average. With 5 or 6 shells left most still end before depth 8, so those rows compare horizons of about 6 and 7.
 
