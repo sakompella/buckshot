@@ -86,7 +86,10 @@ const rowsOf = (seats: ReadonlyArray<SeatFull>, focal: ReadonlyArray<SeatFull>) 
   return { configs: mostUnused(configs), items: mostUnused(items) };
 };
 
-/** What one seat's agent moves did about items. A move has an item available when it could use an item, steal with adrenaline or jam. */
+/**
+ * What one seat's agent moves did about items. A move has an item available when legalUse has a bit: it could use an own
+ * item, jam, or steal with adrenaline. A steal counts as an adrenaline use, not as a use of the item taken.
+ */
 export interface Behavior {
   readonly moves: number;
   readonly available: number;
@@ -127,6 +130,9 @@ export const behaviorBySeat = memoLast((decisions: Pick<Decisions, "seat" | "leg
   return tallies;
 });
 
+/** The share of moves with an item available that used one, or null when none had. */
+export const useShare = ({ available, usedWhenAvailable }: Behavior): number | null => (available === 0 ? null : usedWhenAvailable / available);
+
 interface UseRow {
   readonly name: string;
   readonly color: string;
@@ -144,7 +150,7 @@ const useRowsOf = (decisions: Decisions, seats: ReadonlyArray<SeatFull>, focal: 
     .map(([key, played]): UseRow => {
       const { moves, available, usedWhenAvailable, itemActions } = played.reduce((sum, seat) => addBehavior(sum, bySeat[indexOf.get(seat) ?? -1] ?? NO_BEHAVIOR), NO_BEHAVIOR);
       const name = labelOf(key);
-      const share = available === 0 ? null : usedWhenAvailable / available;
+      const share = useShare({ moves, available, usedWhenAvailable, itemActions });
       const used = share === null ? "no move had an item available" : `${pct(share)} of ${available.toLocaleString()} moves with an item available used one`;
       const perHundred = moves === 0 ? "" : `, ${(itemActions / moves * 100).toFixed(1)} item actions per 100 of ${moves.toLocaleString()} moves`;
 
