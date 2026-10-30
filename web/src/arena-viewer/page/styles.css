@@ -123,6 +123,7 @@ figure.lanes h3 { margin-top: 0; }
 .fate-name { text-align: right; white-space: nowrap; }
 .fate-bar { display: flex; height: 12px; background: #0d0d0d; }
 .fate-bar i { display: block; height: 100%; }
+.fate-note { margin: 0 0 8px; color: var(--mut); font-size: 12px; }
 .fate-val { font-variant-numeric: tabular-nums; }
 svg .big { font-size: 20px; font-weight: 600; fill: var(--fg); font-variant-numeric: tabular-nums; }
 details.tables { margin-top: 34px; }

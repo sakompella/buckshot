@@ -266,7 +266,7 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
             h.div(
               [],
               [
-                lazyFates(fatesView, [h, derived.seats, derived.filtered]),
+                lazyFates(fatesView, [h, derived.decisions, derived.seats, derived.filtered]),
                 optionalView(h, derived.consistency, "consistency", (consistency) => lazyConsistency(consistencyView, [h, derived.pooled, consistency, card])),
               ],
             ),
