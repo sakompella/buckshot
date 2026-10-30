@@ -62,10 +62,10 @@ export const moveStripView = (h: H, detail: MatchDetail, width: number, height =
 };
 
 /** Regret in points from which a move stands out as a blunder, in its tag and on the health chart. */
-const BIG_REGRET = 5;
+export const BIG_REGRET = 5;
 
 /** Regret in points below which the move list leaves a move untagged, so the tags mark the few real mistakes. */
-const MINOR_REGRET = 2;
+export const MINOR_REGRET = 2;
 
 const TURNING_POINTS = 3;
 
