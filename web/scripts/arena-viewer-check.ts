@@ -418,8 +418,6 @@ const checkMatchWins = async (page: Page, scatter: ReturnType<Page["locator"]>) 
   expectThat(JSON.stringify(await ratingViews(page)) === JSON.stringify(rounds), "Round wins did not bring the page back to how it started after Match wins");
 };
 
-// The replay's header names its match, so its expected regret comes from that match's data fetched by id, whether the
-// page loaded the match on this click or earlier.
 const servedDecisions = async (id: string) => Schema.decodeUnknownSync(MatchDetail)(await (await fetch(`${base}/api/match?id=${encodeURIComponent(id)}`)).json()).decisions;
 
 const openedMatchId = async (page: Page) => {
@@ -493,7 +491,6 @@ const checkRegret = async (page: Page) => {
     await closeReplay(page);
   }
 
-  // The regret blunder cards are built from regret rows, so their replays are the covered fixture.
   const blunderCards = page.locator(".icard", { hasText: "Round win chance" });
   const fixtures = Math.min(await blunderCards.count(), 5);
   let exact = 0;
@@ -538,8 +535,6 @@ const checkRegret = async (page: Page) => {
   expectThat(exact + notExact > 0, "no covered replay shows a regret tag");
 };
 
-// One match's response is served with every regret removed, as a viewer whose regret database lacks the match would
-// serve it, while the rest of the page and the other matches stay as the viewer serves them.
 const checkMissingRegret = async (browser: Browser, viewport: Viewport) => {
   const [missingId, coveredId] = coveredMatchIds;
 
@@ -547,39 +542,56 @@ const checkMissingRegret = async (browser: Browser, viewport: Viewport) => {
 
   const page = await newPage(browser, viewport);
   const blunderCards = page.locator(".icard", { hasText: "Round win chance" });
+  let incomingRegrets = 0;
 
-  page.setDefaultTimeout(ACTION_TIMEOUT_MS);
-  watch(page, `${viewport.name} missing regret`);
+  const openCardOf = async (matchId: string) => {
+    for (const card of Array.from({ length: await blunderCards.count() }, (_, index) => index)) {
+      await blunderCards.nth(card).click();
 
-  await page.route(/\/api\/match\?id=/, async (route) => {
-    if (new URL(route.request().url()).searchParams.get("id") !== missingId) return route.fallback();
+      if ((await openedMatchId(page)) === matchId) return;
 
-    const response = await route.fetch();
-    const detail = Schema.decodeUnknownSync(MatchDetail)(await response.json());
+      await closeReplay(page);
+    }
 
-    return route.fulfill({ response, json: { ...detail, decisions: withoutRegret(detail.decisions) } });
-  });
-  await loadPage(page);
+    throw new Error(`no regret blunder card opens match ${matchId}`);
+  };
 
-  await blunderCards.nth(0).click();
-  expectThat((await openedMatchId(page)) === missingId, "the first regret blunder card opened another match than the fixture's");
+  try {
+    page.setDefaultTimeout(ACTION_TIMEOUT_MS);
+    watch(page, `${viewport.name} missing regret`);
 
-  const shown = { tagged: await regretTags(page).count(), rings: await countOf(page, ".modal .chart circle"), turning: await countOf(page, ".modal .turning .chip") };
-  const detail = (await page.locator(".modal").innerText()).replaceAll(/\s+/g, " ");
+    await page.route(/\/api\/match\?id=/, async (route) => {
+      if (new URL(route.request().url()).searchParams.get("id") !== missingId) return route.fallback();
 
-  expectThat(shown.tagged === 0 && shown.rings === 0 && shown.turning === 0, `a replay with no regret shows ${JSON.stringify(shown)}`);
-  expectThat(!/Gave up \d|Best move .+ chosen/.test(detail), "a replay with no regret still words a regret");
-  await page.locator(".modal").screenshot({ path: shot("replay-missing-regret") });
-  await closeReplay(page);
+      const response = await route.fetch();
+      const detail = Schema.decodeUnknownSync(MatchDetail)(await response.json());
 
-  await blunderCards.nth(1).click();
-  expectThat((await openedMatchId(page)) === coveredId, "the second regret blunder card opened another match than the covered one");
-  await expectRegretShown(page, await coverageOfMatch(coveredId, servedDecisions), "the covered replay beside the fixture");
+      incomingRegrets = Math.max(incomingRegrets, detail.decisions.filter(({ regret }) => regret !== null).length);
 
-  await clearOverlays(page);
-  expectThat((await page.locator(".modal").count()) === 0, "clearing the overlays left the replay open");
-  console.log("missing regret fixture: 0 tags, 0 rings, 0 turning points; the covered replay beside it keeps its own");
-  await page.close();
+      return route.fulfill({ response, json: { ...detail, decisions: withoutRegret(detail.decisions) } });
+    });
+    await loadPage(page);
+
+    await openCardOf(missingId);
+
+    const shown = { tagged: await regretTags(page).count(), rings: await countOf(page, ".modal .chart circle"), turning: await countOf(page, ".modal .turning .chip") };
+    const detail = (await page.locator(".modal").innerText()).replaceAll(/\s+/g, " ");
+
+    expectThat(incomingRegrets > 0, "the fixture route did not fire on a match that came with regret, so it proves nothing");
+    expectThat(shown.tagged === 0 && shown.rings === 0 && shown.turning === 0, `a replay with no regret shows ${JSON.stringify(shown)}`);
+    expectThat(!/Gave up \d|Best move .+ chosen/.test(detail), "a replay with no regret still words a regret");
+    await page.locator(".modal").screenshot({ path: shot("replay-missing-regret") });
+    await closeReplay(page);
+
+    await openCardOf(coveredId);
+    await expectRegretShown(page, await coverageOfMatch(coveredId, servedDecisions), "the covered replay beside the fixture");
+
+    await clearOverlays(page);
+    expectThat((await page.locator(".modal").count()) === 0, "clearing the overlays left the replay open");
+    console.log("missing regret fixture: 0 tags, 0 rings, 0 turning points; the covered replay beside it keeps its own");
+  } finally {
+    await page.context().close();
+  }
 };
 
 const checkDesktop = async (browser: Browser, viewport: Viewport) => {
