@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { coverageOfMatch, type Decision, regretCoverageOf } from "../scripts/arena-viewer-regret-coverage.ts";
+import { coverageOfMatch, type Decision, regretCoverageOf, withoutRegret } from "../scripts/arena-viewer-regret-coverage.ts";
 
 const move = (byWhom: "agent" | "forced", points: number | null): Decision => ({ byWhom, regret: points === null ? null : { points } });
 
@@ -29,4 +29,12 @@ test("the opened replay's coverage comes from its own match, whatever other matc
   expect((await coverageOfMatch("covered", decisionsOf)).turning).toBe(3);
   expect((await coverageOfMatch("uncovered", decisionsOf)).searched).toBe(0);
   expect(fetched).toEqual(["covered", "uncovered"]);
+});
+
+test("a match served without regret keeps its moves and expects no regret on its replay", () => {
+  const served = withoutRegret(COVERED);
+
+  expect(served).toHaveLength(COVERED.length);
+  expect(served.map(({ byWhom }) => byWhom)).toEqual(COVERED.map(({ byWhom }) => byWhom));
+  expect(regretCoverageOf(served)).toEqual({ searched: 0, tagged: 0, rings: 0, turning: 0 });
 });

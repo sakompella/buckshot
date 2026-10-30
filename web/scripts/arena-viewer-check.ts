@@ -7,7 +7,7 @@ import { type Browser, chromium, type Page } from "playwright-core";
 import { MatchDetail } from "../src/arena-viewer/api.ts";
 import { GROUPS, Section } from "../src/arena-viewer/page/model.ts";
 import { TOUR } from "../src/arena-viewer/page/tour.ts";
-import { coverageOfMatch, type RegretCoverage } from "./arena-viewer-regret-coverage.ts";
+import { coverageOfMatch, type RegretCoverage, withoutRegret } from "./arena-viewer-regret-coverage.ts";
 
 // Clicks through the arena viewer's page, its jump menu and replay in headless Chromium at
 // desktop, phone and tablet widths and saves screenshots. Pointed at the old viewer too,
@@ -418,17 +418,24 @@ const checkMatchWins = async (page: Page, scatter: ReturnType<Page["locator"]>) 
   expectThat(JSON.stringify(await ratingViews(page)) === JSON.stringify(rounds), "Round wins did not bring the page back to how it started after Match wins");
 };
 
-// The replay's header names its match, so its expected regret comes from that match's data fetched by id, whether the
-// page loaded the match on this click or earlier.
-const openReplay = async (page: Page, open: () => Promise<void>): Promise<RegretCoverage> => {
-  await open();
+const servedDecisions = async (id: string) => Schema.decodeUnknownSync(MatchDetail)(await (await fetch(`${base}/api/match?id=${encodeURIComponent(id)}`)).json()).decisions;
+
+const openedMatchId = async (page: Page) => {
   await page.waitForSelector(".modal .step");
 
   const matchId = await page.locator(".modal .mhead").getAttribute("data-match");
 
   if (matchId === null) throw new Error("the replay's header names no match");
 
-  return coverageOfMatch(matchId, async (id) => Schema.decodeUnknownSync(MatchDetail)(await (await fetch(`${base}/api/match?id=${encodeURIComponent(id)}`)).json()).decisions);
+  return matchId;
+};
+
+const openReplay = async (page: Page, open: () => Promise<void>) => {
+  await open();
+
+  const matchId = await openedMatchId(page);
+
+  return { matchId, ...(await coverageOfMatch(matchId, servedDecisions)) };
 };
 
 const closeReplay = async (page: Page) => {
@@ -441,6 +448,8 @@ const expectRegretShown = async (page: Page, coverage: RegretCoverage, what: str
 
   expectThat(shown.tagged === coverage.tagged && shown.rings === coverage.rings && shown.turning === coverage.turning, `${what}: replay shows ${JSON.stringify(shown)}, its data has ${JSON.stringify({ tagged: coverage.tagged, rings: coverage.rings, turning: coverage.turning })}`);
 };
+
+const coveredMatchIds: Array<string> = [];
 
 const REGRET_TAG = /^−\d+\.\d$/;
 
@@ -474,25 +483,14 @@ const checkRegret = async (page: Page) => {
 
   await page.locator(".lb").first().screenshot({ path: shot("leaderboard-regret"), style: UNSTICK });
 
-  // The newest matches are the ones the derived database reaches last; one with no regret must show none.
-  const newest: Array<RegretCoverage> = [];
-
   for (const row of [0, 1, 2, 3, 4]) {
     const coverage = await openReplay(page, () => page.locator("#matches tbody tr.row").nth(row).click());
-
-    newest.push(coverage);
 
     await expectRegretShown(page, coverage, `match ${row}`);
     console.log("match", row, "searched moves", coverage.searched, "tags", coverage.tagged);
     await closeReplay(page);
   }
 
-  expectThat(
-    newest.some(({ searched }) => searched === 0),
-    "none of the newest matches lacks regret, so the missing-data replay is not exercised",
-  );
-
-  // The regret blunder cards are built from regret rows, so their replays are the covered fixture.
   const blunderCards = page.locator(".icard", { hasText: "Round win chance" });
   const fixtures = Math.min(await blunderCards.count(), 5);
   let exact = 0;
@@ -503,6 +501,7 @@ const checkRegret = async (page: Page) => {
   for (const card of Array.from({ length: fixtures }, (_, index) => index)) {
     const coverage = await openReplay(page, () => blunderCards.nth(card).click());
 
+    coveredMatchIds.push(coverage.matchId);
     expectThat(coverage.searched > 0 && coverage.tagged > 0 && coverage.turning > 0, `regret blunder card ${card}: its replay has ${coverage.searched} searched, ${coverage.tagged} tagged, ${coverage.turning} turning`);
     await expectRegretShown(page, coverage, `blunder card ${card}`);
 
@@ -534,6 +533,65 @@ const checkRegret = async (page: Page) => {
 
   console.log("regret tags over the covered replays:", exact, "exact,", notExact, "not proven exact");
   expectThat(exact + notExact > 0, "no covered replay shows a regret tag");
+};
+
+const checkMissingRegret = async (browser: Browser, viewport: Viewport) => {
+  const [missingId, coveredId] = coveredMatchIds;
+
+  if (missingId === undefined || coveredId === undefined) throw new Error("the regret check found fewer than two regret-covered replays to build the fixture from");
+
+  const page = await newPage(browser, viewport);
+  const blunderCards = page.locator(".icard", { hasText: "Round win chance" });
+  let incomingRegrets = 0;
+
+  const openCardOf = async (matchId: string) => {
+    for (const card of Array.from({ length: await blunderCards.count() }, (_, index) => index)) {
+      await blunderCards.nth(card).click();
+
+      if ((await openedMatchId(page)) === matchId) return;
+
+      await closeReplay(page);
+    }
+
+    throw new Error(`no regret blunder card opens match ${matchId}`);
+  };
+
+  try {
+    page.setDefaultTimeout(ACTION_TIMEOUT_MS);
+    watch(page, `${viewport.name} missing regret`);
+
+    await page.route(/\/api\/match\?id=/, async (route) => {
+      if (new URL(route.request().url()).searchParams.get("id") !== missingId) return route.fallback();
+
+      const response = await route.fetch();
+      const detail = Schema.decodeUnknownSync(MatchDetail)(await response.json());
+
+      incomingRegrets = Math.max(incomingRegrets, detail.decisions.filter(({ regret }) => regret !== null).length);
+
+      return route.fulfill({ response, json: { ...detail, decisions: withoutRegret(detail.decisions) } });
+    });
+    await loadPage(page);
+
+    await openCardOf(missingId);
+
+    const shown = { tagged: await regretTags(page).count(), rings: await countOf(page, ".modal .chart circle"), turning: await countOf(page, ".modal .turning .chip") };
+    const detail = (await page.locator(".modal").innerText()).replaceAll(/\s+/g, " ");
+
+    expectThat(incomingRegrets > 0, "the fixture route did not fire on a match that came with regret, so it proves nothing");
+    expectThat(shown.tagged === 0 && shown.rings === 0 && shown.turning === 0, `a replay with no regret shows ${JSON.stringify(shown)}`);
+    expectThat(!/Gave up \d|Best move .+ chosen/.test(detail), "a replay with no regret still words a regret");
+    await page.locator(".modal").screenshot({ path: shot("replay-missing-regret") });
+    await closeReplay(page);
+
+    await openCardOf(coveredId);
+    await expectRegretShown(page, await coverageOfMatch(coveredId, servedDecisions), "the covered replay beside the fixture");
+
+    await clearOverlays(page);
+    expectThat((await page.locator(".modal").count()) === 0, "clearing the overlays left the replay open");
+    console.log("missing regret fixture: 0 tags, 0 rings, 0 turning points; the covered replay beside it keeps its own");
+  } finally {
+    await page.context().close();
+  }
 };
 
 const checkDesktop = async (browser: Browser, viewport: Viewport) => {
@@ -569,6 +627,7 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
   await check("match wins", () => checkMatchWins(page, scatter));
   await check("every config rated", () => checkEveryConfigRated(page, scatter));
   await check("regret", () => checkRegret(page));
+  await check("missing regret", () => checkMissingRegret(browser, viewport));
   await check("heatmap modes", async () => {
     for (const [mode, name] of [
       ["Win share vs opponent", "opp"],

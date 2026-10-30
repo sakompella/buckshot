@@ -37,7 +37,10 @@ def best_tau(by_block: dict[str, list[Game]], ids: list[str], names: set[str], t
     return min(GRID, key=lambda tau: (totals[tau], tau))
 
 
-def nested(games: list[Game], terms: bool, rng: random.Random, repeats: int = 5, outer: int = 10, inner: int = 5):
+OUTER_FOLDS = 10
+
+
+def nested(games: list[Game], terms: bool, rng: random.Random, repeats: int = 5, outer: int = OUTER_FOLDS, inner: int = 5):
     """Per block, the held-out log loss averaged over the repeats, for each fixed tau and for the nested choice.
 
     Returns (losses, chosen): losses maps 'tau=..' and 'nested' to {block: loss}; chosen counts the taus picked.

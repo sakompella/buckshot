@@ -24,3 +24,5 @@ export const regretCoverageOf = (decisions: ReadonlyArray<Decision>): RegretCove
 
 /** The coverage of the match a replay shows, read from that match's own data by its id, not from whatever response the page last got. */
 export const coverageOfMatch = async (matchId: string, decisionsOf: (matchId: string) => Promise<ReadonlyArray<Decision>>): Promise<RegretCoverage> => regretCoverageOf(await decisionsOf(matchId));
+
+export const withoutRegret = <D extends { readonly regret: unknown }>(decisions: ReadonlyArray<D>): ReadonlyArray<D & { readonly regret: null }> => decisions.map((decision) => ({ ...decision, regret: null }));

@@ -12,13 +12,14 @@ import argparse
 
 import bt
 from fmt import pct, signed, table
-from load import CROSS_MODEL, CROSS_SAMPLES, Game, cohorts, connect, scored_games
+from load import CROSS_MODEL, CROSS_SAMPLES, TOURNAMENT_5_COHORT, Game, cohorts, connect, scored_games
 
 START, END = "<!-- leaderboard:start -->", "<!-- leaderboard:end -->"
 
 TITLES = {
     CROSS_MODEL: "Cross-model games (tournament 1)",
     "opus-effort": "Opus efforts (tournament 2)",
+    TOURNAMENT_5_COHORT: "Tournament 5, first imported subset",
 }
 
 

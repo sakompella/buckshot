@@ -12,7 +12,7 @@ appear only when each effort has at least MIN_UNITS distinct seeds in the suppor
 games with a DeepSeek seat are left out. The database is opened read-only. With --doc FILE the tables replace the text between the
 matched-efforts markers of that file.
 
-    python3 tools/arena/analysis/matched_efforts.py [--db PATH] [--draws 2000] [--doc docs/arena/analysis/matched-efforts.md]
+    python3 tools/arena/analysis/matched_efforts.py [--db PATH] [--draws 2000] [--doc <output.md>]
 """
 
 import argparse
