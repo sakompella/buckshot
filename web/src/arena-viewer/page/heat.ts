@@ -20,19 +20,16 @@ export interface HeatRow {
   readonly label: string;
   readonly color: string;
   readonly rating: number;
-  /** The place, 1 first (see Derived.ranks). */
   readonly rank: number;
   readonly cost: number;
 }
 
-/** Higher is better on either ranking. */
 const scoreOf = (row: HeatRow, ranking: Ranking): number => (ranking === "elo" ? row.rating : -row.rank);
 
 interface HeatCol {
   readonly id: string;
   readonly label: string;
   readonly title: string;
-  /** The item a column counts, drawn above its label. */
   readonly item?: string;
 }
 
@@ -40,7 +37,6 @@ interface HeatCell {
   readonly value: number;
   readonly text: string;
   readonly tip: string;
-  /** The games, moves or player-matches the value is over. */
   readonly n: number;
   readonly isFaint: boolean;
   readonly isRinged: boolean;
@@ -152,7 +148,6 @@ const CHOICE_BITS = CHOICES.map(([pattern]) => patternBit(pattern));
 
 const emptyTally = (): Tally => ({ use: ITEMS.map(() => [0, 0]), pattern: CHOICES.map(() => [0, 0]), shots: 0, atOpp: 0, moves: 0, items: 0, jams: 0, steals: 0, seats: new Set<number>() });
 
-/** Per config key. A filter keeps or drops whole configs, so these are counted once. */
 const configTallies = memoLast((decisions: Decisions, seats: ReadonlyArray<SeatFull>): ReadonlyMap<string, Tally> => {
   const out = new Map<string, Tally>();
 
@@ -218,7 +213,6 @@ const configTallies = memoLast((decisions: Decisions, seats: ReadonlyArray<SeatF
   return out;
 });
 
-/** Per config the filter keeps. */
 const tallies = memoLast((derived: Derived): ReadonlyMap<string, Tally> => {
   const perConfig = configTallies(derived.decisions, derived.seats);
 
@@ -229,7 +223,6 @@ const tallies = memoLast((derived: Derived): ReadonlyMap<string, Tally> => {
   }));
 });
 
-/** Each config's win share against each opponent model: hits and games. */
 const versus = memoLast((matches: ReadonlyArray<MatchRow>): ReadonlyMap<string, ReadonlyMap<string, readonly [number, number]>> => {
   const out = new Map<string, Map<string, [number, number]>>();
 
@@ -366,7 +359,6 @@ const sortedRows = (rows: ReadonlyArray<HeatRow>, sort: string, ranking: Ranking
 const heatmapView = (h: H, derived: Derived, heat: Model["heat"], ranking: Ranking): Html => {
   const rows = heatRowsOf(derived);
   const byRating = rows.toSorted((left, right) => scoreOf(right, ranking) - scoreOf(left, ranking));
-  // The best row per model keeps each model's best effort by the ranking.
   const shown = heat.isBestOnly ? byRating.filter((row, index) => byRating.findIndex((other) => other.model === row.model) === index) : byRating;
   const columns = columnsOf(heat.mode, derived.matches);
   const cells = new Map(shown.map((row) => [row.key, new Map(columns.map((col) => [col.id, cellAt(derived, heat.mode, row, col.id)]))]));

@@ -50,7 +50,6 @@ test("Bradley-Terry ranks a player that wins more of the same games higher", () 
   expect(bradleyTerry([...games, { a: "x", b: "y", sa: 1 }]).get("x") ?? 0).toBeGreaterThan(ratings.get("x") ?? 0);
 });
 
-// Two models' effort sweeps joined only through their medium configs: the shape of the real data.
 const TRUE_ELO: ReadonlyArray<readonly [string, number]> = [
   ["a-low", -120],
   ["a-medium", 40],
@@ -116,7 +115,6 @@ test("a config that wins every game is rated high but finite", () => {
   expect(Number.isFinite(ratings.get("y"))).toBe(true);
 });
 
-// The bootstrap as written out plainly: every resample draws from a fresh rng(7).
 const plainBlockRate = (tally: BlockTally, reps: number) => {
   const blocks = [...tally.values()];
   const random = rng(7);
@@ -569,7 +567,6 @@ test("self-shot tallies count shots with odds per config and bin, and skip clued
 
 test("playing the odds keeps every effort the filter keeps, named as itself, with or without medium", () => {
   const seats = ["low", "medium", "high", "max"].map((effort) => ({ model: "claude-opus-5-5", effort }));
-  // Each config shoots itself 30 times at 0% live and 30 times at 100% live.
   const odds = seats.flatMap((_seat, index) => Array.from({ length: 120 }, (_, shot) => ({ index, percent: shot < 60 ? 0 : 100, isSelf: shot % 2 === 0 })));
   const decisions = { odds: odds.map(({ percent }) => percent), seat: odds.map(({ index }) => index), shot: odds.map(({ isSelf }) => (isSelf ? 2 : 1)) };
   const effortsOf = (keep: ReadonlyArray<boolean>) => oddsPanels(selfShotTallies(decisions, seats, keep)).map(({ model, lines }) => [model, lines.map(({ effort }) => effort)]);

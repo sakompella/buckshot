@@ -102,7 +102,6 @@ const loadPage = async (page: Page) => {
   await page.waitForSelector(".icard svg rect", { timeout: 60_000 });
 };
 
-// Prints what the default filter shows (every config), then what switching 'all configs' off hides, and switches it back on.
 const openPage = async (page: Page) => {
   const started = Date.now();
 
@@ -114,7 +113,6 @@ const openPage = async (page: Page) => {
 
   console.log("default (all configs):", ...(await counts()));
 
-  // The switch is drawn only while some config is hidden, which no config is once every config has cross-model games.
   if ((await allConfigs.count()) === 0) return;
 
   await allConfigs.uncheck();
@@ -151,7 +149,6 @@ const captureBaseline = async (browser: Browser, viewport: Viewport) => {
   await loadPage(page);
   await page.screenshot({ path: shot(`${name}-page`), fullPage: true });
 
-  // GROUPS is what the jump menu and the tour order rely on; the page must put each section where it says.
   for (const { group, sections } of GROUPS) {
     for (const section of sections) {
       expectThat((await page.locator(`#${group} #${section}, #${group}#${section}`).count()) === 1, `${name}: #${section} is not in the ${group} group`);
@@ -210,7 +207,6 @@ const checkJumps = async (page: Page, name: string, isTouch: boolean) => {
   console.log(name, "every section link landed under the bar");
 };
 
-// The scatter's rating axis tick labels from the top down.
 const yTicks = (page: Page) =>
   page.evaluate(() =>
     [...document.querySelectorAll("#scatter .card:first-child svg > g:not(.ptlabel) > text[text-anchor=end]")]
@@ -221,7 +217,6 @@ const yTicks = (page: Page) =>
       .join(" "),
   );
 
-// The scatter's gridlines and tick labels: a filter must leave them where they are.
 const axesOf = (page: Page) =>
   page.evaluate(() => {
     const chart = document.querySelector(".card svg");
@@ -236,7 +231,6 @@ const axesOf = (page: Page) =>
 const reliabilityScales = (page: Page) =>
   page.evaluate(() => [...document.querySelectorAll("#reliability .chartrow svg")].map((chart) => [...chart.querySelectorAll("text[text-anchor=middle]")].map((text) => text.textContent).join(" ")).join(" | "));
 
-// Turning chips on and off shows and hides points but moves no axis.
 const checkFixedAxes = async (page: Page, scatter: ReturnType<Page["locator"]>) => {
   const filters = page.locator(".filters");
 
@@ -677,7 +671,6 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
     console.log("matches → modal", await textOf(page, ".mhead h2"));
     await page.keyboard.press("Escape");
   });
-  // An old tab link, or a section link, lands on its section once the data is in.
   await check("deep link", async () => {
     await page.goto(`${base}/#reliability`);
     await page.waitForSelector("#reliability .chartrow figure", { timeout: 120_000 });
@@ -730,7 +723,6 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
     console.log(name, "first chart starts at", Math.round(chartTop), "px of", height);
     expectThat(chartTop < height * 0.6, `${name}: the first chart starts below the first screen's upper 60%`);
 
-    // A phone or tablet folds the filters into one line that says what they keep; a tap opens them.
     if (width <= 1024) {
       console.log(name, "filters line:", await textOf(page, ".filtersum"), "| chips shown", await page.locator(".filters .chip").first().isVisible());
       await page.locator(".filtersum").tap();
@@ -743,7 +735,6 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
     }
   });
   await check("mark tap", async () => {
-    // A chart mark pins the shared tip, with its sample, and a tap outside clears it.
     for (const selector of ["#luck svg rect[role=button]", "#rubbers svg g[role=button]", "#deals svg g[role=button]"]) {
       await page.locator(selector).first().scrollIntoViewIfNeeded();
       await page.locator(selector).first().tap({ force: true });
@@ -753,7 +744,6 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
       console.log(name, "tap", selector, "→", tip);
       expectThat(tip !== "none" && /\d/.test(tip), `${name}: tapping ${selector} shows no tip with a count`);
 
-      // The pinned tip follows its mark as the page scrolls.
       await page.mouse.wheel(0, 120);
       await settled(page);
 
@@ -842,7 +832,6 @@ const checkOptionalFailure = async (browser: Browser) => {
   const notes = await page.getByText(/^Could not load the /).allInnerTexts();
 
   console.log("with blunders and consistency failing:", notes, "| leaderboards", await countOf(page, "table.lbt"));
-  // Blunders feed two sections: the cards and the blunder rate.
   expectThat(notes.length === 3 && (await page.locator("#blunders").getByText(/^Could not load/).count()) === 1 && (await page.locator("#mistakes").getByText(/^Could not load/).count()) === 1, "a failed optional endpoint did not leave a note in its own section");
   await page.context().close();
 };
