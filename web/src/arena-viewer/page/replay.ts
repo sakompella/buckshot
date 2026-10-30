@@ -279,22 +279,44 @@ const callView = (h: H, call: Call): Html => {
   );
 };
 
-const regretLine = (h: H, regret: MoveRegret): Html =>
-  h.div(
-    [h.Class("k")],
+const PHONE_WIDTH = 640;
+
+const verdictOf = (regret: MoveRegret): string => {
+  if (regret.points === 0) return `Best at depth ${regret.depth}`;
+
+  return regret.exact ? `Proven worse · gave up ${fmtPoints(regret.points)} points` : `Gave up ${fmtPoints(regret.points)} points (estimate)`;
+};
+
+const candidatesView = (h: H, step: Step, regret: MoveRegret, who: string, isOpen: boolean): Html =>
+  h.details(
+    [h.Class("fold cands"), ...(isOpen ? [h.Open(true)] : [])],
     [
-      `Best move ${regret.best} ${fmtPoints(regret.bestScore)}%, chosen ${fmtPoints(regret.chosenScore)}% · depth ${regret.depth}${regret.limited ? ", stopped by the node budget" : ""}`,
-      regret.exact ? " · proven exact" : " · not proven exact",
+      h.summary([], [verdictOf(regret)]),
+      h.div([h.Class("k")], [`${who}'s estimated round win chance · depth ${regret.depth}${regret.limited ? " · budget stopped" : ""}`]),
+      h.ol(
+        [],
+        regret.values
+          .toSorted((left, right) => right.score - left.score)
+          .map(({ label, score }) => {
+            const isChosen = label === regret.chosen;
+            const isBest = score === regret.bestScore;
+
+            return h.li(
+              [h.Class(`cand ${isChosen ? "chosen" : ""} ${isBest ? "best" : ""}`)],
+              [
+                h.span([h.Class("label")], [label]),
+                isBest ? h.span([h.Class("tag")], ["best"]) : h.empty,
+                isChosen ? h.span([h.Class("tag")], ["chosen"]) : h.empty,
+                h.span([h.Class("pct")], [`${fmtPoints(score)}%`]),
+              ],
+            );
+          }),
+      ),
+      step.live + step.blank <= regret.depth ? h.div([h.Class("k")], ["A reload is within reach. With the static leaf, gaps at 1–3 shells left read about 0.6 points high on average."]) : h.empty,
     ],
   );
 
-const regretSummary = (regret: MoveRegret): string => {
-  if (regret.points >= MINOR_REGRET) return `Gave up ${fmtPoints(regret.points)} points of round win chance; the evaluator's best was ${regret.best}.`;
-
-  return regret.points > 0 ? `Within ${fmtPoints(regret.points)} points of the evaluator's best move.` : "As good as the evaluator's best move.";
-};
-
-const selectedView = (h: H, detail: MatchDetail, step: Step, names: ReadonlyMap<string, string>): Html => {
+const selectedView = (h: H, detail: MatchDetail, step: Step, names: ReadonlyMap<string, string>, viewport: Viewport): Html => {
   const { regret } = step;
   const shot = shotOf(step);
   const latency = sumOf(step.calls.map(({ latency }) => latency ?? 0));
@@ -316,7 +338,7 @@ const selectedView = (h: H, detail: MatchDetail, step: Step, names: ReadonlyMap<
       step.outcome.length > 0 ? h.div([h.Class("outcome")], [h.span([h.Class("k")], ["Outcome: "]), step.outcome.join(" ")]) : h.empty,
       regret === null
         ? h.div([h.Class("k")], ["Not searched by the evaluator."])
-        : h.details([h.Class("fold")], [h.summary([], [regretSummary(regret)]), regretLine(h, regret)]),
+        : candidatesView(h, step, regret, names.get(step.player) ?? step.player, viewport.width >= PHONE_WIDTH),
       step.calls.length === 0
         ? h.empty
         : h.details(
@@ -478,7 +500,7 @@ const detailView = (h: H, replay: Replay, detail: MatchDetail, allMatches: Reado
                 h.button([h.Type("button"), h.AriaLabel("Next move"), h.Disabled(at >= steps.length - 1), h.OnClick(Message.SteppedReplay({ delta: 1 }))], ["Next ›"]),
               ],
             ),
-            ...(step === undefined ? [] : [boardView(h, detail, steps, step, names), selectedView(h, detail, step, names)]),
+            ...(step === undefined ? [] : [boardView(h, detail, steps, step, names), selectedView(h, detail, step, names, viewport)]),
           ],
         ),
         h.div(

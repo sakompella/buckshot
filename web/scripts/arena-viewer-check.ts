@@ -4,10 +4,11 @@ import { join } from "node:path";
 import { Schema } from "effect";
 import { type Browser, chromium, type Page } from "playwright-core";
 
-import { Blunders, MatchDetail } from "../src/arena-viewer/api.ts";
+import { Blunders, MatchDetail, type MoveRegret } from "../src/arena-viewer/api.ts";
 import { anchorId } from "../src/arena-viewer/page/charts.ts";
 import { baseName } from "../src/arena-viewer/page/data.ts";
 import { GROUPS, MOVED_TARGETS, Section } from "../src/arena-viewer/page/model.ts";
+import { stepsOf } from "../src/arena-viewer/page/replay.ts";
 import { TOUR } from "../src/arena-viewer/page/tour.ts";
 import { coverageOfMatch, type RegretCoverage, withoutRegret } from "./arena-viewer-regret-coverage.ts";
 
@@ -323,7 +324,9 @@ const openBreakdown = async (page: Page) => {
   await settled(page);
 };
 
-const servedDecisions = async (id: string) => Schema.decodeUnknownSync(MatchDetail)(await (await fetch(`${base}/api/match?id=${encodeURIComponent(id)}`)).json()).decisions;
+const servedDetail = async (id: string) => Schema.decodeUnknownSync(MatchDetail)(await (await fetch(`${base}/api/match?id=${encodeURIComponent(id)}`)).json());
+
+const servedDecisions = async (id: string) => (await servedDetail(id)).decisions;
 
 const openedMatchId = async (page: Page) => {
   await page.waitForSelector(".modal .step");
@@ -353,6 +356,73 @@ const expectRegretShown = async (page: Page, coverage: RegretCoverage, what: str
 
   expectThat(shown.tagged === coverage.tagged && shown.rings === coverage.rings && shown.turning === coverage.turning, `${what}: replay shows ${JSON.stringify(shown)}, its data has ${JSON.stringify({ tagged: coverage.tagged, rings: coverage.rings, turning: coverage.turning })}`);
 };
+
+const expectedCandidates = (regret: MoveRegret) =>
+  regret.values
+    .toSorted((left, right) => right.score - left.score)
+    .map(({ label, score }) => ({ label, pct: `${score.toFixed(1)}%`, isChosen: label === regret.chosen, isBest: score === regret.bestScore }));
+
+const expectedVerdict = (regret: MoveRegret) => {
+  if (regret.points === 0) return `Best at depth ${regret.depth}`;
+
+  return regret.exact ? `Proven worse · gave up ${regret.points.toFixed(1)} points` : `Gave up ${regret.points.toFixed(1)} points (estimate)`;
+};
+
+const checkCandidates = async (page: Page, matchId: string, what: string): Promise<boolean> => {
+  await settled(page);
+
+  const detail = await servedDetail(matchId);
+  const at = Number(/move (\d+) of/.exec(await textOf(page, ".modal .stepper .k"))?.[1] ?? Number.NaN) - 1;
+  const step = stepsOf(detail)[at];
+  const list = page.locator(".modal .sel .cands");
+
+  if (step === undefined) throw new Error(`${what}: the replay shows move ${at + 1}, which ${matchId} does not have`);
+
+  if (step.regret === null) {
+    expectThat((await list.count()) === 0, `${what}: move ${at + 1} has no regret but shows a candidate list`);
+
+    return false;
+  }
+
+  const wasFolded = (await list.getAttribute("open")) === null;
+
+  if (wasFolded) await list.locator("summary").click();
+
+  await settled(page);
+
+  const shown = await list.locator(".cand").evaluateAll((rows) =>
+    rows.map((row) => ({
+      label: row.querySelector(".label")?.textContent ?? "",
+      pct: row.querySelector(".pct")?.textContent ?? "",
+      isChosen: row.classList.contains("chosen"),
+      isBest: row.classList.contains("best"),
+    })),
+  );
+
+  const expected = expectedCandidates(step.regret);
+  const lines = (await list.locator(":scope > .k").allInnerTexts()).map((line) => line.trim());
+  const reloadInReach = step.live + step.blank <= step.regret.depth;
+
+  expectThat(JSON.stringify(shown) === JSON.stringify(expected), `${what}: move ${at + 1} lists ${JSON.stringify(shown)}, its data has ${JSON.stringify(expected)}`);
+  expectThat((await textOf(page, ".modal .sel .cands > summary")).trim() === expectedVerdict(step.regret), `${what}: move ${at + 1} says "${await textOf(page, ".modal .sel .cands > summary")}", not "${expectedVerdict(step.regret)}"`);
+  expectThat(lines[0]?.endsWith(`· depth ${step.regret.depth}${step.regret.limited ? " · budget stopped" : ""}`) === true, `${what}: move ${at + 1} has the depth line "${lines[0]}"`);
+  expectThat(lines.length === (reloadInReach ? 2 : 1) && (!reloadInReach || /reload is within reach/.test(lines[1] ?? "")), `${what}: move ${at + 1} has ${lines.length} lines under its list with a reload ${reloadInReach ? "" : "not "}in reach`);
+  console.log(what, "move", at + 1, "candidates", shown.length, "|", expectedVerdict(step.regret), step.regret.limited ? "| budget stopped" : "", reloadInReach ? "| reload in reach" : "", wasFolded ? "| was folded" : "| was open");
+
+  return wasFolded;
+};
+
+const openBudgetStopped = async (page: Page, matchId: string) => {
+  const at = stepsOf(await servedDetail(matchId)).findIndex(({ regret }) => regret?.limited === true);
+
+  if (at === -1) return false;
+
+  await page.locator(".modal .step").nth(at).click();
+
+  return true;
+};
+
+const regretSteps = (page: Page, kind: "exact" | "not exact") => page.locator(".modal .step").filter({ has: kind === "exact" ? page.locator(".tag.regret.exact") : page.locator(".tag.regret:not(.exact)") });
 
 const FixtureSeats = Schema.Array(Schema.Struct({ matchId: Schema.String, model: Schema.String, effort: Schema.String, status: Schema.String }));
 
@@ -430,6 +500,7 @@ const checkRegret = async (page: Page) => {
   const fixtures = await regretFixtures(5);
   let exact = 0;
   let notExact = 0;
+  let budgetStopped = 0;
 
   expectThat(fixtures.length > 0, "no regret blunder to open a regret-covered replay from");
 
@@ -448,19 +519,29 @@ const checkRegret = async (page: Page) => {
     notExact += tags.filter(({ isExact }) => !isExact).length;
 
     for (const kind of ["exact", "not exact"] as const) {
-      const step = page.locator(".modal .step").filter({ has: kind === "exact" ? page.locator(".tag.regret.exact") : page.locator(".tag.regret:not(.exact)") }).first();
+      const step = regretSteps(page, kind).first();
 
       if ((await step.count()) === 0) continue;
 
       await step.click();
-      await settled(page);
 
-      const detail = ((await page.locator(".modal .sel").textContent()) ?? "").replaceAll(/\s+/g, " ");
-      const says = /not proven exact/.test(detail) ? "not exact" : /proven exact/.test(detail) ? "exact" : "neither";
+      const wasFolded = await checkCandidates(page, coverage.matchId, `blunder match ${card} ${kind}`);
 
-      expectThat(/Best move .+ chosen [\d.]+% · depth \d/.test(detail) && says === kind, `blunder match ${card}: a ${kind} move's detail says ${says}: ${detail.slice(0, 120)}`);
+      expectThat(!wasFolded, `blunder match ${card}: the candidate list of a ${kind} move came up folded on the desktop`);
 
       if (card === 0) await page.locator(".modal").screenshot({ path: shot(`replay-regret-${kind.replace(" ", "-")}`) });
+    }
+
+    const best = page.locator(".modal .step").filter({ hasNot: page.locator(".tag") }).first();
+
+    await best.click();
+    await checkCandidates(page, coverage.matchId, `blunder match ${card} untagged`);
+
+    if (await openBudgetStopped(page, coverage.matchId)) {
+      budgetStopped++;
+      await checkCandidates(page, coverage.matchId, `blunder match ${card} budget stopped`);
+
+      if (card === 0) await page.locator(".modal").screenshot({ path: shot("replay-regret-budget-stopped") });
     }
 
     console.log("blunder match", card, "searched moves", coverage.searched, "tags", coverage.tagged, "turning points", coverage.turning);
@@ -469,6 +550,7 @@ const checkRegret = async (page: Page) => {
 
   console.log("regret tags over the covered replays:", exact, "exact,", notExact, "not proven exact");
   expectThat(exact + notExact > 0, "no covered replay shows a regret tag");
+  expectThat(budgetStopped > 0, "no covered replay has a move the node budget stopped");
 };
 
 const checkMissingRegret = async (browser: Browser, viewport: Viewport) => {
@@ -512,7 +594,14 @@ const checkMissingRegret = async (browser: Browser, viewport: Viewport) => {
 
     expectThat(incomingRegrets > 0, "the fixture route did not fire on a match that came with regret, so it proves nothing");
     expectThat(shown.tagged === 0 && shown.rings === 0 && shown.turning === 0, `a replay with no regret shows ${JSON.stringify(shown)}`);
-    expectThat(!/Gave up \d|Best move .+ chosen/.test(detail), "a replay with no regret still words a regret");
+    expectThat(!/Gave up \d|Best at depth|Proven worse/.test(detail), "a replay with no regret still words a regret");
+    expectThat((await page.locator(".modal .cands").count()) === 0, "a replay with no regret shows a candidate list");
+
+    for (const step of [0, 1, 2]) {
+      await page.locator(".modal .step").nth(step).click();
+      expectThat((await countOf(page, ".modal .cands")) === 0, `the missing regret fixture's move ${step + 1} shows a candidate list`);
+    }
+
     await page.locator(".modal").screenshot({ path: shot("replay-missing-regret") });
     await closeReplay(page);
 
@@ -791,6 +880,27 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
     expectThat(crowded === 0, `${name}: a move row overflows with its regret tag`);
     await page.goBack();
     console.log(name, "back closes replay:", (await countOf(page, ".modal")) === 0);
+  });
+  await check("candidate list", async () => {
+    const [fixture] = await regretFixtures(1);
+
+    if (fixture === undefined) throw new Error("no regret blunder to open a candidate list from");
+
+    await openFromLeaderboard(page, fixture);
+
+    const matchId = await openedMatchId(page);
+
+    if (!(await openBudgetStopped(page, matchId))) throw new Error(`${name}: ${matchId} has no move the node budget stopped`);
+
+    const wasFolded = await checkCandidates(page, matchId, `${name} candidates`);
+    const summary = await page.locator(".modal .sel .cands > summary").boundingBox();
+    const overflow = await page.evaluate(() => Math.max(document.documentElement.scrollWidth - innerWidth, ...[...document.querySelectorAll(".modal, .modal .cands")].map((element) => element.scrollWidth - element.clientWidth)));
+
+    expectThat(wasFolded === width < 640, `${name}: the candidate list came up ${wasFolded ? "folded" : "open"}`);
+    expectThat(summary !== null && summary.height >= 44, `${name}: the candidate list's summary is ${summary?.height ?? 0}px tall`);
+    expectThat(overflow <= 0, `${name}: the replay with its candidate list overflows by ${overflow}px`);
+    await page.locator(".modal .sel").screenshot({ path: shot(`${name}-candidates`) });
+    await closeReplay(page);
   });
   await check("jump menu", async () => {
     await checkJumps(page, name, true);
