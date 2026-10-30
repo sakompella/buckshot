@@ -234,6 +234,14 @@ Wins out of 10 (Sonnet max: of 8 here):
 
 Ten games per config is a small sample: read single cells as rough. Two patterns stand out. Haiku 4.5 at high won none of its 10. Sol stays strong at every effort (6–8 of 10). The pooled ratings over all tournaments are in the leaderboard above, the viewer and [matchups.md](analysis/matchups.md).
 
+## Tournament 5: first completed subset (2026-10-30)
+
+The viewer now includes 62 completed matches from the first subset and earlier small batches. The database has 2,553 completed matches in total. This snapshot excludes the additional top-up still running. The new matches add $49.58 of list-price usage, bringing the database total to $1,200.01; every call is priced.
+
+These are sparse comparisons, not a new leaderboard verdict. Each new pairing has two matches on one seed with swapped seats. Configs have between two and twelve matches in this snapshot, against different opponents. Opus max won seven of its eight matches and Opus off five of eight, but neither is enough to establish their relative strength. Terra 6.1 has results at all six tested effort levels; the sample does not establish an effort trend.
+
+The viewer's outcome ratings include these matches. Its derived knowledge and regret datasets have not yet been refreshed for them, so missing move-quality data must not be read as zero mistakes. The [deeper-search check](analysis/regret.md#deeper-search) and [minimax self-play study](analysis/matchups.md#minimax-self-play) describe separate CPU-only evaluations.
+
 ## Beliefs and items
 What each model knew about the chamber when it shot, whether it acted on it, what became of its items, and how consistently it chose in repeated positions: [analysis/beliefs-and-items.md](analysis/beliefs-and-items.md).
 
