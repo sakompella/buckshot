@@ -38,6 +38,7 @@ const BASES: ReadonlyArray<Base> = [
   { id: "claude-haiku-4-5", name: "Haiku 4.5", short: "Haiku 4.5", tone: [0.59, 0.14, 50] },
   { id: "gpt-6-astra", name: "GPT-6 Astra", short: "Astra", tone: [0.89, 0.073, 224.2] },
   { id: "gpt-6.1-sol", name: "GPT-6.1 Sol", short: "Sol", tone: [0.741, 0.131, 240.2] },
+  { id: "gpt-6.1-terra", name: "GPT-6.1 Terra", short: "Terra 6.1", tone: [0.69, 0.137, 245] },
   { id: "gpt-5.6-terra", name: "GPT-5.6 Terra", short: "Terra", tone: [0.638, 0.144, 250] },
   { id: "gpt-6-luna", name: "GPT-6 Luna", short: "Luna", tone: [0.563, 0.128, 250] },
 ];
