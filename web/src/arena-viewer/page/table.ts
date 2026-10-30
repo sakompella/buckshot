@@ -25,16 +25,13 @@ export type TableState = {
   readonly live: number;
   readonly blank: number;
   readonly known: "live" | "blank" | null;
-  /** Whose knowledge of the shells the middle shows. */
   readonly viewer: string;
-  /** What happens at this moment, shown in the middle under the shells. */
   readonly action: Html;
 };
 
 /** Grid areas in table order, starting at the bottom and going clockwise, for a table of one to four seats. */
 const PLACES = [["bottom"], ["bottom", "top"], ["bottom", "left", "top"], ["bottom", "left", "top", "right"]] as const;
 
-/** An item list with repeats counted: beer, beer, saw becomes beer ×2, saw. */
 const countItems = (items: ReadonlyArray<string>): ReadonlyArray<readonly [string, number]> => [
   ...items.reduce((counts, item) => counts.set(item, (counts.get(item) ?? 0) + 1), new Map<string, number>()),
 ];

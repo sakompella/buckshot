@@ -15,13 +15,11 @@ const HOUR_MS = 3.6e6;
 const MIN_CALLS = 20;
 
 export interface HourBucket {
-  /** Hours since the epoch, in UTC. */
   readonly hour: number;
   readonly calls: number;
   readonly failed: number;
 }
 
-/** Each model's replies and failed replies by the hour each was logged, hours in order. */
 export const failuresByHour = (seats: ReadonlyArray<Pick<SeatFull, "model" | "callHours">>, keep: ReadonlyArray<boolean>): ReadonlyMap<string, ReadonlyArray<HourBucket>> => {
   const kept = seats.filter((_, index) => keep[index] === true);
 
@@ -46,7 +44,6 @@ const failedShare = ({ calls, failed }: HourBucket): number => (calls >= MIN_CAL
 
 const PACIFIC_DAY = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", month: "short", day: "numeric", hour: "numeric", hourCycle: "h23" });
 
-/** The hours in [first, last] that start a Pacific day, with the day's name. */
 const dayStarts = (first: number, last: number): ReadonlyArray<{ readonly hour: number; readonly name: string }> =>
   Array.from({ length: last - first + 1 }, (_, index) => first + index).flatMap((hour) => {
     const parts = PACIFIC_DAY.formatToParts(new Date(hour * HOUR_MS));
