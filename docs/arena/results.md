@@ -4,64 +4,74 @@ This page summarizes the tournaments run so far, the findings about model reason
 
 Ratings are one Bradley-Terry fit over every scored match of every tournament, on an Elo scale with the mean at 0, per configuration (model + endpoint + effort). So one rating scale covers every config, as in the viewer. A second fit on pot share (a config's cash over the match's cash, which also credits round prizes a loser banked) gives the cash rating. 95% intervals are in [matchups.md](analysis/matchups.md). Each pairing plays 10 seeds in both seat orders, 20 matches, unless stated otherwise. With 10 seeds, close rankings aren't reliable. "Medium" also isn't equal compute across providers.
 
-Scope: 2,471 scored matches with no DeepSeek seat, as of 2026-10-26.
+Scope: 2,533 scored matches with no DeepSeek seat, from the 2,553-match snapshot of 2026-10-30.
 
-## Status (2026-10-26)
-- **Nothing is running.** No arena jobs, runners, agents or heartbeats.
+## Status (snapshot of 2026-10-30)
+This page describes the 2,553-match snapshot of the analysis database. Tournament 5 was still running a top-up when it was taken. Its later matches are not here.
 - **tournament-1** (`_work/arena/tournament-1`): finished. 120 scheduled matches are unplayed, all against DeepSeek: 38 started and are partial, and 82 never started. The leftover Astra and terra matches finished on 2026-10-22 (below).
 - **tournament-2** (`_work/arena/tournament-2`, config `web/tournaments/opus-effort.json`): stage A is finished. Stage B, the max pairings, hasn't started and needs the user's go-ahead.
 - **tournament-3** (`_work/arena/tournament-3`, config `web/tournaments/astra-opus-xhigh.json`): finished, 40 of 40 capped matches.
 - **tournament-4** (`_work/arena/tournament-4`): finished, 288 of 288 (below). The 138 Sonnet max matches once scheduled in tournament-1 were cut when tournament-4 took over its cross-model games; the import skips them.
-- **Where the data is:** all tournament data lives in the `agents/arena-design` worktree (`~/.t3/worktrees/buckshot/t3-1427bb8e/_work/arena/`). That worktree also holds the code checkout the runner needs for new matches. Keep it.
+- **tournament-5** (`_work/arena/tournament-5`): partly played. The snapshot holds 62 completed matches (below).
 
 ## Leaderboard
-One table per cohort, ranked by the pooled rating, as the viewer's leaderboards show them. Matches, win share and pot share count the cohort's own games; ratings come from the one pooled fit, so a config has the same rating in every table. Sonnet max has 2 games in tournament 1's cross-model cohort (it lost both to Opus), so its rating there rests on its tournament-4 games. `python3 tools/arena/analysis/leaderboard.py --doc docs/arena/results.md` rewrites the tables.
+One table per cohort, ranked by the pooled rating, as the viewer's leaderboards show them. Matches, win share and pot share count the cohort's own games; ratings come from the one pooled fit, so a config has the same rating in every table. Sonnet max has 2 games in tournament 1's cross-model cohort (it lost both to Opus), so its rating there rests on its tournament-4 games. Tournament 5's 62 matches are one table of their own, with 2 to 12 matches per config against different opponents; their ratings are mostly the prior pulling a thin record, not a ranking. `python3 tools/arena/analysis/leaderboard.py --doc docs/arena/results.md` rewrites the tables.
 
 <!-- leaderboard:start -->
 ### All configs
 
-2471 scored matches.
+2533 scored matches.
 
 | config | matches | win share | pot share | rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
-| claude-opus-5-5-xhigh | 81 | 59.3% | 54.7% | +205 | +109 |
-| claude-sonnet-5-5-max | 110 | 69.1% | 64.3% | +191 | +128 |
-| gpt-6-astra | 219 | 68.0% | 61.3% | +174 | +96 |
-| gpt-6.1-sol-max | 90 | 61.1% | 56.8% | +164 | +108 |
-| claude-haiku-5-5-xhigh | 110 | 62.7% | 54.0% | +130 | +29 |
-| claude-sonnet-5-5-xhigh | 110 | 57.3% | 52.9% | +121 | +63 |
-| claude-haiku-5-5-max | 110 | 60.9% | 58.6% | +119 | +58 |
-| claude-opus-5-5-high | 50 | 48.0% | 47.9% | +113 | +54 |
-| gpt-6.1-sol-xhigh | 90 | 51.1% | 51.7% | +109 | +81 |
-| gpt-6.1-sol-low | 90 | 50.0% | 49.9% | +102 | +70 |
-| claude-opus-5-5 | 238 | 58.8% | 55.1% | +98 | +57 |
-| gpt-6.1-sol-high | 90 | 48.9% | 48.7% | +89 | +59 |
-| gpt-6.1-sol | 256 | 56.6% | 56.3% | +84 | +66 |
-| claude-sonnet-5-5-high | 110 | 51.8% | 50.2% | +79 | +41 |
-| claude-haiku-5-5-high | 110 | 52.7% | 52.4% | +67 | +20 |
-| claude-sonnet-5-5-off | 110 | 45.5% | 46.0% | +46 | +19 |
-| claude-sonnet-5-5 | 276 | 51.4% | 51.5% | +43 | +28 |
-| claude-haiku-5-5 | 278 | 52.5% | 51.1% | +42 | +12 |
-| claude-haiku-5-5-low | 110 | 48.2% | 48.9% | +41 | +0 |
-| gpt-5.6-terra-max | 90 | 57.8% | 53.8% | +34 | +36 |
-| gpt-5.6-terra-xhigh | 90 | 56.7% | 54.7% | +32 | +45 |
-| gpt-6-luna-xhigh | 110 | 70.0% | 64.7% | +0 | +8 |
-| claude-opus-5-5-low | 30 | 43.3% | 55.8% | -1 | +67 |
-| claude-sonnet-5-5-low | 110 | 36.4% | 42.4% | -14 | -4 |
-| gpt-6-luna-max | 110 | 67.3% | 63.2% | -18 | -1 |
-| gpt-5.6-terra | 256 | 46.5% | 48.3% | -25 | -4 |
-| gpt-5.6-terra-high | 90 | 44.4% | 49.6% | -42 | +13 |
-| gpt-5.6-terra-low | 90 | 41.1% | 45.7% | -59 | -8 |
-| claude-haiku-5-5-off | 110 | 30.9% | 35.7% | -72 | -82 |
-| gpt-6-luna-high | 110 | 60.0% | 55.6% | -74 | -52 |
-| claude-haiku-4-5-20251001-minimal | 90 | 55.6% | 50.0% | -133 | -106 |
-| claude-haiku-4-5-20251001 | 256 | 38.3% | 41.7% | -138 | -89 |
-| claude-haiku-4-5-20251001-low | 90 | 50.0% | 51.3% | -168 | -99 |
-| claude-haiku-4-5-20251001-high | 90 | 47.8% | 49.4% | -181 | -109 |
-| gpt-6-luna | 272 | 26.8% | 34.6% | -226 | -134 |
-| claude-haiku-4-5-20251001-off | 90 | 27.8% | 36.3% | -302 | -184 |
-| gpt-6-luna-off | 110 | 26.4% | 33.8% | -311 | -191 |
-| gpt-6-luna-low | 110 | 25.5% | 31.4% | -317 | -205 |
+| claude-opus-5-5-max | 8 | 87.5% | 71.4% | +334 | +190 |
+| gpt-6.1-terra-max | 4 | 75.0% | 66.1% | +227 | +126 |
+| claude-opus-5-5-xhigh | 81 | 59.3% | 54.7% | +180 | +96 |
+| gpt-6.1-terra-low | 6 | 66.7% | 61.1% | +167 | +72 |
+| claude-sonnet-5-5-max | 110 | 69.1% | 64.3% | +160 | +112 |
+| gpt-6-astra | 219 | 68.0% | 61.3% | +149 | +84 |
+| gpt-6.1-sol-max | 92 | 60.9% | 57.0% | +145 | +104 |
+| claude-haiku-5-5-xhigh | 110 | 62.7% | 54.0% | +103 | +16 |
+| gpt-6.1-terra | 12 | 58.3% | 53.5% | +95 | +23 |
+| claude-opus-5-5-off | 8 | 62.5% | 58.6% | +94 | +81 |
+| claude-haiku-5-5-max | 110 | 60.9% | 58.6% | +92 | +45 |
+| claude-sonnet-5-5-xhigh | 112 | 57.1% | 53.2% | +89 | +47 |
+| claude-opus-5-5-high | 50 | 48.0% | 47.9% | +88 | +42 |
+| gpt-6.1-sol-xhigh | 94 | 52.1% | 52.7% | +86 | +73 |
+| gpt-6.1-sol-low | 90 | 50.0% | 49.9% | +81 | +63 |
+| gpt-6-astra-low | 8 | 62.5% | 50.0% | +76 | -9 |
+| claude-opus-5-5 | 248 | 58.1% | 54.5% | +72 | +44 |
+| gpt-6.1-sol-high | 90 | 48.9% | 48.7% | +68 | +52 |
+| gpt-6.1-terra-off | 6 | 50.0% | 44.4% | +66 | -14 |
+| gpt-6.1-sol | 266 | 56.8% | 56.5% | +65 | +59 |
+| gpt-6-astra-high | 4 | 50.0% | 67.8% | +62 | +161 |
+| claude-sonnet-5-5-high | 112 | 52.7% | 50.5% | +51 | +25 |
+| claude-haiku-5-5-high | 112 | 51.8% | 51.8% | +36 | +4 |
+| claude-haiku-5-5 | 280 | 52.5% | 51.1% | +17 | +0 |
+| claude-haiku-5-5-low | 112 | 48.2% | 48.8% | +16 | -12 |
+| claude-sonnet-5-5 | 278 | 51.1% | 51.3% | +15 | +14 |
+| claude-sonnet-5-5-off | 112 | 44.6% | 45.4% | +11 | +1 |
+| gpt-5.6-terra-max | 90 | 57.8% | 53.8% | +10 | +24 |
+| gpt-5.6-terra-xhigh | 90 | 56.7% | 54.7% | +8 | +33 |
+| gpt-6-luna-xhigh | 112 | 69.6% | 64.4% | -21 | -2 |
+| claude-opus-5-5-low | 34 | 41.2% | 54.0% | -24 | +56 |
+| gpt-6.1-terra-xhigh | 8 | 37.5% | 37.5% | -27 | -66 |
+| gpt-6-luna-max | 110 | 67.3% | 63.2% | -42 | -12 |
+| claude-sonnet-5-5-low | 112 | 35.7% | 42.2% | -49 | -22 |
+| gpt-5.6-terra | 256 | 46.5% | 48.3% | -50 | -16 |
+| gpt-5.6-terra-high | 90 | 44.4% | 49.6% | -66 | +2 |
+| gpt-5.6-terra-low | 90 | 41.1% | 45.7% | -83 | -20 |
+| gpt-6-luna-high | 110 | 60.0% | 55.6% | -98 | -63 |
+| claude-haiku-5-5-off | 110 | 30.9% | 35.7% | -99 | -96 |
+| gpt-6.1-terra-high | 8 | 25.0% | 33.1% | -133 | -104 |
+| claude-haiku-4-5-20251001-minimal | 90 | 55.6% | 50.0% | -158 | -117 |
+| claude-haiku-4-5-20251001 | 256 | 38.3% | 41.7% | -163 | -101 |
+| claude-haiku-4-5-20251001-low | 90 | 50.0% | 51.3% | -193 | -111 |
+| claude-haiku-4-5-20251001-high | 90 | 47.8% | 49.4% | -205 | -121 |
+| gpt-6-luna | 276 | 26.4% | 34.4% | -252 | -147 |
+| claude-haiku-4-5-20251001-off | 90 | 27.8% | 36.3% | -327 | -195 |
+| gpt-6-luna-off | 110 | 26.4% | 33.8% | -335 | -202 |
+| gpt-6-luna-low | 110 | 25.5% | 31.4% | -341 | -217 |
 
 ### Cross-model games (tournament 1)
 
@@ -69,15 +79,15 @@ One table per cohort, ranked by the pooled rating, as the viewer's leaderboards 
 
 | config | matches | win share | pot share | rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
-| claude-sonnet-5-5-max | 2 | 0.0% | 34.4% | +191 | +128 |
-| gpt-6-astra | 140 | 72.1% | 63.3% | +174 | +96 |
-| claude-opus-5-5 | 142 | 62.7% | 58.2% | +98 | +57 |
-| gpt-6.1-sol | 140 | 59.3% | 58.2% | +84 | +66 |
-| claude-sonnet-5-5 | 140 | 55.0% | 54.2% | +43 | +28 |
-| claude-haiku-5-5 | 140 | 57.9% | 53.7% | +42 | +12 |
-| gpt-5.6-terra | 140 | 45.7% | 48.3% | -25 | -4 |
-| claude-haiku-4-5-20251001 | 140 | 30.0% | 35.7% | -138 | -89 |
-| gpt-6-luna | 140 | 17.9% | 28.5% | -226 | -134 |
+| claude-sonnet-5-5-max | 2 | 0.0% | 34.4% | +160 | +112 |
+| gpt-6-astra | 140 | 72.1% | 63.3% | +149 | +84 |
+| claude-opus-5-5 | 142 | 62.7% | 58.2% | +72 | +44 |
+| gpt-6.1-sol | 140 | 59.3% | 58.2% | +65 | +59 |
+| claude-haiku-5-5 | 140 | 57.9% | 53.7% | +17 | +0 |
+| claude-sonnet-5-5 | 140 | 55.0% | 54.2% | +15 | +14 |
+| gpt-5.6-terra | 140 | 45.7% | 48.3% | -50 | -16 |
+| claude-haiku-4-5-20251001 | 140 | 30.0% | 35.7% | -163 | -101 |
+| gpt-6-luna | 140 | 17.9% | 28.5% | -252 | -147 |
 
 ### claude-haiku-5-5 efforts (tournament 1)
 
@@ -85,12 +95,12 @@ One table per cohort, ranked by the pooled rating, as the viewer's leaderboards 
 
 | config | matches | win share | pot share | rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
-| claude-haiku-5-5-xhigh | 100 | 65.0% | 55.0% | +130 | +29 |
-| claude-haiku-5-5-max | 100 | 60.0% | 57.8% | +119 | +58 |
-| claude-haiku-5-5-high | 100 | 54.0% | 53.6% | +67 | +20 |
-| claude-haiku-5-5 | 100 | 45.0% | 49.5% | +42 | +12 |
-| claude-haiku-5-5-low | 100 | 45.0% | 47.8% | +41 | +0 |
-| claude-haiku-5-5-off | 100 | 31.0% | 36.2% | -72 | -82 |
+| claude-haiku-5-5-xhigh | 100 | 65.0% | 55.0% | +103 | +16 |
+| claude-haiku-5-5-max | 100 | 60.0% | 57.8% | +92 | +45 |
+| claude-haiku-5-5-high | 100 | 54.0% | 53.6% | +36 | +4 |
+| claude-haiku-5-5 | 100 | 45.0% | 49.5% | +17 | +0 |
+| claude-haiku-5-5-low | 100 | 45.0% | 47.8% | +16 | -12 |
+| claude-haiku-5-5-off | 100 | 31.0% | 36.2% | -99 | -96 |
 
 ### claude-sonnet-5-5 efforts (tournament 1)
 
@@ -98,12 +108,12 @@ One table per cohort, ranked by the pooled rating, as the viewer's leaderboards 
 
 | config | matches | win share | pot share | rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
-| claude-sonnet-5-5-max | 100 | 68.0% | 63.4% | +191 | +128 |
-| claude-sonnet-5-5-xhigh | 100 | 58.0% | 52.9% | +121 | +63 |
-| claude-sonnet-5-5-high | 100 | 51.0% | 49.2% | +79 | +41 |
-| claude-sonnet-5-5-off | 100 | 43.0% | 44.9% | +46 | +19 |
-| claude-sonnet-5-5 | 100 | 45.0% | 47.6% | +43 | +28 |
-| claude-sonnet-5-5-low | 100 | 35.0% | 42.0% | -14 | -4 |
+| claude-sonnet-5-5-max | 100 | 68.0% | 63.4% | +160 | +112 |
+| claude-sonnet-5-5-xhigh | 100 | 58.0% | 52.9% | +89 | +47 |
+| claude-sonnet-5-5-high | 100 | 51.0% | 49.2% | +51 | +25 |
+| claude-sonnet-5-5 | 100 | 45.0% | 47.6% | +15 | +14 |
+| claude-sonnet-5-5-off | 100 | 43.0% | 44.9% | +11 | +1 |
+| claude-sonnet-5-5-low | 100 | 35.0% | 42.0% | -49 | -22 |
 
 ### gpt-6-luna efforts (tournament 1)
 
@@ -111,12 +121,12 @@ One table per cohort, ranked by the pooled rating, as the viewer's leaderboards 
 
 | config | matches | win share | pot share | rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
-| gpt-6-luna-xhigh | 100 | 72.0% | 66.0% | +0 | +8 |
-| gpt-6-luna-max | 100 | 72.0% | 66.1% | -18 | -1 |
-| gpt-6-luna-high | 100 | 62.0% | 56.8% | -74 | -52 |
-| gpt-6-luna | 100 | 39.0% | 42.7% | -226 | -134 |
-| gpt-6-luna-off | 100 | 28.0% | 35.4% | -311 | -191 |
-| gpt-6-luna-low | 100 | 27.0% | 32.9% | -317 | -205 |
+| gpt-6-luna-xhigh | 100 | 72.0% | 66.0% | -21 | -2 |
+| gpt-6-luna-max | 100 | 72.0% | 66.1% | -42 | -12 |
+| gpt-6-luna-high | 100 | 62.0% | 56.8% | -98 | -63 |
+| gpt-6-luna | 100 | 39.0% | 42.7% | -252 | -147 |
+| gpt-6-luna-off | 100 | 28.0% | 35.4% | -335 | -202 |
+| gpt-6-luna-low | 100 | 27.0% | 32.9% | -341 | -217 |
 
 ### claude-haiku-4-5-20251001 efforts (tournament 1)
 
@@ -124,11 +134,11 @@ One table per cohort, ranked by the pooled rating, as the viewer's leaderboards 
 
 | config | matches | win share | pot share | rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
-| claude-haiku-4-5-20251001-minimal | 80 | 57.5% | 51.2% | -133 | -106 |
-| claude-haiku-4-5-20251001 | 80 | 58.8% | 55.8% | -138 | -89 |
-| claude-haiku-4-5-20251001-low | 80 | 51.2% | 52.7% | -168 | -99 |
-| claude-haiku-4-5-20251001-high | 80 | 53.8% | 52.4% | -181 | -109 |
-| claude-haiku-4-5-20251001-off | 80 | 28.7% | 38.0% | -302 | -184 |
+| claude-haiku-4-5-20251001-minimal | 80 | 57.5% | 51.2% | -158 | -117 |
+| claude-haiku-4-5-20251001 | 80 | 58.8% | 55.8% | -163 | -101 |
+| claude-haiku-4-5-20251001-low | 80 | 51.2% | 52.7% | -193 | -111 |
+| claude-haiku-4-5-20251001-high | 80 | 53.8% | 52.4% | -205 | -121 |
+| claude-haiku-4-5-20251001-off | 80 | 28.7% | 38.0% | -327 | -195 |
 
 ### gpt-5.6-terra efforts (tournament 1)
 
@@ -136,11 +146,11 @@ One table per cohort, ranked by the pooled rating, as the viewer's leaderboards 
 
 | config | matches | win share | pot share | rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
-| gpt-5.6-terra-max | 80 | 58.8% | 53.9% | +34 | +36 |
-| gpt-5.6-terra-xhigh | 80 | 60.0% | 56.1% | +32 | +45 |
-| gpt-5.6-terra | 80 | 45.0% | 45.0% | -25 | -4 |
-| gpt-5.6-terra-high | 80 | 46.2% | 50.8% | -42 | +13 |
-| gpt-5.6-terra-low | 80 | 40.0% | 44.2% | -59 | -8 |
+| gpt-5.6-terra-max | 80 | 58.8% | 53.9% | +10 | +24 |
+| gpt-5.6-terra-xhigh | 80 | 60.0% | 56.1% | +8 | +33 |
+| gpt-5.6-terra | 80 | 45.0% | 45.0% | -50 | -16 |
+| gpt-5.6-terra-high | 80 | 46.2% | 50.8% | -66 | +2 |
+| gpt-5.6-terra-low | 80 | 40.0% | 44.2% | -83 | -20 |
 
 ### gpt-6.1-sol efforts (tournament 1)
 
@@ -148,11 +158,11 @@ One table per cohort, ranked by the pooled rating, as the viewer's leaderboards 
 
 | config | matches | win share | pot share | rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
-| gpt-6.1-sol-max | 80 | 58.8% | 54.7% | +164 | +108 |
-| gpt-6.1-sol-xhigh | 80 | 48.8% | 49.8% | +109 | +81 |
-| gpt-6.1-sol-low | 80 | 48.8% | 48.7% | +102 | +70 |
-| gpt-6.1-sol-high | 80 | 47.5% | 47.7% | +89 | +59 |
-| gpt-6.1-sol | 80 | 46.2% | 49.1% | +84 | +66 |
+| gpt-6.1-sol-max | 80 | 58.8% | 54.7% | +145 | +104 |
+| gpt-6.1-sol-xhigh | 80 | 48.8% | 49.8% | +86 | +73 |
+| gpt-6.1-sol-low | 80 | 48.8% | 48.7% | +81 | +63 |
+| gpt-6.1-sol-high | 80 | 47.5% | 47.7% | +68 | +52 |
+| gpt-6.1-sol | 80 | 46.2% | 49.1% | +65 | +59 |
 
 ### Opus efforts (tournament 2)
 
@@ -160,10 +170,42 @@ One table per cohort, ranked by the pooled rating, as the viewer's leaderboards 
 
 | config | matches | win share | pot share | rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
-| claude-opus-5-5-xhigh | 40 | 65.0% | 58.6% | +205 | +109 |
-| claude-opus-5-5-high | 40 | 45.0% | 44.1% | +113 | +54 |
-| claude-opus-5-5 | 60 | 48.3% | 48.1% | +98 | +57 |
-| claude-opus-5-5-low | 20 | 35.0% | 50.2% | -1 | +67 |
+| claude-opus-5-5-xhigh | 40 | 65.0% | 58.6% | +180 | +96 |
+| claude-opus-5-5-high | 40 | 45.0% | 44.1% | +88 | +42 |
+| claude-opus-5-5 | 60 | 48.3% | 48.1% | +72 | +44 |
+| claude-opus-5-5-low | 20 | 35.0% | 50.2% | -24 | +56 |
+
+### Tournament 5, first imported subset
+
+62 scored matches.
+
+| config | matches | win share | pot share | rating (Elo) | cash rating (Elo) |
+|---|---|---|---|---|---|
+| claude-opus-5-5-max | 8 | 87.5% | 71.4% | +334 | +190 |
+| gpt-6.1-terra-max | 4 | 75.0% | 66.1% | +227 | +126 |
+| gpt-6.1-terra-low | 6 | 66.7% | 61.1% | +167 | +72 |
+| gpt-6.1-sol-max | 2 | 50.0% | 67.8% | +145 | +104 |
+| gpt-6.1-terra | 12 | 58.3% | 53.5% | +95 | +23 |
+| claude-opus-5-5-off | 8 | 62.5% | 58.6% | +94 | +81 |
+| claude-sonnet-5-5-xhigh | 2 | 50.0% | 65.6% | +89 | +47 |
+| gpt-6.1-sol-xhigh | 4 | 75.0% | 75.0% | +86 | +73 |
+| gpt-6-astra-low | 8 | 62.5% | 50.0% | +76 | -9 |
+| claude-opus-5-5 | 10 | 40.0% | 39.8% | +72 | +44 |
+| gpt-6.1-terra-off | 6 | 50.0% | 44.4% | +66 | -14 |
+| gpt-6.1-sol | 10 | 60.0% | 59.8% | +65 | +59 |
+| gpt-6-astra-high | 4 | 50.0% | 67.8% | +62 | +161 |
+| claude-sonnet-5-5-high | 2 | 100.0% | 67.8% | +51 | +25 |
+| claude-haiku-5-5-high | 2 | 0.0% | 16.7% | +36 | +4 |
+| claude-haiku-5-5 | 2 | 50.0% | 48.9% | +17 | +0 |
+| claude-haiku-5-5-low | 2 | 50.0% | 47.8% | +16 | -12 |
+| claude-sonnet-5-5 | 2 | 0.0% | 16.7% | +15 | +14 |
+| claude-sonnet-5-5-off | 2 | 0.0% | 16.7% | +11 | +1 |
+| gpt-6-luna-xhigh | 2 | 50.0% | 50.0% | -21 | -2 |
+| claude-opus-5-5-low | 4 | 25.0% | 40.6% | -24 | +56 |
+| gpt-6.1-terra-xhigh | 8 | 37.5% | 37.5% | -27 | -66 |
+| claude-sonnet-5-5-low | 2 | 0.0% | 32.2% | -49 | -22 |
+| gpt-6.1-terra-high | 8 | 25.0% | 33.1% | -133 | -104 |
+| gpt-6-luna | 4 | 0.0% | 16.7% | -252 | -147 |
 <!-- leaderboard:end -->
 
 ## tournament-1: cross-model and effort sweeps
@@ -240,14 +282,14 @@ The viewer now includes 62 completed matches from the first subset and earlier s
 
 These are sparse comparisons, not a new leaderboard verdict. Each new pairing has two matches on one seed with swapped seats. Configs have between two and twelve matches in this snapshot, against different opponents. Opus max won seven of its eight matches and Opus off five of eight, but neither is enough to establish their relative strength. Terra 6.1 has results at all six tested effort levels; the sample does not establish an effort trend.
 
-The viewer's outcome ratings include these matches. Its derived knowledge and regret datasets have not yet been refreshed for them, so missing move-quality data must not be read as zero mistakes. The [deeper-search check](analysis/regret.md#deeper-search) and [minimax self-play study](analysis/matchups.md#minimax-self-play) describe separate CPU-only evaluations.
+The viewer's outcome ratings include these matches. The knowledge and regret datasets were rebuilt for them on 2026-10-30 from the same snapshot, and the tables in [analysis/beliefs-and-items.md](analysis/beliefs-and-items.md) and [analysis/regret.md](analysis/regret.md) include them. They are new files until the live derived databases are swapped, so a viewer still on the old files has no move-quality data for them, which must not be read as zero mistakes. The [deeper-search check](analysis/regret.md#deeper-search) and [minimax self-play study](analysis/matchups.md#minimax-self-play) describe separate CPU-only evaluations.
 
 ## Beliefs and items
 What each model knew about the chamber when it shot, whether it acted on it, what became of its items, and how consistently it chose in repeated positions: [analysis/beliefs-and-items.md](analysis/beliefs-and-items.md).
 
 ## Other analyses
 - **Matchups:** ratings within each cohort, no matchup effects, seat and round-1 starter effects: [analysis/matchups.md](analysis/matchups.md).
-- **Play patterns:** reviewed habits per model, from the traces: [analysis/patterns.md](analysis/patterns.md).
+- **Patterns against regret:** the mean regret of single-move choice patterns: [analysis/patterns.md](analysis/patterns.md).
 - **Ideas not yet built:** [analysis-ideas.md](analysis-ideas.md).
 
 ## Known confound: an extra system prompt on Claude calls

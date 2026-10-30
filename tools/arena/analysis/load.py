@@ -16,6 +16,11 @@ SKIPPED_MODEL = "deepseek"
 CROSS_MODEL = "cpa-tiers cross-model"
 CROSS_SAMPLES = "tournament 4"
 
+TOURNAMENT_5_COHORT = "tournament 5"
+
+# Tournament 5's phases. Each runs few matches with mixed models and efforts, so seat and starter figures treat them as one cohort.
+TOURNAMENT_5 = frozenset({"astra-high-cross", "astra-low-cross", "astra-self", "cross-more", "opus-max-cross", "opus-max-effort", "opus-off", "terra61-a", "terra61-b", "terra61-c", "top-four"})
+
 STARTS = re.compile(r"Round 1 begins\. Everyone has \d+ health; Player (\w) starts\.")
 
 
@@ -52,6 +57,8 @@ def cohort_of(tournament: str, model_a: str, model_b: str, effort_a: str, effort
         return "tournament 3"
     elif tournament == "cross-samples":
         return CROSS_SAMPLES
+    elif tournament in TOURNAMENT_5:
+        return TOURNAMENT_5_COHORT
     raise ValueError(f"no cohort for {tournament}: {model_a} {effort_a} vs {model_b} {effort_b}")
 
 

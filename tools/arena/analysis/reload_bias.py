@@ -124,7 +124,7 @@ class Pair:
 def pairs(sampled_path: Path, regret_path: Path, knowledge_path: Path, depth: int = 6, budget: int = 20000, samples: int = 256) -> list[Pair]:
     """The sampled run's searched decisions with the static run's score of the same decision, matched by match, ordinal, depth and budget.
 
-    The evaluator column is not compared: a fresh build of the player differs from the one that scored the static rows only by recompilation.
+    The evaluator column is not compared: a build of the player made after the reload rules were added has a different hash, because the reload-leaf source changed, though its static path is meant to score the same.
     """
     db = connect(str(sampled_path))
     db.execute("ATTACH DATABASE ? AS s", (f"file:{regret_path}?mode=ro",))
