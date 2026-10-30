@@ -1,8 +1,9 @@
 """Starter and seed effects in minimax self-play (docs/arena/analysis/matchups.md, "Minimax self-play").
 
 Reads the JSON lines that web/scripts/arena-selfplay.ts writes and prints markdown tables: the round 1 starter's round and
-match win share, the share of each round's starter by round, and the spread of the starter's edge across seeds. Every
-interval is a 95% bootstrap that draws whole seeds, never single matches.
+match win share, the share of each round's starter by round, and the observed spread of seeds' shares. Every
+interval is a 95% bootstrap that draws whole seeds, never single matches. Nothing here tests a seed effect: games of a seed
+(swap pairs, reps) share a random stream, so they are not independent. Results describe this bot, not the game.
 
     python3 tools/arena/analysis/selfplay.py [--arena-doc docs/arena/analysis/matchups.md] <label>=<file.jsonl> ...
 
@@ -23,7 +24,6 @@ import boot
 from fmt import frac, pct, span, table
 
 RESAMPLES = 2000
-PERMUTATIONS = 2000
 
 
 def load(path: Path) -> list[dict]:
@@ -31,6 +31,9 @@ def load(path: Path) -> list[dict]:
     for game in games:
         if any(round_["winner"] == 0 for round_ in game["rounds"]):
             raise ValueError(f"{path}: seed {game['seed']} has a round with no winner")
+    settings = {(game["depth"], game["budget"], game["tieRule"]) for game in games}
+    if len(settings) > 1:
+        raise ValueError(f"{path}: matches played with mixed settings {sorted(settings)}")
     return games
 
 
@@ -77,51 +80,9 @@ def bootstrap(groups: dict[int, list[float]], statistic, rng: random.Random) -> 
 
 def share(groups: dict[int, list[float]], rng: random.Random) -> str:
     """wins/games = share (95% CI, seeds drawn)."""
-    point, interval = bootstrap(groups, mean_of, rng)
+    _, interval = bootstrap(groups, mean_of, rng)
     wins, games = sum(map(sum, groups.values())), sum(map(len, groups.values()))
     return f"{frac(wins, games)} ({span(interval)})"
-
-
-def variance_components(groups: dict[int, list[float]]) -> tuple[float, float]:
-    """One-way ANOVA of the outcome by seed: the variance between seeds' true shares, and the variance between games of one seed."""
-    sizes = [len(values) for values in groups.values()]
-    games, seeds = sum(sizes), len(sizes)
-    grand = mean_of(groups)
-    between = sum(len(values) * (sum(values) / len(values) - grand) ** 2 for values in groups.values()) / (seeds - 1)
-    within = sum(sum((y - sum(values) / len(values)) ** 2 for y in values) for values in groups.values()) / (games - seeds)
-    per_seed = (games - sum(size * size for size in sizes) / games) / (seeds - 1)
-    return (between - within) / per_seed, within
-
-
-def seed_sd(groups: dict[int, list[float]]) -> float:
-    """The standard deviation of the seeds' true win shares, 0 when the seeds differ no more than chance."""
-    between, _ = variance_components(groups)
-    return math.sqrt(max(between, 0.0))
-
-
-def permutation_p(groups: dict[int, list[float]], rng: random.Random) -> float:
-    """How often shuffling the outcomes over the games, which keeps each seed's game count, spreads seeds as widely as the real ones."""
-    observed = variance_components(groups)[0]
-    sizes = [len(values) for values in groups.values()]
-    pool = [y for values in groups.values() for y in values]
-    above = 0
-    for _ in range(PERMUTATIONS):
-        rng.shuffle(pool)
-        shuffled, at = {}, 0
-        for seed, size in enumerate(sizes):
-            shuffled[seed] = pool[at : at + size]
-            at += size
-        above += variance_components(shuffled)[0] >= observed
-    return (above + 1) / (PERMUTATIONS + 1)
-
-
-def wilson(wins: float, games: int) -> tuple[float, float]:
-    z = 1.96
-    p = wins / games
-    scale = 1 + z * z / games
-    centre = (p + z * z / (2 * games)) / scale
-    half = z * math.sqrt(p * (1 - p) / games + z * z / (4 * games * games)) / scale
-    return centre - half, centre + half
 
 
 def pearson(xs: list[float], ys: list[float]) -> float:
@@ -143,17 +104,6 @@ def ranks(values: list[float]) -> list[float]:
             out[order[k]] = (i + j) / 2 + 1
         i = j + 1
     return out
-
-
-def correlation_p(xs: list[float], ys: list[float], rng: random.Random) -> float:
-    """Two-sided permutation p of the Pearson correlation."""
-    observed = abs(pearson(xs, ys))
-    shuffled = list(ys)
-    above = 0
-    for _ in range(PERMUTATIONS):
-        rng.shuffle(shuffled)
-        above += abs(pearson(xs, shuffled)) >= observed  # a constant series gives nan, never above
-    return (above + 1) / (PERMUTATIONS + 1)
 
 
 def arena_shares(doc: Path) -> dict[int, tuple[int, float]]:
@@ -192,14 +142,14 @@ def by_round(games: list[dict], rng: random.Random) -> str:
     return table(["round", "its own starter wins it", "the round 1 starter wins it"], rows)
 
 
-def spread(games: list[dict], rng: random.Random) -> str:
+def spread(games: list[dict]) -> str:
+    """The observed spread of the seeds' own shares. Games of a seed share a random stream, so this is description, not an estimate of true seed effects."""
     rows = []
     for name, outcome in (("round 1", starter_round_win), ("match", starter_match_win)):
         groups = by_seed(games, outcome)
-        point, interval = bootstrap(groups, seed_sd, rng)
-        size = statistics.fmean(map(len, groups.values()))
-        rows.append([name, f"{size:.1f}", f"{point * 100:.1f} ({span(interval, lambda x: f'{x * 100:.1f}')})", f"{permutation_p(groups, rng):.3f}"])
-    return table(["starter's win in", "matches per seed", "SD of the seeds' true win shares, points (95% CI)", "p of no seed effect"], rows)
+        shares = [statistics.fmean(values) for values in groups.values()]
+        rows.append([name, f"{statistics.fmean(map(len, groups.values())):.1f}", f"{statistics.pstdev(shares) * 100:.1f}"])
+    return table(["starter's win in", "matches per seed", "SD of the seeds' observed shares, points"], rows)
 
 
 def openings(games: list[dict], rng: random.Random) -> str:
@@ -213,32 +163,31 @@ def openings(games: list[dict], rng: random.Random) -> str:
     spread_ = statistics.pstdev(mean_scores)
     return table(
         ["the starter's opening score", "mean (95% CI, seeds drawn)", "SD over seeds", "seeds' correlation with the round 1 result"],
-        [[f"{len(seeds)} seeds", f"{pct(point)} ({span(interval)})", f"{spread_ * 100:.1f} points", f"{pearson(mean_scores, mean_wins):+.2f} (permutation p {correlation_p(mean_scores, mean_wins, rng):.3f})"]],
+        [[f"{len(seeds)} seeds", f"{pct(point)} ({span(interval)})", f"{spread_ * 100:.1f} points", f"{pearson(mean_scores, mean_wins):+.2f}"]],
     )
 
 
-def per_seed(games: list[dict], arena: dict[int, tuple[int, float]], rng: random.Random) -> str:
+def per_seed(games: list[dict], arena: dict[int, tuple[int, float]]) -> str:
     round_1, match = by_seed(games, starter_round_win), by_seed(games, starter_match_win)
     rows, mine, theirs = [], [], []
     for seed in sorted(match):
         wins, count = sum(match[seed]), len(match[seed])
-        low, high = wilson(wins, count)
         position, arena_share = arena[seed]
-        rows.append([str(seed), str(position), str(count), frac(sum(round_1[seed]), count), f"{frac(wins, count)} ({pct(low)} to {pct(high)})", pct(arena_share)])
+        rows.append([str(seed), str(position), str(count), frac(sum(round_1[seed]), count), frac(wins, count), pct(arena_share)])
         mine.append(wins / count)
         theirs.append(arena_share)
     summary = (
-        f"Across the {len(rows)} seeds, the minimax starter's match share and the arena's starter share correlate at {pearson(mine, theirs):+.2f} "
-        f"(permutation p {correlation_p(mine, theirs, rng):.3f}), by rank {pearson(ranks(mine), ranks(theirs)):+.2f}."
+        f"Across the {len(rows)} seeds, the minimax starter's match share and the arena's starter share correlate at {pearson(mine, theirs):+.2f}, "
+        f"by rank {pearson(ranks(mine), ranks(theirs)):+.2f}. This is descriptive over {len(rows)} seeds, with no test."
     )
-    return table(["seed", "position that starts", "matches", "starter wins round 1", "starter wins the match (95% Wilson)", "arena starter share"], rows) + "\n\n" + summary
+    return table(["seed", "position that starts", "matches", "starter wins round 1", "starter wins the match", "arena starter share"], rows) + "\n\n" + summary
 
 
 def report(label: str, games: list[dict], arena: dict[int, tuple[int, float]]) -> str:
     rng = random.Random(label)
-    parts = [f"### {label}", run_info(games), "Round 1 starter:", headline(games, rng), "By round:", by_round(games, rng), "Spread over seeds:", spread(games, rng), "Opening score:", openings(games, rng)]
+    parts = [f"### {label}", run_info(games), "Round 1 starter:", headline(games, rng), "By round:", by_round(games, rng), "Spread of the seeds' observed shares:", spread(games), "Opening score:", openings(games, rng)]
     if arena and {game["seed"] for game in games} <= arena.keys():
-        parts += ["Per seed, set beside the arena's starter shares:", per_seed(games, arena, rng)]
+        parts += ["Per seed, set beside the arena's starter shares:", per_seed(games, arena)]
     return "\n\n".join(parts)
 
 

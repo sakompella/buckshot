@@ -22,7 +22,7 @@ import { agentMoveText } from "../src/text.ts";
 // is the other seat: the first draw (FirstSeat) is answered with the value the
 // seed did not give, every later draw as before. Equal best moves are broken
 // by --ties: first (the machine's first), or at random from the seed, swap and
-// rep. One JSON line per match goes to --out; a rerun skips the matches in it.
+// rep. One JSON line per match goes to --out; a rerun skips the matches in it, and refuses a file played with other depth, budget or ties.
 // `openings` holds, for each round, the best score (the mover's chance of winning
 // the round, in millionths) at the first decision it analysed, and who moved.
 //
@@ -166,14 +166,20 @@ const key = (seed: number, swap: boolean, rep: number): string => `${seed}/${swa
 
 mkdirSync(dirname(out), { recursive: true });
 
-const decodeDone = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Struct({ seed: Schema.Number, swap: Schema.Boolean, rep: Schema.Number })));
-
-const done = new Set(
-  (existsSync(out) ? readFileSync(out, "utf8").split("\n") : [])
-    .filter((line) => line !== "")
-    .map((line) => decodeDone(line))
-    .map(({ seed, swap, rep }) => key(seed, swap, rep)),
+const decodeDone = Schema.decodeUnknownSync(
+  Schema.fromJsonString(Schema.Struct({ seed: Schema.Number, swap: Schema.Boolean, rep: Schema.Number, depth: Schema.Number, budget: Schema.Number, tieRule: Schema.String })),
 );
+
+const finished = (existsSync(out) ? readFileSync(out, "utf8").split("\n") : []).filter((line) => line !== "").map((line) => decodeDone(line));
+
+const mismatch = finished.find((match) => match.depth !== limits.depth || match.budget !== limits.budget || match.tieRule !== values.ties);
+
+if (mismatch !== undefined) {
+  console.error(`${out} holds matches played with depth ${mismatch.depth}, budget ${mismatch.budget}, ties ${mismatch.tieRule}; use another --out for these settings`);
+  process.exit(1);
+}
+
+const done = new Set(finished.map(({ seed, swap, rep }) => key(seed, swap, rep)));
 
 const started = performance.now();
 let played = 0;
