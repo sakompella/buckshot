@@ -1,26 +1,25 @@
 # Certain mistakes
 
-How often each config made a shot that its own information proves worse than the other shot. This is not bad odds, minimax disagreement or regret. A mistake counts only where the rules show the other shot leaves the same game except for one difference that is always worse for the player. Two types, each over its own opportunities:
+How often each config made a shot that its own information proves worse than the other shot. This is not bad odds, minimax disagreement or regret. A mistake counts only where an exact argument from the rules shows the other shot is better on every line. Each certain mistake has its own opportunities:
 
 1. **Shot itself on a proven live.** Opportunities: agent decisions where the player's own information proves the chambered shell is live. Mistakes: the player shot itself.
-2. **Shot the opponent on a proven blank.** Opportunities: agent decisions where the player's own information proves the chambered shell is blank. Mistakes: the player shot the opponent.
+2. **Shot the opponent, giving up a guaranteed win.** Opportunities: agent decisions where the player's own information proves the chambered shell is blank and the next shell live. The opponent must show its health (not jammed) and that health must die to the player's next shot. The player's own health must die to the opponent's next shot. Mistakes: the player shot the opponent.
 
-An item move at an opportunity is never a mistake. Only the chosen shot is judged.
+Every other proven blank is the fact pattern **proven blank, gave the turn away**. Its rate is the share of those decisions where the player shot the opponent. It is never a certain-mistake rate, because there keeping the move is not proven better.
+
+An item move at an opportunity is never a mistake. Only the chosen shot is judged. All of it is scored on the current round, like [regret](regret.md). A round's first death decides who starts the next round (`first.override` in `sim/bend-mp/sm/main.bend`), so the effect on the match is not proven.
 
 ## How it is measured
 
-**Proves.** The `chamber` column of `_work/arena/analysis/derived/knowledge.sqlite`, built by `web/scripts/arena-knowledge.ts` ([beliefs-and-items.md](beliefs-and-items.md)). It is set only when every shell order the player's own log allows has the same chambered shell. The log is the public events and the player's own secrets: counting, the magnifying glass, the burner phone, or several of them together. The opponent's secrets never enter. A shell that is only likely live is not proven. A clue made stale by an inverter is not used either, because the belief replays the inverter. Nothing here rebuilds beliefs or applies rules.
+**Proves.** From `_work/arena/analysis/derived/knowledge.sqlite`, built by `web/scripts/arena-knowledge.ts` ([beliefs-and-items.md](beliefs-and-items.md)). `chamber` is set only when every shell order the player's own log allows has the same chambered shell. `private_known` lists the positions that every allowed order agrees on, so `2L` means the next shell is proven live. The log is the public events and the player's own secrets: counting, the magnifying glass, the burner phone, or several of them together. The opponent's secrets never enter. A shell that is only likely live is not proven. A clue made stale by an inverter is not used either, because the belief replays the inverter. Health and items come from the same rows. Nothing here rebuilds beliefs or applies rules.
 
-**Why the other shot is better.** From `shoot.loaded` and `turn.end` in `sim/bend-mp/sm/main.bend`. Either shot fires the same shell, removes it from the gun, and spends the saw if one was used, so a sawed shot does double damage to whoever is hit. Neither shot changes items, clues or what anyone sees.
+**Why the other shot is better.** From `shoot.loaded`, `turn.end` and `grant` in `sim/bend-mp/sm/main.bend`. Either shot fires the same shell and removes it from the gun. Either shot also clears the saw, so the next shooter can saw again. Neither shot changes items, clues or what anyone sees.
 
-- *Live.* Either shot passes the turn the same way, including the skip of a jammed opponent, and either empties the gun into the same reload. The only difference is whose health falls. Elsewhere the rules read health only to ask whether a seat is alive (legal targets, turn order, dealing, the win check) and to stop cigarettes healing past full. So the side with more health can make the same moves and never does worse in the round. No live case is excluded.
-- *Blank.* Shooting itself keeps the move. Shooting the opponent passes it. On the last shell both start the same reload: items are dealt to every seat at once, and only the first move after it differs. If the opponent shows as jammed, shooting it spends the jam's skip and the move comes back. Shooting itself leaves the jam unspent. The two shots then leave different jam states, so neither is proven better, and these decisions are excluded and counted.
+- *Live.* Either shot passes the turn the same way, including the skip of a jammed opponent. On the last shell, either starts the same reload. The only difference is whose health falls, by one, or by two with the saw. Elsewhere the rules read health only to ask whether a seat is alive (legal targets, turn order, dealing, the win check) and to stop cigarettes healing past full. So the side with more health can make the same moves and never does worse in the round.
+- *Blank, guaranteed win.* Shooting itself keeps the move. The player then shoots the opponent with the proven live and kills it, with its own saw if it needs two damage. The opponent never moves, so this wins on every line. Shooting the opponent passes the move. The opponent can then shoot the player with the same live and kill it, with its own saw if it needs two. So the opponent shot can lose, while the self shot cannot.
+- *Blank, any other case.* The self shot still keeps the move, and the opponent shot still passes it, or with a jammed opponent spends the jam's skip. That keeping the move is never worse has no proof: the rules have no pass move. The table below splits these decisions by what the depth-6 search in `regret.sqlite` scored for the two shots. Settled scores there are not used as proof. The modelled opponent picks its move by the expected score over public information, so a settled score is a result against that one opponent, not against every play.
 
-**Limits of the argument.**
-- It is scored on the current round, like [regret](regret.md). A round's first death decides who starts the next round. So a live shot that changes who dies first also changes the next round's starter. That effect on the match is not proven either way.
-- The blank type assumes that having the move is never worse than the opponent having it, with all else equal. The rules have no pass move, so this is a premise, not a proof. The depth-limited search in `regret.sqlite` sometimes scores the opponent shot higher at these decisions, but never with settled scores.
-
-**Counted.** Completed matches only, agent decisions only (no forced grabs or fallback moves), and no match with a DeepSeek seat. All matches are two-player. A config is `players.model` plus effort, pooled over cohorts and code versions. Each rate is mistakes over counted opportunities (opportunities minus exclusions), with a 95% interval from 2,000 seeded resamples of seed blocks.
+**Counted.** Completed matches only, agent decisions only (no forced grabs or fallback moves), and no match with a DeepSeek seat. All matches are two-player. A config is `players.model` plus effort, pooled over cohorts and code versions. Each rate has a 95% interval from 2,000 seeded resamples of seed blocks.
 
 ## Reproduce
 
@@ -34,61 +33,68 @@ Inside `nix develop`, from the repository root:
 <!-- tables:start -->
 ### By config
 
-| model | effort | proven live | shot itself | proven blank | excluded, opponent jammed | shot the opponent |
-|---|---|---|---|---|---|---|
-| claude-haiku-4-5-20251001 | off | 549 | 4.4% (24/549) [2.6%, 6.5%] | 441 | 68 | 37.0% (138/373) [32.2%, 42.4%] |
-| claude-haiku-4-5-20251001 | minimal | 533 | 3.8% (20/533) [2.3%, 5.5%] | 415 | 68 | 31.1% (108/347) [25.3%, 36.5%] |
-| claude-haiku-4-5-20251001 | low | 587 | 2.6% (15/587) [1.5%, 3.8%] | 396 | 79 | 28.1% (89/317) [22.8%, 33.2%] |
-| claude-haiku-4-5-20251001 | medium | 1,409 | 2.3% (32/1409) [1.5%, 3.2%] | 962 | 200 | 26.5% (202/762) [23.0%, 30.2%] |
-| claude-haiku-4-5-20251001 | high | 561 | 2.5% (14/561) [1.2%, 4.1%] | 380 | 89 | 29.2% (85/291) [24.6%, 34.9%] |
-| claude-haiku-5-5 | off | 572 | 0.0% (0/572) [0.0%, 0.0%] | 453 | 68 | 35.3% (136/385) [30.3%, 40.7%] |
-| claude-haiku-5-5 | low | 737 | 0.5% (4/737) [0.1%, 1.1%] | 497 | 91 | 21.4% (87/406) [18.0%, 25.3%] |
-| claude-haiku-5-5 | medium | 1,953 | 0.5% (10/1953) [0.2%, 0.8%] | 1,265 | 282 | 17.6% (173/983) [15.5%, 19.7%] |
-| claude-haiku-5-5 | high | 760 | 0.4% (3/760) [0.0%, 0.9%] | 497 | 111 | 18.9% (73/386) [14.9%, 23.1%] |
-| claude-haiku-5-5 | xhigh | 844 | 0.0% (0/844) [0.0%, 0.0%] | 471 | 104 | 15.3% (56/367) [11.4%, 19.1%] |
-| claude-haiku-5-5 | max | 872 | 0.0% (0/872) [0.0%, 0.0%] | 490 | 117 | 7.2% (27/373) [4.6%, 10.1%] |
-| claude-opus-5-5 | off | 55 | 0.0% (0/55) [0.0%, 0.0%] | 27 | 4 | 0.0% (0/23) [0.0%, 0.0%] |
-| claude-opus-5-5 | low | 223 | 0.0% (0/223) [0.0%, 0.0%] | 112 | 25 | 1.1% (1/87) [0.0%, 3.6%] |
-| claude-opus-5-5 | medium | 1,799 | 0.1% (1/1799) [0.0%, 0.2%] | 979 | 203 | 0.3% (2/776) [0.0%, 0.7%] |
-| claude-opus-5-5 | high | 339 | 0.0% (0/339) [0.0%, 0.0%] | 179 | 28 | 0.0% (0/151) [0.0%, 0.0%] |
-| claude-opus-5-5 | xhigh | 579 | 0.0% (0/579) [0.0%, 0.0%] | 320 | 57 | 0.0% (0/263) [0.0%, 0.0%] |
-| claude-opus-5-5 | max | 79 | 0.0% (0/79) [0.0%, 0.0%] | 31 | 8 | 0.0% (0/23) [0.0%, 0.0%] |
-| claude-sonnet-5-5 | off | 816 | 0.7% (6/816) [0.1%, 1.5%] | 384 | 58 | 3.7% (12/326) [1.6%, 6.2%] |
-| claude-sonnet-5-5 | low | 725 | 0.3% (2/725) [0.0%, 0.7%] | 430 | 55 | 2.1% (8/375) [0.6%, 3.9%] |
-| claude-sonnet-5-5 | medium | 2,044 | 0.3% (7/2044) [0.1%, 0.6%] | 972 | 160 | 1.5% (12/812) [0.7%, 2.4%] |
-| claude-sonnet-5-5 | high | 805 | 0.2% (2/805) [0.0%, 0.6%] | 416 | 94 | 0.0% (0/322) [0.0%, 0.0%] |
-| claude-sonnet-5-5 | xhigh | 815 | 0.0% (0/815) [0.0%, 0.0%] | 449 | 89 | 0.0% (0/360) [0.0%, 0.0%] |
-| claude-sonnet-5-5 | max | 893 | 0.0% (0/893) [0.0%, 0.0%] | 522 | 113 | 0.2% (1/409) [0.0%, 0.8%] |
-| gpt-5.6-terra | low | 515 | 1.9% (10/515) [0.8%, 3.3%] | 327 | 90 | 8.9% (21/237) [4.8%, 13.6%] |
-| gpt-5.6-terra | medium | 1,443 | 0.8% (12/1443) [0.4%, 1.3%] | 936 | 266 | 7.8% (52/670) [5.9%, 9.7%] |
-| gpt-5.6-terra | high | 530 | 2.1% (11/530) [1.0%, 3.3%] | 357 | 99 | 5.8% (15/258) [2.8%, 9.3%] |
-| gpt-5.6-terra | xhigh | 599 | 0.7% (4/599) [0.2%, 1.4%] | 384 | 104 | 2.9% (8/280) [1.1%, 5.3%] |
-| gpt-5.6-terra | max | 665 | 0.2% (1/665) [0.0%, 0.5%] | 430 | 102 | 0.9% (3/328) [0.0%, 2.1%] |
-| gpt-6-astra | low | 39 | 0.0% (0/39) [0.0%, 0.0%] | 18 | 4 | 14.3% (2/14) [0.0%, 46.2%] |
-| gpt-6-astra | medium | 1,446 | 0.0% (0/1446) [0.0%, 0.0%] | 764 | 154 | 0.3% (2/610) [0.0%, 0.8%] |
-| gpt-6-astra | high | 43 | 0.0% (0/43) [0.0%, 0.0%] | 25 | 2 | 0.0% (0/23) [0.0%, 0.0%] |
-| gpt-6-luna | off | 707 | 11.3% (80/707) [9.2%, 13.4%] | 581 | 127 | 25.1% (114/454) [21.5%, 28.7%] |
-| gpt-6-luna | low | 726 | 12.0% (87/726) [9.2%, 15.2%] | 540 | 138 | 28.4% (114/402) [23.9%, 32.5%] |
-| gpt-6-luna | medium | 1,775 | 8.6% (153/1775) [7.2%, 10.1%] | 1,199 | 295 | 22.8% (206/904) [20.0%, 25.8%] |
-| gpt-6-luna | high | 784 | 3.7% (29/784) [2.7%, 4.8%] | 529 | 130 | 12.3% (49/399) [9.3%, 15.5%] |
-| gpt-6-luna | xhigh | 834 | 2.6% (22/834) [1.7%, 3.7%] | 512 | 142 | 11.9% (44/370) [8.9%, 15.1%] |
-| gpt-6-luna | max | 850 | 2.2% (19/850) [1.3%, 3.3%] | 551 | 187 | 11.0% (40/364) [7.6%, 14.7%] |
-| gpt-6.1-sol | low | 544 | 0.0% (0/544) [0.0%, 0.0%] | 296 | 55 | 2.5% (6/241) [0.5%, 4.8%] |
-| gpt-6.1-sol | medium | 1,773 | 0.0% (0/1773) [0.0%, 0.0%] | 996 | 204 | 1.3% (10/792) [0.5%, 2.1%] |
-| gpt-6.1-sol | high | 584 | 0.0% (0/584) [0.0%, 0.0%] | 340 | 49 | 2.4% (7/291) [0.9%, 4.4%] |
-| gpt-6.1-sol | xhigh | 629 | 0.0% (0/629) [0.0%, 0.0%] | 360 | 66 | 0.7% (2/294) [0.0%, 1.9%] |
-| gpt-6.1-sol | max | 653 | 0.0% (0/653) [0.0%, 0.0%] | 367 | 78 | 0.7% (2/289) [0.0%, 1.8%] |
-| gpt-6.1-terra | off | 35 | 0.0% (0/35) [0.0%, 0.0%] | 23 | 3 | 0.0% (0/20) [0.0%, 0.0%] |
-| gpt-6.1-terra | low | 51 | 0.0% (0/51) [0.0%, 0.0%] | 26 | 4 | 0.0% (0/22) [0.0%, 0.0%] |
-| gpt-6.1-terra | medium | 94 | 0.0% (0/94) [0.0%, 0.0%] | 54 | 9 | 0.0% (0/45) [0.0%, 0.0%] |
-| gpt-6.1-terra | high | 53 | 0.0% (0/53) [0.0%, 0.0%] | 27 | 6 | 0.0% (0/21) [0.0%, 0.0%] |
-| gpt-6.1-terra | xhigh | 55 | 0.0% (0/55) [0.0%, 0.0%] | 27 | 3 | 0.0% (0/24) [0.0%, 0.0%] |
-| gpt-6.1-terra | max | 46 | 0.0% (0/46) [0.0%, 0.0%] | 22 | 6 | 0.0% (0/16) [0.0%, 0.0%] |
+| model | effort | shot itself on a proven live | shot the opponent, giving up a guaranteed win | proven blank, gave the turn away |
+|---|---|---|---|---|
+| claude-haiku-4-5-20251001 | off | 4.4% (24/549) [2.6%, 6.5%] | 66.7% (2/3) [0.0%, 100.0%] | 37.9% (166/438) [33.2%, 42.9%] |
+| claude-haiku-4-5-20251001 | minimal | 3.8% (20/533) [2.2%, 5.5%] | 25.0% (1/4) [0.0%, 50.0%] | 33.3% (137/411) [27.5%, 39.2%] |
+| claude-haiku-4-5-20251001 | low | 2.6% (15/587) [1.5%, 3.8%] | 0.0% (0/1) [0.0%, 0.0%] | 30.6% (121/395) [25.6%, 35.5%] |
+| claude-haiku-4-5-20251001 | medium | 2.3% (32/1409) [1.5%, 3.2%] | 16.7% (1/6) [0.0%, 50.0%] | 29.3% (280/956) [25.8%, 32.7%] |
+| claude-haiku-4-5-20251001 | high | 2.5% (14/561) [1.2%, 4.1%] | 0.0% (0/1) [0.0%, 0.0%] | 31.9% (121/379) [27.9%, 36.4%] |
+| claude-haiku-5-5 | off | 0.0% (0/572) [0.0%, 0.0%] | – | 37.1% (168/453) [32.1%, 42.1%] |
+| claude-haiku-5-5 | low | 0.5% (4/737) [0.1%, 1.1%] | 0.0% (0/6) [0.0%, 0.0%] | 27.1% (133/491) [23.6%, 30.7%] |
+| claude-haiku-5-5 | medium | 0.5% (10/1953) [0.2%, 0.8%] | 9.1% (1/11) [0.0%, 30.0%] | 20.7% (260/1254) [18.4%, 23.0%] |
+| claude-haiku-5-5 | high | 0.4% (3/760) [0.0%, 0.9%] | 0.0% (0/3) [0.0%, 0.0%] | 20.4% (101/494) [16.5%, 24.4%] |
+| claude-haiku-5-5 | xhigh | 0.0% (0/844) [0.0%, 0.0%] | 0.0% (0/5) [0.0%, 0.0%] | 16.7% (78/466) [13.6%, 20.0%] |
+| claude-haiku-5-5 | max | 0.0% (0/872) [0.0%, 0.0%] | 0.0% (0/2) [0.0%, 0.0%] | 8.4% (41/488) [5.9%, 11.1%] |
+| claude-opus-5-5 | off | 0.0% (0/55) [0.0%, 0.0%] | 0.0% (0/1) [0.0%, 0.0%] | 0.0% (0/26) [0.0%, 0.0%] |
+| claude-opus-5-5 | low | 0.0% (0/223) [0.0%, 0.0%] | 0.0% (0/1) [0.0%, 0.0%] | 0.9% (1/111) [0.0%, 3.0%] |
+| claude-opus-5-5 | medium | 0.1% (1/1799) [0.0%, 0.2%] | 0.0% (0/11) [0.0%, 0.0%] | 0.2% (2/968) [0.0%, 0.5%] |
+| claude-opus-5-5 | high | 0.0% (0/339) [0.0%, 0.0%] | – | 0.0% (0/179) [0.0%, 0.0%] |
+| claude-opus-5-5 | xhigh | 0.0% (0/579) [0.0%, 0.0%] | 0.0% (0/3) [0.0%, 0.0%] | 0.0% (0/317) [0.0%, 0.0%] |
+| claude-opus-5-5 | max | 0.0% (0/79) [0.0%, 0.0%] | – | 0.0% (0/31) [0.0%, 0.0%] |
+| claude-sonnet-5-5 | off | 0.7% (6/816) [0.1%, 1.5%] | 0.0% (0/3) [0.0%, 0.0%] | 3.4% (13/381) [1.5%, 5.6%] |
+| claude-sonnet-5-5 | low | 0.3% (2/725) [0.0%, 0.7%] | 0.0% (0/5) [0.0%, 0.0%] | 2.4% (10/425) [0.9%, 4.2%] |
+| claude-sonnet-5-5 | medium | 0.3% (7/2044) [0.1%, 0.6%] | 0.0% (0/7) [0.0%, 0.0%] | 1.9% (18/965) [1.0%, 2.8%] |
+| claude-sonnet-5-5 | high | 0.2% (2/805) [0.0%, 0.6%] | 0.0% (0/5) [0.0%, 0.0%] | 0.2% (1/411) [0.0%, 0.8%] |
+| claude-sonnet-5-5 | xhigh | 0.0% (0/815) [0.0%, 0.0%] | 0.0% (0/1) [0.0%, 0.0%] | 0.7% (3/448) [0.0%, 1.5%] |
+| claude-sonnet-5-5 | max | 0.0% (0/893) [0.0%, 0.0%] | 0.0% (0/3) [0.0%, 0.0%] | 0.2% (1/519) [0.0%, 0.6%] |
+| gpt-5.6-terra | low | 1.9% (10/515) [0.8%, 3.3%] | 0.0% (0/3) [0.0%, 0.0%] | 8.3% (27/324) [5.0%, 11.9%] |
+| gpt-5.6-terra | medium | 0.8% (12/1443) [0.4%, 1.3%] | 0.0% (0/7) [0.0%, 0.0%] | 6.5% (60/929) [4.9%, 8.1%] |
+| gpt-5.6-terra | high | 2.1% (11/530) [1.1%, 3.3%] | 0.0% (0/1) [0.0%, 0.0%] | 5.6% (20/356) [3.0%, 8.4%] |
+| gpt-5.6-terra | xhigh | 0.7% (4/599) [0.2%, 1.4%] | 0.0% (0/4) [0.0%, 0.0%] | 3.7% (14/380) [2.0%, 5.7%] |
+| gpt-5.6-terra | max | 0.2% (1/665) [0.0%, 0.5%] | 0.0% (0/3) [0.0%, 0.0%] | 1.9% (8/427) [0.7%, 3.3%] |
+| gpt-6-astra | low | 0.0% (0/39) [0.0%, 0.0%] | – | 11.1% (2/18) [0.0%, 42.9%] |
+| gpt-6-astra | medium | 0.0% (0/1446) [0.0%, 0.0%] | 0.0% (0/13) [0.0%, 0.0%] | 0.7% (5/751) [0.1%, 1.4%] |
+| gpt-6-astra | high | 0.0% (0/43) [0.0%, 0.0%] | – | 0.0% (0/25) [0.0%, 0.0%] |
+| gpt-6-luna | off | 11.3% (80/707) [9.1%, 13.4%] | 0.0% (0/1) [0.0%, 0.0%] | 28.3% (164/580) [24.9%, 31.8%] |
+| gpt-6-luna | low | 12.0% (87/726) [9.0%, 15.2%] | – | 31.3% (169/540) [27.4%, 35.0%] |
+| gpt-6-luna | medium | 8.6% (153/1775) [7.3%, 10.1%] | 0.0% (0/7) [0.0%, 0.0%] | 24.4% (291/1192) [21.9%, 26.9%] |
+| gpt-6-luna | high | 3.7% (29/784) [2.7%, 4.8%] | 0.0% (0/4) [0.0%, 0.0%] | 13.9% (73/525) [11.2%, 16.9%] |
+| gpt-6-luna | xhigh | 2.6% (22/834) [1.7%, 3.7%] | 100.0% (1/1) [100.0%, 100.0%] | 11.9% (61/511) [8.7%, 15.3%] |
+| gpt-6-luna | max | 2.2% (19/850) [1.3%, 3.3%] | 0.0% (0/3) [0.0%, 0.0%] | 11.1% (61/548) [8.4%, 14.1%] |
+| gpt-6.1-sol | low | 0.0% (0/544) [0.0%, 0.0%] | 0.0% (0/2) [0.0%, 0.0%] | 2.4% (7/294) [0.7%, 4.2%] |
+| gpt-6.1-sol | medium | 0.0% (0/1773) [0.0%, 0.0%] | 0.0% (0/9) [0.0%, 0.0%] | 1.4% (14/987) [0.7%, 2.2%] |
+| gpt-6.1-sol | high | 0.0% (0/584) [0.0%, 0.0%] | – | 2.1% (7/340) [0.8%, 3.8%] |
+| gpt-6.1-sol | xhigh | 0.0% (0/629) [0.0%, 0.0%] | 0.0% (0/7) [0.0%, 0.0%] | 1.1% (4/353) [0.3%, 2.4%] |
+| gpt-6.1-sol | max | 0.0% (0/653) [0.0%, 0.0%] | 0.0% (0/6) [0.0%, 0.0%] | 0.6% (2/361) [0.0%, 1.4%] |
+| gpt-6.1-terra | off | 0.0% (0/35) [0.0%, 0.0%] | 0.0% (0/1) [0.0%, 0.0%] | 0.0% (0/22) [0.0%, 0.0%] |
+| gpt-6.1-terra | low | 0.0% (0/51) [0.0%, 0.0%] | – | 0.0% (0/26) [0.0%, 0.0%] |
+| gpt-6.1-terra | medium | 0.0% (0/94) [0.0%, 0.0%] | 0.0% (0/1) [0.0%, 0.0%] | 0.0% (0/53) [0.0%, 0.0%] |
+| gpt-6.1-terra | high | 0.0% (0/53) [0.0%, 0.0%] | – | 0.0% (0/27) [0.0%, 0.0%] |
+| gpt-6.1-terra | xhigh | 0.0% (0/55) [0.0%, 0.0%] | – | 0.0% (0/27) [0.0%, 0.0%] |
+| gpt-6.1-terra | max | 0.0% (0/46) [0.0%, 0.0%] | – | 0.0% (0/22) [0.0%, 0.0%] |
+
+### Proven blank, gave the turn away, by what the search scored, all configs
+
+| pattern | opponent jammed | search scores the opponent shot higher | search settles the self shot as a win and the opponent shot as a loss | search scores the self shot higher or equal, not both settled | no search |
+|---|---|---|---|---|---|
+| proven blank, gave the turn away | 16.5% (743/4494) [15.1%, 18.1%] | 5.0% (13/262) [2.6%, 7.7%] | 2.6% (5/190) [0.5%, 5.6%] | 12.0% (1883/15678) [11.2%, 12.8%] | – |
 
 ### By source of the proof and shells left, all configs
 
-| mistake | public | glass | phone | combined | last shell | earlier shells |
+| pattern | public | glass | phone | combined | last shell | earlier shells |
 |---|---|---|---|---|---|---|
 | shot itself on a proven live | 2.3% (450/19250) [2.1%, 2.6%] | 0.1% (17/12000) [0.1%, 0.2%] | 3.7% (100/2720) [2.9%, 4.5%] | 1.9% (1/52) [0.0%, 5.7%] | 2.8% (331/11965) [2.4%, 3.1%] | 1.1% (237/22057) [0.9%, 1.3%] |
-| shot the opponent on a proven blank | 17.0% (1506/8850) [15.9%, 18.2%] | 3.0% (155/5252) [2.4%, 3.6%] | 11.5% (244/2125) [10.0%, 13.1%] | 3.4% (2/58) [0.0%, 8.2%] | 19.0% (1148/6042) [17.7%, 20.3%] | 7.4% (759/10243) [6.7%, 8.1%] |
+| shot the opponent, giving up a guaranteed win | 100.0% (1/1) [100.0%, 100.0%] | 2.6% (3/115) [0.0%, 6.1%] | 2.8% (1/36) [0.0%, 8.6%] | 33.3% (1/3) [0.0%, 100.0%] | – | 3.9% (6/155) [1.3%, 7.2%] |
+| proven blank, gave the turn away | 17.8% (2079/11676) [16.7%, 19.0%] | 3.9% (244/6321) [3.3%, 4.5%] | 12.5% (320/2560) [11.0%, 14.1%] | 1.5% (1/67) [0.0%, 4.8%] | 19.3% (1513/7830) [18.1%, 20.6%] | 8.8% (1131/12794) [8.1%, 9.6%] |
 <!-- tables:end -->

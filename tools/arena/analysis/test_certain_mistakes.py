@@ -1,7 +1,6 @@
 """Tests for the certain-mistake rates: python3 -m unittest discover -s tools/arena/analysis"""
 
 import json
-import random
 import sqlite3
 import tempfile
 import unittest
@@ -9,66 +8,88 @@ from pathlib import Path
 
 import certain_mistakes as cm
 
-FREE = json.dumps([{"_tag": "Unjammed", "health": 3}, {"_tag": "Unjammed", "health": 3}])
-JAMMED = json.dumps([{"_tag": "Unjammed", "health": 3}, {"_tag": "Jammed"}])
+
+def health(own=1, opponent=1):
+    return json.dumps([{"_tag": "Unjammed", "health": own}, {"_tag": "Jammed"} if opponent is None else {"_tag": "Unjammed", "health": opponent}])
 
 
-def decision(ordinal, player="A", chamber=None, source=None, shot=None, health=FREE, remaining=3, live_chance="[0.5,0.5,0.5]"):
-    return ("m1", ordinal, player, "agent", chamber, source, shot, health, remaining, live_chance)
+def decision(ordinal, player="A", chamber=None, source=None, shot=None, hp=None, known="", live_chance="[0.5,0.5,0.5]"):
+    return ("m1", ordinal, player, "agent", chamber, source, shot, hp or health(), known, "[]", "[]", 3, live_chance)
 
 
-def write(directory: Path, decisions, clues=()):
-    path = directory / "knowledge.sqlite"
-    db = sqlite3.connect(path)
-    db.executescript(
+def scores(own, other):
+    return json.dumps([{"label": "Shoot yourself", "score": own}, {"label": "Shoot Player B", "score": other}])
+
+
+def write(directory: Path, decisions, clues=(), searched=()):
+    knowledge = sqlite3.connect(directory / "knowledge.sqlite")
+    knowledge.executescript(
         """CREATE TABLE matches (match_id TEXT, status TEXT, seed_block_id TEXT);
            CREATE TABLE players (match_id TEXT, player TEXT, model TEXT, effort TEXT);
-           CREATE TABLE decisions (match_id TEXT, ordinal INTEGER, player TEXT, by_whom TEXT, chamber TEXT, source TEXT, shot TEXT,
-                                   health_json TEXT, remaining INTEGER, private_live_json TEXT);
+           CREATE TABLE decisions (match_id TEXT, ordinal INTEGER, player TEXT, by_whom TEXT, chamber TEXT, source TEXT, shot TEXT, health_json TEXT,
+                                   private_known TEXT, own_items_json TEXT, opponent_items_json TEXT, remaining INTEGER, private_live_json TEXT);
            CREATE TABLE clues (match_id TEXT, learned INTEGER, ordinal INTEGER, player TEXT, kind TEXT, position INTEGER, shell TEXT);
            INSERT INTO matches VALUES ('m1', 'completed', 'b1');
            INSERT INTO players VALUES ('m1', 'A', 'opus', 'high'), ('m1', 'B', 'sol', 'low');"""
     )
-    db.executemany("INSERT INTO decisions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", decisions)
-    db.executemany("INSERT INTO clues VALUES ('m1', ?, ?, ?, ?, ?, ?)", clues)
-    db.commit()
-    db.close()
-    return path
+    knowledge.executemany("INSERT INTO decisions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", decisions)
+    knowledge.executemany("INSERT INTO clues VALUES ('m1', ?, ?, ?, ?, ?, ?)", clues)
+    knowledge.commit()
+    knowledge.close()
+    regret = sqlite3.connect(directory / "regret.sqlite")
+    regret.execute("CREATE TABLE regret (match_id TEXT, ordinal INTEGER, max_depth INTEGER, budget INTEGER, reload TEXT, status TEXT, values_json TEXT)")
+    regret.executemany("INSERT INTO regret VALUES ('m1', ?, 6, 20000, 'static', 'searched', ?)", searched)
+    regret.commit()
+    regret.close()
+    return directory / "knowledge.sqlite", directory / "regret.sqlite"
 
 
 class CertainMistakes(unittest.TestCase):
-    def rates(self, decisions, clues=()):
+    def load(self, decisions, clues=(), searched=()):
         with tempfile.TemporaryDirectory() as directory:
-            loaded = cm.load(write(Path(directory), decisions, clues))
-        rng = random.Random(0)
-        return {kind: cm.rate([d for d in loaded if d.kind is kind], rng) for kind in cm.Kind}
+            return cm.load(*write(Path(directory), decisions, clues, searched))
+
+    def patterns(self, decisions, clues=()):
+        return [(d.pattern, d.chose) for d in self.load(decisions, clues)]
 
     def test_shooting_itself_on_a_proven_live_is_a_mistake_and_the_other_shot_is_not(self):
-        rates = self.rates([decision(0, chamber="Live", source="glass", shot="self"), decision(1, chamber="Live", source="public", shot="opponent")])
-        self.assertEqual(rates[cm.Kind.SELF_ON_LIVE], cm.Rate(2, 0, 1, (0.5, 0.5)))
+        found = self.patterns([decision(0, chamber="Live", source="glass", shot="self"), decision(1, chamber="Live", source="public", shot="opponent")])
+        self.assertEqual(found, [(cm.Pattern.SELF_ON_LIVE, True), (cm.Pattern.SELF_ON_LIVE, False)])
 
     def test_a_merely_likely_live_is_no_opportunity(self):
-        rates = self.rates([decision(0, shot="self", live_chance="[0.95,0.95,0.1]")])
-        self.assertEqual(rates[cm.Kind.SELF_ON_LIVE].opportunities, 0)
+        self.assertEqual(self.patterns([decision(0, shot="self", live_chance="[0.95,0.95,0.1]")]), [])
 
     def test_a_clue_the_inverter_made_stale_is_judged_by_the_proven_chamber(self):
-        rates = self.rates(
-            [decision(5, chamber="Blank", source="glass", shot="opponent")],
-            clues=[(3, 3, "A", "glass", 0, "Live")],
-        )
-        self.assertEqual(rates[cm.Kind.SELF_ON_LIVE].opportunities, 0)
-        self.assertEqual(rates[cm.Kind.OPPONENT_ON_BLANK].mistakes, 1)
+        found = self.patterns([decision(5, chamber="Blank", source="glass", shot="opponent", known="1B 2L")], clues=[(3, 3, "A", "glass", 0, "Live")])
+        self.assertEqual(found, [(cm.Pattern.GAVE_UP_GUARANTEED_WIN, True)])
 
     def test_the_opponents_secret_proves_nothing_for_the_player(self):
-        rates = self.rates([decision(4, player="A", shot="self")], clues=[(2, 2, "B", "glass", 0, "Live")])
-        self.assertEqual(rates[cm.Kind.SELF_ON_LIVE].opportunities, 0)
+        self.assertEqual(self.patterns([decision(4, player="A", shot="self")], clues=[(2, 2, "B", "glass", 0, "Live")]), [])
 
-    def test_a_proven_blank_against_a_jammed_opponent_is_excluded_and_counted(self):
-        rates = self.rates(
-            [decision(0, chamber="Blank", source="public", shot="opponent", health=JAMMED), decision(1, chamber="Blank", source="phone", shot="opponent")]
+    def test_a_proven_blank_without_a_guaranteed_win_is_only_the_turn_given_away(self):
+        found = self.patterns(
+            [
+                decision(0, chamber="Blank", shot="opponent", known="1B 2L", hp=health(own=1, opponent=None)),
+                decision(1, chamber="Blank", shot="opponent", known="1B 2L", hp=health(own=1, opponent=2)),
+                decision(2, chamber="Blank", shot="opponent", known="1B 2L", hp=health(own=2, opponent=1)),
+                decision(3, chamber="Blank", shot="opponent", known="1B"),
+            ]
         )
-        self.assertEqual(rates[cm.Kind.OPPONENT_ON_BLANK], cm.Rate(2, 1, 1, (1.0, 1.0)))
-        self.assertEqual(rates[cm.Kind.OPPONENT_ON_BLANK].counted, 1)
+        self.assertEqual(found, [(cm.Pattern.GAVE_TURN_AWAY, True)] * 4)
+
+    def test_the_turn_given_away_is_split_by_what_the_search_scored(self):
+        found = self.load(
+            [decision(0, chamber="Blank", shot="opponent"), decision(1, chamber="Blank", shot="opponent"), decision(2, chamber="Blank", shot="self")],
+            searched=[(0, scores(400000, 500000)), (1, scores(1000000, 0))],
+        )
+        self.assertEqual([d.search for d in found], [cm.Search.OPPONENT_SHOT_HIGHER, cm.Search.SETTLED_FOR_SELF_SHOT, cm.Search.UNSEARCHED])
+
+
+class GuaranteedWin(unittest.TestCase):
+    def test_a_saw_lets_either_side_kill_from_two_health(self):
+        self.assertTrue(cm.guaranteed_win(True, own_health=2, opponent_health=2, own_saw=True, opponent_saw=True))
+        self.assertFalse(cm.guaranteed_win(True, own_health=2, opponent_health=2, own_saw=True, opponent_saw=False))
+        self.assertFalse(cm.guaranteed_win(True, own_health=2, opponent_health=2, own_saw=False, opponent_saw=True))
 
 
 if __name__ == "__main__":
