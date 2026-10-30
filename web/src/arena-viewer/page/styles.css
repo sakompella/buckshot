@@ -305,6 +305,8 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
   .moves .step { min-height: 44px; }
   table.heat td.cellv, table.heat td.left, table.heat td.total { height: 44px; }
   .sq i { width: 22px; height: 22px; }
+  .fate-hit { height: 44px; align-items: center; background: linear-gradient(#0d0d0d, #0d0d0d) center / 100% 12px no-repeat; }
+  .fate-hit i { height: 12px; }
   details > summary { min-height: 44px; display: flex; align-items: center; }
   table.heat th.sortable { height: 44px; }
   table.heat td .n { position: static; display: block; text-align: right; margin: 1px -5px -2px 0; }

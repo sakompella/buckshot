@@ -13,8 +13,6 @@ import { replayIndex, stepsOf } from "./replay.ts";
 import { PlaceTour, TOUR, tourKeyMessage } from "./tour.ts";
 import { stickyHeight, view } from "./view.ts";
 
-// The arena viewer's page: a Foldkit application over the viewer's JSON API.
-
 type Return = Update.Return<Model, Message>;
 
 const describe = (error: { readonly message: string }) => error.message;
@@ -26,7 +24,6 @@ const getJson = <A, I>(url: string, schema: Schema.Codec<A, I>) =>
     Effect.flatMap((body) => Schema.decodeUnknownEffect(schema)(body)),
   );
 
-/** An optional section's data: its failure is kept for the section to show, and the page loads without it. */
 const getOptional = <A, I>(url: string, schema: Schema.Codec<A, I>) =>
   getJson(url, schema).pipe(
     Effect.map((data) => AsyncData.succeed<A, string>(data)),
@@ -76,7 +73,6 @@ const JumpTo = Command.define("JumpTo", {
     }).pipe(Effect.as(Message.CompletedScroll())),
 });
 
-/** Keeps the current group's link in view in a jump menu wider than the screen. */
 const RevealNavLink = Command.define("RevealNavLink", {
   args: { group: Group },
   messages: [Message.CompletedScroll],
@@ -89,7 +85,6 @@ const RevealNavLink = Command.define("RevealNavLink", {
     }).pipe(Effect.as(Message.CompletedScroll())),
 });
 
-/** The last group whose top has passed under the sticky bar. */
 const groupInView = (): Option.Option<Message> => {
   const line = stickyHeight() + 8;
   const passed = [...document.querySelectorAll("section.part[id]")].filter((group) => group.getBoundingClientRect().top <= line).at(-1);
@@ -130,7 +125,6 @@ const LeaveReplayHistory = Command.define("LeaveReplayHistory", {
   }).pipe(Effect.as(Message.CompletedHistoryChange())),
 });
 
-/** Asks for every match detail in `ids` the model does not have yet. */
 const withMatches = (model: Model, ids: ReadonlyArray<string>): Return => {
   const missing = ids.filter((id) => model.matches[id] === undefined);
 
@@ -142,7 +136,6 @@ const withMatches = (model: Model, ids: ReadonlyArray<string>): Return => {
   };
 };
 
-/** The interesting matches' cards draw their moves, so a new filter may need new match details. */
 const withPickedMatches = (model: Model): Return =>
   AsyncData.matchData(model.data, {
     onEmpty: (): Return => ({ model }),
@@ -178,11 +171,9 @@ const openReplay = (model: Model, id: string, maybeFocus: Option.Option<number>)
     [id],
   );
 
-  // Opening another match from a replay reuses its history entry.
   return Option.isSome(model.maybeReplay) ? opened : { ...opened, commands: [...(opened.commands ?? []), PushReplayHistory()] };
 };
 
-// A filter can remove the pinned mark or change what it counts, so the tip goes.
 const withFilter = (model: Model, change: (filter: Filter) => Filter): Return =>
   withPickedMatches(modifyFields(model, { filter: change, markTip: () => ({ maybeHover: Option.none(), maybePin: Option.none() }) }));
 
@@ -269,13 +260,10 @@ export const update = (model: Model, message: Message): Return =>
         },
       }),
     ClosedTour: () => ({ model: modifyFields(model, { maybeTour: () => Option.none() }) }),
-    // A placement for a step the tour has already left is dropped.
     PlacedTour: ({ step, maybeBox, isCardUnder }) => ({
       model: modifyFields(model, { maybeTour: (maybeTour) => Option.map(maybeTour, (tour) => (tour.step === step ? { ...tour, maybeBox, isCardUnder } : tour)) }),
     }),
   });
-
-// INIT
 
 const Flags = Schema.Struct({ viewport: Schema.Struct({ width: Schema.Number, height: Schema.Number }) });
 
@@ -305,8 +293,6 @@ const init: Runtime.ApplicationInit<Model, Message, Flags> = ({ viewport }) => (
   commands: [LoadData()],
 });
 
-// SUBSCRIPTION
-
 const viewportNow = (): Viewport => ({ width: document.documentElement.clientWidth, height: innerHeight });
 
 const replayKeyMessage = (key: string): Option.Option<Message> => {
@@ -333,7 +319,6 @@ const tappedTitleMessage = (event: PointerEvent): Option.Option<Message> => {
 const subscriptions = Subscription.make<Model, Message>()((entry) => ({
   resize: Subscription.persistentEntry(Dom.streamFromEvent({ target: window, type: "resize", mapEvent: () => Message.ResizedViewport(viewportNow()) })),
   back: Subscription.persistentEntry(Dom.streamFromEvent({ target: window, type: "popstate", mapEvent: () => Message.NavigatedBack() })),
-  // The arrows step through an open replay instead of scrolling the page.
   replayKeys: entry(
     { isReplayOpen: Schema.Boolean },
     {

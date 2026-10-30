@@ -9,7 +9,6 @@ test("every section sits in exactly one group", () => {
   expect(pageOrder.toSorted()).toEqual([...Section.literals].toSorted());
 });
 
-// The sections the jump menu linked to before the page had groups: shared links to them must still land.
 test("every section an old link names is still on the page", () => {
   const linked = ["scatter", "interesting", "luck", "seats", "deals", "blunders", "mistakes", "odds", "items", "pressure", "rubbers", "reliability", "matches", "leaderboards", "breakdown"];
 
@@ -24,7 +23,6 @@ test("the tour visits every section, in page order", () => {
   expect(new Set(anchors).size).toBe(pageOrder.length);
 });
 
-// Figures in the cards would go stale as the data grows; naming round 1 or table position 2 is fine.
 test("each card is one or two sentences, with no figures", () => {
   for (const { title, text } of TOUR) {
     const sentences = text.split(/[.!?](?:\s|$)/).filter((sentence) => sentence.trim() !== "");

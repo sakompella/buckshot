@@ -10,8 +10,6 @@ import { Message, type Model } from "./model.ts";
 
 type H = HtmlBuilder<Message>;
 
-// Infrastructure and protocol reliability, kept apart from skill, per config.
-
 const hours = (ms: number) => `${(ms / 3.6e6).toFixed(2)} h`;
 
 interface Tally {
@@ -47,7 +45,6 @@ interface Row extends Tally {
 }
 
 const tallyRows = (decisions: Decisions, seats: ReadonlyArray<SeatFull>, keep: ReadonlyArray<boolean>): ReadonlyArray<Row> => {
-  // Per seat: replies linked to a move, and how many of them failed.
   const linked = new Map<number, [number, number]>();
 
   decisions.seat.forEach((seat, move) => {
@@ -165,13 +162,11 @@ const tipOf = (h: H, rows: ReadonlyArray<Row>, cell: Model["maybeRateTip"]): Htm
     },
   });
 
-/** One config's value in a bar chart, with its interval when it has one. */
 export interface Bar {
   readonly value: number;
   readonly lo: number;
   readonly hi: number;
   readonly text: string;
-  /** What the shared tip says: the value with its sample and interval. */
   readonly tip: string;
 }
 
@@ -226,7 +221,6 @@ export const configBarsView = <R extends { readonly key: string }>(h: H, chartId
           ],
         ),
       ),
-      // A row answers a tap anywhere along it, so a short bar is as easy to pick as a long one.
       ...placed.map(({ row, bar, y: rowY }) =>
         h.g(
           Number.isNaN(bar.value) ? [] : markTip(h, anchorId("bar", chartId, row.key), `${labelOf(row.key)}: ${bar.tip}`),

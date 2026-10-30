@@ -1,10 +1,13 @@
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
+import { Schema } from "effect";
 import { type Browser, chromium, type Page } from "playwright-core";
 
+import { MatchDetail } from "../src/arena-viewer/api.ts";
 import { GROUPS, Section } from "../src/arena-viewer/page/model.ts";
 import { TOUR } from "../src/arena-viewer/page/tour.ts";
+import { coverageOfMatch, type RegretCoverage } from "./arena-viewer-regret-coverage.ts";
 
 // Clicks through the arena viewer's page, its jump menu and replay in headless Chromium at
 // desktop, phone and tablet widths and saves screenshots. Pointed at the old viewer too,
@@ -21,12 +24,27 @@ const expectThat = (isOk: boolean, what: string) => {
   if (!isOk) failures.push(what);
 };
 
-const attempt = async (viewport: string, check: string, run: () => Promise<void>) => {
+// A failed check can leave a replay or the tour open over the page, which would make every later click time out. The
+// next check starts from the bare page, so one failure is reported once.
+const attempt = async (viewport: string, check: string, run: () => Promise<void>, reset: () => Promise<void> = () => Promise.resolve()) => {
   try {
     await run();
   } catch (error) {
     failures.push(`${viewport}: ${check} threw: ${error instanceof Error ? (error.message.split("\n")[0] ?? "") : String(error)}`);
+
+    try {
+      await reset();
+    } catch {
+      failures.push(`${viewport}: could not clear the page after ${check}`);
+    }
   }
+};
+
+const ACTION_TIMEOUT_MS = 10_000;
+
+const clearOverlays = async (page: Page) => {
+  await page.keyboard.press("Escape");
+  await page.waitForSelector(".modal, .tour-layer", { state: "detached", timeout: ACTION_TIMEOUT_MS });
 };
 
 const VIEWPORTS = [
@@ -84,7 +102,6 @@ const loadPage = async (page: Page) => {
   await page.waitForSelector(".icard svg rect", { timeout: 60_000 });
 };
 
-// Prints what the default filter shows (every config), then what switching 'all configs' off hides, and switches it back on.
 const openPage = async (page: Page) => {
   const started = Date.now();
 
@@ -96,7 +113,6 @@ const openPage = async (page: Page) => {
 
   console.log("default (all configs):", ...(await counts()));
 
-  // The switch is drawn only while some config is hidden, which no config is once every config has cross-model games.
   if ((await allConfigs.count()) === 0) return;
 
   await allConfigs.uncheck();
@@ -133,7 +149,6 @@ const captureBaseline = async (browser: Browser, viewport: Viewport) => {
   await loadPage(page);
   await page.screenshot({ path: shot(`${name}-page`), fullPage: true });
 
-  // GROUPS is what the jump menu and the tour order rely on; the page must put each section where it says.
   for (const { group, sections } of GROUPS) {
     for (const section of sections) {
       expectThat((await page.locator(`#${group} #${section}, #${group}#${section}`).count()) === 1, `${name}: #${section} is not in the ${group} group`);
@@ -192,7 +207,6 @@ const checkJumps = async (page: Page, name: string, isTouch: boolean) => {
   console.log(name, "every section link landed under the bar");
 };
 
-// The scatter's rating axis tick labels from the top down.
 const yTicks = (page: Page) =>
   page.evaluate(() =>
     [...document.querySelectorAll("#scatter .card:first-child svg > g:not(.ptlabel) > text[text-anchor=end]")]
@@ -203,7 +217,6 @@ const yTicks = (page: Page) =>
       .join(" "),
   );
 
-// The scatter's gridlines and tick labels: a filter must leave them where they are.
 const axesOf = (page: Page) =>
   page.evaluate(() => {
     const chart = document.querySelector(".card svg");
@@ -218,7 +231,6 @@ const axesOf = (page: Page) =>
 const reliabilityScales = (page: Page) =>
   page.evaluate(() => [...document.querySelectorAll("#reliability .chartrow svg")].map((chart) => [...chart.querySelectorAll("text[text-anchor=middle]")].map((text) => text.textContent).join(" ")).join(" | "));
 
-// Turning chips on and off shows and hides points but moves no axis.
 const checkFixedAxes = async (page: Page, scatter: ReturnType<Page["locator"]>) => {
   const filters = page.locator(".filters");
 
@@ -406,6 +418,30 @@ const checkMatchWins = async (page: Page, scatter: ReturnType<Page["locator"]>) 
   expectThat(JSON.stringify(await ratingViews(page)) === JSON.stringify(rounds), "Round wins did not bring the page back to how it started after Match wins");
 };
 
+// The replay's header names its match, so its expected regret comes from that match's data fetched by id, whether the
+// page loaded the match on this click or earlier.
+const openReplay = async (page: Page, open: () => Promise<void>): Promise<RegretCoverage> => {
+  await open();
+  await page.waitForSelector(".modal .step");
+
+  const matchId = await page.locator(".modal .mhead").getAttribute("data-match");
+
+  if (matchId === null) throw new Error("the replay's header names no match");
+
+  return coverageOfMatch(matchId, async (id) => Schema.decodeUnknownSync(MatchDetail)(await (await fetch(`${base}/api/match?id=${encodeURIComponent(id)}`)).json()).decisions);
+};
+
+const closeReplay = async (page: Page) => {
+  await page.keyboard.press("Escape");
+  await page.waitForSelector(".modal", { state: "detached" });
+};
+
+const expectRegretShown = async (page: Page, coverage: RegretCoverage, what: string) => {
+  const shown = { tagged: await regretTags(page).count(), rings: await countOf(page, ".modal .chart circle"), turning: await countOf(page, ".modal .turning .chip") };
+
+  expectThat(shown.tagged === coverage.tagged && shown.rings === coverage.rings && shown.turning === coverage.turning, `${what}: replay shows ${JSON.stringify(shown)}, its data has ${JSON.stringify({ tagged: coverage.tagged, rings: coverage.rings, turning: coverage.turning })}`);
+};
+
 const REGRET_TAG = /^−\d+\.\d$/;
 
 const regretTags = (page: Page) => page.locator(".modal .step .tag.regret");
@@ -438,18 +474,41 @@ const checkRegret = async (page: Page) => {
 
   await page.locator(".lb").first().screenshot({ path: shot("leaderboard-regret"), style: UNSTICK });
 
+  // The newest matches are the ones the derived database reaches last; one with no regret must show none.
+  const newest: Array<RegretCoverage> = [];
+
+  for (const row of [0, 1, 2, 3, 4]) {
+    const coverage = await openReplay(page, () => page.locator("#matches tbody tr.row").nth(row).click());
+
+    newest.push(coverage);
+
+    await expectRegretShown(page, coverage, `match ${row}`);
+    console.log("match", row, "searched moves", coverage.searched, "tags", coverage.tagged);
+    await closeReplay(page);
+  }
+
+  expectThat(
+    newest.some(({ searched }) => searched === 0),
+    "none of the newest matches lacks regret, so the missing-data replay is not exercised",
+  );
+
+  // The regret blunder cards are built from regret rows, so their replays are the covered fixture.
+  const blunderCards = page.locator(".icard", { hasText: "Round win chance" });
+  const fixtures = Math.min(await blunderCards.count(), 5);
   let exact = 0;
   let notExact = 0;
 
-  for (const row of [0, 1, 2, 3, 4]) {
-    await page.locator("#matches tbody tr.row").nth(row).click();
-    await page.waitForSelector(".modal .step");
+  expectThat(fixtures > 0, "no regret blunder card to open a regret-covered replay from");
+
+  for (const card of Array.from({ length: fixtures }, (_, index) => index)) {
+    const coverage = await openReplay(page, () => blunderCards.nth(card).click());
+
+    expectThat(coverage.searched > 0 && coverage.tagged > 0 && coverage.turning > 0, `regret blunder card ${card}: its replay has ${coverage.searched} searched, ${coverage.tagged} tagged, ${coverage.turning} turning`);
+    await expectRegretShown(page, coverage, `blunder card ${card}`);
 
     const tags = await regretTags(page).evaluateAll((found) => found.map((tag) => ({ text: tag.textContent ?? "", isExact: tag.classList.contains("exact") })));
-    const steps = await countOf(page, ".modal .step");
 
-    expectThat(tags.every(({ text }) => REGRET_TAG.test(text.trim())), `match ${row}: regret tags ${tags.slice(0, 3).map(({ text }) => text).join(" | ")}`);
-    expectThat(tags.length <= steps, `match ${row}: more regret tags than moves`);
+    expectThat(tags.every(({ text }) => REGRET_TAG.test(text.trim())), `blunder card ${card}: regret tags ${tags.slice(0, 3).map(({ text }) => text).join(" | ")}`);
     exact += tags.filter(({ isExact }) => isExact).length;
     notExact += tags.filter(({ isExact }) => !isExact).length;
 
@@ -464,24 +523,25 @@ const checkRegret = async (page: Page) => {
       const detail = ((await page.locator(".modal .sel").textContent()) ?? "").replaceAll(/\s+/g, " ");
       const says = /not proven exact/.test(detail) ? "not exact" : /proven exact/.test(detail) ? "exact" : "neither";
 
-      expectThat(/Best move .+ chosen [\d.]+% · depth \d/.test(detail) && says === kind, `match ${row}: a ${kind} move's detail says ${says}: ${detail.slice(0, 120)}`);
+      expectThat(/Best move .+ chosen [\d.]+% · depth \d/.test(detail) && says === kind, `blunder card ${card}: a ${kind} move's detail says ${says}: ${detail.slice(0, 120)}`);
 
-      if (row === 0) await page.locator(".modal").screenshot({ path: shot(`replay-regret-${kind.replace(" ", "-")}`) });
+      if (card === 0) await page.locator(".modal").screenshot({ path: shot(`replay-regret-${kind.replace(" ", "-")}`) });
     }
 
-    console.log("match", row, "regret tags", tags.length, "of", steps, "steps, first", tags.slice(0, 3).map(({ text }) => text).join(" | "));
-    await page.keyboard.press("Escape");
+    console.log("blunder card", card, "searched moves", coverage.searched, "tags", coverage.tagged, "turning points", coverage.turning);
+    await closeReplay(page);
   }
 
-  console.log("regret tags over those matches:", exact, "exact,", notExact, "not proven exact");
-  expectThat(exact + notExact > 0, "no replay shows a regret tag");
+  console.log("regret tags over the covered replays:", exact, "exact,", notExact, "not proven exact");
+  expectThat(exact + notExact > 0, "no covered replay shows a regret tag");
 };
 
 const checkDesktop = async (browser: Browser, viewport: Viewport) => {
   const page = await newPage(browser, viewport);
   const scatter = page.locator(".card").first();
-  const check = (name: string, run: () => Promise<void>) => attempt(viewport.name, name, run);
+  const check = (name: string, run: () => Promise<void>) => attempt(viewport.name, name, run, () => clearOverlays(page));
 
+  page.setDefaultTimeout(ACTION_TIMEOUT_MS);
   watch(page, viewport.name);
   await check("open page", () => openPage(page));
   await check("scatter", async () => {
@@ -557,24 +617,37 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
     }
   });
   await check("focused move", async () => {
-    await page.locator(".flagged tr.row").first().click();
+    const coverage = await openReplay(page, () => page.locator(".flagged tr.row").first().click());
+
     await page.waitForSelector(".modal .step.on");
-    console.log("focused move", await textOf(page, ".modal .step.on"));
-
-    const turning = page.locator(".modal .turning .chip");
-    const rings = await countOf(page, ".modal .chart circle");
-
-    console.log("turning points", await countOf(page, ".modal .turning .chip"), "| blunder rings", rings);
-    expectThat((await turning.count()) > 0 && rings >= (await turning.count()), "the replay of a flagged move has no turning points on its health chart");
-    await turning.first().click();
-    console.log("turning point opens", await textOf(page, ".modal .step.on"));
-    await page.locator(".modal").screenshot({ path: shot("replay-turning-points") });
+    console.log("focused move", await textOf(page, ".modal .step.on"), "| searched moves", coverage.searched);
+    await expectRegretShown(page, coverage, "the flagged move's replay");
     await page.locator(".modal details.seeds > summary").click();
     await page.locator(".seedrow .chip").first().click();
     await page.waitForSelector(".modal .step");
     await settled(page);
     console.log("after same-seed chip:", await textOf(page, ".mhead h2"));
-    await page.keyboard.press("Escape");
+    await closeReplay(page);
+  });
+  await check("turning points", async () => {
+    const coverage = await openReplay(page, () => page.locator(".icard", { hasText: "Round win chance" }).first().click());
+    const turning = page.locator(".modal .turning .chip");
+    const listed = await turning.count();
+    const rings = await countOf(page, ".modal .chart circle");
+
+    console.log("turning points", listed, "| blunder rings", rings);
+    expectThat(coverage.turning > 0 && listed === coverage.turning && rings === coverage.rings, `the replay of a regret blunder lists ${listed} turning points and ${rings} rings, its data has ${coverage.turning} and ${coverage.rings}`);
+
+    const [, label = "", points = ""] = (await turning.first().innerText()).replaceAll(/\s+/g, " ").split(" · ");
+
+    await turning.first().click();
+
+    const opened = await textOf(page, ".modal .step.on");
+
+    console.log("turning point opens", opened);
+    expectThat(opened.includes(label) && opened.includes(points), `a turning point "${label} · ${points}" opened "${opened}"`);
+    await page.locator(".modal").screenshot({ path: shot("replay-turning-points") });
+    await closeReplay(page);
   });
   await check("mark tip by keyboard", async () => {
     const mark = page.locator("#rubbers svg g[role=button]").first();
@@ -603,7 +676,6 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
     console.log("matches → modal", await textOf(page, ".mhead h2"));
     await page.keyboard.press("Escape");
   });
-  // An old tab link, or a section link, lands on its section once the data is in.
   await check("deep link", async () => {
     await page.goto(`${base}/#reliability`);
     await page.waitForSelector("#reliability .chartrow figure", { timeout: 120_000 });
@@ -641,9 +713,10 @@ const checkTour = async (page: Page, name: string) => {
 const checkTouch = async (browser: Browser, viewport: Viewport) => {
   const { name, width, height } = viewport;
   const page = await newPage(browser, viewport);
-  const check = (what: string, run: () => Promise<void>) => attempt(name, what, run);
+  const check = (what: string, run: () => Promise<void>) => attempt(name, what, run, () => clearOverlays(page));
   const stickyModelColumn = () => page.evaluate(() => getComputedStyle(document.querySelector("table.heat td.left") ?? document.body).position);
 
+  page.setDefaultTimeout(ACTION_TIMEOUT_MS);
   watch(page, name);
   await check("open page", () => openPage(page));
   await check("overview", async () => console.log(name, "overflow", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page), "| heat model column", await stickyModelColumn(), "| scatter labels", await countOf(page, ".card svg g.ptlabel")));
@@ -655,7 +728,6 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
     console.log(name, "first chart starts at", Math.round(chartTop), "px of", height);
     expectThat(chartTop < height * 0.6, `${name}: the first chart starts below the first screen's upper 60%`);
 
-    // A phone or tablet folds the filters into one line that says what they keep; a tap opens them.
     if (width <= 1024) {
       console.log(name, "filters line:", await textOf(page, ".filtersum"), "| chips shown", await page.locator(".filters .chip").first().isVisible());
       await page.locator(".filtersum").tap();
@@ -668,7 +740,6 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
     }
   });
   await check("mark tap", async () => {
-    // A chart mark pins the shared tip, with its sample, and a tap outside clears it.
     for (const selector of ["#luck svg rect[role=button]", "#rubbers svg g[role=button]", "#deals svg g[role=button]"]) {
       await page.locator(selector).first().scrollIntoViewIfNeeded();
       await page.locator(selector).first().tap({ force: true });
@@ -678,7 +749,6 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
       console.log(name, "tap", selector, "→", tip);
       expectThat(tip !== "none" && /\d/.test(tip), `${name}: tapping ${selector} shows no tip with a count`);
 
-      // The pinned tip follows its mark as the page scrolls.
       await page.mouse.wheel(0, 120);
       await settled(page);
 
@@ -767,7 +837,6 @@ const checkOptionalFailure = async (browser: Browser) => {
   const notes = await page.getByText(/^Could not load the /).allInnerTexts();
 
   console.log("with blunders and consistency failing:", notes, "| leaderboards", await countOf(page, "table.lbt"));
-  // Blunders feed two sections: the cards and the blunder rate.
   expectThat(notes.length === 3 && (await page.locator("#blunders").getByText(/^Could not load/).count()) === 1 && (await page.locator("#mistakes").getByText(/^Could not load/).count()) === 1, "a failed optional endpoint did not leave a note in its own section");
   await page.context().close();
 };

@@ -20,6 +20,7 @@ const MODELS: ReadonlyMap<string, Described> = new Map([
   ["claude-opus-5-5", { name: "claude-opus 5.5", family: "claude-opus", reasoningText: "thinking" }],
   ["gpt-6-luna", { name: "gpt-6 luna", family: "gpt", reasoningText: "reasoning summary" }],
   ["gpt-6.1-sol", { name: "gpt-6.1 sol", family: "gpt", reasoningText: "reasoning summary" }],
+  ["gpt-6.1-terra", { name: "gpt-6.1 terra", family: "gpt", reasoningText: "reasoning summary" }],
   ["gpt-6-astra", { name: "gpt-6 astra", family: "gpt", reasoningText: "reasoning summary" }],
   ["oc/deepseek-v4.1-flash-free", { name: "deepseek v4.1", family: "deepseek", reasoningText: "thinking" }],
 ]);

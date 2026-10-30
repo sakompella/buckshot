@@ -16,25 +16,20 @@ export interface Tally {
   readonly games: number;
 }
 
-/** A config's results on one deal, seated at table position 1 and at position 2. */
 export interface Cell {
   readonly first: Tally;
   readonly second: Tally;
 }
 
-/** One seed under one version of the code: the matches that share its shuffle. */
 export interface Deal {
   readonly id: string;
   readonly seed: number;
   readonly startedAt: string;
   readonly games: number;
-  /** Table position 1's win share over the deal's matches. */
   readonly firstShare: number;
-  /** By config key. */
   readonly cells: ReadonlyMap<string, Cell>;
 }
 
-/** The part of a match that a deal reads; its seats are in table order. */
 export interface DealMatch {
   readonly seed: number;
   readonly startedAt: string;
@@ -49,7 +44,6 @@ const EMPTY: Tally = { wins: 0, games: 0 };
 
 const added = (tally: Tally, share: number): Tally => ({ wins: tally.wins + share, games: tally.games + 1 });
 
-/** Deals of two-player scored matches, from the one that favours table position 1 the most. */
 export const dealsOf = (matches: ReadonlyArray<DealMatch>): ReadonlyArray<Deal> =>
   [...groupBy(matches.filter(({ status, seats }) => status === "completed" && seats.length === 2), ({ seed, seats }) => `${seed}|${seats[0]?.codeHash ?? ""}`)]
     .flatMap(([id, played]) => {
@@ -81,7 +75,6 @@ const DAY = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", 
 
 const share = ({ wins, games }: Tally): number => wins / games;
 
-/** Grey from dark (no wins) to light (all wins). */
 const shade = (value: number): string => {
   const level = Math.round(40 + value * 200);
 
@@ -158,7 +151,6 @@ export const dealsView = (h: H, derived: Derived, width: number): Html => {
                             tally.games === 0 ? [] : [h.rect([h.X(String(x)), h.Y(String(top + offset + 1)), h.Width(String(cell - 2)), h.Height(String(HALF)), h.Fill(shade(share(tally)))], [])],
                           );
 
-                          // The whole cell answers a tap, not just the half that was played.
                           return [
                             h.g(markTip(h, anchorId("deal", deal.id, key), `${labelOf(key)} on seed ${nameOf(deal)}: ${tallyText(result.first)} at position 1, ${tallyText(result.second)} at position 2`, false), [
                               h.rect([h.X(String(x - 1)), h.Y(String(top)), h.Width(String(cell)), h.Height(String(ROW)), h.Fill("transparent")], []),

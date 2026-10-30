@@ -10,7 +10,6 @@ type H = HtmlBuilder<Message>;
 // Regret is an evaluator's estimate per move (docs/arena/analysis/regret.md), with depth limits and its own objective, so
 // a win against lower regret is a disagreement between the estimate and the result, not a measurement of luck.
 
-/** A decided two-player match whose seats both have searched moves. */
 export interface Duel {
   readonly winner: SeatFull;
   readonly loser: SeatFull;
@@ -24,12 +23,10 @@ export const duelsOf = (matches: ReadonlyArray<MatchRow>): ReadonlyArray<Duel> =
     return match.status === "completed" && match.seats.length === 2 && winner?.regret && loser?.regret ? [{ winner, loser }] : [];
   });
 
-/** What a regret gap is counted in: the mean per move, or the total over the match. */
 export type Measure = "mean" | "total";
 
 const regretOf = ({ regret }: SeatFull, measure: Measure): number => (regret === null ? Number.NaN : measure === "mean" ? regret.total / regret.moves : regret.total);
 
-/** Loser's regret minus winner's: positive when the winner had the lower regret, zero when it is a tie. */
 export const gapOf = ({ winner, loser }: Duel, measure: Measure): number => regretOf(loser, measure) - regretOf(winner, measure);
 
 /** Duels where one player had lower regret by more than `minGap`; a tie has no lower player. */
@@ -48,13 +45,11 @@ export const betterShare = (duels: ReadonlyArray<Duel>, measure: Measure, minGap
   return { k: decided.filter((duel) => gapOf(duel, measure) > 0).length, n: decided.length };
 };
 
-/** Gaps in points of regret per move where a bucket of the chart starts. */
 export const GAP_EDGES: ReadonlyArray<number> = [0, 0.5, 1, 2, 4];
 
 export interface GapBucket {
   readonly from: number;
   readonly to: number | null;
-  /** The win share of the player with lower regret, with a seed-block interval. */
   readonly rate: Rate;
 }
 
@@ -104,7 +99,6 @@ const bucketsView = (h: H, buckets: ReadonlyArray<GapBucket>, width: number): Ht
       ...buckets.flatMap(({ rate, ...bucket }, index) => {
         const centre = L + slot * (index + 0.5);
 
-        // A filter can leave a gap with no matches: it keeps its label and count but has no bar.
         const drawn = rate.n === 0 ? [] : [
           h.rect(
             [

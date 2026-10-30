@@ -68,8 +68,9 @@ test("a player found by a letter keeps that letter in its type", () => {
   const roster = rosterOf(SEATS_BY_TABLE[2]);
   const a: Option.Option<Player<"A">> = roster.find("A");
 
-  // @ts-expect-error Player A is not Player B.
-  const _notB: Option.Option<Player<"B">> = a;
+  const assignableToB: [typeof a] extends [Option.Option<Player<"B">>] ? true : false = false;
+
+  expect(assignableToB).toBe(false);
 
   expect(Option.map(a, ({ letter }) => letter)).toEqual(Option.some("A"));
 });

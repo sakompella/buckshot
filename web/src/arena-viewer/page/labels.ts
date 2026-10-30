@@ -14,7 +14,6 @@ export type Align = "start" | "middle" | "end";
 export interface Placed {
   readonly idx: number;
   readonly left: number;
-  /** The label's vertical centre. */
   readonly y: number;
   readonly w: number;
   readonly h: number;
@@ -43,13 +42,10 @@ interface Candidate {
   readonly y: number;
   readonly anchorX: number;
   readonly align: Align;
-  /** The gap between the dot and the label box. */
   readonly gap: number;
-  /** A small preference cost: above, below, sideways, flanks, rings. */
   readonly side: number;
 }
 
-/** How much of a label sits left of its anchor. */
 const ALIGN_SHARE: Readonly<Record<Align, number>> = { start: 0, middle: 0.5, end: 1 };
 
 const PAD = 2;
@@ -109,7 +105,6 @@ const segmentHitsBox = (s: Segment, box: Box): boolean => {
   return edges.some((edge) => segmentsCross(s, edge));
 };
 
-/** From the dot's centre to the nearest point of the label box: the line that is drawn. */
 const segmentOf = (dotX: number, dotY: number, at: { readonly left: number; readonly y: number }, w: number, h: number): Segment => ({
   x1: dotX,
   y1: dotY,
@@ -117,7 +112,6 @@ const segmentOf = (dotX: number, dotY: number, at: { readonly left: number; read
   y2: Math.max(at.y - h / 2, Math.min(dotY, at.y + h / 2)),
 });
 
-// Rings of flank spots further out: horizontal distance past the flank, the side costs right and left, and the heights.
 const RINGS: ReadonlyArray<readonly [number, number, number, ReadonlyArray<number>]> = [
   [14, 8, 10, [0, -10, 10, -20, 20, -30, 30, -40, 40]],
   [30, 12, 14, [0, -14, 14, -28, 28, -42, 42]],
@@ -183,12 +177,9 @@ export const placeLabels = (points: ReadonlyArray<LabelPoint>, area: Box): Reado
     segments[label.idx] = segmentOf(label.dotX, label.dotY, label.current, label.w, label.h);
   };
 
-  // What two placed labels cost each other: overlap, crossing leaders and leaders through a box.
   const between = (box: Box, segment: Segment, otherBox: Box, otherSegment: Segment): number =>
     overlap(box, otherBox) * 4 + (segmentsCross(segment, otherSegment) ? 150 : 0) + (segmentHitsBox(segment, otherBox) ? 60 : 0) + (segmentHitsBox(otherSegment, box) ? 60 : 0);
 
-  // Overlaps cost more than any clear spot; among clear spots the distance term keeps labels close to their dot.
-  // `apart` leaves one other label out, for searching two labels' places together.
   const costAt = (label: Label, candidate: Candidate, apart?: Label): number => {
     const box = boxOf(candidate, label.w, label.h);
     const segment = segmentOf(label.dotX, label.dotY, candidate, label.w, label.h);
@@ -242,7 +233,29 @@ export const placeLabels = (points: ReadonlyArray<LabelPoint>, area: Box): Reado
     if (!hasMoved) break;
   }
 
-  // Two labels whose leaders cross can each be stuck under single moves, so both candidate sets are searched together.
+  const cheaperPair = (a: Label, b: Label): readonly [Candidate, Candidate] | null => {
+    let best: readonly [Candidate, Candidate] | null = null;
+    let bestCost = costAt(a, a.current) + costAt(b, b.current);
+
+    const placesOf = (label: Label, other: Label) =>
+      label.candidates.map((candidate) => ({ candidate, alone: costAt(label, candidate, other), box: boxOf(candidate, label.w, label.h), segment: segmentOf(label.dotX, label.dotY, candidate, label.w, label.h) }));
+
+    const placesB = placesOf(b, a);
+
+    for (const placeA of placesOf(a, b)) {
+      for (const placeB of placesB) {
+        const cost = placeA.alone + placeB.alone + 2 * between(placeA.box, placeA.segment, placeB.box, placeB.segment);
+
+        if (cost < bestCost - 1e-6) {
+          bestCost = cost;
+          best = [placeA.candidate, placeB.candidate];
+        }
+      }
+    }
+
+    return best;
+  };
+
   for (let pass = 0; pass < 3; pass++) {
     let hasUntangled = false;
 
@@ -253,32 +266,14 @@ export const placeLabels = (points: ReadonlyArray<LabelPoint>, area: Box): Reado
 
         if (segmentA === undefined || segmentB === undefined || !segmentsCross(segmentA, segmentB)) continue;
 
-        const start = [a.current, b.current] as const;
-        let best = start;
-        let bestCost = costAt(a, a.current) + costAt(b, b.current);
+        const pair = cheaperPair(a, b);
 
-        // Each label's cost against the rest is the same whatever the other of the two does, so it is counted once per place.
-        const placesOf = (label: Label, other: Label) =>
-          label.candidates.map((candidate) => ({ candidate, alone: costAt(label, candidate, other), box: boxOf(candidate, label.w, label.h), segment: segmentOf(label.dotX, label.dotY, candidate, label.w, label.h) }));
+        if (pair === null) continue;
 
-        const placesB = placesOf(b, a);
-
-        for (const placeA of placesOf(a, b)) {
-          for (const placeB of placesB) {
-            const cost = placeA.alone + placeB.alone + 2 * between(placeA.box, placeA.segment, placeB.box, placeB.segment);
-
-            if (cost < bestCost - 1e-6) {
-              bestCost = cost;
-              best = [placeA.candidate, placeB.candidate];
-            }
-          }
-        }
-
-        [a.current, b.current] = best;
+        [a.current, b.current] = pair;
         refresh(a);
         refresh(b);
-
-        if (best !== start) hasUntangled = true;
+        hasUntangled = true;
       }
     }
 

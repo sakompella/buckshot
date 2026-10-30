@@ -32,9 +32,7 @@ const decodeSeatTotal = Schema.decodeUnknownSync(SeatTotalRow);
 const decodeMove = Schema.decodeUnknownSync(MoveRow);
 
 export interface Regret {
-  /** Searched moves per seat, keyed by `${matchId}|${player}`. */
   readonly seats: ReadonlyMap<string, SeatRegret>;
-  /** One match's searched moves, keyed by the decision's ordinal. */
   readonly moves: (matchId: string) => Map<number, MoveRegret>;
 }
 

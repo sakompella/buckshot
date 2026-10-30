@@ -4,8 +4,6 @@ import { defineMessageUnion } from "foldkit/message";
 
 import { Blunders, Consistency, Decisions, MatchDetail, Mistakes, Seat } from "../api.ts";
 
-// MODEL
-
 /** The page's groups below the hero, in page order: the jump menu's links, and the sections the reader can be in. */
 export const Group = Schema.Literals(["results", "watch", "decisions", "rounds", "reliability", "details"]);
 
@@ -16,7 +14,6 @@ export const Section = Schema.Literals(["scatter", "interesting", "blunders", "o
 
 export type Section = typeof Section.Type;
 
-/** Anything a link can jump to: a group or a section. */
 export const Target = Schema.Union([Group, Section]);
 
 export type Target = typeof Target.Type;
@@ -80,12 +77,10 @@ export type HeatMode = typeof HeatMode.Type;
 
 export const HeatCellId = Schema.Struct({ row: Schema.String, col: Schema.String });
 
-/** The moves behind one choice-pattern cell: one config, one pattern bit. */
 export const Flagged = Schema.Struct({ key: Schema.String, bit: Schema.Number, title: Schema.String });
 
 export const Heat = Schema.Struct({
   mode: HeatMode,
-  /** "rating", "model", "cost" or a column id. */
   sort: Schema.String,
   isBestOnly: Schema.Boolean,
   maybeTip: Schema.Option(HeatCellId),
@@ -99,7 +94,6 @@ export const Replay = Schema.Struct({ id: Schema.String, maybeFocus: Schema.Opti
 
 export type Replay = typeof Replay.Type;
 
-/** The match list's search and how many rows it shows. */
 export const MatchList = Schema.Struct({ query: Schema.String, limit: Schema.Number });
 
 /** A chart mark's tip: the id of the mark it points at, and what the mark means with its sample size. */
@@ -107,10 +101,8 @@ export const MarkTip = Schema.Struct({ anchor: Schema.String, text: Schema.Strin
 
 export type MarkTip = typeof MarkTip.Type;
 
-/** A reliability cell with its tooltip open: a row (a config) and a column. */
 export const RateCell = Schema.Struct({ row: Schema.String, column: Schema.String });
 
-/** Where the tour's highlighted element sits, in page coordinates. */
 export const TourBox = Schema.Struct({ top: Schema.Number, left: Schema.Number, width: Schema.Number, height: Schema.Number });
 
 export type TourBox = typeof TourBox.Type;
@@ -143,11 +135,8 @@ export const Model = Schema.Struct({
   markTip: Schema.Struct({ maybeHover: Schema.Option(MarkTip), maybePin: Schema.Option(MarkTip) }),
   /** The text of a chart mark a touch tapped: its SVG title or title attribute, which only a mouse can hover. */
   maybeTappedTitle: Schema.Option(Schema.String),
-  /** The group the reader is in, marked in the jump menu. */
   maybeGroup: Schema.Option(Group),
-  /** Whether a phone shows the filters, not just their summary. */
   isFiltersOpen: Schema.Boolean,
-  /** Each match detail asked for, by match id. */
   matches: Schema.Record(Schema.String, MatchData),
   maybeReplay: Schema.Option(Replay),
   /** Whether the page has painted once with the data. Most sections that came with the analysis ideas wait for it, so the first paint is as quick as before them. */
@@ -156,8 +145,6 @@ export const Model = Schema.Struct({
 });
 
 export type Model = typeof Model.Type;
-
-// MESSAGE
 
 export const Message = defineMessageUnion({
   ResizedViewport: { width: Schema.Number, height: Schema.Number },

@@ -11,12 +11,10 @@ export interface Game {
   readonly weight?: number;
 }
 
-/** A game with the seed block it was played in, which a bootstrap resamples whole. */
 export interface BlockGame extends Game {
   readonly block: string;
 }
 
-/** Games between configs numbered by first appearance, so many resamples can be fitted without building maps. */
 interface NumberedGames {
   readonly ids: ReadonlyArray<string>;
   readonly a: Int32Array;
@@ -99,7 +97,6 @@ const fitGames = (games: NumberedGames, rows: ArrayLike<number>): Map<string, nu
 
   const size = present.length;
 
-  // The likelihood depends on a pair's games only through their count and summed share, so each step visits pairs, not games.
   const pairOf = new Int32Array(size * size).fill(-1);
   const pairX: Array<number> = [];
   const pairY: Array<number> = [];
@@ -173,7 +170,6 @@ const fitGames = (games: NumberedGames, rows: ArrayLike<number>): Map<string, nu
 
 export const bradleyTerry = (games: ReadonlyArray<Game>): Map<string, number> => fitGames(numberGames(games), Int32Array.from(games.keys()));
 
-/** Completed two-player matches, as their two seats in table order. */
 const pairsOf = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<readonly [SeatFull, SeatFull]> =>
   [...groupBy(
     seats.filter(({ status }) => status === "completed"),
@@ -202,9 +198,7 @@ export const gamesOfSeats = (seats: ReadonlyArray<SeatFull>, basis: Basis): Read
 export const expectedShare = (rating: number, opponent: number): number => 1 / (1 + 10 ** ((opponent - rating) / 400));
 
 export interface Surprise {
-  /** The config's mean share of these games. */
   readonly observed: number;
-  /** The mean share the ratings predict for the same games. */
   readonly expected: number;
   readonly games: number;
 }
@@ -285,7 +279,6 @@ export const pooledRatings = (seats: ReadonlyArray<SeatFull>, basis: Basis): Rea
   );
 };
 
-/** How many folds the held-out ratings deal seed blocks into. */
 const FOLDS = 5;
 
 /**

@@ -19,7 +19,6 @@ test("every repeated position weighs the same, whatever its size", () => {
 });
 
 test("a seed block drawn twice in the bootstrap does not agree with its own copy", () => {
-  // Every position is met once in each of two blocks, with different moves: no draw can find agreement.
   const { agree, lo, hi } = consistencyOf(Array.from({ length: 30 }, () => [decision("shoot", "b1"), decision("drink", "b2")]));
 
   expect([agree, lo, hi]).toEqual([0, 0, 0]);
@@ -64,7 +63,6 @@ const SHOWN = new Map([
 test("a config's agreement pools its decisions, counting agent moves of the viewer's matches only", () => {
   const rows = openConsistency(knowledgeFile(), SHOWN);
 
-  // Three of four decisions shoot: three agreeing pairs of six.
   expect(rows).toHaveLength(1);
   expect(rows[0]).toMatchObject({ model: "steady", effort: "medium", positions: 30, decisions: 120, agree: 0.5 });
 });

@@ -30,8 +30,6 @@ import { spendView } from "./spend.ts";
 
 type H = HtmlBuilder<Message>;
 
-// LAYOUT
-
 /** The width inside main's padding, as styles.css lays it out. */
 export const contentWidth = ({ width }: Viewport): number => {
   const padding = width < 640 ? 12 : width <= 1024 ? 20 : 36;
@@ -48,8 +46,6 @@ export const stickyHeight = (): number => {
 
 /** The width inside a .card: its padding and border. */
 const cardWidth = (viewport: Viewport): number => Math.max(0, contentWidth(viewport) - 2 * (viewport.width < 640 ? 10 : 20) - 2);
-
-// FILTERS
 
 /** Which of `every` are on, in the fewest names: all, the ones on, or all but the ones off. */
 const keptOf = (every: ReadonlyArray<string>, off: ReadonlyArray<string>, noun: string): string => {
@@ -71,7 +67,6 @@ const filtersView = (h: H, derived: Derived, filter: Model["filter"], isOpen: bo
   const main = mainConfigsOf(seats);
   const hidden = unique(seats.map(keyOf)).filter((key) => !main.has(key)).length;
 
-  // A phone or tablet shows one line saying what the filters keep, and the filters themselves only when it is tapped.
   const summary = [
     keptOf(names, filter.offModels, "models"),
     keptOf(efforts, filter.offEfforts, "efforts"),
@@ -101,8 +96,6 @@ const filtersView = (h: H, derived: Derived, filter: Model["filter"], isOpen: bo
     ],
   );
 };
-
-// HERO
 
 const heroView = (h: H, derived: Derived): Html => {
   const scored = derived.matches.filter(({ status }) => status === "completed").length;
@@ -226,7 +219,6 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
     [],
     [
       lazyHero(heroView, [h, derived]),
-      // The jump menu and the filters stay at the top; the filters apply to every section.
       h.div([h.Class("top")], [lazyNav(navView, [h, model.maybeGroup]), lazyFilters(filtersView, [h, derived, model.filter, model.isFiltersOpen])]),
       groupView(h, "results", [
         sectionView(
@@ -266,7 +258,7 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
             h.div(
               [],
               [
-                lazyFates(fatesView, [h, derived.seats, derived.filtered]),
+                lazyFates(fatesView, [h, derived.decisions, derived.seats, derived.filtered]),
                 optionalView(h, derived.consistency, "consistency", (consistency) => lazyConsistency(consistencyView, [h, derived.pooled, consistency, card])),
               ],
             ),
