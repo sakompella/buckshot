@@ -86,10 +86,7 @@ const rowsOf = (seats: ReadonlyArray<SeatFull>, focal: ReadonlyArray<SeatFull>) 
   return { configs: mostUnused(configs), items: mostUnused(items) };
 };
 
-/**
- * What one seat's agent moves did about items. A move has an item available when legalUse has a bit: it could use an own
- * item, jam, or steal with adrenaline. A steal counts as an adrenaline use, not as a use of the item taken.
- */
+/** A move has an item available when legalUse has a bit: an own item, a jam or an adrenaline steal. A steal counts as an adrenaline use. */
 export interface Behavior {
   readonly moves: number;
   readonly available: number;
@@ -106,7 +103,6 @@ export const addBehavior = (left: Behavior, right: Behavior): Behavior => ({
   itemActions: left.itemActions + right.itemActions,
 });
 
-/** Per seat index, over its agent moves. */
 export const behaviorBySeat = memoLast((decisions: Pick<Decisions, "seat" | "legalUse" | "useItem">, seatCount: number): ReadonlyArray<Behavior> => {
   const tallies = Array.from({ length: seatCount }, () => ({ moves: 0, available: 0, usedWhenAvailable: 0, itemActions: 0 }));
 
@@ -130,18 +126,15 @@ export const behaviorBySeat = memoLast((decisions: Pick<Decisions, "seat" | "leg
   return tallies;
 });
 
-/** The share of moves with an item available that used one, or null when none had. */
 export const useShare = ({ available, usedWhenAvailable }: Behavior): number | null => (available === 0 ? null : usedWhenAvailable / available);
 
 interface UseRow {
   readonly name: string;
   readonly color: string;
-  /** Null when no move of the config had an item available. */
   readonly share: number | null;
   readonly tip: string;
 }
 
-/** One row per config over its agent moves, the most item-using first. */
 const useRowsOf = (decisions: Decisions, seats: ReadonlyArray<SeatFull>, focal: ReadonlyArray<SeatFull>): ReadonlyArray<UseRow> => {
   const bySeat = behaviorBySeat(decisions, seats.length);
   const indexOf = new Map(seats.map((seat, index) => [seat, index]));
@@ -164,7 +157,7 @@ const useRowView = (h: H, { name, color, share, tip }: UseRow): Html =>
     [h.Class("fate")],
     [
       h.span([h.Class("fate-name"), h.Style({ color })], [name]),
-      h.span([h.Class("fate-bar"), ...markTip(h, anchorId("use", name), tip)], [h.i([h.Style({ width: `${((share ?? 0) * 100).toFixed(2)}%`, background: color, opacity: OPACITY.used })], [])]),
+      h.span([h.Class("fate-bar fate-hit"), ...markTip(h, anchorId("use", name), tip)], [h.i([h.Style({ width: `${((share ?? 0) * 100).toFixed(2)}%`, background: color, opacity: OPACITY.used })], [])]),
       h.span([h.Class("fate-val")], [share === null ? "–" : pct(share)]),
     ],
   );
@@ -220,7 +213,6 @@ export const fatesView = (h: H, decisions: Decisions, seats: ReadonlyArray<SeatF
             [],
             [
               h.h3([], ["Moves using an item"]),
-              h.div([h.Class("fate-note")], ["Of the moves with an item available, the share that used one. Not a measure of play."]),
               useRows.length === 0 ? h.div([h.Class("empty")], ["No moves for this filter."]) : h.div([h.Class("fates")], useRows.map((row) => useRowView(h, row))),
             ],
           ),
