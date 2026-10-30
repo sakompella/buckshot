@@ -8,7 +8,7 @@ opponent config, seed and seat position in both efforts; pairs are averaged per 
 nobody played is left out, never read as 0. Rounds are primary (round winners come from by_round.py), match win shares secondary.
 The comparison is run on every scored match and again on the matches that started at or after REQUEST_CHANGE, so each period's
 ratings, counts and coverage describe only that period. Intervals resample seeds, jointly across opponents and both efforts, and
-appear only when each effort has at least MIN_UNITS distinct seeds in the support. Games between two efforts of one model and
+appear only when each effort has at least MIN_UNITS distinct seeds in the support and no resample leaves a cell empty. Games between two efforts of one model and
 games with a DeepSeek seat are left out. The database is opened read-only. With --doc FILE the tables replace the text between the
 matched-efforts markers of that file.
 
@@ -165,8 +165,8 @@ def seed_draws(seeds: set[int], rng: random.Random, draws: int):
 
 
 def interval_of(replicates: list[float], draws: int) -> tuple[float, float] | None:
-    """The central 95%, when at least half the resamples left every cell with data."""
-    return boot.interval(replicates) if len(replicates) * 2 >= draws else None
+    """The central 95%, or None when any resample left a cell without data: dropping those resamples would bias the interval."""
+    return boot.interval(replicates) if len(replicates) == draws else None
 
 
 def common_interval(a: Cells, b: Cells, weights: dict[Config, float], rng: random.Random, draws: int) -> tuple[float, float] | None:

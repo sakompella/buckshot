@@ -143,6 +143,15 @@ class Intervals(unittest.TestCase):
         self.assertAlmostEqual(high, 0.1)
 
 
+    def test_no_interval_when_a_resample_can_leave_a_cell_empty(self):
+        # Enough seeds overall, but one opponent was met under a single seed, so many resamples miss it.
+        specs = [(f, EASY, 2, dict(seed=s)) for s in range(me.MIN_UNITS) for f in (HIGH, MED)] + [(f, HARD, 2, dict(seed=0)) for f in (HIGH, MED)]
+        row = me.compare(numbered(specs * 2), me.round_metric, {}, 100)[0]
+        self.assertEqual(row.common.opponents, 2)
+        self.assertIsNone(row.common.interval)
+        self.assertIsNone(row.strict.interval)
+
+
 class Time(unittest.TestCase):
     def test_parses_milliseconds_and_offsets_to_the_same_instant(self):
         base = me.parse_time("2026-10-16T14:48:44Z")
