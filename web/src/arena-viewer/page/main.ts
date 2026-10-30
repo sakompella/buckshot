@@ -3,7 +3,7 @@ import { HttpClient, HttpClientResponse } from "effect/http";
 import { AsyncData, Command, Dom, Http, Runtime, Subscription, type Update } from "foldkit";
 import { modifyFields } from "foldkit/struct";
 
-import { Blunders, Consistency, Decisions, MatchDetail, Mistakes, SeatsResponse } from "../api.ts";
+import { Consistency, Decisions, MatchDetail, SeatsResponse } from "../api.ts";
 import { withPotShares } from "./data.ts";
 import { derive } from "./derived.ts";
 import { picksOf } from "./interesting.ts";
@@ -32,11 +32,8 @@ const getOptional = <A, I>(url: string, schema: Schema.Codec<A, I>) =>
 
 const LoadData = Command.define("LoadData", {
   messages: [Message.SucceededLoad, Message.FailedLoad],
-  execute: Effect.all(
-    [getJson("/api/seats", SeatsResponse), getJson("/api/decisions", Decisions), getOptional("/api/blunders", Blunders), getOptional("/api/mistakes", Mistakes), getOptional("/api/consistency", Schema.Array(Consistency))],
-    { concurrency: 5 },
-  ).pipe(
-    Effect.map(([seats, decisions, blunders, mistakes, consistency]) => Message.SucceededLoad({ loaded: { seats: withPotShares(seats), decisions, blunders, mistakes, consistency } })),
+  execute: Effect.all([getJson("/api/seats", SeatsResponse), getJson("/api/decisions", Decisions), getOptional("/api/consistency", Schema.Array(Consistency))], { concurrency: 3 }).pipe(
+    Effect.map(([seats, decisions, consistency]) => Message.SucceededLoad({ loaded: { seats: withPotShares(seats), decisions, consistency } })),
     Effect.catch((error) => Effect.succeed(Message.FailedLoad({ error: describe(error) }))),
     Effect.provide(Http.layer),
   ),
@@ -140,7 +137,7 @@ const withPickedMatches = (model: Model): Return =>
   AsyncData.matchData(model.data, {
     onEmpty: (): Return => ({ model }),
     onFailure: (): Return => ({ model }),
-    onData: (loaded) => withMatches(model, picksOf(derive(loaded, model.filter, model.basis)).map(({ match }) => match.matchId)),
+    onData: (loaded) => withMatches(model, picksOf(derive(loaded, model.filter)).map(({ match }) => match.matchId)),
   });
 
 const toggled = (values: ReadonlyArray<string>, value: string): ReadonlyArray<string> => (values.includes(value) ? values.filter((other) => other !== value) : [...values, value]);
@@ -194,14 +191,11 @@ export const update = (model: Model, message: Message): Return =>
     FailedLoad: ({ error }) => ({ model: modifyFields(model, { data: () => AsyncData.fail(error) }) }),
     ToggledEffort: ({ effort }) => withFilter(model, (filter) => ({ ...filter, offEfforts: toggled(filter.offEfforts, effort) })),
     ToggledModel: ({ name }) => withFilter(model, (filter) => ({ ...filter, offModels: toggled(filter.offModels, name) })),
-    ToggledAllConfigs: () => withFilter(model, (filter) => ({ ...filter, isAllConfigs: !filter.isAllConfigs })),
     ScrolledInto: ({ group }) =>
       Option.contains(model.maybeGroup, group) ? { model } : { model: modifyFields(model, { maybeGroup: () => Option.some(group) }), commands: [RevealNavLink({ group })] },
     ToggledFilters: () => ({ model: modifyFields(model, { isFiltersOpen: (isOpen) => !isOpen }) }),
     TappedTitle: ({ text }) => ({ model: modifyFields(model, { maybeTappedTitle: () => Option.some(text) }) }),
     ClearedTappedTitle: () => ({ model: modifyFields(model, { maybeTappedTitle: () => Option.none() }) }),
-    SelectedRanking: ({ ranking }) => ({ model: modifyFields(model, { ranking: () => ranking }) }),
-    SelectedBasis: ({ basis }) => ({ model: modifyFields(model, { basis: () => basis }) }),
     SelectedScatterAxis: ({ axis }) => ({ model: modifyFields(model, { scatter: (scatter) => ({ ...scatter, axis }) }) }),
     HoveredPoint: ({ key }) => ({ model: modifyFields(model, { scatter: (scatter) => ({ ...scatter, maybeHover: Option.some(key) }) }) }),
     LeftPoint: () => ({ model: modifyFields(model, { scatter: (scatter) => ({ ...scatter, maybeHover: Option.none() }) }) }),
@@ -222,13 +216,9 @@ export const update = (model: Model, message: Message): Return =>
         scatter: (scatter) => ({ ...scatter, maybePin: Option.none(), maybeHover: Option.none() }),
       }),
     }),
-    SelectedHeatMode: ({ mode }) => ({ model: modifyFields(model, { heat: (heat) => ({ ...heat, mode, maybeFlagged: Option.none(), maybeTip: Option.none() }) }) }),
     ClickedHeatColumn: ({ column }) => ({ model: modifyFields(model, { heat: (heat) => ({ ...heat, sort: column }) }) }),
-    ToggledBestOnly: () => ({ model: modifyFields(model, { heat: (heat) => ({ ...heat, isBestOnly: !heat.isBestOnly }) }) }),
     HoveredCell: (cell) => ({ model: modifyFields(model, { heat: (heat) => ({ ...heat, maybeTip: Option.some(cell) }) }) }),
     LeftCell: () => ({ model: modifyFields(model, { heat: (heat) => ({ ...heat, maybeTip: Option.none() }) }) }),
-    ClickedPatternCell: (flagged) => ({ model: modifyFields(model, { heat: (heat) => ({ ...heat, maybeFlagged: Option.some(flagged) }) }) }),
-    ClosedFlagged: () => ({ model: modifyFields(model, { heat: (heat) => ({ ...heat, maybeFlagged: Option.none() }) }) }),
     ClickedLeaderboardRow: ({ id }) => ({
       model: modifyFields(model, { leaderboard: (leaderboard) => ({ maybeTip: Option.none(), maybeOpen: Option.exists(leaderboard.maybeOpen, (open) => open === id) ? Option.none() : Option.some(id) }) }),
     }),
@@ -273,17 +263,15 @@ const init: Runtime.ApplicationInit<Model, Message, Flags> = ({ viewport }) => (
   model: {
     viewport,
     data: AsyncData.Loading(),
-    filter: { offEfforts: [], offModels: [], isAllConfigs: true },
-    ranking: "elo",
-    basis: "rounds",
+    filter: { offEfforts: [], offModels: [] },
     scatter: { axis: "cost", maybeHover: Option.none(), maybePin: Option.none() },
-    heat: { mode: "opp", sort: "rating", isBestOnly: false, maybeTip: Option.none(), maybeFlagged: Option.none() },
+    heat: { sort: "rating", maybeTip: Option.none() },
     leaderboard: { maybeOpen: Option.none(), maybeTip: Option.none() },
     matchList: { query: "", limit: 25 },
     maybeRateTip: Option.none(),
     maybeTappedTitle: Option.none(),
     markTip: { maybeHover: Option.none(), maybePin: Option.none() },
-    maybeGroup: Option.some("results"),
+    maybeGroup: Option.some("standings"),
     isFiltersOpen: false,
     matches: {},
     maybeReplay: Option.none(),

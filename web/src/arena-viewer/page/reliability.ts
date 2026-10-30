@@ -261,57 +261,54 @@ const timeBar = ({ failedTime, returnedTime }: Row): Bar => {
 };
 
 /** The reliability section, laid out for a viewport `width` wide with `content` pixels inside main's padding. */
-export const reliabilityView = (
-  h: H,
-  decisions: Decisions,
-  seats: ReadonlyArray<SeatFull>,
-  keep: ReadonlyArray<boolean>,
-  tip: Model["maybeRateTip"],
-  width: number,
-  content: number,
-): Html => {
+export const reliabilityView = (h: H, decisions: Decisions, seats: ReadonlyArray<SeatFull>, keep: ReadonlyArray<boolean>, width: number, content: number): Html => {
   const rows = rowsOf(decisions, seats, keep);
   const every = everyRowOf(decisions, seats);
+  const figure = chartWidth(width, content);
+  const fallbacks = sumOf(rows.map(({ fallbacks: count }) => count));
+
+  return h.div(
+    [],
+    [
+      h.h2([], ["Service failures"]),
+      h.p([h.Class("sub")], ["Calls the provider or the shared hub refused or dropped, mostly quota limits: not the model's play."]),
+      h.div(
+        [h.Class("chartrow")],
+        [
+          figureView(h, "Failed calls", "Share of replies.", configBarsView(h, "failed", rows, every, ({ rates }) => rateBar(rates.failed, 100, 1, "%", "replies"), (value) => `${value}%`, figure)),
+          figureView(h, "Time lost to failed calls", "Share of call latency.", configBarsView(h, "time", rows, every, timeBar, (value) => `${value}%`, figure)),
+        ],
+      ),
+      failuresOverTimeView(h, everyHourlyOf(seats), hourlyOf(seats, keep), content),
+      h.h2([h.Class("subhead")], ["Model failures"]),
+      h.div(
+        [h.Class("chartrow")],
+        [
+          figureView(
+            h,
+            "Turns ended without a move",
+            `Reminders per 1,000 moves; ${fallbacks === 0 ? "no" : fallbacks.toLocaleString()} fallback ${fallbacks === 1 ? "move" : "moves"} after a second miss.`,
+            configBarsView(h, "reminders", rows, every, ({ rates }) => rateBar(rates.reminders, 1000, 1, "", "moves"), String, figure),
+          ),
+        ],
+      ),
+    ],
+  );
+};
+
+export const reliabilityTablesView = (h: H, decisions: Decisions, seats: ReadonlyArray<SeatFull>, keep: ReadonlyArray<boolean>, tip: Model["maybeRateTip"]): Html => {
+  const rows = rowsOf(decisions, seats, keep);
   const worst = worstOf(decisions, seats, keep);
   const total = (pick: (row: Row) => number) => sumOf(rows.map(pick));
-  const figure = chartWidth(width, content);
-  const fallbacks = total(({ fallbacks: count }) => count);
   const overhead = rows.filter((row) => row.failedCost > 0 || row.failedTime > 0).toSorted((left, right) => right.failedTime - left.failedTime);
 
   return h.div(
     [],
     [
-      h.div(
-        [],
-        [
-          h.h2([], ["Service failures"]),
-          h.p([h.Class("sub")], ["Calls the provider or the shared hub refused or dropped, mostly quota limits: not the model's play."]),
-          h.div(
-            [h.Class("chartrow")],
-            [
-              figureView(h, "Failed calls", "Share of replies.", configBarsView(h, "failed", rows, every, ({ rates }) => rateBar(rates.failed, 100, 1, "%", "replies"), (value) => `${value}%`, figure)),
-              figureView(h, "Time lost to failed calls", "Share of call latency.", configBarsView(h, "time", rows, every, timeBar, (value) => `${value}%`, figure)),
-            ],
-          ),
-          failuresOverTimeView(h, everyHourlyOf(seats), hourlyOf(seats, keep), content),
-          h.h2([h.Class("subhead")], ["Model failures"]),
-          h.div(
-            [h.Class("chartrow")],
-            [
-              figureView(
-                h,
-                "Turns ended without a move",
-                `Reminders per 1,000 moves; ${fallbacks === 0 ? "no" : fallbacks.toLocaleString()} fallback ${fallbacks === 1 ? "move" : "moves"} after a second miss.`,
-                configBarsView(h, "reminders", rows, every, ({ rates }) => rateBar(rates.reminders, 1000, 1, "", "moves"), String, figure),
-              ),
-            ],
-          ),
-        ],
-      ),
       h.details(
         [h.Class("tables")],
         [
-          h.summary([], ["The numbers as tables"]),
+          h.summary([], ["Failures as tables"]),
           h.section(
             [],
             [

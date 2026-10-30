@@ -4,7 +4,9 @@ import { join } from "node:path";
 import { Schema } from "effect";
 import { type Browser, chromium, type Page } from "playwright-core";
 
-import { MatchDetail } from "../src/arena-viewer/api.ts";
+import { Blunders, MatchDetail } from "../src/arena-viewer/api.ts";
+import { anchorId } from "../src/arena-viewer/page/charts.ts";
+import { baseName } from "../src/arena-viewer/page/data.ts";
 import { GROUPS, Section } from "../src/arena-viewer/page/model.ts";
 import { TOUR } from "../src/arena-viewer/page/tour.ts";
 import { coverageOfMatch, type RegretCoverage, withoutRegret } from "./arena-viewer-regret-coverage.ts";
@@ -94,7 +96,7 @@ const countOf = async (page: Page, selector: string) => {
   return page.locator(selector).count();
 };
 
-const heat = (page: Page) => page.locator("#breakdown");
+const heat = (page: Page) => page.locator("#breakdown details", { has: page.locator("table.heat") });
 
 const loadPage = async (page: Page) => {
   await page.goto(`${base}/`);
@@ -107,23 +109,14 @@ const openPage = async (page: Page) => {
 
   await loadPage(page);
   console.log("every section drawn in", Date.now() - started, "ms");
-
-  const counts = async () => ["scatter points", await countOf(page, ".card svg g.pt"), "heat rows", await countOf(page, "table.heat tbody tr"), "leaderboards", await countOf(page, "table.lbt"), "|", await page.locator(".filters .switch").allInnerTexts()];
-  const allConfigs = page.getByRole("switch", { name: /all configs/ });
-
-  console.log("default (all configs):", ...(await counts()));
-
-  if ((await allConfigs.count()) === 0) return;
-
-  await allConfigs.uncheck();
-  console.log("main configs only:", ...(await counts()));
-  await allConfigs.check();
+  console.log("default:", "scatter points", await countOf(page, "#scatter svg g.pt"), "heat rows", await countOf(page, "table.heat tbody tr"), "leaderboard rows", await countOf(page, "table.lbt tbody tr.row"));
+  expectThat((await page.getByRole("switch").count()) === 0, "the page still has a switch");
 };
 
 // Visible controls smaller than 44px either way (heat cells and leaderboard squares are left out).
 const smallTargets = (page: Page) =>
   page.evaluate(() =>
-    [...document.querySelectorAll("nav a, .toggle button, .chip, .switch, select, input:not([type=checkbox]), .stepper button, .modal .x")].flatMap((element) => {
+    [...document.querySelectorAll("nav a, .toggle button, .chip, select, input:not([type=checkbox]), .stepper button, .modal .x")].flatMap((element) => {
       const box = element.getBoundingClientRect();
 
       return box.width > 0 && (box.height < 44 || box.width < 44) ? [`${element.className || element.tagName} ${element.textContent?.slice(0, 20)} ${Math.round(box.width)}x${Math.round(box.height)}`] : [];
@@ -147,6 +140,8 @@ const captureBaseline = async (browser: Browser, viewport: Viewport) => {
   const page = await newPage(browser, viewport);
 
   await loadPage(page);
+  await settled(page);
+  console.log(name, "page height", await page.evaluate(() => document.documentElement.scrollHeight), "| leaderboard starts at", await page.evaluate(() => Math.round((document.querySelector("table.lbt")?.getBoundingClientRect().top ?? Number.NaN) + scrollY)));
   await page.screenshot({ path: shot(`${name}-page`), fullPage: true });
 
   for (const { group, sections } of GROUPS) {
@@ -209,7 +204,7 @@ const checkJumps = async (page: Page, name: string, isTouch: boolean) => {
 
 const yTicks = (page: Page) =>
   page.evaluate(() =>
-    [...document.querySelectorAll("#scatter .card:first-child svg > g:not(.ptlabel) > text[text-anchor=end]")]
+    [...document.querySelectorAll("#scatter .card svg > g:not(.ptlabel) > text[text-anchor=end]")]
       .map((text) => ({ y: Number(text.getAttribute("y")), label: text.textContent ?? "" }))
       .toSorted((left, right) => left.y - right.y)
       .map(({ label }) => label)
@@ -219,7 +214,7 @@ const yTicks = (page: Page) =>
 
 const axesOf = (page: Page) =>
   page.evaluate(() => {
-    const chart = document.querySelector(".card svg");
+    const chart = document.querySelector("#scatter svg");
     const lines = [...(chart?.querySelectorAll("line") ?? [])].filter((line) => line.getAttribute("stroke") === null);
     const vertical = lines.flatMap((line) => (line.getAttribute("x1") === line.getAttribute("x2") ? [Math.round(Number(line.getAttribute("x1")))] : []));
     const horizontal = lines.flatMap((line) => (line.getAttribute("y1") === line.getAttribute("y2") ? [Math.round(Number(line.getAttribute("y1")))] : []));
@@ -262,7 +257,7 @@ const checkFixedAxes = async (page: Page, scatter: ReturnType<Page["locator"]>) 
       const isSame = (await axesOf(page)) === before;
       const isScaleSame = (await reliabilityScales(page)) === scales;
 
-      console.log(name, label, "| points", await countOf(page, ".card svg g.pt"), "| axes unchanged:", isSame, "| reliability scales unchanged:", isScaleSame);
+      console.log(name, label, "| points", await countOf(page, "#scatter svg g.pt"), "| axes unchanged:", isSame, "| reliability scales unchanged:", isScaleSame);
       expectThat(isSame && isScaleSame, `${name} axes moved after ${label}`);
 
       if (label === "max off") await scatter.screenshot({ path: shot(`scatter-${name}-max-off`) });
@@ -278,144 +273,42 @@ const checkFixedAxes = async (page: Page, scatter: ReturnType<Page["locator"]>) 
 // A screenshot of an element taller than the window is stitched while scrolling, so the sticky bar would cover part of it.
 const UNSTICK = ".top, nav { position: static !important; }";
 
-// One choice drives the scatter, the heatmap and the leaderboards: each section's toggle shows it.
-const checkRanking = async (page: Page, scatter: ReturnType<Page["locator"]>) => {
-  const ranking = async () => [await textOf(page, ".card h2"), "| y ticks", await yTicks(page), "| heat header", await textOf(page, "table.heat thead th:nth-last-child(2)"), "| heat first row", await textOf(page, "table.heat tbody tr"), "| unranked heat rows", (await page.locator("table.heat td.total").allInnerTexts()).filter((text) => text === "–").length, "| leaderboard first row", await textOf(page, "table.lbt tbody tr.row"), "| toggles on", (await page.locator(".toggle button.on", { hasText: /^(Elo|Rank)$/ }).allInnerTexts()).join(" ")];
+const checkRatings = async (page: Page) => {
+  await openBreakdown(page);
 
-  console.log("Elo:", ...(await ranking()));
-  await scatter.getByRole("button", { name: "Rank", exact: true }).click();
-  await settled(page);
-  console.log("Rank:", ...(await ranking()));
+  const heading = { scatter: await textOf(page, "#scatter h2"), leaderboard: await textOf(page, "table.lbt thead th.rating"), heat: await textOf(page, "table.heat thead th:nth-last-child(2)") };
+  const choices = await page.locator(".toggle button, select option").evaluateAll((controls) => controls.map((control) => control.textContent?.trim() ?? "").filter((text) => /^(Elo|Rank|Round wins|Match wins|Cash)$/.test(text)));
 
-  const places = (await yTicks(page)).split(" ").map(Number);
+  console.log("rating headings", heading, "| rating choices", choices);
+  expectThat(heading.scatter.includes("Round Elo") && heading.leaderboard === "Round Elo" && heading.heat === "Round Elo", `a section does not show Round Elo: ${JSON.stringify(heading)}`);
+  expectThat(choices.length === 0, `the page still offers a rating choice: ${choices.join(" ")}`);
 
-  expectThat(places.length > 1 && places.every((place, index) => index === 0 || place - (places[index - 1] ?? 0) === (places[1] ?? 0) - (places[0] ?? 0)), `rank ticks are not evenly spaced: ${places.join(" ")}`);
-  await scatter.screenshot({ path: shot("scatter-rank") });
-  await heat(page).screenshot({ path: shot("heat-rank"), style: UNSTICK });
-  await page.locator(".lb").screenshot({ path: shot("leaderboard-rank"), style: UNSTICK });
-  await page.locator(".lb").getByRole("button", { name: "Elo", exact: true }).click();
-  await settled(page);
-  console.log("back to Elo from the leaderboard:", await textOf(page, ".card h2"));
-};
+  const rows = await countOf(page, "table.lbt tbody tr.row");
+  const cells = (label: string) => page.locator(`table.lbt td[data-label="${label}"]`).allInnerTexts();
+  const elos = await cells("round elo");
 
-// Under either rating basis and either ranking, every config the page draws has an Elo and a rank: no dash in the
-// heatmap or the leaderboards.
-const checkEveryConfigRated = async (page: Page, scatter: ReturnType<Page["locator"]>) => {
-  const dashes = (selector: string) => page.locator(selector).evaluateAll((cells) => cells.filter((cell) => cell.textContent?.trim() === "–").length);
+  for (const label of ["match wins", "round wins", "cash share"]) {
+    const shares = await cells(label);
 
-  for (const basis of ["Round wins", "Match wins", "Cash"] as const) {
-    await scatter.getByRole("button", { name: basis, exact: true }).click();
-
-    for (const ranking of ["Elo", "Rank"] as const) {
-      await scatter.getByRole("button", { name: ranking, exact: true }).click();
-      await settled(page);
-
-      const label = ranking === "Rank" ? "rank" : ELO_NAMES[basis];
-      const rows = await countOf(page, "table.heat tbody tr");
-      const missing = (await dashes("table.heat td.total")) + (await dashes(`table.lbt td[data-label="${label}"]`));
-      const points = await countOf(page, ".card svg g.pt");
-      const unlisted = await page.locator("table.heat td.total").evaluateAll((cells) => cells.filter((cell) => cell.textContent?.trim() === "").length);
-
-      console.log(basis, ranking, "| heat rows", rows, "| scatter points", points, "| rows without a rating", missing + unlisted);
-      expectThat(missing + unlisted === 0, `${basis} ${ranking}: a config shows a dash instead of a rating`);
-    }
+    console.log(label, "cells", shares.length, "of", rows, "rows, first", shares.slice(0, 4).join(" | "));
+    expectThat(shares.length === rows && shares.every((text) => /^\d+%/.test(text.trim())), `a leaderboard row has no ${label}`);
   }
 
-  await scatter.getByRole("button", { name: "Round wins", exact: true }).click();
-  await scatter.getByRole("button", { name: "Elo", exact: true }).click();
-  await settled(page);
+  const ratings = elos.map((text) => Number(text.trim().split(" ")[0]?.replace("+", "").replace("−", "-")));
+
+  console.log("round elo cells", elos.length, "of", rows, "rows, first", elos.slice(0, 4).join(" | "));
+  expectThat(elos.length === rows && ratings.every(Number.isFinite), "a leaderboard row shows no Round Elo");
+  expectThat(ratings.every((rating, index) => index === 0 || rating <= (ratings[index - 1] ?? rating)), "the leaderboard is not best Round Elo first");
+
+  const totals = await page.locator("table.heat td.total").allInnerTexts();
+
+  expectThat(totals.length > 0 && totals.every((text) => text.trim() !== "" && text.trim() !== "–"), "a heatmap row shows no Round Elo");
 };
 
-const ELO_NAMES = { "Round wins": "Round Elo", "Match wins": "Match Elo", Cash: "Cash Elo" } as const;
+const openBreakdown = async (page: Page) => {
+  if ((await heat(page).getAttribute("open")) === null) await heat(page).locator("summary").click();
 
-const ratingViews = async (page: Page) => ({
-  scatter: await textOf(page, ".card h2"),
-  heat: await textOf(page, "table.heat thead th:nth-last-child(2)"),
-  leaderboard: await textOf(page, "table.lbt thead th.rating"),
-  firstRow: await textOf(page, "table.lbt tbody tr.row"),
-  heatFirstRow: await textOf(page, "table.heat tbody tr"),
-  toggles: await page.locator(".toggle button.on", { hasText: /^(Round wins|Match wins|Cash)$/ }).allInnerTexts(),
-});
-
-// The Round wins / Cash choice drives the scatter, the heatmap and the leaderboards together, the leaderboards show every
-// config's pot share beside its match win share, and the axes stay put under filters on the cash rating too.
-const checkCash = async (page: Page, scatter: ReturnType<Page["locator"]>) => {
-  const rounds = await ratingViews(page);
-
-  console.log("Round wins:", rounds);
-  await scatter.getByRole("button", { name: "Cash", exact: true }).click();
   await settled(page);
-
-  const cash = await ratingViews(page);
-
-  console.log("Cash:", cash);
-  expectThat(cash.scatter.includes("Cash Elo") && cash.heat === "Cash Elo" && cash.leaderboard === "Cash Elo", "the Cash choice did not reach the scatter, the heatmap and the leaderboards");
-  expectThat(rounds.scatter.includes("Round Elo") && rounds.heat === "Round Elo" && rounds.leaderboard === "Round Elo", "the page does not start on the round rating");
-  expectThat(cash.firstRow !== rounds.firstRow && cash.heatFirstRow !== rounds.heatFirstRow, "the cash rating left the leaderboard or heatmap rows as they were");
-  expectThat(cash.toggles.length === 3 && cash.toggles.every((text) => text === "Cash"), `Cash toggles on: ${cash.toggles.join(" ")}`);
-
-  const pots = await page.locator('table.lbt td[data-label="pot share"]').allInnerTexts();
-  const rows = await countOf(page, "table.lbt tbody tr.row");
-
-  console.log("pot share cells", pots.length, "of", rows, "rows, first", pots.slice(0, 6).join(" "));
-  expectThat(pots.length === rows && pots.every((text) => /^\d+%$/.test(text.trim())), "a leaderboard row has no pot share");
-
-  await page.locator(".lb").getByRole("button", { name: "Rank", exact: true }).click();
-  await settled(page);
-  console.log("Cash rank:", await textOf(page, "table.lbt tbody tr.row"), "| heat header", await textOf(page, "table.heat thead th:nth-last-child(2)"));
-  await scatter.screenshot({ path: shot("scatter-cash-rank") });
-  await page.locator(".lb").getByRole("button", { name: "Elo", exact: true }).click();
-  await settled(page);
-  await scatter.screenshot({ path: shot("scatter-cash") });
-  await heat(page).screenshot({ path: shot("heat-cash"), style: UNSTICK });
-  await page.locator(".lb").screenshot({ path: shot("leaderboard-cash"), style: UNSTICK });
-  await checkFixedAxes(page, scatter);
-
-  await heat(page).getByRole("button", { name: "Round wins", exact: true }).click();
-  await settled(page);
-
-  const back = await ratingViews(page);
-
-  expectThat(JSON.stringify(back) === JSON.stringify(rounds), "Round wins did not bring the page back to how it started");
-};
-
-// The page starts on round wins, with every leaderboard row's round wins. Match wins is fitted on its first click, which
-// is timed, and reaches the scatter, the heatmap and the leaderboards.
-const checkMatchWins = async (page: Page, scatter: ReturnType<Page["locator"]>) => {
-  const rounds = await ratingViews(page);
-  const shares = await page.locator('table.lbt td[data-label="round wins"]').allInnerTexts();
-  const rows = await countOf(page, "table.lbt tbody tr.row");
-
-  console.log("round wins cells", shares.length, "of", rows, "rows, first", shares.slice(0, 6).join(" "));
-  expectThat(shares.length === rows && shares.every((text) => /^\d+%$/.test(text.trim())), "a leaderboard row has no round wins");
-
-  const clicked = Date.now();
-
-  await scatter.getByRole("button", { name: "Match wins", exact: true }).click();
-  await settled(page);
-  console.log("Match wins fitted and drawn in", Date.now() - clicked, "ms");
-
-  const matches = await ratingViews(page);
-
-  console.log("Match wins:", matches);
-  expectThat(matches.scatter.includes("Match Elo") && matches.heat === "Match Elo" && matches.leaderboard === "Match Elo", "the Match wins choice did not reach the scatter, the heatmap and the leaderboards");
-  expectThat(matches.firstRow !== rounds.firstRow && matches.heatFirstRow !== rounds.heatFirstRow, "the match rating left the leaderboard or heatmap rows as they were");
-  expectThat(matches.toggles.length === 3 && matches.toggles.every((text) => text === "Match wins"), `Match wins toggles on: ${matches.toggles.join(" ")}`);
-
-  await page.locator(".lb").getByRole("button", { name: "Rank", exact: true }).click();
-  await settled(page);
-  console.log("Match wins rank:", await textOf(page, "table.lbt tbody tr.row"), "| heat header", await textOf(page, "table.heat thead th:nth-last-child(2)"));
-  await scatter.screenshot({ path: shot("scatter-matches-rank") });
-  await page.locator(".lb").getByRole("button", { name: "Elo", exact: true }).click();
-  await settled(page);
-  await scatter.screenshot({ path: shot("scatter-matches") });
-  await heat(page).screenshot({ path: shot("heat-matches"), style: UNSTICK });
-  await page.locator(".lb").screenshot({ path: shot("leaderboard-matches"), style: UNSTICK });
-  await checkFixedAxes(page, scatter);
-
-  await heat(page).getByRole("button", { name: "Round wins", exact: true }).click();
-  await settled(page);
-  expectThat(JSON.stringify(await ratingViews(page)) === JSON.stringify(rounds), "Round wins did not bring the page back to how it started after Match wins");
 };
 
 const servedDecisions = async (id: string) => Schema.decodeUnknownSync(MatchDetail)(await (await fetch(`${base}/api/match?id=${encodeURIComponent(id)}`)).json()).decisions;
@@ -447,6 +340,37 @@ const expectRegretShown = async (page: Page, coverage: RegretCoverage, what: str
   const shown = { tagged: await regretTags(page).count(), rings: await countOf(page, ".modal .chart circle"), turning: await countOf(page, ".modal .turning .chip") };
 
   expectThat(shown.tagged === coverage.tagged && shown.rings === coverage.rings && shown.turning === coverage.turning, `${what}: replay shows ${JSON.stringify(shown)}, its data has ${JSON.stringify({ tagged: coverage.tagged, rings: coverage.rings, turning: coverage.turning })}`);
+};
+
+const FixtureSeats = Schema.Array(Schema.Struct({ matchId: Schema.String, model: Schema.String, effort: Schema.String, status: Schema.String }));
+
+interface RegretFixture {
+  readonly matchId: string;
+  readonly model: string;
+  readonly effort: string;
+}
+
+const regretFixtures = async (count: number): Promise<ReadonlyArray<RegretFixture>> => {
+  const seats = Schema.decodeUnknownSync(FixtureSeats)(await (await fetch(`${base}/api/seats`)).json());
+  const blunders = Schema.decodeUnknownSync(Blunders)(await (await fetch(`${base}/api/blunders`)).json());
+  const costliest = blunders.seat.map((_seat, at) => at).toSorted((left, right) => (blunders.exact[right] ?? 0) - (blunders.exact[left] ?? 0) || (blunders.points[right] ?? 0) - (blunders.points[left] ?? 0));
+  const picked = new Map<string, RegretFixture>();
+
+  for (const at of costliest) {
+    const seat = seats[blunders.seat[at] ?? -1];
+
+    if (seat !== undefined && seat.status === "completed" && !picked.has(seat.matchId) && picked.size < count) picked.set(seat.matchId, seat);
+  }
+
+  return [...picked.values()];
+};
+
+const openFromLeaderboard = async (page: Page, { matchId, model, effort }: RegretFixture) => {
+  const row = page.locator("table.lbt tr.row", { hasText: `${baseName(model)} [${effort}]` }).first();
+
+  if ((await row.getAttribute("aria-expanded")) !== "true") await row.click();
+
+  await page.locator(`#${anchorId("sq", matchId)}`).click();
 };
 
 const coveredMatchIds: Array<string> = [];
@@ -491,23 +415,23 @@ const checkRegret = async (page: Page) => {
     await closeReplay(page);
   }
 
-  const blunderCards = page.locator(".icard", { hasText: "Round win chance" });
-  const fixtures = Math.min(await blunderCards.count(), 5);
+  const fixtures = await regretFixtures(5);
   let exact = 0;
   let notExact = 0;
 
-  expectThat(fixtures > 0, "no regret blunder card to open a regret-covered replay from");
+  expectThat(fixtures.length > 0, "no regret blunder to open a regret-covered replay from");
 
-  for (const card of Array.from({ length: fixtures }, (_, index) => index)) {
-    const coverage = await openReplay(page, () => blunderCards.nth(card).click());
+  for (const [card, fixture] of fixtures.entries()) {
+    const coverage = await openReplay(page, () => openFromLeaderboard(page, fixture));
 
     coveredMatchIds.push(coverage.matchId);
-    expectThat(coverage.searched > 0 && coverage.tagged > 0 && coverage.turning > 0, `regret blunder card ${card}: its replay has ${coverage.searched} searched, ${coverage.tagged} tagged, ${coverage.turning} turning`);
-    await expectRegretShown(page, coverage, `blunder card ${card}`);
+    expectThat(coverage.matchId === fixture.matchId, `blunder match ${card}: the leaderboard opened ${coverage.matchId}, not ${fixture.matchId}`);
+    expectThat(coverage.searched > 0 && coverage.tagged > 0 && coverage.turning > 0, `blunder match ${card}: its replay has ${coverage.searched} searched, ${coverage.tagged} tagged, ${coverage.turning} turning`);
+    await expectRegretShown(page, coverage, `blunder match ${card}`);
 
     const tags = await regretTags(page).evaluateAll((found) => found.map((tag) => ({ text: tag.textContent ?? "", isExact: tag.classList.contains("exact") })));
 
-    expectThat(tags.every(({ text }) => REGRET_TAG.test(text.trim())), `blunder card ${card}: regret tags ${tags.slice(0, 3).map(({ text }) => text).join(" | ")}`);
+    expectThat(tags.every(({ text }) => REGRET_TAG.test(text.trim())), `blunder match ${card}: regret tags ${tags.slice(0, 3).map(({ text }) => text).join(" | ")}`);
     exact += tags.filter(({ isExact }) => isExact).length;
     notExact += tags.filter(({ isExact }) => !isExact).length;
 
@@ -522,12 +446,12 @@ const checkRegret = async (page: Page) => {
       const detail = ((await page.locator(".modal .sel").textContent()) ?? "").replaceAll(/\s+/g, " ");
       const says = /not proven exact/.test(detail) ? "not exact" : /proven exact/.test(detail) ? "exact" : "neither";
 
-      expectThat(/Best move .+ chosen [\d.]+% · depth \d/.test(detail) && says === kind, `blunder card ${card}: a ${kind} move's detail says ${says}: ${detail.slice(0, 120)}`);
+      expectThat(/Best move .+ chosen [\d.]+% · depth \d/.test(detail) && says === kind, `blunder match ${card}: a ${kind} move's detail says ${says}: ${detail.slice(0, 120)}`);
 
       if (card === 0) await page.locator(".modal").screenshot({ path: shot(`replay-regret-${kind.replace(" ", "-")}`) });
     }
 
-    console.log("blunder card", card, "searched moves", coverage.searched, "tags", coverage.tagged, "turning points", coverage.turning);
+    console.log("blunder match", card, "searched moves", coverage.searched, "tags", coverage.tagged, "turning points", coverage.turning);
     await closeReplay(page);
   }
 
@@ -541,19 +465,16 @@ const checkMissingRegret = async (browser: Browser, viewport: Viewport) => {
   if (missingId === undefined || coveredId === undefined) throw new Error("the regret check found fewer than two regret-covered replays to build the fixture from");
 
   const page = await newPage(browser, viewport);
-  const blunderCards = page.locator(".icard", { hasText: "Round win chance" });
+  const fixtures = await regretFixtures(5);
   let incomingRegrets = 0;
 
-  const openCardOf = async (matchId: string) => {
-    for (const card of Array.from({ length: await blunderCards.count() }, (_, index) => index)) {
-      await blunderCards.nth(card).click();
+  const openFixtureOf = async (matchId: string) => {
+    const fixture = fixtures.find((candidate) => candidate.matchId === matchId);
 
-      if ((await openedMatchId(page)) === matchId) return;
+    if (fixture === undefined) throw new Error(`no regret blunder opens match ${matchId}`);
 
-      await closeReplay(page);
-    }
-
-    throw new Error(`no regret blunder card opens match ${matchId}`);
+    await openFromLeaderboard(page, fixture);
+    await openedMatchId(page);
   };
 
   try {
@@ -572,7 +493,7 @@ const checkMissingRegret = async (browser: Browser, viewport: Viewport) => {
     });
     await loadPage(page);
 
-    await openCardOf(missingId);
+    await openFixtureOf(missingId);
 
     const shown = { tagged: await regretTags(page).count(), rings: await countOf(page, ".modal .chart circle"), turning: await countOf(page, ".modal .turning .chip") };
     const detail = (await page.locator(".modal").innerText()).replaceAll(/\s+/g, " ");
@@ -583,7 +504,7 @@ const checkMissingRegret = async (browser: Browser, viewport: Viewport) => {
     await page.locator(".modal").screenshot({ path: shot("replay-missing-regret") });
     await closeReplay(page);
 
-    await openCardOf(coveredId);
+    await openFixtureOf(coveredId);
     await expectRegretShown(page, await coverageOfMatch(coveredId, servedDecisions), "the covered replay beside the fixture");
 
     await clearOverlays(page);
@@ -596,16 +517,16 @@ const checkMissingRegret = async (browser: Browser, viewport: Viewport) => {
 
 const checkDesktop = async (browser: Browser, viewport: Viewport) => {
   const page = await newPage(browser, viewport);
-  const scatter = page.locator(".card").first();
+  const scatter = page.locator("#scatter .card");
   const check = (name: string, run: () => Promise<void>) => attempt(viewport.name, name, run, () => clearOverlays(page));
 
   page.setDefaultTimeout(ACTION_TIMEOUT_MS);
   watch(page, viewport.name);
   await check("open page", () => openPage(page));
   await check("scatter", async () => {
-    console.log("scatter points", await countOf(page, ".card svg g[style*=pointer]"), "labels", await countOf(page, ".card svg g.ptlabel"), "| toggles:", await textOf(page, ".card .ctl"));
+    console.log("scatter points", await countOf(page, "#scatter svg g[style*=pointer]"), "labels", await countOf(page, "#scatter svg g.ptlabel"), "| toggles:", await textOf(page, "#scatter .ctl"));
     await scatter.screenshot({ path: shot("scatter") });
-    await page.locator(".card svg g[style*=pointer]").nth(3).hover({ force: true });
+    await page.locator("#scatter svg g[style*=pointer]").nth(3).hover({ force: true });
     console.log("hover point → tip:", await tipOf(page));
     await page.mouse.move(0, 0);
   });
@@ -617,43 +538,21 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
     ] as const) {
       await scatter.getByRole("button", { name: axis, exact: true }).click();
       await settled(page);
-      console.log("axis", name, "|", await textOf(page, ".card h2"), "| points", await countOf(page, ".card svg g.pt"));
+      console.log("axis", name, "|", await textOf(page, "#scatter h2"), "| points", await countOf(page, "#scatter svg g.pt"));
       await scatter.screenshot({ path: shot(`scatter-${name}`) });
     }
   });
   await check("fixed axes", () => checkFixedAxes(page, scatter));
-  await check("ranking", () => checkRanking(page, scatter));
-  await check("cash", () => checkCash(page, scatter));
-  await check("match wins", () => checkMatchWins(page, scatter));
-  await check("every config rated", () => checkEveryConfigRated(page, scatter));
+  await check("ratings", () => checkRatings(page));
   await check("regret", () => checkRegret(page));
   await check("missing regret", () => checkMissingRegret(browser, viewport));
-  await check("heatmap modes", async () => {
-    for (const [mode, name] of [
-      ["Win share vs opponent", "opp"],
-      ["Item use when legal", "items"],
-      ["Choice patterns", "choices"],
-      ["Play style", "style"],
-    ] as const) {
-      await heat(page).getByRole("button", { name: mode }).click();
-      console.log("heat", name, "rows", await countOf(page, "table.heat tbody tr"), "cols", await countOf(page, "table.heat thead th"), "| first row:", await textOf(page, "table.heat tbody tr"));
-      await heat(page).screenshot({ path: shot(`heat-${name}`) });
-    }
-
-    await heat(page).getByRole("switch", { name: /best row/ }).check();
-    console.log("best row per model", await countOf(page, "table.heat tbody tr"), "rows");
-    await heat(page).screenshot({ path: shot("heat-style-best") });
-    await heat(page).getByRole("switch", { name: /best row/ }).uncheck();
+  await check("heatmap", async () => {
+    await openBreakdown(page);
+    console.log("heat rows", await countOf(page, "table.heat tbody tr"), "cols", await countOf(page, "table.heat thead th"), "| first row:", await textOf(page, "table.heat tbody tr"));
+    await heat(page).screenshot({ path: shot("heat-opp"), style: UNSTICK });
   });
-  await check("flagged moves", async () => {
-    await heat(page).getByRole("button", { name: "Choice patterns" }).click();
-    await page.locator("table.heat td.click").first().hover();
-    console.log("hover cell → tip:", await tipOf(page));
-    await page.locator("table.heat td.click").first().click();
-    await page.waitForSelector(".flagged tr.row");
-    console.log("flagged rows", await countOf(page, ".flagged tr.row"));
+  await check("interesting and drill", async () => {
     await page.locator(".igrid").screenshot({ path: shot("interesting") });
-    await page.locator("#blunders").screenshot({ path: shot("blunders"), style: UNSTICK });
     console.log("cards", (await page.locator(".icard").allInnerTexts()).map((text) => text.replaceAll(/\s+/g, " ")));
     await page.locator("table.lbt tr.row").first().click();
     await page.locator(".drillin .sq i").first().hover();
@@ -676,11 +575,11 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
     }
   });
   await check("focused move", async () => {
-    const coverage = await openReplay(page, () => page.locator(".flagged tr.row").first().click());
+    const coverage = await openReplay(page, () => page.locator(".icard", { hasText: "Known-blank blunder" }).click());
 
     await page.waitForSelector(".modal .step.on");
     console.log("focused move", await textOf(page, ".modal .step.on"), "| searched moves", coverage.searched);
-    await expectRegretShown(page, coverage, "the flagged move's replay");
+    await expectRegretShown(page, coverage, "the known-blank blunder's replay");
     await page.locator(".modal details.seeds > summary").click();
     await page.locator(".seedrow .chip").first().click();
     await page.waitForSelector(".modal .step");
@@ -689,7 +588,11 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
     await closeReplay(page);
   });
   await check("turning points", async () => {
-    const coverage = await openReplay(page, () => page.locator(".icard", { hasText: "Round win chance" }).first().click());
+    const [fixture] = await regretFixtures(1);
+
+    if (fixture === undefined) throw new Error("no regret blunder to open turning points from");
+
+    const coverage = await openReplay(page, () => openFromLeaderboard(page, fixture));
     const turning = page.locator(".modal .turning .chip");
     const listed = await turning.count();
     const rings = await countOf(page, ".modal .chart circle");
@@ -700,6 +603,7 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
     const [, label = "", points = ""] = (await turning.first().innerText()).replaceAll(/\s+/g, " ").split(" · ");
 
     await turning.first().click();
+    await settled(page);
 
     const opened = await textOf(page, ".modal .step.on");
 
@@ -709,7 +613,7 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
     await closeReplay(page);
   });
   await check("mark tip by keyboard", async () => {
-    const mark = page.locator("#rubbers svg g[role=button]").first();
+    const mark = page.locator("#odds svg g[role=button]").first();
 
     await mark.focus();
     console.log("focus a mark → tip:", await tipOf(page));
@@ -720,15 +624,15 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
 
     console.log("Enter pins it, and it stays after the focus leaves → tip:", pinned);
     expectThat(pinned === (await mark.getAttribute("aria-label")), "a mark pinned by Enter left no tip of its own");
-    await page.locator(".hero").click();
+    await page.locator(".hero .title").click();
     expectThat((await tipOf(page)) === "none", "a click outside left the pinned tip");
   });
   await check("section counts", async () => console.log("matches", await countOf(page, "#matches tbody tr.row"), "| seats", await countOf(page, "#seats .bignum"), "| item fate rows", await countOf(page, "#items .fate"), "| reliability charts", await countOf(page, "#reliability .chartrow figure")));
   await check("jump menu", () => checkJumps(page, viewport.name, false));
   await check("sticky filters", async () => console.log("the filters stay in view:", await page.evaluate(() => Math.round(document.querySelector(".filters")?.getBoundingClientRect().top ?? -1)), "px from the top at scroll", await page.evaluate(() => Math.round(scrollY))));
   await check("reliability and matches", async () => {
-    await page.locator("#reliability details.tables > summary").click();
-    await page.locator("#reliability tbody td[data-label='failed calls']").first().hover();
+    await page.locator("#breakdown details.tables > summary", { hasText: "Failures as tables" }).click();
+    await page.locator("#breakdown tbody td[data-label='failed calls']").first().hover();
     console.log("reliability tip:", await tipOf(page));
     await page.locator("#matches tbody tr.row").first().click();
     await page.waitForSelector(".modal .step");
@@ -749,7 +653,7 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
 // Steps through the whole tour by keyboard: every step must highlight an element the page draws, inside the page's
 // width, and Escape must close it.
 const checkTour = async (page: Page, name: string) => {
-  await page.locator("nav .tourstart").click();
+  await page.locator(".tourstart").click();
 
   for (const [index, step] of TOUR.entries()) {
     if (index > 0) await page.keyboard.press("ArrowRight");
@@ -778,14 +682,14 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
   page.setDefaultTimeout(ACTION_TIMEOUT_MS);
   watch(page, name);
   await check("open page", () => openPage(page));
-  await check("overview", async () => console.log(name, "overflow", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page), "| heat model column", await stickyModelColumn(), "| scatter labels", await countOf(page, ".card svg g.ptlabel")));
+  await check("overview", async () => console.log(name, "overflow", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page), "| heat model column", await stickyModelColumn(), "| scatter labels", await countOf(page, "#scatter svg g.ptlabel")));
   await check("first screen and filters", async () => {
     await page.screenshot({ path: shot(`${name}-first-screen`) });
 
-    const chartTop = await page.evaluate(() => document.querySelector(".card svg")?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY);
+    const tableTop = await page.evaluate(() => document.querySelector("table.lbt")?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY);
 
-    console.log(name, "first chart starts at", Math.round(chartTop), "px of", height);
-    expectThat(chartTop < height * 0.6, `${name}: the first chart starts below the first screen's upper 60%`);
+    console.log(name, "the leaderboard starts at", Math.round(tableTop), "px of", height);
+    expectThat(tableTop < height * 0.6, `${name}: the leaderboard starts below the first screen's upper 60%`);
 
     if (width <= 1024) {
       console.log(name, "filters line:", await textOf(page, ".filtersum"), "| chips shown", await page.locator(".filters .chip").first().isVisible());
@@ -799,7 +703,7 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
     }
   });
   await check("mark tap", async () => {
-    for (const selector of ["#luck svg rect[role=button]", "#rubbers svg g[role=button]", "#deals svg g[role=button]"]) {
+    for (const selector of ["#odds svg g[role=button]", "#items .fate-bar[role=button]", "#seats svg g[role=button]"]) {
       await page.locator(selector).first().scrollIntoViewIfNeeded();
       await page.locator(selector).first().tap({ force: true });
 
@@ -818,27 +722,26 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
       }, selector);
 
       expectThat(gap < 200, `${name}: the tip of ${selector} stayed put while the page scrolled (${gap}px from its mark)`);
-      await page.locator(".hero").tap();
+      await page.locator(".hero .title").tap();
       expectThat((await tipOf(page)) === "none", `${name}: a tap outside leaves the tip of ${selector}`);
     }
   });
   await check("scatter tap", async () => {
-    await page.locator(".card svg g[style*=pointer]").nth(3).tap({ force: true });
+    await page.locator("#scatter svg g[style*=pointer]").nth(3).tap({ force: true });
     console.log(name, "tap point → tip:", await tipOf(page));
-    await page.locator("#luck svg rect[role=button]").first().tap({ force: true });
+    await page.locator("#odds svg g[role=button]").first().tap({ force: true });
     expectThat((await page.locator(".tip").count()) === 1, `${name}: pinning a mark left the scatter's pin up too`);
-    await page.locator(".hero").tap();
-    await page.locator(".card svg g[style*=pointer]").nth(3).scrollIntoViewIfNeeded();
-    await page.locator(".card svg g[style*=pointer]").nth(3).tap({ force: true });
-    await page.locator(".card").first().screenshot({ path: shot(`${name}-scatter`) });
-    await page.locator(".hero").tap();
+    await page.locator(".hero .title").tap();
+    await page.locator("#scatter svg g[style*=pointer]").nth(3).scrollIntoViewIfNeeded();
+    await page.locator("#scatter svg g[style*=pointer]").nth(3).tap({ force: true });
+    await page.locator("#scatter .card").screenshot({ path: shot(`${name}-scatter`) });
+    await page.locator(".hero .title").tap();
     console.log(name, "tap outside clears the tip:", (await tipOf(page)) === "none");
   });
   await check("heat and leaderboard", async () => {
-    await heat(page).getByRole("button", { name: "Item use when legal" }).tap();
-    await settled(page);
+    await openBreakdown(page);
     await heat(page).locator(".heatscroll").evaluate((element) => element.scrollTo({ left: 200 }));
-    await heat(page).screenshot({ path: shot(`${name}-heat-items`) });
+    await heat(page).screenshot({ path: shot(`${name}-heat`) });
     await page.locator("table.lbt").first().screenshot({ path: shot(`${name}-leaderboard`) });
   });
   await check("replay", async () => {
@@ -865,19 +768,14 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
     await checkJumps(page, name, true);
     console.log(name, "overflow after every section", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page));
   });
-  await check("rank toggles", async () => {
-    await heat(page).getByRole("button", { name: "Rank", exact: true }).tap();
+  await check("scatter axis menu", async () => {
+    const chooseAxis = (axis: string, label: string) => (width < 640 ? page.locator("#scatter select").selectOption(axis) : page.locator("#scatter").getByRole("button", { name: label, exact: true }).tap());
+
+    await chooseAxis("tokens", "Tokens");
     await settled(page);
-    console.log(name, "rank y ticks", await yTicks(page));
-    await page.locator(".card").first().screenshot({ path: shot(`${name}-scatter-rank`) });
-    await heat(page).getByRole("button", { name: "Cash", exact: true }).tap();
-    await settled(page);
-    console.log(name, "cash rank y ticks", await yTicks(page), "| overflow", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page));
-    await page.locator(".card").first().screenshot({ path: shot(`${name}-scatter-cash-rank`) });
-    await heat(page).getByRole("button", { name: "Match wins", exact: true }).tap();
-    await settled(page);
-    console.log(name, "match rank y ticks", await yTicks(page), "| overflow", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page));
-    await page.locator(".card").first().screenshot({ path: shot(`${name}-scatter-matches-rank`) });
+    console.log(name, "tokens axis:", await textOf(page, "#scatter h2"), "| y ticks", await yTicks(page), "| overflow", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page));
+    await page.locator("#scatter .card").screenshot({ path: shot(`${name}-scatter-tokens`) });
+    await chooseAxis("cost", "Cost");
   });
   await check("tour", () => checkTour(page, name));
 
@@ -887,16 +785,18 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
 // An optional section's data failing to load leaves the rest of the page drawn and says, in that section, what failed.
 const checkOptionalFailure = async (browser: Browser) => {
   const page = await newPage(browser, VIEWPORTS[0]);
+  const asked: Array<string> = [];
 
+  page.on("request", (request) => asked.push(new URL(request.url()).pathname));
   await page.route("**/api/consistency", (route) => route.abort());
-  await page.route("**/api/blunders", (route) => route.fulfill({ status: 500, body: "" }));
   await loadPage(page);
   await settled(page);
 
   const notes = await page.getByText(/^Could not load the /).allInnerTexts();
 
-  console.log("with blunders and consistency failing:", notes, "| leaderboards", await countOf(page, "table.lbt"));
-  expectThat(notes.length === 3 && (await page.locator("#blunders").getByText(/^Could not load/).count()) === 1 && (await page.locator("#mistakes").getByText(/^Could not load/).count()) === 1, "a failed optional endpoint did not leave a note in its own section");
+  console.log("with consistency failing:", notes, "| leaderboards", await countOf(page, "table.lbt"));
+  expectThat(notes.length === 1 && (await page.locator("#items").getByText(/^Could not load/).count()) === 1, "a failed optional endpoint did not leave a note in its own section");
+  expectThat(!asked.some((path) => path === "/api/blunders" || path === "/api/mistakes"), "the page still loads the blunders or the regret by shells left");
   await page.context().close();
 };
 

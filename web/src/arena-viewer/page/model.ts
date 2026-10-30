@@ -2,15 +2,15 @@ import { Schema } from "effect";
 import { AsyncData } from "foldkit";
 import { defineMessageUnion } from "foldkit/message";
 
-import { Blunders, Consistency, Decisions, MatchDetail, Mistakes, Seat } from "../api.ts";
+import { Consistency, Decisions, MatchDetail, Seat } from "../api.ts";
 
 /** The page's groups below the hero, in page order: the jump menu's links, and the sections the reader can be in. */
-export const Group = Schema.Literals(["results", "watch", "decisions", "rounds", "reliability", "details"]);
+export const Group = Schema.Literals(["standings", "watch", "decisions", "health"]);
 
 export type Group = typeof Group.Type;
 
 /** The sections inside the groups, each an in-page anchor; links to them from before the groups still land. */
-export const Section = Schema.Literals(["scatter", "interesting", "blunders", "odds", "mistakes", "items", "luck", "seats", "pressure", "rubbers", "reliability", "leaderboards", "matches", "deals", "breakdown"]);
+export const Section = Schema.Literals(["leaderboards", "scatter", "interesting", "matches", "odds", "items", "reliability", "seats", "breakdown"]);
 
 export type Section = typeof Section.Type;
 
@@ -19,18 +19,11 @@ export const Target = Schema.Union([Group, Section]);
 export type Target = typeof Target.Type;
 
 export const GROUPS: ReadonlyArray<{ readonly group: Group; readonly label: string; readonly sections: ReadonlyArray<Section> }> = [
-  { group: "results", label: "Results", sections: ["scatter"] },
-  { group: "watch", label: "Watch a match", sections: ["interesting", "blunders"] },
-  { group: "decisions", label: "Decisions", sections: ["odds", "mistakes", "items", "luck"] },
-  { group: "rounds", label: "Rounds", sections: ["seats", "pressure", "rubbers"] },
-  { group: "reliability", label: "Reliability", sections: ["reliability"] },
-  { group: "details", label: "Details", sections: ["leaderboards", "matches", "deals", "breakdown"] },
+  { group: "standings", label: "Standings", sections: ["leaderboards", "scatter"] },
+  { group: "watch", label: "Matches", sections: ["interesting", "matches"] },
+  { group: "decisions", label: "How they play", sections: ["odds", "items"] },
+  { group: "health", label: "Run health", sections: ["reliability", "seats", "breakdown"] },
 ];
-
-/** How ratings show: the Bradley-Terry rating on an Elo scale, or its place, best first. */
-export const Ranking = Schema.Literals(["elo", "rank"]);
-
-export type Ranking = typeof Ranking.Type;
 
 /** What ratings count: each round as one game, each match's win share, or each player's pot share (its cash over the match's cash). */
 export const Basis = Schema.Literals(["rounds", "matches", "cash"]);
@@ -44,23 +37,18 @@ const OptionalData = <A, I>(schema: Schema.Codec<A, I>) => AsyncData.Schema(sche
 
 /**
  * The database as the page holds it: every seat with its pot share and the agent moves' columns, which every section needs;
- * then the blunders, the regret of the searched moves, and each config's consistency (empty without a knowledge database).
+ * then each config's consistency (empty without a knowledge database).
  */
 export const Loaded = Schema.Struct({
   seats: Schema.Array(SeatFull),
   decisions: Decisions,
-  blunders: OptionalData(Blunders),
-  mistakes: OptionalData(Mistakes),
   consistency: OptionalData(Schema.Array(Consistency)),
 });
 
 export type Loaded = typeof Loaded.Type;
 
-/**
- * Which seats the page counts: all, minus the efforts and models switched off. Unless isAllConfigs,
- * only the main configs count (see mainConfigsOf).
- */
-export const Filter = Schema.Struct({ offEfforts: Schema.Array(Schema.String), offModels: Schema.Array(Schema.String), isAllConfigs: Schema.Boolean });
+/** Which seats the page counts: all, minus the efforts and models switched off. */
+export const Filter = Schema.Struct({ offEfforts: Schema.Array(Schema.String), offModels: Schema.Array(Schema.String) });
 
 export type Filter = typeof Filter.Type;
 
@@ -71,21 +59,9 @@ export type ScatterAxis = typeof ScatterAxis.Type;
 
 export const Scatter = Schema.Struct({ axis: ScatterAxis, maybeHover: Schema.Option(Schema.String), maybePin: Schema.Option(Schema.String) });
 
-export const HeatMode = Schema.Literals(["opp", "surprise", "items", "choices", "style"]);
-
-export type HeatMode = typeof HeatMode.Type;
-
 export const HeatCellId = Schema.Struct({ row: Schema.String, col: Schema.String });
 
-export const Flagged = Schema.Struct({ key: Schema.String, bit: Schema.Number, title: Schema.String });
-
-export const Heat = Schema.Struct({
-  mode: HeatMode,
-  sort: Schema.String,
-  isBestOnly: Schema.Boolean,
-  maybeTip: Schema.Option(HeatCellId),
-  maybeFlagged: Schema.Option(Flagged),
-});
+export const Heat = Schema.Struct({ sort: Schema.String, maybeTip: Schema.Option(HeatCellId) });
 
 export const Leaderboard = Schema.Struct({ maybeOpen: Schema.Option(Schema.String), maybeTip: Schema.Option(Schema.String) });
 
@@ -124,8 +100,6 @@ export const Model = Schema.Struct({
   viewport: Viewport,
   data: AsyncData.Schema(Loaded, Schema.String).schema,
   filter: Filter,
-  ranking: Ranking,
-  basis: Basis,
   scatter: Scatter,
   heat: Heat,
   leaderboard: Leaderboard,
@@ -154,13 +128,10 @@ export const Message = defineMessageUnion({
   FailedLoad: { error: Schema.String },
   ToggledEffort: { effort: Schema.String },
   ToggledModel: { name: Schema.String },
-  ToggledAllConfigs: {},
   ToggledFilters: {},
   ScrolledInto: { group: Group },
   TappedTitle: { text: Schema.String },
   ClearedTappedTitle: {},
-  SelectedRanking: { ranking: Ranking },
-  SelectedBasis: { basis: Basis },
   SelectedScatterAxis: { axis: ScatterAxis },
   HoveredPoint: { key: Schema.String },
   LeftPoint: {},
@@ -169,13 +140,9 @@ export const Message = defineMessageUnion({
   HoveredMark: { tip: MarkTip },
   LeftMark: {},
   ClickedMark: { tip: MarkTip },
-  SelectedHeatMode: { mode: HeatMode },
   ClickedHeatColumn: { column: Schema.String },
-  ToggledBestOnly: {},
   HoveredCell: { row: Schema.String, col: Schema.String },
   LeftCell: {},
-  ClickedPatternCell: { key: Schema.String, bit: Schema.Number, title: Schema.String },
-  ClosedFlagged: {},
   ClickedLeaderboardRow: { id: Schema.String },
   HoveredSquare: { matchId: Schema.String },
   LeftSquare: {},

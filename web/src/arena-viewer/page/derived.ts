@@ -1,6 +1,6 @@
 import { type Decisions, ITEMS } from "../api.ts";
-import { addTo, baseName, type BlockTally, blockRate, groupBy, keyOf, type MatchRow, matchRows, type ModelStats, modelStats, type Rate, type SeatFull } from "./data.ts";
-import type { Basis, Filter, Loaded } from "./model.ts";
+import { addTo, baseName, type BlockTally, blockRate, keyOf, type MatchRow, matchRows, type ModelStats, modelStats, type Rate, type SeatFull } from "./data.ts";
+import type { Filter, Loaded } from "./model.ts";
 import { pooledRatings, type Rating } from "./ratings.ts";
 
 // What the page shows, worked out from the loaded data and the filter. Each is
@@ -111,15 +111,12 @@ const itemSummaries = (decisions: Decisions, seats: ReadonlyArray<SeatFull>): Re
 export interface Derived {
   readonly seats: ReadonlyArray<SeatFull>;
   readonly decisions: Decisions;
-  readonly blunders: Loaded["blunders"];
-  readonly mistakes: Loaded["mistakes"];
   readonly consistency: Loaded["consistency"];
   readonly keep: ReadonlyArray<boolean>;
   readonly filtered: ReadonlyArray<SeatFull>;
   readonly matchSeats: ReadonlyArray<SeatFull>;
   readonly pooled: ReadonlyArray<ModelStats>;
-  readonly basis: Basis;
-  /** One rating per config on that basis, fitted over every match of every tournament: filters pick rows, not the scale. */
+  /** One round-win rating per config, fitted over every match of every tournament: filters pick rows, not the scale. */
   readonly ratings: ReadonlyMap<string, Rating>;
   readonly ranks: ReadonlyMap<string, number>;
   readonly everyPooled: ReadonlyArray<ModelStats>;
@@ -131,22 +128,7 @@ export interface Derived {
 // A filter keeps or drops whole configs, so whatever is grouped by config is worked out once for every seat and then
 // picked by the filter.
 
-// Each basis is fitted when first asked for, and kept, so the load pays only for the win ratings and switching back is free.
-export const ratingsOf = memoLast((seats: ReadonlyArray<SeatFull>) => {
-  const fitted = new Map<Basis, ReadonlyMap<string, Rating>>();
-
-  return (basis: Basis): ReadonlyMap<string, Rating> => {
-    const known = fitted.get(basis);
-
-    if (known) return known;
-
-    const fresh = pooledRatings(seats, basis);
-
-    fitted.set(basis, fresh);
-
-    return fresh;
-  };
-});
+export const ratingsOf = memoLast((seats: ReadonlyArray<SeatFull>): ReadonlyMap<string, Rating> => pooledRatings(seats, "rounds"));
 
 const allMatchesOf = memoLast((seats: ReadonlyArray<SeatFull>) => matchRows(seats));
 
@@ -154,25 +136,9 @@ const everyPooledOf = memoLast((seats: ReadonlyArray<SeatFull>) => modelStats(se
 
 const itemsOf = memoLast((decisions: Decisions, seats: ReadonlyArray<SeatFull>) => itemSummaries(decisions, seats));
 
-const MIN_SCORED = 20;
+const passes = (filter: Filter, seat: SeatFull): boolean => !filter.offEfforts.includes(seat.effort) && !filter.offModels.includes(baseName(seat.model));
 
-/**
- * The configs shown by default: those with a scored match against another model and at least MIN_SCORED scored
- * matches. The rest only played their own model's effort sweep, or too few matches.
- */
-export const mainConfigsOf = memoLast((seats: ReadonlyArray<SeatFull>): ReadonlySet<string> => {
-  const modelsIn = new Map([...groupBy(seats, ({ matchId }) => matchId)].map(([matchId, both]) => [matchId, new Set(both.map(({ model }) => model)).size]));
-  const scored = [...groupBy(seats.filter(({ status }) => status === "completed"), keyOf)];
-
-  return new Set(scored.flatMap(([key, played]) => (new Set(played.map(({ matchId }) => matchId)).size >= MIN_SCORED && played.some(({ matchId }) => (modelsIn.get(matchId) ?? 0) > 1) ? [key] : [])));
-});
-
-const passes = (filter: Filter, main: ReadonlySet<string>, seat: SeatFull): boolean =>
-  !filter.offEfforts.includes(seat.effort) &&
-  !filter.offModels.includes(baseName(seat.model)) &&
-  (filter.isAllConfigs || main.has(keyOf(seat)));
-
-const passingConfigs = (stats: ReadonlyArray<ModelStats>, filter: Filter, main: ReadonlySet<string>) => stats.filter(({ started: [first] }) => first !== undefined && passes(filter, main, first));
+const passingConfigs = (stats: ReadonlyArray<ModelStats>, filter: Filter) => stats.filter(({ started: [first] }) => first !== undefined && passes(filter, first));
 
 /** Each rated config's place by rating, ties by label so places are distinct; a config without a rating has none. */
 export const ranksOf = memoLast((pooled: ReadonlyArray<ModelStats>, ratings: ReadonlyMap<string, Rating>): ReadonlyMap<string, number> => {
@@ -182,27 +148,23 @@ export const ranksOf = memoLast((pooled: ReadonlyArray<ModelStats>, ratings: Rea
   return new Map(ordered.map((m, index) => [m.key, index + 1]));
 });
 
-export const derive = memoLast((loaded: Loaded, filter: Filter, basis: Basis): Derived => {
-  const { seats, decisions, blunders, mistakes, consistency } = loaded;
-  const main = mainConfigsOf(seats);
-  const keep = seats.map((seat) => passes(filter, main, seat));
+export const derive = memoLast((loaded: Loaded, filter: Filter): Derived => {
+  const { seats, decisions, consistency } = loaded;
+  const keep = seats.map((seat) => passes(filter, seat));
   const filtered = seats.filter((_seat, index) => keep[index]);
   const kept = new Set(filtered.map(({ matchId }) => matchId));
   const matchSeats = seats.filter(({ matchId }) => kept.has(matchId));
   const every = everyPooledOf(seats);
-  const ratings = ratingsOf(seats)(basis);
+  const ratings = ratingsOf(seats);
 
   return {
     seats,
     decisions,
-    blunders,
-    mistakes,
     consistency,
     keep,
     filtered,
     matchSeats,
-    pooled: passingConfigs(every, filter, main),
-    basis,
+    pooled: passingConfigs(every, filter),
     ratings,
     ranks: ranksOf(every, ratings),
     everyPooled: every,

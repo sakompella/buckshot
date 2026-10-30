@@ -10,7 +10,7 @@ test("every section sits in exactly one group", () => {
 });
 
 test("every section an old link names is still on the page", () => {
-  const linked = ["scatter", "interesting", "luck", "seats", "deals", "blunders", "mistakes", "odds", "items", "pressure", "rubbers", "reliability", "matches", "leaderboards", "breakdown"];
+  const linked = ["scatter", "interesting", "seats", "odds", "items", "reliability", "matches", "leaderboards", "breakdown"];
 
   expect(linked.filter((section) => !pageOrder.includes(section))).toEqual([]);
 });
