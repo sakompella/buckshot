@@ -107,7 +107,7 @@ def ranks(values: list[float]) -> list[float]:
 
 
 def arena_shares(doc: Path) -> dict[int, tuple[int, float]]:
-    """The arena's per-seed rows with 10 or more complete blocks: seed to (position that starts, starter's match share)."""
+    """The arena's per-seed rows with 10 or more complete blocks: seed to (arena starter position, starter's match share)."""
     rows = re.findall(r"^\| (\d{4}) \| (\d) \| (\d+) \| (\d+)/(\d+) = [\d.]+% \|$", doc.read_text(), re.MULTILINE)
     return {int(seed): (int(position), int(wins) / int(games)) for seed, position, blocks, wins, games in rows if int(blocks) >= 10}
 
@@ -180,7 +180,7 @@ def per_seed(games: list[dict], arena: dict[int, tuple[int, float]]) -> str:
         f"Across the {len(rows)} seeds, the minimax starter's match share and the arena's starter share correlate at {pearson(mine, theirs):+.2f}, "
         f"by rank {pearson(ranks(mine), ranks(theirs)):+.2f}. This is descriptive over {len(rows)} seeds, with no test."
     )
-    return table(["seed", "position that starts", "matches", "starter wins round 1", "starter wins the match", "arena starter share"], rows) + "\n\n" + summary
+    return table(["seed", "arena starter position", "matches", "starter wins round 1", "starter wins the match", "arena starter share"], rows) + "\n\n" + summary
 
 
 def report(label: str, games: list[dict], arena: dict[int, tuple[int, float]]) -> str:
