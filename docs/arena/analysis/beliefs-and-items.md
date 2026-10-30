@@ -54,7 +54,7 @@ The prose summary written for the earlier 2,471-match scope is removed. Its figu
 
 From `web/`, after `bun run rules` (Bend comes from `$BEND`, `bend` on PATH or the pinned build):
 
-    nice -n 10 bun scripts/arena-knowledge.ts --db <buckshot.sqlite> --out <derived>/knowledge.sqlite --verify   # about 35 minutes for 2,596 matches
+    nice -n 10 bun scripts/arena-knowledge.ts --db <buckshot.sqlite> --out <derived>/knowledge.sqlite --verify   # about 30 minutes for 2,596 matches
     nice -n 10 bun scripts/arena-knowledge-report.ts --db <derived>/knowledge.sqlite                            # about 3 minutes
     bun scripts/arena-knowledge.ts --db <buckshot.sqlite> --trace <match name>                                 # one match, decision by decision
 

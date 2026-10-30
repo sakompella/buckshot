@@ -55,7 +55,7 @@ The sampled rule with 256 deals, on the same 12 decisions:
 
 ## Reproduce
 
-After an import, score only the new decisions: write the agent decisions with no row yet to a list (`<match id> <ordinal>` lines) and pass it to `--decisions`. If the compiled player has changed, its rows carry a new `evaluator` and `--all` would score everything again. Do that only after rescoring a sample of old decisions with the new build and finding every stored column equal, then record the pair in `evaluator_equivalence` (`evaluator_a`, `evaluator_b`, `compared_decisions`, `differing_decisions`, `note`); `regret.py` and the reports that use it accept two evaluators in one run only when that table lists them with no differing decision. Otherwise rescore everything. The 2026-10-30 refresh did this with 2,953 old decisions.
+After an import, score only the new decisions: write the agent decisions with no row yet to a list (`<match id> <ordinal>` lines) and pass it to `--decisions`. Rows are keyed by the player's `evaluator` hash, and the reports refuse a file whose rows have several. When the player's source has changed since the old rows were scored, rebuild the old player (the same Bend release on the `sim/bend-mp/analysis.bend` of the commit that scored them, in a detached worktree) and score the new decisions with it, or rescore everything. The 2026-10-30 refresh did the first: the old rows' hash `a3962092b561cfb4` is Bend 2.0.36 on `sim/bend-mp/analysis.bend` at commit `03978b0`, and the 62 new matches were scored by that commit's own `arena-regret.ts`.
 
 From `web/`, after `bun run rules`:
 
@@ -75,7 +75,7 @@ With `--doc` it rewrites the tables at the end of this page. `tools/arena/analys
 
 ## Results
 
-Scope: 2,533 scored matches with no DeepSeek seat, from the 2,553-match snapshot of 2026-10-30. This is a casual pass over the full run, with counts and means and no intervals. It covers the 128,332 agent decisions of those matches (DeepSeek is left out as in [matchups.md](matchups.md)). Every one has a row, every row was searched, and none fell back. The 130,000 rows of the run also hold DeepSeek's matches and unfinished ones. The 3,182 decisions of tournament 5's 62 new matches were scored with a rebuilt player (`176850ecddfa98bf`); the earlier rows keep their build (`a3962092b561cfb4`). A sample of 2,953 old decisions (65 matches, every tournament but 5 and a few of its phases) rescored with the new build matched the old rows exactly on every stored column, nodes included, and `evaluator_equivalence` in the regret database records this. That is a sample, not a proof for every old row. A config is a model with its effort, pooled over the tournaments it played in. Regret is in percentage points of the round win chance, as above. Mean regret over all decisions is 2.4 points and the 90th percentile 6.7. 10.8% of the decisions are exact.
+Scope: 2,533 scored matches with no DeepSeek seat, from the 2,553-match snapshot of 2026-10-30. This is a casual pass over the full run, with counts and means and no intervals. It covers the 128,332 agent decisions of those matches (DeepSeek is left out as in [matchups.md](matchups.md)). Every one has a row, every row was searched, and none fell back. The 129,998 rows of the run also hold DeepSeek's matches and unfinished ones. All rows come from one player build (see Reproduce). A config is a model with its effort, pooled over the tournaments it played in. Regret is in percentage points of the round win chance, as above. Mean regret over all decisions is 2.4 points and the 90th percentile 6.7. 10.8% of the decisions are exact.
 
 1. **Regret and the ratings agree at the ends.**
    - At medium effort the mean regret is Opus 1.1, Sol 1.4, Astra 1.4, Haiku 5.5 1.9, Sonnet 2.0, Terra 2.7, Luna 4.0 and Haiku 4.5 4.8 points. Terra 6.1 (new, 323 decisions) is 2.4.
@@ -297,7 +297,7 @@ The budget still stops 29.9% of the depth 8 searches, against 40.2% at depth 6.
 
 ## By round
 
-Does a model play the short early rounds differently from the later, item-heavy ones? This is a casual pass for [#14](https://github.com/sakompella/buckshot/issues/14), with counts in brackets and no intervals. It covers the same 2,471 finished matches with no DeepSeek seat. Round winners come from the public lines of the match events, as the viewer reads them; the last round's winner is inferred from final cash when its line is missing. Rounds are numbered from 1. A win rate is the share of its rounds a config won, against whoever it met, so it also reflects the opponents' strength.
+Does a model play the short early rounds differently from the later, item-heavy ones? This is a casual pass for [#14](https://github.com/sakompella/buckshot/issues/14), with counts in brackets and no intervals. It covers the same 2,533 finished matches with no DeepSeek seat. Round winners come from the public lines of the match events, as the viewer reads them; the last round's winner is inferred from final cash when its line is missing. Rounds are numbered from 1. A win rate is the share of its rounds a config won, against whoever it met, so it also reflects the opponents' strength.
 
 1. **No config's win rate clearly changes by round.**
    - Pooled over efforts, a model's win rate moves by 4 points or less between rounds for seven of the nine models. Astra goes from 58.0% to 61.9% and 62.8% over 231 rounds, Terra 6.1 from 45.5% to 50.0% over 44, and Haiku 4.5 from 46.8% to 42.9% and back to 44.5% over 616.
@@ -305,7 +305,7 @@ Does a model play the short early rounds differently from the later, item-heavy 
 2. **Regret is flat across rounds, except that round 1 shots are a little worse.**
    - Mean regret over all moves is 2.5, 2.3 and 2.4 points in rounds 1, 2 and 3. In every round the same three, Opus, Astra and Sol, are lowest and Haiku 4.5 is highest.
    - Shots cost 3.3 points in round 1 against 2.8 and 3.0 later. Item moves stay at 1.8 to 1.9. The table does not say why. Decisions of one match are not independent, so the gap is small evidence.
-   - Round 3 is often a dead rubber, since prizes are 70k, 75k and 80k and a 2-0 lead settles the winner ([patterns.md](patterns.md)). No table here splits round 3 regret by the lead; an earlier one-off check of that was not scripted and is removed.
+   - Round 3 is often a dead rubber, since prizes are 70k, 75k and 80k and a 2-0 lead settles the winner. No table here splits round 3 regret by the lead; an earlier one-off check of that was not scripted and is removed.
 
 <!-- by-round:start -->
 7,599 rounds of finished matches; 0 matches left out because their round winners did not match the final cash.

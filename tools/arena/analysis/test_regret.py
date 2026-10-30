@@ -84,25 +84,6 @@ class Load(unittest.TestCase):
                 scores=[score("m1", 0, 1, evaluator="old"), score("m1", 1, 1, evaluator="new")],
             )
 
-    def test_mixes_evaluators_only_when_recorded_as_equivalent(self):
-        with tempfile.TemporaryDirectory() as directory:
-            paths = databases(
-                Path(directory),
-                players=[("m1", "A", "opus", "high")],
-                decisions=[("m1", 0, "A", "agent", "Use beer", 2, 1), ("m1", 1, "A", "agent", "Use beer", 2, 1)],
-                scores=[score("m1", 0, 1, evaluator="old"), score("m1", 1, 1, evaluator="new")],
-            )
-            scored = sqlite3.connect(paths[0])
-            scored.execute("CREATE TABLE evaluator_equivalence (evaluator_a TEXT, evaluator_b TEXT, compared_decisions INTEGER, differing_decisions INTEGER, note TEXT)")
-            scored.execute("INSERT INTO evaluator_equivalence VALUES ('old', 'new', 100, 1, '')")
-            scored.commit()
-            with self.assertRaises(SystemExit):
-                regret.load(*paths, depth=6, budget=20000)
-            scored.execute("UPDATE evaluator_equivalence SET differing_decisions = 0")
-            scored.commit()
-            self.assertEqual(len(regret.load(*paths, depth=6, budget=20000).decisions), 2)
-            scored.close()
-
     def test_reads_one_reload_rule(self):
         loaded = self.load(
             players=[("m1", "A", "opus", "high")],

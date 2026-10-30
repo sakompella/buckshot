@@ -234,7 +234,7 @@ def matchup_test(by_cohort: dict[str, list[Game]], rng: random.Random, draws: in
             continue
         by_block = blocks_of(games)
         if len(by_block) < cv.OUTER_FOLDS:
-            rows.append([name, "-", "-", "-", "-", "-", "-", f"{len(by_block)} seed blocks: too few for {cv.OUTER_FOLDS}-fold cross-validation"])
+            rows.append([name, "-", "-", "-", "-", "-", "-", f"{len(by_block)} seed blocks, under the minimum of {cv.OUTER_FOLDS}: the fit with seat and starter terms can be singular on so few, so not tested"])
             continue
         for with_terms in (False, True):
             losses, chosen = cv.nested(games, with_terms, rng, repeats)

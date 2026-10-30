@@ -289,7 +289,7 @@ What each model knew about the chamber when it shot, whether it acted on it, wha
 
 ## Other analyses
 - **Matchups:** ratings within each cohort, no matchup effects, seat and round-1 starter effects: [analysis/matchups.md](analysis/matchups.md).
-- **Play patterns:** reviewed habits per model, from the traces: [analysis/patterns.md](analysis/patterns.md).
+- **Patterns against regret:** the mean regret of single-move choice patterns: [analysis/patterns.md](analysis/patterns.md).
 - **Ideas not yet built:** [analysis-ideas.md](analysis-ideas.md).
 
 ## Known confound: an extra system prompt on Claude calls
