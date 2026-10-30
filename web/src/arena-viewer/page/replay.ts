@@ -449,7 +449,7 @@ const detailView = (h: H, replay: Replay, detail: MatchDetail, allMatches: Reado
 
   return [
     h.div(
-      [h.Class("mhead")],
+      [h.Class("mhead"), h.DataAttribute("match", detail.match.id)],
       [
         h.h2(
           [],
