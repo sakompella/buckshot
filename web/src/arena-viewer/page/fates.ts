@@ -1,6 +1,6 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { ITEMS, type Seat } from "../api.ts";
+import { type Decisions, ITEMS, type Seat } from "../api.ts";
 import { anchorId, markTip } from "./charts.ts";
 import { colorOfKey, groupBy, keyOf, labelOf, type SeatFull, sumOf } from "./data.ts";
 import { memoLast } from "./derived.ts";
@@ -86,6 +86,82 @@ const rowsOf = (seats: ReadonlyArray<SeatFull>, focal: ReadonlyArray<SeatFull>) 
   return { configs: mostUnused(configs), items: mostUnused(items) };
 };
 
+/** A move has an item available when legalUse has a bit: an own item, a jam or an adrenaline steal. A steal counts as an adrenaline use. */
+export interface Behavior {
+  readonly moves: number;
+  readonly available: number;
+  readonly usedWhenAvailable: number;
+  readonly itemActions: number;
+}
+
+const NO_BEHAVIOR: Behavior = { moves: 0, available: 0, usedWhenAvailable: 0, itemActions: 0 };
+
+export const addBehavior = (left: Behavior, right: Behavior): Behavior => ({
+  moves: left.moves + right.moves,
+  available: left.available + right.available,
+  usedWhenAvailable: left.usedWhenAvailable + right.usedWhenAvailable,
+  itemActions: left.itemActions + right.itemActions,
+});
+
+export const behaviorBySeat = memoLast((decisions: Pick<Decisions, "seat" | "legalUse" | "useItem">, seatCount: number): ReadonlyArray<Behavior> => {
+  const tallies = Array.from({ length: seatCount }, () => ({ moves: 0, available: 0, usedWhenAvailable: 0, itemActions: 0 }));
+
+  decisions.seat.forEach((seatIndex, move) => {
+    const tally = tallies[seatIndex];
+
+    if (tally === undefined) return;
+
+    const available = (decisions.legalUse[move] ?? 0) !== 0;
+    const used = (decisions.useItem[move] ?? -1) >= 0;
+
+    tally.moves++;
+
+    if (available) tally.available++;
+
+    if (available && used) tally.usedWhenAvailable++;
+
+    if (used) tally.itemActions++;
+  });
+
+  return tallies;
+});
+
+export const useShare = ({ available, usedWhenAvailable }: Behavior): number | null => (available === 0 ? null : usedWhenAvailable / available);
+
+interface UseRow {
+  readonly name: string;
+  readonly color: string;
+  readonly share: number | null;
+  readonly tip: string;
+}
+
+const useRowsOf = (decisions: Decisions, seats: ReadonlyArray<SeatFull>, focal: ReadonlyArray<SeatFull>): ReadonlyArray<UseRow> => {
+  const bySeat = behaviorBySeat(decisions, seats.length);
+  const indexOf = new Map(seats.map((seat, index) => [seat, index]));
+
+  return [...groupBy(focal, keyOf)]
+    .map(([key, played]): UseRow => {
+      const { moves, available, usedWhenAvailable, itemActions } = played.reduce((sum, seat) => addBehavior(sum, bySeat[indexOf.get(seat) ?? -1] ?? NO_BEHAVIOR), NO_BEHAVIOR);
+      const name = labelOf(key);
+      const share = useShare({ moves, available, usedWhenAvailable, itemActions });
+      const used = share === null ? "no move had an item available" : `${pct(share)} of ${available.toLocaleString()} moves with an item available used one`;
+      const perHundred = moves === 0 ? "" : `, ${(itemActions / moves * 100).toFixed(1)} item actions per 100 of ${moves.toLocaleString()} moves`;
+
+      return { name, color: colorOfKey(key), share, tip: `${name}: ${used}${perHundred}` };
+    })
+    .toSorted((left, right) => (right.share ?? -1) - (left.share ?? -1));
+};
+
+const useRowView = (h: H, { name, color, share, tip }: UseRow): Html =>
+  h.div(
+    [h.Class("fate")],
+    [
+      h.span([h.Class("fate-name"), h.Style({ color })], [name]),
+      h.span([h.Class("fate-bar fate-hit"), ...markTip(h, anchorId("use", name), tip)], [h.i([h.Style({ width: `${((share ?? 0) * 100).toFixed(2)}%`, background: color, opacity: OPACITY.used })], [])]),
+      h.span([h.Class("fate-val")], [share === null ? "–" : pct(share)]),
+    ],
+  );
+
 const OPACITY = { used: "0.95", stolen: "0.5", unused: "0.2" } as const;
 
 const rowView = (h: H, { name, color, fates, tip }: Row, label: ReadonlyArray<Html | string>): Html => {
@@ -114,8 +190,9 @@ const legendView = (h: H): Html =>
   h.div([h.Class("fate-legend")], LEGEND.map(([fate, label]) => h.span([], [h.i([h.Style({ opacity: OPACITY[fate] })], []), label])));
 
 /** The Items section: what became of the items each config received, and of each kind of item. The number at the end of a bar is the share left unused. */
-export const fatesView = (h: H, seats: ReadonlyArray<SeatFull>, focal: ReadonlyArray<SeatFull>): Html => {
+export const fatesView = (h: H, decisions: Decisions, seats: ReadonlyArray<SeatFull>, focal: ReadonlyArray<SeatFull>): Html => {
   const { configs, items } = rowsOf(seats, focal);
+  const useRows = useRowsOf(decisions, seats, focal);
 
   return h.div(
     [],
@@ -130,6 +207,13 @@ export const fatesView = (h: H, seats: ReadonlyArray<SeatFull>, focal: ReadonlyA
             [
               h.h3([], ["By config"]),
               configs.length === 0 ? h.div([h.Class("empty")], ["No scored matches for this filter."]) : h.div([h.Class("fates")], configs.map((row) => rowView(h, row, [row.name]))),
+            ],
+          ),
+          h.figure(
+            [],
+            [
+              h.h3([], ["Moves using an item"]),
+              useRows.length === 0 ? h.div([h.Class("empty")], ["No moves for this filter."]) : h.div([h.Class("fates")], useRows.map((row) => useRowView(h, row))),
             ],
           ),
           h.figure([], [h.h3([], ["By item"]), h.div([h.Class("fates")], items.map((row) => rowView(h, row, [itemIconOf(h, row.name), row.name])))]),
