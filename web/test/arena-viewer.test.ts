@@ -6,7 +6,7 @@ import { type BlockTally, blockRate, colorOf, groupBy, modelStats, quantile, reg
 import { bradleyTerry, type Game, heldOutRatings, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 import { ODDS_BINS, oddsBinOf, oddsPanels, selfShotTallies } from "../src/arena-viewer/page/odds.ts";
 import { failuresByHour } from "../src/arena-viewer/page/failures-over-time.ts";
-import { turningPoints } from "../src/arena-viewer/page/replay.ts";
+import { showsReloadNote, turningPoints } from "../src/arena-viewer/page/replay.ts";
 import { ranksOf } from "../src/arena-viewer/page/derived.ts";
 import { inRankOrder } from "../src/arena-viewer/page/leaderboard.ts";
 import { AXES } from "../src/arena-viewer/page/scatter.ts";
@@ -511,4 +511,10 @@ test("ranks go to rated configs by rating, equal ratings by label; a config with
 
   expect([...ranks]).toEqual([["bravo|medium", 1], ["charlie|medium", 2], ["alpha|medium", 3]]);
   expect(inRankOrder(stats, ranks).map(({ model }) => model)).toEqual(["bravo", "charlie", "alpha", "delta"]);
+});
+
+test("the reload note shows only when a reload is within the depth reached and 1 to 3 shells are left", () => {
+  expect([1, 2, 3].map((shells) => showsReloadNote(shells, 6))).toEqual([true, true, true]);
+  expect([4, 5, 6].map((shells) => showsReloadNote(shells, 6))).toEqual([false, false, false]);
+  expect([showsReloadNote(2, 1), showsReloadNote(1, 1), showsReloadNote(3, 3), showsReloadNote(3, 2)]).toEqual([false, true, true, false]);
 });

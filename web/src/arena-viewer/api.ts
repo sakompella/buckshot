@@ -234,9 +234,11 @@ export const MoveRegret = Schema.Struct({
   exact: Schema.Boolean,
   best: Schema.String,
   bestScore: Schema.Number,
+  chosen: Schema.String,
   chosenScore: Schema.Number,
   depth: Schema.Number,
   limited: Schema.Boolean,
+  values: Schema.Array(Schema.Struct({ label: Schema.String, score: Schema.Number })),
 });
 
 export type MoveRegret = typeof MoveRegret.Type;

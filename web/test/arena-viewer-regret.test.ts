@@ -4,7 +4,8 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { openRegret } from "../src/arena-viewer/regret.ts";
+import { consistencyOf } from "../scripts/arena-regret-consistency.ts";
+import { MISMATCHES, mismatchesOf, type MoveRow, openRegret } from "../src/arena-viewer/regret.ts";
 
 const SCHEMA = `create table regret (
   match_id text, ordinal integer, player text, label text, evaluator text, max_depth integer, budget integer, reload text, samples integer,
@@ -20,6 +21,7 @@ interface Row {
   readonly best: number;
   readonly chosen: number;
   readonly exact?: boolean;
+  readonly values?: string;
   readonly run?: Partial<Run>;
 }
 
@@ -39,13 +41,15 @@ const regretFile = (rows: ReadonlyArray<Row>): string => {
 
   db.run(SCHEMA);
 
-  const insert = db.query(`insert into regret values (?, ?, ?, 'chosen move', ?, ?, ?, ?, ?, ?, null, '[]', 'best move', ?, ?, ?, ?, 4, 1, 0, 0)`);
+  const insert = db.query(`insert into regret values (?, ?, ?, 'chosen move', ?, ?, ?, ?, ?, ?, null, ?, 'best move', ?, ?, ?, ?, 4, 1, 0, 0)`);
 
   for (const row of rows) {
     const { evaluator, depth, budget, reload, samples } = { ...RUN, ...row.run };
     const searched = (row.status ?? "searched") === "searched";
 
-    insert.run(row.match, row.ordinal, row.player, evaluator, depth, budget, reload, samples, row.status ?? "searched", searched ? row.best : null, searched ? row.chosen : null, searched ? row.best - row.chosen : null, searched ? Number(row.exact ?? false) : null);
+    const values = row.values ?? JSON.stringify([{ label: "best move", score: row.best }, { label: "other move", score: 0 }, { label: "chosen move", score: row.chosen }]);
+
+    insert.run(row.match, row.ordinal, row.player, evaluator, depth, budget, reload, samples, row.status ?? "searched", values, searched ? row.best : null, searched ? row.chosen : null, searched ? row.best - row.chosen : null, searched ? Number(row.exact ?? false) : null);
   }
 
   db.close();
@@ -86,7 +90,21 @@ test("a move shows its regret, whether it is exact and the scores in percentage 
     ]),
   );
 
-  expect(regret.moves("m1").get(1)).toEqual({ points: 10, exact: false, best: "best move", bestScore: 60, chosenScore: 50, depth: 4, limited: true });
+  expect(regret.moves("m1").get(1)).toEqual({
+    points: 10,
+    exact: false,
+    best: "best move",
+    bestScore: 60,
+    chosen: "chosen move",
+    chosenScore: 50,
+    depth: 4,
+    limited: true,
+    values: [
+      { label: "best move", score: 60 },
+      { label: "other move", score: 0 },
+      { label: "chosen move", score: 50 },
+    ],
+  });
   expect(regret.moves("m1").get(2)?.exact).toBe(true);
   expect(regret.moves("other").size).toBe(0);
 });
@@ -106,4 +124,61 @@ test("only the run with the most searched moves is read, so evaluators, reload r
 
   expect(regret.seats.get("m1|A")).toEqual({ moves: 2, total: 20, exact: 0 });
   expect(regret.moves("m1").size).toBe(2);
+});
+
+test("a stored row whose values do not decode or do not agree with its scores fails the match loudly", () => {
+  const broken = (row: Partial<Row>) => openRegret(regretFile([{ match: "m1", ordinal: 1, player: "A", best: 600_000, chosen: 500_000, ...row }]));
+
+  expect(() => broken({ values: "not json" }).moves("m1")).toThrow();
+  expect(() => broken({ values: JSON.stringify([{ label: "best move", score: 2_000_000 }, { label: "chosen move", score: 500_000 }]) }).moves("m1")).toThrow();
+  expect(() => broken({ values: JSON.stringify([{ label: "best move", score: 600_000 }]) }).moves("m1")).toThrow("chosen move has no value");
+  expect(() => broken({ values: JSON.stringify([{ label: "best move", score: 700_000 }, { label: "chosen move", score: 500_000 }]) }).moves("m1")).toThrow("best score is not the top value");
+});
+
+const randomOf = (seed: number) => {
+  let state = seed;
+
+  return (below: number) => {
+    state = (state * 1_103_515_245 + 12_345) % 2_147_483_648;
+
+    return state % below;
+  };
+};
+
+const consistentRow = (random: (below: number) => number, ordinal: number): MoveRow => {
+  const values = Array.from({ length: 1 + random(13) }, (_value, index) => ({ label: `move ${index}`, score: random(3) === 0 ? random(2) * 1_000_000 : random(1_000_001) }));
+  const chosen = values[random(values.length)] ?? { label: "move 0", score: 0 };
+  const bestScore = Math.max(...values.map(({ score }) => score));
+
+  return { matchId: "m", ordinal, label: chosen.label, values, regret: bestScore - chosen.score, exact: 0, best: "move 0", bestScore, chosenScore: chosen.score, depth: 6, limited: 0 };
+};
+
+test("a consistent row has no mismatch, and each kind of damage shows as its own mismatch", () => {
+  const random = randomOf(17);
+
+  for (let ordinal = 0; ordinal < 500; ordinal++) {
+    const row = consistentRow(random, ordinal);
+
+    expect(mismatchesOf(row)).toEqual([]);
+    expect(mismatchesOf({ ...row, bestScore: row.bestScore + 1, regret: row.regret + 1 })).toEqual(["best score is not the top value"]);
+    expect(mismatchesOf({ ...row, label: "not a move" })).toEqual(["chosen move has no value"]);
+    expect(mismatchesOf({ ...row, chosenScore: row.chosenScore - 1, regret: row.regret + 1 })).toEqual(["chosen value is not the chosen score"]);
+    expect(mismatchesOf({ ...row, regret: row.regret + 1 })).toEqual(["regret is not best minus chosen"]);
+  }
+});
+
+test("the consistency check counts every row, the rows that do not decode and each mismatch", () => {
+  const random = randomOf(5);
+  const stored = (row: MoveRow) => ({ ...row, values: JSON.stringify(row.values) });
+  const rows = Array.from({ length: 20 }, (_row, ordinal) => consistentRow(random, ordinal));
+
+  const damaged = [
+    ...rows.map(stored),
+    { ...stored(rows[0] ?? consistentRow(random, 0)), regret: -1 },
+    { ...stored(rows[1] ?? consistentRow(random, 1)), values: "[" },
+    { ...stored(rows[2] ?? consistentRow(random, 2)), limited: 2 },
+    { ...stored(rows[3] ?? consistentRow(random, 3)), bestScore: 1_000_001 },
+  ];
+
+  expect(consistencyOf(damaged)).toEqual({ rows: 24, undecodable: 3, mismatches: MISMATCHES.map((mismatch) => [mismatch, mismatch === "regret is not best minus chosen" ? 1 : 0]) });
 });
