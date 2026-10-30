@@ -115,6 +115,8 @@ Legal alternatives and own-player views support future opportunity-conditioned s
 
 ## Validation
 
+Snapshot of 2026-10-30, the one the derived tables are built from: 2,553 `completed` matches, 43 `partial` with logs, every one of those 2,596 replay-validated, 0 issues, in a database of 15 tournaments with tournament 5 imported in 1 minute 7 seconds incrementally. A copy of that database is what `arena-knowledge.ts` and `arena-regret.ts` read, so later top-up imports do not shift their input. The tables below describe the earlier import of tournaments 1 to 3 and are kept as that record.
+
 Rebuilt on 2026-10-21 into a new file, then swapped in. The import took about 10 minutes on the Mac and 30 on hp. Scoring seed 3030's finished match was an incremental re-import of a copy, about 2 minutes. On 2026-10-22 the tournament-1 leftovers (60 new terra matches and 3 resumed Astra vs haiku 4.5 matches) were added the same way, in 3.5 minutes on hp, and the old file was kept as `buckshot.pre-leftovers.sqlite`. `PRAGMA integrity_check` returned `ok`, the foreign key check was clean and `issues` is empty. The figures below are after that import.
 
 | Tournament | Scheduled | Completed (scored) | Partial, skipped (unscored) | Skipped, never started | Unstarted | Replay validated | List-price cost, including partial work |

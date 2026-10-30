@@ -3,7 +3,7 @@
 Patterns in how the models played and reasoned in the arena. Each one was found in the traces and then checked again with an independent query against the analysis database ([database.md](../database.md)) and the derived `knowledge.sqlite` ([beliefs-and-items.md](beliefs-and-items.md)). This is a casual pass: counts and rates, no intervals. Treat any gap of a few points on 20–100 seats as noise.
 
 Scope:
-- **Data.** Only the table and prose of "Patterns against regret" use the 2,471 scored matches with no DeepSeek seat, as of 2026-10-26. Every other count and rate on this page was taken from 2,118 such matches around 2026-10-22 and was not refreshed. Where the two disagree, trust the regret section.
+- **Data.** Only the table and prose of "Patterns against regret" use the 2,533 scored matches with no DeepSeek seat, from the 2,553-match snapshot of 2026-10-30. Every other count and rate on this page was taken from 2,118 such matches around 2026-10-22 and was not refreshed. Where the two disagree, trust the regret section.
 - Decision rates count scored matches with no DeepSeek seat.
 - Call counts (tokens, list-price costs, tool calls, reasoning text) include every started match.
 - "Known" means the deciding player's own log proves the shell. A shot's result is read from the log that follows it.
@@ -81,32 +81,32 @@ Scope:
 Each choice pattern above that is a single move, checked against [regret](regret.md): the minimax player's score of the move, in percentage points of the round win chance, from the deciding player's own information. A row takes the decisions where the pattern could have happened, splits them into those it matched and the rest, and gives the mean regret of each. "Same configs" is the mean of the rest for the same model and effort mix as the matched ones, so a weak model's share does not explain a gap. Numbers in brackets are the pattern's number above. The certain-live rows pool all models, where pattern 7 is Luna's, and the certain-blank rows belong to the known-shell measures of [beliefs-and-items.md](beliefs-and-items.md). The patterns that are not a single move are not in the table, the clue source `combined` is left out, and rates may differ slightly from the counts above where the definitions differ. The three last rows are in the section above on things that are not patterns. Casual pass: means over 125,150 searched decisions, no intervals, DeepSeek left out.
 
 <!-- regret:start -->
-125,150 searched decisions.
+128,332 searched decisions.
 
 | pattern | matched | mean regret | other applicable | mean regret | same configs |
 |---|---|---|---|---|---|
-| Invert the last shell and shoot yourself, known live (2) | 221 | 10.2 | 3,056 | 1.5 | 1.3 |
-| Smoke at full health, outside Luna (4) | 92 | 1.3 | 10,253 | 1.5 | 1.0 |
-| Smoke at full health, outside Luna, opponent holds adrenaline (4) | 86 | 1.2 | 4,154 | 1.8 | 1.1 |
-| Smoke at full health, Luna (4) | 95 | 4.2 | 2,744 | 2.4 | 2.8 |
-| Shoot yourself, unknown chamber, under half live (6) | 1,612 | 5.5 | 1,789 | 4.6 | 3.3 |
-| Shoot yourself on a certain live, from the count (7) | 448 | 27.4 | 12,763 | 1.6 | 2.3 |
-| Shoot yourself on a certain live, from the glass | 16 | 21.0 | 6,956 | 2.7 | 6.6 |
-| Shoot yourself on a certain live, from the phone | 99 | 26.3 | 1,773 | 1.9 | 3.1 |
-| Shoot the opponent on a certain blank, not the last shell | 1,133 | 19.7 | 7,568 | 0.8 | 1.2 |
-| Shoot the opponent on a certain blank, last shell | 1,502 | 3.6 | 3,069 | 2.2 | 2.9 |
-| Use the phone with two or fewer shells left (16) | 506 | 2.5 | 10,721 | 3.1 | 5.2 |
-| Shoot yourself at exactly half live, no saw (17) | 1,781 | 4.3 | 5,167 | 3.7 | 3.2 |
-| Shoot yourself with the gun sawed (17) | 115 | 10.3 | 10,295 | 2.8 | 3.7 |
-| Saw an unknown chamber (not a pattern) | 5,412 | 1.6 | 17,251 | 3.2 | 3.5 |
-| Saw a certain live (not a pattern) | 4,598 | 0.3 | 2,453 | 5.3 | 3.6 |
-| Beer a certain live (not a pattern) | 842 | 5.8 | 10,350 | 2.8 | 3.5 |
+| Invert the last shell and shoot yourself, known live (2) | 232 | 10.1 | 3,140 | 1.5 | 1.3 |
+| Smoke at full health, outside Luna (4) | 94 | 1.4 | 10,545 | 1.5 | 0.9 |
+| Smoke at full health, outside Luna, opponent holds adrenaline (4) | 87 | 1.2 | 4,231 | 1.8 | 1.1 |
+| Smoke at full health, Luna (4) | 95 | 4.2 | 2,761 | 2.4 | 2.8 |
+| Shoot yourself, unknown chamber, under half live (6) | 1,658 | 5.5 | 1,813 | 4.5 | 3.3 |
+| Shoot yourself on a certain live, from the count (7) | 450 | 27.4 | 13,118 | 1.6 | 2.3 |
+| Shoot yourself on a certain live, from the glass | 17 | 20.6 | 7,128 | 2.6 | 6.5 |
+| Shoot yourself on a certain live, from the phone | 100 | 26.7 | 1,838 | 2.0 | 3.1 |
+| Shoot the opponent on a certain blank, not the last shell | 1,137 | 19.7 | 7,795 | 0.8 | 1.2 |
+| Shoot the opponent on a certain blank, last shell | 1,513 | 3.5 | 3,178 | 2.2 | 2.9 |
+| Use the phone with two or fewer shells left (16) | 511 | 2.5 | 10,954 | 3.1 | 5.2 |
+| Shoot yourself at exactly half live, no saw (17) | 1,813 | 4.3 | 5,314 | 3.7 | 3.2 |
+| Shoot yourself with the gun sawed (17) | 117 | 10.1 | 10,548 | 2.8 | 3.6 |
+| Saw an unknown chamber (not a pattern) | 5,516 | 1.6 | 17,662 | 3.1 | 3.5 |
+| Saw a certain live (not a pattern) | 4,743 | 0.3 | 2,515 | 5.2 | 3.5 |
+| Beer a certain live (not a pattern) | 852 | 5.7 | 10,704 | 2.8 | 3.5 |
 <!-- regret:end -->
 
-- **Costly.** Shooting yourself on a shell you can prove live averages 27 points when proven by the count, against 1.6 for the other shots there. The glass (21, only 16 shots) and phone (26) rows are as bad. Shooting the opponent on the last shell's certain blank is mildly worse than the rest, 3.6 against 2.2. Shooting the opponent on a certain blank before the last shell costs 20 against 0.8. Inverting a known live last shell to keep the turn costs 10 against 1.5, and a self-shot with the gun sawed 10 against 2.8. Throwing a beer at a certain live costs 6 against 3 for the rest.
+- **Costly.** Shooting yourself on a shell you can prove live averages 27 points when proven by the count, against 1.6 for the other shots there. The glass (21, only 17 shots) and phone (27) rows are as bad. Shooting the opponent on the last shell's certain blank is mildly worse than the rest, 3.5 against 2.2. Shooting the opponent on a certain blank before the last shell costs 20 against 0.8. Inverting a known live last shell to keep the turn costs 10 against 1.5, and a self-shot with the gun sawed 10 against 2.8. Throwing a beer at a certain live costs 6 against 3 for the rest.
 - **Cost little.** Using the phone with two or fewer shells left averages 2.5. Sawing an unknown chamber averages 1.6, and sawing a certain live 0.3.
-- **No clear gap.** Smoking your own cigarettes at full health averages 1.3 points outside Luna (1.2 while the opponent holds adrenaline), against 1.5 for the other moves there. Luna's 95 such smokes average 4.2 against 2.4, which is a small sample. Shooting yourself at exactly half live is 4.3 against 3.7 for shooting the opponent. The self-shot the Haiku models skip, an unknown chamber under half live, is 5.5 against 4.6, so skipping it shows no cost here.
-- **Limits.** The item rows (smoking, phone, saws) are only as good as the evaluator's untrained item weights, so "cost little" there means the evaluator values the item little. Shots on the last shell end at the next reload, which the search scores as a static leaf. Many of the other rows have more than three shells left, where most searches stop early. Smoking counts only the player's own cigarettes, not ones stolen with adrenaline: 92 decisions outside Luna and 95 for Luna; pattern 4's counts of 79 and 84 above were not refreshed.
+- **No clear gap.** Smoking your own cigarettes at full health averages 1.4 points outside Luna (1.2 while the opponent holds adrenaline), against 1.5 for the other moves there. Luna's 95 such smokes average 4.2 against 2.4, which is a small sample. Shooting yourself at exactly half live is 4.3 against 3.7 for shooting the opponent. The self-shot the Haiku models skip, an unknown chamber under half live, is 5.5 against 4.5, so skipping it shows no cost here.
+- **Limits.** The item rows (smoking, phone, saws) are only as good as the evaluator's untrained item weights, so "cost little" there means the evaluator values the item little. Shots on the last shell end at the next reload, which the search scores as a static leaf. Many of the other rows have more than three shells left, where most searches stop early. Smoking counts only the player's own cigarettes, not ones stolen with adrenaline: 94 decisions outside Luna and 95 for Luna; pattern 4's counts of 79 and 84 above were not refreshed.
 
 Rerun with `python3 tools/arena/analysis/patterns_regret.py --doc docs/arena/analysis/patterns.md`. This table and its prose use the full data. The scope at the top of this page says what the rest uses.
 

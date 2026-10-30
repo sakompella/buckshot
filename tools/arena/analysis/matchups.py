@@ -32,6 +32,7 @@ SHORT_NAMES = {
     "gpt-6-astra": "Astra",
     "gpt-6.1-sol": "Sol",
     "gpt-5.6-terra": "Terra",
+    "gpt-6.1-terra": "Terra 6.1",
     "gpt-6-luna": "Luna",
 }
 
@@ -232,6 +233,9 @@ def matchup_test(by_cohort: dict[str, list[Game]], rng: random.Random, draws: in
             rows.append([name, "-", "-", "-", "-", "-", "-", "no spare pairs: a tree of pairs, so pair effects are not identified"])
             continue
         by_block = blocks_of(games)
+        if len(by_block) < cv.OUTER_FOLDS:
+            rows.append([name, "-", "-", "-", "-", "-", "-", f"{len(by_block)} seed blocks: too few for {cv.OUTER_FOLDS}-fold cross-validation"])
+            continue
         for with_terms in (False, True):
             losses, chosen = cv.nested(games, with_terms, rng, repeats)
             ids = sorted(by_block)
@@ -338,7 +342,7 @@ def seat_section(by_cohort: dict[str, list[Game]], model_of: dict[str, str], dra
             "A block counts for every model that plays in it; a matched block gives one position-1 share for both sides, so this says how large the position edge is in games that involve the model, not which side of the board benefits. Starter figures per model are not reported: a model's blocks cover a handful of seeds, and the starter's result depends on the seed (see below).\n",
             seat_rows(per_model, draws, rng, {}, position_only=True),
             "\n#### Per seed, all cohorts\n",
-            "Cohorts reuse seeds 3000 to 3018 (tournament 3 adds 3020 to 3029), so a seed's starter result pools many pairings.\n",
+            "Cohorts reuse seeds 3000 to 3018 (tournament 3 adds 3020 to 3029, and tournament 5 many seeds from 4000 up, most with one block), so a seed's starter result pools many pairings.\n",
             by_seed_table(everything),
         ]
     )

@@ -70,6 +70,12 @@ def summarise(decisions: list[Decision]) -> Summary:
     return Summary(len(regrets), sum(regrets) / len(regrets), percentile(regrets, 0.9), sum(d.exact for d in decisions) / len(decisions))
 
 
+def equivalent(db: sqlite3.Connection, a: str, b: str) -> bool:
+    """True when the table `evaluator_equivalence` (written by hand after rescoring old decisions) records no differing decision between the two builds."""
+    has_table = db.execute("SELECT 1 FROM sqlite_master WHERE name = 'evaluator_equivalence'").fetchone()
+    return has_table is not None and db.execute("SELECT 1 FROM evaluator_equivalence WHERE ((evaluator_a = ? AND evaluator_b = ?) OR (evaluator_a = ? AND evaluator_b = ?)) AND differing_decisions = 0 AND compared_decisions > 0", (a, b, b, a)).fetchone() is not None
+
+
 def load(regret_path: Path, knowledge_path: Path, depth: int, budget: int, reload: str = "static", samples: int = 0) -> Loaded:
     """The scored agent decisions of finished matches under one reload rule and sample count (0 unless the rule is sampled), with the deciding player's config and the shells left in the gun."""
     db = connect(str(regret_path))
@@ -84,8 +90,9 @@ def load(regret_path: Path, knowledge_path: Path, depth: int, budget: int, reloa
            WHERE r.max_depth = ? AND r.budget = ? AND r.reload = ? AND r.samples = ? AND r.match_id NOT IN (SELECT match_id FROM k.players WHERE model LIKE ?)""",
         (depth, budget, reload, samples, f"%{SKIPPED_MODEL}%"),
     ).fetchall()
-    if len({row["evaluator"] for row in rows}) > 1:
-        raise SystemExit(f"{regret_path} holds rows of several evaluators at depth {depth}, budget {budget}, reload {reload} and samples {samples}; they must not be mixed.")
+    evaluators = {row["evaluator"] for row in rows}
+    if len(evaluators) > 1 and not all(equivalent(db, a, b) for a in evaluators for b in evaluators if a < b):
+        raise SystemExit(f"{regret_path} holds rows of several evaluators at depth {depth}, budget {budget}, reload {reload} and samples {samples}; they must not be mixed unless evaluator_equivalence records them as scoring the same decisions identically.")
     unscored = db.execute(
         """SELECT COUNT(*) FROM k.decisions d JOIN k.matches m ON m.match_id = d.match_id AND m.status = 'completed'
            WHERE d.by_whom = 'agent' AND d.match_id NOT IN (SELECT match_id FROM k.players WHERE model LIKE ?)
