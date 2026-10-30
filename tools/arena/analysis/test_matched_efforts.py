@@ -12,8 +12,8 @@ EASY, HARD = Config("sol", "medium", "cpa"), Config("astra", "medium", "cpa")
 NO_DRAWS = 0
 
 
-def seat(n: int, focal: Config, opponent: Config, won: int, rounds: int = 3, seed: int = 1, position: int = 1, code: str = "c1", block: str | None = None) -> Seat:
-    return Seat(f"m{n}", block or f"b{n}", code, seed, position, focal, opponent, 1.0 if won * 2 > rounds else 0.0, tuple(i < won for i in range(rounds)) if rounds else ())
+def seat(n: int, focal: Config, opponent: Config, won: int, rounds: int = 3, seed: int = 1, position: int = 1, block: str | None = None) -> Seat:
+    return Seat(f"m{n}", block or f"b{n}", "t", seed, position, focal, opponent, 1.0 if won * 2 > rounds else 0.0, tuple(i < won for i in range(rounds)) if rounds else ())
 
 
 def numbered(specs) -> list[Seat]:
@@ -64,16 +64,14 @@ class Matching(unittest.TestCase):
 
 
 class Strict(unittest.TestCase):
-    def test_pairs_only_the_same_opponent_seed_position_and_code(self):
+    def test_pairs_only_the_same_opponent_seed_and_position(self):
         specs = [
             (HIGH, EASY, 3, dict(seed=1, position=1)), (MED, EASY, 0, dict(seed=1, position=1)),
             (HIGH, EASY, 3, dict(seed=2, position=1)), (MED, EASY, 0, dict(seed=2, position=2)),
-            (HIGH, EASY, 3, dict(seed=3, position=1, code="c2")), (MED, EASY, 0, dict(seed=3, position=1)),
             (HIGH, HARD, 3, dict(seed=1, position=1)),
         ]
-        row = only_row(numbered(specs))
-        self.assertEqual((row.strict_code.pairs, row.strict_code.seeds, row.strict_code.diff), (1, 1, 1.0))
-        self.assertEqual((row.strict.pairs, row.strict.seeds), (2, 2))
+        strict = only_row(numbered(specs)).strict
+        self.assertEqual((strict.pairs, strict.seeds, strict.diff), (1, 1, 1.0))
 
     def test_a_repeated_cell_counts_once_and_pools_its_matches(self):
         specs = [(HIGH, EASY, 3, dict(block="x")), (HIGH, EASY, 0, dict(block="y")), (MED, EASY, 0, dict(block="z"))]
@@ -94,7 +92,7 @@ class Strict(unittest.TestCase):
     def test_an_interval_appears_with_enough_independent_seeds_and_covers_the_estimate(self):
         seeds = range(me.MIN_UNITS)
         specs = [(f, EASY, 3 if f is HIGH and s % 2 else 1, dict(seed=s)) for s in seeds for f in (HIGH, MED)]
-        strict = me.strict(*[me.arms(numbered(specs), me.round_metric)[f] for f in (HIGH, MED)], False, random.Random(0), 200)
+        strict = me.strict(*[me.arms(numbered(specs), me.round_metric)[f] for f in (HIGH, MED)], random.Random(0), 200)
         low, high = strict.interval
         self.assertLessEqual(low, strict.diff)
         self.assertGreaterEqual(high, strict.diff)
@@ -125,18 +123,35 @@ class Loading(unittest.TestCase):
         db.executescript(
             """CREATE TABLE source_files (path TEXT, match_id TEXT);
                CREATE TABLE source_records (path TEXT, raw TEXT, current INTEGER);
-               CREATE TABLE matches (id TEXT, seed_block_id TEXT, code_hash TEXT, seed INTEGER, status TEXT);
+               CREATE TABLE matches (id TEXT, seed_block_id TEXT, started_at TEXT, seed INTEGER, status TEXT);
                CREATE TABLE entrants (id TEXT, model TEXT, effort TEXT, endpoint_category TEXT);
                CREATE TABLE match_seats (match_id TEXT, position INTEGER, player TEXT, win_share REAL, cash REAL, entrant_id TEXT)"""
         )
         db.executemany("INSERT INTO entrants VALUES (?, ?, 'medium', 'cpa')", [("e1", "opus"), ("e2", "sol"), ("e3", "oc/deepseek-v4.1-flash-free")])
         for match, other in (("m1", "e2"), ("m2", "e3")):
-            db.execute("INSERT INTO matches VALUES (?, 'b', 'c', 1, 'completed')", (match,))
+            db.execute("INSERT INTO matches VALUES (?, 'b', '2026-10-20', 1, 'completed')", (match,))
             db.executemany("INSERT INTO match_seats VALUES (?, ?, ?, ?, 0, ?)", [(match, 1, "A", 1.0, "e1"), (match, 2, "B", 0.0, other)])
         seats, skipped = me.load_seats(db)
         db.close()
         self.assertEqual((skipped, len(seats)), (1, 2))
         self.assertTrue(all(s.rounds is None for s in seats))
+
+    def test_since_keeps_only_later_matches(self):
+        db = sqlite3.connect(":memory:")
+        db.executescript(
+            """CREATE TABLE source_files (path TEXT, match_id TEXT);
+               CREATE TABLE source_records (path TEXT, raw TEXT, current INTEGER);
+               CREATE TABLE matches (id TEXT, seed_block_id TEXT, started_at TEXT, seed INTEGER, status TEXT);
+               CREATE TABLE entrants (id TEXT, model TEXT, effort TEXT, endpoint_category TEXT);
+               CREATE TABLE match_seats (match_id TEXT, position INTEGER, player TEXT, win_share REAL, cash REAL, entrant_id TEXT)"""
+        )
+        db.executemany("INSERT INTO entrants VALUES (?, ?, 'medium', 'cpa')", [("e1", "opus"), ("e2", "sol")])
+        for match, started in (("early", "2026-10-15"), ("late", "2026-10-20")):
+            db.execute("INSERT INTO matches VALUES (?, 'b', ?, 1, 'completed')", (match, started))
+            db.executemany("INSERT INTO match_seats VALUES (?, ?, ?, ?, 0, ?)", [(match, 1, "A", 1.0, "e1"), (match, 2, "B", 0.0, "e2")])
+        seats, _ = me.load_seats(db, "2026-10-16")
+        db.close()
+        self.assertEqual({s.match for s in seats}, {"late"})
 
 
 if __name__ == "__main__":

@@ -3,18 +3,17 @@
 
 Within each model, every effort is compared with the reference effort (medium) in three layers, each on its own support:
 pooled (every external match of either effort), common opponents (only opponent configs both efforts faced, equal weight per
-opponent config, so both efforts are scored on the same mix), and strict blocks (only the same opponent config, seed, seat
-position and code version in both efforts, one paired difference per block). A cell nobody played is left out, never read as 0.
+opponent config, so both efforts are scored on the same mix), and strict blocks (only the same opponent config, seed and seat
+position in both efforts, one paired difference per block). A cell nobody played is left out, never read as 0.
 Round winners come from by_round.py, so rounds are primary and match win shares secondary. Intervals resample seed blocks (strict
 layer: seeds of one opponent) within each opponent config and appear only when there are at least MIN_UNITS of them.
 Games between two efforts of one model and games with a DeepSeek seat are left out. The database is opened read-only. With --doc
 FILE the tables replace the text between the matched-efforts markers of that file.
 
-    python3 tools/arena/analysis/matched_efforts.py [--db PATH] [--draws 2000] [--doc docs/arena/analysis/matched-efforts.md]
+    python3 tools/arena/analysis/matched_efforts.py [--db PATH] [--draws 2000] [--since ISO] [--doc docs/arena/analysis/matched-efforts.md]
 """
 
 import argparse
-import hashlib
 import random
 from collections import defaultdict
 from dataclasses import dataclass
@@ -47,7 +46,7 @@ class Seat:
 
     match: str
     block: str
-    code: str
+    started: str
     seed: int
     position: int
     focal: Config
@@ -61,7 +60,7 @@ class Scored:
     """A seat's contribution to one rate: `num` over `den`, from one seed block and one strict key."""
 
     block: str
-    key: tuple[int, int, str]  # seed, position, code
+    key: tuple[int, int]  # seed, position
     num: float
     den: int
 
@@ -87,13 +86,14 @@ def rate(units: list[Scored]) -> float:
 
 # ---- loading
 
-def load_seats(db) -> tuple[list[Seat], int]:
-    """Both seats of every scored match without a DeepSeek seat, and how many DeepSeek matches were left out."""
+def load_seats(db, since: str = "") -> tuple[list[Seat], int]:
+    """Both seats of every scored match without a DeepSeek seat that started at or after `since`, and how many DeepSeek matches were left out."""
     cash: dict[str, dict[str, float]] = defaultdict(dict)
     rows = db.execute(
-        """SELECT s.match_id, m.seed_block_id, m.code_hash, m.seed, s.position, s.player, s.win_share, s.cash, e.model, e.effort, e.endpoint_category
+        """SELECT s.match_id, m.seed_block_id, m.started_at, m.seed, s.position, s.player, s.win_share, s.cash, e.model, e.effort, e.endpoint_category
            FROM match_seats s JOIN entrants e ON e.id = s.entrant_id JOIN matches m ON m.id = s.match_id
-           WHERE m.status = 'completed' ORDER BY s.match_id, s.position"""
+           WHERE m.status = 'completed' AND m.started_at >= ? ORDER BY s.match_id, s.position""",
+        (since,),
     ).fetchall()
     by_match: dict[str, list[tuple]] = defaultdict(list)
     for row in rows:
@@ -124,7 +124,7 @@ def arms(seats: list[Seat], metric: Metric) -> dict[Config, Cells]:
     out: dict[Config, Cells] = defaultdict(lambda: defaultdict(list))
     for seat in external(seats):
         if (value := metric(seat)) is not None and value[1] > 0:
-            out[seat.focal][seat.opponent].append(Scored(seat.block, (seat.seed, seat.position, seat.code), *value))
+            out[seat.focal][seat.opponent].append(Scored(seat.block, (seat.seed, seat.position), *value))
     return out
 
 
@@ -225,19 +225,19 @@ def common(a: Cells, b: Cells, rng: random.Random, draws: int) -> Common | None:
     )
 
 
-def key_rates(units: list[Scored], code: bool) -> dict[tuple[int, int, str], float]:
-    """Seats sharing a strict key (repeated matches of one cell) count once, pooled. Without `code` the key ignores the code version."""
+def key_rates(units: list[Scored]) -> dict[tuple[int, int], float]:
+    """Seats sharing a strict key (repeated matches of one cell) count once, pooled."""
     out: dict[tuple, list[Scored]] = defaultdict(list)
     for u in units:
-        out[u.key if code else (*u.key[:2], "")].append(u)
+        out[u.key].append(u)
     return {key: rate(group) for key, group in out.items()}
 
 
-def strict(a: Cells, b: Cells, code: bool, rng: random.Random, draws: int) -> Strict | None:
-    """Paired differences per (opponent, seed, position) and, with `code`, code version, averaged within an opponent seed, then equally over opponents."""
+def strict(a: Cells, b: Cells, rng: random.Random, draws: int) -> Strict | None:
+    """Paired differences per (opponent, seed, position), averaged within an opponent seed, then equally over opponents."""
     diffs: dict[Config, dict[int, list[float]]] = {}
     for o in a.keys() & b.keys():
-        ra, rb = key_rates(a[o], code), key_rates(b[o], code)
+        ra, rb = key_rates(a[o]), key_rates(b[o])
         for key in ra.keys() & rb.keys():
             diffs.setdefault(o, {}).setdefault(key[0], []).append(ra[key] - rb[key])
     if not diffs:
@@ -263,9 +263,7 @@ class Row:
     effort: str
     pooled: Pooled | None
     common: Common | None
-    common_code: Common | None  # common opponents again, with the reference's matches cut to the code versions the effort played
-    strict_code: Strict | None  # same opponent, seed, seat and code version
-    strict: Strict | None  # same opponent, seed and seat, any code version
+    strict: Strict | None
     elo: float | None  # pooled Bradley-Terry rating difference to the reference, from every scored match
 
 
@@ -280,14 +278,7 @@ def compare(seats: list[Seat], metric: Metric, elo: dict[tuple[str, str], float]
             continue
         a, b = by_config[focal], by_config[ref]
         both = (elo.get((focal.model, focal.effort)), elo.get((focal.model, REFERENCE)))
-        codes = {u.key[2] for units in a.values() for u in units}
-        b_code = {o: [u for u in units if u.key[2] in codes] for o, units in b.items()}
-        rows.append(
-            Row(
-                focal.model, focal.effort, pooled(a, b), common(a, b, rng, draws), common(a, b_code, rng, draws),
-                strict(a, b, True, rng, draws), strict(a, b, False, rng, draws), None if None in both else both[0] - both[1],
-            )
-        )
+        rows.append(Row(focal.model, focal.effort, pooled(a, b), common(a, b, rng, draws), strict(a, b, rng, draws), None if None in both else both[0] - both[1]))
     return sorted(rows, key=lambda r: (r.model, EFFORTS.index(r.effort) if r.effort in EFFORTS else -1))
 
 
@@ -328,10 +319,10 @@ def effort_table(rows: list[Row]) -> str:
             r.model, r.effort,
             "-" if p is None else f"{pp(p.rate - p.rate_ref)} ({p.n:,}/{p.n_ref:,})",
             "-" if r.elo is None else signed(r.elo),
-            common_text(r.common), common_text(r.common_code), strict_text(r.strict_code), strict_text(r.strict),
+            common_text(r.common), strict_text(r.strict),
         ]
 
-    header = ["model", "effort", "pooled diff (matches)", "pooled rating diff (Elo)", "common opponents diff (matches)", "common opponents, same code", "strict blocks, same code", "strict blocks, any code"]
+    header = ["model", "effort", "pooled diff (matches)", "pooled rating diff (Elo)", "common opponents diff (matches)", "strict blocks"]
     return table(header, [cells(r) for r in rows])
 
 
@@ -347,13 +338,13 @@ def support_table(rows: list[Row]) -> str:
     return table(header, [cells(r) for r in rows])
 
 
-def coverage(seats: list[Seat], skipped: int, snapshot: str) -> str:
+def coverage(seats: list[Seat], skipped: int) -> str:
     matches = {s.match for s in seats}
     same = {s.match for s in seats if s.focal.model == s.opponent.model}
     unreadable = {s.match for s in seats if s.rounds is None}
     empty = {s.match for s in seats if s.rounds == ()}
     return (
-        f"Snapshot {snapshot}: {len(matches) + skipped:,} scored matches; {skipped:,} with a DeepSeek seat, {len(same):,} between two efforts of one model "
+        f"{len(matches) + skipped:,} scored matches; {skipped:,} with a DeepSeek seat, {len(same):,} between two efforts of one model "
         f"and {len(unreadable):,} with unreadable round winners (and {len(empty):,} with no rounds) are left out of the layers they cannot enter; "
         f"{len(matches) - len(same):,} external matches remain."
     )
@@ -371,16 +362,7 @@ def by_effort(rows: list[Row]) -> str:
         }
         if group:
             out.append([effort, *(f"{pp(sum(v) / len(v))} ({sum(x > 0 for x in v)}/{len(v)} up)" if v else "-" for v in layers.values())])
-    return table(["effort", "pooled", "common opponents", "strict blocks, any code"], out)
-
-
-def code_mix(seats: list[Seat]) -> str:
-    """External seats by code version (numbered by size), reference effort against the other efforts."""
-    counts: dict[str, list[int]] = defaultdict(lambda: [0, 0])
-    for seat in external(seats):
-        counts[seat.code][seat.focal.effort != REFERENCE] += 1
-    ordered = sorted(counts.values(), key=lambda c: -sum(c))
-    return table(["code version", f"seats at {REFERENCE}", "seats at other efforts"], [[str(n), f"{a:,}", f"{b:,}"] for n, (a, b) in enumerate(ordered, 1)])
+    return table(["effort", "pooled", "common opponents", "strict blocks"], out)
 
 
 def signs(rows: list[Row]) -> str:
@@ -389,26 +371,17 @@ def signs(rows: list[Row]) -> str:
         pairs = [(r.pooled.rate - r.pooled.rate_ref, d) for r in rows if r.pooled and (d := layer(r)) is not None]
         return f"{sum(x * y > 0 for x, y in pairs)} of {len(pairs)}"
 
-    intervals = sum(1 for r in rows for x in (r.common, r.common_code, r.strict_code, r.strict) if x is not None and x.interval is not None)
+    intervals = sum(1 for r in rows for x in (r.common, r.strict) if x is not None and x.interval is not None)
     return (
         f"{len(rows)} effort comparisons. Sign kept from the pooled difference: common opponents {agree(lambda r: r.common and r.common.rate - r.common.rate_ref)}, "
-        f"common opponents with the same code {agree(lambda r: r.common_code and r.common_code.rate - r.common_code.rate_ref)}, "
-        f"strict blocks with the same code {agree(lambda r: r.strict_code and r.strict_code.diff)}, strict blocks with any code {agree(lambda r: r.strict and r.strict.diff)}. "
-        f"Intervals shown: {intervals}."
+        f"strict blocks {agree(lambda r: r.strict and r.strict.diff)}. Intervals shown: {intervals}."
     )
 
 
-def snapshot_id(db) -> str:
-    digest = hashlib.sha256()
-    for (fingerprint,) in db.execute("SELECT fingerprint FROM matches WHERE status = 'completed' ORDER BY id"):
-        digest.update(fingerprint.encode())
-    return digest.hexdigest()[:12]
-
-
-def report(db, draws: int) -> str:
-    seats, skipped = load_seats(db)
+def report(db, draws: int, since: str) -> str:
+    seats, skipped = load_seats(db, since)
     elo = ratings(seats)
-    parts = [coverage(seats, skipped, snapshot_id(db)), code_mix(seats)]
+    parts = [coverage(seats, skipped)]
     for title, name in (("Round win rate (primary)", "rounds"), ("Match win share (secondary)", "matches")):
         rows = compare(seats, METRICS[name], elo, draws)
         parts.append(f"### {title}\n\n{signs(rows)}\n\n{by_effort(rows)}\n\n{effort_table(rows)}\n\n#### Common support and weightings\n\n{support_table(rows)}")
@@ -419,9 +392,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--db", default=DB)
     parser.add_argument("--draws", type=int, default=2000)
+    parser.add_argument("--since", default="", help="only matches that started at or after this ISO time")
     parser.add_argument("--doc")
     args = parser.parse_args()
-    text = report(connect(args.db), args.draws)
+    text = report(connect(args.db), args.draws, args.since)
     if args.doc:
         doc = open(args.doc).read()
         head, rest = doc.split(START)
