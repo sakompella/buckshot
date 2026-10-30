@@ -7,7 +7,7 @@ import { stickyHeight } from "./view.ts";
 
 type H = HtmlBuilder<Message>;
 
-// The guided tour: hidden until the jump menu's Tour button starts it. Each step scrolls to an element, highlights
+// The guided tour: hidden until the hero's tour button starts it. Each step scrolls to an element, highlights
 // it and shows a short card. The page itself carries no descriptions.
 
 /**
@@ -23,124 +23,16 @@ export interface TourStep {
 
 export const TOUR: ReadonlyArray<TourStep> = [
   {
-    anchor: "scatter",
+    anchor: "leaderboards",
     focus: ".filters",
     title: "Filters",
     text: "The model and effort chips apply to the whole page; on a phone they fold into one line, and a tap opens them. Every scored match from every tournament is pooled.",
   },
   {
-    anchor: "scatter",
-    focus: "#scatter .ctl > .toggle:nth-child(2), #scatter .ctl > select:nth-child(2)",
-    title: "What the rating counts",
-    text: "Round wins counts each round as one game, Match wins each match's win share and Cash each player's pot share; Round wins is the default. The choice carries to every rating on the page.",
-  },
-  {
-    anchor: "scatter",
-    focus: "#scatter .ctl > .toggle:nth-child(3), #scatter .ctl > select:nth-child(3)",
-    title: "Elo / Rank",
-    text: "Elo is one Bradley-Terry rating per config, pooled over every tournament; Rank is a place, first at the top. Check the leaderboards' intervals before calling a small gap real.",
-  },
-  {
-    anchor: "scatter",
-    focus: "#scatter > div > .card:nth-child(1)",
-    title: "Cost, Moves, Tokens, Regret",
-    text: "Each point is a config, a model at one effort; the x axis is its cost, model moves or output tokens per match, or its regret, an estimate of the round win chance its moves gave up (lower is better). Look for configs rated alike that sit far apart.",
-  },
-  {
-    anchor: "interesting",
-    focus: "#interesting .igrid",
-    title: "Interesting matches",
-    text: "A few matches worth a look, such as the biggest comeback or an underdog sweep. A click opens the replay.",
-  },
-  {
-    anchor: "blunders",
-    focus: "#blunders .bgrid",
-    title: "Blunders",
-    text: "The moves that gave up the most round win chance, with the move chosen and the best move, marked exact when both scores are settled and estimated otherwise. A click opens the replay at that move.",
-  },
-  {
-    anchor: "odds",
-    focus: "#odds .chartrow figure:first-child",
-    title: "Playing the odds",
-    text: "How often a config shoots itself against the chance, by its own count, that the shell is live, one panel per model and a line per effort. A model that counts shells shoots itself on a sure blank.",
-  },
-  {
-    anchor: "mistakes",
-    focus: "#mistakes > div > .card:nth-child(1)",
-    title: "Regret by shells left",
-    text: "Mean regret per move by shells left in the gun, shots on the left and every other move on the right, one line per model. Compare the shots' peak with the flat panel beside it.",
-  },
-  {
-    anchor: "mistakes",
-    focus: "#mistakes > div > .card:nth-child(2)",
-    title: "Blunder rate",
-    text: "Each config's share of its searched moves that were blunders, with intervals, best on top. The bars say more than any single card.",
-  },
-  {
-    anchor: "items",
-    focus: "#items .chartrow",
-    title: "Item fates",
-    text: "What became of the items each config received: used, stolen by the opponent or left unused, by config and by item. Look for the items most often left unused.",
-  },
-  {
-    anchor: "items",
-    focus: "#items > div > .card",
-    title: "Same position, same move",
-    text: "How often a config chose the same move when it met the same position again, with the count of repeated positions. It measures steadiness, not good play.",
-  },
-  {
-    anchor: "luck",
-    focus: "#luck .luckrow",
-    title: "Won with higher estimated regret",
-    text: "How often the player whose moves gave up more estimated round-win chance still won the match, per move, in total and without tiny gaps, and the lower-regret player's win share by the gap. An estimate is not a measure of luck.",
-  },
-  {
-    anchor: "seats",
-    focus: "#seats .chartrow",
-    title: "Seats",
-    text: "Whether table position and starting round 1 matter: round 1 to the match, comebacks and the starter's edge per seed. The full tables fold under the charts.",
-  },
-  {
-    anchor: "seats",
-    focus: "#seats > div > .card",
-    title: "Results after round 1",
-    text: "How often the round 1 winner went on to take round 2, over every config; each config's dots fold below, with round 3 at one round each as a ring. Opponents and seeds differ between configs, so this describes the matches and does not show momentum.",
-  },
-  {
-    anchor: "pressure",
-    focus: "#pressure .chartrow figure:first-child",
-    title: "Output tokens by health gap",
-    text: "Output tokens per move by health gap, as a multiple of the config's own amount at level health, one panel per model. A line sloping down writes less when ahead, though positions behind are also harder.",
-  },
-  {
-    anchor: "rubbers",
-    focus: "#rubbers",
-    title: "Dead rubbers",
-    text: "Output tokens per move in round 3: the ring when the match is level at one round each, the dot after one player won both rounds. A big drop means the config writes less once the match is settled.",
-  },
-  {
-    anchor: "reliability",
-    focus: "#reliability .chartrow figure:first-child",
-    title: "Reliability",
-    text: "Service failures, the calls a provider or the shared hub refused, sit apart from model failures, the turns a model ended without a move. Many failed calls are quota limits on the shared endpoints, not the model's play.",
-  },
-  {
-    anchor: "reliability",
-    focus: "#reliability .lanes",
-    title: "Failed calls by hour",
-    text: "Each model's failed replies, by the hour each call was logged. Lanes failing in the same hours point to an outage rather than a weak model.",
-  },
-  {
-    anchor: "reliability",
-    focus: "#reliability > .card:last-child",
-    title: "Where the money went",
-    text: "Each config's share of the list-price usage, grouped by model, under the current filters. Look for how much of the total a single config takes.",
-  },
-  {
     anchor: "leaderboards",
     focus: "#leaderboards .lbt thead, #leaderboards .lbt tbody tr:first-child",
     title: "Leaderboard columns",
-    text: "Per config: its share with an interval, the rating, Regret, cost per match and per move, time per move, output tokens and the favourite item. Under Round wins or Cash a round wins or pot share column appears.",
+    text: "Per config: its Round Elo, one Bradley-Terry rating pooled over every tournament, its matches and cost per match, then match wins with an interval, round wins, cash share, Regret, cost per move, time per move, output tokens and the favourite item. On a phone the row keeps the first four, and a tap shows the rest.",
   },
   {
     anchor: "leaderboards",
@@ -149,10 +41,22 @@ export const TOUR: ReadonlyArray<TourStep> = [
     text: "A click on a row lists its matches by opponent, one square per match. Faded rows rest on few scored matches.",
   },
   {
+    anchor: "scatter",
+    focus: "#scatter .card",
+    title: "Cost, Moves, Tokens, Regret",
+    text: "Each point is a config, a model at one effort, placed by its Round Elo against its cost, model moves or output tokens per match, or its regret, an estimate of the round win chance its moves gave up (lower is better). Look for configs rated alike that sit far apart.",
+  },
+  {
+    anchor: "interesting",
+    focus: "#interesting .igrid",
+    title: "Interesting matches",
+    text: "A few matches worth a look, such as the biggest comeback or an underdog sweep. A click opens the replay.",
+  },
+  {
     anchor: "matches",
     focus: "#matches .bar",
     title: "Matches",
-    text: "The newest matches, with a search. A row opens its replay, where the arrow keys step through the moves and Escape closes it.",
+    text: "Every started match, newest first, with a search. A row opens its replay, where the arrow keys step through the moves and Escape closes it.",
   },
   {
     anchor: "matches",
@@ -167,28 +71,52 @@ export const TOUR: ReadonlyArray<TourStep> = [
     text: "On the replay's health chart, rings mark the costly moves, and the biggest are listed under it as turning points. A click on one jumps to that move.",
   },
   {
-    anchor: "deals",
-    focus: "#deals .card",
-    title: "Results on each seed",
-    text: "One row per seed and one column per config; the top bar is its wins from table position 1, the bottom from position 2. Look for rows where one position nearly always wins.",
+    anchor: "odds",
+    focus: "#odds .chartrow figure:first-child",
+    title: "Playing the odds",
+    text: "How often a config shoots itself against the chance, by its own count, that the shell is live, one panel per model and a line per effort. A model that counts shells shoots itself on a sure blank.",
+  },
+  {
+    anchor: "items",
+    focus: "#items .chartrow",
+    title: "Item fates",
+    text: "What became of the items each config received: used, stolen by the opponent or left unused, by config and by item. Look for the items most often left unused.",
+  },
+  {
+    anchor: "items",
+    focus: "#items > div > .card",
+    title: "Same position, same move",
+    text: "How often a config chose the same move when it met the same position again, with the count of repeated positions. It measures steadiness, not good play.",
+  },
+  {
+    anchor: "reliability",
+    focus: "#reliability .chartrow figure:first-child",
+    title: "Failures",
+    text: "Service failures, the calls a provider or the shared hub refused, sit apart from model failures, the turns a model ended without a move. Many failed calls are quota limits on the shared endpoints, not the model's play.",
+  },
+  {
+    anchor: "reliability",
+    focus: "#reliability .lanes",
+    title: "Failed calls by hour",
+    text: "Each model's failed replies, by the hour each call was logged. Lanes failing in the same hours point to an outage rather than a weak model.",
+  },
+  {
+    anchor: "reliability",
+    focus: "#reliability > div > .card",
+    title: "Where the money went",
+    text: "Each config's share of the list-price usage, grouped by model, under the current filters. Look for how much of the total a single config takes.",
+  },
+  {
+    anchor: "seats",
+    focus: "#seats .chartrow",
+    title: "Seat balance",
+    text: "Whether table position and starting round 1 matter: round 1 to the match, comebacks and the starter's edge per seed.",
   },
   {
     anchor: "breakdown",
-    focus: "#breakdown .heatctl > .toggle:first-child",
-    title: "Breakdown modes",
-    text: "One heatmap per mode, a row per config: win share against each opponent model, item use when legal, choice patterns and play style. A click on a column head sorts by it.",
-  },
-  {
-    anchor: "breakdown",
-    focus: "#breakdown .heatctl > .toggle:first-child > button:nth-child(2)",
-    title: "Beats the ratings",
-    text: "Each cell is a config's share against one opponent model minus the share the pooled ratings predict for those games; lighter beat the prediction. Most cells are noise.",
-  },
-  {
-    anchor: "breakdown",
-    focus: "#breakdown .heat tbody tr:first-child",
-    title: "Counts",
-    text: "The small grey number in each cell is the sample behind it: games, chances or player-matches. Read it before trusting a shade.",
+    focus: "#breakdown > div",
+    title: "The numbers as tables",
+    text: "The failures, the seats and each config's win share against each opponent model fold into tables at the end; a click on a title opens one. Inside the open heatmap a click on a column head sorts by it, and the small grey number in each cell is the sample behind it.",
   },
 ];
 

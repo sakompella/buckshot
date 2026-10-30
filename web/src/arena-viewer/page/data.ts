@@ -1,5 +1,4 @@
 import type { Seat, Story } from "../api.ts";
-import type { Basis } from "./model.ts";
 
 // The page's numbers: model labels and colours, per-config stats, ratings and intervals.
 
@@ -85,7 +84,7 @@ export const isClaude = (model: string): boolean => model.startsWith("claude");
 /** A config: one model at one effort. */
 export const keyOf = (seat: { readonly model: string; readonly effort: string }): string => `${seat.model}|${seat.effort}`;
 
-export const splitKey = (key: string): readonly [string, string] => {
+const splitKey = (key: string): readonly [string, string] => {
   const [model = "", effort = ""] = key.split("|");
 
   return [model, effort];
@@ -154,10 +153,6 @@ export const fmtRating = (rating: number): string => {
   return `${rounded >= 0 ? "+" : ""}${rounded}`;
 };
 
-export const eloName = (basis: Basis): string => ({ rounds: "Round Elo", matches: "Match Elo", cash: "Cash Elo" })[basis];
-
-export const shareName = (basis: Basis): string => ({ rounds: "round win share", matches: "match win share", cash: "pot share" })[basis];
-
 // GROUPS AND SUMS
 
 export const sumOf = (values: Iterable<number>): number => {
@@ -216,11 +211,8 @@ export const rng = (seed: number) => {
 /** A seat with its pot share: its cash over the match's total cash, null when it has no cash recorded. */
 export type SeatFull = Seat & { readonly potShare: number | null };
 
-/** What a rating counts per match: each player's win share of it, or its pot share. A rounds rating counts rounds instead (see knownRounds). */
-export const seatShare = (seat: SeatFull, basis: Exclude<Basis, "rounds">): number => (basis === "matches" ? seat.winShare : seat.potShare) ?? 0;
-
 /** A match's rounds with their winners, or none when the events do not give every round (Story.ok). */
-export const knownRounds = (seat: Pick<Seat, "story">): Story["rounds"] => (seat.story?.ok ? seat.story.rounds : []);
+const knownRounds = (seat: Pick<Seat, "story">): Story["rounds"] => (seat.story?.ok ? seat.story.rounds : []);
 
 /** What each known round of a match was to a seat: 1 for a round it won, 0 for one it lost. */
 export const roundResults = (seat: Pick<Seat, "story" | "player">): ReadonlyArray<number> => knownRounds(seat).map(({ winner }) => (winner === seat.player ? 1 : 0));

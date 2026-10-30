@@ -80,6 +80,7 @@ tr.few td { opacity: 0.7; }
 .lbt td { padding: 8px; }
 .lbt .barcol { width: 42%; padding: 0 22px; }
 .lbt .eff { color: var(--dim); }
+.drillstats { display: none; }
 .dot { display: inline-block; width: 9px; height: 9px; margin-right: 9px; border-radius: 50%; }
 .dot.o { border-radius: 2px; }
 .track { position: relative; height: 10px; background: #0d0d0d; }
@@ -102,13 +103,7 @@ details summary { cursor: pointer; margin: 4px 0; }
 .bignums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; margin-bottom: 34px; }
 .bignum { display: flex; flex-direction: column; gap: 4px; border-left: 2px solid var(--line); padding-left: 14px; }
 .bignum b { font-size: 46px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
-.luckrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 28px; align-items: start; margin-bottom: 26px; }
-.luckrow figure { margin: 0; min-width: 0; }
-.luckbig { display: flex; flex-direction: column; gap: 28px; }
-svg .dimtext { fill: var(--dim); font-size: 11px; }
 .chartrow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; align-items: start; }
-.chartpair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; align-items: start; }
-.chartpair h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
 .chartrow figure { margin: 0; min-width: 0; }
 figure.lanes { margin: 36px 0 0; }
 h2.subhead { margin-top: 40px; }
@@ -134,11 +129,9 @@ svg text { pointer-events: none; }
 .track { min-width: 180px; }
 .dim { color: var(--dim); }
 tr.group td { color: var(--fg); font-weight: 600; padding-top: 18px; border-bottom: 1px solid var(--line); text-align: left; }
-.scrollx { overflow-x: auto; }
 .panels { display: flex; flex-wrap: wrap; gap: 18px 28px; }
 td.pick { cursor: pointer; }
 td.pick:hover { outline: 1px solid #666; }
-.flagged { margin-top: 16px; max-height: 420px; overflow: auto; }
 
 .lbbar h2 { margin: 0; }
 .tag { white-space: nowrap; font-size: 11px; color: var(--dim); border: 1px solid #2a2a2a; border-radius: 4px; padding: 0 5px; }
@@ -166,8 +159,7 @@ table.heat td.click:hover, table.heat td.ring { outline: 1.5px solid #fff; outli
 table.heat td.total { font-weight: 600; text-align: center; padding: 3px 10px; }
 
 /* interesting matches */
-.igrid, .bgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
-.bgrid { grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); margin-bottom: 18px; }
+.igrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
 .icard { border: 1px solid var(--line); border-radius: 4px; padding: 12px 14px 8px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
 .icard:hover { border-color: #444; background: #070707; }
 .ititle { font-weight: 600; }
@@ -247,14 +239,6 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
 
 /* section controls */
 .ctl { display: flex; gap: 8px 18px; flex-wrap: wrap; align-items: center; margin: 4px 0 12px; }
-.switch { position: relative; display: inline-flex; align-items: center; gap: 8px; color: var(--mut); font-size: 12px; cursor: pointer; user-select: none; }
-.switch input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; z-index: 1; }
-.switch .knob { position: relative; width: 26px; height: 15px; border-radius: 8px; background: #1e1e1e; border: 1px solid #333; transition: background 0.15s; flex: none; }
-.switch .knob::after { content: ""; position: absolute; top: 2px; left: 2px; width: 9px; height: 9px; border-radius: 50%; background: #8b8b8b; transition: transform 0.15s; }
-.switch input:checked + .knob { background: var(--fg); border-color: var(--fg); }
-.switch input:checked + .knob::after { background: #000; transform: translateX(11px); }
-.switch input:focus-visible + .knob { outline: 1px solid #fff; outline-offset: 2px; }
-.switch:has(input:checked) { color: var(--fg); }
 
 .spendbar { display: flex; gap: 2px; height: 34px; margin: 4px 0 16px; }
 .spendbar .seg { min-width: 1px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #000; font-size: 12px; font-weight: 600; line-height: 34px; text-indent: 6px; }
@@ -298,7 +282,7 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
 
 /* touch screens: 44px targets */
 @media (pointer: coarse) {
-  nav a, .toggle button, .chip, .more, select, input:not([type="checkbox"]), .switch, .stepper button, .seedrow .chip { min-height: 44px; }
+  nav a, .toggle button, .chip, .more, select, input:not([type="checkbox"]), .stepper button, .seedrow .chip { min-height: 44px; }
   .chip { padding: 0 12px; min-width: 44px; }
   .toggle button { min-width: 44px; }
   .modal .x { width: 44px; height: 44px; right: 4px; top: 4px; }
@@ -327,9 +311,6 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
   .filtersum { display: flex; width: 100%; min-height: 44px; align-items: center; justify-content: space-between; gap: 10px; background: #0d0d0d; border: 1px solid var(--line); border-radius: 6px; color: var(--fg); font: inherit; font-size: 13px; padding: 4px 10px; text-align: left; cursor: pointer; }
   .filters:not(.open) > :not(.filtersum) { display: none; }
   .chartrow { grid-template-columns: minmax(0, 1fr); gap: 30px; }
-  .luckrow { grid-template-columns: minmax(0, 1fr); gap: 24px; }
-  .luckbig { gap: 16px; }
-  .chartpair { grid-template-columns: minmax(0, 1fr); gap: 30px; }
   .chartrow .wide { grid-column: auto; }
   main { padding: 16px 20px 60px; }
   nav .brand { display: none; }
@@ -362,6 +343,7 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
   table.lbt.rows td:first-child { flex: 1 1 auto; }
   table.lbt.rows td.barcol { order: 1; flex: 1 0 100%; width: auto; padding: 4px 0; }
   table.lbt.rows td[data-label] { order: 2; }
+  table.lbt.rows td[data-label="round elo"] { order: 0; }
   .track { min-width: 0; }
   table.matchrows td:first-child { flex: 0 0 auto; font-size: 12.5px; color: var(--mut); }
   table.matchrows td.seat { order: -2; flex: 1 0 100%; font-size: 13.5px; }
@@ -387,15 +369,12 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
   .filters { gap: 8px; }
   .ctl.menus { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr) minmax(0, 0.8fr); gap: 8px; }
   .ctl.menus select { width: 100%; min-width: 0; }
-  .ctl.menus .switch { grid-column: 1 / -1; }
   .chips { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; scrollbar-width: none; }
   .chips .chip { flex: none; }
   .filters.open .chips { flex-wrap: wrap; overflow-x: visible; }
   input[type="text"], input:not([type]) { width: 100%; }
   .toggle { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; width: 100%; }
   .toggle button { padding: 6px 8px; }
-  .heatctl > .toggle:first-child { display: flex; overflow-x: auto; scrollbar-width: none; }
-  .heatctl > .toggle:first-child button { flex: none; white-space: nowrap; }
 
   .heatscroll { max-height: 70svh; overflow: auto; }
   table.heat td.left { white-space: normal; min-width: 112px; max-width: 132px; font-size: 11px; line-height: 1.25; padding: 3px 8px 3px 0; }
@@ -404,7 +383,6 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
 
   .opp { grid-template-columns: 1fr auto; gap: 4px 10px; padding: 6px 0; }
   .opp .sq { grid-column: 1 / -1; }
-  .flagged { max-height: none; }
 
   .overlay { align-items: stretch; }
   .modal { width: 100vw; height: 100dvh; border: 0; border-radius: 0; padding: 10px 12px 0; }
@@ -416,8 +394,8 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
 }
 
 /* The tour: a dimmed page with one element cut out, and a card. Hidden until the jump menu's Tour starts it. */
-nav .tourstart { background: none; border: 0; color: var(--fg); font: inherit; font-size: 13px; padding: 4px 9px; border-radius: 6px; cursor: pointer; white-space: nowrap; }
-nav .tourstart:hover { background: #141414; }
+.lead .tourstart { background: none; border: 0; color: var(--mut); font: inherit; font-size: 13px; padding: 0; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; white-space: nowrap; }
+.lead .tourstart:hover { color: var(--fg); }
 .tour-backdrop { position: fixed; inset: 0; z-index: 40; }
 .tour-focus { position: absolute; z-index: 41; pointer-events: none; border-radius: 8px; outline: 2px solid #fff; box-shadow: 0 0 0 200vmax rgba(0, 0, 0, 0.6); }
 .tour-card { position: fixed; z-index: 42; right: 24px; bottom: 24px; width: 380px; background: #0d0d0d; border: 1px solid #3a3a3a; border-radius: 10px; padding: 14px 16px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6); }
@@ -430,10 +408,19 @@ nav .tourstart:hover { background: #141414; }
 .tour-buttons button:disabled { color: var(--dim); cursor: default; }
 .tour-buttons button:last-child { margin-left: auto; }
 @media (pointer: coarse) {
-  nav .tourstart, .tour-buttons button { min-height: 44px; }
+  .tour-buttons button { min-height: 44px; }
 }
 @media (max-width: 639px) {
   .tour-card, .tour-card.under { position: fixed; left: 0; right: 0; bottom: 0; top: auto; width: auto; border-radius: 12px 12px 0 0; padding: 12px 12px calc(12px + env(safe-area-inset-bottom)); }
   .tour-buttons button { flex: 1; min-height: 44px; }
   .tour-buttons button:last-child { margin-left: 0; }
+}
+
+@media (max-width: 639px) {
+  table.lbt.rows tr.row { gap: 2px 12px; padding: 8px 2px; }
+  table.lbt.rows td.barcol, table.lbt.rows td.detail { display: none; }
+  table.lbt.rows td[data-label="round elo"]::before { content: none; }
+  .drillstats { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 4px 0 12px; font-size: 12.5px; }
+  .drillstats dt { color: var(--mut); }
+  .drillstats dd { margin: 0; }
 }

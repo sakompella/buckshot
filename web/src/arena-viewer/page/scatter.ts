@@ -1,18 +1,18 @@
 import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { anchorId, linScale, logScale, ratingSelects, ratingToggles, REFERENCE, REFERENCE_DASH, selectView, tipView, toggleView } from "./charts.ts";
-import { baseName, DEFAULT_EFFORT, eloName, fmtCount, fmtPct, fmtRating, fmtUsd, isClaude, type ModelStats } from "./data.ts";
+import { anchorId, linScale, logScale, REFERENCE, REFERENCE_DASH, selectView, tipView, toggleView } from "./charts.ts";
+import { baseName, DEFAULT_EFFORT, fmtCount, fmtPct, fmtRating, fmtUsd, isClaude, type ModelStats } from "./data.ts";
 import { leader, measureText, placeLabels, uncrowded } from "./labels.ts";
 import { memoLast } from "./derived.ts";
-import { type Basis, Message, type Model, type Ranking, type ScatterAxis } from "./model.ts";
+import { Message, type Model, type ScatterAxis } from "./model.ts";
 import type { Rating } from "./ratings.ts";
 
 type H = HtmlBuilder<Message>;
 
-// Average cost, model moves or output tokens against the Elo or the rank, one point per config, labelled
+// Average cost, model moves or output tokens against the Round Elo, one point per config, labelled
 // as on DeepSWE: the model's name, its effort below in small caps. The dashed line is the frontier: no other point is
-// both lower on the x axis and higher rated (or ranked).
+// both lower on the x axis and higher rated.
 
 interface Axis {
   readonly label: string;
@@ -118,13 +118,9 @@ interface Point {
   readonly rank: number;
 }
 
-const scoreOf = (point: Point, ranking: Ranking): number => (ranking === "elo" ? point.rating : -point.rank);
+const dominates = (other: Point, point: Point) => other.x <= point.x && other.rating >= point.rating && (other.x < point.x || other.rating > point.rating);
 
-const dominates = (other: Point, point: Point, ranking: Ranking) =>
-  other.x <= point.x && scoreOf(other, ranking) >= scoreOf(point, ranking) && (other.x < point.x || scoreOf(other, ranking) > scoreOf(point, ranking));
-
-const frontierOf = (points: ReadonlyArray<Point>, ranking: Ranking) =>
-  points.filter((point) => !points.some((other) => other !== point && dominates(other, point, ranking))).toSorted((left, right) => left.x - right.x);
+const frontierOf = (points: ReadonlyArray<Point>) => points.filter((point) => !points.some((other) => other !== point && dominates(other, point))).toSorted((left, right) => left.x - right.x);
 
 /** The nearest 1-2-5 step strictly past a value. */
 const stepPast = (value: number, direction: "down" | "up"): number => {
@@ -178,10 +174,7 @@ const T = 40;
 
 const B = 52;
 
-/**
- * The axes' extent, from every config whatever the filter, so a filter only shows or hides points.
- * Rank runs from 1 to the number of rated configs.
- */
+/** The axes' extent, from every config whatever the filter, so a filter only shows or hides points. */
 interface Domain {
   readonly x: Readonly<Record<ScatterAxis, readonly [number, number]>>;
   readonly elo: readonly [number, number];
@@ -229,12 +222,8 @@ const labeledTicks = (ticks: ReadonlyArray<number>, at: (value: number) => numbe
   return new Set(placed.map(({ value }) => value));
 };
 
-/** The rating axis: Elo grows upward in 50-point steps; rank counts down from 1 at the top, with evenly spaced round ticks. */
-const yScaleOf = (ranking: Ranking, elo: readonly [number, number], places: number, top: number, bottom: number, isPhone: boolean) => {
-  if (ranking === "rank") {
-    return linScale(0.5, places + 0.5, top, bottom, linearTicks(1, places, Math.floor((bottom - top) / 36)));
-  }
-
+/** The rating axis: Elo grows upward in 50-point steps. */
+const yScaleOf = (elo: readonly [number, number], top: number, bottom: number, isPhone: boolean) => {
   const low = Math.floor((elo[0] - 30) / 50) * 50;
   const high = Math.ceil((elo[1] + 30) / 50) * 50;
   const tickStep = isPhone ? 100 : 50;
@@ -248,11 +237,7 @@ const yScaleOf = (ranking: Ranking, elo: readonly [number, number], places: numb
   );
 };
 
-const yValueOf = (point: Point, ranking: Ranking): number => (ranking === "elo" ? point.rating : point.rank);
-
-const fmtY = (value: number, ranking: Ranking): string => (ranking === "elo" ? fmtRating(value) : String(value));
-
-const layoutOf = memoLast((points: ReadonlyArray<Point>, width: number, scatterAxis: ScatterAxis, ranking: Ranking, domain: Domain, places: number) => {
+const layoutOf = memoLast((points: ReadonlyArray<Point>, width: number, scatterAxis: ScatterAxis, domain: Domain) => {
   if (points.length === 0) return null;
 
   const axis = AXES[scatterAxis];
@@ -263,7 +248,7 @@ const layoutOf = memoLast((points: ReadonlyArray<Point>, width: number, scatterA
   const [least, most] = domain.x[scatterAxis];
   const x = xScaleOf(axis, least, most, L, width - right);
   const xLabels = labeledTicks(x.ticks, x.at, axis.tick, `${type.tick}px ${SANS}`, L, width - right);
-  const y = yScaleOf(ranking, domain.elo, places, T, height - B, isPhone);
+  const y = yScaleOf(domain.elo, T, height - B, isPhone);
 
   const nameFont = `600 ${type.name}px ${SANS}`;
   const effortFont = `400 ${type.eff}px ${MONO}`;
@@ -273,15 +258,15 @@ const layoutOf = memoLast((points: ReadonlyArray<Point>, width: number, scatterA
     const effort = point.m.effort.toUpperCase();
     const labelWidth = Math.max(measureText(name, nameFont), measureText(effort, effortFont) + effort.length * type.eff * 0.08);
 
-    return { x: x.at(point.x), y: y.at(yValueOf(point, ranking)), w: labelWidth, h: type.name + type.eff + 3, name, effort };
+    return { x: x.at(point.x), y: y.at(point.rating), w: labelWidth, h: type.name + type.eff + 3, name, effort };
   });
 
-  const frontier = frontierOf(points, ranking);
+  const frontier = frontierOf(points);
   const placed = placeLabels(at, { left: L, right: width - 2, top: T, bottom: height - B });
 
   // Where labels collide the frontier is labelled first, then medium effort, then by rating; the rest are left to hovering or tapping.
   const priority = points
-    .map((point, index) => ({ index, order: (frontier.includes(point) ? 2e4 : 0) + (point.m.effort === DEFAULT_EFFORT ? 1e4 : 0) + scoreOf(point, ranking) }))
+    .map((point, index) => ({ index, order: (frontier.includes(point) ? 2e4 : 0) + (point.m.effort === DEFAULT_EFFORT ? 1e4 : 0) + point.rating }))
     .toSorted((left, right) => right.order - left.order)
     .map(({ index }) => index);
 
@@ -297,17 +282,15 @@ export const scatterView = (
   everyConfig: ReadonlyArray<ModelStats>,
   ratings: ReadonlyMap<string, Rating>,
   ranks: ReadonlyMap<string, number>,
-  ranking: Ranking,
-  basis: Basis,
   scatter: Model["scatter"],
   width: number,
 ): Html => {
   const axis = AXES[scatter.axis];
-  const yLabel = ranking === "elo" ? eloName(basis) : "Rank";
-  const title = `${axis.label} vs ${ranking === "elo" ? eloName(basis) : "rank"}`;
+  const yLabel = "Round Elo";
+  const title = `${axis.label} vs Round Elo`;
   const byAxis = pointsOf(stats, ratings, ranks);
   const points = byAxis[scatter.axis];
-  const layout = layoutOf(points, width, scatter.axis, ranking, domainOf(everyConfig, ratings), ranks.size);
+  const layout = layoutOf(points, width, scatter.axis, domainOf(everyConfig, ratings));
   const activeKey = Option.orElse(scatter.maybeHover, () => scatter.maybePin);
   const active = Option.flatMap(activeKey, (key) => Option.fromUndefinedOr(points.find((point) => point.m.key === key)));
   const isDimmed = (point: Point) => Option.exists(active, (shown) => shown.m.model !== point.m.model);
@@ -316,11 +299,8 @@ export const scatterView = (
   const axes = axisOptions(everyConfig.some(({ regret }) => regret !== null));
   const selectAxis = (option: ScatterAxis) => Message.SelectedScatterAxis({ axis: option });
 
-  // A phone has no room for three rows of buttons above the chart, so the same choices are menus on one row.
-  const controls = h.div(
-    [h.Class(width < NARROW ? "ctl menus" : "ctl")],
-    width < NARROW ? [selectView(h, "x axis", scatter.axis, axes, selectAxis), ...ratingSelects(h, ranking, basis)] : [toggleView(h, scatter.axis, axes, selectAxis), ...ratingToggles(h, ranking, basis)],
-  );
+  // A phone has no room for a row of buttons above the chart, so the choice is a menu.
+  const controls = h.div([h.Class(width < NARROW ? "ctl menus" : "ctl")], [width < NARROW ? selectView(h, "x axis", scatter.axis, axes, selectAxis) : toggleView(h, scatter.axis, axes, selectAxis)]);
 
   if (layout === null) return h.div([h.Class("chart")], [h.div([h.Class("lbbar")], [h.h2([], [title])]), controls, h.div([h.Class("empty")], ["No scored matches for this filter."])]);
 
@@ -333,7 +313,7 @@ export const scatterView = (
     onNone: () => h.empty,
     onSome: (point) => {
       const ax = x.at(point.x);
-      const ay = y.at(yValueOf(point, ranking));
+      const ay = y.at(point.rating);
       const color = point.m.color;
       const label = { fill: color, "font-size": `${type.tick}px`, "font-weight": "600", ...halo(4) };
 
@@ -343,7 +323,7 @@ export const scatterView = (
           h.line([h.X1(`${ax}`), h.Y1(`${ay}`), h.X2(`${ax}`), h.Y2(`${height - B}`), h.Stroke(color), h.StrokeDasharray("4 4")], []),
           h.line([h.X1(`${L}`), h.Y1(`${ay}`), h.X2(`${ax}`), h.Y2(`${ay}`), h.Stroke(color), h.StrokeDasharray("4 4")], []),
           textAt(h, ax, height - B + 18, "middle", label, axis.format(point.x)),
-          textAt(h, L - 10, ay + 4, "end", label, fmtY(yValueOf(point, ranking), ranking)),
+          textAt(h, L - 10, ay + 4, "end", label, fmtRating(point.rating)),
         ],
       );
     },
@@ -412,12 +392,12 @@ export const scatterView = (
         [h.Width(`${width}`), h.Height(`${height}`), h.OnClick(Message.ClickedOutsideChart())],
         [
           textAt(h, L, T - 16, "start", { fill: "var(--fg)", "font-size": `${type.title}px`, "font-weight": "600" }, yLabel),
-          ...y.ticks.map((value) => h.g([], [gridLine(L, width - right, y.at(value), y.at(value)), textAt(h, L - 10, y.at(value) + 4, "end", tick, fmtY(value, ranking))])),
+          ...y.ticks.map((value) => h.g([], [gridLine(L, width - right, y.at(value), y.at(value)), textAt(h, L - 10, y.at(value) + 4, "end", tick, fmtRating(value))])),
           ...x.ticks.map((value) => h.g([], [gridLine(x.at(value), x.at(value), T, height - B), xLabels.has(value) ? textAt(h, x.at(value), height - B + 18, "middle", tick, axis.tick(value)) : h.empty])),
           textAt(h, (L + width - right) / 2, height - 14, "middle", { fill: "var(--fg)", "font-size": `${type.axis}px` }, axis.axisLabel),
           h.path(
             [
-              h.D(frontier.map((point, index) => `${index === 0 ? "M" : "L"}${x.at(point.x)},${y.at(yValueOf(point, ranking))}`).join("")),
+              h.D(frontier.map((point, index) => `${index === 0 ? "M" : "L"}${x.at(point.x)},${y.at(point.rating)}`).join("")),
               h.Fill("none"),
               h.Stroke(REFERENCE),
               h.StrokeOpacity("0.6"),
@@ -438,7 +418,7 @@ export const scatterView = (
           tipView(h, anchorId("pt", point.m.key), [
             h.b([], [point.m.label]),
             h.br([]),
-            `rank ${point.rank} · ${eloName(basis)} ${fmtRating(point.rating)} · ${fmtPct(point.m.roundShare)} of rounds won, ${fmtPct(point.m.winShare)} of matches won, ${fmtPct(point.m.potShare)} of the pot, over ${point.m.scored.length} matches`,
+            `rank ${point.rank} · Round Elo ${fmtRating(point.rating)} · ${fmtPct(point.m.roundShare)} of rounds won, ${fmtPct(point.m.winShare)} of matches won, ${fmtPct(point.m.potShare)} of the pot, over ${point.m.scored.length} matches`,
             h.br([]),
             axis.perMatch(point.x),
           ]),

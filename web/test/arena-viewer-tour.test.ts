@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { GROUPS, Section } from "../src/arena-viewer/page/model.ts";
+import { GROUPS, MOVED_TARGETS, Section } from "../src/arena-viewer/page/model.ts";
 import { TOUR } from "../src/arena-viewer/page/tour.ts";
 
 const pageOrder: ReadonlyArray<string> = GROUPS.flatMap(({ sections }) => sections);
@@ -9,10 +9,12 @@ test("every section sits in exactly one group", () => {
   expect(pageOrder.toSorted()).toEqual([...Section.literals].toSorted());
 });
 
-test("every section an old link names is still on the page", () => {
-  const linked = ["scatter", "interesting", "luck", "seats", "deals", "blunders", "mistakes", "odds", "items", "pressure", "rubbers", "reliability", "matches", "leaderboards", "breakdown"];
+test("every group or section an old link names lands on the page, directly or at the section that took its place", () => {
+  const linked = ["results", "watch", "decisions", "rounds", "reliability", "details", "scatter", "interesting", "luck", "seats", "deals", "blunders", "mistakes", "odds", "items", "pressure", "rubbers", "matches", "leaderboards", "breakdown"];
+  const onPage = new Set([...GROUPS.map(({ group }) => group), ...pageOrder]);
 
-  expect(linked.filter((section) => !pageOrder.includes(section))).toEqual([]);
+  expect(linked.filter((id) => !onPage.has(id) && !onPage.has(MOVED_TARGETS.get(id) ?? ""))).toEqual([]);
+  expect([...MOVED_TARGETS.keys()].filter((id) => onPage.has(id))).toEqual([]);
 });
 
 test("the tour visits every section, in page order", () => {

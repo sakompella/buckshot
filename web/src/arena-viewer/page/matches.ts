@@ -50,7 +50,7 @@ export const matchesView = (h: H, matches: ReadonlyArray<MatchRow>, list: Model[
   return h.div(
     [],
     [
-      h.h2([], ["Matches"]),
+      h.h2([], ["All matches"]),
       h.p([h.Class("sub")], ["Every started match; times are Pacific."]),
       h.div(
         [h.Class("bar")],

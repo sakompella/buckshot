@@ -1,5 +1,4 @@
-import { groupBy, keyOf, meanOf, quantile, rng, roundResults, type SeatFull, seatShare, unique } from "./data.ts";
-import type { Basis } from "./model.ts";
+import { groupBy, keyOf, meanOf, quantile, rng, roundResults, type SeatFull, unique } from "./data.ts";
 
 // The ratings the whole page reads: Bradley-Terry over every scored two-player match of every tournament.
 
@@ -180,61 +179,15 @@ const pairsOf = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<readonly [SeatFu
     return matchSeats.length === 2 && first !== undefined && second !== undefined ? [[first, second] as const] : [];
   });
 
-/** What one match adds to a fit: its share on the basis, or with rounds, its known rounds as that many games. */
-const gamesOf = ([x, y]: readonly [SeatFull, SeatFull], basis: Basis): ReadonlyArray<BlockGame> => {
-  const game = (sa: number, weight = 1): BlockGame => ({ a: keyOf(x), b: keyOf(y), sa, weight, block: x.seedBlock });
-
-  if (basis !== "rounds") return [game(seatShare(x, basis))];
-
+/** What one match adds to a fit: its known rounds as that many games. */
+const gamesOf = ([x, y]: readonly [SeatFull, SeatFull]): ReadonlyArray<BlockGame> => {
   const rounds = roundResults(x);
 
-  return rounds.length === 0 ? [] : [game(meanOf(rounds), rounds.length)];
+  return rounds.length === 0 ? [] : [{ a: keyOf(x), b: keyOf(y), sa: meanOf(rounds), weight: rounds.length, block: x.seedBlock }];
 };
 
-/** Every completed two-player match in `seats`, as the games a rating on `basis` counts. */
-export const gamesOfSeats = (seats: ReadonlyArray<SeatFull>, basis: Basis): ReadonlyArray<BlockGame> => pairsOf(seats).flatMap((pair) => gamesOf(pair, basis));
-
-/** The share a config rated `rating` is expected to take from one rated `opponent`: the model the ratings are fitted to. */
-export const expectedShare = (rating: number, opponent: number): number => 1 / (1 + 10 ** ((opponent - rating) / 400));
-
-export interface Surprise {
-  readonly observed: number;
-  readonly expected: number;
-  readonly games: number;
-}
-
-/**
- * Per config and opponent group, how far its share beat what the ratings predict for those games. A game counts
- * for both its configs. Configs without a rating are left out.
- */
-export const surprises = (games: ReadonlyArray<Game>, ratings: ReadonlyMap<string, number>, groupOf: (config: string) => string): ReadonlyMap<string, ReadonlyMap<string, Surprise>> => {
-  const sums = new Map<string, Map<string, { observed: number; expected: number; games: number }>>();
-
-  const add = (config: string, opponent: string, observed: number, expected: number, weight: number) => {
-    const row = sums.get(config) ?? new Map<string, { observed: number; expected: number; games: number }>();
-    const cell = row.get(groupOf(opponent)) ?? { observed: 0, expected: 0, games: 0 };
-
-    cell.observed += observed * weight;
-    cell.expected += expected * weight;
-    cell.games += weight;
-    row.set(groupOf(opponent), cell);
-    sums.set(config, row);
-  };
-
-  for (const { a, b, sa, weight = 1 } of games) {
-    const ratingA = ratings.get(a);
-    const ratingB = ratings.get(b);
-
-    if (ratingA === undefined || ratingB === undefined) continue;
-
-    const expected = expectedShare(ratingA, ratingB);
-
-    add(a, b, sa, expected, weight);
-    add(b, a, 1 - sa, 1 - expected, weight);
-  }
-
-  return new Map([...sums].map(([config, row]) => [config, new Map([...row].map(([group, { observed, expected, games }]) => [group, { observed: observed / games, expected: expected / games, games }]))]));
-};
+/** Every completed two-player match in `seats`, as the games the round rating counts. */
+const gamesOfSeats = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<BlockGame> => pairsOf(seats).flatMap(gamesOf);
 
 export interface Rating {
   readonly rating: number;
@@ -247,12 +200,11 @@ const BOOTSTRAP_REPS = 200;
 /**
  * Every config's rating from one fit over all the seats' completed two-player matches, with 95% percentile
  * intervals from refitting resamples of whole seed blocks. Effort sweeps join the other models through their
- * medium configs, so one scale covers every config. The fit counts each match as the basis's share: win shares,
- * or pot shares for a cash rating. A rounds rating counts each round as a game, in the matches whose rounds are known;
- * its resamples still take whole seed blocks, since a match's rounds are not independent.
+ * medium configs, so one scale covers every config. The fit counts each round as a game, in the matches whose
+ * rounds are known; its resamples still take whole seed blocks, since a match's rounds are not independent.
  */
-export const pooledRatings = (seats: ReadonlyArray<SeatFull>, basis: Basis): ReadonlyMap<string, Rating> => {
-  const games = gamesOfSeats(seats, basis);
+export const pooledRatings = (seats: ReadonlyArray<SeatFull>): ReadonlyMap<string, Rating> => {
+  const games = gamesOfSeats(seats);
   const numbered = numberGames(games);
   const point = fitGames(numbered, Int32Array.from(games.keys()));
   const blocks = [...groupBy(games.keys(), (index) => games[index]?.block).values()];
@@ -285,8 +237,8 @@ const FOLDS = 5;
  * Ratings that never saw a match's own seed block: the blocks are dealt into FOLDS folds in order, and each fold's
  * matches are rated by one fit over the other folds. By seed block; a config absent from the other folds has no rating.
  */
-export const heldOutRatings = (seats: ReadonlyArray<SeatFull>, basis: Basis): ((block: string) => ReadonlyMap<string, { readonly rating: number }>) => {
-  const games = gamesOfSeats(seats, basis);
+export const heldOutRatings = (seats: ReadonlyArray<SeatFull>): ((block: string) => ReadonlyMap<string, { readonly rating: number }>) => {
+  const games = gamesOfSeats(seats);
   const numbered = numberGames(games);
   const foldOf = new Map(unique(games.map(({ block }) => block)).toSorted().map((block, index) => [block, index % FOLDS]));
 

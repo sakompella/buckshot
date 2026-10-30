@@ -366,8 +366,7 @@ const perSeedView = (h: H, rows: ReadonlyArray<{ readonly seed: string; readonly
 
 /** The Seats tab, laid out for a viewport `width` wide with `content` pixels inside main's padding. */
 export const seatsView = (h: H, derived: Derived, width: number, content: number): Html => {
-  const { games, partial, position: allPositions, starter: allStarters, firstStarts, configs, story, perSeed, comebacks } = seatsOf(derived);
-  const left = partial > 0 ? `; ${partial} incomplete blocks left out` : "";
+  const { position: allPositions, starter: allStarters, story, perSeed, comebacks } = seatsOf(derived);
   const figure = chartWidth(width, content);
   const decided = story.roundOneWinner + story.lostRoundOne;
 
@@ -378,7 +377,7 @@ export const seatsView = (h: H, derived: Derived, width: number, content: number
   return h.div(
     [],
     [
-      h.h2([], ["Seats"]),
+      h.h2([], ["Seat balance"]),
       h.div(
         [],
         [
@@ -400,83 +399,89 @@ export const seatsView = (h: H, derived: Derived, width: number, content: number
           ),
         ],
       ),
-      h.details(
-        [h.Class("tables")],
+    ],
+  );
+};
+
+export const seatTablesView = (h: H, derived: Derived): Html => {
+  const { games, partial, position: allPositions, starter: allStarters, firstStarts, configs, story } = seatsOf(derived);
+  const left = partial > 0 ? `; ${partial} incomplete blocks left out` : "";
+
+  return h.details(
+    [h.Class("tables")],
+    [
+      h.summary([], ["Seats as tables"]),
+      h.section(
+        [],
         [
-          h.summary([], ["The numbers as tables"]),
-          h.section(
-            [],
-            [
-              h.h2([], ["Table position"]),
-              h.p(
-                [h.Class("sub")],
-                [`Position 1 is a table seat, not the first mover (it starts round 1 in ${firstStarts.toLocaleString()} of ${games.length.toLocaleString()}); averaged within seed blocks${left}.`],
-              ),
-              groupTableView(h, allPositions, ["Position 1 share", "Position 2 share"]),
-            ],
+          h.h2([], ["Table position"]),
+          h.p(
+            [h.Class("sub")],
+            [`Position 1 is a table seat, not the first mover (it starts round 1 in ${firstStarts.toLocaleString()} of ${games.length.toLocaleString()}); averaged within seed blocks${left}.`],
           ),
-          h.section(
-            [],
+          groupTableView(h, allPositions, ["Position 1 share", "Position 2 share"]),
+        ],
+      ),
+      h.section(
+        [],
+        [
+          h.h2([], ["Round-1 starter"]),
+          h.p([h.Class("sub")], ["Win share of the player who starts round 1, over complete seed blocks."]),
+          groupTableView(h, allStarters, ["Starter share", "Other player"]),
+        ],
+      ),
+      h.section(
+        [],
+        [
+          h.h2([], ["Table position per config"]),
+          h.p([h.Class("sub")], ["Position 1 minus position 2 share within blocks; both configs in a block share the value."]),
+          h.table(
+            [h.Class("rows")],
             [
-              h.h2([], ["Round-1 starter"]),
-              h.p([h.Class("sub")], ["Win share of the player who starts round 1, over complete seed blocks."]),
-              groupTableView(h, allStarters, ["Starter share", "Other player"]),
-            ],
-          ),
-          h.section(
-            [],
-            [
-              h.h2([], ["Table position per config"]),
-              h.p([h.Class("sub")], ["Position 1 minus position 2 share within blocks; both configs in a block share the value."]),
-              h.table(
-                [h.Class("rows")],
-                [
-                  h.thead([], [h.tr([], ["Config", "Blocks", "Position 1 share", "Position 2 share", "Position 1 − 2", "95% CI"].map((title) => h.th([], [title])))]),
-                  h.tbody(
-                    [],
-                    configs.map((row) =>
-                      h.tr(
-                        [],
-                        [
-                          h.td([h.Style({ color: colorOfKey(row.key) })], [labelOf(row.key)]),
-                          h.td([h.DataAttribute("label", "blocks")], [String(row.n)]),
-                          h.td([h.DataAttribute("label", "position 1")], [pct(row.one / row.n)]),
-                          h.td([h.DataAttribute("label", "position 2")], [pct(row.two / row.n)]),
-                          h.td([h.DataAttribute("label", "1 − 2")], [h.b([], [points(row.rate.rate)])]),
-                          h.td([h.DataAttribute("label", "95% CI")], [`${points(row.rate.lo)} to ${points(row.rate.hi)}`]),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          h.section(
-            [],
-            [
-              h.h2([], ["Round story"]),
-              h.p([h.Class("sub")], ["The final round is inferred from final cash; a sweep is a winner that won every round."]),
-              h.table(
-                [h.Class("rows")],
-                [
-                  h.thead(
-                    [],
-                    [h.tr([], ["Scored matches", "Round-1 winner won the match", "Winner lost round 1", "Sweeps", "Prizes check failed"].map((title) => h.th([], [title])))],
-                  ),
-                  h.tbody(
+              h.thead([], [h.tr([], ["Config", "Blocks", "Position 1 share", "Position 2 share", "Position 1 − 2", "95% CI"].map((title) => h.th([], [title])))]),
+              h.tbody(
+                [],
+                configs.map((row) =>
+                  h.tr(
                     [],
                     [
-                      h.tr(
-                        [],
-                        [
-                          h.td([h.DataAttribute("label", "scored")], [String(story.n)]),
-                          h.td([h.DataAttribute("label", "round-1 winner won")], [`${story.roundOneWinner} `, h.span([h.Class("pm")], [pct(story.roundOneWinner / (story.roundOneWinner + story.lostRoundOne))])]),
-                          h.td([h.DataAttribute("label", "winner lost round 1")], [String(story.lostRoundOne)]),
-                          h.td([h.DataAttribute("label", "sweeps")], [String(story.sweeps)]),
-                          h.td([h.DataAttribute("label", "prizes check failed")], [String(story.bad)]),
-                        ],
-                      ),
+                      h.td([h.Style({ color: colorOfKey(row.key) })], [labelOf(row.key)]),
+                      h.td([h.DataAttribute("label", "blocks")], [String(row.n)]),
+                      h.td([h.DataAttribute("label", "position 1")], [pct(row.one / row.n)]),
+                      h.td([h.DataAttribute("label", "position 2")], [pct(row.two / row.n)]),
+                      h.td([h.DataAttribute("label", "1 − 2")], [h.b([], [points(row.rate.rate)])]),
+                      h.td([h.DataAttribute("label", "95% CI")], [`${points(row.rate.lo)} to ${points(row.rate.hi)}`]),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      h.section(
+        [],
+        [
+          h.h2([], ["Round story"]),
+          h.p([h.Class("sub")], ["The final round is inferred from final cash; a sweep is a winner that won every round."]),
+          h.table(
+            [h.Class("rows")],
+            [
+              h.thead(
+                [],
+                [h.tr([], ["Scored matches", "Round-1 winner won the match", "Winner lost round 1", "Sweeps", "Prizes check failed"].map((title) => h.th([], [title])))],
+              ),
+              h.tbody(
+                [],
+                [
+                  h.tr(
+                    [],
+                    [
+                      h.td([h.DataAttribute("label", "scored")], [String(story.n)]),
+                      h.td([h.DataAttribute("label", "round-1 winner won")], [`${story.roundOneWinner} `, h.span([h.Class("pm")], [pct(story.roundOneWinner / (story.roundOneWinner + story.lostRoundOne))])]),
+                      h.td([h.DataAttribute("label", "winner lost round 1")], [String(story.lostRoundOne)]),
+                      h.td([h.DataAttribute("label", "sweeps")], [String(story.sweeps)]),
+                      h.td([h.DataAttribute("label", "prizes check failed")], [String(story.bad)]),
                     ],
                   ),
                 ],
