@@ -2,29 +2,21 @@ import { Option } from "effect";
 import { AsyncData } from "foldkit";
 import { createLazy, type Document, type Html, type HtmlBuilder } from "foldkit/html";
 
-import type { Blunders } from "../api.ts";
-import { baseName, baseOrder, colorOf, EFFORTS, fmtCount, keyOf, sumOf, unique } from "./data.ts";
-import { switchView, tipView } from "./charts.ts";
+import { baseName, baseOrder, colorOf, EFFORTS, fmtCount, sumOf, unique } from "./data.ts";
+import { tipView } from "./charts.ts";
 import { consistencyView } from "./consistency.ts";
-import { type Derived, derive, mainConfigsOf, ratingsOf } from "./derived.ts";
-import { dealsView } from "./deals.ts";
-import { blunderCardsView, blunderRatesView, everyRateFor, galleryFor, ratesFor } from "./blunders.ts";
+import { type Derived, derive } from "./derived.ts";
 import { fatesView } from "./fates.ts";
 import { breakdownView, heatRowsOf } from "./heat.ts";
 import { interestingView, picksOf } from "./interesting.ts";
-import { luckView } from "./luck.ts";
 import { leaderboardView } from "./leaderboard.ts";
 import { oddsView } from "./odds.ts";
-import { mistakesView } from "./mistakes.ts";
 import { matchesView } from "./matches.ts";
-import { momentumView } from "./momentum.ts";
-import { type Basis, type Group, GROUPS, Message, type Model, type Ranking, type Section, type Viewport } from "./model.ts";
-import { pressureView } from "./pressure.ts";
-import { reliabilityView } from "./reliability.ts";
+import { type Group, GROUPS, Message, type Model, type Section, type Viewport } from "./model.ts";
+import { reliabilityTablesView, reliabilityView } from "./reliability.ts";
 import { replayView } from "./replay.ts";
-import { rubberRows, rubbersView } from "./rubbers.ts";
 import { scatterView } from "./scatter.ts";
-import { seatsView } from "./seats.ts";
+import { seatsView, seatTablesView } from "./seats.ts";
 import { tourView } from "./tour.ts";
 import { spendView } from "./spend.ts";
 
@@ -64,14 +56,7 @@ const filtersView = (h: H, derived: Derived, filter: Model["filter"], isOpen: bo
   const models = unique(seats.map(({ model }) => model)).toSorted((left, right) => baseOrder(left) - baseOrder(right));
   const names = unique(models.map((model) => baseName(model)));
   const efforts = EFFORTS.filter((effort) => seats.some((seat) => seat.effort === effort));
-  const main = mainConfigsOf(seats);
-  const hidden = unique(seats.map(keyOf)).filter((key) => !main.has(key)).length;
-
-  const summary = [
-    keptOf(names, filter.offModels, "models"),
-    keptOf(efforts, filter.offEfforts, "efforts"),
-    ...(hidden > 0 && !filter.isAllConfigs ? [`${hidden} configs hidden`] : []),
-  ].join(" · ");
+  const summary = [keptOf(names, filter.offModels, "models"), keptOf(efforts, filter.offEfforts, "efforts")].join(" · ");
 
   return h.div(
     [h.Class(isOpen ? "filters open" : "filters")],
@@ -92,7 +77,6 @@ const filtersView = (h: H, derived: Derived, filter: Model["filter"], isOpen: bo
         [h.Class("chips")],
         efforts.map((effort) => h.button([h.Type("button"), h.Class(`chip ${filter.offEfforts.includes(effort) ? "" : "on"}`), h.OnClick(Message.ToggledEffort({ effort }))], [effort])),
       ),
-      hidden > 0 ? switchView(h, filter.isAllConfigs, filter.isAllConfigs ? "all configs" : `all configs (${hidden} hidden)`, Message.ToggledAllConfigs()) : h.empty,
     ],
   );
 };
@@ -104,7 +88,13 @@ const heroView = (h: H, derived: Derived): Html => {
   return h.div(
     [h.Class("hero")],
     [
-      h.div([], [h.div([h.Class("title")], ["Buckshot Arena"]), h.p([h.Class("lead")], ["Frontier models playing two-player Buckshot Roulette."])]),
+      h.div(
+        [],
+        [
+          h.div([h.Class("title")], ["Buckshot Arena"]),
+          h.p([h.Class("lead")], ["Frontier models playing two-player Buckshot Roulette. ", h.button([h.Type("button"), h.Class("tourstart"), h.OnClick(Message.ClickedTour())], ["Take the tour"])]),
+        ],
+      ),
       h.dl(
         [h.Class("stats")],
         [
@@ -128,43 +118,31 @@ const lazyNav = createLazy();
 
 const lazyFilters = createLazy();
 
+const lazyLeaderboard = createLazy();
+
 const lazyScatter = createLazy();
-
-const lazySpend = createLazy();
-
-const lazyMomentum = createLazy();
-
-const lazyConsistency = createLazy();
-
-const lazyBreakdown = createLazy();
-
-const lazyBlunderCards = createLazy();
-
-const lazyBlunderRates = createLazy();
 
 const lazyInteresting = createLazy();
 
-const lazyLuck = createLazy();
-
-const lazyMistakes = createLazy();
-
-const lazySeats = createLazy();
+const lazyMatches = createLazy();
 
 const lazyOdds = createLazy();
 
-const lazyPressure = createLazy();
-
-const lazyRubbers = createLazy();
-
 const lazyFates = createLazy();
 
-const lazyDeals = createLazy();
+const lazyConsistency = createLazy();
 
 const lazyReliability = createLazy();
 
-const lazyMatches = createLazy();
+const lazySpend = createLazy();
 
-const lazyLeaderboard = createLazy();
+const lazySeats = createLazy();
+
+const lazyReliabilityTables = createLazy();
+
+const lazySeatTables = createLazy();
+
+const lazyBreakdown = createLazy();
 
 const lazyReplay = createLazy();
 
@@ -176,20 +154,14 @@ const navView = (h: H, maybeGroup: Option.Option<Group>): Html =>
       ...GROUPS.map(({ group, label }) =>
         h.a([h.Href(`#${group}`), ...(Option.contains(maybeGroup, group) ? [h.Class("on"), h.AriaCurrent("location")] : []), h.OnClick(Message.ClickedJump({ target: group }), { defaultAction: "Prevent" })], [label]),
       ),
-      h.button([h.Type("button"), h.Class("tourstart"), h.OnClick(Message.ClickedTour())], ["Tour"]),
       h.a([h.Class("download"), h.Href("/api/db")], ["Database (SQLite)"]),
     ],
   );
 
-const scatterCard = (h: H, derived: Derived, ranking: Ranking, basis: Basis, scatter: Model["scatter"], width: number): Html =>
-  h.div([h.Class("card")], [scatterView(h, derived.pooled, derived.everyPooled, derived.ratings, derived.ranks, ranking, basis, scatter, width)]);
+const scatterCard = (h: H, derived: Derived, scatter: Model["scatter"], width: number): Html =>
+  h.div([h.Class("card")], [scatterView(h, derived.pooled, derived.everyPooled, derived.ratings, derived.ranks, scatter, width)]);
 
 const spendCard = (h: H, derived: Derived): Html => h.div([h.Class("card")], [spendView(h, derived.pooled)]);
-
-const blunderCardsCard = (h: H, derived: Derived, blunders: Blunders): Html => blunderCardsView(h, galleryFor(derived.seats, derived.keep, ratingsOf(derived.seats)("rounds"), blunders));
-
-const blunderRatesCard = (h: H, derived: Derived, blunders: Blunders, width: number, content: number): Html =>
-  blunderRatesView(h, ratesFor(derived.seats, derived.keep, blunders), everyRateFor(derived.seats, blunders), width, content);
 
 /** An optional section's view, or, when its data did not load, a note in its place. */
 const optionalView = <A>(h: H, data: AsyncData.AsyncData<A, string>, what: string, draw: (loaded: A) => Html): Html =>
@@ -198,10 +170,6 @@ const optionalView = <A>(h: H, data: AsyncData.AsyncData<A, string>, what: strin
     onFailure: (error) => h.div([h.Class("card")], [h.p([h.Class("k")], [`Could not load the ${what}: ${error}`])]),
     onData: draw,
   });
-
-const dealsCard = (h: H, derived: Derived, width: number): Html => h.div([h.Class("card")], [dealsView(h, derived, width)]);
-
-const momentumCard = (h: H, derived: Derived, width: number): Html => h.div([h.Class("card")], [momentumView(h, derived.pooled, width)]);
 
 const sectionView = (h: H, section: Section, content: Html): Html => h.section([h.Id(section)], [content]);
 
@@ -220,37 +188,16 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
     [
       lazyHero(heroView, [h, derived]),
       h.div([h.Class("top")], [lazyNav(navView, [h, model.maybeGroup]), lazyFilters(filtersView, [h, derived, model.filter, model.isFiltersOpen])]),
-      groupView(h, "results", [
-        sectionView(
-          h,
-          "scatter",
-          h.div(
-            [],
-            [
-              lazyScatter(scatterCard, [h, derived, model.ranking, model.basis, model.scatter, card]),
-            ],
-          ),
-        ),
+      groupView(h, "standings", [
+        sectionView(h, "leaderboards", lazyLeaderboard(leaderboardView, [h, derived.pooled, derived.everyPooled, derived.ranks, derived.ratings, derived.matchSeats, derived.items, model.leaderboard])),
+        sectionView(h, "scatter", lazyScatter(scatterCard, [h, derived, model.scatter, card])),
       ]),
       groupView(h, "watch", [
         sectionView(h, "interesting", lazyInteresting(interestingView, [h, picksOf(derived), model.matches, content])),
-        sectionView(h, "blunders", afterFirstPaint(() => optionalView(h, derived.blunders, "blunders", (blunders) => lazyBlunderCards(blunderCardsCard, [h, derived, blunders])))),
+        sectionView(h, "matches", lazyMatches(matchesView, [h, derived.matches, model.matchList])),
       ]),
       groupView(h, "decisions", [
         sectionView(h, "odds", afterFirstPaint(() => lazyOdds(oddsView, [h, derived.decisions, derived.seats, derived.keep, model.viewport.width, content]))),
-        sectionView(
-          h,
-          "mistakes",
-          afterFirstPaint(() =>
-            h.div(
-              [],
-              [
-                optionalView(h, derived.mistakes, "regret by shells left", (mistakes) => lazyMistakes(mistakesView, [h, mistakes, derived.seats, derived.keep, model.viewport.width, card])),
-                optionalView(h, derived.blunders, "blunder rates", (blunders) => lazyBlunderRates(blunderRatesCard, [h, derived, blunders, model.viewport.width, card])),
-              ],
-            ),
-          ),
-        ),
         sectionView(
           h,
           "items",
@@ -264,33 +211,30 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
             ),
           ),
         ),
-        sectionView(h, "luck", afterFirstPaint(() => lazyLuck(luckView, [h, derived.matches, model.viewport.width, content]))),
       ]),
-      groupView(h, "rounds", [
-        sectionView(h, "seats", h.div([], [lazySeats(seatsView, [h, derived, model.viewport.width, content]), afterFirstPaint(() => lazyMomentum(momentumCard, [h, derived, card]))])),
+      groupView(h, "health", [
         sectionView(
           h,
-          "pressure",
+          "reliability",
+          afterFirstPaint(() =>
+            h.div([], [lazyReliability(reliabilityView, [h, derived.decisions, derived.seats, derived.keep, model.viewport.width, content]), lazySpend(spendCard, [h, derived])]),
+          ),
+        ),
+        sectionView(h, "seats", afterFirstPaint(() => lazySeats(seatsView, [h, derived, model.viewport.width, content]))),
+        sectionView(
+          h,
+          "breakdown",
           afterFirstPaint(() =>
             h.div(
               [],
               [
-                lazyPressure(pressureView, [h, derived.decisions, derived.seats, derived.keep, model.viewport.width, content]),
-                h.div([h.Id("rubbers"), h.Class("card")], [lazyRubbers(rubbersView, [h, rubberRows(derived.filtered), card])]),
+                lazyReliabilityTables(reliabilityTablesView, [h, derived.decisions, derived.seats, derived.keep, model.maybeRateTip]),
+                lazySeatTables(seatTablesView, [h, derived]),
+                lazyBreakdown(breakdownView, [h, derived, model.heat]),
               ],
             ),
           ),
         ),
-      ]),
-      groupView(h, "reliability", [
-        afterFirstPaint(() => lazyReliability(reliabilityView, [h, derived.decisions, derived.seats, derived.keep, model.maybeRateTip, model.viewport.width, content])),
-        afterFirstPaint(() => lazySpend(spendCard, [h, derived])),
-      ]),
-      groupView(h, "details", [
-        sectionView(h, "leaderboards", lazyLeaderboard(leaderboardView, [h, derived.pooled, derived.everyPooled, derived.ranks, derived.ratings, derived.matchSeats, derived.items, model.leaderboard, model.ranking, model.basis])),
-        sectionView(h, "matches", lazyMatches(matchesView, [h, derived.matches, model.matchList])),
-        sectionView(h, "deals", afterFirstPaint(() => lazyDeals(dealsCard, [h, derived, card]))),
-        sectionView(h, "breakdown", lazyBreakdown(breakdownView, [h, derived, model.heat, model.ranking])),
       ]),
     ],
   );
@@ -303,7 +247,7 @@ export const view = (model: Model, h: H): Document =>
     onEmpty: () => ({ title: "Buckshot Arena", body: h.main([], [h.p([h.Class("k")], ["Loading the analysis database…"])]) }),
     onFailure: (error) => ({ title: "Buckshot Arena", body: h.main([], [h.p([h.Class("k")], [`Could not load the analysis database: ${error}`])]) }),
     onData: (loaded) => {
-      const derived = derive(loaded, model.filter, model.basis);
+      const derived = derive(loaded, model.filter);
 
       const replay = Option.match(model.maybeReplay, {
         onNone: () => h.empty,

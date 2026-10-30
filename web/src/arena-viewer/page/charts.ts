@@ -2,7 +2,7 @@ import { Effect, Option, Schema } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 import { Mount } from "foldkit";
 
-import { type Basis, Message, type Ranking } from "./model.ts";
+import { Message } from "./model.ts";
 
 type H = HtmlBuilder<Message>;
 
@@ -146,13 +146,6 @@ const PlaceTip = Mount.define("PlaceTip", {
 export const tipView = (h: H, anchor: string, children: ReadonlyArray<Html | string>): Html =>
   h.keyed("div")(anchor, [h.Class("tip"), h.Style({ visibility: "hidden" }), h.OnMount(PlaceTip({ anchor }))], [...children]);
 
-/** A labelled on/off switch. */
-export const switchView = (h: H, isOn: boolean, label: string, message: Message): Html =>
-  h.label(
-    [h.Class("switch")],
-    [h.input([h.Type("checkbox"), h.Role("switch"), h.Checked(isOn), h.OnChange(() => message)]), h.span([h.Class("knob"), h.AriaHidden(true)], []), label],
-  );
-
 /** A row of buttons choosing one value. */
 export const toggleView = <A extends string>(h: H, value: A, options: ReadonlyArray<readonly [A, string]>, toMessage: (value: A) => Message): Html =>
   h.div(
@@ -166,28 +159,6 @@ export const selectView = <A extends string>(h: H, label: string, value: A, opti
     [h.AriaLabel(label), h.OnChange((chosen) => toMessage(options.find(([option]) => option === chosen)?.[0] ?? value))],
     options.map(([option, optionLabel]) => h.option([h.Value(option), h.Selected(option === value)], [optionLabel])),
   );
-
-const RANKINGS: ReadonlyArray<readonly [Ranking, string]> = [
-  ["elo", "Elo"],
-  ["rank", "Rank"],
-];
-
-const BASES: ReadonlyArray<readonly [Basis, string]> = [
-  ["rounds", "Round wins"],
-  ["matches", "Match wins"],
-  ["cash", "Cash"],
-];
-
-/** The page-wide choices for ratings, drawn wherever they show: what they count (round wins, match wins or cash), and Elo or rank. */
-export const ratingToggles = (h: H, ranking: Ranking, basis: Basis): ReadonlyArray<Html> => [
-  toggleView(h, basis, BASES, (option) => Message.SelectedBasis({ basis: option })),
-  toggleView(h, ranking, RANKINGS, (option) => Message.SelectedRanking({ ranking: option })),
-];
-
-export const ratingSelects = (h: H, ranking: Ranking, basis: Basis): ReadonlyArray<Html> => [
-  selectView(h, "what the ratings count", basis, BASES, (option) => Message.SelectedBasis({ basis: option })),
-  selectView(h, "Elo or rank", ranking, RANKINGS, (option) => Message.SelectedRanking({ ranking: option })),
-];
 
 const CHART_GAP = 28;
 

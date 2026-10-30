@@ -162,7 +162,7 @@ const tipOf = (h: H, rows: ReadonlyArray<Row>, cell: Model["maybeRateTip"]): Htm
     },
   });
 
-export interface Bar {
+interface Bar {
   readonly value: number;
   readonly lo: number;
   readonly hi: number;
@@ -189,7 +189,7 @@ const barEnd = ({ value, hi }: Bar): number => (Number.isNaN(hi) ? (Number.isNaN
  * One bar per config in table order. The scale and the label column fit `every` row, whatever the filter, so a filter
  * only adds or removes bars.
  */
-export const configBarsView = <R extends { readonly key: string }>(h: H, chartId: string, rows: ReadonlyArray<R>, every: ReadonlyArray<R>, barOf: (row: R) => Bar, tick: (value: number) => string, width: number): Html => {
+const configBarsView = <R extends { readonly key: string }>(h: H, chartId: string, rows: ReadonlyArray<R>, every: ReadonlyArray<R>, barOf: (row: R) => Bar, tick: (value: number) => string, width: number): Html => {
   if (rows.length === 0) return h.div([h.Class("empty")], ["No configs for this filter."]);
 
   const bars = rows.map(barOf);
@@ -240,7 +240,7 @@ export const configBarsView = <R extends { readonly key: string }>(h: H, chartId
 };
 
 /** A rate as a bar: `noun` names what it counts out of, for the tip. */
-export const rateBar = (rate: Rate, scale: number, digits: number, unit: string, noun: string): Bar => {
+const rateBar = (rate: Rate, scale: number, digits: number, unit: string, noun: string): Bar => {
   const shown = (value: number) => `${(value * scale).toFixed(digits)}${unit}`;
   const hasInterval = rate.n > 0 && !isDegenerate(rate);
 
@@ -261,57 +261,54 @@ const timeBar = ({ failedTime, returnedTime }: Row): Bar => {
 };
 
 /** The reliability section, laid out for a viewport `width` wide with `content` pixels inside main's padding. */
-export const reliabilityView = (
-  h: H,
-  decisions: Decisions,
-  seats: ReadonlyArray<SeatFull>,
-  keep: ReadonlyArray<boolean>,
-  tip: Model["maybeRateTip"],
-  width: number,
-  content: number,
-): Html => {
+export const reliabilityView = (h: H, decisions: Decisions, seats: ReadonlyArray<SeatFull>, keep: ReadonlyArray<boolean>, width: number, content: number): Html => {
   const rows = rowsOf(decisions, seats, keep);
   const every = everyRowOf(decisions, seats);
+  const figure = chartWidth(width, content);
+  const fallbacks = sumOf(rows.map(({ fallbacks: count }) => count));
+
+  return h.div(
+    [],
+    [
+      h.h2([], ["Service failures"]),
+      h.p([h.Class("sub")], ["Calls the provider or the shared hub refused or dropped, mostly quota limits: not the model's play."]),
+      h.div(
+        [h.Class("chartrow")],
+        [
+          figureView(h, "Failed calls", "Share of replies.", configBarsView(h, "failed", rows, every, ({ rates }) => rateBar(rates.failed, 100, 1, "%", "replies"), (value) => `${value}%`, figure)),
+          figureView(h, "Time lost to failed calls", "Share of call latency.", configBarsView(h, "time", rows, every, timeBar, (value) => `${value}%`, figure)),
+        ],
+      ),
+      failuresOverTimeView(h, everyHourlyOf(seats), hourlyOf(seats, keep), content),
+      h.h2([h.Class("subhead")], ["Model failures"]),
+      h.div(
+        [h.Class("chartrow")],
+        [
+          figureView(
+            h,
+            "Turns ended without a move",
+            `Reminders per 1,000 moves; ${fallbacks === 0 ? "no" : fallbacks.toLocaleString()} fallback ${fallbacks === 1 ? "move" : "moves"} after a second miss.`,
+            configBarsView(h, "reminders", rows, every, ({ rates }) => rateBar(rates.reminders, 1000, 1, "", "moves"), String, figure),
+          ),
+        ],
+      ),
+    ],
+  );
+};
+
+export const reliabilityTablesView = (h: H, decisions: Decisions, seats: ReadonlyArray<SeatFull>, keep: ReadonlyArray<boolean>, tip: Model["maybeRateTip"]): Html => {
+  const rows = rowsOf(decisions, seats, keep);
   const worst = worstOf(decisions, seats, keep);
   const total = (pick: (row: Row) => number) => sumOf(rows.map(pick));
-  const figure = chartWidth(width, content);
-  const fallbacks = total(({ fallbacks: count }) => count);
   const overhead = rows.filter((row) => row.failedCost > 0 || row.failedTime > 0).toSorted((left, right) => right.failedTime - left.failedTime);
 
   return h.div(
     [],
     [
-      h.div(
-        [],
-        [
-          h.h2([], ["Service failures"]),
-          h.p([h.Class("sub")], ["Calls the provider or the shared hub refused or dropped, mostly quota limits: not the model's play."]),
-          h.div(
-            [h.Class("chartrow")],
-            [
-              figureView(h, "Failed calls", "Share of replies.", configBarsView(h, "failed", rows, every, ({ rates }) => rateBar(rates.failed, 100, 1, "%", "replies"), (value) => `${value}%`, figure)),
-              figureView(h, "Time lost to failed calls", "Share of call latency.", configBarsView(h, "time", rows, every, timeBar, (value) => `${value}%`, figure)),
-            ],
-          ),
-          failuresOverTimeView(h, everyHourlyOf(seats), hourlyOf(seats, keep), content),
-          h.h2([h.Class("subhead")], ["Model failures"]),
-          h.div(
-            [h.Class("chartrow")],
-            [
-              figureView(
-                h,
-                "Turns ended without a move",
-                `Reminders per 1,000 moves; ${fallbacks === 0 ? "no" : fallbacks.toLocaleString()} fallback ${fallbacks === 1 ? "move" : "moves"} after a second miss.`,
-                configBarsView(h, "reminders", rows, every, ({ rates }) => rateBar(rates.reminders, 1000, 1, "", "moves"), String, figure),
-              ),
-            ],
-          ),
-        ],
-      ),
       h.details(
         [h.Class("tables")],
         [
-          h.summary([], ["The numbers as tables"]),
+          h.summary([], ["Failures as tables"]),
           h.section(
             [],
             [
