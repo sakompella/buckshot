@@ -281,6 +281,10 @@ const callView = (h: H, call: Call): Html => {
 
 const PHONE_WIDTH = 640;
 
+const MOST_BIASED_SHELLS = 3;
+
+export const showsReloadNote = (shellsLeft: number, depth: number): boolean => shellsLeft <= Math.min(depth, MOST_BIASED_SHELLS);
+
 const verdictOf = (regret: MoveRegret): string => {
   if (regret.points === 0) return `Best at depth ${regret.depth}`;
 
@@ -312,7 +316,7 @@ const candidatesView = (h: H, step: Step, regret: MoveRegret, who: string, isOpe
             );
           }),
       ),
-      step.live + step.blank <= regret.depth ? h.div([h.Class("k")], ["A reload is within reach. With the static leaf, gaps at 1–3 shells left read about 0.6 points high on average."]) : h.empty,
+      showsReloadNote(step.live + step.blank, regret.depth) ? h.div([h.Class("k")], ["A reload is within reach. With the static leaf, gaps here read about 0.6 points high on average."]) : h.empty,
     ],
   );
 

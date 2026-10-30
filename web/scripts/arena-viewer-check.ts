@@ -401,7 +401,7 @@ const checkCandidates = async (page: Page, matchId: string, what: string): Promi
 
   const expected = expectedCandidates(step.regret);
   const lines = (await list.locator(":scope > .k").allInnerTexts()).map((line) => line.trim());
-  const reloadInReach = step.live + step.blank <= step.regret.depth;
+  const reloadInReach = step.live + step.blank <= Math.min(3, step.regret.depth);
 
   expectThat(JSON.stringify(shown) === JSON.stringify(expected), `${what}: move ${at + 1} lists ${JSON.stringify(shown)}, its data has ${JSON.stringify(expected)}`);
   expectThat((await textOf(page, ".modal .sel .cands > summary")).trim() === expectedVerdict(step.regret), `${what}: move ${at + 1} says "${await textOf(page, ".modal .sel .cands > summary")}", not "${expectedVerdict(step.regret)}"`);
