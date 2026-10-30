@@ -558,3 +558,22 @@ The 41-match estimate adds seed 3030's one scored match, which Astra won, to the
 
 The matched seeds are 3000 to 3009, so the matched estimate is the same whether tournament 3 counts 40 or 41 matches.
 <!-- tables:end -->
+
+## Minimax self-play
+
+The Bend minimax player plays itself under the arena's rules (`web/scripts/arena-selfplay.ts`, tables from `tools/arena/analysis/selfplay.py`). Each seed is played twice: once as the seed starts it, once with the round 1 starter swapped. Ties between equal best moves are broken at random from seed, swap and rep.
+
+| run | matches | round 1 starter wins round 1 | round 1 starter wins match |
+|---|---|---|---|
+| depth 2 | 2000 (1000 seeds) | 53.8% (50.7 to 56.5) | 50.5% (48.0 to 53.1) |
+| depth 3 | 2000 (1000 seeds) | 56.8% (54.0 to 59.5) | 52.6% (50.0 to 55.1) |
+| depth 4 | 200 (100 seeds) | 56.5% (48.0 to 64.5) | 57.5% (50.0 to 65.0) |
+
+Intervals are 95% bootstraps over whole seeds. Findings:
+
+- Starting round 1 helps a little: about 54 to 57% of round 1. The match edge is smaller (50.5 to 52.6%) because the other seat starts round 2. The depth 4 match figure is noisy and its interval reaches 50%.
+- The seed matters more than the seat. The spread of the starter's true round 1 share across seeds is about 35 to 40 points, and the opening score the player computes correlates with the result (+0.22 to +0.35).
+- Seat position (first or second in the table) is worth nothing: position 1 wins 46.5 to 50.3%.
+- On the 19 arena seeds (depth 3, 10 reps each way), the starter's match share correlates +0.44 with the arena's starter share (permutation p 0.062). Some seeds are near-deterministic (3003, 3007: starter wins all matches; 3006, 3014, 3017: starter nearly never).
+
+Limits. These are the edge of this finite-budget bot (depth 2 to 4, 20000 nodes, static evaluation), not the game's value. At depth 3, 6% of decisions and at depth 4, 17% stop on the budget. The swapped pair of a seed is not two independent matches, so match counts overstate the data; the seed is the unit. Seeds in the arena table repeat the same seed with different tie breaks, so the 20 matches per seed measure the bot's tie noise, not new deals.
