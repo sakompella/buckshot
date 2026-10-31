@@ -5,7 +5,7 @@ import { chamberPatterns, roundStory, ShellTracker, shotLineIn } from "../src/ar
 import type { Seat } from "../src/arena-viewer/api.ts";
 import { type BlockTally, blockRate, colorOf, fmtBytes, groupBy, matchRows, modelStats, quantile, regretStats, rng, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { bradleyTerry, type Game, heldOutRatings, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
-import { ODDS_BINS, oddsBinOf, oddsPanels, selfShotTallies } from "../src/arena-viewer/page/odds.ts";
+import { droppedConfigs, droppedText, ODDS_BINS, oddsBinOf, oddsPanels, selfShotTallies } from "../src/arena-viewer/page/odds.ts";
 import { shotOf, showsReloadNote, turningPoints } from "../src/arena-viewer/page/replay.ts";
 import { rowsOf } from "../src/arena-viewer/page/matches.ts";
 import { ranksOf } from "../src/arena-viewer/page/derived.ts";
@@ -564,4 +564,17 @@ test("a match search needs each of its words in a seat's label or the seed, in a
 
 test("a file size is in KB, MB or GB, whichever reads shortest", () => {
   expect([fmtBytes(2_400), fmtBytes(87_300_000), fmtBytes(1_540_000_000)]).toEqual(["2 KB", "87 MB", "1.5 GB"]);
+});
+
+test("the configs left off the odds chart are those of the kept seats with no line, named by model with their efforts", () => {
+  const seats = [{ model: "claude-opus-5-5", effort: "low" }, { model: "claude-opus-5-5", effort: "off" }, { model: "gpt-6.1-sol", effort: "max" }, { model: "gpt-6.1-sol", effort: "low" }];
+  const odds = Array.from({ length: 120 }, (_, shot) => (shot < 60 ? 0 : 100));
+  const decisions = { odds: [...odds, ...odds], seat: [...odds.map(() => 0), ...odds.map(() => 2)], shot: [...odds.map(() => 1), ...odds.map(() => 2)] };
+  const panels = oddsPanels(selfShotTallies(decisions, seats, [true, true, true, true]));
+  const dropped = droppedConfigs(seats, [true, true, true, false], panels);
+
+  expect(panels.map(({ model }) => model)).toEqual(["claude-opus-5-5", "gpt-6.1-sol"]);
+  expect(dropped).toEqual(["claude-opus-5-5|off"]);
+  expect(droppedConfigs(seats, [true, true, true, true], panels)).toEqual(["claude-opus-5-5|off", "gpt-6.1-sol|low"]);
+  expect(droppedText(["claude-opus-5-5|off", "claude-opus-5-5|medium", "gpt-6.1-sol|low"])).toBe("Opus 5.5 off, medium · GPT-6.1 Sol low");
 });

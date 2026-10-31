@@ -9,6 +9,7 @@ import { anchorId } from "../src/arena-viewer/page/charts.ts";
 import { baseName, baseOrder, CERTAIN_NAMES, fmtBytes, fmtCount, fmtPct, fmtUsd, blocksOf, keyOf, labelOf, MIN_BLOCKS_FOR_INTERVAL, shortName, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { GROUPS, MOVED_TARGETS, Section } from "../src/arena-viewer/page/model.ts";
 import { pooledRatings } from "../src/arena-viewer/page/ratings.ts";
+import { droppedConfigs, droppedText, oddsPanels, selfShotTallies } from "../src/arena-viewer/page/odds.ts";
 import { stepsOf } from "../src/arena-viewer/page/replay.ts";
 import { tourOf } from "../src/arena-viewer/page/tour.ts";
 import { coverageOfMatch, type RegretCoverage, withoutRegret } from "./arena-viewer-regret-coverage.ts";
@@ -1295,6 +1296,7 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
     console.log("hover point → tip:", await tipOf(page));
     await page.mouse.move(0, 0);
   });
+  await check("odds dropped", () => checkOddsDropped(page, viewport.name));
   await check("database link", () => checkDatabaseLink(page, viewport.name));
   await check("scatter drill-down", () => checkScatterDrill(page, viewport.name, false));
   await check("scatter axes", async () => {
@@ -1436,6 +1438,19 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
 // Steps through the whole tour by keyboard: every step must highlight an element the page draws, inside the page's
 // width, and Escape must close it.
 // A click on a scatter point opens that config's drill-down under the chart, and its close button shuts it.
+const checkOddsDropped = async (page: Page, name: string) => {
+  const seats = await servedSeats();
+  const panels = oddsPanels(selfShotTallies(await servedPageDecisions(), seats, seats.map(() => true)));
+  const dropped = droppedConfigs(seats, seats.map(() => true), panels);
+  const lines = sum(panels.map((panel) => panel.lines.length));
+  const note = (await page.locator("#odds .dropped").allInnerTexts()).map((text) => text.trim());
+
+  console.log(name, "odds panels", await countOf(page, "#odds figure"), "| lines", lines, "| dropped", dropped.length, "|", note.join(" ").slice(0, 120));
+  expectThat((await countOf(page, "#odds figure")) === panels.length && (await countOf(page, "#odds figure svg > path[stroke-width='1.6']")) === lines, `${name}: the odds chart draws ${await countOf(page, "#odds figure")} panels and ${await countOf(page, "#odds figure svg > path[stroke-width='1.6']")} lines, the data has ${panels.length} and ${lines}`);
+  expectThat(dropped.length > 0 ? note.length === 1 && note[0] === `Left out for too few shots: ${droppedText(dropped)}.` : note.length === 0, `${name}: the line under the odds chart reads "${note.join(" ")}", the data drops ${dropped.length} configs`);
+  expectThat(sum(panels.map((panel) => panel.lines.length)) + dropped.length === configsOf(seats).length, `${name}: configs drawn and dropped do not add up to every config`);
+};
+
 const checkDatabaseLink = async (page: Page, name: string) => {
   const served = await fetch(`${base}/api/download`);
   const link = page.locator("footer .download");
@@ -1568,6 +1583,7 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
       expectThat((await tipOf(page)) === "none", `${name}: a tap outside leaves the tip of ${selector}`);
     }
   });
+  await check("odds dropped", () => checkOddsDropped(page, name));
   await check("database link", () => checkDatabaseLink(page, name));
   await check("scatter drill-down", () => checkScatterDrill(page, name, true));
   await check("scatter tap", async () => {

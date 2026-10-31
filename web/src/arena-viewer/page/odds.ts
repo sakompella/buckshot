@@ -106,6 +106,16 @@ export const oddsPanels = (tallies: ReadonlyMap<string, ReadonlyArray<{ readonly
     .map(([model, own]) => ({ model, lines: own.toSorted((left, right) => EFFORT_ORDER.indexOf(left.effort) - EFFORT_ORDER.indexOf(right.effort)) }));
 };
 
+/** The configs of the kept seats that no line is drawn for, strongest model and lowest effort first. */
+export const droppedConfigs = (seats: ReadonlyArray<Pick<SeatFull, "model" | "effort">>, keep: ReadonlyArray<boolean>, panels: ReturnType<typeof oddsPanels>): ReadonlyArray<string> => {
+  const drawn = new Set(panels.flatMap(({ lines }) => lines.map(({ key }) => key)));
+  const kept = new Set(seats.flatMap((seat, index) => (keep[index] === true ? [keyOf(seat)] : [])));
+
+  return [...kept]
+    .filter((key) => !drawn.has(key))
+    .toSorted((left, right) => baseOrder(left) - baseOrder(right) || EFFORT_ORDER.indexOf(left.split("|")[1] ?? "") - EFFORT_ORDER.indexOf(right.split("|")[1] ?? ""));
+};
+
 /** A panel narrower than this keys its lines below instead of naming them at their ends. */
 const KEYED_BELOW = 480;
 
@@ -157,8 +167,13 @@ const panelView = (h: H, model: string, lines: ReadonlyArray<OddsLine>, width: n
   return isKeyedBelow ? h.div([], [chart, lineKeyView(h, lines.toSorted((left, right) => EFFORT_ORDER.indexOf(left.effort) - EFFORT_ORDER.indexOf(right.effort)).map(({ effort }) => ({ label: effort, color, dash: DASH.get(effort) ?? "" })))]) : chart;
 };
 
+/** The dropped configs by model, each with its efforts: "Opus 5.5 off, low · Sonnet 5.5 off". */
+export const droppedText = (keys: ReadonlyArray<string>): string =>
+  [...groupBy(keys, (key) => key.split("|")[0] ?? "")].map(([model, own]) => `${baseName(model)} ${own.map((key) => key.split("|")[1] ?? "").join(", ")}`).join(" · ");
+
 export const oddsView = (h: H, decisions: Decisions, seats: ReadonlyArray<SeatFull>, keep: ReadonlyArray<boolean>, width: number, content: number): Html => {
   const panels = oddsPanels(talliesOf(decisions, seats, keep));
+  const dropped = droppedConfigs(seats, keep, panels);
   const figure = chartWidth(width, content);
 
   return h.div(
@@ -169,6 +184,7 @@ export const oddsView = (h: H, decisions: Decisions, seats: ReadonlyArray<SeatFu
       panels.length === 0
         ? h.div([h.Class("empty")], ["No config in this filter has enough shots."])
         : h.div([h.Class("chartrow")], panels.map(({ model, lines }) => h.figure([], [h.h3([], [baseName(model)]), panelView(h, model, lines, figure)]))),
+      dropped.length === 0 ? h.empty : h.p([h.Class("k dropped")], [`Left out for too few shots: ${droppedText(dropped)}.`]),
     ],
   );
 };
