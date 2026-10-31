@@ -4,7 +4,7 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 
 import type { Call, MatchDetail, MoveRegret, Step } from "../api.ts";
 import { linScale, pressable } from "./charts.ts";
-import { baseName, colorOf, fmtCount, fmtPoints, fmtSec, fmtPct, fmtTime, fmtUsd, keyOf, labelOf, type MatchRow, sumOf, unique } from "./data.ts";
+import { baseName, CERTAIN_NAMES, colorOf, fmtCount, fmtPoints, fmtSec, fmtPct, fmtTime, fmtUsd, keyOf, labelOf, type MatchRow, sumOf, unique } from "./data.ts";
 import { type MatchData, Message, type Replay, type Viewport } from "./model.ts";
 import { tableView } from "./table.ts";
 
@@ -307,8 +307,10 @@ const selectedView = (h: H, detail: MatchDetail, step: Step, names: ReadonlyMap<
           step.byWhom === "agent" ? h.empty : h.span([h.Class("tag")], [step.byWhom]),
           shot === null ? h.empty : h.span([h.Class(`shot ${shot}`)], [shot]),
           regret === null || regret.points < MINOR_REGRET ? h.empty : h.span([h.Class(`tag regret ${regret.points >= BIG_REGRET ? "big" : ""}`)], [`−${fmtPoints(regret.points)}`]),
+          step.certain === null ? h.empty : h.span([h.Class("tag certain")], ["certain mistake"]),
         ],
       ),
+      step.certain === null ? h.empty : h.div([h.Class("k")], [CERTAIN_NAMES[step.certain]]),
       step.outcome.length > 0 ? h.div([h.Class("outcome")], [h.span([h.Class("k")], ["Outcome: "]), step.outcome.join(" ")]) : h.empty,
       regret === null
         ? h.div([h.Class("k")], ["Not searched by the evaluator."])
@@ -342,7 +344,7 @@ const stepView = (h: H, detail: MatchDetail, names: ReadonlyMap<string, string>,
     [
       h.span([h.Class("n")], [isOn ? h.keyed("span")(`${step.id}-on`, [h.OnMount(ScrollStepIntoView())], []) : h.empty, `${index + 1}`]),
       nameView(h, detail, names, step.player),
-      h.span([h.Class("label"), h.Title(step.label)], [step.label, step.byWhom === "agent" ? h.empty : h.span([h.Class("tag")], [step.byWhom])]),
+      h.span([h.Class("label"), h.Title(step.label)], [step.label, step.byWhom === "agent" ? h.empty : h.span([h.Class("tag")], [step.byWhom]), step.certain === null ? h.empty : h.span([h.Class("tag certain")], ["certain mistake"])]),
       shot === null ? h.empty : h.span([h.Class(`shot ${shot}`)], [shot]),
       regretTag(h, step.regret),
     ],

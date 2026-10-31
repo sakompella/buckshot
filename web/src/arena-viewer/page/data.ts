@@ -1,4 +1,4 @@
-import type { Seat, Story } from "../api.ts";
+import type { CertainType, Seat, Story } from "../api.ts";
 
 // The page's numbers: model labels and colours, per-config stats, ratings and intervals.
 
@@ -94,6 +94,11 @@ export const labelOf = (key: string): string => {
   const [model, effort] = splitKey(key);
 
   return `${baseName(model)} ${effort}`;
+};
+
+export const CERTAIN_NAMES: Readonly<Record<CertainType, string>> = {
+  self_on_live: "Shot itself on a proven live shell",
+  gave_up_guaranteed_win: "Shot the opponent, giving up a guaranteed win",
 };
 
 export const baseOrder = (model: string): number => {

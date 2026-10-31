@@ -160,6 +160,35 @@ export const Mistakes = Schema.Struct({ seat: Column, left: Column, isShot: Colu
 
 export type Mistakes = typeof Mistakes.Type;
 
+export const CERTAIN_TYPES = ["self_on_live", "gave_up_guaranteed_win"] as const;
+
+export const CertainType = Schema.Literals(CERTAIN_TYPES);
+
+export type CertainType = typeof CertainType.Type;
+
+export const OPPORTUNITY_TYPES = [...CERTAIN_TYPES, "hidden_health", "gave_turn_away"] as const;
+
+export const OpportunityType = Schema.Literals(OPPORTUNITY_TYPES);
+
+export type OpportunityType = typeof OpportunityType.Type;
+
+/** A rate that certain_mistakes.py wrote: a config's, a model's with its efforts pooled, or every config's. Its interval is null under twenty opportunities. */
+export const CertainRate = Schema.Struct({
+  scope: Schema.Literals(["config", "model", "all"]),
+  model: Schema.String,
+  effort: Schema.String,
+  type: OpportunityType,
+  chose: Schema.Number,
+  opportunities: Schema.Number,
+  bounds: Schema.NullOr(Schema.Struct({ lo: Schema.Number, hi: Schema.Number })),
+});
+
+export type CertainRate = typeof CertainRate.Type;
+
+export const CertainMistakes = Schema.Struct({ rates: Schema.Array(CertainRate), moveSeat: Column, moveType: Column, moveOrd: Column });
+
+export type CertainMistakes = typeof CertainMistakes.Type;
+
 /** Bit order of Decisions' opp and pick masks. */
 export const PATTERNS = [
   "knownBlankOpp",
@@ -245,6 +274,7 @@ export const Step = Schema.Struct({
   blank: Schema.Number,
   known: Schema.NullOr(Shell),
   regret: Schema.NullOr(MoveRegret),
+  certain: Schema.NullOr(CertainType),
   outcome: Schema.Array(Schema.String),
   calls: Schema.Array(Call),
 });

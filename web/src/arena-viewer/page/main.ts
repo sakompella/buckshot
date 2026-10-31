@@ -3,12 +3,13 @@ import { HttpClient, HttpClientResponse } from "effect/http";
 import { AsyncData, Command, Dom, Http, Runtime, Subscription, type Update } from "foldkit";
 import { modifyFields } from "foldkit/struct";
 
-import { Consistency, Decisions, MatchDetail, SeatsResponse } from "../api.ts";
+import { CertainMistakes, Consistency, Decisions, MatchDetail, SeatsResponse } from "../api.ts";
+import { hasCertainChart } from "./certain.ts";
 import { withPotShares } from "./data.ts";
 import { INITIAL_ROWS, MORE_ROWS } from "./matches.ts";
 import { type Filter, Group, Message, Model, MOVED_TARGETS, Target, type Viewport } from "./model.ts";
 import { replayIndex, stepsOf } from "./replay.ts";
-import { PlaceTour, TOUR, tourKeyMessage } from "./tour.ts";
+import { PlaceTour, tourKeyMessage, tourOf } from "./tour.ts";
 import { stickyHeight, view } from "./view.ts";
 
 type Return = Update.Return<Model, Message>;
@@ -30,8 +31,11 @@ const getOptional = <A, I>(url: string, schema: Schema.Codec<A, I>) =>
 
 const LoadData = Command.define("LoadData", {
   messages: [Message.SucceededLoad, Message.FailedLoad],
-  execute: Effect.all([getJson("/api/seats", SeatsResponse), getJson("/api/decisions", Decisions), getOptional("/api/consistency", Schema.Array(Consistency))], { concurrency: 3 }).pipe(
-    Effect.map(([seats, decisions, consistency]) => Message.SucceededLoad({ loaded: { seats: withPotShares(seats), decisions, consistency } })),
+  execute: Effect.all(
+    [getJson("/api/seats", SeatsResponse), getJson("/api/decisions", Decisions), getOptional("/api/consistency", Schema.Array(Consistency)), getOptional("/api/certain-mistakes", CertainMistakes)],
+    { concurrency: 4 },
+  ).pipe(
+    Effect.map(([seats, decisions, consistency, certainMistakes]) => Message.SucceededLoad({ loaded: { seats: withPotShares(seats), decisions, consistency, certainMistakes } })),
     Effect.catch((error) => Effect.succeed(Message.FailedLoad({ error: describe(error) }))),
     Effect.provide(Http.layer),
   ),
@@ -69,6 +73,19 @@ const JumpTo = Command.define("JumpTo", {
     Effect.sync(() => {
       history.replaceState(history.state, "", `#${target}`);
       scrollToTarget(target);
+    }).pipe(Effect.as(Message.CompletedScroll())),
+});
+
+const OpenTable = Command.define("OpenTable", {
+  args: { id: Schema.String },
+  messages: [Message.CompletedScroll],
+  execute: ({ id }) =>
+    Effect.sync(() => {
+      const fold = document.getElementById(id);
+
+      if (fold instanceof HTMLDetailsElement) fold.open = true;
+
+      if (fold !== null) scrollTo(0, fold.getBoundingClientRect().top + scrollY - stickyHeight() - 8);
     }).pipe(Effect.as(Message.CompletedScroll())),
 });
 
@@ -174,9 +191,10 @@ export const update = (model: Model, message: Message): Return =>
   Message.match<Return>(message, {
     ResizedViewport: (viewport) => ({
       model: modifyFields(model, { viewport: () => viewport }),
-      commands: Option.match(model.maybeTour, { onNone: () => [], onSome: ({ step }) => [PlaceTour({ step })] }),
+      commands: Option.match(model.maybeTour, { onNone: () => [], onSome: ({ step, hasCertain }) => [PlaceTour({ step, hasCertain })] }),
     }),
     ClickedJump: ({ target }) => ({ model, commands: [JumpTo({ target })] }),
+    ClickedTableLink: ({ id }) => ({ model, commands: [OpenTable({ id })] }),
     NavigatedToHash: () => ({ model, commands: [ScrollToHash()] }),
     SucceededLoad: ({ loaded }) => ({ model: modifyFields(model, { data: () => AsyncData.succeed(loaded) }), commands: [AwaitFirstPaint()] }),
     CompletedFirstPaint: () => ({ model: modifyFields(model, { isFirstPaintDone: () => true }), commands: [ScrollToHash()] }),
@@ -214,6 +232,9 @@ export const update = (model: Model, message: Message): Return =>
     ClickedLeaderboardRow: ({ id }) => ({
       model: modifyFields(model, { leaderboard: (leaderboard) => ({ maybeTip: Option.none(), maybeOpen: Option.exists(leaderboard.maybeOpen, (open) => open === id) ? Option.none() : Option.some(id) }) }),
     }),
+    ClickedCertainCount: ({ key, type }) => ({
+      model: modifyFields(model, { maybeCertainOpen: (open) => (Option.exists(open, (cell) => cell.key === key && cell.type === type) ? Option.none() : Option.some({ key, type })) }),
+    }),
     HoveredSquare: ({ matchId }) => ({ model: modifyFields(model, { leaderboard: (leaderboard) => ({ ...leaderboard, maybeTip: Option.some(matchId) }) }) }),
     LeftSquare: () => ({ model: modifyFields(model, { leaderboard: (leaderboard) => ({ ...leaderboard, maybeTip: Option.none() }) }) }),
     ClickedMatch: ({ id, maybeFocus }) => openReplay(model, id, maybeFocus),
@@ -232,14 +253,18 @@ export const update = (model: Model, message: Message): Return =>
     CompletedHistoryChange: () => ({ model }),
     CompletedStepScroll: () => ({ model }),
     CompletedScroll: () => ({ model }),
-    ClickedTour: () => ({ model: modifyFields(model, { maybeTour: () => Option.some({ step: 0, maybeBox: Option.none(), isCardUnder: false }) }), commands: [PlaceTour({ step: 0 })] }),
+    ClickedTour: () => {
+      const hasCertain = AsyncData.matchData(model.data, { onEmpty: () => false, onFailure: () => false, onData: ({ certainMistakes }) => hasCertainChart(certainMistakes) });
+
+      return { model: modifyFields(model, { maybeTour: () => Option.some({ step: 0, hasCertain, maybeBox: Option.none(), isCardUnder: false }) }), commands: [PlaceTour({ step: 0, hasCertain })] };
+    },
     SteppedTour: ({ delta }) =>
       Option.match(model.maybeTour, {
         onNone: (): Return => ({ model }),
         onSome: (tour): Return => {
-          const step = Math.max(0, Math.min(TOUR.length - 1, tour.step + delta));
+          const step = Math.max(0, Math.min(tourOf(tour.hasCertain).length - 1, tour.step + delta));
 
-          return step === tour.step ? { model } : { model: modifyFields(model, { maybeTour: () => Option.some({ ...tour, step }) }), commands: [PlaceTour({ step })] };
+          return step === tour.step ? { model } : { model: modifyFields(model, { maybeTour: () => Option.some({ ...tour, step }) }), commands: [PlaceTour({ step, hasCertain: tour.hasCertain })] };
         },
       }),
     ClosedTour: () => ({ model: modifyFields(model, { maybeTour: () => Option.none() }) }),
@@ -260,6 +285,7 @@ const init: Runtime.ApplicationInit<Model, Message, Flags> = ({ viewport }) => (
     scatter: { axis: "cost", maybeHover: Option.none(), maybePin: Option.none() },
     heat: { sort: "rating", maybeTip: Option.none() },
     leaderboard: { maybeOpen: Option.none(), maybeTip: Option.none() },
+    maybeCertainOpen: Option.none(),
     matchList: { query: "", limit: INITIAL_ROWS, maybePreset: Option.none() },
     maybeTappedTitle: Option.none(),
     markTip: { maybeHover: Option.none(), maybePin: Option.none() },
