@@ -2,11 +2,13 @@ import { Option } from "effect";
 import { AsyncData } from "foldkit";
 import { createLazy, type Document, type Html, type HtmlBuilder } from "foldkit/html";
 
+import type { CertainMistakes } from "../api.ts";
 import { baseName, baseOrder, colorOf, EFFORTS, fmtCount, sumOf, unique } from "./data.ts";
 import { tipView } from "./charts.ts";
 import { consistencyView } from "./consistency.ts";
 import { type Derived, derive } from "./derived.ts";
 import { fatesView } from "./fates.ts";
+import { certainTableView, certainView, hasCertain } from "./certain.ts";
 import { breakdownView, heatRowsOf } from "./heat.ts";
 import { interestingView, picksOf } from "./interesting.ts";
 import { leaderboardView } from "./leaderboard.ts";
@@ -126,6 +128,10 @@ const lazyInteresting = createLazy();
 
 const lazyMatches = createLazy();
 
+const lazyCertain = createLazy();
+
+const lazyCertainTable = createLazy();
+
 const lazyOdds = createLazy();
 
 const lazyFates = createLazy();
@@ -183,6 +189,9 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
   const card = cardWidth(model.viewport);
   const afterFirstPaint = (draw: () => Html): Html => (model.isFirstPaintDone ? draw() : h.empty);
 
+  const afterCertain = (data: Derived["certainMistakes"], draw: (certain: CertainMistakes) => Html): Html =>
+    AsyncData.matchData(data, { onEmpty: () => h.empty, onFailure: () => h.empty, onData: (certain) => (certain.seat.length === 0 ? h.empty : draw(certain)) });
+
   return h.div(
     [],
     [
@@ -197,6 +206,15 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
         sectionView(h, "matches", lazyMatches(matchesView, [h, derived.matches, model.matchList])),
       ]),
       groupView(h, "decisions", [
+        ...(hasCertain(derived.certainMistakes)
+          ? [
+              sectionView(
+                h,
+                "certain-mistakes",
+                afterFirstPaint(() => optionalView(h, derived.certainMistakes, "certain mistakes", (certain) => lazyCertain(certainView, [h, certain, derived.seats, derived.keep, model.viewport.width, content]))),
+              ),
+            ]
+          : []),
         sectionView(h, "odds", afterFirstPaint(() => lazyOdds(oddsView, [h, derived.decisions, derived.seats, derived.keep, model.viewport.width, content]))),
         sectionView(
           h,
@@ -230,6 +248,7 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
               [
                 lazyReliabilityTables(reliabilityTablesView, [h, derived.decisions, derived.seats, derived.keep, model.maybeRateTip]),
                 lazySeatTables(seatTablesView, [h, derived]),
+                afterCertain(derived.certainMistakes, (certain) => lazyCertainTable(certainTableView, [h, certain, derived.seats, derived.keep, derived.allMatches, model.maybeCertainOpen])),
                 lazyBreakdown(breakdownView, [h, derived, model.heat]),
               ],
             ),

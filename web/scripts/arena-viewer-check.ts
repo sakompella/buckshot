@@ -4,9 +4,9 @@ import { join } from "node:path";
 import { Schema } from "effect";
 import { type Browser, chromium, type Page } from "playwright-core";
 
-import { Blunders, MatchDetail, type MoveRegret } from "../src/arena-viewer/api.ts";
+import { Blunders, CERTAIN_TYPES, CertainMistakes, MatchDetail, type MoveRegret } from "../src/arena-viewer/api.ts";
 import { anchorId } from "../src/arena-viewer/page/charts.ts";
-import { baseName } from "../src/arena-viewer/page/data.ts";
+import { baseName, baseOrder, CERTAIN_NAMES } from "../src/arena-viewer/page/data.ts";
 import { GROUPS, MOVED_TARGETS, Section } from "../src/arena-viewer/page/model.ts";
 import { stepsOf } from "../src/arena-viewer/page/replay.ts";
 import { TOUR } from "../src/arena-viewer/page/tour.ts";
@@ -20,6 +20,16 @@ import { coverageOfMatch, type RegretCoverage, withoutRegret } from "./arena-vie
 const base = (process.argv[2] ?? "http://127.0.0.1:8790").replace(/\/+$/, "");
 const outdir = process.argv[3] ?? "/tmp/arena-viewer-shots";
 const chrome = process.env["CHROME"] ?? "/etc/profiles/per-user/aditya/bin/chromium";
+const ServedSeats = Schema.Array(Schema.Struct({ matchId: Schema.String, player: Schema.String, model: Schema.String, effort: Schema.String }));
+
+const servedSeats = Schema.decodeUnknownSync(ServedSeats)(await (await fetch(`${base}/api/seats`)).json());
+
+// What the server serves is the check's source of truth for the certain-mistakes section: a viewer started without the
+// certain-mistakes database serves nothing, and then the page must draw no section and mark no move.
+const servedCertain = Schema.decodeUnknownSync(CertainMistakes)(await (await fetch(`${base}/api/certain-mistakes`)).json());
+
+const hasCertain = servedCertain.seat.length > 0;
+
 const errors: Array<string> = [];
 const failures: Array<string> = [];
 
@@ -117,14 +127,14 @@ const openPage = async (page: Page) => {
 // Visible controls smaller than 44px either way (heat cells and leaderboard squares are left out).
 const smallTargets = (page: Page) =>
   page.evaluate(() =>
-    [...document.querySelectorAll("nav a, .toggle button, .chip, select, input:not([type=checkbox]), .stepper button, .modal .x")].flatMap((element) => {
+    [...document.querySelectorAll("nav a, .toggle button, .chip, .cmb, .tablelink, select, input:not([type=checkbox]), .stepper button, .modal .x")].flatMap((element) => {
       const box = element.getBoundingClientRect();
 
       return box.width > 0 && (box.height < 44 || box.width < 44) ? [`${element.className || element.tagName} ${element.textContent?.slice(0, 20)} ${Math.round(box.width)}x${Math.round(box.height)}`] : [];
     }),
   );
 
-const SECTIONS = Section.literals;
+const SECTIONS = Section.literals.filter((section) => hasCertain || section !== "certain-mistakes");
 
 // How far a group's or a section's top sits below the sticky bar after a jump (0 or 1 is right), and whether the URL names it.
 const jumpedTo = (page: Page, section: string) =>
@@ -146,7 +156,7 @@ const captureBaseline = async (browser: Browser, viewport: Viewport) => {
   await page.screenshot({ path: shot(`${name}-page`), fullPage: true });
 
   for (const { group, sections } of GROUPS) {
-    for (const section of sections) {
+    for (const section of sections.filter((candidate) => SECTIONS.includes(candidate))) {
       expectThat((await page.locator(`#${group} #${section}, #${group}#${section}`).count()) === 1, `${name}: #${section} is not in the ${group} group`);
     }
   }
@@ -616,6 +626,207 @@ const checkMissingRegret = async (browser: Browser, viewport: Viewport) => {
   }
 };
 
+const count = (value: number) => value.toLocaleString("en-US");
+
+/** Per config label, the served mistakes and opportunities of each certain type, and the served mistakes' matches and decisions. */
+const servedCertainByConfig = () => {
+  const label = (seatAt: number) => {
+    const seat = servedSeats[seatAt];
+
+    return seat === undefined ? "" : `${baseName(seat.model)} [${seat.effort}]`;
+  };
+
+  const cells = new Map<string, Array<{ mistakes: number; opportunities: number }>>();
+
+  servedCertain.seat.forEach((seatAt, entry) => {
+    const type = servedCertain.type[entry] ?? -1;
+
+    if (type >= CERTAIN_TYPES.length) {
+      if (!cells.has(label(seatAt))) cells.set(label(seatAt), CERTAIN_TYPES.map(() => ({ mistakes: 0, opportunities: 0 })));
+
+      return;
+    }
+
+    const own = cells.get(label(seatAt)) ?? CERTAIN_TYPES.map(() => ({ mistakes: 0, opportunities: 0 }));
+    const cell = own[type];
+
+    if (cell !== undefined) {
+      cell.mistakes += servedCertain.chose[entry] ?? 0;
+      cell.opportunities += servedCertain.opportunities[entry] ?? 0;
+    }
+
+    cells.set(label(seatAt), own);
+  });
+
+  const mistakes = servedCertain.moveSeat.map((seatAt, move) => ({ label: label(seatAt), matchId: servedSeats[seatAt]?.matchId ?? "", type: servedCertain.moveType[move] ?? -1, ordinal: servedCertain.moveOrd[move] ?? -1 }));
+
+  return { cells, mistakes };
+};
+
+const expectCertainMarks = async (page: Page, matchId: string, what: string) => {
+  const detail = await servedDetail(matchId);
+  const marked = stepsOf(detail).filter(({ certain }) => certain !== null);
+  const listed = servedCertain.moveOrd.filter((_ordinal, move) => servedSeats[servedCertain.moveSeat[move] ?? -1]?.matchId === matchId).length;
+
+  expectThat(marked.length === listed, `${what}: the match serves ${marked.length} certain mistakes, the opportunities list ${listed}`);
+  expectThat((await page.locator(".modal .moves .step .tag.certain").count()) === marked.length, `${what}: the replay marks ${await page.locator(".modal .moves .step .tag.certain").count()} moves, its data has ${marked.length}`);
+
+  const on = page.locator(".modal .moves .step.on");
+  const at = Number(/move (\d+) of/.exec(await textOf(page, ".modal .stepper .k"))?.[1] ?? Number.NaN) - 1;
+  const isMarked = stepsOf(detail)[at]?.certain !== null;
+
+  expectThat((await on.locator(".tag.certain").count()) === (isMarked ? 1 : 0) && (await page.locator(".modal .sel .selh .tag.certain").count()) === (isMarked ? 1 : 0), `${what}: move ${at + 1} is ${isMarked ? "" : "not "}a certain mistake and the replay disagrees`);
+
+  return { marked: marked.length, at };
+};
+
+// The chart shows each model's served counts and rate, the pooled counts, and a dot only from twenty opportunities. Each
+// config's counts are in a folded table, a cell under twenty opportunities shows its count alone, a count opens the matches
+// it counts, and a match opens the replay at that move, which it marks along with the match's other certain mistakes and no other move.
+const checkCertain = async (page: Page, name: string, press: (target: ReturnType<Page["locator"]>) => Promise<void>, isTouch: boolean) => {
+  if (!hasCertain) {
+    expectThat((await page.locator("#certain-mistakes, #certain-table").count()) === 0, `${name}: a viewer without certain mistakes draws their section`);
+    console.log(name, "no certain-mistakes database: no section");
+
+    return;
+  }
+
+  const { cells, mistakes } = servedCertainByConfig();
+  const chart = page.locator("#certain-mistakes");
+
+  await chart.scrollIntoViewIfNeeded();
+
+  const models = [...new Set(servedCertain.seat.map((seatAt) => servedSeats[seatAt]?.model ?? ""))].toSorted((left, right) => baseOrder(left) - baseOrder(right));
+
+  const totalOf = (type: number, keepSeat: (seatAt: number) => boolean) => {
+    const own = servedCertain.seat.flatMap((seatAt, entry) => (servedCertain.type[entry] === type && keepSeat(seatAt) ? [{ mistakes: servedCertain.chose[entry] ?? 0, opportunities: servedCertain.opportunities[entry] ?? 0 }] : []));
+
+    return { mistakes: own.reduce((sum, cell) => sum + cell.mistakes, 0), opportunities: own.reduce((sum, cell) => sum + cell.opportunities, 0) };
+  };
+
+  const panels = chart.locator(".chartrow figure");
+
+  expectThat((await panels.count()) === CERTAIN_TYPES.length, `${name}: the certain-mistakes chart has ${await panels.count()} panels, not ${CERTAIN_TYPES.length}`);
+
+  for (const [index, type] of CERTAIN_TYPES.entries()) {
+    const panel = panels.nth(index);
+
+    const expectedCounts = models.map((model) => {
+      const own = totalOf(index, (seatAt) => servedSeats[seatAt]?.model === model);
+
+      return own.opportunities === 0 ? "–" : `${count(own.mistakes)} / ${count(own.opportunities)}`;
+    });
+
+    const shownCounts = await panel.locator("svg text").evaluateAll((texts) => texts.map((text) => text.textContent ?? "").filter((text) => /^[\d,]+ \/ [\d,]+$|^–$/.test(text)));
+    const dots = models.filter((model) => totalOf(index, (seatAt) => servedSeats[seatAt]?.model === model).opportunities >= 20).length;
+    const pooled = totalOf(index, () => true);
+
+    expectThat(JSON.stringify(shownCounts) === JSON.stringify(expectedCounts), `${name}: "${CERTAIN_NAMES[type]}" shows ${shownCounts.join(" ")}, the data has ${expectedCounts.join(" ")}`);
+    expectThat((await panel.locator("svg g[role=button]").count()) === dots, `${name}: "${CERTAIN_NAMES[type]}" draws ${await panel.locator("svg g[role=button]").count()} dots, ${dots} models have twenty opportunities`);
+    expectThat((await panel.locator("h3").innerText()).trim() === CERTAIN_NAMES[type] && (await panel.locator(".sub").innerText()).includes(`${count(pooled.mistakes)} of ${count(pooled.opportunities)}`), `${name}: "${CERTAIN_NAMES[type]}" lacks its name or the pooled counts ${count(pooled.mistakes)} of ${count(pooled.opportunities)}`);
+  }
+
+  expectThat((await chart.innerText()).includes("legal move"), `${name}: the certain-mistakes chart lacks the line on opportunities`);
+  await chart.screenshot({ path: shot(`${name}-certain-mistakes`), style: UNSTICK });
+
+  const fold = page.locator("#certain-table");
+
+  expectThat((await fold.getAttribute("open")) === null, `${name}: the certain-mistakes table starts open`);
+  await press(chart.locator(".tablelink"));
+  await settled(page);
+  expectThat((await fold.getAttribute("open")) !== null && (await fold.locator("table").isVisible()), `${name}: the link under the chart did not open the table`);
+
+  if (isTouch) {
+    const small = (await smallTargets(page)).filter((target) => target.startsWith("cmb") || target.startsWith("tablelink"));
+
+    console.log(name, "certain-mistake targets under 44px:", small);
+    expectThat(small.length === 0, `${name}: a certain-mistakes count or link is under 44px: ${small.slice(0, 3).join(", ")}`);
+  }
+
+  const rows = await fold.locator("tbody tr:not(.drill):not(.pooled)").evaluateAll((trs) =>
+    trs.map((tr) => ({
+      label: tr.querySelector("td")?.textContent?.trim() ?? "",
+      cells: [...tr.querySelectorAll("td:not(:first-child)")].map((td) => ({ counts: (td.firstElementChild ?? td).textContent?.trim() ?? "", hasRate: td.querySelector(".cmr") !== null })),
+    })),
+  );
+
+  expectThat(rows.length === cells.size, `${name}: ${rows.length} certain-mistake rows, ${cells.size} configs served`);
+
+  for (const { label, cells: shown } of rows) {
+    const served = cells.get(label);
+
+    for (const [index, type] of CERTAIN_TYPES.entries()) {
+      const want = served?.[index];
+      const cell = shown[index];
+      const expected = want === undefined || want.opportunities === 0 ? "–" : `${count(want.mistakes)} / ${count(want.opportunities)}`;
+
+      expectThat(cell?.counts === expected, `${name}: ${label} shows "${cell?.counts}" for "${CERTAIN_NAMES[type]}", the data has "${expected}"`);
+      expectThat(cell !== undefined && want !== undefined && cell.hasRate === want.opportunities >= 20, `${name}: ${label} ${cell?.hasRate ? "shows" : "lacks"} a rate with ${want?.opportunities} opportunities`);
+    }
+  }
+
+  const pooledRow = await fold.locator("tbody tr.pooled td:not(:first-child)").evaluateAll((tds) => tds.map((td) => (td.firstElementChild ?? td).textContent?.trim() ?? ""));
+
+  expectThat(
+    CERTAIN_TYPES.every((_type, index) => pooledRow[index] === `${count(totalOf(index, () => true).mistakes)} / ${count(totalOf(index, () => true).opportunities)}`),
+    `${name}: the pooled row shows ${pooledRow.join(" | ")}`,
+  );
+
+  const headers = await fold.locator("thead th").allInnerTexts();
+
+  expectThat(CERTAIN_TYPES.every((type, index) => headers[index + 1]?.trim() === CERTAIN_NAMES[type]), `${name}: the certain-mistakes table lacks its type names: ${headers.join(" | ")}`);
+  await fold.screenshot({ path: shot(`${name}-certain-mistakes-table`), style: UNSTICK });
+  expectThat((await fold.locator(".card").evaluate((card) => card.scrollWidth - card.clientWidth)) <= 0, `${name}: the certain-mistakes table scrolls sideways in its card`);
+
+  const openMistake = async (label: string, typeIndex: number, picture: string) => {
+    const own = mistakes.filter((mistake) => mistake.label === label && mistake.type === typeIndex);
+    const row = fold.locator("tbody tr:not(.drill)", { has: page.locator("td:first-child", { hasText: label }) }).first();
+    const button = row.locator(`td:nth-child(${typeIndex + 2}) .cmb`);
+    const chips = fold.locator(".cmmatches .chip");
+    const matchIds = new Set(own.map(({ matchId }) => matchId));
+
+    await press(button);
+    await settled(page);
+    expectThat((await chips.count()) === matchIds.size, `${name}: ${label} lists ${await chips.count()} matches of "${CERTAIN_NAMES[CERTAIN_TYPES[typeIndex] ?? "self_on_live"]}", ${matchIds.size} have its mistakes`);
+    expectThat((await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)) <= 0, `${name}: opening the matches of ${label} overflows the page`);
+
+    if (picture !== "") await fold.screenshot({ path: shot(`${name}-certain-mistakes-${picture}`), style: UNSTICK });
+
+    await press(chips.first());
+
+    const matchId = await openedMatchId(page);
+    const { marked, at } = await expectCertainMarks(page, matchId, `${name} ${label}`);
+    const opened = stepsOf(await servedDetail(matchId))[at];
+    const first = Math.min(...own.filter((mistake) => mistake.matchId === matchId).map(({ ordinal }) => ordinal));
+
+    expectThat(opened !== undefined && opened.certain === CERTAIN_TYPES[typeIndex] && opened.ordinal === first, `${name}: ${label} opened at ordinal ${opened?.ordinal} marked ${opened?.certain}, its first mistake of that type is ${first}`);
+    console.log(name, label, "opens", matchIds.size, "matches | replay at move", at + 1, "| marked moves", marked, "|", await textOf(page, ".modal .sel .selh"));
+
+    if (picture !== "") await page.locator(".modal").screenshot({ path: shot(`${name}-certain-mistakes-replay-${picture}`) });
+
+    await closeReplay(page);
+    await press(button);
+    await settled(page);
+    expectThat((await fold.locator(".cmmatches").count()) === 0, `${name}: a second press on the count of ${label} left its matches open`);
+  };
+
+  const mostOf = (typeIndex: number) => mistakes.filter((mistake) => mistake.type === typeIndex).map(({ label }) => label);
+  const [busiest] = mostOf(0).toSorted((left, right) => mostOf(0).filter((label) => label === right).length - mostOf(0).filter((label) => label === left).length);
+  const [guaranteed] = mostOf(1);
+
+  if (busiest === undefined || guaranteed === undefined) throw new Error("the served data holds no certain mistake of one of the types");
+
+  await openMistake(busiest, 0, "self");
+  await openMistake(guaranteed, 1, "");
+
+  for (const row of [0, 1, 2]) {
+    const sample = await openReplay(page, () => press(page.locator("#matches tbody tr.row").nth(row)));
+
+    await expectCertainMarks(page, sample.matchId, `${name} match ${row}`);
+    await closeReplay(page);
+  }
+};
+
 const checkDesktop = async (browser: Browser, viewport: Viewport) => {
   const page = await newPage(browser, viewport);
   const scatter = page.locator("#scatter .card");
@@ -647,6 +858,7 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
   await check("ratings", () => checkRatings(page));
   await check("regret", () => checkRegret(page));
   await check("missing regret", () => checkMissingRegret(browser, viewport));
+  await check("certain mistakes", () => checkCertain(page, viewport.name, (target) => target.click(), false));
   await check("heatmap", async () => {
     await openBreakdown(page);
     console.log("heat rows", await countOf(page, "table.heat tbody tr"), "cols", await countOf(page, "table.heat thead th"), "| first row:", await textOf(page, "table.heat tbody tr"));
@@ -762,12 +974,17 @@ const checkTour = async (page: Page, name: string) => {
     await settled(page);
 
     const drawn = await page.evaluate((focus) => [...document.querySelectorAll(focus)].some((element) => element.getBoundingClientRect().height > 0), step.focus);
+    const isUnshown = !hasCertain && step.anchor === "certain-mistakes";
+
+    expectThat(drawn || isUnshown, `${name}: tour step "${step.title}" finds nothing drawn at ${step.focus}`);
+    await page.screenshot({ path: shot(`${name}-tour-${String(index + 1).padStart(2, "0")}`) });
+
+    if (isUnshown) continue;
+
     const box = await page.locator(".tour-focus").boundingBox();
     const width = await page.evaluate(() => document.documentElement.clientWidth);
 
-    expectThat(drawn, `${name}: tour step "${step.title}" finds nothing drawn at ${step.focus}`);
     expectThat(box !== null && box.x + box.width <= width + 8, `${name}: tour step "${step.title}" highlights outside the page`);
-    await page.screenshot({ path: shot(`${name}-tour-${String(index + 1).padStart(2, "0")}`) });
   }
 
   await page.keyboard.press("Escape");
@@ -804,7 +1021,7 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
     }
   });
   await check("mark tap", async () => {
-    for (const selector of ["#odds svg g[role=button]", "#items .fate-bar[role=button]", "#seats svg g[role=button]"]) {
+    for (const selector of ["#odds svg g[role=button]", "#items .fate-bar[role=button]", "#seats svg g[role=button]", ...(hasCertain ? ["#certain-mistakes svg g[role=button]"] : [])]) {
       await page.locator(selector).first().scrollIntoViewIfNeeded();
       await page.locator(selector).first().tap({ force: true });
 
@@ -881,6 +1098,7 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
     await page.goBack();
     console.log(name, "back closes replay:", (await countOf(page, ".modal")) === 0);
   });
+  await check("certain mistakes", () => checkCertain(page, name, (target) => target.tap(), true));
   await check("candidate list", async () => {
     const [fixture] = await regretFixtures(1);
 
@@ -922,20 +1140,25 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
 
 // An optional section's data failing to load leaves the rest of the page drawn and says, in that section, what failed.
 const checkOptionalFailure = async (browser: Browser) => {
-  const page = await newPage(browser, VIEWPORTS[0]);
-  const asked: Array<string> = [];
+  for (const { endpoint, section } of [
+    { endpoint: "consistency", section: "#items" },
+    { endpoint: "certain-mistakes", section: "#certain-mistakes" },
+  ]) {
+    const page = await newPage(browser, VIEWPORTS[0]);
+    const asked: Array<string> = [];
 
-  page.on("request", (request) => asked.push(new URL(request.url()).pathname));
-  await page.route("**/api/consistency", (route) => route.abort());
-  await loadPage(page);
-  await settled(page);
+    page.on("request", (request) => asked.push(new URL(request.url()).pathname));
+    await page.route(`**/api/${endpoint}`, (route) => route.abort());
+    await loadPage(page);
+    await settled(page);
 
-  const notes = await page.getByText(/^Could not load the /).allInnerTexts();
+    const notes = await page.getByText(/^Could not load the /).allInnerTexts();
 
-  console.log("with consistency failing:", notes, "| leaderboards", await countOf(page, "table.lbt"));
-  expectThat(notes.length === 1 && (await page.locator("#items").getByText(/^Could not load/).count()) === 1, "a failed optional endpoint did not leave a note in its own section");
-  expectThat(!asked.some((path) => path === "/api/blunders" || path === "/api/mistakes"), "the page still loads the blunders or the regret by shells left");
-  await page.context().close();
+    console.log(`with ${endpoint} failing:`, notes, "| leaderboards", await countOf(page, "table.lbt"));
+    expectThat(notes.length === 1 && (await page.locator(section).getByText(/^Could not load/).count()) === 1, `a failed ${endpoint} endpoint did not leave a note in its own section`);
+    expectThat(!asked.some((path) => path === "/api/blunders" || path === "/api/mistakes"), "the page still loads the blunders or the regret by shells left");
+    await page.context().close();
+  }
 };
 
 mkdirSync(outdir, { recursive: true });

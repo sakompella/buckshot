@@ -176,6 +176,34 @@ export const Mistakes = Schema.Struct({ seat: Column, left: Column, isShot: Colu
 
 export type Mistakes = typeof Mistakes.Type;
 
+/** The two certain mistakes of docs/arena/analysis/certain-mistakes.md, named as the derived database names their types. */
+export const CERTAIN_TYPES = ["self_on_live", "gave_up_guaranteed_win"] as const;
+
+export const CertainType = Schema.Literals(CERTAIN_TYPES);
+
+export type CertainType = typeof CertainType.Type;
+
+/** Every type the derived database holds: the certain mistakes, the excluded jammed-opponent decisions and the fact pattern of a proven blank given away. */
+export const OPPORTUNITY_TYPES = [...CERTAIN_TYPES, "hidden_health", "gave_turn_away"] as const;
+
+/**
+ * The certain-mistake opportunities, column by column. Each of the first four columns has one entry per seat and type that had a
+ * decision: seat indexes the seats response, type indexes OPPORTUNITY_TYPES, and chose counts the decisions that played the
+ * type's move (for the two certain types, the mistakes). The last three have one entry per certain mistake, the ordinal being the decision's.
+ * Empty without a certain-mistakes database.
+ */
+export const CertainMistakes = Schema.Struct({
+  seat: Column,
+  type: Column,
+  opportunities: Column,
+  chose: Column,
+  moveSeat: Column,
+  moveType: Column,
+  moveOrd: Column,
+});
+
+export type CertainMistakes = typeof CertainMistakes.Type;
+
 /** Bit order of Decisions' opp and pick masks. */
 export const PATTERNS = [
   "knownBlankOpp",
@@ -261,6 +289,7 @@ export const Step = Schema.Struct({
   blank: Schema.Number,
   known: Schema.NullOr(Shell),
   regret: Schema.NullOr(MoveRegret),
+  certain: Schema.NullOr(CertainType),
   outcome: Schema.Array(Schema.String),
   calls: Schema.Array(Call),
 });

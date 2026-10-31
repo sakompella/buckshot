@@ -71,6 +71,12 @@ export const TOUR: ReadonlyArray<TourStep> = [
     text: "On the replay's health chart, rings mark the costly moves, and the biggest are listed under it as turning points. A click on one jumps to that move.",
   },
   {
+    anchor: "certain-mistakes",
+    focus: "#certain-mistakes .chartrow",
+    title: "Certain mistakes",
+    text: "Shots a player's own information proves worse than the other shot, counted over every decision where it could have made one. The dashed line is every config pooled; a tap on a dot shows its interval.",
+  },
+  {
     anchor: "odds",
     focus: "#odds .chartrow figure:first-child",
     title: "Playing the odds",
@@ -116,7 +122,7 @@ export const TOUR: ReadonlyArray<TourStep> = [
     anchor: "breakdown",
     focus: "#breakdown > div",
     title: "The numbers as tables",
-    text: "The failures, the seats and each config's win share against each opponent model fold into tables at the end; a click on a title opens one. Inside the open heatmap a click on a column head sorts by it, and the small grey number in each cell is the sample behind it.",
+    text: "The failures, the seats, the certain mistakes and each config's win share against each opponent model fold into tables at the end; a click on a title opens one. Inside the open heatmap a click on a column head sorts by it, and the small grey number in each cell is the sample behind it.",
   },
 ];
 

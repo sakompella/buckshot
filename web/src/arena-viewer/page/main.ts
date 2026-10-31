@@ -3,7 +3,7 @@ import { HttpClient, HttpClientResponse } from "effect/http";
 import { AsyncData, Command, Dom, Http, Runtime, Subscription, type Update } from "foldkit";
 import { modifyFields } from "foldkit/struct";
 
-import { Consistency, Decisions, MatchDetail, SeatsResponse } from "../api.ts";
+import { CertainMistakes, Consistency, Decisions, MatchDetail, SeatsResponse } from "../api.ts";
 import { withPotShares } from "./data.ts";
 import { derive } from "./derived.ts";
 import { picksOf } from "./interesting.ts";
@@ -32,8 +32,11 @@ const getOptional = <A, I>(url: string, schema: Schema.Codec<A, I>) =>
 
 const LoadData = Command.define("LoadData", {
   messages: [Message.SucceededLoad, Message.FailedLoad],
-  execute: Effect.all([getJson("/api/seats", SeatsResponse), getJson("/api/decisions", Decisions), getOptional("/api/consistency", Schema.Array(Consistency))], { concurrency: 3 }).pipe(
-    Effect.map(([seats, decisions, consistency]) => Message.SucceededLoad({ loaded: { seats: withPotShares(seats), decisions, consistency } })),
+  execute: Effect.all(
+    [getJson("/api/seats", SeatsResponse), getJson("/api/decisions", Decisions), getOptional("/api/consistency", Schema.Array(Consistency)), getOptional("/api/certain-mistakes", CertainMistakes)],
+    { concurrency: 4 },
+  ).pipe(
+    Effect.map(([seats, decisions, consistency, certainMistakes]) => Message.SucceededLoad({ loaded: { seats: withPotShares(seats), decisions, consistency, certainMistakes } })),
     Effect.catch((error) => Effect.succeed(Message.FailedLoad({ error: describe(error) }))),
     Effect.provide(Http.layer),
   ),
@@ -71,6 +74,20 @@ const JumpTo = Command.define("JumpTo", {
     Effect.sync(() => {
       history.replaceState(history.state, "", `#${target}`);
       scrollToTarget(target);
+    }).pipe(Effect.as(Message.CompletedScroll())),
+});
+
+/** Opens a folded table and scrolls to it, for a link from the chart of the same numbers. */
+const OpenTable = Command.define("OpenTable", {
+  args: { id: Schema.String },
+  messages: [Message.CompletedScroll],
+  execute: ({ id }) =>
+    Effect.sync(() => {
+      const fold = document.getElementById(id);
+
+      if (fold instanceof HTMLDetailsElement) fold.open = true;
+
+      if (fold !== null) scrollTo(0, fold.getBoundingClientRect().top + scrollY - stickyHeight() - 8);
     }).pipe(Effect.as(Message.CompletedScroll())),
 });
 
@@ -185,6 +202,7 @@ export const update = (model: Model, message: Message): Return =>
       commands: Option.match(model.maybeTour, { onNone: () => [], onSome: ({ step }) => [PlaceTour({ step })] }),
     }),
     ClickedJump: ({ target }) => ({ model, commands: [JumpTo({ target })] }),
+    ClickedTableLink: ({ id }) => ({ model, commands: [OpenTable({ id })] }),
     NavigatedToHash: () => ({ model, commands: [ScrollToHash()] }),
     SucceededLoad: ({ loaded }) => {
       const loadedModel = withPickedMatches(modifyFields(model, { data: () => AsyncData.succeed(loaded) }));
@@ -225,6 +243,9 @@ export const update = (model: Model, message: Message): Return =>
     LeftCell: () => ({ model: modifyFields(model, { heat: (heat) => ({ ...heat, maybeTip: Option.none() }) }) }),
     ClickedLeaderboardRow: ({ id }) => ({
       model: modifyFields(model, { leaderboard: (leaderboard) => ({ maybeTip: Option.none(), maybeOpen: Option.exists(leaderboard.maybeOpen, (open) => open === id) ? Option.none() : Option.some(id) }) }),
+    }),
+    ClickedCertainCount: ({ key, type }) => ({
+      model: modifyFields(model, { maybeCertainOpen: (open) => (Option.exists(open, (cell) => cell.key === key && cell.type === type) ? Option.none() : Option.some({ key, type })) }),
     }),
     HoveredSquare: ({ matchId }) => ({ model: modifyFields(model, { leaderboard: (leaderboard) => ({ ...leaderboard, maybeTip: Option.some(matchId) }) }) }),
     LeftSquare: () => ({ model: modifyFields(model, { leaderboard: (leaderboard) => ({ ...leaderboard, maybeTip: Option.none() }) }) }),
@@ -271,6 +292,7 @@ const init: Runtime.ApplicationInit<Model, Message, Flags> = ({ viewport }) => (
     scatter: { axis: "cost", maybeHover: Option.none(), maybePin: Option.none() },
     heat: { sort: "rating", maybeTip: Option.none() },
     leaderboard: { maybeOpen: Option.none(), maybeTip: Option.none() },
+    maybeCertainOpen: Option.none(),
     matchList: { query: "", limit: 25 },
     maybeRateTip: Option.none(),
     maybeTappedTitle: Option.none(),

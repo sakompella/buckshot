@@ -2,7 +2,7 @@ import { Schema } from "effect";
 import { AsyncData } from "foldkit";
 import { defineMessageUnion } from "foldkit/message";
 
-import { Consistency, Decisions, MatchDetail, Seat } from "../api.ts";
+import { CertainMistakes, CertainType, Consistency, Decisions, MatchDetail, Seat } from "../api.ts";
 
 /** The page's groups below the hero, in page order: the jump menu's links, and the sections the reader can be in. */
 export const Group = Schema.Literals(["standings", "watch", "decisions", "health"]);
@@ -10,7 +10,7 @@ export const Group = Schema.Literals(["standings", "watch", "decisions", "health
 export type Group = typeof Group.Type;
 
 /** The sections inside the groups, each an in-page anchor; a link to one the page no longer has lands at its MOVED_TARGETS entry. */
-export const Section = Schema.Literals(["leaderboards", "scatter", "interesting", "matches", "odds", "items", "reliability", "seats", "breakdown"]);
+export const Section = Schema.Literals(["leaderboards", "scatter", "interesting", "matches", "certain-mistakes", "odds", "items", "reliability", "seats", "breakdown"]);
 
 export type Section = typeof Section.Type;
 
@@ -33,7 +33,7 @@ export const MOVED_TARGETS: ReadonlyMap<string, Target> = new Map([
 export const GROUPS: ReadonlyArray<{ readonly group: Group; readonly label: string; readonly sections: ReadonlyArray<Section> }> = [
   { group: "standings", label: "Standings", sections: ["leaderboards", "scatter"] },
   { group: "watch", label: "Matches", sections: ["interesting", "matches"] },
-  { group: "decisions", label: "How they play", sections: ["odds", "items"] },
+  { group: "decisions", label: "How they play", sections: ["certain-mistakes", "odds", "items"] },
   { group: "health", label: "Run health", sections: ["reliability", "seats", "breakdown"] },
 ];
 
@@ -44,12 +44,13 @@ const OptionalData = <A, I>(schema: Schema.Codec<A, I>) => AsyncData.Schema(sche
 
 /**
  * The database as the page holds it: every seat with its pot share and the agent moves' columns, which every section needs;
- * then each config's consistency (empty without a knowledge database).
+ * then each config's consistency (empty without a knowledge database) and certain mistakes (empty without a certain-mistakes database).
  */
 export const Loaded = Schema.Struct({
   seats: Schema.Array(SeatFull),
   decisions: Decisions,
   consistency: OptionalData(Schema.Array(Consistency)),
+  certainMistakes: OptionalData(CertainMistakes),
 });
 
 export type Loaded = typeof Loaded.Type;
@@ -71,6 +72,11 @@ export const HeatCellId = Schema.Struct({ row: Schema.String, col: Schema.String
 export const Heat = Schema.Struct({ sort: Schema.String, maybeTip: Schema.Option(HeatCellId) });
 
 export const Leaderboard = Schema.Struct({ maybeOpen: Schema.Option(Schema.String), maybeTip: Schema.Option(Schema.String) });
+
+/** The certain-mistakes cell whose matches are listed: a config's key and the type of mistake. */
+export const CertainCell = Schema.Struct({ key: Schema.String, type: CertainType });
+
+export type CertainCell = typeof CertainCell.Type;
 
 /** An open replay. Until a move is chosen, it shows the first model move at or after the focus ordinal. */
 export const Replay = Schema.Struct({ id: Schema.String, maybeFocus: Schema.Option(Schema.Number), maybeAt: Schema.Option(Schema.Number) });
@@ -110,6 +116,7 @@ export const Model = Schema.Struct({
   scatter: Scatter,
   heat: Heat,
   leaderboard: Leaderboard,
+  maybeCertainOpen: Schema.Option(CertainCell),
   matchList: MatchList,
   maybeRateTip: Schema.Option(RateCell),
   /** The chart mark the mouse is over, and the one a click, tap or Enter pinned; the hovered one shows first. */
@@ -151,6 +158,8 @@ export const Message = defineMessageUnion({
   HoveredCell: { row: Schema.String, col: Schema.String },
   LeftCell: {},
   ClickedLeaderboardRow: { id: Schema.String },
+  ClickedTableLink: { id: Schema.String },
+  ClickedCertainCount: { key: Schema.String, type: CertainType },
   HoveredSquare: { matchId: Schema.String },
   LeftSquare: {},
   ClickedMatch: { id: Schema.String, maybeFocus: Schema.Option(Schema.Number) },

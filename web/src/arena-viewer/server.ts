@@ -4,8 +4,9 @@ import crypto from "node:crypto";
 import { Option, Schema } from "effect";
 
 import { analyse, decodeVisible, roundStory, ShellTracker } from "./analysis.ts";
-import { Blunders, Call, Consistency, Decisions, MatchDetail, MatchSeat, MatchSummary, Mistakes, type PlayerState, SeatRow, SeatsResponse, type Step } from "./api.ts";
+import { Blunders, Call, CertainMistakes, Consistency, Decisions, MatchDetail, MatchSeat, MatchSummary, Mistakes, type PlayerState, SeatRow, SeatsResponse, type Step } from "./api.ts";
 import { findBlunders } from "./blunders.ts";
+import { type Certain, NO_CERTAIN, openCertain } from "./certain.ts";
 import { mistakesOf } from "./mistakes.ts";
 import { openConsistency } from "./consistency.ts";
 import { groupBy } from "./page/data.ts";
@@ -69,6 +70,8 @@ const encodeBlunders = Schema.encodeSync(Schema.fromJsonString(Blunders));
 
 const encodeMistakes = Schema.encodeSync(Schema.fromJsonString(Mistakes));
 
+const encodeCertain = Schema.encodeSync(Schema.fromJsonString(CertainMistakes));
+
 const encodeMatch = Schema.encodeSync(Schema.fromJsonString(MatchDetail));
 
 // A move's outcome is the start of its player's next window, up to the first line by someone else or a new round, distribution or load.
@@ -83,7 +86,7 @@ interface StepDraft {
   readonly calls: Array<Call>;
 }
 
-const matchDetail = (db: Database, regret: Regret | null, id: string): MatchDetail | null => {
+const matchDetail = (db: Database, regret: Regret | null, certain: Certain, id: string): MatchDetail | null => {
   const match = decodeSummary(
     db
       .query(`select m.id, m.name, m.status, m.seed, m.started_at startedAt, m.ended_at endedAt, t.name tournament from matches m join tournaments t on t.id = m.tournament_id where m.id = ? and ${NOT_DEEPSEEK}`)
@@ -98,6 +101,7 @@ const matchDetail = (db: Database, regret: Regret | null, id: string): MatchDeta
     .map((row) => decodeMatchSeat(row));
 
   const regretOf = regret?.moves(id);
+  const certainOf = certain.moves(id);
 
   // Each player's view is the concatenation of its own decisions' event windows, so shells and rounds are tracked per player.
   const trackers = new Map<string, ShellTracker>();
@@ -146,6 +150,7 @@ const matchDetail = (db: Database, regret: Regret | null, id: string): MatchDeta
           blank: tracker.blank,
           known: chamber !== null && (chamber.by === "glass" || chamber.by === "phone") ? chamber.known : null,
           regret: regretOf?.get(row.ordinal) ?? null,
+          certain: certainOf.get(row.ordinal) ?? null,
         },
         events,
         previous,
@@ -225,9 +230,10 @@ const guarded = (handler: (request: Request) => Response) => {
 
 /**
  * Loads and analyses the database once, then serves the page and the API. With a regret database, seats and moves carry their regret.
- * With a knowledge database, the page shows how consistent each config is.
+ * With a knowledge database, the page shows how consistent each config is. With a certain-mistakes database, it shows each config's
+ * certain-mistake rates and marks the mistakes in the replay.
  */
-export const serveArenaViewer = (dbPath: string, hostname: string, port: number, regretPath?: string, knowledgePath?: string) => {
+export const serveArenaViewer = (dbPath: string, hostname: string, port: number, regretPath?: string, knowledgePath?: string, certainPath?: string) => {
   const db = new Database(dbPath, { readonly: true });
   const regret = regretPath === undefined ? null : openRegret(regretPath);
   const started = performance.now();
@@ -268,6 +274,8 @@ export const serveArenaViewer = (dbPath: string, hostname: string, port: number,
   );
 
   const seedBlocks = new Map(seats.map(({ matchId, seedBlock }) => [matchId, seedBlock]));
+  const certain = certainPath === undefined ? NO_CERTAIN : openCertain(certainPath, seatIndex);
+  const certainBody = encodedBody(encodeCertain(certain.summary));
   const consistencyBody = encodedBody(encodeConsistency(knowledgePath === undefined ? [] : openConsistency(knowledgePath, seedBlocks)));
 
   console.log(`loaded ${seats.length} seats in ${Math.round(performance.now() - started)} ms; decisions payload ${(decisionsBody.gzipped.length / 1e6).toFixed(1)} MB gzipped`);
@@ -290,8 +298,9 @@ export const serveArenaViewer = (dbPath: string, hostname: string, port: number,
       "/api/blunders": guarded((request) => json(request, blundersBody)),
       "/api/mistakes": guarded((request) => json(request, mistakesBody)),
       "/api/consistency": guarded((request) => json(request, consistencyBody)),
+      "/api/certain-mistakes": guarded((request) => json(request, certainBody)),
       "/api/match": guarded((request) => {
-        const detail = matchDetail(db, regret, new URL(request.url).searchParams.get("id") ?? "");
+        const detail = matchDetail(db, regret, certain, new URL(request.url).searchParams.get("id") ?? "");
 
         return detail === null ? new Response("not found", { status: 404 }) : new Response(encodeMatch(detail), { headers: JSON_TYPE });
       }),

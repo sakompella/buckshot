@@ -249,7 +249,7 @@ The look borrows from the studio viewer in
 
 ## Arena analysis viewer
 
-`bun scripts/arena-viewer.ts <db> [host] [port] [--regret <regret db>] [--knowledge <knowledge db>]` serves charts over the arena
+`bun scripts/arena-viewer.ts <db> [host] [port] [--regret <regret db>] [--knowledge <knowledge db>] [--certain-mistakes <opportunities db>]` serves charts over the arena
 analysis database (`scripts/arena-import.ts` builds it; see
 `docs/arena/database.md`) at http://127.0.0.1:8790/ by default, with no auth.
 It is one long page in six groups, in this order:
@@ -260,7 +260,9 @@ It is one long page in six groups, in this order:
   against the Bradley-Terry curve);
 - Watch a match: a few interesting matches and, with `--regret`, the costliest blunders, each marked exact or
   estimated;
-- Decisions: how often each config shoots itself by the odds it counts (one panel per model, a line per effort);
+- Decisions: with `--certain-mistakes` (the file `tools/arena/analysis/certain_mistakes.py --opportunities` writes), each
+  config's certain mistakes over their opportunities (`docs/arena/analysis/certain-mistakes.md`), each count opening its
+  matches at the move, which the replay marks; how often each config shoots itself by the odds it counts (one panel per model, a line per effort);
   with `--regret`, each model's mean regret per move by shells left in the gun and each config's blunder rate (the
   share of its searched moves that gave up 10 or more points); item fates (used, stolen by the opponent or left
   unused, per config and per item); with `--knowledge` (the database `scripts/arena-knowledge.ts` builds) each

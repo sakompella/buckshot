@@ -11,14 +11,16 @@ blank is the fact pattern "proven blank, gave the turn away". Keeping the move i
 certain-mistake rate. Its decisions are split by what the depth-limited search of the regret database scored.
 
 "Proves" is the knowledge database (web/scripts/arena-knowledge.ts): the Bend belief over the player's own log. Matches with a DeepSeek
-seat, unfinished matches and fallback moves are left out. With --doc FILE the tables replace the text between the tables markers of that file.
+seat, unfinished matches and fallback moves are left out. With --doc FILE the tables replace the text between the tables markers of that file. With --opportunities FILE every opportunity is also
+written to a SQLite file, one row per decision with a proven chambered shell, which the arena viewer reads (--certain-mistakes).
 
-    python3 tools/arena/analysis/certain_mistakes.py [--knowledge PATH] [--regret PATH] [--doc docs/arena/analysis/certain-mistakes.md]
+    python3 tools/arena/analysis/certain_mistakes.py [--knowledge PATH] [--regret PATH] [--doc docs/arena/analysis/certain-mistakes.md] [--opportunities PATH]
 """
 
 import argparse
 import json
 import random
+import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
@@ -41,6 +43,13 @@ class Pattern(Enum):
     GAVE_TURN_AWAY = "proven blank, gave the turn away"
 
 
+class Outcome(Enum):
+    MISTAKE = "mistake"
+    NOT_A_MISTAKE = "not a mistake"
+    EXCLUDED = "excluded"
+    FACT_PATTERN = "fact pattern"
+
+
 class Search(Enum):
     """What the depth-limited search scored for the two shots at a proven blank."""
 
@@ -54,6 +63,9 @@ class Search(Enum):
 class Decision:
     """An agent decision at which the player's own information proves the chambered shell. `chose` is the move its pattern counts."""
 
+    match: str
+    ordinal: int
+    player: str
     model: str
     effort: str
     block: str
@@ -88,7 +100,7 @@ def search_of(values: str | None) -> Search:
     return Search.OTHER
 
 
-def decision(model, effort, block, chamber, source, shot, health, known, own_items, opponent_items, remaining, values) -> Decision:
+def decision(match, ordinal, player, model, effort, block, chamber, source, shot, health, known, own_items, opponent_items, remaining, values) -> Decision:
     own, opponent = json.loads(health)
     opponent_health = opponent.get("health")
     if chamber == "Live":
@@ -102,14 +114,14 @@ def decision(model, effort, block, chamber, source, shot, health, known, own_ite
         else:
             pattern = Pattern.GAVE_TURN_AWAY
         chose = shot == "opponent"
-    return Decision(model, effort, block, pattern, chose, source, remaining == 1, opponent_health is None, search_of(values))
+    return Decision(match, ordinal, player, model, effort, block, pattern, chose, source, remaining == 1, opponent_health is None, search_of(values))
 
 
 def load(knowledge_path: Path, regret_path: Path, depth: int = 6, budget: int = 20000) -> list[Decision]:
     db = connect(str(knowledge_path))
     db.execute("ATTACH DATABASE ? AS r", (f"file:{regret_path}?mode=ro",))
     rows = db.execute(
-        """SELECT p.model, p.effort, m.seed_block_id, d.chamber, d.source, d.shot, d.health_json, d.private_known,
+        """SELECT d.match_id, d.ordinal, d.player, p.model, p.effort, m.seed_block_id, d.chamber, d.source, d.shot, d.health_json, d.private_known,
                   d.own_items_json, d.opponent_items_json, d.remaining, g.values_json, g.evaluator
            FROM decisions d
            JOIN matches m ON m.match_id = d.match_id AND m.status = 'completed'
@@ -168,6 +180,30 @@ def of(decisions: list[Decision], pattern: Pattern) -> list[Decision]:
     return [d for d in decisions if d.pattern is pattern]
 
 
+def outcome_of(d: Decision) -> Outcome:
+    if d.pattern is Pattern.HIDDEN_HEALTH:
+        return Outcome.EXCLUDED
+    if d.pattern is Pattern.GAVE_TURN_AWAY:
+        return Outcome.FACT_PATTERN if d.chose else Outcome.NOT_A_MISTAKE
+    return Outcome.MISTAKE if d.chose else Outcome.NOT_A_MISTAKE
+
+
+def write_opportunities(decisions: list[Decision], path: Path) -> None:
+    """One row per decision with a proven chambered shell, so the viewer need not rebuild the classification."""
+    path.unlink(missing_ok=True)
+    db = sqlite3.connect(path)
+    with db:
+        db.execute(
+            """CREATE TABLE opportunities (match_id TEXT NOT NULL, ordinal INTEGER NOT NULL, player TEXT NOT NULL, type TEXT NOT NULL,
+                                           outcome TEXT NOT NULL, source TEXT NOT NULL, PRIMARY KEY (match_id, ordinal)) WITHOUT ROWID"""
+        )
+        db.executemany(
+            "INSERT INTO opportunities VALUES (?, ?, ?, ?, ?, ?)",
+            [(d.match, d.ordinal, d.player, d.pattern.name.lower(), outcome_of(d).value, d.source) for d in decisions],
+        )
+    db.close()
+
+
 def certain(decisions: list[Decision]) -> str:
     rows = [
         names
@@ -211,8 +247,12 @@ def main() -> None:
     parser.add_argument("--knowledge", type=Path, default=DERIVED / "knowledge.sqlite")
     parser.add_argument("--regret", type=Path, default=DERIVED / "regret.sqlite")
     parser.add_argument("--doc", type=Path)
+    parser.add_argument("--opportunities", type=Path)
     args = parser.parse_args()
-    text = report(load(args.knowledge, args.regret))
+    decisions = load(args.knowledge, args.regret)
+    if args.opportunities is not None:
+        write_opportunities(decisions, args.opportunities)
+    text = report(decisions)
     if args.doc is None:
         print(text)
     else:
