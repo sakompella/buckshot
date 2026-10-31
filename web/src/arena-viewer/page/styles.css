@@ -304,6 +304,7 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
 @media (pointer: coarse) {
   nav a, .toggle button, .chip, .more, select, input:not([type="checkbox"]), .stepper button, .seedrow .chip, .drillclose { min-height: 44px; min-width: 44px; }
   .tablelink { min-height: 44px; }
+  .lead .tourstart { display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; }
   .cmb { min-height: 44px; min-width: 44px; display: inline-flex; align-items: center; border-bottom: 0; text-decoration: underline dotted; text-underline-offset: 4px; }
   .chip { padding: 0 12px; min-width: 44px; }
   .toggle button { min-width: 44px; }

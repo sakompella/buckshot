@@ -132,7 +132,7 @@ const openPage = async (page: Page) => {
 // Visible controls smaller than 44px either way (heat cells and leaderboard squares are left out).
 const smallTargets = (page: Page) =>
   page.evaluate(() =>
-    [...document.querySelectorAll("nav a, .toggle button, .chip, .cmb, .tablelink, select, input:not([type=checkbox]), .stepper button, .modal .x")].flatMap((element) => {
+    [...document.querySelectorAll("nav a, .toggle button, .chip, .cmb, .tablelink, select, input:not([type=checkbox]), .stepper button, .modal .x, .tourstart, .drillclose, .foot .download")].flatMap((element) => {
       const box = element.getBoundingClientRect();
 
       return box.width > 0 && (box.height < 44 || box.width < 44) ? [`${element.className || element.tagName} ${element.textContent?.slice(0, 20)} ${Math.round(box.width)}x${Math.round(box.height)}`] : [];
@@ -1538,6 +1538,16 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
   page.setDefaultTimeout(ACTION_TIMEOUT_MS);
   watch(page, name);
   await check("open page", () => openPage(page));
+  await check("tour button", async () => {
+    const box = await page.locator(".tourstart").evaluate((button) => {
+      const { width, height } = button.getBoundingClientRect();
+
+      return { width, height };
+    });
+
+    console.log(name, "Take the tour button", JSON.stringify(box));
+    expectThat(box.width >= 44 && box.height >= 44, `${name}: Take the tour is ${Math.round(box.width)}x${Math.round(box.height)}px, under 44`);
+  });
   await check("overview", async () => console.log(name, "overflow", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page), "| heat model column", await stickyModelColumn(), "| scatter labels", await countOf(page, "#scatter svg g.ptlabel")));
   await check("first screen and filters", async () => {
     await page.screenshot({ path: shot(`${name}-first-screen`) });
