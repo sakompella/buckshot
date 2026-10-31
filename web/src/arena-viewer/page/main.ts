@@ -9,7 +9,8 @@ import { withPotShares } from "./data.ts";
 import { INITIAL_ROWS, MORE_ROWS } from "./matches.ts";
 import { type Filter, Group, Message, Model, MOVED_TARGETS, Target, type Viewport } from "./model.ts";
 import { replayIndex, stepsOf } from "./replay.ts";
-import { PlaceTour, tourKeyMessage, tourOf } from "./tour.ts";
+import { reveal } from "./reveal.ts";
+import { PlaceTour, tourKeyMessage, tourMatchOf, tourOf } from "./tour.ts";
 import { stickyHeight, view } from "./view.ts";
 
 type Return = Update.Return<Model, Message>;
@@ -61,8 +62,11 @@ const targetOfHash = (hash: string): Option.Option<Target> => {
 const scrollToTarget = (id: Target) => {
   const target = document.getElementById(id);
 
+  if (target === null) return;
+
+  reveal(target);
   // The target's top rule tucks under the bar's own.
-  if (target !== null) scrollTo(0, target.getBoundingClientRect().top + scrollY - stickyHeight() + 1);
+  scrollTo(0, target.getBoundingClientRect().top + scrollY - stickyHeight() + 1);
 };
 
 /** Scrolls a group's or a section's heading to just below the sticky bar and puts it in the URL. */
@@ -81,11 +85,12 @@ const OpenTable = Command.define("OpenTable", {
   messages: [Message.CompletedScroll],
   execute: ({ id }) =>
     Effect.sync(() => {
-      const fold = document.getElementById(id);
+      const table = document.getElementById(id);
 
-      if (fold instanceof HTMLDetailsElement) fold.open = true;
+      if (table === null) return;
 
-      if (fold !== null) scrollTo(0, fold.getBoundingClientRect().top + scrollY - stickyHeight() - 8);
+      reveal(table);
+      scrollTo(0, table.getBoundingClientRect().top + scrollY - stickyHeight() - 8);
     }).pipe(Effect.as(Message.CompletedScroll())),
 });
 
@@ -183,6 +188,24 @@ const openReplay = (model: Model, id: string, maybeFocus: Option.Option<number>)
   return Option.isSome(model.maybeReplay) ? opened : { ...opened, commands: [...(opened.commands ?? []), PushReplayHistory()] };
 };
 
+const closeReplay = (model: Model): Return => ({ model: modifyFields(model, { maybeReplay: () => Option.none() }), commands: [LeaveReplayHistory()] });
+
+const openTourReplay = (model: Model): Return => {
+  const seats = AsyncData.getOrElse(
+    AsyncData.map(model.data, (loaded) => loaded.seats),
+    () => [],
+  );
+
+  return Option.match(tourMatchOf(seats), { onNone: (): Return => ({ model }), onSome: (id) => openReplay(model, id, Option.none()) });
+};
+
+/** The result of `first`, then `next` on its model, with both commands. */
+const thenReplay = (first: Return, next: (model: Model) => Return): Return => {
+  const second = next(first.model);
+
+  return { model: second.model, commands: [...(first.commands ?? []), ...(second.commands ?? [])] };
+};
+
 const withFilter = (model: Model, change: (filter: Filter) => Filter): Return => ({
   model: modifyFields(model, { filter: change, markTip: () => ({ maybeHover: Option.none(), maybePin: Option.none() }) }),
 });
@@ -209,12 +232,19 @@ export const update = (model: Model, message: Message): Return =>
     SelectedScatterAxis: ({ axis }) => ({ model: modifyFields(model, { scatter: (scatter) => ({ ...scatter, axis }) }) }),
     HoveredPoint: ({ key }) => ({ model: modifyFields(model, { scatter: (scatter) => ({ ...scatter, maybeHover: Option.some(key) }) }) }),
     LeftPoint: () => ({ model: modifyFields(model, { scatter: (scatter) => ({ ...scatter, maybeHover: Option.none() }) }) }),
-    ClickedPoint: ({ key }) => ({
-      model: modifyFields(model, {
-        scatter: (scatter) => ({ ...scatter, maybePin: Option.exists(scatter.maybePin, (pinned) => pinned === key) ? Option.none() : Option.some(key) }),
-        markTip: () => ({ maybeHover: Option.none(), maybePin: Option.none() }),
-      }),
-    }),
+    ClickedPoint: ({ key }) => {
+      const isPinned = Option.exists(model.scatter.maybePin, (pinned) => pinned === key);
+
+      return {
+        model: modifyFields(model, {
+          scatter: (scatter) => ({ ...scatter, maybePin: isPinned ? Option.none() : Option.some(key) }),
+          maybeDrill: (drill) => (Option.contains(drill, key) ? Option.none() : Option.some(key)),
+          leaderboard: (leaderboard) => ({ ...leaderboard, maybeOpen: Option.none() }),
+          markTip: () => ({ maybeHover: Option.none(), maybePin: Option.none() }),
+        }),
+      };
+    },
+    ClosedDrill: () => ({ model: modifyFields(model, { maybeDrill: () => Option.none() }) }),
     ClickedOutsideChart: () => ({
       model: modifyFields(model, { scatter: (scatter) => ({ ...scatter, maybePin: Option.none(), maybeHover: Option.none() }), markTip: () => ({ maybeHover: Option.none(), maybePin: Option.none() }) }),
     }),
@@ -230,7 +260,10 @@ export const update = (model: Model, message: Message): Return =>
     HoveredCell: (cell) => ({ model: modifyFields(model, { heat: (heat) => ({ ...heat, maybeTip: Option.some(cell) }) }) }),
     LeftCell: () => ({ model: modifyFields(model, { heat: (heat) => ({ ...heat, maybeTip: Option.none() }) }) }),
     ClickedLeaderboardRow: ({ id }) => ({
-      model: modifyFields(model, { leaderboard: (leaderboard) => ({ maybeTip: Option.none(), maybeOpen: Option.exists(leaderboard.maybeOpen, (open) => open === id) ? Option.none() : Option.some(id) }) }),
+      model: modifyFields(model, {
+        leaderboard: (leaderboard) => ({ maybeTip: Option.none(), maybeOpen: Option.exists(leaderboard.maybeOpen, (open) => open === id) ? Option.none() : Option.some(id) }),
+        maybeDrill: () => Option.none(),
+      }),
     }),
     ClickedCertainCount: ({ key, type }) => ({
       model: modifyFields(model, { maybeCertainOpen: (open) => (Option.exists(open, (cell) => cell.key === key && cell.type === type) ? Option.none() : Option.some({ key, type })) }),
@@ -238,7 +271,13 @@ export const update = (model: Model, message: Message): Return =>
     HoveredSquare: ({ matchId }) => ({ model: modifyFields(model, { leaderboard: (leaderboard) => ({ ...leaderboard, maybeTip: Option.some(matchId) }) }) }),
     LeftSquare: () => ({ model: modifyFields(model, { leaderboard: (leaderboard) => ({ ...leaderboard, maybeTip: Option.none() }) }) }),
     ClickedMatch: ({ id, maybeFocus }) => openReplay(model, id, maybeFocus),
-    SucceededMatch: ({ id, detail }) => ({ model: modifyFields(model, { matches: (matches) => ({ ...matches, [id]: AsyncData.succeed(detail) }) }) }),
+    SucceededMatch: ({ id, detail }) => ({
+      model: modifyFields(model, { matches: (matches) => ({ ...matches, [id]: AsyncData.succeed(detail) }) }),
+      commands: Option.match(model.maybeTour, {
+        onNone: () => [],
+        onSome: ({ step, hasCertain }) => (tourOf(hasCertain)[step]?.isReplay === true ? [PlaceTour({ step, hasCertain })] : []),
+      }),
+    }),
     FailedMatch: ({ id, error }) => ({ model: modifyFields(model, { matches: (matches) => ({ ...matches, [id]: AsyncData.fail(error) }) }) }),
     ClosedReplay: () => ({ model: modifyFields(model, { maybeReplay: () => Option.none() }), commands: [LeaveReplayHistory()] }),
     NavigatedBack: () => ({ model: modifyFields(model, { maybeReplay: () => Option.none() }) }),
@@ -262,12 +301,25 @@ export const update = (model: Model, message: Message): Return =>
       Option.match(model.maybeTour, {
         onNone: (): Return => ({ model }),
         onSome: (tour): Return => {
-          const step = Math.max(0, Math.min(tourOf(tour.hasCertain).length - 1, tour.step + delta));
+          const steps = tourOf(tour.hasCertain);
+          const step = Math.max(0, Math.min(steps.length - 1, tour.step + delta));
 
-          return step === tour.step ? { model } : { model: modifyFields(model, { maybeTour: () => Option.some({ ...tour, step }) }), commands: [PlaceTour({ step, hasCertain: tour.hasCertain })] };
+          if (step === tour.step) return { model };
+
+          const toured: Return = { model: modifyFields(model, { maybeTour: () => Option.some({ ...tour, step }) }), commands: [PlaceTour({ step, hasCertain: tour.hasCertain })] };
+          const wasReplay = steps[tour.step]?.isReplay === true;
+          const isReplay = steps[step]?.isReplay === true;
+
+          if (isReplay && !wasReplay) return thenReplay(toured, openTourReplay);
+
+          return wasReplay && !isReplay ? thenReplay(toured, closeReplay) : toured;
         },
       }),
-    ClosedTour: () => ({ model: modifyFields(model, { maybeTour: () => Option.none() }) }),
+    ClosedTour: () => {
+      const closed: Return = { model: modifyFields(model, { maybeTour: () => Option.none() }) };
+
+      return Option.exists(model.maybeTour, ({ step, hasCertain }) => tourOf(hasCertain)[step]?.isReplay === true) ? thenReplay(closed, closeReplay) : closed;
+    },
     PlacedTour: ({ step, maybeBox, isCardUnder }) => ({
       model: modifyFields(model, { maybeTour: (maybeTour) => Option.map(maybeTour, (tour) => (tour.step === step ? { ...tour, maybeBox, isCardUnder } : tour)) }),
     }),
@@ -285,6 +337,7 @@ const init: Runtime.ApplicationInit<Model, Message, Flags> = ({ viewport }) => (
     scatter: { axis: "cost", maybeHover: Option.none(), maybePin: Option.none() },
     heat: { sort: "rating", maybeTip: Option.none() },
     leaderboard: { maybeOpen: Option.none(), maybeTip: Option.none() },
+    maybeDrill: Option.none(),
     maybeCertainOpen: Option.none(),
     matchList: { query: "", limit: INITIAL_ROWS, maybePreset: Option.none() },
     maybeTappedTitle: Option.none(),
@@ -328,7 +381,7 @@ const subscriptions = Subscription.make<Model, Message>()((entry) => ({
   replayKeys: entry(
     { isReplayOpen: Schema.Boolean },
     {
-      modelToDependencies: (model) => ({ isReplayOpen: Option.isSome(model.maybeReplay) }),
+      modelToDependencies: (model) => ({ isReplayOpen: Option.isSome(model.maybeReplay) && Option.isNone(model.maybeTour) }),
       dependenciesToStream: ({ isReplayOpen }) =>
         Stream.when(
           Dom.streamFromEventFilterMapPreventDefault({ target: window, type: "keydown", filterMapEvent: (event) => replayKeyMessage(event.key) }),

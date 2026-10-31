@@ -182,10 +182,10 @@ export const certainTableView = (h: H, certain: CertainMistakes, seats: Readonly
   const { rows, pooled } = talliesOf(certain, seats, keep);
   const matches = matchesById(allMatches);
 
-  return h.details(
-    [h.Class("tables"), h.Id(CERTAIN_TABLE)],
+  return h.div(
+    [h.Id(CERTAIN_TABLE)],
     [
-      h.summary([], ["Certain mistakes by config"]),
+      h.h2([], ["Certain mistakes by config"]),
       rows.length === 0
         ? h.div([h.Class("empty")], ["No config in this filter has a decision with a proven shell."])
         : h.div(

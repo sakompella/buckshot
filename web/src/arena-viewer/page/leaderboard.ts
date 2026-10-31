@@ -68,6 +68,36 @@ const rowView = (h: H, m: ModelStats, elo: Rating | undefined, details: Readonly
 const detailsView = (h: H, details: ReadonlyArray<Detail>): Html =>
   h.dl([h.Class("drillstats")], details.flatMap(({ label, title, content }) => [h.dt([], [label]), h.dd(title === "" ? [] : [h.Title(title)], [...content])]));
 
+/** One config's drill-down as a card: what a click on its scatter point opens. */
+export const configPanelView = (h: H, derived: Derived, key: string, maybeTip: Option.Option<string>): Html => {
+  const m = derived.pooled.find((candidate) => candidate.key === key);
+
+  if (m === undefined) return h.empty;
+
+  const details = detailsOf(
+    h,
+    m,
+    derived.items.get(m.id),
+    derived.everyPooled.some(({ regret }) => regret !== null),
+  );
+
+  return h.div(
+    [h.Class("configpanel")],
+    [
+      h.div(
+        [h.Class("lbbar")],
+        [
+          h.h2([], [h.span([h.Class(`dot ${isClaude(m.model) ? "a" : "o"}`), h.Style({ background: m.color })], []), `${baseName(m.model)} `, h.span([h.Class("eff")], [`[${m.effort}]`])]),
+          h.span([h.Class("k")], ratingView(h, derived.ratings.get(m.key))),
+          h.button([h.Type("button"), h.Class("drillclose"), h.AriaLabel("Close"), h.OnClick(Message.ClosedDrill())], ["✕"]),
+        ],
+      ),
+      detailsView(h, details),
+      drillView(h, m, derived, maybeTip),
+    ],
+  );
+};
+
 const headersOf = (hasRegret: boolean): ReadonlyArray<string> => [
   "Model",
   "Round Elo",

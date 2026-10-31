@@ -106,8 +106,15 @@ const heat = (page: Page) => page.locator("#breakdown details", { has: page.loca
 
 const loadPage = async (page: Page) => {
   await page.goto(`${base}/`);
-  await page.waitForSelector("table.lbt", { timeout: 120_000 });
+  await page.waitForSelector("table.lbt", { state: "attached", timeout: 120_000 });
   await page.waitForSelector("#matches tbody tr.row", { timeout: 60_000 });
+};
+
+const tablesFold = (page: Page) => page.locator("#tables details");
+
+const openTables = async (page: Page) => {
+  await page.locator("#tables details > summary").click();
+  await settled(page);
 };
 
 const openPage = async (page: Page) => {
@@ -115,6 +122,8 @@ const openPage = async (page: Page) => {
 
   await loadPage(page);
   console.log("every section drawn in", Date.now() - started, "ms");
+  expectThat((await tablesFold(page).getAttribute("open")) === null, "the tables fold is open on first load");
+  await openTables(page);
   console.log("default:", "scatter points", await countOf(page, "#scatter svg g.pt"), "heat rows", await countOf(page, "table.heat tbody tr"), "leaderboard rows", await countOf(page, "table.lbt tbody tr.row"));
   expectThat((await page.getByRole("switch").count()) === 0, "the page still has a switch");
 };
@@ -147,8 +156,14 @@ const captureBaseline = async (browser: Browser, viewport: Viewport) => {
 
   await loadPage(page);
   await settled(page);
-  console.log(name, "page height", await page.evaluate(() => document.documentElement.scrollHeight), "| leaderboard starts at", await page.evaluate(() => Math.round((document.querySelector("table.lbt")?.getBoundingClientRect().top ?? Number.NaN) + scrollY)));
+  console.log(name, "page height", await page.evaluate(() => document.documentElement.scrollHeight), "| scatter starts at", await page.evaluate(() => Math.round((document.querySelector("#scatter .card")?.getBoundingClientRect().top ?? Number.NaN) + scrollY)));
   await page.screenshot({ path: shot(`${name}-page`), fullPage: true });
+
+  const order = await page.evaluate(() => [...document.querySelectorAll("section.part")].map((part) => part.id).join(" "));
+
+  expectThat(order === GROUPS.map(({ group }) => group).join(" "), `${name}: the page's groups run ${order}`);
+  expectThat((await page.locator("#scatter .card").evaluate((card) => card.getBoundingClientRect().top)) < (await page.locator("#breakdown").evaluate((fold) => fold.getBoundingClientRect().top)), `${name}: the scatter does not come before the head-to-head matrix`);
+  await openTables(page);
 
   for (const { group, sections } of GROUPS) {
     for (const section of sections.filter((candidate) => SECTIONS.includes(candidate))) {
@@ -461,6 +476,8 @@ const regretFixtures = async (count: number): Promise<ReadonlyArray<RegretFixtur
 };
 
 const openFromLeaderboard = async (page: Page, { matchId, model, effort }: RegretFixture) => {
+  if ((await tablesFold(page).getAttribute("open")) === null) await openTables(page);
+
   const row = page.locator("table.lbt tr.row", { hasText: `${baseName(model)} [${effort}]` }).first();
 
   if ((await row.getAttribute("aria-expanded")) !== "true") await row.click();
@@ -989,10 +1006,12 @@ const checkCertain = async (page: Page, name: string, press: (target: ReturnType
 
   const fold = page.locator("#certain-table");
 
-  expectThat((await fold.getAttribute("open")) === null, `${name}: the certain-mistakes table starts open`);
+  if ((await tablesFold(page).getAttribute("open")) !== null) await page.locator("#tables details > summary").click();
+
+  expectThat(!(await fold.locator("table").isVisible()), `${name}: the certain-mistakes table shows while the tables fold is shut`);
   await press(chart.locator(".tablelink"));
   await settled(page);
-  expectThat((await fold.getAttribute("open")) !== null && (await fold.locator("table").isVisible()), `${name}: the link under the chart did not open the table`);
+  expectThat((await tablesFold(page).getAttribute("open")) !== null && (await fold.locator("table").isVisible()), `${name}: the link under the chart did not open the table`);
 
   if (isTouch) {
     const small = (await smallTargets(page)).filter((target) => target.startsWith("cmb") || target.startsWith("tablelink"));
@@ -1106,6 +1125,7 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
     console.log("hover point → tip:", await tipOf(page));
     await page.mouse.move(0, 0);
   });
+  await check("scatter drill-down", () => checkScatterDrill(page, viewport.name, false));
   await check("scatter axes", async () => {
     for (const [axis, name] of [
       ["Moves", "moves"],
@@ -1244,6 +1264,25 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
 
 // Steps through the whole tour by keyboard: every step must highlight an element the page draws, inside the page's
 // width, and Escape must close it.
+// A click on a scatter point opens that config's drill-down under the chart, and its close button shuts it.
+const checkScatterDrill = async (page: Page, name: string, isTouch: boolean) => {
+  const point = page.locator("#scatter svg g[style*=pointer]").nth(3);
+
+  await point.scrollIntoViewIfNeeded();
+  await (isTouch ? point.tap({ force: true }) : point.click({ force: true }));
+  await settled(page);
+
+  const panel = page.locator("#scatter .configpanel");
+
+  expectThat((await panel.count()) === 1 && (await panel.locator(".drillin .opp").count()) > 0, `${name}: a click on a scatter point opened no drill-down`);
+  expectThat((await page.locator("table.lbt tr.drill").count()) === 0, `${name}: the scatter's drill-down also opened a leaderboard row`);
+  await panel.screenshot({ path: shot(`${name}-scatter-drill`), style: UNSTICK });
+  await (isTouch ? panel.locator(".drillclose").tap() : panel.locator(".drillclose").click());
+  await settled(page);
+  expectThat((await page.locator("#scatter .configpanel").count()) === 0, `${name}: the drill-down's close button left it open`);
+  await page.locator(".hero .title").click({ force: true });
+};
+
 const checkTour = async (page: Page, name: string) => {
   await page.locator(".tourstart").click();
 
@@ -1263,11 +1302,13 @@ const checkTour = async (page: Page, name: string) => {
     expectThat(box !== null && box.x + box.width <= width + 8, `${name}: tour step "${step.title}" highlights outside the page`);
     expectThat(counter === `${index + 1} / ${steps.length}` && (await page.locator(".tour-card").innerText()).includes(step.title), `${name}: tour card ${index + 1} reads "${counter}", the page's tour has ${steps.length} steps`);
     expectThat(hasCertain || !/certain/i.test(await page.locator(".tour-card").innerText()), `${name}: a page without certain mistakes tours them at "${step.title}"`);
+    expectThat(step.isReplay === ((await page.locator(".modal .step").count()) > 0), `${name}: tour step "${step.title}" ${step.isReplay ? "has no replay open" : "leaves a replay open"}`);
     await page.screenshot({ path: shot(`${name}-tour-${String(index + 1).padStart(2, "0")}`) });
   }
 
   await page.keyboard.press("Escape");
   console.log(name, "tour steps", steps.length, "| closed by Escape:", (await countOf(page, ".tour-layer")) === 0);
+  expectThat((await countOf(page, ".modal")) === 0, `${name}: closing the tour left a replay open`);
 };
 
 const checkTouch = async (browser: Browser, viewport: Viewport) => {
@@ -1283,10 +1324,10 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
   await check("first screen and filters", async () => {
     await page.screenshot({ path: shot(`${name}-first-screen`) });
 
-    const tableTop = await page.evaluate(() => document.querySelector("table.lbt")?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY);
+    const scatterTop = await page.evaluate(() => document.querySelector("#scatter .card")?.getBoundingClientRect().top ?? Number.POSITIVE_INFINITY);
 
-    console.log(name, "the leaderboard starts at", Math.round(tableTop), "px of", height);
-    expectThat(tableTop < height * 0.6, `${name}: the leaderboard starts below the first screen's upper 60%`);
+    console.log(name, "the scatter starts at", Math.round(scatterTop), "px of", height);
+    expectThat(scatterTop < height * 0.6, `${name}: the scatter starts below the first screen's upper 60%`);
 
     if (width <= 1024) {
       console.log(name, "filters line:", await textOf(page, ".filtersum"), "| chips shown", await page.locator(".filters .chip").first().isVisible());
@@ -1301,7 +1342,7 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
   });
   await check("mark tap", async () => {
     for (const selector of ["#odds svg g[role=button]", "#items .fate-bar[role=button]", "#spend .spendbar .seg[role=button]", ...(hasCertain ? ["#certain-mistakes svg g[role=button]"] : [])]) {
-      await page.locator(selector).first().scrollIntoViewIfNeeded();
+      await page.locator(selector).first().evaluate((mark) => mark.scrollIntoView({ block: "center" }));
       await page.locator(selector).first().tap({ force: true });
 
       const tip = await tipOf(page);
@@ -1309,6 +1350,7 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
       console.log(name, "tap", selector, "→", tip);
       expectThat(tip !== "none" && /\d/.test(tip), `${name}: tapping ${selector} shows no tip with a count`);
 
+      await page.mouse.move(0, 0);
       await page.mouse.wheel(0, 120);
       await settled(page);
 
@@ -1323,6 +1365,7 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
       expectThat((await tipOf(page)) === "none", `${name}: a tap outside leaves the tip of ${selector}`);
     }
   });
+  await check("scatter drill-down", () => checkScatterDrill(page, name, true));
   await check("scatter tap", async () => {
     await page.locator("#scatter svg g[style*=pointer]").nth(3).tap({ force: true });
     console.log(name, "tap point → tip:", await tipOf(page));
@@ -1432,6 +1475,7 @@ const checkOptionalFailure = async (browser: Browser) => {
   await settled(page);
 
   expectThat((await page.getByText(/^Could not load the /).count()) === 0, "a failed optional endpoint left a note before any row was open");
+  await openTables(page);
   await page.locator("table.lbt tr.row").first().click();
   await settled(page);
 
@@ -1462,9 +1506,11 @@ mkdirSync(outdir, { recursive: true });
 
 const browser = await chromium.launch({ executablePath: chrome, args: ["--no-sandbox"] });
 
-for (const viewport of VIEWPORTS) await attempt(viewport.name, "baseline capture", () => captureBaseline(browser, viewport));
+const only = VIEWPORTS.filter(({ name }) => process.env["ONLY"] === undefined || process.env["ONLY"].split(",").includes(name));
 
-for (const viewport of VIEWPORTS) await (viewport.isTouch ? checkTouch(browser, viewport) : checkDesktop(browser, viewport));
+for (const viewport of only) await attempt(viewport.name, "baseline capture", () => captureBaseline(browser, viewport));
+
+for (const viewport of only) await (viewport.isTouch ? checkTouch(browser, viewport) : checkDesktop(browser, viewport));
 
 await attempt("desktop", "optional data failing", () => checkOptionalFailure(browser));
 
