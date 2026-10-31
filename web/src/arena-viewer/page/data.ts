@@ -336,6 +336,13 @@ export interface ModelStats {
   readonly tokens: { readonly cr: number; readonly cw: number; readonly inp: number; readonly outp: number };
 }
 
+/** List-price cost over model moves in a config's scored matches; null with no move. */
+export const costPerMove = ({ scored }: { readonly scored: ReadonlyArray<Pick<SeatFull, "cost" | "moves">> }): number | null => {
+  const moves = sumOf(scored.map((seat) => seat.moves ?? 0));
+
+  return moves > 0 ? sumOf(scored.map((seat) => seat.cost ?? 0)) / moves : null;
+};
+
 export const modelStats = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<ModelStats> =>
   [...groupBy(seats, keyOf)].flatMap(([id, started]) => {
     const [first] = started;

@@ -71,8 +71,8 @@ const TOUR: ReadonlyArray<TourStep> = [
   {
     anchor: "spend",
     focus: "#spend .spend",
-    title: "List-price spend",
-    text: "Each config's share of the list-price usage, grouped by model, under the current filters. Look for how much of the total a single config takes.",
+    title: "List-price cost per move",
+    text: "Each config's list-price cost per model move, one bar per config, grouped by model, under the current filters. The total spent is in the heading.",
     isReplay: false,
   },
   {

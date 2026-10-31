@@ -1,17 +1,18 @@
 import { expect, test } from "bun:test";
 
-import { spendOf } from "../src/arena-viewer/page/spend.ts";
+import { costPerMove } from "../src/arena-viewer/page/data.ts";
+import { perMoveOf } from "../src/arena-viewer/page/spend.ts";
 
-const config = (key: string, totalCost: number) => ({ key, model: key, label: key, color: "#fff", totalCost });
+const seat = (cost: number | null, moves: number | null) => ({ cost, moves });
 
-test("spend is shared out by cost, biggest first, and leaves out configs that cost nothing", () => {
-  const spend = spendOf([config("a", 10), config("free", 0), config("b", 30), config("c", 60)]);
+const config = (key: string, scored: ReadonlyArray<ReturnType<typeof seat>>) => ({ key, model: key, effort: "medium", color: "#fff", scored });
 
-  expect(spend.map(({ key }) => key)).toEqual(["c", "b", "a"]);
-  expect(spend.map(({ share }) => share)).toEqual([0.6, 0.3, 0.1]);
+test("cost per move is the cost over the moves of every scored match, not a mean of per-match ratios", () => {
+  expect(costPerMove({ scored: [seat(1, 10), seat(9, 30)] })).toBe(0.25);
 });
 
-test("no spend gives no shares", () => {
-  expect(spendOf([])).toEqual([]);
-  expect(spendOf([config("free", 0)])).toEqual([]);
+test("a config with no move or no cost has no cost per move", () => {
+  expect(costPerMove({ scored: [] })).toBeNull();
+  expect(costPerMove({ scored: [seat(1, 0), seat(null, null)] })).toBeNull();
+  expect(perMoveOf([config("free", [seat(0, 10)]), config("none", [seat(null, null)]), config("paid", [seat(2, 4)])]).map(({ key, cost }) => [key, cost])).toEqual([["paid", 0.5]]);
 });

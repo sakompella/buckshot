@@ -2,7 +2,7 @@ import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { pressable } from "./charts.ts";
-import { baseName, fmtCount, fmtPct, fmtPoints, fmtSec, fmtUsd, isClaude, type ModelStats, sumOf } from "./data.ts";
+import { baseName, costPerMove, fmtCount, fmtPct, fmtPoints, fmtSec, fmtUsd, isClaude, type ModelStats, sumOf } from "./data.ts";
 import type { Derived, ItemSummary } from "./derived.ts";
 import { drillView } from "./drill.ts";
 import { itemIconOf } from "./items.ts";
@@ -25,7 +25,6 @@ interface Detail {
 const detailsOf = (h: H, m: ModelStats, item: ItemSummary | undefined, hasRegret: boolean): ReadonlyArray<Detail> => {
   const { lo, hi } = m.win;
   const moves = sumOf(m.scored.map((seat) => seat.moves ?? 0));
-  const cost = sumOf(m.scored.map((seat) => seat.cost ?? 0));
   const favorite = item?.favorite ?? null;
 
   return [
@@ -33,7 +32,7 @@ const detailsOf = (h: H, m: ModelStats, item: ItemSummary | undefined, hasRegret
     { label: "round wins", title: "", content: [fmtPct(m.roundShare)] },
     { label: "cash share", title: "", content: [fmtPct(m.potShare)] },
     ...(hasRegret ? [{ label: "regret", title: m.regret === null ? "" : `${m.regret.moves.toLocaleString()} moves · ${fmtPct(m.regret.exactShare)} proven exact`, content: [m.regret === null ? "–" : fmtPoints(m.regret.mean)] }] : []),
-    { label: "per move", title: "", content: [fmtUsd(moves > 0 ? cost / moves : null)] },
+    { label: "per move", title: "", content: [fmtUsd(costPerMove(m))] },
     { label: "time", title: "", content: [fmtSec(moves > 0 ? sumOf(m.scored.map((seat) => seat.lat ?? 0)) / moves : null)] },
     { label: "out tok", title: "", content: [fmtCount(m.avgOut)] },
     { label: "fav", title: favorite === null ? "" : `${favorite.k} of ${favorite.n} legal moves`, content: favorite === null ? ["–"] : [itemIconOf(h, favorite.item), `${favorite.item} `, h.span([h.Class("pm")], [fmtPct(favorite.rate)])] },

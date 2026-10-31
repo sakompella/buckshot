@@ -255,8 +255,12 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
 /* section controls */
 .ctl { display: flex; gap: 8px 18px; flex-wrap: wrap; align-items: center; margin: 4px 0 12px; }
 
-.spendbar { display: flex; gap: 2px; height: 34px; margin: 4px 0 16px; }
-.spendbar .seg { min-width: 1px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #000; font-size: 12px; font-weight: 600; line-height: 34px; text-indent: 6px; }
+.cpm { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px 28px; margin-top: 8px; }
+.cpm h3 { margin: 0 0 4px; }
+.cpm-row { display: grid; grid-template-columns: 4.5em minmax(0, 1fr) 5.5em; gap: 10px; align-items: center; padding: 2px 0; font-size: 12.5px; }
+.cpm-bar { display: block; height: 10px; background: #0d0d0d; }
+.cpm-bar i { display: block; height: 100%; }
+.cpm-val { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* up to a tablet the replay is one column that scrolls: the table and the chosen move, then the move list in its own box */
 @media (max-width: 1024px) {

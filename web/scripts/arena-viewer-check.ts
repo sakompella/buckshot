@@ -6,7 +6,7 @@ import { type Browser, chromium, type Page } from "playwright-core";
 
 import { Blunders, CERTAIN_TYPES, CertainMistakes, Consistency, Decisions, ITEMS, MatchDetail, type MoveRegret, NO_GAP, SeatsResponse } from "../src/arena-viewer/api.ts";
 import { anchorId } from "../src/arena-viewer/page/charts.ts";
-import { baseName, baseOrder, CERTAIN_NAMES, fmtCount, fmtPct, keyOf, labelOf, withPotShares } from "../src/arena-viewer/page/data.ts";
+import { baseName, baseOrder, CERTAIN_NAMES, fmtCount, fmtPct, fmtUsd, keyOf, labelOf, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { GROUPS, MOVED_TARGETS, Section } from "../src/arena-viewer/page/model.ts";
 import { pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 import { stepsOf } from "../src/arena-viewer/page/replay.ts";
@@ -890,18 +890,29 @@ const checkItemUsage = async (page: Page, name: string) => {
 
 const checkRunHealth = async (page: Page, name: string) => {
   const seats = await servedSeats();
-  const spendKeys = configsOf(seats).flatMap(([seat]) => (seat === undefined ? [] : [seat])).filter((first) => sum(seats.filter((seat) => keyOf(seat) === keyOf(first)).map((seat) => seat.cost ?? 0)) > 0);
-  const spendModels = new Set(spendKeys.map(({ model }) => model));
+
+  const perMove = configsOf(seats).flatMap(([first]) => {
+    const scored = seats.filter((seat) => first !== undefined && keyOf(seat) === keyOf(first) && seat.status === "completed");
+    const moves = sum(scored.map((seat) => seat.moves ?? 0));
+    const cost = sum(scored.map((seat) => seat.cost ?? 0));
+
+    return first === undefined || moves === 0 || cost <= 0 ? [] : [`${baseName(first.model)} ${first.effort} ${fmtUsd(cost / moves)}`];
+  });
+
   const health = await textOf(page, "#spend");
   const balance = (await page.locator("#spend .seatline .dv").allInnerTexts()).map((text) => text.replaceAll(/\s+/g, " ").trim());
-  const segments = await countOf(page, "#spend .spendbar .seg");
-  const labels = await countOf(page, "#spend .spend .legend span");
 
-  console.log(name, "spend segments", segments, "| model labels", labels, "| seat balance", balance);
-  expectThat((await countOf(page, "#spend .spendbar")) === 1 && (await countOf(page, "#spend .seatline")) === 1, `${name}: run health lacks the spend bar or the seat balance line`);
+  const shown = await page.locator("#spend .cpm-model").evaluateAll((blocks) =>
+    blocks.flatMap((block) => [...block.querySelectorAll(".cpm-row")].map((row) => `${block.querySelector("h3")?.textContent ?? ""} ${row.firstElementChild?.textContent ?? ""} ${row.lastElementChild?.textContent ?? ""}`)),
+  );
+
+  console.log(name, "cost per move bars", shown.length, "| seat balance", balance);
+  expectThat((await countOf(page, "#spend .cpm")) === 1 && (await countOf(page, "#spend .seatline")) === 1, `${name}: run health lacks the cost per move bars or the seat balance line`);
+  expectThat((await countOf(page, "#spend .spendbar")) === 0, `${name}: run health still draws the spend bar`);
   expectThat((await countOf(page, "#spend table")) === 0 && (await countOf(page, "#spend .chartrow")) === 0 && (await countOf(page, "#spend details")) === 0 && !/fail|reminder|fallback|by the hour|extra repl/i.test(health), `${name}: run health still shows a failure figure or a table`);
   expectThat((await countOf(page, "#reliability")) === 0 && (await countOf(page, "#seats")) === 0, `${name}: an old section id is still on the page`);
-  expectThat(segments === spendKeys.length && labels === spendModels.size, `${name}: the spend bar has ${segments} segments and ${labels} model labels, the data has ${spendKeys.length} and ${spendModels.size}`);
+  expectThat(JSON.stringify(shown.toSorted()) === JSON.stringify(perMove.toSorted()), `${name}: the cost per move bars read ${shown.slice(0, 3).join(" | ")}, the served seats give ${perMove.slice(0, 3).join(" | ")}`);
+  expectThat(/\$[\d,]+ spent in total/.test(await textOf(page, "#spend .lbbar")), `${name}: the cost per move heading lacks the total spent`);
 
   const ordered = completedPairs(seats).map((both) => both.toSorted((left, right) => left.position - right.position));
   const firstWon = ordered.map(([first]) => first?.winShare ?? 0);
@@ -1238,7 +1249,7 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
     await page.locator(".hero .title").click();
     expectThat((await tipOf(page)) === "none", "a click outside left the pinned tip");
   });
-  await check("section counts", async () => console.log("matches", await countOf(page, "#matches tbody tr.row"), "| item usage rows", await countOf(page, "#items .fate"), "| spend segments", await countOf(page, "#spend .spendbar .seg")));
+  await check("section counts", async () => console.log("matches", await countOf(page, "#matches tbody tr.row"), "| item usage rows", await countOf(page, "#items .fate"), "| cost per move bars", await countOf(page, "#spend .cpm-row")));
   await check("jump menu", () => checkJumps(page, viewport.name, false));
   await check("sticky filters", async () => console.log("the filters stay in view:", await page.evaluate(() => Math.round(document.querySelector(".filters")?.getBoundingClientRect().top ?? -1)), "px from the top at scroll", await page.evaluate(() => Math.round(scrollY))));
   await check("matches", async () => {
@@ -1249,7 +1260,7 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
   });
   await check("deep link", async () => {
     await page.goto(`${base}/#reliability`);
-    await page.waitForSelector("#spend .spendbar", { timeout: 120_000 });
+    await page.waitForSelector("#spend .cpm", { timeout: 120_000 });
     await settled(page);
     await settled(page);
 
@@ -1341,7 +1352,7 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
     }
   });
   await check("mark tap", async () => {
-    for (const selector of ["#odds svg g[role=button]", "#items .fate-bar[role=button]", "#spend .spendbar .seg[role=button]", ...(hasCertain ? ["#certain-mistakes svg g[role=button]"] : [])]) {
+    for (const selector of ["#odds svg g[role=button]", "#items .fate-bar[role=button]", ...(hasCertain ? ["#certain-mistakes svg g[role=button]"] : [])]) {
       await page.locator(selector).first().evaluate((mark) => mark.scrollIntoView({ block: "center" }));
       await page.locator(selector).first().tap({ force: true });
 
