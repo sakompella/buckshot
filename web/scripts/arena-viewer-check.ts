@@ -934,7 +934,13 @@ const checkDrill = async (page: Page, name: string, isTouch: boolean) => {
   const barRows = await page.locator(".drillin .fate").evaluateAll((fates) => fates.map((fate) => ({ name: fate.querySelector(".fate-name")?.textContent ?? "", value: fate.querySelector(".fate-val")?.textContent ?? "" })));
 
   console.log(name, "drill", key, "| opponents", opponents.size, "| item bars", barRows.length, "| all items unused", barRows[0]?.value, "| health gap:", gapText, "| steady:", steadyLine);
-  expectThat(barRows[0]?.name === "All items" && barRows[0]?.value === `${Math.round((unused / sum(received)) * 100)}%`, `${name}: the first item bar is ${JSON.stringify(barRows[0])}, the data gives ${Math.round((unused / sum(received)) * 100)}% unused`);
+  expectThat(barRows[0]?.name === "All items" && barRows[0]?.value === `${Math.round((unused / sum(received)) * 100)}% unused`, `${name}: the first item bar is ${JSON.stringify(barRows[0])}, the data gives ${Math.round((unused / sum(received)) * 100)}% unused`);
+  expectThat(barRows.every(({ value }) => value.endsWith(" unused")), `${name}: an item bar's percentage is not labelled unused: ${JSON.stringify(barRows.map(({ value }) => value))}`);
+
+  const config = (await row.locator("td .dot").first().evaluate((dot) => getComputedStyle(dot).backgroundColor));
+  const swatches = await page.locator(".drillin .fate-legend i").evaluateAll((marks) => marks.map((mark) => getComputedStyle(mark).backgroundColor));
+
+  expectThat(swatches.length === 3 && swatches.every((swatch) => swatch === config), `${name}: the drill-down legend swatches ${swatches.join(" ")} are not the config colour ${config}`);
   expectThat(barRows.length === 1 + received.filter((count) => count > 0).length, `${name}: the drill-down has ${barRows.length} item bars for ${received.filter((count) => count > 0).length} items received`);
   expectThat(mine.length > 0 && (await page.locator(".drillin").count()) === 1, `${name}: the first row opened ${await page.locator(".drillin").count()} drill-downs`);
   await page.locator(".lb").first().screenshot({ path: shot(`${name}-drill`), style: UNSTICK });
@@ -947,6 +953,7 @@ const checkItemUsage = async (page: Page, name: string) => {
   const models = new Set(seats.map(({ model }) => model));
   const shown = await page.locator("#items figure").first().locator(".fate").evaluateAll((fates) => fates.map((fate) => ({ name: fate.querySelector(".fate-name")?.textContent ?? "", value: fate.querySelector(".fate-val")?.textContent ?? "" })));
   const kinds = await countOf(page, "#items figure:nth-child(2) .fate");
+  const unusedValues = await page.locator("#items figure:nth-child(2) .fate-val").allInnerTexts();
 
   const rates = [...models].map((model) => {
     const available = decisions.seat.flatMap((seatIndex, move) => (seats[seatIndex]?.model === model && (decisions.legalUse[move] ?? 0) !== 0 ? [move] : []));
@@ -958,6 +965,7 @@ const checkItemUsage = async (page: Page, name: string) => {
 
   console.log(name, "item usage by model", shown.map(({ name: model, value }) => `${model} ${value}`).join(", "), "| by item", kinds);
   expectThat(shown.length === models.size && rates.every((rate) => shown.some((row) => row.name === rate.name && row.value === rate.value)), `${name}: the item usage rows ${JSON.stringify(shown)} differ from the data ${JSON.stringify(rates)}`);
+  expectThat(unusedValues.length > 0 && unusedValues.every((value) => /^\d+% unused$/.test(value)), `${name}: the item bars' percentages are not labelled unused: ${unusedValues.slice(0, 3).join(" | ")}`);
   expectThat(kinds === ITEMS.length, `${name}: the item usage figure by item has ${kinds} rows, not ${ITEMS.length}`);
   expectThat(!/Item fates|By config|Same position, same move/.test(text), `${name}: the item usage section still carries a retired figure`);
 };

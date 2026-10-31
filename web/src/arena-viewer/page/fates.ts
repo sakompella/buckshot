@@ -181,7 +181,7 @@ const rowView = (h: H, scope: string, { name, color, fates, tip }: Row, label: R
         [h.Class("fate-bar fate-hit"), ...markTip(h, anchorId("fate", scope, name), tip)],
         (["used", "stolen", "unused"] as const).map((fate) => h.i([h.Style({ width: `${(fates[fate] / received * 100).toFixed(2)}%`, background: color, opacity: OPACITY[fate] })], [])),
       ),
-      h.span([h.Class("fate-val")], [pct(fates.unused / received)]),
+      h.span([h.Class("fate-val")], [`${pct(fates.unused / received)} unused`]),
     ],
   );
 };
@@ -192,15 +192,15 @@ const LEGEND = [
   ["unused", "left unused"],
 ] as const;
 
-const legendView = (h: H): Html =>
-  h.div([h.Class("fate-legend")], LEGEND.map(([fate, label]) => h.span([], [h.i([h.Style({ opacity: OPACITY[fate] })], []), label])));
+const legendView = (h: H, color: string): Html =>
+  h.div([h.Class("fate-legend")], LEGEND.map(([fate, label]) => h.span([], [h.i([h.Style({ background: color, opacity: OPACITY[fate] })], []), label])));
 
 const itemLabel = (h: H, name: string): ReadonlyArray<Html | string> => (name === "All items" ? [name] : [itemIconOf(h, name), name]);
 
 export const itemBarsView = (h: H, seats: ReadonlyArray<SeatFull>, focal: ReadonlyArray<SeatFull>, color: string, scope: string): Html => {
   const { all, items } = itemFates(seats, focal, color);
 
-  return h.div([], [legendView(h), h.div([h.Class("fates")], [...(all === null ? [] : [rowView(h, scope, all, [all.name])]), ...items.map((row) => rowView(h, scope, row, itemLabel(h, row.name)))])]);
+  return h.div([], [legendView(h, color), h.div([h.Class("fates")], [...(all === null ? [] : [rowView(h, scope, all, [all.name])]), ...items.map((row) => rowView(h, scope, row, itemLabel(h, row.name)))])]);
 };
 
 export const itemUsageView = (h: H, decisions: Decisions, seats: ReadonlyArray<SeatFull>, focal: ReadonlyArray<SeatFull>): Html => {
@@ -222,7 +222,7 @@ export const itemUsageView = (h: H, decisions: Decisions, seats: ReadonlyArray<S
             [],
             [
               h.h3([], ["What became of each item"]),
-              items.length === 0 ? h.div([h.Class("empty")], ["No scored matches for this filter."]) : h.div([], [legendView(h), h.div([h.Class("fates")], items.map((row) => rowView(h, "page", row, itemLabel(h, row.name))))]),
+              items.length === 0 ? h.div([h.Class("empty")], ["No scored matches for this filter."]) : h.div([], [legendView(h, ITEM_COLOR), h.div([h.Class("fates")], items.map((row) => rowView(h, "page", row, itemLabel(h, row.name))))]),
             ],
           ),
         ],
