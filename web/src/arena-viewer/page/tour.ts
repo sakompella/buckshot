@@ -37,8 +37,8 @@ export const TOUR: ReadonlyArray<TourStep> = [
   {
     anchor: "leaderboards",
     focus: "#leaderboards .lbt tbody tr:first-child",
-    title: "A config's matches",
-    text: "A click on a row lists its matches by opponent, one square per match. Faded rows rest on few scored matches.",
+    title: "A config's row",
+    text: "A click on a row opens its matches by opponent, one square per match, then how steady it is, how much it writes when behind or ahead, and what became of its items. Faded rows rest on few scored matches.",
   },
   {
     anchor: "scatter",
@@ -47,16 +47,16 @@ export const TOUR: ReadonlyArray<TourStep> = [
     text: "Each point is a config, a model at one effort, placed by its Round Elo against its cost, model moves or output tokens per match, or its regret, an estimate of the round win chance its moves gave up (lower is better). Look for configs rated alike that sit far apart.",
   },
   {
-    anchor: "interesting",
-    focus: "#interesting .igrid",
-    title: "Interesting matches",
-    text: "A few matches worth a look, such as the biggest comeback or an underdog sweep. A click opens the replay.",
+    anchor: "breakdown",
+    focus: "#breakdown details",
+    title: "Win share against each opponent",
+    text: "Each config's win share against each opponent model, folded until a click on the title opens it. Inside, a click on a column head sorts by it, and the small grey number in each cell is the sample behind it.",
   },
   {
     anchor: "matches",
     focus: "#matches .bar",
     title: "Matches",
-    text: "Every started match, newest first, with a search. A row opens its replay, where the arrow keys step through the moves and Escape closes it.",
+    text: "Every started match, newest first, with a search and two shortcuts, Comebacks and Upsets. A row opens its replay, where the arrow keys step through the moves and Escape closes it.",
   },
   {
     anchor: "matches",
@@ -79,44 +79,20 @@ export const TOUR: ReadonlyArray<TourStep> = [
   {
     anchor: "items",
     focus: "#items .chartrow",
-    title: "Item fates",
-    text: "What became of the items each config received: used, stolen by the opponent or left unused, by config and by item. Look for the items most often left unused.",
+    title: "Item usage",
+    text: "How often each model used an item when it had one, and what became of each kind of item: used, stolen by the opponent or left unused. Look for the items most often left unused.",
   },
   {
-    anchor: "items",
-    focus: "#items > div > .card",
-    title: "Same position, same move",
-    text: "How often a config chose the same move when it met the same position again, with the count of repeated positions. It measures steadiness, not good play.",
-  },
-  {
-    anchor: "reliability",
-    focus: "#reliability .chartrow figure:first-child",
-    title: "Failures",
-    text: "Service failures, the calls a provider or the shared hub refused, sit apart from model failures, the turns a model ended without a move. Many failed calls are quota limits on the shared endpoints, not the model's play.",
-  },
-  {
-    anchor: "reliability",
-    focus: "#reliability .lanes",
-    title: "Failed calls by hour",
-    text: "Each model's failed replies, by the hour each call was logged. Lanes failing in the same hours point to an outage rather than a weak model.",
-  },
-  {
-    anchor: "reliability",
-    focus: "#reliability > div > .card",
-    title: "Where the money went",
+    anchor: "spend",
+    focus: "#spend .spend",
+    title: "List-price spend",
     text: "Each config's share of the list-price usage, grouped by model, under the current filters. Look for how much of the total a single config takes.",
   },
   {
-    anchor: "seats",
-    focus: "#seats .chartrow",
+    anchor: "spend",
+    focus: "#spend .seatline",
     title: "Seat balance",
-    text: "Whether table position and starting round 1 matter: round 1 to the match, comebacks and the starter's edge per seed.",
-  },
-  {
-    anchor: "breakdown",
-    focus: "#breakdown > div",
-    title: "The numbers as tables",
-    text: "The failures, the seats and each config's win share against each opponent model fold into tables at the end; a click on a title opens one. Inside the open heatmap a click on a column head sorts by it, and the small grey number in each cell is the sample behind it.",
+    text: "Whether table position or starting round 1 decides matches: the win share of position 1 and of the round 1 starter, and how often the round 1 winner won the match, each with its sample.",
   },
 ];
 
