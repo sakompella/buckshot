@@ -103,6 +103,57 @@ class CertainMistakes(unittest.TestCase):
         )
         self.assertEqual([d.search for d in found], [cm.Search.OPPONENT_SHOT_HIGHER, cm.Search.SETTLED_FOR_SELF_SHOT, cm.Search.UNSEARCHED])
 
+    def test_every_opportunity_is_written_with_its_outcome_and_source(self):
+        decisions = [
+            decision(0, chamber="Live", source="glass", shot="self"),
+            decision(1, chamber="Live", source="public", shot="opponent"),
+            decision(2, chamber="Blank", source="phone", shot="opponent", known="1B 2L"),
+            decision(3, chamber="Blank", source="public", shot="opponent", known="1B 2L", hp=health(opponent=None)),
+            decision(4, chamber="Blank", source="public", shot="opponent"),
+            decision(5, chamber="Blank", source="combined", shot="self"),
+            decision(6, shot="self", known="2B"),
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            found = cm.load(*write(Path(directory), decisions))
+            target = Path(directory) / "opportunities.sqlite"
+            cm.write_opportunities(found, target)
+            cm.write_opportunities(found, target)
+            db = sqlite3.connect(target)
+            rows = db.execute("SELECT * FROM opportunities ORDER BY ordinal").fetchall()
+            db.close()
+        self.assertEqual(
+            rows,
+            [
+                ("m1", 0, "A", "self_on_live", "mistake", "glass"),
+                ("m1", 1, "A", "self_on_live", "not a mistake", "public"),
+                ("m1", 2, "A", "gave_up_guaranteed_win", "mistake", "phone"),
+                ("m1", 3, "A", "hidden_health", "excluded", "public"),
+                ("m1", 4, "A", "gave_turn_away", "fact pattern", "public"),
+                ("m1", 5, "A", "gave_turn_away", "not a mistake", "combined"),
+            ],
+        )
+        for pattern in (cm.Pattern.SELF_ON_LIVE, cm.Pattern.GAVE_UP_GUARANTEED_WIN):
+            self.assertEqual(sum(r[3] == pattern.name.lower() and r[4] == "mistake" for r in rows), cm.rate(cm.of(found, pattern)).chose)
+
+    def test_the_written_rates_are_the_documented_cells(self):
+        decisions = [decision(n, chamber="Live", source="public", shot="self" if n % 3 == 0 else "opponent") for n in range(40)]
+        decisions += [decision(100 + n, player="B", chamber="Live", source="public", shot="self") for n in range(5)]
+        with tempfile.TemporaryDirectory() as directory:
+            found = cm.load(*write(Path(directory), decisions))
+            target = Path(directory) / "opportunities.sqlite"
+            cm.write_opportunities(found, target)
+            db = sqlite3.connect(target)
+            rows = db.execute("SELECT * FROM rates WHERE type = 'self_on_live' ORDER BY scope, model").fetchall()
+            db.close()
+        shown = {(scope, model, effort): cm.Rate(opportunities, chose, None if lo is None else (lo, hi)).cell() for scope, model, effort, _, chose, opportunities, lo, hi in rows}
+        table = cm.certain(found)
+        self.assertEqual(sorted(shown), [("all", "", ""), ("config", "opus", "high"), ("config", "sol", "low"), ("model", "opus", ""), ("model", "sol", "")])
+        for (scope, model, effort), cell in shown.items():
+            if scope != "model":
+                self.assertIn(f"| {model or 'all'} | {effort} | {cell} |", table)
+        self.assertEqual(shown[("config", "sol", "low")], "5/5")
+        self.assertRegex(shown[("config", "opus", "high")], r"^\d+\.\d% \(14/40\) \[")
+
     def test_rows_of_two_evaluators_are_refused(self):
         with self.assertRaises(SystemExit):
             self.load([decision(0, chamber="Blank"), decision(1, chamber="Blank")], searched=[(0, "e1", scores(1, 2)), (1, "e2", scores(1, 2))])

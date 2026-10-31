@@ -233,6 +233,21 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
 .tag.regret.exact { color: var(--fg); border-color: var(--fg); }
 .tag.regret.big { color: #000; background: var(--fg); border-color: var(--fg); font-weight: 600; }
 
+.cmt { width: auto; max-width: 100%; }
+.cmt th, .cmt td { vertical-align: top; padding-left: 28px; }
+.cmt th:first-child, .cmt td:first-child { padding-left: 8px; }
+.cmt th { white-space: normal; max-width: 24ch; }
+.cmt td:not(:first-child) { line-height: 1.35; }
+.cmt .cmr { display: block; }
+.cmt tr.pooled td { font-weight: 600; border-top: 1px solid var(--line); }
+.cmb { background: none; border: 0; border-bottom: 1px dotted var(--mut); color: var(--fg); font: inherit; padding: 0; cursor: pointer; font-variant-numeric: tabular-nums; }
+.cmb[aria-expanded="true"] { border-bottom-style: solid; }
+.cmt tr.drill td { padding: 8px 4px 12px; }
+.tablelink { background: none; border: 0; color: var(--mut); font: inherit; padding: 0; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; text-align: left; }
+.tablelink:hover { color: var(--fg); }
+.cmmatches { max-height: 240px; overflow-y: auto; }
+.tag.certain { color: var(--fg); border-color: var(--fg); }
+
 /* section controls */
 .ctl { display: flex; gap: 8px 18px; flex-wrap: wrap; align-items: center; margin: 4px 0 12px; }
 
@@ -275,6 +290,8 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
 /* touch screens: 44px targets */
 @media (pointer: coarse) {
   nav a, .toggle button, .chip, .more, select, input:not([type="checkbox"]), .stepper button, .seedrow .chip { min-height: 44px; }
+  .tablelink { min-height: 44px; }
+  .cmb { min-height: 44px; min-width: 44px; display: inline-flex; align-items: center; border-bottom: 0; text-decoration: underline dotted; text-underline-offset: 4px; }
   .chip { padding: 0 12px; min-width: 44px; }
   .toggle button { min-width: 44px; }
   .modal .x { width: 44px; height: 44px; right: 4px; top: 4px; }
@@ -406,6 +423,8 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
 }
 
 @media (max-width: 639px) {
+  .cmt th, .cmt td { padding-left: 4px; padding-right: 4px; }
+  .cmt .cmr .pm { display: block; }
   table.lbt.rows tr.row { gap: 2px 12px; padding: 8px 2px; }
   table.lbt.rows td.barcol, table.lbt.rows td.detail { display: none; }
   table.lbt.rows td[data-label="round elo"]::before { content: none; }

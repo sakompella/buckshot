@@ -2,8 +2,10 @@ import { Option } from "effect";
 import { AsyncData } from "foldkit";
 import { createLazy, type Document, type Html, type HtmlBuilder } from "foldkit/html";
 
+import type { CertainMistakes } from "../api.ts";
 import { baseName, baseOrder, colorOf, EFFORTS, fmtCount, sumOf, unique } from "./data.ts";
 import { tipView } from "./charts.ts";
+import { certainTableView, certainView, hasCertain } from "./certain.ts";
 import { type Derived, derive } from "./derived.ts";
 import { itemUsageView } from "./fates.ts";
 import { breakdownView, heatRowsOf } from "./heat.ts";
@@ -121,6 +123,10 @@ const lazyScatter = createLazy();
 
 const lazyMatches = createLazy();
 
+const lazyCertain = createLazy();
+
+const lazyCertainTable = createLazy();
+
 const lazyOdds = createLazy();
 
 const lazyItems = createLazy();
@@ -150,6 +156,13 @@ const scatterCard = (h: H, derived: Derived, scatter: Model["scatter"], width: n
 
 const spendCard = (h: H, derived: Derived): Html => h.div([h.Class("card")], [spendView(h, derived.pooled)]);
 
+const optionalView = <A>(h: H, data: AsyncData.AsyncData<A, string>, what: string, draw: (loaded: A) => Html): Html =>
+  AsyncData.matchData(data, {
+    onEmpty: () => h.empty,
+    onFailure: (error) => h.div([h.Class("card")], [h.p([h.Class("k")], [`Could not load the ${what}: ${error}`])]),
+    onData: draw,
+  });
+
 const sectionView = (h: H, section: Section, content: Html): Html => h.section([h.Id(section)], [content]);
 
 const groupLabel = (group: Group): string => GROUPS.find((entry) => entry.group === group)?.label ?? group;
@@ -161,6 +174,9 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
   const content = contentWidth(model.viewport);
   const card = cardWidth(model.viewport);
   const afterFirstPaint = (draw: () => Html): Html => (model.isFirstPaintDone ? draw() : h.empty);
+
+  const afterCertain = (data: Derived["certainMistakes"], draw: (certain: CertainMistakes) => Html): Html =>
+    AsyncData.matchData(data, { onEmpty: () => h.empty, onFailure: () => h.empty, onData: (certain) => (certain.rates.length === 0 ? h.empty : draw(certain)) });
 
   return h.div(
     [],
@@ -174,11 +190,21 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
       ]),
       groupView(h, "watch", [sectionView(h, "matches", lazyMatches(matchesView, [h, derived.matches, derived.ratings, model.matchList]))]),
       groupView(h, "decisions", [
+        ...(hasCertain(derived.certainMistakes)
+          ? [
+              sectionView(
+                h,
+                "certain-mistakes",
+                afterFirstPaint(() => optionalView(h, derived.certainMistakes, "certain mistakes", (certain) => lazyCertain(certainView, [h, certain, derived.seats, derived.keep, model.viewport.width, content]))),
+              ),
+            ]
+          : []),
         sectionView(h, "odds", afterFirstPaint(() => lazyOdds(oddsView, [h, derived.decisions, derived.seats, derived.keep, model.viewport.width, content]))),
         sectionView(h, "items", afterFirstPaint(() => lazyItems(itemUsageView, [h, derived.decisions, derived.seats, derived.filtered]))),
       ]),
       groupView(h, "health", [
         sectionView(h, "spend", afterFirstPaint(() => h.div([], [lazySpend(spendCard, [h, derived]), lazySeatBalance(seatBalanceView, [h, derived.matchSeats])]))),
+        afterFirstPaint(() => afterCertain(derived.certainMistakes, (certain) => lazyCertainTable(certainTableView, [h, certain, derived.seats, derived.keep, derived.allMatches, model.maybeCertainOpen]))),
       ]),
     ],
   );
