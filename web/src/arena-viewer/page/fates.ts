@@ -178,7 +178,7 @@ const rowView = (h: H, scope: string, { name, color, fates, tip }: Row, label: R
     [
       h.span([h.Class("fate-name"), h.Style({ color })], label),
       h.span(
-        [h.Class("fate-bar"), ...markTip(h, anchorId("fate", scope, name), tip)],
+        [h.Class("fate-bar fate-hit"), ...markTip(h, anchorId("fate", scope, name), tip)],
         (["used", "stolen", "unused"] as const).map((fate) => h.i([h.Style({ width: `${(fates[fate] / received * 100).toFixed(2)}%`, background: color, opacity: OPACITY[fate] })], [])),
       ),
       h.span([h.Class("fate-val")], [pct(fates.unused / received)]),

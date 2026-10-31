@@ -12,6 +12,7 @@ h3 { font-size: 15px; font-weight: 600; margin: 18px 0 6px; }
 section { border-top: 1px solid var(--line); padding-top: 28px; margin-top: 28px; }
 /* A group's heading, then its sections; the first section's rule would double the group's own. */
 section.part { border-top-color: #3a3a3a; margin-top: 56px; }
+section.part:last-of-type { min-height: 100svh; }
 h1.ghead { font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mut); margin: 0 0 18px; }
 h1.ghead + section { border-top: 0; margin-top: 0; padding-top: 0; }
 /* The jump menu right above names the first group, so its heading is only for screen readers. */
@@ -45,8 +46,6 @@ input[type="text"], input:not([type]) { width: 280px; }
 .more { border-color: var(--line); margin-top: 12px; }
 
 svg text { fill: var(--mut); font-size: 12px; }
-svg .lbl { font-size: 12.5px; fill: var(--fg); }
-svg .val { font-size: 12px; fill: var(--fg); font-variant-numeric: tabular-nums; }
 svg .small { font-size: 11px; }
 svg .cell { font-size: 10.5px; font-variant-numeric: tabular-nums; }
 svg .note { font-style: italic; font-size: 11px; }
@@ -119,7 +118,6 @@ details summary { cursor: pointer; margin: 4px 0; }
 .fate-bar { display: flex; height: 12px; background: #0d0d0d; }
 .fate-bar i { display: block; height: 100%; }
 .fate-val { font-variant-numeric: tabular-nums; }
-svg .big { font-size: 20px; font-weight: 600; fill: var(--fg); font-variant-numeric: tabular-nums; }
 details.tables { margin-top: 34px; }
 details.fold > summary { color: var(--mut); font-size: 13px; }
 details.tables > summary { color: var(--mut); font-size: 13px; }

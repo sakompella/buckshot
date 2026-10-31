@@ -133,9 +133,7 @@ const jumpedTo = (page: Page, section: string) =>
     const bar = [...document.querySelectorAll(".top, nav")].find((element) => getComputedStyle(element).position === "sticky");
     const top = document.getElementById(id)?.getBoundingClientRect().top ?? Number.NaN;
 
-    const isAtEnd = scrollY + innerHeight >= document.documentElement.scrollHeight - 1;
-
-    return `${id}: ${Math.round(top - (bar?.getBoundingClientRect().bottom ?? 0))}px below the bar, hash ${location.hash}${isAtEnd ? ", at the page end" : ""}`;
+    return `${id}: ${Math.round(top - (bar?.getBoundingClientRect().bottom ?? 0))}px below the bar, hash ${location.hash}`;
   }, section);
 
 // A missing section is a failed check, not an abort: the other sections and viewports still get their pictures.
@@ -172,7 +170,22 @@ const captureBaseline = async (browser: Browser, viewport: Viewport) => {
 // Each group's link lands its heading just under the sticky bar, and so does a link to any section, old links included.
 const checkJumps = async (page: Page, name: string, isTouch: boolean) => {
   // The heading's top rule tucks under the bar's own, so -1 is right too.
-  const landed = (text: string) => /: -?[01]px below/.test(text) || (text.endsWith(", at the page end") && Number(/: (-?\d+)px below/.exec(text)?.[1]) >= 0);
+  const landed = (text: string) => /: -?[01]px below/.test(text);
+  const groupOf = (target: string) => GROUPS.find(({ group, sections }) => group === target || sections.some((section) => section === target));
+
+  const fromTop = (hash: string) =>
+    page.evaluate((id) => {
+      scrollTo(0, 0);
+      history.replaceState(null, "", location.pathname + location.search);
+      location.hash = id;
+    }, hash);
+
+  const markedGroup = async (target: string, label: string) => {
+    const group = groupOf(target);
+    const marked = await textOf(page, "nav a.on").catch(() => "none");
+
+    expectThat(group !== undefined && marked.trim() === group.label, `${name}: ${label} lands in ${group?.label}, but the menu marks ${marked}`);
+  };
 
   for (const { group } of GROUPS) {
     const link = page.locator(`nav a[href="#${group}"]`);
@@ -182,6 +195,8 @@ const checkJumps = async (page: Page, name: string, isTouch: boolean) => {
       continue;
     }
 
+    await page.evaluate(() => scrollTo(0, 0));
+    await settled(page);
     await (isTouch ? link.tap() : link.click());
     await settled(page);
 
@@ -189,30 +204,29 @@ const checkJumps = async (page: Page, name: string, isTouch: boolean) => {
 
     console.log(name, "jump", jumped, "| menu marks", await textOf(page, "nav a.on").catch(() => "none"));
     expectThat(landed(jumped), `${name}: the ${group} link lands at ${jumped}`);
+    await markedGroup(group, `the ${group} link`);
   }
 
   for (const section of SECTIONS) {
-    await page.evaluate((id) => {
-      location.hash = id;
-    }, section);
+    await fromTop(section);
     await settled(page);
     await settled(page);
 
     const jumped = await jumpedTo(page, section);
 
     expectThat(landed(jumped), `${name}: a link to #${section} lands at ${jumped}`);
+    await markedGroup(section, `a link to #${section}`);
   }
 
   for (const [old, target] of MOVED_TARGETS) {
-    await page.evaluate((id) => {
-      location.hash = id;
-    }, old);
+    await fromTop(old);
     await settled(page);
     await settled(page);
 
     const jumped = await jumpedTo(page, target);
 
     expectThat(landed(jumped), `${name}: an old link to #${old} lands at ${jumped}`);
+    await markedGroup(target, `an old link to #${old}`);
   }
 
   console.log(name, "every section link, old ones included, landed under the bar");
@@ -611,7 +625,6 @@ const checkMissingRegret = async (browser: Browser, viewport: Viewport) => {
   }
 };
 
-
 const served = async <A, I>(path: string, schema: Schema.Codec<A, I>): Promise<A> => Schema.decodeUnknownSync(schema)(await (await fetch(`${base}${path}`)).json());
 
 const once = <A>(load: () => Promise<A>) => {
@@ -656,6 +669,34 @@ const numberIn = (text: string) => Number(text.replaceAll(",", "").match(/-?\d+(
 
 const press = (isTouch: boolean, target: ReturnType<Page["locator"]>) => (isTouch ? target.tap() : target.click());
 
+const comebackSize = (winner: ServedSeat) =>
+  Math.max(0, ...(winner.story?.ok === true ? winner.story.rounds.flatMap((round, index) => (round.winner === winner.player ? [winner.deficits[index] ?? 0] : [])) : []));
+
+const worstGapInWonRounds = (detail: MatchDetail, player: string) =>
+  Math.max(
+    0,
+    ...detail.decisions.flatMap(({ players, round }) => {
+      const own = players.find((state) => state.player === player)?.health;
+      const other = players.find((state) => state.player !== player)?.health;
+
+      return detail.story.ok && detail.story.rounds[round - 1]?.winner === player && own !== undefined && other !== undefined ? [other - own] : [];
+    }),
+  );
+
+const checkComebacksAgainstReplays = async (name: string) => {
+  const decided = decidedPairs(await servedSeats());
+  const comebacks = decided.filter(({ winner }) => comebackSize(winner) >= MATCH_PRESETS[0].minimum);
+  const others = decided.filter(({ winner }) => comebackSize(winner) < MATCH_PRESETS[0].minimum);
+  const sampled = others.filter((_pair, at) => at % Math.ceil(others.length / 60) === 0);
+  const fromReplay = async ({ winner }: (typeof decided)[number]) => worstGapInWonRounds(await servedDetail(winner.matchId), winner.player);
+  const listed = await Promise.all(comebacks.map(fromReplay));
+  const unlisted = await Promise.all(sampled.map(fromReplay));
+
+  console.log(name, "comebacks read from replays", comebacks.length, "| smallest", Math.min(...listed), "| unlisted sample", sampled.length, "| biggest", Math.max(...unlisted));
+  expectThat(listed.every((gap) => gap >= MATCH_PRESETS[0].minimum), `${name}: a listed comeback's winner never trailed by ${MATCH_PRESETS[0].minimum} in a round it won, by its replay`);
+  expectThat(unlisted.every((gap) => gap < MATCH_PRESETS[0].minimum), `${name}: a match left out of Comebacks has a winner who trailed by ${MATCH_PRESETS[0].minimum} in a round it won, by its replay`);
+};
+
 const MATCH_PRESETS = [
   { label: "Comebacks", note: /^from (\d+) behind$/, minimum: 3 },
   { label: "Upsets", note: /^rated (\d+) lower$/, minimum: 100 },
@@ -669,7 +710,7 @@ const checkMatchList = async (page: Page, name: string, isTouch: boolean) => {
   const ratingOf = (seat: ServedSeat) => ratings.get(keyOf(seat))?.rating ?? 0;
 
   const expected = [
-    decided.filter(({ winner }) => winner.low !== null && winner.low[1] - winner.low[0] >= MATCH_PRESETS[0].minimum).length,
+    decided.filter(({ winner }) => comebackSize(winner) >= MATCH_PRESETS[0].minimum).length,
     decided.filter(({ winner, loser }) => ratingOf(loser) - ratingOf(winner) >= MATCH_PRESETS[1].minimum).length,
   ];
 
@@ -750,6 +791,13 @@ const checkDrill = async (page: Page, name: string, isTouch: boolean) => {
   const pairs = completedPairs(seats).filter((both) => both.some((seat) => keyOf(seat) === key));
   const decisions = await servedPageDecisions();
   const lines = await page.locator(".drillin .dline").allInnerTexts();
+
+  if (isTouch) {
+    const bars = await page.locator(".drillin .fate-bar").evaluateAll((found) => found.map((bar) => Math.round(bar.getBoundingClientRect().height)));
+
+    expectThat(bars.length > 0 && bars.every((height) => height >= 44), `${name}: the drill-down's item bars are ${bars.join(", ")} px tall`);
+  }
+
   const lineOf = (title: string) => lines.map((line) => line.replaceAll(/\s+/g, " ").trim()).find((line) => line.startsWith(title));
   const tallies = GAP_NAMES.map(() => ({ moves: 0, out: 0 }));
 
@@ -832,13 +880,15 @@ const checkRunHealth = async (page: Page, name: string) => {
   expectThat((await countOf(page, "#reliability")) === 0 && (await countOf(page, "#seats")) === 0, `${name}: an old section id is still on the page`);
   expectThat(segments === spendKeys.length && labels === spendModels.size, `${name}: the spend bar has ${segments} segments and ${labels} model labels, the data has ${spendKeys.length} and ${spendModels.size}`);
 
-  const blocks = groupedBy(completedPairs(seats), ([first]) => first?.seedBlock ?? "").filter((block) => block.length === 2);
-  const ordered = blocks.flatMap((block) => block.map((both) => both.toSorted((left, right) => left.position - right.position)));
+  const ordered = completedPairs(seats).map((both) => both.toSorted((left, right) => left.position - right.position));
   const firstWon = ordered.map(([first]) => first?.winShare ?? 0);
+  const starterWon = ordered.flatMap(([first, second]) => [first, second].flatMap((seat) => (seat?.player === first?.story?.starter ? [seat?.winShare ?? 0] : [])));
   const roundOne = decidedPairs(seats).flatMap(({ winner }) => (winner.story?.ok === true ? [winner.story.rounds[0]?.winner === winner.player] : []));
-  const expectedBalance = [`position 1 ${(100 * (sum(firstWon) / firstWon.length)).toFixed(1)}%`, `round-1 winner ${((100 * roundOne.filter(Boolean).length) / roundOne.length).toFixed(1)}%`];
+  const share = (label: string, wins: number, n: number) => `${label} ${((100 * wins) / n).toFixed(1)}% n ${n.toLocaleString()}`;
 
-  expectThat(balance.length === 3 && balance[0]?.startsWith(expectedBalance[0] ?? "") === true && balance[2]?.startsWith(expectedBalance[1] ?? "") === true && balance.every((item) => /n [\d,]+$/.test(item)), `${name}: the seat balance line ${JSON.stringify(balance)} differs from ${JSON.stringify(expectedBalance)}`);
+  const expectedBalance = [share("position 1", sum(firstWon), firstWon.length), share("starter", sum(starterWon), starterWon.length), share("round-1 winner", roundOne.filter(Boolean).length, roundOne.length)];
+
+  expectThat(JSON.stringify(balance) === JSON.stringify(expectedBalance), `${name}: the seat balance line ${JSON.stringify(balance)} differs from ${JSON.stringify(expectedBalance)}`);
 };
 
 const checkDesktop = async (browser: Browser, viewport: Viewport) => {
@@ -878,6 +928,7 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
     await heat(page).screenshot({ path: shot("heat-opp"), style: UNSTICK });
   });
   await check("match list", () => checkMatchList(page, viewport.name, false));
+  await check("comebacks by replay", () => checkComebacksAgainstReplays(viewport.name));
   await check("drill-down", async () => {
     await page.locator("table.lbt tr.row").first().click();
     await page.locator(".drillin .sq i").first().hover();
@@ -980,7 +1031,11 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
     await page.waitForSelector("#spend .spendbar", { timeout: 120_000 });
     await settled(page);
     await settled(page);
-    console.log("deep link", await jumpedTo(page, "spend"));
+
+    const landing = await jumpedTo(page, "spend");
+
+    console.log("deep link", landing);
+    expectThat(/: -?[01]px below/.test(landing), `the #reliability link lands at ${landing}`);
   });
   await check("tour", () => checkTour(page, viewport.name));
   await page.close();

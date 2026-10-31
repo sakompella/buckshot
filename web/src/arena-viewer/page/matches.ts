@@ -44,11 +44,14 @@ const decidedOf = (match: MatchRow): ReadonlyArray<Decided> => {
 
 const newestFirst = (left: MatchRow, right: MatchRow) => right.startedAt.localeCompare(left.startedAt);
 
+const comebackOf = (winner: SeatFull): number =>
+  Math.max(0, ...(winner.story?.ok === true ? winner.story.rounds.flatMap((round, index) => (round.winner === winner.player ? [winner.deficits[index] ?? 0] : [])) : []));
+
 const presetRows = (matches: ReadonlyArray<MatchRow>, ratings: ReadonlyMap<string, Rating>, preset: MatchPreset): ReadonlyArray<Listed> => {
   const ratingOf = (seat: SeatFull) => ratings.get(keyOf(seat))?.rating ?? 0;
 
   const measured = matches.flatMap(decidedOf).map(({ match, winner, loser }) => {
-    const behind = winner.low === null ? 0 : winner.low[1] - winner.low[0];
+    const behind = comebackOf(winner);
     const underRated = ratingOf(loser) - ratingOf(winner);
 
     return preset === "comebacks"

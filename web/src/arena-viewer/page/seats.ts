@@ -1,11 +1,10 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { addTo, type BlockTally, blockRate, groupBy, keyOf, type Rate, type SeatFull } from "./data.ts";
+import { groupBy, type SeatFull } from "./data.ts";
 import { memoLast } from "./derived.ts";
 import type { Message } from "./model.ts";
 
 type H = HtmlBuilder<Message>;
-
 
 /** A completed two-player match, its seats in table order. */
 interface Game {
@@ -13,9 +12,9 @@ interface Game {
   readonly second: SeatFull;
 }
 
-/** A seed block with both seat orders scored. */
-interface Block {
-  readonly games: readonly [Game, Game];
+interface Share {
+  readonly wins: number;
+  readonly n: number;
 }
 
 const gamesOf = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<Game> =>
@@ -28,59 +27,35 @@ const gamesOf = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<Game> =>
     return first !== undefined && second !== undefined && rest.length === 0 ? [{ first, second }] : [];
   });
 
-const blocksOf = (games: ReadonlyArray<Game>): ReadonlyArray<Block> =>
-  [...groupBy(games, ({ first }) => first.seedBlock).values()].flatMap((pair) => {
-    const [one, two, ...rest] = pair;
+const shareOf = (outcomes: ReadonlyArray<number>): Share => ({ wins: outcomes.reduce((total, outcome) => total + outcome, 0), n: outcomes.length });
 
-    return one === undefined || two === undefined || rest.length > 0 || keyOf(one.first) !== keyOf(two.second) || keyOf(one.second) !== keyOf(two.first) ? [] : [{ games: [one, two] as const }];
-  });
-
-const shareOver = (blocks: ReadonlyArray<Block>, value: (game: Game) => number): Rate => {
-  const tally: BlockTally = new Map();
-
-  blocks.forEach((block, index) => block.games.forEach((game) => addTo(tally, String(index), value(game), 1)));
-
-  return blockRate(tally, 1000);
-};
-
-/** The round-1 starter's win share, or NaN when the story does not name a starter. */
-const starterShare = ({ first, second }: Game): number => {
+const starterWon = ({ first, second }: Game): ReadonlyArray<number> => {
   const starter = first.story?.starter;
 
-  if (starter === first.player) return first.winShare ?? 0;
+  if (starter === first.player) return [first.winShare ?? 0];
 
-  return starter === second.player ? (second.winShare ?? 0) : Number.NaN;
+  return starter === second.player ? [second.winShare ?? 0] : [];
 };
 
-const roundOneWinnerShare = (games: ReadonlyArray<Game>): Pick<Rate, "rate" | "n"> => {
-  const decided = games.flatMap(({ first, second }) => {
-    const winner = (first.winShare ?? 0) >= 1 ? first.player : (second.winShare ?? 0) >= 1 ? second.player : null;
-    const story = first.story;
+const roundOneWinnerWon = ({ first, second }: Game): ReadonlyArray<number> => {
+  const winner = (first.winShare ?? 0) >= 1 ? first.player : (second.winShare ?? 0) >= 1 ? second.player : null;
+  const story = first.story;
 
-    return winner === null || story === null || !story.ok ? [] : [story.rounds[0]?.winner === winner];
-  });
-
-  const wins = decided.filter(Boolean).length;
-
-  return { n: decided.length, rate: wins / decided.length };
+  return winner === null || story === null || !story.ok ? [] : [story.rounds[0]?.winner === winner ? 1 : 0];
 };
 
 const balanceOf = memoLast((matchSeats: ReadonlyArray<SeatFull>) => {
   const games = gamesOf(matchSeats);
-  const blocks = blocksOf(games);
 
   return {
-    position: shareOver(blocks, ({ first }) => first.winShare ?? 0),
-    starter: shareOver(
-      blocks.filter((block) => block.games.every((game) => !Number.isNaN(starterShare(game)))),
-      starterShare,
-    ),
-    roundOneWinner: roundOneWinnerShare(games),
+    position: shareOf(games.map(({ first }) => first.winShare ?? 0)),
+    starter: shareOf(games.flatMap(starterWon)),
+    roundOneWinner: shareOf(games.flatMap(roundOneWinnerWon)),
   };
 });
 
-const shareView = (h: H, label: string, rate: Pick<Rate, "rate" | "n">): Html =>
-  h.span([h.Class("dv")], [h.span([h.Class("k")], [`${label} `]), Number.isNaN(rate.rate) ? "–" : `${(rate.rate * 100).toFixed(1)}%`, " ", h.span([h.Class("pm")], [`n ${rate.n.toLocaleString()}`])]);
+const shareView = (h: H, label: string, { wins, n }: Share): Html =>
+  h.span([h.Class("dv")], [h.span([h.Class("k")], [`${label} `]), n === 0 ? "–" : `${((wins / n) * 100).toFixed(1)}%`, " ", h.span([h.Class("pm")], [`n ${n.toLocaleString()}`])]);
 
 export const seatBalanceView = (h: H, matchSeats: ReadonlyArray<SeatFull>): Html => {
   const { position, starter, roundOneWinner } = balanceOf(matchSeats);

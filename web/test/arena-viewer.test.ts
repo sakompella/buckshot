@@ -268,7 +268,7 @@ const SEAT: Seat = {
   story: null,
   round: 0,
   roundThree: null,
-  low: null,
+  deficits: [],
 };
 
 test("pooled ratings cover every config of a completed match, over every tournament, with an interval around each", () => {

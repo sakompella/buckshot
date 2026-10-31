@@ -11,7 +11,6 @@ import { Message, type Model } from "./model.ts";
 
 type H = HtmlBuilder<Message>;
 
-
 const resultOf = (seat: SeatFull): string => {
   const share = seat.winShare ?? 0;
 
