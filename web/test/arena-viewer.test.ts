@@ -218,7 +218,7 @@ const hsl = (hex: string) => {
 
 test("Claude models are orange and GPT models blue, each family brightest and most saturated for its strongest model", () => {
   const families = [
-    { strongestFirst: ["claude-opus-5-5", "claude-haiku-5-5", "claude-sonnet-5-5", "claude-haiku-4-5"], hues: [18, 40] },
+    { strongestFirst: ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-haiku-4-5"], hues: [18, 40] },
     { strongestFirst: ["gpt-6-astra", "gpt-6.1-sol", "gpt-5.6-terra", "gpt-6-luna"], hues: [195, 225] },
   ];
 

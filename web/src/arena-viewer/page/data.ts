@@ -27,13 +27,13 @@ interface Base {
 }
 
 // Every Claude model is orange and every GPT model blue (sRGB HSL hue 18-36 for Claude, 196-218 for GPT). Within a
-// family the strongest model by the merged cross-model Bradley-Terry order (docs/arena/analysis/matchups.md) is
-// brightest and most saturated, and each step down is clearly darker (contrast on black about 14, 9, 6 and 4.6 to 1, so the darkest still reads as small text):
-// GPT Astra, Sol, Terra, Luna; Claude Opus, Haiku 5.5, Sonnet, Haiku 4.5. Every effort of a model has its colour.
+// family the strongest model, by its Round Elo with all its efforts pooled as one player, is brightest and most saturated,
+// and each step down is clearly darker (contrast on black about 14, 9, 6 and 4.6 to 1, so the darkest still reads as small text):
+// GPT Astra, Sol, Terra 6.1, Terra 5.6, Luna; Claude Opus, Sonnet, Haiku 5.5, Haiku 4.5. Every effort of a model has its colour.
 const BASES: ReadonlyArray<Base> = [
   { id: "claude-opus-5-5", name: "Opus 5.5", short: "Opus", tone: [0.868, 0.115, 75.8] },
-  { id: "claude-haiku-5-5", name: "Haiku 5.5", short: "Haiku 5.5", tone: [0.763, 0.151, 56.7] },
-  { id: "claude-sonnet-5-5", name: "Sonnet 5.5", short: "Sonnet", tone: [0.647, 0.17, 42.4] },
+  { id: "claude-sonnet-5-5", name: "Sonnet 5.5", short: "Sonnet", tone: [0.763, 0.151, 56.7] },
+  { id: "claude-haiku-5-5", name: "Haiku 5.5", short: "Haiku 5.5", tone: [0.647, 0.17, 42.4] },
   { id: "claude-haiku-4-5", name: "Haiku 4.5", short: "Haiku 4.5", tone: [0.59, 0.14, 50] },
   { id: "gpt-6-astra", name: "GPT-6 Astra", short: "Astra", tone: [0.89, 0.073, 224.2] },
   { id: "gpt-6.1-sol", name: "GPT-6.1 Sol", short: "Sol", tone: [0.741, 0.131, 240.2] },
