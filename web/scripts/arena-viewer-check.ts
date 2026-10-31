@@ -328,7 +328,7 @@ const checkRatings = async (page: Page) => {
   const cells = (label: string) => page.locator(`table.lbt td[data-label="${label}"]`).allInnerTexts();
   const elos = await cells("round elo");
 
-  for (const label of ["match wins", "round wins", "cash share"]) {
+  for (const label of ["wins vs own opponents", "round wins", "cash share"]) {
     const shares = await cells(label);
 
     console.log(label, "cells", shares.length, "of", rows, "rows, first", shares.slice(0, 4).join(" | "));
@@ -365,6 +365,24 @@ const checkRatings = async (page: Page) => {
   expectThat(rankedElos.every((rating, index) => index === 0 || rating <= (rankedElos[index - 1] ?? rating)), "the ranked rows are not best Round Elo first");
   expectThat(listed.every(({ name, hasEloInterval }) => !hasEloInterval || blocksOf(playedBy(name)) >= 4), "a config over fewer than 4 seed blocks shows a Round Elo interval");
   expectThat(listed.some(({ hasEloInterval }) => hasEloInterval), "no leaderboard row shows a Round Elo interval");
+
+  const bars = await page.locator("table.lbt tbody tr.row").evaluateAll((trs) =>
+    trs.map((tr) => {
+      const box = (selector: string) => tr.querySelector(selector)?.getBoundingClientRect() ?? null;
+      const [track, fill, zero, whisk] = [box(".track"), box(".track .fill"), box(".track .zero"), box(".track .whisk")];
+
+      return track === null || fill === null || zero === null ? null : { end: Math.abs(fill.left - zero.left) > Math.abs(fill.right - zero.left) ? fill.left : fill.right, zero: zero.left, whisk: whisk === null ? null : { left: whisk.left, right: whisk.right } };
+    }),
+  );
+
+  const drawn = bars.flatMap((bar, index) => (bar === null ? [] : [{ ...bar, rating: ratings[index] ?? Number.NaN, hasInterval: listed[index]?.hasEloInterval === true }]));
+  const byRating = drawn.toSorted((left, right) => right.rating - left.rating);
+
+  console.log("round elo bars", drawn.length, "of", rows, "rows | whiskers", drawn.filter(({ whisk }) => whisk !== null).length);
+  expectThat(drawn.length === rows, `${drawn.length} of ${rows} leaderboard rows draw a Round Elo bar`);
+  expectThat(drawn.every(({ end, zero, rating }) => Math.sign(Math.round(end - zero)) === Math.sign(Math.round(rating)) || Math.abs(end - zero) < 1.5), "a Round Elo bar runs the wrong side of zero");
+  expectThat(byRating.every(({ end }, index) => index === 0 || end <= (byRating[index - 1]?.end ?? end) + 0.5), "the Round Elo bars do not grow with Round Elo");
+  expectThat(drawn.every(({ whisk, hasInterval, end }) => (whisk !== null) === hasInterval && (whisk === null || (whisk.left - 1.5 <= end && end <= whisk.right + 1.5))), "a Round Elo interval is missing, drawn without its numbers, or does not hold its bar's end");
 
   const faded = await page.locator("#scatter g.pt").evaluateAll((points) => points.filter((point) => point instanceof SVGElement && point.style.opacity === "0.4").length);
 
@@ -1439,7 +1457,7 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
 
       console.log(name, "tallest leaderboard row", Math.round(tallest), "px | drill-down details", details.join(", "));
       expectThat(tallest <= 80, `${name}: a leaderboard row is ${Math.round(tallest)}px tall`);
-      expectThat(["match wins", "round wins", "cash share", "per move", "time", "out tok", "fav"].every((label) => details.includes(label)), `${name}: the drill-down lacks a leaderboard detail: ${details.join(", ")}`);
+      expectThat(["wins vs own opponents", "round wins", "cash share", "per move", "time", "out tok", "fav"].every((label) => details.includes(label)), `${name}: the drill-down lacks a leaderboard detail: ${details.join(", ")}`);
       await page.locator("table.lbt").first().screenshot({ path: shot(`${name}-leaderboard-open`) });
       await row.tap();
     }

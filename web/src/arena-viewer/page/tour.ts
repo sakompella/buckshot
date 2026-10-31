@@ -107,14 +107,14 @@ const TOUR: ReadonlyArray<TourStep> = [
     anchor: "leaderboards",
     focus: "#leaderboards .lbt thead, #leaderboards .lbt tbody tr:first-child",
     title: "Leaderboard columns",
-    text: "At the end of the page, one fold holds the tables. Per config the leaderboard gives its Round Elo, one Bradley-Terry rating pooled over every tournament, then its matches, cost per match, match wins, round wins, cash share, Regret, cost per move, time per move, output tokens and favourite item.",
+    text: "At the end of the page, one fold holds the tables. Per config the leaderboard gives its Round Elo, one Bradley-Terry rating pooled over every tournament, drawn as a bar with its interval, then its matches, cost per match, match wins against its own opponents, round wins, cash share, Regret, cost per move, time per move, output tokens and favourite item.",
     isReplay: false,
   },
   {
     anchor: "leaderboards",
     focus: "#leaderboards .lbt tbody tr:first-child",
     title: "A config's row",
-    text: "A click on a row opens its matches by opponent, one square per match, then how steady it is, how much it writes when behind or ahead, and what became of its items. Faded rows rest on few scored matches.",
+    text: "A click on a row opens its matches by opponent, one square per match, then how steady it is, how much it writes when behind or ahead, and what became of its items. Faded rows rest on few scored matches and have no rank.",
     isReplay: false,
   },
 ];

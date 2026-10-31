@@ -60,6 +60,7 @@ table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nu
 th { font-weight: 500; color: var(--mut); text-align: right; padding: 9px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; font-size: 12px; }
 td { text-align: right; padding: 10px 8px; border-bottom: 1px solid #161616; white-space: nowrap; }
 th:first-child, td:first-child { text-align: left; }
+table.lbt th { white-space: normal; }
 tr.row:hover td { background: #0b0b0b; cursor: pointer; }
 tr.sel td { background: #111; }
 tr.provisional td { opacity: 0.55; }
@@ -88,7 +89,8 @@ tr.provisional td { opacity: 0.55; }
 .dot { display: inline-block; width: 9px; height: 9px; margin-right: 9px; border-radius: 50%; }
 .dot.o { border-radius: 2px; }
 .track { position: relative; height: 10px; background: #0d0d0d; }
-.fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 0 2px 2px 0; }
+.fill { position: absolute; top: 0; bottom: 0; }
+.zero { position: absolute; top: -3px; bottom: -3px; border-left: 1px solid #555; }
 .whisk { position: absolute; top: -3px; height: 16px; border-left: 1px solid #ddd; border-right: 1px solid #ddd; }
 .whisk::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px solid #ddd; }
 .axis { position: relative; height: 16px; font-size: 11px; color: var(--dim); }
@@ -317,7 +319,7 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
 /* a narrow desktop: the leaderboard's bar gives up room to its columns */
 @media (max-width: 1440px) {
   .lbt .barcol { width: 22%; padding: 0 12px; }
-  .lbt td[data-label="fav"], table.lbt th { white-space: normal; }
+  .lbt td[data-label="fav"] { white-space: normal; }
   .card { overflow-x: auto; }
 }
 

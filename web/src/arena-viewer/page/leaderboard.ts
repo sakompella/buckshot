@@ -2,7 +2,7 @@ import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { pressable } from "./charts.ts";
-import { baseName, costPerMove, fmtCount, fmtPct, fmtPoints, fmtSec, fmtUsd, isClaude, isProvisional, MIN_BLOCKS_FOR_INTERVAL, type ModelStats, sumOf } from "./data.ts";
+import { baseName, costPerMove, fmtCount, fmtPct, fmtPoints, fmtSec, fmtUsd, isClaude, isProvisional, type ModelStats, sumOf } from "./data.ts";
 import type { Derived, ItemSummary } from "./derived.ts";
 import { drillView } from "./drill.ts";
 import { itemIconOf } from "./items.ts";
@@ -27,7 +27,7 @@ const detailsOf = (h: H, m: ModelStats, item: ItemSummary | undefined, hasRegret
   const favorite = item?.favorite ?? null;
 
   return [
-    { label: "match wins", title: m.win.blocks < MIN_BLOCKS_FOR_INTERVAL ? "" : `${fmtPct(m.win.lo)}–${fmtPct(m.win.hi)}`, content: [h.b([], [fmtPct(m.winShare)]), " ", h.span([h.Class("pm")], [`${m.win.k.toFixed(m.win.k % 1 ? 1 : 0)}/${m.win.n}`])] },
+    { label: "wins vs own opponents", title: "", content: [h.b([], [fmtPct(m.winShare)]), " ", h.span([h.Class("pm")], [`${m.win.k.toFixed(m.win.k % 1 ? 1 : 0)}/${m.win.n}`])] },
     { label: "round wins", title: "", content: [fmtPct(m.roundShare)] },
     { label: "cash share", title: "", content: [fmtPct(m.potShare)] },
     ...(hasRegret ? [{ label: "regret", title: m.regret === null ? "" : `${m.regret.moves.toLocaleString()} moves · ${fmtPct(m.regret.exactShare)} proven exact`, content: [m.regret === null ? "–" : fmtPoints(m.regret.mean)] }] : []),
@@ -38,10 +38,39 @@ const detailsOf = (h: H, m: ModelStats, item: ItemSummary | undefined, hasRegret
   ];
 };
 
-const rowView = (h: H, m: ModelStats, rank: number | undefined, elo: Rating | undefined, details: ReadonlyArray<Detail>, isOpen: boolean): Html => {
-  const { lo, hi } = m.win;
-  const hasInterval = m.win.blocks >= MIN_BLOCKS_FOR_INTERVAL;
+/** The Round Elo axis: whole hundreds around every rating and its interval, so a filter never moves it. */
+interface EloScale {
+  readonly from: number;
+  readonly to: number;
+  readonly ticks: ReadonlyArray<number>;
+}
 
+const eloScaleOf = (ratings: ReadonlyMap<string, Rating>): EloScale => {
+  const ends = [...ratings.values()].flatMap(({ rating, interval }) => [rating, interval?.lo ?? rating, interval?.hi ?? rating]);
+  const from = Math.floor(Math.min(0, ...ends) / 100) * 100;
+  const to = Math.ceil(Math.max(0, ...ends) / 100) * 100;
+
+  return { from, to, ticks: Array.from({ length: (to - from) / 100 + 1 }, (_, index) => from + index * 100) };
+};
+
+const percentOf = ({ from, to }: EloScale, elo: number): number => ((elo - from) / (to - from)) * 100;
+
+const eloBarView = (h: H, scale: EloScale, m: ModelStats, elo: Rating | undefined): Html => {
+  if (elo === undefined) return h.empty;
+
+  const [low, high] = [percentOf(scale, Math.min(0, elo.rating)), percentOf(scale, Math.max(0, elo.rating))];
+
+  return h.div(
+    [h.Class("track")],
+    [
+      h.div([h.Class("zero"), h.Style({ left: `${percentOf(scale, 0)}%` })], []),
+      h.div([h.Class("fill"), h.Style({ left: `${low}%`, width: `${high - low}%`, background: m.color })], []),
+      ...(elo.interval === null ? [] : [h.div([h.Class("whisk"), h.Style({ left: `${percentOf(scale, elo.interval.lo)}%`, width: `${percentOf(scale, elo.interval.hi) - percentOf(scale, elo.interval.lo)}%` })], [])]),
+    ],
+  );
+};
+
+const rowView = (h: H, m: ModelStats, rank: number | undefined, elo: Rating | undefined, scale: EloScale, details: ReadonlyArray<Detail>, isOpen: boolean): Html => {
   return h.keyed("tr")(
     m.id,
     [h.Class(`row ${isOpen ? "sel" : ""} ${isProvisional(m) ? "provisional" : ""}`), h.AriaExpanded(isOpen), ...pressable(h, Message.ClickedLeaderboardRow({ id: m.id }))],
@@ -50,15 +79,7 @@ const rowView = (h: H, m: ModelStats, rank: number | undefined, elo: Rating | un
       h.td([h.DataAttribute("label", "round elo")], ratingView(h, elo)),
       h.td([h.DataAttribute("label", "matches"), h.Title(`${m.win.blocks} seed blocks`)], [m.scored.length.toLocaleString()]),
       h.td([h.DataAttribute("label", "cost")], [fmtUsd(m.avgCost)]),
-      h.td(
-        [h.Class("barcol")],
-        [
-          h.div(
-            [h.Class("track")],
-            [h.div([h.Class("fill"), h.Style({ width: `${m.winShare * 100}%`, background: m.color })], []), ...(hasInterval ? [h.div([h.Class("whisk"), h.Style({ left: `${lo * 100}%`, width: `${(hi - lo) * 100}%` })], [])] : [])],
-          ),
-        ],
-      ),
+      h.td([h.Class("barcol")], [eloBarView(h, scale, m, elo)]),
       ...details.map(({ label, title, content }) => h.td([h.Class("detail"), h.DataAttribute("label", label), ...(title === "" ? [] : [h.Title(title)])], [...content])),
     ],
   );
@@ -103,7 +124,7 @@ const headersOf = (hasRegret: boolean): ReadonlyArray<string> => [
   "Matches",
   "Avg cost",
   "",
-  "Match wins",
+  "Match wins vs own opponents",
   "Round wins",
   "Cash share",
   ...(hasRegret ? ["Regret"] : []),
@@ -142,12 +163,13 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
   const hasRegret = every.some(({ regret }) => regret !== null);
   const headers = headersOf(hasRegret);
   const configs = inRankOrder(stats, ranks, ratings);
+  const scale = eloScaleOf(ratings);
 
   return h.div(
     [h.Class("lb")],
     [
       h.div([h.Class("lbbar")], [h.h2([], ["Leaderboard"])]),
-      h.p([h.Class("sub")], ["Round Elo is one Bradley-Terry rating over every match, on round win share; intervals are 95% bootstraps over seed blocks."]),
+      h.p([h.Class("sub")], ["Round Elo is one Bradley-Terry rating over every match, on round win share; the bar runs from the average at 0, with its 95% interval over seed blocks. Match wins count a config's own opponents only."]),
       h.div(
         [h.Class("card")],
         [
@@ -163,7 +185,7 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
                   const details = detailsOf(h, m, items.get(m.id), hasRegret);
 
                   return [
-                    rowView(h, m, ranks.get(m.key), ratings.get(m.key), details, isOpen),
+                    rowView(h, m, ranks.get(m.key), ratings.get(m.key), scale, details, isOpen),
                     isOpen ? h.keyed("tr")(`drill-${m.id}`, [h.Class("drill")], [h.td([h.Colspan(headers.length)], [detailsView(h, details), drillView(h, m, derived, leaderboard.maybeTip)])]) : h.empty,
                   ];
                 }),
@@ -175,7 +197,7 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
                     [],
                     [
                       h.td([h.Colspan(BAR_COLUMN)], []),
-                      h.td([h.Class("barcol")], [h.div([h.Class("axis")], [0, 25, 50, 75, 100].map((tick) => h.span([h.Style({ left: `${tick}%` })], [`${tick}%`])))]),
+                      h.td([h.Class("barcol")], [h.div([h.Class("axis")], scale.ticks.map((tick) => h.span([h.Style({ left: `${percentOf(scale, tick)}%` })], [String(tick)])))]),
                       h.td([h.Colspan(headers.length - BAR_COLUMN - 1)], []),
                     ],
                   ),
