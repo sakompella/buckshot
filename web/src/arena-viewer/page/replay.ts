@@ -26,36 +26,6 @@ export const seatColor = (detail: MatchDetail, player: string): string => {
   return seat === undefined ? "#999" : colorOf(seat.model);
 };
 
-/** A compact strip of one match: a tick per model move, tall for a live shot, short for a blank, a dot for anything else. */
-export const moveStripView = (h: H, detail: MatchDetail, width: number, height = 26): Html => {
-  const steps = stepsOf(detail);
-  const x = (index: number) => 2 + (index / Math.max(1, steps.length - 1)) * (width - 4);
-
-  return h.div(
-    [],
-    [
-      h.svg(
-        [h.Width(`${width}`), h.Height(`${height}`)],
-        [
-          ...steps.flatMap((step, index) =>
-            index > 0 && step.round !== steps[index - 1]?.round ? [h.line([h.X1(`${x(index - 0.5)}`), h.X2(`${x(index - 0.5)}`), h.Y1("0"), h.Y2(`${height}`), h.Stroke("#333")], [])] : [],
-          ),
-          ...steps.map((step, index) => {
-            const shot = shotOf(step);
-            const color = seatColor(detail, step.player);
-
-            if (shot === null) return h.circle([h.Cx(`${x(index)}`), h.Cy(`${height - 4}`), h.R("1.3"), h.Fill(color), h.Opacity("0.6")], []);
-
-            const tall = shot === "live" ? height - 4 : (height - 4) / 2.6;
-
-            return h.rect([h.X(`${x(index) - 1}`), h.Y(`${height - 2 - tall}`), h.Width("2"), h.Height(`${tall}`), h.Fill(color)], []);
-          }),
-        ],
-      ),
-    ],
-  );
-};
-
 /** Regret in points from which a move stands out as a blunder, in its tag and on the health chart. */
 const BIG_REGRET = 5;
 

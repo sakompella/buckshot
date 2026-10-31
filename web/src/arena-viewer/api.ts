@@ -49,7 +49,6 @@ export const SeatRow = Schema.Struct({
   position: Schema.Number,
   winShare: Count,
   cash: Count,
-  calls: Count,
   cost: Count,
   inp: Count,
   outp: Count,
@@ -57,11 +56,6 @@ export const SeatRow = Schema.Struct({
   cw: Count,
   rt: Count,
   lat: Count,
-  failed: Count,
-  fcost: Count,
-  flat: Count,
-  rcost: Count,
-  rlat: Count,
   rsHidden: Count,
   rsText: Count,
   multiTool: Count,
@@ -75,9 +69,6 @@ export const SeatAnalysis = Schema.Struct({
   acquired: PerItem,
   used: PerItem,
   stolen: PerItem,
-  faults: Schema.Number,
-  reminders: Schema.Number,
-  fallbacks: Schema.Number,
   story: Schema.NullOr(Story),
   round: Schema.Number,
   roundThree: Schema.NullOr(Schema.Tuple([Schema.Number, Schema.Number])),
@@ -95,10 +86,7 @@ export const SeatRegret = Schema.Struct({ moves: Schema.Number, total: Schema.Nu
 
 export type SeatRegret = typeof SeatRegret.Type;
 
-/** A seat's calls in one hour, by the time each call was logged: hours since the epoch in UTC, calls, failed calls. */
-export const CallHour = Schema.Tuple([Schema.Number, Schema.Number, Schema.Number]);
-
-export const Seat = Schema.Struct({ ...SeatRow.fields, ...SeatAnalysis.fields, regret: Schema.NullOr(SeatRegret), callHours: Schema.Array(CallHour) });
+export const Seat = Schema.Struct({ ...SeatRow.fields, ...SeatAnalysis.fields, regret: Schema.NullOr(SeatRegret) });
 
 export type Seat = typeof Seat.Type;
 
@@ -126,7 +114,6 @@ export const Decisions = Schema.Struct({
   moveNo: Column,
   opp: Column,
   pick: Column,
-  failedCalls: Column,
   rt: Column,
   rc: Column,
   out: Column,
@@ -134,7 +121,6 @@ export const Decisions = Schema.Struct({
   cost: Column,
   lat: Column,
   tok: Column,
-  calls: Column,
   legalUse: Column,
   legalSteal: Column,
   useItem: Column,

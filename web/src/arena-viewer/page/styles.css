@@ -91,6 +91,12 @@ tr.few td { opacity: 0.7; }
 .axis span { position: absolute; transform: translateX(-50%); }
 tr.drill td { background: #050505; white-space: normal; text-align: left; }
 .drillin { padding: 6px 4px 12px; }
+.dhead { color: var(--mut); font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; margin: 12px 0 4px; }
+.dline { display: flex; flex-wrap: wrap; gap: 4px 18px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid #111; font-size: 12.5px; }
+.dline .dl { color: var(--fg); }
+.dv { white-space: nowrap; }
+.dline.seatline { margin-top: 30px; padding: 0; border: 0; font-size: 13.5px; }
+.drillin .fates, .drillin .fate-legend { max-width: 560px; }
 .opp { display: grid; grid-template-columns: 240px 90px 1fr; gap: 10px; align-items: center; padding: 3px 0; border-bottom: 1px solid #111; }
 .opp .on { color: var(--fg); font-size: 12px; }
 .opp .ow { text-align: right; font-size: 12px; }
@@ -100,17 +106,11 @@ tr.drill td { background: #050505; white-space: normal; text-align: left; }
 
 pre { white-space: pre-wrap; word-break: break-word; background: #0a0a0a; border: 1px solid #1d1d1d; border-radius: 6px; padding: 8px 10px; font: 12px/1.45 ui-monospace, Menlo, monospace; color: #cfcfcf; margin: 4px 0 8px; }
 details summary { cursor: pointer; margin: 4px 0; }
-.bignums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; margin-bottom: 34px; }
-.bignum { display: flex; flex-direction: column; gap: 4px; border-left: 2px solid var(--line); padding-left: 14px; }
-.bignum b { font-size: 46px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
 .chartrow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; align-items: start; }
 .chartrow figure { margin: 0; min-width: 0; }
-figure.lanes { margin: 36px 0 0; }
-h2.subhead { margin-top: 40px; }
-figure.lanes h3 { margin-top: 0; }
 .chartrow h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
 .chartrow .sub { margin-bottom: 12px; }
-.chartrow .wide { grid-column: span 2; }
+.chartrow.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .fate-legend { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 0 0 18px; color: var(--mut); font-size: 13px; }
 .fate-legend i { display: inline-block; width: 22px; height: 10px; margin-right: 6px; background: var(--fg); }
 .fates { display: grid; grid-template-columns: max-content minmax(0, 1fr) 3.5ch; gap: 4px 10px; align-items: center; font-size: 12px; }
@@ -157,13 +157,6 @@ table.heat td.cost { text-align: center; color: var(--mut); }
 table.heat td.click { cursor: pointer; }
 table.heat td.click:hover, table.heat td.ring { outline: 1.5px solid #fff; outline-offset: -1.5px; }
 table.heat td.total { font-weight: 600; text-align: center; padding: 3px 10px; }
-
-/* interesting matches */
-.igrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
-.icard { border: 1px solid var(--line); border-radius: 4px; padding: 12px 14px 8px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; }
-.icard:hover { border-color: #444; background: #070707; }
-.ititle { font-weight: 600; }
-.ivs { font-size: 13px; }
 
 /* replay modal */
 .overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.72); z-index: 30; display: flex; align-items: center; justify-content: center; }
@@ -247,10 +240,6 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
 
 .spendbar { display: flex; gap: 2px; height: 34px; margin: 4px 0 16px; }
 .spendbar .seg { min-width: 1px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #000; font-size: 12px; font-weight: 600; line-height: 34px; text-indent: 6px; }
-.spendrows { display: grid; grid-template-columns: max-content 1fr max-content; gap: 6px 14px; align-items: center; font-size: 13px; font-variant-numeric: tabular-nums; }
-.spendrows .track { height: 10px; }
-.spendrows .track span { display: block; height: 100%; border-radius: 1px; }
-.spendrows .amt { text-align: right; }
 
 /* up to a tablet the replay is one column that scrolls: the table and the chosen move, then the move list in its own box */
 @media (max-width: 1024px) {
@@ -315,8 +304,7 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
   .filters { margin-bottom: 4px; }
   .filtersum { display: flex; width: 100%; min-height: 44px; align-items: center; justify-content: space-between; gap: 10px; background: #0d0d0d; border: 1px solid var(--line); border-radius: 6px; color: var(--fg); font: inherit; font-size: 13px; padding: 4px 10px; text-align: left; cursor: pointer; }
   .filters:not(.open) > :not(.filtersum) { display: none; }
-  .chartrow { grid-template-columns: minmax(0, 1fr); gap: 30px; }
-  .chartrow .wide { grid-column: auto; }
+  .chartrow, .chartrow.two { grid-template-columns: minmax(0, 1fr); gap: 30px; }
   main { padding: 16px 20px 60px; }
   nav .brand { display: none; }
   .card { overflow-x: auto; }
@@ -357,8 +345,6 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
 
 /* phone, DeepSWE's sm breakpoint */
 @media (max-width: 639px) {
-  .bignums { grid-template-columns: minmax(0, 1fr); gap: 16px; margin-bottom: 24px; }
-  .bignum b { font-size: 36px; }
   main { padding: 0 12px 60px; }
   nav { margin: 0 -12px 14px; padding: 4px 12px; }
   nav .brand { display: none; }

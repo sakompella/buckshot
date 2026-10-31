@@ -205,8 +205,6 @@ const PerDecisionRow = Schema.Struct({
   out: Schema.Number,
   cost: Schema.NullOr(Schema.Number),
   lat: Schema.NullOr(Schema.Number),
-  calls: Schema.Number,
-  failed: Schema.Number,
   tok: Schema.Number,
 });
 
@@ -221,17 +219,9 @@ const DecisionRow = Schema.Struct({
   ord: Schema.Number,
 });
 
-const SeatSourceRow = Schema.Struct({ dir: Schema.String, pos: Schema.Number, id: Schema.String, player: Schema.String });
-
-const NoteRow = Schema.Struct({ path: Schema.String, kind: Schema.String, pos: Schema.Number });
-
 const decodePerDecision = Schema.decodeUnknownSync(PerDecisionRow);
 
 const decodeDecision = Schema.decodeUnknownSync(DecisionRow);
-
-const decodeSeatSource = Schema.decodeUnknownSync(SeatSourceRow);
-
-const decodeNote = Schema.decodeUnknownSync(NoteRow);
 
 const itemIndex = (name: string): number => ITEMS.findIndex((item) => item === name);
 
@@ -243,9 +233,6 @@ interface SeatTally {
   acquired: Array<number>;
   used: Array<number>;
   stolen: Array<number>;
-  faults: number;
-  reminders: number;
-  fallbacks: number;
   story: Story | null;
   round: number;
   roundThree: [number, number] | null;
@@ -256,9 +243,6 @@ const emptySeat = (): SeatTally => ({
   acquired: ITEMS.map(() => 0),
   used: ITEMS.map(() => 0),
   stolen: ITEMS.map(() => 0),
-  faults: 0,
-  reminders: 0,
-  fallbacks: 0,
   story: null,
   round: 0,
   roundThree: null,
@@ -290,7 +274,7 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
     db
       .query(
         `select decision_id d, sum(reasoning_tokens) rt, sum(reasoning_tokens is null) nulls, sum(length(coalesce(reasoning_text, ''))) rc,
-           sum(coalesce(output_tokens, 0)) out, sum(cost_usd) cost, sum(latency_ms) lat, count(*) calls, sum(status = 'failed') failed,
+           sum(coalesce(output_tokens, 0)) out, sum(cost_usd) cost, sum(latency_ms) lat,
            sum(coalesce(input_tokens, 0) + coalesce(output_tokens, 0) + coalesce(cache_read_tokens, 0) + coalesce(cache_write_tokens, 0)) tok
          from calls where decision_id is not null group by decision_id`,
       )
@@ -298,12 +282,12 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
       .map((raw) => {
         const row = decodePerDecision(raw);
 
-        return [row.d, { rt: row.nulls === 0 ? (row.rt ?? 0) : -1, rc: row.rc, out: row.out, cost: row.cost ?? 0, lat: row.lat ?? 0, tok: row.tok, calls: row.calls, failed: row.failed }] as const;
+        return [row.d, { rt: row.nulls === 0 ? (row.rt ?? 0) : -1, rc: row.rc, out: row.out, cost: row.cost ?? 0, lat: row.lat ?? 0, tok: row.tok }] as const;
       }),
   );
 
   const extra = seats.map(() => emptySeat());
-  const columns: MutableColumns = { seat: [], ord: [], moveNo: [], opp: [], pick: [], failedCalls: [], rt: [], rc: [], out: [], gap: [], cost: [], lat: [], tok: [], calls: [], legalUse: [], legalSteal: [], useItem: [], stealItem: [], shot: [], odds: [] };
+  const columns: MutableColumns = { seat: [], ord: [], moveNo: [], opp: [], pick: [], rt: [], rc: [], out: [], gap: [], cost: [], lat: [], tok: [], legalUse: [], legalSteal: [], useItem: [], stealItem: [], shot: [], odds: [] };
   const checks = { ok: 0, bad: 0 };
   const shellsLeft: Array<number> = [];
 
@@ -387,8 +371,6 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
 
     if (ownHealth !== undefined && opponentHealth !== undefined && opponentHealth - ownHealth > (seat.low ? seat.low[1] - seat.low[0] : 0)) seat.low = [ownHealth, opponentHealth, seat.round];
 
-    if (row.w === "fallback") seat.fallbacks++;
-
     if (row.w !== "agent") continue;
 
     moveNo++;
@@ -456,7 +438,6 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
 
     columns.seat.push(seatAt);
     columns.ord.push(row.ord);
-    columns.failedCalls.push(calls?.failed ?? 0);
     columns.moveNo.push(moveNo);
     columns.opp.push(chances);
     columns.pick.push(taken);
@@ -467,7 +448,6 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
     columns.cost.push(calls?.cost ?? 0);
     columns.lat.push(calls?.lat ?? 0);
     columns.tok.push(calls?.tok ?? 0);
-    columns.calls.push(calls?.calls ?? 0);
     columns.legalUse.push(legalUse);
     columns.legalSteal.push(legalSteal);
     columns.useItem.push(steal >= 0 ? ADRENALINE : used);
@@ -479,34 +459,6 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
 
   finishSeat();
   finishMatch();
-
-  const seatBySource = new Map(
-    db
-      .query(`select m.source_dir dir, s.position pos, m.id, s.player from matches m join match_seats s on s.match_id = m.id where m.status in ('completed', 'partial')`)
-      .all()
-      .flatMap((raw) => {
-        const row = decodeSeatSource(raw);
-        const index = seatIndex.get(`${row.id}|${row.player}`);
-
-        return index === undefined ? [] : [[`${row.dir}|${row.pos}`, index] as const];
-      }),
-  );
-
-  const notes = db.query(
-    `select path, json_extract(raw, '$.kind') kind, json_extract(raw, '$.position') pos from source_records
-     where current = 1 and path like '%/events.jsonl' and (raw like '%"kind":"reminder"%' or raw like '%"kind":"fault"%')`,
-  );
-
-  for (const raw of notes.iterate()) {
-    const note = decodeNote(raw);
-    const index = seatBySource.get(`${note.path.slice(0, -"/events.jsonl".length)}|${note.pos}`);
-    const seat = index === undefined ? undefined : extra[index];
-
-    if (seat === undefined) continue;
-
-    if (note.kind === "reminder") seat.reminders++;
-    else seat.faults++;
-  }
 
   console.log(`analysis: ${columns.seat.length} agent moves in ${Math.round(performance.now() - started)} ms; known-shell predictions matched ${checks.ok}, contradicted ${checks.bad}`);
 
