@@ -465,7 +465,7 @@ const expectedCandidates = (regret: MoveRegret) =>
     .map(({ label, score }) => ({ label, pct: `${score.toFixed(1)}%`, isChosen: label === regret.chosen, isBest: score === regret.bestScore }));
 
 const expectedVerdict = (regret: MoveRegret) => {
-  if (regret.points === 0) return `Best at depth ${regret.depth}`;
+  if (regret.points === 0) return `Best move, looking ${regret.depth} moves ahead`;
 
   return regret.exact ? `Proven worse · gave up ${regret.points.toFixed(1)} points` : `Gave up ${regret.points.toFixed(1)} points (estimate)`;
 };
@@ -507,9 +507,9 @@ const checkCandidates = async (page: Page, matchId: string, what: string): Promi
 
   expectThat(JSON.stringify(shown) === JSON.stringify(expected), `${what}: move ${at + 1} lists ${JSON.stringify(shown)}, its data has ${JSON.stringify(expected)}`);
   expectThat((await textOf(page, ".modal .sel .cands > summary")).trim() === expectedVerdict(step.regret), `${what}: move ${at + 1} says "${await textOf(page, ".modal .sel .cands > summary")}", not "${expectedVerdict(step.regret)}"`);
-  expectThat(lines[0]?.endsWith(`· depth ${step.regret.depth}${step.regret.limited ? " · budget stopped" : ""}`) === true, `${what}: move ${at + 1} has the depth line "${lines[0]}"`);
-  expectThat(lines.length === (reloadInReach ? 2 : 1) && (!reloadInReach || /reload is within reach/.test(lines[1] ?? "")), `${what}: move ${at + 1} has ${lines.length} lines under its list with a reload ${reloadInReach ? "" : "not "}in reach`);
-  console.log(what, "move", at + 1, "candidates", shown.length, "|", expectedVerdict(step.regret), step.regret.limited ? "| budget stopped" : "", reloadInReach ? "| reload in reach" : "", wasFolded ? "| was folded" : "| was open");
+  expectThat(lines[0]?.endsWith(`· looking ${step.regret.depth} moves ahead${step.regret.limited ? " · stopped early" : ""}`) === true, `${what}: move ${at + 1} has the depth line "${lines[0]}"`);
+  expectThat(lines.length === (reloadInReach ? 2 : 1) && (!reloadInReach || /reload is within reach/.test(lines[1] ?? "")) && !/static leaf|budget|depth/i.test(lines.join(" ")), `${what}: move ${at + 1} has ${lines.length} lines under its list with a reload ${reloadInReach ? "" : "not "}in reach`);
+  console.log(what, "move", at + 1, "candidates", shown.length, "|", expectedVerdict(step.regret), step.regret.limited ? "| stopped early" : "", reloadInReach ? "| reload in reach" : "", wasFolded ? "| was folded" : "| was open");
 
   return wasFolded;
 };
@@ -563,6 +563,56 @@ const coveredMatchIds: Array<string> = [];
 
 const REGRET_TAG = /^−\d+\.\d$/;
 
+const SHOT_FIXTURE = "0b1ca8ab272b8e3c56bd1d0bfbd552aadfa430ef886ee5047eef9f3275b61624";
+
+const checkShotTags = async (page: Page, matchId: string, what: string) => {
+  const detail = await servedDetail(matchId);
+  const steps = stepsOf(detail);
+  const lastId = detail.decisions.at(-1)?.id;
+  const shown = await page.locator(".modal .moves .step").evaluateAll((rows) => rows.map((row) => ({ label: row.querySelector(".label")?.textContent ?? "", shot: row.querySelector(".shot")?.textContent ?? "" })));
+
+  const expected = steps.map((step) => {
+    const logged = / shot [^:]*: (live|blank)/.exec(step.outcome.join(" "))?.[1];
+
+    return logged ?? (step.label.startsWith("Shoot") && step.id === lastId && detail.match.status === "completed" ? "live" : "");
+  });
+
+  expectThat(shown.length === steps.length && shown.every((row, index) => row.shot === expected[index]), `${what}: the move list tags ${shown.filter((row, index) => row.shot !== expected[index]).length} shots other than the log or the final death gives`);
+  expectThat(steps.every((step, index) => !step.label.startsWith("Shoot") || expected[index] !== "" || detail.match.status !== "completed"), `${what}: a shot in a completed match has no live or blank tag`);
+  console.log(what, "shots tagged", shown.filter((row) => row.shot !== "").length, "of", steps.filter((step) => step.label.startsWith("Shoot")).length);
+};
+
+const checkShotFixture = async (page: Page) => {
+  await page.locator("#matches .bar input").fill("4006");
+  await settled(page);
+
+  for (const row of Array.from({ length: 25 }, (_, index) => index)) {
+    if ((await page.locator("#matches tbody tr.row").count()) <= row) break;
+
+    await page.locator("#matches tbody tr.row").nth(row).click();
+
+    const matchId = await openedMatchId(page);
+
+    if (matchId === SHOT_FIXTURE) {
+      const steps = stepsOf(await servedDetail(matchId));
+
+      await checkShotTags(page, matchId, "seed 4006");
+      expectThat([37, 43].every((at) => steps[at]?.label.startsWith("Shoot") === true), "seed 4006 moves 38 and 44 are no longer shots");
+      expectThat((await page.locator(".modal .moves .step").nth(37).locator(".shot").innerText()) === "live" && (await page.locator(".modal .moves .step").nth(43).locator(".shot").innerText()) === "live", "seed 4006 moves 38 and 44 are not tagged live");
+      expectThat((steps[37]?.outcome.length ?? 0) > 0 && (steps[43]?.outcome.length ?? 1) === 0, "seed 4006 move 38 has no logged shot, or move 44 has one");
+      await closeReplay(page);
+      await page.locator("#matches .bar input").fill("");
+      await settled(page);
+
+      return;
+    }
+
+    await closeReplay(page);
+  }
+
+  throw new Error("seed 4006's Opus max match is not in the match list");
+};
+
 const regretTags = (page: Page) => page.locator(".modal .step .tag.regret");
 
 // With a regret database every leaderboard row shows its mean regret, or a dash when none of its moves were searched, and
@@ -597,9 +647,12 @@ const checkRegret = async (page: Page) => {
     const coverage = await openReplay(page, () => page.locator("#matches tbody tr.row").nth(row).click());
 
     await expectRegretShown(page, coverage, `match ${row}`);
+    await checkShotTags(page, coverage.matchId, `match ${row}`);
     console.log("match", row, "searched moves", coverage.searched, "tags", coverage.tagged);
     await closeReplay(page);
   }
+
+  await checkShotFixture(page);
 
   const fixtures = await regretFixtures(5);
   let exact = 0;
@@ -698,7 +751,7 @@ const checkMissingRegret = async (browser: Browser, viewport: Viewport) => {
 
     expectThat(incomingRegrets > 0, "the fixture route did not fire on a match that came with regret, so it proves nothing");
     expectThat(shown.tagged === 0 && shown.rings === 0 && shown.turning === 0, `a replay with no regret shows ${JSON.stringify(shown)}`);
-    expectThat(!/Gave up \d|Best at depth|Proven worse/.test(detail), "a replay with no regret still words a regret");
+    expectThat(!/Gave up \d|Best move, looking|Proven worse/.test(detail), "a replay with no regret still words a regret");
     expectThat((await page.locator(".modal .cands").count()) === 0, "a replay with no regret shows a candidate list");
 
     for (const step of [0, 1, 2]) {

@@ -1,11 +1,11 @@
 import { expect, test } from "bun:test";
 
-import { chamberPatterns, roundStory, ShellTracker } from "../src/arena-viewer/analysis.ts";
+import { chamberPatterns, roundStory, ShellTracker, shotLineIn } from "../src/arena-viewer/analysis.ts";
 import type { Seat } from "../src/arena-viewer/api.ts";
 import { type BlockTally, blockRate, colorOf, groupBy, modelStats, quantile, regretStats, rng, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { bradleyTerry, type Game, heldOutRatings, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 import { ODDS_BINS, oddsBinOf, oddsPanels, selfShotTallies } from "../src/arena-viewer/page/odds.ts";
-import { showsReloadNote, turningPoints } from "../src/arena-viewer/page/replay.ts";
+import { shotOf, showsReloadNote, turningPoints } from "../src/arena-viewer/page/replay.ts";
 import { ranksOf } from "../src/arena-viewer/page/derived.ts";
 import { inRankOrder } from "../src/arena-viewer/page/leaderboard.ts";
 import { FULL_N, shadeOf } from "../src/arena-viewer/page/heat.ts";
@@ -519,4 +519,28 @@ test("a heat cell grows brighter with its win share, and fades toward the page b
   expect(level(0.8, FULL_N - 1)).toBeLessThan(level(0.8, FULL_N));
   expect(level(0.8, 1)).toBeLessThan(level(0.8, FULL_N - 1));
   expect(level(0.8, FULL_N * 5)).toBe(level(0.8, FULL_N));
+});
+
+test("a shooter with no later window gets its shot line from the next window of another player, its last shot there", () => {
+  const windows = [
+    { player: "B", events: ["Player B shot Player A: blank."] },
+    { player: "A", events: ["Player B used handsaw.", "Player B shot Player A: live, 2 damage, 1 health left.", "Player A's turn."] },
+  ];
+
+  expect(shotLineIn("B", windows)).toBe("Player B shot Player A: live, 2 damage, 1 health left.");
+  expect(shotLineIn("B", windows.slice(0, 1))).toBeUndefined();
+  expect(shotLineIn("A", windows)).toBeUndefined();
+});
+
+test("a shot shows what its log says, and the last move of a completed match is live because only a live shell ends it", () => {
+  const step = (id: string, label: string, outcome: ReadonlyArray<string>) => ({ id, label, outcome });
+  const logged = step("a", "Shoot yourself", ["Player A shot Player A: blank."]);
+  const last = step("c", "Shoot Player B", []);
+  const detail = (status: string) => ({ match: { status }, decisions: [logged, step("b", "Shoot Player B", []), last] });
+
+  expect(shotOf(detail("completed"), logged)).toBe("blank");
+  expect(shotOf(detail("completed"), last)).toBe("live");
+  expect(shotOf(detail("completed"), step("b", "Shoot Player B", []))).toBeNull();
+  expect(shotOf(detail("partial"), last)).toBeNull();
+  expect(shotOf(detail("completed"), step("c", "Use handsaw", []))).toBeNull();
 });
