@@ -5,7 +5,6 @@ import type { Seat } from "../src/arena-viewer/api.ts";
 import { type BlockTally, blockRate, colorOf, groupBy, modelStats, quantile, regretStats, rng, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { bradleyTerry, type Game, heldOutRatings, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 import { ODDS_BINS, oddsBinOf, oddsPanels, selfShotTallies } from "../src/arena-viewer/page/odds.ts";
-import { failuresByHour } from "../src/arena-viewer/page/failures-over-time.ts";
 import { showsReloadNote, turningPoints } from "../src/arena-viewer/page/replay.ts";
 import { ranksOf } from "../src/arena-viewer/page/derived.ts";
 import { inRankOrder } from "../src/arena-viewer/page/leaderboard.ts";
@@ -251,7 +250,6 @@ const SEAT: Seat = {
   position: 0,
   winShare: 1,
   cash: 0,
-  calls: 0,
   cost: 0,
   inp: 0,
   outp: 0,
@@ -259,11 +257,6 @@ const SEAT: Seat = {
   cw: 0,
   rt: 0,
   lat: 0,
-  failed: 0,
-  fcost: 0,
-  flat: 0,
-  rcost: 0,
-  rlat: 0,
   rsHidden: 0,
   rsText: 0,
   multiTool: 0,
@@ -271,15 +264,11 @@ const SEAT: Seat = {
   acquired: [],
   used: [],
   stolen: [],
-  faults: 0,
-  reminders: 0,
-  fallbacks: 0,
   regret: null,
   story: null,
   round: 0,
   roundThree: null,
-  low: null,
-  callHours: [],
+  deficits: [],
 };
 
 test("pooled ratings cover every config of a completed match, over every tournament, with an interval around each", () => {
@@ -474,22 +463,6 @@ test("playing the odds keeps every effort the filter keeps, named as itself, wit
 
   expect(effortsOf([true, true, true, true])).toEqual([["claude-opus-5-5", ["low", "medium", "high", "max"]]]);
   expect(effortsOf([true, false, true, true])).toEqual([["claude-opus-5-5", ["low", "high", "max"]]]);
-});
-
-test("failures by hour pool a model's efforts into the hour each call was logged, and leave out seats the filter drops", () => {
-  const hour = Date.parse("2026-10-16T10:00:00Z") / 3.6e6;
-
-  const seats = [
-    { model: "m", callHours: [[hour, 100, 10], [hour + 1, 40, 0]] as const },
-    { model: "m", callHours: [[hour, 50, 5]] as const },
-    { model: "other", callHours: [[hour, 30, 30]] as const },
-  ];
-
-  expect(failuresByHour(seats, [true, true, false]).get("m")).toEqual([
-    { hour, calls: 150, failed: 15 },
-    { hour: hour + 1, calls: 40, failed: 0 },
-  ]);
-  expect(failuresByHour(seats, [true, true, false]).has("other")).toBe(false);
 });
 
 test("turning points are the biggest blunders, biggest first, and none when no move gave up 5 points", () => {

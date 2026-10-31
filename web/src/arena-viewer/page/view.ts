@@ -4,19 +4,16 @@ import { createLazy, type Document, type Html, type HtmlBuilder } from "foldkit/
 
 import { baseName, baseOrder, colorOf, EFFORTS, fmtCount, sumOf, unique } from "./data.ts";
 import { tipView } from "./charts.ts";
-import { consistencyView } from "./consistency.ts";
 import { type Derived, derive } from "./derived.ts";
-import { fatesView } from "./fates.ts";
+import { itemUsageView } from "./fates.ts";
 import { breakdownView, heatRowsOf } from "./heat.ts";
-import { interestingView, picksOf } from "./interesting.ts";
 import { leaderboardView } from "./leaderboard.ts";
 import { oddsView } from "./odds.ts";
 import { matchesView } from "./matches.ts";
 import { type Group, GROUPS, Message, type Model, type Section, type Viewport } from "./model.ts";
-import { reliabilityTablesView, reliabilityView } from "./reliability.ts";
 import { replayView } from "./replay.ts";
 import { scatterView } from "./scatter.ts";
-import { seatsView, seatTablesView } from "./seats.ts";
+import { seatBalanceView } from "./seats.ts";
 import { tourView } from "./tour.ts";
 import { spendView } from "./spend.ts";
 
@@ -122,25 +119,15 @@ const lazyLeaderboard = createLazy();
 
 const lazyScatter = createLazy();
 
-const lazyInteresting = createLazy();
-
 const lazyMatches = createLazy();
 
 const lazyOdds = createLazy();
 
-const lazyFates = createLazy();
-
-const lazyConsistency = createLazy();
-
-const lazyReliability = createLazy();
+const lazyItems = createLazy();
 
 const lazySpend = createLazy();
 
-const lazySeats = createLazy();
-
-const lazyReliabilityTables = createLazy();
-
-const lazySeatTables = createLazy();
+const lazySeatBalance = createLazy();
 
 const lazyBreakdown = createLazy();
 
@@ -163,14 +150,6 @@ const scatterCard = (h: H, derived: Derived, scatter: Model["scatter"], width: n
 
 const spendCard = (h: H, derived: Derived): Html => h.div([h.Class("card")], [spendView(h, derived.pooled)]);
 
-/** An optional section's view, or, when its data did not load, a note in its place. */
-const optionalView = <A>(h: H, data: AsyncData.AsyncData<A, string>, what: string, draw: (loaded: A) => Html): Html =>
-  AsyncData.matchData(data, {
-    onEmpty: () => h.empty,
-    onFailure: (error) => h.div([h.Class("card")], [h.p([h.Class("k")], [`Could not load the ${what}: ${error}`])]),
-    onData: draw,
-  });
-
 const sectionView = (h: H, section: Section, content: Html): Html => h.section([h.Id(section)], [content]);
 
 const groupLabel = (group: Group): string => GROUPS.find((entry) => entry.group === group)?.label ?? group;
@@ -189,52 +168,17 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
       lazyHero(heroView, [h, derived]),
       h.div([h.Class("top")], [lazyNav(navView, [h, model.maybeGroup]), lazyFilters(filtersView, [h, derived, model.filter, model.isFiltersOpen])]),
       groupView(h, "standings", [
-        sectionView(h, "leaderboards", lazyLeaderboard(leaderboardView, [h, derived.pooled, derived.everyPooled, derived.ranks, derived.ratings, derived.matchSeats, derived.items, model.leaderboard])),
+        sectionView(h, "leaderboards", lazyLeaderboard(leaderboardView, [h, derived, model.leaderboard])),
         sectionView(h, "scatter", lazyScatter(scatterCard, [h, derived, model.scatter, card])),
+        sectionView(h, "breakdown", afterFirstPaint(() => lazyBreakdown(breakdownView, [h, derived, model.heat]))),
       ]),
-      groupView(h, "watch", [
-        sectionView(h, "interesting", lazyInteresting(interestingView, [h, picksOf(derived), model.matches, content])),
-        sectionView(h, "matches", lazyMatches(matchesView, [h, derived.matches, model.matchList])),
-      ]),
+      groupView(h, "watch", [sectionView(h, "matches", lazyMatches(matchesView, [h, derived.matches, derived.ratings, model.matchList]))]),
       groupView(h, "decisions", [
         sectionView(h, "odds", afterFirstPaint(() => lazyOdds(oddsView, [h, derived.decisions, derived.seats, derived.keep, model.viewport.width, content]))),
-        sectionView(
-          h,
-          "items",
-          afterFirstPaint(() =>
-            h.div(
-              [],
-              [
-                lazyFates(fatesView, [h, derived.decisions, derived.seats, derived.filtered]),
-                optionalView(h, derived.consistency, "consistency", (consistency) => lazyConsistency(consistencyView, [h, derived.pooled, consistency, card])),
-              ],
-            ),
-          ),
-        ),
+        sectionView(h, "items", afterFirstPaint(() => lazyItems(itemUsageView, [h, derived.decisions, derived.seats, derived.filtered]))),
       ]),
       groupView(h, "health", [
-        sectionView(
-          h,
-          "reliability",
-          afterFirstPaint(() =>
-            h.div([], [lazyReliability(reliabilityView, [h, derived.decisions, derived.seats, derived.keep, model.viewport.width, content]), lazySpend(spendCard, [h, derived])]),
-          ),
-        ),
-        sectionView(h, "seats", afterFirstPaint(() => lazySeats(seatsView, [h, derived, model.viewport.width, content]))),
-        sectionView(
-          h,
-          "breakdown",
-          afterFirstPaint(() =>
-            h.div(
-              [],
-              [
-                lazyReliabilityTables(reliabilityTablesView, [h, derived.decisions, derived.seats, derived.keep, model.maybeRateTip]),
-                lazySeatTables(seatTablesView, [h, derived]),
-                lazyBreakdown(breakdownView, [h, derived, model.heat]),
-              ],
-            ),
-          ),
-        ),
+        sectionView(h, "spend", afterFirstPaint(() => h.div([], [lazySpend(spendCard, [h, derived]), lazySeatBalance(seatBalanceView, [h, derived.matchSeats])]))),
       ]),
     ],
   );

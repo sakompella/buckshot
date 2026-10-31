@@ -49,7 +49,6 @@ export const SeatRow = Schema.Struct({
   position: Schema.Number,
   winShare: Count,
   cash: Count,
-  calls: Count,
   cost: Count,
   inp: Count,
   outp: Count,
@@ -57,11 +56,6 @@ export const SeatRow = Schema.Struct({
   cw: Count,
   rt: Count,
   lat: Count,
-  failed: Count,
-  fcost: Count,
-  flat: Count,
-  rcost: Count,
-  rlat: Count,
   rsHidden: Count,
   rsText: Count,
   multiTool: Count,
@@ -70,18 +64,15 @@ export const SeatRow = Schema.Struct({
 
 export type SeatRow = typeof SeatRow.Type;
 
-/** What the server's analysis adds to a seat. low is the worst health deficit in the last round it saw: own health, opponent health, round. roundThree is the agent moves of round 3 and the output tokens of the calls linked to them, or null when the seat made none. */
+/** What the server's analysis adds to a seat. deficits is the worst health deficit the seat had in each round, in order: the opponent's health minus its own, 0 if it never trailed. roundThree is the agent moves of round 3 and the output tokens of the calls linked to them, or null when the seat made none. */
 export const SeatAnalysis = Schema.Struct({
   acquired: PerItem,
   used: PerItem,
   stolen: PerItem,
-  faults: Schema.Number,
-  reminders: Schema.Number,
-  fallbacks: Schema.Number,
   story: Schema.NullOr(Story),
   round: Schema.Number,
   roundThree: Schema.NullOr(Schema.Tuple([Schema.Number, Schema.Number])),
-  low: Schema.NullOr(Schema.Tuple([Schema.Number, Schema.Number, Schema.Number])),
+  deficits: Schema.Array(Schema.Number),
 });
 
 export type SeatAnalysis = typeof SeatAnalysis.Type;
@@ -95,10 +86,7 @@ export const SeatRegret = Schema.Struct({ moves: Schema.Number, total: Schema.Nu
 
 export type SeatRegret = typeof SeatRegret.Type;
 
-/** A seat's calls in one hour, by the time each call was logged: hours since the epoch in UTC, calls, failed calls. */
-export const CallHour = Schema.Tuple([Schema.Number, Schema.Number, Schema.Number]);
-
-export const Seat = Schema.Struct({ ...SeatRow.fields, ...SeatAnalysis.fields, regret: Schema.NullOr(SeatRegret), callHours: Schema.Array(CallHour) });
+export const Seat = Schema.Struct({ ...SeatRow.fields, ...SeatAnalysis.fields, regret: Schema.NullOr(SeatRegret) });
 
 export type Seat = typeof Seat.Type;
 
@@ -123,18 +111,14 @@ export const NO_GAP = 99;
 export const Decisions = Schema.Struct({
   seat: Column,
   ord: Column,
-  moveNo: Column,
   opp: Column,
   pick: Column,
-  failedCalls: Column,
   rt: Column,
-  rc: Column,
   out: Column,
   gap: Column,
   cost: Column,
   lat: Column,
   tok: Column,
-  calls: Column,
   legalUse: Column,
   legalSteal: Column,
   useItem: Column,
