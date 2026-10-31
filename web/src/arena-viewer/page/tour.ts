@@ -21,7 +21,10 @@ export interface TourStep {
   readonly text: string;
 }
 
-export const TOUR: ReadonlyArray<TourStep> = [
+const tablesText = (isCertain: boolean): string =>
+  `The failures, the seats${isCertain ? ", the certain mistakes" : ""} and each config's win share against each opponent model fold into tables at the end; a click on a title opens one. Inside the open heatmap a click on a column head sorts by it, and the small grey number in each cell is the sample behind it.`;
+
+const TOUR: ReadonlyArray<TourStep> = [
   {
     anchor: "leaderboards",
     focus: ".filters",
@@ -122,9 +125,12 @@ export const TOUR: ReadonlyArray<TourStep> = [
     anchor: "breakdown",
     focus: "#breakdown > div",
     title: "The numbers as tables",
-    text: "The failures, the seats, the certain mistakes and each config's win share against each opponent model fold into tables at the end; a click on a title opens one. Inside the open heatmap a click on a column head sorts by it, and the small grey number in each cell is the sample behind it.",
+    text: tablesText(true),
   },
 ];
+
+export const tourOf = (hasCertain: boolean): ReadonlyArray<TourStep> =>
+  hasCertain ? TOUR : TOUR.flatMap((step) => (step.anchor === "certain-mistakes" ? [] : [step.anchor === "breakdown" ? { ...step, text: tablesText(false) } : step]));
 
 // PLACING
 
@@ -139,8 +145,8 @@ const CARD_GUESS = 200;
 const isDrawn = (element: Element): boolean => element.getBoundingClientRect().height > 0;
 
 /** Scrolls to a step's element, measures it and decides whether the card fits under it. */
-const placed = (step: number) => {
-  const stop = TOUR[step];
+const placed = (step: number, hasCertain: boolean) => {
+  const stop = tourOf(hasCertain)[step];
   const target = stop === undefined ? null : ([...document.querySelectorAll(stop.focus)].find(isDrawn) ?? document.getElementById(stop.anchor));
 
   if (target === null) return Message.PlacedTour({ step, maybeBox: Option.none(), isCardUnder: false });
@@ -167,9 +173,9 @@ const nextFrame = Effect.callback<void>((resume) => {
 
 /** Places a step a frame after the card is drawn. */
 export const PlaceTour = Command.define("PlaceTour", {
-  args: { step: Schema.Number },
+  args: { step: Schema.Number, hasCertain: Schema.Boolean },
   messages: [Message.PlacedTour],
-  execute: ({ step }) => nextFrame.pipe(Effect.map(() => placed(step))),
+  execute: ({ step, hasCertain }) => nextFrame.pipe(Effect.map(() => placed(step, hasCertain))),
 });
 
 // VIEW
@@ -187,11 +193,12 @@ const px = (value: number): string => `${Math.round(value)}px`;
 const CARD_WIDTH = 380;
 
 export const tourView = (h: H, tour: Tour, viewportWidth: number): Html => {
-  const step = TOUR[tour.step];
+  const steps = tourOf(tour.hasCertain);
+  const step = steps[tour.step];
 
   if (step === undefined) return h.empty;
 
-  const isLast = tour.step === TOUR.length - 1;
+  const isLast = tour.step === steps.length - 1;
   const box = Option.getOrUndefined(tour.maybeBox);
   const cardPlace = box !== undefined && tour.isCardUnder ? { position: "absolute", top: px(box.top + box.height + GAP), left: px(Math.max(GAP, Math.min(box.left, viewportWidth - CARD_WIDTH - GAP))) } : {};
 
@@ -203,7 +210,7 @@ export const tourView = (h: H, tour: Tour, viewportWidth: number): Html => {
       h.div(
         [h.Class(`tour-card ${tour.isCardUnder ? "under" : ""}`), h.Role("dialog"), h.AriaLabel("Tour"), h.Style(cardPlace)],
         [
-          h.div([h.Class("tour-head")], [h.b([], [step.title]), h.span([h.Class("k")], [`${tour.step + 1} / ${TOUR.length}`])]),
+          h.div([h.Class("tour-head")], [h.b([], [step.title]), h.span([h.Class("k")], [`${tour.step + 1} / ${steps.length}`])]),
           h.p([], [step.text]),
           h.div(
             [h.Class("tour-buttons")],

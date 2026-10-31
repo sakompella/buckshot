@@ -73,7 +73,6 @@ export const Heat = Schema.Struct({ sort: Schema.String, maybeTip: Schema.Option
 
 export const Leaderboard = Schema.Struct({ maybeOpen: Schema.Option(Schema.String), maybeTip: Schema.Option(Schema.String) });
 
-/** The certain-mistakes cell whose matches are listed: a config's key and the type of mistake. */
 export const CertainCell = Schema.Struct({ key: Schema.String, type: CertainType });
 
 export type CertainCell = typeof CertainCell.Type;
@@ -96,8 +95,8 @@ export const TourBox = Schema.Struct({ top: Schema.Number, left: Schema.Number, 
 
 export type TourBox = typeof TourBox.Type;
 
-/** The open tour: the step shown (an index into TOUR in tour.ts) and, once measured, its highlight and whether the card fits just under it. */
-export const Tour = Schema.Struct({ step: Schema.Number, maybeBox: Schema.Option(TourBox), isCardUnder: Schema.Boolean });
+/** The open tour: the step shown (an index into the steps tour.ts gives for `hasCertain`) and, once measured, its highlight and whether the card fits just under it. */
+export const Tour = Schema.Struct({ step: Schema.Number, hasCertain: Schema.Boolean, maybeBox: Schema.Option(TourBox), isCardUnder: Schema.Boolean });
 
 export type Tour = typeof Tour.Type;
 

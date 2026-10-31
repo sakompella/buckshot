@@ -190,7 +190,7 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
   const afterFirstPaint = (draw: () => Html): Html => (model.isFirstPaintDone ? draw() : h.empty);
 
   const afterCertain = (data: Derived["certainMistakes"], draw: (certain: CertainMistakes) => Html): Html =>
-    AsyncData.matchData(data, { onEmpty: () => h.empty, onFailure: () => h.empty, onData: (certain) => (certain.seat.length === 0 ? h.empty : draw(certain)) });
+    AsyncData.matchData(data, { onEmpty: () => h.empty, onFailure: () => h.empty, onData: (certain) => (certain.rates.length === 0 ? h.empty : draw(certain)) });
 
   return h.div(
     [],

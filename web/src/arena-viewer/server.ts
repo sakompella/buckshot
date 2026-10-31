@@ -230,8 +230,7 @@ const guarded = (handler: (request: Request) => Response) => {
 
 /**
  * Loads and analyses the database once, then serves the page and the API. With a regret database, seats and moves carry their regret.
- * With a knowledge database, the page shows how consistent each config is. With a certain-mistakes database, it shows each config's
- * certain-mistake rates and marks the mistakes in the replay.
+ * With a knowledge database, the page shows how consistent each config is.
  */
 export const serveArenaViewer = (dbPath: string, hostname: string, port: number, regretPath?: string, knowledgePath?: string, certainPath?: string) => {
   const db = new Database(dbPath, { readonly: true });

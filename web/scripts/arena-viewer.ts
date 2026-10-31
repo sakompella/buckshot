@@ -6,8 +6,6 @@ import { serveArenaViewer } from "../src/arena-viewer/server.ts";
 // Serves the arena viewer over the arena analysis database (docs/arena/database.md). With --regret it also shows the
 // regret table of a derived database (docs/arena/analysis/regret.md); without, the viewer has no regret. With --knowledge
 // it also shows how consistent each config is in repeated positions (the knowledge database of scripts/arena-knowledge.ts).
-// With --certain-mistakes it shows each config's certain-mistake rates and marks them in the replay (the opportunities file
-// that tools/arena/analysis/certain_mistakes.py --opportunities writes; docs/arena/analysis/certain-mistakes.md).
 // Usage: bun scripts/arena-viewer.ts <db> [host] [port] [--regret <regret db>] [--knowledge <knowledge db>] [--certain-mistakes <opportunities db>]
 
 const USAGE = "usage: bun scripts/arena-viewer.ts <db> [host] [port] [--regret <regret db>] [--knowledge <knowledge db>] [--certain-mistakes <opportunities db>]";

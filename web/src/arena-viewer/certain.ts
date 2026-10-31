@@ -2,41 +2,42 @@ import { Database } from "bun:sqlite";
 
 import { Schema } from "effect";
 
-import { CERTAIN_TYPES, type CertainMistakes, CertainType, OPPORTUNITY_TYPES } from "./api.ts";
+import { CERTAIN_TYPES, type CertainMistakes, CertainType, OpportunityType } from "./api.ts";
 
-// The certain-mistake opportunities of the derived database that tools/arena/analysis/certain_mistakes.py writes
-// (docs/arena/analysis/certain-mistakes.md), read only. The classification is that script's; this only tallies its rows.
-
-const TallyRow = Schema.Struct({ matchId: Schema.String, player: Schema.String, type: Schema.Literals(OPPORTUNITY_TYPES), opportunities: Schema.Number, chose: Schema.Number });
+const RateRow = Schema.Struct({
+  scope: Schema.Literals(["config", "model", "all"]),
+  model: Schema.String,
+  effort: Schema.String,
+  type: OpportunityType,
+  chose: Schema.Number,
+  opportunities: Schema.Number,
+  lo: Schema.NullOr(Schema.Number),
+  hi: Schema.NullOr(Schema.Number),
+});
 
 const MistakeRow = Schema.Struct({ matchId: Schema.String, ordinal: Schema.Number, player: Schema.String, type: CertainType });
 
-const decodeTally = Schema.decodeUnknownSync(TallyRow);
+const decodeRate = Schema.decodeUnknownSync(RateRow);
 
 const decodeMistake = Schema.decodeUnknownSync(MistakeRow);
 
 export interface Certain {
   readonly summary: CertainMistakes;
-  /** The certain mistakes of one match, by the ordinal of the decision. */
   readonly moves: (matchId: string) => ReadonlyMap<number, CertainType>;
 }
 
-export const NO_CERTAIN: Certain = { summary: { seat: [], type: [], opportunities: [], chose: [], moveSeat: [], moveType: [], moveOrd: [] }, moves: () => new Map() };
+export const NO_CERTAIN: Certain = { summary: { rates: [], moveSeat: [], moveType: [], moveOrd: [] }, moves: () => new Map() };
 
-/** A row of a match the viewer does not show (partial, DeepSeek) has no seat and is left out. */
 export const openCertain = (path: string, seatIndex: ReadonlyMap<string, number>): Certain => {
   const db = new Database(path, { readonly: true });
 
-  const tallies = db
-    .query(
-      `select match_id matchId, player, type, count(*) opportunities, sum(outcome in ('mistake', 'fact pattern')) chose from opportunities group by match_id, player, type`,
-    )
+  const rates = db
+    .query(`select scope, model, effort, type, chose, opportunities, lo, hi from rates order by scope, model, effort, type`)
     .all()
-    .flatMap((raw) => {
-      const row = decodeTally(raw);
-      const seat = seatIndex.get(`${row.matchId}|${row.player}`);
+    .map((raw) => {
+      const { lo, hi, ...rate } = decodeRate(raw);
 
-      return seat === undefined ? [] : [{ seat, type: OPPORTUNITY_TYPES.indexOf(row.type), opportunities: row.opportunities, chose: row.chose }];
+      return { ...rate, bounds: lo === null || hi === null ? null : { lo, hi } };
     });
 
   const mistakes = db
@@ -57,10 +58,7 @@ export const openCertain = (path: string, seatIndex: ReadonlyMap<string, number>
 
   return {
     summary: {
-      seat: tallies.map(({ seat }) => seat),
-      type: tallies.map(({ type }) => type),
-      opportunities: tallies.map(({ opportunities }) => opportunities),
-      chose: tallies.map(({ chose }) => chose),
+      rates,
       moveSeat: mistakes.map(({ seat }) => seat),
       moveType: mistakes.map(({ type }) => CERTAIN_TYPES.indexOf(type)),
       moveOrd: mistakes.map(({ ordinal }) => ordinal),

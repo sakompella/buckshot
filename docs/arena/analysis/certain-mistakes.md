@@ -30,7 +30,7 @@ Inside `nix develop`, from the repository root:
     python3 tools/arena/analysis/certain_mistakes.py --doc docs/arena/analysis/certain-mistakes.md
     cd tools/arena/analysis && python3 -m unittest discover -s .
 
-`--opportunities FILE` also writes every decision with a proven chambered shell to a SQLite file, one row per decision: match, ordinal, player, type (`self_on_live`, `gave_up_guaranteed_win`, `hidden_health`, `gave_turn_away`), outcome (`mistake`, `not a mistake`, `excluded`, `fact pattern`) and the source of the proof. The arena viewer reads that file with `--certain-mistakes` to show these rates and to mark the mistakes in its replay, so the classifier lives only here.
+`--opportunities FILE` also writes every decision with a proven chambered shell to a SQLite file, one row per decision: match, ordinal, player, type (`self_on_live`, `gave_up_guaranteed_win`, `hidden_health`, `gave_turn_away`), outcome (`mistake`, `not a mistake`, `excluded`, `fact pattern`) and the source of the proof. A second table, `rates`, holds each config's, each model's and every config's counts and 95% interval per type, computed as the tables below are, so the viewer shows these numbers exactly. The arena viewer reads that file with `--certain-mistakes` to show these rates and to mark the mistakes in its replay, so the classifier lives only here.
 
 # Tables
 

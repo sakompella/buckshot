@@ -11,8 +11,7 @@ blank is the fact pattern "proven blank, gave the turn away". Keeping the move i
 certain-mistake rate. Its decisions are split by what the depth-limited search of the regret database scored.
 
 "Proves" is the knowledge database (web/scripts/arena-knowledge.ts): the Bend belief over the player's own log. Matches with a DeepSeek
-seat, unfinished matches and fallback moves are left out. With --doc FILE the tables replace the text between the tables markers of that file. With --opportunities FILE every opportunity is also
-written to a SQLite file, one row per decision with a proven chambered shell, which the arena viewer reads (--certain-mistakes).
+seat, unfinished matches and fallback moves are left out. With --doc FILE the tables replace the text between the tables markers of that file.
 
     python3 tools/arena/analysis/certain_mistakes.py [--knowledge PATH] [--regret PATH] [--doc docs/arena/analysis/certain-mistakes.md] [--opportunities PATH]
 """
@@ -145,6 +144,9 @@ class Rate:
     chose: int
     interval: tuple[float, float] | None
 
+    def bounds(self) -> tuple[float, float] | None:
+        return self.interval if self.decisions >= FEWEST_FOR_INTERVAL else None
+
     def cell(self) -> str:
         if self.decisions == 0:
             return "–"
@@ -188,8 +190,21 @@ def outcome_of(d: Decision) -> Outcome:
     return Outcome.MISTAKE if d.chose else Outcome.NOT_A_MISTAKE
 
 
+def rate_rows(decisions: list[Decision]) -> list[tuple]:
+    *per_config, (_, pooled) = configs(decisions)
+    groups = [("config", model, effort, mine) for [model, effort], mine in per_config]
+    groups += [("model", model, "", [d for d in decisions if d.model == model]) for model in sorted({d.model for d in decisions})]
+    groups.append(("all", "", "", pooled))
+    rows = []
+    for scope, model, effort, mine in groups:
+        for pattern in Pattern:
+            found = rate(of(mine, pattern))
+            lo, hi = found.bounds() or (None, None)
+            rows.append((scope, model, effort, pattern.name.lower(), found.chose, found.decisions, lo, hi))
+    return rows
+
+
 def write_opportunities(decisions: list[Decision], path: Path) -> None:
-    """One row per decision with a proven chambered shell, so the viewer need not rebuild the classification."""
     path.unlink(missing_ok=True)
     db = sqlite3.connect(path)
     with db:
@@ -201,6 +216,11 @@ def write_opportunities(decisions: list[Decision], path: Path) -> None:
             "INSERT INTO opportunities VALUES (?, ?, ?, ?, ?, ?)",
             [(d.match, d.ordinal, d.player, d.pattern.name.lower(), outcome_of(d).value, d.source) for d in decisions],
         )
+        db.execute(
+            """CREATE TABLE rates (scope TEXT NOT NULL, model TEXT NOT NULL, effort TEXT NOT NULL, type TEXT NOT NULL,
+                                   chose INTEGER NOT NULL, opportunities INTEGER NOT NULL, lo REAL, hi REAL, PRIMARY KEY (scope, model, effort, type)) WITHOUT ROWID"""
+        )
+        db.executemany("INSERT INTO rates VALUES (?, ?, ?, ?, ?, ?, ?, ?)", rate_rows(decisions))
     db.close()
 
 

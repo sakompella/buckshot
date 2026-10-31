@@ -2,29 +2,23 @@ import { Option } from "effect";
 import { AsyncData } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { CERTAIN_TYPES, type CertainMistakes, type CertainType, OPPORTUNITY_TYPES } from "../api.ts";
+import { CERTAIN_TYPES, type CertainMistakes, type CertainRate, type CertainType, type OpportunityType } from "../api.ts";
 import { anchorId, chartWidth, linScale, REFERENCE, REFERENCE_DASH, tippedDot } from "./charts.ts";
-import { addTo, baseName, baseOrder, type BlockTally, blockRate, CERTAIN_NAMES, colorOf, EFFORTS, fmtTime, groupBy, keyOf, labelOf, type MatchRow, type SeatFull, shortName, sumOf } from "./data.ts";
+import { baseName, baseOrder, CERTAIN_NAMES, colorOf, EFFORTS, fmtTime, groupBy, keyOf, labelOf, type MatchRow, type SeatFull, shortName, sumOf } from "./data.ts";
 import { memoLast } from "./derived.ts";
 import { type CertainCell, Message } from "./model.ts";
 
 type H = HtmlBuilder<Message>;
 
-/** The id of the folded table at the page's end that the chart links to. */
 export const CERTAIN_TABLE = "certain-table";
 
-// Certain mistakes (docs/arena/analysis/certain-mistakes.md): per config and type, the decisions that made the mistake over
-// the decisions where it was a legal move, from the opportunities tools/arena/analysis/certain_mistakes.py classified.
-
-/** A cell with fewer opportunities than this shows its count only. */
-const FEWEST_FOR_INTERVAL = 20;
+const FEWEST_FOR_RATE = 20;
 
 export interface Cell {
   readonly type: CertainType;
   readonly mistakes: number;
   readonly opportunities: number;
-  /** The 95% seed-block interval of the rate, or null under FEWEST_FOR_INTERVAL opportunities. */
-  readonly bounds: readonly [number, number] | null;
+  readonly bounds: CertainRate["bounds"];
 }
 
 export interface Row {
@@ -35,7 +29,6 @@ export interface Row {
 }
 
 export interface Tallies {
-  /** Every config with a decision, then every model with its efforts pooled (its `effort` is empty). */
   readonly rows: ReadonlyArray<Row>;
   readonly models: ReadonlyArray<Row>;
   readonly pooled: ReadonlyArray<Cell>;
@@ -43,64 +36,52 @@ export interface Tallies {
   readonly hiddenHealth: number;
 }
 
-type SeatKey = Pick<SeatFull, "model" | "effort" | "seedBlock">;
+type SeatKey = Pick<SeatFull, "model" | "effort">;
 
-const totalsOf = (tally: BlockTally) => {
-  const blocks = [...tally.values()];
+const hasRate = ({ opportunities }: Cell): boolean => opportunities >= FEWEST_FOR_RATE;
 
-  return { hits: sumOf(blocks.map(([hits]) => hits)), trials: sumOf(blocks.map(([, trials]) => trials)) };
-};
-
-const cellOf = (type: CertainType, tally: BlockTally): Cell => {
-  const { hits, trials } = totalsOf(tally);
-
-  if (trials < FEWEST_FOR_INTERVAL) return { type, mistakes: hits, opportunities: trials, bounds: null };
-
-  const { lo, hi } = blockRate(tally);
-
-  return { type, mistakes: hits, opportunities: trials, bounds: [lo, hi] };
-};
+const cellOf = (type: CertainType, parts: ReadonlyArray<CertainRate>, whole: CertainRate | undefined): Cell => ({
+  type,
+  mistakes: sumOf(parts.map(({ chose }) => chose)),
+  opportunities: sumOf(parts.map(({ opportunities }) => opportunities)),
+  bounds: whole?.bounds ?? null,
+});
 
 const EFFORT_ORDER: ReadonlyArray<string> = EFFORTS;
 
-const emptyTallies = (): ReadonlyArray<BlockTally> => OPPORTUNITY_TYPES.map(() => new Map());
+const inStrengthOrder = <A extends SeatKey>(items: ReadonlyArray<A>): ReadonlyArray<A> =>
+  items.toSorted((left, right) => baseOrder(left.model) - baseOrder(right.model) || EFFORT_ORDER.indexOf(left.effort) - EFFORT_ORDER.indexOf(right.effort));
 
-/** Each config's and each model's tallies over the kept seats, in strength and effort order, then every kept seat pooled. */
+/** A model's or the pooled row keeps its written interval only while all its configs are shown; a filtered selection has no interval. */
 export const talliesOf = memoLast((certain: CertainMistakes, seats: ReadonlyArray<SeatKey>, keep: ReadonlyArray<boolean>): Tallies => {
-  const configs = new Map<string, { readonly seat: SeatKey; readonly tallies: ReadonlyArray<BlockTally> }>();
-  const models = new Map<string, { readonly seat: SeatKey; readonly tallies: ReadonlyArray<BlockTally> }>();
-  const pooled = emptyTallies();
-
-  certain.seat.forEach((seatAt, entry) => {
-    const seat = seats[seatAt];
-    const type = certain.type[entry] ?? -1;
-
-    if (seat === undefined || keep[seatAt] !== true) return;
-
-    const config = configs.get(keyOf(seat)) ?? { seat, tallies: emptyTallies() };
-    const [mistakes, opportunities] = [certain.chose[entry] ?? 0, certain.opportunities[entry] ?? 0];
-
-    const model = models.get(seat.model) ?? { seat, tallies: emptyTallies() };
-
-    configs.set(keyOf(seat), config);
-    models.set(seat.model, model);
-
-    for (const tally of [config.tallies[type], model.tallies[type], pooled[type]]) if (tally !== undefined) addTo(tally, seat.seedBlock, mistakes, opportunities);
-  });
-
-  const cellsOf = (tallies: ReadonlyArray<BlockTally>) => CERTAIN_TYPES.map((type) => cellOf(type, tallies[OPPORTUNITY_TYPES.indexOf(type)] ?? new Map()));
-  const blanks = totalsOf(pooled[OPPORTUNITY_TYPES.indexOf("gave_turn_away")] ?? new Map());
+  const shownKeys = new Set(seats.flatMap((seat, at) => (keep[at] === true ? [keyOf(seat)] : [])));
+  const configs = certain.rates.filter(({ scope }) => scope === "config");
+  const shown = configs.filter((rate) => shownKeys.has(keyOf(rate)));
+  const ofType = (rates: ReadonlyArray<CertainRate>, type: OpportunityType) => rates.filter((rate) => rate.type === type);
+  const writtenOf = (scope: CertainRate["scope"], model: string, type: OpportunityType) => certain.rates.find((rate) => rate.scope === scope && rate.model === model && rate.type === type);
+  const modelNames = [...new Set(shown.map(({ model }) => model))].toSorted((left, right) => baseOrder(left) - baseOrder(right));
+  const blanks = ofType(shown, "gave_turn_away");
 
   return {
-    rows: [...configs.values()]
-      .toSorted((left, right) => baseOrder(left.seat.model) - baseOrder(right.seat.model) || EFFORT_ORDER.indexOf(left.seat.effort) - EFFORT_ORDER.indexOf(right.seat.effort))
-      .map(({ seat, tallies }) => ({ key: keyOf(seat), model: seat.model, effort: seat.effort, cells: cellsOf(tallies) })),
-    models: [...models.values()]
-      .toSorted((left, right) => baseOrder(left.seat.model) - baseOrder(right.seat.model))
-      .map(({ seat, tallies }) => ({ key: seat.model, model: seat.model, effort: "", cells: cellsOf(tallies) })),
-    pooled: cellsOf(pooled),
-    provenBlanks: { gaveTurnAway: blanks.hits, total: blanks.trials },
-    hiddenHealth: totalsOf(pooled[OPPORTUNITY_TYPES.indexOf("hidden_health")] ?? new Map()).trials,
+    rows: inStrengthOrder([...groupBy(shown, keyOf).values()].flatMap(([first]) => (first === undefined ? [] : [first]))).map(({ model, effort }) => ({
+      key: keyOf({ model, effort }),
+      model,
+      effort,
+      cells: CERTAIN_TYPES.map((type) => {
+        const own = shown.filter((rate) => rate.model === model && rate.effort === effort && rate.type === type);
+
+        return cellOf(type, own, own[0]);
+      }),
+    })),
+    models: modelNames.map((model) => {
+      const mine = shown.filter((rate) => rate.model === model);
+      const isWhole = mine.length === configs.filter((rate) => rate.model === model).length;
+
+      return { key: model, model, effort: "", cells: CERTAIN_TYPES.map((type) => cellOf(type, ofType(mine, type), isWhole ? writtenOf("model", model, type) : undefined)) };
+    }),
+    pooled: CERTAIN_TYPES.map((type) => cellOf(type, ofType(shown, type), shown.length === configs.length ? writtenOf("all", "", type) : undefined)),
+    provenBlanks: { gaveTurnAway: sumOf(blanks.map(({ chose }) => chose)), total: sumOf(blanks.map(({ opportunities }) => opportunities)) },
+    hiddenHealth: sumOf(ofType(shown, "hidden_health").map(({ opportunities }) => opportunities)),
   };
 });
 
@@ -108,14 +89,12 @@ const matchesById = memoLast((matches: ReadonlyArray<MatchRow>): ReadonlyMap<str
 
 interface Listed {
   readonly matchId: string;
-  /** The first mistake of the cell's type in the match, which the replay opens at. */
   readonly ordinal: number;
   readonly count: number;
   readonly startedAt: string;
   readonly opponent: SeatFull | undefined;
 }
 
-/** The matches where a config made a type of certain mistake, newest first. */
 const listedOf = (certain: CertainMistakes, seats: ReadonlyArray<SeatFull>, matches: ReadonlyMap<string, MatchRow>, { key, type }: CertainCell): ReadonlyArray<Listed> => {
   const found = certain.moveSeat.flatMap((seatAt, move) => {
     const seat = seats[seatAt];
@@ -144,6 +123,10 @@ const listedOf = (certain: CertainMistakes, seats: ReadonlyArray<SeatFull>, matc
 
 const fmtRate = (share: number): string => `${(share * 100).toFixed(1)}%`;
 
+const fmtBounds = ({ lo, hi }: NonNullable<CertainRate["bounds"]>): string => `[${fmtRate(lo)}, ${fmtRate(hi)}]`;
+
+const intervalView = (h: H, bounds: NonNullable<CertainRate["bounds"]>): Html => h.span([h.Class("pm")], [` ${fmtBounds(bounds)}`]);
+
 const cellView = (h: H, cell: Cell, link: { readonly key: string; readonly isOpen: boolean } | null): Html => {
   const label = h.DataAttribute("label", CERTAIN_NAMES[cell.type]);
 
@@ -157,9 +140,7 @@ const cellView = (h: H, cell: Cell, link: { readonly key: string; readonly isOpe
       link !== null && cell.mistakes > 0
         ? h.button([h.Type("button"), h.Class("cmb"), h.AriaExpanded(link.isOpen), h.OnClick(Message.ClickedCertainCount({ key: link.key, type: cell.type }))], [counts])
         : h.span([], [counts]),
-      cell.bounds === null
-        ? h.empty
-        : h.span([h.Class("cmr")], [h.b([], [fmtRate(cell.mistakes / cell.opportunities)]), " ", h.span([h.Class("pm")], [`[${fmtRate(cell.bounds[0])}, ${fmtRate(cell.bounds[1])}]`])]),
+      hasRate(cell) ? h.span([h.Class("cmr")], [h.b([], [fmtRate(cell.mistakes / cell.opportunities)]), cell.bounds === null ? h.empty : intervalView(h, cell.bounds)]) : h.empty,
     ],
   );
 };
@@ -197,7 +178,6 @@ const rowView = (h: H, certain: CertainMistakes, seats: ReadonlyArray<SeatFull>,
   ];
 };
 
-/** The configs as a table, folded at the page's end: the counts open the matches. */
 export const certainTableView = (h: H, certain: CertainMistakes, seats: ReadonlyArray<SeatFull>, keep: ReadonlyArray<boolean>, allMatches: ReadonlyArray<MatchRow>, maybeOpen: Option.Option<CertainCell>): Html => {
   const { rows, pooled } = talliesOf(certain, seats, keep);
   const matches = matchesById(allMatches);
@@ -230,7 +210,6 @@ const TOP = 8;
 
 const BOTTOM = 26;
 
-/** The nicest axis step that puts about five ticks under the largest rate. */
 const stepOf = (most: number): number => [0.005, 0.01, 0.02, 0.05, 0.1].find((step) => most / step <= 5) ?? 0.2;
 
 const panelView = (h: H, type: CertainType, models: ReadonlyArray<Row>, pooled: Cell, width: number): Html => {
@@ -238,13 +217,12 @@ const panelView = (h: H, type: CertainType, models: ReadonlyArray<Row>, pooled: 
   const [left, right] = isNarrow ? [78, 78] : [96, 92];
   const cellsOf = models.flatMap(({ model, cells }) => cells.filter((cell) => cell.type === type).map((cell) => ({ model, cell })));
   const pooledShare = pooled.opportunities === 0 ? 0 : pooled.mistakes / pooled.opportunities;
-  const most = Math.max(pooledShare, ...cellsOf.map(({ cell }) => cell.bounds?.[1] ?? 0));
+  const most = Math.max(pooledShare, ...cellsOf.map(({ cell }) => cell.bounds?.hi ?? (hasRate(cell) ? cell.mistakes / cell.opportunities : 0)));
   const step = stepOf(most);
   const top = Math.max(step, Math.ceil(most / step) * step);
   const ticks = Array.from({ length: Math.round(top / step) + 1 }, (_tick, index) => index * step);
   const x = linScale(0, top, left, width - right, ticks);
   const height = TOP + models.length * ROW + BOTTOM;
-  const rate = (share: number) => `${(share * 100).toFixed(1)}%`;
   const tickLabel = (value: number) => `${+(value * 100).toFixed(1)}%`;
 
   return h.svg(
@@ -270,22 +248,24 @@ const panelView = (h: H, type: CertainType, models: ReadonlyArray<Row>, pooled: 
           [],
           [
             h.text([h.X(String(left - 8)), h.Y(String(y + 4)), h.TextAnchor("end"), h.Style({ fill: color })], [name]),
-            cell.bounds === null
-              ? h.empty
-              : h.g(
+            hasRate(cell)
+              ? h.g(
                   [],
                   [
-                    h.line([h.X1(String(x.at(cell.bounds[0]))), h.X2(String(x.at(cell.bounds[1]))), h.Y1(String(y)), h.Y2(String(y)), h.Stroke(color), h.StrokeOpacity("0.4"), h.StrokeWidth("3")], []),
+                    cell.bounds === null
+                      ? h.empty
+                      : h.line([h.X1(String(x.at(cell.bounds.lo))), h.X2(String(x.at(cell.bounds.hi))), h.Y1(String(y)), h.Y2(String(y)), h.Stroke(color), h.StrokeOpacity("0.4"), h.StrokeWidth("3")], []),
                     tippedDot(
                       h,
                       anchorId("certain", type, model),
-                      `${baseName(model)} · ${cell.mistakes.toLocaleString()} of ${cell.opportunities.toLocaleString()} opportunities, ${rate(cell.mistakes / cell.opportunities)} [${rate(cell.bounds[0])}, ${rate(cell.bounds[1])}]`,
+                      `${baseName(model)} · ${cell.mistakes.toLocaleString()} of ${cell.opportunities.toLocaleString()} opportunities, ${fmtRate(cell.mistakes / cell.opportunities)}${cell.bounds === null ? "" : ` ${fmtBounds(cell.bounds)}`}`,
                       String(x.at(cell.mistakes / cell.opportunities)),
                       String(y),
                       [h.R("3.5"), h.Fill(color)],
                     ),
                   ],
-                ),
+                )
+              : h.empty,
             h.text([h.X(String(width - right + 8)), h.Y(String(y + 4))], [counts]),
           ],
         );
@@ -294,10 +274,9 @@ const panelView = (h: H, type: CertainType, models: ReadonlyArray<Row>, pooled: 
   );
 };
 
-const pooledNote = ({ mistakes, opportunities, bounds }: Cell): string =>
-  `All shown configs: ${mistakes.toLocaleString()} of ${opportunities.toLocaleString()}${bounds === null ? "" : `, ${((mistakes / opportunities) * 100).toFixed(1)}% [${(bounds[0] * 100).toFixed(1)}%, ${(bounds[1] * 100).toFixed(1)}%]`}`;
+const pooledNote = (cell: Cell): string =>
+  `All shown configs: ${cell.mistakes.toLocaleString()} of ${cell.opportunities.toLocaleString()}${hasRate(cell) ? `, ${fmtRate(cell.mistakes / cell.opportunities)}${cell.bounds === null ? "" : ` ${fmtBounds(cell.bounds)}`}` : ""}`;
 
-/** The section in How they play: each model's rate for each type, its counts on the right and its interval on a tap, and the pooled rate as the dashed line. */
 export const certainView = (h: H, certain: CertainMistakes, seats: ReadonlyArray<SeatFull>, keep: ReadonlyArray<boolean>, width: number, content: number): Html => {
   const { models, pooled, provenBlanks, hiddenHealth } = talliesOf(certain, seats, keep);
   const figure = chartWidth(width, content);
@@ -324,6 +303,8 @@ export const certainView = (h: H, certain: CertainMistakes, seats: ReadonlyArray
   );
 };
 
-/** The section is drawn when the certain-mistakes data loaded and holds a decision, or failed to load, so the page says so. */
+export const hasCertainChart = (data: AsyncData.AsyncData<CertainMistakes, string>): boolean =>
+  AsyncData.matchData(data, { onEmpty: () => false, onFailure: () => false, onData: ({ rates }) => rates.length > 0 });
+
 export const hasCertain = (data: AsyncData.AsyncData<CertainMistakes, string>): boolean =>
-  AsyncData.matchData(data, { onEmpty: () => false, onFailure: () => true, onData: ({ seat }) => seat.length > 0 });
+  AsyncData.matchData(data, { onEmpty: () => false, onFailure: () => true, onData: ({ rates }) => rates.length > 0 });

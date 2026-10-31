@@ -5,12 +5,13 @@ import { modifyFields } from "foldkit/struct";
 
 import { CertainMistakes, Consistency, Decisions, MatchDetail, SeatsResponse } from "../api.ts";
 import { withPotShares } from "./data.ts";
+import { hasCertainChart } from "./certain.ts";
 import { derive } from "./derived.ts";
 import { picksOf } from "./interesting.ts";
 import { MORE_ROWS } from "./matches.ts";
 import { type Filter, Group, Message, Model, MOVED_TARGETS, Target, type Viewport } from "./model.ts";
 import { replayIndex, stepsOf } from "./replay.ts";
-import { PlaceTour, TOUR, tourKeyMessage } from "./tour.ts";
+import { PlaceTour, tourKeyMessage, tourOf } from "./tour.ts";
 import { stickyHeight, view } from "./view.ts";
 
 type Return = Update.Return<Model, Message>;
@@ -77,7 +78,6 @@ const JumpTo = Command.define("JumpTo", {
     }).pipe(Effect.as(Message.CompletedScroll())),
 });
 
-/** Opens a folded table and scrolls to it, for a link from the chart of the same numbers. */
 const OpenTable = Command.define("OpenTable", {
   args: { id: Schema.String },
   messages: [Message.CompletedScroll],
@@ -199,7 +199,7 @@ export const update = (model: Model, message: Message): Return =>
   Message.match<Return>(message, {
     ResizedViewport: (viewport) => ({
       model: modifyFields(model, { viewport: () => viewport }),
-      commands: Option.match(model.maybeTour, { onNone: () => [], onSome: ({ step }) => [PlaceTour({ step })] }),
+      commands: Option.match(model.maybeTour, { onNone: () => [], onSome: ({ step, hasCertain }) => [PlaceTour({ step, hasCertain })] }),
     }),
     ClickedJump: ({ target }) => ({ model, commands: [JumpTo({ target })] }),
     ClickedTableLink: ({ id }) => ({ model, commands: [OpenTable({ id })] }),
@@ -264,14 +264,18 @@ export const update = (model: Model, message: Message): Return =>
     CompletedHistoryChange: () => ({ model }),
     CompletedStepScroll: () => ({ model }),
     CompletedScroll: () => ({ model }),
-    ClickedTour: () => ({ model: modifyFields(model, { maybeTour: () => Option.some({ step: 0, maybeBox: Option.none(), isCardUnder: false }) }), commands: [PlaceTour({ step: 0 })] }),
+    ClickedTour: () => {
+      const hasCertain = AsyncData.matchData(model.data, { onEmpty: () => false, onFailure: () => false, onData: ({ certainMistakes }) => hasCertainChart(certainMistakes) });
+
+      return { model: modifyFields(model, { maybeTour: () => Option.some({ step: 0, hasCertain, maybeBox: Option.none(), isCardUnder: false }) }), commands: [PlaceTour({ step: 0, hasCertain })] };
+    },
     SteppedTour: ({ delta }) =>
       Option.match(model.maybeTour, {
         onNone: (): Return => ({ model }),
         onSome: (tour): Return => {
-          const step = Math.max(0, Math.min(TOUR.length - 1, tour.step + delta));
+          const step = Math.max(0, Math.min(tourOf(tour.hasCertain).length - 1, tour.step + delta));
 
-          return step === tour.step ? { model } : { model: modifyFields(model, { maybeTour: () => Option.some({ ...tour, step }) }), commands: [PlaceTour({ step })] };
+          return step === tour.step ? { model } : { model: modifyFields(model, { maybeTour: () => Option.some({ ...tour, step }) }), commands: [PlaceTour({ step, hasCertain: tour.hasCertain })] };
         },
       }),
     ClosedTour: () => ({ model: modifyFields(model, { maybeTour: () => Option.none() }) }),

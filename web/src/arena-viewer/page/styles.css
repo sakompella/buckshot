@@ -242,7 +242,6 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
 .tag.regret.exact { color: var(--fg); border-color: var(--fg); }
 .tag.regret.big { color: #000; background: var(--fg); border-color: var(--fg); font-weight: 600; }
 
-/* certain mistakes */
 .cmt { width: auto; max-width: 100%; }
 .cmt th, .cmt td { vertical-align: top; padding-left: 28px; }
 .cmt th:first-child, .cmt td:first-child { padding-left: 8px; }

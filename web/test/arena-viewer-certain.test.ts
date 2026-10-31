@@ -4,6 +4,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import type { CertainMistakes, CertainRate } from "../src/arena-viewer/api.ts";
 import { openCertain } from "../src/arena-viewer/certain.ts";
 import { talliesOf } from "../src/arena-viewer/page/certain.ts";
 
@@ -18,15 +19,27 @@ const OPPORTUNITIES = [
   ["partial", 1, "A", "self_on_live", "mistake"],
 ] as const;
 
+const WRITTEN_RATES = [
+  ["config", "opus", "high", "self_on_live", 2, 40, 0.01, 0.12],
+  ["config", "opus", "low", "self_on_live", 0, 3, null, null],
+  ["model", "opus", "", "self_on_live", 2, 43, 0.012, 0.11],
+  ["all", "", "", "self_on_live", 2, 43, 0.012, 0.11],
+] as const;
+
 const opportunitiesFile = (): string => {
   const path = join(mkdtempSync(join(tmpdir(), "certain-")), "certain-mistakes.sqlite");
   const db = new Database(path);
 
   db.run("create table opportunities (match_id text, ordinal integer, player text, type text, outcome text, source text)");
+  db.run("create table rates (scope text, model text, effort text, type text, chose integer, opportunities integer, lo real, hi real)");
 
   const insert = db.query("insert into opportunities values (?, ?, ?, ?, ?, 'public')");
 
   for (const row of OPPORTUNITIES) insert.run(...row);
+
+  const insertRate = db.query("insert into rates values (?, ?, ?, ?, ?, ?, ?, ?)");
+
+  for (const row of WRITTEN_RATES) insertRate.run(...row);
 
   db.close();
 
@@ -38,16 +51,14 @@ const SEATS = new Map([
   ["m1|B", 1],
 ]);
 
-test("a seat's opportunities count every decision and those that played the type's move, and a match the viewer does not show counts nowhere", () => {
+test("the written rates are served as they are, with an interval only where the file has one", () => {
   const { summary } = openCertain(opportunitiesFile(), SEATS);
 
-  const tallies = summary.seat.map((seat, entry) => [seat, summary.type[entry], summary.opportunities[entry], summary.chose[entry]]);
-
-  expect(tallies.toSorted()).toEqual([
-    [0, 0, 3, 2],
-    [1, 1, 1, 1],
-    [1, 2, 1, 0],
-    [1, 3, 2, 1],
+  expect(summary.rates.map(({ scope, model, effort, type, chose, opportunities, bounds }) => [scope, model, effort, type, chose, opportunities, bounds])).toEqual([
+    ["all", "", "", "self_on_live", 2, 43, { lo: 0.012, hi: 0.11 }],
+    ["config", "opus", "high", "self_on_live", 2, 40, { lo: 0.01, hi: 0.12 }],
+    ["config", "opus", "low", "self_on_live", 0, 3, null],
+    ["model", "opus", "", "self_on_live", 2, 43, { lo: 0.012, hi: 0.11 }],
   ]);
 });
 
@@ -67,52 +78,66 @@ test("only certain mistakes are listed, each with its seat, type and decision, a
   expect(moves("partial").size).toBe(0);
 });
 
-const entries = (seat: ReadonlyArray<number>, type: number, opportunities: ReadonlyArray<number>, chose: ReadonlyArray<number>) => ({
-  seat,
-  type: seat.map(() => type),
-  opportunities,
-  chose,
+type Written = readonly [CertainRate["scope"], string, string, CertainRate["type"], number, number, number | null];
+
+const certainOf = (written: ReadonlyArray<Written>): CertainMistakes => ({
+  rates: written.map(([scope, model, effort, type, chose, opportunities, hi]) => ({ scope, model, effort, type, chose, opportunities, bounds: hi === null ? null : { lo: 0, hi } })),
   moveSeat: [],
   moveType: [],
   moveOrd: [],
 });
 
-const SEATS_OF_CONFIGS = [
-  { model: "gpt-6-luna", effort: "low", seedBlock: "b1" },
-  { model: "gpt-6-luna", effort: "low", seedBlock: "b2" },
-  { model: "claude-opus-5-5", effort: "max", seedBlock: "b1" },
-  { model: "claude-opus-5-5", effort: "off", seedBlock: "b3" },
+const WRITTEN: ReadonlyArray<Written> = [
+  ["config", "claude-opus-5-5", "off", "self_on_live", 1, 3, null],
+  ["config", "claude-opus-5-5", "max", "self_on_live", 0, 40, 0.07],
+  ["config", "gpt-6-luna", "low", "self_on_live", 5, 25, 0.4],
+  ["config", "gpt-6-luna", "low", "gave_turn_away", 11, 50, null],
+  ["config", "gpt-6-luna", "low", "hidden_health", 0, 7, null],
+  ["model", "claude-opus-5-5", "", "self_on_live", 1, 43, 0.06],
+  ["model", "gpt-6-luna", "", "self_on_live", 5, 25, 0.4],
+  ["all", "", "", "self_on_live", 6, 68, 0.2],
 ];
 
-test("each config's mistakes pool its seats over the opportunities, strongest model and lowest effort first, with an interval from twenty opportunities", () => {
-  const { rows, pooled } = talliesOf(entries([0, 1, 2, 3], 0, [15, 10, 40, 3], [4, 1, 0, 1]), SEATS_OF_CONFIGS, [true, true, true, true]);
+const SEATS_OF_CONFIGS = [
+  { model: "gpt-6-luna", effort: "low" },
+  { model: "claude-opus-5-5", effort: "max" },
+  { model: "claude-opus-5-5", effort: "off" },
+];
+
+test("each config shows its written counts and interval, strongest model and lowest effort first", () => {
+  const { rows, pooled } = talliesOf(certainOf(WRITTEN), SEATS_OF_CONFIGS, [true, true, true]);
 
   expect(rows.map(({ model, effort }) => `${model} ${effort}`)).toEqual(["claude-opus-5-5 off", "claude-opus-5-5 max", "gpt-6-luna low"]);
-  expect(rows.map(({ cells }) => [cells[0]?.mistakes, cells[0]?.opportunities, cells[0]?.bounds === null])).toEqual([
-    [1, 3, true],
-    [0, 40, false],
-    [5, 25, false],
+  expect(rows.map(({ cells }) => [cells[0]?.mistakes, cells[0]?.opportunities, cells[0]?.bounds?.hi ?? null])).toEqual([
+    [1, 3, null],
+    [0, 40, 0.07],
+    [5, 25, 0.4],
   ]);
-
-  const [low = 0, high = 1] = rows[2]?.cells[0]?.bounds ?? [];
-
-  expect(low <= 5 / 25 && 5 / 25 <= high).toBe(true);
-  expect(pooled[0]).toMatchObject({ mistakes: 6, opportunities: 68 });
+  expect(pooled[0]).toMatchObject({ mistakes: 6, opportunities: 68, bounds: { hi: 0.2 } });
   expect(pooled[1]).toMatchObject({ mistakes: 0, opportunities: 0, bounds: null });
 });
 
-test("a seat the filter drops leaves its config and the pooled row", () => {
-  const { rows, pooled } = talliesOf(entries([0, 1, 2, 3], 0, [15, 10, 40, 3], [4, 1, 0, 1]), SEATS_OF_CONFIGS, [false, false, true, false]);
+test("a filter that drops a config keeps the other rows' counts, and a pooled row loses the interval it no longer has", () => {
+  const { rows, models, pooled } = talliesOf(certainOf(WRITTEN), SEATS_OF_CONFIGS, [false, true, true]);
 
-  expect(rows.map(({ model }) => model)).toEqual(["claude-opus-5-5"]);
-  expect(pooled[0]).toMatchObject({ mistakes: 0, opportunities: 40 });
+  expect(rows.map(({ model }) => model)).toEqual(["claude-opus-5-5", "claude-opus-5-5"]);
+  expect(models.map(({ model, cells }) => [model, cells[0]?.mistakes, cells[0]?.opportunities, cells[0]?.bounds?.hi])).toEqual([["claude-opus-5-5", 1, 43, 0.06]]);
+  expect(pooled[0]).toMatchObject({ mistakes: 1, opportunities: 43, bounds: null });
+});
+
+test("a model with some of its configs dropped has counts and no interval", () => {
+  const { models, pooled } = talliesOf(certainOf(WRITTEN), SEATS_OF_CONFIGS, [true, true, false]);
+
+  expect(models.map(({ model, cells }) => [model, cells[0]?.mistakes, cells[0]?.opportunities, cells[0]?.bounds])).toEqual([
+    ["claude-opus-5-5", 0, 40, null],
+    ["gpt-6-luna", 5, 25, { lo: 0, hi: 0.4 }],
+  ]);
+  expect(pooled[0]).toMatchObject({ mistakes: 5, opportunities: 65, bounds: null });
 });
 
 test("proven blanks that gave the turn away, and decisions a jammed opponent hid, are tallied apart from the certain mistakes", () => {
-  const certain = { seat: [0, 0, 1], type: [3, 2, 3], opportunities: [30, 7, 20], chose: [6, 0, 5], moveSeat: [], moveType: [], moveOrd: [] };
-  const { rows, provenBlanks, hiddenHealth } = talliesOf(certain, SEATS_OF_CONFIGS, [true, true, true, true]);
+  const { provenBlanks, hiddenHealth } = talliesOf(certainOf(WRITTEN), SEATS_OF_CONFIGS, [true, true, true]);
 
-  expect(rows.map(({ cells }) => cells.map(({ opportunities }) => opportunities))).toEqual([[0, 0]]);
   expect(provenBlanks).toEqual({ gaveTurnAway: 11, total: 50 });
   expect(hiddenHealth).toBe(7);
 });
