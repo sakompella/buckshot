@@ -6,7 +6,7 @@ import { type Browser, chromium, type Page } from "playwright-core";
 
 import { Blunders, CERTAIN_TYPES, CertainMistakes, Consistency, Decisions, ITEMS, MatchDetail, type MoveRegret, NO_GAP, SeatsResponse } from "../src/arena-viewer/api.ts";
 import { anchorId } from "../src/arena-viewer/page/charts.ts";
-import { baseName, baseOrder, CERTAIN_NAMES, fmtCount, fmtPct, fmtUsd, blocksOf, keyOf, labelOf, MIN_BLOCKS_FOR_INTERVAL, withPotShares } from "../src/arena-viewer/page/data.ts";
+import { baseName, baseOrder, CERTAIN_NAMES, fmtCount, fmtPct, fmtUsd, blocksOf, keyOf, labelOf, MIN_BLOCKS_FOR_INTERVAL, shortName, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { GROUPS, MOVED_TARGETS, Section } from "../src/arena-viewer/page/model.ts";
 import { pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 import { stepsOf } from "../src/arena-viewer/page/replay.ts";
@@ -392,6 +392,32 @@ const checkRatings = async (page: Page) => {
   const totals = await page.locator("table.heat td.total").allInnerTexts();
 
   expectThat(totals.length > 0 && totals.every((text) => text.trim() !== "" && text.trim() !== "–"), "a heatmap row shows no Round Elo");
+};
+
+const checkHeat = async (page: Page, name: string) => {
+  await openBreakdown(page);
+
+  const seats = await servedSeats();
+  const columns = (await page.locator("table.heat thead th").allInnerTexts()).map((text) => text.trim()).slice(1, -2);
+  const models = [...new Set(seats.map(({ model }) => model))].toSorted((left, right) => baseOrder(left) - baseOrder(right));
+
+  const cells = await page.locator("table.heat td.cellv:not(.none)").evaluateAll((tds) =>
+    tds.map((td) => ({
+      share: Number.parseFloat(td.firstChild?.textContent ?? "") / 100,
+      n: Number((td.querySelector(".n")?.textContent ?? "").replaceAll(",", "")),
+      level: Number(/rgb\((\d+)/.exec(getComputedStyle(td).backgroundColor)?.[1]),
+      tip: td.getAttribute("data-tip") ?? "",
+    })),
+  );
+
+  const expectedLevel = ({ share, n }: { share: number; n: number }) => Math.round(16 + (38 + share * 194 - 16) * Math.min(1, n / 10));
+
+  console.log(name, "heat columns", columns.join(" | "), "| cells", cells.length);
+  expectThat(JSON.stringify(columns) === JSON.stringify(models.map(shortName)) && new Set(columns).size === columns.length, `${name}: the heatmap columns read ${columns.join(", ")}, the short names are ${models.map(shortName).join(", ")}`);
+  expectThat(cells.length > 0 && cells.every((cell) => Math.abs(cell.level - expectedLevel(cell)) <= 2), `${name}: a heat cell is not shaded by its win share and matches`);
+  expectThat(cells.some((cell) => cell.n < 10) && cells.some((cell) => cell.n >= 10), `${name}: the heatmap has no cell on each side of full strength`);
+  expectThat(cells.every(({ tip, n }) => tip.includes(`of ${n} matches`) && tip.includes("Full strength from 10 matches")), `${name}: a heat cell's tooltip does not say what n gives full strength`);
+  expectThat(!(await textOf(page, "#breakdown")).includes("ull strength"), `${name}: the page explains full strength outside the cell tooltips`);
 };
 
 const openBreakdown = async (page: Page) => {
@@ -1206,7 +1232,7 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
   await check("missing regret", () => checkMissingRegret(browser, viewport));
   await check("certain mistakes", () => checkCertain(page, viewport.name, (target) => target.click(), false));
   await check("heatmap", async () => {
-    await openBreakdown(page);
+    await checkHeat(page, viewport.name);
     console.log("heat rows", await countOf(page, "table.heat tbody tr"), "cols", await countOf(page, "table.heat thead th"), "| first row:", await textOf(page, "table.heat tbody tr"));
     await heat(page).screenshot({ path: shot("heat-opp"), style: UNSTICK });
   });
@@ -1441,7 +1467,7 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
     console.log(name, "tap outside clears the tip:", (await tipOf(page)) === "none");
   });
   await check("heat and leaderboard", async () => {
-    await openBreakdown(page);
+    await checkHeat(page, name);
     await heat(page).locator(".heatscroll").evaluate((element) => element.scrollTo({ left: 200 }));
     await heat(page).screenshot({ path: shot(`${name}-heat`) });
     await page.locator("table.lbt").first().screenshot({ path: shot(`${name}-leaderboard`) });

@@ -8,6 +8,7 @@ import { ODDS_BINS, oddsBinOf, oddsPanels, selfShotTallies } from "../src/arena-
 import { showsReloadNote, turningPoints } from "../src/arena-viewer/page/replay.ts";
 import { ranksOf } from "../src/arena-viewer/page/derived.ts";
 import { inRankOrder } from "../src/arena-viewer/page/leaderboard.ts";
+import { FULL_N, shadeOf } from "../src/arena-viewer/page/heat.ts";
 import { AXES, frontierOf } from "../src/arena-viewer/page/scatter.ts";
 
 const randomGames = (seed: number): ReadonlyArray<Game> => {
@@ -509,4 +510,13 @@ test("the best-value line runs through ranked configs only", () => {
   const points = stats.map((m) => ({ m, x: m.model === "new" ? 1 : 2, rating: m.model === "new" ? 50 : 10, rank: undefined }));
 
   expect(frontierOf(points).map(({ m }) => m.model)).toEqual(["ranked"]);
+});
+
+test("a heat cell grows brighter with its win share, and fades toward the page below the matches that give full strength", () => {
+  const level = (value: number, n: number) => Number(/rgb\((\d+)/.exec(shadeOf(value, n).background)?.[1]);
+
+  expect(level(0.8, FULL_N)).toBeGreaterThan(level(0.4, FULL_N));
+  expect(level(0.8, FULL_N - 1)).toBeLessThan(level(0.8, FULL_N));
+  expect(level(0.8, 1)).toBeLessThan(level(0.8, FULL_N - 1));
+  expect(level(0.8, FULL_N * 5)).toBe(level(0.8, FULL_N));
 });
