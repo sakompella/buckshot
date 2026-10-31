@@ -9,7 +9,6 @@ import { findBlunders } from "./blunders.ts";
 import { type Certain, NO_CERTAIN, openCertain } from "./certain.ts";
 import { mistakesOf } from "./mistakes.ts";
 import { openConsistency } from "./consistency.ts";
-import { groupBy } from "./page/data.ts";
 import page from "./page/index.html";
 import { openRegret, type Regret } from "./regret.ts";
 
@@ -20,18 +19,16 @@ import { openRegret, type Regret } from "./regret.ts";
 
 const NOT_DEEPSEEK = `m.id not in (select x.match_id from match_seats x join entrants y on y.id = x.entrant_id where y.model = 'oc/deepseek-v4.1-flash-free')`;
 
-const SEATS_SQL = `with cs as (select match_id, player, count(*) calls, sum(cost_usd) cost, sum(input_tokens) inp, sum(output_tokens) outp,
+const SEATS_SQL = `with cs as (select match_id, player, sum(cost_usd) cost, sum(input_tokens) inp, sum(output_tokens) outp,
      sum(cache_read_tokens) cr, sum(cache_write_tokens) cw, sum(reasoning_tokens) rt,
-     sum(latency_ms) lat, sum(status = 'failed') failed,
-     sum(case when status = 'failed' then coalesce(cost_usd, 0) else 0 end) fcost, sum(case when status = 'failed' then coalesce(latency_ms, 0) else 0 end) flat,
-     sum(case when status != 'failed' then coalesce(cost_usd, 0) else 0 end) rcost, sum(case when status != 'failed' then coalesce(latency_ms, 0) else 0 end) rlat,
+     sum(latency_ms) lat,
      sum(reasoning_tokens > 0 and coalesce(reasoning_text, '') = '') rsHidden, sum(coalesce(reasoning_text, '') != '') rsText,
      sum(json_valid(tool_calls_json) and json_array_length(tool_calls_json) > 1) multiTool
    from calls group by match_id, player),
    ds as (select match_id, player, sum(by_whom = 'agent') moves from decisions group by match_id, player)
    select t.name tournament, m.id matchId, m.name matchName, m.status, m.started_at startedAt, m.seed, m.seed_block_id seedBlock,
      substr(m.code_hash, 1, 8) codeHash, e.model, e.effort, ms.player, ms.position, ms.win_share winShare, ms.cash,
-     cs.calls, cs.cost, cs.inp, cs.outp, cs.cr, cs.cw, cs.rt, cs.lat, cs.failed, cs.fcost, cs.flat, cs.rcost, cs.rlat, cs.rsHidden, cs.rsText, cs.multiTool, ds.moves
+     cs.cost, cs.inp, cs.outp, cs.cr, cs.cw, cs.rt, cs.lat, cs.rsHidden, cs.rsText, cs.multiTool, ds.moves
    from match_seats ms join matches m on m.id = ms.match_id join tournaments t on t.id = m.tournament_id
    join entrants e on e.id = ms.entrant_id
    left join cs on cs.match_id = m.id and cs.player = ms.player
@@ -45,8 +42,6 @@ const decodeSummary = Schema.decodeUnknownOption(MatchSummary);
 const decodeMatchSeat = Schema.decodeUnknownSync(MatchSeat);
 
 const decodeCall = Schema.decodeUnknownSync(Call);
-
-const decodeCallHourRow = Schema.decodeUnknownSync(Schema.Struct({ matchId: Schema.String, player: Schema.String, hour: Schema.Number, calls: Schema.Number, failed: Schema.Number }));
 
 const DecisionRow = Schema.Struct({
   id: Schema.String,
@@ -245,19 +240,10 @@ export const serveArenaViewer = (dbPath: string, hostname: string, port: number,
   const seatIndex = new Map(rows.map((row, index) => [`${row.matchId}|${row.player}`, index]));
   const { decisions, seats: analysed, shellsLeft } = analyse(db, rows, seatIndex);
 
-  const callHours = groupBy(
-    db
-      .query(`select match_id matchId, player, cast(strftime('%s', t) / 3600 as integer) hour, count(*) calls, sum(status = 'failed') failed from calls group by match_id, player, hour order by hour`)
-      .all()
-      .map((row) => decodeCallHourRow(row)),
-    ({ matchId, player }) => `${matchId}|${player}`,
-  );
-
   const seats = rows.flatMap((row, index) => {
     const extra = analysed[index];
-    const key = `${row.matchId}|${row.player}`;
 
-    return extra === undefined ? [] : [{ ...row, ...extra, regret: regret?.seats.get(key) ?? null, callHours: (callHours.get(key) ?? []).map(({ hour, calls, failed }) => [hour, calls, failed] as const) }];
+    return extra === undefined ? [] : [{ ...row, ...extra, regret: regret?.seats.get(`${row.matchId}|${row.player}`) ?? null }];
   });
 
   const seatsBody = encodedBody(encodeSeats(seats));

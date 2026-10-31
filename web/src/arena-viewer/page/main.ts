@@ -4,11 +4,9 @@ import { AsyncData, Command, Dom, Http, Runtime, Subscription, type Update } fro
 import { modifyFields } from "foldkit/struct";
 
 import { CertainMistakes, Consistency, Decisions, MatchDetail, SeatsResponse } from "../api.ts";
-import { withPotShares } from "./data.ts";
 import { hasCertainChart } from "./certain.ts";
-import { derive } from "./derived.ts";
-import { picksOf } from "./interesting.ts";
-import { MORE_ROWS } from "./matches.ts";
+import { withPotShares } from "./data.ts";
+import { INITIAL_ROWS, MORE_ROWS } from "./matches.ts";
 import { type Filter, Group, Message, Model, MOVED_TARGETS, Target, type Viewport } from "./model.ts";
 import { replayIndex, stepsOf } from "./replay.ts";
 import { PlaceTour, tourKeyMessage, tourOf } from "./tour.ts";
@@ -154,13 +152,6 @@ const withMatches = (model: Model, ids: ReadonlyArray<string>): Return => {
   };
 };
 
-const withPickedMatches = (model: Model): Return =>
-  AsyncData.matchData(model.data, {
-    onEmpty: (): Return => ({ model }),
-    onFailure: (): Return => ({ model }),
-    onData: (loaded) => withMatches(model, picksOf(derive(loaded, model.filter)).map(({ match }) => match.matchId)),
-  });
-
 const toggled = (values: ReadonlyArray<string>, value: string): ReadonlyArray<string> => (values.includes(value) ? values.filter((other) => other !== value) : [...values, value]);
 
 /** Moves the open replay to another move, clamped to its model moves; nothing happens until its match has loaded. */
@@ -192,8 +183,9 @@ const openReplay = (model: Model, id: string, maybeFocus: Option.Option<number>)
   return Option.isSome(model.maybeReplay) ? opened : { ...opened, commands: [...(opened.commands ?? []), PushReplayHistory()] };
 };
 
-const withFilter = (model: Model, change: (filter: Filter) => Filter): Return =>
-  withPickedMatches(modifyFields(model, { filter: change, markTip: () => ({ maybeHover: Option.none(), maybePin: Option.none() }) }));
+const withFilter = (model: Model, change: (filter: Filter) => Filter): Return => ({
+  model: modifyFields(model, { filter: change, markTip: () => ({ maybeHover: Option.none(), maybePin: Option.none() }) }),
+});
 
 export const update = (model: Model, message: Message): Return =>
   Message.match<Return>(message, {
@@ -204,11 +196,7 @@ export const update = (model: Model, message: Message): Return =>
     ClickedJump: ({ target }) => ({ model, commands: [JumpTo({ target })] }),
     ClickedTableLink: ({ id }) => ({ model, commands: [OpenTable({ id })] }),
     NavigatedToHash: () => ({ model, commands: [ScrollToHash()] }),
-    SucceededLoad: ({ loaded }) => {
-      const loadedModel = withPickedMatches(modifyFields(model, { data: () => AsyncData.succeed(loaded) }));
-
-      return { ...loadedModel, commands: [...(loadedModel.commands ?? []), AwaitFirstPaint()] };
-    },
+    SucceededLoad: ({ loaded }) => ({ model: modifyFields(model, { data: () => AsyncData.succeed(loaded) }), commands: [AwaitFirstPaint()] }),
     CompletedFirstPaint: () => ({ model: modifyFields(model, { isFirstPaintDone: () => true }), commands: [ScrollToHash()] }),
     FailedLoad: ({ error }) => ({ model: modifyFields(model, { data: () => AsyncData.fail(error) }) }),
     ToggledEffort: ({ effort }) => withFilter(model, (filter) => ({ ...filter, offEfforts: toggled(filter.offEfforts, effort) })),
@@ -257,9 +245,10 @@ export const update = (model: Model, message: Message): Return =>
     SteppedReplay: ({ delta }) => withReplayMove(model, (at) => at + delta),
     SelectedStep: ({ index }) => withReplayMove(model, () => index),
     ChangedMatchQuery: ({ query }) => ({ model: modifyFields(model, { matchList: (list) => ({ ...list, query }) }) }),
+    ClickedMatchPreset: ({ preset }) => ({
+      model: modifyFields(model, { matchList: (list) => ({ ...list, limit: INITIAL_ROWS, maybePreset: Option.exists(list.maybePreset, (chosen) => chosen === preset) ? Option.none() : Option.some(preset) }) }),
+    }),
     ClickedShowMore: () => ({ model: modifyFields(model, { matchList: (list) => ({ ...list, limit: list.limit + MORE_ROWS }) }) }),
-    HoveredRate: (cell) => ({ model: modifyFields(model, { maybeRateTip: () => Option.some(cell) }) }),
-    LeftRate: () => ({ model: modifyFields(model, { maybeRateTip: () => Option.none() }) }),
     PlacedTip: () => ({ model }),
     CompletedHistoryChange: () => ({ model }),
     CompletedStepScroll: () => ({ model }),
@@ -297,8 +286,7 @@ const init: Runtime.ApplicationInit<Model, Message, Flags> = ({ viewport }) => (
     heat: { sort: "rating", maybeTip: Option.none() },
     leaderboard: { maybeOpen: Option.none(), maybeTip: Option.none() },
     maybeCertainOpen: Option.none(),
-    matchList: { query: "", limit: 25 },
-    maybeRateTip: Option.none(),
+    matchList: { query: "", limit: INITIAL_ROWS, maybePreset: Option.none() },
     maybeTappedTitle: Option.none(),
     markTip: { maybeHover: Option.none(), maybePin: Option.none() },
     maybeGroup: Option.some("standings"),

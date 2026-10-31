@@ -96,8 +96,6 @@ export const labelOf = (key: string): string => {
   return `${baseName(model)} ${effort}`;
 };
 
-export const colorOfKey = (key: string): string => colorOf(splitKey(key)[0]);
-
 export const CERTAIN_NAMES: Readonly<Record<CertainType, string>> = {
   self_on_live: "Shot itself on a proven live shell",
   gave_up_guaranteed_win: "Shot the opponent, giving up a guaranteed win",
@@ -301,17 +299,6 @@ export const blockRate = (tally: BlockTally, reps = 400): Rate => {
   const sorted = rates.subarray(0, count).sort();
 
   return { k, n, rate: k / n, lo: quantile(sorted, 0.025), hi: quantile(sorted, 0.975), blocks: blocks.length };
-};
-
-/** A bootstrap of a cell with no events, or only events, collapses to a point. */
-export const isDegenerate = (rate: Rate): boolean => rate.n > 0 && (rate.k === 0 || rate.k === rate.n);
-
-export const fmtCI = (rate: Rate): string => {
-  if (rate.n === 0) return "";
-
-  if (isDegenerate(rate)) return `${rate.k === 0 ? "0" : "all"} of ${rate.n}, no interval · ${rate.blocks} seed blocks`;
-
-  return `95% CI ${(rate.lo * 100).toFixed(1)}–${(rate.hi * 100).toFixed(1)}% · ${rate.blocks} seed blocks`;
 };
 
 // CONFIG STATS

@@ -129,7 +129,7 @@ export interface Derived {
 // A filter keeps or drops whole configs, so whatever is grouped by config is worked out once for every seat and then
 // picked by the filter.
 
-export const ratingsOf = memoLast((seats: ReadonlyArray<SeatFull>): ReadonlyMap<string, Rating> => pooledRatings(seats));
+const ratingsOf = memoLast((seats: ReadonlyArray<SeatFull>): ReadonlyMap<string, Rating> => pooledRatings(seats));
 
 const allMatchesOf = memoLast((seats: ReadonlyArray<SeatFull>) => matchRows(seats));
 

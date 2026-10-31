@@ -1,7 +1,7 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { anchorId, markTip } from "./charts.ts";
-import { baseOrder, fmtUsd, groupBy, type ModelStats, sumOf } from "./data.ts";
+import { baseName, baseOrder, colorOf, fmtUsd, groupBy, type ModelStats, sumOf } from "./data.ts";
 import type { Message } from "./model.ts";
 
 type H = HtmlBuilder<Message>;
@@ -22,8 +22,6 @@ export const spendOf = (stats: ReadonlyArray<Pick<ModelStats, "key" | "model" | 
   return paid.map(({ key, model, label, color, totalCost }) => ({ key, model, label, color, cost: totalCost, share: totalCost / total })).toSorted((left, right) => right.cost - left.cost);
 };
 
-const RANKED = 8;
-
 /** The bar's segments are named only where they are wide enough to hold the name. */
 const NAMED_FROM = 0.12;
 
@@ -38,14 +36,12 @@ const barOrder = (spend: ReadonlyArray<Spend>): ReadonlyArray<Spend> =>
 export const spendView = (h: H, stats: ReadonlyArray<ModelStats>): Html => {
   const spend = spendOf(stats);
   const total = sumOf(spend.map(({ cost }) => cost));
-  const top = spend.slice(0, RANKED);
-  const rest = spend.slice(RANKED);
-  const biggest = top[0]?.share ?? 1;
+  const models = [...groupBy(spend, ({ model }) => model)].toSorted(([left], [right]) => baseOrder(left) - baseOrder(right));
 
   return h.div(
-    [h.Class("chart")],
+    [h.Class("chart spend")],
     [
-      h.div([h.Class("lbbar")], [h.h2([], ["Where the money went"]), h.span([h.Class("k")], [`$${Math.round(total).toLocaleString()} of list-price usage over ${spend.length} configs`])]),
+      h.div([h.Class("lbbar")], [h.h2([], ["List-price spend"]), h.span([h.Class("k")], [`$${Math.round(total).toLocaleString()} over ${spend.length} configs`])]),
       spend.length === 0
         ? h.div([h.Class("empty")], ["No spend in this filter."])
         : h.div(
@@ -58,21 +54,10 @@ export const spendView = (h: H, stats: ReadonlyArray<ModelStats>): Html => {
                 ),
               ),
               h.div(
-                [h.Class("spendrows")],
-                [
-                  ...top.flatMap((part) => [
-                    h.span([h.Class("name")], [part.label]),
-                    h.span([h.Class("track")], [h.span([h.Style({ width: `${(part.share / biggest) * 100}%`, background: part.color })], [])]),
-                    h.span([h.Class("amt")], [`${fmtUsd(part.cost)} · ${pct(part.share)}`]),
-                  ]),
-                  ...(rest.length === 0
-                    ? []
-                    : [
-                        h.span([h.Class("name k")], [`${rest.length} other configs`]),
-                        h.span([], []),
-                        h.span([h.Class("amt k")], [`${fmtUsd(sumOf(rest.map(({ cost }) => cost)))} · ${pct(sumOf(rest.map(({ share }) => share)))}`]),
-                      ]),
-                ],
+                [h.Class("legend")],
+                models.map(([model, configs]) =>
+                  h.span([h.Style({ color: colorOf(model) })], [`${baseName(model)} ${fmtUsd(sumOf(configs.map(({ cost }) => cost)))} · ${pct(sumOf(configs.map(({ share }) => share)))}`]),
+                ),
               ),
             ],
           ),

@@ -10,7 +10,7 @@ export const Group = Schema.Literals(["standings", "watch", "decisions", "health
 export type Group = typeof Group.Type;
 
 /** The sections inside the groups, each an in-page anchor; a link to one the page no longer has lands at its MOVED_TARGETS entry. */
-export const Section = Schema.Literals(["leaderboards", "scatter", "interesting", "matches", "certain-mistakes", "odds", "items", "reliability", "seats", "breakdown"]);
+export const Section = Schema.Literals(["leaderboards", "scatter", "breakdown", "matches", "certain-mistakes", "odds", "items", "spend"]);
 
 export type Section = typeof Section.Type;
 
@@ -20,21 +20,24 @@ export type Target = typeof Target.Type;
 
 export const MOVED_TARGETS: ReadonlyMap<string, Target> = new Map([
   ["results", "standings"],
-  ["rounds", "seats"],
+  ["rounds", "spend"],
+  ["reliability", "spend"],
   ["details", "leaderboards"],
-  ["blunders", "interesting"],
+  ["interesting", "matches"],
+  ["blunders", "matches"],
   ["mistakes", "odds"],
   ["luck", "odds"],
-  ["pressure", "seats"],
-  ["rubbers", "seats"],
+  ["pressure", "leaderboards"],
+  ["rubbers", "spend"],
+  ["seats", "spend"],
   ["deals", "matches"],
 ]);
 
 export const GROUPS: ReadonlyArray<{ readonly group: Group; readonly label: string; readonly sections: ReadonlyArray<Section> }> = [
-  { group: "standings", label: "Standings", sections: ["leaderboards", "scatter"] },
-  { group: "watch", label: "Matches", sections: ["interesting", "matches"] },
+  { group: "standings", label: "Standings", sections: ["leaderboards", "scatter", "breakdown"] },
+  { group: "watch", label: "Matches", sections: ["matches"] },
   { group: "decisions", label: "How they play", sections: ["certain-mistakes", "odds", "items"] },
-  { group: "health", label: "Run health", sections: ["reliability", "seats", "breakdown"] },
+  { group: "health", label: "Run health", sections: ["spend"] },
 ];
 
 export const SeatFull = Schema.Struct({ ...Seat.fields, potShare: Schema.NullOr(Schema.Number) });
@@ -82,14 +85,16 @@ export const Replay = Schema.Struct({ id: Schema.String, maybeFocus: Schema.Opti
 
 export type Replay = typeof Replay.Type;
 
-export const MatchList = Schema.Struct({ query: Schema.String, limit: Schema.Number });
+export const MatchPreset = Schema.Literals(["comebacks", "upsets"]);
+
+export type MatchPreset = typeof MatchPreset.Type;
+
+export const MatchList = Schema.Struct({ query: Schema.String, limit: Schema.Number, maybePreset: Schema.Option(MatchPreset) });
 
 /** A chart mark's tip: the id of the mark it points at, and what the mark means with its sample size. */
 export const MarkTip = Schema.Struct({ anchor: Schema.String, text: Schema.String });
 
 export type MarkTip = typeof MarkTip.Type;
-
-export const RateCell = Schema.Struct({ row: Schema.String, column: Schema.String });
 
 export const TourBox = Schema.Struct({ top: Schema.Number, left: Schema.Number, width: Schema.Number, height: Schema.Number });
 
@@ -117,7 +122,6 @@ export const Model = Schema.Struct({
   leaderboard: Leaderboard,
   maybeCertainOpen: Schema.Option(CertainCell),
   matchList: MatchList,
-  maybeRateTip: Schema.Option(RateCell),
   /** The chart mark the mouse is over, and the one a click, tap or Enter pinned; the hovered one shows first. */
   markTip: Schema.Struct({ maybeHover: Schema.Option(MarkTip), maybePin: Schema.Option(MarkTip) }),
   /** The text of a chart mark a touch tapped: its SVG title or title attribute, which only a mouse can hover. */
@@ -169,9 +173,8 @@ export const Message = defineMessageUnion({
   SteppedReplay: { delta: Schema.Number },
   SelectedStep: { index: Schema.Number },
   ChangedMatchQuery: { query: Schema.String },
+  ClickedMatchPreset: { preset: MatchPreset },
   ClickedShowMore: {},
-  HoveredRate: { row: Schema.String, column: Schema.String },
-  LeftRate: {},
   PlacedTip: {},
   CompletedHistoryChange: {},
   CompletedStepScroll: {},
