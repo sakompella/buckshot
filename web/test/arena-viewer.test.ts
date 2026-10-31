@@ -8,7 +8,7 @@ import { ODDS_BINS, oddsBinOf, oddsPanels, selfShotTallies } from "../src/arena-
 import { showsReloadNote, turningPoints } from "../src/arena-viewer/page/replay.ts";
 import { ranksOf } from "../src/arena-viewer/page/derived.ts";
 import { inRankOrder } from "../src/arena-viewer/page/leaderboard.ts";
-import { AXES } from "../src/arena-viewer/page/scatter.ts";
+import { AXES, frontierOf } from "../src/arena-viewer/page/scatter.ts";
 
 const randomGames = (seed: number): ReadonlyArray<Game> => {
   const random = rng(seed);
@@ -294,7 +294,16 @@ test("pooled ratings cover every config of a completed match, over every tournam
 
   expect([...ratings.keys()].toSorted()).toEqual(TRUE_ELO.map(([id]) => id.replace("-", "|")).toSorted());
 
-  for (const { lo, hi } of ratings.values()) expect(lo).toBeLessThan(hi);
+  for (const { interval } of ratings.values()) expect(interval?.lo).toBeLessThan(interval?.hi ?? Number.NEGATIVE_INFINITY);
+});
+
+test("a config over fewer than 4 seed blocks has a rating and no interval", () => {
+  const seats = Array.from({ length: 12 }, (_match, index) => [
+    { ...SEAT, matchId: `m${index}`, seedBlock: `block${index % 3}`, model: "strong", player: "A", position: 0, winShare: index % 3 === 0 ? 0 : 1, potShare: null, story: oneRoundWonBy(index % 3 === 0 ? "B" : "A") },
+    { ...SEAT, matchId: `m${index}`, seedBlock: `block${index % 3}`, model: "weak", player: "B", position: 1, winShare: index % 3 === 0 ? 1 : 0, potShare: null, story: oneRoundWonBy(index % 3 === 0 ? "B" : "A") },
+  ]).flat();
+
+  expect([...pooledRatings(seats).values()].map(({ blocks, interval }) => [blocks, interval])).toEqual([[3, null], [3, null]]);
 });
 
 // Two-player matches over the sweeps' pairings, each with a pot of its own, the winner taking `winnerShare` of it.
@@ -474,20 +483,30 @@ test("turning points are the biggest blunders, biggest first, and none when no m
   expect(turningPoints([4.9, null, 0].map(stepWith))).toEqual([]);
 });
 
-test("ranks go to rated configs by rating, equal ratings by label; a config without a rating has no rank and the leaderboard lists it last", () => {
-  const configs = ["delta", "alpha", "charlie", "bravo"];
-  const seats = configs.map((model, index) => ({ ...SEAT, matchId: `m${index}`, model, potShare: null }));
-  const stats = modelStats(seats);
-  const rated = (rating: number) => ({ rating, lo: rating, hi: rating });
-  const ratings = new Map([["charlie|medium", rated(5)], ["bravo|medium", rated(5)], ["alpha|medium", rated(-20)]]);
+test("ranks go to rated configs of 20 or more matches by rating, equal ratings by label; the rest have no rank and the leaderboard lists them after, the better rated first", () => {
+  const played = (model: string, matches: number) => Array.from({ length: matches }, (_, index) => ({ ...SEAT, matchId: `${model}${index}`, model, potShare: null }));
+  const stats = modelStats([...played("delta", 20), ...played("alpha", 20), ...played("charlie", 20), ...played("bravo", 20), ...played("echo", 19), ...played("foxtrot", 3)]);
+  const rated = (rating: number) => ({ rating, blocks: 4, interval: { lo: rating, hi: rating } });
+  const ratings = new Map([["charlie|medium", rated(5)], ["bravo|medium", rated(5)], ["alpha|medium", rated(-20)], ["echo|medium", rated(90)], ["foxtrot|medium", rated(10)]]);
   const ranks = ranksOf(stats, ratings);
 
   expect([...ranks]).toEqual([["bravo|medium", 1], ["charlie|medium", 2], ["alpha|medium", 3]]);
-  expect(inRankOrder(stats, ranks).map(({ model }) => model)).toEqual(["bravo", "charlie", "alpha", "delta"]);
+  expect(inRankOrder(stats, ranks, ratings).map(({ model }) => model)).toEqual(["bravo", "charlie", "alpha", "echo", "foxtrot", "delta"]);
 });
 
 test("the reload note shows only when a reload is within the depth reached and 1 to 3 shells are left", () => {
   expect([1, 2, 3].map((shells) => showsReloadNote(shells, 6))).toEqual([true, true, true]);
   expect([4, 5, 6].map((shells) => showsReloadNote(shells, 6))).toEqual([false, false, false]);
   expect([showsReloadNote(2, 1), showsReloadNote(1, 1), showsReloadNote(3, 3), showsReloadNote(3, 2)]).toEqual([false, true, true, false]);
+});
+
+test("the best-value line runs through ranked configs only", () => {
+  const stats = modelStats([
+    ...Array.from({ length: 20 }, (_, index) => ({ ...SEAT, matchId: `ranked${index}`, model: "ranked", cost: 2, potShare: null })),
+    ...Array.from({ length: 3 }, (_, index) => ({ ...SEAT, matchId: `new${index}`, model: "new", cost: 1, potShare: null })),
+  ]);
+
+  const points = stats.map((m) => ({ m, x: m.model === "new" ? 1 : 2, rating: m.model === "new" ? 50 : 10, rank: undefined }));
+
+  expect(frontierOf(points).map(({ m }) => m.model)).toEqual(["ranked"]);
 });

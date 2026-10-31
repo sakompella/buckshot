@@ -6,7 +6,7 @@ import { type Browser, chromium, type Page } from "playwright-core";
 
 import { Blunders, CERTAIN_TYPES, CertainMistakes, Consistency, Decisions, ITEMS, MatchDetail, type MoveRegret, NO_GAP, SeatsResponse } from "../src/arena-viewer/api.ts";
 import { anchorId } from "../src/arena-viewer/page/charts.ts";
-import { baseName, baseOrder, CERTAIN_NAMES, fmtCount, fmtPct, fmtUsd, keyOf, labelOf, withPotShares } from "../src/arena-viewer/page/data.ts";
+import { baseName, baseOrder, CERTAIN_NAMES, fmtCount, fmtPct, fmtUsd, blocksOf, keyOf, labelOf, MIN_BLOCKS_FOR_INTERVAL, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { GROUPS, MOVED_TARGETS, Section } from "../src/arena-viewer/page/model.ts";
 import { pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 import { stepsOf } from "../src/arena-viewer/page/replay.ts";
@@ -339,7 +339,37 @@ const checkRatings = async (page: Page) => {
 
   console.log("round elo cells", elos.length, "of", rows, "rows, first", elos.slice(0, 4).join(" | "));
   expectThat(elos.length === rows && ratings.every(Number.isFinite), "a leaderboard row shows no Round Elo");
-  expectThat(ratings.every((rating, index) => index === 0 || rating <= (ratings[index - 1] ?? rating)), "the leaderboard is not best Round Elo first");
+
+  const listed = await page.locator("table.lbt tbody tr.row").evaluateAll((trs) =>
+    trs.map((tr) => ({
+      name: (tr.querySelector("td")?.textContent ?? "").replace(/^\d+/, ""),
+      rank: Number(tr.querySelector(".rk")?.textContent || Number.NaN),
+      isProvisional: tr.classList.contains("provisional"),
+      hasEloInterval: tr.querySelector('td[data-label="round elo"] .pm') !== null,
+    })),
+  );
+
+  const seats = (await servedSeats()).filter(({ status }) => status === "completed");
+  const played = configsOf(seats).flatMap(([first, ...rest]) => (first === undefined ? [] : [[`${baseName(first.model)} [${first.effort}]`, [first, ...rest]] as const]));
+  const playedBy = (name: string) => played.flatMap(([label, configSeats]) => (label === name.trim() ? configSeats : []));
+  const provisionalRows = listed.filter(({ isProvisional }) => isProvisional);
+  const rankedRows = listed.filter(({ isProvisional }) => !isProvisional);
+
+  console.log("leaderboard ranked", rankedRows.length, "| provisional", provisionalRows.length, "| rows with an Elo interval", listed.filter(({ hasEloInterval }) => hasEloInterval).length);
+  expectThat(listed.every(({ name, isProvisional }) => isProvisional === (playedBy(name).length < 20)), "a leaderboard row is provisional other than at under 20 completed matches");
+  expectThat(rankedRows.every(({ rank }, index) => rank === index + 1) && provisionalRows.every(({ rank }) => Number.isNaN(rank)), "ranked rows are not numbered 1, 2, 3 in order, or a provisional row has a rank");
+  expectThat(listed.slice(0, rankedRows.length).every(({ isProvisional }) => !isProvisional), "a provisional row sits among the ranked rows");
+
+  const rankedElos = ratings.slice(0, rankedRows.length);
+
+  expectThat(rankedElos.every((rating, index) => index === 0 || rating <= (rankedElos[index - 1] ?? rating)), "the ranked rows are not best Round Elo first");
+  expectThat(listed.every(({ name, hasEloInterval }) => !hasEloInterval || blocksOf(playedBy(name)) >= 4), "a config over fewer than 4 seed blocks shows a Round Elo interval");
+  expectThat(listed.some(({ hasEloInterval }) => hasEloInterval), "no leaderboard row shows a Round Elo interval");
+
+  const faded = await page.locator("#scatter g.pt").evaluateAll((points) => points.filter((point) => point instanceof SVGElement && point.style.opacity === "0.4").length);
+
+  console.log("scatter faded points", faded);
+  expectThat(faded === provisionalRows.length, `the scatter fades ${faded} points, the leaderboard has ${provisionalRows.length} provisional rows`);
 
   const totals = await page.locator("table.heat td.total").allInnerTexts();
 
@@ -803,7 +833,7 @@ const checkDrill = async (page: Page, name: string, isTouch: boolean) => {
   await press(isTouch, row);
   await settled(page);
 
-  const [, model = "", effort = ""] = /^(.*) \[(.*)\]$/.exec((await row.locator("td").first().innerText()).replaceAll(/\s+/g, " ").trim()) ?? [];
+  const [, model = "", effort = ""] = /^(.*) \[(.*)\]$/.exec((await row.locator("td").first().innerText()).replace(/^\d+/, "").replaceAll(/\s+/g, " ").trim()) ?? [];
   const seats = await servedSeats();
   const own = seats.find((seat) => baseName(seat.model) === model && seat.effort === effort);
 
@@ -934,16 +964,18 @@ const servedCertainByConfig = () => {
     return seat === undefined ? "" : `${baseName(seat.model)} [${seat.effort}]`;
   };
 
-  const cells = new Map<string, Array<{ mistakes: number; opportunities: number; bounds: { lo: number; hi: number } | null }>>();
+  const cells = new Map<string, Array<{ mistakes: number; opportunities: number; bounds: { lo: number; hi: number } | null; hasRate: boolean }>>();
 
   for (const { scope, model, effort, type, chose, opportunities, bounds } of servedCertain.rates) {
     const index = CERTAIN_TYPES.findIndex((certainType) => certainType === type);
 
     if (scope !== "config") continue;
 
-    const own = cells.get(`${baseName(model)} [${effort}]`) ?? CERTAIN_TYPES.map(() => ({ mistakes: 0, opportunities: 0, bounds: null }));
+    const own = cells.get(`${baseName(model)} [${effort}]`) ?? CERTAIN_TYPES.map(() => ({ mistakes: 0, opportunities: 0, bounds: null, hasRate: false }));
 
-    if (index >= 0) own[index] = { mistakes: chose, opportunities, bounds };
+    const spans = blocksOf(certainSeats.filter((seat) => seat.model === model && seat.effort === effort && seat.status === "completed"));
+
+    if (index >= 0) own[index] = { mistakes: chose, opportunities, bounds: spans < MIN_BLOCKS_FOR_INTERVAL ? null : bounds, hasRate: bounds !== null };
 
     cells.set(`${baseName(model)} [${effort}]`, own);
   }
@@ -1050,7 +1082,8 @@ const checkCertain = async (page: Page, name: string, press: (target: ReturnType
 
       expectThat(cell?.counts === expected, `${name}: ${label} shows "${cell?.counts}" for "${CERTAIN_NAMES[type]}", the data has "${expected}"`);
 
-      const expectedRate = want === undefined || want.bounds === null ? "" : `${((want.mistakes / want.opportunities) * 100).toFixed(1)}% ${shownInterval(want.bounds)}`;
+      const expectedShare = want === undefined ? "" : `${((want.mistakes / want.opportunities) * 100).toFixed(1)}%`;
+      const expectedRate = want === undefined || !want.hasRate ? "" : want.bounds === null ? expectedShare : `${expectedShare} ${shownInterval(want.bounds)}`;
 
       expectThat(cell?.rate === expectedRate, `${name}: ${label} shows the rate "${cell?.rate}" for "${CERTAIN_NAMES[type]}", the written one is "${expectedRate}"`);
     }

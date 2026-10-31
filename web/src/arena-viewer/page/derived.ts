@@ -1,5 +1,5 @@
 import { type Decisions, ITEMS } from "../api.ts";
-import { addTo, baseName, type BlockTally, blockRate, keyOf, type MatchRow, matchRows, type ModelStats, modelStats, type Rate, type SeatFull } from "./data.ts";
+import { addTo, baseName, type BlockTally, blockRate, isProvisional, keyOf, type MatchRow, matchRows, type ModelStats, modelStats, type Rate, type SeatFull } from "./data.ts";
 import type { Filter, Loaded } from "./model.ts";
 import { pooledRatings, type Rating } from "./ratings.ts";
 
@@ -141,10 +141,10 @@ const passes = (filter: Filter, seat: SeatFull): boolean => !filter.offEfforts.i
 
 const passingConfigs = (stats: ReadonlyArray<ModelStats>, filter: Filter) => stats.filter(({ started: [first] }) => first !== undefined && passes(filter, first));
 
-/** Each rated config's place by rating, ties by label so places are distinct; a config without a rating has none. */
+/** Each rated config's place by rating, ties by label so places are distinct; a provisional config or one without a rating has none. */
 export const ranksOf = memoLast((pooled: ReadonlyArray<ModelStats>, ratings: ReadonlyMap<string, Rating>): ReadonlyMap<string, number> => {
   const eloOf = (m: ModelStats) => ratings.get(m.key)?.rating ?? 0;
-  const ordered = pooled.filter((m) => m.scored.length > 0 && ratings.has(m.key)).toSorted((left, right) => eloOf(right) - eloOf(left) || left.label.localeCompare(right.label));
+  const ordered = pooled.filter((m) => !isProvisional(m) && ratings.has(m.key)).toSorted((left, right) => eloOf(right) - eloOf(left) || left.label.localeCompare(right.label));
 
   return new Map(ordered.map((m, index) => [m.key, index + 1]));
 });

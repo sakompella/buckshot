@@ -17,7 +17,6 @@ export interface HeatRow {
   readonly label: string;
   readonly color: string;
   readonly rating: number;
-  readonly rank: number;
   readonly cost: number;
 }
 
@@ -97,9 +96,8 @@ const cellAt = (derived: Derived, row: HeatRow, col: string): HeatCell | null =>
 export const heatRowsOf = memoLast((derived: Derived): ReadonlyArray<HeatRow> =>
   derived.pooled.flatMap((m) => {
     const rating = derived.ratings.get(m.key)?.rating;
-    const rank = derived.ranks.get(m.key);
 
-    return rating === undefined || rank === undefined || m.scored.length === 0 ? [] : [{ key: m.key, model: m.model, label: m.label, color: m.color, rating, rank, cost: m.avgCost }];
+    return rating === undefined || m.scored.length === 0 ? [] : [{ key: m.key, model: m.model, label: m.label, color: m.color, rating, cost: m.avgCost }];
   }),
 );
 

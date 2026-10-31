@@ -1,4 +1,4 @@
-import { groupBy, keyOf, meanOf, quantile, rng, roundResults, type SeatFull, unique } from "./data.ts";
+import { groupBy, keyOf, MIN_BLOCKS_FOR_INTERVAL, meanOf, quantile, rng, roundResults, type SeatFull, unique } from "./data.ts";
 
 // The ratings the whole page reads: Bradley-Terry over every scored two-player match of every tournament.
 
@@ -189,10 +189,11 @@ const gamesOf = ([x, y]: readonly [SeatFull, SeatFull]): ReadonlyArray<BlockGame
 /** Every completed two-player match in `seats`, as the games the round rating counts. */
 const gamesOfSeats = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<BlockGame> => pairsOf(seats).flatMap(gamesOf);
 
+/** A config's rating, with its seed-block bootstrap interval only when it spans enough blocks to resample. */
 export interface Rating {
   readonly rating: number;
-  readonly lo: number;
-  readonly hi: number;
+  readonly blocks: number;
+  readonly interval: { readonly lo: number; readonly hi: number } | null;
 }
 
 const BOOTSTRAP_REPS = 200;
@@ -222,11 +223,16 @@ export const pooledRatings = (seats: ReadonlyArray<SeatFull>): ReadonlyMap<strin
     }
   }
 
+  const spans = new Map<string, Set<string>>();
+
+  for (const { a, b, block } of games) for (const key of [a, b]) spans.set(key, (spans.get(key) ?? new Set<string>()).add(block));
+
   return new Map(
     [...point].map(([key, rating]) => {
       const sorted = (draws.get(key) ?? []).toSorted((left, right) => left - right);
+      const spanned = spans.get(key)?.size ?? 0;
 
-      return [key, { rating, lo: quantile(sorted, 0.025), hi: quantile(sorted, 0.975) }] as const;
+      return [key, { rating, blocks: spanned, interval: spanned < MIN_BLOCKS_FOR_INTERVAL ? null : { lo: quantile(sorted, 0.025), hi: quantile(sorted, 0.975) } }] as const;
     }),
   );
 };

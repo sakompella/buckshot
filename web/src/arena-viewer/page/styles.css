@@ -62,7 +62,8 @@ td { text-align: right; padding: 10px 8px; border-bottom: 1px solid #161616; whi
 th:first-child, td:first-child { text-align: left; }
 tr.row:hover td { background: #0b0b0b; cursor: pointer; }
 tr.sel td { background: #111; }
-tr.few td { opacity: 0.7; }
+tr.provisional td { opacity: 0.55; }
+.rk { display: inline-block; min-width: 1.6em; color: #8a8a8a; font-variant-numeric: tabular-nums; }
 
 .hero { display: flex; justify-content: space-between; align-items: flex-end; padding: 36px 0 26px; }
 .hero .title { font-size: 52px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; }
