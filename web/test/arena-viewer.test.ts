@@ -3,7 +3,7 @@ import { Option } from "effect";
 
 import { chamberPatterns, roundStory, ShellTracker, shotLineIn } from "../src/arena-viewer/analysis.ts";
 import type { Seat } from "../src/arena-viewer/api.ts";
-import { type BlockTally, blockRate, colorOf, groupBy, matchRows, modelStats, quantile, regretStats, rng, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
+import { type BlockTally, blockRate, colorOf, fmtBytes, groupBy, matchRows, modelStats, quantile, regretStats, rng, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { bradleyTerry, type Game, heldOutRatings, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 import { ODDS_BINS, oddsBinOf, oddsPanels, selfShotTallies } from "../src/arena-viewer/page/odds.ts";
 import { shotOf, showsReloadNote, turningPoints } from "../src/arena-viewer/page/replay.ts";
@@ -560,4 +560,8 @@ test("a match search needs each of its words in a seat's label or the seed, in a
   expect(found("sol low")).toEqual(["b", "c"]);
   expect(found("opus luna")).toEqual([]);
   expect(found("")).toEqual(["a", "b", "c"]);
+});
+
+test("a file size is in KB, MB or GB, whichever reads shortest", () => {
+  expect([fmtBytes(2_400), fmtBytes(87_300_000), fmtBytes(1_540_000_000)]).toEqual(["2 KB", "87 MB", "1.5 GB"]);
 });

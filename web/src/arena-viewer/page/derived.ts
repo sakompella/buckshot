@@ -113,6 +113,7 @@ export interface Derived {
   readonly decisions: Decisions;
   readonly consistency: Loaded["consistency"];
   readonly certainMistakes: Loaded["certainMistakes"];
+  readonly download: Loaded["download"];
   readonly keep: ReadonlyArray<boolean>;
   readonly filtered: ReadonlyArray<SeatFull>;
   readonly matchSeats: ReadonlyArray<SeatFull>;
@@ -150,7 +151,7 @@ export const ranksOf = memoLast((pooled: ReadonlyArray<ModelStats>, ratings: Rea
 });
 
 export const derive = memoLast((loaded: Loaded, filter: Filter): Derived => {
-  const { seats, decisions, consistency, certainMistakes } = loaded;
+  const { seats, decisions, consistency, certainMistakes, download } = loaded;
   const keep = seats.map((seat) => passes(filter, seat));
   const filtered = seats.filter((_seat, index) => keep[index]);
   const kept = new Set(filtered.map(({ matchId }) => matchId));
@@ -163,6 +164,7 @@ export const derive = memoLast((loaded: Loaded, filter: Filter): Derived => {
     decisions,
     consistency,
     certainMistakes,
+    download,
     keep,
     filtered,
     matchSeats,

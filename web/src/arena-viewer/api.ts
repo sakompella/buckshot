@@ -185,6 +185,9 @@ export const CertainRate = Schema.Struct({
 
 export type CertainRate = typeof CertainRate.Type;
 
+/** The database file the viewer offers for download, when it has one. */
+export const Download = Schema.Struct({ bytes: Schema.Number });
+
 export const CertainMistakes = Schema.Struct({ rates: Schema.Array(CertainRate), moveSeat: Column, moveType: Column, moveOrd: Column });
 
 export type CertainMistakes = typeof CertainMistakes.Type;

@@ -283,6 +283,11 @@ export const serveArenaViewer = (dbPath: string, hostname: string, port: number,
     routes: {
       "/": page,
       "/api/seats": guarded((request) => json(request, seatsBody)),
+      "/api/download": guarded(() => {
+        const download = process.env["ARENA_VIEWER_DOWNLOAD"];
+
+        return download === undefined || download === "" ? new Response("no download configured", { status: 404 }) : Response.json({ bytes: Bun.file(download).size });
+      }),
       "/api/db": guarded(() => {
         const download = process.env["ARENA_VIEWER_DOWNLOAD"];
 

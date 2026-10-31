@@ -6,7 +6,7 @@ import { type Browser, chromium, type Page } from "playwright-core";
 
 import { Blunders, CERTAIN_TYPES, CertainMistakes, Consistency, Decisions, ITEMS, MatchDetail, type MoveRegret, NO_GAP, SeatsResponse } from "../src/arena-viewer/api.ts";
 import { anchorId } from "../src/arena-viewer/page/charts.ts";
-import { baseName, baseOrder, CERTAIN_NAMES, fmtCount, fmtPct, fmtUsd, blocksOf, keyOf, labelOf, MIN_BLOCKS_FOR_INTERVAL, shortName, withPotShares } from "../src/arena-viewer/page/data.ts";
+import { baseName, baseOrder, CERTAIN_NAMES, fmtBytes, fmtCount, fmtPct, fmtUsd, blocksOf, keyOf, labelOf, MIN_BLOCKS_FOR_INTERVAL, shortName, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { GROUPS, MOVED_TARGETS, Section } from "../src/arena-viewer/page/model.ts";
 import { pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 import { stepsOf } from "../src/arena-viewer/page/replay.ts";
@@ -1295,6 +1295,7 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
     console.log("hover point → tip:", await tipOf(page));
     await page.mouse.move(0, 0);
   });
+  await check("database link", () => checkDatabaseLink(page, viewport.name));
   await check("scatter drill-down", () => checkScatterDrill(page, viewport.name, false));
   await check("scatter axes", async () => {
     for (const [axis, name] of [
@@ -1435,6 +1436,38 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
 // Steps through the whole tour by keyboard: every step must highlight an element the page draws, inside the page's
 // width, and Escape must close it.
 // A click on a scatter point opens that config's drill-down under the chart, and its close button shuts it.
+const checkDatabaseLink = async (page: Page, name: string) => {
+  const served = await fetch(`${base}/api/download`);
+  const link = page.locator("footer .download");
+
+  if (!served.ok) {
+    expectThat((await link.count()) === 0 && (await page.locator("nav .download").count()) === 0, `${name}: the viewer has no download, yet the page links a database`);
+
+    return;
+  }
+
+  const { bytes } = Schema.decodeUnknownSync(Schema.Struct({ bytes: Schema.Number }))(await served.json());
+  const size = fmtBytes(bytes);
+
+  await link.scrollIntoViewIfNeeded();
+
+  const box = await link.evaluate((anchor) => {
+    const { left, right, height } = anchor.getBoundingClientRect();
+
+    return { left, right, height, width: innerWidth, text: (anchor.textContent ?? "").trim(), scroll: document.documentElement.scrollWidth - innerWidth };
+  });
+
+  console.log(name, "database link", JSON.stringify(box));
+  expectThat(box.text === `Database (SQLite, ${size})`, `${name}: the database link reads "${box.text}", the file is ${size}`);
+  expectThat(box.left >= 0 && box.right <= box.width && box.scroll <= 0, `${name}: the database link runs off the screen: ${box.left} to ${box.right} of ${box.width}`);
+  expectThat(box.height >= 44, `${name}: the database link is ${box.height}px tall`);
+  expectThat((await page.locator("nav .download").count()) === 0, `${name}: the database link is also in the jump menu, where a phone cuts it off`);
+
+  const download = await fetch(`${base}/api/db`, { method: "HEAD" });
+
+  expectThat(download.ok && Number(download.headers.get("content-length")) === bytes, `${name}: the database link serves ${download.headers.get("content-length")} bytes, not ${bytes}`);
+};
+
 const checkScatterDrill = async (page: Page, name: string, isTouch: boolean) => {
   const point = page.locator("#scatter svg g[style*=pointer]").nth(3);
 
@@ -1535,6 +1568,7 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
       expectThat((await tipOf(page)) === "none", `${name}: a tap outside leaves the tip of ${selector}`);
     }
   });
+  await check("database link", () => checkDatabaseLink(page, name));
   await check("scatter drill-down", () => checkScatterDrill(page, name, true));
   await check("scatter tap", async () => {
     await page.locator("#scatter svg g[style*=pointer]").nth(3).tap({ force: true });

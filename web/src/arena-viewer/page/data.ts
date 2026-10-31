@@ -121,6 +121,12 @@ export const fmtUsd = (value: number | null | undefined): string => {
   return value >= 0.01 ? `$${value.toFixed(3)}` : `$${value.toFixed(4)}`;
 };
 
+export const fmtBytes = (bytes: number): string => {
+  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`;
+
+  return bytes >= 1e6 ? `${Math.round(bytes / 1e6)} MB` : `${Math.max(1, Math.round(bytes / 1e3))} KB`;
+};
+
 export const fmtCount = (value: number | null | undefined): string => {
   if (value === null || value === undefined) return "–";
 

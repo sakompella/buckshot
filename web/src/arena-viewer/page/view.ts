@@ -3,7 +3,7 @@ import { AsyncData } from "foldkit";
 import { createLazy, type Document, type Html, type HtmlBuilder } from "foldkit/html";
 
 import type { CertainMistakes } from "../api.ts";
-import { baseName, baseOrder, colorOf, EFFORTS, fmtCount, sumOf, unique } from "./data.ts";
+import { baseName, baseOrder, colorOf, EFFORTS, fmtBytes, fmtCount, sumOf, unique } from "./data.ts";
 import { tipView } from "./charts.ts";
 import { certainTableView, certainView, hasCertain } from "./certain.ts";
 import { type Derived, derive } from "./derived.ts";
@@ -147,9 +147,15 @@ const navView = (h: H, maybeGroup: Option.Option<Group>): Html =>
       ...GROUPS.map(({ group, label }) =>
         h.a([h.Href(`#${group}`), ...(Option.contains(maybeGroup, group) ? [h.Class("on"), h.AriaCurrent("location")] : []), h.OnClick(Message.ClickedJump({ target: group }), { defaultAction: "Prevent" })], [label]),
       ),
-      h.a([h.Class("download"), h.Href("/api/db")], ["Database (SQLite)"]),
     ],
   );
+
+const footView = (h: H, download: Derived["download"]): Html =>
+  AsyncData.matchData(download, {
+    onEmpty: () => h.empty,
+    onFailure: () => h.empty,
+    onData: ({ bytes }) => h.footer([h.Class("foot")], [h.a([h.Class("download"), h.Href("/api/db")], [`Database (SQLite, ${fmtBytes(bytes)})`])]),
+  });
 
 const scatterCard = (h: H, derived: Derived, scatter: Model["scatter"], width: number): Html =>
   h.div([h.Class("card")], [scatterView(h, derived.pooled, derived.everyPooled, derived.ratings, derived.ranks, scatter, width)]);
@@ -219,6 +225,7 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
           ),
         ),
       ]),
+      footView(h, derived.download),
     ],
   );
 };

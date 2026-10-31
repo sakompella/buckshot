@@ -2,7 +2,7 @@ import { Schema } from "effect";
 import { AsyncData } from "foldkit";
 import { defineMessageUnion } from "foldkit/message";
 
-import { CertainMistakes, CertainType, Consistency, Decisions, MatchDetail, Seat } from "../api.ts";
+import { CertainMistakes, CertainType, Consistency, Decisions, Download, MatchDetail, Seat } from "../api.ts";
 
 /** The page's groups below the hero, in page order: the jump menu's links, and the sections the reader can be in. */
 export const Group = Schema.Literals(["standings", "decisions", "health", "watch", "tables"]);
@@ -55,6 +55,7 @@ export const Loaded = Schema.Struct({
   decisions: Decisions,
   consistency: OptionalData(Schema.Array(Consistency)),
   certainMistakes: OptionalData(CertainMistakes),
+  download: OptionalData(Download),
 });
 
 export type Loaded = typeof Loaded.Type;
