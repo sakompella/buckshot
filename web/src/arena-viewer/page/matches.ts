@@ -44,18 +44,22 @@ const decidedOf = (match: MatchRow): ReadonlyArray<Decided> => {
 
 const newestFirst = (left: MatchRow, right: MatchRow) => right.startedAt.localeCompare(left.startedAt);
 
-const comebackOf = (winner: SeatFull): number =>
-  Math.max(0, ...(winner.story?.ok === true ? winner.story.rounds.flatMap((round, index) => (round.winner === winner.player ? [winner.deficits[index] ?? 0] : [])) : []));
+/** The worst health deficit the winner had in a round it won, and the first round it had it in. */
+const comebackOf = (winner: SeatFull): { readonly behind: number; readonly round: number } => {
+  const won = winner.story?.ok === true ? winner.story.rounds.flatMap((round, index) => (round.winner === winner.player ? [{ round: index + 1, behind: winner.deficits[index] ?? 0 }] : [])) : [];
+
+  return won.reduce((worst, next) => (next.behind > worst.behind ? next : worst), { behind: 0, round: 0 });
+};
 
 const presetRows = (matches: ReadonlyArray<MatchRow>, ratings: ReadonlyMap<string, Rating>, preset: MatchPreset): ReadonlyArray<Listed> => {
   const ratingOf = (seat: SeatFull) => ratings.get(keyOf(seat))?.rating ?? 0;
 
   const measured = matches.flatMap(decidedOf).map(({ match, winner, loser }) => {
-    const behind = comebackOf(winner);
+    const { behind, round } = comebackOf(winner);
     const underRated = ratingOf(loser) - ratingOf(winner);
 
     return preset === "comebacks"
-      ? { match, size: behind, min: MIN_COMEBACK, note: `from ${behind} behind` }
+      ? { match, size: behind, min: MIN_COMEBACK, note: `from ${behind} health behind in round ${round}` }
       : { match, size: underRated, min: MIN_UPSET, note: `rated ${Math.round(underRated)} lower` };
   });
 
@@ -65,9 +69,11 @@ const presetRows = (matches: ReadonlyArray<MatchRow>, ratings: ReadonlyMap<strin
     .map(({ match, note }) => ({ match, note }));
 };
 
-const rowsOf = memoLast((matches: ReadonlyArray<MatchRow>, ratings: ReadonlyMap<string, Rating>, query: string, maybePreset: Option.Option<MatchPreset>): ReadonlyArray<Listed> => {
-  const needle = query.trim().toLowerCase();
-  const isMatch = (match: MatchRow) => needle === "" || match.seats.some((seat) => labelOf(keyOf(seat)).toLowerCase().includes(needle)) || String(match.seed).includes(needle);
+/** The matches a search and a preset leave, newest first or biggest first. Every word of the search must be in a seat's label or the seed. */
+export const rowsOf = memoLast((matches: ReadonlyArray<MatchRow>, ratings: ReadonlyMap<string, Rating>, query: string, maybePreset: Option.Option<MatchPreset>): ReadonlyArray<Listed> => {
+  const words = query.toLowerCase().split(/\s+/).filter((word) => word !== "");
+  const haystack = (match: MatchRow) => [...match.seats.map((seat) => labelOf(keyOf(seat)).toLowerCase()), String(match.seed)];
+  const isMatch = (match: MatchRow) => words.every((word) => haystack(match).some((text) => text.includes(word)));
   const searched = matches.filter(isMatch);
 
   return Option.match(maybePreset, {

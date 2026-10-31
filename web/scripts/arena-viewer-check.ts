@@ -848,7 +848,7 @@ const checkComebacksAgainstReplays = async (name: string) => {
 };
 
 const MATCH_PRESETS = [
-  { label: "Comebacks", note: /^from (\d+) behind$/, minimum: 3 },
+  { label: "Comebacks", note: /^from (\d+) health behind in round [123]$/, minimum: 3 },
   { label: "Upsets", note: /^rated (\d+) lower$/, minimum: 100 },
 ] as const;
 
@@ -902,6 +902,27 @@ const checkMatchList = async (page: Page, name: string, isTouch: boolean) => {
   const found = matchesOf(seats).filter((both) => both.some((seat) => String(seat.seed).includes(needle) || labelOf(keyOf(seat)).toLowerCase().includes(needle))).length;
 
   expectThat((await listed()).count === found, `${name}: searching ${needle} lists ${(await listed()).count} matches, the data has ${found}`);
+  await search.fill("");
+  await settled(page);
+
+  const [newest] = one ?? [];
+
+  if (newest === undefined) throw new Error(`${name}: no match to search for`);
+
+  const words = labelOf(keyOf(newest))
+    .toLowerCase()
+    .split(" ")
+    .filter((_, index, all) => index === 0 || index === all.length - 1);
+
+  const wordsFound = matchesOf(seats).filter((both) => words.every((word) => both.some((seat) => labelOf(keyOf(seat)).toLowerCase().includes(word)))).length;
+
+  await search.fill(words.join(" "));
+  await settled(page);
+  console.log(name, "search", JSON.stringify(words.join(" ")), "lists", (await listed()).count, "| data", wordsFound);
+  expectThat(words.length === 2 && wordsFound > 0 && (await listed()).count === wordsFound, `${name}: searching "${words.join(" ")}" lists ${(await listed()).count} matches, the data has ${wordsFound}`);
+  await search.fill(`  ${words.join("   ")}  zzzz`);
+  await settled(page);
+  expectThat((await listed()).count === 0, `${name}: a word that matches nothing still lists matches`);
   await search.fill("");
   await settled(page);
 

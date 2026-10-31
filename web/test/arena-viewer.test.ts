@@ -1,11 +1,13 @@
 import { expect, test } from "bun:test";
+import { Option } from "effect";
 
 import { chamberPatterns, roundStory, ShellTracker, shotLineIn } from "../src/arena-viewer/analysis.ts";
 import type { Seat } from "../src/arena-viewer/api.ts";
-import { type BlockTally, blockRate, colorOf, groupBy, modelStats, quantile, regretStats, rng, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
+import { type BlockTally, blockRate, colorOf, groupBy, matchRows, modelStats, quantile, regretStats, rng, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { bradleyTerry, type Game, heldOutRatings, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 import { ODDS_BINS, oddsBinOf, oddsPanels, selfShotTallies } from "../src/arena-viewer/page/odds.ts";
 import { shotOf, showsReloadNote, turningPoints } from "../src/arena-viewer/page/replay.ts";
+import { rowsOf } from "../src/arena-viewer/page/matches.ts";
 import { ranksOf } from "../src/arena-viewer/page/derived.ts";
 import { inRankOrder } from "../src/arena-viewer/page/leaderboard.ts";
 import { FULL_N, shadeOf } from "../src/arena-viewer/page/heat.ts";
@@ -543,4 +545,19 @@ test("a shot shows what its log says, and the last move of a completed match is 
   expect(shotOf(detail("completed"), step("b", "Shoot Player B", []))).toBeNull();
   expect(shotOf(detail("partial"), last)).toBeNull();
   expect(shotOf(detail("completed"), step("c", "Use handsaw", []))).toBeNull();
+});
+
+test("a match search needs each of its words in a seat's label or the seed, in any order and with any spacing", () => {
+  const played = (matchId: string, seed: number, ...configs: ReadonlyArray<readonly [string, string]>) =>
+    matchRows(configs.map(([model, effort], position) => ({ ...SEAT, matchId, seed, model, effort, position, potShare: null })))[0] ?? { matchId, seats: [], startedAt: "", status: "", seed };
+
+  const matches = [played("a", 4006, ["claude-opus-5-5", "max"], ["gpt-6.1-sol", "medium"]), played("b", 4007, ["claude-opus-5-5", "low"], ["gpt-6.1-sol", "max"]), played("c", 4008, ["gpt-6-luna", "max"], ["gpt-6.1-sol", "low"])];
+  const found = (query: string) => rowsOf(matches, new Map(), query, Option.none()).map(({ match }) => match.matchId).toSorted();
+
+  expect(found("opus max")).toEqual(["a", "b"]);
+  expect(found("  max   OPUS ")).toEqual(["a", "b"]);
+  expect(found("opus 4006")).toEqual(["a"]);
+  expect(found("sol low")).toEqual(["b", "c"]);
+  expect(found("opus luna")).toEqual([]);
+  expect(found("")).toEqual(["a", "b", "c"]);
 });
