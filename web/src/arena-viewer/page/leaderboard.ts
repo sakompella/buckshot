@@ -38,34 +38,34 @@ const detailsOf = (h: H, m: ModelStats, item: ItemSummary | undefined, hasRegret
   ];
 };
 
-/** The Round Elo axis: whole hundreds around every rating and its interval, so a filter never moves it. */
 interface EloScale {
   readonly from: number;
   readonly to: number;
   readonly ticks: ReadonlyArray<number>;
 }
 
-const eloScaleOf = (ratings: ReadonlyMap<string, Rating>): EloScale => {
-  const ends = [...ratings.values()].flatMap(({ rating, interval }) => [rating, interval?.lo ?? rating, interval?.hi ?? rating]);
+const eloScaleOf = (ratings: ReadonlyMap<string, Rating>, ranks: ReadonlyMap<string, number>): EloScale => {
+  const ends = [...ratings].filter(([key]) => ranks.has(key)).flatMap(([, { rating, interval }]) => [rating, interval?.lo ?? rating, interval?.hi ?? rating]);
   const from = Math.floor(Math.min(0, ...ends) / 100) * 100;
   const to = Math.ceil(Math.max(0, ...ends) / 100) * 100;
 
   return { from, to, ticks: Array.from({ length: (to - from) / 100 + 1 }, (_, index) => from + index * 100) };
 };
 
-const percentOf = ({ from, to }: EloScale, elo: number): number => ((elo - from) / (to - from)) * 100;
+const percentOf = ({ from, to }: EloScale, elo: number): number => Math.min(100, Math.max(0, ((elo - from) / (to - from)) * 100));
 
 const eloBarView = (h: H, scale: EloScale, m: ModelStats, elo: Rating | undefined): Html => {
   if (elo === undefined) return h.empty;
 
   const [low, high] = [percentOf(scale, Math.min(0, elo.rating)), percentOf(scale, Math.max(0, elo.rating))];
+  const whisker = elo.interval === null ? null : { left: percentOf(scale, elo.interval.lo), right: percentOf(scale, elo.interval.hi), clippedLow: elo.interval.lo < scale.from, clippedHigh: elo.interval.hi > scale.to };
 
   return h.div(
     [h.Class("track")],
     [
       h.div([h.Class("zero"), h.Style({ left: `${percentOf(scale, 0)}%` })], []),
       h.div([h.Class("fill"), h.Style({ left: `${low}%`, width: `${high - low}%`, background: m.color })], []),
-      ...(elo.interval === null ? [] : [h.div([h.Class("whisk"), h.Style({ left: `${percentOf(scale, elo.interval.lo)}%`, width: `${percentOf(scale, elo.interval.hi) - percentOf(scale, elo.interval.lo)}%` })], [])]),
+      ...(whisker === null ? [] : [h.div([h.Class(`whisk${whisker.clippedLow ? " clip-lo" : ""}${whisker.clippedHigh ? " clip-hi" : ""}`), h.Style({ left: `${whisker.left}%`, width: `${whisker.right - whisker.left}%` })], [])]),
     ],
   );
 };
@@ -88,7 +88,6 @@ const rowView = (h: H, m: ModelStats, rank: number | undefined, elo: Rating | un
 const detailsView = (h: H, details: ReadonlyArray<Detail>): Html =>
   h.dl([h.Class("drillstats")], details.flatMap(({ label, title, content }) => [h.dt([], [label]), h.dd(title === "" ? [] : [h.Title(title)], [...content])]));
 
-/** One config's drill-down as a card: what a click on its scatter point opens. */
 export const configPanelView = (h: H, derived: Derived, key: string, maybeTip: Option.Option<string>): Html => {
   const m = derived.pooled.find((candidate) => candidate.key === key);
 
@@ -163,7 +162,7 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
   const hasRegret = every.some(({ regret }) => regret !== null);
   const headers = headersOf(hasRegret);
   const configs = inRankOrder(stats, ranks, ratings);
-  const scale = eloScaleOf(ratings);
+  const scale = eloScaleOf(ratings, ranks);
 
   return h.div(
     [h.Class("lb")],

@@ -95,6 +95,11 @@ tr.provisional td { opacity: 0.55; }
 .zero { position: absolute; top: -3px; bottom: -3px; border-left: 1px solid #555; }
 .whisk { position: absolute; top: -3px; height: 16px; border-left: 1px solid #ddd; border-right: 1px solid #ddd; }
 .whisk::after { content: ""; position: absolute; left: 0; right: 0; top: 50%; border-top: 1px solid #ddd; }
+.whisk.clip-lo { border-left: 0; }
+.whisk.clip-hi { border-right: 0; }
+.whisk.clip-lo::before, .whisk.clip-hi::before { position: absolute; top: -2px; line-height: 16px; font-size: 11px; color: #ddd; }
+.whisk.clip-lo::before { content: "◂"; left: -3px; }
+.whisk.clip-hi::before { content: "▸"; right: -3px; }
 .axis { position: relative; height: 16px; font-size: 11px; color: var(--dim); }
 .axis span { position: absolute; transform: translateX(-50%); }
 tr.drill td { background: #050505; white-space: normal; text-align: left; }
