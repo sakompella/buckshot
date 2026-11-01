@@ -2,15 +2,15 @@ import { Schema } from "effect";
 import { AsyncData } from "foldkit";
 import { defineMessageUnion } from "foldkit/message";
 
-import { CertainMistakes, CertainType, Consistency, Decisions, MatchDetail, Seat } from "../api.ts";
+import { CertainMistakes, CertainType, Consistency, Decisions, Download, MatchDetail, Seat } from "../api.ts";
 
 /** The page's groups below the hero, in page order: the jump menu's links, and the sections the reader can be in. */
-export const Group = Schema.Literals(["standings", "watch", "decisions", "health"]);
+export const Group = Schema.Literals(["standings", "decisions", "health", "watch", "tables"]);
 
 export type Group = typeof Group.Type;
 
-/** The sections inside the groups, each an in-page anchor; a link to one the page no longer has lands at its MOVED_TARGETS entry. */
-export const Section = Schema.Literals(["leaderboards", "scatter", "breakdown", "matches", "certain-mistakes", "odds", "items", "spend"]);
+/** The sections, each an in-page anchor; a link to one the page no longer has lands at its MOVED_TARGETS entry. */
+export const Section = Schema.Literals(["scatter", "breakdown", "certain-mistakes", "odds", "items", "spend", "matches", "leaderboards"]);
 
 export type Section = typeof Section.Type;
 
@@ -34,10 +34,11 @@ export const MOVED_TARGETS: ReadonlyMap<string, Target> = new Map([
 ]);
 
 export const GROUPS: ReadonlyArray<{ readonly group: Group; readonly label: string; readonly sections: ReadonlyArray<Section> }> = [
-  { group: "standings", label: "Standings", sections: ["leaderboards", "scatter", "breakdown"] },
-  { group: "watch", label: "Matches", sections: ["matches"] },
+  { group: "standings", label: "Standings", sections: ["scatter", "breakdown"] },
   { group: "decisions", label: "How they play", sections: ["certain-mistakes", "odds", "items"] },
   { group: "health", label: "Run health", sections: ["spend"] },
+  { group: "watch", label: "Matches", sections: ["matches"] },
+  { group: "tables", label: "Tables", sections: ["leaderboards"] },
 ];
 
 export const SeatFull = Schema.Struct({ ...Seat.fields, potShare: Schema.NullOr(Schema.Number) });
@@ -54,6 +55,7 @@ export const Loaded = Schema.Struct({
   decisions: Decisions,
   consistency: OptionalData(Schema.Array(Consistency)),
   certainMistakes: OptionalData(CertainMistakes),
+  download: OptionalData(Download),
 });
 
 export type Loaded = typeof Loaded.Type;
@@ -120,6 +122,7 @@ export const Model = Schema.Struct({
   scatter: Scatter,
   heat: Heat,
   leaderboard: Leaderboard,
+  maybeDrill: Schema.Option(Schema.String),
   maybeCertainOpen: Schema.Option(CertainCell),
   matchList: MatchList,
   /** The chart mark the mouse is over, and the one a click, tap or Enter pinned; the hovered one shows first. */
@@ -153,6 +156,7 @@ export const Message = defineMessageUnion({
   HoveredPoint: { key: Schema.String },
   LeftPoint: {},
   ClickedPoint: { key: Schema.String },
+  ClosedDrill: {},
   ClickedOutsideChart: {},
   HoveredMark: { tip: MarkTip },
   LeftMark: {},

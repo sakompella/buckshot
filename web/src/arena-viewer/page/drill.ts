@@ -4,7 +4,7 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { type Decisions, NO_GAP } from "../api.ts";
 import { anchorId, tipView } from "./charts.ts";
-import { fmtCount, fmtPct, groupBy, keyOf, labelOf, type ModelStats, type SeatFull, sumOf } from "./data.ts";
+import { fmtCount, fmtPct, groupBy, keyOf, labelOf, MIN_BLOCKS_FOR_INTERVAL, type ModelStats, type SeatFull, sumOf } from "./data.ts";
 import { type Derived, memoLast } from "./derived.ts";
 import { itemBarsView } from "./fates.ts";
 import { Message, type Model } from "./model.ts";
@@ -132,7 +132,7 @@ const gapLineView = (h: H, decisions: Decisions, seats: ReadonlyArray<SeatFull>,
     ),
   );
 
-const consistencyLineView = (h: H, consistency: Derived["consistency"], key: string): Html =>
+const consistencyLineView = (h: H, consistency: Derived["consistency"], key: string, hasInterval: boolean): Html =>
   AsyncData.matchData(consistency, {
     onEmpty: () => h.empty,
     onFailure: (error) => lineView(h, "Same position, same move", [h.span([h.Class("dv")], [`Could not load the consistency: ${error}`])]),
@@ -146,7 +146,7 @@ const consistencyLineView = (h: H, consistency: Derived["consistency"], key: str
         "Same position, same move",
         row === undefined
           ? ["–"]
-          : [h.span([h.Class("dv")], [fmtPct(row.agree), " ", h.span([h.Class("pm")], [`[${fmtPct(row.lo)}, ${fmtPct(row.hi)}] over ${row.positions.toLocaleString()} positions`])])],
+          : [h.span([h.Class("dv")], [fmtPct(row.agree), " ", h.span([h.Class("pm")], [`${hasInterval ? `[${fmtPct(row.lo)}, ${fmtPct(row.hi)}] ` : ""}over ${row.positions.toLocaleString()} positions`])])],
       );
     },
   });
@@ -157,7 +157,7 @@ export const drillView = (h: H, m: ModelStats, derived: Derived, maybeTip: Model
     [
       h.div([h.Class("dhead")], ["Head-to-head"]),
       headToHeadView(h, m, derived.matchSeats, maybeTip),
-      consistencyLineView(h, derived.consistency, m.key),
+      consistencyLineView(h, derived.consistency, m.key, m.win.blocks >= MIN_BLOCKS_FOR_INTERVAL),
       gapLineView(h, derived.decisions, derived.seats, m.key),
       h.div([h.Class("dhead")], ["Items"]),
       itemBarsView(h, derived.seats, m.started, m.color, m.key),

@@ -1,7 +1,9 @@
 import { expect, test } from "bun:test";
 
 import { GROUPS, MOVED_TARGETS, Section } from "../src/arena-viewer/page/model.ts";
-import { tourOf } from "../src/arena-viewer/page/tour.ts";
+import { Option } from "effect";
+
+import { tourMatchOf, tourOf } from "../src/arena-viewer/page/tour.ts";
 
 const pageOrder: ReadonlyArray<string> = GROUPS.flatMap(({ sections }) => sections);
 
@@ -34,4 +36,16 @@ test("each card is one or two sentences, with no figures", () => {
     expect([title, sentences.length <= 2]).toEqual([title, true]);
     expect(`${title} ${text}`.replaceAll(/(?:round|position) \d\b/g, "")).not.toMatch(/\d/);
   }
+});
+
+test("the tour's replay is the completed match whose seats gave up the most points", () => {
+  const seat = (matchId: string, status: "completed" | "partial", total: number | null) => ({ matchId, status, regret: total === null ? null : { moves: 1, total, exact: 0 } });
+
+  expect(tourMatchOf([seat("a", "completed", 5), seat("a", "completed", 6), seat("b", "completed", 9), seat("c", "partial", 99)])).toEqual(Option.some("a"));
+  expect(tourMatchOf([seat("a", "completed", null)])).toEqual(Option.some("a"));
+  expect(tourMatchOf([])).toEqual(Option.none());
+});
+
+test("only the replay steps of the tour open a replay", () => {
+  expect(tourOf(true).filter(({ isReplay }) => isReplay).map(({ anchor }) => anchor)).toEqual(["matches", "matches"]);
 });

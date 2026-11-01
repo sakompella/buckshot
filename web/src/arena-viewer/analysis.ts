@@ -137,6 +137,18 @@ export const chamberPatterns = (chamber: Chamber, isSawed: boolean, legal: Reado
 
 const sumOf = (values: ReadonlyArray<number>): number => values.reduce((total, value) => total + value, 0);
 
+export interface Window {
+  readonly player: string;
+  readonly events: ReadonlyArray<string>;
+}
+
+/**
+ * The shot line of a player's last shot, from the first later window of another player: a shooter with no decision
+ * after its shot has no window of its own to carry the line, but everyone sees a shot.
+ */
+export const shotLineIn = (player: string, later: ReadonlyArray<Window>): string | undefined =>
+  later.find((window) => window.player !== player)?.events.findLast((text) => text.startsWith(`Player ${player} shot `));
+
 /**
  * Round winners and prizes from the public events. The last round's win is never in a decision window (the match
  * ends there), so it is inferred from final cash; ok means every player's prizes then sum exactly to its final cash.

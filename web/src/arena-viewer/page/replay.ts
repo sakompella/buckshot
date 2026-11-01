@@ -12,12 +12,16 @@ type H = HtmlBuilder<Message>;
 
 export const stepsOf = (detail: MatchDetail): ReadonlyArray<Step> => detail.decisions.filter(({ byWhom }) => byWhom !== "forced");
 
-export const shotOf = (step: Step): "live" | "blank" | null => {
+/**
+ * What a shot hit, from its logged outcome. The match's last move has no later window to log one, and a completed
+ * match ends on a death, which only a live shell causes.
+ */
+export const shotOf = (detail: { readonly match: Pick<MatchDetail["match"], "status">; readonly decisions: ReadonlyArray<Pick<Step, "id">> }, step: Pick<Step, "id" | "label" | "outcome">): "live" | "blank" | null => {
   const shot = / shot [^:]*: (live|blank)/.exec(step.outcome.join(" "));
 
-  if (shot === null) return null;
+  if (shot !== null) return shot[1] === "live" ? "live" : "blank";
 
-  return shot[1] === "live" ? "live" : "blank";
+  return detail.match.status === "completed" && step.label.startsWith("Shoot") && detail.decisions.at(-1)?.id === step.id ? "live" : null;
 };
 
 export const seatColor = (detail: MatchDetail, player: string): string => {
@@ -256,7 +260,7 @@ const MOST_BIASED_SHELLS = 3;
 export const showsReloadNote = (shellsLeft: number, depth: number): boolean => shellsLeft <= Math.min(depth, MOST_BIASED_SHELLS);
 
 const verdictOf = (regret: MoveRegret): string => {
-  if (regret.points === 0) return `Best at depth ${regret.depth}`;
+  if (regret.points === 0) return `Best move, looking ${regret.depth} moves ahead`;
 
   return regret.exact ? `Proven worse · gave up ${fmtPoints(regret.points)} points` : `Gave up ${fmtPoints(regret.points)} points (estimate)`;
 };
@@ -266,7 +270,7 @@ const candidatesView = (h: H, step: Step, regret: MoveRegret, who: string, isOpe
     [h.Class("fold cands"), ...(isOpen ? [h.Open(true)] : [])],
     [
       h.summary([], [verdictOf(regret)]),
-      h.div([h.Class("k")], [`${who}'s estimated round win chance · depth ${regret.depth}${regret.limited ? " · budget stopped" : ""}`]),
+      h.div([h.Class("k")], [`${who}'s estimated round win chance · looking ${regret.depth} moves ahead${regret.limited ? " · stopped early" : ""}`]),
       h.ol(
         [],
         regret.values
@@ -286,13 +290,13 @@ const candidatesView = (h: H, step: Step, regret: MoveRegret, who: string, isOpe
             );
           }),
       ),
-      showsReloadNote(step.live + step.blank, regret.depth) ? h.div([h.Class("k")], ["A reload is within reach. With the static leaf, gaps here read about 0.6 points high on average."]) : h.empty,
+      showsReloadNote(step.live + step.blank, regret.depth) ? h.div([h.Class("k")], ["A reload is within reach, and the evaluator cannot see past it. Gaps here read about 0.6 points high on average."]) : h.empty,
     ],
   );
 
 const selectedView = (h: H, detail: MatchDetail, step: Step, names: ReadonlyMap<string, string>, viewport: Viewport): Html => {
   const { regret } = step;
-  const shot = shotOf(step);
+  const shot = shotOf(detail, step);
   const latency = sumOf(step.calls.map(({ latency }) => latency ?? 0));
   const cost = sumOf(step.calls.map((call) => call.cost ?? 0));
 
@@ -336,7 +340,7 @@ const regretTag = (h: H, regret: MoveRegret | null): Html =>
 
 const stepView = (h: H, detail: MatchDetail, names: ReadonlyMap<string, string>, step: Step, index: number, at: number): Html => {
   const isOn = index === at;
-  const shot = shotOf(step);
+  const shot = shotOf(detail, step);
 
   return h.keyed("div")(
     step.id,

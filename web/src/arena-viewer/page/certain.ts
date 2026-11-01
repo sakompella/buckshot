@@ -4,7 +4,7 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { CERTAIN_TYPES, type CertainMistakes, type CertainRate, type CertainType, type OpportunityType } from "../api.ts";
 import { anchorId, chartWidth, linScale, REFERENCE, REFERENCE_DASH, tippedDot } from "./charts.ts";
-import { baseName, baseOrder, CERTAIN_NAMES, colorOf, EFFORTS, fmtTime, groupBy, keyOf, labelOf, type MatchRow, type SeatFull, shortName, sumOf } from "./data.ts";
+import { baseName, baseOrder, blocksOf, CERTAIN_NAMES, colorOf, EFFORTS, fmtTime, groupBy, keyOf, labelOf, type MatchRow, MIN_BLOCKS_FOR_INTERVAL, type SeatFull, shortName, sumOf } from "./data.ts";
 import { memoLast } from "./derived.ts";
 import { type CertainCell, Message } from "./model.ts";
 
@@ -36,25 +36,27 @@ export interface Tallies {
   readonly hiddenHealth: number;
 }
 
-type SeatKey = Pick<SeatFull, "model" | "effort">;
+type SeatKey = Pick<SeatFull, "model" | "effort" | "seedBlock" | "status">;
 
 const hasRate = ({ opportunities }: Cell): boolean => opportunities >= FEWEST_FOR_RATE;
 
-const cellOf = (type: CertainType, parts: ReadonlyArray<CertainRate>, whole: CertainRate | undefined): Cell => ({
+const cellOf = (type: CertainType, parts: ReadonlyArray<CertainRate>, whole: CertainRate | undefined, blocks: number): Cell => ({
   type,
   mistakes: sumOf(parts.map(({ chose }) => chose)),
   opportunities: sumOf(parts.map(({ opportunities }) => opportunities)),
-  bounds: whole?.bounds ?? null,
+  bounds: blocks < MIN_BLOCKS_FOR_INTERVAL ? null : (whole?.bounds ?? null),
 });
 
 const EFFORT_ORDER: ReadonlyArray<string> = EFFORTS;
 
-const inStrengthOrder = <A extends SeatKey>(items: ReadonlyArray<A>): ReadonlyArray<A> =>
+const inStrengthOrder = <A extends Pick<SeatKey, "model" | "effort">>(items: ReadonlyArray<A>): ReadonlyArray<A> =>
   items.toSorted((left, right) => baseOrder(left.model) - baseOrder(right.model) || EFFORT_ORDER.indexOf(left.effort) - EFFORT_ORDER.indexOf(right.effort));
 
-/** A model's or the pooled row keeps its written interval only while all its configs are shown; a filtered selection has no interval. */
+/** A model's or the pooled row keeps its written interval only while all its configs are shown; a filtered selection has no interval. No row keeps one over fewer seed blocks than an interval needs. */
 export const talliesOf = memoLast((certain: CertainMistakes, seats: ReadonlyArray<SeatKey>, keep: ReadonlyArray<boolean>): Tallies => {
+  const shownSeats = seats.filter((seat, at) => keep[at] === true && seat.status === "completed");
   const shownKeys = new Set(seats.flatMap((seat, at) => (keep[at] === true ? [keyOf(seat)] : [])));
+  const blocksWhere = (isIn: (seat: SeatKey) => boolean) => blocksOf(shownSeats.filter(isIn));
   const configs = certain.rates.filter(({ scope }) => scope === "config");
   const shown = configs.filter((rate) => shownKeys.has(keyOf(rate)));
   const ofType = (rates: ReadonlyArray<CertainRate>, type: OpportunityType) => rates.filter((rate) => rate.type === type);
@@ -70,16 +72,16 @@ export const talliesOf = memoLast((certain: CertainMistakes, seats: ReadonlyArra
       cells: CERTAIN_TYPES.map((type) => {
         const own = shown.filter((rate) => rate.model === model && rate.effort === effort && rate.type === type);
 
-        return cellOf(type, own, own[0]);
+        return cellOf(type, own, own[0], blocksWhere((seat) => seat.model === model && seat.effort === effort));
       }),
     })),
     models: modelNames.map((model) => {
       const mine = shown.filter((rate) => rate.model === model);
       const isWhole = mine.length === configs.filter((rate) => rate.model === model).length;
 
-      return { key: model, model, effort: "", cells: CERTAIN_TYPES.map((type) => cellOf(type, ofType(mine, type), isWhole ? writtenOf("model", model, type) : undefined)) };
+      return { key: model, model, effort: "", cells: CERTAIN_TYPES.map((type) => cellOf(type, ofType(mine, type), isWhole ? writtenOf("model", model, type) : undefined, blocksWhere((seat) => seat.model === model))) };
     }),
-    pooled: CERTAIN_TYPES.map((type) => cellOf(type, ofType(shown, type), shown.length === configs.length ? writtenOf("all", "", type) : undefined)),
+    pooled: CERTAIN_TYPES.map((type) => cellOf(type, ofType(shown, type), shown.length === configs.length ? writtenOf("all", "", type) : undefined, blocksWhere(() => true))),
     provenBlanks: { gaveTurnAway: sumOf(blanks.map(({ chose }) => chose)), total: sumOf(blanks.map(({ opportunities }) => opportunities)) },
     hiddenHealth: sumOf(ofType(shown, "hidden_health").map(({ opportunities }) => opportunities)),
   };
@@ -182,10 +184,10 @@ export const certainTableView = (h: H, certain: CertainMistakes, seats: Readonly
   const { rows, pooled } = talliesOf(certain, seats, keep);
   const matches = matchesById(allMatches);
 
-  return h.details(
-    [h.Class("tables"), h.Id(CERTAIN_TABLE)],
+  return h.div(
+    [h.Id(CERTAIN_TABLE)],
     [
-      h.summary([], ["Certain mistakes by config"]),
+      h.h2([], ["Certain mistakes by config"]),
       rows.length === 0
         ? h.div([h.Class("empty")], ["No config in this filter has a decision with a proven shell."])
         : h.div(
