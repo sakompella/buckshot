@@ -2,7 +2,7 @@ import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { anchorId, linScale, logScale, REFERENCE, REFERENCE_DASH, selectView, tipView, toggleView } from "./charts.ts";
-import { baseName, DEFAULT_EFFORT, fmtCount, fmtPct, fmtRating, fmtUsd, isClaude, type ModelStats } from "./data.ts";
+import { baseName, DEFAULT_EFFORT, fmtCount, fmtPct, fmtRating, fmtUsd, isClaude, isProvisional, type ModelStats } from "./data.ts";
 import { leader, measureText, placeLabels, uncrowded } from "./labels.ts";
 import { memoLast } from "./derived.ts";
 import { Message, type Model, type ScatterAxis } from "./model.ts";
@@ -115,12 +115,16 @@ interface Point {
   readonly m: ModelStats;
   readonly x: number;
   readonly rating: number;
-  readonly rank: number;
+  readonly rank: number | undefined;
 }
 
 const dominates = (other: Point, point: Point) => other.x <= point.x && other.rating >= point.rating && (other.x < point.x || other.rating > point.rating);
 
-const frontierOf = (points: ReadonlyArray<Point>) => points.filter((point) => !points.some((other) => other !== point && dominates(other, point))).toSorted((left, right) => left.x - right.x);
+export const frontierOf = (points: ReadonlyArray<Point>) => {
+  const ranked = points.filter(({ m }) => !isProvisional(m));
+
+  return ranked.filter((point) => !ranked.some((other) => other !== point && dominates(other, point))).toSorted((left, right) => left.x - right.x);
+};
 
 /** The nearest 1-2-5 step strictly past a value. */
 const stepPast = (value: number, direction: "down" | "up"): number => {
@@ -152,7 +156,7 @@ const pointsOf = memoLast(
         const rank = ranks.get(m.key);
         const x = AXES[axis].valueOf(m);
 
-        return rating !== undefined && rank !== undefined && x !== null && m.scored.length > 0 ? [{ m, x, rating, rank }] : [];
+        return rating !== undefined && x !== null && m.scored.length > 0 ? [{ m, x, rating, rank }] : [];
       });
 
     return { cost: on("cost"), moves: on("moves"), tokens: on("tokens"), regret: on("regret") };
@@ -294,7 +298,7 @@ export const scatterView = (
   const activeKey = Option.orElse(scatter.maybeHover, () => scatter.maybePin);
   const active = Option.flatMap(activeKey, (key) => Option.fromUndefinedOr(points.find((point) => point.m.key === key)));
   const isDimmed = (point: Point) => Option.exists(active, (shown) => shown.m.model !== point.m.model);
-  const dim = (point: Point) => (isDimmed(point) ? { opacity: "0.55", filter: "grayscale(1)" } : {});
+  const dim = (point: Point) => (isDimmed(point) ? { opacity: "0.55", filter: "grayscale(1)" } : isProvisional(point.m) ? { opacity: "0.4" } : {});
 
   const axes = axisOptions(everyConfig.some(({ regret }) => regret !== null));
   const selectAxis = (option: ScatterAxis) => Message.SelectedScatterAxis({ axis: option });
@@ -418,7 +422,7 @@ export const scatterView = (
           tipView(h, anchorId("pt", point.m.key), [
             h.b([], [point.m.label]),
             h.br([]),
-            `rank ${point.rank} · Round Elo ${fmtRating(point.rating)} · ${fmtPct(point.m.roundShare)} of rounds won, ${fmtPct(point.m.winShare)} of matches won, ${fmtPct(point.m.potShare)} of the pot, over ${point.m.scored.length} matches`,
+            `${point.rank === undefined ? "provisional" : `rank ${point.rank}`} · Round Elo ${fmtRating(point.rating)} · ${fmtPct(point.m.roundShare)} of rounds won, ${fmtPct(point.m.winShare)} of matches won, ${fmtPct(point.m.potShare)} of the pot, over ${point.m.scored.length} matches`,
             h.br([]),
             axis.perMatch(point.x),
           ]),

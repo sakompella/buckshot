@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 
 import { Option, Schema } from "effect";
 
-import { analyse, decodeVisible, roundStory, ShellTracker } from "./analysis.ts";
+import { analyse, decodeVisible, roundStory, ShellTracker, shotLineIn } from "./analysis.ts";
 import { Blunders, Call, CertainMistakes, Consistency, Decisions, MatchDetail, MatchSeat, MatchSummary, Mistakes, type PlayerState, SeatRow, SeatsResponse, type Step } from "./api.ts";
 import { findBlunders } from "./blunders.ts";
 import { type Certain, NO_CERTAIN, openCertain } from "./certain.ts";
@@ -164,6 +164,17 @@ const matchDetail = (db: Database, regret: Regret | null, certain: Certain, id: 
     before.outcome.push(...(end === -1 ? draft.events : draft.events.slice(0, end)).filter((text) => !text.endsWith(" picked up the shotgun.")));
   }
 
+  drafts.forEach((draft, index) => {
+    if (draft.outcome.length > 0 || !draft.step.label.startsWith("Shoot")) return;
+
+    const line = shotLineIn(
+      draft.step.player,
+      drafts.slice(index + 1).map(({ step, events }) => ({ player: step.player, events })),
+    );
+
+    if (line !== undefined) draft.outcome.push(line);
+  });
+
   const byId = new Map(drafts.map((draft) => [draft.step.id, draft]));
   const unlinked: Array<Call> = [];
 
@@ -272,6 +283,11 @@ export const serveArenaViewer = (dbPath: string, hostname: string, port: number,
     routes: {
       "/": page,
       "/api/seats": guarded((request) => json(request, seatsBody)),
+      "/api/download": guarded(() => {
+        const download = process.env["ARENA_VIEWER_DOWNLOAD"];
+
+        return download === undefined || download === "" ? new Response("no download configured", { status: 404 }) : Response.json({ bytes: Bun.file(download).size });
+      }),
       "/api/db": guarded(() => {
         const download = process.env["ARENA_VIEWER_DOWNLOAD"];
 

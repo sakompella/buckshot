@@ -1,14 +1,17 @@
 import { expect, test } from "bun:test";
+import { Option } from "effect";
 
-import { chamberPatterns, roundStory, ShellTracker } from "../src/arena-viewer/analysis.ts";
+import { chamberPatterns, roundStory, ShellTracker, shotLineIn } from "../src/arena-viewer/analysis.ts";
 import type { Seat } from "../src/arena-viewer/api.ts";
-import { type BlockTally, blockRate, colorOf, groupBy, modelStats, quantile, regretStats, rng, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
+import { type BlockTally, blockRate, colorOf, fmtBytes, groupBy, matchRows, modelStats, quantile, regretStats, rng, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { bradleyTerry, type Game, heldOutRatings, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
-import { ODDS_BINS, oddsBinOf, oddsPanels, selfShotTallies } from "../src/arena-viewer/page/odds.ts";
-import { showsReloadNote, turningPoints } from "../src/arena-viewer/page/replay.ts";
+import { droppedConfigs, droppedText, ODDS_BINS, oddsBinOf, oddsPanels, selfShotTallies } from "../src/arena-viewer/page/odds.ts";
+import { shotOf, showsReloadNote, turningPoints } from "../src/arena-viewer/page/replay.ts";
+import { rowsOf } from "../src/arena-viewer/page/matches.ts";
 import { ranksOf } from "../src/arena-viewer/page/derived.ts";
 import { inRankOrder } from "../src/arena-viewer/page/leaderboard.ts";
-import { AXES } from "../src/arena-viewer/page/scatter.ts";
+import { FULL_N, shadeOf } from "../src/arena-viewer/page/heat.ts";
+import { AXES, frontierOf } from "../src/arena-viewer/page/scatter.ts";
 
 const randomGames = (seed: number): ReadonlyArray<Game> => {
   const random = rng(seed);
@@ -215,7 +218,7 @@ const hsl = (hex: string) => {
 
 test("Claude models are orange and GPT models blue, each family brightest and most saturated for its strongest model", () => {
   const families = [
-    { strongestFirst: ["claude-opus-5-5", "claude-haiku-5-5", "claude-sonnet-5-5", "claude-haiku-4-5"], hues: [18, 40] },
+    { strongestFirst: ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-haiku-4-5"], hues: [18, 40] },
     { strongestFirst: ["gpt-6-astra", "gpt-6.1-sol", "gpt-5.6-terra", "gpt-6-luna"], hues: [195, 225] },
   ];
 
@@ -294,7 +297,16 @@ test("pooled ratings cover every config of a completed match, over every tournam
 
   expect([...ratings.keys()].toSorted()).toEqual(TRUE_ELO.map(([id]) => id.replace("-", "|")).toSorted());
 
-  for (const { lo, hi } of ratings.values()) expect(lo).toBeLessThan(hi);
+  for (const { interval } of ratings.values()) expect(interval?.lo).toBeLessThan(interval?.hi ?? Number.NEGATIVE_INFINITY);
+});
+
+test("a config over fewer than 4 seed blocks has a rating and no interval", () => {
+  const seats = Array.from({ length: 12 }, (_match, index) => [
+    { ...SEAT, matchId: `m${index}`, seedBlock: `block${index % 3}`, model: "strong", player: "A", position: 0, winShare: index % 3 === 0 ? 0 : 1, potShare: null, story: oneRoundWonBy(index % 3 === 0 ? "B" : "A") },
+    { ...SEAT, matchId: `m${index}`, seedBlock: `block${index % 3}`, model: "weak", player: "B", position: 1, winShare: index % 3 === 0 ? 1 : 0, potShare: null, story: oneRoundWonBy(index % 3 === 0 ? "B" : "A") },
+  ]).flat();
+
+  expect([...pooledRatings(seats).values()].map(({ blocks, interval }) => [blocks, interval])).toEqual([[3, null], [3, null]]);
 });
 
 // Two-player matches over the sweeps' pairings, each with a pot of its own, the winner taking `winnerShare` of it.
@@ -474,20 +486,95 @@ test("turning points are the biggest blunders, biggest first, and none when no m
   expect(turningPoints([4.9, null, 0].map(stepWith))).toEqual([]);
 });
 
-test("ranks go to rated configs by rating, equal ratings by label; a config without a rating has no rank and the leaderboard lists it last", () => {
-  const configs = ["delta", "alpha", "charlie", "bravo"];
-  const seats = configs.map((model, index) => ({ ...SEAT, matchId: `m${index}`, model, potShare: null }));
-  const stats = modelStats(seats);
-  const rated = (rating: number) => ({ rating, lo: rating, hi: rating });
-  const ratings = new Map([["charlie|medium", rated(5)], ["bravo|medium", rated(5)], ["alpha|medium", rated(-20)]]);
+test("ranks go to rated configs of 20 or more matches by rating, equal ratings by label; the rest have no rank and the leaderboard lists them after, the better rated first", () => {
+  const played = (model: string, matches: number) => Array.from({ length: matches }, (_, index) => ({ ...SEAT, matchId: `${model}${index}`, model, potShare: null }));
+  const stats = modelStats([...played("delta", 20), ...played("alpha", 20), ...played("charlie", 20), ...played("bravo", 20), ...played("echo", 19), ...played("foxtrot", 3)]);
+  const rated = (rating: number) => ({ rating, blocks: 4, interval: { lo: rating, hi: rating } });
+  const ratings = new Map([["charlie|medium", rated(5)], ["bravo|medium", rated(5)], ["alpha|medium", rated(-20)], ["echo|medium", rated(90)], ["foxtrot|medium", rated(10)]]);
   const ranks = ranksOf(stats, ratings);
 
   expect([...ranks]).toEqual([["bravo|medium", 1], ["charlie|medium", 2], ["alpha|medium", 3]]);
-  expect(inRankOrder(stats, ranks).map(({ model }) => model)).toEqual(["bravo", "charlie", "alpha", "delta"]);
+  expect(inRankOrder(stats, ranks, ratings).map(({ model }) => model)).toEqual(["bravo", "charlie", "alpha", "echo", "foxtrot", "delta"]);
 });
 
 test("the reload note shows only when a reload is within the depth reached and 1 to 3 shells are left", () => {
   expect([1, 2, 3].map((shells) => showsReloadNote(shells, 6))).toEqual([true, true, true]);
   expect([4, 5, 6].map((shells) => showsReloadNote(shells, 6))).toEqual([false, false, false]);
   expect([showsReloadNote(2, 1), showsReloadNote(1, 1), showsReloadNote(3, 3), showsReloadNote(3, 2)]).toEqual([false, true, true, false]);
+});
+
+test("the best-value line runs through ranked configs only", () => {
+  const stats = modelStats([
+    ...Array.from({ length: 20 }, (_, index) => ({ ...SEAT, matchId: `ranked${index}`, model: "ranked", cost: 2, potShare: null })),
+    ...Array.from({ length: 3 }, (_, index) => ({ ...SEAT, matchId: `new${index}`, model: "new", cost: 1, potShare: null })),
+  ]);
+
+  const points = stats.map((m) => ({ m, x: m.model === "new" ? 1 : 2, rating: m.model === "new" ? 50 : 10, rank: undefined }));
+
+  expect(frontierOf(points).map(({ m }) => m.model)).toEqual(["ranked"]);
+});
+
+test("a heat cell grows brighter with its win share, and fades toward the page below the matches that give full strength", () => {
+  const level = (value: number, n: number) => Number(/rgb\((\d+)/.exec(shadeOf(value, n).background)?.[1]);
+
+  expect(level(0.8, FULL_N)).toBeGreaterThan(level(0.4, FULL_N));
+  expect(level(0.8, FULL_N - 1)).toBeLessThan(level(0.8, FULL_N));
+  expect(level(0.8, 1)).toBeLessThan(level(0.8, FULL_N - 1));
+  expect(level(0.8, FULL_N * 5)).toBe(level(0.8, FULL_N));
+});
+
+test("a shooter with no later window gets its shot line from the next window of another player, its last shot there", () => {
+  const windows = [
+    { player: "B", events: ["Player B shot Player A: blank."] },
+    { player: "A", events: ["Player B used handsaw.", "Player B shot Player A: live, 2 damage, 1 health left.", "Player A's turn."] },
+  ];
+
+  expect(shotLineIn("B", windows)).toBe("Player B shot Player A: live, 2 damage, 1 health left.");
+  expect(shotLineIn("B", windows.slice(0, 1))).toBeUndefined();
+  expect(shotLineIn("A", windows)).toBeUndefined();
+});
+
+test("a shot shows what its log says, and the last move of a completed match is live because only a live shell ends it", () => {
+  const step = (id: string, label: string, outcome: ReadonlyArray<string>) => ({ id, label, outcome });
+  const logged = step("a", "Shoot yourself", ["Player A shot Player A: blank."]);
+  const last = step("c", "Shoot Player B", []);
+  const detail = (status: string) => ({ match: { status }, decisions: [logged, step("b", "Shoot Player B", []), last] });
+
+  expect(shotOf(detail("completed"), logged)).toBe("blank");
+  expect(shotOf(detail("completed"), last)).toBe("live");
+  expect(shotOf(detail("completed"), step("b", "Shoot Player B", []))).toBeNull();
+  expect(shotOf(detail("partial"), last)).toBeNull();
+  expect(shotOf(detail("completed"), step("c", "Use handsaw", []))).toBeNull();
+});
+
+test("a match search needs each of its words in a seat's label or the seed, in any order and with any spacing", () => {
+  const played = (matchId: string, seed: number, ...configs: ReadonlyArray<readonly [string, string]>) =>
+    matchRows(configs.map(([model, effort], position) => ({ ...SEAT, matchId, seed, model, effort, position, potShare: null })))[0] ?? { matchId, seats: [], startedAt: "", status: "", seed };
+
+  const matches = [played("a", 4006, ["claude-opus-5-5", "max"], ["gpt-6.1-sol", "medium"]), played("b", 4007, ["claude-opus-5-5", "low"], ["gpt-6.1-sol", "max"]), played("c", 4008, ["gpt-6-luna", "max"], ["gpt-6.1-sol", "low"])];
+  const found = (query: string) => rowsOf(matches, new Map(), query, Option.none()).map(({ match }) => match.matchId).toSorted();
+
+  expect(found("opus max")).toEqual(["a", "b"]);
+  expect(found("  max   OPUS ")).toEqual(["a", "b"]);
+  expect(found("opus 4006")).toEqual(["a"]);
+  expect(found("sol low")).toEqual(["b", "c"]);
+  expect(found("opus luna")).toEqual([]);
+  expect(found("")).toEqual(["a", "b", "c"]);
+});
+
+test("a file size is in KB, MB or GB, whichever reads shortest", () => {
+  expect([fmtBytes(2_400), fmtBytes(87_300_000), fmtBytes(1_540_000_000)]).toEqual(["2 KB", "87 MB", "1.5 GB"]);
+});
+
+test("the configs left off the odds chart are those of the kept seats with no line, named by model with their efforts", () => {
+  const seats = [{ model: "claude-opus-5-5", effort: "low" }, { model: "claude-opus-5-5", effort: "off" }, { model: "gpt-6.1-sol", effort: "max" }, { model: "gpt-6.1-sol", effort: "low" }];
+  const odds = Array.from({ length: 120 }, (_, shot) => (shot < 60 ? 0 : 100));
+  const decisions = { odds: [...odds, ...odds], seat: [...odds.map(() => 0), ...odds.map(() => 2)], shot: [...odds.map(() => 1), ...odds.map(() => 2)] };
+  const panels = oddsPanels(selfShotTallies(decisions, seats, [true, true, true, true]));
+  const dropped = droppedConfigs(seats, [true, true, true, false], panels);
+
+  expect(panels.map(({ model }) => model)).toEqual(["claude-opus-5-5", "gpt-6.1-sol"]);
+  expect(dropped).toEqual(["claude-opus-5-5|off"]);
+  expect(droppedConfigs(seats, [true, true, true, true], panels)).toEqual(["claude-opus-5-5|off", "gpt-6.1-sol|low"]);
+  expect(droppedText(["claude-opus-5-5|off", "claude-opus-5-5|medium", "gpt-6.1-sol|low"])).toBe("Opus 5.5 off, medium · GPT-6.1 Sol low");
 });

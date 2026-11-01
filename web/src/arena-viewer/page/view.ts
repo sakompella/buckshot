@@ -3,13 +3,13 @@ import { AsyncData } from "foldkit";
 import { createLazy, type Document, type Html, type HtmlBuilder } from "foldkit/html";
 
 import type { CertainMistakes } from "../api.ts";
-import { baseName, baseOrder, colorOf, EFFORTS, fmtCount, sumOf, unique } from "./data.ts";
+import { baseName, baseOrder, colorOf, EFFORTS, fmtBytes, fmtCount, sumOf, unique } from "./data.ts";
 import { tipView } from "./charts.ts";
 import { certainTableView, certainView, hasCertain } from "./certain.ts";
 import { type Derived, derive } from "./derived.ts";
 import { itemUsageView } from "./fates.ts";
 import { breakdownView, heatRowsOf } from "./heat.ts";
-import { leaderboardView } from "./leaderboard.ts";
+import { configPanelView, leaderboardView } from "./leaderboard.ts";
 import { oddsView } from "./odds.ts";
 import { matchesView } from "./matches.ts";
 import { type Group, GROUPS, Message, type Model, type Section, type Viewport } from "./model.ts";
@@ -147,12 +147,23 @@ const navView = (h: H, maybeGroup: Option.Option<Group>): Html =>
       ...GROUPS.map(({ group, label }) =>
         h.a([h.Href(`#${group}`), ...(Option.contains(maybeGroup, group) ? [h.Class("on"), h.AriaCurrent("location")] : []), h.OnClick(Message.ClickedJump({ target: group }), { defaultAction: "Prevent" })], [label]),
       ),
-      h.a([h.Class("download"), h.Href("/api/db")], ["Database (SQLite)"]),
     ],
   );
 
+const footView = (h: H, download: Derived["download"]): Html =>
+  AsyncData.matchData(download, {
+    onEmpty: () => h.empty,
+    onFailure: () => h.empty,
+    onData: ({ bytes }) => h.footer([h.Class("foot")], [h.a([h.Class("download"), h.Href("/api/db")], [`Database (SQLite, ${fmtBytes(bytes)})`])]),
+  });
+
 const scatterCard = (h: H, derived: Derived, scatter: Model["scatter"], width: number): Html =>
   h.div([h.Class("card")], [scatterView(h, derived.pooled, derived.everyPooled, derived.ratings, derived.ranks, scatter, width)]);
+
+const lazyDrill = createLazy();
+
+const drillCard = (h: H, derived: Derived, maybeDrill: Model["maybeDrill"], maybeTip: Model["leaderboard"]["maybeTip"]): Html =>
+  Option.match(maybeDrill, { onNone: () => h.empty, onSome: (key) => configPanelView(h, derived, key, maybeTip) });
 
 const spendCard = (h: H, derived: Derived): Html => h.div([h.Class("card")], [spendView(h, derived.pooled)]);
 
@@ -184,11 +195,9 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
       lazyHero(heroView, [h, derived]),
       h.div([h.Class("top")], [lazyNav(navView, [h, model.maybeGroup]), lazyFilters(filtersView, [h, derived, model.filter, model.isFiltersOpen])]),
       groupView(h, "standings", [
-        sectionView(h, "leaderboards", lazyLeaderboard(leaderboardView, [h, derived, model.leaderboard])),
-        sectionView(h, "scatter", lazyScatter(scatterCard, [h, derived, model.scatter, card])),
+        sectionView(h, "scatter", h.div([], [lazyScatter(scatterCard, [h, derived, model.scatter, card]), lazyDrill(drillCard, [h, derived, model.maybeDrill, model.leaderboard.maybeTip])])),
         sectionView(h, "breakdown", afterFirstPaint(() => lazyBreakdown(breakdownView, [h, derived, model.heat]))),
       ]),
-      groupView(h, "watch", [sectionView(h, "matches", lazyMatches(matchesView, [h, derived.matches, derived.ratings, model.matchList]))]),
       groupView(h, "decisions", [
         ...(hasCertain(derived.certainMistakes)
           ? [
@@ -202,10 +211,21 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
         sectionView(h, "odds", afterFirstPaint(() => lazyOdds(oddsView, [h, derived.decisions, derived.seats, derived.keep, model.viewport.width, content]))),
         sectionView(h, "items", afterFirstPaint(() => lazyItems(itemUsageView, [h, derived.decisions, derived.seats, derived.filtered]))),
       ]),
-      groupView(h, "health", [
-        sectionView(h, "spend", afterFirstPaint(() => h.div([], [lazySpend(spendCard, [h, derived]), lazySeatBalance(seatBalanceView, [h, derived.matchSeats])]))),
-        afterFirstPaint(() => afterCertain(derived.certainMistakes, (certain) => lazyCertainTable(certainTableView, [h, certain, derived.seats, derived.keep, derived.allMatches, model.maybeCertainOpen]))),
+      groupView(h, "health", [sectionView(h, "spend", afterFirstPaint(() => h.div([], [lazySpend(spendCard, [h, derived]), lazySeatBalance(seatBalanceView, [h, derived.matchSeats])])))]),
+      groupView(h, "watch", [sectionView(h, "matches", lazyMatches(matchesView, [h, derived.matches, derived.ratings, model.matchList]))]),
+      groupView(h, "tables", [
+        afterFirstPaint(() =>
+          h.details(
+            [h.Class("tables")],
+            [
+              h.summary([], ["Leaderboard · Certain mistakes by config"]),
+              sectionView(h, "leaderboards", lazyLeaderboard(leaderboardView, [h, derived, model.leaderboard])),
+              afterCertain(derived.certainMistakes, (certain) => lazyCertainTable(certainTableView, [h, certain, derived.seats, derived.keep, derived.allMatches, model.maybeCertainOpen])),
+            ],
+          ),
+        ),
       ]),
+      footView(h, derived.download),
     ],
   );
 };
