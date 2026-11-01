@@ -309,15 +309,12 @@ export const blockRate = (tally: BlockTally, reps = 400): Rate => {
 
 // CONFIG STATS
 
-/** A config with fewer scored matches than this is provisional: too few to rank, and faded where it is drawn. */
 export const PROVISIONAL_BELOW = 20;
 
-/** An interval over seed blocks says nothing with fewer blocks than this, so such a config shows its counts only. */
 export const MIN_BLOCKS_FOR_INTERVAL = 4;
 
 export const isProvisional = ({ scored }: { readonly scored: ReadonlyArray<unknown> }): boolean => scored.length < PROVISIONAL_BELOW;
 
-/** The seed blocks a config's seats span. */
 export const blocksOf = (seats: ReadonlyArray<Pick<SeatFull, "seedBlock">>): number => new Set(seats.map(({ seedBlock }) => seedBlock)).size;
 
 export interface ModelStats {
@@ -353,7 +350,6 @@ export interface ModelStats {
   readonly tokens: { readonly cr: number; readonly cw: number; readonly inp: number; readonly outp: number };
 }
 
-/** List-price cost over model moves in a config's scored matches; null with no move. */
 export const costPerMove = ({ scored }: { readonly scored: ReadonlyArray<Pick<SeatFull, "cost" | "moves">> }): number | null => {
   const moves = sumOf(scored.map((seat) => seat.moves ?? 0));
 

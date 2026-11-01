@@ -137,7 +137,6 @@ export const chamberPatterns = (chamber: Chamber, isSawed: boolean, legal: Reado
 
 const sumOf = (values: ReadonlyArray<number>): number => values.reduce((total, value) => total + value, 0);
 
-/** A decision's event window: what its player saw since its previous decision. */
 export interface Window {
   readonly player: string;
   readonly events: ReadonlyArray<string>;

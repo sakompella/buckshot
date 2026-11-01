@@ -199,7 +199,6 @@ const openTourReplay = (model: Model): Return => {
   return Option.match(tourMatchOf(seats), { onNone: (): Return => ({ model }), onSome: (id) => openReplay(model, id, Option.none()) });
 };
 
-/** The result of `first`, then `next` on its model, with both commands. */
 const thenReplay = (first: Return, next: (model: Model) => Return): Return => {
   const second = next(first.model);
 

@@ -33,14 +33,12 @@ interface HeatCell {
   readonly n: number;
 }
 
-/** Matches against an opponent from which a cell's shade is at full strength; fewer fade it toward the page. */
 export const FULL_N = 10;
 
 const DARKEST = 0x26;
 const BRIGHTEST = 0xe8;
 const PAGE = 0x10;
 
-/** A grey that grows with the win share, pulled toward the page's own grey by as much as the cell lacks of FULL_N matches. */
 export const shadeOf = (value: number, n: number) => {
   const level = Math.round(PAGE + (DARKEST + value * (BRIGHTEST - DARKEST) - PAGE) * Math.min(1, n / FULL_N));
 

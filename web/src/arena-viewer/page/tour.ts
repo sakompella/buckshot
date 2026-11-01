@@ -21,7 +21,6 @@ export interface TourStep {
   readonly focus: string;
   readonly title: string;
   readonly text: string;
-  /** Whether the step is about an open replay, which the tour opens for it. */
   readonly isReplay: boolean;
 }
 
@@ -119,7 +118,6 @@ const TOUR: ReadonlyArray<TourStep> = [
   },
 ];
 
-/** The match the tour opens for its replay steps: the completed one whose seats gave up the most points, so it has turning points to show. */
 export const tourMatchOf = (seats: ReadonlyArray<Pick<SeatFull, "matchId" | "status" | "regret">>): Option.Option<string> => {
   const given = new Map<string, number>();
 

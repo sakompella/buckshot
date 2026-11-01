@@ -189,7 +189,6 @@ const gamesOf = ([x, y]: readonly [SeatFull, SeatFull]): ReadonlyArray<BlockGame
 /** Every completed two-player match in `seats`, as the games the round rating counts. */
 const gamesOfSeats = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<BlockGame> => pairsOf(seats).flatMap(gamesOf);
 
-/** A config's rating, with its seed-block bootstrap interval only when it spans enough blocks to resample. */
 export interface Rating {
   readonly rating: number;
   readonly blocks: number;

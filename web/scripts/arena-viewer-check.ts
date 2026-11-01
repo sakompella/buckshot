@@ -1435,9 +1435,6 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
   await page.close();
 };
 
-// Steps through the whole tour by keyboard: every step must highlight an element the page draws, inside the page's
-// width, and Escape must close it.
-// A click on a scatter point opens that config's drill-down under the chart, and its close button shuts it.
 const checkOddsDropped = async (page: Page, name: string) => {
   const seats = await servedSeats();
   const panels = oddsPanels(selfShotTallies(await servedPageDecisions(), seats, seats.map(() => true)));
@@ -1501,6 +1498,8 @@ const checkScatterDrill = async (page: Page, name: string, isTouch: boolean) => 
   await page.locator(".hero .title").click({ force: true });
 };
 
+// Steps through the whole tour by keyboard: every step must highlight an element the page draws, inside the page's
+// width, and Escape must close it.
 const checkTour = async (page: Page, name: string) => {
   await page.locator(".tourstart").click();
 

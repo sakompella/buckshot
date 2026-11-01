@@ -44,7 +44,6 @@ const decidedOf = (match: MatchRow): ReadonlyArray<Decided> => {
 
 const newestFirst = (left: MatchRow, right: MatchRow) => right.startedAt.localeCompare(left.startedAt);
 
-/** The worst health deficit the winner had in a round it won, and the first round it had it in. */
 const comebackOf = (winner: SeatFull): { readonly behind: number; readonly round: number } => {
   const won = winner.story?.ok === true ? winner.story.rounds.flatMap((round, index) => (round.winner === winner.player ? [{ round: index + 1, behind: winner.deficits[index] ?? 0 }] : [])) : [];
 
@@ -69,7 +68,6 @@ const presetRows = (matches: ReadonlyArray<MatchRow>, ratings: ReadonlyMap<strin
     .map(({ match, note }) => ({ match, note }));
 };
 
-/** The matches a search and a preset leave, newest first or biggest first. Every word of the search must be in a seat's label or the seed. */
 export const rowsOf = memoLast((matches: ReadonlyArray<MatchRow>, ratings: ReadonlyMap<string, Rating>, query: string, maybePreset: Option.Option<MatchPreset>): ReadonlyArray<Listed> => {
   const words = query.toLowerCase().split(/\s+/).filter((word) => word !== "");
   const haystack = (match: MatchRow) => [...match.seats.map((seat) => labelOf(keyOf(seat)).toLowerCase()), String(match.seed)];

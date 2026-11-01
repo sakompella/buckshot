@@ -106,7 +106,6 @@ export const oddsPanels = (tallies: ReadonlyMap<string, ReadonlyArray<{ readonly
     .map(([model, own]) => ({ model, lines: own.toSorted((left, right) => EFFORT_ORDER.indexOf(left.effort) - EFFORT_ORDER.indexOf(right.effort)) }));
 };
 
-/** The configs of the kept seats that no line is drawn for, strongest model and lowest effort first. */
 export const droppedConfigs = (seats: ReadonlyArray<Pick<SeatFull, "model" | "effort">>, keep: ReadonlyArray<boolean>, panels: ReturnType<typeof oddsPanels>): ReadonlyArray<string> => {
   const drawn = new Set(panels.flatMap(({ lines }) => lines.map(({ key }) => key)));
   const kept = new Set(seats.flatMap((seat, index) => (keep[index] === true ? [keyOf(seat)] : [])));
@@ -167,7 +166,6 @@ const panelView = (h: H, model: string, lines: ReadonlyArray<OddsLine>, width: n
   return isKeyedBelow ? h.div([], [chart, lineKeyView(h, lines.toSorted((left, right) => EFFORT_ORDER.indexOf(left.effort) - EFFORT_ORDER.indexOf(right.effort)).map(({ effort }) => ({ label: effort, color, dash: DASH.get(effort) ?? "" })))]) : chart;
 };
 
-/** The dropped configs by model, each with its efforts: "Opus 5.5 off, low · Sonnet 5.5 off". */
 export const droppedText = (keys: ReadonlyArray<string>): string =>
   [...groupBy(keys, (key) => key.split("|")[0] ?? "")].map(([model, own]) => `${baseName(model)} ${own.map((key) => key.split("|")[1] ?? "").join(", ")}`).join(" · ");
 

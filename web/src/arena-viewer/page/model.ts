@@ -122,7 +122,6 @@ export const Model = Schema.Struct({
   scatter: Scatter,
   heat: Heat,
   leaderboard: Leaderboard,
-  /** The config whose drill-down is open under the scatter, set by a click on its point. */
   maybeDrill: Schema.Option(Schema.String),
   maybeCertainOpen: Schema.Option(CertainCell),
   matchList: MatchList,

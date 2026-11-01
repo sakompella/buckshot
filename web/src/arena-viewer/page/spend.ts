@@ -15,7 +15,6 @@ export interface PerMove {
 
 type Config = Pick<ModelStats, "key" | "model" | "effort" | "color"> & { readonly scored: ReadonlyArray<Pick<SeatFull, "cost" | "moves">> };
 
-/** Each config's list-price cost per model move in its scored matches, leaving out those that cost nothing. */
 export const perMoveOf = (stats: ReadonlyArray<Config>): ReadonlyArray<PerMove> =>
   stats.flatMap(({ key, model, effort, color, scored }) => {
     const cost = costPerMove({ scored });

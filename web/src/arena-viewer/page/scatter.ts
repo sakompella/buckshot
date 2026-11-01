@@ -120,7 +120,6 @@ interface Point {
 
 const dominates = (other: Point, point: Point) => other.x <= point.x && other.rating >= point.rating && (other.x < point.x || other.rating > point.rating);
 
-/** The best-value line runs through ranked configs only: a provisional config rests on too few matches to set it. */
 export const frontierOf = (points: ReadonlyArray<Point>) => {
   const ranked = points.filter(({ m }) => !isProvisional(m));
 
