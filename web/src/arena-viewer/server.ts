@@ -279,6 +279,8 @@ export const serveArenaViewer = (dbPath: string, hostname: string, port: number,
   return Bun.serve({
     hostname,
     port,
+    // With routes, Bun otherwise shares the port with a viewer already on it and splits requests between the two.
+    reusePort: false,
     development: false,
     routes: {
       "/": page,

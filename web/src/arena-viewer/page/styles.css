@@ -110,12 +110,6 @@ tr.drill td { background: #050505; white-space: normal; text-align: left; }
 .dv { white-space: nowrap; }
 .dline.seatline { margin-top: 30px; padding: 0; border: 0; font-size: 13.5px; }
 .drillin .fates, .drillin .fate-legend { max-width: 560px; }
-.opp { display: grid; grid-template-columns: 240px 90px 1fr; gap: 10px; align-items: center; padding: 3px 0; border-bottom: 1px solid #111; }
-.opp .on { color: var(--fg); font-size: 12px; }
-.opp .ow { text-align: right; font-size: 12px; }
-.sq { display: flex; flex-wrap: wrap; gap: 2px; }
-.sq i { width: 11px; height: 11px; border-radius: 2px; cursor: pointer; }
-.sq i:hover { outline: 1px solid #fff; }
 
 pre { white-space: pre-wrap; word-break: break-word; background: #0a0a0a; border: 1px solid #1d1d1d; border-radius: 6px; padding: 8px 10px; font: 12px/1.45 ui-monospace, Menlo, monospace; color: #cfcfcf; margin: 4px 0 8px; }
 details summary { cursor: pointer; margin: 4px 0; }
@@ -316,7 +310,6 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
   .modal .x { width: 44px; height: 44px; right: 4px; top: 4px; }
   .moves .step { min-height: 44px; }
   table.heat td.cellv, table.heat td.left, table.heat td.total { height: 44px; }
-  .sq i { width: 22px; height: 22px; }
   .fate-hit { height: 44px; align-items: center; background: linear-gradient(#0d0d0d, #0d0d0d) center / 100% 12px no-repeat; }
   .fate-hit i { height: 12px; }
   details > summary { min-height: 44px; display: flex; align-items: center; }
@@ -405,9 +398,6 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
   table.heat td.left { white-space: normal; min-width: 112px; max-width: 132px; font-size: 11px; line-height: 1.25; padding: 3px 8px 3px 0; }
   table.heat th { max-width: 64px; font-size: 10.5px; }
   table.heat td.cellv { min-width: 48px; }
-
-  .opp { grid-template-columns: 1fr auto; gap: 4px 10px; padding: 6px 0; }
-  .opp .sq { grid-column: 1 / -1; }
 
   .overlay { align-items: stretch; }
   .modal { width: 100vw; height: 100dvh; border: 0; border-radius: 0; padding: 10px 12px 0; }

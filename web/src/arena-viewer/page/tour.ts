@@ -113,7 +113,7 @@ const TOUR: ReadonlyArray<TourStep> = [
     anchor: "leaderboards",
     focus: "#leaderboards .lbt tbody tr:first-child",
     title: "A config's row",
-    text: "A click on a row opens its matches by opponent, one square per match, then how steady it is, how much it writes when behind or ahead, and what became of its items. Faded rows rest on few scored matches and have no rank.",
+    text: "A click on a row shows how steady it is, how much it writes when behind or ahead, and what became of its items. Faded rows rest on few scored matches and have no rank.",
     isReplay: false,
   },
 ];

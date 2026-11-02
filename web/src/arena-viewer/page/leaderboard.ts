@@ -88,7 +88,7 @@ const rowView = (h: H, m: ModelStats, rank: number | undefined, elo: Rating | un
 const detailsView = (h: H, details: ReadonlyArray<Detail>): Html =>
   h.dl([h.Class("drillstats")], details.flatMap(({ label, title, content }) => [h.dt([], [label]), h.dd(title === "" ? [] : [h.Title(title)], [...content])]));
 
-export const configPanelView = (h: H, derived: Derived, key: string, maybeTip: Option.Option<string>): Html => {
+export const configPanelView = (h: H, derived: Derived, key: string): Html => {
   const m = derived.pooled.find((candidate) => candidate.key === key);
 
   if (m === undefined) return h.empty;
@@ -112,7 +112,7 @@ export const configPanelView = (h: H, derived: Derived, key: string, maybeTip: O
         ],
       ),
       detailsView(h, details),
-      drillView(h, m, derived, maybeTip),
+      drillView(h, m, derived),
     ],
   );
 };
@@ -185,7 +185,7 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
 
                   return [
                     rowView(h, m, ranks.get(m.key), ratings.get(m.key), scale, details, isOpen),
-                    isOpen ? h.keyed("tr")(`drill-${m.id}`, [h.Class("drill")], [h.td([h.Colspan(headers.length)], [detailsView(h, details), drillView(h, m, derived, leaderboard.maybeTip)])]) : h.empty,
+                    isOpen ? h.keyed("tr")(`drill-${m.id}`, [h.Class("drill")], [h.td([h.Colspan(headers.length)], [detailsView(h, details), drillView(h, m, derived)])]) : h.empty,
                   ];
                 }),
               ),
