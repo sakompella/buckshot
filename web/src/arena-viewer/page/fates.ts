@@ -101,7 +101,7 @@ export interface Behavior {
 
 const NO_BEHAVIOR: Behavior = { moves: 0, available: 0, usedWhenAvailable: 0, itemActions: 0 };
 
-export const addBehavior = (left: Behavior, right: Behavior): Behavior => ({
+const addBehavior = (left: Behavior, right: Behavior): Behavior => ({
   moves: left.moves + right.moves,
   available: left.available + right.available,
   usedWhenAvailable: left.usedWhenAvailable + right.usedWhenAvailable,

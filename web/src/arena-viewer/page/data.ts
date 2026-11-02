@@ -314,7 +314,7 @@ export const blockRate = (tally: BlockTally, reps = 400): Rate => {
 
 // CONFIG STATS
 
-export const PROVISIONAL_BELOW = 20;
+const PROVISIONAL_BELOW = 20;
 
 export const MIN_BLOCKS_FOR_INTERVAL = 4;
 

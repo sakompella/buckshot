@@ -10,7 +10,7 @@ import { type CertainCell, Message } from "./model.ts";
 
 type H = HtmlBuilder<Message>;
 
-export const CERTAIN_TABLE = "certain-table";
+const CERTAIN_TABLE = "certain-table";
 
 const FEWEST_FOR_RATE = 20;
 

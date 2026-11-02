@@ -166,7 +166,7 @@ export const CertainType = Schema.Literals(CERTAIN_TYPES);
 
 export type CertainType = typeof CertainType.Type;
 
-export const OPPORTUNITY_TYPES = [...CERTAIN_TYPES, "hidden_health", "gave_turn_away"] as const;
+const OPPORTUNITY_TYPES = [...CERTAIN_TYPES, "hidden_health", "gave_turn_away"] as const;
 
 export const OpportunityType = Schema.Literals(OPPORTUNITY_TYPES);
 
@@ -192,7 +192,7 @@ export const CertainMistakes = Schema.Struct({ rates: Schema.Array(CertainRate),
 export type CertainMistakes = typeof CertainMistakes.Type;
 
 /** Bit order of Decisions' opp and pick masks. */
-export const PATTERNS = [
+const PATTERNS = [
   "knownBlankOpp",
   "knownLiveSelf",
   "countLiveSelf",
