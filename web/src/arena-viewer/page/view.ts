@@ -2,8 +2,9 @@ import { Option } from "effect";
 import { AsyncData } from "foldkit";
 import { createLazy, type Document, type Html, type HtmlBuilder } from "foldkit/html";
 
+import { EFFORTS } from "../../arena/model-names.ts";
 import type { CertainMistakes } from "../api.ts";
-import { baseName, baseOrder, colorOf, EFFORTS, fmtBytes, fmtCount, sumOf, unique } from "./data.ts";
+import { baseName, baseOrder, colorOf, fmtBytes, fmtCount, sumOf, unique } from "./data.ts";
 import { tipView } from "./charts.ts";
 import { certainTableView, certainView, hasCertain } from "./certain.ts";
 import { type Derived, derive } from "./derived.ts";

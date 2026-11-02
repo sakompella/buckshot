@@ -1,8 +1,10 @@
+import { EFFORTS } from "../../arena/model-names.ts";
 import type { CertainType, Seat, Story } from "../api.ts";
 
 // The page's numbers: model labels and colours, per-config stats, ratings and intervals.
 
-export const EFFORTS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+/** Sorts efforts weakest first; one model-names.ts does not list sorts before them all. */
+export const byEffort = (left: string, right: string): number => EFFORTS.indexOf(left) - EFFORTS.indexOf(right);
 
 export const DEFAULT_EFFORT = "medium";
 
@@ -84,7 +86,7 @@ export const isClaude = (model: string): boolean => model.startsWith("claude");
 /** A config: one model at one effort. */
 export const keyOf = (seat: { readonly model: string; readonly effort: string }): string => `${seat.model}|${seat.effort}`;
 
-const splitKey = (key: string): readonly [string, string] => {
+export const splitKey = (key: string): readonly [string, string] => {
   const [model = "", effort = ""] = key.split("|");
 
   return [model, effort];
