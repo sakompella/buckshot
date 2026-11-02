@@ -1,0 +1,54 @@
+{
+  "name": "astra-self",
+  "seed": 4054,
+  "delivery": "on-turn",
+  "endpoints": {
+    "cpa-openai": {
+      "api": "openai-responses",
+      "url": "https://hub.dog-minnow.ts.net/v1",
+      "keyEnv": "CPA_KEY"
+    }
+  },
+  "entrants": {
+    "gpt-6-astra": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6-astra",
+      "effort": "medium"
+    },
+    "gpt-6-astra-low": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6-astra",
+      "effort": "low"
+    },
+    "gpt-6-astra-high": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6-astra",
+      "effort": "high"
+    }
+  },
+  "pairings": [
+    {
+      "entrants": [
+        "gpt-6-astra-low",
+        "gpt-6-astra"
+      ],
+      "seeds": [
+        4054,
+        4055,
+        4058
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6-astra-high",
+        "gpt-6-astra"
+      ],
+      "seeds": [
+        4054,
+        4055,
+        4058
+      ]
+    }
+  ],
+  "blocksPerPairing": 3
+}
