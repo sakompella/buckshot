@@ -109,7 +109,7 @@ const addBehavior = (left: Behavior, right: Behavior): Behavior => ({
 });
 
 export const behaviorBySeat = memoLast((decisions: Pick<Decisions, "seat" | "legalUse" | "useItem">, seatCount: number): ReadonlyArray<Behavior> => {
-  const tallies = Array.from({ length: seatCount }, () => ({ moves: 0, available: 0, usedWhenAvailable: 0, itemActions: 0 }));
+  const tallies = Array.from({ length: seatCount }, () => ({ ...NO_BEHAVIOR }));
 
   decisions.seat.forEach((seatIndex, move) => {
     const tally = tallies[seatIndex];
@@ -147,9 +147,10 @@ const useRowsOf = (decisions: Decisions, seats: ReadonlyArray<SeatFull>, focal: 
   return [...groupBy(focal, ({ model }) => model)]
     .toSorted(([left], [right]) => baseOrder(left) - baseOrder(right))
     .map(([model, played]): UseRow => {
-      const { moves, available, usedWhenAvailable, itemActions } = played.reduce((sum, seat) => addBehavior(sum, bySeat[indexOf.get(seat) ?? -1] ?? NO_BEHAVIOR), NO_BEHAVIOR);
+      const behavior = played.reduce((sum, seat) => addBehavior(sum, bySeat[indexOf.get(seat) ?? -1] ?? NO_BEHAVIOR), NO_BEHAVIOR);
+      const { moves, available, itemActions } = behavior;
       const name = baseName(model);
-      const share = useShare({ moves, available, usedWhenAvailable, itemActions });
+      const share = useShare(behavior);
       const used = share === null ? "no move had an item available" : `${pct(share)} of ${available.toLocaleString()} moves with an item available used one`;
       const perHundred = moves === 0 ? "" : `, ${(itemActions / moves * 100).toFixed(1)} item actions per 100 of ${moves.toLocaleString()} moves`;
 
