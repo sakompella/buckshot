@@ -90,10 +90,13 @@ const splitKey = (key: string): readonly [string, string] => {
   return [model, effort];
 };
 
+/** Models with no reasoning-off whose "off" config is low effort plus the immediate-recall prompt (ADR-0048), marked with an asterisk. */
+const PROMPTED_OFF: ReadonlySet<string> = new Set(["gpt-6-astra"]);
+
 export const labelOf = (key: string): string => {
   const [model, effort] = splitKey(key);
 
-  return `${baseName(model)} ${effort}`;
+  return `${baseName(model)} ${effort}${effort === "off" && PROMPTED_OFF.has(model) ? "*" : ""}`;
 };
 
 export const CERTAIN_NAMES: Readonly<Record<CertainType, string>> = {

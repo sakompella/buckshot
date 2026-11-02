@@ -16,7 +16,8 @@ import type { AgentId } from "./agent.ts";
 // PLAYER_A_MODEL and an optional PLAYER_A_EFFORT; B to D likewise. An optional
 // PLAYER_A_CPA_AUTH_ID pins every request of the agent to one CLIProxyAPI
 // account, by sending its id in X-CPA-Auth-ID; without it no header is sent and
-// the proxy picks the account. A model id
+// the proxy picks the account. An optional PLAYER_A_INSTRUCTIONS_ADDENDUM is
+// text appended to the shared instructions for that agent only (ADR-0048). A model id
 // pi-ai does not list, such as a proxy's alias, names the catalog model it
 // stands for in PLAYER_A_CATALOG_MODEL: a model of the endpoint's API, or a
 // model of another pi-ai provider after its name and a slash, such as
@@ -35,6 +36,8 @@ const EndpointFields = {
   effort: Schema.optional(Schema.Literals(THINKING_LEVELS)),
   /** The CLIProxyAPI account every request is pinned to. An id, not a secret. */
   cpaAuthId: Schema.optional(Schema.NonEmptyString),
+  /** Text appended to the shared instructions for this agent only. */
+  instructionsAddendum: Schema.optional(Schema.NonEmptyString),
 };
 
 export const Endpoint = Schema.TaggedUnion({
@@ -103,6 +106,7 @@ export const agentEndpoint = (agent: AgentId) =>
       catalogModel: Config.option(Config.NonEmptyString(name("CATALOG_MODEL"))),
       effort: Config.option(Config.Literals(THINKING_LEVELS, name("EFFORT"))),
       cpaAuthId: Config.option(Config.NonEmptyString(name("CPA_AUTH_ID"))),
+      instructionsAddendum: Config.option(Config.NonEmptyString(name("INSTRUCTIONS_ADDENDUM"))),
     }).pipe(
       Effect.mapError((error) => new EndpointConfigError({ message: error.message })),
     );
@@ -111,7 +115,7 @@ export const agentEndpoint = (agent: AgentId) =>
 
     if (Option.isNone(settings.model)) return yield* new EndpointConfigError({ message: `${name("MODEL")} must be set` });
 
-    const fields = { model: settings.model.value, catalogModel: Option.getOrUndefined(settings.catalogModel), effort: Option.getOrUndefined(settings.effort), cpaAuthId: Option.getOrUndefined(settings.cpaAuthId) };
+    const fields = { model: settings.model.value, catalogModel: Option.getOrUndefined(settings.catalogModel), effort: Option.getOrUndefined(settings.effort), cpaAuthId: Option.getOrUndefined(settings.cpaAuthId), instructionsAddendum: Option.getOrUndefined(settings.instructionsAddendum) };
 
     const notListed = (endpoint: Endpoint): string =>
       Option.match(settings.catalogModel, {
@@ -238,6 +242,8 @@ export const AgentProvenance = Schema.Struct({
   effort: Schema.NullOr(Schema.String),
   /** The CLIProxyAPI account the agent is pinned to; absent when it is not, as before the pin existed. */
   cpa_auth_id: Schema.optionalKey(Schema.String),
+  /** The text appended to the shared instructions for this agent only; absent when the agent plays on the shared instructions alone. */
+  instructions_addendum: Schema.optionalKey(Schema.String),
   /**
    * How the model is asked to think at that effort: not at all, only between tool calls (Claude Sonnet 5.5 at off),
    * Anthropic adaptive thinking at an effort, an Anthropic thinking budget, or an OpenAI reasoning effort. `summary` is
@@ -291,5 +297,7 @@ const thinkingOf = (endpoint: Endpoint, model: Model<Api>): AgentProvenance["thi
 export const provenanceOf = (providerId: string, endpoint: Endpoint): AgentProvenance => {
   const provenance = { api: endpoint._tag, provider: providerId, url: baseUrlOf(endpoint.url), model: endpoint.model, catalog_model: endpoint.catalogModel ?? null, effort: endpoint.effort ?? null, thinking: thinkingOf(endpoint, listedModelOf(endpoint)) };
 
-  return endpoint.cpaAuthId === undefined ? provenance : { ...provenance, cpa_auth_id: endpoint.cpaAuthId };
+  const pinned = endpoint.cpaAuthId === undefined ? provenance : { ...provenance, cpa_auth_id: endpoint.cpaAuthId };
+
+  return endpoint.instructionsAddendum === undefined ? pinned : { ...pinned, instructions_addendum: endpoint.instructionsAddendum };
 };
