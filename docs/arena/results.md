@@ -290,15 +290,15 @@ Ten games per config is a small sample: read single cells as rough. Two patterns
 
 Only three pairings played 5 seeds in both seats (10 matches): Opus max against low, medium and xhigh. The top-four round robin also plays 5 seeds per pair. Everything else is one seed in both seats (2 matches per pairing), so a single pairing says very little. **Provisional (under 20 matches in total):** Opus off (12), Astra low (12), Astra high (8), and Terra 6.1 off (8), low (8), high (8), xhigh (10) and max (4). Opus max (40 matches) and Terra 6.1 medium (20) are not provisional.
 
-- **Opus max:** 24 wins in 40 matches (60%), pooled rating +145. Before this tournament it had 8 matches and +334, so that was a small-sample high.
+- **Opus max:** 24 wins in 40 matches (60%), pooled rating +145 (95% interval +34 to +264). Before this tournament it had 8 matches and +334, so that was a small-sample high.
   - Against its own efforts, 5 seeds in both seats: 7-3 against low, 6-4 against medium, 5-5 against xhigh. The 95% intervals on those shares span 60 to 70 points (20% to 80% for xhigh), so none is settled.
   - Against Sonnet, Haiku 5.5, Astra, Sol and Terra 6.1 at medium, one seed each: 6 wins in 10.
   - On the pooled scale it sits with Opus xhigh (+154) and above medium (+86), high (+86) and low (-6).
-- **Terra 6.1:** results at all six efforts, no trend. Medium has 20 matches, 10 wins, +37. The others: off 4 of 8 (+19), low 5 of 8 (+99), high 2 of 8 (-136), xhigh 4 of 10 (-8), max 3 of 4 (+234).
+- **Terra 6.1:** results at all six efforts, no trend. Medium has 20 matches, 10 wins, +37 (-92 to +147). The others: off 4 of 8 (+19), low 5 of 8 (+99), high 2 of 8 (-136), xhigh 4 of 10 (-8), max 3 of 4 (+234).
   - Against each other: low beat off 2-0, xhigh beat high 2-0, max beat xhigh 2-0, medium beat xhigh 2-0, and medium split 1-1 with off, low and high.
   - Terra 6.1 medium (+37) is above Terra 5.6 medium (-40), on 20 matches against 256.
-- **Opus off:** 7 wins in 12 matches (58%), +93. It split 1-1 with Opus low, medium, high, Haiku 5.5 medium and Luna xhigh, and beat Sonnet off 2-0. That is level with Opus medium and high (+86); with 12 matches it can't be placed.
-- **Astra low and high:** low won 7 of 12 (+88), high won 3 of 8 (-5), against Astra medium at +157 (253 matches).
+- **Opus off:** 7 wins in 12 matches (58%), +93 (-11 to +240). It split 1-1 with Opus low, medium, high, Haiku 5.5 medium and Luna xhigh, and beat Sonnet off 2-0. That is level with Opus medium and high (+86); with 12 matches it can't be placed.
+- **Astra low and high:** low won 7 of 12 (+88, -81 to +291), high won 3 of 8 (-5, -312 to +139), against Astra medium at +157 (253 matches).
   - Astra medium beat Astra low 2-0 and split 1-1 with Astra high.
   - Low: Sonnet medium 2-0 for low, Luna medium 2-0, 1-1 with Opus, Haiku 5.5 and Sol at medium.
   - High: lost 0-2 to Sonnet medium, 1-1 with Opus and Sol at medium.
