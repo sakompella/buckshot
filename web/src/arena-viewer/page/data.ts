@@ -324,7 +324,6 @@ export const blocksOf = (seats: ReadonlyArray<Pick<SeatFull, "seedBlock">>): num
 
 export interface ModelStats {
   /** The config key. */
-  readonly id: string;
   readonly key: string;
   readonly model: string;
   readonly effort: string;
@@ -362,7 +361,7 @@ export const costPerMove = ({ scored }: { readonly scored: ReadonlyArray<Pick<Se
 };
 
 export const modelStats = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<ModelStats> =>
-  [...groupBy(seats, keyOf)].flatMap(([id, started]) => {
+  [...groupBy(seats, keyOf)].flatMap(([key, started]) => {
     const [first] = started;
 
     if (first === undefined) return [];
@@ -377,11 +376,10 @@ export const modelStats = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<ModelS
 
     return [
       {
-        id,
-        key: keyOf(first),
+        key,
         model: first.model,
         effort: first.effort,
-        label: labelOf(keyOf(first)),
+        label: labelOf(key),
         color: colorOf(first.model),
         dash: DASH.get(first.effort) ?? "",
         started,

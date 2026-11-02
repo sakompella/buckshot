@@ -72,8 +72,8 @@ const eloBarView = (h: H, scale: EloScale, m: ModelStats, elo: Rating | undefine
 
 const rowView = (h: H, m: ModelStats, rank: number | undefined, elo: Rating | undefined, scale: EloScale, details: ReadonlyArray<Detail>, isOpen: boolean): Html => {
   return h.keyed("tr")(
-    m.id,
-    [h.Class(`row ${isOpen ? "sel" : ""} ${isProvisional(m) ? "provisional" : ""}`), h.AriaExpanded(isOpen), ...pressable(h, Message.ClickedLeaderboardRow({ id: m.id }))],
+    m.key,
+    [h.Class(`row ${isOpen ? "sel" : ""} ${isProvisional(m) ? "provisional" : ""}`), h.AriaExpanded(isOpen), ...pressable(h, Message.ClickedLeaderboardRow({ id: m.key }))],
     [
       h.td([], [h.span([h.Class("rk")], [rank === undefined ? "" : String(rank)]), h.span([h.Class(`dot ${isClaude(m.model) ? "a" : "o"}`), h.Style({ background: m.color })], []), `${baseName(m.model)} `, h.span([h.Class("eff")], [`[${m.effort}]`])]),
       h.td([h.DataAttribute("label", "round elo")], ratingView(h, elo)),
@@ -96,7 +96,7 @@ export const configPanelView = (h: H, derived: Derived, key: string): Html => {
   const details = detailsOf(
     h,
     m,
-    derived.items.get(m.id),
+    derived.items.get(m.key),
     derived.everyPooled.some(({ regret }) => regret !== null),
   );
 
@@ -179,13 +179,13 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
               h.tbody(
                 [],
                 configs.flatMap((m) => {
-                  const isOpen = Option.exists(leaderboard.maybeOpen, (open) => open === m.id);
+                  const isOpen = Option.exists(leaderboard.maybeOpen, (open) => open === m.key);
 
-                  const details = detailsOf(h, m, items.get(m.id), hasRegret);
+                  const details = detailsOf(h, m, items.get(m.key), hasRegret);
 
                   return [
                     rowView(h, m, ranks.get(m.key), ratings.get(m.key), scale, details, isOpen),
-                    isOpen ? h.keyed("tr")(`drill-${m.id}`, [h.Class("drill")], [h.td([h.Colspan(headers.length)], [detailsView(h, details), drillView(h, m, derived)])]) : h.empty,
+                    isOpen ? h.keyed("tr")(`drill-${m.key}`, [h.Class("drill")], [h.td([h.Colspan(headers.length)], [detailsView(h, details), drillView(h, m, derived)])]) : h.empty,
                   ];
                 }),
               ),
