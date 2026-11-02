@@ -122,8 +122,12 @@ The move the arena plays for an agent that ended its turn without moving, and ag
 **Reminder**:
 The one fixed message an agent gets when it ends its turn without moving: "It is still your turn; call play_move with one of the listed moves."
 
+**Instructions addendum**:
+Text a tournament entrant adds after the shared instructions, for its agent only. It is the one way agents' prompts differ, and the entrant is named for it. The match's instructions hash covers the shared instructions only.
+_Avoid_: system prompt override
+
 **Provenance**:
-What a match records when it starts about what decides its play: the code and instructions hashes and each agent's endpoint, model, effort and resolved thinking settings. A resume must bring the same, keys aside.
+What a match records when it starts about what decides its play: the code and instructions hashes and each agent's endpoint, model, effort, resolved thinking settings and instructions addendum. A resume must bring the same, keys aside.
 
 **Intervention**:
 A fallback move, counted against the agent it was played for, because the agent ended its turn without a move even after the arena's one reminder. A reminder alone is not an intervention. A match with an intervention is still scored, and the tournament stats flag it.

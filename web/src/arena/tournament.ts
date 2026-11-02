@@ -16,7 +16,7 @@ const EntrantName = Schema.String.check(Schema.isPattern(/^[a-z0-9][a-z0-9.-]*$/
 
 const TournamentEndpoint = Schema.Struct({ api: Schema.Literals(["anthropic", "openai-responses"]), url: Schema.NonEmptyString, keyEnv: Schema.NonEmptyString, accounts: Schema.optional(Schema.NonEmptyArray(Schema.NonEmptyString)) });
 
-const ModelEntrant = Schema.Struct({ endpoint: Schema.NonEmptyString, model: Schema.NonEmptyString, catalogModel: Schema.optional(Schema.NonEmptyString), effort: Schema.Literals(THINKING_LEVELS) });
+const ModelEntrant = Schema.Struct({ endpoint: Schema.NonEmptyString, model: Schema.NonEmptyString, catalogModel: Schema.optional(Schema.NonEmptyString), effort: Schema.Literals(THINKING_LEVELS), instructionsAddendum: Schema.optional(Schema.NonEmptyString), effortLabel: Schema.optional(Schema.NonEmptyString) });
 
 const BotEntrant = Schema.Struct({ bot: Schema.Literals(BOTS) });
 
@@ -319,6 +319,7 @@ export const childEnv = (base: Env, config: TournamentConfig, match: ScheduledMa
       [`${prefix}MODEL`, entrant.model],
       ...(entrant.catalogModel === undefined ? [] : [[`${prefix}CATALOG_MODEL`, entrant.catalogModel]]),
       [`${prefix}EFFORT`, entrant.effort],
+      ...(entrant.instructionsAddendum === undefined ? [] : [[`${prefix}INSTRUCTIONS_ADDENDUM`, entrant.instructionsAddendum]]),
       ...(accounts[seat] === undefined ? [] : [[`${prefix}CPA_AUTH_ID`, accounts[seat]]]),
     ] as const;
   });

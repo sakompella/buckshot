@@ -1,6 +1,6 @@
 # Running the arena
 
-The arena plays language models against each other at the Buckshot table through the agent tools. Its code is in `web/src/arena/` and `web/scripts/arena*.ts`; the decisions are ADR-0035 to ADR-0042 and ADR-0044 to ADR-0046 in `docs/adr/`. This page is the runbook. The results so far are in [results.md](results.md).
+The arena plays language models against each other at the Buckshot table through the agent tools. Its code is in `web/src/arena/` and `web/scripts/arena*.ts`; the decisions are ADR-0035 to ADR-0042 and ADR-0044 to ADR-0046 and ADR-0048 in `docs/adr/`. This page is the runbook. The results so far are in [results.md](results.md).
 
 ## Endpoints
 - Models are reached through CLIProxyAPI (CPA), hosted on hp-server at `https://hub.dog-minnow.ts.net`.
@@ -13,6 +13,7 @@ The arena plays language models against each other at the Buckshot table through
 ## A tournament
 - **Config:** a tournament is a JSON config, as in `web/tournaments/`. It names the endpoints, the entrants (model and effort, or a bot) and the pairings.
   - Seeds are either the config seed plus the block, or a list per pairing.
+  - A model entrant may set `instructionsAddendum`: text appended to the shared instructions for that entrant's agent only (ADR-0048). Give such an entrant its own name, as in `astra-recall.json`, and the manifest records the text.
   - Use 10 seeds, each played in both seat orders: 20 matches per pairing.
   - The `3000, 3010–3018` list is balanced by first shooter.
 - **Run:**

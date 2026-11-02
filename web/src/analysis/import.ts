@@ -111,7 +111,7 @@ export const importTournaments = ({ database, sources, skipped = {} }: ImportOpt
 
         for (const [name, entrant] of Object.entries(file.config.entrants)) {
           const endpoint = "endpoint" in entrant ? file.config.endpoints[entrant.endpoint] : undefined;
-          put("entrants", { id: sha(`${tournamentId}\0${name}`), tournament_id: tournamentId, name, model: "model" in entrant ? entrant.model : null, effort: "effort" in entrant ? entrant.effort : null, provider: endpoint?.api ?? null, endpoint_category: "endpoint" in entrant ? entrant.endpoint : "bot", config_json: json(entrant) });
+          put("entrants", { id: sha(`${tournamentId}\0${name}`), tournament_id: tournamentId, name, model: "model" in entrant ? entrant.model : null, effort: "effort" in entrant ? (entrant.effortLabel ?? entrant.effort) : null, provider: endpoint?.api ?? null, endpoint_category: "endpoint" in entrant ? entrant.endpoint : "bot", config_json: json(entrant) });
         }
 
         const scheduledNames = new Set(file.schedule.map((match) => match.name));

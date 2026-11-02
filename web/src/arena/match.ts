@@ -53,7 +53,7 @@ const ITEM_FACTS = [
   "Rounds: every player starts each round with fresh health, empty slots and no jams. Prizes are 70,000, 75,000 and 80,000. Round 1 starts with a random player, later rounds with the player who died first in the round before.",
 ].join("\n");
 
-/** The same for every player; the arena adds nothing per model. */
+/** The shared instructions every player gets. An agent may get an addendum after them (agentInstructions); no one gets a different version. */
 export const INSTRUCTIONS = `${RULES} You are one of the players. On each of your turns you get your view as JSON: you, your player letter; turn, to pass to play_move; players, with health (not shown while jammed), items and, while players grab from the briefcase, holding; gun, with sawed when it is; events, the entries of the match log you have not been sent yet; and moves, your legal moves, each with its number. Play one with play_move, giving its number and the turn. Make exactly one play_move call per reply. get_game shows your view again, without log entries. Log entries say what happened, and what only you learned from the magnifying glass or the phone. Each entry reaches you once, with your turn or in a message between turns, so remember what you need. When your only move is "Grab an item", it is played for you. Your goal is to finish the match with the most cash.\n\n${ITEM_FACTS}`;
 
 const GRAB = "Grab an item";
@@ -65,6 +65,9 @@ const GRAB = "Grab an item";
 export const DELIVERIES = ["on-turn", "live"] as const;
 
 export type Delivery = (typeof DELIVERIES)[number];
+
+/** The instructions one agent's conversation starts with: the shared ones, then its addendum if its entrant has one. */
+const agentInstructions = ({ provenance }: Entrant): string => (provenance.instructions_addendum === undefined ? INSTRUCTIONS : `${INSTRUCTIONS}\n\n${provenance.instructions_addendum}`);
 
 /** One agent: its letter, the model it plays with, and its provenance, which the match fixes when it starts. */
 export interface Entrant {
@@ -99,7 +102,10 @@ type MoveLine = { readonly turn: number; readonly player: Letter; readonly move:
 /** Log entries sent to a player: `count` entries of its log from `from`. */
 type DeliveryLine = { readonly player: Letter; readonly via: "input" | "live" | "end"; readonly turn: number; readonly from: number; readonly count: number };
 
-/** What decides how a match plays, fixed when it starts; a resume with anything else is refused. */
+/**
+ * What decides how a match plays, fixed when it starts; a resume with anything else is refused. `instructions_sha` covers
+ * the shared instructions only; an agent's addendum is in its own provenance entry.
+ */
 type MatchProvenance = { code_sha: string; instructions_sha: string; compaction: "off"; agents: Record<string, AgentProvenance> };
 
 type MatchState = {
@@ -563,7 +569,7 @@ export const playMatch = (match: ArenaMatch) =>
           store.createConversation(
             {
               ownership: { kind: "ownerless" },
-              agent: { model: entrant.model, thinkingLevel: entrant.thinkingLevel ?? null, instructions: INSTRUCTIONS, extensions: [extension] },
+              agent: { model: entrant.model, thinkingLevel: entrant.thinkingLevel ?? null, instructions: agentInstructions(entrant), extensions: [extension] },
               init: async (tx, id) => void Object.assign(await tx.doc(SeatDoc, id), sitting),
             },
             context,

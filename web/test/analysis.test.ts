@@ -162,6 +162,22 @@ test("a changed tournament config revalidates unchanged matches, as a fresh rebu
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test("an entrant with an effort label is filed under it, and the others under their effort", async () => {
+  const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
+
+  try {
+    const { source } = await probeTournament(root, "medium");
+    const database = join(root, "analysis.sqlite");
+    const file = JSON.parse(readFileSync(join(source, "tournament.json"), "utf8"));
+
+    file.config.entrants.a.effortLabel = "off";
+    writeFileSync(join(source, "tournament.json"), JSON.stringify(file));
+    importTournaments({ database, sources: [source] });
+    expect(rowsOf(database, "SELECT name, effort FROM entrants ORDER BY name")).toEqual([{ name: "a", effort: "off" }, { name: "b", effort: "medium" }]);
+    expect(rowsOf(database, "SELECT message FROM issues")).toEqual([]);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test("importing the same tournament from a new directory leaves every row and source observation pointing at the new one", async () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 

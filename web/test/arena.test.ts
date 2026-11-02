@@ -1,9 +1,10 @@
 import { expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { type AssistantMessage, contentText, createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall, type Message, type TranscriptContext } from "@earendil-works/pi-ai";
+import { type AssistantMessage, contentText, createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall, getSystemMessageText, type Message, type TranscriptContext } from "@earendil-works/pi-ai";
 import { ConfigProvider, Effect, Exit, Schema } from "effect";
 
 import { AGENTS, AgentId } from "../src/arena/agent.ts";
@@ -51,13 +52,18 @@ const fauxMatch = (controllers: ReadonlyArray<Controller>, seed: string, context
     agents = AGENTS,
     provenance = fauxProvenance,
     crashAt,
-  }: { readonly dir?: string; readonly agents?: ReadonlyArray<AgentId>; readonly provenance?: (modelId: string) => AgentProvenance; readonly crashAt?: (point: string) => void } = {},
+    onRequest,
+  }: { readonly dir?: string; readonly agents?: ReadonlyArray<AgentId>; readonly provenance?: (modelId: string) => AgentProvenance; readonly crashAt?: (point: string) => void; readonly onRequest?: (transcript: TranscriptContext) => void } = {},
 ) => {
   const faux = fauxProvider({ provider: "faux", models: [{ id: "faux-a", contextWindow, maxTokens: 512 }, { id: "faux-b", contextWindow, maxTokens: 512 }] });
   const models = createModels();
   const seated = agents.slice(0, controllers.filter((controller) => controller === "Agent").length);
 
-  faux.setResponses(Array.from({ length: 5_000 }, () => decide));
+  faux.setResponses(Array.from({ length: 5_000 }, () => (transcript: TranscriptContext) => {
+    onRequest?.(transcript);
+
+    return decide(transcript);
+  }));
   models.setProvider(faux.provider);
 
   return playMatch({
@@ -98,6 +104,59 @@ test("a match records its account pin and refuses a different account on resume"
 
   expect(Exit.isFailure(changed) && String(changed.cause)).toContain("cannot resume with this one");
   expect(Exit.isSuccess(await Effect.runPromiseExit(fauxMatch(["Agent", "DoN"], "3", 200_000, "on-turn", { dir, provenance: pinned("account-a") })))).toBe(true);
+});
+
+const sha256Head = (text: string) => createHash("sha256").update(text).digest("hex").slice(0, 12);
+
+const ADDENDUM = "Answer in as few words as you can.";
+
+/** Agent A's provenance carries the addendum; the other agents' do not. */
+const withAddendum = (addendum: string) => (modelId: string) => (modelId === "faux-a" ? { ...fauxProvenance(modelId), instructions_addendum: addendum } : fauxProvenance(modelId));
+
+test("an agent's instructions addendum reaches its own system prompt only, and the manifest records it", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "arena-addendum-test-"));
+  const systemPromptsOf = new Map<string, Set<string>>();
+
+  const record = (transcript: TranscriptContext) => {
+    const system = transcript.messages.find((message) => message.role === "system");
+    const opening = transcript.messages.find((message) => message.role === "user" && textOf(message).startsWith("Your turn."));
+
+    if (system === undefined || opening === undefined) return;
+
+    const { you } = parseView(textOf(opening).slice(textOf(opening).indexOf("{")));
+
+    systemPromptsOf.set(you, (systemPromptsOf.get(you) ?? new Set()).add(getSystemMessageText(system)));
+  };
+
+  await Effect.runPromise(fauxMatch(["Agent", "Agent"], "3", 200_000, "on-turn", { dir, provenance: withAddendum(ADDENDUM), onRequest: record }));
+
+  const [promptA, promptB] = ["A", "B"].map((you) => [...(systemPromptsOf.get(you) ?? [])]);
+
+  expect(promptA?.length).toBe(1);
+  expect(promptB?.length).toBe(1);
+  expect(promptA?.[0]).toContain(`${INSTRUCTIONS}\n\n${ADDENDUM}`);
+  expect(promptB?.[0]).toContain(INSTRUCTIONS);
+  expect(promptB?.[0]).not.toContain(ADDENDUM);
+
+  const manifest = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Struct({ instructions_sha: Schema.String, provenance: Schema.Struct({ agents: Schema.Record(Schema.String, Schema.Struct({ instructions_addendum: Schema.optional(Schema.String) })) }) })))(readFileSync(join(dir, "manifest.json"), "utf8"));
+
+  expect(manifest.provenance.agents.A?.instructions_addendum).toBe(ADDENDUM);
+  expect(manifest.provenance.agents.B?.instructions_addendum).toBeUndefined();
+  expect(manifest.instructions_sha).toBe(sha256Head(INSTRUCTIONS));
+});
+
+test("a match refuses to resume with a changed or dropped instructions addendum", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "arena-addendum-resume-"));
+
+  await Effect.runPromise(fauxMatch(["Agent", "DoN"], "3", 200_000, "on-turn", { dir, provenance: withAddendum(ADDENDUM) }));
+
+  for (const provenance of [withAddendum(`${ADDENDUM} Really.`), fauxProvenance]) {
+    const changed = await Effect.runPromiseExit(fauxMatch(["Agent", "DoN"], "3", 200_000, "on-turn", { dir, provenance }));
+
+    expect(Exit.isFailure(changed) && String(changed.cause)).toContain("cannot resume with this one");
+  }
+
+  expect(Exit.isSuccess(await Effect.runPromiseExit(fauxMatch(["Agent", "DoN"], "3", 200_000, "on-turn", { dir, provenance: withAddendum(ADDENDUM) })))).toBe(true);
 });
 
 test.each(["start:before-commit", "start:after-commit"])("the pin is recoverable from the manifest at %s", async (point) => {
@@ -341,6 +400,17 @@ test("the account pin is recorded in the provenance only when set, never with th
   expect(provenanceOf("provider-A", pinned.value).cpa_auth_id).toBe("codex-account-1.json");
   expect("cpa_auth_id" in provenanceOf("provider-A", unpinned.value)).toBe(false);
   expect(JSON.stringify(provenanceOf("provider-A", pinned.value))).not.toContain(CPA.key);
+});
+
+test("the instructions addendum is read from PLAYER_A_INSTRUCTIONS_ADDENDUM into the provenance only when set", async () => {
+  const env = { PLAYER_A_OAI_URL: CPA.url, PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "gpt-6-luna", PLAYER_A_EFFORT: "medium" };
+  const withText = await endpointFrom({ ...env, PLAYER_A_INSTRUCTIONS_ADDENDUM: ADDENDUM });
+  const without = await endpointFrom(env);
+
+  if (!Exit.isSuccess(withText) || !Exit.isSuccess(without)) throw new Error("test endpoints failed");
+
+  expect(provenanceOf("provider-A", withText.value).instructions_addendum).toBe(ADDENDUM);
+  expect("instructions_addendum" in provenanceOf("provider-A", without.value)).toBe(false);
 });
 
 test("a blank PLAYER_A_CPA_AUTH_ID pins nothing", async () => {

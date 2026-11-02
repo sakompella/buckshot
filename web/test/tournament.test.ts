@@ -279,7 +279,11 @@ const manifestOf = (tournament: Tournament, match: ScheduledMatch, status: "fini
   const agents = Object.fromEntries(match.seats.flatMap((seat, index) => {
     const entrant = tournament.config.entrants[match.entrants[index] ?? ""];
 
-    return entrant !== undefined && "model" in entrant ? [[seat, { model: entrant.model, effort: entrant.effort }]] : [];
+    if (entrant === undefined || !("model" in entrant)) return [];
+
+    const played = { model: entrant.model, effort: entrant.effort };
+
+    return [[seat, entrant.instructionsAddendum === undefined ? played : { ...played, instructions_addendum: entrant.instructionsAddendum }]];
   }));
 
   const manifest = {
@@ -760,6 +764,53 @@ test("a match's child gets no PLAYER_* variable but its own, and no key shows in
   expect(command.join(" ")).not.toContain("sk-secret-value");
   expect(command.slice(0, 5)).toEqual(["nice", "-n", "10", "bun", "--no-env-file"]);
   expect(command.slice(command.indexOf("--seats"))).toEqual(["--seats", match.seats.join(","), "--rotation", "0", "--delivery", "on-turn"]);
+});
+
+test("an entrant's instructions addendum reaches only its own seat's environment and the schedule check, and an entrant without one is unchanged", () => {
+  const addendum = "Answer in as few words as you can.";
+  const entrants = { ...ENTRANTS, "luna-brief": { ...ENTRANTS.luna, instructionsAddendum: addendum } };
+  const tournament = tournamentFrom(configJson({ entrants, pairings: [["luna-brief", "haiku-5-5"]], blocksPerPairing: 1 }));
+  const [match] = scheduleOf(tournament);
+  const keys = resolveKeys(tournament.config, scheduleOf(tournament), { CPA_KEY: "sk-test" });
+
+  if (match === undefined || Result.isFailure(keys)) throw new Error("setup failed");
+
+  const env = childEnv({}, tournament.config, match, keys.success);
+  const seatOf = (entrant: string) => match.seats[match.entrants.indexOf(entrant)];
+
+  expect(env[`PLAYER_${seatOf("luna-brief")}_INSTRUCTIONS_ADDENDUM`]).toBe(addendum);
+  expect(Object.keys(env).filter((name) => name.endsWith("_INSTRUCTIONS_ADDENDUM"))).toEqual([`PLAYER_${seatOf("luna-brief")}_INSTRUCTIONS_ADDENDUM`]);
+
+  const plain = tournamentFrom(configJson({ pairings: [["luna", "haiku-5-5"]], blocksPerPairing: 1 }));
+  const [plainMatch] = scheduleOf(plain);
+
+  if (plainMatch === undefined) throw new Error("setup failed");
+
+  expect(Object.keys(childEnv({}, plain.config, plainMatch, keys.success)).filter((name) => name.endsWith("_INSTRUCTIONS_ADDENDUM"))).toEqual([]);
+});
+
+test("a blank instructions addendum is not a valid entrant", () => {
+  expect(errorOf(configJson({ entrants: { ...ENTRANTS, luna: { ...ENTRANTS.luna, instructionsAddendum: "" } }, pairings: [["luna", "don"]] }))).toContain("not valid");
+});
+
+test("a finished match whose agent played without the instructions addendum the schedule gives its entrant is left out", () => {
+  const entrants = { ...ENTRANTS, "luna-brief": { ...ENTRANTS.luna, instructionsAddendum: "Answer in as few words as you can." } };
+  const tournament = tournamentFrom(configJson({ entrants, pairings: [["luna-brief", "don"]], blocksPerPairing: 1 }));
+  const dir = mkdtempSync(join(tmpdir(), "tournament-addendum-"));
+  const [match] = scheduleOf(tournament);
+
+  if (match === undefined) throw new Error("no match scheduled");
+
+  writeManifest(dir, tournament, match, "finished");
+
+  expect(Result.isSuccess(readMatch(dir, tournament, match))).toBe(true);
+
+  const manifest = JSON.parse(readFileSync(join(dir, match.name, "manifest.json"), "utf8"));
+  const agents = Object.fromEntries(Object.entries<Record<string, Schema.Json>>(manifest.provenance.agents).map(([seat, { instructions_addendum: _dropped, ...rest }]) => [seat, rest]));
+
+  writeFileSync(join(dir, match.name, "manifest.json"), JSON.stringify({ ...manifest, provenance: { ...manifest.provenance, agents } }));
+
+  expect(Result.isFailure(readMatch(dir, tournament, match))).toBe(true);
 });
 
 test("a missing key variable is named and its value is never shown", () => {
