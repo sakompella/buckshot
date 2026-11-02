@@ -5,8 +5,7 @@ import { Schema } from "effect";
 import { type Browser, chromium, type Page } from "playwright-core";
 
 import { Blunders, CERTAIN_TYPES, CertainMistakes, Consistency, Decisions, ITEMS, MatchDetail, type MoveRegret, NO_GAP, SeatsResponse } from "../src/arena-viewer/api.ts";
-import { anchorId } from "../src/arena-viewer/page/charts.ts";
-import { baseName, baseOrder, CERTAIN_NAMES, fmtBytes, fmtCount, fmtPct, fmtUsd, blocksOf, keyOf, labelOf, MIN_BLOCKS_FOR_INTERVAL, shortName, withPotShares } from "../src/arena-viewer/page/data.ts";
+import { baseName, baseOrder, CERTAIN_NAMES, fmtBytes, fmtCount, fmtPct, fmtUsd, blocksOf, groupBy, keyOf, labelOf, MIN_BLOCKS_FOR_INTERVAL, shortName, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { GROUPS, MOVED_TARGETS, Section } from "../src/arena-viewer/page/model.ts";
 import { pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 import { droppedConfigs, droppedText, oddsPanels, selfShotTallies } from "../src/arena-viewer/page/odds.ts";
@@ -129,7 +128,7 @@ const openPage = async (page: Page) => {
   expectThat((await page.getByRole("switch").count()) === 0, "the page still has a switch");
 };
 
-// Visible controls smaller than 44px either way (heat cells and leaderboard squares are left out).
+// Visible controls smaller than 44px either way (heat cells are left out).
 const smallTargets = (page: Page) =>
   page.evaluate(() =>
     [...document.querySelectorAll("nav a, .toggle button, .chip, .cmb, .tablelink, select, input:not([type=checkbox]), .stepper button, .modal .x, .tourstart, .drillclose, .foot .download")].flatMap((element) => {
@@ -163,7 +162,7 @@ const captureBaseline = async (browser: Browser, viewport: Viewport) => {
   const order = await page.evaluate(() => [...document.querySelectorAll("section.part")].map((part) => part.id).join(" "));
 
   expectThat(order === GROUPS.map(({ group }) => group).join(" "), `${name}: the page's groups run ${order}`);
-  expectThat((await page.locator("#scatter .card").evaluate((card) => card.getBoundingClientRect().top)) < (await page.locator("#breakdown").evaluate((fold) => fold.getBoundingClientRect().top)), `${name}: the scatter does not come before the head-to-head matrix`);
+  expectThat((await page.locator("#scatter .card").evaluate((card) => card.getBoundingClientRect().top)) < (await page.locator("#breakdown").evaluate((fold) => fold.getBoundingClientRect().top)), `${name}: the scatter does not come before the win-share matrix`);
   await openTables(page);
 
   for (const { group, sections } of GROUPS) {
@@ -527,13 +526,39 @@ const openBudgetStopped = async (page: Page, matchId: string) => {
 
 const regretSteps = (page: Page, kind: "exact" | "not exact") => page.locator(".modal .step").filter({ has: kind === "exact" ? page.locator(".tag.regret.exact") : page.locator(".tag.regret:not(.exact)") });
 
-const FixtureSeats = Schema.Array(Schema.Struct({ matchId: Schema.String, model: Schema.String, effort: Schema.String, status: Schema.String }));
+const FixtureSeats = Schema.Array(Schema.Struct({ matchId: Schema.String, seed: Schema.Number, startedAt: Schema.String, model: Schema.String, effort: Schema.String, status: Schema.String }));
 
 interface RegretFixture {
   readonly matchId: string;
+  readonly seed: number;
+  readonly listQuery: string;
+  readonly listRow: number;
   readonly model: string;
   readonly effort: string;
 }
+
+type FixtureSeat = typeof FixtureSeats.Type[number];
+
+const labelsOf = (both: ReadonlyArray<FixtureSeat>) => both.map((seat) => labelOf(keyOf(seat))).toSorted();
+
+const listQueryOf = (seed: number, both: ReadonlyArray<FixtureSeat>) => [String(seed), ...labelsOf(both)].join(" ");
+
+const listRowOf = (matches: ReadonlyArray<ReadonlyArray<FixtureSeat>>, target: ReadonlyArray<FixtureSeat>) => {
+  const words = listQueryOf(target[0]?.seed ?? 0, target).toLowerCase().split(" ");
+
+  const listed = matches.filter(
+    (both) => both[0]?.seed === target[0]?.seed && words.every((word) => [...labelsOf(both), String(both[0]?.seed)].some((text) => text.toLowerCase().includes(word))),
+  );
+
+  return listed.toSorted((left, right) => (right[0]?.startedAt ?? "").localeCompare(left[0]?.startedAt ?? "")).findIndex((both) => both[0]?.matchId === target[0]?.matchId);
+};
+
+const listOf = (seats: ReadonlyArray<FixtureSeat>, seat: FixtureSeat) => {
+  const matches = [...groupBy(seats, ({ matchId }) => matchId).values()];
+  const both = matches.find(([first]) => first?.matchId === seat.matchId) ?? [];
+
+  return { listQuery: listQueryOf(seat.seed, both), listRow: listRowOf(matches, both) };
+};
 
 const regretFixtures = async (count: number): Promise<ReadonlyArray<RegretFixture>> => {
   const seats = Schema.decodeUnknownSync(FixtureSeats)(await (await fetch(`${base}/api/seats`)).json());
@@ -544,20 +569,18 @@ const regretFixtures = async (count: number): Promise<ReadonlyArray<RegretFixtur
   for (const at of costliest) {
     const seat = seats[blunders.seat[at] ?? -1];
 
-    if (seat !== undefined && seat.status === "completed" && !picked.has(seat.matchId) && picked.size < count) picked.set(seat.matchId, seat);
+    if (seat !== undefined && seat.status === "completed" && !picked.has(seat.matchId) && picked.size < count) picked.set(seat.matchId, { ...seat, ...listOf(seats, seat) });
   }
 
   return [...picked.values()];
 };
 
-const openFromLeaderboard = async (page: Page, { matchId, model, effort }: RegretFixture) => {
-  if ((await tablesFold(page).getAttribute("open")) === null) await openTables(page);
+const openFromMatchList = async (page: Page, fixture: RegretFixture) => {
+  const filter = page.locator("#matches .bar input");
 
-  const row = page.locator("table.lbt tr.row", { hasText: `${baseName(model)} [${effort}]` }).first();
-
-  if ((await row.getAttribute("aria-expanded")) !== "true") await row.click();
-
-  await page.locator(`#${anchorId("sq", matchId)}`).click();
+  await filter.fill(fixture.listQuery);
+  await page.locator("#matches tbody tr.row").filter({ has: page.locator('td[data-label="seed"]', { hasText: new RegExp(`^${fixture.seed}$`) }) }).nth(fixture.listRow).click();
+  await filter.fill("");
 };
 
 const coveredMatchIds: Array<string> = [];
@@ -663,10 +686,10 @@ const checkRegret = async (page: Page) => {
   expectThat(fixtures.length > 0, "no regret blunder to open a regret-covered replay from");
 
   for (const [card, fixture] of fixtures.entries()) {
-    const coverage = await openReplay(page, () => openFromLeaderboard(page, fixture));
+    const coverage = await openReplay(page, () => openFromMatchList(page, fixture));
 
     coveredMatchIds.push(coverage.matchId);
-    expectThat(coverage.matchId === fixture.matchId, `blunder match ${card}: the leaderboard opened ${coverage.matchId}, not ${fixture.matchId}`);
+    expectThat(coverage.matchId === fixture.matchId, `blunder match ${card}: the match list opened ${coverage.matchId}, not ${fixture.matchId}`);
     expectThat(coverage.searched > 0 && coverage.tagged > 0 && coverage.turning > 0, `blunder match ${card}: its replay has ${coverage.searched} searched, ${coverage.tagged} tagged, ${coverage.turning} turning`);
     await expectRegretShown(page, coverage, `blunder match ${card}`);
 
@@ -725,7 +748,7 @@ const checkMissingRegret = async (browser: Browser, viewport: Viewport) => {
 
     if (fixture === undefined) throw new Error(`no regret blunder opens match ${matchId}`);
 
-    await openFromLeaderboard(page, fixture);
+    await openFromMatchList(page, fixture);
     await openedMatchId(page);
   };
 
@@ -999,16 +1022,11 @@ const checkDrill = async (page: Page, name: string, isTouch: boolean) => {
       `${name}: the same-position line reads "${steadyLine}"`,
     );
 
-  const opponents = new Set(pairs.flatMap((both) => both.filter((seat) => keyOf(seat) !== key).map(keyOf)));
-  const gamesShown = sum((await page.locator(".drillin .opp .ow .pm").allInnerTexts()).map(numberIn));
-
-  expectThat((await countOf(page, ".drillin .opp")) === opponents.size && gamesShown === pairs.length, `${name}: the head-to-head shows ${await countOf(page, ".drillin .opp")} opponents and ${gamesShown} games, the data has ${opponents.size} and ${pairs.length}`);
-
   const received = [0, 1, 2, 3, 4, 5, 6, 7].map((item) => sum(pairs.flatMap((both) => both.filter((seat) => keyOf(seat) === key).map((seat) => seat.acquired[item] ?? 0))));
   const unused = sum(pairs.flatMap((both) => both.filter((seat) => keyOf(seat) === key).flatMap((seat) => seat.acquired.map((acquired, item) => acquired - (seat.used[item] ?? 0) - (both.find((other) => other !== seat)?.stolen[item] ?? 0)))));
   const barRows = await page.locator(".drillin .fate").evaluateAll((fates) => fates.map((fate) => ({ name: fate.querySelector(".fate-name")?.textContent ?? "", value: fate.querySelector(".fate-val")?.textContent ?? "" })));
 
-  console.log(name, "drill", key, "| opponents", opponents.size, "| item bars", barRows.length, "| all items unused", barRows[0]?.value, "| health gap:", gapText, "| steady:", steadyLine);
+  console.log(name, "drill", key, "| item bars", barRows.length, "| all items unused", barRows[0]?.value, "| health gap:", gapText, "| steady:", steadyLine);
   expectThat(barRows[0]?.name === "All items" && barRows[0]?.value === `${Math.round((unused / sum(received)) * 100)}% unused`, `${name}: the first item bar is ${JSON.stringify(barRows[0])}, the data gives ${Math.round((unused / sum(received)) * 100)}% unused`);
   expectThat(barRows.every(({ value }) => value.endsWith(" unused")), `${name}: an item bar's percentage is not labelled unused: ${JSON.stringify(barRows.map(({ value }) => value))}`);
 
@@ -1325,8 +1343,6 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
   await check("comebacks by replay", () => checkComebacksAgainstReplays(viewport.name));
   await check("drill-down", async () => {
     await page.locator("table.lbt tr.row").first().click();
-    await page.locator(".drillin .sq i").first().hover();
-    console.log("drill → tip:", await tipOf(page));
     await page.locator(".lb").first().screenshot({ path: shot("leaderboard"), style: UNSTICK });
     await page.locator("table.lbt tr.row").first().click();
     await checkDrill(page, viewport.name, false);
@@ -1376,7 +1392,7 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
 
     if (fixture === undefined) throw new Error("no regret blunder to open turning points from");
 
-    const coverage = await openReplay(page, () => openFromLeaderboard(page, fixture));
+    const coverage = await openReplay(page, () => openFromMatchList(page, fixture));
     const turning = page.locator(".modal .turning .chip");
     const listed = await turning.count();
     const rings = await countOf(page, ".modal .chart circle");
@@ -1489,7 +1505,7 @@ const checkScatterDrill = async (page: Page, name: string, isTouch: boolean) => 
 
   const panel = page.locator("#scatter .configpanel");
 
-  expectThat((await panel.count()) === 1 && (await panel.locator(".drillin .opp").count()) > 0, `${name}: a click on a scatter point opened no drill-down`);
+  expectThat((await panel.count()) === 1 && (await panel.locator(".drillin").count()) === 1, `${name}: a click on a scatter point opened no drill-down`);
   expectThat((await page.locator("table.lbt tr.drill").count()) === 0, `${name}: the scatter's drill-down also opened a leaderboard row`);
   await panel.screenshot({ path: shot(`${name}-scatter-drill`), style: UNSTICK });
   await (isTouch ? panel.locator(".drillclose").tap() : panel.locator(".drillclose").click());
@@ -1659,7 +1675,7 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
 
     if (fixture === undefined) throw new Error("no regret blunder to open a candidate list from");
 
-    await openFromLeaderboard(page, fixture);
+    await openFromMatchList(page, fixture);
 
     const matchId = await openedMatchId(page);
 
