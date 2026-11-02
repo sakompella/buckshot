@@ -13,7 +13,7 @@ import { RunManifest } from "../src/arena/match.ts";
 import { MoveLine } from "../src/arena/runlog.ts";
 import { rosterOf } from "../src/players.ts";
 import { agentMoveText } from "../src/text.ts";
-import { replayOf } from "../src/viewer/replay.ts";
+import { replayOf } from "../src/arena/replay.ts";
 
 // Scores every agent decision of one match, of every replay-validated match, or of
 // the decisions a list names, with the minimax player (src/analysis/regret.ts) and writes the rows to the
@@ -250,7 +250,7 @@ const scoreMatch = (match: MatchRow): void => {
     if (wanted(decision)) {
       const before = current();
       const me = Option.getOrThrow(roster.find(decodeLetter(decision.player))).seat;
-      // The arena plays every match with items (src/viewer/replay.ts starts it so).
+      // The arena plays every match with items (src/arena/replay.ts starts it so).
       const input = { table: before.game.table, items: true, board: boardOf(before.game), log: ownLog(before.events, before.learned, me), me };
       const menu = decodeMenu(decision.legal_json).map(({ label }) => label);
       const started = performance.now();

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { Option, Result } from "effect";
 
 import { importTournaments, openAnalysis } from "../src/analysis/import.ts";
-import { replayOf } from "../src/viewer/replay.ts";
+import { replayOf } from "../src/arena/replay.ts";
 import { playFauxRun } from "./faux-run.ts";
 
 test("refreshes resumed logs without duplicating calls, retains bad observations, and rebuilds the same projections", async () => {
