@@ -76,7 +76,7 @@ export const HeatCellId = Schema.Struct({ row: Schema.String, col: Schema.String
 
 export const Heat = Schema.Struct({ sort: Schema.String, maybeTip: Schema.Option(HeatCellId) });
 
-export const Leaderboard = Schema.Struct({ maybeOpen: Schema.Option(Schema.String), maybeTip: Schema.Option(Schema.String) });
+export const Leaderboard = Schema.Struct({ maybeOpen: Schema.Option(Schema.String) });
 
 export const CertainCell = Schema.Struct({ key: Schema.String, type: CertainType });
 
@@ -167,8 +167,6 @@ export const Message = defineMessageUnion({
   ClickedLeaderboardRow: { id: Schema.String },
   ClickedTableLink: { id: Schema.String },
   ClickedCertainCount: { key: Schema.String, type: CertainType },
-  HoveredSquare: { matchId: Schema.String },
-  LeftSquare: {},
   ClickedMatch: { id: Schema.String, maybeFocus: Schema.Option(Schema.Number) },
   SucceededMatch: { id: Schema.String, detail: MatchDetail },
   FailedMatch: { id: Schema.String, error: Schema.String },

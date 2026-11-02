@@ -260,15 +260,13 @@ export const update = (model: Model, message: Message): Return =>
     LeftCell: () => ({ model: modifyFields(model, { heat: (heat) => ({ ...heat, maybeTip: Option.none() }) }) }),
     ClickedLeaderboardRow: ({ id }) => ({
       model: modifyFields(model, {
-        leaderboard: (leaderboard) => ({ maybeTip: Option.none(), maybeOpen: Option.exists(leaderboard.maybeOpen, (open) => open === id) ? Option.none() : Option.some(id) }),
+        leaderboard: (leaderboard) => ({ maybeOpen: Option.exists(leaderboard.maybeOpen, (open) => open === id) ? Option.none() : Option.some(id) }),
         maybeDrill: () => Option.none(),
       }),
     }),
     ClickedCertainCount: ({ key, type }) => ({
       model: modifyFields(model, { maybeCertainOpen: (open) => (Option.exists(open, (cell) => cell.key === key && cell.type === type) ? Option.none() : Option.some({ key, type })) }),
     }),
-    HoveredSquare: ({ matchId }) => ({ model: modifyFields(model, { leaderboard: (leaderboard) => ({ ...leaderboard, maybeTip: Option.some(matchId) }) }) }),
-    LeftSquare: () => ({ model: modifyFields(model, { leaderboard: (leaderboard) => ({ ...leaderboard, maybeTip: Option.none() }) }) }),
     ClickedMatch: ({ id, maybeFocus }) => openReplay(model, id, maybeFocus),
     SucceededMatch: ({ id, detail }) => ({
       model: modifyFields(model, { matches: (matches) => ({ ...matches, [id]: AsyncData.succeed(detail) }) }),
@@ -335,7 +333,7 @@ const init: Runtime.ApplicationInit<Model, Message, Flags> = ({ viewport }) => (
     filter: { offEfforts: [], offModels: [] },
     scatter: { axis: "cost", maybeHover: Option.none(), maybePin: Option.none() },
     heat: { sort: "rating", maybeTip: Option.none() },
-    leaderboard: { maybeOpen: Option.none(), maybeTip: Option.none() },
+    leaderboard: { maybeOpen: Option.none() },
     maybeDrill: Option.none(),
     maybeCertainOpen: Option.none(),
     matchList: { query: "", limit: INITIAL_ROWS, maybePreset: Option.none() },

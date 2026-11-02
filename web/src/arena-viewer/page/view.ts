@@ -162,8 +162,8 @@ const scatterCard = (h: H, derived: Derived, scatter: Model["scatter"], width: n
 
 const lazyDrill = createLazy();
 
-const drillCard = (h: H, derived: Derived, maybeDrill: Model["maybeDrill"], maybeTip: Model["leaderboard"]["maybeTip"]): Html =>
-  Option.match(maybeDrill, { onNone: () => h.empty, onSome: (key) => configPanelView(h, derived, key, maybeTip) });
+const drillCard = (h: H, derived: Derived, maybeDrill: Model["maybeDrill"]): Html =>
+  Option.match(maybeDrill, { onNone: () => h.empty, onSome: (key) => configPanelView(h, derived, key) });
 
 const spendCard = (h: H, derived: Derived): Html => h.div([h.Class("card")], [spendView(h, derived.pooled)]);
 
@@ -195,7 +195,7 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
       lazyHero(heroView, [h, derived]),
       h.div([h.Class("top")], [lazyNav(navView, [h, model.maybeGroup]), lazyFilters(filtersView, [h, derived, model.filter, model.isFiltersOpen])]),
       groupView(h, "standings", [
-        sectionView(h, "scatter", h.div([], [lazyScatter(scatterCard, [h, derived, model.scatter, card]), lazyDrill(drillCard, [h, derived, model.maybeDrill, model.leaderboard.maybeTip])])),
+        sectionView(h, "scatter", h.div([], [lazyScatter(scatterCard, [h, derived, model.scatter, card]), lazyDrill(drillCard, [h, derived, model.maybeDrill])])),
         sectionView(h, "breakdown", afterFirstPaint(() => lazyBreakdown(breakdownView, [h, derived, model.heat]))),
       ]),
       groupView(h, "decisions", [
