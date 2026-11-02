@@ -1,0 +1,342 @@
+{
+  "name": "haiku-ladder",
+  "seed": 4103,
+  "delivery": "on-turn",
+  "endpoints": {
+    "cpa-anthropic": {
+      "api": "anthropic",
+      "url": "https://hub.dog-minnow.ts.net",
+      "keyEnv": "CPA_KEY"
+    }
+  },
+  "entrants": {
+    "claude-haiku-4-5-20251001-off": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "effort": "off"
+    },
+    "claude-haiku-5-5-off": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-5-5",
+      "effort": "off"
+    },
+    "claude-haiku-5-5-low": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-5-5",
+      "effort": "low"
+    },
+    "claude-haiku-4-5-20251001-minimal": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "effort": "minimal"
+    },
+    "claude-haiku-5-5": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-5-5",
+      "effort": "medium"
+    },
+    "claude-haiku-4-5-20251001-low": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "effort": "low"
+    },
+    "claude-haiku-5-5-high": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-5-5",
+      "effort": "high"
+    },
+    "claude-haiku-4-5-20251001": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "effort": "medium"
+    },
+    "claude-haiku-5-5-xhigh": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-5-5",
+      "effort": "xhigh"
+    },
+    "claude-haiku-4-5-20251001-high": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "effort": "high"
+    },
+    "claude-haiku-5-5-max": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-5-5",
+      "effort": "max"
+    }
+  },
+  "pairings": [
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-off",
+        "claude-haiku-5-5-off"
+      ],
+      "seeds": [
+        4104
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-low",
+        "claude-haiku-4-5-20251001-off"
+      ],
+      "seeds": [
+        4103
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-off",
+        "claude-haiku-4-5-20251001-minimal"
+      ],
+      "seeds": [
+        4105
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-off",
+        "claude-haiku-5-5"
+      ],
+      "seeds": [
+        4106
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-minimal",
+        "claude-haiku-5-5-low"
+      ],
+      "seeds": [
+        4108
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-low",
+        "claude-haiku-5-5-off"
+      ],
+      "seeds": [
+        4107
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-high",
+        "claude-haiku-4-5-20251001-off"
+      ],
+      "seeds": [
+        4109
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5",
+        "claude-haiku-4-5-20251001-minimal"
+      ],
+      "seeds": [
+        4111
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-low",
+        "claude-haiku-4-5-20251001-low"
+      ],
+      "seeds": [
+        4110
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-off",
+        "claude-haiku-4-5-20251001"
+      ],
+      "seeds": [
+        4112
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-off",
+        "claude-haiku-5-5-xhigh"
+      ],
+      "seeds": [
+        4113
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-minimal",
+        "claude-haiku-5-5-high"
+      ],
+      "seeds": [
+        4115
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-low",
+        "claude-haiku-5-5"
+      ],
+      "seeds": [
+        4114
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001",
+        "claude-haiku-5-5-low"
+      ],
+      "seeds": [
+        4120
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-high",
+        "claude-haiku-5-5-off"
+      ],
+      "seeds": [
+        4116
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-max",
+        "claude-haiku-4-5-20251001-off"
+      ],
+      "seeds": [
+        4122
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-xhigh",
+        "claude-haiku-4-5-20251001-minimal"
+      ],
+      "seeds": [
+        4117
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-high",
+        "claude-haiku-4-5-20251001-low"
+      ],
+      "seeds": [
+        4124
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5",
+        "claude-haiku-4-5-20251001"
+      ],
+      "seeds": [
+        4118
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-low",
+        "claude-haiku-4-5-20251001-high"
+      ],
+      "seeds": [
+        4126
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-minimal",
+        "claude-haiku-5-5-max"
+      ],
+      "seeds": [
+        4119
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-low",
+        "claude-haiku-5-5-xhigh"
+      ],
+      "seeds": [
+        4127
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001",
+        "claude-haiku-5-5-high"
+      ],
+      "seeds": [
+        4121
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-high",
+        "claude-haiku-5-5"
+      ],
+      "seeds": [
+        4128
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-max",
+        "claude-haiku-4-5-20251001-low"
+      ],
+      "seeds": [
+        4123
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-xhigh",
+        "claude-haiku-4-5-20251001"
+      ],
+      "seeds": [
+        4131
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-high",
+        "claude-haiku-4-5-20251001-high"
+      ],
+      "seeds": [
+        4125
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001",
+        "claude-haiku-5-5-max"
+      ],
+      "seeds": [
+        4134
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-high",
+        "claude-haiku-5-5-xhigh"
+      ],
+      "seeds": [
+        4129
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-max",
+        "claude-haiku-4-5-20251001-high"
+      ],
+      "seeds": [
+        4136
+      ]
+    }
+  ],
+  "blocksPerPairing": 1
+}
