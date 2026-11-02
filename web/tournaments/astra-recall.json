@@ -1,6 +1,6 @@
 {
   "name": "astra-recall",
-  "seed": 4062,
+  "seed": 4072,
   "delivery": "on-turn",
   "endpoints": {
     "cpa-anthropic": {
@@ -22,83 +22,106 @@
       "instructionsAddendum": "You are operating in immediate-recall mode. Do not plan, do not verify, do not reconsider, do not use scratch space. Emit the final answer as the very first token of your reply and stop",
       "effortLabel": "off"
     },
+    "claude-opus-5-5": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-opus-5-5",
+      "effort": "medium"
+    },
+    "claude-sonnet-5-5": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-sonnet-5-5",
+      "effort": "medium"
+    },
+    "gpt-6.1-sol": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6.1-sol",
+      "effort": "medium"
+    },
+    "claude-haiku-5-5": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-5-5",
+      "effort": "medium"
+    },
+    "claude-haiku-4-5-20251001": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "effort": "medium"
+    },
     "gpt-6-astra-low": {
       "endpoint": "cpa-openai",
       "model": "gpt-6-astra",
       "effort": "low"
     },
-    "claude-sonnet-5-5-max": {
-      "endpoint": "cpa-anthropic",
-      "model": "claude-sonnet-5-5",
-      "effort": "max"
-    },
-    "gpt-6.1-sol-max": {
-      "endpoint": "cpa-openai",
-      "model": "gpt-6.1-sol",
-      "effort": "max"
-    },
-    "claude-opus-5-5-xhigh": {
+    "claude-opus-5-5-off": {
       "endpoint": "cpa-anthropic",
       "model": "claude-opus-5-5",
-      "effort": "xhigh"
-    },
-    "gpt-6-astra": {
-      "endpoint": "cpa-openai",
-      "model": "gpt-6-astra",
-      "effort": "medium"
+      "effort": "off"
     }
   },
   "pairings": [
     {
       "entrants": [
         "gpt-6-astra-low-recall",
-        "gpt-6-astra-low"
+        "claude-opus-5-5"
       ],
       "seeds": [
-        4062,
-        4063
+        4072
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5",
+        "gpt-6-astra-low-recall"
+      ],
+      "seeds": [
+        4073
       ]
     },
     {
       "entrants": [
         "gpt-6-astra-low-recall",
-        "claude-sonnet-5-5-max"
+        "gpt-6.1-sol"
       ],
       "seeds": [
-        4064,
-        4065
+        4074
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5",
+        "gpt-6-astra-low-recall"
+      ],
+      "seeds": [
+        4077
       ]
     },
     {
       "entrants": [
         "gpt-6-astra-low-recall",
-        "gpt-6.1-sol-max"
+        "claude-haiku-4-5-20251001"
       ],
       "seeds": [
-        4066,
-        4067
+        4075
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6-astra-low",
+        "gpt-6-astra-low-recall"
+      ],
+      "seeds": [
+        4078
       ]
     },
     {
       "entrants": [
         "gpt-6-astra-low-recall",
-        "claude-opus-5-5-xhigh"
+        "claude-opus-5-5-off"
       ],
       "seeds": [
-        4068,
-        4069
-      ]
-    },
-    {
-      "entrants": [
-        "gpt-6-astra-low-recall",
-        "gpt-6-astra"
-      ],
-      "seeds": [
-        4070,
-        4071
+        4076
       ]
     }
   ],
-  "blocksPerPairing": 2
+  "blocksPerPairing": 1
 }

@@ -13,3 +13,7 @@ CPA normally moves requests between upstream accounts. Doing so within a match l
 ## Consequences
 
 The manifest is the durable source of assignments, not a second assignment file. The match writes its initial running manifest before its first journal commit, so even a crash at that commit leaves the pin available to the runner. The runner holds only current loads and cooldowns in memory, rebuilding them from manifests and fault logs on restart. It still requires one runner per tournament directory. An existing endpoint without a pool can add one as compatible tournament growth. Started matches stay unpinned, and new matches use the pool. Once listed, the pool is fixed like the endpoint connection settings. Unknown or removed CPA ids are provider errors, not a reason to switch accounts. Existing code-version resume rules still apply, as in ADR-0041.
+
+## 2026-11-01: Claude pins dropped from tournament 6
+
+Tournament 6 gives its Claude endpoint no `accounts` pool, so Claude agents are unpinned and send no `X-CPA-Auth-ID`. Both Claude accounts belong to one organisation, so the prompt cache and the reasoning carry across them, which was the reason for pinning. Codex pins stay. A driver that holds Claude to a quota line can no longer hold one account, so it treats the Claude accounts as a pool and uses their average five-hour usage.
