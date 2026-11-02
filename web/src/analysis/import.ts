@@ -29,7 +29,7 @@ const decodeCall = Schema.decodeUnknownResult(Schema.fromJsonString(CallLine));
 const ValidationManifest = Schema.Struct({
   status: Schema.String, seed: Schema.String, controllers: Schema.Array(Schema.String),
   letters: Schema.Array(Schema.String), delivery: Schema.String,
-  provenance: Schema.Struct({ code_sha: Schema.String, agents: Schema.Record(Schema.String, Schema.Struct({ model: Schema.String, effort: Schema.NullOr(Schema.String) })) }),
+  provenance: Schema.Struct({ code_sha: Schema.String, agents: Schema.Record(Schema.String, Schema.Struct({ model: Schema.String, effort: Schema.NullOr(Schema.String), instructions_addendum: Schema.optional(Schema.String) })) }),
   agents: Schema.Record(Schema.String, Schema.Struct({ moves: Schema.Int, reminders: Schema.Int, interventions: Schema.Int })),
 });
 
