@@ -228,25 +228,6 @@ agent to call `new_match` and play its player. Checks:
 The server uses `@modelcontextprotocol/server` 2.3.1, the v2 SDK. It also
 answers clients that use the older `initialize` handshake.
 
-## Arena viewer
-
-`bun run viewer` serves a read-only site for browsing arena matches at
-http://127.0.0.1:4173/. It reads the run directories in `_work/arena` at the
-repo root (`--dir <runs dir>` picks another, `--port <n>` another port, 0 a free
-one) and binds 127.0.0.1 only, with no auth. Each run directory's
-`manifest.json`, `events.jsonl` and `calls.jsonl` are all it reads; costs come
-from `src/arena/prices.json` at each request. The list shows every match with its agents,
-seating, status and standings, and totals per agent and per model. A match page
-replays the match through the rules machine with a scrubber, and shows each
-agent's log side by side: what was delivered to it, its model calls with
-thinking, text, tool calls, tokens and cost, and its turns. A live match is
-polled and followed. Runs from before format 1 are listed as unreadable.
-
-    bun scripts/viewer-check.ts [outdir]   # headless Chrome over a temp runs dir it fills itself (two faux matches, a format-0 run and a live copy): the list, a finished match, and a live match appended while the page watches
-
-The look borrows from the studio viewer in
-[claude-paint](https://github.com/aliceisjustplaying/claude-paint) (MIT).
-
 ## Arena analysis viewer
 
 `bun scripts/arena-viewer.ts <db> [host] [port] [--regret <regret db>] [--knowledge <knowledge db>] [--certain-mistakes <opportunities db>]` serves charts over the arena

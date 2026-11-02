@@ -30,7 +30,7 @@ import { MoveLine } from "../src/arena/runlog.ts";
 import { GameEvent, type Seat, Secret } from "../src/domain.ts";
 import { type Letter, rosterOf } from "../src/players.ts";
 import { eventText, secretText } from "../src/text.ts";
-import { replayOf } from "../src/viewer/replay.ts";
+import { replayOf } from "../src/arena/replay.ts";
 
 // Rebuilds every agent decision's own information from the analysis database
 // (docs/arena/database.md) and writes it to a separate database: the shell

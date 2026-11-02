@@ -17,7 +17,7 @@ import { answerDraw, answerPrompt, type Game, startGame } from "../src/bend.ts";
 import { Counter, type GameEvent, type LearnedSecret, type Move, type Seat, Secret, Stage } from "../src/domain.ts";
 import { rosterOf } from "../src/players.ts";
 import { agentMoveText } from "../src/text.ts";
-import { replayOf } from "../src/viewer/replay.ts";
+import { replayOf } from "../src/arena/replay.ts";
 import { playFauxRun } from "./faux-run.ts";
 
 // Regret on known positions. Most are two-player games without items, played

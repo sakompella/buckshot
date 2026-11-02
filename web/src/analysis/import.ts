@@ -10,7 +10,7 @@ import { costOf, DEFAULT_PRICES, loadPrices } from "../arena/cost.ts";
 import { RunManifest } from "../arena/match.ts";
 import { CallLine, EventLine, type MoveLine } from "../arena/runlog.ts";
 import { manifestProblems, TournamentFile, tournamentOf } from "../arena/tournament-dir.ts";
-import { replayOf, type Replay } from "../viewer/replay.ts";
+import { replayOf, type Replay } from "../arena/replay.ts";
 
 const sha = (text: string) => createHash("sha256").update(text).digest("hex");
 
@@ -271,7 +271,7 @@ export const importTournaments = ({ database, sources, skipped = {} }: ImportOpt
             }
 
             const delivered = events.flatMap(({ value, line }) => value.kind === "delivered" && value.player === move.player && value.turn === move.turn && line < event.line ? [{ from: value.from, entries: value.entries, seq: value.seq, turn: value.turn }] : []);
-            put("decisions", { id: sha(`${matchId}\0${ordinal}`), match_id: matchId, ordinal, journal_seq: move.seq ?? null, turn: move.turn, player: move.player, position: move.position, selected_move: move.move, label: move.label, by_whom: move.by, visible_json: visible, legal_json: legal, delivered_json: json(delivered), view_provenance: visible === null ? null : "reconstructed:viewer/replay.ts + agentGame; not original prompt", source_record: event.record });
+            put("decisions", { id: sha(`${matchId}\0${ordinal}`), match_id: matchId, ordinal, journal_seq: move.seq ?? null, turn: move.turn, player: move.player, position: move.position, selected_move: move.move, label: move.label, by_whom: move.by, visible_json: visible, legal_json: legal, delivered_json: json(delivered), view_provenance: visible === null ? null : "reconstructed:arena/replay.ts + agentGame; not original prompt", source_record: event.record });
 
             if (manifest !== undefined && replayError === null) {
               const next = replayOf(replay, manifest, moves.slice(0, ordinal + 1).map(({ value }) => value));
@@ -292,7 +292,7 @@ export const importTournaments = ({ database, sources, skipped = {} }: ImportOpt
 
           for (const [ordinal, observation] of calls.entries()) {
             const call = observation.value;
-            // Same chronological attribution as viewer/reasoning.ts. This is a link heuristic, not a provider call id.
+            // Each call belongs to its agent's next chosen move. This is a link heuristic, not a provider call id.
             const decision = moves.findIndex(({ value }) => (value.by === "agent" || value.by === "fallback") && value.player === call.agent && value.t >= call.t);
             put("calls", { id: sha(`${matchId}\0call:${observation.line}`), match_id: matchId, decision_id: decision === -1 ? null : sha(`${matchId}\0${decision}`), ordinal, player: call.agent, position: call.position, model: call.model, provider: call.provider, api: call.api, t: call.t, status: call.error !== undefined || call.stop_reason === "error" || call.stop_reason === "aborted" ? "failed" : "returned", error: call.error ?? null, stop_reason: call.stop_reason, latency_ms: call.latency_ms ?? null, input_tokens: call.usage.input, output_tokens: call.usage.output, cache_read_tokens: call.usage.cacheRead, cache_write_tokens: call.usage.cacheWrite, cache_write_1h_tokens: call.usage.cacheWrite1h ?? null, reasoning_tokens: call.usage.reasoning ?? null, cost_usd: costOf(prices, call) ?? null, reasoning_text: call.thinking, reasoning_provenance: "calls.jsonl thinking, provider-returned text concatenated by runlog.ts; may be summary, not complete chain of thought", response_text: call.text, tool_calls_json: json(call.tool_calls), usage_json: json(call.usage), source_record: observation.record, link_method: decision === -1 ? null : "viewer chronological: next chosen move by same player" });
           }

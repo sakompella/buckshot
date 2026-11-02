@@ -3,17 +3,40 @@ import { Option, Result, Schema } from "effect";
 import { emptyTable, type HeadlessTable } from "../agent/headless.ts";
 import { type AgentCall, AgentReply, type MatchSession, replyText, runTool, tools } from "../agent/tools.ts";
 import { agentGame, type AgentSource } from "../agent/view.ts";
-import { letteredSession, type RunManifest } from "../arena/match.ts";
-import type { MoveLine } from "../arena/runlog.ts";
+import { letteredSession, type RunManifest } from "./match.ts";
+import type { MoveLine } from "./runlog.ts";
 import { Counter, seatsOut } from "../domain.ts";
-import { rosterOf } from "../players.ts";
+import { type Letter, rosterOf } from "../players.ts";
 import { eventText, itemName, secretText } from "../text.ts";
-import type { Frame, PlayerAt } from "./api.ts";
 
 // A spectator's replay of a run: the match started from the manifest's seed,
 // controllers and letters, as src/arena/match.ts starts it, then each logged
 // move played in order through the rules machine. Health, items and the gun
 // come from the machine, never from the log's text (ADR-0001).
+
+export interface PlayerAt {
+  readonly player: Letter;
+  readonly health: number | "jammed";
+  readonly items: ReadonlyArray<string>;
+  readonly cash: number;
+  readonly out: boolean;
+}
+
+/**
+ * The table as the rules machine left it after one logged move, the bots' replies included, with the log entries
+ * the move produced. The first frame is the start of the match.
+ */
+export interface Frame {
+  readonly move?: { readonly turn: number; readonly player: Letter; readonly label: string; readonly by: MoveLine["by"] };
+  /** From 1. */
+  readonly round: number;
+  /** Everyone's health when the round began. */
+  readonly roundHealth: number;
+  /** A public event, or a secret with the player who heard it. */
+  readonly entries: ReadonlyArray<{ readonly text: string; readonly heardBy?: Letter }>;
+  readonly players: ReadonlyArray<PlayerAt>;
+  readonly gun: { readonly live: number; readonly blank: number; readonly remaining: number; readonly sawed: boolean };
+}
 
 /** What a replay starts from. */
 export type ReplaySetup = Pick<RunManifest, "seed" | "controllers" | "letters">;

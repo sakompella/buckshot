@@ -87,11 +87,6 @@ Codex isn't checked there: use account pins, so a full Codex account pauses only
       bun scripts/arena-cost.ts <dir>
 
   This is theoretical cost at `web/src/arena/prices.json` list prices. CPA plans are subscriptions, so nothing is billed.
-- **Viewer:**
-
-      bun scripts/viewer.ts --dir <dir> --port 4173
-
-  It has matches, reasoning per move, filters and a leaderboard.
 
 ## Reasoning settings
 - **Claude 5.5 models:** `adaptive` thinking with an effort and `display: "summarized"` (their default `omitted` returns no text).
