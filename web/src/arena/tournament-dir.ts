@@ -101,7 +101,7 @@ export const openTournament = (dir: string, tournament: Tournament, gitCommit: s
 };
 
 /** What a tournament reads of a match's manifest. */
-const Described = Schema.Struct({ model: Schema.String, effort: Schema.NullOr(Schema.String) });
+const Described = Schema.Struct({ model: Schema.String, effort: Schema.NullOr(Schema.String), instructions_addendum: Schema.optional(Schema.String) });
 
 const MatchManifest = Schema.Struct({
   status: Schema.String,
@@ -174,6 +174,7 @@ export const manifestProblems = (tournament: Tournament, match: ScheduledMatch, 
     return [
       ...(played.model === entrant.model ? [] : [`agent ${seat} played ${played.model}, the schedule says ${entrant.model}`]),
       ...(played.effort === entrant.effort ? [] : [`agent ${seat} played at effort ${played.effort ?? "unset"}, the schedule says ${entrant.effort}`]),
+      ...(played.instructions_addendum === entrant.instructionsAddendum ? [] : [`agent ${seat} played with the instructions addendum ${JSON.stringify(played.instructions_addendum ?? null)}, the schedule says ${JSON.stringify(entrant.instructionsAddendum ?? null)}`]),
       ...(manifest.letters[index] === seat ? [] : [`position ${index + 1} is player ${manifest.letters[index] ?? "none"}, the schedule says ${seat}`]),
     ];
   });

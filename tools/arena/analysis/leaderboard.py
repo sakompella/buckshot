@@ -19,7 +19,7 @@ START, END = "<!-- leaderboard:start -->", "<!-- leaderboard:end -->"
 TITLES = {
     CROSS_MODEL: "Cross-model games (tournament 1)",
     "opus-effort": "Opus efforts (tournament 2)",
-    TOURNAMENT_5_COHORT: "Tournament 5, first imported subset",
+    TOURNAMENT_5_COHORT: "Tournament 5",
 }
 
 
