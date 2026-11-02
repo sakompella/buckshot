@@ -24,7 +24,7 @@ export const shotOf = (detail: { readonly match: Pick<MatchDetail["match"], "sta
   return detail.match.status === "completed" && step.label.startsWith("Shoot") && detail.decisions.at(-1)?.id === step.id ? "live" : null;
 };
 
-export const seatColor = (detail: MatchDetail, player: string): string => {
+const seatColor = (detail: MatchDetail, player: string): string => {
   const seat = detail.seats.find((candidate) => candidate.player === player);
 
   return seat === undefined ? "#999" : colorOf(seat.model);

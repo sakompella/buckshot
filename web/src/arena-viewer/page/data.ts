@@ -1,8 +1,10 @@
+import { EFFORTS } from "../../arena/model-names.ts";
 import type { CertainType, Seat, Story } from "../api.ts";
 
 // The page's numbers: model labels and colours, per-config stats, ratings and intervals.
 
-export const EFFORTS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+/** Sorts efforts weakest first; one model-names.ts does not list sorts before them all. */
+export const byEffort = (left: string, right: string): number => EFFORTS.indexOf(left) - EFFORTS.indexOf(right);
 
 export const DEFAULT_EFFORT = "medium";
 
@@ -84,7 +86,7 @@ export const isClaude = (model: string): boolean => model.startsWith("claude");
 /** A config: one model at one effort. */
 export const keyOf = (seat: { readonly model: string; readonly effort: string }): string => `${seat.model}|${seat.effort}`;
 
-const splitKey = (key: string): readonly [string, string] => {
+export const splitKey = (key: string): readonly [string, string] => {
   const [model = "", effort = ""] = key.split("|");
 
   return [model, effort];
@@ -312,7 +314,7 @@ export const blockRate = (tally: BlockTally, reps = 400): Rate => {
 
 // CONFIG STATS
 
-export const PROVISIONAL_BELOW = 20;
+const PROVISIONAL_BELOW = 20;
 
 export const MIN_BLOCKS_FOR_INTERVAL = 4;
 
@@ -322,7 +324,6 @@ export const blocksOf = (seats: ReadonlyArray<Pick<SeatFull, "seedBlock">>): num
 
 export interface ModelStats {
   /** The config key. */
-  readonly id: string;
   readonly key: string;
   readonly model: string;
   readonly effort: string;
@@ -360,7 +361,7 @@ export const costPerMove = ({ scored }: { readonly scored: ReadonlyArray<Pick<Se
 };
 
 export const modelStats = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<ModelStats> =>
-  [...groupBy(seats, keyOf)].flatMap(([id, started]) => {
+  [...groupBy(seats, keyOf)].flatMap(([key, started]) => {
     const [first] = started;
 
     if (first === undefined) return [];
@@ -375,11 +376,10 @@ export const modelStats = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<ModelS
 
     return [
       {
-        id,
-        key: keyOf(first),
+        key,
         model: first.model,
         effort: first.effort,
-        label: labelOf(keyOf(first)),
+        label: labelOf(key),
         color: colorOf(first.model),
         dash: DASH.get(first.effort) ?? "",
         started,
