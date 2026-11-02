@@ -1,0 +1,85 @@
+{
+  "name": "t7-terra-xhigh",
+  "seed": 4840,
+  "delivery": "on-turn",
+  "endpoints": {
+    "cpa-anthropic": {
+      "api": "anthropic",
+      "url": "https://hub.dog-minnow.ts.net",
+      "keyEnv": "CPA_KEY"
+    },
+    "cpa-openai": {
+      "api": "openai-responses",
+      "url": "https://hub.dog-minnow.ts.net/v1",
+      "keyEnv": "CPA_KEY"
+    }
+  },
+  "entrants": {
+    "gpt-6.1-terra-xhigh": {
+      "catalogModel": "openai/gpt-5.6-terra",
+      "effort": "xhigh",
+      "endpoint": "cpa-openai",
+      "model": "gpt-6.1-terra"
+    },
+    "claude-sonnet-5-5-low": {
+      "effort": "low",
+      "endpoint": "cpa-anthropic",
+      "model": "claude-sonnet-5-5"
+    },
+    "claude-haiku-5-5": {
+      "effort": "medium",
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-5-5"
+    },
+    "claude-sonnet-5-5": {
+      "effort": "medium",
+      "endpoint": "cpa-anthropic",
+      "model": "claude-sonnet-5-5"
+    },
+    "gpt-5.6-terra": {
+      "catalogModel": "openai/gpt-5.6-terra",
+      "effort": "medium",
+      "endpoint": "cpa-openai",
+      "model": "gpt-5.6-terra"
+    }
+  },
+  "pairings": [
+    {
+      "entrants": [
+        "gpt-6.1-terra-xhigh",
+        "claude-sonnet-5-5-low"
+      ],
+      "seeds": [
+        4840
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5",
+        "gpt-6.1-terra-xhigh"
+      ],
+      "seeds": [
+        4841
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6.1-terra-xhigh",
+        "claude-sonnet-5-5"
+      ],
+      "seeds": [
+        4842
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-5.6-terra",
+        "gpt-6.1-terra-xhigh"
+      ],
+      "seeds": [
+        4846
+      ]
+    }
+  ],
+  "blocksPerPairing": 1
+}
