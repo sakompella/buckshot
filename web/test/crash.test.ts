@@ -9,8 +9,8 @@ import { Option, Result, Schema } from "effect";
 
 import { RunManifest } from "../src/arena/match.ts";
 import { entriesSentTo } from "../src/arena/runlog.ts";
-import { decodeEventLine, movesOf, readJsonl } from "../src/viewer/runs.ts";
-import { replayOf } from "../src/viewer/replay.ts";
+import { decodeEventLine, movesOf, readJsonl } from "../src/arena/jsonl.ts";
+import { replayOf } from "../src/arena/replay.ts";
 
 // Ends test/crash-run.ts's faux match at each journal commit and log export,
 // resumes it, and checks the run against one never stopped: the same moves,

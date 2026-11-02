@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { Option, Result } from "effect";
 
 import { importTournaments, openAnalysis } from "../src/analysis/import.ts";
-import { replayOf } from "../src/viewer/replay.ts";
+import { replayOf } from "../src/arena/replay.ts";
 import { playFauxRun } from "./faux-run.ts";
 
 test("refreshes resumed logs without duplicating calls, retains bad observations, and rebuilds the same projections", async () => {
@@ -174,6 +174,26 @@ test("an entrant with an effort label is filed under it, and the others under th
     writeFileSync(join(source, "tournament.json"), JSON.stringify(file));
     importTournaments({ database, sources: [source] });
     expect(rowsOf(database, "SELECT name, effort FROM entrants ORDER BY name")).toEqual([{ name: "a", effort: "off" }, { name: "b", effort: "medium" }]);
+    expect(rowsOf(database, "SELECT message FROM issues")).toEqual([]);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("a match whose agent played its entrant's instructions addendum is not an issue", async () => {
+  const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
+
+  try {
+    const { source } = await probeTournament(root, "medium");
+    const database = join(root, "analysis.sqlite");
+    const tournamentPath = join(source, "tournament.json");
+    const manifestPath = join(source, "a_b_b0_p0", "manifest.json");
+    const file = JSON.parse(readFileSync(tournamentPath, "utf8"));
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+
+    file.config.entrants.a.instructionsAddendum = "Answer at once.";
+    manifest.provenance.agents[manifest.letters[0]].instructions_addendum = "Answer at once.";
+    writeFileSync(tournamentPath, JSON.stringify(file));
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+    importTournaments({ database, sources: [source] });
     expect(rowsOf(database, "SELECT message FROM issues")).toEqual([]);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

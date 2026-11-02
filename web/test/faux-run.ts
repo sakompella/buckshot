@@ -7,7 +7,7 @@ import { type Delivery, playMatch } from "../src/arena/match.ts";
 import type { Controller } from "../src/driver.ts";
 
 // A finished arena run that costs nothing: faux pi-ai models that answer each
-// turn's view with a move. The viewer's tests and its screenshot check use it.
+// turn's view with a move. The replay and crash tests use it.
 
 const View = Schema.Struct({ turn: Schema.optional(Schema.Int), moves: Schema.optional(Schema.Array(Schema.Struct({ move: Schema.Int, label: Schema.String }))) });
 
