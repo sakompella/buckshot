@@ -1,6 +1,6 @@
 # Regret
 
-How good each agent move was, by the minimax player in `sim/bend-mp/player/` ([ADR-0043](../../adr/0043-minimax-player.md)). For every agent decision the player scores each legal move from the deciding player's own information. Regret is the best move's score minus the chosen move's score. The script scores one match, every match of the analysis database split over shards, or the decisions a list names.
+How good each agent move was, by the minimax player in `sim/bend-mp/player/` ([ADR-0043](../../adr/0043-minimax-player.md)). For every agent decision the player scores each legal move from the deciding player's own information. Regret is the best move's score minus the chosen move's score. The script scores one match, every match of the analysis database split over shards, or the decisions a list names. [net-points.md](net-points.md) sums it per match and seat.
 
 ## How it is measured
 
