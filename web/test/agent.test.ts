@@ -98,7 +98,7 @@ test("new_match makes Player A the agent and DoN the others by default, and auto
 
   const ticked = update(model, Message.TickedAutoplay()).model;
 
-  expect(match(ticked).events).toBe(match(model).events);
+  expect(match(ticked).events).toEqual(match(model).events);
   expect(match(ticked).isAutoplay).toBe(true);
 });
 
@@ -129,14 +129,17 @@ test("a tool call through update returns one reply command", () => {
   expect(outcome.commands?.map(({ name }) => name)).toEqual(["ReplyToAgent"]);
 });
 
-test("in the page, new_match is refused while a match runs, the Restart match button still starts one, and a turn from before the restart is refused at the same point of the same seed", () => {
+test("in the page, new_match is refused while a match runs and changes nothing", () => {
   const first = untilAgentTurn(newMatch(2, false, 3, ["Agent", "DoN"]));
-  const { turn = expect.unreachable("Player A has no turn"), ...before } = viewOf(first, A);
   const refused = call(first, AgentCall.cases.NewMatch.make({ players: 2, items: false, seed: 3, controllers: ["Agent", "DoN"] }));
 
   expect(refused.reply._tag).toBe("Refused");
   expect(refused.state).toBe(first);
+});
 
+test("in the page, the Restart match button starts the same seed over, and a turn from before the restart is refused", () => {
+  const first = untilAgentTurn(newMatch(2, false, 3, ["Agent", "DoN"]));
+  const { turn = expect.unreachable("Player A has no turn"), ...before } = viewOf(first, A);
   const restarted = untilAgentTurn(update(first, Message.ClickedNewMatch()).model);
   const { turn: laterTurn, ...after } = viewOf(restarted, A);
 

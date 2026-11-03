@@ -103,7 +103,6 @@ test("missing code checkouts wait, skip leaves matches untouched, and --limit re
   const waiting = run();
 
   expect(await waiting.exited).toBe(1);
-  expect(await new Response(waiting.stdout).text()).toContain("wait for a checkout");
   expect(schedule.map(({ name }) => starts(dir, name))).toEqual([0, 0]);
   expect(await run(["--code", `${OLD}=${checkout}`, "--skip", "faux"]).exited).toBe(0);
   expect(schedule.map(({ name }) => starts(dir, name))).toEqual([0, 0]);

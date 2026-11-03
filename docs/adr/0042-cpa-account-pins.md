@@ -1,6 +1,6 @@
 # CPA account pins
 
-A tournament endpoint can list a non-empty `accounts` pool of CPA auth ids. The runner assigns each agent of that endpoint an account when its match starts. It excludes accounts cooling for that model and prefers the account with the fewest running matches, breaking ties by config order. Running matches count across models because an account can serve several models.
+A tournament endpoint can list a non-empty `accounts` pool of CPA auth ids. The runner assigns each agent of that endpoint an account when its match starts. It excludes accounts cooling for that model and prefers the account with the fewest running matches, breaking ties by the runner's `--prefer-account` order, then by config order. Running matches count across models because an account can serve several models.
 
 The child receives its pin in `PLAYER_X_CPA_AUTH_ID`, never a command argument. Both provider APIs send `X-CPA-Auth-ID` on every request. The agent's provenance records `cpa_auth_id` and the journal fixes it with the rest of the match configuration, as in ADR-0039. A resume reads that recorded pin, even when another account is available. A match started without pins resumes without pins.
 
