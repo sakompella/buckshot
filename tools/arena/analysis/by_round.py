@@ -87,6 +87,16 @@ def public_lines(db) -> dict[str, list[str]]:
     return longest
 
 
+def read_winners(db_path: str, matches: list[str]) -> dict[str, dict[int, str] | None]:
+    """Round number to winner's letter for each match, None where the prizes do not add up to the final cash."""
+    db = connect(db_path)
+    cash = defaultdict(dict)
+    for match, player, total in db.execute("SELECT match_id, player, cash FROM match_seats"):
+        cash[match][player] = total
+    lines = public_lines(db)
+    return {match: round_winners(lines.get(match, []), cash[match]) for match in matches}
+
+
 def load_results(db_path: str, knowledge_path: Path) -> Results:
     """Both seats of every round of the finished matches, with the seat's config and whether it won."""
     knowledge = connect(str(knowledge_path))
@@ -97,18 +107,12 @@ def load_results(db_path: str, knowledge_path: Path) -> Results:
         (f"%{SKIPPED_MODEL}%",),
     ):
         seats[match][player] = (model, effort)
-    db = connect(db_path)
-    cash = defaultdict(dict)
-    for match, player, total in db.execute("SELECT match_id, player, cash FROM match_seats"):
-        cash[match][player] = total
-    lines = public_lines(db)
     results, unreadable = [], 0
-    for match, configs in seats.items():
-        winners = round_winners(lines.get(match, []), cash[match])
+    for match, winners in read_winners(db_path, list(seats)).items():
         if winners is None:
             unreadable += 1
             continue
-        results += [RoundResult(model, effort, round, winner == player) for round, winner in winners.items() for player, (model, effort) in configs.items()]
+        results += [RoundResult(model, effort, round, winner == player) for round, winner in winners.items() for player, (model, effort) in seats[match].items()]
     return Results(results, unreadable)
 
 
