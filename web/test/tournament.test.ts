@@ -3,6 +3,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { ConfigProvider, Effect, Exit, Option, Redacted, Result, type Schema } from "effect";
 
 import { AGENTS } from "../src/arena/agent.ts";
@@ -165,9 +167,16 @@ const syntheticMatches = (seed: number): ReadonlyArray<PlayedMatch> => {
   });
 };
 
-test("ties share the win", () => {
-  expect(winShares([100, 100, 50])).toEqual([0.5, 0.5, 0]);
-  expect(winShares([10, 90])).toEqual([0, 1]);
+test("the players with the most cash share one win equally, and the others get none", () => {
+  hegel.test((tc) => {
+    const cash = tc.draw(gs.arrays(gs.integers({ minValue: -1000, maxValue: 1000 }), { minSize: 2, maxSize: 4 }));
+    const shares = winShares(cash);
+    const best = Math.max(...cash);
+
+    expect(shares.reduce((total, share) => total + share, 0)).toBeCloseTo(1);
+    expect(shares.map((share) => share > 0)).toEqual(cash.map((amount) => amount === best));
+    expect(new Set(shares.filter((share) => share > 0)).size).toBe(1);
+  });
 });
 
 test("ratings recover the strengths and seat terms that drew the matches, and the bootstrap interval covers them", () => {
@@ -191,7 +200,7 @@ test("ratings recover the strengths and seat terms that drew the matches, and th
   expect(fitted.seats.map(({ size, position }) => `${size}:${position}`)).toEqual(["3:2", "3:3"]);
 });
 
-test("the same seed gives the same intervals, and win shares sum to one per match", () => {
+test("the same seed gives the same intervals, and every match gives out exactly one win", () => {
   const matches = syntheticMatches(3);
   const again = (seed: number) => intervalsOf(resamples(matches, 50, seed).map((resample) => new Map([...sharesByEntrant(resample)].map(([entrant, { share }]) => [entrant, share]))));
 
@@ -622,24 +631,24 @@ test("one directory holds one tournament", () => {
 });
 
 test("balanced block seeds start every position as evenly as they can in every prefix, after the kept ones", () => {
-  for (const table of [2, 3, 4] as const) {
-    for (const blocks of [1, 4, 7, 10]) {
-      const from = 1000 * table + blocks;
-      const keep = blocks > 2 ? [from - 1] : [];
-      const seeds = balancedSeeds(table, blocks, from, keep);
+  hegel.test((tc) => {
+    const table = tc.draw(gs.sampledFrom([2, 3, 4] as const));
+    const blocks = tc.draw(gs.integers({ minValue: 1, maxValue: 12 }));
+    const from = tc.draw(gs.integers({ minValue: 1, maxValue: 100_000 }));
+    const keep = blocks > 2 ? [from - 1] : [];
+    const seeds = balancedSeeds(table, blocks, from, keep);
 
-      expect(seeds.length).toBe(blocks);
-      expect(new Set(seeds).size).toBe(blocks);
-      expect(seeds.slice(0, keep.length)).toEqual(keep);
+    expect(seeds.length).toBe(blocks);
+    expect(new Set(seeds).size).toBe(blocks);
+    expect(seeds.slice(0, keep.length)).toEqual(keep);
 
-      for (let length = keep.length + 1; length <= blocks; length++) {
-        const started = Array.from({ length: table }, (_, position) => seeds.slice(0, length).filter((seed) => firstPositionOf(seed, table) === position + 1).length);
+    for (let length = keep.length + 1; length <= blocks; length++) {
+      const started = Array.from({ length: table }, (_, position) => seeds.slice(0, length).filter((seed) => firstPositionOf(seed, table) === position + 1).length);
 
-        expect(Math.max(...started) - Math.min(...started)).toBeLessThanOrEqual(1);
-      }
+      expect(Math.max(...started) - Math.min(...started)).toBeLessThanOrEqual(1);
     }
-  }
-});
+  }, { testCases: 25 });
+}, 30_000);
 
 test("a match started under a code version is resumed under it, and a match not yet started under none", () => {
   const dir = mkdtempSync(join(tmpdir(), "tournament-code-"));

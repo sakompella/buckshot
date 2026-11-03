@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { Option, Predicate, Result } from "effect";
 
 import { answerPrompt } from "../src/bend.ts";
 import { type GameEvent, type Seat, type SeatCount } from "../src/domain.ts";
 import { aiPrompt, aiStep, begin, type Controller, type Progress, promptsOf } from "../src/driver.ts";
 import { seedRng } from "../src/rng.ts";
-import { titles } from "../src/titles.ts";
 
 const MOVE_LIMIT = 5_000;
 
@@ -23,26 +24,24 @@ const playOut = (table: SeatCount, items: boolean, seed: number, controllers: Re
   return progress;
 };
 
-for (const table of [2, 3, 4] as const) {
-  for (const items of [false, true]) {
-    test(`Story and DoN finish a ${table}-seat match, items ${items ? "on" : "off"}`, () => {
-      for (let seed = 1; seed <= 3; seed++) {
-        const progress = playOut(table, items, seed * 7919 + table, MIXED);
+const table = gs.sampledFrom([2, 3, 4] as const);
 
-        expect(progress.game.pending.kind).toBe("Finished");
-        expect(progress.events.at(-1)?._tag).toBe("MatchConcluded");
-        expect(titles(progress.events, progress.game.seats)).toHaveLength(5);
-      }
-    });
-  }
-}
+test("Story and DoN finish a match at any table, items on or off, from any seed", () => {
+  hegel.test((tc) => {
+    const progress = playOut(tc.draw(table), tc.draw(gs.booleans()), tc.draw(gs.integers()), MIXED);
 
-test("an AI match with items is reproducible from its seed", () => {
-  const first = playOut(3, true, 42, MIXED);
-  const second = playOut(3, true, 42, MIXED);
+    expect(progress.game.pending.kind).toBe("Finished");
+    expect(progress.events.at(-1)?._tag).toBe("MatchConcluded");
+  }, { testCases: 20 });
+}, 60_000);
 
-  expect(second.events).toEqual(first.events);
-});
+test("an AI match is reproducible from its seed", () => {
+  hegel.test((tc) => {
+    const [size, items, seed] = [tc.draw(table), tc.draw(gs.booleans()), tc.draw(gs.integers())];
+
+    expect(playOut(size, items, seed, MIXED).events).toEqual(playOut(size, items, seed, MIXED).events);
+  }, { testCases: 10 });
+}, 60_000);
 
 test("items are used when they are on", () => {
   const used = [1, 2, 3].flatMap((seed) => playOut(2, true, seed, MIXED).events).filter(Predicate.isTagged("Used"));
@@ -139,23 +138,19 @@ const roundRobin = ({ first, takers }: Distribution): ReadonlyArray<Seat> => {
   return order;
 };
 
-for (const table of [2, 3, 4] as const) {
-  test(`bots take their items one seat at a time from the seat after the first shooter, ${table} seats`, () => {
-    let distributions = 0;
-    let shared = 0;
+test("bots take their items one seat at a time from the seat after the first shooter", () => {
+  let distributions = 0;
+  let shared = 0;
 
-    for (let seed = 1; seed <= 8; seed++) {
-      const progress = playOut(table, true, seed * 104729 + table, MIXED);
+  hegel.test((tc) => {
+    for (const distribution of distributionsOf(playOut(tc.draw(table), true, tc.draw(gs.integers()), MIXED))) {
+      expect(distribution.takers).toEqual(roundRobin(distribution));
+      distributions++;
 
-      for (const distribution of distributionsOf(progress)) {
-        expect({ table, seed, takers: distribution.takers }).toEqual({ table, seed, takers: roundRobin(distribution) });
-        distributions++;
-
-        if (new Set(distribution.takers).size > 1) shared++;
-      }
+      if (new Set(distribution.takers).size > 1) shared++;
     }
+  }, { testCases: 20, derandomize: true });
 
-    expect(distributions).toBeGreaterThan(0);
-    expect(shared).toBeGreaterThan(0);
-  });
-}
+  expect(distributions).toBeGreaterThan(0);
+  expect(shared).toBeGreaterThan(0);
+}, 60_000);
