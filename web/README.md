@@ -230,10 +230,29 @@ answers clients that use the older `initialize` handshake.
 
 ## Arena analysis viewer
 
-`bun scripts/arena-viewer.ts <db> [host] [port] [--regret <regret db>] [--knowledge <knowledge db>] [--certain-mistakes <opportunities db>]` serves charts over the arena
+The site is one app (`src/site/`) with three pages, each at its own URL:
+
+| Page | URL | Needs |
+|-|-|-|
+| Play | `/` | nothing: the game runs in the browser |
+| Arena | `/arena?offModels=…&offEfforts=…&row=…` | the arena viewer's API |
+| Replay | `/replay/<match id>?at=<move ordinal>` | the arena viewer's API |
+
+The arena's filter, its open leaderboard row and a replay's move live in the
+URL, so a link shares them and a reload keeps them. Opening a replay adds a
+history entry, so Back closes it. Old links to the arena's sections
+(`/#scatter`) move to `/arena#scatter`. A build of the site with no arena
+server (`vite preview`, a static host) still plays; Arena and Replay then say
+they need the arena data.
+
+`bun scripts/arena-viewer.ts <db> [host] [port] [--regret <regret db>] [--knowledge <knowledge db>] [--certain-mistakes <opportunities db>]` serves the built site
+(`web/dist`: run `bun run build` first) and its API over the arena
 analysis database (`scripts/arena-import.ts` builds it; see
 `docs/arena/database.md`) at http://127.0.0.1:8790/ by default, with no auth.
-It is one long page in six groups, in this order:
+`bun run dev` proxies `/api` to a viewer on that port, so the arena pages work in
+development while one runs.
+
+The Arena page is one long page in six groups, in this order:
 
 - the hero numbers;
 - Results: the cost, moves, output tokens or mean regret vs rating scatter, each model's rating across its efforts,
