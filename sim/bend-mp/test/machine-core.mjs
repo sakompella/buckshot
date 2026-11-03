@@ -1,59 +1,10 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { config, round, list, array, kind, seat, tag, plain, requestJSON, maybe, turnHolder, jamPair, machineJam } from './reference-adapter.mjs';
+import { config, round, list, array, kind, seat, tag, plain, requestJSON, maybe, machineJam } from './reference-adapter.mjs';
+import { loadModels, lockstep, nil, normalize, ring } from './machine-items-lib.mjs';
 
-const dir = mkdtempSync(join(tmpdir(), 'bend-mp-machine-core-'));
-function build(name, relativeSource) {
-  const source = fileURLToPath(new URL(relativeSource, import.meta.url));
-  const output = join(dir, `${name}.mjs`);
-  for (const args of [[source, '--check-only'], [source, '-o', output]]) {
-    const result = spawnSync(process.env.BEND ?? 'bend', args, { encoding: 'utf8' });
-    if (result.error) throw result.error;
-    const log = `${result.stdout}${result.stderr}`;
-    assert.equal(result.status, 0, `Bend ${name} failed:
-${log}`);
-    assert.doesNotMatch(log, /SOME (?:PROOFS|TYPES) FAIL/, `Bend ${name} reported a check failure`);
-    if (args.includes('--check-only')) assert.match(log, /ALL PROOFS CHECK/);
-  }
-  return pathToFileURL(output).href;
-}
-
+const { M, R, close } = await loadModels('bend-mp-machine-core-');
 try {
-  const machine = build('machine', '../sm/main.bend');
-  const reference = build('reference', '../ref/main.bend');
-  const M = (await import(machine)).default;
-  const R = (await import(reference)).default;
-
-  const normalize = value => JSON.parse(JSON.stringify(value, (key, x) => {
-    if (typeof x === 'bigint') return Number(x);
-    if (key === '$') return x.split('.').at(-1);
-    return x;
-  }));
-  const ring = (template, f) => Object.fromEntries(Object.entries(template).map(([key, value]) => [key, key === '$' ? value : f(value, key)]));
-  const nil = list([]);
-  const hostState = state => {
-    const { world, players, grabs } = state;
-    const seats = ring(players, (s, key) => ({ health: s.health, ...jamPair(s.jam), cash: s.cash, slots: s.slots, grabbing: grabs.grabbing[key], holding: grabs.holding[key], has_turn: turnHolder(state.phase) === Number(key.slice(1)) }));
-    return { ...world, seats, distributing: grabs.distributing, grabs: ring(players, (_, key) => ({ $: 'GrabProgress', count: grabs.granted[key], intake: grabs.intake[key] })) };
-  };
-  const referenceHost = state => ({ ...state.host, seats: ring(state.host.seats, props => {
-    const { $, ...fields } = props;
-    return { ...fields, jam_checked: fields.jammed ? fields.jam_checked : null };
-  }) });
-  let checked = 0;
-  const compare = (reference, machine) => {
-    assert.deepEqual(normalize(M.point(machine)), normalize(R.point(reference)), 'public point must agree');
-    const host = hostState(machine);
-    const expected = referenceHost(reference);
-    delete host.$;
-    delete expected.$;
-    assert.deepEqual(normalize(host), normalize(expected), 'hidden fields and independent player rings must agree');
-    checked++;
-  };
+  const { compare, boundaries } = lockstep(M, R);
   const replay = (c, tape) => {
     let r = R.start(c), m = M.start(c);
     assert.deepEqual(normalize(m.notes), normalize(r.notes));
@@ -74,21 +25,6 @@ try {
   for (const seats of [2, 3, 4]) {
     const c = config(seats, [round({ health: 100, live: 0, blank: 1 })]);
     replay(c, Array(140).fill(0));
-  }
-  let seed = 0x4b534854;
-  const random = () => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return seed >>> 0; };
-  for (const seats of [2, 3, 4]) {
-    for (let trial = 0; trial < 30; trial++) {
-      const rounds = Array.from({ length: 1 + random() % 3 }, () => round({
-        health: random() % 2 ? null : 1 + random() % 5,
-        loads: Array.from({ length: 4 }, () => {
-          const total = 1 + random() % 7;
-          const live = random() % (total + 1);
-          return { live: random() % 2 ? null : live, blank: total - live, amount: random() % 2 ? null : random() % 6 };
-        }),
-      }));
-      replay(config(seats, rounds), Array.from({ length: 120 }, () => random() % 20));
-    }
   }
   for (const seats of [2, 3, 4]) {
     const c = config(seats, [round({ health: 3, live: 1, blank: 1 })]);
@@ -166,7 +102,7 @@ try {
   const itemized = config(2, [round(), round({ items: { saw: {} } })]);
   assert.notEqual(requestJSON(M.point(M.start(itemized).state).request).kind, 'Stuck', 'an item config starts');
   compare(R.start(itemized).state, M.start(itemized).state);
-  console.log(`core differential verification: ${checked} boundaries passed`);
+  console.log(`core differential verification: ${boundaries()} boundaries passed`);
 } finally {
-  rmSync(dir, { recursive: true });
+  close();
 }

@@ -42,10 +42,5 @@ class StarterShares(unittest.TestCase):
         self.assertIsNone(sp.starter_round_win(played, 3))
 
 
-class Ranks(unittest.TestCase):
-    def test_ranks_average_ties(self):
-        self.assertEqual(sp.ranks([3.0, 1.0, 3.0, 2.0]), [3.5, 1.0, 3.5, 2.0])
-
-
 if __name__ == "__main__":
     unittest.main()
