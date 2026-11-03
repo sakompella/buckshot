@@ -16,7 +16,9 @@ def game(seed, starter_wins_round_1, cash=(150000, 75000), starter=1):
 class Spread(unittest.TestCase):
     def test_spread_is_the_sd_of_the_seeds_own_shares(self):
         games = [game(seed, seed % 2 == 0) for seed in range(40) for _ in range(2)]
-        self.assertIn("50.0", sp.spread(games))
+        rows = {cells[0]: cells for cells in ([c.strip() for c in line.strip("|").split("|")] for line in sp.spread(games).splitlines()[2:])}
+        self.assertEqual(rows["round 1"][1:], ["2.0", "50.0"])
+        self.assertEqual(rows["match"][1:], ["2.0", "0.0"])
 
 
 class Load(unittest.TestCase):

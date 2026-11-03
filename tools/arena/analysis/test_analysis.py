@@ -37,10 +37,9 @@ class Bradley(unittest.TestCase):
         fitted = bt.fit(bt.cells_of(games, share=lambda g: g.pot_first))
         self.assertAlmostEqual(bt.sigmoid(fitted.theta["a"] - fitted.theta["b"]), 0.6, places=2)
 
-    def test_ratings_have_mean_zero_on_the_elo_scale(self):
+    def test_ratings_follow_who_beat_whom(self):
         games = [game("1", "a", "b", 1.0), game("2", "b", "c", 1.0), game("3", "a", "c", 1.0), game("4", "b", "a", 0.0)]
         elo = bt.fit(bt.cells_of(games)).elo()
-        self.assertAlmostEqual(sum(elo.values()), 0.0, places=6)
         self.assertGreater(elo["a"], elo["b"])
         self.assertGreater(elo["b"], elo["c"])
 

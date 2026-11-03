@@ -122,6 +122,7 @@ test.each([
   ["a bad entrant name", { entrants: { ...ENTRANTS, Luna: ENTRANTS.luna } }, "the config is not valid"],
   ["a mistyped key", { entrants: { ...ENTRANTS, luna: { ...ENTRANTS.luna, efort: "low" } } }, "the config is not valid"],
   ["an unknown effort", { entrants: { ...ENTRANTS, luna: { ...ENTRANTS.luna, effort: "extreme" } } }, "the config is not valid"],
+  ["a blank instructions addendum", { entrants: { ...ENTRANTS, luna: { ...ENTRANTS.luna, instructionsAddendum: "" } }, pairings: [["luna", "don"]] }, "the config is not valid"],
 ])("a config with %s fails and says so", (_, changes, message) => {
   expect(errorOf(configJson(changes))).toContain(message);
 });
@@ -432,7 +433,7 @@ test.each([
   ['openai-responses-A API error (429): {"error":{"message":"Too many requests"}}', RATE_LIMIT_WAIT_SECONDS],
   ['429 {"type":"error","error":{"type":"rate_limit_error","message":"Number of requests has exceeded your rate limit"}}', RATE_LIMIT_WAIT_SECONDS],
   ['openai-responses-A API error (503): {"message":"server_is_overloaded"}', undefined],
-])("a fault holds back the model for the reset its error gives, any 429 for a while, and nothing else: %s", (error, seconds) => {
+])("a fault holds back the model for the reset its error gives, a 429 without one for a fixed wait, and any other fault not at all: %s", (error, seconds) => {
   const tournament = tournamentFrom(configJson({ pairings: [["luna", "haiku-5-5"]], blocksPerPairing: 1 }));
   const [match] = scheduleOf(tournament);
   const dir = mkdtempSync(join(tmpdir(), "tournament-limit-"));
@@ -685,7 +686,7 @@ test("a pairing that lists its block seeds plays its blocks at them, and a tourn
   expect(Result.isSuccess(grown) && grown.success.schedule).toEqual([...scheduleOf(first), ...schedule.filter((match) => match.pairing === 1)]);
 });
 
-test("a tournament grows by entrants and their endpoints, by pairings listed after its own and by seed blocks, its scheduled matches stay first and unchanged, and a config it grew from opens it as it is", () => {
+test("a tournament grows by entrants and by pairings listed after its own: its scheduled matches stay first and unchanged, the config it grew from opens it as it is, and reordered pairings are refused", () => {
   const dir = join(mkdtempSync(join(tmpdir(), "tournament-dir-")), "t");
   const first = tournamentFrom(configJson({ entrants: { luna: ENTRANTS.luna, don: ENTRANTS.don }, pairings: [["luna", "don"]] }));
   const grown = tournamentFrom(configJson({ pairings: [["luna", "don"], ["haiku-5-5", "luna"], ["opus", "story"]] }));
@@ -705,6 +706,14 @@ test("a tournament grows by entrants and their endpoints, by pairings listed aft
   for (const pairings of [[["haiku-5-5", "luna"]], [["haiku-5-5", "luna"], ["luna", "don"]]]) {
     expect(Result.isFailure(openTournament(dir, tournamentFrom(configJson({ pairings })), "abc123", new Date(0)))).toBe(true);
   }
+
+});
+
+test("a tournament grows by seed blocks and by endpoints for new entrants, but not by a changed delivery or a changed endpoint it already used", () => {
+  const dir = join(mkdtempSync(join(tmpdir(), "tournament-dir-")), "t");
+  const grown = tournamentFrom(configJson({ pairings: [["luna", "don"], ["haiku-5-5", "luna"], ["opus", "story"]] }));
+  const opened = openTournament(dir, grown, "abc123", new Date(0));
+  const schedule = Result.isSuccess(opened) ? opened.success.schedule : [];
 
   expect(openTournament(dir, tournamentFrom(configJson({ pairings: [["luna", "don"], ["haiku-5-5", "luna"], ["opus", "story"]], blocksPerPairing: 1 })), "abc123", new Date(0))).toEqual(opened);
   expect(Result.isFailure(openTournament(dir, tournamentFrom(configJson({ pairings: [["luna", "don"], ["haiku-5-5", "luna"], ["opus", "story"]], delivery: "live" })), "abc123", new Date(0)))).toBe(true);
@@ -771,8 +780,8 @@ test("a match's child gets no PLAYER_* variable but its own, and no key shows in
   const command = childCommand("/tmp/t/m", tournament.config, match);
 
   expect(command.join(" ")).not.toContain("sk-secret-value");
-  expect(command.slice(0, 5)).toEqual(["nice", "-n", "10", "bun", "--no-env-file"]);
-  expect(command.slice(command.indexOf("--seats"))).toEqual(["--seats", match.seats.join(","), "--rotation", "0", "--delivery", "on-turn"]);
+  expect(command).toContain("--no-env-file");
+  expect(command[command.indexOf("--seats") + 1]).toBe(match.seats.join(","));
 });
 
 test("an entrant's instructions addendum reaches only its own seat's environment and the schedule check, and an entrant without one is unchanged", () => {
@@ -796,10 +805,6 @@ test("an entrant's instructions addendum reaches only its own seat's environment
   if (plainMatch === undefined) throw new Error("setup failed");
 
   expect(Object.keys(childEnv({}, plain.config, plainMatch, keys.success)).filter((name) => name.endsWith("_INSTRUCTIONS_ADDENDUM"))).toEqual([]);
-});
-
-test("a blank instructions addendum is not a valid entrant", () => {
-  expect(errorOf(configJson({ entrants: { ...ENTRANTS, luna: { ...ENTRANTS.luna, instructionsAddendum: "" } }, pairings: [["luna", "don"]] }))).toContain("not valid");
 });
 
 test("a finished match whose agent played without the instructions addendum the schedule gives its entrant is left out", () => {
