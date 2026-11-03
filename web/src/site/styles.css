@@ -1,0 +1,42 @@
+/* The site's bar of pages, above whichever page is shown. The arena styles bare `nav`, so these rules name the bar's own. */
+:root { --site-nav: 34px; }
+
+nav.site-nav {
+  position: static;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: 4px;
+  height: var(--site-nav);
+  margin: 0;
+  padding: 0 10px;
+  background: #000;
+  border-bottom: 1px solid #222;
+  font: 14px/1 system-ui, sans-serif;
+}
+
+nav.site-nav .site-name { display: inline-flex; align-items: center; margin-right: 10px; color: #888; letter-spacing: 0.08em; text-transform: uppercase; font-size: 12px; }
+
+nav.site-nav a {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 0;
+  padding: 0 10px;
+  border-radius: 0;
+  color: #aaa;
+  font-size: 14px;
+  text-decoration: none;
+  background: none;
+  box-shadow: none;
+  border-bottom: 2px solid transparent;
+}
+
+nav.site-nav a:hover { color: #fff; }
+
+nav.site-nav a[aria-current="page"] { color: #fff; border-bottom-color: currentColor; }
+
+/* The bar's bottom border comes out of its height, which leaves the links 44px for a finger. */
+@media (pointer: coarse) { :root { --site-nav: 45px; } }
+
+.site-play .app { height: calc(100vh - var(--site-nav)); height: calc(100dvh - var(--site-nav)); }

@@ -1,6 +1,7 @@
 import { Schema } from "effect";
 import { AsyncData } from "foldkit";
 import { defineMessageUnion } from "foldkit/message";
+import { defineTaggedUnion } from "foldkit/schema";
 
 import { CertainMistakes, CertainType, Consistency, Decisions, Download, MatchDetail, Seat } from "../api.ts";
 
@@ -115,9 +116,14 @@ export const Viewport = Schema.Struct({ width: Schema.Number, height: Schema.Num
 
 export type Viewport = typeof Viewport.Type;
 
+/** Why the database did not load. A static build of the site has no arena server to ask. */
+export const LoadFailure = defineTaggedUnion({ NoServer: {}, Failed: { error: Schema.String } });
+
+export type LoadFailure = typeof LoadFailure.Type;
+
 export const Model = Schema.Struct({
   viewport: Viewport,
-  data: AsyncData.Schema(Loaded, Schema.String).schema,
+  data: AsyncData.Schema(Loaded, LoadFailure).schema,
   filter: Filter,
   scatter: Scatter,
   heat: Heat,
@@ -145,7 +151,7 @@ export const Message = defineMessageUnion({
   ClickedJump: { target: Target },
   NavigatedToHash: {},
   SucceededLoad: { loaded: Loaded },
-  FailedLoad: { error: Schema.String },
+  FailedLoad: { failure: LoadFailure },
   ToggledEffort: { effort: Schema.String },
   ToggledModel: { name: Schema.String },
   ToggledFilters: {},
@@ -171,14 +177,12 @@ export const Message = defineMessageUnion({
   SucceededMatch: { id: Schema.String, detail: MatchDetail },
   FailedMatch: { id: Schema.String, error: Schema.String },
   ClosedReplay: {},
-  NavigatedBack: {},
   SteppedReplay: { delta: Schema.Number },
   SelectedStep: { index: Schema.Number },
   ChangedMatchQuery: { query: Schema.String },
   ClickedMatchPreset: { preset: MatchPreset },
   ClickedShowMore: {},
   PlacedTip: {},
-  CompletedHistoryChange: {},
   CompletedStepScroll: {},
   CompletedScroll: {},
   CompletedFirstPaint: {},

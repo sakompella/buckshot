@@ -1,24 +1,29 @@
-import { Effect, Option, Schema, Stream } from "effect";
+import { Data, Effect, Option, Predicate, Schema, Stream } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/http";
-import { AsyncData, Command, Dom, Http, Runtime, Subscription, type Update } from "foldkit";
+import { AsyncData, Command, Dom, Http, Subscription, type Update } from "foldkit";
 import { modifyFields } from "foldkit/struct";
 
+import { type ArenaRoute, arenaHref, arenaStateOf, replayHref } from "../../site/route.ts";
 import { CertainMistakes, Consistency, Decisions, Download, MatchDetail, SeatsResponse } from "../api.ts";
 import { hasCertainChart } from "./certain.ts";
 import { withPotShares } from "./data.ts";
 import { INITIAL_ROWS, MORE_ROWS } from "./matches.ts";
-import { type Filter, Group, Message, Model, MOVED_TARGETS, Target, Viewport } from "./model.ts";
+import { type Filter, Group, LoadFailure, Message, type Model, MOVED_TARGETS, type Replay, Target, type Viewport } from "./model.ts";
 import { replayIndex, stepsOf } from "./replay.ts";
 import { reveal } from "./reveal.ts";
 import { PlaceTour, tourKeyMessage, tourMatchOf, tourOf } from "./tour.ts";
-import { stickyHeight, view } from "./view.ts";
+import { stickyHeight } from "./view.ts";
 
 type Return = Update.Return<Model, Message>;
 
 const describe = (error: { readonly message: string }) => error.message;
 
+/** No arena server answers: a static build of the site, whose host sends a 404 or the page itself for `/api/...`. */
+class NoArenaServer extends Data.TaggedError("NoArenaServer") {}
+
 const getJson = <A, I>(url: string, schema: Schema.Codec<A, I>) =>
   HttpClient.get(url).pipe(
+    Effect.flatMap((response) => (response.status === 404 || !(response.headers["content-type"] ?? "").includes("json") ? Effect.fail(new NoArenaServer()) : Effect.succeed(response))),
     Effect.flatMap(HttpClientResponse.filterStatusOk),
     Effect.flatMap((response) => response.json),
     Effect.flatMap((body) => Schema.decodeUnknownEffect(schema)(body)),
@@ -37,7 +42,7 @@ const LoadData = Command.define("LoadData", {
     { concurrency: 5 },
   ).pipe(
     Effect.map(([seats, decisions, consistency, certainMistakes, download]) => Message.SucceededLoad({ loaded: { seats: withPotShares(seats), decisions, consistency, certainMistakes, download } })),
-    Effect.catch((error) => Effect.succeed(Message.FailedLoad({ error: describe(error) }))),
+    Effect.catch((error) => Effect.succeed(Message.FailedLoad({ failure: error instanceof NoArenaServer ? LoadFailure.NoServer() : LoadFailure.Failed({ error: describe(error) }) }))),
     Effect.provide(Http.layer),
   ),
 });
@@ -99,7 +104,7 @@ const RevealNavLink = Command.define("RevealNavLink", {
   messages: [Message.CompletedScroll],
   execute: ({ group }) =>
     Effect.sync(() => {
-      const nav = document.querySelector("nav");
+      const nav = document.querySelector("main nav");
       const link = nav?.querySelector(`a[href="#${group}"]`);
 
       if (nav instanceof HTMLElement && link instanceof HTMLElement) nav.scrollTo({ left: link.offsetLeft - (nav.clientWidth - link.offsetWidth) / 2, behavior: "smooth" });
@@ -129,21 +134,6 @@ const ScrollToHash = Command.define("ScrollToHash", {
 const AwaitFirstPaint = Command.define("AwaitFirstPaint", {
   messages: [Message.CompletedFirstPaint],
   execute: nextFrame.pipe(Effect.as(Message.CompletedFirstPaint())),
-});
-
-// An open replay owns one history entry, so the phone's back gesture closes it instead of leaving the page.
-const ReplayHistory = Schema.Struct({ replay: Schema.Literal(true) });
-
-const PushReplayHistory = Command.define("PushReplayHistory", {
-  messages: [Message.CompletedHistoryChange],
-  execute: Effect.sync(() => history.pushState({ replay: true }, "")).pipe(Effect.as(Message.CompletedHistoryChange())),
-});
-
-const LeaveReplayHistory = Command.define("LeaveReplayHistory", {
-  messages: [Message.CompletedHistoryChange],
-  execute: Effect.sync(() => {
-    if (Schema.is(ReplayHistory)(history.state)) history.back();
-  }).pipe(Effect.as(Message.CompletedHistoryChange())),
 });
 
 const NO_MARK_TIP: Model["markTip"] = { maybeHover: Option.none(), maybePin: Option.none() };
@@ -177,8 +167,8 @@ const withReplayMove = (model: Model, choose: (at: number) => number): Return =>
     },
   });
 
-const openReplay = (model: Model, id: string, maybeFocus: Option.Option<number>): Return => {
-  const opened = withMatches(
+const openReplay = (model: Model, id: string, maybeFocus: Option.Option<number>): Return =>
+  withMatches(
     modifyFields(model, {
       maybeReplay: () => Option.some({ id, maybeFocus, maybeAt: Option.none() }),
       maybeTappedTitle: () => Option.none(),
@@ -187,10 +177,7 @@ const openReplay = (model: Model, id: string, maybeFocus: Option.Option<number>)
     [id],
   );
 
-  return Option.isSome(model.maybeReplay) ? opened : { ...opened, commands: [...(opened.commands ?? []), PushReplayHistory()] };
-};
-
-const closeReplay = (model: Model): Return => ({ model: modifyFields(model, { maybeReplay: () => Option.none() }), commands: [LeaveReplayHistory()] });
+const closeReplay = (model: Model): Return => ({ model: modifyFields(model, { maybeReplay: () => Option.none() }) });
 
 const openTourReplay = (model: Model): Return => {
   const seats = AsyncData.getOrElse(
@@ -222,7 +209,7 @@ export const update = (model: Model, message: Message): Return =>
     NavigatedToHash: () => ({ model, commands: [ScrollToHash()] }),
     SucceededLoad: ({ loaded }) => ({ model: modifyFields(model, { data: () => AsyncData.succeed(loaded) }), commands: [AwaitFirstPaint()] }),
     CompletedFirstPaint: () => ({ model: modifyFields(model, { isFirstPaintDone: () => true }), commands: [ScrollToHash()] }),
-    FailedLoad: ({ error }) => ({ model: modifyFields(model, { data: () => AsyncData.fail(error) }) }),
+    FailedLoad: ({ failure }) => ({ model: modifyFields(model, { data: () => AsyncData.fail(failure) }) }),
     ToggledEffort: ({ effort }) => withFilter(model, (filter) => ({ ...filter, offEfforts: toggled(filter.offEfforts, effort) })),
     ToggledModel: ({ name }) => withFilter(model, (filter) => ({ ...filter, offModels: toggled(filter.offModels, name) })),
     ScrolledInto: ({ group }) =>
@@ -279,7 +266,6 @@ export const update = (model: Model, message: Message): Return =>
     }),
     FailedMatch: ({ id, error }) => ({ model: modifyFields(model, { matches: (matches) => ({ ...matches, [id]: AsyncData.fail(error) }) }) }),
     ClosedReplay: () => closeReplay(model),
-    NavigatedBack: () => ({ model: modifyFields(model, { maybeReplay: () => Option.none() }) }),
     SteppedReplay: ({ delta }) => withReplayMove(model, (at) => at + delta),
     SelectedStep: ({ index }) => withReplayMove(model, () => index),
     ChangedMatchQuery: ({ query }) => ({ model: modifyFields(model, { matchList: (list) => ({ ...list, query }) }) }),
@@ -288,7 +274,6 @@ export const update = (model: Model, message: Message): Return =>
     }),
     ClickedShowMore: () => ({ model: modifyFields(model, { matchList: (list) => ({ ...list, limit: list.limit + MORE_ROWS }) }) }),
     PlacedTip: () => ({ model }),
-    CompletedHistoryChange: () => ({ model }),
     CompletedStepScroll: () => ({ model }),
     CompletedScroll: () => ({ model }),
     ClickedTour: () => {
@@ -324,12 +309,32 @@ export const update = (model: Model, message: Message): Return =>
     }),
   });
 
-const Flags = Schema.Struct({ viewport: Viewport });
+/** Applies what an arena URL says: the filter and open row of `/arena`, or the replay of `/replay/<id>` over them. */
+export const withRoute = (model: Model, route: ArenaRoute): Return => {
+  if (Predicate.isTagged(route, "Replay")) return openReplay(model, route.id, Option.fromUndefinedOr(route.at));
 
-type Flags = typeof Flags.Type;
+  const { filter, maybeRow } = arenaStateOf(route);
 
-const init: Runtime.ApplicationInit<Model, Message, Flags> = ({ viewport }) => ({
-  model: {
+  return { model: modifyFields(model, { filter: () => filter, leaderboard: () => ({ maybeOpen: maybeRow }), maybeReplay: () => Option.none() }) };
+};
+
+/** The ordinal of the move an open replay shows, once its match has loaded; before that, the one it was asked to show. */
+const replayOrdinal = (model: Model, replay: Replay): Option.Option<number> => {
+  const data = model.matches[replay.id];
+  const steps = data === undefined ? [] : AsyncData.getOrElse(AsyncData.map(data, stepsOf), () => []);
+
+  return steps.length === 0 || Option.isNone(replay.maybeAt) ? replay.maybeFocus : Option.fromUndefinedOr(steps[replayIndex(replay, steps)]?.ordinal);
+};
+
+/** The URL of what the arena shows, so it can be shared and survives a reload. */
+export const hrefOf = (model: Model): string =>
+  Option.match(model.maybeReplay, {
+    onNone: () => arenaHref(model.filter, model.leaderboard.maybeOpen),
+    onSome: (replay) => replayHref(replay.id, replayOrdinal(model, replay)),
+  });
+
+export const init = (viewport: Viewport, route: ArenaRoute): Return => {
+  const model: Model = {
     viewport,
     data: AsyncData.Loading(),
     filter: { offEfforts: [], offModels: [] },
@@ -347,11 +352,14 @@ const init: Runtime.ApplicationInit<Model, Message, Flags> = ({ viewport }) => (
     maybeReplay: Option.none(),
     isFirstPaintDone: false,
     maybeTour: Option.none(),
-  },
-  commands: [LoadData()],
-});
+  };
 
-const viewportNow = (): Viewport => ({ width: document.documentElement.clientWidth, height: innerHeight });
+  const routed = withRoute(model, route);
+
+  return { model: routed.model, commands: [LoadData(), ...(routed.commands ?? [])] };
+};
+
+export const viewportNow = (): Viewport => ({ width: document.documentElement.clientWidth, height: innerHeight });
 
 const replayKeyMessage = (key: string): Option.Option<Message> => {
   if (key === "Escape") return Option.some(Message.ClosedReplay());
@@ -374,9 +382,8 @@ const tappedTitleMessage = (event: PointerEvent): Option.Option<Message> => {
   return Option.some(Message.ClearedTappedTitle());
 };
 
-const subscriptions = Subscription.make<Model, Message>()((entry) => ({
+export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
   resize: Subscription.persistentEntry(Dom.streamFromEvent({ target: window, type: "resize", mapEvent: () => Message.ResizedViewport(viewportNow()) })),
-  back: Subscription.persistentEntry(Dom.streamFromEvent({ target: window, type: "popstate", mapEvent: () => Message.NavigatedBack() })),
   replayKeys: entry(
     { isReplayOpen: Schema.Boolean },
     {
@@ -403,15 +410,3 @@ const subscriptions = Subscription.make<Model, Message>()((entry) => ({
   ),
   hash: Subscription.persistentEntry(Dom.streamFromEvent({ target: window, type: "hashchange", mapEvent: () => Message.NavigatedToHash() })),
 }));
-
-const application = Runtime.makeApplication({
-  Model,
-  Flags,
-  init,
-  update,
-  view,
-  subscriptions,
-  container: document.getElementById("root"),
-});
-
-Runtime.run(application, { flags: Effect.sync(() => ({ viewport: viewportNow() })) });

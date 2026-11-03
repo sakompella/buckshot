@@ -1,5 +1,6 @@
 import { Database } from "bun:sqlite";
 import crypto from "node:crypto";
+import { join, normalize } from "node:path";
 
 import { Option, Schema } from "effect";
 
@@ -8,10 +9,9 @@ import { Blunders, Call, CertainMistakes, Consistency, Decisions, MatchDetail, M
 import { findBlunders } from "./blunders.ts";
 import { type Certain, NO_CERTAIN, openCertain } from "./certain.ts";
 import { openConsistency } from "./consistency.ts";
-import page from "./page/index.html";
 import { openRegret, type Regret } from "./regret.ts";
 
-// The arena viewer's server: the page, and a read-only JSON API over the arena
+// The arena viewer's server: the built site (web/dist), and a read-only JSON API over the arena
 // analysis database. It never selects match_seats.provenance_json, which holds
 // an account email. DeepSeek is left out entirely: a match with a DeepSeek seat
 // is dropped here, so no tab, rating or total sees it.
@@ -235,7 +235,16 @@ const guarded = (handler: (request: Request) => Response) => {
  * Loads and analyses the database once, then serves the page and the API. With a regret database, seats and moves carry their regret.
  * With a knowledge database, the page shows how consistent each config is.
  */
-export const serveArenaViewer = (dbPath: string, hostname: string, port: number, regretPath?: string, knowledgePath?: string, certainPath?: string) => {
+/** A file of the built site when the path names one; any other path gets the page, which routes itself. */
+const siteResponse = async (siteDir: string, pathname: string): Promise<Response> => {
+  const file = Bun.file(join(siteDir, normalize(decodeURIComponent(pathname))));
+
+  if (pathname !== "/" && (await file.exists())) return new Response(file, pathname.startsWith("/assets/") ? { headers: { "cache-control": "public, max-age=31536000, immutable" } } : {});
+
+  return new Response(Bun.file(join(siteDir, "index.html")), { headers: { "content-type": "text/html; charset=utf-8" } });
+};
+
+export const serveArenaViewer = (dbPath: string, siteDir: string, hostname: string, port: number, regretPath?: string, knowledgePath?: string, certainPath?: string) => {
   const db = new Database(dbPath, { readonly: true });
   const regret = regretPath === undefined ? null : openRegret(regretPath);
   const started = performance.now();
@@ -271,8 +280,9 @@ export const serveArenaViewer = (dbPath: string, hostname: string, port: number,
     // With routes, Bun otherwise shares the port with a viewer already on it and splits requests between the two.
     reusePort: false,
     development: false,
+    fetch: (request) => siteResponse(siteDir, new URL(request.url).pathname),
     routes: {
-      "/": page,
+      "/api/*": () => new Response("not found", { status: 404 }),
       "/api/seats": guarded((request) => json(request, seatsBody)),
       "/api/download": guarded(() => {
         const download = process.env["ARENA_VIEWER_DOWNLOAD"];
