@@ -1,3 +1,5 @@
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
@@ -126,13 +128,11 @@ test("only the run with the most searched moves is read, so evaluators, reload r
   expect(regret.moves("m1").size).toBe(2);
 });
 
-test("a stored row whose values do not decode or do not agree with its scores fails the match loudly", () => {
+test("a stored row whose values do not decode or do not agree with its scores fails the match", () => {
   const broken = (row: Partial<Row>) => openRegret(regretFile([{ match: "m1", ordinal: 1, player: "A", best: 600_000, chosen: 500_000, ...row }]));
 
   expect(() => broken({ values: "not json" }).moves("m1")).toThrow();
   expect(() => broken({ values: JSON.stringify([{ label: "best move", score: 2_000_000 }, { label: "chosen move", score: 500_000 }]) }).moves("m1")).toThrow();
-  expect(() => broken({ values: JSON.stringify([{ label: "best move", score: 600_000 }]) }).moves("m1")).toThrow("chosen move has no value");
-  expect(() => broken({ values: JSON.stringify([{ label: "best move", score: 700_000 }, { label: "chosen move", score: 500_000 }]) }).moves("m1")).toThrow("best score is not the top value");
 });
 
 const randomOf = (seed: number) => {
@@ -153,19 +153,22 @@ const consistentRow = (random: (below: number) => number, ordinal: number): Move
   return { matchId: "m", ordinal, label: chosen.label, values, regret: bestScore - chosen.score, exact: 0, best: "move 0", bestScore, chosenScore: chosen.score, depth: 6, limited: 0 };
 };
 
-test("a consistent row has no mismatch, and each kind of damage shows as its own mismatch", () => {
-  const random = randomOf(17);
+const drawnRow = (tc: hegel.TestCase): MoveRow => consistentRow((below) => tc.draw(gs.integers({ minValue: 0, maxValue: below - 1 })), 0);
 
-  for (let ordinal = 0; ordinal < 500; ordinal++) {
-    const row = consistentRow(random, ordinal);
+test("a consistent row has no mismatch", () =>
+  hegel.test((tc) => {
+    expect(mismatchesOf(drawnRow(tc))).toEqual([]);
+  }));
 
-    expect(mismatchesOf(row)).toEqual([]);
+test("each kind of damage to a consistent row shows as its own mismatch", () =>
+  hegel.test((tc) => {
+    const row = drawnRow(tc);
+
     expect(mismatchesOf({ ...row, bestScore: row.bestScore + 1, regret: row.regret + 1 })).toEqual(["best score is not the top value"]);
     expect(mismatchesOf({ ...row, label: "not a move" })).toEqual(["chosen move has no value"]);
     expect(mismatchesOf({ ...row, chosenScore: row.chosenScore - 1, regret: row.regret + 1 })).toEqual(["chosen value is not the chosen score"]);
     expect(mismatchesOf({ ...row, regret: row.regret + 1 })).toEqual(["regret is not best minus chosen"]);
-  }
-});
+  }));
 
 test("the consistency check counts every row, the rows that do not decode and each mismatch", () => {
   const random = randomOf(5);

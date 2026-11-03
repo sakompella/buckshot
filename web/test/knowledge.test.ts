@@ -1,3 +1,5 @@
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { beforeAll, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -96,6 +98,36 @@ test("a phone clue keeps its offset as shots remove shells, and becomes the cham
   // Publicly one live and one blank are left, in either order.
   expect(later.public.live).toEqual([1, 1]);
 });
+
+test("what a player believes about the shells is never contradicted by the shells actually loaded", () =>
+  hegel.test((tc) => {
+    const shells = tc.draw(gs.arrays(gs.booleans(), { minSize: 2, maxSize: 8 }));
+    const name = (isLive: boolean): "Live" | "Blank" => (isLive ? "Live" : "Blank");
+    const loadedShells = loaded(shells.filter(Boolean).length, shells.filter((isLive) => !isLive).length);
+    const clueAt = tc.draw(gs.integers({ minValue: 2, maxValue: shells.length }));
+    const firedCount = tc.draw(gs.integers({ minValue: 0, maxValue: shells.length - 1 }));
+    const hasPhone = tc.draw(gs.booleans());
+    const hasGlass = tc.draw(gs.booleans());
+    const remaining = shells.slice(firedCount);
+
+    const steps: Array<Step> = [
+      loadedShells,
+      ...(hasPhone ? [used(ME, ME, "Phone"), { heard: clue(clueAt, name(shells[clueAt - 1] ?? false)) }] : []),
+      ...shells.slice(0, firedCount).map((isLive) => fired(ME, THEM, name(isLive))),
+      ...(hasGlass ? [used(ME, ME, "Glass"), { heard: glimpse(name(remaining[0] ?? false)) }] : []),
+    ];
+
+    const knowledge = knowledgeAfter(steps);
+    const remainingLive = remaining.filter(Boolean).length;
+    const truth = name(remaining[0] ?? false);
+
+    expect(knowledge.private.orders).toBeGreaterThan(0);
+    expect(knowledge.private.live.reduce((total, count) => total + count, 0)).toBe(knowledge.private.orders * remainingLive);
+
+    if (Option.isSome(knowledge.chamber)) expect(knowledge.chamber.value).toBe(truth);
+
+    expect(Option.isSome(knowledge.chamber) || !hasGlass).toBe(true);
+  }));
 
 test("the public count settles the chamber before a clue does", () => {
   const knowledge = knowledgeAfter([loaded(1, 2), used(ME, ME, "Phone"), { heard: clue(3, "Live") }, fired(ME, ME, "Blank"), fired(ME, THEM, "Blank")]);
