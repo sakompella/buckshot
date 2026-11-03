@@ -9,7 +9,7 @@ import boot
 import bt
 import cv
 import seats
-from load import Game, blocks_of
+from load import Game, blocks_of, cohort_of
 
 
 def game(block, first, second, share_first, seed=1, starter=1, cohort="c"):
@@ -134,5 +134,20 @@ class Seats(unittest.TestCase):
         self.assertAlmostEqual(out["starter"], 1.0)
 
 
+class Cohorts(unittest.TestCase):
+    def test_a_declared_cohort_wins_over_the_name_mapping(self):
+        self.assertEqual(cohort_of("t8-gpt-1a", "m", "n", "low", "high", "tournament 8"), "tournament 8")
+        self.assertEqual(cohort_of("t7-astra-off", "m", "n", "low", "high", "tournament 9"), "tournament 9")
+
+    def test_old_tournaments_keep_their_name_mapping(self):
+        self.assertEqual(cohort_of("t7-astra-off", "m", "n", "low", "high"), "tournament 7")
+        self.assertEqual(cohort_of("cpa-tiers", "m", "m", "low", "high"), "cpa-tiers sweep m")
+
+    def test_an_unknown_tournament_without_a_cohort_is_an_error(self):
+        with self.assertRaises(ValueError):
+            cohort_of("t99-new", "m", "n", "low", "high")
+
+
 if __name__ == "__main__":
     unittest.main()
+

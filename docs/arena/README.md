@@ -13,6 +13,7 @@ The arena plays language models against each other at the Buckshot table through
 ## A tournament
 - **Config:** a tournament is a JSON config, as in `web/tournaments/`. It names the endpoints, the entrants (model and effort, or a bot) and the pairings.
   - Seeds are either the config seed plus the block, or a list per pairing.
+  - `cohort` (optional) names the group the analysis compares the tournament's matches in, such as `"tournament 8"`; the leaderboard titles it by that name. Tournaments before it was added get theirs from `cohort_of` in `tools/arena/analysis/load.py`. All phases of one run share one cohort. The wrap-up command (below) stamps it into the run dirs if a config lacked it.
   - A model entrant may set `instructionsAddendum`: text appended to the shared instructions for that entrant's agent only (ADR-0048). Give such an entrant its own name, as in `astra-recall.json`, and the manifest records the text.
   - Use 10 seeds, each played in both seat orders: 20 matches per pairing.
   - The `3000, 3010–3018` list is balanced by first shooter.
@@ -89,6 +90,9 @@ Codex isn't checked there: use account pins, so a full Codex account pauses only
       bun scripts/arena-cost.ts <dir>
 
   This is theoretical cost at `web/src/arena/prices.json` list prices. CPA plans are subscriptions, so nothing is billed.
+
+## Wrap-up
+`python3 tools/arena/wrap_tournament.py --run-dir <dir> --importer <worktree> --cohort "<name>"`, inside `nix develop` from the main checkout, imports finished tournaments and refreshes everything derived from them: the steps are in its docstring. It is rerunnable (a `wrapup/state.json` in the run dir records finished steps), stops on the first failed check, and rewrites doc tables in the working tree without committing. `--dry-run` lists the steps.
 
 ## Reasoning settings
 - **Claude 5.5 models:** `adaptive` thinking with an effort and `display: "summarized"` (their default `omitted` returns no text).
