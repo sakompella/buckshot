@@ -291,8 +291,8 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
   .seat .bolts i { width: 14px; }
   .felt { padding: 8px; }
   .felt .action, .selh { font-size: 14px; }
-  .moves { column-gap: 6px; }
-  .moves .step .label { white-space: normal; }
+  .moves { column-gap: 6px; grid-auto-rows: min-content; }
+  .moves .step .label { white-space: normal; overflow-wrap: anywhere; }
   .table.seats-2 { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "top bottom" "felt felt"; gap: 6px; }
   .seat .name { font-size: 13px; }
   .seat .who { flex-wrap: wrap; }
