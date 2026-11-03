@@ -1,6 +1,6 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { baseName, baseOrder, byEffort, costPerMove, fmtUsd, groupBy, type ModelStats, type SeatFull, sumOf } from "./data.ts";
+import { baseName, baseOrder, byEffort, costPerMove, effortLabel, fmtUsd, groupBy, type ModelStats, type SeatFull, sumOf } from "./data.ts";
 import type { Message } from "./model.ts";
 
 type H = HtmlBuilder<Message>;
@@ -22,10 +22,10 @@ export const perMoveOf = (stats: ReadonlyArray<Config>): ReadonlyArray<PerMove> 
     return cost === null || cost <= 0 ? [] : [{ key, model, effort, color, cost }];
   });
 
-const rowView = (h: H, { effort, color, cost }: PerMove, most: number): Html =>
+const rowView = (h: H, { model, effort, color, cost }: PerMove, most: number): Html =>
   h.div(
     [h.Class("cpm-row")],
-    [h.span([], [effort]), h.span([h.Class("cpm-bar")], [h.i([h.Style({ width: `${((cost / most) * 100).toFixed(2)}%`, background: color })], [])]), h.span([h.Class("cpm-val")], [fmtUsd(cost)])],
+    [h.span([], [effortLabel(model, effort)]), h.span([h.Class("cpm-bar")], [h.i([h.Style({ width: `${((cost / most) * 100).toFixed(2)}%`, background: color })], [])]), h.span([h.Class("cpm-val")], [fmtUsd(cost)])],
   );
 
 export const spendView = (h: H, stats: ReadonlyArray<ModelStats>): Html => {
@@ -37,7 +37,7 @@ export const spendView = (h: H, stats: ReadonlyArray<ModelStats>): Html => {
   return h.div(
     [h.Class("chart spend")],
     [
-      h.div([h.Class("lbbar")], [h.h2([], ["List-price cost per move"]), h.span([h.Class("k")], [`$${Math.round(total).toLocaleString()} spent in total`])]),
+      h.div([h.Class("lbbar")], [h.h2([], ["List-price cost per move"]), h.span([h.Class("k")], [`$${Math.round(total).toLocaleString()} at list prices`])]),
       rows.length === 0
         ? h.div([h.Class("empty")], ["No spend in this filter."])
         : h.div(

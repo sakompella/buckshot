@@ -2,7 +2,7 @@ import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { pressable } from "./charts.ts";
-import { baseName, costPerMove, fmtCount, fmtPct, fmtPoints, fmtSec, fmtUsd, isClaude, isProvisional, type ModelStats, sumOf } from "./data.ts";
+import { baseName, costPerMove, effortLabel, fmtCount, fmtPct, fmtPoints, fmtSec, fmtUsd, isClaude, isProvisional, keyOf, labelOf, type MatchRow, type ModelStats, sumOf } from "./data.ts";
 import type { Derived, ItemSummary } from "./derived.ts";
 import { drillView } from "./drill.ts";
 import { itemIconOf } from "./items.ts";
@@ -22,6 +22,9 @@ interface Detail {
   readonly content: ReadonlyArray<Html | string>;
 }
 
+const lossTitle = ({ loss }: ModelStats): string =>
+  loss === null ? "" : `est. round-win equivalents lost / match, over ${loss.matches.toLocaleString()} fully searched matches${loss.excluded > 0 ? `; ${loss.excluded.toLocaleString()} left out` : ""}`;
+
 const detailsOf = (h: H, m: ModelStats, item: ItemSummary | undefined, hasRegret: boolean): ReadonlyArray<Detail> => {
   const moves = sumOf(m.scored.map((seat) => seat.moves ?? 0));
   const favorite = item?.favorite ?? null;
@@ -31,9 +34,10 @@ const detailsOf = (h: H, m: ModelStats, item: ItemSummary | undefined, hasRegret
     { label: "round wins", title: "", content: [fmtPct(m.roundShare)] },
     { label: "cash share", title: "", content: [fmtPct(m.potShare)] },
     ...(hasRegret ? [{ label: "regret", title: m.regret === null ? "" : `${m.regret.moves.toLocaleString()} moves · ${fmtPct(m.regret.exactShare)} proven exact`, content: [m.regret === null ? "–" : fmtPoints(m.regret.mean)] }] : []),
-    { label: "per move", title: "", content: [fmtUsd(costPerMove(m))] },
-    { label: "time", title: "", content: [fmtSec(moves > 0 ? sumOf(m.scored.map((seat) => seat.lat ?? 0)) / moves : null)] },
-    { label: "out tok", title: "", content: [fmtCount(m.avgOut)] },
+    ...(hasRegret ? [{ label: "lost / match", title: lossTitle(m), content: [m.loss === null ? "–" : m.loss.perMatch.toFixed(2)] }] : []),
+    { label: "cost / move", title: "", content: [fmtUsd(costPerMove(m))] },
+    { label: "time / move", title: "", content: [fmtSec(moves > 0 ? sumOf(m.scored.map((seat) => seat.lat ?? 0)) / moves : null)] },
+    { label: "output tok / match", title: "", content: [fmtCount(m.avgOut)] },
     { label: "fav", title: favorite === null ? "" : `${favorite.k} of ${favorite.n} legal moves`, content: favorite === null ? ["–"] : [itemIconOf(h, favorite.item), `${favorite.item} `, h.span([h.Class("pm")], [fmtPct(favorite.rate)])] },
   ];
 };
@@ -74,7 +78,7 @@ const eloBarView = (h: H, scale: EloScale, m: ModelStats, elo: Rating | undefine
 const nameView = (h: H, m: ModelStats): ReadonlyArray<Html | string> => [
   h.span([h.Class(`dot ${isClaude(m.model) ? "a" : "o"}`), h.Style({ background: m.color })], []),
   `${baseName(m.model)} `,
-  h.span([h.Class("eff")], [`[${m.effort}]`]),
+  h.span([h.Class("eff")], [`[${effortLabel(m.model, m.effort)}]`]),
 ];
 
 const rowView = (h: H, m: ModelStats, rank: number | undefined, elo: Rating | undefined, scale: EloScale, details: ReadonlyArray<Detail>, isOpen: boolean): Html =>
@@ -85,7 +89,7 @@ const rowView = (h: H, m: ModelStats, rank: number | undefined, elo: Rating | un
       h.td([], [h.span([h.Class("rk")], [rank === undefined ? "" : String(rank)]), ...nameView(h, m)]),
       h.td([h.DataAttribute("label", "round elo")], ratingView(h, elo)),
       h.td([h.DataAttribute("label", "matches"), h.Title(`${m.win.blocks} seed blocks`)], [m.scored.length.toLocaleString()]),
-      h.td([h.DataAttribute("label", "cost")], [fmtUsd(m.avgCost)]),
+      h.td([h.DataAttribute("label", "cost / match")], [fmtUsd(m.avgCost)]),
       h.td([h.Class("barcol")], [eloBarView(h, scale, m, elo)]),
       ...details.map(({ label, title, content }) => h.td([h.Class("detail"), h.DataAttribute("label", label), ...(title === "" ? [] : [h.Title(title)])], [...content])),
     ],
@@ -93,6 +97,25 @@ const rowView = (h: H, m: ModelStats, rank: number | undefined, elo: Rating | un
 
 const detailsView = (h: H, details: ReadonlyArray<Detail>): Html =>
   h.dl([h.Class("drillstats")], details.flatMap(({ label, title, content }) => [h.dt([], [label]), h.dd(title === "" ? [] : [h.Title(title)], [...content])]));
+
+/** The move where a config gave up the most round win chance, as a link to that move in its match's replay. */
+const missView = (h: H, m: ModelStats, matches: ReadonlyArray<MatchRow>): Html => {
+  if (m.loss === null) return h.empty;
+
+  const { matchId, ordinal, points } = m.loss.largest;
+  const opponent = matches.find((match) => match.matchId === matchId)?.seats.find((seat) => keyOf(seat) !== m.key);
+
+  return h.p(
+    [h.Class("miss")],
+    [
+      h.span([h.Class("k")], ["largest missed chance "]),
+      h.button(
+        [h.Type("button"), h.Class("chip on"), h.OnClick(Message.ClickedMatch({ id: matchId, maybeFocus: Option.some(ordinal) }))],
+        [`${fmtPoints(points)} pts${opponent === undefined ? "" : ` vs ${labelOf(keyOf(opponent))}`} ▸`],
+      ),
+    ],
+  );
+};
 
 export const configPanelView = (h: H, derived: Derived, key: string): Html => {
   const m = derived.pooled.find((candidate) => candidate.key === key);
@@ -113,6 +136,7 @@ export const configPanelView = (h: H, derived: Derived, key: string): Html => {
         ],
       ),
       detailsView(h, details),
+      missView(h, m, derived.allMatches),
       drillView(h, m, derived),
     ],
   );
@@ -122,15 +146,15 @@ const headersOf = (hasRegret: boolean): ReadonlyArray<string> => [
   "Model",
   "Round Elo",
   "Matches",
-  "Avg cost",
+  "Cost / match",
   "",
   "Match wins vs own opponents",
   "Round wins",
   "Cash share",
-  ...(hasRegret ? ["Regret"] : []),
-  "Per move",
+  ...(hasRegret ? ["Regret", "Lost / match"] : []),
+  "Cost / move",
   "Time / move",
-  "Out tok",
+  "Output tok / match",
   "Favorite item",
 ];
 
@@ -141,6 +165,7 @@ const HEADER_TITLES = new Map([
   ["Cash share", "a config's cash over the match's cash, averaged over scored matches"],
   ["Round wins", "the rounds a config won over the rounds it played"],
   ["Regret", "mean points of round win chance a move gave up against the minimax player's best move; lower is better"],
+  ["Lost / match", "est. round-win equivalents lost / match: a config's regret summed over each fully searched match; lower is better"],
 ]);
 
 const headerView = (h: H, label: string, index: number): Html => {
@@ -185,7 +210,7 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
 
                   return [
                     rowView(h, m, ranks.get(m.key), ratings.get(m.key), scale, details, isOpen),
-                    isOpen ? h.keyed("tr")(`drill-${m.key}`, [h.Class("drill")], [h.td([h.Colspan(headers.length)], [detailsView(h, details), drillView(h, m, derived)])]) : h.empty,
+                    isOpen ? h.keyed("tr")(`drill-${m.key}`, [h.Class("drill")], [h.td([h.Colspan(headers.length)], [detailsView(h, details), missView(h, m, derived.allMatches), drillView(h, m, derived)])]) : h.empty,
                   ];
                 }),
               ),

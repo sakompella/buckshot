@@ -2,7 +2,7 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 
 import type { Decisions } from "../api.ts";
 import { anchorId, chartWidth, lineKeyView, linScale, tippedDot } from "./charts.ts";
-import { baseName, baseOrder, byEffort, colorOf, DASH, groupBy, keyOf, labelOf, type SeatFull, splitKey } from "./data.ts";
+import { baseName, baseOrder, byEffort, colorOf, DASH, effortLabel, groupBy, keyOf, labelOf, type SeatFull, splitKey } from "./data.ts";
 import { memoLast } from "./derived.ts";
 import type { Message } from "./model.ts";
 
@@ -155,17 +155,17 @@ const panelView = (h: H, model: string, lines: ReadonlyArray<OddsLine>, width: n
           ? []
           : [
               h.path([h.D(`M${x.at(points.at(-1)?.bin ?? 0) + 3},${y.at(points.at(-1)?.share ?? 0)} L${width - right + 6},${labelYs[index] ?? 0} h2`), h.Fill("none"), h.Stroke(color), h.StrokeOpacity("0.6")], []),
-              h.text([h.X(String(width - right + 10)), h.Y(String((labelYs[index] ?? 0) + 4)), h.Style({ fill: color }), h.Class("small")], [effort]),
+              h.text([h.X(String(width - right + 10)), h.Y(String((labelYs[index] ?? 0) + 4)), h.Style({ fill: color }), h.Class("small")], [effortLabel(model, effort)]),
             ]),
       ]),
     ],
   );
 
-  return isKeyedBelow ? h.div([], [chart, lineKeyView(h, lines.map(({ effort }) => ({ label: effort, color, dash: DASH.get(effort) ?? "" })))]) : chart;
+  return isKeyedBelow ? h.div([], [chart, lineKeyView(h, lines.map(({ effort }) => ({ label: effortLabel(model, effort), color, dash: DASH.get(effort) ?? "" })))]) : chart;
 };
 
 export const droppedText = (keys: ReadonlyArray<string>): string =>
-  [...groupBy(keys, (key) => splitKey(key)[0])].map(([model, own]) => `${baseName(model)} ${own.map((key) => splitKey(key)[1]).join(", ")}`).join(" · ");
+  [...groupBy(keys, (key) => splitKey(key)[0])].map(([model, own]) => `${baseName(model)} ${own.map((key) => effortLabel(model, splitKey(key)[1])).join(", ")}`).join(" · ");
 
 export const oddsView = (h: H, decisions: Decisions, seats: ReadonlyArray<SeatFull>, keep: ReadonlyArray<boolean>, width: number, content: number): Html => {
   const panels = oddsPanels(talliesOf(decisions, seats, keep));

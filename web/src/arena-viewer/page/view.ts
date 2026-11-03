@@ -2,7 +2,7 @@ import { Option } from "effect";
 import { AsyncData } from "foldkit";
 import { createLazy, type Document, type Html, type HtmlBuilder } from "foldkit/html";
 
-import { EFFORTS } from "../../arena/model-names.ts";
+import { EFFORTS, effortName } from "../../arena/model-names.ts";
 import type { CertainMistakes } from "../api.ts";
 import { baseName, baseOrder, colorOf, fmtBytes, fmtCount, sumOf, unique } from "./data.ts";
 import { tipView } from "./charts.ts";
@@ -56,7 +56,7 @@ const filtersView = (h: H, derived: Derived, filter: Model["filter"], isOpen: bo
   const models = unique(seats.map(({ model }) => model)).toSorted((left, right) => baseOrder(left) - baseOrder(right));
   const names = unique(models.map((model) => baseName(model)));
   const efforts = EFFORTS.filter((effort) => seats.some((seat) => seat.effort === effort));
-  const summary = [keptOf(names, filter.offModels, "models"), keptOf(efforts, filter.offEfforts, "efforts")].join(" · ");
+  const summary = [keptOf(names, filter.offModels, "models"), keptOf(efforts.map(effortName), filter.offEfforts.map(effortName), "efforts")].join(" · ");
 
   return h.div(
     [h.Class(isOpen ? "filters open" : "filters")],
@@ -75,7 +75,7 @@ const filtersView = (h: H, derived: Derived, filter: Model["filter"], isOpen: bo
       ),
       h.span(
         [h.Class("chips")],
-        efforts.map((effort) => h.button([h.Type("button"), h.Class(`chip ${filter.offEfforts.includes(effort) ? "" : "on"}`), h.OnClick(Message.ToggledEffort({ effort }))], [effort])),
+        efforts.map((effort) => h.button([h.Type("button"), h.Class(`chip ${filter.offEfforts.includes(effort) ? "" : "on"}`), h.OnClick(Message.ToggledEffort({ effort }))], [effortName(effort)])),
       ),
     ],
   );

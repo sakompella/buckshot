@@ -5,7 +5,7 @@ import { Option } from "effect";
 
 import { chamberPatterns, roundStory, ShellTracker, shotLineIn } from "../src/arena-viewer/analysis.ts";
 import type { Seat } from "../src/arena-viewer/api.ts";
-import { type BlockTally, blockRate, colorOf, fmtBytes, groupBy, matchRows, modelStats, quantile, regretStats, rng, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
+import { type BlockTally, blockRate, colorOf, fmtBytes, groupBy, labelOf, lossStats, matchRows, modelStats, quantile, regretStats, rng, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { bradleyTerry, type Game, heldOutRatings, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 import { droppedConfigs, ODDS_BINS, oddsBinOf, oddsPanels, selfShotTallies } from "../src/arena-viewer/page/odds.ts";
 import { shotOf, showsReloadNote, turningPoints } from "../src/arena-viewer/page/replay.ts";
@@ -366,11 +366,21 @@ test("a config's pot share is its cash over the match's cash, averaged over scor
 });
 
 test("a config's regret weights every searched move equally, whichever seat it came from, and is null with none", () => {
-  const seats = [{ regret: { moves: 1, total: 10, exact: 1 } }, { regret: { moves: 3, total: 2, exact: 0 } }, { regret: null }];
+  const largest = { ordinal: 1, points: 1 };
+  const seats = [{ regret: { moves: 1, total: 10, exact: 1, largest } }, { regret: { moves: 3, total: 2, exact: 0, largest } }, { regret: null }];
 
   expect(regretStats(seats)).toEqual({ moves: 4, mean: 3, exactShare: 0.25 });
   expect(regretStats([{ regret: null }])).toBeNull();
   expect(regretStats([])).toBeNull();
+});
+
+test("own loss per match sums a seat's regret over fully searched matches only, and the largest miss is over every searched move", () => {
+  const seat = (matchId: string, moves: number, searched: number, total: number, largest: number) => ({ matchId, moves, regret: { moves: searched, total, exact: 0, largest: { ordinal: 7, points: largest } } });
+  const loss = lossStats([seat("a", 4, 4, 30, 20), seat("b", 2, 2, 10, 10), seat("c", 5, 3, 90, 60), { matchId: "d", moves: 3, regret: null }]);
+
+  expect(loss).toEqual({ perMatch: 0.2, matches: 2, excluded: 2, largest: { matchId: "c", ordinal: 7, points: 60 } });
+  expect(lossStats([seat("c", 5, 3, 90, 60)])).toBeNull();
+  expect(lossStats([])).toBeNull();
 });
 
 // Two-player matches over the sweeps' pairings where every match lasts `rounds` rounds and the winner takes `winnerRounds` of them.
@@ -398,7 +408,7 @@ const playedRoundSeats = (seed: number, rounds: number, winnerRounds: number, is
 
 // The viewer check used to require Opus's mean regret below Haiku 4.5's on the live data; on fixed data it is a property of modelStats.
 test("a config's mean regret comes from its own scored seats, so a lower-regret config shows the lower mean", () => {
-  const seatOf = (model: string, matchId: string, player: string, total: number): SeatFull => ({ ...SEAT, potShare: null, matchId, player, model, regret: { moves: 10, total, exact: 0 } });
+  const seatOf = (model: string, matchId: string, player: string, total: number): SeatFull => ({ ...SEAT, potShare: null, matchId, player, model, regret: { moves: 10, total, exact: 0, largest: { ordinal: 1, points: total / 10 } } });
   const seats = [seatOf("claude-opus-5-5", "m1", "A", 20), seatOf("claude-haiku-4-5-20251001", "m1", "B", 60), seatOf("claude-opus-5-5", "m2", "B", 40), seatOf("claude-haiku-4-5-20251001", "m2", "A", 80)];
   const meanOf = (model: string) => modelStats(seats).find((config) => config.model === model)?.regret?.mean;
 
@@ -408,7 +418,7 @@ test("a config's mean regret comes from its own scored seats, so a lower-regret 
 
 test("the scatter's regret axis places a config with no searched move nowhere and a measured zero at zero", () => {
   const [unsearched, flawless, flawed] = modelStats(
-    [null, { moves: 4, total: 0, exact: 4 }, { moves: 2, total: 3, exact: 0 }].map((regret, index) => ({ ...SEAT, matchId: `m${index}`, effort: `e${index}`, potShare: null, regret })),
+    [null, { moves: 4, total: 0, exact: 4, largest: { ordinal: 1, points: 0 } }, { moves: 2, total: 3, exact: 0, largest: { ordinal: 1, points: 2 } }].map((regret, index) => ({ ...SEAT, matchId: `m${index}`, effort: `e${index}`, potShare: null, regret })),
   );
 
   expect([unsearched, flawless, flawed].map((config) => (config === undefined ? undefined : AXES.regret.valueOf(config)))).toEqual([null, 0, 1.5]);
@@ -584,6 +594,10 @@ test("a match search needs each of its words in a seat's label or the seed, in a
 
 test("a file size is in KB, MB or GB, whichever reads shortest", () => {
   expect([fmtBytes(2_400), fmtBytes(87_300_000), fmtBytes(1_540_000_000)]).toEqual(["2 KB", "87 MB", "1.5 GB"]);
+});
+
+test("off reads none, and Astra's off, low effort with the recall prompt, is starred", () => {
+  expect(["claude-opus-5-5|off", "gpt-6-astra|off", "gpt-6-astra|low"].map(labelOf)).toEqual(["Opus 5.5 none", "GPT-6 Astra none*", "GPT-6 Astra low"]);
 });
 
 test("the configs left off the odds chart are those of the kept seats with no line, named by model with their efforts", () => {

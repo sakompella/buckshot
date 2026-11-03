@@ -10,7 +10,7 @@ import type { MoveRegret, SeatRegret } from "./api.ts";
 
 const POINT = 10_000;
 
-const SeatTotalRow = Schema.Struct({ matchId: Schema.String, player: Schema.String, moves: Schema.Number, total: Schema.Number, exact: Schema.Number });
+const SeatTotalRow = Schema.Struct({ matchId: Schema.String, player: Schema.String, moves: Schema.Number, total: Schema.Number, exact: Schema.Number, largest: Schema.Number, ordinal: Schema.Number });
 
 const Score = Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 1_000_000 }));
 
@@ -85,8 +85,9 @@ export const openRegret = (path: string): Regret => {
 
   const inRun = [run?.evaluator ?? null, run?.depth ?? null, run?.budget ?? null, run?.reload ?? null, run?.samples ?? null];
 
+  // SQLite fills the bare ordinal column from the row that holds max(regret).
   const seatTotals = db.query(
-    `select match_id matchId, player, count(*) moves, sum(regret) total, sum(exact) exact from regret
+    `select match_id matchId, player, count(*) moves, sum(regret) total, sum(exact) exact, max(regret) largest, ordinal from regret
      where status = 'searched' and evaluator is ? and max_depth is ? and budget is ? and reload is ? and samples is ? group by match_id, player`,
   );
 
@@ -100,7 +101,7 @@ export const openRegret = (path: string): Regret => {
       seatTotals.all(...inRun).map((raw) => {
         const row = decodeSeatTotal(raw);
 
-        return [`${row.matchId}|${row.player}`, { moves: row.moves, total: row.total / POINT, exact: row.exact }];
+        return [`${row.matchId}|${row.player}`, { moves: row.moves, total: row.total / POINT, exact: row.exact, largest: { ordinal: row.ordinal, points: row.largest / POINT } }];
       }),
     ),
     moves: (matchId) =>

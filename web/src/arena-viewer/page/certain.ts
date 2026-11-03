@@ -4,7 +4,7 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { CERTAIN_TYPES, type CertainMistakes, type CertainRate, type CertainType, type OpportunityType } from "../api.ts";
 import { anchorId, chartWidth, linScale, REFERENCE, REFERENCE_DASH, tippedDot } from "./charts.ts";
-import { baseName, baseOrder, blocksOf, CERTAIN_NAMES, byEffort, colorOf, fmtTime, groupBy, keyOf, labelOf, type MatchRow, MIN_BLOCKS_FOR_INTERVAL, type SeatFull, shortName, sumOf } from "./data.ts";
+import { baseName, baseOrder, blocksOf, CERTAIN_NAMES, byEffort, colorOf, effortLabel, fmtTime, groupBy, keyOf, labelOf, type MatchRow, MIN_BLOCKS_FOR_INTERVAL, type SeatFull, shortName, sumOf } from "./data.ts";
 import { memoLast } from "./derived.ts";
 import { type CertainCell, Message } from "./model.ts";
 
@@ -167,7 +167,7 @@ const rowView = (h: H, certain: CertainMistakes, seats: ReadonlyArray<SeatFull>,
       row.key,
       [h.Class(Option.isSome(open) ? "sel" : "")],
       [
-        h.td([], [h.span([h.Class("dot"), h.Style({ background: colorOf(row.model) })], []), `${baseName(row.model)} `, h.span([h.Class("eff")], [`[${row.effort}]`])]),
+        h.td([], [h.span([h.Class("dot"), h.Style({ background: colorOf(row.model) })], []), `${baseName(row.model)} `, h.span([h.Class("eff")], [`[${effortLabel(row.model, row.effort)}]`])]),
         ...row.cells.map((cell) => cellView(h, cell, { key: row.key, isOpen: Option.exists(open, ({ type }) => type === cell.type) })),
       ],
     ),
@@ -285,7 +285,7 @@ export const certainView = (h: H, certain: CertainMistakes, seats: ReadonlyArray
     [],
     [
       h.h2([], ["Certain mistakes"]),
-      h.p([h.Class("sub")], ["An opportunity is every decision where the mistake was a legal move."]),
+      h.p([h.Class("sub")], ["All selected efforts, pooled. An opportunity is every decision where the mistake was a legal move."]),
       models.length === 0
         ? h.div([h.Class("empty")], ["No config in this filter has a decision with a proven shell."])
         : h.div(
