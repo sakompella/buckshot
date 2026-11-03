@@ -1,9 +1,10 @@
 import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
 import { serveArenaViewer } from "../src/arena-viewer/server.ts";
 
-// Serves the arena viewer over the arena analysis database (docs/arena/database.md). With --regret it also shows the
+// Serves the site (web/dist, from `bun run build`) with the arena viewer's API over the arena analysis database (docs/arena/database.md). With --regret it also shows the
 // regret table of a derived database (docs/arena/analysis/regret.md); without, the viewer has no regret. With --knowledge
 // it also shows how consistent each config is in repeated positions (the knowledge database of scripts/arena-knowledge.ts).
 // Usage: bun scripts/arena-viewer.ts <db> [host] [port] [--regret <regret db>] [--knowledge <knowledge db>] [--certain-mistakes <opportunities db>]
@@ -23,7 +24,14 @@ if (dbPath === undefined || isMissing(dbPath) || isMissing(regretPath) || isMiss
   process.exit(1);
 }
 
-const server = serveArenaViewer(dbPath, host, Number(port), regretPath, knowledgePath, certainPath);
+const siteDir = fileURLToPath(new URL("../dist", import.meta.url));
+
+if (!existsSync(`${siteDir}/index.html`)) {
+  console.error(`no built site at ${siteDir}: run \`bun run build\` first`);
+  process.exit(1);
+}
+
+const server = serveArenaViewer(dbPath, siteDir, host, Number(port), regretPath, knowledgePath, certainPath);
 
 console.log(
   `arena viewer: ${server.url.href} reading ${[dbPath, regretPath, knowledgePath, certainPath].filter((path) => path !== undefined).join(" and ")}`,

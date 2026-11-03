@@ -1,11 +1,11 @@
 import "@fontsource/league-gothic/400.css";
 import "@fontsource/vt323/400.css";
+import "./site/styles.css";
 import { Effect } from "effect";
 import { Runtime } from "foldkit";
 
-import { Flags, init, subscriptions, update } from "./main.ts";
-import { Message, Model } from "./model.ts";
-import { view } from "./view.ts";
+import { init, Model, Message, onUrlChange, onUrlRequest, subscriptions, update, view } from "./site/main.ts";
+import { Flags } from "./main.ts";
 import { ports, registerAgentTools } from "./webmcp.ts";
 
 const application = Runtime.makeApplication({
@@ -16,6 +16,7 @@ const application = Runtime.makeApplication({
   view,
   subscriptions,
   ports,
+  routing: { onUrlChange, onUrlRequest },
   container: document.getElementById("root"),
   // Bend's JS reads its arguments in place, so the Model must stay unfrozen.
   freezeModel: false,
