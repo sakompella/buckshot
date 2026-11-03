@@ -1087,7 +1087,7 @@ const checkRunHealth = async (page: Page, name: string) => {
   expectThat((await countOf(page, "#spend table")) === 0 && (await countOf(page, "#spend .chartrow")) === 0 && (await countOf(page, "#spend details")) === 0 && !/fail|reminder|fallback|by the hour|extra repl/i.test(health), `${name}: run health still shows a failure figure or a table`);
   expectThat((await countOf(page, "#reliability")) === 0 && (await countOf(page, "#seats")) === 0, `${name}: an old section id is still on the page`);
   expectThat(JSON.stringify(shown.toSorted()) === JSON.stringify(perMove.toSorted()), `${name}: the cost per move bars read ${shown.slice(0, 3).join(" | ")}, the served seats give ${perMove.slice(0, 3).join(" | ")}`);
-  expectThat(/\$[\d,]+ spent in total/.test(await textOf(page, "#spend .lbbar")), `${name}: the cost per move heading lacks the total spent`);
+  expectThat(/\$[\d,]+ at list prices/.test(await textOf(page, "#spend .lbbar")), `${name}: the cost per move heading lacks the total at list prices`);
 
   const ordered = completedPairs(seats).map((both) => both.toSorted((left, right) => left.position - right.position));
   const firstWon = ordered.map(([first]) => first?.winShare ?? 0);
@@ -1640,7 +1640,7 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
 
       console.log(name, "tallest leaderboard row", Math.round(tallest), "px | drill-down details", details.join(", "));
       expectThat(tallest <= 80, `${name}: a leaderboard row is ${Math.round(tallest)}px tall`);
-      expectThat(["wins vs own opponents", "round wins", "cash share", "per move", "time", "out tok", "fav"].every((label) => details.includes(label)), `${name}: the drill-down lacks a leaderboard detail: ${details.join(", ")}`);
+      expectThat(["wins vs own opponents", "round wins", "cash share", "cost / move", "time / move", "output tok / match", "fav"].every((label) => details.includes(label)), `${name}: the drill-down lacks a leaderboard detail: ${details.join(", ")}`);
       await page.locator("table.lbt").first().screenshot({ path: shot(`${name}-leaderboard-open`) });
       await row.tap();
     }

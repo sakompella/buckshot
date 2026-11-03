@@ -285,7 +285,7 @@ export const certainView = (h: H, certain: CertainMistakes, seats: ReadonlyArray
     [],
     [
       h.h2([], ["Certain mistakes"]),
-      h.p([h.Class("sub")], ["An opportunity is every decision where the mistake was a legal move."]),
+      h.p([h.Class("sub")], ["All selected efforts, pooled. An opportunity is every decision where the mistake was a legal move."]),
       models.length === 0
         ? h.div([h.Class("empty")], ["No config in this filter has a decision with a proven shell."])
         : h.div(

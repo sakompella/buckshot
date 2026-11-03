@@ -212,6 +212,7 @@ export const itemUsageView = (h: H, decisions: Decisions, seats: ReadonlyArray<S
     [],
     [
       h.h2([], ["Item usage"]),
+      h.p([h.Class("sub")], ["All selected efforts, pooled."]),
       h.div(
         [h.Class("chartrow two")],
         [
