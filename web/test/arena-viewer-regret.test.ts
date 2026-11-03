@@ -59,7 +59,7 @@ const regretFile = (rows: ReadonlyArray<Row>): string => {
   return path;
 };
 
-test("a seat's regret sums its searched moves in percentage points, with its exact count", () => {
+test("a seat's regret sums its searched moves in percentage points, with its exact count and its largest move", () => {
   const regret = openRegret(
     regretFile([
       { match: "m1", ordinal: 1, player: "A", best: 600_000, chosen: 500_000 },
@@ -68,8 +68,8 @@ test("a seat's regret sums its searched moves in percentage points, with its exa
     ]),
   );
 
-  expect(regret.seats.get("m1|A")).toEqual({ moves: 2, total: 110, exact: 1 });
-  expect(regret.seats.get("m1|B")).toEqual({ moves: 1, total: 0, exact: 0 });
+  expect(regret.seats.get("m1|A")).toEqual({ moves: 2, total: 110, exact: 1, largest: { ordinal: 2, points: 100 } });
+  expect(regret.seats.get("m1|B")).toEqual({ moves: 1, total: 0, exact: 0, largest: { ordinal: 3, points: 0 } });
 });
 
 test("a move that fell back has no regret, not a zero", () => {
@@ -124,7 +124,7 @@ test("only the run with the most searched moves is read, so evaluators, reload r
     ]),
   );
 
-  expect(regret.seats.get("m1|A")).toEqual({ moves: 2, total: 20, exact: 0 });
+  expect(regret.seats.get("m1|A")).toMatchObject({ moves: 2, total: 20, exact: 0 });
   expect(regret.moves("m1").size).toBe(2);
 });
 
