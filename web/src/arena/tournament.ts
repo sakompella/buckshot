@@ -28,6 +28,7 @@ const SeededPairing = Schema.Struct({ entrants: Schema.Array(EntrantName), seeds
 export const TournamentConfig = Schema.Struct({
   name: Schema.NonEmptyString,
   seed: Schema.Int,
+  cohort: Schema.optional(Schema.NonEmptyString),
   delivery: Schema.Literals(DELIVERIES),
   endpoints: Schema.Record(Schema.String, TournamentEndpoint),
   entrants: Schema.Record(EntrantName, Schema.Union([ModelEntrant, BotEntrant])),

@@ -135,6 +135,12 @@ test("a model with no price fails before any match, naming the entrant", () => {
   expect(Result.isSuccess(checkPrices(tournamentFrom(configJson()), prices))).toBe(true);
 });
 
+test("a config's cohort survives parsing, and may be left out", () => {
+  expect(tournamentFrom(configJson({ cohort: "tournament 9" })).config.cohort).toBe("tournament 9");
+  expect(tournamentFrom(configJson()).config.cohort).toBeUndefined();
+  expect(errorOf(configJson({ cohort: "" }))).toContain("the config is not valid");
+});
+
 // Synthetic matches, drawn from the model the ratings assume.
 
 /** Mulberry32, a generator whose draws are independent enough for a bootstrap check. */
