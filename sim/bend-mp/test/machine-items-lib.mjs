@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { config, round } from './reference-adapter.mjs';
+import { config, round, list, jamPair, turnHolder } from './reference-adapter.mjs';
 
 export const items = ['Saw', 'Glass', 'Jammer', 'Cigarettes', 'Beer', 'Phone', 'Inverter', 'Adrenaline', 'Remote'];
 
@@ -82,4 +82,35 @@ export function makeRandom(seed) {
     return random() % 16 === 0 ? count + random() % 4 : random() % count;
   };
   return { random, pick, randomConfig, answerFor };
+}
+
+export const ring = (template, f) => Object.fromEntries(Object.entries(template).map(([key, value]) => [key, key === '$' ? value : f(value, key)]));
+export const nil = list([]);
+
+// Compares the machine with the reference in lockstep: the public point and
+// the hidden fields, with the machine's rings folded into the host's seats.
+export function lockstep(M, R) {
+  const hostState = state => {
+    const { world, players, grabs } = state;
+    const seats = ring(players, (s, key) => ({ health: s.health, ...jamPair(s.jam), cash: s.cash, slots: s.slots, grabbing: grabs.grabbing[key], holding: grabs.holding[key], has_turn: turnHolder(state.phase) === Number(key.slice(1)) }));
+    return { ...world, seats, distributing: grabs.distributing, grabs: ring(players, (_, key) => ({ $: 'GrabProgress', count: grabs.granted[key], intake: grabs.intake[key] })) };
+  };
+  const referenceHost = state => ({ ...state.host, seats: ring(state.host.seats, props => {
+    const { $, ...fields } = props;
+    return { ...fields, jam_checked: fields.jammed ? fields.jam_checked : null };
+  }) });
+  let boundaries = 0;
+  return {
+    boundaries: () => boundaries,
+    compare(reference, machine, where = '') {
+      assert.deepEqual(normalize(M.point(machine)), normalize(R.point(reference)), `public point must agree (${where})`);
+      const host = hostState(machine);
+      const expected = referenceHost(reference);
+      delete host.$;
+      delete expected.$;
+      assert.deepEqual(normalize(host), normalize(expected), `hidden fields must agree (${where})`);
+      boundaries++;
+    },
+    sameNotes: (machine, reference, where = '') => assert.deepEqual(normalize(machine), normalize(reference), `per-answer notes must agree (${where})`),
+  };
 }

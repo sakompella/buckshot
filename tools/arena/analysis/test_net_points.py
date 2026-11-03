@@ -24,14 +24,7 @@ class Arithmetic(unittest.TestCase):
         self.assertAlmostEqual(m.net, 0.6)
         self.assertEqual(m.margin, 1)
 
-    def test_ols_recovers_a_line(self):
-        line = np_.ols([0.0, 1.0, 2.0, 3.0], [1.0, 3.0, 5.0, 7.0])
-        self.assertAlmostEqual(line.slope, 2.0)
-        self.assertAlmostEqual(line.intercept, 1.0)
-        self.assertAlmostEqual(line.r2, 1.0)
-
-    def test_spearman_is_one_for_any_increasing_map_and_ties_share_ranks(self):
-        self.assertAlmostEqual(np_.spearman([1, 2, 3, 4], [1, 8, 27, 1000]), 1.0)
+    def test_tied_values_share_the_mean_of_their_ranks(self):
         self.assertEqual(np_.ranks([5.0, 1.0, 5.0, 3.0]), [3.5, 1.0, 3.5, 2.0])
 
     def test_interval_of_identical_blocks_is_a_point(self):

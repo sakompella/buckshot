@@ -1,32 +1,10 @@
 import assert from 'node:assert/strict';
-import { config, round, list, array, kind, seatNumber, tag, maybe, requestJSON, stateJSON, turnHolder, jamPair, machineJam } from './reference-adapter.mjs';
-import { items, loadModels, makeRandom, normalize, rules } from './machine-items-lib.mjs';
+import { config, round, list, array, kind, seatNumber, tag, maybe, requestJSON, stateJSON, machineJam } from './reference-adapter.mjs';
+import { items, loadModels, lockstep, makeRandom, nil, normalize, ring, rules } from './machine-items-lib.mjs';
 
 const { M, R, close } = await loadModels('bend-mp-machine-items-');
 try {
-  const ring = (template, f) => Object.fromEntries(Object.entries(template).map(([key, value]) => [key, key === '$' ? value : f(value, key)]));
-  const nil = list([]);
-  const hostState = state => {
-    const { world, players, grabs } = state;
-    const seats = ring(players, (s, key) => ({ health: s.health, ...jamPair(s.jam), cash: s.cash, slots: s.slots, grabbing: grabs.grabbing[key], holding: grabs.holding[key], has_turn: turnHolder(state.phase) === Number(key.slice(1)) }));
-    return { ...world, seats, distributing: grabs.distributing, grabs: ring(players, (_, key) => ({ $: 'GrabProgress', count: grabs.granted[key], intake: grabs.intake[key] })) };
-  };
-  const referenceHost = state => ({ ...state.host, seats: ring(state.host.seats, props => {
-    const { $, ...fields } = props;
-    return { ...fields, jam_checked: fields.jammed ? fields.jam_checked : null };
-  }) });
-
-  let boundaries = 0;
-  const compare = (reference, machine, where) => {
-    assert.deepEqual(normalize(M.point(machine)), normalize(R.point(reference)), `public point must agree (${where})`);
-    const host = hostState(machine);
-    const expected = referenceHost(reference);
-    delete host.$;
-    delete expected.$;
-    assert.deepEqual(normalize(host), normalize(expected), `hidden fields must agree (${where})`);
-    boundaries++;
-  };
-  const sameNotes = (machine, reference, where) => assert.deepEqual(normalize(machine), normalize(reference), `per-answer notes must agree (${where})`);
+  const { compare, sameNotes, boundaries } = lockstep(M, R);
 
   const sockets = n => n === 2 ? [1, 3] : Array.from({ length: n }, (_, i) => i);
 
@@ -314,7 +292,7 @@ try {
       game.move(actor, move => move.Steal?.[2] === 'Glass');
     }
   });
-  const scenarioBoundaries = boundaries;
+  const scenarioBoundaries = boundaries();
 
   const { random, randomConfig, answerFor } = makeRandom(0x6974656d);
   const seen = { M1: 0, M3: 0, M4: 0, adrenalineRefused: 0, D56: 0, steals: 0, phoneDraws: 0, itemChoices: 0, turnAmounts: 0, finished: 0, stuck: 0 };
@@ -409,7 +387,7 @@ try {
     if (situation !== 'stuck') assert.ok(hits > 0, `random games reach ${situation}`);
   }
   assert.equal(seen.stuck, 0, 'normal random play never reaches Stuck');
-  console.log(`machine item verification: ${scenarios} scenarios, ${games} random games, ${boundaries} boundaries (${scenarioBoundaries} scenario) passed; ${JSON.stringify(seen)}`);
+  console.log(`machine item verification: ${scenarios} scenarios, ${games} random games, ${boundaries()} boundaries (${scenarioBoundaries} scenario) passed; ${JSON.stringify(seen)}`);
 } finally {
   close();
 }
