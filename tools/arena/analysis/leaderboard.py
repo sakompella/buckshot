@@ -26,7 +26,11 @@ TITLES = {
 
 
 def title_of(cohort: str) -> str:
-    return TITLES.get(cohort) or cohort.removeprefix("cpa-tiers sweep ") + " efforts (tournament 1)"
+    if cohort in TITLES:
+        return TITLES[cohort]
+    if cohort.startswith("cpa-tiers sweep "):
+        return cohort.removeprefix("cpa-tiers sweep ") + " efforts (tournament 1)"
+    return cohort[0].upper() + cohort[1:]
 
 
 def cohort_table(games: list[Game], wins: dict[str, float], cash: dict[str, float]) -> str:

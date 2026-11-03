@@ -53,8 +53,12 @@ def connect(path: str = DB) -> sqlite3.Connection:
     return sqlite3.connect(f"file:{path}?mode=ro", uri=True)
 
 
-def cohort_of(tournament: str, model_a: str, model_b: str, effort_a: str, effort_b: str) -> str:
-    """Seat and pair figures compare matches only inside a cohort: a model's own effort levels, tournament 1's cross-model games, or one tournament."""
+def cohort_of(tournament: str, model_a: str, model_b: str, effort_a: str, effort_b: str, declared: str | None = None) -> str:
+    """Seat and pair figures compare matches only inside a cohort: a model's own effort levels, tournament 1's cross-model games, or one tournament.
+
+    A tournament's config names its cohort in `cohort`. The name mapping below is for tournaments run before that field."""
+    if declared is not None:
+        return declared
     if tournament == "cpa-tiers":
         if model_a == model_b:
             return f"cpa-tiers sweep {model_a}"
@@ -107,15 +111,15 @@ def scored_games(db: sqlite3.Connection) -> list[Game]:
     for row in seats:
         by_match.setdefault(row[0], []).append(row)
     games = []
-    for match, tournament, block, seed, code in db.execute(
-        "SELECT m.id, t.name, m.seed_block_id, m.seed, m.code_hash FROM matches m JOIN tournaments t ON t.id = m.tournament_id WHERE m.status = 'completed' ORDER BY m.id"
+    for match, tournament, block, seed, code, declared in db.execute(
+        "SELECT m.id, t.name, m.seed_block_id, m.seed, m.code_hash, json_extract(t.config_json, '$.cohort') FROM matches m JOIN tournaments t ON t.id = m.tournament_id WHERE m.status = 'completed' ORDER BY m.id"
     ):
         (_, _, letter_a, share_a, cash_a, a, model_a, effort_a), (_, _, letter_b, _, cash_b, b, model_b, effort_b) = by_match[match]
         if SKIPPED_MODEL in model_a or SKIPPED_MODEL in model_b:
             continue
         letter_of = {letter_a: 1, letter_b: 2}
         games.append(
-            Game(block, cohort_of(tournament, model_a, model_b, effort_a, effort_b), tournament, code, seed, a, b, share_a, cash_a / (cash_a + cash_b), letter_of[starters[match]], shooters[match])
+            Game(block, cohort_of(tournament, model_a, model_b, effort_a, effort_b, declared), tournament, code, seed, a, b, share_a, cash_a / (cash_a + cash_b), letter_of[starters[match]], shooters[match])
         )
     return games
 
