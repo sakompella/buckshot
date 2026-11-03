@@ -2,7 +2,7 @@ import Base
 import ../domain.bend as D
 import ../driver.bend as R
 
-# Smoke test for check.sh: 64 matches at each table size run to the end, with
+# Smoke test for check.sh: 64 matches at each table size finish, with
 # nothing stuck and no fuel spent. Items are on.
 
 def items() -> Bool:
@@ -10,8 +10,8 @@ def items() -> Bool:
 
 def line(label: String, totals: R.Totals) -> String:
   match totals:
-    case R.Totals{played, matches, rounds, stuck, exhausted}:
-      "smoke " ++ label ++ " played=" ++ U32.show(played) ++ " stuck=" ++ U32.show(stuck) ++ " exhausted=" ++ U32.show(exhausted)
+    case R.Totals{played, matches, rounds, +stuck, +exhausted}:
+      "smoke " ++ label ++ " finished=" ++ U32.show((played - stuck - exhausted : U32)) ++ " stuck=" ++ U32.show(stuck) ++ " exhausted=" ++ U32.show(exhausted)
 
 def main() -> IO(Unit):
   do IO<Unit>:

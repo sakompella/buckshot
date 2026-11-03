@@ -110,7 +110,7 @@ gate_driver_imports() {
 gate_driver_smoke() {
   local out
   out="$("$BEND" "$here/test/driver-smoke.bend" 2>&1)"
-  if [[ $? -eq 0 && "$(printf '%s\n' "$out" | grep -c ' played=64 stuck=0 exhausted=0$')" -eq 3 ]]; then
+  if [[ $? -eq 0 && "$(printf '%s\n' "$out" | grep -c ' finished=64 stuck=0 exhausted=0$')" -eq 3 ]]; then
     report ok "driver smoke" "3 table sizes, 0 stuck, 0 exhausted"
   else
     report fail "driver smoke" "$(printf '%s' "$out" | head -20)"
@@ -120,7 +120,7 @@ gate_driver_smoke() {
 gate_simple_smoke() {
   local out
   out="$("$BEND" "$here/test/simple-smoke.bend" 2>&1)"
-  if [[ $? -eq 0 && "$(printf '%s\n' "$out" | grep -c '^simple smoke [234] played=64 stuck=0 exhausted=0$')" -eq 3 ]]; then
+  if [[ $? -eq 0 && "$(printf '%s\n' "$out" | grep -c '^simple smoke [234] finished=64 stuck=0 exhausted=0$')" -eq 3 ]]; then
     report ok "simple smoke" "3 table sizes, 0 stuck, 0 exhausted"
   else
     report fail "simple smoke" "$(printf '%s' "$out" | head -20)"

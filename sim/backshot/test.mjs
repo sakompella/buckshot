@@ -81,7 +81,10 @@ assert.ok(array(L['model.candidates'](true,state({playerTurn:false}))).includes(
 
 assert.equal(outcomes({live:0,blank:1,cuffs:2},1)[0].state.cuffs,2n);
 assert.equal(outcomes({live:0,blank:1,cuffs:2},1,false)[0].state.cuffs,1n);
-assert.equal(run({live:2,blank:1,playerItems:'h',cuffs:2},true).value.includes('1000000'),false);
+{
+ const [numerator,denominator]=run({live:2,blank:1,playerItems:'h',cuffs:2},true).value.split('/').map(BigInt);
+ assert.ok(0n<=numerator&&numerator<=denominator&&denominator>0n,'a cuffed position scores like any leaf, between 0 and 1');
+}
 assert.equal(run({dealerHp:0,playerHp:0},true).value,'1/2');
 assert.equal(L['heuristic.obvious'](true,state({playerTurn:false,dealerHp:1,playerHp:2,shell:'live',dealerItems:'s'})).value,8n);
 assert.equal(L['heuristic.obvious'](false,state({playerTurn:false,dealerHp:1,playerHp:2,shell:'live',dealerItems:'s'},false)).value,1n);
@@ -157,8 +160,10 @@ for(let live=0;live<=3;live++) for(let blank=0;blank<=3;blank++) {
   }
  }
 }
-// A second traversal independently averages every outcome. No alpha/beta or
-// production search helper participates. It checks the Bellman equation.
+// A second traversal averages every outcome of the model's candidates and
+// outcomes, which the loops above check on their own. No alpha/beta or
+// production search helper participates, so it checks the search against the
+// Bellman equation, not the transition model.
 function brute(s,depth) {
  if(depth===0||s.player_hp===0n||s.dealer_hp===0n||L['state.total'](s)===0n) {
   if(s.player_hp+s.dealer_hp===0n)return [1n,2n];
