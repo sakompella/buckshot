@@ -360,6 +360,10 @@ export const scatterView = (
         h.OnMouseEnter(Message.HoveredPoint({ key: point.m.key })),
         h.OnMouseLeave(Message.LeftPoint()),
         h.OnClick(Message.ClickedPoint({ key: point.m.key }), { propagation: "Stop" }),
+        h.Tabindex(0),
+        h.Role("button"),
+        h.AriaLabel(point.m.label),
+        h.OnKeyDownSelfPreventDefault((key) => (key === "Enter" || key === " " ? Option.some(Message.ClickedPoint({ key: point.m.key })) : Option.none())),
       ],
       [
         h.path([h.D(cellPath(cells[index] ?? [])), h.Fill("transparent")], []),
