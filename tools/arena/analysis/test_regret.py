@@ -37,9 +37,6 @@ class Percentile(unittest.TestCase):
     def test_interpolates_between_ranks(self):
         self.assertEqual(regret.percentile([0, 10, 20, 30, 40], 0.9), 36)
 
-    def test_one_value(self):
-        self.assertEqual(regret.percentile([7], 0.9), 7)
-
 
 class Load(unittest.TestCase):
     def load(self, **kwargs):

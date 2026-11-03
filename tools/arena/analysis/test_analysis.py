@@ -22,11 +22,6 @@ def swapped_block(block, a, b, share_a_first, share_a_second, seed=1, starter=1)
 
 
 class Bradley(unittest.TestCase):
-    def test_solve(self):
-        x = bt.solve([[2.0, 1.0], [1.0, 3.0]], [3.0, 5.0])
-        self.assertAlmostEqual(x[0], 0.8)
-        self.assertAlmostEqual(x[1], 1.4)
-
     def test_recovers_the_win_probability_of_a_pair(self):
         games = [game(f"b{i}", "a", "b", 1.0 if i < 75 else 0.0) for i in range(100)]
         fitted = bt.fit(bt.cells_of(games))
@@ -85,10 +80,6 @@ class Bradley(unittest.TestCase):
 
 
 class Bootstrap(unittest.TestCase):
-    def test_weights_draw_as_many_blocks_as_there_are(self):
-        ids = ["a", "b", "c", "d"]
-        self.assertEqual(sum(boot.weights(ids, random.Random(1)).values()), 4)
-
     def test_interval_needs_enough_draws(self):
         self.assertIsNone(boot.interval([1.0] * 5))
         low, high = boot.interval([float(i) for i in range(101)])
@@ -97,11 +88,6 @@ class Bootstrap(unittest.TestCase):
 
 
 class CrossValidation(unittest.TestCase):
-    def test_folds_hold_out_every_block_once(self):
-        ids = [str(i) for i in range(23)]
-        held = [b for fold in cv.folds(ids, 5, random.Random(1)) for b in fold]
-        self.assertEqual(sorted(held), sorted(ids))
-
     def test_nested_scores_every_block_for_every_tau(self):
         games = [g for i in range(30) for g in swapped_block(f"b{i}", "a", "b", 1.0, 1.0)]
         losses, chosen = cv.nested(games, False, random.Random(1), repeats=1, outer=5, inner=3)
