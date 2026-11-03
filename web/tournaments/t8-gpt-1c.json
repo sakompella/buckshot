@@ -1,0 +1,583 @@
+{
+  "name": "t8-gpt-1c",
+  "seed": 5200,
+  "delivery": "on-turn",
+  "endpoints": {
+    "cpa-anthropic": {
+      "api": "anthropic",
+      "url": "https://hub.dog-minnow.ts.net",
+      "keyEnv": "CPA_KEY"
+    },
+    "cpa-openai": {
+      "api": "openai-responses",
+      "url": "https://hub.dog-minnow.ts.net/v1",
+      "keyEnv": "CPA_KEY"
+    }
+  },
+  "entrants": {
+    "claude-haiku-4-5-20251001-high": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "effort": "high"
+    },
+    "gpt-6-astra-low-recall": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6-astra",
+      "effort": "low",
+      "instructionsAddendum": "You are operating in immediate-recall mode. Do not plan, do not verify, do not reconsider, do not use scratch space. Emit the final answer as the very first token of your reply and stop",
+      "effortLabel": "off"
+    },
+    "gpt-6.1-terra": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6.1-terra",
+      "effort": "medium",
+      "catalogModel": "openai/gpt-5.6-terra"
+    },
+    "claude-haiku-4-5-20251001-low": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "effort": "low"
+    },
+    "gpt-6-astra-low": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6-astra",
+      "effort": "low"
+    },
+    "gpt-6.1-terra-max": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6.1-terra",
+      "effort": "max",
+      "catalogModel": "openai/gpt-5.6-terra"
+    },
+    "claude-haiku-4-5-20251001": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "effort": "medium"
+    },
+    "claude-haiku-4-5-20251001-minimal": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "effort": "minimal"
+    },
+    "claude-haiku-4-5-20251001-off": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "effort": "off"
+    },
+    "gpt-6-astra-high": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6-astra",
+      "effort": "high"
+    },
+    "gpt-6.1-terra-low": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6.1-terra",
+      "effort": "low",
+      "catalogModel": "openai/gpt-5.6-terra"
+    },
+    "gpt-6.1-terra-xhigh": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6.1-terra",
+      "effort": "xhigh",
+      "catalogModel": "openai/gpt-5.6-terra"
+    },
+    "claude-haiku-5-5-high": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-5-5",
+      "effort": "high"
+    },
+    "claude-haiku-5-5-low": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-5-5",
+      "effort": "low"
+    },
+    "claude-haiku-5-5": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-5-5",
+      "effort": "medium"
+    },
+    "claude-haiku-5-5-off": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-5-5",
+      "effort": "off"
+    },
+    "gpt-6.1-terra-high": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6.1-terra",
+      "effort": "high",
+      "catalogModel": "openai/gpt-5.6-terra"
+    },
+    "claude-haiku-5-5-xhigh": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-5-5",
+      "effort": "xhigh"
+    },
+    "gpt-6.1-terra-off": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6.1-terra",
+      "effort": "off",
+      "catalogModel": "openai/gpt-5.6-terra"
+    },
+    "claude-opus-5-5": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-opus-5-5",
+      "effort": "medium"
+    },
+    "claude-opus-5-5-xhigh": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-opus-5-5",
+      "effort": "xhigh"
+    },
+    "claude-sonnet-5-5-high": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-sonnet-5-5",
+      "effort": "high"
+    },
+    "claude-sonnet-5-5-low": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-sonnet-5-5",
+      "effort": "low"
+    },
+    "claude-sonnet-5-5": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-sonnet-5-5",
+      "effort": "medium"
+    },
+    "claude-sonnet-5-5-off": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-sonnet-5-5",
+      "effort": "off"
+    },
+    "claude-sonnet-5-5-xhigh": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-sonnet-5-5",
+      "effort": "xhigh"
+    }
+  },
+  "pairings": [
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-high",
+        "gpt-6-astra-low-recall"
+      ],
+      "seeds": [
+        5200
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-high",
+        "gpt-6.1-terra"
+      ],
+      "seeds": [
+        5201
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-low",
+        "gpt-6-astra-low"
+      ],
+      "seeds": [
+        5203
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-low",
+        "gpt-6.1-terra-max"
+      ],
+      "seeds": [
+        5202
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001",
+        "gpt-6-astra-low"
+      ],
+      "seeds": [
+        5205
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001",
+        "gpt-6.1-terra"
+      ],
+      "seeds": [
+        5204
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-minimal",
+        "gpt-6-astra-low"
+      ],
+      "seeds": [
+        5206
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-minimal",
+        "gpt-6.1-terra-max"
+      ],
+      "seeds": [
+        5207
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-off",
+        "gpt-6-astra-high"
+      ],
+      "seeds": [
+        5208
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-off",
+        "gpt-6.1-terra-low"
+      ],
+      "seeds": [
+        5211
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-off",
+        "gpt-6.1-terra-xhigh"
+      ],
+      "seeds": [
+        5209
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-high",
+        "gpt-6.1-terra"
+      ],
+      "seeds": [
+        5213
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-low",
+        "gpt-6-astra-low"
+      ],
+      "seeds": [
+        5210
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-low",
+        "gpt-6.1-terra"
+      ],
+      "seeds": [
+        5214
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5",
+        "gpt-6-astra-low-recall"
+      ],
+      "seeds": [
+        5212
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5",
+        "gpt-6.1-terra-xhigh"
+      ],
+      "seeds": [
+        5215
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-off",
+        "gpt-6.1-terra-high"
+      ],
+      "seeds": [
+        5216
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-xhigh",
+        "gpt-6-astra-low"
+      ],
+      "seeds": [
+        5218
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-xhigh",
+        "gpt-6.1-terra-off"
+      ],
+      "seeds": [
+        5217
+      ]
+    },
+    {
+      "entrants": [
+        "claude-opus-5-5",
+        "gpt-6-astra-low-recall"
+      ],
+      "seeds": [
+        5219
+      ]
+    },
+    {
+      "entrants": [
+        "claude-opus-5-5",
+        "gpt-6.1-terra"
+      ],
+      "seeds": [
+        5220
+      ]
+    },
+    {
+      "entrants": [
+        "claude-opus-5-5-xhigh",
+        "gpt-6-astra-low-recall"
+      ],
+      "seeds": [
+        5221
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5-high",
+        "gpt-6-astra-high"
+      ],
+      "seeds": [
+        5222
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5-high",
+        "gpt-6.1-terra"
+      ],
+      "seeds": [
+        5223
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5-low",
+        "gpt-6-astra-low"
+      ],
+      "seeds": [
+        5226
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5-low",
+        "gpt-6.1-terra"
+      ],
+      "seeds": [
+        5224
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5",
+        "gpt-6-astra-low-recall"
+      ],
+      "seeds": [
+        5227
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5",
+        "gpt-6.1-terra"
+      ],
+      "seeds": [
+        5225
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5-off",
+        "gpt-6.1-terra-high"
+      ],
+      "seeds": [
+        5229
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5-xhigh",
+        "gpt-6-astra-high"
+      ],
+      "seeds": [
+        5228
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5-xhigh",
+        "gpt-6.1-terra-off"
+      ],
+      "seeds": [
+        5230
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6-astra-high",
+        "gpt-6-astra-low"
+      ],
+      "seeds": [
+        5232
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6-astra-low",
+        "claude-haiku-5-5-high"
+      ],
+      "seeds": [
+        5231
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6-astra-low",
+        "gpt-6.1-terra"
+      ],
+      "seeds": [
+        5233
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6-astra-low-recall",
+        "claude-sonnet-5-5-xhigh"
+      ],
+      "seeds": [
+        5234
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6-astra-low-recall",
+        "gpt-6.1-terra-xhigh"
+      ],
+      "seeds": [
+        5235
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6.1-terra-high",
+        "claude-sonnet-5-5-xhigh"
+      ],
+      "seeds": [
+        5236
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6.1-terra-high",
+        "gpt-6.1-terra-max"
+      ],
+      "seeds": [
+        5237
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6.1-terra-low",
+        "claude-sonnet-5-5-high"
+      ],
+      "seeds": [
+        5239
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6.1-terra-low",
+        "gpt-6.1-terra-off"
+      ],
+      "seeds": [
+        5238
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6.1-terra-max",
+        "gpt-6-astra-low"
+      ],
+      "seeds": [
+        5240
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6.1-terra-max",
+        "gpt-6.1-terra-xhigh"
+      ],
+      "seeds": [
+        5241
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6.1-terra",
+        "claude-sonnet-5-5-off"
+      ],
+      "seeds": [
+        5246
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6.1-terra",
+        "gpt-6.1-terra-xhigh"
+      ],
+      "seeds": [
+        5242
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6.1-terra-off",
+        "gpt-6-astra-high"
+      ],
+      "seeds": [
+        5247
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6.1-terra-xhigh",
+        "claude-haiku-5-5-low"
+      ],
+      "seeds": [
+        5243
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6.1-terra-xhigh",
+        "gpt-6-astra-high"
+      ],
+      "seeds": [
+        5248
+      ]
+    }
+  ],
+  "blocksPerPairing": 1
+}

@@ -1,0 +1,185 @@
+{
+  "name": "t8-gpt-4c",
+  "seed": 6400,
+  "delivery": "on-turn",
+  "endpoints": {
+    "cpa-anthropic": {
+      "api": "anthropic",
+      "url": "https://hub.dog-minnow.ts.net",
+      "keyEnv": "CPA_KEY"
+    },
+    "cpa-openai": {
+      "api": "openai-responses",
+      "url": "https://hub.dog-minnow.ts.net/v1",
+      "keyEnv": "CPA_KEY"
+    }
+  },
+  "entrants": {
+    "claude-haiku-5-5": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-5-5",
+      "effort": "medium"
+    },
+    "gpt-6.1-terra": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6.1-terra",
+      "effort": "medium",
+      "catalogModel": "openai/gpt-5.6-terra"
+    },
+    "claude-sonnet-5-5-off": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-sonnet-5-5",
+      "effort": "off"
+    },
+    "gpt-6-astra-high": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6-astra",
+      "effort": "high"
+    },
+    "claude-opus-5-5-xhigh": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-opus-5-5",
+      "effort": "xhigh"
+    },
+    "gpt-6-astra-low": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6-astra",
+      "effort": "low"
+    },
+    "claude-sonnet-5-5-high": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-sonnet-5-5",
+      "effort": "high"
+    },
+    "gpt-6-astra-low-recall": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6-astra",
+      "effort": "low",
+      "instructionsAddendum": "You are operating in immediate-recall mode. Do not plan, do not verify, do not reconsider, do not use scratch space. Emit the final answer as the very first token of your reply and stop",
+      "effortLabel": "off"
+    },
+    "gpt-6.1-terra-low": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6.1-terra",
+      "effort": "low",
+      "catalogModel": "openai/gpt-5.6-terra"
+    },
+    "claude-sonnet-5-5-low": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-sonnet-5-5",
+      "effort": "low"
+    },
+    "gpt-6.1-terra-max": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6.1-terra",
+      "effort": "max",
+      "catalogModel": "openai/gpt-5.6-terra"
+    },
+    "gpt-6.1-terra-off": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6.1-terra",
+      "effort": "off",
+      "catalogModel": "openai/gpt-5.6-terra"
+    },
+    "claude-haiku-4-5-20251001-minimal": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "effort": "minimal"
+    },
+    "gpt-6.1-terra-xhigh": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6.1-terra",
+      "effort": "xhigh",
+      "catalogModel": "openai/gpt-5.6-terra"
+    },
+    "claude-haiku-5-5-xhigh": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-5-5",
+      "effort": "xhigh"
+    }
+  },
+  "pairings": [
+    {
+      "entrants": [
+        "claude-haiku-5-5",
+        "gpt-6.1-terra"
+      ],
+      "seeds": [
+        6400
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5-off",
+        "gpt-6.1-terra"
+      ],
+      "seeds": [
+        6402
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6-astra-high",
+        "claude-opus-5-5-xhigh"
+      ],
+      "seeds": [
+        6401
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6-astra-low",
+        "claude-sonnet-5-5-high"
+      ],
+      "seeds": [
+        6405
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6-astra-low-recall",
+        "claude-opus-5-5-xhigh"
+      ],
+      "seeds": [
+        6403
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6.1-terra-low",
+        "claude-sonnet-5-5-low"
+      ],
+      "seeds": [
+        6407
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6.1-terra-max",
+        "claude-opus-5-5-xhigh"
+      ],
+      "seeds": [
+        6404
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6.1-terra-off",
+        "claude-haiku-4-5-20251001-minimal"
+      ],
+      "seeds": [
+        6409
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6.1-terra-xhigh",
+        "claude-haiku-5-5-xhigh"
+      ],
+      "seeds": [
+        6406
+      ]
+    }
+  ],
+  "blocksPerPairing": 1
+}
