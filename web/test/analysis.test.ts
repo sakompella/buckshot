@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { appendFileSync, cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,6 +9,18 @@ import { importTournaments, openAnalysis } from "../src/analysis/import.ts";
 import { replayOf } from "../src/arena/replay.ts";
 import { playFauxRun } from "./faux-run.ts";
 
+const played = mkdtempSync(join(tmpdir(), "buckshot-analysis-faux-"));
+
+// Each test imports and replays a match, several times over in the longest.
+setDefaultTimeout(30_000);
+
+beforeAll(() => playFauxRun(played, ["Agent", "Agent"], "on-turn"), 30_000);
+
+afterAll(() => rmSync(played, { recursive: true, force: true }));
+
+/** Every test reads the same finished match, so it is played once and copied. */
+const fauxMatchInto = (dir: string) => cpSync(played, dir, { recursive: true });
+
 test("refreshes resumed logs without duplicating calls, retains bad observations, and rebuilds the same projections", async () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
   const source = join(root, "tournament");
@@ -17,7 +29,7 @@ test("refreshes resumed logs without duplicating calls, retains bad observations
   mkdirSync(source);
 
   try {
-    await playFauxRun(match, ["Agent", "Agent"], "on-turn");
+    fauxMatchInto(match);
     const schedule = [{ name: "a_b_b0_p0", pairing: 0, block: 0, seed: 42, seats: ["A", "B"], entrants: ["a", "b"] }, { name: "b_a_b0_p1", pairing: 0, block: 0, seed: 42, seats: ["B", "A"], entrants: ["b", "a"] }];
     writeFileSync(join(source, "tournament.json"), JSON.stringify({ format: 1, created_at: "2026-01-01T00:00:00Z", git_commit: "test", config: { name: "test", seed: 42, delivery: "on-turn", endpoints: { fake: { api: "anthropic", url: "http://invalid", keyEnv: "UNUSED" } }, entrants: { a: { endpoint: "fake", model: "faux-a", effort: "medium" }, b: { endpoint: "fake", model: "faux-b", effort: "medium" } }, pairings: [["a", "b"]], blocksPerPairing: 1 }, schedule }));
     const eventsPath = join(match, "events.jsonl");
@@ -100,7 +112,7 @@ test("a finished match with an explicit skip keeps its moves and costs but is no
   mkdirSync(source);
 
   try {
-    await playFauxRun(join(source, "a_b_b0_p0"), ["Agent", "Agent"], "on-turn");
+    fauxMatchInto(join(source, "a_b_b0_p0"));
     const schedule = [{ name: "a_b_b0_p0", pairing: 0, block: 0, seed: 42, seats: ["A", "B"], entrants: ["a", "b"] }, { name: "b_a_b0_p1", pairing: 0, block: 0, seed: 42, seats: ["B", "A"], entrants: ["b", "a"] }];
     writeFileSync(join(source, "tournament.json"), JSON.stringify({ format: 1, created_at: "2026-01-01T00:00:00Z", git_commit: "test", config: { name: "test", seed: 42, delivery: "on-turn", endpoints: { fake: { api: "anthropic", url: "http://invalid", keyEnv: "UNUSED" } }, entrants: { a: { endpoint: "fake", model: "faux-a", effort: "medium" }, b: { endpoint: "fake", model: "faux-b", effort: "medium" } }, pairings: [["a", "b"]], blocksPerPairing: 1 }, schedule }));
     importTournaments({ database, sources: [source], skipped: { [source]: { a_b_b0_p0: "over the cap", b_a_b0_p1: "never played" } } });
@@ -118,11 +130,11 @@ test("a finished match with an explicit skip keeps its moves and costs but is no
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-const probeTournament = async (root: string, effort: string) => {
+const probeTournament = (root: string, effort: string) => {
   const source = join(root, "source");
   const name = "a_b_b0_p0";
   mkdirSync(source);
-  await playFauxRun(join(source, name), ["Agent", "Agent"], "on-turn");
+  fauxMatchInto(join(source, name));
   const manifestPath = join(source, name, "manifest.json");
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 
@@ -146,7 +158,7 @@ test("a changed tournament config revalidates unchanged matches, as a fresh rebu
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 
   try {
-    const { source, configure } = await probeTournament(root, "medium");
+    const { source, configure } = probeTournament(root, "medium");
     const database = join(root, "analysis.sqlite");
     const fresh = join(root, "fresh.sqlite");
     importTournaments({ database, sources: [source] });
@@ -166,7 +178,7 @@ test("an entrant with an effort label is filed under it, and the others under th
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 
   try {
-    const { source } = await probeTournament(root, "medium");
+    const { source } = probeTournament(root, "medium");
     const database = join(root, "analysis.sqlite");
     const file = JSON.parse(readFileSync(join(source, "tournament.json"), "utf8"));
 
@@ -182,7 +194,7 @@ test("a match whose agent played its entrant's instructions addendum is not an i
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 
   try {
-    const { source } = await probeTournament(root, "medium");
+    const { source } = probeTournament(root, "medium");
     const database = join(root, "analysis.sqlite");
     const tournamentPath = join(source, "tournament.json");
     const manifestPath = join(source, "a_b_b0_p0", "manifest.json");
@@ -202,7 +214,7 @@ test("importing the same tournament from a new directory leaves every row and so
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 
   try {
-    const { source } = await probeTournament(root, "medium");
+    const { source } = probeTournament(root, "medium");
     const database = join(root, "analysis.sqlite");
     const relocated = join(root, "relocated");
     importTournaments({ database, sources: [source] });
@@ -225,7 +237,7 @@ test("a finished match whose standings do not cover every player is reported and
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 
   try {
-    const { source, manifestPath } = await probeTournament(root, "medium");
+    const { source, manifestPath } = probeTournament(root, "medium");
     const database = join(root, "analysis.sqlite");
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
     const standings = manifest.standings;
@@ -251,7 +263,7 @@ test("a finished match is scored only when its replay and end event confirm the 
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 
   try {
-    const { source, manifestPath } = await probeTournament(root, "medium");
+    const { source, manifestPath } = probeTournament(root, "medium");
     const database = join(root, "analysis.sqlite");
     const eventsPath = join(source, "a_b_b0_p0", "events.jsonl");
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
@@ -282,7 +294,7 @@ test("a truncated but legal move prefix with an end marker and matching current 
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 
   try {
-    const { source, manifestPath } = await probeTournament(root, "medium");
+    const { source, manifestPath } = probeTournament(root, "medium");
     const database = join(root, "analysis.sqlite");
     const eventsPath = join(source, "a_b_b0_p0", "events.jsonl");
     const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
@@ -305,7 +317,7 @@ test("importing a tournament from a directory that contains its earlier source r
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 
   try {
-    const { source } = await probeTournament(root, "medium");
+    const { source } = probeTournament(root, "medium");
     const database = join(root, "analysis.sqlite");
     importTournaments({ database, sources: [source] });
     cpSync(join(source, "tournament.json"), join(root, "tournament.json"));

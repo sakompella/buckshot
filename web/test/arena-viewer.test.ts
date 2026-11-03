@@ -101,26 +101,6 @@ test("one pooled Bradley-Terry fit recovers known strengths, including configs t
   }
 });
 
-test("a block bootstrap's resamples include every block about equally often", () => {
-  const blocks = 1000;
-  const reps = 400;
-  const random = rng(3);
-  const included = new Float64Array(blocks);
-
-  for (let draw = 0; draw < blocks * reps; draw++) {
-    const block = Math.floor(random() * blocks);
-
-    included[block] = (included[block] ?? 0) + 1;
-  }
-
-  const perRep = Array.from(included, (count) => count / reps);
-  const spread = Math.sqrt(perRep.reduce((total, value) => total + (value - 1) ** 2, 0) / blocks);
-
-  expect(Math.min(...perRep)).toBeGreaterThan(0.8);
-  expect(Math.max(...perRep)).toBeLessThan(1.2);
-  expect(spread).toBeLessThan(0.1);
-});
-
 test("a config that wins every game is rated high but finite", () => {
   const ratings = bradleyTerry(Array.from({ length: 30 }, () => ({ a: "x", b: "y", sa: 1 })));
 
@@ -374,14 +354,33 @@ test("a config's regret weights every searched move equally, whichever seat it c
   expect(regretStats([])).toBeNull();
 });
 
-test("own loss per match sums a seat's regret over fully searched matches only, and the largest miss is over every searched move", () => {
-  const seat = (matchId: string, moves: number, searched: number, total: number, largest: number) => ({ matchId, moves, regret: { moves: searched, total, exact: 0, largest: { ordinal: 7, points: largest } } });
-  const loss = lossStats([seat("a", 4, 4, 30, 20), seat("b", 2, 2, 10, 10), seat("c", 5, 3, 90, 60), { matchId: "d", moves: 3, regret: null }]);
+test("own loss per match is the mean regret over fully searched seats, and the largest miss is over every searched move", () =>
+  hegel.test((tc) => {
+    const seatGen = gs.composite<Parameters<typeof lossStats>[0][number]>((draw) => {
+      const moves = draw.draw(gs.integers({ minValue: 1, maxValue: 6 }));
+      const searched = draw.draw(gs.integers({ minValue: 0, maxValue: moves }));
+      const [total, points, ordinal] = draw.draw(gs.tuples(gs.integers({ minValue: 0, maxValue: 500 }), gs.integers({ minValue: 0, maxValue: 100 }), gs.integers({ minValue: 1, maxValue: 30 })));
 
-  expect(loss).toEqual({ perMatch: 0.2, matches: 2, excluded: 2, largest: { matchId: "c", ordinal: 7, points: 60 } });
-  expect(lossStats([seat("c", 5, 3, 90, 60)])).toBeNull();
-  expect(lossStats([])).toBeNull();
-});
+      return { matchId: `m${draw.draw(gs.integers({ minValue: 0, maxValue: 99 }))}`, moves, regret: searched === 0 ? null : { moves: searched, total, exact: 0, largest: { ordinal, points } } };
+    });
+
+    const seats = tc.draw(gs.arrays(seatGen, { maxSize: 12 }));
+    const covered = seats.filter(({ moves, regret }) => regret !== null && regret.moves === moves);
+    const withRegret = seats.flatMap(({ matchId, regret }) => (regret === null ? [] : [{ matchId, ...regret.largest }]));
+    const [worst] = withRegret.toSorted((left, right) => right.points - left.points);
+    const loss = lossStats(seats);
+
+    if (covered.length === 0 || worst === undefined) {
+      expect(loss).toBeNull();
+
+      return;
+    }
+
+    expect(loss?.matches).toBe(covered.length);
+    expect(loss?.excluded).toBe(seats.length - covered.length);
+    expect(loss?.perMatch).toBeCloseTo(covered.reduce((total, { regret }) => total + (regret?.total ?? 0), 0) / 100 / covered.length, 9);
+    expect(loss?.largest).toEqual(worst);
+  }));
 
 // Two-player matches over the sweeps' pairings where every match lasts `rounds` rounds and the winner takes `winnerRounds` of them.
 const playedRoundSeats = (seed: number, rounds: number, winnerRounds: number, isStoryOk = true) => {

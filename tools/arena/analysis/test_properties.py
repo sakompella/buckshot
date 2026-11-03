@@ -9,6 +9,7 @@ import cv
 import net_points
 import regret
 import selfplay
+from load import Game
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
@@ -51,12 +52,10 @@ class Ranks(unittest.TestCase):
                 for j, y in enumerate(values):
                     self.assertEqual((x < y), (out[i] < out[j]))
 
-    @given(st.lists(st.integers(-20, 20), min_size=2, max_size=30), st.lists(st.integers(-20, 20), min_size=2, max_size=30))
+    @given(st.lists(st.integers(-20, 20), min_size=2, max_size=30, unique=True), st.lists(st.integers(-20, 20), min_size=2, max_size=30, unique=True))
     def test_spearman_ignores_increasing_maps(self, xs, ys):
         n = min(len(xs), len(ys))
         xs, ys = xs[:n], ys[:n]
-        if len(set(xs)) < 2 or len(set(ys)) < 2:
-            return
         self.assertAlmostEqual(net_points.spearman(xs, ys), net_points.spearman([x**3 + 2 * x for x in xs], ys))
 
 
@@ -94,3 +93,10 @@ class Resampling(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Ratings(unittest.TestCase):
+    @given(st.lists(st.tuples(st.integers(0, 3), st.integers(1, 3), st.sampled_from([0.0, 0.5, 1.0])), min_size=1, max_size=40))
+    def test_have_mean_zero_on_the_elo_scale(self, played):
+        games = [Game(f"b{i}", "c", "t", "code", 1, "abcd"[first], "abcd"[(first + offset) % 4], share, share, 1, 1) for i, (first, offset, share) in enumerate(played)]
+        self.assertAlmostEqual(sum(bt.fit(bt.cells_of(games)).elo().values()), 0.0, places=6)

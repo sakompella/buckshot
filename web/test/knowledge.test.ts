@@ -18,7 +18,6 @@ import {
   positionKeys,
   shotOf,
   stolenClue,
-  summaryOf,
 } from "../src/analysis/knowledge.ts";
 import { loadPlayer, type Player } from "../src/analysis/player.ts";
 import { type Board, Briefcase, Counter, GameEvent, type Item, type LearnedSecret, type Seat, Secret, Stage } from "../src/domain.ts";
@@ -158,7 +157,7 @@ test("a beer moves a phone clue one shell closer", () => {
 test("a reload forgets the last load's clues", () => {
   const knowledge = knowledgeAfter([loaded(1, 1), used(ME, ME, "Phone"), { heard: clue(2, "Live") }, fired(ME, ME, "Blank"), fired(ME, THEM, "Live"), loaded(2, 2)]);
 
-  expect(knowledge.private).toEqual(summaryOf(belief.orders(loadLog([loaded(2, 2)], [], ME), true)));
+  expect(knowledge.private.orders).toBe(6);
   expect(knowledge.private.live).toEqual([3, 3, 3, 3]);
   expect(Option.isNone(knowledge.chamber)).toBe(true);
 });

@@ -4,7 +4,7 @@ import ../simple/main.bend as M
 import ../simple/state.bend as T
 
 # Smoke test for check.sh: 64 matches at each table size, answered from a
-# hashed tape, run to the end with nothing stuck and no fuel spent. Items are
+# hashed tape, all finished with nothing stuck and no fuel spent. Items are
 # on, at the default caps.
 
 def mix(+x: U32) -> U32:
@@ -24,24 +24,24 @@ def answer.for(request: T.Request, word: U32) -> Nat:
       0n
 
 type Totals is Data:
-  Totals{played: U32, stuck: U32, exhausted: U32}
+  Totals{finished: U32, stuck: U32, exhausted: U32}
 
 def play(fuel: Nat, +request: T.Request, +state: T.State, +seed: U32, +step: U32) -> Totals:
   match fuel request:
     case _ T.Finished{}:
       Totals{1, 0, 0}
     case _ T.Stuck{}:
-      Totals{1, 1, 0}
+      Totals{0, 1, 0}
     case 0n _:
-      Totals{1, 0, 1}
+      Totals{0, 0, 1}
     case 1n+rest _:
       +next : T.State = M.stepped.state(M.answer(state, answer.for(request, mix(U32.xor(seed, mix(step))))))
       play(rest, M.request(next), next, seed, (step + 1 : U32))
 
 def totals.add(a: Totals, b: Totals) -> Totals:
   match a b:
-    case Totals{ap, as, ae} Totals{bp, bs, be}:
-      Totals{(ap + bp : U32), (as + bs : U32), (ae + be : U32)}
+    case Totals{af, as, ae} Totals{bf, bs, be}:
+      Totals{(af + bf : U32), (as + bs : U32), (ae + be : U32)}
 
 def batch(n: Nat, +table: D.Table, +salt: U32) -> Totals:
   match n:
@@ -53,8 +53,8 @@ def batch(n: Nat, +table: D.Table, +salt: U32) -> Totals:
 
 def line(label: String, totals: Totals) -> String:
   match totals:
-    case Totals{played, stuck, exhausted}:
-      "simple smoke " ++ label ++ " played=" ++ U32.show(played) ++ " stuck=" ++ U32.show(stuck) ++ " exhausted=" ++ U32.show(exhausted)
+    case Totals{finished, stuck, exhausted}:
+      "simple smoke " ++ label ++ " finished=" ++ U32.show(finished) ++ " stuck=" ++ U32.show(stuck) ++ " exhausted=" ++ U32.show(exhausted)
 
 def main() -> IO(Unit):
   do IO<Unit>:
