@@ -105,7 +105,7 @@ const countOf = async (page: Page, selector: string) => {
 const heat = (page: Page) => page.locator("#breakdown details", { has: page.locator("table.heat") });
 
 const loadPage = async (page: Page) => {
-  await page.goto(`${base}/`);
+  await page.goto(`${base}/arena`);
   await page.waitForSelector("table.lbt", { state: "attached", timeout: 120_000 });
   await page.waitForSelector("#matches tbody tr.row", { timeout: 60_000 });
 };
@@ -1444,11 +1444,78 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
 
     const landing = await jumpedTo(page, "spend");
 
-    console.log("deep link", landing);
+    console.log("deep link", landing, "at", new URL(page.url()).pathname);
     expectThat(/: -?[01]px below/.test(landing), `the #reliability link lands at ${landing}`);
+    expectThat(new URL(page.url()).pathname === "/arena", `the arena's old /#reliability link stays at ${page.url()}`);
   });
   await check("tour", () => checkTour(page, viewport.name));
+  await check("site routes", () => checkSiteRoutes(page));
   await page.close();
+};
+
+const pathOf = (page: Page) => {
+  const url = new URL(page.url());
+
+  return url.pathname + url.search;
+};
+
+// The site's URLs: Play and Arena from the bar, and the arena's filter, open leaderboard row and replay move, each kept by a reload.
+const checkSiteRoutes = async (page: Page) => {
+  await page.goto(`${base}/`);
+  await page.getByRole("link", { name: "Arena", exact: true }).click();
+  await page.waitForSelector("#matches tbody tr.row", { timeout: 120_000 });
+  expectThat(pathOf(page) === "/arena", `the bar's Arena link leads to ${pathOf(page)}`);
+
+  await page.getByRole("button", { name: "minimal", exact: true }).first().click();
+  await settled(page);
+
+  const filtered = pathOf(page);
+  const scatterPoints = await countOf(page, "#scatter svg g.pt");
+
+  await page.reload();
+  await page.waitForSelector("#matches tbody tr.row", { timeout: 120_000 });
+  console.log("filter", filtered, "| points", scatterPoints, "→ after reload", await countOf(page, "#scatter svg g.pt"));
+  expectThat(filtered === "/arena?offEfforts=minimal" && pathOf(page) === filtered, `switching off an effort gives ${filtered}, a reload ${pathOf(page)}`);
+  expectThat((await countOf(page, "#scatter svg g.pt")) === scatterPoints, "a reload of a filtered arena shows a different scatter");
+
+  await page.locator("#matches tbody tr.row").first().click();
+  await page.waitForSelector(".modal .stepper");
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowRight");
+  await settled(page);
+
+  const replayed = pathOf(page);
+  const move = await textOf(page, ".modal .stepper .k");
+
+  await page.reload();
+  await page.waitForSelector(".modal .stepper", { timeout: 120_000 });
+  await settled(page);
+  console.log("replay", replayed, move, "→ after reload", pathOf(page), await textOf(page, ".modal .stepper .k"));
+  expectThat(/^\/replay\/[0-9a-f]+\?at=\d+$/.test(replayed) && pathOf(page) === replayed, `a stepped replay is at ${replayed}, a reload at ${pathOf(page)}`);
+  expectThat((await textOf(page, ".modal .stepper .k")) === move, `a reload moves the replay from ${move} to ${await textOf(page, ".modal .stepper .k")}`);
+
+  await page.keyboard.press("Escape");
+  await settled(page);
+  expectThat(pathOf(page) === "/arena" && (await countOf(page, ".modal")) === 0, `closing a reloaded replay leaves ${pathOf(page)}`);
+
+  await openTables(page);
+  await page.locator("table.lbt tr.row").first().click();
+  await settled(page);
+
+  const opened = pathOf(page);
+
+  await page.reload();
+  await page.waitForSelector("table.lbt", { state: "attached", timeout: 120_000 });
+  await openTables(page);
+  console.log("leaderboard row", opened, "| open after reload", await countOf(page, "table.lbt tr.row[aria-expanded=true]"));
+  expectThat(opened.startsWith("/arena?row=") && (await countOf(page, "table.lbt tr.row[aria-expanded=true]")) === 1, `an open leaderboard row is at ${opened} and does not survive a reload`);
+
+  await page.getByRole("link", { name: "Play", exact: true }).click();
+  await settled(page);
+  expectThat(pathOf(page) === "/" && (await countOf(page, ".setup")) === 1, `the bar's Play link shows ${pathOf(page)} without the game's setup`);
+  await page.goBack();
+  await page.waitForSelector("table.lbt", { state: "attached", timeout: 120_000 });
+  expectThat(pathOf(page) === opened, `back from Play returns to ${pathOf(page)}, not ${opened}`);
 };
 
 const checkOddsDropped = async (page: Page, name: string) => {
