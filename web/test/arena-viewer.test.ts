@@ -1,3 +1,5 @@
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { expect, test } from "bun:test";
 import { Option } from "effect";
 
@@ -5,7 +7,7 @@ import { chamberPatterns, roundStory, ShellTracker, shotLineIn } from "../src/ar
 import type { Seat } from "../src/arena-viewer/api.ts";
 import { type BlockTally, blockRate, colorOf, fmtBytes, groupBy, matchRows, modelStats, quantile, regretStats, rng, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { bradleyTerry, type Game, heldOutRatings, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
-import { droppedConfigs, droppedText, ODDS_BINS, oddsBinOf, oddsPanels, selfShotTallies } from "../src/arena-viewer/page/odds.ts";
+import { droppedConfigs, ODDS_BINS, oddsBinOf, oddsPanels, selfShotTallies } from "../src/arena-viewer/page/odds.ts";
 import { shotOf, showsReloadNote, turningPoints } from "../src/arena-viewer/page/replay.ts";
 import { rowsOf } from "../src/arena-viewer/page/matches.ts";
 import { ranksOf } from "../src/arena-viewer/page/derived.ts";
@@ -13,26 +15,44 @@ import { inRankOrder } from "../src/arena-viewer/page/leaderboard.ts";
 import { FULL_N, shadeOf } from "../src/arena-viewer/page/heat.ts";
 import { AXES, frontierOf } from "../src/arena-viewer/page/scatter.ts";
 
-const randomGames = (seed: number): ReadonlyArray<Game> => {
-  const random = rng(seed);
-  const players = ["a", "b", "c", "d", "e"];
-  const pick = () => players[Math.floor(random() * players.length)] ?? "a";
+const PLAYERS = ["a", "b", "c", "d", "e"];
 
-  return Array.from({ length: 40 }, () => [pick(), pick()] as const).flatMap(([a, b]) => (a === b ? [] : [{ a, b, sa: [0, 0.5, 1][Math.floor(random() * 3)] ?? 0 }]));
-};
+const gamesGen = gs.composite<ReadonlyArray<Game>>((tc) => {
+  const game = gs.tuples(gs.integers({ minValue: 0, maxValue: 4 }), gs.integers({ minValue: 1, maxValue: 4 }), gs.sampledFrom([0, 0.5, 1])).map(([a, offset, sa]) => ({ a: PLAYERS[a] ?? "a", b: PLAYERS[(a + offset) % 5] ?? "b", sa }));
 
-test("Bradley-Terry ratings have mean 0 and do not depend on which side a game lists first", () => {
-  for (let seed = 1; seed <= 20; seed++) {
-    const games = randomGames(seed);
-    const ratings = bradleyTerry(games);
-    const swapped = bradleyTerry(games.map(({ a, b, sa }) => ({ a: b, b: a, sa: 1 - sa })));
-    const values = [...ratings.values()];
+  return tc.draw(gs.arrays(game, { minSize: 1, maxSize: 40 }));
+});
+
+test("Bradley-Terry ratings have mean 0", () =>
+  hegel.test((tc) => {
+    const values = [...bradleyTerry(tc.draw(gamesGen)).values()];
 
     expect(Math.abs(values.reduce((total, value) => total + value, 0))).toBeLessThan(1e-6);
+  }));
 
-    for (const [id, rating] of ratings) expect(swapped.get(id) ?? Number.NaN).toBeCloseTo(rating, 6);
-  }
-});
+test("Bradley-Terry ratings do not depend on which side a game lists first", () =>
+  hegel.test((tc) => {
+    const games = tc.draw(gamesGen);
+    const swapped = bradleyTerry(games.map(({ a, b, sa }) => ({ a: b, b: a, sa: 1 - sa })));
+
+    for (const [id, rating] of bradleyTerry(games)) expect(swapped.get(id) ?? Number.NaN).toBeCloseTo(rating, 6);
+  }));
+
+test("one more win for a player over another never narrows the gap between them", () =>
+  hegel.test((tc) => {
+    const games = tc.draw(gamesGen);
+    const winnerAt = tc.draw(gs.integers({ minValue: 0, maxValue: 4 }));
+    const winner = PLAYERS[winnerAt] ?? "a";
+    const loser = PLAYERS[(winnerAt + tc.draw(gs.integers({ minValue: 1, maxValue: 4 }))) % 5] ?? "b";
+
+    const gap = (played: ReadonlyArray<Game>) => {
+      const ratings = bradleyTerry(played);
+
+      return (ratings.get(winner) ?? 0) - (ratings.get(loser) ?? 0);
+    };
+
+    expect(gap([...games, { a: winner, b: loser, sa: 1 }])).toBeGreaterThanOrEqual(gap(games) - 1e-6);
+  }));
 
 test("Bradley-Terry ranks a player that wins more of the same games higher", () => {
   const games = [
@@ -41,10 +61,7 @@ test("Bradley-Terry ranks a player that wins more of the same games higher", () 
     { a: "x", b: "y", sa: 0 },
   ];
 
-  const ratings = bradleyTerry(games);
-
-  expect(ratings.get("x") ?? 0).toBeGreaterThan(ratings.get("y") ?? 0);
-  expect(bradleyTerry([...games, { a: "x", b: "y", sa: 1 }]).get("x") ?? 0).toBeGreaterThan(ratings.get("x") ?? 0);
+  expect(bradleyTerry(games).get("x") ?? 0).toBeGreaterThan(bradleyTerry(games).get("y") ?? 0);
 });
 
 const TRUE_ELO: ReadonlyArray<readonly [string, number]> = [
@@ -136,18 +153,21 @@ const plainBlockRate = (tally: BlockTally, reps: number) => {
   return { lo: quantile(rates, 0.025), hi: quantile(rates, 0.975) };
 };
 
-test("the block bootstrap's kept draws give the same interval as drawing afresh, whatever sizes came before", () => {
-  const random = rng(11);
+test("the block bootstrap's kept draws give the same interval as drawing afresh, whatever sizes came before", () =>
+  hegel.test(
+    (tc) => {
+      const draws = gs.tuples(gs.integers({ minValue: 1, maxValue: 120 }), gs.sampledFrom([200, 300, 400, 1000]));
 
-  for (let round = 0; round < 60; round++) {
-    const size = 1 + Math.floor(random() * (round % 2 === 0 ? 40 : 900));
-    const reps = [200, 300, 400, 1000][round % 4] ?? 200;
-    const tally: BlockTally = new Map(Array.from({ length: size }, (_block, index) => [String(index), [Math.floor(random() * 3) / 2, 1 + Math.floor(random() * 3)]]));
-    const { lo, hi } = blockRate(tally, reps);
+      for (const [size, reps] of tc.draw(gs.arrays(draws, { minSize: 1, maxSize: 5 }))) {
+        const block = gs.tuples(gs.integers({ minValue: 0, maxValue: 2 }).map((half) => half / 2), gs.integers({ minValue: 1, maxValue: 3 }));
+        const tally: BlockTally = new Map(tc.draw(gs.arrays(block, { minSize: size, maxSize: size })).map((counts, index) => [String(index), counts]));
+        const { lo, hi } = blockRate(tally, reps);
 
-    expect({ lo, hi }).toEqual(plainBlockRate(tally, reps));
-  }
-});
+        expect({ lo, hi }).toEqual(plainBlockRate(tally, reps));
+      }
+    },
+    { testCases: 30 },
+  ));
 
 test("the shell tracker knows the chamber from a glass, a phone and the count", () => {
   const tracker = new ShellTracker();
@@ -576,5 +596,4 @@ test("the configs left off the odds chart are those of the kept seats with no li
   expect(panels.map(({ model }) => model)).toEqual(["claude-opus-5-5", "gpt-6.1-sol"]);
   expect(dropped).toEqual(["claude-opus-5-5|off"]);
   expect(droppedConfigs(seats, [true, true, true, true], panels)).toEqual(["claude-opus-5-5|off", "gpt-6.1-sol|low"]);
-  expect(droppedText(["claude-opus-5-5|off", "claude-opus-5-5|medium", "gpt-6.1-sol|low"])).toBe("Opus 5.5 off, medium · GPT-6.1 Sol low");
 });

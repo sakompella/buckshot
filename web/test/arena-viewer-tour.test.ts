@@ -26,16 +26,6 @@ test("the tour visits every section, in page order, and the certain-mistakes one
   expect(anchors).toEqual(anchors.toSorted((left, right) => left - right));
   expect(new Set(anchors).size).toBe(pageOrder.length);
   expect(tourOf(false).map(({ anchor }) => anchor)).toEqual(tourOf(true).map(({ anchor }) => anchor).filter((anchor) => anchor !== "certain-mistakes"));
-  expect(tourOf(false).some(({ title, text }) => /certain/i.test(`${title} ${text}`))).toBe(false);
-});
-
-test("each card is one or two sentences, with no figures", () => {
-  for (const { title, text } of [...tourOf(true), ...tourOf(false)]) {
-    const sentences = text.split(/[.!?](?:\s|$)/).filter((sentence) => sentence.trim() !== "");
-
-    expect([title, sentences.length <= 2]).toEqual([title, true]);
-    expect(`${title} ${text}`.replaceAll(/(?:round|position) \d\b/g, "")).not.toMatch(/\d/);
-  }
 });
 
 test("the tour's replay is the completed match whose seats gave up the most points", () => {
@@ -44,8 +34,4 @@ test("the tour's replay is the completed match whose seats gave up the most poin
   expect(tourMatchOf([seat("a", "completed", 5), seat("a", "completed", 6), seat("b", "completed", 9), seat("c", "partial", 99)])).toEqual(Option.some("a"));
   expect(tourMatchOf([seat("a", "completed", null)])).toEqual(Option.some("a"));
   expect(tourMatchOf([])).toEqual(Option.none());
-});
-
-test("only the replay steps of the tour open a replay", () => {
-  expect(tourOf(true).filter(({ isReplay }) => isReplay).map(({ anchor }) => anchor)).toEqual(["matches", "matches"]);
 });

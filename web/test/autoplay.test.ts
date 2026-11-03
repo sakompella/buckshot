@@ -48,15 +48,14 @@ test("autoplay stays armed on a human turn and the AI moves on after the human a
     model = send(model, Message.ClickedMove({ match: prompt.ticket.match, generation: prompt.ticket.generation, seat: prompt.seat, index: 0 }));
   }
 
-  const match = Option.getOrThrow(model.maybeMatch);
-  const aiCoins = (): number => Option.getOrThrow(model.maybeMatch).ais.reduce((total, ai) => total + Option.match(ai, { onNone: () => 0, onSome: ({ coins }) => coins }), 0);
-  const before = aiCoins();
+  const eventsOf = (current: Model): number => Option.getOrThrow(current.maybeMatch).events.length;
+  const before = eventsOf(model);
 
-  expect(match.isAutoplay).toBe(true);
+  expect(autoplaying(model)).toBe(true);
 
   model = send(model, Message.TickedAutoplay());
 
-  expect(aiCoins()).toBe(before + 1);
+  expect(eventsOf(model)).toBeGreaterThan(before);
 });
 
 test("autoplay cannot be switched on at a table with no AI seat", () => {

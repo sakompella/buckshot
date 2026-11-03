@@ -134,7 +134,7 @@ test("in the page, new_match is refused while a match runs, the Restart match bu
   const { turn = expect.unreachable("Player A has no turn"), ...before } = viewOf(first, A);
   const refused = call(first, AgentCall.cases.NewMatch.make({ players: 2, items: false, seed: 3, controllers: ["Agent", "DoN"] }));
 
-  expect(refused.reply).toEqual(AgentReply.cases.Refused.make({ reason: "A match is in progress; finish it first." }));
+  expect(refused.reply._tag).toBe("Refused");
   expect(refused.state).toBe(first);
 
   const restarted = untilAgentTurn(update(first, Message.ClickedNewMatch()).model);

@@ -1,5 +1,7 @@
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { beforeAll, expect, test } from "bun:test";
-import { appendFileSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -32,37 +34,20 @@ test("a line cut mid-JSON is left out until it is complete, and a malformed comp
   expect(malformed[1]).toMatchObject({ kind: "unreadable", line: 2 });
 });
 
-/** A seeded linear congruential generator, so a failing cut sequence repeats. */
-const randomFrom = (seed: number) => {
-  let state = seed;
+/** Reads `file` from the faux run with a cursor after each of a series of prefixes cut at arbitrary byte offsets, as a tailing reader sees a file being written. */
+const tailInChunks = <A>(file: string, decode: (line: string) => Result.Result<A, string>) =>
+  hegel.test((tc) => {
+    const bytes = readFileSync(join(dir, file));
+    const cuts = tc.draw(gs.arrays(gs.integers({ minValue: 0, maxValue: bytes.length }), { maxSize: 50 })).toSorted((left, right) => left - right);
+    const seen: Array<JsonlLine<A>> = [];
 
-  return () => {
-    state = (state * 1_103_515_245 + 12_345) % 2 ** 31;
+    for (const cut of [...cuts, bytes.length]) seen.push(...readJsonl(bytes.subarray(0, cut).toString("utf8"), decode).slice(seen.length));
 
-    return state / 2 ** 31;
-  };
-};
+    expect(seen).toEqual([...readJsonl(bytes.toString("utf8"), decode)]);
+    expect(seen.every((line) => line.kind === "read")).toBe(true);
+  });
 
-/** Writes `file` from the faux run into a new file in chunks cut at seeded random byte offsets, reading it with a cursor after each. */
-const tailInChunks = <A>(file: string, decode: (line: string) => Result.Result<A, string>) => {
-  const bytes = readFileSync(join(dir, file));
-  const path = join(tempDir("jsonl-tail-"), file);
-  const random = randomFrom(7);
-  const cuts = Array.from({ length: 50 }, () => Math.floor(random() * bytes.length)).toSorted((left, right) => left - right);
-  const seen: Array<JsonlLine<A>> = [];
-
-  writeFileSync(path, "");
-
-  for (const [from, to] of [0, ...cuts].map((cut, index) => [cut, cuts[index] ?? bytes.length])) {
-    appendFileSync(path, bytes.subarray(from, to));
-    seen.push(...readJsonl(readFileSync(path, "utf8"), decode).slice(seen.length));
-  }
-
-  expect(seen).toEqual([...readJsonl(bytes.toString("utf8"), decode)]);
-  expect(seen.every((line) => line.kind === "read")).toBe(true);
-};
-
-test("reading events.jsonl with a cursor while it is written in random chunks gives every line once, in order", () => tailInChunks("events.jsonl", decodeEventLine));
+test("reading events.jsonl with a cursor while it is written in chunks gives every line once, in order", () => tailInChunks("events.jsonl", decodeEventLine));
 
 test("a faux match replays move for move to its final cash, extends a partial replay", () => {
   const manifest = Schema.decodeUnknownSync(Schema.fromJsonString(RunManifest))(readFileSync(join(dir, "manifest.json"), "utf8"));

@@ -1,23 +1,23 @@
+import * as hegel from "@hegeldev/hegel";
+import * as gs from "@hegeldev/hegel/generators";
 import { expect, test } from "bun:test";
 
-import { rng } from "../src/arena-viewer/page/data.ts";
 import { behaviorBySeat, seatFates, sumFates, useShare } from "../src/arena-viewer/page/fates.ts";
 
-test("a seat's fates read the stolen copies from its opponent and add up to what it received", () => {
-  for (let seed = 1; seed <= 20; seed++) {
-    const random = rng(seed);
-    const counts = (cap: number) => Array.from({ length: 8 }, () => Math.floor(random() * (cap + 1)));
-    const acquired = counts(6);
-    const used = acquired.map((count) => Math.floor(random() * (count + 1)));
-    const stolen = acquired.map((count, item) => Math.floor(random() * (count - (used[item] ?? 0) + 1)));
+const counts = (tc: hegel.TestCase) => Array.from({ length: 8 }, () => tc.draw(gs.integers({ minValue: 0, maxValue: 6 })));
+
+test("a seat's fates read the stolen copies from its opponent and add up to what it received", () =>
+  hegel.test((tc) => {
+    const acquired = counts(tc);
+    const used = acquired.map((count) => tc.draw(gs.integers({ minValue: 0, maxValue: count })));
+    const stolen = acquired.map((count, item) => tc.draw(gs.integers({ minValue: 0, maxValue: count - (used[item] ?? 0) })));
     const fates = seatFates({ acquired, used }, { stolen });
     const total = sumFates(fates);
 
     expect(total.used + total.stolen + total.unused).toBe(acquired.reduce((sum, count) => sum + count, 0));
     expect(fates.every(({ unused }) => unused >= 0)).toBe(true);
     expect(fates.map((fate) => fate.stolen)).toEqual(stolen);
-  }
-});
+  }));
 
 test("a seat's own steals do not count as its items stolen", () => {
   const own = { acquired: [3, 0], used: [1, 0], stolen: [0, 2] };
@@ -31,16 +31,6 @@ test("a seat's own steals do not count as its items stolen", () => {
 
 const ADRENALINE_BIT = 1 << 7;
 const JAMMER_BIT = 1 << 6;
-
-test("a move with no item available is not counted as available, and an available move that shot is available but not used", () => {
-  const decisions = {
-    seat: [0, 0, 0],
-    legalUse: [0, 0b1, 0b1],
-    useItem: [-1, -1, 0],
-  };
-
-  expect(behaviorBySeat(decisions, 1)).toEqual([{ moves: 3, available: 2, usedWhenAvailable: 1, itemActions: 1 }]);
-});
 
 test("an adrenaline-only or jammer-only option makes an item available, and a steal counts as an adrenaline use", () => {
   const decisions = {

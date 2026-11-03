@@ -68,9 +68,8 @@ test("a player found by a letter keeps that letter in its type", () => {
   const roster = rosterOf(SEATS_BY_TABLE[2]);
   const a: Option.Option<Player<"A">> = roster.find("A");
 
-  const assignableToB: [typeof a] extends [Option.Option<Player<"B">>] ? true : false = false;
+  // Fails to typecheck if a Player<"A"> were assignable to a Player<"B">.
+  const notB: [typeof a] extends [Option.Option<Player<"B">>] ? never : true = true;
 
-  expect(assignableToB).toBe(false);
-
-  expect(Option.map(a, ({ letter }) => letter)).toEqual(Option.some("A"));
+  expect([notB, Option.map(a, ({ letter }) => letter)]).toEqual([true, Option.some("A")]);
 });
