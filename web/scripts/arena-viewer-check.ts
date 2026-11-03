@@ -5,7 +5,7 @@ import { Schema } from "effect";
 import { type Browser, chromium, type Page } from "playwright-core";
 
 import { Blunders, CERTAIN_TYPES, CertainMistakes, Consistency, Decisions, ITEMS, MatchDetail, type MoveRegret, NO_GAP, SeatsResponse } from "../src/arena-viewer/api.ts";
-import { baseName, baseOrder, CERTAIN_NAMES, fmtBytes, fmtCount, fmtPct, fmtUsd, blocksOf, groupBy, keyOf, labelOf, MIN_BLOCKS_FOR_INTERVAL, shortName, withPotShares } from "../src/arena-viewer/page/data.ts";
+import { baseName, baseOrder, CERTAIN_NAMES, effortLabel, fmtBytes, fmtCount, fmtPct, fmtUsd, blocksOf, groupBy, keyOf, labelOf, MIN_BLOCKS_FOR_INTERVAL, shortName, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { GROUPS, MOVED_TARGETS, Section } from "../src/arena-viewer/page/model.ts";
 import { pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 import { droppedConfigs, droppedText, oddsPanels, selfShotTallies } from "../src/arena-viewer/page/odds.ts";
@@ -350,7 +350,7 @@ const checkRatings = async (page: Page) => {
   );
 
   const seats = (await servedSeats()).filter(({ status }) => status === "completed");
-  const played = configsOf(seats).flatMap(([first, ...rest]) => (first === undefined ? [] : [[`${baseName(first.model)} [${first.effort}]`, [first, ...rest]] as const]));
+  const played = configsOf(seats).flatMap(([first, ...rest]) => (first === undefined ? [] : [[`${baseName(first.model)} [${effortLabel(first.model, first.effort)}]`, [first, ...rest]] as const]));
   const playedBy = (name: string) => played.flatMap(([label, configSeats]) => (label === name.trim() ? configSeats : []));
   const provisionalRows = listed.filter(({ isProvisional }) => isProvisional);
   const rankedRows = listed.filter(({ isProvisional }) => !isProvisional);
@@ -977,7 +977,7 @@ const checkDrill = async (page: Page, name: string, isTouch: boolean) => {
 
   const [, model = "", effort = ""] = /^(.*) \[(.*)\]$/.exec((await row.locator("td").first().innerText()).replace(/^\d+/, "").replaceAll(/\s+/g, " ").trim()) ?? [];
   const seats = await servedSeats();
-  const own = seats.find((seat) => baseName(seat.model) === model && seat.effort === effort);
+  const own = seats.find((seat) => baseName(seat.model) === model && effortLabel(seat.model, seat.effort) === effort);
 
   if (own === undefined) throw new Error(`${name}: no served seat for the first leaderboard row "${model} [${effort}]"`);
 
@@ -1071,7 +1071,7 @@ const checkRunHealth = async (page: Page, name: string) => {
     const moves = sum(scored.map((seat) => seat.moves ?? 0));
     const cost = sum(scored.map((seat) => seat.cost ?? 0));
 
-    return first === undefined || moves === 0 || cost <= 0 ? [] : [`${baseName(first.model)} ${first.effort} ${fmtUsd(cost / moves)}`];
+    return first === undefined || moves === 0 || cost <= 0 ? [] : [`${baseName(first.model)} ${effortLabel(first.model, first.effort)} ${fmtUsd(cost / moves)}`];
   });
 
   const health = await textOf(page, "#spend");
@@ -1106,7 +1106,7 @@ const servedCertainByConfig = () => {
   const label = (seatAt: number) => {
     const seat = certainSeats[seatAt];
 
-    return seat === undefined ? "" : `${baseName(seat.model)} [${seat.effort}]`;
+    return seat === undefined ? "" : `${baseName(seat.model)} [${effortLabel(seat.model, seat.effort)}]`;
   };
 
   const cells = new Map<string, Array<{ mistakes: number; opportunities: number; bounds: { lo: number; hi: number } | null; hasRate: boolean }>>();
@@ -1116,13 +1116,13 @@ const servedCertainByConfig = () => {
 
     if (scope !== "config") continue;
 
-    const own = cells.get(`${baseName(model)} [${effort}]`) ?? CERTAIN_TYPES.map(() => ({ mistakes: 0, opportunities: 0, bounds: null, hasRate: false }));
+    const own = cells.get(`${baseName(model)} [${effortLabel(model, effort)}]`) ?? CERTAIN_TYPES.map(() => ({ mistakes: 0, opportunities: 0, bounds: null, hasRate: false }));
 
     const spans = blocksOf(certainSeats.filter((seat) => seat.model === model && seat.effort === effort && seat.status === "completed"));
 
     if (index >= 0) own[index] = { mistakes: chose, opportunities, bounds: spans < MIN_BLOCKS_FOR_INTERVAL ? null : bounds, hasRate: bounds !== null };
 
-    cells.set(`${baseName(model)} [${effort}]`, own);
+    cells.set(`${baseName(model)} [${effortLabel(model, effort)}]`, own);
   }
 
   const mistakes = servedCertain.moveSeat.map((seatAt, move) => ({ label: label(seatAt), matchId: certainSeats[seatAt]?.matchId ?? "", type: servedCertain.moveType[move] ?? -1, ordinal: servedCertain.moveOrd[move] ?? -1 }));

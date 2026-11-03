@@ -2,7 +2,7 @@ import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { anchorId, linScale, logScale, REFERENCE, REFERENCE_DASH, selectView, tipView, toggleView } from "./charts.ts";
-import { baseName, DEFAULT_EFFORT, fmtCount, fmtPct, fmtRating, fmtUsd, isClaude, isProvisional, type ModelStats } from "./data.ts";
+import { baseName, DEFAULT_EFFORT, effortLabel, fmtCount, fmtPct, fmtRating, fmtUsd, isClaude, isProvisional, type ModelStats } from "./data.ts";
 import { leader, measureText, placeLabels, uncrowded } from "./labels.ts";
 import { memoLast } from "./derived.ts";
 import { Message, type Model, type ScatterAxis } from "./model.ts";
@@ -259,7 +259,7 @@ const layoutOf = memoLast((points: ReadonlyArray<Point>, width: number, scatterA
 
   const at = points.map((point) => {
     const name = baseName(point.m.model);
-    const effort = point.m.effort.toUpperCase();
+    const effort = effortLabel(point.m.model, point.m.effort).toUpperCase();
     const labelWidth = Math.max(measureText(name, nameFont), measureText(effort, effortFont) + effort.length * type.eff * 0.08);
 
     return { x: x.at(point.x), y: y.at(point.rating), w: labelWidth, h: type.name + type.eff + 3, name, effort };

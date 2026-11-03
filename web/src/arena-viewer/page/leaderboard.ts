@@ -2,7 +2,7 @@ import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { pressable } from "./charts.ts";
-import { baseName, costPerMove, fmtCount, fmtPct, fmtPoints, fmtSec, fmtUsd, isClaude, isProvisional, keyOf, labelOf, type MatchRow, type ModelStats, sumOf } from "./data.ts";
+import { baseName, costPerMove, effortLabel, fmtCount, fmtPct, fmtPoints, fmtSec, fmtUsd, isClaude, isProvisional, keyOf, labelOf, type MatchRow, type ModelStats, sumOf } from "./data.ts";
 import type { Derived, ItemSummary } from "./derived.ts";
 import { drillView } from "./drill.ts";
 import { itemIconOf } from "./items.ts";
@@ -78,7 +78,7 @@ const eloBarView = (h: H, scale: EloScale, m: ModelStats, elo: Rating | undefine
 const nameView = (h: H, m: ModelStats): ReadonlyArray<Html | string> => [
   h.span([h.Class(`dot ${isClaude(m.model) ? "a" : "o"}`), h.Style({ background: m.color })], []),
   `${baseName(m.model)} `,
-  h.span([h.Class("eff")], [`[${m.effort}]`]),
+  h.span([h.Class("eff")], [`[${effortLabel(m.model, m.effort)}]`]),
 ];
 
 const rowView = (h: H, m: ModelStats, rank: number | undefined, elo: Rating | undefined, scale: EloScale, details: ReadonlyArray<Detail>, isOpen: boolean): Html =>

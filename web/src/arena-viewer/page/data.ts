@@ -1,4 +1,4 @@
-import { EFFORTS } from "../../arena/model-names.ts";
+import { EFFORTS, effortName } from "../../arena/model-names.ts";
 import type { CertainType, Seat, Story } from "../api.ts";
 
 // The page's numbers: model labels and colours, per-config stats, ratings and intervals.
@@ -95,10 +95,13 @@ export const splitKey = (key: string): readonly [string, string] => {
 /** Models with no reasoning-off whose "off" config is low effort plus the immediate-recall prompt (ADR-0048), marked with an asterisk. */
 const PROMPTED_OFF: ReadonlySet<string> = new Set(["gpt-6-astra"]);
 
+/** How the page names a config's effort, everywhere it shows one. */
+export const effortLabel = (model: string, effort: string): string => `${effortName(effort)}${effort === "off" && PROMPTED_OFF.has(model) ? "*" : ""}`;
+
 export const labelOf = (key: string): string => {
   const [model, effort] = splitKey(key);
 
-  return `${baseName(model)} ${effort}${effort === "off" && PROMPTED_OFF.has(model) ? "*" : ""}`;
+  return `${baseName(model)} ${effortLabel(model, effort)}`;
 };
 
 export const CERTAIN_NAMES: Readonly<Record<CertainType, string>> = {

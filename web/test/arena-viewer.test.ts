@@ -5,7 +5,7 @@ import { Option } from "effect";
 
 import { chamberPatterns, roundStory, ShellTracker, shotLineIn } from "../src/arena-viewer/analysis.ts";
 import type { Seat } from "../src/arena-viewer/api.ts";
-import { type BlockTally, blockRate, colorOf, fmtBytes, groupBy, lossStats, matchRows, modelStats, quantile, regretStats, rng, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
+import { type BlockTally, blockRate, colorOf, fmtBytes, groupBy, labelOf, lossStats, matchRows, modelStats, quantile, regretStats, rng, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { bradleyTerry, type Game, heldOutRatings, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 import { droppedConfigs, ODDS_BINS, oddsBinOf, oddsPanels, selfShotTallies } from "../src/arena-viewer/page/odds.ts";
 import { shotOf, showsReloadNote, turningPoints } from "../src/arena-viewer/page/replay.ts";
@@ -594,6 +594,10 @@ test("a match search needs each of its words in a seat's label or the seed, in a
 
 test("a file size is in KB, MB or GB, whichever reads shortest", () => {
   expect([fmtBytes(2_400), fmtBytes(87_300_000), fmtBytes(1_540_000_000)]).toEqual(["2 KB", "87 MB", "1.5 GB"]);
+});
+
+test("off reads none, and Astra's off, low effort with the recall prompt, is starred", () => {
+  expect(["claude-opus-5-5|off", "gpt-6-astra|off", "gpt-6-astra|low"].map(labelOf)).toEqual(["Opus 5.5 none", "GPT-6 Astra none*", "GPT-6 Astra low"]);
 });
 
 test("the configs left off the odds chart are those of the kept seats with no line, named by model with their efforts", () => {
