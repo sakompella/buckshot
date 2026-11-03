@@ -78,11 +78,11 @@ export const SeatAnalysis = Schema.Struct({
 export type SeatAnalysis = typeof SeatAnalysis.Type;
 
 /**
- * A seat's searched agent moves: how many, their regret summed in percentage points of the round win chance, and how
- * many of them are proven exact (docs/arena/analysis/regret.md). Null when the viewer has no regret database or the
- * seat has no searched move.
+ * A seat's searched agent moves: how many, their regret summed in percentage points of the round win chance, how
+ * many of them are proven exact (docs/arena/analysis/regret.md), and the move with the most regret. Null when the
+ * viewer has no regret database or the seat has no searched move.
  */
-export const SeatRegret = Schema.Struct({ moves: Schema.Number, total: Schema.Number, exact: Schema.Number });
+export const SeatRegret = Schema.Struct({ moves: Schema.Number, total: Schema.Number, exact: Schema.Number, largest: Schema.Struct({ ordinal: Schema.Number, points: Schema.Number }) });
 
 export type SeatRegret = typeof SeatRegret.Type;
 

@@ -2,7 +2,7 @@ import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { anchorId, linScale, logScale, REFERENCE, REFERENCE_DASH, selectView, tipView, toggleView } from "./charts.ts";
-import { baseName, DEFAULT_EFFORT, fmtCount, fmtPct, fmtRating, fmtUsd, isClaude, isProvisional, type ModelStats } from "./data.ts";
+import { baseName, DEFAULT_EFFORT, effortLabel, fmtCount, fmtPct, fmtRating, fmtUsd, isClaude, isProvisional, type ModelStats } from "./data.ts";
 import { leader, measureText, placeLabels, uncrowded } from "./labels.ts";
 import { memoLast } from "./derived.ts";
 import { Message, type Model, type ScatterAxis } from "./model.ts";
@@ -73,30 +73,30 @@ const positive = (value: number): number | null => (value > 0 ? value : null);
 export const AXES: Readonly<Record<ScatterAxis, Axis>> = {
   cost: {
     label: "Cost",
-    axisLabel: "Avg cost per player per match (log)",
+    axisLabel: "Cost / match (USD, log)",
     isLog: true,
     valueOf: (m) => positive(m.avgCost),
     format: fmtUsd,
     tick: (value) => `$${value}`,
-    perMatch: (value) => `${fmtUsd(value)} per match`,
+    perMatch: (value) => `${fmtUsd(value)} / match`,
   },
   moves: {
     label: "Moves",
-    axisLabel: "Avg model moves per player per match",
+    axisLabel: "Model moves / match",
     isLog: false,
     valueOf: (m) => positive(m.avgMoves),
     format: (value) => value.toFixed(1),
     tick: String,
-    perMatch: (value) => `${value.toFixed(1)} moves per match`,
+    perMatch: (value) => `${value.toFixed(1)} moves / match`,
   },
   tokens: {
     label: "Tokens",
-    axisLabel: "Avg output tokens per player per match (log)",
+    axisLabel: "Output tok / match (log)",
     isLog: true,
     valueOf: (m) => positive(m.avgOut),
     format: fmtCount,
     tick: (value) => (value >= 1e6 ? `${value / 1e6}M` : value >= 1e3 ? `${value / 1e3}k` : String(value)),
-    perMatch: (value) => `${fmtCount(value)} output tokens per match`,
+    perMatch: (value) => `${fmtCount(value)} output tok / match`,
   },
   regret: {
     label: "Regret",
@@ -259,7 +259,7 @@ const layoutOf = memoLast((points: ReadonlyArray<Point>, width: number, scatterA
 
   const at = points.map((point) => {
     const name = baseName(point.m.model);
-    const effort = point.m.effort.toUpperCase();
+    const effort = effortLabel(point.m.model, point.m.effort).toUpperCase();
     const labelWidth = Math.max(measureText(name, nameFont), measureText(effort, effortFont) + effort.length * type.eff * 0.08);
 
     return { x: x.at(point.x), y: y.at(point.rating), w: labelWidth, h: type.name + type.eff + 3, name, effort };
@@ -360,6 +360,10 @@ export const scatterView = (
         h.OnMouseEnter(Message.HoveredPoint({ key: point.m.key })),
         h.OnMouseLeave(Message.LeftPoint()),
         h.OnClick(Message.ClickedPoint({ key: point.m.key }), { propagation: "Stop" }),
+        h.Tabindex(0),
+        h.Role("button"),
+        h.AriaLabel(point.m.label),
+        h.OnKeyDownSelfPreventDefault((key) => (key === "Enter" || key === " " ? Option.some(Message.ClickedPoint({ key: point.m.key })) : Option.none())),
       ],
       [
         h.path([h.D(cellPath(cells[index] ?? [])), h.Fill("transparent")], []),

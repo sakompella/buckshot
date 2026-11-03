@@ -1,4 +1,4 @@
-import { EFFORTS } from "../../arena/model-names.ts";
+import { EFFORTS, effortName } from "../../arena/model-names.ts";
 import type { CertainType, Seat, Story } from "../api.ts";
 
 // The page's numbers: model labels and colours, per-config stats, ratings and intervals.
@@ -95,10 +95,13 @@ export const splitKey = (key: string): readonly [string, string] => {
 /** Models with no reasoning-off whose "off" config is low effort plus the immediate-recall prompt (ADR-0048), marked with an asterisk. */
 const PROMPTED_OFF: ReadonlySet<string> = new Set(["gpt-6-astra"]);
 
+/** How the page names a config's effort, everywhere it shows one. */
+export const effortLabel = (model: string, effort: string): string => `${effortName(effort)}${effort === "off" && PROMPTED_OFF.has(model) ? "*" : ""}`;
+
 export const labelOf = (key: string): string => {
   const [model, effort] = splitKey(key);
 
-  return `${baseName(model)} ${effort}${effort === "off" && PROMPTED_OFF.has(model) ? "*" : ""}`;
+  return `${baseName(model)} ${effortLabel(model, effort)}`;
 };
 
 export const CERTAIN_NAMES: Readonly<Record<CertainType, string>> = {
@@ -341,6 +344,7 @@ export interface ModelStats {
   readonly roundShare: number;
   /** Over scored matches; null when the viewer has no regret. */
   readonly regret: RegretStats | null;
+  readonly loss: LossStats | null;
   /** Observed win share with a seed-block bootstrap interval. */
   readonly win: Rate;
   /** Every started match, failed calls included. */
@@ -388,6 +392,7 @@ export const modelStats = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<ModelS
         potShare: scoredMean(({ potShare }) => potShare),
         roundShare: meanOf(scored.flatMap(roundResults)),
         regret: regretStats(scored),
+        loss: lossStats(scored),
         win: blockRate(wins),
         totalCost: sumOf(started.map(({ cost }) => cost ?? 0)),
         costs,
@@ -428,6 +433,32 @@ export const regretStats = (seats: ReadonlyArray<Pick<SeatFull, "regret">>): Reg
   const moves = sumOf(totals.map((total) => total.moves));
 
   return moves === 0 ? null : { moves, mean: sumOf(totals.map((total) => total.total)) / moves, exactShare: sumOf(totals.map((total) => total.exact)) / moves };
+};
+
+/**
+ * A config's own loss (docs/arena/analysis/net-points.md): per scored match, the regret its seat summed
+ * over its searched moves, in round-win equivalents. Only matches whose every agent move was searched count, since a
+ * move without analysis is not a zero. largest is the single move with the most regret, over every searched move.
+ */
+export interface LossStats {
+  readonly perMatch: number;
+  readonly matches: number;
+  readonly excluded: number;
+  readonly largest: { readonly matchId: string; readonly ordinal: number; readonly points: number };
+}
+
+export const lossStats = (scored: ReadonlyArray<Pick<SeatFull, "matchId" | "moves" | "regret">>): LossStats | null => {
+  const searched = scored.flatMap(({ matchId, moves, regret }) => (regret === null ? [] : [{ matchId, moves, regret }]));
+  const covered = searched.filter(({ moves, regret }) => regret.moves === moves);
+
+  const largest = searched.reduce<LossStats["largest"] | null>(
+    (most, { matchId, regret: { largest: move } }) => (most !== null && most.points >= move.points ? most : { matchId, ordinal: move.ordinal, points: move.points }),
+    null,
+  );
+
+  return covered.length === 0 || largest === null
+    ? null
+    : { perMatch: sumOf(covered.map(({ regret }) => regret.total)) / 100 / covered.length, matches: covered.length, excluded: scored.length - covered.length, largest };
 };
 
 export const winnerOf = (match: MatchRow): SeatFull | undefined => match.seats.find(({ winShare }) => (winShare ?? 0) >= 1);

@@ -5,7 +5,7 @@ import { Schema } from "effect";
 import { type Browser, chromium, type Page } from "playwright-core";
 
 import { Blunders, CERTAIN_TYPES, CertainMistakes, Consistency, Decisions, ITEMS, MatchDetail, type MoveRegret, NO_GAP, SeatsResponse } from "../src/arena-viewer/api.ts";
-import { baseName, baseOrder, CERTAIN_NAMES, fmtBytes, fmtCount, fmtPct, fmtUsd, blocksOf, groupBy, keyOf, labelOf, MIN_BLOCKS_FOR_INTERVAL, shortName, withPotShares } from "../src/arena-viewer/page/data.ts";
+import { baseName, baseOrder, CERTAIN_NAMES, effortLabel, fmtBytes, fmtCount, fmtPct, fmtPoints, fmtUsd, blocksOf, groupBy, keyOf, labelOf, MIN_BLOCKS_FOR_INTERVAL, shortName, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { GROUPS, MOVED_TARGETS, Section } from "../src/arena-viewer/page/model.ts";
 import { pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 import { droppedConfigs, droppedText, oddsPanels, selfShotTallies } from "../src/arena-viewer/page/odds.ts";
@@ -350,7 +350,7 @@ const checkRatings = async (page: Page) => {
   );
 
   const seats = (await servedSeats()).filter(({ status }) => status === "completed");
-  const played = configsOf(seats).flatMap(([first, ...rest]) => (first === undefined ? [] : [[`${baseName(first.model)} [${first.effort}]`, [first, ...rest]] as const]));
+  const played = configsOf(seats).flatMap(([first, ...rest]) => (first === undefined ? [] : [[`${baseName(first.model)} [${effortLabel(first.model, first.effort)}]`, [first, ...rest]] as const]));
   const playedBy = (name: string) => played.flatMap(([label, configSeats]) => (label === name.trim() ? configSeats : []));
   const provisionalRows = listed.filter(({ isProvisional }) => isProvisional);
   const rankedRows = listed.filter(({ isProvisional }) => !isProvisional);
@@ -977,7 +977,7 @@ const checkDrill = async (page: Page, name: string, isTouch: boolean) => {
 
   const [, model = "", effort = ""] = /^(.*) \[(.*)\]$/.exec((await row.locator("td").first().innerText()).replace(/^\d+/, "").replaceAll(/\s+/g, " ").trim()) ?? [];
   const seats = await servedSeats();
-  const own = seats.find((seat) => baseName(seat.model) === model && seat.effort === effort);
+  const own = seats.find((seat) => baseName(seat.model) === model && effortLabel(seat.model, seat.effort) === effort);
 
   if (own === undefined) throw new Error(`${name}: no served seat for the first leaderboard row "${model} [${effort}]"`);
 
@@ -1071,7 +1071,7 @@ const checkRunHealth = async (page: Page, name: string) => {
     const moves = sum(scored.map((seat) => seat.moves ?? 0));
     const cost = sum(scored.map((seat) => seat.cost ?? 0));
 
-    return first === undefined || moves === 0 || cost <= 0 ? [] : [`${baseName(first.model)} ${first.effort} ${fmtUsd(cost / moves)}`];
+    return first === undefined || moves === 0 || cost <= 0 ? [] : [`${baseName(first.model)} ${effortLabel(first.model, first.effort)} ${fmtUsd(cost / moves)}`];
   });
 
   const health = await textOf(page, "#spend");
@@ -1087,7 +1087,7 @@ const checkRunHealth = async (page: Page, name: string) => {
   expectThat((await countOf(page, "#spend table")) === 0 && (await countOf(page, "#spend .chartrow")) === 0 && (await countOf(page, "#spend details")) === 0 && !/fail|reminder|fallback|by the hour|extra repl/i.test(health), `${name}: run health still shows a failure figure or a table`);
   expectThat((await countOf(page, "#reliability")) === 0 && (await countOf(page, "#seats")) === 0, `${name}: an old section id is still on the page`);
   expectThat(JSON.stringify(shown.toSorted()) === JSON.stringify(perMove.toSorted()), `${name}: the cost per move bars read ${shown.slice(0, 3).join(" | ")}, the served seats give ${perMove.slice(0, 3).join(" | ")}`);
-  expectThat(/\$[\d,]+ spent in total/.test(await textOf(page, "#spend .lbbar")), `${name}: the cost per move heading lacks the total spent`);
+  expectThat(/\$[\d,]+ at list prices/.test(await textOf(page, "#spend .lbbar")), `${name}: the cost per move heading lacks the total at list prices`);
 
   const ordered = completedPairs(seats).map((both) => both.toSorted((left, right) => left.position - right.position));
   const firstWon = ordered.map(([first]) => first?.winShare ?? 0);
@@ -1106,7 +1106,7 @@ const servedCertainByConfig = () => {
   const label = (seatAt: number) => {
     const seat = certainSeats[seatAt];
 
-    return seat === undefined ? "" : `${baseName(seat.model)} [${seat.effort}]`;
+    return seat === undefined ? "" : `${baseName(seat.model)} [${effortLabel(seat.model, seat.effort)}]`;
   };
 
   const cells = new Map<string, Array<{ mistakes: number; opportunities: number; bounds: { lo: number; hi: number } | null; hasRate: boolean }>>();
@@ -1116,13 +1116,13 @@ const servedCertainByConfig = () => {
 
     if (scope !== "config") continue;
 
-    const own = cells.get(`${baseName(model)} [${effort}]`) ?? CERTAIN_TYPES.map(() => ({ mistakes: 0, opportunities: 0, bounds: null, hasRate: false }));
+    const own = cells.get(`${baseName(model)} [${effortLabel(model, effort)}]`) ?? CERTAIN_TYPES.map(() => ({ mistakes: 0, opportunities: 0, bounds: null, hasRate: false }));
 
     const spans = blocksOf(certainSeats.filter((seat) => seat.model === model && seat.effort === effort && seat.status === "completed"));
 
     if (index >= 0) own[index] = { mistakes: chose, opportunities, bounds: spans < MIN_BLOCKS_FOR_INTERVAL ? null : bounds, hasRate: bounds !== null };
 
-    cells.set(`${baseName(model)} [${effort}]`, own);
+    cells.set(`${baseName(model)} [${effortLabel(model, effort)}]`, own);
   }
 
   const mistakes = servedCertain.moveSeat.map((seatAt, move) => ({ label: label(seatAt), matchId: certainSeats[seatAt]?.matchId ?? "", type: servedCertain.moveType[move] ?? -1, ordinal: servedCertain.moveOrd[move] ?? -1 }));
@@ -1496,6 +1496,24 @@ const checkDatabaseLink = async (page: Page, name: string) => {
   expectThat(download.ok && Number(download.headers.get("content-length")) === bytes, `${name}: the database link serves ${download.headers.get("content-length")} bytes, not ${bytes}`);
 };
 
+// The config panel's largest missed chance opens its match's replay at that move, and no other move of that player gave up more.
+const checkLargestMiss = async (page: Page, name: string, panel: ReturnType<Page["locator"]>, isTouch: boolean) => {
+  const link = panel.locator(".miss button");
+
+  expectThat((await link.count()) === 1, `${name}: the config panel shows no largest missed chance`);
+  await (isTouch ? link.tap() : link.click());
+
+  const matchId = await openedMatchId(page);
+  const steps = stepsOf(await servedDetail(matchId));
+  const at = Number(/move (\d+) of/.exec(await textOf(page, ".modal .stepper .k"))?.[1] ?? Number.NaN) - 1;
+  const opened = steps[at];
+  const most = Math.max(...steps.filter(({ player }) => player === opened?.player).map(({ regret }) => regret?.points ?? 0));
+
+  console.log(name, "largest missed chance:", await link.textContent(), "| opens", matchId, "at move", at + 1, "giving up", opened?.regret?.points);
+  expectThat(opened?.regret !== null && opened?.regret !== undefined && opened.regret.points === most && (await link.textContent())?.startsWith(fmtPoints(most)) === true, `${name}: the largest missed chance opened move ${at + 1} (${opened?.regret?.points ?? "no"} points), its player's most is ${most}`);
+  await closeReplay(page);
+};
+
 const checkScatterDrill = async (page: Page, name: string, isTouch: boolean) => {
   const point = page.locator("#scatter svg g[style*=pointer]").nth(3);
 
@@ -1508,9 +1526,20 @@ const checkScatterDrill = async (page: Page, name: string, isTouch: boolean) => 
   expectThat((await panel.count()) === 1 && (await panel.locator(".drillin").count()) === 1, `${name}: a click on a scatter point opened no drill-down`);
   expectThat((await page.locator("table.lbt tr.drill").count()) === 0, `${name}: the scatter's drill-down also opened a leaderboard row`);
   await panel.screenshot({ path: shot(`${name}-scatter-drill`), style: UNSTICK });
+  await checkLargestMiss(page, name, panel, isTouch);
   await (isTouch ? panel.locator(".drillclose").tap() : panel.locator(".drillclose").click());
   await settled(page);
   expectThat((await page.locator("#scatter .configpanel").count()) === 0, `${name}: the drill-down's close button left it open`);
+
+  if (!isTouch) {
+    await point.focus();
+    await page.keyboard.press("Enter");
+    await settled(page);
+    expectThat((await panel.count()) === 1, `${name}: Enter on a focused scatter point opened no drill-down`);
+    await panel.locator(".drillclose").click();
+    await settled(page);
+  }
+
   await page.locator(".hero .title").click({ force: true });
 };
 
@@ -1640,7 +1669,7 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
 
       console.log(name, "tallest leaderboard row", Math.round(tallest), "px | drill-down details", details.join(", "));
       expectThat(tallest <= 80, `${name}: a leaderboard row is ${Math.round(tallest)}px tall`);
-      expectThat(["wins vs own opponents", "round wins", "cash share", "per move", "time", "out tok", "fav"].every((label) => details.includes(label)), `${name}: the drill-down lacks a leaderboard detail: ${details.join(", ")}`);
+      expectThat(["wins vs own opponents", "round wins", "cash share", "cost / move", "time / move", "output tok / match", "fav"].every((label) => details.includes(label)), `${name}: the drill-down lacks a leaderboard detail: ${details.join(", ")}`);
       await page.locator("table.lbt").first().screenshot({ path: shot(`${name}-leaderboard-open`) });
       await row.tap();
     }
