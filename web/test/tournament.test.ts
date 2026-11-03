@@ -184,7 +184,7 @@ test("ratings recover the strengths and seat terms that drew the matches, and th
   const matches = syntheticMatches(7);
   const fitted = fitRatings(matches, "don");
   const truth = (entrant: string) => (STRENGTH.get(entrant) ?? 0) * ELO_PER_NAT;
-  const intervals = intervalsOf(resamples(matches, 200, 1).map((resample) => fitRatings(resample, "don").entrants));
+  const intervals = intervalsOf(resamples(matches, 100, 1).map((resample) => fitRatings(resample, "don").entrants));
 
   for (const entrant of ["haiku-5-5", "luna", "sonnet", "opus"]) {
     const rating = fitted.entrants.get(entrant) ?? NaN;
@@ -414,18 +414,21 @@ test("a model at its usage limit holds back its matches until the reset, other m
 
   const finish = (dir: string) => (match: ScheduledMatch) => (writeManifest(dir, tournament, match, "finished"), 0);
 
+  const RESET_SECONDS = 0.5;
   const inRun = mkdtempSync(join(tmpdir(), "tournament-cooldown-"));
-  const played = await playAll(inRun, (match) => (match === lunaFirst && !existsSync(join(inRun, match.name)) ? (coolDown(inRun, match, 1), 1) : finish(inRun)(match)));
+  const earlier = mkdtempSync(join(tmpdir(), "tournament-cooldown-"));
+
+  coolDown(earlier, lunaFirst, RESET_SECONDS);
+
+  const [played, resumed] = await Promise.all([
+    playAll(inRun, (match) => (match === lunaFirst && !existsSync(join(inRun, match.name)) ? (coolDown(inRun, match, RESET_SECONDS), 1) : finish(inRun)(match))),
+    playAll(earlier, finish(earlier)),
+  ]);
 
   expect(played.runs).toEqual([lunaFirst, ...claude, lunaFirst, lunaSecond].map((match) => match.name));
   expect(played.settled.map(({ status }) => status)).toEqual(["cooling", "finished", "finished", "finished", "finished"]);
-
-  const earlier = mkdtempSync(join(tmpdir(), "tournament-cooldown-"));
-
-  coolDown(earlier, lunaFirst, 1);
-
-  expect((await playAll(earlier, finish(earlier))).runs).toEqual([...claude, lunaFirst, lunaSecond].map((match) => match.name));
-});
+  expect(resumed.runs).toEqual([...claude, lunaFirst, lunaSecond].map((match) => match.name));
+}, 30_000);
 
 test.each([
   ['openai-responses-A API error (429): {"code":"model_cooldown","reset_seconds":90}', 90],

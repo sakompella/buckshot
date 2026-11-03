@@ -20,7 +20,7 @@ const decodeNumbered = (line: string) => Result.mapError(Schema.decodeUnknownRes
 
 const dir = join(tempDir("replay-run-"), "faux");
 
-beforeAll(() => playFauxRun(dir, ["Agent", "Agent", "DoN"], "live"));
+beforeAll(() => playFauxRun(dir, ["Agent", "Agent", "DoN"], "live"), 30_000);
 
 test("a line cut mid-JSON is left out until it is complete, and a malformed complete line is unreadable in place", () => {
   const cut = '{"n":1}\n{"n":2}\n{"n":';

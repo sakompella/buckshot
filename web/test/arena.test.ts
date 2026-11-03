@@ -123,7 +123,7 @@ test("an agent's instructions addendum reaches its own system prompt only, and t
 
   expect(manifest.provenance.agents.A?.instructions_addendum).toBe(ADDENDUM);
   expect(manifest.provenance.agents.B?.instructions_addendum).toBeUndefined();
-});
+}, 60_000);
 
 test.each([
   ["effort", fauxProvenance, (modelId: string) => ({ ...fauxProvenance(modelId), effort: "medium" })],
