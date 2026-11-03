@@ -370,6 +370,13 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
   table.matchrows td.res { order: -1; font-weight: 500; }
 }
 
+/* tablet cards: a tighter gap and a shorter label keep the leaderboard stats on two lines */
+@media (min-width: 640px) and (max-width: 1024px) {
+  table.lbt.rows tr.row { column-gap: 10px; }
+  table.lbt.rows td[data-label="wins vs own opponents"]::before { content: "match wins "; }
+  table.lbt.rows td[data-label="output tok / match"]::before { content: "out tok / match "; }
+}
+
 /* phone, DeepSWE's sm breakpoint */
 @media (max-width: 639px) {
   main { padding: 0 12px 60px; }
