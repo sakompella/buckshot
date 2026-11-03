@@ -36,7 +36,10 @@ test("a tap lands in the cell of the nearest point within reach, and in no other
       // Ties and the edge of reach are left out: either answer is right there.
       tc.assume(Math.abs(nearest.gap - TAP_REACH) >= 1 && (runnerUp === undefined || runnerUp.gap - nearest.gap >= 0.01));
 
-      expect(inside).toEqual(nearest.gap < TAP_REACH * 0.98 ? [nearest.index] : nearest.gap > TAP_REACH ? [] : inside);
+      // Cells are polygons inside the reach circle, so between 0.98 and 1 times the reach a tap may miss its point's cell but never lands in another's.
+      if (nearest.gap < TAP_REACH * 0.98) expect(inside).toEqual([nearest.index]);
+      else if (nearest.gap > TAP_REACH) expect(inside).toEqual([]);
+      else expect(inside.every((index) => index === nearest.index)).toBe(true);
     },
     { testCases: 500 },
   ));

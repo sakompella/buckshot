@@ -20,7 +20,7 @@ const CRASH_EXIT = 86;
 
 const WEB = join(import.meta.dir, "..");
 
-/** Each crash point, with the occurrence to crash at. */
+/** Each crash point, with the occurrence to crash at: a number, or the last time the match reaches it. */
 const POINTS = [
   ["start:before-commit", 1],
   ["start:after-commit", 1],
@@ -39,6 +39,9 @@ const POINTS = [
   ["delivery:after-commit", 3],
   ["reminder:after-submit", 1],
   ["fallback:after-commit", 1],
+  ["delivery:before-commit", "last"],
+  ["delivery:after-commit", "last"],
+  ["delivery:after-export", "last"],
 ] as const;
 
 const play = async (dir: string, point: string, occurrence: number, signal = "exit"): Promise<number> => Bun.spawn(["nice", "-n", "10", "bun", "test/crash-run.ts", dir, point, String(occurrence), signal], { cwd: WEB, env: { ...process.env, CRASH_TEST_EFFORT: undefined }, stdout: "ignore", stderr: "pipe" }).exited;
@@ -71,12 +74,14 @@ const CASES = [...POINTS.map(([point, occurrence]) => ({ name: `${point}#${occur
 beforeAll(async () => {
   expect(await play(baseline, "none", 0)).toBe(0);
 
+  const lastDelivery = seqsOf(baseline, ["delivered"]).length;
+
   // Two at a time: the machine is small.
   for (let at = 0; at < CASES.length; at += 2) {
     await Promise.all(
       CASES.slice(at, at + 2).map(async ({ name, point, occurrence }) => {
         const dir = join(root, name);
-        const crashed = await play(dir, point, occurrence);
+        const crashed = await play(dir, point, occurrence === "last" ? lastDelivery : occurrence);
 
         if (name === "half-written lines") for (const file of ["events.jsonl", "calls.jsonl"]) appendFileSync(join(dir, file), '{"t":"2026-');
 
@@ -103,6 +108,7 @@ test.each(CASES.map(({ name }) => name))("a crash at %s resumes to the match a r
 
   expect(moveSeqs).toEqual(moveSeqs.map((_, index) => index));
   expect(deliverySeqs).toEqual(deliverySeqs.map((_, index) => index));
+  expect(deliverySeqs).toEqual(seqsOf(baseline, ["delivered"]));
   expect(entriesSentTo(dir, "A")).toEqual(entriesSentTo(baseline, "A"));
 
   const replay = Result.getOrThrow(replayOf(Option.none(), manifest, movesOf(eventsOf(dir))));
@@ -157,17 +163,6 @@ test("a changed agent provenance is refused before more calls or moves", async (
   expect(movesOf(eventsOf(dir))).toEqual(moves);
   expect(await play(dir, "none", 0)).toBe(0);
   expect(moveLogSha(dir)).toBe(moveLogSha(baseline));
-}, 30_000);
-
-test.each(["before-commit", "after-commit", "after-export"])("the final notice resumes at delivery %s without sending it twice", async (boundary) => {
-  const dir = join(root, `final-${boundary}`);
-  const occurrence = seqsOf(baseline, ["delivered"]).length;
-
-  expect(await play(dir, `delivery:${boundary}`, occurrence)).toBe(CRASH_EXIT);
-  expect(await play(dir, "none", 0)).toBe(0);
-  expect(moveLogSha(dir)).toBe(moveLogSha(baseline));
-  expect(entriesSentTo(dir, "A")).toEqual(entriesSentTo(baseline, "A"));
-  expect(seqsOf(dir, ["delivered"])).toEqual(seqsOf(baseline, ["delivered"]));
 }, 30_000);
 
 test("a journal started under another code_sha refuses to resume and names both versions", async () => {

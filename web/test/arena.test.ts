@@ -279,13 +279,14 @@ test("rotating only a provider key preserves resume provenance, and no key ever 
 });
 
 test.each([
-  ["ANT", "claude-haiku-4-5-20251001", { level: "medium", mode: "budget", effort: null, budget_tokens: 8192, summary: "summarized" }],
-  ["ANT", "claude-haiku-5-5", { level: "medium", mode: "adaptive", effort: "medium", budget_tokens: null, summary: "summarized" }],
-  ["OAI", "gpt-6-luna", { level: "medium", mode: "effort", effort: "medium", budget_tokens: null, summary: "detailed" }],
-  ["OAI", "opencode/deepseek-v4.1-flash", { level: "high", mode: "effort", effort: "high", budget_tokens: null, summary: "auto" }],
-] as const)("the provenance records the thinking settings medium effort resolves to: %s %s", async (api, model, thinking) => {
+  ["ANT", "claude-haiku-4-5-20251001", "medium", { level: "medium", mode: "budget", effort: null, budget_tokens: 8192, summary: "summarized" }],
+  ["ANT", "claude-haiku-5-5", "medium", { level: "medium", mode: "adaptive", effort: "medium", budget_tokens: null, summary: "summarized" }],
+  ["ANT", "claude-sonnet-5-5", "xhigh", { level: "xhigh", mode: "adaptive", effort: "xhigh", budget_tokens: null, summary: "summarized" }],
+  ["OAI", "gpt-6-luna", "medium", { level: "medium", mode: "effort", effort: "medium", budget_tokens: null, summary: "detailed" }],
+  ["OAI", "opencode/deepseek-v4.1-flash", "high", { level: "high", mode: "effort", effort: "high", budget_tokens: null, summary: "auto" }],
+] as const)("the provenance records the thinking settings %s %s resolves to at effort %s", async (api, model, effort, thinking) => {
   const catalogModel = model.includes("/") ? { PLAYER_A_CATALOG_MODEL: model } : {};
-  const endpoint = await endpointFrom({ [`PLAYER_A_${api}_URL`]: CPA.url, [`PLAYER_A_${api}_KEY`]: CPA.key, PLAYER_A_MODEL: model, ...catalogModel, PLAYER_A_EFFORT: "medium" });
+  const endpoint = await endpointFrom({ [`PLAYER_A_${api}_URL`]: CPA.url, [`PLAYER_A_${api}_KEY`]: CPA.key, PLAYER_A_MODEL: model, ...catalogModel, PLAYER_A_EFFORT: effort });
 
   if (!Exit.isSuccess(endpoint)) throw new Error(String(endpoint.cause));
 
@@ -293,19 +294,6 @@ test.each([
 
   expect(provenance.thinking).toEqual(thinking);
   expect(JSON.stringify(provenance)).not.toContain(CPA.key);
-});
-
-test.each([
-  ["claude-haiku-4-5-20251001", "off", { level: "off", mode: "off", effort: null, budget_tokens: null, summary: null }],
-  ["claude-haiku-5-5", "off", { level: "off", mode: "off", effort: null, budget_tokens: null, summary: null }],
-  ["claude-sonnet-5-5", "off", { level: "off", mode: "between_tools", effort: null, budget_tokens: null, summary: null }],
-  ["claude-sonnet-5-5", "xhigh", { level: "xhigh", mode: "adaptive", effort: "xhigh", budget_tokens: null, summary: "summarized" }],
-] as const)("the provenance records the thinking settings the arena sent CLIProxyAPI for %s at effort %s", async (model, effort, thinking) => {
-  const endpoint = await endpointFrom({ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_ANT_KEY: CPA.key, PLAYER_A_MODEL: model, PLAYER_A_EFFORT: effort });
-
-  if (!Exit.isSuccess(endpoint)) throw new Error(String(endpoint.cause));
-
-  expect(provenanceOf("provider-A", endpoint.value).thinking).toEqual(thinking);
 });
 
 /** What a local server received: the request body, and the account pin header if it carried one. */
@@ -359,15 +347,21 @@ const SentRequest = Schema.Struct({
   reasoning: Schema.optional(Schema.Struct({ summary: Schema.optional(Schema.String) })),
 });
 
-test.each([
-  ["claude-haiku-5-5", "off", "disabled", []],
-  ["claude-sonnet-5-5", "off", "between_tools", []],
-  ["claude-haiku-4-5-20251001", "off", "disabled", []],
-] as const)("%s at effort %s asks for thinking %s, at the efforts %j", async (model, effort, thinking, efforts) => {
-  const request = await firstRequestAt("ANT", model, effort);
+const OFF = { level: "off", effort: null, budget_tokens: null, summary: null };
 
-  expect(request.thinking?.type).toBe(thinking);
-  expect([request.output_config, ...(request.messages ?? []).map((message) => message.output_config)].flatMap((config) => (config === undefined ? [] : [config.effort]))).toEqual([...efforts]);
+test.each([
+  ["claude-haiku-5-5", "disabled", { ...OFF, mode: "off" }],
+  ["claude-haiku-4-5-20251001", "disabled", { ...OFF, mode: "off" }],
+  ["claude-sonnet-5-5", "between_tools", { ...OFF, mode: "between_tools" }],
+] as const)("%s at effort off asks for thinking %s, sends no effort, and records the same in the provenance", async (model, wire, thinking) => {
+  const request = await firstRequestAt("ANT", model, "off");
+  const endpoint = await endpointFrom({ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_ANT_KEY: CPA.key, PLAYER_A_MODEL: model, PLAYER_A_EFFORT: "off" });
+
+  if (!Exit.isSuccess(endpoint)) throw new Error(String(endpoint.cause));
+
+  expect(request.thinking?.type).toBe(wire);
+  expect([request.output_config, ...(request.messages ?? []).map((message) => message.output_config)].flatMap((config) => (config === undefined ? [] : [config.effort]))).toEqual([]);
+  expect(provenanceOf("provider-A", endpoint.value).thinking).toEqual(thinking);
 });
 
 test.each([

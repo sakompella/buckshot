@@ -216,7 +216,7 @@ test("on random tables of 2 to 4 players, each Agent sees the players as Player 
   expect(otherAgentNotes).toBeGreaterThan(0);
 }, 120_000);
 
-test("a view holds only what the screen shows: a bare waiting while it is not the player's turn, no cash or nulls until the match is over, and no drawn item, since the bots and the agents here place what they draw before anyone looks", () => {
+test("a view holds only what the screen shows: a bare waiting while it is not the player's turn, no cash or nulls until the match is over, and each player's drawn item as the board has it", () => {
   hegel.test((tc) => {
     playRandomTable(tc, { check: (table) => {
       const { board } = match(table).game;
@@ -237,7 +237,6 @@ test("a view holds only what the screen shows: a bare waiting while it is not th
         expect(text).not.toContain("cash");
         expect(view.gun?.sawed).toBe(board.gun.sawed ? true : undefined);
         expect(view.players?.map(({ holding }) => holding)).toEqual(holdings);
-        expect(holdings.every((holding) => holding === undefined)).toBe(true);
       }
     } });
   }, { testCases: 4, derandomize: true });
@@ -389,31 +388,35 @@ test("Agent players that may move at once can answer in either order, and the la
   }
 });
 
-test("a move number outside the list is refused and changes nothing", () => {
+test("a play_move call with a move outside the list or arguments that do not fit the schema is refused and changes nothing", () => {
   hegel.test((tc) => {
     const table = newMatch(2, tc.draw(gs.integers()), ["DoN", "Agent"]);
     const { moves, turn } = turnViewOf(table, "B");
-    const move = tc.draw(gs.integers());
+    const valid = { player: "B", move: 0, turn };
 
-    tc.assume(move < 0 || move >= moves.length);
+    const input: ToolInput = tc.draw(
+      gs.oneOf(
+        gs.integers().map((move) => ({ ...valid, move })),
+        gs.floats({ allowNan: false, allowInfinity: false }).map((move) => ({ ...valid, move })),
+        gs.text().map((move) => ({ ...valid, move })),
+        gs.text().map((player) => ({ ...valid, player })),
+        gs.integers().map((player) => ({ ...valid, player })),
+        gs.just({ seat: 3, move: 0, turn }),
+        gs.text().map((text) => ({ ...valid, turn: text })),
+        gs.integers({ maxValue: -1 }).map((negative) => ({ ...valid, turn: negative })),
+        gs.just({ player: "B", move: 0 }),
+      ),
+    );
 
-    const outcome = play(table, "B", move, turn);
+    const fits = input.player === "B" && typeof input.move === "number" && Number.isInteger(input.move) && input.move >= 0 && input.move < moves.length && input.turn === turn;
 
-    refusal(outcome.reply);
-    expect(outcome.table).toBe(table);
-  });
-});
+    tc.assume(!fits);
 
-test("arguments that do not fit the schema are refused and change nothing", () => {
-  const table = newMatch(2, 3, ["DoN", "Agent"]);
-  const { turn } = turnViewOf(table, "B");
-
-  for (const input of [{ player: "B", move: 1.5, turn }, { player: "B", move: "zero", turn }, { player: "b", move: 0, turn }, { player: 2, move: 0, turn }, { seat: 3, move: 0, turn }, { player: "B", move: 0 }, { player: "B", move: 0, turn: "1" }, { player: "B", move: 0, turn: -1 }]) {
     const outcome = call(table, "play_move", input);
 
     refusal(outcome.reply);
     expect(outcome.table).toBe(table);
-  }
+  });
 });
 
 test("a move when it is not the player's turn is refused", () => {
