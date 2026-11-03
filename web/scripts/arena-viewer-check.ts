@@ -1728,7 +1728,7 @@ const checkOptionalFailure = async (browser: Browser) => {
 
   console.log("with consistency failing:", notes, "| leaderboards", await countOf(page, "table.lbt"));
   expectThat(notes.length === 1 && (await page.locator(".drillin").getByText(/^Could not load the consistency/).count()) === 1, "a failed optional endpoint did not leave a note in the drill-down that reads it");
-  expectThat(!asked.some((path) => path === "/api/blunders" || path === "/api/mistakes"), "the page still loads the blunders or the regret by shells left");
+  expectThat(!asked.includes("/api/blunders"), "the page still loads the blunders");
   await page.context().close();
 };
 

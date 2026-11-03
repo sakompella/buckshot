@@ -2,8 +2,9 @@ import { Option } from "effect";
 import { AsyncData } from "foldkit";
 import { createLazy, type Document, type Html, type HtmlBuilder } from "foldkit/html";
 
+import { EFFORTS } from "../../arena/model-names.ts";
 import type { CertainMistakes } from "../api.ts";
-import { baseName, baseOrder, colorOf, EFFORTS, fmtBytes, fmtCount, sumOf, unique } from "./data.ts";
+import { baseName, baseOrder, colorOf, fmtBytes, fmtCount, sumOf, unique } from "./data.ts";
 import { tipView } from "./charts.ts";
 import { certainTableView, certainView, hasCertain } from "./certain.ts";
 import { type Derived, derive } from "./derived.ts";
@@ -139,6 +140,8 @@ const lazyBreakdown = createLazy();
 
 const lazyReplay = createLazy();
 
+const lazyDrill = createLazy();
+
 const navView = (h: H, maybeGroup: Option.Option<Group>): Html =>
   h.nav(
     [],
@@ -159,8 +162,6 @@ const footView = (h: H, download: Derived["download"]): Html =>
 
 const scatterCard = (h: H, derived: Derived, scatter: Model["scatter"], width: number): Html =>
   h.div([h.Class("card")], [scatterView(h, derived.pooled, derived.everyPooled, derived.ratings, derived.ranks, scatter, width)]);
-
-const lazyDrill = createLazy();
 
 const drillCard = (h: H, derived: Derived, maybeDrill: Model["maybeDrill"]): Html =>
   Option.match(maybeDrill, { onNone: () => h.empty, onSome: (key) => configPanelView(h, derived, key) });

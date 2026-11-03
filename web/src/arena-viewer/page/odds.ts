@@ -2,7 +2,7 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 
 import type { Decisions } from "../api.ts";
 import { anchorId, chartWidth, lineKeyView, linScale, tippedDot } from "./charts.ts";
-import { baseName, baseOrder, colorOf, DASH, EFFORTS, groupBy, keyOf, labelOf, type SeatFull } from "./data.ts";
+import { baseName, baseOrder, byEffort, colorOf, DASH, groupBy, keyOf, labelOf, type SeatFull, splitKey } from "./data.ts";
 import { memoLast } from "./derived.ts";
 import type { Message } from "./model.ts";
 
@@ -85,8 +85,6 @@ const spreadLabels = (ys: ReadonlyArray<number>, bottom: number): ReadonlyArray<
 
 const talliesOf = memoLast(selfShotTallies);
 
-const EFFORT_ORDER: ReadonlyArray<string> = EFFORTS;
-
 interface OddsLine {
   readonly key: string;
   readonly effort: string;
@@ -98,12 +96,12 @@ export const oddsPanels = (tallies: ReadonlyMap<string, ReadonlyArray<{ readonly
   const lines = [...tallies].flatMap(([key, bins]): ReadonlyArray<OddsLine> => {
     const points = bins.flatMap(({ self, shots }, bin) => (shots >= MIN_SHOTS ? [{ bin, self, shots, share: self / shots }] : []));
 
-    return points.length > 1 ? [{ key, effort: key.split("|")[1] ?? "", points }] : [];
+    return points.length > 1 ? [{ key, effort: splitKey(key)[1], points }] : [];
   });
 
-  return [...groupBy(lines, ({ key }) => key.split("|")[0] ?? "")]
+  return [...groupBy(lines, ({ key }) => splitKey(key)[0])]
     .toSorted(([left], [right]) => baseOrder(left) - baseOrder(right) || left.localeCompare(right))
-    .map(([model, own]) => ({ model, lines: own.toSorted((left, right) => EFFORT_ORDER.indexOf(left.effort) - EFFORT_ORDER.indexOf(right.effort)) }));
+    .map(([model, own]) => ({ model, lines: own.toSorted((left, right) => byEffort(left.effort, right.effort)) }));
 };
 
 export const droppedConfigs = (seats: ReadonlyArray<Pick<SeatFull, "model" | "effort">>, keep: ReadonlyArray<boolean>, panels: ReturnType<typeof oddsPanels>): ReadonlyArray<string> => {
@@ -112,7 +110,7 @@ export const droppedConfigs = (seats: ReadonlyArray<Pick<SeatFull, "model" | "ef
 
   return [...kept]
     .filter((key) => !drawn.has(key))
-    .toSorted((left, right) => baseOrder(left) - baseOrder(right) || EFFORT_ORDER.indexOf(left.split("|")[1] ?? "") - EFFORT_ORDER.indexOf(right.split("|")[1] ?? ""));
+    .toSorted((left, right) => baseOrder(left) - baseOrder(right) || byEffort(splitKey(left)[1], splitKey(right)[1]));
 };
 
 /** A panel narrower than this keys its lines below instead of naming them at their ends. */
@@ -163,11 +161,11 @@ const panelView = (h: H, model: string, lines: ReadonlyArray<OddsLine>, width: n
     ],
   );
 
-  return isKeyedBelow ? h.div([], [chart, lineKeyView(h, lines.toSorted((left, right) => EFFORT_ORDER.indexOf(left.effort) - EFFORT_ORDER.indexOf(right.effort)).map(({ effort }) => ({ label: effort, color, dash: DASH.get(effort) ?? "" })))]) : chart;
+  return isKeyedBelow ? h.div([], [chart, lineKeyView(h, lines.map(({ effort }) => ({ label: effort, color, dash: DASH.get(effort) ?? "" })))]) : chart;
 };
 
 export const droppedText = (keys: ReadonlyArray<string>): string =>
-  [...groupBy(keys, (key) => key.split("|")[0] ?? "")].map(([model, own]) => `${baseName(model)} ${own.map((key) => key.split("|")[1] ?? "").join(", ")}`).join(" · ");
+  [...groupBy(keys, (key) => splitKey(key)[0])].map(([model, own]) => `${baseName(model)} ${own.map((key) => splitKey(key)[1]).join(", ")}`).join(" · ");
 
 export const oddsView = (h: H, decisions: Decisions, seats: ReadonlyArray<SeatFull>, keep: ReadonlyArray<boolean>, width: number, content: number): Html => {
   const panels = oddsPanels(talliesOf(decisions, seats, keep));

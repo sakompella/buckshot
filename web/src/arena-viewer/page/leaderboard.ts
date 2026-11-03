@@ -70,12 +70,19 @@ const eloBarView = (h: H, scale: EloScale, m: ModelStats, elo: Rating | undefine
   );
 };
 
-const rowView = (h: H, m: ModelStats, rank: number | undefined, elo: Rating | undefined, scale: EloScale, details: ReadonlyArray<Detail>, isOpen: boolean): Html => {
-  return h.keyed("tr")(
-    m.id,
-    [h.Class(`row ${isOpen ? "sel" : ""} ${isProvisional(m) ? "provisional" : ""}`), h.AriaExpanded(isOpen), ...pressable(h, Message.ClickedLeaderboardRow({ id: m.id }))],
+/** A config's dot, model name and effort. */
+const nameView = (h: H, m: ModelStats): ReadonlyArray<Html | string> => [
+  h.span([h.Class(`dot ${isClaude(m.model) ? "a" : "o"}`), h.Style({ background: m.color })], []),
+  `${baseName(m.model)} `,
+  h.span([h.Class("eff")], [`[${m.effort}]`]),
+];
+
+const rowView = (h: H, m: ModelStats, rank: number | undefined, elo: Rating | undefined, scale: EloScale, details: ReadonlyArray<Detail>, isOpen: boolean): Html =>
+  h.keyed("tr")(
+    m.key,
+    [h.Class(`row ${isOpen ? "sel" : ""} ${isProvisional(m) ? "provisional" : ""}`), h.AriaExpanded(isOpen), ...pressable(h, Message.ClickedLeaderboardRow({ id: m.key }))],
     [
-      h.td([], [h.span([h.Class("rk")], [rank === undefined ? "" : String(rank)]), h.span([h.Class(`dot ${isClaude(m.model) ? "a" : "o"}`), h.Style({ background: m.color })], []), `${baseName(m.model)} `, h.span([h.Class("eff")], [`[${m.effort}]`])]),
+      h.td([], [h.span([h.Class("rk")], [rank === undefined ? "" : String(rank)]), ...nameView(h, m)]),
       h.td([h.DataAttribute("label", "round elo")], ratingView(h, elo)),
       h.td([h.DataAttribute("label", "matches"), h.Title(`${m.win.blocks} seed blocks`)], [m.scored.length.toLocaleString()]),
       h.td([h.DataAttribute("label", "cost")], [fmtUsd(m.avgCost)]),
@@ -83,7 +90,6 @@ const rowView = (h: H, m: ModelStats, rank: number | undefined, elo: Rating | un
       ...details.map(({ label, title, content }) => h.td([h.Class("detail"), h.DataAttribute("label", label), ...(title === "" ? [] : [h.Title(title)])], [...content])),
     ],
   );
-};
 
 const detailsView = (h: H, details: ReadonlyArray<Detail>): Html =>
   h.dl([h.Class("drillstats")], details.flatMap(({ label, title, content }) => [h.dt([], [label]), h.dd(title === "" ? [] : [h.Title(title)], [...content])]));
@@ -93,12 +99,7 @@ export const configPanelView = (h: H, derived: Derived, key: string): Html => {
 
   if (m === undefined) return h.empty;
 
-  const details = detailsOf(
-    h,
-    m,
-    derived.items.get(m.id),
-    derived.everyPooled.some(({ regret }) => regret !== null),
-  );
+  const details = detailsOf(h, m, derived.items.get(m.key), derived.everyPooled.some(({ regret }) => regret !== null));
 
   return h.div(
     [h.Class("configpanel")],
@@ -106,7 +107,7 @@ export const configPanelView = (h: H, derived: Derived, key: string): Html => {
       h.div(
         [h.Class("lbbar")],
         [
-          h.h2([], [h.span([h.Class(`dot ${isClaude(m.model) ? "a" : "o"}`), h.Style({ background: m.color })], []), `${baseName(m.model)} `, h.span([h.Class("eff")], [`[${m.effort}]`])]),
+          h.h2([], nameView(h, m)),
           h.span([h.Class("k")], ratingView(h, derived.ratings.get(m.key))),
           h.button([h.Type("button"), h.Class("drillclose"), h.AriaLabel("Close"), h.OnClick(Message.ClosedDrill())], ["✕"]),
         ],
@@ -179,13 +180,12 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
               h.tbody(
                 [],
                 configs.flatMap((m) => {
-                  const isOpen = Option.exists(leaderboard.maybeOpen, (open) => open === m.id);
-
-                  const details = detailsOf(h, m, items.get(m.id), hasRegret);
+                  const isOpen = Option.exists(leaderboard.maybeOpen, (open) => open === m.key);
+                  const details = detailsOf(h, m, items.get(m.key), hasRegret);
 
                   return [
                     rowView(h, m, ranks.get(m.key), ratings.get(m.key), scale, details, isOpen),
-                    isOpen ? h.keyed("tr")(`drill-${m.id}`, [h.Class("drill")], [h.td([h.Colspan(headers.length)], [detailsView(h, details), drillView(h, m, derived)])]) : h.empty,
+                    isOpen ? h.keyed("tr")(`drill-${m.key}`, [h.Class("drill")], [h.td([h.Colspan(headers.length)], [detailsView(h, details), drillView(h, m, derived)])]) : h.empty,
                   ];
                 }),
               ),

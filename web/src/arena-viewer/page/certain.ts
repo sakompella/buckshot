@@ -4,13 +4,13 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { CERTAIN_TYPES, type CertainMistakes, type CertainRate, type CertainType, type OpportunityType } from "../api.ts";
 import { anchorId, chartWidth, linScale, REFERENCE, REFERENCE_DASH, tippedDot } from "./charts.ts";
-import { baseName, baseOrder, blocksOf, CERTAIN_NAMES, colorOf, EFFORTS, fmtTime, groupBy, keyOf, labelOf, type MatchRow, MIN_BLOCKS_FOR_INTERVAL, type SeatFull, shortName, sumOf } from "./data.ts";
+import { baseName, baseOrder, blocksOf, CERTAIN_NAMES, byEffort, colorOf, fmtTime, groupBy, keyOf, labelOf, type MatchRow, MIN_BLOCKS_FOR_INTERVAL, type SeatFull, shortName, sumOf } from "./data.ts";
 import { memoLast } from "./derived.ts";
 import { type CertainCell, Message } from "./model.ts";
 
 type H = HtmlBuilder<Message>;
 
-export const CERTAIN_TABLE = "certain-table";
+const CERTAIN_TABLE = "certain-table";
 
 const FEWEST_FOR_RATE = 20;
 
@@ -47,10 +47,8 @@ const cellOf = (type: CertainType, parts: ReadonlyArray<CertainRate>, whole: Cer
   bounds: blocks < MIN_BLOCKS_FOR_INTERVAL ? null : (whole?.bounds ?? null),
 });
 
-const EFFORT_ORDER: ReadonlyArray<string> = EFFORTS;
-
 const inStrengthOrder = <A extends Pick<SeatKey, "model" | "effort">>(items: ReadonlyArray<A>): ReadonlyArray<A> =>
-  items.toSorted((left, right) => baseOrder(left.model) - baseOrder(right.model) || EFFORT_ORDER.indexOf(left.effort) - EFFORT_ORDER.indexOf(right.effort));
+  items.toSorted((left, right) => baseOrder(left.model) - baseOrder(right.model) || byEffort(left.effort, right.effort));
 
 /** A model's or the pooled row keeps its written interval only while all its configs are shown; a filtered selection has no interval. No row keeps one over fewer seed blocks than an interval needs. */
 export const talliesOf = memoLast((certain: CertainMistakes, seats: ReadonlyArray<SeatKey>, keep: ReadonlyArray<boolean>): Tallies => {

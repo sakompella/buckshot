@@ -18,12 +18,16 @@ CROSS_SAMPLES = "tournament 4"
 
 TOURNAMENT_5_COHORT = "tournament 5"
 TOURNAMENT_6_COHORT = "tournament 6"
+TOURNAMENT_7_COHORT = "tournament 7"
 
 # Tournament 5's phases. Each runs few matches with mixed models and efforts, so seat and starter figures treat them as one cohort.
 TOURNAMENT_5 = frozenset({"astra-high-cross", "astra-low-cross", "astra-self", "cross-more", "opus-max-cross", "opus-max-effort", "opus-off", "terra61-a", "terra61-b", "terra61-c", "top-four"})
 
 # Tournament 6's phases: one match per pairing, so one cohort.
 TOURNAMENT_6 = frozenset({"astra-recall", "terra-claude", "opus-none", "haiku-ladder"})
+
+# Tournament 7's phases: one match per pairing, topping every configuration up to 20 matches, so one cohort.
+TOURNAMENT_7 = frozenset({"t7-terra-max", "t7-cross-a", "t7-astra-off", "t7-terra-off", "t7-astra-high", "t7-cross-b", "t7-terra-low-high", "t7-terra-xhigh"})
 
 STARTS = re.compile(r"Round 1 begins\. Everyone has \d+ health; Player (\w) starts\.")
 
@@ -65,6 +69,8 @@ def cohort_of(tournament: str, model_a: str, model_b: str, effort_a: str, effort
         return TOURNAMENT_5_COHORT
     elif tournament in TOURNAMENT_6:
         return TOURNAMENT_6_COHORT
+    elif tournament in TOURNAMENT_7:
+        return TOURNAMENT_7_COHORT
     raise ValueError(f"no cohort for {tournament}: {model_a} {effort_a} vs {model_b} {effort_b}")
 
 

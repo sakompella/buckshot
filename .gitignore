@@ -2,3 +2,4 @@ _work/
 result
 node_modules
 __pycache__/
+.hegel/

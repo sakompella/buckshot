@@ -1,6 +1,6 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { baseName, baseOrder, costPerMove, EFFORTS, fmtUsd, groupBy, type ModelStats, type SeatFull, sumOf } from "./data.ts";
+import { baseName, baseOrder, byEffort, costPerMove, fmtUsd, groupBy, type ModelStats, type SeatFull, sumOf } from "./data.ts";
 import type { Message } from "./model.ts";
 
 type H = HtmlBuilder<Message>;
@@ -21,8 +21,6 @@ export const perMoveOf = (stats: ReadonlyArray<Config>): ReadonlyArray<PerMove> 
 
     return cost === null || cost <= 0 ? [] : [{ key, model, effort, color, cost }];
   });
-
-const EFFORT_ORDER: ReadonlyArray<string> = EFFORTS;
 
 const rowView = (h: H, { effort, color, cost }: PerMove, most: number): Html =>
   h.div(
@@ -49,7 +47,7 @@ export const spendView = (h: H, stats: ReadonlyArray<ModelStats>): Html => {
                 [h.Class("cpm-model")],
                 [
                   h.h3([h.Style({ color: configs[0]?.color ?? "" })], [baseName(model)]),
-                  ...configs.toSorted((left, right) => EFFORT_ORDER.indexOf(left.effort) - EFFORT_ORDER.indexOf(right.effort)).map((row) => rowView(h, row, most)),
+                  ...configs.toSorted((left, right) => byEffort(left.effort, right.effort)).map((row) => rowView(h, row, most)),
                 ],
               ),
             ),

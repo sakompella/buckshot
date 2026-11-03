@@ -152,21 +152,13 @@ export const Blunders = Schema.Struct({
 
 export type Blunders = typeof Blunders.Type;
 
-/**
- * The regret of each searched agent move, column by column. seat indexes the seats response. left is the shells left
- * in the gun, the chambered one included; isShot is 1 for a shot and 0 for any other move; points is the regret.
- */
-export const Mistakes = Schema.Struct({ seat: Column, left: Column, isShot: Column, points: Column });
-
-export type Mistakes = typeof Mistakes.Type;
-
 export const CERTAIN_TYPES = ["self_on_live", "gave_up_guaranteed_win"] as const;
 
 export const CertainType = Schema.Literals(CERTAIN_TYPES);
 
 export type CertainType = typeof CertainType.Type;
 
-export const OPPORTUNITY_TYPES = [...CERTAIN_TYPES, "hidden_health", "gave_turn_away"] as const;
+const OPPORTUNITY_TYPES = [...CERTAIN_TYPES, "hidden_health", "gave_turn_away"] as const;
 
 export const OpportunityType = Schema.Literals(OPPORTUNITY_TYPES);
 
@@ -192,7 +184,7 @@ export const CertainMistakes = Schema.Struct({ rates: Schema.Array(CertainRate),
 export type CertainMistakes = typeof CertainMistakes.Type;
 
 /** Bit order of Decisions' opp and pick masks. */
-export const PATTERNS = [
+const PATTERNS = [
   "knownBlankOpp",
   "knownLiveSelf",
   "countLiveSelf",

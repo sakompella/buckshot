@@ -7,7 +7,7 @@ import { CertainMistakes, Consistency, Decisions, Download, MatchDetail, SeatsRe
 import { hasCertainChart } from "./certain.ts";
 import { withPotShares } from "./data.ts";
 import { INITIAL_ROWS, MORE_ROWS } from "./matches.ts";
-import { type Filter, Group, Message, Model, MOVED_TARGETS, Target, type Viewport } from "./model.ts";
+import { type Filter, Group, Message, Model, MOVED_TARGETS, Target, Viewport } from "./model.ts";
 import { replayIndex, stepsOf } from "./replay.ts";
 import { reveal } from "./reveal.ts";
 import { PlaceTour, tourKeyMessage, tourMatchOf, tourOf } from "./tour.ts";
@@ -146,6 +146,8 @@ const LeaveReplayHistory = Command.define("LeaveReplayHistory", {
   }).pipe(Effect.as(Message.CompletedHistoryChange())),
 });
 
+const NO_MARK_TIP: Model["markTip"] = { maybeHover: Option.none(), maybePin: Option.none() };
+
 const withMatches = (model: Model, ids: ReadonlyArray<string>): Return => {
   const missing = ids.filter((id) => model.matches[id] === undefined);
 
@@ -180,7 +182,7 @@ const openReplay = (model: Model, id: string, maybeFocus: Option.Option<number>)
     modifyFields(model, {
       maybeReplay: () => Option.some({ id, maybeFocus, maybeAt: Option.none() }),
       maybeTappedTitle: () => Option.none(),
-      markTip: () => ({ maybeHover: Option.none(), maybePin: Option.none() }),
+      markTip: () => NO_MARK_TIP,
     }),
     [id],
   );
@@ -206,7 +208,7 @@ const thenReplay = (first: Return, next: (model: Model) => Return): Return => {
 };
 
 const withFilter = (model: Model, change: (filter: Filter) => Filter): Return => ({
-  model: modifyFields(model, { filter: change, markTip: () => ({ maybeHover: Option.none(), maybePin: Option.none() }) }),
+  model: modifyFields(model, { filter: change, markTip: () => NO_MARK_TIP }),
 });
 
 export const update = (model: Model, message: Message): Return =>
@@ -239,13 +241,13 @@ export const update = (model: Model, message: Message): Return =>
           scatter: (scatter) => ({ ...scatter, maybePin: isPinned ? Option.none() : Option.some(key) }),
           maybeDrill: (drill) => (Option.contains(drill, key) ? Option.none() : Option.some(key)),
           leaderboard: (leaderboard) => ({ ...leaderboard, maybeOpen: Option.none() }),
-          markTip: () => ({ maybeHover: Option.none(), maybePin: Option.none() }),
+          markTip: () => NO_MARK_TIP,
         }),
       };
     },
     ClosedDrill: () => ({ model: modifyFields(model, { maybeDrill: () => Option.none() }) }),
     ClickedOutsideChart: () => ({
-      model: modifyFields(model, { scatter: (scatter) => ({ ...scatter, maybePin: Option.none(), maybeHover: Option.none() }), markTip: () => ({ maybeHover: Option.none(), maybePin: Option.none() }) }),
+      model: modifyFields(model, { scatter: (scatter) => ({ ...scatter, maybePin: Option.none(), maybeHover: Option.none() }), markTip: () => NO_MARK_TIP }),
     }),
     HoveredMark: ({ tip }) => ({ model: modifyFields(model, { markTip: (markTip) => ({ ...markTip, maybeHover: Option.some(tip) }) }) }),
     LeftMark: () => ({ model: modifyFields(model, { markTip: (markTip) => ({ ...markTip, maybeHover: Option.none() }) }) }),
@@ -276,7 +278,7 @@ export const update = (model: Model, message: Message): Return =>
       }),
     }),
     FailedMatch: ({ id, error }) => ({ model: modifyFields(model, { matches: (matches) => ({ ...matches, [id]: AsyncData.fail(error) }) }) }),
-    ClosedReplay: () => ({ model: modifyFields(model, { maybeReplay: () => Option.none() }), commands: [LeaveReplayHistory()] }),
+    ClosedReplay: () => closeReplay(model),
     NavigatedBack: () => ({ model: modifyFields(model, { maybeReplay: () => Option.none() }) }),
     SteppedReplay: ({ delta }) => withReplayMove(model, (at) => at + delta),
     SelectedStep: ({ index }) => withReplayMove(model, () => index),
@@ -322,7 +324,7 @@ export const update = (model: Model, message: Message): Return =>
     }),
   });
 
-const Flags = Schema.Struct({ viewport: Schema.Struct({ width: Schema.Number, height: Schema.Number }) });
+const Flags = Schema.Struct({ viewport: Viewport });
 
 type Flags = typeof Flags.Type;
 
@@ -338,7 +340,7 @@ const init: Runtime.ApplicationInit<Model, Message, Flags> = ({ viewport }) => (
     maybeCertainOpen: Option.none(),
     matchList: { query: "", limit: INITIAL_ROWS, maybePreset: Option.none() },
     maybeTappedTitle: Option.none(),
-    markTip: { maybeHover: Option.none(), maybePin: Option.none() },
+    markTip: NO_MARK_TIP,
     maybeGroup: Option.some("standings"),
     isFiltersOpen: false,
     matches: {},

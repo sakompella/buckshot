@@ -4,10 +4,9 @@ import crypto from "node:crypto";
 import { Option, Schema } from "effect";
 
 import { analyse, decodeVisible, roundStory, ShellTracker, shotLineIn } from "./analysis.ts";
-import { Blunders, Call, CertainMistakes, Consistency, Decisions, MatchDetail, MatchSeat, MatchSummary, Mistakes, type PlayerState, SeatRow, SeatsResponse, type Step } from "./api.ts";
+import { Blunders, Call, CertainMistakes, Consistency, Decisions, MatchDetail, MatchSeat, MatchSummary, type PlayerState, SeatRow, SeatsResponse, type Step } from "./api.ts";
 import { findBlunders } from "./blunders.ts";
 import { type Certain, NO_CERTAIN, openCertain } from "./certain.ts";
-import { mistakesOf } from "./mistakes.ts";
 import { openConsistency } from "./consistency.ts";
 import page from "./page/index.html";
 import { openRegret, type Regret } from "./regret.ts";
@@ -62,8 +61,6 @@ const encodeConsistency = Schema.encodeSync(Schema.fromJsonString(Schema.Array(C
 const encodeDecisions = Schema.encodeSync(Schema.fromJsonString(Decisions));
 
 const encodeBlunders = Schema.encodeSync(Schema.fromJsonString(Blunders));
-
-const encodeMistakes = Schema.encodeSync(Schema.fromJsonString(Mistakes));
 
 const encodeCertain = Schema.encodeSync(Schema.fromJsonString(CertainMistakes));
 
@@ -249,7 +246,7 @@ export const serveArenaViewer = (dbPath: string, hostname: string, port: number,
     .map((row) => decodeSeatRow(row));
 
   const seatIndex = new Map(rows.map((row, index) => [`${row.matchId}|${row.player}`, index]));
-  const { decisions, seats: analysed, shellsLeft } = analyse(db, rows, seatIndex);
+  const { decisions, seats: analysed } = analyse(db, rows, seatIndex);
 
   const seats = rows.flatMap((row, index) => {
     const extra = analysed[index];
@@ -260,14 +257,6 @@ export const serveArenaViewer = (dbPath: string, hostname: string, port: number,
   const seatsBody = encodedBody(encodeSeats(seats));
   const decisionsBody = encodedBody(encodeDecisions(decisions));
   const blundersBody = encodedBody(encodeBlunders(findBlunders(db, regret, seatIndex)));
-
-  const mistakesBody = encodedBody(
-    encodeMistakes(
-      regret === null
-        ? { seat: [], left: [], isShot: [], points: [] }
-        : mistakesOf(decisions, shellsLeft, (seat) => rows[seat]?.matchId ?? "", (matchId) => regret.moves(matchId)),
-    ),
-  );
 
   const seedBlocks = new Map(seats.map(({ matchId, seedBlock }) => [matchId, seedBlock]));
   const certain = certainPath === undefined ? NO_CERTAIN : openCertain(certainPath, seatIndex);
@@ -299,7 +288,6 @@ export const serveArenaViewer = (dbPath: string, hostname: string, port: number,
       }),
       "/api/decisions": guarded((request) => json(request, decisionsBody)),
       "/api/blunders": guarded((request) => json(request, blundersBody)),
-      "/api/mistakes": guarded((request) => json(request, mistakesBody)),
       "/api/consistency": guarded((request) => json(request, consistencyBody)),
       "/api/certain-mistakes": guarded((request) => json(request, certainBody)),
       "/api/match": guarded((request) => {

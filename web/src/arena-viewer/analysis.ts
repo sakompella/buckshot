@@ -273,8 +273,6 @@ interface PendingInvert {
 export interface Analysis {
   readonly decisions: Decisions;
   readonly seats: ReadonlyArray<SeatAnalysis>;
-  /** Shells left in the gun at each of the decisions' agent moves, the chambered one included. */
-  readonly shellsLeft: ReadonlyArray<number>;
 }
 
 export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: ReadonlyMap<string, number>): Analysis => {
@@ -300,7 +298,6 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
   const extra = seats.map(() => emptySeat());
   const columns: MutableColumns = { seat: [], ord: [], opp: [], pick: [], rt: [], out: [], gap: [], cost: [], lat: [], tok: [], legalUse: [], legalSteal: [], useItem: [], stealItem: [], shot: [], odds: [] };
   const checks = { ok: 0, bad: 0 };
-  const shellsLeft: Array<number> = [];
 
   const seatsOf = new Map<string, Array<number>>();
 
@@ -462,7 +459,6 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
     columns.stealItem.push(steal);
     columns.shot.push(isOpp ? 1 : isSelf ? 2 : 0);
     columns.odds.push(chamber !== null && (isSelf || isOpp) && chamber.by !== "glass" && chamber.by !== "phone" ? Math.round(chamber.pLive * 100) : -1);
-    shellsLeft.push(tracker.total - tracker.cursor);
   }
 
   finishSeat();
@@ -470,5 +466,5 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
 
   console.log(`analysis: ${columns.seat.length} agent moves in ${Math.round(performance.now() - started)} ms; known-shell predictions matched ${checks.ok}, contradicted ${checks.bad}`);
 
-  return { decisions: { ...columns, checks }, seats: extra, shellsLeft };
+  return { decisions: { ...columns, checks }, seats: extra };
 };

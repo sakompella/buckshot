@@ -15,10 +15,12 @@
 
       devShells = forEachSystem (pkgs:
         let inherit (self.packages.${pkgs.stdenv.hostPlatform.system}) bend bendtt; in {
-          default = pkgs.mkShell {
+          default = pkgs.mkShell ({
             packages = [ bend pkgs.bun pkgs.python3 pkgs.uv ];
             BENDTT = "${bendtt}/bin/bendtt";
-          };
+          } // pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+            LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib ];
+          });
         });
     };
 }

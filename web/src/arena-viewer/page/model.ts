@@ -133,7 +133,7 @@ export const Model = Schema.Struct({
   isFiltersOpen: Schema.Boolean,
   matches: Schema.Record(Schema.String, MatchData),
   maybeReplay: Schema.Option(Replay),
-  /** Whether the page has painted once with the data. Most sections that came with the analysis ideas wait for it, so the first paint is as quick as before them. */
+  /** Whether the page has painted once with the data. Most sections wait for it, so the first paint is quick. */
   isFirstPaintDone: Schema.Boolean,
   maybeTour: Schema.Option(Tour),
 });
