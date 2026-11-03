@@ -71,7 +71,7 @@ The summary tables below come from the regret and knowledge databases, read only
 
     python3 tools/arena/analysis/regret.py [--regret <derived>/regret.sqlite] [--knowledge <derived>/knowledge.sqlite] [--doc docs/arena/analysis/regret.md]
 
-With `--doc` it rewrites the tables at the end of this page. `tools/arena/analysis/reload_bias.py` draws the stratified lists for `--decisions` (`sample`) and rewrites the tables of the Reload bias section from a `sampled` run (`report --doc`), reading the sampled and static runs read only. The by-round tables come from `tools/arena/analysis/by_round.py`, which also reads the analysis database for round winners (`--db`) and rewrites the tables of the last section the same way. `tools/arena/analysis/regret_depth.py` does the same for the Deeper search section: `sample` draws the lists, to run with `--depth 8 --budget 200000`, and `report --doc` rewrites its tables from the deep run (`regret-depth.sqlite`). `python3 -m unittest discover -s tools/arena/analysis` runs its tests.
+With `--doc` it rewrites the tables at the end of this page. `tools/arena/analysis/reload_bias.py` draws the stratified lists for `--decisions` (`sample`) and rewrites the tables of the Reload bias section from a `sampled` run (`report --doc`), reading the sampled and static runs read only. The by-round tables come from `tools/arena/analysis/by_round.py`, which also reads the analysis database for round winners (`--db`) and rewrites the tables of the last section the same way. `tools/arena/analysis/regret_depth.py` does the same for the Deeper search section: `sample` draws the lists, to run with `--depth 8 --budget 200000`, and `report --doc` rewrites its tables from the deep run (`regret-depth.sqlite`). `tools/arena/analysis/round_improvement.py` rewrites the within-match tables of the By round section (`--doc`, and `--svg DIR` for its figures). `python3 -m unittest discover -s tools/arena/analysis` runs its tests.
 
 `bun scripts/arena-regret-consistency.ts <derived>/regret.sqlite`, from `web/`, checks every searched row of every run, read only: `values_json` decodes, its top score is `best_score`, the chosen move is in it with `chosen_score`, and `regret` is `best_score` minus `chosen_score`. It prints the count of each mismatch and fails on any. The viewer's replay reads the same rows and refuses a match with a malformed one.
 
@@ -299,7 +299,7 @@ The budget still stops 29.9% of the depth 8 searches, against 40.2% at depth 6.
 
 ## By round
 
-Does a model play the short early rounds differently from the later, item-heavy ones? This is a casual pass for [#14](https://github.com/sakompella/buckshot/issues/14), with counts in brackets and no intervals. It covers the same 2,533 finished matches with no DeepSeek seat. Round winners come from the public lines of the match events, as the viewer reads them; the last round's winner is inferred from final cash when its line is missing. Rounds are numbered from 1. A win rate is the share of its rounds a config won, against whoever it met, so it also reflects the opponents' strength.
+Does a model play the short early rounds differently from the later, item-heavy ones? This is a casual pass for [#14](https://github.com/sakompella/buckshot/issues/14), with counts in brackets and no intervals, over the same 2,533 finished matches with no DeepSeek seat. The last subsection follows each seat within its own match, with intervals, over the 2,722 matches now in the database. Round winners come from the public lines of the match events, as the viewer reads them; the last round's winner is inferred from final cash when its line is missing. Rounds are numbered from 1. A win rate is the share of its rounds a config won, against whoever it met, so it also reflects the opponents' strength.
 
 1. **No config's win rate clearly changes by round.**
    - Pooled over efforts, a model's win rate moves by 4 points or less between rounds for seven of the nine models. Astra goes from 58.0% to 61.9% and 62.8% over 231 rounds, Terra 6.1 from 45.5% to 50.0% over 44, and Haiku 4.5 from 46.8% to 42.9% and back to 44.5% over 616.
@@ -389,3 +389,142 @@ Does a model play the short early rounds differently from the later, item-heavy 
 | claude-haiku-4-5-20251001 | high | 51.1% (90) | 4.3 (729) | 56.7% (90) | 4.0 (833) | 41.1% (90) | 5.3 (712) |
 | all |  | - | 2.5 (40,142) | - | 2.3 (45,447) | - | 2.4 (42,743) |
 <!-- by-round:end -->
+
+### Within a match
+
+Do models get better, or worse, from round 1 to rounds 2 and 3 of the same match? The tables above compare configs across different matches, so match-to-match luck sits in them. This compares each seat with itself: its round 2 and round 3 value minus its round 1 value, for mean regret, round win and shooting itself on a proven live shell ([certain-mistakes.md](certain-mistakes.md)). The changes are averaged per model and per config. Each interval is 95%, from resampling seed blocks, so the two seats of a match and its seat swap move together. A regret change counts only the seats that moved in both rounds. Regret is first adjusted: each move's regret minus the mean regret of all moves of the same model, shot or item move, and shells left in the gun. Later rounds have more items and other chamber lengths, and this keeps that from passing as a change. Unadjusted means differ from adjusted ones by about 0.1 points or less. The data is the whole database, 2,722 matches including tournament 6, so these tables cover more matches than the two above. Two figures come from the same run: `round-change-by-model.svg` (a small panel per model, rounds 1 to 3, regret and win) and `round-change-by-config.svg` (every config's round 3 change). They are not committed, as the repo holds no images. `round_improvement.py --svg DIR` writes them.
+
+1. **Two models get better, and the gain is in shots.**
+   - Luna's regret falls by 0.54 points by round 2 and 0.70 (-1.10 to -0.31) by round 3. Its shots fall by 1.41 and its item moves do not change. It also shoots itself less on a proven live shell: seat by seat that rate drops by 4.7 points (-7.7 to -1.6).
+   - Sonnet falls by 0.39 (-0.68 to -0.10) by round 3, shots -0.54, item moves flat.
+   - Both clear the multiple-comparison check below. Their round 1 regrets are 3.8 and 1.9 points, so each change is about a fifth of its level.
+2. **Within these models the gain sits at low and middle effort.**
+   - Luna off falls by 2.29 (-3.44 to -1.24), the biggest change in the data, and Luna medium by 0.82. At high, xhigh and max it stays within 0.1 of zero. Sonnet medium falls by 0.61.
+   - Two configs get a little worse by round 3: Sonnet max (+0.33, +0.10 to +0.58) and Opus medium (+0.33, +0.05 to +0.62). Both have regrets near 1 point, there is little to lose, and neither survives the check below. Read them as flat.
+3. **The other six models show no change, with different strength of evidence.**
+   - Opus (+0.15, -0.02 to +0.33) and Sol (+0.02, -0.13 to +0.17) are flat to within a third of a point. Sol's regret is 0.21 higher in round 2 (+0.03 to +0.40) and back to round 1 by round 3. Sol low (+1.01) and Sol max (+0.41) carry that round 2 rise through the check below, but their round 3 changes are +0.07 and +0.16, flat.
+   - Astra, Terra 5.6, Haiku 5.5 and Haiku 4.5 have intervals of 0.25 to 0.55 points either side, so a change of that size is not ruled out. Haiku 4.5 leans worse (+0.37, -0.17 to +0.92) and Haiku 5.5 dips in round 2 and returns (-0.25, then +0.09). Terra 6.1 has 70 seats and an interval over 1.4 points wide, which says nothing.
+4. **Win rate does not follow regret.**
+   - No model's round 3 win rate moves outside its interval. Luna gains 1.7 points (-0.5 to +3.7) and Sonnet 0.6 (-2.1 to +3.1). Haiku 4.5's round 2 is 3.8 points lower (-6.2 to -1.4), the one interval off zero among 16 (8 models, 2 rounds), where chance gives about 0.8. A win change also holds the opponent's change and who opens the round, so it is a weaker test of the model itself.
+5. **Round 1 shots are a little worse for everyone.** Over all seats, adjusted regret is lower by 0.19 in round 2 and 0.13 (-0.25 to 0.00) in round 3. Shots are lower by 0.31 (-0.52 to -0.11) and item moves higher by 0.09 (+0.01 to +0.17). This is the pattern in the table above, now inside matches. The drops of Luna and Sonnet are larger than this common one.
+6. **How many configs can be tested.** 36 of 49 configs have 80 or more seats with a regret in both rounds. The other 13 are all 6 Terra 6.1 configs, Astra off, low and high, and Opus off, low, high and max (4 to 46 seats), and are not tested. With about 100 seats an interval is about 1 point either side of the mean, and with 270 seats 0.5 to 0.7 for the noisier models. Config-level tests only see changes over about a point at most efforts.
+7. **How much is chance.** Each of the 36 configs has a 95% interval, so about 1.8 should miss zero by chance alone, 0.9 on each side. Round 3 against round 1 shows 4 better and 2 worse, and round 2 against round 1 shows 3 better and 2 worse, so a little more than chance, and the config list is not a clean map. After a Benjamini-Hochberg correction at 5%, which caps the share of false findings among those kept, one config survives for round 3, Luna off, and three for round 2: Luna off, Sol low and Sol max (the last two worse). At model level 8 models are testable and about 0.4 should miss zero per delta; Luna (both rounds) and Sonnet (round 3) survive. Anything else here is suggestive.
+8. **Stakes.** Round 3 is a dead rubber when one seat leads 2-0. Luna's change is -1.03 in matches already decided and -0.33 in level ones, and Sonnet's is -0.21 and -0.61, the other way. Whether a match is level depends on how rounds 1 and 2 went, so this split carries that selection. It shows no common story.
+
+This says what changes, not why. It could be learning from the earlier rounds, warming up on round 1, or both. It does not show that the models would improve over a longer match. Opponents differ between tournaments, and the adjustment covers shells left and the kind of move only, not health or items held.
+
+<!-- round-improvement:start -->
+2,722 finished matches, 5,444 seats. A regret change counts only the seats that moved in both rounds. Negative regret change is better; win changes are in percentage points of rounds won.
+
+### Change within a match, per model
+
+| model | seats | regret, round 2 minus 1 | regret, round 3 minus 1 | round 3: verdict | win, round 2 minus 1 (points) | win, round 3 minus 1 (points) | shot with a proven live: self-shots, round 3 minus 1 (points) |
+|---|---|---|---|---|---|---|---|
+| gpt-6-luna | 811 | -0.54 (-0.91 to -0.16) | -0.70 (-1.10 to -0.31) | better | +0.4 (-1.7 to +2.6) | +1.7 (-0.5 to +3.7) | -4.7 (-7.7 to -1.6) |
+| claude-sonnet-5-5 | 852 | -0.24 (-0.56 to +0.07) | -0.39 (-0.68 to -0.10) | better | -0.6 (-3.0 to +1.6) | +0.6 (-2.1 to +3.1) | +0.1 (-0.4 to +0.6) |
+| gpt-6.1-terra | 70 | -0.72 (-1.58 to +0.11) | -0.26 (-0.95 to +0.50) | flat | +9.7 (-1.3 to +22.2) | +6.9 (-5.6 to +20.7) | +0.0 (+0.0 to +0.0) |
+| gpt-5.6-terra | 578 | -0.31 (-0.68 to +0.02) | -0.17 (-0.54 to +0.18) | flat | +1.1 (-1.4 to +3.6) | +1.8 (-1.1 to +5.1) | -0.6 (-1.8 to +0.6) |
+| gpt-6-astra | 273 | -0.25 (-0.50 to +0.03) | -0.16 (-0.45 to +0.13) | flat | +2.8 (-3.6 to +9.3) | +3.9 (-2.2 to +9.9) | +0.0 (+0.0 to +0.0) |
+| gpt-6.1-sol | 654 | +0.21 (+0.03 to +0.40) | +0.02 (-0.13 to +0.17) | flat | +1.5 (-1.3 to +4.4) | -0.3 (-3.2 to +2.5) | +0.0 (+0.0 to +0.0) |
+| claude-haiku-5-5 | 848 | -0.25 (-0.50 to -0.02) | +0.09 (-0.15 to +0.32) | flat | -0.5 (-2.7 to +1.8) | -2.1 (-4.6 to +0.4) | +0.6 (-0.1 to +1.4) |
+| claude-opus-5-5 | 510 | +0.08 (-0.07 to +0.22) | +0.15 (-0.02 to +0.33) | flat | -0.4 (-4.5 to +3.8) | -1.7 (-5.8 to +2.4) | +0.1 (+0.0 to +0.2) |
+| claude-haiku-4-5-20251001 | 628 | -0.01 (-0.56 to +0.56) | +0.37 (-0.17 to +0.92) | flat | -3.8 (-6.2 to -1.4) | -2.7 (-5.5 to +0.3) | +0.1 (-2.3 to +2.3) |
+| all | 5,224 | -0.19 (-0.31 to -0.06) | -0.13 (-0.25 to -0.00) | better | +0.0 (+0.0 to +0.0) | +0.0 (+0.0 to +0.0) | -0.6 (-1.1 to -0.1) |
+
+### Where the regret change sits, round 3 minus round 1
+
+| model | all moves, raw regret | all moves, adjusted | shots, adjusted | item moves, adjusted |
+|---|---|---|---|---|
+| gpt-6-luna | -0.77 (-1.18 to -0.38) | -0.70 (-1.10 to -0.31) | -1.41 (-2.11 to -0.72) | +0.16 (-0.06 to +0.37) |
+| claude-sonnet-5-5 | -0.42 (-0.73 to -0.13) | -0.39 (-0.68 to -0.10) | -0.54 (-0.97 to -0.12) | +0.03 (-0.15 to +0.21) |
+| gpt-6.1-terra | -0.29 (-1.03 to +0.50) | -0.26 (-0.95 to +0.50) | +0.01 (-1.40 to +1.66) | -0.44 (-0.96 to +0.05) |
+| gpt-5.6-terra | -0.21 (-0.54 to +0.17) | -0.17 (-0.54 to +0.18) | -0.30 (-0.83 to +0.22) | -0.10 (-0.37 to +0.15) |
+| gpt-6-astra | -0.15 (-0.43 to +0.13) | -0.16 (-0.45 to +0.13) | -0.12 (-0.59 to +0.37) | -0.08 (-0.35 to +0.19) |
+| gpt-6.1-sol | +0.03 (-0.11 to +0.18) | +0.02 (-0.13 to +0.17) | -0.07 (-0.37 to +0.21) | +0.05 (-0.15 to +0.25) |
+| claude-haiku-5-5 | +0.06 (-0.20 to +0.29) | +0.09 (-0.15 to +0.32) | -0.20 (-0.72 to +0.32) | +0.25 (+0.08 to +0.43) |
+| claude-opus-5-5 | +0.14 (-0.03 to +0.32) | +0.15 (-0.02 to +0.33) | +0.20 (-0.07 to +0.49) | +0.08 (-0.12 to +0.29) |
+| claude-haiku-4-5-20251001 | +0.25 (-0.33 to +0.83) | +0.37 (-0.17 to +0.92) | +0.47 (-0.50 to +1.36) | +0.24 (-0.03 to +0.51) |
+| all | -0.17 (-0.30 to -0.04) | -0.13 (-0.25 to -0.00) | -0.31 (-0.51 to -0.11) | +0.09 (+0.01 to +0.17) |
+
+### Round 3 minus round 1 regret, by whether round 3 still decides the match
+
+| model | level: seats | level: change | decided: seats | decided: change |
+|---|---|---|---|---|
+| claude-haiku-4-5-20251001 | 315 | +0.68 (-0.08 to +1.44) | 313 | +0.05 (-0.73 to +0.85) |
+| claude-haiku-5-5 | 457 | +0.11 (-0.20 to +0.42) | 391 | +0.05 (-0.34 to +0.44) |
+| claude-opus-5-5 | 245 | +0.24 (-0.05 to +0.55) | 265 | +0.06 (-0.14 to +0.26) |
+| claude-sonnet-5-5 | 382 | -0.61 (-1.02 to -0.20) | 470 | -0.21 (-0.57 to +0.14) |
+| gpt-5.6-terra | 316 | +0.00 (-0.45 to +0.46) | 262 | -0.37 (-0.89 to +0.19) |
+| gpt-6-astra | 132 | -0.11 (-0.44 to +0.20) | 141 | -0.21 (-0.63 to +0.22) |
+| gpt-6-luna | 386 | -0.33 (-0.88 to +0.23) | 425 | -1.03 (-1.61 to -0.49) |
+| gpt-6.1-sol | 348 | +0.08 (-0.14 to +0.29) | 306 | -0.05 (-0.25 to +0.15) |
+| gpt-6.1-terra | 33 | +0.66 (-0.75 to +2.18) | 37 | -1.08 (-2.19 to -0.10) |
+
+### Change within a match, per config
+
+| model | effort | seats | regret, round 2 minus 1 | regret, round 3 minus 1 | win, round 2 minus 1 (points) | win, round 3 minus 1 (points) | round 3 regret |
+|---|---|---|---|---|---|---|---|
+| claude-haiku-4-5-20251001 | off | 89 | -0.35 (-1.81 to +1.18) | +0.30 (-1.16 to +1.78) | -3.3 (-18.7 to +12.0) | +3.3 (-8.7 to +14.4) | flat |
+| claude-haiku-4-5-20251001 | minimal | 90 | -0.30 (-1.49 to +0.86) | -0.14 (-1.29 to +1.12) | -5.5 (-19.8 to +8.7) | +0.0 (-14.1 to +12.2) | flat |
+| claude-haiku-4-5-20251001 | low | 92 | +0.17 (-0.95 to +1.35) | +1.13 (-0.18 to +2.50) | +0.0 (-13.7 to +12.8) | +5.4 (-5.4 to +16.1) | flat |
+| claude-haiku-4-5-20251001 | medium | 265 | +0.28 (-0.60 to +1.03) | +0.08 (-0.72 to +0.87) | -8.6 (-15.4 to -2.2) | -6.0 (-13.1 to +1.5) | flat |
+| claude-haiku-4-5-20251001 | high | 92 | -0.39 (-1.63 to +0.86) | +1.01 (-0.48 to +2.51) | +7.4 (-6.2 to +20.4) | -9.6 (-21.1 to +3.2) | flat |
+| claude-haiku-5-5 | off | 110 | -1.24 (-2.55 to -0.07) | -0.63 (-1.84 to +0.55) | -14.2 (-27.4 to -0.9) | -16.8 (-28.8 to -3.6) | flat |
+| claude-haiku-5-5 | low | 116 | +0.19 (-0.43 to +0.79) | +0.42 (-0.17 to +1.00) | -7.4 (-19.0 to +3.4) | +4.1 (-8.3 to +16.8) | flat |
+| claude-haiku-5-5 | medium | 292 | -0.32 (-0.66 to +0.03) | +0.01 (-0.36 to +0.39) | +0.7 (-6.8 to +7.8) | -3.4 (-10.9 to +4.7) | flat |
+| claude-haiku-5-5 | high | 114 | +0.09 (-0.31 to +0.48) | +0.30 (-0.08 to +0.70) | -0.8 (-12.0 to +10.2) | -1.7 (-13.6 to +9.2) | flat |
+| claude-haiku-5-5 | xhigh | 107 | -0.01 (-0.34 to +0.30) | +0.32 (-0.07 to +0.74) | +1.8 (-9.0 to +12.6) | +1.8 (-8.8 to +13.4) | flat |
+| claude-haiku-5-5 | max | 109 | -0.16 (-0.45 to +0.11) | +0.20 (-0.12 to +0.58) | +16.2 (+6.3 to +26.1) | +5.4 (-4.5 to +15.5) | flat |
+| claude-opus-5-5 | off | 20 | +0.04 (-1.26 to +1.12) | -0.73 (-1.57 to -0.07) | -4.3 (-31.8 to +25.0) | +4.3 (-18.2 to +27.3) | too few seats |
+| claude-opus-5-5 | low | 42 | -0.54 (-1.14 to +0.01) | -0.56 (-1.05 to -0.12) | +11.4 (-4.8 to +27.3) | +4.5 (-11.9 to +20.5) | too few seats |
+| claude-opus-5-5 | medium | 257 | +0.11 (-0.08 to +0.31) | +0.33 (+0.05 to +0.62) | -0.4 (-8.2 to +7.8) | -4.1 (-11.5 to +3.7) | worse |
+| claude-opus-5-5 | high | 46 | +0.04 (-0.33 to +0.43) | +0.18 (-0.25 to +0.65) | +5.7 (-7.4 to +18.9) | -5.7 (-19.6 to +9.3) | too few seats |
+| claude-opus-5-5 | xhigh | 105 | +0.24 (-0.04 to +0.52) | +0.14 (-0.13 to +0.42) | -4.5 (-15.2 to +7.3) | +1.8 (-8.9 to +12.6) | flat |
+| claude-opus-5-5 | max | 40 | +0.14 (-0.22 to +0.49) | +0.16 (-0.08 to +0.41) | -7.5 (-27.5 to +12.5) | +0.0 (-15.0 to +15.0) | too few seats |
+| claude-sonnet-5-5 | off | 112 | +0.16 (-1.06 to +1.42) | -0.79 (-1.83 to +0.18) | -10.9 (-21.0 to -0.8) | -5.9 (-16.9 to +5.1) | flat |
+| claude-sonnet-5-5 | low | 111 | -0.22 (-1.14 to +0.80) | -0.02 (-0.85 to +0.85) | -12.6 (-22.0 to -3.3) | -5.0 (-17.0 to +8.4) | flat |
+| claude-sonnet-5-5 | medium | 273 | -0.42 (-1.00 to +0.13) | -0.61 (-1.14 to -0.14) | +9.0 (+2.1 to +15.7) | +8.3 (+0.7 to +15.9) | better |
+| claude-sonnet-5-5 | high | 113 | -0.48 (-1.22 to +0.20) | -0.43 (-1.12 to +0.22) | +1.7 (-9.2 to +10.9) | -8.3 (-18.0 to +0.9) | flat |
+| claude-sonnet-5-5 | xhigh | 113 | -0.34 (-0.99 to +0.23) | -0.61 (-1.30 to +0.00) | -9.2 (-19.2 to +0.8) | -4.2 (-16.7 to +7.6) | flat |
+| claude-sonnet-5-5 | max | 130 | +0.11 (-0.07 to +0.30) | +0.33 (+0.10 to +0.58) | +4.3 (-5.0 to +13.6) | +6.4 (-4.3 to +17.1) | worse |
+| gpt-5.6-terra | low | 82 | -0.77 (-1.75 to +0.20) | -0.50 (-1.65 to +0.65) | +4.4 (-8.9 to +18.9) | +5.6 (-6.7 to +16.7) | flat |
+| gpt-5.6-terra | medium | 241 | -0.64 (-1.23 to -0.08) | -0.64 (-1.22 to -0.06) | +2.7 (-4.7 to +10.5) | +1.6 (-7.0 to +10.2) | better |
+| gpt-5.6-terra | high | 85 | -0.16 (-0.93 to +0.66) | +0.65 (-0.44 to +1.92) | -1.1 (-14.4 to +12.2) | +0.0 (-13.3 to +13.3) | flat |
+| gpt-5.6-terra | xhigh | 86 | +0.35 (-0.31 to +0.94) | +0.32 (-0.21 to +0.83) | -2.2 (-15.6 to +11.1) | -3.3 (-16.7 to +10.0) | flat |
+| gpt-5.6-terra | max | 84 | +0.27 (-0.15 to +0.69) | +0.22 (-0.16 to +0.59) | -1.1 (-14.4 to +11.1) | +5.6 (-5.6 to +16.7) | flat |
+| gpt-6-astra | off | 6 | - | - | - | - | too few seats |
+| gpt-6-astra | low | 13 | - | - | - | - | too few seats |
+| gpt-6-astra | medium | 246 | -0.27 (-0.55 to +0.00) | -0.16 (-0.46 to +0.16) | +3.6 (-3.2 to +10.6) | +4.3 (-2.4 to +10.3) | flat |
+| gpt-6-astra | high | 8 | - | - | - | - | too few seats |
+| gpt-6-luna | off | 104 | -1.93 (-3.02 to -0.88) | -2.29 (-3.44 to -1.24) | +5.5 (-7.3 to +18.2) | +5.5 (-6.4 to +16.4) | better |
+| gpt-6-luna | low | 103 | -0.83 (-2.00 to +0.29) | -0.97 (-2.23 to +0.20) | +9.1 (-3.6 to +21.8) | -4.5 (-14.5 to +6.4) | flat |
+| gpt-6-luna | medium | 277 | -0.64 (-1.35 to +0.09) | -0.82 (-1.50 to -0.16) | -3.5 (-10.3 to +3.9) | -1.4 (-8.9 to +5.3) | better |
+| gpt-6-luna | high | 106 | +0.14 (-0.93 to +1.06) | -0.09 (-1.31 to +1.01) | +2.7 (-9.1 to +14.5) | +5.5 (-8.2 to +19.1) | flat |
+| gpt-6-luna | xhigh | 110 | +0.23 (-0.72 to +1.08) | +0.06 (-0.81 to +0.91) | -4.4 (-14.9 to +6.1) | +4.4 (-7.0 to +14.9) | flat |
+| gpt-6-luna | max | 111 | -0.13 (-0.81 to +0.56) | +0.02 (-0.58 to +0.60) | -0.9 (-12.5 to +10.7) | +5.4 (-7.1 to +17.0) | flat |
+| gpt-6.1-sol | low | 90 | +1.01 (+0.50 to +1.59) | +0.07 (-0.40 to +0.47) | -6.2 (-14.6 to +2.1) | -4.2 (-14.6 to +7.3) | flat |
+| gpt-6.1-sol | medium | 261 | -0.06 (-0.40 to +0.32) | -0.15 (-0.41 to +0.09) | +4.8 (-1.9 to +12.2) | -2.2 (-8.9 to +4.4) | flat |
+| gpt-6.1-sol | high | 92 | +0.01 (-0.38 to +0.40) | +0.10 (-0.27 to +0.48) | -4.1 (-14.3 to +6.1) | -4.1 (-15.3 to +7.1) | flat |
+| gpt-6.1-sol | xhigh | 96 | +0.10 (-0.19 to +0.37) | +0.16 (-0.17 to +0.47) | +2.0 (-8.0 to +12.0) | +11.0 (+1.0 to +21.0) | flat |
+| gpt-6.1-sol | max | 115 | +0.41 (+0.15 to +0.68) | +0.16 (-0.15 to +0.48) | +4.1 (-5.7 to +13.9) | +0.8 (-9.8 to +10.7) | flat |
+| gpt-6.1-terra | off | 11 | - | - | - | - | too few seats |
+| gpt-6.1-terra | low | 11 | - | - | - | - | too few seats |
+| gpt-6.1-terra | medium | 20 | -0.84 (-2.66 to +1.23) | -1.02 (-2.63 to +0.69) | +9.5 (-10.5 to +30.0) | +33.3 (+4.5 to +61.9) | too few seats |
+| gpt-6.1-terra | high | 10 | - | - | - | - | too few seats |
+| gpt-6.1-terra | xhigh | 14 | - | - | - | - | too few seats |
+| gpt-6.1-terra | max | 4 | - | - | - | - | too few seats |
+
+### What chance alone would give
+
+36 of 49 configs have 80 or more seats with a regret in rounds 1 and 3. Per delta, with a 95% interval, about 0.9 should land on each side by chance alone.
+- regret, round 2 minus 1: 3 better, 2 worse, 31 flat. 3 survive Benjamini-Hochberg at 5%.
+- regret, round 3 minus 1: 4 better, 2 worse, 30 flat. 1 survive Benjamini-Hochberg at 5%.
+- win, round 2 minus 1: 2 better, 4 worse, 30 flat. 0 survive Benjamini-Hochberg at 5%.
+- win, round 3 minus 1: 2 better, 1 worse, 33 flat. 0 survive Benjamini-Hochberg at 5%.
+
+8 of 9 models have 80 or more seats with a regret in rounds 1 and 3. Per delta, with a 95% interval, about 0.2 should land on each side by chance alone.
+- regret, round 2 minus 1: 2 better, 1 worse, 5 flat. 1 survive Benjamini-Hochberg at 5%.
+- regret, round 3 minus 1: 2 better, 0 worse, 6 flat. 2 survive Benjamini-Hochberg at 5%.
+- win, round 2 minus 1: 0 better, 1 worse, 7 flat. 1 survive Benjamini-Hochberg at 5%.
+- win, round 3 minus 1: 0 better, 0 worse, 8 flat. 0 survive Benjamini-Hochberg at 5%.
+<!-- round-improvement:end -->
