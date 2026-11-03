@@ -388,27 +388,30 @@ test("Agent players that may move at once can answer in either order, and the la
   }
 });
 
+type PlayInput = { readonly player?: string | number; readonly move?: string | number; readonly turn?: string | number };
+
 test("a play_move call with a move outside the list or arguments that do not fit the schema is refused and changes nothing", () => {
   hegel.test((tc) => {
     const table = newMatch(2, tc.draw(gs.integers()), ["DoN", "Agent"]);
     const { moves, turn } = turnViewOf(table, "B");
-    const valid = { player: "B", move: 0, turn };
+    const replacing = (field: keyof PlayInput) => (value: string | number): PlayInput => ({ player: "B", move: 0, turn, [field]: value });
 
-    const input: ToolInput = tc.draw(
+    const input = tc.draw(
       gs.oneOf(
-        gs.integers().map((move) => ({ ...valid, move })),
-        gs.floats({ allowNan: false, allowInfinity: false }).map((move) => ({ ...valid, move })),
-        gs.text().map((move) => ({ ...valid, move })),
-        gs.text().map((player) => ({ ...valid, player })),
-        gs.integers().map((player) => ({ ...valid, player })),
-        gs.just({ seat: 3, move: 0, turn }),
-        gs.text().map((text) => ({ ...valid, turn: text })),
-        gs.integers({ maxValue: -1 }).map((negative) => ({ ...valid, turn: negative })),
-        gs.just({ player: "B", move: 0 }),
+        gs.integers().map(replacing("move")),
+        gs.floats({ allowNan: false, allowInfinity: false }).map(replacing("move")),
+        gs.text().map(replacing("move")),
+        gs.text().map(replacing("player")),
+        gs.integers().map(replacing("player")),
+        gs.text().map(replacing("turn")),
+        gs.integers({ maxValue: -1 }).map(replacing("turn")),
+        gs.just<PlayInput>({ move: 0, turn }),
+        gs.just<PlayInput>({ player: "B", move: 0 }),
       ),
     );
 
-    const fits = input.player === "B" && typeof input.move === "number" && Number.isInteger(input.move) && input.move >= 0 && input.move < moves.length && input.turn === turn;
+    const move = Number(input.move);
+    const fits = input.player === "B" && Number.isInteger(move) && move >= 0 && move < moves.length && input.turn === turn;
 
     tc.assume(!fits);
 

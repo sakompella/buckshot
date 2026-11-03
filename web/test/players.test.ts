@@ -71,5 +71,6 @@ test("a player found by a letter keeps that letter in its type", () => {
   // @ts-expect-error a Player<"A"> must not be assignable to a Player<"B">
   const asB: Option.Option<Player<"B">> = a;
 
-  expect(Option.map(asB, ({ letter }) => letter)).toEqual(Option.some("A"));
+  expect(Option.isSome(asB)).toBe(true);
+  expect(Option.map(a, ({ letter }) => letter)).toEqual(Option.some("A"));
 });

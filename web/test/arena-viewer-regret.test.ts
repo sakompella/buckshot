@@ -185,7 +185,7 @@ test("the consistency check counts every row, the rows that do not decode and ea
     { ...stored(rows[3] ?? consistentRow(random, 3)), bestScore: undertop, regret: undertop - (rows[3]?.chosenScore ?? 0) },
   ];
 
-  const expected: Record<string, number> = { "best score is not the top value": 1, "regret is not best minus chosen": 1 };
+  const expected = new Map([["best score is not the top value", 1], ["regret is not best minus chosen", 1]]);
 
-  expect(consistencyOf(damaged)).toEqual({ rows: 24, undecodable: 2, mismatches: MISMATCHES.map((mismatch) => [mismatch, expected[mismatch] ?? 0]) });
+  expect(consistencyOf(damaged)).toEqual({ rows: 24, undecodable: 2, mismatches: MISMATCHES.map((mismatch) => [mismatch, expected.get(mismatch) ?? 0]) });
 });
