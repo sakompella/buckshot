@@ -124,7 +124,7 @@ test("only the run with the most searched moves is read, so evaluators, reload r
     ]),
   );
 
-  expect(regret.seats.get("m1|A")).toMatchObject({ moves: 2, total: 20, exact: 0 });
+  expect(regret.seats.get("m1|A")).toEqual({ moves: 2, total: 20, exact: 0, largest: { ordinal: 1, points: 10 } });
   expect(regret.moves("m1").size).toBe(2);
 });
 
@@ -132,7 +132,7 @@ test("a stored row whose values do not decode or do not agree with its scores fa
   const broken = (row: Partial<Row>) => openRegret(regretFile([{ match: "m1", ordinal: 1, player: "A", best: 600_000, chosen: 500_000, ...row }]));
 
   expect(() => broken({ values: "not json" }).moves("m1")).toThrow();
-  expect(() => broken({ values: JSON.stringify([{ label: "best move", score: 2_000_000 }, { label: "chosen move", score: 500_000 }]) }).moves("m1")).toThrow();
+  expect(() => broken({ values: JSON.stringify([{ label: "best move", score: 700_000 }, { label: "chosen move", score: 500_000 }]) }).moves("m1")).toThrow("best score is not the top value");
 });
 
 const randomOf = (seed: number) => {
@@ -175,13 +175,17 @@ test("the consistency check counts every row, the rows that do not decode and ea
   const stored = (row: MoveRow) => ({ ...row, values: JSON.stringify(row.values) });
   const rows = Array.from({ length: 20 }, (_row, ordinal) => consistentRow(random, ordinal));
 
+  const undertop = (rows[3]?.bestScore ?? 0) === 0 ? 1 : (rows[3]?.bestScore ?? 0) - 1;
+
   const damaged = [
     ...rows.map(stored),
     { ...stored(rows[0] ?? consistentRow(random, 0)), regret: -1 },
     { ...stored(rows[1] ?? consistentRow(random, 1)), values: "[" },
     { ...stored(rows[2] ?? consistentRow(random, 2)), limited: 2 },
-    { ...stored(rows[3] ?? consistentRow(random, 3)), bestScore: 1_000_001 },
+    { ...stored(rows[3] ?? consistentRow(random, 3)), bestScore: undertop, regret: undertop - (rows[3]?.chosenScore ?? 0) },
   ];
 
-  expect(consistencyOf(damaged)).toEqual({ rows: 24, undecodable: 3, mismatches: MISMATCHES.map((mismatch) => [mismatch, mismatch === "regret is not best minus chosen" ? 1 : 0]) });
+  const expected: Record<string, number> = { "best score is not the top value": 1, "regret is not best minus chosen": 1 };
+
+  expect(consistencyOf(damaged)).toEqual({ rows: 24, undecodable: 2, mismatches: MISMATCHES.map((mismatch) => [mismatch, expected[mismatch] ?? 0]) });
 });

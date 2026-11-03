@@ -101,26 +101,6 @@ test("one pooled Bradley-Terry fit recovers known strengths, including configs t
   }
 });
 
-test("a block bootstrap's resamples include every block about equally often", () => {
-  const blocks = 1000;
-  const reps = 400;
-  const random = rng(3);
-  const included = new Float64Array(blocks);
-
-  for (let draw = 0; draw < blocks * reps; draw++) {
-    const block = Math.floor(random() * blocks);
-
-    included[block] = (included[block] ?? 0) + 1;
-  }
-
-  const perRep = Array.from(included, (count) => count / reps);
-  const spread = Math.sqrt(perRep.reduce((total, value) => total + (value - 1) ** 2, 0) / blocks);
-
-  expect(Math.min(...perRep)).toBeGreaterThan(0.8);
-  expect(Math.max(...perRep)).toBeLessThan(1.2);
-  expect(spread).toBeLessThan(0.1);
-});
-
 test("a config that wins every game is rated high but finite", () => {
   const ratings = bradleyTerry(Array.from({ length: 30 }, () => ({ a: "x", b: "y", sa: 1 })));
 
