@@ -6,9 +6,9 @@ DeepSeek (`deepseek-v4.1-flash`) is left out entirely. Every match with a DeepSe
 
 ## Summary
 
-Scope: the 2,533 scored matches of the nine cohorts in the Coverage table, with no DeepSeek seat, from the knowledge database rebuilt on 2026-10-30 from the 2,553-match snapshot of the analysis database (the first imported tournament 5 subset, 62 matches, is included). The cohorts are Cross-model (every match between different models, 931 matches) and one effort cohort per model (every match of that model against itself, 1,602 matches in all).
+Scope: the 2,895 scored matches of the ten cohorts in the Coverage table, with no DeepSeek seat, from the knowledge database rebuilt on 2026-11-04 from the analysis database (2,915 completed matches, now including tournaments 7 and 9). The cohorts are Cross-model (every match between different models, 1,255 matches) and one effort cohort per model (every match of that model against itself, 1,640 matches in all).
 
-The prose summary written for the earlier 2,471-match scope is removed. Its figures were typed by hand, were not regenerated and cannot be reproduced from the tables below, so they would describe a scope this page no longer has. The tables are the findings: each rate is numerator/denominator with a 95% interval over seed blocks. Tournament 5's cohorts are small (Terra 6.1 efforts has 14 matches, and the 40 new Cross-model matches are spread over many pairings and efforts), so their rows are wide and say little on their own.
+The prose summary written for an earlier 2,471-match scope is removed. Its figures were typed by hand, were not regenerated and cannot be reproduced from the tables below, so they would describe a scope this page no longer has. The tables are the findings: each rate is numerator/denominator with a 95% interval over seed blocks. Small cohorts (Astra efforts has 6 matches, Terra 6.1 efforts 16) and Cross-model pairings with few seed blocks have wide rows that say little on their own.
 
 ## How it was measured
 
@@ -26,7 +26,7 @@ The prose summary written for the earlier 2,471-match scope is removed. Its figu
 **Intervals.** Every rate is numerator/denominator with a 95% percentile interval from 2,000 resamples of seed blocks (`matches.seed_block_id`) within the row, never of single matches or moves. The resampler is seeded, so a rerun prints the same intervals. For consistency and agreement, the interval is over pairs of distinct decisions: a pair weighs the product of its two blocks' resample counts, and a decision never pairs with its own copy. Without that, a block drawn twice would agree with itself. The non-modal share has no interval for that reason.
 
 **Checks.**
-- On all 130,000 non-forced decisions of the 2,596 replay-validated matches of the 2026-10-30 snapshot (`--verify`, 29 minutes), the true gun was one of the orders the player's log allows (0 outside), and every chamber the log called certain was right (0 wrong). The true gun was read only for this check and is not stored. Earlier builds were verified the same way on their own scope.
+- On 148,579 checked decisions of the 2,958 replay-validated matches of the 2026-11-04 snapshot (`--verify`, 38 minutes), the true gun was one of the orders the player's log allows (0 outside), and every chamber the log called certain was right (0 wrong). The true gun was read only for this check and is not stored. Earlier builds were verified the same way on their own scope.
 - The item ledger agreed with the board's slots at every decision of every match, with no contradictions.
 - `web/test/knowledge.test.ts` checks hand-computed histories:
   - a phone clue keeping its offset through two shots;
@@ -54,29 +54,31 @@ The prose summary written for the earlier 2,471-match scope is removed. Its figu
 
 From `web/`, after `bun run rules` (Bend comes from `$BEND`, `bend` on PATH or the pinned build):
 
-    nice -n 10 bun scripts/arena-knowledge.ts --db <buckshot.sqlite> --out <derived>/knowledge.sqlite --verify   # about 30 minutes for 2,596 matches
+    nice -n 10 bun scripts/arena-knowledge.ts --db <buckshot.sqlite> --out <derived>/knowledge.sqlite --verify   # about 38 minutes for 2,958 matches
     nice -n 10 bun scripts/arena-knowledge-report.ts --db <derived>/knowledge.sqlite                            # about 3 minutes
     bun scripts/arena-knowledge.ts --db <buckshot.sqlite> --trace <match name>                                 # one match, decision by decision
 
-The knowledge script always rebuilds its whole output (it drops its tables first), about 34 minutes for 2,596 matches without `--verify`. The 2026-10-30 rebuild reproduced every decision, clue, item, death and player row of the 2026-10-25 database exactly and added the 62 new matches (3,182 agent decisions); only the `cohort` label of every match differs, because the earlier file used older cohort names.
+The knowledge script always rebuilds its whole output (it drops its tables first), about 34 minutes for 2,596 matches without `--verify` (the 2026-10-30 size). The 2026-10-30 rebuild reproduced every decision, clue, item, death and player row of the 2026-10-25 database exactly and added the 62 new matches (3,182 agent decisions); only the `cohort` label of every match differs, because the earlier file used older cohort names.
 
 # Tables
 
 Generated by `web/scripts/arena-knowledge-report.ts` from the knowledge database. A cohort is one kind of comparison, pooled over every tournament: Cross-model (every match between different models) or one model's efforts (every match of that model against itself).
 
+<!-- beliefs:start -->
 ## Coverage
 
 | Cohort | Matches | Seed blocks | Agent decisions | Shots | Shots with a certain chamber | Code versions |
 |---|---|---|---|---|---|---|
-| Cross-model | 931 | 466 | 46264 | 22296 | 13219 | 12e2e3295899, 3c9b98f8b3f4, 51b8366684f0, 9e7d7ff22891 |
+| Cross-model | 1255 | 680 | 62889 | 30163 | 18039 | 12e2e3295899, 29f99c6dce47, 2a5f469d8793, 3c9b98f8b3f4, 51b8366684f0, 9e7d7ff22891, b72cdce126f2 |
+| Astra efforts | 6 | 4 | 242 | 117 | 72 | 12e2e3295899, 2a5f469d8793, b72cdce126f2 |
 | Haiku 4.5 efforts | 200 | 100 | 10636 | 5358 | 2854 | 51b8366684f0, 9e7d7ff22891 |
 | Haiku 5.5 efforts | 300 | 150 | 15078 | 7000 | 4229 | 51b8366684f0, 9e7d7ff22891 |
 | Luna efforts | 300 | 150 | 17231 | 7600 | 4441 | 9e7d7ff22891 |
-| Opus efforts | 88 | 44 | 4245 | 2021 | 1236 | 12e2e3295899, 9e7d7ff22891 |
+| Opus efforts | 118 | 60 | 5861 | 2763 | 1747 | 12e2e3295899, 9e7d7ff22891, b72cdce126f2 |
 | Sol efforts | 200 | 100 | 9726 | 4690 | 2830 | 9e7d7ff22891 |
 | Sonnet efforts | 300 | 150 | 14710 | 7060 | 4383 | 51b8366684f0, 9e7d7ff22891 |
-| Terra 6.1 efforts | 14 | 7 | 712 | 359 | 227 | 12e2e3295899 |
 | Terra efforts | 200 | 100 | 9730 | 4858 | 2886 | 9e7d7ff22891 |
+| gpt-6.1-terra efforts | 16 | 9 | 808 | 412 | 261 | 12e2e3295899, 2a5f469d8793 |
 
 ## Shots with a certain chamber
 
@@ -86,54 +88,64 @@ Shooting the opponent on a known blank and yourself on a known live. Certainty i
 
 | Model | Opponent on known blank, not the last shell | Opponent on known blank, last shell | Self on known live |
 |---|---|---|---|
-| claude-haiku-4-5-20251001 high | 42% (5/12) [0%, 81%] | 57% (4/7) [33%, 100%] | 3.4% (1/29) [0%, 10%] |
-| claude-haiku-4-5-20251001 low | 6.3% (1/16) [0%, 13%] | 63% (5/8) [25%, 100%] | 8.6% (3/35) [0%, 22%] |
-| claude-haiku-4-5-20251001 medium | 30% (88/289) [24%, 37%] | 62% (80/130) [53%, 71%] | 3.7% (22/589) [2.0%, 5.8%] |
-| claude-haiku-4-5-20251001 minimal | 21% (4/19) [8.3%, 30%] | 86% (6/7) [63%, 100%] | 4.8% (2/42) [0%, 11%] |
-| claude-haiku-4-5-20251001 off | 40% (10/25) [15%, 67%] | 86% (6/7) [63%, 100%] | 10% (3/29) [0%, 24%] |
-| claude-haiku-5-5 high | 19% (4/21) [5.6%, 30%] | 82% (9/11) [57%, 100%] | 0% (0/50) [0%, 0%] |
-| claude-haiku-5-5 low | 18% (4/22) [4.0%, 39%] | 75% (6/8) [62%, 100%] | 0% (0/66) [0%, 0%] |
-| claude-haiku-5-5 max | 5.6% (1/18) [0%, 14%] | 50% (3/6) [17%, 83%] | 0% (0/43) [0%, 0%] |
-| claude-haiku-5-5 medium | 19% (49/261) [13%, 25%] | 74% (103/139) [65%, 83%] | 0.6% (5/849) [0.1%, 1.2%] |
-| claude-haiku-5-5 off | 70% (7/10) [40%, 100%] | 89% (8/9) [73%, 100%] | 0% (0/33) [0%, 0%] |
-| claude-haiku-5-5 xhigh | 7.1% (1/14) [0%, 19%] | 86% (6/7) [67%, 100%] | 0% (0/44) [0%, 0%] |
-| claude-opus-5-5 high | 0% (0/8) [0%, 0%] | 0% (0/6) [0%, 0%] | 0% (0/47) [0%, 0%] |
-| claude-opus-5-5 low | 0% (0/10) [0%, 0%] | 0% (0/7) [0%, 0%] | 0% (0/44) [0%, 0%] |
-| claude-opus-5-5 max | 0% (0/8) [0%, 0%] | 0% (0/4) [0%, 0%] | 0% (0/23) [0%, 0%] |
-| claude-opus-5-5 medium | 0% (0/368) [0%, 0%] | 1.3% (2/153) [0%, 3.4%] | 0.1% (1/975) [0%, 0.3%] |
-| claude-opus-5-5 off | 0% (0/8) [0%, 0%] | 0% (0/4) [0%, 0%] | 0% (0/22) [0%, 0%] |
-| claude-opus-5-5 xhigh | 0% (0/82) [0%, 0%] | 0% (0/37) [0%, 0%] | 0% (0/208) [0%, 0%] |
-| claude-sonnet-5-5 high | 0% (0/14) [0%, 0%] | 0% (0/7) [0%, 0%] | 0% (0/63) [0%, 0%] |
-| claude-sonnet-5-5 low | 0% (0/21) [0%, 0%] | 10% (1/10) [0%, 20%] | 0% (0/63) [0%, 0%] |
-| claude-sonnet-5-5 max | 0% (0/11) [0%, 0%] | 0% (0/8) [0%, 0%] | 0% (0/46) [0%, 0%] |
-| claude-sonnet-5-5 medium | 0.6% (2/311) [0%, 1.7%] | 8.5% (9/106) [3.6%, 14%] | 0.6% (6/941) [0.2%, 1.2%] |
-| claude-sonnet-5-5 off | 0% (0/14) [0%, 0%] | 38% (3/8) [0%, 60%] | 2.8% (2/71) [0%, 8.8%] |
-| claude-sonnet-5-5 xhigh | 0% (0/12) [0%, 0%] | 0% (0/7) [0%, 0%] | 0% (0/63) [0%, 0%] |
-| gpt-5.6-terra high | 0% (0/26) [0%, 0%] | 8.3% (1/12) [0%, 15%] | 4.9% (2/41) [0%, 10%] |
-| gpt-5.6-terra low | 0% (0/20) [0%, 0%] | 17% (2/12) [0%, 50%] | 2.3% (1/44) [0%, 10%] |
+| claude-haiku-4-5-20251001 high | 37% (19/52) [16%, 58%] | 55% (16/29) [38%, 72%] | 4.4% (4/91) [1.1%, 8.4%] |
+| claude-haiku-4-5-20251001 low | 19% (12/62) [8.3%, 34%] | 59% (20/34) [38%, 78%] | 5.2% (7/135) [1.4%, 10%] |
+| claude-haiku-4-5-20251001 medium | 31% (121/392) [25%, 37%] | 63% (114/182) [54%, 71%] | 4.8% (37/767) [3.1%, 6.8%] |
+| claude-haiku-4-5-20251001 minimal | 36% (20/56) [22%, 48%] | 78% (28/36) [68%, 88%] | 5.2% (7/134) [2.2%, 8.3%] |
+| claude-haiku-4-5-20251001 off | 40% (18/45) [25%, 56%] | 83% (15/18) [67%, 96%] | 10% (6/60) [3.7%, 17%] |
+| claude-haiku-5-5 high | 15% (6/40) [5.4%, 23%] | 75% (24/32) [53%, 97%] | 0.6% (1/158) [0%, 2.2%] |
+| claude-haiku-5-5 low | 21% (18/84) [12%, 32%] | 77% (37/48) [62%, 91%] | 0.7% (2/300) [0%, 1.7%] |
+| claude-haiku-5-5 max | 5.0% (1/20) [0%, 13%] | 50% (3/6) [17%, 83%] | 0% (0/47) [0%, 0%] |
+| claude-haiku-5-5 medium | 18% (55/308) [13%, 23%] | 75% (122/163) [66%, 83%] | 0.5% (5/1009) [0.1%, 0.9%] |
+| claude-haiku-5-5 off | 46% (33/71) [34%, 61%] | 81% (59/73) [71%, 91%] | 1.1% (3/285) [0%, 2.4%] |
+| claude-haiku-5-5 xhigh | 11% (3/28) [0%, 21%] | 89% (8/9) [75%, 100%] | 0% (0/77) [0%, 0%] |
+| claude-opus-5-5 high | 0% (0/16) [0%, 0%] | 0% (0/13) [0%, 0%] | 0% (0/71) [0%, 0%] |
+| claude-opus-5-5 low | 0% (0/23) [0%, 0%] | 0% (0/11) [0%, 0%] | 0% (0/74) [0%, 0%] |
+| claude-opus-5-5 max | 0% (0/14) [0%, 0%] | 0% (0/13) [0%, 0%] | 0% (0/55) [0%, 0%] |
+| claude-opus-5-5 medium | 0% (0/396) [0%, 0%] | 1.2% (2/168) [0%, 3.1%] | 0.1% (1/1040) [0%, 0.3%] |
+| claude-opus-5-5 off | 0% (0/40) [0%, 0%] | 0% (0/13) [0%, 0%] | 0% (0/94) [0%, 0%] |
+| claude-opus-5-5 xhigh | 0% (0/133) [0%, 0%] | 0% (0/53) [0%, 0%] | 0% (0/317) [0%, 0%] |
+| claude-sonnet-5-5 high | 0% (0/36) [0%, 0%] | 0% (0/16) [0%, 0%] | 0.9% (1/114) [0%, 2.9%] |
+| claude-sonnet-5-5 low | 0% (0/34) [0%, 0%] | 6.7% (1/15) [0%, 16%] | 0% (0/102) [0%, 0%] |
+| claude-sonnet-5-5 max | 1.5% (1/68) [0%, 5.1%] | 0% (0/44) [0%, 0%] | 0% (0/187) [0%, 0%] |
+| claude-sonnet-5-5 medium | 0.6% (2/336) [0%, 1.5%] | 8.2% (9/110) [3.5%, 13%] | 0.8% (8/998) [0.3%, 1.4%] |
+| claude-sonnet-5-5 off | 6.5% (2/31) [0%, 16%] | 32% (6/19) [0%, 59%] | 2.5% (3/120) [0%, 6.1%] |
+| claude-sonnet-5-5 xhigh | 0% (0/32) [0%, 0%] | 0% (0/22) [0%, 0%] | 0% (0/126) [0%, 0%] |
+| gpt-5.6-terra high | 0% (0/28) [0%, 0%] | 8.3% (1/12) [0%, 15%] | 4.2% (2/48) [0%, 8.7%] |
+| gpt-5.6-terra low | 0% (0/20) [0%, 0%] | 17% (2/12) [0%, 50%] | 2.0% (1/49) [0%, 8.1%] |
 | gpt-5.6-terra max | 0% (0/21) [0%, 0%] | 7.1% (1/14) [0%, 19%] | 0% (0/50) [0%, 0%] |
-| gpt-5.6-terra medium | 5.2% (17/324) [3.0%, 7.8%] | 12% (22/184) [7.1%, 18%] | 0.9% (7/742) [0.3%, 1.7%] |
-| gpt-5.6-terra xhigh | 0% (0/28) [0%, 0%] | 0% (0/11) [0%, 0%] | 0% (0/47) [0%, 0%] |
-| gpt-6-astra high | 0% (0/13) [0%, 0%] | 0% (0/7) [0%, 0%] | 0% (0/28) [0%, 0%] |
-| gpt-6-astra low | 0% (0/6) [0%, 0%] | 33% (2/6) [0%, 86%] | 0% (0/25) [0%, 0%] |
-| gpt-6-astra medium | 0.6% (2/339) [0%, 1.5%] | 1.6% (3/192) [0%, 3.6%] | 0% (0/1023) [0%, 0%] |
-| gpt-6-luna high | 7.4% (2/27) [0%, 14%] | 40% (2/5) [0%, 100%] | 5.6% (3/54) [1.7%, 9.4%] |
+| gpt-5.6-terra medium | 5.1% (17/332) [2.9%, 7.6%] | 13% (24/189) [7.7%, 19%] | 0.9% (7/748) [0.3%, 1.6%] |
+| gpt-5.6-terra xhigh | 0% (0/32) [0%, 0%] | 0% (0/16) [0%, 0%] | 0% (0/57) [0%, 0%] |
+| gpt-6-astra high | 0% (0/34) [0%, 0%] | 0% (0/19) [0%, 0%] | 0% (0/82) [0%, 0%] |
+| gpt-6-astra low | 0% (0/19) [0%, 0%] | 20% (2/10) [0%, 67%] | 0% (0/64) [0%, 0%] |
+| gpt-6-astra medium | 0.8% (3/394) [0%, 1.7%] | 1.3% (3/226) [0%, 3.0%] | 0% (0/1175) [0%, 0%] |
+| gpt-6-astra off | 0% (0/30) [0%, 0%] | 27% (4/15) [0%, 57%] | 0% (0/92) [0%, 0%] |
+| gpt-6-luna high | 6.5% (2/31) [0%, 13%] | 43% (3/7) [13%, 80%] | 6.5% (4/62) [2.1%, 11%] |
 | gpt-6-luna low | 12% (2/17) [0%, 24%] | 56% (5/9) [29%, 80%] | 24% (7/29) [9.5%, 50%] |
-| gpt-6-luna max | 8.7% (2/23) [0%, 20%] | 14% (1/7) [0%, 43%] | 2.3% (1/43) [0%, 6.3%] |
-| gpt-6-luna medium | 26% (89/345) [21%, 31%] | 51% (85/166) [44%, 59%] | 14% (96/684) [11%, 17%] |
+| gpt-6-luna max | 8.0% (2/25) [0%, 18%] | 11% (1/9) [0%, 38%] | 2.0% (1/51) [0%, 5.7%] |
+| gpt-6-luna medium | 25% (92/361) [21%, 31%] | 50% (88/176) [43%, 58%] | 14% (97/697) [11%, 17%] |
 | gpt-6-luna off | 33% (6/18) [0%, 60%] | 78% (7/9) [60%, 100%] | 24% (9/37) [20%, 29%] |
-| gpt-6-luna xhigh | 0% (0/17) [0%, 0%] | 25% (4/16) [0%, 71%] | 5.8% (3/52) [2.1%, 8.8%] |
-| gpt-6.1-sol high | 0% (0/14) [0%, 0%] | 14% (1/7) [0%, 50%] | 0% (0/45) [0%, 0%] |
-| gpt-6.1-sol low | 5.9% (1/17) [0%, 23%] | 20% (1/5) [0%, 50%] | 0% (0/44) [0%, 0%] |
-| gpt-6.1-sol max | 4.8% (1/21) [0%, 20%] | 0% (0/15) [0%, 0%] | 0% (0/61) [0%, 0%] |
-| gpt-6.1-sol medium | 0.9% (3/326) [0%, 2.1%] | 5.1% (7/138) [1.4%, 9.8%] | 0% (0/887) [0%, 0%] |
-| gpt-6.1-sol xhigh | 0% (0/19) [0%, 0%] | 0% (0/16) [0%, 0%] | 0% (0/61) [0%, 0%] |
-| gpt-6.1-terra high | 0% (0/7) [0%, 0%] | 0% (0/2) [0%, 0%] | 0% (0/17) [0%, 0%] |
-| gpt-6.1-terra low | 0% (0/3) [0%, 0%] | 0% (0/1) [0%, 0%] | 0% (0/11) [0%, 0%] |
-| gpt-6.1-terra max | 0% (0/4) [0%, 0%] | 0% (0/6) [0%, 0%] | 0% (0/13) [0%, 0%] |
-| gpt-6.1-terra medium | 0% (0/9) [0%, 0%] | 0% (0/2) [0%, 0%] | 0% (0/22) [0%, 0%] |
-| gpt-6.1-terra off | 0% (0/5) [0%, 0%] | 0% (0/1) [0%, 0%] | 0% (0/6) [0%, 0%] |
-| gpt-6.1-terra xhigh | 0% (0/5) [0%, 0%] | – | 0% (0/11) [0%, 0%] |
+| gpt-6-luna xhigh | 0% (0/28) [0%, 0%] | 22% (4/18) [0%, 63%] | 5.7% (4/70) [1.9%, 8.2%] |
+| gpt-6.1-sol high | 0% (0/36) [0%, 0%] | 6.3% (1/16) [0%, 21%] | 0% (0/97) [0%, 0%] |
+| gpt-6.1-sol low | 3.1% (1/32) [0%, 12%] | 14% (1/7) [0%, 38%] | 0% (0/78) [0%, 0%] |
+| gpt-6.1-sol max | 1.5% (1/65) [0%, 5.3%] | 0% (0/42) [0%, 0%] | 0% (0/195) [0%, 0%] |
+| gpt-6.1-sol medium | 0.9% (3/336) [0%, 2.0%] | 5.0% (7/141) [1.4%, 9.6%] | 0% (0/920) [0%, 0%] |
+| gpt-6.1-sol xhigh | 0% (0/41) [0%, 0%] | 0% (0/26) [0%, 0%] | 0% (0/89) [0%, 0%] |
+| gpt-6.1-terra high | 0% (0/27) [0%, 0%] | 0% (0/13) [0%, 0%] | 0% (0/70) [0%, 0%] |
+| gpt-6.1-terra low | 9.5% (2/21) [0%, 24%] | 10% (1/10) [0%, 38%] | 0% (0/81) [0%, 0%] |
+| gpt-6.1-terra max | 0% (0/36) [0%, 0%] | 0% (0/23) [0%, 0%] | 0% (0/91) [0%, 0%] |
+| gpt-6.1-terra medium | 0% (0/25) [0%, 0%] | 0% (0/8) [0%, 0%] | 0% (0/75) [0%, 0%] |
+| gpt-6.1-terra off | 3.6% (1/28) [0%, 14%] | 14% (1/7) [0%, 27%] | 0% (0/61) [0%, 0%] |
+| gpt-6.1-terra xhigh | 0% (0/28) [0%, 0%] | 13% (1/8) [0%, 43%] | 0% (0/59) [0%, 0%] |
+
+### Astra efforts
+
+| Model | Opponent on known blank, not the last shell | Opponent on known blank, last shell | Self on known live |
+|---|---|---|---|
+| gpt-6-astra high | 0% (0/4) [0%, 0%] | 0% (0/2) [0%, 0%] | 0% (0/12) [0%, 0%] |
+| gpt-6-astra low | 0% (0/5) [0%, 0%] | 0% (0/3) [0%, 0%] | 0% (0/11) [0%, 0%] |
+| gpt-6-astra medium | 0% (0/5) [0%, 0%] | 0% (0/2) [0%, 0%] | 0% (0/20) [0%, 0%] |
+| gpt-6-astra off | 0% (0/5) [0%, 0%] | – | 0% (0/3) [0%, 0%] |
 
 ### Haiku 4.5 efforts
 
@@ -171,12 +183,12 @@ Shooting the opponent on a known blank and yourself on a known live. Certainty i
 
 | Model | Opponent on known blank, not the last shell | Opponent on known blank, last shell | Self on known live |
 |---|---|---|---|
-| claude-opus-5-5 high | 0% (0/73) [0%, 0%] | 0% (0/35) [0%, 0%] | 0% (0/172) [0%, 0%] |
-| claude-opus-5-5 low | 0% (0/44) [0%, 0%] | 5.6% (1/18) [0%, 15%] | 0% (0/111) [0%, 0%] |
-| claude-opus-5-5 max | 0% (0/7) [0%, 0%] | 0% (0/3) [0%, 0%] | 0% (0/26) [0%, 0%] |
-| claude-opus-5-5 medium | 0% (0/115) [0%, 0%] | 0% (0/42) [0%, 0%] | 0% (0/288) [0%, 0%] |
-| claude-opus-5-5 off | 0% (0/3) [0%, 0%] | – | 0% (0/13) [0%, 0%] |
-| claude-opus-5-5 xhigh | 0% (0/69) [0%, 0%] | 0% (0/34) [0%, 0%] | 0% (0/183) [0%, 0%] |
+| claude-opus-5-5 high | 0% (0/85) [0%, 0%] | 0% (0/36) [0%, 0%] | 0% (0/185) [0%, 0%] |
+| claude-opus-5-5 low | 0% (0/60) [0%, 0%] | 4.0% (1/25) [0%, 12%] | 0% (0/158) [0%, 0%] |
+| claude-opus-5-5 max | 0% (0/55) [0%, 0%] | 0% (0/16) [0%, 0%] | 0% (0/186) [0%, 0%] |
+| claude-opus-5-5 medium | 0% (0/134) [0%, 0%] | 2.0% (1/50) [0%, 6.0%] | 0% (0/336) [0%, 0%] |
+| claude-opus-5-5 off | 0% (0/5) [0%, 0%] | 0% (0/3) [0%, 0%] | 0% (0/33) [0%, 0%] |
+| claude-opus-5-5 xhigh | 0% (0/98) [0%, 0%] | 2.3% (1/43) [0%, 7.3%] | 0% (0/239) [0%, 0%] |
 
 ### Sol efforts
 
@@ -199,17 +211,6 @@ Shooting the opponent on a known blank and yourself on a known live. Certainty i
 | claude-sonnet-5-5 off | 1.3% (2/153) [0%, 3.6%] | 14% (8/58) [5.7%, 25%] | 0.8% (4/502) [0.2%, 1.6%] |
 | claude-sonnet-5-5 xhigh | 0.5% (1/186) [0%, 1.8%] | 2.7% (2/74) [0%, 6.8%] | 0% (0/463) [0%, 0%] |
 
-### Terra 6.1 efforts
-
-| Model | Opponent on known blank, not the last shell | Opponent on known blank, last shell | Self on known live |
-|---|---|---|---|
-| gpt-6.1-terra high | 0% (0/8) [0%, 0%] | – | 0% (0/15) [0%, 0%] |
-| gpt-6.1-terra low | 0% (0/14) [0%, 0%] | 0% (0/4) [0%, 0%] | 0% (0/27) [0%, 0%] |
-| gpt-6.1-terra max | 0% (0/5) [0%, 0%] | 0% (0/5) [0%, 0%] | 0% (0/13) [0%, 0%] |
-| gpt-6.1-terra medium | 0% (0/17) [0%, 0%] | 0% (0/7) [0%, 0%] | 0% (0/44) [0%, 0%] |
-| gpt-6.1-terra off | 0% (0/7) [0%, 0%] | 0% (0/4) [0%, 0%] | 0% (0/17) [0%, 0%] |
-| gpt-6.1-terra xhigh | 0% (0/10) [0%, 0%] | 0% (0/2) [0%, 0%] | 0% (0/28) [0%, 0%] |
-
 ### Terra efforts
 
 | Model | Opponent on known blank, not the last shell | Opponent on known blank, last shell | Self on known live |
@@ -220,74 +221,96 @@ Shooting the opponent on a known blank and yourself on a known live. Certainty i
 | gpt-5.6-terra medium | 9.8% (13/132) [5.0%, 16%] | 12% (8/67) [5.5%, 20%] | 1.5% (5/326) [0.3%, 2.9%] |
 | gpt-5.6-terra xhigh | 3.6% (6/165) [0.8%, 7.0%] | 9.6% (8/83) [4.1%, 17%] | 1.1% (4/350) [0.3%, 2.4%] |
 
+### gpt-6.1-terra efforts
+
+| Model | Opponent on known blank, not the last shell | Opponent on known blank, last shell | Self on known live |
+|---|---|---|---|
+| gpt-6.1-terra high | 0% (0/12) [0%, 0%] | 0% (0/1) [0%, 0%] | 0% (0/19) [0%, 0%] |
+| gpt-6.1-terra low | 0% (0/14) [0%, 0%] | 0% (0/4) [0%, 0%] | 0% (0/27) [0%, 0%] |
+| gpt-6.1-terra max | 0% (0/5) [0%, 0%] | 0% (0/5) [0%, 0%] | 0% (0/13) [0%, 0%] |
+| gpt-6.1-terra medium | 0% (0/17) [0%, 0%] | 0% (0/7) [0%, 0%] | 0% (0/44) [0%, 0%] |
+| gpt-6.1-terra off | 0% (0/12) [0%, 0%] | 0% (0/4) [0%, 0%] | 0% (0/27) [0%, 0%] |
+| gpt-6.1-terra xhigh | 0% (0/13) [0%, 0%] | 0% (0/3) [0%, 0%] | 0% (0/34) [0%, 0%] |
+
 ## By where the certainty came from
 
 Shots against the known shell, by source. A clue taken with adrenaline counts with its item.
 
 | Cohort | public | glass | phone | combined |
 |---|---|---|---|---|
-| Cross-model | 9.0% (689/7618) [8.1%, 10%] | 1.6% (68/4162) [1.2%, 2.1%] | 8.0% (112/1405) [6.4%, 9.7%] | 2.9% (1/34) [0%, 8.6%] |
+| Cross-model | 9.9% (1019/10288) [9.0%, 11%] | 1.8% (106/5754) [1.4%, 2.3%] | 7.7% (150/1939) [6.4%, 9.2%] | 10% (6/58) [2.0%, 19%] |
+| Astra efforts | 0% (0/31) [0%, 0%] | 0% (0/24) [0%, 0%] | 0% (0/17) [0%, 0%] | – |
 | Haiku 4.5 efforts | 29% (513/1770) [27%, 32%] | 12% (102/886) [9.0%, 14%] | 40% (79/196) [33%, 47%] | 0% (0/2) [0%, 0%] |
 | Haiku 5.5 efforts | 20% (479/2360) [18%, 22%] | 4.0% (54/1340) [2.8%, 5.3%] | 11% (59/518) [7.9%, 15%] | 9.1% (1/11) [0%, 25%] |
 | Luna efforts | 27% (705/2638) [24%, 29%] | 2.9% (39/1350) [1.9%, 3.9%] | 32% (141/442) [28%, 36%] | 9.1% (1/11) [0%, 20%] |
-| Opus efforts | 0.2% (1/649) [0%, 0.5%] | 0% (0/403) [0%, 0%] | 0% (0/182) [0%, 0%] | 0% (0/2) [0%, 0%] |
+| Opus efforts | 0.3% (3/917) [0%, 0.7%] | 0% (0/574) [0%, 0%] | 0% (0/249) [0%, 0%] | 0% (0/7) [0%, 0%] |
 | Sol efforts | 1.3% (20/1493) [0.8%, 2.0%] | 0% (0/885) [0%, 0%] | 0% (0/446) [0%, 0%] | 0% (0/6) [0%, 0%] |
 | Sonnet efforts | 1.4% (33/2341) [0.9%, 2.1%] | 0% (0/1441) [0%, 0%] | 1.2% (7/586) [0.4%, 2.1%] | 0% (0/15) [0%, 0%] |
-| Terra 6.1 efforts | 0% (0/120) [0%, 0%] | 0% (0/73) [0%, 0%] | 0% (0/33) [0%, 0%] | 0% (0/1) [0%, 0%] |
 | Terra efforts | 5.4% (90/1677) [4.2%, 6.6%] | 0.1% (1/937) [0%, 0.3%] | 8.6% (23/267) [5.4%, 13%] | 0% (0/5) [0%, 0%] |
+| gpt-6.1-terra efforts | 0% (0/134) [0%, 0%] | 0% (0/88) [0%, 0%] | 0% (0/38) [0%, 0%] | 0% (0/1) [0%, 0%] |
 
 ### Cross-model, glass and phone by model
 
 | Model | glass | phone |
 |---|---|---|
-| claude-haiku-4-5-20251001 high | 13% (2/16) [0%, 33%] | 67% (2/3) [0%, 100%] |
-| claude-haiku-4-5-20251001 low | 6.7% (1/15) [0%, 14%] | 0% (0/5) [0%, 0%] |
-| claude-haiku-4-5-20251001 medium | 11% (36/338) [7.3%, 14%] | 29% (20/70) [17%, 39%] |
-| claude-haiku-4-5-20251001 minimal | 4.0% (1/25) [0%, 10%] | 40% (2/5) [0%, 100%] |
-| claude-haiku-4-5-20251001 off | 18% (4/22) [3.8%, 43%] | 33% (2/6) [0%, 100%] |
-| claude-haiku-5-5 high | 5.6% (1/18) [0%, 17%] | 0% (0/14) [0%, 0%] |
-| claude-haiku-5-5 low | 0% (0/23) [0%, 0%] | 13% (2/15) [0%, 33%] |
-| claude-haiku-5-5 max | 0% (0/18) [0%, 0%] | 0% (0/9) [0%, 0%] |
-| claude-haiku-5-5 medium | 4.3% (15/352) [2.3%, 6.3%] | 4.9% (7/143) [1.5%, 8.8%] |
-| claude-haiku-5-5 off | 0% (0/15) [0%, 0%] | 67% (2/3) [0%, 100%] |
-| claude-haiku-5-5 xhigh | 0% (0/18) [0%, 0%] | 0% (0/7) [0%, 0%] |
-| claude-opus-5-5 high | 0% (0/20) [0%, 0%] | 0% (0/6) [0%, 0%] |
-| claude-opus-5-5 low | 0% (0/23) [0%, 0%] | 0% (0/5) [0%, 0%] |
-| claude-opus-5-5 max | 0% (0/10) [0%, 0%] | 0% (0/1) [0%, 0%] |
-| claude-opus-5-5 medium | 0% (0/412) [0%, 0%] | 0.6% (1/171) [0%, 1.8%] |
-| claude-opus-5-5 off | 0% (0/12) [0%, 0%] | 0% (0/4) [0%, 0%] |
-| claude-opus-5-5 xhigh | 0% (0/87) [0%, 0%] | 0% (0/38) [0%, 0%] |
-| claude-sonnet-5-5 high | 0% (0/19) [0%, 0%] | 0% (0/15) [0%, 0%] |
-| claude-sonnet-5-5 low | 0% (0/25) [0%, 0%] | 0% (0/15) [0%, 0%] |
-| claude-sonnet-5-5 max | 0% (0/14) [0%, 0%] | 0% (0/13) [0%, 0%] |
-| claude-sonnet-5-5 medium | 0% (0/458) [0%, 0%] | 0.7% (1/144) [0%, 2.2%] |
-| claude-sonnet-5-5 off | 0% (0/27) [0%, 0%] | 0% (0/6) [0%, 0%] |
-| claude-sonnet-5-5 xhigh | 0% (0/23) [0%, 0%] | 0% (0/6) [0%, 0%] |
-| gpt-5.6-terra high | 0% (0/27) [0%, 0%] | 0% (0/8) [0%, 0%] |
-| gpt-5.6-terra low | 0% (0/28) [0%, 0%] | 0% (0/4) [0%, 0%] |
+| claude-haiku-4-5-20251001 high | 11% (6/53) [3.2%, 22%] | 43% (6/14) [17%, 73%] |
+| claude-haiku-4-5-20251001 low | 6.0% (5/83) [2.2%, 11%] | 15% (2/13) [0%, 38%] |
+| claude-haiku-4-5-20251001 medium | 12% (53/450) [8.4%, 16%] | 28% (27/97) [20%, 37%] |
+| claude-haiku-4-5-20251001 minimal | 8.0% (6/75) [2.3%, 15%] | 38% (5/13) [14%, 67%] |
+| claude-haiku-4-5-20251001 off | 14% (6/43) [2.8%, 28%] | 27% (3/11) [10%, 50%] |
+| claude-haiku-5-5 high | 1.7% (1/59) [0%, 5.7%] | 0% (0/24) [0%, 0%] |
+| claude-haiku-5-5 low | 0.8% (1/120) [0%, 2.7%] | 14% (7/50) [4.8%, 23%] |
+| claude-haiku-5-5 max | 0% (0/18) [0%, 0%] | 0% (0/11) [0%, 0%] |
+| claude-haiku-5-5 medium | 3.6% (15/420) [1.9%, 5.2%] | 5.8% (10/171) [2.8%, 9.3%] |
+| claude-haiku-5-5 off | 3.1% (4/129) [0.8%, 5.9%] | 23% (11/47) [12%, 36%] |
+| claude-haiku-5-5 xhigh | 0% (0/36) [0%, 0%] | 0% (0/13) [0%, 0%] |
+| claude-opus-5-5 high | 0% (0/31) [0%, 0%] | 0% (0/12) [0%, 0%] |
+| claude-opus-5-5 low | 0% (0/38) [0%, 0%] | 0% (0/9) [0%, 0%] |
+| claude-opus-5-5 max | 0% (0/24) [0%, 0%] | 0% (0/6) [0%, 0%] |
+| claude-opus-5-5 medium | 0% (0/444) [0%, 0%] | 0.5% (1/188) [0%, 1.7%] |
+| claude-opus-5-5 off | 0% (0/54) [0%, 0%] | 0% (0/14) [0%, 0%] |
+| claude-opus-5-5 xhigh | 0% (0/147) [0%, 0%] | 0% (0/57) [0%, 0%] |
+| claude-sonnet-5-5 high | 0% (0/42) [0%, 0%] | 0% (0/29) [0%, 0%] |
+| claude-sonnet-5-5 low | 0% (0/46) [0%, 0%] | 0% (0/23) [0%, 0%] |
+| claude-sonnet-5-5 max | 0% (0/94) [0%, 0%] | 2.1% (1/48) [0%, 7.3%] |
+| claude-sonnet-5-5 medium | 0% (0/483) [0%, 0%] | 1.3% (2/156) [0%, 3.2%] |
+| claude-sonnet-5-5 off | 0% (0/52) [0%, 0%] | 10% (1/10) [0%, 33%] |
+| claude-sonnet-5-5 xhigh | 0% (0/51) [0%, 0%] | 0% (0/22) [0%, 0%] |
+| gpt-5.6-terra high | 0% (0/32) [0%, 0%] | 0% (0/8) [0%, 0%] |
+| gpt-5.6-terra low | 0% (0/30) [0%, 0%] | 0% (0/4) [0%, 0%] |
 | gpt-5.6-terra max | 0% (0/28) [0%, 0%] | 0% (0/6) [0%, 0%] |
-| gpt-5.6-terra medium | 0% (0/464) [0%, 0%] | 15% (15/103) [7.8%, 22%] |
-| gpt-5.6-terra xhigh | 0% (0/27) [0%, 0%] | 0% (0/8) [0%, 0%] |
-| gpt-6-astra high | 0% (0/14) [0%, 0%] | 0% (0/6) [0%, 0%] |
-| gpt-6-astra low | 0% (0/12) [0%, 0%] | 0% (0/1) [0%, 0%] |
-| gpt-6-astra medium | 0% (0/497) [0%, 0%] | 0% (0/181) [0%, 0%] |
-| gpt-6-luna high | 0% (0/25) [0%, 0%] | 7.7% (1/13) [0%, 30%] |
+| gpt-5.6-terra medium | 0% (0/470) [0%, 0%] | 14% (15/105) [7.1%, 22%] |
+| gpt-5.6-terra xhigh | 0% (0/36) [0%, 0%] | 0% (0/8) [0%, 0%] |
+| gpt-6-astra high | 0% (0/44) [0%, 0%] | 0% (0/10) [0%, 0%] |
+| gpt-6-astra low | 0% (0/34) [0%, 0%] | 0% (0/8) [0%, 0%] |
+| gpt-6-astra medium | 0% (0/580) [0%, 0%] | 0% (0/209) [0%, 0%] |
+| gpt-6-astra off | 0% (0/46) [0%, 0%] | 0% (0/26) [0%, 0%] |
+| gpt-6-luna high | 0% (0/30) [0%, 0%] | 7.1% (1/14) [0%, 27%] |
 | gpt-6-luna low | 0% (0/23) [0%, 0%] | 67% (2/3) [0%, 100%] |
-| gpt-6-luna max | 0% (0/20) [0%, 0%] | 7.7% (1/13) [0%, 23%] |
-| gpt-6-luna medium | 1.9% (8/412) [0.7%, 3.4%] | 40% (51/127) [33%, 47%] |
+| gpt-6-luna max | 0% (0/26) [0%, 0%] | 7.1% (1/14) [0%, 21%] |
+| gpt-6-luna medium | 2.1% (9/428) [0.9%, 3.6%] | 40% (51/128) [33%, 47%] |
 | gpt-6-luna off | 0% (0/20) [0%, 0%] | 25% (1/4) [0%, 100%] |
-| gpt-6-luna xhigh | 0% (0/25) [0%, 0%] | 0% (0/3) [0%, 0%] |
-| gpt-6.1-sol high | 0% (0/21) [0%, 0%] | 0% (0/8) [0%, 0%] |
-| gpt-6.1-sol low | 0% (0/24) [0%, 0%] | 13% (1/8) [0%, 33%] |
-| gpt-6.1-sol max | 0% (0/28) [0%, 0%] | 0% (0/11) [0%, 0%] |
-| gpt-6.1-sol medium | 0% (0/410) [0%, 0%] | 0.6% (1/162) [0%, 2.1%] |
-| gpt-6.1-sol xhigh | 0% (0/24) [0%, 0%] | 0% (0/13) [0%, 0%] |
-| gpt-6.1-terra high | 0% (0/5) [0%, 0%] | 0% (0/8) [0%, 0%] |
-| gpt-6.1-terra low | 0% (0/5) [0%, 0%] | 0% (0/1) [0%, 0%] |
-| gpt-6.1-terra max | 0% (0/8) [0%, 0%] | 0% (0/2) [0%, 0%] |
-| gpt-6.1-terra medium | 0% (0/12) [0%, 0%] | 0% (0/4) [0%, 0%] |
-| gpt-6.1-terra off | 0% (0/6) [0%, 0%] | 0% (0/2) [0%, 0%] |
-| gpt-6.1-terra xhigh | 0% (0/7) [0%, 0%] | 0% (0/2) [0%, 0%] |
+| gpt-6-luna xhigh | 0% (0/29) [0%, 0%] | 0% (0/7) [0%, 0%] |
+| gpt-6.1-sol high | 0% (0/39) [0%, 0%] | 0% (0/22) [0%, 0%] |
+| gpt-6.1-sol low | 0% (0/45) [0%, 0%] | 5.3% (1/19) [0%, 20%] |
+| gpt-6.1-sol max | 0% (0/111) [0%, 0%] | 0% (0/31) [0%, 0%] |
+| gpt-6.1-sol medium | 0% (0/426) [0%, 0%] | 0.6% (1/167) [0%, 1.9%] |
+| gpt-6.1-sol xhigh | 0% (0/40) [0%, 0%] | 0% (0/25) [0%, 0%] |
+| gpt-6.1-terra high | 0% (0/35) [0%, 0%] | 0% (0/18) [0%, 0%] |
+| gpt-6.1-terra low | 0% (0/46) [0%, 0%] | 8.3% (1/12) [0%, 27%] |
+| gpt-6.1-terra max | 0% (0/51) [0%, 0%] | 0% (0/16) [0%, 0%] |
+| gpt-6.1-terra medium | 0% (0/38) [0%, 0%] | 0% (0/15) [0%, 0%] |
+| gpt-6.1-terra off | 0% (0/39) [0%, 0%] | 0% (0/10) [0%, 0%] |
+| gpt-6.1-terra xhigh | 0% (0/36) [0%, 0%] | 0% (0/12) [0%, 0%] |
+
+### Astra efforts, glass and phone by model
+
+| Model | glass | phone |
+|---|---|---|
+| gpt-6-astra high | 0% (0/3) [0%, 0%] | 0% (0/6) [0%, 0%] |
+| gpt-6-astra low | 0% (0/7) [0%, 0%] | 0% (0/3) [0%, 0%] |
+| gpt-6-astra medium | 0% (0/10) [0%, 0%] | 0% (0/8) [0%, 0%] |
+| gpt-6-astra off | 0% (0/4) [0%, 0%] | – |
 
 ### Haiku 4.5 efforts, glass and phone by model
 
@@ -325,12 +348,12 @@ Shots against the known shell, by source. A clue taken with adrenaline counts wi
 
 | Model | glass | phone |
 |---|---|---|
-| claude-opus-5-5 high | 0% (0/89) [0%, 0%] | 0% (0/41) [0%, 0%] |
-| claude-opus-5-5 low | 0% (0/63) [0%, 0%] | 0% (0/19) [0%, 0%] |
-| claude-opus-5-5 max | 0% (0/10) [0%, 0%] | 0% (0/1) [0%, 0%] |
-| claude-opus-5-5 medium | 0% (0/147) [0%, 0%] | 0% (0/70) [0%, 0%] |
-| claude-opus-5-5 off | 0% (0/5) [0%, 0%] | 0% (0/1) [0%, 0%] |
-| claude-opus-5-5 xhigh | 0% (0/89) [0%, 0%] | 0% (0/50) [0%, 0%] |
+| claude-opus-5-5 high | 0% (0/99) [0%, 0%] | 0% (0/49) [0%, 0%] |
+| claude-opus-5-5 low | 0% (0/92) [0%, 0%] | 0% (0/24) [0%, 0%] |
+| claude-opus-5-5 max | 0% (0/75) [0%, 0%] | 0% (0/29) [0%, 0%] |
+| claude-opus-5-5 medium | 0% (0/175) [0%, 0%] | 0% (0/78) [0%, 0%] |
+| claude-opus-5-5 off | 0% (0/13) [0%, 0%] | 0% (0/4) [0%, 0%] |
+| claude-opus-5-5 xhigh | 0% (0/120) [0%, 0%] | 0% (0/65) [0%, 0%] |
 
 ### Sol efforts, glass and phone by model
 
@@ -353,17 +376,6 @@ Shots against the known shell, by source. A clue taken with adrenaline counts wi
 | claude-sonnet-5-5 off | 0% (0/250) [0%, 0%] | 3.0% (3/99) [0%, 6.5%] |
 | claude-sonnet-5-5 xhigh | 0% (0/207) [0%, 0%] | 0.9% (1/115) [0%, 2.8%] |
 
-### Terra 6.1 efforts, glass and phone by model
-
-| Model | glass | phone |
-|---|---|---|
-| gpt-6.1-terra high | 0% (0/8) [0%, 0%] | 0% (0/5) [0%, 0%] |
-| gpt-6.1-terra low | 0% (0/19) [0%, 0%] | 0% (0/6) [0%, 0%] |
-| gpt-6.1-terra max | 0% (0/5) [0%, 0%] | 0% (0/1) [0%, 0%] |
-| gpt-6.1-terra medium | 0% (0/22) [0%, 0%] | 0% (0/10) [0%, 0%] |
-| gpt-6.1-terra off | 0% (0/9) [0%, 0%] | 0% (0/5) [0%, 0%] |
-| gpt-6.1-terra xhigh | 0% (0/10) [0%, 0%] | 0% (0/6) [0%, 0%] |
-
 ### Terra efforts, glass and phone by model
 
 | Model | glass | phone |
@@ -374,6 +386,17 @@ Shots against the known shell, by source. A clue taken with adrenaline counts wi
 | gpt-5.6-terra medium | 0% (0/184) [0%, 0%] | 19% (7/37) [8.6%, 30%] |
 | gpt-5.6-terra xhigh | 0.5% (1/188) [0%, 1.8%] | 5.8% (4/69) [0%, 14%] |
 
+### gpt-6.1-terra efforts, glass and phone by model
+
+| Model | glass | phone |
+|---|---|---|
+| gpt-6.1-terra high | 0% (0/12) [0%, 0%] | 0% (0/6) [0%, 0%] |
+| gpt-6.1-terra low | 0% (0/19) [0%, 0%] | 0% (0/6) [0%, 0%] |
+| gpt-6.1-terra max | 0% (0/5) [0%, 0%] | 0% (0/1) [0%, 0%] |
+| gpt-6.1-terra medium | 0% (0/22) [0%, 0%] | 0% (0/10) [0%, 0%] |
+| gpt-6.1-terra off | 0% (0/16) [0%, 0%] | 0% (0/7) [0%, 0%] |
+| gpt-6.1-terra xhigh | 0% (0/14) [0%, 0%] | 0% (0/8) [0%, 0%] |
+
 ## By accepted moves since the clue
 
 Shots against a chamber known from a clue (glass or phone), by the accepted moves of either player between the clue and the shot. 0 is the very next move.
@@ -382,29 +405,31 @@ Shots against a chamber known from a clue (glass or phone), by the accepted move
 
 | Cohort | 0 | 1 | 2–3 | 4+ |
 |---|---|---|---|---|
-| Cross-model | 1.2% (31/2508) [0.8%, 1.7%] | 2.1% (28/1350) [1.3%, 2.9%] | 3.0% (9/302) [1.3%, 5.1%] | 0% (0/2) [0%, 0%] |
+| Cross-model | 1.6% (53/3397) [1.1%, 2.1%] | 2.0% (37/1862) [1.3%, 2.7%] | 3.3% (16/490) [1.8%, 4.9%] | 0% (0/5) [0%, 0%] |
+| Astra efforts | 0% (0/15) [0%, 0%] | 0% (0/8) [0%, 0%] | 0% (0/1) [0%, 0%] | – |
 | Haiku 4.5 efforts | 11% (55/518) [7.4%, 14%] | 11% (35/327) [7.4%, 14%] | 30% (12/40) [15%, 47%] | 0% (0/1) [0%, 0%] |
 | Haiku 5.5 efforts | 2.7% (15/561) [1.3%, 4.1%] | 4.4% (25/562) [2.5%, 6.6%] | 6.0% (13/215) [3.3%, 9.4%] | 50% (1/2) [0%, 100%] |
 | Luna efforts | 0.5% (4/786) [0.1%, 1.0%] | 5.1% (23/449) [3.2%, 7.4%] | 11% (12/112) [5.1%, 17%] | 0% (0/3) [0%, 0%] |
-| Opus efforts | 0% (0/212) [0%, 0%] | 0% (0/143) [0%, 0%] | 0% (0/48) [0%, 0%] | – |
+| Opus efforts | 0% (0/314) [0%, 0%] | 0% (0/190) [0%, 0%] | 0% (0/70) [0%, 0%] | – |
 | Sol efforts | 0% (0/563) [0%, 0%] | 0% (0/232) [0%, 0%] | 0% (0/90) [0%, 0%] | – |
 | Sonnet efforts | 0% (0/709) [0%, 0%] | 0% (0/491) [0%, 0%] | 0% (0/236) [0%, 0%] | 0% (0/5) [0%, 0%] |
-| Terra 6.1 efforts | 0% (0/47) [0%, 0%] | 0% (0/18) [0%, 0%] | 0% (0/8) [0%, 0%] | – |
 | Terra efforts | 0% (0/575) [0%, 0%] | 0.3% (1/300) [0%, 1.0%] | 0% (0/61) [0%, 0%] | 0% (0/1) [0%, 0%] |
+| gpt-6.1-terra efforts | 0% (0/60) [0%, 0%] | 0% (0/20) [0%, 0%] | 0% (0/8) [0%, 0%] | – |
 
 ### phone
 
 | Cohort | 0 | 1 | 2–3 | 4+ |
 |---|---|---|---|---|
-| Cross-model | 5.7% (13/227) [2.8%, 9.0%] | 7.4% (24/323) [4.7%, 11%] | 5.9% (29/488) [3.9%, 8.4%] | 13% (46/367) [9.0%, 16%] |
+| Cross-model | 5.1% (16/311) [2.9%, 7.8%] | 6.5% (29/446) [4.2%, 8.9%] | 6.1% (41/672) [4.2%, 8.2%] | 13% (64/510) [9.3%, 16%] |
+| Astra efforts | – | 0% (0/5) [0%, 0%] | 0% (0/9) [0%, 0%] | 0% (0/3) [0%, 0%] |
 | Haiku 4.5 efforts | 39% (16/41) [26%, 53%] | 38% (14/37) [23%, 56%] | 48% (29/60) [38%, 59%] | 34% (20/58) [25%, 44%] |
 | Haiku 5.5 efforts | 9.5% (7/74) [3.5%, 17%] | 5.6% (6/108) [1.8%, 9.9%] | 13% (28/210) [8.8%, 18%] | 14% (18/126) [8.5%, 21%] |
 | Luna efforts | 29% (24/84) [20%, 38%] | 30% (29/98) [22%, 38%] | 32% (47/149) [24%, 39%] | 37% (41/111) [28%, 46%] |
-| Opus efforts | 0% (0/37) [0%, 0%] | 0% (0/48) [0%, 0%] | 0% (0/70) [0%, 0%] | 0% (0/27) [0%, 0%] |
+| Opus efforts | 0% (0/45) [0%, 0%] | 0% (0/58) [0%, 0%] | 0% (0/100) [0%, 0%] | 0% (0/46) [0%, 0%] |
 | Sol efforts | 0% (0/77) [0%, 0%] | 0% (0/102) [0%, 0%] | 0% (0/148) [0%, 0%] | 0% (0/119) [0%, 0%] |
 | Sonnet efforts | 0% (0/108) [0%, 0%] | 0.7% (1/134) [0%, 2.3%] | 1.3% (3/223) [0%, 3.0%] | 2.5% (3/121) [0%, 5.6%] |
-| Terra 6.1 efforts | 0% (0/4) [0%, 0%] | 0% (0/4) [0%, 0%] | 0% (0/15) [0%, 0%] | 0% (0/10) [0%, 0%] |
 | Terra efforts | 3.3% (2/60) [0%, 8.5%] | 8.3% (6/72) [2.7%, 15%] | 10% (9/86) [4.4%, 17%] | 12% (6/49) [2.6%, 22%] |
+| gpt-6.1-terra efforts | 0% (0/5) [0%, 0%] | 0% (0/5) [0%, 0%] | 0% (0/18) [0%, 0%] | 0% (0/10) [0%, 0%] |
 
 ## How shots are informed
 
@@ -414,54 +439,64 @@ Each agent shot by what the player knew of the chamber: a clue from its own item
 
 | Model | Known from a clue | Known from the count | Unknown | Blind with a glass in hand |
 |---|---|---|---|---|
-| claude-haiku-4-5-20251001 high | 18% (19/105) [13%, 23%] | 28% (29/105) [19%, 37%] | 54% (57/105) [50%, 59%] | 7.0% (4/57) [0%, 13%] |
-| claude-haiku-4-5-20251001 low | 17% (20/119) [11%, 22%] | 33% (39/119) [25%, 41%] | 50% (60/119) [45%, 57%] | 1.7% (1/60) [0%, 4.8%] |
-| claude-haiku-4-5-20251001 medium | 20% (408/2023) [18%, 22%] | 30% (600/2023) [28%, 32%] | 50% (1015/2023) [48%, 52%] | 3.2% (32/1015) [1.8%, 4.7%] |
-| claude-haiku-4-5-20251001 minimal | 24% (30/127) [14%, 31%] | 30% (38/127) [19%, 38%] | 46% (59/127) [41%, 53%] | 3.4% (2/59) [0%, 9.5%] |
-| claude-haiku-4-5-20251001 off | 25% (28/114) [15%, 33%] | 29% (33/114) [24%, 34%] | 46% (53/114) [39%, 55%] | 3.8% (2/53) [0%, 8.7%] |
-| claude-haiku-5-5 high | 25% (32/126) [21%, 30%] | 40% (50/126) [33%, 47%] | 35% (44/126) [28%, 41%] | 0% (0/44) [0%, 0%] |
-| claude-haiku-5-5 low | 27% (38/143) [21%, 32%] | 41% (58/143) [34%, 47%] | 33% (47/143) [30%, 36%] | 0% (0/47) [0%, 0%] |
-| claude-haiku-5-5 max | 26% (27/105) [19%, 33%] | 38% (40/105) [30%, 47%] | 36% (38/105) [31%, 41%] | 0% (0/38) [0%, 0%] |
-| claude-haiku-5-5 medium | 25% (503/2012) [23%, 27%] | 37% (746/2012) [35%, 39%] | 38% (763/2012) [36%, 40%] | 0.7% (5/763) [0.1%, 1.4%] |
-| claude-haiku-5-5 off | 19% (18/95) [13%, 27%] | 36% (34/95) [23%, 47%] | 45% (43/95) [36%, 54%] | 0% (0/43) [0%, 0%] |
-| claude-haiku-5-5 xhigh | 27% (27/100) [18%, 35%] | 38% (38/100) [29%, 47%] | 35% (35/100) [25%, 45%] | 0% (0/35) [0%, 0%] |
-| claude-opus-5-5 high | 25% (26/105) [18%, 30%] | 33% (35/105) [25%, 43%] | 42% (44/105) [34%, 48%] | 0% (0/44) [0%, 0%] |
-| claude-opus-5-5 low | 27% (28/104) [24%, 29%] | 32% (33/104) [29%, 35%] | 41% (43/104) [38%, 44%] | 0% (0/43) [0%, 0%] |
-| claude-opus-5-5 max | 22% (11/49) [22%, 23%] | 49% (24/49) [44%, 52%] | 29% (14/49) [26%, 33%] | 0% (0/14) [0%, 0%] |
-| claude-opus-5-5 medium | 26% (590/2310) [24%, 28%] | 39% (906/2310) [37%, 41%] | 35% (814/2310) [33%, 37%] | 0.1% (1/814) [0%, 0.4%] |
-| claude-opus-5-5 off | 36% (17/47) [31%, 44%] | 36% (17/47) [34%, 39%] | 28% (13/47) [17%, 34%] | 0% (0/13) [0%, 0%] |
-| claude-opus-5-5 xhigh | 25% (126/508) [20%, 29%] | 40% (201/508) [36%, 44%] | 36% (181/508) [31%, 41%] | 0% (0/181) [0%, 0%] |
-| claude-sonnet-5-5 high | 26% (34/130) [18%, 35%] | 38% (50/130) [33%, 43%] | 35% (46/130) [29%, 42%] | 0% (0/46) [0%, 0%] |
-| claude-sonnet-5-5 low | 24% (40/166) [18%, 30%] | 33% (54/166) [28%, 38%] | 43% (72/166) [37%, 49%] | 0% (0/72) [0%, 0%] |
-| claude-sonnet-5-5 max | 25% (27/107) [11%, 40%] | 36% (38/107) [28%, 43%] | 39% (42/107) [33%, 48%] | 4.8% (2/42) [0%, 12%] |
-| claude-sonnet-5-5 medium | 27% (602/2199) [25%, 29%] | 34% (756/2199) [32%, 36%] | 38% (841/2199) [36%, 40%] | 0.2% (2/841) [0%, 0.6%] |
-| claude-sonnet-5-5 off | 23% (33/142) [18%, 30%] | 42% (60/142) [38%, 46%] | 35% (49/142) [28%, 40%] | 0% (0/49) [0%, 0%] |
-| claude-sonnet-5-5 xhigh | 22% (29/130) [17%, 27%] | 41% (53/130) [31%, 48%] | 37% (48/130) [26%, 48%] | 0% (0/48) [0%, 0%] |
-| gpt-5.6-terra high | 26% (35/134) [20%, 33%] | 33% (44/134) [29%, 37%] | 41% (55/134) [38%, 44%] | 0% (0/55) [0%, 0%] |
-| gpt-5.6-terra low | 25% (32/129) [19%, 31%] | 34% (44/129) [29%, 38%] | 41% (53/129) [32%, 50%] | 0% (0/53) [0%, 0%] |
+| claude-haiku-4-5-20251001 high | 21% (67/323) [17%, 24%] | 33% (105/323) [27%, 38%] | 47% (151/323) [40%, 53%] | 3.3% (5/151) [0%, 6.5%] |
+| claude-haiku-4-5-20251001 low | 22% (98/443) [19%, 25%] | 30% (133/443) [27%, 34%] | 48% (212/443) [44%, 51%] | 2.8% (6/212) [0.8%, 5.6%] |
+| claude-haiku-4-5-20251001 medium | 21% (548/2670) [19%, 22%] | 30% (793/2670) [28%, 31%] | 50% (1329/2670) [48%, 52%] | 2.9% (39/1329) [1.8%, 4.3%] |
+| claude-haiku-4-5-20251001 minimal | 21% (88/418) [17%, 25%] | 33% (138/418) [29%, 37%] | 46% (192/418) [41%, 51%] | 4.2% (8/192) [1.5%, 7.6%] |
+| claude-haiku-4-5-20251001 off | 22% (55/246) [17%, 29%] | 28% (68/246) [24%, 32%] | 50% (123/246) [43%, 57%] | 2.4% (3/123) [0%, 4.7%] |
+| claude-haiku-5-5 high | 25% (83/338) [20%, 28%] | 43% (147/338) [39%, 49%] | 32% (108/338) [28%, 36%] | 0% (0/108) [0%, 0%] |
+| claude-haiku-5-5 low | 27% (174/654) [23%, 30%] | 39% (258/654) [36%, 43%] | 34% (222/654) [30%, 38%] | 0.5% (1/222) [0%, 1.5%] |
+| claude-haiku-5-5 max | 25% (29/114) [19%, 32%] | 39% (44/114) [31%, 47%] | 36% (41/114) [32%, 41%] | 0% (0/41) [0%, 0%] |
+| claude-haiku-5-5 medium | 26% (602/2353) [24%, 28%] | 37% (878/2353) [35%, 39%] | 37% (873/2353) [35%, 39%] | 0.6% (5/873) [0.1%, 1.2%] |
+| claude-haiku-5-5 off | 24% (177/739) [21%, 27%] | 34% (252/739) [31%, 37%] | 42% (310/739) [38%, 45%] | 0.3% (1/310) [0%, 1.1%] |
+| claude-haiku-5-5 xhigh | 30% (51/169) [23%, 38%] | 37% (63/169) [31%, 44%] | 33% (55/169) [25%, 41%] | 0% (0/55) [0%, 0%] |
+| claude-opus-5-5 high | 26% (43/163) [22%, 31%] | 35% (57/163) [28%, 43%] | 39% (63/163) [28%, 47%] | 0% (0/63) [0%, 0%] |
+| claude-opus-5-5 low | 29% (47/161) [26%, 34%] | 38% (61/161) [33%, 45%] | 33% (53/161) [23%, 40%] | 0% (0/53) [0%, 0%] |
+| claude-opus-5-5 max | 24% (30/126) [21%, 27%] | 41% (52/126) [34%, 48%] | 35% (44/126) [29%, 42%] | 2.3% (1/44) [0%, 7.1%] |
+| claude-opus-5-5 medium | 26% (641/2464) [24%, 28%] | 39% (963/2464) [37%, 41%] | 35% (860/2464) [33%, 37%] | 0.1% (1/860) [0%, 0.4%] |
+| claude-opus-5-5 off | 33% (69/212) [25%, 41%] | 37% (78/212) [31%, 43%] | 31% (65/212) [22%, 40%] | 0% (0/65) [0%, 0%] |
+| claude-opus-5-5 xhigh | 27% (206/759) [23%, 31%] | 39% (297/759) [36%, 42%] | 34% (256/759) [30%, 38%] | 0.4% (1/256) [0%, 1.3%] |
+| claude-sonnet-5-5 high | 27% (71/260) [20%, 34%] | 37% (95/260) [31%, 41%] | 36% (94/260) [32%, 40%] | 0% (0/94) [0%, 0%] |
+| claude-sonnet-5-5 low | 26% (69/267) [21%, 30%] | 31% (82/267) [27%, 34%] | 43% (116/267) [39%, 47%] | 0% (0/116) [0%, 0%] |
+| claude-sonnet-5-5 max | 31% (145/472) [24%, 37%] | 33% (154/472) [30%, 35%] | 37% (173/472) [31%, 43%] | 1.7% (3/173) [0%, 4.3%] |
+| claude-sonnet-5-5 medium | 27% (639/2350) [25%, 29%] | 34% (805/2350) [32%, 36%] | 39% (906/2350) [37%, 40%] | 0.3% (3/906) [0%, 0.8%] |
+| claude-sonnet-5-5 off | 24% (64/262) [20%, 29%] | 40% (106/262) [34%, 46%] | 35% (92/262) [30%, 41%] | 0% (0/92) [0%, 0%] |
+| claude-sonnet-5-5 xhigh | 28% (73/263) [22%, 33%] | 41% (107/263) [35%, 46%] | 32% (83/263) [25%, 39%] | 0% (0/83) [0%, 0%] |
+| gpt-5.6-terra high | 28% (40/145) [21%, 35%] | 33% (48/145) [29%, 37%] | 39% (57/145) [34%, 43%] | 0% (0/57) [0%, 0%] |
+| gpt-5.6-terra low | 24% (34/139) [19%, 30%] | 34% (47/139) [29%, 37%] | 42% (58/139) [33%, 51%] | 0% (0/58) [0%, 0%] |
 | gpt-5.6-terra max | 23% (34/149) [20%, 26%] | 34% (51/149) [26%, 42%] | 43% (64/149) [36%, 50%] | 0% (0/64) [0%, 0%] |
-| gpt-5.6-terra medium | 26% (569/2171) [24%, 28%] | 31% (681/2171) [29%, 33%] | 42% (921/2171) [40%, 45%] | 0.3% (3/921) [0%, 0.7%] |
-| gpt-5.6-terra xhigh | 25% (35/142) [17%, 31%] | 36% (51/142) [24%, 47%] | 39% (56/142) [32%, 48%] | 0% (0/56) [0%, 0%] |
-| gpt-6-astra high | 34% (22/64) [27%, 42%] | 41% (26/64) [35%, 45%] | 25% (16/64) [23%, 27%] | 0% (0/16) [0%, 0%] |
-| gpt-6-astra low | 19% (13/69) [12%, 29%] | 35% (24/69) [26%, 44%] | 46% (32/69) [43%, 53%] | 0% (0/32) [0%, 0%] |
-| gpt-6-astra medium | 26% (681/2593) [25%, 28%] | 34% (873/2593) [32%, 35%] | 40% (1039/2593) [38%, 42%] | 0% (0/1039) [0%, 0%] |
-| gpt-6-luna high | 30% (38/126) [22%, 38%] | 38% (48/126) [32%, 46%] | 32% (40/126) [29%, 33%] | 2.5% (1/40) [0%, 7.1%] |
+| gpt-5.6-terra medium | 26% (577/2205) [24%, 28%] | 31% (692/2205) [29%, 33%] | 42% (936/2205) [40%, 45%] | 0.3% (3/936) [0%, 0.8%] |
+| gpt-5.6-terra xhigh | 24% (44/180) [18%, 30%] | 34% (61/180) [25%, 43%] | 42% (75/180) [35%, 49%] | 0% (0/75) [0%, 0%] |
+| gpt-6-astra high | 26% (57/221) [19%, 32%] | 35% (78/221) [30%, 40%] | 39% (86/221) [32%, 48%] | 0% (0/86) [0%, 0%] |
+| gpt-6-astra low | 28% (42/150) [20%, 35%] | 34% (51/150) [27%, 40%] | 38% (57/150) [30%, 46%] | 0% (0/57) [0%, 0%] |
+| gpt-6-astra medium | 27% (793/2986) [25%, 28%] | 34% (1002/2986) [32%, 35%] | 40% (1191/2986) [38%, 42%] | 0% (0/1191) [0%, 0%] |
+| gpt-6-astra off | 30% (72/238) [24%, 37%] | 27% (65/238) [24%, 31%] | 42% (101/238) [36%, 49%] | 0% (0/101) [0%, 0%] |
+| gpt-6-luna high | 31% (44/144) [23%, 37%] | 39% (56/144) [33%, 47%] | 31% (44/144) [26%, 33%] | 2.3% (1/44) [0%, 6.7%] |
 | gpt-6-luna low | 23% (26/115) [15%, 27%] | 25% (29/115) [17%, 32%] | 52% (60/115) [42%, 66%] | 0% (0/60) [0%, 0%] |
-| gpt-6-luna max | 28% (34/121) [22%, 35%] | 32% (39/121) [23%, 39%] | 40% (48/121) [31%, 51%] | 0% (0/48) [0%, 0%] |
-| gpt-6-luna medium | 25% (540/2134) [24%, 27%] | 31% (655/2134) [29%, 33%] | 44% (939/2134) [42%, 46%] | 0.7% (7/939) [0.1%, 1.6%] |
+| gpt-6-luna max | 29% (41/142) [23%, 34%] | 31% (44/142) [24%, 38%] | 40% (57/142) [32%, 50%] | 0% (0/57) [0%, 0%] |
+| gpt-6-luna medium | 25% (557/2197) [24%, 27%] | 31% (677/2197) [29%, 33%] | 44% (963/2197) [42%, 46%] | 0.8% (8/963) [0.2%, 1.6%] |
 | gpt-6-luna off | 21% (24/116) [18%, 23%] | 34% (40/116) [29%, 41%] | 45% (52/116) [39%, 50%] | 1.9% (1/52) [0%, 5.9%] |
-| gpt-6-luna xhigh | 18% (28/160) [13%, 22%] | 36% (57/160) [29%, 41%] | 47% (75/160) [41%, 52%] | 0% (0/75) [0%, 0%] |
-| gpt-6.1-sol high | 25% (29/114) [16%, 33%] | 32% (37/114) [25%, 38%] | 42% (48/114) [36%, 47%] | 0% (0/48) [0%, 0%] |
-| gpt-6.1-sol low | 28% (32/113) [23%, 34%] | 30% (34/113) [24%, 38%] | 42% (47/113) [33%, 50%] | 0% (0/47) [0%, 0%] |
-| gpt-6.1-sol max | 26% (39/150) [18%, 33%] | 39% (58/150) [33%, 42%] | 35% (53/150) [27%, 44%] | 0% (0/53) [0%, 0%] |
-| gpt-6.1-sol medium | 25% (573/2256) [24%, 27%] | 34% (778/2256) [33%, 36%] | 40% (905/2256) [38%, 42%] | 0.1% (1/905) [0%, 0.3%] |
-| gpt-6.1-sol xhigh | 23% (39/168) [19%, 28%] | 34% (57/168) [30%, 38%] | 43% (72/168) [39%, 47%] | 0% (0/72) [0%, 0%] |
-| gpt-6.1-terra high | 32% (14/44) [31%, 33%] | 27% (12/44) [17%, 35%] | 41% (18/44) [35%, 50%] | 0% (0/18) [0%, 0%] |
-| gpt-6.1-terra low | 24% (7/29) [24%, 24%] | 28% (8/29) [28%, 28%] | 48% (14/29) [48%, 48%] | 0% (0/14) [0%, 0%] |
-| gpt-6.1-terra max | 31% (10/32) [31%, 31%] | 41% (13/32) [41%, 41%] | 28% (9/32) [28%, 28%] | 0% (0/9) [0%, 0%] |
-| gpt-6.1-terra medium | 31% (17/54) [25%, 38%] | 30% (16/54) [23%, 36%] | 39% (21/54) [38%, 39%] | 0% (0/21) [0%, 0%] |
-| gpt-6.1-terra off | 35% (8/23) [35%, 35%] | 17% (4/23) [17%, 17%] | 48% (11/23) [48%, 48%] | 0% (0/11) [0%, 0%] |
-| gpt-6.1-terra xhigh | 38% (9/24) [38%, 38%] | 29% (7/24) [29%, 29%] | 33% (8/24) [33%, 33%] | 0% (0/8) [0%, 0%] |
+| gpt-6-luna xhigh | 17% (36/207) [14%, 22%] | 39% (80/207) [31%, 47%] | 44% (91/207) [37%, 50%] | 0% (0/91) [0%, 0%] |
+| gpt-6.1-sol high | 26% (61/238) [20%, 31%] | 37% (88/238) [31%, 42%] | 37% (89/238) [31%, 43%] | 0% (0/89) [0%, 0%] |
+| gpt-6.1-sol low | 31% (64/206) [25%, 37%] | 26% (53/206) [20%, 31%] | 43% (89/206) [36%, 52%] | 0% (0/89) [0%, 0%] |
+| gpt-6.1-sol max | 28% (142/501) [23%, 33%] | 32% (160/501) [28%, 36%] | 40% (199/501) [35%, 45%] | 0.5% (1/199) [0%, 1.6%] |
+| gpt-6.1-sol medium | 26% (594/2319) [24%, 27%] | 35% (803/2319) [33%, 36%] | 40% (922/2319) [38%, 42%] | 0.1% (1/922) [0%, 0.3%] |
+| gpt-6.1-sol xhigh | 27% (69/252) [22%, 33%] | 35% (87/252) [30%, 39%] | 38% (96/252) [32%, 43%] | 0% (0/96) [0%, 0%] |
+| gpt-6.1-terra high | 30% (54/178) [26%, 36%] | 31% (56/178) [26%, 37%] | 38% (68/178) [33%, 44%] | 0% (0/68) [0%, 0%] |
+| gpt-6.1-terra low | 31% (59/189) [27%, 35%] | 28% (53/189) [23%, 33%] | 41% (77/189) [36%, 45%] | 0% (0/77) [0%, 0%] |
+| gpt-6.1-terra max | 28% (67/239) [23%, 32%] | 35% (83/239) [29%, 39%] | 37% (89/239) [32%, 43%] | 0% (0/89) [0%, 0%] |
+| gpt-6.1-terra medium | 32% (54/168) [27%, 38%] | 32% (54/168) [25%, 40%] | 36% (60/168) [31%, 41%] | 0% (0/60) [0%, 0%] |
+| gpt-6.1-terra off | 31% (49/157) [25%, 36%] | 30% (47/157) [25%, 36%] | 39% (61/157) [31%, 46%] | 0% (0/61) [0%, 0%] |
+| gpt-6.1-terra xhigh | 31% (48/156) [24%, 36%] | 30% (47/156) [23%, 37%] | 39% (61/156) [31%, 50%] | 0% (0/61) [0%, 0%] |
+
+### Astra efforts
+
+| Model | Known from a clue | Known from the count | Unknown | Blind with a glass in hand |
+|---|---|---|---|---|
+| gpt-6-astra high | 28% (9/32) [0%, 38%] | 28% (9/32) [25%, 38%] | 44% (14/32) [38%, 63%] | 0% (0/14) [0%, 0%] |
+| gpt-6-astra low | 28% (10/36) [13%, 40%] | 25% (9/36) [20%, 28%] | 47% (17/36) [40%, 63%] | 0% (0/17) [0%, 0%] |
+| gpt-6-astra medium | 49% (18/37) [39%, 58%] | 24% (9/37) [16%, 33%] | 27% (10/37) [26%, 28%] | 0% (0/10) [0%, 0%] |
+| gpt-6-astra off | 33% (4/12) [33%, 33%] | 33% (4/12) [33%, 33%] | 33% (4/12) [33%, 33%] | 0% (0/4) [0%, 0%] |
 
 ### Haiku 4.5 efforts
 
@@ -499,12 +534,12 @@ Each agent shot by what the player knew of the chamber: a clue from its own item
 
 | Model | Known from a clue | Known from the count | Unknown | Blind with a glass in hand |
 |---|---|---|---|---|
-| claude-opus-5-5 high | 28% (130/464) [23%, 33%] | 32% (150/464) [27%, 38%] | 40% (184/464) [34%, 45%] | 0% (0/184) [0%, 0%] |
-| claude-opus-5-5 low | 29% (82/287) [21%, 36%] | 32% (91/287) [26%, 37%] | 40% (114/287) [33%, 47%] | 0% (0/114) [0%, 0%] |
-| claude-opus-5-5 max | 21% (11/52) [14%, 29%] | 48% (25/52) [43%, 54%] | 31% (16/52) [17%, 43%] | 0% (0/16) [0%, 0%] |
-| claude-opus-5-5 medium | 30% (217/726) [26%, 33%] | 31% (228/726) [28%, 35%] | 39% (281/726) [34%, 44%] | 0% (0/281) [0%, 0%] |
-| claude-opus-5-5 off | 17% (6/36) [14%, 25%] | 28% (10/36) [13%, 32%] | 56% (20/36) [54%, 63%] | 0% (0/20) [0%, 0%] |
-| claude-opus-5-5 xhigh | 31% (141/456) [26%, 36%] | 32% (145/456) [27%, 37%] | 37% (170/456) [33%, 42%] | 1.2% (2/170) [0%, 2.8%] |
+| claude-opus-5-5 high | 30% (149/499) [25%, 35%] | 31% (157/499) [26%, 37%] | 39% (193/499) [33%, 44%] | 0% (0/193) [0%, 0%] |
+| claude-opus-5-5 low | 29% (116/400) [24%, 34%] | 32% (127/400) [27%, 36%] | 39% (157/400) [34%, 45%] | 0% (0/157) [0%, 0%] |
+| claude-opus-5-5 max | 28% (107/376) [23%, 34%] | 40% (150/376) [35%, 45%] | 32% (119/376) [27%, 37%] | 6.7% (8/119) [3.3%, 11%] |
+| claude-opus-5-5 medium | 30% (253/835) [27%, 34%] | 32% (267/835) [28%, 35%] | 38% (315/835) [33%, 42%] | 0.3% (1/315) [0%, 1.0%] |
+| claude-opus-5-5 off | 24% (17/71) [10%, 41%] | 34% (24/71) [26%, 42%] | 42% (30/71) [24%, 55%] | 0% (0/30) [0%, 0%] |
+| claude-opus-5-5 xhigh | 32% (188/582) [28%, 37%] | 33% (192/582) [29%, 37%] | 35% (202/582) [31%, 39%] | 1.0% (2/202) [0%, 2.4%] |
 
 ### Sol efforts
 
@@ -527,17 +562,6 @@ Each agent shot by what the player knew of the chamber: a clue from its own item
 | claude-sonnet-5-5 off | 30% (351/1182) [26%, 33%] | 31% (362/1182) [28%, 33%] | 40% (469/1182) [36%, 43%] | 0% (0/469) [0%, 0%] |
 | claude-sonnet-5-5 xhigh | 28% (323/1142) [25%, 31%] | 35% (400/1142) [32%, 38%] | 37% (419/1142) [34%, 40%] | 0.5% (2/419) [0%, 1.2%] |
 
-### Terra 6.1 efforts
-
-| Model | Known from a clue | Known from the count | Unknown | Blind with a glass in hand |
-|---|---|---|---|---|
-| gpt-6.1-terra high | 27% (13/48) [21%, 33%] | 21% (10/48) [13%, 29%] | 52% (25/48) [50%, 54%] | 0% (0/25) [0%, 0%] |
-| gpt-6.1-terra low | 42% (25/59) [33%, 49%] | 34% (20/59) [26%, 46%] | 24% (14/59) [21%, 26%] | 0% (0/14) [0%, 0%] |
-| gpt-6.1-terra max | 17% (6/35) [17%, 17%] | 49% (17/35) [49%, 49%] | 34% (12/35) [34%, 34%] | 0% (0/12) [0%, 0%] |
-| gpt-6.1-terra medium | 31% (33/105) [23%, 39%] | 33% (35/105) [27%, 39%] | 35% (37/105) [25%, 49%] | 0% (0/37) [0%, 0%] |
-| gpt-6.1-terra off | 33% (14/43) [26%, 38%] | 33% (14/43) [32%, 33%] | 35% (15/43) [29%, 42%] | 0% (0/15) [0%, 0%] |
-| gpt-6.1-terra xhigh | 23% (16/69) [11%, 32%] | 35% (24/69) [26%, 41%] | 42% (29/69) [27%, 54%] | 0% (0/29) [0%, 0%] |
-
 ### Terra efforts
 
 | Model | Known from a clue | Known from the count | Unknown | Blind with a glass in hand |
@@ -548,6 +572,17 @@ Each agent shot by what the player knew of the chamber: a clue from its own item
 | gpt-5.6-terra medium | 24% (221/931) [20%, 27%] | 33% (304/931) [29%, 36%] | 44% (406/931) [40%, 47%] | 0.5% (2/406) [0%, 1.3%] |
 | gpt-5.6-terra xhigh | 26% (257/985) [23%, 30%] | 35% (341/985) [32%, 37%] | 39% (387/985) [35%, 43%] | 0.3% (1/387) [0%, 0.8%] |
 
+### gpt-6.1-terra efforts
+
+| Model | Known from a clue | Known from the count | Unknown | Blind with a glass in hand |
+|---|---|---|---|---|
+| gpt-6.1-terra high | 31% (18/59) [21%, 45%] | 24% (14/59) [13%, 36%] | 46% (27/59) [18%, 54%] | 0% (0/27) [0%, 0%] |
+| gpt-6.1-terra low | 42% (25/59) [33%, 49%] | 34% (20/59) [26%, 46%] | 24% (14/59) [21%, 26%] | 0% (0/14) [0%, 0%] |
+| gpt-6.1-terra max | 17% (6/35) [17%, 17%] | 49% (17/35) [49%, 49%] | 34% (12/35) [34%, 34%] | 0% (0/12) [0%, 0%] |
+| gpt-6.1-terra medium | 31% (33/105) [23%, 39%] | 33% (35/105) [27%, 39%] | 35% (37/105) [25%, 49%] | 0% (0/37) [0%, 0%] |
+| gpt-6.1-terra off | 33% (23/69) [21%, 50%] | 29% (20/69) [23%, 33%] | 38% (26/69) [26%, 52%] | 0% (0/26) [0%, 0%] |
+| gpt-6.1-terra xhigh | 26% (22/85) [15%, 36%] | 33% (28/85) [26%, 38%] | 41% (35/85) [31%, 51%] | 0% (0/35) [0%, 0%] |
+
 ## Item fates
 
 Each item a player placed, by how it left: used by its owner, stolen with adrenaline, still held when the owner died, or still held when the round ended (censored). Delays count only items used by their owner. Own turns are the owner's own decisions between placing the item and using it, so 0 is the first decision after the distribution.
@@ -556,54 +591,64 @@ Each item a player placed, by how it left: used by its owner, stolen with adrena
 
 | Model | Used | Stolen | Held at death | Held at round end | Own turns held before use, mean (median) | Accepted moves to use, median |
 |---|---|---|---|---|---|---|
-| claude-haiku-4-5-20251001 high | 41% (86/208) [36%, 48%] | 8.2% (17/208) [6.7%, 9.7%] | 38% (80/208) [33%, 44%] | 12% (25/208) [8.1%, 16%] | 1.21 (1) | 6 |
-| claude-haiku-4-5-20251001 low | 48% (101/212) [36%, 60%] | 8.5% (18/212) [5.8%, 11%] | 25% (54/212) [17%, 36%] | 18% (39/212) [4.9%, 36%] | 1.50 (1) | 6 |
-| claude-haiku-4-5-20251001 medium | 47% (1922/4064) [45%, 49%] | 7.9% (321/4064) [7.1%, 8.7%] | 29% (1192/4064) [27%, 32%] | 15% (629/4064) [13%, 18%] | 1.38 (1) | 6 |
-| claude-haiku-4-5-20251001 minimal | 55% (127/231) [46%, 61%] | 6.5% (15/231) [4.1%, 8.6%] | 24% (56/231) [14%, 35%] | 14% (33/231) [6.5%, 22%] | 1.58 (1) | 7 |
-| claude-haiku-4-5-20251001 off | 49% (115/237) [38%, 55%] | 8.0% (19/237) [6.1%, 9.8%] | 32% (77/237) [19%, 46%] | 11% (26/237) [1.8%, 20%] | 1.33 (1) | 7 |
-| claude-haiku-5-5 high | 55% (143/258) [44%, 68%] | 7.4% (19/258) [3.5%, 11%] | 29% (74/258) [20%, 38%] | 8.5% (22/258) [3.9%, 13%] | 1.45 (1) | 6 |
-| claude-haiku-5-5 low | 58% (170/294) [53%, 62%] | 5.8% (17/294) [3.4%, 8.6%] | 19% (55/294) [12%, 24%] | 18% (52/294) [13%, 24%] | 1.38 (1) | 7 |
-| claude-haiku-5-5 max | 62% (133/216) [53%, 69%] | 5.6% (12/216) [2.9%, 9.0%] | 16% (34/216) [6.7%, 26%] | 17% (37/216) [12%, 23%] | 1.68 (1) | 8 |
-| claude-haiku-5-5 medium | 57% (2422/4247) [55%, 59%] | 7.3% (310/4247) [6.6%, 8.0%] | 20% (861/4247) [18%, 22%] | 15% (654/4247) [14%, 17%] | 1.58 (1) | 7 |
-| claude-haiku-5-5 off | 50% (119/237) [41%, 59%] | 9.3% (22/237) [6.8%, 12%] | 28% (66/237) [17%, 39%] | 13% (30/237) [4.8%, 19%] | 1.08 (1) | 6 |
-| claude-haiku-5-5 xhigh | 51% (116/226) [47%, 55%] | 8.0% (18/226) [3.3%, 12%] | 30% (68/226) [21%, 39%] | 11% (24/226) [7.2%, 14%] | 1.64 (1) | 7 |
-| claude-opus-5-5 high | 56% (123/220) [52%, 61%] | 6.4% (14/220) [4.7%, 8.6%] | 19% (41/220) [10%, 27%] | 19% (42/220) [9.6%, 28%] | 1.46 (1) | 7 |
-| claude-opus-5-5 low | 52% (108/206) [45%, 60%] | 7.8% (16/206) [4.8%, 10%] | 16% (32/206) [6.6%, 24%] | 24% (50/206) [15%, 38%] | 1.69 (1) | 7 |
-| claude-opus-5-5 max | 63% (51/81) [60%, 65%] | 1.2% (1/81) [0%, 2.2%] | 16% (13/81) [4.3%, 31%] | 20% (16/81) [8.6%, 28%] | 1.82 (1) | 9 |
-| claude-opus-5-5 medium | 57% (2461/4333) [55%, 58%] | 7.3% (316/4333) [6.5%, 8.1%] | 18% (798/4333) [17%, 20%] | 17% (758/4333) [16%, 19%] | 1.67 (1) | 7 |
-| claude-opus-5-5 off | 62% (66/106) [51%, 70%] | 8.5% (9/106) [8.2%, 8.9%] | 16% (17/106) [9.8%, 24%] | 13% (14/106) [11%, 16%] | 2.20 (1) | 7 |
-| claude-opus-5-5 xhigh | 57% (547/956) [54%, 61%] | 9.9% (95/956) [7.9%, 12%] | 20% (190/956) [16%, 25%] | 13% (124/956) [10%, 16%] | 1.82 (1) | 7 |
-| claude-sonnet-5-5 high | 56% (144/256) [48%, 65%] | 5.1% (13/256) [3.4%, 7.2%] | 18% (45/256) [6.8%, 28%] | 21% (54/256) [16%, 28%] | 1.65 (1) | 7 |
-| claude-sonnet-5-5 low | 52% (150/286) [44%, 60%] | 9.8% (28/286) [6.2%, 15%] | 27% (77/286) [12%, 43%] | 11% (31/286) [3.8%, 20%] | 1.82 (1) | 6 |
-| claude-sonnet-5-5 max | 57% (126/221) [46%, 66%] | 8.1% (18/221) [4.1%, 13%] | 12% (27/221) [4.9%, 24%] | 23% (50/221) [17%, 28%] | 1.68 (1) | 7 |
-| claude-sonnet-5-5 medium | 53% (2196/4116) [51%, 55%] | 7.2% (297/4116) [6.5%, 7.9%] | 21% (884/4116) [19%, 24%] | 18% (739/4116) [16%, 20%] | 1.71 (1) | 7 |
-| claude-sonnet-5-5 off | 51% (158/309) [45%, 55%] | 9.7% (30/309) [7.1%, 12%] | 22% (69/309) [12%, 31%] | 17% (52/309) [10%, 24%] | 1.54 (1) | 7 |
-| claude-sonnet-5-5 xhigh | 57% (150/262) [53%, 61%] | 8.8% (23/262) [6.9%, 12%] | 17% (45/262) [11%, 24%] | 17% (44/262) [9.7%, 24%] | 1.72 (1) | 8 |
-| gpt-5.6-terra high | 52% (124/238) [49%, 55%] | 8.0% (19/238) [4.1%, 12%] | 25% (60/238) [20%, 31%] | 15% (35/238) [7.6%, 23%] | 1.54 (1) | 6 |
-| gpt-5.6-terra low | 53% (130/246) [47%, 57%] | 6.5% (16/246) [5.0%, 8.2%] | 22% (54/246) [17%, 29%] | 19% (46/246) [11%, 29%] | 1.23 (1) | 6 |
+| claude-haiku-4-5-20251001 high | 48% (303/625) [43%, 54%] | 10% (65/625) [8.5%, 12%] | 30% (188/625) [23%, 37%] | 11% (69/625) [7.5%, 14%] | 1.38 (1) | 6 |
+| claude-haiku-4-5-20251001 low | 52% (444/860) [47%, 56%] | 7.4% (64/860) [5.6%, 9.3%] | 26% (227/860) [22%, 31%] | 15% (125/860) [9.3%, 21%] | 1.60 (1) | 7 |
+| claude-haiku-4-5-20251001 medium | 48% (2547/5289) [46%, 50%] | 8.2% (432/5289) [7.4%, 8.9%] | 29% (1543/5289) [27%, 31%] | 15% (767/5289) [13%, 17%] | 1.40 (1) | 6 |
+| claude-haiku-4-5-20251001 minimal | 50% (397/790) [44%, 55%] | 8.7% (69/790) [7.2%, 10%] | 27% (215/790) [21%, 34%] | 14% (109/790) [8.7%, 19%] | 1.56 (1) | 6 |
+| claude-haiku-4-5-20251001 off | 50% (249/502) [45%, 54%] | 8.8% (44/502) [7.0%, 11%] | 32% (160/502) [24%, 40%] | 9.8% (49/502) [4.6%, 15%] | 1.32 (1) | 7 |
+| claude-haiku-5-5 high | 60% (407/677) [54%, 66%] | 7.7% (52/677) [5.3%, 10%] | 18% (124/677) [12%, 25%] | 14% (94/677) [9.4%, 19%] | 1.48 (1) | 7 |
+| claude-haiku-5-5 low | 60% (809/1349) [57%, 63%] | 6.8% (92/1349) [5.2%, 8.3%] | 13% (175/1349) [9.6%, 16%] | 20% (273/1349) [17%, 24%] | 1.64 (1) | 7 |
+| claude-haiku-5-5 max | 59% (138/233) [49%, 67%] | 5.2% (12/233) [2.3%, 8.3%] | 17% (40/233) [8.0%, 27%] | 18% (43/233) [13%, 25%] | 1.66 (1) | 8 |
+| claude-haiku-5-5 medium | 57% (2856/5020) [55%, 59%] | 7.3% (368/5020) [6.7%, 8.0%] | 20% (1017/5020) [18%, 22%] | 16% (779/5020) [14%, 17%] | 1.58 (1) | 7 |
+| claude-haiku-5-5 off | 59% (923/1572) [55%, 62%] | 6.5% (102/1572) [5.3%, 7.6%] | 20% (314/1572) [16%, 24%] | 15% (233/1572) [12%, 17%] | 1.35 (1) | 6 |
+| claude-haiku-5-5 xhigh | 53% (198/376) [47%, 58%] | 8.5% (32/376) [5.3%, 11%] | 30% (113/376) [23%, 37%] | 8.8% (33/376) [4.6%, 13%] | 1.67 (1) | 7 |
+| claude-opus-5-5 high | 59% (189/321) [54%, 65%] | 6.9% (22/321) [5.4%, 8.6%] | 18% (58/321) [10%, 26%] | 16% (52/321) [8.4%, 24%] | 1.76 (1) | 7 |
+| claude-opus-5-5 low | 50% (165/329) [42%, 58%] | 9.4% (31/329) [7.1%, 12%] | 21% (70/329) [13%, 31%] | 19% (63/329) [12%, 28%] | 1.69 (1) | 7 |
+| claude-opus-5-5 max | 67% (138/207) [63%, 69%] | 4.8% (10/207) [1.5%, 7.9%] | 14% (30/207) [6.9%, 24%] | 14% (29/207) [5.4%, 22%] | 1.59 (1) | 7 |
+| claude-opus-5-5 medium | 57% (2644/4660) [55%, 58%] | 7.4% (343/4660) [6.6%, 8.1%] | 18% (850/4660) [16%, 20%] | 18% (823/4660) [16%, 20%] | 1.67 (1) | 7 |
+| claude-opus-5-5 off | 55% (240/439) [48%, 61%] | 8.4% (37/439) [5.7%, 11%] | 21% (92/439) [13%, 31%] | 16% (70/439) [9.9%, 22%] | 2.01 (1) | 7 |
+| claude-opus-5-5 xhigh | 55% (803/1451) [52%, 58%] | 9.6% (140/1451) [7.9%, 12%] | 21% (304/1451) [17%, 25%] | 14% (204/1451) [12%, 17%] | 1.76 (1) | 7 |
+| claude-sonnet-5-5 high | 54% (282/524) [45%, 61%] | 8.4% (44/524) [5.9%, 11%] | 21% (111/524) [14%, 29%] | 17% (87/524) [12%, 21%] | 1.60 (1) | 7 |
+| claude-sonnet-5-5 low | 52% (265/508) [47%, 57%] | 8.7% (44/508) [6.1%, 12%] | 28% (143/508) [19%, 37%] | 11% (56/508) [6.3%, 17%] | 1.73 (1) | 7 |
+| claude-sonnet-5-5 max | 56% (532/945) [53%, 59%] | 10% (95/945) [7.8%, 12%] | 19% (179/945) [15%, 23%] | 15% (139/945) [12%, 18%] | 1.77 (1) | 7 |
+| claude-sonnet-5-5 medium | 53% (2360/4429) [51%, 55%] | 7.1% (316/4429) [6.5%, 7.8%] | 22% (975/4429) [20%, 24%] | 18% (778/4429) [16%, 19%] | 1.72 (1) | 7 |
+| claude-sonnet-5-5 off | 53% (287/543) [48%, 57%] | 10% (56/543) [8.2%, 13%] | 18% (96/543) [11%, 25%] | 19% (104/543) [14%, 25%] | 1.64 (1) | 7 |
+| claude-sonnet-5-5 xhigh | 60% (316/523) [57%, 64%] | 8.2% (43/523) [6.3%, 10%] | 15% (78/523) [9.0%, 22%] | 16% (86/523) [11%, 21%] | 1.84 (1) | 7 |
+| gpt-5.6-terra high | 51% (135/264) [48%, 55%] | 8.0% (21/264) [4.7%, 11%] | 27% (71/264) [21%, 34%] | 14% (37/264) [7.5%, 21%] | 1.56 (1) | 6 |
+| gpt-5.6-terra low | 51% (136/266) [43%, 56%] | 6.8% (18/266) [5.4%, 8.5%] | 24% (64/266) [19%, 33%] | 18% (48/266) [11%, 27%] | 1.21 (1) | 6 |
 | gpt-5.6-terra max | 68% (170/250) [63%, 73%] | 8.0% (20/250) [5.1%, 10%] | 14% (35/250) [10%, 17%] | 10% (25/250) [5.1%, 19%] | 1.60 (1) | 6 |
-| gpt-5.6-terra medium | 52% (2075/3953) [51%, 54%] | 7.9% (313/3953) [7.1%, 8.8%] | 22% (883/3953) [20%, 25%] | 17% (682/3953) [15%, 20%] | 1.46 (1) | 6 |
-| gpt-5.6-terra xhigh | 63% (162/257) [56%, 71%] | 6.6% (17/257) [3.5%, 10.0%] | 16% (42/257) [10.0%, 23%] | 14% (36/257) [8.2%, 21%] | 1.83 (1) | 7 |
-| gpt-6-astra high | 56% (61/108) [54%, 59%] | 8.3% (9/108) [7.4%, 9.3%] | 13% (14/108) [11%, 15%] | 22% (24/108) [22%, 22%] | 2.30 (1) | 8 |
-| gpt-6-astra low | 55% (77/140) [47%, 62%] | 5.7% (8/140) [2.8%, 10%] | 26% (37/140) [21%, 30%] | 13% (18/140) [6.1%, 20%] | 1.34 (1) | 6 |
-| gpt-6-astra medium | 56% (2800/5000) [54%, 58%] | 7.3% (363/5000) [6.5%, 8.1%] | 17% (826/5000) [14%, 19%] | 20% (1011/5000) [19%, 22%] | 1.68 (1) | 7 |
-| gpt-6-luna high | 53% (132/249) [45%, 60%] | 4.4% (11/249) [2.4%, 6.6%] | 29% (71/249) [24%, 35%] | 14% (35/249) [11%, 18%] | 1.40 (1) | 7 |
+| gpt-5.6-terra medium | 52% (2111/4024) [51%, 54%] | 7.9% (319/4024) [7.1%, 8.7%] | 23% (907/4024) [20%, 25%] | 17% (687/4024) [15%, 19%] | 1.47 (1) | 6 |
+| gpt-5.6-terra xhigh | 63% (199/318) [56%, 70%] | 6.3% (20/318) [3.8%, 9.0%] | 16% (51/318) [10.0%, 23%] | 15% (48/318) [9.5%, 21%] | 1.65 (1) | 6 |
+| gpt-6-astra high | 56% (228/409) [49%, 62%] | 8.1% (33/409) [5.3%, 11%] | 19% (76/409) [12%, 27%] | 18% (72/409) [12%, 23%] | 1.64 (1) | 6 |
+| gpt-6-astra low | 52% (165/319) [45%, 57%] | 7.2% (23/319) [4.7%, 11%] | 25% (80/319) [15%, 37%] | 16% (51/319) [7.3%, 24%] | 1.52 (1) | 7 |
+| gpt-6-astra medium | 56% (3233/5743) [55%, 58%] | 7.5% (430/5743) [6.7%, 8.3%] | 17% (974/5743) [15%, 19%] | 19% (1106/5743) [18%, 21%] | 1.69 (1) | 7 |
+| gpt-6-astra off | 54% (253/465) [49%, 59%] | 9.9% (46/465) [7.4%, 12%] | 14% (67/465) [8.8%, 20%] | 21% (99/465) [17%, 26%] | 1.70 (1) | 7 |
+| gpt-6-luna high | 55% (156/286) [48%, 61%] | 4.2% (12/286) [2.2%, 6.4%] | 28% (79/286) [23%, 33%] | 14% (39/286) [11%, 17%] | 1.40 (1) | 7 |
 | gpt-6-luna low | 71% (148/209) [63%, 79%] | 6.2% (13/209) [5.1%, 7.3%] | 19% (39/209) [13%, 26%] | 4.3% (9/209) [1.6%, 7.2%] | 1.31 (1) | 6 |
-| gpt-6-luna max | 56% (138/246) [45%, 65%] | 5.7% (14/246) [2.4%, 9.9%] | 27% (67/246) [20%, 39%] | 11% (27/246) [3.4%, 18%] | 1.56 (1) | 7 |
-| gpt-6-luna medium | 62% (2539/4099) [60%, 64%] | 6.1% (250/4099) [5.5%, 6.7%] | 25% (1021/4099) [23%, 27%] | 7.1% (289/4099) [5.7%, 8.4%] | 1.60 (1) | 6 |
+| gpt-6-luna max | 58% (166/284) [47%, 67%] | 5.3% (15/284) [2.1%, 8.9%] | 24% (69/284) [15%, 35%] | 12% (34/284) [5.5%, 18%] | 1.58 (1) | 7 |
+| gpt-6-luna medium | 62% (2628/4257) [60%, 64%] | 6.3% (267/4257) [5.6%, 6.9%] | 25% (1067/4257) [23%, 27%] | 6.9% (295/4257) [5.7%, 8.2%] | 1.59 (1) | 6 |
 | gpt-6-luna off | 68% (158/232) [64%, 71%] | 6.0% (14/232) [3.6%, 8.5%] | 23% (54/232) [21%, 25%] | 2.6% (6/232) [0.4%, 5.4%] | 1.72 (1) | 6 |
-| gpt-6-luna xhigh | 64% (192/299) [56%, 71%] | 6.0% (18/299) [4.2%, 7.3%] | 16% (49/299) [13%, 21%] | 13% (40/299) [8.0%, 19%] | 1.71 (1) | 7 |
-| gpt-6.1-sol high | 58% (134/231) [44%, 66%] | 9.1% (21/231) [5.3%, 12%] | 18% (41/231) [11%, 25%] | 15% (35/231) [7.1%, 23%] | 1.51 (1) | 6 |
-| gpt-6.1-sol low | 58% (121/208) [47%, 68%] | 7.2% (15/208) [5.7%, 9.4%] | 16% (34/208) [6.9%, 28%] | 18% (38/208) [11%, 29%] | 1.46 (1) | 6 |
-| gpt-6.1-sol max | 60% (175/293) [55%, 66%] | 8.2% (24/293) [6.4%, 9.9%] | 7.8% (23/293) [1.2%, 16%] | 24% (71/293) [15%, 34%] | 1.70 (1) | 7 |
-| gpt-6.1-sol medium | 57% (2448/4310) [55%, 59%] | 6.9% (296/4310) [6.2%, 7.5%] | 18% (778/4310) [16%, 20%] | 18% (788/4310) [17%, 20%] | 1.65 (1) | 7 |
-| gpt-6.1-sol xhigh | 64% (215/337) [57%, 71%] | 6.5% (22/337) [5.0%, 7.9%] | 12% (42/337) [6.5%, 18%] | 17% (58/337) [12%, 23%] | 1.73 (1) | 7 |
-| gpt-6.1-terra high | 50% (47/94) [49%, 51%] | 6.4% (6/94) [5.1%, 7.3%] | 33% (31/94) [29%, 38%] | 11% (10/94) [5.1%, 15%] | 2.21 (1) | 7 |
-| gpt-6.1-terra low | 60% (32/53) [60%, 60%] | 11% (6/53) [11%, 11%] | 15% (8/53) [15%, 15%] | 13% (7/53) [13%, 13%] | 1.47 (1) | 6 |
-| gpt-6.1-terra max | 60% (37/62) [60%, 60%] | 9.7% (6/62) [9.7%, 9.7%] | 21% (13/62) [21%, 21%] | 9.7% (6/62) [9.7%, 9.7%] | 2.32 (1) | 7 |
-| gpt-6.1-terra medium | 59% (64/109) [51%, 67%] | 7.3% (8/109) [7.0%, 7.7%] | 20% (22/109) [15%, 25%] | 14% (15/109) [9.6%, 18%] | 1.66 (1) | 6 |
-| gpt-6.1-terra off | 54% (22/41) [54%, 54%] | 7.3% (3/41) [7.3%, 7.3%] | 12% (5/41) [12%, 12%] | 27% (11/41) [27%, 27%] | 1.59 (1) | 5 |
-| gpt-6.1-terra xhigh | 69% (33/48) [69%, 69%] | 8.3% (4/48) [8.3%, 8.3%] | 13% (6/48) [13%, 13%] | 10% (5/48) [10%, 10%] | 1.88 (1) | 6 |
+| gpt-6-luna xhigh | 64% (252/391) [59%, 71%] | 7.2% (28/391) [5.2%, 9.0%] | 16% (63/391) [13%, 20%] | 12% (48/391) [7.3%, 17%] | 1.85 (1) | 7 |
+| gpt-6.1-sol high | 58% (269/460) [50%, 66%] | 9.3% (43/460) [6.1%, 12%] | 20% (91/460) [13%, 26%] | 12% (57/460) [7.6%, 18%] | 1.55 (1) | 6 |
+| gpt-6.1-sol low | 57% (227/395) [51%, 64%] | 6.8% (27/395) [5.8%, 8.1%] | 16% (64/395) [10%, 23%] | 19% (77/395) [14%, 26%] | 1.52 (1) | 6 |
+| gpt-6.1-sol max | 59% (596/1005) [55%, 63%] | 8.4% (84/1005) [6.6%, 10%] | 15% (151/1005) [11%, 19%] | 17% (174/1005) [14%, 22%] | 1.66 (1) | 6 |
+| gpt-6.1-sol medium | 57% (2520/4448) [55%, 58%] | 6.9% (306/4448) [6.2%, 7.6%] | 18% (798/4448) [16%, 20%] | 19% (824/4448) [17%, 20%] | 1.65 (1) | 7 |
+| gpt-6.1-sol xhigh | 61% (312/511) [56%, 67%] | 8.2% (42/511) [6.4%, 10%] | 15% (76/511) [9.9%, 20%] | 16% (81/511) [12%, 20%] | 1.70 (1) | 7 |
+| gpt-6.1-terra high | 48% (168/348) [43%, 53%] | 6.9% (24/348) [5.3%, 8.6%] | 21% (73/348) [11%, 29%] | 24% (83/348) [17%, 33%] | 1.80 (1) | 7 |
+| gpt-6.1-terra low | 54% (206/384) [49%, 59%] | 9.6% (37/384) [6.9%, 12%] | 22% (83/384) [15%, 28%] | 15% (58/384) [11%, 21%] | 1.57 (1) | 7 |
+| gpt-6.1-terra max | 65% (300/460) [61%, 71%] | 8.0% (37/460) [5.8%, 10%] | 13% (58/460) [5.4%, 20%] | 14% (65/460) [8.8%, 20%] | 1.81 (1) | 6 |
+| gpt-6.1-terra medium | 54% (172/317) [47%, 61%] | 7.9% (25/317) [4.9%, 11%] | 25% (79/317) [21%, 30%] | 13% (41/317) [8.0%, 17%] | 1.50 (1) | 6 |
+| gpt-6.1-terra off | 52% (153/294) [47%, 57%] | 5.4% (16/294) [2.8%, 8.0%] | 23% (68/294) [15%, 32%] | 19% (57/294) [12%, 26%] | 1.44 (1) | 6 |
+| gpt-6.1-terra xhigh | 59% (173/295) [52%, 65%] | 7.5% (22/295) [4.2%, 10%] | 19% (56/295) [14%, 25%] | 15% (44/295) [9.8%, 20%] | 1.58 (1) | 6 |
+
+### Astra efforts
+
+| Model | Used | Stolen | Held at death | Held at round end | Own turns held before use, mean (median) | Accepted moves to use, median |
+|---|---|---|---|---|---|---|
+| gpt-6-astra high | 72% (38/53) [70%, 77%] | 3.8% (2/53) [2.5%, 7.7%] | 17% (9/53) [0%, 23%] | 7.5% (4/53) [5.0%, 15%] | 1.47 (1) | 6 |
+| gpt-6-astra low | 49% (35/71) [48%, 54%] | 9.9% (7/71) [5.0%, 23%] | 30% (21/71) [15%, 35%] | 11% (8/71) [7.7%, 13%] | 1.46 (1) | 7 |
+| gpt-6-astra medium | 53% (42/80) [50%, 55%] | 6.3% (5/80) [5.0%, 7.5%] | 18% (14/80) [15%, 20%] | 24% (19/80) [23%, 25%] | 0.90 (1) | 7 |
+| gpt-6-astra off | 56% (10/18) [56%, 56%] | 11% (2/18) [11%, 11%] | 17% (3/18) [17%, 17%] | 17% (3/18) [17%, 17%] | 1.10 (1) | 5 |
 
 ### Haiku 4.5 efforts
 
@@ -641,12 +686,12 @@ Each item a player placed, by how it left: used by its owner, stolen with adrena
 
 | Model | Used | Stolen | Held at death | Held at round end | Own turns held before use, mean (median) | Accepted moves to use, median |
 |---|---|---|---|---|---|---|
-| claude-opus-5-5 high | 57% (506/888) [53%, 61%] | 10% (90/888) [8.5%, 12%] | 23% (201/888) [18%, 27%] | 10% (91/888) [7.5%, 13%] | 1.78 (1) | 7 |
-| claude-opus-5-5 low | 55% (296/536) [48%, 62%] | 10% (54/536) [7.7%, 13%] | 19% (103/536) [15%, 24%] | 15% (83/536) [9.8%, 22%] | 1.68 (1) | 7 |
-| claude-opus-5-5 max | 66% (57/87) [65%, 66%] | 20% (17/87) [19%, 20%] | 2.3% (2/87) [2.1%, 2.5%] | 13% (11/87) [13%, 13%] | 1.47 (1) | 6 |
-| claude-opus-5-5 medium | 58% (815/1416) [55%, 60%] | 9.7% (137/1416) [8.3%, 11%] | 21% (301/1416) [19%, 24%] | 12% (163/1416) [9.8%, 13%] | 1.69 (1) | 7 |
-| claude-opus-5-5 off | 52% (37/71) [52%, 52%] | 17% (12/71) [16%, 17%] | 17% (12/71) [15%, 20%] | 14% (10/71) [12%, 15%] | 1.32 (1) | 7 |
-| claude-opus-5-5 xhigh | 59% (513/869) [53%, 64%] | 10% (87/869) [8.1%, 13%] | 15% (133/869) [11%, 20%] | 16% (136/869) [12%, 20%] | 1.66 (1) | 6 |
+| claude-opus-5-5 high | 57% (546/952) [53%, 61%] | 9.8% (93/952) [8.2%, 11%] | 23% (216/952) [19%, 27%] | 10% (97/952) [7.5%, 13%] | 1.80 (1) | 7 |
+| claude-opus-5-5 low | 56% (428/766) [50%, 61%] | 10% (79/766) [8.3%, 13%] | 20% (154/766) [15%, 25%] | 14% (105/766) [9.5%, 19%] | 1.59 (1) | 6 |
+| claude-opus-5-5 max | 62% (454/729) [57%, 68%] | 11% (81/729) [9.0%, 14%] | 15% (108/729) [10%, 20%] | 12% (86/729) [9.0%, 15%] | 1.79 (1) | 7 |
+| claude-opus-5-5 medium | 58% (939/1619) [56%, 60%] | 9.8% (158/1619) [8.5%, 11%] | 21% (345/1619) [19%, 24%] | 11% (177/1619) [9.1%, 13%] | 1.70 (1) | 7 |
+| claude-opus-5-5 off | 49% (78/158) [43%, 52%] | 11% (18/158) [5.3%, 16%] | 23% (37/158) [17%, 34%] | 16% (25/158) [14%, 18%] | 1.50 (1) | 7 |
+| claude-opus-5-5 xhigh | 59% (653/1102) [55%, 64%] | 10% (114/1102) [8.6%, 13%] | 15% (166/1102) [11%, 19%] | 15% (169/1102) [12%, 19%] | 1.67 (1) | 6 |
 
 ### Sol efforts
 
@@ -669,17 +714,6 @@ Each item a player placed, by how it left: used by its owner, stolen with adrena
 | claude-sonnet-5-5 off | 56% (1233/2220) [53%, 58%] | 7.7% (171/2220) [6.7%, 8.8%] | 23% (511/2220) [20%, 26%] | 14% (305/2220) [11%, 16%] | 1.72 (1) | 6 |
 | claude-sonnet-5-5 xhigh | 58% (1297/2229) [56%, 60%] | 8.0% (179/2229) [7.0%, 9.1%] | 20% (448/2229) [18%, 23%] | 14% (305/2229) [12%, 16%] | 1.69 (1) | 7 |
 
-### Terra 6.1 efforts
-
-| Model | Used | Stolen | Held at death | Held at round end | Own turns held before use, mean (median) | Accepted moves to use, median |
-|---|---|---|---|---|---|---|
-| gpt-6.1-terra high | 54% (46/85) [50%, 58%] | 5.9% (5/85) [5.0%, 6.7%] | 32% (27/85) [28%, 36%] | 8.2% (7/85) [0%, 18%] | 1.30 (1) | 5 |
-| gpt-6.1-terra low | 56% (54/97) [52%, 58%] | 8.2% (8/97) [7.5%, 9.1%] | 12% (12/97) [4.5%, 19%] | 24% (23/97) [15%, 34%] | 1.87 (1) | 8 |
-| gpt-6.1-terra max | 71% (39/55) [71%, 71%] | 11% (6/55) [11%, 11%] | 0% (0/55) [0%, 0%] | 18% (10/55) [18%, 18%] | 1.79 (1) | 6 |
-| gpt-6.1-terra medium | 54% (100/184) [41%, 66%] | 11% (20/184) [6.0%, 15%] | 19% (35/184) [11%, 28%] | 16% (29/184) [9.2%, 22%] | 1.70 (1) | 6 |
-| gpt-6.1-terra off | 49% (44/90) [42%, 55%] | 13% (12/90) [11%, 16%] | 34% (31/90) [28%, 42%] | 3.3% (3/90) [0%, 6.4%] | 1.59 (1) | 6 |
-| gpt-6.1-terra xhigh | 49% (70/144) [39%, 69%] | 9.7% (14/144) [4.4%, 16%] | 33% (47/144) [0%, 51%] | 9.0% (13/144) [0%, 27%] | 1.41 (1) | 7 |
-
 ### Terra efforts
 
 | Model | Used | Stolen | Held at death | Held at round end | Own turns held before use, mean (median) | Accepted moves to use, median |
@@ -690,6 +724,17 @@ Each item a player placed, by how it left: used by its owner, stolen with adrena
 | gpt-5.6-terra medium | 46% (861/1855) [44%, 49%] | 8.5% (157/1855) [7.3%, 9.7%] | 31% (571/1855) [28%, 34%] | 14% (266/1855) [12%, 16%] | 1.44 (1) | 6 |
 | gpt-5.6-terra xhigh | 55% (1045/1903) [52%, 58%] | 8.5% (162/1903) [7.4%, 9.6%] | 18% (339/1903) [15%, 21%] | 19% (357/1903) [16%, 21%] | 1.55 (1) | 6 |
 
+### gpt-6.1-terra efforts
+
+| Model | Used | Stolen | Held at death | Held at round end | Own turns held before use, mean (median) | Accepted moves to use, median |
+|---|---|---|---|---|---|---|
+| gpt-6.1-terra high | 54% (56/104) [50%, 58%] | 6.7% (7/104) [5.0%, 11%] | 33% (34/104) [28%, 37%] | 6.7% (7/104) [0%, 18%] | 1.36 (1) | 5 |
+| gpt-6.1-terra low | 56% (54/97) [52%, 58%] | 8.2% (8/97) [7.5%, 9.1%] | 12% (12/97) [4.5%, 19%] | 24% (23/97) [15%, 34%] | 1.87 (1) | 8 |
+| gpt-6.1-terra max | 71% (39/55) [71%, 71%] | 11% (6/55) [11%, 11%] | 0% (0/55) [0%, 0%] | 18% (10/55) [18%, 18%] | 1.79 (1) | 6 |
+| gpt-6.1-terra medium | 54% (100/184) [41%, 66%] | 11% (20/184) [6.0%, 15%] | 19% (35/184) [11%, 28%] | 16% (29/184) [9.2%, 22%] | 1.70 (1) | 6 |
+| gpt-6.1-terra off | 50% (66/133) [42%, 58%] | 11% (14/133) [4.7%, 15%] | 33% (44/133) [23%, 42%] | 6.8% (9/133) [1.7%, 14%] | 1.59 (1) | 6 |
+| gpt-6.1-terra xhigh | 48% (81/169) [39%, 61%] | 9.5% (16/169) [5.7%, 14%] | 29% (49/169) [2.9%, 47%] | 14% (23/169) [1.0%, 31%] | 1.47 (1) | 7 |
+
 ## Use when legal
 
 Agent decisions where using an own item is a legal move, and the share that use it. A player holding two of an item counts once per decision.
@@ -698,54 +743,64 @@ Agent decisions where using an own item is a legal move, and the share that use 
 
 | Model | magnifying glass | burner phone | handsaw | beer | inverter | cigarettes | jammer |
 |---|---|---|---|---|---|---|---|
-| claude-haiku-4-5-20251001 high | 58% (14/24) [48%, 80%] | 17% (13/76) [11%, 32%] | 41% (13/32) [31%, 63%] | 17% (12/71) [13%, 24%] | 8.3% (6/72) [1.4%, 14%] | 21% (12/56) [11%, 35%] | 47% (8/17) [13%, 67%] |
-| claude-haiku-4-5-20251001 low | 73% (16/22) [56%, 100%] | 25% (17/67) [17%, 35%] | 41% (19/46) [34%, 49%] | 16% (15/94) [8.4%, 23%] | 14% (10/71) [6.1%, 21%] | 12% (7/57) [7.5%, 19%] | 37% (7/19) [17%, 80%] |
-| claude-haiku-4-5-20251001 medium | 63% (338/535) [58%, 69%] | 16% (209/1314) [14%, 19%] | 35% (297/858) [31%, 38%] | 21% (278/1327) [18%, 24%] | 13% (192/1470) [11%, 15%] | 18% (190/1047) [16%, 21%] | 38% (208/554) [33%, 43%] |
-| claude-haiku-4-5-20251001 minimal | 67% (24/36) [61%, 77%] | 17% (16/95) [9.8%, 29%] | 50% (21/42) [38%, 69%] | 20% (20/102) [12%, 35%] | 15% (11/72) [9.3%, 23%] | 17% (11/63) [10%, 24%] | 29% (13/45) [25%, 33%] |
-| claude-haiku-4-5-20251001 off | 65% (22/34) [57%, 82%] | 40% (14/35) [21%, 57%] | 26% (16/61) [16%, 50%] | 17% (14/82) [11%, 27%] | 16% (13/83) [4.6%, 25%] | 25% (15/61) [15%, 34%] | 33% (14/42) [23%, 49%] |
-| claude-haiku-5-5 high | 83% (15/18) [68%, 100%] | 41% (26/63) [28%, 57%] | 21% (11/53) [13%, 33%] | 24% (23/96) [18%, 33%] | 17% (19/113) [9.2%, 24%] | 26% (12/47) [14%, 40%] | 71% (15/21) [52%, 100%] |
-| claude-haiku-5-5 low | 80% (24/30) [64%, 100%] | 24% (22/93) [16%, 33%] | 32% (25/79) [26%, 39%] | 25% (23/92) [14%, 37%] | 11% (16/140) [8.4%, 14%] | 32% (24/75) [23%, 40%] | 39% (17/44) [29%, 50%] |
-| claude-haiku-5-5 max | 67% (18/27) [56%, 93%] | 32% (21/66) [26%, 43%] | 19% (16/84) [12%, 29%] | 18% (15/85) [9.6%, 28%] | 11% (10/94) [7.0%, 15%] | 27% (17/62) [16%, 46%] | 45% (13/29) [28%, 78%] |
-| claude-haiku-5-5 medium | 66% (360/548) [61%, 71%] | 29% (334/1142) [26%, 33%] | 32% (328/1025) [30%, 34%] | 24% (341/1406) [22%, 27%] | 13% (237/1802) [12%, 15%] | 25% (257/1032) [22%, 28%] | 46% (249/541) [42%, 51%] |
-| claude-haiku-5-5 off | 68% (13/19) [53%, 82%] | 46% (23/50) [20%, 75%] | 46% (22/48) [40%, 60%] | 21% (13/63) [18%, 29%] | 8.8% (5/57) [2.9%, 13%] | 30% (11/37) [17%, 59%] | 17% (11/64) [8.8%, 26%] |
-| claude-haiku-5-5 xhigh | 63% (15/24) [50%, 75%] | 38% (19/50) [30%, 55%] | 19% (10/52) [14%, 28%] | 18% (15/83) [12%, 25%] | 15% (15/99) [11%, 20%] | 20% (11/55) [14%, 32%] | 50% (13/26) [37%, 71%] |
-| claude-opus-5-5 high | 55% (22/40) [48%, 62%] | 39% (16/41) [31%, 54%] | 31% (17/55) [24%, 35%] | 18% (12/68) [6.2%, 29%] | 10% (9/90) [5.5%, 15%] | 41% (16/39) [28%, 51%] | 42% (13/31) [36%, 48%] |
-| claude-opus-5-5 low | 54% (21/39) [39%, 80%] | 21% (12/56) [8.2%, 33%] | 34% (16/47) [25%, 43%] | 12% (11/92) [4.6%, 20%] | 13% (11/85) [5.7%, 19%] | 31% (11/36) [20%, 50%] | 56% (10/18) [45%, 75%] |
-| claude-opus-5-5 max | 62% (8/13) [50%, 80%] | 36% (5/14) [25%, 50%] | 27% (9/33) [18%, 38%] | 18% (7/40) [16%, 25%] | 10% (3/29) [0%, 13%] | 50% (7/14) [40%, 56%] | 38% (5/13) [29%, 50%] |
-| claude-opus-5-5 medium | 55% (362/662) [51%, 58%] | 31% (348/1115) [28%, 35%] | 26% (323/1239) [24%, 28%] | 19% (332/1769) [17%, 21%] | 13% (240/1792) [12%, 15%] | 33% (312/938) [30%, 36%] | 38% (242/641) [34%, 41%] |
-| claude-opus-5-5 off | 53% (9/17) [45%, 67%] | 23% (8/35) [23%, 23%] | 22% (10/45) [19%, 31%] | 16% (9/57) [16%, 17%] | 22% (6/27) [22%, 25%] | 44% (7/16) [29%, 56%] | 56% (5/9) [50%, 57%] |
-| claude-opus-5-5 xhigh | 56% (70/126) [47%, 67%] | 38% (82/213) [30%, 50%] | 23% (73/312) [19%, 28%] | 20% (72/364) [16%, 24%] | 14% (54/400) [11%, 16%] | 36% (63/175) [27%, 46%] | 34% (53/156) [29%, 40%] |
-| claude-sonnet-5-5 high | 64% (18/28) [53%, 77%] | 29% (20/68) [15%, 48%] | 25% (20/79) [19%, 32%] | 19% (21/109) [9.3%, 28%] | 10% (12/118) [5.4%, 15%] | 32% (22/68) [19%, 48%] | 44% (18/41) [34%, 60%] |
-| claude-sonnet-5-5 low | 75% (18/24) [51%, 100%] | 29% (30/104) [20%, 39%] | 27% (14/52) [22%, 33%] | 15% (17/111) [9.1%, 26%] | 3.8% (5/130) [1.4%, 6.0%] | 32% (24/76) [23%, 48%] | 38% (20/52) [30%, 51%] |
-| claude-sonnet-5-5 max | 54% (13/24) [29%, 91%] | 28% (22/80) [19%, 40%] | 26% (18/68) [20%, 31%] | 17% (17/102) [7.3%, 20%] | 15% (14/91) [8.9%, 21%] | 32% (15/47) [18%, 47%] | 40% (12/30) [18%, 69%] |
-| claude-sonnet-5-5 medium | 68% (369/546) [63%, 72%] | 24% (302/1243) [21%, 27%] | 26% (293/1128) [24%, 28%] | 20% (317/1582) [17%, 22%] | 7.4% (142/1918) [6.4%, 8.5%] | 34% (287/833) [31%, 39%] | 33% (216/662) [29%, 37%] |
-| claude-sonnet-5-5 off | 79% (23/29) [73%, 88%] | 33% (19/58) [25%, 46%] | 24% (22/91) [21%, 30%] | 28% (31/110) [19%, 37%] | 7.3% (10/137) [4.7%, 10%] | 29% (22/77) [21%, 40%] | 52% (11/21) [37%, 74%] |
-| claude-sonnet-5-5 xhigh | 76% (19/25) [47%, 100%] | 36% (16/45) [18%, 63%] | 30% (18/60) [21%, 39%] | 23% (27/118) [12%, 39%] | 11% (14/124) [9.0%, 13%] | 37% (13/35) [23%, 67%] | 30% (17/56) [17%, 48%] |
-| gpt-5.6-terra high | 63% (25/40) [51%, 76%] | 11% (11/99) [5.9%, 19%] | 32% (18/56) [24%, 43%] | 18% (18/101) [14%, 21%] | 11% (10/90) [5.0%, 15%] | 15% (12/80) [7.9%, 26%] | 82% (14/17) [71%, 100%] |
-| gpt-5.6-terra low | 63% (24/38) [56%, 71%] | 24% (11/45) [5.6%, 53%] | 32% (23/72) [24%, 39%] | 16% (18/110) [12%, 23%] | 6.5% (6/92) [2.8%, 9.8%] | 11% (12/110) [3.0%, 26%] | 56% (18/32) [46%, 78%] |
+| claude-haiku-4-5-20251001 high | 70% (53/76) [59%, 84%] | 16% (38/240) [12%, 21%] | 38% (50/130) [34%, 46%] | 18% (38/206) [13%, 24%] | 12% (22/188) [7.5%, 16%] | 22% (37/169) [15%, 29%] | 35% (28/79) [22%, 50%] |
+| claude-haiku-4-5-20251001 low | 66% (86/130) [54%, 79%] | 19% (51/273) [14%, 25%] | 37% (73/195) [31%, 46%] | 22% (65/296) [17%, 28%] | 12% (39/324) [9.1%, 15%] | 19% (47/250) [14%, 23%] | 39% (31/80) [28%, 55%] |
+| claude-haiku-4-5-20251001 medium | 63% (441/697) [58%, 68%] | 16% (277/1786) [14%, 18%] | 36% (397/1112) [33%, 39%] | 21% (359/1698) [19%, 24%] | 13% (255/1926) [12%, 15%] | 19% (264/1384) [17%, 21%] | 37% (262/702) [33%, 42%] |
+| claude-haiku-4-5-20251001 minimal | 59% (78/132) [54%, 66%] | 15% (48/322) [11%, 19%] | 45% (58/128) [40%, 52%] | 19% (54/287) [13%, 26%] | 12% (32/264) [8.5%, 16%] | 18% (42/228) [14%, 23%] | 31% (44/142) [25%, 37%] |
+| claude-haiku-4-5-20251001 off | 70% (39/56) [57%, 89%] | 34% (36/106) [27%, 46%] | 24% (44/180) [17%, 37%] | 20% (32/164) [11%, 30%] | 16% (24/148) [9.8%, 22%] | 19% (29/155) [11%, 29%] | 32% (23/72) [20%, 45%] |
+| claude-haiku-5-5 high | 68% (50/74) [60%, 78%] | 32% (58/184) [24%, 41%] | 27% (49/184) [22%, 31%] | 20% (58/291) [16%, 24%] | 15% (45/302) [11%, 19%] | 25% (39/156) [18%, 34%] | 63% (47/75) [51%, 75%] |
+| claude-haiku-5-5 low | 66% (126/190) [59%, 76%] | 23% (105/464) [18%, 28%] | 30% (107/354) [26%, 35%] | 23% (117/512) [19%, 27%] | 13% (77/580) [11%, 16%] | 23% (99/422) [19%, 29%] | 42% (77/184) [35%, 51%] |
+| claude-haiku-5-5 max | 67% (18/27) [56%, 93%] | 32% (22/69) [27%, 43%] | 21% (19/92) [14%, 32%] | 17% (15/89) [8.3%, 26%] | 11% (10/94) [7.0%, 15%] | 25% (17/69) [13%, 39%] | 45% (13/29) [28%, 78%] |
+| claude-haiku-5-5 medium | 64% (424/662) [60%, 69%] | 28% (394/1386) [25%, 32%] | 31% (389/1236) [30%, 33%] | 24% (405/1660) [22%, 27%] | 13% (270/2085) [12%, 14%] | 25% (297/1210) [22%, 28%] | 46% (296/638) [42%, 50%] |
+| claude-haiku-5-5 off | 77% (140/182) [72%, 82%] | 33% (154/467) [28%, 39%] | 44% (150/341) [40%, 48%] | 31% (120/391) [25%, 37%] | 7.3% (51/700) [5.6%, 9.2%] | 20% (89/447) [16%, 24%] | 30% (77/258) [24%, 38%] |
+| claude-haiku-5-5 xhigh | 56% (30/54) [39%, 74%] | 33% (31/93) [24%, 44%] | 22% (16/74) [16%, 29%] | 18% (22/125) [13%, 24%] | 13% (20/156) [8.5%, 18%] | 25% (20/81) [18%, 37%] | 50% (24/48) [39%, 63%] |
+| claude-opus-5-5 high | 45% (32/71) [36%, 56%] | 31% (23/75) [20%, 47%] | 30% (26/87) [25%, 34%] | 18% (23/125) [10%, 29%] | 11% (15/142) [6.6%, 15%] | 37% (21/57) [26%, 48%] | 43% (23/54) [36%, 52%] |
+| claude-opus-5-5 low | 51% (35/68) [42%, 68%] | 19% (21/111) [10%, 26%] | 32% (24/75) [24%, 39%] | 10% (15/147) [4.2%, 16%] | 15% (20/131) [9.9%, 21%] | 36% (18/50) [25%, 53%] | 60% (12/20) [48%, 85%] |
+| claude-opus-5-5 max | 51% (18/35) [41%, 70%] | 33% (18/55) [27%, 44%] | 25% (15/59) [12%, 37%] | 17% (18/103) [12%, 22%] | 14% (9/66) [3.1%, 22%] | 47% (23/49) [31%, 82%] | 37% (15/41) [31%, 48%] |
+| claude-opus-5-5 medium | 55% (388/709) [51%, 59%] | 32% (375/1179) [28%, 36%] | 26% (340/1332) [24%, 28%] | 18% (363/1966) [17%, 20%] | 13% (254/1903) [12%, 15%] | 33% (325/978) [30%, 37%] | 37% (258/691) [34%, 41%] |
+| claude-opus-5-5 off | 49% (47/95) [44%, 59%] | 17% (26/151) [10%, 26%] | 26% (32/122) [21%, 35%] | 13% (28/212) [9.7%, 18%] | 11% (19/166) [6.8%, 17%] | 46% (29/63) [35%, 60%] | 59% (19/32) [50%, 71%] |
+| claude-opus-5-5 xhigh | 52% (123/238) [46%, 60%] | 35% (117/337) [29%, 44%] | 26% (111/432) [22%, 30%] | 16% (91/555) [13%, 20%] | 11% (70/629) [8.8%, 13%] | 34% (95/279) [28%, 41%] | 34% (68/200) [28%, 41%] |
+| claude-sonnet-5-5 high | 68% (42/62) [56%, 80%] | 36% (46/128) [26%, 47%] | 25% (38/150) [21%, 30%] | 24% (43/179) [17%, 32%] | 6.9% (17/245) [3.6%, 11%] | 29% (37/129) [19%, 42%] | 41% (34/83) [35%, 48%] |
+| claude-sonnet-5-5 low | 76% (38/50) [60%, 95%] | 25% (42/171) [18%, 32%] | 29% (34/116) [25%, 35%] | 20% (38/190) [13%, 30%] | 5.7% (12/209) [3.3%, 8.8%] | 31% (41/131) [24%, 41%] | 32% (31/98) [23%, 42%] |
+| claude-sonnet-5-5 max | 57% (84/148) [49%, 68%] | 31% (79/251) [25%, 40%] | 27% (87/317) [23%, 31%] | 14% (49/344) [10%, 18%] | 15% (58/396) [12%, 17%] | 40% (63/159) [32%, 50%] | 40% (39/97) [31%, 51%] |
+| claude-sonnet-5-5 medium | 67% (390/586) [63%, 71%] | 25% (329/1316) [22%, 28%] | 26% (329/1244) [25%, 28%] | 20% (336/1664) [18%, 23%] | 7.4% (152/2045) [6.5%, 8.5%] | 34% (304/905) [30%, 38%] | 33% (235/713) [29%, 37%] |
+| claude-sonnet-5-5 off | 68% (45/66) [58%, 79%] | 29% (36/124) [19%, 41%] | 24% (38/156) [21%, 28%] | 24% (46/190) [17%, 33%] | 7.7% (16/209) [4.6%, 12%] | 29% (38/129) [21%, 40%] | 47% (26/55) [31%, 70%] |
+| claude-sonnet-5-5 xhigh | 58% (43/74) [46%, 80%] | 34% (43/128) [25%, 47%] | 25% (34/136) [19%, 32%] | 20% (51/254) [15%, 28%] | 12% (28/233) [8.7%, 15%] | 27% (25/93) [16%, 46%] | 38% (40/105) [28%, 49%] |
+| gpt-5.6-terra high | 63% (26/41) [52%, 77%] | 10% (11/110) [5.0%, 17%] | 33% (21/63) [26%, 43%] | 17% (19/115) [12%, 20%] | 11% (11/102) [5.3%, 14%] | 14% (12/86) [7.1%, 23%] | 82% (14/17) [71%, 100%] |
+| gpt-5.6-terra low | 65% (26/40) [58%, 78%] | 22% (11/51) [4.3%, 45%] | 34% (26/76) [27%, 44%] | 16% (18/115) [11%, 22%] | 6.0% (6/100) [2.4%, 9.3%] | 11% (12/110) [3.0%, 26%] | 56% (18/32) [46%, 78%] |
 | gpt-5.6-terra max | 60% (25/42) [42%, 78%] | 44% (25/57) [32%, 60%] | 29% (23/80) [22%, 40%] | 23% (21/92) [11%, 39%] | 14% (23/167) [9.0%, 20%] | 29% (16/55) [13%, 52%] | 45% (13/29) [26%, 79%] |
-| gpt-5.6-terra medium | 60% (403/670) [57%, 64%] | 14% (216/1529) [12%, 17%] | 35% (297/849) [32%, 38%] | 19% (240/1238) [16%, 23%] | 9.3% (164/1766) [7.9%, 11%] | 13% (180/1374) [11%, 16%] | 67% (261/388) [61%, 74%] |
-| gpt-5.6-terra xhigh | 59% (26/44) [36%, 79%] | 22% (19/85) [14%, 35%] | 27% (24/90) [20%, 36%] | 26% (22/85) [22%, 31%] | 12% (15/129) [9.2%, 14%] | 21% (22/107) [16%, 29%] | 59% (17/29) [49%, 93%] |
-| gpt-6-astra high | 29% (10/35) [29%, 29%] | 41% (11/27) [35%, 50%] | 28% (8/29) [21%, 33%] | 16% (6/37) [10%, 24%] | 6.5% (3/46) [5.9%, 6.9%] | 17% (3/18) [0%, 21%] | 26% (9/34) [18%, 35%] |
-| gpt-6-astra low | 65% (11/17) [40%, 89%] | 33% (8/24) [24%, 75%] | 29% (14/48) [21%, 54%] | 24% (11/45) [12%, 40%] | 15% (8/53) [4.0%, 24%] | 37% (10/27) [31%, 54%] | 37% (7/19) [30%, 50%] |
-| gpt-6-astra medium | 50% (419/843) [46%, 54%] | 37% (449/1224) [34%, 40%] | 27% (418/1549) [25%, 29%] | 13% (294/2228) [11%, 15%] | 11% (237/2182) [9.9%, 12%] | 30% (315/1033) [27%, 35%] | 38% (264/704) [35%, 40%] |
-| gpt-6-luna high | 70% (23/33) [54%, 81%] | 25% (21/83) [15%, 42%] | 40% (17/43) [32%, 47%] | 30% (23/77) [22%, 36%] | 8.0% (9/112) [4.7%, 11%] | 22% (14/64) [16%, 31%] | 30% (11/37) [17%, 52%] |
+| gpt-5.6-terra medium | 60% (408/677) [57%, 64%] | 14% (219/1539) [12%, 17%] | 34% (302/876) [32%, 37%] | 20% (249/1263) [17%, 23%] | 9.3% (167/1792) [8.0%, 11%] | 13% (182/1409) [11%, 15%] | 67% (264/394) [61%, 74%] |
+| gpt-5.6-terra xhigh | 60% (34/57) [41%, 75%] | 22% (20/93) [14%, 31%] | 27% (28/104) [20%, 37%] | 20% (26/128) [12%, 27%] | 11% (17/159) [7.1%, 14%] | 22% (26/117) [17%, 33%] | 65% (24/37) [53%, 91%] |
+| gpt-6-astra high | 40% (34/85) [34%, 51%] | 43% (37/86) [33%, 54%] | 28% (30/108) [20%, 33%] | 18% (20/114) [11%, 25%] | 11% (21/193) [7.6%, 15%] | 28% (20/71) [20%, 44%] | 35% (27/77) [27%, 49%] |
+| gpt-6-astra low | 51% (28/55) [36%, 69%] | 30% (14/46) [19%, 48%] | 31% (28/91) [23%, 45%] | 15% (18/120) [9.1%, 25%] | 13% (18/141) [5.9%, 18%] | 40% (20/50) [25%, 62%] | 39% (17/44) [28%, 50%] |
+| gpt-6-astra medium | 48% (488/1010) [45%, 52%] | 37% (525/1415) [34%, 40%] | 27% (478/1739) [26%, 29%] | 13% (319/2461) [11%, 15%] | 11% (276/2545) [9.9%, 12%] | 32% (371/1157) [29%, 36%] | 37% (300/810) [35%, 40%] |
+| gpt-6-astra off | 46% (43/93) [37%, 56%] | 29% (38/129) [21%, 41%] | 36% (45/125) [30%, 43%] | 5.2% (12/230) [1.9%, 10.0%] | 12% (22/187) [6.6%, 16%] | 25% (30/120) [18%, 35%] | 37% (26/70) [31%, 45%] |
+| gpt-6-luna high | 71% (27/38) [56%, 82%] | 26% (24/91) [17%, 43%] | 37% (22/59) [30%, 46%] | 31% (29/93) [25%, 37%] | 8.9% (11/123) [5.4%, 15%] | 22% (14/64) [16%, 31%] | 29% (12/41) [15%, 50%] |
 | gpt-6-luna low | 74% (20/27) [59%, 95%] | 46% (21/46) [31%, 67%] | 27% (18/66) [18%, 38%] | 34% (22/64) [22%, 49%] | 35% (21/60) [24%, 49%] | 18% (13/72) [9.2%, 24%] | 36% (13/36) [26%, 48%] |
-| gpt-6-luna max | 69% (18/26) [59%, 88%] | 29% (23/78) [18%, 56%] | 26% (18/70) [19%, 36%] | 28% (23/82) [23%, 33%] | 13% (11/87) [8.7%, 16%] | 22% (14/63) [11%, 32%] | 67% (14/21) [50%, 88%] |
-| gpt-6-luna medium | 68% (394/579) [64%, 72%] | 36% (381/1065) [33%, 39%] | 34% (352/1024) [32%, 37%] | 29% (381/1315) [27%, 32%] | 16% (256/1569) [14%, 19%] | 21% (254/1209) [19%, 23%] | 40% (232/582) [35%, 45%] |
+| gpt-6-luna max | 64% (23/36) [54%, 80%] | 26% (26/99) [17%, 45%] | 27% (23/84) [21%, 36%] | 28% (25/90) [23%, 33%] | 13% (12/91) [9.6%, 17%] | 24% (17/70) [15%, 34%] | 69% (18/26) [54%, 86%] |
+| gpt-6-luna medium | 68% (410/603) [64%, 73%] | 36% (393/1097) [33%, 39%] | 34% (363/1071) [32%, 36%] | 29% (400/1384) [26%, 32%] | 16% (261/1613) [14%, 19%] | 21% (264/1259) [19%, 23%] | 39% (235/598) [34%, 44%] |
 | gpt-6-luna off | 54% (21/39) [40%, 94%] | 52% (24/46) [39%, 65%] | 33% (15/46) [28%, 47%] | 24% (17/72) [11%, 35%] | 27% (26/95) [19%, 39%] | 30% (14/46) [25%, 41%] | 56% (20/36) [40%, 77%] |
-| gpt-6-luna xhigh | 56% (23/41) [47%, 80%] | 30% (23/77) [16%, 45%] | 26% (24/93) [20%, 31%] | 20% (25/124) [8.8%, 37%] | 12% (22/191) [8.0%, 15%] | 33% (26/78) [24%, 46%] | 61% (20/33) [49%, 77%] |
-| gpt-6.1-sol high | 45% (18/40) [44%, 48%] | 32% (20/62) [22%, 42%] | 33% (23/70) [31%, 36%] | 16% (14/85) [2.5%, 37%] | 15% (13/85) [6.8%, 24%] | 33% (15/45) [25%, 46%] | 38% (15/40) [33%, 42%] |
-| gpt-6.1-sol low | 59% (17/29) [45%, 76%] | 30% (15/50) [15%, 44%] | 30% (18/60) [24%, 39%] | 17% (12/69) [7.9%, 25%] | 6.9% (7/101) [2.7%, 13%] | 26% (14/54) [8.9%, 44%] | 40% (12/30) [19%, 60%] |
-| gpt-6.1-sol max | 48% (23/48) [40%, 62%] | 34% (22/64) [27%, 45%] | 22% (21/94) [18%, 29%] | 16% (18/110) [10%, 23%] | 16% (22/136) [14%, 20%] | 43% (23/53) [29%, 64%] | 25% (17/67) [19%, 35%] |
-| gpt-6.1-sol medium | 51% (358/704) [47%, 55%] | 35% (364/1027) [32%, 39%] | 28% (348/1228) [27%, 30%] | 14% (246/1700) [13%, 16%] | 12% (228/1828) [11%, 14%] | 34% (300/892) [29%, 38%] | 39% (254/649) [36%, 42%] |
-| gpt-6.1-sol xhigh | 52% (22/42) [41%, 75%] | 51% (40/78) [35%, 66%] | 30% (29/98) [26%, 34%] | 26% (45/173) [19%, 31%] | 13% (21/159) [9.9%, 17%] | 26% (22/84) [18%, 35%] | 30% (17/56) [21%, 40%] |
-| gpt-6.1-terra high | 43% (3/7) [43%, 43%] | 33% (9/27) [25%, 45%] | 29% (6/21) [23%, 38%] | 8.7% (4/46) [5.9%, 10%] | 13% (7/53) [12%, 15%] | 42% (5/12) [38%, 50%] | 50% (5/10) [33%, 75%] |
-| gpt-6.1-terra low | 75% (6/8) [75%, 75%] | 43% (3/7) [43%, 43%] | 18% (3/17) [18%, 18%] | 3.8% (1/26) [3.8%, 3.8%] | 9.8% (4/41) [9.8%, 9.8%] | 21% (5/24) [21%, 21%] | 44% (4/9) [44%, 44%] |
-| gpt-6.1-terra max | 40% (6/15) [40%, 40%] | 44% (8/18) [44%, 44%] | 33% (2/6) [33%, 33%] | 21% (6/29) [21%, 21%] | 2.3% (1/44) [2.3%, 2.3%] | 45% (5/11) [45%, 45%] | 33% (2/6) [33%, 33%] |
-| gpt-6.1-terra medium | 27% (9/33) [14%, 50%] | 36% (13/36) [26%, 54%] | 31% (4/13) [0%, 50%] | 9.2% (6/65) [3.7%, 13%] | 15% (7/48) [12%, 18%] | 50% (11/22) [47%, 57%] | 46% (6/13) [43%, 50%] |
-| gpt-6.1-terra off | 67% (4/6) [67%, 67%] | 67% (4/6) [67%, 67%] | 31% (5/16) [31%, 31%] | 4.8% (1/21) [4.8%, 4.8%] | 0% (0/20) [0%, 0%] | 17% (1/6) [17%, 17%] | 44% (4/9) [44%, 44%] |
-| gpt-6.1-terra xhigh | 43% (6/14) [43%, 43%] | 78% (7/9) [78%, 78%] | 36% (4/11) [36%, 36%] | 14% (6/43) [14%, 14%] | 12% (2/17) [12%, 12%] | 11% (1/9) [11%, 11%] | 33% (3/9) [33%, 33%] |
+| gpt-6-luna xhigh | 57% (26/46) [47%, 76%] | 29% (33/113) [19%, 43%] | 25% (32/128) [19%, 31%] | 22% (35/160) [12%, 35%] | 11% (29/259) [8.3%, 15%] | 34% (32/95) [25%, 44%] | 65% (24/37) [51%, 85%] |
+| gpt-6.1-sol high | 48% (30/63) [43%, 55%] | 37% (41/110) [30%, 47%] | 34% (41/122) [29%, 38%] | 18% (28/152) [7.5%, 33%] | 12% (23/194) [7.3%, 17%] | 36% (33/92) [28%, 47%] | 33% (28/85) [25%, 42%] |
+| gpt-6.1-sol low | 55% (36/66) [46%, 65%] | 26% (31/118) [19%, 35%] | 28% (33/118) [23%, 34%] | 14% (19/132) [8.3%, 22%] | 9.3% (17/183) [5.2%, 13%] | 27% (26/95) [17%, 38%] | 38% (25/65) [28%, 52%] |
+| gpt-6.1-sol max | 51% (93/183) [45%, 59%] | 40% (85/211) [33%, 49%] | 29% (91/311) [25%, 34%] | 15% (48/325) [11%, 19%] | 13% (62/484) [9.7%, 16%] | 42% (72/173) [33%, 53%] | 30% (46/151) [26%, 37%] |
+| gpt-6.1-sol medium | 50% (374/745) [47%, 54%] | 35% (373/1071) [31%, 39%] | 28% (360/1265) [27%, 30%] | 14% (250/1738) [13%, 16%] | 12% (234/1881) [11%, 14%] | 34% (308/907) [30%, 38%] | 39% (263/683) [36%, 41%] |
+| gpt-6.1-sol xhigh | 41% (37/90) [33%, 55%] | 49% (59/121) [38%, 62%] | 27% (37/135) [22%, 32%] | 25% (59/239) [20%, 29%] | 15% (33/223) [12%, 18%] | 26% (29/112) [19%, 34%] | 31% (22/71) [23%, 41%] |
+| gpt-6.1-terra high | 50% (25/50) [38%, 69%] | 31% (30/98) [22%, 39%] | 24% (20/85) [16%, 29%] | 4.0% (7/176) [0.9%, 7.1%] | 9.0% (16/178) [5.2%, 12%] | 28% (18/65) [11%, 54%] | 43% (10/23) [30%, 62%] |
+| gpt-6.1-terra low | 45% (35/78) [33%, 58%] | 32% (33/102) [22%, 43%] | 27% (29/106) [22%, 36%] | 3.2% (5/158) [1.5%, 4.7%] | 8.3% (18/218) [5.7%, 11%] | 27% (25/91) [21%, 40%] | 51% (21/41) [44%, 63%] |
+| gpt-6.1-terra max | 43% (44/102) [34%, 55%] | 41% (42/102) [31%, 53%] | 25% (34/134) [20%, 33%] | 19% (36/193) [14%, 23%] | 11% (28/248) [7.7%, 16%] | 41% (49/119) [33%, 53%] | 44% (21/48) [37%, 54%] |
+| gpt-6.1-terra medium | 37% (32/86) [26%, 51%] | 35% (36/103) [24%, 49%] | 34% (19/56) [21%, 44%] | 8.0% (11/137) [4.2%, 11%] | 9.4% (15/159) [4.7%, 14%] | 38% (24/64) [25%, 47%] | 54% (14/26) [47%, 67%] |
+| gpt-6.1-terra off | 49% (33/68) [40%, 62%] | 51% (33/65) [42%, 60%] | 30% (28/94) [25%, 35%] | 4.5% (7/157) [1.4%, 7.8%] | 4.1% (5/122) [1.5%, 7.0%] | 35% (19/55) [24%, 55%] | 25% (8/32) [9.1%, 47%] |
+| gpt-6.1-terra xhigh | 43% (29/67) [37%, 53%] | 32% (24/74) [18%, 52%] | 32% (27/84) [26%, 38%] | 11% (16/152) [5.7%, 15%] | 9.4% (13/139) [4.7%, 16%] | 19% (14/72) [7.6%, 33%] | 47% (18/38) [37%, 63%] |
+
+### Astra efforts
+
+| Model | magnifying glass | burner phone | handsaw | beer | inverter | cigarettes | jammer |
+|---|---|---|---|---|---|---|---|
+| gpt-6-astra high | 21% (3/14) [17%, 50%] | 78% (7/9) [50%, 86%] | 37% (7/19) [25%, 40%] | 24% (6/25) [17%, 26%] | 22% (4/18) [21%, 25%] | 33% (2/6) [20%, 100%] | 33% (4/12) [20%, 43%] |
+| gpt-6-astra low | 57% (4/7) [50%, 60%] | 40% (6/15) [40%, 40%] | 36% (8/22) [29%, 40%] | 8.8% (3/34) [0%, 17%] | 18% (3/17) [13%, 33%] | 14% (2/14) [0%, 33%] | 50% (3/6) [50%, 50%] |
+| gpt-6-astra medium | 90% (9/10) [80%, 100%] | 43% (10/23) [36%, 56%] | 33% (9/27) [25%, 40%] | 6.5% (3/46) [3.6%, 11%] | 13% (3/23) [7.7%, 20%] | 40% (2/5) [25%, 100%] | 23% (3/13) [20%, 33%] |
+| gpt-6-astra off | 50% (3/6) [50%, 50%] | 100% (2/2) [100%, 100%] | 100% (1/1) [100%, 100%] | 10% (1/10) [10%, 10%] | 6.3% (1/16) [6.3%, 6.3%] | – | – |
 
 ### Haiku 4.5 efforts
 
@@ -783,12 +838,12 @@ Agent decisions where using an own item is a legal move, and the share that use 
 
 | Model | magnifying glass | burner phone | handsaw | beer | inverter | cigarettes | jammer |
 |---|---|---|---|---|---|---|---|
-| claude-opus-5-5 high | 47% (72/154) [40%, 56%] | 34% (73/212) [29%, 42%] | 25% (52/212) [19%, 30%] | 16% (56/355) [12%, 21%] | 14% (52/371) [12%, 16%] | 26% (54/208) [18%, 39%] | 50% (51/101) [42%, 63%] |
-| claude-opus-5-5 low | 53% (56/106) [48%, 60%] | 16% (29/179) [13%, 25%] | 24% (34/142) [19%, 30%] | 15% (29/189) [12%, 23%] | 13% (24/191) [8.6%, 16%] | 38% (37/98) [26%, 56%] | 51% (33/65) [39%, 64%] |
-| claude-opus-5-5 max | 50% (10/20) [38%, 100%] | 75% (3/4) [67%, 100%] | 33% (7/21) [33%, 33%] | 23% (7/31) [22%, 25%] | 20% (4/20) [7.1%, 50%] | 38% (9/24) [30%, 43%] | 44% (4/9) [0%, 67%] |
-| claude-opus-5-5 medium | 50% (126/250) [45%, 59%] | 30% (113/377) [26%, 34%] | 27% (86/323) [23%, 31%] | 17% (94/555) [14%, 20%] | 13% (75/587) [11%, 15%] | 36% (103/287) [29%, 45%] | 53% (73/139) [46%, 61%] |
-| claude-opus-5-5 off | 44% (4/9) [43%, 50%] | 50% (4/8) [50%, 50%] | 38% (6/16) [33%, 43%] | 7.4% (2/27) [5.3%, 13%] | 18% (6/34) [16%, 22%] | 33% (5/15) [17%, 44%] | 67% (4/6) [33%, 100%] |
-| claude-opus-5-5 xhigh | 50% (82/164) [46%, 55%] | 40% (82/207) [32%, 49%] | 25% (54/219) [22%, 28%] | 16% (49/309) [11%, 23%] | 14% (50/359) [10%, 18%] | 33% (61/186) [25%, 43%] | 34% (52/155) [28%, 41%] |
+| claude-opus-5-5 high | 48% (80/166) [42%, 57%] | 34% (84/249) [29%, 40%] | 24% (54/223) [19%, 30%] | 16% (59/362) [12%, 22%] | 13% (53/395) [11%, 16%] | 27% (57/215) [18%, 39%] | 46% (58/126) [38%, 59%] |
+| claude-opus-5-5 low | 54% (76/140) [49%, 61%] | 20% (47/239) [15%, 27%] | 27% (50/187) [21%, 34%] | 15% (42/276) [12%, 20%] | 12% (34/273) [9.3%, 15%] | 38% (56/147) [28%, 53%] | 46% (46/101) [35%, 57%] |
+| claude-opus-5-5 max | 35% (64/185) [29%, 42%] | 36% (63/173) [29%, 49%] | 28% (55/196) [25%, 31%] | 25% (56/228) [21%, 28%] | 16% (35/225) [11%, 21%] | 38% (61/159) [29%, 52%] | 35% (36/104) [27%, 45%] |
+| claude-opus-5-5 medium | 50% (149/299) [44%, 57%] | 29% (130/442) [26%, 34%] | 27% (104/379) [24%, 32%] | 17% (103/623) [14%, 19%] | 13% (85/659) [11%, 15%] | 38% (122/320) [31%, 47%] | 50% (84/169) [43%, 58%] |
+| claude-opus-5-5 off | 37% (10/27) [33%, 44%] | 33% (8/24) [22%, 50%] | 34% (10/29) [28%, 40%] | 18% (10/57) [9.0%, 28%] | 19% (11/57) [13%, 34%] | 28% (10/36) [11%, 60%] | 67% (8/12) [43%, 100%] |
+| claude-opus-5-5 xhigh | 47% (106/225) [42%, 53%] | 39% (105/267) [34%, 46%] | 25% (74/291) [23%, 29%] | 15% (60/412) [11%, 20%] | 14% (61/439) [11%, 17%] | 36% (80/225) [28%, 45%] | 32% (59/186) [27%, 38%] |
 
 ### Sol efforts
 
@@ -811,17 +866,6 @@ Agent decisions where using an own item is a legal move, and the share that use 
 | claude-sonnet-5-5 off | 64% (211/328) [61%, 69%] | 38% (210/553) [33%, 44%] | 24% (124/512) [22%, 27%] | 22% (157/706) [19%, 26%] | 7.0% (71/1013) [5.6%, 8.5%] | 31% (169/550) [26%, 37%] | 38% (120/315) [32%, 44%] |
 | claude-sonnet-5-5 xhigh | 60% (176/292) [52%, 69%] | 40% (197/496) [36%, 45%] | 24% (144/598) [22%, 26%] | 21% (164/768) [18%, 25%] | 15% (137/922) [13%, 17%] | 31% (163/528) [26%, 37%] | 43% (120/282) [38%, 48%] |
 
-### Terra 6.1 efforts
-
-| Model | magnifying glass | burner phone | handsaw | beer | inverter | cigarettes | jammer |
-|---|---|---|---|---|---|---|---|
-| gpt-6.1-terra high | 64% (7/11) [63%, 67%] | 42% (8/19) [29%, 50%] | 38% (10/26) [33%, 45%] | 7.0% (3/43) [6.3%, 7.4%] | 8.3% (1/12) [0%, 33%] | 38% (5/13) [27%, 100%] | 41% (7/17) [36%, 50%] |
-| gpt-6.1-terra low | 33% (15/46) [31%, 33%] | 23% (8/35) [5.3%, 44%] | 24% (4/17) [13%, 33%] | 0% (0/54) [0%, 0%] | 3.3% (1/30) [0%, 17%] | 37% (7/19) [23%, 67%] | 42% (5/12) [25%, 75%] |
-| gpt-6.1-terra max | 45% (5/11) [45%, 45%] | 35% (6/17) [35%, 35%] | 22% (4/18) [22%, 22%] | 36% (4/11) [36%, 36%] | 14% (4/29) [14%, 14%] | 35% (6/17) [35%, 35%] | 42% (5/12) [42%, 42%] |
-| gpt-6.1-terra medium | 44% (19/43) [33%, 67%] | 37% (19/52) [28%, 40%] | 32% (12/38) [20%, 58%] | 5.2% (3/58) [1.4%, 14%] | 7.8% (4/51) [0%, 12%] | 25% (14/56) [15%, 44%] | 33% (11/33) [26%, 42%] |
-| gpt-6.1-terra off | 29% (5/17) [29%, 30%] | 21% (5/24) [9.1%, 31%] | 27% (6/22) [25%, 29%] | 8.0% (4/50) [3.4%, 14%] | 14% (4/28) [11%, 16%] | 36% (5/14) [33%, 38%] | 23% (3/13) [22%, 25%] |
-| gpt-6.1-terra xhigh | 37% (10/27) [33%, 50%] | 69% (9/13) [67%, 71%] | 35% (13/37) [29%, 42%] | 6.1% (3/49) [3.6%, 13%] | 11% (6/54) [0%, 13%] | 43% (9/21) [27%, 60%] | 69% (9/13) [56%, 100%] |
-
 ### Terra efforts
 
 | Model | magnifying glass | burner phone | handsaw | beer | inverter | cigarettes | jammer |
@@ -832,6 +876,17 @@ Agent decisions where using an own item is a legal move, and the share that use 
 | gpt-5.6-terra medium | 55% (160/292) [49%, 61%] | 11% (70/655) [8.1%, 14%] | 42% (145/345) [38%, 47%] | 15% (91/627) [11%, 19%] | 9.5% (69/725) [7.1%, 12%] | 15% (76/495) [12%, 20%] | 74% (108/145) [65%, 84%] |
 | gpt-5.6-terra xhigh | 54% (170/312) [50%, 60%] | 19% (130/675) [15%, 24%] | 35% (139/396) [31%, 40%] | 18% (123/693) [14%, 22%] | 10% (90/883) [8.4%, 12%] | 18% (103/570) [15%, 22%] | 69% (116/169) [59%, 80%] |
 
+### gpt-6.1-terra efforts
+
+| Model | magnifying glass | burner phone | handsaw | beer | inverter | cigarettes | jammer |
+|---|---|---|---|---|---|---|---|
+| gpt-6.1-terra high | 55% (11/20) [44%, 67%] | 45% (10/22) [29%, 67%] | 35% (12/34) [25%, 45%] | 6.3% (3/48) [0%, 7.4%] | 8.3% (1/12) [0%, 33%] | 43% (6/14) [27%, 100%] | 44% (8/18) [36%, 100%] |
+| gpt-6.1-terra low | 33% (15/46) [31%, 33%] | 23% (8/35) [5.3%, 44%] | 24% (4/17) [13%, 33%] | 0% (0/54) [0%, 0%] | 3.3% (1/30) [0%, 17%] | 37% (7/19) [23%, 67%] | 42% (5/12) [25%, 75%] |
+| gpt-6.1-terra max | 45% (5/11) [45%, 45%] | 35% (6/17) [35%, 35%] | 22% (4/18) [22%, 22%] | 36% (4/11) [36%, 36%] | 14% (4/29) [14%, 14%] | 35% (6/17) [35%, 35%] | 42% (5/12) [42%, 42%] |
+| gpt-6.1-terra medium | 44% (19/43) [33%, 67%] | 37% (19/52) [28%, 40%] | 32% (12/38) [19%, 58%] | 5.2% (3/58) [1.4%, 14%] | 7.8% (4/51) [0%, 12%] | 25% (14/56) [16%, 42%] | 33% (11/33) [26%, 42%] |
+| gpt-6.1-terra off | 41% (11/27) [29%, 61%] | 25% (7/28) [9.1%, 50%] | 22% (8/37) [11%, 35%] | 8.5% (5/59) [3.4%, 14%] | 13% (5/40) [8.3%, 16%] | 36% (8/22) [31%, 56%] | 33% (6/18) [22%, 60%] |
+| gpt-6.1-terra xhigh | 33% (14/42) [29%, 44%] | 56% (10/18) [20%, 71%] | 35% (13/37) [29%, 42%] | 5.6% (4/72) [3.9%, 9.5%] | 10% (6/58) [0%, 12%] | 48% (11/23) [32%, 82%] | 63% (10/16) [44%, 100%] |
+
 ## Adrenaline steals when legal
 
 Agent decisions where stealing an item with adrenaline is legal, and the share that steal it. These are separate from the player's own items.
@@ -840,54 +895,64 @@ Agent decisions where stealing an item with adrenaline is legal, and the share t
 
 | Model | magnifying glass | burner phone | handsaw | beer | inverter | cigarettes | jammer |
 |---|---|---|---|---|---|---|---|
-| claude-haiku-4-5-20251001 high | 17% (3/18) [2.9%, 83%] | 0% (0/32) [0%, 0%] | 0% (0/19) [0%, 0%] | 6.7% (2/30) [0%, 23%] | 3.4% (1/29) [0%, 9.7%] | 0% (0/28) [0%, 0%] | 17% (2/12) [0%, 67%] |
-| claude-haiku-4-5-20251001 low | – | 0% (0/5) [0%, 0%] | 12% (3/25) [5.0%, 17%] | 0% (0/29) [0%, 0%] | 2.9% (1/34) [0%, 14%] | 8.3% (2/24) [0%, 24%] | 50% (4/8) [50%, 50%] |
-| claude-haiku-4-5-20251001 medium | 18% (41/233) [12%, 25%] | 1.0% (5/495) [0.2%, 2.0%] | 16% (48/300) [12%, 21%] | 3.4% (19/561) [1.8%, 5.2%] | 5.5% (35/641) [3.7%, 7.6%] | 3.6% (13/363) [1.9%, 5.5%] | 35% (49/142) [27%, 44%] |
-| claude-haiku-4-5-20251001 minimal | 12% (2/17) [0%, 33%] | 0% (0/32) [0%, 0%] | 6.3% (1/16) [0%, 27%] | 7.1% (3/42) [1.8%, 21%] | 2.9% (1/34) [0%, 17%] | 5.7% (2/35) [0%, 18%] | 50% (2/4) [50%, 50%] |
-| claude-haiku-4-5-20251001 off | 0% (0/30) [0%, 0%] | 0% (0/32) [0%, 0%] | 16% (3/19) [0%, 33%] | 2.4% (1/42) [0%, 6.1%] | 3.5% (2/57) [0%, 7.3%] | 0% (0/28) [0%, 0%] | 8.3% (1/12) [0%, 17%] |
-| claude-haiku-5-5 high | 46% (6/13) [29%, 59%] | 15% (2/13) [0%, 100%] | 50% (3/6) [50%, 50%] | 5.0% (1/20) [0%, 13%] | 19% (3/16) [0%, 25%] | 17% (3/18) [5.3%, 36%] | 57% (4/7) [40%, 100%] |
-| claude-haiku-5-5 low | 71% (5/7) [50%, 100%] | 20% (3/15) [4.3%, 60%] | 31% (4/13) [9.1%, 44%] | 15% (5/34) [2.7%, 33%] | 2.8% (1/36) [0%, 9.4%] | 0% (0/28) [0%, 0%] | 7.1% (1/14) [0%, 33%] |
-| claude-haiku-5-5 max | 14% (2/14) [0%, 33%] | 14% (3/22) [0%, 30%] | 18% (3/17) [13%, 25%] | 14% (4/29) [3.3%, 26%] | 8.7% (2/23) [0%, 21%] | 28% (5/18) [17%, 50%] | 50% (4/8) [14%, 80%] |
-| claude-haiku-5-5 medium | 26% (55/214) [19%, 34%] | 10% (43/411) [7.8%, 14%] | 27% (59/220) [21%, 34%] | 8.4% (38/452) [6.1%, 11%] | 6.7% (31/462) [4.8%, 9.0%] | 15% (52/337) [12%, 20%] | 30% (38/125) [23%, 40%] |
-| claude-haiku-5-5 off | 75% (3/4) [50%, 100%] | 14% (4/29) [5.3%, 30%] | 43% (3/7) [0%, 67%] | 8.0% (2/25) [0%, 15%] | 20% (6/30) [3.1%, 46%] | 11% (3/27) [0%, 38%] | 0% (0/4) [0%, 0%] |
-| claude-haiku-5-5 xhigh | 25% (3/12) [0%, 50%] | 4.3% (1/23) [0%, 11%] | 50% (6/12) [43%, 80%] | 6.3% (1/16) [0%, 21%] | 4.2% (1/24) [0%, 17%] | 21% (4/19) [5.9%, 46%] | 40% (2/5) [0%, 100%] |
-| claude-opus-5-5 high | 5.6% (1/18) [0%, 50%] | 14% (2/14) [0%, 40%] | 14% (1/7) [0%, 100%] | 0% (0/39) [0%, 0%] | 14% (4/28) [6.3%, 25%] | 21% (5/24) [11%, 40%] | 42% (5/12) [20%, 100%] |
-| claude-opus-5-5 low | 67% (2/3) [0%, 100%] | 3.1% (1/32) [0%, 4.5%] | 56% (5/9) [22%, 88%] | 0% (0/25) [0%, 0%] | 13% (3/23) [6.3%, 29%] | 13% (2/15) [0%, 33%] | 38% (3/8) [0%, 50%] |
-| claude-opus-5-5 max | 100% (2/2) [100%, 100%] | 0% (0/4) [0%, 0%] | 17% (1/6) [17%, 17%] | 0% (0/9) [0%, 0%] | 6.3% (1/16) [0%, 7.7%] | 11% (1/9) [0%, 13%] | 50% (2/4) [33%, 100%] |
-| claude-opus-5-5 medium | 34% (62/183) [27%, 42%] | 6.6% (30/456) [4.3%, 9.1%] | 20% (46/232) [16%, 25%] | 5.4% (28/514) [3.5%, 7.4%] | 8.6% (47/546) [6.7%, 11%] | 12% (41/351) [8.3%, 16%] | 35% (48/138) [28%, 44%] |
-| claude-opus-5-5 off | 23% (3/13) [13%, 40%] | 13% (1/8) [0%, 20%] | 0% (0/11) [0%, 0%] | 14% (3/22) [11%, 15%] | 30% (3/10) [20%, 40%] | 0% (0/18) [0%, 0%] | 33% (2/6) [0%, 67%] |
-| claude-opus-5-5 xhigh | 27% (19/71) [19%, 36%] | 2.6% (3/116) [0%, 6.9%] | 16% (11/68) [7.5%, 25%] | 4.4% (6/137) [0.7%, 10%] | 8.0% (14/174) [5.2%, 11%] | 10% (12/120) [6.1%, 14%] | 33% (15/45) [24%, 44%] |
-| claude-sonnet-5-5 high | 17% (3/18) [8.3%, 27%] | 5.1% (2/39) [0%, 30%] | 14% (3/22) [0%, 40%] | 0% (0/11) [0%, 0%] | 2.6% (1/38) [0%, 23%] | 11% (3/27) [0%, 27%] | 17% (1/6) [17%, 17%] |
-| claude-sonnet-5-5 low | 60% (9/15) [53%, 73%] | 0% (0/47) [0%, 0%] | 9.1% (3/33) [0%, 13%] | 2.2% (1/46) [0%, 12%] | 4.6% (3/65) [2.2%, 7.2%] | 0% (0/35) [0%, 0%] | 32% (6/19) [20%, 80%] |
-| claude-sonnet-5-5 max | 13% (2/15) [0%, 50%] | 7.7% (1/13) [0%, 12%] | 25% (5/20) [14%, 35%] | 8.3% (1/12) [0%, 33%] | 0% (0/17) [0%, 0%] | 20% (4/20) [4.8%, 31%] | 100% (2/2) [100%, 100%] |
-| claude-sonnet-5-5 medium | 36% (101/282) [30%, 42%] | 2.3% (13/561) [1.0%, 3.8%] | 13% (45/352) [9.5%, 16%] | 2.3% (13/575) [1.2%, 3.5%] | 3.3% (24/738) [2.0%, 4.6%] | 5.4% (29/534) [3.7%, 7.4%] | 19% (45/235) [14%, 25%] |
-| claude-sonnet-5-5 off | 31% (5/16) [11%, 64%] | 0% (0/30) [0%, 0%] | 13% (3/23) [3.7%, 40%] | 14% (6/44) [0%, 31%] | 7.1% (3/42) [0%, 12%] | 0% (0/23) [0%, 0%] | 18% (3/17) [0%, 60%] |
-| claude-sonnet-5-5 xhigh | 36% (4/11) [10%, 67%] | 12% (3/25) [0%, 23%] | 19% (4/21) [14%, 29%] | 7.3% (4/55) [0%, 13%] | 6.9% (2/29) [0%, 15%] | 19% (6/31) [11%, 33%] | 30% (3/10) [13%, 67%] |
-| gpt-5.6-terra high | 40% (4/10) [20%, 100%] | 0% (0/41) [0%, 0%] | 33% (5/15) [0%, 46%] | 0% (0/29) [0%, 0%] | 2.6% (1/38) [0%, 8.3%] | 12% (3/25) [0%, 25%] | 75% (3/4) [67%, 100%] |
-| gpt-5.6-terra low | 50% (4/8) [0%, 100%] | 6.9% (2/29) [0%, 29%] | 29% (6/21) [17%, 50%] | 2.0% (1/51) [0%, 5.3%] | 2.1% (1/47) [0%, 10%] | 4.0% (1/25) [0%, 7.7%] | 75% (3/4) [50%, 100%] |
+| claude-haiku-4-5-20251001 high | 17% (8/48) [6.8%, 34%] | 1.1% (1/89) [0%, 2.9%] | 13% (8/62) [6.0%, 21%] | 5.7% (5/87) [1.0%, 15%] | 3.2% (4/125) [0%, 8.6%] | 4.9% (4/82) [0%, 15%] | 15% (7/46) [6.7%, 38%] |
+| claude-haiku-4-5-20251001 low | 15% (6/41) [3.6%, 31%] | 0.9% (1/106) [0%, 2.8%] | 16% (13/82) [9.3%, 22%] | 2.1% (3/146) [0%, 6.1%] | 1.7% (3/172) [0%, 3.6%] | 2.3% (3/128) [0%, 5.4%] | 36% (23/64) [26%, 46%] |
+| claude-haiku-4-5-20251001 medium | 18% (60/339) [13%, 23%] | 1.5% (10/671) [0.6%, 2.6%] | 16% (62/390) [13%, 20%] | 3.6% (27/741) [2.3%, 5.2%] | 5.5% (44/805) [3.9%, 7.2%] | 2.7% (15/564) [1.4%, 4.1%] | 34% (74/215) [27%, 42%] |
+| claude-haiku-4-5-20251001 minimal | 12% (7/58) [4.7%, 25%] | 0.8% (1/121) [0%, 2.7%] | 12% (8/69) [4.9%, 23%] | 4.0% (4/99) [1.1%, 7.7%] | 4.6% (7/152) [0.6%, 11%] | 4.0% (4/100) [0.8%, 9.8%] | 42% (10/24) [22%, 73%] |
+| claude-haiku-4-5-20251001 off | 11% (5/44) [1.4%, 31%] | 0% (0/42) [0%, 0%] | 11% (4/38) [2.2%, 21%] | 3.4% (2/58) [0%, 8.2%] | 4.0% (4/101) [1.1%, 7.1%] | 8.9% (4/45) [0%, 24%] | 7.7% (3/39) [0%, 16%] |
+| claude-haiku-5-5 high | 48% (15/31) [36%, 60%] | 13% (5/39) [4.9%, 22%] | 23% (5/22) [6.7%, 38%] | 5.7% (3/53) [0%, 14%] | 14% (11/79) [7.4%, 22%] | 16% (8/50) [8.5%, 24%] | 61% (14/23) [46%, 80%] |
+| claude-haiku-5-5 low | 22% (16/74) [13%, 36%] | 6.7% (13/193) [4.3%, 9.7%] | 25% (20/80) [16%, 36%] | 8.0% (16/200) [4.0%, 13%] | 6.8% (13/192) [3.3%, 12%] | 3.2% (5/158) [1.0%, 6.0%] | 37% (18/49) [22%, 55%] |
+| claude-haiku-5-5 max | 14% (2/14) [0%, 33%] | 13% (3/23) [0%, 29%] | 17% (3/18) [11%, 23%] | 14% (4/29) [3.3%, 26%] | 8.7% (2/23) [0%, 21%] | 28% (5/18) [17%, 50%] | 56% (5/9) [25%, 86%] |
+| claude-haiku-5-5 medium | 23% (66/286) [18%, 30%] | 8.6% (45/523) [6.1%, 11%] | 27% (75/280) [22%, 33%] | 8.2% (45/549) [6.0%, 11%] | 6.8% (38/558) [4.9%, 8.9%] | 16% (66/414) [13%, 20%] | 29% (46/161) [21%, 38%] |
+| claude-haiku-5-5 off | 26% (19/74) [16%, 39%] | 9.8% (23/234) [6.0%, 14%] | 25% (26/102) [17%, 35%] | 12% (21/177) [7.0%, 17%] | 9.4% (22/233) [5.5%, 14%] | 7.5% (14/186) [4.2%, 12%] | 13% (17/136) [7.1%, 19%] |
+| claude-haiku-5-5 xhigh | 31% (8/26) [14%, 50%] | 8.6% (3/35) [2.4%, 18%] | 36% (8/22) [21%, 48%] | 5.3% (2/38) [0%, 20%] | 9.8% (5/51) [2.9%, 16%] | 16% (4/25) [3.7%, 33%] | 56% (5/9) [22%, 86%] |
+| claude-opus-5-5 high | 8.7% (2/23) [0%, 36%] | 14% (3/22) [3.2%, 29%] | 17% (2/12) [0%, 43%] | 3.4% (2/58) [0%, 12%] | 13% (5/40) [5.9%, 21%] | 15% (5/33) [5.6%, 28%] | 50% (7/14) [29%, 100%] |
+| claude-opus-5-5 low | 75% (3/4) [25%, 100%] | 5.3% (2/38) [0%, 13%] | 50% (5/10) [13%, 80%] | 0% (0/31) [0%, 0%] | 8.3% (3/36) [2.3%, 19%] | 9.5% (2/21) [0%, 23%] | 38% (5/13) [14%, 67%] |
+| claude-opus-5-5 max | 55% (6/11) [29%, 100%] | 0% (0/22) [0%, 0%] | 15% (2/13) [0%, 25%] | 3.6% (1/28) [0%, 7.9%] | 12% (5/42) [2.2%, 28%] | 19% (5/27) [2.8%, 42%] | 38% (3/8) [25%, 100%] |
+| claude-opus-5-5 medium | 33% (70/215) [27%, 40%] | 6.6% (32/483) [4.5%, 9.2%] | 21% (54/263) [16%, 25%] | 5.4% (31/572) [3.6%, 7.3%] | 8.6% (52/605) [6.7%, 11%] | 12% (45/387) [8.6%, 15%] | 35% (57/162) [28%, 43%] |
+| claude-opus-5-5 off | 27% (7/26) [12%, 57%] | 1.9% (1/53) [0%, 7.9%] | 16% (5/31) [4.9%, 45%] | 5.9% (5/85) [1.4%, 12%] | 10% (8/80) [5.4%, 16%] | 6.5% (4/62) [1.6%, 13%] | 34% (10/29) [21%, 54%] |
+| claude-opus-5-5 xhigh | 28% (28/99) [21%, 36%] | 3.2% (5/156) [0.8%, 7.1%] | 16% (20/126) [10%, 22%] | 5.6% (10/179) [2.0%, 11%] | 12% (29/250) [7.4%, 17%] | 10% (15/146) [6.6%, 15%] | 36% (21/58) [27%, 47%] |
+| claude-sonnet-5-5 high | 17% (5/29) [11%, 23%] | 4.3% (3/69) [0%, 14%] | 9.6% (5/52) [2.2%, 22%] | 3.1% (2/64) [0%, 7.5%] | 4.4% (4/91) [1.0%, 12%] | 8.0% (4/50) [1.4%, 17%] | 25% (2/8) [17%, 50%] |
+| claude-sonnet-5-5 low | 34% (12/35) [14%, 64%] | 0% (0/92) [0%, 0%] | 5.8% (4/69) [0%, 10%] | 3.1% (3/98) [0%, 6.7%] | 2.6% (3/117) [0%, 4.6%] | 0% (0/50) [0%, 0%] | 26% (7/27) [12%, 44%] |
+| claude-sonnet-5-5 max | 23% (15/64) [11%, 44%] | 3.7% (3/81) [0%, 8.4%] | 20% (17/85) [13%, 30%] | 3.1% (3/97) [0%, 7.9%] | 4.0% (5/124) [0.8%, 7.8%] | 27% (18/67) [18%, 38%] | 60% (12/20) [36%, 100%] |
+| claude-sonnet-5-5 medium | 36% (107/297) [30%, 42%] | 2.3% (13/571) [1.0%, 3.7%] | 12% (48/386) [9.1%, 16%] | 2.3% (14/613) [1.2%, 3.5%] | 3.2% (25/770) [2.1%, 4.7%] | 5.5% (30/544) [3.9%, 7.6%] | 19% (48/255) [14%, 24%] |
+| claude-sonnet-5-5 off | 29% (9/31) [14%, 50%] | 1.9% (1/52) [0%, 6.3%] | 9.4% (5/53) [3.0%, 22%] | 8.6% (8/93) [1.2%, 19%] | 5.9% (5/85) [0%, 8.9%] | 7.0% (5/71) [1.7%, 13%] | 21% (9/43) [10%, 35%] |
+| claude-sonnet-5-5 xhigh | 29% (12/42) [19%, 53%] | 6.5% (4/62) [1.4%, 14%] | 16% (7/44) [10%, 22%] | 5.3% (6/113) [1.1%, 11%] | 8.0% (6/75) [2.6%, 15%] | 13% (8/63) [7.4%, 21%] | 41% (9/22) [27%, 62%] |
+| gpt-5.6-terra high | 57% (8/14) [26%, 100%] | 0% (0/46) [0%, 0%] | 32% (6/19) [10%, 43%] | 0% (0/38) [0%, 0%] | 2.0% (1/49) [0%, 7.1%] | 9.4% (3/32) [0%, 22%] | 38% (3/8) [0%, 100%] |
+| gpt-5.6-terra low | 40% (4/10) [0%, 80%] | 6.9% (2/29) [0%, 29%] | 26% (6/23) [14%, 47%] | 1.9% (1/54) [0%, 4.9%] | 2.0% (1/50) [0%, 9.1%] | 3.6% (1/28) [0%, 7.0%] | 57% (4/7) [40%, 100%] |
 | gpt-5.6-terra max | 36% (4/11) [33%, 50%] | 12% (3/26) [0%, 38%] | 17% (3/18) [0%, 50%] | 11% (3/28) [3.0%, 22%] | 13% (3/23) [4.5%, 25%] | 10% (1/10) [0%, 33%] | 64% (7/11) [45%, 100%] |
-| gpt-5.6-terra medium | 32% (78/243) [27%, 38%] | 2.4% (11/465) [1.1%, 3.8%] | 23% (85/365) [19%, 28%] | 6.0% (28/469) [3.8%, 8.5%] | 2.8% (17/602) [1.6%, 4.2%] | 4.5% (19/418) [2.6%, 6.9%] | 57% (76/134) [48%, 67%] |
-| gpt-5.6-terra xhigh | 33% (3/9) [6.7%, 83%] | 9.1% (2/22) [0%, 31%] | 21% (4/19) [0%, 25%] | 4.2% (1/24) [0%, 12%] | 8.3% (2/24) [0%, 30%] | 11% (2/19) [0%, 40%] | 75% (3/4) [75%, 75%] |
-| gpt-6-astra high | 50% (4/8) [40%, 67%] | 9.1% (1/11) [0%, 13%] | 25% (2/8) [25%, 25%] | 0% (0/22) [0%, 0%] | 0% (0/7) [0%, 0%] | 20% (3/15) [11%, 33%] | 100% (1/1) [100%, 100%] |
-| gpt-6-astra low | 100% (1/1) [100%, 100%] | 9.1% (1/11) [0%, 17%] | 50% (5/10) [33%, 67%] | 0% (0/5) [0%, 0%] | 0% (0/15) [0%, 0%] | 10% (1/10) [0%, 50%] | – |
-| gpt-6-astra medium | 33% (84/255) [26%, 41%] | 2.7% (15/560) [1.4%, 4.2%] | 24% (72/300) [21%, 28%] | 2.9% (16/554) [1.6%, 4.3%] | 8.9% (61/685) [7.1%, 11%] | 23% (88/383) [19%, 28%] | 40% (68/171) [34%, 46%] |
-| gpt-6-luna high | 29% (5/17) [13%, 40%] | 0% (0/33) [0%, 0%] | 18% (3/17) [0%, 23%] | 4.3% (1/23) [0%, 14%] | 0% (0/25) [0%, 0%] | 8.7% (2/23) [0%, 40%] | 43% (3/7) [0%, 50%] |
+| gpt-5.6-terra medium | 31% (79/252) [26%, 37%] | 2.3% (11/473) [1.1%, 3.7%] | 23% (86/378) [19%, 27%] | 5.8% (28/479) [3.8%, 8.4%] | 3.0% (18/606) [1.7%, 4.4%] | 4.7% (20/430) [2.8%, 6.9%] | 57% (78/136) [48%, 68%] |
+| gpt-5.6-terra xhigh | 33% (4/12) [7.7%, 75%] | 8.0% (2/25) [0%, 25%] | 33% (9/27) [22%, 57%] | 3.8% (1/26) [0%, 11%] | 6.3% (2/32) [0%, 19%] | 10% (2/20) [0%, 38%] | 80% (4/5) [75%, 100%] |
+| gpt-6-astra high | 34% (10/29) [17%, 65%] | 9.4% (3/32) [4.3%, 12%] | 22% (8/36) [13%, 31%] | 1.8% (1/56) [0%, 7.5%] | 14% (5/36) [4.8%, 30%] | 14% (5/37) [5.1%, 25%] | 33% (7/21) [14%, 67%] |
+| gpt-6-astra low | 38% (6/16) [20%, 67%] | 6.3% (2/32) [0%, 19%] | 38% (8/21) [22%, 64%] | 0% (0/33) [0%, 0%] | 2.3% (1/44) [0%, 5.7%] | 8.0% (2/25) [0%, 27%] | 100% (3/3) [100%, 100%] |
+| gpt-6-astra medium | 35% (98/284) [28%, 42%] | 3.4% (21/617) [2.0%, 5.0%] | 24% (88/367) [21%, 27%] | 2.8% (18/647) [1.7%, 4.1%] | 8.3% (69/828) [6.7%, 10%] | 24% (102/424) [20%, 29%] | 41% (80/194) [36%, 48%] |
+| gpt-6-astra off | 17% (4/23) [7.1%, 24%] | 2.1% (1/48) [0%, 4.7%] | 19% (6/32) [12%, 29%] | 1.8% (1/55) [0%, 6.3%] | 4.8% (3/63) [0%, 14%] | 20% (9/45) [10%, 41%] | 76% (13/17) [65%, 92%] |
+| gpt-6-luna high | 32% (6/19) [18%, 42%] | 0% (0/35) [0%, 0%] | 17% (3/18) [0%, 22%] | 4.3% (1/23) [0%, 14%] | 3.7% (1/27) [0%, 19%] | 8.3% (2/24) [0%, 33%] | 50% (4/8) [0%, 100%] |
 | gpt-6-luna low | 33% (5/15) [20%, 64%] | 0% (0/9) [0%, 0%] | 0% (0/26) [0%, 0%] | 21% (5/24) [13%, 26%] | 11% (5/46) [3.6%, 24%] | 8.3% (2/24) [0%, 29%] | 43% (3/7) [25%, 67%] |
-| gpt-6-luna max | 33% (2/6) [0%, 75%] | 5.0% (1/20) [0%, 7.7%] | 13% (1/8) [0%, 25%] | 5.6% (1/18) [0%, 7.9%] | 12% (5/42) [4.2%, 39%] | 16% (4/25) [5.6%, 24%] | 60% (3/5) [50%, 67%] |
-| gpt-6-luna medium | 22% (59/263) [18%, 28%] | 5.7% (29/507) [3.9%, 8.0%] | 11% (33/287) [7.9%, 16%] | 8.4% (43/512) [6.0%, 11%] | 7.2% (48/668) [5.3%, 9.2%] | 4.8% (20/418) [3.1%, 6.7%] | 34% (57/168) [28%, 41%] |
+| gpt-6-luna max | 33% (3/9) [11%, 63%] | 3.4% (1/29) [0%, 6.8%] | 18% (3/17) [0%, 25%] | 5.6% (1/18) [0%, 7.9%] | 11% (5/46) [3.7%, 30%] | 17% (6/36) [9.7%, 23%] | 60% (3/5) [50%, 67%] |
+| gpt-6-luna medium | 22% (63/284) [18%, 27%] | 5.6% (30/535) [3.8%, 7.7%] | 11% (35/310) [8.0%, 15%] | 8.2% (44/539) [5.8%, 11%] | 7.0% (49/699) [5.3%, 9.0%] | 4.6% (20/435) [2.9%, 6.4%] | 34% (61/180) [28%, 41%] |
 | gpt-6-luna off | 6.9% (2/29) [0%, 9.1%] | 8.7% (4/46) [4.0%, 13%] | 4.2% (1/24) [0%, 13%] | 5.4% (2/37) [0%, 40%] | 17% (6/36) [2.2%, 47%] | 0% (0/16) [0%, 0%] | 43% (6/14) [13%, 100%] |
-| gpt-6-luna xhigh | 25% (4/16) [5.3%, 100%] | 7.1% (1/14) [0%, 14%] | 18% (5/28) [8.2%, 33%] | 20% (6/30) [11%, 30%] | 5.4% (2/37) [0%, 9.5%] | 12% (4/33) [2.6%, 23%] | 70% (7/10) [58%, 88%] |
-| gpt-6.1-sol high | 19% (3/16) [3.6%, 100%] | 0% (0/6) [0%, 0%] | 22% (2/9) [0%, 67%] | 0% (0/15) [0%, 0%] | 12% (2/17) [0%, 14%] | 30% (6/20) [12%, 100%] | 43% (3/7) [0%, 100%] |
-| gpt-6.1-sol low | 70% (7/10) [58%, 100%] | 13% (3/23) [0%, 39%] | 4.8% (1/21) [0%, 9.1%] | 7.1% (2/28) [0%, 29%] | 12% (5/41) [9.1%, 15%] | 25% (4/16) [0%, 50%] | 57% (4/7) [0%, 67%] |
-| gpt-6.1-sol max | 38% (5/13) [13%, 86%] | 5.6% (2/36) [0%, 15%] | 23% (5/22) [17%, 32%] | 11% (3/27) [3.0%, 28%] | 11% (5/44) [4.8%, 17%] | 33% (7/21) [11%, 65%] | 29% (2/7) [0%, 67%] |
-| gpt-6.1-sol medium | 34% (60/177) [26%, 44%] | 5.1% (22/429) [3.2%, 7.4%] | 22% (61/279) [18%, 26%] | 3.5% (16/452) [1.9%, 5.7%] | 9.3% (54/581) [7.3%, 11%] | 20% (70/352) [15%, 25%] | 40% (67/169) [34%, 47%] |
-| gpt-6.1-sol xhigh | 14% (2/14) [0%, 29%] | 0% (0/32) [0%, 0%] | 14% (3/21) [0%, 38%] | 0% (0/54) [0%, 0%] | 5.9% (1/17) [0%, 20%] | 27% (9/33) [18%, 43%] | 57% (4/7) [14%, 100%] |
-| gpt-6.1-terra high | 100% (3/3) [100%, 100%] | 43% (3/7) [20%, 100%] | 50% (1/2) [50%, 50%] | 0% (0/11) [0%, 0%] | 0% (0/12) [0%, 0%] | 0% (0/4) [0%, 0%] | 20% (1/5) [20%, 20%] |
-| gpt-6.1-terra low | – | 40% (2/5) [40%, 40%] | 50% (1/2) [50%, 50%] | 0% (0/2) [0%, 0%] | 0% (0/7) [0%, 0%] | 33% (1/3) [33%, 33%] | 67% (2/3) [67%, 67%] |
-| gpt-6.1-terra max | 50% (2/4) [50%, 50%] | 0% (0/2) [0%, 0%] | 33% (2/6) [33%, 33%] | 0% (0/2) [0%, 0%] | 0% (0/1) [0%, 0%] | 50% (3/6) [50%, 50%] | – |
-| gpt-6.1-terra medium | 57% (4/7) [40%, 100%] | 0% (0/14) [0%, 0%] | 11% (1/9) [0%, 13%] | 0% (0/24) [0%, 0%] | 0% (0/12) [0%, 0%] | 14% (1/7) [0%, 33%] | 67% (2/3) [67%, 67%] |
-| gpt-6.1-terra off | 100% (2/2) [100%, 100%] | 0% (0/1) [0%, 0%] | 0% (0/1) [0%, 0%] | 0% (0/1) [0%, 0%] | 0% (0/5) [0%, 0%] | 0% (0/2) [0%, 0%] | 100% (1/1) [100%, 100%] |
-| gpt-6.1-terra xhigh | 50% (1/2) [50%, 50%] | 0% (0/2) [0%, 0%] | 0% (0/1) [0%, 0%] | 0% (0/1) [0%, 0%] | 100% (1/1) [100%, 100%] | 100% (2/2) [100%, 100%] | – |
+| gpt-6-luna xhigh | 29% (5/17) [10%, 100%] | 11% (2/19) [0%, 27%] | 16% (5/32) [5.9%, 29%] | 24% (11/45) [13%, 32%] | 7.1% (4/56) [2.3%, 11%] | 13% (5/38) [4.3%, 24%] | 60% (9/15) [35%, 89%] |
+| gpt-6.1-sol high | 24% (10/41) [13%, 44%] | 0% (0/23) [0%, 0%] | 25% (9/36) [11%, 42%] | 3.6% (2/55) [0%, 5.6%] | 9.8% (6/61) [4.9%, 17%] | 16% (8/51) [7.3%, 33%] | 36% (10/28) [26%, 55%] |
+| gpt-6.1-sol low | 64% (9/14) [42%, 89%] | 12% (5/42) [2.6%, 26%] | 8.6% (3/35) [2.9%, 15%] | 6.7% (3/45) [0%, 18%] | 11% (6/55) [7.1%, 13%] | 20% (7/35) [7.4%, 31%] | 70% (7/10) [44%, 89%] |
+| gpt-6.1-sol max | 28% (18/64) [18%, 39%] | 4.1% (5/121) [1.2%, 7.8%] | 17% (20/115) [14%, 23%] | 4.8% (7/145) [1.1%, 11%] | 11% (19/166) [8.5%, 14%] | 26% (19/73) [14%, 42%] | 48% (11/23) [24%, 75%] |
+| gpt-6.1-sol medium | 31% (60/191) [24%, 41%] | 5.0% (22/443) [3.0%, 7.2%] | 22% (63/289) [18%, 26%] | 3.5% (17/482) [1.9%, 5.5%] | 9.3% (56/605) [7.3%, 11%] | 20% (73/365) [16%, 26%] | 39% (67/172) [33%, 46%] |
+| gpt-6.1-sol xhigh | 17% (4/24) [3.4%, 35%] | 0% (0/47) [0%, 0%] | 19% (7/36) [8.9%, 32%] | 1.2% (1/84) [0%, 3.3%] | 9.8% (4/41) [3.0%, 17%] | 23% (12/52) [15%, 34%] | 50% (8/16) [31%, 77%] |
+| gpt-6.1-terra high | 52% (11/21) [33%, 85%] | 25% (6/24) [7.1%, 73%] | 25% (4/16) [7.7%, 47%] | 4.5% (3/67) [0%, 7.7%] | 7.5% (4/53) [2.0%, 15%] | 16% (5/32) [3.4%, 27%] | 53% (9/17) [33%, 83%] |
+| gpt-6.1-terra low | 67% (12/18) [56%, 85%] | 12% (3/26) [0%, 27%] | 31% (9/29) [22%, 50%] | 5.6% (2/36) [0%, 13%] | 2.6% (1/39) [0%, 10%] | 26% (7/27) [12%, 53%] | 46% (6/13) [19%, 82%] |
+| gpt-6.1-terra max | 21% (9/43) [11%, 35%] | 18% (6/34) [2.7%, 48%] | 24% (9/37) [16%, 35%] | 1.6% (1/63) [0%, 4.7%] | 5.0% (3/60) [0%, 11%] | 34% (10/29) [22%, 50%] | 36% (8/22) [17%, 61%] |
+| gpt-6.1-terra medium | 58% (7/12) [38%, 100%] | 3.1% (1/32) [0%, 14%] | 18% (3/17) [7.1%, 33%] | 2.4% (1/41) [0%, 11%] | 0% (0/30) [0%, 0%] | 11% (2/18) [0%, 25%] | 64% (7/11) [38%, 86%] |
+| gpt-6.1-terra off | 44% (7/16) [17%, 82%] | 0% (0/29) [0%, 0%] | 27% (4/15) [7.7%, 46%] | 0% (0/26) [0%, 0%] | 5.7% (2/35) [0%, 14%] | 10% (2/20) [0%, 29%] | 28% (5/18) [15%, 50%] |
+| gpt-6.1-terra xhigh | 33% (7/21) [12%, 65%] | 15% (3/20) [0%, 33%] | 26% (6/23) [10%, 41%] | 4.2% (1/24) [0%, 21%] | 3.4% (1/29) [0%, 16%] | 44% (8/18) [20%, 67%] | 40% (6/15) [33%, 67%] |
+
+### Astra efforts
+
+| Model | magnifying glass | burner phone | handsaw | beer | inverter | cigarettes | jammer |
+|---|---|---|---|---|---|---|---|
+| gpt-6-astra high | 100% (1/1) [100%, 100%] | 0% (0/13) [0%, 0%] | 29% (2/7) [25%, 33%] | 0% (0/12) [0%, 0%] | 0% (0/3) [0%, 0%] | 100% (1/1) [100%, 100%] | 100% (1/1) [100%, 100%] |
+| gpt-6-astra low | 100% (3/3) [100%, 100%] | 11% (1/9) [0%, 20%] | 50% (1/2) [0%, 100%] | 0% (0/14) [0%, 0%] | 25% (1/4) [25%, 25%] | – | – |
+| gpt-6-astra medium | 33% (1/3) [0%, 100%] | 0% (0/9) [0%, 0%] | – | 9.1% (1/11) [0%, 13%] | 50% (1/2) [50%, 50%] | – | – |
+| gpt-6-astra off | 100% (1/1) [100%, 100%] | 33% (1/3) [33%, 33%] | – | 0% (0/3) [0%, 0%] | – | – | – |
 
 ### Haiku 4.5 efforts
 
@@ -925,12 +990,12 @@ Agent decisions where stealing an item with adrenaline is legal, and the share t
 
 | Model | magnifying glass | burner phone | handsaw | beer | inverter | cigarettes | jammer |
 |---|---|---|---|---|---|---|---|
-| claude-opus-5-5 high | 43% (20/47) [29%, 67%] | 4.8% (4/83) [1.1%, 10%] | 19% (17/91) [14%, 24%] | 12% (14/113) [6.3%, 21%] | 8.3% (9/108) [2.9%, 16%] | 23% (18/77) [16%, 33%] | 54% (14/26) [36%, 74%] |
-| claude-opus-5-5 low | 30% (9/30) [19%, 53%] | 1.5% (1/67) [0%, 7.5%] | 30% (15/50) [24%, 39%] | 6.1% (6/99) [1.6%, 11%] | 8.5% (8/94) [4.3%, 15%] | 10% (6/60) [2.3%, 19%] | 41% (9/22) [19%, 65%] |
-| claude-opus-5-5 max | 40% (2/5) [33%, 50%] | 50% (1/2) [50%, 50%] | – | 28% (5/18) [23%, 40%] | 9.5% (2/21) [0%, 67%] | 0% (0/5) [0%, 0%] | 43% (3/7) [33%, 50%] |
-| claude-opus-5-5 medium | 27% (28/103) [20%, 37%] | 5.4% (8/148) [1.9%, 11%] | 21% (27/127) [16%, 28%] | 8.1% (13/161) [4.3%, 13%] | 8.9% (20/225) [5.7%, 12%] | 17% (24/144) [12%, 22%] | 49% (25/51) [33%, 70%] |
-| claude-opus-5-5 off | 100% (1/1) [100%, 100%] | 0% (0/9) [0%, 0%] | 25% (2/8) [20%, 33%] | 0% (0/7) [0%, 0%] | 25% (1/4) [0%, 33%] | 0% (0/5) [0%, 0%] | 33% (2/6) [25%, 50%] |
-| claude-opus-5-5 xhigh | 26% (12/46) [14%, 43%] | 5.8% (6/104) [1.2%, 11%] | 24% (17/71) [19%, 30%] | 9.2% (7/76) [3.2%, 21%] | 6.4% (7/110) [2.3%, 12%] | 27% (21/78) [20%, 36%] | 52% (13/25) [37%, 78%] |
+| claude-opus-5-5 high | 40% (23/58) [29%, 60%] | 3.9% (4/103) [0.8%, 9.3%] | 19% (18/94) [15%, 25%] | 11% (14/123) [5.6%, 19%] | 8.4% (10/119) [3.3%, 15%] | 23% (18/77) [16%, 33%] | 54% (14/26) [36%, 74%] |
+| claude-opus-5-5 low | 38% (18/48) [24%, 54%] | 3.5% (3/86) [0%, 9.0%] | 30% (21/71) [24%, 37%] | 5.8% (7/121) [1.7%, 10%] | 8.3% (9/109) [4.3%, 14%] | 10% (8/77) [3.3%, 18%] | 35% (11/31) [17%, 54%] |
+| claude-opus-5-5 max | 23% (17/75) [17%, 33%] | 4.7% (2/43) [0%, 16%] | 20% (16/80) [15%, 25%] | 14% (14/101) [7.1%, 23%] | 12% (11/91) [5.8%, 23%] | 7.9% (5/63) [1.8%, 17%] | 35% (19/55) [27%, 45%] |
+| claude-opus-5-5 medium | 27% (34/128) [19%, 37%] | 5.4% (9/168) [2.2%, 10%] | 22% (30/138) [16%, 28%] | 7.9% (14/177) [4.4%, 12%] | 9.3% (23/248) [6.6%, 13%] | 16% (25/160) [11%, 21%] | 47% (27/58) [33%, 65%] |
+| claude-opus-5-5 off | 43% (3/7) [11%, 100%] | 0% (0/20) [0%, 0%] | 25% (3/12) [20%, 33%] | 0% (0/19) [0%, 0%] | 7.7% (1/13) [0%, 23%] | 0% (0/11) [0%, 0%] | 25% (4/16) [18%, 36%] |
+| claude-opus-5-5 xhigh | 24% (22/91) [14%, 38%] | 6.8% (9/133) [2.4%, 13%] | 22% (19/87) [16%, 29%] | 9.3% (10/107) [3.8%, 18%] | 8.0% (11/138) [3.5%, 13%] | 24% (21/88) [17%, 32%] | 36% (16/45) [22%, 58%] |
 
 ### Sol efforts
 
@@ -953,17 +1018,6 @@ Agent decisions where stealing an item with adrenaline is legal, and the share t
 | claude-sonnet-5-5 off | 26% (51/194) [21%, 34%] | 2.3% (5/217) [0%, 5.4%] | 15% (31/201) [12%, 20%] | 6.4% (20/313) [3.8%, 9.3%] | 3.0% (15/497) [1.5%, 4.7%] | 4.3% (12/276) [2.0%, 7.4%] | 32% (37/116) [24%, 41%] |
 | claude-sonnet-5-5 xhigh | 28% (36/129) [21%, 38%] | 4.2% (11/263) [1.9%, 7.1%] | 15% (32/214) [11%, 19%] | 6.8% (18/265) [4.0%, 10%] | 7.8% (31/400) [4.7%, 11%] | 14% (35/252) [9.6%, 19%] | 34% (33/97) [26%, 43%] |
 
-### Terra 6.1 efforts
-
-| Model | magnifying glass | burner phone | handsaw | beer | inverter | cigarettes | jammer |
-|---|---|---|---|---|---|---|---|
-| gpt-6.1-terra high | 50% (1/2) [0%, 100%] | 0% (0/2) [0%, 0%] | – | 25% (2/8) [0%, 40%] | 0% (0/6) [0%, 0%] | – | 67% (2/3) [67%, 67%] |
-| gpt-6.1-terra low | 67% (4/6) [50%, 75%] | 4.8% (1/21) [0%, 13%] | 67% (4/6) [60%, 100%] | 0% (0/30) [0%, 0%] | 3.4% (1/29) [0%, 5.3%] | 8.3% (1/12) [0%, 33%] | 25% (3/12) [0%, 33%] |
-| gpt-6.1-terra max | 0% (0/4) [0%, 0%] | 20% (1/5) [20%, 20%] | 29% (2/7) [29%, 29%] | 0% (0/1) [0%, 0%] | 0% (0/19) [0%, 0%] | 9.1% (1/11) [9.1%, 9.1%] | 100% (1/1) [100%, 100%] |
-| gpt-6.1-terra medium | 80% (4/5) [25%, 100%] | 3.4% (1/29) [0%, 11%] | 33% (4/12) [0%, 60%] | 6.3% (3/48) [0%, 19%] | 6.1% (2/33) [0%, 7.1%] | 6.3% (1/16) [0%, 6.7%] | 25% (3/12) [25%, 25%] |
-| gpt-6.1-terra off | 50% (4/8) [33%, 60%] | 25% (2/8) [0%, 29%] | 22% (2/9) [20%, 25%] | 13% (1/8) [13%, 13%] | 0% (0/4) [0%, 0%] | 25% (1/4) [25%, 25%] | 100% (2/2) [100%, 100%] |
-| gpt-6.1-terra xhigh | 50% (1/2) [0%, 100%] | 20% (3/15) [0%, 27%] | 33% (1/3) [33%, 33%] | 33% (3/9) [0%, 100%] | 0% (0/15) [0%, 0%] | 11% (2/19) [0%, 100%] | 100% (1/1) [100%, 100%] |
-
 ### Terra efforts
 
 | Model | magnifying glass | burner phone | handsaw | beer | inverter | cigarettes | jammer |
@@ -974,6 +1028,17 @@ Agent decisions where stealing an item with adrenaline is legal, and the share t
 | gpt-5.6-terra medium | 35% (32/91) [27%, 45%] | 4.1% (7/170) [1.2%, 7.7%] | 26% (31/117) [21%, 33%] | 7.9% (18/228) [4.9%, 11%] | 2.7% (8/293) [1.0%, 4.8%] | 8.2% (14/170) [4.9%, 12%] | 68% (32/47) [57%, 81%] |
 | gpt-5.6-terra xhigh | 33% (33/100) [25%, 45%] | 4.5% (11/242) [2.1%, 8.0%] | 28% (39/138) [22%, 35%] | 6.1% (10/163) [2.8%, 9.9%] | 6.2% (19/306) [3.2%, 10.0%] | 12% (25/206) [7.8%, 17%] | 64% (37/58) [52%, 76%] |
 
+### gpt-6.1-terra efforts
+
+| Model | magnifying glass | burner phone | handsaw | beer | inverter | cigarettes | jammer |
+|---|---|---|---|---|---|---|---|
+| gpt-6.1-terra high | 50% (1/2) [0%, 100%] | 0% (0/2) [0%, 0%] | – | 25% (2/8) [0%, 40%] | 0% (0/6) [0%, 0%] | – | 67% (2/3) [67%, 67%] |
+| gpt-6.1-terra low | 67% (4/6) [50%, 75%] | 4.8% (1/21) [0%, 13%] | 67% (4/6) [60%, 100%] | 0% (0/30) [0%, 0%] | 3.4% (1/29) [0%, 5.3%] | 8.3% (1/12) [0%, 33%] | 25% (3/12) [0%, 33%] |
+| gpt-6.1-terra max | 0% (0/4) [0%, 0%] | 20% (1/5) [20%, 20%] | 29% (2/7) [29%, 29%] | 0% (0/1) [0%, 0%] | 0% (0/19) [0%, 0%] | 9.1% (1/11) [9.1%, 9.1%] | 100% (1/1) [100%, 100%] |
+| gpt-6.1-terra medium | 80% (4/5) [25%, 100%] | 3.4% (1/29) [0%, 11%] | 33% (4/12) [0%, 60%] | 6.3% (3/48) [0%, 19%] | 6.1% (2/33) [0%, 7.1%] | 6.3% (1/16) [0%, 6.7%] | 25% (3/12) [25%, 25%] |
+| gpt-6.1-terra off | 56% (5/9) [33%, 100%] | 21% (3/14) [0%, 29%] | 22% (2/9) [20%, 25%] | 3.8% (1/26) [0%, 13%] | 10% (1/10) [0%, 17%] | 17% (1/6) [0%, 25%] | 100% (3/3) [100%, 100%] |
+| gpt-6.1-terra xhigh | 9.1% (1/11) [0%, 100%] | 17% (3/18) [0%, 27%] | 17% (1/6) [0%, 33%] | 17% (3/18) [0%, 75%] | 0% (0/27) [0%, 0%] | 15% (3/20) [5.6%, 100%] | 33% (2/6) [20%, 100%] |
+
 ## Item fates by item
 
 Share of placed items used by their owner, by item. Adrenaline counts as used when its owner steals with it.
@@ -982,54 +1047,64 @@ Share of placed items used by their owner, by item. Adrenaline counts as used wh
 
 | Model | magnifying glass | burner phone | handsaw | beer | inverter | cigarettes | jammer | adrenaline |
 |---|---|---|---|---|---|---|---|---|
-| claude-haiku-4-5-20251001 high | 54% (14/26) [42%, 66%] | 39% (13/33) [31%, 55%] | 46% (13/28) [37%, 65%] | 44% (12/27) [34%, 57%] | 19% (6/31) [3.4%, 34%] | 60% (12/20) [43%, 75%] | 50% (8/16) [15%, 67%] | 30% (8/27) [12%, 57%] |
-| claude-haiku-4-5-20251001 low | 70% (16/23) [53%, 83%] | 55% (17/31) [38%, 74%] | 58% (19/33) [41%, 70%] | 45% (15/33) [19%, 74%] | 37% (10/27) [24%, 48%] | 30% (7/23) [20%, 43%] | 47% (7/15) [31%, 70%] | 37% (10/27) [23%, 52%] |
-| claude-haiku-4-5-20251001 medium | 70% (338/483) [66%, 74%] | 37% (209/560) [33%, 42%] | 57% (297/519) [53%, 62%] | 46% (278/610) [41%, 50%] | 32% (192/602) [28%, 36%] | 45% (190/419) [40%, 50%] | 58% (208/359) [53%, 63%] | 41% (210/512) [37%, 46%] |
-| claude-haiku-4-5-20251001 minimal | 89% (24/27) [79%, 100%] | 47% (16/34) [27%, 74%] | 66% (21/32) [57%, 76%] | 59% (20/34) [41%, 84%] | 37% (11/30) [23%, 56%] | 44% (11/25) [20%, 62%] | 54% (13/24) [43%, 65%] | 44% (11/25) [32%, 59%] |
-| claude-haiku-4-5-20251001 off | 65% (22/34) [46%, 78%] | 61% (14/23) [39%, 76%] | 48% (16/33) [37%, 64%] | 39% (14/36) [30%, 53%] | 45% (13/29) [14%, 69%] | 60% (15/25) [38%, 80%] | 56% (14/25) [42%, 71%] | 22% (7/32) [7.7%, 44%] |
-| claude-haiku-5-5 high | 60% (15/25) [50%, 86%] | 63% (26/41) [54%, 73%] | 39% (11/28) [19%, 62%] | 55% (23/42) [38%, 77%] | 46% (19/41) [26%, 67%] | 52% (12/23) [29%, 79%] | 58% (15/26) [37%, 83%] | 69% (22/32) [47%, 88%] |
-| claude-haiku-5-5 low | 65% (24/37) [53%, 81%] | 51% (22/43) [38%, 66%] | 69% (25/36) [56%, 84%] | 57% (23/40) [42%, 67%] | 34% (16/47) [24%, 45%] | 71% (24/34) [58%, 79%] | 68% (17/25) [57%, 80%] | 59% (19/32) [42%, 71%] |
-| claude-haiku-5-5 max | 67% (18/27) [48%, 87%] | 75% (21/28) [55%, 89%] | 57% (16/28) [45%, 75%] | 54% (15/28) [33%, 68%] | 40% (10/25) [29%, 48%] | 63% (17/27) [45%, 78%] | 76% (13/17) [61%, 92%] | 64% (23/36) [51%, 76%] |
-| claude-haiku-5-5 medium | 68% (360/532) [64%, 71%] | 56% (334/597) [51%, 61%] | 61% (328/541) [57%, 64%] | 57% (341/602) [53%, 61%] | 39% (237/613) [35%, 42%] | 57% (257/450) [53%, 61%] | 64% (249/391) [59%, 68%] | 61% (316/521) [56%, 65%] |
-| claude-haiku-5-5 off | 48% (13/27) [40%, 54%] | 61% (23/38) [26%, 92%] | 67% (22/33) [56%, 75%] | 43% (13/30) [34%, 52%] | 21% (5/24) [6.7%, 37%] | 50% (11/22) [33%, 75%] | 44% (11/25) [26%, 65%] | 55% (21/38) [30%, 78%] |
-| claude-haiku-5-5 xhigh | 58% (15/26) [45%, 77%] | 53% (19/36) [32%, 71%] | 42% (10/24) [30%, 59%] | 44% (15/34) [33%, 53%] | 44% (15/34) [36%, 53%] | 50% (11/22) [43%, 56%] | 65% (13/20) [57%, 77%] | 60% (18/30) [38%, 76%] |
-| claude-opus-5-5 high | 65% (22/34) [58%, 73%] | 70% (16/23) [64%, 76%] | 59% (17/29) [46%, 71%] | 38% (12/32) [17%, 55%] | 32% (9/28) [24%, 39%] | 70% (16/23) [53%, 86%] | 62% (13/21) [48%, 74%] | 60% (18/30) [37%, 89%] |
-| claude-opus-5-5 low | 70% (21/30) [59%, 89%] | 57% (12/21) [24%, 86%] | 67% (16/24) [48%, 94%] | 31% (11/35) [13%, 46%] | 32% (11/34) [15%, 50%] | 58% (11/19) [43%, 77%] | 71% (10/14) [56%, 92%] | 55% (16/29) [46%, 68%] |
-| claude-opus-5-5 max | 100% (8/8) [100%, 100%] | 83% (5/6) [75%, 100%] | 64% (9/14) [50%, 75%] | 54% (7/13) [50%, 56%] | 25% (3/12) [0%, 38%] | 58% (7/12) [40%, 71%] | 83% (5/6) [67%, 100%] | 70% (7/10) [33%, 86%] |
-| claude-opus-5-5 medium | 69% (362/528) [65%, 73%] | 58% (348/599) [53%, 63%] | 57% (323/566) [53%, 61%] | 49% (332/677) [45%, 53%] | 40% (240/598) [37%, 44%] | 65% (312/481) [61%, 69%] | 66% (242/366) [61%, 71%] | 58% (302/518) [54%, 62%] |
-| claude-opus-5-5 off | 82% (9/11) [71%, 100%] | 67% (8/12) [60%, 71%] | 63% (10/16) [57%, 67%] | 47% (9/19) [33%, 54%] | 43% (6/14) [33%, 45%] | 70% (7/10) [50%, 83%] | 71% (5/7) [33%, 100%] | 71% (12/17) [38%, 100%] |
-| claude-opus-5-5 xhigh | 60% (70/116) [50%, 70%] | 66% (82/125) [58%, 74%] | 52% (73/141) [45%, 59%] | 54% (72/133) [46%, 62%] | 40% (54/135) [31%, 48%] | 64% (63/99) [52%, 74%] | 63% (53/84) [55%, 71%] | 65% (80/123) [56%, 73%] |
-| claude-sonnet-5-5 high | 72% (18/25) [62%, 79%] | 59% (20/34) [38%, 79%] | 65% (20/31) [39%, 93%] | 50% (21/42) [30%, 63%] | 30% (12/40) [14%, 46%] | 61% (22/36) [40%, 78%] | 78% (18/23) [61%, 91%] | 52% (13/25) [28%, 77%] |
-| claude-sonnet-5-5 low | 64% (18/28) [48%, 85%] | 60% (30/50) [39%, 84%] | 48% (14/29) [30%, 61%] | 41% (17/41) [31%, 55%] | 13% (5/40) [5.4%, 18%] | 69% (24/35) [51%, 86%] | 71% (20/28) [60%, 83%] | 63% (22/35) [45%, 79%] |
-| claude-sonnet-5-5 max | 65% (13/20) [40%, 80%] | 55% (22/40) [41%, 69%] | 67% (18/27) [52%, 86%] | 45% (17/38) [17%, 57%] | 45% (14/31) [20%, 61%] | 68% (15/22) [36%, 86%] | 57% (12/21) [32%, 78%] | 68% (15/22) [56%, 92%] |
-| claude-sonnet-5-5 medium | 74% (369/497) [70%, 78%] | 54% (302/559) [50%, 58%] | 56% (293/520) [53%, 60%] | 49% (317/645) [44%, 54%] | 25% (142/573) [21%, 29%] | 66% (287/436) [61%, 70%] | 64% (216/336) [59%, 69%] | 49% (270/550) [44%, 54%] |
-| claude-sonnet-5-5 off | 77% (23/30) [68%, 91%] | 49% (19/39) [34%, 63%] | 48% (22/46) [38%, 58%] | 54% (31/57) [35%, 72%] | 22% (10/45) [12%, 34%] | 65% (22/34) [52%, 76%] | 61% (11/18) [31%, 86%] | 50% (20/40) [40%, 58%] |
-| claude-sonnet-5-5 xhigh | 63% (19/30) [43%, 83%] | 67% (16/24) [43%, 84%] | 58% (18/31) [38%, 79%] | 64% (27/42) [46%, 79%] | 30% (14/47) [21%, 41%] | 62% (13/21) [52%, 77%] | 65% (17/26) [50%, 81%] | 63% (26/41) [48%, 83%] |
-| gpt-5.6-terra high | 71% (25/35) [53%, 88%] | 31% (11/36) [19%, 43%] | 72% (18/25) [61%, 86%] | 51% (18/35) [37%, 67%] | 32% (10/31) [11%, 43%] | 50% (12/24) [35%, 64%] | 67% (14/21) [53%, 86%] | 52% (16/31) [33%, 72%] |
-| gpt-5.6-terra low | 80% (24/30) [74%, 93%] | 44% (11/25) [16%, 67%] | 53% (23/43) [43%, 64%] | 51% (18/35) [41%, 61%] | 23% (6/26) [10%, 31%] | 41% (12/29) [13%, 69%] | 82% (18/22) [71%, 95%] | 50% (18/36) [32%, 69%] |
+| claude-haiku-4-5-20251001 high | 69% (53/77) [58%, 79%] | 41% (38/93) [32%, 51%] | 56% (50/89) [49%, 66%] | 47% (38/81) [36%, 56%] | 28% (22/79) [18%, 38%] | 60% (37/62) [47%, 71%] | 56% (28/50) [39%, 69%] | 39% (37/94) [29%, 54%] |
+| claude-haiku-4-5-20251001 low | 72% (86/119) [64%, 80%] | 46% (51/110) [37%, 56%] | 63% (73/115) [56%, 71%] | 54% (65/120) [43%, 65%] | 35% (39/110) [27%, 45%] | 50% (47/94) [40%, 58%] | 53% (31/59) [42%, 64%] | 39% (52/133) [32%, 45%] |
+| claude-haiku-4-5-20251001 medium | 70% (441/629) [66%, 74%] | 37% (277/739) [34%, 41%] | 58% (397/682) [54%, 62%] | 47% (359/769) [43%, 51%] | 33% (255/771) [29%, 37%] | 48% (264/546) [44%, 53%] | 57% (262/461) [53%, 61%] | 42% (292/692) [38%, 46%] |
+| claude-haiku-4-5-20251001 minimal | 72% (78/108) [63%, 80%] | 41% (48/117) [31%, 52%] | 59% (58/98) [51%, 67%] | 51% (54/105) [39%, 63%] | 36% (32/90) [26%, 47%] | 51% (42/83) [41%, 58%] | 55% (44/80) [45%, 64%] | 38% (41/109) [26%, 51%] |
+| claude-haiku-4-5-20251001 off | 68% (39/57) [54%, 81%] | 54% (36/67) [45%, 65%] | 54% (44/81) [43%, 67%] | 40% (32/81) [27%, 51%] | 41% (24/59) [23%, 56%] | 57% (29/51) [42%, 70%] | 55% (23/42) [38%, 70%] | 34% (22/64) [19%, 51%] |
+| claude-haiku-5-5 high | 74% (50/68) [62%, 87%] | 60% (58/97) [53%, 68%] | 57% (49/86) [44%, 68%] | 54% (58/107) [46%, 63%] | 45% (45/99) [34%, 57%] | 63% (39/62) [50%, 77%] | 66% (47/71) [53%, 78%] | 70% (61/87) [60%, 80%] |
+| claude-haiku-5-5 low | 72% (126/176) [64%, 78%] | 55% (105/190) [46%, 64%] | 63% (107/170) [57%, 69%] | 59% (117/200) [54%, 64%] | 42% (77/183) [35%, 49%] | 73% (99/135) [64%, 82%] | 65% (77/119) [57%, 73%] | 57% (101/176) [50%, 65%] |
+| claude-haiku-5-5 max | 64% (18/28) [44%, 84%] | 71% (22/31) [50%, 86%] | 59% (19/32) [47%, 75%] | 47% (15/32) [24%, 63%] | 37% (10/27) [24%, 45%] | 61% (17/28) [41%, 76%] | 76% (13/17) [61%, 92%] | 63% (24/38) [50%, 75%] |
+| claude-haiku-5-5 medium | 68% (424/628) [64%, 71%] | 55% (394/717) [50%, 60%] | 60% (389/650) [56%, 63%] | 57% (405/710) [53%, 61%] | 38% (270/704) [35%, 42%] | 57% (297/525) [53%, 61%] | 64% (296/465) [59%, 68%] | 61% (381/621) [57%, 66%] |
+| claude-haiku-5-5 off | 77% (140/182) [69%, 84%] | 60% (154/255) [54%, 67%] | 74% (150/204) [67%, 79%] | 66% (120/182) [58%, 73%] | 25% (51/205) [20%, 30%] | 56% (89/159) [49%, 63%] | 56% (77/138) [48%, 64%] | 57% (142/247) [51%, 64%] |
+| claude-haiku-5-5 xhigh | 60% (30/50) [45%, 74%] | 53% (31/59) [35%, 72%] | 42% (16/38) [24%, 62%] | 45% (22/49) [37%, 54%] | 37% (20/54) [28%, 45%] | 54% (20/37) [45%, 67%] | 65% (24/37) [54%, 79%] | 67% (35/52) [52%, 81%] |
+| claude-opus-5-5 high | 68% (32/47) [61%, 76%] | 66% (23/35) [56%, 74%] | 62% (26/42) [52%, 74%] | 50% (23/46) [31%, 70%] | 39% (15/38) [29%, 55%] | 70% (21/30) [55%, 85%] | 64% (23/36) [53%, 75%] | 55% (26/47) [35%, 78%] |
+| claude-opus-5-5 low | 66% (35/53) [60%, 74%] | 50% (21/42) [23%, 74%] | 62% (24/39) [44%, 80%] | 29% (15/52) [13%, 42%] | 38% (20/53) [25%, 51%] | 58% (18/31) [46%, 73%] | 63% (12/19) [43%, 79%] | 50% (20/40) [38%, 60%] |
+| claude-opus-5-5 max | 82% (18/22) [69%, 100%] | 78% (18/23) [70%, 94%] | 63% (15/24) [31%, 83%] | 56% (18/32) [42%, 68%] | 38% (9/24) [7.1%, 64%] | 74% (23/31) [59%, 87%] | 75% (15/20) [44%, 95%] | 71% (22/31) [56%, 82%] |
+| claude-opus-5-5 medium | 68% (388/572) [64%, 72%] | 59% (375/636) [54%, 64%] | 57% (340/601) [53%, 61%] | 49% (363/746) [45%, 52%] | 40% (254/634) [37%, 44%] | 65% (325/499) [61%, 69%] | 65% (258/398) [60%, 69%] | 59% (341/574) [56%, 63%] |
+| claude-opus-5-5 off | 71% (47/66) [57%, 81%] | 47% (26/55) [28%, 63%] | 64% (32/50) [53%, 76%] | 39% (28/72) [32%, 47%] | 35% (19/55) [23%, 46%] | 64% (29/45) [53%, 74%] | 66% (19/29) [44%, 82%] | 60% (40/67) [47%, 75%] |
+| claude-opus-5-5 xhigh | 67% (123/184) [58%, 74%] | 59% (117/199) [51%, 67%] | 54% (111/205) [48%, 61%] | 49% (91/187) [40%, 56%] | 35% (70/201) [28%, 42%] | 61% (95/157) [52%, 69%] | 59% (68/116) [50%, 67%] | 63% (128/202) [57%, 70%] |
+| claude-sonnet-5-5 high | 67% (42/63) [48%, 82%] | 62% (46/74) [51%, 74%] | 58% (38/65) [41%, 75%] | 59% (43/73) [47%, 70%] | 24% (17/72) [12%, 35%] | 62% (37/60) [47%, 76%] | 68% (34/50) [54%, 80%] | 37% (25/67) [21%, 60%] |
+| claude-sonnet-5-5 low | 73% (38/52) [60%, 87%] | 51% (42/83) [36%, 68%] | 57% (34/60) [46%, 68%] | 49% (38/77) [37%, 63%] | 17% (12/70) [9.5%, 27%] | 65% (41/63) [54%, 76%] | 66% (31/47) [53%, 78%] | 52% (29/56) [36%, 67%] |
+| claude-sonnet-5-5 max | 78% (84/108) [67%, 87%] | 53% (79/150) [44%, 62%] | 63% (87/138) [57%, 71%] | 42% (49/118) [31%, 50%] | 42% (58/138) [34%, 50%] | 62% (63/101) [55%, 71%] | 59% (39/66) [49%, 70%] | 58% (73/126) [49%, 67%] |
+| claude-sonnet-5-5 medium | 73% (390/532) [69%, 77%] | 55% (329/595) [51%, 59%] | 58% (329/571) [54%, 61%] | 49% (336/688) [44%, 54%] | 25% (152/619) [21%, 28%] | 65% (304/471) [60%, 69%] | 64% (235/366) [59%, 69%] | 49% (285/587) [44%, 53%] |
+| claude-sonnet-5-5 off | 76% (45/59) [68%, 86%] | 53% (36/68) [41%, 64%] | 51% (38/74) [40%, 64%] | 51% (46/90) [36%, 66%] | 24% (16/68) [14%, 36%] | 63% (38/60) [52%, 74%] | 57% (26/46) [44%, 70%] | 54% (42/78) [45%, 63%] |
+| claude-sonnet-5-5 xhigh | 63% (43/68) [54%, 71%] | 75% (43/57) [64%, 84%] | 56% (34/61) [43%, 70%] | 61% (51/84) [50%, 72%] | 36% (28/78) [24%, 49%] | 64% (25/39) [49%, 77%] | 70% (40/57) [61%, 79%] | 66% (52/79) [55%, 76%] |
+| gpt-5.6-terra high | 72% (26/36) [55%, 88%] | 28% (11/39) [16%, 40%] | 75% (21/28) [64%, 90%] | 50% (19/38) [37%, 64%] | 31% (11/36) [11%, 40%] | 46% (12/26) [29%, 59%] | 64% (14/22) [47%, 81%] | 54% (21/39) [36%, 70%] |
+| gpt-5.6-terra low | 79% (26/33) [73%, 88%] | 41% (11/27) [12%, 59%] | 54% (26/48) [45%, 63%] | 47% (18/38) [32%, 58%] | 19% (6/31) [7.1%, 29%] | 41% (12/29) [13%, 69%] | 82% (18/22) [71%, 95%] | 50% (19/38) [33%, 68%] |
 | gpt-5.6-terra max | 86% (25/29) [69%, 100%] | 78% (25/32) [60%, 91%] | 79% (23/29) [72%, 88%] | 55% (21/38) [38%, 71%] | 51% (23/45) [35%, 69%] | 73% (16/22) [52%, 91%] | 59% (13/22) [44%, 79%] | 73% (24/33) [59%, 89%] |
-| gpt-5.6-terra medium | 74% (403/542) [70%, 78%] | 39% (216/553) [33%, 45%] | 64% (297/462) [60%, 68%] | 45% (240/539) [39%, 50%] | 28% (164/588) [23%, 33%] | 45% (180/399) [40%, 50%] | 72% (261/362) [68%, 76%] | 62% (314/508) [58%, 66%] |
-| gpt-5.6-terra xhigh | 79% (26/33) [61%, 96%] | 56% (19/34) [41%, 77%] | 59% (24/41) [47%, 68%] | 71% (22/31) [59%, 86%] | 47% (15/32) [37%, 62%] | 65% (22/34) [53%, 71%] | 68% (17/25) [57%, 84%] | 63% (17/27) [48%, 80%] |
-| gpt-6-astra high | 59% (10/17) [50%, 67%] | 65% (11/17) [60%, 71%] | 50% (8/16) [38%, 63%] | 46% (6/13) [29%, 67%] | 38% (3/8) [33%, 50%] | 43% (3/7) [0%, 60%] | 82% (9/11) [60%, 100%] | 58% (11/19) [56%, 60%] |
-| gpt-6-astra low | 73% (11/15) [50%, 100%] | 67% (8/12) [61%, 83%] | 56% (14/25) [45%, 67%] | 46% (11/24) [19%, 100%] | 36% (8/22) [14%, 57%] | 67% (10/15) [54%, 83%] | 78% (7/9) [75%, 100%] | 44% (8/18) [29%, 72%] |
-| gpt-6-astra medium | 71% (419/589) [68%, 75%] | 64% (449/700) [60%, 68%] | 59% (418/706) [56%, 63%] | 38% (294/780) [33%, 42%] | 35% (237/681) [32%, 38%] | 62% (315/511) [57%, 66%] | 65% (264/409) [60%, 69%] | 65% (404/624) [61%, 69%] |
-| gpt-6-luna high | 79% (23/29) [62%, 93%] | 53% (21/40) [42%, 60%] | 63% (17/27) [50%, 76%] | 57% (23/40) [40%, 71%] | 23% (9/39) [12%, 30%] | 61% (14/23) [45%, 71%] | 61% (11/18) [32%, 94%] | 42% (14/33) [16%, 79%] |
+| gpt-5.6-terra medium | 74% (408/553) [69%, 78%] | 39% (219/560) [34%, 45%] | 64% (302/470) [61%, 68%] | 45% (249/552) [40%, 51%] | 28% (167/599) [23%, 32%] | 45% (182/407) [40%, 50%] | 72% (264/367) [68%, 76%] | 62% (320/516) [58%, 66%] |
+| gpt-5.6-terra xhigh | 81% (34/42) [66%, 95%] | 53% (20/38) [38%, 72%] | 58% (28/48) [47%, 68%] | 60% (26/43) [38%, 79%] | 43% (17/40) [31%, 57%] | 67% (26/39) [55%, 77%] | 75% (24/32) [63%, 92%] | 67% (24/36) [53%, 81%] |
+| gpt-6-astra high | 61% (34/56) [48%, 73%] | 62% (37/60) [49%, 76%] | 55% (30/55) [39%, 71%] | 39% (20/51) [24%, 53%] | 38% (21/56) [26%, 52%] | 56% (20/36) [43%, 66%] | 73% (27/37) [57%, 85%] | 67% (39/58) [56%, 80%] |
+| gpt-6-astra low | 68% (28/41) [52%, 81%] | 54% (14/26) [36%, 65%] | 60% (28/47) [49%, 71%] | 36% (18/50) [20%, 69%] | 33% (18/54) [15%, 47%] | 67% (20/30) [45%, 86%] | 68% (17/25) [47%, 89%] | 48% (22/46) [33%, 64%] |
+| gpt-6-astra medium | 72% (488/679) [69%, 75%] | 64% (525/820) [60%, 68%] | 59% (478/804) [56%, 63%] | 38% (319/848) [33%, 42%] | 35% (276/788) [32%, 38%] | 62% (371/595) [58%, 66%] | 64% (300/471) [59%, 68%] | 64% (476/738) [61%, 68%] |
+| gpt-6-astra off | 69% (43/62) [52%, 85%] | 61% (38/62) [52%, 70%] | 67% (45/67) [59%, 77%] | 20% (12/60) [7.4%, 37%] | 34% (22/65) [21%, 45%] | 58% (30/52) [45%, 68%] | 60% (26/43) [49%, 75%] | 69% (37/54) [57%, 80%] |
+| gpt-6-luna high | 79% (27/34) [65%, 92%] | 55% (24/44) [45%, 63%] | 67% (22/33) [54%, 80%] | 59% (29/49) [45%, 70%] | 24% (11/45) [13%, 35%] | 58% (14/24) [40%, 69%] | 60% (12/20) [33%, 89%] | 46% (17/37) [22%, 80%] |
 | gpt-6-luna low | 77% (20/26) [55%, 95%] | 84% (21/25) [72%, 94%] | 67% (18/27) [53%, 76%] | 71% (22/31) [56%, 87%] | 64% (21/33) [39%, 88%] | 57% (13/23) [35%, 72%] | 76% (13/17) [59%, 94%] | 74% (20/27) [61%, 94%] |
-| gpt-6-luna max | 69% (18/26) [38%, 95%] | 51% (23/45) [41%, 62%] | 62% (18/29) [46%, 90%] | 57% (23/40) [34%, 73%] | 28% (11/39) [10%, 51%] | 58% (14/24) [43%, 76%] | 82% (14/17) [58%, 95%] | 65% (17/26) [50%, 77%] |
-| gpt-6-luna medium | 76% (394/520) [72%, 80%] | 65% (381/585) [61%, 69%] | 66% (352/534) [62%, 70%] | 63% (381/606) [59%, 67%] | 44% (256/578) [39%, 50%] | 59% (254/431) [54%, 64%] | 68% (232/341) [63%, 73%] | 57% (289/504) [52%, 63%] |
+| gpt-6-luna max | 72% (23/32) [45%, 91%] | 52% (26/50) [43%, 62%] | 62% (23/37) [49%, 82%] | 58% (25/43) [39%, 73%] | 29% (12/41) [13%, 51%] | 63% (17/27) [46%, 82%] | 86% (18/21) [69%, 96%] | 67% (22/33) [55%, 76%] |
+| gpt-6-luna medium | 75% (410/544) [71%, 79%] | 65% (393/601) [61%, 69%] | 66% (363/554) [61%, 70%] | 63% (400/635) [60%, 67%] | 44% (261/598) [38%, 49%] | 59% (264/447) [54%, 64%] | 67% (235/351) [62%, 72%] | 57% (302/527) [52%, 62%] |
 | gpt-6-luna off | 78% (21/27) [66%, 95%] | 83% (24/29) [70%, 94%] | 60% (15/25) [45%, 75%] | 65% (17/26) [35%, 87%] | 76% (26/34) [60%, 86%] | 61% (14/23) [50%, 76%] | 65% (20/31) [47%, 88%] | 57% (21/37) [44%, 75%] |
-| gpt-6-luna xhigh | 85% (23/27) [74%, 96%] | 62% (23/37) [36%, 79%] | 59% (24/41) [45%, 65%] | 60% (25/42) [29%, 82%] | 44% (22/50) [30%, 63%] | 74% (26/35) [67%, 85%] | 74% (20/27) [65%, 86%] | 73% (29/40) [63%, 79%] |
-| gpt-6.1-sol high | 67% (18/27) [47%, 82%] | 57% (20/35) [41%, 71%] | 70% (23/33) [60%, 78%] | 40% (14/35) [8.3%, 75%] | 41% (13/32) [18%, 67%] | 63% (15/24) [48%, 76%] | 68% (15/22) [45%, 81%] | 70% (16/23) [56%, 85%] |
-| gpt-6.1-sol low | 68% (17/25) [52%, 94%] | 65% (15/23) [29%, 91%] | 69% (18/26) [55%, 83%] | 38% (12/32) [21%, 54%] | 23% (7/31) [8.3%, 38%] | 67% (14/21) [38%, 85%] | 75% (12/16) [40%, 95%] | 76% (26/34) [68%, 88%] |
-| gpt-6.1-sol max | 68% (23/34) [48%, 86%] | 58% (22/38) [50%, 70%] | 57% (21/37) [47%, 67%] | 45% (18/40) [26%, 60%] | 49% (22/45) [37%, 65%] | 70% (23/33) [56%, 84%] | 68% (17/25) [48%, 88%] | 71% (29/41) [62%, 79%] |
-| gpt-6.1-sol medium | 70% (358/513) [65%, 74%] | 61% (364/600) [56%, 65%] | 59% (348/586) [56%, 64%] | 41% (246/604) [37%, 45%] | 37% (228/609) [34%, 41%] | 64% (300/466) [60%, 69%] | 65% (254/389) [61%, 70%] | 64% (350/543) [60%, 68%] |
-| gpt-6.1-sol xhigh | 65% (22/34) [55%, 85%] | 74% (40/54) [62%, 85%] | 59% (29/49) [52%, 68%] | 65% (45/69) [54%, 73%] | 45% (21/47) [28%, 61%] | 69% (22/32) [47%, 85%] | 74% (17/23) [59%, 92%] | 66% (19/29) [48%, 83%] |
-| gpt-6.1-terra high | 50% (3/6) [0%, 60%] | 64% (9/14) [63%, 67%] | 60% (6/10) [60%, 60%] | 24% (4/17) [17%, 27%] | 44% (7/16) [38%, 50%] | 56% (5/9) [50%, 67%] | 63% (5/8) [50%, 100%] | 57% (8/14) [50%, 67%] |
-| gpt-6.1-terra low | 86% (6/7) [86%, 86%] | 60% (3/5) [60%, 60%] | 50% (3/6) [50%, 50%] | 17% (1/6) [17%, 17%] | 40% (4/10) [40%, 40%] | 71% (5/7) [71%, 71%] | 80% (4/5) [80%, 80%] | 86% (6/7) [86%, 86%] |
-| gpt-6.1-terra max | 60% (6/10) [60%, 60%] | 89% (8/9) [89%, 89%] | 50% (2/4) [50%, 50%] | 50% (6/12) [50%, 50%] | 11% (1/9) [11%, 11%] | 83% (5/6) [83%, 83%] | 67% (2/3) [67%, 67%] | 78% (7/9) [78%, 78%] |
-| gpt-6.1-terra medium | 82% (9/11) [60%, 100%] | 81% (13/16) [67%, 100%] | 40% (4/10) [0%, 67%] | 30% (6/20) [13%, 42%] | 47% (7/15) [38%, 57%] | 85% (11/13) [80%, 88%] | 67% (6/9) [50%, 100%] | 53% (8/15) [45%, 75%] |
-| gpt-6.1-terra off | 57% (4/7) [57%, 57%] | 100% (4/4) [100%, 100%] | 100% (5/5) [100%, 100%] | 11% (1/9) [11%, 11%] | 0% (0/4) [0%, 0%] | 33% (1/3) [33%, 33%] | 80% (4/5) [80%, 80%] | 75% (3/4) [75%, 75%] |
-| gpt-6.1-terra xhigh | 100% (6/6) [100%, 100%] | 100% (7/7) [100%, 100%] | 80% (4/5) [80%, 80%] | 50% (6/12) [50%, 50%] | 33% (2/6) [33%, 33%] | 33% (1/3) [33%, 33%] | 100% (3/3) [100%, 100%] | 67% (4/6) [67%, 67%] |
+| gpt-6-luna xhigh | 76% (26/34) [58%, 91%] | 67% (33/49) [47%, 82%] | 57% (32/56) [48%, 64%] | 66% (35/53) [40%, 86%] | 42% (29/69) [31%, 57%] | 78% (32/41) [69%, 90%] | 69% (24/35) [55%, 79%] | 76% (41/54) [68%, 83%] |
+| gpt-6.1-sol high | 59% (30/51) [44%, 71%] | 65% (41/63) [54%, 76%] | 68% (41/60) [59%, 78%] | 47% (28/59) [22%, 71%] | 37% (23/63) [23%, 51%] | 67% (33/49) [58%, 75%] | 60% (28/47) [49%, 73%] | 66% (45/68) [48%, 86%] |
+| gpt-6.1-sol low | 69% (36/52) [59%, 80%] | 56% (31/55) [41%, 72%] | 61% (33/54) [50%, 72%] | 37% (19/52) [24%, 46%] | 29% (17/58) [17%, 42%] | 67% (26/39) [50%, 80%] | 76% (25/33) [57%, 90%] | 77% (40/52) [66%, 87%] |
+| gpt-6.1-sol max | 74% (93/126) [64%, 84%] | 57% (85/150) [49%, 64%] | 66% (91/138) [59%, 73%] | 48% (48/101) [35%, 60%] | 42% (62/146) [33%, 51%] | 65% (72/111) [56%, 74%] | 65% (46/71) [57%, 73%] | 61% (99/162) [54%, 68%] |
+| gpt-6.1-sol medium | 70% (374/535) [66%, 74%] | 60% (373/621) [56%, 64%] | 60% (360/603) [56%, 64%] | 41% (250/617) [36%, 45%] | 37% (234/626) [34%, 41%] | 64% (308/479) [60%, 68%] | 65% (263/407) [60%, 69%] | 64% (358/560) [60%, 68%] |
+| gpt-6.1-sol xhigh | 60% (37/62) [51%, 72%] | 76% (59/78) [67%, 83%] | 51% (37/72) [42%, 60%] | 62% (59/95) [54%, 69%] | 48% (33/69) [34%, 61%] | 62% (29/47) [45%, 76%] | 61% (22/36) [46%, 76%] | 69% (36/52) [55%, 83%] |
+| gpt-6.1-terra high | 66% (25/38) [50%, 80%] | 59% (30/51) [47%, 68%] | 53% (20/38) [41%, 61%] | 13% (7/55) [2.4%, 22%] | 34% (16/47) [20%, 46%] | 53% (18/34) [30%, 74%] | 45% (10/22) [25%, 64%] | 67% (42/63) [53%, 82%] |
+| gpt-6.1-terra low | 74% (35/47) [59%, 91%] | 62% (33/53) [48%, 74%] | 57% (29/51) [49%, 65%] | 12% (5/43) [5.4%, 17%] | 26% (18/70) [16%, 38%] | 64% (25/39) [49%, 79%] | 70% (21/30) [57%, 83%] | 78% (40/51) [63%, 90%] |
+| gpt-6.1-terra max | 75% (44/59) [65%, 85%] | 72% (42/58) [57%, 85%] | 63% (34/54) [52%, 74%] | 54% (36/67) [42%, 65%] | 44% (28/63) [33%, 56%] | 82% (49/60) [72%, 91%] | 60% (21/35) [43%, 75%] | 72% (46/64) [60%, 83%] |
+| gpt-6.1-terra medium | 76% (32/42) [64%, 88%] | 69% (36/52) [57%, 82%] | 59% (19/32) [33%, 82%] | 25% (11/44) [13%, 35%] | 29% (15/51) [15%, 43%] | 62% (24/39) [39%, 77%] | 74% (14/19) [57%, 100%] | 55% (21/38) [41%, 68%] |
+| gpt-6.1-terra off | 72% (33/46) [62%, 83%] | 79% (33/42) [66%, 93%] | 64% (28/44) [53%, 76%] | 14% (7/49) [5.0%, 24%] | 13% (5/38) [4.8%, 26%] | 70% (19/27) [57%, 88%] | 57% (8/14) [27%, 75%] | 59% (20/34) [38%, 82%] |
+| gpt-6.1-terra xhigh | 81% (29/36) [69%, 89%] | 63% (24/38) [41%, 87%] | 69% (27/39) [57%, 80%] | 36% (16/45) [19%, 43%] | 32% (13/41) [16%, 48%] | 54% (14/26) [24%, 77%] | 67% (18/27) [55%, 79%] | 74% (32/43) [57%, 86%] |
+
+### Astra efforts
+
+| Model | magnifying glass | burner phone | handsaw | beer | inverter | cigarettes | jammer | adrenaline |
+|---|---|---|---|---|---|---|---|---|
+| gpt-6-astra high | 43% (3/7) [40%, 50%] | 78% (7/9) [75%, 100%] | 88% (7/8) [86%, 100%] | 60% (6/10) [50%, 63%] | 80% (4/5) [75%, 100%] | 67% (2/3) [50%, 100%] | 80% (4/5) [75%, 100%] | 83% (5/6) [67%, 100%] |
+| gpt-6-astra low | 67% (4/6) [50%, 75%] | 50% (6/12) [0%, 67%] | 62% (8/13) [60%, 67%] | 18% (3/17) [0%, 50%] | 43% (3/7) [20%, 100%] | 50% (2/4) [0%, 100%] | 60% (3/5) [0%, 100%] | 86% (6/7) [67%, 100%] |
+| gpt-6-astra medium | 75% (9/12) [71%, 80%] | 63% (10/16) [56%, 71%] | 53% (9/17) [50%, 55%] | 20% (3/15) [13%, 29%] | 43% (3/7) [33%, 50%] | 67% (2/3) [50%, 100%] | 75% (3/4) [67%, 100%] | 50% (3/6) [50%, 50%] |
+| gpt-6-astra off | 100% (3/3) [100%, 100%] | 67% (2/3) [67%, 67%] | 100% (1/1) [100%, 100%] | 33% (1/3) [33%, 33%] | 20% (1/5) [20%, 20%] | – | – | 67% (2/3) [67%, 67%] |
 
 ### Haiku 4.5 efforts
 
@@ -1067,12 +1142,12 @@ Share of placed items used by their owner, by item. Adrenaline counts as used wh
 
 | Model | magnifying glass | burner phone | handsaw | beer | inverter | cigarettes | jammer | adrenaline |
 |---|---|---|---|---|---|---|---|---|
-| claude-opus-5-5 high | 67% (72/108) [56%, 76%] | 63% (73/115) [55%, 73%] | 47% (52/111) [37%, 57%] | 47% (56/120) [35%, 57%] | 41% (52/127) [32%, 50%] | 54% (54/100) [44%, 63%] | 68% (51/75) [60%, 75%] | 73% (96/132) [66%, 80%] |
-| claude-opus-5-5 low | 73% (56/77) [59%, 83%] | 45% (29/65) [37%, 54%] | 56% (34/61) [45%, 69%] | 39% (29/74) [30%, 51%] | 34% (24/71) [23%, 45%] | 65% (37/57) [51%, 81%] | 67% (33/49) [58%, 74%] | 66% (54/82) [57%, 76%] |
-| claude-opus-5-5 max | 83% (10/12) [75%, 100%] | 60% (3/5) [33%, 100%] | 70% (7/10) [67%, 71%] | 44% (7/16) [33%, 50%] | 67% (4/6) [33%, 100%] | 60% (9/15) [50%, 67%] | 67% (4/6) [0%, 100%] | 76% (13/17) [71%, 80%] |
-| claude-opus-5-5 medium | 71% (126/177) [65%, 77%] | 61% (113/185) [55%, 67%] | 51% (86/169) [44%, 60%] | 44% (94/215) [37%, 50%] | 39% (75/191) [34%, 45%] | 65% (103/158) [57%, 72%] | 62% (73/118) [56%, 68%] | 71% (145/203) [67%, 76%] |
-| claude-opus-5-5 off | 67% (4/6) [50%, 75%] | 100% (4/4) [100%, 100%] | 60% (6/10) [50%, 75%] | 20% (2/10) [17%, 25%] | 50% (6/12) [40%, 57%] | 50% (5/10) [33%, 57%] | 44% (4/9) [33%, 50%] | 60% (6/10) [43%, 100%] |
-| claude-opus-5-5 xhigh | 69% (82/118) [59%, 79%] | 71% (82/116) [63%, 78%] | 54% (54/100) [44%, 65%] | 42% (49/117) [30%, 55%] | 40% (50/124) [30%, 50%] | 62% (61/98) [51%, 72%] | 62% (52/84) [51%, 73%] | 74% (83/112) [67%, 81%] |
+| claude-opus-5-5 high | 67% (80/119) [57%, 76%] | 64% (84/132) [56%, 72%] | 47% (54/115) [38%, 56%] | 48% (59/124) [37%, 58%] | 40% (53/133) [31%, 48%] | 54% (57/105) [45%, 63%] | 68% (58/85) [61%, 75%] | 73% (101/139) [67%, 79%] |
+| claude-opus-5-5 low | 68% (76/112) [58%, 77%] | 51% (47/92) [42%, 62%] | 53% (50/95) [44%, 62%] | 42% (42/101) [33%, 52%] | 35% (34/98) [26%, 44%] | 65% (56/86) [54%, 77%] | 64% (46/72) [56%, 71%] | 70% (77/110) [61%, 79%] |
+| claude-opus-5-5 max | 57% (64/113) [45%, 67%] | 67% (63/94) [58%, 76%] | 54% (55/102) [45%, 63%] | 60% (56/94) [50%, 70%] | 51% (35/69) [37%, 67%] | 71% (61/86) [63%, 80%] | 65% (36/55) [54%, 79%] | 72% (84/116) [65%, 80%] |
+| claude-opus-5-5 medium | 70% (149/213) [64%, 76%] | 62% (130/210) [56%, 68%] | 53% (104/198) [45%, 60%] | 44% (103/236) [37%, 50%] | 40% (85/211) [35%, 46%] | 66% (122/184) [59%, 73%] | 61% (84/137) [56%, 67%] | 70% (162/230) [66%, 76%] |
+| claude-opus-5-5 off | 56% (10/18) [40%, 67%] | 47% (8/17) [14%, 89%] | 53% (10/19) [38%, 67%] | 40% (10/25) [23%, 59%] | 44% (11/25) [25%, 64%] | 53% (10/19) [31%, 74%] | 53% (8/15) [27%, 83%] | 55% (11/20) [38%, 86%] |
+| claude-opus-5-5 xhigh | 69% (106/153) [61%, 77%] | 71% (105/147) [64%, 78%] | 54% (74/137) [45%, 64%] | 41% (60/147) [30%, 52%] | 41% (61/147) [33%, 50%] | 63% (80/126) [54%, 72%] | 58% (59/102) [48%, 68%] | 76% (108/143) [69%, 81%] |
 
 ### Sol efforts
 
@@ -1095,17 +1170,6 @@ Share of placed items used by their owner, by item. Adrenaline counts as used wh
 | claude-sonnet-5-5 off | 73% (211/289) [68%, 78%] | 68% (210/310) [63%, 72%] | 46% (124/271) [41%, 52%] | 56% (157/282) [49%, 62%] | 23% (71/309) [18%, 28%] | 64% (169/263) [58%, 71%] | 66% (120/182) [59%, 72%] | 54% (171/314) [50%, 60%] |
 | claude-sonnet-5-5 xhigh | 63% (176/279) [57%, 69%] | 70% (197/281) [65%, 76%] | 54% (144/267) [49%, 59%] | 55% (164/300) [49%, 60%] | 41% (137/335) [36%, 46%] | 64% (163/255) [58%, 69%] | 59% (120/205) [53%, 64%] | 64% (196/307) [59%, 69%] |
 
-### Terra 6.1 efforts
-
-| Model | magnifying glass | burner phone | handsaw | beer | inverter | cigarettes | jammer | adrenaline |
-|---|---|---|---|---|---|---|---|---|
-| gpt-6.1-terra high | 70% (7/10) [50%, 83%] | 53% (8/15) [40%, 60%] | 67% (10/15) [50%, 100%] | 19% (3/16) [11%, 29%] | 20% (1/5) [0%, 50%] | 63% (5/8) [60%, 67%] | 78% (7/9) [75%, 80%] | 71% (5/7) [67%, 75%] |
-| gpt-6.1-terra low | 75% (15/20) [56%, 91%] | 40% (8/20) [14%, 54%] | 50% (4/8) [33%, 60%] | 0% (0/6) [0%, 0%] | 14% (1/7) [0%, 50%] | 100% (7/7) [100%, 100%] | 63% (5/8) [50%, 75%] | 67% (14/21) [64%, 70%] |
-| gpt-6.1-terra max | 83% (5/6) [83%, 83%] | 60% (6/10) [60%, 60%] | 50% (4/8) [50%, 50%] | 100% (4/4) [100%, 100%] | 50% (4/8) [50%, 50%] | 75% (6/8) [75%, 75%] | 83% (5/6) [83%, 83%] | 100% (5/5) [100%, 100%] |
-| gpt-6.1-terra medium | 79% (19/24) [61%, 88%] | 63% (19/30) [32%, 87%] | 67% (12/18) [43%, 90%] | 12% (3/25) [4.3%, 22%] | 24% (4/17) [0%, 50%] | 67% (14/21) [56%, 78%] | 61% (11/18) [42%, 87%] | 58% (18/31) [50%, 71%] |
-| gpt-6.1-terra off | 50% (5/10) [40%, 60%] | 50% (5/10) [20%, 80%] | 50% (6/12) [40%, 57%] | 22% (4/18) [10%, 38%] | 29% (4/14) [20%, 33%] | 83% (5/6) [75%, 100%] | 50% (3/6) [25%, 100%] | 86% (12/14) [80%, 89%] |
-| gpt-6.1-terra xhigh | 67% (10/15) [50%, 86%] | 50% (9/18) [0%, 100%] | 54% (13/24) [29%, 67%] | 20% (3/15) [14%, 33%] | 33% (6/18) [0%, 50%] | 69% (9/13) [50%, 100%] | 75% (9/12) [71%, 100%] | 38% (11/29) [22%, 75%] |
-
 ### Terra efforts
 
 | Model | magnifying glass | burner phone | handsaw | beer | inverter | cigarettes | jammer | adrenaline |
@@ -1116,6 +1180,17 @@ Share of placed items used by their owner, by item. Adrenaline counts as used wh
 | gpt-5.6-terra medium | 63% (160/253) [57%, 69%] | 28% (70/251) [22%, 34%] | 59% (145/245) [53%, 64%] | 34% (91/264) [27%, 43%] | 27% (69/256) [21%, 33%] | 42% (76/181) [35%, 49%] | 66% (108/164) [59%, 73%] | 59% (142/241) [53%, 65%] |
 | gpt-5.6-terra xhigh | 68% (170/249) [63%, 73%] | 50% (130/260) [43%, 57%] | 62% (139/223) [56%, 69%] | 47% (123/262) [40%, 54%] | 32% (90/279) [27%, 38%] | 52% (103/200) [44%, 59%] | 69% (116/169) [62%, 75%] | 67% (174/261) [60%, 73%] |
 
+### gpt-6.1-terra efforts
+
+| Model | magnifying glass | burner phone | handsaw | beer | inverter | cigarettes | jammer | adrenaline |
+|---|---|---|---|---|---|---|---|---|
+| gpt-6.1-terra high | 79% (11/14) [50%, 100%] | 50% (10/20) [40%, 60%] | 71% (12/17) [50%, 100%] | 18% (3/17) [0%, 29%] | 20% (1/5) [0%, 50%] | 60% (6/10) [50%, 67%] | 73% (8/11) [50%, 80%] | 50% (5/10) [0%, 75%] |
+| gpt-6.1-terra low | 75% (15/20) [56%, 91%] | 40% (8/20) [14%, 54%] | 50% (4/8) [33%, 60%] | 0% (0/6) [0%, 0%] | 14% (1/7) [0%, 50%] | 100% (7/7) [100%, 100%] | 63% (5/8) [50%, 75%] | 67% (14/21) [64%, 70%] |
+| gpt-6.1-terra max | 83% (5/6) [83%, 83%] | 60% (6/10) [60%, 60%] | 50% (4/8) [50%, 50%] | 100% (4/4) [100%, 100%] | 50% (4/8) [50%, 50%] | 75% (6/8) [75%, 75%] | 83% (5/6) [83%, 83%] | 100% (5/5) [100%, 100%] |
+| gpt-6.1-terra medium | 79% (19/24) [61%, 88%] | 63% (19/30) [38%, 87%] | 67% (12/18) [43%, 90%] | 12% (3/25) [4.3%, 22%] | 24% (4/17) [0%, 50%] | 67% (14/21) [53%, 78%] | 61% (11/18) [42%, 87%] | 58% (18/31) [50%, 71%] |
+| gpt-6.1-terra off | 65% (11/17) [43%, 90%] | 50% (7/14) [17%, 75%] | 47% (8/17) [36%, 56%] | 22% (5/23) [9.1%, 36%] | 29% (5/17) [20%, 33%] | 73% (8/11) [60%, 89%] | 60% (6/10) [25%, 100%] | 67% (16/24) [40%, 86%] |
+| gpt-6.1-terra xhigh | 67% (14/21) [50%, 81%] | 50% (10/20) [10%, 93%] | 54% (13/24) [29%, 67%] | 18% (4/22) [14%, 25%] | 30% (6/20) [0%, 45%] | 73% (11/15) [55%, 100%] | 71% (10/14) [60%, 80%] | 39% (13/33) [28%, 63%] |
+
 ## Items held at elimination
 
 Deaths, the share with at least one unused item, and the items held per death.
@@ -1124,54 +1199,64 @@ Deaths, the share with at least one unused item, and the items held per death.
 
 | Model | Deaths with an item held | Items held per death | Items held at death, most common |
 |---|---|---|---|
-| claude-haiku-4-5-20251001 high | 95% (21/22) [86%, 100%] | 3.64 (80/22) [3.15, 4.05] | inverter 19, adrenaline 16, burner phone 13 |
-| claude-haiku-4-5-20251001 low | 89% (16/18) [79%, 100%] | 3.00 (54/18) [2.14, 4.20] | adrenaline 13, inverter 11, beer 10 |
-| claude-haiku-4-5-20251001 medium | 89% (304/341) [86%, 92%] | 3.50 (1192/341) [3.26, 3.75] | inverter 240, burner phone 213, beer 207 |
-| claude-haiku-4-5-20251001 minimal | 78% (14/18) [61%, 94%] | 3.11 (56/18) [1.80, 4.59] | adrenaline 11, inverter 10, burner phone 9 |
-| claude-haiku-4-5-20251001 off | 91% (21/23) [85%, 100%] | 3.35 (77/23) [2.52, 4.24] | beer 15, adrenaline 15, inverter 12 |
-| claude-haiku-5-5 high | 96% (22/23) [88%, 100%] | 3.22 (74/23) [2.45, 3.90] | beer 14, handsaw 13, inverter 13 |
-| claude-haiku-5-5 low | 100% (15/15) [100%, 100%] | 3.67 (55/15) [2.73, 4.47] | inverter 17, beer 10, burner phone 7 |
-| claude-haiku-5-5 max | 90% (9/10) [70%, 100%] | 3.40 (34/10) [2.29, 4.09] | adrenaline 6, magnifying glass 5, handsaw 5 |
-| claude-haiku-5-5 medium | 92% (237/258) [89%, 95%] | 3.34 (861/258) [3.12, 3.59] | inverter 176, burner phone 140, beer 134 |
-| claude-haiku-5-5 off | 90% (19/21) [81%, 100%] | 3.14 (66/21) [2.39, 3.71] | burner phone 10, inverter 10, adrenaline 10 |
-| claude-haiku-5-5 xhigh | 100% (17/17) [100%, 100%] | 4.00 (68/17) [3.25, 4.76] | beer 13, adrenaline 11, burner phone 10 |
-| claude-opus-5-5 high | 100% (11/11) [100%, 100%] | 3.73 (41/11) [3.08, 4.67] | inverter 8, beer 7, adrenaline 7 |
-| claude-opus-5-5 low | 90% (9/10) [82%, 100%] | 3.20 (32/10) [3.00, 3.67] | beer 8, inverter 7, adrenaline 7 |
-| claude-opus-5-5 max | 100% (4/4) [100%, 100%] | 3.25 (13/4) [2.00, 3.67] | inverter 5, beer 3, cigarettes 2 |
-| claude-opus-5-5 medium | 92% (219/237) [89%, 95%] | 3.37 (798/237) [3.14, 3.59] | inverter 182, beer 154, adrenaline 108 |
-| claude-opus-5-5 off | 75% (3/4) [67%, 100%] | 4.25 (17/4) [3.67, 6.00] | inverter 6, magnifying glass 2, handsaw 2 |
-| claude-opus-5-5 xhigh | 90% (54/60) [83%, 97%] | 3.17 (190/60) [2.71, 3.72] | inverter 43, beer 30, adrenaline 28 |
-| claude-sonnet-5-5 high | 93% (13/14) [84%, 100%] | 3.21 (45/14) [2.30, 4.50] | inverter 19, beer 6, burner phone 5 |
-| claude-sonnet-5-5 low | 95% (19/20) [77%, 100%] | 3.85 (77/20) [2.67, 4.48] | inverter 20, burner phone 15, beer 12 |
-| claude-sonnet-5-5 max | 100% (8/8) [100%, 100%] | 3.38 (27/8) [2.20, 4.40] | adrenaline 5, burner phone 4, beer 4 |
-| claude-sonnet-5-5 medium | 91% (228/250) [87%, 95%] | 3.54 (884/250) [3.25, 3.83] | inverter 226, adrenaline 163, beer 152 |
-| claude-sonnet-5-5 off | 83% (15/18) [76%, 94%] | 3.83 (69/18) [2.89, 5.33] | inverter 16, burner phone 12, adrenaline 12 |
-| claude-sonnet-5-5 xhigh | 88% (14/16) [73%, 100%] | 2.81 (45/16) [2.00, 3.69] | inverter 12, beer 8, magnifying glass 6 |
-| gpt-5.6-terra high | 100% (18/18) [100%, 100%] | 3.33 (60/18) [2.88, 3.93] | burner phone 14, inverter 13, beer 11 |
-| gpt-5.6-terra low | 92% (12/13) [81%, 100%] | 4.15 (54/13) [3.00, 6.00] | adrenaline 11, beer 10, inverter 10 |
+| claude-haiku-4-5-20251001 high | 89% (49/55) [80%, 97%] | 3.42 (188/55) [2.79, 4.04] | inverter 41, adrenaline 39, burner phone 32 |
+| claude-haiku-4-5-20251001 low | 93% (62/67) [87%, 97%] | 3.39 (227/67) [2.99, 3.77] | adrenaline 55, inverter 46, burner phone 32 |
+| claude-haiku-4-5-20251001 medium | 89% (403/451) [86%, 92%] | 3.42 (1543/451) [3.22, 3.63] | inverter 303, burner phone 280, beer 262 |
+| claude-haiku-4-5-20251001 minimal | 87% (53/61) [78%, 95%] | 3.52 (215/61) [2.82, 4.22] | adrenaline 44, burner phone 43, inverter 33 |
+| claude-haiku-4-5-20251001 off | 91% (41/45) [85%, 98%] | 3.56 (160/45) [3.06, 4.07] | beer 31, adrenaline 29, inverter 26 |
+| claude-haiku-5-5 high | 90% (37/41) [82%, 98%] | 3.02 (124/41) [2.45, 3.59] | beer 26, inverter 24, handsaw 19 |
+| claude-haiku-5-5 low | 93% (52/56) [86%, 98%] | 3.13 (175/56) [2.59, 3.61] | inverter 43, beer 30, burner phone 26 |
+| claude-haiku-5-5 max | 91% (10/11) [73%, 100%] | 3.64 (40/11) [2.57, 4.44] | inverter 7, adrenaline 7, magnifying glass 6 |
+| claude-haiku-5-5 medium | 92% (273/298) [89%, 94%] | 3.41 (1017/298) [3.19, 3.64] | inverter 197, burner phone 178, beer 159 |
+| claude-haiku-5-5 off | 90% (83/92) [84%, 95%] | 3.41 (314/92) [3.00, 3.84] | inverter 78, adrenaline 57, burner phone 53 |
+| claude-haiku-5-5 xhigh | 100% (28/28) [100%, 100%] | 4.04 (113/28) [3.41, 4.71] | inverter 20, beer 19, burner phone 18 |
+| claude-opus-5-5 high | 94% (16/17) [80%, 100%] | 3.41 (58/17) [2.79, 4.18] | adrenaline 16, inverter 9, handsaw 8 |
+| claude-opus-5-5 low | 89% (17/19) [76%, 100%] | 3.68 (70/19) [2.89, 4.71] | beer 17, inverter 15, burner phone 13 |
+| claude-opus-5-5 max | 85% (11/13) [54%, 100%] | 2.31 (30/13) [1.38, 3.23] | beer 8, inverter 8, adrenaline 5 |
+| claude-opus-5-5 medium | 92% (232/251) [89%, 95%] | 3.39 (850/251) [3.18, 3.61] | inverter 189, beer 164, adrenaline 119 |
+| claude-opus-5-5 off | 88% (21/24) [75%, 100%] | 3.83 (92/24) [2.92, 4.81] | inverter 24, beer 15, burner phone 14 |
+| claude-opus-5-5 xhigh | 90% (86/96) [84%, 95%] | 3.17 (304/96) [2.74, 3.60] | inverter 70, burner phone 54, beer 46 |
+| claude-sonnet-5-5 high | 91% (30/33) [82%, 100%] | 3.36 (111/33) [2.53, 4.24] | inverter 35, adrenaline 23, burner phone 14 |
+| claude-sonnet-5-5 low | 94% (34/36) [86%, 100%] | 3.97 (143/36) [3.42, 4.37] | inverter 38, burner phone 30, beer 22 |
+| claude-sonnet-5-5 max | 100% (49/49) [100%, 100%] | 3.65 (179/49) [3.27, 4.02] | burner phone 42, adrenaline 38, inverter 28 |
+| claude-sonnet-5-5 medium | 91% (253/277) [88%, 95%] | 3.52 (975/277) [3.26, 3.78] | inverter 245, adrenaline 177, beer 167 |
+| claude-sonnet-5-5 off | 85% (23/27) [78%, 95%] | 3.56 (96/27) [2.74, 4.61] | beer 21, inverter 21, adrenaline 16 |
+| claude-sonnet-5-5 xhigh | 88% (23/26) [75%, 100%] | 3.00 (78/26) [2.37, 3.62] | inverter 19, beer 17, handsaw 12 |
+| gpt-5.6-terra high | 100% (20/20) [100%, 100%] | 3.55 (71/20) [2.96, 4.38] | burner phone 17, inverter 17, beer 12 |
+| gpt-5.6-terra low | 93% (14/15) [83%, 100%] | 4.27 (64/15) [3.14, 5.70] | beer 13, inverter 13, adrenaline 11 |
 | gpt-5.6-terra max | 71% (10/14) [64%, 88%] | 2.50 (35/14) [2.00, 3.57] | beer 10, inverter 7, adrenaline 5 |
-| gpt-5.6-terra medium | 92% (243/265) [88%, 95%] | 3.33 (883/265) [3.07, 3.63] | inverter 198, burner phone 168, beer 166 |
-| gpt-5.6-terra xhigh | 82% (14/17) [69%, 94%] | 2.47 (42/17) [1.67, 3.50] | burner phone 8, inverter 8, handsaw 7 |
-| gpt-6-astra high | 100% (4/4) [100%, 100%] | 3.50 (14/4) [3.00, 4.00] | beer 5, handsaw 2, cigarettes 2 |
-| gpt-6-astra low | 100% (12/12) [100%, 100%] | 3.08 (37/12) [2.47, 3.60] | inverter 10, adrenaline 8, handsaw 6 |
-| gpt-6-astra medium | 94% (240/255) [91%, 97%] | 3.24 (826/255) [3.00, 3.50] | inverter 215, beer 185, adrenaline 103 |
-| gpt-6-luna high | 94% (16/17) [81%, 100%] | 4.18 (71/17) [3.69, 4.65] | inverter 20, burner phone 15, adrenaline 12 |
+| gpt-5.6-terra medium | 92% (249/272) [88%, 95%] | 3.33 (907/272) [3.05, 3.61] | inverter 204, burner phone 171, beer 170 |
+| gpt-5.6-terra xhigh | 85% (17/20) [74%, 96%] | 2.55 (51/20) [1.89, 3.41] | burner phone 9, inverter 9, handsaw 8 |
+| gpt-6-astra high | 95% (21/22) [85%, 100%] | 3.45 (76/22) [2.76, 4.00] | inverter 18, beer 17, burner phone 11 |
+| gpt-6-astra low | 96% (22/23) [85%, 100%] | 3.48 (80/23) [2.83, 4.23] | inverter 22, adrenaline 16, burner phone 11 |
+| gpt-6-astra medium | 93% (280/300) [90%, 96%] | 3.25 (974/300) [3.02, 3.50] | inverter 240, beer 207, adrenaline 128 |
+| gpt-6-astra off | 90% (19/21) [76%, 100%] | 3.19 (67/21) [2.35, 4.00] | inverter 20, beer 17, handsaw 8 |
+| gpt-6-luna high | 90% (18/20) [74%, 100%] | 3.95 (79/20) [3.30, 4.47] | inverter 21, burner phone 15, beer 13 |
 | gpt-6-luna low | 64% (16/25) [46%, 79%] | 1.56 (39/25) [0.89, 2.45] | inverter 9, beer 6, handsaw 5 |
-| gpt-6-luna max | 90% (18/20) [83%, 100%] | 3.35 (67/20) [2.93, 3.88] | inverter 19, burner phone 13, beer 11 |
-| gpt-6-luna medium | 84% (312/372) [80%, 87%] | 2.74 (1021/372) [2.56, 2.94] | inverter 224, beer 173, adrenaline 159 |
+| gpt-6-luna max | 86% (19/22) [75%, 96%] | 3.14 (69/22) [2.44, 3.70] | inverter 20, burner phone 13, beer 12 |
+| gpt-6-luna medium | 84% (325/386) [81%, 87%] | 2.76 (1067/386) [2.57, 2.95] | inverter 234, beer 180, adrenaline 169 |
 | gpt-6-luna off | 88% (22/25) [74%, 100%] | 2.16 (54/25) [1.83, 2.52] | adrenaline 13, cigarettes 9, handsaw 7 |
-| gpt-6-luna xhigh | 83% (15/18) [71%, 95%] | 2.72 (49/18) [2.47, 3.00] | burner phone 9, handsaw 9, inverter 9 |
-| gpt-6.1-sol high | 92% (12/13) [73%, 100%] | 3.15 (41/13) [2.33, 4.23] | inverter 11, burner phone 8, beer 7 |
-| gpt-6.1-sol low | 92% (11/12) [70%, 100%] | 2.83 (34/12) [1.50, 4.33] | beer 15, inverter 7, magnifying glass 4 |
-| gpt-6.1-sol max | 60% (6/10) [13%, 92%] | 2.30 (23/10) [0.50, 3.50] | handsaw 5, beer 4, inverter 4 |
-| gpt-6.1-sol medium | 96% (215/225) [93%, 98%] | 3.46 (778/225) [3.21, 3.70] | inverter 179, beer 153, burner phone 103 |
-| gpt-6.1-sol xhigh | 92% (12/13) [79%, 100%] | 3.23 (42/13) [2.73, 3.64] | inverter 16, beer 9, handsaw 6 |
-| gpt-6.1-terra high | 100% (7/7) [100%, 100%] | 4.43 (31/7) [3.75, 5.33] | beer 10, adrenaline 6, inverter 5 |
-| gpt-6.1-terra low | 100% (3/3) [100%, 100%] | 2.67 (8/3) [2.67, 2.67] | inverter 4, handsaw 1, beer 1 |
-| gpt-6.1-terra max | 100% (4/4) [100%, 100%] | 3.25 (13/4) [3.25, 3.25] | beer 4, inverter 4, adrenaline 2 |
-| gpt-6.1-terra medium | 100% (7/7) [100%, 100%] | 3.14 (22/7) [2.67, 3.50] | inverter 6, adrenaline 6, beer 5 |
-| gpt-6.1-terra off | 50% (1/2) [50%, 50%] | 2.50 (5/2) [2.50, 2.50] | magnifying glass 1, beer 1, cigarettes 1 |
-| gpt-6.1-terra xhigh | 100% (4/4) [100%, 100%] | 1.50 (6/4) [1.50, 1.50] | inverter 2, adrenaline 2, beer 1 |
+| gpt-6-luna xhigh | 83% (20/24) [71%, 96%] | 2.63 (63/24) [2.18, 3.00] | inverter 17, handsaw 13, burner phone 9 |
+| gpt-6.1-sol high | 90% (26/29) [79%, 97%] | 3.14 (91/29) [2.23, 4.07] | inverter 21, adrenaline 17, burner phone 13 |
+| gpt-6.1-sol low | 95% (20/21) [83%, 100%] | 3.05 (64/21) [2.16, 3.95] | beer 20, inverter 17, magnifying glass 7 |
+| gpt-6.1-sol max | 86% (48/56) [75%, 94%] | 2.70 (151/56) [2.27, 3.08] | burner phone 35, inverter 34, adrenaline 33 |
+| gpt-6.1-sol medium | 95% (218/229) [92%, 98%] | 3.48 (798/229) [3.24, 3.74] | inverter 182, beer 155, burner phone 109 |
+| gpt-6.1-sol xhigh | 92% (22/24) [81%, 100%] | 3.17 (76/24) [2.71, 3.65] | inverter 26, beer 15, handsaw 11 |
+| gpt-6.1-terra high | 100% (18/18) [100%, 100%] | 4.06 (73/18) [3.44, 4.67] | beer 17, adrenaline 13, burner phone 10 |
+| gpt-6.1-terra low | 96% (24/25) [87%, 100%] | 3.32 (83/25) [2.54, 4.07] | inverter 31, beer 16, handsaw 8 |
+| gpt-6.1-terra max | 89% (16/18) [71%, 100%] | 3.22 (58/18) [2.00, 4.38] | inverter 13, beer 11, burner phone 8 |
+| gpt-6.1-terra medium | 100% (23/23) [100%, 100%] | 3.43 (79/23) [3.04, 3.86] | inverter 23, beer 19, adrenaline 13 |
+| gpt-6.1-terra off | 95% (18/19) [82%, 100%] | 3.58 (68/19) [3.12, 3.95] | beer 18, inverter 15, adrenaline 10 |
+| gpt-6.1-terra xhigh | 95% (20/21) [86%, 100%] | 2.67 (56/21) [2.14, 3.23] | inverter 15, beer 11, adrenaline 8 |
+
+### Astra efforts
+
+| Model | Deaths with an item held | Items held per death | Items held at death, most common |
+|---|---|---|---|
+| gpt-6-astra high | 60% (3/5) [0%, 75%] | 1.80 (9/5) [0.00, 2.25] | magnifying glass 2, burner phone 2, handsaw 1 |
+| gpt-6-astra low | 100% (7/7) [100%, 100%] | 3.00 (21/7) [1.00, 5.00] | beer 8, burner phone 4, handsaw 3 |
+| gpt-6-astra medium | 100% (4/4) [100%, 100%] | 3.50 (14/4) [3.00, 4.00] | beer 7, burner phone 3, handsaw 2 |
+| gpt-6-astra off | 100% (2/2) [100%, 100%] | 1.50 (3/2) [1.50, 1.50] | beer 1, inverter 1, adrenaline 1 |
 
 ### Haiku 4.5 efforts
 
@@ -1209,12 +1294,12 @@ Deaths, the share with at least one unused item, and the items held per death.
 
 | Model | Deaths with an item held | Items held per death | Items held at death, most common |
 |---|---|---|---|
-| claude-opus-5-5 high | 87% (58/67) [78%, 94%] | 3.00 (201/67) [2.45, 3.55] | beer 44, inverter 36, burner phone 27 |
-| claude-opus-5-5 low | 84% (31/37) [70%, 97%] | 2.78 (103/37) [2.03, 3.51] | beer 28, inverter 21, burner phone 19 |
-| claude-opus-5-5 max | 67% (2/3) [50%, 100%] | 0.67 (2/3) [0.50, 1.00] | handsaw 1, beer 1 |
-| claude-opus-5-5 medium | 90% (91/101) [84%, 95%] | 2.98 (301/101) [2.53, 3.42] | beer 67, inverter 59, burner phone 46 |
-| claude-opus-5-5 off | 67% (4/6) [67%, 67%] | 2.00 (12/6) [1.67, 2.33] | beer 5, jammer 2, adrenaline 2 |
-| claude-opus-5-5 xhigh | 86% (43/50) [76%, 96%] | 2.66 (133/50) [2.09, 3.29] | inverter 32, beer 23, magnifying glass 16 |
+| claude-opus-5-5 high | 88% (64/73) [80%, 94%] | 2.96 (216/73) [2.42, 3.49] | beer 45, inverter 38, burner phone 32 |
+| claude-opus-5-5 low | 82% (42/51) [70%, 94%] | 3.02 (154/51) [2.39, 3.58] | beer 36, inverter 28, burner phone 24 |
+| claude-opus-5-5 max | 83% (34/41) [69%, 95%] | 2.63 (108/41) [2.00, 3.22] | magnifying glass 21, handsaw 19, beer 16 |
+| claude-opus-5-5 medium | 89% (102/114) [84%, 95%] | 3.03 (345/114) [2.62, 3.42] | beer 74, inverter 66, burner phone 51 |
+| claude-opus-5-5 off | 82% (9/11) [69%, 100%] | 3.36 (37/11) [2.21, 5.13] | beer 12, burner phone 6, jammer 4 |
+| claude-opus-5-5 xhigh | 83% (53/64) [74%, 91%] | 2.59 (166/64) [2.09, 3.13] | inverter 34, beer 30, burner phone 21 |
 
 ### Sol efforts
 
@@ -1237,17 +1322,6 @@ Deaths, the share with at least one unused item, and the items held per death.
 | claude-sonnet-5-5 off | 91% (150/165) [86%, 95%] | 3.10 (511/165) [2.76, 3.45] | inverter 138, adrenaline 92, beer 66 |
 | claude-sonnet-5-5 xhigh | 90% (127/141) [85%, 95%] | 3.18 (448/141) [2.87, 3.49] | inverter 106, beer 75, adrenaline 70 |
 
-### Terra 6.1 efforts
-
-| Model | Deaths with an item held | Items held per death | Items held at death, most common |
-|---|---|---|---|
-| gpt-6.1-terra high | 100% (9/9) [100%, 100%] | 3.00 (27/9) [2.67, 3.67] | beer 9, burner phone 7, handsaw 4 |
-| gpt-6.1-terra low | 100% (4/4) [100%, 100%] | 3.00 (12/4) [2.00, 3.33] | burner phone 6, inverter 2, adrenaline 2 |
-| gpt-6.1-terra max | – | – | – |
-| gpt-6.1-terra medium | 90% (9/10) [75%, 100%] | 3.50 (35/10) [2.75, 4.00] | beer 11, inverter 8, burner phone 7 |
-| gpt-6.1-terra off | 100% (8/8) [100%, 100%] | 3.88 (31/8) [3.60, 4.33] | beer 13, inverter 8, burner phone 5 |
-| gpt-6.1-terra xhigh | 100% (11/11) [100%, 100%] | 4.27 (47/11) [3.80, 4.67] | adrenaline 17, inverter 9, beer 8 |
-
 ### Terra efforts
 
 | Model | Deaths with an item held | Items held per death | Items held at death, most common |
@@ -1258,6 +1332,17 @@ Deaths, the share with at least one unused item, and the items held per death.
 | gpt-5.6-terra medium | 97% (128/132) [93%, 100%] | 4.33 (571/132) [3.93, 4.73] | inverter 122, burner phone 116, beer 100 |
 | gpt-5.6-terra xhigh | 91% (96/105) [86%, 96%] | 3.23 (339/105) [2.88, 3.61] | inverter 77, beer 63, burner phone 51 |
 
+### gpt-6.1-terra efforts
+
+| Model | Deaths with an item held | Items held per death | Items held at death, most common |
+|---|---|---|---|
+| gpt-6.1-terra high | 100% (11/11) [100%, 100%] | 3.09 (34/11) [2.67, 3.67] | beer 10, burner phone 9, handsaw 4 |
+| gpt-6.1-terra low | 100% (4/4) [100%, 100%] | 3.00 (12/4) [2.00, 3.33] | burner phone 6, inverter 2, adrenaline 2 |
+| gpt-6.1-terra max | – | – | – |
+| gpt-6.1-terra medium | 90% (9/10) [75%, 100%] | 3.50 (35/10) [2.75, 4.00] | beer 11, inverter 8, burner phone 7 |
+| gpt-6.1-terra off | 100% (11/11) [100%, 100%] | 4.00 (44/11) [3.50, 4.71] | beer 16, inverter 10, burner phone 7 |
+| gpt-6.1-terra xhigh | 100% (12/12) [100%, 100%] | 4.08 (49/12) [2.00, 4.67] | adrenaline 17, inverter 10, beer 9 |
+
 ## Same-position consistency
 
 Agent decisions grouped by the deciding player's own position. Exact: the same board, cash and round, the same log since the load, the same legal moves, code and instructions. Belief: the same board, load shown, cash, round, legal moves and versions, the same public and private shell beliefs, and the same count of clue items each opponent used this load. Players are named relative to the decider. Coverage is the share of decisions in a position seen at least twice. Non-modal is the share of those decisions that differ from their position's most common choice; it has no interval, because resampling blocks duplicates decisions and a copy always matches the mode. Two differ is the chance two different decisions in a position differ, averaged over positions, with an interval over pairs of distinct decisions.
@@ -1266,54 +1351,59 @@ Agent decisions grouped by the deciding player's own position. Exact: the same b
 
 | Cohort | Model | Positions seen twice or more | Coverage | Non-modal choices | Two differ |
 |---|---|---|---|---|---|
-| Cross-model | claude-haiku-4-5-20251001 high | 0 | 0% (0/191) | – | – |
-| Cross-model | claude-haiku-4-5-20251001 low | 5 | 4.5% (10/220) | 0% (0/10) | 0% over 5 positions [0%, 0%] |
-| Cross-model | claude-haiku-4-5-20251001 medium | 263 | 18% (719/3945) | 19% (137/719) | 36% over 263 positions [31%, 41%] |
-| Cross-model | claude-haiku-4-5-20251001 minimal | 0 | 0% (0/254) | – | – |
-| Cross-model | claude-haiku-4-5-20251001 off | 5 | 4.4% (10/229) | 20% (2/10) | 40% over 5 positions [33%, 50%] |
-| Cross-model | claude-haiku-5-5 high | 3 | 2.2% (6/269) | 17% (1/6) | 33% over 3 positions [33%, 33%] |
-| Cross-model | claude-haiku-5-5 low | 0 | 0% (0/313) | – | – |
-| Cross-model | claude-haiku-5-5 max | 0 | 0% (0/238) | – | – |
-| Cross-model | claude-haiku-5-5 medium | 303 | 19% (852/4434) | 12% (101/852) | 21% over 303 positions [18%, 26%] |
-| Cross-model | claude-haiku-5-5 off | 9 | 8.4% (18/214) | 11% (2/18) | 22% over 9 positions [17%, 33%] |
-| Cross-model | claude-haiku-5-5 xhigh | 0 | 0% (0/216) | – | – |
-| Cross-model | claude-opus-5-5 high | 0 | 0% (0/228) | – | – |
-| Cross-model | claude-opus-5-5 low | 0 | 0% (0/212) | – | – |
-| Cross-model | claude-opus-5-5 max | 3 | 6.0% (6/100) | 0% (0/6) | 0% over 3 positions [0%, 0%] |
-| Cross-model | claude-opus-5-5 medium | 399 | 23% (1086/4771) | 6.0% (65/1086) | 11% over 399 positions [9.0%, 14%] |
-| Cross-model | claude-opus-5-5 off | 0 | 0% (0/113) | – | – |
-| Cross-model | claude-opus-5-5 xhigh | 1 | 0.2% (2/1055) | 50% (1/2) | 100% over 1 positions [100%, 100%] |
-| Cross-model | claude-sonnet-5-5 high | 5 | 3.6% (10/274) | 0% (0/10) | 0% over 5 positions [0%, 0%] |
-| Cross-model | claude-sonnet-5-5 low | 5 | 3.2% (10/316) | 10% (1/10) | 20% over 5 positions [0%, 50%] |
-| Cross-model | claude-sonnet-5-5 max | 3 | 2.6% (6/233) | 0% (0/6) | 0% over 3 positions [0%, 0%] |
-| Cross-model | claude-sonnet-5-5 medium | 357 | 23% (995/4395) | 5.9% (59/995) | 12% over 357 positions [8.8%, 15%] |
-| Cross-model | claude-sonnet-5-5 off | 13 | 8.7% (26/300) | 0% (0/26) | 0% over 13 positions [0%, 0%] |
-| Cross-model | claude-sonnet-5-5 xhigh | 0 | 0% (0/280) | – | – |
-| Cross-model | gpt-5.6-terra high | 0 | 0% (0/258) | – | – |
-| Cross-model | gpt-5.6-terra low | 0 | 0% (0/259) | – | – |
+| Cross-model | claude-haiku-4-5-20251001 high | 9 | 2.9% (18/626) | 5.6% (1/18) | 11% over 9 positions [0%, 50%] |
+| Cross-model | claude-haiku-4-5-20251001 low | 5 | 1.1% (10/887) | 0% (0/10) | 0% over 5 positions [0%, 0%] |
+| Cross-model | claude-haiku-4-5-20251001 medium | 265 | 14% (723/5217) | 19% (138/723) | 36% over 265 positions [30%, 41%] |
+| Cross-model | claude-haiku-4-5-20251001 minimal | 4 | 1.0% (8/815) | 13% (1/8) | 25% over 4 positions [0%, 100%] |
+| Cross-model | claude-haiku-4-5-20251001 off | 5 | 2.0% (10/495) | 20% (2/10) | 40% over 5 positions [33%, 50%] |
+| Cross-model | claude-haiku-5-5 high | 3 | 0.8% (6/745) | 17% (1/6) | 33% over 3 positions [33%, 33%] |
+| Cross-model | claude-haiku-5-5 low | 0 | 0% (0/1463) | – | – |
+| Cross-model | claude-haiku-5-5 max | 0 | 0% (0/252) | – | – |
+| Cross-model | claude-haiku-5-5 medium | 308 | 17% (862/5209) | 12% (102/862) | 21% over 308 positions [17%, 26%] |
+| Cross-model | claude-haiku-5-5 off | 14 | 1.7% (28/1662) | 14% (4/28) | 29% over 14 positions [17%, 50%] |
+| Cross-model | claude-haiku-5-5 xhigh | 0 | 0% (0/367) | – | – |
+| Cross-model | claude-opus-5-5 high | 0 | 0% (0/352) | – | – |
+| Cross-model | claude-opus-5-5 low | 0 | 0% (0/326) | – | – |
+| Cross-model | claude-opus-5-5 max | 3 | 2.3% (6/264) | 0% (0/6) | 0% over 3 positions [0%, 0%] |
+| Cross-model | claude-opus-5-5 medium | 409 | 22% (1106/5108) | 6.1% (67/1106) | 11% over 409 positions [9.1%, 14%] |
+| Cross-model | claude-opus-5-5 off | 0 | 0% (0/452) | – | – |
+| Cross-model | claude-opus-5-5 xhigh | 61 | 7.8% (122/1562) | 7.4% (9/122) | 15% over 61 positions [4.2%, 100%] |
+| Cross-model | claude-sonnet-5-5 high | 5 | 1.8% (10/542) | 0% (0/10) | 0% over 5 positions [0%, 0%] |
+| Cross-model | claude-sonnet-5-5 low | 5 | 1.9% (10/532) | 10% (1/10) | 20% over 5 positions [0%, 50%] |
+| Cross-model | claude-sonnet-5-5 max | 131 | 33% (331/1004) | 4.8% (16/331) | 9.7% over 131 positions [4.6%, 14%] |
+| Cross-model | claude-sonnet-5-5 medium | 376 | 22% (1033/4710) | 5.8% (60/1033) | 12% over 376 positions [8.7%, 14%] |
+| Cross-model | claude-sonnet-5-5 off | 13 | 4.7% (26/549) | 0% (0/26) | 0% over 13 positions [0%, 0%] |
+| Cross-model | claude-sonnet-5-5 xhigh | 0 | 0% (0/579) | – | – |
+| Cross-model | gpt-5.6-terra high | 0 | 0% (0/280) | – | – |
+| Cross-model | gpt-5.6-terra low | 0 | 0% (0/275) | – | – |
 | Cross-model | gpt-5.6-terra max | 0 | 0% (0/319) | – | – |
-| Cross-model | gpt-5.6-terra medium | 296 | 16% (690/4246) | 10% (72/690) | 20% over 296 positions [16%, 27%] |
-| Cross-model | gpt-5.6-terra xhigh | 2 | 1.3% (4/304) | 0% (0/4) | 0% over 2 positions [0%, 0%] |
-| Cross-model | gpt-6-astra high | 0 | 0% (0/125) | – | – |
-| Cross-model | gpt-6-astra low | 0 | 0% (0/146) | – | – |
-| Cross-model | gpt-6-astra medium | 398 | 21% (1125/5393) | 2.8% (31/1125) | 5.5% over 398 positions [3.6%, 7.0%] |
-| Cross-model | gpt-6-luna high | 0 | 0% (0/258) | – | – |
+| Cross-model | gpt-5.6-terra medium | 296 | 16% (690/4316) | 10% (72/690) | 20% over 296 positions [16%, 26%] |
+| Cross-model | gpt-5.6-terra xhigh | 2 | 1.1% (4/379) | 0% (0/4) | 0% over 2 positions [0%, 0%] |
+| Cross-model | gpt-6-astra high | 0 | 0% (0/449) | – | – |
+| Cross-model | gpt-6-astra low | 19 | 12% (38/315) | 0% (0/38) | 0% over 19 positions [0%, 0%] |
+| Cross-model | gpt-6-astra medium | 468 | 20% (1268/6219) | 2.9% (37/1268) | 6.0% over 468 positions [3.9%, 7.3%] |
+| Cross-model | gpt-6-astra off | 0 | 0% (0/491) | – | – |
+| Cross-model | gpt-6-luna high | 0 | 0% (0/300) | – | – |
 | Cross-model | gpt-6-luna low | 12 | 9.1% (24/263) | 8.3% (2/24) | 17% over 12 positions [9.1%, 100%] |
-| Cross-model | gpt-6-luna max | 7 | 5.4% (14/259) | 14% (2/14) | 29% over 7 positions [29%, 29%] |
-| Cross-model | gpt-6-luna medium | 306 | 18% (853/4673) | 17% (148/853) | 32% over 306 positions [27%, 37%] |
+| Cross-model | gpt-6-luna max | 7 | 4.5% (14/308) | 14% (2/14) | 29% over 7 positions [29%, 29%] |
+| Cross-model | gpt-6-luna medium | 306 | 18% (853/4825) | 17% (148/853) | 32% over 306 positions [27%, 37%] |
 | Cross-model | gpt-6-luna off | 0 | 0% (0/274) | – | – |
-| Cross-model | gpt-6-luna xhigh | 0 | 0% (0/352) | – | – |
-| Cross-model | gpt-6.1-sol high | 0 | 0% (0/248) | – | – |
-| Cross-model | gpt-6.1-sol low | 0 | 0% (0/234) | – | – |
-| Cross-model | gpt-6.1-sol max | 0 | 0% (0/325) | – | – |
-| Cross-model | gpt-6.1-sol medium | 395 | 23% (1076/4704) | 4.9% (53/1076) | 8.6% over 395 positions [6.9%, 13%] |
-| Cross-model | gpt-6.1-sol xhigh | 1 | 0.5% (2/383) | 50% (1/2) | 100% over 1 positions [100%, 100%] |
-| Cross-model | gpt-6.1-terra high | 0 | 0% (0/91) | – | – |
-| Cross-model | gpt-6.1-terra low | 0 | 0% (0/61) | – | – |
-| Cross-model | gpt-6.1-terra max | 0 | 0% (0/69) | – | – |
-| Cross-model | gpt-6.1-terra medium | 0 | 0% (0/118) | – | – |
-| Cross-model | gpt-6.1-terra off | 0 | 0% (0/45) | – | – |
-| Cross-model | gpt-6.1-terra xhigh | 0 | 0% (0/57) | – | – |
+| Cross-model | gpt-6-luna xhigh | 0 | 0% (0/459) | – | – |
+| Cross-model | gpt-6.1-sol high | 2 | 0.8% (4/507) | 0% (0/4) | 0% over 2 positions [0%, 0%] |
+| Cross-model | gpt-6.1-sol low | 1 | 0.5% (2/433) | 50% (1/2) | 100% over 1 positions [100%, 100%] |
+| Cross-model | gpt-6.1-sol max | 130 | 28% (310/1097) | 2.6% (8/310) | 4.9% over 130 positions [0%, 10%] |
+| Cross-model | gpt-6.1-sol medium | 395 | 22% (1076/4839) | 4.9% (53/1076) | 8.6% over 395 positions [7.1%, 13%] |
+| Cross-model | gpt-6.1-sol xhigh | 1 | 0.4% (2/564) | 50% (1/2) | 100% over 1 positions [100%, 100%] |
+| Cross-model | gpt-6.1-terra high | 0 | 0% (0/346) | – | – |
+| Cross-model | gpt-6.1-terra low | 0 | 0% (0/395) | – | – |
+| Cross-model | gpt-6.1-terra max | 0 | 0% (0/539) | – | – |
+| Cross-model | gpt-6.1-terra medium | 0 | 0% (0/340) | – | – |
+| Cross-model | gpt-6.1-terra off | 0 | 0% (0/310) | – | – |
+| Cross-model | gpt-6.1-terra xhigh | 0 | 0% (0/329) | – | – |
+| Astra efforts | gpt-6-astra high | 0 | 0% (0/70) | – | – |
+| Astra efforts | gpt-6-astra low | 0 | 0% (0/71) | – | – |
+| Astra efforts | gpt-6-astra medium | 13 | 33% (26/79) | 0% (0/26) | 0% over 13 positions [0%, 0%] |
+| Astra efforts | gpt-6-astra off | 0 | 0% (0/22) | – | – |
 | Haiku 4.5 efforts | claude-haiku-4-5-20251001 high | 84 | 11% (228/2083) | 17% (38/228) | 34% over 84 positions [24%, 40%] |
 | Haiku 4.5 efforts | claude-haiku-4-5-20251001 low | 97 | 12% (250/2125) | 17% (42/250) | 32% over 97 positions [24%, 38%] |
 | Haiku 4.5 efforts | claude-haiku-4-5-20251001 medium | 106 | 14% (296/2175) | 15% (43/296) | 29% over 106 positions [20%, 36%] |
@@ -1331,12 +1421,12 @@ Agent decisions grouped by the deciding player's own position. Exact: the same b
 | Luna efforts | gpt-6-luna medium | 123 | 12% (342/2866) | 16% (54/342) | 28% over 123 positions [22%, 38%] |
 | Luna efforts | gpt-6-luna off | 155 | 14% (413/2888) | 16% (67/413) | 30% over 155 positions [24%, 37%] |
 | Luna efforts | gpt-6-luna xhigh | 139 | 13% (375/2792) | 15% (55/375) | 28% over 139 positions [20%, 37%] |
-| Opus efforts | claude-opus-5-5 high | 149 | 31% (301/970) | 5.0% (15/301) | 9.6% over 149 positions [2.4%, 27%] |
-| Opus efforts | claude-opus-5-5 low | 3 | 1.0% (6/583) | 0% (0/6) | 0% over 3 positions [0%, 0%] |
-| Opus efforts | claude-opus-5-5 max | 13 | 24% (26/109) | 3.8% (1/26) | 7.7% over 13 positions [7.7%, 7.7%] |
-| Opus efforts | claude-opus-5-5 medium | 202 | 33% (502/1541) | 4.8% (24/502) | 11% over 202 positions [6.5%, 12%] |
-| Opus efforts | claude-opus-5-5 off | 0 | 0% (0/73) | – | – |
-| Opus efforts | claude-opus-5-5 xhigh | 157 | 33% (319/969) | 5.6% (18/319) | 11% over 157 positions [5.6%, 23%] |
+| Opus efforts | claude-opus-5-5 high | 149 | 29% (301/1045) | 5.0% (15/301) | 9.6% over 149 positions [2.2%, 27%] |
+| Opus efforts | claude-opus-5-5 low | 3 | 0.7% (6/828) | 0% (0/6) | 0% over 3 positions [0%, 0%] |
+| Opus efforts | claude-opus-5-5 max | 106 | 31% (257/830) | 3.9% (10/257) | 8.5% over 106 positions [3.4%, 14%] |
+| Opus efforts | claude-opus-5-5 medium | 207 | 29% (512/1774) | 4.9% (25/512) | 11% over 207 positions [6.6%, 13%] |
+| Opus efforts | claude-opus-5-5 off | 0 | 0% (0/149) | – | – |
+| Opus efforts | claude-opus-5-5 xhigh | 157 | 26% (319/1235) | 5.6% (18/319) | 11% over 157 positions [5.3%, 22%] |
 | Sol efforts | gpt-6.1-sol high | 302 | 41% (801/1951) | 5.5% (44/801) | 11% over 302 positions [7.7%, 14%] |
 | Sol efforts | gpt-6.1-sol low | 291 | 42% (776/1851) | 4.4% (34/776) | 8.4% over 291 positions [5.7%, 11%] |
 | Sol efforts | gpt-6.1-sol max | 321 | 43% (886/2054) | 5.5% (49/886) | 12% over 321 positions [7.8%, 14%] |
@@ -1348,70 +1438,75 @@ Agent decisions grouped by the deciding player's own position. Exact: the same b
 | Sonnet efforts | claude-sonnet-5-5 medium | 284 | 33% (826/2495) | 5.7% (47/826) | 11% over 284 positions [7.9%, 14%] |
 | Sonnet efforts | claude-sonnet-5-5 off | 327 | 41% (988/2415) | 6.1% (60/988) | 12% over 327 positions [9.1%, 14%] |
 | Sonnet efforts | claude-sonnet-5-5 xhigh | 262 | 33% (813/2439) | 5.9% (48/813) | 12% over 262 positions [8.6%, 15%] |
-| Terra 6.1 efforts | gpt-6.1-terra high | 0 | 0% (0/94) | – | – |
-| Terra 6.1 efforts | gpt-6.1-terra low | 0 | 0% (0/113) | – | – |
-| Terra 6.1 efforts | gpt-6.1-terra max | 0 | 0% (0/74) | – | – |
-| Terra 6.1 efforts | gpt-6.1-terra medium | 0 | 0% (0/205) | – | – |
-| Terra 6.1 efforts | gpt-6.1-terra off | 0 | 0% (0/87) | – | – |
-| Terra 6.1 efforts | gpt-6.1-terra xhigh | 2 | 2.9% (4/139) | 25% (1/4) | 50% over 2 positions [50%, 50%] |
 | Terra efforts | gpt-5.6-terra high | 128 | 19% (351/1886) | 14% (49/351) | 27% over 128 positions [20%, 32%] |
 | Terra efforts | gpt-5.6-terra low | 152 | 20% (374/1852) | 13% (50/374) | 24% over 152 positions [19%, 35%] |
 | Terra efforts | gpt-5.6-terra max | 185 | 23% (503/2170) | 9.3% (47/503) | 20% over 185 positions [12%, 24%] |
 | Terra efforts | gpt-5.6-terra medium | 160 | 22% (403/1792) | 13% (51/403) | 24% over 160 positions [18%, 32%] |
 | Terra efforts | gpt-5.6-terra xhigh | 135 | 17% (355/2030) | 14% (48/355) | 29% over 135 positions [20%, 34%] |
+| gpt-6.1-terra efforts | gpt-6.1-terra high | 0 | 0% (0/115) | – | – |
+| gpt-6.1-terra efforts | gpt-6.1-terra low | 0 | 0% (0/113) | – | – |
+| gpt-6.1-terra efforts | gpt-6.1-terra max | 0 | 0% (0/74) | – | – |
+| gpt-6.1-terra efforts | gpt-6.1-terra medium | 0 | 0% (0/205) | – | – |
+| gpt-6.1-terra efforts | gpt-6.1-terra off | 0 | 0% (0/135) | – | – |
+| gpt-6.1-terra efforts | gpt-6.1-terra xhigh | 2 | 2.4% (4/166) | 25% (1/4) | 50% over 2 positions [50%, 50%] |
 
 ### Belief positions
 
 | Cohort | Model | Positions seen twice or more | Coverage | Non-modal choices | Two differ |
 |---|---|---|---|---|---|
-| Cross-model | claude-haiku-4-5-20251001 high | 0 | 0% (0/191) | – | – |
-| Cross-model | claude-haiku-4-5-20251001 low | 5 | 4.5% (10/220) | 0% (0/10) | 0% over 5 positions [0%, 0%] |
-| Cross-model | claude-haiku-4-5-20251001 medium | 287 | 20% (783/3945) | 19% (148/783) | 35% over 287 positions [31%, 41%] |
-| Cross-model | claude-haiku-4-5-20251001 minimal | 0 | 0% (0/254) | – | – |
-| Cross-model | claude-haiku-4-5-20251001 off | 5 | 4.4% (10/229) | 20% (2/10) | 40% over 5 positions [33%, 50%] |
-| Cross-model | claude-haiku-5-5 high | 3 | 2.2% (6/269) | 17% (1/6) | 33% over 3 positions [33%, 33%] |
-| Cross-model | claude-haiku-5-5 low | 0 | 0% (0/313) | – | – |
-| Cross-model | claude-haiku-5-5 max | 0 | 0% (0/238) | – | – |
-| Cross-model | claude-haiku-5-5 medium | 334 | 21% (945/4434) | 11% (106/945) | 19% over 334 positions [17%, 24%] |
-| Cross-model | claude-haiku-5-5 off | 9 | 8.4% (18/214) | 11% (2/18) | 22% over 9 positions [17%, 33%] |
-| Cross-model | claude-haiku-5-5 xhigh | 0 | 0% (0/216) | – | – |
-| Cross-model | claude-opus-5-5 high | 0 | 0% (0/228) | – | – |
-| Cross-model | claude-opus-5-5 low | 0 | 0% (0/212) | – | – |
-| Cross-model | claude-opus-5-5 max | 3 | 6.0% (6/100) | 0% (0/6) | 0% over 3 positions [0%, 0%] |
-| Cross-model | claude-opus-5-5 medium | 430 | 25% (1189/4771) | 5.8% (69/1189) | 10% over 430 positions [8.7%, 13%] |
-| Cross-model | claude-opus-5-5 off | 0 | 0% (0/113) | – | – |
-| Cross-model | claude-opus-5-5 xhigh | 1 | 0.2% (2/1055) | 50% (1/2) | 100% over 1 positions [100%, 100%] |
-| Cross-model | claude-sonnet-5-5 high | 5 | 3.6% (10/274) | 0% (0/10) | 0% over 5 positions [0%, 0%] |
-| Cross-model | claude-sonnet-5-5 low | 5 | 3.2% (10/316) | 10% (1/10) | 20% over 5 positions [0%, 50%] |
-| Cross-model | claude-sonnet-5-5 max | 3 | 2.6% (6/233) | 0% (0/6) | 0% over 3 positions [0%, 0%] |
-| Cross-model | claude-sonnet-5-5 medium | 392 | 25% (1085/4395) | 6.1% (66/1085) | 13% over 392 positions [9.2%, 15%] |
-| Cross-model | claude-sonnet-5-5 off | 13 | 8.7% (26/300) | 0% (0/26) | 0% over 13 positions [0%, 0%] |
-| Cross-model | claude-sonnet-5-5 xhigh | 0 | 0% (0/280) | – | – |
-| Cross-model | gpt-5.6-terra high | 0 | 0% (0/258) | – | – |
-| Cross-model | gpt-5.6-terra low | 0 | 0% (0/259) | – | – |
+| Cross-model | claude-haiku-4-5-20251001 high | 9 | 2.9% (18/626) | 5.6% (1/18) | 11% over 9 positions [0%, 50%] |
+| Cross-model | claude-haiku-4-5-20251001 low | 5 | 1.1% (10/887) | 0% (0/10) | 0% over 5 positions [0%, 0%] |
+| Cross-model | claude-haiku-4-5-20251001 medium | 289 | 15% (787/5217) | 19% (149/787) | 36% over 289 positions [31%, 41%] |
+| Cross-model | claude-haiku-4-5-20251001 minimal | 4 | 1.0% (8/815) | 13% (1/8) | 25% over 4 positions [0%, 100%] |
+| Cross-model | claude-haiku-4-5-20251001 off | 5 | 2.0% (10/495) | 20% (2/10) | 40% over 5 positions [33%, 50%] |
+| Cross-model | claude-haiku-5-5 high | 3 | 0.8% (6/745) | 17% (1/6) | 33% over 3 positions [33%, 33%] |
+| Cross-model | claude-haiku-5-5 low | 0 | 0% (0/1463) | – | – |
+| Cross-model | claude-haiku-5-5 max | 0 | 0% (0/252) | – | – |
+| Cross-model | claude-haiku-5-5 medium | 339 | 18% (955/5209) | 11% (107/955) | 19% over 339 positions [17%, 24%] |
+| Cross-model | claude-haiku-5-5 off | 15 | 1.8% (30/1662) | 17% (5/30) | 33% over 15 positions [17%, 50%] |
+| Cross-model | claude-haiku-5-5 xhigh | 0 | 0% (0/367) | – | – |
+| Cross-model | claude-opus-5-5 high | 0 | 0% (0/352) | – | – |
+| Cross-model | claude-opus-5-5 low | 0 | 0% (0/326) | – | – |
+| Cross-model | claude-opus-5-5 max | 3 | 2.3% (6/264) | 0% (0/6) | 0% over 3 positions [0%, 0%] |
+| Cross-model | claude-opus-5-5 medium | 443 | 24% (1215/5108) | 5.8% (71/1215) | 10% over 443 positions [8.7%, 13%] |
+| Cross-model | claude-opus-5-5 off | 0 | 0% (0/452) | – | – |
+| Cross-model | claude-opus-5-5 xhigh | 67 | 8.6% (134/1562) | 6.7% (9/134) | 13% over 67 positions [4.2%, 100%] |
+| Cross-model | claude-sonnet-5-5 high | 5 | 1.8% (10/542) | 0% (0/10) | 0% over 5 positions [0%, 0%] |
+| Cross-model | claude-sonnet-5-5 low | 5 | 1.9% (10/532) | 10% (1/10) | 20% over 5 positions [0%, 50%] |
+| Cross-model | claude-sonnet-5-5 max | 144 | 36% (362/1004) | 4.7% (17/362) | 9.5% over 144 positions [4.4%, 14%] |
+| Cross-model | claude-sonnet-5-5 medium | 411 | 24% (1123/4710) | 6.0% (67/1123) | 12% over 411 positions [9.0%, 15%] |
+| Cross-model | claude-sonnet-5-5 off | 13 | 4.7% (26/549) | 0% (0/26) | 0% over 13 positions [0%, 0%] |
+| Cross-model | claude-sonnet-5-5 xhigh | 0 | 0% (0/579) | – | – |
+| Cross-model | gpt-5.6-terra high | 0 | 0% (0/280) | – | – |
+| Cross-model | gpt-5.6-terra low | 0 | 0% (0/275) | – | – |
 | Cross-model | gpt-5.6-terra max | 0 | 0% (0/319) | – | – |
-| Cross-model | gpt-5.6-terra medium | 315 | 17% (739/4246) | 10% (77/739) | 20% over 315 positions [16%, 27%] |
-| Cross-model | gpt-5.6-terra xhigh | 2 | 1.3% (4/304) | 0% (0/4) | 0% over 2 positions [0%, 0%] |
-| Cross-model | gpt-6-astra high | 0 | 0% (0/125) | – | – |
-| Cross-model | gpt-6-astra low | 0 | 0% (0/146) | – | – |
-| Cross-model | gpt-6-astra medium | 420 | 22% (1177/5393) | 2.9% (34/1177) | 6.0% over 420 positions [3.7%, 7.6%] |
-| Cross-model | gpt-6-luna high | 0 | 0% (0/258) | – | – |
+| Cross-model | gpt-5.6-terra medium | 315 | 17% (739/4316) | 10% (77/739) | 20% over 315 positions [16%, 26%] |
+| Cross-model | gpt-5.6-terra xhigh | 2 | 1.1% (4/379) | 0% (0/4) | 0% over 2 positions [0%, 0%] |
+| Cross-model | gpt-6-astra high | 0 | 0% (0/449) | – | – |
+| Cross-model | gpt-6-astra low | 19 | 12% (38/315) | 0% (0/38) | 0% over 19 positions [0%, 0%] |
+| Cross-model | gpt-6-astra medium | 499 | 22% (1338/6219) | 3.0% (40/1338) | 6.2% over 499 positions [4.0%, 7.6%] |
+| Cross-model | gpt-6-astra off | 0 | 0% (0/491) | – | – |
+| Cross-model | gpt-6-luna high | 0 | 0% (0/300) | – | – |
 | Cross-model | gpt-6-luna low | 15 | 11% (30/263) | 6.7% (2/30) | 13% over 15 positions [7.1%, 100%] |
-| Cross-model | gpt-6-luna max | 7 | 5.4% (14/259) | 14% (2/14) | 29% over 7 positions [29%, 29%] |
-| Cross-model | gpt-6-luna medium | 330 | 19% (911/4673) | 17% (156/911) | 31% over 330 positions [27%, 37%] |
+| Cross-model | gpt-6-luna max | 7 | 4.5% (14/308) | 14% (2/14) | 29% over 7 positions [29%, 29%] |
+| Cross-model | gpt-6-luna medium | 330 | 19% (911/4825) | 17% (156/911) | 31% over 330 positions [26%, 37%] |
 | Cross-model | gpt-6-luna off | 0 | 0% (0/274) | – | – |
-| Cross-model | gpt-6-luna xhigh | 0 | 0% (0/352) | – | – |
-| Cross-model | gpt-6.1-sol high | 0 | 0% (0/248) | – | – |
-| Cross-model | gpt-6.1-sol low | 0 | 0% (0/234) | – | – |
-| Cross-model | gpt-6.1-sol max | 0 | 0% (0/325) | – | – |
-| Cross-model | gpt-6.1-sol medium | 426 | 25% (1165/4704) | 4.7% (55/1165) | 8.4% over 426 positions [6.7%, 12%] |
-| Cross-model | gpt-6.1-sol xhigh | 1 | 0.5% (2/383) | 50% (1/2) | 100% over 1 positions [100%, 100%] |
-| Cross-model | gpt-6.1-terra high | 0 | 0% (0/91) | – | – |
-| Cross-model | gpt-6.1-terra low | 0 | 0% (0/61) | – | – |
-| Cross-model | gpt-6.1-terra max | 0 | 0% (0/69) | – | – |
-| Cross-model | gpt-6.1-terra medium | 0 | 0% (0/118) | – | – |
-| Cross-model | gpt-6.1-terra off | 0 | 0% (0/45) | – | – |
-| Cross-model | gpt-6.1-terra xhigh | 0 | 0% (0/57) | – | – |
+| Cross-model | gpt-6-luna xhigh | 0 | 0% (0/459) | – | – |
+| Cross-model | gpt-6.1-sol high | 2 | 0.8% (4/507) | 0% (0/4) | 0% over 2 positions [0%, 0%] |
+| Cross-model | gpt-6.1-sol low | 1 | 0.5% (2/433) | 50% (1/2) | 100% over 1 positions [100%, 100%] |
+| Cross-model | gpt-6.1-sol max | 137 | 30% (331/1097) | 2.4% (8/331) | 4.6% over 137 positions [0%, 10%] |
+| Cross-model | gpt-6.1-sol medium | 426 | 24% (1165/4839) | 4.7% (55/1165) | 8.4% over 426 positions [6.7%, 12%] |
+| Cross-model | gpt-6.1-sol xhigh | 1 | 0.4% (2/564) | 50% (1/2) | 100% over 1 positions [100%, 100%] |
+| Cross-model | gpt-6.1-terra high | 0 | 0% (0/346) | – | – |
+| Cross-model | gpt-6.1-terra low | 0 | 0% (0/395) | – | – |
+| Cross-model | gpt-6.1-terra max | 0 | 0% (0/539) | – | – |
+| Cross-model | gpt-6.1-terra medium | 0 | 0% (0/340) | – | – |
+| Cross-model | gpt-6.1-terra off | 0 | 0% (0/310) | – | – |
+| Cross-model | gpt-6.1-terra xhigh | 0 | 0% (0/329) | – | – |
+| Astra efforts | gpt-6-astra high | 0 | 0% (0/70) | – | – |
+| Astra efforts | gpt-6-astra low | 0 | 0% (0/71) | – | – |
+| Astra efforts | gpt-6-astra medium | 13 | 33% (26/79) | 0% (0/26) | 0% over 13 positions [0%, 0%] |
+| Astra efforts | gpt-6-astra off | 0 | 0% (0/22) | – | – |
 | Haiku 4.5 efforts | claude-haiku-4-5-20251001 high | 91 | 12% (244/2083) | 17% (42/244) | 35% over 91 positions [25%, 41%] |
 | Haiku 4.5 efforts | claude-haiku-4-5-20251001 low | 107 | 13% (271/2125) | 17% (45/271) | 31% over 107 positions [25%, 38%] |
 | Haiku 4.5 efforts | claude-haiku-4-5-20251001 medium | 112 | 14% (308/2175) | 14% (43/308) | 28% over 112 positions [20%, 34%] |
@@ -1429,12 +1524,12 @@ Agent decisions grouped by the deciding player's own position. Exact: the same b
 | Luna efforts | gpt-6-luna medium | 148 | 14% (400/2866) | 17% (69/400) | 32% over 148 positions [24%, 40%] |
 | Luna efforts | gpt-6-luna off | 175 | 16% (458/2888) | 18% (82/458) | 34% over 175 positions [27%, 41%] |
 | Luna efforts | gpt-6-luna xhigh | 161 | 16% (435/2792) | 14% (62/435) | 27% over 161 positions [20%, 35%] |
-| Opus efforts | claude-opus-5-5 high | 158 | 33% (319/970) | 5.3% (17/319) | 10% over 158 positions [4.2%, 26%] |
-| Opus efforts | claude-opus-5-5 low | 3 | 1.0% (6/583) | 0% (0/6) | 0% over 3 positions [0%, 0%] |
-| Opus efforts | claude-opus-5-5 max | 13 | 24% (26/109) | 3.8% (1/26) | 7.7% over 13 positions [7.7%, 7.7%] |
-| Opus efforts | claude-opus-5-5 medium | 221 | 35% (545/1541) | 5.0% (27/545) | 11% over 221 positions [6.4%, 14%] |
-| Opus efforts | claude-opus-5-5 off | 0 | 0% (0/73) | – | – |
-| Opus efforts | claude-opus-5-5 xhigh | 168 | 35% (343/969) | 5.8% (20/343) | 12% over 168 positions [5.6%, 21%] |
+| Opus efforts | claude-opus-5-5 high | 158 | 31% (319/1045) | 5.3% (17/319) | 10% over 158 positions [4.0%, 26%] |
+| Opus efforts | claude-opus-5-5 low | 3 | 0.7% (6/828) | 0% (0/6) | 0% over 3 positions [0%, 0%] |
+| Opus efforts | claude-opus-5-5 max | 114 | 33% (277/830) | 4.7% (13/277) | 9.9% over 114 positions [4.7%, 16%] |
+| Opus efforts | claude-opus-5-5 medium | 226 | 31% (555/1774) | 5.0% (28/555) | 11% over 226 positions [6.5%, 14%] |
+| Opus efforts | claude-opus-5-5 off | 0 | 0% (0/149) | – | – |
+| Opus efforts | claude-opus-5-5 xhigh | 168 | 28% (343/1235) | 5.8% (20/343) | 12% over 168 positions [5.3%, 21%] |
 | Sol efforts | gpt-6.1-sol high | 316 | 43% (845/1951) | 5.4% (46/845) | 10% over 316 positions [7.5%, 13%] |
 | Sol efforts | gpt-6.1-sol low | 305 | 44% (820/1851) | 4.5% (37/820) | 8.9% over 305 positions [6.1%, 11%] |
 | Sol efforts | gpt-6.1-sol max | 339 | 45% (929/2054) | 5.6% (52/929) | 12% over 339 positions [8.0%, 14%] |
@@ -1446,17 +1541,17 @@ Agent decisions grouped by the deciding player's own position. Exact: the same b
 | Sonnet efforts | claude-sonnet-5-5 medium | 294 | 35% (862/2495) | 6.0% (52/862) | 12% over 294 positions [8.5%, 15%] |
 | Sonnet efforts | claude-sonnet-5-5 off | 334 | 42% (1021/2415) | 6.5% (66/1021) | 13% over 334 positions [9.5%, 16%] |
 | Sonnet efforts | claude-sonnet-5-5 xhigh | 280 | 36% (867/2439) | 5.8% (50/867) | 12% over 280 positions [8.5%, 14%] |
-| Terra 6.1 efforts | gpt-6.1-terra high | 0 | 0% (0/94) | – | – |
-| Terra 6.1 efforts | gpt-6.1-terra low | 0 | 0% (0/113) | – | – |
-| Terra 6.1 efforts | gpt-6.1-terra max | 0 | 0% (0/74) | – | – |
-| Terra 6.1 efforts | gpt-6.1-terra medium | 0 | 0% (0/205) | – | – |
-| Terra 6.1 efforts | gpt-6.1-terra off | 0 | 0% (0/87) | – | – |
-| Terra 6.1 efforts | gpt-6.1-terra xhigh | 2 | 2.9% (4/139) | 25% (1/4) | 50% over 2 positions [50%, 50%] |
 | Terra efforts | gpt-5.6-terra high | 140 | 21% (388/1886) | 13% (52/388) | 27% over 140 positions [19%, 31%] |
 | Terra efforts | gpt-5.6-terra low | 173 | 23% (422/1852) | 14% (58/422) | 26% over 173 positions [20%, 34%] |
 | Terra efforts | gpt-5.6-terra max | 208 | 26% (558/2170) | 9.0% (50/558) | 19% over 208 positions [12%, 23%] |
 | Terra efforts | gpt-5.6-terra medium | 176 | 25% (453/1792) | 13% (57/453) | 23% over 176 positions [19%, 31%] |
 | Terra efforts | gpt-5.6-terra xhigh | 156 | 20% (405/2030) | 12% (50/405) | 26% over 156 positions [19%, 31%] |
+| gpt-6.1-terra efforts | gpt-6.1-terra high | 0 | 0% (0/115) | – | – |
+| gpt-6.1-terra efforts | gpt-6.1-terra low | 0 | 0% (0/113) | – | – |
+| gpt-6.1-terra efforts | gpt-6.1-terra max | 0 | 0% (0/74) | – | – |
+| gpt-6.1-terra efforts | gpt-6.1-terra medium | 0 | 0% (0/205) | – | – |
+| gpt-6.1-terra efforts | gpt-6.1-terra off | 0 | 0% (0/135) | – | – |
+| gpt-6.1-terra efforts | gpt-6.1-terra xhigh | 2 | 2.4% (4/166) | 25% (1/4) | 50% over 2 positions [50%, 50%] |
 
 ## Agreement between effort variants
 
@@ -1465,37 +1560,37 @@ For each pair of one model's effort levels in the same cohort, exact positions b
 | Cohort | Variants | Shared positions | Across | Within, first | Within, second |
 |---|---|---|---|---|---|
 | Cross-model | claude-haiku-4-5-20251001 high vs claude-haiku-4-5-20251001 low | 4 | 75% over 4 positions [75%, 75%] | – | – |
-| Cross-model | claude-haiku-4-5-20251001 high vs claude-haiku-4-5-20251001 medium | 33 | 68% over 33 positions [61%, 83%] | – | 77% over 13 positions [50%, 100%] |
+| Cross-model | claude-haiku-4-5-20251001 high vs claude-haiku-4-5-20251001 medium | 34 | 69% over 34 positions [61%, 100%] | – | 77% over 13 positions [50%, 100%] |
 | Cross-model | claude-haiku-4-5-20251001 high vs claude-haiku-4-5-20251001 minimal | 9 | 89% over 9 positions [89%, 89%] | – | – |
 | Cross-model | claude-haiku-4-5-20251001 high vs claude-haiku-4-5-20251001 off | 17 | 71% over 17 positions [33%, 100%] | – | 100% over 1 positions [100%, 100%] |
-| Cross-model | claude-haiku-4-5-20251001 low vs claude-haiku-4-5-20251001 medium | 31 | 58% over 31 positions [25%, 80%] | – | 67% over 12 positions [50%, 100%] |
+| Cross-model | claude-haiku-4-5-20251001 low vs claude-haiku-4-5-20251001 medium | 31 | 58% over 31 positions [20%, 79%] | – | 67% over 12 positions [50%, 100%] |
 | Cross-model | claude-haiku-4-5-20251001 low vs claude-haiku-4-5-20251001 minimal | 31 | 74% over 31 positions [0%, 92%] | 100% over 5 positions [100%, 100%] | – |
 | Cross-model | claude-haiku-4-5-20251001 low vs claude-haiku-4-5-20251001 off | 0 | – | – | – |
-| Cross-model | claude-haiku-4-5-20251001 medium vs claude-haiku-4-5-20251001 minimal | 44 | 65% over 44 positions [52%, 75%] | 53% over 19 positions [40%, 67%] | – |
+| Cross-model | claude-haiku-4-5-20251001 medium vs claude-haiku-4-5-20251001 minimal | 44 | 65% over 44 positions [53%, 75%] | 53% over 19 positions [40%, 67%] | – |
 | Cross-model | claude-haiku-4-5-20251001 medium vs claude-haiku-4-5-20251001 off | 20 | 55% over 20 positions [20%, 83%] | 75% over 8 positions [0%, 100%] | 100% over 1 positions [100%, 100%] |
 | Cross-model | claude-haiku-4-5-20251001 minimal vs claude-haiku-4-5-20251001 off | 6 | 67% over 6 positions [67%, 67%] | – | – |
 | Cross-model | claude-haiku-5-5 high vs claude-haiku-5-5 low | 26 | 83% over 26 positions [50%, 100%] | 67% over 3 positions [67%, 67%] | – |
 | Cross-model | claude-haiku-5-5 high vs claude-haiku-5-5 max | 3 | 67% over 3 positions [67%, 67%] | – | – |
-| Cross-model | claude-haiku-5-5 high vs claude-haiku-5-5 medium | 46 | 80% over 46 positions [67%, 92%] | 67% over 3 positions [67%, 67%] | 94% over 18 positions [89%, 100%] |
+| Cross-model | claude-haiku-5-5 high vs claude-haiku-5-5 medium | 54 | 81% over 54 positions [67%, 91%] | 67% over 3 positions [67%, 67%] | 94% over 18 positions [89%, 100%] |
 | Cross-model | claude-haiku-5-5 high vs claude-haiku-5-5 off | 3 | 33% over 3 positions [33%, 33%] | – | – |
 | Cross-model | claude-haiku-5-5 high vs claude-haiku-5-5 xhigh | 4 | 100% over 4 positions [100%, 100%] | – | – |
 | Cross-model | claude-haiku-5-5 low vs claude-haiku-5-5 max | 3 | 67% over 3 positions [67%, 67%] | – | – |
 | Cross-model | claude-haiku-5-5 low vs claude-haiku-5-5 medium | 52 | 78% over 52 positions [67%, 86%] | – | 94% over 17 positions [80%, 100%] |
 | Cross-model | claude-haiku-5-5 low vs claude-haiku-5-5 off | 0 | – | – | – |
 | Cross-model | claude-haiku-5-5 low vs claude-haiku-5-5 xhigh | 0 | – | – | – |
-| Cross-model | claude-haiku-5-5 max vs claude-haiku-5-5 medium | 35 | 77% over 35 positions [33%, 93%] | – | 62% over 13 positions [0%, 100%] |
+| Cross-model | claude-haiku-5-5 max vs claude-haiku-5-5 medium | 35 | 77% over 35 positions [0%, 93%] | – | 62% over 13 positions [0%, 100%] |
 | Cross-model | claude-haiku-5-5 max vs claude-haiku-5-5 off | 12 | 58% over 12 positions [0%, 100%] | – | 100% over 1 positions [100%, 100%] |
 | Cross-model | claude-haiku-5-5 max vs claude-haiku-5-5 xhigh | 46 | 87% over 46 positions [50%, 100%] | – | – |
-| Cross-model | claude-haiku-5-5 medium vs claude-haiku-5-5 off | 32 | 72% over 32 positions [50%, 83%] | 78% over 18 positions [50%, 100%] | 80% over 5 positions [67%, 100%] |
+| Cross-model | claude-haiku-5-5 medium vs claude-haiku-5-5 off | 32 | 72% over 32 positions [50%, 85%] | 78% over 18 positions [50%, 100%] | 80% over 5 positions [67%, 100%] |
 | Cross-model | claude-haiku-5-5 medium vs claude-haiku-5-5 xhigh | 41 | 76% over 41 positions [50%, 100%] | 69% over 16 positions [50%, 100%] | – |
 | Cross-model | claude-haiku-5-5 off vs claude-haiku-5-5 xhigh | 16 | 56% over 16 positions [0%, 75%] | 100% over 1 positions [100%, 100%] | – |
 | Cross-model | claude-opus-5-5 high vs claude-opus-5-5 low | 21 | 90% over 21 positions [75%, 100%] | – | – |
 | Cross-model | claude-opus-5-5 high vs claude-opus-5-5 max | 0 | – | – | – |
-| Cross-model | claude-opus-5-5 high vs claude-opus-5-5 medium | 43 | 90% over 43 positions [0%, 100%] | – | 96% over 23 positions [86%, 100%] |
+| Cross-model | claude-opus-5-5 high vs claude-opus-5-5 medium | 43 | 90% over 43 positions [60%, 100%] | – | 96% over 23 positions [86%, 100%] |
 | Cross-model | claude-opus-5-5 high vs claude-opus-5-5 off | 0 | – | – | – |
 | Cross-model | claude-opus-5-5 high vs claude-opus-5-5 xhigh | 0 | – | – | – |
 | Cross-model | claude-opus-5-5 low vs claude-opus-5-5 max | 0 | – | – | – |
-| Cross-model | claude-opus-5-5 low vs claude-opus-5-5 medium | 63 | 91% over 63 positions [83%, 100%] | – | 98% over 40 positions [92%, 100%] |
+| Cross-model | claude-opus-5-5 low vs claude-opus-5-5 medium | 63 | 91% over 63 positions [80%, 100%] | – | 98% over 40 positions [92%, 100%] |
 | Cross-model | claude-opus-5-5 low vs claude-opus-5-5 off | 0 | – | – | – |
 | Cross-model | claude-opus-5-5 low vs claude-opus-5-5 xhigh | 0 | – | – | – |
 | Cross-model | claude-opus-5-5 max vs claude-opus-5-5 medium | 0 | – | – | – |
@@ -1504,21 +1599,21 @@ For each pair of one model's effort levels in the same cohort, exact positions b
 | Cross-model | claude-opus-5-5 medium vs claude-opus-5-5 off | 0 | – | – | – |
 | Cross-model | claude-opus-5-5 medium vs claude-opus-5-5 xhigh | 0 | – | – | – |
 | Cross-model | claude-opus-5-5 off vs claude-opus-5-5 xhigh | 0 | – | – | – |
-| Cross-model | claude-sonnet-5-5 high vs claude-sonnet-5-5 low | 12 | 88% over 12 positions [86%, 100%] | – | 50% over 2 positions [50%, 50%] |
+| Cross-model | claude-sonnet-5-5 high vs claude-sonnet-5-5 low | 25 | 90% over 25 positions [86%, 100%] | – | 50% over 2 positions [50%, 50%] |
 | Cross-model | claude-sonnet-5-5 high vs claude-sonnet-5-5 max | 7 | 57% over 7 positions [0%, 75%] | – | – |
 | Cross-model | claude-sonnet-5-5 high vs claude-sonnet-5-5 medium | 40 | 89% over 40 positions [80%, 100%] | 100% over 5 positions [100%, 100%] | 93% over 14 positions [88%, 100%] |
 | Cross-model | claude-sonnet-5-5 high vs claude-sonnet-5-5 off | 6 | 83% over 6 positions [50%, 100%] | – | – |
 | Cross-model | claude-sonnet-5-5 high vs claude-sonnet-5-5 xhigh | 4 | 75% over 4 positions [75%, 75%] | – | – |
 | Cross-model | claude-sonnet-5-5 low vs claude-sonnet-5-5 max | 20 | 70% over 20 positions [50%, 100%] | 50% over 2 positions [50%, 50%] | – |
-| Cross-model | claude-sonnet-5-5 low vs claude-sonnet-5-5 medium | 28 | 84% over 28 positions [67%, 100%] | 50% over 2 positions [50%, 50%] | 85% over 13 positions [0%, 100%] |
+| Cross-model | claude-sonnet-5-5 low vs claude-sonnet-5-5 medium | 28 | 84% over 28 positions [67%, 97%] | 50% over 2 positions [50%, 50%] | 85% over 13 positions [0%, 100%] |
 | Cross-model | claude-sonnet-5-5 low vs claude-sonnet-5-5 off | 19 | 79% over 19 positions [0%, 100%] | 100% over 1 positions [100%, 100%] | 100% over 1 positions [100%, 100%] |
 | Cross-model | claude-sonnet-5-5 low vs claude-sonnet-5-5 xhigh | 6 | 67% over 6 positions [50%, 100%] | – | – |
 | Cross-model | claude-sonnet-5-5 max vs claude-sonnet-5-5 medium | 16 | 53% over 16 positions [0%, 70%] | – | 91% over 11 positions [0%, 100%] |
 | Cross-model | claude-sonnet-5-5 max vs claude-sonnet-5-5 off | 7 | 71% over 7 positions [0%, 100%] | – | – |
 | Cross-model | claude-sonnet-5-5 max vs claude-sonnet-5-5 xhigh | 2 | 50% over 2 positions [50%, 50%] | – | – |
 | Cross-model | claude-sonnet-5-5 medium vs claude-sonnet-5-5 off | 29 | 79% over 29 positions [50%, 100%] | 89% over 19 positions [75%, 100%] | – |
-| Cross-model | claude-sonnet-5-5 medium vs claude-sonnet-5-5 xhigh | 37 | 80% over 37 positions [60%, 92%] | 81% over 16 positions [50%, 100%] | – |
-| Cross-model | claude-sonnet-5-5 off vs claude-sonnet-5-5 xhigh | 27 | 81% over 27 positions [50%, 89%] | – | – |
+| Cross-model | claude-sonnet-5-5 medium vs claude-sonnet-5-5 xhigh | 40 | 76% over 40 positions [50%, 88%] | 81% over 16 positions [50%, 100%] | – |
+| Cross-model | claude-sonnet-5-5 off vs claude-sonnet-5-5 xhigh | 34 | 79% over 34 positions [50%, 89%] | – | – |
 | Cross-model | gpt-5.6-terra high vs gpt-5.6-terra low | 4 | 100% over 4 positions [100%, 100%] | – | – |
 | Cross-model | gpt-5.6-terra high vs gpt-5.6-terra max | 20 | 80% over 20 positions [75%, 83%] | – | – |
 | Cross-model | gpt-5.6-terra high vs gpt-5.6-terra medium | 45 | 87% over 45 positions [50%, 96%] | – | 88% over 17 positions [0%, 100%] |
@@ -1528,41 +1623,44 @@ For each pair of one model's effort levels in the same cohort, exact positions b
 | Cross-model | gpt-5.6-terra low vs gpt-5.6-terra xhigh | 20 | 90% over 20 positions [67%, 100%] | – | – |
 | Cross-model | gpt-5.6-terra max vs gpt-5.6-terra medium | 26 | 63% over 26 positions [33%, 75%] | – | 70% over 10 positions [0%, 100%] |
 | Cross-model | gpt-5.6-terra max vs gpt-5.6-terra xhigh | 0 | – | – | – |
-| Cross-model | gpt-5.6-terra medium vs gpt-5.6-terra xhigh | 52 | 83% over 52 positions [56%, 92%] | 89% over 19 positions [50%, 100%] | 100% over 2 positions [100%, 100%] |
+| Cross-model | gpt-5.6-terra medium vs gpt-5.6-terra xhigh | 52 | 83% over 52 positions [58%, 93%] | 89% over 19 positions [50%, 100%] | 100% over 2 positions [100%, 100%] |
 | Cross-model | gpt-6-astra high vs gpt-6-astra low | 0 | – | – | – |
 | Cross-model | gpt-6-astra high vs gpt-6-astra medium | 0 | – | – | – |
+| Cross-model | gpt-6-astra high vs gpt-6-astra off | 0 | – | – | – |
 | Cross-model | gpt-6-astra low vs gpt-6-astra medium | 0 | – | – | – |
+| Cross-model | gpt-6-astra low vs gpt-6-astra off | 0 | – | – | – |
+| Cross-model | gpt-6-astra medium vs gpt-6-astra off | 0 | – | – | – |
 | Cross-model | gpt-6-luna high vs gpt-6-luna low | 7 | 57% over 7 positions [0%, 80%] | – | – |
 | Cross-model | gpt-6-luna high vs gpt-6-luna max | 15 | 80% over 15 positions [75%, 83%] | – | – |
-| Cross-model | gpt-6-luna high vs gpt-6-luna medium | 31 | 53% over 31 positions [6.7%, 80%] | – | 54% over 15 positions [0%, 100%] |
+| Cross-model | gpt-6-luna high vs gpt-6-luna medium | 31 | 53% over 31 positions [11%, 80%] | – | 54% over 15 positions [0%, 100%] |
 | Cross-model | gpt-6-luna high vs gpt-6-luna off | 5 | 60% over 5 positions [0%, 75%] | – | – |
 | Cross-model | gpt-6-luna high vs gpt-6-luna xhigh | 3 | 67% over 3 positions [67%, 67%] | – | – |
 | Cross-model | gpt-6-luna low vs gpt-6-luna max | 15 | 40% over 15 positions [0%, 75%] | – | 100% over 1 positions [100%, 100%] |
 | Cross-model | gpt-6-luna low vs gpt-6-luna medium | 24 | 58% over 24 positions [25%, 78%] | 0% over 1 positions [0%, 0%] | 78% over 12 positions [0%, 100%] |
 | Cross-model | gpt-6-luna low vs gpt-6-luna off | 9 | 56% over 9 positions [56%, 56%] | – | – |
 | Cross-model | gpt-6-luna low vs gpt-6-luna xhigh | 8 | 50% over 8 positions [40%, 67%] | – | – |
-| Cross-model | gpt-6-luna max vs gpt-6-luna medium | 27 | 56% over 27 positions [38%, 68%] | 100% over 4 positions [100%, 100%] | 76% over 15 positions [0%, 100%] |
+| Cross-model | gpt-6-luna max vs gpt-6-luna medium | 27 | 56% over 27 positions [33%, 75%] | 100% over 4 positions [100%, 100%] | 76% over 15 positions [0%, 100%] |
 | Cross-model | gpt-6-luna max vs gpt-6-luna off | 9 | 56% over 9 positions [50%, 60%] | – | – |
 | Cross-model | gpt-6-luna max vs gpt-6-luna xhigh | 17 | 88% over 17 positions [88%, 88%] | – | – |
-| Cross-model | gpt-6-luna medium vs gpt-6-luna off | 24 | 67% over 24 positions [25%, 83%] | 71% over 7 positions [0%, 100%] | – |
+| Cross-model | gpt-6-luna medium vs gpt-6-luna off | 24 | 67% over 24 positions [0%, 83%] | 71% over 7 positions [0%, 100%] | – |
 | Cross-model | gpt-6-luna medium vs gpt-6-luna xhigh | 22 | 68% over 22 positions [25%, 100%] | 0% over 2 positions [0%, 0%] | – |
 | Cross-model | gpt-6-luna off vs gpt-6-luna xhigh | 8 | 63% over 8 positions [50%, 75%] | – | – |
 | Cross-model | gpt-6.1-sol high vs gpt-6.1-sol low | 0 | – | – | – |
 | Cross-model | gpt-6.1-sol high vs gpt-6.1-sol max | 0 | – | – | – |
-| Cross-model | gpt-6.1-sol high vs gpt-6.1-sol medium | 41 | 91% over 41 positions [0%, 100%] | – | 94% over 18 positions [83%, 100%] |
-| Cross-model | gpt-6.1-sol high vs gpt-6.1-sol xhigh | 22 | 77% over 22 positions [0%, 100%] | – | – |
+| Cross-model | gpt-6.1-sol high vs gpt-6.1-sol medium | 51 | 90% over 51 positions [71%, 100%] | – | 89% over 19 positions [0%, 100%] |
+| Cross-model | gpt-6.1-sol high vs gpt-6.1-sol xhigh | 36 | 83% over 36 positions [43%, 100%] | – | – |
 | Cross-model | gpt-6.1-sol low vs gpt-6.1-sol max | 33 | 82% over 33 positions [67%, 100%] | – | – |
-| Cross-model | gpt-6.1-sol low vs gpt-6.1-sol medium | 45 | 87% over 45 positions [69%, 100%] | – | 86% over 14 positions [50%, 100%] |
+| Cross-model | gpt-6.1-sol low vs gpt-6.1-sol medium | 62 | 90% over 62 positions [75%, 100%] | – | 86% over 14 positions [50%, 100%] |
 | Cross-model | gpt-6.1-sol low vs gpt-6.1-sol xhigh | 0 | – | – | – |
-| Cross-model | gpt-6.1-sol max vs gpt-6.1-sol medium | 47 | 84% over 47 positions [63%, 100%] | – | 79% over 14 positions [50%, 100%] |
+| Cross-model | gpt-6.1-sol max vs gpt-6.1-sol medium | 47 | 84% over 47 positions [62%, 100%] | – | 79% over 14 positions [50%, 100%] |
 | Cross-model | gpt-6.1-sol max vs gpt-6.1-sol xhigh | 7 | 86% over 7 positions [86%, 86%] | – | – |
-| Cross-model | gpt-6.1-sol medium vs gpt-6.1-sol xhigh | 41 | 74% over 41 positions [50%, 86%] | 93% over 15 positions [83%, 100%] | – |
-| Cross-model | gpt-6.1-terra high vs gpt-6.1-terra low | 4 | 75% over 4 positions [75%, 75%] | – | – |
+| Cross-model | gpt-6.1-sol medium vs gpt-6.1-sol xhigh | 51 | 76% over 51 positions [57%, 86%] | 88% over 16 positions [0%, 100%] | – |
+| Cross-model | gpt-6.1-terra high vs gpt-6.1-terra low | 7 | 86% over 7 positions [75%, 100%] | – | – |
 | Cross-model | gpt-6.1-terra high vs gpt-6.1-terra max | 6 | 83% over 6 positions [83%, 83%] | – | – |
 | Cross-model | gpt-6.1-terra high vs gpt-6.1-terra medium | 0 | – | – | – |
 | Cross-model | gpt-6.1-terra high vs gpt-6.1-terra off | 0 | – | – | – |
 | Cross-model | gpt-6.1-terra high vs gpt-6.1-terra xhigh | 0 | – | – | – |
-| Cross-model | gpt-6.1-terra low vs gpt-6.1-terra max | 0 | – | – | – |
+| Cross-model | gpt-6.1-terra low vs gpt-6.1-terra max | 8 | 100% over 8 positions [100%, 100%] | – | – |
 | Cross-model | gpt-6.1-terra low vs gpt-6.1-terra medium | 0 | – | – | – |
 | Cross-model | gpt-6.1-terra low vs gpt-6.1-terra off | 0 | – | – | – |
 | Cross-model | gpt-6.1-terra low vs gpt-6.1-terra xhigh | 0 | – | – | – |
@@ -1572,6 +1670,12 @@ For each pair of one model's effort levels in the same cohort, exact positions b
 | Cross-model | gpt-6.1-terra medium vs gpt-6.1-terra off | 0 | – | – | – |
 | Cross-model | gpt-6.1-terra medium vs gpt-6.1-terra xhigh | 20 | 90% over 20 positions [90%, 90%] | – | – |
 | Cross-model | gpt-6.1-terra off vs gpt-6.1-terra xhigh | 0 | – | – | – |
+| Astra efforts | gpt-6-astra high vs gpt-6-astra low | 16 | 81% over 16 positions [81%, 81%] | – | – |
+| Astra efforts | gpt-6-astra high vs gpt-6-astra medium | 14 | 79% over 14 positions [79%, 85%] | – | 100% over 10 positions [100%, 100%] |
+| Astra efforts | gpt-6-astra high vs gpt-6-astra off | 0 | – | – | – |
+| Astra efforts | gpt-6-astra low vs gpt-6-astra medium | 9 | 89% over 9 positions [83%, 89%] | – | 100% over 5 positions [100%, 100%] |
+| Astra efforts | gpt-6-astra low vs gpt-6-astra off | 0 | – | – | – |
+| Astra efforts | gpt-6-astra medium vs gpt-6-astra off | 0 | – | – | – |
 | Haiku 4.5 efforts | claude-haiku-4-5-20251001 high vs claude-haiku-4-5-20251001 low | 195 | 69% over 195 positions [65%, 75%] | 66% over 60 positions [62%, 76%] | 70% over 71 positions [62%, 78%] |
 | Haiku 4.5 efforts | claude-haiku-4-5-20251001 high vs claude-haiku-4-5-20251001 medium | 170 | 70% over 170 positions [64%, 77%] | 72% over 55 positions [64%, 82%] | 74% over 66 positions [65%, 84%] |
 | Haiku 4.5 efforts | claude-haiku-4-5-20251001 high vs claude-haiku-4-5-20251001 minimal | 169 | 69% over 169 positions [65%, 76%] | 67% over 59 positions [59%, 77%] | 74% over 75 positions [69%, 83%] |
@@ -1612,20 +1716,20 @@ For each pair of one model's effort levels in the same cohort, exact positions b
 | Luna efforts | gpt-6-luna medium vs gpt-6-luna off | 217 | 67% over 217 positions [62%, 73%] | 73% over 88 positions [64%, 79%] | 70% over 88 positions [58%, 77%] |
 | Luna efforts | gpt-6-luna medium vs gpt-6-luna xhigh | 182 | 65% over 182 positions [56%, 70%] | 72% over 70 positions [65%, 80%] | 69% over 66 positions [60%, 79%] |
 | Luna efforts | gpt-6-luna off vs gpt-6-luna xhigh | 141 | 54% over 141 positions [49%, 61%] | 74% over 75 positions [63%, 81%] | 78% over 69 positions [66%, 84%] |
-| Opus efforts | claude-opus-5-5 high vs claude-opus-5-5 low | 150 | 86% over 150 positions [78%, 90%] | 93% over 99 positions [77%, 100%] | 100% over 2 positions [100%, 100%] |
+| Opus efforts | claude-opus-5-5 high vs claude-opus-5-5 low | 150 | 86% over 150 positions [77%, 91%] | 93% over 99 positions [75%, 100%] | 100% over 2 positions [100%, 100%] |
 | Opus efforts | claude-opus-5-5 high vs claude-opus-5-5 max | 0 | – | – | – |
-| Opus efforts | claude-opus-5-5 high vs claude-opus-5-5 medium | 353 | 90% over 353 positions [88%, 93%] | 91% over 146 positions [73%, 98%] | 91% over 170 positions [88%, 95%] |
-| Opus efforts | claude-opus-5-5 high vs claude-opus-5-5 off | 0 | – | – | – |
-| Opus efforts | claude-opus-5-5 high vs claude-opus-5-5 xhigh | 203 | 86% over 203 positions [83%, 90%] | 94% over 108 positions [78%, 100%] | 87% over 116 positions [76%, 93%] |
-| Opus efforts | claude-opus-5-5 low vs claude-opus-5-5 max | 9 | 78% over 9 positions [78%, 78%] | – | 100% over 4 positions [100%, 100%] |
-| Opus efforts | claude-opus-5-5 low vs claude-opus-5-5 medium | 192 | 85% over 192 positions [81%, 89%] | 100% over 1 positions [100%, 100%] | 96% over 106 positions [92%, 99%] |
+| Opus efforts | claude-opus-5-5 high vs claude-opus-5-5 medium | 353 | 90% over 353 positions [88%, 93%] | 91% over 146 positions [75%, 98%] | 91% over 170 positions [88%, 96%] |
+| Opus efforts | claude-opus-5-5 high vs claude-opus-5-5 off | 6 | 83% over 6 positions [83%, 83%] | – | – |
+| Opus efforts | claude-opus-5-5 high vs claude-opus-5-5 xhigh | 203 | 86% over 203 positions [83%, 90%] | 94% over 108 positions [78%, 100%] | 87% over 116 positions [75%, 93%] |
+| Opus efforts | claude-opus-5-5 low vs claude-opus-5-5 max | 23 | 67% over 23 positions [33%, 82%] | – | 94% over 21 positions [75%, 100%] |
+| Opus efforts | claude-opus-5-5 low vs claude-opus-5-5 medium | 249 | 86% over 249 positions [82%, 89%] | 100% over 1 positions [100%, 100%] | 96% over 106 positions [92%, 99%] |
 | Opus efforts | claude-opus-5-5 low vs claude-opus-5-5 off | 5 | 80% over 5 positions [80%, 80%] | – | – |
-| Opus efforts | claude-opus-5-5 low vs claude-opus-5-5 xhigh | 139 | 83% over 139 positions [74%, 89%] | – | 91% over 88 positions [78%, 98%] |
-| Opus efforts | claude-opus-5-5 max vs claude-opus-5-5 medium | 6 | 67% over 6 positions [0%, 67%] | 100% over 1 positions [100%, 100%] | – |
+| Opus efforts | claude-opus-5-5 low vs claude-opus-5-5 xhigh | 197 | 82% over 197 positions [75%, 87%] | – | 91% over 88 positions [78%, 100%] |
+| Opus efforts | claude-opus-5-5 max vs claude-opus-5-5 medium | 20 | 55% over 20 positions [33%, 69%] | 92% over 16 positions [72%, 100%] | 100% over 1 positions [100%, 100%] |
 | Opus efforts | claude-opus-5-5 max vs claude-opus-5-5 off | 0 | – | – | – |
-| Opus efforts | claude-opus-5-5 max vs claude-opus-5-5 xhigh | 0 | – | – | – |
+| Opus efforts | claude-opus-5-5 max vs claude-opus-5-5 xhigh | 44 | 84% over 44 positions [42%, 94%] | 94% over 24 positions [75%, 100%] | – |
 | Opus efforts | claude-opus-5-5 medium vs claude-opus-5-5 off | 2 | 0% over 2 positions [0%, 0%] | – | – |
-| Opus efforts | claude-opus-5-5 medium vs claude-opus-5-5 xhigh | 294 | 89% over 294 positions [87%, 91%] | 92% over 158 positions [90%, 97%] | 89% over 119 positions [79%, 97%] |
+| Opus efforts | claude-opus-5-5 medium vs claude-opus-5-5 xhigh | 365 | 88% over 365 positions [86%, 91%] | 92% over 160 positions [90%, 97%] | 89% over 119 positions [78%, 98%] |
 | Opus efforts | claude-opus-5-5 off vs claude-opus-5-5 xhigh | 0 | – | – | – |
 | Sol efforts | gpt-6.1-sol high vs gpt-6.1-sol low | 446 | 89% over 446 positions [86%, 91%] | 92% over 221 positions [88%, 94%] | 93% over 214 positions [90%, 95%] |
 | Sol efforts | gpt-6.1-sol high vs gpt-6.1-sol max | 328 | 86% over 328 positions [83%, 88%] | 90% over 182 positions [87%, 94%] | 90% over 188 positions [88%, 94%] |
@@ -1652,21 +1756,6 @@ For each pair of one model's effort levels in the same cohort, exact positions b
 | Sonnet efforts | claude-sonnet-5-5 medium vs claude-sonnet-5-5 off | 395 | 85% over 395 positions [83%, 89%] | 88% over 199 positions [85%, 92%] | 87% over 212 positions [84%, 91%] |
 | Sonnet efforts | claude-sonnet-5-5 medium vs claude-sonnet-5-5 xhigh | 306 | 79% over 306 positions [78%, 84%] | 91% over 164 positions [88%, 95%] | 89% over 164 positions [88%, 94%] |
 | Sonnet efforts | claude-sonnet-5-5 off vs claude-sonnet-5-5 xhigh | 271 | 79% over 271 positions [76%, 83%] | 92% over 159 positions [89%, 95%] | 88% over 142 positions [86%, 92%] |
-| Terra 6.1 efforts | gpt-6.1-terra high vs gpt-6.1-terra low | 0 | – | – | – |
-| Terra 6.1 efforts | gpt-6.1-terra high vs gpt-6.1-terra max | 0 | – | – | – |
-| Terra 6.1 efforts | gpt-6.1-terra high vs gpt-6.1-terra medium | 26 | 92% over 26 positions [92%, 92%] | – | – |
-| Terra 6.1 efforts | gpt-6.1-terra high vs gpt-6.1-terra off | 0 | – | – | – |
-| Terra 6.1 efforts | gpt-6.1-terra high vs gpt-6.1-terra xhigh | 3 | 33% over 3 positions [33%, 33%] | – | – |
-| Terra 6.1 efforts | gpt-6.1-terra low vs gpt-6.1-terra max | 0 | – | – | – |
-| Terra 6.1 efforts | gpt-6.1-terra low vs gpt-6.1-terra medium | 9 | 89% over 9 positions [89%, 89%] | – | – |
-| Terra 6.1 efforts | gpt-6.1-terra low vs gpt-6.1-terra off | 1 | 0% over 1 positions [0%, 0%] | – | – |
-| Terra 6.1 efforts | gpt-6.1-terra low vs gpt-6.1-terra xhigh | 0 | – | – | – |
-| Terra 6.1 efforts | gpt-6.1-terra max vs gpt-6.1-terra medium | 0 | – | – | – |
-| Terra 6.1 efforts | gpt-6.1-terra max vs gpt-6.1-terra off | 0 | – | – | – |
-| Terra 6.1 efforts | gpt-6.1-terra max vs gpt-6.1-terra xhigh | 3 | 67% over 3 positions [67%, 67%] | – | – |
-| Terra 6.1 efforts | gpt-6.1-terra medium vs gpt-6.1-terra off | 1 | 0% over 1 positions [0%, 0%] | – | – |
-| Terra 6.1 efforts | gpt-6.1-terra medium vs gpt-6.1-terra xhigh | 12 | 83% over 12 positions [83%, 83%] | – | – |
-| Terra 6.1 efforts | gpt-6.1-terra off vs gpt-6.1-terra xhigh | 0 | – | – | – |
 | Terra efforts | gpt-5.6-terra high vs gpt-5.6-terra low | 257 | 76% over 257 positions [71%, 79%] | 75% over 93 positions [69%, 83%] | 74% over 100 positions [63%, 81%] |
 | Terra efforts | gpt-5.6-terra high vs gpt-5.6-terra max | 204 | 72% over 204 positions [67%, 78%] | 76% over 95 positions [69%, 84%] | 85% over 112 positions [79%, 91%] |
 | Terra efforts | gpt-5.6-terra high vs gpt-5.6-terra medium | 236 | 74% over 236 positions [70%, 79%] | 75% over 92 positions [70%, 84%] | 77% over 115 positions [68%, 83%] |
@@ -1677,6 +1766,21 @@ For each pair of one model's effort levels in the same cohort, exact positions b
 | Terra efforts | gpt-5.6-terra max vs gpt-5.6-terra medium | 221 | 71% over 221 positions [65%, 76%] | 82% over 100 positions [75%, 90%] | 77% over 106 positions [68%, 83%] |
 | Terra efforts | gpt-5.6-terra max vs gpt-5.6-terra xhigh | 227 | 72% over 227 positions [70%, 78%] | 86% over 118 positions [81%, 92%] | 77% over 96 positions [69%, 84%] |
 | Terra efforts | gpt-5.6-terra medium vs gpt-5.6-terra xhigh | 192 | 69% over 192 positions [65%, 75%] | 77% over 102 positions [69%, 83%] | 76% over 90 positions [67%, 83%] |
+| gpt-6.1-terra efforts | gpt-6.1-terra high vs gpt-6.1-terra low | 0 | – | – | – |
+| gpt-6.1-terra efforts | gpt-6.1-terra high vs gpt-6.1-terra max | 0 | – | – | – |
+| gpt-6.1-terra efforts | gpt-6.1-terra high vs gpt-6.1-terra medium | 26 | 92% over 26 positions [92%, 92%] | – | – |
+| gpt-6.1-terra efforts | gpt-6.1-terra high vs gpt-6.1-terra off | 0 | – | – | – |
+| gpt-6.1-terra efforts | gpt-6.1-terra high vs gpt-6.1-terra xhigh | 3 | 33% over 3 positions [33%, 33%] | – | – |
+| gpt-6.1-terra efforts | gpt-6.1-terra low vs gpt-6.1-terra max | 0 | – | – | – |
+| gpt-6.1-terra efforts | gpt-6.1-terra low vs gpt-6.1-terra medium | 9 | 89% over 9 positions [89%, 89%] | – | – |
+| gpt-6.1-terra efforts | gpt-6.1-terra low vs gpt-6.1-terra off | 1 | 0% over 1 positions [0%, 0%] | – | – |
+| gpt-6.1-terra efforts | gpt-6.1-terra low vs gpt-6.1-terra xhigh | 0 | – | – | – |
+| gpt-6.1-terra efforts | gpt-6.1-terra max vs gpt-6.1-terra medium | 0 | – | – | – |
+| gpt-6.1-terra efforts | gpt-6.1-terra max vs gpt-6.1-terra off | 0 | – | – | – |
+| gpt-6.1-terra efforts | gpt-6.1-terra max vs gpt-6.1-terra xhigh | 3 | 67% over 3 positions [67%, 67%] | – | – |
+| gpt-6.1-terra efforts | gpt-6.1-terra medium vs gpt-6.1-terra off | 1 | 0% over 1 positions [0%, 0%] | – | – |
+| gpt-6.1-terra efforts | gpt-6.1-terra medium vs gpt-6.1-terra xhigh | 12 | 83% over 12 positions [83%, 83%] | – | – |
+| gpt-6.1-terra efforts | gpt-6.1-terra off vs gpt-6.1-terra xhigh | 0 | – | – | – |
 
 ## Code versions
 
@@ -1684,20 +1788,28 @@ The main rates within each cohort by code version, pooled over models.
 
 | Cohort | Code | Against a known shell | Shots known from a clue | Matches |
 |---|---|---|---|---|
-| Cross-model | 12e2e3295899 | 7.0% (324/4624) [5.8%, 8.3%] | 25% (1935/7815) [24%, 26%] | 330 |
+| Cross-model | 12e2e3295899 | 5.8% (373/6466) [4.8%, 6.8%] | 26% (2782/10702) [25%, 27%] | 450 |
+| Cross-model | 29f99c6dce47 | 20% (291/1445) [18%, 23%] | 24% (594/2504) [22%, 26%] | 100 |
+| Cross-model | 2a5f469d8793 | 3.5% (36/1023) [2.0%, 5.1%] | 28% (467/1659) [26%, 30%] | 70 |
 | Cross-model | 3c9b98f8b3f4 | 4.4% (39/888) [2.5%, 6.8%] | 26% (383/1491) [23%, 29%] | 63 |
 | Cross-model | 51b8366684f0 | 7.3% (439/6022) [6.3%, 8.4%] | 25% (2539/10172) [24%, 26%] | 420 |
 | Cross-model | 9e7d7ff22891 | 4.0% (68/1685) [2.7%, 5.6%] | 26% (744/2818) [24%, 29%] | 118 |
+| Cross-model | b72cdce126f2 | 6.9% (35/510) [3.5%, 11%] | 30% (242/817) [26%, 33%] | 34 |
+| Astra efforts | 12e2e3295899 | 0% (0/52) [0%, 0%] | 41% (32/79) [38%, 43%] | 4 |
+| Astra efforts | 2a5f469d8793 | 0% (0/9) [0%, 0%] | 22% (4/18) [22%, 22%] | 1 |
+| Astra efforts | b72cdce126f2 | 0% (0/11) [0%, 0%] | 25% (5/20) [25%, 25%] | 1 |
 | Haiku 4.5 efforts | 51b8366684f0 | 17% (19/114) [9.2%, 24%] | 15% (37/251) [13%, 17%] | 12 |
 | Haiku 4.5 efforts | 9e7d7ff22891 | 25% (675/2740) [23%, 27%] | 21% (1047/5107) [19%, 22%] | 188 |
 | Haiku 5.5 efforts | 51b8366684f0 | 12% (22/188) [7.6%, 16%] | 16% (57/354) [11%, 22%] | 20 |
 | Haiku 5.5 efforts | 9e7d7ff22891 | 14% (571/4041) [13%, 16%] | 27% (1812/6646) [26%, 29%] | 280 |
 | Luna efforts | 9e7d7ff22891 | 20% (886/4441) [18%, 22%] | 24% (1803/7600) [22%, 25%] | 300 |
-| Opus efforts | 12e2e3295899 | 0% (0/102) [0%, 0%] | 23% (42/183) [19%, 29%] | 8 |
+| Opus efforts | 12e2e3295899 | 0.3% (2/590) [0%, 0.8%] | 31% (274/888) [27%, 36%] | 36 |
 | Opus efforts | 9e7d7ff22891 | 0.1% (1/1134) [0%, 0.3%] | 30% (545/1838) [26%, 33%] | 80 |
+| Opus efforts | b72cdce126f2 | 0% (0/23) [0%, 0%] | 30% (11/37) [29%, 30%] | 2 |
 | Sol efforts | 9e7d7ff22891 | 0.7% (20/2830) [0.4%, 1.0%] | 29% (1337/4690) [27%, 30%] | 200 |
 | Sonnet efforts | 51b8366684f0 | 0% (0/55) [0%, 0%] | 24% (22/91) [20%, 26%] | 5 |
 | Sonnet efforts | 9e7d7ff22891 | 0.9% (40/4328) [0.6%, 1.3%] | 29% (2020/6969) [28%, 30%] | 295 |
-| Terra 6.1 efforts | 12e2e3295899 | 0% (0/227) [0%, 0%] | 30% (107/359) [22%, 37%] | 14 |
 | Terra efforts | 9e7d7ff22891 | 4.0% (114/2886) [3.1%, 4.8%] | 25% (1209/4858) [23%, 27%] | 200 |
-
+| gpt-6.1-terra efforts | 12e2e3295899 | 0% (0/227) [0%, 0%] | 30% (107/359) [22%, 37%] | 14 |
+| gpt-6.1-terra efforts | 2a5f469d8793 | 0% (0/34) [0%, 0%] | 38% (20/53) [26%, 55%] | 2 |
+<!-- beliefs:end -->
