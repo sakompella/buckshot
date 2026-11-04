@@ -5,10 +5,12 @@ import { join, normalize } from "node:path";
 import { Option, Schema } from "effect";
 
 import { analyse, decodeVisible, roundStory, ShellTracker, shotLineIn } from "./analysis.ts";
-import { Blunders, Call, CertainMistakes, Consistency, Decisions, MatchDetail, MatchSeat, MatchSummary, type PlayerState, SeatRow, SeatsResponse, type Step } from "./api.ts";
+import { Blunders, Call, CertainMistakes, Consistency, Decisions, MatchDetail, MatchSeat, MatchSummary, type PlayerState, RatingsResponse, SeatRow, SeatsResponse, type Step } from "./api.ts";
 import { findBlunders } from "./blunders.ts";
 import { type Certain, NO_CERTAIN, openCertain } from "./certain.ts";
 import { openConsistency } from "./consistency.ts";
+import { withPotShares } from "./page/data.ts";
+import { pooledRatings } from "./page/ratings.ts";
 import { openRegret, type Regret } from "./regret.ts";
 
 // The arena viewer's server: the built site (web/dist), and a read-only JSON API over the arena
@@ -57,6 +59,8 @@ const decodeDecisionRow = Schema.decodeUnknownSync(DecisionRow);
 const encodeSeats = Schema.encodeSync(Schema.fromJsonString(SeatsResponse));
 
 const encodeConsistency = Schema.encodeSync(Schema.fromJsonString(Schema.Array(Consistency)));
+
+const encodeRatings = Schema.encodeSync(Schema.fromJsonString(RatingsResponse));
 
 const encodeDecisions = Schema.encodeSync(Schema.fromJsonString(Decisions));
 
@@ -236,10 +240,28 @@ const guarded = (handler: (request: Request) => Response) => {
  * With a knowledge database, the page shows how consistent each config is.
  */
 /** A file of the built site when the path names one; any other path gets the page, which routes itself. */
-const siteResponse = async (siteDir: string, pathname: string): Promise<Response> => {
+const COMPRESSIBLE = /\.(js|css|svg)$/;
+
+const gzippedAssets = new Map<string, Uint8Array<ArrayBuffer>>();
+
+/** A hashed script or stylesheet, gzipped once when asked for; the others are sent as they are. */
+const assetResponse = async (pathname: string, file: ReturnType<typeof Bun.file>, request: Request): Promise<Response> => {
+  const headers = { "cache-control": "public, max-age=31536000, immutable" };
+
+  if (!COMPRESSIBLE.test(pathname) || !/\bgzip\b/.test(request.headers.get("accept-encoding") ?? "")) return new Response(file, { headers });
+
+  const gzipped = gzippedAssets.get(pathname) ?? Bun.gzipSync(await file.bytes());
+
+  gzippedAssets.set(pathname, gzipped);
+
+  return new Response(gzipped, { headers: { ...headers, "content-type": file.type, "content-encoding": "gzip", vary: "accept-encoding" } });
+};
+
+const siteResponse = async (siteDir: string, request: Request): Promise<Response> => {
+  const { pathname } = new URL(request.url);
   const file = Bun.file(join(siteDir, normalize(decodeURIComponent(pathname))));
 
-  if (pathname !== "/" && (await file.exists())) return new Response(file, pathname.startsWith("/assets/") ? { headers: { "cache-control": "public, max-age=31536000, immutable" } } : {});
+  if (pathname !== "/" && (await file.exists())) return pathname.startsWith("/assets/") ? assetResponse(pathname, file, request) : new Response(file);
 
   return new Response(Bun.file(join(siteDir, "index.html")), { headers: { "content-type": "text/html; charset=utf-8" } });
 };
@@ -265,6 +287,7 @@ export const serveArenaViewer = (dbPath: string, siteDir: string, hostname: stri
 
   const seatsBody = encodedBody(encodeSeats(seats));
   const decisionsBody = encodedBody(encodeDecisions(decisions));
+  const ratingsBody = encodedBody(encodeRatings([...pooledRatings(withPotShares(seats))].map(([key, rating]) => ({ key, ...rating }))));
   const blundersBody = encodedBody(encodeBlunders(findBlunders(db, regret, seatIndex)));
 
   const seedBlocks = new Map(seats.map(({ matchId, seedBlock }) => [matchId, seedBlock]));
@@ -280,7 +303,7 @@ export const serveArenaViewer = (dbPath: string, siteDir: string, hostname: stri
     // With routes, Bun otherwise shares the port with a viewer already on it and splits requests between the two.
     reusePort: false,
     development: false,
-    fetch: (request) => siteResponse(siteDir, new URL(request.url).pathname),
+    fetch: (request) => siteResponse(siteDir, request),
     routes: {
       "/api/*": () => new Response("not found", { status: 404 }),
       "/api/seats": guarded((request) => json(request, seatsBody)),
@@ -296,6 +319,7 @@ export const serveArenaViewer = (dbPath: string, siteDir: string, hostname: stri
           ? new Response("no download configured", { status: 404 })
           : new Response(Bun.file(download), { headers: { "content-disposition": 'attachment; filename="buckshot.sqlite"' } });
       }),
+      "/api/ratings": guarded((request) => json(request, ratingsBody)),
       "/api/decisions": guarded((request) => json(request, decisionsBody)),
       "/api/blunders": guarded((request) => json(request, blundersBody)),
       "/api/consistency": guarded((request) => json(request, consistencyBody)),

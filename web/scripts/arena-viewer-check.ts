@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { Schema } from "effect";
 import { type Browser, chromium, type Page } from "playwright-core";
 
-import { Blunders, CERTAIN_TYPES, CertainMistakes, Consistency, Decisions, ITEMS, MatchDetail, type MoveRegret, NO_GAP, SeatsResponse } from "../src/arena-viewer/api.ts";
+import { Blunders, CERTAIN_TYPES, CertainMistakes, Consistency, Decisions, ITEMS, MatchDetail, type MoveRegret, NO_GAP, RatingsResponse, SeatsResponse } from "../src/arena-viewer/api.ts";
 import { baseName, baseOrder, CERTAIN_NAMES, effortLabel, fmtBytes, fmtCount, fmtPct, fmtPoints, fmtUsd, blocksOf, groupBy, keyOf, labelOf, MIN_BLOCKS_FOR_INTERVAL, shortName, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { GROUPS, MOVED_TARGETS, Section } from "../src/arena-viewer/page/model.ts";
 import { pooledRatings } from "../src/arena-viewer/page/ratings.ts";
@@ -1856,6 +1856,16 @@ for (const viewport of only) await (viewport.isTouch ? checkTouch(browser, viewp
 await attempt("desktop", "optional data failing", () => checkOptionalFailure(browser));
 
 await attempt("desktop", "certain mistakes failing", () => checkCertainFailure(browser));
+
+// The server fits the ratings; they must be the numbers the page's own fit gives over the same served seats.
+const servedRatings = await served("/api/ratings", RatingsResponse);
+const fitted = pooledRatings(withPotShares(await servedSeats()));
+
+console.log("served ratings", servedRatings.length, "| fitted here", fitted.size);
+
+expectThat(servedRatings.length === fitted.size, "served ratings and the page's fit rate different configs");
+
+for (const { key, ...rating } of servedRatings) expectThat(JSON.stringify(rating) === JSON.stringify(fitted.get(key)), `served rating of ${key} differs from the page's fit`);
 
 console.log("failed checks", failures);
 

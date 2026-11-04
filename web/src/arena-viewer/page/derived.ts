@@ -1,7 +1,7 @@
 import { type Decisions, ITEMS } from "../api.ts";
 import { addTo, baseName, type BlockTally, blockRate, isProvisional, keyOf, type MatchRow, matchRows, type ModelStats, modelStats, type Rate, type SeatFull } from "./data.ts";
 import type { Filter, Loaded } from "./model.ts";
-import { pooledRatings, type Rating } from "./ratings.ts";
+import type { Rating } from "./ratings.ts";
 
 // What the page shows, worked out from the loaded data and the filter. Each is
 // recomputed only when its inputs change, so hovering a chart stays cheap.
@@ -118,7 +118,7 @@ export interface Derived {
   readonly filtered: ReadonlyArray<SeatFull>;
   readonly matchSeats: ReadonlyArray<SeatFull>;
   readonly pooled: ReadonlyArray<ModelStats>;
-  /** One round-win rating per config, fitted over every match of every tournament: filters pick rows, not the scale. */
+  /** One round-win rating per config, fitted by the server over every match of every tournament: filters pick rows, not the scale. */
   readonly ratings: ReadonlyMap<string, Rating>;
   readonly ranks: ReadonlyMap<string, number>;
   readonly everyPooled: ReadonlyArray<ModelStats>;
@@ -130,7 +130,9 @@ export interface Derived {
 // A filter keeps or drops whole configs, so whatever is grouped by config is worked out once for every seat and then
 // picked by the filter.
 
-const ratingsOf = memoLast((seats: ReadonlyArray<SeatFull>): ReadonlyMap<string, Rating> => pooledRatings(seats));
+const ratingsOf = memoLast(
+  (rows: Loaded["ratings"]): ReadonlyMap<string, Rating> => new Map(rows.map(({ key, ...rating }) => [key, rating])),
+);
 
 const allMatchesOf = memoLast((seats: ReadonlyArray<SeatFull>) => matchRows(seats));
 
@@ -157,7 +159,7 @@ export const derive = memoLast((loaded: Loaded, filter: Filter): Derived => {
   const kept = new Set(filtered.map(({ matchId }) => matchId));
   const matchSeats = seats.filter(({ matchId }) => kept.has(matchId));
   const every = everyPooledOf(seats);
-  const ratings = ratingsOf(seats);
+  const ratings = ratingsOf(loaded.ratings);
 
   return {
     seats,
