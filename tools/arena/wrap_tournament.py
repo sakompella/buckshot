@@ -19,7 +19,8 @@ check stops the run with a message and a non-zero exit; fix the cause and rerun.
   certain   certain-mistakes database
   swap-derived  swap regret, knowledge and certain-mistakes in, each keeping a .pre-<name> copy
   public    redact_database.py, scan every column for emails, swap, restart the viewer
-  export    arena-export.ts: the online site's aggregate JSON from the public copy into web/online/data (deploy stays manual: `bun run deploy:online`)
+  export    arena-export.ts: the online site's aggregate JSON from the public copy into web/online/data
+  deploy    only with --deploy: upload the site as a preview version, check it at its preview URL, then promote it to buckshot.akompella.dev (docs/arena/README.md)
   doc-*     rerun the doc table scripts into the working tree (nothing is committed)
   cleanup   restart the viewer, delete the scratch files
 
@@ -44,6 +45,7 @@ REPO = Path(__file__).resolve().parents[2]
 WORKTREES = Path.home() / ".t3/worktrees/buckshot"
 EMAIL = re.compile(rb"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+")
 SIDECARS = ("", "-wal", "-shm")
+CLOUDFLARE_ENV = REPO / "_work/.cloudflare-deploy.env"
 
 
 class Stop(Exception):
@@ -200,6 +202,23 @@ def splice_between_markers(text: str, name: str, body: str) -> str:
     return head + start + "\n" + body.strip("\n") + "\n" + end + rest.partition(end)[2]
 
 
+def dotenv(text: str) -> dict[str, str]:
+    """KEY=VALUE lines of an env file; blank lines and # comments are skipped."""
+    pairs = (line.split("=", 1) for line in text.splitlines() if "=" in line and not line.lstrip().startswith("#"))
+    return {key.strip(): value.strip() for key, value in pairs}
+
+
+def preview_version(output: str) -> str:
+    """The version id in the last JSON line of `deploy-online.ts preview`; stops unless the preview passed its checks."""
+    for line in reversed(output.splitlines()):
+        if line.startswith("{"):
+            result = json.loads(line)
+            if result["problems"]:
+                raise Stop(f"the preview {result['url']} fails its checks: {result['problems']}")
+            return result["versionId"]
+    raise Stop("deploy-online.ts preview printed no result")
+
+
 def email_hits(path: Path) -> int:
     """How many email-shaped strings the database holds in any column. Values are read as text, not raw bytes: a record header byte can be an `@`."""
     db = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
@@ -240,6 +259,7 @@ class Wrap:
     viewer_unit: str | None
     viewer_url: str
     jobs: int
+    deploy: bool = False
 
     def __post_init__(self) -> None:
         self.logs = self.run_dirs[0] / "wrapup"
@@ -266,11 +286,11 @@ class Wrap:
         with open(self.logs / "wrapup.log", "a") as f:
             f.write(line + "\n")
 
-    def run(self, step: str, cmd: list[str], cwd: Path = REPO, stdout: Path | None = None) -> None:
+    def run(self, step: str, cmd: list[str], cwd: Path = REPO, stdout: Path | None = None, env: dict[str, str] | None = None) -> None:
         """Runs a command, its output going to the step's log (or `stdout`, with stderr to the log); a failure stops the run."""
         log = self.logs / f"{step}.log"
         with open(log, "a") as err, open(stdout or log, "a") as out:
-            done = subprocess.run(cmd, cwd=cwd, env=self.env, stdout=out, stderr=err if stdout else subprocess.STDOUT)
+            done = subprocess.run(cmd, cwd=cwd, env=env or self.env, stdout=out, stderr=err if stdout else subprocess.STDOUT)
         if done.returncode != 0:
             raise Stop(f"{' '.join(cmd[:6])} exited {done.returncode}; see {log}")
 
@@ -393,7 +413,20 @@ class Wrap:
         derived = [("--regret", "regret"), ("--knowledge", "knowledge"), ("--certain-mistakes", "certain-mistakes")]
         args = [str(self.public), "--out", str(out), *[a for flag, name in derived for a in (flag, str(self.derived / f"{name}.sqlite"))]]
         self.run("export", self.nix(REPO, "bun", "scripts/arena-export.ts", *args), cwd=REPO / "web")
-        return f"aggregates in {out}; deploy with `bun run deploy:online` from web/"
+        return f"aggregates in {out}" + ("" if self.deploy else "; deploy with --deploy or `bun run deploy:online` from web/")
+
+    def deploy_(self) -> str:
+        """Preview, check and promote the exported site. The preview step fails the run unless the preview URL passes the privacy scan and the smoke checks, so a bad site is never promoted."""
+        if not CLOUDFLARE_ENV.exists():
+            raise Stop(f"{CLOUDFLARE_ENV} is missing: see docs/arena/README.md, Deploying the online site")
+        env = {**self.env, **dotenv(CLOUDFLARE_ENV.read_text())}
+        web = REPO / "web"
+        out = self.logs / "deploy-preview.out"
+        out.unlink(missing_ok=True)
+        self.run("deploy-preview", self.nix(REPO, "bun", "run", "deploy:preview", "--alias", self.tag), cwd=web, stdout=out, env=env)
+        version = preview_version(out.read_text())
+        self.run("deploy-promote", self.nix(REPO, "bun", "run", "deploy:promote", version), cwd=web, env=env)
+        return f"version {version} is live at buckshot.akompella.dev"
 
     def doc(self, script: str, doc: str, *args: str) -> Callable[[], None]:
         def step() -> None:
@@ -434,6 +467,7 @@ class Wrap:
             ("swap-derived", self.swap_derived),
             ("public", self.public_),
             ("export", self.export),
+            *([("deploy", self.deploy_)] if self.deploy else []),
             ("doc-leaderboard", self.doc("leaderboard", "results.md", *dbs)),
             ("doc-regret", self.doc("regret", f"{a}/regret.md", *derived)),
             ("doc-by_round", self.doc("by_round", f"{a}/regret.md", *dbs, *derived)),
@@ -461,10 +495,11 @@ def main() -> None:
     p.add_argument("--viewer-url", default="http://127.0.0.1:8790/")
     p.add_argument("--jobs", type=int, default=2, help="regret scoring processes")
     p.add_argument("--skip", action="append", default=[], help="step to leave out, repeatable")
+    p.add_argument("--deploy", action="store_true", help="after the export, preview, check and promote the online site to buckshot.akompella.dev (off by default)")
     p.add_argument("--dry-run", action="store_true", help="list the steps and which are done")
     args = p.parse_args()
     runs = [r.resolve() for r in args.run_dir]
-    wrap = Wrap(runs, args.importer.resolve(), args.analysis.resolve(), args.docs.resolve(), args.name or re.sub(r"tournament-?", "t", runs[-1].name), args.cohort, args.skips, args.evaluator, args.knowledge, args.viewer_unit or None, args.viewer_url, args.jobs)
+    wrap = Wrap(runs, args.importer.resolve(), args.analysis.resolve(), args.docs.resolve(), args.name or re.sub(r"tournament-?", "t", runs[-1].name), args.cohort, args.skips, args.evaluator, args.knowledge, args.viewer_unit or None, args.viewer_url, args.jobs, args.deploy)
     steps = [(n, f) for n, f in wrap.steps() if n not in args.skip]
     if args.dry_run:
         done = json.loads(wrap.state.read_text()) if wrap.state.exists() else {}

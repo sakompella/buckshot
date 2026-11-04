@@ -94,6 +94,17 @@ Codex isn't checked there: use account pins, so a full Codex account pauses only
 ## Wrap-up
 `python3 tools/arena/wrap_tournament.py --run-dir <dir> --importer <worktree> --cohort "<name>"`, inside `nix develop` from the main checkout, imports finished tournaments and refreshes everything derived from them: the steps are in its docstring. It is rerunnable (a `wrapup/state.json` in the run dir records finished steps), stops on the first failed check, and rewrites doc tables in the working tree without committing. `--dry-run` lists the steps.
 
+## Deploying the online site
+The wrap-up's `export` step writes the aggregates to `web/online/data`. Deploying them is off by default. `wrap_tournament.py --deploy` adds a `deploy` step after `export`: it uploads a Worker version without traffic, checks it at its preview URL (the privacy scan on the files it serves, `/` and `/arena` answering, every `/data/*.json` equal to the export), then promotes it to buckshot.akompella.dev. A failed check stops the run and nothing is promoted. Turn it on by adding `--deploy` to the wrap-up command; there is no timer or hook.
+
+By hand, from `web/` in `nix develop`, with the token loaded (`set -a; . ../_work/.cloudflare-deploy.env; set +a`):
+
+- `bun run deploy:preview --alias <name>` uploads, checks and prints `{"versionId", "url", "problems"}`; exit 1 when a check fails. The preview URL is `https://<alias>-buckshot.<workers.dev subdomain>.workers.dev`. It is public and holds the same aggregates as the live site. An alias is lowercase letters, digits and dashes, starting with a letter; reusing one moves it to the new version.
+- `bun run deploy:promote <versionId>` sends all traffic to that version.
+- `bun run deploy:online` is the old one-step deploy to the live domain, with no preview.
+
+`_work/.cloudflare-deploy.env` (mode 600, gitignored) holds `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`; the token is `buckshot-deploy`, without expiry, and can only edit Workers scripts on the account, read account settings, and read the zone and edit its Worker routes. Without that file, `cf auth login` (OAuth, expires daily) also works for the by-hand commands. To replace the token: `cf accounts tokens roll <token id>` (the id is `CLOUDFLARE_TOKEN_ID` in the file) or create a new one with the same permission groups, and update the file. `cf` needs Node, so run everything under `nix develop`.
+
 ## Reasoning settings
 - **Claude 5.5 models:** `adaptive` thinking with an effort and `display: "summarized"` (their default `omitted` returns no text).
   - haiku 5.5 off sends `disabled`.
