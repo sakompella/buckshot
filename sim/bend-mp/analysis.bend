@@ -9,8 +9,8 @@ import ./player/belief.bend as B
 # domain values carry the rules build's "domain." tags, so a board or config
 # from that build passes in unchanged.
 
-def analyse(position: A.Position, depth: Nat, budget: Nat, reload: A.Reload) -> A.Analysis:
-  P.analyse(position, depth, budget, reload)
+def analyse(position: A.Position, depth: Nat, budget: Nat, reload: A.Reload, memo: A.Memo) -> A.Analysis:
+  P.analyse(position, depth, budget, reload, memo)
 
 # Every shell order a log allows, with multiplicity: from the public events
 # alone, or with the player's own clues too.

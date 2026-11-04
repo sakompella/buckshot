@@ -6,7 +6,7 @@ A pure Bend 2 player for `../simple/`, separate from the single-player simulator
 
 `Position{config, board, log, me}` contains the public match configuration, current public board, and the complete chronological `List<Heard>` for `me`. Build `log` with `domain.hear` as the match runs. It must include `RoundBegan` and `Loaded`; do not pass only the latest answer's notes. It contains no hidden shell order, deck or RNG.
 
-`analyse(position, depth, budget, reload)` returns either an input/belief error or every legal move with a fixed-point score and principal variation, the best move/index, expanded node count, completed depth and a budget flag. A line's score is its value over `me`'s private belief. Ties keep the first canonical legal move.
+`analyse(position, depth, budget, reload, memo)` returns either an input/belief error or every legal move with a fixed-point score, principal variation and reach, the best move/index, expanded node count, completed depth, a budget flag and memo counts. A line's score is its value over `me`'s private belief. Ties keep the first canonical legal move.
 
 A PV starts with the line's own move and then names the player decisions that follow, so it holds at most `depth` moves. At a chance node it follows the private observation branch with the highest probability. That branch is the most likely one, not a prediction of the random outcome.
 
@@ -31,12 +31,25 @@ After a move, worlds are grouped by what the public and the searcher observe. On
 
   A deal leaf costs no nodes, so every rule searches the same tree.
 
+A line's `reach` says how its leaves ended: `Settled` if every round ended, `Reloads` if some stopped at a reload and none ran out of depth, `Cut` if any ran out of depth. Only a `Cut` line can score differently at more depth. Leaves at a reload are exact for the reload rule, not for the game.
+
+## Memo
+
+The same beliefs recur across move orders and across the iterations of deepening. The `memo` argument says how the search reuses them:
+
+- `Off` searches every node again.
+- `Charged` reuses a decision node's value but spends the nodes its first search spent, so scores, nodes, depth and `limited` are exactly those of `Off`. `choose` uses it.
+- `Free` spends nothing on reuse, so a budget reaches further. Scores match `Off` whenever the budget does not run out.
+
+A decision node is keyed by both beliefs, each world's state spelled out in full, and the depth it was searched to. A value whose reach is not `Cut` serves any equal or greater depth, since its tree cannot grow. A `Cut` value serves only its own depth. A deal leaf's sums depend on its beliefs alone, so they are kept whatever the depth. The memo lives for one `analyse` call.
+
 ## Modules
 
 - `belief.bend` reconstructs synthetic states from public information, enumerates shell orders, replays observations and groups outcomes.
 - `evaluation.bend` holds all starting weights and the static win-share estimate.
 - `search.bend` does bounded paranoid expectiminimax and iterative deepening.
 - `deal.bend` enumerates or samples a reload's deals for the deal leaves.
+- `memo.bend` keys beliefs and keeps the memo of decision nodes and deal leaves.
 - `policy.bend` selects a move from completed analysis.
 - `main.bend` is the stable export entry point.
 
