@@ -14,10 +14,8 @@ def stage(state: S.State) -> D.Stage:
 def point(state: S.State) -> D.Point:
   P.point(state)
 
-def pickup(state: S.State, +seat: D.Seat) -> S.State:
-  match state:
-    case S.State{world, +players, _, notes, grabs}:
-      S.State{world, players, S.Aim{seat}, List.append(&2, D.Note, notes, [D.Shown{D.PickedUp{seat}}]), grabs}
+def pickup(+state: S.State, +seat: D.Seat) -> S.State:
+  S.state.emit(S.state.set_phase(state, S.Aim{seat}), D.PickedUp{seat})
 
 def replace_hidden(+state: S.State, gun: List<&2, D.Shell>, decks: S.Decks) -> S.State:
   S.state.set_world(state, S.world.set_decks(S.world.set_gun(S.state.world(state), gun), decks))
@@ -34,10 +32,9 @@ def grant.step(rank: Nat, +state: S.State, +seat: D.Seat, result: S.JamResult) -
     case 0n S.Skip{players}:
       S.state.set_phase(S.state.set_players(state, players), S.Blocked{None{}})
     case 1n+rest S.Skip{+players}:
-      +world : S.World = S.state.world(state)
-      next : D.Seat = G.next_turn(S.players.health(players), S.world.direction(world), seat)
+      next : D.Seat = G.next_turn(S.players.health(players), S.world.direction(S.state.world(state)), seat)
       +next : D.Seat = next
-      state : S.State = S.state.set_world(S.state.set_players(state, players), S.world.set_turn(world, Some{next}))
+      state : S.State = S.state.set_world(S.state.set_players(state, players), S.world.set_turn(S.state.world(state), Some{next}))
       grant.step(rest, S.state.emit(state, D.TurnSkipped{seat}), next, G.jam(players, next))
 
 def grant.bound(rank: Nat, +state: S.State, +seat: D.Seat) -> S.State:
@@ -493,41 +490,47 @@ def pickup.selected(state: S.State, +seat: D.Seat, selected: Maybe<&2, S.IdleOpt
     case None{}:
       S.state.set_phase(state, S.Blocked{Some{seat}})
 
-def answer.choice(+state: S.State, choice: D.Choice) -> S.State:
-  match state choice:
-    case S.State{world, players, S.Idle{+seat, options}, notes, grabs} D.Choice{_, index, _}:
+def answer.choice.at(+state: S.State, phase: S.Phase, choice: D.Choice) -> S.State:
+  match phase choice:
+    case S.Idle{+seat, options} D.Choice{_, index, _}:
       pickup.selected(state, seat, G.idle.nth(D.nonempty.list(S.IdleOption, options), index))
-    case S.State{world, +players, S.Aim{+seat}, notes, grabs} D.Choice{_, index, _}:
-      aim.selected(state, seat, G.target.nth(G.aim.targets(players), index))
-    case S.State{world, players, S.Grab{needs}, notes, grabs} D.Choice{+chosen, index, _}:
+    case S.Aim{+seat} D.Choice{_, index, _}:
+      aim.selected(state, seat, G.target.nth(G.aim.targets(S.state.players(state)), index))
+    case S.Grab{needs} D.Choice{+chosen, index, _}:
       grab.selected(state, chosen, I.grab.nth(G.value.or(List<&2, S.GrabOption>, D.ring.get(List<&2, S.GrabOption>, needs, chosen), Nil{}), index))
-    case S.State{world, players, S.JamPick{+seat, targets}, notes, grabs} D.Choice{_, index, _}:
+    case S.JamPick{+seat, targets} D.Choice{_, index, _}:
       jam.selected(state, seat, I.jam.nth(targets, index))
-    case S.State{world, players, S.StealPick{+seat, picks}, notes, grabs} D.Choice{_, index, _}:
+    case S.StealPick{+seat, picks} D.Choice{_, index, _}:
       steal.selected(state, seat, I.steal.nth(picks, index))
     case _ _:
       S.state.set_phase(state, S.Blocked{None{}})
 
-def answer.draw(+state: S.State, value: Nat) -> S.State:
-  match state:
-    case S.State{world, players, S.NeedFirst{}, notes, grabs}:
-      first.chosen(state, G.value.or(D.Seat, G.nth(D.Seat, D.table.seats(S.world.table(world)), value), D.Seat0{}))
-    case S.State{world, players, S.NeedHealth{}, notes, grabs}:
+def answer.choice(+state: S.State, choice: D.Choice) -> S.State:
+  answer.choice.at(state, S.state.phase(state), choice)
+
+def answer.draw.at(+state: S.State, phase: S.Phase, value: Nat) -> S.State:
+  match phase:
+    case S.NeedFirst{}:
+      first.chosen(state, G.value.or(D.Seat, G.nth(D.Seat, D.table.seats(S.world.table(S.state.world(state))), value), D.Seat0{}))
+    case S.NeedHealth{}:
       health.chosen(state, value)
-    case S.State{world, players, S.NeedAmount{}, notes, grabs}:
+    case S.NeedAmount{}:
       amount.chosen(state, value)
-    case S.State{world, players, S.NeedBatch{}, notes, grabs}:
+    case S.NeedBatch{}:
       batch(state, value)
-    case S.State{world, players, S.NeedSwap{load, shells, +i}, notes, grabs}:
+    case S.NeedSwap{load, shells, +i}:
       shuffle(state, load, G.swap(shells, i, value), G.predecessor(i))
-    case S.State{world, players, S.NeedTurnAmount{from, passing, winner}, notes, grabs}:
-      turn.winner(S.state.set_world(state, S.world.set_item_amount(world, value)), from, passing, winner)
-    case S.State{world, players, S.NeedItem{seat, first, second, rest}, notes, grabs}:
+    case S.NeedTurnAmount{from, passing, winner}:
+      turn.winner(S.state.set_world(state, S.world.set_item_amount(S.state.world(state), value)), from, passing, winner)
+    case S.NeedItem{seat, first, second, rest}:
       grab.chosen(state, seat, G.nth(D.Item, first <> second <> rest, value))
-    case S.State{world, players, S.NeedPhone{seat, owner, slot}, notes, grabs}:
+    case S.NeedPhone{seat, owner, slot}:
       item.clue(state, seat, owner, slot, value)
     case _:
       S.state.set_phase(state, S.Blocked{None{}})
+
+def answer.draw(+state: S.State, value: Nat) -> S.State:
+  answer.draw.at(state, S.state.phase(state), value)
 
 def answer.resolved(state: S.State, resolved: D.Resolved) -> S.State:
   match resolved:

@@ -141,8 +141,8 @@ MUTATIONS = (
         "sm/point.bend",
         (
             Edit(
-                "def board(+state: S.State) -> D.Board:",
-                "def head.shown(gun: List<&2, D.Shell>, fallback: D.Load) -> D.Load:\n  match gun:\n    case Nil{}:\n      fallback\n    case D.Live{} <> rest:\n      D.Load{1n, 0n}\n    case D.Blank{} <> rest:\n      D.Load{0n, 1n}\n\ndef board(+state: S.State) -> D.Board:",
+                "def board.gun(+world: S.World) -> D.GunView:",
+                "def head.shown(gun: List<&2, D.Shell>, fallback: D.Load) -> D.Load:\n  match gun:\n    case Nil{}:\n      fallback\n    case D.Live{} <> rest:\n      D.Load{1n, 0n}\n    case D.Blank{} <> rest:\n      D.Load{0n, 1n}\n\ndef board.gun(+world: S.World) -> D.GunView:",
             ),
             Edit(
                 "D.GunView{S.world.shown(world),",

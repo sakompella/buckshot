@@ -33,10 +33,9 @@ def grant.step(rank: Nat, +state: T.State, +seat: D.Seat, result: S.JamResult) -
     case 0n S.Skip{players}:
       T.state.set_phase(T.state.set_players(state, players), T.Blocked{None{}})
     case 1n+rest S.Skip{+players}:
-      +world : S.World = T.state.world(state)
-      next : D.Seat = G.next_turn(S.players.health(players), S.world.direction(world), seat)
+      next : D.Seat = G.next_turn(S.players.health(players), S.world.direction(T.state.world(state)), seat)
       +next : D.Seat = next
-      state : T.State = T.state.set_world(T.state.set_players(state, players), S.world.set_turn(world, Some{next}))
+      state : T.State = T.state.set_world(T.state.set_players(state, players), S.world.set_turn(T.state.world(state), Some{next}))
       grant.step(rest, T.state.emit(state, D.TurnSkipped{seat}), next, G.jam(players, next))
 
 def grant.bound(rank: Nat, +state: T.State, +seat: D.Seat) -> T.State:
@@ -562,33 +561,39 @@ def pickup.selected(state: T.State, +seat: D.Seat, selected: Maybe<&2, T.IdleOpt
     case None{}:
       T.state.set_phase(state, T.Blocked{Some{seat}})
 
-def answer.choice(+state: T.State, index: Nat) -> T.State:
-  match state:
-    case T.State{world, players, T.Idle{+seat}, notes, grabs}:
+def answer.choice.at(+state: T.State, phase: T.Phase, index: Nat) -> T.State:
+  match phase:
+    case T.Idle{+seat}:
       pickup.selected(state, seat, P.option.nth(P.options(state, seat), index))
     case _:
       T.state.set_phase(state, T.Blocked{None{}})
 
-def answer.draw(+state: T.State, value: Nat) -> T.State:
-  match state:
-    case T.State{world, players, T.NeedFirst{}, notes, grabs}:
-      first.chosen(state, G.value.or(D.Seat, G.nth(D.Seat, D.table.seats(S.world.table(world)), value), D.Seat0{}))
-    case T.State{world, players, T.NeedHealth{}, notes, grabs}:
+def answer.choice(+state: T.State, index: Nat) -> T.State:
+  answer.choice.at(state, T.state.phase(state), index)
+
+def answer.draw.at(+state: T.State, phase: T.Phase, value: Nat) -> T.State:
+  match phase:
+    case T.NeedFirst{}:
+      first.chosen(state, G.value.or(D.Seat, G.nth(D.Seat, D.table.seats(S.world.table(T.state.world(state))), value), D.Seat0{}))
+    case T.NeedHealth{}:
       health.chosen(state, value)
-    case T.State{world, players, T.NeedAmount{}, notes, grabs}:
+    case T.NeedAmount{}:
       amount.chosen(state, value)
-    case T.State{world, players, T.NeedBatch{}, notes, grabs}:
+    case T.NeedBatch{}:
       batch(state, value)
-    case T.State{world, players, T.NeedSwap{load, shells, +i}, notes, grabs}:
+    case T.NeedSwap{load, shells, +i}:
       shuffle(state, load, G.swap(shells, i, value), G.predecessor(i))
-    case T.State{world, players, T.NeedTurnAmount{from, passing, winner}, notes, grabs}:
-      turn.winner(T.state.set_world(state, S.world.set_item_amount(world, value)), from, passing, winner)
-    case T.State{world, players, T.NeedItem{+seat, first, second, rest}, notes, grabs}:
+    case T.NeedTurnAmount{from, passing, winner}:
+      turn.winner(T.state.set_world(state, S.world.set_item_amount(T.state.world(state), value)), from, passing, winner)
+    case T.NeedItem{+seat, first, second, rest}:
       grab.distribute(grab.chosen(state, seat, G.nth(D.Item, first <> second <> rest, value)), seat)
-    case T.State{world, players, T.NeedPhone{seat, owner, slot}, notes, grabs}:
+    case T.NeedPhone{seat, owner, slot}:
       item.clue(state, seat, owner, slot, value)
     case _:
       T.state.set_phase(state, T.Blocked{None{}})
+
+def answer.draw(+state: T.State, value: Nat) -> T.State:
+  answer.draw.at(state, T.state.phase(state), value)
 
 # A choice index past the end of the menu clamps to its last move.
 def answer.request(+state: T.State, n: Nat, request: T.Request) -> D.Stepped<&2, T.State>:

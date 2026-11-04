@@ -134,10 +134,9 @@ def put.phase(phase: T.Phase, rest: String) -> String:
     case T.NeedPhone{seat, owner, slot}:
       L.put(11, L.put.seat(seat, L.put.seat(owner, put.slot(slot, rest))))
 
-def put.state(state: T.State, rest: String) -> String:
-  match state:
-    case T.State{world, players, phase, _, grabs}:
-      put.world(world, put.players(D.ring.entries(S.Seat, players), put.phase(phase, L.put.grabs(grabs, rest))))
+def put.state(+state: T.State, rest: String) -> String:
+  tail : String = put.players(D.ring.entries(S.Seat, T.state.players(state)), put.phase(T.state.phase(state), L.put.grabs(T.state.grabs(state), rest)))
+  put.world(T.state.world(state), tail)
 
 def put.world_list(worlds: List<&2, A.World>, rest: String) -> String:
   match worlds:
