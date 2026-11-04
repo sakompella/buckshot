@@ -6,7 +6,9 @@ import type { Call, MatchDetail, MoveRegret, Step } from "../api.ts";
 import { linScale, pressable } from "./charts.ts";
 import { baseName, CERTAIN_NAMES, colorOf, fmtCount, fmtPoints, fmtSec, fmtPct, fmtTime, fmtUsd, keyOf, labelOf, type MatchRow, sumOf, unique } from "./data.ts";
 import { type MatchData, Message, type Replay, type Viewport } from "./model.ts";
-import { tableView } from "./table.ts";
+import { positionOf } from "../../board.ts";
+import { tableView } from "../../board-view.ts";
+import type { Shell } from "../../domain.ts";
 
 type H = HtmlBuilder<Message>;
 
@@ -199,23 +201,45 @@ const turningPointsView = (h: H, detail: MatchDetail, names: ReadonlyMap<string,
 const nameView = (h: H, detail: MatchDetail, names: ReadonlyMap<string, string>, player: string): Html =>
   h.b([h.Class("who"), h.Style({ color: seatColor(detail, player) })], [names.get(player) ?? player]);
 
-/** The table just before the chosen move, as its mover saw it; what the move did is the selected view's. */
-const boardView = (h: H, detail: MatchDetail, steps: ReadonlyArray<Step>, step: Step, names: ReadonlyMap<string, string>): Html => {
-  const most = Math.max(1, ...steps.filter(({ round }) => round === step.round).flatMap(({ players }) => players.map(({ health }) => health)));
+const POSITION_NAMES = ["near", "left", "far", "right"] as const;
 
-  return tableView(h, {
-    seats: detail.seats.map((seat) => {
-      const seen = step.players.find(({ player }) => player === seat.player);
+/** The table just before the chosen move, as its mover saw it, with the chosen move marked; what the move did is the selected view's. */
+const boardView = (h: H, detail: MatchDetail, step: Step, names: ReadonlyMap<string, string>): Html => {
+  if (step.table === null) return h.p([h.Class("k")], ["This match does not replay through the rules to this move, so there is no table to show."]);
 
-      return { letter: seat.player, name: names.get(seat.player) ?? seat.player, color: colorOf(seat.model), health: seen?.health ?? 0, items: seen?.items ?? [], isActing: seat.player === step.player };
-    }),
-    maxHealth: most,
-    live: step.live,
-    blank: step.blank,
-    known: step.known,
-    viewer: names.get(step.player) ?? step.player,
-    action: h.div([h.Class("action")], [nameView(h, detail, names, step.player), " chose ", h.span([], [step.label])]),
-  });
+  const { board, out, moves, chosen } = step.table;
+  // Board seats and match seats are both in table order; the first seat sits nearest, as a spectator sees it.
+  const near = board.seats[0]?.seat ?? 0;
+  const chamber = Option.map(Option.fromNullOr(step.known), (shell): Shell => (shell === "live" ? "Live" : "Blank"));
+
+  return h.div(
+    [h.Class("board")],
+    [
+      tableView(h, {
+        view: { board, near, out: new Set(out), shells: Option.some({ live: step.live, blank: step.blank, chamber }), recent: [], key: step.id },
+        moves,
+        onMove: Option.none(),
+        chosen: Option.some(chosen),
+      }),
+      h.div(
+        [h.Class("action")],
+        [
+          ...detail.seats.flatMap((seat, index) => {
+            const at = board.seats[index] === undefined ? undefined : POSITION_NAMES[positionOf(near, board.seats[index].seat)];
+
+            return at === undefined ? [] : [nameView(h, detail, names, seat.player), h.span([h.Class("k")], [` ${at} · `])];
+          }),
+          nameView(h, detail, names, step.player),
+          " chose ",
+          h.span([], [step.label]),
+        ],
+      ),
+      h.div(
+        [h.Class("k")],
+        [`${step.live} live · ${step.blank} blank · ${step.known === null ? "chamber unknown" : `chamber ${step.known}`}, as ${names.get(step.player) ?? step.player} counts them`],
+      ),
+    ],
+  );
 };
 
 const scrollListToRow = (list: Element, row: Element): void => {
@@ -480,7 +504,7 @@ const detailView = (h: H, replay: Replay, detail: MatchDetail, allMatches: Reado
                 h.button([h.Type("button"), h.AriaLabel("Next move"), h.Disabled(at >= steps.length - 1), h.OnClick(Message.SteppedReplay({ delta: 1 }))], ["Next ›"]),
               ],
             ),
-            ...(step === undefined ? [] : [boardView(h, detail, steps, step, names), selectedView(h, detail, step, names, viewport)]),
+            ...(step === undefined ? [] : [boardView(h, detail, step, names), selectedView(h, detail, step, names, viewport)]),
           ],
         ),
         h.div(

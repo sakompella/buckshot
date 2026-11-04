@@ -1,5 +1,8 @@
 import { Schema } from "effect";
 
+import { TableMove } from "../board.ts";
+import { Board, Seat as BoardSeat } from "../domain.ts";
+
 // The arena viewer's JSON API: what its server encodes and its page decodes.
 // The server reads the analysis database (docs/arena/database.md) read-only.
 
@@ -250,6 +253,14 @@ export const MoveRegret = Schema.Struct({
 export type MoveRegret = typeof MoveRegret.Type;
 
 /**
+ * The table just before a decision, from the match replayed through the rules (ADR-0001): the public board, the
+ * seats out of the round, and the deciding player's legal moves, of which `chosen` is the one played.
+ */
+export const TablePosition = Schema.Struct({ board: Board, out: Schema.Array(BoardSeat), moves: Schema.Array(TableMove), chosen: Schema.Number });
+
+export type TablePosition = typeof TablePosition.Type;
+
+/**
  * One decision of a match, with the deciding player's view: everyone's health and items, the shells it counts
  * by original type, and the chambered shell if glass or phone told it. A view can omit a jammed player's health,
  * so the last known value is carried forward. outcome is the public events the move caused.
@@ -270,6 +281,8 @@ export const Step = Schema.Struct({
   certain: Schema.NullOr(CertainType),
   outcome: Schema.Array(Schema.String),
   calls: Schema.Array(Call),
+  /** Null when the match does not replay to this decision. */
+  table: Schema.NullOr(TablePosition),
 });
 
 export type Step = typeof Step.Type;
@@ -304,3 +317,6 @@ export const MatchDetail = Schema.Struct({
 });
 
 export type MatchDetail = typeof MatchDetail.Type;
+
+/** A match detail as JSON: a board's empty slots are Options. */
+export const MatchDetailJson = Schema.toCodecJson(MatchDetail);

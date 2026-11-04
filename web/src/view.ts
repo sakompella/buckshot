@@ -2,12 +2,12 @@ import { Array as Arr, Option } from "effect";
 import type { Document, Html, HtmlBuilder } from "foldkit/html";
 
 import type { Prompt } from "./bend.ts";
-import { GameEvent, Move, type Seat, SEATS_BY_TABLE } from "./domain.ts";
+import { GameEvent, Move, type Seat, SEATS_BY_TABLE, seatsOut } from "./domain.ts";
 import { aiPrompt, controllerOf, promptsOf } from "./driver.ts";
 import { latestLearned, latestStep, Message, type Model, type Session, type Speed, SPEED_FACTOR, type Viewer } from "./model.ts";
 import { rosterOf } from "./players.ts";
-import { boardMoves, viewerPrompt } from "./board.ts";
-import { hurtView, tableView } from "./board-view.ts";
+import { boardMoves, nearSeat, promptMoves, type TableMove, viewerPrompt } from "./board.ts";
+import { hurtView, type SeatTable, tableView } from "./board-view.ts";
 import { eventText, secretShout, secretText } from "./text.ts";
 import { titles } from "./titles.ts";
 
@@ -112,23 +112,36 @@ const bannerView = (h: H, model: Model, match: Session): Html => {
   );
 };
 
-// Moves that no single thing on the table stands for.
-const looseMovesView = (h: H, match: Session): Html =>
+/** The viewer's legal moves, and the message that plays each through the machine. */
+const viewerMoves = (match: Session): { readonly moves: ReadonlyArray<TableMove>; readonly onMove: Option.Option<(index: number) => Message> } =>
   Option.match(viewerPrompt(match), {
-    onNone: () => h.empty,
-    onSome: (prompt) => {
-      const { buttons } = boardMoves(rosterOf(match.game.seats), prompt);
-
-      return buttons.length === 0
-        ? h.empty
-        : h.div(
-            [h.Class("loose-moves")],
-            buttons.map(({ index, label }) =>
-              h.button([h.Type("button"), h.OnClick(Message.ClickedMove({ match: prompt.ticket.match, generation: prompt.ticket.generation, seat: prompt.seat, index }))], [label]),
-            ),
-          );
-    },
+    onNone: () => ({ moves: [], onMove: Option.none() }),
+    onSome: (prompt) => ({
+      moves: promptMoves(rosterOf(match.game.seats), prompt),
+      onMove: Option.some((index: number) => Message.ClickedMove({ match: prompt.ticket.match, generation: prompt.ticket.generation, seat: prompt.seat, index })),
+    }),
   });
+
+const seatTableOf = (match: Session, matchNumber: number): SeatTable => ({
+  board: match.game.board,
+  near: nearSeat(match),
+  out: seatsOut(match.events),
+  shells: Option.none(),
+  recent: latestStep(match),
+  key: `${matchNumber}`,
+});
+
+// Moves that no single thing on the table stands for.
+const looseMovesView = (h: H, match: Session): Html => {
+  const { moves, onMove } = viewerMoves(match);
+  const { buttons } = boardMoves(moves);
+
+  return Option.match(onMove, {
+    onNone: () => h.empty,
+    onSome: (toMessage) =>
+      buttons.length === 0 ? h.empty : h.div([h.Class("loose-moves")], buttons.map(({ index, label }) => h.button([h.Type("button"), h.OnClick(toMessage(index))], [label]))),
+  });
+};
 
 /**
  * The latest secret the viewer learned, big in the middle of the screen for a
@@ -258,8 +271,8 @@ const matchView = (h: H, model: Model, match: Session): Html => {
     [h.Class("game")],
     [
       bannerView(h, model, match),
-      tableView(h, match, model.matchCount),
-      hurtView(h, match, model.matchCount),
+      tableView(h, { view: seatTableOf(match, model.matchCount), ...viewerMoves(match), chosen: Option.none() }),
+      match.viewer === "Spectator" ? h.empty : hurtView(h, seatTableOf(match, model.matchCount)),
       match.game.pending.kind === "Stuck" ? h.p([h.Class("error")], ["The machine is stuck: no seat has a legal move."]) : h.empty,
       looseMovesView(h, match),
       secretView(h, match),

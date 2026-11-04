@@ -2,11 +2,17 @@ import type { Database } from "bun:sqlite";
 import crypto from "node:crypto";
 import { join, normalize } from "node:path";
 
-import { Option, Schema } from "effect";
+import { Array as Arr, Option, Result, Schema } from "effect";
 
+import { agentMoves } from "../agent/moves.ts";
+import { replayOf } from "../arena/replay.ts";
+import type { TableMove } from "../board.ts";
+import { seatsOut } from "../domain.ts";
+import { Controller } from "../driver.ts";
+import { Letter, rosterOf } from "../players.ts";
 import { AGGREGATE_NAMES, aggregatesOf, encodeAggregates } from "./aggregates.ts";
 import { decodeVisible, roundStory, ShellTracker, shotLineIn } from "./analysis.ts";
-import { Blunders, Call, CertainMistakes, Decisions, MatchDetail, MatchSeat, MatchSummary, type PlayerState, SeatsResponse, type Step } from "./api.ts";
+import { Blunders, Call, CertainMistakes, Decisions, type MatchDetail, MatchDetailJson, MatchSeat, MatchSummary, type PlayerState, SeatsResponse, type Step, type TablePosition } from "./api.ts";
 import { findBlunders } from "./blunders.ts";
 import type { Certain } from "./certain.ts";
 import { type ArenaPaths, loadArena, NOT_DEEPSEEK } from "./load.ts";
@@ -26,11 +32,14 @@ const DecisionRow = Schema.Struct({
   id: Schema.String,
   ordinal: Schema.Number,
   turn: Schema.Number,
-  player: Schema.String,
+  player: Letter,
   byWhom: Schema.Literals(["agent", "fallback", "forced"]),
   label: Schema.String,
+  move: Schema.Number,
   visible: Schema.NullOr(Schema.String),
 });
+
+type DecisionRow = typeof DecisionRow.Type;
 
 const decodeDecisionRow = Schema.decodeUnknownSync(DecisionRow);
 
@@ -42,11 +51,50 @@ const encodeBlunders = Schema.encodeSync(Schema.fromJsonString(Blunders));
 
 const encodeCertain = Schema.encodeSync(Schema.fromJsonString(CertainMistakes));
 
-const encodeMatch = Schema.encodeSync(Schema.fromJsonString(MatchDetail));
+const encodeMatch = Schema.encodeSync(Schema.fromJsonString(MatchDetailJson));
 
 // A move's outcome is the start of its player's next window, up to the first line by someone else or a new round, distribution or load.
 const isOutcomeEnd = (text: string, player: string): boolean =>
   (text.startsWith("Player ") && !text.startsWith(`Player ${player} `)) || /^(Round \d+ begins|Item distribution|The shotgun is loaded)/.test(text);
+
+/** What a replay needs of a match's manifest. */
+const ReplayManifest = Schema.fromJsonString(Schema.Struct({ seed: Schema.String, controllers: Schema.Array(Controller), letters: Schema.Array(Letter) }));
+
+const decodeReplayManifest = Schema.decodeUnknownOption(ReplayManifest);
+
+/** Each decision's table, from the match replayed through the rules; none from where it stops replaying. */
+const tablesOf = (manifest: string | null, decisions: ReadonlyArray<DecisionRow>): ReadonlyArray<TablePosition> =>
+  Option.match(decodeReplayManifest(manifest), {
+    onNone: () => [],
+    onSome: (setup) =>
+      Result.match(replayOf(Option.none(), setup, decisions.map(({ turn, player, move, label, byWhom }) => ({ turn, player, move, label, by: byWhom }))), {
+        onFailure: () => [],
+        onSuccess: (replay) =>
+          replay.applied.flatMap((line, index) => {
+            const source = replay.frames[index]?.source;
+
+            if (source === undefined) return [];
+
+            const roster = rosterOf(source.game.seats, source.letters);
+
+            return Option.match(roster.find(line.player), {
+              onNone: () => [],
+              onSome: ({ seat }) =>
+                Result.match(agentMoves(source, roster, seat), {
+                  onFailure: () => [],
+                  onSuccess: (moves) => [
+                    {
+                      board: source.game.board,
+                      out: [...seatsOut(source.events)],
+                      moves: moves.map(({ label, chain }): TableMove => ({ seat, steps: Arr.map(chain, ({ move }) => move), label })),
+                      chosen: line.move,
+                    },
+                  ],
+                }),
+            });
+          }),
+      }),
+  });
 
 interface StepDraft {
   readonly step: Omit<Step, "outcome" | "calls">;
@@ -79,11 +127,15 @@ const matchDetail = (db: Database, regret: Regret | null, certain: Certain, id: 
   const roundOf = new Map<string, number>();
   const healthOf = new Map<string, number>();
 
-  const drafts = db
-    .query(`select id, ordinal, turn, player, by_whom byWhom, label, visible_json visible from decisions where match_id = ? order by ordinal`)
+  const rows = db
+    .query(`select id, ordinal, turn, player, by_whom byWhom, label, selected_move move, visible_json visible from decisions where match_id = ? order by ordinal`)
     .all(id)
-    .map((raw, index): StepDraft => {
-      const row = decodeDecisionRow(raw);
+    .map((raw) => decodeDecisionRow(raw));
+
+  const manifest = db.query<{ manifest: string | null }, [string]>(`select manifest_json manifest from matches where id = ?`).get(id)?.manifest ?? null;
+  const tables = tablesOf(manifest, rows);
+
+  const drafts = rows.map((row, index): StepDraft => {
       const visible = row.visible === null ? null : decodeVisible(row.visible);
       const events = visible?.events ?? [];
       const tracker = trackers.get(row.player) ?? new ShellTracker();
@@ -109,7 +161,7 @@ const matchDetail = (db: Database, regret: Regret | null, certain: Certain, id: 
         return { player: seen.player, health, items: seen.items ?? [] };
       });
 
-      const { visible: _visible, ...decision } = row;
+      const { visible: _visible, move: _move, ...decision } = row;
 
       return {
         step: {
@@ -121,6 +173,7 @@ const matchDetail = (db: Database, regret: Regret | null, certain: Certain, id: 
           known: chamber !== null && (chamber.by === "glass" || chamber.by === "phone") ? chamber.known : null,
           regret: regretOf?.get(row.ordinal) ?? null,
           certain: certainOf.get(row.ordinal) ?? null,
+          table: tables[index] ?? null,
         },
         events,
         previous,
@@ -177,6 +230,9 @@ const matchDetail = (db: Database, regret: Regret | null, certain: Certain, id: 
 
   return { match: match.value, seats, decisions: drafts.map(({ step, outcome, calls: linked }) => ({ ...step, outcome, calls: linked })), unlinked, story };
 };
+
+/** Replaying a match through the rules takes up to seconds, so the server keeps the latest few it sent. */
+const RECENT_MATCHES = 32;
 
 const JSON_TYPE = { "content-type": "application/json" };
 
@@ -247,6 +303,7 @@ export const serveArenaViewer = (dbPath: string, siteDir: string, hostname: stri
   const aggregateRoutes = Object.fromEntries(AGGREGATE_NAMES.map((name) => [`/api/agg/${name}`, guarded((request) => json(request, encodedBody(aggregateJson[name])))]));
 
   const seatsBody = encodedBody(encodeSeats(seats));
+  const recentMatches = new Map<string, ReturnType<typeof encodedBody>>();
   const decisionsBody = encodedBody(encodeDecisions(decisions));
   const blundersBody = encodedBody(encodeBlunders(findBlunders(db, regret, seatIndex)));
   const certainBody = encodedBody(encodeCertain(certain.summary));
@@ -280,9 +337,17 @@ export const serveArenaViewer = (dbPath: string, siteDir: string, hostname: stri
       ...aggregateRoutes,
       "/api/certain-mistakes": guarded((request) => json(request, certainBody)),
       "/api/match": guarded((request) => {
-        const detail = matchDetail(db, regret, certain, new URL(request.url).searchParams.get("id") ?? "");
+        const id = new URL(request.url).searchParams.get("id") ?? "";
+        const body = Option.orElse(Option.fromUndefinedOr(recentMatches.get(id)), () => Option.map(Option.fromNullOr(matchDetail(db, regret, certain, id)), (detail) => encodedBody(encodeMatch(detail))));
 
-        return detail === null ? new Response("not found", { status: 404 }) : new Response(encodeMatch(detail), { headers: JSON_TYPE });
+        if (Option.isSome(body)) {
+          recentMatches.delete(id);
+          recentMatches.set(id, body.value);
+
+          for (const old of [...recentMatches.keys()].slice(0, Math.max(0, recentMatches.size - RECENT_MATCHES))) recentMatches.delete(old);
+        }
+
+        return Option.match(body, { onNone: () => new Response("not found", { status: 404 }), onSome: (found) => json(request, found) });
       }),
     },
   });
