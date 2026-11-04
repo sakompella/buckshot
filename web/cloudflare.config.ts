@@ -8,6 +8,6 @@ export default defineConfig({
     assets: { htmlHandling: "auto-trailing-slash", notFoundHandling: "single-page-application" },
     domains: ["buckshot.akompella.dev"],
     workersDev: false,
-    previewUrls: false,
+    previewUrls: true,
   },
 });
