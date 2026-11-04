@@ -1,6 +1,6 @@
 import { Match, Schema, SchemaTransformation } from "effect";
 
-import { CertainRate, Consistency, type Decisions, ITEMS, type Seat } from "./api.ts";
+import { CertainRate, Consistency, type Decisions, ITEMS, NO_GAP, type Seat } from "./api.ts";
 import { addTo, type BlockTally, blockRate, blocksOf, groupBy, keyOf, lossStats, MIN_BLOCKS_FOR_INTERVAL, meanOf, regretStats, roundResults, type SeatFull, sumOf } from "./page/data.ts";
 import { pooledRatings } from "./page/ratings.ts";
 
@@ -83,7 +83,18 @@ export const Behavior = Schema.Struct({ moves: Schema.Number, available: Schema.
 export type Behavior = typeof Behavior.Type;
 
 /** A config's item fates over its scored two-player matches (`players` of them), in ITEMS order, and its moves' item behaviour over every match. */
-export const ConfigItems = Schema.Struct({ config: Schema.String, players: Schema.Number, fates: Schema.Array(Fates), behavior: Behavior });
+export const GapTokens = Schema.Struct({ moves: Schema.Number, tokens: Schema.Number });
+
+export type GapTokens = typeof GapTokens.Type;
+
+export const ConfigItems = Schema.Struct({
+  config: Schema.String,
+  players: Schema.Number,
+  fates: Schema.Array(Fates),
+  behavior: Behavior,
+  /** Mean output tokens per move at each health gap from GAPS_FROM, the outer ones holding every wider gap. */
+  tokensByGap: Schema.Array(GapTokens),
+});
 
 export type ConfigItems = typeof ConfigItems.Type;
 
@@ -93,6 +104,8 @@ export type ShotTally = typeof ShotTally.Type;
 
 /** A config's shots per ODDS_BINS bin. */
 export const ConfigOdds = Schema.Struct({ config: Schema.String, bins: Schema.Array(ShotTally) });
+
+export type ConfigOdds = typeof ConfigOdds.Type;
 
 export const CertainRates = Schema.Array(CertainRate);
 
@@ -193,10 +206,32 @@ const fatesBySeat = (seats: ReadonlyArray<SeatFull>): ReadonlyMap<SeatFull, Read
     }),
   );
 
+/** The health gaps, own health less the opponent's, that the tokens per move are split by. */
+export const GAPS_FROM = -2;
+
+export const GAPS_TO = 2;
+
+const tokensBySeat = (decisions: Pick<Decisions, "seat" | "gap" | "out">, seatCount: number): ReadonlyArray<ReadonlyArray<{ moves: number; out: number }>> => {
+  const tallies = Array.from({ length: seatCount }, () => Array.from({ length: GAPS_TO - GAPS_FROM + 1 }, () => ({ moves: 0, out: 0 })));
+
+  decisions.seat.forEach((seatIndex, move) => {
+    const gap = decisions.gap[move] ?? NO_GAP;
+    const tally = tallies[seatIndex]?.[Math.max(GAPS_FROM, Math.min(GAPS_TO, gap)) - GAPS_FROM];
+
+    if (gap === NO_GAP || tally === undefined) return;
+
+    tally.moves++;
+    tally.out += decisions.out[move] ?? 0;
+  });
+
+  return tallies;
+};
+
 const configItems = (seats: ReadonlyArray<SeatFull>, decisions: Decisions): ReadonlyArray<ConfigItems> => {
   const perSeat = fatesBySeat(seats);
   const bySeat = behaviorBySeat(decisions, seats.length);
-  const indexed = seats.map((seat, index) => ({ seat, behavior: bySeat[index] ?? NO_BEHAVIOR }));
+  const tokens = tokensBySeat(decisions, seats.length);
+  const indexed = seats.map((seat, index) => ({ seat, behavior: bySeat[index] ?? NO_BEHAVIOR, gaps: tokens[index] ?? [] }));
 
   return [...groupBy(indexed, ({ seat }) => keyOf(seat))].map(([config, own]) => {
     const players = own.filter(({ seat }) => perSeat.has(seat));
@@ -206,6 +241,11 @@ const configItems = (seats: ReadonlyArray<SeatFull>, decisions: Decisions): Read
       players: players.length,
       fates: ITEMS.map((_item, index) => sumFates(players.map(({ seat }) => perSeat.get(seat)?.[index] ?? { used: 0, stolen: 0, unused: 0 }))),
       behavior: own.reduce((sum, { behavior }) => addBehavior(sum, behavior), NO_BEHAVIOR),
+      tokensByGap: Array.from({ length: GAPS_TO - GAPS_FROM + 1 }, (_gap, index) => {
+        const moves = sumOf(own.map(({ gaps }) => gaps[index]?.moves ?? 0));
+
+        return { moves, tokens: moves === 0 ? 0 : sumOf(own.map(({ gaps }) => gaps[index]?.out ?? 0)) / moves };
+      }),
     };
   });
 };
@@ -213,7 +253,7 @@ const configItems = (seats: ReadonlyArray<SeatFull>, decisions: Decisions): Read
 const MIN_LEGAL = 30;
 
 /** Per config, the item it used most often when it was legal, over at least MIN_LEGAL legal moves. A steal with adrenaline counts as an adrenaline use. */
-const favorites = (seats: ReadonlyArray<SeatFull>, decisions: Decisions): ReadonlyMap<string, ConfigSummary["favorite"]> => {
+const favorites = (seats: ReadonlyArray<SeatFull>, decisions: Pick<Decisions, "seat" | "legalUse" | "useItem">): ReadonlyMap<string, ConfigSummary["favorite"]> => {
   const tallies = new Map<string, Array<[number, number]>>();
 
   const tallyOfSeat = seats.map((seat) => {
@@ -342,7 +382,7 @@ const pairsOf = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<Pair> =>
 
 // CONFIGS
 
-const configSummaries = (seats: ReadonlyArray<SeatFull>, decisions: Decisions): ReadonlyArray<ConfigSummary> => {
+export const configSummaries = (seats: ReadonlyArray<SeatFull>, decisions: Pick<Decisions, "seat" | "legalUse" | "useItem">): ReadonlyArray<ConfigSummary> => {
   const ratings = pooledRatings(seats);
   const favoriteOf = favorites(seats, decisions);
 

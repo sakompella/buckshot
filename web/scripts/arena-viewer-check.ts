@@ -8,7 +8,8 @@ import { Blunders, CERTAIN_TYPES, CertainMistakes, Consistency, Decisions, ITEMS
 import { baseName, baseOrder, CERTAIN_NAMES, effortLabel, fmtBytes, fmtCount, fmtPct, fmtPoints, fmtUsd, blocksOf, groupBy, keyOf, labelOf, MIN_BLOCKS_FOR_INTERVAL, shortName, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { GROUPS, MOVED_TARGETS, Section } from "../src/arena-viewer/page/model.ts";
 import { pooledRatings } from "../src/arena-viewer/page/ratings.ts";
-import { droppedConfigs, droppedText, oddsPanels, selfShotTallies } from "../src/arena-viewer/page/odds.ts";
+import { selfShotTallies } from "../src/arena-viewer/aggregates.ts";
+import { droppedConfigs, droppedText, oddsPanels } from "../src/arena-viewer/page/odds.ts";
 import { stepsOf } from "../src/arena-viewer/page/replay.ts";
 import { tourOf } from "../src/arena-viewer/page/tour.ts";
 import { coverageOfMatch, type RegretCoverage, withoutRegret } from "./arena-viewer-regret-coverage.ts";
@@ -1521,7 +1522,7 @@ const checkSiteRoutes = async (page: Page) => {
 const checkOddsDropped = async (page: Page, name: string) => {
   const seats = await servedSeats();
   const panels = oddsPanels(selfShotTallies(await servedPageDecisions(), seats, seats.map(() => true)));
-  const dropped = droppedConfigs(seats, seats.map(() => true), panels);
+  const dropped = droppedConfigs(new Set(seats.map(keyOf)), panels);
   const lines = sum(panels.map((panel) => panel.lines.length));
   const note = (await page.locator("#odds .dropped").allInnerTexts()).map((text) => text.trim());
 

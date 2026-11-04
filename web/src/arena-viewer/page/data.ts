@@ -321,88 +321,11 @@ const PROVISIONAL_BELOW = 20;
 
 export const MIN_BLOCKS_FOR_INTERVAL = 4;
 
-export const isProvisional = ({ scored }: { readonly scored: ReadonlyArray<unknown> }): boolean => scored.length < PROVISIONAL_BELOW;
+export const isProvisional = ({ scored }: { readonly scored: number }): boolean => scored < PROVISIONAL_BELOW;
 
 export const blocksOf = (seats: ReadonlyArray<Pick<SeatFull, "seedBlock">>): number => new Set(seats.map(({ seedBlock }) => seedBlock)).size;
 
-export interface ModelStats {
-  /** The config key. */
-  readonly key: string;
-  readonly model: string;
-  readonly effort: string;
-  readonly label: string;
-  readonly color: string;
-  readonly dash: string;
-  /** Completed and partial matches. */
-  readonly started: ReadonlyArray<SeatFull>;
-  /** Completed matches only. */
-  readonly scored: ReadonlyArray<SeatFull>;
-  readonly winShare: number;
-  /** Mean pot share over scored matches. */
-  readonly potShare: number;
-  /** Rounds won over rounds played, in the scored matches whose rounds are known. */
-  readonly roundShare: number;
-  /** Over scored matches; null when the viewer has no regret. */
-  readonly regret: RegretStats | null;
-  readonly loss: LossStats | null;
-  /** Observed win share with a seed-block bootstrap interval. */
-  readonly win: Rate;
-  /** Every started match, failed calls included. */
-  readonly totalCost: number;
-  /** Completed matches, cheapest first. */
-  readonly costs: ReadonlyArray<{ readonly cost: number; readonly seat: SeatFull }>;
-  readonly avgCost: number;
-  readonly avgOut: number;
-  readonly avgMoves: number;
-  /** Means per completed match. */
-  readonly tokens: { readonly cr: number; readonly cw: number; readonly inp: number; readonly outp: number };
-}
-
-export const costPerMove = ({ scored }: { readonly scored: ReadonlyArray<Pick<SeatFull, "cost" | "moves">> }): number | null => {
-  const moves = sumOf(scored.map((seat) => seat.moves ?? 0));
-
-  return moves > 0 ? sumOf(scored.map((seat) => seat.cost ?? 0)) / moves : null;
-};
-
-export const modelStats = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<ModelStats> =>
-  [...groupBy(seats, keyOf)].flatMap(([key, started]) => {
-    const [first] = started;
-
-    if (first === undefined) return [];
-
-    const scored = started.filter(({ status }) => status === "completed");
-    const wins: BlockTally = new Map();
-
-    for (const seat of scored) addTo(wins, seat.seedBlock, seat.winShare ?? 0, 1);
-
-    const costs = scored.flatMap((seat) => (seat.cost === null ? [] : [{ cost: seat.cost, seat }])).toSorted((left, right) => left.cost - right.cost);
-    const scoredMean = (value: (seat: SeatFull) => number | null) => meanOf(scored.map((seat) => value(seat) ?? 0));
-
-    return [
-      {
-        key,
-        model: first.model,
-        effort: first.effort,
-        label: labelOf(key),
-        color: colorOf(first.model),
-        dash: DASH.get(first.effort) ?? "",
-        started,
-        scored,
-        winShare: scoredMean(({ winShare }) => winShare),
-        potShare: scoredMean(({ potShare }) => potShare),
-        roundShare: meanOf(scored.flatMap(roundResults)),
-        regret: regretStats(scored),
-        loss: lossStats(scored),
-        win: blockRate(wins),
-        totalCost: sumOf(started.map(({ cost }) => cost ?? 0)),
-        costs,
-        avgCost: meanOf(costs.map(({ cost }) => cost)),
-        avgOut: scoredMean(({ outp }) => outp),
-        avgMoves: scoredMean(({ moves }) => moves),
-        tokens: { cr: scoredMean(({ cr }) => cr), cw: scoredMean(({ cw }) => cw), inp: scoredMean(({ inp }) => inp), outp: scoredMean(({ outp }) => outp) },
-      },
-    ];
-  });
+export const costPerMove = ({ scoredCost, scoredMoves }: { readonly scoredCost: number; readonly scoredMoves: number }): number | null => (scoredMoves > 0 ? scoredCost / scoredMoves : null);
 
 export interface MatchRow {
   readonly matchId: string;

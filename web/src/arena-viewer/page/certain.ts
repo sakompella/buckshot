@@ -1,10 +1,9 @@
 import { Option } from "effect";
-import { AsyncData } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { CERTAIN_TYPES, type CertainMistakes, type CertainRate, type CertainType, type OpportunityType } from "../api.ts";
 import { anchorId, chartWidth, linScale, REFERENCE, REFERENCE_DASH, tippedDot } from "./charts.ts";
-import { baseName, baseOrder, blocksOf, CERTAIN_NAMES, byEffort, colorOf, effortLabel, fmtTime, groupBy, keyOf, labelOf, type MatchRow, MIN_BLOCKS_FOR_INTERVAL, type SeatFull, shortName, sumOf } from "./data.ts";
+import { baseName, baseOrder, CERTAIN_NAMES, byEffort, colorOf, effortLabel, fmtTime, groupBy, keyOf, labelOf, type MatchRow, type SeatFull, shortName, sumOf } from "./data.ts";
 import { memoLast } from "./derived.ts";
 import { type CertainCell, Message } from "./model.ts";
 
@@ -36,29 +35,24 @@ export interface Tallies {
   readonly hiddenHealth: number;
 }
 
-type SeatKey = Pick<SeatFull, "model" | "effort" | "seedBlock" | "status">;
-
 const hasRate = ({ opportunities }: Cell): boolean => opportunities >= FEWEST_FOR_RATE;
 
-const cellOf = (type: CertainType, parts: ReadonlyArray<CertainRate>, whole: CertainRate | undefined, blocks: number): Cell => ({
+const cellOf = (type: CertainType, parts: ReadonlyArray<CertainRate>, whole: CertainRate | undefined): Cell => ({
   type,
   mistakes: sumOf(parts.map(({ chose }) => chose)),
   opportunities: sumOf(parts.map(({ opportunities }) => opportunities)),
-  bounds: blocks < MIN_BLOCKS_FOR_INTERVAL ? null : (whole?.bounds ?? null),
+  bounds: whole?.bounds ?? null,
 });
 
-const inStrengthOrder = <A extends Pick<SeatKey, "model" | "effort">>(items: ReadonlyArray<A>): ReadonlyArray<A> =>
+const inStrengthOrder = <A extends { readonly model: string; readonly effort: string }>(items: ReadonlyArray<A>): ReadonlyArray<A> =>
   items.toSorted((left, right) => baseOrder(left.model) - baseOrder(right.model) || byEffort(left.effort, right.effort));
 
-/** A model's or the pooled row keeps its written interval only while all its configs are shown; a filtered selection has no interval. No row keeps one over fewer seed blocks than an interval needs. */
-export const talliesOf = memoLast((certain: CertainMistakes, seats: ReadonlyArray<SeatKey>, keep: ReadonlyArray<boolean>): Tallies => {
-  const shownSeats = seats.filter((seat, at) => keep[at] === true && seat.status === "completed");
-  const shownKeys = new Set(seats.flatMap((seat, at) => (keep[at] === true ? [keyOf(seat)] : [])));
-  const blocksWhere = (isIn: (seat: SeatKey) => boolean) => blocksOf(shownSeats.filter(isIn));
-  const configs = certain.rates.filter(({ scope }) => scope === "config");
-  const shown = configs.filter((rate) => shownKeys.has(keyOf(rate)));
-  const ofType = (rates: ReadonlyArray<CertainRate>, type: OpportunityType) => rates.filter((rate) => rate.type === type);
-  const writtenOf = (scope: CertainRate["scope"], model: string, type: OpportunityType) => certain.rates.find((rate) => rate.scope === scope && rate.model === model && rate.type === type);
+/** A model's or the pooled row keeps its written interval only while all its configs are shown; a filtered selection has no interval. */
+export const talliesOf = memoLast((rates: ReadonlyArray<CertainRate>, kept: ReadonlySet<string>): Tallies => {
+  const configs = rates.filter(({ scope }) => scope === "config");
+  const shown = configs.filter((rate) => kept.has(keyOf(rate)));
+  const ofType = (own: ReadonlyArray<CertainRate>, type: OpportunityType) => own.filter((rate) => rate.type === type);
+  const writtenOf = (scope: CertainRate["scope"], model: string, type: OpportunityType) => rates.find((rate) => rate.scope === scope && rate.model === model && rate.type === type);
   const modelNames = [...new Set(shown.map(({ model }) => model))].toSorted((left, right) => baseOrder(left) - baseOrder(right));
   const blanks = ofType(shown, "gave_turn_away");
 
@@ -70,22 +64,29 @@ export const talliesOf = memoLast((certain: CertainMistakes, seats: ReadonlyArra
       cells: CERTAIN_TYPES.map((type) => {
         const own = shown.filter((rate) => rate.model === model && rate.effort === effort && rate.type === type);
 
-        return cellOf(type, own, own[0], blocksWhere((seat) => seat.model === model && seat.effort === effort));
+        return cellOf(type, own, own[0]);
       }),
     })),
     models: modelNames.map((model) => {
       const mine = shown.filter((rate) => rate.model === model);
       const isWhole = mine.length === configs.filter((rate) => rate.model === model).length;
 
-      return { key: model, model, effort: "", cells: CERTAIN_TYPES.map((type) => cellOf(type, ofType(mine, type), isWhole ? writtenOf("model", model, type) : undefined, blocksWhere((seat) => seat.model === model))) };
+      return { key: model, model, effort: "", cells: CERTAIN_TYPES.map((type) => cellOf(type, ofType(mine, type), isWhole ? writtenOf("model", model, type) : undefined)) };
     }),
-    pooled: CERTAIN_TYPES.map((type) => cellOf(type, ofType(shown, type), shown.length === configs.length ? writtenOf("all", "", type) : undefined, blocksWhere(() => true))),
+    pooled: CERTAIN_TYPES.map((type) => cellOf(type, ofType(shown, type), shown.length === configs.length ? writtenOf("all", "", type) : undefined)),
     provenBlanks: { gaveTurnAway: sumOf(blanks.map(({ chose }) => chose)), total: sumOf(blanks.map(({ opportunities }) => opportunities)) },
     hiddenHealth: sumOf(ofType(shown, "hidden_health").map(({ opportunities }) => opportunities)),
   };
 });
 
 const matchesById = memoLast((matches: ReadonlyArray<MatchRow>): ReadonlyMap<string, MatchRow> => new Map(matches.map((match) => [match.matchId, match])));
+
+/** The arena server's per-move certain mistakes, which let a count open the matches it was made in. */
+export interface CertainLinks {
+  readonly certain: CertainMistakes;
+  readonly seats: ReadonlyArray<SeatFull>;
+  readonly allMatches: ReadonlyArray<MatchRow>;
+}
 
 interface Listed {
   readonly matchId: string;
@@ -95,7 +96,9 @@ interface Listed {
   readonly opponent: SeatFull | undefined;
 }
 
-const listedOf = (certain: CertainMistakes, seats: ReadonlyArray<SeatFull>, matches: ReadonlyMap<string, MatchRow>, { key, type }: CertainCell): ReadonlyArray<Listed> => {
+const listedOf = ({ certain, seats, allMatches }: CertainLinks, { key, type }: CertainCell): ReadonlyArray<Listed> => {
+  const matches = matchesById(allMatches);
+
   const found = certain.moveSeat.flatMap((seatAt, move) => {
     const seat = seats[seatAt];
 
@@ -159,8 +162,9 @@ const matchesView = (h: H, listed: ReadonlyArray<Listed>): Html =>
     ),
   );
 
-const rowView = (h: H, certain: CertainMistakes, seats: ReadonlyArray<SeatFull>, matches: ReadonlyMap<string, MatchRow>, row: Row, maybeOpen: Option.Option<CertainCell>): ReadonlyArray<Html> => {
+const rowView = (h: H, maybeLinks: Option.Option<CertainLinks>, row: Row, maybeOpen: Option.Option<CertainCell>): ReadonlyArray<Html> => {
   const open = Option.filter(maybeOpen, ({ key }) => key === row.key);
+  const isLinked = Option.isSome(maybeLinks);
 
   return [
     h.keyed("tr")(
@@ -168,19 +172,18 @@ const rowView = (h: H, certain: CertainMistakes, seats: ReadonlyArray<SeatFull>,
       [h.Class(Option.isSome(open) ? "sel" : "")],
       [
         h.td([], [h.span([h.Class("dot"), h.Style({ background: colorOf(row.model) })], []), `${baseName(row.model)} `, h.span([h.Class("eff")], [`[${effortLabel(row.model, row.effort)}]`])]),
-        ...row.cells.map((cell) => cellView(h, cell, { key: row.key, isOpen: Option.exists(open, ({ type }) => type === cell.type) })),
+        ...row.cells.map((cell) => cellView(h, cell, isLinked ? { key: row.key, isOpen: Option.exists(open, ({ type }) => type === cell.type) } : null)),
       ],
     ),
-    Option.match(open, {
+    Option.match(Option.all([open, maybeLinks]), {
       onNone: () => h.empty,
-      onSome: (cell) => h.keyed("tr")(`drill-${row.key}`, [h.Class("drill")], [h.td([h.Colspan(CERTAIN_TYPES.length + 1)], [matchesView(h, listedOf(certain, seats, matches, cell))])]),
+      onSome: ([cell, links]) => h.keyed("tr")(`drill-${row.key}`, [h.Class("drill")], [h.td([h.Colspan(CERTAIN_TYPES.length + 1)], [matchesView(h, listedOf(links, cell))])]),
     }),
   ];
 };
 
-export const certainTableView = (h: H, certain: CertainMistakes, seats: ReadonlyArray<SeatFull>, keep: ReadonlyArray<boolean>, allMatches: ReadonlyArray<MatchRow>, maybeOpen: Option.Option<CertainCell>): Html => {
-  const { rows, pooled } = talliesOf(certain, seats, keep);
-  const matches = matchesById(allMatches);
+export const certainTableView = (h: H, rates: ReadonlyArray<CertainRate>, kept: ReadonlySet<string>, maybeLinks: Option.Option<CertainLinks>, maybeOpen: Option.Option<CertainCell>): Html => {
+  const { rows, pooled } = talliesOf(rates, kept);
 
   return h.div(
     [h.Id(CERTAIN_TABLE)],
@@ -195,7 +198,7 @@ export const certainTableView = (h: H, certain: CertainMistakes, seats: Readonly
                 [h.Class("cmt")],
                 [
                   h.thead([], [h.tr([], ["Model", ...CERTAIN_TYPES.map((type) => CERTAIN_NAMES[type])].map((title) => h.th([], [title])))]),
-                  h.tbody([], [...rows.flatMap((row) => rowView(h, certain, seats, matches, row, maybeOpen)), h.tr([h.Class("pooled")], [h.td([], ["All shown configs"]), ...pooled.map((cell) => cellView(h, cell, null))])]),
+                  h.tbody([], [...rows.flatMap((row) => rowView(h, maybeLinks, row, maybeOpen)), h.tr([h.Class("pooled")], [h.td([], ["All shown configs"]), ...pooled.map((cell) => cellView(h, cell, null))])]),
                 ],
               ),
             ],
@@ -277,8 +280,8 @@ const panelView = (h: H, type: CertainType, models: ReadonlyArray<Row>, pooled: 
 const pooledNote = (cell: Cell): string =>
   `All shown configs: ${cell.mistakes.toLocaleString()} of ${cell.opportunities.toLocaleString()}${hasRate(cell) ? `, ${fmtRate(cell.mistakes / cell.opportunities)}${cell.bounds === null ? "" : ` ${fmtBounds(cell.bounds)}`}` : ""}`;
 
-export const certainView = (h: H, certain: CertainMistakes, seats: ReadonlyArray<SeatFull>, keep: ReadonlyArray<boolean>, width: number, content: number): Html => {
-  const { models, pooled, provenBlanks, hiddenHealth } = talliesOf(certain, seats, keep);
+export const certainView = (h: H, rates: ReadonlyArray<CertainRate>, kept: ReadonlySet<string>, width: number, content: number): Html => {
+  const { models, pooled, provenBlanks, hiddenHealth } = talliesOf(rates, kept);
   const figure = chartWidth(width, content);
 
   return h.div(
@@ -302,9 +305,3 @@ export const certainView = (h: H, certain: CertainMistakes, seats: ReadonlyArray
     ],
   );
 };
-
-export const hasCertainChart = (data: AsyncData.AsyncData<CertainMistakes, string>): boolean =>
-  AsyncData.matchData(data, { onEmpty: () => false, onFailure: () => false, onData: ({ rates }) => rates.length > 0 });
-
-export const hasCertain = (data: AsyncData.AsyncData<CertainMistakes, string>): boolean =>
-  AsyncData.matchData(data, { onEmpty: () => false, onFailure: () => true, onData: ({ rates }) => rates.length > 0 });

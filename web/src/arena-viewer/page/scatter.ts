@@ -2,9 +2,9 @@ import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { anchorId, linScale, logScale, REFERENCE, REFERENCE_DASH, selectView, tipView, toggleView } from "./charts.ts";
-import { baseName, DEFAULT_EFFORT, effortLabel, fmtCount, fmtPct, fmtRating, fmtUsd, isClaude, isProvisional, type ModelStats } from "./data.ts";
+import { baseName, DEFAULT_EFFORT, effortLabel, fmtCount, fmtPct, fmtRating, fmtUsd, isClaude, isProvisional } from "./data.ts";
 import { leader, measureText, placeLabels, uncrowded } from "./labels.ts";
-import { memoLast } from "./derived.ts";
+import { memoLast, type ModelStats } from "./derived.ts";
 import { Message, type Model, type ScatterAxis } from "./model.ts";
 import type { Rating } from "./ratings.ts";
 
@@ -156,7 +156,7 @@ const pointsOf = memoLast(
         const rank = ranks.get(m.key);
         const x = AXES[axis].valueOf(m);
 
-        return rating !== undefined && x !== null && m.scored.length > 0 ? [{ m, x, rating, rank }] : [];
+        return rating !== undefined && x !== null && m.scored > 0 ? [{ m, x, rating, rank }] : [];
       });
 
     return { cost: on("cost"), moves: on("moves"), tokens: on("tokens"), regret: on("regret") };
@@ -185,7 +185,7 @@ interface Domain {
 }
 
 const domainOf = memoLast((every: ReadonlyArray<ModelStats>, ratings: ReadonlyMap<string, Rating>): Domain => {
-  const rated = every.filter((m) => m.scored.length > 0 && ratings.has(m.key));
+  const rated = every.filter((m) => m.scored > 0 && ratings.has(m.key));
   const extent = (values: ReadonlyArray<number>): readonly [number, number] => [Math.min(...values), Math.max(...values)];
 
   const xOf = (axis: ScatterAxis) =>
@@ -426,7 +426,7 @@ export const scatterView = (
           tipView(h, anchorId("pt", point.m.key), [
             h.b([], [point.m.label]),
             h.br([]),
-            `${point.rank === undefined ? "provisional" : `rank ${point.rank}`} · Round Elo ${fmtRating(point.rating)} · ${fmtPct(point.m.roundShare)} of rounds won, ${fmtPct(point.m.winShare)} of matches won, ${fmtPct(point.m.potShare)} of the pot, over ${point.m.scored.length} matches`,
+            `${point.rank === undefined ? "provisional" : `rank ${point.rank}`} · Round Elo ${fmtRating(point.rating)} · ${fmtPct(point.m.roundShare)} of rounds won, ${fmtPct(point.m.winShare)} of matches won, ${fmtPct(point.m.potShare)} of the pot, over ${point.m.scored} matches`,
             h.br([]),
             axis.perMatch(point.x),
           ]),

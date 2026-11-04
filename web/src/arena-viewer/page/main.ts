@@ -3,12 +3,13 @@ import { HttpClient, HttpClientResponse } from "effect/http";
 import { AsyncData, Command, Dom, Http, Subscription, type Update } from "foldkit";
 import { modifyFields } from "foldkit/struct";
 
+import { aggregateUrl, isOnline } from "../../site/online.ts";
 import { type ArenaRoute, arenaHref, arenaStateOf, replayHref } from "../../site/route.ts";
-import { CertainMistakes, Consistency, Decisions, Download, MatchDetail, RatingsResponse, SeatsResponse } from "../api.ts";
-import { hasCertainChart } from "./certain.ts";
+import { AGGREGATES } from "../aggregates.ts";
+import { CertainMistakes, Decisions, Download, MatchDetail, SeatsResponse } from "../api.ts";
 import { withPotShares } from "./data.ts";
 import { INITIAL_ROWS, MORE_ROWS } from "./matches.ts";
-import { type Filter, Group, LoadFailure, Message, type Model, MOVED_TARGETS, type Replay, Target, type Viewport } from "./model.ts";
+import { type Filter, Group, GROUPS, type Lazy, type LazyName, LoadFailure, Message, type Model, MOVED_TARGETS, type Replay, Target, type Viewport } from "./model.ts";
 import { replayIndex, stepsOf } from "./replay.ts";
 import { reveal } from "./reveal.ts";
 import { PlaceTour, tourKeyMessage, tourMatchOf, tourOf } from "./tour.ts";
@@ -37,15 +38,81 @@ const getOptional = <A, I>(url: string, schema: Schema.Codec<A, I>) =>
 
 const LoadData = Command.define("LoadData", {
   messages: [Message.SucceededLoad, Message.FailedLoad],
-  execute: Effect.all(
-    [getJson("/api/seats", SeatsResponse), getJson("/api/decisions", Decisions), getJson("/api/ratings", RatingsResponse), getOptional("/api/consistency", Schema.Array(Consistency)), getOptional("/api/certain-mistakes", CertainMistakes), getOptional("/api/download", Download)],
-    { concurrency: 6 },
-  ).pipe(
-    Effect.map(([seats, decisions, ratings, consistency, certainMistakes, download]) => Message.SucceededLoad({ loaded: { seats: withPotShares(seats), decisions, ratings, consistency, certainMistakes, download } })),
+  execute: Effect.all([getJson(aggregateUrl("summary"), AGGREGATES.summary), getJson(aggregateUrl("pairs"), AGGREGATES.pairs)], { concurrency: 2 }).pipe(
+    Effect.map(([summary, pairs]) => Message.SucceededLoad({ loaded: { summary, pairs } })),
     Effect.catch((error) => Effect.succeed(Message.FailedLoad({ failure: error instanceof NoArenaServer ? LoadFailure.NoServer() : LoadFailure.Failed({ error: describe(error) }) }))),
     Effect.provide(Http.layer),
   ),
 });
+
+const lazyFailure = (name: LazyName) => (error: { readonly message: string }) => Effect.succeed(Message.FailedLazy({ name, error: describe(error) }));
+
+const LoadItems = Command.define("LoadItems", {
+  messages: [Message.SucceededItems, Message.FailedLazy],
+  execute: getJson(aggregateUrl("items"), AGGREGATES.items).pipe(Effect.map((items) => Message.SucceededItems({ items })), Effect.catch(lazyFailure("items")), Effect.provide(Http.layer)),
+});
+
+const LoadOdds = Command.define("LoadOdds", {
+  messages: [Message.SucceededOdds, Message.FailedLazy],
+  execute: getJson(aggregateUrl("odds"), AGGREGATES.odds).pipe(Effect.map((odds) => Message.SucceededOdds({ odds })), Effect.catch(lazyFailure("odds")), Effect.provide(Http.layer)),
+});
+
+const LoadCertain = Command.define("LoadCertain", {
+  messages: [Message.SucceededCertain, Message.FailedLazy],
+  execute: getJson(aggregateUrl("certain"), AGGREGATES.certain).pipe(Effect.map((certain) => Message.SucceededCertain({ certain })), Effect.catch(lazyFailure("certain")), Effect.provide(Http.layer)),
+});
+
+const LoadConsistency = Command.define("LoadConsistency", {
+  messages: [Message.SucceededConsistency, Message.FailedLazy],
+  execute: getJson(aggregateUrl("consistency"), AGGREGATES.consistency).pipe(
+    Effect.map((consistency) => Message.SucceededConsistency({ consistency })),
+    Effect.catch(lazyFailure("consistency")),
+    Effect.provide(Http.layer),
+  ),
+});
+
+const LOAD_LAZY = { items: LoadItems, odds: LoadOdds, certain: LoadCertain, consistency: LoadConsistency } as const;
+
+const LoadLocal = Command.define("LoadLocal", {
+  messages: [Message.SucceededLocal, Message.FailedLocal],
+  execute: Effect.all([getJson("/api/seats", SeatsResponse), getJson("/api/decisions", Decisions), getOptional("/api/certain-mistakes", CertainMistakes), getOptional("/api/download", Download)], { concurrency: 4 }).pipe(
+    Effect.map(([seats, decisions, certainMoves, download]) => Message.SucceededLocal({ local: { seats: withPotShares(seats), decisions, certainMoves, download } })),
+    Effect.catch((error) => Effect.succeed(Message.FailedLocal({ error: describe(error) }))),
+    Effect.provide(Http.layer),
+  ),
+});
+
+const withLazy = <N extends LazyName>(lazy: Lazy, name: N, data: Lazy[N]): Lazy => ({ ...lazy, [name]: data });
+
+/** What a section needs beyond the first paint: an aggregate file, or the arena server's per-seat and per-move data. */
+type Need = LazyName | "local";
+
+const GROUP_NEEDS: Readonly<Record<Group, ReadonlyArray<Need>>> = {
+  standings: [],
+  decisions: ["certain", "odds", "items"],
+  health: [],
+  watch: ["local"],
+  tables: ["certain", "local"],
+};
+
+const DRILL_NEEDS: ReadonlyArray<Need> = ["consistency", "items", "local"];
+
+/** Starts fetching each need not yet asked for. The online build has no arena server, so it never asks for the local data. */
+const withNeeds = (next: Return, needs: ReadonlyArray<Need>): Return => {
+  const { model } = next;
+  const lazy = needs.filter((need): need is LazyName => need !== "local" && Predicate.isTagged(model.lazy[need], "Idle"));
+  const isLocalNeeded = !isOnline && needs.includes("local") && AsyncData.isIdle(model.local);
+
+  if (lazy.length === 0 && !isLocalNeeded) return next;
+
+  return {
+    model: modifyFields(model, {
+      lazy: (all) => lazy.reduce((loading, name) => withLazy(loading, name, AsyncData.Loading()), all),
+      local: (local) => (isLocalNeeded ? AsyncData.Loading() : local),
+    }),
+    commands: [...(next.commands ?? []), ...lazy.map((name) => LOAD_LAZY[name]()), ...(isLocalNeeded ? [LoadLocal()] : [])],
+  };
+};
 
 const LoadMatch = Command.define("LoadMatch", {
   args: { id: Schema.String },
@@ -118,6 +185,16 @@ const groupInView = (): Option.Option<Message> => {
   return Option.map(Schema.decodeUnknownOption(Group)(passed?.id), (group) => Message.ScrolledInto({ group }));
 };
 
+/** The groups within a viewport above to two below the current one: the ones whose data should be on its way. */
+const groupsNear = () =>
+  Message.CameNear({
+    groups: [...document.querySelectorAll("section.part[id]")].flatMap((part) => {
+      const { top, bottom } = part.getBoundingClientRect();
+
+      return bottom >= -innerHeight && top <= 2 * innerHeight ? Option.toArray(Schema.decodeUnknownOption(Group)(part.id)) : [];
+    }),
+  });
+
 const nextFrame = Effect.callback<void>((resume) => {
   requestAnimationFrame(() => requestAnimationFrame(() => resume(Effect.void)));
 });
@@ -134,6 +211,11 @@ const ScrollToHash = Command.define("ScrollToHash", {
 const AwaitFirstPaint = Command.define("AwaitFirstPaint", {
   messages: [Message.CompletedFirstPaint],
   execute: nextFrame.pipe(Effect.as(Message.CompletedFirstPaint())),
+});
+
+const MeasureNear = Command.define("MeasureNear", {
+  messages: [Message.CameNear],
+  execute: nextFrame.pipe(Effect.map(groupsNear)),
 });
 
 const NO_MARK_TIP: Model["markTip"] = { maybeHover: Option.none(), maybePin: Option.none() };
@@ -168,20 +250,23 @@ const withReplayMove = (model: Model, choose: (at: number) => number): Return =>
   });
 
 const openReplay = (model: Model, id: string, maybeFocus: Option.Option<number>): Return =>
-  withMatches(
-    modifyFields(model, {
-      maybeReplay: () => Option.some({ id, maybeFocus, maybeAt: Option.none() }),
-      maybeTappedTitle: () => Option.none(),
-      markTip: () => NO_MARK_TIP,
-    }),
-    [id],
+  withNeeds(
+    withMatches(
+      modifyFields(model, {
+        maybeReplay: () => Option.some({ id, maybeFocus, maybeAt: Option.none() }),
+        maybeTappedTitle: () => Option.none(),
+        markTip: () => NO_MARK_TIP,
+      }),
+      [id],
+    ),
+    ["local"],
   );
 
 const closeReplay = (model: Model): Return => ({ model: modifyFields(model, { maybeReplay: () => Option.none() }) });
 
 const openTourReplay = (model: Model): Return => {
   const seats = AsyncData.getOrElse(
-    AsyncData.map(model.data, (loaded) => loaded.seats),
+    AsyncData.map(model.local, (local) => local.seats),
     () => [],
   );
 
@@ -208,8 +293,16 @@ export const update = (model: Model, message: Message): Return =>
     ClickedTableLink: ({ id }) => ({ model, commands: [OpenTable({ id })] }),
     NavigatedToHash: () => ({ model, commands: [ScrollToHash()] }),
     SucceededLoad: ({ loaded }) => ({ model: modifyFields(model, { data: () => AsyncData.succeed(loaded) }), commands: [AwaitFirstPaint()] }),
-    CompletedFirstPaint: () => ({ model: modifyFields(model, { isFirstPaintDone: () => true }), commands: [ScrollToHash()] }),
+    CompletedFirstPaint: () => ({ model: modifyFields(model, { isFirstPaintDone: () => true }), commands: [ScrollToHash(), MeasureNear()] }),
     FailedLoad: ({ failure }) => ({ model: modifyFields(model, { data: () => AsyncData.fail(failure) }) }),
+    SucceededItems: ({ items }) => ({ model: modifyFields(model, { lazy: (lazy) => ({ ...lazy, items: AsyncData.succeed(items) }) }) }),
+    SucceededOdds: ({ odds }) => ({ model: modifyFields(model, { lazy: (lazy) => ({ ...lazy, odds: AsyncData.succeed(odds) }) }) }),
+    SucceededCertain: ({ certain }) => ({ model: modifyFields(model, { lazy: (lazy) => ({ ...lazy, certain: AsyncData.succeed(certain) }) }) }),
+    SucceededConsistency: ({ consistency }) => ({ model: modifyFields(model, { lazy: (lazy) => ({ ...lazy, consistency: AsyncData.succeed(consistency) }) }) }),
+    FailedLazy: ({ name, error }) => ({ model: modifyFields(model, { lazy: (lazy) => withLazy(lazy, name, AsyncData.fail<string, never>(error)) }) }),
+    SucceededLocal: ({ local }) => ({ model: modifyFields(model, { local: () => AsyncData.succeed(local) }) }),
+    FailedLocal: ({ error }) => ({ model: modifyFields(model, { local: () => AsyncData.fail(error) }) }),
+    CameNear: ({ groups }) => withNeeds({ model }, groups.flatMap((group) => GROUP_NEEDS[group])),
     ToggledEffort: ({ effort }) => withFilter(model, (filter) => ({ ...filter, offEfforts: toggled(filter.offEfforts, effort) })),
     ToggledModel: ({ name }) => withFilter(model, (filter) => ({ ...filter, offModels: toggled(filter.offModels, name) })),
     ScrolledInto: ({ group }) =>
@@ -223,14 +316,14 @@ export const update = (model: Model, message: Message): Return =>
     ClickedPoint: ({ key }) => {
       const isPinned = Option.exists(model.scatter.maybePin, (pinned) => pinned === key);
 
-      return {
+      return withNeeds({
         model: modifyFields(model, {
           scatter: (scatter) => ({ ...scatter, maybePin: isPinned ? Option.none() : Option.some(key) }),
           maybeDrill: (drill) => (Option.contains(drill, key) ? Option.none() : Option.some(key)),
           leaderboard: (leaderboard) => ({ ...leaderboard, maybeOpen: Option.none() }),
           markTip: () => NO_MARK_TIP,
         }),
-      };
+      }, DRILL_NEEDS);
     },
     ClosedDrill: () => ({ model: modifyFields(model, { maybeDrill: () => Option.none() }) }),
     ClickedOutsideChart: () => ({
@@ -247,12 +340,16 @@ export const update = (model: Model, message: Message): Return =>
     ClickedHeatColumn: ({ column }) => ({ model: modifyFields(model, { heat: (heat) => ({ ...heat, sort: column }) }) }),
     HoveredCell: (cell) => ({ model: modifyFields(model, { heat: (heat) => ({ ...heat, maybeTip: Option.some(cell) }) }) }),
     LeftCell: () => ({ model: modifyFields(model, { heat: (heat) => ({ ...heat, maybeTip: Option.none() }) }) }),
-    ClickedLeaderboardRow: ({ id }) => ({
-      model: modifyFields(model, {
-        leaderboard: (leaderboard) => ({ maybeOpen: Option.exists(leaderboard.maybeOpen, (open) => open === id) ? Option.none() : Option.some(id) }),
-        maybeDrill: () => Option.none(),
-      }),
-    }),
+    ClickedLeaderboardRow: ({ id }) =>
+      withNeeds(
+        {
+          model: modifyFields(model, {
+            leaderboard: (leaderboard) => ({ maybeOpen: Option.exists(leaderboard.maybeOpen, (open) => open === id) ? Option.none() : Option.some(id) }),
+            maybeDrill: () => Option.none(),
+          }),
+        },
+        DRILL_NEEDS,
+      ),
     ClickedCertainCount: ({ key, type }) => ({
       model: modifyFields(model, { maybeCertainOpen: (open) => (Option.exists(open, (cell) => cell.key === key && cell.type === type) ? Option.none() : Option.some({ key, type })) }),
     }),
@@ -277,9 +374,12 @@ export const update = (model: Model, message: Message): Return =>
     CompletedStepScroll: () => ({ model }),
     CompletedScroll: () => ({ model }),
     ClickedTour: () => {
-      const hasCertain = AsyncData.matchData(model.data, { onEmpty: () => false, onFailure: () => false, onData: ({ certainMistakes }) => hasCertainChart(certainMistakes) });
+      const hasCertain = AsyncData.matchData(model.data, { onEmpty: () => false, onFailure: () => false, onData: ({ summary }) => summary.hasCertain });
 
-      return { model: modifyFields(model, { maybeTour: () => Option.some({ step: 0, hasCertain, maybeBox: Option.none(), isCardUnder: false }) }), commands: [PlaceTour({ step: 0, hasCertain })] };
+      return withNeeds(
+        { model: modifyFields(model, { maybeTour: () => Option.some({ step: 0, hasCertain, maybeBox: Option.none(), isCardUnder: false }) }), commands: [PlaceTour({ step: 0, hasCertain })] },
+        GROUPS.flatMap(({ group }) => GROUP_NEEDS[group]),
+      );
     },
     SteppedTour: ({ delta }) =>
       Option.match(model.maybeTour, {
@@ -314,8 +414,9 @@ export const withRoute = (model: Model, route: ArenaRoute): Return => {
   if (Predicate.isTagged(route, "Replay")) return openReplay(model, route.id, Option.fromUndefinedOr(route.at));
 
   const { filter, maybeRow } = arenaStateOf(route);
+  const routed: Return = { model: modifyFields(model, { filter: () => filter, leaderboard: () => ({ maybeOpen: maybeRow }), maybeReplay: () => Option.none() }) };
 
-  return { model: modifyFields(model, { filter: () => filter, leaderboard: () => ({ maybeOpen: maybeRow }), maybeReplay: () => Option.none() }) };
+  return Option.isSome(maybeRow) ? withNeeds(routed, DRILL_NEEDS) : routed;
 };
 
 /** The ordinal of the move an open replay shows, once its match has loaded; before that, the one it was asked to show. */
@@ -337,6 +438,8 @@ export const init = (viewport: Viewport, route: ArenaRoute): Return => {
   const model: Model = {
     viewport,
     data: AsyncData.Loading(),
+    lazy: { items: AsyncData.Idle(), odds: AsyncData.Idle(), certain: AsyncData.Idle(), consistency: AsyncData.Idle() },
+    local: AsyncData.Idle(),
     filter: { offEfforts: [], offModels: [] },
     scatter: { axis: "cost", maybeHover: Option.none(), maybePin: Option.none() },
     heat: { sort: "rating", maybeTip: Option.none() },
@@ -396,6 +499,7 @@ export const subscriptions = Subscription.make<Model, Message>()((entry) => ({
     },
   ),
   scroll: Subscription.persistentEntry(Dom.streamFromEventFilterMap({ target: window, type: "scroll", filterMapEvent: groupInView })),
+  near: Subscription.persistentEntry(Dom.streamFromEvent({ target: window, type: "scroll", mapEvent: groupsNear })),
   tappedTitle: Subscription.persistentEntry(Dom.streamFromEventFilterMap({ target: window, type: "pointerup", filterMapEvent: tappedTitleMessage })),
   tourKeys: entry(
     { isTourOpen: Schema.Boolean },

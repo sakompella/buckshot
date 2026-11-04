@@ -104,14 +104,10 @@ const CONFIGS = [
   { model: "claude-opus-5-5", effort: "off" },
 ];
 
-const seatsOver = (blocks: number) => CONFIGS.flatMap((config) => Array.from({ length: blocks }, (_, block) => ({ ...config, seedBlock: `block${block}`, status: "completed" as const })));
-
-const SEATS_OF_CONFIGS = seatsOver(4);
-
-const keepConfigs = (configs: ReadonlyArray<boolean>, blocks = 4) => CONFIGS.flatMap((_, at) => Array.from({ length: blocks }, () => configs[at] === true));
+const keepConfigs = (configs: ReadonlyArray<boolean>): ReadonlySet<string> => new Set(CONFIGS.flatMap(({ model, effort }, at) => (configs[at] === true ? [`${model}|${effort}`] : [])));
 
 test("each config shows its written counts and interval, strongest model and lowest effort first", () => {
-  const { rows, pooled } = talliesOf(certainOf(WRITTEN), SEATS_OF_CONFIGS, keepConfigs([true, true, true]));
+  const { rows, pooled } = talliesOf(certainOf(WRITTEN).rates, keepConfigs([true, true, true]));
 
   expect(rows.map(({ model, effort }) => `${model} ${effort}`)).toEqual(["claude-opus-5-5 off", "claude-opus-5-5 max", "gpt-6-luna low"]);
   expect(rows.map(({ cells }) => [cells[0]?.mistakes, cells[0]?.opportunities, cells[0]?.bounds?.hi ?? null])).toEqual([
@@ -124,7 +120,7 @@ test("each config shows its written counts and interval, strongest model and low
 });
 
 test("a filter that drops a config keeps the other rows' counts, and a pooled row loses the interval it no longer has", () => {
-  const { rows, models, pooled } = talliesOf(certainOf(WRITTEN), SEATS_OF_CONFIGS, keepConfigs([false, true, true]));
+  const { rows, models, pooled } = talliesOf(certainOf(WRITTEN).rates, keepConfigs([false, true, true]));
 
   expect(rows.map(({ model }) => model)).toEqual(["claude-opus-5-5", "claude-opus-5-5"]);
   expect(models.map(({ model, cells }) => [model, cells[0]?.mistakes, cells[0]?.opportunities, cells[0]?.bounds?.hi])).toEqual([["claude-opus-5-5", 1, 43, 0.06]]);
@@ -132,7 +128,7 @@ test("a filter that drops a config keeps the other rows' counts, and a pooled ro
 });
 
 test("a model with some of its configs dropped has counts and no interval", () => {
-  const { models, pooled } = talliesOf(certainOf(WRITTEN), SEATS_OF_CONFIGS, keepConfigs([true, true, false]));
+  const { models, pooled } = talliesOf(certainOf(WRITTEN).rates, keepConfigs([true, true, false]));
 
   expect(models.map(({ model, cells }) => [model, cells[0]?.mistakes, cells[0]?.opportunities, cells[0]?.bounds])).toEqual([
     ["claude-opus-5-5", 0, 40, null],
@@ -142,16 +138,8 @@ test("a model with some of its configs dropped has counts and no interval", () =
 });
 
 test("proven blanks that gave the turn away, and decisions a jammed opponent hid, are tallied apart from the certain mistakes", () => {
-  const { provenBlanks, hiddenHealth } = talliesOf(certainOf(WRITTEN), SEATS_OF_CONFIGS, keepConfigs([true, true, true]));
+  const { provenBlanks, hiddenHealth } = talliesOf(certainOf(WRITTEN).rates, keepConfigs([true, true, true]));
 
   expect(provenBlanks).toEqual({ gaveTurnAway: 11, total: 50 });
   expect(hiddenHealth).toBe(7);
-});
-
-test("a config, model or pool over fewer than 4 seed blocks has counts and no interval", () => {
-  const { rows, models, pooled } = talliesOf(certainOf(WRITTEN), seatsOver(3), keepConfigs([true, true, true], 3));
-
-  expect(rows.map(({ cells }) => [cells[0]?.opportunities, cells[0]?.bounds])).toEqual([[3, null], [40, null], [25, null]]);
-  expect(models.map(({ cells }) => cells[0]?.bounds)).toEqual([null, null]);
-  expect(pooled[0]).toMatchObject({ opportunities: 68, bounds: null });
 });
