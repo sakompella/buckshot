@@ -1,8 +1,9 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { type Decisions, ITEMS, type Seat } from "../api.ts";
+import { addBehavior, type Behavior, type ConfigItems, type Fates, NO_BEHAVIOR, sumFates } from "../aggregates.ts";
+import { ITEMS } from "../api.ts";
 import { anchorId, markTip } from "./charts.ts";
-import { baseName, baseOrder, colorOf, groupBy, type SeatFull, sumOf } from "./data.ts";
+import { baseName, baseOrder, colorOf, groupBy, splitKey, sumOf } from "./data.ts";
 import { memoLast } from "./derived.ts";
 import { itemIconOf } from "./items.ts";
 import type { Message } from "./model.ts";
@@ -12,44 +13,7 @@ type H = HtmlBuilder<Message>;
 // What became of the items players received: used, stolen by the opponent, or still in hand when the round ended.
 // Only completed two-player matches count, since the copies stolen from a seat are its opponent's steals.
 
-export interface Fates {
-  readonly used: number;
-  readonly stolen: number;
-  readonly unused: number;
-}
-
-/** A seat's copies of each item, in ITEMS order, by what became of them. Adrenaline steals count as uses of the adrenaline that paid for them. */
-export const seatFates = (seat: Pick<Seat, "acquired" | "used">, opponent: Pick<Seat, "stolen">): ReadonlyArray<Fates> =>
-  seat.acquired.map((acquired, item) => {
-    const used = seat.used[item] ?? 0;
-    const stolen = opponent.stolen[item] ?? 0;
-
-    return { used, stolen, unused: acquired - used - stolen };
-  });
-
-export const sumFates = (fates: ReadonlyArray<Fates>): Fates => ({
-  used: sumOf(fates.map(({ used }) => used)),
-  stolen: sumOf(fates.map(({ stolen }) => stolen)),
-  unused: sumOf(fates.map(({ unused }) => unused)),
-});
-
 const receivedOf = ({ used, stolen, unused }: Fates): number => used + stolen + unused;
-
-const fatesBySeat = memoLast(
-  (seats: ReadonlyArray<SeatFull>): ReadonlyMap<SeatFull, ReadonlyArray<Fates>> =>
-    new Map(
-      [...groupBy(seats.filter(({ status }) => status === "completed"), ({ matchId }) => matchId).values()].flatMap((both) => {
-        const [one, other, ...rest] = both;
-
-        return one === undefined || other === undefined || rest.length > 0
-          ? []
-          : [
-              [one, seatFates(one, other)],
-              [other, seatFates(other, one)],
-            ];
-      }),
-    ),
-);
 
 interface Row {
   readonly name: string;
@@ -76,60 +40,18 @@ interface ItemFates {
   readonly items: ReadonlyArray<Row>;
 }
 
-const itemFates = (seats: ReadonlyArray<SeatFull>, focal: ReadonlyArray<SeatFull>, color: string): ItemFates => {
-  const perSeat = fatesBySeat(seats);
-  const scored = focal.filter((seat) => perSeat.has(seat));
-  const per = `${scored.length.toLocaleString()} player-matches`;
-  const all = sumFates(scored.flatMap((seat) => perSeat.get(seat) ?? []));
+const itemFates = (focal: ReadonlyArray<ConfigItems>, color: string): ItemFates => {
+  const per = `${sumOf(focal.map(({ players }) => players)).toLocaleString()} player-matches`;
+  const all = sumFates(focal.flatMap(({ fates }) => fates));
 
   const items = ITEMS.flatMap((item, index) => {
-    const fates = sumFates(scored.flatMap((seat) => perSeat.get(seat)?.[index] ?? []));
+    const fates = sumFates(focal.flatMap(({ fates: own }) => own[index] ?? []));
 
     return receivedOf(fates) === 0 ? [] : [rowOf(item, color, fates, per)];
   });
 
   return { all: receivedOf(all) === 0 ? null : rowOf("All items", color, all, per), items: items.toSorted((left, right) => unusedShare(right) - unusedShare(left)) };
 };
-
-/** A move has an item available when legalUse has a bit: an own item, a jam or an adrenaline steal. A steal counts as an adrenaline use. */
-export interface Behavior {
-  readonly moves: number;
-  readonly available: number;
-  readonly usedWhenAvailable: number;
-  readonly itemActions: number;
-}
-
-const NO_BEHAVIOR: Behavior = { moves: 0, available: 0, usedWhenAvailable: 0, itemActions: 0 };
-
-const addBehavior = (left: Behavior, right: Behavior): Behavior => ({
-  moves: left.moves + right.moves,
-  available: left.available + right.available,
-  usedWhenAvailable: left.usedWhenAvailable + right.usedWhenAvailable,
-  itemActions: left.itemActions + right.itemActions,
-});
-
-export const behaviorBySeat = memoLast((decisions: Pick<Decisions, "seat" | "legalUse" | "useItem">, seatCount: number): ReadonlyArray<Behavior> => {
-  const tallies = Array.from({ length: seatCount }, () => ({ ...NO_BEHAVIOR }));
-
-  decisions.seat.forEach((seatIndex, move) => {
-    const tally = tallies[seatIndex];
-
-    if (tally === undefined) return;
-
-    const available = (decisions.legalUse[move] ?? 0) !== 0;
-    const used = (decisions.useItem[move] ?? -1) >= 0;
-
-    tally.moves++;
-
-    if (available) tally.available++;
-
-    if (available && used) tally.usedWhenAvailable++;
-
-    if (used) tally.itemActions++;
-  });
-
-  return tallies;
-});
 
 export const useShare = ({ available, usedWhenAvailable }: Behavior): number | null => (available === 0 ? null : usedWhenAvailable / available);
 
@@ -140,14 +62,11 @@ interface UseRow {
   readonly tip: string;
 }
 
-const useRowsOf = (decisions: Decisions, seats: ReadonlyArray<SeatFull>, focal: ReadonlyArray<SeatFull>): ReadonlyArray<UseRow> => {
-  const bySeat = behaviorBySeat(decisions, seats.length);
-  const indexOf = new Map(seats.map((seat, index) => [seat, index]));
-
-  return [...groupBy(focal, ({ model }) => model)]
+const useRowsOf = (focal: ReadonlyArray<ConfigItems>): ReadonlyArray<UseRow> =>
+  [...groupBy(focal, ({ config }) => splitKey(config)[0])]
     .toSorted(([left], [right]) => baseOrder(left) - baseOrder(right))
     .map(([model, played]): UseRow => {
-      const behavior = played.reduce((sum, seat) => addBehavior(sum, bySeat[indexOf.get(seat) ?? -1] ?? NO_BEHAVIOR), NO_BEHAVIOR);
+      const behavior = played.reduce((sum, { behavior: own }) => addBehavior(sum, own), NO_BEHAVIOR);
       const { moves, available, itemActions } = behavior;
       const name = baseName(model);
       const share = useShare(behavior);
@@ -157,7 +76,6 @@ const useRowsOf = (decisions: Decisions, seats: ReadonlyArray<SeatFull>, focal: 
       return { name, color: colorOf(model), share, tip: `${name}: ${used}${perHundred}` };
     })
     .toSorted((left, right) => (right.share ?? -1) - (left.share ?? -1));
-};
 
 const useRowView = (h: H, { name, color, share, tip }: UseRow): Html =>
   h.div(
@@ -198,15 +116,19 @@ const legendView = (h: H, color: string): Html =>
 
 const itemLabel = (h: H, name: string): ReadonlyArray<Html | string> => (name === "All items" ? [name] : [itemIconOf(h, name), name]);
 
-export const itemBarsView = (h: H, seats: ReadonlyArray<SeatFull>, focal: ReadonlyArray<SeatFull>, color: string, scope: string): Html => {
-  const { all, items } = itemFates(seats, focal, color);
+/** One config's items, as its drill-down shows them. */
+export const itemBarsView = (h: H, own: ConfigItems | undefined, color: string, scope: string): Html => {
+  const { all, items } = itemFates(own === undefined ? [] : [own], color);
 
   return h.div([], [legendView(h, color), h.div([h.Class("fates")], [...(all === null ? [] : [rowView(h, scope, all, [all.name])]), ...items.map((row) => rowView(h, scope, row, itemLabel(h, row.name)))])]);
 };
 
-export const itemUsageView = (h: H, decisions: Decisions, seats: ReadonlyArray<SeatFull>, focal: ReadonlyArray<SeatFull>): Html => {
-  const { items } = itemFates(seats, focal, ITEM_COLOR);
-  const useRows = useRowsOf(decisions, seats, focal);
+const focalOf = memoLast((items: ReadonlyArray<ConfigItems>, kept: ReadonlySet<string>): ReadonlyArray<ConfigItems> => items.filter(({ config }) => kept.has(config)));
+
+export const itemUsageView = (h: H, every: ReadonlyArray<ConfigItems>, kept: ReadonlySet<string>): Html => {
+  const focal = focalOf(every, kept);
+  const { items } = itemFates(focal, ITEM_COLOR);
+  const useRows = useRowsOf(focal);
 
   return h.div(
     [],

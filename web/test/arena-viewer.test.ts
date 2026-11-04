@@ -3,19 +3,22 @@ import * as gs from "@hegeldev/hegel/generators";
 import { expect, test } from "bun:test";
 import { Option } from "effect";
 
+import { configSummaries, ODDS_BINS, oddsBinOf, selfShotTallies } from "../src/arena-viewer/aggregates.ts";
 import { chamberPatterns, roundStory, ShellTracker, shotLineIn } from "../src/arena-viewer/analysis.ts";
 import type { Seat } from "../src/arena-viewer/api.ts";
-import { type BlockTally, blockRate, colorOf, fmtBytes, groupBy, labelOf, lossStats, matchRows, modelStats, quantile, regretStats, rng, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
+import { type BlockTally, blockRate, colorOf, fmtBytes, groupBy, labelOf, lossStats, matchRows, quantile, regretStats, rng, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { bradleyTerry, type Game, heldOutRatings, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
-import { droppedConfigs, ODDS_BINS, oddsBinOf, oddsPanels, selfShotTallies } from "../src/arena-viewer/page/odds.ts";
+import { droppedConfigs, oddsPanels } from "../src/arena-viewer/page/odds.ts";
 import { shotOf, showsReloadNote, turningPoints } from "../src/arena-viewer/page/replay.ts";
 import { rowsOf } from "../src/arena-viewer/page/matches.ts";
-import { ranksOf } from "../src/arena-viewer/page/derived.ts";
+import { modelStatsOf, ranksOf } from "../src/arena-viewer/page/derived.ts";
 import { inRankOrder } from "../src/arena-viewer/page/leaderboard.ts";
 import { FULL_N, shadeOf } from "../src/arena-viewer/page/heat.ts";
 import { AXES, frontierOf } from "../src/arena-viewer/page/scatter.ts";
 
 const PLAYERS = ["a", "b", "c", "d", "e"];
+
+const modelStats = (seats: ReadonlyArray<SeatFull>) => modelStatsOf(configSummaries(seats, { seat: [], legalUse: [], useItem: [] }));
 
 const gamesGen = gs.composite<ReadonlyArray<Game>>((tc) => {
   const game = gs.tuples(gs.integers({ minValue: 0, maxValue: 4 }), gs.integers({ minValue: 1, maxValue: 4 }), gs.sampledFrom([0, 0.5, 1])).map(([a, offset, sa]) => ({ a: PLAYERS[a] ?? "a", b: PLAYERS[(a + offset) % 5] ?? "b", sa }));
@@ -339,9 +342,7 @@ test("a config's pot share is its cash over the match's cash, averaged over scor
   }
 
   for (const config of modelStats(seats)) {
-    const wins = config.scored.filter(({ winShare }) => winShare === 1).length;
-
-    expect(config.potShare).toBeCloseTo((wins * (2 / 3) + (config.scored.length - wins) / 3) / config.scored.length, 12);
+    expect(config.potShare).toBeCloseTo(config.winShare * (2 / 3) + (1 - config.winShare) / 3, 12);
   }
 });
 
@@ -445,9 +446,7 @@ test("rounds ratings leave out matches whose round winners are not all known", (
 
 test("a config's round share is the rounds it won over the rounds it played", () => {
   for (const config of modelStats(playedRoundSeats(1, 3, 2))) {
-    const wins = config.scored.filter(({ winShare }) => winShare === 1).length;
-
-    expect(config.roundShare).toBeCloseTo((wins * 2 + (config.scored.length - wins)) / (3 * config.scored.length), 12);
+    expect(config.roundShare).toBeCloseTo((config.winShare * 2 + (1 - config.winShare)) / 3, 12);
   }
 });
 
@@ -604,9 +603,9 @@ test("the configs left off the odds chart are those of the kept seats with no li
   const odds = Array.from({ length: 120 }, (_, shot) => (shot < 60 ? 0 : 100));
   const decisions = { odds: [...odds, ...odds], seat: [...odds.map(() => 0), ...odds.map(() => 2)], shot: [...odds.map(() => 1), ...odds.map(() => 2)] };
   const panels = oddsPanels(selfShotTallies(decisions, seats, [true, true, true, true]));
-  const dropped = droppedConfigs(seats, [true, true, true, false], panels);
+  const dropped = droppedConfigs(new Set(["claude-opus-5-5|low", "claude-opus-5-5|off", "gpt-6.1-sol|max"]), panels);
 
   expect(panels.map(({ model }) => model)).toEqual(["claude-opus-5-5", "gpt-6.1-sol"]);
   expect(dropped).toEqual(["claude-opus-5-5|off"]);
-  expect(droppedConfigs(seats, [true, true, true, true], panels)).toEqual(["claude-opus-5-5|off", "gpt-6.1-sol|low"]);
+  expect(droppedConfigs(new Set(seats.map(({ model, effort }) => `${model}|${effort}`)), panels)).toEqual(["claude-opus-5-5|off", "gpt-6.1-sol|low"]);
 });

@@ -27,7 +27,7 @@ export interface Repeat {
  * distinct decisions weighs the product of its blocks' counts and a decision never pairs with itself, so a block drawn
  * twice cannot agree with its own copy.
  */
-export const consistencyOf = (positions: ReadonlyArray<ReadonlyArray<Repeat>>, everyBlock: Iterable<string> = positions.flat().map(({ block }) => block)): Pick<Consistency, "positions" | "decisions" | "agree" | "lo" | "hi"> => {
+export const consistencyOf = (positions: ReadonlyArray<ReadonlyArray<Repeat>>, everyBlock: Iterable<string> = positions.flat().map(({ block }) => block)): Pick<Consistency, "positions" | "agree" | "lo" | "hi"> => {
   const blockIds = new Map<string, number>();
   const idOf = (ids: Map<string, number>, value: string) => ids.get(value) ?? (ids.set(value, ids.size), ids.size - 1);
 
@@ -104,7 +104,7 @@ export const consistencyOf = (positions: ReadonlyArray<ReadonlyArray<Repeat>>, e
     .filter((value) => !Number.isNaN(value))
     .toSorted((left, right) => left - right);
 
-  return { positions: positions.length, decisions: decisions.length, agree: meanOver(new Float64Array(blockIds.size).fill(1)), lo: quantile(draws, 0.025), hi: quantile(draws, 0.975) };
+  return { positions: positions.length, agree: meanOver(new Float64Array(blockIds.size).fill(1)), lo: quantile(draws, 0.025), hi: quantile(draws, 0.975) };
 };
 
 const DecisionRow = Schema.Struct({ matchId: Schema.String, model: Schema.String, effort: Schema.String, position: Schema.String, choice: Schema.String });

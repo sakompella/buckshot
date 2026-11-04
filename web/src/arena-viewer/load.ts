@@ -1,0 +1,81 @@
+import { Database } from "bun:sqlite";
+
+import { Schema } from "effect";
+
+import { analyse } from "./analysis.ts";
+import { type Consistency, type Decisions, type Seat, SeatRow } from "./api.ts";
+import { type Certain, NO_CERTAIN, openCertain } from "./certain.ts";
+import { openConsistency } from "./consistency.ts";
+import { openRegret, type Regret } from "./regret.ts";
+
+// Reads the arena analysis database once for the viewer server and the aggregate export. It never selects
+// match_seats.provenance_json, which holds an account email. DeepSeek is left out entirely: a match with a DeepSeek
+// seat is dropped here, so no tab, rating or total sees it.
+
+export const NOT_DEEPSEEK = `m.id not in (select x.match_id from match_seats x join entrants y on y.id = x.entrant_id where y.model = 'oc/deepseek-v4.1-flash-free')`;
+
+const SEATS_SQL = `with cs as (select match_id, player, sum(cost_usd) cost, sum(input_tokens) inp, sum(output_tokens) outp,
+     sum(cache_read_tokens) cr, sum(cache_write_tokens) cw, sum(reasoning_tokens) rt,
+     sum(latency_ms) lat,
+     sum(reasoning_tokens > 0 and coalesce(reasoning_text, '') = '') rsHidden, sum(coalesce(reasoning_text, '') != '') rsText,
+     sum(json_valid(tool_calls_json) and json_array_length(tool_calls_json) > 1) multiTool
+   from calls group by match_id, player),
+   ds as (select match_id, player, sum(by_whom = 'agent') moves from decisions group by match_id, player)
+   select t.name tournament, m.id matchId, m.name matchName, m.status, m.started_at startedAt, m.seed, m.seed_block_id seedBlock,
+     substr(m.code_hash, 1, 8) codeHash, e.model, e.effort, ms.player, ms.position, ms.win_share winShare, ms.cash,
+     cs.cost, cs.inp, cs.outp, cs.cr, cs.cw, cs.rt, cs.lat, cs.rsHidden, cs.rsText, cs.multiTool, ds.moves
+   from match_seats ms join matches m on m.id = ms.match_id join tournaments t on t.id = m.tournament_id
+   join entrants e on e.id = ms.entrant_id
+   left join cs on cs.match_id = m.id and cs.player = ms.player
+   left join ds on ds.match_id = m.id and ds.player = ms.player
+   where m.status in ('completed', 'partial') and ${NOT_DEEPSEEK} order by m.started_at, ms.position`;
+
+const decodeSeatRow = Schema.decodeUnknownSync(SeatRow);
+
+export interface ArenaPaths {
+  readonly regret?: string | undefined;
+  readonly knowledge?: string | undefined;
+  readonly certain?: string | undefined;
+}
+
+export interface Arena {
+  readonly db: Database;
+  readonly regret: Regret | null;
+  readonly seats: ReadonlyArray<Seat>;
+  readonly seatIndex: ReadonlyMap<string, number>;
+  readonly decisions: Decisions;
+  readonly certain: Certain;
+  readonly consistency: ReadonlyArray<Consistency>;
+}
+
+/** With a regret database, seats carry their regret; with a knowledge database, each config's consistency; with a certain-mistakes database, its rates and moves. */
+export const loadArena = (dbPath: string, paths: ArenaPaths = {}): Arena => {
+  const db = new Database(dbPath, { readonly: true });
+  const regret = paths.regret === undefined ? null : openRegret(paths.regret);
+
+  const rows = db
+    .query(SEATS_SQL)
+    .all()
+    .map((row) => decodeSeatRow(row));
+
+  const seatIndex = new Map(rows.map((row, index) => [`${row.matchId}|${row.player}`, index]));
+  const { decisions, seats: analysed } = analyse(db, rows, seatIndex);
+
+  const seats = rows.flatMap((row, index) => {
+    const extra = analysed[index];
+
+    return extra === undefined ? [] : [{ ...row, ...extra, regret: regret?.seats.get(`${row.matchId}|${row.player}`) ?? null }];
+  });
+
+  const seedBlocks = new Map(seats.map(({ matchId, seedBlock }) => [matchId, seedBlock]));
+
+  return {
+    db,
+    regret,
+    seats,
+    seatIndex,
+    decisions,
+    certain: paths.certain === undefined ? NO_CERTAIN : openCertain(paths.certain, seatIndex),
+    consistency: paths.knowledge === undefined ? [] : openConsistency(paths.knowledge, seedBlocks),
+  };
+};

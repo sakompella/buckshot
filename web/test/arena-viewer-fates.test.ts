@@ -2,7 +2,8 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { expect, test } from "bun:test";
 
-import { behaviorBySeat, seatFates, sumFates, useShare } from "../src/arena-viewer/page/fates.ts";
+import { behaviorBySeat, seatFates, sumFates } from "../src/arena-viewer/aggregates.ts";
+import { useShare } from "../src/arena-viewer/page/fates.ts";
 
 const counts = (tc: hegel.TestCase) => Array.from({ length: 8 }, () => tc.draw(gs.integers({ minValue: 0, maxValue: 6 })));
 

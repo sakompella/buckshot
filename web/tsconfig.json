@@ -16,6 +16,6 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["src", "scripts", "test", "generated/*.d.mts", "oxlint.config.ts", "vite.config.ts"],
+  "include": ["src", "scripts", "test", "generated/*.d.mts", "oxlint.config.ts", "vite.config.ts", "cloudflare.config.ts"],
   "exclude": ["tools"]
 }

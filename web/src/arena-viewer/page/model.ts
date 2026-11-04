@@ -3,7 +3,9 @@ import { AsyncData } from "foldkit";
 import { defineMessageUnion } from "foldkit/message";
 import { defineTaggedUnion } from "foldkit/schema";
 
-import { CertainMistakes, CertainType, Consistency, Decisions, Download, MatchDetail, RatingsResponse, Seat } from "../api.ts";
+import { isOnline } from "../../site/online.ts";
+import { AGGREGATES } from "../aggregates.ts";
+import { CertainMistakes, CertainType, Decisions, Download, MatchDetail, Seat } from "../api.ts";
 
 /** The page's groups below the hero, in page order: the jump menu's links, and the sections the reader can be in. */
 export const Group = Schema.Literals(["standings", "decisions", "health", "watch", "tables"]);
@@ -34,7 +36,7 @@ export const MOVED_TARGETS: ReadonlyMap<string, Target> = new Map([
   ["deals", "matches"],
 ]);
 
-export const GROUPS: ReadonlyArray<{ readonly group: Group; readonly label: string; readonly sections: ReadonlyArray<Section> }> = [
+const EVERY_GROUP: ReadonlyArray<{ readonly group: Group; readonly label: string; readonly sections: ReadonlyArray<Section> }> = [
   { group: "standings", label: "Standings", sections: ["scatter", "breakdown"] },
   { group: "decisions", label: "How they play", sections: ["certain-mistakes", "odds", "items"] },
   { group: "health", label: "Run health", sections: ["spend"] },
@@ -42,25 +44,40 @@ export const GROUPS: ReadonlyArray<{ readonly group: Group; readonly label: stri
   { group: "tables", label: "Tables", sections: ["leaderboards"] },
 ];
 
+/** The groups this build draws: the online one has no matches, which need per-match data. */
+export const GROUPS = isOnline ? EVERY_GROUP.filter(({ group }) => group !== "watch") : EVERY_GROUP;
+
 export const SeatFull = Schema.Struct({ ...Seat.fields, potShare: Schema.NullOr(Schema.Number) });
 
 /** An optional section's data, or why it could not be loaded: its failure leaves the rest of the page standing. */
 const OptionalData = <A, I>(schema: Schema.Codec<A, I>) => AsyncData.Schema(schema, Schema.String).schema;
 
-/**
- * The database as the page holds it: every seat with its pot share, the agent moves' columns and the server's ratings, which every section needs;
- * then each config's consistency (empty without a knowledge database) and certain mistakes (empty without a certain-mistakes database).
- */
-export const Loaded = Schema.Struct({
-  seats: Schema.Array(SeatFull),
-  decisions: Decisions,
-  ratings: RatingsResponse,
-  consistency: OptionalData(Schema.Array(Consistency)),
-  certainMistakes: OptionalData(CertainMistakes),
-  download: OptionalData(Download),
-});
+/** What the first paint draws: every config's stats and every pair of configs' matches. */
+export const Loaded = Schema.Struct({ summary: AGGREGATES.summary, pairs: AGGREGATES.pairs });
 
 export type Loaded = typeof Loaded.Type;
+
+/** The aggregate files a section fetches when it first comes near. */
+export const LazyName = Schema.Literals(["items", "odds", "certain", "consistency"]);
+
+export type LazyName = typeof LazyName.Type;
+
+export const Lazy = Schema.Struct({
+  items: OptionalData(AGGREGATES.items),
+  odds: OptionalData(AGGREGATES.odds),
+  certain: OptionalData(AGGREGATES.certain),
+  consistency: OptionalData(AGGREGATES.consistency),
+});
+
+export type Lazy = typeof Lazy.Type;
+
+/**
+ * The per-seat and per-move data only the arena server has, fetched when a section that needs it first comes near: the
+ * match list, replays and their links, and the drill's per-move line. The online build never fetches it.
+ */
+export const Local = Schema.Struct({ seats: Schema.Array(SeatFull), decisions: Decisions, certainMoves: OptionalData(CertainMistakes), download: OptionalData(Download) });
+
+export type Local = typeof Local.Type;
 
 /** Which seats the page counts: all, minus the efforts and models switched off. */
 export const Filter = Schema.Struct({ offEfforts: Schema.Array(Schema.String), offModels: Schema.Array(Schema.String) });
@@ -125,6 +142,8 @@ export type LoadFailure = typeof LoadFailure.Type;
 export const Model = Schema.Struct({
   viewport: Viewport,
   data: AsyncData.Schema(Loaded, LoadFailure).schema,
+  lazy: Lazy,
+  local: OptionalData(Local),
   filter: Filter,
   scatter: Scatter,
   heat: Heat,
@@ -153,10 +172,18 @@ export const Message = defineMessageUnion({
   NavigatedToHash: {},
   SucceededLoad: { loaded: Loaded },
   FailedLoad: { failure: LoadFailure },
+  SucceededItems: { items: AGGREGATES.items },
+  SucceededOdds: { odds: AGGREGATES.odds },
+  SucceededCertain: { certain: AGGREGATES.certain },
+  SucceededConsistency: { consistency: AGGREGATES.consistency },
+  FailedLazy: { name: LazyName, error: Schema.String },
+  SucceededLocal: { local: Local },
+  FailedLocal: { error: Schema.String },
   ToggledEffort: { effort: Schema.String },
   ToggledModel: { name: Schema.String },
   ToggledFilters: {},
   ScrolledInto: { group: Group },
+  CameNear: { groups: Schema.Array(Group) },
   TappedTitle: { text: Schema.String },
   ClearedTappedTitle: {},
   SelectedScatterAxis: { axis: ScatterAxis },

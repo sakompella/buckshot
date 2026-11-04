@@ -3,7 +3,7 @@ import { Command } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import type { SeatFull } from "./data.ts";
-import { Message, type Section, type Tour } from "./model.ts";
+import { GROUPS, Message, type Section, type Tour } from "./model.ts";
 import { reveal } from "./reveal.ts";
 import { stickyHeight } from "./view.ts";
 
@@ -126,7 +126,9 @@ export const tourMatchOf = (seats: ReadonlyArray<Pick<SeatFull, "matchId" | "sta
   return Option.fromUndefinedOr([...given].toSorted(([, left], [, right]) => right - left)[0]?.[0]);
 };
 
-export const tourOf = (hasCertain: boolean): ReadonlyArray<TourStep> => (hasCertain ? TOUR : TOUR.filter(({ anchor }) => anchor !== "certain-mistakes"));
+/** The steps over the sections this page draws. */
+export const tourOf = (hasCertain: boolean): ReadonlyArray<TourStep> =>
+  TOUR.filter(({ anchor }) => (hasCertain || anchor !== "certain-mistakes") && GROUPS.some(({ sections }) => sections.includes(anchor)));
 
 // PLACING
 

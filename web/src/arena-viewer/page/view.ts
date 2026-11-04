@@ -3,17 +3,16 @@ import { AsyncData } from "foldkit";
 import { createLazy, type Document, type Html, type HtmlBuilder } from "foldkit/html";
 
 import { EFFORTS, effortName } from "../../arena/model-names.ts";
-import type { CertainMistakes } from "../api.ts";
-import { baseName, baseOrder, colorOf, fmtBytes, fmtCount, sumOf, unique } from "./data.ts";
+import { baseName, baseOrder, colorOf, fmtBytes, fmtCount, type MatchRow, sumOf, unique } from "./data.ts";
 import { tipView } from "./charts.ts";
-import { certainTableView, certainView, hasCertain } from "./certain.ts";
-import { type Derived, derive } from "./derived.ts";
+import { type CertainLinks, certainTableView, certainView } from "./certain.ts";
+import { allMatchesOf, type Derived, derive, keptMatchesOf, memoLast } from "./derived.ts";
 import { itemUsageView } from "./fates.ts";
 import { breakdownView, heatRowsOf } from "./heat.ts";
 import { configPanelView, leaderboardView } from "./leaderboard.ts";
 import { oddsView } from "./odds.ts";
 import { matchesView } from "./matches.ts";
-import { type Group, GROUPS, LoadFailure, Message, type Model, type Section, type Viewport } from "./model.ts";
+import { type Group, GROUPS, LoadFailure, type Local, Message, type Model, type Section, type Viewport } from "./model.ts";
 import { replayView } from "./replay.ts";
 import { scatterView } from "./scatter.ts";
 import { seatBalanceView } from "./seats.ts";
@@ -52,7 +51,7 @@ const keptOf = (every: ReadonlyArray<string>, off: ReadonlyArray<string>, noun: 
 };
 
 const filtersView = (h: H, derived: Derived, filter: Model["filter"], isOpen: boolean): Html => {
-  const { seats } = derived;
+  const seats = derived.everyPooled;
   const models = unique(seats.map(({ model }) => model)).toSorted((left, right) => baseOrder(left) - baseOrder(right));
   const names = unique(models.map((model) => baseName(model)));
   const efforts = EFFORTS.filter((effort) => seats.some((seat) => seat.effort === effort));
@@ -82,7 +81,7 @@ const filtersView = (h: H, derived: Derived, filter: Model["filter"], isOpen: bo
 };
 
 const heroView = (h: H, derived: Derived): Html => {
-  const scored = derived.matches.filter(({ status }) => status === "completed").length;
+  const scored = sumOf(derived.pairs.map((pair) => pair.scored));
   const stat = (label: string, value: string) => [h.dt([], [label]), h.dd([], [value])];
 
   return h.div(
@@ -100,7 +99,7 @@ const heroView = (h: H, derived: Derived): Html => {
         [
           ...stat("scored matches", scored.toLocaleString()),
           ...stat("configs", String(heatRowsOf(derived).length)),
-          ...stat("model moves", fmtCount(sumOf(derived.pooled.flatMap(({ started }) => started.map(({ moves }) => moves ?? 0))))),
+          ...stat("model moves", fmtCount(sumOf(derived.pooled.map(({ startedMoves }) => startedMoves)))),
           ...stat("list-price cost", `$${Math.round(sumOf(derived.pooled.map(({ totalCost }) => totalCost))).toLocaleString()}`),
         ],
       ),
@@ -153,8 +152,8 @@ const navView = (h: H, maybeGroup: Option.Option<Group>): Html =>
     ],
   );
 
-const footView = (h: H, download: Derived["download"]): Html =>
-  AsyncData.matchData(download, {
+const footView = (h: H, local: Model["local"]): Html =>
+  AsyncData.matchData(AsyncData.flatMap(local, ({ download }) => download), {
     onEmpty: () => h.empty,
     onFailure: () => h.empty,
     onData: ({ bytes }) => h.footer([h.Class("foot")], [h.a([h.Class("download"), h.Href("/api/db")], [`Database (SQLite, ${fmtBytes(bytes)})`])]),
@@ -163,8 +162,8 @@ const footView = (h: H, download: Derived["download"]): Html =>
 const scatterCard = (h: H, derived: Derived, scatter: Model["scatter"], width: number): Html =>
   h.div([h.Class("card")], [scatterView(h, derived.pooled, derived.everyPooled, derived.ratings, derived.ranks, scatter, width)]);
 
-const drillCard = (h: H, derived: Derived, maybeDrill: Model["maybeDrill"]): Html =>
-  Option.match(maybeDrill, { onNone: () => h.empty, onSome: (key) => configPanelView(h, derived, key) });
+const drillCard = (h: H, derived: Derived, maybeDrill: Model["maybeDrill"], lazy: Model["lazy"], local: Model["local"]): Html =>
+  Option.match(maybeDrill, { onNone: () => h.empty, onSome: (key) => configPanelView(h, derived, key, lazy, local) });
 
 const spendCard = (h: H, derived: Derived): Html => h.div([h.Class("card")], [spendView(h, derived.pooled)]);
 
@@ -174,6 +173,16 @@ const optionalView = <A>(h: H, data: AsyncData.AsyncData<A, string>, what: strin
     onFailure: (error) => h.div([h.Class("card")], [h.p([h.Class("k")], [`Could not load the ${what}: ${error}`])]),
     onData: draw,
   });
+
+const certainLinksOf = memoLast((local: Local): Option.Option<CertainLinks> =>
+  Option.map(AsyncData.getData(local.certainMoves), (certain) => ({ certain, seats: local.seats, allMatches: allMatchesOf(local.seats) })),
+);
+
+const NO_MATCHES: ReadonlyArray<MatchRow> = [];
+
+const localData = (local: Model["local"]): Option.Option<Local> => AsyncData.getData(local);
+
+const isDrawn = (group: Group): boolean => GROUPS.some((entry) => entry.group === group);
 
 const sectionView = (h: H, section: Section, content: Html): Html => h.section([h.Id(section)], [content]);
 
@@ -185,10 +194,9 @@ const groupView = (h: H, group: Group, sections: ReadonlyArray<Html>): Html => h
 const pageView = (h: H, model: Model, derived: Derived): Html => {
   const content = contentWidth(model.viewport);
   const card = cardWidth(model.viewport);
+  const { lazy, local } = model;
   const afterFirstPaint = (draw: () => Html): Html => (model.isFirstPaintDone ? draw() : h.empty);
-
-  const afterCertain = (data: Derived["certainMistakes"], draw: (certain: CertainMistakes) => Html): Html =>
-    AsyncData.matchData(data, { onEmpty: () => h.empty, onFailure: () => h.empty, onData: (certain) => (certain.rates.length === 0 ? h.empty : draw(certain)) });
+  const maybeLinks = Option.flatMap(localData(local), certainLinksOf);
 
   return h.div(
     [],
@@ -196,37 +204,45 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
       lazyHero(heroView, [h, derived]),
       h.div([h.Class("top")], [lazyNav(navView, [h, model.maybeGroup]), lazyFilters(filtersView, [h, derived, model.filter, model.isFiltersOpen])]),
       groupView(h, "standings", [
-        sectionView(h, "scatter", h.div([], [lazyScatter(scatterCard, [h, derived, model.scatter, card]), lazyDrill(drillCard, [h, derived, model.maybeDrill])])),
+        sectionView(h, "scatter", h.div([], [lazyScatter(scatterCard, [h, derived, model.scatter, card]), lazyDrill(drillCard, [h, derived, model.maybeDrill, lazy, local])])),
         sectionView(h, "breakdown", afterFirstPaint(() => lazyBreakdown(breakdownView, [h, derived, model.heat]))),
       ]),
       groupView(h, "decisions", [
-        ...(hasCertain(derived.certainMistakes)
-          ? [
+        ...(derived.hasCertain
+          ? [sectionView(h, "certain-mistakes", afterFirstPaint(() => optionalView(h, lazy.certain, "certain mistakes", (rates) => lazyCertain(certainView, [h, rates, derived.kept, model.viewport.width, content]))))]
+          : []),
+        sectionView(h, "odds", afterFirstPaint(() => optionalView(h, lazy.odds, "odds", (odds) => lazyOdds(oddsView, [h, odds, derived.kept, model.viewport.width, content])))),
+        sectionView(h, "items", afterFirstPaint(() => optionalView(h, lazy.items, "items", (items) => lazyItems(itemUsageView, [h, items, derived.kept])))),
+      ]),
+      groupView(h, "health", [sectionView(h, "spend", afterFirstPaint(() => h.div([], [lazySpend(spendCard, [h, derived]), lazySeatBalance(seatBalanceView, [h, derived.pairs])])))]),
+      ...(isDrawn("watch")
+        ? [
+            groupView(h, "watch", [
               sectionView(
                 h,
-                "certain-mistakes",
-                afterFirstPaint(() => optionalView(h, derived.certainMistakes, "certain mistakes", (certain) => lazyCertain(certainView, [h, certain, derived.seats, derived.keep, model.viewport.width, content]))),
+                "matches",
+                optionalView(h, local, "matches", ({ seats }) => lazyMatches(matchesView, [h, keptMatchesOf(allMatchesOf(seats), derived.kept), derived.ratings, model.matchList])),
               ),
-            ]
-          : []),
-        sectionView(h, "odds", afterFirstPaint(() => lazyOdds(oddsView, [h, derived.decisions, derived.seats, derived.keep, model.viewport.width, content]))),
-        sectionView(h, "items", afterFirstPaint(() => lazyItems(itemUsageView, [h, derived.decisions, derived.seats, derived.filtered]))),
-      ]),
-      groupView(h, "health", [sectionView(h, "spend", afterFirstPaint(() => h.div([], [lazySpend(spendCard, [h, derived]), lazySeatBalance(seatBalanceView, [h, derived.matchSeats])])))]),
-      groupView(h, "watch", [sectionView(h, "matches", lazyMatches(matchesView, [h, derived.matches, derived.ratings, model.matchList]))]),
+            ]),
+          ]
+        : []),
       groupView(h, "tables", [
         afterFirstPaint(() =>
           h.details(
             [h.Class("tables")],
             [
               h.summary([], ["Leaderboard · Certain mistakes by config"]),
-              sectionView(h, "leaderboards", lazyLeaderboard(leaderboardView, [h, derived, model.leaderboard])),
-              afterCertain(derived.certainMistakes, (certain) => lazyCertainTable(certainTableView, [h, certain, derived.seats, derived.keep, derived.allMatches, model.maybeCertainOpen])),
+              sectionView(h, "leaderboards", lazyLeaderboard(leaderboardView, [h, derived, model.leaderboard, lazy, local])),
+              AsyncData.matchData(lazy.certain, {
+                onEmpty: () => h.empty,
+                onFailure: () => h.empty,
+                onData: (rates) => (rates.length === 0 ? h.empty : lazyCertainTable(certainTableView, [h, rates, derived.kept, maybeLinks, model.maybeCertainOpen])),
+              }),
             ],
           ),
         ),
       ]),
-      footView(h, derived.download),
+      footView(h, local),
     ],
   );
 };
@@ -258,7 +274,7 @@ export const view = (model: Model, h: H): Document =>
 
       const replay = Option.match(model.maybeReplay, {
         onNone: () => h.empty,
-        onSome: (open) => lazyReplay(replayView, [h, open, model.matches[open.id], derived.allMatches, model.viewport]),
+        onSome: (open) => lazyReplay(replayView, [h, open, model.matches[open.id], Option.match(localData(model.local), { onNone: () => NO_MATCHES, onSome: ({ seats }) => allMatchesOf(seats) }), model.viewport]),
       });
 
       return {

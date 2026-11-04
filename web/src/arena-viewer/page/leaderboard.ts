@@ -1,12 +1,13 @@
 import { Option } from "effect";
+import { AsyncData } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { pressable } from "./charts.ts";
-import { baseName, costPerMove, effortLabel, fmtCount, fmtPct, fmtPoints, fmtSec, fmtUsd, isClaude, isProvisional, keyOf, labelOf, type MatchRow, type ModelStats, sumOf } from "./data.ts";
-import type { Derived, ItemSummary } from "./derived.ts";
+import { baseName, costPerMove, effortLabel, fmtCount, fmtPct, fmtPoints, fmtSec, fmtUsd, groupBy, isClaude, isProvisional, keyOf, labelOf, lossStats, type SeatFull } from "./data.ts";
+import { allMatchesOf, type Derived, memoLast, type ModelStats } from "./derived.ts";
 import { drillView } from "./drill.ts";
 import { itemIconOf } from "./items.ts";
-import { Message, type Model } from "./model.ts";
+import { type Lazy, Message, type Model } from "./model.ts";
 import type { Rating } from "./ratings.ts";
 
 type H = HtmlBuilder<Message>;
@@ -25,9 +26,8 @@ interface Detail {
 const lossTitle = ({ loss }: ModelStats): string =>
   loss === null ? "" : `est. round-win equivalents lost / match, over ${loss.matches.toLocaleString()} fully searched matches${loss.excluded > 0 ? `; ${loss.excluded.toLocaleString()} left out` : ""}`;
 
-const detailsOf = (h: H, m: ModelStats, item: ItemSummary | undefined, hasRegret: boolean): ReadonlyArray<Detail> => {
-  const moves = sumOf(m.scored.map((seat) => seat.moves ?? 0));
-  const favorite = item?.favorite ?? null;
+const detailsOf = (h: H, m: ModelStats, hasRegret: boolean): ReadonlyArray<Detail> => {
+  const { favorite } = m;
 
   return [
     { label: "wins vs own opponents", title: "", content: [h.b([], [fmtPct(m.winShare)]), " ", h.span([h.Class("pm")], [`${m.win.k.toFixed(m.win.k % 1 ? 1 : 0)}/${m.win.n}`])] },
@@ -36,7 +36,7 @@ const detailsOf = (h: H, m: ModelStats, item: ItemSummary | undefined, hasRegret
     ...(hasRegret ? [{ label: "regret", title: m.regret === null ? "" : `${m.regret.moves.toLocaleString()} moves · ${fmtPct(m.regret.exactShare)} proven exact`, content: [m.regret === null ? "–" : fmtPoints(m.regret.mean)] }] : []),
     ...(hasRegret ? [{ label: "lost / match", title: lossTitle(m), content: [m.loss === null ? "–" : m.loss.perMatch.toFixed(2)] }] : []),
     { label: "cost / move", title: "", content: [fmtUsd(costPerMove(m))] },
-    { label: "time / move", title: "", content: [fmtSec(moves > 0 ? sumOf(m.scored.map((seat) => seat.lat ?? 0)) / moves : null)] },
+    { label: "time / move", title: "", content: [fmtSec(m.scoredMoves > 0 ? m.scoredLatency / m.scoredMoves : null)] },
     { label: "output tok / match", title: "", content: [fmtCount(m.avgOut)] },
     { label: "fav", title: favorite === null ? "" : `${favorite.k} of ${favorite.n} legal moves`, content: favorite === null ? ["–"] : [itemIconOf(h, favorite.item), `${favorite.item} `, h.span([h.Class("pm")], [fmtPct(favorite.rate)])] },
   ];
@@ -88,7 +88,7 @@ const rowView = (h: H, m: ModelStats, rank: number | undefined, elo: Rating | un
     [
       h.td([], [h.span([h.Class("rk")], [rank === undefined ? "" : String(rank)]), ...nameView(h, m)]),
       h.td([h.DataAttribute("label", "round elo")], ratingView(h, elo)),
-      h.td([h.DataAttribute("label", "matches"), h.Title(`${m.win.blocks} seed blocks`)], [m.scored.length.toLocaleString()]),
+      h.td([h.DataAttribute("label", "matches"), h.Title(`${m.win.blocks} seed blocks`)], [m.scored.toLocaleString()]),
       h.td([h.DataAttribute("label", "cost / match")], [fmtUsd(m.avgCost)]),
       h.td([h.Class("barcol")], [eloBarView(h, scale, m, elo)]),
       ...details.map(({ label, title, content }) => h.td([h.Class("detail"), h.DataAttribute("label", label), ...(title === "" ? [] : [h.Title(title)])], [...content])),
@@ -98,31 +98,41 @@ const rowView = (h: H, m: ModelStats, rank: number | undefined, elo: Rating | un
 const detailsView = (h: H, details: ReadonlyArray<Detail>): Html =>
   h.dl([h.Class("drillstats")], details.flatMap(({ label, title, content }) => [h.dt([], [label]), h.dd(title === "" ? [] : [h.Title(title)], [...content])]));
 
+/** Per config, the move where it gave up the most round win chance over its scored matches. */
+const largestOf = memoLast((seats: ReadonlyArray<SeatFull>) => new Map([...groupBy(seats.filter(({ status }) => status === "completed"), keyOf)].map(([key, scored]) => [key, lossStats(scored)?.largest] as const)));
+
 /** The move where a config gave up the most round win chance, as a link to that move in its match's replay. */
-const missView = (h: H, m: ModelStats, matches: ReadonlyArray<MatchRow>): Html => {
-  if (m.loss === null) return h.empty;
+const missView = (h: H, m: ModelStats, local: Model["local"]): Html =>
+  AsyncData.matchData(local, {
+    onEmpty: () => h.empty,
+    onFailure: () => h.empty,
+    onData: ({ seats }) => {
+      const largest = largestOf(seats).get(m.key);
 
-  const { matchId, ordinal, points } = m.loss.largest;
-  const opponent = matches.find((match) => match.matchId === matchId)?.seats.find((seat) => keyOf(seat) !== m.key);
+      if (largest === undefined) return h.empty;
 
-  return h.p(
-    [h.Class("miss")],
-    [
-      h.span([h.Class("k")], ["largest missed chance "]),
-      h.button(
-        [h.Type("button"), h.Class("chip on"), h.OnClick(Message.ClickedMatch({ id: matchId, maybeFocus: Option.some(ordinal) }))],
-        [`${fmtPoints(points)} pts${opponent === undefined ? "" : ` vs ${labelOf(keyOf(opponent))}`} ▸`],
-      ),
-    ],
-  );
-};
+      const { matchId, ordinal, points } = largest;
+      const opponent = allMatchesOf(seats).find((match) => match.matchId === matchId)?.seats.find((seat) => keyOf(seat) !== m.key);
 
-export const configPanelView = (h: H, derived: Derived, key: string): Html => {
+      return h.p(
+        [h.Class("miss")],
+        [
+          h.span([h.Class("k")], ["largest missed chance "]),
+          h.button(
+            [h.Type("button"), h.Class("chip on"), h.OnClick(Message.ClickedMatch({ id: matchId, maybeFocus: Option.some(ordinal) }))],
+            [`${fmtPoints(points)} pts${opponent === undefined ? "" : ` vs ${labelOf(keyOf(opponent))}`} ▸`],
+          ),
+        ],
+      );
+    },
+  });
+
+export const configPanelView = (h: H, derived: Derived, key: string, lazy: Lazy, local: Model["local"]): Html => {
   const m = derived.pooled.find((candidate) => candidate.key === key);
 
   if (m === undefined) return h.empty;
 
-  const details = detailsOf(h, m, derived.items.get(m.key), derived.everyPooled.some(({ regret }) => regret !== null));
+  const details = detailsOf(h, m, derived.everyPooled.some(({ regret }) => regret !== null));
 
   return h.div(
     [h.Class("configpanel")],
@@ -136,8 +146,8 @@ export const configPanelView = (h: H, derived: Derived, key: string): Html => {
         ],
       ),
       detailsView(h, details),
-      missView(h, m, derived.allMatches),
-      drillView(h, m, derived),
+      missView(h, m, local),
+      drillView(h, m, lazy),
     ],
   );
 };
@@ -179,12 +189,12 @@ export const inRankOrder = (stats: ReadonlyArray<ModelStats>, ranks: ReadonlyMap
   const eloOf = ({ key }: ModelStats) => ratings.get(key)?.rating ?? Number.NEGATIVE_INFINITY;
 
   return stats
-    .filter(({ scored }) => scored.length > 0)
+    .filter(({ scored }) => scored > 0)
     .toSorted((left, right) => (ranks.get(left.key) ?? Number.POSITIVE_INFINITY) - (ranks.get(right.key) ?? Number.POSITIVE_INFINITY) || eloOf(right) - eloOf(left) || left.label.localeCompare(right.label));
 };
 
-export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["leaderboard"]): Html => {
-  const { pooled: stats, everyPooled: every, ranks, ratings, items } = derived;
+export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["leaderboard"], lazy: Lazy, local: Model["local"]): Html => {
+  const { pooled: stats, everyPooled: every, ranks, ratings } = derived;
   const hasRegret = every.some(({ regret }) => regret !== null);
   const headers = headersOf(hasRegret);
   const configs = inRankOrder(stats, ranks, ratings);
@@ -206,11 +216,11 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
                 [],
                 configs.flatMap((m) => {
                   const isOpen = Option.exists(leaderboard.maybeOpen, (open) => open === m.key);
-                  const details = detailsOf(h, m, items.get(m.key), hasRegret);
+                  const details = detailsOf(h, m, hasRegret);
 
                   return [
                     rowView(h, m, ranks.get(m.key), ratings.get(m.key), scale, details, isOpen),
-                    isOpen ? h.keyed("tr")(`drill-${m.key}`, [h.Class("drill")], [h.td([h.Colspan(headers.length)], [detailsView(h, details), missView(h, m, derived.allMatches), drillView(h, m, derived)])]) : h.empty,
+                    isOpen ? h.keyed("tr")(`drill-${m.key}`, [h.Class("drill")], [h.td([h.Colspan(headers.length)], [detailsView(h, details), missView(h, m, local), drillView(h, m, lazy)])]) : h.empty,
                   ];
                 }),
               ),

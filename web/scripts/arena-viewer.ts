@@ -37,7 +37,7 @@ const program = Effect.gen(function* () {
   const listenPort = yield* Schema.decodeUnknownEffect(Port)(port).pipe(Effect.mapError(usage));
 
   const server = yield* Effect.acquireRelease(
-    Effect.try({ try: () => serveArenaViewer(dbPath, siteDir, host, listenPort, regretPath, knowledgePath, certainPath), catch: (cause) => new ScriptError({ message: `cannot serve: ${String(cause)}`, exitCode: 1 }) }),
+    Effect.try({ try: () => serveArenaViewer(dbPath, siteDir, host, listenPort, { regret: regretPath, knowledge: knowledgePath, certain: certainPath }), catch: (cause) => new ScriptError({ message: `cannot serve: ${String(cause)}`, exitCode: 1 }) }),
     (running) => Effect.promise(() => running.stop()),
   );
 
