@@ -69,11 +69,11 @@ const build = spawnSync(process.env.BEND ?? 'bend', [join(dir, 'probe.bend'), '-
 if (build.error) throw build.error;
 assert.equal(build.status, 0, `bend build failed:\n${build.stdout}${build.stderr}`);
 const P = (await import(join(dir, 'probe.mjs'))).default;
-const D = new Proxy(P, { get: (lib, name) => lib[`domain.${name}`] ?? assert.fail(`no export domain.${name}`) });
+const D = new Proxy(P, { get: (lib, name) => lib[`domain:${name}`] ?? assert.fail(`no export domain:${name}`) });
 
 const list = xs => xs.reduceRight((tail, head) => ({ $: 'Con', head, tail }), { $: 'Nil' });
 const array = xs => { const out = []; for (; xs.$ === 'Con'; xs = xs.tail) out.push(xs.head); assert.equal(xs.$, 'Nil'); return out; };
-const plain = v => JSON.parse(JSON.stringify(v, (_, x) => typeof x === 'bigint' ? Number(x) : x));
+const plain = v => JSON.parse(JSON.stringify(v));
 const same = (a, b, message) => assert.deepEqual(plain(a), plain(b), message);
 
 let seed = Number(process.env.SEED ?? 20261011) >>> 0;
@@ -91,7 +91,7 @@ const anyNat = () => pick([() => 0, () => below(8), () => below(64), () => below
 const tables = array(P['probe.tables']());
 const seatsAt = table => array(D['table.seats'](table));
 const allSeats = seatsAt(tables[2]);
-assert.equal(allSeats[1].$, 'domain.Seat1', 'imported domain tags are path-qualified');
+assert.equal(allSeats[1].$, 'Seat1', 'constructor tags are bare names');
 const [finished, stuck] = array(P['probe.ends']());
 const slots = array(P['probe.slots']());
 const shells = array(P['probe.shells']());

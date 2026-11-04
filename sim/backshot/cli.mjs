@@ -14,7 +14,7 @@ const { lib, close } = await load();
 try {
   const state = position(lib, input, fixed);
   for (const d of depthArg ? [depth] : Array.from({ length: depth }, (_, i) => i + 1)) {
-    const result = plain(lib, lib.search(bool(fixed), BigInt(d), state));
+    const result = plain(lib, lib.search(bool(fixed), d, state));
     console.log(JSON.stringify({ depth: d, ...result }));
   }
 } finally { close(); }

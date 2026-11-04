@@ -261,11 +261,11 @@ try {
   scenario('injected CCW and CW traversal include dead current only', () => {
     const state = replay(config(4, [round({ health: 2 })]), [0, 0]).state;
     const host = { ...state.host, seats: { ...state.host.seats, s1: { ...state.host.seats.s1, health: 0 } } };
-    assert.equal(R['rules.GetNextTurn_Socket'](host, seat(1)).$, seat(2).$);
-    assert.equal(R['rules.GetNextTurn_Socket'](host, seat(2)).$, seat(3).$);
+    assert.equal(R['rules:GetNextTurn_Socket'](host, seat(1)).$, seat(2).$);
+    assert.equal(R['rules:GetNextTurn_Socket'](host, seat(2)).$, seat(3).$);
     const ccw = { ...host, direction: tag('CounterClockwise') };
-    assert.equal(R['rules.GetNextTurn_Socket'](ccw, seat(2)).$, seat(0).$);
-    assert.equal(R['rules.GetNextTurn_Socket'](ccw, seat(1)).$, seat(0).$);
+    assert.equal(R['rules:GetNextTurn_Socket'](ccw, seat(2)).$, seat(0).$);
+    assert.equal(R['rules:GetNextTurn_Socket'](ccw, seat(1)).$, seat(0).$);
   });
 
   // D32. The host predicate checks turn/holding/has_turn, not target health.
