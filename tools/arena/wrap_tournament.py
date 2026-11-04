@@ -270,7 +270,9 @@ class Wrap:
         self.main = self.analysis / "buckshot.sqlite"
         self.public = self.analysis / "buckshot.public.sqlite"
         self.state = self.logs / "state.json"
-        self.env = {**os.environ, "XDG_RUNTIME_DIR": os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")}
+        # Without $BEND: each `nix develop <worktree>` gets the Bend of that worktree's pin. A $BEND inherited from this
+        # checkout's dev shell would make an older evaluator worktree build its player with a newer, incompatible Bend.
+        self.env = {**{k: v for k, v in os.environ.items() if k != "BEND"}, "XDG_RUNTIME_DIR": os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")}
 
     @property
     def tag(self) -> str:

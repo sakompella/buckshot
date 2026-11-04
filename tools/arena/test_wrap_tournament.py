@@ -1,4 +1,5 @@
 import json
+import os
 import sqlite3
 import tempfile
 import unittest
@@ -96,6 +97,12 @@ def make_wrap(deploy: bool) -> w.Wrap:
     (d / "run").mkdir()
     (d / "analysis").mkdir()
     return w.Wrap([d / "run"], d, d / "analysis", d / "docs", "t9", None, None, d, d, None, "", 1, deploy)
+
+
+class Environment(unittest.TestCase):
+    def test_worktree_commands_do_not_inherit_this_checkouts_bend(self):
+        with unittest.mock.patch.dict(os.environ, {"BEND": "/nix/store/x-bend-new/bin/bend"}):
+            self.assertNotIn("BEND", make_wrap(False).env)
 
 
 class Deploy(unittest.TestCase):
