@@ -1,0 +1,77 @@
+{
+  "name": "t9-b",
+  "cohort": "tournament 9",
+  "seed": 9021,
+  "delivery": "on-turn",
+  "blocksPerPairing": 5,
+  "endpoints": {
+    "cpa-anthropic": {
+      "api": "anthropic",
+      "url": "https://hub.dog-minnow.ts.net",
+      "keyEnv": "CPA_KEY"
+    }
+  },
+  "entrants": {
+    "claude-haiku-4-5-20251001-low": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "effort": "low"
+    },
+    "claude-haiku-5-5-off": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-5-5",
+      "effort": "off"
+    },
+    "claude-haiku-5-5-low": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-5-5",
+      "effort": "low"
+    },
+    "claude-haiku-4-5-20251001-minimal": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "effort": "minimal"
+    }
+  },
+  "pairings": [
+    {
+      "entrants": [
+        "claude-haiku-5-5-off",
+        "claude-haiku-4-5-20251001-low"
+      ],
+      "seeds": [
+        9021,
+        9020,
+        9025,
+        9022,
+        9028
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-5-5-low",
+        "claude-haiku-4-5-20251001-low"
+      ],
+      "seeds": [
+        9103,
+        9100,
+        9105,
+        9101,
+        9106
+      ]
+    },
+    {
+      "entrants": [
+        "claude-haiku-4-5-20251001-minimal",
+        "claude-haiku-5-5-low"
+      ],
+      "seeds": [
+        9160,
+        9162,
+        9161,
+        9163,
+        9167
+      ]
+    }
+  ]
+}
