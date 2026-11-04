@@ -1,4 +1,6 @@
-import { Cause, Data, Effect, Exit, Option } from "effect";
+import type { parseArgs } from "node:util";
+
+import { Cause, Data, Effect, Exit, Option, Schema } from "effect";
 
 /** A script's expected failure: the message goes to stderr and the process exits with `exitCode`. */
 export class ScriptError extends Data.TaggedError("ScriptError")<{ readonly message: string; readonly exitCode: number }> {}
@@ -23,3 +25,11 @@ export const runMain = async <E>(program: Effect.Effect<number | void, E>): Prom
     process.exitCode = 1;
   }
 };
+
+export type ParsedArgs = ReturnType<typeof parseArgs>["values"];
+
+/** Decodes the values parseArgs read with `schema`; anything it rejects is a usage error. */
+export const decodeArgs =
+  <A>(schema: Schema.Decoder<A>, usage: string) =>
+  (values: ParsedArgs) =>
+    Schema.decodeUnknownEffect(schema)(values).pipe(Effect.mapError(() => new ScriptError({ message: usage, exitCode: 1 })));
