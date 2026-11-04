@@ -34,7 +34,26 @@ export const targetOf = (seat: Seat, move: Move): Target =>
 
 export const targetKey = (target: Target): string => JSON.stringify(target);
 
+/**
+ * A whole move of one seat, named by the machine steps it plays (CONTEXT.md's Move): one step from a prompt's menu,
+ * or an agent's chain such as picking up the shotgun, then shooting. The label is for display only.
+ */
+export const TableMove = Schema.Struct({ seat: Seat, steps: Schema.NonEmptyArray(Move), label: Schema.String });
+
+export type TableMove = typeof TableMove.Type;
+
+/** The prompt's menu, each step a move of its own. */
+export const promptMoves = (roster: Roster, prompt: Prompt): ReadonlyArray<TableMove> =>
+  prompt.menu.map((move) => ({ seat: prompt.seat, steps: [move], label: moveText(roster, prompt.seat, move) }));
+
+/** Every thing a move acts on, in step order. */
+export const targetsOf = (move: TableMove): ReadonlyArray<Target> => move.steps.map((step) => targetOf(move.seat, step));
+
+/** The thing a move is played by clicking: where its last step acts. */
+const placeOf = (move: TableMove): Target => targetOf(move.seat, move.steps.at(-1) ?? move.steps[0]);
+
 export interface BoardMove {
+  /** In the move list. */
   readonly index: number;
   readonly label: string;
 }
@@ -46,14 +65,14 @@ export interface BoardMoves {
   readonly buttons: ReadonlyArray<BoardMove>;
 }
 
-/** Every move of the menu, each either on the table or as a plain button. */
-export const boardMoves = (roster: Roster, prompt: Prompt): BoardMoves => {
-  const placed = prompt.menu.map((move, index) => ({ key: targetKey(targetOf(prompt.seat, move)), move: { index, label: moveText(roster, prompt.seat, move) } }));
+/** Every move, each either on the table or as a plain button. */
+export const boardMoves = (moves: ReadonlyArray<TableMove>): BoardMoves => {
+  const placed = moves.map((move, index) => ({ key: targetKey(placeOf(move)), move: { index, label: move.label } }));
   const isShared = (key: string): boolean => placed.filter((other) => other.key === key).length > 1;
 
   return {
-    onTable: new Map(placed.filter(({ key }) => !isShared(key)).map(({ key, move }) => [key, move])),
-    buttons: placed.filter(({ key }) => isShared(key)).map(({ move }) => move),
+    onTable: new Map(placed.flatMap(({ key, move }) => (isShared(key) ? [] : [[key, move] as const]))),
+    buttons: placed.flatMap(({ key, move }) => (isShared(key) ? [move] : [])),
   };
 };
 
@@ -66,9 +85,8 @@ export type Position = 0 | 1 | 2 | 3;
 
 const POSITIONS: ReadonlyArray<Position> = [0, 1, 2, 3];
 
-/** The viewer's seat sits nearest; a spectator sees the table from the first seat. */
-export const positionOf = (match: Session, seat: Seat): Position => {
-  const near = match.viewer === "Spectator" ? (match.game.seats[0] ?? 0) : match.viewer;
+/** Where a seat sits, counted from the near seat. */
+export const positionOf = (near: Seat, seat: Seat): Position => POSITIONS[(seat - near + 4) % 4] ?? 0;
 
-  return POSITIONS[(seat - near + 4) % 4] ?? 0;
-};
+/** The seat a match's viewer sees nearest: their own; a spectator sees the table from the first seat. */
+export const nearSeat = (match: Session): Seat => (match.viewer === "Spectator" ? (match.game.seats[0] ?? 0) : match.viewer);

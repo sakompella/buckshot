@@ -5,7 +5,7 @@ import { Schema } from "effect";
 import { type Browser, chromium, type Page } from "playwright-core";
 
 import { AGGREGATES, selfShotTallies } from "../src/arena-viewer/aggregates.ts";
-import { Blunders, CERTAIN_TYPES, CertainMistakes, Decisions, ITEMS, MatchDetail, type MoveRegret, NO_GAP, SeatsResponse } from "../src/arena-viewer/api.ts";
+import { Blunders, CERTAIN_TYPES, CertainMistakes, Decisions, ITEMS, MatchDetail, MatchDetailJson, type MoveRegret, NO_GAP, SeatsResponse } from "../src/arena-viewer/api.ts";
 import { baseName, baseOrder, CERTAIN_NAMES, effortLabel, fmtBytes, fmtCount, fmtPct, fmtPoints, fmtUsd, blocksOf, groupBy, keyOf, labelOf, MIN_BLOCKS_FOR_INTERVAL, shortName, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { GROUPS, MOVED_TARGETS, Section } from "../src/arena-viewer/page/model.ts";
 import { pooledRatings } from "../src/arena-viewer/page/ratings.ts";
@@ -436,7 +436,7 @@ const openBreakdown = async (page: Page) => {
   await settled(page);
 };
 
-const servedDetail = async (id: string) => Schema.decodeUnknownSync(MatchDetail)(await (await fetch(`${base}/api/match?id=${encodeURIComponent(id)}`)).json());
+const servedDetail = async (id: string) => Schema.decodeUnknownSync(MatchDetailJson)(await (await fetch(`${base}/api/match?id=${encodeURIComponent(id)}`)).json());
 
 const servedDecisions = async (id: string) => (await servedDetail(id)).decisions;
 
@@ -770,7 +770,7 @@ const checkMissingRegret = async (browser: Browser, viewport: Viewport) => {
       if (new URL(route.request().url()).searchParams.get("id") !== missingId) return route.fallback();
 
       const response = await route.fetch();
-      const detail = Schema.decodeUnknownSync(MatchDetail)(await response.json());
+      const detail = Schema.decodeUnknownSync(MatchDetailJson)(await response.json());
 
       incomingRegrets = Math.max(incomingRegrets, detail.decisions.filter(({ regret }) => regret !== null).length);
 
@@ -1369,6 +1369,7 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
 
       for (let step = 0; step < (row === 0 ? 6 : 0); step++) await page.keyboard.press("ArrowRight");
 
+      expectThat((await countOf(page, ".modal .board .stage")) === 1 && (await countOf(page, ".modal .board .chosen")) > 0, `${name}: the replay's table is missing or marks no chosen move`);
       console.log(name, "steps", await countOf(page, ".modal .step"), "| on:", await textOf(page, ".modal .step.on"), "| reasoning blocks", await countOf(page, ".modal .sel pre"), "| same-seed chips", await countOf(page, ".seedrow .chip"));
       await page.locator(".modal").screenshot({ path: shot(name) });
       await page.keyboard.press("Escape");
@@ -1629,6 +1630,9 @@ const checkTour = async (page: Page, name: string) => {
 
   for (const [index, step] of steps.entries()) {
     if (index > 0) await page.keyboard.press("ArrowRight");
+
+    // A match the server has not sent lately is replayed through the rules first, which takes up to seconds.
+    if (step.isReplay) await page.waitForSelector(".modal .step", { timeout: ACTION_TIMEOUT_MS });
 
     await settled(page);
 

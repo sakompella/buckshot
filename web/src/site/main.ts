@@ -11,6 +11,7 @@ import arenaStyles from "../arena-viewer/page/styles.css?inline";
 import * as Play from "../main.ts";
 import { Message as PlayMessage, Model as PlayModel } from "../model.ts";
 import playStyles from "../styles.css?inline";
+import tableStyles from "../table.css?inline";
 import { view as playView } from "../view.ts";
 import { type ArenaRoute, isArenaRoute, isOldArenaLink, PLAY_HREF, routeOf, SiteRoute } from "./route.ts";
 
@@ -168,17 +169,22 @@ const navView = (h: H, model: Model): Html => {
 };
 
 // Each page brings its own stylesheet, and only the shown page's applies: the two set the same root variables and elements.
+// Both draw the table, so both bring its stylesheet first.
+const PLAY_STYLES = `${tableStyles}\n${playStyles}`;
+
+const ARENA_STYLES = `${tableStyles}\n${arenaStyles}`;
+
 const pageOf = (h: H, model: Model, styles: string, page: Html): Html =>
   h.div([h.Class(`site ${Predicate.isTagged(model.route, "Play") ? "site-play" : "site-arena"}`)], [h.style([], [styles]), navView(h, model), page]);
 
 export const view = (model: Model, h: H): Document =>
   SiteRoute.match(model.route, {
-    Play: () => ({ title: "Buckshot table", body: pageOf(h, model, playStyles, h.submodel({ slotId: "play", view: playBody, model: model.play, toParentMessage: toPlayMessage })) }),
+    Play: () => ({ title: "Buckshot table", body: pageOf(h, model, PLAY_STYLES, h.submodel({ slotId: "play", view: playBody, model: model.play, toParentMessage: toPlayMessage })) }),
     Arena: () => arenaPage(h, model),
     Replay: () => arenaPage(h, model),
     NotFound: ({ path }) => ({
       title: "Buckshot",
-      body: pageOf(h, model, arenaStyles, h.main([], [h.p([h.Class("k")], [`Nothing lives at ${path}. `, h.a([h.Href("/arena")], ["The arena"]), " has every config's results."])])),
+      body: pageOf(h, model, ARENA_STYLES, h.main([], [h.p([h.Class("k")], [`Nothing lives at ${path}. `, h.a([h.Href("/arena")], ["The arena"]), " has every config's results."])])),
     }),
   });
 
@@ -187,7 +193,7 @@ const arenaPage = (h: H, model: Model): Document => ({
   body: pageOf(
     h,
     model,
-    arenaStyles,
+    ARENA_STYLES,
     Option.match(model.maybeArena, {
       onNone: () => h.empty,
       onSome: (arena) => h.submodel({ slotId: "arena", view: arenaBody, model: arena, toParentMessage: toArenaMessage }),

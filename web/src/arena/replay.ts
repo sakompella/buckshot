@@ -27,7 +27,7 @@ export interface PlayerAt {
  * the move produced. The first frame is the start of the match.
  */
 export interface Frame {
-  readonly move?: { readonly turn: number; readonly player: Letter; readonly label: string; readonly by: MoveLine["by"] };
+  readonly move?: { readonly turn: number; readonly player: Letter; readonly label: string; readonly by: ReplayLine["by"] };
   /** From 1. */
   readonly round: number;
   /** Everyone's health when the round began. */
@@ -36,7 +36,12 @@ export interface Frame {
   readonly entries: ReadonlyArray<{ readonly text: string; readonly heardBy?: Letter }>;
   readonly players: ReadonlyArray<PlayerAt>;
   readonly gun: { readonly live: number; readonly blank: number; readonly remaining: number; readonly sawed: boolean };
+  /** The machine's match as the move left it: where the next logged move is played. */
+  readonly source: AgentSource;
 }
+
+/** What a replay plays of a logged move. */
+export type ReplayLine = Pick<MoveLine, "turn" | "player" | "move" | "label" | "by">;
 
 /** What a replay starts from. */
 export type ReplaySetup = Pick<RunManifest, "seed" | "controllers" | "letters">;
@@ -45,7 +50,7 @@ export interface Replay {
   readonly setup: ReplaySetup;
   readonly session: MatchSession<HeadlessTable>;
   readonly table: HeadlessTable;
-  readonly applied: ReadonlyArray<MoveLine>;
+  readonly applied: ReadonlyArray<ReplayLine>;
   readonly frames: ReadonlyArray<Frame>;
   /** Set when a logged move does not replay; the replay stops there. */
   readonly divergence: Option.Option<string>;
@@ -84,13 +89,14 @@ const frameOf = (before: AgentSource | undefined, after: AgentSource, move: Fram
       out: out.has(view.seat),
     })),
     gun: { live: board.gun.shown.live, blank: board.gun.shown.blank, remaining: board.gun.remaining, sawed: board.gun.sawed },
+    source: after,
   };
 
   return move === undefined ? frame : { ...frame, move };
 };
 
 /** The label the machine gives a move now: what match.ts logged as the move's label when it was played. */
-const labelOf = (replay: Replay, line: MoveLine): string =>
+const labelOf = (replay: Replay, line: ReplayLine): string =>
   Result.match(agentGame(sourceOf(replay), replay.session.turn(replay.table), line.player), {
     onSuccess: (game) => (game.status === "your turn" ? (game.moves[line.move]?.label ?? "") : ""),
     onFailure: () => "",
@@ -98,7 +104,7 @@ const labelOf = (replay: Replay, line: MoveLine): string =>
 
 const diverged = (replay: Replay, note: string): Replay => ({ ...replay, divergence: Option.some(note) });
 
-const playLine = (replay: Replay, line: MoveLine): Replay => {
+const playLine = (replay: Replay, line: ReplayLine): Replay => {
   const replayed = labelOf(replay, line);
 
   if (replayed !== line.label) return diverged(replay, `turn ${line.turn}: logged "${line.label}", replayed "${replayed}"`);
@@ -127,7 +133,7 @@ const startReplay = (setup: ReplaySetup): Result.Result<Replay, string> => {
   );
 };
 
-const sameMove = (left: MoveLine, right: MoveLine | undefined): boolean =>
+const sameMove = (left: ReplayLine, right: ReplayLine | undefined): boolean =>
   right !== undefined && left.turn === right.turn && left.player === right.player && left.move === right.move && left.label === right.label && left.by === right.by;
 
 const sameSetup = (left: ReplaySetup, right: ReplaySetup): boolean => JSON.stringify([left.seed, left.controllers, left.letters]) === JSON.stringify([right.seed, right.controllers, right.letters]);
@@ -136,7 +142,7 @@ const sameSetup = (left: ReplaySetup, right: ReplaySetup): boolean => JSON.strin
  * The replay of `moves`, a run's move lines in file order. It extends `previous` when that replayed a prefix of
  * them, as it does while a match is live, since moves are only appended; otherwise it starts over.
  */
-export const replayOf = (previous: Option.Option<Replay>, setup: ReplaySetup, moves: ReadonlyArray<MoveLine>): Result.Result<Replay, string> => {
+export const replayOf = (previous: Option.Option<Replay>, setup: ReplaySetup, moves: ReadonlyArray<ReplayLine>): Result.Result<Replay, string> => {
   const extendable = Option.filter(previous, (replay) => sameSetup(replay.setup, setup) && replay.applied.every((line, index) => sameMove(line, moves[index])));
 
   return Result.map(Option.match(extendable, { onSome: Result.succeed, onNone: () => startReplay(setup) }), (start) => {
