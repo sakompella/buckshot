@@ -37,6 +37,8 @@
     "mcp": "bun run rules 1>&2 && bun scripts/mcp.ts",
     "dev:online": "bun run rules && cf dev --mode online",
     "build:online": "bun run rules && cf build --mode online",
-    "deploy:online": "bun run rules && cf deploy --mode online"
+    "deploy:online": "bun run rules && cf deploy --mode online",
+    "deploy:preview": "bun run rules && bun scripts/deploy-online.ts preview",
+    "deploy:promote": "bun scripts/deploy-online.ts promote"
   }
 }
