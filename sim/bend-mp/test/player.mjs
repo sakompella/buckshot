@@ -31,7 +31,8 @@ const timed = (name, f) => (...args) => { const t = performance.now(); try { ret
 const position = (cfg, board, log, me) => ({ $: 'types.Position', config: cfg, board, log: list(log), me: seat(me) });
 const STATIC = { $: 'types.Static' }, EXPECTED_DEAL = { $: 'types.ExpectedDeal' };
 const sampled = count => ({ $: 'types.Sampled', count: BigInt(count) });
-const analyse = (pos, depth, budget, reload = STATIC) => P.analyse(pos, BigInt(depth), BigInt(budget), reload);
+const OFF = { $: 'types.Off' }, CHARGED = { $: 'types.Charged' }, FREE = { $: 'types.Free' };
+const analyse = (pos, depth, budget, reload = STATIC, memo = CHARGED) => P.analyse(pos, BigInt(depth), BigInt(budget), reload, memo);
 const lines = analysis => array(analysis.lines);
 const menu = request => [request.moves.head, ...array(request.moves.tail)];
 
@@ -199,8 +200,8 @@ function checkPublicOnly(pos) {
   assert.equal(json(without.public), json(withClues.public));
   const scores = belief => {
     const options = X('options.of')(list(menu(pos.request)), 0n);
-    const task = { $: 'search.Moves', depth: replies ? 1n : 0n, public: belief.public, private: belief.private, options, scored: list([]), nodes: 0n };
-    const result = X('search')(X('fuel')(1000000n), task, seat(pos.me), 1000000n, STATIC);
+    const task = { $: 'search.Moves', depth: replies ? 1n : 0n, public: belief.public, private: belief.private, options, scored: list([]), tally: P['memo.tally.new']() };
+    const result = X('search')(X('fuel')(1000000n), task, seat(pos.me), 1000000n, STATIC, OFF);
     assert.equal(kind(result), 'Scores');
     return array(result.scored);
   };
@@ -410,13 +411,75 @@ function checkInvalid(pos) {
   checked('invalid');
 }
 
+
+// The memo changes no score. Charged reuse also spends and stops exactly where
+// a search without it does, budget or not; free reuse spends no more nodes and,
+// with the budget unspent, scores alike. A line whose leaves never ran out of
+// depth keeps its score at more depth.
+const scoring = analysis => json({ ...analysis, cached: null });
+function checkMemo(pos, reload = STATIC) {
+  for (const [depth, budget] of [[2, 20000], [4, 1500]]) {
+    const off = analyse(pos.position, depth, budget, reload, OFF);
+    assert.equal(scoring(analyse(pos.position, depth, budget, reload, CHARGED)), scoring(off), 'charged reuse searches as no memo does');
+    if (off.limited) continue;
+    const free = analyse(pos.position, depth, budget, reload, FREE);
+    assert.deepEqual(json(lines(free)), json(lines(off)), 'free reuse scores alike');
+    assert.ok(free.nodes <= off.nodes, 'free reuse spends no more nodes');
+    const deeper = analyse(pos.position, depth + 1, budget, reload);
+    if (!deeper.limited) lines(off).forEach((l, i) => { if (kind(l.reach) !== 'Cut') assert.equal(lines(deeper)[i].score, l.score, 'an uncut line holds at more depth'); });
+    checked(reload === STATIC ? 'memo' : 'memo, sampled');
+  }
+}
+
+// Two seats with no items, at most three shells and two HP: the analysis at
+// a depth past every line's end equals an independent search of the whole
+// load, with reloads valued statically and floats rounded only at the end.
+const roundWinner = notes => array(D('public_events')(notes)).find(e => kind(e) === 'RoundWon');
+function brute(worlds, notes, me) {
+  const won = roundWinner(notes);
+  if (won) return seatNumber(won.seat) === me ? WIN : 0;
+  const request = S('request')(worlds[0].state);
+  if (kind(request) === 'Draw') return X('static')(list(worlds.map(w => ({ $: 'types.World', state: w.state, weight: w.weight }))), seat(me));
+  const values = menu(request).map((_, index) => {
+    const groups = Map.groupBy(worlds.map(w => ({ ...S('answer')(w.state, BigInt(index)), weight: w.weight })), out => json(D('public_events')(out.notes)));
+    return sum([...groups.values()].map(outs => {
+      const mass = sum(outs.map(o => o.weight));
+      return mass * brute(outs.map(o => ({ state: o.state, weight: o.weight / mass })), outs[0].notes, me);
+    }));
+  });
+  return seatNumber(request.seat) === me ? Math.max(...values) : Math.min(...values);
+}
+function checkTinyLoads() {
+  for (const health of [1, 2]) for (const [live, blank] of [[1, 1], [2, 1], [1, 2], [0, 3], [3, 0]]) {
+    const cfg = config(2, [round({ health, live, blank })]);
+    const pos = positions(cfg, 2, 20)[0];
+    const analysis = analyse(pos.position, 16, 1000000, STATIC, OFF);
+    assert.equal(scoring(analyse(pos.position, 16, 1000000)), scoring(analysis));
+    const built = P['belief.build'](pos.position).belief;
+    const worlds = array(built.public).map(w => ({ state: w.state, weight: w.weight }));
+    menu(pos.request).forEach((_, index) => {
+      const line = lines(analysis)[index];
+      assert.notEqual(kind(line.reach), 'Cut', 'a tiny load is searched to its end');
+      const groups = Map.groupBy(worlds.map(w => ({ ...S('answer')(w.state, BigInt(index)), weight: w.weight })), out => json(D('public_events')(out.notes)));
+      const value = sum([...groups.values()].map(outs => {
+        const mass = sum(outs.map(o => o.weight));
+        return mass * brute(outs.map(o => ({ state: o.state, weight: o.weight / mass })), outs[0].notes, pos.me);
+      }));
+      assert.ok(Math.abs(line.score - value) <= 64, `tiny load ${health} HP ${live}L ${blank}B move ${index}: ${line.score} vs ${value}`);
+    });
+    checked('tiny load');
+    if (process.env.PLAYER_PROFILE) console.log('tiny', health, live, blank, Number(analysis.nodes), json(analysis.cached));
+  }
+}
+
 const started = performance.now();
-const t = Object.fromEntries(Object.entries({ checkForcedWin, checkRoundEnd, checkLongHistory, checkHandDeal, checkMergedDeal, checkNoReload, checkCertain, checkDeeper, checkPublicOnly, checkOutcomes, checkPolicy, checkDeepening, checkInvalid, analyse }).map(([k, f]) => [k, timed(k, f)]));
+const t = Object.fromEntries(Object.entries({ checkForcedWin, checkRoundEnd, checkLongHistory, checkHandDeal, checkMergedDeal, checkNoReload, checkCertain, checkDeeper, checkPublicOnly, checkOutcomes, checkPolicy, checkDeepening, checkInvalid, checkMemo, checkTinyLoads, analyse }).map(([k, f]) => [k, timed(k, f)]));
 t.checkForcedWin();
 t.checkRoundEnd();
 t.checkLongHistory();
 t.checkHandDeal();
 t.checkMergedDeal();
+t.checkTinyLoads();
 sample.forEach((pos, i) => {
   const analysis = t.analyse(pos.position, 1, 100000);
   checkAnalysis(analysis, 1, 100000);
@@ -428,7 +491,9 @@ sample.forEach((pos, i) => {
   if (i % 8 === 0) t.checkPolicy(pos, analysis);
   if (i % 16 === 0) t.checkDeepening(pos);
   if (i % 32 === 0) t.checkInvalid(pos);
+  if (i % 16 === 3) t.checkMemo(pos);
+  if (i % 32 === 5 && pos.cfg.table.$.endsWith('TwoSeats')) t.checkMemo(pos, sampled(4));
 });
-assert.ok(count['certain win'] > 0 && count['deeper forced win'] > 0 && count['public only'] > 0 && count['public only, with replies'] > 0 && privateMattered > 0 && count.deepening > 0 && count['no reload in reach'] > 0, `every property ran on a case that matters: ${json(count)}`);
+assert.ok(count['certain win'] > 0 && count['deeper forced win'] > 0 && count['public only'] > 0 && count['public only, with replies'] > 0 && privateMattered > 0 && count.deepening > 0 && count['no reload in reach'] > 0 && count.memo > 0 && count['memo, sampled'] > 0, `every property ran on a case that matters: ${json(count)}`);
 console.log(`player: ${sample.length} positions, ${((performance.now() - started) / 1000).toFixed(0)} s; checks ${json(count)}; private clues changed private scores ${privateMattered} times`);
 if (process.env.PLAYER_PROFILE) console.log(json(Object.fromEntries(Object.entries(spent).map(([k, v]) => [k, Math.round(v / 1000)]))));

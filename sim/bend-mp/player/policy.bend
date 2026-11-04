@@ -39,7 +39,7 @@ def pick.near(+near: List<&2, A.Line>, +seed: U32, +analysis: A.Analysis) -> A.P
 
 def pick(+analysis: A.Analysis, +gap: U32, +seed: U32) -> A.Pick:
   match analysis:
-    case A.Analysed{lines, _, +score, _, _, _}:
+    case A.Analysed{lines, _, +score, _, _, _, _}:
       pick.near(near(lines, U32.sub(score, U32.min(gap, score))), seed, analysis)
     case A.Invalid{_, _}:
       A.Unavailable{analysis}
@@ -47,7 +47,7 @@ def pick(+analysis: A.Analysis, +gap: U32, +seed: U32) -> A.Pick:
 def choose(+position: A.Position, level: A.Level) -> A.Pick:
   match level:
     case A.Level{depth, budget, gap, seed}:
-      pick(S.analyse(position, depth, budget, A.Static{}), gap, seed)
+      pick(S.analyse(position, depth, budget, A.Static{}, A.Charged{}), gap, seed)
 
 def line.at(lines: List<&2, A.Line>, +index: Nat) -> Maybe<&2, A.Line>:
   match lines:
@@ -67,7 +67,7 @@ def regret.of(found: Maybe<&2, A.Line>, +best: U32) -> Maybe<&2, U32>:
 # no legal move, rather than clamping it to another one.
 def regret(analysis: A.Analysis, +index: Nat) -> Maybe<&2, U32>:
   match analysis:
-    case A.Analysed{lines, _, score, _, _, _}:
+    case A.Analysed{lines, _, score, _, _, _, _}:
       regret.of(line.at(lines, index), score)
     case A.Invalid{_, _}:
       None{}
