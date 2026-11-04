@@ -6,7 +6,7 @@ import { modifyFields } from "foldkit/struct";
 import { aggregateUrl, isOnline } from "../../site/online.ts";
 import { type ArenaRoute, arenaHref, arenaStateOf, replayHref } from "../../site/route.ts";
 import { AGGREGATES } from "../aggregates.ts";
-import { CertainMistakes, Decisions, Download, MatchDetail, SeatsResponse } from "../api.ts";
+import { CertainMistakes, Decisions, Download, MatchDetailJson, SeatsResponse } from "../api.ts";
 import { withPotShares } from "./data.ts";
 import { INITIAL_ROWS, MORE_ROWS } from "./matches.ts";
 import { type Filter, Group, GROUPS, type Lazy, type LazyName, LoadFailure, Message, type Model, MOVED_TARGETS, type Replay, Target, type Viewport } from "./model.ts";
@@ -118,7 +118,7 @@ const LoadMatch = Command.define("LoadMatch", {
   args: { id: Schema.String },
   messages: [Message.SucceededMatch, Message.FailedMatch],
   execute: ({ id }) =>
-    getJson(`/api/match?id=${encodeURIComponent(id)}`, MatchDetail).pipe(
+    getJson(`/api/match?id=${encodeURIComponent(id)}`, MatchDetailJson).pipe(
       Effect.map((detail) => Message.SucceededMatch({ id, detail })),
       Effect.catch((error) => Effect.succeed(Message.FailedMatch({ id, error: describe(error) }))),
       Effect.provide(Http.layer),
