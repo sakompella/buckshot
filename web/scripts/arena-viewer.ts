@@ -2,7 +2,10 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
+import { Effect, Schema } from "effect";
+
 import { serveArenaViewer } from "../src/arena-viewer/server.ts";
+import { decodeArgs, runMain, ScriptError } from "../src/script.ts";
 
 // Serves the site (web/dist, from `bun run build`) with the arena viewer's API over the arena analysis database (docs/arena/database.md). With --regret it also shows the
 // regret table of a derived database (docs/arena/analysis/regret.md); without, the viewer has no regret. With --knowledge
@@ -11,28 +14,36 @@ import { serveArenaViewer } from "../src/arena-viewer/server.ts";
 
 const USAGE = "usage: bun scripts/arena-viewer.ts <db> [host] [port] [--regret <regret db>] [--knowledge <knowledge db>] [--certain-mistakes <opportunities db>]";
 
-const { positionals, values } = parseArgs({ allowPositionals: true, options: { regret: { type: "string" }, knowledge: { type: "string" }, "certain-mistakes": { type: "string" } } });
-const [dbPath, host = "127.0.0.1", port = "8790"] = positionals;
-const regretPath = values.regret;
-const knowledgePath = values.knowledge;
-const certainPath = values["certain-mistakes"];
+const Flags = Schema.Struct({ regret: Schema.optional(Schema.String), knowledge: Schema.optional(Schema.String), "certain-mistakes": Schema.optional(Schema.String) });
+
+const Port = Schema.NumberFromString.check(Schema.isInt());
+
+const usage = () => new ScriptError({ message: USAGE, exitCode: 1 });
 
 const isMissing = (path: string | undefined) => path !== undefined && !existsSync(path);
 
-if (dbPath === undefined || isMissing(dbPath) || isMissing(regretPath) || isMissing(knowledgePath) || isMissing(certainPath)) {
-  console.error(USAGE);
-  process.exit(1);
-}
+const program = Effect.gen(function* () {
+  const parsed = yield* Effect.try({ try: () => parseArgs({ allowPositionals: true, options: { regret: { type: "string" }, knowledge: { type: "string" }, "certain-mistakes": { type: "string" } } }), catch: usage });
+  const flags = yield* decodeArgs(Flags, USAGE)(parsed.values);
+  const [dbPath, host = "127.0.0.1", port = "8790"] = parsed.positionals;
+  const { regret: regretPath, knowledge: knowledgePath, "certain-mistakes": certainPath } = flags;
 
-const siteDir = fileURLToPath(new URL("../dist", import.meta.url));
+  if (dbPath === undefined || isMissing(dbPath) || isMissing(regretPath) || isMissing(knowledgePath) || isMissing(certainPath)) return yield* Effect.fail(usage());
 
-if (!existsSync(`${siteDir}/index.html`)) {
-  console.error(`no built site at ${siteDir}: run \`bun run build\` first`);
-  process.exit(1);
-}
+  const siteDir = fileURLToPath(new URL("../dist", import.meta.url));
 
-const server = serveArenaViewer(dbPath, siteDir, host, Number(port), regretPath, knowledgePath, certainPath);
+  if (!existsSync(`${siteDir}/index.html`)) return yield* Effect.fail(new ScriptError({ message: `no built site at ${siteDir}: run \`bun run build\` first`, exitCode: 1 }));
 
-console.log(
-  `arena viewer: ${server.url.href} reading ${[dbPath, regretPath, knowledgePath, certainPath].filter((path) => path !== undefined).join(" and ")}`,
-);
+  const listenPort = yield* Schema.decodeUnknownEffect(Port)(port).pipe(Effect.mapError(usage));
+
+  const server = yield* Effect.acquireRelease(
+    Effect.try({ try: () => serveArenaViewer(dbPath, siteDir, host, listenPort, regretPath, knowledgePath, certainPath), catch: (cause) => new ScriptError({ message: `cannot serve: ${String(cause)}`, exitCode: 1 }) }),
+    (running) => Effect.promise(() => running.stop()),
+  );
+
+  console.log(`arena viewer: ${server.url.href} reading ${[dbPath, regretPath, knowledgePath, certainPath].filter((path) => path !== undefined).join(" and ")}`);
+
+  return yield* Effect.never;
+}).pipe(Effect.scoped);
+
+await runMain(program);
