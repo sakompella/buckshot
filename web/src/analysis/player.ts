@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { Schema } from "effect";
@@ -14,8 +14,6 @@ import { type GameEvent as Event, GameEvent, Item, type LearnedSecret, Move, Sea
 // returns pass into it unchanged. This module only marshals: a player's own log
 // and the public board go into Bend, shell orders and analyses come out. The
 // machine state, with its hidden gun, never enters.
-
-const PINNED_BEND = "/nix/store/szxlh9bw7pb8jp7gp8biw6j84r0fc2i3-bend-2.0.36/bin/bend";
 
 const PLAYER_SOURCE = new URL("../../../sim/bend-mp/analysis.bend", import.meta.url).pathname;
 
@@ -279,11 +277,11 @@ export interface Player {
   readonly analyse: (input: PlayerInput, limits: Limits, reload: Reload, memo?: Memo) => Analysis;
 }
 
-/** Builds the player into `dir` (with $BEND, else `bend` on PATH, else the pinned build) and wraps its exports. */
+/** Builds the player into `dir` (with $BEND, else `bend` on PATH) and wraps its exports. */
 export const loadPlayer = async (dir: string): Promise<Player> => {
-  const bend = process.env["BEND"] ?? Bun.which("bend") ?? (existsSync(PINNED_BEND) ? PINNED_BEND : undefined);
+  const bend = process.env["BEND"] ?? Bun.which("bend") ?? undefined;
 
-  if (bend === undefined) throw new Error("bend not found: set BEND to a Bend 2.0.36 binary");
+  if (bend === undefined) throw new Error("bend not found: run inside `nix develop`, or set BEND to the pinned Bend binary");
 
   const output = join(dir, "player.mjs");
   const build = Bun.spawnSync([bend, PLAYER_SOURCE, "-o", output], { stdout: "pipe", stderr: "pipe" });

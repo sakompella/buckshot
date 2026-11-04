@@ -14,9 +14,8 @@ observation and privacy all come from the machine. See
     bun install
     bun run dev        # builds generated/rules.mjs from sim/bend-mp/web.bend, then serves http://localhost:5173/
 
-`bun run rules` needs Bend 2.0.36: `$BEND`, else `bend` on PATH, else the
-pinned Nix store path in `scripts/build-rules.ts`. `nix develop` at the repo
-root provides it.
+`bun run rules` needs the pinned Bend (2.0.39): `$BEND`, else `bend` on PATH.
+`nix develop` at the repo root provides both.
 
 Checks:
 
