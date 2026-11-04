@@ -8,7 +8,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { list, array, kind, seatNumber } from './reference-adapter.mjs';
-import { build, makeRandom, normalize, asAbstract } from './machine-items-lib.mjs';
+import { build, makeRandom, normalize } from './machine-items-lib.mjs';
 
 const GAMES_PER_TABLE = Number(process.env.FUZZ_GAMES ?? 500);
 const MAX_STEPS = Number(process.env.FUZZ_STEPS ?? 60);
@@ -16,12 +16,12 @@ const MAX_STEPS = Number(process.env.FUZZ_STEPS ?? 60);
 const dir = mkdtempSync(join(tmpdir(), 'bend-mp-simple-fuzz-'));
 const bridge = build(dir, 'bridge', '../simple-abstract.bend'), abstract = build(dir, 'abstract', '../abstract.bend');
 const SA = (await import(bridge)).default, A = (await import(abstract)).default;
-const N = name => SA[`simple/main.${name}`], M = name => SA[`sm/main.${name}`], D = name => SA[`domain.${name}`];
-const notesOf = s => SA['simple/state.state.notes'](s);
+const N = name => SA[`simple/main:${name}`], M = name => SA[`sm/main:${name}`], D = name => SA[`domain:${name}`];
+const notesOf = s => SA['simple/state:state.notes'](s);
 const { random, randomConfig } = makeRandom(0x73696d70);
 
 const sockets = n => n === 2 ? [1, 3] : Array.from({ length: n }, (_, i) => i);
-const seatTag = s => ({ $: `domain.Seat${s}` });
+const seatTag = s => ({ $: `Seat${s}` });
 const json = x => JSON.stringify(normalize(x));
 const count = { refines: 0, valid: 0, board: 0, draws: 0, menus: 0, privacy: 0, schedule: 0 };
 const coverage = { games: 0, points: 0, finished: 0, itemDraws: 0, distributions: 0 };
@@ -111,7 +111,7 @@ function checkPrivacy(game, s) {
 // was cut by another seat's items (a table cap binding across seats).
 function alone(x, seat) {
   const key = `s${seat}`;
-  const empty = { $: 'domain.Slots', ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`s${i}`, { $: 'None' }])) };
+  const empty = { $: 'Slots', ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`s${i}`, { $: 'None' }])) };
   const others = (ring, f) => Object.fromEntries(Object.entries(ring).map(([k, v]) => [k, /^s[0-3]$/.test(k) && k !== key ? f(v) : v]));
   return { ...x, players: others(x.players, p => ({ ...p, slots: empty })), grabs: { ...x.grabs, holding: others(x.grabs.holding, () => ({ $: 'None' })) } };
 }
@@ -132,7 +132,7 @@ function watchDistributions(game, x, steps) {
         const order = [...game.seats.filter(s => s > game.lastTaker), ...game.seats.filter(s => s <= game.lastTaker)];
         same('schedule', 'take goes round-robin', order.find(s => takers.includes(s)), seatNumber(step.seat), game);
         game.lastTaker = seatNumber(step.seat);
-        const pool = state => array(SA['sm/items.pool'](state, step.seat)).length;
+        const pool = state => array(SA['sm/items:pool'](state, step.seat)).length;
         if (pool(x) < pool(alone(x, seatNumber(step.seat)))) game.bound.add(game.distribution);
       }
       if (kind(step.move) === 'Place') same('schedule', 'place in the first free slot', prompt.menu.head, step.move, game);
@@ -191,7 +191,7 @@ function play(config, label, seats) {
 const started = performance.now();
 try {
   for (const seats of [2, 3, 4]) for (let trial = 0; trial < GAMES_PER_TABLE; trial++) {
-    play(asAbstract(randomConfig(seats)), `${seats} seats #${trial}`, sockets(seats));
+    play(randomConfig(seats), `${seats} seats #${trial}`, sockets(seats));
     coverage.games++;
   }
 } catch (error) {

@@ -3,17 +3,17 @@
 // seeded random item games (and some no-item ones), machine against reference.
 import assert from 'node:assert/strict';
 import { list, array, kind, seatNumber, tag, requestJSON } from './reference-adapter.mjs';
-import { loadModels, makeRandom, normalize, asAbstract } from './machine-items-lib.mjs';
+import { loadModels, makeRandom, normalize } from './machine-items-lib.mjs';
 
 const GAMES_PER_TABLE = Number(process.env.FUZZ_GAMES ?? 500);
 const SKIPPED = new Set((process.env.FUZZ_SKIP ?? '').split(',')); // lets fuzz_mutations.py see what the other properties catch alone
 const MAX_STEPS = Number(process.env.FUZZ_STEPS ?? 50);
 
 const { M, R, A, close } = await loadModels('bend-mp-item-fuzz-', { abstract: true });
-const mapped = state => A.ref(asAbstract(state));
+const mapped = state => A.ref(state);
 const { random, randomConfig, answerFor } = makeRandom(0x66757a7a);
 
-const OBSERVE = '../domain.observe', HEAR = '../domain.hear', RESOLVE = '../domain.resolve';
+const OBSERVE = '../domain:observe', HEAR = '../domain:hear', RESOLVE = '../domain:resolve';
 const sockets = n => n === 2 ? [1, 3] : Array.from({ length: n }, (_, i) => i);
 const count = { step_matches: 0, observe_matches: 0, legal_exact: 0, legal_accepted: 0, privacy: 0, reachable_valid: 0, state_roundtrip: 0 };
 const coverage = { games: 0, boundaries: 0, noItemGames: 0, itemGames: 0, choosePoints: 0, finished: 0, itemMoves: 0, hiddenChanged: 0 };
@@ -90,7 +90,7 @@ const RING_TABLE = { Duo: 'TwoSeats', Trio: 'ThreeSeats', Quad: 'FourSeats' };
 // A.Valid at a reachable request point: the item normal form, the table
 // tie of the seat ring and the Grabs rings, the round bound and the turn facts.
 function checkValid(game) {
-  const s = asAbstract(game.m);
+  const s = game.m;
   same('reachable_valid', 'Valid normal form', s, A.normalize_items(s), game);
   const { grabbing, holding, granted, intake } = game.m.grabs;
   const table = kind(game.m.world.config.table);

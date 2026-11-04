@@ -5,7 +5,7 @@ Research on Buckshot Roulette: a multiplayer rules library in Bend, a browser ta
 - **Unfinished work** and what each branch needs next: `_work/work-in-progress.md` (local, gitignored). Read it first when it exists.
 - **Rules live only in Bend** (`sim/bend-mp/`). TypeScript may call Bend exports but never re-implements rules.
 - **Never commit** decompiled game code, original game assets or text, raw tournament data, anything under `_work/` or `.audit/`, or in-progress trackers (status notes, progress logs, handoffs, plans). Trackers go in `_work/` or `_*.md`. If one gets committed on a branch, purge it from the branch's history before the merge. Account ids and emails stay out of committed files.
-- **Toolchain:** `nix develop` gives the pinned Bend 2.0.36, bun and Python.
+- **Toolchain:** `nix develop` gives the pinned Bend 2.0.39, bun and Python.
 - **Before committing:**
   - Bend changes: `bash sim/bend-mp/check.sh`.
   - `web/` changes: from `web/`, run `bun run lint` (0 warnings), `bun run typecheck` and `bun run test`. Use `bun run test`, never bare `bun test`.

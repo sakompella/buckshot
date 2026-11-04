@@ -15,12 +15,12 @@ const WIN = 1000000;
 const dir = mkdtempSync(join(tmpdir(), 'bend-mp-player-'));
 const P = (await import(build(dir, 'player', '../player/main.bend'))).default;
 rmSync(dir, { recursive: true });
-const S = name => P[`../simple/main.${name}`], D = name => P[`../domain.${name}`], X = name => P[`search.${name}`];
+const S = name => P[`../simple/main:${name}`], D = name => P[`../domain:${name}`], X = name => P[`search:${name}`];
 const { random } = makeRandom(0x706c6179);
 
 const sockets = n => n === 2 ? [1, 3] : Array.from({ length: n }, (_, i) => i);
 const seat = n => tag(`Seat${n}`);
-const json = x => JSON.stringify(x, (_, v) => typeof v === 'bigint' ? Number(v) : v);
+const json = x => JSON.stringify(x);
 const close = (a, b, label) => assert.ok(Math.abs(a - b) < 1e-4, `${label}: ${a} vs ${b}`);
 const sum = xs => xs.reduce((a, b) => a + b, 0);
 const count = {};
@@ -28,11 +28,11 @@ const checked = name => { count[name] = (count[name] ?? 0) + 1; };
 const spent = {};
 const timed = (name, f) => (...args) => { const t = performance.now(); try { return f(...args); } finally { spent[name] = (spent[name] ?? 0) + performance.now() - t; } };
 
-const position = (cfg, board, log, me) => ({ $: 'types.Position', config: cfg, board, log: list(log), me: seat(me) });
-const STATIC = { $: 'types.Static' }, EXPECTED_DEAL = { $: 'types.ExpectedDeal' };
-const sampled = count => ({ $: 'types.Sampled', count: BigInt(count) });
-const OFF = { $: 'types.Off' }, CHARGED = { $: 'types.Charged' }, FREE = { $: 'types.Free' };
-const analyse = (pos, depth, budget, reload = STATIC, memo = CHARGED) => P.analyse(pos, BigInt(depth), BigInt(budget), reload, memo);
+const position = (cfg, board, log, me) => ({ $: 'Position', config: cfg, board, log: list(log), me: seat(me) });
+const STATIC = { $: 'Static' }, EXPECTED_DEAL = { $: 'ExpectedDeal' };
+const sampled = count => ({ $: 'Sampled', count: Number(count) });
+const OFF = { $: 'Off' }, CHARGED = { $: 'Charged' }, FREE = { $: 'Free' };
+const analyse = (pos, depth, budget, reload = STATIC, memo = CHARGED) => P.analyse(pos, Number(depth), Number(budget), reload, memo);
 const lines = analysis => array(analysis.lines);
 const menu = request => [request.moves.head, ...array(request.moves.tail)];
 
@@ -52,7 +52,7 @@ function positions(cfg, players, steps) {
       found.push({ cfg, state, me, request, log: [...logs[me]], position: position(cfg, point.board, logs[me], me) });
       answer = random() % menu(request).length;
     } else answer = random() % (Number(request.range.extra) + 2);
-    stepped = S('answer')(state, BigInt(answer));
+    stepped = S('answer')(state, Number(answer));
     state = stepped.state;
     hear(stepped.notes);
   }
@@ -68,12 +68,12 @@ const sample = [2, 3, 4].flatMap(n => Array.from({ length: GAMES }, () => positi
 function observed(worlds, index, me) {
   const outs = [];
   for (const world of worlds) {
-    const played = S('answer')(world.state, BigInt(index));
+    const played = S('answer')(world.state, Number(index));
     const request = S('request')(played.state);
     const add = (notes, weight) => outs.push({ weight, public: json(D('public_events')(list(notes))), private: json(D('hear')(list(notes), seat(me))) });
     if (kind(request) === 'Draw' && kind(request.label) === 'PhoneIndex') {
       const values = Number(request.range.extra) + 2;
-      for (let k = 0; k < values; k++) add([...array(played.notes), ...array(S('answer')(played.state, BigInt(k)).notes)], world.weight / values);
+      for (let k = 0; k < values; k++) add([...array(played.notes), ...array(S('answer')(played.state, Number(k)).notes)], world.weight / values);
     } else add(array(played.notes), world.weight);
   }
   return outs;
@@ -81,11 +81,11 @@ function observed(worlds, index, me) {
 const masses = (outs, key) => [...Map.groupBy(outs, out => out[key]).values()].map(group => sum(group.map(out => out.weight))).sort();
 
 function checkOutcomes(pos) {
-  const built = P['belief.build'](pos.position);
+  const built = P['belief:build'](pos.position);
   assert.equal(kind(built), 'Built', built.reason);
   const { public: pub, private: priv } = built.belief;
   for (const [index] of menu(pos.request).entries()) {
-    const branches = array(X('outcomes')(pub, priv, BigInt(index), seat(pos.me)));
+    const branches = array(X('outcomes')(pub, priv, Number(index), seat(pos.me)));
     close(sum(branches.map(b => b.public_p)), 1, 'public probabilities sum to one');
     close(sum(branches.map(b => b.private_p)), 1, 'private probabilities sum to one');
     for (const b of branches) {
@@ -126,7 +126,7 @@ function checkCertain(pos, analysis) {
     if (l.score !== WIN && l.score !== 0) continue;
     let played = S('answer')(pos.state, l.index);
     const request = S('request')(played.state);
-    if (kind(request) === 'Draw' && kind(request.label) === 'PhoneIndex') played = S('answer')(played.state, 0n);
+    if (kind(request) === 'Draw' && kind(request.label) === 'PhoneIndex') played = S('answer')(played.state, 0);
     const events = array(D('public_events')(played.notes));
     const won = events.find(e => kind(e) === 'RoundWon');
     const died = events.some(e => kind(e) === 'Died' && seatNumber(e.seat) === pos.me);
@@ -165,7 +165,7 @@ function checkPolicy(pos, analysis) {
   for (const gap of [0, 50000, WIN]) {
     const seen = new Set();
     for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
-      const level = { $: 'types.Level', depth: 1n, budget: 100000n, gap, seed };
+      const level = { $: 'Level', depth: 1, budget: 100000, gap, seed };
       const pick = P.choose(pos.position, level);
       if (seed === 1) assert.deepEqual(json(P.choose(pos.position, level)), json(pick), 'choose is deterministic for a seed');
       assert.equal(kind(pick), 'Picked');
@@ -182,7 +182,7 @@ function checkPolicy(pos, analysis) {
     assert.ok(r.value >= 0);
   }
   assert.deepEqual(json(P.regret(analysis, analysis.best)), json({ $: 'Some', value: 0 }), 'the best move has no regret');
-  assert.equal(kind(P.regret(analysis, BigInt(lines(analysis).length))), 'None', 'an index past the menu has no regret');
+  assert.equal(kind(P.regret(analysis, Number(lines(analysis).length))), 'None', 'an index past the menu has no regret');
   checked('regret');
 }
 
@@ -195,13 +195,13 @@ let privateMattered = 0, clued = 0;
 function checkPublicOnly(pos) {
   if (!pos.log.some(h => kind(h) === 'Learned')) return;
   const replies = clued++ % 4 === 0;
-  const withClues = P['belief.build'](pos.position).belief;
-  const without = P['belief.build'](position(pos.cfg, pos.position.board, pos.log.filter(h => kind(h) !== 'Learned'), pos.me)).belief;
+  const withClues = P['belief:build'](pos.position).belief;
+  const without = P['belief:build'](position(pos.cfg, pos.position.board, pos.log.filter(h => kind(h) !== 'Learned'), pos.me)).belief;
   assert.equal(json(without.public), json(withClues.public));
   const scores = belief => {
-    const options = X('options.of')(list(menu(pos.request)), 0n);
-    const task = { $: 'search.Moves', depth: replies ? 1n : 0n, public: belief.public, private: belief.private, options, scored: list([]), tally: P['memo.tally.new']() };
-    const result = X('search')(X('fuel')(1000000n), task, seat(pos.me), 1000000n, STATIC, OFF);
+    const options = X('options.of')(list(menu(pos.request)), 0);
+    const task = { $: 'Moves', depth: replies ? 1 : 0, public: belief.public, private: belief.private, options, scored: list([]), tally: P['memo:tally.new']() };
+    const result = X('search')(X('fuel')(1000000), task, seat(pos.me), 1000000, STATIC, OFF);
     assert.equal(kind(result), 'Scores');
     return array(result.scored);
   };
@@ -242,7 +242,7 @@ function scripted(cfg, players, pick, stop) {
       if (stop(at)) return at;
       answer = pick(request, choices++);
     } else assert.equal(kind(request), 'Draw', 'a scripted game ends at a choice');
-    stepped = S('answer')(state, BigInt(answer));
+    stepped = S('answer')(state, Number(answer));
     state = stepped.state;
     hear(stepped.notes);
   }
@@ -259,7 +259,7 @@ function checkRoundEnd() {
   const cfg = config(2, [round({ health: 5 }), round({ health: 5 })]);
   const pos = scripted(cfg, 2, (request, n) => n === 6 ? shootAt(request, seatNumber(request.seat)) : shootOther(request), at => at.choices === 7);
   const win = shootOther(pos.request);
-  const played = S('answer')(pos.state, BigInt(win));
+  const played = S('answer')(pos.state, Number(win));
   assert.ok(array(D('public_events')(played.notes)).some(e => kind(e) === 'RoundWon'), 'the shot wins the round');
   assert.equal(kind(S('request')(played.state)), 'Choose', 'the next round needs no draw');
   for (const depth of [1, 2, 3]) {
@@ -278,7 +278,7 @@ function checkRoundEnd() {
 function checkLongHistory() {
   const cfg = config(2, [round({ health: 10000, live: null, blank: 0, amount: 0 })]);
   const pos = scripted(cfg, 2, shootOther, at => at.loads >= 100);
-  const built = P['belief.build'](pos.position);
+  const built = P['belief:build'](pos.position);
   assert.equal(kind(built), 'Built', built.reason);
   for (const worlds of [array(built.belief.public), array(built.belief.private)]) {
     assert.ok(worlds.length > 0 && worlds.every(w => Number.isFinite(w.weight) && w.weight > 0), 'every world weight is positive and finite');
@@ -293,12 +293,12 @@ function checkLongHistory() {
 // The expected-deal leaf
 // ======================
 
-const E = name => P[`evaluation.${name}`];
+const E = name => P[`evaluation:${name}`];
 const gunOf = state => array(state.world.gun);
 const allAlike = shells => shells.length > 0 && shells.every(s => kind(s) === kind(shells[0]));
-const worlds = weighted => list(weighted.map(([state, weight]) => ({ $: 'types.World', state, weight })));
-const expectedDeal = (publicWorlds, privateWorlds, me) => P['deal.expected'](worlds(publicWorlds), worlds(privateWorlds), seat(me));
-const sampledDeal = (publicWorlds, privateWorlds, me, count) => P['deal.sampled'](worlds(publicWorlds), worlds(privateWorlds), seat(me), BigInt(count));
+const worlds = weighted => list(weighted.map(([state, weight]) => ({ $: 'World', state, weight })));
+const expectedDeal = (publicWorlds, privateWorlds, me) => P['deal:expected'](worlds(publicWorlds), worlds(privateWorlds), seat(me));
+const sampledDeal = (publicWorlds, privateWorlds, me, count) => P['deal:sampled'](worlds(publicWorlds), worlds(privateWorlds), seat(me), Number(count));
 const SAMPLES = 400;
 
 // Plays every draw sequence from `state` to the next choice, with no merging:
@@ -307,7 +307,7 @@ function plainDeals(state, me, p = 1) {
   const request = S('request')(state);
   if (kind(request) !== 'Draw') return [[p, E('state')(state, seat(me), allAlike(gunOf(state)))]];
   const values = Number(request.range.extra) + 2;
-  return Array.from({ length: values }, (_, k) => plainDeals(S('answer')(state, BigInt(k)).state, me, p / values)).flat();
+  return Array.from({ length: values }, (_, k) => plainDeals(S('answer')(state, Number(k)).state, me, p / values)).flat();
 }
 
 const plainDeal = (state, me) => sum(plainDeals(state, me).map(([p, value]) => p * value));
@@ -326,7 +326,7 @@ function checkHandDeal() {
   let reloads = 0;
   for (const [index, move] of menu(pos.request).entries()) {
     if (kind(move) !== 'Shoot') continue;
-    const played = S('answer')(pos.state, BigInt(index)).state;
+    const played = S('answer')(pos.state, Number(index)).state;
     assert.equal(kind(S('request')(played)), 'Draw', 'the last shell reloads');
     const deals = [[0, 0], [0, 1], [1, 0], [1, 1]].map(items => {
       let state = played;
@@ -334,7 +334,7 @@ function checkHandDeal() {
       for (let request = S('request')(state); kind(request) === 'Draw'; request = S('request')(state)) {
         const item = kind(request.label) === 'ItemChoice';
         if (item) assert.equal(Number(request.range.extra), 0, 'each seat draws from saw and beer');
-        state = S('answer')(state, BigInt(item ? left.shift() : 0)).state;
+        state = S('answer')(state, Number(item ? left.shift() : 0)).state;
       }
       assert.equal(left.length, 0, 'each seat draws once');
       return E('state')(state, seat(pos.me), false) / 4;
@@ -380,11 +380,11 @@ function checkMergedDeal() {
         previous = state;
         reloads++;
         checked('merged deal');
-        while (kind(S('request')(state)) === 'Draw') state = S('answer')(state, BigInt(random() % (Number(S('request')(state).range.extra) + 2))).state;
+        while (kind(S('request')(state)) === 'Draw') state = S('answer')(state, Number(random() % (Number(S('request')(state).range.extra) + 2))).state;
         continue;
       }
       const answer = kind(request) === 'Choose' ? random() % menu(request).length : random() % (Number(request.range.extra) + 2);
-      state = S('answer')(state, BigInt(answer)).state;
+      state = S('answer')(state, Number(answer)).state;
     }
     assert.ok(reloads > 0, `amount ${amount} reached a reload`);
   }
@@ -406,8 +406,8 @@ function checkInvalid(pos) {
   assert.equal(kind(analysis), 'Invalid', 'only the player to move is analysed');
   if (!pos.cfg.table.$.endsWith('TwoSeats')) for (const reload of [EXPECTED_DEAL, sampled(4)]) assert.equal(kind(analyse(pos.position, 1, 1000, reload)), 'Invalid', 'a leaf that deals the reload takes two seats only');
   assert.equal(kind(analyse(pos.position, 1, 1000, sampled(0))), 'Invalid', 'the sampled leaf needs a deal');
-  assert.equal(kind(P.choose({ ...pos.position, me: seat(other) }, { $: 'types.Level', depth: 1n, budget: 1000n, gap: 0, seed: 0 })), 'Unavailable');
-  assert.equal(kind(P.regret(analysis, 0n)), 'None');
+  assert.equal(kind(P.choose({ ...pos.position, me: seat(other) }, { $: 'Level', depth: 1, budget: 1000, gap: 0, seed: 0 })), 'Unavailable');
+  assert.equal(kind(P.regret(analysis, 0)), 'None');
   checked('invalid');
 }
 
@@ -439,9 +439,9 @@ function brute(worlds, notes, me) {
   const won = roundWinner(notes);
   if (won) return seatNumber(won.seat) === me ? WIN : 0;
   const request = S('request')(worlds[0].state);
-  if (kind(request) === 'Draw') return X('static')(list(worlds.map(w => ({ $: 'types.World', state: w.state, weight: w.weight }))), seat(me));
+  if (kind(request) === 'Draw') return X('static')(list(worlds.map(w => ({ $: 'World', state: w.state, weight: w.weight }))), seat(me));
   const values = menu(request).map((_, index) => {
-    const groups = Map.groupBy(worlds.map(w => ({ ...S('answer')(w.state, BigInt(index)), weight: w.weight })), out => json(D('public_events')(out.notes)));
+    const groups = Map.groupBy(worlds.map(w => ({ ...S('answer')(w.state, Number(index)), weight: w.weight })), out => json(D('public_events')(out.notes)));
     return sum([...groups.values()].map(outs => {
       const mass = sum(outs.map(o => o.weight));
       return mass * brute(outs.map(o => ({ state: o.state, weight: o.weight / mass })), outs[0].notes, me);
@@ -455,12 +455,12 @@ function checkTinyLoads() {
     const pos = positions(cfg, 2, 20)[0];
     const analysis = analyse(pos.position, 16, 1000000, STATIC, OFF);
     assert.equal(scoring(analyse(pos.position, 16, 1000000)), scoring(analysis));
-    const built = P['belief.build'](pos.position).belief;
+    const built = P['belief:build'](pos.position).belief;
     const worlds = array(built.public).map(w => ({ state: w.state, weight: w.weight }));
     menu(pos.request).forEach((_, index) => {
       const line = lines(analysis)[index];
       assert.notEqual(kind(line.reach), 'Cut', 'a tiny load is searched to its end');
-      const groups = Map.groupBy(worlds.map(w => ({ ...S('answer')(w.state, BigInt(index)), weight: w.weight })), out => json(D('public_events')(out.notes)));
+      const groups = Map.groupBy(worlds.map(w => ({ ...S('answer')(w.state, Number(index)), weight: w.weight })), out => json(D('public_events')(out.notes)));
       const value = sum([...groups.values()].map(outs => {
         const mass = sum(outs.map(o => o.weight));
         return mass * brute(outs.map(o => ({ state: o.state, weight: o.weight / mass })), outs[0].notes, pos.me);

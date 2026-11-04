@@ -37,9 +37,9 @@ try {
     compare(grantedR, grantedM);
     assert.deepEqual(normalize(grantedM.notes), normalize(grantedR.notes), 'unchecked jam chain must preserve checked bits and note order');
     for (const direction of ['Clockwise', 'CounterClockwise']) {
-      const deadR = { ...reference, host: { ...reference.host, direction: tag(direction), seats: ring(reference.host.seats, (props, key) => ({ ...props, health: key === `s${actor}` ? 0n : props.health })) } };
-      const deadM = { ...machine, world: { ...machine.world, direction: tag(direction) }, players: ring(machine.players, (s, key) => key === `s${actor}` ? { ...s, health: 0n } : s) };
-      assert.deepEqual(normalize(M['rules.next_turn'](M['state.players.health'](deadM.players), deadM.world.direction, seat(actor))), normalize(R['rules.GetNextTurn_Socket'](deadR.host, seat(actor))));
+      const deadR = { ...reference, host: { ...reference.host, direction: tag(direction), seats: ring(reference.host.seats, (props, key) => ({ ...props, health: key === `s${actor}` ? 0 : props.health })) } };
+      const deadM = { ...machine, world: { ...machine.world, direction: tag(direction) }, players: ring(machine.players, (s, key) => key === `s${actor}` ? { ...s, health: 0 } : s) };
+      assert.deepEqual(normalize(M['rules:next_turn'](M['state:players.health'](deadM.players), deadM.world.direction, seat(actor))), normalize(R['rules:GetNextTurn_Socket'](deadR.host, seat(actor))));
     }
     for (const shell of ['Live', 'Blank']) {
       const sawR = { ...reference, host: { ...reference.host, sawed: true, gun: list([tag(shell)]) } };
@@ -76,15 +76,15 @@ try {
     }
   }
   const idle = replay(twoBlank, [0, 0, 0]).machine;
-  const forgedMove = tag('Choice', { seat: seat(1), index: 0n, move: tag('Shoot', { target: seat(3) }) });
+  const forgedMove = tag('Choice', { seat: seat(1), index: 0, move: tag('Shoot', { target: seat(3) }) });
   assert.deepEqual(normalize(M['answer.choice'](idle, forgedMove)), normalize(M.pickup(idle, seat(1))), 'effect must reread typed options and ignore Choice.move');
   const initial = M.start(twoBlank).state;
-  const dead = ring(initial.players, s => ({ ...s, health: 0n }));
+  const dead = ring(initial.players, s => ({ ...s, health: 0 }));
   const terminals = [
-    { phase: { $: 'state.Ended' } },
-    { phase: { $: 'state.Blocked', holder: maybe(null) } },
-    { phase: { $: 'state.Aim', seat: seat(1) }, players: dead },
-    { phase: { $: 'state.NeedSwap', load: tag('Load', { live: 0n, blank: 0n }), shells: nil, i: 0n } },
+    { phase: { $: 'Ended' } },
+    { phase: { $: 'Blocked', holder: maybe(null) } },
+    { phase: { $: 'Aim', seat: seat(1) }, players: dead },
+    { phase: { $: 'NeedSwap', load: tag('Load', { live: 0, blank: 0 }), shells: nil, i: 0 } },
   ];
   for (const { phase, players = initial.players } of terminals) {
     const state = { ...initial, phase, players, notes: list([tag('Shown', { event: tag('MatchConcluded') })]) };
@@ -95,7 +95,7 @@ try {
     assert.deepEqual(array(ran.notes), []);
     assert.deepEqual(array(ran.tape).map(Number), [1, 2]);
   }
-  const exhausted = { ...initial, phase: { $: 'state.NeedBatch' }, world: { ...initial.world, decks: { ...initial.world.decks, two: nil } } };
+  const exhausted = { ...initial, phase: { $: 'NeedBatch' }, world: { ...initial.world, decks: { ...initial.world.decks, two: nil } } };
   assert.equal(requestJSON(M.point(exhausted).request).kind, 'Stuck');
   assert.deepEqual(plain(M.answer(exhausted, 0).state), plain(exhausted));
   assert.deepEqual(array(M.run(5, exhausted, list([1, 2])).tape).map(Number), [1, 2]);
