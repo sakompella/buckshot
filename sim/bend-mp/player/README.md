@@ -52,6 +52,7 @@ A decision node is keyed by both beliefs, each world's state spelled out in full
 - `memo.bend` keys beliefs and keeps the memo of decision nodes and deal leaves.
 - `policy.bend` selects a move from completed analysis.
 - `main.bend` is the stable export entry point.
+- `parallel.bend` (prototype) is `search.bend`'s search with the sampled leaf's deals and, optionally, the root moves forked for a native build's threads. `test/parallel.mjs` checks it against `search.bend`.
 
 ## Score and starting weights
 
