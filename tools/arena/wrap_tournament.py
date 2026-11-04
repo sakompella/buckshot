@@ -161,8 +161,16 @@ def stage_regret(live: Path, scored: Path | None, staged: Path) -> str:
     added = 0
     if scored is not None:
         db.execute("ATTACH ? AS scored", (str(scored),))
-        added = db.execute("SELECT COUNT(*) FROM scored.regret").fetchone()[0]
-        db.execute(f"INSERT INTO regret ({REGRET_COLUMNS}, reload, samples) SELECT {REGRET_COLUMNS}, 'static', 0 FROM scored.regret")
+        # The scorer picks matches by name, and names repeat across tournaments, so it can rescore decisions the live
+        # file already holds. Those rows must equal the live ones (timing aside); they are then left out, not added twice.
+        key = "s.match_id = r.match_id AND s.ordinal = r.ordinal AND s.evaluator = r.evaluator AND s.max_depth = r.max_depth AND s.budget = r.budget AND r.reload = 'static' AND r.samples = 0"
+        same = " AND ".join(f"s.{column} IS r.{column}" for column in REGRET_COLUMNS.split(", ") if column != "ms")
+        rescored = db.execute(f"SELECT COUNT(*) FROM scored.regret s JOIN regret r ON {key}").fetchone()[0]
+        differing = db.execute(f"SELECT COUNT(*) FROM scored.regret s JOIN regret r ON {key} WHERE NOT ({same})").fetchone()[0]
+        if differing:
+            raise Stop(f"{differing} rescored regret rows differ from the live rows for the same decision")
+        added = db.execute("SELECT COUNT(*) FROM scored.regret").fetchone()[0] - rescored
+        db.execute(f"INSERT INTO regret ({REGRET_COLUMNS}, reload, samples) SELECT {REGRET_COLUMNS}, 'static', 0 FROM scored.regret s WHERE NOT EXISTS (SELECT 1 FROM regret r WHERE {key})")
         db.commit()
         db.execute("DETACH scored")
     db.execute("DROP TABLE IF EXISTS evaluator_equivalence")

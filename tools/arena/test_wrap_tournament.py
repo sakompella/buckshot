@@ -121,6 +121,24 @@ class Regret(unittest.TestCase):
         rows = sqlite3.connect(d / "staged.sqlite").execute("SELECT match_id, reload, samples FROM regret ORDER BY match_id, ordinal").fetchall()
         self.assertEqual(rows, [("1", "static", 0), ("1", "static", 0), ("2", "static", 0)])
 
+    def test_rescored_rows_that_equal_the_live_ones_are_not_added_again(self):
+        d = tmp()
+        make_regret(d / "live.sqlite", [("1", 1), ("1", 2)])
+        make_regret(d / "new.sqlite", [("1", 2), ("2", 1)], with_reload=False)
+        note = w.stage_regret(d / "live.sqlite", d / "new.sqlite", d / "staged.sqlite")
+        self.assertIn("2 + 1 = 3", note)
+
+    def test_rescored_rows_that_differ_from_the_live_ones_stop(self):
+        d = tmp()
+        make_regret(d / "live.sqlite", [("1", 1)])
+        make_regret(d / "new.sqlite", [("1", 1)], with_reload=False)
+        db = sqlite3.connect(d / "new.sqlite")
+        db.execute("UPDATE regret SET regret = 5")
+        db.commit()
+        db.close()
+        with self.assertRaises(w.Stop):
+            w.stage_regret(d / "live.sqlite", d / "new.sqlite", d / "staged.sqlite")
+
     def test_staging_stops_on_a_second_evaluator(self):
         d = tmp()
         make_regret(d / "live.sqlite", [("1", 1)])
