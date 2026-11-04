@@ -27,6 +27,18 @@ def make_regret(path: Path, rows: list[tuple], with_reload: bool = True) -> None
     db.close()
 
 
+class SpliceBetweenMarkers(unittest.TestCase):
+    def test_replaces_only_the_marked_block_and_is_idempotent(self):
+        doc = "intro\n<!-- beliefs:start -->\nold\n<!-- beliefs:end -->\noutro\n"
+        once = w.splice_between_markers(doc, "beliefs", "new\n")
+        self.assertEqual(once, "intro\n<!-- beliefs:start -->\nnew\n<!-- beliefs:end -->\noutro\n")
+        self.assertEqual(w.splice_between_markers(once, "beliefs", "new\n"), once)
+
+    def test_stops_without_markers(self):
+        with self.assertRaises(w.Stop):
+            w.splice_between_markers("no markers", "beliefs", "x")
+
+
 class Swap(unittest.TestCase):
     def test_keeps_the_old_file_and_its_wal_as_a_set(self):
         d = tmp()

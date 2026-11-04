@@ -192,6 +192,14 @@ def stage_regret(live: Path, scored: Path | None, staged: Path) -> str:
     return f"{before} + {added} = {after} rows, one group {groups[0]}"
 
 
+def splice_between_markers(text: str, name: str, body: str) -> str:
+    start, end = f"<!-- {name}:start -->", f"<!-- {name}:end -->"
+    head, found, rest = text.partition(start)
+    if not found or end not in rest:
+        raise Stop(f"missing {start} / {end} markers")
+    return head + start + "\n" + body.strip("\n") + "\n" + end + rest.partition(end)[2]
+
+
 def email_hits(path: Path) -> int:
     """How many email-shaped strings the database holds in any column. Values are read as text, not raw bytes: a record header byte can be an `@`."""
     db = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
@@ -397,7 +405,8 @@ class Wrap:
         out = self.logs / "beliefs-and-items.tables.md"
         out.unlink(missing_ok=True)
         self.run("doc-beliefs", self.nix(self.knowledge, "bun", "scripts/arena-knowledge-report.ts", "--db", str(self.derived / "knowledge.sqlite")), cwd=self.knowledge / "web", stdout=out)
-        return f"tables in {out}: docs/arena/analysis/beliefs-and-items.md has no markers, so paste them by hand"
+        doc = self.docs / "beliefs-and-items.md"
+        doc.write_text(splice_between_markers(doc.read_text(), "beliefs", out.read_text()))
 
     def cleanup(self) -> str:
         note = self.viewer_up()
