@@ -178,7 +178,7 @@ export const view = (model: Model, h: H): Document =>
     Replay: () => arenaPage(h, model),
     NotFound: ({ path }) => ({
       title: "Buckshot",
-      body: pageOf(h, model, arenaStyles, h.main([], [h.p([h.Class("k")], [`Nothing lives at ${path}.`])])),
+      body: pageOf(h, model, arenaStyles, h.main([], [h.p([h.Class("k")], [`Nothing lives at ${path}. `, h.a([h.Href("/arena")], ["The arena"]), " has every config's results."])])),
     }),
   });
 

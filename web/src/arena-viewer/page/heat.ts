@@ -2,7 +2,8 @@ import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { anchorId, pressable, tipView } from "./charts.ts";
-import { baseName, baseOrder, fmtCount, fmtPct, fmtRating, fmtUsd, isClaude, keyOf, type MatchRow, shortName, unique } from "./data.ts";
+import type { Pair } from "../aggregates.ts";
+import { baseName, baseOrder, fmtCount, fmtPct, fmtRating, fmtUsd, isClaude, shortName, splitKey, unique } from "./data.ts";
 import { type Derived, memoLast } from "./derived.ts";
 import { Message, type Model } from "./model.ts";
 
@@ -45,39 +46,38 @@ export const shadeOf = (value: number, n: number) => {
   return { background: `rgb(${level}, ${level}, ${level})`, color: level > 0x80 ? "#000" : "#e6e6e6" };
 };
 
-const versus = memoLast((matches: ReadonlyArray<MatchRow>): ReadonlyMap<string, ReadonlyMap<string, readonly [number, number]>> => {
+/** Per config, its win shares summed and its scored matches against each opponent model. */
+const versus = memoLast((pairs: ReadonlyArray<Pair>): ReadonlyMap<string, ReadonlyMap<string, readonly [number, number]>> => {
   const out = new Map<string, Map<string, [number, number]>>();
 
-  for (const match of matches) {
-    const [first, second] = match.seats;
+  const add = (key: string, opponent: string, wins: number, scored: number) => {
+    const row = out.get(key) ?? new Map<string, [number, number]>();
+    const counts = row.get(baseName(splitKey(opponent)[0])) ?? [0, 0];
 
-    if (match.status !== "completed" || match.seats.length !== 2 || first === undefined || second === undefined) continue;
+    counts[0] += wins;
+    counts[1] += scored;
+    row.set(baseName(splitKey(opponent)[0]), counts);
+    out.set(key, row);
+  };
 
-    for (const [seat, opponent] of [
-      [first, second],
-      [second, first],
-    ] as const) {
-      const row = out.get(keyOf(seat)) ?? new Map<string, [number, number]>();
-      const counts = row.get(baseName(opponent.model)) ?? [0, 0];
+  for (const pair of pairs) {
+    if (pair.scored === 0) continue;
 
-      counts[0] += seat.winShare ?? 0;
-      counts[1]++;
-      row.set(baseName(opponent.model), counts);
-      out.set(keyOf(seat), row);
-    }
+    add(pair.first, pair.second, pair.firstWins, pair.scored);
+    add(pair.second, pair.first, pair.secondWins, pair.scored);
   }
 
   return out;
 });
 
-const opponentColumns = memoLast((matches: ReadonlyArray<MatchRow>): ReadonlyArray<HeatCol> =>
-  unique(matches.flatMap((match) => match.seats.map(({ model }) => model)))
+const opponentColumns = memoLast((pairs: ReadonlyArray<Pair>): ReadonlyArray<HeatCol> =>
+  unique(pairs.flatMap(({ first, second }) => [splitKey(first)[0], splitKey(second)[0]]))
     .toSorted((left, right) => baseOrder(left) - baseOrder(right))
     .map((model) => ({ id: baseName(model), label: shortName(model), title: baseName(model) })),
 );
 
 const cellAt = (derived: Derived, row: HeatRow, col: string): HeatCell | null => {
-  const counts = versus(derived.matches).get(row.key)?.get(col);
+  const counts = versus(derived.pairs).get(row.key)?.get(col);
 
   return counts === undefined ? null : { value: counts[0] / counts[1], text: fmtPct(counts[0] / counts[1]), tip: `vs ${col}: ${fmtPct(counts[0] / counts[1])} of ${counts[1]} matches. Full strength from ${FULL_N} matches.`, n: counts[1] };
 };
@@ -86,7 +86,7 @@ export const heatRowsOf = memoLast((derived: Derived): ReadonlyArray<HeatRow> =>
   derived.pooled.flatMap((m) => {
     const rating = derived.ratings.get(m.key)?.rating;
 
-    return rating === undefined || m.scored.length === 0 ? [] : [{ key: m.key, model: m.model, label: m.label, color: m.color, rating, cost: m.avgCost }];
+    return rating === undefined || m.scored === 0 ? [] : [{ key: m.key, model: m.model, label: m.label, color: m.color, rating, cost: m.avgCost }];
   }),
 );
 
@@ -103,7 +103,7 @@ const sortedRows = (rows: ReadonlyArray<HeatRow>, sort: string, valueOf: (row: H
 
 const heatmapView = (h: H, derived: Derived, heat: Model["heat"]): Html => {
   const shown = heatRowsOf(derived).toSorted((left, right) => right.rating - left.rating);
-  const columns = opponentColumns(derived.matches);
+  const columns = opponentColumns(derived.pairs);
   const cells = new Map(shown.map((row) => [row.key, new Map(columns.map((col) => [col.id, cellAt(derived, row, col.id)]))]));
   const cellOfRow = (row: HeatRow, col: string) => cells.get(row.key)?.get(col) ?? null;
   const sorted = sortedRows(shown, heat.sort, (row) => cellOfRow(row, heat.sort)?.value ?? -1);

@@ -1,6 +1,7 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { baseName, baseOrder, byEffort, costPerMove, effortLabel, fmtUsd, groupBy, type ModelStats, type SeatFull, sumOf } from "./data.ts";
+import { baseName, baseOrder, byEffort, costPerMove, effortLabel, fmtUsd, groupBy, sumOf } from "./data.ts";
+import type { ModelStats } from "./derived.ts";
 import type { Message } from "./model.ts";
 
 type H = HtmlBuilder<Message>;
@@ -13,11 +14,11 @@ export interface PerMove {
   readonly cost: number;
 }
 
-type Config = Pick<ModelStats, "key" | "model" | "effort" | "color"> & { readonly scored: ReadonlyArray<Pick<SeatFull, "cost" | "moves">> };
+type Config = Pick<ModelStats, "key" | "model" | "effort" | "color" | "scoredCost" | "scoredMoves">;
 
 export const perMoveOf = (stats: ReadonlyArray<Config>): ReadonlyArray<PerMove> =>
-  stats.flatMap(({ key, model, effort, color, scored }) => {
-    const cost = costPerMove({ scored });
+  stats.flatMap(({ key, model, effort, color, scoredCost, scoredMoves }) => {
+    const cost = costPerMove({ scoredCost, scoredMoves });
 
     return cost === null || cost <= 0 ? [] : [{ key, model, effort, color, cost }];
   });

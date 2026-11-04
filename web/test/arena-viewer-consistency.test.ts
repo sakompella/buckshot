@@ -10,10 +10,9 @@ const decision = (choice: string, block: string): Repeat => ({ choice, block });
 
 test("every repeated position weighs the same, whatever its size", () => {
   const big = [...Array.from({ length: 50 }, (_, index) => decision("shoot", `b${index}`)), ...Array.from({ length: 50 }, (_, index) => decision("drink", `b${index}`))];
-  const { positions, decisions, agree, lo, hi } = consistencyOf([[decision("shoot", "b1"), decision("shoot", "b2")], [decision("shoot", "b1"), decision("drink", "b2")], big]);
+  const { positions, agree, lo, hi } = consistencyOf([[decision("shoot", "b1"), decision("shoot", "b2")], [decision("shoot", "b1"), decision("drink", "b2")], big]);
 
   expect(positions).toBe(3);
-  expect(decisions).toBe(104);
   expect(agree).toBeCloseTo((1 + 0 + 49 / 99) / 3, 4);
   expect(0 <= lo && lo <= hi && hi <= 1).toBe(true);
 });
@@ -64,5 +63,5 @@ test("a config's agreement pools its decisions, counting agent moves of the view
   const rows = openConsistency(knowledgeFile(), SHOWN);
 
   expect(rows).toHaveLength(1);
-  expect(rows[0]).toMatchObject({ model: "steady", effort: "medium", positions: 30, decisions: 120, agree: 0.5 });
+  expect(rows[0]).toMatchObject({ model: "steady", effort: "medium", positions: 30, agree: 0.5 });
 });

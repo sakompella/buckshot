@@ -2,6 +2,7 @@ import { Option, pipe, Predicate, Schema, SchemaTransformation } from "effect";
 import { Route, type Url } from "foldkit";
 
 import { type Filter, MOVED_TARGETS, Target } from "../arena-viewer/page/model.ts";
+import { isOnline } from "./online.ts";
 
 // The site's pages and their URLs. The arena's shareable state lives in the query: the models and efforts switched
 // off, the open leaderboard row, and for a replay the move it shows.
@@ -32,7 +33,8 @@ const arenaRouter = pipe(Route.literal("arena"), Route.query(ArenaQuery), Route.
 
 const replayRouter = pipe(Route.literal("replay"), Route.slash(Route.schemaSegment("id", MatchId)), Route.query(ReplayQuery), Route.mapTo(SiteRoute.Replay));
 
-const parseRoute = Route.parseUrlWithFallback(Route.oneOf(replayRouter, arenaRouter, playRouter), SiteRoute.NotFound);
+/** The online build has no replays: a replay's URL there is an unknown page. */
+const parseRoute = Route.parseUrlWithFallback(isOnline ? Route.oneOf(arenaRouter, playRouter) : Route.oneOf(replayRouter, arenaRouter, playRouter), SiteRoute.NotFound);
 
 /** A link from before the site had pages: the arena was at `/`, so `/#scatter` means the arena's scatter. */
 export const isOldArenaLink = (url: Url.Url): boolean =>

@@ -1,8 +1,8 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import type { Decisions } from "../api.ts";
+import { type ConfigOdds, ODDS_BINS, type ShotTally } from "../aggregates.ts";
 import { anchorId, chartWidth, lineKeyView, linScale, tippedDot } from "./charts.ts";
-import { baseName, baseOrder, byEffort, colorOf, DASH, effortLabel, groupBy, keyOf, labelOf, type SeatFull, splitKey } from "./data.ts";
+import { baseName, baseOrder, byEffort, colorOf, DASH, effortLabel, groupBy, labelOf, splitKey } from "./data.ts";
 import { memoLast } from "./derived.ts";
 import type { Message } from "./model.ts";
 
@@ -10,45 +10,6 @@ type H = HtmlBuilder<Message>;
 
 // Playing the odds: for a shot with no glass or phone clue, how often a config shot itself, by the chance it counted the
 // chambered shell live. One panel per model and a line per effort, every config the filter keeps.
-
-/** Chance-live bins in whole percent, ends inclusive. The ends and the even odds are bins of their own: counting shells shows there. */
-export const ODDS_BINS: ReadonlyArray<{ readonly label: string; readonly low: number; readonly high: number }> = [
-  { label: "0%", low: 0, high: 0 },
-  { label: "1–33", low: 1, high: 33 },
-  { label: "34–49", low: 34, high: 49 },
-  { label: "50", low: 50, high: 50 },
-  { label: "51–99", low: 51, high: 99 },
-  { label: "100%", low: 100, high: 100 },
-];
-
-export const oddsBinOf = (percent: number): number => ODDS_BINS.findIndex(({ low, high }) => percent >= low && percent <= high);
-
-/** Shots aimed at oneself over all shots, per bin, for each config of a kept seat. A shot without clue odds counts nowhere. */
-export const selfShotTallies = (decisions: Pick<Decisions, "odds" | "seat" | "shot">, seats: ReadonlyArray<Pick<SeatFull, "model" | "effort">>, keep: ReadonlyArray<boolean>): ReadonlyMap<string, ReadonlyArray<{ readonly self: number; readonly shots: number }>> => {
-  const tallies = new Map<string, Array<{ self: number; shots: number }>>();
-
-  decisions.odds.forEach((percent, move) => {
-    const seatAt = decisions.seat[move] ?? -1;
-    const seat = seats[seatAt];
-    const bin = oddsBinOf(percent);
-
-    if (seat === undefined || keep[seatAt] !== true || bin < 0) return;
-
-    const key = keyOf(seat);
-    const bins = tallies.get(key) ?? ODDS_BINS.map(() => ({ self: 0, shots: 0 }));
-    const tally = bins[bin];
-
-    if (tally) {
-      tally.shots++;
-
-      if (decisions.shot[move] === 2) tally.self++;
-    }
-
-    tallies.set(key, bins);
-  });
-
-  return tallies;
-};
 
 /** A bin with fewer shots than this is left off a config's line. */
 const MIN_SHOTS = 30;
@@ -83,7 +44,8 @@ const spreadLabels = (ys: ReadonlyArray<number>, bottom: number): ReadonlyArray<
   return placed;
 };
 
-const talliesOf = memoLast(selfShotTallies);
+/** The kept configs' shots per bin. */
+const talliesOf = memoLast((odds: ReadonlyArray<ConfigOdds>, kept: ReadonlySet<string>): ReadonlyMap<string, ReadonlyArray<ShotTally>> => new Map(odds.flatMap(({ config, bins }) => (kept.has(config) ? [[config, bins] as const] : []))));
 
 interface OddsLine {
   readonly key: string;
@@ -92,7 +54,7 @@ interface OddsLine {
 }
 
 /** Each model's configs as lines, its efforts in order; a line keeps the bins with enough shots, and needs two of them. */
-export const oddsPanels = (tallies: ReadonlyMap<string, ReadonlyArray<{ readonly self: number; readonly shots: number }>>): ReadonlyArray<{ readonly model: string; readonly lines: ReadonlyArray<OddsLine> }> => {
+export const oddsPanels = (tallies: ReadonlyMap<string, ReadonlyArray<ShotTally>>): ReadonlyArray<{ readonly model: string; readonly lines: ReadonlyArray<OddsLine> }> => {
   const lines = [...tallies].flatMap(([key, bins]): ReadonlyArray<OddsLine> => {
     const points = bins.flatMap(({ self, shots }, bin) => (shots >= MIN_SHOTS ? [{ bin, self, shots, share: self / shots }] : []));
 
@@ -104,9 +66,8 @@ export const oddsPanels = (tallies: ReadonlyMap<string, ReadonlyArray<{ readonly
     .map(([model, own]) => ({ model, lines: own.toSorted((left, right) => byEffort(left.effort, right.effort)) }));
 };
 
-export const droppedConfigs = (seats: ReadonlyArray<Pick<SeatFull, "model" | "effort">>, keep: ReadonlyArray<boolean>, panels: ReturnType<typeof oddsPanels>): ReadonlyArray<string> => {
+export const droppedConfigs = (kept: ReadonlySet<string>, panels: ReturnType<typeof oddsPanels>): ReadonlyArray<string> => {
   const drawn = new Set(panels.flatMap(({ lines }) => lines.map(({ key }) => key)));
-  const kept = new Set(seats.flatMap((seat, index) => (keep[index] === true ? [keyOf(seat)] : [])));
 
   return [...kept]
     .filter((key) => !drawn.has(key))
@@ -167,9 +128,9 @@ const panelView = (h: H, model: string, lines: ReadonlyArray<OddsLine>, width: n
 export const droppedText = (keys: ReadonlyArray<string>): string =>
   [...groupBy(keys, (key) => splitKey(key)[0])].map(([model, own]) => `${baseName(model)} ${own.map((key) => effortLabel(model, splitKey(key)[1])).join(", ")}`).join(" · ");
 
-export const oddsView = (h: H, decisions: Decisions, seats: ReadonlyArray<SeatFull>, keep: ReadonlyArray<boolean>, width: number, content: number): Html => {
-  const panels = oddsPanels(talliesOf(decisions, seats, keep));
-  const dropped = droppedConfigs(seats, keep, panels);
+export const oddsView = (h: H, odds: ReadonlyArray<ConfigOdds>, kept: ReadonlySet<string>, width: number, content: number): Html => {
+  const panels = oddsPanels(talliesOf(odds, kept));
+  const dropped = droppedConfigs(kept, panels);
   const figure = chartWidth(width, content);
 
   return h.div(
