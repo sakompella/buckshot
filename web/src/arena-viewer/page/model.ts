@@ -3,7 +3,7 @@ import { AsyncData } from "foldkit";
 import { defineMessageUnion } from "foldkit/message";
 import { defineTaggedUnion } from "foldkit/schema";
 
-import { CertainMistakes, CertainType, Consistency, Decisions, Download, MatchDetail, Seat } from "../api.ts";
+import { CertainMistakes, CertainType, Consistency, Decisions, Download, MatchDetail, RatingsResponse, Seat } from "../api.ts";
 
 /** The page's groups below the hero, in page order: the jump menu's links, and the sections the reader can be in. */
 export const Group = Schema.Literals(["standings", "decisions", "health", "watch", "tables"]);
@@ -48,12 +48,13 @@ export const SeatFull = Schema.Struct({ ...Seat.fields, potShare: Schema.NullOr(
 const OptionalData = <A, I>(schema: Schema.Codec<A, I>) => AsyncData.Schema(schema, Schema.String).schema;
 
 /**
- * The database as the page holds it: every seat with its pot share and the agent moves' columns, which every section needs;
+ * The database as the page holds it: every seat with its pot share, the agent moves' columns and the server's ratings, which every section needs;
  * then each config's consistency (empty without a knowledge database) and certain mistakes (empty without a certain-mistakes database).
  */
 export const Loaded = Schema.Struct({
   seats: Schema.Array(SeatFull),
   decisions: Decisions,
+  ratings: RatingsResponse,
   consistency: OptionalData(Schema.Array(Consistency)),
   certainMistakes: OptionalData(CertainMistakes),
   download: OptionalData(Download),
