@@ -91,18 +91,6 @@ export type Seat = typeof Seat.Type;
 
 export const SeatsResponse = Schema.Array(Seat);
 
-/** One config's Round Elo (page/ratings.ts), fitted by the server over every match; the interval is null below MIN_BLOCKS_FOR_INTERVAL seed blocks. */
-export const RatingRow = Schema.Struct({
-  key: Schema.String,
-  rating: Schema.Number,
-  blocks: Schema.Number,
-  interval: Schema.NullOr(Schema.Struct({ lo: Schema.Number, hi: Schema.Number })),
-});
-
-export type RatingRow = typeof RatingRow.Type;
-
-export const RatingsResponse = Schema.Array(RatingRow);
-
 // A column holds one number per agent move, over a hundred thousand of them: one type check per column decodes it many
 // times faster than a schema per element.
 const Column = Schema.declare((input: unknown): input is ReadonlyArray<number> => Array.isArray(input) && input.every(Number.isFinite));

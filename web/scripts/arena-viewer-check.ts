@@ -4,11 +4,11 @@ import { join } from "node:path";
 import { Schema } from "effect";
 import { type Browser, chromium, type Page } from "playwright-core";
 
-import { Blunders, CERTAIN_TYPES, CertainMistakes, Consistency, Decisions, ITEMS, MatchDetail, type MoveRegret, NO_GAP, RatingsResponse, SeatsResponse } from "../src/arena-viewer/api.ts";
+import { AGGREGATES, selfShotTallies } from "../src/arena-viewer/aggregates.ts";
+import { Blunders, CERTAIN_TYPES, CertainMistakes, Decisions, ITEMS, MatchDetail, type MoveRegret, NO_GAP, SeatsResponse } from "../src/arena-viewer/api.ts";
 import { baseName, baseOrder, CERTAIN_NAMES, effortLabel, fmtBytes, fmtCount, fmtPct, fmtPoints, fmtUsd, blocksOf, groupBy, keyOf, labelOf, MIN_BLOCKS_FOR_INTERVAL, shortName, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { GROUPS, MOVED_TARGETS, Section } from "../src/arena-viewer/page/model.ts";
 import { pooledRatings } from "../src/arena-viewer/page/ratings.ts";
-import { selfShotTallies } from "../src/arena-viewer/aggregates.ts";
 import { droppedConfigs, droppedText, oddsPanels } from "../src/arena-viewer/page/odds.ts";
 import { stepsOf } from "../src/arena-viewer/page/replay.ts";
 import { tourOf } from "../src/arena-viewer/page/tour.ts";
@@ -105,10 +105,19 @@ const countOf = async (page: Page, selector: string) => {
 
 const heat = (page: Page) => page.locator("#breakdown details", { has: page.locator("table.heat") });
 
+/** A group's data loads as it nears the screen, so passing the page's end brings in everything below the first paint. */
+const showMatches = async (page: Page) => {
+  await page.waitForSelector("section.part", { timeout: 120_000 });
+  await page.evaluate(() => scrollTo(0, document.documentElement.scrollHeight));
+  await page.waitForSelector("#matches tbody tr.row", { timeout: 60_000 });
+};
+
 const loadPage = async (page: Page) => {
   await page.goto(`${base}/arena`);
   await page.waitForSelector("table.lbt", { state: "attached", timeout: 120_000 });
-  await page.waitForSelector("#matches tbody tr.row", { timeout: 60_000 });
+  await showMatches(page);
+  await page.evaluate(() => scrollTo(0, 0));
+  await page.waitForLoadState("networkidle");
 };
 
 const tablesFold = (page: Page) => page.locator("#tables details");
@@ -810,7 +819,7 @@ const servedSeats = once(() => served("/api/seats", SeatsResponse));
 
 const servedPageDecisions = once(() => served("/api/decisions", Decisions));
 
-const servedConsistency = once(() => served("/api/consistency", Schema.Array(Consistency)));
+const servedConsistency = once(() => served("/api/agg/consistency", AGGREGATES.consistency));
 
 type ServedSeat = Awaited<ReturnType<typeof servedSeats>>[number];
 
@@ -1464,7 +1473,7 @@ const pathOf = (page: Page) => {
 const checkSiteRoutes = async (page: Page) => {
   await page.goto(`${base}/`);
   await page.getByRole("link", { name: "Arena", exact: true }).click();
-  await page.waitForSelector("#matches tbody tr.row", { timeout: 120_000 });
+  await showMatches(page);
   expectThat(pathOf(page) === "/arena", `the bar's Arena link leads to ${pathOf(page)}`);
 
   await page.getByRole("button", { name: "minimal", exact: true }).first().click();
@@ -1474,7 +1483,7 @@ const checkSiteRoutes = async (page: Page) => {
   const scatterPoints = await countOf(page, "#scatter svg g.pt");
 
   await page.reload();
-  await page.waitForSelector("#matches tbody tr.row", { timeout: 120_000 });
+  await showMatches(page);
   console.log("filter", filtered, "| points", scatterPoints, "→ after reload", await countOf(page, "#scatter svg g.pt"));
   expectThat(filtered === "/arena?offEfforts=minimal" && pathOf(page) === filtered, `switching off an effort gives ${filtered}, a reload ${pathOf(page)}`);
   expectThat((await countOf(page, "#scatter svg g.pt")) === scatterPoints, "a reload of a filtered arena shows a different scatter");
@@ -1812,7 +1821,7 @@ const checkOptionalFailure = async (browser: Browser) => {
   const asked: Array<string> = [];
 
   page.on("request", (request) => asked.push(new URL(request.url()).pathname));
-  await page.route("**/api/consistency", (route) => route.abort());
+  await page.route("**/api/agg/consistency", (route) => route.abort());
   await loadPage(page);
   await settled(page);
 
@@ -1832,7 +1841,7 @@ const checkOptionalFailure = async (browser: Browser) => {
 const checkCertainFailure = async (browser: Browser) => {
   const page = await newPage(browser, VIEWPORTS[0]);
 
-  await page.route("**/api/certain-mistakes", (route) => route.abort());
+  await page.route("**/api/agg/certain", (route) => route.abort());
   await loadPage(page);
   await settled(page);
 
@@ -1859,14 +1868,14 @@ await attempt("desktop", "optional data failing", () => checkOptionalFailure(bro
 await attempt("desktop", "certain mistakes failing", () => checkCertainFailure(browser));
 
 // The server fits the ratings; they must be the numbers the page's own fit gives over the same served seats.
-const servedRatings = await served("/api/ratings", RatingsResponse);
+const servedRatings = (await served("/api/agg/summary", AGGREGATES.summary)).configs.flatMap((config) => (config.rating === null ? [] : [{ key: keyOf(config), rating: config.rating }]));
 const fitted = pooledRatings(withPotShares(await servedSeats()));
 
 console.log("served ratings", servedRatings.length, "| fitted here", fitted.size);
 
 expectThat(servedRatings.length === fitted.size, "served ratings and the page's fit rate different configs");
 
-for (const { key, ...rating } of servedRatings) expectThat(JSON.stringify(rating) === JSON.stringify(fitted.get(key)), `served rating of ${key} differs from the page's fit`);
+for (const { key, rating } of servedRatings) expectThat(JSON.stringify(rating) === JSON.stringify(fitted.get(key)), `served rating of ${key} differs from the page's fit`);
 
 console.log("failed checks", failures);
 
