@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { CertainMistakes, CertainRate } from "../src/arena-viewer/api.ts";
+import { thresholdedCertain } from "../src/arena-viewer/aggregates.ts";
 import { openCertain } from "../src/arena-viewer/certain.ts";
 import { talliesOf } from "../src/arena-viewer/page/certain.ts";
 
@@ -142,4 +143,12 @@ test("proven blanks that gave the turn away, and decisions a jammed opponent hid
 
   expect(provenBlanks).toEqual({ gaveTurnAway: 11, total: 50 });
   expect(hiddenHealth).toBe(7);
+});
+
+test("the export keeps a config's, model's or pool's interval only over 4 or more seed blocks", () => {
+  const seatsOver = (blocks: number) => CONFIGS.flatMap((config) => Array.from({ length: blocks }, (_, block) => ({ ...config, seedBlock: `block${block}`, status: "completed" as const })));
+  const boundsOver = (blocks: number) => thresholdedCertain(certainOf(WRITTEN).rates, seatsOver(blocks)).map(({ bounds }) => bounds?.hi ?? null);
+
+  expect(boundsOver(3)).toEqual(WRITTEN.map(() => null));
+  expect(boundsOver(4)).toEqual(WRITTEN.map(([, , , , , , hi]) => hi));
 });

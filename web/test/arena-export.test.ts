@@ -18,6 +18,14 @@ const database = join(root, "analysis.sqlite");
 
 setDefaultTimeout(60_000);
 
+/** Text the database holds per call or match, planted so the export can be shown to leave it behind. */
+const POISON = {
+  error: "quota exceeded for someone@example.com",
+  reasoning: "I will shoot myself because the shell is blank",
+  response: "shoot opponent please",
+  reason: "stopped by operator xyz",
+};
+
 /** One played match between two configs, imported as the arena database has it, provenance and all. */
 beforeAll(async () => {
   const source = join(root, "tournament");
@@ -67,6 +75,13 @@ test("a public database exports aggregate files that pass the privacy check and 
 
   db.run("update match_seats set provenance_json = null");
 
+  const planted = [
+    db.run(`update calls set error = '${POISON.error}', reasoning_text = '${POISON.reasoning}', response_text = '${POISON.response}'`),
+    db.run(`update matches set status_reason = '${POISON.reason}'`),
+  ];
+
+  expect(planted.every(({ changes }) => changes > 0)).toBe(true);
+
   const blocks = db.query<{ readonly id: string }, []>("select distinct seed_block_id id from matches").all();
 
   db.close();
@@ -84,6 +99,8 @@ test("a public database exports aggregate files that pass the privacy check and 
   expect(everything).not.toContain(String(SEED));
 
   for (const { id } of blocks) expect(everything).not.toContain(id);
+
+  for (const poison of Object.values(POISON)) expect(everything).not.toContain(poison);
 });
 
 test("the privacy check names each kind of leak in the exported files", () => {

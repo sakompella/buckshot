@@ -355,7 +355,7 @@ const roundOneWinnerWon = (first: SeatFull, second: SeatFull): ReadonlyArray<num
   return winner === null || story === null || !story.ok ? [] : [story.rounds[0]?.winner === winner ? 1 : 0];
 };
 
-const pairsOf = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<Pair> =>
+export const pairsOf = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<Pair> =>
   [...groupBy(twoPlayerMatches(seats), ([first, second]) => `${keyOf(first)} ${keyOf(second)}`).values()].flatMap((matches) => {
     const [[first, second] = []] = matches;
     const scored = matches.filter(([seat]) => seat.status === "completed");
@@ -431,7 +431,7 @@ export const configSummaries = (seats: ReadonlyArray<SeatFull>, decisions: Pick<
 // CERTAIN MISTAKES
 
 /** A written interval stays only over enough seed blocks: of the config's, the model's or every completed seat. */
-const thresholdedCertain = (rates: ReadonlyArray<CertainRate>, seats: ReadonlyArray<SeatFull>): ReadonlyArray<CertainRate> => {
+export const thresholdedCertain = (rates: ReadonlyArray<CertainRate>, seats: ReadonlyArray<Pick<SeatFull, "model" | "effort" | "seedBlock" | "status">>): ReadonlyArray<CertainRate> => {
   const completed = seats.filter(({ status }) => status === "completed");
   const configBlocks = new Map([...groupBy(completed, keyOf)].map(([key, own]) => [key, blocksOf(own)]));
   const modelBlocks = new Map([...groupBy(completed, ({ model }) => model)].map(([model, own]) => [model, blocksOf(own)]));
