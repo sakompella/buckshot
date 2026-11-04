@@ -4,7 +4,7 @@ import { AsyncData, Command, Dom, Http, Subscription, type Update } from "foldki
 import { modifyFields } from "foldkit/struct";
 
 import { type ArenaRoute, arenaHref, arenaStateOf, replayHref } from "../../site/route.ts";
-import { CertainMistakes, Consistency, Decisions, Download, MatchDetail, SeatsResponse } from "../api.ts";
+import { CertainMistakes, Consistency, Decisions, Download, MatchDetail, RatingsResponse, SeatsResponse } from "../api.ts";
 import { hasCertainChart } from "./certain.ts";
 import { withPotShares } from "./data.ts";
 import { INITIAL_ROWS, MORE_ROWS } from "./matches.ts";
@@ -38,10 +38,10 @@ const getOptional = <A, I>(url: string, schema: Schema.Codec<A, I>) =>
 const LoadData = Command.define("LoadData", {
   messages: [Message.SucceededLoad, Message.FailedLoad],
   execute: Effect.all(
-    [getJson("/api/seats", SeatsResponse), getJson("/api/decisions", Decisions), getOptional("/api/consistency", Schema.Array(Consistency)), getOptional("/api/certain-mistakes", CertainMistakes), getOptional("/api/download", Download)],
-    { concurrency: 5 },
+    [getJson("/api/seats", SeatsResponse), getJson("/api/decisions", Decisions), getJson("/api/ratings", RatingsResponse), getOptional("/api/consistency", Schema.Array(Consistency)), getOptional("/api/certain-mistakes", CertainMistakes), getOptional("/api/download", Download)],
+    { concurrency: 6 },
   ).pipe(
-    Effect.map(([seats, decisions, consistency, certainMistakes, download]) => Message.SucceededLoad({ loaded: { seats: withPotShares(seats), decisions, consistency, certainMistakes, download } })),
+    Effect.map(([seats, decisions, ratings, consistency, certainMistakes, download]) => Message.SucceededLoad({ loaded: { seats: withPotShares(seats), decisions, ratings, consistency, certainMistakes, download } })),
     Effect.catch((error) => Effect.succeed(Message.FailedLoad({ failure: error instanceof NoArenaServer ? LoadFailure.NoServer() : LoadFailure.Failed({ error: describe(error) }) }))),
     Effect.provide(Http.layer),
   ),
