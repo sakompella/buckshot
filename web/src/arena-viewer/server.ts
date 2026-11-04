@@ -1,42 +1,20 @@
-import { Database } from "bun:sqlite";
+import type { Database } from "bun:sqlite";
 import crypto from "node:crypto";
 import { join, normalize } from "node:path";
 
 import { Option, Schema } from "effect";
 
-import { analyse, decodeVisible, roundStory, ShellTracker, shotLineIn } from "./analysis.ts";
-import { Blunders, Call, CertainMistakes, Consistency, Decisions, MatchDetail, MatchSeat, MatchSummary, type PlayerState, RatingsResponse, SeatRow, SeatsResponse, type Step } from "./api.ts";
+import { AGGREGATE_NAMES, aggregatesOf, encodeAggregates } from "./aggregates.ts";
+import { decodeVisible, roundStory, ShellTracker, shotLineIn } from "./analysis.ts";
+import { Blunders, Call, CertainMistakes, Decisions, MatchDetail, MatchSeat, MatchSummary, type PlayerState, SeatsResponse, type Step } from "./api.ts";
 import { findBlunders } from "./blunders.ts";
-import { type Certain, NO_CERTAIN, openCertain } from "./certain.ts";
-import { openConsistency } from "./consistency.ts";
+import type { Certain } from "./certain.ts";
+import { type ArenaPaths, loadArena, NOT_DEEPSEEK } from "./load.ts";
 import { withPotShares } from "./page/data.ts";
-import { pooledRatings } from "./page/ratings.ts";
-import { openRegret, type Regret } from "./regret.ts";
+import type { Regret } from "./regret.ts";
 
-// The arena viewer's server: the built site (web/dist), and a read-only JSON API over the arena
-// analysis database. It never selects match_seats.provenance_json, which holds
-// an account email. DeepSeek is left out entirely: a match with a DeepSeek seat
-// is dropped here, so no tab, rating or total sees it.
-
-const NOT_DEEPSEEK = `m.id not in (select x.match_id from match_seats x join entrants y on y.id = x.entrant_id where y.model = 'oc/deepseek-v4.1-flash-free')`;
-
-const SEATS_SQL = `with cs as (select match_id, player, sum(cost_usd) cost, sum(input_tokens) inp, sum(output_tokens) outp,
-     sum(cache_read_tokens) cr, sum(cache_write_tokens) cw, sum(reasoning_tokens) rt,
-     sum(latency_ms) lat,
-     sum(reasoning_tokens > 0 and coalesce(reasoning_text, '') = '') rsHidden, sum(coalesce(reasoning_text, '') != '') rsText,
-     sum(json_valid(tool_calls_json) and json_array_length(tool_calls_json) > 1) multiTool
-   from calls group by match_id, player),
-   ds as (select match_id, player, sum(by_whom = 'agent') moves from decisions group by match_id, player)
-   select t.name tournament, m.id matchId, m.name matchName, m.status, m.started_at startedAt, m.seed, m.seed_block_id seedBlock,
-     substr(m.code_hash, 1, 8) codeHash, e.model, e.effort, ms.player, ms.position, ms.win_share winShare, ms.cash,
-     cs.cost, cs.inp, cs.outp, cs.cr, cs.cw, cs.rt, cs.lat, cs.rsHidden, cs.rsText, cs.multiTool, ds.moves
-   from match_seats ms join matches m on m.id = ms.match_id join tournaments t on t.id = m.tournament_id
-   join entrants e on e.id = ms.entrant_id
-   left join cs on cs.match_id = m.id and cs.player = ms.player
-   left join ds on ds.match_id = m.id and ds.player = ms.player
-   where m.status in ('completed', 'partial') and ${NOT_DEEPSEEK} order by m.started_at, ms.position`;
-
-const decodeSeatRow = Schema.decodeUnknownSync(SeatRow);
+// The arena viewer's server: the built site (web/dist), and a read-only JSON API over the arena analysis database
+// as load.ts reads it.
 
 const decodeSummary = Schema.decodeUnknownOption(MatchSummary);
 
@@ -57,10 +35,6 @@ const DecisionRow = Schema.Struct({
 const decodeDecisionRow = Schema.decodeUnknownSync(DecisionRow);
 
 const encodeSeats = Schema.encodeSync(Schema.fromJsonString(SeatsResponse));
-
-const encodeConsistency = Schema.encodeSync(Schema.fromJsonString(Schema.Array(Consistency)));
-
-const encodeRatings = Schema.encodeSync(Schema.fromJsonString(RatingsResponse));
 
 const encodeDecisions = Schema.encodeSync(Schema.fromJsonString(Decisions));
 
@@ -266,34 +240,16 @@ const siteResponse = async (siteDir: string, request: Request): Promise<Response
   return new Response(Bun.file(join(siteDir, "index.html")), { headers: { "content-type": "text/html; charset=utf-8" } });
 };
 
-export const serveArenaViewer = (dbPath: string, siteDir: string, hostname: string, port: number, regretPath?: string, knowledgePath?: string, certainPath?: string) => {
-  const db = new Database(dbPath, { readonly: true });
-  const regret = regretPath === undefined ? null : openRegret(regretPath);
+export const serveArenaViewer = (dbPath: string, siteDir: string, hostname: string, port: number, paths: ArenaPaths = {}) => {
   const started = performance.now();
-
-  const rows = db
-    .query(SEATS_SQL)
-    .all()
-    .map((row) => decodeSeatRow(row));
-
-  const seatIndex = new Map(rows.map((row, index) => [`${row.matchId}|${row.player}`, index]));
-  const { decisions, seats: analysed } = analyse(db, rows, seatIndex);
-
-  const seats = rows.flatMap((row, index) => {
-    const extra = analysed[index];
-
-    return extra === undefined ? [] : [{ ...row, ...extra, regret: regret?.seats.get(`${row.matchId}|${row.player}`) ?? null }];
-  });
+  const { db, regret, seats, seatIndex, decisions, certain, consistency } = loadArena(dbPath, paths);
+  const aggregateJson = encodeAggregates(aggregatesOf({ seats: withPotShares(seats), decisions, certain: certain.summary.rates, consistency }));
+  const aggregateRoutes = Object.fromEntries(AGGREGATE_NAMES.map((name) => [`/api/agg/${name}`, guarded((request) => json(request, encodedBody(aggregateJson[name])))]));
 
   const seatsBody = encodedBody(encodeSeats(seats));
   const decisionsBody = encodedBody(encodeDecisions(decisions));
-  const ratingsBody = encodedBody(encodeRatings([...pooledRatings(withPotShares(seats))].map(([key, rating]) => ({ key, ...rating }))));
   const blundersBody = encodedBody(encodeBlunders(findBlunders(db, regret, seatIndex)));
-
-  const seedBlocks = new Map(seats.map(({ matchId, seedBlock }) => [matchId, seedBlock]));
-  const certain = certainPath === undefined ? NO_CERTAIN : openCertain(certainPath, seatIndex);
   const certainBody = encodedBody(encodeCertain(certain.summary));
-  const consistencyBody = encodedBody(encodeConsistency(knowledgePath === undefined ? [] : openConsistency(knowledgePath, seedBlocks)));
 
   console.log(`loaded ${seats.length} seats in ${Math.round(performance.now() - started)} ms; decisions payload ${(decisionsBody.gzipped.length / 1e6).toFixed(1)} MB gzipped`);
 
@@ -319,10 +275,9 @@ export const serveArenaViewer = (dbPath: string, siteDir: string, hostname: stri
           ? new Response("no download configured", { status: 404 })
           : new Response(Bun.file(download), { headers: { "content-disposition": 'attachment; filename="buckshot.sqlite"' } });
       }),
-      "/api/ratings": guarded((request) => json(request, ratingsBody)),
       "/api/decisions": guarded((request) => json(request, decisionsBody)),
       "/api/blunders": guarded((request) => json(request, blundersBody)),
-      "/api/consistency": guarded((request) => json(request, consistencyBody)),
+      ...aggregateRoutes,
       "/api/certain-mistakes": guarded((request) => json(request, certainBody)),
       "/api/match": guarded((request) => {
         const detail = matchDetail(db, regret, certain, new URL(request.url).searchParams.get("id") ?? "");

@@ -16,7 +16,6 @@ export const Consistency = Schema.Struct({
   model: Schema.String,
   effort: Schema.String,
   positions: Schema.Number,
-  decisions: Schema.Number,
   agree: Schema.Number,
   lo: Schema.Number,
   hi: Schema.Number,
