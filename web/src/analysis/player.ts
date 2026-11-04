@@ -20,7 +20,7 @@ const PINNED_BEND = "/nix/store/szxlh9bw7pb8jp7gp8biw6j84r0fc2i3-bend-2.0.36/bin
 const PLAYER_SOURCE = new URL("../../../sim/bend-mp/analysis.bend", import.meta.url).pathname;
 
 interface PlayerExports {
-  readonly analyse: (position: BendNode, depth: bigint, budget: bigint, reload: BendNode) => BendNode;
+  readonly analyse: (position: BendNode, depth: bigint, budget: bigint, reload: BendNode, memo: BendNode) => BendNode;
   readonly orders: (log: BendNode, isPrivate: boolean) => BendNode;
 }
 
@@ -143,10 +143,14 @@ const RawMove = Schema.Union([
   Schema.Struct({ $: Schema.Literal("simple/state.StealJam"), owner: Node, target: Node }),
 ]);
 
-const RawLine = Schema.Struct({ $: Schema.Literal("player/types.Line"), move: RawMove, score: Schema.Number });
+const RawLine = Schema.Struct({ $: Schema.Literal("player/types.Line"), move: RawMove, score: Schema.Number, reach: Schema.Struct({ $: Schema.Literals(["player/types.Settled", "player/types.Reloads", "player/types.Cut"]) }) });
+
+const REACH = { "player/types.Settled": "settled", "player/types.Reloads": "reloads", "player/types.Cut": "cut" } as const;
+
+const RawCached = Schema.Struct({ $: Schema.Literal("player/types.Cached"), entries: Schema.BigInt, hits: Schema.BigInt, deals: Schema.BigInt, deal_hits: Schema.BigInt });
 
 const RawAnalysis = Schema.Union([
-  Schema.Struct({ $: Schema.Literal("player/types.Analysed"), lines: Schema.Unknown, best: Schema.BigInt, nodes: Schema.BigInt, depth: Schema.BigInt, limited: Schema.Boolean }),
+  Schema.Struct({ $: Schema.Literal("player/types.Analysed"), lines: Schema.Unknown, best: Schema.BigInt, nodes: Schema.BigInt, depth: Schema.BigInt, limited: Schema.Boolean, cached: RawCached }),
   Schema.Struct({ $: Schema.Literal("player/types.Invalid"), reason: Schema.String, nodes: Schema.BigInt }),
 ]);
 
@@ -187,6 +191,8 @@ const stepsOf = (move: typeof RawMove.Type): ReadonlyArray<Move> => {
 export interface Line {
   readonly steps: ReadonlyArray<Move>;
   readonly score: number;
+  /** How its leaves ended: every round settled, some at a reload (valued by the reload rule), or some where the depth ran out. Only "cut" can change at more depth. */
+  readonly reach: "settled" | "reloads" | "cut";
 }
 
 /** The player's search from one position: every legal move in the machine's order, the first best one, and how far the search got. */
@@ -200,6 +206,8 @@ export type Analysis =
       /** The node budget ran out before the next depth finished. */
       readonly limited: boolean;
       readonly nodes: number;
+      /** What the memo held at the end: decision nodes and reload deals stored, and how often each was reused. */
+      readonly cached: { readonly entries: number; readonly hits: number; readonly deals: number; readonly dealHits: number };
     }
   | { readonly kind: "invalid"; readonly reason: string; readonly nodes: number };
 
@@ -212,12 +220,13 @@ const analysisOf = (raw: typeof RawAnalysis.Type): Analysis =>
         lines: nodesOf(raw.lines as BendNode).map((node) => {
           const line = decodeLine(node);
 
-          return { steps: stepsOf(line.move), score: line.score };
+          return { steps: stepsOf(line.move), score: line.score, reach: REACH[line.reach.$] };
         }),
         best: Number(raw.best),
         depth: Number(raw.depth),
         limited: raw.limited,
         nodes: Number(raw.nodes),
+        cached: { entries: Number(raw.cached.entries), hits: Number(raw.cached.hits), deals: Number(raw.cached.deals), dealHits: Number(raw.cached.deal_hits) },
       };
 
 // The player
@@ -252,11 +261,22 @@ const reloadNode = (reload: Reload): BendNode => {
   }
 };
 
+/**
+ * How the search reuses a position it has already valued. "off" searches every node again. "charged" reuses the value but spends the nodes
+ * its first search spent, so scores, nodes and the depth reached match "off" exactly. "free" spends nothing on reuse, so the same budget
+ * reaches deeper.
+ */
+export type Memo = "off" | "charged" | "free";
+
+const MEMO_TAGS = { off: "player/types.Off", charged: "player/types.Charged", free: "player/types.Free" } as const satisfies Record<Memo, string>;
+
+const memoNode = (memo: Memo): BendNode => ({ $: MEMO_TAGS[memo] });
+
 export interface Player {
   /** Names the build: a hash of the compiled player, so that scores from different versions are never mixed. */
   readonly version: string;
   readonly orders: (log: ReadonlyArray<OwnEntry>, isPrivate: boolean) => Orders;
-  readonly analyse: (input: PlayerInput, limits: Limits, reload: Reload) => Analysis;
+  readonly analyse: (input: PlayerInput, limits: Limits, reload: Reload, memo?: Memo) => Analysis;
 }
 
 /** Builds the player into `dir` (with $BEND, else `bend` on PATH, else the pinned build) and wraps its exports. */
@@ -276,6 +296,7 @@ export const loadPlayer = async (dir: string): Promise<Player> => {
   return {
     version: createHash("sha256").update(readFileSync(output)).digest("hex").slice(0, 16),
     orders: (log, isPrivate) => nodesOf(exports.orders(logNode(log), isPrivate)).map(orderText),
-    analyse: (input, { depth, budget }, reload) => analysisOf(decodeAnalysis(exports.analyse(inputNode(input), BigInt(depth), BigInt(budget), reloadNode(reload)))),
+    analyse: (input, { depth, budget }, reload, memo = "charged") =>
+      analysisOf(decodeAnalysis(exports.analyse(inputNode(input), BigInt(depth), BigInt(budget), reloadNode(reload), memoNode(memo)))),
   };
 };

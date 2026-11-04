@@ -7,6 +7,7 @@ import ./belief.bend as B
 import ./evaluation.bend as E
 import ../sm/items.bend as I
 import ./deal.bend as L
+import ./memo.bend as N
 
 # Bounded paranoid expectiminimax over a belief (ADR-0043). A node holds the
 # public belief and the searcher's private belief. The searcher maximizes its
@@ -237,48 +238,63 @@ def options.of(moves: List<&2, T.Move>, +index: Nat) -> List<&2, Option>:
 # One move's score at a node: the public value (what opponents believe) and
 # the private value (what the searcher believes), and the decisions that follow.
 type Scored is Data:
-  Scored{index: Nat, move: T.Move, public: U32, private: U32, pv: List<&2, T.Move>}
+  Scored{index: Nat, move: T.Move, public: U32, private: U32, pv: List<&2, T.Move>, reach: A.Reach}
 
+# A result carries the tally on: the nodes spent so far and the memo.
 type Searched is Data:
-  Value{public: U32, private: U32, pv: List<&2, T.Move>, nodes: Nat}
-  Scores{scored: List<&2, Scored>, nodes: Nat}
-  Spent{nodes: Nat}
+  Value{public: U32, private: U32, pv: List<&2, T.Move>, tally: N.Tally, reach: A.Reach}
+  Scores{scored: List<&2, Scored>, tally: N.Tally}
+  Spent{tally: N.Tally}
 
-# The branch sums so far, and the most likely private branch's PV.
+# The branch sums so far, the most likely private branch's PV, and the
+# branches' reach.
 type Sum is Data:
-  Sum{public: F32, private: F32, pv: List<&2, T.Move>, pv_p: F32}
+  Sum{public: F32, private: F32, pv: List<&2, T.Move>, pv_p: F32, reach: A.Reach}
+
+# Whether a decision's value goes into the memo once it is found: under `key`,
+# with the depth it was searched to and the nodes spent before it began.
+type Keep is Data:
+  Forget{}
+  Keep{key: String, depth: Nat, start: Nat}
 
 type Task is Data:
   Known{result: Searched}
-  Node{depth: Nat, public: List<&2, A.World>, private: List<&2, A.World>, nodes: Nat}
-  Decide{mine: Bool, moves: Task}
-  Moves{depth: Nat, public: List<&2, A.World>, private: List<&2, A.World>, options: List<&2, Option>, scored: List<&2, Scored>, nodes: Nat}
+  Node{depth: Nat, public: List<&2, A.World>, private: List<&2, A.World>, tally: N.Tally}
+  Decide{mine: Bool, keep: Keep, moves: Task}
+  Moves{depth: Nat, public: List<&2, A.World>, private: List<&2, A.World>, options: List<&2, Option>, scored: List<&2, Scored>, tally: N.Tally}
   Scoring{depth: Nat, public: List<&2, A.World>, private: List<&2, A.World>, option: Option, result: Searched, options: List<&2, Option>, scored: List<&2, Scored>}
-  Branches{depth: Nat, branches: List<&2, Branch>, sum: Sum, nodes: Nat}
+  Branches{depth: Nat, branches: List<&2, Branch>, sum: Sum, tally: N.Tally}
   Adding{depth: Nat, public_p: F32, private_p: F32, result: Searched, branches: List<&2, Branch>, sum: Sum}
 
-def task.nodes(task: Task) -> Nat:
-  match task:
-    case Known{Value{_, _, _, nodes}}:
-      nodes
-    case Known{Scores{_, nodes}}:
-      nodes
-    case Known{Spent{nodes}}:
-      nodes
-    case Node{_, _, _, nodes}:
-      nodes
-    case Decide{_, moves}:
-      task.nodes(moves)
-    case Moves{_, _, _, _, _, nodes}:
-      nodes
-    case Branches{_, _, _, nodes}:
-      nodes
-    case _:
-      0n
+def searched.tally(result: Searched) -> N.Tally:
+  match result:
+    case Value{_, _, _, tally, _}:
+      tally
+    case Scores{_, tally}:
+      tally
+    case Spent{tally}:
+      tally
 
-def node.leaf(+public: List<&2, A.World>, private: List<&2, A.World>, +nodes: Nat, +me: D.Seat) -> Task:
+def task.tally(task: Task) -> N.Tally:
+  match task:
+    case Known{result}:
+      searched.tally(result)
+    case Node{_, _, _, tally}:
+      tally
+    case Decide{_, _, moves}:
+      task.tally(moves)
+    case Moves{_, _, _, _, _, tally}:
+      tally
+    case Scoring{_, _, _, _, result, _, _}:
+      searched.tally(result)
+    case Branches{_, _, _, tally}:
+      tally
+    case Adding{_, _, _, result, _, _}:
+      searched.tally(result)
+
+def node.leaf(+public: List<&2, A.World>, private: List<&2, A.World>, tally: N.Tally, reach: A.Reach, +me: D.Seat) -> Task:
   +value : U32 = static(public, me)
-  Known{Value{value, static.private(private, me, value), Nil{}, nodes}}
+  Known{Value{value, static.private(private, me, value), Nil{}, tally, reach}}
 
 # With no private worlds the private value is the public one, as in static.private.
 def expected.private(worlds: List<&2, A.World>, +private: F32, +public: U32) -> U32:
@@ -288,103 +304,178 @@ def expected.private(worlds: List<&2, A.World>, +private: F32, +public: U32) -> 
     case _:
       millionths(private)
 
-def node.expected(sums: L.Sums, private: List<&2, A.World>, +nodes: Nat) -> Task:
+def node.expected(sums: L.Sums, private: List<&2, A.World>, tally: N.Tally) -> Task:
   match sums:
     case L.Sums{public, of_private}:
       +value : U32 = millionths(public)
-      Known{Value{value, expected.private(private, of_private, value), Nil{}, nodes}}
+      Known{Value{value, expected.private(private, of_private, value), Nil{}, tally, A.Reloads{}}}
 
-def node.reload(reload: A.Reload, +public: List<&2, A.World>, +private: List<&2, A.World>, +nodes: Nat, +me: D.Seat) -> Task:
+def deal.sums(reload: A.Reload, +public: List<&2, A.World>, +private: List<&2, A.World>, +me: D.Seat) -> L.Sums:
+  match reload:
+    case A.Sampled{count}:
+      L.sampled(public, private, me, count)
+    case _:
+      L.expected(public, private, me)
+
+def deal.found(found: Maybe<&2, N.Stored>, tally: N.Tally, +key: String, +reload: A.Reload, +public: List<&2, A.World>, +private: List<&2, A.World>, +me: D.Seat) -> Task:
+  match found:
+    case Some{N.Deal{sums}}:
+      node.expected(sums, private, N.tally.deal_hit(tally))
+    case _:
+      +sums : L.Sums = deal.sums(reload, public, private, me)
+      node.expected(sums, private, N.keep(tally, key, N.Deal{sums}))
+
+def deal.taken(taken: N.Tally & Maybe<&2, N.Stored>, +key: String, +reload: A.Reload, +public: List<&2, A.World>, +private: List<&2, A.World>, +me: D.Seat) -> Task:
+  (tally, found) = taken
+  deal.found(found, tally, key, reload, public, private, me)
+
+# A deal leaf's value depends on its beliefs alone, so the memo keeps it
+# whatever the depth.
+def node.dealt(memo: A.Memo, +reload: A.Reload, +public: List<&2, A.World>, +private: List<&2, A.World>, tally: N.Tally, +me: D.Seat) -> Task:
+  match memo:
+    case A.Off{}:
+      node.expected(deal.sums(reload, public, private, me), private, tally)
+    case _:
+      +key : String = SCon{Chr{0}, N.key(public, private)}
+      deal.taken(N.find(tally, key), key, reload, public, private, me)
+
+def node.reload(reload: A.Reload, +public: List<&2, A.World>, +private: List<&2, A.World>, tally: N.Tally, +me: D.Seat, +memo: A.Memo) -> Task:
   match reload:
     case A.Static{}:
-      node.leaf(public, private, nodes, me)
-    case A.ExpectedDeal{}:
-      node.expected(L.expected(public, private, me), private, nodes)
-    case A.Sampled{count}:
-      node.expected(L.sampled(public, private, me, count), private, nodes)
+      node.leaf(public, private, tally, A.Reloads{}, me)
+    case +reload:
+      node.dealt(memo, reload, public, private, tally, me)
+
+def choose.search(+tally: N.Tally, +key: String, +mine: Bool, +depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +options: List<&2, Option>) -> Task:
+  Decide{mine, Keep{key, depth, N.tally.nodes(tally)}, Moves{depth, public, private, options, Nil{}, tally}}
+
+def choose.hit(fits: Bool, +entry: N.Entry, tally: N.Tally, +charge: Nat, +key: String, +mine: Bool, +depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +options: List<&2, Option>) -> Task:
+  match fits entry:
+    case True{} N.Entry{public_v, private_v, pv, reach, _, _}:
+      Known{Value{public_v, private_v, pv, N.tally.hit(tally, charge), reach}}
+    case False{} _:
+      choose.search(tally, key, mine, depth, public, private, options)
+
+# An entry serves a node when its value holds at the node's depth and, unless
+# reuse is free, the nodes its search spent still fit the budget. When they do
+# not, searching again spends the budget just where an unmemoized search would.
+def choose.entry(+entry: N.Entry, +tally: N.Tally, +key: String, +memo: A.Memo, +mine: Bool, +depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +options: List<&2, Option>, +budget: Nat) -> Task:
+  match entry:
+    case N.Entry{_, _, _, reach, searched, cost}:
+      +charge : Nat = N.entry.cost(memo, cost)
+      +fits : Bool = Bool.and(N.entry.serves(reach, searched, depth), Nat.is_le(Nat.add(N.tally.nodes(tally), charge), budget))
+      choose.hit(fits, entry, tally, charge, key, mine, depth, public, private, options)
+
+def choose.found(found: Maybe<&2, N.Stored>, tally: N.Tally, +key: String, +memo: A.Memo, +mine: Bool, +depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +options: List<&2, Option>, +budget: Nat) -> Task:
+  match found:
+    case Some{N.Decision{entry}}:
+      choose.entry(entry, tally, key, memo, mine, depth, public, private, options, budget)
+    case _:
+      choose.search(tally, key, mine, depth, public, private, options)
+
+def choose.taken(taken: N.Tally & Maybe<&2, N.Stored>, +key: String, +memo: A.Memo, +mine: Bool, +depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +options: List<&2, Option>, +budget: Nat) -> Task:
+  (tally, found) = taken
+  choose.found(found, tally, key, memo, mine, depth, public, private, options, budget)
+
+def node.choose(memo: A.Memo, +mine: Bool, +depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +options: List<&2, Option>, tally: N.Tally, +budget: Nat) -> Task:
+  match memo:
+    case A.Off{}:
+      Decide{mine, Forget{}, Moves{depth, public, private, options, Nil{}, tally}}
+    case +memo:
+      +key : String = SCon{Chr{1}, N.key(public, private)}
+      choose.taken(N.find(tally, key), key, memo, mine, depth, public, private, options, budget)
 
 # Only a reload leaves a node at a draw: the phone's draw is expanded by
 # settle, and a round's opening draws follow its end, which is a leaf first.
-def node.request(request: T.Request, depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +nodes: Nat, +me: D.Seat, +reload: A.Reload) -> Task:
+def node.request(request: T.Request, depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, tally: N.Tally, +me: D.Seat, +reload: A.Reload, +memo: A.Memo, +budget: Nat) -> Task:
   match request depth:
     case T.Choose{seat, D.NonEmpty{move, rest}} 1n+child:
-      Decide{D.seat.eq(seat, me), Moves{child, public, private, options.of(move <> rest, 0n), Nil{}, nodes}}
+      node.choose(memo, D.seat.eq(seat, me), child, public, private, options.of(move <> rest, 0n), tally, budget)
     case T.Draw{_, _} _:
-      node.reload(reload, public, private, nodes, me)
+      node.reload(reload, public, private, tally, me, memo)
     case _ _:
-      node.leaf(public, private, nodes, me)
+      node.leaf(public, private, tally, A.Cut{}, me)
 
 # A move that won the round is a leaf with its exact value, even when the
 # next round began without a draw and already waits on a choice.
-def node.ended(ended: Maybe<&2, U32>, +state: T.State, depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +nodes: Nat, +me: D.Seat, +reload: A.Reload) -> Task:
+def node.ended(ended: Maybe<&2, U32>, +state: T.State, depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, tally: N.Tally, +me: D.Seat, +reload: A.Reload, +memo: A.Memo, +budget: Nat) -> Task:
   match ended:
     case Some{_}:
-      node.leaf(public, private, nodes, me)
+      node.leaf(public, private, tally, A.Settled{}, me)
     case None{}:
-      node.request(M.request(state), depth, public, private, nodes, me, reload)
+      node.request(M.request(state), depth, public, private, tally, me, reload, memo, budget)
 
 # What a node does: a choice with depth left is a decision; the end of the
 # round, a reload or no depth left is evaluated. RoundWon is public, so the
 # first world's notes speak for every world.
-def node.task(depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +nodes: Nat, +me: D.Seat, +reload: A.Reload) -> Task:
+def node.task(depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, tally: N.Tally, +me: D.Seat, +reload: A.Reload, +memo: A.Memo, +budget: Nat) -> Task:
   match public:
     case Nil{}:
-      Known{Value{0, 0, Nil{}, nodes}}
+      Known{Value{0, 0, Nil{}, tally, A.Settled{}}}
     case A.World{+state, _} <> _:
-      node.ended(E.exact(T.state.notes(state), me), state, depth, public, private, nodes, me, reload)
+      node.ended(E.exact(T.state.notes(state), me), state, depth, public, private, tally, me, reload, memo, budget)
 
 # A move costs one node per world it is played in. A move the budget cannot
 # pay for spends the iteration.
-def moves.branches(fits: Bool, +depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +index: Nat, +nodes: Nat, +spent: Nat, +me: D.Seat) -> Task:
+def moves.branches(fits: Bool, +depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +index: Nat, tally: N.Tally, +spent: Nat, +me: D.Seat) -> Task:
   match fits:
     case False{}:
-      Known{Spent{nodes}}
+      Known{Spent{tally}}
     case True{}:
-      Branches{depth, outcomes(public, private, index, me), Sum{0.0, 0.0, Nil{}, F32.neg(1.0)}, spent}
+      Branches{depth, outcomes(public, private, index, me), Sum{0.0, 0.0, Nil{}, F32.neg(1.0), A.Settled{}}, N.tally.spend(tally, spent)}
 
-def moves.task(+depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +index: Nat, +nodes: Nat, +me: D.Seat, +budget: Nat) -> Task:
-  +spent : Nat = Nat.add(nodes, Nat.add(List.length(&2, A.World, public), List.length(&2, A.World, private)))
-  moves.branches(Nat.is_le(spent, budget), depth, public, private, index, nodes, spent, me)
+def moves.task(+depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +index: Nat, +tally: N.Tally, +me: D.Seat, +budget: Nat) -> Task:
+  +spent : Nat = Nat.add(N.tally.nodes(tally), Nat.add(List.length(&2, A.World, public), List.length(&2, A.World, private)))
+  moves.branches(Nat.is_le(spent, budget), depth, public, private, index, tally, spent, me)
 
 def scoring.next(+depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, option: Option, result: Searched, options: List<&2, Option>, scored: List<&2, Scored>) -> Task:
   match option result:
-    case Option{index, +move} Value{public_v, private_v, pv, nodes}:
-      Moves{depth, public, private, options, Scored{index, move, public_v, private_v, move <> pv} <> scored, nodes}
-    case _ Spent{nodes}:
-      Known{Spent{nodes}}
-    case _ Scores{_, nodes}:
-      Known{Spent{nodes}}
+    case Option{index, +move} Value{public_v, private_v, pv, tally, reach}:
+      Moves{depth, public, private, options, Scored{index, move, public_v, private_v, move <> pv, reach} <> scored, tally}
+    case _ Spent{tally}:
+      Known{Spent{tally}}
+    case _ Scores{_, tally}:
+      Known{Spent{tally}}
 
-def sum.add(sum: Sum, +public_p: F32, +private_p: F32, +public: U32, +private: U32, pv: List<&2, T.Move>) -> Sum:
+def sum.add(sum: Sum, +public_p: F32, +private_p: F32, +public: U32, +private: U32, pv: List<&2, T.Move>, reach: A.Reach) -> Sum:
   match sum:
-    case Sum{sp, sq, best, +best_p}:
+    case Sum{sp, sq, best, +best_p, reached}:
       +more : F32 = F32.add(sp, F32.mul(public_p, U32.to_f32(public)))
       +less : F32 = F32.add(sq, F32.mul(private_p, U32.to_f32(private)))
-      Bool.pick(Sum, F32.is_gt(private_p, best_p), Sum{more, less, pv, private_p}, Sum{more, less, best, best_p})
+      +joined : A.Reach = N.reach.join(reached, reach)
+      Bool.pick(Sum, F32.is_gt(private_p, best_p), Sum{more, less, pv, private_p, joined}, Sum{more, less, best, best_p, joined})
 
 def adding.next(+depth: Nat, +public_p: F32, +private_p: F32, result: Searched, branches: List<&2, Branch>, sum: Sum) -> Task:
   match result:
-    case Value{public, private, pv, nodes}:
-      Branches{depth, branches, sum.add(sum, public_p, private_p, public, private, pv), nodes}
-    case Spent{nodes}:
-      Known{Spent{nodes}}
-    case Scores{_, nodes}:
-      Known{Spent{nodes}}
+    case Value{public, private, pv, tally, reach}:
+      Branches{depth, branches, sum.add(sum, public_p, private_p, public, private, pv, reach), tally}
+    case Spent{tally}:
+      Known{Spent{tally}}
+    case Scores{_, tally}:
+      Known{Spent{tally}}
 
-def sum.value(sum: Sum, +nodes: Nat) -> Searched:
+def sum.value(sum: Sum, tally: N.Tally) -> Searched:
   match sum:
-    case Sum{public, private, pv, _}:
-      Value{millionths(public), millionths(private), pv, nodes}
+    case Sum{public, private, pv, _, reach}:
+      Value{millionths(public), millionths(private), pv, tally, reach}
 
 def scored.public(s: Scored) -> U32:
   match s:
-    case Scored{_, _, value, _, _}:
+    case Scored{_, _, value, _, _, _}:
       value
 
 def scored.private(s: Scored) -> U32:
   match s:
-    case Scored{_, _, _, value, _}:
+    case Scored{_, _, _, value, _, _}:
       value
+
+# Every move counts: more depth could change any of them, and so the choice.
+def scored.reach(scored: List<&2, Scored>, reach: A.Reach) -> A.Reach:
+  match scored:
+    case Nil{}:
+      reach
+    case Scored{_, _, _, _, _, r} <> rest:
+      scored.reach(rest, N.reach.join(reach, r))
 
 # Ties keep the first canonical move.
 def pick.max(scored: List<&2, Scored>, +best: Scored) -> Scored:
@@ -408,54 +499,63 @@ def public.max(scored: List<&2, Scored>, +best: U32) -> U32:
     case s <> rest:
       public.max(rest, U32.max(best, scored.public(s)))
 
-def decide.chosen(mine: Bool, chosen: Scored, +public_best: U32, +nodes: Nat) -> Searched:
+def decide.chosen(mine: Bool, chosen: Scored, +public_best: U32, tally: N.Tally, reach: A.Reach) -> Searched:
   match mine chosen:
-    case True{} Scored{_, _, _, private, pv}:
-      Value{public_best, private, pv, nodes}
-    case False{} Scored{_, _, public, private, pv}:
-      Value{public, private, pv, nodes}
+    case True{} Scored{_, _, _, private, pv, _}:
+      Value{public_best, private, pv, tally, reach}
+    case False{} Scored{_, _, public, private, pv, _}:
+      Value{public, private, pv, tally, reach}
 
 # The searcher takes its best private value, and the public believes it
 # takes its best public one. An opponent takes the lowest public value.
 def decide(mine: Bool, result: Searched) -> Searched:
   match mine result:
-    case +mine Scores{+first <> +rest, +nodes}:
-      decide.chosen(mine, Bool.pick(Scored, mine, pick.max(rest, first), pick.min(rest, first)), public.max(rest, scored.public(first)), nodes)
-    case _ Scores{Nil{}, nodes}:
-      Spent{nodes}
+    case +mine Scores{+first <> +rest, tally}:
+      decide.chosen(mine, Bool.pick(Scored, mine, pick.max(rest, first), pick.min(rest, first)), public.max(rest, scored.public(first)), tally, scored.reach(rest, scored.reach([first], A.Settled{})))
+    case _ Scores{Nil{}, tally}:
+      Spent{tally}
+    case _ result:
+      result
+
+# A found value goes into the memo with the nodes its search spent.
+def keep(keep: Keep, result: Searched) -> Searched:
+  match keep result:
+    case Keep{key, depth, start} Value{+public, +private, +pv, +tally, +reach}:
+      +entry : N.Entry = N.Entry{public, private, pv, reach, depth, Nat.sub(N.tally.nodes(tally), start)}
+      Value{public, private, pv, N.keep(tally, key, N.Decision{entry}), reach}
     case _ result:
       result
 
 # One def runs every step, so the recursion has one fuel. Each step spends a
 # unit, and a step that cannot run spends the iteration.
-def search(fuel: Nat, task: Task, +me: D.Seat, +budget: Nat, +reload: A.Reload) -> Searched:
+def search(fuel: Nat, task: Task, +me: D.Seat, +budget: Nat, +reload: A.Reload, +memo: A.Memo) -> Searched:
   match fuel task:
     case 0n task:
-      Spent{task.nodes(task)}
+      Spent{task.tally(task)}
     case _ Known{result}:
       result
-    case 1n+(+fuel) Node{depth, public, private, nodes}:
-      search(fuel, node.task(depth, public, private, nodes, me, reload), me, budget, reload)
-    case 1n+(+fuel) Decide{mine, moves}:
-      decide(mine, search(fuel, moves, me, budget, reload))
-    case _ Moves{_, _, _, Nil{}, scored, nodes}:
-      Scores{List.reverse(&2, Scored, scored), nodes}
-    case 1n+(+fuel) Moves{+depth, +public, +private, Option{+index, move} <> options, scored, nodes}:
-      +branches : Task = moves.task(depth, public, private, index, nodes, me, budget)
-      search(fuel, Scoring{depth, public, private, Option{index, move}, search(fuel, branches, me, budget, reload), options, scored}, me, budget, reload)
+    case 1n+(+fuel) Node{depth, public, private, tally}:
+      search(fuel, node.task(depth, public, private, tally, me, reload, memo, budget), me, budget, reload, memo)
+    case 1n+(+fuel) Decide{mine, kept, moves}:
+      keep(kept, decide(mine, search(fuel, moves, me, budget, reload, memo)))
+    case _ Moves{_, _, _, Nil{}, scored, tally}:
+      Scores{List.reverse(&2, Scored, scored), tally}
+    case 1n+(+fuel) Moves{+depth, +public, +private, Option{+index, move} <> options, scored, tally}:
+      +branches : Task = moves.task(depth, public, private, index, tally, me, budget)
+      search(fuel, Scoring{depth, public, private, Option{index, move}, search(fuel, branches, me, budget, reload, memo), options, scored}, me, budget, reload, memo)
     case 1n+(+fuel) Scoring{depth, public, private, option, result, options, scored}:
-      search(fuel, scoring.next(depth, public, private, option, result, options, scored), me, budget, reload)
-    case _ Branches{_, Nil{}, sum, nodes}:
-      sum.value(sum, nodes)
-    case 1n+(+fuel) Branches{+depth, Branch{public, private, public_p, private_p} <> branches, sum, nodes}:
-      search(fuel, Adding{depth, public_p, private_p, search(fuel, Node{depth, public, private, nodes}, me, budget, reload), branches, sum}, me, budget, reload)
+      search(fuel, scoring.next(depth, public, private, option, result, options, scored), me, budget, reload, memo)
+    case _ Branches{_, Nil{}, sum, tally}:
+      sum.value(sum, tally)
+    case 1n+(+fuel) Branches{+depth, Branch{public, private, public_p, private_p} <> branches, sum, tally}:
+      search(fuel, Adding{depth, public_p, private_p, search(fuel, Node{depth, public, private, tally}, me, budget, reload, memo), branches, sum}, me, budget, reload, memo)
     case 1n+(+fuel) Adding{depth, public_p, private_p, result, branches, sum}:
-      search(fuel, adding.next(depth, public_p, private_p, result, branches, sum), me, budget, reload)
+      search(fuel, adding.next(depth, public_p, private_p, result, branches, sum), me, budget, reload, memo)
 
 def line.of(scored: Scored) -> A.Line:
   match scored:
-    case Scored{index, move, _, private, pv}:
-      A.Line{index, move, private, pv}
+    case Scored{index, move, _, private, pv, reach}:
+      A.Line{index, move, private, pv, reach}
 
 def lines.of(scored: List<&2, Scored>) -> List<&2, A.Line>:
   match scored:
@@ -471,20 +571,20 @@ def line.best(lines: List<&2, A.Line>, +best: A.Line) -> A.Line:
     case +line <> rest:
       line.best(rest, Bool.pick(A.Line, U32.is_gt(A.line.score(line), A.line.score(best)), line, best))
 
-def analysed(+lines: List<&2, A.Line>, nodes: Nat, depth: Nat, limited: Bool) -> A.Analysis:
+def analysed(+lines: List<&2, A.Line>, +tally: N.Tally, depth: Nat, limited: Bool) -> A.Analysis:
   match lines:
     case Nil{}:
-      A.Invalid{"no legal move", nodes}
+      A.Invalid{"no legal move", N.tally.nodes(tally)}
     case +first <> rest:
       +best : A.Line = line.best(rest, first)
-      A.Analysed{lines, A.line.index(best), A.line.score(best), nodes, depth, limited}
+      A.Analysed{lines, A.line.index(best), A.line.score(best), N.tally.nodes(tally), depth, limited, N.tally.cached(tally)}
 
-def analysis.limited(analysis: A.Analysis, nodes: Nat) -> A.Analysis:
+def analysis.limited(analysis: A.Analysis, +tally: N.Tally) -> A.Analysis:
   match analysis:
-    case A.Analysed{lines, best, score, _, depth, _}:
-      A.Analysed{lines, best, score, nodes, depth, True{}}
+    case A.Analysed{lines, best, score, _, depth, _, _}:
+      A.Analysed{lines, best, score, N.tally.nodes(tally), depth, True{}, N.tally.cached(tally)}
     case A.Invalid{reason, _}:
-      A.Invalid{reason, nodes}
+      A.Invalid{reason, N.tally.nodes(tally)}
 
 # Every move scores the static value of the belief, with no move played.
 def lines.static(options: List<&2, Option>, +score: U32) -> List<&2, A.Line>:
@@ -492,82 +592,82 @@ def lines.static(options: List<&2, Option>, +score: U32) -> List<&2, A.Line>:
     case Nil{}:
       Nil{}
     case Option{index, +move} <> rest:
-      A.Line{index, move, score, [move]} <> lines.static(rest, score)
+      A.Line{index, move, score, [move], A.Cut{}} <> lines.static(rest, score)
 
 def fuel(budget: Nat) -> Nat:
   Nat.add(Nat.mul(budget, 8n), 64n)
 
 # Iterative deepening. `attempt` is the search to `depth` decisions; only a
-# finished one replaces `completed`, and the node count runs on across depths.
-def deepen(steps: Nat, attempt: Searched, completed: A.Analysis, +depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +options: List<&2, Option>, +me: D.Seat, +budget: Nat, +reload: A.Reload) -> A.Analysis:
+# finished one replaces `completed`, and the tally runs on across depths.
+def deepen(steps: Nat, attempt: Searched, completed: A.Analysis, +depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +options: List<&2, Option>, +me: D.Seat, +budget: Nat, +reload: A.Reload, +memo: A.Memo) -> A.Analysis:
   match steps attempt:
-    case _ Spent{nodes}:
-      analysis.limited(completed, nodes)
-    case 0n Scores{scored, nodes}:
-      analysed(lines.of(scored), nodes, depth, False{})
-    case 1n+rest Scores{scored, +nodes}:
-      +next : Searched = search(fuel(budget), Moves{depth, public, private, options, Nil{}, nodes}, me, budget, reload)
-      deepen(rest, next, analysed(lines.of(scored), nodes, depth, False{}), 1n+depth, public, private, options, me, budget, reload)
-    case _ Value{_, _, _, nodes}:
-      analysis.limited(completed, nodes)
+    case _ Spent{tally}:
+      analysis.limited(completed, tally)
+    case 0n Scores{scored, tally}:
+      analysed(lines.of(scored), tally, depth, False{})
+    case 1n+rest Scores{scored, +tally}:
+      +next : Searched = search(fuel(budget), Moves{depth, public, private, options, Nil{}, tally}, me, budget, reload, memo)
+      deepen(rest, next, analysed(lines.of(scored), tally, depth, False{}), 1n+depth, public, private, options, me, budget, reload, memo)
+    case _ Value{_, _, _, tally, _}:
+      analysis.limited(completed, tally)
 
-def root(depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +options: List<&2, Option>, +me: D.Seat, +budget: Nat, +reload: A.Reload) -> A.Analysis:
+def root(depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +options: List<&2, Option>, +me: D.Seat, +budget: Nat, +reload: A.Reload, +memo: A.Memo) -> A.Analysis:
   match depth:
     case 0n:
-      analysed(lines.static(options, static(private, me)), 0n, 0n, False{})
+      analysed(lines.static(options, static(private, me)), N.tally.new(), 0n, False{})
     case 1n+rest:
-      +first : Searched = search(fuel(budget), Moves{0n, public, private, options, Nil{}, 0n}, me, budget, reload)
-      deepen(rest, first, analysed(lines.static(options, static(private, me)), 0n, 0n, True{}), 1n, public, private, options, me, budget, reload)
+      +first : Searched = search(fuel(budget), Moves{0n, public, private, options, Nil{}, N.tally.new()}, me, budget, reload, memo)
+      deepen(rest, first, analysed(lines.static(options, static(private, me)), N.tally.new(), 0n, True{}), 1n, public, private, options, me, budget, reload, memo)
 
-def root.turn(mine: Bool, depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +options: List<&2, Option>, +me: D.Seat, +budget: Nat, +reload: A.Reload) -> A.Analysis:
+def root.turn(mine: Bool, depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +options: List<&2, Option>, +me: D.Seat, +budget: Nat, +reload: A.Reload, +memo: A.Memo) -> A.Analysis:
   match mine:
     case True{}:
-      root(depth, public, private, options, me, budget, reload)
+      root(depth, public, private, options, me, budget, reload, memo)
     case False{}:
       A.Invalid{"it is not this player's turn", 0n}
 
-def root.request(request: T.Request, depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +me: D.Seat, +budget: Nat, +reload: A.Reload) -> A.Analysis:
+def root.request(request: T.Request, depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World>, +me: D.Seat, +budget: Nat, +reload: A.Reload, +memo: A.Memo) -> A.Analysis:
   match request:
     case T.Choose{seat, D.NonEmpty{move, rest}}:
-      root.turn(D.seat.eq(seat, me), depth, public, private, options.of(move <> rest, 0n), me, budget, reload)
+      root.turn(D.seat.eq(seat, me), depth, public, private, options.of(move <> rest, 0n), me, budget, reload, memo)
     case _:
       A.Invalid{"the position is not a choice", 0n}
 
-def root.belief(public: List<&2, A.World>, +private: List<&2, A.World>, depth: Nat, +me: D.Seat, +budget: Nat, +reload: A.Reload) -> A.Analysis:
+def root.belief(public: List<&2, A.World>, +private: List<&2, A.World>, depth: Nat, +me: D.Seat, +budget: Nat, +reload: A.Reload, +memo: A.Memo) -> A.Analysis:
   match public:
     case Nil{}:
       A.Invalid{"public log has no consistent shell/deck belief", 0n}
     case A.World{+state, +weight} <> +rest:
-      root.request(M.request(state), depth, A.World{state, weight} <> rest, private, me, budget, reload)
+      root.request(M.request(state), depth, A.World{state, weight} <> rest, private, me, budget, reload, memo)
 
-def analyse.built(built: B.Built, depth: Nat, +budget: Nat, +reload: A.Reload) -> A.Analysis:
+def analyse.built(built: B.Built, depth: Nat, +budget: Nat, +reload: A.Reload, +memo: A.Memo) -> A.Analysis:
   match built:
     case B.Built{A.Belief{public, private, me, _}}:
-      root.belief(public, private, depth, me, budget, reload)
+      root.belief(public, private, depth, me, budget, reload, memo)
     case B.Rejected{reason}:
       A.Invalid{reason, 0n}
 
-def analyse.dealt(table: D.Table, +position: A.Position, depth: Nat, +budget: Nat, +reload: A.Reload) -> A.Analysis:
+def analyse.dealt(table: D.Table, +position: A.Position, depth: Nat, +budget: Nat, +reload: A.Reload, +memo: A.Memo) -> A.Analysis:
   match table:
     case D.TwoSeats{}:
-      analyse.built(B.build(position), depth, budget, reload)
+      analyse.built(B.build(position), depth, budget, reload, memo)
     case D.ThreeSeats{}:
       A.Invalid{"a leaf that deals the reload takes two seats only", 0n}
     case D.FourSeats{}:
       A.Invalid{"a leaf that deals the reload takes two seats only", 0n}
 
-def analyse.table(table: D.Table, +position: A.Position, depth: Nat, +budget: Nat, +reload: A.Reload) -> A.Analysis:
+def analyse.table(table: D.Table, +position: A.Position, depth: Nat, +budget: Nat, +reload: A.Reload, +memo: A.Memo) -> A.Analysis:
   match reload:
     case A.Static{}:
-      analyse.built(B.build(position), depth, budget, reload)
+      analyse.built(B.build(position), depth, budget, reload, memo)
     case A.ExpectedDeal{}:
-      analyse.dealt(table, position, depth, budget, reload)
+      analyse.dealt(table, position, depth, budget, reload, memo)
     case A.Sampled{0n}:
       A.Invalid{"the sampled leaf needs at least one deal", 0n}
     case A.Sampled{1n+more}:
-      analyse.dealt(table, position, depth, budget, A.Sampled{1n+more})
+      analyse.dealt(table, position, depth, budget, A.Sampled{1n+more}, memo)
 
-def analyse(position: A.Position, depth: Nat, +budget: Nat, +reload: A.Reload) -> A.Analysis:
+def analyse(position: A.Position, depth: Nat, +budget: Nat, +reload: A.Reload, +memo: A.Memo) -> A.Analysis:
   match position:
     case A.Position{D.Config{+table, plan}, board, log, me}:
-      analyse.table(table, A.Position{D.Config{table, plan}, board, log, me}, depth, budget, reload)
+      analyse.table(table, A.Position{D.Config{table, plan}, board, log, me}, depth, budget, reload, memo)
