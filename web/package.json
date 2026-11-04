@@ -14,11 +14,13 @@
     "foldkit": "0.167.0"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "2.0.0-beta.v.11",
     "@foldkit/vite-plugin": "0.27.1",
     "@hegeldev/hegel": "0.4.12",
     "@modelcontextprotocol/client": "2.3.1",
     "@oxlint/plugins": "1.87.0",
     "@types/bun": "1.4.2",
+    "cf": "1.0.0-beta.27",
     "oxlint": "1.87.0",
     "playwright-core": "1.64.0",
     "tsrs": "0.18.0-ts7.1.0-dev.20260929",
@@ -32,6 +34,9 @@
     "lint": "oxlint --deny-warnings",
     "typecheck": "tsrs --noEmit -p .",
     "test": "bun run rules && bun test ./test",
-    "mcp": "bun run rules 1>&2 && bun scripts/mcp.ts"
+    "mcp": "bun run rules 1>&2 && bun scripts/mcp.ts",
+    "dev:online": "bun run rules && cf dev --mode online",
+    "build:online": "bun run rules && cf build --mode online",
+    "deploy:online": "bun run rules && cf deploy --mode online"
   }
 }

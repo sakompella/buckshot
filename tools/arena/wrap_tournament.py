@@ -19,6 +19,7 @@ check stops the run with a message and a non-zero exit; fix the cause and rerun.
   certain   certain-mistakes database
   swap-derived  swap regret, knowledge and certain-mistakes in, each keeping a .pre-<name> copy
   public    redact_database.py, scan every column for emails, swap, restart the viewer
+  export    arena-export.ts: the online site's aggregate JSON from the public copy into web/online/data (deploy stays manual: `bun run deploy:online`)
   doc-*     rerun the doc table scripts into the working tree (nothing is committed)
   cleanup   restart the viewer, delete the scratch files
 
@@ -379,6 +380,13 @@ class Wrap:
         swap(self.public, new, self.tag)
         return "0 emails in the public copy; " + self.viewer_up()
 
+    def export(self) -> str:
+        out = REPO / "web/online/data"
+        derived = [("--regret", "regret"), ("--knowledge", "knowledge"), ("--certain-mistakes", "certain-mistakes")]
+        args = [str(self.public), "--out", str(out), *[a for flag, name in derived for a in (flag, str(self.derived / f"{name}.sqlite"))]]
+        self.run("export", self.nix(REPO, "bun", "scripts/arena-export.ts", *args), cwd=REPO / "web")
+        return f"aggregates in {out}; deploy with `bun run deploy:online` from web/"
+
     def doc(self, script: str, doc: str, *args: str) -> Callable[[], None]:
         def step() -> None:
             self.run(f"doc-{script}", [sys.executable, f"tools/arena/analysis/{script}.py", *args, "--doc", str(self.docs / doc)])
@@ -416,6 +424,7 @@ class Wrap:
             ("certain", self.certain),
             ("swap-derived", self.swap_derived),
             ("public", self.public_),
+            ("export", self.export),
             ("doc-leaderboard", self.doc("leaderboard", "results.md", *dbs)),
             ("doc-regret", self.doc("regret", f"{a}/regret.md", *derived)),
             ("doc-by_round", self.doc("by_round", f"{a}/regret.md", *dbs, *derived)),
