@@ -6,7 +6,7 @@ import { Option } from "effect";
 import { configSummaries, ODDS_BINS, oddsBinOf, selfShotTallies } from "../src/arena-viewer/aggregates.ts";
 import { chamberPatterns, roundStory, ShellTracker, shotLineIn } from "../src/arena-viewer/analysis.ts";
 import type { Seat } from "../src/arena-viewer/api.ts";
-import { type BlockTally, blockRate, colorOf, fmtBytes, groupBy, labelOf, lossStats, matchRows, quantile, regretStats, rng, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
+import { type BlockTally, blockRate, colorOf, fmtBytes, groupBy, labelOf, largestGap, matchRows, quantile, regretStats, rng, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { bradleyTerry, type Game, heldOutRatings, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 import { droppedConfigs, oddsPanels } from "../src/arena-viewer/page/odds.ts";
 import { shotOf, showsReloadNote, turningPoints } from "../src/arena-viewer/page/replay.ts";
@@ -355,32 +355,18 @@ test("a config's regret weights every searched move equally, whichever seat it c
   expect(regretStats([])).toBeNull();
 });
 
-test("own loss per match is the mean regret over fully searched seats, and the largest miss is over every searched move", () =>
+test("the largest gap is the searched move with the most points given up, over every scored seat", () =>
   hegel.test((tc) => {
-    const seatGen = gs.composite<Parameters<typeof lossStats>[0][number]>((draw) => {
-      const moves = draw.draw(gs.integers({ minValue: 1, maxValue: 6 }));
-      const searched = draw.draw(gs.integers({ minValue: 0, maxValue: moves }));
-      const [total, points, ordinal] = draw.draw(gs.tuples(gs.integers({ minValue: 0, maxValue: 500 }), gs.integers({ minValue: 0, maxValue: 100 }), gs.integers({ minValue: 1, maxValue: 30 })));
+    const seatGen = gs.composite<Parameters<typeof largestGap>[0][number]>((draw) => {
+      const [searched, points, ordinal] = draw.draw(gs.tuples(gs.booleans(), gs.integers({ minValue: 0, maxValue: 100 }), gs.integers({ minValue: 1, maxValue: 30 })));
 
-      return { matchId: `m${draw.draw(gs.integers({ minValue: 0, maxValue: 99 }))}`, moves, regret: searched === 0 ? null : { moves: searched, total, exact: 0, largest: { ordinal, points } } };
+      return { matchId: `m${draw.draw(gs.integers({ minValue: 0, maxValue: 99 }))}`, regret: searched ? { moves: 1, total: points, exact: 0, largest: { ordinal, points } } : null };
     });
 
     const seats = tc.draw(gs.arrays(seatGen, { maxSize: 12 }));
-    const covered = seats.filter(({ moves, regret }) => regret !== null && regret.moves === moves);
-    const withRegret = seats.flatMap(({ matchId, regret }) => (regret === null ? [] : [{ matchId, ...regret.largest }]));
-    const [worst] = withRegret.toSorted((left, right) => right.points - left.points);
-    const loss = lossStats(seats);
+    const [worst] = seats.flatMap(({ matchId, regret }) => (regret === null ? [] : [{ matchId, ...regret.largest }])).toSorted((left, right) => right.points - left.points);
 
-    if (covered.length === 0 || worst === undefined) {
-      expect(loss).toBeNull();
-
-      return;
-    }
-
-    expect(loss?.matches).toBe(covered.length);
-    expect(loss?.excluded).toBe(seats.length - covered.length);
-    expect(loss?.perMatch).toBeCloseTo(covered.reduce((total, { regret }) => total + (regret?.total ?? 0), 0) / 100 / covered.length, 9);
-    expect(loss?.largest).toEqual(worst);
+    expect(largestGap(seats)).toEqual(worst ?? null);
   }));
 
 // Two-player matches over the sweeps' pairings where every match lasts `rounds` rounds and the winner takes `winnerRounds` of them.
@@ -416,12 +402,12 @@ test("a config's mean regret comes from its own scored seats, so a lower-regret 
   expect(meanOf("claude-haiku-4-5-20251001")).toBe(7);
 });
 
-test("the scatter's regret axis places a config with no searched move nowhere and a measured zero at zero", () => {
+test("the scatter's accuracy axis places a config with no searched move nowhere and a measured zero at zero", () => {
   const [unsearched, flawless, flawed] = modelStats(
     [null, { moves: 4, total: 0, exact: 4, largest: { ordinal: 1, points: 0 } }, { moves: 2, total: 3, exact: 0, largest: { ordinal: 1, points: 2 } }].map((regret, index) => ({ ...SEAT, matchId: `m${index}`, effort: `e${index}`, potShare: null, regret })),
   );
 
-  expect([unsearched, flawless, flawed].map((config) => (config === undefined ? undefined : AXES.regret.valueOf(config)))).toEqual([null, 0, 1.5]);
+  expect([unsearched, flawless, flawed].map((config) => (config === undefined ? undefined : AXES.regret.valueOf(config)))).toEqual([null, 100, 98.5]);
 });
 
 test("when losers win rounds, rounds ratings keep the order of sweeps' ratings but sit closer together", () => {

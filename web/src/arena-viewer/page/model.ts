@@ -8,12 +8,12 @@ import { AGGREGATES } from "../aggregates.ts";
 import { CertainMistakes, CertainType, Decisions, Download, MatchDetail, Seat } from "../api.ts";
 
 /** The page's groups below the hero, in page order: the jump menu's links, and the sections the reader can be in. */
-export const Group = Schema.Literals(["standings", "decisions", "health", "watch", "tables"]);
+export const Group = Schema.Literals(["standings", "decisions", "watch", "tables"]);
 
 export type Group = typeof Group.Type;
 
 /** The sections, each an in-page anchor; a link to one the page no longer has lands at its MOVED_TARGETS entry. */
-export const Section = Schema.Literals(["scatter", "breakdown", "certain-mistakes", "odds", "items", "spend", "matches", "leaderboards"]);
+export const Section = Schema.Literals(["scatter", "breakdown", "certain-mistakes", "odds", "items", "matches", "leaderboards"]);
 
 export type Section = typeof Section.Type;
 
@@ -23,23 +23,18 @@ export type Target = typeof Target.Type;
 
 export const MOVED_TARGETS: ReadonlyMap<string, Target> = new Map([
   ["results", "standings"],
-  ["rounds", "spend"],
-  ["reliability", "spend"],
   ["details", "leaderboards"],
   ["interesting", "matches"],
   ["blunders", "matches"],
   ["mistakes", "odds"],
   ["luck", "odds"],
   ["pressure", "leaderboards"],
-  ["rubbers", "spend"],
-  ["seats", "spend"],
   ["deals", "matches"],
 ]);
 
 const EVERY_GROUP: ReadonlyArray<{ readonly group: Group; readonly label: string; readonly sections: ReadonlyArray<Section> }> = [
   { group: "standings", label: "Standings", sections: ["scatter", "breakdown"] },
   { group: "decisions", label: "How they play", sections: ["certain-mistakes", "odds", "items"] },
-  { group: "health", label: "Run health", sections: ["spend"] },
   { group: "watch", label: "Matches", sections: ["matches"] },
   { group: "tables", label: "Tables", sections: ["leaderboards"] },
 ];
