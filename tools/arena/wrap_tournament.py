@@ -440,7 +440,7 @@ class Wrap:
         out = self.logs / "beliefs-and-items.tables.md"
         out.unlink(missing_ok=True)
         self.run("doc-beliefs", self.nix(self.knowledge, "bun", "scripts/arena-knowledge-report.ts", "--db", str(self.derived / "knowledge.sqlite")), cwd=self.knowledge / "web", stdout=out)
-        doc = self.docs / "beliefs-and-items.md"
+        doc = self.docs / "analysis/beliefs-and-items.md"
         doc.write_text(splice_between_markers(doc.read_text(), "beliefs", out.read_text()))
 
     def cleanup(self) -> str:

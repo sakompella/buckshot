@@ -11,26 +11,16 @@ so tau = 0 means no pair terms and a small tau means strongly shrunk ones.
 import math
 from dataclasses import dataclass, field
 
+import numpy as np
+
 from load import Game
 
 ELO = 400 / math.log(10)  # Elo points per unit of theta
 
 
 def solve(a: list[list[float]], b: list[float]) -> list[float]:
-    """Solves a x = b by Gaussian elimination with partial pivoting."""
-    n = len(b)
-    rows = [[*row, value] for row, value in zip(a, b)]
-    for col in range(n):
-        pivot = max(range(col, n), key=lambda r: abs(rows[r][col]))
-        rows[col], rows[pivot] = rows[pivot], rows[col]
-        for r in range(col + 1, n):
-            factor = rows[r][col] / rows[col][col]
-            if factor:
-                rows[r] = [x - factor * y for x, y in zip(rows[r], rows[col])]
-    x = [0.0] * n
-    for r in range(n - 1, -1, -1):
-        x[r] = (rows[r][n] - sum(rows[r][c] * x[c] for c in range(r + 1, n))) / rows[r][r]
-    return x
+    """Solves a x = b."""
+    return np.linalg.solve(np.array(a), np.array(b)).tolist()
 
 
 def sigmoid(x: float) -> float:
