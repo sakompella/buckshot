@@ -314,6 +314,7 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
   .fate-hit { height: 44px; align-items: center; background: linear-gradient(#0d0d0d, #0d0d0d) center / 100% 12px no-repeat; }
   .fate-hit i { height: 12px; }
   details > summary { min-height: 44px; display: flex; align-items: center; }
+  .sel details.fold > summary { min-height: 36px; margin: 0; }
   table.heat th.sortable { height: 44px; }
   table.heat td .n { position: static; display: block; text-align: right; margin: 1px -5px -2px 0; }
 }
