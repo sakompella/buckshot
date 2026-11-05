@@ -13,6 +13,10 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
+# A near-flat prior (sd 1000) on the seat and starter terms: it keeps the Newton system solvable when a training set
+# has every game with the same starter, which makes the starter term a copy of the seat term.
+FLAT = 1e-6
+
 from load import Game
 
 ELO = 400 / math.log(10)  # Elo points per unit of theta
@@ -77,10 +81,10 @@ def fit(cells: Cells, tau: float = 0.0, seat: bool = False, start: bool = False,
     penalty = [1 / theta_sd**2] * len(names)
     if seat:
         column[("seat", "")] = len(column)
-        penalty.append(0.0)
+        penalty.append(FLAT)
     if start:
         column[("start", "")] = len(column)
-        penalty.append(0.0)
+        penalty.append(FLAT)
     if tau > 0:
         pairs = {pair_of(*key[:2]) for key in cells}
         if pair_terms is not None:
