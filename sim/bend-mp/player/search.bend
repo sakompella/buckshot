@@ -84,11 +84,16 @@ def seen.eq(a: List<&2, Seen>, b: List<&2, Seen>) -> Bool:
       False{}
 
 # One world after a move, with what the public and the searcher observed.
+# The state sits behind one pointer (D.Boxed), so grouping an Out that is
+# shared copies four words instead of every word of the state.
+type Held is Data:
+  Held{state: T.State, boxed: D.Boxed<&2, Held>}
+
 type Out is Data:
-  Out{state: T.State, weight: F32, public: List<&2, Seen>, private: List<&2, Seen>}
+  Out{held: Held, weight: F32, public: List<&2, Seen>, private: List<&2, Seen>}
 
 def out.of(+state: T.State, +notes: List<&2, D.Note>, +weight: F32, +me: D.Seat) -> Out:
-  Out{state, weight, seen(notes, me, False{}), seen(notes, me, True{})}
+  Out{Held{state, D.Boxed{}}, weight, seen(notes, me, False{}), seen(notes, me, True{})}
 
 def phone.answered(stepped: D.Stepped<&2, T.State>, notes: List<&2, D.Note>, +weight: F32, +me: D.Seat) -> Out:
   match stepped:
@@ -230,7 +235,7 @@ def worlds.of(outs: List<&2, Out>, +mass: F32) -> List<&2, A.World>:
   match outs:
     case Nil{}:
       Nil{}
-    case Out{state, weight, _, _} <> rest:
+    case Out{Held{state, _}, weight, _, _} <> rest:
       A.World{state, F32.div(weight, mass)} <> worlds.of(rest, mass)
 
 # One observation after a move: the public belief and one of the searcher's
