@@ -169,40 +169,57 @@ type Stored is Data:
 type Kept is Data:
   Kept{key: String, stored: Stored}
 
+# The memo a decision starts from when the search carries it on from the same
+# player's decision before (analyse.carried). It is only read: a hit copies its
+# entry into this decision's memo, which becomes the next decision's carry.
+# With `deeper`, an entry that was searched deeper than a node needs serves it.
+type Carry is Data:
+  NoCarry{}
+  Carry{memo: Map<&2, List<&2, Kept>>, deeper: Bool}
+
 # The memo files each key under a short hash of it, beside the other keys of
 # that hash; comparing whole keys there keeps a collision from mixing values.
-# What the search has spent and found so far: its nodes, the memo, the
-# decision nodes and deal leaves the memo holds, and how often each was reused.
+# What the search has spent and found so far: its nodes, the memo and the
+# carry, the decision nodes and deal leaves the memo holds, how often each was
+# reused, the nodes the hits were charged, and how many hits the carry served.
 type Tally is Data:
-  Tally{nodes: Nat, memo: Map<&2, List<&2, Kept>>, entries: Nat, hits: Nat, deals: Nat, deal_hits: Nat}
+  Tally{nodes: Nat, memo: Map<&2, List<&2, Kept>>, carry: Carry, entries: Nat, hits: Nat, deals: Nat, deal_hits: Nat, charged: Nat, carried: Nat}
+
+def tally.of(+nodes: Nat, +carry: Carry) -> Tally:
+  Tally{nodes, Map.new(&2, List<&2, Kept>), carry, 0n, 0n, 0n, 0n, 0n, 0n}
 
 def tally.new() -> Tally:
-  Tally{0n, Map.new(&2, List<&2, Kept>), 0n, 0n, 0n, 0n}
+  tally.of(0n, NoCarry{})
 
 def tally.nodes(tally: Tally) -> Nat:
   match tally:
-    case Tally{nodes, _, _, _, _, _}:
+    case Tally{nodes, _, _, _, _, _, _, _, _}:
       nodes
 
 def tally.spend(tally: Tally, +nodes: Nat) -> Tally:
   match tally:
-    case Tally{_, memo, entries, hits, deals, deal_hits}:
-      Tally{nodes, memo, entries, hits, deals, deal_hits}
+    case Tally{_, memo, carry, entries, hits, deals, deal_hits, charged, carried}:
+      Tally{nodes, memo, carry, entries, hits, deals, deal_hits, charged, carried}
 
 def tally.cached(tally: Tally) -> A.Cached:
   match tally:
-    case Tally{_, _, entries, hits, deals, deal_hits}:
+    case Tally{_, _, _, entries, hits, deals, deal_hits, _, _}:
       A.Cached{entries, hits, deals, deal_hits}
 
 def tally.hit(tally: Tally, +cost: Nat) -> Tally:
   match tally:
-    case Tally{nodes, memo, entries, hits, deals, deal_hits}:
-      Tally{Nat.add(nodes, cost), memo, entries, 1n+hits, deals, deal_hits}
+    case Tally{nodes, memo, carry, entries, hits, deals, deal_hits, charged, carried}:
+      Tally{Nat.add(nodes, cost), memo, carry, entries, 1n+hits, deals, deal_hits, Nat.add(charged, cost), carried}
 
 def tally.deal_hit(tally: Tally) -> Tally:
   match tally:
-    case Tally{nodes, memo, entries, hits, deals, deal_hits}:
-      Tally{nodes, memo, entries, hits, deals, 1n+deal_hits}
+    case Tally{nodes, memo, carry, entries, hits, deals, deal_hits, charged, carried}:
+      Tally{nodes, memo, carry, entries, hits, deals, 1n+deal_hits, charged, carried}
+
+def tally.from_carry(tally: Tally) -> Tally:
+  match tally:
+    case Tally{nodes, memo, carry, entries, hits, deals, deal_hits, charged, carried}:
+      Tally{nodes, memo, carry, entries, hits, deals, deal_hits, charged, 1n+carried}
 
 def reach.join(a: A.Reach, b: A.Reach) -> A.Reach:
   match a b:
@@ -225,6 +242,17 @@ def entry.serves(reach: A.Reach, +searched: Nat, +depth: Nat) -> Bool:
       Nat.is_eq(searched, depth)
     case _:
       Nat.is_le(searched, depth)
+
+# A carried entry serves as entry.serves says, or with `deeper` whenever it
+# was searched at least as deep as the node needs; an uncut one at any depth.
+def entry.carried(deeper: Bool, reach: A.Reach, +searched: Nat, +depth: Nat) -> Bool:
+  match deeper reach:
+    case False{} reach:
+      entry.serves(reach, searched, depth)
+    case True{} A.Cut{}:
+      Nat.is_le(depth, searched)
+    case True{} _:
+      True{}
 
 def entry.cost(memo: A.Memo, +cost: Nat) -> Nat:
   match memo:
@@ -272,14 +300,61 @@ def bucket.without(bucket: List<&2, Kept>, +key: String) -> List<&2, Kept>:
 def hash(+key: String) -> String:
   put.u32(L.key.seed(key, 2166136261), SNil{})
 
-def found.of(got: Map<&2, List<&2, Kept>> & List<&2, Kept>, +key: String, +nodes: Nat, +entries: Nat, +hits: Nat, +deals: Nat, +deal_hits: Nat) -> Tally & Maybe<&2, Stored>:
+def found.in(got: Map<&2, List<&2, Kept>> & List<&2, Kept>, +key: String) -> Map<&2, List<&2, Kept>> & Maybe<&2, Stored>:
   (memo, +bucket) = got
-  (Tally{nodes, memo, entries, hits, deals, deal_hits}, bucket.find(bucket, bucket.first_is(bucket, key), key))
+  (memo, bucket.find(bucket, bucket.first_is(bucket, key), key))
+
+def found.of(found: Map<&2, List<&2, Kept>> & Maybe<&2, Stored>, +carry: Carry, +nodes: Nat, +entries: Nat, +hits: Nat, +deals: Nat, +deal_hits: Nat, +charged: Nat, +carried: Nat) -> Tally & Maybe<&2, Stored>:
+  (memo, stored) = found
+  (Tally{nodes, memo, carry, entries, hits, deals, deal_hits, charged, carried}, stored)
 
 def find(tally: Tally, +key: String) -> Tally & Maybe<&2, Stored>:
   match tally:
-    case Tally{nodes, memo, entries, hits, deals, deal_hits}:
-      found.of(Map.get(List<&2, Kept>, Nil{}, memo, hash(key)), key, nodes, entries, hits, deals, deal_hits)
+    case Tally{nodes, memo, carry, entries, hits, deals, deal_hits, charged, carried}:
+      found.of(found.in(Map.get(List<&2, Kept>, Nil{}, memo, hash(key)), key), carry, nodes, entries, hits, deals, deal_hits, charged, carried)
+
+def carry.of(found: Map<&2, List<&2, Kept>> & Maybe<&2, Stored>, +deeper: Bool) -> Carry & Maybe<&2, Stored>:
+  (memo, stored) = found
+  (Carry{memo, deeper}, stored)
+
+def carry.find(carry: Carry, +key: String) -> Carry & Maybe<&2, Stored>:
+  match carry:
+    case NoCarry{}:
+      (NoCarry{}, None{})
+    case Carry{memo, deeper}:
+      carry.of(found.in(Map.get(List<&2, Kept>, Nil{}, memo, hash(key)), key), deeper)
+
+def carried.of(found: Carry & Maybe<&2, Stored>, memo: Map<&2, List<&2, Kept>>, +nodes: Nat, +entries: Nat, +hits: Nat, +deals: Nat, +deal_hits: Nat, +charged: Nat, +carried: Nat) -> Tally & Maybe<&2, Stored>:
+  (carry, stored) = found
+  (Tally{nodes, memo, carry, entries, hits, deals, deal_hits, charged, carried}, stored)
+
+# What the carry holds under the key; nothing without a carry.
+def find.carried(tally: Tally, +key: String) -> Tally & Maybe<&2, Stored>:
+  match tally:
+    case Tally{nodes, memo, carry, entries, hits, deals, deal_hits, charged, carried}:
+      carried.of(carry.find(carry, key), memo, nodes, entries, hits, deals, deal_hits, charged, carried)
+
+def tally.deeper(tally: Tally) -> Tally & Bool:
+  match tally:
+    case Tally{nodes, memo, Carry{carried_memo, +deeper}, entries, hits, deals, deal_hits, charged, carried}:
+      (Tally{nodes, memo, Carry{carried_memo, deeper}, entries, hits, deals, deal_hits, charged, carried}, deeper)
+    case tally:
+      (tally, False{})
+
+def tally.memo(tally: Tally) -> Map<&2, List<&2, Kept>>:
+  match tally:
+    case Tally{_, memo, _, _, _, _, _, _, _}:
+      memo
+
+def tally.charged(tally: Tally) -> Nat:
+  match tally:
+    case Tally{_, _, _, _, _, _, _, charged, _}:
+      charged
+
+def tally.carried(tally: Tally) -> Nat:
+  match tally:
+    case Tally{_, _, _, _, _, _, _, _, carried}:
+      carried
 
 def stored.count(stored: Stored, +entries: Nat, +deals: Nat) -> Nat & Nat:
   match stored:
@@ -288,19 +363,19 @@ def stored.count(stored: Stored, +entries: Nat, +deals: Nat) -> Nat & Nat:
     case Deal{_}:
       (entries, 1n+deals)
 
-def kept.counted(counts: Nat & Nat, +nodes: Nat, memo: Map<&2, List<&2, Kept>>, +hits: Nat, +deal_hits: Nat) -> Tally:
+def kept.counted(counts: Nat & Nat, +nodes: Nat, memo: Map<&2, List<&2, Kept>>, +carry: Carry, +hits: Nat, +deal_hits: Nat, +charged: Nat, +carried: Nat) -> Tally:
   (entries, deals) = counts
-  Tally{nodes, memo, entries, hits, deals, deal_hits}
+  Tally{nodes, memo, carry, entries, hits, deals, deal_hits, charged, carried}
 
-def kept.with(got: Map<&2, List<&2, Kept>> & List<&2, Kept>, +hashed: String, +key: String, +stored: Stored, +nodes: Nat, +entries: Nat, +hits: Nat, +deals: Nat, +deal_hits: Nat) -> Tally:
+def kept.with(got: Map<&2, List<&2, Kept>> & List<&2, Kept>, +hashed: String, +key: String, +stored: Stored, +nodes: Nat, +carry: Carry, +entries: Nat, +hits: Nat, +deals: Nat, +deal_hits: Nat, +charged: Nat, +carried: Nat) -> Tally:
   (memo, +bucket) = got
   +rest : List<&2, Kept> = bucket.without(bucket, key)
   counts : Nat & Nat = Bool.pick(Nat & Nat, Nat.is_eq(List.length(&2, Kept, rest), List.length(&2, Kept, bucket)), stored.count(stored, entries, deals), (entries, deals))
-  kept.counted(counts, nodes, Map.set(&2, List<&2, Kept>, memo, hashed, Kept{key, stored} <> rest), hits, deal_hits)
+  kept.counted(counts, nodes, Map.set(&2, List<&2, Kept>, memo, hashed, Kept{key, stored} <> rest), carry, hits, deal_hits, charged, carried)
 
 # Stores `stored` under `key`, in place of what the key held before.
 def keep(tally: Tally, +key: String, +stored: Stored) -> Tally:
   match tally:
-    case Tally{nodes, memo, entries, hits, deals, deal_hits}:
+    case Tally{nodes, memo, carry, entries, hits, deals, deal_hits, charged, carried}:
       +hashed : String = hash(key)
-      kept.with(Map.get(List<&2, Kept>, Nil{}, memo, hashed), hashed, key, stored, nodes, entries, hits, deals, deal_hits)
+      kept.with(Map.get(List<&2, Kept>, Nil{}, memo, hashed), hashed, key, stored, nodes, carry, entries, hits, deals, deal_hits, charged, carried)

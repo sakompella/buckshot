@@ -1405,27 +1405,63 @@ def each(lines: List<&2, String>, +depth: Nat, +budget: Nat, +reload: Nat, +samp
         IO.print(solve(h, depth, budget, reload, samples, memo, fan))
         each(t, depth, budget, reload, samples, memo, fan)
 
-def finish(got: File & Result<&1, &1, U32 & String, String>, d: String, b: String, rl: String, sm: String, mm: String, fn: String) -> IO(Unit):
+# The carried memo (S.analyse.carried): every line is the next decision of
+# one match. `carry` 1 serves entries as the search does, 2 lets deeper ones
+# serve, and 3 drops the memos after each line (the same search as `analyse`,
+# with the extra counts). Each line adds the nodes the hits were charged and
+# the hits the carry served.
+def show.carried(c: S.Carried) -> String:
+  match c:
+    case S.Carried{analysis, _, charged, carried}:
+      show.analysis(analysis) ++ " | C " ++ Nat.show(charged) ++ " " ++ Nat.show(carried)
+
+def carried.memos(c: S.Carried, keep: Bool) -> List<&2, S.Scoped>:
+  match c keep:
+    case S.Carried{_, memos, _, _} True{}:
+      memos
+    case _ False{}:
+      Nil{}
+
+def each.carried(lines: List<&2, String>, memos: List<&2, S.Scoped>, +depth: Nat, +budget: Nat, +reload: Nat, +samples: Nat, +memo: Nat, +carry: Nat) -> IO(Unit):
+  match lines:
+    case Nil{}:
+      IO.pure(Unit, Unit{})
+    case Con{h, t}:
+      +c : S.Carried = S.analyse.carried(position.of(numbers(h)), depth, budget, reload.of(reload, samples), memo.of(memo), Nat.is_eq(carry, 2n), memos)
+      do IO<Unit>:
+        IO.print(show.carried(c))
+        each.carried(t, carried.memos(c, Nat.is_lt(carry, 3n)), depth, budget, reload, samples, memo, carry)
+
+def each.pick(lines: List<&2, String>, +depth: Nat, +budget: Nat, +reload: Nat, +samples: Nat, +memo: Nat, +fan: Nat, +carry: Nat) -> IO(Unit):
+  match carry:
+    case 0n:
+      each(lines, depth, budget, reload, samples, memo, fan)
+    case _:
+      each.carried(lines, Nil{}, depth, budget, reload, samples, memo, carry)
+
+def finish(got: File & Result<&1, &1, U32 & String, String>, d: String, b: String, rl: String, sm: String, mm: String, fn: String, cr: String) -> IO(Unit):
   (file, text) = got
   do IO<Unit>:
     content : String <- IO.pass(String, text)
     File.close(file)
-    each(String.lines(content), nat.read(d), nat.read(b), nat.read(rl), nat.read(sm), nat.read(mm), nat.read(fn))
+    each.pick(String.lines(content), nat.read(d), nat.read(b), nat.read(rl), nat.read(sm), nat.read(mm), nat.read(fn), nat.read(cr))
 
-def open(path: String, d: String, b: String, rl: String, sm: String, mm: String, fn: String) -> IO(Unit):
+def open(path: String, d: String, b: String, rl: String, sm: String, mm: String, fn: String, cr: String) -> IO(Unit):
   do IO<Unit>:
     file : File <- IO.try(File, File.open(path, "r"))
     got : File & Result<&1, &1, U32 & String, String> <- File.read(file, 268435456)
-    finish(got, d, b, rl, sm, mm, fn)
+    finish(got, d, b, rl, sm, mm, fn, cr)
 
 def run(args: List<String>) -> IO(Unit):
   match args:
     case Con{_, Con{path, Con{d, Con{b, Con{rl, Con{sm, Con{mm, Nil{}}}}}}}}:
-      open(path, d, b, rl, sm, mm, "0")
+      open(path, d, b, rl, sm, mm, "0", "0")
     case Con{_, Con{path, Con{d, Con{b, Con{rl, Con{sm, Con{mm, Con{fn, Nil{}}}}}}}}}:
-      open(path, d, b, rl, sm, mm, fn)
+      open(path, d, b, rl, sm, mm, fn, "0")
+    case Con{_, Con{path, Con{d, Con{b, Con{rl, Con{sm, Con{mm, Con{fn, Con{cr, Nil{}}}}}}}}}}:
+      open(path, d, b, rl, sm, mm, fn, cr)
     case _:
-      IO.die(Unit, 2, "usage: native-eval <inputs> depth budget reload samples memo [fan]")
+      IO.die(Unit, 2, "usage: native-eval <inputs> depth budget reload samples memo [fan [carry]]")
 
 def main() -> IO(Unit):
   do IO<Unit>:
