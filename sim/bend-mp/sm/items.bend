@@ -92,6 +92,12 @@ def copies(xs: List<&2, Maybe<&2, D.Item>>, +item: D.Item) -> Nat:
     case x <> rest:
       Nat.add(copies.one(x, item), copies(rest, item))
 
+# copies(slots.items(slots), item) without building the list.
+def slots.copies(slots: D.Slots, +item: D.Item) -> Nat:
+  match slots:
+    case D.Slots{a, b, c, d, e, f, g, h, _}:
+      Nat.add(copies.one(a, item), Nat.add(copies.one(b, item), Nat.add(copies.one(c, item), Nat.add(copies.one(d, item), Nat.add(copies.one(e, item), Nat.add(copies.one(f, item), Nat.add(copies.one(g, item), Nat.add(copies.one(h, item), 0n))))))))
+
 # Per-seat reads. A seat missing from a ring reads as the initial value.
 
 def seat.health(+players: S.Players, seat: D.Seat) -> Nat:
@@ -152,8 +158,32 @@ def grabs.placed(+grabs: S.Grabs, +seat: D.Seat) -> S.Grabs:
 
 # Pools (D22). Held items count against both caps. The order is item.order().
 
+# slots.copies(seat.slots(players, seat), item), read in place.
+def seat.copies(+players: S.Players, +seat: D.Seat, +item: D.Item) -> Nat:
+  match players seat:
+    case D.Duo{S.Seat{_, _, _, a}, _} D.Seat1{}:
+      slots.copies(a, item)
+    case D.Duo{_, S.Seat{_, _, _, a}} D.Seat3{}:
+      slots.copies(a, item)
+    case D.Trio{S.Seat{_, _, _, a}, _, _} D.Seat0{}:
+      slots.copies(a, item)
+    case D.Trio{_, S.Seat{_, _, _, a}, _} D.Seat1{}:
+      slots.copies(a, item)
+    case D.Trio{_, _, S.Seat{_, _, _, a}} D.Seat2{}:
+      slots.copies(a, item)
+    case D.Quad{S.Seat{_, _, _, a}, _, _, _} D.Seat0{}:
+      slots.copies(a, item)
+    case D.Quad{_, S.Seat{_, _, _, a}, _, _} D.Seat1{}:
+      slots.copies(a, item)
+    case D.Quad{_, _, S.Seat{_, _, _, a}, _} D.Seat2{}:
+      slots.copies(a, item)
+    case D.Quad{_, _, _, S.Seat{_, _, _, a}} D.Seat3{}:
+      slots.copies(a, item)
+    case _ _:
+      0n
+
 def owned(+players: S.Players, +grabs: S.Grabs, +seat: D.Seat, +item: D.Item) -> Nat:
-  Nat.add(copies(slots.items(seat.slots(players, seat)), item), copies.one(seat.holding(grabs, seat), item))
+  Nat.add(seat.copies(players, seat, item), copies.one(seat.holding(grabs, seat), item))
 
 def owned.table(seats: List<&2, D.Seat>, +players: S.Players, +grabs: S.Grabs, +item: D.Item) -> Nat:
   match seats:

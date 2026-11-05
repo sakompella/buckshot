@@ -91,7 +91,7 @@ def count.list(+xs: List<&2, Maybe<&2, D.Item>>, +item: D.Item) -> {G.item.count
     case +x <> +rest:
       add_cong(G.item.count.here(x, item), I.copies.one(x, item), G.item.count(rest, item), I.copies(rest, item), count.cell(x, item), count.list(rest, item))
 
-def count.slots(+sl: D.Slots, +item: D.Item) -> {G.item.count(G.slots.list(sl), item) == I.copies(I.slots.items(sl), item) : Nat}:
+def count.slots(+sl: D.Slots, +item: D.Item) -> {G.item.count(G.slots.list(sl), item) == I.slots.copies(sl, item) : Nat}:
   match sl:
     case D.Slots{a, b, c, d, e, f, g, h, _}:
       count.list([a, b, c, d, e, f, g, h], item)
@@ -101,10 +101,10 @@ def own.ref(sl: D.Slots, held: Maybe<&2, D.Item>, +item: D.Item) -> Nat:
   Nat.add(G.item.count(G.slots.list(sl), item), G.item.count.here(held, item))
 
 def own.machine(sl: D.Slots, held: Maybe<&2, D.Item>, +item: D.Item) -> Nat:
-  Nat.add(I.copies(I.slots.items(sl), item), I.copies.one(held, item))
+  Nat.add(I.slots.copies(sl, item), I.copies.one(held, item))
 
 def count.owned(+sl: D.Slots, +held: Maybe<&2, D.Item>, +item: D.Item) -> {own.ref(sl, held, item) == own.machine(sl, held, item) : Nat}:
-  add_cong(G.item.count(G.slots.list(sl), item), I.copies(I.slots.items(sl), item), G.item.count.here(held, item), I.copies.one(held, item), count.slots(sl, item), count.cell(held, item))
+  add_cong(G.item.count(G.slots.list(sl), item), I.slots.copies(sl, item), G.item.count.here(held, item), I.copies.one(held, item), count.slots(sl, item), count.cell(held, item))
 
 # L2. Pools.
 
