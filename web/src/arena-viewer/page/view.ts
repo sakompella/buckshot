@@ -15,9 +15,7 @@ import { matchesView } from "./matches.ts";
 import { type Group, GROUPS, LoadFailure, type Local, Message, type Model, type Section, type Viewport } from "./model.ts";
 import { replayView } from "./replay.ts";
 import { scatterView } from "./scatter.ts";
-import { seatBalanceView } from "./seats.ts";
 import { tourView } from "./tour.ts";
-import { spendView } from "./spend.ts";
 
 type H = HtmlBuilder<Message>;
 
@@ -131,10 +129,6 @@ const lazyOdds = createLazy();
 
 const lazyItems = createLazy();
 
-const lazySpend = createLazy();
-
-const lazySeatBalance = createLazy();
-
 const lazyBreakdown = createLazy();
 
 const lazyReplay = createLazy();
@@ -164,8 +158,6 @@ const scatterCard = (h: H, derived: Derived, scatter: Model["scatter"], width: n
 
 const drillCard = (h: H, derived: Derived, maybeDrill: Model["maybeDrill"], lazy: Model["lazy"], local: Model["local"]): Html =>
   Option.match(maybeDrill, { onNone: () => h.empty, onSome: (key) => configPanelView(h, derived, key, lazy, local) });
-
-const spendCard = (h: H, derived: Derived): Html => h.div([h.Class("card")], [spendView(h, derived.pooled)]);
 
 const optionalView = <A>(h: H, data: AsyncData.AsyncData<A, string>, what: string, draw: (loaded: A) => Html): Html =>
   AsyncData.matchData(data, {
@@ -214,7 +206,6 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
         sectionView(h, "odds", afterFirstPaint(() => optionalView(h, lazy.odds, "odds", (odds) => lazyOdds(oddsView, [h, odds, derived.kept, model.viewport.width, content])))),
         sectionView(h, "items", afterFirstPaint(() => optionalView(h, lazy.items, "items", (items) => lazyItems(itemUsageView, [h, items, derived.kept])))),
       ]),
-      groupView(h, "health", [sectionView(h, "spend", afterFirstPaint(() => h.div([], [lazySpend(spendCard, [h, derived]), lazySeatBalance(seatBalanceView, [h, derived.pairs])])))]),
       ...(isDrawn("watch")
         ? [
             groupView(h, "watch", [

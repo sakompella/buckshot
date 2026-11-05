@@ -108,7 +108,6 @@ tr.drill td { background: #050505; white-space: normal; text-align: left; }
 .dline { display: flex; flex-wrap: wrap; gap: 4px 18px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid #111; font-size: 12.5px; }
 .dline .dl { color: var(--fg); }
 .dv { white-space: nowrap; }
-.dline.seatline { margin-top: 30px; padding: 0; border: 0; font-size: 13.5px; }
 .drillin .fates, .drillin .fate-legend { max-width: 560px; }
 
 pre { white-space: pre-wrap; word-break: break-word; background: #0a0a0a; border: 1px solid #1d1d1d; border-radius: 6px; padding: 8px 10px; font: 12px/1.45 ui-monospace, Menlo, monospace; color: #cfcfcf; margin: 4px 0 8px; }
@@ -190,8 +189,8 @@ body:has(.overlay) { overflow: hidden; }
 .stepper button:disabled { color: var(--dim); cursor: default; }
 
 /* the table before the chosen move: seats around the gun's shells */
-.modal .shot { font-size: 11px; border-radius: 4px; padding: 0 5px; border: 1px solid #8b8b8b; color: var(--mut); white-space: nowrap; }
-.modal .shot.live { background: #ececec; color: #000; border-color: #ececec; }
+.modal .shot { font-size: 11px; border-radius: 4px; padding: 0 5px; border: 1px solid #34506b; background: #16212c; color: #9db7d1; white-space: nowrap; }
+.modal .shot.live { background: #b3261e; color: #fff; border-color: #b3261e; }
 
 /* the chosen move */
 .sel { border-top: 1px solid var(--line); padding-top: 10px; font-size: 13px; }
@@ -245,12 +244,6 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
 /* section controls */
 .ctl { display: flex; gap: 8px 18px; flex-wrap: wrap; align-items: center; margin: 4px 0 12px; }
 
-.cpm { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px 28px; margin-top: 8px; }
-.cpm h3 { margin: 0 0 4px; }
-.cpm-row { display: grid; grid-template-columns: 4.5em minmax(0, 1fr) 5.5em; gap: 10px; align-items: center; padding: 2px 0; font-size: 12.5px; }
-.cpm-bar { display: block; height: 10px; background: #0d0d0d; }
-.cpm-bar i { display: block; height: 100%; }
-.cpm-val { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* up to a tablet the replay is one column that scrolls: the table and the chosen move, then the move list in its own box */
 @media (max-width: 1024px) {

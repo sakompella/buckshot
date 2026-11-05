@@ -136,6 +136,10 @@ A fallback move, counted against the agent it was played for, because the agent 
 How much a move gave up: the best legal move's score minus the chosen move's, from the minimax player's search over the deciding player's own information, in percentage points of the round win chance. It is exact when both scores are a settled round's win or loss; any other regret is not proven exact, which is not the same as a guess. See `docs/arena/analysis/regret.md`.
 _Avoid_: blunder score, error
 
+**Accuracy**:
+A config's reader-facing score for its moves: 100 minus its mean regret per searched move, so 100 is a config that never gave up round win chance. One decimal on the arena page; higher is better. The largest gap is the single move that gave up the most.
+_Avoid_: lost per match, largest missed chance
+
 **Pot share**:
 A player's cash at the end of a match divided by all the cash in that match: 1 for a sweep, less when the loser banked round prizes. The viewer's cash rating is a Bradley-Terry fit on it.
 

@@ -3,7 +3,7 @@ import { AsyncData } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { pressable } from "./charts.ts";
-import { baseName, costPerMove, effortLabel, fmtCount, fmtPct, fmtPoints, fmtSec, fmtUsd, groupBy, isClaude, isProvisional, keyOf, labelOf, lossStats, type SeatFull } from "./data.ts";
+import { baseName, costPerMove, effortLabel, fmtCount, fmtPct, fmtPoints, fmtSec, fmtUsd, groupBy, isClaude, isProvisional, keyOf, labelOf, largestGap, type SeatFull } from "./data.ts";
 import { allMatchesOf, type Derived, memoLast, type ModelStats } from "./derived.ts";
 import { drillView } from "./drill.ts";
 import { itemIconOf } from "./items.ts";
@@ -23,8 +23,8 @@ interface Detail {
   readonly content: ReadonlyArray<Html | string>;
 }
 
-const lossTitle = ({ loss }: ModelStats): string =>
-  loss === null ? "" : `est. round-win equivalents lost / match, over ${loss.matches.toLocaleString()} fully searched matches${loss.excluded > 0 ? `; ${loss.excluded.toLocaleString()} left out` : ""}`;
+/** 100 minus the mean points of round win chance a move gave up: higher is better. */
+export const accuracyOf = (meanRegret: number): string => (100 - meanRegret).toFixed(1);
 
 const detailsOf = (h: H, m: ModelStats, hasRegret: boolean): ReadonlyArray<Detail> => {
   const { favorite } = m;
@@ -33,8 +33,7 @@ const detailsOf = (h: H, m: ModelStats, hasRegret: boolean): ReadonlyArray<Detai
     { label: "wins vs own opponents", title: "", content: [h.b([], [fmtPct(m.winShare)]), " ", h.span([h.Class("pm")], [`${m.win.k.toFixed(m.win.k % 1 ? 1 : 0)}/${m.win.n}`])] },
     { label: "round wins", title: "", content: [fmtPct(m.roundShare)] },
     { label: "cash share", title: "", content: [fmtPct(m.potShare)] },
-    ...(hasRegret ? [{ label: "regret", title: m.regret === null ? "" : `${m.regret.moves.toLocaleString()} moves · ${fmtPct(m.regret.exactShare)} proven exact`, content: [m.regret === null ? "–" : fmtPoints(m.regret.mean)] }] : []),
-    ...(hasRegret ? [{ label: "lost / match", title: lossTitle(m), content: [m.loss === null ? "–" : m.loss.perMatch.toFixed(2)] }] : []),
+    ...(hasRegret ? [{ label: "accuracy", title: m.regret === null ? "" : `${m.regret.moves.toLocaleString()} moves · ${fmtPct(m.regret.exactShare)} proven exact`, content: [m.regret === null ? "–" : accuracyOf(m.regret.mean)] }] : []),
     { label: "cost / move", title: "", content: [fmtUsd(costPerMove(m))] },
     { label: "time / move", title: "", content: [fmtSec(m.scoredMoves > 0 ? m.scoredLatency / m.scoredMoves : null)] },
     { label: "output tok / match", title: "", content: [fmtCount(m.avgOut)] },
@@ -99,7 +98,11 @@ const detailsView = (h: H, details: ReadonlyArray<Detail>): Html =>
   h.dl([h.Class("drillstats")], details.flatMap(({ label, title, content }) => [h.dt([], [label]), h.dd(title === "" ? [] : [h.Title(title)], [...content])]));
 
 /** Per config, the move where it gave up the most round win chance over its scored matches. */
-const largestOf = memoLast((seats: ReadonlyArray<SeatFull>) => new Map([...groupBy(seats.filter(({ status }) => status === "completed"), keyOf)].map(([key, scored]) => [key, lossStats(scored)?.largest] as const)));
+const largestOf = memoLast((seats: ReadonlyArray<SeatFull>) => new Map([...groupBy(seats.filter(({ status }) => status === "completed"), keyOf)].flatMap(([key, scored]) => {
+  const gap = largestGap(scored);
+
+  return gap === null ? [] : [[key, gap] as const];
+})));
 
 /** The move where a config gave up the most round win chance, as a link to that move in its match's replay. */
 const missView = (h: H, m: ModelStats, local: Model["local"]): Html =>
@@ -117,7 +120,7 @@ const missView = (h: H, m: ModelStats, local: Model["local"]): Html =>
       return h.p(
         [h.Class("miss")],
         [
-          h.span([h.Class("k")], ["largest missed chance "]),
+          h.span([h.Class("k")], ["largest gap "]),
           h.button(
             [h.Type("button"), h.Class("chip on"), h.OnClick(Message.ClickedMatch({ id: matchId, maybeFocus: Option.some(ordinal) }))],
             [`${fmtPoints(points)} pts${opponent === undefined ? "" : ` vs ${labelOf(keyOf(opponent))}`} ▸`],
@@ -161,7 +164,7 @@ const headersOf = (hasRegret: boolean): ReadonlyArray<string> => [
   "Match wins vs own opponents",
   "Round wins",
   "Cash share",
-  ...(hasRegret ? ["Regret", "Lost / match"] : []),
+  ...(hasRegret ? ["Accuracy"] : []),
   "Cost / move",
   "Time / move",
   "Output tok / match",
@@ -174,8 +177,7 @@ const HEADER_TITLES = new Map([
   ["Round Elo", "one Bradley-Terry rating over every match, on round win share; the interval is a 95% bootstrap over seed blocks"],
   ["Cash share", "a config's cash over the match's cash, averaged over scored matches"],
   ["Round wins", "the rounds a config won over the rounds it played"],
-  ["Regret", "mean points of round win chance a move gave up against the minimax player's best move; lower is better"],
-  ["Lost / match", "est. round-win equivalents lost / match: a config's regret summed over each fully searched match; lower is better"],
+  ["Accuracy", "100 minus the mean points of round win chance a move gave up against the minimax player's best move; higher is better"],
 ]);
 
 const headerView = (h: H, label: string, index: number): Html => {

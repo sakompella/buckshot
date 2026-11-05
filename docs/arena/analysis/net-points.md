@@ -6,7 +6,7 @@ How many round wins a seat's moves gave up per match, by the minimax player's re
 
 - **Round-win equivalents lost** (the headline): a seat's own loss in a match is the sum of its regret over its searched decisions, in rounds. A regret is a drop in the chance of winning the round, so 100 points is one round. Lower is better. This is not "rounds forfeited": it adds up chances over a match, and a chance given up and then regained is counted twice, so a seat can lose more than 3.
 - **Net points** of a seat in a match: the opponent's loss minus its own. Positive means the opponent gave up more. It is a difference of two estimates, each made from that seat's own information and a public-only model of the opponent. It is not a count of rounds gained.
-- **Largest missed chance**: the biggest single regret of a seat in a match, in points.
+- **Largest gap**: the biggest single regret of a seat in a match, in points.
 - Only matches where every agent decision has a searched row count. Missing analysis is never zero. Of the 3,537 finished matches, 1 was left out for that and none for unreadable round winners.
 - Intervals are 95% over seed blocks (both seat orders of one seed together), 2,000 resamples.
 
@@ -54,7 +54,7 @@ So running to the reload with 3 or fewer shells left is not cheap and does not s
 
 ### Round-win equivalents lost, by config
 
-| model | effort | matches | round-win equivalents lost per match | per round | largest missed chance (points) | Round Elo |
+| model | effort | matches | round-win equivalents lost per match | per round | largest gap (points) | Round Elo |
 |---|---|---|---|---|---|---|
 | claude-sonnet-5-5 | max | 140 | 0.22 (0.19 to 0.25) | 0.07 | 9.7 | +107 |
 | claude-opus-5-5 | max | 80 | 0.23 (0.20 to 0.27) | 0.08 | 9.8 | +121 |
@@ -130,9 +130,9 @@ So running to the reload with 3 or fewer shells left is not cheap and does not s
 | claude-haiku-5-5 medium | claude-haiku-5-5 off | 10 | +0.58 (0.42 to 0.74) | +0.90 |
 | claude-haiku-4-5-20251001 medium | claude-haiku-5-5 medium | 15 | -0.56 (-0.73 to -0.37) | -1.33 |
 
-### Largest missed chance per match
+### Largest gap per match
 
-| largest missed chance in a match, at least (points) | share of seats |
+| largest gap in a match, at least (points) | share of seats |
 |---|---|
 | 10 | 70.4% |
 | 25 | 28.6% |

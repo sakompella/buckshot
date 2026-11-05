@@ -35,8 +35,8 @@ const TOUR: ReadonlyArray<TourStep> = [
   {
     anchor: "scatter",
     focus: "#scatter .card",
-    title: "Cost, Moves, Tokens, Regret",
-    text: "Each point is a config, a model at one effort, placed by its Round Elo against its cost, model moves or output tokens per match, or its regret, an estimate of the round win chance its moves gave up (lower is better). A click on a point opens that config's drill-down under the chart.",
+    title: "Cost, Moves, Tokens, Accuracy",
+    text: "Each point is a config, a model at one effort, placed by its Round Elo against its cost, model moves or output tokens per match, or its accuracy, 100 minus the mean points of round win chance its moves gave up (higher is better). A click on a point opens that config's drill-down under the chart.",
     isReplay: false,
   },
   {
@@ -65,20 +65,6 @@ const TOUR: ReadonlyArray<TourStep> = [
     focus: "#items .chartrow",
     title: "Item usage",
     text: "How often each model used an item when it had one, and what became of each kind of item: used, stolen by the opponent or left unused. Look for the items most often left unused.",
-    isReplay: false,
-  },
-  {
-    anchor: "spend",
-    focus: "#spend .spend",
-    title: "List-price cost per move",
-    text: "Each config's list-price cost per model move, one bar per config, grouped by model, under the current filters. The total spent is in the heading.",
-    isReplay: false,
-  },
-  {
-    anchor: "spend",
-    focus: "#spend .seatline",
-    title: "Seat balance",
-    text: "Whether table position or starting round 1 decides matches: the win share of position 1 and of the round 1 starter, and how often the round 1 winner won the match, each with its sample.",
     isReplay: false,
   },
   {
