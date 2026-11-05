@@ -202,12 +202,28 @@ def round.items(round: D.RoundRules) -> D.ItemRules:
     case D.RoundRules{_, _, items, _}:
       items
 
+# stock.open, reading the counts only for an enabled, dealt item, and the
+# table's count only while the seat's own count is under its cap.
+def stock.total(own_open: Bool, +total: Nat, +on_table: Nat) -> Bool:
+  match own_open:
+    case True{}:
+      Nat.is_lt(total, on_table)
+    case False{}:
+      False{}
+
+def stock.counted(rule: D.ItemRule, dealt: Bool, +players: S.Players, +grabs: S.Grabs, +seat: D.Seat, +item: D.Item, seats: List<&2, D.Seat>) -> Bool:
+  match rule dealt:
+    case D.ItemRule{True{}, per_player, on_table} True{}:
+      stock.total(Nat.is_lt(owned(players, grabs, seat, item), per_player), owned.table(seats, players, grabs, item), on_table)
+    case _ _:
+      False{}
+
 def pool.go(items: List<&2, D.Item>, +rules: D.ItemRules, +table: D.Table, +players: S.Players, +grabs: S.Grabs, +seat: D.Seat) -> List<&2, D.Item>:
   match items:
     case Nil{}:
       Nil{}
     case +item <> rest:
-      keep(D.Item, stock.open(D.rules.item(rules, item), D.item.dealt_at(table, item), owned(players, grabs, seat, item), owned.table(D.table.seats(table), players, grabs, item)), item, pool.go(rest, rules, table, players, grabs, seat))
+      keep(D.Item, stock.counted(D.rules.item(rules, item), D.item.dealt_at(table, item), players, grabs, seat, item, D.table.seats(table)), item, pool.go(rest, rules, table, players, grabs, seat))
 
 def pool(+state: S.State, +seat: D.Seat) -> List<&2, D.Item>:
   +world : S.World = S.state.world(state)

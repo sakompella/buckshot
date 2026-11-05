@@ -284,11 +284,32 @@ def table.eq(+s: S.State) -> {H.host.table(A.ref_host(s)) == S.world.table(S.sta
     case S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, players, phase, notes, grabs}:
       {==}
 
+# pool.go reads the counts lazily through stock.counted; it decides the
+# same as stock.open on both counts.
+def stock_total.eq(+b: Bool, +total: Nat, +on_table: Nat) -> {Bool.and(b, Nat.is_lt(total, on_table)) == I.stock.total(b, total, on_table) : Bool}:
+  match b:
+    case True{}:
+      {==}
+    case False{}:
+      {==}
+
+def counted.eq(+rule: D.ItemRule, +dealt: Bool, +players: S.Players, +grabs: S.Grabs, +seat: D.Seat, +item: D.Item, +seats: List<&2, D.Seat>) -> {I.stock.open(rule, dealt, I.owned(players, grabs, seat, item), I.owned.table(seats, players, grabs, item)) == I.stock.counted(rule, dealt, players, grabs, seat, item, seats) : Bool}:
+  match rule:
+    case D.ItemRule{enabled, per_player, on_table}:
+      match enabled dealt:
+        case True{} True{}:
+          stock_total.eq(Nat.is_lt(I.owned(players, grabs, seat, item), per_player), I.owned.table(seats, players, grabs, item), on_table)
+        case True{} False{}:
+          {==}
+        case False{} _:
+          {==}
+
 def pool.go_eq(+items: List<&2, D.Item>, +s: S.State, +seat: D.Seat, +shape: A.Shape(s)) -> {G.GetItemToGrab.pool(items, A.ref_host(s), seat) == I.pool.go(items, I.round.items(Q.world.rules(S.state.world(s))), S.world.table(S.state.world(s)), S.state.players(s), S.state.grabs(s), seat) : List<&2, D.Item>}:
   match items:
     case Nil{}:
       {==}
     case +item <> +rest:
+      %counted.eq(D.rules.item(I.round.items(Q.world.rules(S.state.world(s))), item), D.item.dealt_at(S.world.table(S.state.world(s)), item), S.state.players(s), S.state.grabs(s), seat, item, D.table.seats(S.world.table(S.state.world(s)))) : {G.GetItemToGrab.pool(item <> rest, A.ref_host(s), seat) == I.keep(D.Item, _, item, I.pool.go(rest, I.round.items(Q.world.rules(S.state.world(s))), S.world.table(S.state.world(s)), S.state.players(s), S.state.grabs(s), seat)) : List<&2, D.Item>}
       %rules.eq(s) : {G.GetItemToGrab.pool(item <> rest, A.ref_host(s), seat) == I.keep(D.Item, I.stock.open(D.rules.item(_, item), D.item.dealt_at(S.world.table(S.state.world(s)), item), I.owned(S.state.players(s), S.state.grabs(s), seat, item), I.owned.table(D.table.seats(S.world.table(S.state.world(s))), S.state.players(s), S.state.grabs(s), item)), item, I.pool.go(rest, I.round.items(Q.world.rules(S.state.world(s))), S.world.table(S.state.world(s)), S.state.players(s), S.state.grabs(s), seat)) : List<&2, D.Item>}
       %table.eq(s) : {G.GetItemToGrab.pool(item <> rest, A.ref_host(s), seat) == I.keep(D.Item, I.stock.open(D.rules.item(H.rules.items(H.host.rules(A.ref_host(s))), item), D.item.dealt_at(_, item), I.owned(S.state.players(s), S.state.grabs(s), seat, item), I.owned.table(D.table.seats(S.world.table(S.state.world(s))), S.state.players(s), S.state.grabs(s), item)), item, I.pool.go(rest, I.round.items(Q.world.rules(S.state.world(s))), S.world.table(S.state.world(s)), S.state.players(s), S.state.grabs(s), seat)) : List<&2, D.Item>}
       %own.eq(s, seat, item, shape) : {G.GetItemToGrab.pool(item <> rest, A.ref_host(s), seat) == I.keep(D.Item, I.stock.open(D.rules.item(H.rules.items(H.host.rules(A.ref_host(s))), item), D.item.dealt_at(H.host.table(A.ref_host(s)), item), _, I.owned.table(D.table.seats(S.world.table(S.state.world(s))), S.state.players(s), S.state.grabs(s), item)), item, I.pool.go(rest, I.round.items(Q.world.rules(S.state.world(s))), S.world.table(S.state.world(s)), S.state.players(s), S.state.grabs(s), seat)) : List<&2, D.Item>}
