@@ -75,7 +75,7 @@ def put.world(world: S.World, rest: String) -> String:
 
 def put.slots(slots: D.Slots, rest: String) -> String:
   match slots:
-    case D.Slots{a, b, c, d, e, f, g, h}:
+    case D.Slots{a, b, c, d, e, f, g, h, _}:
       L.put.item(a, L.put.item(b, L.put.item(c, L.put.item(d, L.put.item(e, L.put.item(f, L.put.item(g, L.put.item(h, rest))))))))
 
 def put.players(entries: List<&2, D.At<&2, S.Seat>>, rest: String) -> String:

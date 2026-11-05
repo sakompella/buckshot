@@ -1,5 +1,5 @@
-// The parallel search prototype (player/parallel.bend) against search.bend, on
-// positions from seeded random games. The JS target runs parallel calls one
+// search.bend with the root fan against search.bend without it, on positions
+// from seeded random games. The JS target runs parallel calls one
 // after another, so this checks results only; speed needs the native build.
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -11,7 +11,7 @@ import { build, makeRandom } from './machine-items-lib.mjs';
 const GAMES = Number(process.env.PARALLEL_GAMES ?? 2);
 
 const dir = mkdtempSync(join(tmpdir(), 'bend-mp-parallel-'));
-const P = (await import(build(dir, 'parallel', '../player/parallel.bend'))).default;
+const P = (await import(build(dir, 'parallel', '../player/search.bend'))).default;
 rmSync(dir, { recursive: true });
 const S = name => P[`../simple/main:${name}`], D = name => P[`../domain:${name}`];
 const { random } = makeRandom(0x70617261);
@@ -50,16 +50,13 @@ const STATIC = { $: 'Static' }, SAMPLED = { $: 'Sampled', count: 7 };
 const OFF = { $: 'Off' }, CHARGED = { $: 'Charged' }, FREE = { $: 'Free' };
 const lines = a => array(a.lines).map(l => [Number(l.index), Number(l.score), array(l.pv).length, kind(l.reach)]);
 const result = a => kind(a) === 'Invalid' ? { invalid: a.reason } : { lines: lines(a), best: Number(a.best), depth: Number(a.depth), limited: a.limited };
-const counts = a => kind(a) === 'Invalid' ? {} : { nodes: Number(a.nodes), cached: a.cached };
 
 let checked = 0, limited = 0;
-// Under Off and Charged, both modes equal search.bend: without the root fan
-// in every field, with it in everything but node and memo counts.
+// Under Off and Charged the fan gives the same result in everything but node
+// and memo counts.
 function same(pos, depth, budget, reload, memo) {
-  const want = P['search:analyse'](pos, depth, budget, reload, memo);
-  const seq = P.analyse(pos, depth, budget, reload, memo, false);
+  const want = P.analyse(pos, depth, budget, reload, memo, false);
   const fan = P.analyse(pos, depth, budget, reload, memo, true);
-  assert.deepEqual({ ...result(seq), ...counts(seq) }, { ...result(want), ...counts(want) }, 'sequential root');
   assert.deepEqual(result(fan), result(want), 'root fan');
   if (kind(want) !== 'Invalid' && !want.limited) assert.equal(Number(fan.nodes), Number(want.nodes), 'unlimited nodes');
   checked++;
@@ -77,11 +74,11 @@ for (const pos of three) same(pos, 3, 200, STATIC, CHARGED);
 
 // Under Free a budget that never runs out still gives the same scores.
 for (const pos of two.slice(0, 20)) {
-  const want = P['search:analyse'](pos, 2, 1000000, SAMPLED, FREE), fan = P.analyse(pos, 2, 1000000, SAMPLED, FREE, true);
+  const want = P.analyse(pos, 2, 1000000, SAMPLED, FREE, false), fan = P.analyse(pos, 2, 1000000, SAMPLED, FREE, true);
   if (kind(want) !== 'Invalid') assert.equal(want.limited, false);
   assert.deepEqual(result(fan), result(want), 'free, unlimited');
   checked++;
 }
 
 assert.ok(limited > 0, 'some budgets ran out');
-console.log(`parallel search: ${checked} analyses equal search.bend (${limited} limited), ${two.length + three.length} positions`);
+console.log(`parallel search: ${checked} analyses equal without the fan (${limited} limited), ${two.length + three.length} positions`);

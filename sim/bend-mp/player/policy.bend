@@ -47,7 +47,7 @@ def pick(+analysis: A.Analysis, +gap: U32, +seed: U32) -> A.Pick:
 def choose(+position: A.Position, level: A.Level) -> A.Pick:
   match level:
     case A.Level{depth, budget, gap, seed}:
-      pick(S.analyse(position, depth, budget, A.Static{}, A.Charged{}), gap, seed)
+      pick(S.analyse(position, depth, budget, A.Static{}, A.Charged{}, False{}), gap, seed)
 
 def line.at(lines: List<&2, A.Line>, +index: Nat) -> Maybe<&2, A.Line>:
   match lines:

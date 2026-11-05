@@ -355,7 +355,7 @@ def full.list(+xs: List<&2, Maybe<&2, D.Item>>) -> {Bool.not(G.slots.full(xs)) =
 
 def full.slots(+sl: D.Slots) -> {Bool.not(G.slots.full(G.slots.list(sl))) == Nat.is_lt(I.occupied(I.slots.items(sl)), 8n) : Bool}:
   match sl:
-    case D.Slots{+a, +b, +c, +d, +e, +f, +g, +h}:
+    case D.Slots{+a, +b, +c, +d, +e, +f, +g, +h, _}:
       full.list([a, b, c, d, e, f, g, h])
 
 def nonempty.items(+xs: List<&2, D.Item>) -> {G.nonempty(D.Item, xs) == I.has_items(xs) : Bool}:

@@ -36,7 +36,7 @@ def slot.weight(item: Maybe<&2, D.Item>) -> U32:
 
 def slots.weight(slots: D.Slots) -> U32:
   match slots:
-    case D.Slots{a, b, c, d, e, f, g, h}:
+    case D.Slots{a, b, c, d, e, f, g, h, _}:
       (slot.weight(a) + slot.weight(b) + slot.weight(c) + slot.weight(d) + slot.weight(e) + slot.weight(f) + slot.weight(g) + slot.weight(h) : U32)
 
 def seat.weight(+player: S.Seat, tempo: Bool) -> U32:

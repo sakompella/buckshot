@@ -413,13 +413,39 @@ def sample.deal(fuel: Nat, request: T.Request, +state: T.State, +seed: U32, +n: 
     case _ _:
       state
 
-# The static values of `count` deals drawn from one start, summed.
-def sample.sum(count: Nat, +state: T.State, +seed: U32, +me: D.Seat, +sum: F32) -> F32:
-  match count:
-    case 0n:
+# The static value of deal `k` from one start.
+def deal.at(+state: T.State, +seed: U32, +me: D.Seat, +k: Nat) -> F32:
+  deal.value(sample.deal(deal.fuel(), M.request(state), state, mix(U32.xor(seed, U32.from_nat(k))), 0), me)
+
+# The values of deals lo+n-1 down to lo, in that order, split in halves. The
+# halves are independent, so a native build values them on separate threads.
+type Values is Data:
+  Empty{}
+  One{value: F32}
+  Both{high: Values, low: Values}
+
+def deals(fuel: Nat, +n: Nat, +lo: Nat, +state: T.State, +seed: U32, +me: D.Seat) -> Values:
+  match fuel n:
+    case _ 0n:
+      Empty{}
+    case _ 1n:
+      One{deal.at(state, seed, me, lo)}
+    case 1n+(+f) _:
+      +half : Nat = Nat.div(n, 2n)
+      high low = deals(f, Nat.sub(n, half), Nat.add(lo, half), state, seed, me) deals(f, half, lo, state, seed, me)
+      Both{high, low}
+    case 0n _:
+      Empty{}
+
+# Adds the values in order, high half first, as one loop over the deals would.
+def values.sum(values: Values, +sum: F32) -> F32:
+  match values:
+    case Empty{}:
       sum
-    case 1n+(+k):
-      sample.sum(k, state, seed, me, F32.add(sum, deal.value(sample.deal(deal.fuel(), M.request(state), state, mix(U32.xor(seed, U32.from_nat(k))), 0), me)))
+    case One{value}:
+      F32.add(sum, value)
+    case Both{high, low}:
+      values.sum(low, values.sum(high, sum))
 
 # 2166136261 is the FNV offset basis, an arbitrary nonzero start.
 def sampled.starts(starts: List<&2, Dealt>, +count: Nat, +me: D.Seat, sums: Sums) -> Sums:
@@ -427,7 +453,7 @@ def sampled.starts(starts: List<&2, Dealt>, +count: Nat, +me: D.Seat, sums: Sums
     case Nil{}:
       sums
     case Dealt{+state, public, private} <> rest:
-      +sum : F32 = sample.sum(count, state, key.seed(key(state, True{}), 2166136261), me, 0.0)
+      +sum : F32 = values.sum(deals(count, count, 0n, state, key.seed(key(state, True{}), 2166136261), me), 0.0)
       sampled.starts(rest, count, me, sums.scaled(sums, public, private, F32.div(sum, F32.from_nat(count))))
 
 # Probability times the mean static value of `count` sampled deals from each

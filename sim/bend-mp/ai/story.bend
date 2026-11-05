@@ -351,7 +351,7 @@ def held.add(slot: D.Slot, item: Maybe<&2, D.Item>, rest: List<&2, Held>) -> Lis
 
 def held.of(slots: D.Slots) -> List<&2, Held>:
   match slots:
-    case D.Slots{a, b, c, d, e, f, g, h}:
+    case D.Slots{a, b, c, d, e, f, g, h, _}:
       held.add(D.Slot0{}, a, held.add(D.Slot1{}, b, held.add(D.Slot2{}, c, held.add(D.Slot3{}, d, held.add(D.Slot4{}, e, held.add(D.Slot5{}, f, held.add(D.Slot6{}, g, held.add(D.Slot7{}, h, Nil{}))))))))
 
 def loot.add(+owner: D.Seat, helds: List<&2, Held>, rest: List<&2, Loot>) -> List<&2, Loot>:

@@ -93,7 +93,7 @@ def count.list(+xs: List<&2, Maybe<&2, D.Item>>, +item: D.Item) -> {G.item.count
 
 def count.slots(+sl: D.Slots, +item: D.Item) -> {G.item.count(G.slots.list(sl), item) == I.copies(I.slots.items(sl), item) : Nat}:
   match sl:
-    case D.Slots{a, b, c, d, e, f, g, h}:
+    case D.Slots{a, b, c, d, e, f, g, h, _}:
       count.list([a, b, c, d, e, f, g, h], item)
 
 # One seat's count of an item, slots plus the item in hand.
@@ -264,7 +264,7 @@ def pool.step(+rule: D.ItemRule, +dealt: Bool, +own: Nat, +total: Nat, +item: D.
 
 def rules.items_eq(+r: D.RoundRules) -> {H.rules.items(r) == I.round.items(r) : D.ItemRules}:
   match r:
-    case D.RoundRules{a, b, c}:
+    case D.RoundRules{a, b, c, _}:
       {==}
 
 def rules.found_eq(+found: Maybe<&2, D.RoundRules>) -> {H.rules.items(H.rules.found(found)) == I.round.items(Q.value.or(D.RoundRules, found, D.config.default_round())) : D.ItemRules}:
@@ -468,7 +468,7 @@ def occupied.list(+xs: List<&2, Maybe<&2, D.Item>>) -> {RI.occupied(xs) == I.occ
 
 def occupied.slots(+sl: D.Slots) -> {RI.occupied(G.slots.list(sl)) == I.occupied(I.slots.items(sl)) : Nat}:
   match sl:
-    case D.Slots{a, b, c, d, e, f, g, h}:
+    case D.Slots{a, b, c, d, e, f, g, h, _}:
       occupied.list([a, b, c, d, e, f, g, h])
 
 def last.parts(+pool_r: List<&2, D.Item>, +pool_m: List<&2, D.Item>, +sl: D.Slots, +n: Nat, +amount: Nat, +empty: {Bool.not(G.nonempty(D.Item, pool_r)) == Bool.not(I.has_items(pool_m)) : Bool}) -> {Bool.or(Bool.not(G.nonempty(D.Item, pool_r)), Bool.or(Nat.is_eq(1n+RI.occupied(G.slots.list(sl)), 8n), Bool.not(Nat.is_lt(n, amount)))) == Bool.or(Bool.not(I.has_items(pool_m)), Bool.or(Nat.is_eq(1n+I.occupied(I.slots.items(sl)), 8n), Bool.not(Nat.is_lt(n, amount)))) : Bool}:
@@ -1804,21 +1804,21 @@ def held.eq(+s: S.State, +seat: D.Seat, +shape: A.Shape(s)) -> held.claim(s, sea
 
 def slots.set_put(+sl: D.Slots, +slot: D.Slot, +value: Maybe<&2, D.Item>) -> {RI.slots.set(sl, slot, value) == I.slots.put(sl, slot, value) : D.Slots}:
   match sl slot:
-    case D.Slots{a, b, c, d, e, f, g, h} D.Slot0{}:
+    case D.Slots{a, b, c, d, e, f, g, h, _} D.Slot0{}:
       {==}
-    case D.Slots{a, b, c, d, e, f, g, h} D.Slot1{}:
+    case D.Slots{a, b, c, d, e, f, g, h, _} D.Slot1{}:
       {==}
-    case D.Slots{a, b, c, d, e, f, g, h} D.Slot2{}:
+    case D.Slots{a, b, c, d, e, f, g, h, _} D.Slot2{}:
       {==}
-    case D.Slots{a, b, c, d, e, f, g, h} D.Slot3{}:
+    case D.Slots{a, b, c, d, e, f, g, h, _} D.Slot3{}:
       {==}
-    case D.Slots{a, b, c, d, e, f, g, h} D.Slot4{}:
+    case D.Slots{a, b, c, d, e, f, g, h, _} D.Slot4{}:
       {==}
-    case D.Slots{a, b, c, d, e, f, g, h} D.Slot5{}:
+    case D.Slots{a, b, c, d, e, f, g, h, _} D.Slot5{}:
       {==}
-    case D.Slots{a, b, c, d, e, f, g, h} D.Slot6{}:
+    case D.Slots{a, b, c, d, e, f, g, h, _} D.Slot6{}:
       {==}
-    case D.Slots{a, b, c, d, e, f, g, h} D.Slot7{}:
+    case D.Slots{a, b, c, d, e, f, g, h, _} D.Slot7{}:
       {==}
 
 # Shape survives the handout's writes: a ring write keeps the constructor.

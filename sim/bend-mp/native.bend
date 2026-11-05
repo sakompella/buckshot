@@ -1,14 +1,15 @@
 import Base
 import ./domain.bend as D
 import ./web.bend as W
-import ./analysis.bend as N
+import ./player/search.bend as S
 import ./player/types.bend as A
 import ./simple/state.bend as T
 
 # THROWAWAY PROTOTYPE: a native entry for the minimax evaluator. Reads one
 # analysis input per line (numbers only, see web/scripts/native-eval.ts) and
-# prints one result line per input. The evaluator is analysis.bend's `analyse`,
-# unchanged; this file only decodes and prints.
+# prints one result line per input. The evaluator is search.bend's `analyse`,
+# unchanged; this file only decodes and prints. An optional last argument `fan`
+# (default 0) searches the root moves in parallel when it is 1.
 
 
 
@@ -939,7 +940,7 @@ def dec.briefcase(r: List<&2, Nat>) -> D.Briefcase & List<&2, Nat>:
 
 def dec.slots.c0.s8(v0: Maybe<&2, D.Item>, v1: Maybe<&2, D.Item>, v2: Maybe<&2, D.Item>, v3: Maybe<&2, D.Item>, v4: Maybe<&2, D.Item>, v5: Maybe<&2, D.Item>, v6: Maybe<&2, D.Item>, p: Maybe<&2, D.Item> & List<&2, Nat>) -> D.Slots & List<&2, Nat>:
   (v7, r8) = p
-  (D.Slots{v0, v1, v2, v3, v4, v5, v6, v7}, r8)
+  (D.Slots{v0, v1, v2, v3, v4, v5, v6, v7, D.Boxed{}}, r8)
 
 def dec.slots.c0.s7(v0: Maybe<&2, D.Item>, v1: Maybe<&2, D.Item>, v2: Maybe<&2, D.Item>, v3: Maybe<&2, D.Item>, v4: Maybe<&2, D.Item>, v5: Maybe<&2, D.Item>, p: Maybe<&2, D.Item> & List<&2, Nat>) -> D.Slots & List<&2, Nat>:
   (v6, r7) = p
@@ -1392,34 +1393,39 @@ def memo.of(k: Nat) -> A.Memo:
     case 1n+p:
       memo.of.charged(p)
 
-def solve(line: String, depth: Nat, budget: Nat, reload: Nat, samples: Nat, memo: Nat) -> String:
-  show.analysis(N.analyse(position.of(numbers(line)), depth, budget, reload.of(reload, samples), memo.of(memo)))
+def solve(line: String, depth: Nat, budget: Nat, reload: Nat, samples: Nat, memo: Nat, fan: Nat) -> String:
+  show.analysis(S.analyse(position.of(numbers(line)), depth, budget, reload.of(reload, samples), memo.of(memo), Nat.is_gt(fan, 0n)))
 
-def each(lines: List<&2, String>, +depth: Nat, +budget: Nat, +reload: Nat, +samples: Nat, +memo: Nat) -> IO(Unit):
+def each(lines: List<&2, String>, +depth: Nat, +budget: Nat, +reload: Nat, +samples: Nat, +memo: Nat, +fan: Nat) -> IO(Unit):
   match lines:
     case Nil{}:
       IO.pure(Unit, Unit{})
     case Con{h, t}:
       do IO<Unit>:
-        IO.print(solve(h, depth, budget, reload, samples, memo))
-        each(t, depth, budget, reload, samples, memo)
+        IO.print(solve(h, depth, budget, reload, samples, memo, fan))
+        each(t, depth, budget, reload, samples, memo, fan)
 
-def finish(got: File & Result<&1, &1, U32 & String, String>, d: String, b: String, rl: String, sm: String, mm: String) -> IO(Unit):
+def finish(got: File & Result<&1, &1, U32 & String, String>, d: String, b: String, rl: String, sm: String, mm: String, fn: String) -> IO(Unit):
   (file, text) = got
   do IO<Unit>:
     content : String <- IO.pass(String, text)
     File.close(file)
-    each(String.lines(content), nat.read(d), nat.read(b), nat.read(rl), nat.read(sm), nat.read(mm))
+    each(String.lines(content), nat.read(d), nat.read(b), nat.read(rl), nat.read(sm), nat.read(mm), nat.read(fn))
+
+def open(path: String, d: String, b: String, rl: String, sm: String, mm: String, fn: String) -> IO(Unit):
+  do IO<Unit>:
+    file : File <- IO.try(File, File.open(path, "r"))
+    got : File & Result<&1, &1, U32 & String, String> <- File.read(file, 268435456)
+    finish(got, d, b, rl, sm, mm, fn)
 
 def run(args: List<String>) -> IO(Unit):
   match args:
     case Con{_, Con{path, Con{d, Con{b, Con{rl, Con{sm, Con{mm, Nil{}}}}}}}}:
-      do IO<Unit>:
-        file : File <- IO.try(File, File.open(path, "r"))
-        got : File & Result<&1, &1, U32 & String, String> <- File.read(file, 268435456)
-        finish(got, d, b, rl, sm, mm)
+      open(path, d, b, rl, sm, mm, "0")
+    case Con{_, Con{path, Con{d, Con{b, Con{rl, Con{sm, Con{mm, Con{fn, Nil{}}}}}}}}}:
+      open(path, d, b, rl, sm, mm, fn)
     case _:
-      IO.die(Unit, 2, "usage: native-eval <inputs> depth budget reload samples memo")
+      IO.die(Unit, 2, "usage: native-eval <inputs> depth budget reload samples memo [fan]")
 
 def main() -> IO(Unit):
   do IO<Unit>:

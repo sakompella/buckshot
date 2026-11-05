@@ -72,6 +72,8 @@ const encode = (value: unknown): ReadonlyArray<number> => {
 
   const fields = Object.entries(node).filter(([key]) => key !== "$").flatMap(([, field]) => encode(field));
 
+  if (name === "Boxed") return [];
+
   if (SINGLE.has(name)) return fields;
 
   const tag = TAGS[name];
