@@ -372,8 +372,15 @@ def turn_live.c(+a: T.Log, +w: S.World, +p: S.Players, +ph: T.Phase, +l: T.Log, 
     case False{}:
       turn_amount.c(a, w, p, ph, l, g, q, shooter, passing, winner, rule)
 
+def reload_ready.indep(gun: List<&2, D.Shell>, +w: S.World, +p: S.Players, +g: S.Grabs, +q1: S.Phase, +n1: List<&2, D.Note>, +q2: S.Phase, +n2: List<&2, D.Note>, +winner: Maybe<&2, D.Seat>) -> {I.reload.ready(gun, S.State{w, p, q1, n1, g}, winner) == I.reload.ready(gun, S.State{w, p, q2, n2, g}, winner) : Bool}:
+  match gun:
+    case Nil{}:
+      Equal.cong(List<&2, D.Seat>, Bool, xs => Bool.and(I.winnerless(winner), I.has_seats(xs)), I.begin.seats(S.State{w, p, q1, n1, g}, False{}, 1n), I.begin.seats(S.State{w, p, q2, n2, g}, False{}, 1n), begin_seats.indep(1n, w, p, g, q1, n1, q2, n2, False{}))
+    case _ <> _:
+      {==}
+
 def reload_wanted.indep(+w: S.World, +p: S.Players, +g: S.Grabs, +q1: S.Phase, +n1: List<&2, D.Note>, +q2: S.Phase, +n2: List<&2, D.Note>, +winner: Maybe<&2, D.Seat>) -> {I.reload.wanted(S.State{w, p, q1, n1, g}, winner) == I.reload.wanted(S.State{w, p, q2, n2, g}, winner) : Bool}:
-  Equal.cong(List<&2, D.Seat>, Bool, xs => Bool.and(I.gun.empty(S.world.gun(w)), Bool.and(I.winnerless(winner), I.has_seats(xs))), I.begin.seats(S.State{w, p, q1, n1, g}, False{}, 1n), I.begin.seats(S.State{w, p, q2, n2, g}, False{}, 1n), begin_seats.indep(1n, w, p, g, q1, n1, q2, n2, False{}))
+  reload_ready.indep(S.world.gun(w), w, p, g, q1, n1, q2, n2, winner)
 
 def turn_packet.c(+a: T.Log, +w: S.World, +p: S.Players, +ph: T.Phase, +l: T.Log, +g: S.Grabs, +q: S.Phase, +shooter: D.Seat, +passing: Bool, +winner: Maybe<&2, D.Seat>) -> Corr(t => N.turn.packet(t, shooter, passing, winner), x => M.turn.packet(x, shooter, passing, winner), a, w, p, ph, l, g, q):
   +rule : D.AmountRule = G.load.amount(G.world.load_rule(w))

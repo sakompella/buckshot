@@ -39,13 +39,17 @@ def slots.weight(slots: D.Slots) -> U32:
     case D.Slots{a, b, c, d, e, f, g, h, _}:
       (slot.weight(a) + slot.weight(b) + slot.weight(c) + slot.weight(d) + slot.weight(e) + slot.weight(f) + slot.weight(g) + slot.weight(h) : U32)
 
-def seat.weight(+player: S.Seat, tempo: Bool) -> U32:
+# A seat's weight, and whether it is alive.
+type Weighed is Data:
+  Weighed{weight: U32, alive: Bool}
+
+def seat.weight(player: S.Seat, tempo: Bool) -> Weighed:
   match player:
     case S.Seat{0n, _, _, _}:
-      0
+      Weighed{0, False{}}
     case S.Seat{hp, jam, _, slots}:
       +base : U32 = (100 * U32.from_nat(hp) + slots.weight(slots) + Bool.pick(U32, tempo, 35, 0) : U32)
-      U32.sub(base, Bool.pick(U32, S.jam.jammed(jam), U32.min(base, 50), 0))
+      Weighed{U32.sub(base, Bool.pick(U32, S.jam.jammed(jam), U32.min(base, 50), 0)), True{}}
 
 def turn.is(turn: Maybe<&2, D.Seat>, seat: D.Seat) -> Bool:
   match turn:
@@ -54,74 +58,143 @@ def turn.is(turn: Maybe<&2, D.Seat>, seat: D.Seat) -> Bool:
     case Some{current}:
       D.seat.eq(current, seat)
 
-def total(entries: List<&2, D.At<&2, S.Seat>>, +turn: Maybe<&2, D.Seat>) -> U32:
+# Every seat's weight summed, with me's weight and life when me is seated.
+type Weights is Data:
+  Weights{total: U32, own: Maybe<&2, Weighed>}
+
+def weights.add(mine: Bool, weighed: Weighed, weights: Weights) -> Weights:
+  match mine weighed weights:
+    case True{} Weighed{+weight, alive} Weights{total, _}:
+      Weights{(weight + total : U32), Some{Weighed{weight, alive}}}
+    case False{} Weighed{weight, _} Weights{total, own}:
+      Weights{(weight + total : U32), own}
+
+def weights(entries: List<&2, D.At<&2, S.Seat>>, +turn: Maybe<&2, D.Seat>, +me: D.Seat) -> Weights:
   match entries:
     case Nil{}:
-      0
+      Weights{0, None{}}
     case D.At{+seat, player} <> rest:
-      (seat.weight(player, turn.is(turn, seat)) + total(rest, turn) : U32)
+      weights.add(D.seat.eq(seat, me), seat.weight(player, turn.is(turn, seat)), weights(rest, turn, me))
 
-def exact(notes: List<&2, D.Note>, +me: D.Seat) -> Maybe<&2, U32>:
-  match notes:
-    case Nil{}:
-      None{}
-    case D.Shown{D.RoundWon{seat, _}} <> _:
+# An unseated me weighs as S.players.seat's stand-in seat.
+def weights.own(own: Maybe<&2, Weighed>, +turn: Maybe<&2, D.Seat>, +me: D.Seat) -> Weighed:
+  match own:
+    case Some{weighed}:
+      weighed
+    case None{}:
+      seat.weight(S.Seat{100n, S.Free{}, 0, D.slots.empty()}, turn.is(turn, me))
+
+def estimate.of(own: Weighed, total: U32, knowledge: Bool) -> U32:
+  match own:
+    case Weighed{weight, alive}:
+      +bonus : U32 = Bool.pick(U32, Bool.and(knowledge, alive), 25, 0)
+      F32.to_u32(F32.mul(1000000.0, F32.div(U32.to_f32((weight + bonus : U32)), U32.to_f32(U32.max(1, (total + bonus : U32))))))
+
+def estimate(weights: Weights, +turn: Maybe<&2, D.Seat>, +me: D.Seat, knowledge: Bool) -> U32:
+  match weights:
+    case Weights{total, own}:
+      estimate.of(weights.own(own, turn, me), total, knowledge)
+
+def exact.note(note: D.Note, +me: D.Seat) -> Maybe<&2, U32>:
+  match note:
+    case D.Shown{D.RoundWon{seat, _}}:
       Some{Bool.pick(U32, D.seat.eq(me, seat), 1000000, 0)}
-    case _ <> rest:
-      exact(rest, me)
+    case _:
+      None{}
 
-def state.estimate(+state: T.State, +me: D.Seat, knowledge: Bool) -> U32:
-  +players : S.Players = T.state.players(state)
-  +world : S.World = T.state.world(state)
-  +own : S.Seat = S.players.seat(players, me)
-  +bonus : U32 = Bool.pick(U32, Bool.and(knowledge, G.alive(S.seat.health(own))), 25, 0)
-  +weight : U32 = (seat.weight(own, turn.is(S.world.turn(world), me)) + bonus : U32)
-  total : U32 = (total(D.ring.entries(S.Seat, players), S.world.turn(world)) + bonus : U32)
-  F32.to_u32(F32.mul(1000000.0, F32.div(U32.to_f32(weight), U32.to_f32(U32.max(1, total)))))
+def exact.after(found: Maybe<&2, U32>, note: D.Note, +me: D.Seat) -> Maybe<&2, U32>:
+  match found:
+    case Some{value}:
+      Some{value}
+    case None{}:
+      exact.note(note, me)
 
-def state.exact(found: Maybe<&2, U32>, state: T.State, me: D.Seat, knowledge: Bool) -> U32:
+# The value of the first RoundWon in the log, read in place.
+def exact(log: T.Log, +me: D.Seat) -> Maybe<&2, U32>:
+  match log:
+    case T.Empty{}:
+      None{}
+    case T.Snoc{earlier, note}:
+      exact.after(exact(earlier, me), note, me)
+
+def state.exact(found: Maybe<&2, U32>, players: S.Players, +turn: Maybe<&2, D.Seat>, +me: D.Seat, knowledge: Bool) -> U32:
   match found:
     case Some{value}:
       value
     case None{}:
-      state.estimate(state, me, knowledge)
+      estimate(weights(D.ring.entries(S.Seat, players), turn, me), turn, me, knowledge)
 
-def state(+state: T.State, +me: D.Seat, knowledge: Bool) -> U32:
-  state.exact(exact(T.state.notes(state), me), state, me, knowledge)
+def state(state: T.State, +me: D.Seat, knowledge: Bool) -> U32:
+  match state:
+    case T.State{world, players, _, log, _}:
+      state.exact(exact(log, me), players, S.world.turn(world), me, knowledge)
 
-# Whether every world's chamber holds `shell`, given that the worlds before
-# `worlds` do when `so_far`. Stops at the first world that does not.
-def same.chamber(worlds: List<&2, A.World>, so_far: Bool, +shell: D.Shell) -> Bool:
-  match worlds so_far:
-    case _ False{}:
+# A state's value with and without knowledge of the chamber, and its chamber.
+type Valued is Data:
+  Valued{known: U32, unknown: U32, chamber: Maybe<&2, D.Shell>}
+
+def valued.exact(found: Maybe<&2, U32>, players: S.Players, +turn: Maybe<&2, D.Seat>, +me: D.Seat, chamber: Maybe<&2, D.Shell>) -> Valued:
+  match found:
+    case Some{+value}:
+      Valued{value, value, chamber}
+    case None{}:
+      +weights : Weights = weights(D.ring.entries(S.Seat, players), turn, me)
+      Valued{estimate(weights, turn, me, True{}), estimate(weights, turn, me, False{}), chamber}
+
+def chamber(gun: List<&2, D.Shell>) -> Maybe<&2, D.Shell>:
+  match gun:
+    case Nil{}:
+      None{}
+    case shell <> _:
+      Some{shell}
+
+def valued(state: T.State, +me: D.Seat) -> Valued:
+  match state:
+    case T.State{S.World{_, _, _, _, _, _, _, +turn, _, _, _, _, _, gun, _, _}, players, _, log, _}:
+      valued.exact(exact(log, me), players, turn, me, chamber(gun))
+
+# Over the worlds after the first: the weighted sums with and without chamber
+# knowledge, folded right to left as sum would, and whether every chamber
+# matches the first world's.
+type Sums is Data:
+  Sums{known: F32, unknown: F32, same: Bool}
+
+def chamber.same(a: Maybe<&2, D.Shell>, b: Maybe<&2, D.Shell>) -> Bool:
+  match a b:
+    case Some{x} Some{y}:
+      B.shell.eq(x, y)
+    case _ _:
       False{}
-    case Nil{} True{}:
-      True{}
-    case A.World{state, _} <> rest True{}:
-      same.chamber(rest, B.filter.clue(S.world.gun(T.state.world(state)), 0n, shell), shell)
 
-def known.live(live: Bool, +worlds: List<&2, A.World>) -> Bool:
-  match live:
-    case True{}:
-      True{}
-    case False{}:
-      same.chamber(worlds, True{}, D.Blank{})
+def sums.add(+weight: F32, valued: Valued, +first: Maybe<&2, D.Shell>, sums: Sums) -> Sums:
+  match valued sums:
+    case Valued{k, u, chamber} Sums{sk, su, same}:
+      Sums{F32.add(F32.mul(weight, U32.to_f32(k)), sk), F32.add(F32.mul(weight, U32.to_f32(u)), su), Bool.and(chamber.same(chamber, first), same)}
 
-def known(+worlds: List<&2, A.World>) -> Bool:
+def sums(worlds: List<&2, A.World>, +me: D.Seat, +first: Maybe<&2, D.Shell>) -> Sums:
   match worlds:
     case Nil{}:
-      False{}
-    case _ <> _:
-      known.live(same.chamber(worlds, True{}, D.Live{}), worlds)
+      Sums{0.0, 0.0, True{}}
+    case A.World{position, +weight} <> rest:
+      sums.add(weight, valued(position, me), first, sums(rest, me, first))
 
-def sum(worlds: List<&2, A.World>, +me: D.Seat, +knowledge: Bool) -> F32:
+def static.first(+weight: F32, valued: Valued, sums: Sums) -> F32:
+  match valued sums:
+    case Valued{k, _, Some{_}} Sums{sk, _, True{}}:
+      F32.add(F32.mul(weight, U32.to_f32(k)), sk)
+    case Valued{_, u, _} Sums{_, su, _}:
+      F32.add(F32.mul(weight, U32.to_f32(u)), su)
+
+def static.from(+weight: F32, valued: Valued, rest: List<&2, A.World>, +me: D.Seat) -> F32:
+  match valued:
+    case Valued{k, u, +first}:
+      static.first(weight, Valued{k, u, first}, sums(rest, me, first))
+
+# The weighted value of the worlds, knowing the chamber when every world's
+# chamber holds the same shell (E.known), summed right to left as sum does.
+def static(worlds: List<&2, A.World>, +me: D.Seat) -> F32:
   match worlds:
     case Nil{}:
       0.0
-    case A.World{position, weight} <> rest:
-      F32.add(F32.mul(weight, U32.to_f32(state(position, me, knowledge))), sum(rest, me, knowledge))
-
-def evaluate(belief: A.Belief) -> U32:
-  match belief:
-    case A.Belief{_, +private, me, _}:
-      F32.to_u32(sum(private, me, known(private)))
+    case A.World{position, +weight} <> rest:
+      static.from(weight, valued(position, me), rest, me)

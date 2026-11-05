@@ -483,7 +483,7 @@ def rule.eq(+s: S.State) -> {G.load.amount(H.host.load_rule(qh(s))) == Q.load.am
 
 # The reload probe: the packet's reload flag and a positive-amount begin
 # list against reload.wanted.
-def live.eq(+winner: Maybe<&2, D.Seat>, +s: S.State, +from: D.Seat, +passing: Bool, +shape: A.Shape(s)) -> {Bool.and(R.EndPacket.reload(end.packet(s, from, passing, winner)), G.nonempty(D.Seat, G.GetSocketsToBeginItemGrabbingOn(qh(s), False{}, 1n))) == Bool.and(I.gun.empty(S.world.gun(S.state.world(s))), Bool.and(I.winnerless(winner), I.has_seats(I.begin.seats(s, False{}, 1n)))) : Bool}:
+def live.eq(+winner: Maybe<&2, D.Seat>, +s: S.State, +from: D.Seat, +passing: Bool, +shape: A.Shape(s)) -> {Bool.and(R.EndPacket.reload(end.packet(s, from, passing, winner)), G.nonempty(D.Seat, G.GetSocketsToBeginItemGrabbingOn(qh(s), False{}, 1n))) == I.reload.wanted(s, winner) : Bool}:
   match winner:
     case Some{+seat}:
       match s:

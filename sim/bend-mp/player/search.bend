@@ -238,7 +238,7 @@ def millionths(x: F32) -> U32:
   U32.min(1000000, F32.to_u32(F32.add(x, 0.5)))
 
 def static(+worlds: List<&2, A.World>, +me: D.Seat) -> U32:
-  millionths(E.sum(worlds, me, E.known(worlds)))
+  millionths(E.static(worlds, me))
 
 # A belief with no private worlds is a public observation the searcher's
 # clues rule out; its private value has no weight and copies the public one.
@@ -437,7 +437,7 @@ def node.task(depth: Nat, +public: List<&2, A.World>, +private: List<&2, A.World
     case Nil{}:
       Known{Value{0, 0, Nil{}, tally, A.Settled{}}}
     case A.World{+state, _} <> _:
-      node.ended(E.exact(T.state.notes(state), me), state, depth, public, private, tally, me, reload, memo, budget)
+      node.ended(E.exact(T.state.log(state), me), state, depth, public, private, tally, me, reload, memo, budget)
 
 # A move costs one node per world it is played in. A move the budget cannot
 # pay for spends the iteration.

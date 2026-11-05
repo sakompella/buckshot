@@ -383,8 +383,17 @@ def gun.empty(gun: List<&2, D.Shell>) -> Bool:
     case shell <> rest:
       False{}
 
+# Strict Bool.and would ask begin.seats on every loaded gun; a loaded gun
+# answers alone.
+def reload.ready(gun: List<&2, D.Shell>, +state: S.State, winner: Maybe<&2, D.Seat>) -> Bool:
+  match gun:
+    case Nil{}:
+      Bool.and(winnerless(winner), has_seats(begin.seats(state, False{}, 1n)))
+    case _ <> _:
+      False{}
+
 def reload.wanted(+state: S.State, winner: Maybe<&2, D.Seat>) -> Bool:
-  Bool.and(gun.empty(S.world.gun(S.state.world(state))), Bool.and(winnerless(winner), has_seats(begin.seats(state, False{}, 1n))))
+  reload.ready(S.world.gun(S.state.world(state)), state, winner)
 
 # Jammer targets (D37): living, unjammed seats other than the user.
 
@@ -395,10 +404,12 @@ def jam.options(entries: List<&2, D.At<&2, Nat>>, +players: S.Players, +by: D.Se
     case D.At{+seat, hp} <> rest:
       keep(S.JamOption, Bool.and(Bool.not(D.seat.eq(seat, by)), Bool.and(G.alive(hp), Bool.not(seat.jammed(players, seat)))), S.JamAt{seat}, jam.options(rest, players, by))
 
-def jam.for(+state: S.State, +by: D.Seat) -> List<&2, S.JamOption>:
-  +players : S.Players = S.state.players(state)
+def jam.of(+players: S.Players, +by: D.Seat) -> List<&2, S.JamOption>:
   jam.options(D.ring.entries(Nat, S.players.health(players)), players, by)
 
+
+def jam.for(+state: S.State, +by: D.Seat) -> List<&2, S.JamOption>:
+  jam.of(S.state.players(state), by)
 def jam.any(options: List<&2, S.JamOption>) -> Bool:
   match options:
     case Nil{}:
@@ -465,8 +476,13 @@ def steal.owners(entries: List<&2, D.At<&2, D.Slots>>, +thief: D.Seat, +sawed: B
     case D.At{+owner, inventory} <> rest:
       steal.owner(D.seat.eq(owner, thief), owner, inventory, sawed, targets, steal.owners(rest, thief, sawed, targets))
 
+# steal.for, given whether the thief has a jam target.
+def steal.with(+players: S.Players, +thief: D.Seat, +sawed: Bool, +targets: Bool) -> List<&2, S.StealOption>:
+  steal.owners(D.ring.entries(D.Slots, S.players.slots(players)), thief, sawed, targets)
+
 def steal.for(+state: S.State, +thief: D.Seat) -> List<&2, S.StealOption>:
-  steal.owners(D.ring.entries(D.Slots, S.players.slots(S.state.players(state))), thief, S.world.sawed(S.state.world(state)), jam.any(jam.for(state, thief)))
+  +players : S.Players = S.state.players(state)
+  steal.with(players, thief, S.world.sawed(S.state.world(state)), jam.any(jam.of(players, thief)))
 
 def steal.any(options: List<&2, S.StealOption>) -> Bool:
   match options:
@@ -518,8 +534,15 @@ def use.slots(slots: List<&2, D.Slot>, +inventory: D.Slots, +sawed: Bool, +targe
     case +slot <> rest:
       use.here(D.slots.get(inventory, slot), slot, sawed, targets, steals, use.slots(rest, inventory, sawed, targets, steals))
 
+# uses, given the seat's jam targets and steals are known to exist or not.
+def uses.with(+players: S.Players, +seat: D.Seat, +sawed: Bool, +targets: Bool, +steals: Bool) -> List<&2, S.IdleOption>:
+  use.slots(slot.order(), seat.slots(players, seat), sawed, targets, steals)
+
 def uses(+state: S.State, +seat: D.Seat) -> List<&2, S.IdleOption>:
-  use.slots(slot.order(), seat.slots(S.state.players(state), seat), S.world.sawed(S.state.world(state)), jam.any(jam.for(state, seat)), steal.any(steal.for(state, seat)))
+  +players : S.Players = S.state.players(state)
+  +sawed : Bool = S.world.sawed(S.state.world(state))
+  +targets : Bool = jam.any(jam.of(players, seat))
+  uses.with(players, seat, sawed, targets, steal.any(steal.with(players, seat, sawed, targets)))
 
 # Item effect helpers.
 

@@ -607,8 +607,25 @@ def answer.request(+state: T.State, n: Nat, request: T.Request) -> D.Stepped<&2,
     case T.Choose{_, D.NonEmpty{_, rest}}:
       T.state.stepped(answer.choice(T.state.set_log(state, T.Empty{}), D.clamp(n, List.length(&2, T.Move, rest))))
 
+# The n-th option of an Idle menu, clamped to the last, as answer.choice picks it.
+def answer.idle(+state: T.State, +seat: D.Seat, seated: Bool, options: List<&2, T.IdleOption>, n: Nat) -> D.Stepped<&2, T.State>:
+  match seated options:
+    case True{} option <> +rest:
+      T.state.stepped(pickup.selected(T.state.set_log(state, T.Empty{}), seat, P.option.nth(option <> rest, D.clamp(n, List.length(&2, T.Move, P.moves(rest))))))
+    case _ _:
+      D.Stepped{state, Nil{}}
+
+# At Idle, the request's menu and the choice's menu are one list, so it is
+# built once.
+def answer.at(+state: T.State, n: Nat, phase: T.Phase) -> D.Stepped<&2, T.State>:
+  match phase:
+    case T.Idle{+seat}:
+      answer.idle(state, seat, P.seated(D.ring.get(Bool, D.ring.fill(Bool, S.world.table(T.state.world(state)), True{}), seat)), P.options(state, seat), n)
+    case _:
+      answer.request(state, n, request(state))
+
 def answer(+state: T.State, n: Nat) -> D.Stepped<&2, T.State>:
-  answer.request(state, n, request(state))
+  answer.at(state, n, T.state.phase(state))
 
 def stepped.state(stepped: D.Stepped<&2, T.State>) -> T.State:
   match stepped:
