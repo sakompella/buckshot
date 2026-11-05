@@ -431,6 +431,36 @@ function checkMemo(pos, reload = STATIC) {
   }
 }
 
+// A match's decisions in order, with the memo carried from each player's
+// decision before. Charged with entries served as the search serves them
+// scores and spends exactly as a fresh Charged search, for both players at
+// once, so neither reads the other's memo. Free spends no more nodes; with the
+// budget unspent it scores alike, and letting deeper entries serve changes no
+// line whose leaves never ran out of depth.
+const carriedRun = (game, depth, budget, memo, deeper) => {
+  let memos = list([]);
+  return game.map(pos => {
+    const c = X('analyse.carried')(pos.position, depth, budget, STATIC, memo, deeper, memos);
+    memos = c.memos;
+    return c;
+  });
+};
+function checkCarried() {
+  const game = positions(D('config.default')(tag('TwoSeats')), 2, 60).slice(0, 14);
+  assert.ok(new Set(game.map(pos => pos.me)).size === 2, 'both players decide');
+  const charged = carriedRun(game, 3, 2500, CHARGED, false);
+  game.forEach((pos, i) => assert.equal(scoring(charged[i].analysis), scoring(analyse(pos.position, 3, 2500, STATIC, CHARGED)), `carried charged searches as a fresh search, decision ${i}`));
+  assert.ok(charged.some(c => Number(c.carried) > 0), 'the carry serves some node');
+  const free = carriedRun(game, 3, 1000000, FREE, false), deeper = carriedRun(game, 3, 1000000, FREE, true);
+  game.forEach((pos, i) => {
+    const off = analyse(pos.position, 3, 1000000, STATIC, OFF);
+    assert.deepEqual(json(lines(free[i].analysis)), json(lines(off)), 'carried free scores alike');
+    assert.ok(free[i].analysis.nodes <= off.nodes, 'carried free spends no more nodes');
+    lines(deeper[i].analysis).forEach((l, j) => { if (kind(l.reach) !== 'Cut' && kind(lines(off)[j].reach) !== 'Cut') assert.equal(l.score, lines(off)[j].score, 'an uncut line holds with deeper entries'); });
+    checked('carried');
+  });
+}
+
 // Two seats with no items, at most three shells and two HP: the analysis at
 // a depth past every line's end equals an independent search of the whole
 // load, with reloads valued statically and floats rounded only at the end.
@@ -473,13 +503,14 @@ function checkTinyLoads() {
 }
 
 const started = performance.now();
-const t = Object.fromEntries(Object.entries({ checkForcedWin, checkRoundEnd, checkLongHistory, checkHandDeal, checkMergedDeal, checkNoReload, checkCertain, checkDeeper, checkPublicOnly, checkOutcomes, checkPolicy, checkDeepening, checkInvalid, checkMemo, checkTinyLoads, analyse }).map(([k, f]) => [k, timed(k, f)]));
+const t = Object.fromEntries(Object.entries({ checkForcedWin, checkRoundEnd, checkLongHistory, checkHandDeal, checkMergedDeal, checkNoReload, checkCertain, checkDeeper, checkPublicOnly, checkOutcomes, checkPolicy, checkDeepening, checkInvalid, checkMemo, checkCarried, checkTinyLoads, analyse }).map(([k, f]) => [k, timed(k, f)]));
 t.checkForcedWin();
 t.checkRoundEnd();
 t.checkLongHistory();
 t.checkHandDeal();
 t.checkMergedDeal();
 t.checkTinyLoads();
+t.checkCarried();
 sample.forEach((pos, i) => {
   const analysis = t.analyse(pos.position, 1, 100000);
   checkAnalysis(analysis, 1, 100000);
@@ -494,6 +525,6 @@ sample.forEach((pos, i) => {
   if (i % 16 === 3) t.checkMemo(pos);
   if (i % 32 === 5 && pos.cfg.table.$.endsWith('TwoSeats')) t.checkMemo(pos, sampled(4));
 });
-assert.ok(count['certain win'] > 0 && count['deeper forced win'] > 0 && count['public only'] > 0 && count['public only, with replies'] > 0 && privateMattered > 0 && count.deepening > 0 && count['no reload in reach'] > 0 && count.memo > 0 && count['memo, sampled'] > 0, `every property ran on a case that matters: ${json(count)}`);
+assert.ok(count['certain win'] > 0 && count['deeper forced win'] > 0 && count['public only'] > 0 && count['public only, with replies'] > 0 && privateMattered > 0 && count.deepening > 0 && count['no reload in reach'] > 0 && count.memo > 0 && count['memo, sampled'] > 0 && count.carried > 0, `every property ran on a case that matters: ${json(count)}`);
 console.log(`player: ${sample.length} positions, ${((performance.now() - started) / 1000).toFixed(0)} s; checks ${json(count)}; private clues changed private scores ${privateMattered} times`);
 if (process.env.PLAYER_PROFILE) console.log(json(Object.fromEntries(Object.entries(spent).map(([k, v]) => [k, Math.round(v / 1000)]))));
