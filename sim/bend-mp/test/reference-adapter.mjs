@@ -11,10 +11,10 @@ export function array(xs) {
   assert.equal(xs.$, 'Nil');
   return result;
 }
-export const kind = value => value.$.split('.').at(-1);
+export const kind = value => value.$;
 export const seatNumber = seat => Number(kind(seat).slice(4));
 // The machine's Jam for the reference's (is_jammed, jammer_checked) pair.
-export const machineJam = (jammed, checked) => ({ $: `state.${!jammed ? 'Free' : checked ? 'JammedSkipped' : 'Jammed'}` });
+export const machineJam = (jammed, checked) => ({ $: !jammed ? 'Free' : checked ? 'JammedSkipped' : 'Jammed' });
 // The reference pair of a machine Jam. jammer_checked is dead while unjammed
 // (D57), so the pair compares it only while jammed.
 export const jamPair = jam => ({ jammed: kind(jam) !== 'Free', jam_checked: kind(jam) === 'Free' ? null : kind(jam) === 'JammedSkipped' });
@@ -24,12 +24,12 @@ export const turnHolder = phase => {
   if (kind(phase) === 'Blocked' && kind(phase.holder) === 'Some') return seatNumber(phase.holder.value);
   return null;
 };
-export const tag = (name, fields = {}) => ({ $: `../domain.${name}`, ...fields });
+export const tag = (name, fields = {}) => ({ $: name, ...fields });
 export const bool = value => value;
 export const seat = n => tag(`Seat${n}`);
 export const maybe = value => value === null ? { $: 'None' } : { $: 'Some', value };
 export const valueOf = (value, absent = null) => kind(value) === 'None' ? absent : value.value;
-export const plain = value => JSON.parse(JSON.stringify(value, (_, x) => typeof x === 'bigint' ? Number(x) : x));
+export const plain = value => JSON.parse(JSON.stringify(value));
 
 export async function buildReference() {
   const dir = mkdtempSync(join(tmpdir(), 'bend-mp-core-'));

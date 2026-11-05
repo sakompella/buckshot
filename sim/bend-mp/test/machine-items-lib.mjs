@@ -41,17 +41,7 @@ export async function loadModels(prefix, { abstract = false } = {}) {
   }
 }
 
-// A machine value with its tags as abstract.bend sees them: sm/main.bend sees
-// `../domain.X` and `state.X`, abstract.bend sees `domain.X` and `sm/state.X`.
-const abstractTag = tag => tag.startsWith('../') ? tag.slice(3) : tag.includes('.') ? `sm/${tag}` : tag;
-export const asAbstract = value => value === null || typeof value !== 'object' ? value
-  : Object.fromEntries(Object.entries(value).map(([key, x]) => [key, key === '$' ? abstractTag(x) : asAbstract(x)]));
-
-export const normalize = value => JSON.parse(JSON.stringify(value, (key, x) => {
-  if (typeof x === 'bigint') return Number(x);
-  if (key === '$') return x.split('.').at(-1);
-  return x;
-}));
+export const normalize = value => JSON.parse(JSON.stringify(value));
 
 export const rules = names => Object.fromEntries(names.map(name => [name.toLowerCase(), {}]));
 

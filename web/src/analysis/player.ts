@@ -18,7 +18,7 @@ import { type GameEvent as Event, GameEvent, Item, type LearnedSecret, Move, Sea
 const PLAYER_SOURCE = new URL("../../../sim/bend-mp/analysis.bend", import.meta.url).pathname;
 
 interface PlayerExports {
-  readonly analyse: (position: BendNode, depth: bigint, budget: bigint, reload: BendNode, memo: BendNode) => BendNode;
+  readonly analyse: (position: BendNode, depth: number, budget: number, reload: BendNode, memo: BendNode) => BendNode;
   readonly orders: (log: BendNode, isPrivate: boolean) => BendNode;
 }
 
@@ -57,7 +57,7 @@ const nodesOf = (list: BendNode): ReadonlyArray<BendNode> => {
   return nodes;
 };
 
-const tag = (name: string, fields: Readonly<Record<string, BendNode | bigint | number>> = {}): BendNode => ({ $: `domain.${name}`, ...fields });
+const tag = (name: string, fields: Readonly<Record<string, BendNode | number>> = {}): BendNode => ({ $: name, ...fields });
 
 const seatNode = (seat: Seat): BendNode => tag(`Seat${seat}`);
 
@@ -65,22 +65,22 @@ const slotNode = (slot: number): BendNode => tag(`Slot${slot}`);
 
 const eventNode = (event: Event): BendNode =>
   GameEvent.match(event, {
-    RoundBegan: ({ round, health, first }) => tag("RoundBegan", { round: BigInt(round), health: BigInt(health), first: seatNode(first) }),
+    RoundBegan: ({ round, health, first }) => tag("RoundBegan", { round, health, first: seatNode(first) }),
     GrabbingBegan: ({ seats }) => tag("GrabbingBegan", { seats: bendList(seats.map(seatNode)) }),
     Granted: ({ seat, item }) => tag("Granted", { seat: seatNode(seat), item: tag(item) }),
     Placed: ({ seat, slot, item }) => tag("Placed", { seat: seatNode(seat), slot: slotNode(slot), item: tag(item) }),
     GrabbingEnded: ({ seat }) => tag("GrabbingEnded", { seat: seatNode(seat) }),
     DistributionDone: () => tag("DistributionDone"),
-    Loaded: ({ load }) => tag("Loaded", { load: tag("Load", { live: BigInt(load.live), blank: BigInt(load.blank) }) }),
+    Loaded: ({ load }) => tag("Loaded", { load: tag("Load", { live: load.live, blank: load.blank }) }),
     TurnSkipped: ({ seat }) => tag("TurnSkipped", { seat: seatNode(seat) }),
     JamLifted: ({ seat }) => tag("JamLifted", { seat: seatNode(seat) }),
     TurnGiven: ({ seat }) => tag("TurnGiven", { seat: seatNode(seat) }),
     PickedUp: ({ seat }) => tag("PickedUp", { seat: seatNode(seat) }),
     Fired: ({ shooter, target, shell, captured, applied, health }) =>
-      tag("Fired", { shooter: seatNode(shooter), target: seatNode(target), shell: tag(shell), captured: tag(captured), applied: BigInt(applied), health: BigInt(health) }),
+      tag("Fired", { shooter: seatNode(shooter), target: seatNode(target), shell: tag(shell), captured: tag(captured), applied, health }),
     Died: ({ seat }) => tag("Died", { seat: seatNode(seat) }),
     Used: ({ seat, owner, slot, item }) => tag("Used", { seat: seatNode(seat), owner: seatNode(owner), slot: slotNode(slot), item: tag(item) }),
-    Healed: ({ seat, health }) => tag("Healed", { seat: seatNode(seat), health: BigInt(health) }),
+    Healed: ({ seat, health }) => tag("Healed", { seat: seatNode(seat), health }),
     Ejected: ({ seat, shell }) => tag("Ejected", { seat: seatNode(seat), shell: tag(shell) }),
     Inverted: ({ seat }) => tag("Inverted", { seat: seatNode(seat) }),
     JamApplied: ({ by, target }) => tag("JamApplied", { by: seatNode(by), target: seatNode(target) }),
@@ -92,7 +92,7 @@ const eventNode = (event: Event): BendNode =>
 const secretNode = (secret: Secret): BendNode =>
   Secret.match(secret, {
     Glimpse: ({ shell }) => tag("Glimpse", { shell: tag(shell) }),
-    Clue: ({ position, shell }) => tag("Clue", { position: BigInt(position), shell: tag(shell) }),
+    Clue: ({ position, shell }) => tag("Clue", { position, shell: tag(shell) }),
     NoClue: () => tag("NoClue"),
     EmptyBriefcase: () => tag("EmptyBriefcase"),
   });
@@ -100,7 +100,7 @@ const secretNode = (secret: Secret): BendNode =>
 const logNode = (log: ReadonlyArray<OwnEntry>): BendNode =>
   bendList(log.map((entry) => (entry.kind === "event" ? tag("Witnessed", { event: eventNode(entry.event) }) : tag("Learned", { secret: secretNode(entry.secret) }))));
 
-const TABLES = { 2: "domain.TwoSeats", 3: "domain.ThreeSeats", 4: "domain.FourSeats" } as const satisfies Readonly<Record<SeatCount, string>>;
+const TABLES = { 2: "TwoSeats", 3: "ThreeSeats", 4: "FourSeats" } as const satisfies Readonly<Record<SeatCount, string>>;
 
 /** The public board at a game's request point, as the rules build returns it. Nothing else is read off the machine state. */
 export const boardOf = (game: Game): BendNode => {
@@ -121,7 +121,7 @@ export interface PlayerInput {
 
 const inputNode = ({ table, items, board, log, me }: PlayerInput): BendNode =>
   // SAFETY: the fields are player/types.Position's, each a Bend value; BendNode names only the tag.
-  ({ $: "player/types.Position", config: rules.config({ $: TABLES[table] }, items), board, log: logNode(log), me: seatNode(me) }) as BendNode;
+  ({ $: "Position", config: rules.config({ $: TABLES[table] }, items), board, log: logNode(log), me: seatNode(me) }) as BendNode;
 
 // Out of Bend
 // ===========
@@ -129,27 +129,27 @@ const inputNode = ({ table, items, board, log, me }: PlayerInput): BendNode =>
 /** Shell orders a log allows, each a string such as "LBL" from the chamber out. Repeated orders carry their weight. */
 export type Orders = ReadonlyArray<string>;
 
-const orderText = (order: BendNode): string => nodesOf(order).map((shell) => (shell.$ === "domain.Live" ? "L" : "B")).join("");
+const orderText = (order: BendNode): string => nodesOf(order).map((shell) => (shell.$ === "Live" ? "L" : "B")).join("");
 
 const Node = Schema.Struct({ $: Schema.String });
 
 const RawMove = Schema.Union([
-  Schema.Struct({ $: Schema.Literal("simple/state.Shoot"), target: Node }),
-  Schema.Struct({ $: Schema.Literal("simple/state.Use"), item: Node }),
-  Schema.Struct({ $: Schema.Literal("simple/state.Jam"), target: Node }),
-  Schema.Struct({ $: Schema.Literal("simple/state.Steal"), owner: Node, item: Node }),
-  Schema.Struct({ $: Schema.Literal("simple/state.StealJam"), owner: Node, target: Node }),
+  Schema.Struct({ $: Schema.Literal("Shoot"), target: Node }),
+  Schema.Struct({ $: Schema.Literal("Use"), item: Node }),
+  Schema.Struct({ $: Schema.Literal("Jam"), target: Node }),
+  Schema.Struct({ $: Schema.Literal("Steal"), owner: Node, item: Node }),
+  Schema.Struct({ $: Schema.Literal("StealJam"), owner: Node, target: Node }),
 ]);
 
-const RawLine = Schema.Struct({ $: Schema.Literal("player/types.Line"), move: RawMove, score: Schema.Number, reach: Schema.Struct({ $: Schema.Literals(["player/types.Settled", "player/types.Reloads", "player/types.Cut"]) }) });
+const RawLine = Schema.Struct({ $: Schema.Literal("Line"), move: RawMove, score: Schema.Number, reach: Schema.Struct({ $: Schema.Literals(["Settled", "Reloads", "Cut"]) }) });
 
-const REACH = { "player/types.Settled": "settled", "player/types.Reloads": "reloads", "player/types.Cut": "cut" } as const;
+const REACH = { Settled: "settled", Reloads: "reloads", Cut: "cut" } as const;
 
-const RawCached = Schema.Struct({ $: Schema.Literal("player/types.Cached"), entries: Schema.BigInt, hits: Schema.BigInt, deals: Schema.BigInt, deal_hits: Schema.BigInt });
+const RawCached = Schema.Struct({ $: Schema.Literal("Cached"), entries: Schema.Number, hits: Schema.Number, deals: Schema.Number, deal_hits: Schema.Number });
 
 const RawAnalysis = Schema.Union([
-  Schema.Struct({ $: Schema.Literal("player/types.Analysed"), lines: Schema.Unknown, best: Schema.BigInt, nodes: Schema.BigInt, depth: Schema.BigInt, limited: Schema.Boolean, cached: RawCached }),
-  Schema.Struct({ $: Schema.Literal("player/types.Invalid"), reason: Schema.String, nodes: Schema.BigInt }),
+  Schema.Struct({ $: Schema.Literal("Analysed"), lines: Schema.Unknown, best: Schema.Number, nodes: Schema.Number, depth: Schema.Number, limited: Schema.Boolean, cached: RawCached }),
+  Schema.Struct({ $: Schema.Literal("Invalid"), reason: Schema.String, nodes: Schema.Number }),
 ]);
 
 const decodeAnalysis = Schema.decodeUnknownSync(RawAnalysis);
@@ -160,9 +160,9 @@ const decodeSeat = Schema.decodeUnknownSync(Seat);
 
 const decodeItem = Schema.decodeUnknownSync(Item);
 
-const seatOf = (node: typeof Node.Type): Seat => decodeSeat(Number(node.$.replace("domain.Seat", "")));
+const seatOf = (node: typeof Node.Type): Seat => decodeSeat(Number(node.$.replace("Seat", "")));
 
-const itemOf = (node: typeof Node.Type): Item => decodeItem(node.$.replace("domain.", ""));
+const itemOf = (node: typeof Node.Type): Item => decodeItem(node.$);
 
 /**
  * A whole move as the machine steps an agent's move chains, so that agentMoveText (src/text.ts) words it as the arena did.
@@ -172,15 +172,15 @@ const stepsOf = (move: typeof RawMove.Type): ReadonlyArray<Move> => {
   const use = (item: Item): Move => Move.cases.UseItem.make({ slot: 0, item });
 
   switch (move.$) {
-    case "simple/state.Shoot":
+    case "Shoot":
       return [Move.cases.PickUp.make({}), Move.cases.Shoot.make({ target: seatOf(move.target) })];
-    case "simple/state.Use":
+    case "Use":
       return [use(itemOf(move.item))];
-    case "simple/state.Jam":
+    case "Jam":
       return [use("Jammer"), Move.cases.JamTarget.make({ target: seatOf(move.target) })];
-    case "simple/state.Steal":
+    case "Steal":
       return [use("Adrenaline"), Move.cases.Steal.make({ owner: seatOf(move.owner), slot: 0, item: itemOf(move.item) })];
-    case "simple/state.StealJam":
+    case "StealJam":
       return [use("Adrenaline"), Move.cases.Steal.make({ owner: seatOf(move.owner), slot: 0, item: "Jammer" }), Move.cases.JamTarget.make({ target: seatOf(move.target) })];
   }
 };
@@ -210,8 +210,8 @@ export type Analysis =
   | { readonly kind: "invalid"; readonly reason: string; readonly nodes: number };
 
 const analysisOf = (raw: typeof RawAnalysis.Type): Analysis =>
-  raw.$ === "player/types.Invalid"
-    ? { kind: "invalid", reason: raw.reason, nodes: Number(raw.nodes) }
+  raw.$ === "Invalid"
+    ? { kind: "invalid", reason: raw.reason, nodes: raw.nodes }
     : {
         kind: "analysed",
         // SAFETY: Analysed.lines is a Bend List<Line>.
@@ -220,11 +220,11 @@ const analysisOf = (raw: typeof RawAnalysis.Type): Analysis =>
 
           return { steps: stepsOf(line.move), score: line.score, reach: REACH[line.reach.$] };
         }),
-        best: Number(raw.best),
-        depth: Number(raw.depth),
+        best: raw.best,
+        depth: raw.depth,
         limited: raw.limited,
-        nodes: Number(raw.nodes),
-        cached: { entries: Number(raw.cached.entries), hits: Number(raw.cached.hits), deals: Number(raw.cached.deals), dealHits: Number(raw.cached.deal_hits) },
+        nodes: raw.nodes,
+        cached: { entries: raw.cached.entries, hits: raw.cached.hits, deals: raw.cached.deals, dealHits: raw.cached.deal_hits },
       };
 
 // The player
@@ -250,12 +250,12 @@ export type Reload = { readonly rule: "static" } | { readonly rule: "expected-de
 const reloadNode = (reload: Reload): BendNode => {
   switch (reload.rule) {
     case "static":
-      return { $: "player/types.Static" };
+      return { $: "Static" };
     case "expected-deal":
-      return { $: "player/types.ExpectedDeal" };
+      return { $: "ExpectedDeal" };
     case "sampled":
       // SAFETY: count is player/types.Sampled's one field, a Nat; BendNode names only the tag.
-      return { $: "player/types.Sampled", count: BigInt(reload.samples) } as BendNode;
+      return { $: "Sampled", count: reload.samples } as BendNode;
   }
 };
 
@@ -266,7 +266,7 @@ const reloadNode = (reload: Reload): BendNode => {
  */
 export type Memo = "off" | "charged" | "free";
 
-const MEMO_TAGS = { off: "player/types.Off", charged: "player/types.Charged", free: "player/types.Free" } as const satisfies Record<Memo, string>;
+const MEMO_TAGS = { off: "Off", charged: "Charged", free: "Free" } as const satisfies Record<Memo, string>;
 
 const memoNode = (memo: Memo): BendNode => ({ $: MEMO_TAGS[memo] });
 
@@ -295,6 +295,6 @@ export const loadPlayer = async (dir: string): Promise<Player> => {
     version: createHash("sha256").update(readFileSync(output)).digest("hex").slice(0, 16),
     orders: (log, isPrivate) => nodesOf(exports.orders(logNode(log), isPrivate)).map(orderText),
     analyse: (input, { depth, budget }, reload, memo = "charged") =>
-      analysisOf(decodeAnalysis(exports.analyse(inputNode(input), BigInt(depth), BigInt(budget), reloadNode(reload), memoNode(memo)))),
+      analysisOf(decodeAnalysis(exports.analyse(inputNode(input), depth, budget, reloadNode(reload), memoNode(memo)))),
   };
 };

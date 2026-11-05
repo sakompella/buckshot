@@ -16,7 +16,7 @@
       devShells = forEachSystem (pkgs:
         let inherit (self.packages.${pkgs.stdenv.hostPlatform.system}) bend bendtt; in {
           default = pkgs.mkShell ({
-            packages = [ bend pkgs.bun pkgs.nodejs_22 (pkgs.python3.withPackages (ps: [ ps.hypothesis ])) pkgs.uv ];
+            packages = [ bend pkgs.bun pkgs.nodejs_22 (pkgs.python3.withPackages (ps: [ ps.hypothesis ps.numpy ])) pkgs.uv ];
             BEND = "${bend}/bin/bend";
             BENDTT = "${bendtt}/bin/bendtt";
           } // pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {

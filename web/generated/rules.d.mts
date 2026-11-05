@@ -1,6 +1,7 @@
 // Hand-written types for the Bend JS build of sim/bend-mp/web.bend, which
 // `bun run rules` writes next to this file as rules.mjs. Every value is a Bend
-// constructor object ({ $: "<module>.<Name>", ...fields }); Nat is a bigint.
+// constructor object ({ $: "<Name>", ...fields }, the bare constructor name); Nat is a number
+// (Bend checks it lies in 0..2^53).
 // These types only name the boundary: web/src/bend.ts decodes every result
 // with a Schema before the app reads it.
 
@@ -12,9 +13,9 @@ declare const rules: {
   readonly config: (table: BendNode, items: boolean) => BendNode;
   readonly start: (config: BendNode) => BendNode;
   readonly point: (state: BendNode) => BendNode;
-  readonly answer: (state: BendNode, answer: bigint) => BendNode;
+  readonly answer: (state: BendNode, answer: number) => BendNode;
   readonly prompts: (state: BendNode) => BendNode;
-  readonly "prompt.answer": (prompt: BendNode, index: bigint) => bigint;
+  readonly "prompt.answer": (prompt: BendNode, index: number) => number;
   readonly "prompt.next": (state: BendNode, prompts: BendNode) => BendNode;
   readonly hear: (notes: BendNode, seat: BendNode) => BendNode;
   readonly public_events: (notes: BendNode) => BendNode;

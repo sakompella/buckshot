@@ -78,7 +78,7 @@ try {
           const key = `s${s}`;
           const slots = change.inventory && { ...host.seats[key].slots, ...Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`s${i}`, maybe(change.inventory[i] ? tag(change.inventory[i]) : null)])) };
           const props = { ...host.seats[key] };
-          if ('health' in change) { props.health = BigInt(change.health); players[key].health = BigInt(change.health); }
+          if ('health' in change) { props.health = Number(change.health); players[key].health = Number(change.health); }
           if ('jammed' in change) { props.jammed = change.jammed; players[key].jam = machineJam(change.jammed, props.jam_checked); }
           if ('grabbing' in change) { props.grabbing = change.grabbing; grabs.grabbing[key] = change.grabbing; }
           if (slots) { props.slots = slots; players[key].slots = slots; }
