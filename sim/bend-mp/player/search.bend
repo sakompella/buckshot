@@ -112,10 +112,19 @@ def settle(request: T.Request, +state: T.State, +notes: List<&2, D.Note>, +weigh
     case _:
       [out.of(state, notes, weight, me)]
 
+# Only a NeedPhone phase can request the phone's draw, so other phases skip
+# computing the request (and with it the Idle menu).
+def settle.phase(phase: T.Phase, +state: T.State, +notes: List<&2, D.Note>, +weight: F32, +me: D.Seat) -> List<&2, Out>:
+  match phase:
+    case T.NeedPhone{_, _, _}:
+      settle(M.request(state), state, notes, weight, me)
+    case _:
+      [out.of(state, notes, weight, me)]
+
 def play.stepped(stepped: D.Stepped<&2, T.State>, +weight: F32, +me: D.Seat) -> List<&2, Out>:
   match stepped:
     case D.Stepped{+state, notes}:
-      settle(M.request(state), state, notes, weight, me)
+      settle.phase(T.state.phase(state), state, notes, weight, me)
 
 def play(worlds: List<&2, A.World>, +index: Nat, +me: D.Seat) -> List<&2, Out>:
   match worlds:
