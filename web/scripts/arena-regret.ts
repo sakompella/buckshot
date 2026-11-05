@@ -8,7 +8,8 @@ import { Option, Result, Schema } from "effect";
 
 import { type AgentSource } from "../src/agent/view.ts";
 import { boardOf, type Limits, loadPlayer, ownLog, RELOAD_RULES, type Reload, type ReloadRule } from "../src/analysis/player.ts";
-import { type Regret, regretOf } from "../src/analysis/regret.ts";
+import { regretOf } from "../src/analysis/regret.ts";
+import { CREATE_REGRET, scored } from "../src/analysis/regret-rows.ts";
 import { RunManifest } from "../src/arena/match.ts";
 import { MoveLine } from "../src/arena/runlog.ts";
 import { rosterOf } from "../src/players.ts";
@@ -184,37 +185,18 @@ const out = new Database(resolve(values.out), { create: true, strict: true });
 
 out.exec("PRAGMA busy_timeout = 30000; PRAGMA journal_mode = WAL;");
 
-const CREATE = `CREATE TABLE IF NOT EXISTS regret (
-    match_id TEXT, ordinal INTEGER, player TEXT, label TEXT,
-    evaluator TEXT, max_depth INTEGER, budget INTEGER, reload TEXT NOT NULL, samples INTEGER NOT NULL CHECK ((reload = 'sampled') = (samples > 0)),
-    status TEXT, reason TEXT, values_json TEXT, best TEXT, best_score INTEGER, chosen_score INTEGER, regret INTEGER, exact INTEGER,
-    depth INTEGER, limited INTEGER, nodes INTEGER, ms REAL,
-    PRIMARY KEY (match_id, ordinal, evaluator, max_depth, budget, reload, samples))`;
-
 // A table from before the reload rule holds static rows only. It is rebuilt with the rule in its key, once, while other shards wait.
 out
   .transaction(() => {
     const columns = out.query<{ name: string }, []>("SELECT name FROM pragma_table_info('regret')").all().map(({ name }) => name);
 
     if (columns.length > 0 && !columns.includes("reload")) {
-      out.exec(`ALTER TABLE regret RENAME TO regret_before_reload; ${CREATE}; INSERT INTO regret (${columns.join(", ")}, reload, samples) SELECT ${columns.join(", ")}, 'static', 0 FROM regret_before_reload; DROP TABLE regret_before_reload;`);
+      out.exec(`ALTER TABLE regret RENAME TO regret_before_reload; ${CREATE_REGRET}; INSERT INTO regret (${columns.join(", ")}, reload, samples) SELECT ${columns.join(", ")}, 'static', 0 FROM regret_before_reload; DROP TABLE regret_before_reload;`);
     }
 
-    out.exec(CREATE);
+    out.exec(CREATE_REGRET);
   })
   .immediate();
-
-/** The columns that depend on how the decision was scored. Only a searched decision has a regret; a fallback or invalid one has none, never 0. */
-const scored = (regret: Regret) => {
-  switch (regret.status) {
-    case "searched":
-      return { values_json: JSON.stringify(regret.values), best: regret.best.label, best_score: regret.best.score, chosen_score: regret.chosen.score, regret: regret.regret, exact: regret.exact ? 1 : 0, depth: regret.depth, limited: regret.limited ? 1 : 0 };
-    case "fallback":
-      return { values_json: JSON.stringify(regret.values), depth: 0, limited: regret.limited ? 1 : 0 };
-    case "invalid":
-      return { reason: regret.reason };
-  }
-};
 
 const put = (row: Readonly<Record<string, string | number | null>>): void => {
   const keys = Object.keys(row);
