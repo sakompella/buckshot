@@ -4,7 +4,7 @@ This page summarizes the tournaments run so far, the findings about model reason
 
 Ratings are one Bradley-Terry fit over every scored match of every tournament, on an Elo scale with the mean at 0, per configuration (model + endpoint + effort). So one rating scale covers every config, as in the viewer. A second fit on pot share (a config's cash over the match's cash, which also credits round prizes a loser banked) gives the cash rating. 95% intervals are in [matchups.md](analysis/matchups.md). Each pairing plays 10 seeds in both seat orders, 20 matches, unless stated otherwise. With 10 seeds, close rankings aren't reliable. "Medium" also isn't equal compute across providers.
 
-Scope: 3,537 scored matches with no DeepSeek seat, from the 3,557-match snapshot of 2026-11-04 (tournaments 5, 6, 7 and 9 are finished; tournament 8 is still running and its 642 matches so far are in it). The regret and patterns pages under [analysis/](analysis/) cover the same snapshot (3,536 matches; one match with an unsearched decision is left out).
+Scope: 3,537 scored matches with no DeepSeek seat, from the 3,557-match snapshot of 2026-11-04 (tournaments 5 to 9 are finished). The regret and patterns pages under [analysis/](analysis/) cover the same snapshot (3,536 matches; one match with an unsearched decision is left out).
 
 ## Status (snapshot of 2026-11-04)
 This page describes the 3,557-match snapshot of the analysis database: 3,557 completed matches, 43 partial, 54 tournament rows (phase directories) and no replay issues.
@@ -15,7 +15,7 @@ This page describes the 3,557-match snapshot of the analysis database: 3,557 com
 - **tournament-5** (`_work/arena/tournament-5`, 11 phase directories): finished. 214 of its 264 scheduled matches were played, since the schedule was cut to a smaller selection to save usage quota (below).
 - **tournament-6** (`_work/arena/tournament-6`, 4 phases): finished 2026-11-02. 37 of its 114 scheduled matches were played (the selection was cut to save quota). Phases: astra-none, terra-claude, opus-none, haiku-ladder.
 - **tournament-7** (`_work/arena/tournament-7`, 8 phases): finished 2026-11-02. 73 of its 146 scheduled matches were played (selected only). Terra 6.1 efforts, Astra off and high, and cross-model games.
-- **tournament-8** (`_work/arena/tournament-8`): running; 642 of its matches are in the snapshot. Its driver is paused on Codex quota as of 2026-11-04 12:38 AM, waiting for a reset. Opus, Opus max and GPT phases are in progress.
+- **tournament-8** (`_work/arena/tournament-8`): finished 2026-11-04; all 642 matches are in the snapshot. It topped the Terra 6.1, Astra and Opus configurations up to 80 matches each.
 - **tournament-9** (`_work/arena/tournament-9`, 3 phases): finished 2026-11-03. 100 of 100 matches played (Haiku 4.5 and Haiku 5.5 effort games).
 
 ## Leaderboard
