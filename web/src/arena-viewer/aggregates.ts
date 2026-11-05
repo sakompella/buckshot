@@ -1,7 +1,7 @@
 import { Match, Schema, SchemaTransformation } from "effect";
 
 import { CertainRate, Consistency, type Decisions, ITEMS, NO_GAP, type Seat } from "./api.ts";
-import { addTo, type BlockTally, blockRate, blocksOf, groupBy, keyOf, lossStats, MIN_BLOCKS_FOR_INTERVAL, meanOf, regretStats, roundResults, type SeatFull, sumOf } from "./page/data.ts";
+import { addTo, type BlockTally, blockRate, blocksOf, groupBy, keyOf, MIN_BLOCKS_FOR_INTERVAL, meanOf, regretStats, roundResults, type SeatFull, sumOf } from "./page/data.ts";
 import { pooledRatings } from "./page/ratings.ts";
 
 // What the arena page shows, worked out once from every seat and agent move: per config and per pair of configs, never
@@ -35,7 +35,6 @@ export const ConfigSummary = Schema.Struct({
   /** Observed win share with a seed-block bootstrap interval. */
   win: Rate,
   regret: Schema.NullOr(Schema.Struct({ moves: Schema.Number, mean: Schema.Number, exactShare: Schema.Number })),
-  loss: Schema.NullOr(Schema.Struct({ perMatch: Schema.Number, matches: Schema.Number, excluded: Schema.Number })),
   totalCost: Schema.Number,
   startedMoves: Schema.Number,
   avgCost: Schema.Number,
@@ -54,10 +53,7 @@ export type ConfigSummary = typeof ConfigSummary.Type;
 
 export const Summary = Schema.Struct({ configs: Schema.Array(ConfigSummary), hasCertain: Schema.Boolean });
 
-/**
- * The two-player matches between two configs, `first` at the table's first position. Wins are win shares summed over
- * scored matches; a starter or round-one count is over the scored matches where it is known.
- */
+/** The two-player matches between two configs, `first` at the table's first position. Wins are win shares summed over scored matches. */
 export const Pair = Schema.Struct({
   first: Schema.String,
   second: Schema.String,
@@ -65,10 +61,6 @@ export const Pair = Schema.Struct({
   scored: Schema.Number,
   firstWins: Schema.Number,
   secondWins: Schema.Number,
-  starterWins: Schema.Number,
-  starts: Schema.Number,
-  roundOneWins: Schema.Number,
-  roundOnes: Schema.Number,
 });
 
 export type Pair = typeof Pair.Type;
@@ -340,27 +332,10 @@ const twoPlayerMatches = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<readonl
     return first !== undefined && second !== undefined && rest.length === 0 ? [[first, second] as const] : [];
   });
 
-const starterWon = (first: SeatFull, second: SeatFull): ReadonlyArray<number> => {
-  const starter = first.story?.starter;
-
-  if (starter === first.player) return [first.winShare ?? 0];
-
-  return starter === second.player ? [second.winShare ?? 0] : [];
-};
-
-const roundOneWinnerWon = (first: SeatFull, second: SeatFull): ReadonlyArray<number> => {
-  const winner = (first.winShare ?? 0) >= 1 ? first.player : (second.winShare ?? 0) >= 1 ? second.player : null;
-  const story = first.story;
-
-  return winner === null || story === null || !story.ok ? [] : [story.rounds[0]?.winner === winner ? 1 : 0];
-};
-
 export const pairsOf = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<Pair> =>
   [...groupBy(twoPlayerMatches(seats), ([first, second]) => `${keyOf(first)} ${keyOf(second)}`).values()].flatMap((matches) => {
     const [[first, second] = []] = matches;
     const scored = matches.filter(([seat]) => seat.status === "completed");
-    const starters = scored.flatMap(([one, other]) => starterWon(one, other));
-    const roundOnes = scored.flatMap(([one, other]) => roundOneWinnerWon(one, other));
 
     return first === undefined || second === undefined
       ? []
@@ -372,10 +347,6 @@ export const pairsOf = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<Pair> =>
             scored: scored.length,
             firstWins: sumOf(scored.map(([one]) => one.winShare ?? 0)),
             secondWins: sumOf(scored.map(([, other]) => other.winShare ?? 0)),
-            starterWins: sumOf(starters),
-            starts: starters.length,
-            roundOneWins: sumOf(roundOnes),
-            roundOnes: roundOnes.length,
           },
         ];
   });
@@ -399,7 +370,6 @@ export const configSummaries = (seats: ReadonlyArray<SeatFull>, decisions: Pick<
     const costs = scored.flatMap(({ cost }) => (cost === null ? [] : [cost]));
     const scoredMean = (value: (seat: SeatFull) => number | null) => meanOf(scored.map((seat) => value(seat) ?? 0));
     const scoredSum = (value: (seat: SeatFull) => number | null) => sumOf(scored.map((seat) => value(seat) ?? 0));
-    const loss = lossStats(scored);
 
     return [
       {
@@ -412,7 +382,6 @@ export const configSummaries = (seats: ReadonlyArray<SeatFull>, decisions: Pick<
         roundShare: meanOf(scored.flatMap(roundResults)),
         win: blockRate(wins),
         regret: regretStats(scored),
-        loss: loss === null ? null : { perMatch: loss.perMatch, matches: loss.matches, excluded: loss.excluded },
         totalCost: sumOf(started.map(({ cost }) => cost ?? 0)),
         startedMoves: sumOf(started.map(({ moves }) => moves ?? 0)),
         avgCost: meanOf(costs),

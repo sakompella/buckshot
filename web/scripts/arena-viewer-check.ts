@@ -6,7 +6,7 @@ import { type Browser, chromium, type Page } from "playwright-core";
 
 import { AGGREGATES, selfShotTallies } from "../src/arena-viewer/aggregates.ts";
 import { Blunders, CERTAIN_TYPES, CertainMistakes, Decisions, ITEMS, MatchDetail, MatchDetailJson, type MoveRegret, NO_GAP, SeatsResponse } from "../src/arena-viewer/api.ts";
-import { baseName, baseOrder, CERTAIN_NAMES, effortLabel, fmtBytes, fmtCount, fmtPct, fmtPoints, fmtUsd, blocksOf, groupBy, keyOf, labelOf, MIN_BLOCKS_FOR_INTERVAL, shortName, withPotShares } from "../src/arena-viewer/page/data.ts";
+import { baseName, baseOrder, CERTAIN_NAMES, effortLabel, fmtBytes, fmtCount, fmtPct, fmtPoints, blocksOf, groupBy, keyOf, labelOf, MIN_BLOCKS_FOR_INTERVAL, shortName, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { GROUPS, MOVED_TARGETS, Section } from "../src/arena-viewer/page/model.ts";
 import { pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 import { droppedConfigs, droppedText, oddsPanels } from "../src/arena-viewer/page/odds.ts";
@@ -653,8 +653,8 @@ const regretTags = (page: Page) => page.locator(".modal .step .tag.regret");
 // the replay's move list tags each searched model move that gave up a real share of the win chance: a proven exact one
 // apart from the rest, and the chosen move's folded evaluator line says which it is. Without one the page shows no regret.
 const checkRegret = async (page: Page) => {
-  const hasRegret = (await page.locator("table.lbt thead th", { hasText: /^Regret$/ }).count()) > 0;
-  const cells = page.locator('table.lbt td[data-label="regret"]');
+  const hasRegret = (await page.locator("table.lbt thead th", { hasText: /^Accuracy$/ }).count()) > 0;
+  const cells = page.locator('table.lbt td[data-label="accuracy"]');
 
   if (!hasRegret) {
     expectThat((await cells.count()) === 0, "a viewer without regret shows a regret cell");
@@ -671,7 +671,7 @@ const checkRegret = async (page: Page) => {
 
   expectThat(texts.length === rows && scored.length > 0 && scored.every((text) => /^\d+\.\d$/.test(text.trim())), "a leaderboard row has neither a mean regret nor a dash");
 
-  const titles = await page.locator('table.lbt td[data-label="regret"][title]:not([title=""])').evaluateAll((titled) => titled.map((cell) => cell.getAttribute("title") ?? ""));
+  const titles = await page.locator('table.lbt td[data-label="accuracy"][title]:not([title=""])').evaluateAll((titled) => titled.map((cell) => cell.getAttribute("title") ?? ""));
 
   expectThat(titles.length === scored.length && titles.every((title) => /^[\d,]+ moves · \d+% proven exact$/.test(title)), "a regret cell does not say how many moves and how many are proven exact");
 
@@ -1073,43 +1073,6 @@ const checkItemUsage = async (page: Page, name: string) => {
   expectThat(!/Item fates|By config|Same position, same move/.test(text), `${name}: the item usage section still carries a retired figure`);
 };
 
-const checkRunHealth = async (page: Page, name: string) => {
-  const seats = await servedSeats();
-
-  const perMove = configsOf(seats).flatMap(([first]) => {
-    const scored = seats.filter((seat) => first !== undefined && keyOf(seat) === keyOf(first) && seat.status === "completed");
-    const moves = sum(scored.map((seat) => seat.moves ?? 0));
-    const cost = sum(scored.map((seat) => seat.cost ?? 0));
-
-    return first === undefined || moves === 0 || cost <= 0 ? [] : [`${baseName(first.model)} ${effortLabel(first.model, first.effort)} ${fmtUsd(cost / moves)}`];
-  });
-
-  const health = await textOf(page, "#spend");
-  const balance = (await page.locator("#spend .seatline .dv").allInnerTexts()).map((text) => text.replaceAll(/\s+/g, " ").trim());
-
-  const shown = await page.locator("#spend .cpm-model").evaluateAll((blocks) =>
-    blocks.flatMap((block) => [...block.querySelectorAll(".cpm-row")].map((row) => `${block.querySelector("h3")?.textContent ?? ""} ${row.firstElementChild?.textContent ?? ""} ${row.lastElementChild?.textContent ?? ""}`)),
-  );
-
-  console.log(name, "cost per move bars", shown.length, "| seat balance", balance);
-  expectThat((await countOf(page, "#spend .cpm")) === 1 && (await countOf(page, "#spend .seatline")) === 1, `${name}: run health lacks the cost per move bars or the seat balance line`);
-  expectThat((await countOf(page, "#spend .spendbar")) === 0, `${name}: run health still draws the spend bar`);
-  expectThat((await countOf(page, "#spend table")) === 0 && (await countOf(page, "#spend .chartrow")) === 0 && (await countOf(page, "#spend details")) === 0 && !/fail|reminder|fallback|by the hour|extra repl/i.test(health), `${name}: run health still shows a failure figure or a table`);
-  expectThat((await countOf(page, "#reliability")) === 0 && (await countOf(page, "#seats")) === 0, `${name}: an old section id is still on the page`);
-  expectThat(JSON.stringify(shown.toSorted()) === JSON.stringify(perMove.toSorted()), `${name}: the cost per move bars read ${shown.slice(0, 3).join(" | ")}, the served seats give ${perMove.slice(0, 3).join(" | ")}`);
-  expectThat(/\$[\d,]+ at list prices/.test(await textOf(page, "#spend .lbbar")), `${name}: the cost per move heading lacks the total at list prices`);
-
-  const ordered = completedPairs(seats).map((both) => both.toSorted((left, right) => left.position - right.position));
-  const firstWon = ordered.map(([first]) => first?.winShare ?? 0);
-  const starterWon = ordered.flatMap(([first, second]) => [first, second].flatMap((seat) => (seat?.player === first?.story?.starter ? [seat?.winShare ?? 0] : [])));
-  const roundOne = decidedPairs(seats).flatMap(({ winner }) => (winner.story?.ok === true ? [winner.story.rounds[0]?.winner === winner.player] : []));
-  const share = (label: string, wins: number, n: number) => `${label} ${((100 * wins) / n).toFixed(1)}% n ${n.toLocaleString()}`;
-
-  const expectedBalance = [share("position 1", sum(firstWon), firstWon.length), share("starter", sum(starterWon), starterWon.length), share("round-1 winner", roundOne.filter(Boolean).length, roundOne.length)];
-
-  expectThat(JSON.stringify(balance) === JSON.stringify(expectedBalance), `${name}: the seat balance line ${JSON.stringify(balance)} differs from ${JSON.stringify(expectedBalance)}`);
-};
-
 const count = (value: number) => value.toLocaleString("en-US");
 
 const servedCertainByConfig = () => {
@@ -1358,7 +1321,6 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
     await checkDrill(page, viewport.name, false);
   });
   await check("item usage", () => checkItemUsage(page, viewport.name));
-  await check("run health", () => checkRunHealth(page, viewport.name));
   await check("replays", async () => {
     for (const [row, name] of [
       [0, "replay"],
@@ -1438,7 +1400,7 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
     await page.locator(".hero .title").click();
     expectThat((await tipOf(page)) === "none", "a click outside left the pinned tip");
   });
-  await check("section counts", async () => console.log("matches", await countOf(page, "#matches tbody tr.row"), "| item usage rows", await countOf(page, "#items .fate"), "| cost per move bars", await countOf(page, "#spend .cpm-row")));
+  await check("section counts", async () => console.log("matches", await countOf(page, "#matches tbody tr.row"), "| item usage rows", await countOf(page, "#items .fate")));
   await check("jump menu", () => checkJumps(page, viewport.name, false));
   await check("sticky filters", async () => console.log("the filters stay in view:", await page.evaluate(() => Math.round(document.querySelector(".filters")?.getBoundingClientRect().top ?? -1)), "px from the top at scroll", await page.evaluate(() => Math.round(scrollY))));
   await check("matches", async () => {
@@ -1448,16 +1410,16 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
     await page.keyboard.press("Escape");
   });
   await check("deep link", async () => {
-    await page.goto(`${base}/#reliability`);
-    await page.waitForSelector("#spend .cpm", { timeout: 120_000 });
+    await page.goto(`${base}/#luck`);
+    await page.waitForSelector("#odds", { timeout: 120_000 });
     await settled(page);
     await settled(page);
 
-    const landing = await jumpedTo(page, "spend");
+    const landing = await jumpedTo(page, "odds");
 
     console.log("deep link", landing, "at", new URL(page.url()).pathname);
-    expectThat(/: -?[01]px below/.test(landing), `the #reliability link lands at ${landing}`);
-    expectThat(new URL(page.url()).pathname === "/arena", `the arena's old /#reliability link stays at ${page.url()}`);
+    expectThat(/: -?[01]px below/.test(landing), `the #luck link lands at ${landing}`);
+    expectThat(new URL(page.url()).pathname === "/arena", `the arena's old /#luck link stays at ${page.url()}`);
   });
   await check("tour", () => checkTour(page, viewport.name));
   await check("site routes", () => checkSiteRoutes(page));
@@ -1574,11 +1536,11 @@ const checkDatabaseLink = async (page: Page, name: string) => {
   expectThat(download.ok && Number(download.headers.get("content-length")) === bytes, `${name}: the database link serves ${download.headers.get("content-length")} bytes, not ${bytes}`);
 };
 
-// The config panel's largest missed chance opens its match's replay at that move, and no other move of that player gave up more.
+// The config panel's largest gap opens its match's replay at that move, and no other move of that player gave up more.
 const checkLargestMiss = async (page: Page, name: string, panel: ReturnType<Page["locator"]>, isTouch: boolean) => {
   const link = panel.locator(".miss button");
 
-  expectThat((await link.count()) === 1, `${name}: the config panel shows no largest missed chance`);
+  expectThat((await link.count()) === 1, `${name}: the config panel shows no largest gap`);
   await (isTouch ? link.tap() : link.click());
 
   const matchId = await openedMatchId(page);
@@ -1587,8 +1549,8 @@ const checkLargestMiss = async (page: Page, name: string, panel: ReturnType<Page
   const opened = steps[at];
   const most = Math.max(...steps.filter(({ player }) => player === opened?.player).map(({ regret }) => regret?.points ?? 0));
 
-  console.log(name, "largest missed chance:", await link.textContent(), "| opens", matchId, "at move", at + 1, "giving up", opened?.regret?.points);
-  expectThat(opened?.regret !== null && opened?.regret !== undefined && opened.regret.points === most && (await link.textContent())?.startsWith(fmtPoints(most)) === true, `${name}: the largest missed chance opened move ${at + 1} (${opened?.regret?.points ?? "no"} points), its player's most is ${most}`);
+  console.log(name, "largest gap:", await link.textContent(), "| opens", matchId, "at move", at + 1, "giving up", opened?.regret?.points);
+  expectThat(opened?.regret !== null && opened?.regret !== undefined && opened.regret.points === most && (await link.textContent())?.startsWith(fmtPoints(most)) === true, `${name}: the largest gap opened move ${at + 1} (${opened?.regret?.points ?? "no"} points), its player's most is ${most}`);
   await closeReplay(page);
 };
 
@@ -1758,7 +1720,6 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
   await check("match list", () => checkMatchList(page, name, true));
   await check("drill-down", () => checkDrill(page, name, true));
   await check("item usage", () => checkItemUsage(page, name));
-  await check("run health", () => checkRunHealth(page, name));
   await check("replay", async () => {
     await page.locator("#matches tbody tr.row").first().tap();
     await page.waitForSelector(".modal .step");

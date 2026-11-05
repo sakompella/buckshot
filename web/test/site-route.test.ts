@@ -33,7 +33,7 @@ test("a replay URL gives back its match and move", () =>
 test("the arena's old section links lead to the arena; other paths, and replays of no match id, are not found", () => {
   expect(routeAt("/")).toEqual(SiteRoute.Play());
   expect(routeAt("/#scatter")).toEqual(SiteRoute.Arena({}));
-  expect(routeAt("/#reliability")).toEqual(SiteRoute.Arena({}));
+  expect(routeAt("/#luck")).toEqual(SiteRoute.Arena({}));
   expect(routeAt("/#nothing")).toEqual(SiteRoute.Play());
   expect(routeAt("/nowhere")).toEqual(SiteRoute.NotFound({ path: "/nowhere" }));
   expect(routeAt("/replay/not%20a%20match")).toEqual(SiteRoute.NotFound({ path: "/replay/not%20a%20match" }));

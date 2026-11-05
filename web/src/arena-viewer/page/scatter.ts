@@ -99,13 +99,13 @@ export const AXES: Readonly<Record<ScatterAxis, Axis>> = {
     perMatch: (value) => `${fmtCount(value)} output tok / match`,
   },
   regret: {
-    label: "Regret",
-    axisLabel: "Mean regret per move (points of round win chance)",
+    label: "Accuracy",
+    axisLabel: "Accuracy (100 minus the mean points of round win chance lost per move)",
     isLog: false,
-    valueOf: (m) => m.regret?.mean ?? null,
-    format: (value) => value.toFixed(2),
+    valueOf: (m) => (m.regret === null ? null : 100 - m.regret.mean),
+    format: (value) => value.toFixed(1),
     tick: String,
-    perMatch: (value) => `${value.toFixed(2)} points of regret per move`,
+    perMatch: (value) => `accuracy ${value.toFixed(1)}`,
   },
 };
 

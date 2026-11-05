@@ -90,7 +90,6 @@ type Need = LazyName | "local";
 const GROUP_NEEDS: Readonly<Record<Group, ReadonlyArray<Need>>> = {
   standings: [],
   decisions: ["certain", "odds", "items"],
-  health: [],
   watch: ["local"],
   tables: ["certain", "local"],
 };

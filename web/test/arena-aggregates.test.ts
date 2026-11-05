@@ -49,18 +49,16 @@ const EFFORTS = ["low", "medium", "high"];
 
 const configGen = gs.tuples(gs.sampledFrom(MODELS), gs.sampledFrom(EFFORTS));
 
-const matchGen = gs.tuples(configGen, configGen, gs.booleans(), gs.booleans(), gs.sampledFrom(["A", "B"]), gs.integers({ minValue: 0, maxValue: 5 }));
+const matchGen = gs.tuples(configGen, configGen, gs.booleans(), gs.booleans(), gs.integers({ minValue: 0, maxValue: 5 }));
 
-// The page used to count the hero's and the seat balance's matches over the seats of every match with a kept seat; it
+// The page used to count the hero's matches over the seats of every match with a kept seat; it
 // now sums the per-pair aggregates of the pairs with a kept config. Both must give the same numbers under any filter.
 test("the kept pairs' sums equal the counts over the matches with a kept seat, under any filter", () =>
   hegel.test((tc) => {
     const played = tc.draw(gs.arrays(matchGen, { minSize: 1, maxSize: 30 }));
 
     const seats = withPotShares(
-      played.flatMap(([[aModel, aEffort], [bModel, bEffort], aWins, isScored, starter, block], index) => {
-        const story = { starter, ok: true, rounds: [{ winner: aWins ? "A" : "B", prize: 1, inferred: false }] };
-
+      played.flatMap(([[aModel, aEffort], [bModel, bEffort], aWins, isScored, block], index) => {
         const seat = (model: string, effort: string, player: string, position: number, isWinner: boolean): Seat => ({
           ...SEAT,
           matchId: `m${index}`,
@@ -71,7 +69,6 @@ test("the kept pairs' sums equal the counts over the matches with a kept seat, u
           player,
           position,
           winShare: isWinner ? 1 : 0,
-          story,
         });
 
         return [seat(aModel, aEffort, "A", 0, aWins), seat(bModel, bEffort, "B", 1, !aWins)];
@@ -92,6 +89,4 @@ test("the kept pairs' sums equal the counts over the matches with a kept seat, u
     expect(kept).toEqual(new Set(seats.filter(isKept).map(keyOf)));
     expect(sumOf(pairs.map(({ scored }) => scored))).toBe(scoredWithKept.length);
     expect(sumOf(pairs.map(({ firstWins }) => firstWins))).toBe(sumOf(scoredWithKept.map(([first]) => first?.winShare ?? 0)));
-    expect(sumOf(pairs.map(({ starts }) => starts))).toBe(scoredWithKept.length);
-    expect(sumOf(pairs.map(({ starterWins }) => starterWins))).toBe(sumOf(scoredWithKept.map((both) => both.find(({ player }) => player === both[0]?.story?.starter)?.winShare ?? 0)));
   }));

@@ -284,7 +284,7 @@ def config_table(rows: list[ConfigRow]) -> str:
         [r.config[0], r.config[1], str(r.matches), f"{two(r.lost)} ({span(r.lost_interval)})", two(r.lost / ROUNDS_PER_MATCH), f"{r.worst:.1f}", f"{r.elo:+.0f}"]
         for r in sorted(rows, key=key)
     ]
-    return table(["model", "effort", "matches", "round-win equivalents lost per match", "per round", "largest missed chance (points)", "Round Elo"], body)
+    return table(["model", "effort", "matches", "round-win equivalents lost per match", "per round", "largest gap (points)", "Round Elo"], body)
 
 
 @dataclass(frozen=True)
@@ -360,7 +360,7 @@ MISS_LEVELS = (10, 25, 50, 100)
 def worst_table(matches: list[Match]) -> str:
     """How large each seat's largest single regret in a match is, over all seats of all matches. 100 points is a certain win given up."""
     seats = [s.worst / POINT for m in matches for s in (m.first, m.second)]
-    return table(["largest missed chance in a match, at least (points)", "share of seats"], [[str(level), pct(sum(w >= level for w in seats) / len(seats))] for level in MISS_LEVELS])
+    return table(["largest gap in a match, at least (points)", "share of seats"], [[str(level), pct(sum(w >= level for w in seats) / len(seats))] for level in MISS_LEVELS])
 
 
 # Match margin
@@ -572,7 +572,7 @@ def report(loaded: Loaded, rows: list[ConfigRow], elo_lost: Correlation, elo_net
             [["own points lost per match", f"{elo_lost.pearson:+.2f}", span(elo_lost.interval), f"{elo_lost.spearman:+.2f}"], ["net points per match", f"{elo_net.pearson:+.2f}", span(elo_net.interval), f"{elo_net.spearman:+.2f}"]],
         )
         + f"\n\n### Net points within a matchup\n\n{len(matchups)} pairings have at least {MIN_BLOCKS} complete seed blocks. Across them, net points and round margin per match correlate at {pearson([r.net for r in matchups], [r.margin for r in matchups]):+.2f}. The ten largest nets:\n\n{matchup_table(matchups)}\n\n"
-        f"### Largest missed chance per match\n\n{worst_table(kept)}\n\n"
+        f"### Largest gap per match\n\n{worst_table(kept)}\n\n"
         f"### Round margin on net points, per match\n\n"
         f"{margin.matches:,} matches. Round margin of the first seat = {margin.line.intercept:+.3f} + {margin.line.slope:.2f} × its net points; R² {margin.line.r2:.3f}, slope interval {span(margin.slope_interval)}.\n\n{margin_table(margin)}\n\n"
         + depth_text

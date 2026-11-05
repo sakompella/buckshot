@@ -358,30 +358,18 @@ export const regretStats = (seats: ReadonlyArray<Pick<SeatFull, "regret">>): Reg
   return moves === 0 ? null : { moves, mean: sumOf(totals.map((total) => total.total)) / moves, exactShare: sumOf(totals.map((total) => total.exact)) / moves };
 };
 
-/**
- * A config's own loss (docs/arena/analysis/net-points.md): per scored match, the regret its seat summed
- * over its searched moves, in round-win equivalents. Only matches whose every agent move was searched count, since a
- * move without analysis is not a zero. largest is the single move with the most regret, over every searched move.
- */
-export interface LossStats {
-  readonly perMatch: number;
-  readonly matches: number;
-  readonly excluded: number;
-  readonly largest: { readonly matchId: string; readonly ordinal: number; readonly points: number };
+export interface LargestGap {
+  readonly matchId: string;
+  readonly ordinal: number;
+  readonly points: number;
 }
 
-export const lossStats = (scored: ReadonlyArray<Pick<SeatFull, "matchId" | "moves" | "regret">>): LossStats | null => {
-  const searched = scored.flatMap(({ matchId, moves, regret }) => (regret === null ? [] : [{ matchId, moves, regret }]));
-  const covered = searched.filter(({ moves, regret }) => regret.moves === moves);
+/** The single searched move, over a config's scored seats, that gave up the most round win chance. */
+export const largestGap = (scored: ReadonlyArray<Pick<SeatFull, "matchId" | "regret">>): LargestGap | null =>
+  scored.reduce<LargestGap | null>((most, { matchId, regret }) => {
+    if (regret === null || (most !== null && most.points >= regret.largest.points)) return most;
 
-  const largest = searched.reduce<LossStats["largest"] | null>(
-    (most, { matchId, regret: { largest: move } }) => (most !== null && most.points >= move.points ? most : { matchId, ordinal: move.ordinal, points: move.points }),
-    null,
-  );
-
-  return covered.length === 0 || largest === null
-    ? null
-    : { perMatch: sumOf(covered.map(({ regret }) => regret.total)) / 100 / covered.length, matches: covered.length, excluded: scored.length - covered.length, largest };
-};
+    return { matchId, ordinal: regret.largest.ordinal, points: regret.largest.points };
+  }, null);
 
 export const winnerOf = (match: MatchRow): SeatFull | undefined => match.seats.find(({ winShare }) => (winShare ?? 0) >= 1);

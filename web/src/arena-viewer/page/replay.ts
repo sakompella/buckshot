@@ -26,11 +26,13 @@ export const shotOf = (detail: { readonly match: Pick<MatchDetail["match"], "sta
   return detail.match.status === "completed" && step.label.startsWith("Shoot") && detail.decisions.at(-1)?.id === step.id ? "live" : null;
 };
 
-const seatColor = (detail: MatchDetail, player: string): string => {
-  const seat = detail.seats.find((candidate) => candidate.player === player);
+/**
+ * Each player's colour in a replay, by letter, so the two sides stay apart when both models share a family colour.
+ * The model's own colour is kept as a marker beside its name in the header.
+ */
+const SEAT_COLORS = ["#3fd0c0", "#f08ad2", "#e2cf5a", "#a99bff"] as const;
 
-  return seat === undefined ? "#999" : colorOf(seat.model);
-};
+const seatColor = (player: string): string => SEAT_COLORS[player.charCodeAt(0) - "A".charCodeAt(0)] ?? "#999";
 
 /** Regret in points from which a move stands out as a blunder, in its tag and on the health chart. */
 const BIG_REGRET = 5;
@@ -70,11 +72,18 @@ const shortNamesOf = (detail: MatchDetail): ReadonlyMap<string, string> => {
   return new Map(detail.seats.map((seat, index) => [seat.player, bases.indexOf(bases[index] ?? "") === bases.lastIndexOf(bases[index] ?? "") ? (bases[index] ?? seat.player) : labelOf(keyOf(seat))]));
 };
 
-/** The health chart's width, as styles.css lays out .modal and .mbody: one full-screen column up to a tablet, else half the modal. */
+/**
+ * The health chart's width, as styles.css lays out .modal and .mbody: one column up to a tablet, else the right half
+ * of the modal, and from a wide screen the two narrower of its three columns (5fr 4fr 4fr).
+ */
 const chartWidth = ({ width }: Viewport): number => {
   if (width < 640) return width - 24;
 
-  return width <= 1024 ? width - 2 * 16 : Math.floor((Math.min(1320, 0.96 * width) - 2 * 22 - 2 - 22) / 2);
+  if (width <= 1024) return width - 2 * 16;
+
+  const inner = width - 2 * 12 - 2 * 20 - 2;
+
+  return width < 1280 ? Math.floor((inner - 22) / 2 - 15) : Math.floor((8 * (inner - 2 * 20)) / 13 + 20);
 };
 
 const healthView = (h: H, detail: MatchDetail, steps: ReadonlyArray<Step>, at: number, width: number): Html => {
@@ -87,7 +96,7 @@ const healthView = (h: H, detail: MatchDetail, steps: ReadonlyArray<Step>, at: n
 
   const lines = detail.seats.map(({ player }, index) => {
     const ys = steps.map((step) => y.at(step.players.find((seen) => seen.player === player)?.health ?? 0) + (index > 0 ? 1.5 : -1.5));
-    const color = seatColor(detail, player);
+    const color = seatColor(player);
 
     return h.g(
       [],
@@ -112,7 +121,7 @@ const healthView = (h: H, detail: MatchDetail, steps: ReadonlyArray<Step>, at: n
   const blunders = steps.flatMap((step, index) => {
     if (step.regret === null || step.regret.points < BIG_REGRET) return [];
 
-    const color = seatColor(detail, step.player);
+    const color = seatColor(step.player);
     const seat = detail.seats.findIndex(({ player }) => player === step.player);
     const mine = step.players.find(({ player }) => player === step.player)?.health ?? 0;
     const radius = 4 + Math.min(step.regret.points, 50) / 10;
@@ -186,7 +195,7 @@ const turningPointsView = (h: H, detail: MatchDetail, names: ReadonlyMap<string,
                   [
                     h.Type("button"),
                     h.Class(`chip ${index === at ? "on" : ""}`),
-                    h.Style({ color: seatColor(detail, step.player), "border-color": index === at ? seatColor(detail, step.player) : "" }),
+                    h.Style({ color: seatColor(step.player), "border-color": index === at ? seatColor(step.player) : "" }),
                     h.OnClick(Message.SelectedStep({ index })),
                   ],
                   [`R${step.round} ${names.get(step.player) ?? step.player} · ${step.label} · −${fmtPoints(step.regret.points)}`],
@@ -199,7 +208,7 @@ const turningPointsView = (h: H, detail: MatchDetail, names: ReadonlyMap<string,
 };
 
 const nameView = (h: H, detail: MatchDetail, names: ReadonlyMap<string, string>, player: string): Html =>
-  h.b([h.Class("who"), h.Style({ color: seatColor(detail, player) })], [names.get(player) ?? player]);
+  h.b([h.Class("who"), h.Style({ color: seatColor(player) })], [names.get(player) ?? player]);
 
 const POSITION_NAMES = ["near", "left", "far", "right"] as const;
 
@@ -212,8 +221,23 @@ const boardView = (h: H, detail: MatchDetail, step: Step, names: ReadonlyMap<str
   const near = board.seats[0]?.seat ?? 0;
   const chamber = Option.map(Option.fromNullOr(step.known), (shell): Shell => (shell === "live" ? "Live" : "Blank"));
 
+  const seatMarks = Object.fromEntries(
+    detail.seats.flatMap((seat, index) => {
+      const boardSeat = board.seats[index];
+
+      if (boardSeat === undefined) return [];
+
+      const at = positionOf(near, boardSeat.seat);
+
+      return [
+        [`--seat-${at}`, seatColor(seat.player)],
+        [`--letter-${at}`, `"${seat.player}"`],
+      ];
+    }),
+  );
+
   return h.div(
-    [h.Class("board")],
+    [h.Class("board"), h.Style(seatMarks)],
     [
       tableView(h, {
         view: { board, near, out: new Set(out), shells: Option.some({ live: step.live, blank: step.blank, chamber }), recent: [], key: step.id },
@@ -307,8 +331,8 @@ const candidatesView = (h: H, step: Step, regret: MoveRegret, who: string, isOpe
               [h.Class(`cand ${isChosen ? "chosen" : ""} ${isBest ? "best" : ""}`)],
               [
                 h.span([h.Class("label")], [label]),
-                isBest ? h.span([h.Class("tag")], ["best"]) : h.empty,
-                isChosen ? h.span([h.Class("tag")], ["chosen"]) : h.empty,
+                isBest ? h.span([h.Class("tag best")], ["best"]) : h.empty,
+                isChosen ? h.span([h.Class("tag"), h.Style({ color: seatColor(step.player), "border-color": seatColor(step.player) })], ["chosen"]) : h.empty,
                 h.span([h.Class("pct")], [`${fmtPoints(score)}%`]),
               ],
             );
@@ -480,7 +504,12 @@ const detailView = (h: H, replay: Replay, detail: MatchDetail, allMatches: Reado
         h.h2(
           [],
           detail.seats.map((seat, index) =>
-            h.span([], [index > 0 ? " vs " : h.empty, h.span([h.Style({ color: colorOf(seat.model) })], [labelOf(keyOf(seat))]), h.span([h.Class("letter")], [seat.player])]),
+            h.span([], [
+              index > 0 ? " vs " : h.empty,
+              h.i([h.Class("mk"), h.Style({ background: colorOf(seat.model) }), h.Title(baseName(seat.model))], []),
+              h.span([h.Style({ color: seatColor(seat.player) })], [labelOf(keyOf(seat))]),
+              h.span([h.Class("letter"), h.Style({ color: seatColor(seat.player), "border-color": seatColor(seat.player) })], [seat.player]),
+            ]),
           ),
         ),
         h.span(
@@ -521,7 +550,7 @@ const detailView = (h: H, replay: Replay, detail: MatchDetail, allMatches: Reado
                 ),
               ],
             ),
-            h.div([h.Class("k legend")], [`−N: points of round win chance the move gave up, marked from ${fmtPoints(MINOR_REGRET)}; outlined when proven exact.`]),
+            h.div([h.Class("k legend")], [`−N: points of round win chance the move gave up, marked from ${fmtPoints(MINOR_REGRET)}; solid outline when proven exact, dashed when not.`]),
             movesView(h, detail, names, steps, at),
           ],
         ),

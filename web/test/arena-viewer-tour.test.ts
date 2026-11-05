@@ -12,7 +12,7 @@ test("every section sits in exactly one group", () => {
 });
 
 test("every group or section an old link names lands on the page, directly or at the section that took its place", () => {
-  const linked = ["results", "watch", "decisions", "rounds", "reliability", "details", "scatter", "interesting", "luck", "seats", "deals", "blunders", "mistakes", "odds", "items", "pressure", "rubbers", "matches", "leaderboards", "breakdown"];
+  const linked = ["results", "watch", "decisions", "details", "scatter", "interesting", "luck", "deals", "blunders", "mistakes", "odds", "items", "pressure", "matches", "leaderboards", "breakdown"];
   const onPage = new Set([...GROUPS.map(({ group }) => group), ...pageOrder]);
 
   expect(linked.filter((id) => !onPage.has(id) && !onPage.has(MOVED_TARGETS.get(id) ?? ""))).toEqual([]);
