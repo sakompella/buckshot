@@ -89,19 +89,30 @@ def state.exact(found: Maybe<&2, U32>, state: T.State, me: D.Seat, knowledge: Bo
 def state(+state: T.State, +me: D.Seat, knowledge: Bool) -> U32:
   state.exact(exact(T.state.notes(state), me), state, me, knowledge)
 
-def same.chamber(worlds: List<&2, A.World>, +shell: D.Shell) -> Bool:
-  match worlds:
-    case Nil{}:
+# Whether every world's chamber holds `shell`, given that the worlds before
+# `worlds` do when `so_far`. Stops at the first world that does not.
+def same.chamber(worlds: List<&2, A.World>, so_far: Bool, +shell: D.Shell) -> Bool:
+  match worlds so_far:
+    case _ False{}:
+      False{}
+    case Nil{} True{}:
       True{}
-    case A.World{state, _} <> rest:
-      Bool.and(B.filter.clue(S.world.gun(T.state.world(state)), 0n, shell), same.chamber(rest, shell))
+    case A.World{state, _} <> rest True{}:
+      same.chamber(rest, B.filter.clue(S.world.gun(T.state.world(state)), 0n, shell), shell)
+
+def known.live(live: Bool, +worlds: List<&2, A.World>) -> Bool:
+  match live:
+    case True{}:
+      True{}
+    case False{}:
+      same.chamber(worlds, True{}, D.Blank{})
 
 def known(+worlds: List<&2, A.World>) -> Bool:
   match worlds:
     case Nil{}:
       False{}
     case _ <> _:
-      Bool.or(same.chamber(worlds, D.Live{}), same.chamber(worlds, D.Blank{}))
+      known.live(same.chamber(worlds, True{}, D.Live{}), worlds)
 
 def sum(worlds: List<&2, A.World>, +me: D.Seat, +knowledge: Bool) -> F32:
   match worlds:

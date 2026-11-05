@@ -139,30 +139,45 @@ def out.weight(out: Out) -> F32:
 type Group is Data:
   Group{key: List<&2, Seen>, outs: List<&2, Out>, mass: F32}
 
+# While grouping, a group's outs are kept last first.
 def group.added(group: Group, +out: Out) -> Group:
   match group:
     case Group{key, outs, mass}:
-      Group{key, List.append(&2, Out, outs, [out]), F32.add(mass, out.weight(out))}
+      Group{key, out <> outs, F32.add(mass, out.weight(out))}
 
-def group.key(group: Group) -> List<&2, Seen>:
-  match group:
-    case Group{key, _, _}:
-      key
-
-def group.insert(groups: List<&2, Group>, +out: Out, +key: List<&2, Seen>) -> List<&2, Group>:
+def group.ordered(groups: List<&2, Group>) -> List<&2, Group>:
   match groups:
     case Nil{}:
+      Nil{}
+    case Group{key, outs, mass} <> rest:
+      Group{key, List.reverse(&2, Out, outs), mass} <> group.ordered(rest)
+
+# Whether the first group has this key.
+def group.first_is(+groups: List<&2, Group>, +key: List<&2, Seen>) -> Bool:
+  match groups:
+    case Nil{}:
+      False{}
+    case Group{other, _, _} <> _:
+      seen.eq(other, key)
+
+# `same` tells whether the first of `groups` has the key.
+def group.insert(groups: List<&2, Group>, same: Bool, +out: Out, +key: List<&2, Seen>) -> List<&2, Group>:
+  match groups same:
+    case Nil{} _:
       [Group{key, [out], out.weight(out)}]
-    case +group <> +rest:
-      Bool.pick(List<&2, Group>, seen.eq(group.key(group), key), group.added(group, out) <> rest, group <> group.insert(rest, out, key))
+    case group <> rest True{}:
+      group.added(group, out) <> rest
+    case group <> +rest False{}:
+      group <> group.insert(rest, group.first_is(rest, key), out, key)
 
 # Groups in order of first appearance.
-def group(outs: List<&2, Out>, +private: Bool, groups: List<&2, Group>) -> List<&2, Group>:
+def group(outs: List<&2, Out>, +private: Bool, +groups: List<&2, Group>) -> List<&2, Group>:
   match outs:
     case Nil{}:
-      groups
+      group.ordered(groups)
     case +out <> rest:
-      group(rest, private, group.insert(groups, out, out.key(out, private)))
+      +key : List<&2, Seen> = out.key(out, private)
+      group(rest, private, group.insert(groups, group.first_is(groups, key), out, key))
 
 def outs.matching(outs: List<&2, Out>, +key: List<&2, Seen>) -> List<&2, Out>:
   match outs:

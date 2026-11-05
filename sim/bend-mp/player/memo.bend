@@ -244,12 +244,22 @@ def text.eq(a: String, b: String, same: Bool) -> Bool:
     case _ _:
       False{}
 
-def bucket.find(bucket: List<&2, Kept>, +key: String) -> Maybe<&2, Stored>:
+def bucket.first_is(+bucket: List<&2, Kept>, +key: String) -> Bool:
   match bucket:
     case Nil{}:
+      False{}
+    case Kept{other, _} <> _:
+      text.eq(other, key, True{})
+
+# `same` tells whether the first of `bucket` has the key.
+def bucket.find(bucket: List<&2, Kept>, same: Bool, +key: String) -> Maybe<&2, Stored>:
+  match bucket same:
+    case Nil{} _:
       None{}
-    case Kept{+other, +stored} <> rest:
-      Bool.pick(Maybe<&2, Stored>, text.eq(other, key, True{}), Some{stored}, bucket.find(rest, key))
+    case Kept{_, stored} <> _ True{}:
+      Some{stored}
+    case _ <> +rest False{}:
+      bucket.find(rest, bucket.first_is(rest, key), key)
 
 def bucket.without(bucket: List<&2, Kept>, +key: String) -> List<&2, Kept>:
   match bucket:
@@ -263,8 +273,8 @@ def hash(+key: String) -> String:
   put.u32(L.key.seed(key, 2166136261), SNil{})
 
 def found.of(got: Map<&2, List<&2, Kept>> & List<&2, Kept>, +key: String, +nodes: Nat, +entries: Nat, +hits: Nat, +deals: Nat, +deal_hits: Nat) -> Tally & Maybe<&2, Stored>:
-  (memo, bucket) = got
-  (Tally{nodes, memo, entries, hits, deals, deal_hits}, bucket.find(bucket, key))
+  (memo, +bucket) = got
+  (Tally{nodes, memo, entries, hits, deals, deal_hits}, bucket.find(bucket, bucket.first_is(bucket, key), key))
 
 def find(tally: Tally, +key: String) -> Tally & Maybe<&2, Stored>:
   match tally:
