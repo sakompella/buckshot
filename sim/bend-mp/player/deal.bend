@@ -406,9 +406,9 @@ def key.seed(key: String, +seed: U32) -> U32:
 # Word `n` of the deal's stream answers its n-th draw, each value equally likely.
 def sample.deal(fuel: Nat, request: T.Request, +state: T.State, +seed: U32, +n: U32) -> T.State:
   match fuel request:
-    case 1n+(+fuel) T.Draw{_, D.Range{_, extra}}:
+    case 1n+(+fuel) T.Draw{kind, D.Range{low, +extra}}:
       +k : U32 = U32.mod(mix(U32.xor(seed, mix(n))), U32.from_nat(2n+extra))
-      +next : T.State = answered(M.answer(state, U32.to_nat(k)))
+      +next : T.State = answered(M.answer.request(state, U32.to_nat(k), T.Draw{kind, D.Range{low, extra}}))
       sample.deal(fuel, M.request(next), next, seed, (n + 1 : U32))
     case _ _:
       state
