@@ -607,6 +607,10 @@ def answer.request(+state: T.State, n: Nat, request: T.Request) -> D.Stepped<&2,
     case T.Choose{_, D.NonEmpty{_, rest}}:
       T.state.stepped(answer.choice(T.state.set_log(state, T.Empty{}), D.clamp(n, List.length(&2, T.Move, rest))))
 
+# Whether seat sits at the table, so has an Idle menu.
+def seated(+state: T.State, +seat: D.Seat) -> Bool:
+  P.seated(D.ring.get(Bool, D.ring.fill(Bool, S.world.table(T.state.world(state)), True{}), seat))
+
 # The n-th option of an Idle menu, clamped to the last, as answer.choice picks it.
 def answer.idle(+state: T.State, +seat: D.Seat, seated: Bool, options: List<&2, T.IdleOption>, n: Nat) -> D.Stepped<&2, T.State>:
   match seated options:
@@ -620,7 +624,7 @@ def answer.idle(+state: T.State, +seat: D.Seat, seated: Bool, options: List<&2, 
 def answer.at(+state: T.State, n: Nat, phase: T.Phase) -> D.Stepped<&2, T.State>:
   match phase:
     case T.Idle{+seat}:
-      answer.idle(state, seat, P.seated(D.ring.get(Bool, D.ring.fill(Bool, S.world.table(T.state.world(state)), True{}), seat)), P.options(state, seat), n)
+      answer.idle(state, seat, seated(state, seat), P.options(state, seat), n)
     case _:
       answer.request(state, n, request(state))
 
