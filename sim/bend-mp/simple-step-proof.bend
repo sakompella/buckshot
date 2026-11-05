@@ -259,7 +259,7 @@ def begin_go.indep(seats: List<&2, D.Seat>, +w: S.World, +p: S.Players, +g: S.Gr
     case Nil{}:
       {==}
     case +seat <> rest:
-      Equal.cong(List<&2, D.Seat>, List<&2, D.Seat>, xs => I.keep(D.Seat, Bool.and(I.begin.can(nr, I.seat.health(p, seat), I.seat.slots(p, seat)), I.has_items(I.pool(S.State{w, p, q1, n1, g}, seat))), seat, xs), I.begin.go(rest, S.State{w, p, q1, n1, g}, nr), I.begin.go(rest, S.State{w, p, q2, n2, g}, nr), begin_go.indep(rest, w, p, g, q1, n1, q2, n2, nr))
+      Equal.cong(List<&2, D.Seat>, List<&2, D.Seat>, xs => I.keep(D.Seat, Bool.and(I.begin.can(nr, I.seat.health(p, seat), I.seat.slots(p, seat)), I.stocked(S.State{w, p, q1, n1, g}, seat)), seat, xs), I.begin.go(rest, S.State{w, p, q1, n1, g}, nr), I.begin.go(rest, S.State{w, p, q2, n2, g}, nr), begin_go.indep(rest, w, p, g, q1, n1, q2, n2, nr))
 
 def begin_seats.indep(amount: Nat, +w: S.World, +p: S.Players, +g: S.Grabs, +q1: S.Phase, +n1: List<&2, D.Note>, +q2: S.Phase, +n2: List<&2, D.Note>, +nr: Bool) -> {I.begin.seats(S.State{w, p, q1, n1, g}, nr, amount) == I.begin.seats(S.State{w, p, q2, n2, g}, nr, amount) : List<&2, D.Seat>}:
   match amount:

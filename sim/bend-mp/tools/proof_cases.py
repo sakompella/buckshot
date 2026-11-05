@@ -228,7 +228,7 @@ def last_leaf(shape: Shape, seat: int | None, state: str) -> list[str]:
     slots, granted = (f"s{seat}", f"n{seat}") if seat in shape.seated else ("D.slots.empty()", "0n")
     at = SEATS[seat]
     return [
-        f"last.parts(G.GetItemToGrab.pool(D.item.order(), A.ref_host({state}), {at}), I.pool({state}, {at}), "
+        f"last.parts(G.GetItemToGrab.pool(D.item.order(), A.ref_host({state}), {at}), I.stocked({state}, {at}), "
         f"{slots}, {granted}, amount, empty.eq({state}, {at}, shape))"
     ]
 

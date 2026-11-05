@@ -229,6 +229,20 @@ def pool(+state: S.State, +seat: D.Seat) -> List<&2, D.Item>:
   +world : S.World = S.state.world(state)
   pool.go(D.item.order(), round.items(G.world.rules(world)), S.world.table(world), S.state.players(state), S.state.grabs(state), seat)
 
+# Whether a seat's pool has an item; stops once one is found.
+def pool.any(items: List<&2, D.Item>, found: Bool, +rules: D.ItemRules, +table: D.Table, +players: S.Players, +grabs: S.Grabs, +seat: D.Seat) -> Bool:
+  match items found:
+    case _ True{}:
+      True{}
+    case Nil{} False{}:
+      False{}
+    case +item <> rest False{}:
+      pool.any(rest, stock.counted(D.rules.item(rules, item), D.item.dealt_at(table, item), players, grabs, seat, item, D.table.seats(table)), rules, table, players, grabs, seat)
+
+def stocked(+state: S.State, +seat: D.Seat) -> Bool:
+  +world : S.World = S.state.world(state)
+  pool.any(D.item.order(), False{}, round.items(G.world.rules(world)), S.world.table(world), S.state.players(state), S.state.grabs(state), seat)
+
 # Who begins grabbing. A new round ignores health and full slots (D46); the
 # caller passes the stored amount, whose zero selects no one (D12).
 
@@ -241,7 +255,7 @@ def begin.go(seats: List<&2, D.Seat>, +state: S.State, +new_round: Bool) -> List
       Nil{}
     case +seat <> rest:
       +players : S.Players = S.state.players(state)
-      keep(D.Seat, Bool.and(begin.can(new_round, seat.health(players, seat), seat.slots(players, seat)), has_items(pool(state, seat))), seat, begin.go(rest, state, new_round))
+      keep(D.Seat, Bool.and(begin.can(new_round, seat.health(players, seat), seat.slots(players, seat)), stocked(state, seat)), seat, begin.go(rest, state, new_round))
 
 def begin.seats(+state: S.State, new_round: Bool, amount: Nat) -> List<&2, D.Seat>:
   match amount:
@@ -324,7 +338,7 @@ def grab.nth(options: List<&2, S.GrabOption>, n: Nat) -> Maybe<&2, S.GrabOption>
 # IsPlacingLastItem: the placing seat still holds its item here.
 def placing.last(+state: S.State, +seat: D.Seat) -> Bool:
   +grabs : S.Grabs = S.state.grabs(state)
-  Bool.or(Bool.not(has_items(pool(state, seat))), Bool.or(Nat.is_eq(1n+occupied(slots.items(seat.slots(S.state.players(state), seat))), 8n), Bool.not(Nat.is_lt(seat.granted(grabs, seat), S.world.item_amount(S.state.world(state))))))
+  Bool.or(Bool.not(stocked(state, seat)), Bool.or(Nat.is_eq(1n+occupied(slots.items(seat.slots(S.state.players(state), seat))), 8n), Bool.not(Nat.is_lt(seat.granted(grabs, seat), S.world.item_amount(S.state.world(state))))))
 
 def finish.ended(entries: List<&2, D.At<&2, Bool>>) -> Bool:
   match entries:
@@ -338,7 +352,7 @@ def finish.empty(seats: List<&2, D.Seat>, +state: S.State) -> Bool:
     case Nil{}:
       True{}
     case seat <> rest:
-      Bool.and(Bool.not(has_items(pool(state, seat))), finish.empty(rest, state))
+      Bool.and(Bool.not(stocked(state, seat)), finish.empty(rest, state))
 
 # Godot's completion predicate, unchanged: every seat stopped grabbing, or
 # every seat's pool is empty. M1 re-runs it after the noneligible pass.
@@ -353,7 +367,7 @@ def stalled(seats: List<&2, D.Seat>, +state: S.State, +placing: D.Seat) -> List<
       Nil{}
     case +seat <> rest:
       +grabs : S.Grabs = S.state.grabs(state)
-      keep(D.Seat, Bool.and(seat.grabbing(grabs, seat), Bool.and(is_none(seat.holding(grabs, seat)), Bool.and(Bool.not(D.seat.eq(seat, placing)), Bool.not(has_items(pool(state, seat)))))), seat, stalled(rest, state, placing))
+      keep(D.Seat, Bool.and(seat.grabbing(grabs, seat), Bool.and(is_none(seat.holding(grabs, seat)), Bool.and(Bool.not(D.seat.eq(seat, placing)), Bool.not(stocked(state, seat))))), seat, stalled(rest, state, placing))
 
 def stalled.seats(+state: S.State, +placing: D.Seat) -> List<&2, D.Seat>:
   stalled(D.table.seats(S.world.table(S.state.world(state))), state, placing)

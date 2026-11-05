@@ -49,8 +49,8 @@ MUTATIONS = (
         "sm/items.bend",
         (
             Edit(
-                "jam.any(jam.for(state, seat)), steal.any(steal.for(state, seat)))",
-                "jam.any(jam.for(state, seat)), True{})",
+                "steal.any(steal.with(players, seat, sawed, targets)))",
+                "True{})",
             ),
         ),
     ),
