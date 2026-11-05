@@ -1,0 +1,185 @@
+{
+  "name": "t8-gpt-4b",
+  "seed": 6300,
+  "delivery": "on-turn",
+  "endpoints": {
+    "cpa-anthropic": {
+      "api": "anthropic",
+      "url": "https://hub.dog-minnow.ts.net",
+      "keyEnv": "CPA_KEY"
+    },
+    "cpa-openai": {
+      "api": "openai-responses",
+      "url": "https://hub.dog-minnow.ts.net/v1",
+      "keyEnv": "CPA_KEY"
+    }
+  },
+  "entrants": {
+    "claude-haiku-5-5-high": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-5-5",
+      "effort": "high"
+    },
+    "gpt-6.1-terra-low": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6.1-terra",
+      "effort": "low",
+      "catalogModel": "openai/gpt-5.6-terra"
+    },
+    "claude-sonnet-5-5-off": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-sonnet-5-5",
+      "effort": "off"
+    },
+    "gpt-6-astra-high": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6-astra",
+      "effort": "high"
+    },
+    "claude-haiku-5-5-low": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-5-5",
+      "effort": "low"
+    },
+    "gpt-6-astra-low": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6-astra",
+      "effort": "low"
+    },
+    "claude-haiku-5-5-xhigh": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-5-5",
+      "effort": "xhigh"
+    },
+    "gpt-6-astra-low-recall": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6-astra",
+      "effort": "low",
+      "instructionsAddendum": "You are operating in immediate-recall mode. Do not plan, do not verify, do not reconsider, do not use scratch space. Emit the final answer as the very first token of your reply and stop",
+      "effortLabel": "off"
+    },
+    "claude-haiku-5-5-off": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-5-5",
+      "effort": "off"
+    },
+    "gpt-6.1-terra-high": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6.1-terra",
+      "effort": "high",
+      "catalogModel": "openai/gpt-5.6-terra"
+    },
+    "gpt-6.1-terra-max": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6.1-terra",
+      "effort": "max",
+      "catalogModel": "openai/gpt-5.6-terra"
+    },
+    "claude-haiku-5-5": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-haiku-5-5",
+      "effort": "medium"
+    },
+    "gpt-6.1-terra": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6.1-terra",
+      "effort": "medium",
+      "catalogModel": "openai/gpt-5.6-terra"
+    },
+    "claude-sonnet-5-5": {
+      "endpoint": "cpa-anthropic",
+      "model": "claude-sonnet-5-5",
+      "effort": "medium"
+    },
+    "gpt-6.1-terra-xhigh": {
+      "endpoint": "cpa-openai",
+      "model": "gpt-6.1-terra",
+      "effort": "xhigh",
+      "catalogModel": "openai/gpt-5.6-terra"
+    }
+  },
+  "pairings": [
+    {
+      "entrants": [
+        "claude-haiku-5-5-high",
+        "gpt-6.1-terra-low"
+      ],
+      "seeds": [
+        6300
+      ]
+    },
+    {
+      "entrants": [
+        "claude-sonnet-5-5-off",
+        "gpt-6-astra-high"
+      ],
+      "seeds": [
+        6303
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6-astra-high",
+        "claude-haiku-5-5-low"
+      ],
+      "seeds": [
+        6301
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6-astra-low",
+        "claude-haiku-5-5-xhigh"
+      ],
+      "seeds": [
+        6304
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6-astra-low-recall",
+        "claude-haiku-5-5-off"
+      ],
+      "seeds": [
+        6302
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6.1-terra-high",
+        "claude-sonnet-5-5-off"
+      ],
+      "seeds": [
+        6310
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6.1-terra-max",
+        "claude-haiku-5-5"
+      ],
+      "seeds": [
+        6305
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6.1-terra",
+        "claude-sonnet-5-5"
+      ],
+      "seeds": [
+        6311
+      ]
+    },
+    {
+      "entrants": [
+        "gpt-6.1-terra-xhigh",
+        "claude-haiku-5-5-off"
+      ],
+      "seeds": [
+        6306
+      ]
+    }
+  ],
+  "blocksPerPairing": 1
+}

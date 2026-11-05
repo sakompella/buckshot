@@ -12,7 +12,7 @@ import argparse
 
 import bt
 from fmt import pct, signed, table
-from load import CROSS_MODEL, CROSS_SAMPLES, TOURNAMENT_5_COHORT, TOURNAMENT_6_COHORT, TOURNAMENT_7_COHORT, Game, cohorts, connect, scored_games
+from load import CROSS_MODEL, CROSS_SAMPLES, TOURNAMENT_5_COHORT, TOURNAMENT_6_COHORT, TOURNAMENT_7_COHORT, TOURNAMENT_8_COHORT, Game, cohorts, connect, scored_games
 
 START, END = "<!-- leaderboard:start -->", "<!-- leaderboard:end -->"
 
@@ -22,6 +22,7 @@ TITLES = {
     TOURNAMENT_5_COHORT: "Tournament 5",
     TOURNAMENT_6_COHORT: "Tournament 6",
     TOURNAMENT_7_COHORT: "Tournament 7",
+    TOURNAMENT_8_COHORT: "Tournament 8",
 }
 
 
