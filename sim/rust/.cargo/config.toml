@@ -1,4 +1,5 @@
 [alias]
 # The verification runs: `branch!` records the Bend branches taken only here.
-trace-test = "test --release --features buckshot-rules/trace"
+# Only the tape replay takes the trace; other tests would let it grow unbounded.
+trace-test = "test --release --features buckshot-rules/trace --test tapes"
 branch-map = "run --quiet -p branch-map --"
