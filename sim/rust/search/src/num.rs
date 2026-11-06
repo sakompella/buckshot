@@ -90,6 +90,44 @@ mod ops {
     pub const fn len_u32(n: usize) -> u32 {
         n as u32
     }
+
+    /// The window branch `at` of a probability-weighted sum is searched in,
+    /// given the sum's own window `lo..hi` (the Star1 bound). Each term is a
+    /// probability and the bounds of its value, in millionths. A value at most
+    /// the low end keeps the sum at most `lo` whatever the others' values in
+    /// their bounds, and a value at least the high end keeps it at least `hi`.
+    /// The bounds are taken in f64 and widened by a slack of `2 + terms`
+    /// millionths, past the f32 rounding of the sum (at most `0.12 · terms`
+    /// with every value at most a million) and its final rounding.
+    #[must_use]
+    pub fn branch_window(window: (u32, u32), terms: impl Iterator<Item = (F32, u32, u32)>, at: usize) -> (u32, u32) {
+        let (mut p, mut rest_lo, mut rest_hi, mut count) = (0.0_f64, 0.0_f64, 0.0_f64, 0.0_f64);
+        for (k, (q, lo, hi)) in terms.enumerate() {
+            let q = f64::from(q.0);
+            if k == at {
+                p = q;
+            } else {
+                rest_lo += q * f64::from(lo);
+                rest_hi += q * f64::from(hi);
+            }
+            count += 1.0_f64;
+        }
+        if p <= 0.0_f64 {
+            return (u32::MAX, 0);
+        }
+        let slack = 2.0_f64 + count;
+        let lo = if window.0 == 0 {
+            0
+        } else {
+            ((f64::from(window.0) - rest_hi - slack) / p).floor().max(0.0) as u32
+        };
+        let hi = if window.1 == u32::MAX {
+            u32::MAX
+        } else {
+            ((f64::from(window.1) - rest_lo + slack) / p).ceil().max(0.0) as u32
+        };
+        (lo, hi)
+    }
 }
 
-pub use ops::len_u32;
+pub use ops::{branch_window, len_u32};

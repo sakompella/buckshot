@@ -25,9 +25,12 @@ One JSON row per input decision ({id, ordinal, input}), read from the path or st
   --evaluator compat|bounded-v1
                          compat: Bend's search, bit for bit (default).
                          bounded-v1: the box search; lines add `upper`, the
-                         high end of the private value's box. Its budget
-                         counts nodes only (no fuel), memo hits are free and
-                         --memo does not apply.
+                         high end of the private value's box. The best move
+                         and the row's `chosenIndex` move (a menu index, if
+                         given) are exact; every other line's box is proved
+                         no better. Its budget counts nodes only (no fuel),
+                         memo hits are free and --memo does not apply.
+  --unpruned             with bounded-v1: search every child, every box exact.
   --stats                with bounded-v1: count the decision belief keys
                          (the exact memo key) of each decision's deepest
                          iteration; rows add visits, distinct, inMatch (keys
@@ -54,6 +57,7 @@ enum Evaluator {
 struct Args {
     evaluator: Evaluator,
     stats: bool,
+    unpruned: bool,
     limits: Limits,
     reload: Reload,
     memo: Memo,
@@ -77,6 +81,7 @@ fn args() -> Result<Args, Box<dyn Error>> {
         memo: Memo::Off,
         evaluator: Evaluator::Compat,
         stats: false,
+        unpruned: false,
         threads: default_threads(),
         path: None,
         help: false,
@@ -89,6 +94,7 @@ fn args() -> Result<Args, Box<dyn Error>> {
         match word.as_str() {
             "-h" | "--help" => args.help = true,
             "--stats" => args.stats = true,
+            "--unpruned" => args.unpruned = true,
             "--evaluator" => {
                 args.evaluator = match value()?.as_str() {
                     "compat" => Evaluator::Compat,
@@ -121,8 +127,8 @@ fn args() -> Result<Args, Box<dyn Error>> {
     if sampled {
         args.reload = Reload::Sampled { count };
     }
-    if args.stats && args.evaluator != Evaluator::BoundedV1 {
-        return Err("--stats needs --evaluator bounded-v1".into());
+    if (args.stats || args.unpruned) && args.evaluator != Evaluator::BoundedV1 {
+        return Err("--stats and --unpruned need --evaluator bounded-v1".into());
     }
     Ok(args)
 }
@@ -132,6 +138,7 @@ struct Input {
     id: Value,
     ordinal: Value,
     info: Result<InfoSet, String>,
+    chosen: Option<u32>,
 }
 
 fn input(row: &Value) -> Input {
@@ -143,6 +150,7 @@ fn input(row: &Value) -> Input {
         id: row["id"].clone(),
         ordinal: row["ordinal"].clone(),
         info,
+        chosen: row["chosenIndex"].as_u64().and_then(|index| u32::try_from(index).ok()),
     }
 }
 
@@ -217,7 +225,10 @@ impl Seen {
 
 /// The rows of a chunk of inputs, in input order.
 fn rows(args: &Args, pool: &ThreadPool, inputs: &[Input], seen: &mut Seen) -> Vec<Value> {
-    let infos: Vec<InfoSet> = inputs.iter().filter_map(|input| input.info.clone().ok()).collect();
+    let items: Vec<(InfoSet, Option<u32>)> = inputs
+        .iter()
+        .filter_map(|input| input.info.clone().ok().map(|info| (info, input.chosen)))
+        .collect();
     let done: Vec<(Analysis, Option<KeyStats>)> = match args.evaluator {
         Evaluator::Compat => {
             let searcher = Compat {
@@ -225,18 +236,17 @@ fn rows(args: &Args, pool: &ThreadPool, inputs: &[Input], seen: &mut Seen) -> Ve
                 memo: args.memo,
                 pool: Some(pool),
             };
-            analyse_batch(&infos, pool, |info| (searcher.analyse(info, args.limits), None))
+            analyse_batch(&items, pool, |(info, _)| (searcher.analyse(info, args.limits), None))
         }
         Evaluator::BoundedV1 => {
             let searcher = BoundedV1 {
                 reload: args.reload,
+                prune: !args.unpruned,
                 pool: Some(pool),
             };
-            if args.stats {
-                analyse_batch(&infos, pool, |info| searcher.analyse_with_stats(info, args.limits))
-            } else {
-                analyse_batch(&infos, pool, |info| (searcher.analyse(info, args.limits), None))
-            }
+            analyse_batch(&items, pool, |(info, chosen)| {
+                searcher.analyse_chosen(info, args.limits, *chosen, args.stats)
+            })
         }
     };
     let mut done = done.into_iter();

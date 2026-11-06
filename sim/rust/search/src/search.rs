@@ -354,6 +354,7 @@ struct Search<'a> {
     deal: DealScratch,
     boxes: Vec<bounded::Boxed>,
     stats: Option<KeyStats>,
+    prune: bool,
 }
 
 impl Search<'_> {
@@ -741,8 +742,9 @@ fn lines_static(choices: &[Choice], score: u32) -> Vec<Line> {
 pub(crate) enum Mode {
     /// Bend's search, bit for bit.
     Compat,
-    /// The box search, gathering the decision keys of its deepest iteration with `stats`.
-    Bounded { stats: bool },
+    /// The box search, pruned or not, the chosen move (a menu index) searched
+    /// exactly, gathering the decision keys of its deepest iteration with `stats`.
+    Bounded { prune: bool, chosen: Option<u32>, stats: bool },
 }
 
 /// `root.belief`: the analysis of a built belief. A pool runs the deals of
@@ -796,14 +798,15 @@ pub(crate) fn run(
         scratch: Scratch::default(),
         deal: DealScratch::default(),
         boxes: Vec::new(),
-        stats: matches!(mode, Mode::Bounded { stats: true }).then(KeyStats::default),
+        stats: matches!(mode, Mode::Bounded { stats: true, .. }).then(KeyStats::default),
+        prune: matches!(mode, Mode::Bounded { prune: true, .. }),
     };
     let public = pushed(&mut search.worlds, |into| into.extend_from_slice(&belief.public));
     let private = pushed(&mut search.worlds, |into| into.extend_from_slice(&belief.private));
     let choices = push_choices(&menu, &mut search.choices);
     let analysis = match mode {
         Mode::Compat => search.root(limits.depth, public, private, choices),
-        Mode::Bounded { .. } => search.bounded_root(limits.depth, public, private, choices),
+        Mode::Bounded { chosen, .. } => search.bounded_root(limits.depth, (public, private), choices, chosen),
     };
     if search.scratch.buffers.overflow {
         return (invalid(OVERFLOW, search.tally.nodes), search.stats);
@@ -823,7 +826,12 @@ mod tests {
     use crate::types::{Analysis, Belief, Limits, Memo, Reach, Reload, World};
 
     /// Two seats at 2 health, a one-shell live load and no items.
-    fn config() -> Result<Config, RuleError> {
+    pub(super) fn config() -> Result<Config, RuleError> {
+        config_for(Table::TwoSeats)
+    }
+
+    /// `table` at 2 health, a one-shell live load and no items.
+    pub(super) fn config_for(table: Table) -> Result<Config, RuleError> {
         let load = LoadRule {
             shells: ShellRule::AllLive { live: 1 },
             items: AmountRule::Fixed(0),
@@ -838,7 +846,7 @@ mod tests {
             loads: [load; 4],
             items: [off; 9],
         };
-        Config::new(Table::TwoSeats, &[round, round, round])
+        Config::new(table, &[round, round, round])
     }
 
     /// The first choice of the match, each seat at 1 health and one batch left in the deck.

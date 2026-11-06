@@ -50,13 +50,15 @@ pub struct Compat<'a> {
     pub pool: Option<&'a ThreadPool>,
 }
 
-/// `bounded-v1`: the box search, unpruned. A line's score is its private
-/// value's low end and `upper` its high end; with nothing pruned they agree
-/// and equal compat's values at a budget compat finishes within. Only nodes
-/// count against the budget; there is no fuel, and a memo hit is free.
+/// `bounded-v1`: the box search. A line's score is its private value's low
+/// end and `upper` its high end. Unpruned, they agree and equal compat's
+/// values at a budget compat finishes within. Pruned, the best move and the
+/// chosen move are exact and every other line's box is proved no better.
+/// Only nodes count against the budget; there is no fuel, and a memo hit is free.
 #[derive(Clone, Copy, Debug)]
 pub struct BoundedV1<'a> {
     pub reload: Reload,
+    pub prune: bool,
     pub pool: Option<&'a ThreadPool>,
 }
 
@@ -95,29 +97,28 @@ impl Searcher for Compat<'_> {
 }
 
 impl BoundedV1<'_> {
-    /// [`Searcher::analyse`] with the decision keys its deepest iteration visited.
+    /// [`Searcher::analyse`] with the chosen move (a menu index) searched
+    /// exactly and, with `stats`, the decision keys its deepest iteration visited.
     #[must_use]
-    pub fn analyse_with_stats(&self, info: &InfoSet, limits: Limits) -> (Analysis, Option<KeyStats>) {
-        analyse_in(info, limits, (self.reload, Memo::Charged), self.pool, Mode::Bounded { stats: true })
+    pub fn analyse_chosen(&self, info: &InfoSet, limits: Limits, chosen: Option<u32>, stats: bool) -> (Analysis, Option<KeyStats>) {
+        let mode = Mode::Bounded {
+            prune: self.prune,
+            chosen,
+            stats,
+        };
+        analyse_in(info, limits, (self.reload, Memo::Charged), self.pool, mode)
     }
 }
 
 impl Searcher for BoundedV1<'_> {
     fn analyse(&self, info: &InfoSet, limits: Limits) -> Analysis {
-        analyse_in(
-            info,
-            limits,
-            (self.reload, Memo::Charged),
-            self.pool,
-            Mode::Bounded { stats: false },
-        )
-        .0
+        self.analyse_chosen(info, limits, None, false).0
     }
 }
 
-/// `f` of every information set on `pool`, in input order. Each is searched
-/// alone, with its own memo and tally, so each result is the one a single
-/// thread gives.
-pub fn analyse_batch<T: Send>(infos: &[InfoSet], pool: &ThreadPool, f: impl Fn(&InfoSet) -> T + Sync + Send) -> Vec<T> {
-    pool.install(|| infos.par_iter().map(f).collect())
+/// `f` of every item (an information set and what goes with it) on `pool`,
+/// in input order. Each is searched alone, with its own memo and tally, so
+/// each result is the one a single thread gives.
+pub fn analyse_batch<I: Sync, T: Send>(items: &[I], pool: &ThreadPool, f: impl Fn(&I) -> T + Sync + Send) -> Vec<T> {
+    pool.install(|| items.par_iter().map(f).collect())
 }
