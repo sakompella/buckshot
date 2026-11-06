@@ -310,10 +310,6 @@ pub(crate) enum B {
     SimplePointShotsNil,
     /// `simple/point:shots:S.Target{seat} <> rest` (simple/point.bend:15)
     SimplePointShotsTargetCons,
-    /// `simple/point:items.has:Nil{}` (simple/point.bend:20)
-    SimplePointItemsHasNil,
-    /// `simple/point:items.has:x <> rest` (simple/point.bend:22)
-    SimplePointItemsHasCons,
     /// `simple/point:item.chained:D.Jammer{}` (simple/point.bend:27)
     SimplePointItemChainedJammer,
     /// `simple/point:item.chained:D.Adrenaline{}` (simple/point.bend:29)
@@ -344,10 +340,6 @@ pub(crate) enum B {
     SimplePointJamOptionsNone,
     /// `simple/point:jam.options:Some{slot}` (simple/point.bend:64)
     SimplePointJamOptionsSome,
-    /// `simple/point:picks.has:Nil{}` (simple/point.bend:69)
-    SimplePointPicksHasNil,
-    /// `simple/point:picks.has:D.At{seat, x} <> rest` (simple/point.bend:71)
-    SimplePointPicksHasAtCons,
     /// `simple/point:steal.picks:Nil{}` (simple/point.bend:79)
     SimplePointStealPicksNil,
     /// `simple/point:steal.picks:S.Pick{+owner, +slot, +item} <> rest` (simple/point.bend:81)
@@ -360,10 +352,6 @@ pub(crate) enum B {
     SimplePointStealJamTargetsNil,
     /// `simple/point:steal_jam.targets:S.JamAt{seat} <> rest` (simple/point.bend:95)
     SimplePointStealJamTargetsJamAtCons,
-    /// `simple/point:seats.has:Nil{}` (simple/point.bend:100)
-    SimplePointSeatsHasNil,
-    /// `simple/point:seats.has:x <> rest` (simple/point.bend:102)
-    SimplePointSeatsHasCons,
     /// `simple/point:steal_jam.here:True{}` (simple/point.bend:107)
     SimplePointStealJamHereTrue,
     /// `simple/point:steal_jam.here:False{}` (simple/point.bend:109)
@@ -390,10 +378,6 @@ pub(crate) enum B {
     SimplePointChooseNil,
     /// `simple/point:choose:move <> rest` (simple/point.bend:160)
     SimplePointChooseCons,
-    /// `simple/point:seated:Some{_}` (simple/point.bend:166)
-    SimplePointSeatedSome,
-    /// `simple/point:seated:None{}` (simple/point.bend:168)
-    SimplePointSeatedNone,
     /// `simple/point:idle.request:True{}` (simple/point.bend:173)
     SimplePointIdleRequestTrue,
     /// `simple/point:idle.request:False{}` (simple/point.bend:175)
@@ -890,8 +874,6 @@ impl B {
             Self::SimpleMainAnswerRequestChooseNonEmpty => "simple/main:answer.request:T.Choose{_, D.NonEmpty{_, rest}}",
             Self::SimplePointShotsNil => "simple/point:shots:Nil{}",
             Self::SimplePointShotsTargetCons => "simple/point:shots:S.Target{seat} <> rest",
-            Self::SimplePointItemsHasNil => "simple/point:items.has:Nil{}",
-            Self::SimplePointItemsHasCons => "simple/point:items.has:x <> rest",
             Self::SimplePointItemChainedJammer => "simple/point:item.chained:D.Jammer{}",
             Self::SimplePointItemChainedAdrenaline => "simple/point:item.chained:D.Adrenaline{}",
             Self::SimplePointItemChainedAny => "simple/point:item.chained:_",
@@ -907,16 +889,12 @@ impl B {
             Self::SimplePointJamTargetsJamAtCons => "simple/point:jam.targets:S.JamAt{seat} <> rest",
             Self::SimplePointJamOptionsNone => "simple/point:jam.options:None{}",
             Self::SimplePointJamOptionsSome => "simple/point:jam.options:Some{slot}",
-            Self::SimplePointPicksHasNil => "simple/point:picks.has:Nil{}",
-            Self::SimplePointPicksHasAtCons => "simple/point:picks.has:D.At{seat, x} <> rest",
             Self::SimplePointStealPicksNil => "simple/point:steal.picks:Nil{}",
             Self::SimplePointStealPicksPickCons => "simple/point:steal.picks:S.Pick{+owner, +slot, +item} <> rest",
             Self::SimplePointStealOptionsNone => "simple/point:steal.options:None{}",
             Self::SimplePointStealOptionsSome => "simple/point:steal.options:Some{slot}",
             Self::SimplePointStealJamTargetsNil => "simple/point:steal_jam.targets:Nil{}",
             Self::SimplePointStealJamTargetsJamAtCons => "simple/point:steal_jam.targets:S.JamAt{seat} <> rest",
-            Self::SimplePointSeatsHasNil => "simple/point:seats.has:Nil{}",
-            Self::SimplePointSeatsHasCons => "simple/point:seats.has:x <> rest",
             Self::SimplePointStealJamHereTrue => "simple/point:steal_jam.here:True{}",
             Self::SimplePointStealJamHereFalse => "simple/point:steal_jam.here:False{}",
             Self::SimplePointStealJamPicksNil => "simple/point:steal_jam.picks:Nil{}",
@@ -930,8 +908,6 @@ impl B {
             Self::SimplePointOptionMoveStealJamWith => "simple/point:option.move:T.StealJamWith{_, owner, _, target}",
             Self::SimplePointChooseNil => "simple/point:choose:Nil{}",
             Self::SimplePointChooseCons => "simple/point:choose:move <> rest",
-            Self::SimplePointSeatedSome => "simple/point:seated:Some{_}",
-            Self::SimplePointSeatedNone => "simple/point:seated:None{}",
             Self::SimplePointIdleRequestTrue => "simple/point:idle.request:True{}",
             Self::SimplePointIdleRequestFalse => "simple/point:idle.request:False{}",
             Self::SimplePointFirstRangeTwoSeats => "simple/point:first.range:D.TwoSeats{}",

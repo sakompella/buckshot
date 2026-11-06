@@ -63,7 +63,7 @@ fn run() -> Result<bool> {
         }
     }
     let sites: Vec<&bend::Site> = all.iter().filter(|s| !map.exempt.contains_key(&s.def_key())).collect();
-    let ids = gen_ids::ids(&rules, &sites);
+    let ids = gen_ids::ids(&rules, &sites)?;
     match command.as_str() {
         "write" => {
             std::fs::write(paths.ids(), &ids).with_context(|| format!("writing {}", paths.ids().display()))?;

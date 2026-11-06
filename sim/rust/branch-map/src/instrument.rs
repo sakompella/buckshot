@@ -137,7 +137,7 @@ fn with_pick_id(line: &str, id: usize) -> String {
         match c {
             '<' | '(' | '[' | '{' => depth = depth.saturating_add(1),
             '>' | ')' | ']' | '}' => depth = depth.saturating_sub(1),
-            ',' if depth == 0 => {
+            ',' if depth == 0_i32 => {
                 let (ty, rest) = after.split_at(at);
                 return format!("{before}br.pick({ty}, {id}n{rest}");
             }

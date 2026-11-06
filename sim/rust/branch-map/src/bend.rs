@@ -78,10 +78,10 @@ pub fn load(bend_dir: &Path) -> Result<Rules> {
         hasher.update(module.source.as_bytes());
         hasher.update([0]);
     }
-    let hash = hasher.finalize().iter().fold(String::new(), |mut hex, byte| {
-        let _ = write!(hex, "{byte:02x}");
-        hex
-    });
+    let hash = hasher
+        .finalize()
+        .iter()
+        .try_fold(String::new(), |mut hex, byte| write!(hex, "{byte:02x}").map(|()| hex))?;
     let reachable = reachable(&modules)?;
     Ok(Rules { modules, reachable, hash })
 }
@@ -157,7 +157,7 @@ pub fn code(line: &str) -> &str {
 /// The defs a def names: calls and bare references, local or through an import alias.
 fn references(modules: &[Module], module: &Module, def: &Def) -> Vec<(String, String)> {
     let mut out = Vec::new();
-    let has = |module: &str, name: &str| modules.iter().any(|m| m.name == module && m.defs.iter().any(|d| d.name == name));
+    let has = |in_module: &str, name: &str| modules.iter().any(|m| m.name == in_module && m.defs.iter().any(|d| d.name == name));
     for (_, line) in &def.body {
         for word in words(code(line)) {
             let target = match word.split_once('.') {
@@ -360,7 +360,7 @@ fn split_top_str(s: &str, sep: &str) -> Vec<String> {
     let mut current = String::new();
     let mut rest = s;
     while let Some(c) = rest.chars().next() {
-        if depth == 0 && rest.starts_with(sep) {
+        if depth == 0_i32 && rest.starts_with(sep) {
             out.push(std::mem::take(&mut current));
             rest = rest.get(sep.len()..).unwrap_or_default();
             continue;
