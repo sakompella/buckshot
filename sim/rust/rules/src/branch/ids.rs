@@ -8,150 +8,16 @@
 #[allow(dead_code)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum B {
-    /// `domain:seat.eq:Seat0{} Seat0{}` (domain.bend:48)
-    DomainSeatEqSeat0Seat0,
-    /// `domain:seat.eq:Seat1{} Seat1{}` (domain.bend:50)
-    DomainSeatEqSeat1Seat1,
-    /// `domain:seat.eq:Seat2{} Seat2{}` (domain.bend:52)
-    DomainSeatEqSeat2Seat2,
-    /// `domain:seat.eq:Seat3{} Seat3{}` (domain.bend:54)
-    DomainSeatEqSeat3Seat3,
-    /// `domain:seat.eq:_ _` (domain.bend:56)
-    DomainSeatEqAny,
     /// `domain:table.seats:TwoSeats{}` (domain.bend:61)
     DomainTableSeatsTwoSeats,
     /// `domain:table.seats:ThreeSeats{}` (domain.bend:63)
     DomainTableSeatsThreeSeats,
     /// `domain:table.seats:FourSeats{}` (domain.bend:65)
     DomainTableSeatsFourSeats,
-    /// `domain:ring.fill:TwoSeats{}` (domain.bend:80)
-    DomainRingFillTwoSeats,
-    /// `domain:ring.fill:ThreeSeats{}` (domain.bend:82)
-    DomainRingFillThreeSeats,
-    /// `domain:ring.fill:FourSeats{}` (domain.bend:84)
-    DomainRingFillFourSeats,
-    /// `domain:ring.get:Duo{a, b} Seat1{}` (domain.bend:99)
-    DomainRingGetDuoSeat1,
-    /// `domain:ring.get:Duo{a, b} Seat3{}` (domain.bend:101)
-    DomainRingGetDuoSeat3,
-    /// `domain:ring.get:Trio{a, b, c} Seat0{}` (domain.bend:103)
-    DomainRingGetTrioSeat0,
-    /// `domain:ring.get:Trio{a, b, c} Seat1{}` (domain.bend:105)
-    DomainRingGetTrioSeat1,
-    /// `domain:ring.get:Trio{a, b, c} Seat2{}` (domain.bend:107)
-    DomainRingGetTrioSeat2,
-    /// `domain:ring.get:Quad{a, b, c, d} Seat0{}` (domain.bend:109)
-    DomainRingGetQuadSeat0,
-    /// `domain:ring.get:Quad{a, b, c, d} Seat1{}` (domain.bend:111)
-    DomainRingGetQuadSeat1,
-    /// `domain:ring.get:Quad{a, b, c, d} Seat2{}` (domain.bend:113)
-    DomainRingGetQuadSeat2,
-    /// `domain:ring.get:Quad{a, b, c, d} Seat3{}` (domain.bend:115)
-    DomainRingGetQuadSeat3,
-    /// `domain:ring.get:_ _` (domain.bend:117)
-    DomainRingGetAny,
-    /// `domain:ring.set:Duo{a, b} Seat1{}` (domain.bend:123)
-    DomainRingSetDuoSeat1,
-    /// `domain:ring.set:Duo{a, b} Seat3{}` (domain.bend:125)
-    DomainRingSetDuoSeat3,
-    /// `domain:ring.set:Trio{a, b, c} Seat0{}` (domain.bend:127)
-    DomainRingSetTrioSeat0,
-    /// `domain:ring.set:Trio{a, b, c} Seat1{}` (domain.bend:129)
-    DomainRingSetTrioSeat1,
-    /// `domain:ring.set:Trio{a, b, c} Seat2{}` (domain.bend:131)
-    DomainRingSetTrioSeat2,
-    /// `domain:ring.set:Quad{a, b, c, d} Seat0{}` (domain.bend:133)
-    DomainRingSetQuadSeat0,
-    /// `domain:ring.set:Quad{a, b, c, d} Seat1{}` (domain.bend:135)
-    DomainRingSetQuadSeat1,
-    /// `domain:ring.set:Quad{a, b, c, d} Seat2{}` (domain.bend:137)
-    DomainRingSetQuadSeat2,
-    /// `domain:ring.set:Quad{a, b, c, d} Seat3{}` (domain.bend:139)
-    DomainRingSetQuadSeat3,
-    /// `domain:ring.set:ring _` (domain.bend:141)
-    DomainRingSetAny,
-    /// `domain:ring.entries:Duo{a, b}` (domain.bend:150)
-    DomainRingEntriesDuo,
-    /// `domain:ring.entries:Trio{a, b, c}` (domain.bend:152)
-    DomainRingEntriesTrio,
-    /// `domain:ring.entries:Quad{a, b, c, d}` (domain.bend:154)
-    DomainRingEntriesQuad,
-    /// `domain:item.godot_id:Saw{}` (domain.bend:188)
-    DomainItemGodotIdSaw,
-    /// `domain:item.godot_id:Glass{}` (domain.bend:190)
-    DomainItemGodotIdGlass,
-    /// `domain:item.godot_id:Jammer{}` (domain.bend:192)
-    DomainItemGodotIdJammer,
-    /// `domain:item.godot_id:Cigarettes{}` (domain.bend:194)
-    DomainItemGodotIdCigarettes,
-    /// `domain:item.godot_id:Beer{}` (domain.bend:196)
-    DomainItemGodotIdBeer,
-    /// `domain:item.godot_id:Phone{}` (domain.bend:198)
-    DomainItemGodotIdPhone,
-    /// `domain:item.godot_id:Inverter{}` (domain.bend:200)
-    DomainItemGodotIdInverter,
-    /// `domain:item.godot_id:Adrenaline{}` (domain.bend:202)
-    DomainItemGodotIdAdrenaline,
-    /// `domain:item.godot_id:Remote{}` (domain.bend:204)
-    DomainItemGodotIdRemote,
     /// `domain:item.dealt_at:TwoSeats{} Remote{}` (domain.bend:210)
     DomainItemDealtAtTwoSeatsRemote,
     /// `domain:item.dealt_at:_ _` (domain.bend:212)
     DomainItemDealtAtAny,
-    /// `domain:slots.get:Slots{a, b, c, d, e, f, g, h} Slot0{}` (domain.bend:234)
-    DomainSlotsGetSlotsSlot0,
-    /// `domain:slots.get:Slots{a, b, c, d, e, f, g, h} Slot1{}` (domain.bend:236)
-    DomainSlotsGetSlotsSlot1,
-    /// `domain:slots.get:Slots{a, b, c, d, e, f, g, h} Slot2{}` (domain.bend:238)
-    DomainSlotsGetSlotsSlot2,
-    /// `domain:slots.get:Slots{a, b, c, d, e, f, g, h} Slot3{}` (domain.bend:240)
-    DomainSlotsGetSlotsSlot3,
-    /// `domain:slots.get:Slots{a, b, c, d, e, f, g, h} Slot4{}` (domain.bend:242)
-    DomainSlotsGetSlotsSlot4,
-    /// `domain:slots.get:Slots{a, b, c, d, e, f, g, h} Slot5{}` (domain.bend:244)
-    DomainSlotsGetSlotsSlot5,
-    /// `domain:slots.get:Slots{a, b, c, d, e, f, g, h} Slot6{}` (domain.bend:246)
-    DomainSlotsGetSlotsSlot6,
-    /// `domain:slots.get:Slots{a, b, c, d, e, f, g, h} Slot7{}` (domain.bend:248)
-    DomainSlotsGetSlotsSlot7,
-    /// `domain:rules.item:ItemRules{a, b, c, d, e, f, g, h, i} Saw{}` (domain.bend:306)
-    DomainRulesItemItemRulesSaw,
-    /// `domain:rules.item:ItemRules{a, b, c, d, e, f, g, h, i} Glass{}` (domain.bend:308)
-    DomainRulesItemItemRulesGlass,
-    /// `domain:rules.item:ItemRules{a, b, c, d, e, f, g, h, i} Jammer{}` (domain.bend:310)
-    DomainRulesItemItemRulesJammer,
-    /// `domain:rules.item:ItemRules{a, b, c, d, e, f, g, h, i} Cigarettes{}` (domain.bend:312)
-    DomainRulesItemItemRulesCigarettes,
-    /// `domain:rules.item:ItemRules{a, b, c, d, e, f, g, h, i} Beer{}` (domain.bend:314)
-    DomainRulesItemItemRulesBeer,
-    /// `domain:rules.item:ItemRules{a, b, c, d, e, f, g, h, i} Phone{}` (domain.bend:316)
-    DomainRulesItemItemRulesPhone,
-    /// `domain:rules.item:ItemRules{a, b, c, d, e, f, g, h, i} Inverter{}` (domain.bend:318)
-    DomainRulesItemItemRulesInverter,
-    /// `domain:rules.item:ItemRules{a, b, c, d, e, f, g, h, i} Adrenaline{}` (domain.bend:320)
-    DomainRulesItemItemRulesAdrenaline,
-    /// `domain:rules.item:ItemRules{a, b, c, d, e, f, g, h, i} Remote{}` (domain.bend:322)
-    DomainRulesItemItemRulesRemote,
-    /// `domain:plan.length:OneRound{a}` (domain.bend:328)
-    DomainPlanLengthOneRound,
-    /// `domain:plan.length:TwoRounds{a, b}` (domain.bend:330)
-    DomainPlanLengthTwoRounds,
-    /// `domain:plan.length:ThreeRounds{a, b, c}` (domain.bend:332)
-    DomainPlanLengthThreeRounds,
-    /// `domain:plan.round:OneRound{a} 0n` (domain.bend:337)
-    DomainPlanRoundOneRoundZero,
-    /// `domain:plan.round:TwoRounds{a, b} 0n` (domain.bend:339)
-    DomainPlanRoundTwoRoundsZero,
-    /// `domain:plan.round:TwoRounds{a, b} 1n` (domain.bend:341)
-    DomainPlanRoundTwoRoundsOne,
-    /// `domain:plan.round:ThreeRounds{a, b, c} 0n` (domain.bend:343)
-    DomainPlanRoundThreeRoundsZero,
-    /// `domain:plan.round:ThreeRounds{a, b, c} 1n` (domain.bend:345)
-    DomainPlanRoundThreeRoundsOne,
-    /// `domain:plan.round:ThreeRounds{a, b, c} 2n` (domain.bend:347)
-    DomainPlanRoundThreeRoundsTwo,
-    /// `domain:plan.round:_ _` (domain.bend:349)
-    DomainPlanRoundAny,
     /// `domain:table.deck:TwoSeats{}` (domain.bend:402)
     DomainTableDeckTwoSeats,
     /// `domain:table.deck:ThreeSeats{}` (domain.bend:404)
@@ -178,12 +44,6 @@ pub(crate) enum B {
     DomainPrizeTwo,
     /// `domain:prize:_` (domain.bend:438)
     DomainPrizeAny,
-    /// `domain:clamp:0n _` (domain.bend:571)
-    DomainClampZero,
-    /// `domain:clamp:1n+p 0n` (domain.bend:573)
-    DomainClampSuccZero,
-    /// `domain:clamp:1n+p 1n+t` (domain.bend:575)
-    DomainClampSuccSucc,
     /// `domain:damage.amount:Single{}` (domain.bend:812)
     DomainDamageAmountSingle,
     /// `domain:damage.amount:Double{}` (domain.bend:814)
@@ -526,10 +386,6 @@ pub(crate) enum B {
     SimplePointOptionMoveStealWith,
     /// `simple/point:option.move:T.StealJamWith{_, owner, _, target}` (simple/point.bend:146)
     SimplePointOptionMoveStealJamWith,
-    /// `simple/point:moves:Nil{}` (simple/point.bend:151)
-    SimplePointMovesNil,
-    /// `simple/point:moves:option <> rest` (simple/point.bend:153)
-    SimplePointMovesCons,
     /// `simple/point:choose:Nil{}` (simple/point.bend:158)
     SimplePointChooseNil,
     /// `simple/point:choose:move <> rest` (simple/point.bend:160)
@@ -542,12 +398,6 @@ pub(crate) enum B {
     SimplePointIdleRequestTrue,
     /// `simple/point:idle.request:False{}` (simple/point.bend:175)
     SimplePointIdleRequestFalse,
-    /// `simple/point:option.nth:Nil{} _` (simple/point.bend:180)
-    SimplePointOptionNthNil,
-    /// `simple/point:option.nth:option <> rest 0n` (simple/point.bend:182)
-    SimplePointOptionNthConsZero,
-    /// `simple/point:option.nth:option <> rest 1n+n` (simple/point.bend:184)
-    SimplePointOptionNthConsSucc,
     /// `simple/point:first.range:D.TwoSeats{}` (simple/point.bend:189)
     SimplePointFirstRangeTwoSeats,
     /// `simple/point:first.range:D.ThreeSeats{}` (simple/point.bend:191)
@@ -588,10 +438,6 @@ pub(crate) enum B {
     SimplePointPhaseRequestNeedItem,
     /// `simple/point:phase.request:T.NeedPhone{_, _, _}` (simple/point.bend:236)
     SimplePointPhaseRequestNeedPhone,
-    /// `simple/state:log.list:Empty{}` (simple/state.bend:55)
-    SimpleStateLogListEmpty,
-    /// `simple/state:log.list:Snoc{earlier, note}` (simple/state.bend:57)
-    SimpleStateLogListSnoc,
     /// `sm/items:keep:True{}` (sm/items.bend:12)
     SmItemsKeepTrue,
     /// `sm/items:keep:False{}` (sm/items.bend:14)
@@ -608,22 +454,6 @@ pub(crate) enum B {
     SmItemsHasSeatsNil,
     /// `sm/items:has_seats:x <> rest` (sm/items.bend:35)
     SmItemsHasSeatsCons,
-    /// `sm/items:slots.put:D.Slots{a, b, c, d, e, f, g, h} D.Slot0{}` (sm/items.bend:48)
-    SmItemsSlotsPutSlotsSlot0,
-    /// `sm/items:slots.put:D.Slots{a, b, c, d, e, f, g, h} D.Slot1{}` (sm/items.bend:50)
-    SmItemsSlotsPutSlotsSlot1,
-    /// `sm/items:slots.put:D.Slots{a, b, c, d, e, f, g, h} D.Slot2{}` (sm/items.bend:52)
-    SmItemsSlotsPutSlotsSlot2,
-    /// `sm/items:slots.put:D.Slots{a, b, c, d, e, f, g, h} D.Slot3{}` (sm/items.bend:54)
-    SmItemsSlotsPutSlotsSlot3,
-    /// `sm/items:slots.put:D.Slots{a, b, c, d, e, f, g, h} D.Slot4{}` (sm/items.bend:56)
-    SmItemsSlotsPutSlotsSlot4,
-    /// `sm/items:slots.put:D.Slots{a, b, c, d, e, f, g, h} D.Slot5{}` (sm/items.bend:58)
-    SmItemsSlotsPutSlotsSlot5,
-    /// `sm/items:slots.put:D.Slots{a, b, c, d, e, f, g, h} D.Slot6{}` (sm/items.bend:60)
-    SmItemsSlotsPutSlotsSlot6,
-    /// `sm/items:slots.put:D.Slots{a, b, c, d, e, f, g, h} D.Slot7{}` (sm/items.bend:62)
-    SmItemsSlotsPutSlotsSlot7,
     /// `sm/items:occupied:Nil{}` (sm/items.bend:67)
     SmItemsOccupiedNil,
     /// `sm/items:occupied:None{} <> rest` (sm/items.bend:69)
@@ -832,24 +662,6 @@ pub(crate) enum B {
     SmRulesJamRankEntriesNil,
     /// `sm/rules:jam_rank.entries:D.At{seat, jam} <> rest` (sm/rules.bend:140)
     SmRulesJamRankEntriesAtCons,
-    /// `sm/rules:nth:Nil{} _` (sm/rules.bend:148)
-    SmRulesNthNil,
-    /// `sm/rules:nth:x <> rest 0n` (sm/rules.bend:150)
-    SmRulesNthConsZero,
-    /// `sm/rules:nth:x <> rest 1n+n` (sm/rules.bend:152)
-    SmRulesNthConsSucc,
-    /// `sm/rules:replace:Nil{} _` (sm/rules.bend:157)
-    SmRulesReplaceNil,
-    /// `sm/rules:replace:x <> rest 0n` (sm/rules.bend:159)
-    SmRulesReplaceConsZero,
-    /// `sm/rules:replace:x <> rest 1n+n` (sm/rules.bend:161)
-    SmRulesReplaceConsSucc,
-    /// `sm/rules:remove:Nil{} _` (sm/rules.bend:166)
-    SmRulesRemoveNil,
-    /// `sm/rules:remove:x <> rest 0n` (sm/rules.bend:168)
-    SmRulesRemoveConsZero,
-    /// `sm/rules:remove:x <> rest 1n+n` (sm/rules.bend:170)
-    SmRulesRemoveConsSucc,
     /// `sm/rules:swap.found:Some{x} Some{y}` (sm/rules.bend:175)
     SmRulesSwapFoundSomeSome,
     /// `sm/rules:swap.found:_ _` (sm/rules.bend:177)
@@ -858,10 +670,6 @@ pub(crate) enum B {
     SmRulesPredecessorZero,
     /// `sm/rules:predecessor:1n+n` (sm/rules.bend:187)
     SmRulesPredecessorSucc,
-    /// `sm/rules:repeat:0n` (sm/rules.bend:192)
-    SmRulesRepeatZero,
-    /// `sm/rules:repeat:1n+n` (sm/rules.bend:194)
-    SmRulesRepeatSucc,
     /// `sm/rules:rules.load:D.LoadRules{a, _, _, _} 0n` (sm/rules.bend:204)
     SmRulesRulesLoadLoadRulesZero,
     /// `sm/rules:rules.load:D.LoadRules{_, b, _, _} 1n` (sm/rules.bend:206)
@@ -894,12 +702,6 @@ pub(crate) enum B {
     SmRulesRoundNextTrue,
     /// `sm/rules:round.next:False{}` (sm/rules.bend:270)
     SmRulesRoundNextFalse,
-    /// `sm/rules:subtract:0n _` (sm/rules.bend:280)
-    SmRulesSubtractZeroAny,
-    /// `sm/rules:subtract:left 0n` (sm/rules.bend:282)
-    SmRulesSubtractAnyZero,
-    /// `sm/rules:subtract:1n+left 1n+right` (sm/rules.bend:284)
-    SmRulesSubtractSuccSucc,
     /// `sm/rules:captured:False{}` (sm/rules.bend:289)
     SmRulesCapturedFalse,
     /// `sm/rules:captured:True{}` (sm/rules.bend:291)
@@ -922,52 +724,10 @@ pub(crate) enum B {
     SmRulesWinnerOnlyConsNil,
     /// `sm/rules:winner.only:_` (sm/rules.bend:321)
     SmRulesWinnerOnlyAny,
-    /// `sm/state:players.health:D.Duo{a, b}` (sm/state.bend:245)
-    SmStatePlayersHealthDuo,
-    /// `sm/state:players.health:D.Trio{a, b, c}` (sm/state.bend:247)
-    SmStatePlayersHealthTrio,
-    /// `sm/state:players.health:D.Quad{a, b, c, d}` (sm/state.bend:249)
-    SmStatePlayersHealthQuad,
-    /// `sm/state:players.jam:D.Duo{a, b}` (sm/state.bend:254)
-    SmStatePlayersJamDuo,
-    /// `sm/state:players.jam:D.Trio{a, b, c}` (sm/state.bend:256)
-    SmStatePlayersJamTrio,
-    /// `sm/state:players.jam:D.Quad{a, b, c, d}` (sm/state.bend:258)
-    SmStatePlayersJamQuad,
-    /// `sm/state:players.cash:D.Duo{a, b}` (sm/state.bend:263)
-    SmStatePlayersCashDuo,
-    /// `sm/state:players.cash:D.Trio{a, b, c}` (sm/state.bend:265)
-    SmStatePlayersCashTrio,
-    /// `sm/state:players.cash:D.Quad{a, b, c, d}` (sm/state.bend:267)
-    SmStatePlayersCashQuad,
-    /// `sm/state:players.slots:D.Duo{a, b}` (sm/state.bend:272)
-    SmStatePlayersSlotsDuo,
-    /// `sm/state:players.slots:D.Trio{a, b, c}` (sm/state.bend:274)
-    SmStatePlayersSlotsTrio,
-    /// `sm/state:players.slots:D.Quad{a, b, c, d}` (sm/state.bend:276)
-    SmStatePlayersSlotsQuad,
     /// `sm/state:seat.found:Some{seat}` (sm/state.bend:282)
     SmStateSeatFoundSome,
     /// `sm/state:seat.found:None{}` (sm/state.bend:284)
     SmStateSeatFoundNone,
-    /// `sm/state:players.reset:D.Duo{a, b}` (sm/state.bend:320)
-    SmStatePlayersResetDuo,
-    /// `sm/state:players.reset:D.Trio{a, b, c}` (sm/state.bend:322)
-    SmStatePlayersResetTrio,
-    /// `sm/state:players.reset:D.Quad{a, b, c, d}` (sm/state.bend:324)
-    SmStatePlayersResetQuad,
-    /// `sm/state:decks.get:Decks{a, _, _} D.TwoSeats{}` (sm/state.bend:419)
-    SmStateDecksGetDecksTwoSeats,
-    /// `sm/state:decks.get:Decks{_, b, _} D.ThreeSeats{}` (sm/state.bend:421)
-    SmStateDecksGetDecksThreeSeats,
-    /// `sm/state:decks.get:Decks{_, _, c} D.FourSeats{}` (sm/state.bend:423)
-    SmStateDecksGetDecksFourSeats,
-    /// `sm/state:decks.set:Decks{_, b, c} D.TwoSeats{}` (sm/state.bend:428)
-    SmStateDecksSetDecksTwoSeats,
-    /// `sm/state:decks.set:Decks{a, _, c} D.ThreeSeats{}` (sm/state.bend:430)
-    SmStateDecksSetDecksThreeSeats,
-    /// `sm/state:decks.set:Decks{a, b, _} D.FourSeats{}` (sm/state.bend:432)
-    SmStateDecksSetDecksFourSeats,
     /// `sm/state:jam.jammed:Free{}` (sm/state.bend:456)
     SmStateJamJammedFree,
     /// `sm/state:jam.jammed:_` (sm/state.bend:458)
@@ -979,78 +739,11 @@ impl B {
     /// The Bend branch, as `module:def:pattern`.
     pub(crate) const fn label(self) -> &'static str {
         match self {
-            Self::DomainSeatEqSeat0Seat0 => "domain:seat.eq:Seat0{} Seat0{}",
-            Self::DomainSeatEqSeat1Seat1 => "domain:seat.eq:Seat1{} Seat1{}",
-            Self::DomainSeatEqSeat2Seat2 => "domain:seat.eq:Seat2{} Seat2{}",
-            Self::DomainSeatEqSeat3Seat3 => "domain:seat.eq:Seat3{} Seat3{}",
-            Self::DomainSeatEqAny => "domain:seat.eq:_ _",
             Self::DomainTableSeatsTwoSeats => "domain:table.seats:TwoSeats{}",
             Self::DomainTableSeatsThreeSeats => "domain:table.seats:ThreeSeats{}",
             Self::DomainTableSeatsFourSeats => "domain:table.seats:FourSeats{}",
-            Self::DomainRingFillTwoSeats => "domain:ring.fill:TwoSeats{}",
-            Self::DomainRingFillThreeSeats => "domain:ring.fill:ThreeSeats{}",
-            Self::DomainRingFillFourSeats => "domain:ring.fill:FourSeats{}",
-            Self::DomainRingGetDuoSeat1 => "domain:ring.get:Duo{a, b} Seat1{}",
-            Self::DomainRingGetDuoSeat3 => "domain:ring.get:Duo{a, b} Seat3{}",
-            Self::DomainRingGetTrioSeat0 => "domain:ring.get:Trio{a, b, c} Seat0{}",
-            Self::DomainRingGetTrioSeat1 => "domain:ring.get:Trio{a, b, c} Seat1{}",
-            Self::DomainRingGetTrioSeat2 => "domain:ring.get:Trio{a, b, c} Seat2{}",
-            Self::DomainRingGetQuadSeat0 => "domain:ring.get:Quad{a, b, c, d} Seat0{}",
-            Self::DomainRingGetQuadSeat1 => "domain:ring.get:Quad{a, b, c, d} Seat1{}",
-            Self::DomainRingGetQuadSeat2 => "domain:ring.get:Quad{a, b, c, d} Seat2{}",
-            Self::DomainRingGetQuadSeat3 => "domain:ring.get:Quad{a, b, c, d} Seat3{}",
-            Self::DomainRingGetAny => "domain:ring.get:_ _",
-            Self::DomainRingSetDuoSeat1 => "domain:ring.set:Duo{a, b} Seat1{}",
-            Self::DomainRingSetDuoSeat3 => "domain:ring.set:Duo{a, b} Seat3{}",
-            Self::DomainRingSetTrioSeat0 => "domain:ring.set:Trio{a, b, c} Seat0{}",
-            Self::DomainRingSetTrioSeat1 => "domain:ring.set:Trio{a, b, c} Seat1{}",
-            Self::DomainRingSetTrioSeat2 => "domain:ring.set:Trio{a, b, c} Seat2{}",
-            Self::DomainRingSetQuadSeat0 => "domain:ring.set:Quad{a, b, c, d} Seat0{}",
-            Self::DomainRingSetQuadSeat1 => "domain:ring.set:Quad{a, b, c, d} Seat1{}",
-            Self::DomainRingSetQuadSeat2 => "domain:ring.set:Quad{a, b, c, d} Seat2{}",
-            Self::DomainRingSetQuadSeat3 => "domain:ring.set:Quad{a, b, c, d} Seat3{}",
-            Self::DomainRingSetAny => "domain:ring.set:ring _",
-            Self::DomainRingEntriesDuo => "domain:ring.entries:Duo{a, b}",
-            Self::DomainRingEntriesTrio => "domain:ring.entries:Trio{a, b, c}",
-            Self::DomainRingEntriesQuad => "domain:ring.entries:Quad{a, b, c, d}",
-            Self::DomainItemGodotIdSaw => "domain:item.godot_id:Saw{}",
-            Self::DomainItemGodotIdGlass => "domain:item.godot_id:Glass{}",
-            Self::DomainItemGodotIdJammer => "domain:item.godot_id:Jammer{}",
-            Self::DomainItemGodotIdCigarettes => "domain:item.godot_id:Cigarettes{}",
-            Self::DomainItemGodotIdBeer => "domain:item.godot_id:Beer{}",
-            Self::DomainItemGodotIdPhone => "domain:item.godot_id:Phone{}",
-            Self::DomainItemGodotIdInverter => "domain:item.godot_id:Inverter{}",
-            Self::DomainItemGodotIdAdrenaline => "domain:item.godot_id:Adrenaline{}",
-            Self::DomainItemGodotIdRemote => "domain:item.godot_id:Remote{}",
             Self::DomainItemDealtAtTwoSeatsRemote => "domain:item.dealt_at:TwoSeats{} Remote{}",
             Self::DomainItemDealtAtAny => "domain:item.dealt_at:_ _",
-            Self::DomainSlotsGetSlotsSlot0 => "domain:slots.get:Slots{a, b, c, d, e, f, g, h} Slot0{}",
-            Self::DomainSlotsGetSlotsSlot1 => "domain:slots.get:Slots{a, b, c, d, e, f, g, h} Slot1{}",
-            Self::DomainSlotsGetSlotsSlot2 => "domain:slots.get:Slots{a, b, c, d, e, f, g, h} Slot2{}",
-            Self::DomainSlotsGetSlotsSlot3 => "domain:slots.get:Slots{a, b, c, d, e, f, g, h} Slot3{}",
-            Self::DomainSlotsGetSlotsSlot4 => "domain:slots.get:Slots{a, b, c, d, e, f, g, h} Slot4{}",
-            Self::DomainSlotsGetSlotsSlot5 => "domain:slots.get:Slots{a, b, c, d, e, f, g, h} Slot5{}",
-            Self::DomainSlotsGetSlotsSlot6 => "domain:slots.get:Slots{a, b, c, d, e, f, g, h} Slot6{}",
-            Self::DomainSlotsGetSlotsSlot7 => "domain:slots.get:Slots{a, b, c, d, e, f, g, h} Slot7{}",
-            Self::DomainRulesItemItemRulesSaw => "domain:rules.item:ItemRules{a, b, c, d, e, f, g, h, i} Saw{}",
-            Self::DomainRulesItemItemRulesGlass => "domain:rules.item:ItemRules{a, b, c, d, e, f, g, h, i} Glass{}",
-            Self::DomainRulesItemItemRulesJammer => "domain:rules.item:ItemRules{a, b, c, d, e, f, g, h, i} Jammer{}",
-            Self::DomainRulesItemItemRulesCigarettes => "domain:rules.item:ItemRules{a, b, c, d, e, f, g, h, i} Cigarettes{}",
-            Self::DomainRulesItemItemRulesBeer => "domain:rules.item:ItemRules{a, b, c, d, e, f, g, h, i} Beer{}",
-            Self::DomainRulesItemItemRulesPhone => "domain:rules.item:ItemRules{a, b, c, d, e, f, g, h, i} Phone{}",
-            Self::DomainRulesItemItemRulesInverter => "domain:rules.item:ItemRules{a, b, c, d, e, f, g, h, i} Inverter{}",
-            Self::DomainRulesItemItemRulesAdrenaline => "domain:rules.item:ItemRules{a, b, c, d, e, f, g, h, i} Adrenaline{}",
-            Self::DomainRulesItemItemRulesRemote => "domain:rules.item:ItemRules{a, b, c, d, e, f, g, h, i} Remote{}",
-            Self::DomainPlanLengthOneRound => "domain:plan.length:OneRound{a}",
-            Self::DomainPlanLengthTwoRounds => "domain:plan.length:TwoRounds{a, b}",
-            Self::DomainPlanLengthThreeRounds => "domain:plan.length:ThreeRounds{a, b, c}",
-            Self::DomainPlanRoundOneRoundZero => "domain:plan.round:OneRound{a} 0n",
-            Self::DomainPlanRoundTwoRoundsZero => "domain:plan.round:TwoRounds{a, b} 0n",
-            Self::DomainPlanRoundTwoRoundsOne => "domain:plan.round:TwoRounds{a, b} 1n",
-            Self::DomainPlanRoundThreeRoundsZero => "domain:plan.round:ThreeRounds{a, b, c} 0n",
-            Self::DomainPlanRoundThreeRoundsOne => "domain:plan.round:ThreeRounds{a, b, c} 1n",
-            Self::DomainPlanRoundThreeRoundsTwo => "domain:plan.round:ThreeRounds{a, b, c} 2n",
-            Self::DomainPlanRoundAny => "domain:plan.round:_ _",
             Self::DomainTableDeckTwoSeats => "domain:table.deck:TwoSeats{}",
             Self::DomainTableDeckThreeSeats => "domain:table.deck:ThreeSeats{}",
             Self::DomainTableDeckFourSeats => "domain:table.deck:FourSeats{}",
@@ -1064,9 +757,6 @@ impl B {
             Self::DomainPrizeOne => "domain:prize:1n",
             Self::DomainPrizeTwo => "domain:prize:2n",
             Self::DomainPrizeAny => "domain:prize:_",
-            Self::DomainClampZero => "domain:clamp:0n _",
-            Self::DomainClampSuccZero => "domain:clamp:1n+p 0n",
-            Self::DomainClampSuccSucc => "domain:clamp:1n+p 1n+t",
             Self::DomainDamageAmountSingle => "domain:damage.amount:Single{}",
             Self::DomainDamageAmountDouble => "domain:damage.amount:Double{}",
             Self::SimpleMainGrantStepAct => "simple/main:grant.step:rank S.Act{players}",
@@ -1238,17 +928,12 @@ impl B {
             Self::SimplePointOptionMoveJamWith => "simple/point:option.move:T.JamWith{_, target}",
             Self::SimplePointOptionMoveStealWith => "simple/point:option.move:T.StealWith{_, owner, _, item}",
             Self::SimplePointOptionMoveStealJamWith => "simple/point:option.move:T.StealJamWith{_, owner, _, target}",
-            Self::SimplePointMovesNil => "simple/point:moves:Nil{}",
-            Self::SimplePointMovesCons => "simple/point:moves:option <> rest",
             Self::SimplePointChooseNil => "simple/point:choose:Nil{}",
             Self::SimplePointChooseCons => "simple/point:choose:move <> rest",
             Self::SimplePointSeatedSome => "simple/point:seated:Some{_}",
             Self::SimplePointSeatedNone => "simple/point:seated:None{}",
             Self::SimplePointIdleRequestTrue => "simple/point:idle.request:True{}",
             Self::SimplePointIdleRequestFalse => "simple/point:idle.request:False{}",
-            Self::SimplePointOptionNthNil => "simple/point:option.nth:Nil{} _",
-            Self::SimplePointOptionNthConsZero => "simple/point:option.nth:option <> rest 0n",
-            Self::SimplePointOptionNthConsSucc => "simple/point:option.nth:option <> rest 1n+n",
             Self::SimplePointFirstRangeTwoSeats => "simple/point:first.range:D.TwoSeats{}",
             Self::SimplePointFirstRangeThreeSeats => "simple/point:first.range:D.ThreeSeats{}",
             Self::SimplePointFirstRangeFourSeats => "simple/point:first.range:D.FourSeats{}",
@@ -1269,8 +954,6 @@ impl B {
             Self::SimplePointPhaseRequestNeedTurnAmount => "simple/point:phase.request:T.NeedTurnAmount{_, _, _}",
             Self::SimplePointPhaseRequestNeedItem => "simple/point:phase.request:T.NeedItem{_, _, _, rest}",
             Self::SimplePointPhaseRequestNeedPhone => "simple/point:phase.request:T.NeedPhone{_, _, _}",
-            Self::SimpleStateLogListEmpty => "simple/state:log.list:Empty{}",
-            Self::SimpleStateLogListSnoc => "simple/state:log.list:Snoc{earlier, note}",
             Self::SmItemsKeepTrue => "sm/items:keep:True{}",
             Self::SmItemsKeepFalse => "sm/items:keep:False{}",
             Self::SmItemsIsNoneNone => "sm/items:is_none:None{}",
@@ -1279,14 +962,6 @@ impl B {
             Self::SmItemsHasItemsCons => "sm/items:has_items:x <> rest",
             Self::SmItemsHasSeatsNil => "sm/items:has_seats:Nil{}",
             Self::SmItemsHasSeatsCons => "sm/items:has_seats:x <> rest",
-            Self::SmItemsSlotsPutSlotsSlot0 => "sm/items:slots.put:D.Slots{a, b, c, d, e, f, g, h} D.Slot0{}",
-            Self::SmItemsSlotsPutSlotsSlot1 => "sm/items:slots.put:D.Slots{a, b, c, d, e, f, g, h} D.Slot1{}",
-            Self::SmItemsSlotsPutSlotsSlot2 => "sm/items:slots.put:D.Slots{a, b, c, d, e, f, g, h} D.Slot2{}",
-            Self::SmItemsSlotsPutSlotsSlot3 => "sm/items:slots.put:D.Slots{a, b, c, d, e, f, g, h} D.Slot3{}",
-            Self::SmItemsSlotsPutSlotsSlot4 => "sm/items:slots.put:D.Slots{a, b, c, d, e, f, g, h} D.Slot4{}",
-            Self::SmItemsSlotsPutSlotsSlot5 => "sm/items:slots.put:D.Slots{a, b, c, d, e, f, g, h} D.Slot5{}",
-            Self::SmItemsSlotsPutSlotsSlot6 => "sm/items:slots.put:D.Slots{a, b, c, d, e, f, g, h} D.Slot6{}",
-            Self::SmItemsSlotsPutSlotsSlot7 => "sm/items:slots.put:D.Slots{a, b, c, d, e, f, g, h} D.Slot7{}",
             Self::SmItemsOccupiedNil => "sm/items:occupied:Nil{}",
             Self::SmItemsOccupiedNoneCons => "sm/items:occupied:None{} <> rest",
             Self::SmItemsOccupiedSomeCons => "sm/items:occupied:Some{item} <> rest",
@@ -1391,21 +1066,10 @@ impl B {
             Self::SmRulesJamRankBitAny => "sm/rules:jam_rank.bit:_",
             Self::SmRulesJamRankEntriesNil => "sm/rules:jam_rank.entries:Nil{}",
             Self::SmRulesJamRankEntriesAtCons => "sm/rules:jam_rank.entries:D.At{seat, jam} <> rest",
-            Self::SmRulesNthNil => "sm/rules:nth:Nil{} _",
-            Self::SmRulesNthConsZero => "sm/rules:nth:x <> rest 0n",
-            Self::SmRulesNthConsSucc => "sm/rules:nth:x <> rest 1n+n",
-            Self::SmRulesReplaceNil => "sm/rules:replace:Nil{} _",
-            Self::SmRulesReplaceConsZero => "sm/rules:replace:x <> rest 0n",
-            Self::SmRulesReplaceConsSucc => "sm/rules:replace:x <> rest 1n+n",
-            Self::SmRulesRemoveNil => "sm/rules:remove:Nil{} _",
-            Self::SmRulesRemoveConsZero => "sm/rules:remove:x <> rest 0n",
-            Self::SmRulesRemoveConsSucc => "sm/rules:remove:x <> rest 1n+n",
             Self::SmRulesSwapFoundSomeSome => "sm/rules:swap.found:Some{x} Some{y}",
             Self::SmRulesSwapFoundAny => "sm/rules:swap.found:_ _",
             Self::SmRulesPredecessorZero => "sm/rules:predecessor:0n",
             Self::SmRulesPredecessorSucc => "sm/rules:predecessor:1n+n",
-            Self::SmRulesRepeatZero => "sm/rules:repeat:0n",
-            Self::SmRulesRepeatSucc => "sm/rules:repeat:1n+n",
             Self::SmRulesRulesLoadLoadRulesZero => "sm/rules:rules.load:D.LoadRules{a, _, _, _} 0n",
             Self::SmRulesRulesLoadLoadRulesOne => "sm/rules:rules.load:D.LoadRules{_, b, _, _} 1n",
             Self::SmRulesRulesLoadLoadRulesTwo => "sm/rules:rules.load:D.LoadRules{_, _, c, _} 2n",
@@ -1422,9 +1086,6 @@ impl B {
             Self::SmRulesLoadNextFalse => "sm/rules:load.next:False{} _",
             Self::SmRulesRoundNextTrue => "sm/rules:round.next:True{}",
             Self::SmRulesRoundNextFalse => "sm/rules:round.next:False{}",
-            Self::SmRulesSubtractZeroAny => "sm/rules:subtract:0n _",
-            Self::SmRulesSubtractAnyZero => "sm/rules:subtract:left 0n",
-            Self::SmRulesSubtractSuccSucc => "sm/rules:subtract:1n+left 1n+right",
             Self::SmRulesCapturedFalse => "sm/rules:captured:False{}",
             Self::SmRulesCapturedTrue => "sm/rules:captured:True{}",
             Self::SmRulesShotHealthBlank => "sm/rules:shot.health:D.Blank{}",
@@ -1436,29 +1097,8 @@ impl B {
             Self::SmRulesLivingAtSuccCons => "sm/rules:living:D.At{seat, 1n+hp} <> rest",
             Self::SmRulesWinnerOnlyConsNil => "sm/rules:winner.only:seat <> Nil{}",
             Self::SmRulesWinnerOnlyAny => "sm/rules:winner.only:_",
-            Self::SmStatePlayersHealthDuo => "sm/state:players.health:D.Duo{a, b}",
-            Self::SmStatePlayersHealthTrio => "sm/state:players.health:D.Trio{a, b, c}",
-            Self::SmStatePlayersHealthQuad => "sm/state:players.health:D.Quad{a, b, c, d}",
-            Self::SmStatePlayersJamDuo => "sm/state:players.jam:D.Duo{a, b}",
-            Self::SmStatePlayersJamTrio => "sm/state:players.jam:D.Trio{a, b, c}",
-            Self::SmStatePlayersJamQuad => "sm/state:players.jam:D.Quad{a, b, c, d}",
-            Self::SmStatePlayersCashDuo => "sm/state:players.cash:D.Duo{a, b}",
-            Self::SmStatePlayersCashTrio => "sm/state:players.cash:D.Trio{a, b, c}",
-            Self::SmStatePlayersCashQuad => "sm/state:players.cash:D.Quad{a, b, c, d}",
-            Self::SmStatePlayersSlotsDuo => "sm/state:players.slots:D.Duo{a, b}",
-            Self::SmStatePlayersSlotsTrio => "sm/state:players.slots:D.Trio{a, b, c}",
-            Self::SmStatePlayersSlotsQuad => "sm/state:players.slots:D.Quad{a, b, c, d}",
             Self::SmStateSeatFoundSome => "sm/state:seat.found:Some{seat}",
             Self::SmStateSeatFoundNone => "sm/state:seat.found:None{}",
-            Self::SmStatePlayersResetDuo => "sm/state:players.reset:D.Duo{a, b}",
-            Self::SmStatePlayersResetTrio => "sm/state:players.reset:D.Trio{a, b, c}",
-            Self::SmStatePlayersResetQuad => "sm/state:players.reset:D.Quad{a, b, c, d}",
-            Self::SmStateDecksGetDecksTwoSeats => "sm/state:decks.get:Decks{a, _, _} D.TwoSeats{}",
-            Self::SmStateDecksGetDecksThreeSeats => "sm/state:decks.get:Decks{_, b, _} D.ThreeSeats{}",
-            Self::SmStateDecksGetDecksFourSeats => "sm/state:decks.get:Decks{_, _, c} D.FourSeats{}",
-            Self::SmStateDecksSetDecksTwoSeats => "sm/state:decks.set:Decks{_, b, c} D.TwoSeats{}",
-            Self::SmStateDecksSetDecksThreeSeats => "sm/state:decks.set:Decks{a, _, c} D.ThreeSeats{}",
-            Self::SmStateDecksSetDecksFourSeats => "sm/state:decks.set:Decks{a, b, _} D.FourSeats{}",
             Self::SmStateJamJammedFree => "sm/state:jam.jammed:Free{}",
             Self::SmStateJamJammedAny => "sm/state:jam.jammed:_",
         }

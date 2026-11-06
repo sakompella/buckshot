@@ -105,6 +105,26 @@ fn leading(block: &Block) -> Vec<(At, String)> {
     block.stmts.iter().map_while(stmt_branch).collect()
 }
 
+/// The block of an `if` without `else` (true) or of a loop (false), with its line.
+fn fallthrough_body(expr: &Expr) -> Option<(&Block, usize, bool)> {
+    if let Expr::If(node) = expr {
+        return node
+            .else_branch
+            .is_none()
+            .then(|| (&node.then_branch, at(node.if_token.span).0, true));
+    }
+    if let Expr::ForLoop(node) = expr {
+        return Some((&node.body, at(node.for_token.span).0, false));
+    }
+    if let Expr::While(node) = expr {
+        return Some((&node.body, at(node.while_token.span).0, false));
+    }
+    if let Expr::Loop(node) = expr {
+        return Some((&node.body, at(node.loop_token.span).0, false));
+    }
+    None
+}
+
 fn diverges(block: &Block) -> bool {
     matches!(block.stmts.last(), Some(Stmt::Expr(Expr::Return(_), _)))
 }
@@ -112,7 +132,17 @@ fn diverges(block: &Block) -> bool {
 fn text(tokens: &impl ToTokens) -> String {
     let raw = tokens.to_token_stream().to_string();
     let mut out = raw;
-    for (from, to) in [(" (", "("), ("( ", "("), (" )", ")"), (" .", "."), (". ", "."), (" ,", ","), ("! ", "!"), (" :: ", "::"), ("& ", "&")] {
+    for (from, to) in [
+        (" (", "("),
+        ("( ", "("),
+        (" )", ")"),
+        (" .", "."),
+        (". ", "."),
+        (" ,", ","),
+        ("! ", "!"),
+        (" :: ", "::"),
+        ("& ", "&"),
+    ] {
         out = out.replace(from, to);
     }
     out
@@ -147,7 +177,7 @@ impl Walker<'_> {
         }
     }
 
-    fn unlabelled(&mut self, kind: &str, expr: String, line: usize) {
+    fn unlabelled(&mut self, kind: &str, expr: &str, line: usize) {
         let base = format!("{}:{}:{kind} {expr}", self.file, self.names.join("::"));
         let n = self.keys.entry(base.clone()).or_insert(0);
         *n = n.saturating_add(1);
@@ -158,16 +188,17 @@ impl Walker<'_> {
     fn if_chain(node: &ExprIf) -> (Vec<&Block>, Option<&Block>) {
         let mut blocks = vec![&node.then_branch];
         let mut current = node;
-        loop {
-            match current.else_branch.as_ref().map(|(_, e)| e.as_ref()) {
-                Some(Expr::If(next)) => {
-                    blocks.push(&next.then_branch);
-                    current = next;
-                }
-                Some(Expr::Block(last)) => return (blocks, Some(&last.block)),
-                Some(_) | None => return (blocks, None),
+        while let Some((_, rest)) = current.else_branch.as_ref() {
+            if let Expr::If(next) = rest.as_ref() {
+                blocks.push(&next.then_branch);
+                current = next;
+            } else if let Expr::Block(last) = rest.as_ref() {
+                return (blocks, Some(&last.block));
+            } else {
+                break;
             }
         }
+        (blocks, None)
     }
 
     /// Handles the no-`else` `if` and loop forms, whose fallthrough label is the next statement.
@@ -175,12 +206,8 @@ impl Walker<'_> {
         for (index, stmt) in stmts.iter().enumerate() {
             let next = stmts.get(index.saturating_add(1)).and_then(stmt_branch);
             let Stmt::Expr(expr, _) = stmt else { continue };
-            let (body, line, is_if) = match expr {
-                Expr::If(node) if node.else_branch.is_none() => (&node.then_branch, at(node.if_token.span).0, true),
-                Expr::ForLoop(node) => (&node.body, at(node.for_token.span).0, false),
-                Expr::While(node) => (&node.body, at(node.while_token.span).0, false),
-                Expr::Loop(node) => (&node.body, at(node.loop_token.span).0, false),
-                _ => continue,
+            let Some((body, line, is_if)) = fallthrough_body(expr) else {
+                continue;
             };
             if leading(body).is_empty() {
                 continue;
@@ -206,7 +233,7 @@ impl Walker<'_> {
         }
     }
 
-    fn loop_body(&mut self, kind: &str, head: String, body: &Block, line: usize) {
+    fn loop_body(&mut self, kind: &str, head: &str, body: &Block, line: usize) {
         if leading(body).is_empty() {
             self.unlabelled(kind, head, line);
         }
@@ -221,9 +248,10 @@ impl<'ast> Visit<'ast> for Walker<'_> {
     }
 
     fn visit_item_impl(&mut self, node: &'ast syn::ItemImpl) {
-        let name = match node.self_ty.as_ref() {
-            syn::Type::Path(path) => path.path.segments.last().map_or_else(String::new, |s| s.ident.to_string()),
-            other => text(other),
+        let name = if let syn::Type::Path(path) = node.self_ty.as_ref() {
+            path.path.segments.last().map_or_else(String::new, |s| s.ident.to_string())
+        } else {
+            text(&node.self_ty)
         };
         self.names.push(name);
         visit::visit_item_impl(self, node);
@@ -246,7 +274,8 @@ impl<'ast> Visit<'ast> for Walker<'_> {
 
     fn visit_macro(&mut self, node: &'ast Macro) {
         if let Some(variant) = branch_variant(node) {
-            self.seen.push((at(node.path.get_ident().map_or_else(Span::call_site, syn::Ident::span)), variant));
+            self.seen
+                .push((at(node.path.get_ident().map_or_else(Span::call_site, syn::Ident::span)), variant));
         }
         visit::visit_macro(self, node);
     }
@@ -262,9 +291,10 @@ impl<'ast> Visit<'ast> for Walker<'_> {
         let mut bare = Vec::new();
         for arm in &node.arms {
             let arm_line = at(arm.fat_arrow_token.spans[0]).0;
-            let is_labelled = match arm.body.as_ref() {
-                Expr::Block(block) => self.label(&block.block, arm_line),
-                _ => false,
+            let is_labelled = if let Expr::Block(block) = arm.body.as_ref() {
+                self.label(&block.block, arm_line)
+            } else {
+                false
             };
             if is_labelled {
                 labelled = labelled.saturating_add(1);
@@ -273,7 +303,7 @@ impl<'ast> Visit<'ast> for Walker<'_> {
             }
         }
         if labelled == 0 {
-            self.unlabelled("match", text(&node.expr), line);
+            self.unlabelled("match", &text(&node.expr), line);
         } else if !bare.is_empty() {
             self.error(line, &format!("match arms without branch! at lines {bare:?}"));
         }
@@ -286,7 +316,7 @@ impl<'ast> Visit<'ast> for Walker<'_> {
             let (blocks, last) = Self::if_chain(node);
             let labels: Vec<bool> = blocks.iter().chain(last.iter()).map(|b| !leading(b).is_empty()).collect();
             if labels.iter().all(|l| !l) {
-                self.unlabelled("if", text(&node.cond), line);
+                self.unlabelled("if", &text(&node.cond), line);
             } else if labels.iter().any(|l| !l) || last.is_none() {
                 self.error(line, "an if chain with branch! needs it in every block, a final else included");
             } else {
@@ -300,33 +330,30 @@ impl<'ast> Visit<'ast> for Walker<'_> {
         self.visit_block(&node.then_branch);
         let mut rest = node.else_branch.as_ref().map(|(_, e)| e.as_ref());
         while let Some(expr) = rest {
-            match expr {
-                Expr::If(next) => {
-                    self.visit_expr(&next.cond);
-                    self.visit_block(&next.then_branch);
-                    rest = next.else_branch.as_ref().map(|(_, e)| e.as_ref());
-                }
-                other => {
-                    self.visit_expr(other);
-                    rest = None;
-                }
+            if let Expr::If(next) = expr {
+                self.visit_expr(&next.cond);
+                self.visit_block(&next.then_branch);
+                rest = next.else_branch.as_ref().map(|(_, e)| e.as_ref());
+            } else {
+                self.visit_expr(expr);
+                rest = None;
             }
         }
     }
 
     fn visit_expr_for_loop(&mut self, node: &'ast syn::ExprForLoop) {
         let head = format!("{} in {}", text(&node.pat), text(&node.expr));
-        self.loop_body("for", head, &node.body, at(node.for_token.span).0);
+        self.loop_body("for", &head, &node.body, at(node.for_token.span).0);
         visit::visit_expr_for_loop(self, node);
     }
 
     fn visit_expr_while(&mut self, node: &'ast syn::ExprWhile) {
-        self.loop_body("while", text(&node.cond), &node.body, at(node.while_token.span).0);
+        self.loop_body("while", &text(&node.cond), &node.body, at(node.while_token.span).0);
         visit::visit_expr_while(self, node);
     }
 
     fn visit_expr_loop(&mut self, node: &'ast syn::ExprLoop) {
-        self.loop_body("loop", String::new(), &node.body, at(node.loop_token.span).0);
+        self.loop_body("loop", "", &node.body, at(node.loop_token.span).0);
         visit::visit_expr_loop(self, node);
     }
 }

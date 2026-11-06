@@ -100,7 +100,10 @@ fn parse_module(name: &str, source: String) -> Result<Module> {
         if let Some(rest) = line.strip_prefix("def ") {
             defs.extend(current.take());
             let def_name = rest.split('(').next().unwrap_or_default().trim().to_owned();
-            current = Some(Def { name: def_name, body: Vec::new() });
+            current = Some(Def {
+                name: def_name,
+                body: Vec::new(),
+            });
             continue;
         }
         if !line.is_empty() && !line.starts_with(char::is_whitespace) {
@@ -148,7 +151,9 @@ fn references(modules: &[Module], module: &Module, def: &Def) -> Vec<(String, St
     for (_, line) in &def.body {
         for word in words(code(line)) {
             let target = match word.split_once('.') {
-                Some((alias, rest)) if module.aliases.contains_key(alias) => module.aliases.get(alias).map(|m| (m.clone(), rest.to_owned())),
+                Some((alias, rest)) if module.aliases.contains_key(alias) => {
+                    module.aliases.get(alias).map(|m| (m.clone(), rest.to_owned()))
+                }
                 _ => Some((module.name.clone(), word.to_owned())),
             };
             if let Some((m, name)) = target
@@ -176,7 +181,11 @@ fn reachable(modules: &[Module]) -> Result<BTreeSet<(String, String)>> {
             continue;
         }
         let module = modules.iter().find(|m| m.name == module_name).context("module")?;
-        let def = module.defs.iter().find(|d| d.name == def_name).with_context(|| format!("no def {module_name}:{def_name}"))?;
+        let def = module
+            .defs
+            .iter()
+            .find(|d| d.name == def_name)
+            .with_context(|| format!("no def {module_name}:{def_name}"))?;
         queue.extend(references(modules, module, def));
     }
     Ok(seen)
@@ -272,7 +281,13 @@ fn case_names(patterns: &[&str]) -> Vec<String> {
     plain
         .iter()
         .zip(patterns)
-        .map(|(n, p)| if plain.iter().filter(|other| *other == n).count() > 1 { name(p, true) } else { n.clone() })
+        .map(|(n, p)| {
+            if plain.iter().filter(|other| *other == n).count() > 1 {
+                name(p, true)
+            } else {
+                n.clone()
+            }
+        })
         .collect()
 }
 
@@ -281,7 +296,11 @@ fn name(pattern: &str, any_vars: bool) -> String {
         .iter()
         .flat_map(|scrutinee| {
             let words = cons_words(&scrutinee.replace('\u{0}', " <> "));
-            if words.is_empty() && any_vars { vec!["Any".to_owned()] } else { words }
+            if words.is_empty() && any_vars {
+                vec!["Any".to_owned()]
+            } else {
+                words
+            }
         })
         .collect();
     if words.is_empty() { "Any".to_owned() } else { words.concat() }

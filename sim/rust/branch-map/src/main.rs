@@ -72,23 +72,32 @@ fn run() -> Result<bool> {
         other => bail!("usage: branch-map write|check|list (got {other:?})"),
     }
     if std::fs::read_to_string(paths.ids()).ok().as_deref() != Some(ids.as_str()) {
-        errors.push("rules/src/branch/ids.rs is stale: the Bend rules changed; run `cargo run -p branch-map -- write`, then make Rust match".to_owned());
+        errors.push(
+            "rules/src/branch/ids.rs is stale: the Bend rules changed; run `cargo run -p branch-map -- write`, then make Rust match"
+                .to_owned(),
+        );
     }
     let report = check_rust(&paths.rules.join("src"))?;
     errors.extend(report.errors.iter().cloned());
-    let mut uses: BTreeMap<&str, Vec<String>> = sites.iter().map(|s| (s.variant.as_str(), Vec::new())).collect();
+    let mut rust_sites: BTreeMap<&str, Vec<String>> = sites.iter().map(|s| (s.variant.as_str(), Vec::new())).collect();
     for u in &report.uses {
-        match uses.get_mut(u.variant.as_str()) {
+        match rust_sites.get_mut(u.variant.as_str()) {
             Some(at) => at.push(format!("{}:{}", u.file, u.line)),
             None => errors.push(format!("{}:{}: branch!({}) is not a Bend branch", u.file, u.line, u.variant)),
         }
     }
     for site in &sites {
         let expected = map.sites.get(&site.variant).map_or(1, |s| s.count);
-        let found = uses.get(site.variant.as_str()).map_or(0, Vec::len);
+        let found = rust_sites.get(site.variant.as_str()).map_or(0, Vec::len);
         if found != expected {
-            let at = uses.get(site.variant.as_str()).map(|a| a.join(", ")).unwrap_or_default();
-            errors.push(format!("{} (`{}`, {}.bend:{}): {found} Rust sites, expected {expected} [{at}]", site.variant, site.label(), site.module, site.line));
+            let at = rust_sites.get(site.variant.as_str()).map(|a| a.join(", ")).unwrap_or_default();
+            errors.push(format!(
+                "{} (`{}`, {}.bend:{}): {found} Rust sites, expected {expected} [{at}]",
+                site.variant,
+                site.label(),
+                site.module,
+                site.line
+            ));
         }
     }
     for (variant, entry) in &map.sites {
@@ -101,11 +110,25 @@ fn run() -> Result<bool> {
     }
     let mut used = BTreeMap::new();
     for u in &report.unlabelled {
-        let fn_key = u.key.split_once(' ').map_or(u.key.as_str(), |(head, _)| head).rsplit_once(':').map_or("", |(f, _)| f);
-        let file_key = u.key.split(':').next().unwrap_or_default();
-        match [u.key.as_str(), fn_key, file_key].into_iter().find(|k| map.rust_only.contains_key(*k)) {
-            Some(k) => *used.entry(k.to_owned()).or_insert(0_usize) += 1,
-            None => errors.push(format!("{} (line {}): Rust control flow with no branch! and no rust_only entry", u.key, u.line)),
+        let in_fn = u
+            .key
+            .split_once(' ')
+            .map_or(u.key.as_str(), |(head, _)| head)
+            .rsplit_once(':')
+            .map_or("", |(f, _)| f);
+        let in_file = u.key.split(':').next().unwrap_or_default();
+        match [u.key.as_str(), in_fn, in_file]
+            .into_iter()
+            .find(|k| map.rust_only.contains_key(*k))
+        {
+            Some(k) => {
+                let n = used.entry(k.to_owned()).or_insert(0_usize);
+                *n = n.saturating_add(1);
+            }
+            None => errors.push(format!(
+                "{} (line {}): Rust control flow with no branch! and no rust_only entry",
+                u.key, u.line
+            )),
         }
     }
     for key in map.rust_only.keys() {
@@ -115,7 +138,7 @@ fn run() -> Result<bool> {
     }
     if command == "list" {
         for site in &sites {
-            let at = uses.get(site.variant.as_str()).map(|a| a.join(" ")).unwrap_or_default();
+            let at = rust_sites.get(site.variant.as_str()).map(|a| a.join(" ")).unwrap_or_default();
             println!("{}\t{}.bend:{}\t{}\t{at}", site.label(), site.module, site.line, site.variant);
         }
         for (def, reason) in &map.exempt {
