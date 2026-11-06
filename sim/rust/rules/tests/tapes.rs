@@ -13,8 +13,10 @@
 //! With the `trace` feature (`cargo trace-test`) each tape also needs a
 //! `<tape>.trace` from `bend-trace.mjs`: the Bend branches each call took, one
 //! row per tape line. They are compared with the branches Rust took, as counts
-//! per label: Bend binds before it enters an arm, so the order differs.
+//! per label. Bend is strict and also counts branches of work it discards, so the test is
+//! that every branch Rust takes in a call, Bend takes too; the counts are reported.
 
+use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fmt::Debug;
 use std::fs::File;
@@ -376,6 +378,9 @@ struct Trace {
     rust: BTreeSet<&'static str>,
     calls: usize,
     differing: usize,
+    excess: u64,
+    untraced: BTreeSet<String>,
+    untimed: BTreeSet<String>,
     examples: Vec<String>,
     labels: BTreeMap<String, usize>,
 }
@@ -387,8 +392,26 @@ impl Trace {
         }
         let path = format!("{}.trace", tape.display());
         let file = File::open(&path).map_err(|e| format!("{path}: {e}"))?;
+        let untimed_path = tape.with_file_name("traced").join("untimed.json");
+        let untimed: Vec<String> = std::fs::read_to_string(&untimed_path)
+            .map_err(|e| format!("{}: {e}", untimed_path.display()))
+            .and_then(|text| serde_json::from_str(&text).map_err(|e| format!("{}: {e}", untimed_path.display())))?;
+        let mut rows = BufReader::new(file).lines();
+        let header = rows
+            .next()
+            .ok_or_else(|| format!("{path} is empty"))?
+            .map_err(|e| format!("{path}: {e}"))?;
+        let header: Value = serde_json::from_str(&header).map_err(|e| format!("{path}: {e}"))?;
+        let untraced = get(&header, "untraced")
+            .as_array()
+            .ok_or_else(|| format!("{path}: the first line is not an untraced header"))?
+            .iter()
+            .filter_map(|label| label.as_str().map(str::to_owned))
+            .collect();
         Ok(Self {
-            rows: Some(BufReader::new(file).lines()),
+            rows: Some(rows),
+            untraced,
+            untimed: untimed.into_iter().collect(),
             ..Self::default()
         })
     }
@@ -436,22 +459,27 @@ impl Trace {
         self.bend.extend(bend.keys().cloned());
         self.rust.extend(rust.iter().copied());
         bump(&mut self.calls);
-        let differing: Vec<(&str, u64, u64)> = counts
-            .iter()
-            .filter(|(_, (rust_count, bend_count))| rust_count != bend_count)
-            .map(|(label, (rust_count, bend_count))| (*label, *bend_count, *rust_count))
-            .collect();
-        if !differing.is_empty() {
+        let mut over = Vec::new();
+        for (label, (rust_count, bend_count)) in &counts {
+            if self.untraced.contains(*label) || self.untimed.contains(*label) {
+                continue;
+            }
+            match rust_count.cmp(bend_count) {
+                Ordering::Greater if *bend_count == 0 => over.push((*label, format!("{label} rust {rust_count} bend 0"))),
+                Ordering::Greater | Ordering::Equal => {}
+                Ordering::Less => self.excess = self.excess.saturating_add(bend_count.saturating_sub(*rust_count)),
+            }
+        }
+        if !over.is_empty() {
             bump(&mut self.differing);
-            for (label, _, _) in &differing {
+            for (label, _) in &over {
                 bump(self.labels.entry(format!("{call} {label}")).or_default());
             }
             if self.examples.len() < 3 {
-                let labels: Vec<String> = differing
-                    .iter()
-                    .map(|(label, bend_count, rust_count)| format!("{label} bend {bend_count} rust {rust_count}"))
-                    .collect();
-                self.examples.push(format!("{at} {call} branches differ: {}", labels.join("; ")));
+                self.examples.push(format!(
+                    "{at} {call} Rust takes a branch Bend does not: {}",
+                    over.iter().map(|(_, text)| text.as_str()).collect::<Vec<_>>().join("; ")
+                ));
             }
         }
         Ok(())
@@ -463,9 +491,9 @@ impl Trace {
         }
         let mut labels: Vec<(&String, &usize)> = self.labels.iter().collect();
         labels.sort_by(|a, b| b.1.cmp(a.1));
-        let top: Vec<String> = labels.iter().take(8).map(|(label, n)| format!("{label} ({n})")).collect();
+        let top: Vec<String> = labels.iter().take(40).map(|(label, n)| format!("{label} ({n})")).collect();
         Some(format!(
-            "trace: {} of {} calls take different branch counts; most often {}; first {:?}",
+            "trace: Rust takes a branch Bend does not in {} of {} calls; most often {}; first {:?}",
             self.differing,
             self.calls,
             top.join(", "),
@@ -670,10 +698,13 @@ fn tapes_match_bend() {
     let mut failed = false;
     let (mut games, mut capped, mut matched) = (0, 0, 0);
     let (mut bend_labels, mut rust_labels) = (BTreeSet::new(), BTreeSet::<&str>::new());
+    let (mut untraced, mut excess) = (BTreeSet::new(), 0_u64);
     for path in paths {
         let mut tally = Tally::default();
         let replayed = Trace::open(&path).and_then(|mut trace| {
             replay(&path, &mut tally, &mut trace)?;
+            untraced.extend(trace.untraced.iter().cloned());
+            excess = excess.saturating_add(trace.excess);
             bend_labels.extend(trace.bend.iter().cloned());
             rust_labels.extend(trace.rust.iter().copied());
             tally.problems.extend(trace.summary());
@@ -704,10 +735,19 @@ fn tapes_match_bend() {
     }
     println!("total: {games} games ({capped} capped), {matched} genuine Bend steps compared");
     if cfg!(feature = "trace") {
+        let every: Vec<String> = std::fs::read_to_string(format!("{dir}/traced/labels.json"))
+            .ok()
+            .and_then(|text| serde_json::from_str(&text).ok())
+            .unwrap_or_default();
         let bend_only: Vec<&String> = bend_labels.iter().filter(|label| !rust_labels.contains(label.as_str())).collect();
-        let rust_only: Vec<&&str> = rust_labels.iter().filter(|label| !bend_labels.contains(**label)).collect();
+        let neither: Vec<&String> = every
+            .iter()
+            .filter(|label| !bend_labels.contains(*label) && !rust_labels.contains(label.as_str()) && !untraced.contains(*label))
+            .collect();
+        println!("trace: Bend took {excess} more branch hits than Rust (work Bend's strict evaluation discards), not a failure");
+        println!("untraced (folded away by Bend's compiler): {untraced:?}");
         println!(
-            "branches reached: {} by Bend, {} by Rust; Bend only {bend_only:?}; Rust only {rust_only:?}",
+            "branches reached: {} by Bend, {} by Rust; reached by Bend only {bend_only:?}; reached by neither {neither:?}",
             bend_labels.len(),
             rust_labels.len()
         );
