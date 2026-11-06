@@ -5,7 +5,7 @@ import { defineTaggedUnion } from "foldkit/schema";
 
 import { isOnline } from "../../site/online.ts";
 import { AGGREGATES } from "../aggregates.ts";
-import { CertainMistakes, CertainType, Decisions, Download, MatchDetail, Seat } from "../api.ts";
+import { CertainMistakes, CertainType, Download, MatchDetail, Seat } from "../api.ts";
 
 /** The page's groups below the hero, in page order: the jump menu's links, and the sections the reader can be in. */
 export const Group = Schema.Literals(["standings", "decisions", "watch", "tables"]);
@@ -70,7 +70,7 @@ export type Lazy = typeof Lazy.Type;
  * The per-seat and per-move data only the arena server has, fetched when a section that needs it first comes near: the
  * match list, replays and their links, and the drill's per-move line. The online build never fetches it.
  */
-export const Local = Schema.Struct({ seats: Schema.Array(SeatFull), decisions: Decisions, certainMoves: OptionalData(CertainMistakes), download: OptionalData(Download) });
+export const Local = Schema.Struct({ seats: Schema.Array(SeatFull), certainMoves: OptionalData(CertainMistakes), download: OptionalData(Download) });
 
 export type Local = typeof Local.Type;
 
