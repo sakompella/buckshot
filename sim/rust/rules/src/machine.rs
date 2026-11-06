@@ -11,7 +11,7 @@ use crate::domain::{
 };
 use crate::items::{self, GrabOption};
 use crate::rules::{self, JamResult};
-use crate::state::{Batch, Deck, Decks, Grabs, Jam, Phase, SeatRecord, State, World};
+use crate::state::{Batch, Deck, Decks, FirstDeathCheck, Grabs, Jam, Phase, SeatRecord, State, World};
 use crate::{Answer, IdleOption, Notes, Stepped};
 
 pub(crate) struct Run<'a> {
@@ -75,7 +75,7 @@ pub fn initial(config: &Config) -> State {
             turn: None,
             direction: Direction::Clockwise,
             first_death: None,
-            checking_first_death: false,
+            checking_first_death: FirstDeathCheck::Off,
             item_amount: 0,
             sawed: false,
             gun: Gun::EMPTY,
@@ -259,20 +259,17 @@ fn grant(r: &mut Run<'_>, seat: Seat) {
 
 /// `shuffle`.
 fn shuffle(r: &mut Run<'_>, load: Load, shells: Gun, i: u32) {
-    match i {
-        0 => {
-            branch!(B::SimpleMainShuffleZero);
-            let world = r.world();
-            world.gun = shells;
-            world.shown = load;
-            let first = world.first_turn;
-            r.emit(GameEvent::Loaded { load });
-            grant(r, first);
-        }
-        1.. => {
-            branch!(B::SimpleMainShuffleSucc);
-            r.set_phase(Phase::NeedSwap { load, shells, i });
-        }
+    if i == 0 {
+        branch!(B::SimpleMainShuffleZero);
+        let world = r.world();
+        world.gun = shells;
+        world.shown = load;
+        let first = world.first_turn;
+        r.emit(GameEvent::Loaded { load });
+        grant(r, first);
+    } else {
+        branch!(B::SimpleMainShuffleSucc);
+        r.set_phase(Phase::NeedSwap { load, shells, i });
     }
 }
 
@@ -411,15 +408,12 @@ fn grab_give(r: &mut Run<'_>, seat: Seat, item: Item) {
 
 /// `grab.chosen`.
 fn grab_chosen(r: &mut Run<'_>, seat: Seat, found: Option<Item>) {
-    match found {
-        Some(item) => {
-            branch!(B::SimpleMainGrabChosenSome);
-            grab_give(r, seat, item);
-        }
-        None => {
-            branch!(B::SimpleMainGrabChosenNone);
-            r.tell(seat, Secret::EmptyBriefcase);
-        }
+    if let Some(item) = found {
+        branch!(B::SimpleMainGrabChosenSome);
+        grab_give(r, seat, item);
+    } else {
+        branch!(B::SimpleMainGrabChosenNone);
+        r.tell(seat, Secret::EmptyBriefcase);
     }
 }
 
@@ -445,15 +439,12 @@ fn grab_pool(r: &mut Run<'_>, seat: Seat, pool: Items) {
 
 /// `grab.takes`.
 fn grab_takes(options: &[GrabOption]) -> bool {
-    match options {
-        [GrabOption::TakeItem] => {
-            branch!(B::SimpleMainGrabTakesTakeItemConsNil);
-            true
-        }
-        [] | [GrabOption::PutAt { .. }, ..] | [GrabOption::TakeItem, _, ..] => {
-            branch!(B::SimpleMainGrabTakesAny);
-            false
-        }
+    if matches!(options, [GrabOption::TakeItem]) {
+        branch!(B::SimpleMainGrabTakesTakeItemConsNil);
+        true
+    } else {
+        branch!(B::SimpleMainGrabTakesAny);
+        false
     }
 }
 
@@ -495,15 +486,13 @@ fn grab_act(config: &Config, state: &State, after: Seat) -> Distribution {
 /// `grab.continue`: loading once the distribution is done and no item is
 /// held, else the next grab move.
 fn grab_continue(config: &Config, state: &State, after: Seat) -> Distribution {
-    match (state.grabs.distributing, items::holders(&state.grabs)) {
-        (false, false) => {
-            branch!(B::SimpleMainGrabContinueReadyFalseFalse);
-            Distribution::Loading
-        }
-        (true, _) | (false, true) => {
-            branch!(B::SimpleMainGrabContinueReadyAny);
-            grab_act(config, state, after)
-        }
+    let holders = items::holders(&state.grabs);
+    if state.grabs.distributing || holders {
+        branch!(B::SimpleMainGrabContinueReadyAny);
+        grab_act(config, state, after)
+    } else {
+        branch!(B::SimpleMainGrabContinueReadyFalseFalse);
+        Distribution::Loading
     }
 }
 
@@ -603,7 +592,6 @@ fn distribute_begin(r: &mut Run<'_>, seats: Seats) {
 fn round_reset(r: &mut Run<'_>) {
     let world = r.state.world;
     let health = world.round_health;
-    let table = r.config.table();
     let mut players = r.state.players;
     for (seat, record) in r.state.players.entries() {
         players = players.set(
@@ -616,10 +604,9 @@ fn round_reset(r: &mut Run<'_>) {
             },
         );
     }
-    let _ = table;
     r.state.players = players;
     let w = r.world();
-    w.checking_first_death = true;
+    w.checking_first_death = FirstDeathCheck::On;
     w.direction = Direction::Clockwise;
     r.emit(GameEvent::RoundBegan {
         round: world.round_index,
@@ -722,29 +709,26 @@ fn reload_begin(r: &mut Run<'_>) {
 
 /// `turn.winner` with `turn.recipient` and `turn.continue`.
 fn turn_winner(r: &mut Run<'_>, shooter: Seat, passing: bool, winner: Option<Seat>) {
-    match winner {
-        Some(seat) => {
-            branch!(B::SimpleMainTurnWinnerSome);
-            win(r, seat);
-        }
-        None => {
-            branch!(B::SimpleMainTurnWinnerNone);
-            let next = rules::next_turn(&r.state.players, r.state.world.direction, shooter);
-            let recipient = if passing {
-                branch!(B::SimpleMainTurnRecipientTrue);
-                next
-            } else {
-                branch!(B::SimpleMainTurnRecipientFalse);
-                shooter
-            };
-            r.world().first_turn = recipient;
-            if r.state.world.gun.is_empty() {
-                branch!(B::SimpleMainTurnContinueNil);
-                reload_begin(r);
-            } else {
-                branch!(B::SimpleMainTurnContinueCons);
-                grant(r, recipient);
-            }
+    if let Some(seat) = winner {
+        branch!(B::SimpleMainTurnWinnerSome);
+        win(r, seat);
+    } else {
+        branch!(B::SimpleMainTurnWinnerNone);
+        let next = rules::next_turn(&r.state.players, r.state.world.direction, shooter);
+        let recipient = if passing {
+            branch!(B::SimpleMainTurnRecipientTrue);
+            next
+        } else {
+            branch!(B::SimpleMainTurnRecipientFalse);
+            shooter
+        };
+        r.world().first_turn = recipient;
+        if r.state.world.gun.is_empty() {
+            branch!(B::SimpleMainTurnContinueNil);
+            reload_begin(r);
+        } else {
+            branch!(B::SimpleMainTurnContinueCons);
+            grant(r, recipient);
         }
     }
 }
@@ -787,11 +771,11 @@ fn death(r: &mut Run<'_>, target: Seat, shell: Shell, health: u32) {
     match (shell, health) {
         (Shell::Live, 0) => {
             branch!(B::SimpleMainDeathLiveZero);
-            if r.state.world.checking_first_death {
+            if r.state.world.checking_first_death == FirstDeathCheck::On {
                 branch!(B::SimpleMainDeathRememberTrue);
                 let world = r.world();
                 world.first_death = Some(target);
-                world.checking_first_death = false;
+                world.checking_first_death = FirstDeathCheck::Off;
             } else {
                 branch!(B::SimpleMainDeathRememberFalse);
             }

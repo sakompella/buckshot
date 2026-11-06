@@ -8,7 +8,7 @@ Research on Buckshot Roulette: a multiplayer rules library in Bend, a browser ta
 - **Toolchain:** `nix develop` gives the pinned Bend 2.0.39, bun, Python and stable Rust.
 - **Before committing:**
   - Bend changes: `bash sim/bend-mp/check.sh`.
-  - `sim/rust/` changes: from `sim/rust/`, run `cargo fmt --check`, `cargo clippy --all-targets --all-features -- -D warnings` and `cargo test`. To compare with Bend, write the tapes with `node sim/bend-mp/test/rust-tapes.mjs --random 20` and `--arena 5`, then run the tests with `RUST_TAPES=/tmp/rust-tapes`.
+  - `sim/rust/` changes: the pre-commit hook (`.githooks/pre-commit`, enabled by `nix develop`) runs `cargo fmt --check`, `cargo clippy` with `-D warnings` and `cargo check` when `sim/rust/` files are staged. Also run `cargo test` from `sim/rust/`. To compare with Bend, write the tapes with `node sim/bend-mp/test/rust-tapes.mjs --random 20` and `--arena 5`, then run the tests with `RUST_TAPES=/tmp/rust-tapes`.
   - `web/` changes: from `web/`, run `bun run lint` (0 warnings), `bun run typecheck` and `bun run test`. Use `bun run test`, never bare `bun test`.
   - Run heavy jobs with `nice -n 10`, at most two at once.
 - **Git:** work on `main`. Do branch work in a worktree at `~/.t3/worktrees/buckshot/t3-<8 hex>` (never a sibling directory). Merge only verified work, with `--no-ff`.

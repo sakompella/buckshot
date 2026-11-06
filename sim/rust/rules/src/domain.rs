@@ -39,9 +39,18 @@ impl Table {
     #[must_use]
     pub const fn seats(self) -> Seats {
         match self {
-            Self::TwoSeats => Seats::of(&[Seat::Seat1, Seat::Seat3]),
-            Self::ThreeSeats => Seats::of(&[Seat::Seat0, Seat::Seat1, Seat::Seat2]),
-            Self::FourSeats => Seats::of(&[Seat::Seat0, Seat::Seat1, Seat::Seat2, Seat::Seat3]),
+            Self::TwoSeats => Seats {
+                seats: [Seat::Seat1, Seat::Seat3, Seat::Seat0, Seat::Seat0],
+                len: 2,
+            },
+            Self::ThreeSeats => Seats {
+                seats: [Seat::Seat0, Seat::Seat1, Seat::Seat2, Seat::Seat0],
+                len: 3,
+            },
+            Self::FourSeats => Seats {
+                seats: [Seat::Seat0, Seat::Seat1, Seat::Seat2, Seat::Seat3],
+                len: 4,
+            },
         }
     }
 
@@ -69,22 +78,6 @@ impl Seats {
         len: 0,
     };
 
-    #[expect(clippy::indexing_slicing, clippy::arithmetic_side_effects, reason = "i < 4 and i < list.len()")]
-    const fn of(list: &[Seat]) -> Self {
-        let mut seats = Self::EMPTY;
-        let mut i = 0;
-        while i < list.len() && i < 4 {
-            seats.seats[i] = list[i];
-            i += 1;
-        }
-        // At most four seats, so the length fits.
-        #[expect(clippy::cast_possible_truncation, reason = "i <= 4")]
-        {
-            seats.len = i as u8;
-        }
-        seats
-    }
-
     /// Appends `seat`. A fifth seat cannot occur: every list is drawn from one table's seats.
     pub fn push(&mut self, seat: Seat) {
         if let Some(slot) = self.seats.get_mut(usize::from(self.len)) {
@@ -99,8 +92,8 @@ impl Seats {
     }
 
     #[must_use]
-    pub const fn len(&self) -> usize {
-        self.len as usize
+    pub fn len(&self) -> usize {
+        usize::from(self.len)
     }
 
     #[must_use]
@@ -190,7 +183,7 @@ pub struct Load {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
 pub struct Gun {
     bits: u64,
-    len: u8,
+    len: u32,
 }
 
 const fn bit(i: u32) -> u64 {
@@ -210,21 +203,18 @@ impl Gun {
         let live = load.live.min(Self::CAPACITY);
         let total = live.saturating_add(load.blank).min(Self::CAPACITY);
         let bits = (0..live).fold(0, |bits, i| bits | bit(i));
-        Self {
-            bits,
-            len: u8::try_from(total).unwrap_or(u8::MAX),
-        }
+        Self { bits, len: total }
     }
 
     /// Builds a list from shells, head first; shells past the capacity are dropped.
     pub fn from_shells(shells: impl IntoIterator<Item = Shell>) -> Self {
         let mut gun = Self::EMPTY;
         for shell in shells {
-            if u32::from(gun.len) >= Self::CAPACITY {
+            if gun.len >= Self::CAPACITY {
                 break;
             }
             if shell == Shell::Live {
-                gun.bits |= bit(u32::from(gun.len));
+                gun.bits |= bit(gun.len);
             }
             gun.len = gun.len.saturating_add(1);
         }
@@ -233,7 +223,7 @@ impl Gun {
 
     #[must_use]
     pub const fn len(self) -> u32 {
-        self.len as u32
+        self.len
     }
 
     #[must_use]
@@ -244,7 +234,7 @@ impl Gun {
     /// `nth`.
     #[must_use]
     pub const fn nth(self, i: u32) -> Option<Shell> {
-        if i >= self.len as u32 {
+        if i >= self.len {
             return None;
         }
         Some(if self.bits & bit(i) == 0 { Shell::Blank } else { Shell::Live })
@@ -268,7 +258,7 @@ impl Gun {
     /// `shell <> self`. A full list drops its last shell (unreachable: see the type).
     #[must_use]
     pub const fn push_front(self, shell: Shell) -> Self {
-        let len = if (self.len as u32) < Self::CAPACITY {
+        let len = if self.len < Self::CAPACITY {
             self.len.saturating_add(1)
         } else {
             self.len
@@ -640,8 +630,8 @@ impl Config {
 
     /// `plan.length`.
     #[must_use]
-    pub const fn plan_length(&self) -> u32 {
-        self.len as u32
+    pub fn plan_length(&self) -> u32 {
+        u32::from(self.len)
     }
 
     /// `plan.round`.

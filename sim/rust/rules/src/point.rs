@@ -7,13 +7,12 @@ use crate::domain::{Config, Item, Items, Label, Range, Seat, Seats, Slot, Table}
 use crate::items::{self, Picks, Uses};
 use crate::rules;
 use crate::state::{Phase, State};
-use crate::{IdleOption, MENU_CAPACITY, Menu, Request};
+use crate::{IdleOption, MENU_CAPACITY, Menu, Request, push_bounded};
 
 type Options = ArrayVec<IdleOption, MENU_CAPACITY>;
 
 fn add(options: &mut Options, option: IdleOption) {
-    // The capacity bounds every menu (see MENU_CAPACITY), so nothing is dropped.
-    let _ = options.try_push(option);
+    push_bounded(options, option);
 }
 
 /// `item.chained`: items whose use is part of a longer move.
@@ -99,7 +98,7 @@ fn steal_options(options: &mut Options, adrenaline: Option<Slot>, picks: &Picks)
                 },
             );
         }
-        let _ = seen.try_push((pick.owner, pick.item));
+        push_bounded(&mut seen, (pick.owner, pick.item));
     }
 }
 
@@ -192,27 +191,23 @@ pub fn request(config: &Config, state: &State) -> Request {
         }
         Phase::NeedBatch => {
             branch!(B::SimplePointPhaseRequestNeedBatch);
-            match state.world.decks.get(table).len().checked_sub(2) {
-                Some(extra) => {
-                    branch!(B::SimplePointBatchRequestSuccSucc);
-                    draw(Label::SequenceBatch, Range { lo: 0, extra })
-                }
-                None => {
-                    branch!(B::SimplePointBatchRequestAny);
-                    Request::Stuck
-                }
+            if let Some(extra) = state.world.decks.get(table).len().checked_sub(2) {
+                branch!(B::SimplePointBatchRequestSuccSucc);
+                draw(Label::SequenceBatch, Range { lo: 0, extra })
+            } else {
+                branch!(B::SimplePointBatchRequestAny);
+                Request::Stuck
             }
         }
-        Phase::NeedSwap { i, .. } => match i.checked_sub(1) {
-            Some(extra) => {
+        Phase::NeedSwap { i, .. } => {
+            if let Some(extra) = i.checked_sub(1) {
                 branch!(B::SimplePointPhaseRequestNeedSwapSucc);
                 draw(Label::ShuffleSwap, Range { lo: 0, extra })
-            }
-            None => {
+            } else {
                 branch!(B::SimplePointPhaseRequestNeedSwapZero);
                 Request::Stuck
             }
-        },
+        }
         Phase::Idle { seat } => {
             branch!(B::SimplePointPhaseRequestIdle);
             if table.has(seat) {
@@ -252,15 +247,12 @@ pub fn request(config: &Config, state: &State) -> Request {
         }
         Phase::NeedPhone { .. } => {
             branch!(B::SimplePointPhaseRequestNeedPhone);
-            match state.world.gun.len().checked_sub(4) {
-                Some(extra) => {
-                    branch!(B::SimplePointPhoneRequestSuccSuccSuccSucc);
-                    draw(Label::PhoneIndex, Range { lo: 2, extra })
-                }
-                None => {
-                    branch!(B::SimplePointPhoneRequestAny);
-                    Request::Stuck
-                }
+            if let Some(extra) = state.world.gun.len().checked_sub(4) {
+                branch!(B::SimplePointPhoneRequestSuccSuccSuccSucc);
+                draw(Label::PhoneIndex, Range { lo: 2, extra })
+            } else {
+                branch!(B::SimplePointPhoneRequestAny);
+                Request::Stuck
             }
         }
     }

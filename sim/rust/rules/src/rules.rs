@@ -17,15 +17,12 @@ pub(crate) enum JamResult {
 /// `alive`.
 #[must_use]
 pub fn alive(hp: u32) -> bool {
-    match hp {
-        0 => {
-            branch!(B::SmRulesAliveZero);
-            false
-        }
-        1.. => {
-            branch!(B::SmRulesAliveSucc);
-            true
-        }
+    if hp == 0 {
+        branch!(B::SmRulesAliveZero);
+        false
+    } else {
+        branch!(B::SmRulesAliveSucc);
+        true
     }
 }
 
@@ -151,15 +148,12 @@ pub fn predecessor(n: u32) -> u32 {
 
 /// `world.rules`: the round's rules, or the default round past the plan.
 pub(crate) fn world_rules(config: &Config, world: &World) -> RoundRules {
-    match config.round(world.round_index) {
-        Some(round) => {
-            branch!(B::SmRulesValueOrSome);
-            *round
-        }
-        None => {
-            branch!(B::SmRulesValueOrNone);
-            RoundRules::default_round()
-        }
+    if let Some(round) = config.round(world.round_index) {
+        branch!(B::SmRulesValueOrSome);
+        *round
+    } else {
+        branch!(B::SmRulesValueOrNone);
+        RoundRules::default_round()
     }
 }
 
