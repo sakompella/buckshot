@@ -135,11 +135,14 @@ impl Need {
     }
 }
 
-/// A decision's box, the depth it was searched to.
+/// A decision's box, the depth it was searched to and the move that led it
+/// (the highest private low end, or the first lowest public high end), which
+/// a later search of the decision tries first.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BoxEntry {
     pub boxed: Boxed,
     pub depth: u32,
+    pub lead: usize,
 }
 
 impl BoxEntry {
@@ -220,14 +223,16 @@ fn decide_boxes(mine: bool, children: &[Boxed], pending: usize) -> Option<Boxed>
     })
 }
 
-/// The decision's running state over the children searched so far: the
-/// highest low ends (the searcher's) or the lowest public high end (an
-/// opponent's), from which the next child's need follows.
+/// The decision's running state over the children searched so far, in any
+/// order: the highest low ends (the searcher's) or the lowest public high end
+/// and the first child in menu order that has it (an opponent's), from which
+/// the next child's need follows.
 #[derive(Clone, Copy, Debug)]
 struct Running {
     public_lo: u32,
     private_lo: u32,
     public_hi: u32,
+    lowest: usize,
 }
 
 impl Running {
@@ -235,18 +240,22 @@ impl Running {
         public_lo: 0,
         private_lo: 0,
         public_hi: u32::MAX,
+        lowest: usize::MAX,
     };
 
-    fn add(self, child: &Boxed) -> Self {
+    /// With child `j` (its menu index) searched.
+    fn add(self, j: usize, child: &Boxed) -> Self {
+        let lower = child.public.hi < self.public_hi || (child.public.hi == self.public_hi && j < self.lowest);
         Self {
             public_lo: self.public_lo.max(child.public.lo),
             private_lo: self.private_lo.max(child.private.lo),
             public_hi: self.public_hi.min(child.public.hi),
+            lowest: if lower { j } else { self.lowest },
         }
     }
 
-    /// The next child's need, or `None` when the children left cannot matter.
-    fn next(self, mine: bool, need: Need) -> Option<Need> {
+    /// Child `j`'s need, or `None` when the children left cannot matter.
+    fn next(self, mine: bool, j: usize, need: Need) -> Option<Need> {
         if mine {
             // A child at most the best low end so far changes no maximum.
             let raise = |window: Window, lo: u32| {
@@ -266,10 +275,16 @@ impl Running {
             return (next.public.needed() || next.private.needed()).then_some(next);
         }
         // A child at least the lowest public high end so far is not the first
-        // argmin. Telling which child is needs its exact public value.
+        // argmin, nor one above it when it comes earlier in the menu. Telling
+        // which child is needs its exact public value.
+        let above = if j < self.lowest {
+            self.public_hi.saturating_add(1)
+        } else {
+            self.public_hi
+        };
         if need.private.needed() {
             return Some(Need {
-                public: Window { lo: 0, hi: self.public_hi },
+                public: Window { lo: 0, hi: above },
                 private: need.private,
             });
         }
@@ -280,7 +295,7 @@ impl Running {
         (!need.public.met(public)).then_some(Need {
             public: Window {
                 lo: need.public.lo,
-                hi: need.public.hi.min(self.public_hi),
+                hi: need.public.hi.min(above),
             },
             private: Window::NONE,
         })
@@ -350,54 +365,87 @@ impl Search<'_> {
                 stats.keys.insert(stats_key((self.me, self.config), public_worlds, private_worlds));
             }
             let key = hash(Kind::Decision, public_worlds, private_worlds);
-            if let Some(Stored::Box(entry)) = self.tally.find(key, Kind::Decision, public_worlds, private_worlds)
+            let stored = match self.tally.find(key, Kind::Decision, public_worlds, private_worlds) {
+                Some(Stored::Box(entry)) => Some(entry),
+                Some(Stored::Decision(_) | Stored::Deal(_)) | None => None,
+            };
+            if let Some(entry) = stored
                 && entry.serves(depth, need)
             {
                 self.tally.hit(0);
                 return Some(entry.boxed);
             }
-            key
+            (key, stored.map_or(0, |entry| entry.lead))
         };
+        let (key, lead) = key;
         let choices = push_choices(menu, &mut self.choices);
-        let result = self.bounded_choose(mine, depth, beliefs, choices, need);
+        let result = self.bounded_choose(mine, depth, beliefs, (choices, lead), need);
         self.choices.truncate(choices.start);
-        let value = result?;
+        let (value, leader) = result?;
         let (public_worlds, private_worlds) = (public.of(&self.worlds), private.of(&self.worlds));
         self.tally.keep(
             key,
             Kind::Decision,
             (public_worlds, private_worlds),
-            Stored::Box(BoxEntry { boxed: value, depth }),
+            Stored::Box(BoxEntry {
+                boxed: value,
+                depth,
+                lead: leader,
+            }),
         );
         Some(value)
     }
 
-    /// A decision's box: its moves in menu order, each searched for the need
-    /// the moves before it leave, until the rest cannot matter.
-    fn bounded_choose(&mut self, mine: bool, depth: u32, beliefs: (Span, Span), choices: Span, need: Need) -> Option<Boxed> {
+    /// A decision's box and the move that led it: `lead` first, then the
+    /// other moves in menu order, each searched for the need the moves before
+    /// it leave, until the rest cannot matter.
+    fn bounded_choose(
+        &mut self,
+        mine: bool,
+        depth: u32,
+        beliefs: (Span, Span),
+        order: (Span, usize),
+        need: Need,
+    ) -> Option<(Boxed, usize)> {
+        let (choices, lead) = order;
+        let count = choices.len();
+        let lead = if self.prune && lead < count { lead } else { 0 };
         let mark = self.boxes.len();
         let mut running = Running::START;
-        for at in choices.start..choices.end {
+        for j in iter::once(lead).chain((0..count).filter(|&j| j != lead)) {
             let child_need = if self.prune {
-                match running.next(mine, need) {
+                match running.next(mine, j, need) {
                     Some(child_need) => child_need,
                     None => break,
                 }
             } else {
                 Need::EXACT
             };
-            let index = self.choices.get(at)?.index;
+            let index = self.choices.get(choices.start.saturating_add(j))?.index;
             let Some(boxed) = self.bounded_option(depth, beliefs, index, child_need) else {
                 self.boxes.truncate(mark);
                 return None;
             };
-            running = running.add(&boxed);
+            running = running.add(j, &boxed);
             self.boxes.push(boxed);
         }
-        let searched = self.boxes.len().saturating_sub(mark);
-        let decided = decide_boxes(mine, self.boxes.get(mark..).unwrap_or(&[]), choices.len().saturating_sub(searched));
+        // Back to menu order: the unsearched moves are any, and the lead moves back to its place.
+        self.boxes.resize(mark.saturating_add(count), Boxed::ANY);
+        let children = self.boxes.get_mut(mark..)?;
+        children.get_mut(..=lead)?.rotate_left(1);
+        let decided = decide_boxes(mine, children, 0);
+        let leader = if mine {
+            children
+                .iter()
+                .enumerate()
+                .rev()
+                .max_by_key(|(_, child)| child.private.lo)
+                .map_or(0, |(j, _)| j)
+        } else {
+            running.lowest.min(count.saturating_sub(1))
+        };
         self.boxes.truncate(mark);
-        decided
+        decided.map(|value| (value, leader))
     }
 
     fn bounded_option(&mut self, depth: u32, beliefs: (Span, Span), index: u32, need: Need) -> Option<Boxed> {
@@ -653,7 +701,7 @@ mod tests {
             public: Window { lo: 0, hi: 500_000 },
             private: Window { lo: 0, hi: 600_000 },
         };
-        let after = |child: Boxed| Running::START.add(&child).next(true, need);
+        let after = |child: Boxed| Running::START.add(0, &child).next(true, 1, need);
         let raised = Need {
             public: Window::NONE,
             private: Window { lo: 400_000, hi: 600_000 },
@@ -668,13 +716,13 @@ mod tests {
             public: Window { lo: 500_000, hi: TOP },
             private: Window::EXACT,
         };
-        let running = Running::START.add(&exact(300_000, 100_000));
+        let running = Running::START.add(0, &exact(300_000, 100_000));
         let next = Need {
             public: Window { lo: 0, hi: 300_000 },
             private: Window::EXACT,
         };
         assert_eq!(
-            running.next(false, need),
+            running.next(false, 1, need),
             Some(next),
             "a lower public value changes the private value"
         );
@@ -682,7 +730,23 @@ mod tests {
             private: Window::NONE,
             ..need
         };
-        assert_eq!(running.next(false, public_only), None, "public is settled below 500000");
+        assert_eq!(running.next(false, 1, public_only), None, "public is settled below 500000");
+    }
+
+    #[test]
+    fn an_opponent_move_searched_late_but_earlier_in_the_menu_wins_a_tie() {
+        let running = Running::START.add(2, &exact(300_000, 100_000));
+        let need = Need {
+            public: Window::NONE,
+            private: Window::EXACT,
+        };
+        let window = |j| running.next(false, j, need).map(|next| next.public);
+        assert_eq!(
+            window(1),
+            Some(Window { lo: 0, hi: 300_001 }),
+            "an earlier move tied at 300000 is the first argmin"
+        );
+        assert_eq!(window(3), Some(Window { lo: 0, hi: 300_000 }), "a later one is not");
     }
 
     #[test]
@@ -702,6 +766,7 @@ mod tests {
         let entry = BoxEntry {
             boxed: boxed((0, TOP), (200_000, 300_000), Reach::Cut),
             depth: 3,
+            lead: 0,
         };
         let below = Need {
             public: Window::NONE,
