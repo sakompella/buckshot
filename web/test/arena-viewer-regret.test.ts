@@ -76,6 +76,7 @@ test("a seat's regret sums its searched moves in percentage points and judges ea
 
 test("a decision whose moves all score within a point is left out of a seat's statistics", () => {
   const flat = JSON.stringify([{ label: "best move", score: 500_000 }, { label: "chosen move", score: 495_000 }]);
+
   const regret = openRegret(
     regretFile([
       { match: "m1", ordinal: 1, player: "A", best: 500_000, chosen: 495_000, values: flat },
@@ -90,6 +91,7 @@ test("a decision whose moves all score within a point is left out of a seat's st
 
 test("sampled scores replace the static ones for the decisions they cover, in seats and in a match's moves", () => {
   const sampled = { reload: "sampled", samples: 256, evaluator: "s1" };
+
   const regret = openRegret(
     regretFile([
       { match: "m1", ordinal: 1, player: "A", best: 600_000, chosen: 500_000 },

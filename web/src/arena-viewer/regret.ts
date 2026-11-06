@@ -144,7 +144,7 @@ const seatRegretOf = (moves: ReadonlyArray<{ readonly row: SeatMoveRow; readonly
         mistakes: countOf("mistake"),
         blunders: countOf("blunder"),
         sampled: real.filter(({ source }) => source === "sampled").length,
-        losses: losses.map(roundedTenth).filter((loss) => loss > 0),
+        losses: losses.flatMap((loss) => (roundedTenth(loss) > 0 ? [roundedTenth(loss)] : [])),
       };
 };
 
