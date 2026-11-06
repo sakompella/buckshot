@@ -11,7 +11,8 @@ fi
 root=$(git rev-parse --show-toplevel)
 cd "$root/sim/rust" || exit 1
 run() {
-  if command -v cargo >/dev/null; then nice -n 10 "$@"; else nice -n 10 nix develop "$root" -c "$@"; fi
+  # A rustup shim may be on PATH without a toolchain; trust only the dev shell's cargo.
+  if [[ -n ${IN_NIX_SHELL:-} ]]; then nice -n 10 "$@"; else nice -n 10 nix develop "$root" -c "$@"; fi
 }
 
 failed=()
@@ -24,6 +25,7 @@ check cargo fmt --all --check
 check cargo clippy --workspace --all-targets --all-features -- -D warnings
 check cargo clippy --workspace --all-targets -- -D warnings
 check cargo check --workspace --all-targets
+check cargo branch-map check
 
 if ((${#failed[@]})); then
   echo "pre-commit: failed (run from sim/rust/):" >&2
