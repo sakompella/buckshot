@@ -4,6 +4,190 @@
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum B {
+    /// `sm/items:keep:True{}`
+    SmItemsKeepTrue,
+    /// `sm/items:keep:False{}`
+    SmItemsKeepFalse,
+    /// `sm/items:is_none:None{}`
+    SmItemsIsNoneNone,
+    /// `sm/items:is_none:Some{item}`
+    SmItemsIsNoneSome,
+    /// `sm/items:has_items:Nil{}`
+    SmItemsHasItemsNil,
+    /// `sm/items:has_items:x <> rest`
+    SmItemsHasItemsCons,
+    /// `sm/items:has_seats:Nil{}`
+    SmItemsHasSeatsNil,
+    /// `sm/items:has_seats:x <> rest`
+    SmItemsHasSeatsCons,
+    /// `sm/items:slots.items:D.Slots{a, b, c, d, e, f, g, h}`
+    SmItemsSlotsItemsSlots,
+    /// `sm/items:occupied:None{} <> rest`
+    SmItemsOccupiedNoneCons,
+    /// `sm/items:occupied:Some{item} <> rest`
+    SmItemsOccupiedSomeCons,
+    /// `sm/items:occupied:Nil{}`
+    SmItemsOccupiedNil,
+    /// `sm/items:bool.nat:True{}`
+    SmItemsBoolNatTrue,
+    /// `sm/items:bool.nat:False{}`
+    SmItemsBoolNatFalse,
+    /// `sm/items:copies.one:None{}`
+    SmItemsCopiesOneNone,
+    /// `sm/items:copies.one:Some{actual}`
+    SmItemsCopiesOneSome,
+    /// `sm/items:copies:x <> rest`
+    SmItemsCopiesCons,
+    /// `sm/items:copies:Nil{}`
+    SmItemsCopiesNil,
+    /// `sm/items:grabs.open:S.Grabs{distributing, grabbing, holding, granted, intake}`
+    SmItemsGrabsOpenGrabs,
+    /// `sm/items:grabs.open_all:seat <> rest`
+    SmItemsGrabsOpenAllCons,
+    /// `sm/items:grabs.open_all:Nil{}`
+    SmItemsGrabsOpenAllNil,
+    /// `sm/items:grabs.stop_intake:S.Grabs{distributing, grabbing, holding, granted, intake}`
+    SmItemsGrabsStopIntakeGrabs,
+    /// `sm/items:grabs.give:S.Grabs{distributing, grabbing, holding, granted, intake}`
+    SmItemsGrabsGiveGrabs,
+    /// `sm/items:grabs.close:S.Grabs{distributing, grabbing, holding, granted, intake}`
+    SmItemsGrabsCloseGrabs,
+    /// `sm/items:grabs.placed:S.Grabs{distributing, grabbing, holding, granted, intake}`
+    SmItemsGrabsPlacedGrabs,
+    /// `sm/items:owned.table:seat <> rest`
+    SmItemsOwnedTableCons,
+    /// `sm/items:owned.table:Nil{}`
+    SmItemsOwnedTableNil,
+    /// `sm/items:stock.open:D.ItemRule{enabled, per_player, on_table}`
+    SmItemsStockOpenItemRule,
+    /// `sm/items:round.items:D.RoundRules{_, _, items}`
+    SmItemsRoundItemsRoundRules,
+    /// `sm/items:pool.go:+item <> rest`
+    SmItemsPoolGoCons,
+    /// `sm/items:pool.go:Nil{}`
+    SmItemsPoolGoNil,
+    /// `sm/items:begin.go:+seat <> rest`
+    SmItemsBeginGoCons,
+    /// `sm/items:begin.go:Nil{}`
+    SmItemsBeginGoNil,
+    /// `sm/items:begin.seats:0n`
+    SmItemsBeginSeatsZero,
+    /// `sm/items:begin.seats:_`
+    SmItemsBeginSeatsAny,
+    /// `sm/items:puts.here:None{}`
+    SmItemsPutsHereNone,
+    /// `sm/items:puts.here:Some{item}`
+    SmItemsPutsHereSome,
+    /// `sm/items:puts:+slot <> rest`
+    SmItemsPutsCons,
+    /// `sm/items:puts:Nil{}`
+    SmItemsPutsNil,
+    /// `sm/items:grab.intake:True{}`
+    SmItemsGrabIntakeTrue,
+    /// `sm/items:grab.intake:False{}`
+    SmItemsGrabIntakeFalse,
+    /// `sm/items:grab.offer:True{} Some{item}`
+    SmItemsGrabOfferTrueSome,
+    /// `sm/items:grab.offer:True{} None{}`
+    SmItemsGrabOfferTrueNone,
+    /// `sm/items:grab.offer:False{} _`
+    SmItemsGrabOfferFalse,
+    /// `sm/items:grab.needs.go:+seat <> rest`
+    SmItemsGrabNeedsGoCons,
+    /// `sm/items:finish.ended:D.At{seat, grabbing} <> rest`
+    SmItemsFinishEndedAtCons,
+    /// `sm/items:finish.ended:Nil{}`
+    SmItemsFinishEndedNil,
+    /// `sm/items:finish.empty:seat <> rest`
+    SmItemsFinishEmptyCons,
+    /// `sm/items:finish.empty:Nil{}`
+    SmItemsFinishEmptyNil,
+    /// `sm/items:stalled:+seat <> rest`
+    SmItemsStalledCons,
+    /// `sm/items:stalled:Nil{}`
+    SmItemsStalledNil,
+    /// `sm/items:holders:D.At{seat, None{}} <> rest`
+    SmItemsHoldersAtNoneCons,
+    /// `sm/items:holders:D.At{seat, Some{item}} <> rest`
+    SmItemsHoldersAtSomeCons,
+    /// `sm/items:holders:Nil{}`
+    SmItemsHoldersNil,
+    /// `sm/items:amount.live:D.RandomAmount{}`
+    SmItemsAmountLiveRandomAmount,
+    /// `sm/items:amount.live:D.FixedAmount{amount}`
+    SmItemsAmountLiveFixedAmount,
+    /// `sm/items:winnerless:None{}`
+    SmItemsWinnerlessNone,
+    /// `sm/items:winnerless:Some{seat}`
+    SmItemsWinnerlessSome,
+    /// `sm/items:gun.empty:Nil{}`
+    SmItemsGunEmptyNil,
+    /// `sm/items:gun.empty:shell <> rest`
+    SmItemsGunEmptyCons,
+    /// `sm/items:jam.options:D.At{+seat, hp} <> rest`
+    SmItemsJamOptionsAtCons,
+    /// `sm/items:jam.options:Nil{}`
+    SmItemsJamOptionsNil,
+    /// `sm/items:jam.any:Nil{}`
+    SmItemsJamAnyNil,
+    /// `sm/items:jam.any:option <> rest`
+    SmItemsJamAnyCons,
+    /// `sm/items:steal.fits:D.Adrenaline{}`
+    SmItemsStealFitsAdrenaline,
+    /// `sm/items:steal.fits:D.Saw{}`
+    SmItemsStealFitsSaw,
+    /// `sm/items:steal.fits:D.Jammer{}`
+    SmItemsStealFitsJammer,
+    /// `sm/items:steal.fits:_`
+    SmItemsStealFitsAny,
+    /// `sm/items:steal.here:None{}`
+    SmItemsStealHereNone,
+    /// `sm/items:steal.here:Some{+item}`
+    SmItemsStealHereSome,
+    /// `sm/items:steal.slots:+slot <> rest`
+    SmItemsStealSlotsCons,
+    /// `sm/items:steal.slots:Nil{}`
+    SmItemsStealSlotsNil,
+    /// `sm/items:steal.owner:True{}`
+    SmItemsStealOwnerTrue,
+    /// `sm/items:steal.owner:False{}`
+    SmItemsStealOwnerFalse,
+    /// `sm/items:steal.owners:D.At{+owner, inventory} <> rest`
+    SmItemsStealOwnersAtCons,
+    /// `sm/items:steal.owners:Nil{}`
+    SmItemsStealOwnersNil,
+    /// `sm/items:steal.any:Nil{}`
+    SmItemsStealAnyNil,
+    /// `sm/items:steal.any:option <> rest`
+    SmItemsStealAnyCons,
+    /// `sm/items:use.fits:D.Adrenaline{}`
+    SmItemsUseFitsAdrenaline,
+    /// `sm/items:use.fits:D.Saw{}`
+    SmItemsUseFitsSaw,
+    /// `sm/items:use.fits:D.Jammer{}`
+    SmItemsUseFitsJammer,
+    /// `sm/items:use.fits:_`
+    SmItemsUseFitsAny,
+    /// `sm/items:use.here:None{}`
+    SmItemsUseHereNone,
+    /// `sm/items:use.here:Some{+item}`
+    SmItemsUseHereSome,
+    /// `sm/items:use.slots:+slot <> rest`
+    SmItemsUseSlotsCons,
+    /// `sm/items:use.slots:Nil{}`
+    SmItemsUseSlotsNil,
+    /// `sm/items:ends_turn:D.Beer{}`
+    SmItemsEndsTurnBeer,
+    /// `sm/items:ends_turn:_`
+    SmItemsEndsTurnAny,
+    /// `sm/items:invert:D.Live{}`
+    SmItemsInvertLive,
+    /// `sm/items:invert:D.Blank{}`
+    SmItemsInvertBlank,
+    /// `sm/items:flip:D.Clockwise{}`
+    SmItemsFlipClockwise,
+    /// `sm/items:flip:D.CounterClockwise{}`
+    SmItemsFlipCounterClockwise,
     /// `simple/point:option.move:T.ShootAt{target}`
     SimplePointOptionMoveShootAt,
     /// `simple/point:option.move:T.UseSlot{_, item}`
@@ -92,6 +276,8 @@ pub enum B {
     SimpleMainGrabTakesTakeItemConsNil,
     /// `simple/main:grab.takes:_`
     SimpleMainGrabTakesAny,
+    /// `sm/items:grab.needs.go:Nil{}`
+    SmItemsGrabNeedsGoNil,
     /// `simple/main:grab.act.own:S.PutAt{slot} <> _`
     SimpleMainGrabActOwnPutAtCons,
     /// `simple/main:grab.act.own:_`
@@ -242,6 +428,158 @@ pub enum B {
     SimpleMainPickupSelectedSomeStealJamWith,
     /// `simple/main:pickup.selected:None{}`
     SimpleMainPickupSelectedNone,
+    /// `simple/point:item.chained:D.Jammer{}`
+    SimplePointItemChainedJammer,
+    /// `simple/point:item.chained:D.Adrenaline{}`
+    SimplePointItemChainedAdrenaline,
+    /// `simple/point:item.chained:_`
+    SimplePointItemChainedAny,
+    /// `simple/point:jam.options:None{}`
+    SimplePointJamOptionsNone,
+    /// `simple/point:jam.options:Some{slot}`
+    SimplePointJamOptionsSome,
+    /// `simple/point:steal.options:None{}`
+    SimplePointStealOptionsNone,
+    /// `simple/point:steal.options:Some{slot}`
+    SimplePointStealOptionsSome,
+    /// `simple/point:steal_jam.options:None{}`
+    SimplePointStealJamOptionsNone,
+    /// `simple/point:steal_jam.options:Some{slot}`
+    SimplePointStealJamOptionsSome,
+    /// `simple/point:steal_jam.here:True{}`
+    SimplePointStealJamHereTrue,
+    /// `simple/point:steal_jam.here:False{}`
+    SimplePointStealJamHereFalse,
+    /// `simple/point:first.range:D.TwoSeats{}`
+    SimplePointFirstRangeTwoSeats,
+    /// `simple/point:first.range:D.ThreeSeats{}`
+    SimplePointFirstRangeThreeSeats,
+    /// `simple/point:first.range:D.FourSeats{}`
+    SimplePointFirstRangeFourSeats,
+    /// `simple/point:phase.request:T.NeedFirst{}`
+    SimplePointPhaseRequestNeedFirst,
+    /// `simple/point:phase.request:T.NeedHealth{}`
+    SimplePointPhaseRequestNeedHealth,
+    /// `simple/point:phase.request:T.NeedAmount{}`
+    SimplePointPhaseRequestNeedAmount,
+    /// `simple/point:phase.request:T.NeedBatch{}`
+    SimplePointPhaseRequestNeedBatch,
+    /// `simple/point:batch.request:1n+1n+extra`
+    SimplePointBatchRequestSuccSucc,
+    /// `simple/point:batch.request:_`
+    SimplePointBatchRequestAny,
+    /// `simple/point:phase.request:T.NeedSwap{_, _, 1n+extra}`
+    SimplePointPhaseRequestNeedSwapSucc,
+    /// `simple/point:phase.request:T.NeedSwap{_, _, 0n}`
+    SimplePointPhaseRequestNeedSwapZero,
+    /// `simple/point:phase.request:T.Idle{+seat}`
+    SimplePointPhaseRequestIdle,
+    /// `simple/point:idle.request:True{}`
+    SimplePointIdleRequestTrue,
+    /// `simple/point:choose:Nil{}`
+    SimplePointChooseNil,
+    /// `simple/point:choose:move <> rest`
+    SimplePointChooseCons,
+    /// `simple/point:idle.request:False{}`
+    SimplePointIdleRequestFalse,
+    /// `simple/point:phase.request:T.Ended{}`
+    SimplePointPhaseRequestEnded,
+    /// `simple/point:phase.request:T.Blocked{_}`
+    SimplePointPhaseRequestBlocked,
+    /// `simple/point:phase.request:T.Stalled{}`
+    SimplePointPhaseRequestStalled,
+    /// `simple/point:phase.request:T.NeedTurnAmount{_, _, _}`
+    SimplePointPhaseRequestNeedTurnAmount,
+    /// `simple/point:phase.request:T.NeedItem{_, _, _, rest}`
+    SimplePointPhaseRequestNeedItem,
+    /// `simple/point:phase.request:T.NeedPhone{_, _, _}`
+    SimplePointPhaseRequestNeedPhone,
+    /// `simple/point:phone.request:1n+1n+1n+1n+extra`
+    SimplePointPhoneRequestSuccSuccSuccSucc,
+    /// `simple/point:phone.request:_`
+    SimplePointPhoneRequestAny,
+    /// `sm/rules:alive:0n`
+    SmRulesAliveZero,
+    /// `sm/rules:alive:1n+rest`
+    SmRulesAliveSucc,
+    /// `sm/rules:living:D.At{seat, 1n+hp} <> rest`
+    SmRulesLivingAtSuccCons,
+    /// `sm/rules:living:D.At{seat, 0n} <> rest`
+    SmRulesLivingAtZeroCons,
+    /// `sm/rules:seats.keep:True{}`
+    SmRulesSeatsKeepTrue,
+    /// `sm/rules:seats.keep:False{}`
+    SmRulesSeatsKeepFalse,
+    /// `sm/rules:successor:Nil{}`
+    SmRulesSuccessorNil,
+    /// `sm/rules:successor:+head <> rest`
+    SmRulesSuccessorCons,
+    /// `sm/rules:traversal:D.Clockwise{}`
+    SmRulesTraversalClockwise,
+    /// `sm/rules:traversal:D.CounterClockwise{}`
+    SmRulesTraversalCounterClockwise,
+    /// `sm/rules:jam.state:S.Free{}`
+    SmRulesJamStateFree,
+    /// `sm/rules:jam.state:S.Jammed{}`
+    SmRulesJamStateJammed,
+    /// `sm/rules:jam.state:S.JammedSkipped{}`
+    SmRulesJamStateJammedSkipped,
+    /// `sm/rules:jam_rank.bit:S.Jammed{}`
+    SmRulesJamRankBitJammed,
+    /// `sm/rules:jam_rank.bit:_`
+    SmRulesJamRankBitAny,
+    /// `sm/rules:predecessor:0n`
+    SmRulesPredecessorZero,
+    /// `sm/rules:predecessor:1n+n`
+    SmRulesPredecessorSucc,
+    /// `sm/rules:value.or:Some{x}`
+    SmRulesValueOrSome,
+    /// `sm/rules:value.or:None{}`
+    SmRulesValueOrNone,
+    /// `sm/rules:rules.load:D.LoadRules{a, _, _, _} 0n`
+    SmRulesRulesLoadLoadRulesZero,
+    /// `sm/rules:rules.load:D.LoadRules{_, b, _, _} 1n`
+    SmRulesRulesLoadLoadRulesOne,
+    /// `sm/rules:rules.load:D.LoadRules{_, _, c, _} 2n`
+    SmRulesRulesLoadLoadRulesTwo,
+    /// `sm/rules:rules.load:D.LoadRules{_, _, _, d} _`
+    SmRulesRulesLoadLoadRules,
+    /// `sm/rules:load.actual:D.LoadRule{D.RandomShells{}, _}`
+    SmRulesLoadActualLoadRuleRandomShells,
+    /// `sm/rules:load.actual:D.LoadRule{D.FixedShells{live, blank}, _}`
+    SmRulesLoadActualLoadRuleFixedShells,
+    /// `sm/rules:load.actual:D.LoadRule{D.AllLive{live}, _}`
+    SmRulesLoadActualLoadRuleAllLive,
+    /// `sm/rules:load.next:True{} _`
+    SmRulesLoadNextTrue,
+    /// `sm/rules:load.next:False{} 0n`
+    SmRulesLoadNextFalseZero,
+    /// `sm/rules:load.next:False{} 1n`
+    SmRulesLoadNextFalseOne,
+    /// `sm/rules:load.next:False{} 2n`
+    SmRulesLoadNextFalseTwo,
+    /// `sm/rules:load.next:False{} _`
+    SmRulesLoadNextFalse,
+    /// `sm/rules:round.next:True{}`
+    SmRulesRoundNextTrue,
+    /// `sm/rules:round.next:False{}`
+    SmRulesRoundNextFalse,
+    /// `sm/rules:captured:True{}`
+    SmRulesCapturedTrue,
+    /// `sm/rules:captured:False{}`
+    SmRulesCapturedFalse,
+    /// `sm/rules:shot.health:D.Blank{}`
+    SmRulesShotHealthBlank,
+    /// `sm/rules:shot.health:D.Live{}`
+    SmRulesShotHealthLive,
+    /// `sm/rules:shot.passes:D.Blank{} True{}`
+    SmRulesShotPassesBlankTrue,
+    /// `sm/rules:shot.passes:_ _`
+    SmRulesShotPassesAny,
+    /// `sm/rules:winner.only:seat <> Nil{}`
+    SmRulesWinnerOnlyConsNil,
+    /// `sm/rules:winner.only:_`
+    SmRulesWinnerOnlyAny,
 }
 
 #[cfg(feature = "trace")]

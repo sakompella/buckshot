@@ -25,11 +25,6 @@ macro_rules! branch {
     }};
 }
 
-/// A Bend branch label still in string form; converted to `branch!` at integration.
-macro_rules! bend_arm {
-    ($id:literal) => {};
-}
-
 pub mod branch;
 mod domain;
 mod items;
@@ -59,11 +54,29 @@ pub enum Move {
 /// A move with the slots it acts on (simple/state.bend `IdleOption`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum IdleOption {
-    ShootAt { target: Seat },
-    UseSlot { slot: Slot, item: Item },
-    JamWith { slot: Slot, target: Seat },
-    StealWith { adrenaline: Slot, owner: Seat, slot: Slot, item: Item },
-    StealJamWith { adrenaline: Slot, owner: Seat, slot: Slot, target: Seat },
+    ShootAt {
+        target: Seat,
+    },
+    UseSlot {
+        slot: Slot,
+        item: Item,
+    },
+    JamWith {
+        slot: Slot,
+        target: Seat,
+    },
+    StealWith {
+        adrenaline: Slot,
+        owner: Seat,
+        slot: Slot,
+        item: Item,
+    },
+    StealJamWith {
+        adrenaline: Slot,
+        owner: Seat,
+        slot: Slot,
+        target: Seat,
+    },
 }
 
 impl IdleOption {
@@ -163,6 +176,7 @@ impl LegalMove {
 
 /// What the machine asks for at a request point (simple/state.bend `Request`).
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[expect(clippy::large_enum_variant, reason = "the menu is stored inline so a step never allocates")]
 pub enum Request {
     Draw { label: Label, range: Range },
     Choose(Menu),
@@ -252,10 +266,22 @@ pub fn step_event(config: &Config, state: State, event: Event) -> Result<Stepped
         (Request::Draw { range, .. }, Event::Draw(n)) => Ok(step(config, state, Answer::Draw(range.value(n)))),
         (Request::Choose(menu), Event::Choose(n)) => match menu.clamped(n) {
             Some(legal) => Ok(step(config, state, Answer::Choice(legal))),
-            None => Ok(Stepped { state, notes: Notes::default() }),
+            None => Ok(Stepped {
+                state,
+                notes: Notes::default(),
+            }),
         },
-        (Request::Draw { .. }, Event::Choose(_)) => Err(RuleError::WrongEvent { expected: RequestKind::Draw, got: RequestKind::Choose }),
-        (Request::Choose(_), Event::Draw(_)) => Err(RuleError::WrongEvent { expected: RequestKind::Choose, got: RequestKind::Draw }),
-        (Request::Finished | Request::Stuck, Event::Draw(_) | Event::Choose(_)) => Ok(Stepped { state, notes: Notes::default() }),
+        (Request::Draw { .. }, Event::Choose(_)) => Err(RuleError::WrongEvent {
+            expected: RequestKind::Draw,
+            got: RequestKind::Choose,
+        }),
+        (Request::Choose(_), Event::Draw(_)) => Err(RuleError::WrongEvent {
+            expected: RequestKind::Choose,
+            got: RequestKind::Draw,
+        }),
+        (Request::Finished | Request::Stuck, Event::Draw(_) | Event::Choose(_)) => Ok(Stepped {
+            state,
+            notes: Notes::default(),
+        }),
     }
 }

@@ -64,8 +64,12 @@ pub struct Seats {
 }
 
 impl Seats {
-    pub const EMPTY: Self = Self { seats: [Seat::Seat0; 4], len: 0 };
+    pub const EMPTY: Self = Self {
+        seats: [Seat::Seat0; 4],
+        len: 0,
+    };
 
+    #[expect(clippy::indexing_slicing, clippy::arithmetic_side_effects, reason = "i < 4 and i < list.len()")]
     const fn of(list: &[Seat]) -> Self {
         let mut seats = Self::EMPTY;
         let mut i = 0;
@@ -89,6 +93,7 @@ impl Seats {
         }
     }
 
+    #[must_use]
     pub fn iter(&self) -> impl DoubleEndedIterator<Item = Seat> + Clone + '_ {
         self.seats.iter().take(usize::from(self.len)).copied()
     }
@@ -137,7 +142,11 @@ impl<T: Copy> Ring<T> {
     /// `ring.get`: `None` exactly when the seat is not at this table.
     #[must_use]
     pub fn get(&self, seat: Seat) -> Option<T> {
-        if self.table.has(seat) { self.values.get(seat.index()).copied() } else { None }
+        if self.table.has(seat) {
+            self.values.get(seat.index()).copied()
+        } else {
+            None
+        }
     }
 
     /// `ring.set`: a seat not at this table leaves the ring unchanged.
@@ -201,7 +210,10 @@ impl Gun {
         let live = load.live.min(Self::CAPACITY);
         let total = live.saturating_add(load.blank).min(Self::CAPACITY);
         let bits = (0..live).fold(0, |bits, i| bits | bit(i));
-        Self { bits, len: u8::try_from(total).unwrap_or(u8::MAX) }
+        Self {
+            bits,
+            len: u8::try_from(total).unwrap_or(u8::MAX),
+        }
     }
 
     /// Builds a list from shells, head first; shells past the capacity are dropped.
@@ -243,19 +255,32 @@ impl Gun {
     pub const fn split_first(self) -> Option<(Shell, Self)> {
         match self.nth(0) {
             None => None,
-            Some(shell) => Some((shell, Self { bits: self.bits >> 1, len: self.len.saturating_sub(1) })),
+            Some(shell) => Some((
+                shell,
+                Self {
+                    bits: self.bits >> 1,
+                    len: self.len.saturating_sub(1),
+                },
+            )),
         }
     }
 
     /// `shell <> self`. A full list drops its last shell (unreachable: see the type).
     #[must_use]
     pub const fn push_front(self, shell: Shell) -> Self {
-        let len = if (self.len as u32) < Self::CAPACITY { self.len.saturating_add(1) } else { self.len };
+        let len = if (self.len as u32) < Self::CAPACITY {
+            self.len.saturating_add(1)
+        } else {
+            self.len
+        };
         let live = match shell {
             Shell::Live => 1,
             Shell::Blank => 0,
         };
-        Self { bits: (self.bits << 1) | live, len }
+        Self {
+            bits: (self.bits << 1) | live,
+            len,
+        }
     }
 
     /// `G.swap`: swaps positions `i` and `j` when both exist, else unchanged.
@@ -519,20 +544,44 @@ impl RoundRules {
     /// `rules.item`.
     #[must_use]
     pub fn item(&self, item: Item) -> ItemRule {
-        self.items.get(usize::try_from(item.rank()).unwrap_or(0)).copied().unwrap_or(ItemRule { enabled: false, per_player: 0, on_table: 0 })
+        self.items
+            .get(usize::try_from(item.rank()).unwrap_or(0))
+            .copied()
+            .unwrap_or(ItemRule {
+                enabled: false,
+                per_player: 0,
+                on_table: 0,
+            })
     }
 
-    /// `config.default_round()`: MP_MatchCustomization's defaults.
+    /// `config.default_round()`: `MP_MatchCustomization`'s defaults.
     #[must_use]
     pub const fn default_round() -> Self {
         const fn rule(per_player: u32, on_table: u32) -> ItemRule {
-            ItemRule { enabled: true, per_player, on_table }
+            ItemRule {
+                enabled: true,
+                per_player,
+                on_table,
+            }
         }
-        let load = LoadRule { shells: ShellRule::Random, items: AmountRule::Random };
+        let load = LoadRule {
+            shells: ShellRule::Random,
+            items: AmountRule::Random,
+        };
         Self {
             health: HealthRule::Random,
             loads: [load; 4],
-            items: [rule(2, 32), rule(2, 32), rule(1, 1), rule(1, 32), rule(8, 32), rule(8, 32), rule(4, 32), rule(4, 32), rule(1, 2)],
+            items: [
+                rule(2, 32),
+                rule(2, 32),
+                rule(1, 1),
+                rule(1, 32),
+                rule(8, 32),
+                rule(8, 32),
+                rule(4, 32),
+                rule(4, 32),
+                rule(1, 2),
+            ],
         }
     }
 }
@@ -556,8 +605,7 @@ impl Config {
         let invalid = |reason| Err(crate::RuleError::Config(reason));
         let (len, first) = match rounds {
             [first] | [first, _] | [first, _, _] => (rounds.len(), *first),
-            [] => return invalid("a plan has one to three rounds"),
-            [_, _, _, _, ..] => return invalid("a plan has one to three rounds"),
+            [] | [_, _, _, _, ..] => return invalid("a plan has one to three rounds"),
         };
         for round in rounds {
             if matches!(round.health, HealthRule::Fixed(0)) {
@@ -567,7 +615,7 @@ impl Config {
                 let ok = match load.shells {
                     ShellRule::Random => true,
                     ShellRule::Fixed { live, blank } => blank >= 1 && live.saturating_add(blank) <= Gun::CAPACITY,
-                    ShellRule::AllLive { live } => live >= 1 && live <= Gun::CAPACITY,
+                    ShellRule::AllLive { live } => (1..=Gun::CAPACITY).contains(&live),
                 };
                 if !ok {
                     return invalid("a fixed load has 1 to 64 shells");
@@ -578,7 +626,11 @@ impl Config {
         for (cell, round) in all.iter_mut().zip(rounds) {
             *cell = *round;
         }
-        Ok(Self { table, rounds: all, len: u8::try_from(len).unwrap_or(3) })
+        Ok(Self {
+            table,
+            rounds: all,
+            len: u8::try_from(len).unwrap_or(3),
+        })
     }
 
     #[must_use]
@@ -684,8 +736,30 @@ impl Table {
             Load { live, blank }
         }
         const TWO: [Load; 9] = [l(1, 2), l(2, 1), l(2, 2), l(3, 2), l(1, 1), l(2, 3), l(3, 3), l(3, 1), l(4, 2)];
-        const THREE: [Load; 10] = [l(2, 3), l(3, 2), l(3, 3), l(4, 3), l(2, 2), l(3, 4), l(4, 4), l(4, 2), l(3, 1), l(1, 1)];
-        const FOUR: [Load; 10] = [l(3, 4), l(3, 2), l(3, 3), l(4, 3), l(2, 2), l(3, 4), l(4, 4), l(4, 2), l(3, 1), l(2, 1)];
+        const THREE: [Load; 10] = [
+            l(2, 3),
+            l(3, 2),
+            l(3, 3),
+            l(4, 3),
+            l(2, 2),
+            l(3, 4),
+            l(4, 4),
+            l(4, 2),
+            l(3, 1),
+            l(1, 1),
+        ];
+        const FOUR: [Load; 10] = [
+            l(3, 4),
+            l(3, 2),
+            l(3, 3),
+            l(4, 3),
+            l(2, 2),
+            l(3, 4),
+            l(4, 4),
+            l(4, 2),
+            l(3, 1),
+            l(2, 1),
+        ];
         match self {
             Self::TwoSeats => &TWO,
             Self::ThreeSeats => &THREE,
@@ -714,26 +788,81 @@ pub const PHONE_CAP: u32 = 7;
 /// Public events (domain.bend `GameEvent`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum GameEvent {
-    RoundBegan { round: u32, health: u32, first: Seat },
-    GrabbingBegan { seats: Seats },
-    Granted { seat: Seat, item: Item },
-    Placed { seat: Seat, slot: Slot, item: Item },
-    GrabbingEnded { seat: Seat },
+    RoundBegan {
+        round: u32,
+        health: u32,
+        first: Seat,
+    },
+    GrabbingBegan {
+        seats: Seats,
+    },
+    Granted {
+        seat: Seat,
+        item: Item,
+    },
+    Placed {
+        seat: Seat,
+        slot: Slot,
+        item: Item,
+    },
+    GrabbingEnded {
+        seat: Seat,
+    },
     DistributionDone,
-    Loaded { load: Load },
-    TurnSkipped { seat: Seat },
-    JamLifted { seat: Seat },
-    TurnGiven { seat: Seat },
-    PickedUp { seat: Seat },
-    Fired { shooter: Seat, target: Seat, shell: Shell, captured: Damage, applied: u32, health: u32 },
-    Died { seat: Seat },
-    Used { seat: Seat, owner: Seat, slot: Slot, item: Item },
-    Healed { seat: Seat, health: u32 },
-    Ejected { seat: Seat, shell: Shell },
-    Inverted { seat: Seat },
-    JamApplied { by: Seat, target: Seat },
-    DirectionFlipped { direction: Direction },
-    RoundWon { seat: Seat, prize: u32 },
+    Loaded {
+        load: Load,
+    },
+    TurnSkipped {
+        seat: Seat,
+    },
+    JamLifted {
+        seat: Seat,
+    },
+    TurnGiven {
+        seat: Seat,
+    },
+    PickedUp {
+        seat: Seat,
+    },
+    Fired {
+        shooter: Seat,
+        target: Seat,
+        shell: Shell,
+        captured: Damage,
+        applied: u32,
+        health: u32,
+    },
+    Died {
+        seat: Seat,
+    },
+    Used {
+        seat: Seat,
+        owner: Seat,
+        slot: Slot,
+        item: Item,
+    },
+    Healed {
+        seat: Seat,
+        health: u32,
+    },
+    Ejected {
+        seat: Seat,
+        shell: Shell,
+    },
+    Inverted {
+        seat: Seat,
+    },
+    JamApplied {
+        by: Seat,
+        target: Seat,
+    },
+    DirectionFlipped {
+        direction: Direction,
+    },
+    RoundWon {
+        seat: Seat,
+        prize: u32,
+    },
     MatchConcluded,
 }
 

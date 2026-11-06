@@ -4,6 +4,7 @@
 
 use arrayvec::ArrayVec;
 
+use crate::branch::B;
 use crate::domain::{AmountRule, Config, Direction, Gun, Item, ItemRule, Items, Ring, Seat, Seats, Shell, Slot, Slots};
 use crate::rules;
 use crate::state::{Grabs, Jam, Players, State};
@@ -43,24 +44,24 @@ fn read<T: Copy>(ring: &Ring<T>, seat: Seat, fallback: T) -> T {
 }
 
 /// `keep`: whether the element is kept in the result list.
-const fn keep(kept: bool) -> bool {
+fn keep(kept: bool) -> bool {
     if kept {
-        bend_arm!("sm/items:keep:True{}");
+        branch!(B::SmItemsKeepTrue);
     } else {
-        bend_arm!("sm/items:keep:False{}");
+        branch!(B::SmItemsKeepFalse);
     }
     kept
 }
 
 /// `is_none`.
-const fn is_none(found: Option<Item>) -> bool {
+fn is_none(found: Option<Item>) -> bool {
     match found {
         None => {
-            bend_arm!("sm/items:is_none:None{}");
+            branch!(B::SmItemsIsNoneNone);
             true
         }
         Some(_) => {
-            bend_arm!("sm/items:is_none:Some{item}");
+            branch!(B::SmItemsIsNoneSome);
             false
         }
     }
@@ -70,11 +71,11 @@ const fn is_none(found: Option<Item>) -> bool {
 fn has_items(items: Items) -> bool {
     match items.split_first() {
         None => {
-            bend_arm!("sm/items:has_items:Nil{}");
+            branch!(B::SmItemsHasItemsNil);
             false
         }
         Some(_) => {
-            bend_arm!("sm/items:has_items:x <> rest");
+            branch!(B::SmItemsHasItemsCons);
             true
         }
     }
@@ -84,11 +85,11 @@ fn has_items(items: Items) -> bool {
 fn has_seats(seats: Seats) -> bool {
     match seats.first() {
         None => {
-            bend_arm!("sm/items:has_seats:Nil{}");
+            branch!(B::SmItemsHasSeatsNil);
             false
         }
         Some(_) => {
-            bend_arm!("sm/items:has_seats:x <> rest");
+            branch!(B::SmItemsHasSeatsCons);
             true
         }
     }
@@ -96,49 +97,53 @@ fn has_seats(seats: Seats) -> bool {
 
 /// `slots.items`: the eight contents in slot order.
 fn slots_items(slots: Slots) -> impl Iterator<Item = Option<Item>> {
-    bend_arm!("sm/items:slots.items:D.Slots{a, b, c, d, e, f, g, h}");
+    branch!(B::SmItemsSlotsItemsSlots);
     Slot::ORDER.into_iter().map(move |slot| slots.get(slot))
 }
 
 /// `occupied`.
-#[allow(clippy::single_match, clippy::collapsible_match, reason = "one arm per Bend case, even when it only names the branch")]
+#[allow(
+    clippy::single_match,
+    clippy::collapsible_match,
+    reason = "one arm per Bend case, even when it only names the branch"
+)]
 fn occupied(slots: Slots) -> u32 {
     let mut count = 0u32;
     for found in slots_items(slots) {
         match found {
             None => {
-                bend_arm!("sm/items:occupied:None{} <> rest");
+                branch!(B::SmItemsOccupiedNoneCons);
             }
             Some(_) => {
-                bend_arm!("sm/items:occupied:Some{item} <> rest");
+                branch!(B::SmItemsOccupiedSomeCons);
                 count = count.saturating_add(1);
             }
         }
     }
-    bend_arm!("sm/items:occupied:Nil{}");
+    branch!(B::SmItemsOccupiedNil);
     count
 }
 
 /// `bool.nat`.
-const fn bool_nat(b: bool) -> u32 {
+fn bool_nat(b: bool) -> u32 {
     if b {
-        bend_arm!("sm/items:bool.nat:True{}");
+        branch!(B::SmItemsBoolNatTrue);
         1
     } else {
-        bend_arm!("sm/items:bool.nat:False{}");
+        branch!(B::SmItemsBoolNatFalse);
         0
     }
 }
 
 /// `copies.one`.
-const fn copies_one(found: Option<Item>, item: Item) -> u32 {
+fn copies_one(found: Option<Item>, item: Item) -> u32 {
     match found {
         None => {
-            bend_arm!("sm/items:copies.one:None{}");
+            branch!(B::SmItemsCopiesOneNone);
             0
         }
         Some(actual) => {
-            bend_arm!("sm/items:copies.one:Some{actual}");
+            branch!(B::SmItemsCopiesOneSome);
             bool_nat(actual.rank() == item.rank())
         }
     }
@@ -148,10 +153,10 @@ const fn copies_one(found: Option<Item>, item: Item) -> u32 {
 fn copies(slots: Slots, item: Item) -> u32 {
     let mut total = 0u32;
     for found in slots_items(slots) {
-        bend_arm!("sm/items:copies:x <> rest");
+        branch!(B::SmItemsCopiesCons);
         total = total.saturating_add(copies_one(found, item));
     }
-    bend_arm!("sm/items:copies:Nil{}");
+    branch!(B::SmItemsCopiesNil);
     total
 }
 
@@ -192,7 +197,7 @@ fn seat_intake(grabs: &Grabs, seat: Seat) -> bool {
 
 /// `grabs.open`.
 fn grabs_open(grabs: Grabs, seat: Seat) -> Grabs {
-    bend_arm!("sm/items:grabs.open:S.Grabs{distributing, grabbing, holding, granted, intake}");
+    branch!(B::SmItemsGrabsOpenGrabs);
     Grabs {
         distributing: grabs.distributing,
         grabbing: grabs.grabbing.set(seat, true),
@@ -206,22 +211,25 @@ fn grabs_open(grabs: Grabs, seat: Seat) -> Grabs {
 pub(crate) fn grabs_open_all(seats: Seats, grabs: Grabs) -> Grabs {
     let mut grabs = grabs;
     for seat in seats.iter() {
-        bend_arm!("sm/items:grabs.open_all:seat <> rest");
+        branch!(B::SmItemsGrabsOpenAllCons);
         grabs = grabs_open(grabs, seat);
     }
-    bend_arm!("sm/items:grabs.open_all:Nil{}");
+    branch!(B::SmItemsGrabsOpenAllNil);
     grabs
 }
 
 /// `grabs.stop_intake`.
 pub(crate) fn grabs_stop_intake(grabs: Grabs, seat: Seat) -> Grabs {
-    bend_arm!("sm/items:grabs.stop_intake:S.Grabs{distributing, grabbing, holding, granted, intake}");
-    Grabs { intake: grabs.intake.set(seat, false), ..grabs }
+    branch!(B::SmItemsGrabsStopIntakeGrabs);
+    Grabs {
+        intake: grabs.intake.set(seat, false),
+        ..grabs
+    }
 }
 
 /// `grabs.give`.
 pub(crate) fn grabs_give(grabs: Grabs, seat: Seat, item: Item) -> Grabs {
-    bend_arm!("sm/items:grabs.give:S.Grabs{distributing, grabbing, holding, granted, intake}");
+    branch!(B::SmItemsGrabsGiveGrabs);
     Grabs {
         holding: grabs.holding.set(seat, Some(item)),
         granted: grabs.granted.set(seat, seat_granted(&grabs, seat).saturating_add(1)),
@@ -232,14 +240,21 @@ pub(crate) fn grabs_give(grabs: Grabs, seat: Seat, item: Item) -> Grabs {
 
 /// `grabs.close`.
 pub(crate) fn grabs_close(grabs: Grabs, seat: Seat) -> Grabs {
-    bend_arm!("sm/items:grabs.close:S.Grabs{distributing, grabbing, holding, granted, intake}");
-    Grabs { grabbing: grabs.grabbing.set(seat, false), ..grabs }
+    branch!(B::SmItemsGrabsCloseGrabs);
+    Grabs {
+        grabbing: grabs.grabbing.set(seat, false),
+        ..grabs
+    }
 }
 
 /// `grabs.placed`: a placed item leaves the hand; intake reopens only while still grabbing.
 pub(crate) fn grabs_placed(grabs: Grabs, seat: Seat) -> Grabs {
-    bend_arm!("sm/items:grabs.placed:S.Grabs{distributing, grabbing, holding, granted, intake}");
-    Grabs { holding: grabs.holding.set(seat, None), intake: grabs.intake.set(seat, seat_grabbing(&grabs, seat)), ..grabs }
+    branch!(B::SmItemsGrabsPlacedGrabs);
+    Grabs {
+        holding: grabs.holding.set(seat, None),
+        intake: grabs.intake.set(seat, seat_grabbing(&grabs, seat)),
+        ..grabs
+    }
 }
 
 /// `owned`: copies in the slots plus the held item.
@@ -251,16 +266,16 @@ fn owned(players: &Players, grabs: &Grabs, seat: Seat, item: Item) -> u32 {
 fn owned_table(seats: Seats, players: &Players, grabs: &Grabs, item: Item) -> u32 {
     let mut total = 0u32;
     for seat in seats.iter() {
-        bend_arm!("sm/items:owned.table:seat <> rest");
+        branch!(B::SmItemsOwnedTableCons);
         total = total.saturating_add(owned(players, grabs, seat, item));
     }
-    bend_arm!("sm/items:owned.table:Nil{}");
+    branch!(B::SmItemsOwnedTableNil);
     total
 }
 
 /// `stock.open`.
-const fn stock_open(rule: ItemRule, dealt: bool, own: u32, total: u32) -> bool {
-    bend_arm!("sm/items:stock.open:D.ItemRule{enabled, per_player, on_table}");
+fn stock_open(rule: ItemRule, dealt: bool, own: u32, total: u32) -> bool {
+    branch!(B::SmItemsStockOpenItemRule);
     rule.enabled && dealt && own < rule.per_player && total < rule.on_table
 }
 
@@ -270,10 +285,10 @@ pub(crate) fn pool(config: &Config, state: &State, seat: Seat) -> Items {
     let table = config.table();
     let rules = rules::world_rules(config, &state.world);
     // `pool.go` over `item.order()`.
-    bend_arm!("sm/items:round.items:D.RoundRules{_, _, items}");
+    branch!(B::SmItemsRoundItemsRoundRules);
     let mut pool = Items::EMPTY;
     for item in Item::ORDER {
-        bend_arm!("sm/items:pool.go:+item <> rest");
+        branch!(B::SmItemsPoolGoCons);
         let open = stock_open(
             rules.item(item),
             item.dealt_at(table),
@@ -284,27 +299,13 @@ pub(crate) fn pool(config: &Config, state: &State, seat: Seat) -> Items {
             pool = pool.with(item);
         }
     }
-    bend_arm!("sm/items:pool.go:Nil{}");
+    branch!(B::SmItemsPoolGoNil);
     pool
-}
-
-/// `alive` (sm/rules.bend).
-const fn alive(hp: u32) -> bool {
-    match hp {
-        0 => {
-            bend_arm!("sm/rules:alive:0n");
-            false
-        }
-        1.. => {
-            bend_arm!("sm/rules:alive:1n+rest");
-            true
-        }
-    }
 }
 
 /// `begin.can`: a new round ignores health and full slots.
 fn begin_can(new_round: bool, hp: u32, slots: Slots) -> bool {
-    let living = alive(hp);
+    let living = rules::alive(hp);
     let room = occupied(slots) < 8;
     new_round || (living && room)
 }
@@ -313,14 +314,14 @@ fn begin_can(new_round: bool, hp: u32, slots: Slots) -> bool {
 fn begin_go(seats: Seats, config: &Config, state: &State, new_round: bool) -> Seats {
     let mut kept = Seats::EMPTY;
     for seat in seats.iter() {
-        bend_arm!("sm/items:begin.go:+seat <> rest");
+        branch!(B::SmItemsBeginGoCons);
         let can = begin_can(new_round, seat_health(&state.players, seat), seat_slots(&state.players, seat));
         let stocked = has_items(pool(config, state, seat));
         if keep(can && stocked) {
             kept.push(seat);
         }
     }
-    bend_arm!("sm/items:begin.go:Nil{}");
+    branch!(B::SmItemsBeginGoNil);
     kept
 }
 
@@ -329,26 +330,30 @@ fn begin_go(seats: Seats, config: &Config, state: &State, new_round: bool) -> Se
 pub(crate) fn begin_seats(config: &Config, state: &State, new_round: bool, amount: u32) -> Seats {
     match amount {
         0 => {
-            bend_arm!("sm/items:begin.seats:0n");
+            branch!(B::SmItemsBeginSeatsZero);
             Seats::EMPTY
         }
         1.. => {
-            bend_arm!("sm/items:begin.seats:_");
+            branch!(B::SmItemsBeginSeatsAny);
             begin_go(config.table().seats(), config, state, new_round)
         }
     }
 }
 
 /// `puts.here`.
-#[allow(clippy::single_match, clippy::collapsible_match, reason = "one arm per Bend case, even when it only names the branch")]
+#[allow(
+    clippy::single_match,
+    clippy::collapsible_match,
+    reason = "one arm per Bend case, even when it only names the branch"
+)]
 fn puts_here(found: Option<Item>, slot: Slot, out: &mut GrabOptions) {
     match found {
         None => {
-            bend_arm!("sm/items:puts.here:None{}");
+            branch!(B::SmItemsPutsHereNone);
             let _ = out.try_push(GrabOption::PutAt { slot });
         }
         Some(_) => {
-            bend_arm!("sm/items:puts.here:Some{item}");
+            branch!(B::SmItemsPutsHereSome);
         }
     }
 }
@@ -356,19 +361,19 @@ fn puts_here(found: Option<Item>, slot: Slot, out: &mut GrabOptions) {
 /// `puts`: a put at every empty slot.
 fn puts(inventory: Slots, out: &mut GrabOptions) {
     for slot in Slot::ORDER {
-        bend_arm!("sm/items:puts:+slot <> rest");
+        branch!(B::SmItemsPutsCons);
         puts_here(inventory.get(slot), slot, out);
     }
-    bend_arm!("sm/items:puts:Nil{}");
+    branch!(B::SmItemsPutsNil);
 }
 
 /// `grab.intake`.
 fn grab_intake(open: bool, out: &mut GrabOptions) {
     if open {
-        bend_arm!("sm/items:grab.intake:True{}");
+        branch!(B::SmItemsGrabIntakeTrue);
         let _ = out.try_push(GrabOption::TakeItem);
     } else {
-        bend_arm!("sm/items:grab.intake:False{}");
+        branch!(B::SmItemsGrabIntakeFalse);
     }
 }
 
@@ -377,15 +382,15 @@ fn grab_offer(grabbing: bool, holding: Option<Item>, open: bool, slots: Slots) -
     let mut out = GrabOptions::new();
     match (grabbing, holding) {
         (true, Some(_)) => {
-            bend_arm!("sm/items:grab.offer:True{} Some{item}");
+            branch!(B::SmItemsGrabOfferTrueSome);
             puts(slots, &mut out);
         }
         (true, None) => {
-            bend_arm!("sm/items:grab.offer:True{} None{}");
+            branch!(B::SmItemsGrabOfferTrueNone);
             grab_intake(open, &mut out);
         }
         (false, None | Some(_)) => {
-            bend_arm!("sm/items:grab.offer:False{} _");
+            branch!(B::SmItemsGrabOfferFalse);
         }
     }
     out
@@ -398,10 +403,15 @@ pub(crate) fn grab_needs(config: &Config, state: &State, seat: Seat) -> GrabOpti
     if !config.table().has(seat) {
         return GrabOptions::new();
     }
-    bend_arm!("sm/items:grab.needs.go:+seat <> rest");
+    branch!(B::SmItemsGrabNeedsGoCons);
     let grabs = &state.grabs;
     let open = seat_intake(grabs, seat) && grabs.distributing;
-    grab_offer(seat_grabbing(grabs, seat), seat_holding(grabs, seat), open, seat_slots(&state.players, seat))
+    grab_offer(
+        seat_grabbing(grabs, seat),
+        seat_holding(grabs, seat),
+        open,
+        seat_slots(&state.players, seat),
+    )
 }
 
 /// `placing.last`: the placing seat still holds its item here.
@@ -417,10 +427,10 @@ pub(crate) fn placing_last(config: &Config, state: &State, seat: Seat) -> bool {
 fn finish_ended(grabs: &Grabs) -> bool {
     let mut ended = true;
     for (_, grabbing) in grabs.grabbing.entries() {
-        bend_arm!("sm/items:finish.ended:D.At{seat, grabbing} <> rest");
+        branch!(B::SmItemsFinishEndedAtCons);
         ended = !grabbing && ended;
     }
-    bend_arm!("sm/items:finish.ended:Nil{}");
+    branch!(B::SmItemsFinishEndedNil);
     ended
 }
 
@@ -428,11 +438,11 @@ fn finish_ended(grabs: &Grabs) -> bool {
 fn finish_empty(seats: Seats, config: &Config, state: &State) -> bool {
     let mut empty = true;
     for seat in seats.iter() {
-        bend_arm!("sm/items:finish.empty:seat <> rest");
+        branch!(B::SmItemsFinishEmptyCons);
         let stocked = has_items(pool(config, state, seat));
         empty = !stocked && empty;
     }
-    bend_arm!("sm/items:finish.empty:Nil{}");
+    branch!(B::SmItemsFinishEmptyNil);
     empty
 }
 
@@ -448,7 +458,7 @@ pub(crate) fn finished(config: &Config, state: &State) -> bool {
 fn stalled(seats: Seats, config: &Config, state: &State, placing: Seat) -> Seats {
     let mut out = Seats::EMPTY;
     for seat in seats.iter() {
-        bend_arm!("sm/items:stalled:+seat <> rest");
+        branch!(B::SmItemsStalledCons);
         let grabs = &state.grabs;
         let grabbing = seat_grabbing(grabs, seat);
         let empty_handed = is_none(seat_holding(grabs, seat));
@@ -458,7 +468,7 @@ fn stalled(seats: Seats, config: &Config, state: &State, placing: Seat) -> Seats
             out.push(seat);
         }
     }
-    bend_arm!("sm/items:stalled:Nil{}");
+    branch!(B::SmItemsStalledNil);
     out
 }
 
@@ -473,56 +483,56 @@ pub(crate) fn holders(grabs: &Grabs) -> bool {
     for (_, holding) in grabs.holding.entries() {
         match holding {
             None => {
-                bend_arm!("sm/items:holders:D.At{seat, None{}} <> rest");
+                branch!(B::SmItemsHoldersAtNoneCons);
             }
             Some(_) => {
-                bend_arm!("sm/items:holders:D.At{seat, Some{item}} <> rest");
+                branch!(B::SmItemsHoldersAtSomeCons);
                 return true;
             }
         }
     }
-    bend_arm!("sm/items:holders:Nil{}");
+    branch!(B::SmItemsHoldersNil);
     false
 }
 
 /// `amount.live`: the end-of-turn amount draw is live while distributing, or
 /// when an exhausted, winnerless gun would start a distribution.
-pub(crate) const fn amount_live(rule: AmountRule, distributing: bool, reload: bool) -> bool {
+pub(crate) fn amount_live(rule: AmountRule, distributing: bool, reload: bool) -> bool {
     match rule {
         AmountRule::Random => {
-            bend_arm!("sm/items:amount.live:D.RandomAmount{}");
+            branch!(B::SmItemsAmountLiveRandomAmount);
             distributing || reload
         }
         AmountRule::Fixed(_) => {
-            bend_arm!("sm/items:amount.live:D.FixedAmount{amount}");
+            branch!(B::SmItemsAmountLiveFixedAmount);
             false
         }
     }
 }
 
 /// `winnerless`.
-const fn winnerless(winner: Option<Seat>) -> bool {
+fn winnerless(winner: Option<Seat>) -> bool {
     match winner {
         None => {
-            bend_arm!("sm/items:winnerless:None{}");
+            branch!(B::SmItemsWinnerlessNone);
             true
         }
         Some(_) => {
-            bend_arm!("sm/items:winnerless:Some{seat}");
+            branch!(B::SmItemsWinnerlessSome);
             false
         }
     }
 }
 
 /// `gun.empty`.
-const fn gun_empty(gun: Gun) -> bool {
+fn gun_empty(gun: Gun) -> bool {
     match gun.split_first() {
         None => {
-            bend_arm!("sm/items:gun.empty:Nil{}");
+            branch!(B::SmItemsGunEmptyNil);
             true
         }
         Some(_) => {
-            bend_arm!("sm/items:gun.empty:shell <> rest");
+            branch!(B::SmItemsGunEmptyCons);
             false
         }
     }
@@ -540,15 +550,15 @@ pub(crate) fn reload_wanted(config: &Config, state: &State, winner: Option<Seat>
 fn jam_options(players: &Players, by: Seat) -> Seats {
     let mut out = Seats::EMPTY;
     for (seat, record) in players.entries() {
-        bend_arm!("sm/items:jam.options:D.At{+seat, hp} <> rest");
+        branch!(B::SmItemsJamOptionsAtCons);
         let other = seat != by;
-        let living = alive(record.health);
+        let living = rules::alive(record.health);
         let free = !seat_jammed(players, seat);
         if keep(other && living && free) {
             out.push(seat);
         }
     }
-    bend_arm!("sm/items:jam.options:Nil{}");
+    branch!(B::SmItemsJamOptionsNil);
     out
 }
 
@@ -561,11 +571,11 @@ pub(crate) fn jam_for(_config: &Config, state: &State, by: Seat) -> Seats {
 fn jam_any(options: Seats) -> bool {
     match options.first() {
         None => {
-            bend_arm!("sm/items:jam.any:Nil{}");
+            branch!(B::SmItemsJamAnyNil);
             false
         }
         Some(_) => {
-            bend_arm!("sm/items:jam.any:option <> rest");
+            branch!(B::SmItemsJamAnyCons);
             true
         }
     }
@@ -573,36 +583,40 @@ fn jam_any(options: Seats) -> bool {
 
 /// `steal.fits`: adrenaline never, a saw only while the barrel is whole, a
 /// jammer only if the thief has a target, everything else always.
-const fn steal_fits(item: Item, sawed: bool, targets: bool) -> bool {
+fn steal_fits(item: Item, sawed: bool, targets: bool) -> bool {
     match item {
         Item::Adrenaline => {
-            bend_arm!("sm/items:steal.fits:D.Adrenaline{}");
+            branch!(B::SmItemsStealFitsAdrenaline);
             false
         }
         Item::Saw => {
-            bend_arm!("sm/items:steal.fits:D.Saw{}");
+            branch!(B::SmItemsStealFitsSaw);
             !sawed
         }
         Item::Jammer => {
-            bend_arm!("sm/items:steal.fits:D.Jammer{}");
+            branch!(B::SmItemsStealFitsJammer);
             targets
         }
         Item::Glass | Item::Cigarettes | Item::Beer | Item::Phone | Item::Inverter | Item::Remote => {
-            bend_arm!("sm/items:steal.fits:_");
+            branch!(B::SmItemsStealFitsAny);
             true
         }
     }
 }
 
 /// `steal.here`.
-#[allow(clippy::single_match, clippy::collapsible_match, reason = "one arm per Bend case, even when it only names the branch")]
+#[allow(
+    clippy::single_match,
+    clippy::collapsible_match,
+    reason = "one arm per Bend case, even when it only names the branch"
+)]
 fn steal_here(found: Option<Item>, owner: Seat, slot: Slot, sawed: bool, targets: bool, out: &mut Picks) {
     match found {
         None => {
-            bend_arm!("sm/items:steal.here:None{}");
+            branch!(B::SmItemsStealHereNone);
         }
         Some(item) => {
-            bend_arm!("sm/items:steal.here:Some{+item}");
+            branch!(B::SmItemsStealHereSome);
             if keep(steal_fits(item, sawed, targets)) {
                 let _ = out.try_push(Pick { owner, slot, item });
             }
@@ -614,19 +628,19 @@ fn steal_here(found: Option<Item>, owner: Seat, slot: Slot, sawed: bool, targets
 fn steal_slots(inventory: Slots, owner: Seat, sawed: bool, targets: bool) -> Picks {
     let mut out = Picks::new();
     for slot in Slot::ORDER {
-        bend_arm!("sm/items:steal.slots:+slot <> rest");
+        branch!(B::SmItemsStealSlotsCons);
         steal_here(inventory.get(slot), owner, slot, sawed, targets, &mut out);
     }
-    bend_arm!("sm/items:steal.slots:Nil{}");
+    branch!(B::SmItemsStealSlotsNil);
     out
 }
 
 /// `steal.owner`: `slots` is `steal.slots` of this owner, built either way.
 fn steal_owner(own: bool, slots: &Picks, out: &mut Picks) {
     if own {
-        bend_arm!("sm/items:steal.owner:True{}");
+        branch!(B::SmItemsStealOwnerTrue);
     } else {
-        bend_arm!("sm/items:steal.owner:False{}");
+        branch!(B::SmItemsStealOwnerFalse);
         for pick in slots {
             let _ = out.try_push(*pick);
         }
@@ -637,11 +651,11 @@ fn steal_owner(own: bool, slots: &Picks, out: &mut Picks) {
 fn steal_owners(players: &Players, thief: Seat, sawed: bool, targets: bool) -> Picks {
     let mut out = Picks::new();
     for (owner, record) in players.entries() {
-        bend_arm!("sm/items:steal.owners:D.At{+owner, inventory} <> rest");
+        branch!(B::SmItemsStealOwnersAtCons);
         let slots = steal_slots(record.slots, owner, sawed, targets);
         steal_owner(owner == thief, &slots, &mut out);
     }
-    bend_arm!("sm/items:steal.owners:Nil{}");
+    branch!(B::SmItemsStealOwnersNil);
     out
 }
 
@@ -655,47 +669,51 @@ pub(crate) fn steal_for(config: &Config, state: &State, thief: Seat) -> Picks {
 fn steal_any(options: &Picks) -> bool {
     match options.first() {
         None => {
-            bend_arm!("sm/items:steal.any:Nil{}");
+            branch!(B::SmItemsStealAnyNil);
             false
         }
         Some(_) => {
-            bend_arm!("sm/items:steal.any:option <> rest");
+            branch!(B::SmItemsStealAnyCons);
             true
         }
     }
 }
 
 /// `use.fits`.
-const fn use_fits(item: Item, sawed: bool, targets: bool, steals: bool) -> bool {
+fn use_fits(item: Item, sawed: bool, targets: bool, steals: bool) -> bool {
     match item {
         Item::Adrenaline => {
-            bend_arm!("sm/items:use.fits:D.Adrenaline{}");
+            branch!(B::SmItemsUseFitsAdrenaline);
             steals
         }
         Item::Saw => {
-            bend_arm!("sm/items:use.fits:D.Saw{}");
+            branch!(B::SmItemsUseFitsSaw);
             !sawed
         }
         Item::Jammer => {
-            bend_arm!("sm/items:use.fits:D.Jammer{}");
+            branch!(B::SmItemsUseFitsJammer);
             targets
         }
         Item::Glass | Item::Cigarettes | Item::Beer | Item::Phone | Item::Inverter | Item::Remote => {
-            bend_arm!("sm/items:use.fits:_");
+            branch!(B::SmItemsUseFitsAny);
             true
         }
     }
 }
 
 /// `use.here`.
-#[allow(clippy::single_match, clippy::collapsible_match, reason = "one arm per Bend case, even when it only names the branch")]
+#[allow(
+    clippy::single_match,
+    clippy::collapsible_match,
+    reason = "one arm per Bend case, even when it only names the branch"
+)]
 fn use_here(found: Option<Item>, slot: Slot, sawed: bool, targets: bool, steals: bool, out: &mut Uses) {
     match found {
         None => {
-            bend_arm!("sm/items:use.here:None{}");
+            branch!(B::SmItemsUseHereNone);
         }
         Some(item) => {
-            bend_arm!("sm/items:use.here:Some{+item}");
+            branch!(B::SmItemsUseHereSome);
             if keep(use_fits(item, sawed, targets, steals)) {
                 let _ = out.try_push(UseAt { slot, item });
             }
@@ -707,10 +725,10 @@ fn use_here(found: Option<Item>, slot: Slot, sawed: bool, targets: bool, steals:
 fn use_slots(inventory: Slots, sawed: bool, targets: bool, steals: bool) -> Uses {
     let mut out = Uses::new();
     for slot in Slot::ORDER {
-        bend_arm!("sm/items:use.slots:+slot <> rest");
+        branch!(B::SmItemsUseSlotsCons);
         use_here(inventory.get(slot), slot, sawed, targets, steals, &mut out);
     }
-    bend_arm!("sm/items:use.slots:Nil{}");
+    branch!(B::SmItemsUseSlotsNil);
     out
 }
 
@@ -722,49 +740,42 @@ pub(crate) fn uses(config: &Config, state: &State, seat: Seat) -> Uses {
 }
 
 /// `ends_turn`.
-pub(crate) const fn ends_turn(item: Item, length: u32) -> bool {
+pub(crate) fn ends_turn(item: Item, length: u32) -> bool {
     match item {
         Item::Beer => {
-            bend_arm!("sm/items:ends_turn:D.Beer{}");
+            branch!(B::SmItemsEndsTurnBeer);
             length == 1
         }
-        Item::Saw
-        | Item::Glass
-        | Item::Jammer
-        | Item::Cigarettes
-        | Item::Phone
-        | Item::Inverter
-        | Item::Adrenaline
-        | Item::Remote => {
-            bend_arm!("sm/items:ends_turn:_");
+        Item::Saw | Item::Glass | Item::Jammer | Item::Cigarettes | Item::Phone | Item::Inverter | Item::Adrenaline | Item::Remote => {
+            branch!(B::SmItemsEndsTurnAny);
             false
         }
     }
 }
 
 /// `invert`.
-pub(crate) const fn invert(shell: Shell) -> Shell {
+pub(crate) fn invert(shell: Shell) -> Shell {
     match shell {
         Shell::Live => {
-            bend_arm!("sm/items:invert:D.Live{}");
+            branch!(B::SmItemsInvertLive);
             Shell::Blank
         }
         Shell::Blank => {
-            bend_arm!("sm/items:invert:D.Blank{}");
+            branch!(B::SmItemsInvertBlank);
             Shell::Live
         }
     }
 }
 
 /// `flip`.
-pub(crate) const fn flip(direction: Direction) -> Direction {
+pub(crate) fn flip(direction: Direction) -> Direction {
     match direction {
         Direction::Clockwise => {
-            bend_arm!("sm/items:flip:D.Clockwise{}");
+            branch!(B::SmItemsFlipClockwise);
             Direction::CounterClockwise
         }
         Direction::CounterClockwise => {
-            bend_arm!("sm/items:flip:D.CounterClockwise{}");
+            branch!(B::SmItemsFlipCounterClockwise);
             Direction::Clockwise
         }
     }
@@ -786,7 +797,12 @@ mod tests {
     }
 
     fn state(table: Table) -> State {
-        let record = SeatRecord { health: 3, jam: Jam::Free, cash: 0, slots: Slots::EMPTY };
+        let record = SeatRecord {
+            health: 3,
+            jam: Jam::Free,
+            cash: 0,
+            slots: Slots::EMPTY,
+        };
         State {
             world: World {
                 before_round: false,
@@ -844,8 +860,12 @@ mod tests {
         let config = config(Table::ThreeSeats)?;
         let mut s = state(Table::ThreeSeats);
         edit(&mut s, S0, |r| r.slots = stock(&[(Slot::Slot0, Item::Glass)]));
-        edit(&mut s, S1, |r| r.slots = stock(&[(Slot::Slot0, Item::Saw), (Slot::Slot1, Item::Adrenaline), (Slot::Slot2, Item::Beer)]));
-        edit(&mut s, S2, |r| r.slots = stock(&[(Slot::Slot4, Item::Jammer), (Slot::Slot5, Item::Phone)]));
+        edit(&mut s, S1, |r| {
+            r.slots = stock(&[(Slot::Slot0, Item::Saw), (Slot::Slot1, Item::Adrenaline), (Slot::Slot2, Item::Beer)]);
+        });
+        edit(&mut s, S2, |r| {
+            r.slots = stock(&[(Slot::Slot4, Item::Jammer), (Slot::Slot5, Item::Phone)]);
+        });
         let pick = |owner, slot, item| Pick { owner, slot, item };
         assert_eq!(
             steal_for(&config, &s, S0).as_slice(),
@@ -881,7 +901,9 @@ mod tests {
         assert!(grab_needs(&config, &s, S0).is_empty());
         s.grabs.distributing = true;
         s.grabs.holding = s.grabs.holding.set(S0, Some(Item::Beer));
-        edit(&mut s, S0, |r| r.slots = stock(&[(Slot::Slot0, Item::Glass), (Slot::Slot3, Item::Saw)]));
+        edit(&mut s, S0, |r| {
+            r.slots = stock(&[(Slot::Slot0, Item::Glass), (Slot::Slot3, Item::Saw)]);
+        });
         let puts: Vec<_> = [Slot::Slot1, Slot::Slot2, Slot::Slot4, Slot::Slot5, Slot::Slot6, Slot::Slot7]
             .into_iter()
             .map(|slot| GrabOption::PutAt { slot })
@@ -896,21 +918,33 @@ mod tests {
         let config = config(Table::ThreeSeats)?;
         let mut s = state(Table::ThreeSeats);
         edit(&mut s, S0, |r| {
-            r.slots = stock(&[(Slot::Slot0, Item::Adrenaline), (Slot::Slot1, Item::Saw), (Slot::Slot2, Item::Jammer), (Slot::Slot3, Item::Beer)]);
+            r.slots = stock(&[
+                (Slot::Slot0, Item::Adrenaline),
+                (Slot::Slot1, Item::Saw),
+                (Slot::Slot2, Item::Jammer),
+                (Slot::Slot3, Item::Beer),
+            ]);
         });
         edit(&mut s, S1, |r| r.slots = stock(&[(Slot::Slot0, Item::Beer)]));
         s.world.sawed = true;
         let at = |slot, item| UseAt { slot, item };
         assert_eq!(
             uses(&config, &s, S0).as_slice(),
-            [at(Slot::Slot0, Item::Adrenaline), at(Slot::Slot2, Item::Jammer), at(Slot::Slot3, Item::Beer)]
+            [
+                at(Slot::Slot0, Item::Adrenaline),
+                at(Slot::Slot2, Item::Jammer),
+                at(Slot::Slot3, Item::Beer)
+            ]
         );
         // No jam target and nothing to steal: adrenaline and jammer drop out.
         edit(&mut s, S1, |r| r.health = 0);
         edit(&mut s, S2, |r| r.health = 0);
         edit(&mut s, S1, |r| r.slots = Slots::EMPTY);
         s.world.sawed = false;
-        assert_eq!(uses(&config, &s, S0).as_slice(), [at(Slot::Slot1, Item::Saw), at(Slot::Slot3, Item::Beer)]);
+        assert_eq!(
+            uses(&config, &s, S0).as_slice(),
+            [at(Slot::Slot1, Item::Saw), at(Slot::Slot3, Item::Beer)]
+        );
         Ok(())
     }
 }

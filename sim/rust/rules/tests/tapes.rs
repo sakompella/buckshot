@@ -4,12 +4,20 @@
 //! Set `RUST_TAPES` to a directory of `*.jsonl` tapes; without it the test is
 //! skipped. A game stops at its first mismatch, which is printed.
 
+#![allow(
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    clippy::arithmetic_side_effects,
+    reason = "a test harness: a malformed tape fails loudly"
+)]
+
 use std::fmt::Debug;
 use std::io::{BufRead, BufReader};
 
 use buckshot_rules::{
-    AmountRule, Config, Event, GameEvent, HealthRule, ItemRule, LoadRule, Move, Note, Phase, Request, RoundRules, Secret, ShellRule,
-    State, Table, request, start, step_event,
+    AmountRule, Config, Event, GameEvent, HealthRule, ItemRule, LoadRule, Move, Note, Phase, Request, RoundRules, Secret, ShellRule, State,
+    Table, request, start, step_event,
 };
 use serde_json::{Value, json};
 
@@ -19,7 +27,10 @@ fn tag(x: impl Debug) -> Value {
 
 fn list(items: impl IntoIterator<Item = Value>) -> Value {
     let items: Vec<Value> = items.into_iter().collect();
-    items.into_iter().rev().fold(json!({ "$": "Nil" }), |tail, head| json!({ "$": "Con", "head": head, "tail": tail }))
+    items.into_iter().rev().fold(
+        json!({ "$": "Nil" }),
+        |tail, head| json!({ "$": "Con", "head": head, "tail": tail }),
+    )
 }
 
 fn maybe(x: Option<Value>) -> Value {
@@ -111,7 +122,9 @@ fn move_json(m: Move) -> Value {
 
 fn request_json(r: &Request) -> Value {
     match r {
-        Request::Draw { label, range } => json!({ "$": "Draw", "label": tag(label), "range": { "$": "Range", "lo": range.lo, "extra": range.extra } }),
+        Request::Draw { label, range } => {
+            json!({ "$": "Draw", "label": tag(label), "range": { "$": "Range", "lo": range.lo, "extra": range.extra } })
+        }
         Request::Choose(menu) => {
             let mut moves = menu.moves().map(|m| move_json(m.to_move()));
             let head = moves.next().unwrap_or(Value::Null);
@@ -124,7 +137,9 @@ fn request_json(r: &Request) -> Value {
 
 fn event_json(e: GameEvent) -> Value {
     match e {
-        GameEvent::RoundBegan { round, health, first } => json!({ "$": "RoundBegan", "round": round, "health": health, "first": tag(first) }),
+        GameEvent::RoundBegan { round, health, first } => {
+            json!({ "$": "RoundBegan", "round": round, "health": health, "first": tag(first) })
+        }
         GameEvent::GrabbingBegan { seats } => json!({ "$": "GrabbingBegan", "seats": list(seats.iter().map(tag)) }),
         GameEvent::Granted { seat, item } => json!({ "$": "Granted", "seat": tag(seat), "item": tag(item) }),
         GameEvent::Placed { seat, slot, item } => json!({ "$": "Placed", "seat": tag(seat), "slot": tag(slot), "item": tag(item) }),
@@ -135,7 +150,14 @@ fn event_json(e: GameEvent) -> Value {
         GameEvent::JamLifted { seat } => json!({ "$": "JamLifted", "seat": tag(seat) }),
         GameEvent::TurnGiven { seat } => json!({ "$": "TurnGiven", "seat": tag(seat) }),
         GameEvent::PickedUp { seat } => json!({ "$": "PickedUp", "seat": tag(seat) }),
-        GameEvent::Fired { shooter, target, shell, captured, applied, health } => json!({
+        GameEvent::Fired {
+            shooter,
+            target,
+            shell,
+            captured,
+            applied,
+            health,
+        } => json!({
             "$": "Fired", "shooter": tag(shooter), "target": tag(target), "shell": tag(shell),
             "captured": tag(captured), "applied": applied, "health": health,
         }),
@@ -192,8 +214,13 @@ fn round_rules(v: &Value) -> RoundRules {
     let load = |l: &Value| {
         let shells = match name(&l["shells"]) {
             "RandomShells" => ShellRule::Random,
-            "FixedShells" => ShellRule::Fixed { live: nat(&l["shells"]["live"]), blank: pos(&l["shells"]["blank"]) },
-            "AllLive" => ShellRule::AllLive { live: pos(&l["shells"]["live"]) },
+            "FixedShells" => ShellRule::Fixed {
+                live: nat(&l["shells"]["live"]),
+                blank: pos(&l["shells"]["blank"]),
+            },
+            "AllLive" => ShellRule::AllLive {
+                live: pos(&l["shells"]["live"]),
+            },
             other => panic!("shells {other}"),
         };
         let items = match name(&l["items"]) {
@@ -206,12 +233,27 @@ fn round_rules(v: &Value) -> RoundRules {
     let loads = &v["loads"];
     let item = |field: &str| {
         let r = &v["items"][field];
-        ItemRule { enabled: r["enabled"].as_bool().expect("a Bool"), per_player: nat(&r["per_player"]), on_table: nat(&r["on_table"]) }
+        ItemRule {
+            enabled: r["enabled"].as_bool().expect("a Bool"),
+            per_player: nat(&r["per_player"]),
+            on_table: nat(&r["on_table"]),
+        }
     };
     RoundRules {
         health,
         loads: [load(&loads["l0"]), load(&loads["l1"]), load(&loads["l2"]), load(&loads["l3"])],
-        items: ["saw", "glass", "jammer", "cigarettes", "beer", "phone", "inverter", "adrenaline", "remote"].map(item),
+        items: [
+            "saw",
+            "glass",
+            "jammer",
+            "cigarettes",
+            "beer",
+            "phone",
+            "inverter",
+            "adrenaline",
+            "remote",
+        ]
+        .map(item),
     }
 }
 
@@ -234,7 +276,7 @@ fn bend_state(v: &Value) -> Value {
         world.remove("config");
     }
     if let Some(object) = v.as_object_mut() {
-        object.remove("notes");
+        object.remove("log");
     }
     v
 }
@@ -243,8 +285,12 @@ fn bend_state(v: &Value) -> Value {
 fn first_diff(a: &Value, b: &Value, path: &str) -> Option<String> {
     match (a, b) {
         (Value::Object(x), Value::Object(y)) => {
-            for key in x.keys().chain(y.keys()) {
-                if let Some(diff) = first_diff(x.get(key).unwrap_or(&Value::Null), y.get(key).unwrap_or(&Value::Null), &format!("{path}.{key}")) {
+            for key in x.keys().chain(y.keys().filter(|key| !x.contains_key(*key))) {
+                if let Some(diff) = first_diff(
+                    x.get(key).unwrap_or(&Value::Null),
+                    y.get(key).unwrap_or(&Value::Null),
+                    &format!("{path}.{key}"),
+                ) {
                     return Some(diff);
                 }
             }
@@ -308,7 +354,11 @@ fn replay(path: &std::path::Path, tally: &mut Tally) {
             continue;
         }
         let n = nat(&v["event"]["n"]);
-        let event = if v["event"]["kind"] == "Draw" { Event::Draw(n) } else { Event::Choose(n) };
+        let event = if v["event"]["kind"] == "Draw" {
+            Event::Draw(n)
+        } else {
+            Event::Choose(n)
+        };
         let stepped = match step_event(cfg, *st, event) {
             Ok(stepped) => stepped,
             Err(error) => {
@@ -335,14 +385,24 @@ fn tapes_match_bend() {
         eprintln!("RUST_TAPES is not set; skipping the Bend tape replay");
         return;
     };
-    let mut paths: Vec<_> = std::fs::read_dir(&dir).expect("RUST_TAPES is a directory").filter_map(Result::ok).map(|e| e.path()).collect();
+    let mut paths: Vec<_> = std::fs::read_dir(&dir)
+        .expect("RUST_TAPES is a directory")
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .collect();
     paths.retain(|p| p.extension().is_some_and(|x| x == "jsonl"));
     paths.sort();
     let mut failed = false;
     for path in paths {
         let mut tally = Tally::default();
         replay(&path, &mut tally);
-        println!("{}: {} games, {} replayed to the end, {} steps matched", path.display(), tally.games, tally.clean, tally.steps);
+        println!(
+            "{}: {} games, {} replayed to the end, {} steps matched",
+            path.display(),
+            tally.games,
+            tally.clean,
+            tally.steps
+        );
         for mismatch in &tally.mismatches {
             println!("  {mismatch}");
         }

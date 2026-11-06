@@ -6,8 +6,8 @@
 
 use crate::branch::B;
 use crate::domain::{
-    AmountRule, Config, Direction, GameEvent, Gun, HealthRule, Item, Items, Load, Note, PHONE_CAP, Ring, Seat, Seats, Secret,
-    Shell, Slot, Slots, prize,
+    AmountRule, Config, Direction, GameEvent, Gun, HealthRule, Item, Items, Load, Note, PHONE_CAP, Ring, Seat, Seats, Secret, Shell, Slot,
+    Slots, prize,
 };
 use crate::items::{self, GrabOption};
 use crate::rules::{self, JamResult};
@@ -53,7 +53,10 @@ impl Run<'_> {
     }
 
     fn into_stepped(self) -> Stepped {
-        Stepped { state: self.state, notes: self.notes }
+        Stepped {
+            state: self.state,
+            notes: self.notes,
+        }
     }
 }
 
@@ -93,7 +96,11 @@ fn initial(config: &Config) -> State {
 /// `start`: the match from its first request point.
 #[must_use]
 pub fn start(config: &Config) -> Stepped {
-    let mut run = Run { config, state: initial(config), notes: Notes::default() };
+    let mut run = Run {
+        config,
+        state: initial(config),
+        notes: Notes::default(),
+    };
     first_begin(&mut run);
     run.into_stepped()
 }
@@ -102,12 +109,21 @@ pub fn start(config: &Config) -> Stepped {
 /// token. A token at the other kind of point blocks, as in Bend.
 #[must_use]
 pub fn step(config: &Config, state: State, answer: Answer) -> Stepped {
-    let mut run = Run { config, state, notes: Notes::default() };
+    let mut run = Run {
+        config,
+        state,
+        notes: Notes::default(),
+    };
     let r = &mut run;
     match (state.phase, answer) {
         (Phase::NeedFirst, Answer::Draw(value)) => {
             branch!(B::SimpleMainAnswerDrawNeedFirst);
-            let seat = config.table().seats().iter().nth(usize::try_from(value.get()).unwrap_or(usize::MAX)).unwrap_or(Seat::Seat0);
+            let seat = config
+                .table()
+                .seats()
+                .iter()
+                .nth(usize::try_from(value.get()).unwrap_or(usize::MAX))
+                .unwrap_or(Seat::Seat0);
             first_chosen(r, seat);
         }
         (Phase::NeedHealth, Answer::Draw(value)) => {
@@ -359,7 +375,10 @@ fn grab_put(r: &mut Run<'_>, seat: Seat, slot: Slot) {
         }
         Some(item) => {
             branch!(B::SimpleMainGrabPutHeldSome);
-            r.players_update(seat, |record| SeatRecord { slots: record.slots.put(slot, Some(item)), ..record });
+            r.players_update(seat, |record| SeatRecord {
+                slots: record.slots.put(slot, Some(item)),
+                ..record
+            });
             r.state.grabs = items::grabs_placed(r.state.grabs, seat);
             r.emit(GameEvent::Placed { seat, slot, item });
         }
@@ -443,7 +462,11 @@ fn seats_after(seats: Seats, after: Seat) -> Seats {
         return seats;
     };
     let mut cycled = Seats::EMPTY;
-    for seat in seats.iter().skip(at.saturating_add(1)).chain(seats.iter().take(at.saturating_add(1))) {
+    for seat in seats
+        .iter()
+        .skip(at.saturating_add(1))
+        .chain(seats.iter().take(at.saturating_add(1)))
+    {
         cycled.push(seat);
     }
     cycled
@@ -451,6 +474,7 @@ fn seats_after(seats: Seats, after: Seat) -> Seats {
 
 /// `grab.act` with `grab.act.own` and `grab.taker`.
 fn grab_act(config: &Config, state: &State, after: Seat) -> Distribution {
+    branch!(B::SmItemsGrabNeedsGoNil);
     let own = items::grab_needs(config, state, after);
     if let Some(GrabOption::PutAt { slot }) = own.first() {
         branch!(B::SimpleMainGrabActOwnPutAtCons);
@@ -581,14 +605,26 @@ fn round_reset(r: &mut Run<'_>) {
     let table = r.config.table();
     let mut players = r.state.players;
     for (seat, record) in r.state.players.entries() {
-        players = players.set(seat, SeatRecord { health, jam: Jam::Free, cash: record.cash, slots: Slots::EMPTY });
+        players = players.set(
+            seat,
+            SeatRecord {
+                health,
+                jam: Jam::Free,
+                cash: record.cash,
+                slots: Slots::EMPTY,
+            },
+        );
     }
     let _ = table;
     r.state.players = players;
     let w = r.world();
     w.checking_first_death = true;
     w.direction = Direction::Clockwise;
-    r.emit(GameEvent::RoundBegan { round: world.round_index, health, first: world.first_turn });
+    r.emit(GameEvent::RoundBegan {
+        round: world.round_index,
+        health,
+        first: world.first_turn,
+    });
     let seats = items::begin_seats(r.config, &r.state, true, world.item_amount);
     distribute_begin(r, seats);
 }
@@ -662,7 +698,10 @@ fn win(r: &mut Run<'_>, seat: Seat) {
     let round = r.state.world.round_index;
     let prize = prize(round);
     // Bend's U32.add wraps.
-    r.players_update(seat, |record| SeatRecord { cash: record.cash.wrapping_add(prize), ..record });
+    r.players_update(seat, |record| SeatRecord {
+        cash: record.cash.wrapping_add(prize),
+        ..record
+    });
     r.emit(GameEvent::RoundWon { seat, prize });
     if round.saturating_add(1) == r.config.plan_length() {
         branch!(B::SimpleMainWinFinalTrue);
@@ -716,7 +755,11 @@ fn turn_packet(r: &mut Run<'_>, shooter: Seat, passing: bool, winner: Option<Sea
     let live = items::amount_live(rule, r.state.grabs.distributing, items::reload_wanted(r.config, &r.state, winner));
     if live {
         branch!(B::SimpleMainTurnLiveTrue);
-        r.set_phase(Phase::NeedTurnAmount { from: shooter, passing, winner });
+        r.set_phase(Phase::NeedTurnAmount {
+            from: shooter,
+            passing,
+            winner,
+        });
         return;
     }
     branch!(B::SimpleMainTurnLiveFalse);
@@ -774,7 +817,14 @@ fn shoot(r: &mut Run<'_>, shooter: Seat, target: Seat) {
     let world = r.world();
     world.gun = rest;
     world.sawed = false;
-    r.emit(GameEvent::Fired { shooter, target, shell, captured: damage, applied: rules::subtract(before, health), health });
+    r.emit(GameEvent::Fired {
+        shooter,
+        target,
+        shell,
+        captured: damage,
+        applied: rules::subtract(before, health),
+        health,
+    });
     death(r, target, shell, health);
     turn_end(r, shooter, rules::shot_passes(shell, shooter == target));
 }
@@ -895,7 +945,10 @@ fn item_effect(r: &mut Run<'_>, seat: Seat, item: Item, ending: bool, phone: Opt
 
 /// `item.consume`.
 fn item_consume(r: &mut Run<'_>, seat: Seat, owner: Seat, slot: Slot, item: Item, ending: bool, phone: Option<Secret>) {
-    r.players_update(owner, |record| SeatRecord { slots: record.slots.put(slot, None), ..record });
+    r.players_update(owner, |record| SeatRecord {
+        slots: record.slots.put(slot, None),
+        ..record
+    });
     r.emit(GameEvent::Used { seat, owner, slot, item });
     item_effect(r, seat, item, ending, phone);
 }
@@ -947,7 +1000,10 @@ fn item_use(r: &mut Run<'_>, seat: Seat, owner: Seat, slot: Slot, item: Item) {
 
 /// `jam.selected`.
 fn jam_selected(r: &mut Run<'_>, seat: Seat, target: Seat) {
-    r.players_update(target, |record| SeatRecord { jam: Jam::Jammed, ..record });
+    r.players_update(target, |record| SeatRecord {
+        jam: Jam::Jammed,
+        ..record
+    });
     r.emit(GameEvent::JamApplied { by: seat, target });
     item_resume(r, seat);
 }
@@ -969,12 +1025,22 @@ fn pickup_selected(r: &mut Run<'_>, seat: Seat, selected: Option<IdleOption>) {
             item_use(r, seat, seat, slot, Item::Jammer);
             jam_selected(r, seat, target);
         }
-        Some(IdleOption::StealWith { adrenaline, owner, slot, item }) => {
+        Some(IdleOption::StealWith {
+            adrenaline,
+            owner,
+            slot,
+            item,
+        }) => {
             branch!(B::SimpleMainPickupSelectedSomeStealWith);
             item_use(r, seat, seat, adrenaline, Item::Adrenaline);
             item_use(r, seat, owner, slot, item);
         }
-        Some(IdleOption::StealJamWith { adrenaline, owner, slot, target }) => {
+        Some(IdleOption::StealJamWith {
+            adrenaline,
+            owner,
+            slot,
+            target,
+        }) => {
             branch!(B::SimpleMainPickupSelectedSomeStealJamWith);
             item_use(r, seat, seat, adrenaline, Item::Adrenaline);
             item_use(r, seat, owner, slot, Item::Jammer);

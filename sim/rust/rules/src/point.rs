@@ -2,6 +2,7 @@
 
 use arrayvec::ArrayVec;
 
+use crate::branch::B;
 use crate::domain::{Config, Item, Items, Label, Range, Seat, Seats, Slot, Table};
 use crate::items::{self, Picks, Uses};
 use crate::rules;
@@ -19,15 +20,15 @@ fn add(options: &mut Options, option: IdleOption) {
 fn item_chained(item: Item) -> bool {
     match item {
         Item::Jammer => {
-            bend_arm!("simple/point:item.chained:D.Jammer{}");
+            branch!(B::SimplePointItemChainedJammer);
             true
         }
         Item::Adrenaline => {
-            bend_arm!("simple/point:item.chained:D.Adrenaline{}");
+            branch!(B::SimplePointItemChainedAdrenaline);
             true
         }
         Item::Saw | Item::Glass | Item::Cigarettes | Item::Beer | Item::Phone | Item::Inverter | Item::Remote => {
-            bend_arm!("simple/point:item.chained:_");
+            branch!(B::SimplePointItemChainedAny);
             false
         }
     }
@@ -43,10 +44,16 @@ fn use_options(options: &mut Options, uses: &Uses) {
     let mut seen = Items::EMPTY;
     for at in uses {
         if item_chained(at.item) | seen.contains(at.item) {
-            bend_arm!("sm/items:keep:False{}");
+            branch!(B::SmItemsKeepFalse);
         } else {
-            bend_arm!("sm/items:keep:True{}");
-            add(options, IdleOption::UseSlot { slot: at.slot, item: at.item });
+            branch!(B::SmItemsKeepTrue);
+            add(
+                options,
+                IdleOption::UseSlot {
+                    slot: at.slot,
+                    item: at.item,
+                },
+            );
         }
         seen = seen.with(at.item);
     }
@@ -56,10 +63,10 @@ fn use_options(options: &mut Options, uses: &Uses) {
 fn jam_options(options: &mut Options, jammer: Option<Slot>, targets: Seats) {
     match jammer {
         None => {
-            bend_arm!("simple/point:jam.options:None{}");
+            branch!(B::SimplePointJamOptionsNone);
         }
         Some(slot) => {
-            bend_arm!("simple/point:jam.options:Some{slot}");
+            branch!(B::SimplePointJamOptionsSome);
             for target in targets.iter() {
                 add(options, IdleOption::JamWith { slot, target });
             }
@@ -68,21 +75,29 @@ fn jam_options(options: &mut Options, jammer: Option<Slot>, targets: Seats) {
 }
 
 /// `steal.options` with `steal.picks`: one steal per owner and distinct item
-/// that opens no pick (sm never offers adrenaline; a jammer is StealJam), at
+/// that opens no pick (sm never offers adrenaline; a jammer is `StealJam`), at
 /// the owner's first slot holding it, by owner then slot.
 fn steal_options(options: &mut Options, adrenaline: Option<Slot>, picks: &Picks) {
     let Some(adrenaline) = adrenaline else {
-        bend_arm!("simple/point:steal.options:None{}");
+        branch!(B::SimplePointStealOptionsNone);
         return;
     };
-    bend_arm!("simple/point:steal.options:Some{slot}");
+    branch!(B::SimplePointStealOptionsSome);
     let mut seen: ArrayVec<(Seat, Item), 24> = ArrayVec::new();
     for pick in picks {
         if item_chained(pick.item) | seen.contains(&(pick.owner, pick.item)) {
-            bend_arm!("sm/items:keep:False{}");
+            branch!(B::SmItemsKeepFalse);
         } else {
-            bend_arm!("sm/items:keep:True{}");
-            add(options, IdleOption::StealWith { adrenaline, owner: pick.owner, slot: pick.slot, item: pick.item });
+            branch!(B::SmItemsKeepTrue);
+            add(
+                options,
+                IdleOption::StealWith {
+                    adrenaline,
+                    owner: pick.owner,
+                    slot: pick.slot,
+                    item: pick.item,
+                },
+            );
         }
         let _ = seen.try_push((pick.owner, pick.item));
     }
@@ -92,20 +107,28 @@ fn steal_options(options: &mut Options, adrenaline: Option<Slot>, picks: &Picks)
 /// stolen and used on each target, by owner then target.
 fn steal_jam_options(options: &mut Options, adrenaline: Option<Slot>, picks: &Picks, targets: Seats) {
     let Some(adrenaline) = adrenaline else {
-        bend_arm!("simple/point:steal_jam.options:None{}");
+        branch!(B::SimplePointStealJamOptionsNone);
         return;
     };
-    bend_arm!("simple/point:steal_jam.options:Some{slot}");
+    branch!(B::SimplePointStealJamOptionsSome);
     let mut seen = Seats::EMPTY;
     for pick in picks {
         let jammer = pick.item == Item::Jammer;
         if jammer & !seen.contains(pick.owner) {
-            bend_arm!("simple/point:steal_jam.here:True{}");
+            branch!(B::SimplePointStealJamHereTrue);
             for target in targets.iter() {
-                add(options, IdleOption::StealJamWith { adrenaline, owner: pick.owner, slot: pick.slot, target });
+                add(
+                    options,
+                    IdleOption::StealJamWith {
+                        adrenaline,
+                        owner: pick.owner,
+                        slot: pick.slot,
+                        target,
+                    },
+                );
             }
         } else {
-            bend_arm!("simple/point:steal_jam.here:False{}");
+            branch!(B::SimplePointStealJamHereFalse);
         }
         if jammer && !seen.contains(pick.owner) {
             seen.push(pick.owner);
@@ -135,15 +158,15 @@ pub(crate) fn options(config: &Config, state: &State, seat: Seat) -> Options {
 fn first_range(table: Table) -> Range {
     match table {
         Table::TwoSeats => {
-            bend_arm!("simple/point:first.range:D.TwoSeats{}");
+            branch!(B::SimplePointFirstRangeTwoSeats);
             Range { lo: 0, extra: 0 }
         }
         Table::ThreeSeats => {
-            bend_arm!("simple/point:first.range:D.ThreeSeats{}");
+            branch!(B::SimplePointFirstRangeThreeSeats);
             Range { lo: 0, extra: 1 }
         }
         Table::FourSeats => {
-            bend_arm!("simple/point:first.range:D.FourSeats{}");
+            branch!(B::SimplePointFirstRangeFourSeats);
             Range { lo: 0, extra: 2 }
         }
     }
@@ -156,86 +179,86 @@ pub fn request(config: &Config, state: &State) -> Request {
     let draw = |label, range| Request::Draw { label, range };
     match state.phase {
         Phase::NeedFirst => {
-            bend_arm!("simple/point:phase.request:T.NeedFirst{}");
+            branch!(B::SimplePointPhaseRequestNeedFirst);
             draw(Label::FirstSeat, first_range(table))
         }
         Phase::NeedHealth => {
-            bend_arm!("simple/point:phase.request:T.NeedHealth{}");
+            branch!(B::SimplePointPhaseRequestNeedHealth);
             draw(Label::StartingHealth, table.health_range())
         }
         Phase::NeedAmount => {
-            bend_arm!("simple/point:phase.request:T.NeedAmount{}");
+            branch!(B::SimplePointPhaseRequestNeedAmount);
             draw(Label::ItemAmount, table.amount_range())
         }
         Phase::NeedBatch => {
-            bend_arm!("simple/point:phase.request:T.NeedBatch{}");
+            branch!(B::SimplePointPhaseRequestNeedBatch);
             match state.world.decks.get(table).len().checked_sub(2) {
                 Some(extra) => {
-                    bend_arm!("simple/point:batch.request:1n+1n+extra");
+                    branch!(B::SimplePointBatchRequestSuccSucc);
                     draw(Label::SequenceBatch, Range { lo: 0, extra })
                 }
                 None => {
-                    bend_arm!("simple/point:batch.request:_");
+                    branch!(B::SimplePointBatchRequestAny);
                     Request::Stuck
                 }
             }
         }
         Phase::NeedSwap { i, .. } => match i.checked_sub(1) {
             Some(extra) => {
-                bend_arm!("simple/point:phase.request:T.NeedSwap{_, _, 1n+extra}");
+                branch!(B::SimplePointPhaseRequestNeedSwapSucc);
                 draw(Label::ShuffleSwap, Range { lo: 0, extra })
             }
             None => {
-                bend_arm!("simple/point:phase.request:T.NeedSwap{_, _, 0n}");
+                branch!(B::SimplePointPhaseRequestNeedSwapZero);
                 Request::Stuck
             }
         },
         Phase::Idle { seat } => {
-            bend_arm!("simple/point:phase.request:T.Idle{+seat}");
+            branch!(B::SimplePointPhaseRequestIdle);
             if table.has(seat) {
-                bend_arm!("simple/point:idle.request:True{}");
+                branch!(B::SimplePointIdleRequestTrue);
                 let options = options(config, state, seat);
                 if options.is_empty() {
-                    bend_arm!("simple/point:choose:Nil{}");
+                    branch!(B::SimplePointChooseNil);
                     Request::Stuck
                 } else {
-                    bend_arm!("simple/point:choose:move <> rest");
+                    branch!(B::SimplePointChooseCons);
                     Request::Choose(Menu::new(seat, options))
                 }
             } else {
-                bend_arm!("simple/point:idle.request:False{}");
+                branch!(B::SimplePointIdleRequestFalse);
                 Request::Stuck
             }
         }
         Phase::Ended => {
-            bend_arm!("simple/point:phase.request:T.Ended{}");
+            branch!(B::SimplePointPhaseRequestEnded);
             Request::Finished
         }
         Phase::Blocked { .. } => {
-            bend_arm!("simple/point:phase.request:T.Blocked{_}");
+            branch!(B::SimplePointPhaseRequestBlocked);
             Request::Stuck
         }
         Phase::Stalled => {
-            bend_arm!("simple/point:phase.request:T.Stalled{}");
+            branch!(B::SimplePointPhaseRequestStalled);
             Request::Stuck
         }
         Phase::NeedTurnAmount { .. } => {
-            bend_arm!("simple/point:phase.request:T.NeedTurnAmount{_, _, _}");
+            branch!(B::SimplePointPhaseRequestNeedTurnAmount);
             draw(Label::ItemAmount, table.amount_range())
         }
         Phase::NeedItem { rest, .. } => {
-            bend_arm!("simple/point:phase.request:T.NeedItem{_, _, _, rest}");
+            branch!(B::SimplePointPhaseRequestNeedItem);
             draw(Label::ItemChoice, Range { lo: 0, extra: rest.len() })
         }
         Phase::NeedPhone { .. } => {
-            bend_arm!("simple/point:phase.request:T.NeedPhone{_, _, _}");
+            branch!(B::SimplePointPhaseRequestNeedPhone);
             match state.world.gun.len().checked_sub(4) {
                 Some(extra) => {
-                    bend_arm!("simple/point:phone.request:1n+1n+1n+1n+extra");
+                    branch!(B::SimplePointPhoneRequestSuccSuccSuccSucc);
                     draw(Label::PhoneIndex, Range { lo: 2, extra })
                 }
                 None => {
-                    bend_arm!("simple/point:phone.request:_");
+                    branch!(B::SimplePointPhoneRequestAny);
                     Request::Stuck
                 }
             }

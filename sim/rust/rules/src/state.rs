@@ -34,7 +34,12 @@ pub struct SeatRecord {
 
 impl SeatRecord {
     /// A seat missing from the ring reads as this fresh seat (`seat.found`).
-    pub const FRESH: Self = Self { health: 100, jam: Jam::Free, cash: 0, slots: Slots::EMPTY };
+    pub const FRESH: Self = Self {
+        health: 100,
+        jam: Jam::Free,
+        cash: 0,
+        slots: Slots::EMPTY,
+    };
 }
 
 /// One record per seated socket (sm/state.bend `Players`).
@@ -70,7 +75,9 @@ impl Deck {
     #[must_use]
     pub fn full(table: Table) -> Self {
         let n = table.deck().len();
-        let ids = (0..n).fold(0u16, |ids, i| ids | u16::checked_shl(1, u32::try_from(i).unwrap_or(16)).unwrap_or(0));
+        let ids = (0..n).fold(0u16, |ids, i| {
+            ids | u16::checked_shl(1, u32::try_from(i).unwrap_or(16)).unwrap_or(0)
+        });
         Self { table, ids }
     }
 
@@ -95,9 +102,14 @@ impl Deck {
     /// The batches in order.
     pub fn iter(self) -> impl Iterator<Item = Batch> {
         let loads = self.table.deck();
-        (0u32..16).filter(move |id| self.ids & u16::checked_shl(1, *id).unwrap_or(0) != 0).filter_map(move |id| {
-            Some(Batch { id, load: *loads.get(usize::try_from(id).ok()?)? })
-        })
+        (0u32..16)
+            .filter(move |id| self.ids & u16::checked_shl(1, *id).unwrap_or(0) != 0)
+            .filter_map(move |id| {
+                Some(Batch {
+                    id,
+                    load: *loads.get(usize::try_from(id).ok()?)?,
+                })
+            })
     }
 
     /// `nth`.
@@ -110,7 +122,10 @@ impl Deck {
     #[must_use]
     pub fn remove(self, index: u32) -> Self {
         match self.nth(index) {
-            Some(batch) => Self { table: self.table, ids: self.ids & !u16::checked_shl(1, batch.id).unwrap_or(0) },
+            Some(batch) => Self {
+                table: self.table,
+                ids: self.ids & !u16::checked_shl(1, batch.id).unwrap_or(0),
+            },
             None => self,
         }
     }
@@ -128,7 +143,11 @@ impl Decks {
     /// `decks.full()`.
     #[must_use]
     pub fn full() -> Self {
-        Self { two: Deck::full(Table::TwoSeats), three: Deck::full(Table::ThreeSeats), four: Deck::full(Table::FourSeats) }
+        Self {
+            two: Deck::full(Table::TwoSeats),
+            three: Deck::full(Table::ThreeSeats),
+            four: Deck::full(Table::FourSeats),
+        }
     }
 
     /// `decks.get`.
@@ -181,15 +200,36 @@ pub enum Phase {
     NeedHealth,
     NeedAmount,
     NeedBatch,
-    NeedSwap { load: Load, shells: Gun, i: u32 },
-    Idle { seat: Seat },
+    NeedSwap {
+        load: Load,
+        shells: Gun,
+        i: u32,
+    },
+    Idle {
+        seat: Seat,
+    },
     Ended,
-    Blocked { holder: Option<Seat> },
+    Blocked {
+        holder: Option<Seat>,
+    },
     Stalled,
-    NeedTurnAmount { from: Seat, passing: bool, winner: Option<Seat> },
+    NeedTurnAmount {
+        from: Seat,
+        passing: bool,
+        winner: Option<Seat>,
+    },
     /// The pool is `first <> second <> rest`, a subsequence of `Item::ORDER`.
-    NeedItem { seat: Seat, first: Item, second: Item, rest: Items },
-    NeedPhone { seat: Seat, owner: Seat, slot: Slot },
+    NeedItem {
+        seat: Seat,
+        first: Item,
+        second: Item,
+        rest: Items,
+    },
+    NeedPhone {
+        seat: Seat,
+        owner: Seat,
+        slot: Slot,
+    },
 }
 
 /// simple/state.bend `State` without its log: an answer's notes come back

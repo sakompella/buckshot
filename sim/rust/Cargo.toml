@@ -26,6 +26,11 @@ match_wildcard_for_single_variants = "deny"
 todo = "deny"
 unimplemented = "deny"
 unreachable = "deny"
+# Rules code mirrors Bend: one match arm per Bend case, each opening with `branch!`.
+single_match_else = "allow"
+match_bool = "allow"
+# World and Grabs mirror Bend's records field for field.
+struct_excessive_bools = "allow"
 
 [profile.release]
 debug = 1

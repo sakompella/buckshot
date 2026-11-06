@@ -2,6 +2,7 @@
 //! List plumbing (`nth`, `replace`, `remove`, `swap`, `repeat`,
 //! `load.shells`, `batches`) lives on the domain and state types.
 
+use crate::branch::B;
 use crate::domain::{AmountRule, Config, Damage, Direction, HealthRule, Load, LoadRule, RoundRules, Seat, Seats, Shell, ShellRule};
 use crate::state::{Jam, Players, SeatRecord, World};
 
@@ -14,14 +15,14 @@ pub(crate) enum JamResult {
 }
 
 /// `alive`.
-fn alive(hp: u32) -> bool {
+pub(crate) fn alive(hp: u32) -> bool {
     match hp {
         0 => {
-            bend_arm!("sm/rules:alive:0n");
+            branch!(B::SmRulesAliveZero);
             false
         }
         1.. => {
-            bend_arm!("sm/rules:alive:1n+rest");
+            branch!(B::SmRulesAliveSucc);
             true
         }
     }
@@ -32,10 +33,10 @@ fn living(players: &Players) -> Seats {
     let mut seats = Seats::EMPTY;
     for (seat, record) in players.entries() {
         if alive(record.health) {
-            bend_arm!("sm/rules:living:D.At{seat, 1n+hp} <> rest");
+            branch!(B::SmRulesLivingAtSuccCons);
             seats.push(seat);
         } else {
-            bend_arm!("sm/rules:living:D.At{seat, 0n} <> rest");
+            branch!(B::SmRulesLivingAtZeroCons);
         }
     }
     seats
@@ -50,12 +51,12 @@ pub(crate) fn aim_targets(players: &Players) -> Seats {
 fn turn_candidates(players: &Players, current: Seat) -> Seats {
     let mut seats = Seats::EMPTY;
     for (seat, record) in players.entries() {
-        let keep = alive(record.health) | (seat == current);
+        let keep = alive(record.health) || seat == current;
         if keep {
-            bend_arm!("sm/rules:seats.keep:True{}");
+            branch!(B::SmRulesSeatsKeepTrue);
             seats.push(seat);
         } else {
-            bend_arm!("sm/rules:seats.keep:False{}");
+            branch!(B::SmRulesSeatsKeepFalse);
         }
     }
     seats
@@ -65,10 +66,10 @@ fn turn_candidates(players: &Players, current: Seat) -> Seats {
 fn successor(seats: impl Iterator<Item = Seat> + Clone, current: Seat) -> Seat {
     let mut list = seats.clone();
     let Some(head) = list.next() else {
-        bend_arm!("sm/rules:successor:Nil{}");
+        branch!(B::SmRulesSuccessorNil);
         return current;
     };
-    bend_arm!("sm/rules:successor:+head <> rest");
+    branch!(B::SmRulesSuccessorCons);
     let mut pairs = seats.clone().zip(seats.skip(1));
     pairs.find(|(seat, _)| *seat == current).map_or(head, |(_, next)| next)
 }
@@ -78,11 +79,11 @@ pub(crate) fn next_turn(players: &Players, direction: Direction, current: Seat) 
     let candidates = turn_candidates(players, current);
     match direction {
         Direction::Clockwise => {
-            bend_arm!("sm/rules:traversal:D.Clockwise{}");
+            branch!(B::SmRulesTraversalClockwise);
             successor(candidates.iter(), current)
         }
         Direction::CounterClockwise => {
-            bend_arm!("sm/rules:traversal:D.CounterClockwise{}");
+            branch!(B::SmRulesTraversalCounterClockwise);
             successor(candidates.iter().rev(), current)
         }
     }
@@ -97,16 +98,20 @@ fn set_jam(players: Players, seat: Seat, jam: Jam) -> Players {
 pub(crate) fn jam(players: Players, seat: Seat) -> JamResult {
     match players.get(seat).map_or(Jam::Free, |record| record.jam) {
         Jam::Free => {
-            bend_arm!("sm/rules:jam.state:S.Free{}");
+            branch!(B::SmRulesJamStateFree);
             JamResult::Act { players }
         }
         Jam::Jammed => {
-            bend_arm!("sm/rules:jam.state:S.Jammed{}");
-            JamResult::Skip { players: set_jam(players, seat, Jam::JammedSkipped) }
+            branch!(B::SmRulesJamStateJammed);
+            JamResult::Skip {
+                players: set_jam(players, seat, Jam::JammedSkipped),
+            }
         }
         Jam::JammedSkipped => {
-            bend_arm!("sm/rules:jam.state:S.JammedSkipped{}");
-            JamResult::Lift { players: set_jam(players, seat, Jam::Free) }
+            branch!(B::SmRulesJamStateJammedSkipped);
+            JamResult::Lift {
+                players: set_jam(players, seat, Jam::Free),
+            }
         }
     }
 }
@@ -117,11 +122,11 @@ pub(crate) fn jam_rank(players: &Players) -> u32 {
     for (_, record) in players.entries() {
         match record.jam {
             Jam::Jammed => {
-                bend_arm!("sm/rules:jam_rank.bit:S.Jammed{}");
+                branch!(B::SmRulesJamRankBitJammed);
                 rank = rank.saturating_add(1);
             }
             Jam::Free | Jam::JammedSkipped => {
-                bend_arm!("sm/rules:jam_rank.bit:_");
+                branch!(B::SmRulesJamRankBitAny);
             }
         }
     }
@@ -132,11 +137,11 @@ pub(crate) fn jam_rank(players: &Players) -> u32 {
 pub(crate) fn predecessor(n: u32) -> u32 {
     match n.checked_sub(1) {
         None => {
-            bend_arm!("sm/rules:predecessor:0n");
+            branch!(B::SmRulesPredecessorZero);
             0
         }
         Some(n) => {
-            bend_arm!("sm/rules:predecessor:1n+n");
+            branch!(B::SmRulesPredecessorSucc);
             n
         }
     }
@@ -146,11 +151,11 @@ pub(crate) fn predecessor(n: u32) -> u32 {
 pub(crate) fn world_rules(config: &Config, world: &World) -> RoundRules {
     match config.round(world.round_index) {
         Some(round) => {
-            bend_arm!("sm/rules:value.or:Some{x}");
+            branch!(B::SmRulesValueOrSome);
             *round
         }
         None => {
-            bend_arm!("sm/rules:value.or:None{}");
+            branch!(B::SmRulesValueOrNone);
             RoundRules::default_round()
         }
     }
@@ -166,19 +171,19 @@ pub(crate) fn world_load_rule(config: &Config, world: &World) -> LoadRule {
     let [a, b, c, d] = world_rules(config, world).loads;
     match world.load_index {
         0 => {
-            bend_arm!("sm/rules:rules.load:D.LoadRules{a, _, _, _} 0n");
+            branch!(B::SmRulesRulesLoadLoadRulesZero);
             a
         }
         1 => {
-            bend_arm!("sm/rules:rules.load:D.LoadRules{_, b, _, _} 1n");
+            branch!(B::SmRulesRulesLoadLoadRulesOne);
             b
         }
         2 => {
-            bend_arm!("sm/rules:rules.load:D.LoadRules{_, _, c, _} 2n");
+            branch!(B::SmRulesRulesLoadLoadRulesTwo);
             c
         }
         3.. => {
-            bend_arm!("sm/rules:rules.load:D.LoadRules{_, _, _, d} _");
+            branch!(B::SmRulesRulesLoadLoadRules);
             d
         }
     }
@@ -188,15 +193,15 @@ pub(crate) fn world_load_rule(config: &Config, world: &World) -> LoadRule {
 pub(crate) fn load_actual(rule: LoadRule, sampled: Load) -> Load {
     match rule.shells {
         ShellRule::Random => {
-            bend_arm!("sm/rules:load.actual:D.LoadRule{D.RandomShells{}, _}");
+            branch!(B::SmRulesLoadActualLoadRuleRandomShells);
             sampled
         }
         ShellRule::Fixed { live, blank } => {
-            bend_arm!("sm/rules:load.actual:D.LoadRule{D.FixedShells{live, blank}, _}");
+            branch!(B::SmRulesLoadActualLoadRuleFixedShells);
             Load { live, blank }
         }
         ShellRule::AllLive { live } => {
-            bend_arm!("sm/rules:load.actual:D.LoadRule{D.AllLive{live}, _}");
+            branch!(B::SmRulesLoadActualLoadRuleAllLive);
             Load { live, blank: 0 }
         }
     }
@@ -211,23 +216,23 @@ pub(crate) const fn load_amount(rule: LoadRule) -> AmountRule {
 pub(crate) fn load_next(first: bool, index: u32) -> u32 {
     match (first, index) {
         (true, _) => {
-            bend_arm!("sm/rules:load.next:True{} _");
+            branch!(B::SmRulesLoadNextTrue);
             0
         }
         (false, 0) => {
-            bend_arm!("sm/rules:load.next:False{} 0n");
+            branch!(B::SmRulesLoadNextFalseZero);
             1
         }
         (false, 1) => {
-            bend_arm!("sm/rules:load.next:False{} 1n");
+            branch!(B::SmRulesLoadNextFalseOne);
             2
         }
         (false, 2) => {
-            bend_arm!("sm/rules:load.next:False{} 2n");
+            branch!(B::SmRulesLoadNextFalseTwo);
             3
         }
         (false, 3..) => {
-            bend_arm!("sm/rules:load.next:False{} _");
+            branch!(B::SmRulesLoadNextFalse);
             0
         }
     }
@@ -236,10 +241,10 @@ pub(crate) fn load_next(first: bool, index: u32) -> u32 {
 /// `round.next`. The round index stays below the plan length (at most 3).
 pub(crate) fn round_next(before: bool, index: u32) -> u32 {
     if before {
-        bend_arm!("sm/rules:round.next:True{}");
+        branch!(B::SmRulesRoundNextTrue);
         0
     } else {
-        bend_arm!("sm/rules:round.next:False{}");
+        branch!(B::SmRulesRoundNextFalse);
         index.saturating_add(1)
     }
 }
@@ -252,10 +257,10 @@ pub(crate) const fn subtract(left: u32, right: u32) -> u32 {
 /// `captured`.
 pub(crate) fn captured(sawed: bool) -> Damage {
     if sawed {
-        bend_arm!("sm/rules:captured:True{}");
+        branch!(B::SmRulesCapturedTrue);
         Damage::Double
     } else {
-        bend_arm!("sm/rules:captured:False{}");
+        branch!(B::SmRulesCapturedFalse);
         Damage::Single
     }
 }
@@ -264,11 +269,11 @@ pub(crate) fn captured(sawed: bool) -> Damage {
 pub(crate) fn shot_health(shell: Shell, hp: u32, damage: Damage) -> u32 {
     match shell {
         Shell::Blank => {
-            bend_arm!("sm/rules:shot.health:D.Blank{}");
+            branch!(B::SmRulesShotHealthBlank);
             hp
         }
         Shell::Live => {
-            bend_arm!("sm/rules:shot.health:D.Live{}");
+            branch!(B::SmRulesShotHealthLive);
             subtract(hp, damage.amount())
         }
     }
@@ -278,11 +283,11 @@ pub(crate) fn shot_health(shell: Shell, hp: u32, damage: Damage) -> u32 {
 pub(crate) fn shot_passes(shell: Shell, same: bool) -> bool {
     match (shell, same) {
         (Shell::Blank, true) => {
-            bend_arm!("sm/rules:shot.passes:D.Blank{} True{}");
+            branch!(B::SmRulesShotPassesBlankTrue);
             false
         }
         (Shell::Live, _) | (Shell::Blank, false) => {
-            bend_arm!("sm/rules:shot.passes:_ _");
+            branch!(B::SmRulesShotPassesAny);
             true
         }
     }
@@ -292,10 +297,10 @@ pub(crate) fn shot_passes(shell: Shell, same: bool) -> bool {
 pub(crate) fn winner(players: &Players) -> Option<Seat> {
     let seats = living(players);
     if seats.len() == 1 {
-        bend_arm!("sm/rules:winner.only:seat <> Nil{}");
+        branch!(B::SmRulesWinnerOnlyConsNil);
         seats.first()
     } else {
-        bend_arm!("sm/rules:winner.only:_");
+        branch!(B::SmRulesWinnerOnlyAny);
         None
     }
 }
