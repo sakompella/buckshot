@@ -5,6 +5,8 @@
 //! [`Item::ORDER`], and the gun is a bit string of at most [`Gun::CAPACITY`]
 //! shells.
 
+use crate::branch::B;
+
 /// A fixed socket identity (domain.bend `Seat`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Seat {
@@ -37,11 +39,20 @@ pub enum Table {
 impl Table {
     /// `table.seats`: the seated sockets in ascending order.
     #[must_use]
-    pub const fn seats(self) -> Seats {
+    pub fn seats(self) -> Seats {
         match self {
-            Self::TwoSeats => Seats::of(&[Seat::Seat1, Seat::Seat3]),
-            Self::ThreeSeats => Seats::of(&[Seat::Seat0, Seat::Seat1, Seat::Seat2]),
-            Self::FourSeats => Seats::of(&[Seat::Seat0, Seat::Seat1, Seat::Seat2, Seat::Seat3]),
+            Self::TwoSeats => {
+                branch!(B::DomainTableSeatsTwoSeats);
+                Seats::of(&[Seat::Seat1, Seat::Seat3])
+            }
+            Self::ThreeSeats => {
+                branch!(B::DomainTableSeatsThreeSeats);
+                Seats::of(&[Seat::Seat0, Seat::Seat1, Seat::Seat2])
+            }
+            Self::FourSeats => {
+                branch!(B::DomainTableSeatsFourSeats);
+                Seats::of(&[Seat::Seat0, Seat::Seat1, Seat::Seat2, Seat::Seat3])
+            }
         }
     }
 
@@ -93,9 +104,46 @@ impl Seats {
         }
     }
 
+    /// Appends `seat` unless it is already in the list.
+    pub fn insert(&mut self, seat: Seat) {
+        if !self.contains(seat) {
+            self.push(seat);
+        }
+    }
+
+    /// `List.append`.
+    #[must_use]
+    pub fn append(self, other: Self) -> Self {
+        other.iter().fold(self, |mut all, seat| {
+            all.push(seat);
+            all
+        })
+    }
+
+    /// `List.reverse`.
+    #[must_use]
+    pub fn reversed(self) -> Self {
+        self.iter().rev().fold(Self::EMPTY, |mut all, seat| {
+            all.push(seat);
+            all
+        })
+    }
+
+    #[must_use]
+    pub fn as_slice(&self) -> &[Seat] {
+        self.seats.get(..usize::from(self.len)).unwrap_or_default()
+    }
+
+    /// The head and the rest, or `None` for the empty list.
+    #[must_use]
+    pub fn split_first(&self) -> Option<(Seat, Self)> {
+        let (head, rest) = self.as_slice().split_first()?;
+        Some((*head, Self::of(rest)))
+    }
+
     #[must_use]
     pub fn iter(&self) -> impl DoubleEndedIterator<Item = Seat> + Clone + '_ {
-        self.seats.iter().take(usize::from(self.len)).copied()
+        self.as_slice().iter().copied()
     }
 
     #[must_use]
@@ -285,11 +333,17 @@ impl Gun {
 
     /// `G.swap`: swaps positions `i` and `j` when both exist, else unchanged.
     #[must_use]
-    pub const fn swap(self, i: u32, j: u32) -> Self {
-        let (Some(a), Some(b)) = (self.nth(i), self.nth(j)) else {
-            return self;
-        };
-        self.set(i, b).set(j, a)
+    pub fn swap(self, i: u32, j: u32) -> Self {
+        match (self.nth(i), self.nth(j)) {
+            (Some(a), Some(b)) => {
+                branch!(B::SmRulesSwapFoundSomeSome);
+                self.set(i, b).set(j, a)
+            }
+            (None, _) | (Some(_), None) => {
+                branch!(B::SmRulesSwapFoundAny);
+                self
+            }
+        }
     }
 
     const fn set(self, i: u32, shell: Shell) -> Self {
@@ -351,10 +405,16 @@ impl Item {
 
     /// `item.dealt_at`: at exactly two seats the remote is never dealt.
     #[must_use]
-    pub const fn dealt_at(self, table: Table) -> bool {
+    pub fn dealt_at(self, table: Table) -> bool {
         match (table, self) {
-            (Table::TwoSeats, Self::Remote) => false,
-            (Table::TwoSeats | Table::ThreeSeats | Table::FourSeats, _) => true,
+            (Table::TwoSeats, Self::Remote) => {
+                branch!(B::DomainItemDealtAtTwoSeatsRemote);
+                false
+            }
+            (Table::TwoSeats | Table::ThreeSeats | Table::FourSeats, _) => {
+                branch!(B::DomainItemDealtAtAny);
+                true
+            }
         }
     }
 }
@@ -487,10 +547,16 @@ pub enum Damage {
 
 impl Damage {
     #[must_use]
-    pub const fn amount(self) -> u32 {
+    pub fn amount(self) -> u32 {
         match self {
-            Self::Single => 1,
-            Self::Double => 2,
+            Self::Single => {
+                branch!(B::DomainDamageAmountSingle);
+                1
+            }
+            Self::Double => {
+                branch!(B::DomainDamageAmountDouble);
+                2
+            }
         }
     }
 }
@@ -711,27 +777,45 @@ impl Range {
 impl Table {
     /// `table.health_range`.
     #[must_use]
-    pub const fn health_range(self) -> Range {
+    pub fn health_range(self) -> Range {
         match self {
-            Self::TwoSeats => Range { lo: 3, extra: 0 },
-            Self::ThreeSeats => Range { lo: 4, extra: 0 },
-            Self::FourSeats => Range { lo: 3, extra: 1 },
+            Self::TwoSeats => {
+                branch!(B::DomainTableHealthRangeTwoSeats);
+                Range { lo: 3, extra: 0 }
+            }
+            Self::ThreeSeats => {
+                branch!(B::DomainTableHealthRangeThreeSeats);
+                Range { lo: 4, extra: 0 }
+            }
+            Self::FourSeats => {
+                branch!(B::DomainTableHealthRangeFourSeats);
+                Range { lo: 3, extra: 1 }
+            }
         }
     }
 
     /// `table.amount_range`.
     #[must_use]
-    pub const fn amount_range(self) -> Range {
+    pub fn amount_range(self) -> Range {
         match self {
-            Self::TwoSeats => Range { lo: 2, extra: 1 },
-            Self::ThreeSeats => Range { lo: 3, extra: 1 },
-            Self::FourSeats => Range { lo: 3, extra: 0 },
+            Self::TwoSeats => {
+                branch!(B::DomainTableAmountRangeTwoSeats);
+                Range { lo: 2, extra: 1 }
+            }
+            Self::ThreeSeats => {
+                branch!(B::DomainTableAmountRangeThreeSeats);
+                Range { lo: 3, extra: 1 }
+            }
+            Self::FourSeats => {
+                branch!(B::DomainTableAmountRangeFourSeats);
+                Range { lo: 3, extra: 0 }
+            }
         }
     }
 
     /// `table.deck`: the ordered sequence batches.
     #[must_use]
-    pub const fn deck(self) -> &'static [Load] {
+    pub fn deck(self) -> &'static [Load] {
         const fn l(live: u32, blank: u32) -> Load {
             Load { live, blank }
         }
@@ -761,21 +845,42 @@ impl Table {
             l(2, 1),
         ];
         match self {
-            Self::TwoSeats => &TWO,
-            Self::ThreeSeats => &THREE,
-            Self::FourSeats => &FOUR,
+            Self::TwoSeats => {
+                branch!(B::DomainTableDeckTwoSeats);
+                &TWO
+            }
+            Self::ThreeSeats => {
+                branch!(B::DomainTableDeckThreeSeats);
+                &THREE
+            }
+            Self::FourSeats => {
+                branch!(B::DomainTableDeckFourSeats);
+                &FOUR
+            }
         }
     }
 }
 
 /// `prize`: by round index, not plan length.
 #[must_use]
-pub const fn prize(round: u32) -> u32 {
+pub fn prize(round: u32) -> u32 {
     match round {
-        0 => 70000,
-        1 => 75000,
-        2 => 80000,
-        3.. => 0,
+        0 => {
+            branch!(B::DomainPrizeZero);
+            70000
+        }
+        1 => {
+            branch!(B::DomainPrizeOne);
+            75000
+        }
+        2 => {
+            branch!(B::DomainPrizeTwo);
+            80000
+        }
+        3.. => {
+            branch!(B::DomainPrizeAny);
+            0
+        }
     }
 }
 

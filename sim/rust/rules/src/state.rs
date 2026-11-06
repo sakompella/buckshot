@@ -2,6 +2,7 @@
 //! `Players` and `Grabs` records from `sm/state.bend`). The match config is
 //! not here: it is passed beside the state by reference.
 
+use crate::branch::B;
 use crate::domain::{Direction, Gun, Item, Items, Load, Ring, Seat, Slot, Slots, Table};
 
 /// A seat's jammer state (sm/state.bend `Jam`).
@@ -15,10 +16,16 @@ pub enum Jam {
 impl Jam {
     /// `jam.jammed`.
     #[must_use]
-    pub const fn jammed(self) -> bool {
+    pub fn jammed(self) -> bool {
         match self {
-            Self::Free => false,
-            Self::Jammed | Self::JammedSkipped => true,
+            Self::Free => {
+                branch!(B::SmStateJamJammedFree);
+                false
+            }
+            Self::Jammed | Self::JammedSkipped => {
+                branch!(B::SmStateJamJammedAny);
+                true
+            }
         }
     }
 }
@@ -33,7 +40,7 @@ pub struct SeatRecord {
 }
 
 impl SeatRecord {
-    /// A seat missing from the ring reads as this fresh seat (`seat.found`).
+    /// The seat that [`players_seat`] reads for a seat missing from the ring.
     pub const FRESH: Self = Self {
         health: 100,
         jam: Jam::Free,
@@ -44,6 +51,20 @@ impl SeatRecord {
 
 /// One record per seated socket (sm/state.bend `Players`).
 pub type Players = Ring<SeatRecord>;
+
+/// `players.seat` with `seat.found`: a seat missing from the ring reads as a fresh seat.
+pub(crate) fn players_seat(players: &Players, seat: Seat) -> SeatRecord {
+    match players.get(seat) {
+        Some(record) => {
+            branch!(B::SmStateSeatFoundSome);
+            record
+        }
+        None => {
+            branch!(B::SmStateSeatFoundNone);
+            SeatRecord::FRESH
+        }
+    }
+}
 
 /// Item distribution flags (sm/state.bend `Grabs`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -74,10 +95,12 @@ impl Deck {
     /// `batches(table.deck(table), 0)`.
     #[must_use]
     pub fn full(table: Table) -> Self {
-        let n = table.deck().len();
-        let ids = (0..n).fold(0u16, |ids, i| {
-            ids | u16::checked_shl(1, u32::try_from(i).unwrap_or(16)).unwrap_or(0)
-        });
+        let mut ids = 0u16;
+        for i in 0..table.deck().len() {
+            branch!(B::SmRulesBatchesCons);
+            ids |= u16::checked_shl(1, u32::try_from(i).unwrap_or(16)).unwrap_or(0);
+        }
+        branch!(B::SmRulesBatchesNil);
         Self { table, ids }
     }
 

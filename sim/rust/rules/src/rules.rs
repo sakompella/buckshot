@@ -4,7 +4,7 @@
 
 use crate::branch::B;
 use crate::domain::{AmountRule, Config, Damage, Direction, HealthRule, Load, LoadRule, RoundRules, Seat, Seats, Shell, ShellRule};
-use crate::state::{Jam, Players, SeatRecord, World};
+use crate::state::{Jam, Players, SeatRecord, World, players_seat};
 
 /// sm/state.bend `JamResult`: what a seat's jammer does when its turn comes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
