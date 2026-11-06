@@ -97,7 +97,7 @@ const secretNode = (secret: Secret): BendNode =>
     EmptyBriefcase: () => tag("EmptyBriefcase"),
   });
 
-const logNode = (log: ReadonlyArray<OwnEntry>): BendNode =>
+export const logNode = (log: ReadonlyArray<OwnEntry>): BendNode =>
   bendList(log.map((entry) => (entry.kind === "event" ? tag("Witnessed", { event: eventNode(entry.event) }) : tag("Learned", { secret: secretNode(entry.secret) }))));
 
 const TABLES = { 2: "TwoSeats", 3: "ThreeSeats", 4: "FourSeats" } as const satisfies Readonly<Record<SeatCount, string>>;

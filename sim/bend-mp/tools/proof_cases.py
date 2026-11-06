@@ -228,7 +228,7 @@ def last_leaf(shape: Shape, seat: int | None, state: str) -> list[str]:
     slots, granted = (f"s{seat}", f"n{seat}") if seat in shape.seated else ("D.slots.empty()", "0n")
     at = SEATS[seat]
     return [
-        f"last.parts(G.GetItemToGrab.pool(D.item.order(), A.ref_host({state}), {at}), I.pool({state}, {at}), "
+        f"last.parts(G.GetItemToGrab.pool(D.item.order(), A.ref_host({state}), {at}), I.stocked({state}, {at}), "
         f"{slots}, {granted}, amount, empty.eq({state}, {at}, shape))"
     ]
 
@@ -354,7 +354,7 @@ def slot_split() -> list[str]:
     """Every slot of a matched inventory, closed by computation."""
     rows = ["match sl slot:"]
     for slot in SLOTS:
-        rows += [f"  case D.Slots{{+a, +b, +c, +d, +e, +f, +g, +h}} {slot}:", "    {==}"]
+        rows += [f"  case D.Slots{{+a, +b, +c, +d, +e, +f, +g, +h, _}} {slot}:", "    {==}"]
     return rows
 
 
@@ -363,7 +363,7 @@ def count_slot() -> list[str]:
     rows = ["match sl slot:"]
     for k, slot in enumerate(SLOTS):
         rows += [
-            f"  case D.Slots{{{', '.join(f'+c{j}' for j in range(8))}}} {slot}:",
+            f"  case D.Slots{{{', '.join(f'+c{j}' for j in range(8))}, _}} {slot}:",
             f"    count.pos([{', '.join(f'c{j}' for j in range(8))}], item, {k}n, Equal.cong(Maybe<&2, D.Item>, Maybe<&2, Maybe<&2, D.Item>>, x => Some{{x}}, c{k}, Some{{item}}, e))",
         ]
     return rows

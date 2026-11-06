@@ -355,7 +355,7 @@ def full.list(+xs: List<&2, Maybe<&2, D.Item>>) -> {Bool.not(G.slots.full(xs)) =
 
 def full.slots(+sl: D.Slots) -> {Bool.not(G.slots.full(G.slots.list(sl))) == Nat.is_lt(I.occupied(I.slots.items(sl)), 8n) : Bool}:
   match sl:
-    case D.Slots{+a, +b, +c, +d, +e, +f, +g, +h}:
+    case D.Slots{+a, +b, +c, +d, +e, +f, +g, +h, _}:
       full.list([a, b, c, d, e, f, g, h])
 
 def nonempty.items(+xs: List<&2, D.Item>) -> {G.nonempty(D.Item, xs) == I.has_items(xs) : Bool}:
@@ -394,11 +394,11 @@ def begin.go_eq(+s: S.State, +seats: List<&2, D.Seat>, +nr: Bool, +shape: A.Shap
           +sl : D.Slots = I.seat.slots(p, seat)
           +pool_r : List<&2, D.Item> = G.GetItemToGrab.pool(D.item.order(), qh(s0), seat)
           +pool_m : List<&2, D.Item> = I.pool(s0, seat)
-          +e_pool : {G.nonempty(D.Item, pool_r) == I.has_items(pool_m) : Bool} = Equal.trans(Bool, G.nonempty(D.Item, pool_r), G.nonempty(D.Item, pool_m), I.has_items(pool_m), Equal.cong(List<&2, D.Item>, Bool, xs => G.nonempty(D.Item, xs), pool_r, pool_m, GP.pool.eq(sq, seat, ISP.shape.move(w, p, ph, n, g, S.Blocked{None{}}, n, shape))), nonempty.items(pool_m))
-          +e_bit : {Bool.and(Bool.or(nr, Bool.and(G.alive(hp), Bool.not(G.slots.full(G.slots.list(sl))))), G.nonempty(D.Item, pool_r)) == Bool.and(I.begin.can(nr, hp, sl), I.has_items(pool_m)) : Bool} = and.cong(Bool.or(nr, Bool.and(G.alive(hp), Bool.not(G.slots.full(G.slots.list(sl))))), I.begin.can(nr, hp, sl), G.nonempty(D.Item, pool_r), I.has_items(pool_m), can.eq(nr, hp, sl), e_pool)
+          +e_pool : {G.nonempty(D.Item, pool_r) == I.stocked(s0, seat) : Bool} = Equal.trans(Bool, G.nonempty(D.Item, pool_r), I.has_items(pool_m), I.stocked(s0, seat), Equal.trans(Bool, G.nonempty(D.Item, pool_r), G.nonempty(D.Item, pool_m), I.has_items(pool_m), Equal.cong(List<&2, D.Item>, Bool, xs => G.nonempty(D.Item, xs), pool_r, pool_m, GP.pool.eq(sq, seat, ISP.shape.move(w, p, ph, n, g, S.Blocked{None{}}, n, shape))), nonempty.items(pool_m)), GP.stocked.eq(s0, seat))
+          +e_bit : {Bool.and(Bool.or(nr, Bool.and(G.alive(hp), Bool.not(G.slots.full(G.slots.list(sl))))), G.nonempty(D.Item, pool_r)) == Bool.and(I.begin.can(nr, hp, sl), I.stocked(s0, seat)) : Bool} = and.cong(Bool.or(nr, Bool.and(G.alive(hp), Bool.not(G.slots.full(G.slots.list(sl))))), I.begin.can(nr, hp, sl), G.nonempty(D.Item, pool_r), I.stocked(s0, seat), can.eq(nr, hp, sl), e_pool)
           +e_rest : {G.GetSocketsToBeginItemGrabbingOn.go(GP.lens.entries(rest, sq), qh(s0), nr) == I.begin.go(rest, s0, nr) : List<&2, D.Seat>} = begin.go_eq(s0, rest, nr, shape)
-          %Equal.sym(Bool, Bool.and(Bool.or(nr, Bool.and(G.alive(hp), Bool.not(G.slots.full(G.slots.list(sl))))), G.nonempty(D.Item, pool_r)), Bool.and(I.begin.can(nr, hp, sl), I.has_items(pool_m)), e_bit) : {G.turn_ring.put(_, seat, G.GetSocketsToBeginItemGrabbingOn.go(GP.lens.entries(rest, sq), qh(s0), nr)) == I.keep(D.Seat, Bool.and(I.begin.can(nr, hp, sl), I.has_items(pool_m)), seat, I.begin.go(rest, s0, nr)) : List<&2, D.Seat>}
-          put.keep(Bool.and(I.begin.can(nr, hp, sl), I.has_items(pool_m)), seat, G.GetSocketsToBeginItemGrabbingOn.go(GP.lens.entries(rest, sq), qh(s0), nr), I.begin.go(rest, s0, nr), e_rest)
+          %Equal.sym(Bool, Bool.and(Bool.or(nr, Bool.and(G.alive(hp), Bool.not(G.slots.full(G.slots.list(sl))))), G.nonempty(D.Item, pool_r)), Bool.and(I.begin.can(nr, hp, sl), I.stocked(s0, seat)), e_bit) : {G.turn_ring.put(_, seat, G.GetSocketsToBeginItemGrabbingOn.go(GP.lens.entries(rest, sq), qh(s0), nr)) == I.keep(D.Seat, Bool.and(I.begin.can(nr, hp, sl), I.stocked(s0, seat)), seat, I.begin.go(rest, s0, nr)) : List<&2, D.Seat>}
+          put.keep(Bool.and(I.begin.can(nr, hp, sl), I.stocked(s0, seat)), seat, G.GetSocketsToBeginItemGrabbingOn.go(GP.lens.entries(rest, sq), qh(s0), nr), I.begin.go(rest, s0, nr), e_rest)
 
 def begin.eq(+s: S.State, +nr: Bool, +amount: Nat, +shape: A.Shape(s)) -> {G.GetSocketsToBeginItemGrabbingOn(qh(s), nr, amount) == I.begin.seats(s, nr, amount) : List<&2, D.Seat>}:
   match s:
@@ -483,7 +483,7 @@ def rule.eq(+s: S.State) -> {G.load.amount(H.host.load_rule(qh(s))) == Q.load.am
 
 # The reload probe: the packet's reload flag and a positive-amount begin
 # list against reload.wanted.
-def live.eq(+winner: Maybe<&2, D.Seat>, +s: S.State, +from: D.Seat, +passing: Bool, +shape: A.Shape(s)) -> {Bool.and(R.EndPacket.reload(end.packet(s, from, passing, winner)), G.nonempty(D.Seat, G.GetSocketsToBeginItemGrabbingOn(qh(s), False{}, 1n))) == Bool.and(I.gun.empty(S.world.gun(S.state.world(s))), Bool.and(I.winnerless(winner), I.has_seats(I.begin.seats(s, False{}, 1n)))) : Bool}:
+def live.eq(+winner: Maybe<&2, D.Seat>, +s: S.State, +from: D.Seat, +passing: Bool, +shape: A.Shape(s)) -> {Bool.and(R.EndPacket.reload(end.packet(s, from, passing, winner)), G.nonempty(D.Seat, G.GetSocketsToBeginItemGrabbingOn(qh(s), False{}, 1n))) == I.reload.wanted(s, winner) : Bool}:
   match winner:
     case Some{+seat}:
       match s:

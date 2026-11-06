@@ -212,12 +212,12 @@ def rules.load(loads: D.LoadRules, index: Nat) -> D.LoadRule:
 
 def round.health(round: D.RoundRules) -> D.HealthRule:
   match round:
-    case D.RoundRules{health, _, _}:
+    case D.RoundRules{health, _, _, _}:
       health
 
 def round.load(round: D.RoundRules, index: Nat) -> D.LoadRule:
   match round:
-    case D.RoundRules{_, loads, _}:
+    case D.RoundRules{_, loads, _, _}:
       rules.load(loads, index)
 
 def world.rules(+world: S.World) -> D.RoundRules:

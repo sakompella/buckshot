@@ -75,7 +75,7 @@ def put.world(world: S.World, rest: String) -> String:
 
 def put.slots(slots: D.Slots, rest: String) -> String:
   match slots:
-    case D.Slots{a, b, c, d, e, f, g, h}:
+    case D.Slots{a, b, c, d, e, f, g, h, _}:
       L.put.item(a, L.put.item(b, L.put.item(c, L.put.item(d, L.put.item(e, L.put.item(f, L.put.item(g, L.put.item(h, rest))))))))
 
 def put.players(entries: List<&2, D.At<&2, S.Seat>>, rest: String) -> String:
@@ -134,10 +134,9 @@ def put.phase(phase: T.Phase, rest: String) -> String:
     case T.NeedPhone{seat, owner, slot}:
       L.put(11, L.put.seat(seat, L.put.seat(owner, put.slot(slot, rest))))
 
-def put.state(state: T.State, rest: String) -> String:
-  match state:
-    case T.State{world, players, phase, _, grabs}:
-      put.world(world, put.players(D.ring.entries(S.Seat, players), put.phase(phase, L.put.grabs(grabs, rest))))
+def put.state(+state: T.State, rest: String) -> String:
+  tail : String = put.players(D.ring.entries(S.Seat, T.state.players(state)), put.phase(T.state.phase(state), L.put.grabs(T.state.grabs(state), rest)))
+  put.world(T.state.world(state), tail)
 
 def put.world_list(worlds: List<&2, A.World>, rest: String) -> String:
   match worlds:
@@ -245,12 +244,22 @@ def text.eq(a: String, b: String, same: Bool) -> Bool:
     case _ _:
       False{}
 
-def bucket.find(bucket: List<&2, Kept>, +key: String) -> Maybe<&2, Stored>:
+def bucket.first_is(+bucket: List<&2, Kept>, +key: String) -> Bool:
   match bucket:
     case Nil{}:
+      False{}
+    case Kept{other, _} <> _:
+      text.eq(other, key, True{})
+
+# `same` tells whether the first of `bucket` has the key.
+def bucket.find(bucket: List<&2, Kept>, same: Bool, +key: String) -> Maybe<&2, Stored>:
+  match bucket same:
+    case Nil{} _:
       None{}
-    case Kept{+other, +stored} <> rest:
-      Bool.pick(Maybe<&2, Stored>, text.eq(other, key, True{}), Some{stored}, bucket.find(rest, key))
+    case Kept{_, stored} <> _ True{}:
+      Some{stored}
+    case _ <> +rest False{}:
+      bucket.find(rest, bucket.first_is(rest, key), key)
 
 def bucket.without(bucket: List<&2, Kept>, +key: String) -> List<&2, Kept>:
   match bucket:
@@ -264,8 +273,8 @@ def hash(+key: String) -> String:
   put.u32(L.key.seed(key, 2166136261), SNil{})
 
 def found.of(got: Map<&2, List<&2, Kept>> & List<&2, Kept>, +key: String, +nodes: Nat, +entries: Nat, +hits: Nat, +deals: Nat, +deal_hits: Nat) -> Tally & Maybe<&2, Stored>:
-  (memo, bucket) = got
-  (Tally{nodes, memo, entries, hits, deals, deal_hits}, bucket.find(bucket, key))
+  (memo, +bucket) = got
+  (Tally{nodes, memo, entries, hits, deals, deal_hits}, bucket.find(bucket, bucket.first_is(bucket, key), key))
 
 def find(tally: Tally, +key: String) -> Tally & Maybe<&2, Stored>:
   match tally:

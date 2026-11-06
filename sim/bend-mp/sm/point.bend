@@ -109,11 +109,16 @@ def seat.views(seats: List<&2, D.Seat>, +players: S.Players, +grabs: S.Grabs, vi
     case +seat <> rest:
       seat.views(rest, players, grabs, D.ring.set(D.SeatView, views, seat, seat.view(players, grabs, seat)))
 
+def board.round(+world: S.World) -> D.RoundView:
+  D.RoundView{S.world.round_index(world), D.plan.length(S.world.plan(world)), S.world.round_health(world)}
+
+def board.gun(+world: S.World) -> D.GunView:
+  D.GunView{S.world.shown(world), List.length(&2, D.Shell, S.world.gun(world)), S.world.sawed(world)}
+
 def board(+state: S.State) -> D.Board:
-  +world : S.World = S.state.world(state)
-  +table : D.Table = S.world.table(world)
+  +table : D.Table = S.world.table(S.state.world(state))
   views : D.Ring<&2, D.SeatView> = seat.views(D.table.seats(table), S.state.players(state), S.state.grabs(state), D.ring.fill(D.SeatView, table, D.SeatView{D.Unjammed{100n}, D.slots.empty(), 0, D.NotGrabbing{}}))
-  D.Board{D.RoundView{S.world.round_index(world), D.plan.length(S.world.plan(world)), S.world.round_health(world)}, views, D.GunView{S.world.shown(world), List.length(&2, D.Shell, S.world.gun(world)), S.world.sawed(world)}, S.world.direction(world), stage(state)}
+  D.Board{board.round(S.state.world(state)), views, board.gun(S.state.world(state)), S.world.direction(S.state.world(state)), stage(state)}
 
 def point(+state: S.State) -> D.Point:
   D.Point{request(state), board(state)}

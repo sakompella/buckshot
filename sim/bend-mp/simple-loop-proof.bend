@@ -395,7 +395,7 @@ def finish_empty.indep(seats: List<&2, D.Seat>, +w: S.World, +p: S.Players, +g: 
     case Nil{}:
       {==}
     case +seat <> rest:
-      Equal.cong(Bool, Bool, b => Bool.and(Bool.not(I.has_items(I.pool(S.State{w, p, q1, n1, g}, seat))), b), I.finish.empty(rest, S.State{w, p, q1, n1, g}), I.finish.empty(rest, S.State{w, p, q2, n2, g}), finish_empty.indep(rest, w, p, g, q1, n1, q2, n2))
+      Equal.cong(Bool, Bool, b => Bool.and(Bool.not(I.stocked(S.State{w, p, q1, n1, g}, seat)), b), I.finish.empty(rest, S.State{w, p, q1, n1, g}), I.finish.empty(rest, S.State{w, p, q2, n2, g}), finish_empty.indep(rest, w, p, g, q1, n1, q2, n2))
 
 def finished.indep(+w: S.World, +p: S.Players, +g: S.Grabs, +q1: S.Phase, +n1: List<&2, D.Note>, +q2: S.Phase, +n2: List<&2, D.Note>) -> {I.finished(S.State{w, p, q1, n1, g}) == I.finished(S.State{w, p, q2, n2, g}) : Bool}:
   Equal.cong(Bool, Bool, b => Bool.or(I.finish.ended(D.ring.entries(Bool, S.grabs.grabbing(g))), b), I.finish.empty(D.table.seats(S.world.table(w)), S.State{w, p, q1, n1, g}), I.finish.empty(D.table.seats(S.world.table(w)), S.State{w, p, q2, n2, g}), finish_empty.indep(D.table.seats(S.world.table(w)), w, p, g, q1, n1, q2, n2))
@@ -405,7 +405,7 @@ def stalled.indep(seats: List<&2, D.Seat>, +w: S.World, +p: S.Players, +g: S.Gra
     case Nil{}:
       {==}
     case +seat <> rest:
-      Equal.cong(List<&2, D.Seat>, List<&2, D.Seat>, xs => I.keep(D.Seat, Bool.and(I.seat.grabbing(g, seat), Bool.and(I.is_none(I.seat.holding(g, seat)), Bool.and(Bool.not(D.seat.eq(seat, placing)), Bool.not(I.has_items(I.pool(S.State{w, p, q1, n1, g}, seat)))))), seat, xs), I.stalled(rest, S.State{w, p, q1, n1, g}, placing), I.stalled(rest, S.State{w, p, q2, n2, g}, placing), stalled.indep(rest, w, p, g, q1, n1, q2, n2, placing))
+      Equal.cong(List<&2, D.Seat>, List<&2, D.Seat>, xs => I.keep(D.Seat, Bool.and(I.seat.grabbing(g, seat), Bool.and(I.is_none(I.seat.holding(g, seat)), Bool.and(Bool.not(D.seat.eq(seat, placing)), Bool.not(I.stocked(S.State{w, p, q1, n1, g}, seat))))), seat, xs), I.stalled(rest, S.State{w, p, q1, n1, g}, placing), I.stalled(rest, S.State{w, p, q2, n2, g}, placing), stalled.indep(rest, w, p, g, q1, n1, q2, n2, placing))
 
 def stalled.any(+q: S.Phase, +t: T.State, +placing: D.Seat) -> {I.stalled.seats(embedq(q, t), placing) == I.stalled.seats(T.state.records(t), placing) : List<&2, D.Seat>}:
   match t:

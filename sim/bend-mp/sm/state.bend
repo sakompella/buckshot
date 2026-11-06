@@ -438,15 +438,11 @@ def world.deck(+world: World) -> List<&2, Batch>:
 def world.set_deck(+world: World, deck: List<&2, Batch>) -> World:
   world.set_decks(world, decks.set(world.decks(world), world.table(world), deck))
 
-def state.emit(state: State, event: D.GameEvent) -> State:
-  match state:
-    case State{world, players, phase, notes, grabs}:
-      State{world, players, phase, List.append(&2, D.Note, notes, [D.Shown{event}]), grabs}
+def state.emit(+state: State, event: D.GameEvent) -> State:
+  state.set_notes(state, List.append(&2, D.Note, state.notes(state), [D.Shown{event}]))
 
-def state.tell(state: State, seat: D.Seat, secret: D.Secret) -> State:
-  match state:
-    case State{world, players, phase, notes, grabs}:
-      State{world, players, phase, List.append(&2, D.Note, notes, [D.Told{seat, secret}]), grabs}
+def state.tell(+state: State, seat: D.Seat, secret: D.Secret) -> State:
+  state.set_notes(state, List.append(&2, D.Note, state.notes(state), [D.Told{seat, secret}]))
 
 def state.stepped(+state: State) -> D.Stepped<&2, State>:
   D.Stepped{state, state.notes(state)}
