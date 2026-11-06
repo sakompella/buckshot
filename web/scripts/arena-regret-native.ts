@@ -123,15 +123,40 @@ out
 
 out.exec(`CREATE TABLE IF NOT EXISTS evaluator_build (
     evaluator TEXT, max_depth INTEGER, budget INTEGER, reload TEXT, samples INTEGER, source_commit TEXT, binary_sha256 TEXT, binary TEXT,
-    PRIMARY KEY (evaluator, max_depth, budget, reload, samples, source_commit))`);
+    PRIMARY KEY (evaluator, max_depth, budget, reload, samples, binary_sha256))`);
 
 out.exec(`CREATE TABLE IF NOT EXISTS regret_build (
-    match_id TEXT, ordinal INTEGER, evaluator TEXT, max_depth INTEGER, budget INTEGER, reload TEXT, samples INTEGER, source_commit TEXT,
+    match_id TEXT, ordinal INTEGER, evaluator TEXT, max_depth INTEGER, budget INTEGER, reload TEXT, samples INTEGER, source_commit TEXT, binary_sha256 TEXT,
     PRIMARY KEY (match_id, ordinal, evaluator, max_depth, budget, reload, samples))`);
 
+// A file written by the earlier runner keys builds on source_commit alone; it stays readable, but new rows are not mixed into it.
+const keyedOnBinary = out.query<{ name: string }, []>("SELECT name FROM pragma_table_info('evaluator_build') WHERE pk > 0 AND name = 'binary_sha256'").all().length > 0
+  && out.query<{ name: string }, []>("SELECT name FROM pragma_table_info('regret_build') WHERE name = 'binary_sha256'").all().length > 0;
+
+if (!keyedOnBinary) {
+  throw new Error(`${values.out} was written by an older runner that keyed builds on source_commit; write to a new --out file`);
+}
+
+const binarySha256 = createHash("sha256").update(readFileSync(binary)).digest("hex");
+
+/** Records this binary once; shards sharing --out race here, so check and insert are one write transaction. */
 out
-  .query("INSERT OR IGNORE INTO evaluator_build (evaluator, max_depth, budget, reload, samples, source_commit, binary_sha256, binary) VALUES (?, ?, ?, 'sampled', ?, ?, ?, ?)")
-  .run(evaluator, depth, budget, samples, values.commit, createHash("sha256").update(readFileSync(binary)).digest("hex"), binary);
+  .transaction((): void => {
+    const known = out
+      .query<{ source_commit: string }, [string, number, number, number, string]>(
+        "SELECT source_commit FROM evaluator_build WHERE evaluator = ? AND max_depth = ? AND budget = ? AND reload = 'sampled' AND samples = ? AND binary_sha256 = ?",
+      )
+      .get(evaluator, depth, budget, samples, binarySha256);
+
+    if (known === null) {
+      out
+        .query("INSERT INTO evaluator_build (evaluator, max_depth, budget, reload, samples, source_commit, binary_sha256, binary) VALUES (?, ?, ?, 'sampled', ?, ?, ?, ?)")
+        .run(evaluator, depth, budget, samples, values.commit, binarySha256, binary);
+    } else if (known.source_commit !== values.commit) {
+      throw new Error(`binary ${binarySha256} is already recorded in ${values.out} under --commit "${known.source_commit}", not "${values.commit}"`);
+    }
+  })
+  .immediate();
 
 const inputPath = join(scratch, `input-${shard.number}.txt`);
 
@@ -188,8 +213,8 @@ const put = out.transaction((row: Readonly<Record<string, string | number | null
 
   out.query(`INSERT INTO regret (${keys.join(",")}) VALUES (${keys.map(() => "?").join(",")})`).run(...Object.values(row));
   out
-    .query("INSERT INTO regret_build (match_id, ordinal, evaluator, max_depth, budget, reload, samples, source_commit) VALUES (?, ?, ?, ?, ?, 'sampled', ?, ?)")
-    .run(row["match_id"] ?? null, row["ordinal"] ?? null, evaluator, depth, budget, samples, values.commit);
+    .query("INSERT INTO regret_build (match_id, ordinal, evaluator, max_depth, budget, reload, samples, source_commit, binary_sha256) VALUES (?, ?, ?, ?, ?, 'sampled', ?, ?, ?)")
+    .run(row["match_id"] ?? null, row["ordinal"] ?? null, evaluator, depth, budget, samples, values.commit, binarySha256);
 });
 
 const scoreMatch = (match: MatchRow): void => {

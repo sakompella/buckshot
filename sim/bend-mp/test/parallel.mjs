@@ -48,7 +48,8 @@ const two = sample(2), three = sample(3);
 
 const STATIC = { $: 'Static' }, SAMPLED = { $: 'Sampled', count: 7 };
 const OFF = { $: 'Off' }, CHARGED = { $: 'Charged' }, FREE = { $: 'Free' };
-const lines = a => array(a.lines).map(l => [Number(l.index), Number(l.score), array(l.pv).length, kind(l.reach)]);
+const moveKey = move => JSON.stringify(move, (_, v) => typeof v === 'bigint' ? String(v) : v);
+const lines = a => array(a.lines).map(l => [Number(l.index), Number(l.score), array(l.pv).map(moveKey), kind(l.reach)]);
 const result = a => kind(a) === 'Invalid' ? { invalid: a.reason } : { lines: lines(a), best: Number(a.best), depth: Number(a.depth), limited: a.limited };
 
 let checked = 0, limited = 0;
