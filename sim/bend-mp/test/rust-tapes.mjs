@@ -206,7 +206,7 @@ function playArena(recorded) {
     report.cashMatches = JSON.stringify(cash) === JSON.stringify(recorded.seats.map(seat => seat.cash));
     return { arena: report };
   };
-  play(`arena-${recorded.name}`, recorded.config, answerFor, 100000, finish);
+  play(`arena-${recorded.name}-${recorded.id}`, recorded.config, answerFor, 100000, finish);
   return report;
 }
 
