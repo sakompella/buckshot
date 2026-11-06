@@ -13,7 +13,7 @@ fi
 tapes=$(mktemp -d /tmp/rust-parity-XXXXXX)
 echo "== Bend tapes -> $tapes"
 nice -n 10 node "$root/sim/bend-mp/test/rust-tapes.mjs" \
-  --seeds 1,2 --random 12 --items 8 --wild 8 --edge 2 --arena 12 --spread --dir "$tapes"
+  --seeds 1,2 --random 12 --items 8 --wild 8 --edge 2 --arena 12 --spread --perturb 150 --dir "$tapes"
 
 cd "$here"
 echo "== cargo fmt --check"

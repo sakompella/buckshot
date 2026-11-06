@@ -10,6 +10,7 @@
 //   --items N          N games per table size: every item on, high caps, full item amounts, answers biased to items
 //   --wild N           N games per table size: answers sometimes far out of range (the raw n is recorded)
 //   --edge [G]         hand-made configs with biased answers, G games per scenario, table size and seed (default 3)
+//   --perturb N        N games per seed from states mutated into ones no valid game reaches (from_state; a few answers each)
 //   --arena K [--spread] [--db PATH]
 //                      K recorded arena matches replayed with their draws; --spread takes them across tournaments
 //
@@ -28,7 +29,7 @@ import { createHash } from 'node:crypto';
 import { homedir, tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { basename, dirname, join } from 'node:path';
-import { array, config, kind, round } from './reference-adapter.mjs';
+import { array, config, kind, list, round } from './reference-adapter.mjs';
 import { build, items, makeRandom, normalize } from './machine-items-lib.mjs';
 
 const arg = (name, fallback) => {
@@ -60,24 +61,31 @@ const N = name => SA[`simple/main:${name}`], M = name => SA[`sm/main:${name}`];
 
 let out, lines, games, steps, capped;
 const open = path => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, ''); out = path; lines = games = steps = capped = 0; };
-const emit = line => { appendFileSync(out, `${JSON.stringify(line)}\n`); lines++; };
+let buffer = null;
+const emit = line => {
+  if (buffer) return buffer.push(line);
+  appendFileSync(out, `${JSON.stringify(line)}\n`);
+  lines++;
+};
 const isOpen = request => !['Finished', 'Stuck'].includes(kind(request));
 
 // Plays one game; answerFor(request, state, step) gives the answer n, or null to stop.
-function play(game, config, answerFor, limit = MAX_STEPS, extra = () => ({})) {
-  let state = N('start')(config).state;
+// A game from `initial` (a state, not a start) is marked from_state on its first line.
+function play(game, config, answerFor, limit = MAX_STEPS, extra = () => ({}), initial = null) {
+  let state = initial ?? N('start')(config).state;
+  const first = step => step === 0 && { ...(initial && { from_state: true }), config: normalize(config) };
   for (let step = 0; ; step++) {
     const request = N('request')(state);
     const n = isOpen(request) && step < limit ? answerFor(request, state, step) : null;
     if (n === null) {
-      emit({ game, step, ...(step === 0 && { config: normalize(config) }), terminal: true, ...(isOpen(request) && { capped: true }), state: normalize(state), request: normalize(request), ...extra(state, request, step) });
+      emit({ game, step, ...first(step), terminal: true, ...(isOpen(request) && { capped: true }), state: normalize(state), request: normalize(request), ...extra(state, request, step) });
       games++;
       if (isOpen(request)) capped++;
       return request;
     }
     const answered = N('answer')(state, n);
     emit({
-      game, step, ...(step === 0 && { config: normalize(config) }), state: normalize(state), request: normalize(request),
+      game, step, ...first(step), state: normalize(state), request: normalize(request),
       event: { kind: kind(request) === 'Draw' ? 'Draw' : 'Choice', n }, next: normalize(answered.state), notes: normalize(answered.notes),
     });
     steps++;
@@ -223,7 +231,107 @@ function recordedMatches(count) {
 const modes = [];
 const mode = (name, settings, run) => modes.push({ name, settings, run });
 
-const randomGames = count('random', 20), itemGames = count('items', 20), wildGames = count('wild', 20), edgeGames = count('edge', 3), arenaMatches = count('arena', 5);
+
+// Perturbed states: a state reached by a random game is mutated into one no
+// valid game reaches (empty gun, no decks, a phase with odd fields, dead seats,
+// ...) and Bend plays a few random answers from there. Rust must agree with
+// Bend on every state it can represent.
+const shell = random => ({ $: random() % 2 ? 'Live' : 'Blank' });
+const some = value => ({ $: 'Some', value });
+const none = { $: 'None' };
+const seatKeys = state => Object.keys(state.players).filter(key => key !== '$');
+const seatTag = key => ({ $: `Seat${key.slice(1)}` });
+const seatOf = (state, random) => seatKeys(state)[random() % seatKeys(state).length];
+// Half the time a seat that may not sit at this table.
+const seatAny = (state, random) => random() % 2 ? { $: `Seat${random() % 4}` } : seatTag(seatOf(state, random));
+const slotNames = [0, 1, 2, 3, 4, 5, 6, 7].map(i => `s${i}`);
+const mutations = [
+  state => { state.world.gun = list([]); },
+  (state, random) => { state.world.gun = list([shell(random)]); },
+  (state, random) => { state.world.gun = list(Array.from({ length: 1 + random() % 3 }, () => shell(random))); },
+  state => { state.world.shown = { $: 'Load', live: 0, blank: 0 }; },
+  state => { for (const table of ['two', 'three', 'four']) state.world.decks[table] = list([]); },
+  (state, random) => { state.world.decks.two = list([{ $: 'Batch', id: random() % 3, load: { $: 'Load', live: 0, blank: 0 } }]); },
+  state => { for (const key of seatKeys(state)) state.grabs.holding[key] = none; },
+  (state, random) => { for (const key of seatKeys(state)) state.grabs.holding[key] = random() % 2 ? some({ $: items[random() % items.length] }) : none; },
+  (state, random) => {
+    state.grabs.distributing = random() % 4 > 0;
+    for (const key of seatKeys(state)) {
+      state.grabs.granted[key] = random() % 3;
+      state.grabs.grabbing[key] = random() % 2 === 0;
+      state.grabs.intake[key] = random() % 2 === 0;
+    }
+  },
+  (state, random) => { for (const key of seatKeys(state)) if (random() % 2) state.players[key].health = 0; },
+  (state, random) => { state.players[seatOf(state, random)].health = 0; },
+  state => { state.world.turn = none; },
+  (state, random) => { state.world.turn = some(seatAny(state, random)); },
+  (state, random) => { for (const slot of slotNames) state.players[seatOf(state, random)].slots[slot] = none; },
+  (state, random) => { for (const slot of slotNames) state.players[seatOf(state, random)].slots[slot] = some({ $: items[random() % items.length] }); },
+  (state, random) => { state.players[seatOf(state, random)].jam = { $: ['Free', 'Jammed', 'JammedSkipped'][random() % 3] }; },
+  (state, random) => { state.world.sawed = random() % 2 === 0; },
+  (state, random) => { state.world.direction = { $: random() % 2 ? 'Clockwise' : 'CounterClockwise' }; },
+  (state, random) => { state.world.first_death = random() % 2 ? none : some(seatAny(state, random)); },
+  (state, random) => { state.world.checking_first_death = random() % 2 === 0; },
+  (state, random) => { state.world.first_turn = seatAny(state, random); },
+  (state, random) => { state.world.item_amount = random() % 4; },
+  (state, random) => { state.world.round_index = random() % 4; state.world.load_index = random() % 5; },
+  (state, random) => { state.world.before_round = random() % 2 === 0; state.world.first_sequence = random() % 2 === 0; },
+  (state, random) => {
+    const seat = () => seatAny(state, random);
+    const itemTag = () => ({ $: items[random() % items.length] });
+    const load = () => ({ $: 'Load', live: random() % 3, blank: random() % 3 });
+    const phases = [
+      () => ({ $: 'NeedSwap', load: load(), shells: list(Array.from({ length: random() % 4 }, () => shell(random))), i: random() % 4 }),
+      () => ({ $: 'NeedSwap', load: load(), shells: list([]), i: 0 }),
+      () => ({ $: 'Idle', seat: seat() }),
+      () => ({ $: 'Blocked', holder: random() % 2 ? none : some(seat()) }),
+      () => ({ $: 'NeedTurnAmount', from: seat(), passing: random() % 2 === 0, winner: random() % 2 ? none : some(seat()) }),
+      () => ({ $: 'NeedItem', seat: seat(), first: itemTag(), second: itemTag(), rest: list(Array.from({ length: random() % 4 }, itemTag)) }),
+      () => ({ $: 'NeedPhone', seat: seat(), owner: seat(), slot: { $: `Slot${random() % 8}` } }),
+      () => ({ $: ['NeedFirst', 'NeedHealth', 'NeedAmount', 'NeedBatch', 'Stalled', 'Ended'][random() % 6] }),
+    ];
+    state.phase = phases[random() % phases.length]();
+  },
+];
+
+function perturbed(count, seed) {
+  const { random, randomConfig } = makeRandom(seed);
+  const reach = (config, target) => {
+    let state = N('start')(config).state;
+    for (let step = 0; step < target; step++) {
+      const request = N('request')(state);
+      if (!isOpen(request)) break;
+      state = N('answer')(state, kind(request) === 'Draw' ? random() % (Number(request.range.extra) + 2) : random() % (1 + array(request.moves.tail).length)).state;
+    }
+    return normalize(state);
+  };
+  let rejected = 0;
+  for (let at = 0; at < count; at++) {
+    const seats = [2, 3, 4][at % 3];
+    const base = reach(at % 2 ? randomConfig(seats) : itemConfig(random, seats), random() % 60);
+    const state = base;
+    for (let k = 1 + random() % 3; k > 0; k--) mutations[random() % mutations.length](state, random);
+    const saved = { games, steps, capped };
+    buffer = [];
+    try {
+      play(`perturb-${seed}-${at}`, state.world.config, request => kind(request) === 'Draw'
+        ? (random() % 10 ? random() % (Number(request.range.extra) + 2) : random() % 70000)
+        : random() % (1 + array(request.moves.tail).length), 6, undefined, state);
+      const kept = buffer;
+      buffer = null;
+      kept.forEach(emit);
+    } catch {
+      ({ games, steps, capped } = saved);
+      rejected++;
+    } finally {
+      buffer = null;
+    }
+  }
+  return rejected;
+}
+
+const randomGames = count('random', 20), itemGames = count('items', 20), wildGames = count('wild', 20), edgeGames = count('edge', 3), arenaMatches = count('arena', 5), perturbGames = count('perturb', 200);
 
 if (randomGames !== null) mode('random', { perTable: randomGames }, () => {
   const ends = {};
@@ -266,6 +374,13 @@ if (edgeGames !== null) mode('edge', { perScenario: edgeGames, scenarios: edges.
   }
 });
 
+if (perturbGames !== null) mode('perturb', { perSeed: perturbGames }, () => {
+  let rejected = 0;
+  for (const seed of seeds) rejected += perturbed(perturbGames, seed);
+  console.log(`perturb: ${rejected} of ${perturbGames * seeds.length} states rejected by Bend (it threw), skipped`);
+  return { rejectedByBend: rejected };
+});
+
 if (arenaMatches !== null) mode(flag('spread') ? 'arena-spread' : 'arena', { matches: arenaMatches, spread: flag('spread'), seed: seeds[0] }, () => {
   const reports = recordedMatches(arenaMatches).map(playArena);
   for (const { divergence, ...report } of reports) console.log(JSON.stringify(report), divergence ? `DIVERGES ${JSON.stringify(divergence)}` : '');
@@ -276,7 +391,7 @@ if (arenaMatches !== null) mode(flag('spread') ? 'arena-spread' : 'arena', { mat
 
 try {
   if (modes.length === 0) {
-    console.error('usage: rust-tapes.mjs [--random N] [--items N] [--wild N] [--edge [G]] [--arena K [--spread] [--db PATH]] [--seeds a,b,c] [--steps CAP] [--dir DIR | --out FILE]');
+    console.error('usage: rust-tapes.mjs [--random N] [--items N] [--wild N] [--edge [G]] [--perturb N] [--arena K [--spread] [--db PATH]] [--seeds a,b,c] [--steps CAP] [--dir DIR | --out FILE]');
     process.exitCode = 2;
   }
   if (modes.length > 1 && arg('out', null) !== null) throw new Error('--out names one file; use --dir with several modes');

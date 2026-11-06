@@ -24,8 +24,9 @@ use std::io::{BufRead, BufReader, Lines};
 use std::path::{Path, PathBuf};
 
 use buckshot_rules::{
-    AmountRule, Config, Event, FirstDeathCheck, GameEvent, HealthRule, ItemRule, LoadRule, Move, Note, Phase, Request, RoundRules, Secret,
-    ShellRule, State, Table, request, start, step_event,
+    AmountRule, Config, Deck, Decks, Direction, Event, FirstDeathCheck, GameEvent, Grabs, Gun, HealthRule, Item, ItemRule, Items, Jam,
+    Load, LoadRule, Move, Note, Phase, Request, Ring, RoundRules, Seat, SeatRecord, Secret, Shell, ShellRule, Slot, Slots, State, Table,
+    World, request, start, step_event,
 };
 use serde_json::{Value, json};
 
@@ -301,6 +302,191 @@ fn config(v: &Value) -> Result<Config, String> {
     Config::new(table, &rounds).map_err(|e| e.to_string())
 }
 
+// State decoding, for games that start from a perturbed state
+// ============================================================
+
+fn tag_of<T: Copy + Debug>(v: &Value, all: &[T]) -> Result<T, String> {
+    let n = name(v)?;
+    all.iter()
+        .copied()
+        .find(|x| format!("{x:?}") == n)
+        .ok_or_else(|| format!("unknown {n}"))
+}
+
+const SEATS: [Seat; 4] = [Seat::Seat0, Seat::Seat1, Seat::Seat2, Seat::Seat3];
+
+fn boolean(v: &Value) -> Result<bool, String> {
+    v.as_bool().ok_or_else(|| format!("{} is not a Bool", short(v)))
+}
+
+fn cons(v: &Value) -> Result<Vec<&Value>, String> {
+    let mut out = Vec::new();
+    let mut at = v;
+    loop {
+        match name(at)? {
+            "Nil" => return Ok(out),
+            "Con" => {
+                out.push(get(at, "head"));
+                at = get(at, "tail");
+            }
+            other => return Err(format!("list {other}")),
+        }
+    }
+}
+
+fn maybe_of<T>(v: &Value, f: impl Fn(&Value) -> Result<T, String>) -> Result<Option<T>, String> {
+    match name(v)? {
+        "None" => Ok(None),
+        "Some" => f(get(v, "value")).map(Some),
+        other => Err(format!("option {other}")),
+    }
+}
+
+fn seat_of(v: &Value) -> Result<Seat, String> {
+    tag_of(v, &SEATS)
+}
+
+fn load_of(v: &Value) -> Result<Load, String> {
+    Ok(Load {
+        live: nat(get(v, "live"))?,
+        blank: nat(get(v, "blank"))?,
+    })
+}
+
+fn gun_of(v: &Value) -> Result<Gun, String> {
+    let shells = cons(v)?
+        .into_iter()
+        .map(|shell| tag_of(shell, &[Shell::Live, Shell::Blank]))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(Gun::from_shells(shells))
+}
+
+fn item_of(v: &Value) -> Result<Item, String> {
+    tag_of(v, &Item::ORDER)
+}
+
+fn deck_of(table: Table, v: &Value) -> Result<Deck, String> {
+    let ids = cons(v)?
+        .into_iter()
+        .map(|batch| nat(get(batch, "id")))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(Deck::of_ids(table, ids))
+}
+
+fn ring_of<T: Copy>(table: Table, v: &Value, fill: T, f: impl Fn(&Value) -> Result<T, String>) -> Result<Ring<T>, String> {
+    let object = v.as_object().ok_or("a ring is not an object")?;
+    let mut ring = Ring::fill(table, fill);
+    for (key, value) in object.iter().filter(|(key, _)| key.as_str() != "$") {
+        let seat = key
+            .strip_prefix('s')
+            .and_then(|n| n.parse::<usize>().ok())
+            .and_then(|n| SEATS.get(n))
+            .ok_or_else(|| format!("ring key {key}"))?;
+        ring = ring.set(*seat, f(value)?);
+    }
+    Ok(ring)
+}
+
+fn slots_of(v: &Value) -> Result<Slots, String> {
+    let mut slots = Slots::EMPTY;
+    for slot in Slot::ORDER {
+        slots = slots.put(slot, maybe_of(get(v, &format!("s{}", slot.index())), item_of)?);
+    }
+    Ok(slots)
+}
+
+fn phase_of(v: &Value) -> Result<Phase, String> {
+    let seat = |key: &str| seat_of(get(v, key));
+    Ok(match name(v)? {
+        "NeedFirst" => Phase::NeedFirst,
+        "NeedHealth" => Phase::NeedHealth,
+        "NeedAmount" => Phase::NeedAmount,
+        "NeedBatch" => Phase::NeedBatch,
+        "Ended" => Phase::Ended,
+        "Stalled" => Phase::Stalled,
+        "NeedSwap" => Phase::NeedSwap {
+            load: load_of(get(v, "load"))?,
+            shells: gun_of(get(v, "shells"))?,
+            i: nat(get(v, "i"))?,
+        },
+        "Idle" => Phase::Idle { seat: seat("seat")? },
+        "Blocked" => Phase::Blocked {
+            holder: maybe_of(get(v, "holder"), seat_of)?,
+        },
+        "NeedTurnAmount" => Phase::NeedTurnAmount {
+            from: seat("from")?,
+            passing: boolean(get(v, "passing"))?,
+            winner: maybe_of(get(v, "winner"), seat_of)?,
+        },
+        "NeedItem" => Phase::NeedItem {
+            seat: seat("seat")?,
+            first: item_of(get(v, "first"))?,
+            second: item_of(get(v, "second"))?,
+            rest: cons(get(v, "rest"))?
+                .into_iter()
+                .try_fold(Items::EMPTY, |rest, item| item_of(item).map(|item| rest.with(item)))?,
+        },
+        "NeedPhone" => Phase::NeedPhone {
+            seat: seat("seat")?,
+            owner: seat("owner")?,
+            slot: tag_of(get(v, "slot"), &Slot::ORDER)?,
+        },
+        other => return Err(format!("phase {other}")),
+    })
+}
+
+/// The Rust state of a tape's state, which may be one no game reaches. It
+/// need not be representable: the caller compares it back with the tape's.
+fn state_of(table: Table, v: &Value) -> Result<State, String> {
+    let w = get(v, "world");
+    let g = get(v, "grabs");
+    let decks = get(w, "decks");
+    let seat_record = |p: &Value| {
+        Ok(SeatRecord {
+            health: nat(get(p, "health"))?,
+            jam: tag_of(get(p, "jam"), &[Jam::Free, Jam::Jammed, Jam::JammedSkipped])?,
+            cash: nat(get(p, "cash"))?,
+            slots: slots_of(get(p, "slots"))?,
+        })
+    };
+    Ok(State {
+        world: World {
+            before_round: boolean(get(w, "before_round"))?,
+            round_index: nat(get(w, "round_index"))?,
+            load_index: nat(get(w, "load_index"))?,
+            first_sequence: boolean(get(w, "first_sequence"))?,
+            round_health: nat(get(w, "round_health"))?,
+            first_turn: seat_of(get(w, "first_turn"))?,
+            turn: maybe_of(get(w, "turn"), seat_of)?,
+            direction: tag_of(get(w, "direction"), &[Direction::Clockwise, Direction::CounterClockwise])?,
+            first_death: maybe_of(get(w, "first_death"), seat_of)?,
+            checking_first_death: if boolean(get(w, "checking_first_death"))? {
+                FirstDeathCheck::On
+            } else {
+                FirstDeathCheck::Off
+            },
+            item_amount: nat(get(w, "item_amount"))?,
+            sawed: boolean(get(w, "sawed"))?,
+            gun: gun_of(get(w, "gun"))?,
+            shown: load_of(get(w, "shown"))?,
+            decks: Decks {
+                two: deck_of(Table::TwoSeats, get(decks, "two"))?,
+                three: deck_of(Table::ThreeSeats, get(decks, "three"))?,
+                four: deck_of(Table::FourSeats, get(decks, "four"))?,
+            },
+        },
+        players: ring_of(table, get(v, "players"), SeatRecord::FRESH, seat_record)?,
+        grabs: Grabs {
+            distributing: boolean(get(g, "distributing"))?,
+            grabbing: ring_of(table, get(g, "grabbing"), false, boolean)?,
+            holding: ring_of(table, get(g, "holding"), None, |h| maybe_of(h, item_of))?,
+            granted: ring_of(table, get(g, "granted"), 0, nat)?,
+            intake: ring_of(table, get(g, "intake"), false, boolean)?,
+        },
+        phase: phase_of(get(v, "phase"))?,
+    })
+}
+
 /// Takes the state at `key` out of a tape line, without the config and log, which the Rust state does not hold.
 fn take_state(line: &mut Value, key: &str) -> Value {
     let mut v = line.get_mut(key).map(Value::take).unwrap_or_default();
@@ -351,6 +537,9 @@ struct Tally {
     lines: usize,
     steps: usize,
     matched: usize,
+    skipped: usize,
+    skipped_steps: usize,
+    skip_reasons: Vec<String>,
     problems: Vec<String>,
 }
 
@@ -508,10 +697,53 @@ struct Game {
     state: State,
     next_step: u64,
     agrees: bool,
+    skipped: bool,
 }
 
 fn field<'a>(v: &'a Value, key: &str, at: &str) -> Result<&'a Value, String> {
     v.get(key).ok_or_else(|| format!("{at}: no \"{key}\""))
+}
+
+/// The game a step-0 line starts, and the branches Rust took to start it. A
+/// perturbed state Rust cannot represent starts a game that is skipped.
+fn begin(v: &Value, id: &str, at: &str, from_state: bool, tally: &mut Tally) -> Result<(Game, Vec<&'static str>), String> {
+    let cfg = config(get(v, "config")).map_err(|e| format!("{at}: {id}: {e}"))?;
+    take_trace();
+    let mut started = Vec::new();
+    let (state, skipped) = if from_state {
+        let mut tape = v.clone();
+        let bend = take_state(&mut tape, "state");
+        let parsed = state_of(cfg.table(), get(v, "state")).and_then(|parsed| match first_diff(&state(&parsed), &bend, "state") {
+            None => Ok(parsed),
+            Some(diff) => Err(diff),
+        });
+        match parsed {
+            Ok(parsed) => (parsed, false),
+            Err(reason) => {
+                if tally.skip_reasons.len() < 5 {
+                    tally.skip_reasons.push(format!("{id}: {reason}"));
+                }
+                (start(&cfg).state, true)
+            }
+        }
+    } else {
+        let state = start(&cfg).state;
+        started = take_trace();
+        (state, false)
+    };
+    bump(&mut tally.games);
+    if skipped {
+        bump(&mut tally.skipped);
+    }
+    let game = Game {
+        id: id.to_owned(),
+        cfg,
+        state,
+        next_step: 0,
+        agrees: !skipped,
+        skipped,
+    };
+    Ok((game, started))
 }
 
 fn replay(path: &Path, tally: &mut Tally, trace: &mut Trace) -> Result<(), String> {
@@ -531,6 +763,7 @@ fn replay(path: &Path, tally: &mut Tally, trace: &mut Trace) -> Result<(), Strin
         let step = field(&v, "step", &at)?
             .as_u64()
             .ok_or_else(|| format!("{at}: \"step\" is not a number"))?;
+        let from_state = v.get("from_state").is_some();
         let mut started = Vec::new();
         if v.get("config").is_some() {
             if let Some(unfinished) = &current {
@@ -539,19 +772,11 @@ fn replay(path: &Path, tally: &mut Tally, trace: &mut Trace) -> Result<(), Strin
             if step != 0 || !seen.insert(id.to_owned()) {
                 return Err(format!("{at}: game {id} starts at step {step} or repeats an earlier game"));
             }
-            let cfg = config(get(&v, "config")).map_err(|e| format!("{at}: {id}: {e}"))?;
-            take_trace();
-            let state = start(&cfg).state;
-            started = take_trace();
-            bump(&mut tally.games);
-            current = Some(Game {
-                id: id.to_owned(),
-                cfg,
-                state,
-                next_step: 0,
-                agrees: true,
-            });
+            let (game, first_branches) = begin(&v, id, &at, from_state, tally)?;
+            started = first_branches;
+            current = Some(game);
         }
+
         let game = current
             .as_mut()
             .ok_or_else(|| format!("{at}: step line of game {id} without an active game"))?;
@@ -565,10 +790,13 @@ fn replay(path: &Path, tally: &mut Tally, trace: &mut Trace) -> Result<(), Strin
         let terminal = v.get("terminal").is_some();
         if !terminal {
             bump(&mut tally.steps);
+            if game.skipped {
+                bump(&mut tally.skipped_steps);
+            }
         }
         let row = trace.row(id, step)?;
         if game.agrees {
-            let started = if step == 0 {
+            let started = if step == 0 && !from_state {
                 trace.check(row.as_ref(), "start", &started, &format!("{at} {id}"))
             } else {
                 Ok(())
@@ -696,7 +924,7 @@ fn tapes_match_bend() {
     paths.sort();
     assert!(!paths.is_empty(), "no *.jsonl tapes in {dir}");
     let mut failed = false;
-    let (mut games, mut capped, mut matched) = (0, 0, 0);
+    let (mut games, mut capped, mut matched, mut skipped) = (0, 0, 0, 0_usize);
     let (mut bend_labels, mut rust_labels) = (BTreeSet::new(), BTreeSet::<&str>::new());
     let (mut untraced, mut excess) = (BTreeSet::new(), 0_u64);
     for path in paths {
@@ -718,22 +946,27 @@ fn tapes_match_bend() {
             String::from("no manifest")
         });
         println!(
-            "{}: {} games ({} capped), {} of {} Bend steps matched [{source}]",
+            "{}: {} games ({} capped, {} skipped as unrepresentable in Rust), {} of {} Bend steps matched [{source}]",
             path.display(),
             tally.games,
             tally.capped,
+            tally.skipped,
             tally.matched,
-            tally.steps
+            tally.steps.saturating_sub(tally.skipped_steps)
         );
+        for reason in &tally.skip_reasons {
+            println!("  skipped {reason}");
+        }
         for problem in &tally.problems {
             println!("  {problem}");
         }
-        failed |= !tally.problems.is_empty() || tally.matched != tally.steps;
+        failed |= !tally.problems.is_empty() || tally.matched.saturating_add(tally.skipped_steps) != tally.steps;
         games += tally.games;
         capped += tally.capped;
         matched += tally.matched;
+        skipped = skipped.saturating_add(tally.skipped);
     }
-    println!("total: {games} games ({capped} capped), {matched} genuine Bend steps compared");
+    println!("total: {games} games ({capped} capped, {skipped} skipped as unrepresentable), {matched} genuine Bend steps compared");
     if cfg!(feature = "trace") {
         let every: Vec<String> = std::fs::read_to_string(format!("{dir}/traced/labels.json"))
             .ok()
