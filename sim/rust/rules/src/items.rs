@@ -43,14 +43,14 @@ fn read<T: Copy>(ring: &Ring<T>, seat: Seat, fallback: T) -> T {
     ring.get(seat).unwrap_or(fallback)
 }
 
-/// `keep`: whether the element is kept in the result list.
-fn keep(kept: bool) -> bool {
+/// `keep`: runs `on_keep` when the element is kept in the result list.
+pub(crate) fn keep(kept: bool, on_keep: impl FnOnce()) {
     if kept {
         branch!(B::SmItemsKeepTrue);
+        on_keep();
     } else {
         branch!(B::SmItemsKeepFalse);
     }
-    kept
 }
 
 /// `is_none`.
@@ -94,16 +94,22 @@ fn slots_items(slots: Slots) -> impl Iterator<Item = Option<Item>> {
 /// `occupied`.
 fn occupied(slots: Slots) -> u32 {
     let mut count = 0u32;
-    for found in slots_items(slots) {
-        if found.is_none() {
-            branch!(B::SmItemsOccupiedNoneCons);
-        } else {
-            branch!(B::SmItemsOccupiedSomeCons);
-            count = count.saturating_add(1);
+    let mut found = slots_items(slots);
+    loop {
+        match found.next() {
+            None => {
+                branch!(B::SmItemsOccupiedNil);
+                return count;
+            }
+            Some(None) => {
+                branch!(B::SmItemsOccupiedNoneCons);
+            }
+            Some(Some(_)) => {
+                branch!(B::SmItemsOccupiedSomeCons);
+                count = count.saturating_add(1);
+            }
         }
     }
-    branch!(B::SmItemsOccupiedNil);
-    count
 }
 
 /// `bool.nat`.
@@ -270,9 +276,7 @@ pub(crate) fn pool(config: &Config, state: &State, seat: Seat) -> Items {
             owned(&state.players, &state.grabs, seat, item),
             owned_table(table.seats(), &state.players, &state.grabs, item),
         );
-        if keep(open) {
-            pool = pool.with(item);
-        }
+        keep(open, || pool = pool.with(item));
     }
     branch!(B::SmItemsPoolGoNil);
     pool
@@ -292,9 +296,7 @@ fn begin_go(seats: Seats, config: &Config, state: &State, new_round: bool) -> Se
         branch!(B::SmItemsBeginGoCons);
         let can = begin_can(new_round, seat_health(&state.players, seat), seat_slots(&state.players, seat));
         let stocked = has_items(pool(config, state, seat));
-        if keep(can && stocked) {
-            kept.push(seat);
-        }
+        keep(can && stocked, || kept.push(seat));
     }
     branch!(B::SmItemsBeginGoNil);
     kept
@@ -360,22 +362,39 @@ fn grab_offer(grabbing: bool, holding: Option<Item>, open: bool, slots: Slots) -
     out
 }
 
-/// One seat's entry of `grab.needs.go` (empty for a seat not at the table).
-/// The traversal's `Nil{}` arm has no counterpart here: the caller visits the
-/// seats.
-pub(crate) fn grab_needs(config: &Config, state: &State, seat: Seat) -> GrabOptions {
-    if !config.table().has(seat) {
-        return GrabOptions::new();
+/// The options of every seat (`grab.needs`); a seat not at the table has none.
+#[derive(Default)]
+pub(crate) struct Needs([GrabOptions; 4]);
+
+impl Needs {
+    pub(crate) fn of(&self, seat: Seat) -> &[GrabOption] {
+        self.0.get(seat.index()).map_or(&[], ArrayVec::as_slice)
     }
-    branch!(B::SmItemsGrabNeedsGoCons);
+
+    fn set(&mut self, seat: Seat, options: GrabOptions) {
+        if let Some(cell) = self.0.get_mut(seat.index()) {
+            *cell = options;
+        }
+    }
+}
+
+/// `grab.needs` with `grab.needs.go`.
+pub(crate) fn grab_needs(config: &Config, state: &State) -> Needs {
+    let mut needs = Needs::default();
     let grabs = &state.grabs;
-    let open = seat_intake(grabs, seat) && grabs.distributing;
-    grab_offer(
-        seat_grabbing(grabs, seat),
-        seat_holding(grabs, seat),
-        open,
-        seat_slots(&state.players, seat),
-    )
+    for seat in config.table().seats().iter() {
+        branch!(B::SmItemsGrabNeedsGoCons);
+        let open = seat_intake(grabs, seat) && grabs.distributing;
+        let offer = grab_offer(
+            seat_grabbing(grabs, seat),
+            seat_holding(grabs, seat),
+            open,
+            seat_slots(&state.players, seat),
+        );
+        needs.set(seat, offer);
+    }
+    branch!(B::SmItemsGrabNeedsGoNil);
+    needs
 }
 
 /// `placing.last`: the placing seat still holds its item here.
@@ -428,9 +447,7 @@ fn stalled(seats: Seats, config: &Config, state: &State, placing: Seat) -> Seats
         let empty_handed = is_none(seat_holding(grabs, seat));
         let other = seat != placing;
         let dry = !has_items(pool(config, state, seat));
-        if keep(grabbing && empty_handed && other && dry) {
-            out.push(seat);
-        }
+        keep(grabbing && empty_handed && other && dry, || out.push(seat));
     }
     branch!(B::SmItemsStalledNil);
     out
@@ -444,16 +461,22 @@ pub(crate) fn stalled_seats(config: &Config, state: &State, placing: Seat) -> Se
 
 /// `holders` over the holding ring.
 pub(crate) fn holders(grabs: &Grabs) -> bool {
-    for (_, holding) in grabs.holding.entries() {
-        if holding.is_none() {
-            branch!(B::SmItemsHoldersAtNoneCons);
-        } else {
-            branch!(B::SmItemsHoldersAtSomeCons);
-            return true;
+    let mut entries = grabs.holding.entries();
+    loop {
+        match entries.next() {
+            None => {
+                branch!(B::SmItemsHoldersNil);
+                return false;
+            }
+            Some((_, None)) => {
+                branch!(B::SmItemsHoldersAtNoneCons);
+            }
+            Some((_, Some(_))) => {
+                branch!(B::SmItemsHoldersAtSomeCons);
+                return true;
+            }
         }
     }
-    branch!(B::SmItemsHoldersNil);
-    false
 }
 
 /// `amount.live`: the end-of-turn amount draw is live while distributing, or
@@ -509,9 +532,7 @@ fn jam_options(players: &Players, by: Seat) -> Seats {
         let other = seat != by;
         let living = rules::alive(record.health);
         let free = !seat_jammed(players, seat);
-        if keep(other && living && free) {
-            out.push(seat);
-        }
+        keep(other && living && free, || out.push(seat));
     }
     branch!(B::SmItemsJamOptionsNil);
     out
@@ -560,9 +581,7 @@ fn steal_fits(item: Item, sawed: bool, targets: bool) -> bool {
 fn steal_here(found: Option<Item>, owner: Seat, slot: Slot, sawed: bool, targets: bool, out: &mut Picks) {
     if let Some(item) = found {
         branch!(B::SmItemsStealHereSome);
-        if keep(steal_fits(item, sawed, targets)) {
-            push_bounded(out, Pick { owner, slot, item });
-        }
+        keep(steal_fits(item, sawed, targets), || push_bounded(out, Pick { owner, slot, item }));
     } else {
         branch!(B::SmItemsStealHereNone);
     }
@@ -646,9 +665,7 @@ fn use_fits(item: Item, sawed: bool, targets: bool, steals: bool) -> bool {
 fn use_here(found: Option<Item>, slot: Slot, sawed: bool, targets: bool, steals: bool, out: &mut Uses) {
     if let Some(item) = found {
         branch!(B::SmItemsUseHereSome);
-        if keep(use_fits(item, sawed, targets, steals)) {
-            push_bounded(out, UseAt { slot, item });
-        }
+        keep(use_fits(item, sawed, targets, steals), || push_bounded(out, UseAt { slot, item }));
     } else {
         branch!(B::SmItemsUseHereNone);
     }
@@ -823,13 +840,13 @@ mod tests {
     fn grab_needs_follow_grabbing_holding_intake_and_distributing() {
         let config = config(Table::ThreeSeats).expect("a valid config");
         let mut s = state(Table::ThreeSeats);
-        assert!(grab_needs(&config, &s, S0).is_empty());
+        assert!(grab_needs(&config, &s).of(S0).is_empty());
         s.grabs.grabbing = s.grabs.grabbing.set(S0, true);
-        assert!(grab_needs(&config, &s, S0).is_empty());
+        assert!(grab_needs(&config, &s).of(S0).is_empty());
         s.grabs.intake = s.grabs.intake.set(S0, true);
-        assert_eq!(grab_needs(&config, &s, S0).as_slice(), [GrabOption::TakeItem]);
+        assert_eq!(grab_needs(&config, &s).of(S0), [GrabOption::TakeItem]);
         s.grabs.distributing = false;
-        assert!(grab_needs(&config, &s, S0).is_empty());
+        assert!(grab_needs(&config, &s).of(S0).is_empty());
         s.grabs.distributing = true;
         s.grabs.holding = s.grabs.holding.set(S0, Some(Item::Beer));
         edit(&mut s, S0, |r| {
@@ -839,8 +856,8 @@ mod tests {
             .into_iter()
             .map(|slot| GrabOption::PutAt { slot })
             .collect();
-        assert_eq!(grab_needs(&config, &s, S0).as_slice(), puts);
-        assert!(grab_needs(&config, &s, S3).is_empty());
+        assert_eq!(grab_needs(&config, &s).of(S0), puts);
+        assert!(grab_needs(&config, &s).of(S3).is_empty());
     }
 
     #[test]

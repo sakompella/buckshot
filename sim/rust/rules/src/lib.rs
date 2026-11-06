@@ -272,26 +272,40 @@ pub struct Stepped {
 ///
 /// [`RuleError::WrongEvent`] for a Draw answer at a Choose point or the reverse.
 pub fn step_event(config: &Config, state: State, event: Event) -> Result<Stepped, RuleError> {
-    match (request(config, &state), event) {
-        (Request::Draw { range, .. }, Event::Draw(n)) => Ok(step(config, state, Answer::Draw(range.value(n)))),
-        (Request::Choose(menu), Event::Choose(n)) => match menu.clamped(n) {
-            Some(legal) => Ok(step(config, state, Answer::Choice(legal))),
-            None => Ok(Stepped {
-                state,
-                notes: Notes::default(),
-            }),
-        },
-        (Request::Draw { .. }, Event::Choose(_)) => Err(RuleError::WrongEvent {
-            expected: RequestKind::Draw,
-            got: RequestKind::Choose,
-        }),
-        (Request::Choose(_), Event::Draw(_)) => Err(RuleError::WrongEvent {
-            expected: RequestKind::Choose,
-            got: RequestKind::Draw,
-        }),
-        (Request::Finished | Request::Stuck, Event::Draw(_) | Event::Choose(_)) => Ok(Stepped {
-            state,
-            notes: Notes::default(),
-        }),
+    let unchanged = Stepped {
+        state,
+        notes: Notes::default(),
+    };
+    match request(config, &state) {
+        Request::Finished => {
+            branch!(B::SimpleMainAnswerRequestFinished);
+            Ok(unchanged)
+        }
+        Request::Stuck => {
+            branch!(B::SimpleMainAnswerRequestStuck);
+            Ok(unchanged)
+        }
+        Request::Draw { range, .. } => {
+            branch!(B::SimpleMainAnswerRequestDraw);
+            match event {
+                Event::Draw(n) => Ok(step(config, state, Answer::Draw(range.value(n)))),
+                Event::Choose(_) => Err(RuleError::WrongEvent {
+                    expected: RequestKind::Draw,
+                    got: RequestKind::Choose,
+                }),
+            }
+        }
+        Request::Choose(menu) => {
+            branch!(B::SimpleMainAnswerRequestChooseNonEmpty);
+            match event {
+                Event::Choose(n) => Ok(menu
+                    .clamped(n)
+                    .map_or(unchanged, |legal| step(config, state, Answer::Choice(legal)))),
+                Event::Draw(_) => Err(RuleError::WrongEvent {
+                    expected: RequestKind::Choose,
+                    got: RequestKind::Draw,
+                }),
+            }
+        }
     }
 }

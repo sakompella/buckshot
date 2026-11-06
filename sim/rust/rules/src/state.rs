@@ -54,15 +54,12 @@ pub type Players = Ring<SeatRecord>;
 
 /// `players.seat` with `seat.found`: a seat missing from the ring reads as a fresh seat.
 pub(crate) fn players_seat(players: &Players, seat: Seat) -> SeatRecord {
-    match players.get(seat) {
-        Some(record) => {
-            branch!(B::SmStateSeatFoundSome);
-            record
-        }
-        None => {
-            branch!(B::SmStateSeatFoundNone);
-            SeatRecord::FRESH
-        }
+    if let Some(record) = players.get(seat) {
+        branch!(B::SmStateSeatFoundSome);
+        record
+    } else {
+        branch!(B::SmStateSeatFoundNone);
+        SeatRecord::FRESH
     }
 }
 

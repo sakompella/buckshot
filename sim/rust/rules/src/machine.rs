@@ -11,7 +11,7 @@ use crate::domain::{
 };
 use crate::items::{self, GrabOption};
 use crate::rules::{self, JamResult};
-use crate::state::{Batch, Deck, Decks, FirstDeathCheck, Grabs, Jam, Phase, SeatRecord, State, World};
+use crate::state::{Batch, Deck, Decks, FirstDeathCheck, Grabs, Jam, Phase, SeatRecord, State, World, players_seat};
 use crate::{Answer, IdleOption, Notes, Stepped};
 
 pub(crate) struct Run<'a> {
@@ -48,7 +48,7 @@ impl Run<'_> {
 
     fn players_update(&mut self, seat: Seat, f: impl FnOnce(SeatRecord) -> SeatRecord) {
         let players = self.state.players;
-        let record = players.get(seat).unwrap_or(SeatRecord::FRESH);
+        let record = players_seat(&players, seat);
         self.state.players = players.set(seat, f(record));
     }
 
@@ -209,38 +209,36 @@ fn grant_step(r: &mut Run<'_>, rank: u32, seat: Seat, result: JamResult) {
     let mut seat = seat;
     let mut result = result;
     loop {
-        match result {
-            JamResult::Act { players } => {
+        match (result, rank.checked_sub(1)) {
+            (JamResult::Act { players }, _) => {
                 branch!(B::SimpleMainGrantStepAct);
                 r.state.players = players;
                 give_turn(r, seat);
                 return;
             }
-            JamResult::Lift { players } => {
+            (JamResult::Lift { players }, _) => {
                 branch!(B::SimpleMainGrantStepLift);
                 r.state.players = players;
                 r.emit(GameEvent::JamLifted { seat });
                 give_turn(r, seat);
                 return;
             }
-            JamResult::Skip { players } => match rank.checked_sub(1) {
-                None => {
-                    branch!(B::SimpleMainGrantStepZeroSkip);
-                    r.state.players = players;
-                    r.set_phase(Phase::Blocked { holder: None });
-                    return;
-                }
-                Some(rest) => {
-                    branch!(B::SimpleMainGrantStepSuccSkip);
-                    let next = rules::next_turn(&players, r.state.world.direction, seat);
-                    r.state.players = players;
-                    r.world().turn = Some(next);
-                    r.emit(GameEvent::TurnSkipped { seat });
-                    rank = rest;
-                    seat = next;
-                    result = rules::jam(r.state.players, next);
-                }
-            },
+            (JamResult::Skip { players }, None) => {
+                branch!(B::SimpleMainGrantStepZeroSkip);
+                r.state.players = players;
+                r.set_phase(Phase::Blocked { holder: None });
+                return;
+            }
+            (JamResult::Skip { players }, Some(rest)) => {
+                branch!(B::SimpleMainGrantStepSuccSkip);
+                let next = rules::next_turn(&players, r.state.world.direction, seat);
+                r.state.players = players;
+                r.world().turn = Some(next);
+                r.emit(GameEvent::TurnSkipped { seat });
+                rank = rest;
+                seat = next;
+                result = rules::jam(r.state.players, next);
+            }
         }
     }
 }
@@ -418,21 +416,20 @@ fn grab_chosen(r: &mut Run<'_>, seat: Seat, found: Option<Item>) {
 
 /// `grab.pool`.
 fn grab_pool(r: &mut Run<'_>, seat: Seat, pool: Items) {
-    match pool.split_first() {
-        None => {
+    let head = pool.split_first();
+    match (head, head.and_then(|(_, rest)| rest.split_first())) {
+        (None, _) => {
             branch!(B::SimpleMainGrabPoolNil);
             grab_chosen(r, seat, None);
         }
-        Some((first, rest)) => match rest.split_first() {
-            None => {
-                branch!(B::SimpleMainGrabPoolConsNil);
-                grab_give(r, seat, first);
-            }
-            Some((second, rest)) => {
-                branch!(B::SimpleMainGrabPoolConsCons);
-                r.set_phase(Phase::NeedItem { seat, first, second, rest });
-            }
-        },
+        (Some((first, _)), None) => {
+            branch!(B::SimpleMainGrabPoolConsNil);
+            grab_give(r, seat, first);
+        }
+        (Some((first, _)), Some((second, rest))) => {
+            branch!(B::SimpleMainGrabPoolConsCons);
+            r.set_phase(Phase::NeedItem { seat, first, second, rest });
+        }
     }
 }
 
@@ -448,35 +445,44 @@ fn grab_takes(options: &[GrabOption]) -> bool {
 }
 
 /// `seats.after`: the seats after `after` in socket order, cycling, `after` last.
-fn seats_after(seats: Seats, after: Seat) -> Seats {
-    let Some(at) = seats.iter().position(|seat| seat == after) else {
-        return seats;
-    };
-    let mut cycled = Seats::EMPTY;
-    for seat in seats
-        .iter()
-        .skip(at.saturating_add(1))
-        .chain(seats.iter().take(at.saturating_add(1)))
-    {
-        cycled.push(seat);
+fn seats_after(seats: &[Seat], after: Seat) -> Seats {
+    let mut before = Seats::EMPTY;
+    let mut rest = seats;
+    loop {
+        match rest {
+            [] => {
+                branch!(B::SimpleMainSeatsAfterNil);
+                return before;
+            }
+            [seat, tail @ ..] => {
+                branch!(B::SimpleMainSeatsAfterCons);
+                before.push(*seat);
+                if *seat == after {
+                    branch!(B::SimpleMainSeatsAfterPickTrue);
+                    return Seats::joined(tail, before.as_slice());
+                }
+                branch!(B::SimpleMainSeatsAfterPickFalse);
+                rest = tail;
+            }
+        }
     }
-    cycled
 }
 
 /// `grab.act` with `grab.act.own` and `grab.taker`.
 fn grab_act(config: &Config, state: &State, after: Seat) -> Distribution {
-    branch!(B::SmItemsGrabNeedsGoNil);
-    let own = items::grab_needs(config, state, after);
-    if let Some(GrabOption::PutAt { slot }) = own.first() {
+    let needs = items::grab_needs(config, state);
+    if let Some(GrabOption::PutAt { slot }) = needs.of(after).first() {
         branch!(B::SimpleMainGrabActOwnPutAtCons);
         return Distribution::Placing { seat: after, slot: *slot };
     }
     branch!(B::SimpleMainGrabActOwnAny);
-    for seat in seats_after(config.table().seats(), after).iter() {
+    for seat in seats_after(config.table().seats().as_slice(), after).iter() {
         branch!(B::SimpleMainGrabTakerCons);
-        if grab_takes(&items::grab_needs(config, state, seat)) {
+        if grab_takes(needs.of(seat)) {
+            branch!(B::SimpleMainGrabTakerPickTrue);
             return Distribution::Taking { seat };
         }
+        branch!(B::SimpleMainGrabTakerPickFalse);
     }
     branch!(B::SimpleMainGrabTakerNil);
     Distribution::NoTaker
@@ -507,11 +513,20 @@ fn grab_next(config: &Config, state: &State, pool: Items, after: Seat) -> Distri
 }
 
 /// `grab.fuel`: never spent (each seat takes at most 9 times and places at most 8).
-const fn grab_fuel(config: &Config) -> u32 {
+fn grab_fuel(config: &Config) -> u32 {
     match config.table() {
-        crate::Table::TwoSeats => 34,
-        crate::Table::ThreeSeats => 51,
-        crate::Table::FourSeats => 68,
+        crate::Table::TwoSeats => {
+            branch!(B::SimpleMainGrabFuelTwoSeats);
+            34
+        }
+        crate::Table::ThreeSeats => {
+            branch!(B::SimpleMainGrabFuelThreeSeats);
+            51
+        }
+        crate::Table::FourSeats => {
+            branch!(B::SimpleMainGrabFuelFourSeats);
+            68
+        }
     }
 }
 
@@ -788,12 +803,20 @@ fn death(r: &mut Run<'_>, target: Seat, shell: Shell, health: u32) {
 
 /// `shoot` with `shoot.gun` and `shoot.loaded`.
 fn shoot(r: &mut Run<'_>, shooter: Seat, target: Seat) {
-    let Some((shell, rest)) = r.state.world.gun.split_first() else {
-        branch!(B::SimpleMainShootGunNil);
-        r.set_phase(Phase::Blocked { holder: Some(shooter) });
-        return;
-    };
-    branch!(B::SimpleMainShootGunCons);
+    match r.state.world.gun.split_first() {
+        None => {
+            branch!(B::SimpleMainShootGunNil);
+            r.set_phase(Phase::Blocked { holder: Some(shooter) });
+        }
+        Some((shell, rest)) => {
+            branch!(B::SimpleMainShootGunCons);
+            shoot_loaded(r, shooter, target, shell, rest);
+        }
+    }
+}
+
+/// `shoot.loaded`.
+fn shoot_loaded(r: &mut Run<'_>, shooter: Seat, target: Seat, shell: Shell, rest: Gun) {
     let damage = rules::captured(r.state.world.sawed);
     let before = r.state.players.get(target).map_or(100, |record| record.health);
     let health = rules::shot_health(shell, before, damage);
@@ -834,12 +857,20 @@ fn item_end(r: &mut Run<'_>, seat: Seat, ending: bool) {
 
 /// `item.shell` with `item.chamber`: the items that act on the chambered shell.
 fn item_shell(r: &mut Run<'_>, seat: Seat, item: Item, ending: bool) {
-    let Some((shell, rest)) = r.state.world.gun.split_first() else {
-        branch!(B::SimpleMainItemShellNil);
-        r.set_phase(Phase::Blocked { holder: None });
-        return;
-    };
-    branch!(B::SimpleMainItemShellCons);
+    match r.state.world.gun.split_first() {
+        None => {
+            branch!(B::SimpleMainItemShellNil);
+            r.set_phase(Phase::Blocked { holder: None });
+        }
+        Some((shell, rest)) => {
+            branch!(B::SimpleMainItemShellCons);
+            item_chamber(r, seat, item, ending, shell, rest);
+        }
+    }
+}
+
+/// `item.chamber`.
+fn item_chamber(r: &mut Run<'_>, seat: Seat, item: Item, ending: bool, shell: Shell, rest: Gun) {
     match item {
         Item::Glass => {
             branch!(B::SimpleMainItemChamberGlass);

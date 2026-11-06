@@ -35,17 +35,24 @@ fn item_chained(item: Item) -> bool {
 
 /// `use.first`: the first slot holding `item`.
 fn use_first(uses: &Uses, item: Item) -> Option<Slot> {
-    uses.iter().find(|at| at.item == item).map(|at| at.slot)
+    for at in uses {
+        branch!(B::SimplePointUseFirstUseAtCons);
+        if at.item == item {
+            branch!(B::SimplePointUseFirstPickTrue);
+            return Some(at.slot);
+        }
+        branch!(B::SimplePointUseFirstPickFalse);
+    }
+    branch!(B::SimplePointUseFirstNil);
+    None
 }
 
 /// `use.options`: one use per distinct item, at its first slot, in slot order.
 fn use_options(options: &mut Options, uses: &Uses) {
     let mut seen = Items::EMPTY;
     for at in uses {
-        if item_chained(at.item) | seen.contains(at.item) {
-            branch!(B::SmItemsKeepFalse);
-        } else {
-            branch!(B::SmItemsKeepTrue);
+        branch!(B::SimplePointUseOptionsUseAtCons);
+        items::keep(!(item_chained(at.item) | seen.contains(at.item)), || {
             add(
                 options,
                 IdleOption::UseSlot {
@@ -53,9 +60,10 @@ fn use_options(options: &mut Options, uses: &Uses) {
                     item: at.item,
                 },
             );
-        }
+        });
         seen = seen.with(at.item);
     }
+    branch!(B::SimplePointUseOptionsNil);
 }
 
 /// `jam.options` with `jam.targets`.
@@ -67,27 +75,35 @@ fn jam_options(options: &mut Options, jammer: Option<Slot>, targets: Seats) {
         Some(slot) => {
             branch!(B::SimplePointJamOptionsSome);
             for target in targets.iter() {
+                branch!(B::SimplePointJamTargetsJamAtCons);
                 add(options, IdleOption::JamWith { slot, target });
             }
+            branch!(B::SimplePointJamTargetsNil);
         }
     }
 }
 
-/// `steal.options` with `steal.picks`: one steal per owner and distinct item
-/// that opens no pick (sm never offers adrenaline; a jammer is `StealJam`), at
-/// the owner's first slot holding it, by owner then slot.
+/// `steal.options`.
 fn steal_options(options: &mut Options, adrenaline: Option<Slot>, picks: &Picks) {
-    let Some(adrenaline) = adrenaline else {
-        branch!(B::SimplePointStealOptionsNone);
-        return;
-    };
-    branch!(B::SimplePointStealOptionsSome);
+    match adrenaline {
+        None => {
+            branch!(B::SimplePointStealOptionsNone);
+        }
+        Some(slot) => {
+            branch!(B::SimplePointStealOptionsSome);
+            steal_picks(options, slot, picks);
+        }
+    }
+}
+
+/// `steal.picks`: one steal per owner and distinct item that opens no pick
+/// (sm never offers adrenaline; a jammer is `StealJam`), at the owner's first
+/// slot holding it, by owner then slot.
+fn steal_picks(options: &mut Options, adrenaline: Slot, picks: &Picks) {
     let mut seen: ArrayVec<(Seat, Item), 24> = ArrayVec::new();
     for pick in picks {
-        if item_chained(pick.item) | seen.contains(&(pick.owner, pick.item)) {
-            branch!(B::SmItemsKeepFalse);
-        } else {
-            branch!(B::SmItemsKeepTrue);
+        branch!(B::SimplePointStealPicksPickCons);
+        items::keep(!(item_chained(pick.item) | seen.contains(&(pick.owner, pick.item))), || {
             add(
                 options,
                 IdleOption::StealWith {
@@ -97,25 +113,36 @@ fn steal_options(options: &mut Options, adrenaline: Option<Slot>, picks: &Picks)
                     item: pick.item,
                 },
             );
-        }
+        });
         push_bounded(&mut seen, (pick.owner, pick.item));
+    }
+    branch!(B::SimplePointStealPicksNil);
+}
+
+/// `steal_jam.options`.
+fn steal_jam_options(options: &mut Options, adrenaline: Option<Slot>, picks: &Picks, targets: Seats) {
+    match adrenaline {
+        None => {
+            branch!(B::SimplePointStealJamOptionsNone);
+        }
+        Some(slot) => {
+            branch!(B::SimplePointStealJamOptionsSome);
+            steal_jam_picks(options, slot, picks, targets);
+        }
     }
 }
 
-/// `steal_jam.options` with `steal_jam.picks`: each owner's first jammer,
-/// stolen and used on each target, by owner then target.
-fn steal_jam_options(options: &mut Options, adrenaline: Option<Slot>, picks: &Picks, targets: Seats) {
-    let Some(adrenaline) = adrenaline else {
-        branch!(B::SimplePointStealJamOptionsNone);
-        return;
-    };
-    branch!(B::SimplePointStealJamOptionsSome);
+/// `steal_jam.picks`: each owner's first jammer, stolen and used on each
+/// target, by owner then target.
+fn steal_jam_picks(options: &mut Options, adrenaline: Slot, picks: &Picks, targets: Seats) {
     let mut seen = Seats::EMPTY;
     for pick in picks {
+        branch!(B::SimplePointStealJamPicksPickCons);
         let jammer = pick.item == Item::Jammer;
         if jammer & !seen.contains(pick.owner) {
             branch!(B::SimplePointStealJamHereTrue);
             for target in targets.iter() {
+                branch!(B::SimplePointStealJamTargetsJamAtCons);
                 add(
                     options,
                     IdleOption::StealJamWith {
@@ -126,13 +153,13 @@ fn steal_jam_options(options: &mut Options, adrenaline: Option<Slot>, picks: &Pi
                     },
                 );
             }
+            branch!(B::SimplePointStealJamTargetsNil);
         } else {
             branch!(B::SimplePointStealJamHereFalse);
         }
-        if jammer && !seen.contains(pick.owner) {
-            seen.push(pick.owner);
-        }
+        items::keep(jammer, || seen.insert(pick.owner));
     }
+    branch!(B::SimplePointStealJamPicksNil);
 }
 
 /// `options`: every legal move of `seat`, in menu order (shots, uses, jams,
@@ -144,8 +171,10 @@ pub(crate) fn options(config: &Config, state: &State, seat: Seat) -> Options {
     let adrenaline = use_first(&uses, Item::Adrenaline);
     let mut options = Options::new();
     for target in rules::aim_targets(&state.players).iter() {
+        branch!(B::SimplePointShotsTargetCons);
         add(&mut options, IdleOption::ShootAt { target });
     }
+    branch!(B::SimplePointShotsNil);
     use_options(&mut options, &uses);
     jam_options(&mut options, use_first(&uses, Item::Jammer), targets);
     steal_options(&mut options, adrenaline, &picks);
@@ -199,14 +228,19 @@ pub fn request(config: &Config, state: &State) -> Request {
                 Request::Stuck
             }
         }
+        Phase::NeedSwap { i: 0, .. } => {
+            branch!(B::SimplePointPhaseRequestNeedSwapZero);
+            Request::Stuck
+        }
         Phase::NeedSwap { i, .. } => {
-            if let Some(extra) = i.checked_sub(1) {
-                branch!(B::SimplePointPhaseRequestNeedSwapSucc);
-                draw(Label::ShuffleSwap, Range { lo: 0, extra })
-            } else {
-                branch!(B::SimplePointPhaseRequestNeedSwapZero);
-                Request::Stuck
-            }
+            branch!(B::SimplePointPhaseRequestNeedSwapSucc);
+            draw(
+                Label::ShuffleSwap,
+                Range {
+                    lo: 0,
+                    extra: i.saturating_sub(1),
+                },
+            )
         }
         Phase::Idle { seat } => {
             branch!(B::SimplePointPhaseRequestIdle);

@@ -25,50 +25,102 @@ pub(crate) fn alive(hp: u32) -> bool {
     }
 }
 
-/// `living` (and `targets`, the same filter): the living seats, in ring order.
+/// `living`: the living seats, in ring order.
 fn living(players: &Players) -> Seats {
     let mut seats = Seats::EMPTY;
-    for (seat, record) in players.entries() {
-        if alive(record.health) {
-            branch!(B::SmRulesLivingAtSuccCons);
-            seats.push(seat);
-        } else {
-            branch!(B::SmRulesLivingAtZeroCons);
+    let mut entries = players.entries();
+    loop {
+        match entries.next() {
+            None => {
+                branch!(B::SmRulesLivingNil);
+                return seats;
+            }
+            Some((_, SeatRecord { health: 0, .. })) => {
+                branch!(B::SmRulesLivingAtZeroCons);
+            }
+            Some((seat, _)) => {
+                branch!(B::SmRulesLivingAtSuccCons);
+                seats.push(seat);
+            }
         }
     }
-    seats
 }
 
-/// `aim.targets`: every living seat, in ring order: who an aiming seat may shoot.
+/// `aim.targets` with `targets`: every living seat, in ring order: who an aiming seat may shoot.
 pub(crate) fn aim_targets(players: &Players) -> Seats {
-    living(players)
+    let mut seats = Seats::EMPTY;
+    let mut entries = players.entries();
+    loop {
+        match entries.next() {
+            None => {
+                branch!(B::SmRulesTargetsNil);
+                return seats;
+            }
+            Some((_, SeatRecord { health: 0, .. })) => {
+                branch!(B::SmRulesTargetsAtZeroCons);
+            }
+            Some((seat, _)) => {
+                branch!(B::SmRulesTargetsAtSuccCons);
+                seats.push(seat);
+            }
+        }
+    }
 }
 
 /// `turn_candidates`: the living seats and `current`, in ring order.
 fn turn_candidates(players: &Players, current: Seat) -> Seats {
     let mut seats = Seats::EMPTY;
     for (seat, record) in players.entries() {
-        let keep = alive(record.health) || seat == current;
-        if keep {
+        branch!(B::SmRulesTurnCandidatesAtCons);
+        if alive(record.health) || seat == current {
             branch!(B::SmRulesSeatsKeepTrue);
             seats.push(seat);
         } else {
             branch!(B::SmRulesSeatsKeepFalse);
         }
     }
+    branch!(B::SmRulesTurnCandidatesNil);
     seats
 }
 
+/// `successor.go`: the seat after `current` in `seats`, else `wrap`.
+fn successor_go(seats: &[Seat], current: Seat, wrap: Seat) -> Seat {
+    let mut seats = seats;
+    loop {
+        match seats {
+            [] => {
+                branch!(B::SmRulesSuccessorGoNil);
+                return wrap;
+            }
+            [_] => {
+                branch!(B::SmRulesSuccessorGoConsNil);
+                return wrap;
+            }
+            [seat, next, ..] => {
+                branch!(B::SmRulesSuccessorGoConsCons);
+                if *seat == current {
+                    branch!(B::SmRulesSuccessorPickTrue);
+                    return *next;
+                }
+                branch!(B::SmRulesSuccessorPickFalse);
+                seats = seats.get(1..).unwrap_or_default();
+            }
+        }
+    }
+}
+
 /// `successor`: the seat after `current` in `seats`, cycling; `current` when `seats` is empty.
-fn successor(seats: impl Iterator<Item = Seat> + Clone, current: Seat) -> Seat {
-    let mut list = seats.clone();
-    let Some(head) = list.next() else {
-        branch!(B::SmRulesSuccessorNil);
-        return current;
-    };
-    branch!(B::SmRulesSuccessorCons);
-    let mut pairs = seats.clone().zip(seats.skip(1));
-    pairs.find(|(seat, _)| *seat == current).map_or(head, |(_, next)| next)
+fn successor(seats: &[Seat], current: Seat) -> Seat {
+    match seats {
+        [] => {
+            branch!(B::SmRulesSuccessorNil);
+            current
+        }
+        [head, ..] => {
+            branch!(B::SmRulesSuccessorCons);
+            successor_go(seats, current, *head)
+        }
+    }
 }
 
 /// `next_turn` with `traversal`.
@@ -77,17 +129,17 @@ pub(crate) fn next_turn(players: &Players, direction: Direction, current: Seat) 
     match direction {
         Direction::Clockwise => {
             branch!(B::SmRulesTraversalClockwise);
-            successor(candidates.iter(), current)
+            successor(candidates.as_slice(), current)
         }
         Direction::CounterClockwise => {
             branch!(B::SmRulesTraversalCounterClockwise);
-            successor(candidates.iter().rev(), current)
+            successor(candidates.reversed().as_slice(), current)
         }
     }
 }
 
 fn set_jam(players: Players, seat: Seat, jam: Jam) -> Players {
-    let record = players.get(seat).unwrap_or(SeatRecord::FRESH);
+    let record = players_seat(&players, seat);
     players.set(seat, SeatRecord { jam, ..record })
 }
 
@@ -117,6 +169,7 @@ pub(crate) fn jam(players: Players, seat: Seat) -> JamResult {
 pub(crate) fn jam_rank(players: &Players) -> u32 {
     let mut rank = 0u32;
     for (_, record) in players.entries() {
+        branch!(B::SmRulesJamRankEntriesAtCons);
         match record.jam {
             Jam::Jammed => {
                 branch!(B::SmRulesJamRankBitJammed);
@@ -127,6 +180,7 @@ pub(crate) fn jam_rank(players: &Players) -> u32 {
             }
         }
     }
+    branch!(B::SmRulesJamRankEntriesNil);
     rank
 }
 

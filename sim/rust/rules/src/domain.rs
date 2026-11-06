@@ -104,11 +104,11 @@ impl Seats {
         }
     }
 
-    /// `List.append`.
+    /// `List.append` of two lists of seats.
     #[must_use]
-    pub fn append(self, other: Self) -> Self {
-        other.iter().fold(self, |mut all, seat| {
-            all.push(seat);
+    pub fn joined(first: &[Seat], second: &[Seat]) -> Self {
+        first.iter().chain(second).fold(Self::EMPTY, |mut all, seat| {
+            all.push(*seat);
             all
         })
     }
@@ -125,13 +125,6 @@ impl Seats {
     #[must_use]
     pub fn as_slice(&self) -> &[Seat] {
         self.seats.get(..usize::from(self.len)).unwrap_or_default()
-    }
-
-    /// The head and the rest, or `None` for the empty list.
-    #[must_use]
-    pub fn split_first(&self) -> Option<(Seat, Self)> {
-        let (head, rest) = self.as_slice().split_first()?;
-        Some((*head, Self::of(rest)))
     }
 
     #[must_use]
@@ -324,15 +317,12 @@ impl Gun {
     /// `G.swap`: swaps positions `i` and `j` when both exist, else unchanged.
     #[must_use]
     pub fn swap(self, i: u32, j: u32) -> Self {
-        match (self.nth(i), self.nth(j)) {
-            (Some(a), Some(b)) => {
-                branch!(B::SmRulesSwapFoundSomeSome);
-                self.set(i, b).set(j, a)
-            }
-            (None, _) | (Some(_), None) => {
-                branch!(B::SmRulesSwapFoundAny);
-                self
-            }
+        if let (Some(a), Some(b)) = (self.nth(i), self.nth(j)) {
+            branch!(B::SmRulesSwapFoundSomeSome);
+            self.set(i, b).set(j, a)
+        } else {
+            branch!(B::SmRulesSwapFoundAny);
+            self
         }
     }
 
