@@ -195,6 +195,14 @@ impl Decks {
     }
 }
 
+/// sm/state.bend `checking_first_death`: whether the next death is recorded as
+/// the round's first.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum FirstDeathCheck {
+    Off,
+    On,
+}
+
 /// sm/state.bend `World`, without its config.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct World {
@@ -207,7 +215,7 @@ pub struct World {
     pub turn: Option<Seat>,
     pub direction: Direction,
     pub first_death: Option<Seat>,
-    pub checking_first_death: bool,
+    pub checking_first_death: FirstDeathCheck,
     pub item_amount: u32,
     pub sawed: bool,
     pub gun: Gun,

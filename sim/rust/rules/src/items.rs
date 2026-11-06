@@ -6,8 +6,8 @@ use arrayvec::ArrayVec;
 
 use crate::branch::B;
 use crate::domain::{AmountRule, Config, Direction, Gun, Item, ItemRule, Items, Ring, Seat, Seats, Shell, Slot, Slots};
-use crate::rules;
 use crate::state::{Grabs, Jam, Players, State};
+use crate::{push_bounded, rules};
 
 /// sm/state.bend `IdleOption::UseAt` (`uses` only makes these).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -55,43 +55,34 @@ fn keep(kept: bool) -> bool {
 
 /// `is_none`.
 fn is_none(found: Option<Item>) -> bool {
-    match found {
-        None => {
-            branch!(B::SmItemsIsNoneNone);
-            true
-        }
-        Some(_) => {
-            branch!(B::SmItemsIsNoneSome);
-            false
-        }
+    if found.is_none() {
+        branch!(B::SmItemsIsNoneNone);
+        true
+    } else {
+        branch!(B::SmItemsIsNoneSome);
+        false
     }
 }
 
 /// `has_items`.
 fn has_items(items: Items) -> bool {
-    match items.split_first() {
-        None => {
-            branch!(B::SmItemsHasItemsNil);
-            false
-        }
-        Some(_) => {
-            branch!(B::SmItemsHasItemsCons);
-            true
-        }
+    if items.split_first().is_none() {
+        branch!(B::SmItemsHasItemsNil);
+        false
+    } else {
+        branch!(B::SmItemsHasItemsCons);
+        true
     }
 }
 
 /// `has_seats`.
 fn has_seats(seats: Seats) -> bool {
-    match seats.first() {
-        None => {
-            branch!(B::SmItemsHasSeatsNil);
-            false
-        }
-        Some(_) => {
-            branch!(B::SmItemsHasSeatsCons);
-            true
-        }
+    if seats.first().is_none() {
+        branch!(B::SmItemsHasSeatsNil);
+        false
+    } else {
+        branch!(B::SmItemsHasSeatsCons);
+        true
     }
 }
 
@@ -101,22 +92,14 @@ fn slots_items(slots: Slots) -> impl Iterator<Item = Option<Item>> {
 }
 
 /// `occupied`.
-#[allow(
-    clippy::single_match,
-    clippy::collapsible_match,
-    reason = "one arm per Bend case, even when it only names the branch"
-)]
 fn occupied(slots: Slots) -> u32 {
     let mut count = 0u32;
     for found in slots_items(slots) {
-        match found {
-            None => {
-                branch!(B::SmItemsOccupiedNoneCons);
-            }
-            Some(_) => {
-                branch!(B::SmItemsOccupiedSomeCons);
-                count = count.saturating_add(1);
-            }
+        if found.is_none() {
+            branch!(B::SmItemsOccupiedNoneCons);
+        } else {
+            branch!(B::SmItemsOccupiedSomeCons);
+            count = count.saturating_add(1);
         }
     }
     branch!(B::SmItemsOccupiedNil);
@@ -320,33 +303,22 @@ fn begin_go(seats: Seats, config: &Config, state: &State, new_round: bool) -> Se
 /// `begin.seats`: who begins grabbing. The caller passes the stored amount,
 /// whose zero selects no one.
 pub(crate) fn begin_seats(config: &Config, state: &State, new_round: bool, amount: u32) -> Seats {
-    match amount {
-        0 => {
-            branch!(B::SmItemsBeginSeatsZero);
-            Seats::EMPTY
-        }
-        1.. => {
-            branch!(B::SmItemsBeginSeatsAny);
-            begin_go(config.table().seats(), config, state, new_round)
-        }
+    if amount == 0 {
+        branch!(B::SmItemsBeginSeatsZero);
+        Seats::EMPTY
+    } else {
+        branch!(B::SmItemsBeginSeatsAny);
+        begin_go(config.table().seats(), config, state, new_round)
     }
 }
 
 /// `puts.here`.
-#[allow(
-    clippy::single_match,
-    clippy::collapsible_match,
-    reason = "one arm per Bend case, even when it only names the branch"
-)]
 fn puts_here(found: Option<Item>, slot: Slot, out: &mut GrabOptions) {
-    match found {
-        None => {
-            branch!(B::SmItemsPutsHereNone);
-            let _ = out.try_push(GrabOption::PutAt { slot });
-        }
-        Some(_) => {
-            branch!(B::SmItemsPutsHereSome);
-        }
+    if found.is_none() {
+        branch!(B::SmItemsPutsHereNone);
+        push_bounded(out, GrabOption::PutAt { slot });
+    } else {
+        branch!(B::SmItemsPutsHereSome);
     }
 }
 
@@ -363,7 +335,7 @@ fn puts(inventory: Slots, out: &mut GrabOptions) {
 fn grab_intake(open: bool, out: &mut GrabOptions) {
     if open {
         branch!(B::SmItemsGrabIntakeTrue);
-        let _ = out.try_push(GrabOption::TakeItem);
+        push_bounded(out, GrabOption::TakeItem);
     } else {
         branch!(B::SmItemsGrabIntakeFalse);
     }
@@ -473,14 +445,11 @@ pub(crate) fn stalled_seats(config: &Config, state: &State, placing: Seat) -> Se
 /// `holders` over the holding ring.
 pub(crate) fn holders(grabs: &Grabs) -> bool {
     for (_, holding) in grabs.holding.entries() {
-        match holding {
-            None => {
-                branch!(B::SmItemsHoldersAtNoneCons);
-            }
-            Some(_) => {
-                branch!(B::SmItemsHoldersAtSomeCons);
-                return true;
-            }
+        if holding.is_none() {
+            branch!(B::SmItemsHoldersAtNoneCons);
+        } else {
+            branch!(B::SmItemsHoldersAtSomeCons);
+            return true;
         }
     }
     branch!(B::SmItemsHoldersNil);
@@ -504,29 +473,23 @@ pub(crate) fn amount_live(rule: AmountRule, distributing: bool, reload: bool) ->
 
 /// `winnerless`.
 fn winnerless(winner: Option<Seat>) -> bool {
-    match winner {
-        None => {
-            branch!(B::SmItemsWinnerlessNone);
-            true
-        }
-        Some(_) => {
-            branch!(B::SmItemsWinnerlessSome);
-            false
-        }
+    if winner.is_none() {
+        branch!(B::SmItemsWinnerlessNone);
+        true
+    } else {
+        branch!(B::SmItemsWinnerlessSome);
+        false
     }
 }
 
 /// `gun.empty`.
 fn gun_empty(gun: Gun) -> bool {
-    match gun.split_first() {
-        None => {
-            branch!(B::SmItemsGunEmptyNil);
-            true
-        }
-        Some(_) => {
-            branch!(B::SmItemsGunEmptyCons);
-            false
-        }
+    if gun.split_first().is_none() {
+        branch!(B::SmItemsGunEmptyNil);
+        true
+    } else {
+        branch!(B::SmItemsGunEmptyCons);
+        false
     }
 }
 
@@ -561,15 +524,12 @@ pub(crate) fn jam_for(_config: &Config, state: &State, by: Seat) -> Seats {
 
 /// `jam.any`.
 fn jam_any(options: Seats) -> bool {
-    match options.first() {
-        None => {
-            branch!(B::SmItemsJamAnyNil);
-            false
-        }
-        Some(_) => {
-            branch!(B::SmItemsJamAnyCons);
-            true
-        }
+    if options.first().is_none() {
+        branch!(B::SmItemsJamAnyNil);
+        false
+    } else {
+        branch!(B::SmItemsJamAnyCons);
+        true
     }
 }
 
@@ -597,22 +557,14 @@ fn steal_fits(item: Item, sawed: bool, targets: bool) -> bool {
 }
 
 /// `steal.here`.
-#[allow(
-    clippy::single_match,
-    clippy::collapsible_match,
-    reason = "one arm per Bend case, even when it only names the branch"
-)]
 fn steal_here(found: Option<Item>, owner: Seat, slot: Slot, sawed: bool, targets: bool, out: &mut Picks) {
-    match found {
-        None => {
-            branch!(B::SmItemsStealHereNone);
+    if let Some(item) = found {
+        branch!(B::SmItemsStealHereSome);
+        if keep(steal_fits(item, sawed, targets)) {
+            push_bounded(out, Pick { owner, slot, item });
         }
-        Some(item) => {
-            branch!(B::SmItemsStealHereSome);
-            if keep(steal_fits(item, sawed, targets)) {
-                let _ = out.try_push(Pick { owner, slot, item });
-            }
-        }
+    } else {
+        branch!(B::SmItemsStealHereNone);
     }
 }
 
@@ -634,7 +586,7 @@ fn steal_owner(own: bool, slots: &Picks, out: &mut Picks) {
     } else {
         branch!(B::SmItemsStealOwnerFalse);
         for pick in slots {
-            let _ = out.try_push(*pick);
+            push_bounded(out, *pick);
         }
     }
 }
@@ -659,15 +611,12 @@ pub(crate) fn steal_for(config: &Config, state: &State, thief: Seat) -> Picks {
 
 /// `steal.any`.
 fn steal_any(options: &Picks) -> bool {
-    match options.first() {
-        None => {
-            branch!(B::SmItemsStealAnyNil);
-            false
-        }
-        Some(_) => {
-            branch!(B::SmItemsStealAnyCons);
-            true
-        }
+    if options.is_empty() {
+        branch!(B::SmItemsStealAnyNil);
+        false
+    } else {
+        branch!(B::SmItemsStealAnyCons);
+        true
     }
 }
 
@@ -694,22 +643,14 @@ fn use_fits(item: Item, sawed: bool, targets: bool, steals: bool) -> bool {
 }
 
 /// `use.here`.
-#[allow(
-    clippy::single_match,
-    clippy::collapsible_match,
-    reason = "one arm per Bend case, even when it only names the branch"
-)]
 fn use_here(found: Option<Item>, slot: Slot, sawed: bool, targets: bool, steals: bool, out: &mut Uses) {
-    match found {
-        None => {
-            branch!(B::SmItemsUseHereNone);
+    if let Some(item) = found {
+        branch!(B::SmItemsUseHereSome);
+        if keep(use_fits(item, sawed, targets, steals)) {
+            push_bounded(out, UseAt { slot, item });
         }
-        Some(item) => {
-            branch!(B::SmItemsUseHereSome);
-            if keep(use_fits(item, sawed, targets, steals)) {
-                let _ = out.try_push(UseAt { slot, item });
-            }
-        }
+    } else {
+        branch!(B::SmItemsUseHereNone);
     }
 }
 
@@ -777,7 +718,7 @@ pub(crate) fn flip(direction: Direction) -> Direction {
 mod tests {
     use super::*;
     use crate::domain::{Load, RoundRules, Table};
-    use crate::state::{Decks, Phase, SeatRecord, World};
+    use crate::state::{Decks, FirstDeathCheck, Phase, SeatRecord, World};
 
     const S0: Seat = Seat::Seat0;
     const S1: Seat = Seat::Seat1;
@@ -806,7 +747,7 @@ mod tests {
                 turn: Some(S0),
                 direction: Direction::Clockwise,
                 first_death: None,
-                checking_first_death: false,
+                checking_first_death: FirstDeathCheck::Off,
                 item_amount: 2,
                 sawed: false,
                 gun: Gun::EMPTY,
@@ -836,20 +777,19 @@ mod tests {
     }
 
     #[test]
-    fn jam_for_skips_self_dead_and_jammed_seats() -> Result<(), crate::RuleError> {
-        let config = config(Table::FourSeats)?;
+    fn jam_for_skips_self_dead_and_jammed_seats() {
+        let config = config(Table::FourSeats).expect("a valid config");
         let mut s = state(Table::FourSeats);
         edit(&mut s, S2, |r| r.jam = Jam::JammedSkipped);
         edit(&mut s, S3, |r| r.health = 0);
         assert_eq!(jam_for(&config, &s, S0).iter().collect::<Vec<_>>(), [S1]);
         edit(&mut s, S2, |r| r.jam = Jam::Free);
         assert_eq!(jam_for(&config, &s, S1).iter().collect::<Vec<_>>(), [S0, S2]);
-        Ok(())
     }
 
     #[test]
-    fn steal_for_filters_by_item_and_walks_owners_then_slots() -> Result<(), crate::RuleError> {
-        let config = config(Table::ThreeSeats)?;
+    fn steal_for_filters_by_item_and_walks_owners_then_slots() {
+        let config = config(Table::ThreeSeats).expect("a valid config");
         let mut s = state(Table::ThreeSeats);
         edit(&mut s, S0, |r| r.slots = stock(&[(Slot::Slot0, Item::Glass)]));
         edit(&mut s, S1, |r| {
@@ -877,12 +817,11 @@ mod tests {
             steal_for(&config, &s, S0).as_slice(),
             [pick(S1, Slot::Slot2, Item::Beer), pick(S2, Slot::Slot5, Item::Phone)]
         );
-        Ok(())
     }
 
     #[test]
-    fn grab_needs_follow_grabbing_holding_intake_and_distributing() -> Result<(), crate::RuleError> {
-        let config = config(Table::ThreeSeats)?;
+    fn grab_needs_follow_grabbing_holding_intake_and_distributing() {
+        let config = config(Table::ThreeSeats).expect("a valid config");
         let mut s = state(Table::ThreeSeats);
         assert!(grab_needs(&config, &s, S0).is_empty());
         s.grabs.grabbing = s.grabs.grabbing.set(S0, true);
@@ -902,12 +841,11 @@ mod tests {
             .collect();
         assert_eq!(grab_needs(&config, &s, S0).as_slice(), puts);
         assert!(grab_needs(&config, &s, S3).is_empty());
-        Ok(())
     }
 
     #[test]
-    fn uses_hide_saw_jammer_and_adrenaline_without_their_preconditions() -> Result<(), crate::RuleError> {
-        let config = config(Table::ThreeSeats)?;
+    fn uses_hide_saw_jammer_and_adrenaline_without_their_preconditions() {
+        let config = config(Table::ThreeSeats).expect("a valid config");
         let mut s = state(Table::ThreeSeats);
         edit(&mut s, S0, |r| {
             r.slots = stock(&[
@@ -937,6 +875,5 @@ mod tests {
             uses(&config, &s, S0).as_slice(),
             [at(Slot::Slot1, Item::Saw), at(Slot::Slot3, Item::Beer)]
         );
-        Ok(())
     }
 }

@@ -20,6 +20,12 @@
               pkgs.cargo pkgs.rustc pkgs.clippy pkgs.rustfmt pkgs.rust-analyzer ];
             BEND = "${bend}/bin/bend";
             BENDTT = "${bendtt}/bin/bendtt";
+            # Committed git hooks (.githooks/pre-commit). Worktrees share the config, so this is set once.
+            shellHook = ''
+              if [ "$(git config --get core.hooksPath 2>/dev/null)" != .githooks ] && git rev-parse --git-dir >/dev/null 2>&1; then
+                git config core.hooksPath .githooks
+              fi
+            '';
           } // pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
             LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib ];
           });

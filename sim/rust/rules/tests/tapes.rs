@@ -24,8 +24,8 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
 use buckshot_rules::{
-    AmountRule, Config, Event, GameEvent, HealthRule, ItemRule, LoadRule, Move, Note, Phase, Request, RoundRules, Secret, ShellRule, State,
-    Table, request, start, step_event,
+    AmountRule, Config, Event, FirstDeathCheck, GameEvent, HealthRule, ItemRule, LoadRule, Move, Note, Phase, Request, RoundRules, Secret,
+    ShellRule, State, Table, request, start, step_event,
 };
 use serde_json::{Value, json};
 
@@ -101,7 +101,7 @@ fn state(s: &State) -> Value {
             "before_round": w.before_round, "round_index": w.round_index, "load_index": w.load_index,
             "first_sequence": w.first_sequence, "round_health": w.round_health, "first_turn": tag(w.first_turn),
             "turn": maybe(w.turn.map(tag)), "direction": tag(w.direction), "first_death": maybe(w.first_death.map(tag)),
-            "checking_first_death": w.checking_first_death, "item_amount": w.item_amount, "sawed": w.sawed,
+            "checking_first_death": w.checking_first_death == FirstDeathCheck::On, "item_amount": w.item_amount, "sawed": w.sawed,
             "gun": gun(w.gun), "shown": load(w.shown),
             "decks": { "$": "Decks", "two": deck(w.decks.two), "three": deck(w.decks.three), "four": deck(w.decks.four) },
         },
@@ -311,7 +311,11 @@ fn first_diff(a: &Value, b: &Value, path: &str) -> Option<String> {
 
 fn short(v: &Value) -> String {
     let s = v.to_string();
-    if s.len() > 300 { format!("{}...", &s[..300]) } else { s }
+    if s.chars().count() > 300 {
+        format!("{}...", s.chars().take(300).collect::<String>())
+    } else {
+        s
+    }
 }
 
 #[derive(Default)]
