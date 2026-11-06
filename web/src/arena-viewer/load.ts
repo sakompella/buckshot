@@ -34,6 +34,7 @@ const decodeSeatRow = Schema.decodeUnknownSync(SeatRow);
 
 export interface ArenaPaths {
   readonly regret?: string | undefined;
+  readonly regretSampled?: string | undefined;
   readonly knowledge?: string | undefined;
   readonly certain?: string | undefined;
 }
@@ -51,7 +52,7 @@ export interface Arena {
 /** With a regret database, seats carry their regret; with a knowledge database, each config's consistency; with a certain-mistakes database, its rates and moves. */
 export const loadArena = (dbPath: string, paths: ArenaPaths = {}): Arena => {
   const db = new Database(dbPath, { readonly: true });
-  const regret = paths.regret === undefined ? null : openRegret(paths.regret);
+  const regret = paths.regret === undefined ? null : openRegret(paths.regret, paths.regretSampled);
 
   const rows = db
     .query(SEATS_SQL)

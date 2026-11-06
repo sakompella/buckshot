@@ -29,7 +29,7 @@ test("the tour visits every section, in page order, and the certain-mistakes one
 });
 
 test("the tour's replay is the completed match whose seats gave up the most points", () => {
-  const seat = (matchId: string, status: "completed" | "partial", total: number | null) => ({ matchId, status, regret: total === null ? null : { moves: 1, total, exact: 0, largest: { ordinal: 1, points: total } } });
+  const seat = (matchId: string, status: "completed" | "partial", total: number | null) => ({ matchId, status, regret: total === null ? null : { moves: 1, total, accuracy: 50, best: 0, inaccuracies: 0, mistakes: 0, blunders: 0, sampled: 0, losses: [total] } });
 
   expect(tourMatchOf([seat("a", "completed", 5), seat("a", "completed", 6), seat("b", "completed", 9), seat("c", "partial", 99)])).toEqual(Option.some("a"));
   expect(tourMatchOf([seat("a", "completed", null)])).toEqual(Option.some("a"));

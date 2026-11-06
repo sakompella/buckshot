@@ -34,7 +34,19 @@ export const ConfigSummary = Schema.Struct({
   roundShare: Schema.Number,
   /** Observed win share with a seed-block bootstrap interval. */
   win: Rate,
-  regret: Schema.NullOr(Schema.Struct({ moves: Schema.Number, mean: Schema.Number, exactShare: Schema.Number })),
+  regret: Schema.NullOr(
+    Schema.Struct({
+      moves: Schema.Number,
+      accuracy: Schema.Number,
+      meanLost: Schema.Number,
+      p99Lost: Schema.Number,
+      bestShare: Schema.Number,
+      inaccuraciesPer100: Schema.Number,
+      mistakesPer100: Schema.Number,
+      blundersPer100: Schema.Number,
+      sampledShare: Schema.Number,
+    }),
+  ),
   totalCost: Schema.Number,
   startedMoves: Schema.Number,
   avgCost: Schema.Number,

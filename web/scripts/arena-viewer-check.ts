@@ -6,7 +6,7 @@ import { type Browser, chromium, type Page } from "playwright-core";
 
 import { AGGREGATES, selfShotTallies } from "../src/arena-viewer/aggregates.ts";
 import { Blunders, CERTAIN_TYPES, CertainMistakes, Decisions, ITEMS, MatchDetail, MatchDetailJson, type MoveRegret, NO_GAP, SeatsResponse } from "../src/arena-viewer/api.ts";
-import { baseName, baseOrder, CERTAIN_NAMES, effortLabel, fmtBytes, fmtCount, fmtPct, fmtPoints, blocksOf, groupBy, keyOf, labelOf, MIN_BLOCKS_FOR_INTERVAL, shortName, withPotShares } from "../src/arena-viewer/page/data.ts";
+import { baseName, baseOrder, CERTAIN_NAMES, effortLabel, fmtBytes, fmtCount, fmtPct, blocksOf, groupBy, keyOf, labelOf, MIN_BLOCKS_FOR_INTERVAL, shortName, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { GROUPS, MOVED_TARGETS, Section } from "../src/arena-viewer/page/model.ts";
 import { pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 import { droppedConfigs, droppedText, oddsPanels } from "../src/arena-viewer/page/odds.ts";
@@ -673,7 +673,7 @@ const checkRegret = async (page: Page) => {
 
   const titles = await page.locator('table.lbt td[data-label="accuracy"][title]:not([title=""])').evaluateAll((titled) => titled.map((cell) => cell.getAttribute("title") ?? ""));
 
-  expectThat(titles.length === scored.length && titles.every((title) => /^[\d,]+ moves · \d+% proven exact$/.test(title)), "a regret cell does not say how many moves and how many are proven exact");
+  expectThat(titles.length === scored.length && titles.every((title) => /^[\d,]+ moves with a real choice · \d+% scored with the sampled reload rule$/.test(title)), "a regret cell does not say how many moves and how many used the sampled reload rule");
 
   await page.locator(".lb").first().screenshot({ path: shot("leaderboard-regret"), style: UNSTICK });
 
@@ -1536,24 +1536,6 @@ const checkDatabaseLink = async (page: Page, name: string) => {
   expectThat(download.ok && Number(download.headers.get("content-length")) === bytes, `${name}: the database link serves ${download.headers.get("content-length")} bytes, not ${bytes}`);
 };
 
-// The config panel's largest gap opens its match's replay at that move, and no other move of that player gave up more.
-const checkLargestMiss = async (page: Page, name: string, panel: ReturnType<Page["locator"]>, isTouch: boolean) => {
-  const link = panel.locator(".miss button");
-
-  expectThat((await link.count()) === 1, `${name}: the config panel shows no largest gap`);
-  await (isTouch ? link.tap() : link.click());
-
-  const matchId = await openedMatchId(page);
-  const steps = stepsOf(await servedDetail(matchId));
-  const at = Number(/move (\d+) of/.exec(await textOf(page, ".modal .stepper .k"))?.[1] ?? Number.NaN) - 1;
-  const opened = steps[at];
-  const most = Math.max(...steps.filter(({ player }) => player === opened?.player).map(({ regret }) => regret?.points ?? 0));
-
-  console.log(name, "largest gap:", await link.textContent(), "| opens", matchId, "at move", at + 1, "giving up", opened?.regret?.points);
-  expectThat(opened?.regret !== null && opened?.regret !== undefined && opened.regret.points === most && (await link.textContent())?.startsWith(fmtPoints(most)) === true, `${name}: the largest gap opened move ${at + 1} (${opened?.regret?.points ?? "no"} points), its player's most is ${most}`);
-  await closeReplay(page);
-};
-
 const checkScatterDrill = async (page: Page, name: string, isTouch: boolean) => {
   const point = page.locator("#scatter svg g[style*=pointer]").nth(3);
 
@@ -1566,7 +1548,6 @@ const checkScatterDrill = async (page: Page, name: string, isTouch: boolean) => 
   expectThat((await panel.count()) === 1 && (await panel.locator(".drillin").count()) === 1, `${name}: a click on a scatter point opened no drill-down`);
   expectThat((await page.locator("table.lbt tr.drill").count()) === 0, `${name}: the scatter's drill-down also opened a leaderboard row`);
   await panel.screenshot({ path: shot(`${name}-scatter-drill`), style: UNSTICK });
-  await checkLargestMiss(page, name, panel, isTouch);
   await (isTouch ? panel.locator(".drillclose").tap() : panel.locator(".drillclose").click());
   await settled(page);
   expectThat((await page.locator("#scatter .configpanel").count()) === 0, `${name}: the drill-down's close button left it open`);
