@@ -617,3 +617,101 @@ pub fn analyse(position: &Position, depth: u32, budget: u64, reload: Reload, mem
         Err(reason) => invalid(reason, 0),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use buckshot_rules::{
+        AmountRule, Config, Deck, Event, HealthRule, ItemRule, LoadRule, Move, Request, RoundRules, RuleError, SeatRecord, ShellRule,
+        State, Table, initial, request, step_event,
+    };
+
+    use super::analyse_belief;
+    use crate::num::F32;
+    use crate::types::{Analysis, Belief, Memo, Reach, Reload, World};
+
+    /// Two seats at 2 health, a one-shell live load and no items.
+    fn config() -> Result<Config, RuleError> {
+        let load = LoadRule {
+            shells: ShellRule::AllLive { live: 1 },
+            items: AmountRule::Fixed(0),
+        };
+        let off = ItemRule {
+            enabled: false,
+            per_player: 0,
+            on_table: 0,
+        };
+        let round = RoundRules {
+            health: HealthRule::Fixed(2),
+            loads: [load; 4],
+            items: [off; 9],
+        };
+        Config::new(Table::TwoSeats, &[round, round, round])
+    }
+
+    /// The first choice of the match, each seat at 1 health and one batch left in the deck.
+    fn at_one_health(config: &Config) -> Result<State, RuleError> {
+        let mut state = initial(config);
+        for _ in 0..64_u32 {
+            if matches!(request(config, &state), Request::Choose(_)) {
+                break;
+            }
+            state = step_event(config, state, Event::Draw(0))?.state;
+        }
+        let players = state.players.entries().fold(state.players, |all, (seat, record)| {
+            all.set(seat, SeatRecord { health: 1, ..record })
+        });
+        let world = buckshot_rules::World {
+            decks: state.world.decks.set(config.table(), Deck::of_ids(config.table(), [0])),
+            ..state.world
+        };
+        Ok(State { world, players, ..state })
+    }
+
+    /// The scores of shooting the opponent and shooting myself, and whether
+    /// the opponent's shot begins the next round at a choice.
+    type Shots = (bool, Option<(u32, Reach)>, Option<(u32, Reach)>);
+
+    fn shots() -> Result<Shots, RuleError> {
+        let config = config()?;
+        let state = at_one_health(&config)?;
+        let Request::Choose(menu) = request(&config, &state) else {
+            return Err(RuleError::Config("the fixture should start at a choice"));
+        };
+        let me = menu.seat();
+        let shoot = menu
+            .moves()
+            .position(|legal| matches!(legal.to_move(), Move::Shoot { target } if target != me));
+        let index = shoot.and_then(|at| u32::try_from(at).ok()).unwrap_or(u32::MAX);
+        let won = step_event(&config, state, Event::Choose(index))?;
+        let next_round = matches!(request(&config, &won.state), Request::Choose(_));
+        let world = World {
+            state,
+            weight: F32::ONE,
+            won: None,
+        };
+        let belief = Belief {
+            public: vec![world],
+            private: vec![world],
+            me,
+            round: 0,
+        };
+        let Analysis::Analysed(done) = analyse_belief(&config, &belief, 4, 20_000, Reload::Static, Memo::Off) else {
+            return Err(RuleError::Config("the fixture should analyse"));
+        };
+        let at = |own: bool| {
+            done.lines
+                .iter()
+                .find(|line| matches!(line.r#move, Move::Shoot { target } if (target == me) == own))
+                .map(|line| (line.score, line.reach))
+        };
+        Ok((next_round, at(false), at(true)))
+    }
+
+    /// P1.1: shooting the opponent wins the round and begins the next one in the
+    /// same step; the search must score the won round, not the next round's start.
+    #[test]
+    fn a_won_round_is_settled_when_the_next_round_begins_at_once() {
+        let expected = (true, Some((1_000_000, Reach::Settled)), Some((0, Reach::Settled)));
+        assert_eq!(shots(), Ok(expected), "(next round at a choice, opponent shot, own shot)");
+    }
+}
