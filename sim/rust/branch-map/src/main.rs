@@ -5,10 +5,12 @@
 //! change to a Bend source in scope changes its hash), when a variant does
 //! not have its number of Rust sites (one unless `branch-map.toml` says
 //! otherwise), when Rust control flow is neither labelled nor listed as
-//! Rust-only, or when a map entry is stale. `list` prints the map.
+//! Rust-only, or when a map entry is stale. `list` prints the map. `instrument <dir>` writes a traced copy of the
+//! Bend tree for the trace comparison.
 
 mod bend;
 mod gen_ids;
+mod instrument;
 mod map;
 mod rust;
 
@@ -68,8 +70,14 @@ fn run() -> Result<bool> {
             println!("wrote {} ({} variants)", paths.ids().display(), sites.len());
             return Ok(true);
         }
+        "instrument" => {
+            let out = std::env::args().nth(2).context("usage: branch-map instrument <out dir>")?;
+            instrument::write(&paths.bend, Path::new(&out), &rules, &sites)?;
+            println!("wrote the traced Bend tree to {out} ({} labels)", sites.len());
+            return Ok(true);
+        }
         "check" | "list" => {}
-        other => bail!("usage: branch-map write|check|list (got {other:?})"),
+        other => bail!("usage: branch-map write|check|list|instrument <dir> (got {other:?})"),
     }
     if std::fs::read_to_string(paths.ids()).ok().as_deref() != Some(ids.as_str()) {
         errors.push(
@@ -108,34 +116,7 @@ fn run() -> Result<bool> {
             errors.push(format!("branch-map.toml: sites {variant} has no reason"));
         }
     }
-    let mut used = BTreeMap::new();
-    for u in &report.unlabelled {
-        let in_fn = u
-            .key
-            .split_once(' ')
-            .map_or(u.key.as_str(), |(head, _)| head)
-            .rsplit_once(':')
-            .map_or("", |(f, _)| f);
-        let in_file = u.key.split(':').next().unwrap_or_default();
-        match [u.key.as_str(), in_fn, in_file]
-            .into_iter()
-            .find(|k| map.rust_only.contains_key(*k))
-        {
-            Some(k) => {
-                let n = used.entry(k.to_owned()).or_insert(0_usize);
-                *n = n.saturating_add(1);
-            }
-            None => errors.push(format!(
-                "{} (line {}): Rust control flow with no branch! and no rust_only entry",
-                u.key, u.line
-            )),
-        }
-    }
-    for key in map.rust_only.keys() {
-        if !used.contains_key(key) {
-            errors.push(format!("branch-map.toml: rust_only {key} matches nothing"));
-        }
-    }
+    rust_only_errors(&map, &report, &mut errors);
     if command == "list" {
         for site in &sites {
             let at = rust_sites.get(site.variant.as_str()).map(|a| a.join(" ")).unwrap_or_default();
@@ -167,6 +148,38 @@ fn run() -> Result<bool> {
         eprintln!("branch-map: {} errors", errors.len());
     }
     Ok(errors.is_empty())
+}
+
+/// Accounts each unlabelled Rust site to its `[rust_only]` key, and flags unused keys.
+fn rust_only_errors(map: &map::Map, report: &rust::Report, errors: &mut Vec<String>) {
+    let mut used = BTreeMap::new();
+    for u in &report.unlabelled {
+        let in_fn = u
+            .key
+            .split_once(' ')
+            .map_or(u.key.as_str(), |(head, _)| head)
+            .rsplit_once(':')
+            .map_or("", |(f, _)| f);
+        let in_file = u.key.split(':').next().unwrap_or_default();
+        match [u.key.as_str(), in_fn, in_file]
+            .into_iter()
+            .find(|k| map.rust_only.contains_key(*k))
+        {
+            Some(k) => {
+                let n = used.entry(k.to_owned()).or_insert(0_usize);
+                *n = n.saturating_add(1);
+            }
+            None => errors.push(format!(
+                "{} (line {}): Rust control flow with no branch! and no rust_only entry",
+                u.key, u.line
+            )),
+        }
+    }
+    for key in map.rust_only.keys() {
+        if !used.contains_key(key) {
+            errors.push(format!("branch-map.toml: rust_only {key} matches nothing"));
+        }
+    }
 }
 
 fn check_rust(src: &Path) -> Result<rust::Report> {

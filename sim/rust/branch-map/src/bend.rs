@@ -24,8 +24,10 @@ pub struct Module {
 
 pub struct Def {
     pub name: String,
+    /// The def's return type.
+    pub returns: String,
     /// (line number, line) of the body, the header excluded.
-    body: Vec<(usize, String)>,
+    pub body: Vec<(usize, String)>,
 }
 
 /// One Bend branch: a case of a match or an arm of a `Bool.pick`.
@@ -100,8 +102,16 @@ fn parse_module(name: &str, source: String) -> Result<Module> {
         if let Some(rest) = line.strip_prefix("def ") {
             defs.extend(current.take());
             let def_name = rest.split('(').next().unwrap_or_default().trim().to_owned();
+            let returns = rest
+                .rsplit_once("->")
+                .map_or("", |(_, r)| r)
+                .trim()
+                .trim_end_matches(':')
+                .trim()
+                .to_owned();
             current = Some(Def {
                 name: def_name,
+                returns,
                 body: Vec::new(),
             });
             continue;
@@ -140,7 +150,7 @@ fn resolve(dir: &Path, import: &str) -> Result<String> {
 }
 
 /// The code of a line without its comment.
-fn code(line: &str) -> &str {
+pub fn code(line: &str) -> &str {
     line.split('#').next().unwrap_or_default()
 }
 
@@ -210,7 +220,7 @@ pub fn sites(rules: &Rules) -> Vec<Site> {
     out
 }
 
-fn def_sites(module: &str, def: &Def) -> Vec<Site> {
+pub fn def_sites(module: &str, def: &Def) -> Vec<Site> {
     let prefix = format!("{}{}", camel(module), camel(&def.name));
     let mut matches: Vec<Match> = Vec::new();
     let mut open: Vec<usize> = Vec::new();
