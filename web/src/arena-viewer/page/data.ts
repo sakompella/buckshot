@@ -1,5 +1,5 @@
 import { EFFORTS, effortName } from "../../arena/model-names.ts";
-import type { CertainType, Seat, Story } from "../api.ts";
+import type { CertainType, Seat, SeatRegret, Story } from "../api.ts";
 
 // The page's numbers: model labels and colours, per-config stats, ratings and intervals.
 
@@ -344,32 +344,45 @@ export const matchRows = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<MatchRo
     return first === undefined ? [] : [{ matchId: first.matchId, seats: ordered, startedAt: first.startedAt, status: first.status, seed: first.seed }];
   });
 
-/** Regret of a config's searched moves: their mean in points, and the share of them that are proven exact. Null with no searched move. */
+/**
+ * A config's searched moves, leaving out decisions with no real choice: its accuracy (the mean of its seats' game
+ * accuracies), the mean and 99th percentile of the points of round win chance a move gave up, the share of best moves,
+ * inaccuracies, mistakes and blunders per 100 moves, and the share scored with the sampled reload rule. Null with no such move.
+ */
 export interface RegretStats {
   readonly moves: number;
-  readonly mean: number;
-  readonly exactShare: number;
+  readonly accuracy: number;
+  readonly meanLost: number;
+  readonly p99Lost: number;
+  readonly bestShare: number;
+  readonly inaccuraciesPer100: number;
+  readonly mistakesPer100: number;
+  readonly blundersPer100: number;
+  readonly sampledShare: number;
 }
 
 export const regretStats = (seats: ReadonlyArray<Pick<SeatFull, "regret">>): RegretStats | null => {
   const totals = seats.flatMap(({ regret }) => (regret === null ? [] : [regret]));
   const moves = sumOf(totals.map((total) => total.moves));
 
-  return moves === 0 ? null : { moves, mean: sumOf(totals.map((total) => total.total)) / moves, exactShare: sumOf(totals.map((total) => total.exact)) / moves };
+  if (moves === 0) return null;
+
+  const per100 = (count: (seat: SeatRegret) => number) => (sumOf(totals.map(count)) / moves) * 100;
+  const losses = totals.flatMap((total) => total.losses).toSorted((left, right) => left - right);
+  const zeros = moves - losses.length;
+  const rank = Math.ceil(moves * 0.99) - 1;
+
+  return {
+    moves,
+    accuracy: meanOf(totals.map((total) => total.accuracy)),
+    meanLost: sumOf(totals.map((total) => total.total)) / moves,
+    p99Lost: rank < zeros ? 0 : (losses[rank - zeros] ?? 0),
+    bestShare: sumOf(totals.map((total) => total.best)) / moves,
+    inaccuraciesPer100: per100((seat) => seat.inaccuracies),
+    mistakesPer100: per100((seat) => seat.mistakes),
+    blundersPer100: per100((seat) => seat.blunders),
+    sampledShare: sumOf(totals.map((total) => total.sampled)) / moves,
+  };
 };
-
-export interface LargestGap {
-  readonly matchId: string;
-  readonly ordinal: number;
-  readonly points: number;
-}
-
-/** The single searched move, over a config's scored seats, that gave up the most round win chance. */
-export const largestGap = (scored: ReadonlyArray<Pick<SeatFull, "matchId" | "regret">>): LargestGap | null =>
-  scored.reduce<LargestGap | null>((most, { matchId, regret }) => {
-    if (regret === null || (most !== null && most.points >= regret.largest.points)) return most;
-
-    return { matchId, ordinal: regret.largest.ordinal, points: regret.largest.points };
-  }, null);
 
 export const winnerOf = (match: MatchRow): SeatFull | undefined => match.seats.find(({ winShare }) => (winShare ?? 0) >= 1);

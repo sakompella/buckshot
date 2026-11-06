@@ -59,17 +59,47 @@ const regretFile = (rows: ReadonlyArray<Row>): string => {
   return path;
 };
 
-test("a seat's regret sums its searched moves in percentage points, with its exact count and its largest move", () => {
+test("a seat's regret sums its searched moves in percentage points and judges each by lichess's cut-offs", () => {
   const regret = openRegret(
     regretFile([
       { match: "m1", ordinal: 1, player: "A", best: 600_000, chosen: 500_000 },
       { match: "m1", ordinal: 2, player: "A", best: 1_000_000, chosen: 0, exact: true },
       { match: "m1", ordinal: 3, player: "B", best: 400_000, chosen: 400_000 },
+      { match: "m1", ordinal: 4, player: "B", best: 600_000, chosen: 540_000 },
     ]),
   );
 
-  expect(regret.seats.get("m1|A")).toEqual({ moves: 2, total: 110, exact: 1, largest: { ordinal: 2, points: 100 } });
-  expect(regret.seats.get("m1|B")).toEqual({ moves: 1, total: 0, exact: 0, largest: { ordinal: 3, points: 0 } });
+  expect(regret.seats.get("m1|A")).toMatchObject({ moves: 2, total: 110, best: 0, inaccuracies: 0, mistakes: 1, blunders: 1, sampled: 0, losses: [10, 100] });
+  expect(regret.seats.get("m1|B")).toMatchObject({ moves: 2, total: 6, best: 1, inaccuracies: 1, mistakes: 0, blunders: 0, losses: [6] });
+  expect(regret.seats.get("m1|B")?.accuracy).toBeGreaterThan(regret.seats.get("m1|A")?.accuracy ?? 100);
+});
+
+test("a decision whose moves all score within a point is left out of a seat's statistics", () => {
+  const flat = JSON.stringify([{ label: "best move", score: 500_000 }, { label: "chosen move", score: 495_000 }]);
+  const regret = openRegret(
+    regretFile([
+      { match: "m1", ordinal: 1, player: "A", best: 500_000, chosen: 495_000, values: flat },
+      { match: "m1", ordinal: 2, player: "A", best: 600_000, chosen: 600_000 },
+      { match: "m1", ordinal: 3, player: "B", best: 500_000, chosen: 495_000, values: flat },
+    ]),
+  );
+
+  expect(regret.seats.get("m1|A")).toMatchObject({ moves: 1, total: 0, best: 1, losses: [] });
+  expect(regret.seats.has("m1|B")).toBe(false);
+});
+
+test("sampled scores replace the static ones for the decisions they cover, in seats and in a match's moves", () => {
+  const sampled = { reload: "sampled", samples: 256, evaluator: "s1" };
+  const regret = openRegret(
+    regretFile([
+      { match: "m1", ordinal: 1, player: "A", best: 600_000, chosen: 500_000 },
+      { match: "m1", ordinal: 2, player: "A", best: 600_000, chosen: 500_000 },
+    ]),
+    regretFile([{ match: "m1", ordinal: 2, player: "A", best: 600_000, chosen: 550_000, run: sampled }]),
+  );
+
+  expect(regret.seats.get("m1|A")).toMatchObject({ moves: 2, total: 15, sampled: 1, losses: [10, 5] });
+  expect([...regret.moves("m1")].map(([ordinal, move]) => [ordinal, move.points, move.source])).toEqual([[1, 10, "static"], [2, 5, "sampled"]]);
 });
 
 test("a move that fell back has no regret, not a zero", () => {
@@ -101,6 +131,7 @@ test("a move shows its regret, whether it is exact and the scores in percentage 
     chosenScore: 50,
     depth: 4,
     limited: true,
+    source: "static",
     values: [
       { label: "best move", score: 60 },
       { label: "other move", score: 0 },
@@ -124,7 +155,7 @@ test("only the run with the most searched moves is read, so evaluators, reload r
     ]),
   );
 
-  expect(regret.seats.get("m1|A")).toEqual({ moves: 2, total: 20, exact: 0, largest: { ordinal: 1, points: 10 } });
+  expect(regret.seats.get("m1|A")).toMatchObject({ moves: 2, total: 20, losses: [10, 10] });
   expect(regret.moves("m1").size).toBe(2);
 });
 

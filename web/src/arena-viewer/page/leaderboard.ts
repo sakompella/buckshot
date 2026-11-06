@@ -1,10 +1,9 @@
 import { Option } from "effect";
-import { AsyncData } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { pressable } from "./charts.ts";
-import { baseName, costPerMove, effortLabel, fmtCount, fmtPct, fmtPoints, fmtSec, fmtUsd, groupBy, isClaude, isProvisional, keyOf, labelOf, largestGap, type SeatFull } from "./data.ts";
-import { allMatchesOf, type Derived, memoLast, type ModelStats } from "./derived.ts";
+import { baseName, costPerMove, effortLabel, fmtCount, fmtPct, fmtPoints, fmtSec, fmtUsd, isClaude, isProvisional, keyOf } from "./data.ts";
+import { type Derived, type ModelStats } from "./derived.ts";
 import { drillView } from "./drill.ts";
 import { itemIconOf } from "./items.ts";
 import { type Lazy, Message, type Model } from "./model.ts";
@@ -23,8 +22,8 @@ interface Detail {
   readonly content: ReadonlyArray<Html | string>;
 }
 
-/** 100 minus the mean points of round win chance a move gave up: higher is better. */
-export const accuracyOf = (meanRegret: number): string => (100 - meanRegret).toFixed(1);
+/** How many moves a config's accuracy figures rest on, and how many of them were scored with the sampled reload rule. */
+export const movesTitle = ({ regret }: ModelStats): string => (regret === null ? "" : `${regret.moves.toLocaleString()} moves with a real choice · ${fmtPct(regret.sampledShare)} scored with the sampled reload rule`);
 
 const detailsOf = (h: H, m: ModelStats, hasRegret: boolean): ReadonlyArray<Detail> => {
   const { favorite } = m;
@@ -33,7 +32,12 @@ const detailsOf = (h: H, m: ModelStats, hasRegret: boolean): ReadonlyArray<Detai
     { label: "wins vs own opponents", title: "", content: [h.b([], [fmtPct(m.winShare)]), " ", h.span([h.Class("pm")], [`${m.win.k.toFixed(m.win.k % 1 ? 1 : 0)}/${m.win.n}`])] },
     { label: "round wins", title: "", content: [fmtPct(m.roundShare)] },
     { label: "cash share", title: "", content: [fmtPct(m.potShare)] },
-    ...(hasRegret ? [{ label: "accuracy", title: m.regret === null ? "" : `${m.regret.moves.toLocaleString()} moves · ${fmtPct(m.regret.exactShare)} proven exact`, content: [m.regret === null ? "–" : accuracyOf(m.regret.mean)] }] : []),
+    ...(hasRegret
+      ? [
+          { label: "accuracy", title: movesTitle(m), content: [m.regret === null ? "–" : m.regret.accuracy.toFixed(1)] },
+          { label: "p99 points lost", title: movesTitle(m), content: [m.regret === null ? "–" : fmtPoints(m.regret.p99Lost)] },
+        ]
+      : []),
     { label: "cost / move", title: "", content: [fmtUsd(costPerMove(m))] },
     { label: "time / move", title: "", content: [fmtSec(m.scoredMoves > 0 ? m.scoredLatency / m.scoredMoves : null)] },
     { label: "output tok / match", title: "", content: [fmtCount(m.avgOut)] },
@@ -97,40 +101,7 @@ const rowView = (h: H, m: ModelStats, rank: number | undefined, elo: Rating | un
 const detailsView = (h: H, details: ReadonlyArray<Detail>): Html =>
   h.dl([h.Class("drillstats")], details.flatMap(({ label, title, content }) => [h.dt([], [label]), h.dd(title === "" ? [] : [h.Title(title)], [...content])]));
 
-/** Per config, the move where it gave up the most round win chance over its scored matches. */
-const largestOf = memoLast((seats: ReadonlyArray<SeatFull>) => new Map([...groupBy(seats.filter(({ status }) => status === "completed"), keyOf)].flatMap(([key, scored]) => {
-  const gap = largestGap(scored);
-
-  return gap === null ? [] : [[key, gap] as const];
-})));
-
-/** The move where a config gave up the most round win chance, as a link to that move in its match's replay. */
-const missView = (h: H, m: ModelStats, local: Model["local"]): Html =>
-  AsyncData.matchData(local, {
-    onEmpty: () => h.empty,
-    onFailure: () => h.empty,
-    onData: ({ seats }) => {
-      const largest = largestOf(seats).get(m.key);
-
-      if (largest === undefined) return h.empty;
-
-      const { matchId, ordinal, points } = largest;
-      const opponent = allMatchesOf(seats).find((match) => match.matchId === matchId)?.seats.find((seat) => keyOf(seat) !== m.key);
-
-      return h.p(
-        [h.Class("miss")],
-        [
-          h.span([h.Class("k")], ["largest gap "]),
-          h.button(
-            [h.Type("button"), h.Class("chip on"), h.OnClick(Message.ClickedMatch({ id: matchId, maybeFocus: Option.some(ordinal) }))],
-            [`${fmtPoints(points)} pts${opponent === undefined ? "" : ` vs ${labelOf(keyOf(opponent))}`} ▸`],
-          ),
-        ],
-      );
-    },
-  });
-
-export const configPanelView = (h: H, derived: Derived, key: string, lazy: Lazy, local: Model["local"]): Html => {
+export const configPanelView = (h: H, derived: Derived, key: string, lazy: Lazy): Html => {
   const m = derived.pooled.find((candidate) => candidate.key === key);
 
   if (m === undefined) return h.empty;
@@ -149,7 +120,6 @@ export const configPanelView = (h: H, derived: Derived, key: string, lazy: Lazy,
         ],
       ),
       detailsView(h, details),
-      missView(h, m, local),
       drillView(h, m, lazy),
     ],
   );
@@ -164,7 +134,7 @@ const headersOf = (hasRegret: boolean): ReadonlyArray<string> => [
   "Match wins vs own opponents",
   "Round wins",
   "Cash share",
-  ...(hasRegret ? ["Accuracy"] : []),
+  ...(hasRegret ? ["Accuracy", "p99 points lost"] : []),
   "Cost / move",
   "Time / move",
   "Output tok / match",
@@ -173,11 +143,16 @@ const headersOf = (hasRegret: boolean): ReadonlyArray<string> => [
 
 const BAR_COLUMN = 4;
 
+export const ACCURACY_TITLE = "Lichess's accuracy over points of round win chance: each move scored by what it gave up against the minimax player's best move, a game's value combining a volatility-weighted and a harmonic mean, averaged over the config's matches; higher is better, 100 is perfect";
+
+export const P99_TITLE = "Points of round win chance lost by the 99th-percentile move: one move in a hundred gave up at least this much";
+
 const HEADER_TITLES = new Map([
   ["Round Elo", "one Bradley-Terry rating over every match, on round win share; the interval is a 95% bootstrap over seed blocks"],
   ["Cash share", "a config's cash over the match's cash, averaged over scored matches"],
   ["Round wins", "the rounds a config won over the rounds it played"],
-  ["Accuracy", "100 minus the mean points of round win chance a move gave up against the minimax player's best move; higher is better"],
+  ["Accuracy", ACCURACY_TITLE],
+  ["p99 points lost", P99_TITLE],
 ]);
 
 const headerView = (h: H, label: string, index: number): Html => {
@@ -195,7 +170,7 @@ export const inRankOrder = (stats: ReadonlyArray<ModelStats>, ranks: ReadonlyMap
     .toSorted((left, right) => (ranks.get(left.key) ?? Number.POSITIVE_INFINITY) - (ranks.get(right.key) ?? Number.POSITIVE_INFINITY) || eloOf(right) - eloOf(left) || left.label.localeCompare(right.label));
 };
 
-export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["leaderboard"], lazy: Lazy, local: Model["local"]): Html => {
+export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["leaderboard"], lazy: Lazy): Html => {
   const { pooled: stats, everyPooled: every, ranks, ratings } = derived;
   const hasRegret = every.some(({ regret }) => regret !== null);
   const headers = headersOf(hasRegret);
@@ -222,7 +197,7 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
 
                   return [
                     rowView(h, m, ranks.get(m.key), ratings.get(m.key), scale, details, isOpen),
-                    isOpen ? h.keyed("tr")(`drill-${m.key}`, [h.Class("drill")], [h.td([h.Colspan(headers.length)], [detailsView(h, details), missView(h, m, local), drillView(h, m, lazy)])]) : h.empty,
+                    isOpen ? h.keyed("tr")(`drill-${m.key}`, [h.Class("drill")], [h.td([h.Colspan(headers.length)], [detailsView(h, details), drillView(h, m, lazy)])]) : h.empty,
                   ];
                 }),
               ),
@@ -243,6 +218,70 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
           ),
         ],
       ),
+    ],
+  );
+};
+
+const ACCURACY_HEADERS: ReadonlyArray<readonly [string, string]> = [
+  ["Model", ""],
+  ["Accuracy", ACCURACY_TITLE],
+  ["Avg points lost", "Mean points of round win chance a move gave up against the minimax player's best move"],
+  ["p99 points lost", P99_TITLE],
+  ["Best moves", "Moves as good as the minimax player's best"],
+  ["Inaccuracies / 100", "Moves per 100 that gave up 5 to 10 points of round win chance (lichess's inaccuracy, 0.1 of its winning chances)"],
+  ["Mistakes / 100", "Moves per 100 that gave up 10 to 15 points (lichess's mistake, 0.2)"],
+  ["Blunders / 100", "Moves per 100 that gave up 15 points or more (lichess's blunder, 0.3)"],
+  ["Moves", "Moves with a real choice, over the config's scored matches; decisions where every move is within a point are left out"],
+];
+
+/** Configs with a scored move, best accuracy first. */
+export const inAccuracyOrder = (stats: ReadonlyArray<ModelStats>): ReadonlyArray<ModelStats> =>
+  stats.filter(({ regret }) => regret !== null).toSorted((left, right) => (right.regret?.accuracy ?? 0) - (left.regret?.accuracy ?? 0) || left.label.localeCompare(right.label));
+
+const accuracyRowView = (h: H, m: ModelStats, rank: number): Html => {
+  const { regret } = m;
+  const cell = (label: string, text: string | undefined) => h.td([h.DataAttribute("label", label), ...(label === "accuracy" ? [h.Title(movesTitle(m))] : [])], [text ?? "–"]);
+
+  return h.keyed("tr")(
+    m.key,
+    [h.Class(`row ${isProvisional(m) ? "provisional" : ""}`)],
+    [
+      h.td([], [h.span([h.Class("rk")], [String(rank)]), ...nameView(h, m)]),
+      cell("accuracy", regret?.accuracy.toFixed(1)),
+      cell("avg points lost", regret === null ? undefined : fmtPoints(regret.meanLost)),
+      cell("p99 points lost", regret === null ? undefined : fmtPoints(regret.p99Lost)),
+      cell("best moves", regret === null ? undefined : fmtPct(regret.bestShare)),
+      cell("inaccuracies / 100", regret?.inaccuraciesPer100.toFixed(1)),
+      cell("mistakes / 100", regret?.mistakesPer100.toFixed(1)),
+      cell("blunders / 100", regret?.blundersPer100.toFixed(1)),
+      cell("moves", regret?.moves.toLocaleString()),
+    ],
+  );
+};
+
+/** One table of how well each config's moves held the round win chance, best accuracy first. */
+export const accuracyTableView = (h: H, derived: Derived): Html => {
+  const configs = inAccuracyOrder(derived.pooled);
+
+  return h.div(
+    [h.Id("accuracy-table")],
+    [
+      h.h2([], ["Accuracy by config"]),
+      h.p([h.Class("sub")], ["Each move is scored by the round win chance it gave up against the minimax player's best move, with lichess's accuracy formula and its inaccuracy, mistake and blunder cut-offs. Decisions where every move is within a point are left out."]),
+      configs.length === 0
+        ? h.div([h.Class("empty")], ["No config in this filter has a scored move."])
+        : h.div(
+            [h.Class("card")],
+            [
+              h.table(
+                [h.Class("lbt rows")],
+                [
+                  h.thead([], [h.tr([], ACCURACY_HEADERS.map(([label, title]) => h.th(title === "" ? [] : [h.Title(title)], [label])))]),
+                  h.tbody([], configs.map((m, index) => accuracyRowView(h, m, index + 1))),
+                ],
+              ),
+            ],
+          ),
     ],
   );
 };

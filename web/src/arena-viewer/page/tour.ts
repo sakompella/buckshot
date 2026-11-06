@@ -36,7 +36,7 @@ const TOUR: ReadonlyArray<TourStep> = [
     anchor: "scatter",
     focus: "#scatter .card",
     title: "Cost, Moves, Tokens, Accuracy",
-    text: "Each point is a config, a model at one effort, placed by its Round Elo against its cost, model moves or output tokens per match, or its accuracy, 100 minus the mean points of round win chance its moves gave up (higher is better). A click on a point opens that config's drill-down under the chart.",
+    text: "Each point is a config, a model at one effort, placed by its Round Elo against its cost, model moves or output tokens per match, or its accuracy, scored like lichess scores a game from how much win chance each move gave up (higher is better, 100 is perfect). A click on a point opens that config's drill-down under the chart.",
     isReplay: false,
   },
   {
