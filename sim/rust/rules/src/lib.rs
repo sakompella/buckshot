@@ -25,7 +25,7 @@ macro_rules! branch {
     }};
 }
 
-pub mod branch;
+mod branch;
 mod domain;
 mod items;
 mod machine;
@@ -33,6 +33,8 @@ mod point;
 mod rules;
 mod state;
 
+#[cfg(feature = "trace")]
+pub use branch::take_trace;
 pub use domain::{
     AmountRule, Config, Damage, Direction, DrawValue, GameEvent, Gun, HealthRule, Item, ItemRule, Items, Label, Load, LoadRule, Note,
     PHONE_CAP, Range, Ring, RoundRules, Seat, Seats, Secret, Shell, ShellRule, Slot, Slots, Table, prize,

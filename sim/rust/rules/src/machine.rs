@@ -117,7 +117,7 @@ pub fn step(config: &Config, state: State, answer: Answer) -> Stepped {
     let r = &mut run;
     match (state.phase, answer) {
         (Phase::NeedFirst, Answer::Draw(value)) => {
-            branch!(B::SimpleMainAnswerDrawNeedFirst);
+            branch!(B::SimpleMainAnswerDrawStateNeedFirst);
             let seat = config
                 .table()
                 .seats()
@@ -127,28 +127,28 @@ pub fn step(config: &Config, state: State, answer: Answer) -> Stepped {
             first_chosen(r, seat);
         }
         (Phase::NeedHealth, Answer::Draw(value)) => {
-            branch!(B::SimpleMainAnswerDrawNeedHealth);
+            branch!(B::SimpleMainAnswerDrawStateNeedHealth);
             health_chosen(r, value.get());
         }
         (Phase::NeedAmount, Answer::Draw(value)) => {
-            branch!(B::SimpleMainAnswerDrawNeedAmount);
+            branch!(B::SimpleMainAnswerDrawStateNeedAmount);
             amount_chosen(r, value.get());
         }
         (Phase::NeedBatch, Answer::Draw(value)) => {
-            branch!(B::SimpleMainAnswerDrawNeedBatch);
+            branch!(B::SimpleMainAnswerDrawStateNeedBatch);
             batch(r, value.get());
         }
         (Phase::NeedSwap { load, shells, i }, Answer::Draw(value)) => {
-            branch!(B::SimpleMainAnswerDrawNeedSwap);
+            branch!(B::SimpleMainAnswerDrawStateNeedSwap);
             shuffle(r, load, shells.swap(i, value.get()), rules::predecessor(i));
         }
         (Phase::NeedTurnAmount { from, passing, winner }, Answer::Draw(value)) => {
-            branch!(B::SimpleMainAnswerDrawNeedTurnAmount);
+            branch!(B::SimpleMainAnswerDrawStateNeedTurnAmount);
             r.world().item_amount = value.get();
             turn_winner(r, from, passing, winner);
         }
         (Phase::NeedItem { seat, first, second, rest }, Answer::Draw(value)) => {
-            branch!(B::SimpleMainAnswerDrawNeedItem);
+            branch!(B::SimpleMainAnswerDrawStateNeedItem);
             let found = match value.get() {
                 0 => Some(first),
                 1 => Some(second),
@@ -158,7 +158,7 @@ pub fn step(config: &Config, state: State, answer: Answer) -> Stepped {
             grab_distribute(r, seat);
         }
         (Phase::NeedPhone { seat, owner, slot }, Answer::Draw(value)) => {
-            branch!(B::SimpleMainAnswerDrawNeedPhone);
+            branch!(B::SimpleMainAnswerDrawStateNeedPhone);
             item_clue(r, seat, owner, slot, value.get());
         }
         (Phase::Idle { .. } | Phase::Ended | Phase::Blocked { .. } | Phase::Stalled, Answer::Draw(_)) => {
@@ -166,7 +166,7 @@ pub fn step(config: &Config, state: State, answer: Answer) -> Stepped {
             r.set_phase(Phase::Blocked { holder: None });
         }
         (Phase::Idle { seat }, Answer::Choice(legal)) => {
-            branch!(B::SimpleMainAnswerChoiceIdle);
+            branch!(B::SimpleMainAnswerChoiceStateIdle);
             pickup_selected(r, seat, Some(legal.option()));
         }
         (
@@ -977,8 +977,16 @@ fn item_use(r: &mut Run<'_>, seat: Seat, owner: Seat, slot: Slot, item: Item) {
         Item::Phone => {
             branch!(B::SimpleMainItemRoutePhone);
             match length {
-                0..=2 => {
-                    branch!(B::SimpleMainItemPhoneZeroOneTwo);
+                0 => {
+                    branch!(B::SimpleMainItemPhoneZero);
+                    item_consume(r, seat, owner, slot, Item::Phone, false, Some(Secret::NoClue));
+                }
+                1 => {
+                    branch!(B::SimpleMainItemPhoneOne);
+                    item_consume(r, seat, owner, slot, Item::Phone, false, Some(Secret::NoClue));
+                }
+                2 => {
+                    branch!(B::SimpleMainItemPhoneTwo);
                     item_consume(r, seat, owner, slot, Item::Phone, false, Some(Secret::NoClue));
                 }
                 3 => {

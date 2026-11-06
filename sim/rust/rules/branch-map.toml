@@ -1,0 +1,42 @@
+# The hand-kept part of the Bend <-> Rust branch map; `cargo branch-map check`
+# reads it with the Bend sources and the rules crate's Rust.
+
+# Bend defs whose cases have no Rust arm. Each is representation plumbing:
+# a Bend data structure the Rust types replace, whose cases select a field or
+# position and cannot change a rules outcome on their own. Their effect is
+# compared on every tape step through the states, menus and notes.
+[exempt]
+"domain:seat.eq" = "seat equality by constructor pairs; Rust derives PartialEq on Seat"
+"domain:item.godot_id" = "item ids for item.eq; Rust derives PartialEq on Item"
+"domain:ring.fill" = "builds a per-table ring; Rust's Ring is a [T; 4] with its Table"
+"domain:ring.get" = "ring field by seat; Ring::get indexes the array, None off the table as Bend's None"
+"domain:ring.set" = "ring field by seat; Ring::set writes the array, a no-op off the table as in Bend"
+"domain:ring.entries" = "ring as a seat list; Ring::entries iterates the table's seats in socket order"
+"domain:slots.get" = "slot field by slot; Slots is [Option<Item>; 8]"
+"sm/items:slots.put" = "slot field write by slot; Slots::put writes the array"
+"domain:rules.item" = "item rule field by item; Items indexes an array by Item::rank"
+"domain:plan.length" = "round plan length by constructor; Config stores the rounds and their count"
+"domain:plan.round" = "round plan field by index; Config::round indexes the array"
+"domain:clamp" = "Nat recursion computing min(n, top); Range::value clamps with one comparison (the --wild tapes feed out-of-range answers)"
+"sm/rules:subtract" = "Nat recursion for truncated subtraction; Rust uses saturating_sub"
+"sm/rules:nth" = "list index; Gun::nth and fixed arrays"
+"sm/rules:replace" = "list write by index; Gun::set"
+"sm/rules:remove" = "list removal by index; Deck::remove"
+"sm/rules:repeat" = "list of n copies; Gun::from_shells"
+"sm/state:players.health" = "per-table ring projection; Rust reads SeatRecord fields of one Ring"
+"sm/state:players.jam" = "per-table ring projection; Rust reads SeatRecord fields of one Ring"
+"sm/state:players.cash" = "per-table ring projection; Rust reads SeatRecord fields of one Ring"
+"sm/state:players.slots" = "per-table ring projection; Rust reads SeatRecord fields of one Ring"
+"sm/state:players.reset" = "per-table ring rebuild; Rust rewrites the Ring's records"
+"sm/state:decks.get" = "deck field by table; Decks::get"
+"sm/state:decks.set" = "deck field write by table; Decks::set"
+"simple/point:moves" = "maps a menu to its moves; Menu::moves maps the ArrayVec"
+"simple/point:option.nth" = "menu index; Menu::clamped indexes the ArrayVec after Bend's clamp"
+"simple/state:log.list" = "the log as a list; Rust keeps no log in State, each Stepped carries its notes"
+
+# Bend branches with more than one Rust site: variant = { count, reason }.
+[sites]
+
+# Rust control flow with no Bend branch of its own, keyed by file, file:fn,
+# or file:fn:<kind> <expr> as `cargo branch-map check` prints it.
+[rust_only]

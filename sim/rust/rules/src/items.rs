@@ -97,7 +97,6 @@ fn has_seats(seats: Seats) -> bool {
 
 /// `slots.items`: the eight contents in slot order.
 fn slots_items(slots: Slots) -> impl Iterator<Item = Option<Item>> {
-    branch!(B::SmItemsSlotsItemsSlots);
     Slot::ORDER.into_iter().map(move |slot| slots.get(slot))
 }
 
@@ -197,7 +196,6 @@ fn seat_intake(grabs: &Grabs, seat: Seat) -> bool {
 
 /// `grabs.open`.
 fn grabs_open(grabs: Grabs, seat: Seat) -> Grabs {
-    branch!(B::SmItemsGrabsOpenGrabs);
     Grabs {
         distributing: grabs.distributing,
         grabbing: grabs.grabbing.set(seat, true),
@@ -220,7 +218,6 @@ pub(crate) fn grabs_open_all(seats: Seats, grabs: Grabs) -> Grabs {
 
 /// `grabs.stop_intake`.
 pub(crate) fn grabs_stop_intake(grabs: Grabs, seat: Seat) -> Grabs {
-    branch!(B::SmItemsGrabsStopIntakeGrabs);
     Grabs {
         intake: grabs.intake.set(seat, false),
         ..grabs
@@ -229,7 +226,6 @@ pub(crate) fn grabs_stop_intake(grabs: Grabs, seat: Seat) -> Grabs {
 
 /// `grabs.give`.
 pub(crate) fn grabs_give(grabs: Grabs, seat: Seat, item: Item) -> Grabs {
-    branch!(B::SmItemsGrabsGiveGrabs);
     Grabs {
         holding: grabs.holding.set(seat, Some(item)),
         granted: grabs.granted.set(seat, seat_granted(&grabs, seat).saturating_add(1)),
@@ -240,7 +236,6 @@ pub(crate) fn grabs_give(grabs: Grabs, seat: Seat, item: Item) -> Grabs {
 
 /// `grabs.close`.
 pub(crate) fn grabs_close(grabs: Grabs, seat: Seat) -> Grabs {
-    branch!(B::SmItemsGrabsCloseGrabs);
     Grabs {
         grabbing: grabs.grabbing.set(seat, false),
         ..grabs
@@ -249,7 +244,6 @@ pub(crate) fn grabs_close(grabs: Grabs, seat: Seat) -> Grabs {
 
 /// `grabs.placed`: a placed item leaves the hand; intake reopens only while still grabbing.
 pub(crate) fn grabs_placed(grabs: Grabs, seat: Seat) -> Grabs {
-    branch!(B::SmItemsGrabsPlacedGrabs);
     Grabs {
         holding: grabs.holding.set(seat, None),
         intake: grabs.intake.set(seat, seat_grabbing(&grabs, seat)),
@@ -275,7 +269,6 @@ fn owned_table(seats: Seats, players: &Players, grabs: &Grabs, item: Item) -> u3
 
 /// `stock.open`.
 fn stock_open(rule: ItemRule, dealt: bool, own: u32, total: u32) -> bool {
-    branch!(B::SmItemsStockOpenItemRule);
     rule.enabled && dealt && own < rule.per_player && total < rule.on_table
 }
 
@@ -285,7 +278,6 @@ pub(crate) fn pool(config: &Config, state: &State, seat: Seat) -> Items {
     let table = config.table();
     let rules = rules::world_rules(config, &state.world);
     // `pool.go` over `item.order()`.
-    branch!(B::SmItemsRoundItemsRoundRules);
     let mut pool = Items::EMPTY;
     for item in Item::ORDER {
         branch!(B::SmItemsPoolGoCons);

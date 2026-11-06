@@ -1,0 +1,4 @@
+[alias]
+# The verification runs: `branch!` records the Bend branches taken only here.
+trace-test = "test --release --features buckshot-rules/trace"
+branch-map = "run --quiet -p branch-map --"
