@@ -8,6 +8,8 @@ The rules are one flat `Copy` state and an explicit match over every (phase, ans
 
 Equivalence is checked in three layers: a static cross-reference of Bend branches to Rust arms, per-step path traces compared between the two, and differential tests on fuzzed games, recorded arena games with their exact draws, and properties.
 
+A move is graded on exactly the mover's information set (public information plus the mover's own clues), passed explicitly to the search; the true state cannot become one. The search algorithm is a trait over the rules crate, so other algorithms drop in without touching the rules.
+
 The first Rust evaluator is a compatibility mode that reproduces the production regret rows exactly. Deeper search, bounds, a transposition table and a fitted horizon heuristic come later as new evaluator ids.
 
 ## Considered Options
