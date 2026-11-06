@@ -2,20 +2,14 @@
 //! invariants, steps are deterministic, external input never panics, and forged tokens and
 //! arbitrary states are defined (no panic). Set `PROPTEST_CASES` to scale the case counts.
 
-#![allow(
-    clippy::unwrap_used,
-    clippy::expect_used,
-    clippy::indexing_slicing,
-    clippy::arithmetic_side_effects,
-    reason = "test code"
-)]
-
+use std::cell::{Cell, RefCell};
 use std::fmt::Debug;
+use std::hint::black_box;
 
 use buckshot_rules::{
-    AmountRule, Answer, Config, Deck, Decks, Direction, Event, Grabs, Gun, HealthRule, IdleOption, Item, ItemRule, Items, Jam, LegalMove,
-    Load, LoadRule, MENU_CAPACITY, NOTES_CAPACITY, Phase, Range, Request, RequestKind, Ring, RoundRules, RuleError, Seat, SeatRecord,
-    Shell, ShellRule, Slot, Slots, State, Stepped, Table, World, request, start, step, step_event,
+    AmountRule, Answer, Config, Deck, Decks, Direction, Event, FirstDeathCheck, Grabs, Gun, HealthRule, IdleOption, Item, ItemRule, Items,
+    Jam, LegalMove, Load, LoadRule, MENU_CAPACITY, NOTES_CAPACITY, Phase, Range, Request, RequestKind, Ring, RoundRules, RuleError, Seat,
+    SeatRecord, Shell, ShellRule, Slot, Slots, State, Stepped, Table, World, request, start, step, step_event,
 };
 use proptest::collection::vec;
 use proptest::prelude::*;
@@ -99,7 +93,7 @@ fn round_rules(heavy: bool) -> impl Strategy<Value = RoundRules> {
 
 /// A config inside the supported domain: what `rust-tapes.mjs` plays.
 fn supported_config(heavy: bool) -> impl Strategy<Value = Config> {
-    (table(), vec(round_rules(heavy), 1..=3)).prop_map(|(table, rounds)| Config::new(table, &rounds).unwrap())
+    (table(), vec(round_rules(heavy), 1..=3)).prop_filter_map("a valid plan", |(table, rounds)| Config::new(table, &rounds).ok())
 }
 
 fn ring<T: Copy + Debug + 'static>(table: Table, values: impl Strategy<Value = T>) -> impl Strategy<Value = Ring<T>> {
@@ -141,7 +135,8 @@ fn deck(table: Table) -> impl Strategy<Value = Deck> {
 }
 
 fn world() -> BoxedStrategy<World> {
-    let flags = (any::<bool>(), any::<bool>(), any::<bool>(), any::<bool>());
+    let check = prop_oneof![Just(FirstDeathCheck::Off), Just(FirstDeathCheck::On)];
+    let flags = (any::<bool>(), any::<bool>(), check, any::<bool>());
     let counts = (num(), num(), num(), num());
     let seats = (seat(), prop::option::of(seat()), prop::option::of(seat()), direction());
     let gear = (gun(), load());
@@ -237,15 +232,20 @@ fn arbitrary_state(table: Table) -> BoxedStrategy<State> {
 
 /// A draw's raw number: mostly inside the range, sometimes anything.
 fn raw_draw(range: Range, n: u32) -> u32 {
-    if n % 16 == 0 {
+    if n.is_multiple_of(16) {
         n
     } else {
-        u32::try_from(u64::from(n / 16) % (u64::from(range.extra) + 2)).unwrap()
+        let span = u64::from(range.extra).saturating_add(2);
+        u32::try_from(u64::from(n >> 4).checked_rem(span).unwrap_or(0)).unwrap_or(0)
     }
 }
 
 fn raw_choice(len: usize, n: u32) -> u32 {
-    if n % 16 == 0 { n } else { n / 16 % u32::try_from(len).unwrap() }
+    if n.is_multiple_of(16) {
+        n
+    } else {
+        (n >> 4).checked_rem(u32::try_from(len).unwrap_or(1)).unwrap_or(0)
+    }
 }
 
 /// The raw event and the token a request's answer to `n` makes.
@@ -319,10 +319,18 @@ fn check_state(config: &Config, state: &State) -> Result<(), TestCaseError> {
 fn check_step(before: &State, after: &State) -> Result<(), TestCaseError> {
     prop_assert!(after.world.round_index >= before.world.round_index);
     for (seat, record) in after.players.entries() {
-        let old = before.players.get(seat).unwrap();
-        prop_assert!(record.cash >= old.cash, "{seat:?} lost cash");
+        let old = before.players.get(seat).map_or(0, |old| old.cash);
+        prop_assert!(record.cash >= old, "{seat:?} lost cash");
     }
     Ok(())
+}
+
+fn some<T>(value: Option<T>) -> Result<T, TestCaseError> {
+    value.ok_or_else(|| TestCaseError::fail("expected a value"))
+}
+
+fn external(config: &Config, state: State, event: Event) -> Result<Stepped, TestCaseError> {
+    step_event(config, state, event).map_err(|error| TestCaseError::fail(format!("{event:?} at a valid request: {error}")))
 }
 
 /// What one answer does at one point: determinism, event equivalence and the
@@ -336,7 +344,7 @@ fn check_events(
     stepped: &Stepped,
 ) -> Result<(), TestCaseError> {
     prop_assert_eq!(&step(config, state, answer), stepped);
-    prop_assert_eq!(&step_event(config, state, event).unwrap(), stepped);
+    prop_assert_eq!(&external(config, state, event)?, stepped);
     match request {
         Request::Draw { range, .. } => {
             prop_assert_eq!(
@@ -346,8 +354,8 @@ fn check_events(
                     got: RequestKind::Choose
                 })
             );
-            let top = step(config, state, Answer::Draw(range.value(range.extra + 1)));
-            prop_assert_eq!(step_event(config, state, Event::Draw(u32::MAX)).unwrap(), top);
+            let top = step(config, state, Answer::Draw(range.value(range.extra.saturating_add(1))));
+            prop_assert_eq!(external(config, state, Event::Draw(u32::MAX))?, top);
         }
         Request::Choose(menu) => {
             prop_assert_eq!(
@@ -357,9 +365,9 @@ fn check_events(
                     got: RequestKind::Draw
                 })
             );
-            let last = menu.clamped(u32::try_from(menu.len() - 1).unwrap()).unwrap();
+            let last = some(menu.clamped(u32::MAX))?;
             let top = step(config, state, Answer::Choice(last));
-            prop_assert_eq!(step_event(config, state, Event::Choose(u32::MAX)).unwrap(), top);
+            prop_assert_eq!(external(config, state, Event::Choose(u32::MAX))?, top);
         }
         Request::Finished | Request::Stuck => {}
     }
@@ -433,10 +441,10 @@ fn wander(config: &Config, state: State, answers: &[u32]) {
     for n in answers {
         let request = request(config, &state);
         let Some((event, answer)) = answer_for(&request, *n) else {
-            let _ = step_event(config, state, Event::Draw(*n));
+            black_box(step_event(config, state, Event::Draw(*n)).is_ok());
             break;
         };
-        let _ = step_event(config, state, event);
+        black_box(step_event(config, state, event).is_ok());
         state = step(config, state, answer).state;
     }
 }
@@ -465,7 +473,7 @@ proptest! {
             .iter()
             .filter_map(|state| match request(&a, state) {
                 Request::Choose(menu) => Some(menu.moves().collect::<Vec<_>>()),
-                _ => None,
+                Request::Draw { .. } | Request::Finished | Request::Stuck => None,
             })
             .flat_map(|moves| [moves.first().copied(), moves.last().copied()])
             .flatten()
@@ -474,18 +482,18 @@ proptest! {
             .iter()
             .filter_map(|state| match request(&a, state) {
                 Request::Draw { range, .. } => Some(range),
-                _ => None,
+                Request::Choose(_) | Request::Finished | Request::Stuck => None,
             })
             .collect();
         for state in from_b.iter().step_by(3) {
             for legal in &moves {
                 for config in [&a, &b] {
-                    let _ = step(config, *state, Answer::Choice(*legal));
+                    black_box(step(config, *state, Answer::Choice(*legal)));
                 }
             }
             for range in &ranges {
                 for config in [&a, &b] {
-                    let _ = step(config, *state, Answer::Draw(range.value(n)));
+                    black_box(step(config, *state, Answer::Draw(range.value(n))));
                 }
             }
         }
@@ -502,12 +510,12 @@ proptest! {
         n in any::<u32>(),
         answers in vec(any::<u32>(), 40),
     ) {
-        let _ = step_event(&config, state, Event::Draw(n));
-        let _ = step_event(&config, state, Event::Choose(n));
-        let _ = step(&config, state, Answer::Draw(range.value(n)));
+        black_box(step_event(&config, state, Event::Draw(n)).is_ok());
+        black_box(step_event(&config, state, Event::Choose(n)).is_ok());
+        black_box(step(&config, state, Answer::Draw(range.value(n))));
         if let Request::Choose(menu) = request(&config, &state) {
             for legal in menu.moves() {
-                let _ = step(&config, state, Answer::Choice(legal));
+                black_box(step(&config, state, Answer::Choice(legal)));
             }
         }
         wander(&config, state, &answers);
@@ -545,7 +553,7 @@ proptest! {
                 !matches!(round.health, HealthRule::Fixed(0))
                     && round.loads.iter().all(|load| match load.shells {
                         ShellRule::Random => true,
-                        ShellRule::Fixed { live, blank } => blank >= 1 && u64::from(live) + u64::from(blank) <= 64,
+                        ShellRule::Fixed { live, blank } => blank >= 1 && u64::from(live).saturating_add(u64::from(blank)) <= 64,
                         ShellRule::AllLive { live } => (1..=64).contains(&live),
                     })
             });
@@ -553,7 +561,7 @@ proptest! {
             Ok(config) => {
                 prop_assert!(valid);
                 prop_assert_eq!(config.rounds().len(), rounds.len());
-                let _ = start(&config);
+                black_box(start(&config));
             }
             Err(error) => {
                 prop_assert!(!valid);
@@ -565,18 +573,18 @@ proptest! {
 
 #[test]
 fn menus_and_notes_stay_in_capacity() {
-    let seen = std::cell::RefCell::new(Walked::default());
-    let games = std::cell::Cell::new(0);
-    let finished = std::cell::Cell::new(0);
+    let seen = RefCell::new(Walked::default());
+    let games = Cell::<usize>::new(0);
+    let finished = Cell::<usize>::new(0);
     let strategy = (prop_oneof![supported_config(true), supported_config(false)], vec(any::<u32>(), 600));
-    TestRunner::new(config(400))
+    TestRunner::new(config(1000))
         .run(&strategy, |(config, answers)| {
             let walked = walk(&config, &answers)?;
             let mut seen = seen.borrow_mut();
             seen.max_menu = seen.max_menu.max(walked.max_menu);
             seen.max_notes = seen.max_notes.max(walked.max_notes);
-            finished.set(finished.get() + usize::from(walked.finished));
-            games.set(games.get() + 1);
+            finished.set(finished.get().saturating_add(usize::from(walked.finished)));
+            games.set(games.get().saturating_add(1));
             Ok(())
         })
         .unwrap();
