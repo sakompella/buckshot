@@ -12,7 +12,7 @@
 use std::collections::BTreeSet;
 use std::hash::{DefaultHasher, Hash, Hasher};
 
-use buckshot_rules::{Menu, Request, request};
+use buckshot_rules::{Config, Menu, Request, Seat, request};
 
 use super::{Choice, Search, Searched, Span, Value, analysed, limited, lines_static, push_choices, static_value};
 use crate::memo::{Kind, Stored, hash};
@@ -73,16 +73,18 @@ impl BoxEntry {
 }
 
 /// The decision nodes one search visited: every visit, and the distinct
-/// belief keys among them. A key is a 64-bit `SipHash` of the exact memo
-/// key, so two keys collide with odds near `n² / 2^65`.
+/// belief keys among them. A key is a 64-bit `SipHash` of the exact memo key
+/// in the scope a shared table would need (the searcher's seat and the
+/// config), so two keys collide with odds near `n² / 2^65`.
 #[derive(Clone, Debug, Default)]
 pub struct KeyStats {
     pub visits: u64,
     pub keys: BTreeSet<u64>,
 }
 
-fn stats_key(public: &[World], private: &[World]) -> u64 {
+fn stats_key(scope: (Seat, &Config), public: &[World], private: &[World]) -> u64 {
     let mut hasher = DefaultHasher::new();
+    scope.hash(&mut hasher);
     for worlds in [public, private] {
         worlds.len().hash(&mut hasher);
         for world in worlds {
@@ -199,7 +201,7 @@ impl Search<'_> {
             let (public_worlds, private_worlds) = (public.of(&self.worlds), private.of(&self.worlds));
             if let Some(stats) = &mut self.stats {
                 stats.visits = stats.visits.saturating_add(1);
-                stats.keys.insert(stats_key(public_worlds, private_worlds));
+                stats.keys.insert(stats_key((self.me, self.config), public_worlds, private_worlds));
             }
             let key = hash(Kind::Decision, public_worlds, private_worlds);
             if let Some(Stored::Box(entry)) = self.tally.find(key, Kind::Decision, public_worlds, private_worlds)
