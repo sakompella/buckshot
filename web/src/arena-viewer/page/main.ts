@@ -6,7 +6,7 @@ import { modifyFields } from "foldkit/struct";
 import { aggregateUrl, isOnline } from "../../site/online.ts";
 import { type ArenaRoute, arenaHref, arenaStateOf, replayHref } from "../../site/route.ts";
 import { AGGREGATES } from "../aggregates.ts";
-import { CertainMistakes, Decisions, Download, MatchDetailJson, SeatsResponse } from "../api.ts";
+import { CertainMistakes, Download, MatchDetailJson, SeatsResponse } from "../api.ts";
 import { withPotShares } from "./data.ts";
 import { INITIAL_ROWS, MORE_ROWS } from "./matches.ts";
 import { type Filter, Group, GROUPS, type Lazy, type LazyName, LoadFailure, Message, type Model, MOVED_TARGETS, type Replay, Target, type Viewport } from "./model.ts";
@@ -75,8 +75,8 @@ const LOAD_LAZY = { items: LoadItems, odds: LoadOdds, certain: LoadCertain, cons
 
 const LoadLocal = Command.define("LoadLocal", {
   messages: [Message.SucceededLocal, Message.FailedLocal],
-  execute: Effect.all([getJson("/api/seats", SeatsResponse), getJson("/api/decisions", Decisions), getOptional("/api/certain-mistakes", CertainMistakes), getOptional("/api/download", Download)], { concurrency: 4 }).pipe(
-    Effect.map(([seats, decisions, certainMoves, download]) => Message.SucceededLocal({ local: { seats: withPotShares(seats), decisions, certainMoves, download } })),
+  execute: Effect.all([getJson("/api/seats", SeatsResponse), getOptional("/api/certain-mistakes", CertainMistakes), getOptional("/api/download", Download)], { concurrency: 3 }).pipe(
+    Effect.map(([seats, certainMoves, download]) => Message.SucceededLocal({ local: { seats: withPotShares(seats), certainMoves, download } })),
     Effect.catch((error) => Effect.succeed(Message.FailedLocal({ error: describe(error) }))),
     Effect.provide(Http.layer),
   ),
@@ -97,6 +97,8 @@ const GROUP_NEEDS: Readonly<Record<Group, ReadonlyArray<Need>>> = {
 const DRILL_NEEDS: ReadonlyArray<Need> = ["consistency", "items", "local"];
 
 /** Starts fetching each need not yet asked for. The online build has no arena server, so it never asks for the local data. */
+const isLayoutSettled = ({ lazy }: Model): boolean => GROUP_NEEDS.decisions.every((need) => need === "local" || !Predicate.isTagged(lazy[need], "Idle") && !Predicate.isTagged(lazy[need], "Loading"));
+
 const withNeeds = (next: Return, needs: ReadonlyArray<Need>): Return => {
   const { model } = next;
   const lazy = needs.filter((need): need is LazyName => need !== "local" && Predicate.isTagged(model.lazy[need], "Idle"));
@@ -128,6 +130,13 @@ const targetOfHash = (hash: string): Option.Option<Target> => {
   const id = hash.replace(/^#/, "");
 
   return Option.orElse(Schema.decodeUnknownOption(Target)(id), () => Option.fromUndefinedOr(MOVED_TARGETS.get(id)));
+};
+
+/** The data of the group a link to a section or group (`/arena#matches`) points at, which is wanted before the page is long enough to scroll there. */
+const needsOfHash = (): ReadonlyArray<Need> => {
+  const target = Option.getOrUndefined(targetOfHash(location.hash));
+
+  return GROUPS.filter(({ group, sections }) => group === target || sections.some((section) => section === target)).flatMap(({ group }) => GROUP_NEEDS[group]);
 };
 
 const scrollToTarget = (id: Target) => {
@@ -217,6 +226,9 @@ const MeasureNear = Command.define("MeasureNear", {
   execute: nextFrame.pipe(Effect.map(groupsNear)),
 });
 
+/** An aggregate arriving changes the page's height, so which groups are near is measured again. */
+const lazyArrived = (model: Model): Return => ({ model, commands: [MeasureNear()] });
+
 const NO_MARK_TIP: Model["markTip"] = { maybeHover: Option.none(), maybePin: Option.none() };
 
 const withMatches = (model: Model, ids: ReadonlyArray<string>): Return => {
@@ -292,16 +304,16 @@ export const update = (model: Model, message: Message): Return =>
     ClickedTableLink: ({ id }) => ({ model, commands: [OpenTable({ id })] }),
     NavigatedToHash: () => ({ model, commands: [ScrollToHash()] }),
     SucceededLoad: ({ loaded }) => ({ model: modifyFields(model, { data: () => AsyncData.succeed(loaded) }), commands: [AwaitFirstPaint()] }),
-    CompletedFirstPaint: () => ({ model: modifyFields(model, { isFirstPaintDone: () => true }), commands: [ScrollToHash(), MeasureNear()] }),
+    CompletedFirstPaint: () => withNeeds({ model: modifyFields(model, { isFirstPaintDone: () => true }), commands: [ScrollToHash(), MeasureNear()] }, needsOfHash()),
     FailedLoad: ({ failure }) => ({ model: modifyFields(model, { data: () => AsyncData.fail(failure) }) }),
-    SucceededItems: ({ items }) => ({ model: modifyFields(model, { lazy: (lazy) => ({ ...lazy, items: AsyncData.succeed(items) }) }) }),
-    SucceededOdds: ({ odds }) => ({ model: modifyFields(model, { lazy: (lazy) => ({ ...lazy, odds: AsyncData.succeed(odds) }) }) }),
-    SucceededCertain: ({ certain }) => ({ model: modifyFields(model, { lazy: (lazy) => ({ ...lazy, certain: AsyncData.succeed(certain) }) }) }),
-    SucceededConsistency: ({ consistency }) => ({ model: modifyFields(model, { lazy: (lazy) => ({ ...lazy, consistency: AsyncData.succeed(consistency) }) }) }),
-    FailedLazy: ({ name, error }) => ({ model: modifyFields(model, { lazy: (lazy) => withLazy(lazy, name, AsyncData.fail<string, never>(error)) }) }),
+    SucceededItems: ({ items }) => lazyArrived(modifyFields(model, { lazy: (lazy) => ({ ...lazy, items: AsyncData.succeed(items) }) })),
+    SucceededOdds: ({ odds }) => lazyArrived(modifyFields(model, { lazy: (lazy) => ({ ...lazy, odds: AsyncData.succeed(odds) }) })),
+    SucceededCertain: ({ certain }) => lazyArrived(modifyFields(model, { lazy: (lazy) => ({ ...lazy, certain: AsyncData.succeed(certain) }) })),
+    SucceededConsistency: ({ consistency }) => lazyArrived(modifyFields(model, { lazy: (lazy) => ({ ...lazy, consistency: AsyncData.succeed(consistency) }) })),
+    FailedLazy: ({ name, error }) => lazyArrived(modifyFields(model, { lazy: (lazy) => withLazy(lazy, name, AsyncData.fail<string, never>(error)) })),
     SucceededLocal: ({ local }) => ({ model: modifyFields(model, { local: () => AsyncData.succeed(local) }) }),
     FailedLocal: ({ error }) => ({ model: modifyFields(model, { local: () => AsyncData.fail(error) }) }),
-    CameNear: ({ groups }) => withNeeds({ model }, groups.flatMap((group) => GROUP_NEEDS[group])),
+    CameNear: ({ groups }) => withNeeds({ model }, groups.flatMap((group) => GROUP_NEEDS[group]).filter((need) => need !== "local" || isLayoutSettled(model))),
     ToggledEffort: ({ effort }) => withFilter(model, (filter) => ({ ...filter, offEfforts: toggled(filter.offEfforts, effort) })),
     ToggledModel: ({ name }) => withFilter(model, (filter) => ({ ...filter, offModels: toggled(filter.offModels, name) })),
     ScrolledInto: ({ group }) =>
