@@ -266,7 +266,7 @@ fn stock_open(rule: ItemRule, dealt: bool, own: u32, total: u32) -> bool {
 /// count against both caps.
 pub(crate) fn pool(config: &Config, state: &State, seat: Seat) -> Items {
     let table = config.table();
-    let rules = rules::world_rules(config, &state.world);
+    let rules = rules::world_rules_ref(config, &state.world);
     // `pool.go` over `item.order()`.
     branch!(B::SmItemsRoundItemsRoundRules);
     let mut pool = Items::EMPTY;

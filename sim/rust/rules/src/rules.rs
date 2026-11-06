@@ -146,14 +146,22 @@ pub fn predecessor(n: u32) -> u32 {
     }
 }
 
+/// The round past the plan.
+static DEFAULT_ROUND: RoundRules = RoundRules::default_round();
+
 /// `world.rules`: the round's rules, or the default round past the plan.
 pub(crate) fn world_rules(config: &Config, world: &World) -> RoundRules {
+    *world_rules_ref(config, world)
+}
+
+/// [`world_rules`] without the copy.
+pub(crate) fn world_rules_ref<'a>(config: &'a Config, world: &World) -> &'a RoundRules {
     if let Some(round) = config.round(world.round_index) {
         branch!(B::SmRulesValueOrSome);
-        *round
+        round
     } else {
         branch!(B::SmRulesValueOrNone);
-        RoundRules::default_round()
+        &DEFAULT_ROUND
     }
 }
 
