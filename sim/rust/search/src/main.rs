@@ -25,7 +25,8 @@ One JSON row per input decision ({id, ordinal, input}), read from the path or st
   --evaluator compat|bounded-v1
                          compat: Bend's search, bit for bit (default).
                          bounded-v1: the box search; lines add `upper`, the
-                         high end of the private value's box. The best move
+                         high end of the private value's box, and `exact`,
+                         whether the score is exact at the row's depth. The best move
                          and the row's `chosenIndex` move (a menu index, if
                          given) are exact; every other line's box is proved
                          no better. Its budget counts nodes only (no fuel),
@@ -162,7 +163,9 @@ fn analysed(id: &Value, ordinal: &Value, analysis: &Analysis, evaluator: Evaluat
                 .iter()
                 .map(|l| match evaluator {
                     Evaluator::Compat => json!({"score": l.score, "reach": l.reach.name()}),
-                    Evaluator::BoundedV1 => json!({"score": l.score, "upper": l.upper, "reach": l.reach.name()}),
+                    Evaluator::BoundedV1 => {
+                        json!({"score": l.score, "upper": l.upper, "exact": l.score == l.upper, "reach": l.reach.name()})
+                    }
                 })
                 .collect();
             json!({

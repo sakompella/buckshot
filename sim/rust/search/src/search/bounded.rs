@@ -762,6 +762,30 @@ mod tests {
     }
 
     #[test]
+    fn a_later_opponent_move_tied_on_public_loses_to_an_earlier_one_visited_after_it() {
+        let need = Need {
+            public: Window::NONE,
+            private: Window::EXACT,
+        };
+        let visits = [(2, exact(300_000, 900_000)), (0, exact(500_000, 0)), (1, exact(300_000, 100_000))];
+        let mut running = Running::START;
+        let mut menu = [Boxed::ANY; 3];
+        for (j, child) in visits {
+            assert!(running.next(false, j, need).is_some(), "move {j} is searched");
+            running = running.add(j, &child);
+            if let Some(slot) = menu.get_mut(j) {
+                *slot = child;
+            }
+        }
+        assert_eq!(running.lowest, 1, "the first lowest in menu order leads next time");
+        assert_eq!(
+            decide_boxes(false, &menu, 0),
+            Some(exact(300_000, 100_000)),
+            "move 1's private value"
+        );
+    }
+
+    #[test]
     fn a_box_serves_only_at_its_own_depth_and_when_it_meets_the_need() {
         let entry = BoxEntry {
             boxed: boxed((0, TOP), (200_000, 300_000), Reach::Cut),
