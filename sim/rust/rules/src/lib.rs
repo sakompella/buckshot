@@ -21,7 +21,7 @@ macro_rules! branch {
         #[cfg(feature = "trace")]
         $crate::branch::record($b);
         #[cfg(not(feature = "trace"))]
-        let _ = $b;
+        let _: $crate::branch::B = $b;
     }};
 }
 
@@ -39,7 +39,7 @@ pub use domain::{
 };
 pub use machine::{start, step};
 pub use point::request;
-pub use state::{Batch, Deck, Decks, Grabs, Jam, Phase, Players, SeatRecord, State, World};
+pub use state::{Batch, Deck, Decks, FirstDeathCheck, Grabs, Jam, Phase, Players, SeatRecord, State, World};
 
 /// A whole move as the agent tools name it (simple/state.bend `Move`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -244,6 +244,14 @@ impl Notes {
     pub const fn truncated(&self) -> bool {
         self.truncated
     }
+}
+
+/// Pushes `item` onto a list sized for every reachable state (each capacity
+/// documents its bound). A full list means the mirror disagrees with Bend:
+/// debug builds, which run the tapes, stop there; release builds drop the item.
+pub(crate) fn push_bounded<T, const N: usize>(list: &mut ArrayVec<T, N>, item: T) {
+    let full = list.try_push(item).is_err();
+    debug_assert!(!full, "a list outgrew the capacity that bounds every reachable state");
 }
 
 /// The state after an answer and the answer's notes (domain.bend `Stepped`).
