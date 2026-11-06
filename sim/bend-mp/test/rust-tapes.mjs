@@ -3,8 +3,18 @@
 // so the Rust port can be replayed against the same states, requests, answers
 // and notes. States, requests and notes are the machine's own JSON.
 //
-//   node rust-tapes.mjs --random N --seed S [--out PATH]   N games per table size 2, 3, 4
-//   node rust-tapes.mjs --arena K [--db PATH] [--out PATH]  K recorded arena matches, replayed with their draws
+//   node rust-tapes.mjs MODE... [--seeds a,b,c | --seed S] [--steps CAP] [--dir DIR | --out FILE]
+//
+// Modes (each writes DIR/<mode>.jsonl, or FILE when a single mode runs):
+//   --random N         N games per table size 2, 3, 4 with random configs and mostly in-range answers
+//   --items N          N games per table size: every item on, high caps, full item amounts, answers biased to items
+//   --wild N           N games per table size: answers sometimes far out of range (the raw n is recorded)
+//   --edge [G]         hand-made configs with biased answers, G games per scenario, table size and seed (default 3)
+//   --arena K [--spread] [--db PATH]
+//                      K recorded arena matches replayed with their draws; --spread takes them across tournaments
+//
+// Each tape has a sibling <tape>.manifest.json: mode, seeds, settings, games,
+// steps, capped games, lines and a sha256 over every .bend file under sim/bend-mp.
 //
 // A step line: {game, step, config (step 0 only), state, request,
 //   event: {kind: "Draw"|"Choice", n}, next, notes}. n is the answer fed to
@@ -12,41 +22,57 @@
 // for a Choice the menu index. A game ends with {game, step, terminal: true,
 // state, request}; request is Finished or Stuck, or the last request when the
 // step cap cut the game (then capped: true).
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, appendFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, appendFileSync, readdirSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { homedir } from 'node:os';
+import { createHash } from 'node:crypto';
+import { homedir, tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-import { array, kind } from './reference-adapter.mjs';
-import { build, makeRandom, normalize } from './machine-items-lib.mjs';
+import { basename, dirname, join } from 'node:path';
+import { array, config, kind, round } from './reference-adapter.mjs';
+import { build, items, makeRandom, normalize } from './machine-items-lib.mjs';
 
 const arg = (name, fallback) => {
   const at = process.argv.indexOf(`--${name}`);
   return at < 0 ? fallback : process.argv[at + 1];
 };
-const randomGames = arg('random', null), arenaMatches = arg('arena', null);
-const seed = Number(arg('seed', 0x7261636b));
+const flag = name => process.argv.includes(`--${name}`);
+const count = (name, fallback) => {
+  const at = process.argv.indexOf(`--${name}`);
+  if (at < 0) return null;
+  const next = process.argv[at + 1];
+  return next === undefined || next.startsWith('--') ? fallback : Number(next);
+};
+const seeds = String(arg('seeds', arg('seed', 0x7261636b))).split(',').map(Number);
 const MAX_STEPS = Number(arg('steps', 1500));
+
+const bendRoot = fileURLToPath(new URL('..', import.meta.url));
+const bendSources = () => {
+  const files = readdirSync(bendRoot, { recursive: true }).filter(file => file.endsWith('.bend')).sort();
+  const hash = createHash('sha256');
+  for (const file of files) hash.update(`${file}\0`).update(readFileSync(join(bendRoot, file))).update('\0');
+  return { files: files.length, sha256: hash.digest('hex') };
+};
+const sources = bendSources();
 
 const dir = mkdtempSync(join(tmpdir(), 'bend-mp-rust-tapes-'));
 const SA = (await import(build(dir, 'bridge', '../simple-abstract.bend'))).default;
 const N = name => SA[`simple/main:${name}`], M = name => SA[`sm/main:${name}`];
 
-let out, lines = 0, games = 0, steps = 0;
-const open = path => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, ''); out = path; lines = games = steps = 0; };
+let out, lines, games, steps, capped;
+const open = path => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, ''); out = path; lines = games = steps = capped = 0; };
 const emit = line => { appendFileSync(out, `${JSON.stringify(line)}\n`); lines++; };
 const isOpen = request => !['Finished', 'Stuck'].includes(kind(request));
 
-// Plays one game; answerFor(request, state) gives the answer n, or null to stop.
+// Plays one game; answerFor(request, state, step) gives the answer n, or null to stop.
 function play(game, config, answerFor, limit = MAX_STEPS, extra = () => ({})) {
   let state = N('start')(config).state;
   for (let step = 0; ; step++) {
     const request = N('request')(state);
     const n = isOpen(request) && step < limit ? answerFor(request, state, step) : null;
     if (n === null) {
-      emit({ game, step, terminal: true, ...(isOpen(request) && { capped: true }), state: normalize(state), request: normalize(request), ...extra(state, request, step) });
+      emit({ game, step, ...(step === 0 && { config: normalize(config) }), terminal: true, ...(isOpen(request) && { capped: true }), state: normalize(state), request: normalize(request), ...extra(state, request, step) });
       games++;
+      if (isOpen(request)) capped++;
       return request;
     }
     const answered = N('answer')(state, n);
@@ -58,6 +84,74 @@ function play(game, config, answerFor, limit = MAX_STEPS, extra = () => ({})) {
     state = answered.state;
   }
 }
+
+const movesOf = request => [request.moves.head, ...array(request.moves.tail)];
+
+// Answers in range, except one past the end now and then; with `prefer` a move
+// it likes is taken with probability `p`.
+const policy = (random, prefer = null, p = 80) => request => {
+  if (kind(request) === 'Draw') return random() % (Number(request.range.extra) + 2);
+  const moves = movesOf(request);
+  const liked = prefer ? moves.flatMap((move, at) => prefer(move, request) ? [at] : []) : [];
+  return liked.length > 0 && random() % 100 < p ? liked[random() % liked.length] : random() % moves.length;
+};
+
+const big = [2 ** 31, 2 ** 31 - 1, 2 ** 32 - 1, 65536, 1000003];
+const wildPolicy = random => request => {
+  const far = random() % 6 === 0;
+  if (kind(request) === 'Draw') {
+    const span = Number(request.range.extra) + 1;
+    return far ? [span, span + 1, span + random() % 100, big[random() % big.length]][random() % 4] : random() % (span + 1);
+  }
+  const moves = movesOf(request).length;
+  return far ? [moves, moves + 1, moves + random() % 100, big[random() % big.length]][random() % 4] : random() % moves;
+};
+
+const isMove = (...names) => move => names.includes(kind(move));
+const usesItem = name => move => kind(move) === 'Use' && kind(move.item) === name;
+const stealsItem = name => move => kind(move) === 'Steal' && kind(move.item) === name;
+const shootsSelf = (move, request) => kind(move) === 'Shoot' && kind(move.target) === kind(request.seat);
+const shootsOther = (move, request) => kind(move) === 'Shoot' && !shootsSelf(move, request);
+const anyOf = (...tests) => (move, request) => tests.some(test => test(move, request));
+
+const itemRules = (names, per_player = 8, on_table = 32) => Object.fromEntries(names.map(name => [name.toLowerCase(), { per_player, on_table }]));
+const sameLoads = (live, blank, amount) => Array.from({ length: 4 }, () => ({ live, blank, amount }));
+const rounds = (count, spec) => Array.from({ length: count }, () => round(spec));
+
+// Item-heavy configs: every item on with high caps and full amounts, so the
+// slots fill to 8 and every item gets used.
+const itemConfig = (random, seats) => config(seats, Array.from({ length: 1 + random() % 3 }, () => round({
+  health: random() % 4 ? 2 + random() % 4 : null,
+  items: itemRules(items, random() % 4 ? 8 : 1 + random() % 8, 32),
+  loads: Array.from({ length: 4 }, () => {
+    const total = 2 + random() % 7, live = random() % (total + 1);
+    return { live: random() % 4 ? live : null, blank: total - live, amount: random() % 4 ? 8 : random() % 9 };
+  }),
+})));
+
+const itemBiases = [
+  null,
+  isMove('Use'),
+  isMove('Steal', 'StealJam'),
+  isMove('Jam', 'StealJam'),
+  ...items.map(usesItem),
+  ...items.map(stealsItem),
+  shootsSelf,
+  shootsOther,
+];
+
+const edges = [
+  { name: 'slots-max', seats: [2, 3, 4], rules: () => rounds(2, { health: 5, loads: sameLoads(3, 3, 8), items: itemRules(items) }), prefer: () => null },
+  { name: 'jam-everywhere', seats: [2, 3, 4], rules: () => rounds(2, { health: 4, loads: sameLoads(4, 4, 8), items: itemRules(['Jammer']) }), prefer: () => isMove('Jam') },
+  { name: 'steal-jammer-saw', seats: [2, 3, 4], rules: () => rounds(2, { health: 4, loads: sameLoads(4, 4, 6), items: itemRules(['Jammer', 'Saw', 'Adrenaline'], 4) }), prefer: () => isMove('Steal', 'StealJam') },
+  { name: 'phone', seats: [2, 3, 4], rules: () => rounds(2, { health: 3, loads: sameLoads(4, 4, 6), items: itemRules(['Phone', 'Adrenaline', 'Glass']) }), prefer: () => anyOf(usesItem('Phone'), stealsItem('Phone')) },
+  { name: 'inverter', seats: [2, 3], rules: () => rounds(2, { health: 3, loads: sameLoads(3, 3, 6), items: itemRules(['Inverter', 'Glass', 'Beer']) }), prefer: () => anyOf(usesItem('Inverter'), usesItem('Glass')) },
+  { name: 'remote', seats: [3, 4], rules: () => rounds(2, { health: 3, loads: sameLoads(4, 4, 6), items: itemRules(['Remote', 'Adrenaline']) }), prefer: () => anyOf(usesItem('Remote'), stealsItem('Remote')) },
+  { name: 'saw-beer', seats: [2, 4], rules: () => rounds(2, { health: 2, loads: sameLoads(4, 2, 6), items: itemRules(['Saw', 'Beer', 'Cigarettes']) }), prefer: () => isMove('Use') },
+  { name: 'last-round', seats: [2, 3, 4], rules: () => rounds(3, { health: 1, loads: sameLoads(1, 1, 2), items: itemRules(items, 2) }), prefer: () => shootsOther },
+  { name: 'one-health-self', seats: [2, 3, 4], rules: () => rounds(3, { health: 1, loads: sameLoads(2, 0, 2), items: itemRules(['Cigarettes', 'Beer', 'Saw'], 2) }), prefer: () => shootsSelf },
+  { name: 'single-load', seats: [2, 3, 4], rules: () => rounds(2, { health: 2, loads: [{ live: 1, blank: 0, amount: 1 }, { live: 0, blank: 1, amount: 1 }, { live: 1, blank: 0, amount: 0 }, { live: 0, blank: 1, amount: 0 }], items: itemRules(items, 3) }), prefer: () => shootsSelf },
+];
 
 // The arena plays the strong machine (sm) with draws from a seeded generator
 // and moves from agents, so one run of web/'s replay (arena-sm-answers.ts)
@@ -86,7 +180,7 @@ const sockets = n => n === 2 ? [1, 3] : Array.from({ length: n }, (_, i) => i);
 function playArena(recorded) {
   const answers = recorded.answers;
   let at = 0;
-  const report = { id: recorded.id, name: recorded.name, seed: recorded.seed, smAnswers: answers.length, ambiguous: 0, ended: false };
+  const report = { id: recorded.id, tournament: recorded.tournament, name: recorded.name, seed: recorded.seed, smAnswers: answers.length, ambiguous: 0, ended: false };
   const answerFor = (request, state, step) => {
     const menu = kind(request) === 'Draw' ? [answers[at]] : Array.from({ length: 1 + array(request.moves.tail).length }, (_, i) => i);
     const fits = menu.filter(n => {
@@ -120,33 +214,78 @@ function recordedMatches(count) {
   const root = fileURLToPath(new URL('../../../web', import.meta.url));
   const db = arg('db', join(homedir(), 'repos/projects/buckshot/_work/arena/analysis/buckshot.sqlite'));
   const helper = fileURLToPath(new URL('./arena-sm-answers.ts', import.meta.url));
-  const result = spawnSync('bun', [helper, db, String(count)], { cwd: root, encoding: 'utf8', maxBuffer: 1 << 28 });
+  const result = spawnSync('bun', [helper, db, String(count), flag('spread') ? 'spread' : 'stride', String(seeds[0])], { cwd: root, encoding: 'utf8', maxBuffer: 1 << 28 });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`arena-sm-answers failed:\n${result.stderr}`);
   return result.stdout.split('\n').filter(line => line.startsWith('{')).map(line => JSON.parse(line));
 }
 
-try {
-  if (randomGames !== null) {
-    open(arg('out', '/tmp/rust-tapes/random.jsonl'));
+const modes = [];
+const mode = (name, settings, run) => modes.push({ name, settings, run });
+
+const randomGames = count('random', 20), itemGames = count('items', 20), wildGames = count('wild', 20), edgeGames = count('edge', 3), arenaMatches = count('arena', 5);
+
+if (randomGames !== null) mode('random', { perTable: randomGames }, () => {
+  const ends = {};
+  for (const seed of seeds) {
     const { random, randomConfig } = makeRandom(seed);
-    const counts = {};
-    for (const seats of [2, 3, 4]) for (let trial = 0; trial < Number(randomGames); trial++) {
-      const end = play(`random-${seats}-${trial}`, randomConfig(seats), request => kind(request) === 'Draw'
+    for (const seats of [2, 3, 4]) for (let trial = 0; trial < randomGames; trial++) {
+      const end = play(`random-${seed}-${seats}-${trial}`, randomConfig(seats), request => kind(request) === 'Draw'
         ? random() % (Number(request.range.extra) + 2)
         : random() % (1 + array(request.moves.tail).length));
-      counts[kind(end)] = (counts[kind(end)] ?? 0) + 1;
+      ends[kind(end)] = (ends[kind(end)] ?? 0) + 1;
     }
-    console.log(`random tapes: ${games} games, ${steps} answers, ${lines} lines -> ${out}; ends ${JSON.stringify(counts)}`);
-  } else if (arenaMatches !== null) {
-    open(arg('out', '/tmp/rust-tapes/arena.jsonl'));
-    const reports = recordedMatches(Number(arenaMatches)).map(playArena);
-    for (const { divergence, ...report } of reports) console.log(JSON.stringify(report), divergence ? `DIVERGES ${JSON.stringify(divergence)}` : '');
-    console.log(`arena tapes: ${games} games, ${steps} answers, ${lines} lines -> ${out}; ${reports.filter(r => r.ended).length}/${reports.length} reach the recorded end`);
-    if (reports.some(r => !r.ended)) process.exitCode = 1;
-  } else {
-    console.error('usage: rust-tapes.mjs --random N [--seed S] [--steps CAP] [--out PATH] | --arena K [--db PATH] [--out PATH]');
+  }
+  return ends;
+});
+
+if (itemGames !== null) mode('items', { perTable: itemGames }, () => {
+  for (const seed of seeds) {
+    const { random, pick } = makeRandom(seed);
+    for (const seats of [2, 3, 4]) for (let trial = 0; trial < itemGames; trial++) {
+      play(`items-${seed}-${seats}-${trial}`, itemConfig(random, seats), policy(random, pick(itemBiases), 70));
+    }
+  }
+});
+
+if (wildGames !== null) mode('wild', { perTable: wildGames }, () => {
+  for (const seed of seeds) {
+    const { random, pick, randomConfig } = makeRandom(seed);
+    for (const seats of [2, 3, 4]) for (let trial = 0; trial < wildGames; trial++) {
+      play(`wild-${seed}-${seats}-${trial}`, trial % 2 ? randomConfig(seats) : itemConfig(random, seats), wildPolicy(random));
+    }
+  }
+});
+
+if (edgeGames !== null) mode('edge', { perScenario: edgeGames, scenarios: edges.map(edge => edge.name) }, () => {
+  for (const seed of seeds) {
+    const { random } = makeRandom(seed);
+    for (const edge of edges) for (const seats of edge.seats) for (let trial = 0; trial < edgeGames; trial++) {
+      play(`edge-${edge.name}-${seed}-${seats}-${trial}`, config(seats, edge.rules()), policy(random, edge.prefer(), 85));
+    }
+  }
+});
+
+if (arenaMatches !== null) mode(flag('spread') ? 'arena-spread' : 'arena', { matches: arenaMatches, spread: flag('spread'), seed: seeds[0] }, () => {
+  const reports = recordedMatches(arenaMatches).map(playArena);
+  for (const { divergence, ...report } of reports) console.log(JSON.stringify(report), divergence ? `DIVERGES ${JSON.stringify(divergence)}` : '');
+  console.log(`${reports.filter(r => r.ended).length}/${reports.length} reach the recorded end`);
+  if (reports.some(r => !r.ended)) process.exitCode = 1;
+  return { tournaments: new Set(reports.map(r => r.tournament)).size };
+});
+
+try {
+  if (modes.length === 0) {
+    console.error('usage: rust-tapes.mjs [--random N] [--items N] [--wild N] [--edge [G]] [--arena K [--spread] [--db PATH]] [--seeds a,b,c] [--steps CAP] [--dir DIR | --out FILE]');
     process.exitCode = 2;
+  }
+  if (modes.length > 1 && arg('out', null) !== null) throw new Error('--out names one file; use --dir with several modes');
+  for (const { name, settings, run } of modes) {
+    const path = arg('out', null) ?? join(arg('dir', '/tmp/rust-tapes'), `${name}.jsonl`);
+    open(path);
+    const result = run();
+    writeFileSync(`${path}.manifest.json`, `${JSON.stringify({ tape: basename(path), mode: name, seeds, settings: { ...settings, maxSteps: MAX_STEPS }, result, games, steps, capped, lines, bend: sources }, null, 2)}\n`);
+    console.log(`${name} tapes: ${games} games (${capped} capped), ${steps} answers, ${lines} lines -> ${path}`);
   }
 } finally {
   rmSync(dir, { recursive: true });

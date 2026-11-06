@@ -1,8 +1,14 @@
 //! Replays Bend tapes of the simple machine (sim/bend-mp/test/rust-tapes.mjs)
 //! and compares each step's state, request, next state and notes with Bend's.
 //!
-//! Set `RUST_TAPES` to a directory of `*.jsonl` tapes; without it the test is
-//! skipped. A game stops at its first mismatch, which is printed.
+//! The test is ignored so a plain `cargo test` does not pass without Bend:
+//! run `sim/rust/check.sh`, or set `RUST_TAPES` to a directory of `*.jsonl`
+//! tapes, each with a `<tape>.manifest.json`, and pass `--include-ignored`.
+//! It fails on an empty directory, an unreadable or malformed line, a step
+//! without a game, a gap in a game's steps, a game without a terminal line,
+//! truncated notes, an arena game that does not reach its end and a count
+//! that differs from the manifest. A game stops at its first mismatch, which
+//! is printed; games cut by the step cap are counted apart.
 
 #![allow(
     clippy::expect_used,
@@ -12,8 +18,10 @@
     reason = "a test harness: a malformed tape fails loudly"
 )]
 
+use std::collections::HashSet;
 use std::fmt::Debug;
 use std::io::{BufRead, BufReader};
+use std::path::{Path, PathBuf};
 
 use buckshot_rules::{
     AmountRule, Config, Event, GameEvent, HealthRule, ItemRule, LoadRule, Move, Note, Phase, Request, RoundRules, Secret, ShellRule, State,
@@ -269,20 +277,21 @@ fn config(v: &Value) -> Config {
     Config::new(table, &rounds).expect("a valid config")
 }
 
-/// The tape's state without its config and log, which the Rust state does not hold.
-fn bend_state(v: &Value) -> Value {
-    let mut v = v.clone();
+/// Drops from a tape's state the config and log, which the Rust state does not hold.
+fn strip(v: &mut Value) {
     if let Some(world) = v["world"].as_object_mut() {
         world.remove("config");
     }
     if let Some(object) = v.as_object_mut() {
         object.remove("log");
     }
-    v
 }
 
 /// The path to the first difference between two JSON values.
 fn first_diff(a: &Value, b: &Value, path: &str) -> Option<String> {
+    if a == b {
+        return None;
+    }
     match (a, b) {
         (Value::Object(x), Value::Object(y)) => {
             for key in x.keys().chain(y.keys().filter(|key| !x.contains_key(*key))) {
@@ -296,7 +305,6 @@ fn first_diff(a: &Value, b: &Value, path: &str) -> Option<String> {
             }
             None
         }
-        _ if a == b => None,
         _ => Some(format!("{path}: rust {} bend {}", short(a), short(b))),
     }
 }
@@ -309,104 +317,218 @@ fn short(v: &Value) -> String {
 #[derive(Default)]
 struct Tally {
     games: usize,
-    clean: usize,
+    capped: usize,
+    lines: usize,
     steps: usize,
-    mismatches: Vec<String>,
+    matched: usize,
+    problems: Vec<String>,
 }
 
-fn replay(path: &std::path::Path, tally: &mut Tally) {
-    let file = std::fs::File::open(path).expect("a tape");
-    let mut current: Option<(String, Config, State, bool)> = None;
-    for line in BufReader::new(file).lines() {
-        let line = line.expect("a line");
-        if line.is_empty() {
-            continue;
-        }
-        let v: Value = serde_json::from_str(&line).expect("JSON");
-        let game = v["game"].as_str().expect("a game").to_owned();
+struct Game {
+    id: String,
+    cfg: Config,
+    state: State,
+    next_step: u64,
+    agrees: bool,
+}
+
+fn field<'a>(v: &'a Value, key: &str, at: &str) -> Result<&'a Value, String> {
+    v.get(key).ok_or_else(|| format!("{at}: no \"{key}\""))
+}
+
+fn replay(path: &Path, tally: &mut Tally) -> Result<(), String> {
+    let file = std::fs::File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let mut current: Option<Game> = None;
+    let mut seen = HashSet::new();
+    for (index, line) in BufReader::new(file).lines().enumerate() {
+        let at = format!("{}:{}", path.display(), index + 1);
+        let line = line.map_err(|e| format!("{at}: {e}"))?;
+        let mut v: Value = serde_json::from_str(&line).map_err(|e| format!("{at}: {e}"))?;
+        tally.lines += 1;
+        let id = field(&v, "game", &at)?
+            .as_str()
+            .ok_or_else(|| format!("{at}: \"game\" is not a string"))?
+            .to_owned();
+        let id = id.as_str();
+        let step = field(&v, "step", &at)?
+            .as_u64()
+            .ok_or_else(|| format!("{at}: \"step\" is not a number"))?;
         if v.get("config").is_some() {
+            if let Some(unfinished) = &current {
+                return Err(format!("{at}: game {} has no terminal line", unfinished.id));
+            }
+            if step != 0 || !seen.insert(id.to_owned()) {
+                return Err(format!("{at}: game {id} starts at step {step} or repeats an earlier game"));
+            }
             let cfg = config(&v["config"]);
-            let first = start(&cfg).state;
+            let state = start(&cfg).state;
             tally.games += 1;
-            current = Some((game.clone(), cfg, first, true));
+            current = Some(Game {
+                id: id.to_owned(),
+                cfg,
+                state,
+                next_step: 0,
+                agrees: true,
+            });
         }
-        let Some((name, cfg, st, ok)) = current.as_mut() else { continue };
-        if *name != game || !*ok {
-            continue;
+        let game = current
+            .as_mut()
+            .ok_or_else(|| format!("{at}: step line of game {id} without an active game"))?;
+        if game.id != id {
+            return Err(format!("{at}: line of game {id} while game {} has no terminal line", game.id));
         }
-        let step = v["step"].as_u64().unwrap_or(0);
-        let mut fail = |what: &str, diff: Option<String>| {
-            if let Some(diff) = diff {
-                tally.mismatches.push(format!("{game} step {step} {what}: {diff}"));
-                true
-            } else {
-                false
+        if step != game.next_step {
+            return Err(format!("{at}: game {id} step {step} where step {} was expected", game.next_step));
+        }
+        game.next_step += 1;
+        let terminal = v.get("terminal").is_some();
+        if !terminal {
+            tally.steps += 1;
+        }
+        if game.agrees {
+            match compare(game, &mut v, terminal, &at) {
+                Ok(()) => {}
+                Err(mismatch) => {
+                    tally.problems.push(mismatch);
+                    game.agrees = false;
+                }
             }
-        };
-        if fail("state", first_diff(&state(st), &bend_state(&v["state"]), "state"))
-            || fail("request", first_diff(&request_json(&request(cfg, st)), &v["request"], "request"))
-        {
-            *ok = false;
-            continue;
         }
-        if v.get("terminal").is_some() {
-            tally.clean += 1;
-            continue;
+        if game.agrees && !terminal {
+            tally.matched += 1;
         }
-        let n = nat(&v["event"]["n"]);
-        let event = if v["event"]["kind"] == "Draw" {
-            Event::Draw(n)
-        } else {
-            Event::Choose(n)
-        };
-        let stepped = match step_event(cfg, *st, event) {
-            Ok(stepped) => stepped,
-            Err(error) => {
-                tally.mismatches.push(format!("{game} step {step}: {error}"));
-                *ok = false;
-                continue;
+        if terminal {
+            let capped = v.get("capped").is_some_and(|c| c == true);
+            let open = !matches!(v["request"]["$"].as_str(), Some("Finished" | "Stuck"));
+            if capped != open {
+                return Err(format!(
+                    "{at}: game {id} ends on a {} request but capped is {capped}",
+                    v["request"]["$"]
+                ));
             }
-        };
-        let notes = list(stepped.notes.as_slice().iter().map(note_json));
-        if fail("next", first_diff(&state(&stepped.state), &bend_state(&v["next"]), "next"))
-            || fail("notes", first_diff(&notes, &v["notes"], "notes"))
-        {
-            *ok = false;
-            continue;
+            tally.capped += usize::from(capped);
+            let arena = v.get("arena");
+            if id.starts_with("arena-") != arena.is_some() {
+                return Err(format!("{at}: game {id} and its arena report do not go together"));
+            }
+            if let Some(report) = arena
+                && report["ended"] != true
+            {
+                tally
+                    .problems
+                    .push(format!("{id}: the arena game does not reach its recorded end: {}", short(report)));
+            }
+            current = None;
         }
-        tally.steps += 1;
-        *st = stepped.state;
     }
+    match current {
+        Some(unfinished) => Err(format!("{}: game {} has no terminal line", path.display(), unfinished.id)),
+        None => Ok(()),
+    }
+}
+
+/// Compares one line with Rust's state, request and (for a step) next state and notes; advances the game on a step.
+fn compare(game: &mut Game, v: &mut Value, terminal: bool, at: &str) -> Result<(), String> {
+    let mismatch = |what: &str, diff: String| format!("{at} {} {what}: {diff}", game.id);
+    if game.next_step == 1 {
+        strip(&mut v["state"]);
+        if let Some(diff) = first_diff(&state(&game.state), &v["state"], "state") {
+            return Err(mismatch("state", diff));
+        }
+    }
+    if let Some(diff) = first_diff(&request_json(&request(&game.cfg, &game.state)), &v["request"], "request") {
+        return Err(mismatch("request", diff));
+    }
+    if terminal {
+        return Ok(());
+    }
+    let n = nat(&v["event"]["n"]);
+    let event = if v["event"]["kind"] == "Draw" {
+        Event::Draw(n)
+    } else {
+        Event::Choose(n)
+    };
+    let stepped = step_event(&game.cfg, game.state, event).map_err(|error| mismatch("answer", error.to_string()))?;
+    if stepped.notes.truncated() {
+        return Err(mismatch("notes", "Rust's notes were truncated".into()));
+    }
+    let notes = list(stepped.notes.as_slice().iter().map(note_json));
+    strip(&mut v["next"]);
+    if let Some(diff) = first_diff(&state(&stepped.state), &v["next"], "next") {
+        return Err(mismatch("next", diff));
+    }
+    if let Some(diff) = first_diff(&notes, &v["notes"], "notes") {
+        return Err(mismatch("notes", diff));
+    }
+    game.state = stepped.state;
+    Ok(())
+}
+
+fn check_manifest(path: &Path, tally: &mut Tally) -> Result<String, String> {
+    let manifest_path = format!("{}.manifest.json", path.display());
+    let text = std::fs::read_to_string(&manifest_path).map_err(|e| format!("{manifest_path}: {e}"))?;
+    let manifest: Value = serde_json::from_str(&text).map_err(|e| format!("{manifest_path}: {e}"))?;
+    for (key, got) in [
+        ("games", tally.games),
+        ("steps", tally.steps),
+        ("capped", tally.capped),
+        ("lines", tally.lines),
+    ] {
+        if manifest[key].as_u64() != u64::try_from(got).ok() {
+            tally
+                .problems
+                .push(format!("manifest {key} {} but the tape has {got}", manifest[key]));
+        }
+    }
+    if tally.games == 0 {
+        tally.problems.push("the tape has no games".into());
+    }
+    Ok(format!(
+        "{} from {} Bend files, sha256 {}",
+        manifest["mode"].as_str().unwrap_or("?"),
+        manifest["bend"]["files"],
+        manifest["bend"]["sha256"].as_str().unwrap_or("?")
+    ))
 }
 
 #[test]
+#[ignore = "needs RUST_TAPES; run sim/rust/check.sh"]
 fn tapes_match_bend() {
-    let Ok(dir) = std::env::var("RUST_TAPES") else {
-        eprintln!("RUST_TAPES is not set; skipping the Bend tape replay");
-        return;
-    };
-    let mut paths: Vec<_> = std::fs::read_dir(&dir)
-        .expect("RUST_TAPES is a directory")
-        .filter_map(Result::ok)
-        .map(|e| e.path())
+    let dir = std::env::var("RUST_TAPES").expect("RUST_TAPES must name a directory of Bend tapes; run sim/rust/check.sh");
+    let mut paths: Vec<PathBuf> = std::fs::read_dir(&dir)
+        .expect("RUST_TAPES is a readable directory")
+        .map(|entry| entry.expect("a readable directory entry").path())
+        .filter(|path| path.extension().is_some_and(|x| x == "jsonl"))
         .collect();
-    paths.retain(|p| p.extension().is_some_and(|x| x == "jsonl"));
     paths.sort();
+    assert!(!paths.is_empty(), "no *.jsonl tapes in {dir}");
     let mut failed = false;
+    let (mut games, mut capped, mut matched) = (0, 0, 0);
     for path in paths {
         let mut tally = Tally::default();
-        replay(&path, &mut tally);
+        if let Err(error) = replay(&path, &mut tally) {
+            tally.problems.push(error);
+        }
+        let source = check_manifest(&path, &mut tally).unwrap_or_else(|error| {
+            tally.problems.push(error);
+            String::from("no manifest")
+        });
         println!(
-            "{}: {} games, {} replayed to the end, {} steps matched",
+            "{}: {} games ({} capped), {} of {} Bend steps matched [{source}]",
             path.display(),
             tally.games,
-            tally.clean,
+            tally.capped,
+            tally.matched,
             tally.steps
         );
-        for mismatch in &tally.mismatches {
-            println!("  {mismatch}");
+        for problem in &tally.problems {
+            println!("  {problem}");
         }
-        failed |= tally.steps == 0 || !tally.mismatches.is_empty();
+        failed |= !tally.problems.is_empty() || tally.matched != tally.steps;
+        games += tally.games;
+        capped += tally.capped;
+        matched += tally.matched;
     }
+    println!("total: {games} games ({capped} capped), {matched} genuine Bend steps compared");
     assert!(!failed, "the Rust machine differs from Bend's tapes (see above)");
 }
