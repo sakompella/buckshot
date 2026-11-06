@@ -7,10 +7,16 @@
 // Bend tree with br.arm/br.pick around each mapped branch, and labels.json.
 // This builds it, makes br.arm record its id and br.pick record the arm it
 // takes (and evaluate only that arm, as Rust does), and replays each tape.
-// It writes TAPE.jsonl.trace (JSONL; not *.jsonl, which is a tape), one line per
-// tape line:
+// It writes TAPE.jsonl.trace (JSONL; not *.jsonl, which is a tape): first
+//   {untraced: [label...]}
+// the labels whose ids no longer appear in the built JS (Bend folds a match
+// whose arms are all literals, like domain:prize, into a lookup table), then
+// one line per tape line:
 //   {game, step, start?: counts, request: counts, answer?: counts}
 // where counts maps a branch label to the times it was taken in that call.
+// Bend evaluates strictly, so a call also counts branches of work whose
+// result it discards; Rust skips that work, so Rust's count for a label is at
+// most Bend's, not equal to it.
 // A traced step whose next state differs from the tape's is an error: the
 // instrumentation must not change the machine.
 import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
@@ -49,7 +55,7 @@ function lazyPicks(js) {
 }
 
 const dir = mkdtempSync(join(tmpdir(), 'bend-trace-'));
-let SA;
+let SA, untraced;
 try {
   const url = build(dir, 'traced', resolve(tracedDir, 'simple-abstract.bend'));
   const path = new URL(url).pathname;
@@ -59,6 +65,8 @@ try {
   js = js.replace(arms, 'function $1(_id_0, _x_0) {\n  __trace.push(_id_0);\n  return _x_0;\n}');
   js = lazyPicks(js);
   if (armCount === 0 || !js.includes('__pick(')) throw new Error('found no br.arm or br.pick to trace');
+  const seen = new Set([...js.matchAll(/_br_arm\((\d+),|__pick\((\d+),/g)].map(m => Number(m[1] ?? m[2])));
+  untraced = labels.filter((l, id) => !seen.has(id) && !(l.endsWith(':False') && seen.has(labels.indexOf(l.replace(/:False$/, ':True')))));
   js = `const __trace = globalThis.__bendTrace = [];\nconst __pick = (id, c) => (__trace.push(c ? id : -1 - id), c);\n${js}`;
   const traced = join(dir, 'traced-run.mjs');
   writeFileSync(traced, js);
@@ -80,7 +88,7 @@ function counted(run) {
 
 for (const tape of tapes) {
   const lines = readFileSync(tape, 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line));
-  const out = [];
+  const out = [JSON.stringify({ untraced })];
   let differ = 0;
   for (const line of lines) {
     const row = { game: line.game, step: line.step };
@@ -94,6 +102,6 @@ for (const tape of tapes) {
     out.push(JSON.stringify(row));
   }
   writeFileSync(`${tape}.trace`, `${out.join('\n')}\n`);
-  console.log(`${tape}: ${out.length} lines traced, ${differ} next states differ from the tape`);
+  console.log(`${tape}: ${out.length - 1} lines traced, ${differ} next states differ from the tape; untraced: ${untraced.join(' ') || 'none'}`);
   if (differ > 0) process.exitCode = 1;
 }
