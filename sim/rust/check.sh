@@ -21,9 +21,17 @@ cargo fmt --check
 echo "== cargo clippy"
 cargo clippy --all-targets --all-features -- -D warnings
 
-# BRANCH-MAP CHECK: add the branch-map step here (it must fail this script on any failure).
+echo "== cargo branch-map check"
+cargo branch-map check
+
+echo "== Bend branch traces"
+cargo branch-map instrument "$tapes/traced"
+nice -n 10 node "$root/sim/bend-mp/test/bend-trace.mjs" "$tapes/traced" "$tapes"/*.jsonl
 
 echo "== cargo test --release (tape replay against $tapes)"
 RUST_TAPES="$tapes" nice -n 10 cargo test --release -- --include-ignored --nocapture
+
+echo "== cargo trace-test (tape replay with the branch trace comparison)"
+RUST_TAPES="$tapes" nice -n 10 cargo trace-test -- --include-ignored --nocapture
 rm -rf "$tapes"
 echo "== parity gate passed"
