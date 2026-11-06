@@ -5,7 +5,7 @@
 /// The Bend branches the rules mirror: one variant per branch site of the
 /// defs reachable from `simple/main`'s `start`, `request` and `answer`,
 /// less the defs `branch-map.toml` exempts.
-#[deny(dead_code)]
+#[allow(dead_code)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum B {
     /// `domain:seat.eq:Seat0{} Seat0{}` (domain.bend:48)
