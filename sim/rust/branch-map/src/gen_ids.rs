@@ -20,11 +20,12 @@ pub fn ids(rules: &Rules, sites: &[&Site]) -> Result<String, std::fmt::Error> {
         writeln!(out, "    /// `{}` ({}.bend:{})", site.label(), site.module, site.line)?;
         writeln!(out, "    {},", site.variant)?;
     }
-    out.push_str("}\n\n#[cfg(feature = \"trace\")]\nimpl B {\n    /// The Bend branch, as `module:def:pattern`.\n");
-    out.push_str("    pub(crate) const fn label(self) -> &'static str {\n        match self {\n");
+    out.push_str("}\n\n/// Each variant with its Bend branch, as `module:def:pattern`.\n#[cfg(feature = \"trace\")]\nconst LABELS: &[(B, &str)] = &[\n");
     for site in sites {
-        writeln!(out, "            Self::{} => {:?},", site.variant, site.label())?;
+        writeln!(out, "    (B::{}, {:?}),", site.variant, site.label())?;
     }
-    out.push_str("        }\n    }\n}\n");
+    out.push_str(
+        "];\n\n#[cfg(feature = \"trace\")]\nimpl B {\n    /// The Bend branch, as `module:def:pattern`.\n    pub(crate) fn label(self) -> &'static str {\n        LABELS.iter().find(|(b, _)| *b == self).map_or(\"\", |(_, label)| label)\n    }\n}\n",
+    );
     Ok(out)
 }
