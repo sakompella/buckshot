@@ -235,6 +235,16 @@ gate_player() {
   fi
 }
 
+gate_parallel() {
+  local out
+  out="$(bun "$here/test/parallel.mjs" 2>&1)"
+  if [[ $? -eq 0 ]]; then
+    report ok "parallel search prototype" "$(printf '%s' "$out" | tail -1 | cut -c1-200)"
+  else
+    report fail "parallel search prototype" "$(printf '%s' "$out" | tail -20 | cut -c1-600)"
+  fi
+}
+
 gate_fuzz_mutations() {
   local out
   out="$(python3 "$here/tools/fuzz_mutations.py" 2>&1)"
@@ -350,6 +360,7 @@ gate_machine_items
 gate_machine_item_fuzz
 gate_simple_fuzz
 gate_player
+gate_parallel
 gate_mutations
 gate_fuzz_mutations
 gate_simple_mutations

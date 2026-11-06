@@ -223,29 +223,35 @@ type Slot is Data:
   Slot6{}
   Slot7{}
 
+# A field of no words. A record that holds a Boxed of its own type counts as
+# recursive, so the native compiler stores it behind one pointer instead of
+# inlining its words into every record that holds it (Seat, World, Position).
+type Boxed<a, -A: Kind(a)> is Kind(a):
+  Boxed{}
+
 type Slots is Data:
-  Slots{s0: Maybe<&2, Item>, s1: Maybe<&2, Item>, s2: Maybe<&2, Item>, s3: Maybe<&2, Item>, s4: Maybe<&2, Item>, s5: Maybe<&2, Item>, s6: Maybe<&2, Item>, s7: Maybe<&2, Item>}
+  Slots{s0: Maybe<&2, Item>, s1: Maybe<&2, Item>, s2: Maybe<&2, Item>, s3: Maybe<&2, Item>, s4: Maybe<&2, Item>, s5: Maybe<&2, Item>, s6: Maybe<&2, Item>, s7: Maybe<&2, Item>, boxed: Boxed<&2, Slots>}
 
 def slots.empty() -> Slots:
-  Slots{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}}
+  Slots{None{}, None{}, None{}, None{}, None{}, None{}, None{}, None{}, Boxed{}}
 
 def slots.get(slots: Slots, slot: Slot) -> Maybe<&2, Item>:
   match slots slot:
-    case Slots{a, b, c, d, e, f, g, h} Slot0{}:
+    case Slots{a, b, c, d, e, f, g, h, _} Slot0{}:
       a
-    case Slots{a, b, c, d, e, f, g, h} Slot1{}:
+    case Slots{a, b, c, d, e, f, g, h, _} Slot1{}:
       b
-    case Slots{a, b, c, d, e, f, g, h} Slot2{}:
+    case Slots{a, b, c, d, e, f, g, h, _} Slot2{}:
       c
-    case Slots{a, b, c, d, e, f, g, h} Slot3{}:
+    case Slots{a, b, c, d, e, f, g, h, _} Slot3{}:
       d
-    case Slots{a, b, c, d, e, f, g, h} Slot4{}:
+    case Slots{a, b, c, d, e, f, g, h, _} Slot4{}:
       e
-    case Slots{a, b, c, d, e, f, g, h} Slot5{}:
+    case Slots{a, b, c, d, e, f, g, h, _} Slot5{}:
       f
-    case Slots{a, b, c, d, e, f, g, h} Slot6{}:
+    case Slots{a, b, c, d, e, f, g, h, _} Slot6{}:
       g
-    case Slots{a, b, c, d, e, f, g, h} Slot7{}:
+    case Slots{a, b, c, d, e, f, g, h, _} Slot7{}:
       h
 
 # Match configuration
@@ -290,7 +296,7 @@ type ItemRules is Data:
   ItemRules{saw: ItemRule, glass: ItemRule, jammer: ItemRule, cigarettes: ItemRule, beer: ItemRule, phone: ItemRule, inverter: ItemRule, adrenaline: ItemRule, remote: ItemRule}
 
 type RoundRules is Data:
-  RoundRules{health: HealthRule, loads: LoadRules, items: ItemRules}
+  RoundRules{health: HealthRule, loads: LoadRules, items: ItemRules, boxed: Boxed<&2, RoundRules>}
 
 # The UI offers one to three rounds (D23); the type has no other lengths.
 type Plan is Data:
@@ -355,7 +361,7 @@ def config.default_items() -> ItemRules:
 
 def config.default_round() -> RoundRules:
   +load : LoadRule = LoadRule{RandomShells{}, RandomAmount{}}
-  RoundRules{RandomHealth{}, LoadRules{load, load, load, load}, config.default_items()}
+  RoundRules{RandomHealth{}, LoadRules{load, load, load, load}, config.default_items(), Boxed{}}
 
 def config.default(table: Table) -> Config:
   +round : RoundRules = config.default_round()

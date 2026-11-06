@@ -124,7 +124,7 @@ def CheckIfUserHasWon.result(xs: List<&2, D.Seat>) -> Maybe<&2, D.Seat>:
 
 def slots.list(slots: D.Slots) -> List<&2, Maybe<&2, D.Item>>:
   match slots:
-    case D.Slots{a, b, c, d, e, f, g, h}:
+    case D.Slots{a, b, c, d, e, f, g, h, _}:
       [a, b, c, d, e, f, g, h]
 
 def item.count.bool(hit: Bool) -> Nat:

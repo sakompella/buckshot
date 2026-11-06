@@ -47,8 +47,8 @@ A decision node is keyed by both beliefs, each world's state spelled out in full
 
 - `belief.bend` reconstructs synthetic states from public information, enumerates shell orders, replays observations and groups outcomes.
 - `evaluation.bend` holds all starting weights and the static win-share estimate.
-- `search.bend` does bounded paranoid expectiminimax and iterative deepening.
-- `deal.bend` enumerates or samples a reload's deals for the deal leaves.
+- `search.bend` does bounded paranoid expectiminimax and iterative deepening. With `fan` (prototype, native builds only) it searches the root moves in parallel; `test/parallel.mjs` checks the fan against the sequential root.
+- `deal.bend` enumerates or samples a reload's deals for the deal leaves. Sampled deals are valued in a balanced fork tree, so a native build spreads them across threads.
 - `memo.bend` keys beliefs and keeps the memo of decision nodes and deal leaves.
 - `policy.bend` selects a move from completed analysis.
 - `main.bend` is the stable export entry point.

@@ -123,7 +123,7 @@ def found.eq(+m: Maybe<&2, D.RoundRules>) -> {H.rules.found(m) == Q.value.or(D.R
 
 def healthof.eq(+r: D.RoundRules) -> {H.rules.health(r) == Q.round.health(r) : D.HealthRule}:
   match r:
-    case D.RoundRules{+h, +l, +i}:
+    case D.RoundRules{+h, +l, +i, _}:
       {==}
 
 

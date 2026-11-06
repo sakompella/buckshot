@@ -126,10 +126,12 @@ def steal_jam.options(adrenaline: Maybe<&2, D.Slot>, picks: List<&2, S.StealOpti
       steal_jam.picks(slot, picks, targets, Nil{})
 
 def options(+state: T.State, +seat: D.Seat) -> List<&2, T.IdleOption>:
-  +records : S.State = T.state.records(state)
-  +uses : List<&2, S.IdleOption> = I.uses(records, seat)
-  +targets : List<&2, S.JamOption> = I.jam.for(records, seat)
-  +picks : List<&2, S.StealOption> = I.steal.for(records, seat)
+  +players : S.Players = T.state.players(state)
+  +sawed : Bool = S.world.sawed(T.state.world(state))
+  +targets : List<&2, S.JamOption> = I.jam.of(players, seat)
+  +jams : Bool = I.jam.any(targets)
+  +picks : List<&2, S.StealOption> = I.steal.with(players, seat, sawed, jams)
+  +uses : List<&2, S.IdleOption> = I.uses.with(players, seat, sawed, jams, I.steal.any(picks))
   +adrenaline : Maybe<&2, D.Slot> = use.first(uses, D.Adrenaline{})
   List.append(&2, T.IdleOption, shots(G.aim.targets(T.state.players(state))), List.append(&2, T.IdleOption, use.options(uses, Nil{}), List.append(&2, T.IdleOption, jam.options(use.first(uses, D.Jammer{}), targets), List.append(&2, T.IdleOption, steal.options(adrenaline, picks), steal_jam.options(adrenaline, picks, targets)))))
 

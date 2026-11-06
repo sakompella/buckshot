@@ -249,21 +249,21 @@ def heal.eq(+s: S.State, +seat: D.Seat, +shape: A.Shape(s)) -> heal.claim(s, sea
 
 def slot.set.eq(+sl: D.Slots, +slot: D.Slot, +v: Maybe<&2, D.Item>) -> {RI.slots.set(sl, slot, v) == I.slots.put(sl, slot, v) : D.Slots}:
   match sl slot:
-    case D.Slots{+a, +b, +c, +d, +e, +f, +g, +h} D.Slot0{}:
+    case D.Slots{+a, +b, +c, +d, +e, +f, +g, +h, _} D.Slot0{}:
       {==}
-    case D.Slots{+a, +b, +c, +d, +e, +f, +g, +h} D.Slot1{}:
+    case D.Slots{+a, +b, +c, +d, +e, +f, +g, +h, _} D.Slot1{}:
       {==}
-    case D.Slots{+a, +b, +c, +d, +e, +f, +g, +h} D.Slot2{}:
+    case D.Slots{+a, +b, +c, +d, +e, +f, +g, +h, _} D.Slot2{}:
       {==}
-    case D.Slots{+a, +b, +c, +d, +e, +f, +g, +h} D.Slot3{}:
+    case D.Slots{+a, +b, +c, +d, +e, +f, +g, +h, _} D.Slot3{}:
       {==}
-    case D.Slots{+a, +b, +c, +d, +e, +f, +g, +h} D.Slot4{}:
+    case D.Slots{+a, +b, +c, +d, +e, +f, +g, +h, _} D.Slot4{}:
       {==}
-    case D.Slots{+a, +b, +c, +d, +e, +f, +g, +h} D.Slot5{}:
+    case D.Slots{+a, +b, +c, +d, +e, +f, +g, +h, _} D.Slot5{}:
       {==}
-    case D.Slots{+a, +b, +c, +d, +e, +f, +g, +h} D.Slot6{}:
+    case D.Slots{+a, +b, +c, +d, +e, +f, +g, +h, _} D.Slot6{}:
       {==}
-    case D.Slots{+a, +b, +c, +d, +e, +f, +g, +h} D.Slot7{}:
+    case D.Slots{+a, +b, +c, +d, +e, +f, +g, +h, _} D.Slot7{}:
       {==}
 
 # EndItemInteraction: the seat gets its turn back and the Idle menu, or the
@@ -945,21 +945,21 @@ def count.pos(+xs: List<&2, Maybe<&2, D.Item>>, +item: D.Item, +k: Nat, +e: {Q.n
 
 def count.slot(+sl: D.Slots, +slot: D.Slot, +item: D.Item, +e: {D.slots.get(sl, slot) == Some{item} : Maybe<&2, D.Item>}) -> {G.alive(G.item.count(G.slots.list(sl), item)) == True{} : Bool}:
   match sl slot:
-    case D.Slots{+c0, +c1, +c2, +c3, +c4, +c5, +c6, +c7} D.Slot0{}:
+    case D.Slots{+c0, +c1, +c2, +c3, +c4, +c5, +c6, +c7, _} D.Slot0{}:
       count.pos([c0, c1, c2, c3, c4, c5, c6, c7], item, 0n, Equal.cong(Maybe<&2, D.Item>, Maybe<&2, Maybe<&2, D.Item>>, x => Some{x}, c0, Some{item}, e))
-    case D.Slots{+c0, +c1, +c2, +c3, +c4, +c5, +c6, +c7} D.Slot1{}:
+    case D.Slots{+c0, +c1, +c2, +c3, +c4, +c5, +c6, +c7, _} D.Slot1{}:
       count.pos([c0, c1, c2, c3, c4, c5, c6, c7], item, 1n, Equal.cong(Maybe<&2, D.Item>, Maybe<&2, Maybe<&2, D.Item>>, x => Some{x}, c1, Some{item}, e))
-    case D.Slots{+c0, +c1, +c2, +c3, +c4, +c5, +c6, +c7} D.Slot2{}:
+    case D.Slots{+c0, +c1, +c2, +c3, +c4, +c5, +c6, +c7, _} D.Slot2{}:
       count.pos([c0, c1, c2, c3, c4, c5, c6, c7], item, 2n, Equal.cong(Maybe<&2, D.Item>, Maybe<&2, Maybe<&2, D.Item>>, x => Some{x}, c2, Some{item}, e))
-    case D.Slots{+c0, +c1, +c2, +c3, +c4, +c5, +c6, +c7} D.Slot3{}:
+    case D.Slots{+c0, +c1, +c2, +c3, +c4, +c5, +c6, +c7, _} D.Slot3{}:
       count.pos([c0, c1, c2, c3, c4, c5, c6, c7], item, 3n, Equal.cong(Maybe<&2, D.Item>, Maybe<&2, Maybe<&2, D.Item>>, x => Some{x}, c3, Some{item}, e))
-    case D.Slots{+c0, +c1, +c2, +c3, +c4, +c5, +c6, +c7} D.Slot4{}:
+    case D.Slots{+c0, +c1, +c2, +c3, +c4, +c5, +c6, +c7, _} D.Slot4{}:
       count.pos([c0, c1, c2, c3, c4, c5, c6, c7], item, 4n, Equal.cong(Maybe<&2, D.Item>, Maybe<&2, Maybe<&2, D.Item>>, x => Some{x}, c4, Some{item}, e))
-    case D.Slots{+c0, +c1, +c2, +c3, +c4, +c5, +c6, +c7} D.Slot5{}:
+    case D.Slots{+c0, +c1, +c2, +c3, +c4, +c5, +c6, +c7, _} D.Slot5{}:
       count.pos([c0, c1, c2, c3, c4, c5, c6, c7], item, 5n, Equal.cong(Maybe<&2, D.Item>, Maybe<&2, Maybe<&2, D.Item>>, x => Some{x}, c5, Some{item}, e))
-    case D.Slots{+c0, +c1, +c2, +c3, +c4, +c5, +c6, +c7} D.Slot6{}:
+    case D.Slots{+c0, +c1, +c2, +c3, +c4, +c5, +c6, +c7, _} D.Slot6{}:
       count.pos([c0, c1, c2, c3, c4, c5, c6, c7], item, 6n, Equal.cong(Maybe<&2, D.Item>, Maybe<&2, Maybe<&2, D.Item>>, x => Some{x}, c6, Some{item}, e))
-    case D.Slots{+c0, +c1, +c2, +c3, +c4, +c5, +c6, +c7} D.Slot7{}:
+    case D.Slots{+c0, +c1, +c2, +c3, +c4, +c5, +c6, +c7, _} D.Slot7{}:
       count.pos([c0, c1, c2, c3, c4, c5, c6, c7], item, 7n, Equal.cong(Maybe<&2, D.Item>, Maybe<&2, Maybe<&2, D.Item>>, x => Some{x}, c7, Some{item}, e))
 
 def and.cong_true(+a: Bool, +b: Bool, +ea: {a == True{} : Bool}, +eb: {b == True{} : Bool}) -> {Bool.and(a, b) == True{} : Bool}:
