@@ -37,7 +37,8 @@ pub use domain::{
     AmountRule, Config, Damage, Direction, DrawValue, GameEvent, Gun, HealthRule, Item, ItemRule, Items, Label, Load, LoadRule, Note,
     PHONE_CAP, Range, Ring, RoundRules, Seat, Seats, Secret, Shell, ShellRule, Slot, Slots, Table, prize,
 };
-pub use machine::{start, step};
+pub use machine::{initial, start, step};
+pub use rules::{alive, load_actual, load_next, predecessor, world_load_rule};
 pub use point::request;
 pub use state::{Batch, Deck, Decks, Grabs, Jam, Phase, Players, SeatRecord, State, World};
 

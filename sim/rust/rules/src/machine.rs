@@ -60,8 +60,9 @@ impl Run<'_> {
     }
 }
 
-/// `initial`.
-fn initial(config: &Config) -> State {
+/// `initial`: the state before the first round.
+#[must_use]
+pub fn initial(config: &Config) -> State {
     let table = config.table();
     State {
         world: World {

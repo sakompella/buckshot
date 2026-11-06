@@ -15,7 +15,8 @@ pub(crate) enum JamResult {
 }
 
 /// `alive`.
-pub(crate) fn alive(hp: u32) -> bool {
+#[must_use]
+pub fn alive(hp: u32) -> bool {
     match hp {
         0 => {
             branch!(B::SmRulesAliveZero);
@@ -134,7 +135,8 @@ pub(crate) fn jam_rank(players: &Players) -> u32 {
 }
 
 /// `predecessor`.
-pub(crate) fn predecessor(n: u32) -> u32 {
+#[must_use]
+pub fn predecessor(n: u32) -> u32 {
     match n.checked_sub(1) {
         None => {
             branch!(B::SmRulesPredecessorZero);
@@ -167,7 +169,8 @@ pub(crate) const fn round_health(round: &RoundRules) -> HealthRule {
 }
 
 /// `world.load_rule` with `rules.load`.
-pub(crate) fn world_load_rule(config: &Config, world: &World) -> LoadRule {
+#[must_use]
+pub fn world_load_rule(config: &Config, world: &World) -> LoadRule {
     let [a, b, c, d] = world_rules(config, world).loads;
     match world.load_index {
         0 => {
@@ -190,7 +193,8 @@ pub(crate) fn world_load_rule(config: &Config, world: &World) -> LoadRule {
 }
 
 /// `load.actual`.
-pub(crate) fn load_actual(rule: LoadRule, sampled: Load) -> Load {
+#[must_use]
+pub fn load_actual(rule: LoadRule, sampled: Load) -> Load {
     match rule.shells {
         ShellRule::Random => {
             branch!(B::SmRulesLoadActualLoadRuleRandomShells);
@@ -213,7 +217,8 @@ pub(crate) const fn load_amount(rule: LoadRule) -> AmountRule {
 }
 
 /// `load.next`.
-pub(crate) fn load_next(first: bool, index: u32) -> u32 {
+#[must_use]
+pub fn load_next(first: bool, index: u32) -> u32 {
     match (first, index) {
         (true, _) => {
             branch!(B::SmRulesLoadNextTrue);
