@@ -8,6 +8,8 @@ publish = false
 
 [workspace.dependencies]
 arrayvec = { version = "0.7", default-features = false }
+rayon = "1"
+rustc-hash = "2"
 serde_json = "1"
 thiserror = "2"
 

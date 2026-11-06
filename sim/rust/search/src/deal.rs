@@ -4,10 +4,12 @@
 
 use std::collections::BTreeMap;
 
-use buckshot_rules::{Config, Grabs, Item, Phase, Players, Seat, Shell, State, World as Records};
+use buckshot_rules::{Config, Grabs, Item, Notes, Phase, Players, Request, Seat, Shell, State, World as Records, request, step_into};
+use rayon::ThreadPool;
+use rayon::iter::{IntoParallelIterator, ParallelExtend, ParallelIterator};
 
 use crate::evaluation::state_value;
-use crate::machine::{Stepped, answer, draw_range};
+use crate::machine::{round_won, token};
 use crate::num::F32;
 use crate::types::World;
 
@@ -159,68 +161,121 @@ fn deal_value(state: &State, won: Option<Seat>, me: Seat) -> F32 {
 /// A two-seat deal draws at most 19 times, so this fuel is never spent.
 const DEAL_FUEL: u32 = 64;
 
-/// `sample.deal`: word `n` of the deal's stream answers its n-th draw.
-fn sample_deal(config: &Config, start: Stepped, seed: u32) -> Stepped {
-    let mut at = start;
+/// `sample.deal`: word `n` of the deal's stream answers its n-th draw. The
+/// winner is the one the last answer's notes announce.
+fn sample_deal(config: &Config, start: &Start, seed: u32, notes: &mut Notes) -> Option<(State, Option<Seat>)> {
+    let mut state = start.state;
+    let mut won = start.won;
     let mut n = 0u32;
     for _ in 0..DEAL_FUEL {
-        let Some(range) = draw_range(config, &at.state) else {
+        let at = request(config, &state);
+        let Request::Draw { range, .. } = at else {
             break;
         };
         let count = range.extra.wrapping_add(2);
         let k = mix(seed ^ mix(n)).checked_rem(count).unwrap_or(0);
-        at = answer(config, at, k);
+        if let Some(answer) = token(&at, k) {
+            state = step_into(config, state, answer, notes);
+            if notes.truncated() {
+                return None;
+            }
+            won = round_won(notes.as_slice());
+        }
         n = n.wrapping_add(1);
     }
-    at
+    Some((state, won))
 }
 
+#[derive(Clone, Copy, Debug)]
 struct Start {
-    at: Stepped,
+    state: State,
+    won: Option<Seat>,
     public: F32,
     private: F32,
 }
 
-/// `sampled`: the starts merged by key, in key order, each valued by its mean over `count` deals.
-pub fn sampled(config: &Config, public: &[World], private: &[World], me: Seat, count: u32) -> Sums {
-    let mut starts: BTreeMap<Vec<u32>, Start> = BTreeMap::new();
+/// The buffers a sampled leaf reuses: the merged starts and one start's deal values.
+#[derive(Debug, Default)]
+pub struct DealScratch {
+    starts: BTreeMap<Vec<u32>, Start>,
+    values: Vec<Option<F32>>,
+    notes: Notes,
+}
+
+/// One deal's static value, `None` if an answer's notes outgrew their buffer.
+fn deal(config: &Config, start: &Start, seed: u32, k: u32, me: Seat, notes: &mut Notes) -> Option<F32> {
+    let (state, won) = sample_deal(config, start, mix(seed ^ k), notes)?;
+    Some(deal_value(&state, won, me))
+}
+
+/// `sampled`: the starts merged by key, in key order, each valued by its mean
+/// over `count` deals; `None` if an answer's notes outgrew their buffer.
+///
+/// With a pool the deals of a start run in parallel. A deal reads only its
+/// start and its seed, and the memo and the fuel are not touched here, so the
+/// values are the same ones; they are collected by index and summed in the
+/// order Bend sums them, from the last deal to the first.
+pub fn sampled(
+    config: &Config,
+    beliefs: (&[World], &[World]),
+    me: Seat,
+    count: u32,
+    pool: Option<&ThreadPool>,
+    scratch: &mut DealScratch,
+) -> Option<Sums> {
+    let (public, private) = beliefs;
+    let DealScratch { starts, values, notes } = scratch;
+    starts.clear();
     let weighted = public
         .iter()
         .map(|world| (world, world.weight, F32::ZERO))
         .chain(private.iter().map(|world| (world, F32::ZERO, world.weight)));
     for (world, p, q) in weighted {
-        let at = Stepped {
-            state: world.state,
-            won: world.won,
-        };
+        let (state, won) = (world.state, world.won);
         starts
             .entry(key(config, &world.state))
             .and_modify(|start| {
                 *start = Start {
-                    at,
+                    state,
+                    won,
                     public: start.public.add(p),
                     private: start.private.add(q),
                 };
             })
-            .or_insert(Start { at, public: p, private: q });
+            .or_insert(Start {
+                state,
+                won,
+                public: p,
+                private: q,
+            });
     }
     let n = F32::from_u32(count);
-    starts.iter().fold(
-        Sums {
-            public: F32::ZERO,
-            private: F32::ZERO,
-        },
-        |sums, (key, start)| {
-            let seed = key_seed(key, SEED);
-            let total = (0..count).rev().fold(F32::ZERO, |total, k| {
-                let dealt = sample_deal(config, start.at, mix(seed ^ k));
-                total.add(deal_value(&dealt.state, dealt.won, me))
-            });
-            let value = total.div(n);
-            Sums {
-                public: sums.public.add(start.public.mul(value)),
-                private: sums.private.add(start.private.mul(value)),
-            }
-        },
-    )
+    let mut sums = Sums {
+        public: F32::ZERO,
+        private: F32::ZERO,
+    };
+    for (key, start) in starts.iter() {
+        let seed = key_seed(key, SEED);
+        values.clear();
+        match pool {
+            Some(pool) => pool.install(|| {
+                values.par_extend(
+                    (0..count)
+                        .into_par_iter()
+                        .map_init(Notes::default, |own, k| deal(config, start, seed, k, me, own)),
+                );
+            }),
+            None => values.extend((0..count).map(|k| deal(config, start, seed, k, me, notes))),
+        }
+        let total = values
+            .iter()
+            .rev()
+            .try_fold(F32::ZERO, |total, value| value.map(|value| total.add(value)))?;
+        let value = total.div(n);
+        sums = Sums {
+            public: sums.public.add(start.public.mul(value)),
+            private: sums.private.add(start.private.mul(value)),
+        };
+    }
+    Some(sums)
 }

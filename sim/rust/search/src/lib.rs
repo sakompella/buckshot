@@ -17,5 +17,5 @@ mod types;
 
 pub use belief::build;
 pub use position::{Board, Briefcase, Counter, GunView, Heard, Mode, ParseError, Position, RoundView, SeatView, Stage, parse};
-pub use search::{analyse, analyse_belief};
+pub use search::{analyse, analyse_batch, analyse_belief};
 pub use types::{Analysed, Analysis, Belief, Cached, Level, Limits, Line, Memo, Reach, Reload, World};

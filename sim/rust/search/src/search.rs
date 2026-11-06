@@ -3,17 +3,56 @@
 //! the move that minimizes the public value. One fuel bounds every path, as
 //! Bend's single `search` def does: each step spends a unit, and a step that
 //! cannot run spends the iteration.
+//!
+//! The root's moves run one after another and must: each move's search
+//! spends the fuel, the node budget and the memo the moves before it left,
+//! so their results depend on that order.
+//!
+//! The search keeps its working data on stacks that only grow while a
+//! subtree is searched and shrink back once it is done: the worlds of every
+//! branch being searched, the branches, the moves of every open decision and
+//! their scores. A subtree reads its part by [`Span`], so no node allocates.
 
-use buckshot_rules::{Config, GameEvent, Label, Load, Move, Note, Request, Seat, Secret, Shell, Table, request};
+use buckshot_rules::{Config, GameEvent, Label, Load, Move, Note, Notes, Request, Seat, Secret, Shell, Table, request};
+use rayon::ThreadPool;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use crate::belief::build;
-use crate::deal::{Sums, sampled};
+use crate::deal::{DealScratch, Sums, sampled};
 use crate::evaluation::{known, sum};
-use crate::machine::{answer_notes, round_won};
-use crate::memo::{Entry, Key, Kind, Stored, Tally};
+use crate::machine::{answer_into, round_won};
+use crate::memo::{Entry, Kind, Stored, Tally, hash};
 use crate::num::{F32, len_u32};
 use crate::position::Position;
-use crate::types::{Analysed, Analysis, Belief, Line, Memo, Reach, Reload, World};
+use crate::types::{Analysed, Analysis, Belief, Limits, Line, Memo, Reach, Reload, World};
+
+/// A run of a stack: `start..end`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct Span {
+    start: usize,
+    end: usize,
+}
+
+impl Span {
+    pub const fn from(start: usize, end: usize) -> Self {
+        Self { start, end }
+    }
+
+    pub fn of<T>(self, stack: &[T]) -> &[T] {
+        stack.get(self.start..self.end).unwrap_or(&[])
+    }
+
+    const fn is_empty(self) -> bool {
+        self.start >= self.end
+    }
+}
+
+/// Pushes onto `stack` and returns the span of what `fill` pushed.
+fn pushed<T>(stack: &mut Vec<T>, fill: impl FnOnce(&mut Vec<T>)) -> Span {
+    let start = stack.len();
+    fill(stack);
+    Span::from(start, stack.len())
+}
 
 /// What in one world's notes depends on its hidden shells and deck.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -43,54 +82,151 @@ fn seen(notes: &[Note], me: Seat, private: bool, into: &mut Vec<Seen>) {
     }
 }
 
-/// One world after a move, with what the public and the searcher observed.
-#[derive(Clone, Debug)]
+const NO_GROUP: usize = usize::MAX;
+
+/// One world after a move, with what the public and the searcher observed
+/// (spans of [`Buffers::seen`]) and the group it falls in.
+#[derive(Clone, Copy, Debug)]
 struct Out {
     world: World,
-    public: Vec<Seen>,
-    private: Vec<Seen>,
+    public: Span,
+    private: Span,
+    group: usize,
 }
 
+/// Outs that observed the same, the first one's observation as the key.
+#[derive(Clone, Copy, Debug)]
 struct Group {
-    key: Vec<Seen>,
-    outs: Vec<Out>,
+    key: Span,
     mass: F32,
 }
 
-/// `group`: outs by observation, in order of first appearance.
-fn group(outs: impl IntoIterator<Item = Out>, private: bool) -> Vec<Group> {
-    let mut groups: Vec<Group> = Vec::new();
-    for out in outs {
-        let key = if private { &out.private } else { &out.public };
-        match groups.iter_mut().find(|group| group.key == *key) {
-            Some(found) => {
-                found.mass = found.mass.add(out.world.weight);
-                found.outs.push(out);
-            }
-            None => groups.push(Group {
-                key: key.clone(),
-                mass: out.world.weight,
-                outs: vec![out],
-            }),
-        }
-    }
-    groups
+/// The buffers one move's play writes: the notes of the answer and of a
+/// phone draw after it, and what every out observed.
+#[derive(Debug, Default)]
+struct Buffers {
+    notes: Notes,
+    later: Notes,
+    seen: Vec<Seen>,
+    overflow: bool,
 }
 
-/// `worlds.of`: the outs, normalized by their mass.
-fn worlds_of(outs: &[Out], mass: F32) -> Vec<World> {
-    outs.iter()
-        .map(|out| World {
+impl Buffers {
+    /// An out with what the move's notes (if `notes`) and the phone's draw's notes (if `later`) showed.
+    fn out(&mut self, me: Seat, world: World, notes: bool, later: bool) -> Out {
+        let parts: [&[Note]; 2] = [
+            if notes { self.notes.as_slice() } else { &[] },
+            if later { self.later.as_slice() } else { &[] },
+        ];
+        let public = pushed(&mut self.seen, |into| {
+            for part in parts {
+                seen(part, me, false, into);
+            }
+        });
+        let private = pushed(&mut self.seen, |into| {
+            for part in parts {
+                seen(part, me, true, into);
+            }
+        });
+        Out {
+            world,
+            public,
+            private,
+            group: NO_GROUP,
+        }
+    }
+
+    /// `settle`: a move ends at a choice, a draw or the end of the round;
+    /// only the phone's draw is expanded. `stepped` says whether
+    /// [`Buffers::notes`] hold the move's notes.
+    fn settle(&mut self, config: &Config, me: Seat, world: World, stepped: bool, outs: &mut Vec<Out>) {
+        match request(config, &world.state) {
+            Request::Draw {
+                label: Label::PhoneIndex,
+                range,
+            } => {
+                let count = range.extra.wrapping_add(2);
+                let weight = world.weight.div(F32::from_u32(count));
+                for k in (0..count).rev() {
+                    let out = match answer_into(config, &world.state, k, &mut self.later) {
+                        Some(state) => {
+                            self.overflow |= self.later.truncated();
+                            let won = round_won(self.later.as_slice());
+                            self.out(me, World { state, weight, won }, stepped, true)
+                        }
+                        None => self.out(me, World { weight, ..world }, stepped, false),
+                    };
+                    outs.push(out);
+                }
+            }
+            Request::Draw { .. } | Request::Choose(_) | Request::Finished | Request::Stuck => {
+                let out = self.out(me, world, stepped, false);
+                outs.push(out);
+            }
+        }
+    }
+
+    /// `play`: every world after move `index`.
+    fn play(&mut self, config: &Config, me: Seat, worlds: &[World], index: u32, outs: &mut Vec<Out>) {
+        outs.clear();
+        for world in worlds {
+            match answer_into(config, &world.state, index, &mut self.notes) {
+                Some(state) => {
+                    self.overflow |= self.notes.truncated();
+                    let won = round_won(self.notes.as_slice());
+                    let after = World {
+                        state,
+                        weight: world.weight,
+                        won,
+                    };
+                    self.settle(config, me, after, true, outs);
+                }
+                None => self.settle(config, me, *world, false, outs),
+            }
+        }
+    }
+}
+
+/// `group`: outs by observation (the private one with `private`), in order
+/// of first appearance. With `within`, only outs whose public observation is
+/// `within` take part; the rest get no group.
+fn group(outs: &mut [Out], seen: &[Seen], private: bool, within: Option<Span>, groups: &mut Vec<Group>) {
+    groups.clear();
+    for out in outs {
+        out.group = NO_GROUP;
+        if within.is_some_and(|key| out.public.of(seen) != key.of(seen)) {
+            continue;
+        }
+        let key = if private { out.private } else { out.public };
+        let observed = key.of(seen);
+        if let Some((at, found)) = groups.iter_mut().enumerate().find(|(_, group)| group.key.of(seen) == observed) {
+            found.mass = found.mass.add(out.world.weight);
+            out.group = at;
+        } else {
+            out.group = groups.len();
+            groups.push(Group {
+                key,
+                mass: out.world.weight,
+            });
+        }
+    }
+}
+
+/// `worlds.of`: the outs of group `at`, normalized by its mass.
+fn worlds_of(outs: &[Out], at: usize, mass: F32, into: &mut Vec<World>) -> Span {
+    pushed(into, |into| {
+        into.extend(outs.iter().filter(|out| out.group == at).map(|out| World {
             weight: out.world.weight.div(mass),
             ..out.world
-        })
-        .collect()
+        }));
+    })
 }
 
 /// One observation after a move: the public belief, one private belief inside it, and their probabilities.
+#[derive(Clone, Copy, Debug)]
 struct Branch {
-    public: Vec<World>,
-    private: Vec<World>,
+    public: Span,
+    private: Span,
     public_p: F32,
     private_p: F32,
 }
@@ -124,157 +260,129 @@ struct Scored {
     value: Value,
 }
 
+/// A search's result; scores are a span of [`Search::scored`].
+#[derive(Clone, Copy, Debug)]
 enum Searched {
     Value(Value),
-    Scores(Vec<Scored>),
+    Scores(Span),
     Spent,
 }
 
-/// A decision's value goes into the memo under `key`, with the nodes spent before it began.
+/// A decision's value goes into the memo under the beliefs' hash, with the nodes spent before it began.
+#[derive(Clone, Copy, Debug)]
 struct Keep {
-    key: Key,
+    hash: u64,
     start: u64,
 }
 
+/// A decision's choices are a span of [`Search::choices`].
 enum Task {
     Known(Searched),
     Decide {
         mine: bool,
         keep: Option<Keep>,
         depth: u32,
-        choices: Vec<Choice>,
+        choices: Span,
     },
 }
 
-fn choices(menu: &buckshot_rules::Menu) -> Vec<Choice> {
-    menu.moves()
-        .enumerate()
-        .map(|(index, legal)| Choice {
+fn push_choices(menu: &buckshot_rules::Menu, into: &mut Vec<Choice>) -> Span {
+    pushed(into, |into| {
+        into.extend(menu.moves().enumerate().map(|(index, legal)| Choice {
             index: len_u32(index),
             r#move: legal.to_move(),
-        })
-        .collect()
+        }));
+    })
 }
 
 /// `decide`: the searcher takes its best private value, and the public
 /// believes it takes its best public one; an opponent takes the lowest
 /// public value. Ties keep the first move.
-fn decide(mine: bool, result: Searched) -> Searched {
-    match result {
-        Searched::Scores(scored) => {
-            let Some((first, rest)) = scored.split_first() else {
-                return Searched::Spent;
-            };
-            let chosen = rest.iter().fold(first, |best, s| {
-                let better = if mine {
-                    s.value.private > best.value.private
-                } else {
-                    s.value.public < best.value.public
-                };
-                if better { s } else { best }
-            });
-            let public_best = rest.iter().fold(first.value.public, |best, s| best.max(s.value.public));
-            let reach = scored.iter().fold(Reach::Settled, |reach, s| reach.join(s.value.reach));
-            Searched::Value(Value {
-                public: if mine { public_best } else { chosen.value.public },
-                private: chosen.value.private,
-                reach,
-            })
-        }
-        Searched::Value(_) | Searched::Spent => result,
-    }
+fn decide(mine: bool, scored: &[Scored]) -> Searched {
+    let Some((first, rest)) = scored.split_first() else {
+        return Searched::Spent;
+    };
+    let chosen = rest.iter().fold(first, |best, s| {
+        let better = if mine {
+            s.value.private > best.value.private
+        } else {
+            s.value.public < best.value.public
+        };
+        if better { s } else { best }
+    });
+    let public_best = rest.iter().fold(first.value.public, |best, s| best.max(s.value.public));
+    let reach = scored.iter().fold(Reach::Settled, |reach, s| reach.join(s.value.reach));
+    Searched::Value(Value {
+        public: if mine { public_best } else { chosen.value.public },
+        private: chosen.value.private,
+        reach,
+    })
 }
+
+/// One move's play, reused by every move: the outs under each belief and their groups.
+#[derive(Debug, Default)]
+struct Scratch {
+    buffers: Buffers,
+    public_outs: Vec<Out>,
+    private_outs: Vec<Out>,
+    groups: Vec<Group>,
+    private_groups: Vec<Group>,
+}
+
+/// A search whose answers' notes outgrew their buffer, whose values are therefore not Bend's.
+const OVERFLOW: &str = "an answer's notes outgrew their buffer";
 
 struct Search<'a> {
     config: &'a Config,
     me: Seat,
     budget: u64,
+    fuel: u64,
     reload: Reload,
     memo: Memo,
+    pool: Option<&'a ThreadPool>,
     tally: Tally,
+    worlds: Vec<World>,
+    branches: Vec<Branch>,
+    choices: Vec<Choice>,
+    scored: Vec<Scored>,
+    scratch: Scratch,
+    deal: DealScratch,
 }
 
 impl Search<'_> {
-    fn out(&self, world: World, notes: &[Note], later: &[Note]) -> Out {
-        let mut public = Vec::new();
-        let mut private = Vec::new();
-        for part in [notes, later] {
-            seen(part, self.me, false, &mut public);
-            seen(part, self.me, true, &mut private);
-        }
-        Out { world, public, private }
-    }
-
-    /// `settle`: a move ends at a choice, a draw or the end of the round; only the phone's draw is expanded.
-    fn settle(&self, world: World, notes: &[Note], outs: &mut Vec<Out>) {
-        match request(self.config, &world.state) {
-            Request::Draw {
-                label: Label::PhoneIndex,
-                range,
-            } => {
-                let count = range.extra.wrapping_add(2);
-                let weight = world.weight.div(F32::from_u32(count));
-                for k in (0..count).rev() {
-                    let out = match answer_notes(self.config, world.state, k) {
-                        Some((state, later)) => self.out(
-                            World {
-                                state,
-                                weight,
-                                won: round_won(later.as_slice()),
-                            },
-                            notes,
-                            later.as_slice(),
-                        ),
-                        None => self.out(World { weight, ..world }, notes, &[]),
-                    };
-                    outs.push(out);
-                }
-            }
-            Request::Draw { .. } | Request::Choose(_) | Request::Finished | Request::Stuck => outs.push(self.out(world, notes, &[])),
-        }
-    }
-
-    /// `play`: every world after move `index`.
-    fn play(&self, worlds: &[World], index: u32) -> Vec<Out> {
-        let mut outs = Vec::with_capacity(worlds.len());
-        for world in worlds {
-            match answer_notes(self.config, world.state, index) {
-                Some((state, notes)) => self.settle(
-                    World {
-                        state,
-                        weight: world.weight,
-                        won: round_won(notes.as_slice()),
-                    },
-                    notes.as_slice(),
-                    &mut outs,
-                ),
-                None => self.settle(*world, &[], &mut outs),
-            }
-        }
-        outs
-    }
-
-    /// `outcomes`: the observations after move `index`, from normalized beliefs.
-    fn outcomes(&self, public: &[World], private: &[World], index: u32) -> Vec<Branch> {
-        let private_outs = self.play(private, index);
-        let mut branches = Vec::new();
-        for public_group in group(self.play(public, index), false) {
-            let public_worlds = worlds_of(&public_group.outs, public_group.mass);
-            let matching = private_outs.iter().filter(|out| out.public == public_group.key).cloned();
-            let private_groups = group(matching, true);
+    /// `outcomes`: the branches after move `index`, from normalized beliefs,
+    /// pushed onto [`Search::branches`] with their worlds on [`Search::worlds`].
+    fn outcomes(&mut self, public: Span, private: Span, index: u32) -> Span {
+        let Scratch {
+            buffers,
+            public_outs,
+            private_outs,
+            groups,
+            private_groups,
+        } = &mut self.scratch;
+        buffers.seen.clear();
+        buffers.play(self.config, self.me, private.of(&self.worlds), index, private_outs);
+        buffers.play(self.config, self.me, public.of(&self.worlds), index, public_outs);
+        let seen = buffers.seen.as_slice();
+        group(public_outs, seen, false, None, groups);
+        let start = self.branches.len();
+        for (at, public_group) in groups.iter().enumerate() {
+            let public_worlds = worlds_of(public_outs, at, public_group.mass, &mut self.worlds);
+            group(private_outs, seen, true, Some(public_group.key), private_groups);
             if private_groups.is_empty() {
-                branches.push(Branch {
+                self.branches.push(Branch {
                     public: public_worlds,
-                    private: Vec::new(),
+                    private: Span::default(),
                     public_p: public_group.mass,
                     private_p: F32::ZERO,
                 });
             } else {
                 let mut public_p = public_group.mass;
-                for private_group in private_groups {
-                    branches.push(Branch {
-                        public: public_worlds.clone(),
-                        private: worlds_of(&private_group.outs, private_group.mass),
+                for (at_private, private_group) in private_groups.iter().enumerate() {
+                    let private_worlds = worlds_of(private_outs, at_private, private_group.mass, &mut self.worlds);
+                    self.branches.push(Branch {
+                        public: public_worlds,
+                        private: private_worlds,
                         public_p,
                         private_p: private_group.mass,
                     });
@@ -282,20 +390,20 @@ impl Search<'_> {
                 }
             }
         }
-        branches
+        Span::from(start, self.branches.len())
     }
 
-    fn leaf(&self, public: &[World], private: &[World], reach: Reach) -> Searched {
-        let value = static_value(public, self.me);
+    fn leaf(&self, public: Span, private: Span, reach: Reach) -> Searched {
+        let value = static_value(public.of(&self.worlds), self.me);
         Searched::Value(Value {
             public: value,
-            private: static_private(private, self.me, value),
+            private: static_private(private.of(&self.worlds), self.me, value),
             reach,
         })
     }
 
     /// `node.expected`: with no private worlds the private value is the public one.
-    fn expected(sums: Sums, private: &[World]) -> Searched {
+    fn expected(sums: Sums, private: Span) -> Searched {
         let value = sums.public.millionths();
         Searched::Value(Value {
             public: value,
@@ -305,35 +413,50 @@ impl Search<'_> {
     }
 
     /// `node.reload`: a deal leaf's value depends on its beliefs alone, so the memo keeps it whatever the depth.
-    fn reload_leaf(&mut self, public: &[World], private: &[World]) -> Searched {
+    fn reload_leaf(&mut self, public: Span, private: Span) -> Searched {
         let count = match self.reload {
             Reload::Static => return self.leaf(public, private, Reach::Reloads),
             Reload::Sampled { count } => count,
         };
-        let deal = |search: &Self| sampled(search.config, public, private, search.me, count);
-        match self.memo {
-            Memo::Off => Self::expected(deal(self), private),
+        let (public_worlds, private_worlds) = (public.of(&self.worlds), private.of(&self.worlds));
+        let key = match self.memo {
+            Memo::Off => None,
             Memo::Charged | Memo::Free => {
-                let key = Key::new(Kind::Deal, public, private);
-                if let Some(Stored::Deal(sums)) = self.tally.find(&key) {
+                let key = hash(Kind::Deal, public_worlds, private_worlds);
+                if let Some(Stored::Deal(sums)) = self.tally.find(key, Kind::Deal, public_worlds, private_worlds) {
                     self.tally.deal_hit();
                     return Self::expected(sums, private);
                 }
-                let sums = deal(self);
-                self.tally.keep(key, Stored::Deal(sums));
-                Self::expected(sums, private)
+                Some(key)
             }
+        };
+        let Some(sums) = sampled(
+            self.config,
+            (public_worlds, private_worlds),
+            self.me,
+            count,
+            self.pool,
+            &mut self.deal,
+        ) else {
+            self.scratch.buffers.overflow = true;
+            return Searched::Spent;
+        };
+        if let Some(key) = key {
+            self.tally
+                .keep(key, Kind::Deal, (public_worlds, private_worlds), Stored::Deal(sums));
         }
+        Self::expected(sums, private)
     }
 
     /// `node.choose`: an entry serves when its value holds at this depth and,
     /// unless reuse is free, the nodes its search spent still fit the budget.
-    fn choose(&mut self, mine: bool, depth: u32, public: &[World], private: &[World], choices: Vec<Choice>) -> Task {
+    fn choose(&mut self, mine: bool, depth: u32, public: Span, private: Span, menu: &buckshot_rules::Menu) -> Task {
         let keep = match self.memo {
             Memo::Off => None,
             Memo::Charged | Memo::Free => {
-                let key = Key::new(Kind::Decision, public, private);
-                if let Some(Stored::Decision(entry)) = self.tally.find(&key) {
+                let (public_worlds, private_worlds) = (public.of(&self.worlds), private.of(&self.worlds));
+                let key = hash(Kind::Decision, public_worlds, private_worlds);
+                if let Some(Stored::Decision(entry)) = self.tally.find(key, Kind::Decision, public_worlds, private_worlds) {
                     let charge = entry.charge(self.memo);
                     if entry.serves(depth) && self.tally.nodes.saturating_add(charge) <= self.budget {
                         self.tally.hit(charge);
@@ -345,7 +468,7 @@ impl Search<'_> {
                     }
                 }
                 Some(Keep {
-                    key,
+                    hash: key,
                     start: self.tally.nodes,
                 })
             }
@@ -354,15 +477,15 @@ impl Search<'_> {
             mine,
             keep,
             depth,
-            choices,
+            choices: push_choices(menu, &mut self.choices),
         }
     }
 
     /// `node.task`: a choice with depth left is a decision; a won round, a
     /// reload or no depth left is evaluated. A move that won the round is a
     /// leaf even when the next round already began and waits on a choice.
-    fn node_task(&mut self, depth: u32, public: &[World], private: &[World]) -> Task {
-        let Some(first) = public.first() else {
+    fn node_task(&mut self, depth: u32, public: Span, private: Span) -> Task {
+        let Some(first) = public.of(&self.worlds).first().copied() else {
             return Task::Known(Searched::Value(Value {
                 public: 0,
                 private: 0,
@@ -373,13 +496,13 @@ impl Search<'_> {
             return Task::Known(self.leaf(public, private, Reach::Settled));
         }
         match (request(self.config, &first.state), depth.checked_sub(1)) {
-            (Request::Choose(menu), Some(child)) => self.choose(menu.seat() == self.me, child, public, private, choices(&menu)),
+            (Request::Choose(menu), Some(child)) => self.choose(menu.seat() == self.me, child, public, private, &menu),
             (Request::Draw { .. }, _) => Task::Known(self.reload_leaf(public, private)),
             (Request::Choose(_), None) | (Request::Finished | Request::Stuck, _) => Task::Known(self.leaf(public, private, Reach::Cut)),
         }
     }
 
-    fn node(&mut self, fuel: u64, depth: u32, public: &[World], private: &[World]) -> Searched {
+    fn node(&mut self, fuel: u64, depth: u32, public: Span, private: Span) -> Searched {
         let Some(fuel) = fuel.checked_sub(1) else {
             return Searched::Spent;
         };
@@ -396,25 +519,28 @@ impl Search<'_> {
                 keep,
                 depth,
                 choices,
-            } => self.decide(fuel, mine, keep, depth, (public, private), &choices),
+            } => {
+                let result = self.decide(fuel, mine, keep, depth, (public, private), choices);
+                self.choices.truncate(choices.start);
+                result
+            }
         }
     }
 
-    fn decide(
-        &mut self,
-        fuel: u64,
-        mine: bool,
-        keep: Option<Keep>,
-        depth: u32,
-        beliefs: (&[World], &[World]),
-        choices: &[Choice],
-    ) -> Searched {
+    fn decide(&mut self, fuel: u64, mine: bool, keep: Option<Keep>, depth: u32, beliefs: (Span, Span), choices: Span) -> Searched {
         let (public, private) = beliefs;
         let Some(fuel) = fuel.checked_sub(1) else {
             return Searched::Spent;
         };
-        let result = decide(mine, self.moves(fuel, depth, public, private, choices));
-        if let (Some(Keep { key, start }), Searched::Value(value)) = (keep, &result) {
+        let result = match self.moves(fuel, depth, public, private, choices) {
+            Searched::Scores(scores) => {
+                let decided = decide(mine, scores.of(&self.scored));
+                self.scored.truncate(scores.start);
+                decided
+            }
+            other @ (Searched::Value(_) | Searched::Spent) => other,
+        };
+        if let (Some(Keep { hash, start }), Searched::Value(value)) = (keep, result) {
             let entry = Entry {
                 public: value.public,
                 private: value.private,
@@ -422,52 +548,78 @@ impl Search<'_> {
                 depth,
                 cost: self.tally.nodes.saturating_sub(start),
             };
-            self.tally.keep(key, Stored::Decision(entry));
+            let (public_worlds, private_worlds) = (public.of(&self.worlds), private.of(&self.worlds));
+            self.tally
+                .keep(hash, Kind::Decision, (public_worlds, private_worlds), Stored::Decision(entry));
         }
         result
     }
 
-    /// The moves of a decision in menu order. A move costs one node per world
-    /// it is played in; a move the budget cannot pay for spends the iteration.
-    fn moves(&mut self, fuel: u64, depth: u32, public: &[World], private: &[World], choices: &[Choice]) -> Searched {
+    /// The moves of a decision in menu order, scored onto [`Search::scored`].
+    /// A move costs one node per world it is played in; a move the budget
+    /// cannot pay for spends the iteration.
+    fn moves(&mut self, fuel: u64, depth: u32, public: Span, private: Span, choices: Span) -> Searched {
         let mut fuel = fuel;
-        let mut scored = Vec::with_capacity(choices.len());
-        for choice in choices {
-            let Some(after) = fuel.checked_sub(1) else {
+        let start = self.scored.len();
+        for at in choices.start..choices.end {
+            let Some(choice) = self.choices.get(at).copied() else {
+                break;
+            };
+            let after = fuel.checked_sub(1);
+            let result = match after {
+                Some(after) => self.option(after, depth, public, private, choice.index),
+                None => Searched::Spent,
+            };
+            let (Some(next), Searched::Value(value)) = (after.and_then(|after| after.checked_sub(1)), result) else {
+                self.scored.truncate(start);
                 return Searched::Spent;
             };
-            let result = self.option(after, depth, public, private, choice.index);
-            let (Some(next), Searched::Value(value)) = (after.checked_sub(1), result) else {
-                return Searched::Spent;
-            };
-            scored.push(Scored { choice: *choice, value });
+            self.scored.push(Scored { choice, value });
             fuel = next;
         }
-        if fuel == 0 { Searched::Spent } else { Searched::Scores(scored) }
+        if fuel == 0 {
+            self.scored.truncate(start);
+            Searched::Spent
+        } else {
+            Searched::Scores(Span::from(start, self.scored.len()))
+        }
     }
 
-    fn option(&mut self, fuel: u64, depth: u32, public: &[World], private: &[World], index: u32) -> Searched {
-        let worlds = u64::try_from(public.len().saturating_add(private.len())).unwrap_or(u64::MAX);
+    fn option(&mut self, fuel: u64, depth: u32, public: Span, private: Span, index: u32) -> Searched {
+        let worlds = u64::try_from(
+            public
+                .end
+                .saturating_sub(public.start)
+                .saturating_add(private.end.saturating_sub(private.start)),
+        )
+        .unwrap_or(u64::MAX);
         let spent = self.tally.nodes.saturating_add(worlds);
         if spent > self.budget {
             return Searched::Spent;
         }
         self.tally.nodes = spent;
+        let mark = self.worlds.len();
         let branches = self.outcomes(public, private, index);
-        self.branches(fuel, depth, &branches)
+        let result = self.branches(fuel, depth, branches);
+        self.branches.truncate(branches.start);
+        self.worlds.truncate(mark);
+        result
     }
 
     /// The branch sums: probability times value under each belief, and the branches' reach.
-    fn branches(&mut self, fuel: u64, depth: u32, branches: &[Branch]) -> Searched {
+    fn branches(&mut self, fuel: u64, depth: u32, branches: Span) -> Searched {
         let mut fuel = fuel;
         let mut public = F32::ZERO;
         let mut private = F32::ZERO;
         let mut reach = Reach::Settled;
-        for branch in branches {
+        for at in branches.start..branches.end {
+            let Some(branch) = self.branches.get(at).copied() else {
+                break;
+            };
             let Some(after) = fuel.checked_sub(1) else {
                 return Searched::Spent;
             };
-            let result = self.node(after, depth, &branch.public, &branch.private);
+            let result = self.node(after, depth, branch.public, branch.private);
             let (Some(next), Searched::Value(value)) = (after.checked_sub(1), result) else {
                 return Searched::Spent;
             };
@@ -484,6 +636,45 @@ impl Search<'_> {
                 private: private.millionths(),
                 reach,
             })
+        }
+    }
+
+    fn lines(&self, scores: Span) -> Vec<Line> {
+        scores
+            .of(&self.scored)
+            .iter()
+            .map(|s| Line {
+                index: s.choice.index,
+                r#move: s.choice.r#move,
+                score: s.value.private,
+                reach: s.value.reach,
+            })
+            .collect()
+    }
+
+    /// `root` with `deepen`: iterative deepening, the tally running on across
+    /// depths. Only a finished iteration replaces the completed analysis.
+    fn root(&mut self, depth: u32, public: Span, private: Span, choices: Span) -> Analysis {
+        let static_lines = lines_static(choices.of(&self.choices), static_value(private.of(&self.worlds), self.me));
+        if depth == 0 {
+            return analysed(static_lines, &Tally::default(), 0, false);
+        }
+        let mut completed = analysed(static_lines, &Tally::default(), 0, true);
+        let mut current = 0u32;
+        let mut steps = depth;
+        loop {
+            let scores = match self.moves(self.fuel, current, public, private, choices) {
+                Searched::Scores(scores) => scores,
+                Searched::Value(_) | Searched::Spent => return limited(completed, &self.tally),
+            };
+            current = current.saturating_add(1);
+            let done = analysed(self.lines(scores), &self.tally, current, false);
+            self.scored.truncate(scores.start);
+            let Some(rest) = steps.checked_sub(1).filter(|rest| *rest > 0) else {
+                return done;
+            };
+            steps = rest;
+            completed = done;
         }
     }
 }
@@ -523,18 +714,6 @@ fn limited(completed: Analysis, tally: &Tally) -> Analysis {
     }
 }
 
-fn lines_of(scored: &[Scored]) -> Vec<Line> {
-    scored
-        .iter()
-        .map(|s| Line {
-            index: s.choice.index,
-            r#move: s.choice.r#move,
-            score: s.value.private,
-            reach: s.value.reach,
-        })
-        .collect()
-}
-
 /// Every move scores the static value of the belief, with no move played.
 fn lines_static(choices: &[Choice], score: u32) -> Vec<Line> {
     choices
@@ -548,37 +727,10 @@ fn lines_static(choices: &[Choice], score: u32) -> Vec<Line> {
         .collect()
 }
 
-/// `root` with `deepen`: iterative deepening, the tally running on across
-/// depths. Only a finished iteration replaces the completed analysis.
-fn root(search: &mut Search<'_>, depth: u32, public: &[World], private: &[World], choices: &[Choice]) -> Analysis {
-    let static_lines = lines_static(choices, static_value(private, search.me));
-    if depth == 0 {
-        return analysed(static_lines, &Tally::default(), 0, false);
-    }
-    let fuel = search.budget.saturating_mul(8).saturating_add(64);
-    let mut completed = analysed(static_lines, &Tally::default(), 0, true);
-    let mut attempt = search.moves(fuel, 0, public, private, choices);
-    let mut current = 1u32;
-    let mut steps = depth.saturating_sub(1);
-    loop {
-        let scored = match attempt {
-            Searched::Scores(scored) => scored,
-            Searched::Value(_) | Searched::Spent => return limited(completed, &search.tally),
-        };
-        let done = analysed(lines_of(&scored), &search.tally, current, false);
-        let Some(rest) = steps.checked_sub(1) else {
-            return done;
-        };
-        steps = rest;
-        completed = done;
-        attempt = search.moves(fuel, current, public, private, choices);
-        current = current.saturating_add(1);
-    }
-}
-
-/// `root.belief`: the analysis of a built belief.
+/// `root.belief`: the analysis of a built belief. A pool runs the deals of
+/// a sampled leaf in parallel and leaves the analysis as it is.
 #[must_use]
-pub fn analyse_belief(config: &Config, belief: &Belief, depth: u32, budget: u64, reload: Reload, memo: Memo) -> Analysis {
+pub fn analyse_belief(config: &Config, belief: &Belief, limits: Limits, reload: Reload, memo: Memo, pool: Option<&ThreadPool>) -> Analysis {
     let Some(first) = belief.public.first() else {
         return invalid("public log has no consistent shell/deck belief", 0);
     };
@@ -589,20 +741,39 @@ pub fn analyse_belief(config: &Config, belief: &Belief, depth: u32, budget: u64,
     if menu.seat() != belief.me {
         return invalid("it is not this player's turn", 0);
     }
+    // `fuel`: Bend's Nat cannot overflow; a budget whose fuel outgrows u64 is refused.
+    let Some(fuel) = limits.budget.checked_mul(8).and_then(|fuel| fuel.checked_add(64)) else {
+        return invalid("the budget's fuel outgrows 64 bits", 0);
+    };
     let mut search = Search {
         config,
         me: belief.me,
-        budget,
+        budget: limits.budget,
+        fuel,
         reload,
         memo,
+        pool,
         tally: Tally::default(),
+        worlds: Vec::new(),
+        branches: Vec::new(),
+        choices: Vec::new(),
+        scored: Vec::new(),
+        scratch: Scratch::default(),
+        deal: DealScratch::default(),
     };
-    root(&mut search, depth, &belief.public, &belief.private, &choices(&menu))
+    let public = pushed(&mut search.worlds, |into| into.extend_from_slice(&belief.public));
+    let private = pushed(&mut search.worlds, |into| into.extend_from_slice(&belief.private));
+    let choices = push_choices(&menu, &mut search.choices);
+    let analysis = search.root(limits.depth, public, private, choices);
+    if search.scratch.buffers.overflow {
+        return invalid(OVERFLOW, search.tally.nodes);
+    }
+    analysis
 }
 
-/// `analyse`: the position's analysis to `depth` decisions within `budget` nodes.
+/// `analyse`: the position's analysis to `limits.depth` decisions within `limits.budget` nodes.
 #[must_use]
-pub fn analyse(position: &Position, depth: u32, budget: u64, reload: Reload, memo: Memo) -> Analysis {
+pub fn analyse(position: &Position, limits: Limits, reload: Reload, memo: Memo, pool: Option<&ThreadPool>) -> Analysis {
     match reload {
         Reload::Static => {}
         Reload::Sampled { count: 0 } => return invalid("the sampled leaf needs at least one deal", 0),
@@ -613,9 +784,22 @@ pub fn analyse(position: &Position, depth: u32, budget: u64, reload: Reload, mem
         }
     }
     match build(position) {
-        Ok(belief) => analyse_belief(&position.config, &belief, depth, budget, reload, memo),
+        Ok(belief) => analyse_belief(&position.config, &belief, limits, reload, memo, pool),
         Err(reason) => invalid(reason, 0),
     }
+}
+
+/// [`analyse`] of every position on `pool`, in input order. Each position is
+/// searched alone, with its own memo and tally, so each analysis is the one
+/// [`analyse`] gives.
+#[must_use]
+pub fn analyse_batch(positions: &[Position], limits: Limits, reload: Reload, memo: Memo, pool: &ThreadPool) -> Vec<Analysis> {
+    pool.install(|| {
+        positions
+            .par_iter()
+            .map(|position| analyse(position, limits, reload, memo, Some(pool)))
+            .collect()
+    })
 }
 
 #[cfg(test)]
@@ -627,7 +811,7 @@ mod tests {
 
     use super::analyse_belief;
     use crate::num::F32;
-    use crate::types::{Analysis, Belief, Memo, Reach, Reload, World};
+    use crate::types::{Analysis, Belief, Limits, Memo, Reach, Reload, World};
 
     /// Two seats at 2 health, a one-shell live load and no items.
     fn config() -> Result<Config, RuleError> {
@@ -695,7 +879,14 @@ mod tests {
             me,
             round: 0,
         };
-        let Analysis::Analysed(done) = analyse_belief(&config, &belief, 4, 20_000, Reload::Static, Memo::Off) else {
+        let Analysis::Analysed(done) = analyse_belief(
+            &config,
+            &belief,
+            Limits { depth: 4, budget: 20_000 },
+            Reload::Static,
+            Memo::Off,
+            None,
+        ) else {
             return Err(RuleError::Config("the fixture should analyse"));
         };
         let at = |own: bool| {
