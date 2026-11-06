@@ -15,7 +15,7 @@ pub fn ids(rules: &Rules, sites: &[&Site]) -> Result<String, std::fmt::Error> {
          /// defs reachable from `simple/main`'s `start`, `request` and `answer`,\n\
          /// less the defs `branch-map.toml` exempts.\n",
     );
-    out.push_str("#[allow(dead_code)]\n#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]\npub(crate) enum B {\n");
+    out.push_str("#[deny(dead_code)]\n#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]\npub(crate) enum B {\n");
     for site in sites {
         writeln!(out, "    /// `{}` ({}.bend:{})", site.label(), site.module, site.line)?;
         writeln!(out, "    {},", site.variant)?;

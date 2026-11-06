@@ -3,7 +3,8 @@
 //! per enclosing mapped case, and each `Bool.pick(T, c, a, b)` becomes
 //! `br.pick(T, id, c, a, b)`. Both are identities in Bend; the JS build's
 //! post-pass (sim/bend-mp/test/bend-trace.mjs) makes them push the ids.
-//! `labels.json` lists the label of each id, as `B::label` gives it.
+//! `labels.json` lists the label of each id, as `B::label` gives it;
+//! `untimed.json` the labels of `[untimed]` defs.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -20,7 +21,7 @@ def br.pick(-A: Data, id: Nat, c: Bool, t: A, f: A) -> A:
   Bool.pick(A, c, t, f)
 ";
 
-pub fn write(bend_dir: &Path, out: &Path, rules: &Rules, sites: &[&Site]) -> Result<()> {
+pub fn write(bend_dir: &Path, out: &Path, rules: &Rules, sites: &[&Site], untimed: &[String]) -> Result<()> {
     copy_tree(bend_dir, out)?;
     let ids: BTreeMap<String, usize> = sites.iter().enumerate().map(|(id, s)| (s.label(), id)).collect();
     for module in &rules.modules {
@@ -43,6 +44,8 @@ pub fn write(bend_dir: &Path, out: &Path, rules: &Rules, sites: &[&Site]) -> Res
     }
     let labels: Vec<String> = sites.iter().map(|s| format!("{:?}", s.label())).collect();
     std::fs::write(out.join("labels.json"), format!("[\n{}\n]\n", labels.join(",\n")))?;
+    let untimed: Vec<String> = untimed.iter().map(|l| format!("{l:?}")).collect();
+    std::fs::write(out.join("untimed.json"), format!("[\n{}\n]\n", untimed.join(",\n")))?;
     Ok(())
 }
 

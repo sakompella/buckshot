@@ -5,7 +5,7 @@
 /// The Bend branches the rules mirror: one variant per branch site of the
 /// defs reachable from `simple/main`'s `start`, `request` and `answer`,
 /// less the defs `branch-map.toml` exempts.
-#[allow(dead_code)]
+#[deny(dead_code)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum B {
     /// `domain:table.seats:TwoSeats{}` (domain.bend:61)
@@ -320,8 +320,6 @@ pub(crate) enum B {
     SimplePointUseFirstNil,
     /// `simple/point:use.first:S.UseAt{slot, found} <> rest` (simple/point.bend:38)
     SimplePointUseFirstUseAtCons,
-    /// `simple/point:use.first:S.TakeGun{} <> rest` (simple/point.bend:40)
-    SimplePointUseFirstTakeGunCons,
     /// `simple/point:use.first:pick:True` (simple/point.bend:39)
     SimplePointUseFirstPickTrue,
     /// `simple/point:use.first:pick:False` (simple/point.bend:39)
@@ -330,8 +328,6 @@ pub(crate) enum B {
     SimplePointUseOptionsNil,
     /// `simple/point:use.options:S.UseAt{+slot, +item} <> rest` (simple/point.bend:48)
     SimplePointUseOptionsUseAtCons,
-    /// `simple/point:use.options:S.TakeGun{} <> rest` (simple/point.bend:50)
-    SimplePointUseOptionsTakeGunCons,
     /// `simple/point:jam.targets:Nil{}` (simple/point.bend:55)
     SimplePointJamTargetsNil,
     /// `simple/point:jam.targets:S.JamAt{seat} <> rest` (simple/point.bend:57)
@@ -748,7 +744,10 @@ const LABELS: &[(B, &str)] = &[
     (B::SimpleMainShuffleZero, "simple/main:shuffle:0n"),
     (B::SimpleMainShuffleSucc, "simple/main:shuffle:1n+rest"),
     (B::SimpleMainBatchFoundNone, "simple/main:batch.found:None{}"),
-    (B::SimpleMainBatchFoundSomeBatch, "simple/main:batch.found:Some{S.Batch{_, sampled}}"),
+    (
+        B::SimpleMainBatchFoundSomeBatch,
+        "simple/main:batch.found:Some{S.Batch{_, sampled}}",
+    ),
     (B::SimpleMainLoadReadyNil, "simple/main:load.ready:Nil{}"),
     (B::SimpleMainLoadReadyConsNil, "simple/main:load.ready:only <> Nil{}"),
     (B::SimpleMainLoadReadyConsCons, "simple/main:load.ready:first <> next <> rest"),
@@ -767,7 +766,10 @@ const LABELS: &[(B, &str)] = &[
     (B::SimpleMainGrabPoolNil, "simple/main:grab.pool:Nil{}"),
     (B::SimpleMainGrabPoolConsNil, "simple/main:grab.pool:item <> Nil{}"),
     (B::SimpleMainGrabPoolConsCons, "simple/main:grab.pool:first <> second <> rest"),
-    (B::SimpleMainGrabTakesTakeItemConsNil, "simple/main:grab.takes:S.TakeItem{} <> Nil{}"),
+    (
+        B::SimpleMainGrabTakesTakeItemConsNil,
+        "simple/main:grab.takes:S.TakeItem{} <> Nil{}",
+    ),
     (B::SimpleMainGrabTakesAny, "simple/main:grab.takes:_"),
     (B::SimpleMainGrabTakerNil, "simple/main:grab.taker:Nil{}"),
     (B::SimpleMainGrabTakerCons, "simple/main:grab.taker:+seat <> rest"),
@@ -779,7 +781,10 @@ const LABELS: &[(B, &str)] = &[
     (B::SimpleMainSeatsAfterPickFalse, "simple/main:seats.after:pick:False"),
     (B::SimpleMainGrabActOwnPutAtCons, "simple/main:grab.act.own:S.PutAt{slot} <> _"),
     (B::SimpleMainGrabActOwnAny, "simple/main:grab.act.own:_"),
-    (B::SimpleMainGrabContinueReadyFalseFalse, "simple/main:grab.continue.ready:False{} False{}"),
+    (
+        B::SimpleMainGrabContinueReadyFalseFalse,
+        "simple/main:grab.continue.ready:False{} False{}",
+    ),
     (B::SimpleMainGrabContinueReadyAny, "simple/main:grab.continue.ready:_ _"),
     (B::SimpleMainGrabNextConsCons, "simple/main:grab.next:first <> second <> rest"),
     (B::SimpleMainGrabNextAny, "simple/main:grab.next:_"),
@@ -789,7 +794,10 @@ const LABELS: &[(B, &str)] = &[
     (B::SimpleMainGrabLoopZeroTaking, "simple/main:grab.loop:0n Taking{_}"),
     (B::SimpleMainGrabLoopZeroPlacing, "simple/main:grab.loop:0n Placing{_, _}"),
     (B::SimpleMainGrabLoopSuccTaking, "simple/main:grab.loop:1n+fuel Taking{+seat}"),
-    (B::SimpleMainGrabLoopSuccPlacing, "simple/main:grab.loop:1n+fuel Placing{+seat, +slot}"),
+    (
+        B::SimpleMainGrabLoopSuccPlacing,
+        "simple/main:grab.loop:1n+fuel Placing{+seat, +slot}",
+    ),
     (B::SimpleMainGrabFuelTwoSeats, "simple/main:grab.fuel:D.TwoSeats{}"),
     (B::SimpleMainGrabFuelThreeSeats, "simple/main:grab.fuel:D.ThreeSeats{}"),
     (B::SimpleMainGrabFuelFourSeats, "simple/main:grab.fuel:D.FourSeats{}"),
@@ -849,61 +857,125 @@ const LABELS: &[(B, &str)] = &[
     (B::SimpleMainItemPhoneAny, "simple/main:item.phone:_"),
     (B::SimpleMainItemRoutePhone, "simple/main:item.route:D.Phone{}"),
     (B::SimpleMainItemRouteAny, "simple/main:item.route:item"),
-    (B::SimpleMainPickupSelectedSomeShootAt, "simple/main:pickup.selected:Some{T.ShootAt{target}}"),
-    (B::SimpleMainPickupSelectedSomeUseSlot, "simple/main:pickup.selected:Some{T.UseSlot{slot, item}}"),
-    (B::SimpleMainPickupSelectedSomeJamWith, "simple/main:pickup.selected:Some{T.JamWith{slot, target}}"),
-    (B::SimpleMainPickupSelectedSomeStealWith, "simple/main:pickup.selected:Some{T.StealWith{adrenaline, owner, slot, item}}"),
-    (B::SimpleMainPickupSelectedSomeStealJamWith, "simple/main:pickup.selected:Some{T.StealJamWith{adrenaline, owner, slot, target}}"),
+    (
+        B::SimpleMainPickupSelectedSomeShootAt,
+        "simple/main:pickup.selected:Some{T.ShootAt{target}}",
+    ),
+    (
+        B::SimpleMainPickupSelectedSomeUseSlot,
+        "simple/main:pickup.selected:Some{T.UseSlot{slot, item}}",
+    ),
+    (
+        B::SimpleMainPickupSelectedSomeJamWith,
+        "simple/main:pickup.selected:Some{T.JamWith{slot, target}}",
+    ),
+    (
+        B::SimpleMainPickupSelectedSomeStealWith,
+        "simple/main:pickup.selected:Some{T.StealWith{adrenaline, owner, slot, item}}",
+    ),
+    (
+        B::SimpleMainPickupSelectedSomeStealJamWith,
+        "simple/main:pickup.selected:Some{T.StealJamWith{adrenaline, owner, slot, target}}",
+    ),
     (B::SimpleMainPickupSelectedNone, "simple/main:pickup.selected:None{}"),
-    (B::SimpleMainAnswerChoiceStateIdle, "simple/main:answer.choice:T.State{world, players, T.Idle{+seat}, notes, grabs}"),
+    (
+        B::SimpleMainAnswerChoiceStateIdle,
+        "simple/main:answer.choice:T.State{world, players, T.Idle{+seat}, notes, grabs}",
+    ),
     (B::SimpleMainAnswerChoiceAny, "simple/main:answer.choice:_"),
-    (B::SimpleMainAnswerDrawStateNeedFirst, "simple/main:answer.draw:T.State{world, players, T.NeedFirst{}, notes, grabs}"),
-    (B::SimpleMainAnswerDrawStateNeedHealth, "simple/main:answer.draw:T.State{world, players, T.NeedHealth{}, notes, grabs}"),
-    (B::SimpleMainAnswerDrawStateNeedAmount, "simple/main:answer.draw:T.State{world, players, T.NeedAmount{}, notes, grabs}"),
-    (B::SimpleMainAnswerDrawStateNeedBatch, "simple/main:answer.draw:T.State{world, players, T.NeedBatch{}, notes, grabs}"),
-    (B::SimpleMainAnswerDrawStateNeedSwap, "simple/main:answer.draw:T.State{world, players, T.NeedSwap{load, shells, +i}, notes, grabs}"),
-    (B::SimpleMainAnswerDrawStateNeedTurnAmount, "simple/main:answer.draw:T.State{world, players, T.NeedTurnAmount{from, passing, winner}, notes, grabs}"),
-    (B::SimpleMainAnswerDrawStateNeedItem, "simple/main:answer.draw:T.State{world, players, T.NeedItem{+seat, first, second, rest}, notes, grabs}"),
-    (B::SimpleMainAnswerDrawStateNeedPhone, "simple/main:answer.draw:T.State{world, players, T.NeedPhone{seat, owner, slot}, notes, grabs}"),
+    (
+        B::SimpleMainAnswerDrawStateNeedFirst,
+        "simple/main:answer.draw:T.State{world, players, T.NeedFirst{}, notes, grabs}",
+    ),
+    (
+        B::SimpleMainAnswerDrawStateNeedHealth,
+        "simple/main:answer.draw:T.State{world, players, T.NeedHealth{}, notes, grabs}",
+    ),
+    (
+        B::SimpleMainAnswerDrawStateNeedAmount,
+        "simple/main:answer.draw:T.State{world, players, T.NeedAmount{}, notes, grabs}",
+    ),
+    (
+        B::SimpleMainAnswerDrawStateNeedBatch,
+        "simple/main:answer.draw:T.State{world, players, T.NeedBatch{}, notes, grabs}",
+    ),
+    (
+        B::SimpleMainAnswerDrawStateNeedSwap,
+        "simple/main:answer.draw:T.State{world, players, T.NeedSwap{load, shells, +i}, notes, grabs}",
+    ),
+    (
+        B::SimpleMainAnswerDrawStateNeedTurnAmount,
+        "simple/main:answer.draw:T.State{world, players, T.NeedTurnAmount{from, passing, winner}, notes, grabs}",
+    ),
+    (
+        B::SimpleMainAnswerDrawStateNeedItem,
+        "simple/main:answer.draw:T.State{world, players, T.NeedItem{+seat, first, second, rest}, notes, grabs}",
+    ),
+    (
+        B::SimpleMainAnswerDrawStateNeedPhone,
+        "simple/main:answer.draw:T.State{world, players, T.NeedPhone{seat, owner, slot}, notes, grabs}",
+    ),
     (B::SimpleMainAnswerDrawAny, "simple/main:answer.draw:_"),
     (B::SimpleMainAnswerRequestFinished, "simple/main:answer.request:T.Finished{}"),
     (B::SimpleMainAnswerRequestStuck, "simple/main:answer.request:T.Stuck{}"),
     (B::SimpleMainAnswerRequestDraw, "simple/main:answer.request:T.Draw{_, range}"),
-    (B::SimpleMainAnswerRequestChooseNonEmpty, "simple/main:answer.request:T.Choose{_, D.NonEmpty{_, rest}}"),
+    (
+        B::SimpleMainAnswerRequestChooseNonEmpty,
+        "simple/main:answer.request:T.Choose{_, D.NonEmpty{_, rest}}",
+    ),
     (B::SimplePointShotsNil, "simple/point:shots:Nil{}"),
     (B::SimplePointShotsTargetCons, "simple/point:shots:S.Target{seat} <> rest"),
     (B::SimplePointItemChainedJammer, "simple/point:item.chained:D.Jammer{}"),
     (B::SimplePointItemChainedAdrenaline, "simple/point:item.chained:D.Adrenaline{}"),
     (B::SimplePointItemChainedAny, "simple/point:item.chained:_"),
     (B::SimplePointUseFirstNil, "simple/point:use.first:Nil{}"),
-    (B::SimplePointUseFirstUseAtCons, "simple/point:use.first:S.UseAt{slot, found} <> rest"),
-    (B::SimplePointUseFirstTakeGunCons, "simple/point:use.first:S.TakeGun{} <> rest"),
+    (
+        B::SimplePointUseFirstUseAtCons,
+        "simple/point:use.first:S.UseAt{slot, found} <> rest",
+    ),
     (B::SimplePointUseFirstPickTrue, "simple/point:use.first:pick:True"),
     (B::SimplePointUseFirstPickFalse, "simple/point:use.first:pick:False"),
     (B::SimplePointUseOptionsNil, "simple/point:use.options:Nil{}"),
-    (B::SimplePointUseOptionsUseAtCons, "simple/point:use.options:S.UseAt{+slot, +item} <> rest"),
-    (B::SimplePointUseOptionsTakeGunCons, "simple/point:use.options:S.TakeGun{} <> rest"),
+    (
+        B::SimplePointUseOptionsUseAtCons,
+        "simple/point:use.options:S.UseAt{+slot, +item} <> rest",
+    ),
     (B::SimplePointJamTargetsNil, "simple/point:jam.targets:Nil{}"),
     (B::SimplePointJamTargetsJamAtCons, "simple/point:jam.targets:S.JamAt{seat} <> rest"),
     (B::SimplePointJamOptionsNone, "simple/point:jam.options:None{}"),
     (B::SimplePointJamOptionsSome, "simple/point:jam.options:Some{slot}"),
     (B::SimplePointStealPicksNil, "simple/point:steal.picks:Nil{}"),
-    (B::SimplePointStealPicksPickCons, "simple/point:steal.picks:S.Pick{+owner, +slot, +item} <> rest"),
+    (
+        B::SimplePointStealPicksPickCons,
+        "simple/point:steal.picks:S.Pick{+owner, +slot, +item} <> rest",
+    ),
     (B::SimplePointStealOptionsNone, "simple/point:steal.options:None{}"),
     (B::SimplePointStealOptionsSome, "simple/point:steal.options:Some{slot}"),
     (B::SimplePointStealJamTargetsNil, "simple/point:steal_jam.targets:Nil{}"),
-    (B::SimplePointStealJamTargetsJamAtCons, "simple/point:steal_jam.targets:S.JamAt{seat} <> rest"),
+    (
+        B::SimplePointStealJamTargetsJamAtCons,
+        "simple/point:steal_jam.targets:S.JamAt{seat} <> rest",
+    ),
     (B::SimplePointStealJamHereTrue, "simple/point:steal_jam.here:True{}"),
     (B::SimplePointStealJamHereFalse, "simple/point:steal_jam.here:False{}"),
     (B::SimplePointStealJamPicksNil, "simple/point:steal_jam.picks:Nil{}"),
-    (B::SimplePointStealJamPicksPickCons, "simple/point:steal_jam.picks:S.Pick{+owner, slot, +item} <> rest"),
+    (
+        B::SimplePointStealJamPicksPickCons,
+        "simple/point:steal_jam.picks:S.Pick{+owner, slot, +item} <> rest",
+    ),
     (B::SimplePointStealJamOptionsNone, "simple/point:steal_jam.options:None{}"),
     (B::SimplePointStealJamOptionsSome, "simple/point:steal_jam.options:Some{slot}"),
     (B::SimplePointOptionMoveShootAt, "simple/point:option.move:T.ShootAt{target}"),
     (B::SimplePointOptionMoveUseSlot, "simple/point:option.move:T.UseSlot{_, item}"),
     (B::SimplePointOptionMoveJamWith, "simple/point:option.move:T.JamWith{_, target}"),
-    (B::SimplePointOptionMoveStealWith, "simple/point:option.move:T.StealWith{_, owner, _, item}"),
-    (B::SimplePointOptionMoveStealJamWith, "simple/point:option.move:T.StealJamWith{_, owner, _, target}"),
+    (
+        B::SimplePointOptionMoveStealWith,
+        "simple/point:option.move:T.StealWith{_, owner, _, item}",
+    ),
+    (
+        B::SimplePointOptionMoveStealJamWith,
+        "simple/point:option.move:T.StealJamWith{_, owner, _, target}",
+    ),
     (B::SimplePointChooseNil, "simple/point:choose:Nil{}"),
     (B::SimplePointChooseCons, "simple/point:choose:move <> rest"),
     (B::SimplePointIdleRequestTrue, "simple/point:idle.request:True{}"),
@@ -913,21 +985,39 @@ const LABELS: &[(B, &str)] = &[
     (B::SimplePointFirstRangeFourSeats, "simple/point:first.range:D.FourSeats{}"),
     (B::SimplePointBatchRequestSuccSucc, "simple/point:batch.request:1n+1n+extra"),
     (B::SimplePointBatchRequestAny, "simple/point:batch.request:_"),
-    (B::SimplePointPhoneRequestSuccSuccSuccSucc, "simple/point:phone.request:1n+1n+1n+1n+extra"),
+    (
+        B::SimplePointPhoneRequestSuccSuccSuccSucc,
+        "simple/point:phone.request:1n+1n+1n+1n+extra",
+    ),
     (B::SimplePointPhoneRequestAny, "simple/point:phone.request:_"),
     (B::SimplePointPhaseRequestNeedFirst, "simple/point:phase.request:T.NeedFirst{}"),
     (B::SimplePointPhaseRequestNeedHealth, "simple/point:phase.request:T.NeedHealth{}"),
     (B::SimplePointPhaseRequestNeedAmount, "simple/point:phase.request:T.NeedAmount{}"),
     (B::SimplePointPhaseRequestNeedBatch, "simple/point:phase.request:T.NeedBatch{}"),
-    (B::SimplePointPhaseRequestNeedSwapSucc, "simple/point:phase.request:T.NeedSwap{_, _, 1n+extra}"),
-    (B::SimplePointPhaseRequestNeedSwapZero, "simple/point:phase.request:T.NeedSwap{_, _, 0n}"),
+    (
+        B::SimplePointPhaseRequestNeedSwapSucc,
+        "simple/point:phase.request:T.NeedSwap{_, _, 1n+extra}",
+    ),
+    (
+        B::SimplePointPhaseRequestNeedSwapZero,
+        "simple/point:phase.request:T.NeedSwap{_, _, 0n}",
+    ),
     (B::SimplePointPhaseRequestIdle, "simple/point:phase.request:T.Idle{+seat}"),
     (B::SimplePointPhaseRequestEnded, "simple/point:phase.request:T.Ended{}"),
     (B::SimplePointPhaseRequestBlocked, "simple/point:phase.request:T.Blocked{_}"),
     (B::SimplePointPhaseRequestStalled, "simple/point:phase.request:T.Stalled{}"),
-    (B::SimplePointPhaseRequestNeedTurnAmount, "simple/point:phase.request:T.NeedTurnAmount{_, _, _}"),
-    (B::SimplePointPhaseRequestNeedItem, "simple/point:phase.request:T.NeedItem{_, _, _, rest}"),
-    (B::SimplePointPhaseRequestNeedPhone, "simple/point:phase.request:T.NeedPhone{_, _, _}"),
+    (
+        B::SimplePointPhaseRequestNeedTurnAmount,
+        "simple/point:phase.request:T.NeedTurnAmount{_, _, _}",
+    ),
+    (
+        B::SimplePointPhaseRequestNeedItem,
+        "simple/point:phase.request:T.NeedItem{_, _, _, rest}",
+    ),
+    (
+        B::SimplePointPhaseRequestNeedPhone,
+        "simple/point:phase.request:T.NeedPhone{_, _, _}",
+    ),
     (B::SmItemsKeepTrue, "sm/items:keep:True{}"),
     (B::SmItemsKeepFalse, "sm/items:keep:False{}"),
     (B::SmItemsIsNoneNone, "sm/items:is_none:None{}"),
@@ -1048,9 +1138,18 @@ const LABELS: &[(B, &str)] = &[
     (B::SmRulesRulesLoadLoadRulesOne, "sm/rules:rules.load:D.LoadRules{_, b, _, _} 1n"),
     (B::SmRulesRulesLoadLoadRulesTwo, "sm/rules:rules.load:D.LoadRules{_, _, c, _} 2n"),
     (B::SmRulesRulesLoadLoadRules, "sm/rules:rules.load:D.LoadRules{_, _, _, d} _"),
-    (B::SmRulesLoadActualLoadRuleRandomShells, "sm/rules:load.actual:D.LoadRule{D.RandomShells{}, _}"),
-    (B::SmRulesLoadActualLoadRuleFixedShells, "sm/rules:load.actual:D.LoadRule{D.FixedShells{live, blank}, _}"),
-    (B::SmRulesLoadActualLoadRuleAllLive, "sm/rules:load.actual:D.LoadRule{D.AllLive{live}, _}"),
+    (
+        B::SmRulesLoadActualLoadRuleRandomShells,
+        "sm/rules:load.actual:D.LoadRule{D.RandomShells{}, _}",
+    ),
+    (
+        B::SmRulesLoadActualLoadRuleFixedShells,
+        "sm/rules:load.actual:D.LoadRule{D.FixedShells{live, blank}, _}",
+    ),
+    (
+        B::SmRulesLoadActualLoadRuleAllLive,
+        "sm/rules:load.actual:D.LoadRule{D.AllLive{live}, _}",
+    ),
     (B::SmRulesBatchesNil, "sm/rules:batches:Nil{}"),
     (B::SmRulesBatchesCons, "sm/rules:batches:load <> rest"),
     (B::SmRulesLoadNextTrue, "sm/rules:load.next:True{} _"),

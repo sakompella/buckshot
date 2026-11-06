@@ -15,8 +15,9 @@ mod map;
 mod rust;
 
 use std::collections::BTreeMap;
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
-use std::process::ExitCode;
+use std::process::{Command, ExitCode, Stdio};
 
 use anyhow::{Context, Result, bail};
 
@@ -56,23 +57,29 @@ fn run() -> Result<bool> {
     let rules = bend::load(&paths.bend)?;
     let map = map::load(&paths.rules.join("branch-map.toml"))?;
     let all = bend::sites(&rules);
-    let mut errors = Vec::new();
-    for def in map.exempt.keys() {
-        if !all.iter().any(|s| s.def_key() == *def) {
-            errors.push(format!("branch-map.toml: exempt {def} is not a reachable Bend def with branches"));
-        }
-    }
+    let mut errors = map_errors(&map, &all);
     let sites: Vec<&bend::Site> = all.iter().filter(|s| !map.exempt.contains_key(&s.def_key())).collect();
-    let ids = gen_ids::ids(&rules, &sites)?;
+    // A branch mapped to no Rust site gets no variant: B has deny(dead_code).
+    let variants: Vec<&bend::Site> = sites
+        .iter()
+        .copied()
+        .filter(|s| map.sites.get(&s.variant).is_none_or(|e| e.count > 0))
+        .collect();
+    let ids = rustfmt(&gen_ids::ids(&rules, &variants)?)?;
     match command.as_str() {
         "write" => {
             std::fs::write(paths.ids(), &ids).with_context(|| format!("writing {}", paths.ids().display()))?;
-            println!("wrote {} ({} variants)", paths.ids().display(), sites.len());
+            println!("wrote {} ({} variants)", paths.ids().display(), variants.len());
             return Ok(true);
         }
         "instrument" => {
             let out = std::env::args().nth(2).context("usage: branch-map instrument <out dir>")?;
-            instrument::write(&paths.bend, Path::new(&out), &rules, &sites)?;
+            let untimed: Vec<String> = sites
+                .iter()
+                .filter(|s| map.untimed.contains_key(&s.def_key()))
+                .map(|s| s.label())
+                .collect();
+            instrument::write(&paths.bend, Path::new(&out), &rules, &sites, &untimed)?;
             println!("wrote the traced Bend tree to {out} ({} labels)", sites.len());
             return Ok(true);
         }
@@ -118,13 +125,7 @@ fn run() -> Result<bool> {
     }
     rust_only_errors(&map, &report, &mut errors);
     if command == "list" {
-        for site in &sites {
-            let at = rust_sites.get(site.variant.as_str()).map(|a| a.join(" ")).unwrap_or_default();
-            println!("{}\t{}.bend:{}\t{}\t{at}", site.label(), site.module, site.line, site.variant);
-        }
-        for (def, reason) in &map.exempt {
-            println!("{def}\texempt\t{reason}");
-        }
+        print_list(&sites, &rust_sites, &map);
     }
     let exempt_sites = all.len().saturating_sub(sites.len());
     println!(
@@ -180,6 +181,58 @@ fn rust_only_errors(map: &map::Map, report: &rust::Report, errors: &mut Vec<Stri
             errors.push(format!("branch-map.toml: rust_only {key} matches nothing"));
         }
     }
+}
+
+fn print_list(sites: &[&bend::Site], rust_sites: &BTreeMap<&str, Vec<String>>, map: &map::Map) {
+    for site in sites {
+        let at = rust_sites.get(site.variant.as_str()).map(|a| a.join(" ")).unwrap_or_default();
+        println!("{}\t{}.bend:{}\t{}\t{at}", site.label(), site.module, site.line, site.variant);
+    }
+    for (def, reason) in &map.exempt {
+        println!("{def}\texempt\t{reason}");
+    }
+}
+
+/// Entries of `[exempt]` and `[untimed]` that name no def with branches, or
+/// have no reason.
+fn map_errors(map: &map::Map, all: &[bend::Site]) -> Vec<String> {
+    let mut errors = Vec::new();
+    for (section, entries) in [("exempt", &map.exempt), ("untimed", &map.untimed)] {
+        for (def, reason) in entries {
+            if !all.iter().any(|s| s.def_key() == *def) {
+                errors.push(format!(
+                    "branch-map.toml: {section} {def} is not a reachable Bend def with branches"
+                ));
+            }
+            if reason.trim().is_empty() {
+                errors.push(format!("branch-map.toml: {section} {def} has no reason"));
+            }
+        }
+    }
+    for def in map.untimed.keys() {
+        if map.exempt.contains_key(def) {
+            errors.push(format!("branch-map.toml: untimed {def} is exempt, so it has no labels"));
+        }
+    }
+    errors
+}
+
+/// Formats generated Rust with the workspace's rustfmt.toml, as `cargo fmt` would.
+fn rustfmt(source: &str) -> Result<String> {
+    let config = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+    let mut child = Command::new("rustfmt")
+        .args(["--edition", "2024", "--emit", "stdout", "--quiet", "--config-path"])
+        .arg(&config)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .context("running rustfmt")?;
+    child.stdin.take().context("rustfmt stdin")?.write_all(source.as_bytes())?;
+    let output = child.wait_with_output()?;
+    if !output.status.success() {
+        bail!("rustfmt failed on the generated ids.rs");
+    }
+    String::from_utf8(output.stdout).context("rustfmt output")
 }
 
 fn check_rust(src: &Path) -> Result<rust::Report> {

@@ -82,3 +82,14 @@
 "rules.rs:living:loop " = "loop over a list written as `match` on the iterator: every arm of it is labelled; the loop itself is the recursion"
 "rules.rs:aim_targets:loop " = "loop over a list written as `match` on the iterator: every arm of it is labelled; the loop itself is the recursion"
 "rules.rs:successor_go:loop " = "loop over a list written as `match` on the iterator: every arm of it is labelled; the loop itself is the recursion"
+
+# Bend defs whose cases the trace comparison does not time: pure functions of
+# the config (or of a constant) that Rust recomputes where Bend computes once
+# or ahead of time, so Rust may take their cases in a call where Bend did not.
+# Their values reach every compared state and note.
+[untimed]
+"domain:table.seats" = "the table's seats; Rust asks Table::seats at each use"
+"domain:table.deck" = "the table's starting deck; Rust builds it where it uses it"
+"domain:table.health_range" = "the table's health range; a constant per table"
+"domain:table.amount_range" = "the table's item amount range; a constant per table"
+"domain:item.dealt_at" = "whether a table deals an item; a constant per table and item"

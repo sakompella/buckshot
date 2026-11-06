@@ -1,6 +1,7 @@
 //! The hand-kept part of the map, `rules/branch-map.toml`: Bend defs with no
 //! Rust arms, Bend branches with more than one Rust site, and Rust control
-//! flow with no Bend branch of its own. Every entry needs a reason.
+//! flow with no Bend branch of its own, and defs the trace comparison does not
+//! time. Every entry needs a reason.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -20,6 +21,11 @@ pub struct Map {
     /// `file`, `file:fn` or `file:fn:<kind> <expr>` -> why that Rust control flow has no Bend branch.
     #[serde(default)]
     pub rust_only: BTreeMap<String, String>,
+    /// `module:def` -> why the trace comparison may see Rust take its cases in
+    /// a call where Bend did not (a pure function of the config that Rust
+    /// recomputes where Bend binds it once).
+    #[serde(default)]
+    pub untimed: BTreeMap<String, String>,
 }
 
 #[derive(Deserialize)]
