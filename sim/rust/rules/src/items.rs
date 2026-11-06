@@ -598,14 +598,15 @@ fn steal_slots(inventory: Slots, owner: Seat, sawed: bool, targets: bool) -> Pic
     out
 }
 
-/// `steal.owner`: `slots` is `steal.slots` of this owner, built either way.
-fn steal_owner(own: bool, slots: &Picks, out: &mut Picks) {
+/// `steal.owner`.
+fn steal_owner(own: bool, owner: Seat, inventory: Slots, sawed: bool, targets: bool, out: &mut Picks) {
     if own {
         branch!(B::SmItemsStealOwnerTrue);
     } else {
         branch!(B::SmItemsStealOwnerFalse);
+        let slots = steal_slots(inventory, owner, sawed, targets);
         for pick in slots {
-            push_bounded(out, *pick);
+            push_bounded(out, pick);
         }
     }
 }
@@ -615,8 +616,7 @@ fn steal_owners(players: &Players, thief: Seat, sawed: bool, targets: bool) -> P
     let mut out = Picks::new();
     for (owner, record) in players.entries() {
         branch!(B::SmItemsStealOwnersAtCons);
-        let slots = steal_slots(record.slots, owner, sawed, targets);
-        steal_owner(owner == thief, &slots, &mut out);
+        steal_owner(owner == thief, owner, record.slots, sawed, targets, &mut out);
     }
     branch!(B::SmItemsStealOwnersNil);
     out
