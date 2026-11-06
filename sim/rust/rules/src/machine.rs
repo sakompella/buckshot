@@ -4,6 +4,7 @@
 //! Each Bend def `f(state, ..) -> State` is a function on [`Run`], which
 //! holds the state and the notes the answer has made so far.
 
+use crate::branch::B;
 use crate::domain::{
     AmountRule, Config, Direction, GameEvent, Gun, HealthRule, Item, Items, Load, Note, PHONE_CAP, Ring, Seat, Seats, Secret,
     Shell, Slot, Slots, prize,
@@ -105,33 +106,33 @@ pub fn step(config: &Config, state: State, answer: Answer) -> Stepped {
     let r = &mut run;
     match (state.phase, answer) {
         (Phase::NeedFirst, Answer::Draw(value)) => {
-            bend_arm!("simple/main:answer.draw:T.State{world, players, T.NeedFirst{}, notes, grabs}");
+            branch!(B::SimpleMainAnswerDrawNeedFirst);
             let seat = config.table().seats().iter().nth(usize::try_from(value.get()).unwrap_or(usize::MAX)).unwrap_or(Seat::Seat0);
             first_chosen(r, seat);
         }
         (Phase::NeedHealth, Answer::Draw(value)) => {
-            bend_arm!("simple/main:answer.draw:T.State{world, players, T.NeedHealth{}, notes, grabs}");
+            branch!(B::SimpleMainAnswerDrawNeedHealth);
             health_chosen(r, value.get());
         }
         (Phase::NeedAmount, Answer::Draw(value)) => {
-            bend_arm!("simple/main:answer.draw:T.State{world, players, T.NeedAmount{}, notes, grabs}");
+            branch!(B::SimpleMainAnswerDrawNeedAmount);
             amount_chosen(r, value.get());
         }
         (Phase::NeedBatch, Answer::Draw(value)) => {
-            bend_arm!("simple/main:answer.draw:T.State{world, players, T.NeedBatch{}, notes, grabs}");
+            branch!(B::SimpleMainAnswerDrawNeedBatch);
             batch(r, value.get());
         }
         (Phase::NeedSwap { load, shells, i }, Answer::Draw(value)) => {
-            bend_arm!("simple/main:answer.draw:T.State{world, players, T.NeedSwap{load, shells, +i}, notes, grabs}");
+            branch!(B::SimpleMainAnswerDrawNeedSwap);
             shuffle(r, load, shells.swap(i, value.get()), rules::predecessor(i));
         }
         (Phase::NeedTurnAmount { from, passing, winner }, Answer::Draw(value)) => {
-            bend_arm!("simple/main:answer.draw:T.State{world, players, T.NeedTurnAmount{from, passing, winner}, notes, grabs}");
+            branch!(B::SimpleMainAnswerDrawNeedTurnAmount);
             r.world().item_amount = value.get();
             turn_winner(r, from, passing, winner);
         }
         (Phase::NeedItem { seat, first, second, rest }, Answer::Draw(value)) => {
-            bend_arm!("simple/main:answer.draw:T.State{world, players, T.NeedItem{+seat, first, second, rest}, notes, grabs}");
+            branch!(B::SimpleMainAnswerDrawNeedItem);
             let found = match value.get() {
                 0 => Some(first),
                 1 => Some(second),
@@ -141,15 +142,15 @@ pub fn step(config: &Config, state: State, answer: Answer) -> Stepped {
             grab_distribute(r, seat);
         }
         (Phase::NeedPhone { seat, owner, slot }, Answer::Draw(value)) => {
-            bend_arm!("simple/main:answer.draw:T.State{world, players, T.NeedPhone{seat, owner, slot}, notes, grabs}");
+            branch!(B::SimpleMainAnswerDrawNeedPhone);
             item_clue(r, seat, owner, slot, value.get());
         }
         (Phase::Idle { .. } | Phase::Ended | Phase::Blocked { .. } | Phase::Stalled, Answer::Draw(_)) => {
-            bend_arm!("simple/main:answer.draw:_");
+            branch!(B::SimpleMainAnswerDrawAny);
             r.set_phase(Phase::Blocked { holder: None });
         }
         (Phase::Idle { seat }, Answer::Choice(legal)) => {
-            bend_arm!("simple/main:answer.choice:T.State{world, players, T.Idle{+seat}, notes, grabs}");
+            branch!(B::SimpleMainAnswerChoiceIdle);
             pickup_selected(r, seat, Some(legal.option()));
         }
         (
@@ -166,7 +167,7 @@ pub fn step(config: &Config, state: State, answer: Answer) -> Stepped {
             | Phase::NeedPhone { .. },
             Answer::Choice(_),
         ) => {
-            bend_arm!("simple/main:answer.choice:_");
+            branch!(B::SimpleMainAnswerChoiceAny);
             r.set_phase(Phase::Blocked { holder: None });
         }
     }
@@ -194,13 +195,13 @@ fn grant_step(r: &mut Run<'_>, rank: u32, seat: Seat, result: JamResult) {
     loop {
         match result {
             JamResult::Act { players } => {
-                bend_arm!("simple/main:grant.step:rank S.Act{players}");
+                branch!(B::SimpleMainGrantStepAct);
                 r.state.players = players;
                 give_turn(r, seat);
                 return;
             }
             JamResult::Lift { players } => {
-                bend_arm!("simple/main:grant.step:rank S.Lift{players}");
+                branch!(B::SimpleMainGrantStepLift);
                 r.state.players = players;
                 r.emit(GameEvent::JamLifted { seat });
                 give_turn(r, seat);
@@ -208,13 +209,13 @@ fn grant_step(r: &mut Run<'_>, rank: u32, seat: Seat, result: JamResult) {
             }
             JamResult::Skip { players } => match rank.checked_sub(1) {
                 None => {
-                    bend_arm!("simple/main:grant.step:0n S.Skip{players}");
+                    branch!(B::SimpleMainGrantStepZeroSkip);
                     r.state.players = players;
                     r.set_phase(Phase::Blocked { holder: None });
                     return;
                 }
                 Some(rest) => {
-                    bend_arm!("simple/main:grant.step:1n+rest S.Skip{+players}");
+                    branch!(B::SimpleMainGrantStepSuccSkip);
                     let next = rules::next_turn(&players, r.state.world.direction, seat);
                     r.state.players = players;
                     r.world().turn = Some(next);
@@ -243,7 +244,7 @@ fn grant(r: &mut Run<'_>, seat: Seat) {
 fn shuffle(r: &mut Run<'_>, load: Load, shells: Gun, i: u32) {
     match i {
         0 => {
-            bend_arm!("simple/main:shuffle:0n");
+            branch!(B::SimpleMainShuffleZero);
             let world = r.world();
             world.gun = shells;
             world.shown = load;
@@ -252,7 +253,7 @@ fn shuffle(r: &mut Run<'_>, load: Load, shells: Gun, i: u32) {
             grant(r, first);
         }
         1.. => {
-            bend_arm!("simple/main:shuffle:1n+rest");
+            branch!(B::SimpleMainShuffleSucc);
             r.set_phase(Phase::NeedSwap { load, shells, i });
         }
     }
@@ -262,11 +263,11 @@ fn shuffle(r: &mut Run<'_>, load: Load, shells: Gun, i: u32) {
 fn batch(r: &mut Run<'_>, index: u32) {
     match r.deck().nth(index) {
         None => {
-            bend_arm!("simple/main:batch.found:None{}");
+            branch!(B::SimpleMainBatchFoundNone);
             r.set_phase(Phase::Blocked { holder: None });
         }
         Some(Batch { load: sampled, .. }) => {
-            bend_arm!("simple/main:batch.found:Some{S.Batch{_, sampled}}");
+            branch!(B::SimpleMainBatchFoundSomeBatch);
             let load = rules::load_actual(rules::world_load_rule(r.config, &r.state.world), sampled);
             let shells = Gun::of_load(load);
             let deck = r.deck().remove(index);
@@ -280,15 +281,15 @@ fn batch(r: &mut Run<'_>, index: u32) {
 fn load_ready(r: &mut Run<'_>, deck: Deck) {
     match deck.len() {
         0 => {
-            bend_arm!("simple/main:load.ready:Nil{}");
+            branch!(B::SimpleMainLoadReadyNil);
             r.set_phase(Phase::Blocked { holder: None });
         }
         1 => {
-            bend_arm!("simple/main:load.ready:only <> Nil{}");
+            branch!(B::SimpleMainLoadReadyConsNil);
             batch(r, 0);
         }
         2.. => {
-            bend_arm!("simple/main:load.ready:first <> next <> rest");
+            branch!(B::SimpleMainLoadReadyConsCons);
             r.set_phase(Phase::NeedBatch);
         }
     }
@@ -297,11 +298,11 @@ fn load_ready(r: &mut Run<'_>, deck: Deck) {
 /// `load.refill`.
 fn load_refill(r: &mut Run<'_>, deck: Deck) {
     if deck.is_empty() {
-        bend_arm!("simple/main:load.refill:Nil{}");
+        branch!(B::SimpleMainLoadRefillNil);
         r.world().decks = Decks::full();
         load_ready(r, r.deck());
     } else {
-        bend_arm!("simple/main:load.refill:deck");
+        branch!(B::SimpleMainLoadRefillAny);
         load_ready(r, deck);
     }
 }
@@ -331,33 +332,33 @@ enum Distribution {
 fn grab_check(r: &mut Run<'_>) {
     let done = r.state.grabs.distributing && items::finished(r.config, &r.state);
     if done {
-        bend_arm!("simple/main:grab.check.done:True{}");
+        branch!(B::SimpleMainGrabCheckDoneTrue);
         r.state.grabs.distributing = false;
         r.emit(GameEvent::DistributionDone);
     } else {
-        bend_arm!("simple/main:grab.check.done:False{}");
+        branch!(B::SimpleMainGrabCheckDoneFalse);
     }
 }
 
 /// `grab.end_all`.
 fn grab_end_all(r: &mut Run<'_>, seats: Seats) {
     for seat in seats.iter() {
-        bend_arm!("simple/main:grab.end_all:+seat <> rest");
+        branch!(B::SimpleMainGrabEndAllCons);
         r.state.grabs = items::grabs_close(r.state.grabs, seat);
         r.emit(GameEvent::GrabbingEnded { seat });
     }
-    bend_arm!("simple/main:grab.end_all:Nil{}");
+    branch!(B::SimpleMainGrabEndAllNil);
 }
 
 /// `grab.put`.
 fn grab_put(r: &mut Run<'_>, seat: Seat, slot: Slot) {
     match items::seat_holding(&r.state.grabs, seat) {
         None => {
-            bend_arm!("simple/main:grab.put.held:None{}");
+            branch!(B::SimpleMainGrabPutHeldNone);
             r.set_phase(Phase::Blocked { holder: None });
         }
         Some(item) => {
-            bend_arm!("simple/main:grab.put.held:Some{+item}");
+            branch!(B::SimpleMainGrabPutHeldSome);
             r.players_update(seat, |record| SeatRecord { slots: record.slots.put(slot, Some(item)), ..record });
             r.state.grabs = items::grabs_placed(r.state.grabs, seat);
             r.emit(GameEvent::Placed { seat, slot, item });
@@ -369,7 +370,7 @@ fn grab_put(r: &mut Run<'_>, seat: Seat, slot: Slot) {
 /// the noneligible empty-handed grabbers, and checks completion again.
 fn grab_place(r: &mut Run<'_>, seat: Seat, slot: Slot) {
     if items::placing_last(r.config, &r.state, seat) {
-        bend_arm!("simple/main:grab.place.last:True{}");
+        branch!(B::SimpleMainGrabPlaceLastTrue);
         r.state.grabs = items::grabs_close(r.state.grabs, seat);
         r.emit(GameEvent::GrabbingEnded { seat });
         grab_check(r);
@@ -377,7 +378,7 @@ fn grab_place(r: &mut Run<'_>, seat: Seat, slot: Slot) {
         grab_end_all(r, stalled);
         grab_check(r);
     } else {
-        bend_arm!("simple/main:grab.place.last:False{}");
+        branch!(B::SimpleMainGrabPlaceLastFalse);
     }
     grab_put(r, seat, slot);
 }
@@ -392,11 +393,11 @@ fn grab_give(r: &mut Run<'_>, seat: Seat, item: Item) {
 fn grab_chosen(r: &mut Run<'_>, seat: Seat, found: Option<Item>) {
     match found {
         Some(item) => {
-            bend_arm!("simple/main:grab.chosen:Some{item}");
+            branch!(B::SimpleMainGrabChosenSome);
             grab_give(r, seat, item);
         }
         None => {
-            bend_arm!("simple/main:grab.chosen:None{}");
+            branch!(B::SimpleMainGrabChosenNone);
             r.tell(seat, Secret::EmptyBriefcase);
         }
     }
@@ -406,16 +407,16 @@ fn grab_chosen(r: &mut Run<'_>, seat: Seat, found: Option<Item>) {
 fn grab_pool(r: &mut Run<'_>, seat: Seat, pool: Items) {
     match pool.split_first() {
         None => {
-            bend_arm!("simple/main:grab.pool:Nil{}");
+            branch!(B::SimpleMainGrabPoolNil);
             grab_chosen(r, seat, None);
         }
         Some((first, rest)) => match rest.split_first() {
             None => {
-                bend_arm!("simple/main:grab.pool:item <> Nil{}");
+                branch!(B::SimpleMainGrabPoolConsNil);
                 grab_give(r, seat, first);
             }
             Some((second, rest)) => {
-                bend_arm!("simple/main:grab.pool:first <> second <> rest");
+                branch!(B::SimpleMainGrabPoolConsCons);
                 r.set_phase(Phase::NeedItem { seat, first, second, rest });
             }
         },
@@ -426,11 +427,11 @@ fn grab_pool(r: &mut Run<'_>, seat: Seat, pool: Items) {
 fn grab_takes(options: &[GrabOption]) -> bool {
     match options {
         [GrabOption::TakeItem] => {
-            bend_arm!("simple/main:grab.takes:S.TakeItem{} <> Nil{}");
+            branch!(B::SimpleMainGrabTakesTakeItemConsNil);
             true
         }
         [] | [GrabOption::PutAt { .. }, ..] | [GrabOption::TakeItem, _, ..] => {
-            bend_arm!("simple/main:grab.takes:_");
+            branch!(B::SimpleMainGrabTakesAny);
             false
         }
     }
@@ -452,17 +453,17 @@ fn seats_after(seats: Seats, after: Seat) -> Seats {
 fn grab_act(config: &Config, state: &State, after: Seat) -> Distribution {
     let own = items::grab_needs(config, state, after);
     if let Some(GrabOption::PutAt { slot }) = own.first() {
-        bend_arm!("simple/main:grab.act.own:S.PutAt{slot} <> _");
+        branch!(B::SimpleMainGrabActOwnPutAtCons);
         return Distribution::Placing { seat: after, slot: *slot };
     }
-    bend_arm!("simple/main:grab.act.own:_");
+    branch!(B::SimpleMainGrabActOwnAny);
     for seat in seats_after(config.table().seats(), after).iter() {
-        bend_arm!("simple/main:grab.taker:+seat <> rest");
+        branch!(B::SimpleMainGrabTakerCons);
         if grab_takes(&items::grab_needs(config, state, seat)) {
             return Distribution::Taking { seat };
         }
     }
-    bend_arm!("simple/main:grab.taker:Nil{}");
+    branch!(B::SimpleMainGrabTakerNil);
     Distribution::NoTaker
 }
 
@@ -471,11 +472,11 @@ fn grab_act(config: &Config, state: &State, after: Seat) -> Distribution {
 fn grab_continue(config: &Config, state: &State, after: Seat) -> Distribution {
     match (state.grabs.distributing, items::holders(&state.grabs)) {
         (false, false) => {
-            bend_arm!("simple/main:grab.continue.ready:False{} False{}");
+            branch!(B::SimpleMainGrabContinueReadyFalseFalse);
             Distribution::Loading
         }
         (true, _) | (false, true) => {
-            bend_arm!("simple/main:grab.continue.ready:_ _");
+            branch!(B::SimpleMainGrabContinueReadyAny);
             grab_act(config, state, after)
         }
     }
@@ -484,10 +485,10 @@ fn grab_continue(config: &Config, state: &State, after: Seat) -> Distribution {
 /// `grab.next`: a take from a pool of two or more waits for the item draw.
 fn grab_next(config: &Config, state: &State, pool: Items, after: Seat) -> Distribution {
     if pool.len() >= 2 {
-        bend_arm!("simple/main:grab.next:first <> second <> rest");
+        branch!(B::SimpleMainGrabNextConsCons);
         Distribution::Drawing
     } else {
-        bend_arm!("simple/main:grab.next:_");
+        branch!(B::SimpleMainGrabNextAny);
         grab_continue(config, state, after)
     }
 }
@@ -508,31 +509,31 @@ fn grab_loop(r: &mut Run<'_>, fuel: u32, next: Distribution) {
     loop {
         match (fuel.checked_sub(1), next) {
             (_, Distribution::Drawing) => {
-                bend_arm!("simple/main:grab.loop:_ Drawing{}");
+                branch!(B::SimpleMainGrabLoopDrawing);
                 return;
             }
             (_, Distribution::Loading) => {
-                bend_arm!("simple/main:grab.loop:_ Loading{}");
+                branch!(B::SimpleMainGrabLoopLoading);
                 load_begin(r);
                 return;
             }
             (_, Distribution::NoTaker) => {
-                bend_arm!("simple/main:grab.loop:_ NoTaker{}");
+                branch!(B::SimpleMainGrabLoopNoTaker);
                 r.set_phase(Phase::Stalled);
                 return;
             }
             (None, Distribution::Taking { .. }) => {
-                bend_arm!("simple/main:grab.loop:0n Taking{_}");
+                branch!(B::SimpleMainGrabLoopZeroTaking);
                 r.set_phase(Phase::Stalled);
                 return;
             }
             (None, Distribution::Placing { .. }) => {
-                bend_arm!("simple/main:grab.loop:0n Placing{_, _}");
+                branch!(B::SimpleMainGrabLoopZeroPlacing);
                 r.set_phase(Phase::Stalled);
                 return;
             }
             (Some(rest), Distribution::Taking { seat }) => {
-                bend_arm!("simple/main:grab.loop:1n+fuel Taking{+seat}");
+                branch!(B::SimpleMainGrabLoopSuccTaking);
                 r.state.grabs = items::grabs_stop_intake(r.state.grabs, seat);
                 let pool = items::pool(r.config, &r.state, seat);
                 grab_pool(r, seat, pool);
@@ -540,7 +541,7 @@ fn grab_loop(r: &mut Run<'_>, fuel: u32, next: Distribution) {
                 next = grab_next(r.config, &r.state, pool, seat);
             }
             (Some(rest), Distribution::Placing { seat, slot }) => {
-                bend_arm!("simple/main:grab.loop:1n+fuel Placing{+seat, +slot}");
+                branch!(B::SimpleMainGrabLoopSuccPlacing);
                 grab_place(r, seat, slot);
                 fuel = rest;
                 next = grab_continue(r.config, &r.state, seat);
@@ -558,10 +559,10 @@ fn grab_distribute(r: &mut Run<'_>, after: Seat) {
 /// `distribute.begin`.
 fn distribute_begin(r: &mut Run<'_>, seats: Seats) {
     if seats.is_empty() {
-        bend_arm!("simple/main:distribute.begin:Nil{}");
+        branch!(B::SimpleMainDistributeBeginNil);
         load_begin(r);
     } else {
-        bend_arm!("simple/main:distribute.begin:+seat <> +rest");
+        branch!(B::SimpleMainDistributeBeginCons);
         let mut grabs = items::grabs_open_all(seats, r.state.grabs);
         grabs.distributing = true;
         r.state.grabs = grabs;
@@ -602,11 +603,11 @@ fn amount_chosen(r: &mut Run<'_>, value: u32) {
 fn amount_begin(r: &mut Run<'_>) {
     match rules::load_amount(rules::world_load_rule(r.config, &r.state.world)) {
         AmountRule::Random => {
-            bend_arm!("simple/main:amount.rule:D.RandomAmount{}");
+            branch!(B::SimpleMainAmountRuleRandomAmount);
             r.set_phase(Phase::NeedAmount);
         }
         AmountRule::Fixed(amount) => {
-            bend_arm!("simple/main:amount.rule:D.FixedAmount{amount}");
+            branch!(B::SimpleMainAmountRuleFixedAmount);
             amount_chosen(r, amount);
         }
     }
@@ -620,13 +621,13 @@ fn health_chosen(r: &mut Run<'_>, value: u32) {
 
 /// `health.begin` with `health.rule`.
 fn health_begin(r: &mut Run<'_>) {
-    match rules::round_health(rules::world_rules(r.config, &r.state.world)) {
+    match rules::round_health(&rules::world_rules(r.config, &r.state.world)) {
         HealthRule::Random => {
-            bend_arm!("simple/main:health.rule:D.RandomHealth{}");
+            branch!(B::SimpleMainHealthRuleRandomHealth);
             r.set_phase(Phase::NeedHealth);
         }
         HealthRule::Fixed(health) => {
-            bend_arm!("simple/main:health.rule:D.FixedHealth{health}");
+            branch!(B::SimpleMainHealthRuleFixedHealth);
             health_chosen(r, health);
         }
     }
@@ -646,11 +647,11 @@ fn first_chosen(r: &mut Run<'_>, seat: Seat) {
 fn first_begin(r: &mut Run<'_>) {
     match r.state.world.first_death {
         None => {
-            bend_arm!("simple/main:first.override:None{}");
+            branch!(B::SimpleMainFirstOverrideNone);
             r.set_phase(Phase::NeedFirst);
         }
         Some(seat) => {
-            bend_arm!("simple/main:first.override:Some{seat}");
+            branch!(B::SimpleMainFirstOverrideSome);
             first_chosen(r, seat);
         }
     }
@@ -664,11 +665,11 @@ fn win(r: &mut Run<'_>, seat: Seat) {
     r.players_update(seat, |record| SeatRecord { cash: record.cash.wrapping_add(prize), ..record });
     r.emit(GameEvent::RoundWon { seat, prize });
     if round.saturating_add(1) == r.config.plan_length() {
-        bend_arm!("simple/main:win.final:True{}");
+        branch!(B::SimpleMainWinFinalTrue);
         r.set_phase(Phase::Ended);
         r.emit(GameEvent::MatchConcluded);
     } else {
-        bend_arm!("simple/main:win.final:False{}");
+        branch!(B::SimpleMainWinFinalFalse);
         first_begin(r);
     }
 }
@@ -683,25 +684,25 @@ fn reload_begin(r: &mut Run<'_>) {
 fn turn_winner(r: &mut Run<'_>, shooter: Seat, passing: bool, winner: Option<Seat>) {
     match winner {
         Some(seat) => {
-            bend_arm!("simple/main:turn.winner:Some{seat}");
+            branch!(B::SimpleMainTurnWinnerSome);
             win(r, seat);
         }
         None => {
-            bend_arm!("simple/main:turn.winner:None{}");
+            branch!(B::SimpleMainTurnWinnerNone);
             let next = rules::next_turn(&r.state.players, r.state.world.direction, shooter);
             let recipient = if passing {
-                bend_arm!("simple/main:turn.recipient:True{}");
+                branch!(B::SimpleMainTurnRecipientTrue);
                 next
             } else {
-                bend_arm!("simple/main:turn.recipient:False{}");
+                branch!(B::SimpleMainTurnRecipientFalse);
                 shooter
             };
             r.world().first_turn = recipient;
             if r.state.world.gun.is_empty() {
-                bend_arm!("simple/main:turn.continue:Nil{}");
+                branch!(B::SimpleMainTurnContinueNil);
                 reload_begin(r);
             } else {
-                bend_arm!("simple/main:turn.continue:shell <> rest");
+                branch!(B::SimpleMainTurnContinueCons);
                 grant(r, recipient);
             }
         }
@@ -714,17 +715,17 @@ fn turn_packet(r: &mut Run<'_>, shooter: Seat, passing: bool, winner: Option<Sea
     let rule = rules::load_amount(rules::world_load_rule(r.config, &r.state.world));
     let live = items::amount_live(rule, r.state.grabs.distributing, items::reload_wanted(r.config, &r.state, winner));
     if live {
-        bend_arm!("simple/main:turn.live:True{}");
+        branch!(B::SimpleMainTurnLiveTrue);
         r.set_phase(Phase::NeedTurnAmount { from: shooter, passing, winner });
         return;
     }
-    bend_arm!("simple/main:turn.live:False{}");
+    branch!(B::SimpleMainTurnLiveFalse);
     match rule {
         AmountRule::Random => {
-            bend_arm!("simple/main:turn.amount:D.RandomAmount{}");
+            branch!(B::SimpleMainTurnAmountRandomAmount);
         }
         AmountRule::Fixed(amount) => {
-            bend_arm!("simple/main:turn.amount:D.FixedAmount{amount}");
+            branch!(B::SimpleMainTurnAmountFixedAmount);
             r.world().item_amount = amount;
         }
     }
@@ -741,19 +742,19 @@ fn turn_end(r: &mut Run<'_>, shooter: Seat, passing: bool) {
 fn death(r: &mut Run<'_>, target: Seat, shell: Shell, health: u32) {
     match (shell, health) {
         (Shell::Live, 0) => {
-            bend_arm!("simple/main:death:D.Live{} 0n");
+            branch!(B::SimpleMainDeathLiveZero);
             if r.state.world.checking_first_death {
-                bend_arm!("simple/main:death.remember:True{}");
+                branch!(B::SimpleMainDeathRememberTrue);
                 let world = r.world();
                 world.first_death = Some(target);
                 world.checking_first_death = false;
             } else {
-                bend_arm!("simple/main:death.remember:False{}");
+                branch!(B::SimpleMainDeathRememberFalse);
             }
             r.emit(GameEvent::Died { seat: target });
         }
         (Shell::Live, 1..) | (Shell::Blank, _) => {
-            bend_arm!("simple/main:death:_ _");
+            branch!(B::SimpleMainDeathAny);
         }
     }
 }
@@ -761,11 +762,11 @@ fn death(r: &mut Run<'_>, target: Seat, shell: Shell, health: u32) {
 /// `shoot` with `shoot.gun` and `shoot.loaded`.
 fn shoot(r: &mut Run<'_>, shooter: Seat, target: Seat) {
     let Some((shell, rest)) = r.state.world.gun.split_first() else {
-        bend_arm!("simple/main:shoot.gun:Nil{}");
+        branch!(B::SimpleMainShootGunNil);
         r.set_phase(Phase::Blocked { holder: Some(shooter) });
         return;
     };
-    bend_arm!("simple/main:shoot.gun:shell <> rest");
+    branch!(B::SimpleMainShootGunCons);
     let damage = rules::captured(r.state.world.sawed);
     let before = r.state.players.get(target).map_or(100, |record| record.health);
     let health = rules::shot_health(shell, before, damage);
@@ -789,10 +790,10 @@ fn item_resume(r: &mut Run<'_>, seat: Seat) {
 /// `item.end`.
 fn item_end(r: &mut Run<'_>, seat: Seat, ending: bool) {
     if ending {
-        bend_arm!("simple/main:item.end:True{}");
+        branch!(B::SimpleMainItemEndTrue);
         turn_packet(r, seat, true, None);
     } else {
-        bend_arm!("simple/main:item.end:False{}");
+        branch!(B::SimpleMainItemEndFalse);
         item_resume(r, seat);
     }
 }
@@ -800,28 +801,28 @@ fn item_end(r: &mut Run<'_>, seat: Seat, ending: bool) {
 /// `item.shell` with `item.chamber`: the items that act on the chambered shell.
 fn item_shell(r: &mut Run<'_>, seat: Seat, item: Item, ending: bool) {
     let Some((shell, rest)) = r.state.world.gun.split_first() else {
-        bend_arm!("simple/main:item.shell:Nil{}");
+        branch!(B::SimpleMainItemShellNil);
         r.set_phase(Phase::Blocked { holder: None });
         return;
     };
-    bend_arm!("simple/main:item.shell:+shell <> rest");
+    branch!(B::SimpleMainItemShellCons);
     match item {
         Item::Glass => {
-            bend_arm!("simple/main:item.chamber:D.Glass{}");
+            branch!(B::SimpleMainItemChamberGlass);
             r.tell(seat, Secret::Glimpse { shell });
         }
         Item::Beer => {
-            bend_arm!("simple/main:item.chamber:D.Beer{}");
+            branch!(B::SimpleMainItemChamberBeer);
             r.world().gun = rest;
             r.emit(GameEvent::Ejected { seat, shell });
         }
         Item::Inverter => {
-            bend_arm!("simple/main:item.chamber:D.Inverter{}");
+            branch!(B::SimpleMainItemChamberInverter);
             r.world().gun = rest.push_front(items::invert(shell));
             r.emit(GameEvent::Inverted { seat });
         }
         Item::Saw | Item::Jammer | Item::Cigarettes | Item::Phone | Item::Adrenaline | Item::Remote => {
-            bend_arm!("simple/main:item.chamber:_");
+            branch!(B::SimpleMainItemChamberAny);
             r.set_phase(Phase::Blocked { holder: None });
             return;
         }
@@ -833,60 +834,60 @@ fn item_shell(r: &mut Run<'_>, seat: Seat, item: Item, ending: bool) {
 fn item_effect(r: &mut Run<'_>, seat: Seat, item: Item, ending: bool, phone: Option<Secret>) {
     match item {
         Item::Saw => {
-            bend_arm!("simple/main:item.effect:D.Saw{}");
+            branch!(B::SimpleMainItemEffectSaw);
             r.world().sawed = true;
             item_resume(r, seat);
         }
         Item::Jammer => {
-            bend_arm!("simple/main:item.effect:D.Jammer{}");
+            branch!(B::SimpleMainItemEffectJammer);
         }
         Item::Cigarettes => {
-            bend_arm!("simple/main:item.effect:D.Cigarettes{}");
+            branch!(B::SimpleMainItemEffectCigarettes);
             let hp = items::seat_health(&r.state.players, seat);
             if hp < r.state.world.round_health {
-                bend_arm!("simple/main:item.heal:True{}");
+                branch!(B::SimpleMainItemHealTrue);
                 let hp = hp.saturating_add(1);
                 r.players_update(seat, |record| SeatRecord { health: hp, ..record });
                 r.emit(GameEvent::Healed { seat, health: hp });
             } else {
-                bend_arm!("simple/main:item.heal:False{}");
+                branch!(B::SimpleMainItemHealFalse);
             }
             item_resume(r, seat);
         }
         Item::Phone => {
-            bend_arm!("simple/main:item.effect:D.Phone{}");
+            branch!(B::SimpleMainItemEffectPhone);
             match phone {
                 None => {
-                    bend_arm!("simple/main:item.tell:None{}");
+                    branch!(B::SimpleMainItemTellNone);
                     r.set_phase(Phase::Blocked { holder: None });
                 }
                 Some(secret) => {
-                    bend_arm!("simple/main:item.tell:Some{secret}");
+                    branch!(B::SimpleMainItemTellSome);
                     r.tell(seat, secret);
                     item_resume(r, seat);
                 }
             }
         }
         Item::Adrenaline => {
-            bend_arm!("simple/main:item.effect:D.Adrenaline{}");
+            branch!(B::SimpleMainItemEffectAdrenaline);
         }
         Item::Remote => {
-            bend_arm!("simple/main:item.effect:D.Remote{}");
+            branch!(B::SimpleMainItemEffectRemote);
             let direction = items::flip(r.state.world.direction);
             r.world().direction = direction;
             r.emit(GameEvent::DirectionFlipped { direction });
             item_resume(r, seat);
         }
         Item::Glass => {
-            bend_arm!("simple/main:item.effect:D.Glass{}");
+            branch!(B::SimpleMainItemEffectGlass);
             item_shell(r, seat, Item::Glass, ending);
         }
         Item::Beer => {
-            bend_arm!("simple/main:item.effect:D.Beer{}");
+            branch!(B::SimpleMainItemEffectBeer);
             item_shell(r, seat, Item::Beer, ending);
         }
         Item::Inverter => {
-            bend_arm!("simple/main:item.effect:D.Inverter{}");
+            branch!(B::SimpleMainItemEffectInverter);
             item_shell(r, seat, Item::Inverter, ending);
         }
     }
@@ -905,11 +906,11 @@ fn item_clue(r: &mut Run<'_>, seat: Seat, owner: Seat, slot: Slot, index: u32) {
     let position = index.saturating_add(1).min(PHONE_CAP);
     match r.state.world.gun.nth(rules::predecessor(position)) {
         None => {
-            bend_arm!("simple/main:item.clue.found:None{}");
+            branch!(B::SimpleMainItemClueFoundNone);
             r.set_phase(Phase::Blocked { holder: Some(seat) });
         }
         Some(shell) => {
-            bend_arm!("simple/main:item.clue.found:Some{shell}");
+            branch!(B::SimpleMainItemClueFoundSome);
             item_consume(r, seat, owner, slot, Item::Phone, false, Some(Secret::Clue { position, shell }));
         }
     }
@@ -921,24 +922,24 @@ fn item_use(r: &mut Run<'_>, seat: Seat, owner: Seat, slot: Slot, item: Item) {
     let ending = items::ends_turn(item, length);
     match item {
         Item::Phone => {
-            bend_arm!("simple/main:item.route:D.Phone{}");
+            branch!(B::SimpleMainItemRoutePhone);
             match length {
                 0..=2 => {
-                    bend_arm!("simple/main:item.phone:0n|1n|2n");
+                    branch!(B::SimpleMainItemPhoneZeroOneTwo);
                     item_consume(r, seat, owner, slot, Item::Phone, false, Some(Secret::NoClue));
                 }
                 3 => {
-                    bend_arm!("simple/main:item.phone:3n");
+                    branch!(B::SimpleMainItemPhoneThree);
                     item_clue(r, seat, owner, slot, 2);
                 }
                 4.. => {
-                    bend_arm!("simple/main:item.phone:_");
+                    branch!(B::SimpleMainItemPhoneAny);
                     r.set_phase(Phase::NeedPhone { seat, owner, slot });
                 }
             }
         }
         Item::Saw | Item::Glass | Item::Jammer | Item::Cigarettes | Item::Beer | Item::Inverter | Item::Adrenaline | Item::Remote => {
-            bend_arm!("simple/main:item.route:item");
+            branch!(B::SimpleMainItemRouteAny);
             item_consume(r, seat, owner, slot, item, ending, None);
         }
     }
@@ -955,32 +956,32 @@ fn jam_selected(r: &mut Run<'_>, seat: Seat, target: Seat) {
 fn pickup_selected(r: &mut Run<'_>, seat: Seat, selected: Option<IdleOption>) {
     match selected {
         Some(IdleOption::ShootAt { target }) => {
-            bend_arm!("simple/main:pickup.selected:Some{T.ShootAt{target}}");
+            branch!(B::SimpleMainPickupSelectedSomeShootAt);
             pickup(r, seat);
             shoot(r, seat, target);
         }
         Some(IdleOption::UseSlot { slot, item }) => {
-            bend_arm!("simple/main:pickup.selected:Some{T.UseSlot{slot, item}}");
+            branch!(B::SimpleMainPickupSelectedSomeUseSlot);
             item_use(r, seat, seat, slot, item);
         }
         Some(IdleOption::JamWith { slot, target }) => {
-            bend_arm!("simple/main:pickup.selected:Some{T.JamWith{slot, target}}");
+            branch!(B::SimpleMainPickupSelectedSomeJamWith);
             item_use(r, seat, seat, slot, Item::Jammer);
             jam_selected(r, seat, target);
         }
         Some(IdleOption::StealWith { adrenaline, owner, slot, item }) => {
-            bend_arm!("simple/main:pickup.selected:Some{T.StealWith{adrenaline, owner, slot, item}}");
+            branch!(B::SimpleMainPickupSelectedSomeStealWith);
             item_use(r, seat, seat, adrenaline, Item::Adrenaline);
             item_use(r, seat, owner, slot, item);
         }
         Some(IdleOption::StealJamWith { adrenaline, owner, slot, target }) => {
-            bend_arm!("simple/main:pickup.selected:Some{T.StealJamWith{adrenaline, owner, slot, target}}");
+            branch!(B::SimpleMainPickupSelectedSomeStealJamWith);
             item_use(r, seat, seat, adrenaline, Item::Adrenaline);
             item_use(r, seat, owner, slot, Item::Jammer);
             jam_selected(r, seat, target);
         }
         None => {
-            bend_arm!("simple/main:pickup.selected:None{}");
+            branch!(B::SimpleMainPickupSelectedNone);
             r.set_phase(Phase::Blocked { holder: Some(seat) });
         }
     }

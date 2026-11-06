@@ -1,8 +1,8 @@
 //! The Buckshot simple machine (`sim/bend-mp/simple/`), mirrored from Bend.
 //!
 //! Bend is the source of truth: every function here follows one Bend def,
-//! and each match arm starts with a [`bend_arm!`] label naming the Bend
-//! branch (`<module>:<def>:<case pattern>`). The core never panics and never
+//! and each match arm starts with `branch!` naming the Bend branch it
+//! mirrors (see [`branch::B`]). The core never panics and never
 //! allocates: the state is a flat `Copy` value, and notes and menus live in
 //! fixed buffers.
 //!
@@ -12,12 +12,25 @@
 
 use arrayvec::ArrayVec;
 
-/// Labels a match arm with the Bend branch it mirrors. A no-op for now; a
-/// later path tracer hooks in here behind the `trace` feature.
+use crate::branch::B;
+
+/// Names the Bend branch a match arm mirrors; its first statement. Records
+/// the branch under the `trace` feature and compiles to nothing otherwise.
+macro_rules! branch {
+    ($b:expr) => {{
+        #[cfg(feature = "trace")]
+        $crate::branch::record($b);
+        #[cfg(not(feature = "trace"))]
+        let _ = $b;
+    }};
+}
+
+/// A Bend branch label still in string form; converted to `branch!` at integration.
 macro_rules! bend_arm {
     ($id:literal) => {};
 }
 
+pub mod branch;
 mod domain;
 mod items;
 mod machine;
@@ -56,26 +69,26 @@ pub enum IdleOption {
 impl IdleOption {
     /// `option.move`.
     #[must_use]
-    pub const fn to_move(self) -> Move {
+    pub fn to_move(self) -> Move {
         match self {
             Self::ShootAt { target } => {
-                bend_arm!("simple/point:option.move:T.ShootAt{target}");
+                branch!(B::SimplePointOptionMoveShootAt);
                 Move::Shoot { target }
             }
             Self::UseSlot { item, .. } => {
-                bend_arm!("simple/point:option.move:T.UseSlot{_, item}");
+                branch!(B::SimplePointOptionMoveUseSlot);
                 Move::Use { item }
             }
             Self::JamWith { target, .. } => {
-                bend_arm!("simple/point:option.move:T.JamWith{_, target}");
+                branch!(B::SimplePointOptionMoveJamWith);
                 Move::Jam { target }
             }
             Self::StealWith { owner, item, .. } => {
-                bend_arm!("simple/point:option.move:T.StealWith{_, owner, _, item}");
+                branch!(B::SimplePointOptionMoveStealWith);
                 Move::Steal { owner, item }
             }
             Self::StealJamWith { owner, target, .. } => {
-                bend_arm!("simple/point:option.move:T.StealJamWith{_, owner, _, target}");
+                branch!(B::SimplePointOptionMoveStealJamWith);
                 Move::StealJam { owner, target }
             }
         }
@@ -143,7 +156,7 @@ impl LegalMove {
     }
 
     #[must_use]
-    pub const fn to_move(self) -> Move {
+    pub fn to_move(self) -> Move {
         self.option.to_move()
     }
 }

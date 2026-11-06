@@ -89,7 +89,7 @@ impl Seats {
         }
     }
 
-    pub fn iter(&self) -> impl DoubleEndedIterator<Item = Seat> + '_ {
+    pub fn iter(&self) -> impl DoubleEndedIterator<Item = Seat> + Clone + '_ {
         self.seats.iter().take(usize::from(self.len)).copied()
     }
 
