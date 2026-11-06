@@ -15,9 +15,9 @@ import { decodeArgs, runMain, ScriptError } from "../src/script.ts";
 // of configs, never per match. Reads only a public database, one whose provenance is blanked
 // (tools/arena/redact_database.py), and replaces --out only when the files pass src/arena-viewer/privacy.ts.
 
-const USAGE = "usage: bun scripts/arena-export.ts <public db> --out <dir> [--regret <regret db>] [--knowledge <knowledge db>] [--certain-mistakes <opportunities db>]";
+const USAGE = "usage: bun scripts/arena-export.ts <public db> --out <dir> [--regret <regret db>] [--regret-sampled <sampled regret db>] [--knowledge <knowledge db>] [--certain-mistakes <opportunities db>]";
 
-const Flags = Schema.Struct({ out: Schema.String, regret: Schema.optional(Schema.String), knowledge: Schema.optional(Schema.String), "certain-mistakes": Schema.optional(Schema.String) });
+const Flags = Schema.Struct({ out: Schema.String, regret: Schema.optional(Schema.String), "regret-sampled": Schema.optional(Schema.String), knowledge: Schema.optional(Schema.String), "certain-mistakes": Schema.optional(Schema.String) });
 
 const usage = () => new ScriptError({ message: USAGE, exitCode: 1 });
 
@@ -35,18 +35,18 @@ const provenanceCount = (dbPath: string): number => {
 };
 
 const program = Effect.gen(function* () {
-  const options = { out: { type: "string" }, regret: { type: "string" }, knowledge: { type: "string" }, "certain-mistakes": { type: "string" } } as const;
+  const options = { out: { type: "string" }, regret: { type: "string" }, "regret-sampled": { type: "string" }, knowledge: { type: "string" }, "certain-mistakes": { type: "string" } } as const;
   const parsed = yield* Effect.try({ try: () => parseArgs({ allowPositionals: true, options }), catch: usage });
-  const { out, regret, knowledge, "certain-mistakes": certain } = yield* decodeArgs(Flags, USAGE)(parsed.values);
+  const { out, regret, "regret-sampled": regretSampled, knowledge, "certain-mistakes": certain } = yield* decodeArgs(Flags, USAGE)(parsed.values);
   const [dbPath] = parsed.positionals;
 
-  if (dbPath === undefined || isMissing(dbPath) || isMissing(regret) || isMissing(knowledge) || isMissing(certain)) return yield* Effect.fail(usage());
+  if (dbPath === undefined || isMissing(dbPath) || isMissing(regret) || isMissing(regretSampled) || isMissing(knowledge) || isMissing(certain)) return yield* Effect.fail(usage());
 
   const withProvenance = provenanceCount(dbPath);
 
   if (withProvenance > 0) return yield* Effect.fail(new ScriptError({ message: `${dbPath} is not a public database: ${withProvenance} seats keep their provenance`, exitCode: 1 }));
 
-  const arena = loadArena(dbPath, { regret, knowledge, certain });
+  const arena = loadArena(dbPath, { regret, regretSampled, knowledge, certain });
   const json = encodeAggregates(aggregatesOf({ seats: withPotShares(arena.seats), decisions: arena.decisions, certain: arena.certain.summary.rates, consistency: arena.consistency }));
 
   arena.db.close();

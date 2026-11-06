@@ -5,8 +5,8 @@ import { Option } from "effect";
 
 import { configSummaries, ODDS_BINS, oddsBinOf, selfShotTallies } from "../src/arena-viewer/aggregates.ts";
 import { chamberPatterns, roundStory, ShellTracker, shotLineIn } from "../src/arena-viewer/analysis.ts";
-import type { Seat } from "../src/arena-viewer/api.ts";
-import { type BlockTally, blockRate, colorOf, fmtBytes, groupBy, labelOf, largestGap, matchRows, quantile, regretStats, rng, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
+import type { Seat, SeatRegret } from "../src/arena-viewer/api.ts";
+import { type BlockTally, blockRate, colorOf, fmtBytes, groupBy, labelOf, matchRows, quantile, regretStats, rng, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { bradleyTerry, type Game, heldOutRatings, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 import { droppedConfigs, oddsPanels } from "../src/arena-viewer/page/odds.ts";
 import { shotOf, showsReloadNote, turningPoints } from "../src/arena-viewer/page/replay.ts";
@@ -346,28 +346,23 @@ test("a config's pot share is its cash over the match's cash, averaged over scor
   }
 });
 
-test("a config's regret weights every searched move equally, whichever seat it came from, and is null with none", () => {
-  const largest = { ordinal: 1, points: 1 };
-  const seats = [{ regret: { moves: 1, total: 10, exact: 1, largest } }, { regret: { moves: 3, total: 2, exact: 0, largest } }, { regret: null }];
+const seatRegret = (moves: number, losses: ReadonlyArray<number>, rest: Partial<SeatRegret> = {}): SeatRegret => ({ moves, total: losses.reduce((sum, loss) => sum + loss, 0), accuracy: 50, best: 0, inaccuracies: 0, mistakes: 0, blunders: 0, sampled: 0, losses, ...rest });
 
-  expect(regretStats(seats)).toEqual({ moves: 4, mean: 3, exactShare: 0.25 });
+test("a config's regret weighs every searched move equally, whichever seat it came from, and is null with none", () => {
+  const seats = [{ regret: seatRegret(1, [10], { accuracy: 40, blunders: 0, mistakes: 1, best: 0 }) }, { regret: seatRegret(3, [1, 1], { accuracy: 80, best: 1, sampled: 3 }) }, { regret: null }];
+
+  expect(regretStats(seats)).toEqual({ moves: 4, accuracy: 60, meanLost: 3, p99Lost: 10, bestShare: 0.25, inaccuraciesPer100: 0, mistakesPer100: 25, blundersPer100: 0, sampledShare: 0.75 });
   expect(regretStats([{ regret: null }])).toBeNull();
   expect(regretStats([])).toBeNull();
 });
 
-test("the largest gap is the searched move with the most points given up, over every scored seat", () =>
-  hegel.test((tc) => {
-    const seatGen = gs.composite<Parameters<typeof largestGap>[0][number]>((draw) => {
-      const [searched, points, ordinal] = draw.draw(gs.tuples(gs.booleans(), gs.integers({ minValue: 0, maxValue: 100 }), gs.integers({ minValue: 1, maxValue: 30 })));
+test("the 99th-percentile loss counts the moves that lost nothing, by nearest rank", () => {
+  const losses = Array.from({ length: 5 }, (_, at) => at + 1);
 
-      return { matchId: `m${draw.draw(gs.integers({ minValue: 0, maxValue: 99 }))}`, regret: searched ? { moves: 1, total: points, exact: 0, largest: { ordinal, points } } : null };
-    });
-
-    const seats = tc.draw(gs.arrays(seatGen, { maxSize: 12 }));
-    const [worst] = seats.flatMap(({ matchId, regret }) => (regret === null ? [] : [{ matchId, ...regret.largest }])).toSorted((left, right) => right.points - left.points);
-
-    expect(largestGap(seats)).toEqual(worst ?? null);
-  }));
+  expect(regretStats([{ regret: seatRegret(1000, losses) }])?.p99Lost).toBe(0);
+  expect(regretStats([{ regret: seatRegret(100, [...losses, 40, 50]) }])?.p99Lost).toBe(40);
+  expect(regretStats([{ regret: seatRegret(5, losses) }])?.p99Lost).toBe(5);
+});
 
 // Two-player matches over the sweeps' pairings where every match lasts `rounds` rounds and the winner takes `winnerRounds` of them.
 const playedRoundSeats = (seed: number, rounds: number, winnerRounds: number, isStoryOk = true) => {
@@ -394,9 +389,9 @@ const playedRoundSeats = (seed: number, rounds: number, winnerRounds: number, is
 
 // The viewer check used to require Opus's mean regret below Haiku 4.5's on the live data; on fixed data it is a property of modelStats.
 test("a config's mean regret comes from its own scored seats, so a lower-regret config shows the lower mean", () => {
-  const seatOf = (model: string, matchId: string, player: string, total: number): SeatFull => ({ ...SEAT, potShare: null, matchId, player, model, regret: { moves: 10, total, exact: 0, largest: { ordinal: 1, points: total / 10 } } });
+  const seatOf = (model: string, matchId: string, player: string, total: number): SeatFull => ({ ...SEAT, potShare: null, matchId, player, model, regret: seatRegret(10, [total]) });
   const seats = [seatOf("claude-opus-5-5", "m1", "A", 20), seatOf("claude-haiku-4-5-20251001", "m1", "B", 60), seatOf("claude-opus-5-5", "m2", "B", 40), seatOf("claude-haiku-4-5-20251001", "m2", "A", 80)];
-  const meanOf = (model: string) => modelStats(seats).find((config) => config.model === model)?.regret?.mean;
+  const meanOf = (model: string) => modelStats(seats).find((config) => config.model === model)?.regret?.meanLost;
 
   expect(meanOf("claude-opus-5-5")).toBe(3);
   expect(meanOf("claude-haiku-4-5-20251001")).toBe(7);
@@ -404,7 +399,7 @@ test("a config's mean regret comes from its own scored seats, so a lower-regret 
 
 test("the scatter's accuracy axis places a config with no searched move nowhere and a measured zero at zero", () => {
   const [unsearched, flawless, flawed] = modelStats(
-    [null, { moves: 4, total: 0, exact: 4, largest: { ordinal: 1, points: 0 } }, { moves: 2, total: 3, exact: 0, largest: { ordinal: 1, points: 2 } }].map((regret, index) => ({ ...SEAT, matchId: `m${index}`, effort: `e${index}`, potShare: null, regret })),
+    [null, seatRegret(4, [], { accuracy: 100 }), seatRegret(2, [2, 1], { accuracy: 98.5 })].map((regret, index) => ({ ...SEAT, matchId: `m${index}`, effort: `e${index}`, potShare: null, regret })),
   );
 
   expect([unsearched, flawless, flawed].map((config) => (config === undefined ? undefined : AXES.regret.valueOf(config)))).toEqual([null, 100, 98.5]);

@@ -9,7 +9,7 @@ import { type CertainLinks, certainTableView, certainView } from "./certain.ts";
 import { allMatchesOf, type Derived, derive, keptMatchesOf, memoLast } from "./derived.ts";
 import { itemUsageView } from "./fates.ts";
 import { breakdownView, heatRowsOf } from "./heat.ts";
-import { configPanelView, leaderboardView } from "./leaderboard.ts";
+import { accuracyTableView, configPanelView, leaderboardView } from "./leaderboard.ts";
 import { oddsView } from "./odds.ts";
 import { matchesView } from "./matches.ts";
 import { type Group, GROUPS, LoadFailure, type Local, Message, type Model, type Section, type Viewport } from "./model.ts";
@@ -125,6 +125,8 @@ const lazyCertain = createLazy();
 
 const lazyCertainTable = createLazy();
 
+const lazyAccuracyTable = createLazy();
+
 const lazyOdds = createLazy();
 
 const lazyItems = createLazy();
@@ -156,8 +158,8 @@ const footView = (h: H, local: Model["local"]): Html =>
 const scatterCard = (h: H, derived: Derived, scatter: Model["scatter"], width: number): Html =>
   h.div([h.Class("card")], [scatterView(h, derived.pooled, derived.everyPooled, derived.ratings, derived.ranks, scatter, width)]);
 
-const drillCard = (h: H, derived: Derived, maybeDrill: Model["maybeDrill"], lazy: Model["lazy"], local: Model["local"]): Html =>
-  Option.match(maybeDrill, { onNone: () => h.empty, onSome: (key) => configPanelView(h, derived, key, lazy, local) });
+const drillCard = (h: H, derived: Derived, maybeDrill: Model["maybeDrill"], lazy: Model["lazy"]): Html =>
+  Option.match(maybeDrill, { onNone: () => h.empty, onSome: (key) => configPanelView(h, derived, key, lazy) });
 
 const optionalView = <A>(h: H, data: AsyncData.AsyncData<A, string>, what: string, draw: (loaded: A) => Html): Html =>
   AsyncData.matchData(data, {
@@ -196,7 +198,7 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
       lazyHero(heroView, [h, derived]),
       h.div([h.Class("top")], [lazyNav(navView, [h, model.maybeGroup]), lazyFilters(filtersView, [h, derived, model.filter, model.isFiltersOpen])]),
       groupView(h, "standings", [
-        sectionView(h, "scatter", h.div([], [lazyScatter(scatterCard, [h, derived, model.scatter, card]), lazyDrill(drillCard, [h, derived, model.maybeDrill, lazy, local])])),
+        sectionView(h, "scatter", h.div([], [lazyScatter(scatterCard, [h, derived, model.scatter, card]), lazyDrill(drillCard, [h, derived, model.maybeDrill, lazy])])),
         sectionView(h, "breakdown", afterFirstPaint(() => lazyBreakdown(breakdownView, [h, derived, model.heat]))),
       ]),
       groupView(h, "decisions", [
@@ -222,8 +224,9 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
           h.details(
             [h.Class("tables")],
             [
-              h.summary([], ["Leaderboard · Certain mistakes by config"]),
-              sectionView(h, "leaderboards", lazyLeaderboard(leaderboardView, [h, derived, model.leaderboard, lazy, local])),
+              h.summary([], ["Leaderboard · Accuracy · Certain mistakes by config"]),
+              sectionView(h, "leaderboards", lazyLeaderboard(leaderboardView, [h, derived, model.leaderboard, lazy])),
+              derived.everyPooled.some(({ regret }) => regret !== null) ? lazyAccuracyTable(accuracyTableView, [h, derived]) : h.empty,
               AsyncData.matchData(lazy.certain, {
                 onEmpty: () => h.empty,
                 onFailure: () => h.empty,

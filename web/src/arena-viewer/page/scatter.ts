@@ -100,9 +100,9 @@ export const AXES: Readonly<Record<ScatterAxis, Axis>> = {
   },
   regret: {
     label: "Accuracy",
-    axisLabel: "Accuracy (100 minus the mean points of round win chance lost per move)",
+    axisLabel: "Accuracy (lichess formula over points of round win chance lost)",
     isLog: false,
-    valueOf: (m) => (m.regret === null ? null : 100 - m.regret.mean),
+    valueOf: (m) => (m.regret === null ? null : m.regret.accuracy),
     format: (value) => value.toFixed(1),
     tick: String,
     perMatch: (value) => `accuracy ${value.toFixed(1)}`,

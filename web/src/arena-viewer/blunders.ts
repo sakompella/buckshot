@@ -2,7 +2,8 @@ import type { Database } from "bun:sqlite";
 
 import { Schema } from "effect";
 
-import { BLUNDER_POINTS, type Blunders } from "./api.ts";
+import { BLUNDER_POINTS } from "./accuracy.ts";
+import type { Blunders } from "./api.ts";
 import type { Regret } from "./regret.ts";
 
 // The server's blunder list: every searched move that gave up BLUNDER_POINTS or more, found by asking the regret

@@ -137,7 +137,7 @@ How much a move gave up: the best legal move's score minus the chosen move's, fr
 _Avoid_: blunder score, error
 
 **Accuracy**:
-A config's reader-facing score for its moves: 100 minus its mean regret per searched move, so 100 is a config that never gave up round win chance. One decimal on the arena page; higher is better. The largest gap is the single move that gave up the most.
+A config's reader-facing score for its moves, computed as lichess computes accuracy with regret as the drop in win chance: each move is scored from the points of round win chance it gave up, and a game combines a volatility-weighted and a harmonic mean; a config averages its games. 100 is perfect; one decimal on the arena page. The page also shows p99 points lost and inaccuracies, mistakes and blunders per 100 moves (5, 10 and 15 points, lichess's cut-offs). Decisions where every move is within a point are left out. See `docs/arena/analysis/accuracy.md`.
 _Avoid_: lost per match, largest missed chance
 
 **Pot share**:
