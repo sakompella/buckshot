@@ -24,7 +24,7 @@ def round.of(items: Bool) -> D.RoundRules:
       D.config.default_round()
     case False{}:
       +load : D.LoadRule = D.LoadRule{D.RandomShells{}, D.RandomAmount{}}
-      D.RoundRules{D.RandomHealth{}, D.LoadRules{load, load, load, load}, items.off()}
+      D.RoundRules{D.RandomHealth{}, D.LoadRules{load, load, load, load}, items.off(), D.Boxed{}}
 
 # The default three-round match; with items False every item is disabled.
 def config(table: D.Table, items: Bool) -> D.Config:

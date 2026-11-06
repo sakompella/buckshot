@@ -134,7 +134,7 @@ def config(table: D.Table, items: Bool) -> D.Config:
       D.config.default(table)
     case False{}:
       +load : D.LoadRule = D.LoadRule{D.RandomShells{}, D.RandomAmount{}}
-      +round : D.RoundRules = D.RoundRules{D.RandomHealth{}, D.LoadRules{load, load, load, load}, config.no_items()}
+      +round : D.RoundRules = D.RoundRules{D.RandomHealth{}, D.LoadRules{load, load, load, load}, config.no_items(), D.Boxed{}}
       D.Config{table, D.ThreeRounds{round, round, round}}
 
 type Run is Data:

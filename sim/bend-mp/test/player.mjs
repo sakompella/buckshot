@@ -200,7 +200,7 @@ function checkPublicOnly(pos) {
   assert.equal(json(without.public), json(withClues.public));
   const scores = belief => {
     const options = X('options.of')(list(menu(pos.request)), 0);
-    const task = { $: 'Moves', depth: replies ? 1 : 0, public: belief.public, private: belief.private, options, scored: list([]), tally: P['memo:tally.new']() };
+    const task = { $: 'Moves', depth: replies ? 1 : 0, public: X('readies')(belief.public), private: X('readies')(belief.private), options, scored: list([]), tally: P['memo:tally.new']() };
     const result = X('search')(X('fuel')(1000000), task, seat(pos.me), 1000000, STATIC, OFF);
     assert.equal(kind(result), 'Scores');
     return array(result.scored);

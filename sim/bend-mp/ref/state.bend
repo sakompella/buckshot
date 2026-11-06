@@ -237,23 +237,23 @@ def host.rules(+host: Host) -> D.RoundRules:
 
 def rules.health(rules: D.RoundRules) -> D.HealthRule:
   match rules:
-    case D.RoundRules{health, _, _}:
+    case D.RoundRules{health, _, _, _}:
       health
 
 def rules.items(rules: D.RoundRules) -> D.ItemRules:
   match rules:
-    case D.RoundRules{_, _, items}:
+    case D.RoundRules{_, _, items, _}:
       items
 
 def rules.load(rules: D.RoundRules, index: Nat) -> D.LoadRule:
   match rules index:
-    case D.RoundRules{_, D.LoadRules{a, b, c, d}, _} 0n:
+    case D.RoundRules{_, D.LoadRules{a, b, c, d}, _, _} 0n:
       a
-    case D.RoundRules{_, D.LoadRules{a, b, c, d}, _} 1n:
+    case D.RoundRules{_, D.LoadRules{a, b, c, d}, _, _} 1n:
       b
-    case D.RoundRules{_, D.LoadRules{a, b, c, d}, _} 2n:
+    case D.RoundRules{_, D.LoadRules{a, b, c, d}, _, _} 2n:
       c
-    case D.RoundRules{_, D.LoadRules{a, b, c, d}, _} _:
+    case D.RoundRules{_, D.LoadRules{a, b, c, d}, _, _} _:
       d
 
 def host.load_rule(+host: Host) -> D.LoadRule:

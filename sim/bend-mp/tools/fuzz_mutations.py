@@ -49,8 +49,8 @@ MUTATIONS = (
         "sm/items.bend",
         (
             Edit(
-                "jam.any(jam.for(state, seat)), steal.any(steal.for(state, seat)))",
-                "jam.any(jam.for(state, seat)), True{})",
+                "steal.any(steal.with(players, seat, sawed, targets)))",
+                "True{})",
             ),
         ),
     ),
@@ -96,7 +96,7 @@ MUTATIONS = (
         "sm/point.bend",
         (
             Edit(
-                "def board(+state: S.State) -> D.Board:",
+                "def board.gun(+world: S.World) -> D.GunView:",
                 "def head.shown(gun: List<&2, D.Shell>, fallback: D.Load) -> D.Load:\n"
                 "  match gun:\n"
                 "    case Nil{}:\n"
@@ -106,7 +106,7 @@ MUTATIONS = (
                 "    case D.Blank{} <> rest:\n"
                 "      D.Load{0n, 1n}\n"
                 "\n"
-                "def board(+state: S.State) -> D.Board:",
+                "def board.gun(+world: S.World) -> D.GunView:",
             ),
             Edit(
                 "D.GunView{S.world.shown(world),",

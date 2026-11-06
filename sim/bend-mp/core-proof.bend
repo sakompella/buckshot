@@ -287,13 +287,13 @@ def loadproof.found_round(found: Maybe<&2, D.RoundRules>) -> {A.ref_rules_found(
 
 def loadproof.round_load(+round: D.RoundRules, +index: Nat) -> {A.ref_round_load(round, index) == A.machine_round_load(round, index) : D.LoadRule}:
   match round index:
-    case D.RoundRules{health, D.LoadRules{a, b, c, d}, items} 0n:
+    case D.RoundRules{health, D.LoadRules{a, b, c, d}, items, _} 0n:
       {==}
-    case D.RoundRules{health, D.LoadRules{a, b, c, d}, items} 1n:
+    case D.RoundRules{health, D.LoadRules{a, b, c, d}, items, _} 1n:
       {==}
-    case D.RoundRules{health, D.LoadRules{a, b, c, d}, items} 2n:
+    case D.RoundRules{health, D.LoadRules{a, b, c, d}, items, _} 2n:
       {==}
-    case D.RoundRules{health, D.LoadRules{a, b, c, d}, items} 3n+k:
+    case D.RoundRules{health, D.LoadRules{a, b, c, d}, items, _} 3n+k:
       {==}
 
 def loadproof.world_rules(+world: S.World, seats: D.Ring<&2, A.CoreSeat>) -> {A.ref_world_rules(world, seats) == A.machine_world_rules(world) : D.RoundRules}:
@@ -420,13 +420,13 @@ def aimproof.rules_matches(+world: S.World, seats: A.Seats()) -> {Q.world.rules(
 
 def aimproof.round_load_matches(+round: D.RoundRules, +index: Nat) -> {Q.round.load(round, index) == A.turn.source_load(round, index) : D.LoadRule}:
   match round index:
-    case D.RoundRules{health, D.LoadRules{a, b, c, d}, items} 0n:
+    case D.RoundRules{health, D.LoadRules{a, b, c, d}, items, _} 0n:
       {==}
-    case D.RoundRules{health, D.LoadRules{a, b, c, d}, items} 1n:
+    case D.RoundRules{health, D.LoadRules{a, b, c, d}, items, _} 1n:
       {==}
-    case D.RoundRules{health, D.LoadRules{a, b, c, d}, items} 2n:
+    case D.RoundRules{health, D.LoadRules{a, b, c, d}, items, _} 2n:
       {==}
-    case D.RoundRules{health, D.LoadRules{a, b, c, d}, items} 3n+rest:
+    case D.RoundRules{health, D.LoadRules{a, b, c, d}, items, _} 3n+rest:
       {==}
 
 def aimproof.load_rule_matches(+world: S.World, +seats: A.Seats()) -> {Q.world.load_rule(world) == A.turn.source_load_rule(world, seats) : D.LoadRule}:

@@ -194,12 +194,29 @@ def deck.batches(batches: List<&2, S.Batch>, +mask: U32) -> List<&2, S.Batch>:
     case +batch <> rest:
       I.keep(S.Batch, U32.is_ne(U32.and(mask, bit(batch.id(batch))), 0), batch, deck.batches(rest, mask))
 
-def deck.insert(decks: List<&2, Deck>, +mask: U32, +weight: F32) -> List<&2, Deck>:
+def deck.first_is(+decks: List<&2, Deck>, +mask: U32) -> Bool:
   match decks:
     case Nil{}:
+      False{}
+    case Deck{found, _} <> _:
+      U32.is_eq(found, mask)
+
+# `same` tells whether the first of `decks` has the mask.
+def deck.insert(decks: List<&2, Deck>, same: Bool, +mask: U32, +weight: F32) -> List<&2, Deck>:
+  match decks same:
+    case Nil{} _:
       [Deck{mask, weight}]
-    case Deck{+found, +mass} <> +rest:
-      Bool.pick(List<&2, Deck>, U32.is_eq(found, mask), Deck{found, F32.add(mass, weight)} <> rest, Deck{found, mass} <> deck.insert(rest, mask, weight))
+    case Deck{found, mass} <> rest True{}:
+      Deck{found, F32.add(mass, weight)} <> rest
+    case deck <> +rest False{}:
+      deck <> deck.insert(rest, deck.first_is(rest, mask), mask, weight)
+
+def deck.matched(shown: Bool, +acc: List<&2, Deck>, +mask: U32, +weight: F32) -> List<&2, Deck>:
+  match shown:
+    case True{}:
+      deck.insert(acc, deck.first_is(acc, mask), mask, weight)
+    case False{}:
+      acc
 
 def load.eq(a: D.Load, b: D.Load) -> Bool:
   match a b:
@@ -212,7 +229,7 @@ def deck.matches(batches: List<&2, S.Batch>, +rule: D.LoadRule, +shown: D.Load, 
       acc
     case S.Batch{id, sampled} <> rest:
       +actual : D.Load = G.load.actual(rule, sampled)
-      deck.matches(rest, rule, shown, mask, weight, Bool.pick(List<&2, Deck>, load.eq(actual, shown), deck.insert(acc, U32.xor(mask, bit(id)), weight), acc))
+      deck.matches(rest, rule, shown, mask, weight, deck.matched(load.eq(actual, shown), acc, U32.xor(mask, bit(id)), weight))
 
 
 def deck.load(decks: List<&2, Deck>, +table: D.Table, +rule: D.LoadRule, +shown: D.Load, acc: List<&2, Deck>) -> List<&2, Deck>:

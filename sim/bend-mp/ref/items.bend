@@ -5,22 +5,22 @@ import ./rules.bend as G
 
 def slots.set(slots: D.Slots, slot: D.Slot, value: Maybe<&2, D.Item>) -> D.Slots:
   match slots slot:
-    case D.Slots{a, b, c, d, e, f, g, h} D.Slot0{}:
-      D.Slots{value, b, c, d, e, f, g, h}
-    case D.Slots{a, b, c, d, e, f, g, h} D.Slot1{}:
-      D.Slots{a, value, c, d, e, f, g, h}
-    case D.Slots{a, b, c, d, e, f, g, h} D.Slot2{}:
-      D.Slots{a, b, value, d, e, f, g, h}
-    case D.Slots{a, b, c, d, e, f, g, h} D.Slot3{}:
-      D.Slots{a, b, c, value, e, f, g, h}
-    case D.Slots{a, b, c, d, e, f, g, h} D.Slot4{}:
-      D.Slots{a, b, c, d, value, f, g, h}
-    case D.Slots{a, b, c, d, e, f, g, h} D.Slot5{}:
-      D.Slots{a, b, c, d, e, value, g, h}
-    case D.Slots{a, b, c, d, e, f, g, h} D.Slot6{}:
-      D.Slots{a, b, c, d, e, f, value, h}
-    case D.Slots{a, b, c, d, e, f, g, h} D.Slot7{}:
-      D.Slots{a, b, c, d, e, f, g, value}
+    case D.Slots{a, b, c, d, e, f, g, h, bx} D.Slot0{}:
+      D.Slots{value, b, c, d, e, f, g, h, D.Boxed{}}
+    case D.Slots{a, b, c, d, e, f, g, h, bx} D.Slot1{}:
+      D.Slots{a, value, c, d, e, f, g, h, D.Boxed{}}
+    case D.Slots{a, b, c, d, e, f, g, h, bx} D.Slot2{}:
+      D.Slots{a, b, value, d, e, f, g, h, D.Boxed{}}
+    case D.Slots{a, b, c, d, e, f, g, h, bx} D.Slot3{}:
+      D.Slots{a, b, c, value, e, f, g, h, D.Boxed{}}
+    case D.Slots{a, b, c, d, e, f, g, h, bx} D.Slot4{}:
+      D.Slots{a, b, c, d, value, f, g, h, D.Boxed{}}
+    case D.Slots{a, b, c, d, e, f, g, h, bx} D.Slot5{}:
+      D.Slots{a, b, c, d, e, value, g, h, D.Boxed{}}
+    case D.Slots{a, b, c, d, e, f, g, h, bx} D.Slot6{}:
+      D.Slots{a, b, c, d, e, f, value, h, D.Boxed{}}
+    case D.Slots{a, b, c, d, e, f, g, h, bx} D.Slot7{}:
+      D.Slots{a, b, c, d, e, f, g, value, D.Boxed{}}
 
 def slots.all() -> List<&2, D.Slot>:
   [D.Slot0{}, D.Slot1{}, D.Slot2{}, D.Slot3{}, D.Slot4{}, D.Slot5{}, D.Slot6{}, D.Slot7{}]

@@ -89,8 +89,8 @@ MUTATIONS = (
         "simple/main.bend",
         (
             Edit(
-                "      turn.winner(T.state.set_world(state, S.world.set_item_amount(world, value)), from, passing, winner)",
-                "      turn.winner(T.state.set_world(state, S.world.set_item_amount(world, 1n+value)), from, passing, winner)",
+                "      turn.winner(T.state.set_world(state, S.world.set_item_amount(T.state.world(state), value)), from, passing, winner)",
+                "      turn.winner(T.state.set_world(state, S.world.set_item_amount(T.state.world(state), 1n+value)), from, passing, winner)",
             ),
         ),
     ),
