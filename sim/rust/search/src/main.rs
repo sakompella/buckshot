@@ -3,7 +3,9 @@
 use std::error::Error;
 use std::io::{BufRead, BufReader, Write};
 
-use buckshot_search::{Analysis, Limits, Memo, Position, Reload, analyse_batch, parse};
+use std::collections::{BTreeSet, HashMap};
+
+use buckshot_search::{Analysis, BoundedV1, Compat, InfoSet, KeyStats, Limits, Memo, Reload, Searcher, analyse_batch};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use serde_json::{Value, json};
 
@@ -20,6 +22,18 @@ One JSON row per input decision ({id, ordinal, input}), read from the path or st
   --memo off|charged|free
                          how a finished node is reused (off)
   --threads N            worker threads (half the cores, at least 1)
+  --evaluator compat|bounded-v1
+                         compat: Bend's search, bit for bit (default).
+                         bounded-v1: the box search; lines add `upper`, the
+                         high end of the private value's box. Its budget
+                         counts nodes only (no fuel), memo hits are free and
+                         --memo does not apply.
+  --stats                with bounded-v1: count the decision belief keys
+                         (the exact memo key) of each decision's deepest
+                         iteration; rows add visits, distinct, inMatch (keys
+                         an earlier decision of the same id saw) and
+                         elsewhere (keys an earlier other id saw), and a
+                         summary goes to stderr.
 
 The decisions run in parallel on a pool of --threads workers (never rayon's
 global pool), and so do the deals of a sampled leaf. Each decision's root
@@ -31,7 +45,15 @@ a single thread gives, in input order.
 /// Decisions read and analysed at a time.
 const CHUNK: usize = 512;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Evaluator {
+    Compat,
+    BoundedV1,
+}
+
 struct Args {
+    evaluator: Evaluator,
+    stats: bool,
     limits: Limits,
     reload: Reload,
     memo: Memo,
@@ -53,6 +75,8 @@ fn args() -> Result<Args, Box<dyn Error>> {
         limits: Limits { depth: 6, budget: 20_000 },
         reload: Reload::Static,
         memo: Memo::Off,
+        evaluator: Evaluator::Compat,
+        stats: false,
         threads: default_threads(),
         path: None,
         help: false,
@@ -64,6 +88,14 @@ fn args() -> Result<Args, Box<dyn Error>> {
         let mut value = || words.next().ok_or_else(|| format!("{word} needs a value"));
         match word.as_str() {
             "-h" | "--help" => args.help = true,
+            "--stats" => args.stats = true,
+            "--evaluator" => {
+                args.evaluator = match value()?.as_str() {
+                    "compat" => Evaluator::Compat,
+                    "bounded-v1" => Evaluator::BoundedV1,
+                    other => return Err(format!("unknown evaluator {other}").into()),
+                };
+            }
             "--depth" => args.limits.depth = value()?.parse()?,
             "--budget" => args.limits.budget = value()?.parse()?,
             "--samples" => count = value()?.parse()?,
@@ -89,6 +121,9 @@ fn args() -> Result<Args, Box<dyn Error>> {
     if sampled {
         args.reload = Reload::Sampled { count };
     }
+    if args.stats && args.evaluator != Evaluator::BoundedV1 {
+        return Err("--stats needs --evaluator bounded-v1".into());
+    }
     Ok(args)
 }
 
@@ -96,28 +131,31 @@ fn args() -> Result<Args, Box<dyn Error>> {
 struct Input {
     id: Value,
     ordinal: Value,
-    position: Result<Position, String>,
+    info: Result<InfoSet, String>,
 }
 
 fn input(row: &Value) -> Input {
-    let position = match row["input"].as_str() {
-        Some(line) => parse(line).map_err(|error| error.to_string()),
+    let info = match row["input"].as_str() {
+        Some(line) => InfoSet::parse(line).map_err(|error| error.to_string()),
         None => Err("no input".to_owned()),
     };
     Input {
         id: row["id"].clone(),
         ordinal: row["ordinal"].clone(),
-        position,
+        info,
     }
 }
 
-fn analysed(id: &Value, ordinal: &Value, analysis: &Analysis) -> Value {
+fn analysed(id: &Value, ordinal: &Value, analysis: &Analysis, evaluator: Evaluator) -> Value {
     match analysis {
         Analysis::Analysed(done) => {
             let lines: Vec<Value> = done
                 .lines
                 .iter()
-                .map(|l| json!({"score": l.score, "reach": l.reach.name()}))
+                .map(|l| match evaluator {
+                    Evaluator::Compat => json!({"score": l.score, "reach": l.reach.name()}),
+                    Evaluator::BoundedV1 => json!({"score": l.score, "upper": l.upper, "reach": l.reach.name()}),
+                })
                 .collect();
             json!({
                 "id": id, "ordinal": ordinal, "lines": lines, "best": done.best, "nodes": done.nodes,
@@ -130,15 +168,89 @@ fn analysed(id: &Value, ordinal: &Value, analysis: &Analysis) -> Value {
     }
 }
 
+/// Belief keys seen so far, by the id of the decision that saw them.
+#[derive(Default)]
+struct Seen {
+    by_match: HashMap<String, BTreeSet<u64>>,
+    all: HashMap<u64, String>,
+    visits: u64,
+    distinct: u64,
+    in_match: u64,
+    elsewhere: u64,
+}
+
+impl Seen {
+    /// Counts a decision's keys against the earlier decisions', then adds them.
+    fn add(&mut self, id: &Value, stats: &KeyStats) -> Value {
+        let id = id.to_string();
+        let earlier = self.by_match.get(&id);
+        let in_match = stats
+            .keys
+            .iter()
+            .filter(|key| earlier.is_some_and(|seen| seen.contains(*key)))
+            .count();
+        let elsewhere = stats
+            .keys
+            .iter()
+            .filter(|key| self.all.get(*key).is_some_and(|other| *other != id))
+            .count();
+        let distinct = stats.keys.len();
+        let counts = [distinct, in_match, elsewhere].map(|n| u64::try_from(n).unwrap_or(u64::MAX));
+        self.visits = self.visits.saturating_add(stats.visits);
+        self.distinct = self.distinct.saturating_add(counts[0]);
+        self.in_match = self.in_match.saturating_add(counts[1]);
+        self.elsewhere = self.elsewhere.saturating_add(counts[2]);
+        for key in &stats.keys {
+            self.all.entry(*key).or_insert_with(|| id.clone());
+        }
+        self.by_match.entry(id).or_default().extend(stats.keys.iter().copied());
+        json!({"visits": stats.visits, "distinct": counts[0], "inMatch": counts[1], "elsewhere": counts[2]})
+    }
+
+    fn summary(&self) -> Value {
+        json!({
+            "visits": self.visits, "distinct": self.distinct, "inMatch": self.in_match, "elsewhere": self.elsewhere,
+            "matches": self.by_match.len(), "keys": self.all.len(),
+        })
+    }
+}
+
 /// The rows of a chunk of inputs, in input order.
-fn rows(args: &Args, pool: &ThreadPool, inputs: &[Input]) -> Vec<Value> {
-    let positions: Vec<Position> = inputs.iter().filter_map(|input| input.position.clone().ok()).collect();
-    let mut done = analyse_batch(&positions, args.limits, args.reload, args.memo, pool).into_iter();
+fn rows(args: &Args, pool: &ThreadPool, inputs: &[Input], seen: &mut Seen) -> Vec<Value> {
+    let infos: Vec<InfoSet> = inputs.iter().filter_map(|input| input.info.clone().ok()).collect();
+    let done: Vec<(Analysis, Option<KeyStats>)> = match args.evaluator {
+        Evaluator::Compat => {
+            let searcher = Compat {
+                reload: args.reload,
+                memo: args.memo,
+                pool: Some(pool),
+            };
+            analyse_batch(&infos, pool, |info| (searcher.analyse(info, args.limits), None))
+        }
+        Evaluator::BoundedV1 => {
+            let searcher = BoundedV1 {
+                reload: args.reload,
+                pool: Some(pool),
+            };
+            if args.stats {
+                analyse_batch(&infos, pool, |info| searcher.analyse_with_stats(info, args.limits))
+            } else {
+                analyse_batch(&infos, pool, |info| (searcher.analyse(info, args.limits), None))
+            }
+        }
+    };
+    let mut done = done.into_iter();
     inputs
         .iter()
-        .map(|input| match &input.position {
+        .map(|input| match &input.info {
             Ok(_) => match done.next() {
-                Some(analysis) => analysed(&input.id, &input.ordinal, &analysis),
+                Some((analysis, stats)) => {
+                    let mut row = analysed(&input.id, &input.ordinal, &analysis, args.evaluator);
+                    if let (Some(stats), Value::Object(fields)) = (stats, &mut row) {
+                        fields.insert("stats".to_owned(), seen.add(&input.id, &stats));
+                    }
+                    row
+                }
                 None => json!({"id": input.id, "ordinal": input.ordinal, "error": "no analysis"}),
             },
             Err(error) => json!({"id": input.id, "ordinal": input.ordinal, "error": error}),
@@ -159,6 +271,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         None => Box::new(std::io::stdin().lock()),
     };
     let mut chunk = Vec::with_capacity(CHUNK);
+    let mut seen = Seen::default();
     let mut lines = reader.lines();
     loop {
         let line = lines.next().transpose()?;
@@ -168,12 +281,15 @@ fn main() -> Result<(), Box<dyn Error>> {
             chunk.push(input(&serde_json::from_str(line)?));
         }
         if chunk.len() >= CHUNK || (line.is_none() && !chunk.is_empty()) {
-            for row in rows(&args, &pool, &chunk) {
+            for row in rows(&args, &pool, &chunk, &mut seen) {
                 writeln!(out, "{row}")?;
             }
             chunk.clear();
         }
         if line.is_none() {
+            if args.stats {
+                eprintln!("{}", json!({"summary": seen.summary()}));
+            }
             return Ok(());
         }
     }

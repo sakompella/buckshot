@@ -75,12 +75,15 @@ pub struct Cached {
     pub deal_hits: u64,
 }
 
-/// One root move's score (its private value) and reach.
+/// One root move's score (its private value, or the low end of its box),
+/// the high end of its box and its reach. Compat's lines are exact: `upper`
+/// is the score.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Line {
     pub index: u32,
     pub r#move: Move,
     pub score: u32,
+    pub upper: u32,
     pub reach: Reach,
 }
 

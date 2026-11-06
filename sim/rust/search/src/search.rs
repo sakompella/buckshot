@@ -13,18 +13,19 @@
 //! branch being searched, the branches, the moves of every open decision and
 //! their scores. A subtree reads its part by [`Span`], so no node allocates.
 
-use buckshot_rules::{Config, GameEvent, Label, Load, Move, Note, Notes, Request, Seat, Secret, Shell, Table, request};
+use buckshot_rules::{Config, GameEvent, Label, Load, Move, Note, Notes, Request, Seat, Secret, Shell, request};
 use rayon::ThreadPool;
-use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
-use crate::belief::build;
 use crate::deal::{DealScratch, Sums, sampled};
 use crate::evaluation::{known, sum};
 use crate::machine::{answer_into, round_won};
 use crate::memo::{Entry, Kind, Stored, Tally, hash};
 use crate::num::{F32, len_u32};
-use crate::position::Position;
 use crate::types::{Analysed, Analysis, Belief, Limits, Line, Memo, Reach, Reload, World};
+
+mod bounded;
+
+pub use bounded::{BoxEntry, KeyStats};
 
 /// A run of a stack: `start..end`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -44,6 +45,10 @@ impl Span {
 
     const fn is_empty(self) -> bool {
         self.start >= self.end
+    }
+
+    const fn len(self) -> usize {
+        self.end.saturating_sub(self.start)
     }
 }
 
@@ -347,6 +352,8 @@ struct Search<'a> {
     scored: Vec<Scored>,
     scratch: Scratch,
     deal: DealScratch,
+    boxes: Vec<bounded::Boxed>,
+    stats: Option<KeyStats>,
 }
 
 impl Search<'_> {
@@ -647,6 +654,7 @@ impl Search<'_> {
                 index: s.choice.index,
                 r#move: s.choice.r#move,
                 score: s.value.private,
+                upper: s.value.private,
                 reach: s.value.reach,
             })
             .collect()
@@ -722,28 +730,55 @@ fn lines_static(choices: &[Choice], score: u32) -> Vec<Line> {
             index: choice.index,
             r#move: choice.r#move,
             score,
+            upper: score,
             reach: Reach::Cut,
         })
         .collect()
+}
+
+/// Which search runs over a belief.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Mode {
+    /// Bend's search, bit for bit.
+    Compat,
+    /// The box search, gathering the decision keys of its deepest iteration with `stats`.
+    Bounded { stats: bool },
 }
 
 /// `root.belief`: the analysis of a built belief. A pool runs the deals of
 /// a sampled leaf in parallel and leaves the analysis as it is.
 #[must_use]
 pub fn analyse_belief(config: &Config, belief: &Belief, limits: Limits, reload: Reload, memo: Memo, pool: Option<&ThreadPool>) -> Analysis {
+    run(config, belief, limits, (reload, memo), pool, Mode::Compat).0
+}
+
+/// A built belief's analysis under `mode`, with its key stats if asked for.
+pub(crate) fn run(
+    config: &Config,
+    belief: &Belief,
+    limits: Limits,
+    leaves: (Reload, Memo),
+    pool: Option<&ThreadPool>,
+    mode: Mode,
+) -> (Analysis, Option<KeyStats>) {
+    let (reload, memo) = leaves;
     let Some(first) = belief.public.first() else {
-        return invalid("public log has no consistent shell/deck belief", 0);
+        return (invalid("public log has no consistent shell/deck belief", 0), None);
     };
     let menu = match request(config, &first.state) {
         Request::Choose(menu) => menu,
-        Request::Draw { .. } | Request::Finished | Request::Stuck => return invalid("the position is not a choice", 0),
+        Request::Draw { .. } | Request::Finished | Request::Stuck => return (invalid("the position is not a choice", 0), None),
     };
     if menu.seat() != belief.me {
-        return invalid("it is not this player's turn", 0);
+        return (invalid("it is not this player's turn", 0), None);
     }
     // `fuel`: Bend's Nat cannot overflow; a budget whose fuel outgrows u64 is refused.
-    let Some(fuel) = limits.budget.checked_mul(8).and_then(|fuel| fuel.checked_add(64)) else {
-        return invalid("the budget's fuel outgrows 64 bits", 0);
+    let fuel = match mode {
+        Mode::Compat => match limits.budget.checked_mul(8).and_then(|fuel| fuel.checked_add(64)) {
+            Some(fuel) => fuel,
+            None => return (invalid("the budget's fuel outgrows 64 bits", 0), None),
+        },
+        Mode::Bounded { .. } => 0,
     };
     let mut search = Search {
         config,
@@ -760,46 +795,20 @@ pub fn analyse_belief(config: &Config, belief: &Belief, limits: Limits, reload: 
         scored: Vec::new(),
         scratch: Scratch::default(),
         deal: DealScratch::default(),
+        boxes: Vec::new(),
+        stats: matches!(mode, Mode::Bounded { stats: true }).then(KeyStats::default),
     };
     let public = pushed(&mut search.worlds, |into| into.extend_from_slice(&belief.public));
     let private = pushed(&mut search.worlds, |into| into.extend_from_slice(&belief.private));
     let choices = push_choices(&menu, &mut search.choices);
-    let analysis = search.root(limits.depth, public, private, choices);
+    let analysis = match mode {
+        Mode::Compat => search.root(limits.depth, public, private, choices),
+        Mode::Bounded { .. } => search.bounded_root(limits.depth, public, private, choices),
+    };
     if search.scratch.buffers.overflow {
-        return invalid(OVERFLOW, search.tally.nodes);
+        return (invalid(OVERFLOW, search.tally.nodes), search.stats);
     }
-    analysis
-}
-
-/// `analyse`: the position's analysis to `limits.depth` decisions within `limits.budget` nodes.
-#[must_use]
-pub fn analyse(position: &Position, limits: Limits, reload: Reload, memo: Memo, pool: Option<&ThreadPool>) -> Analysis {
-    match reload {
-        Reload::Static => {}
-        Reload::Sampled { count: 0 } => return invalid("the sampled leaf needs at least one deal", 0),
-        Reload::Sampled { .. } => {
-            if position.config.table() != Table::TwoSeats {
-                return invalid("a leaf that deals the reload takes two seats only", 0);
-            }
-        }
-    }
-    match build(position) {
-        Ok(belief) => analyse_belief(&position.config, &belief, limits, reload, memo, pool),
-        Err(reason) => invalid(reason, 0),
-    }
-}
-
-/// [`analyse`] of every position on `pool`, in input order. Each position is
-/// searched alone, with its own memo and tally, so each analysis is the one
-/// [`analyse`] gives.
-#[must_use]
-pub fn analyse_batch(positions: &[Position], limits: Limits, reload: Reload, memo: Memo, pool: &ThreadPool) -> Vec<Analysis> {
-    pool.install(|| {
-        positions
-            .par_iter()
-            .map(|position| analyse(position, limits, reload, memo, Some(pool)))
-            .collect()
-    })
+    (analysis, search.stats)
 }
 
 #[cfg(test)]

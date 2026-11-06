@@ -14,6 +14,7 @@ use buckshot_rules::State;
 use rustc_hash::FxHasher;
 
 use crate::deal::Sums;
+use crate::search::BoxEntry;
 use crate::types::{Cached, Memo, Reach, World};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -101,6 +102,7 @@ impl Entry {
 pub enum Stored {
     Decision(Entry),
     Deal(Sums),
+    Box(BoxEntry),
 }
 
 /// What the search has spent and found so far.
@@ -131,7 +133,7 @@ impl Tally {
         }
         bucket.push((Key::new(kind, public, private), stored));
         match stored {
-            Stored::Decision(_) => self.cached.entries = self.cached.entries.saturating_add(1),
+            Stored::Decision(_) | Stored::Box(_) => self.cached.entries = self.cached.entries.saturating_add(1),
             Stored::Deal(_) => self.cached.deals = self.cached.deals.saturating_add(1),
         }
     }
