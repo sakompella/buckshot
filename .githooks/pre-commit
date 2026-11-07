@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Pre-commit checks for the Rust workspace (sim/rust). Skipped when no file
+# under sim/rust/ is staged. Checks the working tree, not only the staged
+# content. `nix develop` points core.hooksPath here.
+set -uo pipefail
+
+if git diff --cached --quiet -- sim/rust; then
+  exit 0
+fi
+
+root=$(git rev-parse --show-toplevel)
+cd "$root/sim/rust" || exit 1
+run() {
+  # A rustup shim may be on PATH without a toolchain; trust only the dev shell's cargo.
+  if [[ -n ${IN_NIX_SHELL:-} ]]; then nice -n 10 "$@"; else nice -n 10 nix develop "$root" -c "$@"; fi
+}
+
+failed=()
+check() {
+  echo "pre-commit: $*"
+  run "$@" || failed+=("$*")
+}
+check cargo fmt --all --check
+# Both feature sets: the `trace` feature changes what `branch!` expands to.
+check cargo clippy --workspace --all-targets --all-features -- -D warnings
+check cargo clippy --workspace --all-targets -- -D warnings
+check cargo check --workspace --all-targets
+check cargo branch-map check
+
+if ((${#failed[@]})); then
+  echo "pre-commit: failed (run from sim/rust/):" >&2
+  printf '  %s\n' "${failed[@]}" >&2
+  exit 1
+fi
