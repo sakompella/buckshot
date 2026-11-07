@@ -3,7 +3,7 @@
 use buckshot_rules::{Item, Seat, SeatRecord, Shell, Slots, State, alive};
 
 use crate::belief::clue_holds;
-use crate::num::F32;
+use crate::num::Real;
 use crate::types::World;
 
 const fn item_weight(item: Item) -> u32 {
@@ -52,7 +52,7 @@ fn estimate(state: &State, me: Seat, knowledge: bool) -> u32 {
             sum.wrapping_add(seat_weight(player, turn == Some(seat)))
         })
         .wrapping_add(bonus);
-    F32::per_million(weight, total.max(1))
+    Real::per_million(weight, total.max(1))
 }
 
 /// `state`: the exact value of a won round, else the estimate.
@@ -74,10 +74,10 @@ pub fn known(worlds: &[World]) -> bool {
 }
 
 /// `sum`: the probability-weighted value, folded from the last world.
-pub fn sum(worlds: &[World], me: Seat, knowledge: bool) -> F32 {
-    F32::sum_right(
-        worlds
-            .iter()
-            .map(|world| world.weight.mul(F32::from_u32(state_value(&world.state, world.won, me, knowledge)))),
-    )
+pub fn sum(worlds: &[World], me: Seat, knowledge: bool) -> Real {
+    Real::sum_right(worlds.iter().map(|world| {
+        world
+            .weight
+            .mul(Real::from_u32(state_value(&world.state, world.won, me, knowledge)))
+    }))
 }

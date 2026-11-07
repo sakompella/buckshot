@@ -19,8 +19,10 @@ use rayon::ThreadPool;
 use crate::deal::{DealScratch, Sums, sampled};
 use crate::evaluation::{known, sum};
 use crate::machine::{answer_into, round_won};
-use crate::memo::{Entry, Kind, Stored, Tally, hash};
-use crate::num::{F32, len_u32};
+#[cfg(feature = "f32")]
+use crate::memo::Entry;
+use crate::memo::{Kind, Stored, Tally, hash};
+use crate::num::{Real, len_u32};
 use crate::types::{Analysed, Analysis, Belief, Limits, Line, Memo, Reach, Reload, World};
 
 mod bounded;
@@ -103,7 +105,7 @@ struct Out {
 #[derive(Clone, Copy, Debug)]
 struct Group {
     key: Span,
-    mass: F32,
+    mass: Real,
 }
 
 /// The buffers one move's play writes: the notes of the answer and of a
@@ -151,7 +153,7 @@ impl Buffers {
                 range,
             } => {
                 let count = range.extra.wrapping_add(2);
-                let weight = world.weight.div(F32::from_u32(count));
+                let weight = world.weight.div(Real::from_u32(count));
                 for k in (0..count).rev() {
                     let out = match answer_into(config, &world.state, k, &mut self.later) {
                         Some(state) => {
@@ -218,7 +220,7 @@ fn group(outs: &mut [Out], seen: &[Seen], private: bool, within: Option<Span>, g
 }
 
 /// `worlds.of`: the outs of group `at`, normalized by its mass.
-fn worlds_of(outs: &[Out], at: usize, mass: F32, into: &mut Vec<World>) -> Span {
+fn worlds_of(outs: &[Out], at: usize, mass: Real, into: &mut Vec<World>) -> Span {
     pushed(into, |into| {
         into.extend(outs.iter().filter(|out| out.group == at).map(|out| World {
             weight: out.world.weight.div(mass),
@@ -232,8 +234,8 @@ fn worlds_of(outs: &[Out], at: usize, mass: F32, into: &mut Vec<World>) -> Span 
 struct Branch {
     public: Span,
     private: Span,
-    public_p: F32,
-    private_p: F32,
+    public_p: Real,
+    private_p: Real,
 }
 
 /// `millionths` of a static sum.
@@ -259,6 +261,7 @@ struct Value {
     reach: Reach,
 }
 
+#[cfg(feature = "f32")]
 #[derive(Clone, Copy, Debug)]
 struct Scored {
     choice: Choice,
@@ -269,11 +272,13 @@ struct Scored {
 #[derive(Clone, Copy, Debug)]
 enum Searched {
     Value(Value),
+    #[cfg(feature = "f32")]
     Scores(Span),
     Spent,
 }
 
 /// A decision's value goes into the memo under the beliefs' hash, with the nodes spent before it began.
+#[cfg(feature = "f32")]
 #[derive(Clone, Copy, Debug)]
 struct Keep {
     hash: u64,
@@ -281,6 +286,7 @@ struct Keep {
 }
 
 /// A decision's choices are a span of [`Search::choices`].
+#[cfg(feature = "f32")]
 enum Task {
     Known(Searched),
     Decide {
@@ -303,6 +309,7 @@ fn push_choices(menu: &buckshot_rules::Menu, into: &mut Vec<Choice>) -> Span {
 /// `decide`: the searcher takes its best private value, and the public
 /// believes it takes its best public one; an opponent takes the lowest
 /// public value. Ties keep the first move.
+#[cfg(feature = "f32")]
 fn decide(mine: bool, scored: &[Scored]) -> Searched {
     let Some((first, rest)) = scored.split_first() else {
         return Searched::Spent;
@@ -341,6 +348,7 @@ struct Search<'a> {
     config: &'a Config,
     me: Seat,
     budget: u64,
+    #[cfg(feature = "f32")]
     fuel: u64,
     reload: Reload,
     memo: Memo,
@@ -349,6 +357,7 @@ struct Search<'a> {
     worlds: Vec<World>,
     branches: Vec<Branch>,
     choices: Vec<Choice>,
+    #[cfg(feature = "f32")]
     scored: Vec<Scored>,
     scratch: Scratch,
     deal: DealScratch,
@@ -382,7 +391,7 @@ impl Search<'_> {
                     public: public_worlds,
                     private: Span::default(),
                     public_p: public_group.mass,
-                    private_p: F32::ZERO,
+                    private_p: Real::ZERO,
                 });
             } else {
                 let mut public_p = public_group.mass;
@@ -394,7 +403,7 @@ impl Search<'_> {
                         public_p,
                         private_p: private_group.mass,
                     });
-                    public_p = F32::ZERO;
+                    public_p = Real::ZERO;
                 }
             }
         }
@@ -455,7 +464,11 @@ impl Search<'_> {
         }
         Self::expected(sums, private)
     }
+}
 
+/// Bend's search, in the `f32` build only.
+#[cfg(feature = "f32")]
+impl Search<'_> {
     /// `node.choose`: an entry serves when its value holds at this depth and,
     /// unless reuse is free, the nodes its search spent still fit the budget.
     fn choose(&mut self, mine: bool, depth: u32, public: Span, private: Span, menu: &buckshot_rules::Menu) -> Task {
@@ -617,8 +630,8 @@ impl Search<'_> {
     /// The branch sums: probability times value under each belief, and the branches' reach.
     fn branches(&mut self, fuel: u64, depth: u32, branches: Span) -> Searched {
         let mut fuel = fuel;
-        let mut public = F32::ZERO;
-        let mut private = F32::ZERO;
+        let mut public = Real::ZERO;
+        let mut private = Real::ZERO;
         let mut reach = Reach::Settled;
         for at in branches.start..branches.end {
             let Some(branch) = self.branches.get(at).copied() else {
@@ -631,8 +644,8 @@ impl Search<'_> {
             let (Some(next), Searched::Value(value)) = (after.checked_sub(1), result) else {
                 return Searched::Spent;
             };
-            public = public.add(branch.public_p.mul(F32::from_u32(value.public)));
-            private = private.add(branch.private_p.mul(F32::from_u32(value.private)));
+            public = public.add(branch.public_p.mul(Real::from_u32(value.public)));
+            private = private.add(branch.private_p.mul(Real::from_u32(value.private)));
             reach = reach.join(value.reach);
             fuel = next;
         }
@@ -741,6 +754,7 @@ fn lines_static(choices: &[Choice], score: u32) -> Vec<Line> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Mode {
     /// Bend's search, bit for bit.
+    #[cfg(feature = "f32")]
     Compat,
     /// The box search, pruned or not, the chosen move (a menu index) searched
     /// exactly, gathering the decision keys of its deepest iteration with `stats`.
@@ -749,6 +763,7 @@ pub(crate) enum Mode {
 
 /// `root.belief`: the analysis of a built belief. A pool runs the deals of
 /// a sampled leaf in parallel and leaves the analysis as it is.
+#[cfg(feature = "f32")]
 #[must_use]
 pub fn analyse_belief(config: &Config, belief: &Belief, limits: Limits, reload: Reload, memo: Memo, pool: Option<&ThreadPool>) -> Analysis {
     run(config, belief, limits, (reload, memo), pool, Mode::Compat).0
@@ -775,7 +790,9 @@ pub(crate) fn run(
         return (invalid("it is not this player's turn", 0), None);
     }
     // `fuel`: Bend's Nat cannot overflow; a budget whose fuel outgrows u64 is refused.
+    #[cfg(feature = "f32")]
     let fuel = match mode {
+        #[cfg(feature = "f32")]
         Mode::Compat => match limits.budget.checked_mul(8).and_then(|fuel| fuel.checked_add(64)) {
             Some(fuel) => fuel,
             None => return (invalid("the budget's fuel outgrows 64 bits", 0), None),
@@ -786,6 +803,7 @@ pub(crate) fn run(
         config,
         me: belief.me,
         budget: limits.budget,
+        #[cfg(feature = "f32")]
         fuel,
         reload,
         memo,
@@ -794,6 +812,7 @@ pub(crate) fn run(
         worlds: Vec::new(),
         branches: Vec::new(),
         choices: Vec::new(),
+        #[cfg(feature = "f32")]
         scored: Vec::new(),
         scratch: Scratch::default(),
         deal: DealScratch::default(),
@@ -805,6 +824,7 @@ pub(crate) fn run(
     let private = pushed(&mut search.worlds, |into| into.extend_from_slice(&belief.private));
     let choices = push_choices(&menu, &mut search.choices);
     let analysis = match mode {
+        #[cfg(feature = "f32")]
         Mode::Compat => search.root(limits.depth, public, private, choices),
         Mode::Bounded { chosen, .. } => search.bounded_root(limits.depth, (public, private), choices, chosen),
     };
@@ -816,14 +836,7 @@ pub(crate) fn run(
 
 #[cfg(test)]
 mod tests {
-    use buckshot_rules::{
-        AmountRule, Config, Deck, Event, HealthRule, ItemRule, LoadRule, Move, Request, RoundRules, RuleError, SeatRecord, ShellRule,
-        State, Table, initial, request, step_event,
-    };
-
-    use super::analyse_belief;
-    use crate::num::F32;
-    use crate::types::{Analysis, Belief, Limits, Memo, Reach, Reload, World};
+    use buckshot_rules::{AmountRule, Config, HealthRule, ItemRule, LoadRule, RoundRules, RuleError, ShellRule, Table};
 
     /// Two seats at 2 health, a one-shell live load and no items.
     pub(super) fn config() -> Result<Config, RuleError> {
@@ -849,77 +862,88 @@ mod tests {
         Config::new(table, &[round, round, round])
     }
 
-    /// The first choice of the match, each seat at 1 health and one batch left in the deck.
-    fn at_one_health(config: &Config) -> Result<State, RuleError> {
-        let mut state = initial(config);
-        for _ in 0..64_u32 {
-            if matches!(request(config, &state), Request::Choose(_)) {
-                break;
+    /// Bend's search, in the `f32` build only.
+    #[cfg(feature = "f32")]
+    mod compat {
+        use buckshot_rules::{Config, Deck, Event, Move, Request, RuleError, SeatRecord, State, initial, request, step_event};
+
+        use super::config;
+        use crate::num::Real;
+        use crate::search::analyse_belief;
+        use crate::types::{Analysis, Belief, Limits, Memo, Reach, Reload, World};
+
+        /// The first choice of the match, each seat at 1 health and one batch left in the deck.
+        fn at_one_health(config: &Config) -> Result<State, RuleError> {
+            let mut state = initial(config);
+            for _ in 0..64_u32 {
+                if matches!(request(config, &state), Request::Choose(_)) {
+                    break;
+                }
+                state = step_event(config, state, Event::Draw(0))?.state;
             }
-            state = step_event(config, state, Event::Draw(0))?.state;
+            let players = state.players.entries().fold(state.players, |all, (seat, record)| {
+                all.set(seat, SeatRecord { health: 1, ..record })
+            });
+            let world = buckshot_rules::World {
+                decks: state.world.decks.set(config.table(), Deck::of_ids(config.table(), [0])),
+                ..state.world
+            };
+            Ok(State { world, players, ..state })
         }
-        let players = state.players.entries().fold(state.players, |all, (seat, record)| {
-            all.set(seat, SeatRecord { health: 1, ..record })
-        });
-        let world = buckshot_rules::World {
-            decks: state.world.decks.set(config.table(), Deck::of_ids(config.table(), [0])),
-            ..state.world
-        };
-        Ok(State { world, players, ..state })
-    }
 
-    /// The scores of shooting the opponent and shooting myself, and whether
-    /// the opponent's shot begins the next round at a choice.
-    type Shots = (bool, Option<(u32, Reach)>, Option<(u32, Reach)>);
+        /// The scores of shooting the opponent and shooting myself, and whether
+        /// the opponent's shot begins the next round at a choice.
+        type Shots = (bool, Option<(u32, Reach)>, Option<(u32, Reach)>);
 
-    fn shots() -> Result<Shots, RuleError> {
-        let config = config()?;
-        let state = at_one_health(&config)?;
-        let Request::Choose(menu) = request(&config, &state) else {
-            return Err(RuleError::Config("the fixture should start at a choice"));
-        };
-        let me = menu.seat();
-        let shoot = menu
-            .moves()
-            .position(|legal| matches!(legal.to_move(), Move::Shoot { target } if target != me));
-        let index = shoot.and_then(|at| u32::try_from(at).ok()).unwrap_or(u32::MAX);
-        let won = step_event(&config, state, Event::Choose(index))?;
-        let next_round = matches!(request(&config, &won.state), Request::Choose(_));
-        let world = World {
-            state,
-            weight: F32::ONE,
-            won: None,
-        };
-        let belief = Belief {
-            public: vec![world],
-            private: vec![world],
-            me,
-            round: 0,
-        };
-        let Analysis::Analysed(done) = analyse_belief(
-            &config,
-            &belief,
-            Limits { depth: 4, budget: 20_000 },
-            Reload::Static,
-            Memo::Off,
-            None,
-        ) else {
-            return Err(RuleError::Config("the fixture should analyse"));
-        };
-        let at = |own: bool| {
-            done.lines
-                .iter()
-                .find(|line| matches!(line.r#move, Move::Shoot { target } if (target == me) == own))
-                .map(|line| (line.score, line.reach))
-        };
-        Ok((next_round, at(false), at(true)))
-    }
+        fn shots() -> Result<Shots, RuleError> {
+            let config = config()?;
+            let state = at_one_health(&config)?;
+            let Request::Choose(menu) = request(&config, &state) else {
+                return Err(RuleError::Config("the fixture should start at a choice"));
+            };
+            let me = menu.seat();
+            let shoot = menu
+                .moves()
+                .position(|legal| matches!(legal.to_move(), Move::Shoot { target } if target != me));
+            let index = shoot.and_then(|at| u32::try_from(at).ok()).unwrap_or(u32::MAX);
+            let won = step_event(&config, state, Event::Choose(index))?;
+            let next_round = matches!(request(&config, &won.state), Request::Choose(_));
+            let world = World {
+                state,
+                weight: Real::ONE,
+                won: None,
+            };
+            let belief = Belief {
+                public: vec![world],
+                private: vec![world],
+                me,
+                round: 0,
+            };
+            let Analysis::Analysed(done) = analyse_belief(
+                &config,
+                &belief,
+                Limits { depth: 4, budget: 20_000 },
+                Reload::Static,
+                Memo::Off,
+                None,
+            ) else {
+                return Err(RuleError::Config("the fixture should analyse"));
+            };
+            let at = |own: bool| {
+                done.lines
+                    .iter()
+                    .find(|line| matches!(line.r#move, Move::Shoot { target } if (target == me) == own))
+                    .map(|line| (line.score, line.reach))
+            };
+            Ok((next_round, at(false), at(true)))
+        }
 
-    /// P1.1: shooting the opponent wins the round and begins the next one in the
-    /// same step; the search must score the won round, not the next round's start.
-    #[test]
-    fn a_won_round_is_settled_when_the_next_round_begins_at_once() {
-        let expected = (true, Some((1_000_000, Reach::Settled)), Some((0, Reach::Settled)));
-        assert_eq!(shots(), Ok(expected), "(next round at a choice, opponent shot, own shot)");
+        /// P1.1: shooting the opponent wins the round and begins the next one in the
+        /// same step; the search must score the won round, not the next round's start.
+        #[test]
+        fn a_won_round_is_settled_when_the_next_round_begins_at_once() {
+            let expected = (true, Some((1_000_000, Reach::Settled)), Some((0, Reach::Settled)));
+            assert_eq!(shots(), Ok(expected), "(next round at a choice, opponent shot, own shot)");
+        }
     }
 }

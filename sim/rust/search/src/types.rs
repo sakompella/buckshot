@@ -2,7 +2,7 @@
 
 use buckshot_rules::{Move, Seat, State};
 
-use crate::num::F32;
+use crate::num::Real;
 
 /// How a leaf at a reload is valued: by the static evaluation before the
 /// draw, or by that evaluation's mean over `count` deals drawn at random.
@@ -110,7 +110,7 @@ pub enum Analysis {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct World {
     pub state: State,
-    pub weight: F32,
+    pub weight: Real,
     pub won: Option<Seat>,
 }
 

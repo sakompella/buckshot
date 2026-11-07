@@ -5,7 +5,9 @@ use std::io::{BufRead, BufReader, Write};
 
 use std::collections::{BTreeSet, HashMap};
 
-use buckshot_search::{Analysis, BoundedV1, Compat, InfoSet, KeyStats, Limits, Memo, Reload, Searcher, analyse_batch};
+use buckshot_search::{Analysis, BoundedV1, InfoSet, KeyStats, Limits, Memo, Reload, analyse_batch};
+#[cfg(feature = "f32")]
+use buckshot_search::{Compat, Searcher};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use serde_json::{Value, json};
 
@@ -22,17 +24,19 @@ One JSON row per input decision ({id, ordinal, input}), read from the path or st
   --memo off|charged|free
                          how a finished node is reused (off)
   --threads N            worker threads (half the cores, at least 1)
-  --evaluator compat|bounded-v1
-                         compat: Bend's search, bit for bit (default).
-                         bounded-v1: the box search; lines add `upper`, the
-                         high end of the private value's box, and `exact`,
-                         whether the score is exact at the row's depth. The best move
-                         and the row's `chosenIndex` move (a menu index, if
-                         given) are exact; every other line's box is proved
-                         no better. Its budget counts nodes only (no fuel),
-                         memo hits are free and --memo does not apply.
-  --unpruned             with bounded-v1: search every child, every box exact.
-  --stats                with bounded-v1: count the decision belief keys
+  --evaluator ID         compat: Bend's search, bit for bit; the f32 build only,
+                         and its default.
+                         bounded-v1-f32 or bounded-v1-f64, whichever matches
+                         the build (the f64 build's default): the box search.
+                         Lines add `upper`, the high end of the private
+                         value's box, and `exact`, whether the score is exact
+                         at the row's depth. The best move and the row's
+                         `chosenIndex` move (a menu index, if given) are
+                         exact; every other line's box is proved no better.
+                         Its budget counts nodes only (no fuel), memo hits
+                         are free and --memo does not apply.
+  --unpruned             with bounded-v1-*: search every child, every box exact.
+  --stats                with bounded-v1-*: count the decision belief keys
                          (the exact memo key) of each decision's deepest
                          iteration; rows add visits, distinct, inMatch (keys
                          an earlier decision of the same id saw) and
@@ -43,7 +47,7 @@ The decisions run in parallel on a pool of --threads workers (never rayon's
 global pool), and so do the deals of a sampled leaf. Each decision's root
 moves run one after another: they share the fuel, the node budget and the
 memo, so a move's result depends on the moves before it. Every row is the one
-a single thread gives, in input order.
+a single thread gives, in input order. Every row records its `evaluator` id.
 ";
 
 /// Decisions read and analysed at a time.
@@ -51,8 +55,39 @@ const CHUNK: usize = 512;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Evaluator {
+    #[cfg(feature = "f32")]
     Compat,
     BoundedV1,
+}
+
+#[cfg(feature = "f32")]
+const BOUNDED_V1: &str = "bounded-v1-f32";
+#[cfg(not(feature = "f32"))]
+const BOUNDED_V1: &str = "bounded-v1-f64";
+
+impl Evaluator {
+    #[cfg(feature = "f32")]
+    const DEFAULT: Self = Self::Compat;
+    #[cfg(not(feature = "f32"))]
+    const DEFAULT: Self = Self::BoundedV1;
+
+    /// The id rows record; bounded-v1's names the build's arithmetic.
+    const fn id(self) -> &'static str {
+        match self {
+            #[cfg(feature = "f32")]
+            Self::Compat => "compat",
+            Self::BoundedV1 => BOUNDED_V1,
+        }
+    }
+
+    fn parse(id: &str) -> Result<Self, String> {
+        match id {
+            #[cfg(feature = "f32")]
+            "compat" => Ok(Self::Compat),
+            _ if id == BOUNDED_V1 => Ok(Self::BoundedV1),
+            other => Err(format!("unknown evaluator {other} in the {} build", buckshot_search::ARITHMETIC)),
+        }
+    }
 }
 
 struct Args {
@@ -80,7 +115,7 @@ fn args() -> Result<Args, Box<dyn Error>> {
         limits: Limits { depth: 6, budget: 20_000 },
         reload: Reload::Static,
         memo: Memo::Off,
-        evaluator: Evaluator::Compat,
+        evaluator: Evaluator::DEFAULT,
         stats: false,
         unpruned: false,
         threads: default_threads(),
@@ -97,11 +132,7 @@ fn args() -> Result<Args, Box<dyn Error>> {
             "--stats" => args.stats = true,
             "--unpruned" => args.unpruned = true,
             "--evaluator" => {
-                args.evaluator = match value()?.as_str() {
-                    "compat" => Evaluator::Compat,
-                    "bounded-v1" => Evaluator::BoundedV1,
-                    other => return Err(format!("unknown evaluator {other}").into()),
-                };
+                args.evaluator = Evaluator::parse(&value()?)?;
             }
             "--depth" => args.limits.depth = value()?.parse()?,
             "--budget" => args.limits.budget = value()?.parse()?,
@@ -129,7 +160,7 @@ fn args() -> Result<Args, Box<dyn Error>> {
         args.reload = Reload::Sampled { count };
     }
     if (args.stats || args.unpruned) && args.evaluator != Evaluator::BoundedV1 {
-        return Err("--stats and --unpruned need --evaluator bounded-v1".into());
+        return Err(format!("--stats and --unpruned need --evaluator {BOUNDED_V1}").into());
     }
     Ok(args)
 }
@@ -162,6 +193,7 @@ fn analysed(id: &Value, ordinal: &Value, analysis: &Analysis, evaluator: Evaluat
                 .lines
                 .iter()
                 .map(|l| match evaluator {
+                    #[cfg(feature = "f32")]
                     Evaluator::Compat => json!({"score": l.score, "reach": l.reach.name()}),
                     Evaluator::BoundedV1 => {
                         json!({"score": l.score, "upper": l.upper, "exact": l.score == l.upper, "reach": l.reach.name()})
@@ -169,13 +201,15 @@ fn analysed(id: &Value, ordinal: &Value, analysis: &Analysis, evaluator: Evaluat
                 })
                 .collect();
             json!({
-                "id": id, "ordinal": ordinal, "lines": lines, "best": done.best, "nodes": done.nodes,
+                "id": id, "ordinal": ordinal, "evaluator": evaluator.id(), "lines": lines, "best": done.best, "nodes": done.nodes,
                 "depth": done.depth, "limited": done.limited,
                 "entries": done.cached.entries, "hits": done.cached.hits,
                 "deals": done.cached.deals, "dealHits": done.cached.deal_hits,
             })
         }
-        Analysis::Invalid { reason, nodes } => json!({"id": id, "ordinal": ordinal, "error": reason, "nodes": nodes}),
+        Analysis::Invalid { reason, nodes } => {
+            json!({"id": id, "ordinal": ordinal, "evaluator": evaluator.id(), "error": reason, "nodes": nodes})
+        }
     }
 }
 
@@ -233,6 +267,7 @@ fn rows(args: &Args, pool: &ThreadPool, inputs: &[Input], seen: &mut Seen) -> Ve
         .filter_map(|input| input.info.clone().ok().map(|info| (info, input.chosen)))
         .collect();
     let done: Vec<(Analysis, Option<KeyStats>)> = match args.evaluator {
+        #[cfg(feature = "f32")]
         Evaluator::Compat => {
             let searcher = Compat {
                 reload: args.reload,

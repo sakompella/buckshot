@@ -14,8 +14,11 @@ use buckshot_rules::State;
 use rustc_hash::FxHasher;
 
 use crate::deal::Sums;
+use crate::num::Bits;
 use crate::search::BoxEntry;
-use crate::types::{Cached, Memo, Reach, World};
+use crate::types::{Cached, World};
+#[cfg(feature = "f32")]
+use crate::types::{Memo, Reach};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Kind {
@@ -26,15 +29,15 @@ pub enum Kind {
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Key {
     kind: Kind,
-    public: Vec<(u32, State)>,
-    private: Vec<(u32, State)>,
+    public: Vec<(Bits, State)>,
+    private: Vec<(Bits, State)>,
 }
 
-fn spelled(worlds: &[World]) -> Vec<(u32, State)> {
+fn spelled(worlds: &[World]) -> Vec<(Bits, State)> {
     worlds.iter().map(|world| (world.weight.bits(), world.state)).collect()
 }
 
-fn same(spelled: &[(u32, State)], worlds: &[World]) -> bool {
+fn same(spelled: &[(Bits, State)], worlds: &[World]) -> bool {
     spelled.len() == worlds.len()
         && spelled
             .iter()
@@ -71,6 +74,7 @@ pub fn hash(kind: Kind, public: &[World], private: &[World]) -> u64 {
 }
 
 /// A decision node's value, the depth it was searched to, and the nodes that search spent.
+#[cfg(feature = "f32")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Entry {
     pub public: u32,
@@ -80,6 +84,7 @@ pub struct Entry {
     pub cost: u64,
 }
 
+#[cfg(feature = "f32")]
 impl Entry {
     /// `entry.serves`: a value with no cut leaf holds at any greater depth.
     pub const fn serves(&self, depth: u32) -> bool {
@@ -100,6 +105,7 @@ impl Entry {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Stored {
+    #[cfg(feature = "f32")]
     Decision(Entry),
     Deal(Sums),
     Box(BoxEntry),
@@ -133,7 +139,9 @@ impl Tally {
         }
         bucket.push((Key::new(kind, public, private), stored));
         match stored {
-            Stored::Decision(_) | Stored::Box(_) => self.cached.entries = self.cached.entries.saturating_add(1),
+            #[cfg(feature = "f32")]
+            Stored::Decision(_) => self.cached.entries = self.cached.entries.saturating_add(1),
+            Stored::Box(_) => self.cached.entries = self.cached.entries.saturating_add(1),
             Stored::Deal(_) => self.cached.deals = self.cached.deals.saturating_add(1),
         }
     }

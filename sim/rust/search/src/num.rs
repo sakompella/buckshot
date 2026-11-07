@@ -1,28 +1,49 @@
-//! Every F32 operation and numeric cast of the player, in one place, so the
-//! match with Bend's F32 can be audited here. Bend compiles F32 to JavaScript
-//! doubles rounded by `Math.fround` after each operation; for one `+`, `*`
-//! or `/` of two F32 values that is exactly Rust's `f32` operation. There is
-//! no fused multiply-add: each product is rounded before it is added.
+//! Every float operation and numeric cast of the player, in one place, so
+//! the arithmetic can be audited here. [`Real`] is the player's number, an
+//! `f32` or an `f64` chosen by the crate feature of the same name. It has
+//! methods only, no operators, so no other module does float math.
+//!
+//! With `f32` it is Bend's F32. Bend compiles F32 to JavaScript doubles
+//! rounded by `Math.fround` after each operation; for one `+`, `*` or `/` of
+//! two F32 values that is exactly Rust's `f32` operation. There is no fused
+//! multiply-add: each product is rounded before it is added. With `f64` the
+//! same operations run in `f64`, and conversions to U32 follow the same rules.
 
-pub use ops::F32;
+pub use ops::{ARITHMETIC, Bits, Real};
 
 #[expect(
     clippy::float_arithmetic,
     clippy::as_conversions,
-    clippy::cast_precision_loss,
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
-    reason = "Bend F32/U32 ops and conversions, in Bend's order"
+    reason = "float ops and conversions to U32, in Bend's order"
 )]
 mod ops {
+    #[cfg(feature = "f32")]
+    type Float = f32;
+    #[cfg(not(feature = "f32"))]
+    type Float = f64;
+
+    /// The bits of a [`Real`], for hashing and exact comparison.
+    #[cfg(feature = "f32")]
+    pub type Bits = u32;
+    #[cfg(not(feature = "f32"))]
+    pub type Bits = u64;
+
+    /// The arithmetic this build uses, part of its evaluator ids.
+    #[cfg(feature = "f32")]
+    pub const ARITHMETIC: &str = "f32";
+    #[cfg(not(feature = "f32"))]
+    pub const ARITHMETIC: &str = "f64";
+
     /// 2^32, the first value past a U32.
-    const TWO_TO_32: f32 = 65_536.0 * 65_536.0;
+    const TWO_TO_32: Float = 65_536.0 * 65_536.0;
 
-    /// A Bend F32.
+    /// The player's number: a Bend F32 with `f32`, an `f64` with `f64`.
     #[derive(Clone, Copy, Debug, PartialEq, Default)]
-    pub struct F32(f32);
+    pub struct Real(Float);
 
-    impl F32 {
+    impl Real {
         pub const ZERO: Self = Self(0.0);
         pub const ONE: Self = Self(1.0);
         const HALF: Self = Self(0.5);
@@ -30,14 +51,14 @@ mod ops {
 
         /// `U32.to_f32`: rounded to the nearest F32.
         #[must_use]
-        pub const fn from_u32(x: u32) -> Self {
-            Self(x as f32)
+        pub fn from_u32(x: u32) -> Self {
+            Self(widen(x))
         }
 
         /// `F32.from_nat` of a length: the Nat cut to a U32, then rounded.
         #[must_use]
-        pub const fn from_len(n: usize) -> Self {
-            Self((n as u32) as f32)
+        pub fn from_len(n: usize) -> Self {
+            Self(widen(n as u32))
         }
 
         /// `F32.to_u32`: the floor of a value in `[1, 2^32)`, else 0 (NaN included).
@@ -47,7 +68,7 @@ mod ops {
         }
 
         #[must_use]
-        pub fn bits(self) -> u32 {
+        pub fn bits(self) -> Bits {
             self.0.to_bits()
         }
 
@@ -78,11 +99,33 @@ mod ops {
             Self::MILLION.mul(Self::from_u32(weight).div(Self::from_u32(total))).to_u32()
         }
 
+        #[cfg(feature = "f32")]
+        fn to_f64(self) -> f64 {
+            f64::from(self.0)
+        }
+
+        #[cfg(not(feature = "f32"))]
+        const fn to_f64(self) -> f64 {
+            self.0
+        }
+
         /// A Bend right fold `f(x0, f(x1, ... f(xn, 0.0)))` with `f = add`:
         /// the sum taken from the last term to the first.
         pub fn sum_right(terms: impl DoubleEndedIterator<Item = Self>) -> Self {
             terms.rev().fold(Self::ZERO, |rest, term| term.add(rest))
         }
+    }
+
+    /// `x` rounded to the nearest float.
+    #[cfg(feature = "f32")]
+    const fn widen(x: u32) -> Float {
+        x as Float
+    }
+
+    /// `x`, exact.
+    #[cfg(not(feature = "f32"))]
+    fn widen(x: u32) -> Float {
+        f64::from(x)
     }
 
     /// `U32.from_nat` of a count: the Nat modulo 2^32.
@@ -97,13 +140,13 @@ mod ops {
     /// the low end keeps the sum at most `lo` whatever the others' values in
     /// their bounds, and a value at least the high end keeps it at least `hi`.
     /// The bounds are taken in f64 and widened by a slack of `2 + terms`
-    /// millionths, past the f32 rounding of the sum (at most `0.12 · terms`
+    /// millionths, past the f32 (or smaller f64) rounding of the sum (at most `0.12 · terms`
     /// with every value at most a million) and its final rounding.
     #[must_use]
-    pub fn branch_window(window: (u32, u32), terms: impl Iterator<Item = (F32, u32, u32)>, at: usize) -> (u32, u32) {
+    pub fn branch_window(window: (u32, u32), terms: impl Iterator<Item = (Real, u32, u32)>, at: usize) -> (u32, u32) {
         let (mut p, mut rest_lo, mut rest_hi, mut count) = (0.0_f64, 0.0_f64, 0.0_f64, 0.0_f64);
         for (k, (q, lo, hi)) in terms.enumerate() {
-            let q = f64::from(q.0);
+            let q = q.to_f64();
             if k == at {
                 p = q;
             } else {

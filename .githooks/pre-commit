@@ -20,10 +20,16 @@ check() {
   run "$@" || failed+=("$*")
 }
 check cargo fmt --all --check
-# Both feature sets: the `trace` feature changes what `branch!` expands to.
-check cargo clippy --workspace --all-targets --all-features -- -D warnings
-check cargo clippy --workspace --all-targets -- -D warnings
+# Every valid feature set, never --all-features: buckshot-search's `f64`
+# (default) and `f32` exclude each other, and buckshot-rules' `trace`
+# changes what `branch!` expands to.
+for features in "" "--features buckshot-rules/trace" \
+  "--no-default-features --features f32" "--no-default-features --features f32,buckshot-rules/trace"; do
+  # shellcheck disable=SC2086
+  check cargo clippy --workspace --all-targets $features -- -D warnings
+done
 check cargo check --workspace --all-targets
+check cargo check --workspace --all-targets --no-default-features --features f32
 
 if ((${#failed[@]})); then
   echo "pre-commit: failed (run from sim/rust/):" >&2

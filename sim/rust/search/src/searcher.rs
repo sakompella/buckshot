@@ -43,6 +43,8 @@ pub trait Searcher: Sync {
 
 /// Bend's search (`player/search.bend`), every row bit-identical to Bend's.
 /// A pool runs the deals of a sampled leaf in parallel and leaves the rows as they are.
+/// Only in the `f32` build.
+#[cfg(feature = "f32")]
 #[derive(Clone, Copy, Debug)]
 pub struct Compat<'a> {
     pub reload: Reload,
@@ -90,6 +92,7 @@ const fn refused(reason: &'static str) -> Analysis {
     Analysis::Invalid { reason, nodes: 0 }
 }
 
+#[cfg(feature = "f32")]
 impl Searcher for Compat<'_> {
     fn analyse(&self, info: &InfoSet, limits: Limits) -> Analysis {
         analyse_in(info, limits, (self.reload, self.memo), self.pool, Mode::Compat).0

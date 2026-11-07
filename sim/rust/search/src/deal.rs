@@ -10,14 +10,14 @@ use rayon::iter::{IntoParallelIterator, ParallelExtend, ParallelIterator};
 
 use crate::evaluation::state_value;
 use crate::machine::{round_won, token};
-use crate::num::F32;
+use crate::num::Real;
 use crate::types::World;
 
 /// Probability times static value, summed over the deals, under the public and the private belief.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Sums {
-    pub public: F32,
-    pub private: F32,
+    pub public: Real,
+    pub private: Real,
 }
 
 /// `mix`: a 32-bit finalizer.
@@ -154,8 +154,8 @@ fn chamber_known(gun: buckshot_rules::Gun) -> bool {
     !gun.is_empty() && (gun.iter().all(|s| s == Shell::Live) || gun.iter().all(|s| s == Shell::Blank))
 }
 
-fn deal_value(state: &State, won: Option<Seat>, me: Seat) -> F32 {
-    F32::from_u32(state_value(state, won, me, chamber_known(state.world.gun)))
+fn deal_value(state: &State, won: Option<Seat>, me: Seat) -> Real {
+    Real::from_u32(state_value(state, won, me, chamber_known(state.world.gun)))
 }
 
 /// A two-seat deal draws at most 19 times, so this fuel is never spent.
@@ -190,20 +190,20 @@ fn sample_deal(config: &Config, start: &Start, seed: u32, notes: &mut Notes) -> 
 struct Start {
     state: State,
     won: Option<Seat>,
-    public: F32,
-    private: F32,
+    public: Real,
+    private: Real,
 }
 
 /// The buffers a sampled leaf reuses: the merged starts and one start's deal values.
 #[derive(Debug, Default)]
 pub struct DealScratch {
     starts: BTreeMap<Vec<u32>, Start>,
-    values: Vec<Option<F32>>,
+    values: Vec<Option<Real>>,
     notes: Notes,
 }
 
 /// One deal's static value, `None` if an answer's notes outgrew their buffer.
-fn deal(config: &Config, start: &Start, seed: u32, k: u32, me: Seat, notes: &mut Notes) -> Option<F32> {
+fn deal(config: &Config, start: &Start, seed: u32, k: u32, me: Seat, notes: &mut Notes) -> Option<Real> {
     let (state, won) = sample_deal(config, start, mix(seed ^ k), notes)?;
     Some(deal_value(&state, won, me))
 }
@@ -228,8 +228,8 @@ pub fn sampled(
     starts.clear();
     let weighted = public
         .iter()
-        .map(|world| (world, world.weight, F32::ZERO))
-        .chain(private.iter().map(|world| (world, F32::ZERO, world.weight)));
+        .map(|world| (world, world.weight, Real::ZERO))
+        .chain(private.iter().map(|world| (world, Real::ZERO, world.weight)));
     for (world, p, q) in weighted {
         let (state, won) = (world.state, world.won);
         starts
@@ -249,10 +249,10 @@ pub fn sampled(
                 private: q,
             });
     }
-    let n = F32::from_u32(count);
+    let n = Real::from_u32(count);
     let mut sums = Sums {
-        public: F32::ZERO,
-        private: F32::ZERO,
+        public: Real::ZERO,
+        private: Real::ZERO,
     };
     for (key, start) in starts.iter() {
         let seed = key_seed(key, SEED);
@@ -270,7 +270,7 @@ pub fn sampled(
         let total = values
             .iter()
             .rev()
-            .try_fold(F32::ZERO, |total, value| value.map(|value| total.add(value)))?;
+            .try_fold(Real::ZERO, |total, value| value.map(|value| total.add(value)))?;
         let value = total.div(n);
         sums = Sums {
             public: sums.public.add(start.public.mul(value)),

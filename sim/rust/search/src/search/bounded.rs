@@ -25,7 +25,7 @@ use buckshot_rules::{Config, Menu, Request, Seat, request};
 
 use super::{Search, Searched, Span, Value, analysed, limited, lines_static, push_choices, static_value};
 use crate::memo::{Kind, Stored, Tally, hash};
-use crate::num::{F32, branch_window};
+use crate::num::{Real, branch_window};
 use crate::types::{Analysis, Line, Reach, World};
 
 /// The highest value: `millionths` clamps every sum to a million.
@@ -179,7 +179,9 @@ fn stats_key(scope: (Seat, &Config), public: &[World], private: &[World]) -> u64
 fn known(searched: Searched) -> Option<Boxed> {
     match searched {
         Searched::Value(value) => Some(Boxed::exact(value)),
-        Searched::Scores(_) | Searched::Spent => None,
+        Searched::Spent => None,
+        #[cfg(feature = "f32")]
+        Searched::Scores(_) => None,
     }
 }
 
@@ -317,20 +319,20 @@ const fn root_window(j: usize, best: Option<(usize, u32)>) -> Window {
 
 /// A probability-weighted sum of one end of a coordinate, in Bend's order.
 struct Fold {
-    public: F32,
-    private: F32,
+    public: Real,
+    private: Real,
 }
 
 impl Fold {
     const ZERO: Self = Self {
-        public: F32::ZERO,
-        private: F32::ZERO,
+        public: Real::ZERO,
+        private: Real::ZERO,
     };
 
-    fn add(self, public_p: F32, private_p: F32, public: u32, private: u32) -> Self {
+    fn add(self, public_p: Real, private_p: Real, public: u32, private: u32) -> Self {
         Self {
-            public: self.public.add(public_p.mul(F32::from_u32(public))),
-            private: self.private.add(private_p.mul(F32::from_u32(private))),
+            public: self.public.add(public_p.mul(Real::from_u32(public))),
+            private: self.private.add(private_p.mul(Real::from_u32(private))),
         }
     }
 }
@@ -367,7 +369,9 @@ impl Search<'_> {
             let key = hash(Kind::Decision, public_worlds, private_worlds);
             let stored = match self.tally.find(key, Kind::Decision, public_worlds, private_worlds) {
                 Some(Stored::Box(entry)) => Some(entry),
-                Some(Stored::Decision(_) | Stored::Deal(_)) | None => None,
+                Some(Stored::Deal(_)) | None => None,
+                #[cfg(feature = "f32")]
+                Some(Stored::Decision(_)) => None,
             };
             if let Some(entry) = stored
                 && entry.serves(depth, need)
@@ -526,7 +530,7 @@ impl Search<'_> {
     /// Branch `at`'s need: each needed coordinate's [`branch_window`].
     fn branch_need(&self, branches: Span, mark: usize, at: usize, need: Need) -> Need {
         let searched = self.boxes.get(mark..).unwrap_or(&[]);
-        let window = |window: Window, term: fn(&super::Branch, &Boxed) -> (F32, u32, u32)| {
+        let window = |window: Window, term: fn(&super::Branch, &Boxed) -> (Real, u32, u32)| {
             if !window.needed() {
                 return Window::NONE;
             }
@@ -618,7 +622,7 @@ mod tests {
     use buckshot_rules::{RuleError, Seat, Table};
 
     use super::{Bounds, BoxEntry, Boxed, Need, Running, TOP, Window, decide_boxes, root_window, stats_key};
-    use crate::num::{F32, branch_window};
+    use crate::num::{Real, branch_window};
     use crate::search::tests::{config, config_for};
     use crate::types::Reach;
 
@@ -819,17 +823,17 @@ mod tests {
 
     #[test]
     fn a_branch_outside_its_window_settles_the_sum() {
-        let half = F32::ONE.div(F32::from_u32(2));
+        let half = Real::ONE.div(Real::from_u32(2));
         let terms = [(half, 0, TOP), (half, 400_000, 400_000)];
         let (lo, hi) = branch_window((300_000, 600_000), terms.into_iter(), 0);
-        let sum = |value: u32| half.mul(F32::from_u32(value)).add(half.mul(F32::from_u32(400_000))).millionths();
+        let sum = |value: u32| half.mul(Real::from_u32(value)).add(half.mul(Real::from_u32(400_000))).millionths();
         assert!(sum(lo) <= 300_000 && sum(hi) >= 600_000, "{lo}: {}, {hi}: {}", sum(lo), sum(hi));
         assert!(lo > 150_000 && hi < 850_000, "the window is not empty: {lo}..{hi}");
     }
 
     #[test]
     fn the_low_and_high_sums_bracket_the_exact_sum() {
-        let (p, q) = (F32::from_u32(1).div(F32::from_u32(3)), F32::from_u32(2).div(F32::from_u32(3)));
+        let (p, q) = (Real::from_u32(1).div(Real::from_u32(3)), Real::from_u32(2).div(Real::from_u32(3)));
         let sum = |a: u32, b: u32| super::Fold::ZERO.add(p, p, a, a).add(q, q, b, b).public.millionths();
         let (lo, mid, hi) = (sum(100_000, 200_000), sum(150_000, 250_000), sum(200_000, 300_000));
         assert!(lo <= mid && mid <= hi, "{lo} <= {mid} <= {hi}");

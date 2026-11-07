@@ -6,7 +6,7 @@ use buckshot_rules::{
     World as Records, initial, load_actual, load_next, predecessor, world_load_rule,
 };
 
-use crate::num::F32;
+use crate::num::Real;
 use crate::position::{Board, Counter, GunView, Heard, Mode, Position, RoundView, SeatView, Stage};
 use crate::types::{Belief, World};
 
@@ -217,7 +217,7 @@ fn world_event(event: GameEvent, world: Records) -> Records {
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct DeckMass {
     mask: u32,
-    weight: F32,
+    weight: Real,
 }
 
 fn bit(index: u32) -> u32 {
@@ -237,7 +237,7 @@ fn deck_of(table: Table, mask: u32) -> Deck {
     )
 }
 
-fn deck_insert(decks: &mut Vec<DeckMass>, mask: u32, weight: F32) {
+fn deck_insert(decks: &mut Vec<DeckMass>, mask: u32, weight: Real) {
     match decks.iter_mut().find(|deck| deck.mask == mask) {
         Some(found) => found.weight = found.weight.add(weight),
         None => decks.push(DeckMass { mask, weight }),
@@ -250,7 +250,7 @@ fn deck_load(decks: &[DeckMass], table: Table, rule: LoadRule, shown: Load) -> V
     for deck in decks {
         let mask = if deck.mask == 0 { deck_full(table) } else { deck.mask };
         let batches: Vec<_> = deck_of(table, mask).iter().collect();
-        let weight = deck.weight.div(F32::from_len(batches.len()));
+        let weight = deck.weight.div(Real::from_len(batches.len()));
         for batch in batches {
             if load_actual(rule, batch.load) == shown {
                 deck_insert(&mut found, mask ^ bit(batch.id), weight);
@@ -261,7 +261,7 @@ fn deck_load(decks: &[DeckMass], table: Table, rule: LoadRule, shown: Load) -> V
 }
 
 fn deck_normalize(decks: Vec<DeckMass>) -> Vec<DeckMass> {
-    let total = F32::sum_right(decks.iter().map(|deck| deck.weight));
+    let total = Real::sum_right(decks.iter().map(|deck| deck.weight));
     decks
         .into_iter()
         .map(|deck| DeckMass {
@@ -276,7 +276,7 @@ fn deck_log(config: &Config, log: &[Heard]) -> Vec<DeckMass> {
     let mut world = initial(config).world;
     let mut decks = vec![DeckMass {
         mask: deck_full(table),
-        weight: F32::ONE,
+        weight: Real::ONE,
     }];
     for heard in log {
         if let Heard::Witnessed(event) = *heard {
@@ -358,7 +358,7 @@ fn worlds(config: &Config, decks: &[DeckMass], orders: &[Gun], state: State) -> 
 }
 
 fn normalize(worlds: Vec<World>) -> Vec<World> {
-    let total = F32::sum_right(worlds.iter().map(|world| world.weight));
+    let total = Real::sum_right(worlds.iter().map(|world| world.weight));
     worlds
         .into_iter()
         .map(|world| World {
