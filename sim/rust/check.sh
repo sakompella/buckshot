@@ -10,6 +10,10 @@ if [ -z "${IN_NIX_SHELL:-}" ]; then
   exec nix develop "$root" -c bash "$0" "$@"
 fi
 
+# The arena tapes replay recorded matches through web/generated/rules.mjs.
+echo "== web rules build"
+(cd "$root/web" && nice -n 10 bun run rules >/dev/null)
+
 tapes=$(mktemp -d /tmp/rust-parity-XXXXXX)
 echo "== Bend tapes -> $tapes"
 nice -n 10 node "$root/sim/bend-mp/test/rust-tapes.mjs" \
@@ -18,8 +22,13 @@ nice -n 10 node "$root/sim/bend-mp/test/rust-tapes.mjs" \
 cd "$here"
 echo "== cargo fmt --check"
 cargo fmt --check
-echo "== cargo clippy"
-cargo clippy --all-targets --all-features -- -D warnings
+# shellcheck source=features.sh
+source "$here/features.sh"
+for features in "${feature_sets[@]}"; do
+  echo "== cargo clippy $features"
+  # shellcheck disable=SC2086
+  cargo clippy --workspace --all-targets $features -- -D warnings
+done
 
 echo "== cargo branch-map check"
 cargo branch-map check
@@ -30,6 +39,8 @@ nice -n 10 node "$root/sim/bend-mp/test/bend-trace.mjs" "$tapes/traced" "$tapes"
 
 echo "== cargo test --release (tape replay against $tapes)"
 RUST_TAPES="$tapes" nice -n 10 cargo test --release -- --include-ignored --nocapture
+echo "== cargo test --release, f32 build"
+nice -n 10 cargo test --release --no-default-features --features f32 -p buckshot-search
 
 echo "== cargo trace-test (tape replay with the branch trace comparison)"
 RUST_TAPES="$tapes" nice -n 10 cargo trace-test -- --include-ignored --nocapture

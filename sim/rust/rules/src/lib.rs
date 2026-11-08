@@ -39,8 +39,9 @@ pub use domain::{
     AmountRule, Config, Damage, Direction, DrawValue, GameEvent, Gun, HealthRule, Item, ItemRule, Items, Label, Load, LoadRule, Note,
     PHONE_CAP, Range, Ring, RoundRules, Seat, Seats, Secret, Shell, ShellRule, Slot, Slots, Table, prize,
 };
-pub use machine::{start, step};
+pub use machine::{initial, start, step, step_into};
 pub use point::request;
+pub use rules::{alive, load_actual, load_next, predecessor, world_load_rule};
 pub use state::{Batch, Deck, Decks, FirstDeathCheck, Grabs, Jam, Phase, Players, SeatRecord, State, World};
 
 /// A whole move as the agent tools name it (simple/state.bend `Move`).
@@ -230,6 +231,11 @@ pub struct Notes {
 }
 
 impl Notes {
+    pub(crate) fn clear(&mut self) {
+        self.notes.clear();
+        self.truncated = false;
+    }
+
     pub(crate) fn push(&mut self, note: Note) {
         if self.notes.try_push(note).is_err() {
             self.truncated = true;

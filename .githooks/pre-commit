@@ -21,10 +21,14 @@ check() {
   run "$@" || failed+=("$*")
 }
 check cargo fmt --all --check
-# Both feature sets: the `trace` feature changes what `branch!` expands to.
-check cargo clippy --workspace --all-targets --all-features -- -D warnings
-check cargo clippy --workspace --all-targets -- -D warnings
+# shellcheck source=../sim/rust/features.sh
+source "$root/sim/rust/features.sh"
+for features in "${feature_sets[@]}"; do
+  # shellcheck disable=SC2086
+  check cargo clippy --workspace --all-targets $features -- -D warnings
+done
 check cargo check --workspace --all-targets
+check cargo check --workspace --all-targets --no-default-features --features f32
 check cargo branch-map check
 
 if ((${#failed[@]})); then

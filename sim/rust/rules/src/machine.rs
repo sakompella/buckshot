@@ -17,7 +17,7 @@ use crate::{Answer, IdleOption, Notes, Stepped};
 pub(crate) struct Run<'a> {
     pub config: &'a Config,
     pub state: State,
-    pub notes: Notes,
+    pub notes: &'a mut Notes,
 }
 
 impl Run<'_> {
@@ -51,17 +51,11 @@ impl Run<'_> {
         let record = players_seat(&players, seat);
         self.state.players = players.set(seat, f(record));
     }
-
-    fn into_stepped(self) -> Stepped {
-        Stepped {
-            state: self.state,
-            notes: self.notes,
-        }
-    }
 }
 
-/// `initial`.
-fn initial(config: &Config) -> State {
+/// `initial`: the state before the first round.
+#[must_use]
+pub fn initial(config: &Config) -> State {
     let table = config.table();
     State {
         world: World {
@@ -96,24 +90,30 @@ fn initial(config: &Config) -> State {
 /// `start`: the match from its first request point.
 #[must_use]
 pub fn start(config: &Config) -> Stepped {
+    let mut notes = Notes::default();
     let mut run = Run {
         config,
         state: initial(config),
-        notes: Notes::default(),
+        notes: &mut notes,
     };
     first_begin(&mut run);
-    run.into_stepped()
+    Stepped { state: run.state, notes }
 }
 
 /// One answer: `answer.draw` for a Draw token, `answer.choice` for a Choice
 /// token. A token at the other kind of point blocks, as in Bend.
 #[must_use]
 pub fn step(config: &Config, state: State, answer: Answer) -> Stepped {
-    let mut run = Run {
-        config,
-        state,
-        notes: Notes::default(),
-    };
+    let mut notes = Notes::default();
+    let state = step_into(config, state, answer, &mut notes);
+    Stepped { state, notes }
+}
+
+/// [`step`] writing the answer's notes into `notes`, in place of what it
+/// held, so a caller that steps often reuses one buffer.
+pub fn step_into(config: &Config, state: State, answer: Answer, notes: &mut Notes) -> State {
+    notes.clear();
+    let mut run = Run { config, state, notes };
     let r = &mut run;
     match (state.phase, answer) {
         (Phase::NeedFirst, Answer::Draw(value)) => {
@@ -187,7 +187,7 @@ pub fn step(config: &Config, state: State, answer: Answer) -> Stepped {
             r.set_phase(Phase::Blocked { holder: None });
         }
     }
-    run.into_stepped()
+    run.state
 }
 
 // Turns

@@ -1,0 +1,24 @@
+[package]
+name = "buckshot-search"
+version = "0.1.0"
+description = "The Buckshot minimax player (sim/bend-mp/player), mirrored from Bend over buckshot-rules."
+edition.workspace = true
+publish.workspace = true
+
+[features]
+default = ["f64"]
+# The player's arithmetic; exactly one. `f32` is Bend's F32, bit for bit, and
+# the only build with the compat evaluator:
+# --no-default-features --features f32.
+f32 = []
+f64 = []
+
+[dependencies]
+buckshot-rules = { path = "../rules" }
+rayon.workspace = true
+rustc-hash.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

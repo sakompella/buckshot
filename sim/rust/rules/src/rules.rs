@@ -15,7 +15,8 @@ pub(crate) enum JamResult {
 }
 
 /// `alive`.
-pub(crate) fn alive(hp: u32) -> bool {
+#[must_use]
+pub fn alive(hp: u32) -> bool {
     if hp == 0 {
         branch!(B::SmRulesAliveZero);
         false
@@ -185,7 +186,8 @@ pub(crate) fn jam_rank(players: &Players) -> u32 {
 }
 
 /// `predecessor`.
-pub(crate) fn predecessor(n: u32) -> u32 {
+#[must_use]
+pub fn predecessor(n: u32) -> u32 {
     match n.checked_sub(1) {
         None => {
             branch!(B::SmRulesPredecessorZero);
@@ -198,14 +200,22 @@ pub(crate) fn predecessor(n: u32) -> u32 {
     }
 }
 
+/// The round past the plan.
+static DEFAULT_ROUND: RoundRules = RoundRules::default_round();
+
 /// `world.rules`: the round's rules, or the default round past the plan.
 pub(crate) fn world_rules(config: &Config, world: &World) -> RoundRules {
+    *world_rules_ref(config, world)
+}
+
+/// [`world_rules`] without the copy.
+pub(crate) fn world_rules_ref<'a>(config: &'a Config, world: &World) -> &'a RoundRules {
     if let Some(round) = config.round(world.round_index) {
         branch!(B::SmRulesValueOrSome);
-        *round
+        round
     } else {
         branch!(B::SmRulesValueOrNone);
-        RoundRules::default_round()
+        &DEFAULT_ROUND
     }
 }
 
@@ -215,7 +225,8 @@ pub(crate) const fn round_health(round: &RoundRules) -> HealthRule {
 }
 
 /// `world.load_rule` with `rules.load`.
-pub(crate) fn world_load_rule(config: &Config, world: &World) -> LoadRule {
+#[must_use]
+pub fn world_load_rule(config: &Config, world: &World) -> LoadRule {
     let [a, b, c, d] = world_rules(config, world).loads;
     match world.load_index {
         0 => {
@@ -238,7 +249,8 @@ pub(crate) fn world_load_rule(config: &Config, world: &World) -> LoadRule {
 }
 
 /// `load.actual`.
-pub(crate) fn load_actual(rule: LoadRule, sampled: Load) -> Load {
+#[must_use]
+pub fn load_actual(rule: LoadRule, sampled: Load) -> Load {
     match rule.shells {
         ShellRule::Random => {
             branch!(B::SmRulesLoadActualLoadRuleRandomShells);
@@ -261,7 +273,8 @@ pub(crate) const fn load_amount(rule: LoadRule) -> AmountRule {
 }
 
 /// `load.next`.
-pub(crate) fn load_next(first: bool, index: u32) -> u32 {
+#[must_use]
+pub fn load_next(first: bool, index: u32) -> u32 {
     match (first, index) {
         (true, _) => {
             branch!(B::SmRulesLoadNextTrue);
