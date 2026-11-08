@@ -7,7 +7,7 @@ use buckshot_rules::{
 };
 
 use crate::num::Real;
-use crate::position::{Board, Counter, GunView, Heard, Mode, Position, RoundView, SeatView, Stage};
+use crate::position::{Board, Counter, GunView, Heard, MAX_SHELLS, Mode, Position, RoundView, SeatView, Stage};
 use crate::types::{Belief, World};
 
 const fn invert(shell: Shell) -> Shell {
@@ -373,7 +373,7 @@ fn normalize(worlds: Vec<World>) -> Vec<World> {
 pub fn build(position: &Position) -> Result<Belief, &'static str> {
     let Position { config, board, log, me } = position;
     let seat = match board.stage {
-        Stage::Playing { seat, mode: Mode::Idle } if board.gun.shown.live.saturating_add(board.gun.shown.blank) <= 10 => seat,
+        Stage::Playing { seat, mode: Mode::Idle } if board.gun.shown.live.saturating_add(board.gun.shown.blank) <= MAX_SHELLS => seat,
         Stage::Playing { .. } | Stage::Setup | Stage::Distributing | Stage::Loading | Stage::MatchOver => {
             return Err("requires an Idle board and a shown load of at most ten shells");
         }
