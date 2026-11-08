@@ -164,10 +164,13 @@ fn steal_jam_picks(options: &mut Options, adrenaline: Slot, picks: &Picks, targe
 
 /// `options`: every legal move of `seat`, in menu order (shots, uses, jams,
 /// steals, steal-jams).
-pub(crate) fn options(config: &Config, state: &State, seat: Seat) -> Options {
-    let uses = items::uses(config, state, seat);
-    let targets = items::jam_for(config, state, seat);
-    let picks = items::steal_for(config, state, seat);
+pub(crate) fn options(state: &State, seat: Seat) -> Options {
+    let players = &state.players;
+    let sawed = state.world.sawed;
+    let targets = items::jam_of(players, seat);
+    let jams = items::jam_any(targets);
+    let picks = items::steal_with(players, seat, sawed, jams);
+    let uses = items::uses_with(players, seat, sawed, jams, items::steal_any(&picks));
     let adrenaline = use_first(&uses, Item::Adrenaline);
     let mut options = Options::new();
     for target in rules::aim_targets(&state.players).iter() {
@@ -246,7 +249,7 @@ pub fn request(config: &Config, state: &State) -> Request {
             branch!(B::SimplePointPhaseRequestIdle);
             if table.has(seat) {
                 branch!(B::SimplePointIdleRequestTrue);
-                let options = options(config, state, seat);
+                let options = options(state, seat);
                 if options.is_empty() {
                     branch!(B::SimplePointChooseNil);
                     Request::Stuck

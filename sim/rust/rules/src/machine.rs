@@ -117,7 +117,7 @@ pub fn step_into(config: &Config, state: State, answer: Answer, notes: &mut Note
     let r = &mut run;
     match (state.phase, answer) {
         (Phase::NeedFirst, Answer::Draw(value)) => {
-            branch!(B::SimpleMainAnswerDrawStateNeedFirst);
+            branch!(B::SimpleMainAnswerDrawAtNeedFirst);
             let seat = config
                 .table()
                 .seats()
@@ -127,28 +127,28 @@ pub fn step_into(config: &Config, state: State, answer: Answer, notes: &mut Note
             first_chosen(r, seat);
         }
         (Phase::NeedHealth, Answer::Draw(value)) => {
-            branch!(B::SimpleMainAnswerDrawStateNeedHealth);
+            branch!(B::SimpleMainAnswerDrawAtNeedHealth);
             health_chosen(r, value.get());
         }
         (Phase::NeedAmount, Answer::Draw(value)) => {
-            branch!(B::SimpleMainAnswerDrawStateNeedAmount);
+            branch!(B::SimpleMainAnswerDrawAtNeedAmount);
             amount_chosen(r, value.get());
         }
         (Phase::NeedBatch, Answer::Draw(value)) => {
-            branch!(B::SimpleMainAnswerDrawStateNeedBatch);
+            branch!(B::SimpleMainAnswerDrawAtNeedBatch);
             batch(r, value.get());
         }
         (Phase::NeedSwap { load, shells, i }, Answer::Draw(value)) => {
-            branch!(B::SimpleMainAnswerDrawStateNeedSwap);
+            branch!(B::SimpleMainAnswerDrawAtNeedSwap);
             shuffle(r, load, shells.swap(i, value.get()), rules::predecessor(i));
         }
         (Phase::NeedTurnAmount { from, passing, winner }, Answer::Draw(value)) => {
-            branch!(B::SimpleMainAnswerDrawStateNeedTurnAmount);
+            branch!(B::SimpleMainAnswerDrawAtNeedTurnAmount);
             r.world().item_amount = value.get();
             turn_winner(r, from, passing, winner);
         }
         (Phase::NeedItem { seat, first, second, rest }, Answer::Draw(value)) => {
-            branch!(B::SimpleMainAnswerDrawStateNeedItem);
+            branch!(B::SimpleMainAnswerDrawAtNeedItem);
             let found = match value.get() {
                 0 => Some(first),
                 1 => Some(second),
@@ -158,15 +158,15 @@ pub fn step_into(config: &Config, state: State, answer: Answer, notes: &mut Note
             grab_distribute(r, seat);
         }
         (Phase::NeedPhone { seat, owner, slot }, Answer::Draw(value)) => {
-            branch!(B::SimpleMainAnswerDrawStateNeedPhone);
+            branch!(B::SimpleMainAnswerDrawAtNeedPhone);
             item_clue(r, seat, owner, slot, value.get());
         }
         (Phase::Idle { .. } | Phase::Ended | Phase::Blocked { .. } | Phase::Stalled, Answer::Draw(_)) => {
-            branch!(B::SimpleMainAnswerDrawAny);
+            branch!(B::SimpleMainAnswerDrawAtAny);
             r.set_phase(Phase::Blocked { holder: None });
         }
         (Phase::Idle { seat }, Answer::Choice(legal)) => {
-            branch!(B::SimpleMainAnswerChoiceStateIdle);
+            branch!(B::SimpleMainAnswerChoiceAtIdle);
             pickup_selected(r, seat, Some(legal.option()));
         }
         (
@@ -183,11 +183,23 @@ pub fn step_into(config: &Config, state: State, answer: Answer, notes: &mut Note
             | Phase::NeedPhone { .. },
             Answer::Choice(_),
         ) => {
-            branch!(B::SimpleMainAnswerChoiceAny);
+            branch!(B::SimpleMainAnswerChoiceAtAny);
             r.set_phase(Phase::Blocked { holder: None });
         }
     }
     run.state
+}
+
+/// `answer.idle`'s chosen move: `pickup.selected` for a move of `seat`'s own menu.
+pub(crate) fn pick(config: &Config, state: State, seat: Seat, option: IdleOption) -> Stepped {
+    let mut notes = Notes::default();
+    let mut run = Run {
+        config,
+        state,
+        notes: &mut notes,
+    };
+    pickup_selected(&mut run, seat, Some(option));
+    Stepped { state: run.state, notes }
 }
 
 // Turns

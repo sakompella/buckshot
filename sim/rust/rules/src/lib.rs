@@ -269,15 +269,58 @@ pub struct Stepped {
     pub notes: Notes,
 }
 
-/// Validates a raw answer against the state's request and steps. A Draw's
-/// number is clamped into its range and a Choose's index to the last move,
-/// as Bend does; at a Finished or Stuck point the state comes back unchanged
-/// with no notes, as Bend's `answer` does.
+/// Validates a raw answer against the state's request and steps (Bend's
+/// `answer`). A Draw's number is clamped into its range and a Choose's index
+/// to the last move, as Bend does; at a Finished or Stuck point the state
+/// comes back unchanged with no notes, as Bend's `answer` does.
 ///
 /// # Errors
 ///
 /// [`RuleError::WrongEvent`] for a Draw answer at a Choose point or the reverse.
 pub fn step_event(config: &Config, state: State, event: Event) -> Result<Stepped, RuleError> {
+    // `answer.at`: at Idle the request's menu and the choice's menu are one list.
+    if let Phase::Idle { seat } = state.phase {
+        branch!(B::SimpleMainAnswerAtIdle);
+        answer_idle(config, state, seat, event)
+    } else {
+        branch!(B::SimpleMainAnswerAtAny);
+        answer_request(config, state, event)
+    }
+}
+
+/// `answer.idle`: the n-th move of `seat`'s menu, clamped to the last.
+fn answer_idle(config: &Config, state: State, seat: Seat, event: Event) -> Result<Stepped, RuleError> {
+    let seated = config.table().has(seat);
+    let options = point::options(&state, seat);
+    if seated && !options.is_empty() {
+        branch!(B::SimpleMainAnswerIdleTrueCons);
+        match event {
+            Event::Choose(n) => {
+                let menu = Menu { seat, options };
+                Ok(menu.clamped(n).map_or_else(
+                    || Stepped {
+                        state,
+                        notes: Notes::default(),
+                    },
+                    |legal| machine::pick(config, state, seat, legal.option()),
+                ))
+            }
+            Event::Draw(_) => Err(RuleError::WrongEvent {
+                expected: RequestKind::Choose,
+                got: RequestKind::Draw,
+            }),
+        }
+    } else {
+        branch!(B::SimpleMainAnswerIdleAny);
+        Ok(Stepped {
+            state,
+            notes: Notes::default(),
+        })
+    }
+}
+
+/// `answer.request`.
+fn answer_request(config: &Config, state: State, event: Event) -> Result<Stepped, RuleError> {
     let unchanged = Stepped {
         state,
         notes: Notes::default(),

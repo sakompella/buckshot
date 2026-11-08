@@ -80,6 +80,7 @@ fn state(s: &State) -> Value {
         for (slot, item) in slots.entries() {
             object.insert(format!("s{}", slot.index()), maybe(item.map(tag)));
         }
+        object.insert("boxed".into(), json!({ "$": "Boxed" }));
         Value::Object(object)
     };
     let phase = match s.phase {

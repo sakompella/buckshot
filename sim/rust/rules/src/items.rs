@@ -5,7 +5,7 @@
 use arrayvec::ArrayVec;
 
 use crate::branch::B;
-use crate::domain::{AmountRule, Config, Direction, Gun, Item, ItemRule, Items, Ring, Seat, Seats, Shell, Slot, Slots};
+use crate::domain::{AmountRule, Config, Direction, Gun, Item, ItemRule, Items, Ring, Seat, Seats, Shell, Slot, Slots, Table};
 use crate::state::{Grabs, Jam, Players, State};
 use crate::{push_bounded, rules};
 
@@ -61,17 +61,6 @@ fn is_none(found: Option<Item>) -> bool {
     } else {
         branch!(B::SmItemsIsNoneSome);
         false
-    }
-}
-
-/// `has_items`.
-fn has_items(items: Items) -> bool {
-    if items.split_first().is_none() {
-        branch!(B::SmItemsHasItemsNil);
-        false
-    } else {
-        branch!(B::SmItemsHasItemsCons);
-        true
     }
 }
 
@@ -137,15 +126,9 @@ fn copies_one(found: Option<Item>, item: Item) -> u32 {
     }
 }
 
-/// `copies`.
-fn copies(slots: Slots, item: Item) -> u32 {
-    let mut total = 0u32;
-    for found in slots_items(slots) {
-        branch!(B::SmItemsCopiesCons);
-        total = total.saturating_add(copies_one(found, item));
-    }
-    branch!(B::SmItemsCopiesNil);
-    total
+/// `slots.copies`.
+fn slots_copies(slots: Slots, item: Item) -> u32 {
+    slots_items(slots).fold(0u32, |total, found| total.saturating_add(copies_one(found, item)))
 }
 
 /// `seat.health`.
@@ -240,9 +223,47 @@ pub(crate) fn grabs_placed(grabs: Grabs, seat: Seat) -> Grabs {
     }
 }
 
+/// `seat.copies`: `slots.copies` of the seat's slots, 0 for a seat not at the table.
+fn seat_copies(players: &Players, seat: Seat, item: Item) -> u32 {
+    match (players.table(), seat) {
+        (Table::TwoSeats, Seat::Seat1) => {
+            branch!(B::SmItemsSeatCopiesDuoSeatSeat1);
+        }
+        (Table::TwoSeats, Seat::Seat3) => {
+            branch!(B::SmItemsSeatCopiesDuoSeatSeat3);
+        }
+        (Table::ThreeSeats, Seat::Seat0) => {
+            branch!(B::SmItemsSeatCopiesTrioSeatSeat0);
+        }
+        (Table::ThreeSeats, Seat::Seat1) => {
+            branch!(B::SmItemsSeatCopiesTrioSeatSeat1);
+        }
+        (Table::ThreeSeats, Seat::Seat2) => {
+            branch!(B::SmItemsSeatCopiesTrioSeatSeat2);
+        }
+        (Table::FourSeats, Seat::Seat0) => {
+            branch!(B::SmItemsSeatCopiesQuadSeatSeat0);
+        }
+        (Table::FourSeats, Seat::Seat1) => {
+            branch!(B::SmItemsSeatCopiesQuadSeatSeat1);
+        }
+        (Table::FourSeats, Seat::Seat2) => {
+            branch!(B::SmItemsSeatCopiesQuadSeatSeat2);
+        }
+        (Table::FourSeats, Seat::Seat3) => {
+            branch!(B::SmItemsSeatCopiesQuadSeatSeat3);
+        }
+        (Table::TwoSeats, Seat::Seat0 | Seat::Seat2) | (Table::ThreeSeats, Seat::Seat3) => {
+            branch!(B::SmItemsSeatCopiesAny);
+            return 0;
+        }
+    }
+    slots_copies(seat_slots(players, seat), item)
+}
+
 /// `owned`: copies in the slots plus the held item.
 fn owned(players: &Players, grabs: &Grabs, seat: Seat, item: Item) -> u32 {
-    copies(seat_slots(players, seat), item).saturating_add(copies_one(seat_holding(grabs, seat), item))
+    seat_copies(players, seat, item).saturating_add(copies_one(seat_holding(grabs, seat), item))
 }
 
 /// `owned.table`.
@@ -256,9 +277,33 @@ fn owned_table(seats: Seats, players: &Players, grabs: &Grabs, item: Item) -> u3
     total
 }
 
-/// `stock.open`.
-fn stock_open(rule: ItemRule, dealt: bool, own: u32, total: u32) -> bool {
-    rule.enabled && dealt && own < rule.per_player && total < rule.on_table
+/// `stock.total`: the table's count, read only while the seat's own count
+/// is under its cap.
+fn stock_total(own_open: bool, total: impl FnOnce() -> u32, on_table: u32) -> bool {
+    if own_open {
+        branch!(B::SmItemsStockTotalTrue);
+        total() < on_table
+    } else {
+        branch!(B::SmItemsStockTotalFalse);
+        false
+    }
+}
+
+/// `stock.counted`: whether `seat` may still be granted `item`; the counts are
+/// read only for an enabled, dealt item.
+fn stock_counted(rule: ItemRule, dealt: bool, state: &State, seat: Seat, item: Item, seats: Seats) -> bool {
+    if rule.enabled && dealt {
+        branch!(B::SmItemsStockCountedItemRuleTrueTrue);
+        let own = owned(&state.players, &state.grabs, seat, item);
+        stock_total(
+            own < rule.per_player,
+            || owned_table(seats, &state.players, &state.grabs, item),
+            rule.on_table,
+        )
+    } else {
+        branch!(B::SmItemsStockCountedAny);
+        false
+    }
 }
 
 /// `pool`: the items `seat` may still be granted, in item order. Held items
@@ -270,16 +315,36 @@ pub(crate) fn pool(config: &Config, state: &State, seat: Seat) -> Items {
     let mut pool = Items::EMPTY;
     for item in Item::ORDER {
         branch!(B::SmItemsPoolGoCons);
-        let open = stock_open(
-            rules.item(item),
-            item.dealt_at(table),
-            owned(&state.players, &state.grabs, seat, item),
-            owned_table(table.seats(), &state.players, &state.grabs, item),
-        );
+        let open = stock_counted(rules.item(item), item.dealt_at(table), state, seat, item, table.seats());
         keep(open, || pool = pool.with(item));
     }
     branch!(B::SmItemsPoolGoNil);
     pool
+}
+
+/// `stocked` with `pool.any`: whether `seat`'s pool has an item, stopping at
+/// the first.
+fn stocked(config: &Config, state: &State, seat: Seat) -> bool {
+    let table = config.table();
+    let rules = rules::world_rules_ref(config, &state.world);
+    let mut items = Item::ORDER.into_iter();
+    let mut found = false;
+    loop {
+        match (items.next(), found) {
+            (_, true) => {
+                branch!(B::SmItemsPoolAnyTrue);
+                return true;
+            }
+            (None, false) => {
+                branch!(B::SmItemsPoolAnyNilFalse);
+                return false;
+            }
+            (Some(item), false) => {
+                branch!(B::SmItemsPoolAnyConsFalse);
+                found = stock_counted(rules.item(item), item.dealt_at(table), state, seat, item, table.seats());
+            }
+        }
+    }
 }
 
 /// `begin.can`: a new round ignores health and full slots.
@@ -295,7 +360,7 @@ fn begin_go(seats: Seats, config: &Config, state: &State, new_round: bool) -> Se
     for seat in seats.iter() {
         branch!(B::SmItemsBeginGoCons);
         let can = begin_can(new_round, seat_health(&state.players, seat), seat_slots(&state.players, seat));
-        let stocked = has_items(pool(config, state, seat));
+        let stocked = stocked(config, state, seat);
         keep(can && stocked, || kept.push(seat));
     }
     branch!(B::SmItemsBeginGoNil);
@@ -400,7 +465,7 @@ pub(crate) fn grab_needs(config: &Config, state: &State) -> Needs {
 /// `placing.last`: the placing seat still holds its item here.
 pub(crate) fn placing_last(config: &Config, state: &State, seat: Seat) -> bool {
     let grabs = &state.grabs;
-    let empty_pool = !has_items(pool(config, state, seat));
+    let empty_pool = !stocked(config, state, seat);
     let last_slot = occupied(seat_slots(&state.players, seat)).saturating_add(1) == 8;
     let enough = seat_granted(grabs, seat) >= state.world.item_amount;
     empty_pool || last_slot || enough
@@ -422,7 +487,7 @@ fn finish_empty(seats: Seats, config: &Config, state: &State) -> bool {
     let mut empty = true;
     for seat in seats.iter() {
         branch!(B::SmItemsFinishEmptyCons);
-        let stocked = has_items(pool(config, state, seat));
+        let stocked = stocked(config, state, seat);
         empty = !stocked && empty;
     }
     branch!(B::SmItemsFinishEmptyNil);
@@ -446,7 +511,7 @@ fn stalled(seats: Seats, config: &Config, state: &State, placing: Seat) -> Seats
         let grabbing = seat_grabbing(grabs, seat);
         let empty_handed = is_none(seat_holding(grabs, seat));
         let other = seat != placing;
-        let dry = !has_items(pool(config, state, seat));
+        let dry = !stocked(config, state, seat);
         keep(grabbing && empty_handed && other && dry, || out.push(seat));
     }
     branch!(B::SmItemsStalledNil);
@@ -505,23 +570,22 @@ fn winnerless(winner: Option<Seat>) -> bool {
     }
 }
 
-/// `gun.empty`.
-fn gun_empty(gun: Gun) -> bool {
+/// `reload.ready`: a loaded gun answers alone.
+fn reload_ready(gun: Gun, config: &Config, state: &State, winner: Option<Seat>) -> bool {
     if gun.split_first().is_none() {
-        branch!(B::SmItemsGunEmptyNil);
-        true
+        branch!(B::SmItemsReloadReadyNil);
+        let winnerless = winnerless(winner);
+        let begins = has_seats(begin_seats(config, state, false, 1));
+        winnerless && begins
     } else {
-        branch!(B::SmItemsGunEmptyCons);
+        branch!(B::SmItemsReloadReadyCons);
         false
     }
 }
 
 /// `reload.wanted`.
 pub(crate) fn reload_wanted(config: &Config, state: &State, winner: Option<Seat>) -> bool {
-    let empty = gun_empty(state.world.gun);
-    let winnerless = winnerless(winner);
-    let begins = has_seats(begin_seats(config, state, false, 1));
-    empty && winnerless && begins
+    reload_ready(state.world.gun, config, state, winner)
 }
 
 /// `jam.options`.
@@ -538,13 +602,13 @@ fn jam_options(players: &Players, by: Seat) -> Seats {
     out
 }
 
-/// `jam.for`: the living, unjammed seats other than `by`.
-pub(crate) fn jam_for(_config: &Config, state: &State, by: Seat) -> Seats {
-    jam_options(&state.players, by)
+/// `jam.of`: the living, unjammed seats other than `by`.
+pub(crate) fn jam_of(players: &Players, by: Seat) -> Seats {
+    jam_options(players, by)
 }
 
 /// `jam.any`.
-fn jam_any(options: Seats) -> bool {
+pub(crate) fn jam_any(options: Seats) -> bool {
     if options.first().is_none() {
         branch!(B::SmItemsJamAnyNil);
         false
@@ -622,14 +686,14 @@ fn steal_owners(players: &Players, thief: Seat, sawed: bool, targets: bool) -> P
     out
 }
 
-/// `steal.for`: every other seat's occupied slot that fits, dead owners included.
-pub(crate) fn steal_for(config: &Config, state: &State, thief: Seat) -> Picks {
-    let targets = jam_any(jam_for(config, state, thief));
-    steal_owners(&state.players, thief, state.world.sawed, targets)
+/// `steal.with`: every other seat's occupied slot that fits, dead owners
+/// included, given whether the thief has a jam target.
+pub(crate) fn steal_with(players: &Players, thief: Seat, sawed: bool, targets: bool) -> Picks {
+    steal_owners(players, thief, sawed, targets)
 }
 
 /// `steal.any`.
-fn steal_any(options: &Picks) -> bool {
+pub(crate) fn steal_any(options: &Picks) -> bool {
     if options.is_empty() {
         branch!(B::SmItemsStealAnyNil);
         false
@@ -682,11 +746,10 @@ fn use_slots(inventory: Slots, sawed: bool, targets: bool, steals: bool) -> Uses
     out
 }
 
-/// `uses`: ordinary item use, with the adrenaline rule of M4.
-pub(crate) fn uses(config: &Config, state: &State, seat: Seat) -> Uses {
-    let targets = jam_any(jam_for(config, state, seat));
-    let steals = steal_any(&steal_for(config, state, seat));
-    use_slots(seat_slots(&state.players, seat), state.world.sawed, targets, steals)
+/// `uses.with`: ordinary item use, with the adrenaline rule of M4, given
+/// whether the seat has jam targets and steals.
+pub(crate) fn uses_with(players: &Players, seat: Seat, sawed: bool, targets: bool, steals: bool) -> Uses {
+    use_slots(seat_slots(players, seat), sawed, targets, steals)
 }
 
 /// `ends_turn`.
@@ -787,6 +850,21 @@ mod tests {
         let mut record = state.players.get(seat).unwrap_or(SeatRecord::FRESH);
         f(&mut record);
         state.players = state.players.set(seat, record);
+    }
+
+    /// Bend's `jam.for`, `steal.for` and `uses`, the state-level forms of the
+    /// `*.of`/`*.with` functions the menu uses.
+    fn jam_for(_config: &Config, s: &State, by: Seat) -> Seats {
+        jam_of(&s.players, by)
+    }
+
+    fn steal_for(config: &Config, s: &State, thief: Seat) -> Picks {
+        steal_with(&s.players, thief, s.world.sawed, jam_any(jam_for(config, s, thief)))
+    }
+
+    fn uses(config: &Config, s: &State, seat: Seat) -> Uses {
+        let targets = jam_any(jam_for(config, s, seat));
+        uses_with(&s.players, seat, s.world.sawed, targets, steal_any(&steal_for(config, s, seat)))
     }
 
     fn stock(slots: &[(Slot, Item)]) -> Slots {
