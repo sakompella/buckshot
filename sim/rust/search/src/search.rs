@@ -13,12 +13,12 @@
 //! branch being searched, the branches, the moves of every open decision and
 //! their scores. A subtree reads its part by [`Span`], so no node allocates.
 
-use buckshot_rules::{Config, GameEvent, Label, Load, Move, Note, Notes, Request, Seat, Secret, Shell, draw_request, request};
+use buckshot_rules::{Config, GameEvent, Label, Load, Move, Note, Notes, Request, Seat, Secret, Shell, draw_request, request, step_into};
 use rayon::ThreadPool;
 
 use crate::deal::{DealScratch, Sums, sampled};
 use crate::evaluation::{known, sum};
-use crate::machine::{answer_into, round_won};
+use crate::machine::{answer_into, answer_reusing, round_won};
 #[cfg(feature = "f32")]
 use crate::memo::Entry;
 use crate::memo::{Kind, Stored, Tally, hash};
@@ -170,8 +170,10 @@ impl Buffers {
     /// `play`: every world after move `index`.
     fn play(&mut self, config: &Config, me: Seat, worlds: &[World], index: u32, outs: &mut Vec<Out>) {
         outs.clear();
+        let mut menu = None;
         for world in worlds {
-            match answer_into(config, &world.state, index, &mut self.notes) {
+            let answer = answer_reusing(config, &world.state, index, &mut menu);
+            match answer.map(|answer| step_into(config, world.state, answer, &mut self.notes)) {
                 Some(state) => {
                     self.overflow |= self.notes.truncated();
                     let won = round_won(self.notes.as_slice());

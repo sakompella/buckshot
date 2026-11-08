@@ -1,7 +1,7 @@
 //! The simple machine as the player drives it (`simple/main.bend`'s `answer`
 //! and `request`), with the round winner its notes announce.
 
-use buckshot_rules::{Answer, Config, GameEvent, Note, Notes, Request, Seat, State, request, step_into};
+use buckshot_rules::{Answer, Config, GameEvent, MenuInputs, Note, Notes, Request, Seat, State, request, step_into};
 
 /// `exact`'s note: the first `RoundWon`.
 pub fn round_won(notes: &[Note]) -> Option<Seat> {
@@ -20,6 +20,23 @@ pub fn token(request: &Request, n: u32) -> Option<Answer> {
         Request::Choose(menu) => menu.clamped(n).map(Answer::Choice),
         Request::Finished | Request::Stuck => None,
     }
+}
+
+/// The answer `M.answer(state, n)` takes, as [`token`] of the state's
+/// request. `last` holds an earlier state's Idle menu inputs and its answer at
+/// the same `n`; a state with the same inputs reuses that answer.
+pub fn answer_reusing(config: &Config, state: &State, n: u32, last: &mut Option<(MenuInputs, Option<Answer>)>) -> Option<Answer> {
+    let inputs = MenuInputs::of(state);
+    if let (Some(inputs), Some((seen, answer))) = (inputs, last.as_ref())
+        && inputs == *seen
+    {
+        return *answer;
+    }
+    let answer = token(&request(config, state), n);
+    if let Some(inputs) = inputs {
+        *last = Some((inputs, answer));
+    }
+    answer
 }
 
 /// `M.answer(state, n)` with its notes written into `notes`; `None` where

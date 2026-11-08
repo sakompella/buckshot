@@ -66,6 +66,7 @@
 "state.rs:Decks::get" = "deck field by table; Bend's decks.get is exempt"
 "state.rs:Decks::set" = "deck field write by table; Bend's decks.set is exempt"
 "point.rs:draw_request" = "the request's draw without building an Idle menu; Bend's request is labelled in point.rs:request, which it calls"
+"point.rs:MenuInputs::of" = "the inputs of an Idle menu, for reusing it across states; no Bend counterpart"
 "items.rs:Needs::set" = "per-seat slot of the needs array; Bend builds a list by recursion"
 "lib.rs:Notes::push" = "bounded note log; capacity is a Rust representation limit"
 "lib.rs:answer_idle:match event" = "wrong event kind for an Idle menu: a Rust-only error, Bend answers are untyped"

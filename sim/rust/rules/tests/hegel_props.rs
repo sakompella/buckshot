@@ -13,8 +13,8 @@ use std::hint::black_box;
 
 use buckshot_rules::{
     AmountRule, Answer, Config, Deck, Decks, Direction, Event, FirstDeathCheck, Grabs, Gun, HealthRule, IdleOption, Item, ItemRule, Items,
-    Jam, LegalMove, Load, LoadRule, Phase, Range, Request, RequestKind, Ring, RoundRules, RuleError, Seat, SeatRecord, Shell, ShellRule,
-    Slot, Slots, State, Stepped, Table, World, request, start, step, step_event,
+    Jam, LegalMove, Load, LoadRule, MenuInputs, Phase, Range, Request, RequestKind, Ring, RoundRules, RuleError, Seat, SeatRecord, Shell,
+    ShellRule, Slot, Slots, State, Stepped, Table, World, request, start, step, step_event,
 };
 use hegel::TestCase;
 use hegel::generators as gs;
@@ -567,6 +567,38 @@ fn arbitrary_states_do_not_panic(tc: TestCase) {
         }
     }
     wander(&config, state, &answers);
+}
+
+/// States with the same [`MenuInputs`] have the same request, whatever else
+/// differs: the search reuses an Idle menu's answer across them.
+#[hegel::test(test_cases = 256)]
+fn menu_inputs_decide_the_request(tc: TestCase) {
+    let config = supported_config(&tc, false);
+    let table = config.table();
+    let state = State {
+        phase: Phase::Idle { seat: seat(&tc) },
+        ..arbitrary_state(&tc, table)
+    };
+    let other = arbitrary_state(&tc, table);
+    let twin = State {
+        world: World {
+            sawed: state.world.sawed,
+            ..other.world
+        },
+        players: state.players,
+        phase: state.phase,
+        ..other
+    };
+    assert_eq!(
+        MenuInputs::of(&twin),
+        MenuInputs::of(&state),
+        "the twin has the state's menu inputs"
+    );
+    assert_eq!(
+        request(&config, &twin),
+        request(&config, &state),
+        "equal menu inputs, different requests"
+    );
 }
 
 fn wild_round(tc: &TestCase) -> RoundRules {

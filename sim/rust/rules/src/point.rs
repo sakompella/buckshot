@@ -6,7 +6,7 @@ use crate::branch::B;
 use crate::domain::{Config, Item, Items, Label, Range, Seat, Seats, Slot, Table};
 use crate::items::{self, PICKS_CAPACITY, Picks, Uses};
 use crate::rules;
-use crate::state::{Phase, State};
+use crate::state::{Phase, Players, State};
 use crate::{IdleOption, MENU_CAPACITY, Menu, Request};
 
 type Options = ArrayVec<IdleOption, MENU_CAPACITY>;
@@ -191,7 +191,8 @@ fn steal_jam_picks(options: &mut Options, adrenaline: Slot, picks: &Picks, targe
 }
 
 /// `options`: every legal move of `seat`, in menu order (shots, uses, jams,
-/// steals, steal-jams).
+/// steals, steal-jams). Reads only the players and `sawed`; [`MenuInputs`]
+/// relies on that.
 pub(crate) fn options(state: &State, seat: Seat) -> Options {
     let players = &state.players;
     let sawed = state.world.sawed;
@@ -321,6 +322,32 @@ pub fn request(config: &Config, state: &State) -> Request {
                 branch!(B::SimplePointPhoneRequestAny);
                 Request::Stuck
             }
+        }
+    }
+}
+
+/// What an Idle point's request reads besides the config: the seat, the
+/// players and whether the barrel is sawed (see [`options`]). States with
+/// equal inputs have the same request.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MenuInputs {
+    seat: Seat,
+    sawed: bool,
+    players: Players,
+}
+
+impl MenuInputs {
+    /// The inputs of the state's Idle menu; `None` away from Idle.
+    #[must_use]
+    pub const fn of(state: &State) -> Option<Self> {
+        if let Phase::Idle { seat } = state.phase {
+            Some(Self {
+                seat,
+                sawed: state.world.sawed,
+                players: state.players,
+            })
+        } else {
+            None
         }
     }
 }
