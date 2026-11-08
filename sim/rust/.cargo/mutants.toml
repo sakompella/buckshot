@@ -48,7 +48,7 @@ exclude_re = [
   # lead is always a menu index; unpruned, the order changes no value.
   'replace (< with <=|&& with \|\|) in Search<._>::bounded_choose',
   # Which move goes first only changes the order: the best move and value stay
-  # exact and every box still holds its value (search/tests/oracle.rs checks both).
+  # exact and every box still holds its value (search/tests/pruning.rs checks both).
   'replace < with (==|>) in Search<._>::bounded_choose',
   'replace == with != in Search<._>::bounded_root',
   # best only seeds the later moves' windows. Any move's low end is a sound
@@ -61,7 +61,7 @@ exclude_re = [
   # searched again (Search::bounded_branches), so it changes nodes, not values.
   'replace (\+= with [-*]=|\+ with [-*]) in ops::branch_window',
   # A wrong argmin only steers the opponent's later windows and the next lead;
-  # the boxes stay sound (search/tests/oracle.rs), so it costs nodes, not values.
+  # the boxes stay sound (search/tests/pruning.rs), so it costs nodes, not values.
   'replace && with \|\| in Running::add',
 ]
 

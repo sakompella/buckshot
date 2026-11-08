@@ -1,17 +1,18 @@
-//! The compatibility evaluator against Bend's player: every row of the files
-//! in `RUST_SEARCH_ORACLE` (written by `web/scripts/rust-search-synth.ts`,
-//! whose `js` field is the Bend player's analysis) must come out of the CLI
-//! with the same best move, node and memo counts and line values: `static.jsonl` with
-//! the default flags, `sampled.jsonl` with `--reload sampled --samples 32`,
-//! `memo.jsonl` with `--memo charged`, `sampled-memo.jsonl` with both and
-//! `budget.jsonl` with `--budget 300`, where most rows run out of budget.
-//! bounded-v1 is checked against compat on `static.jsonl`.
-//! The f32 build only; run by `sim/rust/mutants.sh`.
+//! The compatibility evaluator against the current Bend player: every row of
+//! the files in `RUST_SEARCH_ORACLE` (written by `sim/rust/search-oracle.sh`;
+//! a row's `js` field is the Bend player's analysis) must come out of the CLI
+//! with the same best move, node and memo counts and line values:
+//! `static.jsonl` with the default flags, `sampled.jsonl` with
+//! `--reload sampled --samples 32`, `memo.jsonl` with `--memo charged`,
+//! `sampled-memo.jsonl` with both and `budget.jsonl` with `--budget 300`,
+//! where most rows run out of budget. The f32 build only; `sim/rust/check.sh`
+//! runs it with `--include-ignored`. `production.rs` holds the pinned
+//! historical reference, `pruning.rs` the bounded-v1 checks of both builds.
 #![cfg(feature = "f32")]
 
-use std::io::Write as _;
-use std::process::{Command, Stdio};
+mod common;
 
+use common::{cli, oracle_dir, oracle_rows, scores};
 use serde_json::Value;
 
 /// The fields Bend's analysis and the CLI's row share.
@@ -31,9 +32,9 @@ fn shared(row: &Value) -> Value {
 }
 
 #[test]
-#[ignore = "needs RUST_SEARCH_ORACLE; run sim/rust/mutants.sh"]
+#[ignore = "needs RUST_SEARCH_ORACLE; run by sim/rust/check.sh"]
 fn compat_matches_bend() {
-    let dir = std::env::var("RUST_SEARCH_ORACLE").expect("RUST_SEARCH_ORACLE names a directory of rust-search-synth.ts files");
+    let dir = oracle_dir().unwrap();
     let runs: [(&str, &[&str]); 5] = [
         ("static.jsonl", &[]),
         ("sampled.jsonl", &["--reload", "sampled", "--samples", "32"]),
@@ -44,175 +45,35 @@ fn compat_matches_bend() {
         ),
         ("budget.jsonl", &["--budget", "300"]),
     ];
+    let mut compared = 0_usize;
     for (name, flags) in runs {
-        let path = format!("{dir}/{name}");
-        let text = std::fs::read_to_string(&path).expect("a readable oracle file");
-        let want: Vec<Value> = text.lines().map(|line| serde_json::from_str(line).expect("a JSON row")).collect();
-        let out = Command::new(env!("CARGO_BIN_EXE_buckshot-search"))
-            .args(flags)
-            .args(["--threads", "2", &path])
-            .output()
-            .expect("the CLI runs");
-        assert!(out.status.success(), "the CLI failed: {}", String::from_utf8_lossy(&out.stderr));
-        let got: Vec<Value> = String::from_utf8_lossy(&out.stdout)
-            .lines()
-            .map(|line| serde_json::from_str(line).expect("a JSON row"))
-            .collect();
-        assert_eq!(got.len(), want.len(), "{name}: one row per input");
-        assert!(!want.is_empty(), "{name}: an empty oracle file");
+        let (text, want) = oracle_rows(&dir, name).unwrap();
+        let got = cli(flags, &text).unwrap();
         for (row, bend) in got.iter().zip(&want) {
             assert_eq!(shared(row), shared(&bend["js"]), "{name}: {} at {}", bend["id"], bend["ordinal"]);
+            compared = compared.saturating_add(1);
         }
     }
+    println!("compat matches Bend on {compared} decisions");
 }
 
-fn scores(row: &Value) -> Vec<Value> {
-    row["lines"]
-        .as_array()
-        .map(|lines| lines.iter().map(|line| line["score"].clone()).collect())
-        .unwrap_or_default()
-}
-
-/// bounded-v1 against compat, and so against Bend: unpruned, every line's
-/// value is compat's; pruned, the best move and its value are the unpruned
-/// ones and every line's box holds its unpruned value. Rows either search
-/// cuts by its budget are left out.
+/// Unpruned, bounded-v1's line values and best move are compat's, and so
+/// Bend's, on every row neither search cuts by its budget.
 #[test]
-#[ignore = "needs RUST_SEARCH_ORACLE; run sim/rust/mutants.sh"]
-fn bounded_matches_compat() {
-    let dir = std::env::var("RUST_SEARCH_ORACLE").expect("RUST_SEARCH_ORACLE names a directory of rust-search-synth.ts files");
-    let inputs = std::fs::read_to_string(format!("{dir}/static.jsonl")).expect("static.jsonl");
-    let rows = |flags: &[&str]| cli(flags, &inputs).expect("the CLI's rows");
-    let compat_rows = rows(&[]);
-    let unpruned_rows = rows(&["--evaluator", "bounded-v1-f32", "--unpruned"]);
-    let pruned_rows = rows(&["--evaluator", "bounded-v1-f32"]);
-    assert_eq!(
-        (unpruned_rows.len(), pruned_rows.len()),
-        (compat_rows.len(), compat_rows.len()),
-        "one row per input"
-    );
-    let best = |row: &Value| {
-        row["lines"]
-            .as_array()
-            .and_then(|lines| lines.iter().map(|line| &line["score"]).max_by_key(|score| score.as_u64()))
-            .cloned()
-    };
+#[ignore = "needs RUST_SEARCH_ORACLE; run by sim/rust/check.sh"]
+fn unpruned_bounded_matches_compat() {
+    let (text, _) = oracle_rows(&oracle_dir().unwrap(), "static.jsonl").unwrap();
+    let compat_rows = cli(&[], &text).unwrap();
+    let unpruned_rows = cli(&["--evaluator", "bounded-v1-f32", "--unpruned"], &text).unwrap();
     let mut compared = 0_u32;
-    for ((compat, unpruned), pruned) in compat_rows.iter().zip(&unpruned_rows).zip(&pruned_rows) {
-        if [compat, unpruned, pruned].iter().any(|row| row["limited"] != Value::Bool(false)) {
+    for (compat, unpruned) in compat_rows.iter().zip(&unpruned_rows) {
+        if [compat, unpruned].iter().any(|row| row["limited"] != Value::Bool(false)) {
             continue;
         }
         compared = compared.saturating_add(1);
         let id = (&compat["id"], &compat["ordinal"]);
         assert_eq!(scores(unpruned), scores(compat), "unpruned line values at {id:?}");
         assert_eq!(unpruned["best"], compat["best"], "unpruned best at {id:?}");
-        assert_eq!(pruned["best"], unpruned["best"], "pruned best at {id:?}");
-        assert_eq!(best(pruned), best(unpruned), "pruned best value at {id:?}");
-        let pruned_lines = pruned["lines"].as_array().expect("lines");
-        let unpruned_lines = unpruned["lines"].as_array().expect("lines");
-        for (j, (boxed, exact)) in pruned_lines.iter().zip(unpruned_lines).enumerate() {
-            let (lo, hi, value) = (boxed["score"].as_u64(), boxed["upper"].as_u64(), exact["score"].as_u64());
-            assert!(lo <= value && value <= hi, "{id:?}: line {j} box {lo:?}..={hi:?} misses {value:?}");
-            if boxed["exact"] == Value::Bool(true) {
-                assert_eq!(lo, value, "{id:?}: line {j} is marked exact");
-            }
-        }
     }
     assert!(compared >= 6, "only {compared} rows within both budgets");
-}
-
-/// The CLI's rows for `input` with `flags`.
-fn cli(flags: &[&str], input: &str) -> Result<Vec<Value>, String> {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_buckshot-search"))
-        .args(flags)
-        .args(["--threads", "2"])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|error| error.to_string())?;
-    child
-        .stdin
-        .take()
-        .ok_or("no stdin")?
-        .write_all(input.as_bytes())
-        .map_err(|error| error.to_string())?;
-    let out = child.wait_with_output().map_err(|error| error.to_string())?;
-    if !out.status.success() {
-        return Err(format!("the CLI failed: {}", String::from_utf8_lossy(&out.stderr)));
-    }
-    String::from_utf8_lossy(&out.stdout)
-        .lines()
-        .map(|line| serde_json::from_str(line).map_err(|error| error.to_string()))
-        .collect()
-}
-
-/// bounded-v1 searches a row's chosen move exactly even where pruning would
-/// cut it, and a search that spends exactly its budget finishes while one
-/// node less cuts it.
-#[test]
-#[ignore = "needs RUST_SEARCH_ORACLE; run sim/rust/mutants.sh"]
-fn bounded_keeps_the_chosen_move_exact_and_its_budget() {
-    let dir = std::env::var("RUST_SEARCH_ORACLE").expect("RUST_SEARCH_ORACLE names a directory of rust-search-synth.ts files");
-    let inputs = std::fs::read_to_string(format!("{dir}/static.jsonl")).expect("static.jsonl");
-    let unbounded = ["--evaluator", "bounded-v1-f32", "--budget", "1000000000"];
-    let pruned_rows = cli(&unbounded, &inputs).expect("the CLI's rows");
-    // The chosen move is one plain pruning leaves inexact.
-    let with_chosen: String = inputs
-        .lines()
-        .zip(&pruned_rows)
-        .filter_map(|(input, pruned)| {
-            let chosen = pruned["lines"]
-                .as_array()?
-                .iter()
-                .position(|line| line["exact"] == Value::Bool(false))?;
-            let mut row: Value = serde_json::from_str(input).expect("a JSON row");
-            row["chosenIndex"] = chosen.into();
-            Some(format!("{row}\n"))
-        })
-        .collect();
-    let chosen_rows = cli(&unbounded, &with_chosen).expect("the CLI's rows");
-    let plain = |input: &Value| {
-        pruned_rows
-            .iter()
-            .find(|row| row["id"] == input["id"] && row["ordinal"] == input["ordinal"])
-            .expect("the plain row")
-    };
-    for (input, row) in with_chosen.lines().zip(&chosen_rows) {
-        let input: Value = serde_json::from_str(input).expect("a JSON row");
-        let chosen = usize::try_from(input["chosenIndex"].as_u64().expect("a chosen index")).expect("a menu index");
-        let (line, boxed) = (&row["lines"][chosen], &plain(&input)["lines"][chosen]);
-        assert_eq!(line["exact"], Value::Bool(true), "chosen line at {:?}", input["id"]);
-        let (value, lo, hi) = (line["score"].as_u64(), boxed["score"].as_u64(), boxed["upper"].as_u64());
-        assert!(
-            lo <= value && value <= hi,
-            "chosen line {value:?} outside {lo:?}..={hi:?} at {:?}",
-            input["id"]
-        );
-    }
-    assert!(chosen_rows.len() >= 3, "only {} rows with an inexact line", chosen_rows.len());
-
-    // A search that spends exactly its budget finishes; one node less cuts it.
-    let (input, nodes) = inputs
-        .lines()
-        .zip(&pruned_rows)
-        .filter(|(_, row)| row["limited"] == Value::Bool(false))
-        .filter_map(|(input, row)| Some((input, row["nodes"].as_u64()?)))
-        .max_by_key(|&(_, nodes)| nodes)
-        .expect("a row within budget");
-    let input = format!("{input}\n");
-    let at = |budget: u64| {
-        cli(&["--evaluator", "bounded-v1-f32", "--budget", &budget.to_string()], &input)
-            .expect("the CLI's rows")
-            .remove(0)
-    };
-    let exact = at(nodes);
-    assert_eq!(
-        (&exact["limited"], exact["nodes"].as_u64()),
-        (&Value::Bool(false), Some(nodes)),
-        "at its budget"
-    );
-    let short = at(nodes.saturating_sub(1));
-    assert_eq!(short["limited"], Value::Bool(true), "one node short");
-    assert!(short["nodes"].as_u64() < Some(nodes), "one node short spends less");
 }
