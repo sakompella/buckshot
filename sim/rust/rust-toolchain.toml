@@ -1,0 +1,5 @@
+# The toolchain for sim/rust, read by rustup (plain cargo) and by the flake (crane via rust-overlay).
+[toolchain]
+channel = "1.98.1"
+components = ["rustfmt", "clippy", "rust-analyzer", "rust-src"]
+profile = "minimal"
