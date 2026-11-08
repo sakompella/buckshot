@@ -1,5 +1,5 @@
 # Every valid feature set of the workspace, for clippy and the tests (sourced by
-# check.sh and .githooks/pre-commit): arithmetic by tables by trace. Never
+# check.sh and hooks.sh): arithmetic by tables by trace. Never
 # --all-features: `f64` (default) and `f32` exclude each other, as do
 # `seats-2-4` (default) and `seats-2`, and buckshot-rules' `trace` changes what
 # `branch!` expands to.

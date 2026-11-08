@@ -9,7 +9,8 @@ set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(git -C "$here" rev-parse --show-toplevel)
-if [ -z "${IN_NIX_SHELL:-}" ]; then
+# Outside Nix, needs cargo (rustup reads rust-toolchain.toml), node, bun and Bend.
+if [ -z "${IN_NIX_SHELL:-}" ] && command -v nix >/dev/null; then
   exec nix develop "$root" -c bash "$0" "$@"
 fi
 

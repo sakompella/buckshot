@@ -1,0 +1,5 @@
+# The toolchain rustup picks outside Nix: the release of nixpkgs' rustc in
+# the dev shell (flake.lock). Move both together.
+[toolchain]
+channel = "1.98.1"
+components = ["clippy", "rustfmt"]

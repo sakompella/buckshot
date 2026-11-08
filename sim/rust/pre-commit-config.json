@@ -1,0 +1,41 @@
+{
+  "repos": [
+    {
+      "repo": "local",
+      "hooks": [
+        {
+          "id": "rustfmt",
+          "name": "cargo fmt --check",
+          "entry": "bash sim/rust/hooks.sh fmt",
+          "language": "system",
+          "files": "^sim/rust/",
+          "pass_filenames": false
+        },
+        {
+          "id": "clippy",
+          "name": "cargo clippy, every feature set",
+          "entry": "bash sim/rust/hooks.sh clippy",
+          "language": "system",
+          "files": "^sim/rust/",
+          "pass_filenames": false
+        },
+        {
+          "id": "cargo-check",
+          "name": "cargo check",
+          "entry": "bash sim/rust/hooks.sh check",
+          "language": "system",
+          "files": "^sim/rust/",
+          "pass_filenames": false
+        },
+        {
+          "id": "branch-map",
+          "name": "cargo branch-map check",
+          "entry": "bash sim/rust/hooks.sh branch-map",
+          "language": "system",
+          "files": "^sim/rust/",
+          "pass_filenames": false
+        }
+      ]
+    }
+  ]
+}

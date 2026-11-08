@@ -6,3 +6,4 @@ __pycache__/
 .hegel/
 web/online/data/
 web/.cloudflare/
+.pre-commit-config.yaml
