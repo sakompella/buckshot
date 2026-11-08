@@ -601,6 +601,14 @@ fn menu_inputs_decide_the_request(tc: TestCase) {
     );
 }
 
+/// `Slots::items` lists the occupied slots' items in slot order.
+#[hegel::test(test_cases = 256)]
+fn slot_items_are_the_occupied_slots(tc: TestCase) {
+    let slots = slots(&tc);
+    let occupied: Vec<Item> = slots.entries().filter_map(|(_, item)| item).collect();
+    assert_eq!(slots.items().collect::<Vec<_>>(), occupied, "items of {slots:?}");
+}
+
 fn wild_round(tc: &TestCase) -> RoundRules {
     let health = if flag(tc) { HealthRule::Random } else { HealthRule::Fixed(num(tc)) };
     let load = |t: &TestCase| LoadRule {

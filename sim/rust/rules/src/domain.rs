@@ -571,6 +571,17 @@ impl Slots {
         Self((self.0 & !0xFu32.wrapping_shl(shift)) | bits.wrapping_shl(shift))
     }
 
+    /// The items of the occupied slots, in slot order.
+    pub fn items(self) -> impl Iterator<Item = Item> {
+        let mut rest = self.0;
+        core::iter::from_fn(move || {
+            let at = rest.trailing_zeros() & !3;
+            let bits = rest.checked_shr(at)? & 0xF;
+            rest &= !0xFu32.wrapping_shl(at);
+            SLOT_CONTENT.get(usize::try_from(bits).unwrap_or(0)).copied().flatten()
+        })
+    }
+
     /// Every slot with its content, in slot order.
     pub fn entries(&self) -> impl Iterator<Item = (Slot, Option<Item>)> + '_ {
         Slot::ORDER.into_iter().map(|slot| (slot, self.get(slot)))
