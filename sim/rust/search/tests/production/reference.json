@@ -1,0 +1,19 @@
+{
+  "evaluator": "a3962092b561cfb4",
+  "identity": "the first 16 hex digits of the sha256 of the JS that Bend 2.0.36 emits for sim/bend-mp/analysis.bend at the source commit (web/src/analysis/player.ts names a build this way); docs/arena/analysis/regret.md (Reproduce) records the same build",
+  "source": {
+    "commit": "03978b0f3d1bea52188fdae49547d4f3d9288ad3",
+    "file": "sim/bend-mp/analysis.bend",
+    "sha256": "05e99e7339e4e6c2d6b3e97c1046cc23fb83e40aa68082f4d844741008b8e8f8",
+    "bend": "2.0.36"
+  },
+  "settings": {
+    "depth": 6,
+    "budget": 20000,
+    "reload": "static",
+    "samples": 0,
+    "memo": "off"
+  },
+  "decisions": 36,
+  "about": "Two-seat arena decisions as the production regret rows scored them: the position as the number line the player reads, and the evaluator's lines (move label and score, in the player's move order), best move, depth reached, whether the budget cut it, and nodes. No match ids or player names."
+}
