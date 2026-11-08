@@ -10,7 +10,9 @@
 // It writes TAPE.jsonl.trace (JSONL; not *.jsonl, which is a tape): first
 //   {untraced: [label...]}
 // the labels whose ids no longer appear in the built JS (Bend folds a match
-// whose arms are all literals, like domain:prize, into a lookup table), then
+// whose arms are all literals, like domain:prize, into a lookup table; the
+// Rust replay requires them to be the reviewed list in
+// sim/rust/rules/tests/trace-coverage.json), then
 // one line per tape line:
 //   {game, step, start?: counts, request: counts, answer?: counts}
 // where counts maps a branch label to the times it was taken in that call.

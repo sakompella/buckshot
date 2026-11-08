@@ -295,6 +295,12 @@ const mutations = [
   },
 ];
 
+// Bend may refuse a state no valid game reaches: its compiled code throws.
+// Any other exception (this script, the adapter) is a generator bug and fails,
+// and so do more refusals than the cap, which would hollow out the tape.
+const MAX_REJECTED = 0.05;
+const rejectedByBend = error => (String(error?.stack ?? '').split('\n').find(line => line.trimStart().startsWith('at ')) ?? '').includes(dir);
+
 function perturbed(count, seed) {
   const { random, randomConfig } = makeRandom(seed);
   const reach = (config, target) => {
@@ -321,13 +327,15 @@ function perturbed(count, seed) {
       const kept = buffer;
       buffer = null;
       kept.forEach(emit);
-    } catch {
+    } catch (error) {
+      if (!rejectedByBend(error)) throw error;
       ({ games, steps, capped } = saved);
       rejected++;
     } finally {
       buffer = null;
     }
   }
+  if (rejected > count * MAX_REJECTED) throw new Error(`perturb seed ${seed}: Bend rejected ${rejected} of ${count} states, over the cap of ${MAX_REJECTED * 100}%`);
   return rejected;
 }
 
@@ -377,7 +385,7 @@ if (edgeGames !== null) mode('edge', { perScenario: edgeGames, scenarios: edges.
 if (perturbGames !== null) mode('perturb', { perSeed: perturbGames }, () => {
   let rejected = 0;
   for (const seed of seeds) rejected += perturbed(perturbGames, seed);
-  console.log(`perturb: ${rejected} of ${perturbGames * seeds.length} states rejected by Bend (it threw), skipped`);
+  console.log(`perturb: ${rejected} of ${perturbGames * seeds.length} states rejected by Bend (its code threw), skipped`);
   return { rejectedByBend: rejected };
 });
 

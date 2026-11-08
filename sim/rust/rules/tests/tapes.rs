@@ -15,6 +15,8 @@
 //! row per tape line. They are compared with the branches Rust took, as counts
 //! per label. Bend is strict and also counts branches of work it discards, so the test is
 //! that every branch Rust takes in a call, Bend takes too; the counts are reported.
+//! It needs the run's `traced/labels.json`, and the labels the trace cannot
+//! see or no tape reaches must be the reviewed ones in `trace-coverage.json`.
 
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashSet};
@@ -1085,14 +1087,12 @@ fn tapes_match_bend() {
     }
     println!("total: {games} games ({capped} capped, {skipped} skipped as unrepresentable), {matched} genuine Bend steps compared");
     if cfg!(feature = "trace") {
-        let every: Vec<String> = std::fs::read_to_string(format!("{dir}/traced/labels.json"))
-            .ok()
-            .and_then(|text| serde_json::from_str(&text).ok())
-            .unwrap_or_default();
+        let every = all_labels(&format!("{dir}/traced/labels.json")).unwrap_or_else(|error| panic!("{error}"));
         let bend_only: Vec<&String> = bend_labels.iter().filter(|label| !rust_labels.contains(label.as_str())).collect();
-        let neither: Vec<&String> = every
+        let neither: BTreeSet<String> = every
             .iter()
             .filter(|label| !bend_labels.contains(*label) && !rust_labels.contains(label.as_str()) && !untraced.contains(*label))
+            .cloned()
             .collect();
         println!("trace: Bend took {excess} more branch hits than Rust (work Bend's strict evaluation discards), not a failure");
         println!("untraced (folded away by Bend's compiler): {untraced:?}");
@@ -1101,6 +1101,86 @@ fn tapes_match_bend() {
             bend_labels.len(),
             rust_labels.len()
         );
+        let reviewed = |list| reviewed(COVERAGE, list).unwrap_or_else(|error| panic!("{error}"));
+        let mut problems = differences("untraced", &reviewed("untraced"), &untraced);
+        // The two-seat build skips the wider tables' games, so it reaches less.
+        if cfg!(feature = "seats-2-4") {
+            problems.extend(differences("unreached", &reviewed("unreached"), &neither));
+        }
+        for problem in &problems {
+            println!("  {problem}");
+        }
+        failed |= !problems.is_empty();
     }
     assert!(!failed, "the Rust machine differs from Bend's tapes (see above)");
+}
+
+/// The reviewed branch labels the traced replay may miss, each with its
+/// reason: `untraced`, the labels Bend's compiler folds away so the trace
+/// cannot see them, and `unreached`, the labels no gate tape reaches. Both
+/// must equal what the replay finds, so coverage cannot shrink unnoticed.
+const COVERAGE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/trace-coverage.json");
+
+/// Every mapped label, from `branch-map instrument`'s `labels.json`.
+fn all_labels(path: &str) -> Result<Vec<String>, String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
+    let labels: Vec<String> = serde_json::from_str(&text).map_err(|e| format!("{path}: {e}"))?;
+    if labels.is_empty() {
+        return Err(format!("{path}: no labels"));
+    }
+    Ok(labels)
+}
+
+/// The labels of one list of the coverage file; each needs a reason.
+fn reviewed(path: &str, list: &str) -> Result<BTreeSet<String>, String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
+    let value: Value = serde_json::from_str(&text).map_err(|e| format!("{path}: {e}"))?;
+    let entries = value
+        .get(list)
+        .and_then(Value::as_object)
+        .ok_or_else(|| format!("{path}: no {list} object"))?;
+    if let Some(label) = entries
+        .iter()
+        .find_map(|(label, reason)| reason.as_str().is_none_or(str::is_empty).then_some(label))
+    {
+        return Err(format!("{path}: {list} {label} has no reason"));
+    }
+    Ok(entries.keys().cloned().collect())
+}
+
+/// How the labels found differ from the reviewed ones.
+fn differences(list: &str, reviewed: &BTreeSet<String>, found: &BTreeSet<String>) -> Vec<String> {
+    let new = found
+        .difference(reviewed)
+        .map(|label| format!("{label} is {list} but not in trace-coverage.json: review it and add it with a reason"));
+    let stale = reviewed
+        .difference(found)
+        .map(|label| format!("trace-coverage.json lists {label} as {list}, but it is not: remove it"));
+    new.chain(stale).collect()
+}
+
+// Bug: a missing labels.json read as no labels, and every unreached branch passed (rust-integration review).
+#[test]
+fn missing_trace_labels_fail() {
+    all_labels("/nonexistent/labels.json").unwrap_err();
+}
+
+// Bug: labels the trace could not see were exempted automatically (rust-integration review).
+#[test]
+fn coverage_must_match_the_reviewed_lists() {
+    let set = |labels: &[&str]| labels.iter().map(|label| (*label).to_owned()).collect::<BTreeSet<String>>();
+    assert!(differences("unreached", &set(&["a", "b"]), &set(&["a", "b"])).is_empty());
+    assert_eq!(
+        differences("unreached", &set(&["a"]), &set(&["a", "b"])).len(),
+        1,
+        "a new unreached label"
+    );
+    assert_eq!(
+        differences("unreached", &set(&["a", "b"]), &set(&["a"])).len(),
+        1,
+        "a stale reviewed label"
+    );
+    for list in ["untraced", "unreached"] {
+        assert!(reviewed(COVERAGE, list).is_ok(), "{list}");
+    }
 }

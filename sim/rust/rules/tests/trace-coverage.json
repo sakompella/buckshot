@@ -1,0 +1,38 @@
+{
+  "untraced": {
+    "domain:prize:0n": "Bend's compiler folds domain:prize, whose arms are all literals, into a lookup table, so no br.arm call is left to record it; Rust's arm is compared through the tapes' states (the round's prize)",
+    "domain:prize:1n": "Bend's compiler folds domain:prize, whose arms are all literals, into a lookup table, so no br.arm call is left to record it; Rust's arm is compared through the tapes' states (the round's prize)",
+    "domain:prize:2n": "Bend's compiler folds domain:prize, whose arms are all literals, into a lookup table, so no br.arm call is left to record it; Rust's arm is compared through the tapes' states (the round's prize)",
+    "domain:prize:_": "Bend's compiler folds domain:prize, whose arms are all literals, into a lookup table, so no br.arm call is left to record it; Rust's arm is compared through the tapes' states (the round's prize)"
+  },
+  "unreached": {
+    "simple/main:answer.choice.at:T.Idle{+seat}": "answer.choice.at is only reached from answer.choice, which the stepping path (answer.request -> answer.idle at Idle) bypasses; answer.idle builds the menu once and calls pickup.selected itself",
+    "simple/main:answer.choice.at:_": "answer.choice.at is only reached from answer.choice; a Choose request exists only at Idle, which answer.idle handles, so a choice in another phase never reaches it",
+    "simple/main:answer.draw.at:_": "defensive: a Draw request is made only in the Need* phases matched above it, so the draw always meets one of them",
+    "simple/main:answer.idle:_ _": "defensive: answer.idle runs only for a Choose request, which needs a seated mover with a non-empty menu",
+    "simple/main:answer.request:T.Choose{_, D.NonEmpty{_, rest}}": "step answers a Choose request through answer.idle (the menu built once), so this arm of answer.request is not on the stepping path",
+    "simple/main:answer.request:T.Finished{}": "the tapes stop at a Finished request and never answer it",
+    "simple/main:answer.request:T.Stuck{}": "the tapes stop at a Stuck request and never answer it",
+    "simple/main:batch.found:None{}": "defensive: the batch index comes from a NeedBatch range over the deck, or is 0 for a one-batch deck, so the batch exists",
+    "simple/main:grab.loop:0n Placing{_, _}": "defensive: the fuel covers every take and place (the comment above grab.loop), so it is never spent",
+    "simple/main:grab.loop:0n Taking{_}": "defensive: the fuel covers every take and place (the comment above grab.loop), so it is never spent",
+    "simple/main:grab.put.held:None{}": "defensive: a Placing step is chosen only for a seat holding an item",
+    "simple/main:grant.step:0n S.Skip{players}": "defensive: the rank is the table's seat count, and a jam skips a seat at most once per pass, so some seat acts before it runs out",
+    "simple/main:item.chamber:_": "defensive: item.chamber is called only for glass, beer and the inverter",
+    "simple/main:item.clue.found:None{}": "defensive: the phone's position is clamped to the gun's length before the lookup, so the shell exists",
+    "simple/main:item.phone:0n": "defensive: an item is used only with a shell in the gun (the round ends on an empty gun first), so the length is at least 1",
+    "simple/main:item.tell:None{}": "defensive: item.tell is called only with the phone's secret",
+    "simple/main:load.ready:Nil{}": "defensive: a round's deck is never empty: the config builds one batch at least and a load is drawn before the deck is exhausted",
+    "simple/main:pickup.selected:None{}": "defensive: the choice index is clamped to the menu, so an option always exists",
+    "simple/main:seats.after:Nil{}": "defensive: seats.after is called with a seat of the table's own list, so it finds `after` before the list ends",
+    "simple/point:idle.request:False{}": "defensive: the Idle seat is always a seat of the table",
+    "simple/point:use.first:S.TakeGun{} <> rest": "use.first runs on a seat's item uses, which never include TakeGun (the gun option is added apart)",
+    "simple/point:use.options:S.TakeGun{} <> rest": "use.options runs on a seat's item uses, which never include TakeGun (the gun option is added apart)",
+    "sm/items:seat.copies:_ _": "defensive: every seat asked about sits at the table, so its ring has the seat",
+    "sm/rules:predecessor:0n": "defensive: predecessor is taken of a positive count (a load's shell count, a swap index above 0)",
+    "sm/rules:successor.go:Nil{}": "defensive: successor.go is called with the non-empty list successor matched",
+    "sm/rules:successor:Nil{}": "defensive: the turn candidates always include the current seat, so the list is not empty",
+    "sm/rules:swap.found:_ _": "defensive: the shuffle's swap indices lie inside the shell list",
+    "sm/state:seat.found:None{}": "defensive: seats read from a ring are seats of its table"
+  }
+}
