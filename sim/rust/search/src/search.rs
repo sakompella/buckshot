@@ -885,7 +885,10 @@ mod tests {
                 all.set(seat, SeatRecord { health: 1, ..record })
             });
             let world = buckshot_rules::World {
-                decks: state.world.decks.set(config.table(), Deck::of_ids(config.table(), [0])),
+                decks: state
+                    .world
+                    .decks
+                    .set(config.table(), Deck::full(config.table()).filtered(|id| id == 0)),
                 ..state.world
             };
             Ok(State { world, players, ..state })

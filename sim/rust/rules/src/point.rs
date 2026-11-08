@@ -4,15 +4,24 @@ use arrayvec::ArrayVec;
 
 use crate::branch::B;
 use crate::domain::{Config, Item, Items, Label, Range, Seat, Seats, Slot, Table};
-use crate::items::{self, Picks, Uses};
+use crate::items::{self, PICKS_CAPACITY, Picks, Uses};
 use crate::rules;
 use crate::state::{Phase, State};
-use crate::{IdleOption, MENU_CAPACITY, Menu, Request, push_bounded};
+use crate::{IdleOption, MENU_CAPACITY, Menu, Request};
 
 type Options = ArrayVec<IdleOption, MENU_CAPACITY>;
 
+// Shots at up to four seats, a use per slot, jams and steal-jams at up to
+// three targets, and the steals.
+const _: () = assert!(
+    4 + 8 + 3 + PICKS_CAPACITY + 3 * 3 <= MENU_CAPACITY,
+    "a menu can outgrow MENU_CAPACITY"
+);
+
+/// [`MENU_CAPACITY`] bounds every menu, so `push` (which panics on a full
+/// list rather than drop the move) never fails.
 fn add(options: &mut Options, option: IdleOption) {
-    push_bounded(options, option);
+    options.push(option);
 }
 
 /// `item.chained`: items whose use is part of a longer move.
@@ -100,7 +109,7 @@ fn steal_options(options: &mut Options, adrenaline: Option<Slot>, picks: &Picks)
 /// (sm never offers adrenaline; a jammer is `StealJam`), at the owner's first
 /// slot holding it, by owner then slot.
 fn steal_picks(options: &mut Options, adrenaline: Slot, picks: &Picks) {
-    let mut seen: ArrayVec<(Seat, Item), 24> = ArrayVec::new();
+    let mut seen: ArrayVec<(Seat, Item), PICKS_CAPACITY> = ArrayVec::new();
     for pick in picks {
         branch!(B::SimplePointStealPicksPickCons);
         items::keep(!(item_chained(pick.item) | seen.contains(&(pick.owner, pick.item))), || {
@@ -114,7 +123,7 @@ fn steal_picks(options: &mut Options, adrenaline: Slot, picks: &Picks) {
                 },
             );
         });
-        push_bounded(&mut seen, (pick.owner, pick.item));
+        seen.push((pick.owner, pick.item));
     }
     branch!(B::SimplePointStealPicksNil);
 }

@@ -89,10 +89,16 @@ impl Seats {
         len: 0,
     };
 
-    /// Appends `seat`. A fifth seat cannot occur: every list is drawn from one table's seats.
+    /// Appends `seat`. Every list is drawn from one table's seats.
+    ///
+    /// # Panics
+    ///
+    /// On a fifth seat, which no table has, rather than drop it.
     pub fn push(&mut self, seat: Seat) {
-        if let Some(slot) = self.seats.get_mut(usize::from(self.len)) {
-            *slot = seat;
+        let free = self.seats.get_mut(usize::from(self.len));
+        assert!(free.is_some(), "a seat list outgrew one table's seats");
+        if let Some(free) = free {
+            *free = seat;
             self.len = self.len.saturating_add(1);
         }
     }
@@ -239,27 +245,32 @@ impl Gun {
     pub const EMPTY: Self = Self { bits: 0, len: 0 };
 
     /// `load.shells`: the live shells, then the blank ones.
+    ///
+    /// # Panics
+    ///
+    /// On a load past [`Gun::CAPACITY`] shells, which [`Config::new`] rejects,
+    /// rather than cut it.
     #[must_use]
     pub fn of_load(load: Load) -> Self {
-        let live = load.live.min(Self::CAPACITY);
-        let total = live.saturating_add(load.blank).min(Self::CAPACITY);
-        let bits = (0..live).fold(0, |bits, i| bits | bit(i));
+        let total = load.live.saturating_add(load.blank);
+        assert!(total <= Self::CAPACITY, "a load outgrew the gun");
+        let bits = (0..load.live).fold(0, |bits, i| bits | bit(i));
         Self { bits, len: total }
     }
 
-    /// Builds a list from shells, head first; shells past the capacity are dropped.
-    pub fn from_shells(shells: impl IntoIterator<Item = Shell>) -> Self {
+    /// Builds a list from shells, head first, or `None` past [`Gun::CAPACITY`] shells.
+    pub fn from_shells(shells: impl IntoIterator<Item = Shell>) -> Option<Self> {
         let mut gun = Self::EMPTY;
         for shell in shells {
             if gun.len >= Self::CAPACITY {
-                break;
+                return None;
             }
             if shell == Shell::Live {
                 gun.bits |= bit(gun.len);
             }
             gun.len = gun.len.saturating_add(1);
         }
-        gun
+        Some(gun)
     }
 
     #[must_use]

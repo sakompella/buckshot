@@ -101,12 +101,24 @@ impl Deck {
         Self { table, ids }
     }
 
-    /// A deck of the given batch ids. Ids past the table's deck are dropped.
+    /// A deck of the given batch ids, or `None` if one is past the table's deck.
     #[must_use]
-    pub fn of_ids(table: Table, ids: impl IntoIterator<Item = u32>) -> Self {
+    pub fn of_ids(table: Table, ids: impl IntoIterator<Item = u32>) -> Option<Self> {
         let full = Self::full(table).ids;
-        let ids = ids.into_iter().fold(0u16, |acc, id| acc | u16::checked_shl(1, id).unwrap_or(0));
-        Self { table, ids: ids & full }
+        let ids = ids.into_iter().try_fold(0u16, |acc, id| Some(acc | u16::checked_shl(1, id)?))?;
+        (ids & !full == 0).then_some(Self { table, ids })
+    }
+
+    /// The batches of this deck whose ids pass `keep`.
+    #[must_use]
+    pub fn filtered(self, keep: impl Fn(u32) -> bool) -> Self {
+        let ids = (0u32..16)
+            .filter(|id| keep(*id))
+            .fold(0u16, |acc, id| acc | u16::checked_shl(1, id).unwrap_or(0));
+        Self {
+            ids: self.ids & ids,
+            ..self
+        }
     }
 
     #[must_use]

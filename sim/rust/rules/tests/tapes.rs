@@ -359,7 +359,7 @@ fn gun_of(v: &Value) -> Result<Gun, String> {
         .into_iter()
         .map(|shell| tag_of(shell, &[Shell::Live, Shell::Blank]))
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(Gun::from_shells(shells))
+    Gun::from_shells(shells).ok_or_else(|| format!("a gun past {} shells", Gun::CAPACITY))
 }
 
 fn item_of(v: &Value) -> Result<Item, String> {
@@ -371,7 +371,7 @@ fn deck_of(table: Table, v: &Value) -> Result<Deck, String> {
         .into_iter()
         .map(|batch| nat(get(batch, "id")))
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(Deck::of_ids(table, ids))
+    Deck::of_ids(table, ids).ok_or_else(|| String::from("a batch id past the table's deck"))
 }
 
 fn ring_of<T: Copy>(table: Table, v: &Value, fill: T, f: impl Fn(&Value) -> Result<T, String>) -> Result<Ring<T>, String> {

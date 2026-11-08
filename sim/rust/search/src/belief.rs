@@ -231,10 +231,7 @@ fn deck_full(table: Table) -> u32 {
 
 /// `deck.batches` of the full deck: the batches in `mask`.
 fn deck_of(table: Table, mask: u32) -> Deck {
-    Deck::of_ids(
-        table,
-        Deck::full(table).iter().map(|batch| batch.id).filter(|id| mask & bit(*id) != 0),
-    )
+    Deck::full(table).filtered(|id| mask & bit(id) != 0)
 }
 
 fn deck_insert(decks: &mut Vec<DeckMass>, mask: u32, weight: Real) {

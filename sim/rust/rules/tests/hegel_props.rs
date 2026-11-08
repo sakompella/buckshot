@@ -155,7 +155,7 @@ fn load(tc: &TestCase) -> Load {
 }
 
 fn gun(tc: &TestCase) -> Gun {
-    Gun::from_shells(many(tc, 0, 69, shell))
+    Gun::from_shells(many(tc, 0, 64, shell)).expect("64 shells fit the gun")
 }
 
 fn direction(tc: &TestCase) -> Direction {
@@ -167,8 +167,9 @@ fn items(tc: &TestCase) -> Items {
 }
 
 fn deck(tc: &TestCase, table: Table) -> Deck {
-    let ids = tc.draw_silent(gs::vecs(gs::integers::<u32>().max_value(11)).max_size(11));
-    Deck::of_ids(table, ids)
+    let last = u32::try_from(table.deck().len()).map_or(0, |len| len.saturating_sub(1));
+    let ids = tc.draw_silent(gs::vecs(gs::integers::<u32>().max_value(last)).max_size(11));
+    Deck::of_ids(table, ids).expect("ids within the deck")
 }
 
 fn world(tc: &TestCase) -> World {
@@ -637,7 +638,12 @@ fn menus_and_notes_stay_in_capacity() {
     .run();
     let (menu, notes) = (seen.max_menu, seen.max_notes);
     println!("{games} walks, {finished} finished; max menu {menu}/{MENU_CAPACITY}, max notes {notes}/{NOTES_CAPACITY}");
-    assert!(menu < MENU_CAPACITY && notes < NOTES_CAPACITY, "a capacity was reached");
+    // A quarter of each capacity stays free (last seen: menu 37/64, notes 77/256).
+    let within = |most: usize, capacity: usize| most.saturating_mul(4) <= capacity.saturating_mul(3);
+    assert!(
+        within(menu, MENU_CAPACITY) && within(notes, NOTES_CAPACITY),
+        "a capacity lost its margin"
+    );
 }
 
 #[hegel::test(test_cases = 128)]

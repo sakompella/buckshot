@@ -6,8 +6,8 @@ use arrayvec::ArrayVec;
 
 use crate::branch::B;
 use crate::domain::{AmountRule, Config, Direction, Gun, Item, ItemRule, Items, Ring, Seat, Seats, Shell, Slot, Slots, Table};
+use crate::rules;
 use crate::state::{Grabs, Jam, Players, State};
-use crate::{push_bounded, rules};
 
 /// sm/state.bend `IdleOption::UseAt` (`uses` only makes these).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -16,6 +16,8 @@ pub(crate) struct UseAt {
     pub item: Item,
 }
 
+/// At most one use per slot. Every list type here is sized for its most
+/// entries, so `push` (which panics rather than drop an entry) never fails.
 pub(crate) type Uses = ArrayVec<UseAt, 8>;
 
 /// sm/state.bend `StealOption::Pick`.
@@ -26,8 +28,9 @@ pub(crate) struct Pick {
     pub item: Item,
 }
 
-/// At most three owners with eight slots each.
-pub(crate) type Picks = ArrayVec<Pick, 24>;
+/// At most three owners (every seat but the thief) with eight slots each.
+pub(crate) type Picks = ArrayVec<Pick, PICKS_CAPACITY>;
+pub(crate) const PICKS_CAPACITY: usize = 24;
 
 /// sm/state.bend `GrabOption`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -36,6 +39,7 @@ pub(crate) enum GrabOption {
     PutAt { slot: Slot },
 }
 
+/// A put per slot and one take.
 pub(crate) type GrabOptions = ArrayVec<GrabOption, 9>;
 
 /// `value.or` over `ring.get`: a seat missing from a ring reads as `fallback`.
@@ -383,7 +387,7 @@ pub(crate) fn begin_seats(config: &Config, state: &State, new_round: bool, amoun
 fn puts_here(found: Option<Item>, slot: Slot, out: &mut GrabOptions) {
     if found.is_none() {
         branch!(B::SmItemsPutsHereNone);
-        push_bounded(out, GrabOption::PutAt { slot });
+        out.push(GrabOption::PutAt { slot });
     } else {
         branch!(B::SmItemsPutsHereSome);
     }
@@ -402,7 +406,7 @@ fn puts(inventory: Slots, out: &mut GrabOptions) {
 fn grab_intake(open: bool, out: &mut GrabOptions) {
     if open {
         branch!(B::SmItemsGrabIntakeTrue);
-        push_bounded(out, GrabOption::TakeItem);
+        out.push(GrabOption::TakeItem);
     } else {
         branch!(B::SmItemsGrabIntakeFalse);
     }
@@ -645,7 +649,7 @@ fn steal_fits(item: Item, sawed: bool, targets: bool) -> bool {
 fn steal_here(found: Option<Item>, owner: Seat, slot: Slot, sawed: bool, targets: bool, out: &mut Picks) {
     if let Some(item) = found {
         branch!(B::SmItemsStealHereSome);
-        keep(steal_fits(item, sawed, targets), || push_bounded(out, Pick { owner, slot, item }));
+        keep(steal_fits(item, sawed, targets), || out.push(Pick { owner, slot, item }));
     } else {
         branch!(B::SmItemsStealHereNone);
     }
@@ -670,7 +674,7 @@ fn steal_owner(own: bool, owner: Seat, inventory: Slots, sawed: bool, targets: b
         branch!(B::SmItemsStealOwnerFalse);
         let slots = steal_slots(inventory, owner, sawed, targets);
         for pick in slots {
-            push_bounded(out, pick);
+            out.push(pick);
         }
     }
 }
@@ -729,7 +733,7 @@ fn use_fits(item: Item, sawed: bool, targets: bool, steals: bool) -> bool {
 fn use_here(found: Option<Item>, slot: Slot, sawed: bool, targets: bool, steals: bool, out: &mut Uses) {
     if let Some(item) = found {
         branch!(B::SmItemsUseHereSome);
-        keep(use_fits(item, sawed, targets, steals), || push_bounded(out, UseAt { slot, item }));
+        keep(use_fits(item, sawed, targets, steals), || out.push(UseAt { slot, item }));
     } else {
         branch!(B::SmItemsUseHereNone);
     }

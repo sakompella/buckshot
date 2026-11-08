@@ -111,8 +111,8 @@ impl IdleOption {
     }
 }
 
-/// Room for every Idle menu: at most 4 shots, 9 uses, 3 jams, 24 steals
-/// (3 owners by 8 slots) and 9 steal-jams.
+/// Room for every Idle menu: at most 4 shots, 8 uses, 3 jams, 24 steals
+/// (3 owners by 8 slots) and 9 steal-jams (`point.rs` checks the sum).
 pub const MENU_CAPACITY: usize = 64;
 
 /// One seat's legal moves at an Idle point, in Bend's menu order.
@@ -252,14 +252,6 @@ impl Notes {
     pub const fn truncated(&self) -> bool {
         self.truncated
     }
-}
-
-/// Pushes `item` onto a list sized for every reachable state (each capacity
-/// documents its bound). A full list means the mirror disagrees with Bend:
-/// debug builds, which run the tapes, stop there; release builds drop the item.
-pub(crate) fn push_bounded<T, const N: usize>(list: &mut ArrayVec<T, N>, item: T) {
-    let full = list.try_push(item).is_err();
-    debug_assert!(!full, "a list outgrew the capacity that bounds every reachable state");
 }
 
 /// The state after an answer and the answer's notes (domain.bend `Stepped`).
