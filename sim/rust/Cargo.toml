@@ -78,3 +78,8 @@ wildcard_enum_match_arm = "deny"
 
 [profile.release]
 debug = 1
+
+# Builds each mutant for `mutants.sh`: release speed without debug info.
+[profile.mutants]
+inherits = "release"
+debug = 0

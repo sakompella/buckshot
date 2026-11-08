@@ -942,6 +942,13 @@ fn tapes_match_bend() {
         if let Err(error) = replayed {
             tally.problems.push(error);
         }
+        // Bend reaches a few perturbed states Rust cannot hold (a deck load with
+        // no blank); more than that means the state decoder broke.
+        if tally.skipped.saturating_mul(4) > tally.games {
+            tally
+                .problems
+                .push(format!("{} of {} games skipped as unrepresentable", tally.skipped, tally.games));
+        }
         let source = check_manifest(&path, &mut tally).unwrap_or_else(|error| {
             tally.problems.push(error);
             String::from("no manifest")

@@ -17,7 +17,7 @@
         let inherit (self.packages.${pkgs.stdenv.hostPlatform.system}) bend bendtt; in {
           default = pkgs.mkShell ({
             packages = [ bend pkgs.bun pkgs.nodejs_22 (pkgs.python3.withPackages (ps: [ ps.hypothesis ps.numpy ])) pkgs.uv
-              pkgs.cargo pkgs.rustc pkgs.clippy pkgs.rustfmt pkgs.rust-analyzer ];
+              pkgs.cargo pkgs.rustc pkgs.clippy pkgs.rustfmt pkgs.rust-analyzer pkgs.cargo-mutants ];
             BEND = "${bend}/bin/bend";
             BENDTT = "${bendtt}/bin/bendtt";
             # Committed git hooks (.githooks/pre-commit). Worktrees share the config, so this is set once.
