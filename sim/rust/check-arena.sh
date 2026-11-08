@@ -25,7 +25,7 @@ matches=${1:-12}
 # The arena tapes replay recorded matches through web/generated/rules.mjs.
 (cd "$root/web" && nice -n 10 bun run rules >/dev/null)
 
-tapes=$(mktemp -d /tmp/rust-arena-XXXXXX)
+tapes=$(mktemp -d -t rust-arena-XXXXXX)
 trap 'rm -rf "$tapes"' EXIT
 echo "== $matches recorded arena matches -> $tapes"
 nice -n 10 node "$root/sim/bend-mp/test/rust-tapes.mjs" --seeds 1 --arena "$matches" --spread --db "$db" --dir "$tapes"

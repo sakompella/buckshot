@@ -13,7 +13,7 @@ if [ -z "${IN_NIX_SHELL:-}" ] && command -v nix >/dev/null; then
   exec nix develop "$root" -c bash "$0" "$@"
 fi
 
-tapes=$(mktemp -d /tmp/rust-parity-XXXXXX)
+tapes=$(mktemp -d -t rust-parity-XXXXXX)
 trap 'rm -rf "$tapes"' EXIT
 echo "== Bend tapes -> $tapes"
 nice -n 10 node "$root/sim/bend-mp/test/rust-tapes.mjs" \
