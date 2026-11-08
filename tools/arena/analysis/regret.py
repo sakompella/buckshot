@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Mean and 90th-percentile regret per config, and where regret sits relative to the next reload.
 
-Reads the regret table (web/scripts/arena-regret.ts) and the knowledge database (web/scripts/arena-knowledge.ts)
+Reads the regret table (tools/arena/score_regret.py writes it) and the knowledge database (web/scripts/arena-knowledge.ts)
 read-only and prints markdown tables. With --doc FILE the tables replace the text between the tables markers of
 that file. A config is a model with its effort. Regret is in percentage points of the deciding player's chance to win the
 round. Matches with a DeepSeek seat, unfinished matches and forced or fallback moves are left out.

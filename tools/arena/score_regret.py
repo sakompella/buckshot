@@ -15,7 +15,7 @@ matches. The wrap-up and the analyses call `score` rather than running the steps
      with its menu in the player's move order and the shells left, in --jobs processes split by match
   3. buckshot-search --evaluator bounded-v1-f64 --unpruned scores them on --threads threads, once per reload rule:
      every move's value is exact at the depth reached, which the replay's move list shows
-  4. each result becomes a row of the regret table's shape (web/src/analysis/regret-rows.ts)
+  4. each result becomes a row of the regret table (columns: docs/arena/analysis/regret.md, The `regret` table)
 
 The evaluator id is `bounded-v1-f64-unpruned-<16 hex>`: the hex hashes the Rust sources, Cargo files and features the
 binary was built from, so rows of different builds never share an id. `evaluator_build` records each id's source

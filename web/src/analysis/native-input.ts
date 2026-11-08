@@ -4,8 +4,7 @@ import { type BendNode } from "../../generated/rules.mjs";
 import { type Move } from "../domain.ts";
 import { logNode, type PlayerInput } from "./player.ts";
 
-// The numbers sim/bend-mp/native.bend decodes, and the move names it prints, for the native evaluator
-// (scripts/arena-regret-native.ts). A throwaway format: one analysis input per line, fields in constructor order.
+// The numbers sim/bend-mp/native.bend decodes, and the move names it prints. A throwaway format: one analysis input per line, fields in constructor order.
 
 const TAG_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
   ["Seat0", "Seat1", "Seat2", "Seat3"],

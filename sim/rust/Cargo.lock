@@ -64,6 +64,7 @@ name = "buckshot-search"
 version = "0.1.0"
 dependencies = [
  "buckshot-rules",
+ "hegeltest",
  "rayon",
  "rustc-hash",
  "serde_json",
