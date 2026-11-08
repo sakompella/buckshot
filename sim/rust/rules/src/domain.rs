@@ -770,13 +770,16 @@ pub enum Label {
 }
 
 /// The inclusive draw range `lo..=lo + extra + 1` (domain.bend `Range`).
+/// Its fields are public: any range can be made, so a [`DrawValue`] is in its
+/// range but is not tied to a state's request.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Range {
     pub lo: u32,
     pub extra: u32,
 }
 
-/// A drawn value inside a request's range. Only [`Range::value`] makes one.
+/// A drawn value inside a [`Range`]. Only [`Range::value`] makes one. It
+/// keeps no record of the request it was drawn for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct DrawValue(u32);
 

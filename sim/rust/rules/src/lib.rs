@@ -10,9 +10,10 @@
 //! The `seats-2-4` feature (default) holds every table; `seats-2` holds only
 //! the two-seat table, so a ring stores two seats.
 //!
-//! [`step`] is infallible and takes an [`Answer`] token from the state's own
-//! [`Request`]. [`step_event`] is for external input: it validates a raw
-//! number into a token with Bend's clamp.
+//! [`step`] is infallible and trusts its caller: the [`Answer`] token must come
+//! from the state's own [`Request`] (a precondition the types do not enforce,
+//! since tokens can be made and reused). [`step_event`] is for external input:
+//! it validates a raw number into a token with Bend's clamp.
 
 #[cfg(all(feature = "seats-2-4", feature = "seats-2"))]
 compile_error!("the features `seats-2-4` and `seats-2` exclude each other");
@@ -167,8 +168,9 @@ impl Menu {
     }
 }
 
-/// A legal move, taken from a state's own [`Menu`]. Passing it to [`step`]
-/// on another state is defined (no panic) but plays its slots as given.
+/// A legal move of some state's [`Menu`]. Nothing ties it to that state:
+/// [`step`] on another state is defined (no panic) but plays the move's
+/// slots as given, which may not be legal there.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct LegalMove {
     option: IdleOption,
@@ -197,7 +199,8 @@ pub enum Request {
 }
 
 /// An answer token for [`step`]: a value from a Draw request's range or a
-/// move from a Choose request's menu.
+/// move from a Choose request's menu. Tokens are `Copy` and not tied to the
+/// state they came from; see [`step`] for what the caller must pass.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Answer {
     Draw(DrawValue),

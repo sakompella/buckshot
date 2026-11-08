@@ -1,21 +1,39 @@
-//! `bounded-v1`: the search over value boxes from `_work/wip/stage3-design.md`.
-//! Every node returns a box `[pub_lo, pub_hi] x [priv_lo, priv_hi]` holding
-//! its exact value pair. A caller passes the [`Need`] of each coordinate, a
-//! window outside of which only the side of the value matters, and a node
-//! skips the children that cannot matter to it (alpha-beta at decisions,
-//! Star1 at chance nodes). A skipped child counts as the universal box with
-//! a cut reach, so a reach is conservative. Leaves are always exact.
+//! `bounded-v1`: the search over value boxes.
 //!
-//! Unpruned, every need is exact and every box degenerate: the values are
-//! compat's. Pruned, the best move and the chosen move are exact, and every
-//! other move's box is proved no better: its high end is below the best
-//! score if it comes earlier in the menu, at most the best score if later.
+//! Every node returns a box `[pub_lo, pub_hi] x [priv_lo, priv_hi]` that
+//! holds its exact value pair. A caller passes the [`Need`] of each
+//! coordinate, a window outside of which only the side of the value matters,
+//! and a node skips the children that cannot matter to it (alpha-beta at
+//! decisions, Star1 at chance nodes). A skipped child counts as the universal
+//! box with a cut reach, so a reach is conservative. Leaves are always exact.
+//!
+//! Pruning contract:
+//! - Unpruned, every need is exact and every box degenerate: the values are
+//!   compat's, at a budget compat finishes within.
+//! - Pruned, each root line gets a box of the private value: `score` is its
+//!   low end and `upper` its high end. The best move and the chosen move
+//!   (the menu index the caller names) are searched exactly, so their box is
+//!   one point. Every other line's box is proved no better: its high end is
+//!   below the best score if it comes earlier in the menu, at most the best
+//!   score if later (a tie goes to the earlier move).
+//! - Ties among an opponent's moves go to the first lowest public value, so
+//!   its private value is the hull of the children that may be that move.
 //!
 //! Budget: only nodes count, one per world a move is played in, as in compat;
-//! there is no fuel. A memo hit costs nothing, and a decision's box is reused
-//! only at the depth it was searched to and when it meets the need. An
-//! iteration of the deepening that would spend past the budget is abandoned,
-//! and the last finished one stands, marked limited.
+//! there is no fuel. A memo hit costs nothing. An iteration of the deepening
+//! that would spend past the budget is abandoned, and the last finished one
+//! stands, marked limited.
+//!
+//! Memo: a decision's box is stored under its full key (the public and the
+//! private worlds, compared whole, not only their hash) and the depth it was
+//! searched to. It serves a later visit only at that same remaining depth and
+//! when its box meets the need of the visit: a reach without cut leaves proves
+//! nothing about other depths once children are pruned.
+//!
+//! Round end: a world whose round was won is a settled leaf, even when the
+//! winning move already began the next round, so the search scores the won
+//! round and never the next round's start. A reload is a leaf valued by the
+//! reload mode.
 
 use std::collections::BTreeSet;
 use std::hash::{DefaultHasher, Hash, Hasher};

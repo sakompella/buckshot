@@ -761,14 +761,6 @@ pub(crate) enum Mode {
     Bounded { prune: bool, chosen: Option<u32>, stats: bool },
 }
 
-/// `root.belief`: the analysis of a built belief. A pool runs the deals of
-/// a sampled leaf in parallel and leaves the analysis as it is.
-#[cfg(feature = "f32")]
-#[must_use]
-pub fn analyse_belief(config: &Config, belief: &Belief, limits: Limits, reload: Reload, memo: Memo, pool: Option<&ThreadPool>) -> Analysis {
-    run(config, belief, limits, (reload, memo), pool, Mode::Compat).0
-}
-
 /// A built belief's analysis under `mode`, with its key stats if asked for.
 pub(crate) fn run(
     config: &Config,
@@ -864,8 +856,13 @@ pub(crate) mod tests {
 
         use super::config;
         use crate::num::Real;
-        use crate::search::analyse_belief;
+        use crate::search::{Mode, run};
         use crate::types::{Analysis, Belief, Limits, Memo, Reach, Reload, World};
+
+        /// The compat analysis of a belief built by hand.
+        fn analyse_belief(config: &Config, belief: &Belief, limits: Limits, reload: Reload, memo: Memo) -> Analysis {
+            run(config, belief, limits, (reload, memo), None, Mode::Compat).0
+        }
 
         /// The first choice of the match, each seat at 1 health and one batch left in the deck.
         fn at_one_health(config: &Config) -> Result<State, RuleError> {
@@ -917,14 +914,8 @@ pub(crate) mod tests {
                 me,
                 round: 0,
             };
-            let Analysis::Analysed(done) = analyse_belief(
-                &config,
-                &belief,
-                Limits { depth: 4, budget: 20_000 },
-                Reload::Static,
-                Memo::Off,
-                None,
-            ) else {
+            let Analysis::Analysed(done) = analyse_belief(&config, &belief, Limits { depth: 4, budget: 20_000 }, Reload::Static, Memo::Off)
+            else {
                 return Err(RuleError::Config("the fixture should analyse"));
             };
             let at = |own: bool| {

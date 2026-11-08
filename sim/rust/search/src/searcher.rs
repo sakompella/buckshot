@@ -12,8 +12,8 @@ use crate::search::{KeyStats, Mode, run};
 use crate::types::{Analysis, Limits, Memo, Reload};
 
 /// What the mover knows: the config, the board as the mover sees it, the
-/// mover's log and seat. Built only from that view (the position's number
-/// line), never from the true state, so a searcher cannot see hidden shells.
+/// mover's log and seat. Built only from the position's number line, which
+/// has no field for the true state, so a searcher cannot see hidden shells.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct InfoSet {
     position: Position,

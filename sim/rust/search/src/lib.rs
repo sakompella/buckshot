@@ -6,7 +6,12 @@
 //! operations in f64 and has no compat evaluator. The player instantiates the simple machine
 //! (`buckshot-rules`).
 //!
-//! A [`Searcher`] analyses an [`InfoSet`], the mover's view. [`Compat`] is
+//! A [`Searcher`] analyses an [`InfoSet`], the mover's view. An [`InfoSet`]
+//! comes only from [`InfoSet::parse`] of a number line, the crate's one way
+//! in: the belief builder and the raw worlds are private, so the search sees
+//! the hidden state only through what the line carries. The line is trusted
+//! to hold the mover's view (it has no field for the gun's order, but nothing
+//! checks that a clue in it was earned). [`Compat`] is
 //! Bend's search; [`BoundedV1`] is a new, versioned mode whose rows are not
 //! Bend's. Parallel work runs only on a `rayon::ThreadPool` the caller
 //! passes: [`analyse_batch`] spreads decisions over it and a sampled leaf its
@@ -33,13 +38,10 @@ mod search;
 mod searcher;
 mod types;
 
-pub use belief::build;
 pub use num::ARITHMETIC;
-pub use position::{Board, Briefcase, Counter, GunView, Heard, Mode, ParseError, Position, RoundView, SeatView, Stage, parse};
+pub use position::{Board, Briefcase, Counter, GunView, Heard, Mode, ParseError, Position, RoundView, SeatView, Stage};
 pub use search::KeyStats;
-#[cfg(feature = "f32")]
-pub use search::analyse_belief;
 #[cfg(feature = "f32")]
 pub use searcher::Compat;
 pub use searcher::{BoundedV1, InfoSet, Searcher, analyse_batch};
-pub use types::{Analysed, Analysis, Belief, Cached, Level, Limits, Line, Memo, Reach, Reload, World};
+pub use types::{Analysed, Analysis, Cached, Level, Limits, Line, Memo, Reach, Reload};

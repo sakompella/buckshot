@@ -102,6 +102,11 @@ pub fn start(config: &Config) -> Stepped {
 
 /// One answer: `answer.draw` for a Draw token, `answer.choice` for a Choice
 /// token. A token at the other kind of point blocks, as in Bend.
+///
+/// The token must come from this state's own request: a value of the Draw
+/// request's range, or a move of the Choose request's menu. The types do not
+/// check it. With another state's token the result is defined but is not a step of
+/// the rules. Input from outside goes through [`crate::step_event`].
 #[must_use]
 pub fn step(config: &Config, state: State, answer: Answer) -> Stepped {
     let mut notes = Notes::default();
