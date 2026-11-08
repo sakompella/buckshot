@@ -1,4 +1,5 @@
-//! The compatibility evaluator against the current Bend player: every row of
+//! The compatibility evaluator against the current Bend player (rows name its
+//! build in `reference`, which must be one build for the whole oracle): every row of
 //! the files in `RUST_SEARCH_ORACLE` (written by `sim/rust/search-oracle.sh`;
 //! a row's `js` field is the Bend player's analysis) must come out of the CLI
 //! with the same best move, node and memo counts and line values:
@@ -46,15 +47,21 @@ fn compat_matches_bend() {
         ("budget.jsonl", &["--budget", "300"]),
     ];
     let mut compared = 0_usize;
+    let mut references = std::collections::BTreeSet::new();
     for (name, flags) in runs {
         let (text, want) = oracle_rows(&dir, name).unwrap();
         let got = cli(flags, &text).unwrap();
         for (row, bend) in got.iter().zip(&want) {
+            references.insert(bend["reference"].as_str().unwrap_or_default().to_owned());
             assert_eq!(shared(row), shared(&bend["js"]), "{name}: {} at {}", bend["id"], bend["ordinal"]);
             compared = compared.saturating_add(1);
         }
     }
-    println!("compat matches Bend on {compared} decisions");
+    assert!(
+        references.len() == 1 && !references.contains(""),
+        "the oracle's rows name {references:?} as their Bend player"
+    );
+    println!("compat matches the current Bend player {references:?} on {compared} decisions");
 }
 
 /// Unpruned, bounded-v1's line values and best move are compat's, and so

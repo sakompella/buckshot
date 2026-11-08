@@ -15,7 +15,9 @@ import { rosterOf } from "../src/players.ts";
 import { nextBelow, seedRng } from "../src/rng.ts";
 
 // Writes synthetic 2/3/4-seat input rows for the Rust searcher (sim/rust/search) and its oracle comparison, in the row
-// shape of rust-search-inputs.ts with its --js fields always present: {id, ordinal, me, table, input, menu, chosen, js, ms}.
+// shape of rust-search-inputs.ts with its --js fields always present: {id, ordinal, me, table, input, menu, chosen, js,
+// reference, ms}. js is the analysis of the current checkout's Bend player, and reference names that build (its hash);
+// this is the current-Bend reference, not the production evaluator (sim/rust/search/tests/production pins that one).
 // Games are played with random legal choices and random draws from the seed; up to --per-game decision points with two
 // or more options per game are analysed by the JS player and emitted.
 //
@@ -86,7 +88,7 @@ const playGame = (table: SeatCount, game: number, seed: number, chosen: Readonly
             ? analysis
             : { kind: analysis.kind, best: analysis.best, score: analysis.lines[analysis.best]?.score, nodes: analysis.nodes, depth: analysis.depth, limited: analysis.limited, ...analysis.cached, lines: analysis.lines.map((line) => ({ code: moveCode(line.steps), score: line.score, reach: line.reach })) };
 
-        rows.push(JSON.stringify({ id: `synth-${table}-${game}`, ordinal: eligible, me, table: input.table, input: nativeInput(input), menu: moves.map((move) => move.label), chosen: moves[index]?.label, js, ms }));
+        rows.push(JSON.stringify({ id: `synth-${table}-${game}`, ordinal: eligible, me, table: input.table, input: nativeInput(input), menu: moves.map((move) => move.label), chosen: moves[index]?.label, js, reference: player.version, ms }));
       }
 
       eligible += 1;

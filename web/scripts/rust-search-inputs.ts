@@ -18,7 +18,9 @@ import { agentMoveText } from "../src/text.ts";
 // Writes the input rows the Rust searcher (sim/rust/search) and its oracle comparison read: one row per listed arena
 // decision, in list order, with the position as the numbers native.bend decodes, the menu in the player's own move
 // order, and the label the agent chose. With --js each row also carries the JS player's analysis (js) and its time
-// (ms) under the given limits, reload rule and memo, for diffing against the Rust results.
+// (ms) under the given limits, reload rule and memo, for diffing against the Rust results, and reference, the hash of
+// that player build. The player is the current checkout's, which matches the production regret rows only while its
+// hash is their evaluator id; sim/rust/search/tests/production pins the production evaluator.
 //
 //   bun scripts/rust-search-inputs.ts --db <buckshot.sqlite> --decisions <list> --out <prefix> [--js] [--depth 6] [--budget 20000] [--reload static|expected-deal|sampled] [--samples 256] [--memo off|charged|free]
 //
@@ -135,7 +137,7 @@ for (const match of matches) {
             ? analysis
             : { kind: analysis.kind, best: analysis.best, score: analysis.lines[analysis.best]?.score, nodes: analysis.nodes, depth: analysis.depth, limited: analysis.limited, ...analysis.cached, lines: analysis.lines.map((line) => ({ code: moveCode(line.steps), score: line.score, reach: line.reach })) };
 
-        rows.set(`${match.id} ${decision.ordinal}`, JSON.stringify({ ...row, js, ms }));
+        rows.set(`${match.id} ${decision.ordinal}`, JSON.stringify({ ...row, js, reference: player.version, ms }));
       } else {
         rows.set(`${match.id} ${decision.ordinal}`, JSON.stringify(row));
       }
