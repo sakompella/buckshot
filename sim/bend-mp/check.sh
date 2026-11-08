@@ -335,6 +335,18 @@ gate_backshot() {
   fi
 }
 
+# The Rust mirror of the rules (sim/rust) must agree with Bend: a Bend change
+# that the Rust port does not follow fails here (branch map hash, tapes, traces).
+gate_rust() {
+  local out
+  out="$(bash "$here/../rust/check.sh" 2>&1)"
+  if [[ $? -eq 0 ]]; then
+    report ok "rust parity gate" "$(printf '%s' "$out" | grep -E 'Bend steps|branch trace' | tail -2 | tr '\n' ' ' | cut -c1-200)"
+  else
+    report fail "rust parity gate" "$(printf '%s' "$out" | tail -20 | cut -c1-600)"
+  fi
+}
+
 gate_backshot
 gate_domain
 gate_unsafe
@@ -364,6 +376,7 @@ gate_parallel
 gate_mutations
 gate_fuzz_mutations
 gate_simple_mutations
+gate_rust
 
 if [[ $failed -eq 0 ]]; then
   echo PASS
