@@ -1,0 +1,33 @@
+# cargo-mutants settings for `sim/rust/mutants.sh` (it sets RUST_TAPES and CI).
+# The oracle is the workspace's own tests: unit tests, the Hegel properties,
+# tests/api.rs and the tape replay against a small fixed set of Bend tapes.
+
+profile = "mutants"
+additional_cargo_test_args = ["--", "--include-ignored"]
+# A busy machine slows the 10 s test run several times over.
+timeout_multiplier = 5.0
+minimum_test_timeout = 60
+
+exclude_globs = [
+  # Generated from the Bend sources, and the trace recorder only `cargo trace-test` turns on.
+  "rules/src/branch.rs",
+  "rules/src/branch/**",
+  # The tooling that maps Bend branches to Rust arms; `cargo branch-map check` tests it.
+  "branch-map/**",
+  # The search CLI's flag parsing and --stats summary; the oracle test runs it with its defaults.
+  "search/src/main.rs",
+]
+
+# Equivalent mutants: no input can tell them apart from the original.
+exclude_re = [
+  # Each shell sets a distinct bit, so or and xor agree.
+  'replace \| with \^ in Gun::of_load',
+  # The shifted list's low bit is zero, so or and xor agree.
+  'replace \| with \^ in Gun::push_front',
+  # At n == top both arms give top.
+  'replace < with <= in Range::value',
+  # A Menu is only built non-empty (an empty one is Request::Stuck).
+  'replace Menu::is_empty -> bool with false',
+  # Unreachable: one answer's notes stay under NOTES_CAPACITY (see its bound).
+  'replace Notes::truncated -> bool with false',
+]

@@ -566,6 +566,8 @@ struct Tally {
     steps: usize,
     matched: usize,
     skipped: usize,
+    /// Skipped games on a table this build lacks (the seats-2 build).
+    other_table: usize,
     skipped_steps: usize,
     skip_reasons: Vec<String>,
     problems: Vec<String>,
@@ -739,6 +741,7 @@ fn begin(v: &Value, id: &str, at: &str, from_state: bool, tally: &mut Tally) -> 
     take_trace();
     let mut started = Vec::new();
     let (state, skipped) = if !built {
+        bump(&mut tally.other_table);
         if tally.skip_reasons.len() < 5 {
             tally.skip_reasons.push(format!("{id}: a table this build lacks"));
         }
@@ -945,17 +948,74 @@ fn check_manifest(path: &Path, tally: &mut Tally) -> Result<String, String> {
     ))
 }
 
+/// The tapes in `dir`, sorted; an unset (empty) or tapeless directory is an
+/// error, so the replay never passes having compared nothing.
+fn tape_paths(dir: &str) -> Result<Vec<PathBuf>, String> {
+    if dir.is_empty() {
+        return Err(String::from(
+            "RUST_TAPES must name a directory of Bend tapes; run sim/rust/check.sh",
+        ));
+    }
+    let mut paths = Vec::new();
+    for entry in std::fs::read_dir(dir).map_err(|e| format!("RUST_TAPES {dir}: {e}"))? {
+        let path = entry.map_err(|e| format!("RUST_TAPES {dir}: {e}"))?.path();
+        if path.extension().is_some_and(|x| x == "jsonl") {
+            paths.push(path);
+        }
+    }
+    paths.sort();
+    if paths.is_empty() {
+        return Err(format!("no *.jsonl tapes in {dir}"));
+    }
+    Ok(paths)
+}
+
+/// Bend reaches a few perturbed states Rust cannot hold (a deck load with no
+/// blank); more than a quarter of a tape's games means the state decoder broke.
+/// Games on a table this build lacks do not count.
+fn too_many_skipped(tally: &Tally) -> Option<String> {
+    let unrepresentable = tally.skipped.saturating_sub(tally.other_table);
+    let games = tally.games.saturating_sub(tally.other_table);
+    (unrepresentable.saturating_mul(4) > games).then(|| format!("{unrepresentable} of {games} games skipped as unrepresentable"))
+}
+
+// Bug: the replay passed with RUST_TAPES unset (f2ae6ba made it fail closed).
+#[test]
+fn replay_fails_without_rust_tapes() {
+    assert_eq!(tape_paths("").ok(), None);
+}
+
+// Bug: a directory with no tapes compared nothing and passed (f2ae6ba).
+#[test]
+fn replay_fails_on_a_directory_without_tapes() {
+    let dir = std::env::temp_dir().join(format!("rust-tapes-empty-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("a temp dir");
+    let paths = tape_paths(dir.to_str().expect("a UTF-8 temp path"));
+    std::fs::remove_dir(&dir).expect("the temp dir is removed");
+    assert_eq!(paths.ok(), None);
+}
+
+// Bug: a broken state decoder skipped every perturbed game and still passed (rust-mutants, Gun::from_shells).
+#[test]
+fn replay_fails_when_over_a_quarter_of_games_are_skipped() {
+    let tally = |games, skipped, other_table| Tally {
+        games,
+        skipped,
+        other_table,
+        ..Tally::default()
+    };
+    assert_eq!(too_many_skipped(&tally(40, 10, 0)), None);
+    assert!(too_many_skipped(&tally(40, 11, 0)).is_some());
+    // The seats-2 build skips every wider table's game; only the rest count.
+    assert_eq!(too_many_skipped(&tally(40, 30, 28)), None);
+    assert!(too_many_skipped(&tally(40, 32, 28)).is_some());
+}
+
 #[test]
 #[ignore = "needs RUST_TAPES; run sim/rust/check.sh"]
 fn tapes_match_bend() {
-    let dir = std::env::var("RUST_TAPES").expect("RUST_TAPES must name a directory of Bend tapes; run sim/rust/check.sh");
-    let mut paths: Vec<PathBuf> = std::fs::read_dir(&dir)
-        .expect("RUST_TAPES is a readable directory")
-        .map(|entry| entry.expect("a readable directory entry").path())
-        .filter(|path| path.extension().is_some_and(|x| x == "jsonl"))
-        .collect();
-    paths.sort();
-    assert!(!paths.is_empty(), "no *.jsonl tapes in {dir}");
+    let dir = std::env::var("RUST_TAPES").unwrap_or_default();
+    let paths = tape_paths(&dir).unwrap_or_else(|error| panic!("{error}"));
     let mut failed = false;
     let (mut games, mut capped, mut matched, mut skipped) = (0, 0, 0, 0_usize);
     let (mut bend_labels, mut rust_labels) = (BTreeSet::new(), BTreeSet::<&str>::new());
@@ -974,6 +1034,7 @@ fn tapes_match_bend() {
         if let Err(error) = replayed {
             tally.problems.push(error);
         }
+        tally.problems.extend(too_many_skipped(&tally));
         let source = check_manifest(&path, &mut tally).unwrap_or_else(|error| {
             tally.problems.push(error);
             String::from("no manifest")
