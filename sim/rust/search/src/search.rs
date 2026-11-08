@@ -13,7 +13,7 @@
 //! branch being searched, the branches, the moves of every open decision and
 //! their scores. A subtree reads its part by [`Span`], so no node allocates.
 
-use buckshot_rules::{Config, GameEvent, Label, Load, Move, Note, Notes, Request, Seat, Secret, Shell, request};
+use buckshot_rules::{Config, GameEvent, Label, Load, Move, Note, Notes, Request, Seat, Secret, Shell, draw_request, request};
 use rayon::ThreadPool;
 
 use crate::deal::{DealScratch, Sums, sampled};
@@ -147,29 +147,23 @@ impl Buffers {
     /// only the phone's draw is expanded. `stepped` says whether
     /// [`Buffers::notes`] hold the move's notes.
     fn settle(&mut self, config: &Config, me: Seat, world: World, stepped: bool, outs: &mut Vec<Out>) {
-        match request(config, &world.state) {
-            Request::Draw {
-                label: Label::PhoneIndex,
-                range,
-            } => {
-                let count = range.extra.wrapping_add(2);
-                let weight = world.weight.div(Real::from_u32(count));
-                for k in (0..count).rev() {
-                    let out = match answer_into(config, &world.state, k, &mut self.later) {
-                        Some(state) => {
-                            self.overflow |= self.later.truncated();
-                            let won = round_won(self.later.as_slice());
-                            self.out(me, World { state, weight, won }, stepped, true)
-                        }
-                        None => self.out(me, World { weight, ..world }, stepped, false),
-                    };
-                    outs.push(out);
-                }
-            }
-            Request::Draw { .. } | Request::Choose(_) | Request::Finished | Request::Stuck => {
-                let out = self.out(me, world, stepped, false);
+        if let Some((Label::PhoneIndex, range)) = draw_request(config, &world.state) {
+            let count = range.extra.wrapping_add(2);
+            let weight = world.weight.div(Real::from_u32(count));
+            for k in (0..count).rev() {
+                let out = match answer_into(config, &world.state, k, &mut self.later) {
+                    Some(state) => {
+                        self.overflow |= self.later.truncated();
+                        let won = round_won(self.later.as_slice());
+                        self.out(me, World { state, weight, won }, stepped, true)
+                    }
+                    None => self.out(me, World { weight, ..world }, stepped, false),
+                };
                 outs.push(out);
             }
+        } else {
+            let out = self.out(me, world, stepped, false);
+            outs.push(out);
         }
     }
 

@@ -109,10 +109,10 @@ fn steal_options(options: &mut Options, adrenaline: Option<Slot>, picks: &Picks)
 /// (sm never offers adrenaline; a jammer is `StealJam`), at the owner's first
 /// slot holding it, by owner then slot.
 fn steal_picks(options: &mut Options, adrenaline: Slot, picks: &Picks) {
-    let mut seen: ArrayVec<(Seat, Item), PICKS_CAPACITY> = ArrayVec::new();
+    let mut seen = SeatItems::default();
     for pick in picks {
         branch!(B::SimplePointStealPicksPickCons);
-        items::keep(!(item_chained(pick.item) | seen.contains(&(pick.owner, pick.item))), || {
+        items::keep(!(item_chained(pick.item) | seen.contains(pick.owner, pick.item)), || {
             add(
                 options,
                 IdleOption::StealWith {
@@ -123,9 +123,28 @@ fn steal_picks(options: &mut Options, adrenaline: Slot, picks: &Picks) {
                 },
             );
         });
-        seen.push((pick.owner, pick.item));
+        seen.insert(pick.owner, pick.item);
     }
     branch!(B::SimplePointStealPicksNil);
+}
+
+/// A set of (seat, item) pairs: bit `16 * seat + rank` per pair.
+#[derive(Clone, Copy, Default)]
+struct SeatItems(u64);
+
+impl SeatItems {
+    fn bit(seat: Seat, item: Item) -> u64 {
+        1u64.checked_shl(u32::from(u8::from(seat)).wrapping_mul(16).wrapping_add(item.rank()))
+            .unwrap_or(0)
+    }
+
+    fn contains(self, seat: Seat, item: Item) -> bool {
+        self.0 & Self::bit(seat, item) != 0
+    }
+
+    fn insert(&mut self, seat: Seat, item: Item) {
+        self.0 |= Self::bit(seat, item);
+    }
 }
 
 /// `steal_jam.options`.
@@ -303,6 +322,20 @@ pub fn request(config: &Config, state: &State) -> Request {
                 Request::Stuck
             }
         }
+    }
+}
+
+/// The request's draw, if it is one, without building the menu an Idle
+/// seat's request holds: at Idle the request is a menu or `Stuck`.
+#[must_use]
+pub fn draw_request(config: &Config, state: &State) -> Option<(Label, Range)> {
+    if let Phase::Idle { .. } = state.phase {
+        return None;
+    }
+    if let Request::Draw { label, range } = request(config, state) {
+        Some((label, range))
+    } else {
+        None
     }
 }
 

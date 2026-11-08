@@ -251,10 +251,11 @@ impl<T: Copy> Ring<T> {
     /// `ring.entries`: every seat with its value, in ascending socket order.
     pub fn entries(&self) -> impl DoubleEndedIterator<Item = (Seat, T)> + '_ {
         let seats = self.table.seats();
-        (0..seats.len()).filter_map(move |i| {
-            let seat = seats.iter().nth(i)?;
-            Some((seat, self.get(seat)?))
-        })
+        seats
+            .seats
+            .into_iter()
+            .take(seats.len())
+            .filter_map(move |seat| Some((seat, self.get(seat)?)))
     }
 }
 
