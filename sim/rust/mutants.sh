@@ -6,7 +6,7 @@
 # by the f32 build's search/tests/oracle.rs). Then runs cargo mutants with any
 # extra arguments, for example:
 #   bash sim/rust/mutants.sh --package buckshot-rules --file rules/src/items.rs
-#   bash sim/rust/mutants.sh --package buckshot-search --no-default-features --features f32 --shard 0/2
+#   bash sim/rust/mutants.sh --package buckshot-search --no-default-features --features f32,seats-2-4 --shard 0/2
 # Results land in sim/rust/mutants.out/ (gitignored). Fails when a mutant survives.
 set -euo pipefail
 

@@ -274,3 +274,32 @@ pub fn sampled(
     }
     Some(sums)
 }
+
+#[cfg(test)]
+mod tests {
+    use buckshot_rules::{Gun, Load, Seat, State, World as Records, initial};
+
+    use super::deal_value;
+    use crate::search::tests::config;
+
+    /// `chamber.known`: a dealt gun of one shell kind tells the chamber, so its
+    /// deal takes the knowledge bonus; a mixed or empty gun does not.
+    #[test]
+    fn a_one_kind_gun_is_valued_as_known() {
+        let start = initial(&config().expect("a valid config"));
+        let value = |live, blank| {
+            let gun = Gun::of_load(Load { live, blank });
+            deal_value(
+                &State {
+                    world: Records { gun, ..start.world },
+                    ..start
+                },
+                None,
+                Seat::Seat1,
+            )
+        };
+        assert_eq!(value(3, 0), value(0, 3), "all live and all blank are both known");
+        assert!(value(3, 0).to_u32() > value(2, 1).to_u32(), "a one-kind gun beats a mixed one");
+        assert_eq!(value(0, 0), value(2, 1), "an empty gun is not known");
+    }
+}

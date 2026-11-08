@@ -3,7 +3,7 @@
 //! whose `js` field is the Bend player's analysis) must come out of the CLI
 //! with the same best move, node and memo counts and line values: `static.jsonl` with
 //! the default flags, `sampled.jsonl` with `--reload sampled --samples 32`,
-//! `memo.jsonl` with `--memo charged`.
+//! `memo.jsonl` with `--memo charged`. bounded-v1 is checked against compat on `static.jsonl`.
 //! The f32 build only; run by `sim/rust/mutants.sh`.
 #![cfg(feature = "f32")]
 
@@ -56,4 +56,60 @@ fn compat_matches_bend() {
             assert_eq!(shared(row), shared(&bend["js"]), "{name}: {} at {}", bend["id"], bend["ordinal"]);
         }
     }
+}
+
+fn scores(row: &Value) -> Vec<Value> {
+    row["lines"]
+        .as_array()
+        .map(|lines| lines.iter().map(|line| line["score"].clone()).collect())
+        .unwrap_or_default()
+}
+
+/// bounded-v1 against compat, and so against Bend: unpruned, every line's
+/// value is compat's; pruned, the best move and its value are the unpruned
+/// ones. Rows either search cuts by its budget are left out.
+#[test]
+#[ignore = "needs RUST_SEARCH_ORACLE; run sim/rust/mutants.sh"]
+fn bounded_matches_compat() {
+    let dir = std::env::var("RUST_SEARCH_ORACLE").expect("RUST_SEARCH_ORACLE names a directory of rust-search-synth.ts files");
+    let path = format!("{dir}/static.jsonl");
+    let rows = |flags: &[&str]| -> Vec<Value> {
+        let out = Command::new(env!("CARGO_BIN_EXE_buckshot-search"))
+            .args(flags)
+            .args(["--threads", "2", &path])
+            .output()
+            .expect("the CLI runs");
+        assert!(out.status.success(), "the CLI failed: {}", String::from_utf8_lossy(&out.stderr));
+        String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .map(|line| serde_json::from_str(line).expect("a JSON row"))
+            .collect()
+    };
+    let compat_rows = rows(&[]);
+    let unpruned_rows = rows(&["--evaluator", "bounded-v1-f32", "--unpruned"]);
+    let pruned_rows = rows(&["--evaluator", "bounded-v1-f32"]);
+    assert_eq!(
+        (unpruned_rows.len(), pruned_rows.len()),
+        (compat_rows.len(), compat_rows.len()),
+        "one row per input"
+    );
+    let best = |row: &Value| {
+        row["lines"]
+            .as_array()
+            .and_then(|lines| lines.iter().map(|line| &line["score"]).max_by_key(|score| score.as_u64()))
+            .cloned()
+    };
+    let mut compared = 0_u32;
+    for ((compat, unpruned), pruned) in compat_rows.iter().zip(&unpruned_rows).zip(&pruned_rows) {
+        if [compat, unpruned, pruned].iter().any(|row| row["limited"] != Value::Bool(false)) {
+            continue;
+        }
+        compared = compared.saturating_add(1);
+        let id = (&compat["id"], &compat["ordinal"]);
+        assert_eq!(scores(unpruned), scores(compat), "unpruned line values at {id:?}");
+        assert_eq!(unpruned["best"], compat["best"], "unpruned best at {id:?}");
+        assert_eq!(pruned["best"], unpruned["best"], "pruned best at {id:?}");
+        assert_eq!(best(pruned), best(unpruned), "pruned best value at {id:?}");
+    }
+    assert!(compared >= 6, "only {compared} rows within both budgets");
 }

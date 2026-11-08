@@ -174,6 +174,18 @@ fn rings_ignore_sockets_off_the_table() {
 }
 
 #[test]
+fn a_table_is_found_by_its_seat_count() {
+    for table in tables() {
+        let seats = u64::try_from(table.seats().len()).expect("a few seats");
+        assert_eq!(Table::of_seats(seats), Some(table), "{table:?}");
+    }
+    let built = u64::try_from(tables().len()).expect("a few tables");
+    for seats in [0, 1, built.saturating_add(2), 5] {
+        assert_eq!(Table::of_seats(seats), None, "{seats} seats");
+    }
+}
+
+#[test]
 fn a_range_lists_every_value() {
     let values: Vec<u32> = Range { lo: 3, extra: 2 }.values().map(buckshot_rules::DrawValue::get).collect();
     assert_eq!(values, [3, 4, 5, 6], "lo through lo + extra + 1");
@@ -213,6 +225,8 @@ fn deck_ids_form_a_set_inside_the_table_deck() {
         let ids: Vec<u32> = deck.iter().map(|batch| batch.id).collect();
         assert_eq!(ids, [0, 2], "{table:?}: repeats collapse");
         assert_eq!(deck.len(), 2, "{table:?}: len");
+        let kept = Deck::of_ids(table, [0]).expect("an id inside the deck");
+        assert_eq!(deck.filtered(|id| id <= 1), kept, "{table:?}: filtered keeps what is in both");
         // Bug: ids past the deck were dropped silently (8a8aad7).
         assert_eq!(Deck::of_ids(table, [0, 15]), None, "{table:?}: an id past the deck");
         assert_eq!(Deck::of_ids(table, [40]), None, "{table:?}: an id past any deck");

@@ -1011,6 +1011,28 @@ fn replay_fails_when_over_a_quarter_of_games_are_skipped() {
     assert!(too_many_skipped(&tally(40, 32, 28)).is_some());
 }
 
+// Bug: arena game ids repeated across tournaments (5352abe, rust-tapes.mjs); the replay must refuse a repeated id.
+#[test]
+#[ignore = "needs RUST_TAPES; run sim/rust/check.sh"]
+fn a_repeated_game_id_fails_the_replay() {
+    let dir = std::env::var("RUST_TAPES").unwrap_or_default();
+    let first = tape_paths(&dir)
+        .unwrap_or_else(|error| panic!("{error}"))
+        .into_iter()
+        .next()
+        .expect("a tape");
+    let text = std::fs::read_to_string(&first).expect("a readable tape");
+    let game: Vec<&str> = text.lines().take_while(|line| !line.contains("\"terminal\"")).collect();
+    let terminal = text.lines().nth(game.len()).expect("the first game's terminal line");
+    let once = [game.as_slice(), &[terminal]].concat().join("\n");
+    let path = std::env::temp_dir().join(format!("rust-tapes-repeat-{}.jsonl", std::process::id()));
+    std::fs::write(&path, format!("{once}\n{once}\n")).expect("a temp tape");
+    let replayed = replay(&path, &mut Tally::default(), &mut Trace::default());
+    std::fs::remove_file(&path).expect("the temp tape is removed");
+    let error = replayed.expect_err("a repeated game id fails");
+    assert!(error.contains("repeats an earlier game"), "{error}");
+}
+
 #[test]
 #[ignore = "needs RUST_TAPES; run sim/rust/check.sh"]
 fn tapes_match_bend() {

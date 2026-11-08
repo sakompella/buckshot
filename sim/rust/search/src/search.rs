@@ -835,11 +835,11 @@ pub(crate) fn run(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use buckshot_rules::{AmountRule, Config, HealthRule, ItemRule, LoadRule, RoundRules, RuleError, ShellRule, Table};
 
     /// Two seats at 2 health, a one-shell live load and no items.
-    pub(super) fn config() -> Result<Config, RuleError> {
+    pub(crate) fn config() -> Result<Config, RuleError> {
         let load = LoadRule {
             shells: ShellRule::AllLive { live: 1 },
             items: AmountRule::Fixed(0),
@@ -936,8 +936,9 @@ mod tests {
             Ok((next_round, at(false), at(true)))
         }
 
-        /// P1.1: shooting the opponent wins the round and begins the next one in the
+        /// Shooting the opponent wins the round and begins the next one in the
         /// same step; the search must score the won round, not the next round's start.
+        // Bug: the round-edge winner (rust-search stage 1, P1.1) scored the next round's start.
         #[test]
         fn a_won_round_is_settled_when_the_next_round_begins_at_once() {
             let expected = (true, Some((1_000_000, Reach::Settled)), Some((0, Reach::Settled)));

@@ -157,3 +157,50 @@ impl Tally {
         self.cached.deal_hits = self.cached.deal_hits.saturating_add(1);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use buckshot_rules::{Event, initial, step_event};
+
+    use super::{Kind, Stored, Tally};
+    use crate::deal::Sums;
+    use crate::num::Real;
+    use crate::search::tests::config;
+    use crate::types::World;
+
+    /// Two keys that share a hash stay apart: a lookup compares every world's
+    /// weight and state, as Bend's string keys do.
+    #[test]
+    fn keys_sharing_a_hash_stay_apart() {
+        let config = config().expect("a valid config");
+        let state = initial(&config);
+        let other = step_event(&config, state, Event::Draw(0)).expect("a draw").state;
+        assert_ne!(state, other, "the draw changes the state");
+        let world = |at| World {
+            state: at,
+            weight: Real::ONE,
+            won: None,
+        };
+        let half = World {
+            weight: Real::ONE.div(Real::from_u32(2)),
+            ..world(state)
+        };
+        let kept = [world(state)];
+        let mut tally = Tally::default();
+        tally.keep(
+            7,
+            Kind::Deal,
+            (&kept, &kept),
+            Stored::Deal(Sums {
+                public: Real::ONE,
+                private: Real::ONE,
+            }),
+        );
+        assert!(tally.find(7, Kind::Deal, &kept, &kept).is_some(), "the same key");
+        for probe in [vec![world(other)], vec![half], vec![world(state), world(state)], vec![]] {
+            assert_eq!(tally.find(7, Kind::Deal, &probe, &kept), None, "public {probe:?}");
+            assert_eq!(tally.find(7, Kind::Deal, &kept, &probe), None, "private {probe:?}");
+        }
+        assert_eq!(tally.find(7, Kind::Decision, &kept, &kept), None, "another kind");
+    }
+}

@@ -174,3 +174,17 @@ mod ops {
 }
 
 pub use ops::{branch_window, len_u32};
+
+#[cfg(test)]
+mod tests {
+    use super::Real;
+
+    /// `F32.to_u32` gives 0 from 2^32 up, rather than saturating.
+    #[test]
+    fn to_u32_is_zero_from_two_to_the_32() {
+        let top = Real::from_u32(u32::MAX).add(Real::from_u32(1));
+        assert_eq!(top.to_u32(), 0, "2^32");
+        assert_eq!(top.mul(Real::from_u32(2)).to_u32(), 0, "2^33");
+        assert_eq!(Real::from_u32(7).to_u32(), 7, "an integer in range");
+    }
+}
