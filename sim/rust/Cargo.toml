@@ -9,6 +9,7 @@ publish = false
 [workspace.dependencies]
 anyhow = "1"
 arrayvec = { version = "0.7", default-features = false }
+hegeltest = { version = "=0.52.0", features = ["static-engine"] }
 proc-macro2 = "1"
 proptest = "1"
 quote = "1"

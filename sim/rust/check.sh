@@ -37,8 +37,9 @@ echo "== Bend branch traces"
 cargo branch-map instrument "$tapes/traced"
 nice -n 10 node "$root/sim/bend-mp/test/bend-trace.mjs" "$tapes/traced" "$tapes"/*.jsonl
 
+# CI=true makes the Hegel properties deterministic and keeps them off .hegel/.
 echo "== cargo test --release (tape replay against $tapes)"
-RUST_TAPES="$tapes" nice -n 10 cargo test --release -- --include-ignored --nocapture
+CI=true RUST_TAPES="$tapes" nice -n 10 cargo test --release -- --include-ignored --nocapture
 echo "== cargo test --release, f32 build"
 nice -n 10 cargo test --release --no-default-features --features f32 -p buckshot-search
 
