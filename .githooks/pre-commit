@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Pre-commit checks for the Rust workspace (sim/rust). Skipped when no file
 # under sim/rust/ is staged. Checks the working tree, not only the staged
-# content. `nix develop` points core.hooksPath here.
+# content. `nix develop` sets core.hooksPath to .githooks when it is unset.
 set -uo pipefail
 
 if git diff --cached --quiet -- sim/rust; then

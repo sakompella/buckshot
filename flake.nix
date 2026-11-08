@@ -20,11 +20,18 @@
               pkgs.cargo pkgs.rustc pkgs.clippy pkgs.rustfmt pkgs.rust-analyzer pkgs.cargo-mutants ];
             BEND = "${bend}/bin/bend";
             BENDTT = "${bendtt}/bin/bendtt";
-            # Committed git hooks (.githooks/pre-commit). Worktrees share the config, so this is set once.
+            # Committed git hooks (.githooks/pre-commit). Set only for a Buckshot checkout
+            # (never the caller's other repo) and only when core.hooksPath is unset.
+            # Worktrees share the config, so this is set once.
             shellHook = ''
-              if [ "$(git config --get core.hooksPath 2>/dev/null)" != .githooks ] && git rev-parse --git-dir >/dev/null 2>&1; then
-                git config core.hooksPath .githooks
+              top=$(git rev-parse --show-toplevel 2>/dev/null)
+              if [ -n "$top" ] && [ -f "$top/.githooks/pre-commit" ] && [ -d "$top/sim/bend-mp" ] \
+                && grep -q 'Buckshot Roulette research' "$top/flake.nix" 2>/dev/null \
+                && [ -z "$(git -C "$top" config --get core.hooksPath)" ]; then
+                git -C "$top" config core.hooksPath .githooks
+                echo "buckshot: set core.hooksPath to .githooks"
               fi
+              unset top
             '';
           } // pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
             LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib ];
