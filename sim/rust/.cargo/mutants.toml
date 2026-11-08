@@ -1,0 +1,82 @@
+# cargo-mutants settings for `sim/rust/mutants.sh` (it sets RUST_TAPES and CI).
+# The oracle is the workspace's own tests: unit tests, the Hegel properties,
+# tests/api.rs and the tape replay against a small fixed set of Bend tapes.
+
+profile = "mutants"
+additional_cargo_test_args = ["--", "--include-ignored"]
+# A busy machine slows the 10 s test run several times over.
+timeout_multiplier = 5.0
+minimum_test_timeout = 60
+
+exclude_globs = [
+  # Generated from the Bend sources, and the trace recorder only `cargo trace-test` turns on.
+  "rules/src/branch.rs",
+  "rules/src/branch/**",
+  # The tooling that maps Bend branches to Rust arms; `cargo branch-map check` tests it.
+  "branch-map/**",
+  # The search CLI's flag parsing and --stats summary; the oracle test runs it with its defaults.
+  "search/src/main.rs",
+]
+
+# Equivalent mutants: no input can tell them apart from the original.
+exclude_re = [
+  # Each shell (batch id) sets a distinct bit, so or and xor agree.
+  'replace \| with \^ in (Gun::of_load|Deck::filtered)',
+  # The shifted list's low bit is zero, so or and xor agree.
+  'replace \| with \^ in Gun::push_front',
+  # At n == top both arms give top.
+  'replace < with <= in Range::value',
+  # A Menu is only built non-empty (an empty one is Request::Stuck).
+  'replace Menu::is_empty -> bool with false',
+  # Unreachable: one answer's notes stay under NOTES_CAPACITY (see its bound).
+  'replace Notes::truncated -> bool with false',
+  # A sampled leaf starts at a reload's first draw: the gun is empty, nobody holds
+  # an item and no item draw is pending, so these key parts never vary there.
+  'replace (godot_id|item_code) -> u32 with [01]',
+  'replace == with != in put_shells',
+  # find compares the whole key, so a constant hash only makes every lookup collide.
+  'replace hash -> u64 with [01]',
+  # The overflow flag is set only by truncated notes, which cannot happen (see Notes::truncated).
+  'replace \|= with &= in Buffers::(settle|play)',
+  # For my move a tie on the private value gives the same value: public is the best over all moves.
+  'replace > with >= in decide',
+  # j is never b: b is a move searched before j.
+  'replace < with <= in root_window',
+  # j is never lowest: lowest is a child searched before j (or usize::MAX).
+  'replace < with <= in Running::next',
+  'replace < with <= in Running::add',
+  # lead is always a menu index; unpruned, the order changes no value.
+  'replace (< with <=|&& with \|\|) in Search<._>::bounded_choose',
+  # Which move goes first only changes the order: the best move and value stay
+  # exact and every box still holds its value (search/tests/pruning.rs checks both).
+  'replace < with (==|>) in Search<._>::bounded_choose',
+  'replace == with != in Search<._>::bounded_root',
+  # best only seeds the later moves' windows. Any move's low end is a sound
+  # window, so these change how much is cut, not the boxes the oracle checks.
+  'bounded.rs:599:.* in Search<._>::bounded_lines',
+  # At a sampled reload leaf the old shells are gone, so both belief sets value
+  # the same deals; a branch with no private worlds has private weight 0.
+  'replace (Span::is_empty -> bool with .*|>= with < in Span::is_empty)',
+  # The slack only sizes a branch's first window: a sum that misses its need is
+  # searched again (Search::bounded_branches), so it changes nodes, not values.
+  'replace (\+= with [-*]=|\+ with [-*]) in ops::branch_window',
+  # A wrong argmin only steers the opponent's later windows and the next lead;
+  # the boxes stay sound (search/tests/pruning.rs), so it costs nodes, not values.
+  'replace && with \|\| in Running::add',
+]
+
+# Equivalent field deletions. cargo-mutants 27.1 does not apply exclude_re (or
+# -E) to "delete field" mutants, so these still show as missed:
+# state_of overwrites these from the board after replaying the log.
+#   'delete field (round_index|round_health) from struct Records expression in world_event'
+#   'delete field shown from struct Records expression in world_event'
+# The round's first Loaded sets load_index to 0 whatever it was (load_next(true, _)).
+#   'delete field load_index from struct Records expression in world_event'
+# It only decides who starts the next round, and a won round is a leaf.
+#   'delete field checking_first_death from struct Records expression in world_event'
+# The log replays the same counters the board shows (a board and log of one game).
+#   'delete field (round_index|round_health|shown) from struct Records expression in state_of'
+# No logged event changes cash, so the view's cash is already there.
+#   'delete field cash from struct SeatRecord expression in state_of'
+# answer_into answers every draw, so the phone's no-answer arm never runs.
+#   'delete field weight from struct World expression in Buffers::settle'

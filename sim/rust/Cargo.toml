@@ -1,0 +1,86 @@
+[workspace]
+resolver = "3"
+members = ["rules", "search", "branch-map"]
+
+[workspace.package]
+edition = "2024"
+publish = false
+
+[workspace.dependencies]
+anyhow = "1"
+arrayvec = { version = "0.7", default-features = false }
+hegeltest = { version = "=0.52.0", features = ["static-engine"] }
+num_enum = { version = "0.7", default-features = false }
+proc-macro2 = "1"
+quote = "1"
+rayon = "1"
+rustc-hash = "2"
+serde = "1"
+serde_json = "1"
+sha2 = "0.10"
+syn = "2"
+thiserror = "2"
+toml = "0.9"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+pedantic = { level = "deny", priority = -1 }
+# clippy::restriction lints, picked one by one: no panics, no silent overflow
+# or truncation, no hidden allocation, exact float behaviour, explicit matches.
+allow_attributes = "deny"
+allow_attributes_without_reason = "deny"
+arithmetic_side_effects = "deny"
+as_conversions = "deny"
+as_underscore = "deny"
+assertions_on_result_states = "deny"
+cfg_not_test = "deny"
+dbg_macro = "deny"
+default_numeric_fallback = "deny"
+empty_drop = "deny"
+exit = "deny"
+expect_used = "deny"
+float_arithmetic = "deny"
+float_cmp_const = "deny"
+fn_to_numeric_cast_any = "deny"
+get_unwrap = "deny"
+indexing_slicing = "deny"
+infinite_loop = "deny"
+integer_division = "deny"
+iter_over_hash_type = "deny"
+let_underscore_must_use = "deny"
+let_underscore_untyped = "deny"
+lossy_float_literal = "deny"
+map_err_ignore = "deny"
+mem_forget = "deny"
+missing_assert_message = "deny"
+mixed_read_write_in_expression = "deny"
+modulo_arithmetic = "deny"
+non_zero_suggestions = "deny"
+panic = "deny"
+panic_in_result_fn = "deny"
+precedence_bits = "deny"
+rest_pat_in_fully_bound_structs = "deny"
+shadow_unrelated = "deny"
+str_to_string = "deny"
+string_add = "deny"
+string_slice = "deny"
+suspicious_xor_used_as_pow = "deny"
+todo = "deny"
+try_err = "deny"
+unimplemented = "deny"
+unneeded_field_pattern = "deny"
+unreachable = "deny"
+unused_result_ok = "deny"
+unwrap_in_result = "deny"
+unwrap_used = "deny"
+wildcard_enum_match_arm = "deny"
+
+[profile.release]
+debug = 1
+
+# Builds each mutant for `mutants.sh`: release speed without debug info.
+[profile.mutants]
+inherits = "release"
+debug = 0
