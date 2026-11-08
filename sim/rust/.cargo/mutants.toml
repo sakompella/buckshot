@@ -45,4 +45,12 @@ exclude_re = [
   # an item and no item draw is pending, so these key parts never vary there.
   'replace (godot_id|item_code) -> u32 with [01]',
   'replace == with != in put_shells',
+  # find compares the whole key, so a constant hash only makes every lookup collide.
+  'replace hash -> u64 with [01]',
+  # The overflow flag is set only by truncated notes, which cannot happen (see Notes::truncated).
+  'replace \|= with &= in Buffers::(settle|play)',
+  # answer_into answers every draw, so the phone's no-answer arm never runs.
+  'delete field weight from struct World expression in Buffers::settle',
+  # For my move a tie on the private value gives the same value: public is the best over all moves.
+  'replace > with >= in decide',
 ]

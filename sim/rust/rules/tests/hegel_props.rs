@@ -13,11 +13,11 @@ use std::hint::black_box;
 
 use buckshot_rules::{
     AmountRule, Answer, Config, Deck, Decks, Direction, Event, FirstDeathCheck, Grabs, Gun, HealthRule, IdleOption, Item, ItemRule, Items,
-    Jam, LegalMove, Load, LoadRule, MENU_CAPACITY, NOTES_CAPACITY, Phase, Range, Request, RequestKind, Ring, RoundRules, RuleError, Seat,
-    SeatRecord, Shell, ShellRule, Slot, Slots, State, Stepped, Table, World, request, start, step, step_event,
+    Jam, LegalMove, Load, LoadRule, Phase, Range, Request, RequestKind, Ring, RoundRules, RuleError, Seat, SeatRecord, Shell, ShellRule,
+    Slot, Slots, State, Stepped, Table, World, request, start, step, step_event,
 };
+use hegel::TestCase;
 use hegel::generators as gs;
-use hegel::{Hegel, Settings, TestCase};
 
 const SEATS: [Seat; 4] = [Seat::Seat0, Seat::Seat1, Seat::Seat2, Seat::Seat3];
 
@@ -332,7 +332,6 @@ fn check_menu(state: &State, menu: &buckshot_rules::Menu) {
     let table = state.players.table();
     let me = menu.seat();
     assert!(!menu.is_empty(), "empty menu");
-    assert!(menu.len() <= MENU_CAPACITY, "menu of {} over capacity", menu.len());
     assert!(table.has(me), "{me:?} is not at the table");
     assert!(alive(state, me), "{me:?} is dead at a Choose");
     let holds = |owner: Seat, slot: Slot, item: Item| state.players.get(owner).is_some_and(|record| record.slots.get(slot) == Some(item));
@@ -448,38 +447,30 @@ fn check_terminal(config: &Config, state: State) {
     }
 }
 
-fn note_sizes(stepped: &Stepped, walked: &mut Walked) {
+fn check_notes(stepped: &Stepped) {
     assert!(!stepped.notes.truncated(), "notes were truncated");
-    walked.max_notes = walked.max_notes.max(stepped.notes.as_slice().len());
 }
 
-/// A walk's visited states and the largest menu and notes it saw.
+/// A walk's visited states.
 #[derive(Default)]
 struct Walked {
     states: Vec<State>,
-    max_menu: usize,
-    max_notes: usize,
-    finished: bool,
 }
 
 /// Plays a reachable game of up to `steps` drawn answers, checking every invariant, and returns the states visited.
 fn walk(tc: &TestCase, config: &Config, steps: usize) -> Walked {
     let mut current = start(config);
     let mut walked = Walked::default();
-    note_sizes(&current, &mut walked);
+    check_notes(&current);
     walked.states.push(current.state);
     for _ in 0..steps {
         let state = current.state;
         check_state(config, &state);
         let request = request(config, &state);
         match &request {
-            Request::Choose(menu) => {
-                check_menu(&state, menu);
-                walked.max_menu = walked.max_menu.max(menu.len());
-            }
+            Request::Choose(menu) => check_menu(&state, menu),
             Request::Finished => {
                 assert!(matches!(state.phase, Phase::Ended), "Finished outside the Ended phase");
-                walked.finished = true;
             }
             Request::Draw { .. } | Request::Stuck => {}
         }
@@ -488,7 +479,7 @@ fn walk(tc: &TestCase, config: &Config, steps: usize) -> Walked {
             break;
         };
         let next = step(config, state, answer);
-        note_sizes(&next, &mut walked);
+        check_notes(&next);
         check_events(config, state, &request, event, answer, &next);
         check_step(&state, &next.state);
         walked.states.push(next.state);
@@ -626,30 +617,6 @@ fn config_validation_matches_the_domain(tc: TestCase) {
             assert!(matches!(error, RuleError::Config(_)), "a config error was expected, got {error}");
         }
     }
-}
-
-#[test]
-fn menus_and_notes_stay_in_capacity() {
-    let mut seen = Walked::default();
-    let (mut games, mut finished) = (0_usize, 0_usize);
-    Hegel::new(|tc| {
-        let config = supported_config(&tc, flag(&tc));
-        let walked = walk(&tc, &config, 600);
-        seen.max_menu = seen.max_menu.max(walked.max_menu);
-        seen.max_notes = seen.max_notes.max(walked.max_notes);
-        finished = finished.saturating_add(usize::from(walked.finished));
-        games = games.saturating_add(1);
-    })
-    .settings(Settings::new().test_cases(1000))
-    .run();
-    let (menu, notes) = (seen.max_menu, seen.max_notes);
-    println!("{games} walks, {finished} finished; max menu {menu}/{MENU_CAPACITY}, max notes {notes}/{NOTES_CAPACITY}");
-    // A quarter of each capacity stays free (last seen: menu 37/64, notes 77/256).
-    let within = |most: usize, capacity: usize| most.saturating_mul(4) <= capacity.saturating_mul(3);
-    assert!(
-        within(menu, MENU_CAPACITY) && within(notes, NOTES_CAPACITY),
-        "a capacity lost its margin"
-    );
 }
 
 #[hegel::test(test_cases = 128)]

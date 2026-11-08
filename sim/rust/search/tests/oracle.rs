@@ -3,7 +3,9 @@
 //! whose `js` field is the Bend player's analysis) must come out of the CLI
 //! with the same best move, node and memo counts and line values: `static.jsonl` with
 //! the default flags, `sampled.jsonl` with `--reload sampled --samples 32`,
-//! `memo.jsonl` with `--memo charged`. bounded-v1 is checked against compat on `static.jsonl`.
+//! `memo.jsonl` with `--memo charged`, `sampled-memo.jsonl` with both and
+//! `budget.jsonl` with `--budget 300`, where most rows run out of budget.
+//! bounded-v1 is checked against compat on `static.jsonl`.
 //! The f32 build only; run by `sim/rust/mutants.sh`.
 #![cfg(feature = "f32")]
 
@@ -31,10 +33,15 @@ fn shared(row: &Value) -> Value {
 #[ignore = "needs RUST_SEARCH_ORACLE; run sim/rust/mutants.sh"]
 fn compat_matches_bend() {
     let dir = std::env::var("RUST_SEARCH_ORACLE").expect("RUST_SEARCH_ORACLE names a directory of rust-search-synth.ts files");
-    let runs: [(&str, &[&str]); 3] = [
+    let runs: [(&str, &[&str]); 5] = [
         ("static.jsonl", &[]),
         ("sampled.jsonl", &["--reload", "sampled", "--samples", "32"]),
         ("memo.jsonl", &["--memo", "charged"]),
+        (
+            "sampled-memo.jsonl",
+            &["--reload", "sampled", "--samples", "32", "--memo", "charged"],
+        ),
+        ("budget.jsonl", &["--budget", "300"]),
     ];
     for (name, flags) in runs {
         let path = format!("{dir}/{name}");
@@ -67,7 +74,8 @@ fn scores(row: &Value) -> Vec<Value> {
 
 /// bounded-v1 against compat, and so against Bend: unpruned, every line's
 /// value is compat's; pruned, the best move and its value are the unpruned
-/// ones. Rows either search cuts by its budget are left out.
+/// ones and every line's box holds its unpruned value. Rows either search
+/// cuts by its budget are left out.
 #[test]
 #[ignore = "needs RUST_SEARCH_ORACLE; run sim/rust/mutants.sh"]
 fn bounded_matches_compat() {
@@ -110,6 +118,19 @@ fn bounded_matches_compat() {
         assert_eq!(unpruned["best"], compat["best"], "unpruned best at {id:?}");
         assert_eq!(pruned["best"], unpruned["best"], "pruned best at {id:?}");
         assert_eq!(best(pruned), best(unpruned), "pruned best value at {id:?}");
+        let pruned_lines = pruned["lines"].as_array().expect("lines");
+        let unpruned_lines = unpruned["lines"].as_array().expect("lines");
+        for (boxed, exact) in pruned_lines.iter().zip(unpruned_lines) {
+            let (lo, hi, value) = (boxed["score"].as_u64(), boxed["upper"].as_u64(), exact["score"].as_u64());
+            assert!(
+                lo <= value && value <= hi,
+                "{id:?}: line {} box {lo:?}..={hi:?} misses {value:?}",
+                boxed["index"]
+            );
+            if boxed["exact"] == Value::Bool(true) {
+                assert_eq!(lo, value, "{id:?}: line {} is marked exact", boxed["index"]);
+            }
+        }
     }
     assert!(compared >= 6, "only {compared} rows within both budgets");
 }
