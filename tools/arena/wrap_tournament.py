@@ -15,7 +15,6 @@ check stops the run with a message and a non-zero exit; fix the cause and rerun.
   snapshot  scratch copy of the new database, the input of the derived refresh
   regret    copy the live regret databases (static and sampled) to staged files and score the decisions they lack into
             them with score_regret.py (the Rust evaluator of the --evaluator checkout); each must stay one evaluator group
-            (with --scorer js: arena-regret.ts from the evaluator worktree that scored the old JS rows, then a stage step)
   knowledge arena-knowledge.ts --verify from the knowledge worktree
   certain   certain-mistakes database
   swap-derived  swap regret, sampled regret, knowledge and certain-mistakes in, each keeping a .pre-<name> copy
@@ -148,55 +147,6 @@ def check_import(db_path: Path, load_dir: Path) -> str:
     return f"quick_check ok, 0 issues, {len(games)} scored games with cohorts, matches by status {by_status}"
 
 
-def new_match_names(snapshot: Path, regret: Path) -> list[str]:
-    """Names of the replay-validated completed matches with no regret row yet."""
-    scored = {row[0] for row in sqlite3.connect(f"file:{regret}?mode=ro", uri=True).execute("SELECT DISTINCT match_id FROM regret")}
-    rows = sqlite3.connect(f"file:{snapshot}?mode=ro", uri=True).execute("SELECT id, name FROM matches WHERE status = 'completed' AND replay_status = 'validated'")
-    return sorted({name for match_id, name in rows if match_id not in scored})
-
-
-REGRET_COLUMNS = "match_id, ordinal, player, label, evaluator, max_depth, budget, status, reason, values_json, best, best_score, chosen_score, regret, exact, depth, limited, nodes, ms"
-
-
-def stage_regret(live: Path, scored: Path | None, staged: Path) -> str:
-    """The live regret rows plus the rows of `scored` (written by the older evaluator, so without reload and samples), as one file."""
-    backup(live, staged)
-    db = sqlite3.connect(staged)
-    before = db.execute("SELECT COUNT(*) FROM regret").fetchone()[0]
-    old_groups = db.execute("SELECT DISTINCT evaluator, max_depth, budget, reload, samples FROM regret").fetchall()
-    added = 0
-    if scored is not None:
-        db.execute("ATTACH ? AS scored", (str(scored),))
-        # The scorer picks matches by name, and names repeat across tournaments, so it can rescore decisions the live
-        # file already holds. Those rows must equal the live ones (timing aside); they are then left out, not added twice.
-        key = "s.match_id = r.match_id AND s.ordinal = r.ordinal AND s.evaluator = r.evaluator AND s.max_depth = r.max_depth AND s.budget = r.budget AND r.reload = 'static' AND r.samples = 0"
-        same = " AND ".join(f"s.{column} IS r.{column}" for column in REGRET_COLUMNS.split(", ") if column != "ms")
-        rescored = db.execute(f"SELECT COUNT(*) FROM scored.regret s JOIN regret r ON {key}").fetchone()[0]
-        differing = db.execute(f"SELECT COUNT(*) FROM scored.regret s JOIN regret r ON {key} WHERE NOT ({same})").fetchone()[0]
-        if differing:
-            raise Stop(f"{differing} rescored regret rows differ from the live rows for the same decision")
-        added = db.execute("SELECT COUNT(*) FROM scored.regret").fetchone()[0] - rescored
-        db.execute(f"INSERT INTO regret ({REGRET_COLUMNS}, reload, samples) SELECT {REGRET_COLUMNS}, 'static', 0 FROM scored.regret s WHERE NOT EXISTS (SELECT 1 FROM regret r WHERE {key})")
-        db.commit()
-        db.execute("DETACH scored")
-    db.execute("DROP TABLE IF EXISTS evaluator_equivalence")
-    db.commit()
-    db.execute("PRAGMA journal_mode=DELETE")
-    db.execute("VACUUM")
-    groups = db.execute("SELECT DISTINCT evaluator, max_depth, budget, reload, samples FROM regret").fetchall()
-    after = db.execute("SELECT COUNT(*) FROM regret").fetchone()[0]
-    quick = db.execute("PRAGMA quick_check").fetchall()
-    foreign = db.execute("PRAGMA foreign_key_check").fetchall()
-    db.close()
-    if quick != [("ok",)] or foreign:
-        raise Stop(f"staged regret database failed its checks: {quick[:3]} {foreign[:3]}")
-    if groups != old_groups or len(groups) != 1:
-        raise Stop(f"the staged rows are not one evaluator group: {old_groups} then {groups}")
-    if after != before + added:
-        raise Stop(f"staged regret has {after} rows, expected {before} + {added}")
-    return f"{before} + {added} = {after} rows, one group {groups[0]}"
-
-
 def splice_between_markers(text: str, name: str, body: str) -> str:
     start, end = f"<!-- {name}:start -->", f"<!-- {name}:end -->"
     head, found, rest = text.partition(start)
@@ -262,7 +212,6 @@ class Wrap:
     viewer_unit: str | None
     viewer_url: str
     jobs: int
-    scorer: str
     regret_name: str
     sampled_name: str
     threads: int
@@ -372,40 +321,6 @@ class Wrap:
             groups += found
         return f"{json.dumps(summary)}; groups {groups}"
 
-    def regret_js(self) -> str:
-        snapshot = self.scratch / "snapshot.sqlite"
-        names = new_match_names(snapshot, self.regret_db)
-        (self.logs / "new-matches.txt").write_text("".join(f"{n}\n" for n in names))
-        if not names:
-            return "no new matches"
-        script = 'while read -r NAME; do nice -n 10 bun scripts/arena-regret.ts --db "$1" --out "$2" --match "$NAME" 2>&1 | tail -1; done < "$3"'
-        procs = []
-        for k in range(self.jobs):
-            part = self.scratch / f"names-{k}.txt"
-            part.write_text("".join(f"{n}\n" for n in names[k :: self.jobs]))
-            out = open(self.logs / f"regret-{k}.log", "w")
-            cmd = ["nix", "develop", str(self.evaluator), "--command", "bash", "-c", script, "regret", str(snapshot), str(self.scratch / "regret-orig-new.sqlite"), str(part)]
-            procs.append((subprocess.Popen(cmd, cwd=self.evaluator / "web", env=self.env, stdout=out, stderr=subprocess.STDOUT), out))
-        for proc, out in procs:
-            proc.wait()
-            out.close()
-        scored = 0
-        for k in range(self.jobs):
-            for line in (self.logs / f"regret-{k}.log").read_text().splitlines():
-                if not line.startswith("{"):
-                    continue
-                result = json.loads(line)
-                if result["failed"]:
-                    raise Stop(f"regret-{k}.log: failed decisions {result['failed']}")
-                scored += 1
-        if scored != len(names):
-            raise Stop(f"{scored} of {len(names)} matches reported a result; see regret-*.log")
-        return f"{scored} matches scored"
-
-    def stage(self) -> str:
-        scored = self.scratch / "regret-orig-new.sqlite"
-        return stage_regret(self.regret_db, scored if scored.exists() else None, self.scratch / "regret.staged.sqlite")
-
     def knowledge_(self) -> str:
         out = self.scratch / "knowledge.sqlite"
         for suffix in SIDECARS:
@@ -426,9 +341,7 @@ class Wrap:
 
     def swap_derived(self) -> str:
         self.viewer("stop")
-        pairs = [(self.regret_db, "regret.staged.sqlite"), (self.derived / "knowledge.sqlite", "knowledge.sqlite"), (self.derived / "certain-mistakes.sqlite", "certain-mistakes.sqlite")]
-        if self.scorer == "rust":
-            pairs.append((self.sampled_db, "regret-sampled.staged.sqlite"))
+        pairs = [(self.regret_db, "regret.staged.sqlite"), (self.derived / "knowledge.sqlite", "knowledge.sqlite"), (self.derived / "certain-mistakes.sqlite", "certain-mistakes.sqlite"), (self.sampled_db, "regret-sampled.staged.sqlite")]
         moved = [swap(live, self.scratch / new, self.tag) for live, new in pairs]
         return f"swapped {moved}"
 
@@ -494,7 +407,7 @@ class Wrap:
             ("check", self.check),
             ("swap-main", self.swap_main),
             ("snapshot", self.snapshot),
-            *([("regret", self.regret)] if self.scorer == "rust" else [("regret", self.regret_js), ("stage", self.stage)]),
+            ("regret", self.regret),
             ("knowledge", self.knowledge_),
             ("certain", self.certain),
             ("swap-derived", self.swap_derived),
@@ -522,25 +435,23 @@ def main() -> None:
     p.add_argument("--skips", type=Path, help="a skips file for arena-import.ts")
     p.add_argument("--analysis", type=Path, default=REPO / "_work/arena/analysis")
     p.add_argument("--docs", type=Path, default=REPO / "docs/arena")
-    p.add_argument("--scorer", choices=["rust", "js"], default="rust", help="rust: score_regret.py (static and sampled rows); js: the old arena-regret.ts path (static rows only)")
-    p.add_argument("--evaluator", type=Path, help="checkout that scores: for rust its sim/rust and web/ (default this checkout); for js the worktree that scored the old rows (default t3-f4819367)")
-    p.add_argument("--regret", help="file name under <analysis>/derived of the static regret rows (default regret-rust.sqlite; regret.sqlite with --scorer js)")
-    p.add_argument("--regret-sampled", help="file name under <analysis>/derived of the sampled rows (default regret-rust-sampled256.sqlite; regret-sampled256-native.sqlite with --scorer js)")
+    p.add_argument("--evaluator", type=Path, help="checkout that scores: its sim/rust and web/ (default this checkout)")
+    p.add_argument("--regret", help="file name under <analysis>/derived of the static regret rows (default regret-rust.sqlite)")
+    p.add_argument("--regret-sampled", help="file name under <analysis>/derived of the sampled rows (default regret-rust-sampled256.sqlite)")
     p.add_argument("--threads", type=int, default=score_regret.Settings.threads, help="buckshot-search threads (half the cores)")
     p.add_argument("--knowledge", type=Path, default=WORKTREES / "t3-5e0b7a11", help="worktree that runs arena-knowledge.ts")
     p.add_argument("--viewer-unit", default="buckshot-viewer", help="user unit to restart; '' leaves the viewer alone")
     p.add_argument("--viewer-url", default="http://127.0.0.1:8790/")
-    p.add_argument("--jobs", type=int, default=4, help="regret input (rust) or scoring (js) processes")
+    p.add_argument("--jobs", type=int, default=4, help="regret scoring processes")
     p.add_argument("--skip", action="append", default=[], help="step to leave out, repeatable")
     p.add_argument("--deploy", action="store_true", help="after the export, preview, check and promote the online site to buckshot.akompella.dev (off by default)")
     p.add_argument("--dry-run", action="store_true", help="list the steps and which are done")
     args = p.parse_args()
     runs = [r.resolve() for r in args.run_dir]
-    rust = args.scorer == "rust"
-    evaluator = (args.evaluator or (REPO if rust else WORKTREES / "t3-f4819367")).resolve()
-    regret_name = args.regret or ("regret-rust.sqlite" if rust else "regret.sqlite")
-    sampled_name = args.regret_sampled or ("regret-rust-sampled256.sqlite" if rust else "regret-sampled256-native.sqlite")
-    wrap = Wrap(runs, args.importer.resolve(), args.analysis.resolve(), args.docs.resolve(), args.name or re.sub(r"tournament-?", "t", runs[-1].name), args.cohort, args.skips, evaluator, args.knowledge, args.viewer_unit or None, args.viewer_url, args.jobs, args.scorer, regret_name, sampled_name, args.threads, args.deploy)
+    evaluator = (args.evaluator or REPO).resolve()
+    regret_name = args.regret or "regret-rust.sqlite"
+    sampled_name = args.regret_sampled or "regret-rust-sampled256.sqlite"
+    wrap = Wrap(runs, args.importer.resolve(), args.analysis.resolve(), args.docs.resolve(), args.name or re.sub(r"tournament-?", "t", runs[-1].name), args.cohort, args.skips, evaluator, args.knowledge, args.viewer_unit or None, args.viewer_url, args.jobs, regret_name, sampled_name, args.threads, args.deploy)
     steps = [(n, f) for n, f in wrap.steps() if n not in args.skip]
     if args.dry_run:
         done = json.loads(wrap.state.read_text()) if wrap.state.exists() else {}

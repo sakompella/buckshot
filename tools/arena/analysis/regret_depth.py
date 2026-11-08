@@ -1,7 +1,7 @@
 """Draws the stratified sample of two-seat agent decisions that the regret-depth run scores again with a deeper search, and summarises the run.
 
 The deep run searches to depth 8 with ten times the node budget of the production run (depth 6, 20,000 nodes), under the same static reload rule.
-`sample` cuts the sample into lists of "<match id> <ordinal>" lines for `web/scripts/arena-regret.ts --decisions`. Each list holds an equal share of every
+`sample` cuts the sample into lists of "<match id> <ordinal>" lines. The deep run was scored with the Bend player's `web/scripts/arena-regret.ts --decisions`, removed on 2026-11-08, so it cannot be rerun as written. Each list holds an equal share of every
 stratum (shells left in the gun, shot or item move, model), so a list that finishes early is still a stratified random sample.
 
     python3 tools/arena/analysis/regret_depth.py sample --out DIR [--lists 24] [--seed N]
