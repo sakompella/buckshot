@@ -58,7 +58,6 @@
 "domain.rs:Gun::split_first" = "head and tail of the packed Gun; the Bend match on the gun list is labelled at its call sites"
 "domain.rs:Gun::push_front" = "prepends a shell to the packed Gun as its live bit"
 "domain.rs:Gun::set" = "shell write by index in the packed Gun; Bend's replace is exempt"
-"domain.rs:Slots::put" = "slot write by slot; Bend's slots.put is exempt"
 "domain.rs:Config::new" = "validates the round plan on construction; Bend builds plans from constructors that cannot be malformed"
 "domain.rs:Config::round" = "round plan field by index; Bend's plan.round is exempt"
 "domain.rs:Range::value" = "clamps an answer into the range; Bend's clamp is exempt"

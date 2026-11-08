@@ -81,16 +81,15 @@ impl Table {
     }
 
     #[must_use]
-    pub const fn has(self, seat: Seat) -> bool {
-        match (self, seat) {
-            (Self::TwoSeats, Seat::Seat1 | Seat::Seat3) => true,
-            (Self::TwoSeats, Seat::Seat0 | Seat::Seat2) => false,
+    pub fn has(self, seat: Seat) -> bool {
+        let sockets: u8 = match self {
+            Self::TwoSeats => 0b1010,
             #[cfg(feature = "seats-2-4")]
-            (Self::ThreeSeats, Seat::Seat0 | Seat::Seat1 | Seat::Seat2)
-            | (Self::FourSeats, Seat::Seat0 | Seat::Seat1 | Seat::Seat2 | Seat::Seat3) => true,
+            Self::ThreeSeats => 0b0111,
             #[cfg(feature = "seats-2-4")]
-            (Self::ThreeSeats, Seat::Seat3) => false,
-        }
+            Self::FourSeats => 0b1111,
+        };
+        sockets.wrapping_shr(u32::from(u8::from(seat))) & 1 != 0
     }
 }
 
@@ -183,12 +182,24 @@ impl Seats {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Ring<T> {
     table: Table,
-    #[cfg(feature = "seats-2-4")]
-    seat0: T,
-    seat1: T,
-    #[cfg(feature = "seats-2-4")]
-    seat2: T,
-    seat3: T,
+    cells: [T; RING_CELLS],
+}
+
+#[cfg(feature = "seats-2-4")]
+const RING_CELLS: usize = 4;
+#[cfg(not(feature = "seats-2-4"))]
+const RING_CELLS: usize = 2;
+
+/// A seat's cell in a ring: its socket, or in the `seats-2` build its
+/// socket's half (the two-seat table sits at sockets 1 and 3).
+#[cfg(feature = "seats-2-4")]
+fn ring_cell(seat: Seat) -> usize {
+    seat.index()
+}
+
+#[cfg(not(feature = "seats-2-4"))]
+fn ring_cell(seat: Seat) -> usize {
+    seat.index().wrapping_shr(1)
 }
 
 impl<T: Copy> Ring<T> {
@@ -197,12 +208,7 @@ impl<T: Copy> Ring<T> {
     pub const fn fill(table: Table, value: T) -> Self {
         Self {
             table,
-            #[cfg(feature = "seats-2-4")]
-            seat0: value,
-            seat1: value,
-            #[cfg(feature = "seats-2-4")]
-            seat2: value,
-            seat3: value,
+            cells: [value; RING_CELLS],
         }
     }
 
@@ -213,37 +219,21 @@ impl<T: Copy> Ring<T> {
 
     /// `ring.get`: `None` exactly when the seat is not at this table.
     #[must_use]
-    pub const fn get(&self, seat: Seat) -> Option<T> {
+    pub fn get(&self, seat: Seat) -> Option<T> {
         if !self.table.has(seat) {
             return None;
         }
-        match seat {
-            #[cfg(feature = "seats-2-4")]
-            Seat::Seat0 => Some(self.seat0),
-            Seat::Seat1 => Some(self.seat1),
-            #[cfg(feature = "seats-2-4")]
-            Seat::Seat2 => Some(self.seat2),
-            Seat::Seat3 => Some(self.seat3),
-            #[cfg(not(feature = "seats-2-4"))]
-            Seat::Seat0 | Seat::Seat2 => None,
-        }
+        self.cells.get(ring_cell(seat)).copied()
     }
 
     /// `ring.set`: a seat not at this table leaves the ring unchanged.
     #[must_use]
-    pub const fn set(mut self, seat: Seat, value: T) -> Self {
+    pub fn set(mut self, seat: Seat, value: T) -> Self {
         if !self.table.has(seat) {
             return self;
         }
-        match seat {
-            #[cfg(feature = "seats-2-4")]
-            Seat::Seat0 => self.seat0 = value,
-            Seat::Seat1 => self.seat1 = value,
-            #[cfg(feature = "seats-2-4")]
-            Seat::Seat2 => self.seat2 = value,
-            Seat::Seat3 => self.seat3 = value,
-            #[cfg(not(feature = "seats-2-4"))]
-            Seat::Seat0 | Seat::Seat2 => {}
+        if let Some(cell) = self.cells.get_mut(ring_cell(seat)) {
+            *cell = value;
         }
         self
     }
@@ -534,31 +524,62 @@ impl Slot {
     }
 }
 
-/// A seat's inventory (domain.bend `Slots`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
-pub struct Slots([Option<Item>; 8]);
+/// A seat's inventory (domain.bend `Slots`): four bits per slot, slot 0
+/// lowest, each 0 for an empty slot or 1 plus the item's rank.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub struct Slots(u32);
+
+/// A slot's content by its four bits.
+const SLOT_CONTENT: [Option<Item>; 16] = [
+    None,
+    Some(Item::Saw),
+    Some(Item::Glass),
+    Some(Item::Jammer),
+    Some(Item::Cigarettes),
+    Some(Item::Beer),
+    Some(Item::Phone),
+    Some(Item::Inverter),
+    Some(Item::Adrenaline),
+    Some(Item::Remote),
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+];
 
 impl Slots {
-    pub const EMPTY: Self = Self([None; 8]);
+    pub const EMPTY: Self = Self(0);
+
+    fn shift(slot: Slot) -> u32 {
+        u32::from(u8::from(slot)).wrapping_mul(4)
+    }
 
     /// `slots.get`.
     #[must_use]
     pub fn get(&self, slot: Slot) -> Option<Item> {
-        self.0.get(slot.index()).copied().flatten()
+        let bits = self.0.wrapping_shr(Self::shift(slot)) & 0xF;
+        SLOT_CONTENT.get(usize::try_from(bits).unwrap_or(0)).copied().flatten()
     }
 
     /// `slots.put`.
     #[must_use]
-    pub fn put(mut self, slot: Slot, value: Option<Item>) -> Self {
-        if let Some(cell) = self.0.get_mut(slot.index()) {
-            *cell = value;
-        }
-        self
+    pub fn put(self, slot: Slot, value: Option<Item>) -> Self {
+        let bits = value.map_or(0, |item| item.rank().wrapping_add(1));
+        let shift = Self::shift(slot);
+        Self((self.0 & !0xFu32.wrapping_shl(shift)) | bits.wrapping_shl(shift))
     }
 
     /// Every slot with its content, in slot order.
     pub fn entries(&self) -> impl Iterator<Item = (Slot, Option<Item>)> + '_ {
         Slot::ORDER.into_iter().map(|slot| (slot, self.get(slot)))
+    }
+}
+
+impl core::fmt::Debug for Slots {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_list().entries(self.entries().map(|(_, item)| item)).finish()
     }
 }
 
