@@ -54,6 +54,8 @@ function spread(): Row[] {
 
 const picked = selection === "spread" ? spread() : strided();
 
+if (picked.length !== count) throw new Error(`${dbPath}: ${picked.length} of the ${count} matches asked for`);
+
 for (const match of picked) {
   const setup = JSON.parse(match.manifest_json);
   const moves = db.query("select turn, player, selected_move as move, label, by_whom as by from decisions where match_id = ? order by ordinal").all(match.id);

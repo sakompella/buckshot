@@ -34,7 +34,7 @@ Later evaluator ids may change the search again (a deeper search, a fitted horiz
 
 Equivalence with Bend is checked in layers:
 
-- **Tape replay.** Bend writes tapes of fuzzed games and recorded arena games with their exact draws; the Rust rules replay them and every state, menu and note must match.
+- **Tape replay.** Bend writes tapes of seeded fuzzed games; the Rust rules replay them and every state, menu and note must match. Recorded arena games with their exact draws are an extended check (`check-arena.sh`), since the arena database is private and stays out of the repository.
 - **Branch traces.** `cargo branch-map check` generates the label enum from the Bend sources (stale when they change) and requires every Bend branch to have its Rust sites and all other Rust control flow to be listed with a reason. `branch-map instrument` writes a Bend tree that reports branch labels. Bend is strict and shares pure calls, so the comparison is per call by presence: every branch Rust takes, Bend took in the same call.
 - **Properties** (Hegel) over the rules.
 - **The search oracle.** Rows from the current Bend player on synthetic decisions, generated in the gate, must match `compat` exactly, and `bounded-v1` unpruned must equal `compat`, and its pruned run must agree with its unpruned run (same best move, every box holding the exact value). This pins Rust to the Bend source of the same checkout.

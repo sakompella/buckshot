@@ -2,7 +2,8 @@
 # The parity gate for sim/rust: Rust must agree with Bend (Bend wins any disagreement).
 # Plays fresh Bend tapes and synthetic Bend player analyses with fixed seeds,
 # then runs fmt, clippy and the tests, including the tape replay and the search
-# oracle. Any failure fails the script.
+# oracle. Needs no recorded games; check-arena.sh replays those. Any failure
+# fails the script.
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -11,15 +12,11 @@ if [ -z "${IN_NIX_SHELL:-}" ]; then
   exec nix develop "$root" -c bash "$0" "$@"
 fi
 
-# The arena tapes replay recorded matches through web/generated/rules.mjs.
-echo "== web rules build"
-(cd "$root/web" && nice -n 10 bun run rules >/dev/null)
-
 tapes=$(mktemp -d /tmp/rust-parity-XXXXXX)
 trap 'rm -rf "$tapes"' EXIT
 echo "== Bend tapes -> $tapes"
 nice -n 10 node "$root/sim/bend-mp/test/rust-tapes.mjs" \
-  --seeds 1,2 --random 12 --items 8 --wild 8 --edge 2 --arena 12 --spread --perturb 150 --dir "$tapes"
+  --seeds 1,2 --random 12 --items 8 --wild 8 --edge 2 --perturb 150 --dir "$tapes"
 echo "== Bend player analyses -> $tapes/search, $tapes/search-2"
 bash "$here/search-oracle.sh" "$tapes/search"
 bash "$here/search-oracle.sh" "$tapes/search-2" 2

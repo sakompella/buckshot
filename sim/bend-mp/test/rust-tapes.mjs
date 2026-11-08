@@ -12,7 +12,8 @@
 //   --edge [G]         hand-made configs with biased answers, G games per scenario, table size and seed (default 3)
 //   --perturb N        N games per seed from states mutated into ones no valid game reaches (from_state; a few answers each)
 //   --arena K [--spread] [--db PATH]
-//                      K recorded arena matches replayed with their draws; --spread takes them across tournaments
+//                      K recorded arena matches replayed with their draws; --spread takes them across tournaments.
+//                      The database (--db, or BUCKSHOT_ARENA_DB) is private; fails unless all K are replayed
 //
 // Each tape has a sibling <tape>.manifest.json: mode, seeds, settings, games,
 // steps, capped games, lines and a sha256 over every .bend file under sim/bend-mp.
@@ -26,7 +27,7 @@
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync, appendFileSync, readdirSync, readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { homedir, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { basename, dirname, join } from 'node:path';
 import { array, config, kind, list, round } from './reference-adapter.mjs';
@@ -218,14 +219,19 @@ function playArena(recorded) {
   return report;
 }
 
+// The arena database is private tournament data, never in the repository: --db
+// or BUCKSHOT_ARENA_DB names it, and every requested match must be replayed.
 function recordedMatches(count) {
   const root = fileURLToPath(new URL('../../../web', import.meta.url));
-  const db = arg('db', join(homedir(), 'repos/projects/buckshot/_work/arena/analysis/buckshot.sqlite'));
+  const db = arg('db', process.env.BUCKSHOT_ARENA_DB);
+  if (!db) throw new Error('--arena needs the arena database: --db PATH or BUCKSHOT_ARENA_DB');
   const helper = fileURLToPath(new URL('./arena-sm-answers.ts', import.meta.url));
   const result = spawnSync('bun', [helper, db, String(count), flag('spread') ? 'spread' : 'stride', String(seeds[0])], { cwd: root, encoding: 'utf8', maxBuffer: 1 << 28 });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`arena-sm-answers failed:\n${result.stderr}`);
-  return result.stdout.split('\n').filter(line => line.startsWith('{')).map(line => JSON.parse(line));
+  const matches = result.stdout.split('\n').filter(line => line.startsWith('{')).map(line => JSON.parse(line));
+  if (matches.length !== count) throw new Error(`--arena ${count}: ${db} gave ${matches.length} matches`);
+  return matches;
 }
 
 const modes = [];
