@@ -1033,6 +1033,7 @@ fn a_repeated_game_id_fails_the_replay() {
     assert!(error.contains("repeats an earlier game"), "{error}");
 }
 
+// Bug: steal.owner built steal.slots for the stealer's own items too (938dc73); only the traced replay catches it.
 #[test]
 #[ignore = "needs RUST_TAPES; run sim/rust/check.sh"]
 fn tapes_match_bend() {

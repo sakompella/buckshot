@@ -9,7 +9,8 @@
 //! The f32 build only; run by `sim/rust/mutants.sh`.
 #![cfg(feature = "f32")]
 
-use std::process::Command;
+use std::io::Write as _;
+use std::process::{Command, Stdio};
 
 use serde_json::Value;
 
@@ -80,19 +81,8 @@ fn scores(row: &Value) -> Vec<Value> {
 #[ignore = "needs RUST_SEARCH_ORACLE; run sim/rust/mutants.sh"]
 fn bounded_matches_compat() {
     let dir = std::env::var("RUST_SEARCH_ORACLE").expect("RUST_SEARCH_ORACLE names a directory of rust-search-synth.ts files");
-    let path = format!("{dir}/static.jsonl");
-    let rows = |flags: &[&str]| -> Vec<Value> {
-        let out = Command::new(env!("CARGO_BIN_EXE_buckshot-search"))
-            .args(flags)
-            .args(["--threads", "2", &path])
-            .output()
-            .expect("the CLI runs");
-        assert!(out.status.success(), "the CLI failed: {}", String::from_utf8_lossy(&out.stderr));
-        String::from_utf8_lossy(&out.stdout)
-            .lines()
-            .map(|line| serde_json::from_str(line).expect("a JSON row"))
-            .collect()
-    };
+    let inputs = std::fs::read_to_string(format!("{dir}/static.jsonl")).expect("static.jsonl");
+    let rows = |flags: &[&str]| cli(flags, &inputs).expect("the CLI's rows");
     let compat_rows = rows(&[]);
     let unpruned_rows = rows(&["--evaluator", "bounded-v1-f32", "--unpruned"]);
     let pruned_rows = rows(&["--evaluator", "bounded-v1-f32"]);
@@ -120,17 +110,109 @@ fn bounded_matches_compat() {
         assert_eq!(best(pruned), best(unpruned), "pruned best value at {id:?}");
         let pruned_lines = pruned["lines"].as_array().expect("lines");
         let unpruned_lines = unpruned["lines"].as_array().expect("lines");
-        for (boxed, exact) in pruned_lines.iter().zip(unpruned_lines) {
+        for (j, (boxed, exact)) in pruned_lines.iter().zip(unpruned_lines).enumerate() {
             let (lo, hi, value) = (boxed["score"].as_u64(), boxed["upper"].as_u64(), exact["score"].as_u64());
-            assert!(
-                lo <= value && value <= hi,
-                "{id:?}: line {} box {lo:?}..={hi:?} misses {value:?}",
-                boxed["index"]
-            );
+            assert!(lo <= value && value <= hi, "{id:?}: line {j} box {lo:?}..={hi:?} misses {value:?}");
             if boxed["exact"] == Value::Bool(true) {
-                assert_eq!(lo, value, "{id:?}: line {} is marked exact", boxed["index"]);
+                assert_eq!(lo, value, "{id:?}: line {j} is marked exact");
             }
         }
     }
     assert!(compared >= 6, "only {compared} rows within both budgets");
+}
+
+/// The CLI's rows for `input` with `flags`.
+fn cli(flags: &[&str], input: &str) -> Result<Vec<Value>, String> {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_buckshot-search"))
+        .args(flags)
+        .args(["--threads", "2"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| error.to_string())?;
+    child
+        .stdin
+        .take()
+        .ok_or("no stdin")?
+        .write_all(input.as_bytes())
+        .map_err(|error| error.to_string())?;
+    let out = child.wait_with_output().map_err(|error| error.to_string())?;
+    if !out.status.success() {
+        return Err(format!("the CLI failed: {}", String::from_utf8_lossy(&out.stderr)));
+    }
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(|line| serde_json::from_str(line).map_err(|error| error.to_string()))
+        .collect()
+}
+
+/// bounded-v1 searches a row's chosen move exactly even where pruning would
+/// cut it, and a search that spends exactly its budget finishes while one
+/// node less cuts it.
+#[test]
+#[ignore = "needs RUST_SEARCH_ORACLE; run sim/rust/mutants.sh"]
+fn bounded_keeps_the_chosen_move_exact_and_its_budget() {
+    let dir = std::env::var("RUST_SEARCH_ORACLE").expect("RUST_SEARCH_ORACLE names a directory of rust-search-synth.ts files");
+    let inputs = std::fs::read_to_string(format!("{dir}/static.jsonl")).expect("static.jsonl");
+    let unbounded = ["--evaluator", "bounded-v1-f32", "--budget", "1000000000"];
+    let pruned_rows = cli(&unbounded, &inputs).expect("the CLI's rows");
+    // The chosen move is one plain pruning leaves inexact.
+    let with_chosen: String = inputs
+        .lines()
+        .zip(&pruned_rows)
+        .filter_map(|(input, pruned)| {
+            let chosen = pruned["lines"]
+                .as_array()?
+                .iter()
+                .position(|line| line["exact"] == Value::Bool(false))?;
+            let mut row: Value = serde_json::from_str(input).expect("a JSON row");
+            row["chosenIndex"] = chosen.into();
+            Some(format!("{row}\n"))
+        })
+        .collect();
+    let chosen_rows = cli(&unbounded, &with_chosen).expect("the CLI's rows");
+    let plain = |input: &Value| {
+        pruned_rows
+            .iter()
+            .find(|row| row["id"] == input["id"] && row["ordinal"] == input["ordinal"])
+            .expect("the plain row")
+    };
+    for (input, row) in with_chosen.lines().zip(&chosen_rows) {
+        let input: Value = serde_json::from_str(input).expect("a JSON row");
+        let chosen = usize::try_from(input["chosenIndex"].as_u64().expect("a chosen index")).expect("a menu index");
+        let (line, boxed) = (&row["lines"][chosen], &plain(&input)["lines"][chosen]);
+        assert_eq!(line["exact"], Value::Bool(true), "chosen line at {:?}", input["id"]);
+        let (value, lo, hi) = (line["score"].as_u64(), boxed["score"].as_u64(), boxed["upper"].as_u64());
+        assert!(
+            lo <= value && value <= hi,
+            "chosen line {value:?} outside {lo:?}..={hi:?} at {:?}",
+            input["id"]
+        );
+    }
+    assert!(chosen_rows.len() >= 3, "only {} rows with an inexact line", chosen_rows.len());
+
+    // A search that spends exactly its budget finishes; one node less cuts it.
+    let (input, nodes) = inputs
+        .lines()
+        .zip(&pruned_rows)
+        .filter(|(_, row)| row["limited"] == Value::Bool(false))
+        .filter_map(|(input, row)| Some((input, row["nodes"].as_u64()?)))
+        .max_by_key(|&(_, nodes)| nodes)
+        .expect("a row within budget");
+    let input = format!("{input}\n");
+    let at = |budget: u64| {
+        cli(&["--evaluator", "bounded-v1-f32", "--budget", &budget.to_string()], &input)
+            .expect("the CLI's rows")
+            .remove(0)
+    };
+    let exact = at(nodes);
+    assert_eq!(
+        (&exact["limited"], exact["nodes"].as_u64()),
+        (&Value::Bool(false), Some(nodes)),
+        "at its budget"
+    );
+    let short = at(nodes.saturating_sub(1));
+    assert_eq!(short["limited"], Value::Bool(true), "one node short");
+    assert!(short["nodes"].as_u64() < Some(nodes), "one node short spends less");
 }
