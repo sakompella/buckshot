@@ -24,7 +24,8 @@ import { agentMoveText } from "../src/text.ts";
 //
 //   bun scripts/rust-search-inputs.ts --db <buckshot.sqlite> --decisions <list> --out <prefix> [--js] [--depth 6] [--budget 20000] [--reload static|expected-deal|sampled] [--samples 256] [--memo off|charged|free]
 //
-// Writes <prefix>.jsonl. Row: {id, ordinal, me, table, input, menu, chosen}, plus js and ms with --js.
+// Writes <prefix>.jsonl. Row: {id, ordinal, me, table, shells, input, menu, chosen}, plus js and ms with --js. shells is
+// the shells left in the gun. A position the player calls invalid has menu null and its reason as invalid, and no js.
 
 const { values } = parseArgs({
   args: process.argv.slice(2),
@@ -116,30 +117,33 @@ for (const match of matches) {
       // The player's own move order (legal_json orders steal and use moves differently); a search of no depth gives every move its static value.
       const ordered = player.analyse(input, { depth: 0, budget: 0 }, { rule: "static" });
 
-      if (ordered.kind !== "analysed") throw new Error(`${match.name} ${decision.ordinal}: the player calls the position invalid: ${ordered.reason}`);
-
-      const menu = ordered.lines.map((line) => agentMoveText(roster, me, line.steps));
-      const legal = new Set(decodeMenu(decision.legal_json).map(({ label }) => label));
-
-      if (menu.length !== legal.size || !menu.every((label) => legal.has(label))) {
-        throw new Error(`${match.name} ${decision.ordinal}: the player's moves [${menu.join("; ")}] are not the recorded menu [${[...legal].join("; ")}]`);
-      }
-
-      const row = { id: match.id, ordinal: decision.ordinal, me, table: input.table, input: nativeInput(input), menu, chosen: decision.label };
-
-      if (values.js) {
-        const started = performance.now();
-        const analysis = player.analyse(input, limits, reload, memo);
-        const ms = performance.now() - started;
-
-        const js =
-          analysis.kind === "invalid"
-            ? analysis
-            : { kind: analysis.kind, best: analysis.best, score: analysis.lines[analysis.best]?.score, nodes: analysis.nodes, depth: analysis.depth, limited: analysis.limited, ...analysis.cached, lines: analysis.lines.map((line) => ({ code: moveCode(line.steps), score: line.score, reach: line.reach })) };
-
-        rows.set(`${match.id} ${decision.ordinal}`, JSON.stringify({ ...row, js, reference: player.version, ms }));
+      // A position the player refuses keeps its row, with no menu, so the scorer records the Rust parser's refusal.
+      if (ordered.kind !== "analysed") {
+        rows.set(`${match.id} ${decision.ordinal}`, JSON.stringify({ id: match.id, ordinal: decision.ordinal, me, table: input.table, shells: before.game.board.gun.remaining, input: nativeInput(input), menu: null, chosen: decision.label, invalid: ordered.reason }));
       } else {
-        rows.set(`${match.id} ${decision.ordinal}`, JSON.stringify(row));
+        const menu = ordered.lines.map((line) => agentMoveText(roster, me, line.steps));
+        const legal = new Set(decodeMenu(decision.legal_json).map(({ label }) => label));
+
+        if (menu.length !== legal.size || !menu.every((label) => legal.has(label))) {
+          throw new Error(`${match.name} ${decision.ordinal}: the player's moves [${menu.join("; ")}] are not the recorded menu [${[...legal].join("; ")}]`);
+        }
+
+        const row = { id: match.id, ordinal: decision.ordinal, me, table: input.table, shells: before.game.board.gun.remaining, input: nativeInput(input), menu, chosen: decision.label };
+
+        if (values.js) {
+          const started = performance.now();
+          const analysis = player.analyse(input, limits, reload, memo);
+          const ms = performance.now() - started;
+
+          const js =
+            analysis.kind === "invalid"
+              ? analysis
+              : { kind: analysis.kind, best: analysis.best, score: analysis.lines[analysis.best]?.score, nodes: analysis.nodes, depth: analysis.depth, limited: analysis.limited, ...analysis.cached, lines: analysis.lines.map((line) => ({ code: moveCode(line.steps), score: line.score, reach: line.reach })) };
+
+          rows.set(`${match.id} ${decision.ordinal}`, JSON.stringify({ ...row, js, reference: player.version, ms }));
+        } else {
+          rows.set(`${match.id} ${decision.ordinal}`, JSON.stringify(row));
+        }
       }
     }
 
