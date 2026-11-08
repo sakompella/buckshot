@@ -5,10 +5,13 @@
 //! [`Item::ORDER`], and the gun is a bit string of at most [`Gun::CAPACITY`]
 //! shells.
 
+use num_enum::{IntoPrimitive, TryFromPrimitive};
+
 use crate::branch::B;
 
-/// A fixed socket identity (domain.bend `Seat`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+/// A fixed socket identity (domain.bend `Seat`), numbered from 0.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, IntoPrimitive, TryFromPrimitive)]
+#[repr(u8)]
 pub enum Seat {
     Seat0,
     Seat1,
@@ -18,13 +21,8 @@ pub enum Seat {
 
 impl Seat {
     #[must_use]
-    pub const fn index(self) -> usize {
-        match self {
-            Self::Seat0 => 0,
-            Self::Seat1 => 1,
-            Self::Seat2 => 2,
-            Self::Seat3 => 3,
-        }
+    pub fn index(self) -> usize {
+        usize::from(u8::from(self))
     }
 }
 
@@ -350,8 +348,9 @@ impl Gun {
     }
 }
 
-/// domain.bend `Item`, in `item.order()`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+/// domain.bend `Item`, numbered in `item.order()`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, IntoPrimitive, TryFromPrimitive)]
+#[repr(u8)]
 pub enum Item {
     Saw,
     Glass,
@@ -380,18 +379,8 @@ impl Item {
 
     /// The position in [`Item::ORDER`].
     #[must_use]
-    pub const fn rank(self) -> u32 {
-        match self {
-            Self::Saw => 0,
-            Self::Glass => 1,
-            Self::Jammer => 2,
-            Self::Cigarettes => 3,
-            Self::Beer => 4,
-            Self::Phone => 5,
-            Self::Inverter => 6,
-            Self::Adrenaline => 7,
-            Self::Remote => 8,
-        }
+    pub fn rank(self) -> u32 {
+        u32::from(u8::from(self))
     }
 
     /// `item.dealt_at`: at exactly two seats the remote is never dealt.
@@ -418,12 +407,12 @@ impl Items {
     pub const EMPTY: Self = Self(0);
 
     #[must_use]
-    pub const fn with(self, item: Item) -> Self {
+    pub fn with(self, item: Item) -> Self {
         Self(self.0 | (1 << item.rank()))
     }
 
     #[must_use]
-    pub const fn contains(self, item: Item) -> bool {
+    pub fn contains(self, item: Item) -> bool {
         self.0 & (1 << item.rank()) != 0
     }
 
@@ -455,8 +444,9 @@ impl Items {
     }
 }
 
-/// One of a seat's eight inventory slots (domain.bend `Slot`).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+/// One of a seat's eight inventory slots (domain.bend `Slot`), numbered from 0.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, IntoPrimitive, TryFromPrimitive)]
+#[repr(u8)]
 pub enum Slot {
     Slot0,
     Slot1,
@@ -482,17 +472,8 @@ impl Slot {
     ];
 
     #[must_use]
-    pub const fn index(self) -> usize {
-        match self {
-            Self::Slot0 => 0,
-            Self::Slot1 => 1,
-            Self::Slot2 => 2,
-            Self::Slot3 => 3,
-            Self::Slot4 => 4,
-            Self::Slot5 => 5,
-            Self::Slot6 => 6,
-            Self::Slot7 => 7,
-        }
+    pub fn index(self) -> usize {
+        usize::from(u8::from(self))
     }
 }
 

@@ -119,22 +119,15 @@ impl Tokens<'_> {
     }
 
     fn seat(&mut self) -> Seat {
-        match self.tag(3) {
-            0 => Seat::Seat0,
-            1 => Seat::Seat1,
-            2 => Seat::Seat2,
-            _ => Seat::Seat3,
-        }
+        Seat::try_from(self.tag(3)).unwrap_or(Seat::Seat3)
     }
 
     fn item(&mut self) -> Item {
-        let tag = usize::from(self.tag(8));
-        Item::ORDER.get(tag).copied().unwrap_or(Item::Remote)
+        Item::try_from(self.tag(8)).unwrap_or(Item::Remote)
     }
 
     fn slot(&mut self) -> Slot {
-        let tag = usize::from(self.tag(7));
-        Slot::ORDER.get(tag).copied().unwrap_or(Slot::Slot7)
+        Slot::try_from(self.tag(7)).unwrap_or(Slot::Slot7)
     }
 
     fn shell(&mut self) -> Shell {

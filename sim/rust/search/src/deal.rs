@@ -33,16 +33,11 @@ pub const fn mix(x: u32) -> u32 {
 /// The FNV offset basis, an arbitrary nonzero start.
 const SEED: u32 = 2_166_136_261;
 
-const fn seat_code(seat: Seat) -> u32 {
-    match seat {
-        Seat::Seat0 => 0,
-        Seat::Seat1 => 1,
-        Seat::Seat2 => 2,
-        Seat::Seat3 => 3,
-    }
+fn seat_code(seat: Seat) -> u32 {
+    u32::from(u8::from(seat))
 }
 
-const fn maybe_seat_code(seat: Option<Seat>) -> u32 {
+fn maybe_seat_code(seat: Option<Seat>) -> u32 {
     match seat {
         None => 9,
         Some(seat) => seat_code(seat),
