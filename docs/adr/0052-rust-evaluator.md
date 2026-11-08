@@ -55,6 +55,6 @@ Mutation testing (cargo-mutants, `sim/rust/mutants.sh`) checks that these tests 
 
 - A second implementation of the rules exists. A rule change is made in Bend first; the Rust arm labels and the cross-reference gate make the matching Rust change required before `check.sh` passes.
 - Rust code must stay isomorphic to Bend at the branch level for path tracing; optimizations either keep the arm structure or move to helpers on a reasoned exemption list.
-- Regret rows from Rust carry their own evaluator id. `compat` rows must equal the Bend rows they replace (the golden suite checks this) before the corpus is rescored with them.
+- Regret rows from Rust carry their own evaluator id. Since 2026-11-08 the production rows are `bounded-v1-f64` unpruned, from the `seats-2` build, scored by `tools/arena/score_regret.py` ([regret.md](../arena/analysis/regret.md#production-scoring)). Its node-only budget reaches deeper than `compat` at the same 20,000 nodes, so those rows differ from the Bend rows where the old budget cut the search short; they are a new evaluator, not a replacement of the old rows. `compat` rows must equal the Bend rows they replace (the golden suite checks this) before the corpus is rescored with them.
 - This amends ADR-0043 for later evaluators only: `bounded-v1` prunes, uses a memo and drops the fuel. `compat` keeps ADR-0043's search exactly.
 - Rows from the `f32` and `f64` builds can't be confused: `compat` exists only in `f32`, and `bounded-v1` ids name their arithmetic.

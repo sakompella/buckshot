@@ -14,26 +14,26 @@ Each row is one choice pattern: the decisions where it could have happened are s
 | pattern | matched | mean regret | other applicable | mean regret | same configs |
 |---|---|---|---|---|---|
 | Invert the last shell and shoot yourself, known live | 327 | 10.2 | 4,631 | 1.2 | 1.2 |
-| Smoke at full health, outside Luna | 130 | 1.4 | 15,484 | 1.4 | 1.0 |
-| Smoke at full health, outside Luna, opponent holds adrenaline | 123 | 1.2 | 5,991 | 1.8 | 1.2 |
-| Smoke at full health, Luna | 97 | 4.2 | 2,796 | 2.4 | 2.8 |
-| Shoot yourself, unknown chamber, under half live | 2,221 | 5.4 | 2,440 | 4.3 | 3.3 |
+| Smoke at full health, outside Luna | 130 | 1.5 | 15,484 | 1.5 | 1.0 |
+| Smoke at full health, outside Luna, opponent holds adrenaline | 123 | 1.4 | 5,991 | 1.8 | 1.2 |
+| Smoke at full health, Luna | 97 | 4.3 | 2,796 | 2.5 | 2.9 |
+| Shoot yourself, unknown chamber, under half live | 2,221 | 5.4 | 2,440 | 4.6 | 3.5 |
 | Shoot yourself on a certain live, from the count | 509 | 27.2 | 18,484 | 1.6 | 2.4 |
-| Shoot yourself on a certain live, from the glass | 21 | 21.5 | 10,198 | 2.4 | 6.2 |
-| Shoot yourself on a certain live, from the phone | 109 | 27.0 | 2,826 | 2.0 | 3.0 |
-| Shoot the opponent on a certain blank, not the last shell | 1,450 | 18.7 | 11,186 | 0.8 | 1.2 |
+| Shoot yourself on a certain live, from the glass | 21 | 22.1 | 10,198 | 2.5 | 6.4 |
+| Shoot yourself on a certain live, from the phone | 109 | 27.0 | 2,826 | 2.0 | 3.1 |
+| Shoot the opponent on a certain blank, not the last shell | 1,450 | 18.9 | 11,186 | 0.8 | 1.2 |
 | Shoot the opponent on a certain blank, last shell | 1,979 | 3.4 | 4,575 | 1.8 | 2.8 |
-| Use the phone with two or fewer shells left | 641 | 2.6 | 15,515 | 2.8 | 5.0 |
-| Shoot yourself at exactly half live, no saw | 2,259 | 4.2 | 7,303 | 3.7 | 3.3 |
-| Shoot yourself with the gun sawed | 153 | 9.4 | 15,186 | 2.6 | 3.6 |
-| Saw an unknown chamber (not a pattern) | 7,801 | 1.6 | 25,305 | 3.0 | 3.3 |
-| Saw a certain live (not a pattern) | 7,025 | 0.4 | 3,518 | 4.6 | 3.1 |
+| Use the phone with two or fewer shells left | 641 | 2.6 | 15,515 | 2.8 | 4.9 |
+| Shoot yourself at exactly half live, no saw | 2,259 | 4.2 | 7,303 | 3.7 | 3.4 |
+| Shoot yourself with the gun sawed | 153 | 9.4 | 15,186 | 2.6 | 3.7 |
+| Saw an unknown chamber (not a pattern) | 7,801 | 1.6 | 25,305 | 2.9 | 3.3 |
+| Saw a certain live (not a pattern) | 7,025 | 0.4 | 3,518 | 4.6 | 3.0 |
 | Beer a certain live (not a pattern) | 1,146 | 5.4 | 15,837 | 2.6 | 3.5 |
 <!-- regret:end -->
 
-- **Costly.** Shooting yourself on a shell you can prove live averages 27.2 points when proven by the count, against 1.6 for the other shots there. The glass (21.5, only 21 shots) and phone (27.0) rows are as bad. Shooting the opponent on the last shell's certain blank is mildly worse than the rest, 3.4 against 1.8. Shooting the opponent on a certain blank before the last shell costs 19 against 0.8. Inverting a known live last shell to keep the turn costs 10 against 1.2, and a self-shot with the gun sawed 9 against 2.6. Throwing a beer at a certain live costs 5 against 3 for the rest.
+- **Costly.** Shooting yourself on a shell you can prove live averages 27.2 points when proven by the count, against 1.6 for the other shots there. The glass (22.1, only 21 shots) and phone (27.0) rows are as bad. Shooting the opponent on the last shell's certain blank is mildly worse than the rest, 3.4 against 1.8. Shooting the opponent on a certain blank before the last shell costs 19 against 0.8. Inverting a known live last shell to keep the turn costs 10 against 1.2, and a self-shot with the gun sawed 9 against 2.6. Throwing a beer at a certain live costs 5 against 3 for the rest.
 - **Cost little.** Using the phone with two or fewer shells left averages 2.6. Sawing an unknown chamber averages 1.6, and sawing a certain live 0.4.
-- **No clear gap.** Smoking your own cigarettes at full health averages 1.4 points outside Luna (1.2 while the opponent holds adrenaline), against 1.4 for the other moves there. Luna's 97 such smokes average 4.2 against 2.4, which is a small sample. Shooting yourself at exactly half live is 4.2 against 3.7 for shooting the opponent. Shooting yourself at an unknown chamber with under half live is 5.4 against 4.3 for the other shots there, so it shows no cost here.
+- **No clear gap.** Smoking your own cigarettes at full health averages 1.5 points outside Luna (1.4 while the opponent holds adrenaline), against 1.5 for the other moves there. Luna's 97 such smokes average 4.3 against 2.5, which is a small sample. Shooting yourself at exactly half live is 4.2 against 3.7 for shooting the opponent. Shooting yourself at an unknown chamber with under half live is 5.4 against 4.6 for the other shots there, so it shows no cost here.
 - **Limits.** The item rows (smoking, phone, saws) are only as good as the evaluator's untrained item weights, so "cost little" there means the evaluator values the item little. Shots on the last shell end at the next reload, which the search scores as a static leaf. Many of the other rows have more than three shells left, where most searches stop early. Smoking counts only the player's own cigarettes, not ones stolen with adrenaline.
 
 Rerun with `python3 tools/arena/analysis/patterns_regret.py --doc docs/arena/analysis/patterns.md`.
