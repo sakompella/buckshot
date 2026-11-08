@@ -27,8 +27,8 @@ for features in "${feature_sets[@]}"; do
   # shellcheck disable=SC2086
   check cargo clippy --workspace --all-targets $features -- -D warnings
 done
+# The sets above name every feature; this checks the defaults name one of them.
 check cargo check --workspace --all-targets
-check cargo check --workspace --all-targets --no-default-features --features f32
 check cargo branch-map check
 
 if ((${#failed[@]})); then

@@ -6,7 +6,13 @@ edition.workspace = true
 publish.workspace = true
 
 [features]
-# Records each `bend_arm!` label as it runs (for future path tracing).
+default = ["seats-2-4"]
+# The tables the rules hold; exactly one. `seats-2-4` is every table; `seats-2`
+# drops the three- and four-seat tables, so a ring stores two seats:
+# --no-default-features --features seats-2 (for buckshot-search, f64,seats-2).
+seats-2-4 = []
+seats-2 = []
+# Records each `branch!` label as it runs (for the trace comparison).
 trace = []
 
 [dependencies]

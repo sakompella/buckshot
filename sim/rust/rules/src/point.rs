@@ -201,10 +201,12 @@ fn first_range(table: Table) -> Range {
             branch!(B::SimplePointFirstRangeTwoSeats);
             Range { lo: 0, extra: 0 }
         }
+        #[cfg(feature = "seats-2-4")]
         Table::ThreeSeats => {
             branch!(B::SimplePointFirstRangeThreeSeats);
             Range { lo: 0, extra: 1 }
         }
+        #[cfg(feature = "seats-2-4")]
         Table::FourSeats => {
             branch!(B::SimplePointFirstRangeFourSeats);
             Range { lo: 0, extra: 2 }

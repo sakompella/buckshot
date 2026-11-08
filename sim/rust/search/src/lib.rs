@@ -15,10 +15,12 @@
 
 #[cfg(not(any(feature = "f32", feature = "f64")))]
 compile_error!(
-    "buckshot-search needs an arithmetic feature: `f64` (the default) or `f32` (Bend-exact, with compat: --no-default-features --features f32)"
+    "buckshot-search needs an arithmetic feature: `f64` (the default) or `f32` (Bend-exact, with compat: --no-default-features --features f32,seats-2-4)"
 );
 #[cfg(all(feature = "f32", feature = "f64"))]
-compile_error!("buckshot-search's `f32` and `f64` features exclude each other; for the f32 build use --no-default-features --features f32");
+compile_error!(
+    "buckshot-search's `f32` and `f64` features exclude each other; for the f32 build use --no-default-features --features f32,seats-2-4"
+);
 
 mod belief;
 mod deal;

@@ -167,7 +167,9 @@ impl Deck {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Decks {
     pub two: Deck,
+    #[cfg(feature = "seats-2-4")]
     pub three: Deck,
+    #[cfg(feature = "seats-2-4")]
     pub four: Deck,
 }
 
@@ -177,7 +179,9 @@ impl Decks {
     pub fn full() -> Self {
         Self {
             two: Deck::full(Table::TwoSeats),
+            #[cfg(feature = "seats-2-4")]
             three: Deck::full(Table::ThreeSeats),
+            #[cfg(feature = "seats-2-4")]
             four: Deck::full(Table::FourSeats),
         }
     }
@@ -187,7 +191,9 @@ impl Decks {
     pub const fn get(self, table: Table) -> Deck {
         match table {
             Table::TwoSeats => self.two,
+            #[cfg(feature = "seats-2-4")]
             Table::ThreeSeats => self.three,
+            #[cfg(feature = "seats-2-4")]
             Table::FourSeats => self.four,
         }
     }
@@ -197,7 +203,9 @@ impl Decks {
     pub const fn set(mut self, table: Table, deck: Deck) -> Self {
         match table {
             Table::TwoSeats => self.two = deck,
+            #[cfg(feature = "seats-2-4")]
             Table::ThreeSeats => self.three = deck,
+            #[cfg(feature = "seats-2-4")]
             Table::FourSeats => self.four = deck,
         }
         self

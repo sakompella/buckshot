@@ -531,10 +531,12 @@ fn grab_fuel(config: &Config) -> u32 {
             branch!(B::SimpleMainGrabFuelTwoSeats);
             34
         }
+        #[cfg(feature = "seats-2-4")]
         crate::Table::ThreeSeats => {
             branch!(B::SimpleMainGrabFuelThreeSeats);
             51
         }
+        #[cfg(feature = "seats-2-4")]
         crate::Table::FourSeats => {
             branch!(B::SimpleMainGrabFuelFourSeats);
             68

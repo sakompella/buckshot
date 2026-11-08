@@ -49,7 +49,9 @@ fn maybe(x: Option<Value>) -> Value {
 fn ring<T: Copy>(ring: &buckshot_rules::Ring<T>, f: impl Fn(T) -> Value) -> Value {
     let name = match ring.table() {
         Table::TwoSeats => "Duo",
+        #[cfg(feature = "seats-2-4")]
         Table::ThreeSeats => "Trio",
+        #[cfg(feature = "seats-2-4")]
         Table::FourSeats => "Quad",
     };
     let mut object = serde_json::Map::new();
@@ -105,7 +107,7 @@ fn state(s: &State) -> Value {
             "turn": maybe(w.turn.map(tag)), "direction": tag(w.direction), "first_death": maybe(w.first_death.map(tag)),
             "checking_first_death": w.checking_first_death == FirstDeathCheck::On, "item_amount": w.item_amount, "sawed": w.sawed,
             "gun": gun(w.gun), "shown": load(w.shown),
-            "decks": { "$": "Decks", "two": deck(w.decks.two), "three": deck(w.decks.three), "four": deck(w.decks.four) },
+            "decks": decks(w.decks),
         },
         "players": ring(&s.players, |p| json!({ "$": "Seat", "health": p.health, "jam": tag(p.jam), "cash": p.cash, "slots": slots(p.slots) })),
         "phase": phase,
@@ -287,11 +289,17 @@ fn round_rules(v: &Value) -> Result<RoundRules, String> {
     })
 }
 
-fn config(v: &Value) -> Result<Config, String> {
-    let table = match name(get(v, "table"))? {
-        "TwoSeats" => Table::TwoSeats,
-        "ThreeSeats" => Table::ThreeSeats,
-        "FourSeats" => Table::FourSeats,
+/// The config, and whether this build has its table. A table the build
+/// lacks gets a two-seat stand-in for a game that is skipped.
+fn config(v: &Value) -> Result<(Config, bool), String> {
+    let (table, built) = match name(get(v, "table"))? {
+        "TwoSeats" => (Table::TwoSeats, true),
+        #[cfg(feature = "seats-2-4")]
+        "ThreeSeats" => (Table::ThreeSeats, true),
+        #[cfg(feature = "seats-2-4")]
+        "FourSeats" => (Table::FourSeats, true),
+        #[cfg(not(feature = "seats-2-4"))]
+        "ThreeSeats" | "FourSeats" => (Table::TwoSeats, false),
         other => return Err(format!("table {other}")),
     };
     let plan = get(v, "plan");
@@ -300,7 +308,7 @@ fn config(v: &Value) -> Result<Config, String> {
         .filter_map(|key| plan.get(*key))
         .map(round_rules)
         .collect::<Result<Vec<_>, _>>()?;
-    Config::new(table, &rounds).map_err(|e| e.to_string())
+    Ok((Config::new(table, &rounds).map_err(|e| e.to_string())?, built))
 }
 
 // State decoding, for games that start from a perturbed state
@@ -472,7 +480,9 @@ fn state_of(table: Table, v: &Value) -> Result<State, String> {
             shown: load_of(get(w, "shown"))?,
             decks: Decks {
                 two: deck_of(Table::TwoSeats, get(decks, "two"))?,
+                #[cfg(feature = "seats-2-4")]
                 three: deck_of(Table::ThreeSeats, get(decks, "three"))?,
+                #[cfg(feature = "seats-2-4")]
                 four: deck_of(Table::FourSeats, get(decks, "four"))?,
             },
         },
@@ -489,8 +499,25 @@ fn state_of(table: Table, v: &Value) -> Result<State, String> {
 }
 
 /// Takes the state at `key` out of a tape line, without the config and log, which the Rust state does not hold.
+#[cfg(feature = "seats-2-4")]
+fn decks(decks: Decks) -> Value {
+    json!({ "$": "Decks", "two": deck(decks.two), "three": deck(decks.three), "four": deck(decks.four) })
+}
+
+#[cfg(not(feature = "seats-2-4"))]
+fn decks(decks: Decks) -> Value {
+    json!({ "$": "Decks", "two": deck(decks.two) })
+}
+
 fn take_state(line: &mut Value, key: &str) -> Value {
     let mut v = line.get_mut(key).map(Value::take).unwrap_or_default();
+    // The seats-2 build has no three- and four-seat decks; a two-seat game
+    // never draws from them.
+    #[cfg(not(feature = "seats-2-4"))]
+    if let Some(decks) = v.pointer_mut("/world/decks").and_then(Value::as_object_mut) {
+        decks.remove("three");
+        decks.remove("four");
+    }
     if let Some(world) = v.get_mut("world").and_then(Value::as_object_mut) {
         world.remove("config");
     }
@@ -708,10 +735,15 @@ fn field<'a>(v: &'a Value, key: &str, at: &str) -> Result<&'a Value, String> {
 /// The game a step-0 line starts, and the branches Rust took to start it. A
 /// perturbed state Rust cannot represent starts a game that is skipped.
 fn begin(v: &Value, id: &str, at: &str, from_state: bool, tally: &mut Tally) -> Result<(Game, Vec<&'static str>), String> {
-    let cfg = config(get(v, "config")).map_err(|e| format!("{at}: {id}: {e}"))?;
+    let (cfg, built) = config(get(v, "config")).map_err(|e| format!("{at}: {id}: {e}"))?;
     take_trace();
     let mut started = Vec::new();
-    let (state, skipped) = if from_state {
+    let (state, skipped) = if !built {
+        if tally.skip_reasons.len() < 5 {
+            tally.skip_reasons.push(format!("{id}: a table this build lacks"));
+        }
+        (start(&cfg).state, true)
+    } else if from_state {
         let mut tape = v.clone();
         let bend = take_state(&mut tape, "state");
         let parsed = state_of(cfg.table(), get(v, "state")).and_then(|parsed| match first_diff(&state(&parsed), &bend, "state") {

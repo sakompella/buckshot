@@ -49,7 +49,11 @@ fn many<T>(tc: &TestCase, lo: usize, hi: usize, mut make: impl FnMut(&TestCase) 
 }
 
 fn table(tc: &TestCase) -> Table {
-    pick(tc, &[Table::TwoSeats, Table::ThreeSeats, Table::FourSeats])
+    #[cfg(feature = "seats-2-4")]
+    let tables = [Table::TwoSeats, Table::ThreeSeats, Table::FourSeats];
+    #[cfg(not(feature = "seats-2-4"))]
+    let tables = [Table::TwoSeats];
+    pick(tc, &tables)
 }
 
 fn seat(tc: &TestCase) -> Seat {
@@ -190,7 +194,9 @@ fn world(tc: &TestCase) -> World {
         shown: load(tc),
         decks: Decks {
             two: deck(tc, Table::TwoSeats),
+            #[cfg(feature = "seats-2-4")]
             three: deck(tc, Table::ThreeSeats),
+            #[cfg(feature = "seats-2-4")]
             four: deck(tc, Table::FourSeats),
         },
     }

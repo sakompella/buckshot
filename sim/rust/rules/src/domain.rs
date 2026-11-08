@@ -30,7 +30,9 @@ impl Seat {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Table {
     TwoSeats,
+    #[cfg(feature = "seats-2-4")]
     ThreeSeats,
+    #[cfg(feature = "seats-2-4")]
     FourSeats,
 }
 
@@ -46,6 +48,7 @@ impl Table {
                     len: 2,
                 }
             }
+            #[cfg(feature = "seats-2-4")]
             Self::ThreeSeats => {
                 branch!(B::DomainTableSeatsThreeSeats);
                 Seats {
@@ -53,6 +56,7 @@ impl Table {
                     len: 3,
                 }
             }
+            #[cfg(feature = "seats-2-4")]
             Self::FourSeats => {
                 branch!(B::DomainTableSeatsFourSeats);
                 Seats {
@@ -63,13 +67,29 @@ impl Table {
         }
     }
 
+    /// The table of `seats` seats, if this build has it.
+    #[must_use]
+    pub const fn of_seats(seats: u64) -> Option<Self> {
+        match seats {
+            2 => Some(Self::TwoSeats),
+            #[cfg(feature = "seats-2-4")]
+            3 => Some(Self::ThreeSeats),
+            #[cfg(feature = "seats-2-4")]
+            4 => Some(Self::FourSeats),
+            _ => None,
+        }
+    }
+
     #[must_use]
     pub const fn has(self, seat: Seat) -> bool {
         match (self, seat) {
-            (Self::TwoSeats, Seat::Seat1 | Seat::Seat3)
-            | (Self::ThreeSeats, Seat::Seat0 | Seat::Seat1 | Seat::Seat2)
+            (Self::TwoSeats, Seat::Seat1 | Seat::Seat3) => true,
+            (Self::TwoSeats, Seat::Seat0 | Seat::Seat2) => false,
+            #[cfg(feature = "seats-2-4")]
+            (Self::ThreeSeats, Seat::Seat0 | Seat::Seat1 | Seat::Seat2)
             | (Self::FourSeats, Seat::Seat0 | Seat::Seat1 | Seat::Seat2 | Seat::Seat3) => true,
-            (Self::TwoSeats, Seat::Seat0 | Seat::Seat2) | (Self::ThreeSeats, Seat::Seat3) => false,
+            #[cfg(feature = "seats-2-4")]
+            (Self::ThreeSeats, Seat::Seat3) => false,
         }
     }
 }
@@ -159,17 +179,31 @@ impl Seats {
 
 /// One value per seated socket (domain.bend `Ring`: `Duo`, `Trio`, `Quad`).
 /// The table is part of the value, so a ring never holds an unseated socket.
+/// The `seats-2` build stores only the two-seat table's sockets.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Ring<T> {
     table: Table,
-    values: [T; 4],
+    #[cfg(feature = "seats-2-4")]
+    seat0: T,
+    seat1: T,
+    #[cfg(feature = "seats-2-4")]
+    seat2: T,
+    seat3: T,
 }
 
 impl<T: Copy> Ring<T> {
     /// `ring.fill`.
     #[must_use]
     pub const fn fill(table: Table, value: T) -> Self {
-        Self { table, values: [value; 4] }
+        Self {
+            table,
+            #[cfg(feature = "seats-2-4")]
+            seat0: value,
+            seat1: value,
+            #[cfg(feature = "seats-2-4")]
+            seat2: value,
+            seat3: value,
+        }
     }
 
     #[must_use]
@@ -179,21 +213,37 @@ impl<T: Copy> Ring<T> {
 
     /// `ring.get`: `None` exactly when the seat is not at this table.
     #[must_use]
-    pub fn get(&self, seat: Seat) -> Option<T> {
-        if self.table.has(seat) {
-            self.values.get(seat.index()).copied()
-        } else {
-            None
+    pub const fn get(&self, seat: Seat) -> Option<T> {
+        if !self.table.has(seat) {
+            return None;
+        }
+        match seat {
+            #[cfg(feature = "seats-2-4")]
+            Seat::Seat0 => Some(self.seat0),
+            Seat::Seat1 => Some(self.seat1),
+            #[cfg(feature = "seats-2-4")]
+            Seat::Seat2 => Some(self.seat2),
+            Seat::Seat3 => Some(self.seat3),
+            #[cfg(not(feature = "seats-2-4"))]
+            Seat::Seat0 | Seat::Seat2 => None,
         }
     }
 
     /// `ring.set`: a seat not at this table leaves the ring unchanged.
     #[must_use]
-    pub fn set(mut self, seat: Seat, value: T) -> Self {
-        if self.table.has(seat)
-            && let Some(slot) = self.values.get_mut(seat.index())
-        {
-            *slot = value;
+    pub const fn set(mut self, seat: Seat, value: T) -> Self {
+        if !self.table.has(seat) {
+            return self;
+        }
+        match seat {
+            #[cfg(feature = "seats-2-4")]
+            Seat::Seat0 => self.seat0 = value,
+            Seat::Seat1 => self.seat1 = value,
+            #[cfg(feature = "seats-2-4")]
+            Seat::Seat2 => self.seat2 = value,
+            Seat::Seat3 => self.seat3 = value,
+            #[cfg(not(feature = "seats-2-4"))]
+            Seat::Seat0 | Seat::Seat2 => {}
         }
         self
     }
@@ -201,10 +251,9 @@ impl<T: Copy> Ring<T> {
     /// `ring.entries`: every seat with its value, in ascending socket order.
     pub fn entries(&self) -> impl DoubleEndedIterator<Item = (Seat, T)> + '_ {
         let seats = self.table.seats();
-        let values = self.values;
         (0..seats.len()).filter_map(move |i| {
             let seat = seats.iter().nth(i)?;
-            Some((seat, *values.get(seat.index())?))
+            Some((seat, self.get(seat)?))
         })
     }
 }
@@ -305,14 +354,15 @@ impl Gun {
         }
     }
 
-    /// `shell <> self`. A full list drops its last shell (unreachable: see the type).
+    /// `shell <> self`.
+    ///
+    /// # Panics
+    ///
+    /// On a full list (unreachable: see the type) rather than drop its last shell.
     #[must_use]
     pub const fn push_front(self, shell: Shell) -> Self {
-        let len = if self.len < Self::CAPACITY {
-            self.len.saturating_add(1)
-        } else {
-            self.len
-        };
+        assert!(self.len < Self::CAPACITY, "a shell list outgrew the gun");
+        let len = self.len.saturating_add(1);
         let live = match shell {
             Shell::Live => 1,
             Shell::Blank => 0,
@@ -391,7 +441,13 @@ impl Item {
                 branch!(B::DomainItemDealtAtTwoSeatsRemote);
                 false
             }
+            #[cfg(feature = "seats-2-4")]
             (Table::TwoSeats | Table::ThreeSeats | Table::FourSeats, _) => {
+                branch!(B::DomainItemDealtAtAny);
+                true
+            }
+            #[cfg(not(feature = "seats-2-4"))]
+            (Table::TwoSeats, _) => {
                 branch!(B::DomainItemDealtAtAny);
                 true
             }
@@ -755,10 +811,12 @@ impl Table {
                 branch!(B::DomainTableHealthRangeTwoSeats);
                 Range { lo: 3, extra: 0 }
             }
+            #[cfg(feature = "seats-2-4")]
             Self::ThreeSeats => {
                 branch!(B::DomainTableHealthRangeThreeSeats);
                 Range { lo: 4, extra: 0 }
             }
+            #[cfg(feature = "seats-2-4")]
             Self::FourSeats => {
                 branch!(B::DomainTableHealthRangeFourSeats);
                 Range { lo: 3, extra: 1 }
@@ -774,10 +832,12 @@ impl Table {
                 branch!(B::DomainTableAmountRangeTwoSeats);
                 Range { lo: 2, extra: 1 }
             }
+            #[cfg(feature = "seats-2-4")]
             Self::ThreeSeats => {
                 branch!(B::DomainTableAmountRangeThreeSeats);
                 Range { lo: 3, extra: 1 }
             }
+            #[cfg(feature = "seats-2-4")]
             Self::FourSeats => {
                 branch!(B::DomainTableAmountRangeFourSeats);
                 Range { lo: 3, extra: 0 }
@@ -792,6 +852,7 @@ impl Table {
             Load { live, blank }
         }
         const TWO: [Load; 9] = [l(1, 2), l(2, 1), l(2, 2), l(3, 2), l(1, 1), l(2, 3), l(3, 3), l(3, 1), l(4, 2)];
+        #[cfg(feature = "seats-2-4")]
         const THREE: [Load; 10] = [
             l(2, 3),
             l(3, 2),
@@ -804,6 +865,7 @@ impl Table {
             l(3, 1),
             l(1, 1),
         ];
+        #[cfg(feature = "seats-2-4")]
         const FOUR: [Load; 10] = [
             l(3, 4),
             l(3, 2),
@@ -821,10 +883,12 @@ impl Table {
                 branch!(B::DomainTableDeckTwoSeats);
                 &TWO
             }
+            #[cfg(feature = "seats-2-4")]
             Self::ThreeSeats => {
                 branch!(B::DomainTableDeckThreeSeats);
                 &THREE
             }
+            #[cfg(feature = "seats-2-4")]
             Self::FourSeats => {
                 branch!(B::DomainTableDeckFourSeats);
                 &FOUR

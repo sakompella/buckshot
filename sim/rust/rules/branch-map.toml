@@ -46,6 +46,7 @@
 # Rust control flow with no Bend branch of its own, keyed by file, file:fn,
 # or file:fn:<kind> <expr> as `cargo branch-map check` prints it.
 [rust_only]
+"domain.rs:Table::of_seats" = "a table by its seat count; Bend decodes tables by constructor tag"
 "domain.rs:Table::has" = "seat membership of a table by constructor pairs; Bend reads it through ring.get over a filled ring"
 "domain.rs:Seats::push" = "bounded append to the fixed-capacity seat list; capacity is a Rust representation limit"
 "domain.rs:Seats::insert" = "set-style append used for Bend's seen-seats list; Bend's seats.has scan is exempt"
@@ -55,7 +56,7 @@
 "domain.rs:Gun::from_shells" = "packs a shell list into the Gun bit set; Bend's repeat is exempt"
 "domain.rs:Gun::nth" = "shell by index in the packed Gun; Bend's nth is exempt"
 "domain.rs:Gun::split_first" = "head and tail of the packed Gun; the Bend match on the gun list is labelled at its call sites"
-"domain.rs:Gun::push_front" = "prepends a shell to the packed Gun; capacity is a Rust representation limit"
+"domain.rs:Gun::push_front" = "prepends a shell to the packed Gun as its live bit"
 "domain.rs:Gun::set" = "shell write by index in the packed Gun; Bend's replace is exempt"
 "domain.rs:Slots::put" = "slot write by slot; Bend's slots.put is exempt"
 "domain.rs:Config::new" = "validates the round plan on construction; Bend builds plans from constructors that cannot be malformed"

@@ -18,14 +18,26 @@ pub fn ids(rules: &Rules, sites: &[&Site]) -> Result<String, std::fmt::Error> {
     out.push_str("#[deny(dead_code)]\n#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]\npub(crate) enum B {\n");
     for site in sites {
         writeln!(out, "    /// `{}` ({}.bend:{})", site.label(), site.module, site.line)?;
+        out.push_str(gate(site));
         writeln!(out, "    {},", site.variant)?;
     }
     out.push_str("}\n\n/// Each variant with its Bend branch, as `module:def:pattern`.\n#[cfg(feature = \"trace\")]\nconst LABELS: &[(B, &str)] = &[\n");
     for site in sites {
+        out.push_str(gate(site));
         writeln!(out, "    (B::{}, {:?}),", site.variant, site.label())?;
     }
     out.push_str(
         "];\n\n#[cfg(feature = \"trace\")]\nimpl B {\n    /// The Bend branch, as `module:def:pattern`.\n    pub(crate) fn label(self) -> &'static str {\n        LABELS.iter().find(|(b, _)| *b == self).map_or(\"\", |(_, label)| label)\n    }\n}\n",
     );
     Ok(out)
+}
+
+/// A branch on a three- or four-seat table exists only in the `seats-2-4` build.
+fn gate(site: &Site) -> &'static str {
+    let wide = ["ThreeSeats{", "FourSeats{", "Trio{", "Quad{"];
+    if wide.iter().any(|table| site.pattern.contains(table)) {
+        "    #[cfg(feature = \"seats-2-4\")]\n"
+    } else {
+        ""
+    }
 }

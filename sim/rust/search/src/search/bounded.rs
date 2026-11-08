@@ -619,11 +619,11 @@ impl Search<'_> {
 
 #[cfg(test)]
 mod tests {
-    use buckshot_rules::{RuleError, Seat, Table};
+    use buckshot_rules::{Config, RoundRules, RuleError, Seat, Table};
 
     use super::{Bounds, BoxEntry, Boxed, Need, Running, TOP, Window, decide_boxes, root_window, stats_key};
     use crate::num::{Real, branch_window};
-    use crate::search::tests::{config, config_for};
+    use crate::search::tests::config;
     use crate::types::Reach;
 
     fn exact(public: u32, private: u32) -> Boxed {
@@ -808,11 +808,11 @@ mod tests {
         assert!(!entry.serves(3, Need::EXACT), "an inexact box for an exact need");
     }
 
-    /// The keys of one empty belief for seat 1 and seat 3 at two seats, and seat 1 at three.
+    /// The keys of one empty belief for seat 1 and seat 3 under one config, and seat 1 under another.
     fn scoped_keys() -> Result<[u64; 3], RuleError> {
-        let (two, three) = (config()?, config_for(Table::ThreeSeats)?);
+        let (one, other) = (config()?, Config::new(Table::TwoSeats, &[RoundRules::default_round()])?);
         let key = |seat, config| stats_key((seat, config), &[], &[]);
-        Ok([key(Seat::Seat1, &two), key(Seat::Seat3, &two), key(Seat::Seat1, &three)])
+        Ok([key(Seat::Seat1, &one), key(Seat::Seat3, &one), key(Seat::Seat1, &other)])
     }
 
     #[test]

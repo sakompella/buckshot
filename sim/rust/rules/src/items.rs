@@ -236,28 +236,41 @@ fn seat_copies(players: &Players, seat: Seat, item: Item) -> u32 {
         (Table::TwoSeats, Seat::Seat3) => {
             branch!(B::SmItemsSeatCopiesDuoSeatSeat3);
         }
+        #[cfg(feature = "seats-2-4")]
         (Table::ThreeSeats, Seat::Seat0) => {
             branch!(B::SmItemsSeatCopiesTrioSeatSeat0);
         }
+        #[cfg(feature = "seats-2-4")]
         (Table::ThreeSeats, Seat::Seat1) => {
             branch!(B::SmItemsSeatCopiesTrioSeatSeat1);
         }
+        #[cfg(feature = "seats-2-4")]
         (Table::ThreeSeats, Seat::Seat2) => {
             branch!(B::SmItemsSeatCopiesTrioSeatSeat2);
         }
+        #[cfg(feature = "seats-2-4")]
         (Table::FourSeats, Seat::Seat0) => {
             branch!(B::SmItemsSeatCopiesQuadSeatSeat0);
         }
+        #[cfg(feature = "seats-2-4")]
         (Table::FourSeats, Seat::Seat1) => {
             branch!(B::SmItemsSeatCopiesQuadSeatSeat1);
         }
+        #[cfg(feature = "seats-2-4")]
         (Table::FourSeats, Seat::Seat2) => {
             branch!(B::SmItemsSeatCopiesQuadSeatSeat2);
         }
+        #[cfg(feature = "seats-2-4")]
         (Table::FourSeats, Seat::Seat3) => {
             branch!(B::SmItemsSeatCopiesQuadSeatSeat3);
         }
+        #[cfg(feature = "seats-2-4")]
         (Table::TwoSeats, Seat::Seat0 | Seat::Seat2) | (Table::ThreeSeats, Seat::Seat3) => {
+            branch!(B::SmItemsSeatCopiesAny);
+            return 0;
+        }
+        #[cfg(not(feature = "seats-2-4"))]
+        (Table::TwoSeats, Seat::Seat0 | Seat::Seat2) => {
             branch!(B::SmItemsSeatCopiesAny);
             return 0;
         }
@@ -798,7 +811,7 @@ pub(crate) fn flip(direction: Direction) -> Direction {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "seats-2-4"))]
 mod tests {
     use super::*;
     use crate::domain::{Load, RoundRules, Table};

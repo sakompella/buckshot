@@ -9,6 +9,10 @@
 //!   `return`, followed directly by a `branch!` statement (the fallthrough);
 //! - a loop whose body opens with `branch!` (one Bend `x <> rest` step),
 //!   followed directly by a `branch!` statement (the `Nil` case).
+//!
+//! The check reads the `seats-2-4` build: a match arm under
+//! `#[cfg(not(feature = "seats-2-4"))]`, the `seats-2` copy of an arm whose
+//! pattern names a wider table, is skipped.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -123,6 +127,10 @@ fn fallthrough_body(expr: &Expr) -> Option<(&Block, usize, bool)> {
         return Some((&node.body, at(node.loop_token.span).0, false));
     }
     None
+}
+
+fn seats_2_only(attrs: &[syn::Attribute]) -> bool {
+    attrs.iter().any(|attr| text(&attr.meta) == "cfg(not(feature = \"seats-2-4\"))")
 }
 
 fn diverges(block: &Block) -> bool {
@@ -290,6 +298,12 @@ impl<'ast> Visit<'ast> for Walker<'_> {
         let mut labelled = 0_usize;
         let mut bare = Vec::new();
         for arm in &node.arms {
+            if seats_2_only(&arm.attrs) {
+                if let Expr::Block(block) = arm.body.as_ref() {
+                    self.accepted.extend(leading(&block.block).into_iter().map(|(at, _)| at));
+                }
+                continue;
+            }
             let arm_line = at(arm.fat_arrow_token.spans[0]).0;
             let is_labelled = if let Expr::Block(block) = arm.body.as_ref() {
                 self.label(&block.block, arm_line)

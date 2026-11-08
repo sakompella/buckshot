@@ -840,11 +840,6 @@ mod tests {
 
     /// Two seats at 2 health, a one-shell live load and no items.
     pub(super) fn config() -> Result<Config, RuleError> {
-        config_for(Table::TwoSeats)
-    }
-
-    /// `table` at 2 health, a one-shell live load and no items.
-    pub(super) fn config_for(table: Table) -> Result<Config, RuleError> {
         let load = LoadRule {
             shells: ShellRule::AllLive { live: 1 },
             items: AmountRule::Fixed(0),
@@ -859,7 +854,7 @@ mod tests {
             loads: [load; 4],
             items: [off; 9],
         };
-        Config::new(table, &[round, round, round])
+        Config::new(Table::TwoSeats, &[round, round, round])
     }
 
     /// Bend's search, in the `f32` build only.

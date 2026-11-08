@@ -2,13 +2,22 @@
 //!
 //! Bend is the source of truth: every function here follows one Bend def,
 //! and each match arm starts with `branch!` naming the Bend branch it
-//! mirrors (see [`branch::B`]). The core never panics and never
-//! allocates: the state is a flat `Copy` value, and notes and menus live in
-//! fixed buffers.
+//! mirrors (see [`branch::B`]). The core never allocates: the state is a
+//! flat `Copy` value, and notes and menus live in fixed buffers. Each buffer
+//! is sized for its most entries, and one that filled up would panic rather
+//! than drop an entry; notes, which no rule bounds, are flagged as truncated.
+//!
+//! The `seats-2-4` feature (default) holds every table; `seats-2` holds only
+//! the two-seat table, so a ring stores two seats.
 //!
 //! [`step`] is infallible and takes an [`Answer`] token from the state's own
 //! [`Request`]. [`step_event`] is for external input: it validates a raw
 //! number into a token with Bend's clamp.
+
+#[cfg(all(feature = "seats-2-4", feature = "seats-2"))]
+compile_error!("the features `seats-2-4` and `seats-2` exclude each other");
+#[cfg(not(any(feature = "seats-2-4", feature = "seats-2")))]
+compile_error!("enable one of the features `seats-2-4` (default) and `seats-2`");
 
 use arrayvec::ArrayVec;
 

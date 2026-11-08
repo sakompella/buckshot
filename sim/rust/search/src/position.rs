@@ -91,6 +91,8 @@ pub struct Position {
 pub enum ParseError {
     #[error("the board has {views:?} seat views at a {table:?} table")]
     Ring { table: Table, views: Table },
+    #[error("a table with more than two seats, which the seats-2 build lacks")]
+    Wide,
     #[error(transparent)]
     Config(#[from] RuleError),
 }
@@ -295,12 +297,9 @@ impl Tokens<'_> {
     }
 
     /// `dec.ring`: a `Duo`, `Trio` or `Quad`, as the ring of that table.
-    fn ring(&mut self) -> Ring<SeatView> {
-        let table = match self.tag(2) {
-            0 => Table::TwoSeats,
-            1 => Table::ThreeSeats,
-            _ => Table::FourSeats,
-        };
+    fn ring(&mut self) -> Result<Ring<SeatView>, ParseError> {
+        let seats = u64::from(self.tag(2)).saturating_add(2);
+        let table = Table::of_seats(seats).ok_or(ParseError::Wide)?;
         let views: Vec<SeatView> = table.seats().iter().map(|_| self.seat_view()).collect();
         let first = views.first().copied().unwrap_or(SeatView {
             counter: Counter::Jammed,
@@ -308,11 +307,11 @@ impl Tokens<'_> {
             cash: 0,
             briefcase: Briefcase::NotGrabbing,
         });
-        table
+        Ok(table
             .seats()
             .iter()
             .zip(views)
-            .fold(Ring::fill(table, first), |ring, (seat, view)| ring.set(seat, view))
+            .fold(Ring::fill(table, first), |ring, (seat, view)| ring.set(seat, view)))
     }
 
     fn stage(&mut self) -> Stage {
@@ -334,33 +333,30 @@ impl Tokens<'_> {
         }
     }
 
-    fn board(&mut self) -> Board {
+    fn board(&mut self) -> Result<Board, ParseError> {
         let index = self.nat();
         let rounds = self.nat();
         let health = self.nat();
-        let views = self.ring();
+        let views = self.ring()?;
         let shown = self.load();
         let remaining = self.nat();
         let sawed = self.bool();
         let direction = self.direction();
         let stage = self.stage();
-        Board {
+        Ok(Board {
             round: RoundView { index, rounds, health },
             views,
             gun: GunView { shown, remaining, sawed },
             direction,
             stage,
-        }
+        })
     }
 }
 
 /// `table.of`: 2, 3 and 4 seats; anything else reads as four.
-const fn table_of(tag: u64) -> Table {
-    match tag {
-        2 => Table::TwoSeats,
-        3 => Table::ThreeSeats,
-        _ => Table::FourSeats,
-    }
+fn table_of(tag: u64) -> Result<Table, ParseError> {
+    let seats = if matches!(tag, 2 | 3) { tag } else { 4 };
+    Table::of_seats(seats).ok_or(ParseError::Wide)
 }
 
 /// `web.bend` `round.of`: the default round, or with items off random health
@@ -390,14 +386,15 @@ const fn round_of(items: bool) -> RoundRules {
 ///
 /// # Errors
 ///
-/// [`ParseError::Ring`] when the board's seat views are not the table's ring.
+/// [`ParseError::Ring`] when the board's seat views are not the table's ring,
+/// and [`ParseError::Wide`] for a table the build lacks.
 pub fn parse(line: &str) -> Result<Position, ParseError> {
     let mut tokens = Tokens { rest: line.split(' ') };
-    let table = table_of(tokens.raw());
+    let table = table_of(tokens.raw())?;
     let round = round_of(tokens.bool());
     let config = Config::new(table, &[round, round, round])?;
     let me = tokens.seat();
-    let board = tokens.board();
+    let board = tokens.board()?;
     let log = tokens.list(Tokens::heard);
     let views = board.views.table();
     if views != table {

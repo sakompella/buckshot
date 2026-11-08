@@ -37,13 +37,17 @@ echo "== Bend branch traces"
 cargo branch-map instrument "$tapes/traced"
 nice -n 10 node "$root/sim/bend-mp/test/bend-trace.mjs" "$tapes/traced" "$tapes"/*.jsonl
 
+# Each table build replays the tapes; seats-2 skips the wider tables' games.
 # CI=true makes the Hegel properties deterministic and keeps them off .hegel/.
-echo "== cargo test --release (tape replay against $tapes)"
-CI=true RUST_TAPES="$tapes" nice -n 10 cargo test --release -- --include-ignored --nocapture
-echo "== cargo test --release, f32 build"
-nice -n 10 cargo test --release --no-default-features --features f32 -p buckshot-search
-
-echo "== cargo trace-test (tape replay with the branch trace comparison)"
-RUST_TAPES="$tapes" nice -n 10 cargo trace-test -- --include-ignored --nocapture
+for seats in seats-2-4 seats-2; do
+  echo "== cargo test --release, f64 $seats (tape replay against $tapes)"
+  CI=true RUST_TAPES="$tapes" nice -n 10 cargo test --release --no-default-features --features "f64,$seats" \
+    -- --include-ignored --nocapture
+  echo "== cargo test --release, f32 $seats"
+  nice -n 10 cargo test --release --no-default-features --features "f32,$seats" -p buckshot-search
+  echo "== cargo trace-test, $seats (tape replay with the branch trace comparison)"
+  RUST_TAPES="$tapes" nice -n 10 cargo trace-test --no-default-features --features "f64,$seats" \
+    -- --include-ignored --nocapture
+done
 rm -rf "$tapes"
 echo "== parity gate passed"

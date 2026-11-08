@@ -11,8 +11,10 @@ pub(crate) enum B {
     /// `domain:table.seats:TwoSeats{}` (domain.bend:61)
     DomainTableSeatsTwoSeats,
     /// `domain:table.seats:ThreeSeats{}` (domain.bend:63)
+    #[cfg(feature = "seats-2-4")]
     DomainTableSeatsThreeSeats,
     /// `domain:table.seats:FourSeats{}` (domain.bend:65)
+    #[cfg(feature = "seats-2-4")]
     DomainTableSeatsFourSeats,
     /// `domain:item.dealt_at:TwoSeats{} Remote{}` (domain.bend:210)
     DomainItemDealtAtTwoSeatsRemote,
@@ -21,20 +23,26 @@ pub(crate) enum B {
     /// `domain:table.deck:TwoSeats{}` (domain.bend:408)
     DomainTableDeckTwoSeats,
     /// `domain:table.deck:ThreeSeats{}` (domain.bend:410)
+    #[cfg(feature = "seats-2-4")]
     DomainTableDeckThreeSeats,
     /// `domain:table.deck:FourSeats{}` (domain.bend:412)
+    #[cfg(feature = "seats-2-4")]
     DomainTableDeckFourSeats,
     /// `domain:table.health_range:TwoSeats{}` (domain.bend:418)
     DomainTableHealthRangeTwoSeats,
     /// `domain:table.health_range:ThreeSeats{}` (domain.bend:420)
+    #[cfg(feature = "seats-2-4")]
     DomainTableHealthRangeThreeSeats,
     /// `domain:table.health_range:FourSeats{}` (domain.bend:422)
+    #[cfg(feature = "seats-2-4")]
     DomainTableHealthRangeFourSeats,
     /// `domain:table.amount_range:TwoSeats{}` (domain.bend:428)
     DomainTableAmountRangeTwoSeats,
     /// `domain:table.amount_range:ThreeSeats{}` (domain.bend:430)
+    #[cfg(feature = "seats-2-4")]
     DomainTableAmountRangeThreeSeats,
     /// `domain:table.amount_range:FourSeats{}` (domain.bend:432)
+    #[cfg(feature = "seats-2-4")]
     DomainTableAmountRangeFourSeats,
     /// `domain:prize:0n` (domain.bend:438)
     DomainPrizeZero,
@@ -149,8 +157,10 @@ pub(crate) enum B {
     /// `simple/main:grab.fuel:D.TwoSeats{}` (simple/main.bend:257)
     SimpleMainGrabFuelTwoSeats,
     /// `simple/main:grab.fuel:D.ThreeSeats{}` (simple/main.bend:259)
+    #[cfg(feature = "seats-2-4")]
     SimpleMainGrabFuelThreeSeats,
     /// `simple/main:grab.fuel:D.FourSeats{}` (simple/main.bend:261)
+    #[cfg(feature = "seats-2-4")]
     SimpleMainGrabFuelFourSeats,
     /// `simple/main:distribute.begin:Nil{}` (simple/main.bend:269)
     SimpleMainDistributeBeginNil,
@@ -389,8 +399,10 @@ pub(crate) enum B {
     /// `simple/point:first.range:D.TwoSeats{}` (simple/point.bend:191)
     SimplePointFirstRangeTwoSeats,
     /// `simple/point:first.range:D.ThreeSeats{}` (simple/point.bend:193)
+    #[cfg(feature = "seats-2-4")]
     SimplePointFirstRangeThreeSeats,
     /// `simple/point:first.range:D.FourSeats{}` (simple/point.bend:195)
+    #[cfg(feature = "seats-2-4")]
     SimplePointFirstRangeFourSeats,
     /// `simple/point:batch.request:1n+1n+extra` (simple/point.bend:200)
     SimplePointBatchRequestSuccSucc,
@@ -461,18 +473,25 @@ pub(crate) enum B {
     /// `sm/items:seat.copies:D.Duo{_, S.Seat{_, _, _, a}} D.Seat3{}` (sm/items.bend:166)
     SmItemsSeatCopiesDuoSeatSeat3,
     /// `sm/items:seat.copies:D.Trio{S.Seat{_, _, _, a}, _, _} D.Seat0{}` (sm/items.bend:168)
+    #[cfg(feature = "seats-2-4")]
     SmItemsSeatCopiesTrioSeatSeat0,
     /// `sm/items:seat.copies:D.Trio{_, S.Seat{_, _, _, a}, _} D.Seat1{}` (sm/items.bend:170)
+    #[cfg(feature = "seats-2-4")]
     SmItemsSeatCopiesTrioSeatSeat1,
     /// `sm/items:seat.copies:D.Trio{_, _, S.Seat{_, _, _, a}} D.Seat2{}` (sm/items.bend:172)
+    #[cfg(feature = "seats-2-4")]
     SmItemsSeatCopiesTrioSeatSeat2,
     /// `sm/items:seat.copies:D.Quad{S.Seat{_, _, _, a}, _, _, _} D.Seat0{}` (sm/items.bend:174)
+    #[cfg(feature = "seats-2-4")]
     SmItemsSeatCopiesQuadSeatSeat0,
     /// `sm/items:seat.copies:D.Quad{_, S.Seat{_, _, _, a}, _, _} D.Seat1{}` (sm/items.bend:176)
+    #[cfg(feature = "seats-2-4")]
     SmItemsSeatCopiesQuadSeatSeat1,
     /// `sm/items:seat.copies:D.Quad{_, _, S.Seat{_, _, _, a}, _} D.Seat2{}` (sm/items.bend:178)
+    #[cfg(feature = "seats-2-4")]
     SmItemsSeatCopiesQuadSeatSeat2,
     /// `sm/items:seat.copies:D.Quad{_, _, _, S.Seat{_, _, _, a}} D.Seat3{}` (sm/items.bend:180)
+    #[cfg(feature = "seats-2-4")]
     SmItemsSeatCopiesQuadSeatSeat3,
     /// `sm/items:seat.copies:_ _` (sm/items.bend:182)
     SmItemsSeatCopiesAny,
@@ -752,18 +771,26 @@ pub(crate) enum B {
 #[cfg(feature = "trace")]
 const LABELS: &[(B, &str)] = &[
     (B::DomainTableSeatsTwoSeats, "domain:table.seats:TwoSeats{}"),
+    #[cfg(feature = "seats-2-4")]
     (B::DomainTableSeatsThreeSeats, "domain:table.seats:ThreeSeats{}"),
+    #[cfg(feature = "seats-2-4")]
     (B::DomainTableSeatsFourSeats, "domain:table.seats:FourSeats{}"),
     (B::DomainItemDealtAtTwoSeatsRemote, "domain:item.dealt_at:TwoSeats{} Remote{}"),
     (B::DomainItemDealtAtAny, "domain:item.dealt_at:_ _"),
     (B::DomainTableDeckTwoSeats, "domain:table.deck:TwoSeats{}"),
+    #[cfg(feature = "seats-2-4")]
     (B::DomainTableDeckThreeSeats, "domain:table.deck:ThreeSeats{}"),
+    #[cfg(feature = "seats-2-4")]
     (B::DomainTableDeckFourSeats, "domain:table.deck:FourSeats{}"),
     (B::DomainTableHealthRangeTwoSeats, "domain:table.health_range:TwoSeats{}"),
+    #[cfg(feature = "seats-2-4")]
     (B::DomainTableHealthRangeThreeSeats, "domain:table.health_range:ThreeSeats{}"),
+    #[cfg(feature = "seats-2-4")]
     (B::DomainTableHealthRangeFourSeats, "domain:table.health_range:FourSeats{}"),
     (B::DomainTableAmountRangeTwoSeats, "domain:table.amount_range:TwoSeats{}"),
+    #[cfg(feature = "seats-2-4")]
     (B::DomainTableAmountRangeThreeSeats, "domain:table.amount_range:ThreeSeats{}"),
+    #[cfg(feature = "seats-2-4")]
     (B::DomainTableAmountRangeFourSeats, "domain:table.amount_range:FourSeats{}"),
     (B::DomainPrizeZero, "domain:prize:0n"),
     (B::DomainPrizeOne, "domain:prize:1n"),
@@ -833,7 +860,9 @@ const LABELS: &[(B, &str)] = &[
         "simple/main:grab.loop:1n+fuel Placing{+seat, +slot}",
     ),
     (B::SimpleMainGrabFuelTwoSeats, "simple/main:grab.fuel:D.TwoSeats{}"),
+    #[cfg(feature = "seats-2-4")]
     (B::SimpleMainGrabFuelThreeSeats, "simple/main:grab.fuel:D.ThreeSeats{}"),
+    #[cfg(feature = "seats-2-4")]
     (B::SimpleMainGrabFuelFourSeats, "simple/main:grab.fuel:D.FourSeats{}"),
     (B::SimpleMainDistributeBeginNil, "simple/main:distribute.begin:Nil{}"),
     (B::SimpleMainDistributeBeginCons, "simple/main:distribute.begin:+seat <> +rest"),
@@ -1004,7 +1033,9 @@ const LABELS: &[(B, &str)] = &[
     (B::SimplePointIdleRequestTrue, "simple/point:idle.request:True{}"),
     (B::SimplePointIdleRequestFalse, "simple/point:idle.request:False{}"),
     (B::SimplePointFirstRangeTwoSeats, "simple/point:first.range:D.TwoSeats{}"),
+    #[cfg(feature = "seats-2-4")]
     (B::SimplePointFirstRangeThreeSeats, "simple/point:first.range:D.ThreeSeats{}"),
+    #[cfg(feature = "seats-2-4")]
     (B::SimplePointFirstRangeFourSeats, "simple/point:first.range:D.FourSeats{}"),
     (B::SimplePointBatchRequestSuccSucc, "simple/point:batch.request:1n+1n+extra"),
     (B::SimplePointBatchRequestAny, "simple/point:batch.request:_"),
@@ -1064,30 +1095,37 @@ const LABELS: &[(B, &str)] = &[
         B::SmItemsSeatCopiesDuoSeatSeat3,
         "sm/items:seat.copies:D.Duo{_, S.Seat{_, _, _, a}} D.Seat3{}",
     ),
+    #[cfg(feature = "seats-2-4")]
     (
         B::SmItemsSeatCopiesTrioSeatSeat0,
         "sm/items:seat.copies:D.Trio{S.Seat{_, _, _, a}, _, _} D.Seat0{}",
     ),
+    #[cfg(feature = "seats-2-4")]
     (
         B::SmItemsSeatCopiesTrioSeatSeat1,
         "sm/items:seat.copies:D.Trio{_, S.Seat{_, _, _, a}, _} D.Seat1{}",
     ),
+    #[cfg(feature = "seats-2-4")]
     (
         B::SmItemsSeatCopiesTrioSeatSeat2,
         "sm/items:seat.copies:D.Trio{_, _, S.Seat{_, _, _, a}} D.Seat2{}",
     ),
+    #[cfg(feature = "seats-2-4")]
     (
         B::SmItemsSeatCopiesQuadSeatSeat0,
         "sm/items:seat.copies:D.Quad{S.Seat{_, _, _, a}, _, _, _} D.Seat0{}",
     ),
+    #[cfg(feature = "seats-2-4")]
     (
         B::SmItemsSeatCopiesQuadSeatSeat1,
         "sm/items:seat.copies:D.Quad{_, S.Seat{_, _, _, a}, _, _} D.Seat1{}",
     ),
+    #[cfg(feature = "seats-2-4")]
     (
         B::SmItemsSeatCopiesQuadSeatSeat2,
         "sm/items:seat.copies:D.Quad{_, _, S.Seat{_, _, _, a}, _} D.Seat2{}",
     ),
+    #[cfg(feature = "seats-2-4")]
     (
         B::SmItemsSeatCopiesQuadSeatSeat3,
         "sm/items:seat.copies:D.Quad{_, _, _, S.Seat{_, _, _, a}} D.Seat3{}",
