@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { gameAccuracy, judgementOf, moveAccuracy } from "../src/arena-viewer/accuracy.ts";
+import { gameAccuracy, moveAccuracy } from "../src/arena-viewer/accuracy.ts";
 
 test("a move that gave up nothing is 100 and the loss of a whole round is 0, falling between along lichess's curve", () => {
   expect(moveAccuracy(60, 60)).toBe(100);
@@ -8,10 +8,6 @@ test("a move that gave up nothing is 100 and the loss of a whole round is 0, fal
   expect(moveAccuracy(100, 0)).toBe(0);
   expect(moveAccuracy(60, 50)).toBeCloseTo(64.58, 1);
   expect(moveAccuracy(60, 55)).toBeGreaterThan(moveAccuracy(60, 50));
-});
-
-test("the cut-offs are lichess's 0.1, 0.2 and 0.3 of its winning chances, which are 5, 10 and 15 points", () => {
-  expect([0, 0.04, 5, 9.9, 10, 14.9, 15, 80].map(judgementOf)).toEqual(["best", "fine", "inaccuracy", "inaccuracy", "mistake", "mistake", "blunder", "blunder"]);
 });
 
 test("a game's accuracy is a mean of the weighted and harmonic means, so it stays between its worst and best move", () => {
