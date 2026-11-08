@@ -17,18 +17,6 @@ def tmp() -> Path:
     return Path(_DIRS[-1].name)
 
 
-def make_regret(path: Path, rows: list[tuple], with_reload: bool = True) -> None:
-    db = sqlite3.connect(path)
-    extra = ", reload TEXT NOT NULL DEFAULT 'static', samples INTEGER NOT NULL DEFAULT 0" if with_reload else ""
-    cols = ", ".join(f"{c} INTEGER" if c in "ordinal max_depth budget best_score chosen_score regret exact depth limited nodes".split() else f"{c} TEXT" for c in w.REGRET_COLUMNS.split(", "))
-    pk = "match_id, ordinal, evaluator, max_depth, budget" + (", reload, samples" if with_reload else "")
-    db.execute(f"CREATE TABLE regret ({cols}, ms REAL{extra}, PRIMARY KEY ({pk}))".replace("ms INTEGER", "ms REAL").replace("ms TEXT", "ms REAL").replace(", ms REAL, ms REAL", ", ms REAL"))
-    for match, ordinal in rows:
-        db.execute("INSERT INTO regret (match_id, ordinal, evaluator, max_depth, budget, status) VALUES (?, ?, 'ev', 6, 20000, 'searched')", (match, ordinal))
-    db.commit()
-    db.close()
-
-
 class SpliceBetweenMarkers(unittest.TestCase):
     def test_replaces_only_the_marked_block_and_is_idempotent(self):
         doc = "intro\n<!-- beliefs:start -->\nold\n<!-- beliefs:end -->\noutro\n"
@@ -96,7 +84,7 @@ def make_wrap(deploy: bool) -> w.Wrap:
     d = tmp()
     (d / "run").mkdir()
     (d / "analysis").mkdir()
-    return w.Wrap([d / "run"], d, d / "analysis", d / "docs", "t9", None, None, d, d, None, "", 1, "rust", "regret.sqlite", "regret-sampled.sqlite", 1, deploy)
+    return w.Wrap([d / "run"], d, d / "analysis", d / "docs", "t9", None, None, d, d, None, "", 1, "regret.sqlite", "regret-sampled.sqlite", 1, deploy)
 
 
 class Environment(unittest.TestCase):
@@ -177,55 +165,6 @@ class Cohort(unittest.TestCase):
         _, dirs = self.dirs("tournament 7")
         with self.assertRaises(w.Stop):
             w.stamp_cohort(dirs, "tournament 8")
-
-
-class Regret(unittest.TestCase):
-    def test_new_matches_are_completed_validated_ones_without_regret_rows(self):
-        d = tmp()
-        snap = sqlite3.connect(d / "snap.sqlite")
-        snap.execute("CREATE TABLE matches (id TEXT, name TEXT, status TEXT, replay_status TEXT)")
-        snap.executemany("INSERT INTO matches VALUES (?, ?, ?, ?)", [("1", "old", "completed", "validated"), ("2", "new", "completed", "validated"), ("3", "partial", "partial", "validated"), ("4", "unvalidated", "completed", "failed")])
-        snap.commit()
-        make_regret(d / "regret.sqlite", [("1", 1)])
-        self.assertEqual(w.new_match_names(d / "snap.sqlite", d / "regret.sqlite"), ["new"])
-
-    def test_staging_adds_the_new_rows_with_static_reload_and_no_samples(self):
-        d = tmp()
-        make_regret(d / "live.sqlite", [("1", 1), ("1", 2)])
-        make_regret(d / "new.sqlite", [("2", 1)], with_reload=False)
-        note = w.stage_regret(d / "live.sqlite", d / "new.sqlite", d / "staged.sqlite")
-        self.assertIn("2 + 1 = 3", note)
-        rows = sqlite3.connect(d / "staged.sqlite").execute("SELECT match_id, reload, samples FROM regret ORDER BY match_id, ordinal").fetchall()
-        self.assertEqual(rows, [("1", "static", 0), ("1", "static", 0), ("2", "static", 0)])
-
-    def test_rescored_rows_that_equal_the_live_ones_are_not_added_again(self):
-        d = tmp()
-        make_regret(d / "live.sqlite", [("1", 1), ("1", 2)])
-        make_regret(d / "new.sqlite", [("1", 2), ("2", 1)], with_reload=False)
-        note = w.stage_regret(d / "live.sqlite", d / "new.sqlite", d / "staged.sqlite")
-        self.assertIn("2 + 1 = 3", note)
-
-    def test_rescored_rows_that_differ_from_the_live_ones_stop(self):
-        d = tmp()
-        make_regret(d / "live.sqlite", [("1", 1)])
-        make_regret(d / "new.sqlite", [("1", 1)], with_reload=False)
-        db = sqlite3.connect(d / "new.sqlite")
-        db.execute("UPDATE regret SET regret = 5")
-        db.commit()
-        db.close()
-        with self.assertRaises(w.Stop):
-            w.stage_regret(d / "live.sqlite", d / "new.sqlite", d / "staged.sqlite")
-
-    def test_staging_stops_on_a_second_evaluator(self):
-        d = tmp()
-        make_regret(d / "live.sqlite", [("1", 1)])
-        make_regret(d / "new.sqlite", [("2", 1)], with_reload=False)
-        db = sqlite3.connect(d / "new.sqlite")
-        db.execute("UPDATE regret SET evaluator = 'other'")
-        db.commit()
-        db.close()
-        with self.assertRaises(w.Stop):
-            w.stage_regret(d / "live.sqlite", d / "new.sqlite", d / "staged.sqlite")
 
 
 class Emails(unittest.TestCase):

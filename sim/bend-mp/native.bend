@@ -6,7 +6,7 @@ import ./player/types.bend as A
 import ./simple/state.bend as T
 
 # THROWAWAY PROTOTYPE: a native entry for the minimax evaluator. Reads one
-# analysis input per line (numbers only, see web/src/analysis/native-input.ts, called by web/scripts/arena-regret-native.ts) and
+# analysis input per line (numbers only, see web/src/analysis/native-input.ts) and
 # prints one result line per input. The evaluator is search.bend's `analyse`,
 # unchanged; this file only decodes and prints. An optional last argument `fan`
 # (default 0) searches the root moves in parallel when it is 1.

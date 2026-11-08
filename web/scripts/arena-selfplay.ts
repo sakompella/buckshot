@@ -17,7 +17,7 @@ import { agentMoveText } from "../src/text.ts";
 // Plays the minimax player (sim/bend-mp/player/) against itself, one match at a
 // time, with the arena's rules: two seats, items, three rounds. Every move is
 // the player's own analysis of its own log and the public board, through the
-// same calls as scripts/arena-regret.ts; TypeScript only marshals. A match is
+// same calls as `analyse`; TypeScript only marshals. A match is
 // played from a seed as the arena starts it. With --swap the round 1 starter
 // is the other seat: the first draw (FirstSeat) is answered with the value the
 // seed did not give, every later draw as before. Equal best moves are broken
