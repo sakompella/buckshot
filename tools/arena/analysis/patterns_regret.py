@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Mean regret of the decisions each choice pattern matches, against the other decisions where the pattern could have applied.
 
-Reads the regret table (web/scripts/arena-regret.ts) and the knowledge database (web/scripts/arena-knowledge.ts) read-only,
+Reads the regret table (tools/arena/score_regret.py writes it) and the knowledge database (web/scripts/arena-knowledge.ts) read-only,
 joined on (match_id, ordinal), and prints one markdown table. With --doc FILE the table replaces the text between the
 patterns markers of that file. Regret is in percentage points of the deciding player's chance to win the round. Matches
 with a DeepSeek seat, unfinished matches and forced or fallback moves are left out.

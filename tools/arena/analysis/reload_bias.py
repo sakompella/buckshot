@@ -1,12 +1,12 @@
 """Draws the stratified sample of two-seat agent decisions that the reload-bias run scores, and summarises the run (#17).
 
-The sample is cut into lists of "<match id> <ordinal>" lines for `web/scripts/arena-regret.ts --decisions`. Each list holds an equal share of every
+The sample is cut into lists of "<match id> <ordinal>" lines. Each list holds an equal share of every
 stratum (shells left in the gun, shot or item move, model), so a list that finishes early is still a stratified random sample.
 
     python3 tools/arena/analysis/reload_bias.py sample --out DIR [--lists 16] [--seed N] [--exclude LIST ...]
     python3 tools/arena/analysis/reload_bias.py report [--sampled PATH] [--samples 64] [--doc docs/arena/analysis/regret.md]
 
-`sample` writes one list per file, to run with `web/scripts/arena-regret.ts --decisions LIST --reload sampled`. `report` reads the sampled run
+`sample` writes one list per file. The run was scored with the Bend player's `web/scripts/arena-regret.ts --decisions LIST --reload sampled`, removed on 2026-11-08, so it cannot be rerun as written. `report` reads the sampled run
 and the static run it is compared with, both read only, and prints markdown tables, or with --doc rewrites the ones between the reload-bias markers of that file.
 """
 
