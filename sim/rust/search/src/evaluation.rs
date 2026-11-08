@@ -21,9 +21,7 @@ const fn item_weight(item: Item) -> u32 {
 }
 
 fn slots_weight(slots: Slots) -> u32 {
-    slots
-        .entries()
-        .fold(0, |sum, (_, item)| sum.wrapping_add(item.map_or(0, item_weight)))
+    slots.items().fold(0, |sum, item| sum.wrapping_add(item_weight(item)))
 }
 
 /// `seat.weight`: Bend's U32 arithmetic wraps.
@@ -41,18 +39,19 @@ fn seat_weight(player: SeatRecord, tempo: bool) -> u32 {
 
 /// `state.estimate`: my share of the table's weight, in millionths.
 fn estimate(state: &State, me: Seat, knowledge: bool) -> u32 {
-    let players = state.players;
     let turn = state.world.turn;
-    let own = players.get(me).unwrap_or(SeatRecord::FRESH);
+    let mut own = None;
+    let mut total = 0u32;
+    for (seat, player) in state.players.entries() {
+        let weight = seat_weight(player, turn == Some(seat));
+        if seat == me {
+            own = Some((player, weight));
+        }
+        total = total.wrapping_add(weight);
+    }
+    let (own, weight) = own.unwrap_or_else(|| (SeatRecord::FRESH, seat_weight(SeatRecord::FRESH, turn == Some(me))));
     let bonus = if knowledge && alive(own.health) { 25 } else { 0 };
-    let weight = seat_weight(own, turn == Some(me)).wrapping_add(bonus);
-    let total = players
-        .entries()
-        .fold(0u32, |sum, (seat, player)| {
-            sum.wrapping_add(seat_weight(player, turn == Some(seat)))
-        })
-        .wrapping_add(bonus);
-    Real::per_million(weight, total.max(1))
+    Real::per_million(weight.wrapping_add(bonus), total.wrapping_add(bonus).max(1))
 }
 
 /// `state`: the exact value of a won round, else the estimate.

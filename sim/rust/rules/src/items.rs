@@ -668,15 +668,13 @@ fn steal_here(found: Option<Item>, owner: Seat, slot: Slot, sawed: bool, targets
     }
 }
 
-/// `steal.slots`.
-fn steal_slots(inventory: Slots, owner: Seat, sawed: bool, targets: bool) -> Picks {
-    let mut out = Picks::new();
+/// `steal.slots`, appended to `out`.
+fn steal_slots(inventory: Slots, owner: Seat, sawed: bool, targets: bool, out: &mut Picks) {
     for slot in Slot::ORDER {
         branch!(B::SmItemsStealSlotsCons);
-        steal_here(inventory.get(slot), owner, slot, sawed, targets, &mut out);
+        steal_here(inventory.get(slot), owner, slot, sawed, targets, out);
     }
     branch!(B::SmItemsStealSlotsNil);
-    out
 }
 
 /// `steal.owner`.
@@ -685,10 +683,7 @@ fn steal_owner(own: bool, owner: Seat, inventory: Slots, sawed: bool, targets: b
         branch!(B::SmItemsStealOwnerTrue);
     } else {
         branch!(B::SmItemsStealOwnerFalse);
-        let slots = steal_slots(inventory, owner, sawed, targets);
-        for pick in slots {
-            out.push(pick);
-        }
+        steal_slots(inventory, owner, sawed, targets, out);
     }
 }
 
