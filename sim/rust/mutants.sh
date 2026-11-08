@@ -26,7 +26,8 @@ mkdir "$tapes/search"
 (cd "$root/web" && nice -n 10 bun run rules >/dev/null &&
   nice -n 10 bun scripts/rust-search-synth.ts --out "$tapes/search/static.jsonl" --games 2 --per-game 3 --seed 1 &&
   nice -n 10 bun scripts/rust-search-synth.ts --out "$tapes/search/sampled.jsonl" --games 3 --per-game 3 --seed 2 \
-    --reload sampled --samples 32)
+    --reload sampled --samples 32 &&
+  nice -n 10 bun scripts/rust-search-synth.ts --out "$tapes/search/memo.jsonl" --games 2 --per-game 3 --seed 3 --memo charged)
 
 cd "$here"
 # CI=true makes the Hegel properties deterministic and keeps them off .hegel/.

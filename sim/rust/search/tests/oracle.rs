@@ -1,8 +1,9 @@
 //! The compatibility evaluator against Bend's player: every row of the files
 //! in `RUST_SEARCH_ORACLE` (written by `web/scripts/rust-search-synth.ts`,
 //! whose `js` field is the Bend player's analysis) must come out of the CLI
-//! with the same best move, node count and line values: `static.jsonl` with
-//! the default flags, `sampled.jsonl` with `--reload sampled --samples 32`.
+//! with the same best move, node and memo counts and line values: `static.jsonl` with
+//! the default flags, `sampled.jsonl` with `--reload sampled --samples 32`,
+//! `memo.jsonl` with `--memo charged`.
 //! The f32 build only; run by `sim/rust/mutants.sh`.
 #![cfg(feature = "f32")]
 
@@ -21,6 +22,7 @@ fn shared(row: &Value) -> Value {
         "nodes": row["nodes"],
         "depth": row["depth"],
         "limited": row["limited"],
+        "memo": [row["entries"], row["hits"], row["deals"], row["dealHits"]],
         "lines": lines,
     })
 }
@@ -29,9 +31,10 @@ fn shared(row: &Value) -> Value {
 #[ignore = "needs RUST_SEARCH_ORACLE; run sim/rust/mutants.sh"]
 fn compat_matches_bend() {
     let dir = std::env::var("RUST_SEARCH_ORACLE").expect("RUST_SEARCH_ORACLE names a directory of rust-search-synth.ts files");
-    let runs: [(&str, &[&str]); 2] = [
+    let runs: [(&str, &[&str]); 3] = [
         ("static.jsonl", &[]),
         ("sampled.jsonl", &["--reload", "sampled", "--samples", "32"]),
+        ("memo.jsonl", &["--memo", "charged"]),
     ];
     for (name, flags) in runs {
         let path = format!("{dir}/{name}");
