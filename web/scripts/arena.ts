@@ -1,7 +1,7 @@
 import { createModels } from "@earendil-works/pi-ai";
 import { Cause, Effect, Exit, Schema } from "effect";
 
-import { type AgentId, SeatSpec, seatingOf } from "../src/arena/agent.ts";
+import { AgentId, SeatSpec, seatingOf } from "../src/arena/agent.ts";
 import { agentEndpoint, modelRefOf, provenanceOf, providerIdOf, providerOf } from "../src/arena/endpoints.ts";
 import { listenForHuman } from "../src/arena/human.ts";
 import { DELIVERIES, playMatch } from "../src/arena/match.ts";
@@ -9,13 +9,14 @@ import type { Letter } from "../src/players.ts";
 
 // Plays one match to game over and writes its run directory. --seats lists who
 // plays: agents by letter, configured in web/.env (see .env.example), the DoN
-// and Story bots, and Human for a person at a terminal. --rotation rotates the
+// and Story bots, Human for a person at a terminal, and Engine/<depth>/<budget>
+// for the Rust search (src/arena/engine.ts). --rotation rotates the
 // seats: rotation 0 puts the first at position 1. Agent A plays as Player A
 // wherever it sits. --delivery picks how the log reaches players (on-turn or
 // live). For each Human seat the arena prints a command to run in another
 // terminal, and waits for it. Rerunning with the same --dir resumes the match
 // from its store, with the settings it started with.
-// Usage: bun scripts/arena.ts [--dir ../_work/arena/<name>] [--seed N] [--seats A,B,DoN] [--rotation 0] [--delivery on-turn]
+// Usage: bun scripts/arena.ts [--dir ../_work/arena/<name>] [--seed N] [--seats A,B,DoN,Engine/4/20000] [--rotation 0] [--delivery on-turn]
 
 const flag = (name: string, fallback: string): string => {
   const at = process.argv.indexOf(`--${name}`);
@@ -31,7 +32,7 @@ const seating = seatingOf(Schema.decodeUnknownSync(Schema.Array(SeatSpec))(flag(
 
 const delivery = Schema.decodeUnknownSync(Schema.Literals(DELIVERIES))(flag("delivery", "on-turn"));
 
-const isAgent = (seat: SeatSpec): seat is AgentId => seat !== "DoN" && seat !== "Story" && seat !== "Human";
+const isAgent = Schema.is(AgentId);
 
 /** A Human seat's socket. It sits in /tmp because a Unix socket path must be short. */
 const connectHuman = async (player: Letter) => {

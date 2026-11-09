@@ -63,7 +63,7 @@ export const MoveLine = Schema.Struct({
   turn: Schema.Int,
   move: Schema.Int,
   label: Schema.String,
-  by: Schema.Literals(["agent", "human", "forced", "fallback"]),
+  by: Schema.Literals(["agent", "human", "engine", "forced", "fallback"]),
   seq: Schema.optional(Schema.Int),
 });
 

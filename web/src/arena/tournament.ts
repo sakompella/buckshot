@@ -1,6 +1,6 @@
 import { Data, Redacted, Result, Schema } from "effect";
 
-import { AgentId } from "./agent.ts";
+import { AgentId, EngineSeat } from "./agent.ts";
 import type { PriceTable } from "./cost.ts";
 import { THINKING_LEVELS } from "./endpoints.ts";
 import { DELIVERIES } from "./match.ts";
@@ -20,6 +20,9 @@ const ModelEntrant = Schema.Struct({ endpoint: Schema.NonEmptyString, model: Sch
 
 const BotEntrant = Schema.Struct({ bot: Schema.Literals(BOTS) });
 
+/** The Rust search at one strength (engine.ts), a fixed yardstick for the models. */
+const EngineEntrant = Schema.Struct({ engine: Schema.Struct({ depth: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)), budget: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)), reload: Schema.optional(Schema.Literal("sampled")) }) });
+
 /** The seeds of a pairing's blocks, in block order, when they are not the config's seed plus the block, as from balancedSeeds in seeds.ts. */
 const BlockSeeds = Schema.Array(Schema.Int);
 
@@ -31,7 +34,7 @@ export const TournamentConfig = Schema.Struct({
   cohort: Schema.optional(Schema.NonEmptyString),
   delivery: Schema.Literals(DELIVERIES),
   endpoints: Schema.Record(Schema.String, TournamentEndpoint),
-  entrants: Schema.Record(EntrantName, Schema.Union([ModelEntrant, BotEntrant])),
+  entrants: Schema.Record(EntrantName, Schema.Union([ModelEntrant, BotEntrant, EngineEntrant])),
   pairings: Schema.Union([Schema.Array(Schema.Union([Schema.Array(EntrantName), SeededPairing])), Schema.Struct({ allOf: Schema.Array(EntrantName), size: Schema.Literals([2, 3, 4]), seeds: Schema.optional(BlockSeeds) })]),
   blocksPerPairing: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
 });
@@ -67,7 +70,8 @@ const combinations = <A>(items: ReadonlyArray<A>, size: number): ReadonlyArray<R
 const permutations = <A>(items: ReadonlyArray<A>): ReadonlyArray<ReadonlyArray<A>> =>
   items.length <= 1 ? [items] : items.flatMap((item, index) => permutations([...items.slice(0, index), ...items.slice(index + 1)]).map((rest) => [item, ...rest]));
 
-const hasModel = (config: TournamentConfig, pairing: Pairing): boolean => pairing.some((name) => modelEntrant(config, name) !== undefined);
+/** Whether the arena plays someone in the pairing: a model or an engine. */
+const hasModel = (config: TournamentConfig, pairing: Pairing): boolean => pairing.some((name) => modelEntrant(config, name) !== undefined || "engine" in (config.entrants[name] ?? {}));
 
 const duplicateIn = (names: ReadonlyArray<string>): string | undefined => names.find((name, index) => names.indexOf(name) !== index);
 
@@ -86,7 +90,7 @@ const explicitPairings = (config: TournamentConfig, listed: ReadonlyArray<Pairin
 
       if (pairing.length < 2 || pairing.length > 4) return yield* fail(`${label} has ${pairing.length} entrants; a pairing has 2 to 4`);
 
-      if (!hasModel(config, pairing)) return yield* fail(`${label} has only bots; a pairing needs at least one model entrant`);
+      if (!hasModel(config, pairing)) return yield* fail(`${label} has only bots; a pairing needs at least one model or engine entrant`);
     }
 
     return listed;
@@ -178,15 +182,15 @@ export const checkPrices = ({ config }: Tournament, prices: PriceTable): Result.
   return unpriced === undefined ? Result.void : fail(`the model of entrant "${unpriced}" has no entry in prices.json; add a price for it first`);
 };
 
-/** The seats a match can have: an agent letter or a bot. */
-const Seat = Schema.Union([AgentId, Schema.Literals(BOTS)]);
+/** The seats a match can have: an agent letter, a bot or an engine. */
+const Seat = Schema.Union([AgentId, Schema.Literals(BOTS), EngineSeat]);
 
 export const ScheduledMatch = Schema.Struct({
   name: Schema.String,
   pairing: Schema.Int,
   block: Schema.Int,
   seed: Schema.Int,
-  /** In table order: the agent's letter, or the bot's name. */
+  /** In table order: the agent's letter, the bot's name, or the engine's seat. */
   seats: Schema.Array(Seat),
   /** The entrant at each seat, in the same order. */
   entrants: Schema.Array(EntrantName),
@@ -211,7 +215,7 @@ const blockOf = ({ config }: Tournament, pairing: Pairing, pairingIndex: number,
       return letter === undefined ? [] : [[letter, name]];
     }
 
-    return [[entrant.bot, name]];
+    return "bot" in entrant ? [[entrant.bot, name]] : [[`Engine/${entrant.engine.depth}/${entrant.engine.budget}${entrant.engine.reload === undefined ? "" : "/sampled"}` as const, name]];
   });
 
   return permutations(seated).map((table, index) => ({

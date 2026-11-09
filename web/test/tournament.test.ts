@@ -103,6 +103,15 @@ test("model entrants get letters in pairing order, and bots take no letter", () 
   }
 });
 
+test("an engine entrant sits at its Engine seat, takes no letter, and can play a bot", () => {
+  const engines = { ...ENTRANTS, "engine-d4": { engine: { depth: 4, budget: 20000 } } };
+  const schedule = scheduleOf(tournamentFrom(configJson({ entrants: engines, pairings: [["engine-d4", "don"], ["luna", "engine-d4"]], blocksPerPairing: 1 })));
+
+  for (const match of schedule) expect(match.seats[match.entrants.indexOf("engine-d4")]).toBe("Engine/4/20000");
+
+  expect(schedule.filter((match) => match.entrants.includes("luna")).every((match) => match.entrants[match.seats.indexOf("A")] === "luna")).toBe(true);
+});
+
 test("allOf makes every combination of its size and skips the ones of bots only", () => {
   const schedule = scheduleOf(tournamentFrom(configJson({ blocksPerPairing: 1 })));
 

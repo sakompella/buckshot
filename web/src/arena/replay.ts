@@ -3,7 +3,7 @@ import { Option, Result, Schema } from "effect";
 import { emptyTable, type HeadlessTable } from "../agent/headless.ts";
 import { type AgentCall, AgentReply, type MatchSession, replyText, runTool, tools } from "../agent/tools.ts";
 import { agentGame, type AgentSource } from "../agent/view.ts";
-import { letteredSession, type RunManifest } from "./match.ts";
+import { letteredSession, machineControllers, type RunManifest } from "./match.ts";
 import type { MoveLine } from "./runlog.ts";
 import { Counter, seatsOut } from "../domain.ts";
 import { type Letter, rosterOf } from "../players.ts";
@@ -128,7 +128,7 @@ const startReplay = (setup: ReplaySetup): Result.Result<Replay, string> => {
   const session = letteredSession(setup.letters);
 
   return Result.map(
-    Result.flatMap(callOf("new_match", { players: setup.controllers.length, items: true, seed: setup.seed, controllers: [...setup.controllers] }), (call) => run(session, emptyTable, call)),
+    Result.flatMap(callOf("new_match", { players: setup.controllers.length, items: true, seed: setup.seed, controllers: machineControllers(setup.controllers) }), (call) => run(session, emptyTable, call)),
     (table) => ({ setup, session, table, applied: [], frames: [frameOf(undefined, sourceOf({ session, table }), undefined)], divergence: Option.none() }),
   );
 };
