@@ -13,7 +13,8 @@
 //   --perturb N        N games per seed from states mutated into ones no valid game reaches (from_state; a few answers each)
 //   --arena K [--spread] [--db PATH]
 //                      K recorded arena matches replayed with their draws; --spread takes them across tournaments.
-//                      The database (--db, or BUCKSHOT_ARENA_DB) is private; fails unless all K are replayed
+//                      The database (--db, or BUCKSHOT_ARENA_DB) is private; fails unless all K reach their
+//                      recorded end and cash, with one answer fitting the recorded moves at every step
 //
 // Each tape has a sibling <tape>.manifest.json: mode, seeds, settings, games,
 // steps, capped games, lines and a sha256 over every .bend file under sim/bend-mp.
@@ -189,7 +190,7 @@ const sockets = n => n === 2 ? [1, 3] : Array.from({ length: n }, (_, i) => i);
 function playArena(recorded) {
   const answers = recorded.answers;
   let at = 0;
-  const report = { id: recorded.id, tournament: recorded.tournament, name: recorded.name, seed: recorded.seed, smAnswers: answers.length, ambiguous: 0, ended: false };
+  const report = { id: recorded.id, tournament: recorded.tournament, name: recorded.name, seed: recorded.seed, smAnswers: answers.length, ambiguous: [], ended: false };
   const answerFor = (request, state, step) => {
     const menu = kind(request) === 'Draw' ? [answers[at]] : Array.from({ length: 1 + array(request.moves.tail).length }, (_, i) => i);
     const fits = menu.filter(n => {
@@ -201,7 +202,7 @@ function playArena(recorded) {
       report.divergence = { step, recordedAt: at, recorded: answers.slice(at, at + 8), request: kind(request), options: best.slice(0, 12).map(({ n, ns, shared }) => ({ n, ns: ns.slice(0, 8), firstDifference: shared })) };
       return null;
     }
-    if (fits.length > 1) report.ambiguous++;
+    if (fits.length > 1) report.ambiguous.push({ step, recordedAt: at, request: kind(request), fits: fits.map(n => ({ n, ns: smAnswers(state, n) })) });
     const n = fits[0];
     at += smAnswers(state, n).length;
     return n;
@@ -403,9 +404,15 @@ if (perturbGames !== null) mode('perturb', { perSeed: perturbGames }, () => {
 
 if (arenaMatches !== null) mode(flag('spread') ? 'arena-spread' : 'arena', { matches: arenaMatches, spread: flag('spread'), seed: seeds[0] }, () => {
   const reports = recordedMatches(arenaMatches).map(playArena);
-  for (const { divergence, ...report } of reports) console.log(JSON.stringify(report), divergence ? `DIVERGES ${JSON.stringify(divergence)}` : '');
-  console.log(`${reports.filter(r => r.ended).length}/${reports.length} reach the recorded end`);
-  if (reports.some(r => !r.ended)) process.exitCode = 1;
+  for (const { divergence, ambiguous, ...report } of reports) {
+    console.log(JSON.stringify(report),
+      divergence ? `DIVERGES ${JSON.stringify(divergence)}` : '',
+      report.cashMatches ? '' : `CASH DIFFERS: Bend ${JSON.stringify(report.cash)}, recorded ${JSON.stringify(report.recordedCash)}`,
+      ambiguous.length > 0 ? `AMBIGUOUS (several answers fit the recorded moves) ${JSON.stringify(ambiguous)}` : '');
+  }
+  const replayed = reports.filter(r => r.ended && r.cashMatches && r.ambiguous.length === 0);
+  console.log(`${replayed.length}/${reports.length} reach the recorded end with the recorded cash, each answer the only one that fits`);
+  if (replayed.length < reports.length) process.exitCode = 1;
   return { tournaments: new Set(reports.map(r => r.tournament)).size };
 });
 
