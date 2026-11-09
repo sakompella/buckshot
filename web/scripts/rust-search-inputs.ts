@@ -14,6 +14,7 @@ import { replayOf } from "../src/arena/replay.ts";
 import { MoveLine } from "../src/arena/runlog.ts";
 import { rosterOf } from "../src/players.ts";
 import { agentMoveText } from "../src/text.ts";
+import { assertCurrentImport } from "../src/analysis/importer-hash.ts";
 
 // Writes the input rows the Rust searcher (sim/rust/search) and its oracle comparison read: one row per listed arena
 // decision, in list order, with the position as the numbers native.bend decodes, the menu in the player's own move
@@ -90,6 +91,8 @@ for (const line of readFileSync(resolve(values.decisions), "utf8").split("\n").f
 }
 
 const source = new Database(resolve(values.db), { readonly: true });
+
+assertCurrentImport(source);
 
 const matches = source
   .query<MatchRow, []>("SELECT m.id, m.name, m.manifest_json FROM matches m WHERE m.manifest_json IS NOT NULL AND m.replay_status = 'validated'")

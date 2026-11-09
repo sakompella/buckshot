@@ -19,7 +19,7 @@ from pathlib import Path
 import regret
 from docs import splice_between_markers
 from fmt import pct, table
-from load import DB, SKIPPED_MODEL, connect
+from load import DB, SKIPPED_MODEL, connect, require_current
 from regret import DERIVED, EFFORTS, Decision, points
 
 ROUNDS = (1, 2, 3)
@@ -173,6 +173,7 @@ def main() -> None:
     parser.add_argument("--samples", type=int, help="deals per leaf of a sampled run, 256 by default")
     parser.add_argument("--doc", type=Path)
     args = parser.parse_args()
+    require_current(args.db)
     text = report(load_results(args.db, args.knowledge), regret.load(args.regret, args.knowledge, args.depth, args.budget, args.reload, regret.run_samples(args.reload, args.samples)).decisions)
     if args.doc is None:
         print(text)
