@@ -154,6 +154,43 @@ const rowsOf = (database: string, sql: string) => {
   try { return db.query(sql).all(); } finally { db.close(); }
 };
 
+test("calls join on the turn they were made on: logged where the log has it, taken from the events where not, and unlinked when no move was made then", async () => {
+  const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
+
+  try {
+    const { source, manifestPath } = probeTournament(root, "medium");
+    const callsPath = join(manifestPath, "..", "calls.jsonl");
+    const logged = readFileSync(callsPath, "utf8").trimEnd().split("\n").map((line) => JSON.parse(line));
+    const links = "SELECT link_method, decision_id IS NULL AS unlinked, COUNT(*) AS n FROM calls GROUP BY 1, 2";
+    const write = (lines: ReadonlyArray<object>) => writeFileSync(callsPath, `${lines.map((line) => JSON.stringify(line)).join("\n")}\n`);
+
+    const import_ = (name: string) => {
+      const database = join(root, `${name}.sqlite`);
+
+      importTournaments({ database, sources: [source] });
+
+      return database;
+    };
+
+    expect(logged.every(({ turn }) => Number.isInteger(turn))).toBe(true);
+
+    const exact = import_("exact");
+    expect(rowsOf(exact, links)).toEqual([{ link_method: "logged turn", unlinked: 0, n: logged.length }]);
+
+    write(logged.map(({ turn: _turn, ...line }) => line));
+
+    const older = import_("older");
+    expect(rowsOf(older, links)).toEqual([{ link_method: "events turn: the player's next turn-stamped event", unlinked: 0, n: logged.length }]);
+    expect(rowsOf(older, "SELECT decision_id FROM calls ORDER BY ordinal")).toEqual(rowsOf(exact, "SELECT decision_id FROM calls ORDER BY ordinal"));
+
+    write([...logged, { ...logged[0], t: "2099-01-01T00:00:00Z", turn: 9999, stop_reason: "error", error: "429" }]);
+    expect(rowsOf(import_("unlinked"), links)).toContainEqual({ link_method: "unlinked", unlinked: 1, n: 1 });
+
+    write(logged.map((line, index) => (index === 0 ? { ...line, turn: line.turn + 2 } : line)));
+    expect(() => import_("disagree")).toThrow("Call turn disagrees with events");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test("a changed tournament config revalidates unchanged matches, as a fresh rebuild does", async () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 

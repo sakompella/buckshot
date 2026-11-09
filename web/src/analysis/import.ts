@@ -46,6 +46,28 @@ const scoringProblem = (standings: ReadonlyArray<{ readonly player: string }> | 
 
 interface Observation<A> { readonly value: A; readonly record: string; readonly line: number }
 
+/**
+ * The accepted move a call led to, joined on the turn the call was made on. A call logged since the arena records its
+ * turn says it. In older logs it is the turn of the same player's next event that carries one and ends an ask (turn,
+ * move, fallback or fault), which the arena writes after the call. A call with no accepted move at its turn is
+ * unlinked: a failed call is never given a later turn's move. Where two sources disagree it throws with a dump.
+ */
+const linkOf = (call: Observation<CallLine>, events: ReadonlyArray<Observation<EventLine>>, moves: ReadonlyArray<Observation<MoveLine>>) => {
+  const ending = events.flatMap(({ value }) => (value.kind === "turn" || value.kind === "move" || value.kind === "fallback" || value.kind === "fault" ? [value] : []));
+  const next = ending.find(({ player, t }) => player === call.value.agent && t >= call.value.t);
+  const logged = call.value.turn;
+
+  if (logged !== undefined && next !== undefined && logged !== next.turn) throw new Error(`Call turn disagrees with events: ${json({ call: { line: call.line, agent: call.value.agent, t: call.value.t, turn: logged }, next })}`);
+
+  const turn = logged ?? next?.turn;
+  const decision = moves.findIndex(({ value }) => (value.by === "agent" || value.by === "fallback") && value.turn === turn);
+  const move = moves[decision]?.value;
+
+  if (move !== undefined && move.player !== call.value.agent) throw new Error(`Call and move at turn ${turn} are different players: ${json({ call: { line: call.line, agent: call.value.agent, t: call.value.t }, move })}`);
+
+  return { decision, method: decision === -1 ? "unlinked" : logged === undefined ? "events turn: the player's next turn-stamped event" : "logged turn" };
+};
+
 export interface ImportOptions {
   readonly database: string;
   readonly sources: ReadonlyArray<string>;
@@ -297,9 +319,8 @@ export const importTournaments = ({ database, sources, skipped = {} }: ImportOpt
 
           for (const [ordinal, observation] of calls.entries()) {
             const call = observation.value;
-            // Each call belongs to its agent's next chosen move. This is a link heuristic, not a provider call id.
-            const decision = moves.findIndex(({ value }) => (value.by === "agent" || value.by === "fallback") && value.player === call.agent && value.t >= call.t);
-            put("calls", { id: sha(`${matchId}\0call:${observation.line}`), match_id: matchId, decision_id: decision === -1 ? null : sha(`${matchId}\0${decision}`), ordinal, player: call.agent, position: call.position, model: call.model, provider: call.provider, api: call.api, t: call.t, status: call.error !== undefined || call.stop_reason === "error" || call.stop_reason === "aborted" ? "failed" : "returned", error: call.error ?? null, stop_reason: call.stop_reason, latency_ms: call.latency_ms ?? null, input_tokens: call.usage.input, output_tokens: call.usage.output, cache_read_tokens: call.usage.cacheRead, cache_write_tokens: call.usage.cacheWrite, cache_write_1h_tokens: call.usage.cacheWrite1h ?? null, reasoning_tokens: call.usage.reasoning ?? null, cost_usd: costOf(prices, call) ?? null, reasoning_text: call.thinking, reasoning_provenance: "calls.jsonl thinking, provider-returned text concatenated by runlog.ts; may be summary, not complete chain of thought", response_text: call.text, tool_calls_json: json(call.tool_calls), usage_json: json(call.usage), source_record: observation.record, link_method: decision === -1 ? null : "viewer chronological: next chosen move by same player" });
+            const { decision, method } = linkOf(observation, events, moves);
+            put("calls", { id: sha(`${matchId}\0call:${observation.line}`), match_id: matchId, decision_id: decision === -1 ? null : sha(`${matchId}\0${decision}`), ordinal, player: call.agent, position: call.position, model: call.model, provider: call.provider, api: call.api, t: call.t, status: call.error !== undefined || call.stop_reason === "error" || call.stop_reason === "aborted" ? "failed" : "returned", error: call.error ?? null, stop_reason: call.stop_reason, latency_ms: call.latency_ms ?? null, input_tokens: call.usage.input, output_tokens: call.usage.output, cache_read_tokens: call.usage.cacheRead, cache_write_tokens: call.usage.cacheWrite, cache_write_1h_tokens: call.usage.cacheWrite1h ?? null, reasoning_tokens: call.usage.reasoning ?? null, cost_usd: costOf(prices, call) ?? null, reasoning_text: call.thinking, reasoning_provenance: "calls.jsonl thinking, provider-returned text concatenated by runlog.ts; may be summary, not complete chain of thought", response_text: call.text, tool_calls_json: json(call.tool_calls), usage_json: json(call.usage), source_record: observation.record, link_method: method });
           }
 
           if (manifest?.status === "finished") {
