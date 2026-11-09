@@ -59,8 +59,6 @@ const ITEM_FACTS = [
 /** The shared instructions every player gets. An agent may get an addendum after them (agentInstructions); no one gets a different version. */
 export const INSTRUCTIONS = `${RULES} You are one of the players. On each of your turns you get your view as JSON: you, your player letter; turn, to pass to play_move; players, with health (not shown while jammed), items and, while players grab from the briefcase, holding; gun, with sawed when it is; events, the entries of the match log you have not been sent yet; and moves, your legal moves, each with its number. Play one with play_move, giving its number and the turn. Make exactly one play_move call per reply. get_game shows your view again, without log entries. Log entries say what happened, and what only you learned from the magnifying glass or the phone. Each entry reaches you once, with your turn or in a message between turns, so remember what you need. When your only move is "Grab an item", it is played for you. Your goal is to finish the match with the most cash.\n\n${ITEM_FACTS}`;
 
-const GRAB = "Grab an item";
-
 /**
  * How a player's log reaches it. "on-turn": the entries since its last delivery come with its next turn. "live": each
  * change is written into its context as it happens, with no model call, and its turn brings only the view.
@@ -293,16 +291,17 @@ class Table {
     return JSON.stringify({ ...this.view(player), events: undefined });
   }
 
-  /** Plays a move for a player if it has the turn; the caller journals the line. */
+  /** Plays a move for a player if it has the turn; the caller journals the line. A menu's only move is "forced", whoever plays it. */
   tryMove(player: Letter, move: number, turn: number, by: MoveLine["by"]): Played {
     if (this.onTurn() !== player) return { ok: false, text: JSON.stringify({ error: "It is not your turn." }) };
 
-    const label = this.view(player).moves?.[move]?.label ?? "";
+    const moves = this.view(player).moves ?? [];
+    const label = moves[move]?.label ?? "";
     const reply = this.run(decode("play_move", { player, move, turn }));
 
     if (AgentReply.guards.Refused(reply)) return { ok: false, text: replyText(reply) };
 
-    return { ok: true, text: replyText(reply), line: { turn, player, move, label, by } };
+    return { ok: true, text: replyText(reply), line: { turn, player, move, label, by: moves.length === 1 ? "forced" : by } };
   }
 
   /** What a seat has been shown, verbatim: its secrets and the public events, in order, up to now. */
@@ -366,7 +365,7 @@ const seatTools = (dir: string, { table, onReply, exportJournal, crashAt }: Seat
         execute: async (args, api) => {
           const sitting = await sittingOf(api.snapshot, api.conversationId);
           const journal = await api.snapshot(MatchDoc, context);
-          const recorded = journal?.moves.find((line) => line.turn === args.turn && line.player === sitting.agent && line.by === "agent");
+          const recorded = journal?.moves.find((line) => line.turn === args.turn && line.player === sitting.agent);
 
           // A rerun after a crash finds its own move already journaled.
           if (recorded !== undefined) return { content: [{ type: "text", text: JSON.stringify({ played: recorded.label }) }], control: { terminate: true } };
@@ -827,7 +826,7 @@ export const playMatch = (match: ArenaMatch) =>
       const view = playing.view(player);
       const turn = view.turn ?? -1;
 
-      if (view.moves?.length === 1 && view.moves[0]?.label === GRAB) {
+      if (view.moves?.length === 1) {
         const played = playing.tryMove(player, 0, turn, "forced");
 
         if (!played.ok) return yield* new ArenaFault({ message: played.text });
