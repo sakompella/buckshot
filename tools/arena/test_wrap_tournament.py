@@ -89,7 +89,7 @@ def make_wrap(deploy: bool) -> w.Wrap:
     d = tmp()
     (d / "run").mkdir()
     (d / "analysis").mkdir()
-    return w.Wrap([d / "run"], d, d / "analysis", d / "docs", "t9", None, None, d, d, None, "", 1, "regret.sqlite", "regret-sampled.sqlite", 1, deploy)
+    return w.Wrap([d / "run"], d, d / "analysis", d / "docs", "t9", None, None, d, d, None, "", 1, "regret.sqlite", "regret-sampled.sqlite", 1, 2, deploy)
 
 
 class Environment(unittest.TestCase):
