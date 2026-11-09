@@ -14,7 +14,8 @@ check stops the run with a message and a non-zero exit; fix the cause and rerun.
   swap-main stop the viewer, move the database in with a dated .pre-<name> copy, start the viewer and check HTTP 200
   snapshot  scratch copy of the new database, the input of the derived refresh
   regret    copy the live regret databases (static and sampled) to staged files and score the decisions they lack into
-            them with score_regret.py (the Rust evaluator of the --evaluator checkout); each must stay one evaluator group
+            them with score_regret.py (the Rust evaluator of the --evaluator checkout); each must stay one evaluator group.
+            A changed evaluator needs a full rescore: name new files with --regret and --regret-sampled
   knowledge arena-knowledge.ts --verify from the knowledge worktree
   certain   certain-mistakes database
   luck      luck corrections of the luck-adjusted Round Elo (analysis/aivat.py)
@@ -211,6 +212,7 @@ class Wrap:
     regret_name: str
     sampled_name: str
     threads: int
+    sampled_max_shells: int
     deploy: bool = False
 
     def __post_init__(self) -> None:
@@ -304,7 +306,7 @@ class Wrap:
         for live, copy in staged.items():
             if live.exists() and not copy.exists():
                 backup(live, copy)
-        settings = score_regret.Settings(threads=self.threads, jobs=self.jobs)
+        settings = score_regret.Settings(threads=self.threads, jobs=self.jobs, sampled_max_shells=self.sampled_max_shells)
         summary = score_regret.score(self.scratch / "snapshot.sqlite", staged[self.regret_db], staged[self.sampled_db], self.evaluator, settings, work=self.scratch / "score")
         groups = []
         for copy in staged.values():
@@ -445,6 +447,7 @@ def main() -> None:
     p.add_argument("--regret", help="file name under <analysis>/derived of the static regret rows (default regret-rust.sqlite)")
     p.add_argument("--regret-sampled", help="file name under <analysis>/derived of the sampled rows (default regret-rust-sampled256.sqlite)")
     p.add_argument("--threads", type=int, default=score_regret.Settings.threads, help="buckshot-search threads (half the cores)")
+    p.add_argument("--sampled-max-shells", type=int, default=score_regret.Settings.sampled_max_shells, help="sampled rows for decisions with at most this many shells left")
     p.add_argument("--knowledge", type=Path, default=WORKTREES / "t3-5e0b7a11", help="worktree that runs arena-knowledge.ts")
     p.add_argument("--viewer-unit", default="buckshot-viewer", help="user unit to restart; '' leaves the viewer alone")
     p.add_argument("--viewer-url", default="http://127.0.0.1:8790/")
@@ -457,7 +460,7 @@ def main() -> None:
     evaluator = (args.evaluator or REPO).resolve()
     regret_name = args.regret or "regret-rust.sqlite"
     sampled_name = args.regret_sampled or "regret-rust-sampled256.sqlite"
-    wrap = Wrap(runs, args.importer.resolve(), args.analysis.resolve(), args.docs.resolve(), args.name or re.sub(r"tournament-?", "t", runs[-1].name), args.cohort, args.skips, evaluator, args.knowledge, args.viewer_unit or None, args.viewer_url, args.jobs, regret_name, sampled_name, args.threads, args.deploy)
+    wrap = Wrap(runs, args.importer.resolve(), args.analysis.resolve(), args.docs.resolve(), args.name or re.sub(r"tournament-?", "t", runs[-1].name), args.cohort, args.skips, evaluator, args.knowledge, args.viewer_unit or None, args.viewer_url, args.jobs, regret_name, sampled_name, args.threads, args.sampled_max_shells, args.deploy)
     steps = [(n, f) for n, f in wrap.steps() if n not in args.skip]
     if args.dry_run:
         done = json.loads(wrap.state.read_text()) if wrap.state.exists() else {}
