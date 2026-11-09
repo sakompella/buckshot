@@ -19,7 +19,7 @@ The name a seat goes by in a match: a letter, from A in table order unless the c
 _Avoid_: seat number, Player 1
 
 **Controller**:
-Who plays a seat: Human, Story, DoN or Agent.
+Who plays a seat: Human, Story, DoN, Agent or, in the arena, Engine (the Rust search at a fixed depth and node budget).
 
 **Bot**:
 A seat played by the Story or DoN AI.

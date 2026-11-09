@@ -15,15 +15,17 @@ import { nextPrompt } from "../bend.ts";
 import { Controller, controllerOf, promptsOf } from "../driver.ts";
 import { Letter, rosterOf } from "../players.ts";
 import { eventText, secretText } from "../text.ts";
-import { AGENTS, type AgentId } from "./agent.ts";
+import { AGENTS, type AgentId, EngineSeat, isEngine } from "./agent.ts";
+import { type Engine, openEngine } from "./engine.ts";
 import { AgentProvenance } from "./endpoints.ts";
 import type { HumanLink } from "./human.ts";
 import { addTokens, agentTotals, dropPartialLine, entriesSentTo, exportedSeqs, logCall, logEvent, readCalls, RUN_FORMAT, type Sitting, Standing, writeManifest } from "./runlog.ts";
 
 // One match in one process: the headless table, one pi-durable conversation per
 // agent in the run directory's session.sqlite, and one terminal per human. The
-// table plays the DoN and Story seats itself. Agent A plays as Player A wherever
-// it sits; bots and humans take the letters left. A conversation's two tools
+// table plays the DoN and Story seats itself, and the Rust search plays Engine
+// seats (engine.ts). Agent A plays as Player A wherever it sits; bots, humans and
+// engines take the letters left. A conversation's two tools
 // read its agent from a seat document written when it was created, so no call
 // can reach another seat. The arena sends a player its view on its turn, plays
 // forced "Grab an item" turns itself, and journals every move and delivery in
@@ -69,6 +71,14 @@ export type Delivery = (typeof DELIVERIES)[number];
 /** The instructions one agent's conversation starts with: the shared ones, then its addendum if its entrant has one. */
 const agentInstructions = ({ provenance }: Entrant): string => (provenance.instructions_addendum === undefined ? INSTRUCTIONS : `${INSTRUCTIONS}\n\n${provenance.instructions_addendum}`);
 
+/** Who plays one position, as the arena sees it: a controller, or an engine with its depth and budget. */
+export const ArenaController = Schema.Union([Controller, EngineSeat]);
+
+export type ArenaController = typeof ArenaController.Type;
+
+/** The controllers the rules machine is given: the arena plays Human and Engine seats through the tools, as it does Agent seats. */
+export const machineControllers = (controllers: ReadonlyArray<ArenaController>): Array<Controller> => controllers.map((controller) => (controller === "Human" || isEngine(controller) ? "Agent" : controller));
+
 /** One agent: its letter, the model it plays with, and its provenance, which the match fixes when it starts. */
 export interface Entrant {
   readonly agent: AgentId;
@@ -80,8 +90,8 @@ export interface Entrant {
 export interface ArenaMatch {
   readonly dir: string;
   readonly seed: string;
-  /** Who plays each position, in table order. The table plays DoN and Story; the arena plays Agent and Human seats. */
-  readonly controllers: ReadonlyArray<Controller>;
+  /** Who plays each position, in table order. The table plays DoN and Story; the arena plays Agent, Human and Engine seats. */
+  readonly controllers: ReadonlyArray<ArenaController>;
   /** One entrant per Agent seat, in table order. */
   readonly entrants: ReadonlyArray<Entrant>;
   /** Reaches the human at a Human seat, each time the match starts or resumes. Only needed when there is one. */
@@ -97,7 +107,7 @@ export class ArenaFault extends Data.TaggedError("ArenaFault")<{ readonly messag
 
 const attempt = <A>(step: string, run: () => Promise<A>) => Effect.tryPromise({ try: run, catch: (cause) => new ArenaFault({ message: `${step}: ${String(cause)}` }) });
 
-type MoveLine = { readonly turn: number; readonly player: Letter; readonly move: number; readonly label: string; readonly by: "agent" | "human" | "forced" | "fallback" };
+type MoveLine = { readonly turn: number; readonly player: Letter; readonly move: number; readonly label: string; readonly by: "agent" | "human" | "engine" | "forced" | "fallback" };
 
 /** Log entries sent to a player: `count` entries of its log from `from`. */
 type DeliveryLine = { readonly player: Letter; readonly via: "input" | "live" | "end"; readonly turn: number; readonly from: number; readonly count: number };
@@ -110,7 +120,7 @@ type MatchProvenance = { code_sha: string; instructions_sha: string; compaction:
 
 type MatchState = {
   seed: string;
-  controllers: Array<Controller>;
+  controllers: Array<ArenaController>;
   /** By seat, in table order: the player's letter. */
   letters: Array<Letter>;
   delivery: Delivery;
@@ -127,9 +137,9 @@ const emptyMatch = (): MatchState => ({ seed: "", controllers: [], letters: [], 
 const sentCount = (state: MatchState, player: Letter): number => state.deliveries.reduce((sent, line) => (line.player === player ? line.from + line.count : sent), 0);
 
 /** The letter at each position: the entrants' own at the Agent seats, in order, and the letters left, in order, at the others. */
-const lettersOf = (controllers: ReadonlyArray<Controller>, agents: ReadonlyArray<AgentId>): Option.Option<Array<Letter>> => {
+const lettersOf = (controllers: ReadonlyArray<ArenaController>, agents: ReadonlyArray<AgentId>): Option.Option<Array<Letter>> => {
   const spare = AGENTS.filter((letter) => !agents.includes(letter));
-  const isAgent = (controller: Controller) => controller === "Agent";
+  const isAgent = (controller: ArenaController) => controller === "Agent";
 
   if (controllers.filter(isAgent).length !== agents.length) return Option.none();
 
@@ -191,13 +201,13 @@ class Table {
   private readonly session: MatchSession<HeadlessTable>;
 
   /** By position: who plays it, as the arena sees it. */
-  private readonly controllers: ReadonlyArray<Controller>;
+  private readonly controllers: ReadonlyArray<ArenaController>;
 
-  /** Starts the match from the journal's seed and replays its moves. The table moves Human seats only through the tools, as it does Agent seats. */
+  /** Starts the match from the journal's seed and replays its moves. The table moves Human and Engine seats only through the tools, as it does Agent seats. */
   constructor(journal: MatchState) {
     this.session = letteredSession(journal.letters);
     this.controllers = journal.controllers;
-    this.run(decode("new_match", { players: journal.controllers.length, items: true, seed: journal.seed, controllers: journal.controllers.map((controller) => (controller === "Human" ? "Agent" : controller)) }));
+    this.run(decode("new_match", { players: journal.controllers.length, items: true, seed: journal.seed, controllers: machineControllers(journal.controllers) }));
 
     for (const line of journal.moves) {
       const reply = this.run(decode("play_move", { player: line.player, move: line.move, turn: line.turn }));
@@ -214,7 +224,8 @@ class Table {
     return outcome.reply;
   }
 
-  private match() {
+  /** The whole table, for the engine, which reads only its player's own log and the public board from it. */
+  match() {
     return Option.getOrThrow(this.session.current(this.state));
   }
 
@@ -240,12 +251,12 @@ class Table {
     return Option.getOrThrow(this.roster().find(letter)).seat;
   }
 
-  /** The players the arena plays, Agent and Human, in table order. */
+  /** The players the arena plays, Agent, Human and Engine, in table order. */
   arenaPlayers(): ReadonlyArray<Letter> {
     return this.roster().players.filter(({ seat }) => controllerOf(this.match().controllers, seat) === "Agent").map(({ letter }) => letter);
   }
 
-  controllerOf(player: Letter): Controller {
+  controllerOf(player: Letter): ArenaController {
     return Option.getOrThrow(Option.fromUndefinedOr(this.controllers[this.positionOf(player) - 1]));
   }
 
@@ -391,7 +402,7 @@ export const RunManifest = Schema.Struct({
   status: Schema.Literals(["running", "finished"]),
   seed: Schema.String,
   /** By position, in table order. */
-  controllers: Schema.Array(Controller),
+  controllers: Schema.Array(ArenaController),
   letters: Schema.Array(Letter),
   delivery: Schema.Literals(DELIVERIES),
   /** By agent: its position, endpoint and totals, the same shape while running and once finished. The totals are zero at start. */
@@ -425,7 +436,7 @@ const seatingIn = (state: MatchState) => Object.fromEntries(state.letters.flatMa
 const WEB = new URL("../..", import.meta.url).pathname;
 
 /** The files that decide how a match plays, under web/: the generated rules, the game and agent core, this match loop, the requests each model is sent and the pinned dependencies. */
-const PLAY_FILES = ["generated", "src/agent", "src/bend.ts", "src/domain.ts", "src/driver.ts", "src/players.ts", "src/rng.ts", "src/text.ts", "src/arena/agent.ts", "src/arena/endpoints.ts", "src/arena/match.ts", "package.json", "bun.lock"];
+const PLAY_FILES = ["generated", "src/agent", "src/bend.ts", "src/domain.ts", "src/driver.ts", "src/players.ts", "src/rng.ts", "src/text.ts", "src/analysis/native-input.ts", "src/analysis/player.ts", "src/arena/agent.ts", "src/arena/endpoints.ts", "src/arena/engine.ts", "src/arena/match.ts", "package.json", "bun.lock"];
 
 const filesUnder = (path: string): ReadonlyArray<string> => (statSync(path).isDirectory() ? readdirSync(path).flatMap((name) => filesUnder(join(path, name))) : [path]);
 
@@ -551,7 +562,7 @@ export const playMatch = (match: ArenaMatch) =>
     };
 
     if (isFresh) {
-      if (!match.controllers.some((controller) => controller === "Agent" || controller === "Human")) return yield* new ArenaFault({ message: "The arena plays Agent and Human seats; a match needs at least one." });
+      if (!match.controllers.some((controller) => controller === "Agent" || controller === "Human" || isEngine(controller))) return yield* new ArenaFault({ message: "The arena plays Agent, Human and Engine seats; a match needs at least one." });
 
       const letters = lettersOf(match.controllers, match.entrants.map((entrant) => entrant.agent));
 
@@ -618,6 +629,11 @@ export const playMatch = (match: ArenaMatch) =>
       yield* attempt(`write to Player ${player}`, () => link.send({ text: INSTRUCTIONS, expectsMove: false }));
       humans.set(player, link);
     }
+
+    const engine: Engine | undefined = playing.arenaPlayers().some((player) => isEngine(playing.controllerOf(player))) ? yield* attempt("start the engine", openEngine) : undefined;
+
+    /** The arena players that are sent their log: everyone but engines, which read the table. */
+    const listeners = () => playing.arenaPlayers().filter((player) => !isEngine(playing.controllerOf(player)));
 
     const humanOf = (player: Letter) => {
       const link = humans.get(player);
@@ -688,7 +704,7 @@ export const playMatch = (match: ArenaMatch) =>
 
     while (!playing.isOver) {
       if ((yield* journal()).delivery === "live") {
-        for (const player of playing.arenaPlayers()) yield* sendPending(player, "live");
+        for (const player of listeners()) yield* sendPending(player, "live");
       }
 
       const player = playing.onTurn();
@@ -709,6 +725,20 @@ export const playMatch = (match: ArenaMatch) =>
         continue;
       }
 
+      const controller = playing.controllerOf(player);
+
+      if (isEngine(controller) && engine !== undefined) {
+        const startedAt = performance.now();
+        const choice = yield* Effect.try({ try: () => engine.choose(playing.match(), player, controller), catch: (cause) => new ArenaFault({ message: `engine at Player ${player}, turn ${turn}: ${String(cause)}` }) });
+        const played = playing.tryMove(player, view.moves?.findIndex((move) => move.label === choice.label) ?? -1, turn, "engine");
+
+        if (!played.ok) return yield* new ArenaFault({ message: `engine at Player ${player}, turn ${turn}, chose "${choice.label}": ${played.text}` });
+
+        yield* commit("move", (next) => void next.moves.push(played.line));
+        logEvent(dir, "turn", { ...where, turn, wall_ms: Math.round(performance.now() - startedAt), moved: true, depth: choice.depth, nodes: choice.nodes });
+        continue;
+      }
+
       const from = sentCount(state, player);
       const entries = playing.heard(player).slice(from);
       const input = `Your turn.\n${JSON.stringify({ ...view, events: entries.length > 0 ? entries : undefined })}`;
@@ -716,7 +746,7 @@ export const playMatch = (match: ArenaMatch) =>
       const sentThisTurn = state.deliveries.some((line) => line.player === player && line.via === "input" && line.turn === turn);
       const delivered = sentThisTurn ? Effect.void : commit("delivery", (next) => void next.deliveries.push({ player, via: "input", turn, from, count: entries.length }));
 
-      if (playing.controllerOf(player) === "Human") {
+      if (controller === "Human") {
         yield* delivered;
         yield* humanTurn(player, input, turn);
         continue;
@@ -772,7 +802,7 @@ export const playMatch = (match: ArenaMatch) =>
       yield* commit("fallback", (next) => void next.moves.push(played.line));
     }
 
-    for (const player of playing.arenaPlayers()) yield* sendPending(player, "end");
+    for (const player of listeners()) yield* sendPending(player, "end");
 
     for (const link of humans.values()) link.close();
 
@@ -781,7 +811,7 @@ export const playMatch = (match: ArenaMatch) =>
     const storeUsage = yield* attempt("read usage", () => store.usage(context));
     const someone = Option.getOrThrow(Option.fromUndefinedOr(playing.arenaPlayers()[0]));
     const standings = (playing.view(someone).standings ?? []).map((standing) => ({ ...standing, controller: final.controllers[final.letters.indexOf(standing.player)] ?? null }));
-    const moves = Object.fromEntries((["agent", "human", "forced", "fallback"] as const).map((by) => [by, final.moves.filter((line) => line.by === by).length]));
+    const moves = Object.fromEntries((["agent", "human", "engine", "forced", "fallback"] as const).map((by) => [by, final.moves.filter((line) => line.by === by).length]));
     const result = { audit, moves, standings, agents: agentsIn(playing, provenance), move_log_sha: sha(JSON.stringify(final.moves)) };
 
     logEvent(dir, "end", { standings });
@@ -838,7 +868,7 @@ const auditOf = (dir: string, harness: Harness, final: MatchState, table: Table)
     return {
       over: table.isOver,
       every_view_is_own_player: transcripts.every(({ agent, messages }) => viewsOf(messages).every((view) => view.you === agent)),
-      delivered_is_own_log_exactly: table.arenaPlayers().every((player) => JSON.stringify(sentTo(player)) === JSON.stringify(table.heard(player))),
+      delivered_is_own_log_exactly: table.arenaPlayers().filter((player) => !isEngine(table.controllerOf(player))).every((player) => JSON.stringify(sentTo(player)) === JSON.stringify(table.heard(player))),
       replay_matches: replayed.events === table.events && table.arenaPlayers().every((player) => replayed.viewText(player) === table.viewText(player)),
     };
   });
