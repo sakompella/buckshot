@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { buildReference, config, round, list, array, kind, seatNumber, tag, maybe, requestJSON, stateJSON, traceJSON } from './reference-adapter.mjs';
+import { items } from './machine-items-lib.mjs';
 
 const { R, close } = await buildReference();
-const items = ['Saw', 'Glass', 'Jammer', 'Cigarettes', 'Beer', 'Phone', 'Inverter', 'Adrenaline', 'Remote'];
 const sockets = n => n === 2 ? [1, 3] : Array.from({ length: n }, (_, i) => i);
 const rules = names => Object.fromEntries(names.map(name => [name.toLowerCase(), {}]));
 let count = 0;

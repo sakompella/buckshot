@@ -21,8 +21,7 @@ from docs import splice_between_markers
 from fmt import pct, table
 from load import DB, SKIPPED_MODEL, connect
 from regret import DERIVED, EFFORTS, Decision, points
-
-ROUNDS = (1, 2, 3)
+from rules import ROUNDS
 
 BEGINS = re.compile(r"^Round (\d+) begins\.")
 WINS = re.compile(r"^Player (\w+) wins the round and \$([\d,]+)\.")

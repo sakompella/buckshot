@@ -27,11 +27,9 @@ import regret
 from docs import splice_between_markers
 from fmt import pct, table
 from load import DB, SKIPPED_MODEL, connect
-from regret import DERIVED, EFFORTS, POINT
+from regret import DERIVED, EFFORTS
 from reload_bias import Estimate
-
-ROUND = 1_000_000  # millionths of a round win
-ROUNDS_PER_MATCH = len(by_round.ROUNDS)
+from rules import POINT, ROUNDS, WIN
 MIN_MATCHES = 20
 MIN_BLOCKS = 10
 BOOTSTRAP = 2000
@@ -129,7 +127,7 @@ def load(db_path: str, regret_path: Path, knowledge_path: Path, depth: int, budg
             incomplete += 1
             continue
         first, second = (
-            Seat((model, effort), lost[match, player][0] / ROUND, lost[match, player][1], sum(w == player for w in winners.values()), *lost[match, player][2:])
+            Seat((model, effort), lost[match, player][0] / WIN, lost[match, player][1], sum(w == player for w in winners.values()), *lost[match, player][2:])
             for _, player, model, effort in sorted(found)
         )
         matches.append(Match(match, blocks[match][1], blocks[match][0], first, second))
@@ -193,7 +191,7 @@ def by_block(matches: list[Match]) -> dict[str, list[Match]]:
 
 def elo_of(matches: list[Match]) -> dict[str, float]:
     """Round Elo per config label."""
-    return bt.round_elo((label(m.first.config), label(m.second.config), ROUNDS_PER_MATCH, m.first.rounds_won) for m in matches)
+    return bt.round_elo((label(m.first.config), label(m.second.config), len(ROUNDS), m.first.rounds_won) for m in matches)
 
 
 # Per config
@@ -263,7 +261,7 @@ def span(interval: Interval) -> str:
 def config_table(rows: list[ConfigRow]) -> str:
     key = lambda r: (r.lost, EFFORTS.index(r.config[1]))
     body = [
-        [r.config[0], r.config[1], str(r.matches), f"{two(r.lost)} ({span(r.lost_interval)})", two(r.lost / ROUNDS_PER_MATCH), f"{r.worst:.1f}", f"{r.elo:+.0f}"]
+        [r.config[0], r.config[1], str(r.matches), f"{two(r.lost)} ({span(r.lost_interval)})", two(r.lost / len(ROUNDS)), f"{r.worst:.1f}", f"{r.elo:+.0f}"]
         for r in sorted(rows, key=key)
     ]
     return table(["model", "effort", "matches", "round-win equivalents lost per match", "per round", "largest gap (points)", "Round Elo"], body)
