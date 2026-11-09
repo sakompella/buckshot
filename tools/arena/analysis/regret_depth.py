@@ -7,7 +7,7 @@ stratum (shells left in the gun, shot or item move, model), so a list that finis
     python3 tools/arena/analysis/regret_depth.py sample --out DIR [--lists 24] [--seed N]
     python3 tools/arena/analysis/regret_depth.py report [--deep PATH] [--lists 24] [--seed N] [--doc docs/arena/analysis/regret.md]
 
-`report` reads the deep run and the production static run it is compared with, both read only. It fails unless the deep run holds exactly the decisions `sample` draws with the same --lists and --seed. It prints markdown tables, or with --doc rewrites the
+`report` reads the deep run and the production static run it is compared with, both read only. It fails unless both runs are of one evaluator build and the deep run holds exactly the decisions `sample` draws with the same --lists and --seed. It prints markdown tables, or with --doc rewrites the
 ones between the regret-depth markers of that file.
 """
 
@@ -86,13 +86,13 @@ class Pair:
 def pairs(deep_path: Path, regret_path: Path, knowledge_path: Path) -> list[Pair]:
     """The deep run's decisions with the production score of the same decision, matched by match and ordinal.
 
-    Fails when a deep row of these settings has no searched production row or agent decision to match, or is not itself searched."""
+    Fails when a deep row of these settings has no searched production row or agent decision to match, or is not itself searched, or was scored by another evaluator build than its production row: the difference would be the evaluators' as much as the depth's."""
     db = connect(str(deep_path))
     db.execute("ATTACH DATABASE ? AS s", (f"file:{regret_path}?mode=ro",))
     db.execute("ATTACH DATABASE ? AS k", (f"file:{knowledge_path}?mode=ro",))
     deep_rows = db.execute("SELECT COUNT(*) FROM regret WHERE max_depth = ? AND budget = ? AND reload = 'static'", (DEEP_DEPTH, DEEP_BUDGET)).fetchone()[0]
     rows = db.execute(
-        """SELECT t.match_id, t.ordinal, d.remaining, d.choice, p.model, s.regret, t.regret, s.depth, t.depth, s.limited, t.limited, s.best, t.best, t.best_score, t.values_json
+        """SELECT t.match_id, t.ordinal, d.remaining, d.choice, p.model, s.regret, t.regret, s.depth, t.depth, s.limited, t.limited, s.best, t.best, t.best_score, t.values_json, s.evaluator, t.evaluator
            FROM regret t
            JOIN s.regret s ON s.match_id = t.match_id AND s.ordinal = t.ordinal AND s.max_depth = ? AND s.budget = ? AND s.reload = 'static' AND s.status = 'searched'
            JOIN k.decisions d ON d.match_id = t.match_id AND d.ordinal = t.ordinal AND d.by_whom = 'agent'
@@ -108,9 +108,12 @@ def pairs(deep_path: Path, regret_path: Path, knowledge_path: Path) -> list[Pair
 
     if len(rows) != deep_rows:
         raise ValueError(f"{deep_rows - len(rows):,} of the {deep_rows:,} deep rows are not searched or have no searched production row and agent decision to match")
+    evaluators = Counter((row[-2], row[-1]) for row in rows)
+    if any(production != deep for production, deep in evaluators):
+        raise ValueError(f"deep rows ({deep_path}) and production rows ({regret_path}) come from different evaluators; (production, deep): number of decisions = {dict(evaluators)}")
     return [
         Pair(match_id, ordinal, remaining, choice.startswith("Shoot"), model, regret / POINT, deep_regret / POINT, depth, deep_depth, bool(limited), bool(deep_limited), best != deep_best, loses(values, best, deep_score))
-        for match_id, ordinal, remaining, choice, model, regret, deep_regret, depth, deep_depth, limited, deep_limited, best, deep_best, deep_score, values in rows
+        for match_id, ordinal, remaining, choice, model, regret, deep_regret, depth, deep_depth, limited, deep_limited, best, deep_best, deep_score, values, _, _ in rows
     ]
 
 
@@ -139,14 +142,13 @@ def estimate(sample: list[Pair], value: Callable[[Pair], float], sizes: Mapping[
     return Estimate(mean, 1.96 * math.sqrt(variance))
 
 
-def check_sample(sample: list[Pair], expected: set[tuple[str, int]], limits: Mapping[tuple[str, int], bool]) -> None:
-    """The deep run must hold exactly the decisions the seeded sample draws from the run, each as the production run scored its limit."""
+def check_sample(sample: list[Pair], expected: set[tuple[str, int]]) -> None:
+    """The deep run must hold exactly the decisions the seeded sample draws from the run."""
     found = {(p.match_id, p.ordinal) for p in sample}
     if len(found) != len(sample):
         raise ValueError("a decision is scored twice")
-    mislimited = [(p.match_id, p.ordinal) for p in sample if (p.match_id, p.ordinal) in limits and limits[p.match_id, p.ordinal] != p.limited]
-    if found != expected or mislimited:
-        raise ValueError(f"deep run holds {len(found - expected):,} decisions outside the sample and lacks {len(expected - found):,} of it; {len(mislimited):,} disagree with the production run on the limit")
+    if found != expected:
+        raise ValueError(f"deep run holds {len(found - expected):,} decisions outside the sample and lacks {len(expected - found):,} of it")
 
 
 def run_limits(regret_path: Path, run: list[Decision]) -> dict[tuple[str, int], bool]:
@@ -263,7 +265,7 @@ def main() -> None:
         return
     limits = run_limits(args.regret, run)
     sample = pairs(args.deep, args.regret, args.knowledge)
-    check_sample(sample, {(d.match_id, d.ordinal) for d in chain.from_iterable(draw(run, QUOTA, args.lists, args.seed))}, limits)
+    check_sample(sample, {(d.match_id, d.ordinal) for d in chain.from_iterable(draw(run, QUOTA, args.lists, args.seed))})
     text = report(sample, run, limits)
     if args.doc is None:
         print(text)

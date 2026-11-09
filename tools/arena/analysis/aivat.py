@@ -24,13 +24,13 @@ luck markers of that file (docs/arena/analysis/matchups.md).
 import argparse
 import bisect
 import json
-import math
 import re
 import sqlite3
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
+import bt
 import numpy as np
 import pandas as pd
 from by_round import public_lines, round_winners
@@ -47,8 +47,6 @@ from docs import splice_between_markers
 DECK = ((1, 2), (2, 1), (2, 2), (3, 2), (1, 1), (2, 3), (3, 3), (3, 1), (4, 2))
 FOLDS = 5
 SHOT = re.compile(r"^Player \w+ shot (?:themselves|Player \w+): (live|blank)")
-ELO = 400 / math.log(10)
-PRIOR_SD = 3.0
 DRAWS = 200
 
 
@@ -103,9 +101,7 @@ def read(db_path: str, knowledge_path: str) -> Data:
         if len(s) != 2 or any(SKIPPED_MODEL in model for *_, model in s):
             continue
         (la, ca, a, _), (lb, cb, b, _) = s
-        won = round_winners(lines.get(match, []), {la: ca, lb: cb})
-        if won is None:
-            continue
+        won = round_winners(match, lines.get(match, []), {la: ca, lb: cb})
         mi = len(rows)
         rows.append((mi, match, seed, block, a, b, la, lb, 1 if starters[match] == la else 2))
         rounds += [(mi, n - 1, 1.0 if w == la else 0.0) for n, w in sorted(won.items())]
@@ -355,23 +351,10 @@ def rated(d: Data, c: np.ndarray) -> Rated:
 
 
 def fit(t: Rated, wins: np.ndarray, w: np.ndarray | None = None) -> np.ndarray:
-    """Bradley-Terry on round shares with a N(0, 3^2) prior, as page/ratings.ts: centred Elo per config."""
-    K = len(t.names)
+    """Round Elo (bt.round_elo) per config of `wins`, with each match counted `w` times (bootstrap weights)."""
     w = np.ones(len(t.i)) if w is None else w
-    nn, yy, th = w * t.n, w * wins, np.zeros(K)
-    for _ in range(50):
-        p = 1 / (1 + np.exp(th[t.j] - th[t.i]))
-        r = yy - nn * p
-        g = np.bincount(t.i, r, K) - np.bincount(t.j, r, K) - th / PRIOR_SD**2
-        v = nn * p * (1 - p)
-        H = np.diag(np.bincount(t.i, v, K) + np.bincount(t.j, v, K) + 1 / PRIOR_SD**2)
-        np.add.at(H, (t.i, t.j), -v)
-        np.add.at(H, (t.j, t.i), -v)
-        step = np.linalg.solve(H, g)
-        th += step
-        if abs(step).max() < 1e-10:
-            break
-    return (th - th.mean()) * ELO
+    elo = bt.round_elo(((t.names[i], t.names[j], k * n, k * y) for i, j, n, y, k in zip(t.i, t.j, t.n, wins, w) if k), t.names)
+    return np.array([elo[name] for name in t.names])
 
 
 def intervals(t: Rated, wins: np.ndarray) -> np.ndarray:

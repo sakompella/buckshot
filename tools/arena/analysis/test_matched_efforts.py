@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 import matched_efforts as me
 from matched_efforts import Config, Seat
+from test_by_round import A1, A3, B2, event, lines
 
 HIGH, MED = Config("opus", "high", "cpa"), Config("opus", "medium", "cpa")
 EASY, HARD = Config("sol", "medium", "cpa"), Config("astra", "medium", "cpa")
@@ -41,7 +42,9 @@ def database(*matches: tuple[str, str, str]) -> sqlite3.Connection:
     db.executemany("INSERT INTO entrants VALUES (?, ?, 'medium', 'cpa')", [(m, m) for m in models])
     for match, started, other in matches:
         db.execute("INSERT INTO matches VALUES (?, ?, 1, 'completed')", (match, started))
-        db.executemany("INSERT INTO match_seats VALUES (?, ?, ?, ?, 0, ?)", [(match, 1, "A", 1.0, "opus"), (match, 2, "B", 0.0, other)])
+        db.executemany("INSERT INTO match_seats VALUES (?, ?, ?, ?, ?, ?)", [(match, 1, "A", 1.0, 150_000, "opus"), (match, 2, "B", 0.0, 75_000, other)])
+        db.execute("INSERT INTO source_files VALUES (?, ?)", (f"t/{match}/events.jsonl", match))
+        db.execute("INSERT INTO source_records VALUES (?, ?, 1)", (f"t/{match}/events.jsonl", event("A", 0, lines(A1, B2, A3))))
     return db
 
 
@@ -182,11 +185,10 @@ class Time(unittest.TestCase):
 
 
 class Unscored(unittest.TestCase):
-    def test_zero_round_and_unreadable_matches_do_not_enter_the_round_rates(self):
-        unreadable = Seat("mx", CUT, 1, 1, HIGH, EASY, 1.0, None)
-        seats = numbered([(HIGH, EASY, 0, dict(rounds=0)), (HIGH, EASY, 3)]) + [unreadable]
+    def test_zero_round_matches_do_not_enter_the_round_rates(self):
+        seats = numbered([(HIGH, EASY, 0, dict(rounds=0)), (HIGH, EASY, 3)])
         self.assertEqual(len(me.arms(seats, me.round_metric)[HIGH][EASY]), 1)
-        self.assertEqual(len(me.arms(seats, me.match_metric)[HIGH][EASY]), 3)
+        self.assertEqual(len(me.arms(seats, me.match_metric)[HIGH][EASY]), 2)
 
     def test_match_win_share_is_the_secondary_metric(self):
         row = only_row(numbered([(HIGH, EASY, 3)] * 2 + [(MED, EASY, 0)] * 2), me.match_metric)
@@ -199,7 +201,6 @@ class Loading(unittest.TestCase):
         seats, skipped = me.load_seats(db)
         db.close()
         self.assertEqual((skipped, len(seats)), (1, 2))
-        self.assertTrue(all(s.rounds is None for s in seats))
 
 
 if __name__ == "__main__":

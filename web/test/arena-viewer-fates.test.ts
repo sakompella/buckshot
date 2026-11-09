@@ -2,6 +2,7 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { expect, test } from "bun:test";
 
+import { placedBy } from "../src/arena-viewer/analysis.ts";
 import { behaviorBySeat, seatFates, sumFates } from "../src/arena-viewer/aggregates.ts";
 import { useShare } from "../src/arena-viewer/page/fates.ts";
 
@@ -12,7 +13,7 @@ test("a seat's fates read the stolen copies from its opponent and add up to what
     const acquired = counts(tc);
     const used = acquired.map((count) => tc.draw(gs.integers({ minValue: 0, maxValue: count })));
     const stolen = acquired.map((count, item) => tc.draw(gs.integers({ minValue: 0, maxValue: count - (used[item] ?? 0) })));
-    const fates = seatFates({ acquired, used }, { stolen });
+    const fates = seatFates({ matchId: "m", player: "A", acquired, used }, { stolen });
     const total = sumFates(fates);
 
     expect(total.used + total.stolen + total.unused).toBe(acquired.reduce((sum, count) => sum + count, 0));
@@ -21,13 +22,26 @@ test("a seat's fates read the stolen copies from its opponent and add up to what
   }));
 
 test("a seat's own steals do not count as its items stolen", () => {
-  const own = { acquired: [3, 0], used: [1, 0], stolen: [0, 2] };
+  const own = { matchId: "m", player: "A", acquired: [3, 0], used: [1, 0], stolen: [0, 2] };
   const opponent = { acquired: [0, 4], used: [0, 1], stolen: [1, 0] };
 
   expect(seatFates(own, opponent)).toEqual([
     { used: 1, stolen: 1, unused: 1 },
     { used: 0, stolen: 0, unused: 0 },
   ]);
+});
+
+test("a seat's copies come from the public placements, including those after its own last decision", () => {
+  const log = ["Player A placed beer in slot 1.", "Player B placed beer in slot 1.", "Player A drew an item.", "Player B placed handsaw in slot 2."];
+  const placed = placedBy(log);
+
+  expect(placed.get("A")).toEqual([0, 0, 0, 1, 0, 0, 0, 0]);
+  expect(placed.get("B")).toEqual([0, 0, 1, 1, 0, 0, 0, 0]);
+  expect(() => placedBy(["Player A placed spork in slot 1."])).toThrow("spork");
+});
+
+test("more copies used and stolen than received stops with the match and counts", () => {
+  expect(() => seatFates({ matchId: "m1", player: "B", acquired: [3], used: [2] }, { stolen: [2] })).toThrow("match m1 Player B: magnifying glass acquired 3, used 2, stolen 2");
 });
 
 const ADRENALINE_BIT = 1 << 7;

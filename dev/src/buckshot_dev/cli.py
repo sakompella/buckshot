@@ -6,11 +6,13 @@ import fcntl
 import os
 import subprocess
 import sys
-import tempfile
 import time
 
 # Same lock files as the pre-dev local heavy launcher, so both take the same slots.
 SLOT_NAMES = ("buckshot-heavy-1.lock", "buckshot-heavy-2.lock")
+
+# Not tempfile.gettempdir(): inside `nix develop` TMPDIR is per shell, so shells would not share slots.
+SLOT_DIR = "/tmp"
 
 
 def heavy_cmd(cmd: list[str]) -> int:
@@ -21,7 +23,7 @@ def heavy_cmd(cmd: list[str]) -> int:
     """
     if not cmd:
         raise SystemExit("dev heavy: no command, use `dev heavy -- CMD [ARG...]`")
-    slot_dir = os.environ.get("BUCKSHOT_HEAVY_DIR") or tempfile.gettempdir()
+    slot_dir = os.environ.get("BUCKSHOT_HEAVY_DIR") or SLOT_DIR
     while True:
         for name in SLOT_NAMES:
             fd = os.open(os.path.join(slot_dir, name), os.O_CREAT | os.O_RDWR, 0o666)

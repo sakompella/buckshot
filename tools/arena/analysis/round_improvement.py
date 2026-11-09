@@ -94,7 +94,7 @@ def load_moves(regret_path: Path, knowledge_path: Path, mistakes_path: Path, db_
     winners = by_round.read_winners(db_path, sorted({row[0] for row in rows}))
     moves = []
     for match, _, player, model, effort, block, round, left, choice, regret, _, mistake in rows:
-        if (won := winners[match]) is None or any(r not in won for r in ROUNDS):
+        if any(r not in (won := winners[match]) for r in ROUNDS):
             continue
         seat = Seat(match, player, model, effort, block, won[1] != won[2], frozenset(r for r, w in won.items() if w == player))
         moves.append(Move(seat, round, choice.startswith("Shoot"), left, regret, None if mistake is None else bool(mistake)))

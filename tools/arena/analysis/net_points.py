@@ -5,13 +5,12 @@ A seat's points lost in a match is the sum of its regret over its searched decis
 winning the round, so 1,000,000 millionths is one round). The net points of a seat are the opponent's points lost minus its own.
 Per config (a model with its effort) the tables give the mean of both per match, with a 95% bootstrap interval over seed blocks, and set
 them beside the config's Round Elo: the Bradley-Terry rating on round shares over every scored match, as the viewer fits it.
-A second table regresses the actual round margin of a match on its net points. The deeper-search section scales the stored depth 8 sample
-(regret_depth.py) to this metric, and the last one prices rescoring with a deeper search from the stored runs' timings.
+A second table regresses the actual round margin of a match on its net points.
 Matches with a DeepSeek seat are left out of the tables and rated with the rest, as the viewer does. With --doc FILE the tables replace the
 text between the net-points markers of that file, and with --plots DIR two SVG plots are written.
 
     python3 tools/arena/analysis/net_points.py [--db PATH] [--regret PATH] [--knowledge PATH] [--depth 6] [--budget 20000] [--reload static] [--samples 256]
-        [--deep PATH] [--sampled PATH] [--unbounded PATH] [--plots DIR] [--doc docs/arena/analysis/net-points.md]
+        [--plots DIR] [--doc docs/arena/analysis/net-points.md]
 """
 
 import argparse
@@ -25,7 +24,6 @@ from pathlib import Path
 import bt
 import by_round
 import regret
-import regret_depth
 from docs import splice_between_markers
 from fmt import pct, table
 from load import DB, SKIPPED_MODEL, connect
@@ -83,9 +81,7 @@ class Match:
 @dataclass(frozen=True)
 class Loaded:
     matches: list[Match]
-    unreadable: int  # finished matches whose round winners could not be read
     incomplete: int  # finished matches with an agent decision that has no searched row: their totals would be too low, so they are left out
-    mix: dict[Config, Counter[tuple[int, bool]]]  # per config, its decisions by shells left and shot-or-item, matches with a DeepSeek seat left out
 
 
 def load(db_path: str, regret_path: Path, knowledge_path: Path, depth: int, budget: int, reload: str = "static", samples: int = 0) -> Loaded:
@@ -100,24 +96,22 @@ def load(db_path: str, regret_path: Path, knowledge_path: Path, depth: int, budg
     db = connect(str(regret_path))
     db.execute("ATTACH DATABASE ? AS k", (f"file:{knowledge_path}?mode=ro",))
     rows = db.execute(
-        """SELECT r.match_id, r.player, d.remaining, d.choice, r.regret, r.evaluator, r.ordinal
+        """SELECT r.match_id, r.player, r.regret, r.evaluator, r.ordinal
            FROM regret r
            JOIN k.matches m ON m.match_id = r.match_id AND m.status = 'completed'
            JOIN k.decisions d ON d.match_id = r.match_id AND d.ordinal = r.ordinal AND d.by_whom = 'agent'
            WHERE r.max_depth = ? AND r.budget = ? AND r.reload = ? AND r.samples = ? AND r.status = 'searched'""",
         (depth, budget, reload, samples),
     ).fetchall()
-    if len({row[5] for row in rows}) > 1:
+    if len({row[3] for row in rows}) > 1:
         raise SystemExit(f"{regret_path} holds rows of several evaluators at depth {depth}, budget {budget}, reload {reload} and samples {samples}; they must not be mixed.")
     lost: dict[tuple[str, str], list[int]] = defaultdict(lambda: [0, 0, 0, 0])  # summed regret, decisions, largest regret, its ordinal
-    shape: dict[tuple[str, str], Counter[tuple[int, bool]]] = defaultdict(Counter)
-    for match, player, remaining, choice, regret_millionths, _, ordinal in rows:
+    for match, player, regret_millionths, _, ordinal in rows:
         seat = lost[match, player]
         seat[0] += regret_millionths
         seat[1] += 1
         if regret_millionths > seat[2]:
             seat[2], seat[3] = regret_millionths, ordinal
-        shape[match, player][remaining, choice.startswith("Shoot")] += 1
     agent_decisions = Counter(
         {(match, player): n for match, player, n in knowledge.execute("SELECT match_id, player, COUNT(*) FROM decisions WHERE by_whom = 'agent' GROUP BY match_id, player")}
     )
@@ -127,13 +121,9 @@ def load(db_path: str, regret_path: Path, knowledge_path: Path, depth: int, budg
     for match, player, total in analysis.execute("SELECT match_id, player, cash FROM match_seats"):
         cash[match][player] = total
     lines = by_round.public_lines(analysis)
-    matches, unreadable, incomplete = [], 0, 0
-    mix: dict[Config, Counter[tuple[int, bool]]] = defaultdict(Counter)
+    matches, incomplete = [], 0
     for match, found in seats.items():
-        winners = by_round.round_winners(lines.get(match, []), cash[match])
-        if winners is None:
-            unreadable += 1
-            continue
+        winners = by_round.round_winners(match, lines.get(match, []), cash[match])
         if any(lost[match, player][1] != agent_decisions[match, player] for _, player, _, _ in found):
             incomplete += 1
             continue
@@ -142,10 +132,7 @@ def load(db_path: str, regret_path: Path, knowledge_path: Path, depth: int, budg
             for _, player, model, effort in sorted(found)
         )
         matches.append(Match(match, blocks[match][1], blocks[match][0], first, second))
-        if not matches[-1].skipped:
-            for _, player, model, effort in found:
-                mix[model, effort] += shape[match, player]
-    return Loaded(matches, unreadable, incomplete, dict(mix))
+    return Loaded(matches, incomplete)
 
 
 # Statistics
@@ -204,13 +191,8 @@ def by_block(matches: list[Match]) -> dict[str, list[Match]]:
 
 
 def elo_of(matches: list[Match]) -> dict[str, float]:
-    """Round Elo per config label: Bradley-Terry on round shares, each match counting its rounds."""
-    cells: dict[tuple[str, str], list[float]] = {}
-    for m in matches:
-        cell = cells.setdefault((label(m.first.config), label(m.second.config)), [0.0, 0.0])
-        cell[0] += ROUNDS_PER_MATCH
-        cell[1] += m.first.rounds_won
-    return bt.fit(cells).elo()
+    """Round Elo per config label."""
+    return bt.round_elo((label(m.first.config), label(m.second.config), ROUNDS_PER_MATCH, m.first.rounds_won) for m in matches)
 
 
 # Per config
@@ -456,113 +438,15 @@ def margin_plot(margin: Margin) -> str:
     return scatter_svg(points, "net points of the first seat (rounds)", "mean round margin of the first seat", "Round margin against net points, binned (labels: matches)", margin.line)
 
 
-# Deeper search
-# =============
-
-
-@dataclass(frozen=True)
-class Shift:
-    config: Config
-    points_per_decision: Estimate  # deep regret minus production regret, in points
-    rounds_per_match: float
-    rounds_interval: float  # half width of the 95% interval
-
-
-def depth_shifts(pairs: list[regret_depth.Pair], rows: list[ConfigRow], mix: dict[Config, Counter[tuple[int, bool]]]) -> list[Shift]:
-    """Each config's change in points lost per match under a depth 8 search with ten times the budget.
-
-    The sample's change in regret per decision of the config's model is weighted by the config's own mix of shells left and shot-or-item.
-    Configs of a model that the sample does not cover (tournament 5's Terra 6.1) are left out.
-    """
-    models = {p.model for p in pairs}
-    shifts = []
-    for r in rows:
-        model, _ = r.config
-        if model not in models:
-            continue
-        sizes = {(shells, shot, model): n for (shells, shot), n in mix[r.config].items()}
-        est = regret_depth.estimate([p for p in pairs if p.model == model], lambda p: p.deep_regret - p.regret, sizes)
-        scale = r.moves / 100  # points per decision to rounds per match
-        shifts.append(Shift(r.config, est, est.mean * scale, est.half_width * scale))
-    return shifts
-
-
-def shift_table(shifts: list[Shift], rows: list[ConfigRow]) -> str:
-    """Models, each with the matches-weighted mean of its configs' points lost per match at depth 6 and at depth 8."""
-    lost = {r.config: r for r in rows}
-    out = []
-    for model in sorted({s.config[0] for s in shifts}, key=lambda m: sum(lost[s.config].lost * lost[s.config].matches for s in shifts if s.config[0] == m)):
-        mine = [s for s in shifts if s.config[0] == model]
-        matches = sum(lost[s.config].matches for s in mine)
-        at6 = sum(lost[s.config].lost * lost[s.config].matches for s in mine) / matches
-        delta = sum(s.rounds_per_match * lost[s.config].matches for s in mine) / matches
-        half = sum(s.rounds_interval * lost[s.config].matches for s in mine) / matches
-        out.append([model, f"{matches:,}", two(at6), two(at6 + delta), f"{delta:+.2f} ± {half:.2f}"])
-    return table(["model", "seat matches", "points lost per match at depth 6", "at depth 8", "change"], out)
-
-
-def depth_correlation(shifts: list[Shift], rows: list[ConfigRow]) -> tuple[float, float, float, float, int]:
-    """Pearson and Spearman against Round Elo of points lost per match, at depth 6 and with each shift added, over the configs that have one; the shifted ordering's Spearman against the old."""
-    lost = {r.config: r for r in rows}
-    cfgs = [s.config for s in shifts]
-    old = [lost[c].lost for c in cfgs]
-    new = [lost[c].lost + s.rounds_per_match for c, s in zip(cfgs, shifts, strict=False)]
-    elo = [lost[c].elo for c in cfgs]
-    return pearson(old, elo), pearson(new, elo), spearman(old, new), max(abs(s.rounds_per_match) for s in shifts), len(cfgs)
-
-
-# Cost of a deeper rescoring
-# ==========================
-
-
-def cell_ms(path: Path, depth: int, budget: int, reload: str, samples: int, knowledge_path: Path) -> dict[tuple[int, bool], tuple[float, int]]:
-    """Mean milliseconds per searched decision of a run, and its decisions, by shells left and shot-or-item."""
-    db = connect(str(path))
-    db.execute("ATTACH DATABASE ? AS k", (f"file:{knowledge_path}?mode=ro",))
-    rows = db.execute(
-        """SELECT d.remaining, d.choice LIKE 'Shoot%', AVG(r.ms), COUNT(*) FROM regret r
-           JOIN k.decisions d ON d.match_id = r.match_id AND d.ordinal = r.ordinal AND d.by_whom = 'agent'
-           WHERE r.max_depth = ? AND r.budget = ? AND r.reload = ? AND r.samples = ? AND r.status = 'searched' GROUP BY 1, 2""",
-        (depth, budget, reload, samples),
-    )
-    return {(shells, bool(shot)): (ms, n) for shells, shot, ms, n in rows}
-
-
-def hours(per_cell: dict[tuple[int, bool], float], population: Counter[tuple[int, bool]], only: range = range(1, 7)) -> float:
-    return sum(per_cell[cell] * n for cell, n in population.items() if cell[0] in only) / 3_600_000
-
-
-def cost_table(mix: dict[Config, Counter[tuple[int, bool]]], regret_path: Path, deep_path: Path, sampled_path: Path, unbounded: dict[tuple[int, bool], float], knowledge_path: Path) -> str:
-    """CPU hours, in one process, to score every decision of the run under each setting: the stored runs' mean time per cell times the cell's size in the whole run."""
-    population = sum(mix.values(), Counter())
-    production = {c: ms for c, (ms, _) in cell_ms(regret_path, 6, 20000, "static", 0, knowledge_path).items()}
-    deep = {c: ms for c, (ms, _) in cell_ms(deep_path, 8, 200_000, "static", 0, knowledge_path).items()}
-    sampled = {c: ms for c, (ms, _) in cell_ms(sampled_path, 6, 20000, "sampled", 64, knowledge_path).items()}
-    few, many = range(1, 4), range(4, 7)
-    settings = [
-        ("production: depth 6, 20,000 nodes, static leaf", hours(production, population)),
-        ("depth 8, 200,000 nodes everywhere", hours(deep, population)),
-        ("depth 8, 200,000 nodes with 4 or more shells left, production below", hours(production, population, few) + hours(deep, population, many)),
-        ("to the reload (depth 16, 2,000,000 nodes) with 3 or fewer shells left, production above", hours(unbounded, population, few) + hours(production, population, many)),
-        ("as above, and depth 8, 200,000 nodes with 4 or more", hours(unbounded, population, few) + hours(deep, population, many)),
-        ("sampled leaf, 64 deals, depth 6 with 3 or fewer shells left, production above", hours(sampled, population, few) + hours(production, population, many)),
-    ]
-    return table(["setting", "CPU hours", "on 8 processes"], [[name, f"{h:,.0f}", f"{h / 8:,.0f}"] for name, h in settings])
-
-
-def unbounded_cells(path: Path, knowledge_path: Path, depth: int, budget: int) -> dict[tuple[int, bool], float]:
-    return {c: ms for c, (ms, _) in cell_ms(path, depth, budget, "static", 0, knowledge_path).items()}
-
-
 # Report
 # ======
 
 
-def report(loaded: Loaded, rows: list[ConfigRow], elo_lost: Correlation, elo_net: Correlation, matchups: list[Matchup], margin: Margin, depth_text: str) -> str:
+def report(loaded: Loaded, rows: list[ConfigRow], elo_lost: Correlation, elo_net: Correlation, matchups: list[Matchup], margin: Margin) -> str:
     kept = [m for m in loaded.matches if not m.skipped]
     ranked = len({label(c) for m in loaded.matches for c in (m.first.config, m.second.config)})
     return (
-        f"{len(kept):,} finished matches with no DeepSeek seat ({len(loaded.matches):,} with it, used for the ratings, which cover {ranked} configs). Left out: {loaded.unreadable:,} matches whose round winners did not match the final cash and {loaded.incomplete:,} with an agent decision that has no searched row. "
+        f"{len(kept):,} finished matches with no DeepSeek seat ({len(loaded.matches):,} with it, used for the ratings, which cover {ranked} configs). Left out: {loaded.incomplete:,} with an agent decision that has no searched row. "
         f"{len(rows)} configs have at least {MIN_MATCHES} matches. Intervals are 95%, {BOOTSTRAP:,} resamples of seed blocks.\n\n"
         f"### Round-win equivalents lost, by config\n\n{config_table(rows)}\n\n"
         f"### Against Round Elo\n\n"
@@ -573,21 +457,8 @@ def report(loaded: Loaded, rows: list[ConfigRow], elo_lost: Correlation, elo_net
         + f"\n\n### Net points within a matchup\n\n{len(matchups)} pairings have at least {MIN_BLOCKS} complete seed blocks. Across them, net points and round margin per match correlate at {pearson([r.net for r in matchups], [r.margin for r in matchups]):+.2f}. The ten largest nets:\n\n{matchup_table(matchups)}\n\n"
         f"### Largest gap per match\n\n{worst_table(kept)}\n\n"
         f"### Round margin on net points, per match\n\n"
-        f"{margin.matches:,} matches. Round margin of the first seat = {margin.line.intercept:+.3f} + {margin.line.slope:.2f} × its net points; R² {margin.line.r2:.3f}, slope interval {span(margin.slope_interval)}.\n\n{margin_table(margin)}\n\n"
-        + depth_text
+        f"{margin.matches:,} matches. Round margin of the first seat = {margin.line.intercept:+.3f} + {margin.line.slope:.2f} × its net points; R² {margin.line.r2:.3f}, slope interval {span(margin.slope_interval)}.\n\n{margin_table(margin)}\n"
     )
-
-
-def depth_report(shifts: list[Shift], rows: list[ConfigRow], mix, args) -> str:
-    old, new, order, biggest, n = depth_correlation(shifts, rows)
-    text = (
-        f"### Under a deeper search\n\nThe stored depth 8 sample, scaled to {n} configs: Pearson against Round Elo {old:+.3f} at depth 6 and {new:+.3f} with the shifts; Spearman between the two orderings {order:+.3f}; the largest change in one config's points lost per match is {biggest:+.2f}.\n\n"
-        f"{shift_table(shifts, rows)}\n"
-    )
-    if args.sampled and args.unbounded:
-        unbounded = unbounded_cells(args.unbounded, args.knowledge, args.unbounded_depth, args.unbounded_budget)
-        text += f"\n### Cost of rescoring {sum(sum(c.values()) for c in mix.values()):,} decisions\n\n{cost_table(mix, args.regret, args.deep, args.sampled, unbounded, args.knowledge)}\n"
-    return text
 
 
 def main() -> None:
@@ -599,11 +470,6 @@ def main() -> None:
     parser.add_argument("--budget", type=int, default=20000)
     parser.add_argument("--reload", choices=["static", "expected-deal", "sampled"], default="static")
     parser.add_argument("--samples", type=int, help="deals per leaf of a sampled run, 256 by default")
-    parser.add_argument("--deep", type=Path, default=DERIVED / "regret-depth.sqlite")
-    parser.add_argument("--sampled", type=Path, help="the reload-bias run, for the cost table")
-    parser.add_argument("--unbounded", type=Path, help="a timed run to the reload of decisions with 3 or fewer shells left, for the cost table")
-    parser.add_argument("--unbounded-depth", type=int, default=16)
-    parser.add_argument("--unbounded-budget", type=int, default=2_000_000)
     parser.add_argument("--plots", type=Path)
     parser.add_argument("--doc", type=Path)
     args = parser.parse_args()
@@ -614,8 +480,7 @@ def main() -> None:
     elo_lost, elo_net = correlation(rows, loaded.matches, "lost", rng), correlation(rows, loaded.matches, "net", rng)
     matchups = matchup_rows(loaded.matches, rng)
     margin = margin_fit(loaded.matches, rng)
-    pairs = regret_depth.pairs(args.deep, args.regret, args.knowledge)
-    text = report(loaded, rows, elo_lost, elo_net, matchups, margin, depth_report(depth_shifts(pairs, rows, loaded.mix), rows, loaded.mix, args))
+    text = report(loaded, rows, elo_lost, elo_net, matchups, margin)
     if args.plots:
         args.plots.mkdir(parents=True, exist_ok=True)
         (args.plots / "points-lost-vs-elo.svg").write_text(elo_plot(rows))

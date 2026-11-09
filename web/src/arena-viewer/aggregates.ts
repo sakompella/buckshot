@@ -147,11 +147,13 @@ export const encodeAggregates = (aggregates: Aggregates): Readonly<Record<Aggreg
 
 // ITEMS
 
-/** A seat's copies of each item, in ITEMS order, by what became of them. Adrenaline steals count as uses of the adrenaline that paid for them. */
-export const seatFates = (seat: Pick<Seat, "acquired" | "used">, opponent: Pick<Seat, "stolen">): ReadonlyArray<Fates> =>
+/** A seat's copies of each item, in ITEMS order, by what became of them. Adrenaline steals count as uses of the adrenaline that paid for them. More copies used and stolen than received is a bug in one of the counts. */
+export const seatFates = (seat: Pick<Seat, "matchId" | "player" | "acquired" | "used">, opponent: Pick<Seat, "stolen">): ReadonlyArray<Fates> =>
   seat.acquired.map((acquired, item) => {
     const used = seat.used[item] ?? 0;
     const stolen = opponent.stolen[item] ?? 0;
+
+    if (acquired < used + stolen) throw new Error(`match ${seat.matchId} Player ${seat.player}: ${ITEMS[item]} acquired ${acquired}, used ${used}, stolen ${stolen}`);
 
     return { used, stolen, unused: acquired - used - stolen };
   });

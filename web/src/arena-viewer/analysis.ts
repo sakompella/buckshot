@@ -236,6 +236,28 @@ const decodeDecision = Schema.decodeUnknownSync(DecisionRow);
 
 const itemIndex = (name: string): number => ITEMS.findIndex((item) => item === name);
 
+/** Copies of each item placed, by player, in the public events "Player X placed <item> in slot N." */
+export const placedBy = (events: ReadonlyArray<string>): ReadonlyMap<string, Array<number>> => {
+  const placed = new Map<string, Array<number>>();
+
+  for (const text of events) {
+    const match = /^Player (\w+) placed (.+) in slot \d+\.$/.exec(text);
+
+    if (match === null) continue;
+
+    const item = itemIndex(match[2] ?? "");
+
+    if (item < 0) throw new Error(`placed an unknown item in "${text}"`);
+
+    const counts = placed.get(match[1] ?? "") ?? ITEMS.map(() => 0);
+
+    counts[item] = (counts[item] ?? 0) + 1;
+    placed.set(match[1] ?? "", counts);
+  }
+
+  return placed;
+};
+
 const ADRENALINE = itemIndex("adrenaline");
 
 const JAMMER = itemIndex("jammer");
@@ -309,6 +331,9 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
   let pendingInvert: PendingInvert | null = null;
   let matchEvents: Array<string> = [];
 
+  // A seat's windows end at its own last decision, so what it received after that is only in the other seat's windows. Placements are public: the seat that decided last saw them all.
+  const windows = new Map<number, { last: number; events: Array<string> }>();
+
   const finishSeat = () => {
     checks.ok += tracker.checks.ok;
     checks.bad += tracker.checks.bad;
@@ -319,11 +344,30 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
     const cash = new Map(indexes.flatMap((index) => seats[index] ?? []).map((seat) => [seat.player, seat.cash ?? 0]));
     const story = roundStory(matchEvents, cash);
 
+    let fullest: ReadonlyArray<string> = [];
+    let latest = -1;
+
+    for (const index of indexes) {
+      const log = windows.get(index);
+
+      if (log !== undefined && log.last > latest) {
+        latest = log.last;
+        fullest = log.events;
+      }
+    }
+
+    const placed = placedBy(fullest);
+
     for (const index of indexes) {
       const seat = extra[index];
 
-      if (seat) seat.story = story;
+      if (seat) {
+        seat.story = story;
+        seat.acquired = placed.get(seats[index]?.player ?? "") ?? seat.acquired;
+      }
     }
+
+    for (const index of indexes) windows.delete(index);
   };
 
   const decisions = db.query(
@@ -354,22 +398,22 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
     if (seatAt === undefined || seat === undefined) continue;
 
     const visible = decodeVisible(row.v);
-    const placedPrefix = `Player ${visible.you} `;
+
+    const log = windows.get(seatAt) ?? { last: row.ord, events: [] };
+
+    log.last = row.ord;
+    windows.set(seatAt, log);
 
     for (const text of visible.events ?? []) {
       tracker.event(text);
       matchEvents.push(text);
+      log.events.push(text);
       const round = /^Round (\d+) begins/.exec(text);
 
       if (round) {
         seat.round = Number(round[1]);
         seat.deficits.push(0);
       }
-
-      const placed = text.startsWith(placedPrefix) ? / placed (.+) in slot \d+\.$/.exec(text) : null;
-      const placedItem = placed ? itemIndex(placed[1] ?? "") : -1;
-
-      if (placedItem >= 0) seat.acquired[placedItem] = (seat.acquired[placedItem] ?? 0) + 1;
     }
 
     const ownHealth = visible.players.find(({ player }) => player === visible.you)?.health;
