@@ -5,10 +5,10 @@ import { join, normalize } from "node:path";
 import { Array as Arr, Option, Result, Schema } from "effect";
 
 import { agentMoves } from "../agent/moves.ts";
+import { ArenaController } from "../arena/match.ts";
 import { replayOf } from "../arena/replay.ts";
 import type { TableMove } from "../board.ts";
 import { seatsOut } from "../domain.ts";
-import { Controller } from "../driver.ts";
 import { Letter, rosterOf } from "../players.ts";
 import { AGGREGATE_NAMES, aggregatesOf, encodeAggregates } from "./aggregates.ts";
 import { decodeVisible, roundStory, ShellTracker, shotLineIn } from "./analysis.ts";
@@ -58,7 +58,7 @@ const isOutcomeEnd = (text: string, player: string): boolean =>
   (text.startsWith("Player ") && !text.startsWith(`Player ${player} `)) || /^(Round \d+ begins|Item distribution|The shotgun is loaded)/.test(text);
 
 /** What a replay needs of a match's manifest. */
-const ReplayManifest = Schema.fromJsonString(Schema.Struct({ seed: Schema.String, controllers: Schema.Array(Controller), letters: Schema.Array(Letter) }));
+const ReplayManifest = Schema.fromJsonString(Schema.Struct({ seed: Schema.String, controllers: Schema.Array(ArenaController), letters: Schema.Array(Letter) }));
 
 const decodeReplayManifest = Schema.decodeUnknownOption(ReplayManifest);
 
