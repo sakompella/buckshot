@@ -30,10 +30,10 @@ from boot import interval, weights
 from fmt import pct, table
 from load import SKIPPED_MODEL, connect
 from regret import DERIVED, EFFORTS
+from rules import WIN
 
 RESAMPLES = 2000
 FEWEST_FOR_INTERVAL = 20
-WIN = 1_000_000
 
 
 class Pattern(Enum):

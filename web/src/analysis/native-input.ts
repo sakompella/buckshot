@@ -1,14 +1,14 @@
 import { Schema } from "effect";
 
 import { type BendNode } from "../../generated/rules.mjs";
-import { type Move } from "../domain.ts";
+import { Item, type Move } from "../domain.ts";
 import { logNode, type PlayerInput } from "./player.ts";
 
 // The numbers sim/bend-mp/native.bend decodes, and the move names it prints. A throwaway format: one analysis input per line, fields in constructor order.
 
 const TAG_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
   ["Seat0", "Seat1", "Seat2", "Seat3"],
-  ["Saw", "Glass", "Jammer", "Cigarettes", "Beer", "Phone", "Inverter", "Adrenaline", "Remote"],
+  Item.literals,
   ["Slot0", "Slot1", "Slot2", "Slot3", "Slot4", "Slot5", "Slot6", "Slot7"],
   ["Live", "Blank"],
   ["Single", "Double"],

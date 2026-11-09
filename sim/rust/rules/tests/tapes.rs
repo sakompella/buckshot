@@ -7,8 +7,9 @@
 //! It fails on an empty directory, an unreadable or malformed line, a step
 //! without a game, a gap in a game's steps, a game without a terminal line,
 //! truncated notes, a perturbed state Rust cannot decode or re-serializes
-//! differently, an arena game that does not reach its end and a count that
-//! differs from the manifest. A game stops at its first mismatch, which
+//! differently, an arena game that does not reach its end, a count that
+//! differs from the manifest and a manifest item order (Bend's
+//! `item.order`) other than `Item::ORDER`. A game stops at its first mismatch, which
 //! is printed; games cut by the step cap are counted apart.
 //!
 //! With the `trace` feature (`cargo trace-test`) each tape also needs a
@@ -930,6 +931,12 @@ fn check_manifest(path: &Path, tally: &mut Tally) -> Result<String, String> {
     }
     if tally.games == 0 {
         tally.problems.push("the tape has no games".into());
+    }
+    let order = json!(Item::ORDER.map(|item| format!("{item:?}")));
+    if *get(&manifest, "items") != order {
+        tally
+            .problems
+            .push(format!("Bend's item order {} is not Item::ORDER {order}", get(&manifest, "items")));
     }
     Ok(format!(
         "{} from {} Bend files, sha256 {}",

@@ -11,7 +11,7 @@ import { Data, Effect, Option, Result, Schema } from "effect";
 import { emptyTable, type HeadlessTable, headlessSession } from "../agent/headless.ts";
 import { type AgentCall, AgentReply, type MatchSession, replyText, RULES, runTool, tools } from "../agent/tools.ts";
 import { SEATS_BY_TABLE, SeatCount } from "../domain.ts";
-import { nextPrompt } from "../bend.ts";
+import { nextPrompt, PRIZES } from "../bend.ts";
 import { Controller, controllerOf, promptsOf } from "../driver.ts";
 import { Letter, rosterOf } from "../players.ts";
 import { eventText, secretText } from "../text.ts";
@@ -39,7 +39,8 @@ const context = BACKGROUND_CONTEXT;
 
 /**
  * What each item and the reload do, as facts with no advice. Checked line by line against `item.effect` in
- * sim/bend-mp/sm/main.bend and the use and steal checks in sm/items.bend; it must change when they do.
+ * sim/bend-mp/sm/main.bend and the use and steal checks in sm/items.bend; it must change when they do. The prizes
+ * come from Bend; test/rules-constants.test.ts checks the handsaw damage and the phone range.
  */
 const ITEM_FACTS = [
   "Items: using one empties its slot, everyone sees which item was used, and your turn goes on unless stated below.",
@@ -53,7 +54,7 @@ const ITEM_FACTS = [
   'Adrenaline (the "Steal" moves): uses your adrenaline to take that item from another player, alive or dead, and use it at once. Adrenaline cannot be taken.',
   "Remote: reverses the turn order until the round ends.",
   "Reload: when a turn ends with the gun empty and no winner, living players with free slots get more items, a new load is announced, and health stays. The turn passes as it would have.",
-  "Rounds: every player starts each round with fresh health, empty slots and no jams. Prizes are 70,000, 75,000 and 80,000. Round 1 starts with a random player, later rounds with the player who died first in the round before.",
+  `Rounds: every player starts each round with fresh health, empty slots and no jams. Prizes are ${new Intl.ListFormat("en-GB").format(PRIZES.map((prize) => prize.toLocaleString("en-US")))}. Round 1 starts with a random player, later rounds with the player who died first in the round before.`,
 ].join("\n");
 
 /** The shared instructions every player gets. An agent may get an addendum after them (agentInstructions); no one gets a different version. */

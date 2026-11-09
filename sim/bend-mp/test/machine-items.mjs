@@ -336,7 +336,7 @@ try {
     const seatKeys = keysOf(players);
     for (const r of [grabs.grabbing, grabs.holding, grabs.granted, grabs.intake]) assert.equal(keysOf(r), seatKeys, `rings share the table (${where})`);
     const keys = seatKeys.split(',');
-    const items = key => Object.entries(players[key].slots).filter(([k]) => k !== '$').map(([, slot]) => kind(slot) === 'Some' ? kind(slot.value) : null);
+    const slotItems = key => Object.entries(players[key].slots).filter(([k]) => k !== '$').map(([, slot]) => kind(slot) === 'Some' ? kind(slot.value) : null);
     const handling = phase === 'Grab' || phase === 'NeedItem';
     if (grabs.distributing) assert.ok(handling, `distributing only in grab phases (${where})`);
     for (const key of keys) {
@@ -349,13 +349,13 @@ try {
     const enabledAnywhere = rounds.some(r => Object.entries(r.items).some(([k, rule]) => k !== '$' && rule.enabled));
     if (!enabledAnywhere) {
       assert.ok(!['Grab', 'NeedItem', 'NeedPhone', 'JamPick', 'StealPick', 'NeedTurnAmount'].includes(phase), `no-item configs never reach item phases (${where})`);
-      for (const key of keys) assert.ok(items(key).every(item => item === null) && !grabs.grabbing[key] && kind(grabs.holding[key]) === 'None' && !grabs.distributing, `no-item configs keep empty inventories (${where})`);
+      for (const key of keys) assert.ok(slotItems(key).every(item => item === null) && !grabs.grabbing[key] && kind(grabs.holding[key]) === 'None' && !grabs.distributing, `no-item configs keep empty inventories (${where})`);
     }
     if (!['NeedHealth', 'NeedAmount'].includes(phase)) {
       const current = rounds[Number(world.round_index)] ?? rounds[0];
-      for (const item of ['Saw', 'Glass', 'Jammer', 'Cigarettes', 'Beer', 'Phone', 'Inverter', 'Adrenaline', 'Remote']) {
+      for (const item of items) {
         const rule = current.items[item.toLowerCase()];
-        const counts = keys.map(key => items(key).filter(x => x === item).length + (kind(grabs.holding[key]) === 'Some' && kind(grabs.holding[key].value) === item ? 1 : 0));
+        const counts = keys.map(key => slotItems(key).filter(x => x === item).length + (kind(grabs.holding[key]) === 'Some' && kind(grabs.holding[key].value) === item ? 1 : 0));
         const total = counts.reduce((a, b) => a + b, 0);
         if (!rule.enabled) assert.equal(total, 0, `disabled ${item} is absent (${where})`);
         else assert.ok(counts.every(n => n <= Number(rule.per_player)) && total <= Number(rule.on_table), `${item} within caps (${where})`);

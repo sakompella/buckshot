@@ -426,7 +426,7 @@ try {
     const path = arg('out', null) ?? join(arg('dir', '/tmp/rust-tapes'), `${name}.jsonl`);
     open(path);
     const result = run();
-    writeFileSync(`${path}.manifest.json`, `${JSON.stringify({ tape: basename(path), mode: name, seeds, settings: { ...settings, maxSteps: MAX_STEPS }, result, games, steps, capped, lines, bend: sources }, null, 2)}\n`);
+    writeFileSync(`${path}.manifest.json`, `${JSON.stringify({ tape: basename(path), mode: name, seeds, settings: { ...settings, maxSteps: MAX_STEPS }, result, games, steps, capped, lines, items: itemOrder.map(item => item.$), bend: sources }, null, 2)}\n`);
     console.log(`${name} tapes: ${games} games (${capped} capped), ${steps} answers, ${lines} lines -> ${path}`);
   }
 } finally {

@@ -9,9 +9,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 import round_improvement as ri
+from rules import POINT
 from test_by_round import A1, A3, B2, event, lines
-
-POINT = ri.POINT
 
 
 def seat(n: int, wins: frozenset[int] = frozenset(), block: str | None = None) -> ri.Seat:

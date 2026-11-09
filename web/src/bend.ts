@@ -1,7 +1,7 @@
 import { Array as Arr, Data, Match, Option, Result, Schema } from "effect";
 
 import rules, { type BendNode } from "../generated/rules.mjs";
-import { Board, Briefcase, Counter, GameEvent, Move, Secret, Stage, type Damage, type Direction, type DrawLabel, type Item, type HeardSecret, type Mode, type Seat, type SeatCount, type SeatView, type Shell, type Slot } from "./domain.ts";
+import { Board, Briefcase, Counter, GameEvent, Move, Secret, Stage, type Damage, type Direction, type DrawLabel, Item, type HeardSecret, type Mode, type Seat, type SeatCount, type SeatView, type Shell, type Slot } from "./domain.ts";
 
 // The one boundary between the app and the Bend build. It is the only file
 // that writes Bend constructor tags, and it decodes every value Bend returns
@@ -88,23 +88,11 @@ const seatOf = (raw: RawSeat): Seat => SEAT_BY_TAG[raw.$];
 
 const seatNode = (seat: Seat): RawSeat => ({ $: SEAT_TAGS[seat] });
 
-const ITEM_BY_TAG = {
-  "Saw": "Saw",
-  "Glass": "Glass",
-  "Jammer": "Jammer",
-  "Cigarettes": "Cigarettes",
-  "Beer": "Beer",
-  "Phone": "Phone",
-  "Inverter": "Inverter",
-  "Adrenaline": "Adrenaline",
-  "Remote": "Remote",
-} as const satisfies Readonly<Record<string, Item>>;
-
-const RawItem = Schema.Struct({ $: Schema.Literals(["Saw", "Glass", "Jammer", "Cigarettes", "Beer", "Phone", "Inverter", "Adrenaline", "Remote"]) });
+const RawItem = Schema.Struct({ $: Item });
 
 type RawItem = typeof RawItem.Type;
 
-const itemOf = (raw: RawItem): Item => ITEM_BY_TAG[raw.$];
+const itemOf = (raw: RawItem): Item => raw.$;
 
 const SLOT_BY_TAG = { "Slot0": 0, "Slot1": 1, "Slot2": 2, "Slot3": 3, "Slot4": 4, "Slot5": 5, "Slot6": 6, "Slot7": 7 } as const;
 
@@ -602,6 +590,9 @@ export const nextPrompt = (game: Game, prompts: ReadonlyArray<Prompt>): Option.O
   maybeToOption(Result.getOrThrow(decodeNextPrompt(rules["prompt.next"](game.state, arrayToList(prompts.map(({ raw }) => raw)))))).pipe(
     Option.flatMap(({ seat }) => Arr.findFirst(prompts, (prompt) => prompt.seat === seatOf(seat))),
   );
+
+/** Each round's prize in a default (three-round) match: Bend's `prize`. */
+export const PRIZES: ReadonlyArray<number> = [0, 1, 2].map((round) => rules["domain:prize"](round));
 
 // AI seats
 // ========
