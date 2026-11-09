@@ -21,7 +21,7 @@ const ModelEntrant = Schema.Struct({ endpoint: Schema.NonEmptyString, model: Sch
 const BotEntrant = Schema.Struct({ bot: Schema.Literals(BOTS) });
 
 /** The Rust search at one strength (engine.ts), a fixed yardstick for the models. */
-const EngineEntrant = Schema.Struct({ engine: Schema.Struct({ depth: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)), budget: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)) }) });
+const EngineEntrant = Schema.Struct({ engine: Schema.Struct({ depth: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)), budget: Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)), reload: Schema.optional(Schema.Literal("sampled")) }) });
 
 /** The seeds of a pairing's blocks, in block order, when they are not the config's seed plus the block, as from balancedSeeds in seeds.ts. */
 const BlockSeeds = Schema.Array(Schema.Int);
@@ -215,7 +215,7 @@ const blockOf = ({ config }: Tournament, pairing: Pairing, pairingIndex: number,
       return letter === undefined ? [] : [[letter, name]];
     }
 
-    return "bot" in entrant ? [[entrant.bot, name]] : [[`Engine/${entrant.engine.depth}/${entrant.engine.budget}`, name]];
+    return "bot" in entrant ? [[entrant.bot, name]] : [[`Engine/${entrant.engine.depth}/${entrant.engine.budget}${entrant.engine.reload === undefined ? "" : "/sampled"}` as const, name]];
   });
 
   return permutations(seated).map((table, index) => ({

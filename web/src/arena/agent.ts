@@ -19,8 +19,11 @@ export const seatingOf = <A>(seats: ReadonlyArray<A>, rotation: number): Readonl
   return [...seats.slice(shift), ...seats.slice(0, shift)];
 };
 
-/** An engine seat, played by the Rust search (engine.ts): `Engine/<depth>/<budget>`, its decision depth and node budget. */
-export const EngineSeat = Schema.TemplateLiteral(["Engine/", Schema.Int, "/", Schema.Int]);
+/**
+ * An engine seat, played by the Rust search (engine.ts): `Engine/<depth>/<budget>`, its decision depth and node budget,
+ * with static reload, or `Engine/<depth>/<budget>/sampled`, which values a reload leaf over sampled deals.
+ */
+export const EngineSeat = Schema.Union([Schema.TemplateLiteral(["Engine/", Schema.Int, "/", Schema.Int]), Schema.TemplateLiteral(["Engine/", Schema.Int, "/", Schema.Int, "/sampled"])]);
 
 export type EngineSeat = typeof EngineSeat.Type;
 

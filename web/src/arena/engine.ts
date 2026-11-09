@@ -72,7 +72,7 @@ export const openEngine = async (): Promise<Engine> => {
 
   return {
     choose: (source, letter, seat) => {
-      const [, depth, budget] = seat.split("/");
+      const [, depth, budget, reload] = seat.split("/");
       const roster = rosterOf(source.game.seats, source.letters);
       const me = Option.getOrThrow(roster.find(letter)).seat;
 
@@ -81,7 +81,7 @@ export const openEngine = async (): Promise<Engine> => {
 
       if (ordered.kind !== "analysed") throw new Error(`the player refuses Player ${letter}'s position: ${ordered.reason}`);
 
-      const search = Bun.spawnSync([binary, "--evaluator", "bounded-v1-f64", "--unpruned", "--depth", depth ?? "", "--budget", budget ?? "", "--threads", "1"], {
+      const search = Bun.spawnSync([binary, "--evaluator", "bounded-v1-f64", "--unpruned", "--depth", depth ?? "", "--budget", budget ?? "", "--reload", reload ?? "static", "--threads", "1"], {
         stdin: Buffer.from(`${JSON.stringify({ id: "engine", ordinal: 0, input: nativeInput(input) })}\n`),
         stderr: "pipe",
       });
