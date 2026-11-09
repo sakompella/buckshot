@@ -24,59 +24,61 @@ One table per cohort, ranked by the pooled match rating. Matches, win share and 
 <!-- leaderboard:start -->
 ### All configs
 
-3537 scored matches.
+3657 scored matches.
 
 | config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
-| claude-opus-5-5-max | 80 | 73.8% | 64.4% | +218 | +118 |
-| gpt-6.1-terra-max | 80 | 72.5% | 66.0% | +202 | +121 |
-| gpt-6-astra-high | 80 | 71.2% | 66.1% | +179 | +116 |
-| claude-sonnet-5-5-max | 140 | 67.1% | 62.3% | +173 | +107 |
-| claude-opus-5-5-xhigh | 150 | 54.7% | 53.4% | +170 | +100 |
-| gpt-6.1-terra-xhigh | 80 | 70.0% | 59.7% | +157 | +59 |
-| gpt-6-astra | 254 | 66.5% | 60.2% | +149 | +84 |
-| claude-opus-5-5-high | 80 | 58.8% | 54.7% | +147 | +77 |
-| gpt-6.1-sol-max | 122 | 57.4% | 54.9% | +143 | +95 |
-| gpt-6-astra-low | 80 | 65.0% | 59.4% | +123 | +63 |
-| claude-sonnet-5-5-xhigh | 160 | 60.0% | 54.7% | +122 | +56 |
-| claude-opus-5-5-off | 80 | 62.5% | 58.8% | +108 | +63 |
-| gpt-6.1-terra | 80 | 62.5% | 57.7% | +103 | +49 |
-| gpt-6-astra-low-recall | 80 | 63.7% | 55.9% | +102 | +31 |
-| gpt-6.1-terra-off | 80 | 65.0% | 56.9% | +91 | +25 |
-| gpt-6.1-sol-low | 98 | 52.0% | 50.9% | +90 | +60 |
-| gpt-6.1-sol-xhigh | 101 | 51.5% | 52.4% | +87 | +68 |
-| claude-opus-5-5 | 294 | 57.5% | 54.2% | +85 | +46 |
-| gpt-6.1-terra-high | 80 | 63.7% | 59.7% | +85 | +47 |
+| claude-opus-5-5-max | 80 | 73.8% | 64.4% | +215 | +117 |
+| gpt-6.1-terra-max | 80 | 72.5% | 66.0% | +199 | +120 |
+| gpt-6-astra-high | 80 | 71.2% | 66.1% | +177 | +115 |
+| claude-sonnet-5-5-max | 140 | 67.1% | 62.3% | +169 | +105 |
+| claude-opus-5-5-xhigh | 150 | 54.7% | 53.4% | +166 | +98 |
+| gpt-6.1-terra-xhigh | 80 | 70.0% | 59.7% | +155 | +58 |
+| gpt-6-astra | 254 | 66.5% | 60.2% | +147 | +83 |
+| claude-opus-5-5-high | 80 | 58.8% | 54.7% | +142 | +76 |
+| gpt-6.1-sol-max | 122 | 57.4% | 54.9% | +141 | +94 |
+| gpt-6-astra-low | 80 | 65.0% | 59.4% | +121 | +62 |
+| claude-sonnet-5-5-xhigh | 160 | 60.0% | 54.7% | +119 | +55 |
+| engine-d6s | 60 | 61.7% | 57.4% | +111 | +65 |
+| claude-opus-5-5-off | 80 | 62.5% | 58.8% | +106 | +62 |
+| gpt-6.1-terra | 80 | 62.5% | 57.7% | +101 | +48 |
+| gpt-6-astra-low-recall | 80 | 63.7% | 55.9% | +100 | +30 |
+| gpt-6.1-terra-off | 80 | 65.0% | 56.9% | +89 | +24 |
+| gpt-6.1-sol-low | 98 | 52.0% | 50.9% | +88 | +59 |
+| gpt-6.1-sol-xhigh | 101 | 51.5% | 52.4% | +84 | +67 |
+| gpt-6.1-terra-high | 80 | 63.7% | 59.7% | +83 | +46 |
+| claude-opus-5-5 | 334 | 56.3% | 53.8% | +76 | +43 |
 | claude-haiku-5-5-max | 111 | 61.3% | 58.7% | +72 | +44 |
-| gpt-6.1-sol | 271 | 57.2% | 56.8% | +65 | +55 |
+| gpt-6.1-sol | 271 | 57.2% | 56.8% | +63 | +54 |
 | claude-haiku-5-5-xhigh | 158 | 54.4% | 50.4% | +61 | +12 |
-| gpt-6.1-sol-high | 99 | 47.5% | 48.0% | +60 | +41 |
-| gpt-6.1-terra-low | 80 | 56.2% | 55.5% | +48 | +31 |
-| claude-sonnet-5-5-high | 161 | 46.6% | 46.9% | +35 | +7 |
-| claude-haiku-5-5-high | 173 | 51.4% | 50.3% | +32 | +5 |
-| claude-sonnet-5-5 | 324 | 49.1% | 49.5% | +10 | +2 |
-| gpt-5.6-terra-xhigh | 93 | 57.0% | 55.1% | +7 | +32 |
-| gpt-5.6-terra-max | 90 | 57.8% | 53.8% | +2 | +19 |
-| claude-haiku-5-5 | 342 | 50.3% | 50.3% | +1 | -4 |
+| gpt-6.1-sol-high | 99 | 47.5% | 48.0% | +58 | +40 |
+| gpt-6.1-terra-low | 80 | 56.2% | 55.5% | +46 | +30 |
+| claude-sonnet-5-5-high | 161 | 46.6% | 46.9% | +32 | +6 |
+| claude-haiku-5-5-high | 173 | 51.4% | 50.3% | +31 | +5 |
+| claude-haiku-5-5 | 382 | 50.5% | 50.3% | +7 | -1 |
+| gpt-5.6-terra-xhigh | 93 | 57.0% | 55.1% | +5 | +31 |
+| claude-sonnet-5-5 | 364 | 48.1% | 48.8% | +4 | -1 |
+| gpt-5.6-terra-max | 90 | 57.8% | 53.8% | +0 | +18 |
 | claude-haiku-5-5-low | 194 | 50.5% | 51.3% | -1 | -3 |
-| claude-opus-5-5-low | 80 | 41.2% | 49.4% | -7 | +23 |
-| claude-sonnet-5-5-off | 164 | 39.6% | 42.4% | -14 | -22 |
-| gpt-6-luna-xhigh | 115 | 68.7% | 63.6% | -26 | -9 |
-| gpt-6-luna-max | 112 | 67.0% | 63.2% | -44 | -14 |
-| gpt-5.6-terra | 259 | 45.9% | 48.0% | -61 | -24 |
-| claude-sonnet-5-5-low | 159 | 31.4% | 39.5% | -67 | -40 |
-| gpt-5.6-terra-high | 91 | 44.0% | 49.5% | -75 | -4 |
-| gpt-5.6-terra-low | 91 | 40.7% | 45.5% | -93 | -25 |
-| gpt-6-luna-high | 112 | 59.8% | 55.5% | -100 | -67 |
+| engine-d2 | 60 | 45.0% | 46.2% | -6 | -13 |
+| claude-opus-5-5-low | 80 | 41.2% | 49.4% | -11 | +22 |
+| claude-sonnet-5-5-off | 164 | 39.6% | 42.4% | -17 | -24 |
+| gpt-6-luna-xhigh | 115 | 68.7% | 63.6% | -29 | -11 |
+| gpt-6-luna-max | 112 | 67.0% | 63.2% | -46 | -15 |
+| gpt-5.6-terra | 259 | 45.9% | 48.0% | -63 | -25 |
+| claude-sonnet-5-5-low | 159 | 31.4% | 39.5% | -70 | -41 |
+| gpt-5.6-terra-high | 91 | 44.0% | 49.5% | -78 | -5 |
+| gpt-5.6-terra-low | 91 | 40.7% | 45.5% | -95 | -26 |
+| gpt-6-luna-high | 112 | 59.8% | 55.5% | -102 | -68 |
 | claude-haiku-5-5-off | 202 | 37.1% | 39.8% | -137 | -100 |
-| claude-haiku-4-5-20251001 | 340 | 33.5% | 38.3% | -198 | -122 |
-| claude-haiku-4-5-20251001-minimal | 143 | 39.9% | 42.5% | -234 | -139 |
-| claude-haiku-4-5-20251001-low | 149 | 36.9% | 41.9% | -250 | -139 |
-| gpt-6-luna | 282 | 26.2% | 34.1% | -262 | -154 |
-| claude-haiku-4-5-20251001-high | 135 | 34.8% | 42.0% | -280 | -147 |
-| gpt-6-luna-off | 110 | 26.4% | 33.8% | -341 | -207 |
-| gpt-6-luna-low | 110 | 25.5% | 31.4% | -346 | -222 |
-| claude-haiku-4-5-20251001-off | 125 | 22.4% | 32.6% | -388 | -216 |
+| claude-haiku-4-5-20251001 | 340 | 33.5% | 38.3% | -200 | -122 |
+| claude-haiku-4-5-20251001-minimal | 143 | 39.9% | 42.5% | -236 | -140 |
+| claude-haiku-4-5-20251001-low | 149 | 36.9% | 41.9% | -251 | -140 |
+| gpt-6-luna | 282 | 26.2% | 34.1% | -264 | -155 |
+| claude-haiku-4-5-20251001-high | 135 | 34.8% | 42.0% | -282 | -147 |
+| gpt-6-luna-off | 110 | 26.4% | 33.8% | -343 | -209 |
+| gpt-6-luna-low | 110 | 25.5% | 31.4% | -348 | -223 |
+| claude-haiku-4-5-20251001-off | 125 | 22.4% | 32.6% | -390 | -217 |
 
 ### Tournament 8
 
@@ -84,36 +86,36 @@ One table per cohort, ranked by the pooled match rating. Matches, win share and 
 
 | config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
-| claude-opus-5-5-max | 40 | 87.5% | 73.8% | +218 | +118 |
-| gpt-6.1-terra-max | 60 | 71.7% | 64.7% | +202 | +121 |
-| gpt-6-astra-high | 60 | 76.7% | 69.8% | +179 | +116 |
-| claude-opus-5-5-xhigh | 38 | 57.9% | 56.2% | +170 | +100 |
-| gpt-6.1-terra-xhigh | 60 | 76.7% | 64.7% | +157 | +59 |
-| claude-opus-5-5-high | 23 | 87.0% | 73.0% | +147 | +77 |
-| gpt-6-astra-low | 60 | 71.7% | 62.6% | +123 | +63 |
-| claude-sonnet-5-5-xhigh | 38 | 63.2% | 56.0% | +122 | +56 |
-| claude-opus-5-5-off | 54 | 64.8% | 60.6% | +108 | +63 |
-| gpt-6.1-terra | 59 | 67.8% | 61.1% | +103 | +49 |
-| gpt-6-astra-low-recall | 60 | 63.3% | 54.1% | +102 | +31 |
-| gpt-6.1-terra-off | 60 | 68.3% | 59.2% | +91 | +25 |
-| claude-opus-5-5 | 25 | 44.0% | 49.6% | +85 | +46 |
-| gpt-6.1-terra-high | 60 | 70.0% | 62.4% | +85 | +47 |
+| claude-opus-5-5-max | 40 | 87.5% | 73.8% | +215 | +117 |
+| gpt-6.1-terra-max | 60 | 71.7% | 64.7% | +199 | +120 |
+| gpt-6-astra-high | 60 | 76.7% | 69.8% | +177 | +115 |
+| claude-opus-5-5-xhigh | 38 | 57.9% | 56.2% | +166 | +98 |
+| gpt-6.1-terra-xhigh | 60 | 76.7% | 64.7% | +155 | +58 |
+| claude-opus-5-5-high | 23 | 87.0% | 73.0% | +142 | +76 |
+| gpt-6-astra-low | 60 | 71.7% | 62.6% | +121 | +62 |
+| claude-sonnet-5-5-xhigh | 38 | 63.2% | 56.0% | +119 | +55 |
+| claude-opus-5-5-off | 54 | 64.8% | 60.6% | +106 | +62 |
+| gpt-6.1-terra | 59 | 67.8% | 61.1% | +101 | +48 |
+| gpt-6-astra-low-recall | 60 | 63.3% | 54.1% | +100 | +30 |
+| gpt-6.1-terra-off | 60 | 68.3% | 59.2% | +89 | +24 |
+| gpt-6.1-terra-high | 60 | 70.0% | 62.4% | +83 | +46 |
+| claude-opus-5-5 | 25 | 44.0% | 49.6% | +76 | +43 |
 | claude-haiku-5-5-xhigh | 42 | 35.7% | 42.5% | +61 | +12 |
-| gpt-6.1-terra-low | 60 | 56.7% | 56.7% | +48 | +31 |
-| claude-sonnet-5-5-high | 38 | 31.6% | 37.7% | +35 | +7 |
-| claude-haiku-5-5-high | 43 | 37.2% | 39.4% | +32 | +5 |
-| claude-sonnet-5-5 | 32 | 37.5% | 40.0% | +10 | +2 |
-| claude-haiku-5-5 | 31 | 25.8% | 35.7% | +1 | -4 |
+| gpt-6.1-terra-low | 60 | 56.7% | 56.7% | +46 | +30 |
+| claude-sonnet-5-5-high | 38 | 31.6% | 37.7% | +32 | +6 |
+| claude-haiku-5-5-high | 43 | 37.2% | 39.4% | +31 | +5 |
+| claude-haiku-5-5 | 31 | 25.8% | 35.7% | +7 | -1 |
+| claude-sonnet-5-5 | 32 | 37.5% | 40.0% | +4 | -1 |
 | claude-haiku-5-5-low | 41 | 34.1% | 42.7% | -1 | -3 |
-| claude-opus-5-5-low | 32 | 43.8% | 46.5% | -7 | +23 |
-| claude-sonnet-5-5-off | 43 | 18.6% | 29.6% | -14 | -22 |
-| claude-sonnet-5-5-low | 38 | 15.8% | 31.5% | -67 | -40 |
+| claude-opus-5-5-low | 32 | 43.8% | 46.5% | -11 | +22 |
+| claude-sonnet-5-5-off | 43 | 18.6% | 29.6% | -17 | -24 |
+| claude-sonnet-5-5-low | 38 | 15.8% | 31.5% | -70 | -41 |
 | claude-haiku-5-5-off | 37 | 10.8% | 26.5% | -137 | -100 |
-| claude-haiku-4-5-20251001 | 32 | 12.5% | 26.0% | -198 | -122 |
-| claude-haiku-4-5-20251001-minimal | 31 | 9.7% | 26.2% | -234 | -139 |
-| claude-haiku-4-5-20251001-low | 34 | 11.8% | 22.5% | -250 | -139 |
-| claude-haiku-4-5-20251001-high | 29 | 6.9% | 25.1% | -280 | -147 |
-| claude-haiku-4-5-20251001-off | 24 | 0.0% | 17.8% | -388 | -216 |
+| claude-haiku-4-5-20251001 | 32 | 12.5% | 26.0% | -200 | -122 |
+| claude-haiku-4-5-20251001-minimal | 31 | 9.7% | 26.2% | -236 | -140 |
+| claude-haiku-4-5-20251001-low | 34 | 11.8% | 22.5% | -251 | -140 |
+| claude-haiku-4-5-20251001-high | 29 | 6.9% | 25.1% | -282 | -147 |
+| claude-haiku-4-5-20251001-off | 24 | 0.0% | 17.8% | -390 | -217 |
 
 ### Cross-model games (tournament 1)
 
@@ -121,15 +123,15 @@ One table per cohort, ranked by the pooled match rating. Matches, win share and 
 
 | config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
-| claude-sonnet-5-5-max | 2 | 0.0% | 34.4% | +173 | +107 |
-| gpt-6-astra | 140 | 72.1% | 63.3% | +149 | +84 |
-| claude-opus-5-5 | 142 | 62.7% | 58.2% | +85 | +46 |
-| gpt-6.1-sol | 140 | 59.3% | 58.2% | +65 | +55 |
-| claude-sonnet-5-5 | 140 | 55.0% | 54.2% | +10 | +2 |
-| claude-haiku-5-5 | 140 | 57.9% | 53.7% | +1 | -4 |
-| gpt-5.6-terra | 140 | 45.7% | 48.3% | -61 | -24 |
-| claude-haiku-4-5-20251001 | 140 | 30.0% | 35.7% | -198 | -122 |
-| gpt-6-luna | 140 | 17.9% | 28.5% | -262 | -154 |
+| claude-sonnet-5-5-max | 2 | 0.0% | 34.4% | +169 | +105 |
+| gpt-6-astra | 140 | 72.1% | 63.3% | +147 | +83 |
+| claude-opus-5-5 | 142 | 62.7% | 58.2% | +76 | +43 |
+| gpt-6.1-sol | 140 | 59.3% | 58.2% | +63 | +54 |
+| claude-haiku-5-5 | 140 | 57.9% | 53.7% | +7 | -1 |
+| claude-sonnet-5-5 | 140 | 55.0% | 54.2% | +4 | -1 |
+| gpt-5.6-terra | 140 | 45.7% | 48.3% | -63 | -25 |
+| claude-haiku-4-5-20251001 | 140 | 30.0% | 35.7% | -200 | -122 |
+| gpt-6-luna | 140 | 17.9% | 28.5% | -264 | -155 |
 
 ### claude-haiku-5-5 efforts (tournament 1)
 
@@ -139,8 +141,8 @@ One table per cohort, ranked by the pooled match rating. Matches, win share and 
 |---|---|---|---|---|---|
 | claude-haiku-5-5-max | 100 | 60.0% | 57.8% | +72 | +44 |
 | claude-haiku-5-5-xhigh | 100 | 65.0% | 55.0% | +61 | +12 |
-| claude-haiku-5-5-high | 100 | 54.0% | 53.6% | +32 | +5 |
-| claude-haiku-5-5 | 100 | 45.0% | 49.5% | +1 | -4 |
+| claude-haiku-5-5-high | 100 | 54.0% | 53.6% | +31 | +5 |
+| claude-haiku-5-5 | 100 | 45.0% | 49.5% | +7 | -1 |
 | claude-haiku-5-5-low | 100 | 45.0% | 47.8% | -1 | -3 |
 | claude-haiku-5-5-off | 100 | 31.0% | 36.2% | -137 | -100 |
 
@@ -150,12 +152,12 @@ One table per cohort, ranked by the pooled match rating. Matches, win share and 
 
 | config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
-| claude-sonnet-5-5-max | 100 | 68.0% | 63.4% | +173 | +107 |
-| claude-sonnet-5-5-xhigh | 100 | 58.0% | 52.9% | +122 | +56 |
-| claude-sonnet-5-5-high | 100 | 51.0% | 49.2% | +35 | +7 |
-| claude-sonnet-5-5 | 100 | 45.0% | 47.6% | +10 | +2 |
-| claude-sonnet-5-5-off | 100 | 43.0% | 44.9% | -14 | -22 |
-| claude-sonnet-5-5-low | 100 | 35.0% | 42.0% | -67 | -40 |
+| claude-sonnet-5-5-max | 100 | 68.0% | 63.4% | +169 | +105 |
+| claude-sonnet-5-5-xhigh | 100 | 58.0% | 52.9% | +119 | +55 |
+| claude-sonnet-5-5-high | 100 | 51.0% | 49.2% | +32 | +6 |
+| claude-sonnet-5-5 | 100 | 45.0% | 47.6% | +4 | -1 |
+| claude-sonnet-5-5-off | 100 | 43.0% | 44.9% | -17 | -24 |
+| claude-sonnet-5-5-low | 100 | 35.0% | 42.0% | -70 | -41 |
 
 ### gpt-6-luna efforts (tournament 1)
 
@@ -163,12 +165,12 @@ One table per cohort, ranked by the pooled match rating. Matches, win share and 
 
 | config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
-| gpt-6-luna-xhigh | 100 | 72.0% | 66.0% | -26 | -9 |
-| gpt-6-luna-max | 100 | 72.0% | 66.1% | -44 | -14 |
-| gpt-6-luna-high | 100 | 62.0% | 56.8% | -100 | -67 |
-| gpt-6-luna | 100 | 39.0% | 42.7% | -262 | -154 |
-| gpt-6-luna-off | 100 | 28.0% | 35.4% | -341 | -207 |
-| gpt-6-luna-low | 100 | 27.0% | 32.9% | -346 | -222 |
+| gpt-6-luna-xhigh | 100 | 72.0% | 66.0% | -29 | -11 |
+| gpt-6-luna-max | 100 | 72.0% | 66.1% | -46 | -15 |
+| gpt-6-luna-high | 100 | 62.0% | 56.8% | -102 | -68 |
+| gpt-6-luna | 100 | 39.0% | 42.7% | -264 | -155 |
+| gpt-6-luna-off | 100 | 28.0% | 35.4% | -343 | -209 |
+| gpt-6-luna-low | 100 | 27.0% | 32.9% | -348 | -223 |
 
 ### Tournament 5
 
@@ -176,39 +178,39 @@ One table per cohort, ranked by the pooled match rating. Matches, win share and 
 
 | config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
-| claude-opus-5-5-max | 40 | 60.0% | 55.0% | +218 | +118 |
-| gpt-6.1-terra-max | 4 | 75.0% | 66.1% | +202 | +121 |
-| gpt-6-astra-high | 8 | 37.5% | 50.6% | +179 | +116 |
-| claude-sonnet-5-5-max | 30 | 60.0% | 54.7% | +173 | +107 |
-| claude-opus-5-5-xhigh | 30 | 36.7% | 45.7% | +170 | +100 |
-| gpt-6.1-terra-xhigh | 10 | 40.0% | 40.0% | +157 | +59 |
-| gpt-6-astra | 34 | 58.8% | 55.0% | +149 | +84 |
-| claude-opus-5-5-high | 2 | 50.0% | 33.3% | +147 | +77 |
-| gpt-6.1-sol-max | 32 | 46.9% | 49.7% | +143 | +95 |
-| gpt-6-astra-low | 12 | 58.3% | 55.4% | +123 | +63 |
-| claude-sonnet-5-5-xhigh | 8 | 87.5% | 83.3% | +122 | +56 |
-| claude-opus-5-5-off | 12 | 58.3% | 61.1% | +108 | +63 |
-| gpt-6.1-terra | 20 | 50.0% | 50.8% | +103 | +49 |
-| gpt-6.1-terra-off | 8 | 50.0% | 41.7% | +91 | +25 |
-| gpt-6.1-sol-low | 6 | 66.7% | 61.1% | +90 | +60 |
-| gpt-6.1-sol-xhigh | 10 | 60.0% | 60.4% | +87 | +68 |
-| claude-opus-5-5 | 28 | 57.1% | 51.1% | +85 | +46 |
-| gpt-6.1-terra-high | 8 | 25.0% | 33.1% | +85 | +47 |
-| gpt-6.1-sol | 12 | 58.3% | 61.1% | +65 | +55 |
-| gpt-6.1-sol-high | 8 | 37.5% | 42.8% | +60 | +41 |
-| gpt-6.1-terra-low | 8 | 62.5% | 58.6% | +48 | +31 |
-| claude-sonnet-5-5-high | 8 | 62.5% | 53.6% | +35 | +7 |
-| claude-haiku-5-5-high | 6 | 66.7% | 54.8% | +32 | +5 |
-| claude-sonnet-5-5 | 10 | 30.0% | 30.0% | +10 | +2 |
-| claude-haiku-5-5 | 14 | 35.7% | 37.6% | +1 | -4 |
+| claude-opus-5-5-max | 40 | 60.0% | 55.0% | +215 | +117 |
+| gpt-6.1-terra-max | 4 | 75.0% | 66.1% | +199 | +120 |
+| gpt-6-astra-high | 8 | 37.5% | 50.6% | +177 | +115 |
+| claude-sonnet-5-5-max | 30 | 60.0% | 54.7% | +169 | +105 |
+| claude-opus-5-5-xhigh | 30 | 36.7% | 45.7% | +166 | +98 |
+| gpt-6.1-terra-xhigh | 10 | 40.0% | 40.0% | +155 | +58 |
+| gpt-6-astra | 34 | 58.8% | 55.0% | +147 | +83 |
+| claude-opus-5-5-high | 2 | 50.0% | 33.3% | +142 | +76 |
+| gpt-6.1-sol-max | 32 | 46.9% | 49.7% | +141 | +94 |
+| gpt-6-astra-low | 12 | 58.3% | 55.4% | +121 | +62 |
+| claude-sonnet-5-5-xhigh | 8 | 87.5% | 83.3% | +119 | +55 |
+| claude-opus-5-5-off | 12 | 58.3% | 61.1% | +106 | +62 |
+| gpt-6.1-terra | 20 | 50.0% | 50.8% | +101 | +48 |
+| gpt-6.1-terra-off | 8 | 50.0% | 41.7% | +89 | +24 |
+| gpt-6.1-sol-low | 6 | 66.7% | 61.1% | +88 | +59 |
+| gpt-6.1-sol-xhigh | 10 | 60.0% | 60.4% | +84 | +67 |
+| gpt-6.1-terra-high | 8 | 25.0% | 33.1% | +83 | +46 |
+| claude-opus-5-5 | 28 | 57.1% | 51.1% | +76 | +43 |
+| gpt-6.1-sol | 12 | 58.3% | 61.1% | +63 | +54 |
+| gpt-6.1-sol-high | 8 | 37.5% | 42.8% | +58 | +40 |
+| gpt-6.1-terra-low | 8 | 62.5% | 58.6% | +46 | +30 |
+| claude-sonnet-5-5-high | 8 | 62.5% | 53.6% | +32 | +6 |
+| claude-haiku-5-5-high | 6 | 66.7% | 54.8% | +31 | +5 |
+| claude-haiku-5-5 | 14 | 35.7% | 37.6% | +7 | -1 |
+| claude-sonnet-5-5 | 10 | 30.0% | 30.0% | +4 | -1 |
 | claude-haiku-5-5-low | 8 | 37.5% | 45.6% | -1 | -3 |
-| claude-opus-5-5-low | 12 | 33.3% | 44.4% | -7 | +23 |
-| claude-sonnet-5-5-off | 8 | 62.5% | 57.8% | -14 | -22 |
-| gpt-6-luna-xhigh | 4 | 50.0% | 49.4% | -26 | -9 |
-| gpt-6-luna-max | 2 | 50.0% | 66.7% | -44 | -14 |
-| claude-sonnet-5-5-low | 8 | 25.0% | 31.9% | -67 | -40 |
-| claude-haiku-4-5-20251001 | 8 | 25.0% | 28.9% | -198 | -122 |
-| gpt-6-luna | 10 | 10.0% | 20.2% | -262 | -154 |
+| claude-opus-5-5-low | 12 | 33.3% | 44.4% | -11 | +22 |
+| claude-sonnet-5-5-off | 8 | 62.5% | 57.8% | -17 | -24 |
+| gpt-6-luna-xhigh | 4 | 50.0% | 49.4% | -29 | -11 |
+| gpt-6-luna-max | 2 | 50.0% | 66.7% | -46 | -15 |
+| claude-sonnet-5-5-low | 8 | 25.0% | 31.9% | -70 | -41 |
+| claude-haiku-4-5-20251001 | 8 | 25.0% | 28.9% | -200 | -122 |
+| gpt-6-luna | 10 | 10.0% | 20.2% | -264 | -155 |
 
 ### claude-haiku-4-5-20251001 efforts (tournament 1)
 
@@ -216,11 +218,11 @@ One table per cohort, ranked by the pooled match rating. Matches, win share and 
 
 | config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
-| claude-haiku-4-5-20251001 | 80 | 58.8% | 55.8% | -198 | -122 |
-| claude-haiku-4-5-20251001-minimal | 80 | 57.5% | 51.2% | -234 | -139 |
-| claude-haiku-4-5-20251001-low | 80 | 51.2% | 52.7% | -250 | -139 |
-| claude-haiku-4-5-20251001-high | 80 | 53.8% | 52.4% | -280 | -147 |
-| claude-haiku-4-5-20251001-off | 80 | 28.7% | 38.0% | -388 | -216 |
+| claude-haiku-4-5-20251001 | 80 | 58.8% | 55.8% | -200 | -122 |
+| claude-haiku-4-5-20251001-minimal | 80 | 57.5% | 51.2% | -236 | -140 |
+| claude-haiku-4-5-20251001-low | 80 | 51.2% | 52.7% | -251 | -140 |
+| claude-haiku-4-5-20251001-high | 80 | 53.8% | 52.4% | -282 | -147 |
+| claude-haiku-4-5-20251001-off | 80 | 28.7% | 38.0% | -390 | -217 |
 
 ### gpt-5.6-terra efforts (tournament 1)
 
@@ -228,11 +230,11 @@ One table per cohort, ranked by the pooled match rating. Matches, win share and 
 
 | config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
-| gpt-5.6-terra-xhigh | 80 | 60.0% | 56.1% | +7 | +32 |
-| gpt-5.6-terra-max | 80 | 58.8% | 53.9% | +2 | +19 |
-| gpt-5.6-terra | 80 | 45.0% | 45.0% | -61 | -24 |
-| gpt-5.6-terra-high | 80 | 46.2% | 50.8% | -75 | -4 |
-| gpt-5.6-terra-low | 80 | 40.0% | 44.2% | -93 | -25 |
+| gpt-5.6-terra-xhigh | 80 | 60.0% | 56.1% | +5 | +31 |
+| gpt-5.6-terra-max | 80 | 58.8% | 53.9% | +0 | +18 |
+| gpt-5.6-terra | 80 | 45.0% | 45.0% | -63 | -25 |
+| gpt-5.6-terra-high | 80 | 46.2% | 50.8% | -78 | -5 |
+| gpt-5.6-terra-low | 80 | 40.0% | 44.2% | -95 | -26 |
 
 ### gpt-6.1-sol efforts (tournament 1)
 
@@ -240,11 +242,23 @@ One table per cohort, ranked by the pooled match rating. Matches, win share and 
 
 | config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
-| gpt-6.1-sol-max | 80 | 58.8% | 54.7% | +143 | +95 |
-| gpt-6.1-sol-low | 80 | 48.8% | 48.7% | +90 | +60 |
-| gpt-6.1-sol-xhigh | 80 | 48.8% | 49.8% | +87 | +68 |
-| gpt-6.1-sol | 80 | 46.2% | 49.1% | +65 | +55 |
-| gpt-6.1-sol-high | 80 | 47.5% | 47.7% | +60 | +41 |
+| gpt-6.1-sol-max | 80 | 58.8% | 54.7% | +141 | +94 |
+| gpt-6.1-sol-low | 80 | 48.8% | 48.7% | +88 | +59 |
+| gpt-6.1-sol-xhigh | 80 | 48.8% | 49.8% | +84 | +67 |
+| gpt-6.1-sol | 80 | 46.2% | 49.1% | +63 | +54 |
+| gpt-6.1-sol-high | 80 | 47.5% | 47.7% | +58 | +40 |
+
+### Tournament 10
+
+120 scored matches.
+
+| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
+|---|---|---|---|---|---|
+| engine-d6s | 60 | 61.7% | 57.4% | +111 | +65 |
+| claude-opus-5-5 | 40 | 47.5% | 50.4% | +76 | +43 |
+| claude-haiku-5-5 | 40 | 52.5% | 50.8% | +7 | -1 |
+| claude-sonnet-5-5 | 40 | 40.0% | 43.5% | +4 | -1 |
+| engine-d2 | 60 | 45.0% | 46.2% | -6 | -13 |
 
 ### Tournament 9
 
@@ -252,15 +266,15 @@ One table per cohort, ranked by the pooled match rating. Matches, win share and 
 
 | config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
-| claude-haiku-5-5-high | 10 | 90.0% | 70.4% | +32 | +5 |
-| claude-haiku-5-5 | 10 | 80.0% | 83.8% | +1 | -4 |
+| claude-haiku-5-5-high | 10 | 90.0% | 70.4% | +31 | +5 |
+| claude-haiku-5-5 | 10 | 80.0% | 83.8% | +7 | -1 |
 | claude-haiku-5-5-low | 30 | 86.7% | 73.1% | -1 | -3 |
 | claude-haiku-5-5-off | 50 | 70.0% | 59.3% | -137 | -100 |
-| claude-haiku-4-5-20251001 | 40 | 25.0% | 30.6% | -198 | -122 |
-| claude-haiku-4-5-20251001-minimal | 20 | 15.0% | 33.6% | -234 | -139 |
-| claude-haiku-4-5-20251001-low | 20 | 20.0% | 33.4% | -250 | -139 |
-| claude-haiku-4-5-20251001-high | 10 | 20.0% | 40.0% | -280 | -147 |
-| claude-haiku-4-5-20251001-off | 10 | 30.0% | 33.6% | -388 | -216 |
+| claude-haiku-4-5-20251001 | 40 | 25.0% | 30.6% | -200 | -122 |
+| claude-haiku-4-5-20251001-minimal | 20 | 15.0% | 33.6% | -236 | -140 |
+| claude-haiku-4-5-20251001-low | 20 | 20.0% | 33.4% | -251 | -140 |
+| claude-haiku-4-5-20251001-high | 10 | 20.0% | 40.0% | -282 | -147 |
+| claude-haiku-4-5-20251001-off | 10 | 30.0% | 33.6% | -390 | -217 |
 
 ### Opus efforts (tournament 2)
 
@@ -268,10 +282,10 @@ One table per cohort, ranked by the pooled match rating. Matches, win share and 
 
 | config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
-| claude-opus-5-5-xhigh | 40 | 65.0% | 58.6% | +170 | +100 |
-| claude-opus-5-5-high | 40 | 45.0% | 44.1% | +147 | +77 |
-| claude-opus-5-5 | 60 | 48.3% | 48.1% | +85 | +46 |
-| claude-opus-5-5-low | 20 | 35.0% | 50.2% | -7 | +23 |
+| claude-opus-5-5-xhigh | 40 | 65.0% | 58.6% | +166 | +98 |
+| claude-opus-5-5-high | 40 | 45.0% | 44.1% | +142 | +76 |
+| claude-opus-5-5 | 60 | 48.3% | 48.1% | +76 | +43 |
+| claude-opus-5-5-low | 20 | 35.0% | 50.2% | -11 | +22 |
 
 ### Tournament 7
 
@@ -279,44 +293,44 @@ One table per cohort, ranked by the pooled match rating. Matches, win share and 
 
 | config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
-| gpt-6.1-terra-max | 16 | 75.0% | 70.7% | +202 | +121 |
-| gpt-6-astra-high | 12 | 66.7% | 58.1% | +179 | +116 |
-| claude-opus-5-5-xhigh | 1 | 100.0% | 64.4% | +170 | +100 |
-| gpt-6.1-terra-xhigh | 6 | 66.7% | 55.6% | +157 | +59 |
-| gpt-6-astra | 1 | 0.0% | 0.0% | +149 | +84 |
-| claude-opus-5-5-high | 4 | 50.0% | 51.1% | +147 | +77 |
-| gpt-6-astra-low | 7 | 14.3% | 38.4% | +123 | +63 |
-| claude-sonnet-5-5-xhigh | 3 | 33.3% | 22.2% | +122 | +56 |
-| claude-opus-5-5-off | 3 | 66.7% | 43.7% | +108 | +63 |
-| gpt-6-astra-low-recall | 13 | 76.9% | 69.1% | +102 | +31 |
-| gpt-6.1-terra-off | 9 | 77.8% | 63.0% | +91 | +25 |
-| gpt-6.1-sol-low | 2 | 100.0% | 65.6% | +90 | +60 |
-| gpt-6.1-sol-xhigh | 1 | 0.0% | 33.3% | +87 | +68 |
-| claude-opus-5-5 | 1 | 0.0% | 31.1% | +85 | +46 |
-| gpt-6.1-terra-high | 9 | 66.7% | 66.4% | +85 | +47 |
-| gpt-6.1-sol | 2 | 100.0% | 84.4% | +65 | +55 |
+| gpt-6.1-terra-max | 16 | 75.0% | 70.7% | +199 | +120 |
+| gpt-6-astra-high | 12 | 66.7% | 58.1% | +177 | +115 |
+| claude-opus-5-5-xhigh | 1 | 100.0% | 64.4% | +166 | +98 |
+| gpt-6.1-terra-xhigh | 6 | 66.7% | 55.6% | +155 | +58 |
+| gpt-6-astra | 1 | 0.0% | 0.0% | +147 | +83 |
+| claude-opus-5-5-high | 4 | 50.0% | 51.1% | +142 | +76 |
+| gpt-6-astra-low | 7 | 14.3% | 38.4% | +121 | +62 |
+| claude-sonnet-5-5-xhigh | 3 | 33.3% | 22.2% | +119 | +55 |
+| claude-opus-5-5-off | 3 | 66.7% | 43.7% | +106 | +62 |
+| gpt-6-astra-low-recall | 13 | 76.9% | 69.1% | +100 | +30 |
+| gpt-6.1-terra-off | 9 | 77.8% | 63.0% | +89 | +24 |
+| gpt-6.1-sol-low | 2 | 100.0% | 65.6% | +88 | +59 |
+| gpt-6.1-sol-xhigh | 1 | 0.0% | 33.3% | +84 | +67 |
+| gpt-6.1-terra-high | 9 | 66.7% | 66.4% | +83 | +46 |
+| claude-opus-5-5 | 1 | 0.0% | 31.1% | +76 | +43 |
+| gpt-6.1-sol | 2 | 100.0% | 84.4% | +63 | +54 |
 | claude-haiku-5-5-xhigh | 4 | 25.0% | 33.3% | +61 | +12 |
-| gpt-6.1-sol-high | 1 | 0.0% | 31.1% | +60 | +41 |
-| gpt-6.1-terra-low | 9 | 55.6% | 48.9% | +48 | +31 |
-| claude-sonnet-5-5-high | 3 | 33.3% | 34.8% | +35 | +7 |
-| claude-haiku-5-5-high | 2 | 0.0% | 0.0% | +32 | +5 |
-| claude-sonnet-5-5 | 4 | 25.0% | 33.3% | +10 | +2 |
-| gpt-5.6-terra-xhigh | 3 | 66.7% | 67.4% | +7 | +32 |
-| claude-haiku-5-5 | 4 | 0.0% | 32.8% | +1 | -4 |
+| gpt-6.1-sol-high | 1 | 0.0% | 31.1% | +58 | +40 |
+| gpt-6.1-terra-low | 9 | 55.6% | 48.9% | +46 | +30 |
+| claude-sonnet-5-5-high | 3 | 33.3% | 34.8% | +32 | +6 |
+| claude-haiku-5-5-high | 2 | 0.0% | 0.0% | +31 | +5 |
+| claude-haiku-5-5 | 4 | 0.0% | 32.8% | +7 | -1 |
+| gpt-5.6-terra-xhigh | 3 | 66.7% | 67.4% | +5 | +31 |
+| claude-sonnet-5-5 | 4 | 25.0% | 33.3% | +4 | -1 |
 | claude-haiku-5-5-low | 2 | 50.0% | 66.7% | -1 | -3 |
-| claude-opus-5-5-low | 4 | 0.0% | 32.8% | -7 | +23 |
-| claude-sonnet-5-5-off | 2 | 50.0% | 34.4% | -14 | -22 |
-| gpt-6-luna-xhigh | 1 | 0.0% | 0.0% | -26 | -9 |
-| gpt-5.6-terra | 3 | 0.0% | 22.2% | -61 | -24 |
-| claude-sonnet-5-5-low | 2 | 50.0% | 47.8% | -67 | -40 |
-| gpt-5.6-terra-high | 1 | 0.0% | 35.6% | -75 | -4 |
-| gpt-5.6-terra-low | 1 | 0.0% | 31.1% | -93 | -25 |
-| gpt-6-luna-high | 2 | 50.0% | 51.1% | -100 | -67 |
+| claude-opus-5-5-low | 4 | 0.0% | 32.8% | -11 | +22 |
+| claude-sonnet-5-5-off | 2 | 50.0% | 34.4% | -17 | -24 |
+| gpt-6-luna-xhigh | 1 | 0.0% | 0.0% | -29 | -11 |
+| gpt-5.6-terra | 3 | 0.0% | 22.2% | -63 | -25 |
+| claude-sonnet-5-5-low | 2 | 50.0% | 47.8% | -70 | -41 |
+| gpt-5.6-terra-high | 1 | 0.0% | 35.6% | -78 | -5 |
+| gpt-5.6-terra-low | 1 | 0.0% | 31.1% | -95 | -26 |
+| gpt-6-luna-high | 2 | 50.0% | 51.1% | -102 | -68 |
 | claude-haiku-5-5-off | 2 | 0.0% | 0.0% | -137 | -100 |
-| claude-haiku-4-5-20251001 | 1 | 0.0% | 0.0% | -198 | -122 |
-| claude-haiku-4-5-20251001-minimal | 1 | 100.0% | 66.7% | -234 | -139 |
-| claude-haiku-4-5-20251001-low | 2 | 0.0% | 17.8% | -250 | -139 |
-| claude-haiku-4-5-20251001-high | 2 | 0.0% | 16.7% | -280 | -147 |
+| claude-haiku-4-5-20251001 | 1 | 0.0% | 0.0% | -200 | -122 |
+| claude-haiku-4-5-20251001-minimal | 1 | 100.0% | 66.7% | -236 | -140 |
+| claude-haiku-4-5-20251001-low | 2 | 0.0% | 17.8% | -251 | -140 |
+| claude-haiku-4-5-20251001-high | 2 | 0.0% | 16.7% | -282 | -147 |
 
 ### Tournament 6
 
@@ -324,34 +338,34 @@ One table per cohort, ranked by the pooled match rating. Matches, win share and 
 
 | config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
-| gpt-6.1-terra-xhigh | 4 | 50.0% | 41.1% | +157 | +59 |
-| claude-opus-5-5-high | 1 | 0.0% | 33.3% | +147 | +77 |
-| gpt-6-astra-low | 1 | 100.0% | 68.9% | +123 | +63 |
-| claude-sonnet-5-5-xhigh | 1 | 100.0% | 66.7% | +122 | +56 |
-| claude-opus-5-5-off | 11 | 54.5% | 51.7% | +108 | +63 |
-| gpt-6.1-terra | 1 | 0.0% | 0.0% | +103 | +49 |
-| gpt-6-astra-low-recall | 7 | 42.9% | 47.0% | +102 | +31 |
-| gpt-6.1-terra-off | 3 | 0.0% | 33.3% | +91 | +25 |
-| claude-opus-5-5 | 2 | 100.0% | 66.7% | +85 | +46 |
-| gpt-6.1-terra-high | 3 | 33.3% | 55.6% | +85 | +47 |
+| gpt-6.1-terra-xhigh | 4 | 50.0% | 41.1% | +155 | +58 |
+| claude-opus-5-5-high | 1 | 0.0% | 33.3% | +142 | +76 |
+| gpt-6-astra-low | 1 | 100.0% | 68.9% | +121 | +62 |
+| claude-sonnet-5-5-xhigh | 1 | 100.0% | 66.7% | +119 | +55 |
+| claude-opus-5-5-off | 11 | 54.5% | 51.7% | +106 | +62 |
+| gpt-6.1-terra | 1 | 0.0% | 0.0% | +101 | +48 |
+| gpt-6-astra-low-recall | 7 | 42.9% | 47.0% | +100 | +30 |
+| gpt-6.1-terra-off | 3 | 0.0% | 33.3% | +89 | +24 |
+| gpt-6.1-terra-high | 3 | 33.3% | 55.6% | +83 | +46 |
+| claude-opus-5-5 | 2 | 100.0% | 66.7% | +76 | +43 |
 | claude-haiku-5-5-max | 1 | 100.0% | 66.7% | +72 | +44 |
-| gpt-6.1-sol | 1 | 100.0% | 64.4% | +65 | +55 |
+| gpt-6.1-sol | 1 | 100.0% | 64.4% | +63 | +54 |
 | claude-haiku-5-5-xhigh | 2 | 50.0% | 51.1% | +61 | +12 |
-| gpt-6.1-terra-low | 3 | 33.3% | 44.4% | +48 | +31 |
-| claude-sonnet-5-5-high | 2 | 0.0% | 32.2% | +35 | +7 |
-| claude-haiku-5-5-high | 2 | 100.0% | 100.0% | +32 | +5 |
-| claude-sonnet-5-5 | 2 | 50.0% | 51.1% | +10 | +2 |
-| claude-haiku-5-5 | 5 | 100.0% | 73.8% | +1 | -4 |
+| gpt-6.1-terra-low | 3 | 33.3% | 44.4% | +46 | +30 |
+| claude-sonnet-5-5-high | 2 | 0.0% | 32.2% | +32 | +6 |
+| claude-haiku-5-5-high | 2 | 100.0% | 100.0% | +31 | +5 |
+| claude-haiku-5-5 | 5 | 100.0% | 73.8% | +7 | -1 |
+| claude-sonnet-5-5 | 2 | 50.0% | 51.1% | +4 | -1 |
 | claude-haiku-5-5-low | 3 | 33.3% | 45.9% | -1 | -3 |
-| claude-opus-5-5-low | 2 | 100.0% | 65.6% | -7 | +23 |
-| claude-sonnet-5-5-off | 1 | 100.0% | 100.0% | -14 | -22 |
-| claude-sonnet-5-5-low | 1 | 100.0% | 66.7% | -67 | -40 |
+| claude-opus-5-5-low | 2 | 100.0% | 65.6% | -11 | +22 |
+| claude-sonnet-5-5-off | 1 | 100.0% | 100.0% | -17 | -24 |
+| claude-sonnet-5-5-low | 1 | 100.0% | 66.7% | -70 | -41 |
 | claude-haiku-5-5-off | 3 | 66.7% | 56.3% | -137 | -100 |
-| claude-haiku-4-5-20251001 | 3 | 0.0% | 22.2% | -198 | -122 |
-| claude-haiku-4-5-20251001-minimal | 1 | 0.0% | 31.1% | -234 | -139 |
-| claude-haiku-4-5-20251001-low | 3 | 66.7% | 54.1% | -250 | -139 |
-| claude-haiku-4-5-20251001-high | 4 | 0.0% | 16.7% | -280 | -147 |
-| claude-haiku-4-5-20251001-off | 1 | 0.0% | 35.6% | -388 | -216 |
+| claude-haiku-4-5-20251001 | 3 | 0.0% | 22.2% | -200 | -122 |
+| claude-haiku-4-5-20251001-minimal | 1 | 0.0% | 31.1% | -236 | -140 |
+| claude-haiku-4-5-20251001-low | 3 | 66.7% | 54.1% | -251 | -140 |
+| claude-haiku-4-5-20251001-high | 4 | 0.0% | 16.7% | -282 | -147 |
+| claude-haiku-4-5-20251001-off | 1 | 0.0% | 35.6% | -390 | -217 |
 <!-- leaderboard:end -->
 
 ## tournament-1: cross-model and effort sweeps

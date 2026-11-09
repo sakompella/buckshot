@@ -46,19 +46,19 @@ Inside `nix develop`, from the repository root:
 | claude-haiku-4-5-20251001 | high | 2.5% (21/831) [1.5%, 3.7%] | 0/5 | 13 |
 | claude-haiku-5-5 | off | 0.4% (5/1151) [0.1%, 0.8%] | 0/4 | 33 |
 | claude-haiku-5-5 | low | 0.6% (8/1392) [0.2%, 1.0%] | 0/11 | 36 |
-| claude-haiku-5-5 | medium | 0.5% (11/2435) [0.2%, 0.7%] | 1/12 | 65 |
+| claude-haiku-5-5 | medium | 0.4% (11/2711) [0.2%, 0.7%] | 1/13 | 75 |
 | claude-haiku-5-5 | high | 0.4% (5/1235) [0.1%, 0.8%] | 0/3 | 35 |
 | claude-haiku-5-5 | xhigh | 0.0% (0/1224) [0.0%, 0.0%] | 0/8 | 35 |
 | claude-haiku-5-5 | max | 0.0% (0/878) [0.0%, 0.0%] | 0/2 | 19 |
 | claude-opus-5-5 | off | 0.0% (0/599) [0.0%, 0.0%] | 0/5 | 18 |
 | claude-opus-5-5 | low | 0.0% (0/566) [0.0%, 0.0%] | 0/3 | 15 |
-| claude-opus-5-5 | medium | 0.0% (1/2177) [0.0%, 0.1%] | 0/13 | 64 |
+| claude-opus-5-5 | medium | 0.0% (1/2468) [0.0%, 0.1%] | 0/15 | 76 |
 | claude-opus-5-5 | high | 0.0% (0/582) [0.0%, 0.0%] | 0/1 | 18 |
 | claude-opus-5-5 | xhigh | 0.0% (0/1073) [0.0%, 0.0%] | 0/6 | 20 |
 | claude-opus-5-5 | max | 0.0% (0/704) [0.0%, 0.0%] | 0/3 | 26 |
 | claude-sonnet-5-5 | off | 0.8% (10/1179) [0.3%, 1.5%] | 0/7 | 20 |
 | claude-sonnet-5-5 | low | 0.3% (3/1013) [0.0%, 0.7%] | 0/5 | 11 |
-| claude-sonnet-5-5 | medium | 0.4% (9/2327) [0.2%, 0.6%] | 0/10 | 45 |
+| claude-sonnet-5-5 | medium | 0.3% (9/2632) [0.1%, 0.6%] | 0/12 | 49 |
 | claude-sonnet-5-5 | high | 0.3% (3/1176) [0.0%, 0.6%] | 0/10 | 35 |
 | claude-sonnet-5-5 | xhigh | 0.0% (0/1243) [0.0%, 0.0%] | 0/4 | 35 |
 | claude-sonnet-5-5 | max | 0.0% (0/1115) [0.0%, 0.0%] | 0/4 | 26 |
@@ -88,7 +88,7 @@ Inside `nix develop`, from the repository root:
 | gpt-6.1-terra | high | 0.0% (0/594) [0.0%, 0.0%] | 0/4 | 18 |
 | gpt-6.1-terra | xhigh | 0.0% (0/570) [0.0%, 0.0%] | – | 11 |
 | gpt-6.1-terra | max | 0.0% (0/648) [0.0%, 0.0%] | 0/2 | 14 |
-| all |  | 1.3% (641/48375) [1.2%, 1.5%] | 2.9% (7/239) [0.9%, 5.4%] | 1,225 |
+| all |  | 1.3% (641/49247) [1.2%, 1.4%] | 2.9% (7/244) [1.2%, 5.3%] | 1,251 |
 
 ### Not a certain mistake: proven blank, gave the turn away, by config
 
@@ -101,19 +101,19 @@ Inside `nix develop`, from the repository root:
 | claude-haiku-4-5-20251001 | high | 29.8% (171/573) [26.5%, 33.3%] |
 | claude-haiku-5-5 | off | 33.5% (275/822) [30.1%, 37.1%] |
 | claude-haiku-5-5 | low | 25.9% (214/826) [23.2%, 28.7%] |
-| claude-haiku-5-5 | medium | 21.4% (306/1433) [19.4%, 23.5%] |
+| claude-haiku-5-5 | medium | 21.0% (336/1597) [19.1%, 23.0%] |
 | claude-haiku-5-5 | high | 20.7% (145/702) [17.3%, 23.9%] |
 | claude-haiku-5-5 | xhigh | 16.9% (105/621) [13.7%, 19.7%] |
 | claude-haiku-5-5 | max | 8.7% (41/471) [6.2%, 11.5%] |
 | claude-opus-5-5 | off | 0.3% (1/300) [0.0%, 1.1%] |
 | claude-opus-5-5 | low | 0.4% (1/271) [0.0%, 1.2%] |
-| claude-opus-5-5 | medium | 0.3% (3/1093) [0.0%, 0.6%] |
+| claude-opus-5-5 | medium | 0.3% (4/1245) [0.1%, 0.7%] |
 | claude-opus-5-5 | high | 0.0% (0/284) [0.0%, 0.0%] |
 | claude-opus-5-5 | xhigh | 0.2% (1/588) [0.0%, 0.5%] |
 | claude-opus-5-5 | max | 0.0% (0/305) [0.0%, 0.0%] |
 | claude-sonnet-5-5 | off | 4.9% (29/597) [3.0%, 7.0%] |
 | claude-sonnet-5-5 | low | 2.7% (15/564) [1.3%, 4.2%] |
-| claude-sonnet-5-5 | medium | 1.8% (19/1078) [1.0%, 2.6%] |
+| claude-sonnet-5-5 | medium | 1.9% (23/1226) [1.1%, 2.7%] |
 | claude-sonnet-5-5 | high | 0.9% (5/563) [0.2%, 1.7%] |
 | claude-sonnet-5-5 | xhigh | 0.8% (5/632) [0.2%, 1.6%] |
 | claude-sonnet-5-5 | max | 0.3% (2/621) [0.0%, 0.8%] |
@@ -143,19 +143,19 @@ Inside `nix develop`, from the repository root:
 | gpt-6.1-terra | high | 2.6% (8/305) [0.7%, 5.3%] |
 | gpt-6.1-terra | xhigh | 1.6% (5/314) [0.3%, 3.0%] |
 | gpt-6.1-terra | max | 0.3% (1/383) [0.0%, 0.9%] |
-| all |  | 12.1% (3305/27394) [11.4%, 12.8%] |
+| all |  | 12.0% (3340/27858) [11.3%, 12.7%] |
 
 ### Not a certain mistake: proven blank, gave the turn away, by what the search scored, all configs
 
 | opponent jammed | search scores the opponent shot higher | search settles the self shot as a win and the opponent shot as a loss | the rest | no search |
 |---|---|---|---|---|
-| 17.7% (830/4686) [16.2%, 19.1%] | 4.4% (19/429) [2.6%, 6.4%] | 2.3% (7/298) [0.7%, 4.3%] | 11.1% (2449/21980) [10.5%, 11.8%] | 0/1 |
+| 17.7% (844/4776) [16.3%, 19.1%] | 4.3% (19/437) [2.6%, 6.3%] | 2.3% (7/304) [0.7%, 4.4%] | 11.1% (2470/22340) [10.4%, 11.7%] | 0/1 |
 
 ### By source of the proof and shells left, all configs
 
 | pattern | public | glass | phone | combined | last shell | earlier shells |
 |---|---|---|---|---|---|---|
-| shot itself on a proven live | 1.9% (509/26972) [1.7%, 2.1%] | 0.1% (21/17159) [0.1%, 0.2%] | 2.6% (109/4155) [2.1%, 3.2%] | 2.2% (2/89) [0.0%, 5.4%] | 2.3% (382/16779) [2.0%, 2.6%] | 0.8% (259/31596) [0.7%, 0.9%] |
-| shot the opponent, giving up a guaranteed win | 1/1 | 2.2% (4/178) [0.5%, 4.6%] | 1.8% (1/55) [0.0%, 5.6%] | 1/5 | – | 2.9% (7/239) [0.9%, 5.4%] |
-| proven blank, gave the turn away | 17.1% (2678/15699) [16.2%, 18.0%] | 3.4% (292/8547) [2.9%, 3.9%] | 10.8% (328/3033) [9.5%, 12.2%] | 6.1% (7/115) [2.4%, 10.5%] | 18.3% (1979/10789) [17.2%, 19.5%] | 8.0% (1326/16605) [7.4%, 8.6%] |
+| shot itself on a proven live | 1.9% (509/27396) [1.7%, 2.1%] | 0.1% (21/17510) [0.1%, 0.2%] | 2.6% (109/4252) [2.0%, 3.1%] | 2.2% (2/89) [0.0%, 5.4%] | 2.2% (382/17029) [2.0%, 2.5%] | 0.8% (259/32218) [0.7%, 0.9%] |
+| shot the opponent, giving up a guaranteed win | 1/1 | 2.2% (4/182) [0.5%, 4.9%] | 1.8% (1/56) [0.0%, 5.5%] | 1/5 | – | 2.9% (7/244) [1.2%, 5.3%] |
+| proven blank, gave the turn away | 17.0% (2707/15938) [16.1%, 17.9%] | 3.4% (295/8695) [2.9%, 3.9%] | 10.7% (331/3107) [9.4%, 12.0%] | 5.9% (7/118) [1.7%, 10.4%] | 18.3% (2001/10935) [17.2%, 19.3%] | 7.9% (1339/16923) [7.3%, 8.5%] |
 <!-- tables:end -->

@@ -9,26 +9,26 @@ An earlier version of this page also listed 20 habits found by hand in the trace
 Each row is one choice pattern: the decisions where it could have happened are split into those it matched and the rest, with the mean regret of each. "Same configs" is the mean of the rest for the same model and effort mix as the matched ones, so a weak model's share does not explain a gap. "Known" means the deciding player's own log proves the shell. The certain-live and certain-blank rows pool all models; the clue source `combined` is left out. The last three rows are comparison moves that are common to every model, not one model's habit.
 
 <!-- regret:start -->
-179,642 searched decisions.
+182,722 searched decisions.
 
 | pattern | matched | mean regret | other applicable | mean regret | same configs |
 |---|---|---|---|---|---|
-| Invert the last shell and shoot yourself, known live | 327 | 10.2 | 4,631 | 1.2 | 1.2 |
-| Smoke at full health, outside Luna | 130 | 1.5 | 15,484 | 1.5 | 1.0 |
-| Smoke at full health, outside Luna, opponent holds adrenaline | 123 | 1.4 | 5,991 | 1.8 | 1.2 |
+| Invert the last shell and shoot yourself, known live | 329 | 10.2 | 4,699 | 1.2 | 1.2 |
+| Smoke at full health, outside Luna | 131 | 1.5 | 15,780 | 1.5 | 1.0 |
+| Smoke at full health, outside Luna, opponent holds adrenaline | 124 | 1.4 | 6,115 | 1.8 | 1.2 |
 | Smoke at full health, Luna | 97 | 4.3 | 2,796 | 2.5 | 2.9 |
-| Shoot yourself, unknown chamber, under half live | 2,221 | 5.4 | 2,440 | 4.6 | 3.5 |
-| Shoot yourself on a certain live, from the count | 509 | 27.2 | 18,484 | 1.6 | 2.4 |
-| Shoot yourself on a certain live, from the glass | 21 | 22.1 | 10,198 | 2.5 | 6.4 |
-| Shoot yourself on a certain live, from the phone | 109 | 27.0 | 2,826 | 2.0 | 3.1 |
-| Shoot the opponent on a certain blank, not the last shell | 1,450 | 18.9 | 11,186 | 0.8 | 1.2 |
-| Shoot the opponent on a certain blank, last shell | 1,979 | 3.4 | 4,575 | 1.8 | 2.8 |
-| Use the phone with two or fewer shells left | 641 | 2.6 | 15,515 | 2.8 | 4.9 |
-| Shoot yourself at exactly half live, no saw | 2,259 | 4.2 | 7,303 | 3.7 | 3.4 |
-| Shoot yourself with the gun sawed | 153 | 9.4 | 15,186 | 2.6 | 3.7 |
-| Saw an unknown chamber (not a pattern) | 7,801 | 1.6 | 25,305 | 2.9 | 3.3 |
-| Saw a certain live (not a pattern) | 7,025 | 0.4 | 3,518 | 4.6 | 3.0 |
-| Beer a certain live (not a pattern) | 1,146 | 5.4 | 15,837 | 2.6 | 3.5 |
+| Shoot yourself, unknown chamber, under half live | 2,262 | 5.5 | 2,476 | 4.6 | 3.5 |
+| Shoot yourself on a certain live, from the count | 509 | 27.2 | 18,797 | 1.6 | 2.4 |
+| Shoot yourself on a certain live, from the glass | 21 | 22.1 | 10,416 | 2.5 | 6.4 |
+| Shoot yourself on a certain live, from the phone | 109 | 27.0 | 2,902 | 2.0 | 3.1 |
+| Shoot the opponent on a certain blank, not the last shell | 1,464 | 18.9 | 11,408 | 0.8 | 1.2 |
+| Shoot the opponent on a certain blank, last shell | 2,001 | 3.4 | 4,634 | 1.8 | 2.8 |
+| Use the phone with two or fewer shells left | 642 | 2.6 | 15,752 | 2.8 | 4.9 |
+| Shoot yourself at exactly half live, no saw | 2,313 | 4.2 | 7,420 | 3.7 | 3.3 |
+| Shoot yourself with the gun sawed | 154 | 9.4 | 15,424 | 2.6 | 3.7 |
+| Saw an unknown chamber (not a pattern) | 7,897 | 1.6 | 25,736 | 2.9 | 3.3 |
+| Saw a certain live (not a pattern) | 7,159 | 0.4 | 3,577 | 4.5 | 3.0 |
+| Beer a certain live (not a pattern) | 1,159 | 5.4 | 16,135 | 2.6 | 3.5 |
 <!-- regret:end -->
 
 - **Costly.** Shooting yourself on a shell you can prove live averages 27.2 points when proven by the count, against 1.6 for the other shots there. The glass (22.1, only 21 shots) and phone (27.0) rows are as bad. Shooting the opponent on the last shell's certain blank is mildly worse than the rest, 3.4 against 1.8. Shooting the opponent on a certain blank before the last shell costs 19 against 0.8. Inverting a known live last shell to keep the turn costs 10 against 1.2, and a self-shot with the gun sawed 9 against 2.6. Throwing a beer at a certain live costs 5 against 3 for the rest.
