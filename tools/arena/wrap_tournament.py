@@ -33,6 +33,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -395,9 +396,7 @@ class Wrap:
 
     def cleanup(self) -> str:
         note = self.viewer_up()
-        for file in self.scratch.iterdir():
-            file.unlink()
-        self.scratch.rmdir()
+        shutil.rmtree(self.scratch)
         return note + "; scratch deleted"
 
     def steps(self) -> list[tuple[str, Callable[[], str | None]]]:
