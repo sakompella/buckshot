@@ -33,7 +33,7 @@ const labels = JSON.parse(readFileSync(join(tracedDir, 'labels.json'), 'utf8'));
 
 // Rewrites each `$..._br_pick(id, c, t, f)` call to `(__pick(id, c) ? (t) : (f))`.
 function lazyPicks(js) {
-  const call = /\$\w*br_pick\(/g;
+  const call = /\$+\w*br_pick\(/g;
   let out = '', from = 0, found;
   while ((found = call.exec(js))) {
     if (js.slice(Math.max(0, found.index - 9), found.index) === 'function ') continue;
@@ -67,7 +67,7 @@ try {
   js = js.replace(arms, 'function $1(_id_0, _x_0) {\n  __trace.push(_id_0);\n  return _x_0;\n}');
   js = lazyPicks(js);
   if (armCount === 0 || !js.includes('__pick(')) throw new Error('found no br.arm or br.pick to trace');
-  const seen = new Set([...js.matchAll(/_br_arm\((\d+),|__pick\((\d+),/g)].map(m => Number(m[1] ?? m[2])));
+  const seen = new Set([...js.matchAll(/_br_arm\(\(?(\d+)\s*\)?,|__pick\(\(?(\d+)\s*\)?,/g)].map(m => Number(m[1] ?? m[2])));
   untraced = labels.filter((l, id) => !seen.has(id) && !(l.endsWith(':False') && seen.has(labels.indexOf(l.replace(/:False$/, ':True')))));
   js = `const __trace = globalThis.__bendTrace = [];\nconst __pick = (id, c) => (__trace.push(c ? id : -1 - id), c);\n${js}`;
   const traced = join(dir, 'traced-run.mjs');

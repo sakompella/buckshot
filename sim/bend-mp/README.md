@@ -174,7 +174,7 @@ Limits of the harness. Its menus come from a function over host fields, not from
 
 ## How to run
 
-Enter the dev shell. It provides the pinned Bend 2.0.39, bun, python3 and uv, and sets `BEND` and `BENDTT` to a proof kernel built with nixpkgs' Lean.
+Enter the dev shell. It provides the pinned Bend 2.0.40, bun, python3 and uv, and sets `BEND` and `BENDTT` to a proof kernel built with nixpkgs' Lean.
 
     nix develop
 
@@ -202,7 +202,7 @@ Run only the proof kernel.
 
     bend sim/bend-mp/PROOF.bend --verdict
 
-It prints `ALL PROOFS CHECK` when every law checks. Bend 2.0.39 wants Lean 4.34.0 and builds its kernel itself when `BENDTT` is unset. The dev shell sets `BENDTT`, so nixpkgs' Lean is used as it is.
+It prints `ALL PROOFS CHECK` when every law checks. Bend 2.0.40 wants Lean 4.34.0 and builds its kernel itself when `BENDTT` is unset. The dev shell sets `BENDTT`, so nixpkgs' Lean is used as it is.
 
 Play matches and print win rates.
 
