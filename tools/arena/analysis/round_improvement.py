@@ -29,10 +29,10 @@ from docs import splice_between_markers
 from boot import interval
 from fmt import table
 from load import DB, SKIPPED_MODEL, connect, require_current
-from regret import DERIVED, EFFORTS, POINT
+from regret import DERIVED, EFFORTS
+from rules import POINT, ROUNDS
 
 RESAMPLES = 2000
-ROUNDS = (1, 2, 3)
 FEWEST_SEATS = 80  # seats with a regret in both rounds below which a config is shown but not tested
 FEWEST_BLOCKS = 10
 FALSE_DISCOVERY = 0.05

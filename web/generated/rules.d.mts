@@ -24,6 +24,11 @@ declare const rules: {
   readonly "mind.hear": (mind: BendNode, notes: BendNode, seat: BendNode) => BendNode;
   readonly "mind.decide": (state: BendNode, prompt: BendNode, mind: BendNode, coin: number) => BendNode;
   readonly "mind.coin": (seed: number, seat: BendNode, count: number) => number;
+  readonly "domain:item.order": () => BendNode;
+  readonly "domain:prize": (round: number) => number;
+  readonly "domain:phone.cap": () => number;
+  readonly "domain:damage.amount": (damage: BendNode) => number;
+  readonly "sm/items:phone.request": (length: number) => BendNode;
 };
 
 export default rules;

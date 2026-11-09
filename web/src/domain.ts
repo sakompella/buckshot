@@ -13,6 +13,7 @@ export type SeatCount = typeof SeatCount.Type;
 
 export const SEATS_BY_TABLE: Readonly<Record<SeatCount, ReadonlyArray<Seat>>> = { 2: [1, 3], 3: [0, 1, 2], 4: [0, 1, 2, 3] };
 
+// In Bend's item.order (domain.bend); test/rules-constants.test.ts checks it.
 export const Item = Schema.Literals(["Saw", "Glass", "Jammer", "Cigarettes", "Beer", "Phone", "Inverter", "Adrenaline", "Remote"]);
 
 export type Item = typeof Item.Type;

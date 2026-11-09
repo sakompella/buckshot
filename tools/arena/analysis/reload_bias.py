@@ -22,7 +22,8 @@ from pathlib import Path
 from docs import splice_between_markers
 from fmt import pct, table
 from load import SKIPPED_MODEL, connect
-from regret import DERIVED, POINT
+from regret import DERIVED
+from rules import POINT
 
 # Decisions to draw for each (shells left, shot, reachable) cell. Where a line can empty the gun, a scored decision costs seconds to minutes, more with more
 # shells left and for item moves, so the quotas shrink with the distance. Where none can, the two rules score alike by construction: a check only.
