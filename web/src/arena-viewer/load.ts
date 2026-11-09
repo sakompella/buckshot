@@ -2,6 +2,8 @@ import { Database } from "bun:sqlite";
 
 import { Schema } from "effect";
 
+import { configOfLabel } from "../arena/model-names.ts";
+
 import { analyse } from "./analysis.ts";
 import { type Consistency, type Decisions, type Seat, SeatRow } from "./api.ts";
 import { type Certain, NO_CERTAIN, openCertain } from "./certain.ts";
@@ -23,15 +25,20 @@ const SEATS_SQL = `with cs as (select match_id, player, sum(cost_usd) cost, sum(
    from calls group by match_id, player),
    ds as (select match_id, player, sum(by_whom = 'agent') moves from decisions group by match_id, player)
    select t.name tournament, m.id matchId, m.name matchName, m.status, m.started_at startedAt, m.seed, m.seed_block_id seedBlock,
-     substr(m.code_hash, 1, 8) codeHash, e.model, e.effort, ms.player, ms.position, ms.win_share winShare, ms.cash,
+     substr(m.code_hash, 1, 8) codeHash, ms.label, ms.player, ms.position, ms.win_share winShare, ms.cash,
      cs.cost, cs.inp, cs.outp, cs.cr, cs.cw, cs.rt, cs.lat, cs.rsHidden, cs.rsText, cs.multiTool, ds.moves
    from match_seats ms join matches m on m.id = ms.match_id join tournaments t on t.id = m.tournament_id
-   join entrants e on e.id = ms.entrant_id
    left join cs on cs.match_id = m.id and cs.player = ms.player
    left join ds on ds.match_id = m.id and ds.player = ms.player
    where m.status in ('completed', 'partial') and ${NOT_DEEPSEEK} order by m.started_at, ms.position`;
 
 const decodeSeatRow = Schema.decodeUnknownSync(SeatRow);
+
+/** A database row with its seat's label. */
+export const decodeLabelled = Schema.decodeUnknownSync(Schema.StructWithRest(Schema.Struct({ label: Schema.String }), [Schema.Record(Schema.String, Schema.Unknown)]));
+
+/** A seat row with its label read as the config the page groups and colours seats by. */
+export const withConfig = ({ label, ...rest }: ReturnType<typeof decodeLabelled>) => ({ ...rest, ...configOfLabel(label) });
 
 export interface ArenaPaths {
   readonly regret?: string | undefined;
@@ -61,7 +68,7 @@ export const loadArena = (dbPath: string, paths: ArenaPaths = {}): Arena => {
   const rows = db
     .query(SEATS_SQL)
     .all()
-    .map((row) => decodeSeatRow(row));
+    .map((row) => decodeSeatRow(withConfig(decodeLabelled(row))));
 
   const seatIndex = new Map(rows.map((row, index) => [`${row.matchId}|${row.player}`, index]));
   const { decisions, seats: analysed } = analyse(db, rows, seatIndex);

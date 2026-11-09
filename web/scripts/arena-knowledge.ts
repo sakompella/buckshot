@@ -355,7 +355,7 @@ function trueGun(at: AgentSource): string {
   const state = at.game.state as { readonly $: string; readonly world: { readonly gun: ShellList } };
   const shells: Array<string> = [];
 
-  for (let rest: ShellList | undefined = state.world.gun; rest?.$ === "Con"; rest = rest.tail) shells.push(rest.head?.$.endsWith(".Live") === true ? "L" : "B");
+  for (let rest: ShellList | undefined = state.world.gun; rest?.$ === "Con"; rest = rest.tail) shells.push(rest.head?.$ === "Live" ? "L" : "B");
 
   return shells.join("");
 }

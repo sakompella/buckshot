@@ -133,7 +133,8 @@ const orderText = (order: BendNode): string => nodesOf(order).map((shell) => (sh
 
 const Node = Schema.Struct({ $: Schema.String });
 
-const RawMove = Schema.Union([
+/** A move as Bend writes it, and buckshot-search too. */
+export const RawMove = Schema.Union([
   Schema.Struct({ $: Schema.Literal("Shoot"), target: Node }),
   Schema.Struct({ $: Schema.Literal("Use"), item: Node }),
   Schema.Struct({ $: Schema.Literal("Jam"), target: Node }),
@@ -168,7 +169,7 @@ const itemOf = (node: typeof Node.Type): Item => decodeItem(node.$);
  * A whole move as the machine steps an agent's move chains, so that agentMoveText (src/text.ts) words it as the arena did.
  * The player names items, not slots, and agentMoveText reads no slot, so slots are given as 0.
  */
-const stepsOf = (move: typeof RawMove.Type): ReadonlyArray<Move> => {
+export const stepsOf = (move: typeof RawMove.Type): ReadonlyArray<Move> => {
   const use = (item: Item): Move => Move.cases.UseItem.make({ slot: 0, item });
 
   switch (move.$) {

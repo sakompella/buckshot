@@ -98,7 +98,7 @@ def read(db_path: str, knowledge_path: str) -> Data:
     rows, rounds = [], []
     for match, seed, block in db.execute("SELECT id, seed, seed_block_id FROM matches WHERE status = 'completed' ORDER BY id"):
         s = seats[match]
-        if len(s) != 2 or any(SKIPPED_MODEL in model for *_, model in s):
+        if len(s) != 2 or any(SKIPPED_MODEL in (model or "") for *_, model in s):
             continue
         (la, ca, a, _), (lb, cb, b, _) = s
         won = round_winners(match, lines.get(match, []), {la: ca, lb: cb})

@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS matches (
 );
 CREATE TABLE IF NOT EXISTS match_seats (
   match_id TEXT NOT NULL REFERENCES matches(id), position INTEGER NOT NULL,
-  entrant_id TEXT NOT NULL REFERENCES entrants(id), player TEXT NOT NULL,
+  entrant_id TEXT NOT NULL REFERENCES entrants(id), player TEXT NOT NULL, label TEXT NOT NULL,
   cash REAL, win_share REAL, provenance_json TEXT,
   PRIMARY KEY(match_id, position)
 );

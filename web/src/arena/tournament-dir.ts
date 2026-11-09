@@ -294,7 +294,7 @@ export type Settled =
   /** Stopped by a model's usage limit: it waits for the reset, and the stop is not a failed run. */
   | { readonly match: ScheduledMatch; readonly status: "cooling"; readonly cooldown: Cooldown };
 
-/** What happens to a failed match: it goes to the back of the queue, for `attempts` runs in all, and its slot waits `pauseMs` first, so a provider's cooldown has fewer matches at once. */
+/** What happens to a failed match: when it ended on a provider fault (network, timeout, an error status), it goes to the back of the queue, for `attempts` runs in all; any other failure is deterministic and final, and its slot waits `pauseMs` first, so a provider's cooldown has fewer matches at once. */
 export interface Retry {
   readonly attempts: number;
   readonly pauseMs: number;
@@ -327,7 +327,7 @@ export interface Scheduling {
  * Runs the matches that are not finished, in schedule order, at most `parallel` at a time. `runOne` plays one and gives
  * its exit code. A match is finished when it exited 0 and its manifest says so. One stopped by a model's usage limit
  * goes back to the front of the queue. Its model/account pair waits until reset when pinned, otherwise its model
- * waits. Earlier cooldowns are read from the matches' logs at the start. Any other failure is retried as `retry` says, and then left for the
+ * waits. Earlier cooldowns are read from the matches' logs at the start. A failure on a provider fault is retried as `retry` says, and then left for the
  * next run.
  */
 export const runPending = async (
@@ -436,7 +436,7 @@ export const runPending = async (
 
         failures.set(match.name, failed);
 
-        if (failed < retry.attempts) queue.push(match);
+        if (failed < retry.attempts && Option.isSome(endingFault(join(dir, match.name)))) queue.push(match);
 
         await pause(retry.pauseMs, stop);
       }

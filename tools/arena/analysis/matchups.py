@@ -363,7 +363,8 @@ def main() -> None:
     parser.add_argument("--doc")
     args = parser.parse_args()
     db = connect(args.db) if args.db else connect()
-    model_of = dict(db.execute("SELECT DISTINCT name, model FROM entrants"))
+    # An engine has no model: it stands for itself, so its matches are cross-model.
+    model_of = {name: model or name for name, model in db.execute("SELECT DISTINCT name, model FROM entrants")}
     tournament_games = scored_games(db)
     games = [replace(game, cohort=cohort_of(model_of[game.first], model_of[game.second])) for game in tournament_games]
     by_cohort = cohorts(games)

@@ -78,11 +78,15 @@ const eloBarView = (h: H, scale: EloScale, m: ModelStats, elo: Rating | undefine
 };
 
 /** A config's dot, model name and effort. */
-const nameView = (h: H, m: ModelStats): ReadonlyArray<Html | string> => [
-  h.span([h.Class(`dot ${isClaude(m.model) ? "a" : "o"}`), h.Style({ background: m.color })], []),
-  `${baseName(m.model)} `,
-  h.span([h.Class("eff")], [`[${effortLabel(m.model, m.effort)}]`]),
-];
+const nameView = (h: H, m: ModelStats): ReadonlyArray<Html | string> => {
+  const effort = effortLabel(m.model, m.effort);
+
+  return [
+    h.span([h.Class(`dot ${isClaude(m.model) ? "a" : "o"}`), h.Style({ background: m.color })], []),
+    `${baseName(m.model)} `,
+    ...(effort === "" ? [] : [h.span([h.Class("eff")], [`[${effort}]`])]),
+  ];
+};
 
 const rowView = (h: H, m: ModelStats, rank: number | undefined, elo: Rating | undefined, hasLuck: boolean, scale: EloScale, details: ReadonlyArray<Detail>, isOpen: boolean): Html =>
   h.keyed("tr")(

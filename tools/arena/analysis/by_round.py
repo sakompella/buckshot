@@ -102,7 +102,7 @@ def load_results(db_path: str, knowledge_path: Path) -> list[RoundResult]:
     seats = defaultdict(dict)
     for match, player, model, effort in knowledge.execute(
         """SELECT p.match_id, p.player, p.model, p.effort FROM players p JOIN matches m ON m.match_id = p.match_id AND m.status = 'completed'
-           WHERE p.match_id NOT IN (SELECT match_id FROM players WHERE model LIKE ?)""",
+           WHERE p.model IS NOT NULL AND p.match_id NOT IN (SELECT match_id FROM players WHERE model LIKE ?)""",
         (f"%{SKIPPED_MODEL}%",),
     ):
         seats[match][player] = (model, effort)

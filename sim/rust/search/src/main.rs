@@ -16,7 +16,8 @@ const HELP: &str = "\
 buckshot-search [options] [inputs.jsonl]
 
 One JSON row per input decision ({id, ordinal, input}), read from the path or stdin.
-Each line names its root move by `code`, as native.bend's show.move prints it.
+Each line names its root move twice: by `code`, as native.bend's show.move prints it, and
+by `move`, as Bend writes a Move.
 
   --depth N              decisions deep (6)
   --budget N             nodes per decision (20000)
@@ -199,6 +200,21 @@ fn code(step: Move) -> String {
     }
 }
 
+/// A root move as Bend writes it (sm `Move`, `{"$": "Shoot", "target": {"$": "Seat1"}}`), so a caller can check the
+/// moves against Bend's menu.
+fn move_json(choice: Move) -> Value {
+    let node = |name: String| json!({"$": name});
+    match choice {
+        Move::Shoot { target } => json!({"$": "Shoot", "target": node(format!("{target:?}"))}),
+        Move::Use { item } => json!({"$": "Use", "item": node(format!("{item:?}"))}),
+        Move::Jam { target } => json!({"$": "Jam", "target": node(format!("{target:?}"))}),
+        Move::Steal { owner, item } => json!({"$": "Steal", "owner": node(format!("{owner:?}")), "item": node(format!("{item:?}"))}),
+        Move::StealJam { owner, target } => {
+            json!({"$": "StealJam", "owner": node(format!("{owner:?}")), "target": node(format!("{target:?}"))})
+        }
+    }
+}
+
 fn analysed(id: &Value, ordinal: &Value, analysis: &Analysis, evaluator: Evaluator) -> Value {
     match analysis {
         Analysis::Analysed(done) => {
@@ -207,9 +223,9 @@ fn analysed(id: &Value, ordinal: &Value, analysis: &Analysis, evaluator: Evaluat
                 .iter()
                 .map(|l| match evaluator {
                     #[cfg(feature = "f32")]
-                    Evaluator::Compat => json!({"code": code(l.r#move), "score": l.score, "reach": l.reach.name()}),
+                    Evaluator::Compat => json!({"code": code(l.r#move), "move": move_json(l.r#move), "score": l.score, "reach": l.reach.name()}),
                     Evaluator::BoundedV1 => {
-                        json!({"code": code(l.r#move), "score": l.score, "upper": l.upper, "exact": l.score == l.upper, "reach": l.reach.name()})
+                        json!({"code": code(l.r#move), "move": move_json(l.r#move), "score": l.score, "upper": l.upper, "exact": l.score == l.upper, "reach": l.reach.name()})
                     }
                 })
                 .collect();

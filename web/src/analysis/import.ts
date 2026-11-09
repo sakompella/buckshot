@@ -8,6 +8,7 @@ import { Option, Result, Schema } from "effect";
 import { agentGame } from "../agent/view.ts";
 import { costOf, DEFAULT_PRICES, loadPrices } from "../arena/cost.ts";
 import { AgentId } from "../arena/agent.ts";
+import { configLabel } from "../arena/model-names.ts";
 import { RunManifest } from "../arena/match.ts";
 import { CallLine, EventLine, type MoveLine } from "../arena/runlog.ts";
 import { manifestProblems, TournamentFile, tournamentOf } from "../arena/tournament-dir.ts";
@@ -213,7 +214,10 @@ export const importTournaments = ({ database, sources, skipped = {} }: ImportOpt
             const cash = manifest?.standings?.find((standing) => standing.player === player)?.cash;
             const high = manifest?.standings === undefined ? undefined : Math.max(...manifest.standings.map((standing) => standing.cash));
             const winners = manifest?.standings?.filter((standing) => standing.cash === high).length;
-            put("match_seats", { match_id: matchId, position: index + 1, entrant_id: sha(`${tournamentId}\0${name}`), player, cash: cash ?? null, win_share: null, provenance_json: json(provenanceObject) });
+            const entrant = file.config.entrants[name];
+            // A match from before labels were recorded: a model entrant is its config, a bot or an engine its scheduled seat.
+            const label = manifest?.labels?.[index] ?? (entrant !== undefined && "model" in entrant ? configLabel(entrant.model, entrant.effortLabel ?? entrant.effort) : (match.seats[index] ?? ""));
+            put("match_seats", { match_id: matchId, position: index + 1, entrant_id: sha(`${tournamentId}\0${name}`), player, label, cash: cash ?? null, win_share: null, provenance_json: json(provenanceObject) });
             shares.set(index + 1, cash === undefined || winners === undefined ? null : cash === high ? 1 / winners : 0);
 
             if (manifest !== undefined && ((Schema.is(AgentId)(match.seats[index]) && manifest.letters[index] !== match.seats[index]) || manifest.seed !== String(match.seed))) issue(`Schedule differs from manifest at position ${index + 1}`, matchId);

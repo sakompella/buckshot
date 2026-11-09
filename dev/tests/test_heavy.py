@@ -26,8 +26,8 @@ class HeavyTest(unittest.TestCase):
         out = tempfile.NamedTemporaryFile("r", suffix=".txt", delete=False)
         self.addCleanup(out.close)
         self.addCleanup(os.unlink, out.name)
-        # nice -n 10 is relative to this process's nicety.
-        expected = os.nice(0) + 10
+        # nice -n 10 is relative to this process's niceness and stops at 19, so a niced caller (heavy) still passes.
+        expected = min(os.nice(0) + 10, 19)
         code = f"import os; open({out.name!r}, 'w').write(str(os.nice(0)))"
         self.assertEqual(cli.heavy_cmd([sys.executable, "-c", code]), 0)
         self.assertEqual(out.read().strip(), str(expected))

@@ -45,7 +45,7 @@ export const playFauxRun = (dir: string, controllers: ReadonlyArray<Controller>,
       entrants: agents.map((agent, index) => {
         const modelId = index % 2 === 0 ? "faux-a" : "faux-b";
 
-        return { agent, model: { provider: "faux", modelId }, thinkingLevel: undefined, provenance: fauxProvenance(modelId) };
+        return { agent, label: modelId, model: { provider: "faux", modelId }, thinkingLevel: undefined, provenance: fauxProvenance(modelId) };
       }),
       models,
       delivery,

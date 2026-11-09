@@ -5,17 +5,17 @@ import { join, normalize } from "node:path";
 import { Array as Arr, Option, Result, Schema } from "effect";
 
 import { agentMoves } from "../agent/moves.ts";
+import { ArenaController } from "../arena/match.ts";
 import { replayOf } from "../arena/replay.ts";
 import type { TableMove } from "../board.ts";
 import { seatsOut } from "../domain.ts";
-import { Controller } from "../driver.ts";
 import { Letter, rosterOf } from "../players.ts";
 import { AGGREGATE_NAMES, aggregatesOf, encodeAggregates } from "./aggregates.ts";
 import { decodeVisible, roundStory, ShellTracker, shotLineIn } from "./analysis.ts";
-import { Blunders, Call, CertainMistakes, Decisions, type MatchDetail, MatchDetailJson, MatchSeat, MatchSummary, type PlayerState, SeatsResponse, type Step, type TablePosition } from "./api.ts";
+import { Blunders, Call, CertainMistakes, Decisions, type MatchDetail, MatchDetailJson, MatchSeat, MatchSummary, type PlayerState, SeatsResponse, Step, type TablePosition } from "./api.ts";
 import { findBlunders } from "./blunders.ts";
 import type { Certain } from "./certain.ts";
-import { type ArenaPaths, loadArena, NOT_DEEPSEEK } from "./load.ts";
+import { type ArenaPaths, loadArena, NOT_DEEPSEEK, decodeLabelled, withConfig } from "./load.ts";
 import { withPotShares } from "./page/data.ts";
 import type { Regret } from "./regret.ts";
 
@@ -33,7 +33,7 @@ const DecisionRow = Schema.Struct({
   ordinal: Schema.Number,
   turn: Schema.Number,
   player: Letter,
-  byWhom: Schema.Literals(["agent", "fallback", "forced"]),
+  byWhom: Step.fields.byWhom,
   label: Schema.String,
   move: Schema.Number,
   visible: Schema.NullOr(Schema.String),
@@ -58,7 +58,7 @@ const isOutcomeEnd = (text: string, player: string): boolean =>
   (text.startsWith("Player ") && !text.startsWith(`Player ${player} `)) || /^(Round \d+ begins|Item distribution|The shotgun is loaded)/.test(text);
 
 /** What a replay needs of a match's manifest. */
-const ReplayManifest = Schema.fromJsonString(Schema.Struct({ seed: Schema.String, controllers: Schema.Array(Controller), letters: Schema.Array(Letter) }));
+const ReplayManifest = Schema.fromJsonString(Schema.Struct({ seed: Schema.String, controllers: Schema.Array(ArenaController), letters: Schema.Array(Letter) }));
 
 const decodeReplayManifest = Schema.decodeUnknownOption(ReplayManifest);
 
@@ -114,9 +114,9 @@ const matchDetail = (db: Database, regret: Regret | null, certain: Certain, id: 
   if (Option.isNone(match)) return null;
 
   const seats = db
-    .query(`select ms.player, ms.position, ms.cash, ms.win_share winShare, e.model, e.effort from match_seats ms join entrants e on e.id = ms.entrant_id where match_id = ? order by position`)
+    .query(`select ms.player, ms.position, ms.cash, ms.win_share winShare, ms.label from match_seats ms where match_id = ? order by position`)
     .all(id)
-    .map((row) => decodeMatchSeat(row));
+    .map((row) => decodeMatchSeat(withConfig(decodeLabelled(row))));
 
   const regretOf = regret?.moves(id);
   const certainOf = certain.moves(id);

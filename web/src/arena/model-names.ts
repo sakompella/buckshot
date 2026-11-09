@@ -48,3 +48,14 @@ export const effortRank = (effort: string | undefined): number => {
 const isLevel = (effort: string): effort is ModelThinkingLevel => Object.hasOwn(EFFORT_NAMES, effort);
 
 export const effortName = (effort: string): string => (isLevel(effort) ? EFFORT_NAMES[effort] : effort);
+
+/** A config's label, as match records name a model agent: the model, then the effort, if it has one. */
+export const configLabel = (model: string, effort: string | undefined): string => (effort === undefined ? model : `${model}-${effort}`);
+
+/** A seat's label as a model and an effort: a config's two parts, or the whole label and no effort for a label that names none. */
+export const configOfLabel = (label: string): { readonly model: string; readonly effort: string } => {
+  const at = label.lastIndexOf("-");
+  const effort = label.slice(at + 1);
+
+  return at > 0 && EFFORTS.includes(effort) ? { model: label.slice(0, at), effort } : { model: label, effort: "" };
+};

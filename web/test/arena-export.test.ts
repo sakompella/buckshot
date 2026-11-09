@@ -35,6 +35,11 @@ beforeAll(async () => {
   await playFauxRun(played, ["Agent", "Agent"], "on-turn");
   cpSync(played, join(source, "a_b_b0_p0"), { recursive: true });
 
+  // The faux agents play as the configs the tournament below names.
+  const manifest = join(source, "a_b_b0_p0", "manifest.json");
+
+  writeFileSync(manifest, JSON.stringify({ ...JSON.parse(readFileSync(manifest, "utf8")), labels: ["faux-a-medium", "faux-b-high"] }));
+
   const config = {
     name: "test",
     seed: SEED,

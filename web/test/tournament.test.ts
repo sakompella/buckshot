@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -555,12 +555,27 @@ test("a stop during a failed match's pause ends the run at once", async () => {
   expect(Date.now() - started).toBeLessThan(5_000);
 });
 
+/** Ends a match's run on a provider fault that is not a rate limit, as a dropped connection does. */
+const failOnProvider = (dir: string, match: ScheduledMatch) => {
+  mkdirSync(join(dir, match.name), { recursive: true });
+  appendFileSync(join(dir, match.name, "events.jsonl"), `${JSON.stringify({ t: new Date().toISOString(), kind: "fault", agent: match.seats.find((seat) => AGENTS.some((letter) => letter === seat)), error: "fetch failed" })}\n`);
+};
+
+test("a failure with no provider fault is final and runs once", async () => {
+  const tournament = tournamentFrom(configJson({ pairings: [["luna", "don"]], blocksPerPairing: 1 }));
+  const schedule = scheduleOf(tournament).slice(0, 1);
+  const dir = mkdtempSync(join(tmpdir(), "tournament-final-"));
+  const settled = await runPending(dir, tournament.config, schedule, 1, async (match) => (writeManifest(dir, tournament, match, "running"), 1), () => undefined, new AbortController().signal, { retry: { attempts: 3, pauseMs: 0 } });
+
+  expect(settled.map(({ status }) => status)).toEqual(["failed"]);
+});
+
 test("a restarted runner gets a fresh three-run failure allowance", async () => {
   const tournament = tournamentFrom(configJson({ pairings: [["luna", "don"]], blocksPerPairing: 1 }));
   const schedule = scheduleOf(tournament).slice(0, 1);
   const dir = mkdtempSync(join(tmpdir(), "tournament-restart-retry-"));
 
-  const runThree = () => runPending(dir, tournament.config, schedule, 1, async (candidate) => (writeManifest(dir, tournament, candidate, "running"), 1), () => undefined, new AbortController().signal, { retry: { attempts: 3, pauseMs: 0 } });
+  const runThree = () => runPending(dir, tournament.config, schedule, 1, async (candidate) => (writeManifest(dir, tournament, candidate, "running"), failOnProvider(dir, candidate), 1), () => undefined, new AbortController().signal, { retry: { attempts: 3, pauseMs: 0 } });
 
   expect((await runThree()).map(({ status }) => status)).toEqual(["failed", "failed", "failed"]);
   expect((await runThree()).map(({ status }) => status)).toEqual(["failed", "failed", "failed"]);
@@ -623,6 +638,8 @@ test("a failed match goes to the back of the queue and is retried, up to its att
       const fails = match.name === broken.name || (match.name === flaky.name && runs.filter((name) => name === flaky.name).length === 1);
 
       writeManifest(dir, tournament, match, fails ? "running" : "finished");
+
+      if (fails) failOnProvider(dir, match);
 
       return fails ? 1 : 0;
     },

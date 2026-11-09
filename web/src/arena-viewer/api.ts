@@ -281,7 +281,7 @@ export const Step = Schema.Struct({
   ordinal: Schema.Number,
   turn: Schema.Number,
   player: Schema.String,
-  byWhom: Schema.Literals(["agent", "fallback", "forced"]),
+  byWhom: Schema.Literals(["agent", "human", "engine", "fallback", "forced"]),
   label: Schema.String,
   round: Schema.Number,
   players: Schema.Array(PlayerState),

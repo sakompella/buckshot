@@ -11,6 +11,7 @@ from pathlib import Path
 DB = str(Path(__file__).resolve().parents[3] / "_work/arena/analysis/buckshot.sqlite")
 
 # Its free tier refused requests, so its scored games are not a random sample of what was scheduled: every analysis skips them.
+# An engine or bot entrant has no model.
 SKIPPED_MODEL = "deepseek"
 
 # Tournament 1's cross-model games (medium effort, plus two Sonnet max games against Opus) and tournament 4's samples.
@@ -122,7 +123,7 @@ def scored_games(db: sqlite3.Connection) -> list[Game]:
         "SELECT m.id, t.name, m.seed_block_id, m.seed, m.code_hash, json_extract(t.config_json, '$.cohort') FROM matches m JOIN tournaments t ON t.id = m.tournament_id WHERE m.status = 'completed' ORDER BY m.id"
     ):
         (_, _, letter_a, share_a, cash_a, a, model_a, effort_a), (_, _, letter_b, _, cash_b, b, model_b, effort_b) = by_match[match]
-        if SKIPPED_MODEL in model_a or SKIPPED_MODEL in model_b:
+        if SKIPPED_MODEL in (model_a or "") or SKIPPED_MODEL in (model_b or ""):
             continue
         letter_of = {letter_a: 1, letter_b: 2}
         games.append(
