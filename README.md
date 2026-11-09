@@ -19,7 +19,7 @@ Research on Buckshot Roulette, with a rules library for its multiplayer mode.
     bend sim/bend-mp/main.bend     # play matches and print win rates
     cd web && bun install && bun run dev
 
-The dev shell provides Bend 2.0.39, bun, python3 and uv.
+The dev shell provides Bend 2.0.40, bun, python3 and uv.
 
 ## What stays local
 
