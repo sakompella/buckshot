@@ -294,7 +294,8 @@ class Wrap:
 
     def swap_main(self) -> str:
         self.viewer("stop")
-        settle(self.scratch / "new.sqlite")
+        if (self.scratch / "new.sqlite").exists():
+            settle(self.scratch / "new.sqlite")
         swapped = swap(self.main, self.scratch / "new.sqlite", self.tag)
         return self.viewer_up() + ("" if swapped else " (was already swapped)")
 
@@ -343,7 +344,7 @@ class Wrap:
         self.viewer("stop")
         pairs = [(self.regret_db, "regret.staged.sqlite"), (self.derived / "knowledge.sqlite", "knowledge.sqlite"), (self.derived / "certain-mistakes.sqlite", "certain-mistakes.sqlite"), (self.sampled_db, "regret-sampled.staged.sqlite")]
         moved = [swap(live, self.scratch / new, self.tag) for live, new in pairs]
-        return f"swapped {moved}"
+        return f"swapped {moved}; " + self.viewer_up()
 
     def public_(self) -> str:
         new = self.scratch / "public.sqlite"
