@@ -49,7 +49,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "analysis"))
 from docs import splice_between_markers  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
-WORKTREES = Path.home() / ".t3/worktrees/buckshot"
 EMAIL = re.compile(rb"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+")
 SIDECARS = ("", "-wal", "-shm")
 CLOUDFLARE_ENV = REPO / "_work/.cloudflare-deploy.env"
@@ -448,7 +447,7 @@ def main() -> None:
     p.add_argument("--regret-sampled", help="file name under <analysis>/derived of the sampled rows (default regret-rust-sampled256.sqlite)")
     p.add_argument("--threads", type=int, default=score_regret.Settings.threads, help="buckshot-search threads (half the cores)")
     p.add_argument("--sampled-max-shells", type=int, default=score_regret.Settings.sampled_max_shells, help="sampled rows for decisions with at most this many shells left")
-    p.add_argument("--knowledge", type=Path, default=WORKTREES / "t3-5e0b7a11", help="worktree that runs arena-knowledge.ts")
+    p.add_argument("--knowledge", type=Path, default=REPO, help="checkout that runs arena-knowledge.ts (default this checkout)")
     p.add_argument("--viewer-unit", default="buckshot-viewer", help="user unit to restart; '' leaves the viewer alone")
     p.add_argument("--viewer-url", default="http://127.0.0.1:8790/")
     p.add_argument("--jobs", type=int, default=4, help="regret scoring processes")
