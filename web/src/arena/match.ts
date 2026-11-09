@@ -392,7 +392,7 @@ const seatTools = (dir: string, { table, onReply, exportJournal, crashAt }: Seat
         afterResponse: async (message: AssistantMessage, api) => {
           const sitting = await sittingOf(api.snapshot, api.conversationId);
 
-          logCall(dir, sitting, message);
+          logCall(dir, sitting, message, table().turn);
           onReply(sitting.agent, message);
         },
       }),
