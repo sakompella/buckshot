@@ -37,10 +37,8 @@ SHORT_NAMES = {
 }
 
 
-def cohort_of(model_a: str | None, model_b: str | None) -> str:
-    """Pairs and seats are compared only inside a cohort, one kind of comparison pooled over every tournament: all matches between different models, or all of one model's matches against itself. An engine has no model: its matches are their own cohort."""
-    if model_a is None or model_b is None:
-        return "Engine anchors"
+def cohort_of(model_a: str, model_b: str) -> str:
+    """Pairs and seats are compared only inside a cohort, one kind of comparison pooled over every tournament: all matches between different models, or all of one model's matches against itself."""
     if model_a != model_b:
         return "Cross-model"
     return next(f"{short} efforts" for model, short in SHORT_NAMES.items() if model in model_a)
@@ -365,7 +363,8 @@ def main() -> None:
     parser.add_argument("--doc")
     args = parser.parse_args()
     db = connect(args.db) if args.db else connect()
-    model_of = dict(db.execute("SELECT DISTINCT name, model FROM entrants"))
+    # An engine has no model: it stands for itself, so its matches are cross-model.
+    model_of = {name: model or name for name, model in db.execute("SELECT DISTINCT name, model FROM entrants")}
     tournament_games = scored_games(db)
     games = [replace(game, cohort=cohort_of(model_of[game.first], model_of[game.second])) for game in tournament_games]
     by_cohort = cohorts(games)
