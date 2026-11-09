@@ -64,8 +64,8 @@ class Load(unittest.TestCase):
         knowledge.executemany("INSERT INTO decisions VALUES ('m', ?, ?, ?, 0, 2, NULL, NULL, 1, 1, 0, ?, ?, NULL, ?, '[]', ?)", decisions)
         knowledge.commit()
         scored = sqlite3.connect(directory / "regret.sqlite")
-        scored.execute("CREATE TABLE regret (match_id TEXT, ordinal INTEGER, max_depth INTEGER, budget INTEGER, reload TEXT, samples INTEGER, status TEXT, regret INTEGER)")
-        scored.executemany("INSERT INTO regret VALUES ('m', ?, 6, 20000, 'static', 0, 'searched', 7)", [(d[0],) for d in decisions])
+        scored.execute("CREATE TABLE regret (match_id TEXT, ordinal INTEGER, evaluator TEXT, max_depth INTEGER, budget INTEGER, reload TEXT, samples INTEGER, status TEXT, regret INTEGER)")
+        scored.executemany("INSERT INTO regret VALUES ('m', ?, 'e', 6, 20000, 'static', 0, 'searched', 7)", [(d[0],) for d in decisions])
         scored.commit()
         return directory / "regret.sqlite", directory / "knowledge.sqlite"
 
@@ -83,7 +83,7 @@ class Load(unittest.TestCase):
                     (3, "B", "forced", None, None, "[]", health(2, 4)),
                 ],
             )
-            moves = pr.load(regret_db, knowledge_db, 6, 20000, "static", 0)
+            moves = pr.load(regret_db, knowledge_db)
         self.assertEqual([(m.full_health, m.shoots_self_next, m.legal_items) for m in moves], [(True, True, frozenset({"Inverter"})), (True, False, frozenset()), (False, False, frozenset())])
         self.assertEqual({m.regret for m in moves}, {7})
 

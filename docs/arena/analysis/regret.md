@@ -6,7 +6,7 @@ Until 2026-11-08 the rows came from the Bend player, through `web/scripts/arena-
 
 ## Production scoring
 
-Since 2026-11-08 the production rows come from the Rust evaluator. `tools/arena/score_regret.py` (the wrap-up's regret step) builds `buckshot-search` with the `f64` and `seats-2` features (arena matches have two seats; the parser refuses wider tables) and runs `--evaluator bounded-v1-f64 --unpruned` at depth 6 and 20,000 nodes. Unpruned, every move's value is exact at the depth reached, which the replay's move list needs. Every decision gets a static-reload row in `derived/regret-rust.sqlite`, and every decision with 2 or fewer shells left also gets a sampled-reload row (256 deals) in `derived/regret-rust-sampled256.sqlite`; the viewer and the export prefer the sampled row (`--regret-sampled`, [accuracy.md](accuracy.md)). The positions come from `web/scripts/rust-search-inputs.ts`, which replays each match as described below. Their `evaluator` is `bounded-v1-f64-unpruned-<hex>`, the hex a hash of the Rust sources, Cargo files and features, and an `evaluator_build` table records each id's commit, binary hash, row count and time. `ms` is empty: the search runs decisions in parallel and times none alone. The older Bend rows (`regret.sqlite`, player `a3962092b561cfb4`, and `regret-sampled256-native.sqlite`, `09c5bda32435eda8`) stay as they were.
+Since 2026-11-08 the production rows come from the Rust evaluator. `tools/arena/score_regret.py` (the wrap-up's regret step) builds `buckshot-search` with the `f64` and `seats-2` features (arena matches have two seats; the parser refuses wider tables) and runs `--evaluator bounded-v1-f64 --unpruned` at depth 6 and 20,000 nodes. Unpruned, every move's value is exact at the depth reached, which the replay's move list needs. Every decision gets a sampled-reload row (256 deals). A regret file holds one run (evaluator, depth, budget, reload rule, samples), and the production file is the one `PRODUCTION` in `tools/arena/analysis/regret.py` names, now `derived/regret-rust-0e62fbca-sampled256.sqlite`: the viewer, the export, the certain-mistakes database and every doc table on these pages read it, and each stops on a file with more than one run. Static-reload rows (`--out`) are for research only. The positions come from `web/scripts/rust-search-inputs.ts`, which replays each match as described below. Their `evaluator` is `bounded-v1-f64-unpruned-<hex>`, the hex a hash of the Rust sources, Cargo files and features, and an `evaluator_build` table records each id's commit, binary hash, row count and time. `ms` is empty: the search runs decisions in parallel and times none alone. The older Bend rows (`regret.sqlite`, player `a3962092b561cfb4`, and `regret-sampled256-native.sqlite`, `09c5bda32435eda8`) stay as they were.
 
 The budget means something else here. `bounded-v1` counts nodes only: it has no fuel, and a memo hit costs nothing. So at the same 20,000 nodes it finishes deeper iterations than the Bend player on the decisions the old budget cut short. Before the switch, 2,000 random static rows and 2,000 random sampled rows were scored both ways:
 
@@ -15,6 +15,8 @@ The budget means something else here. `bounded-v1` counts nodes only: it has no 
 - Mean regret over the sample hardly moved: 2.359 points against 2.362 static, 1.608 against 1.611 sampled. 78 moves lost 15 points or more, against 80.
 
 The full rescore of 2026-11-08 (snapshot of the analysis database that day) wrote 181,311 static rows (181,308 searched, the same 3 invalid as before) and 62,045 sampled rows (3 invalid), 598 more sampled decisions than the old file covered. Its time is in Runtime. The budget now stops 29% of static searches before depth 6 (39% before) and 0.6% of sampled ones (3.3% before). Mean regret is 2.31 points static (2.30 before) and 1.74 sampled (1.75 before).
+
+The rescore of 2026-11-09 (evaluator `bounded-v1-f64-unpruned-0e62fbca19077e85`) scored all 184,388 agent decisions both ways, every one searched: sampled in 82 minutes, static in 2, on 6 threads. Mean regret over every row is 1.87 points sampled and 2.31 static. From then on the production run is the sampled one alone.
 
 ## How it is measured
 
@@ -35,7 +37,7 @@ The Bend player had a third rule, `expected-deal`: the static evaluation average
 
 ## The `regret` table
 
-`score_regret.py` writes the `regret` table of the derived database named by `--out` (static rows) and of the one named by `--sampled-out` (sampled rows), creating each if needed and leaving other tables alone, so a file can share tables with the knowledge database. It also writes an `evaluator_build` table: for each run, the evaluator id, settings, source commit (`+dirty` if `sim/rust` has uncommitted changes), features, binary hash, decisions scored, seconds and threads. Rows are keyed by match, ordinal, evaluator, depth limit, budget, reload rule and sample count. The script reads the keys already in the file and scores only the agent decisions without one, so a rerun continues where it stopped, and after an import only the new matches are scored. Rows are committed every 512, so an interrupted run loses at most that many and scores them again. Two runs must not write one file at the same time. A change to the Rust sources, Cargo files or features changes the evaluator id, so every decision then counts as unscored: a regret database holds one evaluator group, and a changed evaluator needs a full rescore into new files.
+`score_regret.py` writes the `regret` table of the derived database named by `--sampled-out` (sampled rows, the production run) and of the one named by `--out` (static rows, for research), creating each if needed and leaving other tables alone, so a file can share tables with the knowledge database. It also writes an `evaluator_build` table: for each run, the evaluator id, settings, source commit (`+dirty` if `sim/rust` has uncommitted changes), features, binary hash, decisions scored, seconds and threads. Rows are keyed by match, ordinal, evaluator, depth limit, budget, reload rule and sample count. The script reads the keys already in the file and scores only the agent decisions without one, so a rerun continues where it stopped, and after an import only the new matches are scored. Rows are committed every 512, so an interrupted run loses at most that many and scores them again. Two runs must not write one file at the same time. A change to the Rust sources, Cargo files or features changes the evaluator id, so every decision then counts as unscored: a regret database holds one run, and a changed evaluator needs a full rescore into a new file.
 
 | Column | Meaning |
 |---|---|
@@ -43,7 +45,7 @@ The Bend player had a third rule, `expected-deal`: the static evaluation average
 | `player`, `label` | The deciding player's letter and the move it chose. |
 | `evaluator` | `bounded-v1-f64-unpruned-<hash of the Rust sources, Cargo files and features>` (the Bend rows: a hash of the compiled player). Never mix rows with different values. |
 | `max_depth`, `budget` | The run's depth limit (decisions, by every player) and node budget (nodes expanded; in the Bend rows, a fuel count). |
-| `reload`, `samples` | `static` or `sampled`, and the deals per leaf of a sampled run (0 for static); `samples > 0` exactly when `reload` is `sampled`. The Bend rows can also be `expected-deal`. The viewer and the Python reports read one run's rows: they take `--reload` (default `static`) and, for a sampled run, `--samples` (default 256). |
+| `reload`, `samples` | `static` or `sampled`, and the deals per leaf of a sampled run (0 for static); `samples > 0` exactly when `reload` is `sampled`. The Bend rows can also be `expected-deal`. A file holds one run, so the viewer and the Python reports read every row of the file they are given. |
 | `status` | `searched` or `fallback` (`invalid` in older rows). |
 | `values_json` | Every legal move with its score, in the player's move order. |
 | `best`, `best_score`, `chosen_score`, `regret`, `exact` | Set only when searched. Ties go to the first move. `exact` is 1 when proven exact, 0 when not proven (see above). |
@@ -79,38 +81,38 @@ The sampled rule with 256 deals, on the same 12 decisions:
 
 From the repository root, inside `nix develop` (bun, cargo and Bend on PATH):
 
-    nice -n 10 python3 tools/arena/score_regret.py --db <buckshot.sqlite> --out <derived>/regret-rust.sqlite --sampled-out <derived>/regret-rust-sampled256.sqlite [--depth 6] [--budget 20000] [--samples 256] [--threads N] [--jobs N]
+    nice -n 10 python3 tools/arena/score_regret.py --db <buckshot.sqlite> --sampled-out <derived>/regret-rust-<hex>-sampled256.sqlite [--out <static rows>] [--depth 6] [--budget 20000] [--samples 256] [--threads N] [--jobs N]
 
-It scores the agent decisions of replay-validated matches that the files have no row for, so it continues an interrupted run and scores only new matches after an import. `--matches <file>` (match names, one per line) and `--decisions <file>` (one `<match id> <ordinal>` line per decision, the ids of the analysis database) limit it to those; every named decision must be an agent decision of a replay-validated match, or it stops. Give `--out`, `--sampled-out` or both. `--sampled-max-shells` (default 2) sets which decisions get a sampled row. `--work DIR` keeps the inputs and logs. It prints a JSON summary: the evaluator id, the decisions, and rows and seconds per reload rule.
+It scores the agent decisions of replay-validated matches that the files have no row for, so it continues an interrupted run and scores only new matches after an import. `--matches <file>` (match names, one per line) and `--decisions <file>` (one `<match id> <ordinal>` line per decision, the ids of the analysis database) limit it to those; every named decision must be an agent decision of a replay-validated match, or it stops. Give `--sampled-out`, `--out` or both. `--work DIR` keeps the inputs and logs. It prints a JSON summary: the evaluator id, the decisions, and rows and seconds per reload rule.
 
-The wrap-up (`tools/arena/wrap_tournament.py`) runs the same code in its `regret` step. It copies the live static and sampled databases to staged files, scores the new matches of its snapshot into them, and stops unless each staged file still holds one evaluator group. A staged file with a different evaluator means the Rust sources changed: rescore everything into new files (`--regret` and `--regret-sampled` name them) instead.
+The wrap-up (`tools/arena/wrap_tournament.py`) runs the same code in its `regret` step. It copies the live production file to a staged file, scores the new matches of its snapshot into it with the sampled rule, and stops unless the staged file still holds one run. Its certain, export and doc steps read the same file. A second run in the staged file means the Rust sources changed: rescore everything into a new file (`--regret` names it, by default the `PRODUCTION` file) instead.
 
 Rows scored by the removed Bend player cannot be extended: the old files (`regret.sqlite`, hash `a3962092b561cfb4`, and `regret-sampled256-native.sqlite`) hold a different evaluator. The Rust evaluator reproduces the Bend rows within 1 millionth where both reach the same depth (see Production scoring), and `sim/rust/search/tests/production/` pins it to them.
 
 The summary tables below come from the regret and knowledge databases, read only, in a few seconds:
 
-    python3 tools/arena/analysis/regret.py [--regret <derived>/regret.sqlite] [--knowledge <derived>/knowledge.sqlite] [--doc docs/arena/analysis/regret.md]
+    python3 tools/arena/analysis/regret.py [--regret <production file>] [--knowledge <derived>/knowledge.sqlite] [--doc docs/arena/analysis/regret.md]
 
 With `--doc` it rewrites the tables at the end of this page. `tools/arena/analysis/reload_bias.py` draws the stratified lists (`sample`) and rewrites the tables of the Reload bias section from a `sampled` run (`report --doc`), reading the sampled and static runs read only. The by-round tables come from `tools/arena/analysis/by_round.py`, which also reads the analysis database for round winners (`--db`) and rewrites the tables of the last section the same way. `tools/arena/analysis/regret_depth.py` does the same for the Deeper search section: `sample` draws the lists, and `report --doc` rewrites its tables from the deep run (`regret-depth.sqlite`). The Reload bias and Deeper search runs were scored with the removed Bend player (depth 8 and 200,000 nodes for the deep one), so they cannot be rerun as written. The Reload bias report still reads its stored rows. The Deeper search report stops: its depth 8 rows and the production depth 6 rows were scored by different evaluators (`regret_depth.py` checks), so its tables below are the earlier result and are not regenerated. `tools/arena/analysis/round_improvement.py` rewrites the within-match tables of the By round section (`--doc`, and `--svg DIR` for its figures). `python3 -m unittest discover -s tools/arena/analysis` runs its tests.
 
-`bun scripts/arena-regret-consistency.ts <derived>/regret.sqlite`, from `web/`, checks every searched row of every run, read only: `values_json` decodes, its top score is `best_score`, the chosen move is in it with `chosen_score`, and `regret` is `best_score` minus `chosen_score`. It prints the count of each mismatch and fails on any. The viewer's replay reads the same rows and refuses a match with a malformed one.
+`bun scripts/arena-regret-consistency.ts <regret file>`, from `web/`, checks every searched row, read only: `values_json` decodes, its top score is `best_score`, the chosen move is in it with `chosen_score`, and `regret` is `best_score` minus `chosen_score`. It prints the count of each mismatch and fails on any. The viewer's replay reads the same rows and refuses a match with a malformed one.
 
 ## Results
 
-Scope: 3,536 scored matches with no DeepSeek seat, from the 3,557-match snapshot of 2026-11-04. This is a casual pass over the full run, with counts and means and no intervals. It covers the 179,642 agent decisions of those matches (DeepSeek is left out as in [matchups.md](matchups.md)). Every one has a row, every row was searched, and none fell back. The rows of the run also hold DeepSeek's matches and unfinished ones. All rows come from one player build (see Reproduce). A config is a model with its effort, pooled over the tournaments it played in. Regret is in percentage points of the round win chance, as above. Mean regret over all decisions is 2.3 points and the 90th percentile 6.4. 11.3% of the decisions are exact.
+Scope: 3,536 scored matches with no DeepSeek seat, from the 3,557-match snapshot of 2026-11-04. This is a casual pass over the full run, with counts and means and no intervals. It covers the 179,642 agent decisions of those matches (DeepSeek is left out as in [matchups.md](matchups.md)). Every one has a row, every row was searched, and none fell back. The rows of the run also hold DeepSeek's matches and unfinished ones. All rows come from one run, sampled reload with 256 deals (see Production scoring). A config is a model with its effort, pooled over the tournaments it played in. Regret is in percentage points of the round win chance, as above. Mean regret over all decisions is 1.9 points and the 90th percentile 4.0. 11.3% of the decisions are exact.
 
 1. **Regret and the ratings agree at the ends.**
-   - At medium effort the mean regret is Opus 1.1, Astra 1.3, Sol 1.4, Haiku 5.5 2.0, Sonnet 2.0, Terra 2.7, Luna 4.0 and Haiku 4.5 4.6 points. Terra 6.1 (1,976 decisions) is 1.8.
+   - At medium effort the mean regret is Opus 0.9, Astra 0.9, Sol 1.0, Haiku 5.5 1.6, Sonnet 1.7, Terra 2.2, Luna 3.4 and Haiku 4.5 4.0 points. Terra 6.1 (1,976 decisions) is 1.4.
    - The cross-model ratings in [matchups.md](matchups.md) put the same three on top (Astra first) and Luna and Haiku 4.5 at the bottom, in the other order. The four in between overlap in rating, and regret does not separate them further. Regret uses no match results, so it agrees from the other side.
 2. **More effort mostly lowers regret. Sol and Opus barely move.**
-   - Haiku 5.5 goes from 3.8 at off to 1.0 at max, Sonnet from 2.3 to 0.8, Luna from 4.1 to 2.2, Terra from 3.1 at low to 1.4 at max. Haiku 4.5 moves less, from 5.7 at off to 4.5 at high. The steps are not always in order: Luna is 4.1 at off and 4.4 at low. The 90th percentile falls with it: Haiku 5.5 10.7 to 3.2, Sonnet 7.3 to 2.4.
-   - Sol (1.2 to 1.6) and Opus from off to xhigh (1.0 to 1.4) change by 0.4 points or less. Opus max, with 2,180 decisions from 80 matches, is 0.9. Sonnet max, at 0.8, is the lowest cell of the table. Sol is flat in the rating sweep too. Opus is not: its xhigh rating is far above its low, yet its regret moves by 0.4 points. Regret does not explain that gap.
+   - Haiku 5.5 goes from 3.2 at off to 0.7 at max, Sonnet from 1.9 to 0.6, Luna from 3.4 to 1.7, Terra from 2.5 at low to 1.0 at max. Haiku 4.5 moves less, from 5.0 at off to 4.0 at high. The steps are not always in order: Luna is 3.4 at off and 3.8 at low. The 90th percentile falls with it: Haiku 5.5 6.5 to 1.9, Sonnet 4.2 to 1.5.
+   - Sol (0.7 to 1.1) and Opus from off to xhigh (0.8 to 1.1) change by 0.4 points or less. Opus max, with 2,180 decisions from 80 matches, and Sonnet max are 0.6, the lowest cells of the table. Sol is flat in the rating sweep too. Opus is not: its xhigh rating is far above its low, yet its regret moves by 0.3 points. Regret does not explain that gap.
 
 **Near reloads (for [#4](https://github.com/sakompella/buckshot/issues/4)).** Regret concentrates in shots with two or three shells left in the gun.
-- Those shots average 4.5 and 3.8 points, with a 90th percentile of 14.6 and 12.3. A shot with one shell left averages 1.5 and one with five left 2.0.
-- Item moves stay between 1.6 and 2.3 at every distance. In this cut they show no sign of a reload effect.
+- Those shots average 2.9 and 3.1 points, with a 90th percentile of 5.5 and 9.3. A shot with one shell left averages 1.5 and one with five left 1.9.
+- Item moves stay between 0.8 and 2.3 at every distance, lowest with two shells left. In this cut they show no sign of a reload effect.
 - The node budget does not explain the rise. It stopped 1.0% and 12.5% of the searches with two and three shells left, against 0.0% at one shell left.
-- This shows where regret is, not why. A shot with two left ends the search at the reload one shot later, so the static leaf is a possible cause. Real mistakes on near-even shells are another. The table cannot tell them apart, which is what #4 measures. The Reload bias section below has the answer.
+- This shows where regret is, not why. These rows already value a reload over sampled deals, so the static leaf's bias (the Reload bias section below) is not the cause; with the static leaf the same shots averaged 4.5 and 3.7. Real mistakes on near-even shells remain a cause.
 
 ## Reload bias
 
@@ -128,7 +130,7 @@ This measures the bias of the static leaf near reloads ([#4](https://github.com/
 3. **Model rankings hold.** Every model's mean regret falls by 0.3 to 0.6 points. The order is the same except that the top two, Opus and Sol, swap (1.19 and 1.22 static, 0.86 and 0.84 sampled), a gap within noise.
 4. **Moves that spend an item score lower under the sampled rule, and shots at the opponent higher.** Over the sampled moves whose score changed, unweighted, the mean shift is -2.6 points for steals, -2.0 for cigarettes, -1.8 for the magnifying glass, -1.2 for beer, -0.7 for the handsaw and -0.2 for the inverter, and +0.3 for shooting the opponent. The shift does not follow the item weights of the evaluation. Beer, at 25, moves more than the handsaw, at 65. So a term for the value of coming items would not obviously recover it.
 
-**Recommendation.** Keep the static leaf as the default.
+**Recommendation (2026-10, superseded).** Keep the static leaf as the default. Since the 2026-11-09 rescore the production run uses the sampled leaf for every decision (Production scoring), which the Rust evaluator made cheap.
 - The bias shows below 4 shells left, but it does not change which models look good. The guess that item moves are the most affected is not borne out, since shots are as affected.
 - Do not add an expected item value to the leaf. Nothing here says that term is the missing part, and the shifts above do not track item weights.
 - Do not search the draws over the whole run. The sampled rule took 27.6 s per decision on average over this sample against 0.24 s static. Weighted to the run, that is about 1,000 hours in one process, about 170 for the 43,069 decisions with 2 or fewer shells left.
@@ -255,66 +257,66 @@ The budget still stops 29.9% of the depth 8 searches, against 40.2% at depth 6.
 
 | model | effort | decisions | mean regret | 90th percentile | exact |
 |---|---|---|---|---|---|
-| claude-opus-5-5 | off | 2,080 | 1.2 | 4.0 | 13.2% |
-| claude-opus-5-5 | low | 1,941 | 1.4 | 3.8 | 11.1% |
-| claude-opus-5-5 | medium | 8,528 | 1.1 | 3.6 | 12.8% |
-| claude-opus-5-5 | high | 1,985 | 1.0 | 3.4 | 11.7% |
-| claude-opus-5-5 | xhigh | 3,747 | 1.0 | 3.3 | 12.2% |
-| claude-opus-5-5 | max | 2,180 | 0.9 | 2.8 | 13.7% |
-| gpt-6-astra | off | 2,103 | 1.4 | 4.4 | 12.0% |
-| gpt-6-astra | low | 1,992 | 1.3 | 3.6 | 13.5% |
-| gpt-6-astra | medium | 6,298 | 1.3 | 3.9 | 13.2% |
-| gpt-6-astra | high | 2,157 | 1.4 | 4.3 | 13.3% |
-| gpt-6.1-sol | low | 2,284 | 1.6 | 4.6 | 11.9% |
-| gpt-6.1-sol | medium | 6,746 | 1.4 | 4.3 | 12.9% |
-| gpt-6.1-sol | high | 2,458 | 1.3 | 4.6 | 12.4% |
-| gpt-6.1-sol | xhigh | 2,527 | 1.2 | 4.2 | 13.3% |
-| gpt-6.1-sol | max | 3,151 | 1.3 | 4.4 | 12.0% |
-| gpt-6.1-terra | off | 1,934 | 2.3 | 6.9 | 12.5% |
-| gpt-6.1-terra | low | 1,883 | 2.0 | 6.0 | 14.0% |
-| gpt-6.1-terra | medium | 1,976 | 1.8 | 5.1 | 13.6% |
-| gpt-6.1-terra | high | 2,118 | 1.5 | 4.9 | 11.7% |
-| gpt-6.1-terra | xhigh | 2,079 | 1.4 | 4.0 | 13.5% |
-| gpt-6.1-terra | max | 2,444 | 1.2 | 3.9 | 13.6% |
-| claude-sonnet-5-5 | off | 3,996 | 2.3 | 7.3 | 11.4% |
-| claude-sonnet-5-5 | low | 3,682 | 2.3 | 7.3 | 11.2% |
-| claude-sonnet-5-5 | medium | 8,949 | 2.1 | 6.3 | 12.4% |
-| claude-sonnet-5-5 | high | 3,930 | 1.6 | 5.2 | 11.1% |
-| claude-sonnet-5-5 | xhigh | 4,068 | 1.2 | 3.8 | 13.3% |
-| claude-sonnet-5-5 | max | 3,572 | 0.8 | 2.4 | 14.8% |
-| claude-haiku-5-5 | off | 4,888 | 3.8 | 10.7 | 9.7% |
-| claude-haiku-5-5 | low | 5,014 | 2.3 | 6.4 | 10.4% |
-| claude-haiku-5-5 | medium | 9,545 | 2.0 | 5.4 | 11.7% |
-| claude-haiku-5-5 | high | 4,294 | 1.5 | 4.3 | 10.8% |
-| claude-haiku-5-5 | xhigh | 3,935 | 1.1 | 3.6 | 11.4% |
-| claude-haiku-5-5 | max | 2,825 | 1.0 | 3.2 | 13.4% |
-| gpt-5.6-terra | low | 2,127 | 3.1 | 10.1 | 10.4% |
-| gpt-5.6-terra | medium | 6,108 | 2.7 | 7.9 | 11.1% |
-| gpt-5.6-terra | high | 2,166 | 2.7 | 8.3 | 11.4% |
-| gpt-5.6-terra | xhigh | 2,409 | 2.0 | 5.8 | 11.3% |
-| gpt-5.6-terra | max | 2,489 | 1.4 | 4.2 | 10.1% |
-| gpt-6-luna | off | 3,162 | 4.1 | 11.9 | 7.4% |
-| gpt-6-luna | low | 3,183 | 4.4 | 13.4 | 9.4% |
-| gpt-6-luna | medium | 7,691 | 4.0 | 12.3 | 9.2% |
-| gpt-6-luna | high | 3,129 | 3.2 | 9.9 | 12.2% |
-| gpt-6-luna | xhigh | 3,251 | 2.4 | 6.8 | 13.7% |
-| gpt-6-luna | max | 3,244 | 2.2 | 6.5 | 13.1% |
-| claude-haiku-4-5-20251001 | off | 3,272 | 5.7 | 16.5 | 7.1% |
-| claude-haiku-4-5-20251001 | minimal | 3,687 | 4.5 | 12.7 | 6.4% |
-| claude-haiku-4-5-20251001 | low | 3,898 | 4.5 | 13.0 | 7.0% |
-| claude-haiku-4-5-20251001 | medium | 8,136 | 4.6 | 13.5 | 7.4% |
-| claude-haiku-4-5-20251001 | high | 3,461 | 4.5 | 12.6 | 7.4% |
-| all |  | 182,722 | 2.3 | 6.4 | 11.3% |
+| claude-opus-5-5 | off | 2,080 | 1.0 | 2.7 | 13.1% |
+| claude-opus-5-5 | low | 1,941 | 1.1 | 2.4 | 11.1% |
+| claude-opus-5-5 | medium | 8,528 | 0.9 | 2.5 | 12.9% |
+| claude-opus-5-5 | high | 1,985 | 0.9 | 2.4 | 11.8% |
+| claude-opus-5-5 | xhigh | 3,747 | 0.8 | 2.1 | 12.2% |
+| claude-opus-5-5 | max | 2,180 | 0.6 | 1.5 | 13.7% |
+| gpt-6.1-sol | low | 2,284 | 1.1 | 2.6 | 12.1% |
+| gpt-6.1-sol | medium | 6,746 | 1.0 | 2.6 | 12.8% |
+| gpt-6.1-sol | high | 2,458 | 0.8 | 2.5 | 12.4% |
+| gpt-6.1-sol | xhigh | 2,527 | 0.7 | 2.0 | 13.3% |
+| gpt-6.1-sol | max | 3,151 | 0.7 | 2.3 | 12.0% |
+| gpt-6-astra | off | 2,103 | 1.0 | 2.4 | 11.9% |
+| gpt-6-astra | low | 1,992 | 0.9 | 2.1 | 13.6% |
+| gpt-6-astra | medium | 6,298 | 0.9 | 2.4 | 13.2% |
+| gpt-6-astra | high | 2,157 | 0.9 | 2.6 | 13.3% |
+| gpt-6.1-terra | off | 1,934 | 1.8 | 3.6 | 12.5% |
+| gpt-6.1-terra | low | 1,883 | 1.4 | 3.0 | 14.0% |
+| gpt-6.1-terra | medium | 1,976 | 1.4 | 2.9 | 13.8% |
+| gpt-6.1-terra | high | 2,118 | 1.1 | 2.7 | 11.8% |
+| gpt-6.1-terra | xhigh | 2,079 | 1.0 | 2.3 | 13.4% |
+| gpt-6.1-terra | max | 2,444 | 0.7 | 2.1 | 13.9% |
+| claude-sonnet-5-5 | off | 3,996 | 1.9 | 4.2 | 11.4% |
+| claude-sonnet-5-5 | low | 3,682 | 1.9 | 4.4 | 11.2% |
+| claude-sonnet-5-5 | medium | 8,949 | 1.7 | 3.8 | 12.4% |
+| claude-sonnet-5-5 | high | 3,930 | 1.2 | 3.1 | 11.1% |
+| claude-sonnet-5-5 | xhigh | 4,068 | 0.9 | 2.4 | 13.3% |
+| claude-sonnet-5-5 | max | 3,572 | 0.6 | 1.5 | 14.8% |
+| claude-haiku-5-5 | off | 4,888 | 3.2 | 6.5 | 9.7% |
+| claude-haiku-5-5 | low | 5,014 | 1.7 | 4.1 | 10.4% |
+| claude-haiku-5-5 | medium | 9,545 | 1.6 | 3.7 | 11.7% |
+| claude-haiku-5-5 | high | 4,294 | 1.2 | 3.2 | 10.8% |
+| claude-haiku-5-5 | xhigh | 3,935 | 0.9 | 2.7 | 11.4% |
+| claude-haiku-5-5 | max | 2,825 | 0.7 | 1.9 | 13.3% |
+| gpt-5.6-terra | low | 2,127 | 2.5 | 5.6 | 10.4% |
+| gpt-5.6-terra | medium | 6,108 | 2.2 | 4.6 | 11.1% |
+| gpt-5.6-terra | high | 2,166 | 2.2 | 4.4 | 11.4% |
+| gpt-5.6-terra | xhigh | 2,409 | 1.5 | 3.5 | 11.4% |
+| gpt-5.6-terra | max | 2,489 | 1.0 | 2.5 | 10.2% |
+| gpt-6-luna | off | 3,162 | 3.4 | 8.4 | 7.5% |
+| gpt-6-luna | low | 3,183 | 3.8 | 9.7 | 9.6% |
+| gpt-6-luna | medium | 7,691 | 3.4 | 8.5 | 9.3% |
+| gpt-6-luna | high | 3,129 | 2.7 | 5.9 | 12.3% |
+| gpt-6-luna | xhigh | 3,251 | 2.0 | 4.1 | 13.7% |
+| gpt-6-luna | max | 3,244 | 1.7 | 3.9 | 13.2% |
+| claude-haiku-4-5-20251001 | off | 3,272 | 5.0 | 12.8 | 7.1% |
+| claude-haiku-4-5-20251001 | minimal | 3,687 | 3.9 | 9.3 | 6.5% |
+| claude-haiku-4-5-20251001 | low | 3,898 | 3.9 | 9.6 | 7.0% |
+| claude-haiku-4-5-20251001 | medium | 8,136 | 4.0 | 9.7 | 7.4% |
+| claude-haiku-4-5-20251001 | high | 3,461 | 4.0 | 9.6 | 7.4% |
+| all |  | 182,722 | 1.9 | 4.0 | 11.3% |
 
 ### Regret by shells left in the gun
 
 | shells left | stopped by budget | shots | mean | 90th percentile | item moves | mean | 90th percentile |
 |---|---|---|---|---|---|---|---|
-| 1 | 0.0% | 19,478 | 1.5 | 2.8 | 8,485 | 1.8 | 6.1 |
-| 2 | 1.0% | 18,965 | 4.5 | 14.5 | 15,496 | 1.6 | 5.0 |
-| 3 | 12.5% | 18,330 | 3.7 | 12.2 | 22,077 | 1.6 | 4.7 |
-| 4 | 37.6% | 14,475 | 2.6 | 7.9 | 20,480 | 1.8 | 5.4 |
-| 5 | 66.8% | 10,133 | 2.0 | 6.4 | 17,223 | 2.0 | 5.1 |
+| 1 | 0.0% | 19,478 | 1.5 | 3.6 | 8,485 | 1.3 | 3.7 |
+| 2 | 1.0% | 18,965 | 2.9 | 5.5 | 15,496 | 0.8 | 2.0 |
+| 3 | 12.5% | 18,330 | 3.1 | 9.3 | 22,077 | 1.2 | 2.7 |
+| 4 | 37.6% | 14,475 | 2.3 | 7.2 | 20,480 | 1.3 | 3.5 |
+| 5 | 66.8% | 10,133 | 1.9 | 6.2 | 17,223 | 1.8 | 4.6 |
 | 6 | 89.1% | 5,751 | 1.7 | 4.6 | 11,829 | 2.3 | 4.8 |
 <!-- tables:end -->
 
@@ -326,8 +328,8 @@ Does a model play the short early rounds differently from the later, item-heavy 
    - Pooled over efforts, a model's win rate moves by 4 points or less between rounds for all nine models. Astra goes from 59.3% to 61.5% and 60.1% over 494, and Haiku 4.5, the largest mover, from 41.3% to 37.7% and 39.2% over 892.
    - Per config the cells hold 80 to 342 rounds, so gaps of 10 points are common at 110 rounds and say little. The largest swings are Haiku 4.5 high, at 42.2%, 51.1% and 33.3% over 135 rounds, Astra off at 61.3%, 62.5% and 45.0% over 80, Terra 6.1 off at 56.2%, 66.2% and 48.8% over 80, and Haiku 5.5 max at 51.4%, 67.6% and 56.8% over 111. Haiku 5.5 off falls from 45.0% to 36.6% and 38.1% over 202. None is a steady trend across the other efforts.
 2. **Regret is flat across rounds, except that round 1 shots are a little worse.**
-   - Mean regret over all moves is 2.4, 2.3 and 2.3 points in rounds 1, 2 and 3. In every round the same three, Opus, Astra and Sol, are lowest and Haiku 4.5 is highest.
-   - Shots cost 3.1 points in round 1 against 2.7 and 2.8 later. Item moves stay at 1.7 to 1.9. The table does not say why. Decisions of one match are not independent, so the gap is small evidence.
+   - Mean regret over all moves is 1.9, 1.8 and 1.9 points in rounds 1, 2 and 3. In every round the same three, Opus, Sol and Astra, are lowest and Haiku 4.5 is highest.
+   - Shots cost 2.5 points in round 1 against 2.2 and 2.3 later. Item moves stay at 1.3 to 1.5. The table does not say why. Decisions of one match are not independent, so the gap is small evidence.
    - Round 3 is often a dead rubber, since prizes are 70k, 75k and 80k and a 2-0 lead settles the winner. No table here splits round 3 regret by the lead; an earlier one-off check of that was not scripted and is removed.
 
 <!-- by-round:start -->
@@ -337,79 +339,79 @@ Does a model play the short early rounds differently from the later, item-heavy 
 
 | model | effort | round 1 win rate | round 1 mean regret | round 2 win rate | round 2 mean regret | round 3 win rate | round 3 mean regret |
 |---|---|---|---|---|---|---|---|
-| claude-opus-5-5 | all | 55.1% (804) | 1.0 (6,581) | 55.1% (804) | 1.1 (7,132) | 54.6% (804) | 1.1 (6,748) |
-| gpt-6-astra | all | 59.3% (494) | 1.3 (4,050) | 61.5% (494) | 1.3 (4,224) | 60.1% (494) | 1.4 (4,276) |
-| gpt-6.1-sol | all | 53.4% (691) | 1.3 (5,253) | 54.8% (691) | 1.4 (6,178) | 53.0% (691) | 1.4 (5,735) |
-| gpt-6.1-terra | all | 60.2% (480) | 1.7 (4,170) | 59.6% (480) | 1.7 (4,078) | 58.1% (480) | 1.6 (4,186) |
-| claude-sonnet-5-5 | all | 48.5% (1,148) | 1.9 (8,618) | 48.3% (1,148) | 1.8 (10,218) | 49.5% (1,148) | 1.7 (9,361) |
-| claude-haiku-5-5 | all | 49.1% (1,220) | 2.1 (9,641) | 50.1% (1,220) | 1.9 (10,417) | 49.3% (1,220) | 2.1 (10,443) |
-| gpt-5.6-terra | all | 48.9% (624) | 2.6 (4,764) | 49.5% (624) | 2.4 (5,273) | 50.8% (624) | 2.3 (5,262) |
-| gpt-6-luna | all | 43.6% (841) | 3.8 (7,399) | 44.2% (841) | 3.3 (8,459) | 45.4% (841) | 3.4 (7,802) |
-| claude-haiku-4-5-20251001 | all | 41.3% (892) | 4.7 (7,317) | 37.7% (892) | 4.6 (7,788) | 39.2% (892) | 5.0 (7,349) |
-| all |  | - | 2.4 (57,793) | - | 2.3 (63,767) | - | 2.3 (61,162) |
+| claude-opus-5-5 | all | 55.1% (804) | 0.8 (6,581) | 55.1% (804) | 0.9 (7,132) | 54.6% (804) | 0.8 (6,748) |
+| gpt-6.1-sol | all | 53.4% (691) | 0.8 (5,253) | 54.8% (691) | 1.0 (6,178) | 53.0% (691) | 0.8 (5,735) |
+| gpt-6-astra | all | 59.3% (494) | 0.9 (4,050) | 61.5% (494) | 0.9 (4,224) | 60.1% (494) | 0.9 (4,276) |
+| gpt-6.1-terra | all | 60.2% (480) | 1.2 (4,170) | 59.6% (480) | 1.3 (4,078) | 58.1% (480) | 1.2 (4,186) |
+| claude-sonnet-5-5 | all | 48.5% (1,148) | 1.6 (8,618) | 48.3% (1,148) | 1.4 (10,218) | 49.5% (1,148) | 1.3 (9,361) |
+| claude-haiku-5-5 | all | 49.1% (1,220) | 1.7 (9,641) | 50.1% (1,220) | 1.6 (10,417) | 49.3% (1,220) | 1.7 (10,443) |
+| gpt-5.6-terra | all | 48.9% (624) | 2.0 (4,764) | 49.5% (624) | 1.9 (5,273) | 50.8% (624) | 1.9 (5,262) |
+| gpt-6-luna | all | 43.6% (841) | 3.1 (7,399) | 44.2% (841) | 2.8 (8,459) | 45.4% (841) | 2.9 (7,802) |
+| claude-haiku-4-5-20251001 | all | 41.3% (892) | 4.1 (7,317) | 37.7% (892) | 3.9 (7,788) | 39.2% (892) | 4.4 (7,349) |
+| all |  | - | 1.9 (57,793) | - | 1.8 (63,767) | - | 1.9 (61,162) |
 
 ### Mean regret by round and kind of move
 
 | round | all moves | shots | item moves |
 |---|---|---|---|
-| 1 | 2.4 (57,793) | 3.0 (28,157) | 1.7 (29,636) |
-| 2 | 2.3 (63,767) | 2.7 (30,053) | 1.8 (33,714) |
-| 3 | 2.3 (61,162) | 2.8 (28,922) | 1.9 (32,240) |
+| 1 | 1.9 (57,793) | 2.5 (28,157) | 1.3 (29,636) |
+| 2 | 1.8 (63,767) | 2.2 (30,053) | 1.5 (33,714) |
+| 3 | 1.9 (61,162) | 2.3 (28,922) | 1.4 (32,240) |
 
 ### Win rate and regret by round, per config
 
 | model | effort | round 1 win rate | round 1 mean regret | round 2 win rate | round 2 mean regret | round 3 win rate | round 3 mean regret |
 |---|---|---|---|---|---|---|---|
-| claude-opus-5-5 | off | 58.8% (80) | 1.3 (704) | 56.2% (80) | 1.3 (715) | 61.3% (80) | 1.1 (661) |
-| claude-opus-5-5 | low | 51.2% (80) | 1.6 (696) | 52.5% (80) | 1.4 (633) | 45.0% (80) | 1.1 (612) |
-| claude-opus-5-5 | medium | 53.9% (334) | 1.0 (2,730) | 54.2% (334) | 1.2 (2,967) | 53.3% (334) | 1.2 (2,831) |
-| claude-opus-5-5 | high | 48.8% (80) | 0.9 (538) | 60.0% (80) | 1.0 (754) | 55.0% (80) | 1.1 (693) |
-| claude-opus-5-5 | xhigh | 53.3% (150) | 0.8 (1,173) | 52.0% (150) | 1.1 (1,315) | 54.7% (150) | 1.1 (1,259) |
-| claude-opus-5-5 | max | 70.0% (80) | 0.6 (740) | 61.3% (80) | 1.0 (748) | 62.5% (80) | 0.9 (692) |
-| gpt-6-astra | off | 61.3% (80) | 1.2 (677) | 62.5% (80) | 1.4 (685) | 45.0% (80) | 1.6 (741) |
-| gpt-6-astra | low | 51.2% (80) | 1.2 (670) | 62.5% (80) | 1.4 (668) | 63.7% (80) | 1.2 (654) |
-| gpt-6-astra | medium | 57.5% (254) | 1.4 (2,000) | 61.0% (254) | 1.2 (2,167) | 61.8% (254) | 1.4 (2,131) |
-| gpt-6-astra | high | 71.2% (80) | 1.5 (703) | 61.3% (80) | 1.4 (704) | 66.2% (80) | 1.3 (750) |
-| gpt-6.1-sol | low | 55.1% (98) | 1.2 (717) | 48.0% (98) | 2.0 (822) | 50.0% (98) | 1.5 (745) |
-| gpt-6.1-sol | medium | 55.7% (271) | 1.4 (2,183) | 60.9% (271) | 1.4 (2,386) | 53.9% (271) | 1.4 (2,177) |
-| gpt-6.1-sol | high | 51.5% (99) | 1.4 (732) | 46.5% (99) | 1.3 (946) | 46.5% (99) | 1.3 (780) |
-| gpt-6.1-sol | xhigh | 47.5% (101) | 1.1 (750) | 50.5% (101) | 1.2 (884) | 58.4% (101) | 1.3 (893) |
-| gpt-6.1-sol | max | 53.3% (122) | 1.0 (871) | 57.4% (122) | 1.4 (1,140) | 54.1% (122) | 1.3 (1,140) |
-| gpt-6.1-terra | off | 56.2% (80) | 2.3 (629) | 66.2% (80) | 2.2 (721) | 48.8% (80) | 2.4 (584) |
-| gpt-6.1-terra | low | 50.0% (80) | 1.9 (642) | 61.3% (80) | 1.9 (611) | 55.0% (80) | 2.1 (630) |
-| gpt-6.1-terra | medium | 53.8% (80) | 1.8 (660) | 55.0% (80) | 1.9 (660) | 63.7% (80) | 1.6 (656) |
-| gpt-6.1-terra | high | 68.8% (80) | 1.5 (736) | 56.2% (80) | 1.6 (666) | 55.0% (80) | 1.4 (716) |
-| gpt-6.1-terra | xhigh | 60.0% (80) | 1.5 (703) | 52.5% (80) | 1.4 (634) | 66.2% (80) | 1.4 (742) |
-| gpt-6.1-terra | max | 72.5% (80) | 1.1 (800) | 66.2% (80) | 1.4 (786) | 60.0% (80) | 1.2 (858) |
-| claude-sonnet-5-5 | off | 45.1% (164) | 2.3 (1,184) | 39.6% (164) | 2.4 (1,473) | 42.7% (164) | 2.1 (1,339) |
-| claude-sonnet-5-5 | low | 45.3% (159) | 2.4 (1,123) | 34.6% (159) | 2.2 (1,315) | 39.0% (159) | 2.4 (1,244) |
-| claude-sonnet-5-5 | medium | 43.1% (364) | 2.4 (2,647) | 50.5% (364) | 2.0 (3,282) | 52.2% (364) | 1.8 (3,020) |
-| claude-sonnet-5-5 | high | 47.2% (161) | 1.7 (1,261) | 52.2% (161) | 1.5 (1,472) | 41.6% (161) | 1.7 (1,197) |
-| claude-sonnet-5-5 | xhigh | 60.0% (160) | 1.3 (1,306) | 49.4% (160) | 1.2 (1,443) | 55.0% (160) | 1.1 (1,319) |
-| claude-sonnet-5-5 | max | 58.6% (140) | 0.7 (1,097) | 62.9% (140) | 0.8 (1,233) | 65.0% (140) | 1.0 (1,242) |
-| claude-haiku-5-5 | off | 45.0% (202) | 4.0 (1,542) | 36.6% (202) | 3.5 (1,623) | 38.1% (202) | 4.0 (1,723) |
-| claude-haiku-5-5 | low | 50.5% (194) | 2.2 (1,596) | 47.9% (194) | 2.3 (1,687) | 55.2% (194) | 2.3 (1,731) |
-| claude-haiku-5-5 | medium | 50.0% (382) | 2.0 (2,975) | 52.9% (382) | 1.8 (3,272) | 48.2% (382) | 2.0 (3,298) |
-| claude-haiku-5-5 | high | 51.4% (173) | 1.5 (1,366) | 49.7% (173) | 1.5 (1,479) | 49.7% (173) | 1.5 (1,449) |
-| claude-haiku-5-5 | xhigh | 46.2% (158) | 1.0 (1,284) | 51.3% (158) | 1.0 (1,330) | 53.2% (158) | 1.3 (1,321) |
-| claude-haiku-5-5 | max | 51.4% (111) | 1.1 (878) | 67.6% (111) | 0.8 (1,026) | 56.8% (111) | 1.0 (921) |
-| gpt-5.6-terra | low | 42.9% (91) | 3.4 (649) | 46.2% (91) | 3.0 (738) | 47.3% (91) | 3.0 (740) |
-| gpt-5.6-terra | medium | 46.7% (259) | 3.0 (1,903) | 49.0% (259) | 2.7 (2,129) | 48.3% (259) | 2.4 (2,076) |
-| gpt-5.6-terra | high | 49.5% (91) | 2.7 (701) | 48.4% (91) | 2.5 (741) | 50.5% (91) | 2.8 (724) |
-| gpt-5.6-terra | xhigh | 57.0% (93) | 1.8 (761) | 53.8% (93) | 2.0 (804) | 54.8% (93) | 2.2 (844) |
-| gpt-5.6-terra | max | 52.2% (90) | 1.3 (750) | 51.1% (90) | 1.4 (861) | 57.8% (90) | 1.5 (878) |
-| gpt-6-luna | off | 30.0% (110) | 5.1 (996) | 35.5% (110) | 3.7 (1,111) | 35.5% (110) | 3.6 (1,055) |
-| gpt-6-luna | low | 30.0% (110) | 4.8 (1,030) | 39.1% (110) | 4.1 (1,157) | 25.5% (110) | 4.3 (996) |
-| gpt-6-luna | medium | 35.8% (282) | 4.4 (2,341) | 32.3% (282) | 4.0 (2,742) | 34.4% (282) | 3.7 (2,608) |
-| gpt-6-luna | high | 51.8% (112) | 2.9 (969) | 56.2% (112) | 3.1 (1,141) | 58.0% (112) | 3.4 (1,019) |
-| gpt-6-luna | xhigh | 63.5% (115) | 2.4 (1,052) | 59.1% (115) | 2.3 (1,097) | 67.8% (115) | 2.6 (1,102) |
-| gpt-6-luna | max | 61.6% (112) | 2.2 (1,011) | 60.7% (112) | 2.0 (1,211) | 67.0% (112) | 2.3 (1,022) |
-| claude-haiku-4-5-20251001 | off | 34.4% (125) | 5.5 (1,085) | 28.0% (125) | 5.2 (1,102) | 35.2% (125) | 6.4 (1,085) |
-| claude-haiku-4-5-20251001 | minimal | 41.3% (143) | 4.9 (1,245) | 39.9% (143) | 4.2 (1,286) | 46.2% (143) | 4.5 (1,156) |
-| claude-haiku-4-5-20251001 | low | 40.9% (149) | 4.2 (1,258) | 38.9% (149) | 4.4 (1,355) | 45.6% (149) | 4.9 (1,285) |
-| claude-haiku-4-5-20251001 | medium | 43.5% (340) | 4.6 (2,608) | 34.4% (340) | 4.8 (2,807) | 37.4% (340) | 4.5 (2,721) |
-| claude-haiku-4-5-20251001 | high | 42.2% (135) | 4.2 (1,121) | 51.1% (135) | 4.0 (1,238) | 33.3% (135) | 5.3 (1,102) |
-| all |  | - | 2.4 (57,793) | - | 2.3 (63,767) | - | 2.3 (61,162) |
+| claude-opus-5-5 | off | 58.8% (80) | 1.0 (704) | 56.2% (80) | 1.0 (715) | 61.3% (80) | 0.9 (661) |
+| claude-opus-5-5 | low | 51.2% (80) | 1.2 (696) | 52.5% (80) | 1.1 (633) | 45.0% (80) | 0.9 (612) |
+| claude-opus-5-5 | medium | 53.9% (334) | 0.8 (2,730) | 54.2% (334) | 0.9 (2,967) | 53.3% (334) | 0.9 (2,831) |
+| claude-opus-5-5 | high | 48.8% (80) | 0.9 (538) | 60.0% (80) | 0.8 (754) | 55.0% (80) | 0.9 (693) |
+| claude-opus-5-5 | xhigh | 53.3% (150) | 0.7 (1,173) | 52.0% (150) | 0.9 (1,315) | 54.7% (150) | 0.7 (1,259) |
+| claude-opus-5-5 | max | 70.0% (80) | 0.4 (740) | 61.3% (80) | 0.7 (748) | 62.5% (80) | 0.7 (692) |
+| gpt-6.1-sol | low | 55.1% (98) | 0.8 (717) | 48.0% (98) | 1.4 (822) | 50.0% (98) | 0.9 (745) |
+| gpt-6.1-sol | medium | 55.7% (271) | 1.0 (2,183) | 60.9% (271) | 0.9 (2,386) | 53.9% (271) | 1.0 (2,177) |
+| gpt-6.1-sol | high | 51.5% (99) | 1.0 (732) | 46.5% (99) | 0.8 (946) | 46.5% (99) | 0.7 (780) |
+| gpt-6.1-sol | xhigh | 47.5% (101) | 0.7 (750) | 50.5% (101) | 0.7 (884) | 58.4% (101) | 0.6 (893) |
+| gpt-6.1-sol | max | 53.3% (122) | 0.5 (871) | 57.4% (122) | 0.9 (1,140) | 54.1% (122) | 0.7 (1,140) |
+| gpt-6-astra | off | 61.3% (80) | 0.9 (677) | 62.5% (80) | 0.9 (685) | 45.0% (80) | 1.1 (741) |
+| gpt-6-astra | low | 51.2% (80) | 0.9 (670) | 62.5% (80) | 1.0 (668) | 63.7% (80) | 0.8 (654) |
+| gpt-6-astra | medium | 57.5% (254) | 1.0 (2,000) | 61.0% (254) | 0.9 (2,167) | 61.8% (254) | 0.9 (2,131) |
+| gpt-6-astra | high | 71.2% (80) | 1.0 (703) | 61.3% (80) | 0.9 (704) | 66.2% (80) | 0.9 (750) |
+| gpt-6.1-terra | off | 56.2% (80) | 1.9 (629) | 66.2% (80) | 1.7 (721) | 48.8% (80) | 1.8 (584) |
+| gpt-6.1-terra | low | 50.0% (80) | 1.4 (642) | 61.3% (80) | 1.5 (611) | 55.0% (80) | 1.4 (630) |
+| gpt-6.1-terra | medium | 53.8% (80) | 1.4 (660) | 55.0% (80) | 1.5 (660) | 63.7% (80) | 1.3 (656) |
+| gpt-6.1-terra | high | 68.8% (80) | 1.1 (736) | 56.2% (80) | 1.2 (666) | 55.0% (80) | 1.1 (716) |
+| gpt-6.1-terra | xhigh | 60.0% (80) | 1.1 (703) | 52.5% (80) | 0.9 (634) | 66.2% (80) | 0.9 (742) |
+| gpt-6.1-terra | max | 72.5% (80) | 0.6 (800) | 66.2% (80) | 0.8 (786) | 60.0% (80) | 0.7 (858) |
+| claude-sonnet-5-5 | off | 45.1% (164) | 1.9 (1,184) | 39.6% (164) | 2.0 (1,473) | 42.7% (164) | 1.7 (1,339) |
+| claude-sonnet-5-5 | low | 45.3% (159) | 2.1 (1,123) | 34.6% (159) | 1.7 (1,315) | 39.0% (159) | 1.9 (1,244) |
+| claude-sonnet-5-5 | medium | 43.1% (364) | 2.0 (2,647) | 50.5% (364) | 1.7 (3,282) | 52.2% (364) | 1.4 (3,020) |
+| claude-sonnet-5-5 | high | 47.2% (161) | 1.3 (1,261) | 52.2% (161) | 1.2 (1,472) | 41.6% (161) | 1.3 (1,197) |
+| claude-sonnet-5-5 | xhigh | 60.0% (160) | 1.1 (1,306) | 49.4% (160) | 0.9 (1,443) | 55.0% (160) | 0.8 (1,319) |
+| claude-sonnet-5-5 | max | 58.6% (140) | 0.5 (1,097) | 62.9% (140) | 0.6 (1,233) | 65.0% (140) | 0.6 (1,242) |
+| claude-haiku-5-5 | off | 45.0% (202) | 3.3 (1,542) | 36.6% (202) | 2.9 (1,623) | 38.1% (202) | 3.3 (1,723) |
+| claude-haiku-5-5 | low | 50.5% (194) | 1.7 (1,596) | 47.9% (194) | 1.8 (1,687) | 55.2% (194) | 1.7 (1,731) |
+| claude-haiku-5-5 | medium | 50.0% (382) | 1.7 (2,975) | 52.9% (382) | 1.5 (3,272) | 48.2% (382) | 1.6 (3,298) |
+| claude-haiku-5-5 | high | 51.4% (173) | 1.1 (1,366) | 49.7% (173) | 1.3 (1,479) | 49.7% (173) | 1.1 (1,449) |
+| claude-haiku-5-5 | xhigh | 46.2% (158) | 0.8 (1,284) | 51.3% (158) | 0.8 (1,330) | 53.2% (158) | 1.1 (1,321) |
+| claude-haiku-5-5 | max | 51.4% (111) | 0.8 (878) | 67.6% (111) | 0.6 (1,026) | 56.8% (111) | 0.7 (921) |
+| gpt-5.6-terra | low | 42.9% (91) | 2.8 (649) | 46.2% (91) | 2.4 (738) | 47.3% (91) | 2.4 (740) |
+| gpt-5.6-terra | medium | 46.7% (259) | 2.4 (1,903) | 49.0% (259) | 2.2 (2,129) | 48.3% (259) | 2.0 (2,076) |
+| gpt-5.6-terra | high | 49.5% (91) | 2.2 (701) | 48.4% (91) | 2.1 (741) | 50.5% (91) | 2.2 (724) |
+| gpt-5.6-terra | xhigh | 57.0% (93) | 1.3 (761) | 53.8% (93) | 1.5 (804) | 54.8% (93) | 1.7 (844) |
+| gpt-5.6-terra | max | 52.2% (90) | 0.9 (750) | 51.1% (90) | 1.1 (861) | 57.8% (90) | 1.1 (878) |
+| gpt-6-luna | off | 30.0% (110) | 4.3 (996) | 35.5% (110) | 3.0 (1,111) | 35.5% (110) | 3.0 (1,055) |
+| gpt-6-luna | low | 30.0% (110) | 4.2 (1,030) | 39.1% (110) | 3.6 (1,157) | 25.5% (110) | 3.7 (996) |
+| gpt-6-luna | medium | 35.8% (282) | 3.6 (2,341) | 32.3% (282) | 3.4 (2,742) | 34.4% (282) | 3.2 (2,608) |
+| gpt-6-luna | high | 51.8% (112) | 2.4 (969) | 56.2% (112) | 2.7 (1,141) | 58.0% (112) | 2.9 (1,019) |
+| gpt-6-luna | xhigh | 63.5% (115) | 1.9 (1,052) | 59.1% (115) | 1.9 (1,097) | 67.8% (115) | 2.2 (1,102) |
+| gpt-6-luna | max | 61.6% (112) | 1.7 (1,011) | 60.7% (112) | 1.6 (1,211) | 67.0% (112) | 1.9 (1,022) |
+| claude-haiku-4-5-20251001 | off | 34.4% (125) | 5.0 (1,085) | 28.0% (125) | 4.5 (1,102) | 35.2% (125) | 5.7 (1,085) |
+| claude-haiku-4-5-20251001 | minimal | 41.3% (143) | 4.3 (1,245) | 39.9% (143) | 3.4 (1,286) | 46.2% (143) | 4.0 (1,156) |
+| claude-haiku-4-5-20251001 | low | 40.9% (149) | 3.8 (1,258) | 38.9% (149) | 3.7 (1,355) | 45.6% (149) | 4.3 (1,285) |
+| claude-haiku-4-5-20251001 | medium | 43.5% (340) | 4.0 (2,608) | 34.4% (340) | 4.1 (2,807) | 37.4% (340) | 3.9 (2,721) |
+| claude-haiku-4-5-20251001 | high | 42.2% (135) | 3.8 (1,121) | 51.1% (135) | 3.4 (1,238) | 33.3% (135) | 4.8 (1,102) |
+| all |  | - | 1.9 (57,793) | - | 1.8 (63,767) | - | 1.9 (61,162) |
 <!-- by-round:end -->
 
 ### Within a match
