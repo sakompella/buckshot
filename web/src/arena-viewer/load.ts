@@ -43,7 +43,6 @@ export const withConfig = ({ label, ...rest }: ReturnType<typeof decodeLabelled>
 
 export interface ArenaPaths {
   readonly regret?: string | undefined;
-  readonly regretSampled?: string | undefined;
   readonly knowledge?: string | undefined;
   readonly certain?: string | undefined;
   readonly luck?: string | undefined;
@@ -66,7 +65,7 @@ export const loadArena = (dbPath: string, paths: ArenaPaths = {}): Arena => {
   const db = new Database(dbPath, { readonly: true });
 
   assertCurrentImport(db);
-  const regret = paths.regret === undefined ? null : openRegret(paths.regret, paths.regretSampled);
+  const regret = paths.regret === undefined ? null : openRegret(paths.regret);
 
   const rows = db
     .query(SEATS_SQL)

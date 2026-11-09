@@ -347,7 +347,7 @@ export const matchRows = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<MatchRo
 /**
  * A config's searched moves, leaving out decisions with no real choice: its accuracy (the mean of its seats' game
  * accuracies), the mean and 99th percentile of the points of round win chance a move gave up, the share of best moves,
- * inaccuracies, mistakes and blunders per 100 moves, and the share scored with the sampled reload rule. Null with no such move.
+ * inaccuracies, mistakes and blunders per 100 moves. Null with no such move.
  */
 export interface RegretStats {
   readonly moves: number;
@@ -358,7 +358,6 @@ export interface RegretStats {
   readonly inaccuraciesPer100: number;
   readonly mistakesPer100: number;
   readonly blundersPer100: number;
-  readonly sampledShare: number;
 }
 
 export const regretStats = (seats: ReadonlyArray<Pick<SeatFull, "regret">>): RegretStats | null => {
@@ -381,7 +380,6 @@ export const regretStats = (seats: ReadonlyArray<Pick<SeatFull, "regret">>): Reg
     inaccuraciesPer100: per100((seat) => seat.inaccuracies),
     mistakesPer100: per100((seat) => seat.mistakes),
     blundersPer100: per100((seat) => seat.blunders),
-    sampledShare: sumOf(totals.map((total) => total.sampled)) / moves,
   };
 };
 

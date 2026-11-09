@@ -82,7 +82,7 @@ export type SeatAnalysis = typeof SeatAnalysis.Type;
 /**
  * A seat's searched agent moves, leaving out decisions where every move scores within a point: how many, the points of
  * round win chance they gave up in all, the seat's lichess-style game accuracy (accuracy.ts), how many moves were best,
- * inaccuracies, mistakes and blunders, how many were scored with the sampled reload rule (the rest are static), and the
+ * inaccuracies, mistakes and blunders, and the
  * loss of every move that lost a tenth of a point or more. Null when the viewer has no regret database or the seat has
  * no such move.
  */
@@ -94,7 +94,6 @@ export const SeatRegret = Schema.Struct({
   inaccuracies: Schema.Number,
   mistakes: Schema.Number,
   blunders: Schema.Number,
-  sampled: Schema.Number,
   losses: Schema.Array(Schema.Number),
 });
 
@@ -246,7 +245,6 @@ export type PlayerState = typeof PlayerState.Type;
  * What the minimax player made of one searched agent move, in percentage points of the round win chance: the regret,
  * the best move's score and the chosen move's. exact is true only for a proven settled round; false means not proven
  * exact, not that the score is a guess. depth is how deep the search got, and limited whether the node budget stopped it.
- * source is the evaluator run that scored it: static, or the sampled reload rule that scores decisions with few shells left.
  */
 export const MoveRegret = Schema.Struct({
   points: Schema.Number,
@@ -258,7 +256,6 @@ export const MoveRegret = Schema.Struct({
   depth: Schema.Number,
   limited: Schema.Boolean,
   values: Schema.Array(Schema.Struct({ label: Schema.String, score: Schema.Number })),
-  source: Schema.Literals(["static", "sampled"]),
 });
 
 export type MoveRegret = typeof MoveRegret.Type;

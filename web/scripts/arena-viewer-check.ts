@@ -673,7 +673,7 @@ const checkRegret = async (page: Page) => {
 
   const titles = await page.locator('table.lbt td[data-label="accuracy"][title]:not([title=""])').evaluateAll((titled) => titled.map((cell) => cell.getAttribute("title") ?? ""));
 
-  expectThat(titles.length === scored.length && titles.every((title) => /^[\d,]+ moves with a real choice · \d+% scored with the sampled reload rule$/.test(title)), "a regret cell does not say how many moves and how many used the sampled reload rule");
+  expectThat(titles.length === scored.length && titles.every((title) => /^[\d,]+ moves with a real choice$/.test(title)), "a regret cell does not say how many moves it rests on");
 
   await page.locator(".lb").first().screenshot({ path: shot("leaderboard-regret"), style: UNSTICK });
 

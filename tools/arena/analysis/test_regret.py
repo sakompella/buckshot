@@ -41,7 +41,7 @@ class Percentile(unittest.TestCase):
 class Load(unittest.TestCase):
     def load(self, **kwargs):
         with tempfile.TemporaryDirectory() as directory:
-            return regret.load(*databases(Path(directory), **kwargs), depth=6, budget=20000)
+            return regret.load(*databases(Path(directory), **kwargs))
 
     def test_keeps_agent_decisions_of_completed_matches_with_their_config(self):
         loaded = self.load(
@@ -73,31 +73,17 @@ class Load(unittest.TestCase):
         self.assertEqual([d.regret for d in loaded.decisions], [100])
         self.assertEqual((loaded.unsearched, loaded.unscored), (1, 1))
 
-    def test_refuses_to_mix_evaluators(self):
-        with self.assertRaises(SystemExit):
-            self.load(
-                players=[("m1", "A", "opus", "high")],
-                decisions=[("m1", 0, "A", "agent", "Use beer", 2, 1), ("m1", 1, "A", "agent", "Use beer", 2, 1)],
-                scores=[score("m1", 0, 1, evaluator="old"), score("m1", 1, 1, evaluator="new")],
-            )
-
-    def test_reads_one_reload_rule(self):
-        loaded = self.load(
-            players=[("m1", "A", "opus", "high")],
-            decisions=[("m1", 0, "A", "agent", "Use beer", 2, 1), ("m1", 1, "A", "agent", "Use beer", 2, 1)],
-            scores=[score("m1", 0, 1), score("m1", 0, 7, reload="expected-deal"), score("m1", 0, 9, reload="sampled", samples=256)],
-        )
-        self.assertEqual([d.regret for d in loaded.decisions], [1])
-        self.assertEqual(loaded.unscored, 1)
 
 
-class RunSamples(unittest.TestCase):
-    def test_a_sampled_run_defaults_to_the_scripts_count_and_other_rules_take_none(self):
-        self.assertEqual((regret.run_samples("sampled", None), regret.run_samples("sampled", 64), regret.run_samples("static", None)), (256, 64, 0))
-        with self.assertRaises(SystemExit):
-            regret.run_samples("expected-deal", 64)
-        with self.assertRaises(SystemExit):
-            regret.run_samples("sampled", 0)
+class RunOf(unittest.TestCase):
+    def test_a_file_must_hold_exactly_one_run(self):
+        decisions = [("m1", 0, "A", "agent", "Use beer", 2, 1)]
+        with tempfile.TemporaryDirectory() as directory:
+            path, _ = databases(Path(directory), [("m1", "A", "opus", "high")], decisions, [score("m1", 0, 9, reload="sampled", samples=256)])
+            self.assertEqual(regret.run_of(path), regret.Run("e", 6, 20000, "sampled", 256))
+        for second in (score("m1", 0, 1), score("m1", 0, 9, evaluator="new", reload="sampled", samples=256)):
+            with tempfile.TemporaryDirectory() as directory, self.assertRaises(SystemExit):
+                regret.load(*databases(Path(directory), [("m1", "A", "opus", "high")], decisions, [score("m1", 0, 9, reload="sampled", samples=256), second]))
 
 
 class Summary(unittest.TestCase):

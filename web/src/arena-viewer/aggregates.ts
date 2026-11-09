@@ -44,7 +44,6 @@ export const ConfigSummary = Schema.Struct({
       inaccuraciesPer100: Schema.Number,
       mistakesPer100: Schema.Number,
       blundersPer100: Schema.Number,
-      sampledShare: Schema.Number,
     }),
   ),
   totalCost: Schema.Number,
