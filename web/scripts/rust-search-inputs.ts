@@ -24,8 +24,9 @@ import { agentMoveText } from "../src/text.ts";
 //
 //   bun scripts/rust-search-inputs.ts --db <buckshot.sqlite> --decisions <list> --out <prefix> [--js] [--depth 6] [--budget 20000] [--reload static|expected-deal|sampled] [--samples 256] [--memo off|charged|free]
 //
-// Writes <prefix>.jsonl. Row: {id, ordinal, me, table, shells, input, menu, chosen}, plus js and ms with --js. shells is
-// the shells left in the gun. A position the player calls invalid has menu null and its reason as invalid, and no js.
+// Writes <prefix>.jsonl. Row: {id, ordinal, me, table, shells, input, menu, codes, chosen}, plus js and ms with --js.
+// shells is the shells left in the gun; codes names each menu move as the Rust searcher's lines do (moveCode). A position
+// the player calls invalid has menu and codes null and its reason as invalid, and no js.
 
 const { values } = parseArgs({
   args: process.argv.slice(2),
@@ -117,9 +118,9 @@ for (const match of matches) {
       // The player's own move order (legal_json orders steal and use moves differently); a search of no depth gives every move its static value.
       const ordered = player.analyse(input, { depth: 0, budget: 0 }, { rule: "static" });
 
-      // A position the player refuses keeps its row, with no menu, so the scorer records the Rust parser's refusal.
+      // A position the player refuses keeps its row, with no menu, so the scorer stops on it with a dump.
       if (ordered.kind !== "analysed") {
-        rows.set(`${match.id} ${decision.ordinal}`, JSON.stringify({ id: match.id, ordinal: decision.ordinal, me, table: input.table, shells: before.game.board.gun.remaining, input: nativeInput(input), menu: null, chosen: decision.label, invalid: ordered.reason }));
+        rows.set(`${match.id} ${decision.ordinal}`, JSON.stringify({ id: match.id, ordinal: decision.ordinal, me, table: input.table, shells: before.game.board.gun.remaining, input: nativeInput(input), menu: null, codes: null, chosen: decision.label, invalid: ordered.reason }));
       } else {
         const menu = ordered.lines.map((line) => agentMoveText(roster, me, line.steps));
         const legal = new Set(decodeMenu(decision.legal_json).map(({ label }) => label));
@@ -128,7 +129,8 @@ for (const match of matches) {
           throw new Error(`${match.name} ${decision.ordinal}: the player's moves [${menu.join("; ")}] are not the recorded menu [${[...legal].join("; ")}]`);
         }
 
-        const row = { id: match.id, ordinal: decision.ordinal, me, table: input.table, shells: before.game.board.gun.remaining, input: nativeInput(input), menu, chosen: decision.label };
+        const codes = ordered.lines.map((line) => moveCode(line.steps));
+        const row = { id: match.id, ordinal: decision.ordinal, me, table: input.table, shells: before.game.board.gun.remaining, input: nativeInput(input), menu, codes, chosen: decision.label };
 
         if (values.js) {
           const started = performance.now();

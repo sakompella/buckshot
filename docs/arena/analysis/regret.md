@@ -24,7 +24,9 @@ A score is the deciding player's chance of winning the current round, in million
 
 - **Searched:** the search finished at least one depth. Regret is set, and is 0 for the best move.
 - **Fallback:** no depth finished, because the node budget ran out first or the run asked for depth 0. Every move gets the same static value; the regret is NULL, never 0.
-- **Invalid:** the player could not build a belief from the log, or the Rust parser refused the position (for example, a table wider than two seats); the reason is stored and there is no regret.
+- **Invalid:** only in the older Bend rows and the rows written before 2026-11-09: the player could not build a belief from the log, or the Rust parser refused the position. The 3 invalid rows of the 2026-11-08 rescore are item grabs of match `4f16575f…` (ordinals 60, 72 and 81) whose run log records them as the agent's; a menu of one move is no choice, so the scorer no longer takes them.
+
+**Bend and Rust must agree.** For every decision the scorer checks that Rust's root moves (each line's `code`, as `show.move` prints it) are Bend's menu, move by move, and that neither side refuses the position. On any difference it writes no row: it writes one JSON dump per disagreement into `<output>-bugs/` next to the output database (match id, ordinal, the input line exactly as fed to `buckshot-search` and its command, Bend's menu and codes, Rust's whole row, the evaluator id, features, binary hash and commit), prints their paths and exits non-zero after that input file.
 - **Exact:** both the best and the chosen score are 0 or 1,000,000. Only a settled round gives those scores: a win, or a loss, which a dead player's 0 always is. Treat only exact rows as solved. `exact = 0` means not proven exact, not heuristic. Take both players at 1 health with one live and one blank shell left. Shooting the other player settles the round on every path, but its score of 500,000 is a mix of a win and a loss, so the row is not marked exact. The search does not report which values are settled.
 
 The reload rule says how a search values a reload it stops at ([#4](https://github.com/sakompella/buckshot/issues/4)). `static` is the static evaluation before the draw. `sampled` averages that evaluation over `--samples` deals (256 by default) drawn at random as the machine asks for them, seeded by the state the deal starts from, so a rerun gives the same rows. Both rules search the same tree and spend the same nodes, so where no line reaches a reload they give the same scores. Production scores every decision `static`, and the decisions with 2 or fewer shells left also `sampled`, since a reload is near only then. Both rules work at two seats only.
@@ -42,7 +44,7 @@ The Bend player had a third rule, `expected-deal`: the static evaluation average
 | `evaluator` | `bounded-v1-f64-unpruned-<hash of the Rust sources, Cargo files and features>` (the Bend rows: a hash of the compiled player). Never mix rows with different values. |
 | `max_depth`, `budget` | The run's depth limit (decisions, by every player) and node budget (nodes expanded; in the Bend rows, a fuel count). |
 | `reload`, `samples` | `static` or `sampled`, and the deals per leaf of a sampled run (0 for static); `samples > 0` exactly when `reload` is `sampled`. The Bend rows can also be `expected-deal`. The viewer and the Python reports read one run's rows: they take `--reload` (default `static`) and, for a sampled run, `--samples` (default 256). |
-| `status` | `searched`, `fallback` or `invalid`. |
+| `status` | `searched` or `fallback` (`invalid` in older rows). |
 | `values_json` | Every legal move with its score, in the player's move order. |
 | `best`, `best_score`, `chosen_score`, `regret`, `exact` | Set only when searched. Ties go to the first move. `exact` is 1 when proven exact, 0 when not proven (see above). |
 | `depth`, `limited` | The depth the search finished, and whether the budget stopped it there. |
