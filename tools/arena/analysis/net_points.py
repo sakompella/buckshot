@@ -75,7 +75,8 @@ class Match:
 
     @property
     def skipped(self) -> bool:
-        return any(SKIPPED_MODEL in seat.config[0] for seat in (self.first, self.second))
+        """A DeepSeek seat, or an engine's: it has no regret rows, so its net points would mean nothing."""
+        return any(seat.config[0] is None or SKIPPED_MODEL in seat.config[0] for seat in (self.first, self.second))
 
 
 @dataclass(frozen=True)
