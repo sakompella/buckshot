@@ -31,14 +31,13 @@ Live files are read once per match. A snapshot can straddle an append or manifes
 | `decisions` | Accepted moves in chronological order, including forced and fallback moves. Turn, journal sequence, player, selected move, label, reconstructed own-player view and legal alternatives. |
 | `calls` | Each physical model reply, including failed replies, provider, usage, list-price cost, latency, exact saved reasoning text, response text and tool arguments. |
 | `source_files` | Latest file hashes and byte lengths for imported JSON/JSONL files. |
-| `source_records` | Exact raw JSON records and JSONL lines, source path and 1-based line, parse problems and whether the observation belongs to the latest snapshot. Prior versions remain available. |
-| `issues` | Import discrepancies, malformed records, repeated or conflicting moves and replay failures. |
+| `source_records` | Exact raw JSON records and JSONL lines, source path and 1-based line, and whether the observation belongs to the latest snapshot. Prior versions remain available. A live match's last line without its newline is read on a later import. |
 | `metadata` | Schema version and exact price table with its SHA-256. |
 | `match_totals` | View over calls. Known cost, unpriced-call count and token totals, including partial matches and failures. |
 
 IDs are SHA-256 strings. Indexes cover model and effort, tournament/seed/pairing/block, code, entrant, match/turn/player and decision-call joins. A seed-block ID includes tournament, pairing, block and seed. Keep this relationship when resampling results. Do not treat seat swaps as independent seeds.
 
-`matches.status` is `completed`, `partial`, `unstarted` or `skipped`. `completed` is the scored set: the manifest says finished and the match is not skipped, its standings cover every scheduled player exactly once, the log has its end event, and the replay reaches a finished match whose cash equals the standings. A finished match that fails any of these stays `partial`, has no win share and gets an issue. An explicitly skipped match that already has logs stays `partial`, with `disposition = 'skipped'`, even if it finished. A skipped match with no logs is `skipped`. A failed call does not make a match a loss. Its status is `failed`; it and any later calls remain separate observations. Raw fault, reminder and resumed events remain in `source_records`. Retries internal to an SDK request that did not emit a call line are not invented.
+`matches.status` is `completed`, `partial`, `unstarted` or `skipped`. `completed` is the scored set: the manifest says finished and the match is not skipped, its standings cover every scheduled player exactly once, the log has its end event, and the replay reaches a finished match whose cash equals the standings. Where two sources disagree the import stops: a manifest that does not decode or disagrees with the tournament config or the schedule, standings that miss a player, a finished manifest without an end event, a JSONL line that does not decode, two different moves logged under one sequence, a replay that refuses a logged move or does not reach the manifest's end and cash, manifest call or token totals that differ from `calls.jsonl`, an unscheduled match directory, or a source file imported before that is gone. The error names the match directory, what disagrees and both values; the tournament's transaction rolls back. A running match (no finished manifest yet) stays `partial`. An explicitly skipped match that already has logs stays `partial`, with `disposition = 'skipped'`, even if it finished. A skipped match with no logs is `skipped`. A failed call does not make a match a loss. Its status is `failed`; it and any later calls remain separate observations. Raw fault, reminder and resumed events remain in `source_records`. Retries internal to an SDK request that did not emit a call line are not invented.
 
 Missing values are SQL NULL. Zero usage remains zero. `reasoning_tokens` is NULL when the provider did not report it. A match with no calls has NULL cost and token totals. Check `unpriced_calls` before treating known cost as full cost. Costs use the existing `arena/cost.ts` and its tier rules. They are estimates at list prices, not subscription charges.
 
@@ -46,7 +45,7 @@ Missing values are SQL NULL. Zero usage remains zero. `reasoning_tokens` is NULL
 
 `decisions.visible_json` comes from `agentGame` immediately before each accepted move, using the existing viewer replay and generated Bend rules. `legal_json` is that player's legal move list. These are reconstructed views, not captured original prompts. `delivered_json` retains the actual deliveries for that player's turn. Other events and deliveries can be inspected in the raw records.
 
-No hidden shell order or another player's secrets are copied into a decision view. No spectator frame is stored as agent-visible information. If replay fails, subsequent reconstructed views stay NULL and `issues` explains why. Repeated journal sequences count once in the decision projection but every raw line remains. Conflicting repeats stop view reconstruction and are reported. Call lines are not deduplicated by text, timestamp or usage: identical replies can represent separate paid attempts.
+No hidden shell order or another player's secrets are copied into a decision view. No spectator frame is stored as agent-visible information. Repeated journal sequences (the same move logged twice) count once in the decision projection but every raw line remains. Call lines are not deduplicated by text, timestamp or usage: identical replies can represent separate paid attempts.
 
 Calls link to the next chosen move by the same player in timestamp order, matching the viewer's attribution. `link_method` labels this heuristic. It is not an exact provider call-ID join. A call without a subsequent accepted move has a NULL decision link. Several replies, reminders and failed attempts can link to one decision.
 
@@ -106,9 +105,6 @@ FROM decisions d
 LEFT JOIN calls c ON c.decision_id = d.id
 JOIN source_records r ON r.id = d.source_record
 WHERE d.match_id = :match_id ORDER BY d.ordinal, c.ordinal;
-
-SELECT m.name, i.message FROM issues i
-LEFT JOIN matches m ON m.id = i.match_id ORDER BY m.name, i.message;
 ```
 
 Legal alternatives and own-player views support future opportunity-conditioned strategy and move-review tables. This change adds no solver, behavioral evaluation or frontend integration. A future leaderboard should generate its aggregates here rather than parse tournament directories again.

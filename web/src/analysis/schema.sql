@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS matches (
   status TEXT NOT NULL, disposition TEXT, status_reason TEXT, started_at TEXT, ended_at TEXT,
   code_hash TEXT, rules_hash TEXT, instructions_hash TEXT, source_dir TEXT NOT NULL,
   schedule_json TEXT NOT NULL, manifest_json TEXT, source_record TEXT,
-  fingerprint TEXT NOT NULL, replay_status TEXT NOT NULL, replay_error TEXT,
+  fingerprint TEXT NOT NULL, replay_status TEXT NOT NULL,
   UNIQUE(tournament_id, name)
 );
 CREATE TABLE IF NOT EXISTS match_seats (
@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS source_files (
 );
 CREATE TABLE IF NOT EXISTS source_records (
   id TEXT PRIMARY KEY, path TEXT NOT NULL, line INTEGER NOT NULL, raw TEXT NOT NULL,
-  current INTEGER NOT NULL, issue TEXT
+  current INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS records_path ON source_records(path, current, line);
 CREATE TABLE IF NOT EXISTS decisions (
@@ -51,10 +51,6 @@ CREATE TABLE IF NOT EXISTS calls (
   reasoning_text TEXT NOT NULL, reasoning_provenance TEXT NOT NULL, response_text TEXT NOT NULL,
   tool_calls_json TEXT NOT NULL, usage_json TEXT NOT NULL, source_record TEXT NOT NULL REFERENCES source_records(id),
   link_method TEXT, UNIQUE(match_id, ordinal)
-);
-CREATE TABLE IF NOT EXISTS issues (
-  id TEXT PRIMARY KEY, tournament_id TEXT NOT NULL REFERENCES tournaments(id),
-  match_id TEXT REFERENCES matches(id), source_record TEXT, message TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS entrants_model_effort ON entrants(model, effort);

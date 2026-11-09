@@ -18,10 +18,18 @@ beforeAll(() => playFauxRun(played, ["Agent", "Agent"], "on-turn"), 30_000);
 
 afterAll(() => rmSync(played, { recursive: true, force: true }));
 
-/** Every test reads the same finished match, so it is played once and copied. */
-const fauxMatchInto = (dir: string) => cpSync(played, dir, { recursive: true });
+/** Every test reads the same finished match, so it is played once and copied, with both agents at medium effort as the tests' configs say. */
+const fauxMatchInto = (dir: string) => {
+  cpSync(played, dir, { recursive: true });
+  const manifestPath = join(dir, "manifest.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 
-test("refreshes resumed logs without duplicating calls, retains bad observations, and rebuilds the same projections", async () => {
+  for (const agent of Object.values<{ effort: string | null }>(manifest.provenance.agents)) agent.effort = "medium";
+
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+};
+
+test("refreshes resumed logs without duplicating calls or repeated moves, stops at a bad line, and rebuilds the same projections", async () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
   const source = join(root, "tournament");
   const database = join(root, "analysis.sqlite");
@@ -63,7 +71,10 @@ test("refreshes resumed logs without duplicating calls, retains bad observations
     inspection.close();
     refresh();
     expect(snapshot()).toEqual(complete);
-    // Read all prefixes of the last call. Neither valid-but-unterminated JSON nor fragments count as calls.
+    const manifestPath = join(match, "manifest.json");
+    const manifest = readFileSync(manifestPath, "utf8");
+    writeFileSync(manifestPath, manifest.replace('"status": "finished"', '"status": "running"'));
+    // Read all prefixes of a live match's last call. Neither valid-but-unterminated JSON nor fragments count as calls.
     const lastNewline = calls.lastIndexOf("\n", calls.length - 2);
     const last = calls.slice(lastNewline + 1, -1);
 
@@ -74,9 +85,6 @@ test("refreshes resumed logs without duplicating calls, retains bad observations
     }
 
     writeFileSync(callsPath, calls);
-    const manifestPath = join(match, "manifest.json");
-    const manifest = readFileSync(manifestPath, "utf8");
-    writeFileSync(manifestPath, manifest.replace('"status": "finished"', '"status": "running"'));
     appendFileSync(callsPath, JSON.stringify({ t: "2026-01-01T00:00:00Z", agent: "A", position: 1, provider: "faux", api: "faux", model: "unpriced", stop_reason: "error", error: "quota exhausted", usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, tool_calls: [], text: "", thinking: "" }) + "\n");
     refresh();
     const partial = openAnalysis(database);
@@ -88,11 +96,13 @@ test("refreshes resumed logs without duplicating calls, retains bad observations
     writeFileSync(callsPath, calls);
     const moveLine = events.split("\n").find((line) => line.includes('"kind":"move"'));
     expect(moveLine).toBeDefined();
-    appendFileSync(eventsPath, `${moveLine}\nnot json\n`);
+    appendFileSync(eventsPath, `${moveLine}\n`);
     refresh();
     expect(snapshot()).toEqual(complete);
+    appendFileSync(eventsPath, "not json\n");
+    expect(refresh).toThrow(/events.jsonl line \d+ does not decode/);
+    expect(snapshot()).toEqual(complete);
     const db = openAnalysis(database);
-    expect(db.query("SELECT COUNT(*) AS n FROM issues").get()).not.toEqual({ n: 0 });
     expect(db.query("SELECT COUNT(*) AS n FROM source_records WHERE current = 0").get()).not.toEqual({ n: 0 });
     expect(db.query("PRAGMA foreign_key_check").all()).toEqual([]);
     db.close();
@@ -136,11 +146,6 @@ const probeTournament = (root: string, effort: string) => {
   mkdirSync(source);
   fauxMatchInto(join(source, name));
   const manifestPath = join(source, name, "manifest.json");
-  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-
-  for (const agent of Object.values<{ effort: string | null }>(manifest.provenance.agents)) agent.effort = "medium";
-
-  writeFileSync(manifestPath, JSON.stringify(manifest));
   const configured = (aEffort: string) => ({ format: 1, created_at: "2026-01-01T00:00:00Z", git_commit: "test", config: { name: "probe", seed: 42, delivery: "on-turn", endpoints: { fake: { api: "anthropic", url: "http://invalid", keyEnv: "UNUSED" } }, entrants: { a: { endpoint: "fake", model: "faux-a", effort: aEffort }, b: { endpoint: "fake", model: "faux-b", effort: "medium" } }, pairings: [["a", "b"]], blocksPerPairing: 1 }, schedule: [{ name, pairing: 0, block: 0, seed: 42, seats: ["A", "B"], entrants: ["a", "b"] }] });
   const configure = (aEffort: string) => writeFileSync(join(source, "tournament.json"), JSON.stringify(configured(aEffort)));
   configure(effort);
@@ -154,7 +159,7 @@ const rowsOf = (database: string, sql: string) => {
   try { return db.query(sql).all(); } finally { db.close(); }
 };
 
-test("a changed tournament config revalidates unchanged matches, as a fresh rebuild does", async () => {
+test("a changed tournament config is checked on unchanged matches, as a fresh rebuild does", async () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 
   try {
@@ -162,15 +167,11 @@ test("a changed tournament config revalidates unchanged matches, as a fresh rebu
     const database = join(root, "analysis.sqlite");
     const fresh = join(root, "fresh.sqlite");
     importTournaments({ database, sources: [source] });
-    expect(rowsOf(database, "SELECT message FROM issues")).toEqual([]);
     configure("high");
-    importTournaments({ database, sources: [source] });
-    importTournaments({ database: fresh, sources: [source] });
-    expect(rowsOf(database, "SELECT message FROM issues")).toEqual([{ message: "agent A played at effort medium, the schedule says high" }]);
-    expect(rowsOf(database, "SELECT message FROM issues")).toEqual(rowsOf(fresh, "SELECT message FROM issues"));
+    expect(() => importTournaments({ database, sources: [source] })).toThrow("agent A played at effort medium, the schedule says high");
+    expect(() => importTournaments({ database: fresh, sources: [source] })).toThrow("agent A played at effort medium, the schedule says high");
     configure("medium");
     importTournaments({ database, sources: [source] });
-    expect(rowsOf(database, "SELECT message FROM issues")).toEqual([]);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -186,11 +187,10 @@ test("an entrant with an effort label is filed under it, and the others under th
     writeFileSync(join(source, "tournament.json"), JSON.stringify(file));
     importTournaments({ database, sources: [source] });
     expect(rowsOf(database, "SELECT name, effort FROM entrants ORDER BY name")).toEqual([{ name: "a", effort: "off" }, { name: "b", effort: "medium" }]);
-    expect(rowsOf(database, "SELECT message FROM issues")).toEqual([]);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("a match whose agent played its entrant's instructions addendum is not an issue", async () => {
+test("a match whose agent played its entrant's instructions addendum imports", async () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 
   try {
@@ -206,7 +206,7 @@ test("a match whose agent played its entrant's instructions addendum is not an i
     writeFileSync(tournamentPath, JSON.stringify(file));
     writeFileSync(manifestPath, JSON.stringify(manifest));
     importTournaments({ database, sources: [source] });
-    expect(rowsOf(database, "SELECT message FROM issues")).toEqual([]);
+    expect(rowsOf(database, "SELECT status FROM matches")).toEqual([{ status: "completed" }]);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -228,12 +228,11 @@ test("importing the same tournament from a new directory leaves every row and so
     expect(rowsOf(database, "SELECT t.source_dir AS tournament, m.source_dir AS match FROM matches m JOIN tournaments t ON t.id = m.tournament_id")).toEqual([{ tournament: relocated, match: join(relocated, "a_b_b0_p0") }]);
     expect(rowsOf(database, "SELECT COUNT(*) AS n FROM source_files WHERE path NOT LIKE '" + relocated + "/%'")).toEqual([{ n: 0 }]);
     expect(rowsOf(database, "SELECT COUNT(*) AS n FROM source_records WHERE current = 1 AND path NOT LIKE '" + relocated + "/%'")).toEqual([{ n: 0 }]);
-    expect(rowsOf(database, "SELECT COUNT(*) AS n FROM issues")).toEqual([{ n: 0 }]);
     expect(rowsOf(database, "PRAGMA foreign_key_check")).toEqual([]);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("a finished match whose standings do not cover every player is reported and not counted as completed or scored", async () => {
+test("a finished match whose standings do not cover every player stops the import", async () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 
   try {
@@ -244,22 +243,17 @@ test("a finished match whose standings do not cover every player is reported and
 
     for (const [label, broken] of [["no standings", undefined], ["one player", standings.slice(0, 1)], ["a repeated player", [standings[0], standings[0]]], ["an unscheduled player", [standings[0], { ...standings[1], player: "C" }]]] as const) {
       writeFileSync(manifestPath, JSON.stringify({ ...manifest, standings: broken }));
-      importTournaments({ database, sources: [source] });
-      expect([label, rowsOf(database, "SELECT status FROM matches")]).toEqual([label, [{ status: "partial" }]]);
-      expect([label, rowsOf(database, "SELECT COUNT(*) AS n FROM issues WHERE message LIKE 'Finished manifest%'")]).toEqual([label, [{ n: 1 }]]);
-      expect(rowsOf(database, "SELECT COUNT(*) AS n FROM match_seats WHERE win_share IS NOT NULL")).toEqual([{ n: 0 }]);
-      expect(rowsOf(database, "SELECT status FROM tournaments")).toEqual([{ status: "partial" }]);
+      expect(() => importTournaments({ database, sources: [source] }), label).toThrow(/Finished manifest (has no standings|standings do not cover)/);
     }
 
     writeFileSync(manifestPath, JSON.stringify(manifest));
     importTournaments({ database, sources: [source] });
     expect(rowsOf(database, "SELECT status FROM matches")).toEqual([{ status: "completed" }]);
-    expect(rowsOf(database, "SELECT COUNT(*) AS n FROM issues")).toEqual([{ n: 0 }]);
     expect(rowsOf(database, "SELECT COUNT(*) AS n FROM match_seats WHERE win_share IS NOT NULL")).toEqual([{ n: 2 }]);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("a finished match is scored only when its replay and end event confirm the manifest", async () => {
+test("a finished match whose replay or end event disagrees with the manifest stops the import", async () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 
   try {
@@ -273,24 +267,19 @@ test("a finished match is scored only when its replay and end event confirm the 
     expect(scored()).toEqual([{ status: "completed", shares: 2 }]);
 
     writeFileSync(manifestPath, JSON.stringify({ ...manifest, standings: manifest.standings.map((standing: { cash: number }, index: number) => ({ ...standing, cash: standing.cash + index + 1 })) }));
-    importTournaments({ database, sources: [source] });
-    expect(scored()).toEqual([{ status: "partial", shares: 0 }]);
-    expect(rowsOf(database, "SELECT COUNT(*) AS n FROM issues WHERE message LIKE 'Replayed cash differs%'")).toEqual([{ n: 2 }]);
+    expect(() => importTournaments({ database, sources: [source] })).toThrow("the replayed cash of");
 
     writeFileSync(manifestPath, JSON.stringify(manifest));
     writeFileSync(eventsPath, events.split("\n").filter((line) => !line.includes('"kind":"end"')).join("\n"));
-    importTournaments({ database, sources: [source] });
-    expect(scored()).toEqual([{ status: "partial", shares: 0 }]);
-    expect(rowsOf(database, "SELECT message FROM issues")).toEqual([{ message: "Finished manifest without end event in snapshot" }]);
+    expect(() => importTournaments({ database, sources: [source] })).toThrow("the manifest says finished, the events have no end event");
 
     writeFileSync(eventsPath, events);
     importTournaments({ database, sources: [source] });
     expect(scored()).toEqual([{ status: "completed", shares: 2 }]);
-    expect(rowsOf(database, "SELECT COUNT(*) AS n FROM issues")).toEqual([{ n: 0 }]);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("a truncated but legal move prefix with an end marker and matching current cash is not a finished match", async () => {
+test("a truncated but legal move prefix with an end marker and matching current cash stops the import", async () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 
   try {
@@ -306,10 +295,7 @@ test("a truncated but legal move prefix with an end marker and matching current 
     expect(cash.length).toBe(2);
     writeFileSync(eventsPath, lines.filter((_, index) => index !== lastMove).join("\n"));
     writeFileSync(manifestPath, JSON.stringify({ ...manifest, standings: manifest.standings.map((standing: { player: string }) => ({ ...standing, cash: cash.find(({ player }) => player === standing.player)?.cash })) }));
-    importTournaments({ database, sources: [source] });
-    expect(rowsOf(database, "SELECT status FROM matches")).toEqual([{ status: "partial" }]);
-    expect(rowsOf(database, "SELECT COUNT(*) AS n FROM match_seats WHERE win_share IS NOT NULL")).toEqual([{ n: 0 }]);
-    expect(rowsOf(database, "SELECT message FROM issues")).toEqual([{ message: "Replay did not reach a finished match" }]);
+    expect(() => importTournaments({ database, sources: [source] })).toThrow("the replay did not reach the end");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -327,7 +313,6 @@ test("importing a tournament from a directory that contains its earlier source r
     expect(rowsOf(database, "SELECT path FROM source_files ORDER BY path")).toEqual(["a_b_b0_p0/calls.jsonl", "a_b_b0_p0/events.jsonl", "a_b_b0_p0/manifest.json", "tournament.json"].map((leaf) => ({ path: join(root, leaf) })));
     expect(rowsOf(database, "SELECT COUNT(*) AS n FROM source_records WHERE current = 1 AND path LIKE '" + source + "/%'")).toEqual([{ n: 0 }]);
     expect(rowsOf(database, "SELECT COUNT(*) AS n FROM source_records WHERE current = 0 AND path LIKE '" + source + "/%'")).not.toEqual([{ n: 0 }]);
-    expect(rowsOf(database, "SELECT COUNT(*) AS n FROM issues")).toEqual([{ n: 0 }]);
     expect(rowsOf(database, "PRAGMA foreign_key_check")).toEqual([]);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
