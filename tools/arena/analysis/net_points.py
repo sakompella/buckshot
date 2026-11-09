@@ -191,13 +191,8 @@ def by_block(matches: list[Match]) -> dict[str, list[Match]]:
 
 
 def elo_of(matches: list[Match]) -> dict[str, float]:
-    """Round Elo per config label: Bradley-Terry on round shares, each match counting its rounds."""
-    cells: dict[tuple[str, str], list[float]] = {}
-    for m in matches:
-        cell = cells.setdefault((label(m.first.config), label(m.second.config)), [0.0, 0.0])
-        cell[0] += ROUNDS_PER_MATCH
-        cell[1] += m.first.rounds_won
-    return bt.fit(cells).elo()
+    """Round Elo per config label."""
+    return bt.round_elo((label(m.first.config), label(m.second.config), ROUNDS_PER_MATCH, m.first.rounds_won) for m in matches)
 
 
 # Per config
