@@ -25,12 +25,11 @@ from pathlib import Path
 from statistics import fmean, stdev
 
 import by_round
+from docs import splice_between_markers
 from boot import interval
 from fmt import table
 from load import DB, SKIPPED_MODEL, connect
 from regret import DERIVED, EFFORTS, POINT
-
-START, END = "<!-- round-improvement:start -->", "<!-- round-improvement:end -->"
 
 RESAMPLES = 2000
 ROUNDS = (1, 2, 3)
@@ -365,8 +364,7 @@ def main() -> None:
     if args.doc is None:
         print(text_)
     else:
-        head, rest = args.doc.read_text().split(START)
-        args.doc.write_text(f"{head}{START}\n{text_}{END}{rest.split(END)[1]}")
+        splice_between_markers(args.doc, "round-improvement", text_)
 
 
 if __name__ == "__main__":

@@ -17,11 +17,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from docs import splice_between_markers
 from fmt import table
 from load import SKIPPED_MODEL, connect
 from regret import DERIVED, POINT, run_samples
-
-START, END = "<!-- regret:start -->", "<!-- regret:end -->"
 
 
 @dataclass(frozen=True)
@@ -179,9 +178,7 @@ def main() -> None:
     if args.doc is None:
         print(text)
     else:
-        head, rest = args.doc.read_text().split(START)
-        tail = rest.split(END)[1]
-        args.doc.write_text(f"{head}{START}\n{text}{END}{tail}")
+        splice_between_markers(args.doc, "regret", text)
 
 
 if __name__ == "__main__":

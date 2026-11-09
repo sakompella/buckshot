@@ -19,6 +19,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from docs import splice_between_markers
 from fmt import pct, table
 from load import SKIPPED_MODEL, connect
 from regret import DERIVED, POINT
@@ -171,8 +172,6 @@ def estimate(sample: list[Pair], value: Callable[[Pair], float], sizes: Mapping[
 # Tables
 # ======
 
-START, END = "<!-- reload-bias:start -->", "<!-- reload-bias:end -->"
-
 Sizes = Mapping[tuple[int, bool, str, bool], int]
 
 
@@ -260,12 +259,6 @@ def noise_check(sampled_path: Path, samples: int, other: int, depth: int = 6, bu
     return len(gaps), Estimate(mean, 1.96 * math.sqrt(spread / len(gaps)))
 
 
-def replace_between(path: Path, text: str) -> None:
-    head, rest = path.read_text().split(START)
-    tail = rest.split(END)[1]
-    path.write_text(f"{head}{START}\n{text}{END}{tail}")
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--regret", type=Path, default=DERIVED / "regret.sqlite")
@@ -294,7 +287,7 @@ def main() -> None:
     if args.doc is None:
         print(text)
     else:
-        replace_between(args.doc, text)
+        splice_between_markers(args.doc, "reload-bias", text)
 
 
 if __name__ == "__main__":

@@ -16,12 +16,11 @@ from dataclasses import dataclass
 from itertools import groupby
 from pathlib import Path
 
+from docs import splice_between_markers
 from fmt import pct, table
 from load import SKIPPED_MODEL, connect
 
-DERIVED = Path("/home/aditya/repos/projects/buckshot/_work/arena/analysis/derived")
-
-START, END = "<!-- tables:start -->", "<!-- tables:end -->"
+DERIVED = Path(__file__).resolve().parents[3] / "_work/arena/analysis/derived"
 
 EFFORTS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"]
 
@@ -164,9 +163,7 @@ def main() -> None:
     if args.doc is None:
         print(text)
     else:
-        head, rest = args.doc.read_text().split(START)
-        tail = rest.split(END)[1]
-        args.doc.write_text(f"{head}{START}\n{text}{END}{tail}")
+        splice_between_markers(args.doc, "tables", text)
 
 
 if __name__ == "__main__":
