@@ -24,19 +24,22 @@ A1, B2, A3 = "Player A wins the round and $70,000.", "Player B wins the round an
 
 class RoundWinners(unittest.TestCase):
     def test_reads_every_round(self):
-        self.assertEqual(by_round.round_winners(lines(A1, B2, A3), {"A": 150_000, "B": 75_000}), {1: "A", 2: "B", 3: "A"})
+        self.assertEqual(by_round.round_winners("m1", lines(A1, B2, A3), {"A": 150_000, "B": 75_000}), {1: "A", 2: "B", 3: "A"})
 
     def test_infers_a_last_round_win_that_no_line_names(self):
-        self.assertEqual(by_round.round_winners(lines(A1, B2, None), {"A": 150_000, "B": 75_000}), {1: "A", 2: "B", 3: "A"})
+        self.assertEqual(by_round.round_winners("m1", lines(A1, B2, None), {"A": 150_000, "B": 75_000}), {1: "A", 2: "B", 3: "A"})
 
-    def test_rejects_prizes_that_differ_from_the_cash(self):
-        self.assertIsNone(by_round.round_winners(lines(A1, B2, A3), {"A": 70_000, "B": 75_000}))
+    def test_stops_on_prizes_that_differ_from_the_cash_and_names_the_match_and_cash(self):
+        with self.assertRaisesRegex(ValueError, r"match m7: .*final cash \{'A': 70000, 'B': 75000\}.*70,000"):
+            by_round.round_winners("m7", lines(A1, B2, A3), {"A": 70_000, "B": 75_000})
 
-    def test_rejects_a_missing_middle_round(self):
-        self.assertIsNone(by_round.round_winners(lines(A1, None, A3), {"A": 150_000, "B": 0}))
+    def test_stops_on_a_missing_middle_round(self):
+        with self.assertRaises(ValueError):
+            by_round.round_winners("m1", lines(A1, None, A3), {"A": 150_000, "B": 0})
 
-    def test_rejects_an_ambiguous_last_round(self):
-        self.assertIsNone(by_round.round_winners(lines(A1, B2, None), {"A": 70_000 + 40_000, "B": 75_000 + 40_000}))
+    def test_stops_on_an_ambiguous_last_round(self):
+        with self.assertRaises(ValueError):
+            by_round.round_winners("m1", lines(A1, B2, None), {"A": 70_000 + 40_000, "B": 75_000 + 40_000})
 
 
 def event(player: str, start: int, entries: list[str]) -> str:
@@ -68,9 +71,8 @@ class LoadResults(unittest.TestCase):
             knowledge.executemany("INSERT INTO players VALUES ('m1', ?, ?, ?)", [("A", "opus", "high"), ("B", "sol", "low")])
             knowledge.commit()
             results = by_round.load_results(str(Path(directory) / "buckshot.sqlite"), Path(directory) / "knowledge.sqlite")
-        self.assertEqual(results.unreadable, 0)
         self.assertEqual(
-            sorted(results.rounds, key=lambda r: (r.round, r.model)),
+            sorted(results, key=lambda r: (r.round, r.model)),
             [by_round.RoundResult(m, e, n, won) for n, (opus, sol) in enumerate([(True, False), (False, True), (True, False)], 1) for m, e, won in [("opus", "high", opus), ("sol", "low", sol)]],
         )
 

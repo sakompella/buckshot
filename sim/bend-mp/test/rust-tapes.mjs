@@ -13,7 +13,8 @@
 //   --perturb N        N games per seed from states mutated into ones no valid game reaches (from_state; a few answers each)
 //   --arena K [--spread] [--db PATH]
 //                      K recorded arena matches replayed with their draws; --spread takes them across tournaments.
-//                      The database (--db, or BUCKSHOT_ARENA_DB) is private; fails unless all K are replayed
+//                      The database (--db, or BUCKSHOT_ARENA_DB) is private; fails unless all K reach their
+//                      recorded end and cash, with one answer fitting the recorded moves at every step
 //
 // Each tape has a sibling <tape>.manifest.json: mode, seeds, settings, games,
 // steps, capped games, lines and a sha256 over every .bend file under sim/bend-mp.
@@ -189,7 +190,7 @@ const sockets = n => n === 2 ? [1, 3] : Array.from({ length: n }, (_, i) => i);
 function playArena(recorded) {
   const answers = recorded.answers;
   let at = 0;
-  const report = { id: recorded.id, tournament: recorded.tournament, name: recorded.name, seed: recorded.seed, smAnswers: answers.length, ambiguous: 0, ended: false };
+  const report = { id: recorded.id, tournament: recorded.tournament, name: recorded.name, seed: recorded.seed, smAnswers: answers.length, ambiguous: [], ended: false };
   const answerFor = (request, state, step) => {
     const menu = kind(request) === 'Draw' ? [answers[at]] : Array.from({ length: 1 + array(request.moves.tail).length }, (_, i) => i);
     const fits = menu.filter(n => {
@@ -201,7 +202,7 @@ function playArena(recorded) {
       report.divergence = { step, recordedAt: at, recorded: answers.slice(at, at + 8), request: kind(request), options: best.slice(0, 12).map(({ n, ns, shared }) => ({ n, ns: ns.slice(0, 8), firstDifference: shared })) };
       return null;
     }
-    if (fits.length > 1) report.ambiguous++;
+    if (fits.length > 1) report.ambiguous.push({ step, recordedAt: at, request: kind(request), fits: fits.map(n => ({ n, ns: smAnswers(state, n) })) });
     const n = fits[0];
     at += smAnswers(state, n).length;
     return n;
@@ -241,7 +242,8 @@ const mode = (name, settings, run) => modes.push({ name, settings, run });
 // Perturbed states: a state reached by a random game is mutated into one no
 // valid game reaches (empty gun, no decks, a phase with odd fields, dead seats,
 // ...) and Bend plays a few random answers from there. Rust must agree with
-// Bend on every state it can represent.
+// Bend on every one. Bend only ever builds a batch from its table's deck, and
+// an item pool as a subsequence of the item order, so mutations do the same.
 const shell = random => ({ $: random() % 2 ? 'Live' : 'Blank' });
 const some = value => ({ $: 'Some', value });
 const none = { $: 'None' };
@@ -251,13 +253,15 @@ const seatOf = (state, random) => seatKeys(state)[random() % seatKeys(state).len
 // Half the time a seat that may not sit at this table.
 const seatAny = (state, random) => random() % 2 ? { $: `Seat${random() % 4}` } : seatTag(seatOf(state, random));
 const slotNames = [0, 1, 2, 3, 4, 5, 6, 7].map(i => `s${i}`);
+const fullTwoSeatDeck = array(normalize(SA['sm/rules:decks.full']()).two);
+const itemOrder = array(normalize(SA['domain:item.order']()));
 const mutations = [
   state => { state.world.gun = list([]); },
   (state, random) => { state.world.gun = list([shell(random)]); },
   (state, random) => { state.world.gun = list(Array.from({ length: 1 + random() % 3 }, () => shell(random))); },
   state => { state.world.shown = { $: 'Load', live: 0, blank: 0 }; },
   state => { for (const table of ['two', 'three', 'four']) state.world.decks[table] = list([]); },
-  (state, random) => { state.world.decks.two = list([{ $: 'Batch', id: random() % 3, load: { $: 'Load', live: 0, blank: 0 } }]); },
+  (state, random) => { state.world.decks.two = list([fullTwoSeatDeck[random() % fullTwoSeatDeck.length]]); },
   state => { for (const key of seatKeys(state)) state.grabs.holding[key] = none; },
   (state, random) => { for (const key of seatKeys(state)) state.grabs.holding[key] = random() % 2 ? some({ $: items[random() % items.length] }) : none; },
   (state, random) => {
@@ -285,7 +289,6 @@ const mutations = [
   (state, random) => { state.world.before_round = random() % 2 === 0; state.world.first_sequence = random() % 2 === 0; },
   (state, random) => {
     const seat = () => seatAny(state, random);
-    const itemTag = () => ({ $: items[random() % items.length] });
     const load = () => ({ $: 'Load', live: random() % 3, blank: random() % 3 });
     const phases = [
       () => ({ $: 'NeedSwap', load: load(), shells: list(Array.from({ length: random() % 4 }, () => shell(random))), i: random() % 4 }),
@@ -293,7 +296,11 @@ const mutations = [
       () => ({ $: 'Idle', seat: seat() }),
       () => ({ $: 'Blocked', holder: random() % 2 ? none : some(seat()) }),
       () => ({ $: 'NeedTurnAmount', from: seat(), passing: random() % 2 === 0, winner: random() % 2 ? none : some(seat()) }),
-      () => ({ $: 'NeedItem', seat: seat(), first: itemTag(), second: itemTag(), rest: list(Array.from({ length: random() % 4 }, itemTag)) }),
+      () => {
+        const picked = itemOrder.filter(() => random() % 2);
+        const [first, second, ...rest] = picked.length >= 2 ? picked : itemOrder;
+        return { $: 'NeedItem', seat: seat(), first, second, rest: list(rest) };
+      },
       () => ({ $: 'NeedPhone', seat: seat(), owner: seat(), slot: { $: `Slot${random() % 8}` } }),
       () => ({ $: ['NeedFirst', 'NeedHealth', 'NeedAmount', 'NeedBatch', 'Stalled', 'Ended'][random() % 6] }),
     ];
@@ -397,9 +404,15 @@ if (perturbGames !== null) mode('perturb', { perSeed: perturbGames }, () => {
 
 if (arenaMatches !== null) mode(flag('spread') ? 'arena-spread' : 'arena', { matches: arenaMatches, spread: flag('spread'), seed: seeds[0] }, () => {
   const reports = recordedMatches(arenaMatches).map(playArena);
-  for (const { divergence, ...report } of reports) console.log(JSON.stringify(report), divergence ? `DIVERGES ${JSON.stringify(divergence)}` : '');
-  console.log(`${reports.filter(r => r.ended).length}/${reports.length} reach the recorded end`);
-  if (reports.some(r => !r.ended)) process.exitCode = 1;
+  for (const { divergence, ambiguous, ...report } of reports) {
+    console.log(JSON.stringify(report),
+      divergence ? `DIVERGES ${JSON.stringify(divergence)}` : '',
+      report.cashMatches ? '' : `CASH DIFFERS: Bend ${JSON.stringify(report.cash)}, recorded ${JSON.stringify(report.recordedCash)}`,
+      ambiguous.length > 0 ? `AMBIGUOUS (several answers fit the recorded moves) ${JSON.stringify(ambiguous)}` : '');
+  }
+  const replayed = reports.filter(r => r.ended && r.cashMatches && r.ambiguous.length === 0);
+  console.log(`${replayed.length}/${reports.length} reach the recorded end with the recorded cash, each answer the only one that fits`);
+  if (replayed.length < reports.length) process.exitCode = 1;
   return { tournaments: new Set(reports.map(r => r.tournament)).size };
 });
 

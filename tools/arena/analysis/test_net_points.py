@@ -92,7 +92,7 @@ class Load(unittest.TestCase):
         self.assertEqual((m.first.config, m.first.lost, m.first.worst, m.first.worst_ordinal, m.first.rounds_won), (("opus", "high"), 0.35, 250_000, 1, 2))
         self.assertEqual((m.second.config, m.second.lost, m.second.rounds_won), (("sol", "high"), 0.04, 1))
         self.assertAlmostEqual(m.net, -0.31)
-        self.assertEqual((loaded.unreadable, loaded.incomplete), (0, 0))
+        self.assertEqual(loaded.incomplete, 0)
 
     def test_a_match_with_an_unsearched_agent_decision_is_left_out_not_counted_as_zero(self):
         loaded = self.load({0: 100_000, 2: 40_000})

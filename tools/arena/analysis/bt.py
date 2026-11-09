@@ -9,6 +9,7 @@ so tau = 0 means no pair terms and a small tau means strongly shrunk ones.
 """
 
 import math
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -128,6 +129,19 @@ def fit(cells: Cells, tau: float = 0.0, seat: bool = False, start: bool = False,
     if tau > 0:
         out.delta = {key[1]: x[i] for key, i in column.items() if key[0] == "delta"}
     return out
+
+
+def round_elo(matches: Iterable[tuple[str, str, float, float]], entrants: Iterable[str] = ()) -> dict[str, float]:
+    """Round Elo, the viewer's rating (web/src/arena-viewer/page/ratings.ts): the fit on round shares, each match counting its rounds.
+
+    `matches` are (first config, second config, rounds, the first config's round wins), wins fractional for luck-adjusted ones; the Elo of each config, entrants' mean at 0.
+    """
+    cells: Cells = {}
+    for first, second, rounds, wins in matches:
+        cell = cells.setdefault((first, second), [0.0, 0.0])
+        cell[0] += rounds
+        cell[1] += wins
+    return fit(cells, entrants=set(entrants)).elo()
 
 
 def log_loss(fitted: Fit, games: list[Game]) -> float:

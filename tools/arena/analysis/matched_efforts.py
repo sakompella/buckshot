@@ -46,7 +46,7 @@ class Config:
 
 @dataclass(frozen=True)
 class Seat:
-    """One seat of one scored match. `rounds` says per round whether this seat won it, or is None when the winners cannot be read."""
+    """One seat of one scored match. `rounds` says per round whether this seat won it."""
 
     match: str
     started: datetime
@@ -55,7 +55,7 @@ class Seat:
     focal: Config
     opponent: Config
     share: float
-    rounds: tuple[bool, ...] | None
+    rounds: tuple[bool, ...]
 
 
 @dataclass(frozen=True)
@@ -114,10 +114,10 @@ def load_seats(db) -> tuple[list[Seat], int]:
         if any(SKIPPED_MODEL in row[7] for row in pair):
             skipped += 1
             continue
-        winners = by_round.round_winners(lines.get(match, []), cash[match])
+        winners = by_round.round_winners(match, lines.get(match, []), cash[match])
         configs = [Config(row[7], row[8], row[9]) for row in pair]
         for row, focal, opponent in zip(pair, configs, reversed(configs)):
-            rounds = None if winners is None else tuple(winners[n] == row[4] for n in sorted(winners))
+            rounds = tuple(winners[n] == row[4] for n in sorted(winners))
             seats.append(Seat(match, parse_time(row[1]), row[2], row[3], focal, opponent, row[5], rounds))
     return seats, skipped
 
@@ -348,11 +348,10 @@ def effort_table(rows: list[Row]) -> str:
 def coverage(seats: list[Seat]) -> str:
     matches = {s.match for s in seats}
     same = {s.match for s in seats if s.focal.model == s.opponent.model}
-    unreadable = {s.match for s in seats if s.rounds is None}
     empty = {s.match for s in seats if s.rounds == ()}
     return (
         f"{len(matches):,} scored matches, of which {len(same):,} are between two efforts of one model and {len(matches) - len(same):,} are external. "
-        f"{len(unreadable):,} have unreadable round winners and {len(empty):,} have no rounds; they stay out of the round layers."
+        f"{len(empty):,} have no rounds; they stay out of the round layers."
     )
 
 

@@ -4,8 +4,7 @@
 Round winners come from the public lines of events.jsonl in the analysis database, read as web/src/arena-viewer/analysis.ts
 reads them. Regret comes from the regret and knowledge databases, as in regret.py. All three are opened read-only. With
 --doc FILE the tables replace the text between the by-round markers of that file. A config is a model with its effort.
-Matches with a DeepSeek seat and unfinished matches are left out, and so are matches whose prizes do not add up to the
-final cash.
+Matches with a DeepSeek seat and unfinished matches are left out. A match whose prizes do not add up to the final cash stops the run.
 
     python3 tools/arena/analysis/by_round.py [--db PATH] [--regret PATH] [--knowledge PATH] [--depth 6] [--budget 20000] [--reload static] [--samples 256] [--doc docs/arena/analysis/regret.md]
 """
@@ -37,17 +36,16 @@ class RoundResult:
     won: bool
 
 
-@dataclass(frozen=True)
-class Results:
-    rounds: list[RoundResult]
-    unreadable: int  # finished matches whose round winners could not be read
-
-
-def round_winners(lines: list[str], cash: dict[str, int]) -> dict[int, str] | None:
-    """Round number to the winner's letter, or None when the prizes do not add up to the final cash.
+def round_winners(match: str, lines: list[str], cash: dict[str, int]) -> dict[int, str]:
+    """Round number to the winner's letter. Raises when the round log and the final cash disagree, naming the match and the lines and cash that disagree.
 
     The last round's win line may be missing; then the one player with cash left over won it.
     """
+
+    def disagree(why: str) -> ValueError:
+        shown = [line for line in lines if BEGINS.match(line) or WINS.match(line)]
+        return ValueError(f"match {match}: {why}; final cash {cash}; round lines {shown}")
+
     current = 0
     won: dict[int, tuple[str, int]] = {}
     for line in lines:
@@ -56,17 +54,19 @@ def round_winners(lines: list[str], cash: dict[str, int]) -> dict[int, str] | No
         elif (wins := WINS.match(line)) and current not in won:
             won[current] = (wins[1], int(wins[2].replace(",", "")))
     if not won or any(round not in won for round in range(1, current)):
-        return None
+        raise disagree("a round has no winner line")
     left = dict(cash)
     for winner, prize in won.values():
         left[winner] = left.get(winner, 0) - prize
     if current not in won:
         ahead = [player for player, rest in left.items() if rest > 0]
         if len(ahead) != 1:
-            return None
+            raise disagree("the last round has no winner line and the cash left over does not name one")
         won[current] = (ahead[0], left[ahead[0]])
         left[ahead[0]] = 0
-    return {round: winner for round, (winner, _) in won.items()} if all(rest == 0 for rest in left.values()) else None
+    if any(rest != 0 for rest in left.values()):
+        raise disagree("the prizes do not add up to the final cash")
+    return {round: winner for round, (winner, _) in won.items()}
 
 
 def public_lines(db) -> dict[str, list[str]]:
@@ -86,17 +86,17 @@ def public_lines(db) -> dict[str, list[str]]:
     return longest
 
 
-def read_winners(db_path: str, matches: list[str]) -> dict[str, dict[int, str] | None]:
-    """Round number to winner's letter for each match, None where the prizes do not add up to the final cash."""
+def read_winners(db_path: str, matches: list[str]) -> dict[str, dict[int, str]]:
+    """Round number to winner's letter for each match."""
     db = connect(db_path)
     cash = defaultdict(dict)
     for match, player, total in db.execute("SELECT match_id, player, cash FROM match_seats"):
         cash[match][player] = total
     lines = public_lines(db)
-    return {match: round_winners(lines.get(match, []), cash[match]) for match in matches}
+    return {match: round_winners(match, lines.get(match, []), cash[match]) for match in matches}
 
 
-def load_results(db_path: str, knowledge_path: Path) -> Results:
+def load_results(db_path: str, knowledge_path: Path) -> list[RoundResult]:
     """Both seats of every round of the finished matches, with the seat's config and whether it won."""
     knowledge = connect(str(knowledge_path))
     seats = defaultdict(dict)
@@ -106,13 +106,10 @@ def load_results(db_path: str, knowledge_path: Path) -> Results:
         (f"%{SKIPPED_MODEL}%",),
     ):
         seats[match][player] = (model, effort)
-    results, unreadable = [], 0
+    results = []
     for match, winners in read_winners(db_path, list(seats)).items():
-        if winners is None:
-            unreadable += 1
-            continue
         results += [RoundResult(model, effort, round, winner == player) for round, winner in winners.items() for player, (model, effort) in seats[match].items()]
-    return Results(results, unreadable)
+    return results
 
 
 def cell(values: list[float], show) -> str:
@@ -156,12 +153,12 @@ def pooled_over_efforts(results: list[RoundResult], decisions: list[Decision]) -
     return [replace(r, effort="all") for r in results], [replace(d, effort="all") for d in decisions]
 
 
-def report(results: Results, decisions: list[Decision]) -> str:
+def report(results: list[RoundResult], decisions: list[Decision]) -> str:
     return (
-        f"{len(results.rounds) // 2:,} rounds of finished matches; {results.unreadable:,} matches left out because their round winners did not match the final cash.\n\n"
-        f"### Win rate and regret by round, per model\n\n{by_round(*pooled_over_efforts(results.rounds, decisions))}\n\n"
+        f"{len(results) // 2:,} rounds of finished matches.\n\n"
+        f"### Win rate and regret by round, per model\n\n{by_round(*pooled_over_efforts(results, decisions))}\n\n"
         f"### Mean regret by round and kind of move\n\n{by_move_kind(decisions)}\n\n"
-        f"### Win rate and regret by round, per config\n\n{by_round(results.rounds, decisions)}\n"
+        f"### Win rate and regret by round, per config\n\n{by_round(results, decisions)}\n"
     )
 
 

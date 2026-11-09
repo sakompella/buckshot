@@ -38,6 +38,11 @@ class FitTest(unittest.TestCase):
         lucky = aivat.fit(t, t.raw - np.where(i == 0, 0.3, 0.0))
         self.assertLess(lucky[0], raw[0])
 
+    def test_a_weight_counts_a_match_that_many_times(self):
+        t = aivat.Rated(["a", "b"], np.array([0, 1]), np.array([1, 0]), np.full(2, 3.0), np.array([2.0, 1.0]), np.zeros(2), np.arange(2), np.arange(2))
+        twice = aivat.Rated(["a", "b"], np.array([0, 1, 0]), np.array([1, 0, 1]), np.full(3, 3.0), np.array([2.0, 1.0, 2.0]), np.zeros(3), np.arange(3), np.arange(3))
+        np.testing.assert_allclose(aivat.fit(t, t.raw, np.array([2.0, 1.0])), aivat.fit(twice, twice.raw))
+
 
 if __name__ == "__main__":
     unittest.main()

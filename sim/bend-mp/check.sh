@@ -21,6 +21,13 @@ report() {
   fi
 }
 
+# FUZZ_SKIP switches fuzz properties off (fuzz_mutations.py sets it for its own runs); exported here it would weaken the gates.
+if [[ -n "${FUZZ_SKIP:-}" ]]; then
+  report fail "FUZZ_SKIP is set" "'$FUZZ_SKIP' would skip fuzz properties in every gate; unset it"
+  echo FAIL
+  exit 1
+fi
+
 bend_files() {
   find "$here" -name '*.bend' -type f
 }
