@@ -2,7 +2,7 @@
 """Matchup analysis of the scored arena matches: ratings per cohort, pair effects, seat and starter effects.
 
 Reads the analysis database read-only and prints markdown tables. With --doc FILE the tables replace the text
-between the tables markers of that file. Ratings come from one pooled fit over every scored match; cohorts (see cohort_of below) group matches only for pair effects and seat figures. Intervals
+between the tables markers of that file. Ratings come from one pooled fit over every scored match; kinds (see kind_of below) group matches only for pair effects and seat figures. Intervals
 are 95% bootstraps over seed blocks, drawn with a fixed RNG seed so a rerun prints the same numbers.
 
     python3 tools/arena/analysis/matchups.py [--db PATH] [--draws 2000] [--doc docs/arena/analysis/matchups.md]
@@ -21,27 +21,11 @@ import seats
 import tournament3
 from docs import splice_between_markers
 from fmt import frac, pct, pp, signed, span, table
-from load import SKIPPED_MODEL, Game, blocks_of, cohorts, connect, scored_games
+from load import DB, SKIPPED_MODEL, Game, blocks_of, cohorts, connect, scored_games, require_current
 
-# Cohort names, as in the arena viewer: the model's short name within its family.
-SHORT_NAMES = {
-    "claude-opus-5-5": "Opus",
-    "claude-haiku-5-5": "Haiku 5.5",
-    "claude-sonnet-5-5": "Sonnet",
-    "claude-haiku-4-5": "Haiku 4.5",
-    "gpt-6-astra": "Astra",
-    "gpt-6.1-sol": "Sol",
-    "gpt-5.6-terra": "Terra",
-    "gpt-6.1-terra": "Terra 6.1",
-    "gpt-6-luna": "Luna",
-}
-
-
-def cohort_of(model_a: str, model_b: str) -> str:
-    """Pairs and seats are compared only inside a cohort, one kind of comparison pooled over every tournament: all matches between different models, or all of one model's matches against itself."""
-    if model_a != model_b:
-        return "Cross-model"
-    return next(f"{short} efforts" for model, short in SHORT_NAMES.items() if model in model_a)
+def kind_of(model_a: str, model_b: str) -> str:
+    """Pairs and seats are compared only inside one kind of comparison pooled over every tournament: all matches between different models, or all of one model's matches against itself."""
+    return "Cross-model" if model_a != model_b else f"{model_a} efforts"
 
 
 # ---- coverage
@@ -56,7 +40,7 @@ def coverage(db, by_cohort: dict[str, list[Game]]) -> str:
            WHERE a.model NOT LIKE ? AND b.model NOT LIKE ?""",
         (f"%{SKIPPED_MODEL}%", f"%{SKIPPED_MODEL}%"),
     ):
-        cohort = cohort_of(*seat)
+        cohort = kind_of(*seat)
         label = status if disposition is None else f"{status} ({disposition})"
         scheduled.setdefault(cohort, {}).setdefault(label, 0)
         scheduled[cohort][label] += 1
@@ -362,11 +346,12 @@ def main() -> None:
     parser.add_argument("--repeats", type=int, default=5, help="repeats of the 10-fold cross-validation")
     parser.add_argument("--doc")
     args = parser.parse_args()
+    require_current(args.db or DB)
     db = connect(args.db) if args.db else connect()
     # An engine has no model: it stands for itself, so its matches are cross-model.
-    model_of = {name: model or name for name, model in db.execute("SELECT DISTINCT name, model FROM entrants")}
+    model_of = {label: model or label for label, model in db.execute("SELECT DISTINCT s.label, e.model FROM match_seats s JOIN entrants e ON e.id = s.entrant_id")}
     tournament_games = scored_games(db)
-    games = [replace(game, cohort=cohort_of(model_of[game.first], model_of[game.second])) for game in tournament_games]
+    games = [replace(game, cohort=kind_of(model_of[game.first], model_of[game.second])) for game in tournament_games]
     by_cohort = cohorts(games)
     rng = random.Random(20261021)
     pooled_text, pair_tables = pooled_ratings(games, by_cohort, args.draws, rng)

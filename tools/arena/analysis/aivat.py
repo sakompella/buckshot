@@ -35,7 +35,7 @@ import numpy as np
 import pandas as pd
 from by_round import public_lines, round_winners
 from fmt import table
-from load import DB, SKIPPED_MODEL, connect, round_one_starters
+from load import DB, SKIPPED_MODEL, connect, require_current, round_one_starters
 from regret import DERIVED
 from scipy import stats
 from sklearn.ensemble import HistGradientBoostingClassifier
@@ -425,6 +425,7 @@ def main() -> None:
     parser.add_argument("--out", type=Path)
     parser.add_argument("--doc", type=Path)
     args = parser.parse_args()
+    require_current(args.db)
     d = read(args.db, args.knowledge)
     c = corrections(d)
     if args.out:

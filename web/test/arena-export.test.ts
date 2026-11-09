@@ -32,17 +32,22 @@ beforeAll(async () => {
   const played = join(root, "played");
 
   mkdirSync(source);
-  await playFauxRun(played, ["Agent", "Agent"], "on-turn");
+  await playFauxRun(played, ["Agent", "Agent"], "on-turn", String(SEED));
   cpSync(played, join(source, "a_b_b0_p0"), { recursive: true });
 
   // The faux agents play as the configs the tournament below names.
   const manifest = join(source, "a_b_b0_p0", "manifest.json");
 
-  writeFileSync(manifest, JSON.stringify({ ...JSON.parse(readFileSync(manifest, "utf8")), labels: ["faux-a-medium", "faux-b-high"] }));
+  const manifestJson = JSON.parse(readFileSync(manifest, "utf8"));
+
+  manifestJson.provenance.agents.A.effort = "medium";
+  manifestJson.provenance.agents.B.effort = "high";
+  writeFileSync(manifest, JSON.stringify({ ...manifestJson, labels: ["faux-a-medium", "faux-b-high"] }));
 
   const config = {
     name: "test",
     seed: SEED,
+    cohort: "test",
     delivery: "on-turn",
     endpoints: { fake: { api: "anthropic", url: "http://invalid", keyEnv: "UNUSED" } },
     entrants: { a: { endpoint: "fake", model: "faux-a", effort: "medium" }, b: { endpoint: "fake", model: "faux-b", effort: "high" } },

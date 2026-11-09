@@ -4,7 +4,6 @@ import { parseArgs } from "node:util";
 import { Database } from "bun:sqlite";
 import { Effect, Schema } from "effect";
 
-import { shortName } from "../src/arena-viewer/page/data.ts";
 import type { Item } from "../src/domain.ts";
 import { decodeArgs, runMain, ScriptError } from "../src/script.ts";
 import { itemName } from "../src/text.ts";
@@ -38,15 +37,7 @@ const report = (db: Database, draws: number): void => {
   /** DeepSeek's matches are left out of every table, its opponents' moves in them too. */
   const EXCLUDED = "SELECT match_id FROM players WHERE model LIKE '%deepseek%'";
 
-  const cohortByMatch: ReadonlyMap<string, string> = (() => {
-    const modelsByMatch = new Map<string, Set<string>>();
-
-    for (const { match_id, model } of db.query<{ match_id: string; model: string }, []>(`SELECT match_id, model FROM players WHERE match_id NOT IN (${EXCLUDED})`).all()) {
-      modelsByMatch.set(match_id, (modelsByMatch.get(match_id) ?? new Set()).add(model));
-    }
-
-    return new Map([...modelsByMatch].map(([matchId, models]) => [matchId, models.size === 1 ? `${shortName([...models][0] ?? "")} efforts` : "Cross-model"]));
-  })();
+  const cohortByMatch: ReadonlyMap<string, string> = new Map(db.query<{ match_id: string; kind: string }, []>(`SELECT match_id, kind FROM matches WHERE match_id NOT IN (${EXCLUDED})`).all().map(({ match_id, kind }) => [match_id, kind]));
 
   const cohortOf = (matchId: string): string => cohortByMatch.get(matchId) ?? "";
 
