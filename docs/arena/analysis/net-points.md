@@ -7,7 +7,7 @@ How many round wins a seat's moves gave up per match, by the minimax player's re
 - **Round-win equivalents lost** (the headline): a seat's own loss in a match is the sum of its regret over its searched decisions, in rounds. A regret is a drop in the chance of winning the round, so 100 points is one round. Lower is better. This is not "rounds forfeited": it adds up chances over a match, and a chance given up and then regained is counted twice, so a seat can lose more than 3.
 - **Net points** of a seat in a match: the opponent's loss minus its own. Positive means the opponent gave up more. It is a difference of two estimates, each made from that seat's own information and a public-only model of the opponent. It is not a count of rounds gained.
 - **Largest gap**: the biggest single regret of a seat in a match, in points.
-- Only matches where every agent decision has a searched row count. Missing analysis is never zero. Of the 3,537 finished matches, 1 was left out for that and none for unreadable round winners.
+- Only matches where every agent decision has a searched row count. Missing analysis is never zero. Of the 3,537 finished matches, 1 was left out for that. A match whose round log and final cash disagree stops the run and names the match.
 - Intervals are 95% over seed blocks (both seat orders of one seed together), 2,000 resamples.
 
 ## Results
@@ -29,13 +29,9 @@ How many round wins a seat's moves gave up per match, by the minimax player's re
 
 ## Under a deeper search
 
-The 2,880 decisions of the Deeper search section of [regret.md](regret.md) were rescored at depth 8 with 200,000 nodes. Scaling each model's change in regret by each config's own mix of shells left and shot-or-item, and by its decisions per match, gives the change in loss per match.
+Not shown. An earlier version scaled a depth 8 resample to these configs. Its depth 8 rows came from the removed Bend player and its depth 6 rows from the Rust evaluator, which score the same position differently, so the change between them was not a depth effect. The study cannot be rerun as written: `regret_depth.py` now stops when the two runs' evaluators differ, and the Bend player is gone. It needs a new depth 8 run with the Rust evaluator. The headline numbers here are depth 6 only.
 
-- **Nothing moves, except Haiku 4.5.** Seven of eight models change by 0.03 rounds per match or less, with intervals of ±0.03 to ±0.07 (decisions only: these leave out matches and tournaments). Haiku 4.5 rises by 0.07 ± 0.04, from 1.19 to 1.26. The largest change in any config is +0.07.
-- **The correlation with Round Elo barely changes** (-0.956 to -0.947) and the ordering of configs is the same (Spearman 0.993 between the two). Terra 6.1 has no sample and is left out. Every effort of a model is given the model's change, which is an assumption.
-- **The leaf matters more than the depth.** The Reload bias section of regret.md puts the static leaf's overstatement at 0.43 points per decision over the run, about 0.1 round per match at roughly 25 decisions a match. That is three times the depth effect for seven of the eight models, and it lowers every model's regret by 0.3 to 0.6 points.
-
-### What "max depth" would cost
+### What "max depth" would cost (earlier Bend player run)
 
 The round cannot be searched to its end: every search stops at the next reload, which deals random items, so "to the end of the round" means to the reload. With 3 or fewer shells left the depth 8 search with 200,000 nodes is stopped by the budget in at most 6% of shots and 24% of item moves, so most lines already end at the reload. A timed test of 120 decisions (20 for each of shells left 1 to 3, shot or item move, drawn from the depth 8 sample) ran to the reload with depth 16 and 2,000,000 nodes, static leaf, on hp:
 
@@ -50,7 +46,7 @@ So running to the reload with 3 or fewer shells left is not cheap and does not s
 - Suggestion: keep depth 6 with 20,000 nodes for the headline. If a tighter number is wanted, spend the hours on the sampled leaf for 2 or fewer shells left, not on depth.
 
 <!-- net-points:start -->
-3,536 finished matches with no DeepSeek seat (3,556 with it, used for the ratings, which cover 50 configs). Left out: 0 matches whose round winners did not match the final cash and 1 with an agent decision that has no searched row. 49 configs have at least 20 matches. Intervals are 95%, 2,000 resamples of seed blocks.
+3,536 finished matches with no DeepSeek seat (3,556 with it, used for the ratings, which cover 50 configs). Left out: 1 with an agent decision that has no searched row. 49 configs have at least 20 matches. Intervals are 95%, 2,000 resamples of seed blocks.
 
 ### Round-win equivalents lost, by config
 
@@ -152,21 +148,6 @@ So running to the reload with 3 or fewer shells left is not cheap and does not s
 | 0.2 to 0.5 | 577 | +0.34 | +0.31 |
 | 0.5 to 1 | 337 | +0.70 | +0.56 |
 | 1 and above | 140 | +1.39 | +0.84 |
-
-### Under a deeper search
-
-The stored depth 8 sample, scaled to 43 configs: Pearson against Round Elo -0.956 at depth 6 and -0.947 with the shifts; Spearman between the two orderings +0.993; the largest change in one config's points lost per match is +0.07.
-
-| model | seat matches | points lost per match at depth 6 | at depth 8 | change |
-|---|---|---|---|---|
-| gpt-6-astra | 494 | 0.34 | 0.34 | +0.00 ± 0.06 |
-| claude-opus-5-5 | 764 | 0.28 | 0.29 | +0.01 ± 0.03 |
-| gpt-6.1-sol | 691 | 0.34 | 0.33 | -0.01 ± 0.06 |
-| gpt-5.6-terra | 624 | 0.60 | 0.60 | +0.00 ± 0.07 |
-| claude-sonnet-5-5 | 1,108 | 0.44 | 0.41 | -0.02 ± 0.04 |
-| claude-haiku-5-5 | 1,179 | 0.51 | 0.52 | +0.01 ± 0.07 |
-| gpt-6-luna | 841 | 0.98 | 0.95 | -0.03 ± 0.04 |
-| claude-haiku-4-5-20251001 | 892 | 1.19 | 1.26 | +0.07 ± 0.04 |
 <!-- net-points:end -->
 
 ### Cost of rescoring 138,013 decisions (2026-11-02 run)
@@ -187,12 +168,11 @@ This table was not regenerated: the 2026-11-04 run did not rerun the timed setti
 
 - Net points and loss are estimates under a heuristic leaf: the item weights are untrained and a reload is a leaf (see [regret.md](regret.md)). Gaps of a few hundredths of a round are noise.
 - Decisions of one match are not independent, and a config's opponents differ between tournaments. The intervals cover seed blocks of this run, not new tournaments.
-- The cost table prices the stored runs' time per cell. The "to the reload" row uses a 120-decision test. The sampled-leaf row uses the 2,853-decision reload-bias run, both from the 2026-10-26 sample.
-- The depth change is the earlier sample's, applied to later tournaments' configs with the same model.
+- The cost table prices the stored runs' time per cell. The "to the reload" row uses a 120-decision test. The sampled-leaf row uses the 2,853-decision reload-bias run, both from the 2026-10-26 sample. They are earlier results and no script prints them now.
 
 ## Reproduce
 
-    python3 tools/arena/analysis/net_points.py [--db PATH] [--regret PATH] [--knowledge PATH] [--deep PATH] [--sampled PATH] [--unbounded PATH] [--plots DIR] [--doc docs/arena/analysis/net-points.md]
+    python3 tools/arena/analysis/net_points.py [--db PATH] [--regret PATH] [--knowledge PATH] [--plots DIR] [--doc docs/arena/analysis/net-points.md]
 
-The timed test was the Bend player's `arena-regret.ts` (removed on 2026-11-08, so the test cannot be rerun as written), run from `web/` with `--depth 16 --budget 2000000 --reload static --decisions <list>` on 20 decisions for each of shells left 1 to 3, shots and item moves, drawn from the depth 8 sample. `--unbounded` reads its output file; `--sampled` reads `reload-bias.sqlite`. Without those two the cost table is left out. `python3 -m unittest discover -s tools/arena/analysis` runs the tests.
+The timed test was the Bend player's `arena-regret.ts` (removed on 2026-11-08), run from `web/` with `--depth 16 --budget 2000000 --reload static --decisions <list>`, so it cannot be rerun as written. `python3 -m unittest discover -s tools/arena/analysis` runs the tests.
 

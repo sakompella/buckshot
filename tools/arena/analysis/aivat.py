@@ -103,9 +103,7 @@ def read(db_path: str, knowledge_path: str) -> Data:
         if len(s) != 2 or any(SKIPPED_MODEL in model for *_, model in s):
             continue
         (la, ca, a, _), (lb, cb, b, _) = s
-        won = round_winners(lines.get(match, []), {la: ca, lb: cb})
-        if won is None:
-            continue
+        won = round_winners(match, lines.get(match, []), {la: ca, lb: cb})
         mi = len(rows)
         rows.append((mi, match, seed, block, a, b, la, lb, 1 if starters[match] == la else 2))
         rounds += [(mi, n - 1, 1.0 if w == la else 0.0) for n, w in sorted(won.items())]

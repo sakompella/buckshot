@@ -65,7 +65,7 @@ def values(*scores):
     return json.dumps([{"label": f"move {i}", "score": score} for i, score in enumerate(scores)])
 
 
-def write_runs(directory: Path, production_rows, deep_rows):
+def write_runs(directory: Path, production_rows, deep_rows, deep_evaluator="rust-1"):
     """Writes the three databases the summary reads, with only the columns it uses."""
     knowledge = sqlite3.connect(directory / "knowledge.sqlite")
     knowledge.executescript(
@@ -75,10 +75,10 @@ def write_runs(directory: Path, production_rows, deep_rows):
            INSERT INTO decisions VALUES ('m1', 0, 'A', 'agent', 'Shoot player +1', 2), ('m1', 1, 'A', 'agent', 'Use beer', 3)"""
     )
     knowledge.commit()
-    for name, rows in (("regret.sqlite", production_rows), ("regret-depth.sqlite", deep_rows)):
+    for name, rows, evaluator in (("regret.sqlite", production_rows, "rust-1"), ("regret-depth.sqlite", deep_rows, deep_evaluator)):
         db = sqlite3.connect(directory / name)
-        db.execute("CREATE TABLE regret (match_id TEXT, ordinal INTEGER, max_depth INTEGER, budget INTEGER, reload TEXT, status TEXT, values_json TEXT, best TEXT, best_score INTEGER, regret INTEGER, depth INTEGER, limited INTEGER)")
-        db.executemany("INSERT INTO regret VALUES (?, ?, ?, ?, 'static', 'searched', ?, ?, ?, ?, ?, ?)", rows)
+        db.execute("CREATE TABLE regret (match_id TEXT, ordinal INTEGER, max_depth INTEGER, budget INTEGER, reload TEXT, status TEXT, values_json TEXT, best TEXT, best_score INTEGER, regret INTEGER, depth INTEGER, limited INTEGER, evaluator TEXT)")
+        db.executemany("INSERT INTO regret VALUES (?, ?, ?, ?, 'static', 'searched', ?, ?, ?, ?, ?, ?, ?)", [(*row, evaluator) for row in rows])
         db.commit()
     return directory / "regret-depth.sqlite", directory / "regret.sqlite", directory / "knowledge.sqlite"
 
@@ -106,6 +106,12 @@ class Pairs(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.read(production, [matched, ("m1", 1, 8, 200000, values(1, 2), "move 1", 2, 0, 8, 0)])
 
+    def test_fails_when_the_deep_run_is_another_evaluator_than_production(self):
+        rows = ("m1", 0, 6, 20000, values(1, 2), "move 1", 2, 0, 6, 0)
+        deep = ("m1", 0, 8, 200000, values(1, 2), "move 1", 2, 0, 8, 0)
+        with tempfile.TemporaryDirectory() as directory, self.assertRaisesRegex(ValueError, "different evaluators"):
+            rd.pairs(*write_runs(Path(directory), [rows], [deep], deep_evaluator="bend-1"))
+
     def test_fails_on_a_deep_row_that_was_not_searched(self):
         with tempfile.TemporaryDirectory() as directory:
             paths = write_runs(Path(directory), [("m1", 0, 6, 20000, values(1, 2), "move 1", 2, 0, 6, 0)], [("m1", 0, 8, 200000, values(1, 2), "move 1", 2, 0, 8, 0)])
@@ -115,22 +121,18 @@ class Pairs(unittest.TestCase):
 
 
 class CheckSample(unittest.TestCase):
-    def test_accepts_exactly_the_drawn_decisions_with_the_production_limit(self):
-        sample = [pair(ordinal=0, limited=True), pair(ordinal=1)]
-        ids = {("m-0", 0), ("m-1", 1)}
-        rd.check_sample(sample, ids, {("m-0", 0): True, ("m-1", 1): False})
+    def test_accepts_exactly_the_drawn_decisions(self):
+        rd.check_sample([pair(ordinal=0, limited=True), pair(ordinal=1)], {("m-0", 0), ("m-1", 1)})
 
-    def test_rejects_missing_foreign_and_repeated_decisions_and_a_different_limit(self):
+    def test_rejects_missing_foreign_and_repeated_decisions(self):
         sample = [pair(ordinal=0), pair(ordinal=1)]
-        limits = {("m-0", 0): False, ("m-1", 1): False}
-        for expected, found, limit in (
-            ({("m-0", 0), ("m-1", 1), ("m-2", 2)}, sample, limits),
-            ({("m-0", 0)}, sample, limits),
-            ({("m-0", 0), ("m-1", 1)}, [*sample, sample[0]], limits),
-            ({("m-0", 0), ("m-1", 1)}, sample, {**limits, ("m-1", 1): True}),
+        for expected, found in (
+            ({("m-0", 0), ("m-1", 1), ("m-2", 2)}, sample),
+            ({("m-0", 0)}, sample),
+            ({("m-0", 0), ("m-1", 1)}, [*sample, sample[0]]),
         ):
             with self.assertRaises(ValueError):
-                rd.check_sample(found, expected, limit)
+                rd.check_sample(found, expected)
 
 
 if __name__ == "__main__":

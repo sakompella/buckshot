@@ -424,7 +424,7 @@ class Wrap:
             ("doc-by_round", self.doc("by_round", f"{a}/regret.md", *dbs, *derived)),
             ("doc-patterns_regret", self.doc("patterns_regret", f"{a}/patterns.md", *derived)),
             ("doc-certain_mistakes", self.doc("certain_mistakes", f"{a}/certain-mistakes.md", *derived)),
-            ("doc-net_points", self.doc("net_points", f"{a}/net-points.md", *dbs, *derived, "--deep", str(self.derived / "regret-depth.sqlite"))),
+            ("doc-net_points", self.doc("net_points", f"{a}/net-points.md", *dbs, *derived)),
             ("doc-beliefs", self.beliefs),
             ("doc-matchups", self.doc("matchups", f"{a}/matchups.md", *dbs)),
             ("doc-luck", self.doc("aivat", f"{a}/matchups.md", *dbs, "--knowledge", str(kn))),
