@@ -3,6 +3,7 @@ name = "buckshot-dev"
 version = "0.1.0"
 description = "Buckshot developer commands: heavy jobs, checks, wrap-up"
 requires-python = ">=3.12"
+license = "MPL-2.0"
 # numpy, pandas, scikit-learn and hypothesis are not used by `dev` itself: dev/ is also the
 # Python env for the tools/arena scripts and analyses and their tests (`nix develop`, the arena-python flake check).
 dependencies = [

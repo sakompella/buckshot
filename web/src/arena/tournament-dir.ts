@@ -141,7 +141,8 @@ export const startedUnder = (dir: string, match: ScheduledMatch): Option.Option<
   return existsSync(path) ? Option.map(Result.getSuccess(Schema.decodeUnknownResult(Schema.fromJsonString(CodeOnly))(readFileSync(path, "utf8"))), ({ provenance }) => provenance.code_sha) : Option.none();
 };
 
-const AccountProvenance = Schema.Struct({ provenance: Schema.Struct({ agents: Schema.Record(Schema.String, Schema.Struct({ cpa_auth_id: Schema.optional(Schema.String) })) }) });
+/** An agent's pin; older manifests name it cpa_auth_id. */
+const AccountProvenance = Schema.Struct({ provenance: Schema.Struct({ agents: Schema.Record(Schema.String, Schema.Struct({ account_id: Schema.optional(Schema.String), cpa_auth_id: Schema.optional(Schema.String) })) }) });
 
 /** A started match keeps exactly its recorded pins, including no pins on older matches. */
 export const recordedAccounts = (dir: string, match: ScheduledMatch): MatchAccounts | undefined => {
@@ -151,7 +152,11 @@ export const recordedAccounts = (dir: string, match: ScheduledMatch): MatchAccou
 
   const manifest = Schema.decodeUnknownSync(Schema.fromJsonString(AccountProvenance))(readFileSync(path, "utf8"));
 
-  return Object.fromEntries(Object.entries(manifest.provenance.agents).flatMap(([agent, provenance]) => provenance.cpa_auth_id === undefined ? [] : [[agent, provenance.cpa_auth_id]]));
+  return Object.fromEntries(Object.entries(manifest.provenance.agents).flatMap(([agent, provenance]) => {
+    const account = provenance.account_id ?? provenance.cpa_auth_id;
+
+    return account === undefined ? [] : [[agent, account]];
+  }));
 };
 
 const isFinished = (matchDir: string): boolean => {
@@ -253,7 +258,7 @@ export interface Cooldown {
   readonly until: number;
 }
 
-/** A provider's usage-limit refusal, with the seconds until it resets: CLIProxyAPI's model cooldown, or the upstream limit it passes on. */
+/** A provider's usage-limit refusal, with the seconds until it resets: the proxy's model cooldown, or the upstream limit it passes on. */
 const UsageLimit = Schema.Union([
   Schema.Struct({ code: Schema.Literal("model_cooldown"), reset_seconds: Schema.Number }),
   Schema.Struct({ type: Schema.Literal("usage_limit_reached"), resets_in_seconds: Schema.Number }),

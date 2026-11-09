@@ -110,7 +110,7 @@ function refreshIdle(game) {
 }
 
 try {
-  // D17 D22 D28 D37 D51 define item ownership, effects, secrets, and usable moves.
+  // Item ownership, effects, secrets, and usable moves.
   for (const seats of [2, 3, 4]) {
     const [actor, opponent] = sockets(seats);
     for (const item of items) {
@@ -206,7 +206,7 @@ try {
     }
   }
 
-  scenario('D32 host acceptance is wider than normal secondary-mode menus', () => {
+  scenario('host acceptance is wider than normal secondary-mode menus', () => {
     const packet = move => tag('Choice', { seat: tag('Seat0'), index: 0, move });
     const aiming = session(config(3, [round({ live: 3, amount: 1, items: rules(['Glass']) })]));
     aiming.distribute(() => 'Glass');
@@ -224,7 +224,7 @@ try {
     }
   });
 
-  scenario('D37 cigarettes heal one after damage and remain capped at round health', () => {
+  scenario('cigarettes heal one after damage and remain capped at round health', () => {
     for (const seats of [2, 3, 4]) {
       const actor = sockets(seats)[0];
       const game = session(config(seats, [round({ health: 4, live: 10, amount: 1, items: rules(['Cigarettes']) })]));
@@ -240,7 +240,7 @@ try {
     }
   });
 
-  scenario('D11 D28 phone ranges, singleton omission, and seventh-shell cap', () => {
+  scenario('phone ranges, singleton omission, and seventh-shell cap', () => {
     for (const seats of [2, 3, 4]) for (const length of [1, 2, 3, 4, 8, 10]) {
       const actor = sockets(seats)[0];
       const mixed = length === 3 || length >= 8;
@@ -267,7 +267,7 @@ try {
     assert.ok(!shown(game.notes).some(e => kind(e) === 'Granted' && kind(e.item) === 'Saw'));
   });
 
-  scenario('D22 held grants count against table caps and resource order', () => {
+  scenario('held grants count against table caps and resource order', () => {
     const game = session(config(3, [round({ live: 2, amount: 1, items: {
       inverter: {}, adrenaline: {}, remote: { per_player: 1, on_table: 1 },
     } })]));
@@ -286,7 +286,7 @@ try {
     assert.equal(Object.values(game.snapshot.seats).flatMap(s => s.slots).filter(item => item === 'Remote').length, 1);
   });
 
-  scenario('D37 empty-pool grab has no draw or grant and disables intake', () => {
+  scenario('empty-pool grab has no draw or grant and disables intake', () => {
     for (const seats of [2, 3, 4]) {
       const [actor, other] = sockets(seats);
       const game = session(config(seats, [round({ amount: 1, items: { saw: { per_player: 1, on_table: 1 } } })]));
@@ -305,7 +305,7 @@ try {
     }
   });
 
-  scenario('D22 player caps and eight full slots stop ordinary grants', () => {
+  scenario('player caps and eight full slots stop ordinary grants', () => {
     for (const seats of [2, 3, 4]) {
       const capped = session(config(seats, [round({ health: 3, amount: 8, items: { beer: { per_player: 1, on_table: 32 } } })]));
       capped.distribute();
@@ -320,7 +320,7 @@ try {
     }
   });
 
-  scenario('D18 beer-out preserves saw through reload and passes doubled damage', () => {
+  scenario('beer-out preserves saw through reload and passes doubled damage', () => {
     for (const seats of [2, 3, 4]) {
       const [actor, opponent] = sockets(seats);
       const game = session(config(seats, [round({ health: 4, amount: 2, items: rules(['Saw', 'Beer']) })]));
@@ -342,7 +342,7 @@ try {
     }
   });
 
-  scenario('D08 D37 jammer skips once, lifts, and resets checked on re-jam', () => {
+  scenario('jammer skips once, lifts, and resets checked on re-jam', () => {
     for (const seats of [2, 3, 4]) {
       const [actor, opponent] = sockets(seats);
       const game = session(config(seats, [round({ health: 6, live: 10, amount: 2, items: rules(['Jammer']) })]));
@@ -370,7 +370,7 @@ try {
     }
   });
 
-  scenario('D55 M3 real capped round inventories clear before each new handout', () => {
+  scenario('real capped round inventories clear before each new handout', () => {
     for (const seats of [2, 3, 4]) {
       const game = session(config(seats, Array.from({ length: 3 }, () => round({ amount: 1, items: { phone: { per_player: 1, on_table: seats } } }))));
       for (let roundIndex = 0; roundIndex < 3; roundIndex++) {
@@ -392,7 +392,7 @@ try {
     }
   });
 
-  scenario('D55 M1 exact completion does not distribute OR inside forall', () => {
+  scenario('exact completion does not distribute OR inside forall', () => {
     const game = session(config(3, [round({ health: 3, amount: 2, items: {
       saw: { per_player: 1, on_table: 3 }, beer: { per_player: 1, on_table: 1 },
     } })]));
@@ -409,7 +409,7 @@ try {
     event(game.notes, 'DistributionDone');
   });
 
-  scenario('D55 M1 excludes holders from the noneligible end list', () => {
+  scenario('excludes holders from the noneligible end list', () => {
     const game = session(config(3, [round({ amount: 1, items: { saw: { per_player: 1, on_table: 3 }, beer: { per_player: 1, on_table: 1 } } })]));
     game.draws();
     game.grant(0, 'Saw');
@@ -424,7 +424,7 @@ try {
     assert.equal(game.state.host.distributing, false);
   });
 
-  scenario('D56 all-pools-empty completion drains holders before the next load', () => {
+  scenario('all-pools-empty completion drains holders before the next load', () => {
     for (const seats of [2, 3, 4]) {
       const table = sockets(seats);
       const game = session(config(seats, [round({ amount: 1, items: { saw: { per_player: 1, on_table: seats } } })]));
@@ -444,7 +444,7 @@ try {
     }
   });
 
-  scenario('D55 M4 refusal uses thief target rules and counts dead owners', () => {
+  scenario('refusal uses thief target rules and counts dead owners', () => {
     for (const seats of [2, 3, 4]) {
       const [actor, owner] = sockets(seats);
       const game = session(config(seats, [round({ health: 3, live: 3 })]));

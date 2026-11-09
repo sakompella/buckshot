@@ -23,7 +23,7 @@ import { cooldownOf, costOf, faultsOf, finishedNames, openTournament, runPending
 // model, plays at most N matches of that model at once; --last <model> starts
 // its matches only when no other match can; --forget-cooldown <model> ignores
 // the model's recorded cooldowns at the start, after its provider reset early;
-// --skip <entrant> leaves that entrant's matches unplayed this run; --prefer-account <CPA auth id>, in order of
+// --skip <entrant> leaves that entrant's matches unplayed this run; --prefer-account <account id>, in order of
 // preference, pins new matches to those accounts first when accounts are equally loaded.
 // A match resumes under the code version it started under (its manifest's
 // code_sha), so a tournament can span versions: --code <code_sha>=<web dir>,

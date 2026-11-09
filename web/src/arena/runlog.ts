@@ -47,7 +47,7 @@ export const CallLine = Schema.Struct({
 
 export type CallLine = typeof CallLine.Type;
 
-/** The version of the run directory's files, which .audit/agent-arena-design.md describes; it changes when a field changes meaning or goes away. */
+/** The version of the run directory's files; it changes when a field changes meaning or goes away. */
 export const RUN_FORMAT = 1;
 
 /** Where a line's player sits; `agent` only when an agent plays it. */

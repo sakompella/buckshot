@@ -120,7 +120,7 @@ class Deploy(unittest.TestCase):
     def run_deploy(self, preview_output: str) -> list[str]:
         wrap = make_wrap(True)
         env_file = tmp() / "deploy.env"
-        env_file.write_text("CLOUDFLARE_API_TOKEN=t\n")
+        env_file.write_text("CLOUDFLARE_API_TOKEN=t\nONLINE_DOMAIN=site.example\n")
         ran = []
 
         def fake_run(step, cmd, cwd=w.REPO, stdout=None, env=None):

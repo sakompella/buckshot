@@ -53,7 +53,7 @@ def seats.jam(+seats: D.Ring<&2, CoreSeat>) -> D.Ring<&2, S.Jam>:
   S.players.jam(players.jams(seats))
 
 # The reference's (is_jammed, jammer_checked) pair of a jam. Free reads as
-# (False, False); the reference clears the bit when a jam lifts (D57).
+# (False, False); the reference clears the bit when a jam lifts (ADR-0018).
 def jam.checked(jam: S.Jam) -> Bool:
   match jam:
     case S.JammedSkipped{}:

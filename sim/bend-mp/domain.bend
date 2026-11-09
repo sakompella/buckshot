@@ -5,14 +5,10 @@ import Base
 # web UI all speak these types. Neither model's state is here: only what crosses
 # the boundary between a model and its callers.
 #
-# D-numbers (D11, D45, ...) cite the source decision record, which cites the
-# decompiled Godot code line by line. It is kept locally, not committed, at
-# _work/bend-faithful/source-decisions.md.
-#
 # Phase-specific option types (idle moves, target lists, grab or place needs)
 # are not here. Only sm/ consumes them: it renders them to the public Move menus
 # and reads its own typed lists back on answer. ref/ parses the public Move into
-# a host packet (D32) and needs no typed options. Keeping them inside sm/ means a
+# a host packet and needs no typed options. Keeping them inside sm/ means a
 # new machine state never widens a match in the AIs, the driver or the UI.
 #
 # Base is imported unqualified, so constructor names here avoid Base's (Zero,
@@ -24,7 +20,7 @@ import Base
 # =====
 
 # A seat is a fixed socket identity. Two players sit at sockets 1 and 3, three
-# at 0..2, four at 0..3 (D45). Seat assignment is driver configuration.
+# at 0..2, four at 0..3. Seat assignment is driver configuration.
 type Seat is Data:
   Seat0{}
   Seat1{}
@@ -161,12 +157,12 @@ type Shell is Data:
   Live{}
   Blank{}
 
-# A shell composition, live count first (D21 tuples are (live, blank)).
+# A shell composition, live count first (tuples are (live, blank)).
 type Load is Data:
   Load{live: Nat, blank: Nat}
 
 # Expired medicine (Godot ID 7) is absent: the unmodified customization never
-# enables it, so no distribution can grant it (D22).
+# enables it, so no distribution can grant it.
 type Item is Data:
   Saw{}
   Glass{}
@@ -179,7 +175,7 @@ type Item is Data:
   Remote{}
 
 # Godot resource-array order 1,2,3,4,5,6,(7),9,8,10. Item-choice draws index
-# the eligible subsequence of this list, so its order is part of the tape (D11).
+# the eligible subsequence of this list, so its order is part of the tape.
 def item.order() -> List<&2, Item>:
   [Saw{}, Glass{}, Jammer{}, Cigarettes{}, Beer{}, Phone{}, Inverter{}, Adrenaline{}, Remote{}]
 
@@ -204,7 +200,7 @@ def item.godot_id(item: Item) -> Nat:
     case Remote{}:
       10n
 
-# At exactly two connected seats the remote is removed from every pool (D22).
+# At exactly two connected seats the remote is removed from every pool.
 def item.dealt_at(table: Table, item: Item) -> Bool:
   match table item:
     case TwoSeats{} Remote{}:
@@ -212,7 +208,7 @@ def item.dealt_at(table: Table, item: Item) -> Bool:
     case _ _:
       True{}
 
-# A seat's inventory has eight grid slots (D22).
+# A seat's inventory has eight grid slots.
 type Slot is Data:
   Slot0{}
   Slot1{}
@@ -271,7 +267,7 @@ type HealthRule is Data:
   RandomHealth{}
   FixedHealth{health: Pos}
 
-# A fixed load always has at least one shell (D23: the UI offers totals 1..10).
+# A fixed load always has at least one shell (the UI offers totals 1..10).
 type ShellRule is Data:
   RandomShells{}
   FixedShells{live: Nat, blank: Pos}
@@ -284,7 +280,7 @@ type AmountRule is Data:
 type LoadRule is Data:
   LoadRule{shells: ShellRule, items: AmountRule}
 
-# One rule per per-load index 0..3; the index cycles 0,1,2,3,0.. (D14).
+# One rule per per-load index 0..3; the index cycles 0,1,2,3,0,...
 type LoadRules is Data:
   LoadRules{l0: LoadRule, l1: LoadRule, l2: LoadRule, l3: LoadRule}
 
@@ -298,7 +294,7 @@ type ItemRules is Data:
 type RoundRules is Data:
   RoundRules{health: HealthRule, loads: LoadRules, items: ItemRules, boxed: Boxed<&2, RoundRules>}
 
-# The UI offers one to three rounds (D23); the type has no other lengths.
+# The UI offers one to three rounds; the type has no other lengths.
 type Plan is Data:
   OneRound{r0: RoundRules}
   TwoRounds{r0: RoundRules, r1: RoundRules}
@@ -328,7 +324,7 @@ def rules.item(rules: ItemRules, item: Item) -> ItemRule:
     case ItemRules{a, b, c, d, e, f, g, h, i} Remote{}:
       i
 
-# Rounds in the plan; the final round index is this minus one (D25).
+# Rounds in the plan; the final round index is this minus one.
 def plan.length(plan: Plan) -> Nat:
   match plan:
     case OneRound{a}:
@@ -355,7 +351,7 @@ def plan.round(plan: Plan, index: Nat) -> Maybe<&2, RoundRules>:
     case _ _:
       None{}
 
-# MP_MatchCustomization defaults (D22, D23).
+# The game's match customization defaults.
 def config.default_items() -> ItemRules:
   ItemRules{ItemRule{True{}, 2n, 32n}, ItemRule{True{}, 2n, 32n}, ItemRule{True{}, 1n, 1n}, ItemRule{True{}, 1n, 32n}, ItemRule{True{}, 8n, 32n}, ItemRule{True{}, 8n, 32n}, ItemRule{True{}, 4n, 32n}, ItemRule{True{}, 4n, 32n}, ItemRule{True{}, 1n, 2n}}
 
@@ -389,7 +385,7 @@ def nonempty.length(-A: Data, xs: NonEmpty<&2, A>) -> Nat:
 # A random draw a model must request: the inclusive range lo..lo+extra+1. It
 # always holds at least two values. A draw whose range has one value cannot
 # affect play, so it is never a request: the model uses that value directly
-# (D11, Phase 1 amendment; Godot's randi_range(a, a) reads no RNG word either).
+# (Godot's randi_range(a, a) reads no RNG word either).
 type Range is Data:
   Range{lo: Nat, extra: Nat}
 
@@ -402,7 +398,7 @@ def range.of(lo: Nat, width: Nat) -> Maybe<&2, Range>:
     case 1n+extra:
       Some{Range{lo, extra}}
 
-# Ordered sequence-batch resources (D21). Draws index this order.
+# Ordered sequence-batch resources. Draws index this order.
 def table.deck(table: Table) -> List<&2, Load>:
   match table:
     case TwoSeats{}:
@@ -412,7 +408,7 @@ def table.deck(table: Table) -> List<&2, Load>:
     case FourSeats{}:
       [Load{3n, 4n}, Load{3n, 2n}, Load{3n, 3n}, Load{4n, 3n}, Load{2n, 2n}, Load{3n, 4n}, Load{4n, 4n}, Load{4n, 2n}, Load{3n, 1n}, Load{2n, 1n}]
 
-# Random starting health: 2 seats 3..4, 3 seats 4..5, 4 seats 3..5 (D23).
+# Random starting health: 2 seats 3..4, 3 seats 4..5, 4 seats 3..5.
 def table.health_range(table: Table) -> Range:
   match table:
     case TwoSeats{}:
@@ -422,7 +418,7 @@ def table.health_range(table: Table) -> Range:
     case FourSeats{}:
       Range{3n, 1n}
 
-# Random items per distribution: 2 seats 2..4, 3 seats 3..5, 4 seats 3..4 (D23).
+# Random items per distribution: 2 seats 2..4, 3 seats 3..5, 4 seats 3..4.
 def table.amount_range(table: Table) -> Range:
   match table:
     case TwoSeats{}:
@@ -432,7 +428,7 @@ def table.amount_range(table: Table) -> Range:
     case FourSeats{}:
       Range{3n, 0n}
 
-# Round prize by round index, not by plan length (D25).
+# Round prize by round index, not by plan length.
 def prize(round: Nat) -> U32:
   match round:
     case 0n:
@@ -444,15 +440,15 @@ def prize(round: Nat) -> U32:
     case _:
       0
 
-# The phone announces at most the seventh shell (D28).
+# The phone announces at most the seventh shell.
 def phone.cap() -> Nat:
   7n
 
 # Moves
 # =====
 
-# A move an unmodified client can make (D37), one constructor per canonical
-# packet kind (D32, D50). Item identity is the nominated slot's actual item.
+# A move an unmodified client can make, one constructor per canonical
+# packet kind. Item identity is the nominated slot's actual item.
 # A Move value alone is not evidence of legality: legal moves exist only as
 # entries of a Choose request, and callers answer with an index.
 type Move is Data:
@@ -528,7 +524,7 @@ def menu.find(moves: List<&2, Move>, +wanted: Move) -> Maybe<&2, Nat>:
 # Requests and answers
 # ====================
 
-# The semantic draw sites, in Godot call order (D11).
+# The semantic draw sites, in Godot call order.
 type Label is Data:
   FirstSeat{}
   StartingHealth{}
@@ -546,12 +542,12 @@ type Label is Data:
 #     Godot 4.1 order. Any answer sequence is a permutation.
 #   Choose: each configured seat's legal moves, in the canonical order the
 #     producing model must use (ascending socket, then the order the moves are
-#     listed by D37's table: pickup, uses by slot, shots by socket, grab,
+#     listed by the client's table: pickup, uses by slot, shots by socket, grab,
 #     places by slot, jam targets by socket, steals by owner then slot). A seat
 #     with no move has Nil. Several seats can be non-empty while grabbing.
 #     Build it with request.choose, never directly.
-#   Finished: the match concluded (D47). No answer is read.
-#   Stuck: no seat has a legal move and no rule can continue (D53), or the
+#   Finished: the match concluded. No answer is read.
+#   Stuck: no seat has a legal move and no rule can continue, or the
 #     reference ran out of dispatcher fuel. Laws require the machine never to
 #     reach it in normal play; a driver reports it as an invariant failure.
 type Request is Data:
@@ -726,14 +722,13 @@ def prompt.index(prompt: Prompt, +wanted: Move) -> Maybe<&2, Nat>:
 # A seat's health counter and jam state as every client shows them, in one
 # value. Jammer_Enable sets is_jammed and hides the counter; only Jammer_Disable
 # clears is_jammed and shows it again; Jammer_Check flickers it and ends hidden
-# (MP_Jammer.gd:53-77, D27). Round start unjams every seat through
-# Jammer_Disable (MP_RoundManager.gd:231). So at every request point the
-# counter is hidden exactly while the seat is jammed. D26 requires display
-# visibility and the health value to be separate because request points occur
-# while it is hidden: here the visibility is the constructor and the value
-# exists only while visible. A jammed seat's logical health stays public only
-# through earlier events (Fired, Healed, RoundBegan), as D27 states. The
-# jammer_checked bit is model-private and has no public field.
+# (the game's jammer logic). Round start unjams every seat through
+# Jammer_Disable. So at every request point the counter is hidden exactly
+# while the seat is jammed. Display visibility and the health value must be
+# separate because request points occur while it is hidden: here the visibility
+# is the constructor and the value exists only while visible. A jammed seat's
+# logical health stays public only through earlier events (Fired, Healed,
+# RoundBegan). The jammer_checked bit is model-private and has no public field.
 type Counter is Data:
   Unjammed{health: Nat}
   Jammed{}
@@ -746,7 +741,7 @@ def counter.of(jammed: Bool, health: Nat) -> Counter:
     case False{}:
       Unjammed{health}
 
-# A seat's part in item distribution (D37 grabbing rows).
+# A seat's part in item distribution.
 type Briefcase is Data:
   NotGrabbing{}
   Grabbing{}
@@ -760,7 +755,7 @@ type Direction is Data:
   CounterClockwise{}
 
 # Remaining live/blank counts are not public: an inverter changes the split
-# without revealing it (D29). Only the count and the last shown load are.
+# without revealing it. Only the count and the last shown load are.
 type GunView is Data:
   GunView{shown: Load, remaining: Nat, sawed: Bool}
 
@@ -780,7 +775,7 @@ type Stage is Data:
   Playing{seat: Seat, mode: Mode}
   MatchOver{}
 
-# The public table: what every unmodified client shows (D26, D27, D29).
+# The public table: what every unmodified client shows.
 # Shell order, the remaining deck, the item amount and every private result
 # are absent by type. Nothing here is per-seat private.
 type Board is Data:
@@ -807,7 +802,7 @@ def observe(point: Point, seat: Seat) -> Obs:
 # Events
 # ======
 
-# Damage a shot captured at host acceptance from the saw bool (D15). A blank
+# Damage a shot captured at host acceptance from the saw bool. A blank
 # captures it too and applies none.
 type Damage is Data:
   Single{}
@@ -820,8 +815,8 @@ def damage.amount(damage: Damage) -> Nat:
     case Double{}:
       2n
 
-# Public events, in rule-effect order (D51). Rich enough for the web UI to
-# compute end-of-match titles itself (D19, D48): Fired carries the captured
+# Public events, in rule-effect order. Rich enough for the web UI to
+# compute end-of-match titles itself: Fired carries the captured
 # damage the source's badge counter reads and the applied damage after the
 # clamp to zero, so both are auditable; self-live shots are Fired with
 # shooter == target; deaths come from Died, cigarettes and items used from
@@ -849,7 +844,7 @@ type GameEvent is Data:
   RoundWon{seat: Seat, prize: U32}
   MatchConcluded{}
 
-# Results shown only to one seat (D28, D37 empty-pool grab).
+# Results shown only to one seat.
 type Secret is Data:
   Glimpse{shell: Shell}
   Clue{position: Nat, shell: Shell}

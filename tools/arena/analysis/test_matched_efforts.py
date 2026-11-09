@@ -9,8 +9,8 @@ import matched_efforts as me
 from matched_efforts import Config, Seat
 from test_by_round import A1, A3, B2, event, lines
 
-HIGH, MED = Config("opus", "high", "cpa"), Config("opus", "medium", "cpa")
-EASY, HARD = Config("sol", "medium", "cpa"), Config("astra", "medium", "cpa")
+HIGH, MED = Config("opus", "high", "proxy"), Config("opus", "medium", "proxy")
+EASY, HARD = Config("sol", "medium", "proxy"), Config("astra", "medium", "proxy")
 NO_DRAWS = 0
 CUT = me.REQUEST_CHANGE
 
@@ -39,7 +39,7 @@ def database(*matches: tuple[str, str, str]) -> sqlite3.Connection:
            CREATE TABLE match_seats (match_id TEXT, position INTEGER, player TEXT, win_share REAL, cash REAL, entrant_id TEXT)"""
     )
     models = {"opus", "sol", "oc/deepseek-v4.1-flash-free"}
-    db.executemany("INSERT INTO entrants VALUES (?, ?, 'medium', 'cpa')", [(m, m) for m in models])
+    db.executemany("INSERT INTO entrants VALUES (?, ?, 'medium', 'proxy')", [(m, m) for m in models])
     for match, started, other in matches:
         db.execute("INSERT INTO matches VALUES (?, ?, 1, 'completed')", (match, started))
         db.executemany("INSERT INTO match_seats VALUES (?, ?, ?, ?, ?, ?)", [(match, 1, "A", 1.0, 150_000, "opus"), (match, 2, "B", 0.0, 75_000, other)])
@@ -81,7 +81,7 @@ class Matching(unittest.TestCase):
         self.assertIsNone(only_row(numbered([(HIGH, EASY, 3), (MED, EASY, 3)])).common)
 
     def test_games_between_efforts_of_one_model_are_not_external(self):
-        own = Config("opus", "low", "cpa")
+        own = Config("opus", "low", "proxy")
         self.assertEqual(me.arms(numbered([(HIGH, own, 3), (HIGH, EASY, 3)]), me.round_metric)[HIGH].keys(), {EASY})
 
     def test_reports_the_distinct_seeds_of_the_effort(self):
@@ -122,7 +122,7 @@ class Intervals(unittest.TestCase):
 
     def test_seeds_shared_across_opponents_count_once(self):
         # 10 seeds against 5 opponents are 10 independent units, not 50.
-        opponents = [Config(f"m{i}", "medium", "cpa") for i in range(5)]
+        opponents = [Config(f"m{i}", "medium", "proxy") for i in range(5)]
         seats = numbered(self.specs(range(10), opponents) * 2)
         row = only_row(seats)
         self.assertEqual(row.strict.seeds, 10)
@@ -130,7 +130,7 @@ class Intervals(unittest.TestCase):
         self.assertIsNone(row.common.interval)
 
     def test_enough_seeds_give_intervals_that_cover_the_estimates(self):
-        opponents = [Config(f"m{i}", "medium", "cpa") for i in range(2)]
+        opponents = [Config(f"m{i}", "medium", "proxy") for i in range(2)]
         row = me.compare(numbered(self.specs(range(me.MIN_UNITS), opponents) * 2), me.round_metric, {}, 200)[0]
         for layer, estimate in ((row.strict, row.strict.diff), (row.common, row.common.rate - row.common.rate_ref)):
             low, high = layer.interval

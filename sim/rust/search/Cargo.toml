@@ -3,6 +3,7 @@ name = "buckshot-search"
 version = "0.1.0"
 description = "The Buckshot minimax player (sim/bend-mp/player), mirrored from Bend over buckshot-rules."
 edition.workspace = true
+license.workspace = true
 publish.workspace = true
 
 [features]

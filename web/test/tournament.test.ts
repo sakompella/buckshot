@@ -22,15 +22,15 @@ import { codeVersions, fitRatings, ELO_PER_NAT, intervalsOf, type PlayedMatch, r
 const prices = loadPrices(DEFAULT_PRICES);
 
 const ENDPOINTS = {
-  "cpa-anthropic": { api: "anthropic", url: "http://127.0.0.1:8318", keyEnv: "CPA_KEY" },
-  "cpa-openai": { api: "openai-responses", url: "http://127.0.0.1:8318/v1", keyEnv: "CPA_KEY" },
+  "proxy-anthropic": { api: "anthropic", url: "http://127.0.0.1:8318", keyEnv: "PROXY_KEY" },
+  "proxy-openai": { api: "openai-responses", url: "http://127.0.0.1:8318/v1", keyEnv: "PROXY_KEY" },
 };
 
 const ENTRANTS = {
-  "haiku-5-5": { endpoint: "cpa-anthropic", model: "claude-haiku-5-5", effort: "medium" },
-  "luna": { endpoint: "cpa-openai", model: "gpt-6-luna", effort: "high" },
-  "sonnet": { endpoint: "cpa-anthropic", model: "claude-sonnet-5-5", effort: "medium" },
-  "opus": { endpoint: "cpa-anthropic", model: "claude-opus-5-5", effort: "medium" },
+  "haiku-5-5": { endpoint: "proxy-anthropic", model: "claude-haiku-5-5", effort: "medium" },
+  "luna": { endpoint: "proxy-openai", model: "gpt-6-luna", effort: "high" },
+  "sonnet": { endpoint: "proxy-anthropic", model: "claude-sonnet-5-5", effort: "medium" },
+  "opus": { endpoint: "proxy-anthropic", model: "claude-opus-5-5", effort: "medium" },
   "don": { bot: "DoN" },
   "story": { bot: "Story" },
 };
@@ -411,7 +411,7 @@ test("a model at its usage limit holds back its matches until the reset, other m
 
   if (lunaFirst === undefined || lunaSecond === undefined || claude.length !== 2) throw new Error("the schedule is not two luna matches, then two others");
 
-  /** The fault line a match's run ends on when CLIProxyAPI reports luna at its usage limit for `seconds`. */
+  /** The fault line a match's run ends on when the proxy reports luna at its usage limit for `seconds`. */
   const coolDown = (dir: string, match: ScheduledMatch, seconds: number) => {
     const agent = match.seats[match.entrants.indexOf("luna")];
     const error = `openai-responses-A API error (429): ${JSON.stringify({ code: "model_cooldown", model: "gpt-6-luna", reset_seconds: seconds })}`;
@@ -766,7 +766,7 @@ test("a tournament grows by seed blocks and by endpoints for new entrants, but n
     tournamentFrom(configJson({ endpoints, entrants: { ...ENTRANTS, routed: { endpoint: "router", model: "oc/routed", catalogModel: "gpt-6-luna", effort: "high" } }, pairings: [["luna", "don"], ["haiku-5-5", "luna"], ["opus", "story"], ["routed", "luna"]], blocksPerPairing: 3 }));
 
   expect(Result.isSuccess(openTournament(dir, routed(withRouter), "abc123", new Date(0)))).toBe(true);
-  expect(Result.isFailure(openTournament(dir, routed({ ...withRouter, "cpa-openai": { ...ENDPOINTS["cpa-openai"], url: "http://127.0.0.1:9999/v1" } }), "abc123", new Date(0)))).toBe(true);
+  expect(Result.isFailure(openTournament(dir, routed({ ...withRouter, "proxy-openai": { ...ENDPOINTS["proxy-openai"], url: "http://127.0.0.1:9999/v1" } }), "abc123", new Date(0)))).toBe(true);
 });
 
 test("a finished match that disagrees with the schedule is left out, and its counts come from the manifest", () => {
@@ -808,7 +808,7 @@ const BASE_ENV = { PATH: "/usr/bin", HOME: "/home/x", PLAYER_A_ANT_KEY: "leaked-
 test("a match's child gets no PLAYER_* variable but its own, and no key shows in its command", () => {
   const tournament = tournamentFrom(configJson({ pairings: [["luna", "don", "haiku-5-5"]], blocksPerPairing: 1 }));
   const [match] = scheduleOf(tournament);
-  const keys = resolveKeys(tournament.config, scheduleOf(tournament), { CPA_KEY: "sk-secret-value" });
+  const keys = resolveKeys(tournament.config, scheduleOf(tournament), { PROXY_KEY: "sk-secret-value" });
 
   if (match === undefined || Result.isFailure(keys)) throw new Error("setup failed");
 
@@ -816,7 +816,7 @@ test("a match's child gets no PLAYER_* variable but its own, and no key shows in
 
   expect(Object.keys(env).filter((name) => name.startsWith("PLAYER_")).toSorted()).toEqual(["PLAYER_A_EFFORT", "PLAYER_A_MODEL", "PLAYER_A_OAI_KEY", "PLAYER_A_OAI_URL", "PLAYER_B_ANT_KEY", "PLAYER_B_ANT_URL", "PLAYER_B_EFFORT", "PLAYER_B_MODEL"]);
   expect(env).toMatchObject({ PATH: "/usr/bin", HOME: "/home/x", PLAYER_A_MODEL: "gpt-6-luna", PLAYER_A_EFFORT: "high", PLAYER_B_MODEL: "claude-haiku-5-5", PLAYER_B_ANT_KEY: "sk-secret-value" });
-  expect(Redacted.value(keys.success.get("CPA_KEY") ?? Redacted.make(""))).toBe("sk-secret-value");
+  expect(Redacted.value(keys.success.get("PROXY_KEY") ?? Redacted.make(""))).toBe("sk-secret-value");
 
   const command = childCommand("/tmp/t/m", tournament.config, match);
 
@@ -830,7 +830,7 @@ test("an entrant's instructions addendum reaches only its own seat's environment
   const entrants = { ...ENTRANTS, "luna-brief": { ...ENTRANTS.luna, instructionsAddendum: addendum } };
   const tournament = tournamentFrom(configJson({ entrants, pairings: [["luna-brief", "haiku-5-5"]], blocksPerPairing: 1 }));
   const [match] = scheduleOf(tournament);
-  const keys = resolveKeys(tournament.config, scheduleOf(tournament), { CPA_KEY: "sk-test" });
+  const keys = resolveKeys(tournament.config, scheduleOf(tournament), { PROXY_KEY: "sk-test" });
 
   if (match === undefined || Result.isFailure(keys)) throw new Error("setup failed");
 
@@ -872,7 +872,7 @@ test("a missing key variable is named and its value is never shown", () => {
   const tournament = tournamentFrom(configJson());
   const keys = resolveKeys(tournament.config, scheduleOf(tournament), { PATH: "/usr/bin" });
 
-  expect(Result.isFailure(keys) && keys.failure.message).toContain("CPA_KEY");
+  expect(Result.isFailure(keys) && keys.failure.message).toContain("PROXY_KEY");
 });
 
 test("the example tournament's models all start as arena agents from the variables the runner sets", async () => {
@@ -895,7 +895,7 @@ test("the example tournament's models all start as arena agents from the variabl
 });
 
 const pinnedTournament = () => tournamentFrom(configJson({
-  endpoints: { ...ENDPOINTS, "cpa-openai": { ...ENDPOINTS["cpa-openai"], accounts: ["account-a", "account-b"] } },
+  endpoints: { ...ENDPOINTS, "proxy-openai": { ...ENDPOINTS["proxy-openai"], accounts: ["account-a", "account-b"] } },
   pairings: [["luna", "don"]],
 }));
 
@@ -930,13 +930,13 @@ test("account ids travel only in the child environment, and unconfigured agents 
 
   if (match === undefined) throw new Error("no match");
 
-  const keys = new Map([["CPA_KEY", Redacted.make("key")]]);
-  const base = { PLAYER_A_CPA_AUTH_ID: "inherited-account" };
+  const keys = new Map([["PROXY_KEY", Redacted.make("key")]]);
+  const base = { PLAYER_A_ACCOUNT_ID: "inherited-account" };
 
-  expect(childEnv(base, tournament.config, match, keys, { A: "account-b" }).PLAYER_A_CPA_AUTH_ID).toBe("account-b");
-  expect(childEnv(base, tournament.config, match, keys).PLAYER_A_CPA_AUTH_ID).toBeUndefined();
+  expect(childEnv(base, tournament.config, match, keys, { A: "account-b" }).PLAYER_A_ACCOUNT_ID).toBe("account-b");
+  expect(childEnv(base, tournament.config, match, keys).PLAYER_A_ACCOUNT_ID).toBeUndefined();
   expect(childCommand("/tmp/match", tournament.config, match).join(" ")).not.toContain("account-b");
-  expect(Result.isFailure(parseConfig(configJson({ endpoints: { ...ENDPOINTS, "cpa-openai": { ...ENDPOINTS["cpa-openai"], accounts: [] } } })))).toBe(true);
+  expect(Result.isFailure(parseConfig(configJson({ endpoints: { ...ENDPOINTS, "proxy-openai": { ...ENDPOINTS["proxy-openai"], accounts: [] } } })))).toBe(true);
 });
 
 /** A pinned match's manifest and the usage-limit fault which stopped it. */
@@ -945,7 +945,7 @@ const pinAndCool = (dir: string, tournament: Tournament, match: ScheduledMatch, 
   const path = join(dir, match.name, "manifest.json");
   const manifest = JSON.parse(readFileSync(path, "utf8"));
 
-  manifest.provenance.agents.A.cpa_auth_id = account;
+  manifest.provenance.agents.A.account_id = account;
   writeFileSync(path, JSON.stringify(manifest));
   writeFileSync(join(dir, match.name, "events.jsonl"), `${JSON.stringify({ t: new Date().toISOString(), kind: "fault", agent: "A", error: 'API error (429): {"code":"model_cooldown","reset_seconds":3600}' })}\n`);
 };
@@ -1096,7 +1096,7 @@ test("an existing tournament can add account pins for new matches without changi
   expect(Result.isSuccess(upgraded)).toBe(true);
   expect(Result.isSuccess(upgraded) && upgraded.success.schedule).toEqual(scheduleOf(before));
   expect(recordedAccounts(dir, started)).toEqual({});
-  const changed = tournamentFrom(configJson({ endpoints: { ...ENDPOINTS, "cpa-openai": { ...ENDPOINTS["cpa-openai"], accounts: ["account-c"] } }, pairings: [["luna", "don"]] }));
+  const changed = tournamentFrom(configJson({ endpoints: { ...ENDPOINTS, "proxy-openai": { ...ENDPOINTS["proxy-openai"], accounts: ["account-c"] } }, pairings: [["luna", "don"]] }));
 
   expect(Result.isFailure(openTournament(dir, changed, "new", new Date(2)))).toBe(true);
   expect(Result.isSuccess(openTournament(dir, before, "old", new Date(2)))).toBe(true);

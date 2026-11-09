@@ -4,4 +4,4 @@ Story and DoN (Double or Nothing) are ports of the verified two-player dealer po
 
 ## Consequences
 
-Win rates between seats are not yet explained. In mirror matches later seats win more often, and it is open whether the cause is turn order or a bias in the AIs.
+In mirror matches later seats win more often; these seeds do not say whether the cause is turn order or a bias in the AIs.

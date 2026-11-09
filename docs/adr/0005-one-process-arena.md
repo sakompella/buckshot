@@ -11,4 +11,4 @@ The arena runs a match and every model player in one process. Each player is a p
 
 ## Consequences
 
-MCP for outside agents is deferred, not ruled out: the seat tools are the seam an HTTP front end would wrap. One process means one crash stops every player in it, which ADR-0006 makes recoverable.
+The arena offers no MCP server for outside agents; the seat tools are the seam an HTTP front end would wrap. One process means one crash stops every player in it, which ADR-0006 makes recoverable.

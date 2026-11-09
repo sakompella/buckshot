@@ -7,7 +7,7 @@ type Props is Data:
 type Batch is Data:
   Batch{id: Nat, load: D.Load}
 
-# Resource identities survive equal compositions and round changes (D14, D21).
+# Resource identities survive equal compositions and round changes.
 type Decks is Data:
   Decks{two: List<&2, Batch>, three: List<&2, Batch>, four: List<&2, Batch>}
 
@@ -315,7 +315,7 @@ def host.initial(+config: D.Config) -> Host:
   Host{config, True{}, 0n, 0n, False{}, 0n, D.Seat0{}, None{}, D.Clockwise{}, None{}, False{}, 0n, False{}, False{}, Nil{}, D.Load{0n, 0n}, MakeSequenceCopies(), D.ring.fill(Props, config.table(config), props.initial()), D.ring.fill(GrabProgress, config.table(config), GrabProgress{0n, False{}})}
 
 # Godot keeps jammer_checked after a lift, but reads it only while jammed and
-# every jam resets it (D57), so a lift clears it.
+# every jam resets it, so a lift clears it (ADR-0018).
 def props.unjam(props: Props) -> Props:
   match props:
     case Props{hp, _, _, cash, slots, grab, holding, turn}:

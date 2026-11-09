@@ -2,7 +2,7 @@
 """Checks a tournament directory's finished matches: exit 1 if any had a fallback move, a failed audit flag, or an
 endpoint outside URL_PREFIX. Prints finished matches, complete seed pairs and wins per seat label.
 
-    python3 tools/arena/check_matches.py TOURNAMENT_DIR [URL_PREFIX]
+    python3 tools/arena/check_matches.py TOURNAMENT_DIR URL_PREFIX
 """
 
 import json
@@ -11,8 +11,9 @@ import sys
 
 
 def main() -> int:
-    tdir = sys.argv[1]
-    prefix = sys.argv[2] if len(sys.argv) > 2 else "https://hub.dog-minnow.ts.net"
+    if len(sys.argv) != 3:
+        sys.exit(__doc__)
+    tdir, prefix = sys.argv[1:]
     schedule = json.load(open(os.path.join(tdir, "tournament.json")))["schedule"]
     bad, wins, by_seed = [], {}, {}
     for match in schedule:

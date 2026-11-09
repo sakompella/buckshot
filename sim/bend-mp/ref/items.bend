@@ -107,8 +107,8 @@ def all_empty(entries: List<&2, D.At<&2, S.Props>>, +host: S.Host) -> Bool:
     case D.At{seat, _} <> rest:
       Bool.and(Bool.not(G.nonempty(D.Item, G.GetItemToGrab.pool(D.item.order(), host, seat))), all_empty(rest, host))
 
-# D55 M1 retains the two whole-table predicates. Holders are not ended by
-# the noneligible pass, even when their pool is empty.
+# Fix M1 (ADR-0016) retains the two whole-table predicates. Holders are not
+# ended by the noneligible pass, even when their pool is empty.
 def CheckIfItemGrabbingFinishedForAllUsers(+host: S.Host) -> Bool:
   Bool.or(all_ended(D.ring.entries(S.Props, S.host.seats(host))), all_empty(D.ring.entries(S.Props, S.host.seats(host)), host))
 
@@ -136,8 +136,8 @@ def jam_targets(entries: List<&2, D.At<&2, S.Props>>, +by: D.Seat) -> List<&2, D
 def CheckIfJammerHasEligibleTargets(+host: S.Host, seat: D.Seat) -> Bool:
   G.nonempty(D.Seat, jam_targets(D.ring.entries(S.Props, S.host.seats(host)), seat))
 
-# D55 M4 is a prospective stealing-mode mask, not the raw partial
-# adrenaline scan. Jammer targets are relative to the thief.
+# Fix M4 (ADR-0016) is a prospective stealing-mode mask, not the raw
+# partial adrenaline scan. Jammer targets are relative to the thief.
 def valid_steal(+host: S.Host, +seat: D.Seat, item: D.Item) -> Bool:
   match item:
     case D.Adrenaline{}:
