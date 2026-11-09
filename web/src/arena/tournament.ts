@@ -200,6 +200,10 @@ export type ScheduledMatch = typeof ScheduledMatch.Type;
 
 type Seat = typeof Seat.Type;
 
+/** The seat a bot or engine entrant takes: the bot's name or the engine's seat. */
+export const controllerSeat = (entrant: Exclude<Entrant, ModelEntrant>): Exclude<Seat, AgentId> =>
+  "bot" in entrant ? entrant.bot : `Engine/${entrant.engine.depth}/${entrant.engine.budget}${entrant.engine.reload === undefined ? "" : "/sampled"}`;
+
 /** A seed block is one seed and every permutation of the pairing's seats. */
 const blockOf = ({ config }: Tournament, pairing: Pairing, pairingIndex: number, block: number, seed: number): ReadonlyArray<ScheduledMatch> => {
   const letters = AgentId.literals.values();
@@ -215,7 +219,7 @@ const blockOf = ({ config }: Tournament, pairing: Pairing, pairingIndex: number,
       return letter === undefined ? [] : [[letter, name]];
     }
 
-    return "bot" in entrant ? [[entrant.bot, name]] : [[`Engine/${entrant.engine.depth}/${entrant.engine.budget}${entrant.engine.reload === undefined ? "" : "/sampled"}` as const, name]];
+    return [[controllerSeat(entrant), name]];
   });
 
   return permutations(seated).map((table, index) => ({
