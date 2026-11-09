@@ -15,6 +15,7 @@ matched-efforts markers of that file.
     python3 tools/arena/analysis/matched_efforts.py [--db PATH] [--draws 2000] [--doc <output.md>]
 """
 
+from pathlib import Path
 import argparse
 import random
 from collections import Counter, defaultdict
@@ -25,10 +26,9 @@ from typing import Callable
 import boot
 import bt
 import by_round
+from docs import splice_between_markers
 from fmt import pp, signed, table
 from load import DB, SKIPPED_MODEL, connect
-
-START, END = "<!-- matched-efforts:start -->", "<!-- matched-efforts:end -->"
 
 REFERENCE = "medium"
 MIN_MATCHES = 2  # matches per effort and opponent config before the config counts as common support
@@ -384,10 +384,7 @@ def main() -> None:
     args = parser.parse_args()
     text = report(connect(args.db), args.draws)
     if args.doc:
-        doc = open(args.doc).read()
-        head, rest = doc.split(START)
-        _, tail = rest.split(END)
-        open(args.doc, "w").write(f"{head}{START}\n{text}{END}{tail}")
+        splice_between_markers(Path(args.doc), "matched-efforts", text)
     else:
         print(text)
 

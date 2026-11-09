@@ -8,13 +8,13 @@ matchups.md. Tournament 3 and tournament 4 have no table of their own: their mat
     python3 tools/arena/analysis/leaderboard.py [--db PATH] [--doc docs/arena/results.md]
 """
 
+from pathlib import Path
 import argparse
 
 import bt
+from docs import splice_between_markers
 from fmt import pct, signed, table
 from load import CROSS_MODEL, CROSS_SAMPLES, TOURNAMENT_5_COHORT, TOURNAMENT_6_COHORT, TOURNAMENT_7_COHORT, TOURNAMENT_8_COHORT, Game, cohorts, connect, scored_games
-
-START, END = "<!-- leaderboard:start -->", "<!-- leaderboard:end -->"
 
 TITLES = {
     CROSS_MODEL: "Cross-model games (tournament 1)",
@@ -68,10 +68,7 @@ def main() -> None:
     args = parser.parse_args()
     text = leaderboard(scored_games(connect(args.db) if args.db else connect()))
     if args.doc:
-        doc = open(args.doc).read()
-        head, rest = doc.split(START)
-        _, tail = rest.split(END)
-        open(args.doc, "w").write(f"{head}{START}\n{text}\n{END}{tail}")
+        splice_between_markers(Path(args.doc), "leaderboard", text)
     else:
         print(text)
 

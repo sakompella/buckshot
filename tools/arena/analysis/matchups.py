@@ -8,6 +8,7 @@ are 95% bootstraps over seed blocks, drawn with a fixed RNG seed so a rerun prin
     python3 tools/arena/analysis/matchups.py [--db PATH] [--draws 2000] [--doc docs/arena/analysis/matchups.md]
 """
 
+from pathlib import Path
 import argparse
 import random
 import statistics
@@ -18,10 +19,9 @@ import bt
 import cv
 import seats
 import tournament3
+from docs import splice_between_markers
 from fmt import frac, pct, pp, signed, span, table
 from load import SKIPPED_MODEL, Game, blocks_of, cohorts, connect, scored_games
-
-START, END = "<!-- tables:start -->", "<!-- tables:end -->"
 
 # Cohort names, as in the arena viewer: the model's short name within its family.
 SHORT_NAMES = {
@@ -381,10 +381,7 @@ def main() -> None:
     ]
     text = "\n".join(parts) + "\n"
     if args.doc:
-        doc = open(args.doc).read()
-        head, rest = doc.split(START)
-        _, tail = rest.split(END)
-        open(args.doc, "w").write(f"{head}{START}\n{text}{END}{tail}")
+        splice_between_markers(Path(args.doc), "tables", text)
     else:
         print(text)
 

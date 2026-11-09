@@ -1,5 +1,5 @@
 # Bend's proof kernel, built from the bend package's bendtt.lean.
-# Bend 2.0.39 asks for Lean 4.34.0 and builds this itself when $BENDTT is unset.
+# Bend 2.0.40 asks for Lean 4.34.0 and builds this itself when $BENDTT is unset.
 # Setting $BENDTT skips that version check, so nixpkgs' lean4 is used as is.
 { stdenv, bend, lean4 }:
 

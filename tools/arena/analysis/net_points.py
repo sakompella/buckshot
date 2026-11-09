@@ -26,12 +26,11 @@ import bt
 import by_round
 import regret
 import regret_depth
+from docs import splice_between_markers
 from fmt import pct, table
 from load import DB, SKIPPED_MODEL, connect
 from regret import DERIVED, EFFORTS, POINT
 from reload_bias import Estimate
-
-START, END = "<!-- net-points:start -->", "<!-- net-points:end -->"
 
 ROUND = 1_000_000  # millionths of a round win
 ROUNDS_PER_MATCH = len(by_round.ROUNDS)
@@ -624,9 +623,7 @@ def main() -> None:
     if args.doc is None:
         print(text)
     else:
-        head, rest = args.doc.read_text().split(START)
-        tail = rest.split(END)[1]
-        args.doc.write_text(f"{head}{START}\n{text}{END}{tail}")
+        splice_between_markers(args.doc, "net-points", text)
 
 
 if __name__ == "__main__":
