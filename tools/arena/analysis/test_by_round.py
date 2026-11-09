@@ -8,6 +8,7 @@ from pathlib import Path
 
 import by_round
 from regret import Decision
+from rules import PRIZES
 
 
 def lines(*wins: str | None) -> list[str]:
@@ -19,7 +20,7 @@ def lines(*wins: str | None) -> list[str]:
     return out
 
 
-A1, B2, A3 = "Player A wins the round and $70,000.", "Player B wins the round and $75,000.", "Player A wins the round and $80,000."
+A1, B2, A3 = (f"Player {player} wins the round and ${prize:,}." for player, prize in zip("ABA", PRIZES))
 
 
 class RoundWinners(unittest.TestCase):

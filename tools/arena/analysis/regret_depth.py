@@ -24,7 +24,8 @@ from pathlib import Path
 from docs import splice_between_markers
 from fmt import pct, table
 from load import connect
-from regret import DERIVED, POINT
+from regret import DERIVED
+from rules import POINT
 from reload_bias import Decision, Estimate, population, split_evenly
 
 DEPTH, BUDGET = 6, 20_000

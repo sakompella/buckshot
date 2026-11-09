@@ -22,6 +22,7 @@ from pathlib import Path
 from docs import splice_between_markers
 from fmt import pct, table
 from load import SKIPPED_MODEL, connect
+from rules import POINT
 
 DERIVED = Path(__file__).resolve().parents[3] / "_work/arena/analysis/derived"
 
@@ -29,9 +30,6 @@ DERIVED = Path(__file__).resolve().parents[3] / "_work/arena/analysis/derived"
 PRODUCTION = DERIVED / "regret-rust-0e62fbca-sampled256.sqlite"
 
 EFFORTS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"]
-
-# Scores are in millionths of a round win.
-POINT = 10_000
 
 
 @dataclass(frozen=True)

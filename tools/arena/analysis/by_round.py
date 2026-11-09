@@ -19,10 +19,9 @@ from pathlib import Path
 import regret
 from docs import splice_between_markers
 from fmt import pct, table
-from load import DB, SKIPPED_MODEL, connect
+from load import DB, SKIPPED_MODEL, connect, require_current
 from regret import DERIVED, EFFORTS, PRODUCTION, Decision, points
-
-ROUNDS = (1, 2, 3)
+from rules import ROUNDS
 
 BEGINS = re.compile(r"^Round (\d+) begins\.")
 WINS = re.compile(r"^Player (\w+) wins the round and \$([\d,]+)\.")
@@ -169,6 +168,7 @@ def main() -> None:
     parser.add_argument("--knowledge", type=Path, default=DERIVED / "knowledge.sqlite")
     parser.add_argument("--doc", type=Path)
     args = parser.parse_args()
+    require_current(args.db)
     text = report(load_results(args.db, args.knowledge), regret.load(args.regret, args.knowledge).decisions)
     if args.doc is None:
         print(text)

@@ -100,6 +100,12 @@ impl Searcher for Compat<'_> {
 }
 
 impl BoundedV1<'_> {
+    /// The id rows record; it names the build's arithmetic.
+    #[cfg(feature = "f32")]
+    pub const ID: &'static str = "bounded-v1-f32";
+    #[cfg(not(feature = "f32"))]
+    pub const ID: &'static str = "bounded-v1-f64";
+
     /// [`Searcher::analyse`] with the chosen move (a menu index) searched
     /// exactly and, with `stats`, the decision keys its deepest iteration visited.
     #[must_use]

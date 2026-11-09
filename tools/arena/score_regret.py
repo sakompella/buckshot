@@ -34,10 +34,12 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent / "analysis"))
+from rules import WIN  # noqa: E402
+
 REPO = Path(__file__).resolve().parents[2]
 FEATURES = "f64,seats-2"
 CLI_EVALUATOR = "bounded-v1-f64"
-WIN = 1_000_000
 
 CREATE_REGRET = """CREATE TABLE IF NOT EXISTS regret (
     match_id TEXT, ordinal INTEGER, player TEXT, label TEXT,

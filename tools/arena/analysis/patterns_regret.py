@@ -20,7 +20,8 @@ from pathlib import Path
 from docs import splice_between_markers
 from fmt import table
 from load import SKIPPED_MODEL, connect
-from regret import DERIVED, POINT, PRODUCTION, run_of
+from regret import DERIVED, PRODUCTION, run_of
+from rules import POINT
 
 
 @dataclass(frozen=True)

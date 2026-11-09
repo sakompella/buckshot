@@ -10,6 +10,7 @@ import { type Certain, NO_CERTAIN, openCertain } from "./certain.ts";
 import { openConsistency } from "./consistency.ts";
 import { openLuck } from "./luck.ts";
 import { openRegret, type Regret } from "./regret.ts";
+import { assertCurrentImport } from "../analysis/importer-hash.ts";
 
 // Reads the arena analysis database once for the viewer server and the aggregate export. It never selects
 // match_seats.provenance_json, which holds an account email. DeepSeek is left out entirely: a match with a DeepSeek
@@ -62,6 +63,8 @@ export interface Arena {
 /** With a regret database, seats carry their regret; with a knowledge database, each config's consistency; with a certain-mistakes database, its rates and moves; with a luck database, the luck-adjusted ratings. */
 export const loadArena = (dbPath: string, paths: ArenaPaths = {}): Arena => {
   const db = new Database(dbPath, { readonly: true });
+
+  assertCurrentImport(db);
   const regret = paths.regret === undefined ? null : openRegret(paths.regret);
 
   const rows = db
