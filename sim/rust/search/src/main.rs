@@ -5,6 +5,7 @@ use std::io::{BufRead, BufReader, Write};
 
 use std::collections::{BTreeSet, HashMap};
 
+use buckshot_rules::Move;
 use buckshot_search::{Analysis, BoundedV1, InfoSet, KeyStats, Limits, Memo, Reload, analyse_batch};
 #[cfg(feature = "f32")]
 use buckshot_search::{Compat, Searcher};
@@ -186,6 +187,21 @@ fn input(row: &Value) -> Input {
     }
 }
 
+/// A root move as Bend writes it (sm `Move`, `{"$": "Shoot", "target": {"$": "Seat1"}}`), so a caller can check the
+/// moves against Bend's menu.
+fn move_json(choice: Move) -> Value {
+    let node = |name: String| json!({"$": name});
+    match choice {
+        Move::Shoot { target } => json!({"$": "Shoot", "target": node(format!("{target:?}"))}),
+        Move::Use { item } => json!({"$": "Use", "item": node(format!("{item:?}"))}),
+        Move::Jam { target } => json!({"$": "Jam", "target": node(format!("{target:?}"))}),
+        Move::Steal { owner, item } => json!({"$": "Steal", "owner": node(format!("{owner:?}")), "item": node(format!("{item:?}"))}),
+        Move::StealJam { owner, target } => {
+            json!({"$": "StealJam", "owner": node(format!("{owner:?}")), "target": node(format!("{target:?}"))})
+        }
+    }
+}
+
 fn analysed(id: &Value, ordinal: &Value, analysis: &Analysis, evaluator: Evaluator) -> Value {
     match analysis {
         Analysis::Analysed(done) => {
@@ -194,9 +210,9 @@ fn analysed(id: &Value, ordinal: &Value, analysis: &Analysis, evaluator: Evaluat
                 .iter()
                 .map(|l| match evaluator {
                     #[cfg(feature = "f32")]
-                    Evaluator::Compat => json!({"score": l.score, "reach": l.reach.name()}),
+                    Evaluator::Compat => json!({"move": move_json(l.r#move), "score": l.score, "reach": l.reach.name()}),
                     Evaluator::BoundedV1 => {
-                        json!({"score": l.score, "upper": l.upper, "exact": l.score == l.upper, "reach": l.reach.name()})
+                        json!({"move": move_json(l.r#move), "score": l.score, "upper": l.upper, "exact": l.score == l.upper, "reach": l.reach.name()})
                     }
                 })
                 .collect();

@@ -2,7 +2,7 @@ import { createModels } from "@earendil-works/pi-ai";
 import { Cause, Effect, Exit, Schema } from "effect";
 
 import { AgentId, SeatSpec, seatingOf } from "../src/arena/agent.ts";
-import { agentEndpoint, modelRefOf, provenanceOf, providerIdOf, providerOf } from "../src/arena/endpoints.ts";
+import { agentEndpoint, labelOf, modelRefOf, provenanceOf, providerIdOf, providerOf } from "../src/arena/endpoints.ts";
 import { listenForHuman } from "../src/arena/human.ts";
 import { DELIVERIES, playMatch } from "../src/arena/match.ts";
 import type { Letter } from "../src/players.ts";
@@ -53,7 +53,7 @@ const program = Effect.gen(function* () {
 
       models.setProvider(providerOf(providerId, endpoint));
 
-      return { agent, model: modelRefOf(providerId, endpoint), thinkingLevel: endpoint.effort, provenance: provenanceOf(providerId, endpoint) };
+      return { agent, label: labelOf(endpoint), model: modelRefOf(providerId, endpoint), thinkingLevel: endpoint.effort, provenance: provenanceOf(providerId, endpoint) };
     }),
   );
 

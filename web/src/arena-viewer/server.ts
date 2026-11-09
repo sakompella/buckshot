@@ -15,7 +15,7 @@ import { decodeVisible, roundStory, ShellTracker, shotLineIn } from "./analysis.
 import { Blunders, Call, CertainMistakes, Decisions, type MatchDetail, MatchDetailJson, MatchSeat, MatchSummary, type PlayerState, SeatsResponse, type Step, type TablePosition } from "./api.ts";
 import { findBlunders } from "./blunders.ts";
 import type { Certain } from "./certain.ts";
-import { type ArenaPaths, loadArena, NOT_DEEPSEEK } from "./load.ts";
+import { type ArenaPaths, loadArena, NOT_DEEPSEEK, decodeLabelled, withConfig } from "./load.ts";
 import { withPotShares } from "./page/data.ts";
 import type { Regret } from "./regret.ts";
 
@@ -114,9 +114,9 @@ const matchDetail = (db: Database, regret: Regret | null, certain: Certain, id: 
   if (Option.isNone(match)) return null;
 
   const seats = db
-    .query(`select ms.player, ms.position, ms.cash, ms.win_share winShare, e.model, e.effort from match_seats ms join entrants e on e.id = ms.entrant_id where match_id = ? order by position`)
+    .query(`select ms.player, ms.position, ms.cash, ms.win_share winShare, ms.label from match_seats ms where match_id = ? order by position`)
     .all(id)
-    .map((row) => decodeMatchSeat(row));
+    .map((row) => decodeMatchSeat(withConfig(decodeLabelled(row))));
 
   const regretOf = regret?.moves(id);
   const certainOf = certain.moves(id);

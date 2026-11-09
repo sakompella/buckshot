@@ -9,6 +9,7 @@ import type { ModelRef } from "@earendil-works/pi-durable";
 import { Config, Data, Effect, Option, Redacted, Schema } from "effect";
 
 import type { AgentId } from "./agent.ts";
+import { configLabel } from "./model-names.ts";
 
 // Where each agent's model lives, read once from the environment (.env). Agent
 // A is configured by PLAYER_A_ANT_URL and _ANT_KEY for the Anthropic Messages
@@ -17,7 +18,9 @@ import type { AgentId } from "./agent.ts";
 // PLAYER_A_CPA_AUTH_ID pins every request of the agent to one CLIProxyAPI
 // account, by sending its id in X-CPA-Auth-ID; without it no header is sent and
 // the proxy picks the account. An optional PLAYER_A_INSTRUCTIONS_ADDENDUM is
-// text appended to the shared instructions for that agent only (ADR-0048). A model id
+// text appended to the shared instructions for that agent only (ADR-0048), and an
+// optional PLAYER_A_EFFORT_LABEL names the effort in the agent's label when it is
+// not PLAYER_A_EFFORT, as for an "off" that is low effort plus that text. A model id
 // pi-ai does not list, such as a proxy's alias, names the catalog model it
 // stands for in PLAYER_A_CATALOG_MODEL: a model of the endpoint's API, or a
 // model of another pi-ai provider after its name and a slash, such as
@@ -38,6 +41,8 @@ const EndpointFields = {
   cpaAuthId: Schema.optional(Schema.NonEmptyString),
   /** Text appended to the shared instructions for this agent only. */
   instructionsAddendum: Schema.optional(Schema.NonEmptyString),
+  /** The effort the agent's label names, when it is not `effort`. */
+  effortLabel: Schema.optional(Schema.NonEmptyString),
 };
 
 export const Endpoint = Schema.TaggedUnion({
@@ -107,6 +112,7 @@ export const agentEndpoint = (agent: AgentId) =>
       effort: Config.option(Config.Literals(THINKING_LEVELS, name("EFFORT"))),
       cpaAuthId: Config.option(Config.NonEmptyString(name("CPA_AUTH_ID"))),
       instructionsAddendum: Config.option(Config.NonEmptyString(name("INSTRUCTIONS_ADDENDUM"))),
+      effortLabel: Config.option(Config.NonEmptyString(name("EFFORT_LABEL"))),
     }).pipe(
       Effect.mapError((error) => new EndpointConfigError({ message: error.message })),
     );
@@ -115,7 +121,7 @@ export const agentEndpoint = (agent: AgentId) =>
 
     if (Option.isNone(settings.model)) return yield* new EndpointConfigError({ message: `${name("MODEL")} must be set` });
 
-    const fields = { model: settings.model.value, catalogModel: Option.getOrUndefined(settings.catalogModel), effort: Option.getOrUndefined(settings.effort), cpaAuthId: Option.getOrUndefined(settings.cpaAuthId), instructionsAddendum: Option.getOrUndefined(settings.instructionsAddendum) };
+    const fields = { model: settings.model.value, catalogModel: Option.getOrUndefined(settings.catalogModel), effort: Option.getOrUndefined(settings.effort), cpaAuthId: Option.getOrUndefined(settings.cpaAuthId), instructionsAddendum: Option.getOrUndefined(settings.instructionsAddendum), effortLabel: Option.getOrUndefined(settings.effortLabel) };
 
     const notListed = (endpoint: Endpoint): string =>
       Option.match(settings.catalogModel, {
@@ -229,6 +235,9 @@ export const providerOf = (providerId: string, endpoint: Endpoint): Provider => 
     OpenAIResponses: (): Provider => createProvider({ ...options, models: [{ ...model, api: "openai-responses" } as Model<"openai-responses">], api: asksDetailedSummaries(catalogModel) ? withDetailedSummaries(openAIResponsesApi()) : openAIResponsesApi() }),
   });
 };
+
+/** The agent's label: its model and the effort its config is named by. */
+export const labelOf = (endpoint: Endpoint): string => configLabel(endpoint.model, endpoint.effortLabel ?? endpoint.effort);
 
 export const modelRefOf = (providerId: string, endpoint: Endpoint): ModelRef => ({ provider: providerId, modelId: endpoint.model });
 

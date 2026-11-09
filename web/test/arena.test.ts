@@ -74,7 +74,7 @@ const fauxMatch = (controllers: ReadonlyArray<Controller>, seed: string, context
     entrants: seated.map((agent, index) => {
       const modelId = index % 2 === 0 ? "faux-a" : "faux-b";
 
-      return { agent, model: { provider: "faux", modelId }, thinkingLevel: undefined, provenance: provenance(modelId) };
+      return { agent, label: modelId, model: { provider: "faux", modelId }, thinkingLevel: undefined, provenance: provenance(modelId) };
     }),
     models,
     delivery,

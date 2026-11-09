@@ -27,7 +27,7 @@ Live files are read once per match. A snapshot can straddle an append or manifes
 | `tournaments` | Source directory, original configuration, creation date, Git commit and derived completion status. Its ID is also the default rating-pool boundary. |
 | `entrants` | Tournament-local name, configured model, API family in `provider`, endpoint category, effort and complete entrant configuration. Actual per-call provider IDs are in `calls`. |
 | `matches` | Schedule, pairing, block, seed, seed-block ID, original manifest, code and instructions hashes, timestamps, status, explicit disposition and replay result. |
-| `match_seats` | Position from 1 in table order, player letter, entrant, final cash, fractional win share and provenance. |
+| `match_seats` | Position from 1 in table order, player letter, entrant, label, final cash, fractional win share and provenance. The label names who played the seat, as the match's manifest records it (`labels`): a model config as `<model>-<effort>`, a bot or a human by its controller, an engine by its seat. For matches from before labels were recorded the importer derives it from the entrant. |
 | `decisions` | Accepted moves in chronological order, including forced and fallback moves. Turn, journal sequence, player, selected move, label, reconstructed own-player view and legal alternatives. |
 | `calls` | Each physical model reply, including failed replies, provider, usage, list-price cost, latency, exact saved reasoning text, response text and tool arguments. |
 | `source_files` | Latest file hashes and byte lengths for imported JSON/JSONL files. |
