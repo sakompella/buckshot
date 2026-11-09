@@ -40,7 +40,8 @@ def write(directory: Path, decisions, clues=(), searched=()):
     regret.execute(
         "CREATE TABLE regret (match_id TEXT, ordinal INTEGER, evaluator TEXT, max_depth INTEGER, budget INTEGER, reload TEXT, samples INTEGER, status TEXT, values_json TEXT)"
     )
-    regret.executemany("INSERT INTO regret VALUES ('m1', ?, ?, 6, 20000, 'static', 0, 'searched', ?)", searched)
+    # A regret file holds one run: with no searched decisions, a row for a decision the knowledge database lacks.
+    regret.executemany("INSERT INTO regret VALUES ('m1', ?, ?, 6, 20000, 'static', 0, 'searched', ?)", list(searched) or [(999, "e", None)])
     regret.commit()
     regret.close()
     return directory / "knowledge.sqlite", directory / "regret.sqlite"
@@ -153,10 +154,6 @@ class CertainMistakes(unittest.TestCase):
                 self.assertIn(f"| {model or 'all'} | {effort} | {cell} |", table)
         self.assertEqual(shown[("config", "sol", "low")], "5/5")
         self.assertRegex(shown[("config", "opus", "high")], r"^\d+\.\d% \(14/40\) \[")
-
-    def test_rows_of_two_evaluators_are_refused(self):
-        with self.assertRaises(SystemExit):
-            self.load([decision(0, chamber="Blank"), decision(1, chamber="Blank")], searched=[(0, "e1", scores(1, 2)), (1, "e2", scores(1, 2))])
 
 
 class Cells(unittest.TestCase):

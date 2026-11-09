@@ -29,7 +29,7 @@ from docs import splice_between_markers
 from boot import interval, weights
 from fmt import pct, table
 from load import SKIPPED_MODEL, connect
-from regret import DERIVED, EFFORTS
+from regret import DERIVED, EFFORTS, PRODUCTION, run_of
 
 RESAMPLES = 2000
 FEWEST_FOR_INTERVAL = 20
@@ -117,26 +117,24 @@ def decision(match, ordinal, player, model, effort, block, chamber, source, shot
     return Decision(match, ordinal, player, model, effort, block, pattern, chose, source, remaining == 1, opponent_health is None, search_of(values))
 
 
-def load(knowledge_path: Path, regret_path: Path, depth: int = 6, budget: int = 20000) -> list[Decision]:
+def load(knowledge_path: Path, regret_path: Path) -> list[Decision]:
+    run_of(regret_path)
     db = connect(str(knowledge_path))
     db.execute("ATTACH DATABASE ? AS r", (f"file:{regret_path}?mode=ro",))
     rows = db.execute(
         """SELECT d.match_id, d.ordinal, d.player, p.model, p.effort, m.seed_block_id, d.chamber, d.source, d.shot, d.health_json, d.private_known,
-                  d.own_items_json, d.opponent_items_json, d.remaining, g.values_json, g.evaluator
+                  d.own_items_json, d.opponent_items_json, d.remaining, g.values_json
            FROM decisions d
            JOIN matches m ON m.match_id = d.match_id AND m.status = 'completed'
            JOIN players p ON p.match_id = d.match_id AND p.player = d.player
-           LEFT JOIN r.regret g ON g.match_id = d.match_id AND g.ordinal = d.ordinal AND g.max_depth = ? AND g.budget = ?
-                                   AND g.reload = 'static' AND g.samples = 0 AND g.status = 'searched'
+           LEFT JOIN r.regret g ON g.match_id = d.match_id AND g.ordinal = d.ordinal AND g.status = 'searched'
            WHERE d.by_whom = 'agent' AND d.chamber IS NOT NULL
              AND d.match_id NOT IN (SELECT match_id FROM players WHERE model LIKE ?)
            ORDER BY d.match_id, d.ordinal""",
-        (depth, budget, f"%{SKIPPED_MODEL}%"),
+        (f"%{SKIPPED_MODEL}%",),
     ).fetchall()
     db.close()
-    if len({row[-1] for row in rows if row[-1] is not None}) > 1:
-        raise SystemExit(f"{regret_path} holds rows of several evaluators at depth {depth} and budget {budget}; they must not be mixed.")
-    return [decision(*row[:-1]) for row in rows]
+    return [decision(*row) for row in rows]
 
 
 @dataclass(frozen=True)
@@ -266,7 +264,7 @@ def report(decisions: list[Decision]) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--knowledge", type=Path, default=DERIVED / "knowledge.sqlite")
-    parser.add_argument("--regret", type=Path, default=DERIVED / "regret.sqlite")
+    parser.add_argument("--regret", type=Path, default=PRODUCTION)
     parser.add_argument("--doc", type=Path)
     parser.add_argument("--opportunities", type=Path)
     args = parser.parse_args()

@@ -346,12 +346,12 @@ test("a config's pot share is its cash over the match's cash, averaged over scor
   }
 });
 
-const seatRegret = (moves: number, losses: ReadonlyArray<number>, rest: Partial<SeatRegret> = {}): SeatRegret => ({ moves, total: losses.reduce((sum, loss) => sum + loss, 0), accuracy: 50, best: 0, inaccuracies: 0, mistakes: 0, blunders: 0, sampled: 0, losses, ...rest });
+const seatRegret = (moves: number, losses: ReadonlyArray<number>, rest: Partial<SeatRegret> = {}): SeatRegret => ({ moves, total: losses.reduce((sum, loss) => sum + loss, 0), accuracy: 50, best: 0, inaccuracies: 0, mistakes: 0, blunders: 0, losses, ...rest });
 
 test("a config's regret weighs every searched move equally, whichever seat it came from, and is null with none", () => {
-  const seats = [{ regret: seatRegret(1, [10], { accuracy: 40, blunders: 0, mistakes: 1, best: 0 }) }, { regret: seatRegret(3, [1, 1], { accuracy: 80, best: 1, sampled: 3 }) }, { regret: null }];
+  const seats = [{ regret: seatRegret(1, [10], { accuracy: 40, blunders: 0, mistakes: 1, best: 0 }) }, { regret: seatRegret(3, [1, 1], { accuracy: 80, best: 1 }) }, { regret: null }];
 
-  expect(regretStats(seats)).toEqual({ moves: 4, accuracy: 60, meanLost: 3, p99Lost: 10, bestShare: 0.25, inaccuraciesPer100: 0, mistakesPer100: 25, blundersPer100: 0, sampledShare: 0.75 });
+  expect(regretStats(seats)).toEqual({ moves: 4, accuracy: 60, meanLost: 3, p99Lost: 10, bestShare: 0.25, inaccuraciesPer100: 0, mistakesPer100: 25, blundersPer100: 0 });
   expect(regretStats([{ regret: null }])).toBeNull();
   expect(regretStats([])).toBeNull();
 });

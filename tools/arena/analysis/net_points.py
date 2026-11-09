@@ -9,7 +9,7 @@ A second table regresses the actual round margin of a match on its net points.
 Matches with a DeepSeek seat are left out of the tables and rated with the rest, as the viewer does. With --doc FILE the tables replace the
 text between the net-points markers of that file, and with --plots DIR two SVG plots are written.
 
-    python3 tools/arena/analysis/net_points.py [--db PATH] [--regret PATH] [--knowledge PATH] [--depth 6] [--budget 20000] [--reload static] [--samples 256]
+    python3 tools/arena/analysis/net_points.py [--db PATH] [--regret PATH] [--knowledge PATH]
         [--plots DIR] [--doc docs/arena/analysis/net-points.md]
 """
 
@@ -85,8 +85,9 @@ class Loaded:
     incomplete: int  # finished matches with an agent decision that has no searched row: their totals would be too low, so they are left out
 
 
-def load(db_path: str, regret_path: Path, knowledge_path: Path, depth: int, budget: int, reload: str = "static", samples: int = 0) -> Loaded:
-    """Every finished two-seat match whose agent decisions all have a searched row, with its seats' points lost under one run of the regret table, and the rounds each seat won."""
+def load(db_path: str, regret_path: Path, knowledge_path: Path) -> Loaded:
+    """Every finished two-seat match whose agent decisions all have a searched row, with its seats' points lost under the file's one run, and the rounds each seat won."""
+    regret.run_of(regret_path)
     knowledge = connect(str(knowledge_path))
     seats: dict[str, list[tuple[int, str, str, str]]] = defaultdict(list)
     for match, player, position, model, effort in knowledge.execute(
@@ -97,17 +98,14 @@ def load(db_path: str, regret_path: Path, knowledge_path: Path, depth: int, budg
     db = connect(str(regret_path))
     db.execute("ATTACH DATABASE ? AS k", (f"file:{knowledge_path}?mode=ro",))
     rows = db.execute(
-        """SELECT r.match_id, r.player, r.regret, r.evaluator, r.ordinal
+        """SELECT r.match_id, r.player, r.regret, r.ordinal
            FROM regret r
            JOIN k.matches m ON m.match_id = r.match_id AND m.status = 'completed'
            JOIN k.decisions d ON d.match_id = r.match_id AND d.ordinal = r.ordinal AND d.by_whom = 'agent'
-           WHERE r.max_depth = ? AND r.budget = ? AND r.reload = ? AND r.samples = ? AND r.status = 'searched'""",
-        (depth, budget, reload, samples),
+           WHERE r.status = 'searched'"""
     ).fetchall()
-    if len({row[3] for row in rows}) > 1:
-        raise SystemExit(f"{regret_path} holds rows of several evaluators at depth {depth}, budget {budget}, reload {reload} and samples {samples}; they must not be mixed.")
     lost: dict[tuple[str, str], list[int]] = defaultdict(lambda: [0, 0, 0, 0])  # summed regret, decisions, largest regret, its ordinal
-    for match, player, regret_millionths, _, ordinal in rows:
+    for match, player, regret_millionths, ordinal in rows:
         seat = lost[match, player]
         seat[0] += regret_millionths
         seat[1] += 1
@@ -465,16 +463,12 @@ def report(loaded: Loaded, rows: list[ConfigRow], elo_lost: Correlation, elo_net
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--db", default=DB)
-    parser.add_argument("--regret", type=Path, default=DERIVED / "regret.sqlite")
+    parser.add_argument("--regret", type=Path, default=regret.PRODUCTION)
     parser.add_argument("--knowledge", type=Path, default=DERIVED / "knowledge.sqlite")
-    parser.add_argument("--depth", type=int, default=6)
-    parser.add_argument("--budget", type=int, default=20000)
-    parser.add_argument("--reload", choices=["static", "expected-deal", "sampled"], default="static")
-    parser.add_argument("--samples", type=int, help="deals per leaf of a sampled run, 256 by default")
     parser.add_argument("--plots", type=Path)
     parser.add_argument("--doc", type=Path)
     args = parser.parse_args()
-    loaded = load(args.db, args.regret, args.knowledge, args.depth, args.budget, args.reload, regret.run_samples(args.reload, args.samples))
+    loaded = load(args.db, args.regret, args.knowledge)
     rng = random.Random(SEED)
     elo = elo_of(loaded.matches)
     rows = config_rows(loaded.matches, elo, rng)
