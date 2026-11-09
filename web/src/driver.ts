@@ -85,7 +85,9 @@ export const begin = (table: SeatCount, items: boolean, match: number, rng: Rng,
 
 export const promptsOf = (game: Game): ReadonlyArray<Prompt> => (game.pending.kind === "Choose" ? game.pending.prompts : []);
 
-export const controllerOf = (controllers: ReadonlyArray<Controller>, seat: Seat): Controller => Option.getOrElse(Arr.get(controllers, seat), (): Controller => "Human");
+/** A seat without a controller is a configuration error: it fails loudly, since a default Human would wait for a click that never comes. */
+export const controllerOf = (controllers: ReadonlyArray<Controller>, seat: Seat): Controller =>
+  Option.getOrThrowWith(Arr.get(controllers, seat), () => new Error(`Seat ${seat} has no controller (${controllers.length} given)`));
 
 /** The prompt an AI must answer next, if any. Among AI seats grabbing at once, Bend's order holds. */
 export const aiPrompt = (game: Game, controllers: ReadonlyArray<Controller>): Option.Option<Prompt> =>
