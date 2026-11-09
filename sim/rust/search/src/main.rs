@@ -5,6 +5,7 @@ use std::io::{BufRead, BufReader, Write};
 
 use std::collections::{BTreeSet, HashMap};
 
+use buckshot_rules::Move;
 use buckshot_search::{Analysis, BoundedV1, InfoSet, KeyStats, Limits, Memo, Reload, analyse_batch};
 #[cfg(feature = "f32")]
 use buckshot_search::{Compat, Searcher};
@@ -15,6 +16,7 @@ const HELP: &str = "\
 buckshot-search [options] [inputs.jsonl]
 
 One JSON row per input decision ({id, ordinal, input}), read from the path or stdin.
+Each line names its root move by `code`, as native.bend's show.move prints it.
 
   --depth N              decisions deep (6)
   --budget N             nodes per decision (20000)
@@ -186,6 +188,17 @@ fn input(row: &Value) -> Input {
     }
 }
 
+/// A move as native.bend's `show.move` prints it (`moveCode` in web/src/analysis/native-input.ts).
+fn code(step: Move) -> String {
+    match step {
+        Move::Shoot { target } => format!("0.{}", u8::from(target)),
+        Move::Use { item } => format!("1.{}", u8::from(item)),
+        Move::Jam { target } => format!("2.{}", u8::from(target)),
+        Move::Steal { owner, item } => format!("3.{}.{}", u8::from(owner), u8::from(item)),
+        Move::StealJam { owner, target } => format!("4.{}.{}", u8::from(owner), u8::from(target)),
+    }
+}
+
 fn analysed(id: &Value, ordinal: &Value, analysis: &Analysis, evaluator: Evaluator) -> Value {
     match analysis {
         Analysis::Analysed(done) => {
@@ -194,9 +207,9 @@ fn analysed(id: &Value, ordinal: &Value, analysis: &Analysis, evaluator: Evaluat
                 .iter()
                 .map(|l| match evaluator {
                     #[cfg(feature = "f32")]
-                    Evaluator::Compat => json!({"score": l.score, "reach": l.reach.name()}),
+                    Evaluator::Compat => json!({"code": code(l.r#move), "score": l.score, "reach": l.reach.name()}),
                     Evaluator::BoundedV1 => {
-                        json!({"score": l.score, "upper": l.upper, "exact": l.score == l.upper, "reach": l.reach.name()})
+                        json!({"code": code(l.r#move), "score": l.score, "upper": l.upper, "exact": l.score == l.upper, "reach": l.reach.name()})
                     }
                 })
                 .collect();

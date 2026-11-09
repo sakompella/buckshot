@@ -20,7 +20,12 @@ use serde_json::Value;
 fn shared(row: &Value) -> Value {
     let lines: Vec<Value> = row["lines"]
         .as_array()
-        .map(|lines| lines.iter().map(|line| serde_json::json!([line["score"], line["reach"]])).collect())
+        .map(|lines| {
+            lines
+                .iter()
+                .map(|line| serde_json::json!([line["code"], line["score"], line["reach"]]))
+                .collect()
+        })
         .unwrap_or_default();
     serde_json::json!({
         "best": row["best"],

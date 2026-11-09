@@ -74,10 +74,11 @@ def build(rust: Path) -> Path:
 
 
 def wanted(db: sqlite3.Connection, out: sqlite3.Connection, group: tuple, matches: set[str] | None, decisions: set[tuple[str, int]] | None) -> list[tuple[str, int]]:
-    """The agent decisions of replay-validated matches to score, minus those --out has for the group, ordered by match."""
+    """The agent decisions of replay-validated matches to score, minus those --out has for the group, ordered by match.
+    A one-move menu is no choice: the run logs of match 4f16575f… record three item grabs as the agent's."""
     rows = db.execute(
         """SELECT d.match_id, d.ordinal, m.name FROM decisions d JOIN matches m ON m.id = d.match_id
-           WHERE d.by_whom = 'agent' AND m.replay_status = 'validated' AND m.manifest_json IS NOT NULL ORDER BY d.match_id, d.ordinal"""
+           WHERE d.by_whom = 'agent' AND json_array_length(d.legal_json) > 1 AND m.replay_status = 'validated' AND m.manifest_json IS NOT NULL ORDER BY d.match_id, d.ordinal"""
     ).fetchall()
     done = set(out.execute("SELECT match_id, ordinal FROM regret WHERE evaluator = ? AND max_depth = ? AND budget = ? AND reload = ? AND samples = ?", group).fetchall())
     keep = [(match, ordinal) for match, ordinal, name in rows if (match, ordinal) not in done and (matches is None or name in matches) and (decisions is None or (match, ordinal) in decisions)]
@@ -109,16 +110,32 @@ def write_inputs(decisions: list[tuple[str, int]], db: Path, web: Path, work: Pa
     return [work / f"inputs-{k}.jsonl" for k, _ in procs]
 
 
+def disagreement(decision: dict, result: dict) -> str | None:
+    """Why Bend's analysis of a decision and Rust's disagree, if they do (Bend wins, so either is a bug to fix)."""
+    if decision["menu"] is None:
+        return f"Bend's player refuses a position the game reached: {decision['invalid']}"
+    if "error" in result:
+        return f"Rust refuses a position Bend analysed: {result['error']}"
+    codes = [line["code"] for line in result["lines"]]
+    if codes != decision["codes"]:
+        return f"Rust's root moves {codes} are not Bend's {decision['codes']}"
+    return None
+
+
+def dump(bugs: Path, reason: str, decision: dict, fed: str, line: str, build: dict) -> Path:
+    """Writes what reproduces a disagreement: the input exactly as fed to buckshot-search, Bend's menu, Rust's whole row and the build."""
+    bugs.mkdir(parents=True, exist_ok=True)
+    path = bugs / f"{decision['id']}-{decision['ordinal']}.json"
+    bend = {key: decision.get(key) for key in ("menu", "codes", "invalid", "chosen", "me", "table", "shells")}
+    path.write_text(json.dumps({"match_id": decision["id"], "ordinal": decision["ordinal"], "reason": reason, "fed": fed, "bend": bend, "rust": line, **build}, indent=2) + "\n")
+    return path
+
+
 def row_of(decision: dict, result: dict, player: str, group: tuple) -> dict:
-    """The regret row of one decision: searched (a regret), fallback (depth 0: values, no regret) or invalid (the parser's reason)."""
+    """The regret row of a decision Bend and Rust agree on: searched (a regret) or fallback (depth 0: values, no regret)."""
     evaluator, depth, budget, reload, samples = group
     row = {"match_id": decision["id"], "ordinal": decision["ordinal"], "player": player, "label": decision["chosen"], "evaluator": evaluator, "max_depth": depth, "budget": budget, "reload": reload, "samples": samples, "nodes": result.get("nodes")}
-    if "error" in result:
-        return {**row, "status": "invalid", "reason": result["error"]}
-    menu = decision["menu"]
-    if menu is None or len(menu) != len(result["lines"]):
-        raise SystemExit(f"{decision['id']} {decision['ordinal']}: {len(result['lines'])} lines for the menu {menu} (player: {decision.get('invalid')})")
-    values = [{"label": label, "score": line["score"]} for label, line in zip(menu, result["lines"], strict=True)]
+    values = [{"label": label, "score": line["score"]} for label, line in zip(decision["menu"], result["lines"], strict=True)]
     row |= {"values_json": json.dumps(values, separators=(",", ":")), "limited": int(result["limited"])}
     if result["depth"] == 0:
         return {**row, "status": "fallback", "depth": 0}
@@ -128,8 +145,9 @@ def row_of(decision: dict, result: dict, player: str, group: tuple) -> dict:
     return {**row, "status": "searched", "best": best["label"], "best_score": best["score"], "chosen_score": chosen["score"], "regret": best["score"] - chosen["score"], "exact": int(certain), "depth": result["depth"]}
 
 
-def run_search(binary: Path, inputs: list[Path], work: Path, out: sqlite3.Connection, players: dict[tuple[str, int], str], group: tuple, threads: int, keys: set[tuple[str, int]], max_shells: int | None) -> int:
-    """Feeds the inputs of `keys` (with at most `max_shells` shells left) to buckshot-search and writes a row per result, committing every chunk. Returns the rows written."""
+def run_search(binary: Path, inputs: list[Path], work: Path, out: sqlite3.Connection, players: dict[tuple[str, int], str], group: tuple, threads: int, keys: set[tuple[str, int]], max_shells: int | None, bugs: Path, build: dict) -> int:
+    """Feeds the inputs of `keys` (with at most `max_shells` shells left) to buckshot-search and writes a row per result, committing every chunk.
+    Stops after an input file with a disagreement between Bend and Rust, with a dump of each in `bugs`. Returns the rows written."""
     _, depth, budget, reload, samples = group
     sampled = ["--reload", "sampled", "--samples", str(samples)] if reload == "sampled" else []
     cmd = [str(binary), "--evaluator", CLI_EVALUATOR, "--unpruned", "--depth", str(depth), "--budget", str(budget), "--threads", str(threads), *sampled]
@@ -137,14 +155,20 @@ def run_search(binary: Path, inputs: list[Path], work: Path, out: sqlite3.Connec
     for path in inputs:
         decisions = [d for d in map(json.loads, path.read_text().splitlines()) if (d["id"], d["ordinal"]) in keys and (max_shells is None or d["shells"] <= max_shells)]
         feed = work / f"{path.stem}.{group[3]}.jsonl"
-        feed.write_text("".join(json.dumps({"id": d["id"], "ordinal": d["ordinal"], "input": d["input"]}) + "\n" for d in decisions))
+        fed = [json.dumps({"id": d["id"], "ordinal": d["ordinal"], "input": d["input"]}) for d in decisions]
+        feed.write_text("".join(line + "\n" for line in fed))
+        dumps = []
         with open(feed) as stdin, open(work / f"{path.stem}.{group[3]}.log", "w") as log:
             proc = subprocess.Popen(cmd, stdin=stdin, stdout=subprocess.PIPE, stderr=log, text=True)
             assert proc.stdout is not None
-            for decision, line in zip(decisions, proc.stdout, strict=False):
+            for decision, given, line in zip(decisions, fed, proc.stdout, strict=True):
                 result = json.loads(line)
                 if (result["id"], result["ordinal"]) != (decision["id"], decision["ordinal"]):
                     raise SystemExit(f"buckshot-search answered {result['id']} {result['ordinal']} for {decision['id']} {decision['ordinal']}")
+                reason = disagreement(decision, result)
+                if reason is not None:
+                    dumps.append(dump(bugs, reason, decision, given, line.rstrip("\n"), {**build, "command": cmd}))
+                    continue
                 row = row_of(decision, result, players[(decision["id"], decision["ordinal"])], group)
                 out.execute(f"INSERT INTO regret ({', '.join(row)}) VALUES ({', '.join('?' * len(row))})", list(row.values()))
                 written += 1
@@ -154,6 +178,8 @@ def run_search(binary: Path, inputs: list[Path], work: Path, out: sqlite3.Connec
         if proc.wait() != 0:
             raise SystemExit(f"buckshot-search exited {proc.returncode}; see {work / f'{path.stem}.{group[3]}.log'}")
         out.commit()
+        if dumps:
+            raise SystemExit(f"Bend and Rust disagree on {len(dumps)} decisions; dumps:\n" + "\n".join(map(str, dumps)))
     return written
 
 
@@ -202,11 +228,13 @@ def score(db: Path, out: Path | None, sampled_out: Path | None, checkout: Path, 
     started = time.monotonic()
     inputs = write_inputs(union, db, checkout / "web", work, settings.jobs)
     summary["input_seconds"] = round(time.monotonic() - started)
-    for conn, group, max_shells, keys in todo:
+    commit = git_commit(checkout)
+    for (path, *_), (conn, group, max_shells, keys) in zip(runs, todo, strict=True):
         started = time.monotonic()
-        written = run_search(binary, inputs, work, conn, players, group, settings.threads, keys, max_shells)
+        build_info = {"evaluator": evaluator, "features": FEATURES, "binary_sha256": sha, "source_commit": commit}
+        written = run_search(binary, inputs, work, conn, players, group, settings.threads, keys, max_shells, path.parent / f"{path.stem}-bugs", build_info)
         seconds = time.monotonic() - started
-        conn.execute("INSERT INTO evaluator_build VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))", (*group, git_commit(checkout), FEATURES, sha, written, seconds, settings.threads))
+        conn.execute("INSERT INTO evaluator_build VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))", (*group, commit, FEATURES, sha, written, seconds, settings.threads))
         conn.commit()
         conn.close()
         summary[group[3]] = {"rows": written, "seconds": round(seconds)}
