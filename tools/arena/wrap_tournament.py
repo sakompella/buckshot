@@ -17,7 +17,8 @@ check stops the run with a message and a non-zero exit; fix the cause and rerun.
             them with score_regret.py (the Rust evaluator of the --evaluator checkout); each must stay one evaluator group
   knowledge arena-knowledge.ts --verify from the knowledge worktree
   certain   certain-mistakes database
-  swap-derived  swap regret, sampled regret, knowledge and certain-mistakes in, each keeping a .pre-<name> copy
+  luck      luck corrections of the luck-adjusted Round Elo (analysis/aivat.py)
+  swap-derived  swap regret, sampled regret, knowledge, certain-mistakes and luck in, each keeping a .pre-<name> copy
   public    redact_database.py, scan every column for emails, swap, restart the viewer
   export    arena-export.ts: the online site's aggregate JSON from the public copy into web/online/data
   deploy    only with --deploy: upload the site as a preview version, check it at its preview URL, then promote it to buckshot.akompella.dev (docs/arena/README.md)
@@ -335,9 +336,13 @@ class Wrap:
         self.run("certain", python)
         settle(out)
 
+    def luck(self) -> None:
+        python = [sys.executable, "tools/arena/analysis/aivat.py", "--db", str(self.scratch / "snapshot.sqlite"), "--knowledge", str(self.scratch / "knowledge.sqlite"), "--out", str(self.scratch / "luck.sqlite")]
+        self.run("luck", python)
+
     def swap_derived(self) -> str:
         self.viewer("stop")
-        pairs = [(self.regret_db, "regret.staged.sqlite"), (self.derived / "knowledge.sqlite", "knowledge.sqlite"), (self.derived / "certain-mistakes.sqlite", "certain-mistakes.sqlite"), (self.sampled_db, "regret-sampled.staged.sqlite")]
+        pairs = [(self.regret_db, "regret.staged.sqlite"), (self.derived / "knowledge.sqlite", "knowledge.sqlite"), (self.derived / "certain-mistakes.sqlite", "certain-mistakes.sqlite"), (self.derived / "luck.sqlite", "luck.sqlite"), (self.sampled_db, "regret-sampled.staged.sqlite")]
         moved = [swap(live, self.scratch / new, self.tag) for live, new in pairs]
         return f"swapped {moved}; " + self.viewer_up()
 
@@ -353,7 +358,7 @@ class Wrap:
 
     def export(self) -> str:
         out = REPO / "web/online/data"
-        derived = [("--regret", self.regret_db), ("--regret-sampled", self.sampled_db), ("--knowledge", self.derived / "knowledge.sqlite"), ("--certain-mistakes", self.derived / "certain-mistakes.sqlite")]
+        derived = [("--regret", self.regret_db), ("--regret-sampled", self.sampled_db), ("--knowledge", self.derived / "knowledge.sqlite"), ("--certain-mistakes", self.derived / "certain-mistakes.sqlite"), ("--luck", self.derived / "luck.sqlite")]
         args = [str(self.public), "--out", str(out), *[a for flag, path in derived for a in (flag, str(path))]]
         self.run("export", self.nix(REPO, "bun", "scripts/arena-export.ts", *args), cwd=REPO / "web")
         return f"aggregates in {out}" + ("" if self.deploy else "; deploy with --deploy or `bun run deploy:online` from web/")
@@ -409,6 +414,7 @@ class Wrap:
             ("regret", self.regret),
             ("knowledge", self.knowledge_),
             ("certain", self.certain),
+            ("luck", self.luck),
             ("swap-derived", self.swap_derived),
             ("public", self.public_),
             ("export", self.export),
@@ -421,6 +427,7 @@ class Wrap:
             ("doc-net_points", self.doc("net_points", f"{a}/net-points.md", *dbs, *derived, "--deep", str(self.derived / "regret-depth.sqlite"))),
             ("doc-beliefs", self.beliefs),
             ("doc-matchups", self.doc("matchups", f"{a}/matchups.md", *dbs)),
+            ("doc-luck", self.doc("aivat", f"{a}/matchups.md", *dbs, "--knowledge", str(kn))),
             ("cleanup", self.cleanup),
         ]
 

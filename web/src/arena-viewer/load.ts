@@ -6,6 +6,7 @@ import { analyse } from "./analysis.ts";
 import { type Consistency, type Decisions, type Seat, SeatRow } from "./api.ts";
 import { type Certain, NO_CERTAIN, openCertain } from "./certain.ts";
 import { openConsistency } from "./consistency.ts";
+import { openLuck } from "./luck.ts";
 import { openRegret, type Regret } from "./regret.ts";
 
 // Reads the arena analysis database once for the viewer server and the aggregate export. It never selects
@@ -37,6 +38,7 @@ export interface ArenaPaths {
   readonly regretSampled?: string | undefined;
   readonly knowledge?: string | undefined;
   readonly certain?: string | undefined;
+  readonly luck?: string | undefined;
 }
 
 export interface Arena {
@@ -47,9 +49,11 @@ export interface Arena {
   readonly decisions: Decisions;
   readonly certain: Certain;
   readonly consistency: ReadonlyArray<Consistency>;
+  /** Per "<match id>|<player>", the luck correction in round wins; empty without a luck database. */
+  readonly luck: ReadonlyMap<string, number>;
 }
 
-/** With a regret database, seats carry their regret; with a knowledge database, each config's consistency; with a certain-mistakes database, its rates and moves. */
+/** With a regret database, seats carry their regret; with a knowledge database, each config's consistency; with a certain-mistakes database, its rates and moves; with a luck database, the luck-adjusted ratings. */
 export const loadArena = (dbPath: string, paths: ArenaPaths = {}): Arena => {
   const db = new Database(dbPath, { readonly: true });
   const regret = paths.regret === undefined ? null : openRegret(paths.regret, paths.regretSampled);
@@ -78,5 +82,6 @@ export const loadArena = (dbPath: string, paths: ArenaPaths = {}): Arena => {
     decisions,
     certain: paths.certain === undefined ? NO_CERTAIN : openCertain(paths.certain, seatIndex),
     consistency: paths.knowledge === undefined ? [] : openConsistency(paths.knowledge, seedBlocks),
+    luck: paths.luck === undefined ? new Map() : openLuck(paths.luck),
   };
 };

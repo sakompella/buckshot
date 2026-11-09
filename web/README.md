@@ -244,11 +244,12 @@ history entry, so Back closes it. Old links to the arena's sections
 server (`vite preview`, a static host) still plays; Arena and Replay then say
 they need the arena data.
 
-`bun scripts/arena-viewer.ts <db> [host] [port] [--regret <regret db>] [--knowledge <knowledge db>] [--certain-mistakes <opportunities db>]` serves the built site
+`bun scripts/arena-viewer.ts <db> [host] [port] [--regret <regret db>] [--knowledge <knowledge db>] [--certain-mistakes <opportunities db>] [--luck <luck db>]` serves the built site
 (`web/dist`: run `bun run build` first) and its API over the arena
 analysis database (`scripts/arena-import.ts` builds it; see
 `docs/arena/database.md`) at http://127.0.0.1:8790/ by default, with no auth.
-`bun run dev` proxies `/api` to a viewer on that port, so the arena pages work in
+With `--luck` (the file `tools/arena/analysis/aivat.py --out` writes) the leaderboard also shows the luck-adjusted Round
+Elo (`docs/arena/analysis/matchups.md#luck-adjusted-round-elo`). `bun run dev` proxies `/api` to a viewer on that port, so the arena pages work in
 development while one runs.
 
 The Arena page is one long page in six groups, in this order:

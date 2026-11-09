@@ -1023,6 +1023,85 @@ The 41-match estimate adds seed 3030's one scored match, which Astra won, to the
 The matched seeds are 3000 to 3009, so the matched estimate is the same whether tournament 3 counts 40 or 41 matches.
 <!-- tables:end -->
 
+## Luck-adjusted Round Elo
+
+The leaderboard's Luck-adjusted Elo is Round Elo fitted on round results with the luck of each round's chance events taken out
+(`tools/arena/analysis/aivat.py`, an AIVAT-style correction). At each chance event the correction is the expected value of the
+outcomes minus the value of the one that came, sum_o P(o) V(o) - V(realised), in round wins:
+
+- **Shots.** P(live) is the chamber's chance given both players' clues together: no move depends on more than that, so the shell
+  order is uniform over the orders those clues allow. V is gradient boosting on the public state after the shot (both healths,
+  shells and expected lives left, who moves, item counts, round); a shot that ends the round has its exact 0 or 1.
+- **Loads.** The two-seat deck of nine compositions is drawn without replacement and refilled when empty, across rounds; P is
+  the count left over the deck's size (every recorded load fits the deck). V is a logistic on the health gap and the composition.
+- **Round 1's first seat**, a coin flip. V is each starter's mean round 1 result.
+
+There are no decision terms, since the models' policies are unknown, and no deal terms, since the logs lack the item pool. The
+corrections have mean zero for any V that depends only on the history before the event and its outcome, so they leave the
+strengths the same in expectation. Each V is fitted out of fold (five folds by seed), so no round is corrected by a model that saw
+it. The bias test checks the mean zero: per config, the mean correction per round against zero, with standard errors clustered by
+seed, and its correlation with Round Elo fitted on the other half of the seeds. The wrap-up writes the corrections to
+`derived/luck.sqlite` (per match and player) and the viewer and the export add them to the round wins before the Round Elo fit, with
+the same seed-block bootstrap. The table below is the same fit in Python.
+
+<!-- luck:start -->
+3,537 matches, 10,611 rounds. The median 95% half-width falls from ±35 to ±31 Elo (variance of a match's round share 0.084 → 0.065). Spearman rank correlation with the raw ratings 0.986, largest rank change 8.
+
+Bias test: the mean correction per round of each config, seed-clustered, gives chi2 48.6 on 49 configs (p 0.49). Its correlation with Round Elo fitted on the other half of the seeds (20 random halvings) is -0.06.
+
+| config | matches | rounds | Round Elo [95%] | luck-adjusted [95%] |
+|---|---|---|---|---|
+| gpt-6.1-terra-max | 80 | 240 | +124 [+83, +164] | +128 [+98, +162] |
+| claude-sonnet-5-5-max | 140 | 420 | +107 [+72, +140] | +119 [+86, +148] |
+| claude-opus-5-5-max | 80 | 240 | +121 [+78, +165] | +114 [+81, +158] |
+| gpt-6-astra-high | 80 | 240 | +118 [+81, +153] | +106 [+75, +139] |
+| claude-opus-5-5-xhigh | 150 | 450 | +100 [+71, +129] | +100 [+76, +123] |
+| gpt-6.1-sol-max | 122 | 366 | +96 [+65, +125] | +96 [+74, +120] |
+| gpt-6.1-sol-xhigh | 101 | 303 | +67 [+31, +105] | +76 [+48, +101] |
+| gpt-6-astra | 254 | 762 | +83 [+62, +108] | +75 [+55, +94] |
+| claude-opus-5-5-high | 80 | 240 | +77 [+33, +123] | +69 [+35, +102] |
+| gpt-6-astra-low | 80 | 240 | +62 [+28, +103] | +68 [+37, +106] |
+| gpt-6.1-sol-low | 98 | 294 | +61 [+20, +100] | +66 [+36, +94] |
+| gpt-6.1-sol-high | 99 | 297 | +43 [+5, +85] | +60 [+38, +84] |
+| gpt-6.1-sol | 271 | 813 | +55 [+33, +75] | +59 [+41, +76] |
+| gpt-6.1-terra-xhigh | 80 | 240 | +59 [+19, +105] | +56 [+27, +101] |
+| claude-sonnet-5-5-xhigh | 160 | 480 | +58 [+32, +86] | +56 [+33, +84] |
+| claude-opus-5-5-off | 80 | 240 | +63 [+19, +100] | +54 [+11, +87] |
+| gpt-6.1-terra-high | 80 | 240 | +50 [+13, +95] | +54 [+14, +98] |
+| claude-opus-5-5 | 294 | 882 | +47 [+27, +64] | +52 [+36, +67] |
+| gpt-6-astra-low-recall | 80 | 240 | +35 [-6, +81] | +51 [+16, +88] |
+| claude-haiku-5-5-max | 111 | 333 | +43 [+13, +76] | +46 [+18, +73] |
+| gpt-6.1-terra | 80 | 240 | +49 [+13, +83] | +38 [+2, +72] |
+| claude-opus-5-5-low | 80 | 240 | +25 [-11, +59] | +30 [-5, +69] |
+| gpt-5.6-terra-xhigh | 93 | 279 | +32 [-13, +74] | +28 [-5, +64] |
+| gpt-5.6-terra-max | 90 | 270 | +17 [-25, +55] | +28 [-10, +60] |
+| gpt-6.1-terra-low | 80 | 240 | +31 [-5, +65] | +17 [-15, +45] |
+| claude-haiku-5-5-xhigh | 158 | 474 | +11 [-21, +40] | +16 [-11, +40] |
+| claude-sonnet-5-5 | 324 | 972 | +1 [-18, +20] | +14 [-1, +30] |
+| gpt-6.1-terra-off | 80 | 240 | +27 [-15, +75] | +11 [-25, +53] |
+| claude-haiku-5-5-high | 173 | 519 | +6 [-19, +36] | +8 [-17, +30] |
+| claude-sonnet-5-5-high | 161 | 483 | +9 [-32, +44] | +7 [-25, +43] |
+| gpt-5.6-terra-high | 91 | 273 | -5 [-48, +40] | -7 [-42, +31] |
+| claude-haiku-5-5 | 342 | 1026 | -4 [-22, +14] | -10 [-25, +7] |
+| claude-haiku-5-5-low | 194 | 582 | -3 [-26, +23] | -17 [-41, +7] |
+| gpt-5.6-terra | 259 | 777 | -25 [-46, -3] | -19 [-39, +1] |
+| gpt-5.6-terra-low | 91 | 273 | -27 [-64, +17] | -20 [-55, +11] |
+| claude-sonnet-5-5-low | 159 | 477 | -38 [-70, -1] | -24 [-52, +1] |
+| gpt-6-luna-max | 112 | 336 | -18 [-69, +22] | -26 [-69, +12] |
+| claude-sonnet-5-5-off | 164 | 492 | -21 [-53, +6] | -29 [-61, +1] |
+| gpt-6-luna-xhigh | 115 | 345 | -13 [-55, +25] | -31 [-66, +1] |
+| gpt-6-luna-high | 112 | 336 | -71 [-110, -27] | -84 [-120, -43] |
+| claude-haiku-5-5-off | 202 | 606 | -99 [-127, -76] | -99 [-123, -74] |
+| claude-haiku-4-5-20251001 | 340 | 1020 | -121 [-142, -98] | -128 [-146, -111] |
+| claude-haiku-4-5-20251001-high | 135 | 405 | -145 [-179, -114] | -147 [-175, -118] |
+| claude-haiku-4-5-20251001-minimal | 143 | 429 | -140 [-174, -111] | -151 [-186, -125] |
+| claude-haiku-4-5-20251001-low | 149 | 447 | -140 [-170, -106] | -152 [-174, -124] |
+| gpt-6-luna | 282 | 846 | -156 [-179, -132] | -154 [-173, -134] |
+| gpt-6-luna-off | 110 | 330 | -212 [-257, -168] | -189 [-227, -150] |
+| gpt-6-luna-low | 110 | 330 | -225 [-271, -174] | -207 [-242, -169] |
+| claude-haiku-4-5-20251001-off | 125 | 375 | -217 [-252, -186] | -211 [-240, -178] |
+<!-- luck:end -->
+
 ## Minimax self-play
 
 The Bend minimax player plays itself under the arena's rules (`web/scripts/arena-selfplay.ts`, tables from `tools/arena/analysis/selfplay.py`). Each seed is played twice: once as the seed starts it, once with the first draw answered for the other seat, so the other seat starts round 1. Equal best moves are broken at random from seed, swap and rep.
