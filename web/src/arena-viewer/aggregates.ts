@@ -2,7 +2,7 @@ import { Match, Schema, SchemaTransformation } from "effect";
 
 import { CertainRate, Consistency, type Decisions, ITEMS, NO_GAP, type Seat } from "./api.ts";
 import { addTo, type BlockTally, blockRate, blocksOf, groupBy, keyOf, MIN_BLOCKS_FOR_INTERVAL, meanOf, regretStats, roundResults, type SeatFull, sumOf } from "./page/data.ts";
-import { pooledRatings } from "./page/ratings.ts";
+import { type Luck, pooledRatings } from "./page/ratings.ts";
 
 // What the arena page shows, worked out once from every seat and agent move: per config and per pair of configs, never
 // per match or per move. The viewer server serves the set at /api/agg/<name> and scripts/arena-export.ts writes it as
@@ -57,6 +57,8 @@ export const ConfigSummary = Schema.Struct({
   scoredLatency: Schema.Number,
   /** Round Elo from one fit over every match (page/ratings.ts); null for a config with no rated match. */
   rating: Schema.NullOr(RatingSchema),
+  /** The same fit with each match's round wins corrected for luck (tools/arena/analysis/aivat.py); null without a luck database. */
+  luckRating: Schema.NullOr(RatingSchema),
   /** The item used most often when legal, over at least MIN_LEGAL legal moves. */
   favorite: Schema.NullOr(Schema.Struct({ item: Item, rate: Schema.Number, k: Schema.Number, n: Schema.Number })),
 });
@@ -365,8 +367,9 @@ export const pairsOf = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<Pair> =>
 
 // CONFIGS
 
-export const configSummaries = (seats: ReadonlyArray<SeatFull>, decisions: Pick<Decisions, "seat" | "legalUse" | "useItem">): ReadonlyArray<ConfigSummary> => {
+export const configSummaries = (seats: ReadonlyArray<SeatFull>, decisions: Pick<Decisions, "seat" | "legalUse" | "useItem">, luck: Luck = new Map()): ReadonlyArray<ConfigSummary> => {
   const ratings = pooledRatings(seats);
+  const luckRatings = luck.size === 0 ? new Map<string, never>() : pooledRatings(seats, luck);
   const favoriteOf = favorites(seats, decisions);
 
   return [...groupBy(seats, keyOf)].flatMap(([key, started]) => {
@@ -403,6 +406,7 @@ export const configSummaries = (seats: ReadonlyArray<SeatFull>, decisions: Pick<
         scoredMoves: scoredSum(({ moves }) => moves),
         scoredLatency: scoredSum(({ lat }) => lat),
         rating: ratings.get(key) ?? null,
+        luckRating: luckRatings.get(key) ?? null,
         favorite: favoriteOf.get(key) ?? null,
       },
     ];
@@ -434,10 +438,11 @@ export interface Sources {
   readonly decisions: Decisions;
   readonly certain: ReadonlyArray<CertainRate>;
   readonly consistency: ReadonlyArray<Consistency>;
+  readonly luck?: Luck;
 }
 
-export const aggregatesOf = ({ seats, decisions, certain, consistency }: Sources): Aggregates => ({
-  summary: { configs: configSummaries(seats, decisions), hasCertain: certain.length > 0 },
+export const aggregatesOf = ({ seats, decisions, certain, consistency, luck }: Sources): Aggregates => ({
+  summary: { configs: configSummaries(seats, decisions, luck), hasCertain: certain.length > 0 },
   pairs: pairsOf(seats),
   items: configItems(seats, decisions),
   odds: [...selfShotTallies(decisions, seats, seats.map(() => true))].map(([config, bins]) => ({ config, bins })),
