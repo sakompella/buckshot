@@ -182,7 +182,7 @@ Run every gate.
 
     bash sim/bend-mp/check.sh
 
-It takes about 7 to 8 minutes on a Mac, and about 1.5 minutes on a 7-core Linux box. It prints one line per gate, then PASS or FAIL, and exits nonzero on any failure. `FUZZ_GAMES` sets the games for each table size in the item fuzz. The gates, in order:
+It takes about 7 to 8 minutes on a Mac, and about 1.5 minutes on a 7-core Linux box. It prints one line per gate, then PASS or FAIL, and exits nonzero on any failure. `FUZZ_GAMES` sets the games for each table size in the item fuzz. It fails at once if `FUZZ_SKIP` is exported, since that switches fuzz properties off. The gates, in order:
 
 1. `domain.bend` type-checks and its proofs check.
 2. No `@unsafe` and no unfinished `def name?(` hole anywhere under this directory.
