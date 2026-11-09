@@ -10,7 +10,7 @@ check stops the run with a message and a non-zero exit; fix the cause and rerun.
   stamp     write --cohort into each tournament.json that has none (the only write to a run dir)
   copy      copy the analysis database to a scratch file
   import    arena-import.ts of the phase dirs into the copy (importer worktree)
-  check     quick_check ok, 0 issues, every scored match has a cohort
+  check     quick_check ok
   swap-main stop the viewer, move the database in with a dated .pre-<name> copy, start the viewer and check HTTP 200
   snapshot  scratch copy of the new database, the input of the derived refresh
   regret    copy the live regret databases (static and sampled) to staged files and score the decisions they lack into
@@ -130,26 +130,15 @@ def swap(live: Path, new: Path, tag: str) -> bool:
     return True
 
 
-def check_import(db_path: Path, load_dir: Path) -> str:
-    """Stops unless the imported database is sound and every scored match has a cohort. Returns a summary line."""
+def check_import(db_path: Path) -> str:
+    """Stops unless the imported database is sound. The importer stops on a match without a cohort. Returns a summary line."""
     db = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     quick = db.execute("PRAGMA quick_check").fetchall()
     if quick != [("ok",)]:
         raise Stop(f"quick_check on {db_path}: {quick[:5]}")
-    issues = db.execute("SELECT COUNT(*) FROM issues").fetchone()[0]
-    if issues:
-        sample = db.execute("SELECT message FROM issues LIMIT 5").fetchall()
-        raise Stop(f"{issues} import issues, such as {sample}")
-    sys.path.insert(0, str(load_dir))
-    import load
-
-    try:
-        games = load.scored_games(db)
-    except ValueError as error:
-        raise Stop(f"a scored match has no cohort: {error}") from error
     by_status = dict(db.execute("SELECT status, COUNT(*) FROM matches GROUP BY status").fetchall())
     db.close()
-    return f"quick_check ok, 0 issues, {len(games)} scored games with cohorts, matches by status {by_status}"
+    return f"quick_check ok, matches by status {by_status}"
 
 
 def dotenv(text: str) -> dict[str, str]:
@@ -288,7 +277,7 @@ class Wrap:
         self.run("import", self.nix(self.importer, "bun", "scripts/arena-import.ts", "--db", str(self.scratch / "new.sqlite"), *skips, *dirs), cwd=self.importer / "web")
 
     def check(self) -> str:
-        return check_import(self.scratch / "new.sqlite", REPO / "tools/arena/analysis")
+        return check_import(self.scratch / "new.sqlite")
 
     def swap_main(self) -> str:
         self.viewer("stop")

@@ -28,7 +28,7 @@ import by_round
 from docs import splice_between_markers
 from boot import interval
 from fmt import table
-from load import DB, SKIPPED_MODEL, connect
+from load import DB, SKIPPED_MODEL, connect, require_current
 from regret import DERIVED, EFFORTS
 from rules import POINT, ROUNDS
 
@@ -353,6 +353,7 @@ def main() -> None:
     parser.add_argument("--doc", type=Path)
     parser.add_argument("--svg", type=Path, help="directory for the two figures")
     args = parser.parse_args()
+    require_current(args.db)
     moves = load_moves(args.regret, args.knowledge, args.mistakes, args.db)
     values = seat_values(moves)
     if args.svg is not None:

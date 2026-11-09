@@ -28,7 +28,7 @@ import bt
 import by_round
 from docs import splice_between_markers
 from fmt import pp, signed, table
-from load import DB, SKIPPED_MODEL, connect
+from load import DB, SKIPPED_MODEL, connect, require_current
 
 REFERENCE = "medium"
 MIN_MATCHES = 2  # matches per effort and opponent config before the config counts as common support
@@ -298,7 +298,7 @@ def compare(seats: list[Seat], metric: Metric, elo: dict[tuple[str, str], float]
         a, b = by_config[focal], by_config[ref]
         both = (elo.get((focal.model, focal.effort)), elo.get((focal.model, REFERENCE)))
         rows.append(Row(focal.model, focal.effort, pooled(a, b), common(a, b, rng, draws), strict(a, b, rng, draws), None if None in both else both[0] - both[1]))
-    return sorted(rows, key=lambda r: (r.model, EFFORTS.index(r.effort) if r.effort in EFFORTS else -1))
+    return sorted(rows, key=lambda r: (r.model, EFFORTS.index(r.effort)))
 
 
 # ---- rendering
@@ -381,6 +381,7 @@ def main() -> None:
     parser.add_argument("--draws", type=int, default=2000)
     parser.add_argument("--doc")
     args = parser.parse_args()
+    require_current(args.db)
     text = report(connect(args.db), args.draws)
     if args.doc:
         splice_between_markers(Path(args.doc), "matched-efforts", text)

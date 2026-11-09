@@ -29,7 +29,7 @@ const decide = (transcript: TranscriptContext): AssistantMessage => {
 export const fauxProvenance = (modelId: string): AgentProvenance => ({ api: "faux", provider: "faux", url: null, model: modelId, catalog_model: null, effort: null, thinking: { level: null, mode: "off", effort: null, budget_tokens: null, summary: null } });
 
 /** Plays a faux match into `dir`; agents sit at the Agent seats in letter order, on models faux-a and faux-b by turns. */
-export const playFauxRun = (dir: string, controllers: ReadonlyArray<Controller>, delivery: Delivery) => {
+export const playFauxRun = (dir: string, controllers: ReadonlyArray<Controller>, delivery: Delivery, seed = "42") => {
   const faux = fauxProvider({ provider: "faux", models: [{ id: "faux-a", contextWindow: 200_000, maxTokens: 512 }, { id: "faux-b", contextWindow: 200_000, maxTokens: 512 }] });
   const models = createModels();
   const agents = AGENTS.slice(0, controllers.filter((controller) => controller === "Agent").length);
@@ -40,7 +40,7 @@ export const playFauxRun = (dir: string, controllers: ReadonlyArray<Controller>,
   return Effect.runPromise(
     playMatch({
       dir,
-      seed: "42",
+      seed,
       controllers,
       entrants: agents.map((agent, index) => {
         const modelId = index % 2 === 0 ? "faux-a" : "faux-b";
