@@ -33,7 +33,7 @@ const DecisionRow = Schema.Struct({
   ordinal: Schema.Number,
   turn: Schema.Number,
   player: Letter,
-  byWhom: Schema.Literals(["agent", "fallback", "forced"]),
+  byWhom: Schema.Literals(["agent", "human", "engine", "fallback", "forced"]),
   label: Schema.String,
   move: Schema.Number,
   visible: Schema.NullOr(Schema.String),
