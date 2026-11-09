@@ -6,7 +6,10 @@ read-only and prints markdown tables. With --doc FILE the tables replace the tex
 that file. A config is a model with its effort. Regret is in percentage points of the deciding player's chance to win the
 round. Matches with a DeepSeek seat, unfinished matches and forced or fallback moves are left out.
 
-    python3 tools/arena/analysis/regret.py [--regret PATH] [--knowledge PATH] [--depth 6] [--budget 20000] [--reload static] [--samples 256] [--doc docs/arena/analysis/regret.md]
+    python3 tools/arena/analysis/regret.py [--regret PATH] [--knowledge PATH] [--doc docs/arena/analysis/regret.md]
+
+A regret file holds one run (evaluator, depth, budget, reload rule, samples); every analysis reads the run its --regret file holds,
+the production file (PRODUCTION) by default.
 """
 
 import argparse
@@ -19,13 +22,33 @@ from pathlib import Path
 from docs import splice_between_markers
 from fmt import pct, table
 from load import SKIPPED_MODEL, connect
+from rules import POINT
 
 DERIVED = Path(__file__).resolve().parents[3] / "_work/arena/analysis/derived"
 
+# The production regret file: the one run the site, the export and the doc tables read (docs/arena/analysis/regret.md, Production scoring).
+PRODUCTION = DERIVED / "regret-rust-0e62fbca-sampled256.sqlite"
+
 EFFORTS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"]
 
-# Scores are in millionths of a round win.
-POINT = 10_000
+
+@dataclass(frozen=True)
+class Run:
+    evaluator: str
+    max_depth: int
+    budget: int
+    reload: str
+    samples: int
+
+
+def run_of(path: Path) -> Run:
+    """The one run a regret file holds; a file with none or several stops the analysis, naming what it found."""
+    db = connect(str(path))
+    runs = db.execute("SELECT DISTINCT evaluator, max_depth, budget, reload, samples FROM regret").fetchall()
+    db.close()
+    if len(runs) != 1:
+        raise SystemExit(f"{path} must hold exactly one regret run (evaluator, max_depth, budget, reload, samples); it holds {runs}.")
+    return Run(*runs[0])
 
 
 @dataclass(frozen=True)
@@ -69,27 +92,26 @@ def summarise(decisions: list[Decision]) -> Summary:
     return Summary(len(regrets), sum(regrets) / len(regrets), percentile(regrets, 0.9), sum(d.exact for d in decisions) / len(decisions))
 
 
-def load(regret_path: Path, knowledge_path: Path, depth: int, budget: int, reload: str = "static", samples: int = 0) -> Loaded:
-    """The scored agent decisions of finished matches under one reload rule and sample count (0 unless the rule is sampled), with the deciding player's config and the shells left in the gun."""
+def load(regret_path: Path, knowledge_path: Path) -> Loaded:
+    """The scored agent decisions of finished matches in the file's one run, with the deciding player's config and the shells left in the gun."""
+    run_of(regret_path)
     db = connect(str(regret_path))
     db.row_factory = sqlite3.Row
     db.execute("ATTACH DATABASE ? AS k", (f"file:{knowledge_path}?mode=ro",))
     rows = db.execute(
-        """SELECT p.model, p.effort, d.round + 1 AS round, d.remaining, d.choice, r.status, r.regret, r.exact, r.limited, r.evaluator
+        """SELECT p.model, p.effort, d.round + 1 AS round, d.remaining, d.choice, r.status, r.regret, r.exact, r.limited
            FROM regret r
            JOIN k.matches m ON m.match_id = r.match_id AND m.status = 'completed'
            JOIN k.decisions d ON d.match_id = r.match_id AND d.ordinal = r.ordinal AND d.by_whom = 'agent'
            JOIN k.players p ON p.match_id = d.match_id AND p.player = d.player
-           WHERE r.max_depth = ? AND r.budget = ? AND r.reload = ? AND r.samples = ? AND r.match_id NOT IN (SELECT match_id FROM k.players WHERE model LIKE ?)""",
-        (depth, budget, reload, samples, f"%{SKIPPED_MODEL}%"),
+           WHERE r.match_id NOT IN (SELECT match_id FROM k.players WHERE model LIKE ?)""",
+        (f"%{SKIPPED_MODEL}%",),
     ).fetchall()
-    if len({row["evaluator"] for row in rows}) > 1:
-        raise SystemExit(f"{regret_path} holds rows of several evaluators at depth {depth}, budget {budget}, reload {reload} and samples {samples}; they must not be mixed.")
     unscored = db.execute(
         """SELECT COUNT(*) FROM k.decisions d JOIN k.matches m ON m.match_id = d.match_id AND m.status = 'completed'
            WHERE d.by_whom = 'agent' AND d.match_id NOT IN (SELECT match_id FROM k.players WHERE model LIKE ?)
-             AND NOT EXISTS (SELECT 1 FROM regret r WHERE r.match_id = d.match_id AND r.ordinal = d.ordinal AND r.max_depth = ? AND r.budget = ? AND r.reload = ? AND r.samples = ?)""",
-        (f"%{SKIPPED_MODEL}%", depth, budget, reload, samples),
+             AND NOT EXISTS (SELECT 1 FROM regret r WHERE r.match_id = d.match_id AND r.ordinal = d.ordinal)""",
+        (f"%{SKIPPED_MODEL}%",),
     ).fetchone()[0]
     searched = [row for row in rows if row["status"] == "searched"]
     return Loaded(
@@ -138,28 +160,13 @@ def report(loaded: Loaded) -> str:
     )
 
 
-def run_samples(reload: str, samples: int | None) -> int:
-    """The sample count the regret script stores for a run: --samples, 256 by default, for a sampled run, and 0 for the other rules."""
-    if reload != "sampled":
-        if samples is not None:
-            raise SystemExit("--samples goes with --reload sampled.")
-        return 0
-    if samples is not None and samples < 1:
-        raise SystemExit("--samples takes a whole number of at least 1.")
-    return 256 if samples is None else samples
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--regret", type=Path, default=DERIVED / "regret.sqlite")
+    parser.add_argument("--regret", type=Path, default=PRODUCTION)
     parser.add_argument("--knowledge", type=Path, default=DERIVED / "knowledge.sqlite")
-    parser.add_argument("--depth", type=int, default=6)
-    parser.add_argument("--budget", type=int, default=20000)
-    parser.add_argument("--reload", choices=["static", "expected-deal", "sampled"], default="static")
-    parser.add_argument("--samples", type=int, help="deals per leaf of a sampled run, 256 by default")
     parser.add_argument("--doc", type=Path)
     args = parser.parse_args()
-    text = report(load(args.regret, args.knowledge, args.depth, args.budget, args.reload, run_samples(args.reload, args.samples)))
+    text = report(load(args.regret, args.knowledge))
     if args.doc is None:
         print(text)
     else:

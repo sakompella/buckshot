@@ -31,6 +31,7 @@ import { GameEvent, type Seat, Secret } from "../src/domain.ts";
 import { type Letter, rosterOf } from "../src/players.ts";
 import { eventText, secretText } from "../src/text.ts";
 import { replayOf } from "../src/arena/replay.ts";
+import { assertCurrentImport } from "../src/analysis/importer-hash.ts";
 
 // Rebuilds every agent decision's own information from the analysis database
 // (docs/arena/database.md) and writes it to a separate database: the shell
@@ -57,6 +58,8 @@ if (values.db === undefined || (values.out === undefined && values.trace === und
 }
 
 const source = new Database(resolve(values.db), { readonly: true });
+
+assertCurrentImport(source);
 
 const scratch = mkdtempSync(join(tmpdir(), "buckshot-knowledge-"));
 
@@ -98,8 +101,8 @@ interface DecisionRow {
   readonly raw: string;
 }
 
-/** The comparison a match belongs to: every match between different models, or every match of one model against itself (an effort sweep), from every tournament. Same rule as the arena viewer's cohorts. */
-const cohortOf = (seats: ReadonlyArray<SeatRow>): string => {
+/** The kind of comparison a match is: every match between different models, or every match of one model against itself (an effort sweep), from every tournament. arena-knowledge-report.ts groups by it. */
+const kindOf = (seats: ReadonlyArray<SeatRow>): string => {
   const models = [...new Set(seats.map((seat) => seat.model ?? ""))];
 
   return models.length === 1 ? `${shortName(models[0] ?? "")} efforts` : "Cross-model";
@@ -127,7 +130,7 @@ const out = values.out === undefined ? undefined : (() => {
     PRAGMA journal_mode = WAL;
     DROP TABLE IF EXISTS matches; DROP TABLE IF EXISTS players; DROP TABLE IF EXISTS decisions; DROP TABLE IF EXISTS clues;
     DROP TABLE IF EXISTS items; DROP TABLE IF EXISTS deaths; DROP TABLE IF EXISTS problems;
-    CREATE TABLE matches (match_id TEXT PRIMARY KEY, name TEXT, tournament TEXT, cohort TEXT, status TEXT, code_hash TEXT, instructions_hash TEXT, seed INTEGER, seed_block_id TEXT, pairing INTEGER);
+    CREATE TABLE matches (match_id TEXT PRIMARY KEY, name TEXT, tournament TEXT, kind TEXT, status TEXT, code_hash TEXT, instructions_hash TEXT, seed INTEGER, seed_block_id TEXT, pairing INTEGER);
     CREATE TABLE players (match_id TEXT, player TEXT, position INTEGER, entrant TEXT, model TEXT, effort TEXT, PRIMARY KEY (match_id, player));
     CREATE TABLE decisions (
       match_id TEXT, ordinal INTEGER, player TEXT, by_whom TEXT, label TEXT, choice TEXT, legal_json TEXT,
@@ -196,7 +199,7 @@ for (const [count, match] of matches.entries()) {
 
   const ownBetween = (player: string, after: number, before: number): number => (agentOrdinals.get(player) ?? []).filter((ordinal) => ordinal > after && ordinal < before).length;
 
-  put("matches", { match_id: match.id, name: match.name, tournament: match.tournament, cohort: cohortOf(seats), status: match.status, code_hash: match.code_hash, instructions_hash: match.instructions_hash, seed: match.seed, seed_block_id: match.seed_block_id, pairing: match.pairing });
+  put("matches", { match_id: match.id, name: match.name, tournament: match.tournament, kind: kindOf(seats), status: match.status, code_hash: match.code_hash, instructions_hash: match.instructions_hash, seed: match.seed, seed_block_id: match.seed_block_id, pairing: match.pairing });
 
   for (const seat of seats) put("players", { match_id: match.id, player: seat.player, position: seat.position, entrant: seat.entrant, model: seat.model, effort: seat.effort });
 

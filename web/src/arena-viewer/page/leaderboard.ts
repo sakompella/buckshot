@@ -22,8 +22,8 @@ interface Detail {
   readonly content: ReadonlyArray<Html | string>;
 }
 
-/** How many moves a config's accuracy figures rest on, and how many of them were scored with the sampled reload rule. */
-export const movesTitle = ({ regret }: ModelStats): string => (regret === null ? "" : `${regret.moves.toLocaleString()} moves with a real choice · ${fmtPct(regret.sampledShare)} scored with the sampled reload rule`);
+/** How many moves a config's accuracy figures rest on. */
+export const movesTitle = ({ regret }: ModelStats): string => (regret === null ? "" : `${regret.moves.toLocaleString()} moves with a real choice`);
 
 const detailsOf = (h: H, m: ModelStats, hasRegret: boolean): ReadonlyArray<Detail> => {
   const { favorite } = m;

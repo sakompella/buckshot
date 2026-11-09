@@ -6,7 +6,7 @@ reads them. Regret comes from the regret and knowledge databases, as in regret.p
 --doc FILE the tables replace the text between the by-round markers of that file. A config is a model with its effort.
 Matches with a DeepSeek seat and unfinished matches are left out. A match whose prizes do not add up to the final cash stops the run.
 
-    python3 tools/arena/analysis/by_round.py [--db PATH] [--regret PATH] [--knowledge PATH] [--depth 6] [--budget 20000] [--reload static] [--samples 256] [--doc docs/arena/analysis/regret.md]
+    python3 tools/arena/analysis/by_round.py [--db PATH] [--regret PATH] [--knowledge PATH] [--doc docs/arena/analysis/regret.md]
 """
 
 import argparse
@@ -19,10 +19,9 @@ from pathlib import Path
 import regret
 from docs import splice_between_markers
 from fmt import pct, table
-from load import DB, SKIPPED_MODEL, connect
-from regret import DERIVED, EFFORTS, Decision, points
-
-ROUNDS = (1, 2, 3)
+from load import DB, SKIPPED_MODEL, connect, require_current
+from regret import DERIVED, EFFORTS, PRODUCTION, Decision, points
+from rules import ROUNDS
 
 BEGINS = re.compile(r"^Round (\d+) begins\.")
 WINS = re.compile(r"^Player (\w+) wins the round and \$([\d,]+)\.")
@@ -165,15 +164,12 @@ def report(results: list[RoundResult], decisions: list[Decision]) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--db", default=DB)
-    parser.add_argument("--regret", type=Path, default=DERIVED / "regret.sqlite")
+    parser.add_argument("--regret", type=Path, default=PRODUCTION)
     parser.add_argument("--knowledge", type=Path, default=DERIVED / "knowledge.sqlite")
-    parser.add_argument("--depth", type=int, default=6)
-    parser.add_argument("--budget", type=int, default=20000)
-    parser.add_argument("--reload", choices=["static", "expected-deal", "sampled"], default="static")
-    parser.add_argument("--samples", type=int, help="deals per leaf of a sampled run, 256 by default")
     parser.add_argument("--doc", type=Path)
     args = parser.parse_args()
-    text = report(load_results(args.db, args.knowledge), regret.load(args.regret, args.knowledge, args.depth, args.budget, args.reload, regret.run_samples(args.reload, args.samples)).decisions)
+    require_current(args.db)
+    text = report(load_results(args.db, args.knowledge), regret.load(args.regret, args.knowledge).decisions)
     if args.doc is None:
         print(text)
     else:

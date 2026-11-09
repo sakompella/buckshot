@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """The production regret run: score agent decisions with the Rust evaluator (sim/rust, ADR-0052) into the `regret` table.
 
-    python3 tools/arena/score_regret.py --db buckshot.sqlite --out derived/regret-rust.sqlite --sampled-out derived/regret-rust-sampled256.sqlite
+    python3 tools/arena/score_regret.py --db buckshot.sqlite --sampled-out derived/regret-rust-<hex>-sampled256.sqlite
 
-Every decision gets a static-reload row in --out. With --sampled-out, the decisions with at most --sampled-max-shells
-shells left (2) also get a sampled-reload row (--samples deals per leaf, 256) there; the viewer and the export prefer
-those (--regret-sampled). Run it inside `nix develop` (bun, cargo and Bend on PATH, or $BUN and $CARGO). It takes the
+Every decision gets a sampled-reload row (--samples deals per leaf, 256) in --sampled-out: the production run, which the
+site, the export and the doc tables read (tools/arena/analysis/regret.py, PRODUCTION). --out, for research, gets a static-reload
+row for every decision. Each file holds one run. Run it inside `nix develop` (bun, cargo and Bend on PATH, or $BUN and $CARGO). It takes the
 agent decisions of the replay-validated matches (or those --matches or --decisions name) that an output has no row for
 under the same evaluator, depth, budget, reload and samples, so a rerun continues and a wrap-up scores only the new
 matches. The wrap-up and the analyses call `score` rather than running the steps themselves. Steps:
@@ -34,10 +34,12 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent / "analysis"))
+from rules import WIN  # noqa: E402
+
 REPO = Path(__file__).resolve().parents[2]
 FEATURES = "f64,seats-2"
 CLI_EVALUATOR = "bounded-v1-f64"
-WIN = 1_000_000
 
 CREATE_REGRET = """CREATE TABLE IF NOT EXISTS regret (
     match_id TEXT, ordinal INTEGER, player TEXT, label TEXT,
@@ -145,15 +147,15 @@ def row_of(decision: dict, result: dict, player: str, group: tuple) -> dict:
     return {**row, "status": "searched", "best": best["label"], "best_score": best["score"], "chosen_score": chosen["score"], "regret": best["score"] - chosen["score"], "exact": int(certain), "depth": result["depth"]}
 
 
-def run_search(binary: Path, inputs: list[Path], work: Path, out: sqlite3.Connection, players: dict[tuple[str, int], str], group: tuple, threads: int, keys: set[tuple[str, int]], max_shells: int | None, bugs: Path, build: dict) -> int:
-    """Feeds the inputs of `keys` (with at most `max_shells` shells left) to buckshot-search and writes a row per result, committing every chunk.
+def run_search(binary: Path, inputs: list[Path], work: Path, out: sqlite3.Connection, players: dict[tuple[str, int], str], group: tuple, threads: int, keys: set[tuple[str, int]], bugs: Path, build: dict) -> int:
+    """Feeds the inputs of `keys` to buckshot-search and writes a row per result, committing every chunk.
     Stops after an input file with a disagreement between Bend and Rust, with a dump of each in `bugs`. Returns the rows written."""
     _, depth, budget, reload, samples = group
     sampled = ["--reload", "sampled", "--samples", str(samples)] if reload == "sampled" else []
     cmd = [str(binary), "--evaluator", CLI_EVALUATOR, "--unpruned", "--depth", str(depth), "--budget", str(budget), "--threads", str(threads), *sampled]
     written = 0
     for path in inputs:
-        decisions = [d for d in map(json.loads, path.read_text().splitlines()) if (d["id"], d["ordinal"]) in keys and (max_shells is None or d["shells"] <= max_shells)]
+        decisions = [d for d in map(json.loads, path.read_text().splitlines()) if (d["id"], d["ordinal"]) in keys]
         feed = work / f"{path.stem}.{group[3]}.jsonl"
         fed = [json.dumps({"id": d["id"], "ordinal": d["ordinal"], "input": d["input"]}) for d in decisions]
         feed.write_text("".join(line + "\n" for line in fed))
@@ -194,7 +196,6 @@ class Settings:
     depth: int = 6
     budget: int = 20000
     samples: int = 256
-    sampled_max_shells: int = 2
     threads: int = max(1, (os.cpu_count() or 2) // 2)
     jobs: int = 4
 
@@ -208,12 +209,12 @@ def open_out(path: Path) -> sqlite3.Connection:
 
 
 def score(db: Path, out: Path | None, sampled_out: Path | None, checkout: Path, settings: Settings, matches: set[str] | None = None, decisions: set[tuple[str, int]] | None = None, work: Path | None = None) -> dict:
-    """Scores the decisions `out` (static reload) and `sampled_out` (sampled reload, few shells left) lack, writing their rows. Returns a summary."""
+    """Scores the decisions `out` (static reload) and `sampled_out` (sampled reload) lack, writing their rows. Returns a summary."""
     rust = checkout / "sim/rust"
     evaluator = evaluator_id(rust)
-    runs = [(path, (evaluator, settings.depth, settings.budget, reload, samples), max_shells) for path, reload, samples, max_shells in ((out, "static", 0, None), (sampled_out, "sampled", settings.samples, settings.sampled_max_shells)) if path is not None]
+    runs = [(path, (evaluator, settings.depth, settings.budget, reload, samples)) for path, reload, samples in ((out, "static", 0), (sampled_out, "sampled", settings.samples)) if path is not None]
     source = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
-    todo = [(open_out(path), group, max_shells, set(wanted(source, open_out(path), group, matches, decisions))) for path, group, max_shells in runs]
+    todo = [(open_out(path), group, set(wanted(source, open_out(path), group, matches, decisions))) for path, group in runs]
     players = {(m, o): p for m, o, p in source.execute("SELECT match_id, ordinal, player FROM decisions WHERE by_whom = 'agent'")}
     source.close()
     union = sorted(set().union(*(keys for *_, keys in todo)))
@@ -229,10 +230,10 @@ def score(db: Path, out: Path | None, sampled_out: Path | None, checkout: Path, 
     inputs = write_inputs(union, db, checkout / "web", work, settings.jobs)
     summary["input_seconds"] = round(time.monotonic() - started)
     commit = git_commit(checkout)
-    for (path, *_), (conn, group, max_shells, keys) in zip(runs, todo, strict=True):
+    for (path, _), (conn, group, keys) in zip(runs, todo, strict=True):
         started = time.monotonic()
         build_info = {"evaluator": evaluator, "features": FEATURES, "binary_sha256": sha, "source_commit": commit}
-        written = run_search(binary, inputs, work, conn, players, group, settings.threads, keys, max_shells, path.parent / f"{path.stem}-bugs", build_info)
+        written = run_search(binary, inputs, work, conn, players, group, settings.threads, keys, path.parent / f"{path.stem}-bugs", build_info)
         seconds = time.monotonic() - started
         conn.execute("INSERT INTO evaluator_build VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))", (*group, commit, FEATURES, sha, written, seconds, settings.threads))
         conn.commit()
@@ -245,13 +246,12 @@ def score(db: Path, out: Path | None, sampled_out: Path | None, checkout: Path, 
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--db", type=Path, required=True, help="the analysis database, opened read only")
-    p.add_argument("--out", type=Path, help="derived database for the static rows (created if missing)")
-    p.add_argument("--sampled-out", type=Path, help="derived database for the sampled rows (created if missing)")
+    p.add_argument("--sampled-out", type=Path, help="derived database for the sampled rows, the production run (created if missing)")
+    p.add_argument("--out", type=Path, help="derived database for static rows, for research (created if missing)")
     p.add_argument("--checkout", type=Path, default=REPO, help="checkout whose sim/rust builds the evaluator and whose web/ writes the inputs")
     p.add_argument("--depth", type=int, default=Settings.depth)
     p.add_argument("--budget", type=int, default=Settings.budget, help="nodes per decision")
     p.add_argument("--samples", type=int, default=Settings.samples, help="deals per sampled leaf")
-    p.add_argument("--sampled-max-shells", type=int, default=Settings.sampled_max_shells, help="sampled rows for decisions with at most this many shells left")
     p.add_argument("--matches", type=Path, help="file of match names, one per line: score only these")
     p.add_argument("--decisions", type=Path, help="file of '<match id> <ordinal>' lines: score only these")
     p.add_argument("--threads", type=int, default=Settings.threads, help="buckshot-search threads (half the cores)")
@@ -259,8 +259,8 @@ def main() -> None:
     p.add_argument("--work", type=Path, help="directory for the inputs and logs (kept); a temporary one by default")
     args = p.parse_args()
     if args.out is None and args.sampled_out is None:
-        p.error("give --out, --sampled-out or both")
-    settings = Settings(args.depth, args.budget, args.samples, args.sampled_max_shells, args.threads, args.jobs)
+        p.error("give --sampled-out, --out or both")
+    settings = Settings(args.depth, args.budget, args.samples, args.threads, args.jobs)
     matches = set(args.matches.read_text().split()) if args.matches else None
     listed = {(m, int(o)) for m, o in (line.split() for line in args.decisions.read_text().splitlines() if line.strip())} if args.decisions else None
     print(json.dumps(score(args.db.resolve(), args.out, args.sampled_out, args.checkout.resolve(), settings, matches, listed, args.work)))

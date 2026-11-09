@@ -28,11 +28,11 @@ import by_round
 from docs import splice_between_markers
 from boot import interval
 from fmt import table
-from load import DB, SKIPPED_MODEL, connect
-from regret import DERIVED, EFFORTS, POINT
+from load import DB, SKIPPED_MODEL, connect, require_current
+from regret import DERIVED, EFFORTS, PRODUCTION, run_of
+from rules import POINT, ROUNDS
 
 RESAMPLES = 2000
-ROUNDS = (1, 2, 3)
 FEWEST_SEATS = 80  # seats with a regret in both rounds below which a config is shown but not tested
 FEWEST_BLOCKS = 10
 FALSE_DISCOVERY = 0.05
@@ -73,27 +73,26 @@ class Estimate:
     p: float  # two-sided, from a normal curve on the resamples' spread
 
 
-def load_moves(regret_path: Path, knowledge_path: Path, mistakes_path: Path, db_path: str, depth: int = 6, budget: int = 20000) -> list[Move]:
+def load_moves(regret_path: Path, knowledge_path: Path, mistakes_path: Path, db_path: str) -> list[Move]:
+    run_of(regret_path)
     db = connect(str(regret_path))
     db.execute("ATTACH DATABASE ? AS k", (f"file:{knowledge_path}?mode=ro",))
     db.execute("ATTACH DATABASE ? AS c", (f"file:{mistakes_path}?mode=ro",))
     rows = db.execute(
-        """SELECT r.match_id, r.ordinal, d.player, p.model, p.effort, m.seed_block_id, d.round + 1, d.remaining, d.choice, r.regret, r.evaluator,
+        """SELECT r.match_id, r.ordinal, d.player, p.model, p.effort, m.seed_block_id, d.round + 1, d.remaining, d.choice, r.regret,
                   o.outcome = 'mistake'
            FROM regret r
            JOIN k.matches m ON m.match_id = r.match_id AND m.status = 'completed'
            JOIN k.decisions d ON d.match_id = r.match_id AND d.ordinal = r.ordinal AND d.by_whom = 'agent'
            JOIN k.players p ON p.match_id = d.match_id AND p.player = d.player
            LEFT JOIN c.opportunities o ON o.match_id = r.match_id AND o.ordinal = r.ordinal AND o.type = 'self_on_live'
-           WHERE r.max_depth = ? AND r.budget = ? AND r.reload = 'static' AND r.samples = 0 AND r.status = 'searched'
+           WHERE r.status = 'searched'
              AND r.match_id NOT IN (SELECT match_id FROM k.players WHERE model LIKE ?)""",
-        (depth, budget, f"%{SKIPPED_MODEL}%"),
+        (f"%{SKIPPED_MODEL}%",),
     ).fetchall()
-    if len({row[10] for row in rows}) > 1:
-        raise SystemExit(f"{regret_path} holds rows of several evaluators at depth {depth} and budget {budget}; they must not be mixed.")
     winners = by_round.read_winners(db_path, sorted({row[0] for row in rows}))
     moves = []
-    for match, _, player, model, effort, block, round, left, choice, regret, _, mistake in rows:
+    for match, _, player, model, effort, block, round, left, choice, regret, mistake in rows:
         if any(r not in (won := winners[match]) for r in ROUNDS):
             continue
         seat = Seat(match, player, model, effort, block, won[1] != won[2], frozenset(r for r, w in won.items() if w == player))
@@ -347,12 +346,13 @@ def config_figure(rows: list[Row]) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--db", default=DB)
-    parser.add_argument("--regret", type=Path, default=DERIVED / "regret.sqlite")
+    parser.add_argument("--regret", type=Path, default=PRODUCTION)
     parser.add_argument("--knowledge", type=Path, default=DERIVED / "knowledge.sqlite")
     parser.add_argument("--mistakes", type=Path, default=DERIVED / "certain-mistakes.sqlite")
     parser.add_argument("--doc", type=Path)
     parser.add_argument("--svg", type=Path, help="directory for the two figures")
     args = parser.parse_args()
+    require_current(args.db)
     moves = load_moves(args.regret, args.knowledge, args.mistakes, args.db)
     values = seat_values(moves)
     if args.svg is not None:

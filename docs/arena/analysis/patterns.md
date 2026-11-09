@@ -13,27 +13,27 @@ Each row is one choice pattern: the decisions where it could have happened are s
 
 | pattern | matched | mean regret | other applicable | mean regret | same configs |
 |---|---|---|---|---|---|
-| Invert the last shell and shoot yourself, known live | 329 | 10.2 | 4,699 | 1.2 | 1.2 |
-| Smoke at full health, outside Luna | 131 | 1.5 | 15,780 | 1.5 | 1.0 |
-| Smoke at full health, outside Luna, opponent holds adrenaline | 124 | 1.4 | 6,115 | 1.8 | 1.2 |
-| Smoke at full health, Luna | 97 | 4.3 | 2,796 | 2.5 | 2.9 |
-| Shoot yourself, unknown chamber, under half live | 2,262 | 5.5 | 2,476 | 4.6 | 3.5 |
-| Shoot yourself on a certain live, from the count | 509 | 27.2 | 18,797 | 1.6 | 2.4 |
-| Shoot yourself on a certain live, from the glass | 21 | 22.1 | 10,416 | 2.5 | 6.4 |
-| Shoot yourself on a certain live, from the phone | 109 | 27.0 | 2,902 | 2.0 | 3.1 |
-| Shoot the opponent on a certain blank, not the last shell | 1,464 | 18.9 | 11,408 | 0.8 | 1.2 |
-| Shoot the opponent on a certain blank, last shell | 2,001 | 3.4 | 4,634 | 1.8 | 2.8 |
-| Use the phone with two or fewer shells left | 642 | 2.6 | 15,752 | 2.8 | 4.9 |
-| Shoot yourself at exactly half live, no saw | 2,313 | 4.2 | 7,420 | 3.7 | 3.3 |
-| Shoot yourself with the gun sawed | 154 | 9.4 | 15,424 | 2.6 | 3.7 |
-| Saw an unknown chamber (not a pattern) | 7,897 | 1.6 | 25,736 | 2.9 | 3.3 |
-| Saw a certain live (not a pattern) | 7,159 | 0.4 | 3,577 | 4.5 | 3.0 |
-| Beer a certain live (not a pattern) | 1,159 | 5.4 | 16,135 | 2.6 | 3.5 |
+| Invert the last shell and shoot yourself, known live | 329 | 3.4 | 4,699 | 0.9 | 0.9 |
+| Smoke at full health, outside Luna | 131 | 1.0 | 15,780 | 1.1 | 0.7 |
+| Smoke at full health, outside Luna, opponent holds adrenaline | 124 | 0.9 | 6,115 | 1.4 | 0.9 |
+| Smoke at full health, Luna | 97 | 3.5 | 2,796 | 2.0 | 2.4 |
+| Shoot yourself, unknown chamber, under half live | 2,262 | 4.9 | 2,476 | 4.1 | 2.9 |
+| Shoot yourself on a certain live, from the count | 509 | 23.6 | 18,797 | 0.8 | 1.6 |
+| Shoot yourself on a certain live, from the glass | 21 | 19.4 | 10,416 | 2.3 | 6.0 |
+| Shoot yourself on a certain live, from the phone | 109 | 27.6 | 2,902 | 1.3 | 2.7 |
+| Shoot the opponent on a certain blank, not the last shell | 1,464 | 14.0 | 11,408 | 0.6 | 1.0 |
+| Shoot the opponent on a certain blank, last shell | 2,001 | 6.3 | 4,634 | 1.1 | 1.9 |
+| Use the phone with two or fewer shells left | 642 | 1.7 | 15,752 | 2.1 | 4.1 |
+| Shoot yourself at exactly half live, no saw | 2,313 | 4.1 | 7,420 | 2.5 | 2.2 |
+| Shoot yourself with the gun sawed | 154 | 9.6 | 15,424 | 2.4 | 3.4 |
+| Saw an unknown chamber (not a pattern) | 7,897 | 1.1 | 25,736 | 2.8 | 3.1 |
+| Saw a certain live (not a pattern) | 7,159 | 0.2 | 3,577 | 4.3 | 2.8 |
+| Beer a certain live (not a pattern) | 1,159 | 4.1 | 16,135 | 1.9 | 2.8 |
 <!-- regret:end -->
 
-- **Costly.** Shooting yourself on a shell you can prove live averages 27.2 points when proven by the count, against 1.6 for the other shots there. The glass (22.1, only 21 shots) and phone (27.0) rows are as bad. Shooting the opponent on the last shell's certain blank is mildly worse than the rest, 3.4 against 1.8. Shooting the opponent on a certain blank before the last shell costs 19 against 0.8. Inverting a known live last shell to keep the turn costs 10 against 1.2, and a self-shot with the gun sawed 9 against 2.6. Throwing a beer at a certain live costs 5 against 3 for the rest.
-- **Cost little.** Using the phone with two or fewer shells left averages 2.6. Sawing an unknown chamber averages 1.6, and sawing a certain live 0.4.
-- **No clear gap.** Smoking your own cigarettes at full health averages 1.5 points outside Luna (1.4 while the opponent holds adrenaline), against 1.5 for the other moves there. Luna's 97 such smokes average 4.3 against 2.5, which is a small sample. Shooting yourself at exactly half live is 4.2 against 3.7 for shooting the opponent. Shooting yourself at an unknown chamber with under half live is 5.4 against 4.6 for the other shots there, so it shows no cost here.
-- **Limits.** The item rows (smoking, phone, saws) are only as good as the evaluator's untrained item weights, so "cost little" there means the evaluator values the item little. Shots on the last shell end at the next reload, which the search scores as a static leaf. Many of the other rows have more than three shells left, where most searches stop early. Smoking counts only the player's own cigarettes, not ones stolen with adrenaline.
+- **Costly.** Shooting yourself on a shell you can prove live averages 23.6 points when proven by the count, against 0.8 for the other shots there. The glass (19.4, only 21 shots) and phone (27.6) rows are as bad. Shooting the opponent on a certain blank before the last shell costs 14 against 0.6, and on the last shell's certain blank 6.3 against 1.1. A self-shot with the gun sawed costs 9.6 against 2.4. Throwing a beer at a certain live costs 4.1 against 1.9 for the rest, and inverting a known live last shell to keep the turn 3.4 against 0.9.
+- **Cost little.** Using the phone with two or fewer shells left averages 1.7. Sawing an unknown chamber averages 1.1, and sawing a certain live 0.2.
+- **No clear gap.** Smoking your own cigarettes at full health averages 1.0 points outside Luna (0.9 while the opponent holds adrenaline), against 1.1 for the other moves there. Luna's 97 such smokes average 3.5 against 2.0, which is a small sample. Shooting yourself at an unknown chamber with under half live is 4.9 against 4.1 for the other shots there. Shooting yourself at exactly half live is 4.1 against 2.5 for shooting the opponent, a gap that the static leaf hid (3.7 there).
+- **Limits.** The item rows (smoking, phone, saws) are only as good as the evaluator's untrained item weights, so "cost little" there means the evaluator values the item little. Shots on the last shell end at the next reload, which the search values over 256 sampled deals. Many of the other rows have more than three shells left, where most searches stop early. Smoking counts only the player's own cigarettes, not ones stolen with adrenaline.
 
 Rerun with `python3 tools/arena/analysis/patterns_regret.py --doc docs/arena/analysis/patterns.md`.

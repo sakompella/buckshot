@@ -63,11 +63,6 @@ enum Evaluator {
     BoundedV1,
 }
 
-#[cfg(feature = "f32")]
-const BOUNDED_V1: &str = "bounded-v1-f32";
-#[cfg(not(feature = "f32"))]
-const BOUNDED_V1: &str = "bounded-v1-f64";
-
 impl Evaluator {
     #[cfg(feature = "f32")]
     const DEFAULT: Self = Self::Compat;
@@ -79,7 +74,7 @@ impl Evaluator {
         match self {
             #[cfg(feature = "f32")]
             Self::Compat => "compat",
-            Self::BoundedV1 => BOUNDED_V1,
+            Self::BoundedV1 => BoundedV1::ID,
         }
     }
 
@@ -87,7 +82,7 @@ impl Evaluator {
         match id {
             #[cfg(feature = "f32")]
             "compat" => Ok(Self::Compat),
-            _ if id == BOUNDED_V1 => Ok(Self::BoundedV1),
+            _ if id == BoundedV1::ID => Ok(Self::BoundedV1),
             other => Err(format!("unknown evaluator {other} in the {} build", buckshot_search::ARITHMETIC)),
         }
     }
@@ -163,7 +158,7 @@ fn args() -> Result<Args, Box<dyn Error>> {
         args.reload = Reload::Sampled { count };
     }
     if (args.stats || args.unpruned) && args.evaluator != Evaluator::BoundedV1 {
-        return Err(format!("--stats and --unpruned need --evaluator {BOUNDED_V1}").into());
+        return Err(format!("--stats and --unpruned need --evaluator {}", BoundedV1::ID).into());
     }
     Ok(args)
 }

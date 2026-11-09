@@ -149,7 +149,7 @@ Inside `nix develop`, from the repository root:
 
 | opponent jammed | search scores the opponent shot higher | search settles the self shot as a win and the opponent shot as a loss | the rest | no search |
 |---|---|---|---|---|
-| 17.7% (844/4776) [16.3%, 19.1%] | 4.3% (19/437) [2.6%, 6.3%] | 2.3% (7/304) [0.7%, 4.4%] | 11.1% (2470/22340) [10.4%, 11.7%] | 0/1 |
+| 17.7% (844/4776) [16.3%, 19.1%] | 2.8% (6/214) [0.9%, 5.3%] | 2.3% (7/306) [0.6%, 4.3%] | 11.0% (2483/22561) [10.4%, 11.7%] | 0/1 |
 
 ### By source of the proof and shells left, all configs
 

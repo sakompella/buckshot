@@ -6,7 +6,7 @@ joined on (match_id, ordinal), and prints one markdown table. With --doc FILE th
 patterns markers of that file. Regret is in percentage points of the deciding player's chance to win the round. Matches
 with a DeepSeek seat, unfinished matches and forced or fallback moves are left out.
 
-    python3 tools/arena/analysis/patterns_regret.py [--regret PATH] [--knowledge PATH] [--depth 6] [--budget 20000] [--reload static] [--samples 256] [--doc docs/arena/analysis/patterns.md]
+    python3 tools/arena/analysis/patterns_regret.py [--regret PATH] [--knowledge PATH] [--doc docs/arena/analysis/patterns.md]
 """
 
 import argparse
@@ -20,7 +20,8 @@ from pathlib import Path
 from docs import splice_between_markers
 from fmt import table
 from load import SKIPPED_MODEL, connect
-from regret import DERIVED, POINT, run_samples
+from regret import DERIVED, PRODUCTION, run_of
+from rules import POINT
 
 
 @dataclass(frozen=True)
@@ -91,8 +92,9 @@ class Row:
     others_mean_same_configs: float | None
 
 
-def load(regret_path: Path, knowledge_path: Path, depth: int, budget: int, reload: str, samples: int) -> list[Move]:
+def load(regret_path: Path, knowledge_path: Path) -> list[Move]:
     """The searched agent decisions of finished matches. Full health is the round's highest health seen in any decision of it, which equals the health every seat starts the round with. The health list starts with the deciding player."""
+    run_of(regret_path)
     db = connect(str(regret_path))
     db.row_factory = sqlite3.Row
     db.execute("ATTACH DATABASE ? AS k", (f"file:{knowledge_path}?mode=ro",))
@@ -113,9 +115,9 @@ def load(regret_path: Path, knowledge_path: Path, depth: int, budget: int, reloa
            JOIN k.matches m ON m.match_id = r.match_id AND m.status = 'completed'
            JOIN healthy d ON d.match_id = r.match_id AND d.ordinal = r.ordinal AND d.by_whom = 'agent'
            JOIN k.players p ON p.match_id = d.match_id AND p.player = d.player
-           WHERE r.status = 'searched' AND r.max_depth = ? AND r.budget = ? AND r.reload = ? AND r.samples = ?
+           WHERE r.status = 'searched'
              AND r.match_id NOT IN (SELECT match_id FROM k.players WHERE model LIKE ?)""",
-        (depth, budget, reload, samples, f"%{SKIPPED_MODEL}%"),
+        (f"%{SKIPPED_MODEL}%",),
     ).fetchall()
     return [
         Move(
@@ -166,15 +168,11 @@ def report(moves: list[Move]) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--regret", type=Path, default=DERIVED / "regret.sqlite")
+    parser.add_argument("--regret", type=Path, default=PRODUCTION)
     parser.add_argument("--knowledge", type=Path, default=DERIVED / "knowledge.sqlite")
-    parser.add_argument("--depth", type=int, default=6)
-    parser.add_argument("--budget", type=int, default=20000)
-    parser.add_argument("--reload", choices=["static", "expected-deal", "sampled"], default="static")
-    parser.add_argument("--samples", type=int, help="deals per leaf of a sampled run, 256 by default")
     parser.add_argument("--doc", type=Path)
     args = parser.parse_args()
-    text = report(load(args.regret, args.knowledge, args.depth, args.budget, args.reload, run_samples(args.reload, args.samples)))
+    text = report(load(args.regret, args.knowledge))
     if args.doc is None:
         print(text)
     else:

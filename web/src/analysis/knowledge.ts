@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import { Option } from "effect";
 
-import { type Board, type GameEvent as Event, GameEvent, type Item, type LearnedSecret, type Seat, Secret, type Shell } from "../domain.ts";
+import { type Board, type GameEvent as Event, GameEvent, Item, type LearnedSecret, type Seat, Secret, type Shell } from "../domain.ts";
 import { type Roster } from "../players.ts";
 import { eventText, itemName, secretText } from "../text.ts";
 import { type Orders, type OwnEntry, ownLog, type Player } from "./player.ts";
@@ -188,7 +188,7 @@ export interface ItemMove {
   readonly stolen: boolean;
 }
 
-const ITEM_BY_NAME = new Map<string, Item>((["Saw", "Glass", "Jammer", "Cigarettes", "Beer", "Phone", "Inverter", "Adrenaline", "Remote"] as const).map((item) => [itemName(item), item]));
+const ITEM_BY_NAME = new Map<string, Item>(Item.literals.map((item) => [itemName(item), item]));
 
 /** Reads a move's label, as src/text.ts words it: "Use beer", "Jam Player B", "Steal handsaw from Player A". */
 export const itemMoveOf = (label: string): Option.Option<ItemMove> => {

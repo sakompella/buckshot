@@ -14,15 +14,12 @@ import argparse
 import bt
 from docs import splice_between_markers
 from fmt import pct, signed, table
-from load import CROSS_MODEL, CROSS_SAMPLES, TOURNAMENT_5_COHORT, TOURNAMENT_6_COHORT, TOURNAMENT_7_COHORT, TOURNAMENT_8_COHORT, Game, cohorts, connect, scored_games
+from load import DB, Game, cohorts, connect, scored_games, require_current
 
+# Cohorts are named by the importer (web/src/analysis/import.ts); a "tournament N" cohort is titled as is.
 TITLES = {
-    CROSS_MODEL: "Cross-model games (tournament 1)",
+    "cpa-tiers cross-model": "Cross-model games (tournament 1)",
     "opus-effort": "Opus efforts (tournament 2)",
-    TOURNAMENT_5_COHORT: "Tournament 5",
-    TOURNAMENT_6_COHORT: "Tournament 6",
-    TOURNAMENT_7_COHORT: "Tournament 7",
-    TOURNAMENT_8_COHORT: "Tournament 8",
 }
 
 
@@ -55,7 +52,7 @@ def leaderboard(games: list[Game]) -> str:
     cash = bt.fit(bt.cells_of(games, share=lambda g: g.pot_first), entrants=names).elo()
     parts = [f"### All configs\n\n{len(games)} scored matches.\n\n{cohort_table(games, wins, cash)}"]
     for cohort, cohort_games in sorted(cohorts(games).items(), key=lambda item: -len(item[1])):
-        if cohort in (CROSS_SAMPLES, "tournament 3"):
+        if cohort in ("tournament 3", "tournament 4"):
             continue
         parts.append(f"### {title_of(cohort)}\n\n{len(cohort_games)} scored matches.\n\n{cohort_table(cohort_games, wins, cash)}")
     return "\n\n".join(parts)
@@ -66,6 +63,7 @@ def main() -> None:
     parser.add_argument("--db")
     parser.add_argument("--doc")
     args = parser.parse_args()
+    require_current(args.db or DB)
     text = leaderboard(scored_games(connect(args.db) if args.db else connect()))
     if args.doc:
         splice_between_markers(Path(args.doc), "leaderboard", text)

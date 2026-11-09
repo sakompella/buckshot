@@ -10,16 +10,16 @@ check stops the run with a message and a non-zero exit; fix the cause and rerun.
   stamp     write --cohort into each tournament.json that has none (the only write to a run dir)
   copy      copy the analysis database to a scratch file
   import    arena-import.ts of the phase dirs into the copy (importer worktree)
-  check     quick_check ok, 0 issues, every scored match has a cohort
+  check     quick_check ok
   swap-main stop the viewer, move the database in with a dated .pre-<name> copy, start the viewer and check HTTP 200
   snapshot  scratch copy of the new database, the input of the derived refresh
-  regret    copy the live regret databases (static and sampled) to staged files and score the decisions they lack into
-            them with score_regret.py (the Rust evaluator of the --evaluator checkout); each must stay one evaluator group.
-            A changed evaluator needs a full rescore: name new files with --regret and --regret-sampled
+  regret    copy the live regret database to a staged file and score the decisions it lacks into it, sampled reload,
+            with score_regret.py (the Rust evaluator of the --evaluator checkout); it must stay one run.
+            A changed evaluator needs a full rescore: name a new file with --regret
   knowledge arena-knowledge.ts --verify from the knowledge worktree
   certain   certain-mistakes database
   luck      luck corrections of the luck-adjusted Round Elo (analysis/aivat.py)
-  swap-derived  swap regret, sampled regret, knowledge, certain-mistakes and luck in, each keeping a .pre-<name> copy
+  swap-derived  swap regret, knowledge, certain-mistakes and luck in, each keeping a .pre-<name> copy
   public    redact_database.py, scan every column for emails, swap, restart the viewer
   export    arena-export.ts: the online site's aggregate JSON from the public copy into web/online/data
   deploy    only with --deploy: upload the site as a preview version, check it at its preview URL, then promote it to buckshot.akompella.dev (docs/arena/README.md)
@@ -48,6 +48,7 @@ import score_regret
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "analysis"))
 from docs import splice_between_markers  # noqa: E402
+from regret import PRODUCTION, run_of  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
 EMAIL = re.compile(rb"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+")
@@ -130,26 +131,15 @@ def swap(live: Path, new: Path, tag: str) -> bool:
     return True
 
 
-def check_import(db_path: Path, load_dir: Path) -> str:
-    """Stops unless the imported database is sound and every scored match has a cohort. Returns a summary line."""
+def check_import(db_path: Path) -> str:
+    """Stops unless the imported database is sound. The importer stops on a match without a cohort. Returns a summary line."""
     db = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     quick = db.execute("PRAGMA quick_check").fetchall()
     if quick != [("ok",)]:
         raise Stop(f"quick_check on {db_path}: {quick[:5]}")
-    issues = db.execute("SELECT COUNT(*) FROM issues").fetchone()[0]
-    if issues:
-        sample = db.execute("SELECT message FROM issues LIMIT 5").fetchall()
-        raise Stop(f"{issues} import issues, such as {sample}")
-    sys.path.insert(0, str(load_dir))
-    import load
-
-    try:
-        games = load.scored_games(db)
-    except ValueError as error:
-        raise Stop(f"a scored match has no cohort: {error}") from error
     by_status = dict(db.execute("SELECT status, COUNT(*) FROM matches GROUP BY status").fetchall())
     db.close()
-    return f"quick_check ok, 0 issues, {len(games)} scored games with cohorts, matches by status {by_status}"
+    return f"quick_check ok, matches by status {by_status}"
 
 
 def dotenv(text: str) -> dict[str, str]:
@@ -210,9 +200,7 @@ class Wrap:
     viewer_url: str
     jobs: int
     regret_name: str
-    sampled_name: str
     threads: int
-    sampled_max_shells: int
     deploy: bool = False
 
     def __post_init__(self) -> None:
@@ -224,7 +212,6 @@ class Wrap:
         self.main = self.analysis / "buckshot.sqlite"
         self.public = self.analysis / "buckshot.public.sqlite"
         self.regret_db = self.derived / self.regret_name
-        self.sampled_db = self.derived / self.sampled_name
         self.state = self.logs / "state.json"
         # Without $BEND: each `nix develop <worktree>` gets the Bend of that worktree's pin. A $BEND inherited from this
         # checkout's dev shell would make an older evaluator worktree build its player with a newer, incompatible Bend.
@@ -288,7 +275,7 @@ class Wrap:
         self.run("import", self.nix(self.importer, "bun", "scripts/arena-import.ts", "--db", str(self.scratch / "new.sqlite"), *skips, *dirs), cwd=self.importer / "web")
 
     def check(self) -> str:
-        return check_import(self.scratch / "new.sqlite", REPO / "tools/arena/analysis")
+        return check_import(self.scratch / "new.sqlite")
 
     def swap_main(self) -> str:
         self.viewer("stop")
@@ -301,24 +288,23 @@ class Wrap:
         backup(self.main, self.scratch / "snapshot.sqlite")
 
     def regret(self) -> str:
-        """Scores the decisions the live regret databases lack into staged copies of them; a rerun continues where it stopped."""
-        staged = {self.regret_db: self.scratch / "regret.staged.sqlite", self.sampled_db: self.scratch / "regret-sampled.staged.sqlite"}
-        for live, copy in staged.items():
-            if live.exists() and not copy.exists():
-                backup(live, copy)
-        settings = score_regret.Settings(threads=self.threads, jobs=self.jobs, sampled_max_shells=self.sampled_max_shells)
-        summary = score_regret.score(self.scratch / "snapshot.sqlite", staged[self.regret_db], staged[self.sampled_db], self.evaluator, settings, work=self.scratch / "score")
-        groups = []
-        for copy in staged.values():
-            db = sqlite3.connect(copy)
-            found = db.execute("SELECT DISTINCT evaluator, max_depth, budget, reload, samples FROM regret").fetchall()
-            quick = db.execute("PRAGMA quick_check").fetchall()
-            db.close()
-            if quick != [("ok",)] or len(found) != 1:
-                raise Stop(f"{copy}: quick_check {quick[:3]}, evaluator groups {found}; a regret database holds one group (a changed evaluator needs a full rescore)")
-            settle(copy)
-            groups += found
-        return f"{json.dumps(summary)}; groups {groups}"
+        """Scores the decisions the live regret database lacks into a staged copy of it; a rerun continues where it stopped."""
+        staged = self.scratch / "regret.staged.sqlite"
+        if self.regret_db.exists() and not staged.exists():
+            backup(self.regret_db, staged)
+        settings = score_regret.Settings(threads=self.threads, jobs=self.jobs)
+        summary = score_regret.score(self.scratch / "snapshot.sqlite", None, staged, self.evaluator, settings, work=self.scratch / "score")
+        db = sqlite3.connect(staged)
+        quick = db.execute("PRAGMA quick_check").fetchall()
+        db.close()
+        if quick != [("ok",)]:
+            raise Stop(f"{staged}: quick_check {quick[:3]}")
+        try:
+            run = run_of(staged)
+        except SystemExit as error:
+            raise Stop(f"{error} A changed evaluator needs a full rescore into a new file.") from error
+        settle(staged)
+        return f"{json.dumps(summary)}; run {run}"
 
     def knowledge_(self) -> str:
         out = self.scratch / "knowledge.sqlite"
@@ -344,7 +330,7 @@ class Wrap:
 
     def swap_derived(self) -> str:
         self.viewer("stop")
-        pairs = [(self.regret_db, "regret.staged.sqlite"), (self.derived / "knowledge.sqlite", "knowledge.sqlite"), (self.derived / "certain-mistakes.sqlite", "certain-mistakes.sqlite"), (self.derived / "luck.sqlite", "luck.sqlite"), (self.sampled_db, "regret-sampled.staged.sqlite")]
+        pairs = [(self.regret_db, "regret.staged.sqlite"), (self.derived / "knowledge.sqlite", "knowledge.sqlite"), (self.derived / "certain-mistakes.sqlite", "certain-mistakes.sqlite"), (self.derived / "luck.sqlite", "luck.sqlite")]
         moved = [swap(live, self.scratch / new, self.tag) for live, new in pairs]
         return f"swapped {moved}; " + self.viewer_up()
 
@@ -360,7 +346,7 @@ class Wrap:
 
     def export(self) -> str:
         out = REPO / "web/online/data"
-        derived = [("--regret", self.regret_db), ("--regret-sampled", self.sampled_db), ("--knowledge", self.derived / "knowledge.sqlite"), ("--certain-mistakes", self.derived / "certain-mistakes.sqlite"), ("--luck", self.derived / "luck.sqlite")]
+        derived = [("--regret", self.regret_db), ("--knowledge", self.derived / "knowledge.sqlite"), ("--certain-mistakes", self.derived / "certain-mistakes.sqlite"), ("--luck", self.derived / "luck.sqlite")]
         args = [str(self.public), "--out", str(out), *[a for flag, path in derived for a in (flag, str(path))]]
         self.run("export", self.nix(REPO, "bun", "scripts/arena-export.ts", *args), cwd=REPO / "web")
         return f"aggregates in {out}" + ("" if self.deploy else "; deploy with --deploy or `bun run deploy:online` from web/")
@@ -442,10 +428,8 @@ def main() -> None:
     p.add_argument("--analysis", type=Path, default=REPO / "_work/arena/analysis")
     p.add_argument("--docs", type=Path, default=REPO / "docs/arena")
     p.add_argument("--evaluator", type=Path, help="checkout that scores: its sim/rust and web/ (default this checkout)")
-    p.add_argument("--regret", help="file name under <analysis>/derived of the static regret rows (default regret-rust.sqlite)")
-    p.add_argument("--regret-sampled", help="file name under <analysis>/derived of the sampled rows (default regret-rust-sampled256.sqlite)")
+    p.add_argument("--regret", default=PRODUCTION.name, help="file name under <analysis>/derived of the regret rows (default %(default)s)")
     p.add_argument("--threads", type=int, default=score_regret.Settings.threads, help="buckshot-search threads (half the cores)")
-    p.add_argument("--sampled-max-shells", type=int, default=score_regret.Settings.sampled_max_shells, help="sampled rows for decisions with at most this many shells left")
     p.add_argument("--knowledge", type=Path, default=REPO, help="checkout that runs arena-knowledge.ts (default this checkout)")
     p.add_argument("--viewer-unit", default="buckshot-viewer", help="user unit to restart; '' leaves the viewer alone")
     p.add_argument("--viewer-url", default="http://127.0.0.1:8790/")
@@ -456,9 +440,7 @@ def main() -> None:
     args = p.parse_args()
     runs = [r.resolve() for r in args.run_dir]
     evaluator = (args.evaluator or REPO).resolve()
-    regret_name = args.regret or "regret-rust.sqlite"
-    sampled_name = args.regret_sampled or "regret-rust-sampled256.sqlite"
-    wrap = Wrap(runs, args.importer.resolve(), args.analysis.resolve(), args.docs.resolve(), args.name or re.sub(r"tournament-?", "t", runs[-1].name), args.cohort, args.skips, evaluator, args.knowledge, args.viewer_unit or None, args.viewer_url, args.jobs, regret_name, sampled_name, args.threads, args.sampled_max_shells, args.deploy)
+    wrap = Wrap(runs, args.importer.resolve(), args.analysis.resolve(), args.docs.resolve(), args.name or re.sub(r"tournament-?", "t", runs[-1].name), args.cohort, args.skips, evaluator, args.knowledge, args.viewer_unit or None, args.viewer_url, args.jobs, args.regret, args.threads, args.deploy)
     steps = [(n, f) for n, f in wrap.steps() if n not in args.skip]
     if args.dry_run:
         done = json.loads(wrap.state.read_text()) if wrap.state.exists() else {}

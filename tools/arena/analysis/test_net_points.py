@@ -84,7 +84,7 @@ class Load(unittest.TestCase):
     def load(self, searched: dict[int, int]) -> np_.Loaded:
         with tempfile.TemporaryDirectory() as directory:
             root = self.build(directory, searched)
-            return np_.load(str(root / "buckshot.sqlite"), root / "regret.sqlite", root / "knowledge.sqlite", 6, 20000)
+            return np_.load(str(root / "buckshot.sqlite"), root / "regret.sqlite", root / "knowledge.sqlite")
 
     def test_sums_each_seats_regret_in_rounds_and_keeps_its_largest_with_the_rounds_it_won(self):
         loaded = self.load({0: 100_000, 1: 250_000, 2: 40_000})

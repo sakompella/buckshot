@@ -4,9 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { config, round, list, jamPair, turnHolder } from './reference-adapter.mjs';
-
-export const items = ['Saw', 'Glass', 'Jammer', 'Cigarettes', 'Beer', 'Phone', 'Inverter', 'Adrenaline', 'Remote'];
+import { array, config, round, list, jamPair, turnHolder } from './reference-adapter.mjs';
 
 export function build(dir, name, relativeSource) {
   const source = fileURLToPath(new URL(relativeSource, import.meta.url));
@@ -42,6 +40,17 @@ export async function loadModels(prefix, { abstract = false } = {}) {
 }
 
 export const normalize = value => JSON.parse(JSON.stringify(value));
+
+// Bend's item order (domain.bend item.order), the item list of every test.
+export const items = await (async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'bend-mp-items-'));
+  try {
+    const D = (await import(build(dir, 'domain', '../domain.bend'))).default;
+    return array(normalize(D['item.order']())).map(item => item.$);
+  } finally {
+    rmSync(dir, { recursive: true });
+  }
+})();
 
 export const rules = names => Object.fromEntries(names.map(name => [name.toLowerCase(), {}]));
 
