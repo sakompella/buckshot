@@ -2,7 +2,7 @@
 
 This page summarizes the tournaments run so far, the findings about model reasoning, and the open work. The raw data stays under `_work/arena/`, which isn't committed. See [README.md](README.md) for how to run and resume. All costs are list-price costs: list prices applied to usage on subscription plans, not money paid.
 
-Ratings are one Bradley-Terry fit over every scored match of every tournament, on an Elo scale with the mean at 0, per configuration (model + endpoint + effort). So one rating scale covers every config, as in the viewer. A second fit on pot share (a config's cash over the match's cash, which also credits round prizes a loser banked) gives the cash rating. 95% intervals are in [matchups.md](analysis/matchups.md). Each pairing plays 10 seeds in both seat orders, 20 matches, unless stated otherwise. With 10 seeds, close rankings aren't reliable. "Medium" also isn't equal compute across providers.
+Ratings are one Bradley-Terry fit over every scored match of every tournament, on an Elo scale with the mean at 0, per configuration (model + endpoint + effort). So one rating scale covers every config. This match rating is not the viewer's Round Elo, which fits each round as a game; [net-points.md](analysis/net-points.md) lists Round Elo per config. A second fit on pot share (a config's cash over the match's cash, which also credits round prizes a loser banked) gives the cash rating. 95% intervals are in [matchups.md](analysis/matchups.md). Each pairing plays 10 seeds in both seat orders, 20 matches, unless stated otherwise. With 10 seeds, close rankings aren't reliable. "Medium" also isn't equal compute across providers.
 
 Scope: 3,537 scored matches with no DeepSeek seat, from the 3,557-match snapshot of 2026-11-04 (tournaments 5 to 9 are finished). The regret and patterns pages under [analysis/](analysis/) cover the same snapshot (3,536 matches; one match with an unsearched decision is left out).
 
@@ -19,14 +19,14 @@ This page describes the 3,557-match snapshot of the analysis database: 3,557 com
 - **tournament-9** (`_work/arena/tournament-9`, 3 phases): finished 2026-11-03. 100 of 100 matches played (Haiku 4.5 and Haiku 5.5 effort games).
 
 ## Leaderboard
-One table per cohort, ranked by the pooled rating, as the viewer's leaderboards show them. Matches, win share and pot share count the cohort's own games; ratings come from the one pooled fit, so a config has the same rating in every table. Sonnet max has 2 games in tournament 1's cross-model cohort (it lost both to Opus), so its rating there rests on its tournament-4 games. Tournament 5's 214 matches are one table of their own. Most of its configs had 2 to 12 matches against different opponents there, so their ratings rest mostly on the prior and later tournaments, not on that record. A config with fewer than 20 matches in total is provisional, as in the viewer. `python3 tools/arena/analysis/leaderboard.py --doc docs/arena/results.md` rewrites the tables.
+One table per cohort, ranked by the pooled match rating. Matches, win share and pot share count the cohort's own games; ratings come from the one pooled fit, so a config has the same rating in every table. Sonnet max has 2 games in tournament 1's cross-model cohort (it lost both to Opus), so its rating there rests on its tournament-4 games. Tournament 5's 214 matches are one table of their own. Most of its configs had 2 to 12 matches against different opponents there, so their ratings rest mostly on the prior and later tournaments, not on that record. A config with fewer than 20 matches in total is provisional, as in the viewer. `python3 tools/arena/analysis/leaderboard.py --doc docs/arena/results.md` rewrites the tables.
 
 <!-- leaderboard:start -->
 ### All configs
 
 3537 scored matches.
 
-| config | matches | win share | pot share | rating (Elo) | cash rating (Elo) |
+| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
 | claude-opus-5-5-max | 80 | 73.8% | 64.4% | +218 | +118 |
 | gpt-6.1-terra-max | 80 | 72.5% | 66.0% | +202 | +121 |
@@ -82,7 +82,7 @@ One table per cohort, ranked by the pooled rating, as the viewer's leaderboards 
 
 642 scored matches.
 
-| config | matches | win share | pot share | rating (Elo) | cash rating (Elo) |
+| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
 | claude-opus-5-5-max | 40 | 87.5% | 73.8% | +218 | +118 |
 | gpt-6.1-terra-max | 60 | 71.7% | 64.7% | +202 | +121 |
@@ -119,7 +119,7 @@ One table per cohort, ranked by the pooled rating, as the viewer's leaderboards 
 
 562 scored matches.
 
-| config | matches | win share | pot share | rating (Elo) | cash rating (Elo) |
+| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
 | claude-sonnet-5-5-max | 2 | 0.0% | 34.4% | +173 | +107 |
 | gpt-6-astra | 140 | 72.1% | 63.3% | +149 | +84 |
@@ -135,7 +135,7 @@ One table per cohort, ranked by the pooled rating, as the viewer's leaderboards 
 
 300 scored matches.
 
-| config | matches | win share | pot share | rating (Elo) | cash rating (Elo) |
+| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
 | claude-haiku-5-5-max | 100 | 60.0% | 57.8% | +72 | +44 |
 | claude-haiku-5-5-xhigh | 100 | 65.0% | 55.0% | +61 | +12 |
@@ -148,7 +148,7 @@ One table per cohort, ranked by the pooled rating, as the viewer's leaderboards 
 
 300 scored matches.
 
-| config | matches | win share | pot share | rating (Elo) | cash rating (Elo) |
+| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
 | claude-sonnet-5-5-max | 100 | 68.0% | 63.4% | +173 | +107 |
 | claude-sonnet-5-5-xhigh | 100 | 58.0% | 52.9% | +122 | +56 |
@@ -161,7 +161,7 @@ One table per cohort, ranked by the pooled rating, as the viewer's leaderboards 
 
 300 scored matches.
 
-| config | matches | win share | pot share | rating (Elo) | cash rating (Elo) |
+| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
 | gpt-6-luna-xhigh | 100 | 72.0% | 66.0% | -26 | -9 |
 | gpt-6-luna-max | 100 | 72.0% | 66.1% | -44 | -14 |
@@ -174,7 +174,7 @@ One table per cohort, ranked by the pooled rating, as the viewer's leaderboards 
 
 214 scored matches.
 
-| config | matches | win share | pot share | rating (Elo) | cash rating (Elo) |
+| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
 | claude-opus-5-5-max | 40 | 60.0% | 55.0% | +218 | +118 |
 | gpt-6.1-terra-max | 4 | 75.0% | 66.1% | +202 | +121 |
@@ -214,7 +214,7 @@ One table per cohort, ranked by the pooled rating, as the viewer's leaderboards 
 
 200 scored matches.
 
-| config | matches | win share | pot share | rating (Elo) | cash rating (Elo) |
+| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
 | claude-haiku-4-5-20251001 | 80 | 58.8% | 55.8% | -198 | -122 |
 | claude-haiku-4-5-20251001-minimal | 80 | 57.5% | 51.2% | -234 | -139 |
@@ -226,7 +226,7 @@ One table per cohort, ranked by the pooled rating, as the viewer's leaderboards 
 
 200 scored matches.
 
-| config | matches | win share | pot share | rating (Elo) | cash rating (Elo) |
+| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
 | gpt-5.6-terra-xhigh | 80 | 60.0% | 56.1% | +7 | +32 |
 | gpt-5.6-terra-max | 80 | 58.8% | 53.9% | +2 | +19 |
@@ -238,7 +238,7 @@ One table per cohort, ranked by the pooled rating, as the viewer's leaderboards 
 
 200 scored matches.
 
-| config | matches | win share | pot share | rating (Elo) | cash rating (Elo) |
+| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
 | gpt-6.1-sol-max | 80 | 58.8% | 54.7% | +143 | +95 |
 | gpt-6.1-sol-low | 80 | 48.8% | 48.7% | +90 | +60 |
@@ -250,7 +250,7 @@ One table per cohort, ranked by the pooled rating, as the viewer's leaderboards 
 
 100 scored matches.
 
-| config | matches | win share | pot share | rating (Elo) | cash rating (Elo) |
+| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
 | claude-haiku-5-5-high | 10 | 90.0% | 70.4% | +32 | +5 |
 | claude-haiku-5-5 | 10 | 80.0% | 83.8% | +1 | -4 |
@@ -266,7 +266,7 @@ One table per cohort, ranked by the pooled rating, as the viewer's leaderboards 
 
 80 scored matches.
 
-| config | matches | win share | pot share | rating (Elo) | cash rating (Elo) |
+| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
 | claude-opus-5-5-xhigh | 40 | 65.0% | 58.6% | +170 | +100 |
 | claude-opus-5-5-high | 40 | 45.0% | 44.1% | +147 | +77 |
@@ -277,7 +277,7 @@ One table per cohort, ranked by the pooled rating, as the viewer's leaderboards 
 
 73 scored matches.
 
-| config | matches | win share | pot share | rating (Elo) | cash rating (Elo) |
+| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
 | gpt-6.1-terra-max | 16 | 75.0% | 70.7% | +202 | +121 |
 | gpt-6-astra-high | 12 | 66.7% | 58.1% | +179 | +116 |
@@ -322,7 +322,7 @@ One table per cohort, ranked by the pooled rating, as the viewer's leaderboards 
 
 37 scored matches.
 
-| config | matches | win share | pot share | rating (Elo) | cash rating (Elo) |
+| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
 |---|---|---|---|---|---|
 | gpt-6.1-terra-xhigh | 4 | 50.0% | 41.1% | +157 | +59 |
 | claude-opus-5-5-high | 1 | 0.0% | 33.3% | +147 | +77 |

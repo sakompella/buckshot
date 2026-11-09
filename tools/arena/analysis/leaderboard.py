@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""The arena leaderboard of docs/arena/results.md: one table per cohort, as the viewer shows them.
+"""The arena leaderboard of docs/arena/results.md: one table per cohort.
 
-Ratings are the pooled Bradley-Terry fits over every scored match, on win shares and on pot shares, so a config has
-one rating in every table. Win share, pot share and matches count only the cohort's own matches. Intervals are in
+Ratings are the pooled Bradley-Terry fits over every scored match, one per match on its win share and one on its pot share, so a config has
+one rating in every table. They are not the viewer's Round Elo, which fits round shares (bt.round_elo). Win share, pot share and matches count only the cohort's own matches. Intervals are in
 matchups.md. Tournament 3 and tournament 4 have no table of their own: their matches are in the first one. With --doc FILE the tables replace the text between the leaderboard markers of that file.
 
     python3 tools/arena/analysis/leaderboard.py [--db PATH] [--doc docs/arena/results.md]
@@ -46,7 +46,7 @@ def cohort_table(games: list[Game], wins: dict[str, float], cash: dict[str, floa
         [config, f"{n:g}", pct(won / n), pct(pot / n), signed(wins[config]), signed(cash[config])]
         for config, (n, won, pot) in sorted(seats.items(), key=lambda item: -wins[item[0]])
     ]
-    return table(["config", "matches", "win share", "pot share", "rating (Elo)", "cash rating (Elo)"], rows)
+    return table(["config", "matches", "win share", "pot share", "match rating (Elo)", "cash rating (Elo)"], rows)
 
 
 def leaderboard(games: list[Game]) -> str:
