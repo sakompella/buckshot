@@ -32,7 +32,7 @@ Live files are read once per match. A snapshot can straddle an append or manifes
 | `calls` | Each physical model reply, including failed replies, provider, usage, list-price cost, latency, exact saved reasoning text, response text and tool arguments. |
 | `source_files` | Latest file hashes and byte lengths for imported JSON/JSONL files. |
 | `source_records` | Exact raw JSON records and JSONL lines, source path and 1-based line, and whether the observation belongs to the latest snapshot. Prior versions remain available. A live match's last line without its newline is read on a later import. |
-| `metadata` | Schema version and exact price table with its SHA-256. |
+| `metadata` | Schema version, exact price table with its SHA-256, and the importer files with their SHA-256. |
 | `match_totals` | View over calls. Known cost, unpriced-call count and token totals, including partial matches and failures. |
 
 IDs are SHA-256 strings. Indexes cover model and effort, tournament/seed/pairing/block, code, entrant, match/turn/player and decision-call joins. A seed-block ID includes tournament, pairing, block and seed. Keep this relationship when resampling results. Do not treat seat swaps as independent seeds.
@@ -51,7 +51,7 @@ Calls link to the next chosen move by the same player in timestamp order, matchi
 
 `reasoning_text` preserves `calls.jsonl`'s `thinking` string exactly. It is provider-returned text, often a reasoning summary, not a complete chain-of-thought trace. The original logger concatenated blocks without separators; the importer does not repair that. Encrypted signatures are not decrypted. Full conversation prompts and durable retry history remain in `session.sqlite`, referenced through `matches.source_dir`; the importer does not open the journal or its WAL. `arena.log` remains there too.
 
-Original manifests provide a combined gameplay `code_hash`, not an independently recorded rules hash. `rules_hash` therefore remains NULL. Do not substitute the current rules hash for historical evidence. Replay uses the current generated rules and reports any divergence. Keep code versions separate when comparing requests. Rating subsets, such as medium-only cross-model games and within-model effort sweeps, must be selected explicitly by entrants/pairings; the importer does not pool them into one rating.
+Original manifests provide a combined gameplay `code_hash`, not an independently recorded rules hash. Replay uses the current generated rules, and a divergence stops the import. A replayed match records in `validated_with` the hash of the code that validated it: `import.ts`, every local module it imports (the replay, the agent view, `bend.ts`, the generated Bend rules and the files that play a match) and `schema.sql`, listed with their SHA-256 in the `importer_files` metadata row (`web/src/analysis/importer-hash.ts`). The viewer, `arena-knowledge.ts`, `rust-search-inputs.ts`, the export and the Python analysis scripts refuse a database with a validated match whose hash is not this checkout's; re-import it after a rules or replay change. The fingerprint includes the hash, so the re-import replays every match. Keep code versions separate when comparing requests. Rating subsets, such as medium-only cross-model games and within-model effort sweeps, must be selected explicitly by entrants/pairings; the importer does not pool them into one rating.
 
 ## Queries
 

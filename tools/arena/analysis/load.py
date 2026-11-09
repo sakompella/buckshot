@@ -3,12 +3,15 @@
 Only the columns the analysis needs are read: never match_seats.provenance_json, which holds account ids.
 """
 
+import json
 import re
 import sqlite3
 from dataclasses import dataclass
+from hashlib import sha256
 from pathlib import Path
 
-DB = str(Path(__file__).resolve().parents[3] / "_work/arena/analysis/buckshot.sqlite")
+REPO = Path(__file__).resolve().parents[3]
+DB = str(REPO / "_work/arena/analysis/buckshot.sqlite")
 
 # Its free tier refused requests, so its scored games are not a random sample of what was scheduled: every analysis skips them.
 # An engine or bot entrant has no model.
@@ -57,6 +60,23 @@ class Game:
 
 def connect(path: str = DB) -> sqlite3.Connection:
     return sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+
+
+def require_current(path: str) -> None:
+    """Stops unless every validated match in the analysis database was replayed by this checkout's importer, replay and rules code.
+
+    The hash is web/src/analysis/importer-hash.ts's: the SHA-256 of the JSON object mapping each file the importer records to its SHA-256.
+    """
+    db = connect(path)
+    row = db.execute("SELECT value FROM metadata WHERE key = 'importer_files'").fetchone()
+    if row is None:
+        raise SystemExit(f"{path} records no importer files; re-import it")
+    files = {name: sha256((REPO / name).read_bytes()).hexdigest() for name in json.loads(row[0])}
+    current = sha256(json.dumps(files, separators=(",", ":")).encode()).hexdigest()
+    stale = db.execute("SELECT name, validated_with FROM matches WHERE replay_status = 'validated' AND validated_with IS NOT ? LIMIT 3", (current,)).fetchall()
+    db.close()
+    if stale:
+        raise SystemExit(f"{path} was validated by other replay or rules code (now {current}); re-import it. Such as: {stale}")
 
 
 def cohort_of(tournament: str, model_a: str, model_b: str, effort_a: str, effort_b: str, declared: str | None = None) -> str:

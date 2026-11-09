@@ -13,6 +13,7 @@ import { RunManifest } from "../arena/match.ts";
 import { CallLine, EventLine, type MoveLine } from "../arena/runlog.ts";
 import { manifestProblems, TournamentFile, tournamentOf } from "../arena/tournament-dir.ts";
 import { replayOf, type Replay } from "../arena/replay.ts";
+import { IMPORTER_FILES, IMPORTER_HASH } from "./importer-hash.ts";
 
 const sha = (text: string) => createHash("sha256").update(text).digest("hex");
 
@@ -71,7 +72,6 @@ export const importTournaments = ({ database, sources, skipped = {} }: ImportOpt
   const db = openAnalysis(database);
   const prices = loadPrices(DEFAULT_PRICES);
   const priceHash = sha(readFileSync(DEFAULT_PRICES, "utf8"));
-  const importerHash = sha(readFileSync(new URL(import.meta.url), "utf8") + readFileSync(new URL("./schema.sql", import.meta.url), "utf8"));
 
   try {
     for (const source of sources) {
@@ -144,7 +144,7 @@ export const importTournaments = ({ database, sources, skipped = {} }: ImportOpt
             else for (const problem of manifestProblems(tournament, match, validation.success)) conflict(matchDir, "the manifest disagrees with the tournament config", json({ problem }));
           }
 
-          const fingerprint = sha(json([importerHash, json(match), manifestText, eventText, callText, priceHash, skipReason ?? null, matchDir]));
+          const fingerprint = sha(json([IMPORTER_HASH, json(match), manifestText, eventText, callText, priceHash, skipReason ?? null, matchDir]));
           const previous = db.query<{ fingerprint: string }, [string]>("SELECT fingerprint FROM matches WHERE id = ?").get(matchId);
 
           if (previous?.fingerprint === fingerprint) continue;
@@ -168,7 +168,7 @@ export const importTournaments = ({ database, sources, skipped = {} }: ImportOpt
 
           // A finished, unskipped match becomes completed only after its replay and end event check out, below.
           const status = manifestText !== undefined || eventText !== undefined || callText !== undefined ? "partial" : isSkipped ? "skipped" : "unstarted";
-          put("matches", { id: matchId, tournament_id: tournamentId, name: match.name, pairing: match.pairing, block: match.block, seed: match.seed, seed_block_id: sha(json([tournamentId, match.pairing, match.block, match.seed])), status, disposition: isSkipped ? "skipped" : null, status_reason: skipReason ?? null, started_at: null, ended_at: null, code_hash: null, rules_hash: null, instructions_hash: null, source_dir: matchDir, schedule_json: json(match), manifest_json: manifestText ?? null, source_record: null, fingerprint, replay_status: manifest === undefined ? "unavailable" : "pending" });
+          put("matches", { id: matchId, tournament_id: tournamentId, name: match.name, pairing: match.pairing, block: match.block, seed: match.seed, seed_block_id: sha(json([tournamentId, match.pairing, match.block, match.seed])), status, disposition: isSkipped ? "skipped" : null, status_reason: skipReason ?? null, started_at: null, ended_at: null, code_hash: null, validated_with: null, instructions_hash: null, source_dir: matchDir, schedule_json: json(match), manifest_json: manifestText ?? null, source_record: null, fingerprint, replay_status: manifest === undefined ? "unavailable" : "pending" });
           const provenanceObject = manifest?.provenance ?? null;
           const provenance = Schema.decodeUnknownOption(Schema.Struct({ code_sha: Schema.String, instructions_sha: Schema.String }))(provenanceObject);
           db.query("UPDATE matches SET code_hash = ?, instructions_hash = ? WHERE id = ?").run(Option.isSome(provenance) ? provenance.value.code_sha : null, Option.isSome(provenance) ? provenance.value.instructions_sha : null, matchId);
@@ -273,7 +273,7 @@ export const importTournaments = ({ database, sources, skipped = {} }: ImportOpt
             }
           }
 
-          db.query("UPDATE matches SET replay_status = ? WHERE id = ?").run(manifest === undefined ? "unavailable" : "validated", matchId);
+          db.query("UPDATE matches SET replay_status = ?, validated_with = ? WHERE id = ?").run(manifest === undefined ? "unavailable" : "validated", manifest === undefined ? null : IMPORTER_HASH, matchId);
 
           for (const [ordinal, observation] of calls.entries()) {
             const call = observation.value;
@@ -316,7 +316,7 @@ export const importTournaments = ({ database, sources, skipped = {} }: ImportOpt
 
         db.query(`UPDATE tournaments SET status = CASE WHEN EXISTS (SELECT 1 FROM matches WHERE tournament_id = ? AND status NOT IN ('completed','skipped') AND disposition IS NULL) THEN 'partial' ELSE 'completed' END WHERE id = ?`).run(tournamentId, tournamentId);
         put("metadata", { key: "schema_version", value: "1" });
-        put("metadata", { key: "importer_sha256", value: importerHash });
+        put("metadata", { key: "importer_files", value: json(IMPORTER_FILES) });
         put("metadata", { key: "prices_sha256", value: priceHash });
         put("metadata", { key: "prices_json", value: readFileSync(DEFAULT_PRICES, "utf8") });
       })();

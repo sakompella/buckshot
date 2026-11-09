@@ -21,7 +21,7 @@ import seats
 import tournament3
 from docs import splice_between_markers
 from fmt import frac, pct, pp, signed, span, table
-from load import SKIPPED_MODEL, Game, blocks_of, cohorts, connect, scored_games
+from load import DB, SKIPPED_MODEL, Game, blocks_of, cohorts, connect, scored_games, require_current
 
 # Cohort names, as in the arena viewer: the model's short name within its family.
 SHORT_NAMES = {
@@ -362,6 +362,7 @@ def main() -> None:
     parser.add_argument("--repeats", type=int, default=5, help="repeats of the 10-fold cross-validation")
     parser.add_argument("--doc")
     args = parser.parse_args()
+    require_current(args.db or DB)
     db = connect(args.db) if args.db else connect()
     # An engine has no model: it stands for itself, so its matches are cross-model.
     model_of = {name: model or name for name, model in db.execute("SELECT DISTINCT name, model FROM entrants")}

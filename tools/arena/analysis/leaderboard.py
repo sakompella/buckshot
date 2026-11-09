@@ -14,7 +14,7 @@ import argparse
 import bt
 from docs import splice_between_markers
 from fmt import pct, signed, table
-from load import CROSS_MODEL, CROSS_SAMPLES, TOURNAMENT_5_COHORT, TOURNAMENT_6_COHORT, TOURNAMENT_7_COHORT, TOURNAMENT_8_COHORT, Game, cohorts, connect, scored_games
+from load import DB, CROSS_MODEL, CROSS_SAMPLES, TOURNAMENT_5_COHORT, TOURNAMENT_6_COHORT, TOURNAMENT_7_COHORT, TOURNAMENT_8_COHORT, Game, cohorts, connect, scored_games, require_current
 
 TITLES = {
     CROSS_MODEL: "Cross-model games (tournament 1)",
@@ -66,6 +66,7 @@ def main() -> None:
     parser.add_argument("--db")
     parser.add_argument("--doc")
     args = parser.parse_args()
+    require_current(args.db or DB)
     text = leaderboard(scored_games(connect(args.db) if args.db else connect()))
     if args.doc:
         splice_between_markers(Path(args.doc), "leaderboard", text)

@@ -28,7 +28,7 @@ import bt
 import by_round
 from docs import splice_between_markers
 from fmt import pp, signed, table
-from load import DB, SKIPPED_MODEL, connect
+from load import DB, SKIPPED_MODEL, connect, require_current
 
 REFERENCE = "medium"
 MIN_MATCHES = 2  # matches per effort and opponent config before the config counts as common support
@@ -381,6 +381,7 @@ def main() -> None:
     parser.add_argument("--draws", type=int, default=2000)
     parser.add_argument("--doc")
     args = parser.parse_args()
+    require_current(args.db)
     text = report(connect(args.db), args.draws)
     if args.doc:
         splice_between_markers(Path(args.doc), "matched-efforts", text)

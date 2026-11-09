@@ -26,7 +26,7 @@ import by_round
 import regret
 from docs import splice_between_markers
 from fmt import pct, table
-from load import DB, SKIPPED_MODEL, connect
+from load import DB, SKIPPED_MODEL, connect, require_current
 from regret import DERIVED, EFFORTS, POINT
 from reload_bias import Estimate
 
@@ -474,6 +474,7 @@ def main() -> None:
     parser.add_argument("--plots", type=Path)
     parser.add_argument("--doc", type=Path)
     args = parser.parse_args()
+    require_current(args.db)
     loaded = load(args.db, args.regret, args.knowledge, args.depth, args.budget, args.reload, regret.run_samples(args.reload, args.samples))
     rng = random.Random(SEED)
     elo = elo_of(loaded.matches)

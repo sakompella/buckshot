@@ -31,6 +31,7 @@ import { GameEvent, type Seat, Secret } from "../src/domain.ts";
 import { type Letter, rosterOf } from "../src/players.ts";
 import { eventText, secretText } from "../src/text.ts";
 import { replayOf } from "../src/arena/replay.ts";
+import { assertCurrentImport } from "../src/analysis/importer-hash.ts";
 
 // Rebuilds every agent decision's own information from the analysis database
 // (docs/arena/database.md) and writes it to a separate database: the shell
@@ -57,6 +58,8 @@ if (values.db === undefined || (values.out === undefined && values.trace === und
 }
 
 const source = new Database(resolve(values.db), { readonly: true });
+
+assertCurrentImport(source);
 
 const scratch = mkdtempSync(join(tmpdir(), "buckshot-knowledge-"));
 

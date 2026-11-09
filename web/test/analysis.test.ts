@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { Option, Result } from "effect";
 
 import { importTournaments, openAnalysis } from "../src/analysis/import.ts";
+import { assertCurrentImport } from "../src/analysis/importer-hash.ts";
 import { replayOf } from "../src/arena/replay.ts";
 import { playFauxRun } from "./faux-run.ts";
 
@@ -158,6 +159,25 @@ const rowsOf = (database: string, sql: string) => {
 
   try { return db.query(sql).all(); } finally { db.close(); }
 };
+
+test("a database validated by other replay or rules code is refused, by the TypeScript readers and the Python analysis alike", async () => {
+  const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
+
+  try {
+    const { source } = probeTournament(root, "medium");
+    const database = join(root, "analysis.sqlite");
+    importTournaments({ database, sources: [source] });
+    const python = () => Bun.spawnSync(["python3", "-c", `import sys; sys.path.insert(0, "${join(import.meta.dir, "../../tools/arena/analysis")}"); import load; load.require_current("${database}")`], { stderr: "pipe" });
+    const db = openAnalysis(database);
+
+    assertCurrentImport(db);
+    expect(python().exitCode).toBe(0);
+    db.run("UPDATE matches SET validated_with = 'older rules'");
+    expect(() => assertCurrentImport(db)).toThrow("validated by other replay or rules code");
+    expect(python().stderr.toString()).toContain("validated by other replay or rules code");
+    db.close();
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
 
 test("a changed tournament config is checked on unchanged matches, as a fresh rebuild does", async () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
