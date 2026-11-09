@@ -56,7 +56,7 @@ await Effect.runPromise(
     dir,
     seed: "5",
     controllers: ["Agent", "DoN"],
-    entrants: (["A"] as const).map((agent) => ({ agent, model: { provider: "faux", modelId: "faux-a" }, thinkingLevel: undefined, provenance: { ...fauxProvenance("faux-a"), effort: process.env.CRASH_TEST_EFFORT ?? null } })),
+    entrants: (["A"] as const).map((agent) => ({ agent, label: "faux-a", model: { provider: "faux", modelId: "faux-a" }, thinkingLevel: undefined, provenance: { ...fauxProvenance("faux-a"), effort: process.env.CRASH_TEST_EFFORT ?? null } })),
     models,
     delivery: "on-turn",
     crashAt: (at) => {
