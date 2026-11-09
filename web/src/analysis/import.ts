@@ -7,6 +7,7 @@ import { Option, Result, Schema } from "effect";
 
 import { agentGame } from "../agent/view.ts";
 import { costOf, DEFAULT_PRICES, loadPrices } from "../arena/cost.ts";
+import { AgentId } from "../arena/agent.ts";
 import { RunManifest } from "../arena/match.ts";
 import { CallLine, EventLine, type MoveLine } from "../arena/runlog.ts";
 import { manifestProblems, TournamentFile, tournamentOf } from "../arena/tournament-dir.ts";
@@ -215,7 +216,7 @@ export const importTournaments = ({ database, sources, skipped = {} }: ImportOpt
             put("match_seats", { match_id: matchId, position: index + 1, entrant_id: sha(`${tournamentId}\0${name}`), player, cash: cash ?? null, win_share: null, provenance_json: json(provenanceObject) });
             shares.set(index + 1, cash === undefined || winners === undefined ? null : cash === high ? 1 / winners : 0);
 
-            if (manifest !== undefined && (manifest.letters[index] !== match.seats[index] || manifest.seed !== String(match.seed))) issue(`Schedule differs from manifest at position ${index + 1}`, matchId);
+            if (manifest !== undefined && ((Schema.is(AgentId)(match.seats[index]) && manifest.letters[index] !== match.seats[index]) || manifest.seed !== String(match.seed))) issue(`Schedule differs from manifest at position ${index + 1}`, matchId);
           }
 
           const moves: Array<Observation<MoveLine>> = [];
