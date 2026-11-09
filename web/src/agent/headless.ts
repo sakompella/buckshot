@@ -38,6 +38,10 @@ const bySeat = ({ table, controllers }: MatchSetup): ReadonlyArray<Controller> =
   Arr.makeBy(4, (seat) => Option.getOrElse(Arr.findFirstIndex(SEATS_BY_TABLE[table], (tableSeat) => tableSeat === seat).pipe(Option.flatMap((position) => Arr.get(controllers, position))), (): Controller => "Human"));
 
 const start = (table: HeadlessTable, setup: MatchSetup): Applied<HeadlessTable> => {
+  const seatsAtTable = SEATS_BY_TABLE[setup.table];
+
+  if (setup.controllers.length < seatsAtTable.length) return failed(table, `Seat ${setup.controllers.length} of the ${seatsAtTable.length}-seat table has no controller. Give one per seat.`);
+
   if (setup.controllers.includes("Human")) return failed(table, "No one can click in the MCP server, so no player can be Human. Use Agent, DoN or Story.");
 
   const seed = Option.getOrElse(setup.maybeSeed, randomSeed);
