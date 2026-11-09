@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS entrants (
 CREATE TABLE IF NOT EXISTS matches (
   id TEXT PRIMARY KEY, tournament_id TEXT NOT NULL REFERENCES tournaments(id), name TEXT NOT NULL,
   pairing INTEGER NOT NULL, block INTEGER NOT NULL, seed INTEGER NOT NULL, seed_block_id TEXT NOT NULL,
-  status TEXT NOT NULL, disposition TEXT, status_reason TEXT, started_at TEXT, ended_at TEXT,
+  status TEXT NOT NULL, cohort TEXT NOT NULL, disposition TEXT, status_reason TEXT, started_at TEXT, ended_at TEXT,
   code_hash TEXT, validated_with TEXT, instructions_hash TEXT, source_dir TEXT NOT NULL,
   schedule_json TEXT NOT NULL, manifest_json TEXT, source_record TEXT,
   fingerprint TEXT NOT NULL, replay_status TEXT NOT NULL,

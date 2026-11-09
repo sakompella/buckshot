@@ -26,6 +26,8 @@ const fauxMatchInto = (dir: string) => {
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 
   for (const agent of Object.values<{ effort: string | null }>(manifest.provenance.agents)) agent.effort = "medium";
+  // Without recorded labels each seat is labelled by its entrant's config, as a match from before labels.
+  delete manifest.labels;
 
   writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
 };
@@ -40,7 +42,7 @@ test("refreshes resumed logs without duplicating calls or repeated moves, stops 
   try {
     fauxMatchInto(match);
     const schedule = [{ name: "a_b_b0_p0", pairing: 0, block: 0, seed: 42, seats: ["A", "B"], entrants: ["a", "b"] }, { name: "b_a_b0_p1", pairing: 0, block: 0, seed: 42, seats: ["B", "A"], entrants: ["b", "a"] }];
-    writeFileSync(join(source, "tournament.json"), JSON.stringify({ format: 1, created_at: "2026-01-01T00:00:00Z", git_commit: "test", config: { name: "test", seed: 42, delivery: "on-turn", endpoints: { fake: { api: "anthropic", url: "http://invalid", keyEnv: "UNUSED" } }, entrants: { a: { endpoint: "fake", model: "faux-a", effort: "medium" }, b: { endpoint: "fake", model: "faux-b", effort: "medium" } }, pairings: [["a", "b"]], blocksPerPairing: 1 }, schedule }));
+    writeFileSync(join(source, "tournament.json"), JSON.stringify({ format: 1, created_at: "2026-01-01T00:00:00Z", git_commit: "test", config: { name: "test", seed: 42, cohort: "test", delivery: "on-turn", endpoints: { fake: { api: "anthropic", url: "http://invalid", keyEnv: "UNUSED" } }, entrants: { a: { endpoint: "fake", model: "faux-a", effort: "medium" }, b: { endpoint: "fake", model: "faux-b", effort: "medium" } }, pairings: [["a", "b"]], blocksPerPairing: 1 }, schedule }));
     const eventsPath = join(match, "events.jsonl");
     const callsPath = join(match, "calls.jsonl");
     const events = readFileSync(eventsPath, "utf8");
@@ -125,7 +127,7 @@ test("a finished match with an explicit skip keeps its moves and costs but is no
   try {
     fauxMatchInto(join(source, "a_b_b0_p0"));
     const schedule = [{ name: "a_b_b0_p0", pairing: 0, block: 0, seed: 42, seats: ["A", "B"], entrants: ["a", "b"] }, { name: "b_a_b0_p1", pairing: 0, block: 0, seed: 42, seats: ["B", "A"], entrants: ["b", "a"] }];
-    writeFileSync(join(source, "tournament.json"), JSON.stringify({ format: 1, created_at: "2026-01-01T00:00:00Z", git_commit: "test", config: { name: "test", seed: 42, delivery: "on-turn", endpoints: { fake: { api: "anthropic", url: "http://invalid", keyEnv: "UNUSED" } }, entrants: { a: { endpoint: "fake", model: "faux-a", effort: "medium" }, b: { endpoint: "fake", model: "faux-b", effort: "medium" } }, pairings: [["a", "b"]], blocksPerPairing: 1 }, schedule }));
+    writeFileSync(join(source, "tournament.json"), JSON.stringify({ format: 1, created_at: "2026-01-01T00:00:00Z", git_commit: "test", config: { name: "test", seed: 42, cohort: "test", delivery: "on-turn", endpoints: { fake: { api: "anthropic", url: "http://invalid", keyEnv: "UNUSED" } }, entrants: { a: { endpoint: "fake", model: "faux-a", effort: "medium" }, b: { endpoint: "fake", model: "faux-b", effort: "medium" } }, pairings: [["a", "b"]], blocksPerPairing: 1 }, schedule }));
     importTournaments({ database, sources: [source], skipped: { [source]: { a_b_b0_p0: "over the cap", b_a_b0_p1: "never played" } } });
     const db = openAnalysis(database);
 
@@ -147,7 +149,7 @@ const probeTournament = (root: string, effort: string) => {
   mkdirSync(source);
   fauxMatchInto(join(source, name));
   const manifestPath = join(source, name, "manifest.json");
-  const configured = (aEffort: string) => ({ format: 1, created_at: "2026-01-01T00:00:00Z", git_commit: "test", config: { name: "probe", seed: 42, delivery: "on-turn", endpoints: { fake: { api: "anthropic", url: "http://invalid", keyEnv: "UNUSED" } }, entrants: { a: { endpoint: "fake", model: "faux-a", effort: aEffort }, b: { endpoint: "fake", model: "faux-b", effort: "medium" } }, pairings: [["a", "b"]], blocksPerPairing: 1 }, schedule: [{ name, pairing: 0, block: 0, seed: 42, seats: ["A", "B"], entrants: ["a", "b"] }] });
+  const configured = (aEffort: string) => ({ format: 1, created_at: "2026-01-01T00:00:00Z", git_commit: "test", config: { name: "probe", seed: 42, cohort: "test", delivery: "on-turn", endpoints: { fake: { api: "anthropic", url: "http://invalid", keyEnv: "UNUSED" } }, entrants: { a: { endpoint: "fake", model: "faux-a", effort: aEffort }, b: { endpoint: "fake", model: "faux-b", effort: "medium" } }, pairings: [["a", "b"]], blocksPerPairing: 1 }, schedule: [{ name, pairing: 0, block: 0, seed: 42, seats: ["A", "B"], entrants: ["a", "b"] }] });
   const configure = (aEffort: string) => writeFileSync(join(source, "tournament.json"), JSON.stringify(configured(aEffort)));
   configure(effort);
 
@@ -192,6 +194,21 @@ test("a changed tournament config is checked on unchanged matches, as a fresh re
     expect(() => importTournaments({ database: fresh, sources: [source] })).toThrow("agent A played at effort medium, the schedule says high");
     configure("medium");
     importTournaments({ database, sources: [source] });
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("a match's cohort is its tournament config's, and a config without one stops the import", async () => {
+  const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
+
+  try {
+    const { source } = probeTournament(root, "medium");
+    const database = join(root, "analysis.sqlite");
+    importTournaments({ database, sources: [source] });
+    expect(rowsOf(database, "SELECT cohort FROM matches")).toEqual([{ cohort: "test" }]);
+    const file = JSON.parse(readFileSync(join(source, "tournament.json"), "utf8"));
+    delete file.config.cohort;
+    writeFileSync(join(source, "tournament.json"), JSON.stringify(file));
+    expect(() => importTournaments({ database, sources: [source] })).toThrow("the tournament config names no cohort");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

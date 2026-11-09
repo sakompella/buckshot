@@ -47,6 +47,7 @@ beforeAll(async () => {
   const config = {
     name: "test",
     seed: SEED,
+    cohort: "test",
     delivery: "on-turn",
     endpoints: { fake: { api: "anthropic", url: "http://invalid", keyEnv: "UNUSED" } },
     entrants: { a: { endpoint: "fake", model: "faux-a", effort: "medium" }, b: { endpoint: "fake", model: "faux-b", effort: "high" } },

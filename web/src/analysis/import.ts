@@ -13,6 +13,7 @@ import { RunManifest } from "../arena/match.ts";
 import { CallLine, EventLine, type MoveLine } from "../arena/runlog.ts";
 import { manifestProblems, TournamentFile, tournamentOf } from "../arena/tournament-dir.ts";
 import { replayOf, type Replay } from "../arena/replay.ts";
+import { modelEntrant } from "../arena/tournament.ts";
 import { IMPORTER_FILES, IMPORTER_HASH } from "./importer-hash.ts";
 
 const sha = (text: string) => createHash("sha256").update(text).digest("hex");
@@ -41,6 +42,25 @@ const validateManifest = Schema.decodeUnknownResult(Schema.fromJsonString(Valida
 /** Stops the import where two sources disagree, naming the match directory, what disagrees and both sides. */
 const conflict = (matchDir: string, what: string, dump: string): never => {
   throw new Error(`Import stopped at ${matchDir}: ${what}\n${dump}`);
+};
+
+/** Old tournaments ran before configs named their cohort (`config.cohort`); this is their cohort, by tournament name. */
+const LEGACY_COHORTS: ReadonlyArray<readonly [string, ReadonlyArray<string>]> = [
+  ["opus-effort", ["opus-effort"]],
+  ["tournament 3", ["astra-vs-opus-xhigh"]],
+  ["tournament 4", ["cross-samples"]],
+  ["tournament 5", ["astra-high-cross", "astra-low-cross", "astra-self", "cross-more", "opus-max-cross", "opus-max-effort", "opus-off", "terra61-a", "terra61-b", "terra61-c", "top-four"]],
+  ["tournament 6", ["astra-recall", "terra-claude", "opus-none", "haiku-ladder"]],
+  ["tournament 7", ["t7-terra-max", "t7-cross-a", "t7-astra-off", "t7-terra-off", "t7-astra-high", "t7-cross-b", "t7-terra-low-high", "t7-terra-xhigh"]],
+];
+
+/** The comparison a match is pooled in: its tournament's `cohort`; for tournament 1 (cpa-tiers), each model's effort sweep or the cross-model games. */
+const cohortOf = (tournament: string, declared: string | undefined, models: ReadonlyArray<string | null>): string | undefined => {
+  if (declared !== undefined) return declared;
+
+  if (tournament === "cpa-tiers") return new Set(models).size === 1 ? `cpa-tiers sweep ${models[0]}` : "cpa-tiers cross-model";
+
+  return LEGACY_COHORTS.find(([, names]) => names.includes(tournament))?.[0];
 };
 
 /** Why a finished manifest can't be scored: its standings must cover each seated player exactly once. */
@@ -144,6 +164,7 @@ export const importTournaments = ({ database, sources, skipped = {} }: ImportOpt
             else for (const problem of manifestProblems(tournament, match, validation.success)) conflict(matchDir, "the manifest disagrees with the tournament config", json({ problem }));
           }
 
+          const cohort = cohortOf(file.config.name, file.config.cohort, match.entrants.map((name) => modelEntrant(file.config, name)?.model ?? null)) ?? conflict(matchDir, "the tournament config names no cohort", json({ tournament: file.config.name }));
           const fingerprint = sha(json([IMPORTER_HASH, json(match), manifestText, eventText, callText, priceHash, skipReason ?? null, matchDir]));
           const previous = db.query<{ fingerprint: string }, [string]>("SELECT fingerprint FROM matches WHERE id = ?").get(matchId);
 
@@ -168,7 +189,7 @@ export const importTournaments = ({ database, sources, skipped = {} }: ImportOpt
 
           // A finished, unskipped match becomes completed only after its replay and end event check out, below.
           const status = manifestText !== undefined || eventText !== undefined || callText !== undefined ? "partial" : isSkipped ? "skipped" : "unstarted";
-          put("matches", { id: matchId, tournament_id: tournamentId, name: match.name, pairing: match.pairing, block: match.block, seed: match.seed, seed_block_id: sha(json([tournamentId, match.pairing, match.block, match.seed])), status, disposition: isSkipped ? "skipped" : null, status_reason: skipReason ?? null, started_at: null, ended_at: null, code_hash: null, validated_with: null, instructions_hash: null, source_dir: matchDir, schedule_json: json(match), manifest_json: manifestText ?? null, source_record: null, fingerprint, replay_status: manifest === undefined ? "unavailable" : "pending" });
+          put("matches", { id: matchId, tournament_id: tournamentId, name: match.name, pairing: match.pairing, block: match.block, seed: match.seed, seed_block_id: sha(json([tournamentId, match.pairing, match.block, match.seed])), status, cohort, disposition: isSkipped ? "skipped" : null, status_reason: skipReason ?? null, started_at: null, ended_at: null, code_hash: null, validated_with: null, instructions_hash: null, source_dir: matchDir, schedule_json: json(match), manifest_json: manifestText ?? null, source_record: null, fingerprint, replay_status: manifest === undefined ? "unavailable" : "pending" });
           const provenanceObject = manifest?.provenance ?? null;
           const provenance = Schema.decodeUnknownOption(Schema.Struct({ code_sha: Schema.String, instructions_sha: Schema.String }))(provenanceObject);
           db.query("UPDATE matches SET code_hash = ?, instructions_hash = ? WHERE id = ?").run(Option.isSome(provenance) ? provenance.value.code_sha : null, Option.isSome(provenance) ? provenance.value.instructions_sha : null, matchId);
@@ -212,8 +233,11 @@ export const importTournaments = ({ database, sources, skipped = {} }: ImportOpt
             const high = manifest?.standings === undefined ? undefined : Math.max(...manifest.standings.map((standing) => standing.cash));
             const winners = manifest?.standings?.filter((standing) => standing.cash === high).length;
             const entrant = file.config.entrants[name];
+            const configured = entrant !== undefined && "model" in entrant ? configLabel(entrant.model, entrant.effortLabel ?? entrant.effort) : undefined;
             // A match from before labels were recorded: a model entrant is its config, a bot or an engine its scheduled seat.
-            const label = manifest?.labels?.[index] ?? (entrant !== undefined && "model" in entrant ? configLabel(entrant.model, entrant.effortLabel ?? entrant.effort) : (match.seats[index] ?? ""));
+            const label = manifest?.labels?.[index] ?? configured ?? match.seats[index] ?? "";
+
+            if (configured !== undefined && label !== configured) conflict(matchDir, `the manifest's label at position ${index + 1} is not its entrant's config`, json({ label, entrant: name, config: entrant }));
             put("match_seats", { match_id: matchId, position: index + 1, entrant_id: sha(`${tournamentId}\0${name}`), player, label, cash: cash ?? null, win_share: null, provenance_json: json(provenanceObject) });
             shares.set(index + 1, cash === undefined || winners === undefined ? null : cash === high ? 1 / winners : 0);
 
@@ -315,6 +339,10 @@ export const importTournaments = ({ database, sources, skipped = {} }: ImportOpt
         }
 
         db.query(`UPDATE tournaments SET status = CASE WHEN EXISTS (SELECT 1 FROM matches WHERE tournament_id = ? AND status NOT IN ('completed','skipped') AND disposition IS NULL) THEN 'partial' ELSE 'completed' END WHERE id = ?`).run(tournamentId, tournamentId);
+        // The seat label is the config's one key: two configs under one label would pool as one.
+        const shared = db.query<{ label: string; configs: string }, []>("SELECT s.label, json_group_array(DISTINCT json_remove(e.config_json, '$.endpoint')) AS configs FROM match_seats s JOIN entrants e ON e.id = s.entrant_id GROUP BY s.label HAVING COUNT(DISTINCT json_remove(e.config_json, '$.endpoint')) > 1").all();
+
+        for (const { label, configs } of shared) conflict(dir, `two configs play as ${label}`, configs);
         put("metadata", { key: "schema_version", value: "1" });
         put("metadata", { key: "importer_files", value: json(IMPORTER_FILES) });
         put("metadata", { key: "prices_sha256", value: priceHash });

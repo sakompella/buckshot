@@ -298,7 +298,7 @@ def compare(seats: list[Seat], metric: Metric, elo: dict[tuple[str, str], float]
         a, b = by_config[focal], by_config[ref]
         both = (elo.get((focal.model, focal.effort)), elo.get((focal.model, REFERENCE)))
         rows.append(Row(focal.model, focal.effort, pooled(a, b), common(a, b, rng, draws), strict(a, b, rng, draws), None if None in both else both[0] - both[1]))
-    return sorted(rows, key=lambda r: (r.model, EFFORTS.index(r.effort) if r.effort in EFFORTS else -1))
+    return sorted(rows, key=lambda r: (r.model, EFFORTS.index(r.effort)))
 
 
 # ---- rendering

@@ -10,10 +10,10 @@ import random
 import boot
 import bt
 from fmt import table
-from load import CROSS_MODEL, Game, blocks_of
+from load import Game, blocks_of
 
-OPUS, ASTRA = "claude-opus-5-5-xhigh", "gpt-6-astra"
-OPUS_MEDIUM = "claude-opus-5-5"
+OPUS, ASTRA = "claude-opus-5-5-xhigh", "gpt-6-astra-medium"
+OPUS_MEDIUM = "claude-opus-5-5-medium"
 
 
 def opus_share(game: Game) -> float:
@@ -71,7 +71,7 @@ def matched(t3: list[Game], baseline: list[Game], draws: int, rng: random.Random
 
 def report(games: list[Game], draws: int, rng: random.Random) -> str:
     t3 = [g for g in games if g.cohort == "tournament 3"]
-    baseline = [g for g in games if g.cohort == CROSS_MODEL and {g.first, g.second} == {OPUS_MEDIUM, ASTRA}]
+    baseline = [g for g in games if g.cohort == "cpa-tiers cross-model" and {g.first, g.second} == {OPUS_MEDIUM, ASTRA}]
     complete = [g for g in t3 if len(blocks_of(t3)[g.block]) == 2]
     rows = [
         ["41 matches, 21 seed blocks (seed 3030 half)", *estimate(t3, draws, rng)],
