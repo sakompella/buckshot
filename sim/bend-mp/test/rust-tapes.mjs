@@ -241,7 +241,8 @@ const mode = (name, settings, run) => modes.push({ name, settings, run });
 // Perturbed states: a state reached by a random game is mutated into one no
 // valid game reaches (empty gun, no decks, a phase with odd fields, dead seats,
 // ...) and Bend plays a few random answers from there. Rust must agree with
-// Bend on every state it can represent.
+// Bend on every one. Bend only ever builds a batch from its table's deck, and
+// an item pool as a subsequence of the item order, so mutations do the same.
 const shell = random => ({ $: random() % 2 ? 'Live' : 'Blank' });
 const some = value => ({ $: 'Some', value });
 const none = { $: 'None' };
@@ -251,13 +252,15 @@ const seatOf = (state, random) => seatKeys(state)[random() % seatKeys(state).len
 // Half the time a seat that may not sit at this table.
 const seatAny = (state, random) => random() % 2 ? { $: `Seat${random() % 4}` } : seatTag(seatOf(state, random));
 const slotNames = [0, 1, 2, 3, 4, 5, 6, 7].map(i => `s${i}`);
+const fullTwoSeatDeck = array(normalize(SA['sm/rules:decks.full']()).two);
+const itemOrder = array(normalize(SA['domain:item.order']()));
 const mutations = [
   state => { state.world.gun = list([]); },
   (state, random) => { state.world.gun = list([shell(random)]); },
   (state, random) => { state.world.gun = list(Array.from({ length: 1 + random() % 3 }, () => shell(random))); },
   state => { state.world.shown = { $: 'Load', live: 0, blank: 0 }; },
   state => { for (const table of ['two', 'three', 'four']) state.world.decks[table] = list([]); },
-  (state, random) => { state.world.decks.two = list([{ $: 'Batch', id: random() % 3, load: { $: 'Load', live: 0, blank: 0 } }]); },
+  (state, random) => { state.world.decks.two = list([fullTwoSeatDeck[random() % fullTwoSeatDeck.length]]); },
   state => { for (const key of seatKeys(state)) state.grabs.holding[key] = none; },
   (state, random) => { for (const key of seatKeys(state)) state.grabs.holding[key] = random() % 2 ? some({ $: items[random() % items.length] }) : none; },
   (state, random) => {
@@ -285,7 +288,6 @@ const mutations = [
   (state, random) => { state.world.before_round = random() % 2 === 0; state.world.first_sequence = random() % 2 === 0; },
   (state, random) => {
     const seat = () => seatAny(state, random);
-    const itemTag = () => ({ $: items[random() % items.length] });
     const load = () => ({ $: 'Load', live: random() % 3, blank: random() % 3 });
     const phases = [
       () => ({ $: 'NeedSwap', load: load(), shells: list(Array.from({ length: random() % 4 }, () => shell(random))), i: random() % 4 }),
@@ -293,7 +295,11 @@ const mutations = [
       () => ({ $: 'Idle', seat: seat() }),
       () => ({ $: 'Blocked', holder: random() % 2 ? none : some(seat()) }),
       () => ({ $: 'NeedTurnAmount', from: seat(), passing: random() % 2 === 0, winner: random() % 2 ? none : some(seat()) }),
-      () => ({ $: 'NeedItem', seat: seat(), first: itemTag(), second: itemTag(), rest: list(Array.from({ length: random() % 4 }, itemTag)) }),
+      () => {
+        const picked = itemOrder.filter(() => random() % 2);
+        const [first, second, ...rest] = picked.length >= 2 ? picked : itemOrder;
+        return { $: 'NeedItem', seat: seat(), first, second, rest: list(rest) };
+      },
       () => ({ $: 'NeedPhone', seat: seat(), owner: seat(), slot: { $: `Slot${random() % 8}` } }),
       () => ({ $: ['NeedFirst', 'NeedHealth', 'NeedAmount', 'NeedBatch', 'Stalled', 'Ended'][random() % 6] }),
     ];
