@@ -25,10 +25,11 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
+from docs import splice_between_markers
 from boot import interval, weights
 from fmt import pct, table
 from load import SKIPPED_MODEL, connect
-from regret import DERIVED, EFFORTS, END, START
+from regret import DERIVED, EFFORTS
 
 RESAMPLES = 2000
 FEWEST_FOR_INTERVAL = 20
@@ -276,9 +277,7 @@ def main() -> None:
     if args.doc is None:
         print(text)
     else:
-        head, rest = args.doc.read_text().split(START)
-        tail = rest.split(END)[1]
-        args.doc.write_text(f"{head}{START}\n{text}{END}{tail}")
+        splice_between_markers(args.doc, "tables", text)
 
 
 if __name__ == "__main__":

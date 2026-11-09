@@ -43,6 +43,9 @@ from pathlib import Path
 
 import score_regret
 
+sys.path.insert(0, str(Path(__file__).resolve().parent / "analysis"))
+from docs import splice_between_markers  # noqa: E402
+
 REPO = Path(__file__).resolve().parents[2]
 WORKTREES = Path.home() / ".t3/worktrees/buckshot"
 EMAIL = re.compile(rb"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+")
@@ -145,14 +148,6 @@ def check_import(db_path: Path, load_dir: Path) -> str:
     by_status = dict(db.execute("SELECT status, COUNT(*) FROM matches GROUP BY status").fetchall())
     db.close()
     return f"quick_check ok, 0 issues, {len(games)} scored games with cohorts, matches by status {by_status}"
-
-
-def splice_between_markers(text: str, name: str, body: str) -> str:
-    start, end = f"<!-- {name}:start -->", f"<!-- {name}:end -->"
-    head, found, rest = text.partition(start)
-    if not found or end not in rest:
-        raise Stop(f"missing {start} / {end} markers")
-    return head + start + "\n" + body.strip("\n") + "\n" + end + rest.partition(end)[2]
 
 
 def dotenv(text: str) -> dict[str, str]:
@@ -387,7 +382,10 @@ class Wrap:
         out.unlink(missing_ok=True)
         self.run("doc-beliefs", self.nix(self.knowledge, "bun", "scripts/arena-knowledge-report.ts", "--db", str(self.derived / "knowledge.sqlite")), cwd=self.knowledge / "web", stdout=out)
         doc = self.docs / "analysis/beliefs-and-items.md"
-        doc.write_text(splice_between_markers(doc.read_text(), "beliefs", out.read_text()))
+        try:
+            splice_between_markers(doc, "beliefs", out.read_text())
+        except ValueError as e:
+            raise Stop(str(e)) from e
 
     def cleanup(self) -> str:
         note = self.viewer_up()

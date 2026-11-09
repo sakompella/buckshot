@@ -19,14 +19,19 @@ def tmp() -> Path:
 
 class SpliceBetweenMarkers(unittest.TestCase):
     def test_replaces_only_the_marked_block_and_is_idempotent(self):
-        doc = "intro\n<!-- beliefs:start -->\nold\n<!-- beliefs:end -->\noutro\n"
-        once = w.splice_between_markers(doc, "beliefs", "new\n")
+        doc = tmp() / "doc.md"
+        doc.write_text("intro\n<!-- beliefs:start -->\nold\n<!-- beliefs:end -->\noutro\n")
+        w.splice_between_markers(doc, "beliefs", "new\n")
+        once = doc.read_text()
         self.assertEqual(once, "intro\n<!-- beliefs:start -->\nnew\n<!-- beliefs:end -->\noutro\n")
-        self.assertEqual(w.splice_between_markers(once, "beliefs", "new\n"), once)
+        w.splice_between_markers(doc, "beliefs", "new")
+        self.assertEqual(doc.read_text(), once)
 
-    def test_stops_without_markers(self):
-        with self.assertRaises(w.Stop):
-            w.splice_between_markers("no markers", "beliefs", "x")
+    def test_rejects_a_file_without_markers(self):
+        doc = tmp() / "doc.md"
+        doc.write_text("no markers")
+        with self.assertRaises(ValueError):
+            w.splice_between_markers(doc, "beliefs", "x")
 
 
 class Swap(unittest.TestCase):

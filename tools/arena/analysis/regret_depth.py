@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from itertools import chain
 from pathlib import Path
 
+from docs import splice_between_markers
 from fmt import pct, table
 from load import connect
 from regret import DERIVED, POINT
@@ -159,8 +160,6 @@ def run_limits(regret_path: Path, run: list[Decision]) -> dict[tuple[str, int], 
 # Tables
 # ======
 
-START, END = "<!-- regret-depth:start -->", "<!-- regret-depth:end -->"
-
 
 def sizes_of(run: list[Decision]) -> Mapping[Stratum, int]:
     """How many decisions the whole run holds in each stratum."""
@@ -239,12 +238,6 @@ def report(sample: list[Pair], run: list[Decision], limits: Mapping[tuple[str, i
     return "\n".join(lines) + f"\n\n### By shells left in the gun\n\n{by_cell(sample, run, sizes)}\n\n### By how the production search ended\n\n{by_limit(sample, run, sizes, limits)}\n\n### By model\n\n{by_model(sample, sizes)}\n"
 
 
-def replace_between(path: Path, text: str) -> None:
-    head, rest = path.read_text().split(START)
-    tail = rest.split(END)[1]
-    path.write_text(f"{head}{START}\n{text}{END}{tail}")
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--regret", type=Path, default=DERIVED / "regret.sqlite")
@@ -275,7 +268,7 @@ def main() -> None:
     if args.doc is None:
         print(text)
     else:
-        replace_between(args.doc, text)
+        splice_between_markers(args.doc, "regret-depth", text)
 
 
 if __name__ == "__main__":

@@ -6,8 +6,9 @@ Only the columns the analysis needs are read: never match_seats.provenance_json,
 import re
 import sqlite3
 from dataclasses import dataclass
+from pathlib import Path
 
-DB = "/home/aditya/repos/projects/buckshot/_work/arena/analysis/buckshot.sqlite"
+DB = str(Path(__file__).resolve().parents[3] / "_work/arena/analysis/buckshot.sqlite")
 
 # Its free tier refused requests, so its scored games are not a random sample of what was scheduled: every analysis skips them.
 SKIPPED_MODEL = "deepseek"
