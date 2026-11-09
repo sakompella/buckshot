@@ -1,4 +1,4 @@
-import { groupBy, keyOf, MIN_BLOCKS_FOR_INTERVAL, meanOf, quantile, rng, roundResults, type SeatFull, unique } from "./data.ts";
+import { groupBy, keyOf, MIN_BLOCKS_FOR_INTERVAL, meanOf, quantile, rng, roundResults, type SeatFull, sumOf, unique } from "./data.ts";
 
 // The ratings the whole page reads: Bradley-Terry over every scored two-player match of every tournament.
 
@@ -179,15 +179,21 @@ const pairsOf = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<readonly [SeatFu
     return matchSeats.length === 2 && first !== undefined && second !== undefined ? [[first, second] as const] : [];
   });
 
-/** What one match adds to a fit: its known rounds as that many games. */
-const gamesOf = ([x, y]: readonly [SeatFull, SeatFull]): ReadonlyArray<BlockGame> => {
-  const rounds = roundResults(x);
+/** Per "<match id>|<player>", what to add to the player's round wins: the luck correction of the luck-adjusted rating. */
+export type Luck = ReadonlyMap<string, number>;
 
-  return rounds.length === 0 ? [] : [{ a: keyOf(x), b: keyOf(y), sa: meanOf(rounds), weight: rounds.length, block: x.seedBlock }];
-};
+/** What one match adds to a fit: its known rounds as that many games, x's round wins shifted by its luck correction. */
+const gamesOf =
+  (luck: Luck) =>
+  ([x, y]: readonly [SeatFull, SeatFull]): ReadonlyArray<BlockGame> => {
+    const rounds = roundResults(x);
+    const shift = luck.get(`${x.matchId}|${x.player}`) ?? 0;
+
+    return rounds.length === 0 ? [] : [{ a: keyOf(x), b: keyOf(y), sa: (sumOf(rounds) + shift) / rounds.length, weight: rounds.length, block: x.seedBlock }];
+  };
 
 /** Every completed two-player match in `seats`, as the games the round rating counts. */
-const gamesOfSeats = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<BlockGame> => pairsOf(seats).flatMap(gamesOf);
+const gamesOfSeats = (seats: ReadonlyArray<SeatFull>, luck: Luck = new Map()): ReadonlyArray<BlockGame> => pairsOf(seats).flatMap(gamesOf(luck));
 
 export interface Rating {
   readonly rating: number;
@@ -201,10 +207,11 @@ const BOOTSTRAP_REPS = 200;
  * Every config's rating from one fit over all the seats' completed two-player matches, with 95% percentile
  * intervals from refitting resamples of whole seed blocks. Effort sweeps join the other models through their
  * medium configs, so one scale covers every config. The fit counts each round as a game, in the matches whose
- * rounds are known; its resamples still take whole seed blocks, since a match's rounds are not independent.
+ * rounds are known; its resamples still take whole seed blocks, since a match's rounds are not independent. With
+ * `luck`, each match's round wins are first corrected for luck (tools/arena/analysis/aivat.py).
  */
-export const pooledRatings = (seats: ReadonlyArray<SeatFull>): ReadonlyMap<string, Rating> => {
-  const games = gamesOfSeats(seats);
+export const pooledRatings = (seats: ReadonlyArray<SeatFull>, luck: Luck = new Map()): ReadonlyMap<string, Rating> => {
+  const games = gamesOfSeats(seats, luck);
   const numbered = numberGames(games);
   const point = fitGames(numbered, Int32Array.from(games.keys()));
   const blocks = [...groupBy(games.keys(), (index) => games[index]?.block).values()];

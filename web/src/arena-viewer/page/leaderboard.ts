@@ -84,13 +84,14 @@ const nameView = (h: H, m: ModelStats): ReadonlyArray<Html | string> => [
   h.span([h.Class("eff")], [`[${effortLabel(m.model, m.effort)}]`]),
 ];
 
-const rowView = (h: H, m: ModelStats, rank: number | undefined, elo: Rating | undefined, scale: EloScale, details: ReadonlyArray<Detail>, isOpen: boolean): Html =>
+const rowView = (h: H, m: ModelStats, rank: number | undefined, elo: Rating | undefined, hasLuck: boolean, scale: EloScale, details: ReadonlyArray<Detail>, isOpen: boolean): Html =>
   h.keyed("tr")(
     m.key,
     [h.Class(`row ${isOpen ? "sel" : ""} ${isProvisional(m) ? "provisional" : ""}`), h.AriaExpanded(isOpen), ...pressable(h, Message.ClickedLeaderboardRow({ id: m.key }))],
     [
       h.td([], [h.span([h.Class("rk")], [rank === undefined ? "" : String(rank)]), ...nameView(h, m)]),
       h.td([h.DataAttribute("label", "round elo")], ratingView(h, elo)),
+      ...(hasLuck ? [h.td([h.DataAttribute("label", "luck-adjusted")], ratingView(h, m.luckRating ?? undefined))] : []),
       h.td([h.DataAttribute("label", "matches"), h.Title(`${m.win.blocks} seed blocks`)], [m.scored.toLocaleString()]),
       h.td([h.DataAttribute("label", "cost / match")], [fmtUsd(m.avgCost)]),
       h.td([h.Class("barcol")], [eloBarView(h, scale, m, elo)]),
@@ -125,9 +126,10 @@ export const configPanelView = (h: H, derived: Derived, key: string, lazy: Lazy)
   );
 };
 
-const headersOf = (hasRegret: boolean): ReadonlyArray<string> => [
+const headersOf = (hasRegret: boolean, hasLuck: boolean): ReadonlyArray<string> => [
   "Model",
   "Round Elo",
+  ...(hasLuck ? [LUCK] : []),
   "Matches",
   "Cost / match",
   "",
@@ -141,7 +143,7 @@ const headersOf = (hasRegret: boolean): ReadonlyArray<string> => [
   "Favorite item",
 ];
 
-const BAR_COLUMN = 4;
+const LUCK = "Luck-adjusted Elo";
 
 export const ACCURACY_TITLE = "Lichess's accuracy over points of round win chance: each move scored by what it gave up against the minimax player's best move, a game's value combining a volatility-weighted and a harmonic mean, averaged over the config's matches; higher is better, 100 is perfect";
 
@@ -149,16 +151,17 @@ export const P99_TITLE = "Points of round win chance lost by the 99th-percentile
 
 const HEADER_TITLES = new Map([
   ["Round Elo", "one Bradley-Terry rating over every match, on round win share; the interval is a 95% bootstrap over seed blocks"],
+  [LUCK, "Round Elo with each round's result corrected for the luck of its shots, loads and first seat (AIVAT): the same strengths with less noise"],
   ["Cash share", "a config's cash over the match's cash, averaged over scored matches"],
   ["Round wins", "the rounds a config won over the rounds it played"],
   ["Accuracy", ACCURACY_TITLE],
   ["p99 points lost", P99_TITLE],
 ]);
 
-const headerView = (h: H, label: string, index: number): Html => {
+const headerView = (h: H, label: string): Html => {
   const title = HEADER_TITLES.get(label);
 
-  return h.th(index === BAR_COLUMN ? [h.Class("barcol")] : [...(label === "Round Elo" ? [h.Class("rating")] : []), ...(title === undefined ? [] : [h.Title(title)])], [label]);
+  return h.th(label === "" ? [h.Class("barcol")] : [...(label === "Round Elo" || label === LUCK ? [h.Class("rating")] : []), ...(title === undefined ? [] : [h.Title(title)])], [label]);
 };
 
 /** Configs with a scored match, by rank; the unranked (provisional or unrated) after them, by rating and then label. */
@@ -173,7 +176,9 @@ export const inRankOrder = (stats: ReadonlyArray<ModelStats>, ranks: ReadonlyMap
 export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["leaderboard"], lazy: Lazy): Html => {
   const { pooled: stats, everyPooled: every, ranks, ratings } = derived;
   const hasRegret = every.some(({ regret }) => regret !== null);
-  const headers = headersOf(hasRegret);
+  const hasLuck = every.some(({ luckRating }) => luckRating !== null);
+  const headers = headersOf(hasRegret, hasLuck);
+  const barColumn = headers.indexOf("");
   const configs = inRankOrder(stats, ranks, ratings);
   const scale = eloScaleOf(ratings, ranks);
 
@@ -181,14 +186,14 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
     [h.Class("lb")],
     [
       h.div([h.Class("lbbar")], [h.h2([], ["Leaderboard"])]),
-      h.p([h.Class("sub")], ["Round Elo is one Bradley-Terry rating over every match, on round win share; the bar runs from the average at 0, with its 95% interval over seed blocks. Match wins count a config's own opponents only."]),
+      h.p([h.Class("sub")], [`Round Elo is one Bradley-Terry rating over every match, on round win share; the bar runs from the average at 0, with its 95% interval over seed blocks.${hasLuck ? " Luck-adjusted Elo is the same fit with the luck of each round's shots, loads and first seat taken out." : ""} Match wins count a config's own opponents only.`]),
       h.div(
         [h.Class("card")],
         [
           h.table(
             [h.Class("lbt rows")],
             [
-              h.thead([], [h.tr([], headers.map((label, index) => headerView(h, label, index)))]),
+              h.thead([], [h.tr([], headers.map((label) => headerView(h, label)))]),
               h.tbody(
                 [],
                 configs.flatMap((m) => {
@@ -196,7 +201,7 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
                   const details = detailsOf(h, m, hasRegret);
 
                   return [
-                    rowView(h, m, ranks.get(m.key), ratings.get(m.key), scale, details, isOpen),
+                    rowView(h, m, ranks.get(m.key), ratings.get(m.key), hasLuck, scale, details, isOpen),
                     isOpen ? h.keyed("tr")(`drill-${m.key}`, [h.Class("drill")], [h.td([h.Colspan(headers.length)], [detailsView(h, details), drillView(h, m, lazy)])]) : h.empty,
                   ];
                 }),
@@ -207,9 +212,9 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
                   h.tr(
                     [],
                     [
-                      h.td([h.Colspan(BAR_COLUMN)], []),
+                      h.td([h.Colspan(barColumn)], []),
                       h.td([h.Class("barcol")], [h.div([h.Class("axis")], scale.ticks.map((tick) => h.span([h.Style({ left: `${percentOf(scale, tick)}%` })], [String(tick)])))]),
-                      h.td([h.Colspan(headers.length - BAR_COLUMN - 1)], []),
+                      h.td([h.Colspan(headers.length - barColumn - 1)], []),
                     ],
                   ),
                 ],

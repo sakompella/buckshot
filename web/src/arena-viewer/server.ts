@@ -298,8 +298,8 @@ const siteResponse = async (siteDir: string, request: Request): Promise<Response
 
 export const serveArenaViewer = (dbPath: string, siteDir: string, hostname: string, port: number, paths: ArenaPaths = {}) => {
   const started = performance.now();
-  const { db, regret, seats, seatIndex, decisions, certain, consistency } = loadArena(dbPath, paths);
-  const aggregateJson = encodeAggregates(aggregatesOf({ seats: withPotShares(seats), decisions, certain: certain.summary.rates, consistency }));
+  const { db, regret, seats, seatIndex, decisions, certain, consistency, luck } = loadArena(dbPath, paths);
+  const aggregateJson = encodeAggregates(aggregatesOf({ seats: withPotShares(seats), decisions, certain: certain.summary.rates, consistency, luck }));
   const aggregateRoutes = Object.fromEntries(AGGREGATE_NAMES.map((name) => [`/api/agg/${name}`, guarded((request) => json(request, encodedBody(aggregateJson[name])))]));
 
   const seatsBody = encodedBody(encodeSeats(seats));
