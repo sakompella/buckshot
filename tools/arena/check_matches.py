@@ -26,8 +26,9 @@ def main() -> int:
         agents = manifest["provenance"]["agents"]
         if manifest["moves"].get("fallback", 0) or not all(manifest["audit"].values()) or any(not a["url"].startswith(prefix) for a in agents.values()):
             bad.append(match["name"])
-        winner = agents[manifest["standings"][0]["player"]]
-        key = f"{winner['model']}-{winner['effort']}"
+        standing = manifest["standings"][0]
+        winner = agents.get(standing["player"])
+        key = standing["controller"] if winner is None else f"{winner['model']}-{winner['effort']}"
         wins[key] = wins.get(key, 0) + 1
     pairs = sum(1 for names in by_seed.values() if len(names) == 2)
     print(f"finished {sum(map(len, by_seed.values()))}, complete seed pairs {pairs}, wins {wins}, problems {bad or 'none'}")
