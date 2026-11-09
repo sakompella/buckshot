@@ -6,8 +6,9 @@
 //! tapes, each with a `<tape>.manifest.json`, and pass `--include-ignored`.
 //! It fails on an empty directory, an unreadable or malformed line, a step
 //! without a game, a gap in a game's steps, a game without a terminal line,
-//! truncated notes, an arena game that does not reach its end and a count
-//! that differs from the manifest. A game stops at its first mismatch, which
+//! truncated notes, a perturbed state Rust cannot decode or re-serializes
+//! differently, an arena game that does not reach its end and a count that
+//! differs from the manifest. A game stops at its first mismatch, which
 //! is printed; games cut by the step cap are counted apart.
 //!
 //! With the `trace` feature (`cargo trace-test`) each tape also needs a
@@ -567,11 +568,9 @@ struct Tally {
     lines: usize,
     steps: usize,
     matched: usize,
+    /// Games on a table this build lacks (the seats-2 build).
     skipped: usize,
-    /// Skipped games on a table this build lacks (the seats-2 build).
-    other_table: usize,
     skipped_steps: usize,
-    skip_reasons: Vec<String>,
     problems: Vec<String>,
 }
 
@@ -737,38 +736,28 @@ fn field<'a>(v: &'a Value, key: &str, at: &str) -> Result<&'a Value, String> {
 }
 
 /// The game a step-0 line starts, and the branches Rust took to start it. A
-/// perturbed state Rust cannot represent starts a game that is skipped.
+/// game on a table this build lacks is skipped. A perturbed state that Rust
+/// cannot decode, or re-serializes differently from Bend, fails the replay.
 fn begin(v: &Value, id: &str, at: &str, from_state: bool, tally: &mut Tally) -> Result<(Game, Vec<&'static str>), String> {
     let (cfg, built) = config(get(v, "config")).map_err(|e| format!("{at}: {id}: {e}"))?;
     take_trace();
     let mut started = Vec::new();
-    let (state, skipped) = if !built {
-        bump(&mut tally.other_table);
-        if tally.skip_reasons.len() < 5 {
-            tally.skip_reasons.push(format!("{id}: a table this build lacks"));
-        }
-        (start(&cfg).state, true)
+    let state = if !built {
+        start(&cfg).state
     } else if from_state {
         let mut tape = v.clone();
         let bend = take_state(&mut tape, "state");
-        let parsed = state_of(cfg.table(), get(v, "state")).and_then(|parsed| match first_diff(&state(&parsed), &bend, "state") {
-            None => Ok(parsed),
-            Some(diff) => Err(diff),
-        });
-        match parsed {
-            Ok(parsed) => (parsed, false),
-            Err(reason) => {
-                if tally.skip_reasons.len() < 5 {
-                    tally.skip_reasons.push(format!("{id}: {reason}"));
-                }
-                (start(&cfg).state, true)
-            }
+        let parsed = state_of(cfg.table(), get(v, "state")).map_err(|e| format!("{at}: {id}: Rust cannot decode Bend's state: {e}"))?;
+        if let Some(diff) = first_diff(&state(&parsed), &bend, "state") {
+            return Err(format!("{at}: {id}: Rust re-serializes Bend's state differently: {diff}"));
         }
+        parsed
     } else {
         let state = start(&cfg).state;
         started = take_trace();
-        (state, false)
+        state
     };
+    let skipped = !built;
     bump(&mut tally.games);
     if skipped {
         bump(&mut tally.skipped);
@@ -972,15 +961,6 @@ fn tape_paths(dir: &str) -> Result<Vec<PathBuf>, String> {
     Ok(paths)
 }
 
-/// Bend reaches a few perturbed states Rust cannot hold (a deck load with no
-/// blank); more than a quarter of a tape's games means the state decoder broke.
-/// Games on a table this build lacks do not count.
-fn too_many_skipped(tally: &Tally) -> Option<String> {
-    let unrepresentable = tally.skipped.saturating_sub(tally.other_table);
-    let games = tally.games.saturating_sub(tally.other_table);
-    (unrepresentable.saturating_mul(4) > games).then(|| format!("{unrepresentable} of {games} games skipped as unrepresentable"))
-}
-
 // Bug: the replay passed with RUST_TAPES unset (f2ae6ba made it fail closed).
 #[test]
 fn replay_fails_without_rust_tapes() {
@@ -997,20 +977,28 @@ fn replay_fails_on_a_directory_without_tapes() {
     assert_eq!(paths.ok(), None);
 }
 
-// Bug: a broken state decoder skipped every perturbed game and still passed (rust-mutants, Gun::from_shells).
+// Bug: a perturbed state whose batch load disagrees with its id was skipped, not failed (disagreement audit #4).
 #[test]
-fn replay_fails_when_over_a_quarter_of_games_are_skipped() {
-    let tally = |games, skipped, other_table| Tally {
-        games,
-        skipped,
-        other_table,
-        ..Tally::default()
+#[ignore = "needs RUST_TAPES; run sim/rust/check.sh"]
+fn a_state_rust_reserializes_differently_fails_the_replay() {
+    let dir = std::env::var("RUST_TAPES").unwrap_or_default();
+    let first = tape_paths(&dir)
+        .unwrap_or_else(|error| panic!("{error}"))
+        .into_iter()
+        .next()
+        .expect("a tape");
+    let text = std::fs::read_to_string(&first).expect("a readable tape");
+    let mut line: Value = text
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).expect("a JSON line"))
+        .find(|line| dig(line, &["config", "table", "$"]) == "TwoSeats")
+        .expect("a two-seat game");
+    line["state"]["world"]["decks"]["two"] =
+        list([json!({ "$": "Batch", "id": 0_u32, "load": { "$": "Load", "live": 0_u32, "blank": 0_u32 } })]);
+    let Err(error) = begin(&line, "perturbed", "line 1", true, &mut Tally::default()) else {
+        panic!("a batch whose load disagrees with its id fails the replay");
     };
-    assert_eq!(too_many_skipped(&tally(40, 10, 0)), None);
-    assert!(too_many_skipped(&tally(40, 11, 0)).is_some());
-    // The seats-2 build skips every wider table's game; only the rest count.
-    assert_eq!(too_many_skipped(&tally(40, 30, 28)), None);
-    assert!(too_many_skipped(&tally(40, 32, 28)).is_some());
+    assert!(error.contains("re-serializes"), "{error}");
 }
 
 // Bug: arena game ids repeated across tournaments (5352abe, rust-tapes.mjs); the replay must refuse a repeated id.
@@ -1059,13 +1047,12 @@ fn tapes_match_bend() {
         if let Err(error) = replayed {
             tally.problems.push(error);
         }
-        tally.problems.extend(too_many_skipped(&tally));
         let source = check_manifest(&path, &mut tally).unwrap_or_else(|error| {
             tally.problems.push(error);
             String::from("no manifest")
         });
         println!(
-            "{}: {} games ({} capped, {} skipped as unrepresentable in Rust), {} of {} Bend steps matched [{source}]",
+            "{}: {} games ({} capped, {} skipped on a table this build lacks), {} of {} Bend steps matched [{source}]",
             path.display(),
             tally.games,
             tally.capped,
@@ -1073,9 +1060,6 @@ fn tapes_match_bend() {
             tally.matched,
             tally.steps.saturating_sub(tally.skipped_steps)
         );
-        for reason in &tally.skip_reasons {
-            println!("  skipped {reason}");
-        }
         for problem in &tally.problems {
             println!("  {problem}");
         }
@@ -1085,7 +1069,9 @@ fn tapes_match_bend() {
         matched += tally.matched;
         skipped = skipped.saturating_add(tally.skipped);
     }
-    println!("total: {games} games ({capped} capped, {skipped} skipped as unrepresentable), {matched} genuine Bend steps compared");
+    println!(
+        "total: {games} games ({capped} capped, {skipped} skipped on a table this build lacks), {matched} genuine Bend steps compared"
+    );
     if cfg!(feature = "trace") {
         let every = all_labels(&format!("{dir}/traced/labels.json")).unwrap_or_else(|error| panic!("{error}"));
         let bend_only: Vec<&String> = bend_labels.iter().filter(|label| !rust_labels.contains(label.as_str())).collect();
