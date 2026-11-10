@@ -4,7 +4,7 @@
 Reads the regret table (tools/arena/score_regret.py writes it) and the knowledge database (web/scripts/arena-knowledge.ts)
 read-only and prints markdown tables. With --doc FILE the tables replace the text between the tables markers of
 that file. A config is a model with its effort. Regret is in percentage points of the deciding player's chance to win the
-round. Matches with a DeepSeek seat, unfinished matches and forced or fallback moves are left out.
+round. Excluded matches (a DeepSeek seat), unfinished matches and forced or fallback moves are left out.
 
     python3 tools/arena/analysis/regret.py [--regret PATH] [--knowledge PATH] [--doc docs/arena/analysis/regret.md]
 
@@ -21,7 +21,7 @@ from pathlib import Path
 
 from docs import splice_between_markers
 from fmt import pct, table
-from load import SKIPPED_MODEL, connect
+from load import connect
 from rules import POINT
 
 DERIVED = Path(__file__).resolve().parents[3] / "_work/arena/analysis/derived"
@@ -99,23 +99,19 @@ def load(regret_path: Path, knowledge_path: Path) -> Loaded:
     db.row_factory = sqlite3.Row
     db.execute("ATTACH DATABASE ? AS k", (f"file:{knowledge_path}?mode=ro",))
     rows = db.execute(
-        """SELECT p.model, p.effort, d.round + 1 AS round, d.remaining, d.choice, r.status, r.regret, r.exact, r.limited
+        """SELECT p.model, p.effort, d.round + 1 AS round, d.remaining, d.shot IS NOT NULL AS shot, r.status, r.regret, r.exact, r.limited
            FROM regret r
-           JOIN k.matches m ON m.match_id = r.match_id AND m.status = 'completed'
+           JOIN k.matches m ON m.match_id = r.match_id AND m.status = 'completed' AND m.disposition IS NULL
            JOIN k.decisions d ON d.match_id = r.match_id AND d.ordinal = r.ordinal AND d.by_whom = 'agent'
-           JOIN k.players p ON p.match_id = d.match_id AND p.player = d.player
-           WHERE r.match_id NOT IN (SELECT match_id FROM k.players WHERE model LIKE ?)""",
-        (f"%{SKIPPED_MODEL}%",),
+           JOIN k.players p ON p.match_id = d.match_id AND p.player = d.player""",
     ).fetchall()
     unscored = db.execute(
-        """SELECT COUNT(*) FROM k.decisions d JOIN k.matches m ON m.match_id = d.match_id AND m.status = 'completed'
-           WHERE d.by_whom = 'agent' AND d.match_id NOT IN (SELECT match_id FROM k.players WHERE model LIKE ?)
-             AND NOT EXISTS (SELECT 1 FROM regret r WHERE r.match_id = d.match_id AND r.ordinal = d.ordinal)""",
-        (f"%{SKIPPED_MODEL}%",),
+        """SELECT COUNT(*) FROM k.decisions d JOIN k.matches m ON m.match_id = d.match_id AND m.status = 'completed' AND m.disposition IS NULL
+           WHERE d.by_whom = 'agent' AND NOT EXISTS (SELECT 1 FROM regret r WHERE r.match_id = d.match_id AND r.ordinal = d.ordinal)""",
     ).fetchone()[0]
     searched = [row for row in rows if row["status"] == "searched"]
     return Loaded(
-        [Decision(r["model"], r["effort"], r["remaining"], r["choice"].startswith("Shoot"), r["regret"], bool(r["exact"]), bool(r["limited"]), r["round"]) for r in searched],
+        [Decision(r["model"], r["effort"], r["remaining"], bool(r["shot"]), r["regret"], bool(r["exact"]), bool(r["limited"]), r["round"]) for r in searched],
         len(rows) - len(searched),
         unscored,
     )

@@ -7,8 +7,8 @@ from resampling seed blocks (boot.py). Regret is first made comparable across ro
 all moves of the same model, kind (shot or item move) and shells left, so a round with more long chambers or more item moves does not
 look better or worse for that alone. A seat counts for a delta only if it moved (or played) in both rounds.
 
-Reads the analysis database for round winners, and the regret, knowledge and certain-mistakes databases, all read only. Matches with a
-DeepSeek seat and unfinished matches are left out. With --doc FILE the tables replace the text between the round-improvement markers of
+Reads the analysis database for round winners, and the regret, knowledge and certain-mistakes databases, all read only. Excluded
+matches (a DeepSeek seat) and unfinished matches are left out. With --doc FILE the tables replace the text between the round-improvement markers of
 that file, and with --svg DIR the figures are written there.
 
     python3 tools/arena/analysis/round_improvement.py [--db PATH] [--regret PATH] [--knowledge PATH] [--mistakes PATH] [--doc docs/arena/analysis/regret.md] [--svg DIR]
@@ -24,11 +24,10 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from statistics import fmean, stdev
 
-import by_round
 from docs import splice_between_markers
 from boot import interval
 from fmt import table
-from load import DB, SKIPPED_MODEL, connect, require_current
+from load import DB, connect, require_current, round_winners
 from regret import DERIVED, EFFORTS, PRODUCTION, run_of
 from rules import POINT, ROUNDS
 
@@ -79,24 +78,22 @@ def load_moves(regret_path: Path, knowledge_path: Path, mistakes_path: Path, db_
     db.execute("ATTACH DATABASE ? AS k", (f"file:{knowledge_path}?mode=ro",))
     db.execute("ATTACH DATABASE ? AS c", (f"file:{mistakes_path}?mode=ro",))
     rows = db.execute(
-        """SELECT r.match_id, r.ordinal, d.player, p.model, p.effort, m.seed_block_id, d.round + 1, d.remaining, d.choice, r.regret,
+        """SELECT r.match_id, r.ordinal, d.player, p.model, p.effort, m.seed_block_id, d.round + 1, d.remaining, d.shot IS NOT NULL, r.regret,
                   o.outcome = 'mistake'
            FROM regret r
-           JOIN k.matches m ON m.match_id = r.match_id AND m.status = 'completed'
+           JOIN k.matches m ON m.match_id = r.match_id AND m.status = 'completed' AND m.disposition IS NULL
            JOIN k.decisions d ON d.match_id = r.match_id AND d.ordinal = r.ordinal AND d.by_whom = 'agent'
            JOIN k.players p ON p.match_id = d.match_id AND p.player = d.player
            LEFT JOIN c.opportunities o ON o.match_id = r.match_id AND o.ordinal = r.ordinal AND o.type = 'self_on_live'
-           WHERE r.status = 'searched'
-             AND r.match_id NOT IN (SELECT match_id FROM k.players WHERE model LIKE ?)""",
-        (f"%{SKIPPED_MODEL}%",),
+           WHERE r.status = 'searched'""",
     ).fetchall()
-    winners = by_round.read_winners(db_path, sorted({row[0] for row in rows}))
+    winners = round_winners(connect(db_path))
     moves = []
-    for match, _, player, model, effort, block, round, left, choice, regret, mistake in rows:
+    for match, _, player, model, effort, block, round, left, shot, regret, mistake in rows:
         if any(r not in (won := winners[match]) for r in ROUNDS):
             continue
         seat = Seat(match, player, model, effort, block, won[1] != won[2], frozenset(r for r, w in won.items() if w == player))
-        moves.append(Move(seat, round, choice.startswith("Shoot"), left, regret, None if mistake is None else bool(mistake)))
+        moves.append(Move(seat, round, bool(shot), left, regret, None if mistake is None else bool(mistake)))
     return with_excess(moves)
 
 

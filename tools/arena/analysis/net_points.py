@@ -6,7 +6,7 @@ winning the round, so 1,000,000 millionths is one round). The net points of a se
 Per config (a model with its effort) the tables give the mean of both per match, with a 95% bootstrap interval over seed blocks, and set
 them beside the config's Round Elo: the Bradley-Terry rating on round shares over every scored match, as the viewer fits it.
 A second table regresses the actual round margin of a match on its net points.
-Matches with a DeepSeek seat are left out of the tables and rated with the rest, as the viewer does. With --doc FILE the tables replace the
+Excluded matches (a DeepSeek seat) are left out entirely, as the viewer does. With --doc FILE the tables replace the
 text between the net-points markers of that file, and with --plots DIR two SVG plots are written.
 
     python3 tools/arena/analysis/net_points.py [--db PATH] [--regret PATH] [--knowledge PATH]
@@ -22,11 +22,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import bt
-import by_round
 import regret
 from docs import splice_between_markers
 from fmt import pct, table
-from load import DB, SKIPPED_MODEL, connect, require_current
+from load import DB, connect, require_current, round_winners
 from regret import DERIVED, EFFORTS
 from reload_bias import Estimate
 from rules import POINT, ROUNDS, WIN
@@ -73,8 +72,8 @@ class Match:
 
     @property
     def skipped(self) -> bool:
-        """A DeepSeek seat, or an engine's: it has no regret rows, so its net points would mean nothing."""
-        return any(seat.config[0] is None or SKIPPED_MODEL in seat.config[0] for seat in (self.first, self.second))
+        """With an engine's seat: an engine has no regret rows, so its net points would mean nothing."""
+        return any(seat.config[0] is None for seat in (self.first, self.second))
 
 
 @dataclass(frozen=True)
@@ -89,7 +88,7 @@ def load(db_path: str, regret_path: Path, knowledge_path: Path) -> Loaded:
     knowledge = connect(str(knowledge_path))
     seats: dict[str, list[tuple[int, str, str, str]]] = defaultdict(list)
     for match, player, position, model, effort in knowledge.execute(
-        "SELECT p.match_id, p.player, p.position, p.model, p.effort FROM players p JOIN matches m ON m.match_id = p.match_id AND m.status = 'completed'"
+        "SELECT p.match_id, p.player, p.position, p.model, p.effort FROM players p JOIN matches m ON m.match_id = p.match_id AND m.status = 'completed' AND m.disposition IS NULL"
     ):
         seats[match].append((position, player, model, effort))
     blocks = {match: (block, name) for match, block, name in knowledge.execute("SELECT match_id, seed_block_id, name FROM matches")}
@@ -113,14 +112,10 @@ def load(db_path: str, regret_path: Path, knowledge_path: Path) -> Loaded:
         {(match, player): n for match, player, n in knowledge.execute("SELECT match_id, player, COUNT(*) FROM decisions WHERE by_whom = 'agent' GROUP BY match_id, player")}
     )
 
-    analysis = connect(db_path)
-    cash: dict[str, dict[str, int]] = defaultdict(dict)
-    for match, player, total in analysis.execute("SELECT match_id, player, cash FROM match_seats"):
-        cash[match][player] = total
-    lines = by_round.public_lines(analysis)
+    winners_of = round_winners(connect(db_path))
     matches, incomplete = [], 0
     for match, found in seats.items():
-        winners = by_round.round_winners(match, lines.get(match, []), cash[match])
+        winners = winners_of[match]
         if any(lost[match, player][1] != agent_decisions[match, player] for _, player, _, _ in found):
             incomplete += 1
             continue
@@ -216,7 +211,7 @@ def seat_views(matches: list[Match]):
 
 
 def config_rows(matches: list[Match], elo: dict[str, float], rng: random.Random) -> list[ConfigRow]:
-    """Configs with at least MIN_MATCHES matches, the fewest points lost first. Matches with a DeepSeek seat are left out."""
+    """Configs with at least MIN_MATCHES matches, the fewest points lost first. Matches with an engine seat are left out."""
     per_block: dict[Config, dict[str, list[float]]] = defaultdict(lambda: defaultdict(lambda: [0.0, 0.0, 0.0, 0.0, 0.0]))
     for config, block, lost, net, moves, worst in seat_views([m for m in matches if not m.skipped]):
         cell = per_block[config][block]
@@ -357,7 +352,7 @@ BIN_EDGES = [-math.inf, -1.0, -0.5, -0.2, 0.2, 0.5, 1.0, math.inf]
 
 
 def margin_fit(matches: list[Match], rng: random.Random) -> Margin:
-    """The first seat's round margin on its net points, over the matches with no DeepSeek seat."""
+    """The first seat's round margin on its net points, over the matches with no engine seat."""
     kept = [m for m in matches if not m.skipped]
     xs, ys = [m.net for m in kept], [float(m.margin) for m in kept]
     blocks = list(by_block(kept).values())
@@ -443,7 +438,7 @@ def report(loaded: Loaded, rows: list[ConfigRow], elo_lost: Correlation, elo_net
     kept = [m for m in loaded.matches if not m.skipped]
     ranked = len({label(c) for m in loaded.matches for c in (m.first.config, m.second.config)})
     return (
-        f"{len(kept):,} finished matches with no DeepSeek seat ({len(loaded.matches):,} with it, used for the ratings, which cover {ranked} configs). Left out: {loaded.incomplete:,} with an agent decision that has no searched row. "
+        f"{len(kept):,} finished matches with no DeepSeek seat and no engine seat ({len(loaded.matches):,} with the engine ones, used for the ratings, which cover {ranked} configs). Left out: {loaded.incomplete:,} with an agent decision that has no searched row. "
         f"{len(rows)} configs have at least {MIN_MATCHES} matches. Intervals are 95%, {BOOTSTRAP:,} resamples of seed blocks.\n\n"
         f"### Round-win equivalents lost, by config\n\n{config_table(rows)}\n\n"
         f"### Against Round Elo\n\n"

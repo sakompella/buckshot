@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 import certain_mistakes as cm
+from testdb import KNOWLEDGE, REGRET, database, insert
 
 
 def health(own=1, opponent=1):
@@ -21,27 +22,24 @@ def scores(own, other):
     return json.dumps([{"label": "Shoot yourself", "score": own}, {"label": "Shoot Player B", "score": other}])
 
 
+DECISION_COLUMNS = ("match_id", "ordinal", "player", "by_whom", "chamber", "source", "shot", "health_json", "private_known", "own_items_json", "opponent_items_json", "remaining", "private_live_json")
+
+
 def write(directory: Path, decisions, clues=(), searched=()):
-    knowledge = sqlite3.connect(directory / "knowledge.sqlite")
-    knowledge.executescript(
-        """CREATE TABLE matches (match_id TEXT, status TEXT, seed_block_id TEXT);
-           CREATE TABLE players (match_id TEXT, player TEXT, model TEXT, effort TEXT);
-           CREATE TABLE decisions (match_id TEXT, ordinal INTEGER, player TEXT, by_whom TEXT, chamber TEXT, source TEXT, shot TEXT, health_json TEXT,
-                                   private_known TEXT, own_items_json TEXT, opponent_items_json TEXT, remaining INTEGER, private_live_json TEXT);
-           CREATE TABLE clues (match_id TEXT, learned INTEGER, ordinal INTEGER, player TEXT, kind TEXT, position INTEGER, shell TEXT);
-           INSERT INTO matches VALUES ('m1', 'completed', 'b1');
-           INSERT INTO players VALUES ('m1', 'A', 'opus', 'high'), ('m1', 'B', 'sol', 'low');"""
-    )
-    knowledge.executemany("INSERT INTO decisions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", decisions)
-    knowledge.executemany("INSERT INTO clues VALUES ('m1', ?, ?, ?, ?, ?, ?)", clues)
+    knowledge = database(directory / "knowledge.sqlite", KNOWLEDGE)
+    insert(knowledge, "matches", match_id="m1", status="completed", seed_block_id="b1")
+    insert(knowledge, "players", match_id="m1", player="A", model="opus", effort="high")
+    insert(knowledge, "players", match_id="m1", player="B", model="sol", effort="low")
+    for row in decisions:
+        insert(knowledge, "decisions", **dict(zip(DECISION_COLUMNS, row)))
+    for learned, ordinal, player, kind, position, shell in clues:
+        insert(knowledge, "clues", match_id="m1", learned=learned, ordinal=ordinal, player=player, kind=kind, position=position, shell=shell)
     knowledge.commit()
     knowledge.close()
-    regret = sqlite3.connect(directory / "regret.sqlite")
-    regret.execute(
-        "CREATE TABLE regret (match_id TEXT, ordinal INTEGER, evaluator TEXT, max_depth INTEGER, budget INTEGER, reload TEXT, samples INTEGER, status TEXT, values_json TEXT)"
-    )
+    regret = database(directory / "regret.sqlite", REGRET)
     # A regret file holds one run: with no searched decisions, a row for a decision the knowledge database lacks.
-    regret.executemany("INSERT INTO regret VALUES ('m1', ?, ?, 6, 20000, 'static', 0, 'searched', ?)", list(searched) or [(999, "e", None)])
+    for ordinal, evaluator, values_json in list(searched) or [(999, "e", None)]:
+        insert(regret, "regret", match_id="m1", ordinal=ordinal, evaluator=evaluator, max_depth=6, budget=20000, reload="static", samples=0, status="searched", values_json=values_json)
     regret.commit()
     regret.close()
     return directory / "knowledge.sqlite", directory / "regret.sqlite"

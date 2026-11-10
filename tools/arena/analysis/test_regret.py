@@ -1,32 +1,31 @@
 """Tests for the regret summary: python3 -m unittest discover -s tools/arena/analysis"""
 
-import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
 
 import regret
+from testdb import KNOWLEDGE, REGRET, database, insert
 
 
 def databases(directory: Path, players, decisions, scores, matches=None):
-    """Writes the two derived databases the summary reads, with only the columns it uses."""
-    knowledge = sqlite3.connect(directory / "knowledge.sqlite")
-    knowledge.executescript(
-        """CREATE TABLE matches (match_id TEXT, status TEXT);
-           CREATE TABLE players (match_id TEXT, player TEXT, model TEXT, effort TEXT);
-           CREATE TABLE decisions (match_id TEXT, ordinal INTEGER, player TEXT, by_whom TEXT, choice TEXT, remaining INTEGER, round INTEGER)"""
-    )
-    knowledge.executemany("INSERT INTO matches VALUES (?, ?)", matches or [("m1", "completed")])
-    knowledge.executemany("INSERT INTO players VALUES (?, ?, ?, ?)", players)
-    knowledge.executemany("INSERT INTO decisions VALUES (?, ?, ?, ?, ?, ?, ?)", decisions)
+    """Writes the two derived databases the summary reads, from their real DDL."""
+    knowledge = database(directory / "knowledge.sqlite", KNOWLEDGE)
+    for match_id, status, disposition in matches or [("m1", "completed", None)]:
+        insert(knowledge, "matches", match_id=match_id, status=status, disposition=disposition)
+    for match_id, player, model, effort in players:
+        insert(knowledge, "players", match_id=match_id, player=player, model=model, effort=effort)
+    for match_id, ordinal, player, by_whom, shot, remaining, round in decisions:
+        insert(knowledge, "decisions", match_id=match_id, ordinal=ordinal, player=player, by_whom=by_whom, shot=shot, remaining=remaining, round=round)
     knowledge.commit()
-    scored = sqlite3.connect(directory / "regret.sqlite")
-    scored.execute(
-        "CREATE TABLE regret (match_id TEXT, ordinal INTEGER, evaluator TEXT, max_depth INTEGER, budget INTEGER, reload TEXT, samples INTEGER, status TEXT, regret INTEGER, exact INTEGER, limited INTEGER)"
-    )
-    scored.executemany("INSERT INTO regret VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", scores)
+    scored = database(directory / "regret.sqlite", REGRET)
+    for row in scores:
+        insert(scored, "regret", **dict(zip(SCORE_COLUMNS, row)))
     scored.commit()
     return directory / "regret.sqlite", directory / "knowledge.sqlite"
+
+
+SCORE_COLUMNS = ("match_id", "ordinal", "evaluator", "max_depth", "budget", "reload", "samples", "status", "regret", "exact", "limited")
 
 
 def score(match, ordinal, regret_value, exact=0, status="searched", evaluator="e", limited=0, reload="static", samples=0):
@@ -46,7 +45,7 @@ class Load(unittest.TestCase):
     def test_keeps_agent_decisions_of_completed_matches_with_their_config(self):
         loaded = self.load(
             players=[("m1", "A", "opus", "high"), ("m1", "B", "sol", "low")],
-            decisions=[("m1", 0, "A", "agent", "Shoot player +1", 3, 0), ("m1", 1, "B", "agent", "Use beer", 1, 1)],
+            decisions=[("m1", 0, "A", "agent", "opponent", 3, 0), ("m1", 1, "B", "agent", None, 1, 1)],
             scores=[score("m1", 0, 250000, exact=1), score("m1", 1, 0, limited=1)],
         )
         self.assertEqual(
@@ -55,19 +54,19 @@ class Load(unittest.TestCase):
         )
         self.assertEqual((loaded.unsearched, loaded.unscored), (0, 0))
 
-    def test_leaves_out_deepseek_matches_forced_moves_and_unfinished_matches(self):
+    def test_leaves_out_excluded_matches_forced_moves_and_unfinished_matches(self):
         loaded = self.load(
-            players=[("m1", "A", "opus", "high"), ("m1", "B", "deepseek-v4", "medium"), ("m2", "A", "opus", "high"), ("m3", "A", "opus", "high")],
-            decisions=[("m1", 0, "A", "agent", "Use beer", 2, 1), ("m2", 0, "A", "forced", "Grab an item", 2, 1), ("m3", 0, "A", "agent", "Use beer", 2, 1)],
+            players=[("m1", "A", "opus", "high"), ("m2", "A", "opus", "high"), ("m3", "A", "opus", "high")],
+            decisions=[("m1", 0, "A", "agent", None, 2, 1), ("m2", 0, "A", "forced", None, 2, 1), ("m3", 0, "A", "agent", None, 2, 1)],
             scores=[score("m1", 0, 5), score("m2", 0, 0), score("m3", 0, 5)],
-            matches=[("m1", "completed"), ("m2", "completed"), ("m3", "partial")],
+            matches=[("m1", "completed", "excluded"), ("m2", "completed", None), ("m3", "partial", None)],
         )
         self.assertEqual(loaded.decisions, [])
 
     def test_counts_unsearched_and_unscored_decisions_apart_instead_of_as_zero_regret(self):
         loaded = self.load(
             players=[("m1", "A", "opus", "high")],
-            decisions=[("m1", 0, "A", "agent", "Use beer", 2, 1), ("m1", 1, "A", "agent", "Use beer", 2, 1), ("m1", 2, "A", "agent", "Use beer", 2, 1)],
+            decisions=[("m1", 0, "A", "agent", None, 2, 1), ("m1", 1, "A", "agent", None, 2, 1), ("m1", 2, "A", "agent", None, 2, 1)],
             scores=[score("m1", 0, None, status="fallback"), score("m1", 1, 100)],
         )
         self.assertEqual([d.regret for d in loaded.decisions], [100])
@@ -77,7 +76,7 @@ class Load(unittest.TestCase):
 
 class RunOf(unittest.TestCase):
     def test_a_file_must_hold_exactly_one_run(self):
-        decisions = [("m1", 0, "A", "agent", "Use beer", 2, 1)]
+        decisions = [("m1", 0, "A", "agent", None, 2, 1)]
         with tempfile.TemporaryDirectory() as directory:
             path, _ = databases(Path(directory), [("m1", "A", "opus", "high")], decisions, [score("m1", 0, 9, reload="sampled", samples=256)])
             self.assertEqual(regret.run_of(path), regret.Run("e", 6, 20000, "sampled", 256))

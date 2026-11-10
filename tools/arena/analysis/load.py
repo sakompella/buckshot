@@ -4,21 +4,14 @@ Only the columns the analysis needs are read: never match_seats.provenance_json,
 """
 
 import json
-import re
 import sqlite3
+from collections import defaultdict
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 DB = str(REPO / "_work/arena/analysis/buckshot.sqlite")
-
-# Its free tier refused requests, so its scored games are not a random sample of what was scheduled: every analysis skips them.
-# An engine or bot entrant has no model.
-SKIPPED_MODEL = "deepseek"
-
-STARTS = re.compile(r"Round 1 begins\. Everyone has \d+ health; Player (\w) starts\.")
-
 
 @dataclass(frozen=True)
 class Game:
@@ -59,44 +52,55 @@ def require_current(path: str) -> None:
 
 
 def round_one_starters(db: sqlite3.Connection) -> dict[str, str]:
-    """Match id to the letter of the player who opens round 1, read from the public lines of events.jsonl."""
+    """Match id to the letter of the player who opens round 1."""
     rows = db.execute(
-        """SELECT f.match_id, r.raw FROM source_files f JOIN source_records r ON r.path = f.path AND r.current = 1
-           WHERE f.path LIKE '%/events.jsonl' AND r.raw LIKE '%Round 1 begins%'"""
+        """SELECT e.match_id, s.player FROM events e JOIN match_seats s ON s.match_id = e.match_id AND s.socket = json_extract(e.json, '$.first')
+           WHERE e.kind = 'RoundBegan' AND json_extract(e.json, '$.round') = 0"""
     )
-    letters: dict[str, set[str]] = {}
-    for match, raw in rows:
-        for found in STARTS.findall(raw):
-            letters.setdefault(match, set()).add(found)
-    for match, found in letters.items():
-        if len(found) != 1:
-            raise ValueError(f"match {match} names {len(found)} round 1 starters")
-    return {match: next(iter(found)) for match, found in letters.items()}
+    return dict(rows.fetchall())
 
 
 def first_shooters(db: sqlite3.Connection) -> dict[str, int]:
-    """Match id to the position of the first accepted shot, from the decisions."""
-    rows = db.execute("SELECT match_id, position, MIN(ordinal) FROM decisions WHERE label LIKE 'Shoot%' GROUP BY match_id")
-    return {match: position for match, position, _ in rows}
+    """Match id to the position of the first player to shoot in the match."""
+    rows = db.execute(
+        """SELECT e.match_id, s.position FROM (SELECT match_id, MIN(idx) AS idx FROM events WHERE kind = 'Fired' GROUP BY match_id) f
+           JOIN events e ON e.match_id = f.match_id AND e.idx = f.idx JOIN match_seats s ON s.match_id = e.match_id AND s.socket = json_extract(e.json, '$.shooter')"""
+    )
+    return dict(rows.fetchall())
+
+
+def round_winners(db: sqlite3.Connection) -> dict[str, dict[int, str]]:
+    """Match id to each round's number, from 1, and the letter of its winner."""
+    winners: dict[str, dict[int, str]] = defaultdict(dict)
+    current = 0
+    for match, kind, round, player in db.execute(
+        """SELECT e.match_id, e.kind, json_extract(e.json, '$.round'), s.player FROM events e
+           LEFT JOIN match_seats s ON s.match_id = e.match_id AND s.socket = json_extract(e.json, '$.seat')
+           WHERE e.kind IN ('RoundBegan', 'RoundWon') ORDER BY e.match_id, e.idx"""
+    ):
+        if kind == "RoundBegan":
+            current = round + 1
+        else:
+            winners[match][current] = player
+    return dict(winners)
 
 
 def scored_games(db: sqlite3.Connection) -> list[Game]:
     starters, shooters = round_one_starters(db), first_shooters(db)
     seats = db.execute(
-        """SELECT s.match_id, s.position, s.player, s.win_share, s.cash, s.label, e.model, e.effort
-           FROM match_seats s JOIN entrants e ON e.id = s.entrant_id JOIN matches m ON m.id = s.match_id
-           WHERE m.status = 'completed' ORDER BY s.match_id, s.position"""
+        """SELECT s.match_id, s.position, s.player, s.win_share, s.cash, s.label
+           FROM match_seats s JOIN matches m ON m.id = s.match_id
+           WHERE m.status = 'completed' AND m.disposition IS NULL ORDER BY s.match_id, s.position"""
     ).fetchall()
     by_match: dict[str, list[tuple]] = {}
     for row in seats:
         by_match.setdefault(row[0], []).append(row)
     games = []
     for match, tournament, block, seed, code, cohort in db.execute(
-        "SELECT m.id, t.name, m.seed_block_id, m.seed, m.code_hash, m.cohort FROM matches m JOIN tournaments t ON t.id = m.tournament_id WHERE m.status = 'completed' ORDER BY m.id"
+        "SELECT m.id, t.name, m.seed_block_id, m.seed, m.code_hash, m.cohort FROM matches m JOIN tournaments t ON t.id = m.tournament_id"
+        " WHERE m.status = 'completed' AND m.disposition IS NULL ORDER BY m.id"
     ):
-        (_, _, letter_a, share_a, cash_a, a, model_a, effort_a), (_, _, letter_b, _, cash_b, b, model_b, effort_b) = by_match[match]
-        if SKIPPED_MODEL in (model_a or "") or SKIPPED_MODEL in (model_b or ""):
-            continue
+        (_, _, letter_a, share_a, cash_a, a), (_, _, letter_b, _, cash_b, b) = by_match[match]
         letter_of = {letter_a: 1, letter_b: 2}
         games.append(
             Game(block, cohort, tournament, code, seed, a, b, share_a, cash_a / (cash_a + cash_b), letter_of[starters[match]], shooters[match])

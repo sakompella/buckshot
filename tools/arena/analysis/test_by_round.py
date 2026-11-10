@@ -1,75 +1,26 @@
 """Tests for the by-round summary: python3 -m unittest discover -s tools/arena/analysis"""
 
-import json
-import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
 
 import by_round
 from regret import Decision
-from rules import PRIZES
-
-
-def lines(*wins: str | None) -> list[str]:
-    """Public lines of a match: each round begins and, unless None, names its winner."""
-    out = []
-    for n, win in enumerate(wins, 1):
-        out.append(f"Round {n} begins. Everyone has 3 health; Player A starts.")
-        out += ["Player B shot Player A: live, 1 damage, 0 health left."] + ([win] if win else [])
-    return out
-
-
-A1, B2, A3 = (f"Player {player} wins the round and ${prize:,}." for player, prize in zip("ABA", PRIZES))
-
-
-class RoundWinners(unittest.TestCase):
-    def test_reads_every_round(self):
-        self.assertEqual(by_round.round_winners("m1", lines(A1, B2, A3), {"A": 150_000, "B": 75_000}), {1: "A", 2: "B", 3: "A"})
-
-    def test_infers_a_last_round_win_that_no_line_names(self):
-        self.assertEqual(by_round.round_winners("m1", lines(A1, B2, None), {"A": 150_000, "B": 75_000}), {1: "A", 2: "B", 3: "A"})
-
-    def test_stops_on_prizes_that_differ_from_the_cash_and_names_the_match_and_cash(self):
-        with self.assertRaisesRegex(ValueError, r"match m7: .*final cash \{'A': 70000, 'B': 75000\}.*70,000"):
-            by_round.round_winners("m7", lines(A1, B2, A3), {"A": 70_000, "B": 75_000})
-
-    def test_stops_on_a_missing_middle_round(self):
-        with self.assertRaises(ValueError):
-            by_round.round_winners("m1", lines(A1, None, A3), {"A": 150_000, "B": 0})
-
-    def test_stops_on_an_ambiguous_last_round(self):
-        with self.assertRaises(ValueError):
-            by_round.round_winners("m1", lines(A1, B2, None), {"A": 70_000 + 40_000, "B": 75_000 + 40_000})
-
-
-def event(player: str, start: int, entries: list[str]) -> str:
-    return json.dumps({"kind": "delivered", "player": player, "from": start, "entries": entries}, separators=(",", ":"))
+from testdb import ANALYSIS, KNOWLEDGE, database, events, insert, rounds
 
 
 class LoadResults(unittest.TestCase):
-    def test_pairs_each_round_winner_with_its_config_from_the_longest_log(self):
-        public = lines(A1, B2, A3)
+    def test_pairs_each_round_winner_with_its_config(self):
         with tempfile.TemporaryDirectory() as directory:
-            db = sqlite3.connect(Path(directory) / "buckshot.sqlite")
-            db.executescript(
-                """CREATE TABLE source_files (path TEXT, match_id TEXT);
-                   CREATE TABLE source_records (path TEXT, raw TEXT, current INTEGER);
-                   CREATE TABLE match_seats (match_id TEXT, player TEXT, cash INTEGER)"""
-            )
-            db.execute("INSERT INTO source_files VALUES ('t/m1/events.jsonl', 'm1')")
-            # B was shown the log in two overlapping deliveries; A only its first half.
-            records = [event("A", 0, public[:4]), event("B", 4, public[4:]), event("B", 0, public[:4]), event("B", 4, public[4:])]
-            db.executemany("INSERT INTO source_records VALUES ('t/m1/events.jsonl', ?, 1)", [(r,) for r in records])
-            db.executemany("INSERT INTO match_seats VALUES ('m1', ?, ?)", [("A", 150_000), ("B", 75_000)])
+            db = database(Path(directory) / "buckshot.sqlite", ANALYSIS)
+            for player, socket in (("A", 0), ("B", 1)):
+                insert(db, "match_seats", match_id="m1", position=socket + 1, player=player, socket=socket)
+            events(db, "m1", *rounds(0, 1, 0))
             db.commit()
-            knowledge = sqlite3.connect(Path(directory) / "knowledge.sqlite")
-            knowledge.executescript(
-                """CREATE TABLE matches (match_id TEXT, status TEXT);
-                   CREATE TABLE players (match_id TEXT, player TEXT, model TEXT, effort TEXT)"""
-            )
-            knowledge.execute("INSERT INTO matches VALUES ('m1', 'completed')")
-            knowledge.executemany("INSERT INTO players VALUES ('m1', ?, ?, ?)", [("A", "opus", "high"), ("B", "sol", "low")])
+            knowledge = database(Path(directory) / "knowledge.sqlite", KNOWLEDGE)
+            insert(knowledge, "matches", match_id="m1", status="completed")
+            for player, model, effort in (("A", "opus", "high"), ("B", "sol", "low")):
+                insert(knowledge, "players", match_id="m1", player=player, model=model, effort=effort)
             knowledge.commit()
             results = by_round.load_results(str(Path(directory) / "buckshot.sqlite"), Path(directory) / "knowledge.sqlite")
         self.assertEqual(

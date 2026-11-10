@@ -1,12 +1,12 @@
 """Tests for the pattern regret table: python3 -m unittest discover -s tools/arena/analysis"""
 
 import json
-import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
 
 import patterns_regret as pr
+from testdb import KNOWLEDGE, REGRET, database, insert
 
 
 def move(config="opus high", regret=0, **fields):
@@ -52,20 +52,17 @@ class Evaluate(unittest.TestCase):
 
 class Load(unittest.TestCase):
     def build(self, directory: Path, decisions):
-        knowledge = sqlite3.connect(directory / "knowledge.sqlite")
-        knowledge.executescript(
-            """CREATE TABLE matches (match_id TEXT, status TEXT);
-               CREATE TABLE players (match_id TEXT, player TEXT, position INTEGER, model TEXT, effort TEXT);
-               CREATE TABLE decisions (match_id TEXT, ordinal INTEGER, player TEXT, by_whom TEXT, round INTEGER, remaining INTEGER, chamber TEXT, source TEXT,
-                 private_live_min INTEGER, private_live_max INTEGER, sawed INTEGER, shot TEXT, item TEXT, item_stolen INTEGER, legal_items_json TEXT, opponent_items_json TEXT, health_json TEXT)"""
-        )
-        knowledge.execute("INSERT INTO matches VALUES ('m', 'completed')")
-        knowledge.executemany("INSERT INTO players VALUES ('m', ?, ?, 'opus', 'high')", [("A", 2), ("B", 1)])
-        knowledge.executemany("INSERT INTO decisions VALUES ('m', ?, ?, ?, 0, 2, NULL, NULL, 1, 1, 0, ?, ?, NULL, ?, '[]', ?)", decisions)
+        knowledge = database(directory / "knowledge.sqlite", KNOWLEDGE)
+        insert(knowledge, "matches", match_id="m", status="completed")
+        for player, position in (("A", 2), ("B", 1)):
+            insert(knowledge, "players", match_id="m", player=player, position=position, model="opus", effort="high")
+        for ordinal, player, by_whom, shot, item, legal_items, health in decisions:
+            insert(knowledge, "decisions", match_id="m", ordinal=ordinal, player=player, by_whom=by_whom, round=0, remaining=2, private_live_min=1, private_live_max=1,
+                   sawed=0, shot=shot, item=item, legal_items_json=legal_items, opponent_items_json="[]", health_json=health)
         knowledge.commit()
-        scored = sqlite3.connect(directory / "regret.sqlite")
-        scored.execute("CREATE TABLE regret (match_id TEXT, ordinal INTEGER, evaluator TEXT, max_depth INTEGER, budget INTEGER, reload TEXT, samples INTEGER, status TEXT, regret INTEGER)")
-        scored.executemany("INSERT INTO regret VALUES ('m', ?, 'e', 6, 20000, 'static', 0, 'searched', 7)", [(d[0],) for d in decisions])
+        scored = database(directory / "regret.sqlite", REGRET)
+        for ordinal, *_ in decisions:
+            insert(scored, "regret", match_id="m", ordinal=ordinal, evaluator="e", max_depth=6, budget=20000, reload="static", samples=0, status="searched", regret=7)
         scored.commit()
         return directory / "regret.sqlite", directory / "knowledge.sqlite"
 

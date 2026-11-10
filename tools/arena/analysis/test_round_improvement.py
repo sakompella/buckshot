@@ -1,7 +1,6 @@
 """Tests for the within-match round change: python3 -m unittest discover -s tools/arena/analysis"""
 
 import random
-import sqlite3
 import tempfile
 import unittest
 import xml.etree.ElementTree as ET
@@ -9,8 +8,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 import round_improvement as ri
+from certain_mistakes import CREATE_OPPORTUNITIES
 from rules import POINT
-from test_by_round import A1, A3, B2, event, lines
+from testdb import ANALYSIS, KNOWLEDGE, REGRET, database, events, insert, rounds
 
 
 def seat(n: int, wins: frozenset[int] = frozenset(), block: str | None = None) -> ri.Seat:
@@ -103,38 +103,26 @@ class Figures(unittest.TestCase):
 
 class Load(unittest.TestCase):
     def test_reads_seats_rounds_and_self_shot_opportunities(self):
-        public = lines(A1, B2, A3)
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            db = sqlite3.connect(root / "buckshot.sqlite")
-            db.executescript(
-                """CREATE TABLE source_files (path TEXT, match_id TEXT);
-                   CREATE TABLE source_records (path TEXT, raw TEXT, current INTEGER);
-                   CREATE TABLE match_seats (match_id TEXT, player TEXT, cash INTEGER)"""
-            )
-            db.execute("INSERT INTO source_files VALUES ('t/m1/events.jsonl', 'm1')")
-            db.execute("INSERT INTO source_records VALUES ('t/m1/events.jsonl', ?, 1)", (event("A", 0, public),))
-            db.executemany("INSERT INTO match_seats VALUES ('m1', ?, ?)", [("A", 150_000), ("B", 75_000)])
+            db = database(root / "buckshot.sqlite", ANALYSIS)
+            for player, socket in (("A", 0), ("B", 1)):
+                insert(db, "match_seats", match_id="m1", position=socket + 1, player=player, socket=socket)
+            events(db, "m1", *rounds(0, 1, 0))
             db.commit()
-            knowledge = sqlite3.connect(root / "knowledge.sqlite")
-            knowledge.executescript(
-                """CREATE TABLE matches (match_id TEXT, status TEXT, seed_block_id TEXT);
-                   CREATE TABLE players (match_id TEXT, player TEXT, model TEXT, effort TEXT);
-                   CREATE TABLE decisions (match_id TEXT, ordinal INTEGER, player TEXT, by_whom TEXT, round INTEGER, remaining INTEGER, choice TEXT)"""
-            )
-            knowledge.execute("INSERT INTO matches VALUES ('m1', 'completed', 'block1')")
-            knowledge.executemany("INSERT INTO players VALUES ('m1', ?, ?, ?)", [("A", "opus", "high"), ("B", "sol", "low")])
-            knowledge.executemany("INSERT INTO decisions VALUES ('m1', ?, ?, 'agent', ?, 3, ?)", [(0, "A", 0, "Shoot Player B"), (1, "B", 1, "Use Beer")])
+            knowledge = database(root / "knowledge.sqlite", KNOWLEDGE)
+            insert(knowledge, "matches", match_id="m1", status="completed", seed_block_id="block1")
+            for player, model, effort in (("A", "opus", "high"), ("B", "sol", "low")):
+                insert(knowledge, "players", match_id="m1", player=player, model=model, effort=effort)
+            for ordinal, player, round, shot in ((0, "A", 0, "opponent"), (1, "B", 1, None)):
+                insert(knowledge, "decisions", match_id="m1", ordinal=ordinal, player=player, by_whom="agent", round=round, remaining=3, shot=shot)
             knowledge.commit()
-            regret = sqlite3.connect(root / "regret.sqlite")
-            regret.execute(
-                """CREATE TABLE regret (match_id TEXT, ordinal INTEGER, evaluator TEXT, max_depth INTEGER, budget INTEGER, reload TEXT, samples INTEGER, status TEXT, regret INTEGER)"""
-            )
-            regret.executemany("INSERT INTO regret VALUES ('m1', ?, 'e', 6, 20000, 'static', 0, 'searched', ?)", [(0, 30_000), (1, 0)])
+            regret = database(root / "regret.sqlite", REGRET)
+            for ordinal, value in ((0, 30_000), (1, 0)):
+                insert(regret, "regret", match_id="m1", ordinal=ordinal, evaluator="e", max_depth=6, budget=20000, reload="static", samples=0, status="searched", regret=value)
             regret.commit()
-            mistakes = sqlite3.connect(root / "mistakes.sqlite")
-            mistakes.execute("CREATE TABLE opportunities (match_id TEXT, ordinal INTEGER, player TEXT, type TEXT, outcome TEXT, source TEXT)")
-            mistakes.execute("INSERT INTO opportunities VALUES ('m1', 0, 'A', 'self_on_live', 'mistake', 'public')")
+            mistakes = database(root / "mistakes.sqlite", CREATE_OPPORTUNITIES)
+            insert(mistakes, "opportunities", match_id="m1", ordinal=0, player="A", type="self_on_live", outcome="mistake", source="public")
             mistakes.commit()
             moves = ri.load_moves(root / "regret.sqlite", root / "knowledge.sqlite", root / "mistakes.sqlite", str(root / "buckshot.sqlite"))
         first, second = sorted(moves, key=lambda m: m.round)
