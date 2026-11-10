@@ -52,12 +52,24 @@ const { values } = parseArgs({
   options: { db: { type: "string" }, out: { type: "string" }, trace: { type: "string" }, verify: { type: "boolean" }, limit: { type: "string" } },
 });
 
-if (values.db === undefined || (values.out === undefined && values.trace === undefined && values.verify !== true)) {
-  console.error("Usage: bun scripts/arena-knowledge.ts --db <database> (--out <knowledge.sqlite> | --trace <match> | --verify) [--limit N]");
+const USAGE = "Usage: bun scripts/arena-knowledge.ts --db <database> (--out <knowledge.sqlite> | --trace <match> | --verify) [--limit N]";
+
+const Args = Schema.Struct({
+  db: Schema.String,
+  out: Schema.optional(Schema.String),
+  trace: Schema.optional(Schema.String),
+  verify: Schema.optional(Schema.Boolean),
+  limit: Schema.optional(Schema.NumberFromString.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(1))),
+});
+
+const args = Option.getOrNull(Schema.decodeUnknownOption(Args)(values));
+
+if (args === null || (args.out === undefined && args.trace === undefined && args.verify !== true)) {
+  console.error(USAGE);
   process.exit(1);
 }
 
-const source = new Database(resolve(values.db), { readonly: true });
+const source = new Database(resolve(args.db), { readonly: true });
 
 assertCurrentImport(source);
 
@@ -116,17 +128,17 @@ const matches = source
      WHERE m.manifest_json IS NOT NULL AND m.replay_status = 'validated' ORDER BY t.name, m.name`,
   )
   .all()
-  .filter((match) => values.trace === undefined || match.name === values.trace)
-  .slice(0, values.limit === undefined ? undefined : Number(values.limit));
+  .filter((match) => args.trace === undefined || match.name === args.trace)
+  .slice(0, args.limit);
 
 if (matches.length === 0) {
   console.error("No replay-validated match matched.");
   process.exit(1);
 }
 
-const out = values.out === undefined ? undefined : (() => {
-  mkdirSync(dirname(resolve(values.out)), { recursive: true });
-  const db = new Database(resolve(values.out), { create: true, strict: true });
+const out = args.out === undefined ? undefined : (() => {
+  mkdirSync(dirname(resolve(args.out)), { recursive: true });
+  const db = new Database(resolve(args.out), { create: true, strict: true });
   db.exec("PRAGMA journal_mode = WAL");
   db.exec(readFileSync(new URL("../src/analysis/knowledge.sql", import.meta.url), "utf8"));
 
@@ -248,7 +260,7 @@ for (const [count, match] of matches.entries()) {
         belief_key: keys.belief,
       });
 
-      if (values.verify === true) {
+      if (args.verify === true) {
         const gun = trueGun(before);
         const allowed = belief.orders(log, true);
         checked++;
@@ -261,7 +273,7 @@ for (const [count, match] of matches.entries()) {
         if (Option.isSome(knowledge.chamber) && Option.getOrNull(certainAt(knowledge.private, 0)) !== (gun.startsWith("L") ? "Live" : "Blank")) wrongCertain++;
       }
 
-      if (values.trace !== undefined) {
+      if (args.trace !== undefined) {
         console.log(
           [
             `#${decision.ordinal} ${decision.player} (${decision.by_whom}) ${decision.label}`,
@@ -353,4 +365,4 @@ source.close();
 
 const summary = { matches: matches.length, problems: problemCount, seconds: Math.round((performance.now() - started) / 1000) };
 
-console.error(JSON.stringify(values.verify === true ? { ...summary, checked, outside, wrongCertain } : summary));
+console.error(JSON.stringify(args.verify === true ? { ...summary, checked, outside, wrongCertain } : summary));

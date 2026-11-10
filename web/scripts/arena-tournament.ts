@@ -166,17 +166,27 @@ const runOne = (match: ScheduledMatch, accounts: MatchAccounts): Promise<number>
 
     mkdirSync(matchDir, { recursive: true });
 
-    const log = openSync(join(matchDir, "arena.log"), "a");
     const [command = "nice", ...rest] = childCommand(matchDir, file.config, match);
-    const child = spawn(command, rest, { cwd: webOf(match) ?? WEB, env: childEnv(process.env, file.config, match, keys, accounts), stdio: ["ignore", log, log] });
+    const log = openSync(join(matchDir, "arena.log"), "a");
+
+    // The child gets its own copy of the log's descriptor when it spawns, so this one closes right away.
+    const child = (() => {
+      try {
+        return spawn(command, rest, { cwd: webOf(match) ?? WEB, env: childEnv(process.env, file.config, match, keys, accounts), stdio: ["ignore", log, log] });
+      } finally {
+        closeSync(log);
+      }
+    })();
 
     children.add(child);
     child.on("close", (code) => {
       children.delete(child);
-      closeSync(log);
       done(code ?? 1);
     });
-    child.on("error", () => done(1));
+    child.on("error", () => {
+      children.delete(child);
+      done(1);
+    });
   });
 
 const tail = (match: ScheduledMatch, lines: number): string => {

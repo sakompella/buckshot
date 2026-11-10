@@ -1,13 +1,14 @@
 import { parseArgs } from "node:util";
 
 import { createModels } from "@earendil-works/pi-ai";
-import { Cause, Effect, Exit, Schema } from "effect";
+import { Effect, Schema } from "effect";
 
 import { AgentId, SeatSpec, seatingOf } from "../src/arena/agent.ts";
 import { agentEndpoint, labelOf, modelRefOf, provenanceOf, providerIdOf, providerOf } from "../src/arena/endpoints.ts";
 import { listenForHuman } from "../src/arena/human.ts";
 import { DELIVERIES, playMatch } from "../src/arena/match.ts";
 import type { Letter } from "../src/players.ts";
+import { decodeArgs, runMain, ScriptError } from "../src/script.ts";
 
 // Plays one match to game over and writes its run directory. --seats lists who
 // plays: agents by letter, configured in web/.env (see .env.example), the DoN
@@ -31,11 +32,15 @@ const { values } = parseArgs({
   },
 });
 
-const { dir, seed } = values;
+const USAGE = "usage: bun scripts/arena.ts [--dir ../_work/arena/<name>] [--seed N] [--seats A,B,DoN,Engine/4/20000] [--rotation 0] [--delivery on-turn|live]";
 
-const seating = seatingOf(Schema.decodeUnknownSync(Schema.Array(SeatSpec))(values.seats.split(",")), Number(values.rotation));
-
-const delivery = Schema.decodeUnknownSync(Schema.Literals(DELIVERIES))(values.delivery);
+const Flags = Schema.Struct({
+  dir: Schema.String,
+  seed: Schema.String,
+  seats: Schema.String,
+  rotation: Schema.NumberFromString.check(Schema.isInt()),
+  delivery: Schema.Literals(DELIVERIES),
+});
 
 const isAgent = Schema.is(AgentId);
 
@@ -50,6 +55,9 @@ const connectHuman = async (player: Letter) => {
 };
 
 const program = Effect.gen(function* () {
+  const { dir, seed, rotation, delivery, ...flags } = yield* decodeArgs(Flags, USAGE)(values);
+  const seats = yield* Schema.decodeUnknownEffect(Schema.Array(SeatSpec))(flags.seats.split(",")).pipe(Effect.mapError((error) => new ScriptError({ message: `--seats: ${error.message}\n${USAGE}`, exitCode: 1 })));
+  const seating = seatingOf(seats, rotation);
   const models = createModels();
 
   const entrants = yield* Effect.forEach(seating.filter(isAgent), (agent) =>
@@ -64,13 +72,9 @@ const program = Effect.gen(function* () {
 
   console.error(`arena: ${dir}, seed ${seed}, ${delivery} delivery, seating ${seating.map((seat, index) => `position ${index + 1}: ${seat}`).join(", ")}`);
 
-  return yield* playMatch({ dir, seed, controllers: seating.map((seat) => (isAgent(seat) ? "Agent" : seat)), entrants, connectHuman, models, delivery });
+  const result = yield* playMatch({ dir, seed, controllers: seating.map((seat) => (isAgent(seat) ? "Agent" : seat)), entrants, connectHuman, models, delivery });
+
+  console.log(JSON.stringify({ dir, ...result }, null, 2));
 });
 
-Exit.match(await Effect.runPromiseExit(program), {
-  onSuccess: (result) => console.log(JSON.stringify({ dir, ...result }, null, 2)),
-  onFailure: (cause) => {
-    console.error(Cause.pretty(cause));
-    process.exitCode = 1;
-  },
-});
+await runMain(program);

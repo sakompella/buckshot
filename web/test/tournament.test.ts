@@ -446,6 +446,22 @@ test.each([
   expect(Option.getOrUndefined(cooldownOf(dir, tournament.config, match, at))).toEqual(seconds === undefined ? undefined : { model: "gpt-6-luna", until: at + 1000 * seconds });
 });
 
+test("a half-written last line of a running match's log is not read yet", () => {
+  const tournament = tournamentFrom(configJson({ pairings: [["luna", "haiku-5-5"]], blocksPerPairing: 1 }));
+  const [match] = scheduleOf(tournament);
+  const dir = mkdtempSync(join(tmpdir(), "tournament-partial-"));
+  const at = Date.parse("2026-10-16T01:00:00Z");
+
+  if (match === undefined) throw new Error("no match");
+
+  const fault = JSON.stringify({ t: new Date(at).toISOString(), kind: "fault", agent: match.seats[match.entrants.indexOf("luna")], error: 'openai-responses-A API error (429): {"code":"model_cooldown","reset_seconds":90}' });
+
+  mkdirSync(join(dir, match.name));
+  writeFileSync(join(dir, match.name, "events.jsonl"), `${fault}\n${fault.slice(0, 20)}`);
+
+  expect(Option.getOrUndefined(cooldownOf(dir, tournament.config, match, at))).toEqual({ model: "gpt-6-luna", until: at + 90_000 });
+});
+
 test("each refusal in a row doubles the wait after a 429 without a reset, and a move starts it over", () => {
   const tournament = tournamentFrom(configJson({ pairings: [["luna", "haiku-5-5"]], blocksPerPairing: 1 }));
   const [match] = scheduleOf(tournament);

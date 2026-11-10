@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 
-import { Schema } from "effect";
+import { Effect, Schema } from "effect";
 
 import { configOfLabel } from "../arena/model-names.ts";
 
@@ -11,6 +11,7 @@ import { openConsistency } from "./consistency.ts";
 import { openLuck } from "./luck.ts";
 import { openRegret, type Regret } from "./regret.ts";
 import { assertCurrentImport } from "../analysis/importer-hash.ts";
+import { ScriptError } from "../script.ts";
 
 // Reads the arena analysis database once for the viewer server and the aggregate export. It never selects
 // match_seats.provenance_json, which holds an account email. Excluded matches (a DeepSeek seat, matches.disposition)
@@ -58,12 +59,14 @@ export interface Arena {
   readonly luck: ReadonlyMap<string, number>;
 }
 
-/** With a regret database, seats carry their regret; with a knowledge database, each config's consistency; with a certain-mistakes database, its rates and moves; with a luck database, the luck-adjusted ratings. */
-export const loadArena = (dbPath: string, paths: ArenaPaths = {}): Arena => {
-  const db = new Database(dbPath, { readonly: true });
+const closeArena = ({ db, regret }: Pick<Arena, "db" | "regret">) => {
+  regret?.close();
+  db.close();
+};
 
+/** With a regret database, seats carry their regret; with a knowledge database, each config's consistency; with a certain-mistakes database, its rates and moves; with a luck database, the luck-adjusted ratings. */
+const loadFrom = (db: Database, regret: Regret | null, paths: ArenaPaths): Arena => {
   assertCurrentImport(db);
-  const regret = paths.regret === undefined ? null : openRegret(paths.regret);
 
   const rows = db
     .query(SEATS_SQL)
@@ -92,3 +95,25 @@ export const loadArena = (dbPath: string, paths: ArenaPaths = {}): Arena => {
     luck: paths.luck === undefined ? new Map() : openLuck(paths.luck),
   };
 };
+
+/** The arena of `dbPath`, open until the scope closes. The main and regret databases stay open for the per-match routes. */
+export const openArena = (dbPath: string, paths: ArenaPaths = {}) =>
+  Effect.acquireRelease(
+    Effect.try({
+      try: () => {
+        const db = new Database(dbPath, { readonly: true });
+        let regret: Regret | null = null;
+
+        try {
+          regret = paths.regret === undefined ? null : openRegret(paths.regret);
+
+          return loadFrom(db, regret, paths);
+        } catch (error) {
+          closeArena({ db, regret });
+          throw error;
+        }
+      },
+      catch: (cause) => new ScriptError({ message: `cannot read ${dbPath}: ${String(cause)}`, exitCode: 1 }),
+    }),
+    (arena) => Effect.sync(() => closeArena(arena)),
+  );

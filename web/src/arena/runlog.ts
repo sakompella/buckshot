@@ -105,7 +105,8 @@ const decodeCall = Schema.decodeUnknownSync(Schema.fromJsonString(CallLine));
 
 const decodeEvent = Schema.decodeUnknownSync(Schema.fromJsonString(ReadFields));
 
-const linesOf = (path: string): ReadonlyArray<string> => (existsSync(path) ? readFileSync(path, "utf8").split("\n").filter((line) => line !== "") : []);
+/** The file's whole lines. An unterminated last line is one a running match is still appending, so it is left out. */
+const linesOf = (path: string): ReadonlyArray<string> => (existsSync(path) ? readFileSync(path, "utf8").split("\n").slice(0, -1).filter((line) => line !== "") : []);
 
 export const readCalls = (dir: string): ReadonlyArray<CallLine> => linesOf(join(dir, "calls.jsonl")).map((line) => decodeCall(line));
 

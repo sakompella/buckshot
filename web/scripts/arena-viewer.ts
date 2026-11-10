@@ -4,6 +4,7 @@ import { parseArgs } from "node:util";
 
 import { Effect, Schema } from "effect";
 
+import { openArena } from "../src/arena-viewer/load.ts";
 import { serveArenaViewer } from "../src/arena-viewer/server.ts";
 import { decodeArgs, runMain, ScriptError } from "../src/script.ts";
 
@@ -39,8 +40,14 @@ const program = Effect.gen(function* () {
   // ARENA_VIEWER_PASSWORD guards the API; ARENA_VIEWER_DOWNLOAD names the database file the page offers. Blank is unset.
   const access = { password: process.env["ARENA_VIEWER_PASSWORD"] || undefined, download: process.env["ARENA_VIEWER_DOWNLOAD"] || undefined };
 
+  const started = performance.now();
+  const arena = yield* openArena(dbPath, { regret: regretPath, knowledge: knowledgePath, certain: certainPath, luck: luckPath });
+
+  console.log(`loaded ${arena.seats.length} seats in ${Math.round(performance.now() - started)} ms`);
+
+  // Released first, so the server stops before the databases close.
   const server = yield* Effect.acquireRelease(
-    Effect.try({ try: () => serveArenaViewer(dbPath, siteDir, host, listenPort, { regret: regretPath, knowledge: knowledgePath, certain: certainPath, luck: luckPath }, access), catch: (cause) => new ScriptError({ message: `cannot serve: ${String(cause)}`, exitCode: 1 }) }),
+    Effect.try({ try: () => serveArenaViewer(arena, siteDir, host, listenPort, access), catch: (cause) => new ScriptError({ message: `cannot serve: ${String(cause)}`, exitCode: 1 }) }),
     (running) => Effect.promise(() => running.stop()),
   );
 
