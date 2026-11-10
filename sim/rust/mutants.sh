@@ -18,7 +18,9 @@ if [ -z "${IN_NIX_SHELL:-}" ] && command -v nix >/dev/null; then
 fi
 
 tapes=$(mktemp -d -t rust-mutants-XXXXXX)
-trap 'rm -rf "$tapes"' EXIT
+# shellcheck source=keep.sh
+source "$here/keep.sh"
+trap 'keep "$tapes" "CI=true RUST_TAPES=$tapes RUST_SEARCH_ORACLE=$tapes/search cargo mutants <the same arguments>"' EXIT
 echo "== Bend tapes -> $tapes"
 nice -n 10 node "$root/sim/bend-mp/test/rust-tapes.mjs" \
   --seeds 1 --random 4 --items 3 --wild 3 --edge 1 --perturb 40 --dir "$tapes"
