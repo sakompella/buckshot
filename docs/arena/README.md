@@ -28,6 +28,7 @@ The arena plays language models against each other at the Buckshot table through
   - `--dry-run` prints the schedule.
 - **Flags:**
   - `--limit N`: plays at most N matches, the first unfinished in schedule order. The runner exits 1 while matches remain.
+  - `--first N`: plays only the first N matches of the schedule, and exits 0 once they are finished.
   - `--cap <model>=N`, `--last <model>`, `--skip <entrant>`, `--forget-cooldown <model>`.
   - `--prefer-account <id>`, repeated in order of preference: a new match pins to these accounts first when accounts are equally loaded. With `--parallel 1 --limit 1`, rerun with a fresh order before each match, such as the account whose window resets first.
   - `--code <code_sha>=<web dir>`: see code versions below.
@@ -54,7 +55,9 @@ The Claude subscription is shared with other work, so long runs go through `tool
 - the least-used Claude account reaches the Claude line (default: 0.78 to start, 0.80 while playing);
 - the runner fails;
 - `tools/arena/check_matches.py` finds a fallback move, a failed audit flag or an unexpected endpoint;
-- the first `CAP` matches are finished.
+- the first `CAP` matches are finished (the runner's `--first`).
+
+It exits 0 on the Claude line or a finished cap, and 1 on a failed runner or check. The checker also runs after the runner exits, and before a finished run ends.
 
 Codex isn't checked there: use account pins, so a full Codex account pauses only its own matches.
 

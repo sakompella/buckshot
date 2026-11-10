@@ -32,11 +32,12 @@ import { cooldownOf, costOf, faultsOf, finishedNames, openTournament, runPending
 // A match that fails goes to the back of the queue after a pause, up to three
 // runs, and the rest go on. Rerun the same command to resume: finished matches
 // never run again. Do not run two of these on one directory. --limit plays at
-// most that many matches. The runner appends a line to <dir>/PROGRESS.md when
+// most that many matches. --first N plays only the first N matches of the schedule, and exits 0 once they are
+// finished. The runner appends a line to <dir>/PROGRESS.md when
 // it starts, every 30 minutes and when it ends. --dry-run prints the schedule
 // of the last config.
 // Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel N] [--cap <model>=N]... [--last <model>]...
-//          [--forget-cooldown <model>]... [--skip <entrant>]... [--prefer-account <id>]... [--code <code_sha>=<web dir>]... [--limit N] [--dry-run]
+//          [--forget-cooldown <model>]... [--skip <entrant>]... [--prefer-account <id>]... [--code <code_sha>=<web dir>]... [--limit N] [--first N] [--dry-run]
 //        bun scripts/arena-stats.ts <tournament dir> [--json]
 
 const WEB = join(import.meta.dir, "..");
@@ -49,13 +50,15 @@ const flag = (name: string): string | undefined => {
   return at === -1 ? undefined : args[at + 1];
 };
 
-const VALUED = new Set(["--dir", "--parallel", "--limit", "--cap", "--last", "--forget-cooldown", "--skip", "--prefer-account", "--code"]);
+const VALUED = new Set(["--dir", "--parallel", "--limit", "--cap", "--last", "--forget-cooldown", "--skip", "--prefer-account", "--code", "--first"]);
 
 const configPaths = args.filter((arg, index) => !arg.startsWith("--") && !VALUED.has(args[index - 1] ?? ""));
 
 const parallel = Number(flag("parallel") ?? "5");
 
 const limit = flag("limit") === undefined ? undefined : Number(flag("limit"));
+
+const first = flag("first") === undefined ? undefined : Number(flag("first"));
 
 /** The values of a flag given once per value, as --cap is. */
 const repeated = (name: string): ReadonlyArray<string> => args.flatMap((arg, index) => (arg === `--${name}` ? [args[index + 1] ?? ""] : []));
@@ -68,11 +71,13 @@ const exit = (message: string): never => {
 
 const unwrap = <A>(result: Result.Result<A, TournamentError>): A => Result.match(result, { onFailure: (error) => exit(error.message), onSuccess: (value) => value });
 
-if (configPaths.length === 0) exit("Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel N] [--cap <model>=N]... [--last <model>]... [--forget-cooldown <model>]... [--skip <entrant>]... [--prefer-account <id>]... [--code <code_sha>=<web dir>]... [--limit N] [--dry-run]");
+if (configPaths.length === 0) exit("Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel N] [--cap <model>=N]... [--last <model>]... [--forget-cooldown <model>]... [--skip <entrant>]... [--prefer-account <id>]... [--code <code_sha>=<web dir>]... [--limit N] [--first N] [--dry-run]");
 
 if (!Number.isInteger(parallel) || parallel < 1) exit("--parallel must be a whole number from 1");
 
 if (limit !== undefined && (!Number.isInteger(limit) || limit < 1)) exit("--limit must be a whole number from 1");
+
+if (first !== undefined && (!Number.isInteger(first) || first < 1)) exit("--first must be a whole number from 1");
 
 const caps = new Map(
   repeated("cap").map((cap) => {
@@ -224,7 +229,10 @@ const settle = (settled: Settled) => {
 
 const isPlayed = (match: ScheduledMatch) => !match.entrants.some((entrant) => skipped.has(entrant));
 
-const played = unfinished(file.schedule, finishedNames(dir, file.schedule)).filter(isPlayed);
+/** The matches this run is for: the whole schedule, or its first --first. */
+const scope = file.schedule.slice(0, first);
+
+const played = unfinished(scope, finishedNames(dir, file.schedule)).filter(isPlayed);
 
 const pending = played.filter((match) => webOf(match) !== undefined).slice(0, limit);
 
@@ -247,7 +255,7 @@ clearInterval(every30Minutes);
 const failed = settled.filter(({ status }) => status === "failed").length;
 
 // Skipped matches do not count, so a run that skips an entrant ends with exit 0 once the rest are finished.
-const remaining = unfinished(file.schedule, finishedNames(dir, file.schedule)).filter(isPlayed).length;
+const remaining = unfinished(scope, finishedNames(dir, file.schedule)).filter(isPlayed).length;
 
 console.log(`\n${settled.length - failed} matches finished, ${failed} failed runs, ${remaining} not finished. Total cost ${money(costOf(dir, prices, file.schedule))}.`);
 
