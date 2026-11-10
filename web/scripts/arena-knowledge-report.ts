@@ -27,6 +27,8 @@ const DEFAULT_DRAWS = 2000;
 
 const Args = Schema.Struct({ db: Schema.String, draws: Schema.optional(Schema.NumberFromString.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(1))) });
 
+const decodeLabels = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Array(Schema.String)));
+
 const openReadOnly = (path: string) =>
   Effect.acquireRelease(
     Effect.try({ try: () => new Database(resolve(path), { readonly: true }), catch: (cause) => new ScriptError({ message: `cannot open ${path}: ${String(cause)}`, exitCode: 1 }) }),
@@ -62,21 +64,31 @@ const report = (db: Database, draws: number): void => {
     readonly shot: string | null;
     readonly item: string | null;
     readonly stolen: number | null;
-    readonly legal_items_json: string;
-    readonly own_items_json: string;
+    readonly legalItems: ReadonlyArray<string>;
+    readonly ownItems: ReadonlyArray<string>;
     readonly exact_key: string;
     readonly belief_key: string;
   }
 
+  type DecisionRow = Omit<Decision, "cohort" | "legalItems" | "ownItems"> & { readonly legal_items_json: string; readonly own_items_json: string };
+
+  const labelsOf = (row: Pick<DecisionRow, "match_id" | "ordinal">, column: string, json: string): ReadonlyArray<string> => {
+    try {
+      return decodeLabels(json);
+    } catch (error) {
+      throw new Error(`decision ${row.match_id} #${row.ordinal}: bad ${column}`, { cause: error });
+    }
+  };
+
   const decisions = db
-    .query<Omit<Decision, "cohort">, []>(
+    .query<DecisionRow, []>(
       `SELECT d.match_id, d.ordinal, m.code_hash, m.seed_block_id AS block, p.model || ' ' || p.effort AS model, d.choice, d.chamber, d.remaining, d.source,
          d.clue_via_adrenaline AS via, d.moves_since_clue AS since, d.shot, d.item, d.item_stolen AS stolen, d.legal_items_json, d.own_items_json, d.exact_key, d.belief_key
        FROM decisions d JOIN matches m ON m.match_id = d.match_id JOIN players p ON p.match_id = d.match_id AND p.player = d.player
        WHERE m.status = 'completed' AND m.disposition IS NULL AND d.by_whom = 'agent'`,
     )
     .all()
-    .map((row) => ({ ...row, cohort: cohortOf(row.match_id) }));
+    .map(({ legal_items_json, own_items_json, ...row }) => ({ ...row, legalItems: labelsOf(row, "legal_items_json", legal_items_json), ownItems: labelsOf(row, "own_items_json", own_items_json), cohort: cohortOf(row.match_id) }));
 
   interface ItemRow {
     readonly match_id: string;
@@ -318,7 +330,7 @@ const report = (db: Database, draws: number): void => {
             show(rateOf(shots.map((row) => [row.block, flag(row.source === "glass" || row.source === "phone" || row.source === "combined"), 1]), `${cohort}|${model}|clue`)),
             show(rateOf(shots.map((row) => [row.block, flag(row.source === "public"), 1]), `${cohort}|${model}|count`)),
             show(rateOf(shots.map((row) => [row.block, flag(row.chamber === null), 1]), `${cohort}|${model}|unknown`)),
-            show(rateOf(blind.map((row) => [row.block, flag(JSON.parse(row.own_items_json).includes("Glass")), 1]), `${cohort}|${model}|glass in hand`)),
+            show(rateOf(blind.map((row) => [row.block, flag(row.ownItems.includes("Glass")), 1]), `${cohort}|${model}|glass in hand`)),
           ];
         }),
       ),
@@ -359,7 +371,7 @@ const report = (db: Database, draws: number): void => {
   const useWhenLegal = (rows: ReadonlyArray<Decision>, option: string, label: string): Rate =>
     rateOf(
       rows.flatMap((row): ReadonlyArray<readonly [string, number, number]> =>
-        JSON.parse(row.legal_items_json).includes(option) ? [[row.block, flag(row.item !== null && `${row.stolen === 1 ? "steal " : ""}${row.item}` === option), 1]] : [],
+        row.legalItems.includes(option) ? [[row.block, flag(row.item !== null && `${row.stolen === 1 ? "steal " : ""}${row.item}` === option), 1]] : [],
       ),
       label,
     );

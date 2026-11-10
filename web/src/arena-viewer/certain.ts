@@ -1,8 +1,7 @@
-import { Database } from "bun:sqlite";
-
 import { Schema } from "effect";
 
 import { CERTAIN_TYPES, type CertainMistakes, CertainType, OpportunityType } from "./api.ts";
+import { readOnly } from "./read-only.ts";
 
 const RateRow = Schema.Struct({
   scope: Schema.Literals(["config", "model", "all"]),
@@ -29,28 +28,25 @@ export interface Certain {
 export const NO_CERTAIN: Certain = { summary: { rates: [], moveSeat: [], moveType: [], moveOrd: [] }, moves: () => new Map() };
 
 export const openCertain = (path: string, seatIndex: ReadonlyMap<string, number>): Certain => {
-  const db = new Database(path, { readonly: true });
+  const { rates, mistakes } = readOnly(path, (db) => ({
+    rates: db
+      .query(`select scope, model, effort, type, chose, opportunities, lo, hi from rates order by scope, model, effort, type`)
+      .all()
+      .map((raw) => {
+        const { lo, hi, ...rate } = decodeRate(raw);
 
-  const rates = db
-    .query(`select scope, model, effort, type, chose, opportunities, lo, hi from rates order by scope, model, effort, type`)
-    .all()
-    .map((raw) => {
-      const { lo, hi, ...rate } = decodeRate(raw);
+        return { ...rate, bounds: lo === null || hi === null ? null : { lo, hi } };
+      }),
+    mistakes: db
+      .query(`select match_id matchId, ordinal, player, type from opportunities where outcome = 'mistake' order by match_id, ordinal`)
+      .all()
+      .flatMap((raw) => {
+        const row = decodeMistake(raw);
+        const seat = seatIndex.get(`${row.matchId}|${row.player}`);
 
-      return { ...rate, bounds: lo === null || hi === null ? null : { lo, hi } };
-    });
-
-  const mistakes = db
-    .query(`select match_id matchId, ordinal, player, type from opportunities where outcome = 'mistake' order by match_id, ordinal`)
-    .all()
-    .flatMap((raw) => {
-      const row = decodeMistake(raw);
-      const seat = seatIndex.get(`${row.matchId}|${row.player}`);
-
-      return seat === undefined ? [] : [{ ...row, seat }];
-    });
-
-  db.close();
+        return seat === undefined ? [] : [{ ...row, seat }];
+      }),
+  }));
 
   const byMatch = new Map<string, Map<number, CertainType>>();
 

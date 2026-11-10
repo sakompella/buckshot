@@ -75,6 +75,7 @@ const decodeSeatMove = Schema.decodeUnknownSync(SeatMoveRow);
 export interface Regret {
   readonly seats: ReadonlyMap<string, SeatRegret>;
   readonly moves: (matchId: string) => Map<number, MoveRegret>;
+  readonly close: () => void;
 }
 
 type SeatMoveRow = typeof SeatMoveRow.Type;
@@ -117,9 +118,19 @@ const moveOf = (row: MoveRow): MoveRegret => ({
   values: row.values.map(({ label, score }) => ({ label, score: score / POINT })),
 });
 
-/** The scores of the file's one run. */
+/** The scores of the file's one run. It keeps the file open for `moves` until `close`. */
 export const openRegret = (path: string): Regret => {
   const db = new Database(path, { readonly: true });
+
+  try {
+    return regretOf(path, db);
+  } catch (error) {
+    db.close();
+    throw error;
+  }
+};
+
+const regretOf = (path: string, db: Database): Regret => {
   const runs = decodeRuns(db.query(`select distinct evaluator, max_depth depth, budget, reload, samples from regret`).all());
 
   if (runs.length > 1) throw new Error(`${path} holds ${runs.length} regret runs, not one: ${JSON.stringify(runs)}`);
@@ -155,5 +166,6 @@ export const openRegret = (path: string): Regret => {
 
       return [row.ordinal, moveOf(row)];
     })),
+    close: () => db.close(),
   };
 };
