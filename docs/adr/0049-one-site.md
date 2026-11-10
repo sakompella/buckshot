@@ -25,4 +25,3 @@ This replaces the viewer's separate Bun-bundled page, and amends ADR-0027: the b
 
 - One bundle holds both pages. Code-splitting the arena behind a dynamic import is possible later and is not needed yet.
 - The viewer serves the build from disk, so `bun run build` must run before the viewer starts, and again after a change to the page. The server needs no restart for a new build.
-- The next slice is a seat-view table component shared by Play and Replay (`_work/wip/analysis-board-design.md`); this ADR only puts the two pages in one app.

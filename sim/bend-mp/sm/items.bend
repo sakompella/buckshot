@@ -4,7 +4,7 @@ import ./state.bend as S
 import ./rules.bend as G
 
 # Item rules of the machine: inventories, distribution pools, and the typed
-# option lists of the grab, idle, jammer and adrenaline phases (D22, D37, D55).
+# option lists of the grab, idle, jammer and adrenaline phases.
 # Pure functions over machine state; main.bend sequences them.
 
 def keep(-A: Data, kept: Bool, x: A, rest: List<&2, A>) -> List<&2, A>:
@@ -156,7 +156,7 @@ def grabs.placed(+grabs: S.Grabs, +seat: D.Seat) -> S.Grabs:
     case S.Grabs{distributing, grabbing, holding, granted, intake}:
       S.Grabs{distributing, grabbing, D.ring.set(Maybe<&2, D.Item>, holding, seat, None{}), granted, D.ring.set(Bool, intake, seat, seat.grabbing(grabs, seat))}
 
-# Pools (D22). Held items count against both caps. The order is item.order().
+# Pools. Held items count against both caps. The order is item.order().
 
 # slots.copies(seat.slots(players, seat), item), read in place.
 def seat.copies(+players: S.Players, +seat: D.Seat, +item: D.Item) -> Nat:
@@ -243,8 +243,8 @@ def stocked(+state: S.State, +seat: D.Seat) -> Bool:
   +world : S.World = S.state.world(state)
   pool.any(D.item.order(), False{}, round.items(G.world.rules(world)), S.world.table(world), S.state.players(state), S.state.grabs(state), seat)
 
-# Who begins grabbing. A new round ignores health and full slots (D46); the
-# caller passes the stored amount, whose zero selects no one (D12).
+# Who begins grabbing. A new round ignores health and full slots; the
+# caller passes the stored amount, whose zero selects no one.
 
 def begin.can(new_round: Bool, hp: Nat, slots: D.Slots) -> Bool:
   Bool.or(new_round, Bool.and(G.alive(hp), Nat.is_lt(occupied(slots.items(slots)), 8n)))
@@ -264,8 +264,8 @@ def begin.seats(+state: S.State, new_round: Bool, amount: Nat) -> List<&2, D.Sea
     case _:
       begin.go(D.table.seats(S.world.table(S.state.world(state))), state, new_round)
 
-# Grab phase options (D37 grabbing rows). After completion latches, intake is
-# closed for everyone and only holders may still place (D56).
+# Grab phase options. After completion latches, intake is
+# closed for everyone and only holders may still place (ADR-0017).
 
 def puts.here(found: Maybe<&2, D.Item>, slot: D.Slot, rest: List<&2, S.GrabOption>) -> List<&2, S.GrabOption>:
   match found:
@@ -391,7 +391,7 @@ def briefcase(grabbing: Bool, holding: Maybe<&2, D.Item>) -> D.Briefcase:
       D.Holding{item}
 
 # The end-of-turn amount draw is live while distributing, or when an
-# exhausted, winnerless gun would start a distribution (D12).
+# exhausted, winnerless gun would start a distribution.
 def amount.live(rule: D.AmountRule, distributing: Bool, reload: Bool) -> Bool:
   match rule:
     case D.RandomAmount{}:
@@ -425,7 +425,7 @@ def reload.ready(gun: List<&2, D.Shell>, +state: S.State, winner: Maybe<&2, D.Se
 def reload.wanted(+state: S.State, winner: Maybe<&2, D.Seat>) -> Bool:
   reload.ready(S.world.gun(S.state.world(state)), state, winner)
 
-# Jammer targets (D37): living, unjammed seats other than the user.
+# Jammer targets: living, unjammed seats other than the user.
 
 def jam.options(entries: List<&2, D.At<&2, Nat>>, +players: S.Players, +by: D.Seat) -> List<&2, S.JamOption>:
   match entries:
@@ -463,7 +463,7 @@ def jam.nth(options: List<&2, S.JamOption>, n: Nat) -> Maybe<&2, S.JamOption>:
     case option <> rest 1n+n:
       jam.nth(rest, n)
 
-# Stealing mode (D37, D55 M4): adrenaline never, a saw only while the barrel
+# Stealing mode: adrenaline never, a saw only while the barrel
 # is whole, a jammer only if the thief has a target, everything else always.
 # Every other seat's occupied slot is a candidate, dead owners included.
 
@@ -537,7 +537,7 @@ def steal.nth(options: List<&2, S.StealOption>, n: Nat) -> Maybe<&2, S.StealOpti
     case option <> rest 1n+n:
       steal.nth(rest, n)
 
-# Ordinary item use (D37 invalid-ID mask with M4's adrenaline rule).
+# Ordinary item use.
 
 def use.fits(item: D.Item, sawed: Bool, targets: Bool, steals: Bool) -> Bool:
   match item:
@@ -597,7 +597,7 @@ def flip(direction: D.Direction) -> D.Direction:
     case D.CounterClockwise{}:
       D.Clockwise{}
 
-# The phone draws a position only with at least four shells (D28).
+# The phone draws a position only with at least four shells.
 def phone.request(length: Nat) -> D.Request:
   match length:
     case 1n+1n+1n+1n+extra:

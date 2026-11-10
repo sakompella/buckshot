@@ -1,6 +1,6 @@
 # Tournament database
 
-The internal analytical database is `_work/arena/analysis/buckshot.sqlite` in the main checkout. It is Git-ignored. Original tournament directories remain the source of truth. It isn't published openly: the arena viewer shares it behind a password, with a copy that has every email and account id redacted as its download (`web/README.md`). The importer never writes to a tournament directory.
+The analysis database is `_work/arena/analysis/buckshot.sqlite` by default. It is Git-ignored. Original tournament directories remain the source of truth. It isn't published openly: the arena viewer shares it behind a password, with a copy that has every email and account id redacted as its download (`web/README.md`). The importer never writes to a tournament directory.
 
 ## Import and rebuild
 
@@ -12,7 +12,7 @@ bun scripts/arena-import.ts --db /absolute/path/to/buckshot.sqlite \
   /absolute/path/to/tournament-1 /absolute/path/to/tournament-2 /absolute/path/to/tournament-3
 ```
 
-`--skips` is optional. It takes a JSON object of the form `{absoluteTournamentPath: {matchName: reason}}`: each absolute tournament path maps to its exact scheduled match names, and each match name maps to the reason it is not scored. The reason is stored in `matches.status_reason`, so every skip keeps its own. This is an explicit disposition, not a guess based on missing files. Keep this local file beside the database and record its evidence in the validation report. A skipped match that has logs, finished or not, is stored as `partial` and keeps its moves and costs, but it is never scored. Two local lists in `_work/arena/analysis/skip-lists/` feed the file: tournament 1's 120 skipped matches (38 started and partial, 82 never started) and tournament 3's 5 unfinished matches past its 40-match cap.
+`--skips` is optional. It takes a JSON object of the form `{absoluteTournamentPath: {matchName: reason}}`: each absolute tournament path maps to its exact scheduled match names, and each match name maps to the reason it is not scored. The reason is stored in `matches.status_reason`, so every skip keeps its own. This is an explicit disposition, not a guess based on missing files. Keep this local file beside the database. A skipped match that has logs, finished or not, is stored as `partial` and keeps its moves and costs, but it is never scored. Tournament 1 has 120 skipped matches (38 started and partial, 82 never started) and tournament 3 has 5 unfinished matches past its 40-match cap.
 
 Run the same command after more matches finish. Unchanged matches are not replayed. A match is unchanged only if its files, schedule entry, skip reason, source directory and the result of checking its manifest against the tournament's configuration are all the same, so changing a tournament's configuration or importing a copy from a new directory refreshes the affected matches. Changed matches refresh in a transaction per tournament. Stable IDs derive from the tournament's creation date and name, the scheduled match name, and the observation's position. Copies of the same tournament should not be imported as separate tournaments. Importing the same tournament from a new directory moves it: its rows point at the new paths, and the observations at the old paths stay as history but are no longer current. The database retains previous raw observations when files change. Analytical tables describe the latest imported snapshot, not every historical snapshot.
 
@@ -107,37 +107,8 @@ JOIN source_records r ON r.id = d.source_record
 WHERE d.match_id = :match_id ORDER BY d.ordinal, c.ordinal;
 ```
 
-Legal alternatives and own-player views support future opportunity-conditioned strategy and move-review tables. This change adds no solver, behavioral evaluation or frontend integration. A future leaderboard should generate its aggregates here rather than parse tournament directories again.
-
 ## Validation
 
-Snapshot of 2026-11-04, the one the derived tables are built from: 2,915 `completed` matches (2,895 scored without a DeepSeek seat), 43 `partial` with logs, every one of those 2,958 replay-validated, 0 issues, in a database of 30 `tournaments` rows (tournaments 1 to 7 and 9; a row is one tournament directory or phase). Tournaments 6, 7 and 9 were added since 2026-10-30; tournament 8 is still running and isn't in it. A copy of that database is what `arena-knowledge.ts` and the regret scorer read, so later top-up imports do not shift their input. The tables below describe the earlier import of tournaments 1 to 3 and are kept as that record.
+Every import replays every started match against the generated rules and records any failure in `issues`; after a rebuild, `PRAGMA integrity_check` returns `ok`, the foreign key check is clean and `issues` is empty. Matches cut from a schedule (never started, or past a match cap) reach the importer through a `--skips` file that maps each tournament directory to `{match name: reason}`. They are stored with `disposition = 'skipped'`, as `partial` when they started, and are not scored.
 
-Rebuilt on 2026-10-21 into a new file, then swapped in. The import took about 10 minutes on the Mac and 30 on hp. Scoring seed 3030's finished match was an incremental re-import of a copy, about 2 minutes. On 2026-10-22 the tournament-1 leftovers (60 new terra matches and 3 resumed Astra vs haiku 4.5 matches) were added the same way, in 3.5 minutes on hp, and the old file was kept as `buckshot.pre-leftovers.sqlite`. `PRAGMA integrity_check` returned `ok`, the foreign key check was clean and `issues` is empty. The figures below are after that import.
-
-| Tournament | Scheduled | Completed (scored) | Partial, skipped (unscored) | Skipped, never started | Unstarted | Replay validated | List-price cost, including partial work |
-|---|---|---|---|---|---|---|---|
-| tournament-1 (`cpa-tiers`) | 2,200 | 2,080 | 38 | 82 | 0 | 2,118 | $934.4558 |
-| tournament-2 (`opus-effort`) | 80 | 80 | 0 | 0 | 0 | 80 | $58.8854 |
-| tournament-3 (`astra-vs-opus-xhigh`) | 60 | 41 | 5 | 0 | 14 | 46 | $42.4880 |
-| Total | 2,340 | 2,201 | 43 | 82 | 14 | 2,244 | $1,035.83 |
-
-- Every started match (2,244) replayed and validated against the generated rules. The 96 matches with no logs have replay status `unavailable`. There are 216,291 decisions. Every call has a list price.
-- Tournament 2 and tournament 1's first 2,017 scored matches match the tournament reports and the first build exactly: $971.5335 and $58.8854. The leftovers added 63 scored matches, $19.56. On 2026-10-22 Sonnet 5.5's cache-read price was corrected from $0.20 to $0.10 per million tokens (Anthropic's pricing page), and the database was rebuilt clean: only Sonnet's cost changed, $579.48 to $522.84, so tournament 1 is now $934.46 and the total $1,035.83 (earlier figures in this section are before the correction).
-- Tournament 3 has 41 scored matches, Opus 22 and Astra 19, matching `results.md`. The 41st is seed 3030's first match, which finished during an uncapped run between 9:20 and 9:23 PM Pacific time; Aditya ruled that it counts. The other 5 matches past the 40-match cap never finished. They carry a skip disposition, are stored as `partial` and are unscored. The other 14 never started. The $42.4880 list-price cost includes all 46 started matches. The first build had 39 scored, 3 partial and $39.94.
-- The 2026-10-21 rebuild and its checks ran on the Mac, which holds the tournament directories: `PRAGMA integrity_check` returned `ok`, `issues` is empty and all 2,184 started matches replayed. Rebuilding on another machine needs its own copy of the tournament directories.
-- The `--skips` file now holds 125 skips: tournament 1's 120 and tournament 3's 5. All 125 carry `disposition = 'skipped'` and the reason from their list. Tournament 1's 38 started matches and tournament 3's 5 are `partial`, and tournament 1's 82 never-started matches are `skipped`. No other match has a disposition. Tournaments 1 and 2 are `completed`. Tournament 3 stays `partial`.
-
-The skips file holds absolute local paths, so it is not committed. It is built from two lists of match names and reasons in `_work/arena/analysis/skip-lists/`: `tournament-1-skipped.json` (120 matches) and `tournament-3-over-cap.json` (5 matches). Build the file from both, giving each tournament its absolute path:
-
-```sh
-bun -e '
-const entry = async (f) => { const l = await Bun.file(f).json(); return Object.fromEntries(l.matches.map((m) => [m, l.reason])); };
-console.log(JSON.stringify({
-  "/absolute/path/to/tournament-1": await entry("_work/arena/analysis/skip-lists/tournament-1-skipped.json"),
-  "/absolute/path/to/tournament-3": await entry("_work/arena/analysis/skip-lists/tournament-3-over-cap.json"),
-}));
-' > skips.json
-```
-
-Tournament 3's account ids contain emails, so provenance stays in the database and out of committed files.
+Account ids may contain emails, so provenance stays in the database and out of committed files.

@@ -136,7 +136,7 @@ def run_fuzz(mutation: Mutation, env: dict[str, str] | None = None) -> tuple[str
             HERE,
             copy,
             ignore=shutil.ignore_patterns(
-                ".git", "node_modules", "__pycache__", ".audit"
+                ".git", "node_modules", "__pycache__"
             ),
         )
         target = copy / mutation.path

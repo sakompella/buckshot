@@ -47,11 +47,14 @@ const LEGACY_COHORTS: ReadonlyArray<readonly [string, ReadonlyArray<string>]> = 
   ["tournament 7", ["t7-terra-max", "t7-cross-a", "t7-astra-off", "t7-terra-off", "t7-astra-high", "t7-cross-b", "t7-terra-low-high", "t7-terra-xhigh"]],
 ];
 
-/** The comparison a match is pooled in: its tournament's `cohort`; for tournament 1 (cpa-tiers), each model's effort sweep or the cross-model games. */
+/** Tournament 1's name in its run directories. */
+const TOURNAMENT_1 = "cpa-tiers";
+
+/** The comparison a match is pooled in: its tournament's `cohort`; for tournament 1, each model's effort sweep or the cross-model games. */
 const cohortOf = (tournament: string, declared: string | undefined, models: ReadonlyArray<string | null>): string | undefined => {
   if (declared !== undefined) return declared;
 
-  if (tournament === "cpa-tiers") return new Set(models).size === 1 ? `cpa-tiers sweep ${models[0]}` : "cpa-tiers cross-model";
+  if (tournament === TOURNAMENT_1) return new Set(models).size === 1 ? `tiers sweep ${models[0]}` : "tiers cross-model";
 
   return LEGACY_COHORTS.find(([, names]) => names.includes(tournament))?.[0];
 };

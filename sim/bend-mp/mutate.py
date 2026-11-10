@@ -222,7 +222,7 @@ def verify_mutations(
                     here,
                     candidate,
                     ignore=shutil.ignore_patterns(
-                        ".git", "node_modules", "__pycache__", ".audit"
+                        ".git", "node_modules", "__pycache__"
                     ),
                 )
                 target = candidate / relative

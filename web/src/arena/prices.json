@@ -131,7 +131,7 @@
           "cacheWrite": 0.25
         }
       ],
-      "source": "CLIProxyAPI alias for gpt-6-luna on a faster service tier; priced as gpt-6-luna from the pi-ai 1.1.0 catalog, copied 2026-10-15. A priority tier may cost more; not checked."
+      "source": "Proxy alias for gpt-6-luna on a faster service tier; priced as gpt-6-luna from the pi-ai 1.1.0 catalog, copied 2026-10-15. A priority tier may cost more; not checked."
     },
     "oc/deepseek-v4.1-flash-free": {
       "input": 0,
@@ -154,7 +154,7 @@
           "cacheWrite": 5
         }
       ],
-      "source": "gpt-5.6-terra from the pi-ai 1.1.0 built-in model catalog (openai provider), copied 2026-10-16; served by CLIProxyAPI. Not checked against OpenAI's price page"
+      "source": "gpt-5.6-terra from the pi-ai 1.1.0 built-in model catalog (openai provider), copied 2026-10-16; served by a proxy. Not checked against OpenAI's price page"
     },
     "gpt-6.1-terra": {
       "input": 1,

@@ -384,7 +384,7 @@ def props.view(+props: S.Props) -> D.SeatView:
 def snapshot(+state: RefState) -> T.Snapshot:
   T.snapshot(host(state))
 
-# D32 host acceptance is broader than D37 menus. Continuation modes stand
+# Host acceptance is broader than the normal client menus. Continuation modes stand
 # for holding/viewing/stealing flags under the no-overlap contract.
 def VerifyPacket.grab(props: S.Props, move: D.Move) -> Bool:
   match props move:
@@ -571,7 +571,7 @@ def answer.move.accepted(+state: RefState, +choice: D.Choice, +accepted: Bool) -
     case False{}:
       stuck(state)
 
-# Self-live uses D51's FP representative. Grow already preceded damage. TP
+# Self-live uses the FP representative. Grow already preceded damage. TP
 # moves that write after outcome, with no normal request between the writes.
 def RemoveFirstShellFromSequence.grow(+state: RefState, +shot: Shot) -> RefState:
   match shot:

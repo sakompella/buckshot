@@ -176,7 +176,7 @@ def verdicts(mutation: Mutation) -> tuple[str, str]:
     bend = os.environ.get("BEND", "bend")
     with tempfile.TemporaryDirectory(prefix="buckshot-simple-mutation-") as temporary:
         copy = Path(temporary) / "bend-mp"
-        shutil.copytree(HERE, copy, ignore=shutil.ignore_patterns(".git", "node_modules", "__pycache__", ".audit"))
+        shutil.copytree(HERE, copy, ignore=shutil.ignore_patterns(".git", "node_modules", "__pycache__"))
         target = copy / mutation.path
         target.write_text(apply(target.read_text(), mutation))
         built = run([bend, "simple/main.bend", "--check-only"], copy)

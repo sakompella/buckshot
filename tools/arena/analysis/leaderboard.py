@@ -18,7 +18,7 @@ from load import DB, Game, cohorts, connect, scored_games, require_current
 
 # Cohorts are named by the importer (web/src/analysis/import.ts); a "tournament N" cohort is titled as is.
 TITLES = {
-    "cpa-tiers cross-model": "Cross-model games (tournament 1)",
+    "tiers cross-model": "Cross-model games (tournament 1)",
     "opus-effort": "Opus efforts (tournament 2)",
 }
 
@@ -26,8 +26,8 @@ TITLES = {
 def title_of(cohort: str) -> str:
     if cohort in TITLES:
         return TITLES[cohort]
-    if cohort.startswith("cpa-tiers sweep "):
-        return cohort.removeprefix("cpa-tiers sweep ") + " efforts (tournament 1)"
+    if cohort.startswith("tiers sweep "):
+        return cohort.removeprefix("tiers sweep ") + " efforts (tournament 1)"
     return cohort[0].upper() + cohort[1:]
 
 

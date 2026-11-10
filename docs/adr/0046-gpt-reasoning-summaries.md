@@ -4,7 +4,7 @@ Every GPT request asks for `reasoning.summary: "detailed"`. The arena stores exa
 - headings only for gpt-6-luna, gpt-5.6-terra and gpt-6-astra;
 - rare prose, or nothing, for gpt-6.1-sol.
 
-A census of saved calls, raw streaming probes and direct requests to the Codex backend without CPA all agree. Claude 5.5 models are asked for `display: "summarized"`, since their default `omitted` returns no text.
+A census of saved calls, raw streaming probes and direct requests to the Codex backend without the proxy all agree. Claude 5.5 models are asked for `display: "summarized"`, since their default `omitted` returns no text.
 
 ## Considered Options
 
@@ -15,4 +15,4 @@ A census of saved calls, raw streaming probes and direct requests to the Codex b
 
 ## Consequences
 
-Saved reasoning text is a provider summary, not a chain of thought, and analysis must say so. Raw reasoning can't be recovered; the encrypted items only allow a match to resume. Thinking blocks should be joined with blank lines in the call log (`web/src/arena/runlog.ts`), which is still open.
+Saved reasoning text is a provider summary, not a chain of thought, and analysis must say so. Raw reasoning can't be recovered; the encrypted items only allow a match to resume.

@@ -135,31 +135,31 @@ M3, new-round grabbers. At a new round Godot decides which seats get items befor
 
 M4, adrenaline soft-lock. In Godot, adrenaline can start a steal in which no opponent item can be clicked. There is no cancel, so the turn freezes. It can happen with default settings. For example the barrel is sawed and the opponent holds only a saw and adrenaline. The library offers adrenaline only when at least one opponent item would be valid to steal and use.
 
-Other decisions that matter, from the decision log D01 to D56, which stays local.
+Other decisions that matter:
 
-- D56. If distribution finishes while a seat still holds an item it has not placed, the placement is applied before the reload. Godot's reload waits two seconds, and a normal client places inside that time. A slower holder is client timing and out of scope.
-- D10 and D11. A random draw is in the model only if its value can affect play. The library does not match Godot's random stream. It has seven draw kinds. They are first seat, starting health, item amount, item choice, phone index, sequence batch and shuffle swap. The shuffle swaps follow Godot's Fisher-Yates order.
-- D16. A blank shot at yourself gives you another action, but it still goes through the pass-turn code, so jam checks apply.
-- D25. A round winner is paid 70,000 at round index 0, 75,000 at index 1 and 80,000 at index 2.
-- D31. The machine offers only moves a normal client can make. The reference's host verification is stated as a predicate so `legal_accepted` can say that every machine move passes it.
-- D45. The first-death seat stays the first seat of later rounds until another death replaces it.
+- If distribution finishes while a seat still holds an item it has not placed, the placement is applied before the reload. Godot's reload waits two seconds, and a normal client places inside that time. A slower holder is client timing and out of scope (ADR-0017).
+- A random draw is in the model only if its value can affect play. The library does not match Godot's random stream. It has seven draw kinds. They are first seat, starting health, item amount, item choice, phone index, sequence batch and shuffle swap. The shuffle swaps follow Godot's Fisher-Yates order.
+- A blank shot at yourself gives you another action, but it still goes through the pass-turn code, so jam checks apply.
+- A round winner is paid 70,000 at round index 0, 75,000 at index 1 and 80,000 at index 2.
+- The machine offers only moves a normal client can make (ADR-0020). The reference's host verification is stated as a predicate so `legal_accepted` can say that every machine move passes it.
+- The first-death seat stays the first seat of later rounds until another death replaces it.
 
 ## Timing deviations
 
-The library has no clock. It orders rule effects as they happen in normal play. The real engine can reorder some of them. Examples are a very long frame that ends a turn before a shot's outcome runs, a round's item handout starting before the new health is installed, and a reload that runs before the last placed item is installed. These deviations are recorded in the decision log as diagnostics. They are not proof cases and the library does not model them.
+The library has no clock. It orders rule effects as they happen in normal play. The real engine can reorder some of them. Examples are a very long frame that ends a turn before a shot's outcome runs, a round's item handout starting before the new health is installed, and a reload that runs before the last placed item is installed. The library does not model these deviations, and they are not proof cases.
 
 ## Verification against Godot
 
-The reference is checked against the real game code by a local harness. It is not in git. It lives under the ignored `_work/` directory.
+The reference is checked against the real game by a comparison harness (ADR-0021). The harness is private and is not part of this tree.
 
-The harness loads the real `mp_main` scene of a copy of the decompiled project, headless, with only Steam stubbed. Every multiplayer script, animation and timer runs as in the game. A small set of edits lets it read the random draws and the player moves from a tape. Six files change, and 60 lines. The edits also carry M1, M3 and M4.
+The harness loads the game's multiplayer scene headless, with only Steam stubbed. Every multiplayer script, animation and timer runs as in the game. A small set of edits lets it read the random draws and the player moves from a tape. Six files change, and 60 lines. The edits also carry M1, M3 and M4.
 
 For each run the harness makes random configs and random tapes. At each request point it builds the menu of every seat from the host's fields, takes the move the tape selects, and sends it as the exact packet a client sends, through the host's real verification. It records a trace and compares it with the reference's trace at every request point.
 
-Results so far.
+Results.
 
 - 2 seats, core rules, 2,000 random tapes, 0 mismatches. 1,999 matches ran to the end with identical traces. One tape is a custom config that never ends. All 4,029 points before the game-time limit were identical. One engine crash after a trace was written was recovered by a rerun.
-- Item tapes, 76 in all, 37 with 2 seats, 23 with 3 and 16 with 4. That is 25,533 request points and 0 mismatches. They include witness tapes for M1, M3, M4 and D56. They use every kind of move and every kind of draw.
+- Item tapes, 76 in all, 37 with 2 seats, 23 with 3 and 16 with 4. That is 25,533 request points and 0 mismatches. They include witness tapes for M1, M3, M4 and placements before the reload. They use every kind of move and every kind of draw.
 - Random item games, 100 each with 2, 3 and 4 seats (seeds 2026101302, 2026101303 and 2026101304), 0 mismatches. Each round has items at default caps or a random subset at random caps and amounts.
 - The comparator flagged all 7 trace differences planted in a test.
 - 4 seats, core rules, 1,000 random tapes (seed 2026101104), 0 mismatches. Every match ran to the end with identical traces. Three tapes first crashed Godot (exit 241) while a second harness run competed for memory; run alone, they matched.
@@ -210,8 +210,6 @@ Play matches and print win rates.
 
 It plays one verbose 2-seat match, then 16,384 matches for each line, with 3 rounds per match.
 
-An optional script, `_work/tools/remote-check.sh`, copies the working tree to a remote Linux machine over ssh and runs `check.sh` there. It is local, not in git, and needs a host with Nix. Pass `VAR=value` arguments, such as `FUZZ_GAMES=60`, to set the fuzz size.
-
 ## AI win rates
 
 The two AIs are ports of the verified two-player dealer policies in `sim/python/dealer_vs_dealer.py`. Story uses fair coins and the dealer's item rules. Double or Nothing, DoN for short, is the story policy plus three upgrades. They are count_flip, deduce and beer_reset. Each AI is one pure function from its prompt, the board, what it heard and its own memory to a move. The driver gives each AI its own random stream.
@@ -230,4 +228,4 @@ In the mirrors, where every seat runs the same AI, the later seats win more ofte
 | 3 seats | 30.8 / 33.8 / 35.3 | 30.4 / 33.8 / 35.7 |
 | 4 seats | 20.8 / 24.4 / 26.9 / 27.7 | 20.9 / 24.3 / 26.5 / 28.1 |
 
-These numbers use the round-robin distribution of ADR-0033. Earlier tables came from a driver that served the lowest socket first, so seat 0 took all its items first and had first claim on the jammer and the remotes. With that driver the mirrors were wider: 28.4 / 33.1 / 38.3 for story at 3 seats, and 19.5 / 23.2 / 26.4 / 30.7 at 4 seats. The 2-seat items-on figures were 72.5% and 71.4%. Fixing the order narrowed the later-seat advantage but did not remove it. The rest is still an open question. It may be the turn order or a bias in the AIs.
+These numbers use the round-robin distribution of ADR-0033. Earlier tables came from a driver that served the lowest socket first, so seat 0 took all its items first and had first claim on the jammer and the remotes. With that driver the mirrors were wider: 28.4 / 33.1 / 38.3 for story at 3 seats, and 19.5 / 23.2 / 26.4 / 30.7 at 4 seats. The 2-seat items-on figures were 72.5% and 71.4%. Fixing the order narrowed the later-seat advantage but did not remove it. The remaining advantage may come from the turn order or from a bias in the AIs.

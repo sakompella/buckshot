@@ -17,11 +17,12 @@ import { coverageOfMatch, type RegretCoverage, withoutRegret } from "./arena-vie
 // Clicks through the arena viewer's page, its jump menu and replay in headless Chromium at
 // desktop, phone and tablet widths and saves screenshots. Pointed at the old viewer too,
 // it gives the pictures to compare against.
+// It runs $CHROME, or chromium from PATH.
 // Usage: bun scripts/arena-viewer-check.ts <url> [outdir]
 
 const base = (process.argv[2] ?? "http://127.0.0.1:8790").replace(/\/+$/, "");
 const outdir = process.argv[3] ?? "/tmp/arena-viewer-shots";
-const chrome = process.env["CHROME"] ?? "/etc/profiles/per-user/aditya/bin/chromium";
+const chrome = process.env["CHROME"] ?? Bun.which("chromium") ?? "chromium";
 const servedCertain = Schema.decodeUnknownSync(CertainMistakes)(await (await fetch(`${base}/api/certain-mistakes`)).json());
 
 const hasCertain = servedCertain.rates.length > 0;

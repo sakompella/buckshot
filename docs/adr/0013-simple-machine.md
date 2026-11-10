@@ -13,4 +13,3 @@ The simple machine shares the strong machine's records and pure rules, not its s
 ## Consequences
 
 - Some strong-machine behaviour cannot be represented: other grab schedules (ADR-0033), and later-slot choices (ADR-0034).
-- Whether `web/src/agent/moves.ts` switches from its chain search to the simple machine is still open.

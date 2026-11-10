@@ -329,7 +329,7 @@ export const childEnv = (base: Env, config: TournamentConfig, match: ScheduledMa
       [`${prefix}EFFORT`, entrant.effort],
       ...(entrant.instructionsAddendum === undefined ? [] : [[`${prefix}INSTRUCTIONS_ADDENDUM`, entrant.instructionsAddendum]]),
       ...(entrant.effortLabel === undefined ? [] : [[`${prefix}EFFORT_LABEL`, entrant.effortLabel]]),
-      ...(accounts[seat] === undefined ? [] : [[`${prefix}CPA_AUTH_ID`, accounts[seat]]]),
+      ...(accounts[seat] === undefined ? [] : [[`${prefix}ACCOUNT_ID`, accounts[seat]]]),
     ] as const;
   });
 

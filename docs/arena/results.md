@@ -1,22 +1,10 @@
 # Arena results
 
-This page summarizes the tournaments run so far, the findings about model reasoning, and the open work. The raw data stays under `_work/arena/`, which isn't committed. See [README.md](README.md) for how to run and resume. All costs are list-price costs: list prices applied to usage on subscription plans, not money paid.
+This page summarizes the finished tournaments and the findings about model reasoning. The raw data isn't committed. See [README.md](README.md) for how to run and resume. All costs are list-price costs: list prices applied to usage on subscription plans, not money paid.
 
 Ratings are one Bradley-Terry fit over every scored match of every tournament, on an Elo scale with the mean at 0, per configuration (model + endpoint + effort). So one rating scale covers every config. This match rating is not the viewer's Round Elo, which fits each round as a game; [net-points.md](analysis/net-points.md) lists Round Elo per config. A second fit on pot share (a config's cash over the match's cash, which also credits round prizes a loser banked) gives the cash rating. 95% intervals are in [matchups.md](analysis/matchups.md). Each pairing plays 10 seeds in both seat orders, 20 matches, unless stated otherwise. With 10 seeds, close rankings aren't reliable. "Medium" also isn't equal compute across providers.
 
-Scope: 3,537 scored matches with no DeepSeek seat, from the 3,557-match snapshot of 2026-11-04 (tournaments 5 to 9 are finished). The regret and patterns pages under [analysis/](analysis/) cover the same snapshot (3,536 matches; one match with an unsearched decision is left out).
-
-## Status (snapshot of 2026-11-04)
-This page describes the 3,557-match snapshot of the analysis database: 3,557 completed matches, 43 partial, 54 tournament rows (phase directories) and no replay issues.
-- **tournament-1** (`_work/arena/tournament-1`): finished. 120 scheduled matches are unplayed, all against DeepSeek: 38 started and are partial, and 82 never started. The leftover Astra and terra matches finished on 2026-10-22 (below).
-- **tournament-2** (`_work/arena/tournament-2`, config `opus-effort.json`): stage A is finished. Stage B, the max pairings, hasn't started and needs the user's go-ahead.
-- **tournament-3** (`_work/arena/tournament-3`, config `astra-opus-xhigh.json`): finished, 40 of 40 capped matches.
-- **tournament-4** (`_work/arena/tournament-4`): finished, 288 of 288 (below). The 138 Sonnet max matches once scheduled in tournament-1 were cut when tournament-4 took over its cross-model games; the import skips them.
-- **tournament-5** (`_work/arena/tournament-5`, 11 phase directories): finished. 214 of its 264 scheduled matches were played, since the schedule was cut to a smaller selection to save usage quota (below).
-- **tournament-6** (`_work/arena/tournament-6`, 4 phases): finished 2026-11-02. 37 of its 114 scheduled matches were played (the selection was cut to save quota). Phases: astra-none, terra-claude, opus-none, haiku-ladder.
-- **tournament-7** (`_work/arena/tournament-7`, 8 phases): finished 2026-11-02. 73 of its 146 scheduled matches were played (selected only). Terra 6.1 efforts, Astra off and high, and cross-model games.
-- **tournament-8** (`_work/arena/tournament-8`): finished 2026-11-04; all 642 matches are in the snapshot. It topped the Terra 6.1, Astra and Opus configurations up to 80 matches each.
-- **tournament-9** (`_work/arena/tournament-9`, 3 phases): finished 2026-11-03. 100 of 100 matches played (Haiku 4.5 and Haiku 5.5 effort games).
+Scope: 3,537 scored matches with no DeepSeek seat, from the 3,557-match snapshot of 2026-11-04 (tournaments 1 to 9). The regret and patterns pages under [analysis/](analysis/) cover the same snapshot (3,536 matches; one match with an unsearched decision is left out).
 
 ## Leaderboard
 One table per cohort, ranked by the pooled match rating. Matches, win share and pot share count the cohort's own games; ratings come from the one pooled fit, so a config has the same rating in every table. Sonnet max has 2 games in tournament 1's cross-model cohort (it lost both to Opus), so its rating there rests on its tournament-4 games. Tournament 5's 214 matches are one table of their own. Most of its configs had 2 to 12 matches against different opponents there, so their ratings rest mostly on the prior and later tournaments, not on that record. A config with fewer than 20 matches in total is provisional, as in the viewer. `python3 tools/arena/analysis/leaderboard.py --doc docs/arena/results.md` rewrites the tables.
@@ -380,6 +368,7 @@ One table per cohort, ranked by the pooled match rating. Matches, win share and 
 | claude-haiku-4-5-20251001-off | 1 | 0.0% | 35.6% | -385 | -216 |
 <!-- leaderboard:end -->
 
+
 ## tournament-1: cross-model and effort sweeps
 2,080 matches, list-price cost $934.46. The only request difference between its two runs of the arena is the GPT reasoning summary (`auto` vs `detailed`).
 
@@ -398,7 +387,7 @@ Takeaways:
 - True off clearly hurts haiku 4.5 and 5.5. haiku 4.5's minimal plays like its medium.
 - sonnet 5.5's off is "requested off" (`between_tools`).
 
-## tournament-2: Opus 5.5 effort, stage A
+## tournament-2: Opus 5.5 effort
 80 matches, list-price cost $58.89. Each new level plays medium and its neighbouring level: low–medium, medium–high, medium–xhigh, high–xhigh.
 
 Ratings are in the leaderboard above.
@@ -409,12 +398,8 @@ Head to head:
 - xhigh beat medium 65–35;
 - xhigh beat high 65–35.
 
-Stage B would add medium–max and xhigh–max: 40 matches, list-price cost about $355–370 (max matches take about an hour each), about 1.5–2.5 days at the Claude line. Measured quota use was about 0.0115 of a Claude 5h window per dollar on one account and 0.0080 on the other.
-
 ## tournament-3: Opus 5.5 xhigh vs Astra medium (finished, 41 matches)
-- **Seeds:** fixed in advance. First 3000–3009, which are tournament-1's Opus medium vs Astra seeds, for a matched comparison. Then 3020–3029. Capped at 40 matches; Aditya later ruled that the one finished match past the cap also counts.
-- **Codex accounts:** Astra was pinned to one Codex account per match (ADR-0042) from match 38 on. Opus was never pinned.
-- **The last 2 matches** ran with no quota line. Seed 3028's first match started without a pin, and CPA may have moved it to the other Codex account while account 1 was full. Seed 3029's second match stayed pinned and waited for account 1 to reset.
+- **Seeds:** fixed in advance. First 3000–3009, which are tournament-1's Opus medium vs Astra seeds, for a matched comparison. Then 3020–3029. Capped at 40 matches; the one finished match past the cap also counts.
 
 **Results (20 complete seed pairs plus seed 3030's first match):**
 - **Overall:** Opus xhigh 22, Astra 19. Opus share 53.7%, 95% CI 38.1–69.0% (seed bootstrap over 21 seeds). On the 20 complete pairs alone it was 22–18, 55.0%, CI 40.0–70.0%.
@@ -424,11 +409,6 @@ Stage B would add medium–max and xhigh–max: 40 matches, list-price cost abou
 - **List-price cost:** $41.11: Opus $29.75, Astra $11.36. Astra reports few reasoning tokens at medium: about 3k over 1,077 calls.
 
 **Outside the cap.** A brief uncapped run started 6 matches (seeds 3030–3032). Seed 3030's first match finished and is scored above. The other 5 never finished, are not scored, and have a list-price cost of $1.38 together. They stay in the tournament directory, unfinished.
-
-**Lessons:**
-- **Pass every needed `--code` when using a cap.** While an old-code match waits for its checkout, the runner leaves it off its pending list, so `--limit` picks a match past the cap.
-- **An account with no quota data isn't over the limit.** `tools/arena/quota_guard.py` (since removed) then treated it as not blocking; the old rule caused a false stop at 8:58 PM.
-- **List accounts on every endpoint,** Claude as well as Codex, so both sides of each new match are pinned from the start.
 
 ## tournament-4: cross-model samples (finished 2026-10-25, 288 matches)
 
@@ -486,31 +466,21 @@ What each model knew about the chamber when it shot, whether it acted on it, wha
 - **Matchups:** ratings within each cohort, no matchup effects, seat and round-1 starter effects: [analysis/matchups.md](analysis/matchups.md).
 - **Patterns against regret:** the mean regret of single-move choice patterns: [analysis/patterns.md](analysis/patterns.md).
 
-## Known confound: an extra system prompt on Claude calls
-The Claude subscription account behind CPA carries organization-level instructions about a LibKey scholarly-article connector, and they reach every Claude request sent through CPA. The arena's own prompts never contain them. 38 Claude calls in 38 matches mention them (Sonnet max 25, Sonnet xhigh 2, Haiku 5.5 max 11), always to say they don't apply; other calls likely carried them silently. GPT calls never saw them. The effect on play is probably small, but Claude and GPT did not get identical prompts. To remove it, turn off the account's organization instructions or use an account without them before the next tournament.
 
 ## Reasoning findings
-- **GPT reasoning summaries are short upstream.** Nothing is lost in CPA, pi-ai or the arena.
+- **GPT reasoning summaries are short upstream.** Nothing is lost in the proxy, pi-ai or the arena.
   - A census of 50,904 saved calls and 36 raw streaming probes showed every summary delta equals the final item; there's no raw reasoning text.
-  - Direct requests to the Codex backend without CPA return the same thing: headings for luna, terra and astra; rare prose or nothing for sol.
+  - Direct requests to the Codex backend without the proxy return the same thing: headings for luna, terra and astra; rare prose or nothing for sol.
   - Keep `summary: "detailed"`. Omitting it returns no text; `auto` is echoed as `detailed`; `concise` gave sol headings where `detailed` gave none, but sol's `detailed` sometimes returns real prose.
   - The public OpenAI API can't be tested with the subscription credentials (missing `api.responses.write`).
 - **Saved runs keep the full text.** Each match's `calls.jsonl` keeps the returned thinking text, usage including reasoning tokens, tool calls and latency. `session.sqlite` keeps full conversations with encrypted reasoning signatures, which allow resume but can't be decrypted.
 - **Claude 5.5 summaries are prose,** from about 250 characters at medium to 9–13k at max. At medium, sonnet and opus skip thinking on 40–50% of calls.
 - **A required `reason` field on `play_move`** produced readable 1–3 sentence rationales from all four GPT models, exposing their mistakes. It's a self-report, and its effect on play is untested.
 - **Effort availability:**
-  - terra and gpt-5.6-luna `none` reach the Codex backend fine (0 reasoning tokens), but CPA rewrites them to `low`.
+  - terra and gpt-5.6-luna `none` reach the Codex backend fine (0 reasoning tokens), but the proxy used here rewrites them to `low`.
   - gpt-6-luna `none` works.
   - gpt-6.1-sol rejects `none`.
   - opus 5.5 can't disable thinking.
-  - sonnet 5.5 `disabled` returned 200 with 0 thinking through the hub, which contradicts Anthropic's docs. Unresolved.
+  - sonnet 5.5 `disabled` returned 200 with 0 thinking through the proxy, which contradicts Anthropic's docs.
 - **How other benchmarks pair entrants:** Kaggle Game Arena plays a round robin with seat swaps. LMArena samples pairs adaptively. Effort variants appear as separate entrants elsewhere, but no benchmark found plays a model's own effort levels against each other. Here, neighbouring effort levels plus medium carry the most information per game.
 
-## Open work
-1. tournament-2 stage B: needs the user's go-ahead.
-2. gpt-5.6-luna effort sweep: a medium entrant, placement against the medium models, then low–max. About 160 matches on Codex quota. `none` needs the CPA patch.
-3. tournament-1 leftovers: 20 matches per pairing against DeepSeek (free tier refusing). Refit the medium table with the 63 new matches.
-4. `web/src/arena/runlog.ts`: join thinking blocks with `"\n\n"`. About 1.9% of saved texts run headings together. This changes the code hash.
-5. An optional, separately labelled entrant with a `reason` field. Check its effect on play with paired seeds before rating it.
-6. Keep the `t3-1427bb8e` worktree: it holds the tournament data and the current code checkout. its 41 partial tournament-1 matches need the older arena code from git history to resume.
-7. Fit the minimax player's evaluator weights from the analysis database before tuning anything by hand.

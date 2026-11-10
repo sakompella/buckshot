@@ -6,4 +6,4 @@ A Human seat in an arena match is played from a terminal client, `scripts/arena-
 
 - The arena's own terminal: one human at most, and the arena's output shares the screen.
 - The web app's Human controller: there the page owns the table (ADR-0027), so it cannot be a seat in an arena match.
-- The arena viewer: the likely next client. It would speak the same socket protocol through a local bridge, and keep no game logic of its own.
+- Another client, such as the arena viewer, would speak the same socket protocol through a local bridge and keep no game logic of its own.

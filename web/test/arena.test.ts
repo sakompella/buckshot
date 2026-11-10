@@ -82,11 +82,11 @@ const fauxMatch = (controllers: ReadonlyArray<Controller>, seed: string, context
   });
 };
 
-const PinnedAgents = Schema.Struct({ provenance: Schema.Struct({ agents: Schema.Record(Schema.String, Schema.Struct({ cpa_auth_id: Schema.String })) }) });
+const PinnedAgents = Schema.Struct({ provenance: Schema.Struct({ agents: Schema.Record(Schema.String, Schema.Struct({ account_id: Schema.String })) }) });
 
-const pinOf = (dir: string) => Schema.decodeUnknownSync(Schema.fromJsonString(PinnedAgents))(readFileSync(join(dir, "manifest.json"), "utf8")).provenance.agents.A?.cpa_auth_id;
+const pinOf = (dir: string) => Schema.decodeUnknownSync(Schema.fromJsonString(PinnedAgents))(readFileSync(join(dir, "manifest.json"), "utf8")).provenance.agents.A?.account_id;
 
-const pinned = (account: string) => (modelId: string) => ({ ...fauxProvenance(modelId), cpa_auth_id: account });
+const pinned = (account: string) => (modelId: string) => ({ ...fauxProvenance(modelId), account_id: account });
 
 const ADDENDUM = "Answer in as few words as you can.";
 
@@ -241,7 +241,9 @@ test.each([...DELIVERIES])("a human types moves into the terminal client and pla
   expect(shown.some((line) => line.startsWith("error: "))).toBe(true);
 }, 60_000);
 
-const CPA = { url: "http://127.0.0.1:8318", key: "sk-test-secret-value" };
+/** The header a test proxy reads an account pin from, as ARENA_ACCOUNT_HEADER names it. */
+const ACCOUNT_HEADER = "X-Account-Id";
+const PROXY = { url: "http://127.0.0.1:8318", key: "sk-test-secret-value" };
 
 const endpointFrom = (env: Readonly<Record<string, string>>) => Effect.runPromiseExit(agentEndpoint(Schema.decodeUnknownSync(AgentId)("A")).pipe(Effect.provideService(ConfigProvider.ConfigProvider, ConfigProvider.fromEnvRecord(env))));
 
@@ -252,8 +254,8 @@ const failureOf = async (env: Readonly<Record<string, string>>): Promise<string>
 };
 
 test("an endpoint is Anthropic or OpenAI Responses, from its URL and key", async () => {
-  const anthropic = await endpointFrom({ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_ANT_KEY: CPA.key, PLAYER_A_MODEL: "claude-haiku-5-5", PLAYER_A_EFFORT: "low" });
-  const openai = await endpointFrom({ PLAYER_A_OAI_URL: `${CPA.url}/v1`, PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "gpt-6-luna" });
+  const anthropic = await endpointFrom({ PLAYER_A_ANT_URL: PROXY.url, PLAYER_A_ANT_KEY: PROXY.key, PLAYER_A_MODEL: "claude-haiku-5-5", PLAYER_A_EFFORT: "low" });
+  const openai = await endpointFrom({ PLAYER_A_OAI_URL: `${PROXY.url}/v1`, PLAYER_A_OAI_KEY: PROXY.key, PLAYER_A_MODEL: "gpt-6-luna" });
 
   expect(Exit.isSuccess(anthropic) && anthropic.value._tag).toBe("Anthropic");
   expect(Exit.isSuccess(openai) && openai.value._tag).toBe("OpenAIResponses");
@@ -264,7 +266,7 @@ test("rotating only a provider key preserves resume provenance, and no key ever 
 
   await hegel.testAsync(async (tc) => {
     const [api, model] = tc.draw(gs.sampledFrom([["OAI", "gpt-6-luna"], ["ANT", "claude-haiku-5-5"]] as const));
-    const env = { [`PLAYER_A_${api}_URL`]: CPA.url, PLAYER_A_MODEL: model, PLAYER_A_EFFORT: tc.draw(gs.sampledFrom(["off", "low", "medium"] as const)) };
+    const env = { [`PLAYER_A_${api}_URL`]: PROXY.url, PLAYER_A_MODEL: model, PLAYER_A_EFFORT: tc.draw(gs.sampledFrom(["off", "low", "medium"] as const)) };
     const [oldKey, newKey] = [tc.draw(keyGen), tc.draw(keyGen)];
     const before = await endpointFrom({ ...env, [`PLAYER_A_${api}_KEY`]: oldKey });
     const after = await endpointFrom({ ...env, [`PLAYER_A_${api}_KEY`]: newKey });
@@ -286,20 +288,20 @@ test.each([
   ["OAI", "opencode/deepseek-v4.1-flash", "high", { level: "high", mode: "effort", effort: "high", budget_tokens: null, summary: "auto" }],
 ] as const)("the provenance records the thinking settings %s %s resolves to at effort %s", async (api, model, effort, thinking) => {
   const catalogModel = model.includes("/") ? { PLAYER_A_CATALOG_MODEL: model } : {};
-  const endpoint = await endpointFrom({ [`PLAYER_A_${api}_URL`]: CPA.url, [`PLAYER_A_${api}_KEY`]: CPA.key, PLAYER_A_MODEL: model, ...catalogModel, PLAYER_A_EFFORT: effort });
+  const endpoint = await endpointFrom({ [`PLAYER_A_${api}_URL`]: PROXY.url, [`PLAYER_A_${api}_KEY`]: PROXY.key, PLAYER_A_MODEL: model, ...catalogModel, PLAYER_A_EFFORT: effort });
 
   if (!Exit.isSuccess(endpoint)) throw new Error(String(endpoint.cause));
 
   const provenance = provenanceOf("provider-A", endpoint.value);
 
   expect(provenance.thinking).toEqual(thinking);
-  expect(JSON.stringify(provenance)).not.toContain(CPA.key);
+  expect(JSON.stringify(provenance)).not.toContain(PROXY.key);
 });
 
 /** What a local server received: the request body, and the account pin header if it carried one. */
 interface Received {
   readonly body: unknown;
-  readonly cpaAuthId: string | null;
+  readonly account: string | null;
 }
 
 /** The requests an endpoint sends for `replies` replies, as pi-durable asks for each: with no reasoning option at effort off. */
@@ -309,13 +311,13 @@ const requestsSentAt = async (api: "ANT" | "OAI", model: string, effort: "off" |
   const server = Bun.serve({
     port: 0,
     fetch: async (request) => {
-      requests.push({ body: await request.json(), cpaAuthId: request.headers.get("X-CPA-Auth-ID") });
+      requests.push({ body: await request.json(), account: request.headers.get(ACCOUNT_HEADER) });
 
       return Response.json({ type: "error", error: { type: "invalid_request_error", message: "refused by the test" } }, { status: 400 });
     },
   });
 
-  const endpoint = await endpointFrom({ [`PLAYER_A_${api}_URL`]: server.url.href, [`PLAYER_A_${api}_KEY`]: CPA.key, PLAYER_A_MODEL: model, PLAYER_A_EFFORT: effort, ...extraEnv });
+  const endpoint = await endpointFrom({ [`PLAYER_A_${api}_URL`]: server.url.href, [`PLAYER_A_${api}_KEY`]: PROXY.key, PLAYER_A_MODEL: model, PLAYER_A_EFFORT: effort, ...extraEnv });
 
   if (!Exit.isSuccess(endpoint)) throw new Error(String(endpoint.cause));
 
@@ -355,7 +357,7 @@ test.each([
   ["claude-sonnet-5-5", "between_tools", { ...OFF, mode: "between_tools" }],
 ] as const)("%s at effort off asks for thinking %s, sends no effort, and records the same in the provenance", async (model, wire, thinking) => {
   const request = await firstRequestAt("ANT", model, "off");
-  const endpoint = await endpointFrom({ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_ANT_KEY: CPA.key, PLAYER_A_MODEL: model, PLAYER_A_EFFORT: "off" });
+  const endpoint = await endpointFrom({ PLAYER_A_ANT_URL: PROXY.url, PLAYER_A_ANT_KEY: PROXY.key, PLAYER_A_MODEL: model, PLAYER_A_EFFORT: "off" });
 
   if (!Exit.isSuccess(endpoint)) throw new Error(String(endpoint.cause));
 
@@ -374,28 +376,28 @@ test.each([
 test.each([
   ["ANT", "claude-haiku-5-5"],
   ["OAI", "gpt-6-luna"],
-] as const)("a %s endpoint with PLAYER_A_CPA_AUTH_ID pins every request to the account, and one without sends no pin", async (api, model) => {
-  const pinned = await requestsSentAt(api, model, "low", { PLAYER_A_CPA_AUTH_ID: "claude-account-2.json" }, 2);
-  const unpinned = await requestsSentAt(api, model, "low", {}, 2);
+] as const)("a %s endpoint with PLAYER_A_ACCOUNT_ID pins every request to the account in ARENA_ACCOUNT_HEADER, and one without sends no pin", async (api, model) => {
+  const pinned = await requestsSentAt(api, model, "low", { ARENA_ACCOUNT_HEADER: ACCOUNT_HEADER, PLAYER_A_ACCOUNT_ID: "claude-account-2.json" }, 2);
+  const unpinned = await requestsSentAt(api, model, "low", { ARENA_ACCOUNT_HEADER: ACCOUNT_HEADER }, 2);
 
-  expect(pinned.map((received) => received.cpaAuthId)).toEqual(["claude-account-2.json", "claude-account-2.json"]);
-  expect(unpinned.map((received) => received.cpaAuthId)).toEqual([null, null]);
+  expect(pinned.map((received) => received.account)).toEqual(["claude-account-2.json", "claude-account-2.json"]);
+  expect(unpinned.map((received) => received.account)).toEqual([null, null]);
 });
 
 test("the account pin is recorded in the provenance only when set, never with the key", async () => {
-  const env = { PLAYER_A_OAI_URL: CPA.url, PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "gpt-6-luna", PLAYER_A_EFFORT: "medium" };
-  const pinned = await endpointFrom({ ...env, PLAYER_A_CPA_AUTH_ID: "codex-account-1.json" });
+  const env = { PLAYER_A_OAI_URL: PROXY.url, PLAYER_A_OAI_KEY: PROXY.key, PLAYER_A_MODEL: "gpt-6-luna", PLAYER_A_EFFORT: "medium" };
+  const pinned = await endpointFrom({ ...env, ARENA_ACCOUNT_HEADER: ACCOUNT_HEADER, PLAYER_A_ACCOUNT_ID: "codex-account-1.json" });
   const unpinned = await endpointFrom(env);
 
   if (!Exit.isSuccess(pinned) || !Exit.isSuccess(unpinned)) throw new Error("test endpoints failed");
 
-  expect(provenanceOf("provider-A", pinned.value).cpa_auth_id).toBe("codex-account-1.json");
-  expect("cpa_auth_id" in provenanceOf("provider-A", unpinned.value)).toBe(false);
-  expect(JSON.stringify(provenanceOf("provider-A", pinned.value))).not.toContain(CPA.key);
+  expect(provenanceOf("provider-A", pinned.value).account_id).toBe("codex-account-1.json");
+  expect("account_id" in provenanceOf("provider-A", unpinned.value)).toBe(false);
+  expect(JSON.stringify(provenanceOf("provider-A", pinned.value))).not.toContain(PROXY.key);
 });
 
 test("the instructions addendum is read from PLAYER_A_INSTRUCTIONS_ADDENDUM into the provenance only when set", async () => {
-  const env = { PLAYER_A_OAI_URL: CPA.url, PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "gpt-6-luna", PLAYER_A_EFFORT: "medium" };
+  const env = { PLAYER_A_OAI_URL: PROXY.url, PLAYER_A_OAI_KEY: PROXY.key, PLAYER_A_MODEL: "gpt-6-luna", PLAYER_A_EFFORT: "medium" };
   const withText = await endpointFrom({ ...env, PLAYER_A_INSTRUCTIONS_ADDENDUM: ADDENDUM });
   const without = await endpointFrom(env);
 
@@ -405,12 +407,12 @@ test("the instructions addendum is read from PLAYER_A_INSTRUCTIONS_ADDENDUM into
   expect("instructions_addendum" in provenanceOf("provider-A", without.value)).toBe(false);
 });
 
-test("a blank PLAYER_A_CPA_AUTH_ID pins nothing", async () => {
-  expect((await requestsSentAt("OAI", "gpt-6-luna", "low", { PLAYER_A_CPA_AUTH_ID: "" })).map((received) => received.cpaAuthId)).toEqual([null]);
+test("a blank PLAYER_A_ACCOUNT_ID pins nothing", async () => {
+  expect((await requestsSentAt("OAI", "gpt-6-luna", "low", { ARENA_ACCOUNT_HEADER: ACCOUNT_HEADER, PLAYER_A_ACCOUNT_ID: "" })).map((received) => received.account)).toEqual([null]);
 });
 
 test("a proxy's model alias plays as the catalog model it names", async () => {
-  const alias = await endpointFrom({ PLAYER_A_OAI_URL: `${CPA.url}/v1`, PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "gpt-6-luna-fast", PLAYER_A_CATALOG_MODEL: "gpt-6-luna" });
+  const alias = await endpointFrom({ PLAYER_A_OAI_URL: `${PROXY.url}/v1`, PLAYER_A_OAI_KEY: PROXY.key, PLAYER_A_MODEL: "gpt-6-luna-fast", PLAYER_A_CATALOG_MODEL: "gpt-6-luna" });
 
   if (!Exit.isSuccess(alias)) throw new Error(String(alias.cause));
 
@@ -421,7 +423,7 @@ test("a proxy's model alias plays as the catalog model it names", async () => {
 });
 
 test("a router's model plays as a model of the pi-ai provider its catalog model names", async () => {
-  const routed = await endpointFrom({ PLAYER_A_OAI_URL: "http://localhost:20128/v1", PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "oc/deepseek-v4.1-flash-free", PLAYER_A_CATALOG_MODEL: "opencode/deepseek-v4.1-flash" });
+  const routed = await endpointFrom({ PLAYER_A_OAI_URL: "http://localhost:20128/v1", PLAYER_A_OAI_KEY: PROXY.key, PLAYER_A_MODEL: "oc/deepseek-v4.1-flash-free", PLAYER_A_CATALOG_MODEL: "opencode/deepseek-v4.1-flash" });
 
   if (!Exit.isSuccess(routed)) throw new Error(String(routed.cause));
 
@@ -435,18 +437,19 @@ test("a router's model plays as a model of the pi-ai provider its catalog model 
 });
 
 test.each([
-  [{ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_ANT_KEY: CPA.key, PLAYER_A_OAI_URL: CPA.url, PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "claude-haiku-5-5" }, "not both"],
-  [{ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_MODEL: "claude-haiku-5-5" }, "PLAYER_A_ANT_KEY must be set"],
-  [{ PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "gpt-6-luna" }, "PLAYER_A_OAI_URL must be set"],
-  [{ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_ANT_KEY: CPA.key }, "PLAYER_A_MODEL must be set"],
-  [{ PLAYER_A_ANT_URL: CPA.url, PLAYER_A_ANT_KEY: CPA.key, PLAYER_A_MODEL: "gpt-6-luna" }, "PLAYER_A_MODEL=gpt-6-luna is not a pi-ai Anthropic model"],
-  [{ PLAYER_A_OAI_URL: CPA.url, PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "gpt-6-luna-fast", PLAYER_A_CATALOG_MODEL: "gpt-6-lunar" }, "PLAYER_A_CATALOG_MODEL=gpt-6-lunar is not a pi-ai OpenAIResponses model"],
-  [{ PLAYER_A_OAI_URL: CPA.url, PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "ds", PLAYER_A_CATALOG_MODEL: "opencode/deepseek-v9" }, "PLAYER_A_CATALOG_MODEL=opencode/deepseek-v9 is not a pi-ai OpenAIResponses model"],
-  [{ PLAYER_A_OAI_URL: CPA.url, PLAYER_A_OAI_KEY: CPA.key, PLAYER_A_MODEL: "ds", PLAYER_A_CATALOG_MODEL: "nowhere/deepseek-v4.1-flash" }, "PLAYER_A_CATALOG_MODEL=nowhere/deepseek-v4.1-flash is not a pi-ai OpenAIResponses model"],
+  [{ PLAYER_A_ANT_URL: PROXY.url, PLAYER_A_ANT_KEY: PROXY.key, PLAYER_A_OAI_URL: PROXY.url, PLAYER_A_OAI_KEY: PROXY.key, PLAYER_A_MODEL: "claude-haiku-5-5" }, "not both"],
+  [{ PLAYER_A_ANT_URL: PROXY.url, PLAYER_A_MODEL: "claude-haiku-5-5" }, "PLAYER_A_ANT_KEY must be set"],
+  [{ PLAYER_A_OAI_KEY: PROXY.key, PLAYER_A_MODEL: "gpt-6-luna" }, "PLAYER_A_OAI_URL must be set"],
+  [{ PLAYER_A_ANT_URL: PROXY.url, PLAYER_A_ANT_KEY: PROXY.key }, "PLAYER_A_MODEL must be set"],
+  [{ PLAYER_A_ANT_URL: PROXY.url, PLAYER_A_ANT_KEY: PROXY.key, PLAYER_A_MODEL: "gpt-6-luna" }, "PLAYER_A_MODEL=gpt-6-luna is not a pi-ai Anthropic model"],
+  [{ PLAYER_A_OAI_URL: PROXY.url, PLAYER_A_OAI_KEY: PROXY.key, PLAYER_A_MODEL: "gpt-6-luna-fast", PLAYER_A_CATALOG_MODEL: "gpt-6-lunar" }, "PLAYER_A_CATALOG_MODEL=gpt-6-lunar is not a pi-ai OpenAIResponses model"],
+  [{ PLAYER_A_OAI_URL: PROXY.url, PLAYER_A_OAI_KEY: PROXY.key, PLAYER_A_MODEL: "ds", PLAYER_A_CATALOG_MODEL: "opencode/deepseek-v9" }, "PLAYER_A_CATALOG_MODEL=opencode/deepseek-v9 is not a pi-ai OpenAIResponses model"],
+  [{ PLAYER_A_OAI_URL: PROXY.url, PLAYER_A_OAI_KEY: PROXY.key, PLAYER_A_MODEL: "ds", PLAYER_A_CATALOG_MODEL: "nowhere/deepseek-v4.1-flash" }, "PLAYER_A_CATALOG_MODEL=nowhere/deepseek-v4.1-flash is not a pi-ai OpenAIResponses model"],
+  [{ PLAYER_A_OAI_URL: PROXY.url, PLAYER_A_OAI_KEY: PROXY.key, PLAYER_A_MODEL: "gpt-6-luna", PLAYER_A_ACCOUNT_ID: "account-1" }, "ARENA_ACCOUNT_HEADER must be set when PLAYER_A_ACCOUNT_ID is"],
   [{ PLAYER_A_MODEL: "gpt-6-luna" }, "Set PLAYER_A_ANT_URL and PLAYER_A_ANT_KEY, or PLAYER_A_OAI_URL and PLAYER_A_OAI_KEY"],
 ])("a bad endpoint fails naming the variable, never the key: %p", async (env, expected) => {
   const failure = await failureOf(env);
 
   expect(failure).toContain(expected);
-  expect(failure).not.toContain(CPA.key);
+  expect(failure).not.toContain(PROXY.key);
 });

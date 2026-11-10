@@ -2,9 +2,9 @@
 
 Research on Buckshot Roulette: a multiplayer rules library in Bend, a browser table, agent tools, and an arena where models play each other.
 
-- **Unfinished work** and what each branch needs next: `_work/work-in-progress.md` (local, gitignored). Read it first when it exists.
+- **Local notes:** `_work/AGENTS.local.md` (local, gitignored) holds setup-specific notes. Read it first when it exists.
 - **Bend is the source of truth for the rules** (`sim/bend-mp/`). TypeScript may call Bend exports but never re-implements rules. Rules outside Bend (the Rust evaluator in `sim/rust/`) must be verified against Bend, and Bend wins any disagreement (ADR-0052).
-- **Never commit** decompiled game code, original game assets or text, raw tournament data, anything under `_work/` or `.audit/`, or in-progress trackers (status notes, progress logs, handoffs, plans). Trackers go in `_work/` or `_*.md`. If one gets committed on a branch, purge it from the branch's history before the merge. Account ids and emails stay out of committed files.
+- **Never commit** decompiled game code, original game assets or text, raw tournament data, anything under the gitignored `_work/`, or in-progress trackers (status notes, progress logs, handoffs, plans). Trackers go in `_work/` or `_*.md`. If one gets committed on a branch, purge it from the branch's history before the merge. Account ids and emails stay out of committed files.
 - **Toolchain:** `nix develop` gives the pinned Bend 2.0.40, bun, Python and stable Rust. The Rust version lives only in `sim/rust/rust-toolchain.toml`: rustup reads it outside Nix, and the flake builds the same toolchain from it (rust-overlay).
 - **`dev` commands:** the `buckshot-dev` package in `dev/` (uv project) provides the `dev` CLI — `dev heavy -- <cmd...>` runs a command niced holding one of two machine-wide heavy slots. Run it three ways: `uv run --project dev dev ...` (no Nix), `nix run .#dev -- ...` (Nix), or `dev ...` on PATH inside `nix develop`. Tool overrides for `dev`: `BEND`, `BENDTT`, `CARGO`, `BUN`. The shell scripts under `sim/` use `cargo` and `bun` from `PATH`.
 - **Before committing:**
@@ -13,8 +13,8 @@ Research on Buckshot Roulette: a multiplayer rules library in Bend, a browser ta
   - `web/` changes: from `web/`, run `bun run lint` (0 warnings), `bun run typecheck` and `bun run test`. Use `bun run test`, never bare `bun test`.
   - `tools/arena/` changes: `nix build .#checks.x86_64-linux.arena-python` (also part of `nix flake check`) runs the `tools/arena` and `tools/arena/analysis` unit tests in the `dev/` env; inside `nix develop`, `python -m unittest discover -s .` from each directory does the same.
   - Run heavy jobs with `dev heavy --` (niced, at most two at once).
-- **Git:** work on `main`. Do branch work in a worktree at `~/.t3/worktrees/buckshot/t3-<8 hex>` (never a sibling directory). Merge only verified work, with `--no-ff`.
-- **Arena work** (tournaments, model endpoints, quotas, the CLIProxyAPI hub): read `docs/arena/README.md` first. Never restart CLIProxyAPI or 9router, and stop only processes you started.
+- **Git:** work on `main`. Do branch work in a git worktree. Merge only verified work, with `--no-ff`.
+- **Arena work** (tournaments, model endpoints, usage limits): read `docs/arena/README.md` first. Stop only processes you started.
   - Editing the files that play a match (`PLAY_FILES` in `web/src/arena/match.ts`) changes the arena's code hash.
 - **Domain terms and decisions:** `CONTEXT.md` and `docs/adr/`.
-- **Issues:** GitHub Issues on sakompella/buckshot through `gh`. Labels and conventions are in `docs/agents/`.
+- **Issues:** this repository's GitHub Issues, through `gh`. Labels and conventions are in `docs/agents/`.

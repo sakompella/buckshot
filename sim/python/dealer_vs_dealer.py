@@ -1,7 +1,7 @@
 """Story-mode dealer vs Double-or-Nothing dealer under 2-player multiplayer rules.
 
 Both policies are ports of DealerChoice, CoinFlip and FigureOutShell from the
-v2.2.0.6 DealerIntelligence.gd. Double or Nothing is the story policy plus
+game's dealer AI (v2.2.0.6). Double or Nothing is the story policy plus
 three upgrades, which can be removed one at a time:
 
 - count_flip: when the shell is unknown, shoot the opponent if lives outnumber
@@ -109,7 +109,7 @@ class Game:
         return lives == 0 or blanks == 0
 
     def dealer_turn(self, me, opp):
-        """One shot. Returns (target, damage). Ported from DealerIntelligence.DealerChoice."""
+        """One shot. Returns (target, damage). Ported from the game's DealerChoice."""
         known, knows, target = "", False, ""
         sawed = False
         while True:

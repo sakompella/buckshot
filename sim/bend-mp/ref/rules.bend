@@ -269,7 +269,7 @@ def props.item_count(props: S.Props, +item: D.Item) -> Nat:
     case S.Props{_, _, _, _, slots, _, holding, _}:
       Nat.add(item.count(slots.list(slots), item), item.count.here(holding, item))
 
-# D45 includes a dead current socket, sorts socket IDs and traverses only
+# The next turn includes a dead current socket, sorts socket IDs and traverses only
 # that socket plus living seats in the current direction.
 def GetNextTurn_Socket(+host: S.Host, +current: D.Seat) -> D.Seat:
   directed(S.host.direction(host), turn_ring(D.ring.entries(S.Props, S.host.seats(host)), current), current)
@@ -295,7 +295,7 @@ def GetSocketsToBeginItemGrabbingOn.go(entries: List<&2, D.At<&2, S.Props>>, +ho
     case D.At{+seat, props} <> rest:
       turn_ring.put(Bool.and(props.can_grab(props, new_round), nonempty(D.Item, GetItemToGrab.pool(D.item.order(), host, seat))), seat, GetSocketsToBeginItemGrabbingOn.go(rest, host, new_round))
 
-# Random reload preflight may use a positive amount probe (D12). Actual
+# Random reload preflight may use a positive amount probe. Actual
 # selection uses the freshly stored amount, including its zero guard.
 def GetSocketsToBeginItemGrabbingOn(+host: S.Host, new_round: Bool, amount: Nat) -> List<&2, D.Seat>:
   match amount:

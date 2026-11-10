@@ -21,7 +21,7 @@ function scenario(name, test) { test(); count++; console.log(`ok    ${name}`); }
 const twoBlank = config(2, [round({ live: 1, blank: 1 })]);
 
 try {
-  // D11, D15, D16, D19, D25, D47. Shuffle j=0 puts blank first.
+  // Shuffle j=0 puts blank first.
   // Seat1 self-blanks, picks up again, then kills Seat3 with the live shell.
   scenario('two-seat full match and self blank', () => {
     const { state, notes } = replay(twoBlank, [0, 0, 0, 0, 0, 0, 1]);
@@ -35,7 +35,7 @@ try {
     assert.equal(array(R.answer(state, 99).notes).length, 0);
   });
 
-  // D16 and D51. Self blank follows CheckIfEndingTurn/UserEndTurn/PassTurn.
+  // Self blank follows CheckIfEndingTurn/UserEndTurn/PassTurn.
   scenario('self blank keeps turn through end-turn path', () => {
     const { state, notes } = replay(twoBlank, [0, 0, 0, 0, 0]);
     assert.deepEqual(req(state), { kind: 'Choose', menus: { 1: [{ PickUp: true }], 3: [] } });
@@ -45,7 +45,7 @@ try {
     assert.equal(state.host.first_turn.$, seat(1).$);
   });
 
-  // D45 overrides FirstSeat in round2. D25 pays 70k,75k,80k by index.
+  // The first-death seat overrides FirstSeat in round2. Prizes pay 70k,75k,80k by index.
   // Round0 winner1; round1 first3 and winner3; round2 first1 and winner1.
   scenario('three rounds, first-death override and all prize tiers', () => {
     const c = config(2, Array.from({ length: 3 }, () => round({ live: 1, blank: 1 })));
@@ -62,7 +62,7 @@ try {
     assert.deepEqual(snap(state).deck, [3, 4, 5, 6, 7, 8], 'deck is not reset at a round boundary');
   });
 
-  // D07, D14, D16, D51. One live hits3; empty reload carries recipient3.
+  // One live hits3; empty reload carries recipient3.
   // Current socket stays1 until LoadShotgun calls PassTurn.
   scenario('reload mid-round carries the pending turn', () => {
     const c = config(2, [round({ health: 3 })]);
@@ -77,7 +77,7 @@ try {
     assert.deepEqual(snap(next).gun, ['Live']);
   });
 
-  // D21,D37,D45,D47. 0 kills1; 2 kills0. Dead1 is skipped on traversal.
+  // 0 kills1; 2 kills0. Dead1 is skipped on traversal.
   scenario('three-seat full match', () => {
     const { state } = replay(config(3), [0, 0, 0, 1, 0, 0, 0]);
     assert.equal(req(state).kind, 'Finished');
@@ -87,7 +87,7 @@ try {
     assert.equal(end.seats['2'].cash, 70000);
   });
 
-  // D21,D37,D45,D47. 0 kills1; 2 kills3; 0 kills2.
+  // 0 kills1; 2 kills3; 0 kills2.
   scenario('four-seat full match', () => {
     const { state } = replay(config(4), [0, 0, 0, 1, 0, 0, 2, 0, 0, 1]);
     assert.equal(req(state).kind, 'Finished');
@@ -97,7 +97,7 @@ try {
     assert.equal(end.seats['0'].cash, 70000);
   });
 
-  // D11 singleton amendment,D14. Each blank-only load needs pickup + self shot.
+  // Each blank-only load needs pickup + self shot.
   // Loads1..8 draw batches. Load9 uses the singleton directly. Load10 refills.
   scenario('deck singleton and refill after nine two-seat loads', () => {
     const c = config(2, [round({ live: 0, blank: 1 })]);
@@ -115,7 +115,7 @@ try {
     assert.equal(traceJSON(R, 'refill', c, Array(27).fill(0)).points.filter(p => p.request.label === 'SequenceBatch').length, 9);
   });
 
-  // D11,D12,D23,D51. New-round random amount is retained even with no items.
+  // New-round random amount is retained even with no items.
   // Dead end-turn amounts are absent. Shared health is not installed until
   // AFTER amount selection, so health100 persists at both preceding draws.
   scenario('random no-item request vocabulary at all seat counts', () => {
@@ -133,7 +133,7 @@ try {
     }
   });
 
-  // D12. Initial amount0 bypasses distribution. The second load's random
+  // Initial amount0 bypasses distribution. The second load's random
   // amount is first read at its empty, nonwinning end turn, before another
   // SequenceBatch can run. Both pools are nonempty at that site.
   scenario('reload retains a live amount draw before distribution', () => {
@@ -151,7 +151,7 @@ try {
     assert.deepEqual(req(next), { kind: 'Choose', menus: { 1: [{ Grab: true }], 3: [{ Grab: true }] } });
   });
 
-  // D21. Deck resource4 for two seats is (1,1); shuffle j=1 is identity.
+  // Deck resource4 for two seats is (1,1); shuffle j=1 is identity.
   scenario('random composition uses the sampled resource identity', () => {
     const c = config(2, [round({ live: null })]);
     const trace = traceJSON(R, 'sample-resource4', c, [0, 4, 1]);
@@ -161,7 +161,7 @@ try {
     assert.deepEqual(trace.points[2].state.gun, [], 'new shells stay local until shuffle completes');
   });
 
-  // D11,D14. Start [Live,Live,Blank,Blank]. Swaps (3,0),(2,1),(1,0)
+  // Start [Live,Live,Blank,Blank]. Swaps (3,0),(2,1),(1,0)
   // produce [Blank,Blank,Live,Live]. Each index is a separate request.
   scenario('Fisher-Yates requests descend and install only at completion', () => {
     const c = config(2, [round({ live: 2, blank: 2 })]);
@@ -172,7 +172,7 @@ try {
     assert.deepEqual(plain(replay(c, [0, 0, 0, 1, 0]).state.host.shown), plain(tag('Load', { live: 2, blank: 2 })));
   });
 
-  // D55 M3. These inventories are injected because distribution effects are
+  // These inventories are injected because distribution effects are
   // Phase5. At round1 both old Beer slots hit caps before the scheduled clear.
   // Post-clear selection must nevertheless offer both seats a Grab.
   scenario('injected M3 clears old capped inventories before selection', () => {
@@ -186,7 +186,7 @@ try {
     assert.ok(Object.values(snap(state).seats).every(s => s.slots.every(x => x === null)));
   });
 
-  // D12,D14,D55 M3. Round0 ends on load2. Round1 reads amount1 from old
+  // Round0 ends on load2. Round1 reads amount1 from old
   // index2, not amount0 from index0, and exposes both post-clear grabbers.
   scenario('new-round amount uses the old load index', () => {
     const loads = [0, 0, 1, 0].map(amount => ({ live: 1, blank: 0, amount }));
@@ -201,7 +201,7 @@ try {
     assert.equal(state.host.first_turn.$, seat(3).$);
   });
 
-  // D08,D16,D27. Jammer is not reachable in a no-item game. This injected
+  // Jammer is not reachable in a no-item game. This injected
   // target-selection fixture verifies that the self-blank end-turn checks it.
   scenario('injected jam skips once, then lifts on the next visit', () => {
     const base = replay(twoBlank, [0, 0, 0, 0]).state;
@@ -224,7 +224,7 @@ try {
     assert.equal(req(closed).kind, 'Choose');
   });
 
-  // D08. Four simultaneous unchecked jams make four skips, then the first
+  // Four simultaneous unchecked jams make four skips, then the first
   // checked jam lifts. The bounded silent closure must still reach Choose.
   scenario('injected four-seat all-jammed closure terminates', () => {
     const state = replay(config(4), [0, 0]).state;
@@ -235,7 +235,7 @@ try {
     assert.equal(snap(next).turn, 0);
   });
 
-  // D51. Saw Remove is Phase5. The injected flag captures double damage;
+  // Saw Remove is Phase5. The injected flag captures double damage;
   // Grow clears it on a blank too, and damage clamps at zero on live.
   scenario('injected saw is captured and grown on each shot', () => {
     const blank = replay(twoBlank, [0, 0, 0, 0]).state;
@@ -256,7 +256,7 @@ try {
     }
   });
 
-  // D45,D51. Remote is the only direction flip, so CCW cannot be reached
+  // Remote is the only direction flip, so CCW cannot be reached
   // before Phase5. This injected fixture includes dead current socket1.
   scenario('injected CCW and CW traversal include dead current only', () => {
     const state = replay(config(4, [round({ health: 2 })]), [0, 0]).state;
@@ -268,7 +268,7 @@ try {
     assert.equal(R['rules:GetNextTurn_Socket'](ccw, seat(1)).$, seat(0).$);
   });
 
-  // D32. The host predicate checks turn/holding/has_turn, not target health.
+  // The host predicate checks turn/holding/has_turn, not target health.
   scenario('canonical core menus pass the host guards', () => {
     const idle = replay(twoBlank, [0, 0, 0]).state;
     const choice = (s, move) => tag('Choice', { seat: seat(s), index: 0, move });

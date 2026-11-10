@@ -71,7 +71,7 @@ def matched(t3: list[Game], baseline: list[Game], draws: int, rng: random.Random
 
 def report(games: list[Game], draws: int, rng: random.Random) -> str:
     t3 = [g for g in games if g.cohort == "tournament 3"]
-    baseline = [g for g in games if g.cohort == "cpa-tiers cross-model" and {g.first, g.second} == {OPUS_MEDIUM, ASTRA}]
+    baseline = [g for g in games if g.cohort == "tiers cross-model" and {g.first, g.second} == {OPUS_MEDIUM, ASTRA}]
     complete = [g for g in t3 if len(blocks_of(t3)[g.block]) == 2]
     rows = [
         ["41 matches, 21 seed blocks (seed 3030 half)", *estimate(t3, draws, rng)],

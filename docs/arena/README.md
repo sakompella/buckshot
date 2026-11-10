@@ -1,21 +1,18 @@
 # Running the arena
 
-The arena plays language models against each other at the Buckshot table through the agent tools. Its code is in `web/src/arena/` and `web/scripts/arena*.ts`; the decisions are ADR-0035 to ADR-0042 and ADR-0044 to ADR-0046 and ADR-0048 in `docs/adr/`. This page is the runbook. The results so far are in [results.md](results.md).
+The arena plays language models against each other at the Buckshot table through the agent tools. Its code is in `web/src/arena/` and `web/scripts/arena*.ts`; the decisions are ADR-0035 to ADR-0041, ADR-0043, ADR-0044, ADR-0046 and ADR-0048 in `docs/adr/`. This page is the runbook. The results are in [results.md](results.md).
 
 ## Endpoints
-- Models are reached through CLIProxyAPI (CPA), hosted on hp-server at `https://hub.dog-minnow.ts.net`.
-  - Anthropic Messages is at the root and OpenAI Responses at `/v1`.
-  - The management API is `/v0/management/...` and `/v8/management/config/...`; its password is the container's `MANAGEMENT_PASSWORD`.
-  - The old local container on `127.0.0.1:8318` is retired. Matches that recorded that URL resume only through a forwarder that serves it, because an endpoint change stops a resume.
-- DeepSeek is the one model reached through 9router (`http://localhost:20128/v1`). Its free tier has been refusing requests (429 FreeUsageLimitError). OpenCode Zen is never used.
-- `web/.env` (not committed) holds `CPA_KEY` and `NINEROUTER_KEY`. Bun loads it for the runner, and each match gets only its own `PLAYER_*` variables.
+- An endpoint is an Anthropic Messages or OpenAI Responses API: a provider's own API, or a local proxy that serves several providers behind one key.
+- DeepSeek is reached through 9router (`http://localhost:20128/v1`).
+- `web/.env` (not committed) holds the API keys the configs name as `keyEnv`. Bun loads it for the runner, and each match gets only its own `PLAYER_*` variables.
 
 ## A tournament
-- **Config:** a tournament is a JSON config, as in `web/tournaments/example.json`; the configs of past runs are kept locally in `_work/arena/tournament-configs/`. It names the endpoints, the entrants (model and effort, or a bot) and the pairings.
+- **Config:** a tournament is a JSON config, as in `web/tournaments/example.json`. It names the endpoints, the entrants (model and effort, or a bot) and the pairings.
   - Seeds are either the config seed plus the block, or a list per pairing.
   - `cohort` (optional) names the group the analysis compares the tournament's matches in, such as `"tournament 8"`; the leaderboard titles it by that name. The importer stores it on each match (`matches.cohort`) and stops on a tournament without one; tournaments before it was added get theirs from `LEGACY_COHORTS` in `web/src/analysis/import.ts`. All phases of one run share one cohort. The wrap-up command (below) stamps it into the run dirs if a config lacked it.
-  - An engine entrant, `{"engine": {"depth": 6, "budget": 20000}}`, is the Rust search at that strength (`web/src/arena/engine.ts`): a fixed yardstick that sits at seat `Engine/<depth>/<budget>`. With `"reload": "sampled"` (seat `Engine/<depth>/<budget>/sampled`) a line that reaches a reload is valued over sampled deals instead of statically; that engine is much stronger (about 70% against DoN at depth 6, against about 54% with static reload) and takes about 0.2 s a move. It decides from the player's own log and the public board, as the regret scorer does, values every move unpruned (static reload unless sampled) and plays the first best one, in about 20 ms a move. It needs cargo, or `$BUCKSHOT_SEARCH` naming a buckshot-search built with `f64,seats-2`, so it plays two-seat pairings only: the config refuses an engine in a wider one. Its root moves must be Bend's menu: if they differ, or the search fails, the match stops and the position, the menu and the search output are written to `engine-fault-turn-<turn>-<player>.json` in the match directory. A pairing needs at least one model or engine; a config whose entrants are only engines and bots, such as `engine-anchors-selfplay.json`, makes no model calls.
-  - A model entrant may set `instructionsAddendum`: text appended to the shared instructions for that entrant's agent only (ADR-0048). Give such an entrant its own name, as `astra-recall.json` did, and the manifest records the text.
+  - An engine entrant, `{"engine": {"depth": 6, "budget": 20000}}`, is the Rust search at that strength (`web/src/arena/engine.ts`): a fixed yardstick that sits at seat `Engine/<depth>/<budget>`. With `"reload": "sampled"` (seat `Engine/<depth>/<budget>/sampled`) a line that reaches a reload is valued over sampled deals instead of statically; that engine is much stronger (about 70% against DoN at depth 6, against about 54% with static reload) and takes about 0.2 s a move. It decides from the player's own log and the public board, as the regret scorer does, values every move unpruned (static reload unless sampled) and plays the first best one, in about 20 ms a move. It needs cargo, or `$BUCKSHOT_SEARCH` naming a buckshot-search built with `f64,seats-2`, so it plays two-seat pairings only: the config refuses an engine in a wider one. Its root moves must be Bend's menu: if they differ, or the search fails, the match stops and the position, the menu and the search output are written to `engine-fault-turn-<turn>-<player>.json` in the match directory. A pairing needs at least one model or engine; a config whose entrants are only engines and bots makes no model calls.
+  - A model entrant may set `instructionsAddendum`: text appended to the shared instructions for that entrant's agent only (ADR-0048). Give such an entrant its own name; the manifest records the text.
   - Use 10 seeds, each played in both seat orders: 20 matches per pairing.
   - The `3000, 3010–3018` list is balanced by first shooter.
 - **Run:**
@@ -41,14 +38,14 @@ Use the hash, not a hand-assigned version id. It changes exactly when gameplay c
 
 ## Usage limits
 - **Usage-limit 429s:** a match stopped by one doesn't count as failed. It waits for the reset, and other matches fill its slot.
-- **Unpinned agents:** the cooldown is per model. CPA picks the account, and its session affinity (24 h) keeps an agent's conversation on one account until that account fails.
-- **Account pins (ADR-0042):** an endpoint may list CPA `accounts`, the `id` of each entry in `GET /v0/management/auth-files`.
-  - Each new match pins each agent of that endpoint to one account, with the `X-CPA-Auth-ID` header, and records it in provenance as `cpa_auth_id`.
+- **Unpinned agents:** the cooldown is per model.
+- **Account pins:** when the endpoint is a proxy over several accounts, an endpoint may list `accounts`, the proxy's ids for them.
+  - Each new match pins each agent of that endpoint to one account by sending its id in the header that `ARENA_ACCOUNT_HEADER` names (set it in `web/.env`; an account id without it is an error), and records it in provenance as `account_id`.
   - It picks an account that isn't cooling, with the fewest running matches; ties go to config order.
-  - When an account is full, CPA answers 429, and only that (model, account) pair cools. The match pauses until the reset, and new matches start on another account.
+  - When an account is full, the proxy answers 429, and only that (model, account) pair cools. The match pauses until the reset, and new matches start on another account.
   - Resumed matches always keep their pin. Matches started without a pin stay unpinned.
   - An existing tournament may add `accounts` to an endpoint that had none.
-- **Account ids:** they contain account emails, so they stay out of committed configs. Add them to the run's own copy of the config.
+- **Account ids:** they may contain account emails, so they stay out of committed configs. Add them to the run's own copy of the config.
 - **Checking a run:** `tools/arena/check_matches.py` finds fallback moves, failed audit flags and unexpected endpoints in a tournament directory.
 
 ## Results
@@ -74,32 +71,30 @@ Use the hash, not a hand-assigned version id. It changes exactly when gameplay c
 
       bun scripts/arena-cost.ts <dir>
 
-  This is theoretical cost at `web/src/arena/prices.json` list prices. CPA plans are subscriptions, so nothing is billed.
+  This is theoretical cost at `web/src/arena/prices.json` list prices; a subscription plan bills nothing per call.
 
 ## Wrap-up
-`python3 tools/arena/wrap_tournament.py --run-dir <dir> --importer <worktree> --cohort "<name>"`, inside `nix develop` from the main checkout, imports finished tournaments and refreshes everything derived from them: the steps are in its docstring. It is rerunnable (a `wrapup/state.json` in the run dir records finished steps), stops on the first failed check, and rewrites doc tables in the working tree without committing. `--dry-run` lists the steps.
+`python3 tools/arena/wrap_tournament.py --run-dir <dir> --importer <checkout> --cohort "<name>"`, inside `nix develop` from the main checkout, imports finished tournaments and refreshes everything derived from them: the steps are in its docstring. It is rerunnable (a `wrapup/state.json` in the run dir records finished steps), stops on the first failed check, and rewrites doc tables in the working tree without committing. `--dry-run` lists the steps.
 
 ## Deploying the online site
-The wrap-up's `export` step writes the aggregates to `web/online/data`. Deploying them is off by default. `wrap_tournament.py --deploy` adds a `deploy` step after `export`: it uploads a Worker version without traffic, checks it at its preview URL (the privacy scan on the files it serves, `/` and `/arena` answering, every `/data/*.json` equal to the export), then promotes it to buckshot.akompella.dev. A failed check stops the run and nothing is promoted. Turn it on by adding `--deploy` to the wrap-up command; there is no timer or hook.
+The wrap-up's `export` step writes the aggregates to `web/online/data`. Deploying them is off by default. `wrap_tournament.py --deploy` adds a `deploy` step after `export`: it uploads a Worker version without traffic, checks it at its preview URL (the privacy scan on the files it serves, `/` and `/arena` answering, every `/data/*.json` equal to the export), then promotes it to the live domain. A failed check stops the run and nothing is promoted.
 
-By hand, from `web/` in `nix develop`, with the token loaded (`set -a; . ../_work/.cloudflare-deploy.env; set +a`):
+By hand, from `web/` in `nix develop`, with the deploy settings loaded (`set -a; . <deploy env file>; set +a`):
 
 - `bun run deploy:preview --alias <name>` uploads, checks and prints `{"versionId", "url", "problems"}`; exit 1 when a check fails. The preview URL is `https://<alias>-buckshot.<workers.dev subdomain>.workers.dev`. It is public and holds the same aggregates as the live site. An alias is lowercase letters, digits and dashes, starting with a letter; reusing one moves it to the new version.
 - `bun run deploy:promote <versionId>` sends all traffic to that version.
-- `bun run deploy:online` is the old one-step deploy to the live domain, with no preview.
+- `bun run deploy:online` deploys to the live domain in one step, with no preview.
 
-Every upload first runs `bun scripts/deploy-online.ts check` on `web/online`, so nothing leaves the machine when it fails: it refuses any file other than `_headers` and the export's `data/*.json`, and runs the privacy scan on the data.
-
-`_work/.cloudflare-deploy.env` (mode 600, gitignored) holds `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`; the token is `buckshot-deploy`, without expiry, and can only edit Workers scripts on the account, read account settings, and read the zone and edit its Worker routes. Without that file, `cf auth login` (OAuth, expires daily) also works for the by-hand commands. To replace the token: `cf accounts tokens roll <token id>` (the id is `CLOUDFLARE_TOKEN_ID` in the file) or create a new one with the same permission groups, and update the file. `cf` needs Node, so run everything under `nix develop`.
+The deploy env file (gitignored, mode 600) holds `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` and `ONLINE_DOMAIN`, the live domain. The token needs to edit Workers scripts and the zone's Worker routes and to read account settings. `cf auth login` also works for the by-hand commands. `cf` needs Node, so run everything under `nix develop`.
 
 ## Reasoning settings
 - **Claude 5.5 models:** `adaptive` thinking with an effort and `display: "summarized"` (their default `omitted` returns no text).
   - haiku 5.5 off sends `disabled`.
   - sonnet 5.5 off sends `between_tools`.
-  - opus 5.5 off sends `disabled`. The hub accepted it in a probe on 2026-10-29 (HTTP 200, no thinking block); `between_tools` is rejected with a 400.
+  - opus 5.5 off sends `disabled`. It is accepted (HTTP 200, no thinking block); `between_tools` is rejected with a 400.
 - **claude-haiku-4-5:** thinking budgets.
 - **GPT models:** `reasoning.effort` and `reasoning.summary: "detailed"`.
-  - CPA rewrites effort `none` to `low` for gpt-5.6 models. The upstream accepts it; a CPA patch is in progress.
+  - Some proxies rewrite effort `none` to `low` for gpt-5.6 models; the upstream accepts `none`.
   - gpt-6 models pass `none` through.
   - gpt-6.1-sol rejects `none` upstream.
 - **`minimal`** sends the same request as `low` on every model except haiku 4.5.

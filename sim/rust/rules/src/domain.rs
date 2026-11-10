@@ -682,7 +682,7 @@ impl RoundRules {
         self.items[item]
     }
 
-    /// `config.default_round()`: `MP_MatchCustomization`'s defaults.
+    /// `config.default_round()`: the game's match customization defaults.
     #[must_use]
     pub const fn default_round() -> Self {
         const fn rule(per_player: u32, on_table: u32) -> ItemRule {

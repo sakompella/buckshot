@@ -4,4 +4,4 @@ The library is the rules of the game, not the running game. It has no clock. Rul
 
 ## Consequences
 
-The real engine can reorder some effects under unusual timing, for example a very long frame that ends a turn before a shot resolves. These are recorded in the local decision log as diagnostics. They are not laws and no proof covers them. ADR-0017 is one place where the no-clock rule forced a choice.
+The real engine can reorder some effects under unusual timing, for example a very long frame that ends a turn before a shot resolves. These are recorded as diagnostics. They are not laws and no proof covers them. ADR-0017 is one place where the no-clock rule forced a choice.

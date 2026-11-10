@@ -15,9 +15,9 @@ import { configLabel } from "./model-names.ts";
 // A is configured by PLAYER_A_ANT_URL and _ANT_KEY for the Anthropic Messages
 // API, or PLAYER_A_OAI_URL and _OAI_KEY for the OpenAI Responses API, plus
 // PLAYER_A_MODEL and an optional PLAYER_A_EFFORT; B to D likewise. An optional
-// PLAYER_A_CPA_AUTH_ID pins every request of the agent to one CLIProxyAPI
-// account, by sending its id in X-CPA-Auth-ID; without it no header is sent and
-// the proxy picks the account. An optional PLAYER_A_INSTRUCTIONS_ADDENDUM is
+// PLAYER_A_ACCOUNT_ID pins every request of the agent to one account of a
+// proxy, by sending the id in the header ARENA_ACCOUNT_HEADER names; without it
+// no header is sent and the proxy picks the account. An optional PLAYER_A_INSTRUCTIONS_ADDENDUM is
 // text appended to the shared instructions for that agent only (ADR-0048), and an
 // optional PLAYER_A_EFFORT_LABEL names the effort in the agent's label when it is
 // not PLAYER_A_EFFORT, as for an "off" that is low effort plus that text. A model id
@@ -37,8 +37,8 @@ const EndpointFields = {
   /** The pi-ai catalog model whose context window, thinking levels and prices `model` shares, when pi-ai does not list `model` itself. */
   catalogModel: Schema.optional(Schema.NonEmptyString),
   effort: Schema.optional(Schema.Literals(THINKING_LEVELS)),
-  /** The CLIProxyAPI account every request is pinned to. An id, not a secret. */
-  cpaAuthId: Schema.optional(Schema.NonEmptyString),
+  /** The proxy account every request is pinned to, and the header that names it. An id, not a secret. */
+  account: Schema.optional(Schema.Struct({ header: Schema.NonEmptyString, id: Schema.NonEmptyString })),
   /** Text appended to the shared instructions for this agent only. */
   instructionsAddendum: Schema.optional(Schema.NonEmptyString),
   /** The effort the agent's label names, when it is not `effort`. */
@@ -110,7 +110,8 @@ export const agentEndpoint = (agent: AgentId) =>
       model: Config.option(Config.NonEmptyString(name("MODEL"))),
       catalogModel: Config.option(Config.NonEmptyString(name("CATALOG_MODEL"))),
       effort: Config.option(Config.Literals(THINKING_LEVELS, name("EFFORT"))),
-      cpaAuthId: Config.option(Config.NonEmptyString(name("CPA_AUTH_ID"))),
+      accountId: Config.option(Config.NonEmptyString(name("ACCOUNT_ID"))),
+      accountHeader: Config.option(Config.NonEmptyString("ARENA_ACCOUNT_HEADER")),
       instructionsAddendum: Config.option(Config.NonEmptyString(name("INSTRUCTIONS_ADDENDUM"))),
       effortLabel: Config.option(Config.NonEmptyString(name("EFFORT_LABEL"))),
     }).pipe(
@@ -121,7 +122,10 @@ export const agentEndpoint = (agent: AgentId) =>
 
     if (Option.isNone(settings.model)) return yield* new EndpointConfigError({ message: `${name("MODEL")} must be set` });
 
-    const fields = { model: settings.model.value, catalogModel: Option.getOrUndefined(settings.catalogModel), effort: Option.getOrUndefined(settings.effort), cpaAuthId: Option.getOrUndefined(settings.cpaAuthId), instructionsAddendum: Option.getOrUndefined(settings.instructionsAddendum), effortLabel: Option.getOrUndefined(settings.effortLabel) };
+    if (Option.isSome(settings.accountId) && Option.isNone(settings.accountHeader)) return yield* new EndpointConfigError({ message: `ARENA_ACCOUNT_HEADER must be set when ${name("ACCOUNT_ID")} is` });
+
+    const account = Option.getOrUndefined(Option.zipWith(settings.accountHeader, settings.accountId, (header, id) => ({ header, id })));
+    const fields = { model: settings.model.value, catalogModel: Option.getOrUndefined(settings.catalogModel), effort: Option.getOrUndefined(settings.effort), account, instructionsAddendum: Option.getOrUndefined(settings.instructionsAddendum), effortLabel: Option.getOrUndefined(settings.effortLabel) };
 
     const notListed = (endpoint: Endpoint): string =>
       Option.match(settings.catalogModel, {
@@ -141,9 +145,6 @@ export const agentEndpoint = (agent: AgentId) =>
 /** The base URL as the SDKs want it, without a trailing slash. */
 const baseUrlOf = (url: URL): string => url.href.replace(/\/$/, "");
 
-/** The header CLIProxyAPI reads to serve a request from one account. */
-export const CPA_AUTH_ID_HEADER = "X-CPA-Auth-ID";
-
 /** The key, and the account pin when the endpoint has one, as pi-ai resolves them for every request. createProvider's own `headers` option is never sent. */
 const requestAuth = (endpoint: Endpoint, source: string) => ({
   apiKey: {
@@ -151,7 +152,7 @@ const requestAuth = (endpoint: Endpoint, source: string) => ({
     resolve: async () => {
       const auth = { apiKey: Redacted.value(endpoint.key) };
 
-      return { auth: endpoint.cpaAuthId === undefined ? auth : { ...auth, headers: { [CPA_AUTH_ID_HEADER]: endpoint.cpaAuthId } }, source };
+      return { auth: endpoint.account === undefined ? auth : { ...auth, headers: { [endpoint.account.header]: endpoint.account.id } }, source };
     },
   },
 });
@@ -249,8 +250,8 @@ export const AgentProvenance = Schema.Struct({
   model: Schema.String,
   catalog_model: Schema.NullOr(Schema.String),
   effort: Schema.NullOr(Schema.String),
-  /** The CLIProxyAPI account the agent is pinned to; absent when it is not, as before the pin existed. */
-  cpa_auth_id: Schema.optionalKey(Schema.String),
+  /** The proxy account the agent is pinned to; absent when it is not, as before the pin existed. */
+  account_id: Schema.optionalKey(Schema.String),
   /** The text appended to the shared instructions for this agent only; absent when the agent plays on the shared instructions alone. */
   instructions_addendum: Schema.optionalKey(Schema.String),
   /**
@@ -306,7 +307,7 @@ const thinkingOf = (endpoint: Endpoint, model: Model<Api>): AgentProvenance["thi
 export const provenanceOf = (providerId: string, endpoint: Endpoint): AgentProvenance => {
   const provenance = { api: endpoint._tag, provider: providerId, url: baseUrlOf(endpoint.url), model: endpoint.model, catalog_model: endpoint.catalogModel ?? null, effort: endpoint.effort ?? null, thinking: thinkingOf(endpoint, listedModelOf(endpoint)) };
 
-  const pinned = endpoint.cpaAuthId === undefined ? provenance : { ...provenance, cpa_auth_id: endpoint.cpaAuthId };
+  const pinned = endpoint.account === undefined ? provenance : { ...provenance, account_id: endpoint.account.id };
 
   return endpoint.instructionsAddendum === undefined ? pinned : { ...pinned, instructions_addendum: endpoint.instructionsAddendum };
 };

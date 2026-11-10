@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Wrap up finished tournaments: import them, refresh every derived database, rebuild the public copy and the doc tables.
 
-    python3 tools/arena/wrap_tournament.py --run-dir _work/arena/tournament-8 --importer ~/.t3/worktrees/buckshot/t3-XXXXXXXX --cohort "tournament 8"
+    python3 tools/arena/wrap_tournament.py --run-dir _work/arena/tournament-8 --importer <checkout with the importer> --cohort "tournament 8"
 
 Run it from the main checkout inside `nix develop`, once the runner has stopped. Each step logs to <first run dir>/wrapup/ and is
 recorded in wrapup/state.json when it finishes, so a rerun skips finished steps and continues at the one that stopped. A failed
@@ -22,7 +22,7 @@ check stops the run with a message and a non-zero exit; fix the cause and rerun.
   swap-derived  swap regret, knowledge, certain-mistakes and luck in, each keeping a .pre-<name> copy
   public    redact_database.py, scan every column for emails, swap, restart the viewer
   export    arena-export.ts: the online site's aggregate JSON from the public copy into web/online/data
-  deploy    only with --deploy: upload the site as a preview version, check it at its preview URL, then promote it to buckshot.akompella.dev (docs/arena/README.md)
+  deploy    only with --deploy: upload the site as a preview version, check it at its preview URL, then promote it to $ONLINE_DOMAIN (docs/arena/README.md)
   doc-*     rerun the doc table scripts into the working tree (nothing is committed)
   cleanup   restart the viewer, delete the scratch files
 
@@ -358,7 +358,7 @@ class Wrap:
         self.run("deploy-preview", self.nix(REPO, "bun", "run", "deploy:preview", "--alias", self.tag), cwd=web, stdout=out, env=env)
         version = preview_version(out.read_text())
         self.run("deploy-promote", self.nix(REPO, "bun", "run", "deploy:promote", version), cwd=web, env=env)
-        return f"version {version} is live at buckshot.akompella.dev"
+        return f"version {version} is live at {env['ONLINE_DOMAIN']}"
 
     def doc(self, script: str, doc: str, *args: str) -> Callable[[], None]:
         def step() -> None:
@@ -432,7 +432,7 @@ def main() -> None:
     p.add_argument("--viewer-url", default="http://127.0.0.1:8790/")
     p.add_argument("--jobs", type=int, default=4, help="regret scoring processes")
     p.add_argument("--skip", action="append", default=[], help="step to leave out, repeatable")
-    p.add_argument("--deploy", action="store_true", help="after the export, preview, check and promote the online site to buckshot.akompella.dev (off by default)")
+    p.add_argument("--deploy", action="store_true", help="after the export, preview, check and promote the online site to $ONLINE_DOMAIN, set with the Cloudflare variables in _work/.cloudflare-deploy.env (off by default)")
     p.add_argument("--dry-run", action="store_true", help="list the steps and which are done")
     args = p.parse_args()
     runs = [r.resolve() for r in args.run_dir]

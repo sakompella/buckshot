@@ -1,6 +1,6 @@
 # Net points
 
-How many round wins a seat's moves gave up per match, by the minimax player's reading ([regret.md](regret.md)), and how that compares with the Round Elo and with who actually won the rounds. A casual pass over the 3,536 finished matches with no DeepSeek seat of the 2026-11-04 run, one scoring run (the Rust `bounded-v1-f64-unpruned-39a1a62064e75de8`, depth 6, 20,000 nodes, sampled reload with 256 deals; [regret.md](regret.md#production-scoring)). The scripts write the tables below. The two plots are not committed: they go to `_work/wip/net-points/plots/` (`--plots`), and their data is the config table and the round-margin table.
+How many round wins a seat's moves gave up per match, by the minimax player's reading ([regret.md](regret.md)), and how that compares with the Round Elo and with who actually won the rounds. A casual pass over the 3,536 finished matches with no DeepSeek seat of the 2026-11-04 run, one scoring run (the Rust `bounded-v1-f64-unpruned-39a1a62064e75de8`, depth 6, 20,000 nodes, sampled reload with 256 deals; [regret.md](regret.md#production-scoring)). The scripts write the tables below. The two plots are not committed: `--plots DIR` writes them, and their data is the config table and the round-margin table.
 
 ## Definition
 
@@ -33,7 +33,7 @@ Not shown. An earlier version scaled a depth 8 resample to these configs. Its de
 
 ### What "max depth" would cost (earlier Bend player run)
 
-The round cannot be searched to its end: every search stops at the next reload, which deals random items, so "to the end of the round" means to the reload. With 3 or fewer shells left the depth 8 search with 200,000 nodes is stopped by the budget in at most 6% of shots and 24% of item moves, so most lines already end at the reload. A timed test of 120 decisions (20 for each of shells left 1 to 3, shot or item move, drawn from the depth 8 sample) ran to the reload with depth 16 and 2,000,000 nodes, static leaf, on hp:
+The round cannot be searched to its end: every search stops at the next reload, which deals random items, so "to the end of the round" means to the reload. With 3 or fewer shells left the depth 8 search with 200,000 nodes is stopped by the budget in at most 6% of shots and 24% of item moves, so most lines already end at the reload. A timed test of 120 decisions (20 for each of shells left 1 to 3, shot or item move, drawn from the depth 8 sample) ran to the reload with depth 16 and 2,000,000 nodes, static leaf:
 
 - Six searches stopped on the budget; the rest finished at depth 16 or earlier (mean 15.7).
 - The best move's label was the same as at depth 8 in all 120. The regret differed from depth 8 in 1 decision and from production in 3. Mean regret was 2.42 at depth 16, 2.42 at depth 8 and 2.31 at depth 6, which is noise at this size.

@@ -57,8 +57,7 @@ log so each plays once and is gone when the next step starts, and
 
 The Speed setting (Slow, Normal, Fast) scales every pause: Normal holds a load
 reveal 2.6 s, a shot 2.2 s and a round over 4.4 s, and Fast is about an eighth
-of that. ADR-0029 records why the table is 2D; a three.js version of the whole
-scene is kept unmerged on branch `web/game-3d` as a reference.
+of that. ADR-0029 records why the table is 2D.
 
 Fonts are self-hosted from `@fontsource`: League Gothic (banners) and VT323
 (everything else), both under the SIL Open Font License 1.1. Every drawing is

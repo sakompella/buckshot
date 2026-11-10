@@ -3,6 +3,7 @@ name = "branch-map"
 version = "0.1.0"
 description = "Generates the rules crate's Bend branch ids from the Bend sources and checks every Rust rules arm against them."
 edition.workspace = true
+license.workspace = true
 publish.workspace = true
 
 [dependencies]
