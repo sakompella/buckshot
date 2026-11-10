@@ -24,7 +24,6 @@ luck markers of that file (docs/arena/analysis/matchups.md).
 import argparse
 import bisect
 import json
-import re
 import sqlite3
 from collections import Counter, defaultdict
 from dataclasses import dataclass
@@ -33,9 +32,8 @@ from pathlib import Path
 import bt
 import numpy as np
 import pandas as pd
-from by_round import public_lines, round_winners
 from fmt import table
-from load import DB, SKIPPED_MODEL, connect, require_current, round_one_starters
+from load import DB, connect, require_current, round_one_starters, round_winners
 from regret import DERIVED
 from scipy import stats
 from sklearn.ensemble import HistGradientBoostingClassifier
@@ -46,13 +44,15 @@ from docs import splice_between_markers
 # The two-seat deck, table.deck(TwoSeats) in sim/bend-mp: (live, blank) per load.
 DECK = ((1, 2), (2, 1), (2, 2), (3, 2), (1, 1), (2, 3), (3, 3), (3, 1), (4, 2))
 FOLDS = 5
-SHOT = re.compile(r"^Player \w+ shot (?:themselves|Player \w+): (live|blank)")
 DRAWS = 200
 
 
-def shot_outcomes(lines: list[str]) -> list[bool]:
-    """Whether each shot of a match's public log was live, in order."""
-    return [m[1] == "live" for line in lines if (m := SHOT.match(line))]
+def shot_outcomes(db: sqlite3.Connection) -> dict[str, list[bool]]:
+    """Match id to whether each of its shots was live, in order."""
+    outcomes = defaultdict(list)
+    for match, shell in db.execute("SELECT match_id, json_extract(json, '$.shell') FROM events WHERE kind = 'Fired' ORDER BY match_id, idx"):
+        outcomes[match].append(shell == "Live")
+    return outcomes
 
 
 def deck_chances(loads: list[tuple[int, int]]) -> list[dict[tuple[int, int], float]]:
@@ -88,20 +88,20 @@ class Data:
 
 def read(db_path: str, knowledge_path: str) -> Data:
     db, kn = connect(db_path), connect(knowledge_path)
-    starters, lines = round_one_starters(db), public_lines(db)
+    starters, winners = round_one_starters(db), round_winners(db)
     seats = defaultdict(list)
     for row in db.execute(
-        """SELECT s.match_id, s.player, s.cash, e.name, e.model FROM match_seats s JOIN entrants e ON e.id = s.entrant_id
-           JOIN matches m ON m.id = s.match_id WHERE m.status = 'completed' ORDER BY s.match_id, s.position"""
+        """SELECT s.match_id, s.player, e.name FROM match_seats s JOIN entrants e ON e.id = s.entrant_id
+           JOIN matches m ON m.id = s.match_id WHERE m.status = 'completed' AND m.disposition IS NULL ORDER BY s.match_id, s.position"""
     ):
         seats[row[0]].append(row[1:])
     rows, rounds = [], []
-    for match, seed, block in db.execute("SELECT id, seed, seed_block_id FROM matches WHERE status = 'completed' ORDER BY id"):
+    for match, seed, block in db.execute("SELECT id, seed, seed_block_id FROM matches WHERE status = 'completed' AND disposition IS NULL ORDER BY id"):
         s = seats[match]
-        if len(s) != 2 or any(SKIPPED_MODEL in (model or "") for *_, model in s):
+        if len(s) != 2:
             continue
-        (la, ca, a, _), (lb, cb, b, _) = s
-        won = round_winners(match, lines.get(match, []), {la: ca, lb: cb})
+        (la, a), (lb, b) = s
+        won = winners[match]
         mi = len(rows)
         rows.append((mi, match, seed, block, a, b, la, lb, 1 if starters[match] == la else 2))
         rounds += [(mi, n - 1, 1.0 if w == la else 0.0) for n, w in sorted(won.items())]
@@ -113,15 +113,14 @@ def read(db_path: str, knowledge_path: str) -> Data:
         kn,
     )
     dec = dec[dec.match_id.isin(ids)].sort_values(["match_id", "ordinal"]).reset_index(drop=True)
-    labels = pd.DataFrame(db.execute("SELECT match_id, ordinal, label FROM decisions").fetchall(), columns=["match_id", "ordinal", "label"])
-    labels = labels[labels.match_id.isin(ids)].sort_values(["match_id", "ordinal"])
-    labels["c"] = (labels.label.str.startswith("Shoot") | labels.label.str.startswith("Steal beer") | (labels.label == "Use beer")).astype(int)
-    consumed = {m: dict(zip(g.ordinal, np.concatenate([[0], np.cumsum(g.c.values)[:-1]]))) for m, g in labels.groupby("match_id")}
+    spends = (dec.shot.notna() | (dec.item == "Beer")).astype(int)  # a shot, or beer used or stolen, spends a shell
+    consumed = {m: dict(zip(g.ordinal, np.concatenate([[0], np.cumsum(spends[g.index].values)[:-1]]))) for m, g in dec.groupby("match_id")}
     inverters = defaultdict(list)
-    for t in labels[labels.label.str.contains("inverter")].itertuples():
+    for t in dec[dec.item == "Inverter"].itertuples():
         inverters[t.match_id].append(t.ordinal)
     clues = pd.read_sql("SELECT match_id, ordinal, player, position, shell FROM clues", kn)
-    outcomes = {m: shot_outcomes(lines.get(m, [])) for m in ids}
+    shots = shot_outcomes(db)
+    outcomes = {m: shots[m] for m in ids}
     return Data(matches, rounds=pd.DataFrame(rounds, columns=["mi", "r", "O"]), dec=dec, consumed=consumed, inverters=inverters, clues=clues, outcomes=outcomes)
 
 
@@ -134,8 +133,7 @@ def shots_of(d: Data) -> pd.DataFrame:
     live = []
     for m, g in sh.groupby("match_id", sort=False):
         seen = d.outcomes[m]
-        # The last shot of a match ends it, so no log shows it; it was live.
-        live += (seen + [True] * (len(g) - len(seen)))[: len(g)] if len(seen) >= len(g) - 1 else [np.nan] * len(g)
+        live += seen if len(seen) == len(g) else [np.nan] * len(g)
     sh["live"] = live
     sh["mi"] = sh.match_id.map(mi_of)
     sh["O1"] = [O.get((a, b), np.nan) for a, b in zip(sh.mi, sh["round"])]

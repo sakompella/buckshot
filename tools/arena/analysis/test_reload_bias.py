@@ -1,12 +1,12 @@
 """Tests for the reload-bias sample and summary: python3 -m unittest discover -s tools/arena/analysis"""
 
 import json
-import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
 
 import reload_bias as rb
+from testdb import KNOWLEDGE, REGRET, database, insert
 
 
 def decision(index, shells_left=2, shot=True, model="m", depth=6):
@@ -72,19 +72,17 @@ class Estimate(unittest.TestCase):
 
 
 def write_runs(directory: Path, static_rows, sampled_rows):
-    """Writes the three databases the summary reads, with only the columns it uses."""
-    knowledge = sqlite3.connect(directory / "knowledge.sqlite")
-    knowledge.executescript(
-        """CREATE TABLE players (match_id TEXT, player TEXT, model TEXT);
-           CREATE TABLE decisions (match_id TEXT, ordinal INTEGER, player TEXT, by_whom TEXT, choice TEXT, remaining INTEGER);
-           INSERT INTO players VALUES ('m1', 'A', 'opus');
-           INSERT INTO decisions VALUES ('m1', 0, 'A', 'agent', 'Shoot player +1', 2), ('m1', 1, 'A', 'agent', 'Use beer', 3)"""
-    )
+    """Writes the three databases the summary reads, from their real DDL."""
+    knowledge = database(directory / "knowledge.sqlite", KNOWLEDGE)
+    insert(knowledge, "players", match_id="m1", player="A", model="opus")
+    insert(knowledge, "decisions", match_id="m1", ordinal=0, player="A", by_whom="agent", shot="opponent", remaining=2)
+    insert(knowledge, "decisions", match_id="m1", ordinal=1, player="A", by_whom="agent", shot=None, remaining=3)
     knowledge.commit()
     for name, rows in (("regret.sqlite", static_rows), ("reload-bias.sqlite", sampled_rows)):
-        db = sqlite3.connect(directory / name)
-        db.execute("CREATE TABLE regret (match_id TEXT, ordinal INTEGER, max_depth INTEGER, budget INTEGER, reload TEXT, samples INTEGER, status TEXT, values_json TEXT, best TEXT, regret INTEGER, nodes INTEGER, depth INTEGER)")
-        db.executemany("INSERT INTO regret VALUES (?, ?, 6, 20000, ?, ?, 'searched', ?, ?, ?, ?, ?)", rows)
+        db = database(directory / name, REGRET)
+        for match_id, ordinal, reload, samples, values_json, best, regret, nodes, depth in rows:
+            insert(db, "regret", match_id=match_id, ordinal=ordinal, max_depth=6, budget=20000, reload=reload, samples=samples, status="searched",
+                   values_json=values_json, best=best, regret=regret, nodes=nodes, depth=depth)
         db.commit()
     return directory / "reload-bias.sqlite", directory / "regret.sqlite", directory / "knowledge.sqlite"
 

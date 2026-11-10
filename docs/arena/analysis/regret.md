@@ -322,7 +322,7 @@ The budget still stops 29.9% of the depth 8 searches, against 40.2% at depth 6.
 
 ## By round
 
-Does a model play the short early rounds differently from the later, item-heavy ones? This is a casual pass, with counts in brackets and no intervals, over the same 3,536 finished matches with no DeepSeek seat. The last subsection follows each seat within its own match, with intervals. It was not regenerated for tournaments 7, 8 and 9 and covers 2,722 matches. Round winners come from the public lines of the match events, as the viewer reads them; the last round's winner is inferred from final cash when its line is missing. Rounds are numbered from 1. A win rate is the share of its rounds a config won, against whoever it met, so it also reflects the opponents' strength.
+Does a model play the short early rounds differently from the later, item-heavy ones? This is a casual pass, with counts in brackets and no intervals, over the same 3,536 finished matches with no DeepSeek seat. The last subsection follows each seat within its own match, with intervals. It was not regenerated for tournaments 7, 8 and 9 and covers 2,722 matches. Round winners come from the replayed match events. Rounds are numbered from 1. A win rate is the share of its rounds a config won, against whoever it met, so it also reflects the opponents' strength.
 
 1. **No config's win rate clearly changes by round.**
    - Pooled over efforts, a model's win rate moves by 4 points or less between rounds for all nine models. Astra goes from 59.3% to 61.5% and 60.1% over 494, and Haiku 4.5, the largest mover, from 41.3% to 37.7% and 39.2% over 892.

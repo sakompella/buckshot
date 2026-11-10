@@ -93,7 +93,7 @@ def pairs(deep_path: Path, regret_path: Path, knowledge_path: Path) -> list[Pair
     db.execute("ATTACH DATABASE ? AS k", (f"file:{knowledge_path}?mode=ro",))
     deep_rows = db.execute("SELECT COUNT(*) FROM regret WHERE max_depth = ? AND budget = ? AND reload = 'static'", (DEEP_DEPTH, DEEP_BUDGET)).fetchone()[0]
     rows = db.execute(
-        """SELECT t.match_id, t.ordinal, d.remaining, d.choice, p.model, s.regret, t.regret, s.depth, t.depth, s.limited, t.limited, s.best, t.best, t.best_score, t.values_json, s.evaluator, t.evaluator
+        """SELECT t.match_id, t.ordinal, d.remaining, d.shot IS NOT NULL, p.model, s.regret, t.regret, s.depth, t.depth, s.limited, t.limited, s.best, t.best, t.best_score, t.values_json, s.evaluator, t.evaluator
            FROM regret t
            JOIN s.regret s ON s.match_id = t.match_id AND s.ordinal = t.ordinal AND s.max_depth = ? AND s.budget = ? AND s.reload = 'static' AND s.status = 'searched'
            JOIN k.decisions d ON d.match_id = t.match_id AND d.ordinal = t.ordinal AND d.by_whom = 'agent'
@@ -113,8 +113,8 @@ def pairs(deep_path: Path, regret_path: Path, knowledge_path: Path) -> list[Pair
     if any(production != deep for production, deep in evaluators):
         raise ValueError(f"deep rows ({deep_path}) and production rows ({regret_path}) come from different evaluators; (production, deep): number of decisions = {dict(evaluators)}")
     return [
-        Pair(match_id, ordinal, remaining, choice.startswith("Shoot"), model, regret / POINT, deep_regret / POINT, depth, deep_depth, bool(limited), bool(deep_limited), best != deep_best, loses(values, best, deep_score))
-        for match_id, ordinal, remaining, choice, model, regret, deep_regret, depth, deep_depth, limited, deep_limited, best, deep_best, deep_score, values, _, _ in rows
+        Pair(match_id, ordinal, remaining, bool(shot), model, regret / POINT, deep_regret / POINT, depth, deep_depth, bool(limited), bool(deep_limited), best != deep_best, loses(values, best, deep_score))
+        for match_id, ordinal, remaining, shot, model, regret, deep_regret, depth, deep_depth, limited, deep_limited, best, deep_best, deep_score, values, _, _ in rows
     ]
 
 

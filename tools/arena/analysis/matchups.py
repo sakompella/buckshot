@@ -21,7 +21,7 @@ import seats
 import tournament3
 from docs import splice_between_markers
 from fmt import frac, pct, pp, signed, span, table
-from load import DB, SKIPPED_MODEL, Game, blocks_of, cohorts, connect, scored_games, require_current
+from load import DB, Game, blocks_of, cohorts, connect, scored_games, require_current
 
 def kind_of(model_a: str, model_b: str) -> str:
     """Pairs and seats are compared only inside one kind of comparison pooled over every tournament: all matches between different models, or all of one model's matches against itself."""
@@ -37,8 +37,7 @@ def coverage(db, by_cohort: dict[str, list[Game]]) -> str:
            FROM matches m
            JOIN match_seats sa ON sa.match_id = m.id AND sa.position = 1 JOIN entrants a ON a.id = sa.entrant_id
            JOIN match_seats sb ON sb.match_id = m.id AND sb.position = 2 JOIN entrants b ON b.id = sb.entrant_id
-           WHERE a.model NOT LIKE ? AND b.model NOT LIKE ?""",
-        (f"%{SKIPPED_MODEL}%", f"%{SKIPPED_MODEL}%"),
+           WHERE m.disposition IS NOT 'excluded'"""
     ):
         cohort = kind_of(*seat)
         label = status if disposition is None else f"{status} ({disposition})"

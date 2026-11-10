@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 import matched_efforts as me
 from matched_efforts import Config, Seat
-from test_by_round import A1, A3, B2, event, lines
+from testdb import ANALYSIS, database, events, insert, rounds
 
 HIGH, MED = Config("opus", "high", "proxy"), Config("opus", "medium", "proxy")
 EASY, HARD = Config("sol", "medium", "proxy"), Config("astra", "medium", "proxy")
@@ -28,23 +28,16 @@ def only_row(seats: list[Seat], metric=me.round_metric) -> me.Row:
     return row
 
 
-def database(*matches: tuple[str, str, str]) -> sqlite3.Connection:
-    """Matches as (id, started_at, model of the second seat); the first seat is always opus."""
-    db = sqlite3.connect(":memory:")
-    db.executescript(
-        """CREATE TABLE source_files (path TEXT, match_id TEXT);
-           CREATE TABLE source_records (path TEXT, raw TEXT, current INTEGER);
-           CREATE TABLE matches (id TEXT, started_at TEXT, seed INTEGER, status TEXT);
-           CREATE TABLE entrants (id TEXT, model TEXT, effort TEXT, endpoint_category TEXT);
-           CREATE TABLE match_seats (match_id TEXT, position INTEGER, player TEXT, win_share REAL, cash REAL, entrant_id TEXT)"""
-    )
-    models = {"opus", "sol", "oc/deepseek-v4.1-flash-free"}
-    db.executemany("INSERT INTO entrants VALUES (?, ?, 'medium', 'proxy')", [(m, m) for m in models])
-    for match, started, other in matches:
-        db.execute("INSERT INTO matches VALUES (?, ?, 1, 'completed')", (match, started))
-        db.executemany("INSERT INTO match_seats VALUES (?, ?, ?, ?, ?, ?)", [(match, 1, "A", 1.0, 150_000, "opus"), (match, 2, "B", 0.0, 75_000, other)])
-        db.execute("INSERT INTO source_files VALUES (?, ?)", (f"t/{match}/events.jsonl", match))
-        db.execute("INSERT INTO source_records VALUES (?, ?, 1)", (f"t/{match}/events.jsonl", event("A", 0, lines(A1, B2, A3))))
+def matches_db(*matches: tuple) -> sqlite3.Connection:
+    """Matches as (id, started_at, model of the second seat[, disposition]); the first seat is always opus."""
+    db = database(":memory:", ANALYSIS)
+    for model in ("opus", "sol", "oc/deepseek-v4.1-flash-free"):
+        insert(db, "entrants", id=model, name=model, model=model, effort="medium", endpoint_category="proxy")
+    for match, started, other, *disposition in matches:
+        insert(db, "matches", id=match, name=match, started_at=started, seed=1, status="completed", disposition=(disposition or [None])[0])
+        for position, (player, share, cash, entrant) in enumerate((("A", 1.0, 150_000, "opus"), ("B", 0.0, 75_000, other)), 1):
+            insert(db, "match_seats", match_id=match, position=position, player=player, win_share=share, cash=cash, entrant_id=entrant, socket=position - 1)
+        events(db, match, *rounds(0, 1, 0))
     return db
 
 
@@ -173,7 +166,7 @@ class Time(unittest.TestCase):
         self.assertEqual([s.match for s in me.since(seats, CUT)], ["m1", "m2"])
 
     def test_loading_reads_stored_milliseconds_as_instants(self):
-        db = database(("early", "2026-10-16T14:48:43.999Z", "sol"), ("equal", "2026-10-16T14:48:44.000Z", "sol"))
+        db = matches_db(("early", "2026-10-16T14:48:43.999Z", "sol"), ("equal", "2026-10-16T14:48:44.000Z", "sol"))
         seats, _ = me.load_seats(db)
         db.close()
         self.assertEqual({s.match for s in me.since(seats, CUT)}, {"equal"})
@@ -196,8 +189,8 @@ class Unscored(unittest.TestCase):
 
 
 class Loading(unittest.TestCase):
-    def test_deepseek_matches_are_left_out_and_counted(self):
-        db = database(("m1", "2026-10-20T00:00:00.000Z", "sol"), ("m2", "2026-10-20T00:00:00.000Z", "oc/deepseek-v4.1-flash-free"))
+    def test_excluded_matches_are_left_out_and_counted(self):
+        db = matches_db(("m1", "2026-10-20T00:00:00.000Z", "sol"), ("m2", "2026-10-20T00:00:00.000Z", "oc/deepseek-v4.1-flash-free", "excluded"))
         seats, skipped = me.load_seats(db)
         db.close()
         self.assertEqual((skipped, len(seats)), (1, 2))

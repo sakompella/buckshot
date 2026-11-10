@@ -10,8 +10,8 @@ A proven blank with a proven live next and a jammed opponent hides the opponent'
 blank is the fact pattern "proven blank, gave the turn away". Keeping the move is not proven better there, so it never enters a
 certain-mistake rate. Its decisions are split by what the depth-limited search of the regret database scored.
 
-"Proves" is the knowledge database (web/scripts/arena-knowledge.ts): the Bend belief over the player's own log. Matches with a DeepSeek
-seat, unfinished matches and fallback moves are left out. With --doc FILE the tables replace the text between the tables markers of that file.
+"Proves" is the knowledge database (web/scripts/arena-knowledge.ts): the Bend belief over the player's own log. Excluded
+matches (a DeepSeek seat), unfinished matches and fallback moves are left out. With --doc FILE the tables replace the text between the tables markers of that file.
 
     python3 tools/arena/analysis/certain_mistakes.py [--knowledge PATH] [--regret PATH] [--doc docs/arena/analysis/certain-mistakes.md] [--opportunities PATH]
 """
@@ -28,7 +28,7 @@ from pathlib import Path
 from docs import splice_between_markers
 from boot import interval, weights
 from fmt import pct, table
-from load import SKIPPED_MODEL, connect
+from load import connect
 from regret import DERIVED, EFFORTS, PRODUCTION, run_of
 from rules import WIN
 
@@ -125,13 +125,11 @@ def load(knowledge_path: Path, regret_path: Path) -> list[Decision]:
         """SELECT d.match_id, d.ordinal, d.player, p.model, p.effort, m.seed_block_id, d.chamber, d.source, d.shot, d.health_json, d.private_known,
                   d.own_items_json, d.opponent_items_json, d.remaining, g.values_json
            FROM decisions d
-           JOIN matches m ON m.match_id = d.match_id AND m.status = 'completed'
+           JOIN matches m ON m.match_id = d.match_id AND m.status = 'completed' AND m.disposition IS NULL
            JOIN players p ON p.match_id = d.match_id AND p.player = d.player
            LEFT JOIN r.regret g ON g.match_id = d.match_id AND g.ordinal = d.ordinal AND g.status = 'searched'
            WHERE d.by_whom = 'agent' AND d.chamber IS NOT NULL
-             AND d.match_id NOT IN (SELECT match_id FROM players WHERE model LIKE ?)
            ORDER BY d.match_id, d.ordinal""",
-        (f"%{SKIPPED_MODEL}%",),
     ).fetchall()
     db.close()
     return [decision(*row) for row in rows]
@@ -203,14 +201,15 @@ def rate_rows(decisions: list[Decision]) -> list[tuple]:
     return rows
 
 
+CREATE_OPPORTUNITIES = """CREATE TABLE opportunities (match_id TEXT NOT NULL, ordinal INTEGER NOT NULL, player TEXT NOT NULL, type TEXT NOT NULL,
+                                           outcome TEXT NOT NULL, source TEXT NOT NULL, PRIMARY KEY (match_id, ordinal)) WITHOUT ROWID"""
+
+
 def write_opportunities(decisions: list[Decision], path: Path) -> None:
     path.unlink(missing_ok=True)
     db = sqlite3.connect(path)
     with db:
-        db.execute(
-            """CREATE TABLE opportunities (match_id TEXT NOT NULL, ordinal INTEGER NOT NULL, player TEXT NOT NULL, type TEXT NOT NULL,
-                                           outcome TEXT NOT NULL, source TEXT NOT NULL, PRIMARY KEY (match_id, ordinal)) WITHOUT ROWID"""
-        )
+        db.execute(CREATE_OPPORTUNITIES)
         db.executemany(
             "INSERT INTO opportunities VALUES (?, ?, ?, ?, ?, ?)",
             [(d.match, d.ordinal, d.player, d.pattern.name.lower(), outcome_of(d).value, d.source) for d in decisions],
