@@ -128,6 +128,15 @@ impl Deck {
         }
     }
 
+    /// The deck without batch `id`.
+    #[must_use]
+    pub const fn without(self, id: u32) -> Self {
+        Self {
+            ids: self.ids & !bit(id),
+            ..self
+        }
+    }
+
     #[must_use]
     pub const fn len(self) -> u32 {
         self.ids.count_ones()
