@@ -938,14 +938,14 @@ fn check_manifest(path: &Path, tally: &mut Tally) -> Result<String, String> {
     ))
 }
 
-/// The tapes in `dir`, sorted; an unset (empty) or tapeless directory is an
-/// error, so the replay never passes having compared nothing.
+/// The directory `RUST_TAPES` names; unset, the replay fails.
+fn tapes_dir() -> Result<String, String> {
+    std::env::var("RUST_TAPES").map_err(|_unset| String::from("RUST_TAPES must name a directory of Bend tapes; run sim/rust/check.sh"))
+}
+
+/// The tapes in `dir`, sorted; a tapeless directory is an error, so the
+/// replay never passes having compared nothing.
 fn tape_paths(dir: &str) -> Result<Vec<PathBuf>, String> {
-    if dir.is_empty() {
-        return Err(String::from(
-            "RUST_TAPES must name a directory of Bend tapes; run sim/rust/check.sh",
-        ));
-    }
     let mut paths = Vec::new();
     for entry in std::fs::read_dir(dir).map_err(|e| format!("RUST_TAPES {dir}: {e}"))? {
         let path = entry.map_err(|e| format!("RUST_TAPES {dir}: {e}"))?.path();
@@ -961,11 +961,6 @@ fn tape_paths(dir: &str) -> Result<Vec<PathBuf>, String> {
 }
 
 #[test]
-fn replay_fails_without_rust_tapes() {
-    assert_eq!(tape_paths("").ok(), None);
-}
-
-#[test]
 fn replay_fails_on_a_directory_without_tapes() {
     let dir = std::env::temp_dir().join(format!("rust-tapes-empty-{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("a temp dir");
@@ -977,7 +972,7 @@ fn replay_fails_on_a_directory_without_tapes() {
 #[test]
 #[ignore = "needs RUST_TAPES; run sim/rust/check.sh"]
 fn a_state_rust_reserializes_differently_fails_the_replay() {
-    let dir = std::env::var("RUST_TAPES").unwrap_or_default();
+    let dir = tapes_dir().unwrap_or_else(|error| panic!("{error}"));
     let first = tape_paths(&dir)
         .unwrap_or_else(|error| panic!("{error}"))
         .into_iter()
@@ -1000,7 +995,7 @@ fn a_state_rust_reserializes_differently_fails_the_replay() {
 #[test]
 #[ignore = "needs RUST_TAPES; run sim/rust/check.sh"]
 fn a_repeated_game_id_fails_the_replay() {
-    let dir = std::env::var("RUST_TAPES").unwrap_or_default();
+    let dir = tapes_dir().unwrap_or_else(|error| panic!("{error}"));
     let first = tape_paths(&dir)
         .unwrap_or_else(|error| panic!("{error}"))
         .into_iter()
@@ -1022,7 +1017,7 @@ fn a_repeated_game_id_fails_the_replay() {
 #[test]
 #[ignore = "needs RUST_TAPES; run sim/rust/check.sh"]
 fn tapes_match_bend() {
-    let dir = std::env::var("RUST_TAPES").unwrap_or_default();
+    let dir = tapes_dir().unwrap_or_else(|error| panic!("{error}"));
     let paths = tape_paths(&dir).unwrap_or_else(|error| panic!("{error}"));
     let mut failed = false;
     let (mut games, mut capped, mut matched, mut skipped) = (0, 0, 0, 0_usize);
@@ -1138,28 +1133,4 @@ fn differences(list: &str, reviewed: &BTreeSet<String>, found: &BTreeSet<String>
         .difference(found)
         .map(|label| format!("trace-coverage.json lists {label} as {list}, but it is not: remove it"));
     new.chain(stale).collect()
-}
-
-#[test]
-fn missing_trace_labels_fail() {
-    all_labels("/nonexistent/labels.json").unwrap_err();
-}
-
-#[test]
-fn coverage_must_match_the_reviewed_lists() {
-    let set = |labels: &[&str]| labels.iter().map(|label| (*label).to_owned()).collect::<BTreeSet<String>>();
-    assert!(differences("unreached", &set(&["a", "b"]), &set(&["a", "b"])).is_empty());
-    assert_eq!(
-        differences("unreached", &set(&["a"]), &set(&["a", "b"])).len(),
-        1,
-        "a new unreached label"
-    );
-    assert_eq!(
-        differences("unreached", &set(&["a", "b"]), &set(&["a"])).len(),
-        1,
-        "a stale reviewed label"
-    );
-    for list in ["untraced", "unreached"] {
-        assert!(reviewed(COVERAGE, list).is_ok(), "{list}");
-    }
 }

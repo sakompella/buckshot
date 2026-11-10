@@ -51,38 +51,13 @@ pub fn answer_into(config: &Config, state: &State, n: u32, notes: &mut Notes) ->
 /// the same answers as a plain per-world `token` would.
 #[cfg(test)]
 mod reuse {
-    use buckshot_rules::testing::{any_u32, between, count, flag, grabs, item, many, maybe, num, pick, ring, seat, slots, table, world};
-    use buckshot_rules::{
-        AmountRule, Config, EnumMap, HealthRule, IdleOption, Item, ItemRule, Jam, LoadRule, MenuInputs, Phase, Request, RoundRules,
-        SeatRecord, ShellRule, Slot, Slots, State, Table, World, request,
+    use buckshot_rules::testing::{
+        any_u32, between, count, flag, grabs, item, maybe, num, pick, ring, seat, slots, supported_config, world,
     };
+    use buckshot_rules::{IdleOption, Item, Jam, MenuInputs, Phase, Request, SeatRecord, Slot, Slots, State, Table, World, request};
     use hegel::TestCase;
-    use hegel::generators as gs;
 
     use super::{answer_reusing, token};
-
-    /// A config inside the supported domain: the plans `rust-tapes.mjs` plays.
-    fn supported_config(tc: &TestCase) -> Config {
-        let table = table(tc);
-        let load = |t: &TestCase| LoadRule {
-            shells: ShellRule::Fixed {
-                live: between(t, 0, 7),
-                blank: between(t, 1, 8),
-            },
-            items: AmountRule::Fixed(between(t, 0, 8)),
-        };
-        let rounds: Vec<RoundRules> = many(tc, 1, 3, |tc| RoundRules {
-            health: HealthRule::Fixed(between(tc, 1, 5)),
-            loads: std::array::from_fn(|_| load(tc)),
-            items: EnumMap::from_fn(|_| ItemRule {
-                enabled: tc.draw_silent(gs::weighted_booleans(0.75)),
-                per_player: between(tc, 1, 8),
-                on_table: 32,
-            }),
-        });
-        tc.note(&format!("{table:?} {rounds:?}"));
-        Config::new(table, &rounds).unwrap_or_else(|error| panic!("a supported plan is valid: {error}"))
-    }
 
     /// A seat with every slot filled: Adrenaline, a Jammer and a Beer ahead of
     /// the rest, so a table of them keeps a thief stocked for steals and jams.

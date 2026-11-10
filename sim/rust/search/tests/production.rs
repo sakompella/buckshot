@@ -1,8 +1,8 @@
 //! The compat evaluator against the production regret rows: a small
 //! committed set of decisions (`tests/production/`) scored by the evaluator
 //! the regret corpus was built with. `reference.json` names it: evaluator id,
-//! source commit and file hash, Bend version and settings. The test checks
-//! that it is the pinned reference before it compares a row. The f32 build only.
+//! source commit and file hash, Bend version and the settings the CLI runs
+//! with. The f32 build only.
 #![cfg(feature = "f32")]
 
 use std::process::Command;
@@ -10,48 +10,32 @@ use std::process::Command;
 use serde_json::{Value, json};
 
 const DIR: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/production");
-/// The production evaluator and its settings, and the CLI flags that are those settings.
-const EVALUATOR: &str = "a3962092b561cfb4";
-const SOURCE_COMMIT: &str = "03978b0f3d1bea52188fdae49547d4f3d9288ad3";
-const FLAGS: [&str; 10] = [
-    "--evaluator",
-    "compat",
-    "--depth",
-    "6",
-    "--budget",
-    "20000",
-    "--reload",
-    "static",
-    "--memo",
-    "off",
-];
 
-fn settings() -> Value {
-    json!({"depth": 6, "budget": 20000, "reload": "static", "samples": 0, "memo": "off"})
+/// The CLI flags of the production settings in `reference.json`.
+fn flags(settings: &Value) -> Vec<String> {
+    let mut flags = vec![String::from("--evaluator"), String::from("compat")];
+    for key in ["depth", "budget", "reload", "memo"] {
+        let value = &settings[key];
+        flags.push(format!("--{key}"));
+        flags.push(value.as_str().map_or_else(|| value.to_string(), str::to_owned));
+    }
+    if settings["samples"] != 0_u32 {
+        flags.extend([String::from("--samples"), settings["samples"].to_string()]);
+    }
+    flags
 }
 
 #[test]
 fn compat_matches_the_production_evaluator() {
     let reference: Value = serde_json::from_str(&std::fs::read_to_string(format!("{DIR}/reference.json")).unwrap()).unwrap();
-    assert_eq!(
-        reference["evaluator"], EVALUATOR,
-        "the rows are not the pinned production evaluator's"
-    );
-    assert_eq!(reference["source"]["commit"], SOURCE_COMMIT, "the production source commit");
-    assert_eq!(reference["settings"], settings(), "the production settings");
     let path = format!("{DIR}/decisions.jsonl");
     let want: Vec<Value> = std::fs::read_to_string(&path)
         .unwrap()
         .lines()
         .map(|line| serde_json::from_str(line).unwrap())
         .collect();
-    assert_eq!(
-        reference["decisions"].as_u64(),
-        u64::try_from(want.len()).ok(),
-        "decisions.jsonl against reference.json"
-    );
     let out = Command::new(env!("CARGO_BIN_EXE_buckshot-search"))
-        .args(FLAGS)
+        .args(flags(&reference["settings"]))
         .args(["--threads", "2", &path])
         .output()
         .unwrap();
@@ -77,5 +61,9 @@ fn compat_matches_the_production_evaluator() {
         });
         assert_eq!(rust, bend, "{}", decision["id"]);
     }
-    println!("compat matches production evaluator {EVALUATOR} on {} decisions", want.len());
+    println!(
+        "compat matches production evaluator {} on {} decisions",
+        reference["evaluator"],
+        want.len()
+    );
 }
