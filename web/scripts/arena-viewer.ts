@@ -36,8 +36,11 @@ const program = Effect.gen(function* () {
 
   const listenPort = yield* Schema.decodeUnknownEffect(Port)(port).pipe(Effect.mapError(usage));
 
+  // ARENA_VIEWER_PASSWORD guards the API; ARENA_VIEWER_DOWNLOAD names the database file the page offers. Blank is unset.
+  const access = { password: process.env["ARENA_VIEWER_PASSWORD"] || undefined, download: process.env["ARENA_VIEWER_DOWNLOAD"] || undefined };
+
   const server = yield* Effect.acquireRelease(
-    Effect.try({ try: () => serveArenaViewer(dbPath, siteDir, host, listenPort, { regret: regretPath, knowledge: knowledgePath, certain: certainPath, luck: luckPath }), catch: (cause) => new ScriptError({ message: `cannot serve: ${String(cause)}`, exitCode: 1 }) }),
+    Effect.try({ try: () => serveArenaViewer(dbPath, siteDir, host, listenPort, { regret: regretPath, knowledge: knowledgePath, certain: certainPath, luck: luckPath }, access), catch: (cause) => new ScriptError({ message: `cannot serve: ${String(cause)}`, exitCode: 1 }) }),
     (running) => Effect.promise(() => running.stop()),
   );
 

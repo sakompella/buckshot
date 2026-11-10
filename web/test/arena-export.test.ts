@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
+import { afterAll, beforeAll, expect, test } from "bun:test";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,7 +16,6 @@ const root = mkdtempSync(join(tmpdir(), "buckshot-export-"));
 
 const database = join(root, "analysis.sqlite");
 
-setDefaultTimeout(60_000);
 
 /** Text the database holds per call or match, planted so the export can be shown to leave it behind. */
 const POISON = {
@@ -59,7 +58,7 @@ beforeAll(async () => {
 
   writeFileSync(join(source, "tournament.json"), JSON.stringify({ format: 1, created_at: "2026-01-01T00:00:00Z", git_commit: "test", config, schedule }));
   importTournaments({ database, sources: [source] });
-}, 60_000);
+});
 
 afterAll(() => rmSync(root, { recursive: true, force: true }));
 

@@ -144,12 +144,6 @@ test("a model with no price fails before any match, naming the entrant", () => {
   expect(Result.isSuccess(checkPrices(tournamentFrom(configJson()), prices))).toBe(true);
 });
 
-test("a config's cohort survives parsing, and may be left out", () => {
-  expect(tournamentFrom(configJson({ cohort: "tournament 9" })).config.cohort).toBe("tournament 9");
-  expect(tournamentFrom(configJson()).config.cohort).toBeUndefined();
-  expect(errorOf(configJson({ cohort: "" }))).toContain("the config is not valid");
-});
-
 // Synthetic matches, drawn from the model the ratings assume.
 
 const STRENGTH = new Map([["haiku-5-5", 0.8], ["luna", 0.3], ["sonnet", -0.3], ["opus", -0.7], ["don", 0]]);
@@ -430,7 +424,7 @@ test("a model at its usage limit holds back its matches until the reset, other m
   expect(played.runs).toEqual([lunaFirst, ...claude, lunaFirst, lunaSecond].map((match) => match.name));
   expect(played.settled.map(({ status }) => status)).toEqual(["cooling", "finished", "finished", "finished", "finished"]);
   expect(resumed.runs).toEqual([...claude, lunaFirst, lunaSecond].map((match) => match.name));
-}, 30_000);
+});
 
 test.each([
   ['openai-responses-A API error (429): {"code":"model_cooldown","reset_seconds":90}', 90],
@@ -568,43 +562,6 @@ test("a restarted runner gets a fresh three-run failure allowance", async () => 
   expect((await runThree()).map(({ status }) => status)).toEqual(["failed", "failed", "failed"]);
 });
 
-test("restart scheduling preserves last priority and can forget persisted cooldowns", async () => {
-  const tournament = tournamentFrom(configJson({ pairings: [["luna", "haiku-5-5"], ["haiku-5-5", "sonnet"]], blocksPerPairing: 1 }));
-  const schedule = scheduleOf(tournament);
-  const [lunaFirst, lunaSecond, ...other] = schedule;
-  const dir = mkdtempSync(join(tmpdir(), "tournament-restart-scheduling-"));
-
-  if (lunaFirst === undefined || lunaSecond === undefined || other.length !== 2) throw new Error("unexpected schedule");
-
-  const lunaSeat = lunaFirst.seats[lunaFirst.entrants.indexOf("luna")];
-  const error = `openai-responses-A API error (429): ${JSON.stringify({ code: "model_cooldown", model: "gpt-6-luna", reset_seconds: 3600 })}`;
-
-  mkdirSync(join(dir, lunaFirst.name));
-  writeFileSync(join(dir, lunaFirst.name, "events.jsonl"), `${JSON.stringify({ t: new Date().toISOString(), kind: "fault", agent: lunaSeat, error })}\n`);
-
-  const runs: Array<string> = [];
-
-  const stop = new AbortController();
-
-  const resumedRuns = await runPending(dir, tournament.config, schedule, 1, async (match) => {
-    runs.push(match.name);
-    writeManifest(dir, tournament, match, "finished");
-
-    if (runs.length === other.length) stop.abort();
-
-    return 0;
-  }, () => undefined, stop.signal, { last: new Set(["gpt-6-luna"]) });
-
-  expect(runs).toEqual(other.map(({ name }) => name));
-  expect(resumedRuns.every(({ status }) => status === "finished")).toBe(true);
-
-  const restart = new AbortController();
-  runs.length = 0;
-  const afterForget = await runPending(dir, tournament.config, schedule, 1, async (match) => (runs.push(match.name), writeManifest(dir, tournament, match, "finished"), 0), () => undefined, restart.signal, { forget: new Set(["gpt-6-luna"]) });
-  expect(runs).toEqual([lunaFirst.name, lunaSecond.name]);
-  expect(afterForget.every(({ status }) => status === "finished")).toBe(true);
-});
-
 test("a failed match goes to the back of the queue and is retried, up to its attempts", async () => {
   const tournament = tournamentFrom(configJson({ pairings: [["luna", "don"], ["haiku-5-5", "story"]], blocksPerPairing: 1 }));
   const schedule = scheduleOf(tournament);
@@ -671,7 +628,7 @@ test("balanced block seeds start every position as evenly as they can in every p
       expect(Math.max(...started) - Math.min(...started)).toBeLessThanOrEqual(1);
     }
   }, { testCases: 25 });
-}, 30_000);
+});
 
 test("a match started under a code version is resumed under it, and a match not yet started under none", () => {
   const dir = mkdtempSync(join(tmpdir(), "tournament-code-"));

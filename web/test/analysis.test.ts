@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
+import { afterAll, beforeAll, expect, test } from "bun:test";
 import { appendFileSync, cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,10 +12,8 @@ import { playFauxRun } from "./faux-run.ts";
 
 const played = mkdtempSync(join(tmpdir(), "buckshot-analysis-faux-"));
 
-// Each test imports and replays a match, several times over in the longest.
-setDefaultTimeout(30_000);
 
-beforeAll(() => playFauxRun(played, ["Agent", "Agent"], "on-turn"), 30_000);
+beforeAll(() => playFauxRun(played, ["Agent", "Agent"], "on-turn"));
 
 afterAll(() => rmSync(played, { recursive: true, force: true }));
 

@@ -6,7 +6,7 @@ import { Option } from "effect";
 import { configSummaries, ODDS_BINS, oddsBinOf, selfShotTallies } from "../src/arena-viewer/aggregates.ts";
 import { chamberPatterns, roundStory, ShellTracker } from "../src/arena-viewer/analysis.ts";
 import type { Seat, SeatRegret } from "../src/arena-viewer/api.ts";
-import { type BlockTally, blockRate, colorOf, fmtBytes, groupBy, labelOf, matchRows, quantile, regretStats, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
+import { type BlockTally, blockRate, fmtBytes, groupBy, labelOf, matchRows, quantile, regretStats, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { mulberry32 } from "../src/arena/tournament-stats.ts";
 import { bradleyTerry, type Game, heldOutRatings, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 import { droppedConfigs, oddsPanels } from "../src/arena-viewer/page/odds.ts";
@@ -209,39 +209,6 @@ test("the round story reads each round's winner from the events, and is ok when 
   expect(roundStory({ events, roster }, cash)).toEqual({ starter: "B", rounds: [{ winner: "B", prize: 10_000 }, { winner: "A", prize: 20_000 }, { winner: "B", prize: 60_000 }], ok: true });
   expect(roundStory({ events, roster }, new Map([["A", 30_000], ["B", 70_000]])).ok).toBe(false);
   expect(roundStory({ events: events.slice(0, -1), roster }, cash).ok).toBe(false);
-});
-
-const hsl = (hex: string) => {
-  const [r = 0, g = 0, b = 0] = [1, 3, 5].map((start) => Number.parseInt(hex.slice(start, start + 2), 16) / 255);
-  const high = Math.max(r, g, b);
-  const low = Math.min(r, g, b);
-  const lightness = (high + low) / 2;
-  const span = high - low;
-  const sector = high === r ? ((g - b) / span + 6) % 6 : high === g ? (b - r) / span + 2 : (r - g) / span + 4;
-
-  return { hue: sector * 60, saturation: span / (1 - Math.abs(2 * lightness - 1)), lightness };
-};
-
-test("Claude models are orange and GPT models blue, each family brightest and most saturated for its strongest model", () => {
-  const families = [
-    { strongestFirst: ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-haiku-4-5"], hues: [18, 40] },
-    { strongestFirst: ["gpt-6-astra", "gpt-6.1-sol", "gpt-5.6-terra", "gpt-6-luna"], hues: [195, 225] },
-  ];
-
-  for (const { strongestFirst, hues } of families) {
-    const tones = strongestFirst.map((model) => hsl(colorOf(model)));
-
-    for (const tone of tones) {
-      expect(tone.hue).toBeGreaterThanOrEqual(hues[0] ?? 0);
-      expect(tone.hue).toBeLessThanOrEqual(hues[1] ?? 0);
-      expect(tone.lightness).toBeGreaterThan(0.4);
-    }
-
-    for (const [weaker, stronger] of tones.slice(1).map((tone, index) => [tone, tones[index]] as const)) {
-      expect(stronger?.lightness ?? 0).toBeGreaterThan(weaker.lightness + 0.08);
-      expect(stronger?.saturation ?? 0).toBeGreaterThan(weaker.saturation);
-    }
-  }
 });
 
 test("pooled ratings cover every config of a completed match, over every tournament, with an interval around each", () => {

@@ -129,7 +129,7 @@ test.each(["SIGTERM", "SIGKILL", "model:in-flight"])("a %s stop resumes without 
   const seqs = seqsOf(dir, ["move", "fallback"]);
 
   expect(seqs).toEqual(seqs.map((_, index) => index));
-}, 30_000);
+});
 
 test("resuming a finished match makes no model calls, moves or deliveries", async () => {
   const before = readManifest(baseline);
@@ -142,7 +142,7 @@ test("resuming a finished match makes no model calls, moves or deliveries", asyn
   expect(readFileSync(join(baseline, "calls.jsonl"), "utf8")).toBe(calls);
   expect(movesOf(eventsOf(baseline))).toEqual(moves);
   expect(seqsOf(baseline, ["delivered"])).toEqual(deliveries);
-}, 30_000);
+});
 
 test("a changed agent provenance is refused before more calls or moves", async () => {
   const dir = join(root, "provenance");
@@ -163,7 +163,7 @@ test("a changed agent provenance is refused before more calls or moves", async (
   expect(movesOf(eventsOf(dir))).toEqual(moves);
   expect(await play(dir, "none", 0)).toBe(0);
   expect(moveLogSha(dir)).toBe(moveLogSha(baseline));
-}, 30_000);
+});
 
 test("a journal started under another code_sha refuses to resume and names both versions", async () => {
   const dir = join(root, "old-code");
@@ -185,7 +185,7 @@ test("a journal started under another code_sha refuses to resume and names both 
   const error = await new Response(refused.stderr).text();
 
   expect(error).toContain(`code_sha was ${old}, now ${code}`);
-}, 30_000);
+});
 
 test("a truncated manifest is rebuilt from the journal after a stop", async () => {
   const dir = join(root, "manifest-write");
@@ -196,7 +196,7 @@ test("a truncated manifest is rebuilt from the journal after a stop", async () =
   expect(readManifest(dir).status).toBe("finished");
   expect(moveLogSha(dir)).toBe(moveLogSha(baseline));
   expect(exportedSha(dir)).toBe(moveLogSha(dir));
-}, 30_000);
+});
 
 test("a provider fault resumes the interrupted turn without losing or duplicating a delivery", async () => {
   const dir = join(root, "provider-fault");
@@ -207,4 +207,4 @@ test("a provider fault resumes the interrupted turn without losing or duplicatin
   expect(moveLogSha(dir)).toBe(moveLogSha(baseline));
   expect(exportedSha(dir)).toBe(moveLogSha(dir));
   expect(entriesSentTo(dir, "A")).toEqual(entriesSentTo(baseline, "A"));
-}, 30_000);
+});
