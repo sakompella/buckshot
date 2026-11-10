@@ -27,7 +27,7 @@ from rules import POINT
 DERIVED = Path(__file__).resolve().parents[3] / "_work/arena/analysis/derived"
 
 # The production regret file: the one run the site, the export and the doc tables read (docs/arena/analysis/regret.md, Production scoring).
-PRODUCTION = DERIVED / "regret-rust-0e62fbca-sampled256.sqlite"
+PRODUCTION = DERIVED / "regret-rust-39a1a620-sampled256.sqlite"
 
 EFFORTS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"]
 
