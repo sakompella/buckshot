@@ -74,9 +74,7 @@ class Estimate:
 
 def load_moves(regret_path: Path, knowledge_path: Path, mistakes_path: Path, db_path: str) -> list[Move]:
     run_of(regret_path)
-    db = connect(str(regret_path))
-    db.execute("ATTACH DATABASE ? AS k", (f"file:{knowledge_path}?mode=ro",))
-    db.execute("ATTACH DATABASE ? AS c", (f"file:{mistakes_path}?mode=ro",))
+    db = connect(str(regret_path), k=knowledge_path, c=mistakes_path)
     rows = db.execute(
         """SELECT r.match_id, r.ordinal, d.player, p.model, p.effort, m.seed_block_id, d.round + 1, d.remaining, d.shot IS NOT NULL, r.regret,
                   o.outcome = 'mistake'

@@ -8,7 +8,7 @@ import bt
 import cv
 import net_points
 import regret
-import selfplay
+import stats
 from load import Game
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
@@ -19,7 +19,6 @@ settings.load_profile("arena")
 finite = st.floats(-1e6, 1e6, allow_nan=False)
 nonempty = st.lists(finite, min_size=1, max_size=40)
 shares = st.floats(0, 1)
-rank_functions = [net_points.ranks, selfplay.ranks]
 
 
 class Percentiles(unittest.TestCase):
@@ -45,18 +44,17 @@ class Percentiles(unittest.TestCase):
 class Ranks(unittest.TestCase):
     @given(st.lists(st.integers(-20, 20), min_size=1, max_size=30))
     def test_order_the_values_and_total_the_first_n_integers(self, values):
-        for ranks in rank_functions:
-            out = ranks(values)
-            self.assertAlmostEqual(sum(out), len(values) * (len(values) + 1) / 2)
-            for i, x in enumerate(values):
-                for j, y in enumerate(values):
-                    self.assertEqual((x < y), (out[i] < out[j]))
+        out = stats.ranks(values)
+        self.assertAlmostEqual(sum(out), len(values) * (len(values) + 1) / 2)
+        for i, x in enumerate(values):
+            for j, y in enumerate(values):
+                self.assertEqual((x < y), (out[i] < out[j]))
 
     @given(st.lists(st.integers(-20, 20), min_size=2, max_size=30, unique=True), st.lists(st.integers(-20, 20), min_size=2, max_size=30, unique=True))
     def test_spearman_ignores_increasing_maps(self, xs, ys):
         n = min(len(xs), len(ys))
         xs, ys = xs[:n], ys[:n]
-        self.assertAlmostEqual(net_points.spearman(xs, ys), net_points.spearman([x**3 + 2 * x for x in xs], ys))
+        self.assertAlmostEqual(stats.spearman(xs, ys), stats.spearman([x**3 + 2 * x for x in xs], ys))
 
 
 class Regression(unittest.TestCase):

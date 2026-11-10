@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
+import { parseArgs } from "node:util";
 
 import { Option, Result } from "effect";
 
@@ -42,26 +43,29 @@ import { cooldownOf, costOf, faultsOf, finishedNames, openTournament, runPending
 
 const WEB = join(import.meta.dir, "..");
 
-const args = process.argv.slice(2);
+const { values, positionals: configPaths } = parseArgs({
+  args: process.argv.slice(2),
+  allowPositionals: true,
+  options: {
+    dir: { type: "string" },
+    parallel: { type: "string", default: "5" },
+    limit: { type: "string" },
+    first: { type: "string" },
+    cap: { type: "string", multiple: true, default: [] },
+    last: { type: "string", multiple: true, default: [] },
+    "forget-cooldown": { type: "string", multiple: true, default: [] },
+    skip: { type: "string", multiple: true, default: [] },
+    "prefer-account": { type: "string", multiple: true, default: [] },
+    code: { type: "string", multiple: true, default: [] },
+    "dry-run": { type: "boolean", default: false },
+  },
+});
 
-const flag = (name: string): string | undefined => {
-  const at = args.indexOf(`--${name}`);
+const parallel = Number(values.parallel);
 
-  return at === -1 ? undefined : args[at + 1];
-};
+const limit = values.limit === undefined ? undefined : Number(values.limit);
 
-const VALUED = new Set(["--dir", "--parallel", "--limit", "--cap", "--last", "--forget-cooldown", "--skip", "--prefer-account", "--code", "--first"]);
-
-const configPaths = args.filter((arg, index) => !arg.startsWith("--") && !VALUED.has(args[index - 1] ?? ""));
-
-const parallel = Number(flag("parallel") ?? "5");
-
-const limit = flag("limit") === undefined ? undefined : Number(flag("limit"));
-
-const first = flag("first") === undefined ? undefined : Number(flag("first"));
-
-/** The values of a flag given once per value, as --cap is. */
-const repeated = (name: string): ReadonlyArray<string> => args.flatMap((arg, index) => (arg === `--${name}` ? [args[index + 1] ?? ""] : []));
+const first = values.first === undefined ? undefined : Number(values.first);
 
 const exit = (message: string): never => {
   console.error(message);
@@ -80,26 +84,26 @@ if (limit !== undefined && (!Number.isInteger(limit) || limit < 1)) exit("--limi
 if (first !== undefined && (!Number.isInteger(first) || first < 1)) exit("--first must be a whole number from 1");
 
 const caps = new Map(
-  repeated("cap").map((cap) => {
+  values.cap.map((cap) => {
     const [, model = "", most = ""] = /^(.+)=([1-9]\d*)$/.exec(cap) ?? exit(`--cap takes <model>=<matches at once>, not "${cap}"`);
 
     return [model, Number(most)] as const;
   }),
 );
 
-const last = new Set(repeated("last"));
+const last = new Set(values.last);
 
-const forget = new Set(repeated("forget-cooldown"));
+const forget = new Set(values["forget-cooldown"]);
 
-const skipped = new Set(repeated("skip"));
+const skipped = new Set(values.skip);
 
-const prefer = repeated("prefer-account");
+const prefer = values["prefer-account"];
 
 const CODE = codeSha();
 
 /** Checkouts of older code versions, by code_sha, for the matches that started under them. */
 const checkouts = new Map(
-  repeated("code").map((entry) => {
+  values.code.map((entry) => {
     const [, code = "", web = ""] = /^([0-9a-f]+)=(.+)$/.exec(entry) ?? exit(`--code takes <code_sha>=<web dir>, not "${entry}"`);
 
     return [code, resolve(web)] as const;
@@ -120,7 +124,7 @@ const tournament = tournaments.at(-1) ?? exit("no config");
 
 const money = (dollars: number): string => `$${dollars.toFixed(4)}`;
 
-if (args.includes("--dry-run")) {
+if (values["dry-run"]) {
   const schedule = scheduleOf(tournament);
   const { name, delivery, blocksPerPairing } = tournament.config;
 
@@ -131,7 +135,7 @@ if (args.includes("--dry-run")) {
   process.exit(0);
 }
 
-const dir = resolve(flag("dir") ?? exit("--dir is required"));
+const dir = resolve(values.dir ?? exit("--dir is required"));
 
 const gitCommit = Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: WEB }).stdout.toString().trim();
 

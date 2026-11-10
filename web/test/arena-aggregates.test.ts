@@ -6,42 +6,7 @@ import { configSummaries, pairsOf } from "../src/arena-viewer/aggregates.ts";
 import type { Seat } from "../src/arena-viewer/api.ts";
 import { baseName, keyOf, sumOf, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { derive } from "../src/arena-viewer/page/derived.ts";
-
-const SEAT: Seat = {
-  tournament: "t",
-  matchId: "",
-  matchName: "",
-  status: "completed",
-  startedAt: "",
-  seed: 1,
-  seedBlock: "",
-  codeHash: "",
-  model: "",
-  effort: "medium",
-  player: "A",
-  position: 0,
-  winShare: 1,
-  cash: 0,
-  cost: 0,
-  inp: 0,
-  outp: 0,
-  cr: 0,
-  cw: 0,
-  rt: 0,
-  lat: 0,
-  rsHidden: 0,
-  rsText: 0,
-  multiTool: 0,
-  moves: 0,
-  acquired: [],
-  used: [],
-  stolen: [],
-  regret: null,
-  story: null,
-  round: 0,
-  roundThree: null,
-  deficits: [],
-};
+import { SEAT } from "./fixtures.ts";
 
 const MODELS = ["claude-opus-5-5", "gpt-6-luna", "claude-haiku-5-5"];
 

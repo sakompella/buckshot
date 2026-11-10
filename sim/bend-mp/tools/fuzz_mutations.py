@@ -11,24 +11,14 @@ import subprocess
 import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(HERE))
+
+from mutate import Edit, Mutation, apply  # noqa: E402
+
 FUZZ_TIMEOUT_SECONDS = 240
-
-
-@dataclass(frozen=True)
-class Edit:
-    old: str
-    new: str
-
-
-@dataclass(frozen=True)
-class Mutation:
-    name: str
-    path: str
-    edits: tuple[Edit, ...]
 
 
 MUTATIONS = (
@@ -115,17 +105,6 @@ MUTATIONS = (
         ),
     ),
 )
-
-
-def apply(source: str, mutation: Mutation) -> str:
-    for edit in mutation.edits:
-        occurrences = source.count(edit.old)
-        if occurrences != 1:
-            raise RuntimeError(
-                f"{mutation.name}: expected one anchor, found {occurrences}"
-            )
-        source = source.replace(edit.old, edit.new, 1)
-    return source
 
 
 def run_fuzz(mutation: Mutation, env: dict[str, str] | None = None) -> tuple[str, str]:

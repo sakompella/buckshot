@@ -2,6 +2,8 @@
 // Confidence intervals bootstrap over seeds: a seed fixes the deal of round 1,
 // so the matches played at one seed, in any pairing, are not independent.
 
+import { nextBelow, seedRng } from "../rng.ts";
+
 /** One player of a scored match. `share` is its part of the win: 1, or 1/k when k players tied on cash. */
 export interface Player {
   readonly entrant: string;
@@ -270,24 +272,23 @@ export const fitRatings = (matches: ReadonlyArray<PlayedMatch>, anchor: string |
 
 // Bootstrap
 
-/** A small seeded generator, so a rerun prints the same intervals. */
-const randomFrom = (seed: number): (() => number) => {
-  let state = seed >>> 0;
+/** Mulberry32 as a stream of draws in [0, 1), over rng.ts's generator, so a rerun prints the same intervals. */
+export const mulberry32 = (seed: number): (() => number) => {
+  let state = seedRng(seed);
 
   return () => {
-    state = (state + 0x6d2b79f5) >>> 0;
+    const [word, next] = nextBelow(state, 2 ** 32);
 
-    const mixed = Math.imul(state ^ (state >>> 15), state | 1);
-    const stirred = mixed ^ (mixed + Math.imul(mixed ^ (mixed >>> 7), mixed | 61));
+    state = next;
 
-    return ((stirred ^ (stirred >>> 14)) >>> 0) / 4_294_967_296;
+    return word / 2 ** 32;
   };
 };
 
 /** Resamples of the matches: seeds drawn with replacement, each with every match played at it, in any pairing. */
 export const resamples = (matches: ReadonlyArray<PlayedMatch>, count: number, seed: number): ReadonlyArray<ReadonlyArray<PlayedMatch>> => {
   const bySeed = [...groupBy(matches, (match) => match.seed).values()];
-  const random = randomFrom(seed);
+  const random = mulberry32(seed);
 
   return Array.from({ length: count }, () => Array.from({ length: bySeed.length }, () => bySeed[Math.floor(random() * bySeed.length)] ?? []).flat());
 };

@@ -1,4 +1,5 @@
-import { groupBy, keyOf, MIN_BLOCKS_FOR_INTERVAL, meanOf, quantile, rng, roundResults, type SeatFull, sumOf, unique } from "./data.ts";
+import { groupBy, keyOf, MIN_BLOCKS_FOR_INTERVAL, meanOf, quantile, roundResults, type SeatFull, sumOf, unique } from "./data.ts";
+import { mulberry32 } from "../../arena/tournament-stats.ts";
 
 // The ratings the whole page reads: Bradley-Terry over every scored two-player match of every tournament.
 
@@ -215,7 +216,7 @@ export const pooledRatings = (seats: ReadonlyArray<SeatFull>, luck: Luck = new M
   const numbered = numberGames(games);
   const point = fitGames(numbered, Int32Array.from(games.keys()));
   const blocks = [...groupBy(games.keys(), (index) => games[index]?.block).values()];
-  const random = rng(3);
+  const random = mulberry32(3);
   const draws = new Map<string, Array<number>>();
 
   for (let rep = 0; rep < BOOTSTRAP_REPS; rep++) {

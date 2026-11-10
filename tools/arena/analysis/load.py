@@ -30,8 +30,12 @@ class Game:
     first_shot: int  # the position of the first player to shoot in the match
 
 
-def connect(path: str = DB) -> sqlite3.Connection:
-    return sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+def connect(path: str = DB, **attached: str | Path) -> sqlite3.Connection:
+    """Opens `path` read-only, with each keyword's database attached read-only under that schema name."""
+    db = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    for schema, other in attached.items():
+        db.execute(f"ATTACH DATABASE ? AS {schema}", (f"file:{other}?mode=ro",))
+    return db
 
 
 def require_current(path: str) -> None:

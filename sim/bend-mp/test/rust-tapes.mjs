@@ -32,7 +32,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { basename, dirname, join } from 'node:path';
 import { array, config, kind, list, round } from './reference-adapter.mjs';
-import { build, items, makeRandom, normalize } from './machine-items-lib.mjs';
+import { build, items, makeRandom, normalize, sockets } from './machine-items-lib.mjs';
 
 const arg = (name, fallback) => {
   const at = process.argv.indexOf(`--${name}`);
@@ -185,7 +185,6 @@ function smAnswers(s, n) {
   return answers;
 }
 
-const sockets = n => n === 2 ? [1, 3] : Array.from({ length: n }, (_, i) => i);
 
 function playArena(recorded) {
   const answers = recorded.answers;

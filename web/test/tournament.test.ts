@@ -14,7 +14,7 @@ import { assignAccounts, checkPrices, childCommand, childEnv, parseConfig, resol
 import { balancedSeeds, firstPositionOf } from "../src/arena/seeds.ts";
 import { cooldownOf, costOf, openTournament, recordedAccounts, RATE_LIMIT_WAIT_SECONDS, readMatch, runPending, type Scheduling, startedUnder, TOURNAMENT_FORMAT } from "../src/arena/tournament-dir.ts";
 import { reportOf } from "../src/arena/tournament-report.ts";
-import { codeVersions, fitRatings, ELO_PER_NAT, intervalsOf, type PlayedMatch, resamples, sharesByEntrant, sharesByVersion, starterRates, winShares } from "../src/arena/tournament-stats.ts";
+import { codeVersions, fitRatings, ELO_PER_NAT, intervalsOf, mulberry32, type PlayedMatch, resamples, sharesByEntrant, sharesByVersion, starterRates, winShares } from "../src/arena/tournament-stats.ts";
 
 // The tournament's schedule, config checks, stats and runner. No model is called:
 // matches are played by fakes that write the manifests an arena match would.
@@ -152,26 +152,12 @@ test("a config's cohort survives parsing, and may be left out", () => {
 
 // Synthetic matches, drawn from the model the ratings assume.
 
-/** Mulberry32, a generator whose draws are independent enough for a bootstrap check. */
-const randomFrom = (seed: number) => {
-  let state = seed;
-
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0;
-
-    const mixed = Math.imul(state ^ (state >>> 15), state | 1);
-    const stirred = mixed ^ (mixed + Math.imul(mixed ^ (mixed >>> 7), mixed | 61));
-
-    return ((stirred ^ (stirred >>> 14)) >>> 0) / 4_294_967_296;
-  };
-};
-
 const STRENGTH = new Map([["haiku-5-5", 0.8], ["luna", 0.3], ["sonnet", -0.3], ["opus", -0.7], ["don", 0]]);
 
 const SEAT_TERMS = new Map([["3:2", 0.3], ["3:3", 0.5]]);
 
 const syntheticMatches = (seed: number): ReadonlyArray<PlayedMatch> => {
-  const random = randomFrom(seed);
+  const random = mulberry32(seed);
   const tournament = tournamentFrom(configJson({ pairings: { allOf: ["haiku-5-5", "luna", "sonnet", "opus", "don"], size: 3 }, blocksPerPairing: 12 }));
 
   return scheduleOf(tournament).map((match) => {
@@ -237,7 +223,7 @@ test("a resample holds whole seeds, each as often as it was drawn", () => {
 });
 
 test("when the matches of a seed agree, a resample over seeds gives a wider interval than one over matches", () => {
-  const random = randomFrom(11);
+  const random = mulberry32(11);
 
   const matches: ReadonlyArray<PlayedMatch> = Array.from({ length: 200 }, (_, index) => {
     const seed = index % 10;

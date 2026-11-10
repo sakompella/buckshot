@@ -6,8 +6,8 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { config, round, list, array, kind, seatNumber, tag } from './reference-adapter.mjs';
-import { build, makeRandom } from './machine-items-lib.mjs';
+import { config, round, list, array, kind, seat, seatNumber, tag } from './reference-adapter.mjs';
+import { build, makeRandom, menu, positions, sockets } from './machine-items-lib.mjs';
 
 const GAMES = Number(process.env.PLAYER_GAMES ?? 2);
 const WIN = 1000000;
@@ -18,8 +18,6 @@ rmSync(dir, { recursive: true });
 const S = name => P[`../simple/main:${name}`], D = name => P[`../domain:${name}`], X = name => P[`search:${name}`];
 const { random } = makeRandom(0x706c6179);
 
-const sockets = n => n === 2 ? [1, 3] : Array.from({ length: n }, (_, i) => i);
-const seat = n => tag(`Seat${n}`);
 const json = x => JSON.stringify(x);
 const close = (a, b, label) => assert.ok(Math.abs(a - b) < 1e-4, `${label}: ${a} vs ${b}`);
 const sum = xs => xs.reduce((a, b) => a + b, 0);
@@ -34,33 +32,12 @@ const sampled = count => ({ $: 'Sampled', count: Number(count) });
 const OFF = { $: 'Off' }, CHARGED = { $: 'Charged' }, FREE = { $: 'Free' };
 const analyse = (pos, depth, budget, reload = STATIC, memo = CHARGED) => P.analyse(pos, Number(depth), Number(budget), reload, memo);
 const lines = analysis => array(analysis.lines);
-const menu = request => [request.moves.head, ...array(request.moves.tail)];
 
 // Every Choose point of seeded random games, from the mover's log.
-function positions(cfg, players, steps) {
-  const found = [];
-  let stepped = S('start')(cfg), state = stepped.state;
-  const logs = Object.fromEntries(sockets(players).map(s => [s, []]));
-  const hear = notes => { for (const s of sockets(players)) logs[s].push(...array(D('hear')(notes, seat(s)))); };
-  hear(stepped.notes);
-  for (let step = 0; step < steps; step++) {
-    const point = S('point')(state), request = point.request;
-    if (kind(request) !== 'Choose' && kind(request) !== 'Draw') break;
-    let answer;
-    if (kind(request) === 'Choose') {
-      const me = seatNumber(request.seat);
-      found.push({ cfg, state, me, request, log: [...logs[me]], position: position(cfg, point.board, logs[me], me) });
-      answer = random() % menu(request).length;
-    } else answer = random() % (Number(request.range.extra) + 2);
-    stepped = S('answer')(state, Number(answer));
-    state = stepped.state;
-    hear(stepped.notes);
-  }
-  return found;
-}
+const positionsOf = (cfg, players, steps) => positions({ S, D, random }, cfg, players, steps, ({ cfg, state, me, request, board, log }) => ({ cfg, state, me, request, log, position: position(cfg, board, log, me) }));
 
 const tables = { 2: 'TwoSeats', 3: 'ThreeSeats', 4: 'FourSeats' };
-const sample = [2, 3, 4].flatMap(n => Array.from({ length: GAMES }, () => positions(D('config.default')(tag(tables[n])), n, 150)).flat());
+const sample = [2, 3, 4].flatMap(n => Array.from({ length: GAMES }, () => positionsOf(D('config.default')(tag(tables[n])), n, 150)).flat());
 
 // A move's observations, computed independently from the notes: worlds group
 // by every public event (public) or by everything the searcher heard
@@ -215,7 +192,7 @@ function checkPublicOnly(pos) {
 // wins and shooting oneself loses, at every depth.
 function checkForcedWin() {
   const cfg = config(2, [round({ health: 1, live: 2, blank: 0 })]);
-  const pos = positions(cfg, 2, 20)[0];
+  const pos = positionsOf(cfg, 2, 20)[0];
   const moves = menu(pos.request);
   for (const depth of [1, 2, 3]) {
     const analysis = analyse(pos.position, depth, 100000);
@@ -452,7 +429,7 @@ function brute(worlds, notes, me) {
 function checkTinyLoads() {
   for (const health of [1, 2]) for (const [live, blank] of [[1, 1], [2, 1], [1, 2], [0, 3], [3, 0]]) {
     const cfg = config(2, [round({ health, live, blank })]);
-    const pos = positions(cfg, 2, 20)[0];
+    const pos = positionsOf(cfg, 2, 20)[0];
     const analysis = analyse(pos.position, 16, 1000000, STATIC, OFF);
     assert.equal(scoring(analyse(pos.position, 16, 1000000)), scoring(analysis));
     const built = P['belief:build'](pos.position).belief;

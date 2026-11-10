@@ -95,9 +95,8 @@ def summarise(decisions: list[Decision]) -> Summary:
 def load(regret_path: Path, knowledge_path: Path) -> Loaded:
     """The scored agent decisions of finished matches in the file's one run, with the deciding player's config and the shells left in the gun."""
     run_of(regret_path)
-    db = connect(str(regret_path))
+    db = connect(str(regret_path), k=knowledge_path)
     db.row_factory = sqlite3.Row
-    db.execute("ATTACH DATABASE ? AS k", (f"file:{knowledge_path}?mode=ro",))
     rows = db.execute(
         """SELECT p.model, p.effort, d.round + 1 AS round, d.remaining, d.shot IS NOT NULL AS shot, r.status, r.regret, r.exact, r.limited
            FROM regret r

@@ -5,8 +5,8 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { list, array, kind, seatNumber, tag } from './reference-adapter.mjs';
-import { build, makeRandom } from './machine-items-lib.mjs';
+import { list, array, kind, seat, tag } from './reference-adapter.mjs';
+import { build, makeRandom, positions } from './machine-items-lib.mjs';
 
 const GAMES = Number(process.env.PARALLEL_GAMES ?? 2);
 
@@ -16,34 +16,10 @@ rmSync(dir, { recursive: true });
 const S = name => P[`../simple/main:${name}`], D = name => P[`../domain:${name}`];
 const { random } = makeRandom(0x70617261);
 
-const sockets = n => n === 2 ? [1, 3] : Array.from({ length: n }, (_, i) => i);
-const seat = n => tag(`Seat${n}`);
-const menu = request => [request.moves.head, ...array(request.moves.tail)];
-
-function positions(cfg, players, steps) {
-  const found = [];
-  let stepped = S('start')(cfg), state = stepped.state;
-  const logs = Object.fromEntries(sockets(players).map(s => [s, []]));
-  const hear = notes => { for (const s of sockets(players)) logs[s].push(...array(D('hear')(notes, seat(s)))); };
-  hear(stepped.notes);
-  for (let step = 0; step < steps; step++) {
-    const point = S('point')(state), request = point.request;
-    if (kind(request) !== 'Choose' && kind(request) !== 'Draw') break;
-    let answer;
-    if (kind(request) === 'Choose') {
-      const me = seatNumber(request.seat);
-      found.push({ $: 'Position', config: cfg, board: point.board, log: list(logs[me]), me: seat(me) });
-      answer = random() % menu(request).length;
-    } else answer = random() % (Number(request.range.extra) + 2);
-    stepped = S('answer')(state, Number(answer));
-    state = stepped.state;
-    hear(stepped.notes);
-  }
-  return found;
-}
+const positionAt = ({ cfg, board, log, me }) => ({ $: 'Position', config: cfg, board, log: list(log), me: seat(me) });
 
 const tables = { 2: 'TwoSeats', 3: 'ThreeSeats' };
-const sample = n => Array.from({ length: GAMES }, () => positions(D('config.default')(tag(tables[n])), n, 120)).flat();
+const sample = n => Array.from({ length: GAMES }, () => positions({ S, D, random }, D('config.default')(tag(tables[n])), n, 120, positionAt)).flat();
 const two = sample(2), three = sample(3);
 
 const STATIC = { $: 'Static' }, SAMPLED = { $: 'Sampled', count: 7 };

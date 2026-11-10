@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { parseArgs } from "node:util";
 
 import { Schema } from "effect";
 
@@ -16,13 +17,9 @@ import { readCalls } from "../src/arena/runlog.ts";
 // manifest records for the agent, in brackets.
 // Usage: bun scripts/arena-cost.ts <dir>... [--prices src/arena/prices.json]
 
-const pricesAt = process.argv.indexOf("--prices");
+const { values, positionals: roots } = parseArgs({ args: process.argv.slice(2), allowPositionals: true, options: { prices: { type: "string", default: DEFAULT_PRICES } } });
 
-const pricesPath = pricesAt === -1 ? DEFAULT_PRICES : (process.argv[pricesAt + 1] ?? "");
-
-const prices = loadPrices(pricesPath);
-
-const roots = process.argv.slice(2).filter((arg, index, args) => arg !== "--prices" && args[index - 1] !== "--prices");
+const prices = loadPrices(values.prices);
 
 const matchDirs = (root: string): ReadonlyArray<string> =>
   existsSync(join(root, "manifest.json"))
@@ -67,7 +64,7 @@ const show = (title: string, table: ReadonlyMap<string, Total>) => {
   }
 };
 
-console.log(`Prices: ${pricesPath} (${prices.unit})`);
+console.log(`Prices: ${values.prices} (${prices.unit})`);
 
 show(
   "Per entrant in each match",

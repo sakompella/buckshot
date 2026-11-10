@@ -17,6 +17,15 @@ def signed(x: float) -> str:
     return f"{round(x):+d}"
 
 
+def two_places(x: float) -> str:
+    return f"{x:.2f}"
+
+
+def plus_minus(estimate) -> str:
+    """A stats.Estimate as its signed mean ± the half-width of its 95% interval."""
+    return f"{round(estimate.mean, 2) + 0.0:+.2f} ± {estimate.half_width:.2f}"
+
+
 def frac(wins: float, games: float) -> str:
     return f"{wins:g}/{games:g} = {pct(wins / games)}"
 

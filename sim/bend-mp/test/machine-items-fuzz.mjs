@@ -3,7 +3,7 @@
 // seeded random item games (and some no-item ones), machine against reference.
 import assert from 'node:assert/strict';
 import { list, array, kind, seatNumber, tag, requestJSON } from './reference-adapter.mjs';
-import { loadModels, makeRandom, normalize } from './machine-items-lib.mjs';
+import { loadModels, makeRandom, Mismatch, normalize, propertyCheck, sockets } from './machine-items-lib.mjs';
 
 const GAMES_PER_TABLE = Number(process.env.FUZZ_GAMES ?? 500);
 const SKIPPED = new Set((process.env.FUZZ_SKIP ?? '').split(',')); // lets fuzz_mutations.py see what the other properties catch alone
@@ -16,28 +16,14 @@ const COMPLETE_STEPS = Number(process.env.FUZZ_COMPLETE_STEPS ?? 10000);
 
 const { M, R, A, close } = await loadModels('bend-mp-item-fuzz-', { abstract: true });
 const mapped = state => A.ref(state);
-const { random, randomConfig, answerFor } = makeRandom(0x66757a7a);
+const { random, randomConfig, answerFor, shuffled } = makeRandom(0x66757a7a);
 
 const OBSERVE = '../domain:observe', HEAR = '../domain:hear', RESOLVE = '../domain:resolve';
-const sockets = n => n === 2 ? [1, 3] : Array.from({ length: n }, (_, i) => i);
 const count = { step_matches: 0, observe_matches: 0, legal_exact: 0, legal_accepted: 0, privacy: 0, reachable_valid: 0, state_roundtrip: 0 };
 const coverage = { prefixes: 0, prefixesFinished: 0, complete: 0, longest: 0, boundaries: 0, noItemGames: 0, itemGames: 0, choosePoints: 0, itemMoves: 0, hiddenChanged: 0 };
 
-class Mismatch extends Error {}
-const same = (property, label, expected, actual, game, detail = '') => {
-  if (SKIPPED.has(property)) return;
-  try { assert.deepEqual(normalize(actual), normalize(expected)); } catch (error) {
-    const reproduction = { property, detail, tape: game.tape, config: normalize(game.config) };
-    throw new Mismatch(`${property} failed (${label})${detail ? `: ${detail}` : ''}\n${error.message}\nrepro: ${JSON.stringify(reproduction)}`);
-  }
-  count[property]++;
-};
+const same = propertyCheck(count, SKIPPED);
 
-const shuffled = xs => {
-  const ys = [...xs];
-  for (let i = ys.length - 1; i > 0; i--) { const j = random() % (i + 1); [ys[i], ys[j]] = [ys[j], ys[i]]; }
-  return ys;
-};
 const rotated = xs => xs.length < 2 ? xs : [...xs.slice(1), xs[0]];
 
 // Same shells in another order, and every deck rotated (reversed when rotation is a no-op).

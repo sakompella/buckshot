@@ -8,7 +8,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { list, array, kind, seatNumber } from './reference-adapter.mjs';
-import { build, makeRandom, normalize } from './machine-items-lib.mjs';
+import { build, makeRandom, Mismatch, normalize, propertyCheck, sockets } from './machine-items-lib.mjs';
 
 // Most trials are prefixes of MAX_STEPS answers; a smaller batch plays whole
 // games (an item game can run past 2,600 random answers), and one that has
@@ -23,9 +23,8 @@ const bridge = build(dir, 'bridge', '../simple-abstract.bend'), abstract = build
 const SA = (await import(bridge)).default, A = (await import(abstract)).default;
 const N = name => SA[`simple/main:${name}`], M = name => SA[`sm/main:${name}`], D = name => SA[`domain:${name}`];
 const notesOf = s => SA['simple/state:state.notes'](s);
-const { random, randomConfig } = makeRandom(0x73696d70);
+const { random, randomConfig, drawAnswer, moveAnswer, shuffled } = makeRandom(0x73696d70);
 
-const sockets = n => n === 2 ? [1, 3] : Array.from({ length: n }, (_, i) => i);
 const seatTag = s => ({ $: `Seat${s}` });
 const json = x => JSON.stringify(normalize(x));
 const count = { refines: 0, valid: 0, board: 0, draws: 0, menus: 0, privacy: 0, schedule: 0 };
@@ -33,13 +32,7 @@ const coverage = { prefixes: 0, prefixesFinished: 0, complete: 0, longest: 0, po
 const moveKinds = { Shoot: 0, Use: 0, Jam: 0, Steal: 0, StealJam: 0 };
 const capBound = { 2: 0, 3: 0, 4: 0 };
 
-class Mismatch extends Error {}
-const same = (property, label, expected, actual, game) => {
-  try { assert.deepEqual(normalize(actual), normalize(expected)); } catch (error) {
-    throw new Mismatch(`${property} failed (${label})\n${error.message}\nrepro: ${JSON.stringify({ tape: game.tape, config: normalize(game.config) })}`);
-  }
-  count[property]++;
-};
+const same = propertyCheck(count);
 
 const maybe = x => kind(x) === 'Some' ? x.value : null;
 const RING_TABLE = { Duo: 'TwoSeats', Trio: 'ThreeSeats', Quad: 'FourSeats' };
@@ -99,7 +92,6 @@ function checkMenu(game, s, x, request) {
 }
 
 function otherHidden(world) {
-  const shuffled = xs => { const ys = [...xs]; for (let i = ys.length - 1; i > 0; i--) { const j = random() % (i + 1); [ys[i], ys[j]] = [ys[j], ys[i]]; } return ys; };
   const other = xs => list([...array(xs)].reverse());
   const decks = world.decks;
   return { gun: list(shuffled(array(world.gun))), decks: { ...decks, two: other(decks.two), three: other(decks.three), four: other(decks.four) } };
@@ -152,11 +144,7 @@ function watchDistributions(game, x, steps) {
   }
 }
 
-function answerFor(request) {
-  if (kind(request) === 'Draw') return random() % 8 === 0 ? 50 + random() % 50 : random() % (Number(request.range.extra) + 2);
-  const length = 1 + array(request.moves.tail).length;
-  return random() % 16 === 0 ? length + random() % 4 : random() % length;
-}
+const answerFor = request => kind(request) === 'Draw' ? drawAnswer(Number(request.range.extra) + 2) : moveAnswer(1 + array(request.moves.tail).length);
 
 // Plays up to `limit` answers; returns how many it took to finish, or null
 // (a whole game that has not finished fails with its tape).
