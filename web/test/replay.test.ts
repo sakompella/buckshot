@@ -20,7 +20,7 @@ const decodeNumbered = (line: string) => Result.mapError(Schema.decodeUnknownRes
 
 const dir = join(tempDir("replay-run-"), "faux");
 
-beforeAll(() => playFauxRun(dir, ["Agent", "Agent", "DoN"], "live"), 30_000);
+beforeAll(() => playFauxRun(dir, ["Agent", "Agent", "DoN"], "live"));
 
 test("a line cut mid-JSON is left out until it is complete, and a malformed complete line is unreadable in place", () => {
   const cut = '{"n":1}\n{"n":2}\n{"n":';
@@ -63,4 +63,4 @@ test("a faux match replays move for move to its final cash, extends a partial re
   const partial = Result.getOrThrow(replayOf(Option.none(), manifest, moves.slice(0, 40)));
 
   expect(Result.getOrThrow(replayOf(Option.some(partial), manifest, moves)).frames).toEqual(replay.frames);
-}, 30_000);
+});

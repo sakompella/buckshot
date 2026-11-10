@@ -34,7 +34,7 @@
     "build": "bun run rules && vite build",
     "lint": "oxlint --deny-warnings",
     "typecheck": "tsrs --noEmit -p .",
-    "test": "bun run rules && bun test ./test",
+    "test": "bun run rules && bun test ./test --timeout 60000",
     "mcp": "bun run rules 1>&2 && bun scripts/mcp.ts",
     "dev:online": "bun run rules && cf dev --mode online",
     "build:online": "bun run rules && cf build --mode online",

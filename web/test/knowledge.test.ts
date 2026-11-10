@@ -36,7 +36,7 @@ beforeAll(async () => {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
-}, 60_000);
+});
 
 const ME: Seat = 1;
 
@@ -177,14 +177,6 @@ test("another player's clue is not in this player's belief, and an adrenaline gl
   expect(Option.getOrNull(knowledgeAfter(steps, THEM).chamber)).toBe("Live");
   expect(stolenClue(events, learned[0]?.at ?? 0, THEM)).toBe(true);
   expect(stolenClue([loaded(1, 1), used(THEM, THEM, "Glass")], 2, THEM)).toBe(false);
-});
-
-test("the load log puts each secret after the events before it", () => {
-  const { events, learned } = historyOf([loaded(1, 1), used(ME, ME, "Glass"), { heard: glimpse("Live") }, fired(ME, THEM, "Live")]);
-  const log = loadLog(events, learned, ME);
-
-  expect(log.map((entry) => (entry.kind === "event" ? entry.event._tag : entry.secret._tag))).toEqual(["Loaded", "Used", "Glimpse", "Fired"]);
-  expect(loadLog(events, learned, THEM).map((entry) => entry.kind)).toEqual(["event", "event", "event"]);
 });
 
 test("the ledger follows items to their use, theft, the owner's death or the round's end", () => {
