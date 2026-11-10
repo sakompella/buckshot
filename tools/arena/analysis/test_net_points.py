@@ -14,7 +14,7 @@ def seat(model: str, lost: float, won: int, worst: int = 0, effort: str = "high"
 
 
 def match(block: str, first: np_.Seat, second: np_.Seat, name: str = "m") -> np_.Match:
-    return np_.Match(name, name, block, first, second, False)
+    return np_.Match(name, name, block, first, second)
 
 
 class Arithmetic(unittest.TestCase):
