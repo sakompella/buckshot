@@ -11,16 +11,16 @@ The arena plays language models against each other at the Buckshot table through
 - `web/.env` (not committed) holds `CPA_KEY` and `NINEROUTER_KEY`. Bun loads it for the runner, and each match gets only its own `PLAYER_*` variables.
 
 ## A tournament
-- **Config:** a tournament is a JSON config, as in `web/tournaments/`. It names the endpoints, the entrants (model and effort, or a bot) and the pairings.
+- **Config:** a tournament is a JSON config, as in `web/tournaments/example.json`; the configs of past runs are kept locally in `_work/arena/tournament-configs/`. It names the endpoints, the entrants (model and effort, or a bot) and the pairings.
   - Seeds are either the config seed plus the block, or a list per pairing.
   - `cohort` (optional) names the group the analysis compares the tournament's matches in, such as `"tournament 8"`; the leaderboard titles it by that name. The importer stores it on each match (`matches.cohort`) and stops on a tournament without one; tournaments before it was added get theirs from `LEGACY_COHORTS` in `web/src/analysis/import.ts`. All phases of one run share one cohort. The wrap-up command (below) stamps it into the run dirs if a config lacked it.
-  - An engine entrant, `{"engine": {"depth": 6, "budget": 20000}}`, is the Rust search at that strength (`web/src/arena/engine.ts`): a fixed yardstick that sits at seat `Engine/<depth>/<budget>`. With `"reload": "sampled"` (seat `Engine/<depth>/<budget>/sampled`) a line that reaches a reload is valued over sampled deals instead of statically; that engine is much stronger (about 70% against DoN at depth 6, against about 54% with static reload) and takes about 0.2 s a move. It decides from the player's own log and the public board, as the regret scorer does, values every move unpruned (static reload unless sampled) and plays the first best one, in about 20 ms a move. It needs cargo, or `$BUCKSHOT_SEARCH` naming a buckshot-search built with `f64,seats-2`, so it plays two-seat pairings only: the config refuses an engine in a wider one. Its root moves must be Bend's menu: if they differ, or the search fails, the match stops and the position, the menu and the search output are written to `engine-fault-turn-<turn>-<player>.json` in the match directory. A pairing needs at least one model or engine; `tournaments/engine-anchors-selfplay.json` plays engines and DoN with no model calls.
-  - A model entrant may set `instructionsAddendum`: text appended to the shared instructions for that entrant's agent only (ADR-0048). Give such an entrant its own name, as in `astra-recall.json`, and the manifest records the text.
+  - An engine entrant, `{"engine": {"depth": 6, "budget": 20000}}`, is the Rust search at that strength (`web/src/arena/engine.ts`): a fixed yardstick that sits at seat `Engine/<depth>/<budget>`. With `"reload": "sampled"` (seat `Engine/<depth>/<budget>/sampled`) a line that reaches a reload is valued over sampled deals instead of statically; that engine is much stronger (about 70% against DoN at depth 6, against about 54% with static reload) and takes about 0.2 s a move. It decides from the player's own log and the public board, as the regret scorer does, values every move unpruned (static reload unless sampled) and plays the first best one, in about 20 ms a move. It needs cargo, or `$BUCKSHOT_SEARCH` naming a buckshot-search built with `f64,seats-2`, so it plays two-seat pairings only: the config refuses an engine in a wider one. Its root moves must be Bend's menu: if they differ, or the search fails, the match stops and the position, the menu and the search output are written to `engine-fault-turn-<turn>-<player>.json` in the match directory. A pairing needs at least one model or engine; a config whose entrants are only engines and bots, such as `engine-anchors-selfplay.json`, makes no model calls.
+  - A model entrant may set `instructionsAddendum`: text appended to the shared instructions for that entrant's agent only (ADR-0048). Give such an entrant its own name, as `astra-recall.json` did, and the manifest records the text.
   - Use 10 seeds, each played in both seat orders: 20 matches per pairing.
   - The `3000, 3010–3018` list is balanced by first shooter.
 - **Run:**
 
-      cd web && nice -n 10 bun scripts/arena-tournament.ts tournaments/<config>.json --dir <dir> --parallel 5
+      cd web && nice -n 10 bun scripts/arena-tournament.ts <config>.json --dir <dir> --parallel 5
 
   - The first run writes `<dir>/tournament.json`. A later run needs the same config, or one that only grows it.
   - Rerun the same command to resume: finished matches never run again, and an interrupted match resumes from its journal.
@@ -49,27 +49,7 @@ Use the hash, not a hand-assigned version id. It changes exactly when gameplay c
   - Resumed matches always keep their pin. Matches started without a pin stay unpinned.
   - An existing tournament may add `accounts` to an endpoint that had none.
 - **Account ids:** they contain account emails, so they stay out of committed configs. Add them to the run's own copy of the config.
-
-## Quota-limited runs
-The Claude subscription is shared with other work, so long runs go through `tools/arena/run-quota-limited.sh` under launchd. It stops for good, with no resume after resets, when:
-- the least-used Claude account reaches the Claude line (default: 0.78 to start, 0.80 while playing);
-- the runner fails;
-- `tools/arena/check_matches.py` finds a fallback move, a failed audit flag or an unexpected endpoint;
-- the first `CAP` matches are finished (the runner's `--first`).
-
-It exits 0 on the Claude line or a finished cap, and 1 on a failed runner or check. The checker also runs after the runner exits, and before a finished run ends.
-
-Codex isn't checked there: use account pins, so a full Codex account pauses only its own matches.
-
-    printf %s "$MANAGEMENT_PASSWORD" > <dir>/.mgmt && chmod 600 <dir>/.mgmt
-    launchctl submit -l com.aditya.buckshot-<name> -o <dir>/runner.log -e <dir>/runner.log -- \
-      /usr/bin/env TD=<dir> CONFIG=<config> WEB=<checkout>/web LABEL=com.aditya.buckshot-<name> CAP=40 \
-      /bin/sh tools/arena/run-quota-limited.sh
-
-- Delete `.mgmt` when the run ends.
-- `tools/arena/quota_guard.py` prints every account's windows. CPA reports no Claude 7-day window, so that window can't be checked. A CPA restart empties CPA's Codex quota data until the next Codex reply.
-- `launchctl submit` jobs don't survive a reboot.
-- A T3 restart ends agent sessions and their heartbeats, but not launchd jobs.
+- **Checking a run:** `tools/arena/check_matches.py` finds fallback moves, failed audit flags and unexpected endpoints in a tournament directory.
 
 ## Results
 - **Stats:**

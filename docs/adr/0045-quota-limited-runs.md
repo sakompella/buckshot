@@ -1,5 +1,7 @@
 # Quota-limited runs
 
+Removed: `quota_guard.py` and `run-quota-limited.sh` are no longer in the tree. Runs that need them use their own local copies.
+
 The model subscriptions are shared with other work, so long arena runs go through `tools/arena/run-quota-limited.sh`. The rules are:
 
 - **Claude:** may use up to 80%. The run doesn't start a pair while the least-used Claude account is at 0.78 or more, and stops when it reaches 0.80 during play. Averaging the accounts would hide an exhausted one, and checking every account would stop on an account that other work used up while another still has room.

@@ -876,9 +876,9 @@ test("a missing key variable is named and its value is never shown", () => {
 });
 
 test("the example tournament's models all start as arena agents from the variables the runner sets", async () => {
-  const tournament = tournamentFrom(readFileSync(join(import.meta.dir, "../tournaments/cpa-medium.json"), "utf8"));
+  const tournament = tournamentFrom(readFileSync(join(import.meta.dir, "../tournaments/example.json"), "utf8"));
   const schedule = scheduleOf(tournament);
-  const keys = resolveKeys(tournament.config, schedule, { CPA_KEY: "sk-test" });
+  const keys = resolveKeys(tournament.config, schedule, { ANTHROPIC_API_KEY: "sk-test", OPENAI_API_KEY: "sk-test" });
 
   expect(Result.isSuccess(checkPrices(tournament, prices))).toBe(true);
 

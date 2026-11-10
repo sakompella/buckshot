@@ -11,7 +11,7 @@ import { cooldownOf, costOf, faultsOf, finishedNames, openTournament, runPending
 
 // Plays a tournament: every scheduled match, in schedule order, as a child
 // process running scripts/arena.ts, at most --parallel at a time (default 5).
-// The config says who plays whom, as tournaments/cpa-medium.json does. The
+// The config says who plays whom, as tournaments/example.json does. The
 // first run writes <dir>/tournament.json, and a later run needs the same
 // config, or one that grows it; with several configs, each grows the tournament
 // in turn, so their new matches play in that order. Keys come from the
