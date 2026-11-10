@@ -132,7 +132,7 @@ fn run() -> Result<bool> {
         "branch-map: {} Bend modules (sha256 {}), {} reachable defs, {} branch sites: {} mapped, {} in {} exempt defs; {} Rust labels, {} Rust-only control flow sites",
         rules.modules.len(),
         rules.hash.get(..12).unwrap_or_default(),
-        rules.reachable.len(),
+        rules.reachable.values().map(std::collections::BTreeSet::len).sum::<usize>(),
         all.len(),
         sites.len(),
         exempt_sites,
