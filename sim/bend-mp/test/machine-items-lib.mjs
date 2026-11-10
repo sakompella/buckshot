@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { array, config, round, list, jamPair, turnHolder } from './reference-adapter.mjs';
+import { array, config, round, list, jamPair, kind, seat, seatNumber, turnHolder } from './reference-adapter.mjs';
 
 export function build(dir, name, relativeSource) {
   const source = fileURLToPath(new URL(relativeSource, import.meta.url));
@@ -52,7 +52,62 @@ export const items = await (async () => {
   }
 })();
 
+// The item steps of a test session: the session gives request, moves,
+// snapshot, move and answer, and referenceOf reads its reference state.
+export const itemSteps = referenceOf => ({
+  draws() {
+    for (let fuel = 0; this.request.kind === 'Draw'; fuel++) {
+      assert.ok(fuel < 64, 'draw closure terminates');
+      assert.notEqual(this.request.label, 'ItemChoice', 'grant must select its desired item');
+      this.answer(this.request.label === 'ShuffleSwap' ? this.request.hi : 0);
+    }
+  },
+  grant(s, item) {
+    this.move(s, move => 'Grab' in move);
+    if (this.request.kind === 'Draw') {
+      assert.equal(this.request.label, 'ItemChoice');
+      const pool = array(referenceOf(this).frame.continuation.pool).map(kind);
+      const index = pool.indexOf(item);
+      assert.ok(index >= 0, `${item} is in eligible pool ${pool}`);
+      this.answer(index);
+    }
+    assert.equal(this.snapshot.seats[s].holding, item);
+  },
+  place(s, slot = 0) { return this.move(s, move => move.Place === slot); },
+  distribute(wanted = () => 'Beer') {
+    for (let fuel = 0; ; fuel++) {
+      assert.ok(fuel < 256, 'distribution terminates');
+      this.draws();
+      assert.equal(this.request.kind, 'Choose');
+      if (this.moves.some(({ move }) => 'PickUp' in move)) return;
+      const choice = this.moves[0];
+      if ('Grab' in choice.move) this.grant(choice.seat, wanted(choice.seat, this.snapshot));
+      else if ('Place' in choice.move) this.place(choice.seat, choice.move.Place);
+      else assert.fail(`unexpected distribution request ${JSON.stringify(this.request)}`);
+    }
+  },
+  use(s, item) { return this.move(s, move => move.UseItem?.[1] === item); },
+  shoot(s, target) {
+    this.move(s, move => 'PickUp' in move);
+    return this.move(s, move => move.Shoot === target);
+  },
+});
+
 export const rules = names => Object.fromEntries(names.map(name => [name.toLowerCase(), {}]));
+
+// A failed fuzz property, with the tape and config that reproduce it.
+export class Mismatch extends Error {}
+
+// The check of fuzz properties: count tallies each property's passes, and
+// the properties in skipped are not checked.
+export const propertyCheck = (count, skipped = new Set()) => (property, label, expected, actual, game, detail = '') => {
+  if (skipped.has(property)) return;
+  try { assert.deepEqual(normalize(actual), normalize(expected)); } catch (error) {
+    const reproduction = { property, detail, tape: game.tape, config: normalize(game.config) };
+    throw new Mismatch(`${property} failed (${label})${detail ? `: ${detail}` : ''}\n${error.message}\nrepro: ${JSON.stringify(reproduction)}`);
+  }
+  count[property]++;
+};
 
 // Seeded xorshift32 with random item games: configs over 2 to 4 seats and
 // answers that are mostly in range but sometimes not.
@@ -75,12 +130,18 @@ export function makeRandom(seed) {
       return { live: random() % 3 ? live : null, blank: total - live, amount: random() % 2 ? null : random() % 9 };
     }),
   })));
-  const answerFor = request => {
-    if (request.kind === 'Draw') return random() % 8 === 0 ? 50 + random() % 50 : random() % (request.hi - request.lo + 2);
-    const count = Object.values(request.menus).reduce((n, menu) => n + menu.length, 0);
-    return random() % 16 === 0 ? count + random() % 4 : random() % count;
+  // A draw answer is out of range one time in 8, a move one time in 16.
+  const drawAnswer = size => random() % 8 === 0 ? 50 + random() % 50 : random() % size;
+  const moveAnswer = count => random() % 16 === 0 ? count + random() % 4 : random() % count;
+  const answerFor = request => request.kind === 'Draw'
+    ? drawAnswer(request.hi - request.lo + 2)
+    : moveAnswer(Object.values(request.menus).reduce((n, menu) => n + menu.length, 0));
+  const shuffled = xs => {
+    const ys = [...xs];
+    for (let i = ys.length - 1; i > 0; i--) { const j = random() % (i + 1); [ys[i], ys[j]] = [ys[j], ys[i]]; }
+    return ys;
   };
-  return { random, pick, randomConfig, answerFor };
+  return { random, pick, randomConfig, answerFor, drawAnswer, moveAnswer, shuffled };
 }
 
 export const ring = (template, f) => Object.fromEntries(Object.entries(template).map(([key, value]) => [key, key === '$' ? value : f(value, key)]));
@@ -112,4 +173,33 @@ export function lockstep(M, R) {
     },
     sameNotes: (machine, reference, where = '') => assert.deepEqual(normalize(machine), normalize(reference), `per-answer notes must agree (${where})`),
   };
+}
+
+// The sockets of an n-seat table: two players sit opposite each other.
+export const sockets = n => n === 2 ? [1, 3] : Array.from({ length: n }, (_, i) => i);
+export const menu = request => [request.moves.head, ...array(request.moves.tail)];
+
+// Every Choose point of a seeded random game of the simple machine, from the
+// mover's log: record gets { cfg, state, me, request, board, log } and returns
+// what to keep. S and D read the simple machine's and domain's exports.
+export function positions({ S, D, random }, cfg, players, steps, record) {
+  const found = [];
+  let stepped = S('start')(cfg), state = stepped.state;
+  const logs = Object.fromEntries(sockets(players).map(s => [s, []]));
+  const hear = notes => { for (const s of sockets(players)) logs[s].push(...array(D('hear')(notes, seat(s)))); };
+  hear(stepped.notes);
+  for (let step = 0; step < steps; step++) {
+    const point = S('point')(state), request = point.request;
+    if (kind(request) !== 'Choose' && kind(request) !== 'Draw') break;
+    let answer;
+    if (kind(request) === 'Choose') {
+      const me = seatNumber(request.seat);
+      found.push(record({ cfg, state, me, request, board: point.board, log: [...logs[me]] }));
+      answer = random() % menu(request).length;
+    } else answer = random() % (Number(request.range.extra) + 2);
+    stepped = S('answer')(state, Number(answer));
+    state = stepped.state;
+    hear(stepped.notes);
+  }
+  return found;
 }

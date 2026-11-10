@@ -27,8 +27,8 @@ from docs import splice_between_markers
 from fmt import pct, table
 from load import DB, connect, require_current, round_winners
 from regret import DERIVED, EFFORTS
-from reload_bias import Estimate
 from rules import POINT, ROUNDS, WIN
+from stats import pearson, spearman
 MIN_MATCHES = 20
 MIN_BLOCKS = 10
 BOOTSTRAP = 2000
@@ -92,8 +92,7 @@ def load(db_path: str, regret_path: Path, knowledge_path: Path) -> Loaded:
     ):
         seats[match].append((position, player, model, effort))
     blocks = {match: (block, name) for match, block, name in knowledge.execute("SELECT match_id, seed_block_id, name FROM matches")}
-    db = connect(str(regret_path))
-    db.execute("ATTACH DATABASE ? AS k", (f"file:{knowledge_path}?mode=ro",))
+    db = connect(str(regret_path), k=knowledge_path)
     rows = db.execute(
         """SELECT r.match_id, r.player, r.regret, r.ordinal
            FROM regret r
@@ -134,31 +133,6 @@ def load(db_path: str, regret_path: Path, knowledge_path: Path) -> Loaded:
 def percentile_interval(values: list[float]) -> Interval:
     ordered = sorted(values)
     return ordered[int(0.025 * len(ordered))], ordered[int(0.975 * len(ordered)) - 1]
-
-
-def pearson(xs: list[float], ys: list[float]) -> float:
-    mx, my = sum(xs) / len(xs), sum(ys) / len(ys)
-    cov = sum((x - mx) * (y - my) for x, y in zip(xs, ys, strict=False))
-    return cov / math.sqrt(sum((x - mx) ** 2 for x in xs) * sum((y - my) ** 2 for y in ys))
-
-
-def ranks(values: list[float]) -> list[float]:
-    """Ranks from 1, tied values sharing the mean of their ranks."""
-    ordered = sorted(range(len(values)), key=values.__getitem__)
-    out = [0.0] * len(values)
-    i = 0
-    while i < len(ordered):
-        j = i
-        while j + 1 < len(ordered) and values[ordered[j + 1]] == values[ordered[i]]:
-            j += 1
-        for k in range(i, j + 1):
-            out[ordered[k]] = (i + j) / 2 + 1
-        i = j + 1
-    return out
-
-
-def spearman(xs: list[float], ys: list[float]) -> float:
-    return pearson(ranks(xs), ranks(ys))
 
 
 @dataclass(frozen=True)

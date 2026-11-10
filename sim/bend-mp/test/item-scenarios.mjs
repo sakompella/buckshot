@@ -1,10 +1,8 @@
 import assert from 'node:assert/strict';
 import { buildReference, config, round, list, array, kind, seatNumber, tag, maybe, requestJSON, stateJSON, traceJSON } from './reference-adapter.mjs';
-import { items } from './machine-items-lib.mjs';
+import { items, itemSteps, rules, sockets } from './machine-items-lib.mjs';
 
 const { R, close } = await buildReference();
-const sockets = n => n === 2 ? [1, 3] : Array.from({ length: n }, (_, i) => i);
-const rules = names => Object.fromEntries(names.map(name => [name.toLowerCase(), {}]));
 let count = 0;
 function scenario(name, test) {
   test();
@@ -39,42 +37,7 @@ function session(c) {
       assert.equal(R.VerifyPacket(this.state, choice), true, 'every offered choice passes the host guards');
       return this.answer(index);
     },
-    draws() {
-      for (let fuel = 0; this.request.kind === 'Draw'; fuel++) {
-        assert.ok(fuel < 64, 'draw closure terminates');
-        assert.notEqual(this.request.label, 'ItemChoice', 'grant must select its desired item');
-        this.answer(this.request.label === 'ShuffleSwap' ? this.request.hi : 0);
-      }
-    },
-    grant(s, item) {
-      this.move(s, move => 'Grab' in move);
-      if (this.request.kind === 'Draw') {
-        assert.equal(this.request.label, 'ItemChoice');
-        const pool = array(this.state.frame.continuation.pool).map(kind);
-        const index = pool.indexOf(item);
-        assert.ok(index >= 0, `${item} is in eligible pool ${pool}`);
-        this.answer(index);
-      }
-      assert.equal(this.snapshot.seats[s].holding, item);
-    },
-    place(s, slot = 0) { return this.move(s, move => move.Place === slot); },
-    distribute(wanted = () => 'Beer') {
-      for (let fuel = 0; ; fuel++) {
-        assert.ok(fuel < 256, 'distribution terminates');
-        this.draws();
-        assert.equal(this.request.kind, 'Choose');
-        if (this.moves.some(({ move }) => 'PickUp' in move)) return;
-        const choice = this.moves[0];
-        if ('Grab' in choice.move) this.grant(choice.seat, wanted(choice.seat, this.snapshot));
-        else if ('Place' in choice.move) this.place(choice.seat, choice.move.Place);
-        else assert.fail(`unexpected distribution request ${JSON.stringify(this.request)}`);
-      }
-    },
-    use(s, item) { return this.move(s, move => move.UseItem?.[1] === item); },
-    shoot(s, target) {
-      this.move(s, move => 'PickUp' in move);
-      return this.move(s, move => move.Shoot === target);
-    },
+    ...itemSteps(game => game.state),
   };
 }
 const shown = notes => notes.filter(note => kind(note) === 'Shown').map(note => note.event);

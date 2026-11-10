@@ -6,7 +6,8 @@ import { Option } from "effect";
 import { configSummaries, ODDS_BINS, oddsBinOf, selfShotTallies } from "../src/arena-viewer/aggregates.ts";
 import { chamberPatterns, roundStory, ShellTracker } from "../src/arena-viewer/analysis.ts";
 import type { Seat, SeatRegret } from "../src/arena-viewer/api.ts";
-import { type BlockTally, blockRate, colorOf, fmtBytes, groupBy, labelOf, matchRows, quantile, regretStats, rng, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
+import { type BlockTally, blockRate, colorOf, fmtBytes, groupBy, labelOf, matchRows, quantile, regretStats, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
+import { mulberry32 } from "../src/arena/tournament-stats.ts";
 import { bradleyTerry, type Game, heldOutRatings, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 import { droppedConfigs, oddsPanels } from "../src/arena-viewer/page/odds.ts";
 import { shotOf, showsReloadNote, turningPoints } from "../src/arena-viewer/page/replay.ts";
@@ -17,6 +18,7 @@ import { FULL_N, shadeOf } from "../src/arena-viewer/page/heat.ts";
 import { GameEvent, type Seat as Socket, Secret } from "../src/domain.ts";
 import { rosterOf } from "../src/players.ts";
 import { AXES, frontierOf } from "../src/arena-viewer/page/scatter.ts";
+import { SEAT } from "./fixtures.ts";
 
 const PLAYERS = ["a", "b", "c", "d", "e"];
 
@@ -99,7 +101,7 @@ const playedGames = (random: () => number, perPairing: number): ReadonlyArray<Ga
 
 test("one pooled Bradley-Terry fit recovers known strengths, including configs that only met their own model", () => {
   for (let seed = 1; seed <= 10; seed++) {
-    const ratings = bradleyTerry(playedGames(rng(seed), 1000));
+    const ratings = bradleyTerry(playedGames(mulberry32(seed), 1000));
     const mean = TRUE_ELO.reduce((total, [, elo]) => total + elo, 0) / TRUE_ELO.length;
 
     for (const [id, elo] of TRUE_ELO) expect(Math.abs((ratings.get(id) ?? Number.NaN) - (elo - mean))).toBeLessThan(35);
@@ -116,7 +118,7 @@ test("a config that wins every game is rated high but finite", () => {
 
 const plainBlockRate = (tally: BlockTally, reps: number) => {
   const blocks = [...tally.values()];
-  const random = rng(7);
+  const random = mulberry32(7);
   const rates: Array<number> = [];
 
   for (let rep = 0; rep < reps; rep++) {
@@ -242,44 +244,8 @@ test("Claude models are orange and GPT models blue, each family brightest and mo
   }
 });
 
-const SEAT: Seat = {
-  tournament: "t",
-  matchId: "",
-  matchName: "",
-  status: "completed",
-  startedAt: "",
-  seed: 1,
-  seedBlock: "",
-  codeHash: "",
-  model: "",
-  effort: "medium",
-  player: "A",
-  position: 0,
-  winShare: 1,
-  cash: 0,
-  cost: 0,
-  inp: 0,
-  outp: 0,
-  cr: 0,
-  cw: 0,
-  rt: 0,
-  lat: 0,
-  rsHidden: 0,
-  rsText: 0,
-  multiTool: 0,
-  moves: 0,
-  acquired: [],
-  used: [],
-  stolen: [],
-  regret: null,
-  story: null,
-  round: 0,
-  roundThree: null,
-  deficits: [],
-};
-
 test("pooled ratings cover every config of a completed match, over every tournament, with an interval around each", () => {
-  const random = rng(4);
+  const random = mulberry32(4);
 
   const seats = Array.from({ length: 60 }, (_match, index) => {
     const [a, b] = PAIRINGS[index % PAIRINGS.length] ?? ["", ""];
@@ -315,7 +281,7 @@ test("a config over fewer than 4 seed blocks has a rating and no interval", () =
 
 // Two-player matches over the sweeps' pairings, each with a pot of its own, the winner taking `winnerShare` of it.
 const playedSeats = (seed: number, winnerShare: number) => {
-  const random = rng(seed);
+  const random = mulberry32(seed);
   const strength = new Map(TRUE_ELO);
 
   const seats = Array.from({ length: 60 }, (_match, index) => {
@@ -367,7 +333,7 @@ test("the 99th-percentile loss counts the moves that lost nothing, by nearest ra
 
 // Two-player matches over the sweeps' pairings where every match lasts `rounds` rounds and the winner takes `winnerRounds` of them.
 const playedRoundSeats = (seed: number, rounds: number, winnerRounds: number, isStoryOk = true) => {
-  const random = rng(seed);
+  const random = mulberry32(seed);
   const strength = new Map(TRUE_ELO);
 
   const seats = Array.from({ length: 60 }, (_match, index) => {

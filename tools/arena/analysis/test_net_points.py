@@ -23,9 +23,6 @@ class Arithmetic(unittest.TestCase):
         self.assertAlmostEqual(m.net, 0.6)
         self.assertEqual(m.margin, 1)
 
-    def test_tied_values_share_the_mean_of_their_ranks(self):
-        self.assertEqual(np_.ranks([5.0, 1.0, 5.0, 3.0]), [3.5, 1.0, 3.5, 2.0])
-
     def test_interval_of_identical_blocks_is_a_point(self):
         rows = np_.config_rows([match(str(n), seat("opus", 0.5, 1), seat("sol", 0.7, 2)) for n in range(25)], {"opus high": 10.0, "sol high": -10.0}, random.Random(1))
         opus = next(r for r in rows if r.config[0] == "opus")

@@ -1,12 +1,11 @@
 import assert from 'node:assert/strict';
 import { config, round, list, array, kind, seatNumber, tag, maybe, requestJSON, stateJSON, machineJam } from './reference-adapter.mjs';
-import { items, loadModels, lockstep, makeRandom, nil, normalize, ring, rules } from './machine-items-lib.mjs';
+import { items, itemSteps, loadModels, lockstep, makeRandom, nil, normalize, ring, rules, sockets } from './machine-items-lib.mjs';
 
 const { M, R, close } = await loadModels('bend-mp-machine-items-');
 try {
   const { compare, sameNotes, boundaries } = lockstep(M, R);
 
-  const sockets = n => n === 2 ? [1, 3] : Array.from({ length: n }, (_, i) => i);
 
   function dual(c, label) {
     const r = R.start(c), m = M.start(c);
@@ -37,39 +36,7 @@ try {
         assert.ok(index >= 0, `seat ${s} has required move in ${JSON.stringify(this.request)}`);
         return this.answer(index);
       },
-      draws() {
-        for (let fuel = 0; this.request.kind === 'Draw'; fuel++) {
-          assert.ok(fuel < 64, 'draw closure terminates');
-          this.answer(this.request.label === 'ShuffleSwap' ? this.request.hi : 0);
-        }
-      },
-      grant(s, item) {
-        this.move(s, move => 'Grab' in move);
-        if (this.request.kind === 'Draw') {
-          assert.equal(this.request.label, 'ItemChoice');
-          const index = array(this.r.frame.continuation.pool).map(kind).indexOf(item);
-          assert.ok(index >= 0, `${item} is in the eligible pool`);
-          this.answer(index);
-        }
-        assert.equal(this.snapshot.seats[s].holding, item);
-      },
-      place(s, slot = 0) { return this.move(s, move => move.Place === slot); },
-      distribute(wanted = () => 'Beer') {
-        for (let fuel = 0; ; fuel++) {
-          assert.ok(fuel < 256, 'distribution terminates');
-          this.draws();
-          assert.equal(this.request.kind, 'Choose');
-          if (this.moves.some(({ move }) => 'PickUp' in move)) return;
-          const choice = this.moves[0];
-          if ('Grab' in choice.move) this.grant(choice.seat, wanted(choice.seat, this.snapshot));
-          else this.place(choice.seat, choice.move.Place);
-        }
-      },
-      use(s, item) { return this.move(s, move => move.UseItem?.[1] === item); },
-      shoot(s, target) {
-        this.move(s, move => 'PickUp' in move);
-        return this.move(s, move => move.Shoot === target);
-      },
+      ...itemSteps(game => game.r),
       fixture(changes, sawed = null) {
         const host = { ...this.r.host, seats: { ...this.r.host.seats } };
         const players = ring(this.m.players, s => ({ ...s }));

@@ -14,7 +14,6 @@ ones between the regret-depth markers of that file.
 import argparse
 import json
 import math
-import random
 from collections import Counter
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -22,11 +21,12 @@ from itertools import chain
 from pathlib import Path
 
 from docs import splice_between_markers
-from fmt import pct, table
+from fmt import pct, plus_minus, table, two_places
 from load import connect
 from regret import DERIVED
 from rules import POINT
-from reload_bias import Decision, Estimate, population, split_evenly
+from reload_bias import Decision, population
+from stats import Estimate, draw
 
 DEPTH, BUDGET = 6, 20_000
 DEEP_DEPTH, DEEP_BUDGET = 8, 200_000
@@ -37,28 +37,15 @@ QUOTA = {(1, True): 140, (2, True): 200, (3, True): 280, (4, True): 280, (5, Tru
          (1, False): 140, (2, False): 200, (3, False): 280, (4, False): 280, (5, False): 280, (6, False): 260}  # fmt: skip
 
 
-def draw(decisions: list[Decision], per_cell: Mapping[tuple[int, bool], int], lists: int, seed: int) -> list[list[Decision]]:
-    """`per_cell` decisions for each (shells left, shot) cell, spread equally over the models, dealt into `lists` lists that each hold an equal share of every stratum."""
-    rng = random.Random(seed)
-    out: list[list[Decision]] = [[] for _ in range(lists)]
-    turn = 0
-    for cell in sorted(per_cell):
-        by_model: dict[str, list[Decision]] = {}
-        for decision in decisions:
-            if (decision.shells_left, decision.shot) == cell:
-                by_model.setdefault(decision.model, []).append(decision)
-        shares = split_evenly(per_cell[cell], {model: len(group) for model, group in by_model.items()})
-        for model in sorted(by_model):
-            for decision in rng.sample(by_model[model], shares[model]):
-                out[turn % lists].append(decision)
-                turn += 1
-    return out
-
-
 # Summary
 # =======
 
 Stratum = tuple[int, bool, str]  # shells left, shot, model
+
+
+def cell(decision: Decision) -> tuple[int, bool]:
+    """The draw's cell: shells left and shot."""
+    return (decision.shells_left, decision.shot)
 
 
 @dataclass(frozen=True)
@@ -88,9 +75,7 @@ def pairs(deep_path: Path, regret_path: Path, knowledge_path: Path) -> list[Pair
     """The deep run's decisions with the production score of the same decision, matched by match and ordinal.
 
     Fails when a deep row of these settings has no searched production row or agent decision to match, or is not itself searched, or was scored by another evaluator build than its production row: the difference would be the evaluators' as much as the depth's."""
-    db = connect(str(deep_path))
-    db.execute("ATTACH DATABASE ? AS s", (f"file:{regret_path}?mode=ro",))
-    db.execute("ATTACH DATABASE ? AS k", (f"file:{knowledge_path}?mode=ro",))
+    db = connect(str(deep_path), s=regret_path, k=knowledge_path)
     deep_rows = db.execute("SELECT COUNT(*) FROM regret WHERE max_depth = ? AND budget = ? AND reload = 'static'", (DEEP_DEPTH, DEEP_BUDGET)).fetchone()[0]
     rows = db.execute(
         """SELECT t.match_id, t.ordinal, d.remaining, d.shot IS NOT NULL, p.model, s.regret, t.regret, s.depth, t.depth, s.limited, t.limited, s.best, t.best, t.best_score, t.values_json, s.evaluator, t.evaluator
@@ -169,14 +154,6 @@ def sizes_of(run: list[Decision]) -> Mapping[Stratum, int]:
     return Counter((d.shells_left, d.shot, d.model) for d in run)
 
 
-def two_places(value: float) -> str:
-    return f"{value:.2f}"
-
-
-def signed(e: Estimate) -> str:
-    return f"{round(e.mean, 2) + 0.0:+.2f} ± {e.half_width:.2f}"
-
-
 def by_cell(sample: list[Pair], run: list[Decision], sizes: Mapping[Stratum, int]) -> str:
     """Shots and item moves apart, by shells left in the gun and pooled over it."""
     rows = []
@@ -199,7 +176,7 @@ def by_cell(sample: list[Pair], run: list[Decision], sizes: Mapping[Stratum, int
                     two_places(mean(lambda p: p.deep_depth - p.depth).mean),
                     two_places(mean(lambda p: p.regret).mean),
                     two_places(mean(lambda p: p.deep_regret).mean),
-                    signed(mean(lambda p: p.deep_regret - p.regret)),
+                    plus_minus(mean(lambda p: p.deep_regret - p.regret)),
                     pct(mean(lambda p: p.best_label_changed).mean),
                     pct(mean(lambda p: p.best_loses > 0).mean),
                 ]
@@ -214,7 +191,7 @@ def by_limit(sample: list[Pair], run: list[Decision], sizes: Mapping[Stratum, in
         scored = [p for p in sample if p.limited == limited]
         in_domain = sum(limits[d.match_id, d.ordinal] == limited for d in run)
         mean = lambda value, limited=limited, in_domain=in_domain: estimate(sample, lambda p: value(p) * (p.limited == limited), sizes, in_domain)
-        rows.append([name, f"{len(scored):,}", two_places(mean(lambda p: p.regret).mean), two_places(mean(lambda p: p.deep_regret).mean), signed(mean(lambda p: p.deep_regret - p.regret)), pct(mean(lambda p: p.best_label_changed).mean), pct(mean(lambda p: p.deep_limited).mean)])
+        rows.append([name, f"{len(scored):,}", two_places(mean(lambda p: p.regret).mean), two_places(mean(lambda p: p.deep_regret).mean), plus_minus(mean(lambda p: p.deep_regret - p.regret)), pct(mean(lambda p: p.best_label_changed).mean), pct(mean(lambda p: p.deep_limited).mean)])
     return table(["production search", "scored", "regret at 6", "regret at 8", "8 minus 6", "best label changed", "depth 8 limited"], rows)
 
 
@@ -226,7 +203,7 @@ def by_model(sample: list[Pair], sizes: Mapping[Stratum, int]) -> str:
     deep = {m: mean(m, lambda p: p.deep_regret).mean for m in models}
     rank = lambda means: {m: 1 + sum(means[other] < means[m] for other in models) for m in models}
     shallow_rank, deep_rank = rank(shallow), rank(deep)
-    rows = [[m, str(sum(p.model == m for p in sample)), two_places(shallow[m]), str(shallow_rank[m]), two_places(deep[m]), str(deep_rank[m]), signed(mean(m, lambda p: p.deep_regret - p.regret))] for m in sorted(models, key=shallow.__getitem__)]
+    rows = [[m, str(sum(p.model == m for p in sample)), two_places(shallow[m]), str(shallow_rank[m]), two_places(deep[m]), str(deep_rank[m]), plus_minus(mean(m, lambda p: p.deep_regret - p.regret))] for m in sorted(models, key=shallow.__getitem__)]
     return table(["model", "scored", "regret at 6", "rank", "regret at 8", "rank", "8 minus 6"], rows)
 
 
@@ -235,7 +212,7 @@ def report(sample: list[Pair], run: list[Decision], limits: Mapping[tuple[str, i
     mean = lambda value: estimate(sample, value, sizes)
     lines = [
         f"{len(sample):,} decisions scored at depth {DEEP_DEPTH} with {DEEP_BUDGET:,} nodes and at depth {DEPTH} with {BUDGET:,}, drawn from the run's {len(run):,}.",
-        f"Over the run the chosen best move's label changes in {pct(mean(lambda p: p.best_label_changed).mean)} of decisions, and in {pct(mean(lambda p: p.best_loses > 0).mean)} the deep search scores the old chosen best move strictly lower than its own. Mean regret goes from {two_places(mean(lambda p: p.regret).mean)} to {two_places(mean(lambda p: p.deep_regret).mean)} points ({signed(mean(lambda p: p.deep_regret - p.regret))}).",
+        f"Over the run the chosen best move's label changes in {pct(mean(lambda p: p.best_label_changed).mean)} of decisions, and in {pct(mean(lambda p: p.best_loses > 0).mean)} the deep search scores the old chosen best move strictly lower than its own. Mean regret goes from {two_places(mean(lambda p: p.regret).mean)} to {two_places(mean(lambda p: p.deep_regret).mean)} points ({plus_minus(mean(lambda p: p.deep_regret - p.regret))}).",
         f"The budget still stops {pct(mean(lambda p: p.deep_limited).mean)} of the depth 8 searches, against {pct(mean(lambda p: p.limited).mean)} at depth 6.",
     ]
     return "\n".join(lines) + f"\n\n### By shells left in the gun\n\n{by_cell(sample, run, sizes)}\n\n### By how the production search ended\n\n{by_limit(sample, run, sizes, limits)}\n\n### By model\n\n{by_model(sample, sizes)}\n"
@@ -258,7 +235,7 @@ def main() -> None:
     args = parser.parse_args()
     run = population(args.regret, args.knowledge, DEPTH, BUDGET)
     if args.command == "sample":
-        lists = draw(run, QUOTA, args.lists, args.seed)
+        lists = draw(run, QUOTA, args.lists, args.seed, cell)
         args.out.mkdir(parents=True, exist_ok=True)
         for index, chosen in enumerate(lists):
             (args.out / f"list-{index:02d}.txt").write_text("".join(f"{d.match_id} {d.ordinal}\n" for d in chosen))
@@ -266,7 +243,7 @@ def main() -> None:
         return
     limits = run_limits(args.regret, run)
     sample = pairs(args.deep, args.regret, args.knowledge)
-    check_sample(sample, {(d.match_id, d.ordinal) for d in chain.from_iterable(draw(run, QUOTA, args.lists, args.seed))})
+    check_sample(sample, {(d.match_id, d.ordinal) for d in chain.from_iterable(draw(run, QUOTA, args.lists, args.seed, cell))})
     text = report(sample, run, limits)
     if args.doc is None:
         print(text)
