@@ -195,18 +195,11 @@ fn check_notes(stepped: &Stepped) {
     assert!(!stepped.notes.truncated(), "notes were truncated");
 }
 
-/// A walk's visited states.
-#[derive(Default)]
-struct Walked {
-    states: Vec<State>,
-}
-
 /// Plays a reachable game of up to `steps` drawn answers, checking every invariant, and returns the states visited.
-fn walk(tc: &TestCase, config: &Config, steps: usize) -> Walked {
+fn walk(tc: &TestCase, config: &Config, steps: usize) -> Vec<State> {
     let mut current = start(config);
-    let mut walked = Walked::default();
     check_notes(&current);
-    walked.states.push(current.state);
+    let mut walked = vec![current.state];
     for _ in 0..steps {
         let state = current.state;
         check_state(config, &state);
@@ -226,7 +219,7 @@ fn walk(tc: &TestCase, config: &Config, steps: usize) -> Walked {
         check_notes(&next);
         check_events(config, state, &request, event, answer, &next);
         check_step(&state, &next.state);
-        walked.states.push(next.state);
+        walked.push(next.state);
         current = next;
     }
     walked
@@ -250,16 +243,16 @@ const STEPS: usize = 400;
 
 #[hegel::test(test_cases = 512)]
 fn walks_hold_invariants(tc: TestCase) {
-    let config = supported_config(&tc, false);
+    let config = supported_config(&tc);
     walk(&tc, &config, STEPS);
 }
 
 #[hegel::test(test_cases = 512)]
 fn forged_tokens_do_not_panic(tc: TestCase) {
-    let a = supported_config(&tc, false);
-    let b = supported_config(&tc, false);
-    let from_a = walk(&tc, &a, 120).states;
-    let from_b = walk(&tc, &b, 120).states;
+    let a = supported_config(&tc);
+    let b = supported_config(&tc);
+    let from_a = walk(&tc, &a, 120);
+    let from_b = walk(&tc, &b, 120);
     let n = any_u32(&tc);
     let moves: Vec<LegalMove> = from_a
         .iter()
@@ -293,7 +286,7 @@ fn forged_tokens_do_not_panic(tc: TestCase) {
 
 #[hegel::test(test_cases = 256)]
 fn arbitrary_states_do_not_panic(tc: TestCase) {
-    let config = supported_config(&tc, false);
+    let config = supported_config(&tc);
     let table = table(&tc);
     let state = arbitrary_state(&tc, table);
     let range = Range {
@@ -317,7 +310,7 @@ fn arbitrary_states_do_not_panic(tc: TestCase) {
 /// differs: the search reuses an Idle menu's answer across them.
 #[hegel::test(test_cases = 256)]
 fn menu_inputs_decide_the_request(tc: TestCase) {
-    let config = supported_config(&tc, false);
+    let config = supported_config(&tc);
     let table = config.table();
     let state = State {
         phase: Phase::Idle { seat: seat(&tc) },
