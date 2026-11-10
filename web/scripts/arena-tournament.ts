@@ -130,9 +130,9 @@ const dir = resolve(flag("dir") ?? exit("--dir is required"));
 
 const gitCommit = Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: WEB }).stdout.toString().trim();
 
-const keys = unwrap(resolveKeys(tournament.config, scheduleOf(tournament), process.env));
-
 const file = tournaments.map((each) => unwrap(openTournament(dir, each, gitCommit, new Date()))).at(-1) ?? exit("no config");
+
+const keys = unwrap(resolveKeys(file.config, file.schedule, process.env));
 
 const children = new Set<ReturnType<typeof spawn>>();
 
