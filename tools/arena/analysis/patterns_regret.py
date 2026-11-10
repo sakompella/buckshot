@@ -95,9 +95,8 @@ class Row:
 def load(regret_path: Path, knowledge_path: Path) -> list[Move]:
     """The searched agent decisions of finished matches. Full health is the round's highest health seen in any decision of it, which equals the health every seat starts the round with. The health list starts with the deciding player."""
     run_of(regret_path)
-    db = connect(str(regret_path))
+    db = connect(str(regret_path), k=knowledge_path)
     db.row_factory = sqlite3.Row
-    db.execute("ATTACH DATABASE ? AS k", (f"file:{knowledge_path}?mode=ro",))
     rows = db.execute(
         """WITH seen AS (
              SELECT match_id, ordinal, player, by_whom, round, remaining, chamber, source, private_live_min, private_live_max, sawed, shot, item, item_stolen,

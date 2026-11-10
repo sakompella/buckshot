@@ -13,7 +13,6 @@ arena's own starter shares.
 
 import argparse
 import json
-import math
 import random
 import re
 import statistics
@@ -22,6 +21,7 @@ from pathlib import Path
 
 import boot
 from fmt import frac, pct, span, table
+from stats import pearson, ranks
 
 RESAMPLES = 2000
 
@@ -83,27 +83,6 @@ def share(groups: dict[int, list[float]], rng: random.Random) -> str:
     _, interval = bootstrap(groups, mean_of, rng)
     wins, games = sum(map(sum, groups.values())), sum(map(len, groups.values()))
     return f"{frac(wins, games)} ({span(interval)})"
-
-
-def pearson(xs: list[float], ys: list[float]) -> float:
-    mx, my = statistics.fmean(xs), statistics.fmean(ys)
-    cov = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
-    spread_ = math.sqrt(sum((x - mx) ** 2 for x in xs) * sum((y - my) ** 2 for y in ys))
-    return cov / spread_ if spread_ > 0 else math.nan
-
-
-def ranks(values: list[float]) -> list[float]:
-    order = sorted(range(len(values)), key=values.__getitem__)
-    out = [0.0] * len(values)
-    i = 0
-    while i < len(order):
-        j = i
-        while j + 1 < len(order) and values[order[j + 1]] == values[order[i]]:
-            j += 1
-        for k in range(i, j + 1):
-            out[order[k]] = (i + j) / 2 + 1
-        i = j + 1
-    return out
 
 
 def arena_shares(doc: Path) -> dict[int, tuple[int, float]]:

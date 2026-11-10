@@ -14,25 +14,6 @@ def decision(index, shells_left=2, shot=True, model="m", depth=6):
     return rd.Decision(f"match{index}", index, shells_left, shot, model, depth)
 
 
-class Draw(unittest.TestCase):
-    def setUp(self):
-        self.decisions = [decision(i, shells_left=1 + i % 2, shot=i % 4 < 2, model="abc"[i % 3]) for i in range(600)]
-
-    def test_takes_each_cells_quota_spread_over_the_models_and_deals_it_evenly_into_lists(self):
-        lists = rd.draw(self.decisions, {(1, True): 12, (2, False): 6}, lists=3, seed=1)
-        everything = [d for items in lists for d in items]
-        self.assertEqual(sorted(len(items) for items in lists), [6, 6, 6])
-        self.assertEqual(len({(d.match_id, d.ordinal) for d in everything}), 18)
-        for cell, quota in {(1, True): 12, (2, False): 6}.items():
-            chosen = [d for d in everything if (d.shells_left, d.shot) == cell]
-            self.assertEqual({m: sum(d.model == m for d in chosen) for m in "abc"}, {m: quota // 3 for m in "abc"})
-            for items in lists:
-                self.assertEqual(sum((d.shells_left, d.shot) == cell for d in items), quota // 3)
-
-    def test_the_same_seed_draws_the_same_sample(self):
-        self.assertEqual(rd.draw(self.decisions, {(1, True): 9}, 2, seed=5), rd.draw(self.decisions, {(1, True): 9}, 2, seed=5))
-
-
 def pair(shells_left=2, shot=True, model="m", regret=1.0, deep_regret=1.0, limited=False, ordinal=0):
     return rd.Pair(f"{model}-{ordinal}", ordinal, shells_left, shot, model, regret, deep_regret, 6, 8, limited, False, False, 0.0)
 

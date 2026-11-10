@@ -119,8 +119,7 @@ def decision(match, ordinal, player, model, effort, block, chamber, source, shot
 
 def load(knowledge_path: Path, regret_path: Path) -> list[Decision]:
     run_of(regret_path)
-    db = connect(str(knowledge_path))
-    db.execute("ATTACH DATABASE ? AS r", (f"file:{regret_path}?mode=ro",))
+    db = connect(str(knowledge_path), r=regret_path)
     rows = db.execute(
         """SELECT d.match_id, d.ordinal, d.player, p.model, p.effort, m.seed_block_id, d.chamber, d.source, d.shot, d.health_json, d.private_known,
                   d.own_items_json, d.opponent_items_json, d.remaining, g.values_json

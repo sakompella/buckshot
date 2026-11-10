@@ -13,17 +13,17 @@ and the static run it is compared with, both read only, and prints markdown tabl
 import argparse
 import json
 import math
-import random
 from collections import Counter
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
 from docs import splice_between_markers
-from fmt import pct, table
+from fmt import pct, plus_minus, table, two_places
 from load import connect
 from regret import DERIVED
 from rules import POINT
+from stats import Estimate, draw
 
 # Decisions to draw for each (shells left, shot, reachable) cell. Where a line can empty the gun, a scored decision costs seconds to minutes, more with more
 # shells left and for item moves, so the quotas shrink with the distance. Where none can, the two rules score alike by construction: a check only.
@@ -55,8 +55,7 @@ class Decision:
 
 def population(regret_path: Path, knowledge_path: Path, depth: int = 6, budget: int = 20000) -> list[Decision]:
     """The searched static decisions of finished two-seat matches that are not excluded, as regret.py reads them."""
-    db = connect(str(regret_path))
-    db.execute("ATTACH DATABASE ? AS k", (f"file:{knowledge_path}?mode=ro",))
+    db = connect(str(regret_path), k=knowledge_path)
     rows = db.execute(
         """SELECT r.match_id, r.ordinal, d.remaining, d.shot IS NOT NULL, p.model, r.depth
            FROM regret r
@@ -71,40 +70,13 @@ def population(regret_path: Path, knowledge_path: Path, depth: int = 6, budget: 
     return [Decision(match, ordinal, remaining, bool(shot), model, finished) for match, ordinal, remaining, shot, model, finished in rows]
 
 
-def split_evenly(total: int, sizes: dict[str, int]) -> dict[str, int]:
-    """Shares of `total` equal across the keys, where a key never gets more than its size and its unused share goes to the others."""
-    shares = {key: 0 for key in sizes}
-    open_keys = [key for key in sizes if sizes[key] > 0]
-    left = min(total, sum(sizes.values()))
-    while left > 0:
-        each, extra = divmod(left, len(open_keys))
-        for index, key in enumerate(open_keys):
-            shares[key] = min(sizes[key], shares[key] + each + (1 if index < extra else 0))
-        left = min(total, sum(sizes.values())) - sum(shares.values())
-        open_keys = [key for key in open_keys if shares[key] < sizes[key]]
-    return shares
-
-
-def draw(decisions: list[Decision], per_cell: dict[tuple[int, bool, bool], int], lists: int, seed: int) -> list[list[Decision]]:
-    """`per_cell` decisions for each (shells left, shot, reachable) cell, spread equally over the models, dealt into `lists` lists that each hold an equal share of every stratum."""
-    rng = random.Random(seed)
-    out: list[list[Decision]] = [[] for _ in range(lists)]
-    turn = 0
-    for cell in sorted(per_cell):
-        by_model: dict[str, list[Decision]] = {}
-        for decision in decisions:
-            if (decision.shells_left, decision.shot, decision.reachable) == cell:
-                by_model.setdefault(decision.model, []).append(decision)
-        shares = split_evenly(per_cell[cell], {model: len(group) for model, group in by_model.items()})
-        for model in sorted(by_model):
-            for decision in rng.sample(by_model[model], shares[model]):
-                out[turn % lists].append(decision)
-                turn += 1
-    return out
-
-
 # Summary
 # =======
+
+
+def cell(decision: Decision) -> tuple[int, bool, bool]:
+    """The draw's cell: shells left, shot, and whether the search can reach a reload."""
+    return (decision.shells_left, decision.shot, decision.reachable)
 
 
 @dataclass(frozen=True)
@@ -127,9 +99,7 @@ def pairs(sampled_path: Path, regret_path: Path, knowledge_path: Path, depth: in
 
     The evaluator column is not compared: a build of the player made after the reload rules were added has a different hash, because the reload-leaf source changed, though its static path is meant to score the same.
     """
-    db = connect(str(sampled_path))
-    db.execute("ATTACH DATABASE ? AS s", (f"file:{regret_path}?mode=ro",))
-    db.execute("ATTACH DATABASE ? AS k", (f"file:{knowledge_path}?mode=ro",))
+    db = connect(str(sampled_path), s=regret_path, k=knowledge_path)
     rows = db.execute(
         """SELECT d.remaining, d.shot IS NOT NULL, p.model, t.regret, r.regret, t.values_json, r.values_json, t.best, r.best, t.nodes, r.nodes, t.depth, r.depth
            FROM regret r
@@ -145,12 +115,6 @@ def pairs(sampled_path: Path, regret_path: Path, knowledge_path: Path, depth: in
         Pair(remaining, bool(shot), model, static / POINT, sampled / POINT, remaining <= static_depth, scores(static_values) != scores(sampled_values), static_best != sampled_best, static_nodes == sampled_nodes and static_depth == sampled_depth)
         for remaining, shot, model, static, sampled, static_values, sampled_values, static_best, sampled_best, static_nodes, sampled_nodes, static_depth, sampled_depth in rows
     ]
-
-
-@dataclass(frozen=True)
-class Estimate:
-    mean: float
-    half_width: float  # of a 95% interval
 
 
 def estimate(sample: list[Pair], value: Callable[[Pair], float], sizes: Mapping[tuple[int, bool, str, bool], int]) -> Estimate:
@@ -180,14 +144,6 @@ def sizes_of(run: list[Decision]) -> Sizes:
     return Counter(d.stratum for d in run)
 
 
-def two_places(value: float) -> str:
-    return f"{value:.2f}"
-
-
-def signed(e: Estimate) -> str:
-    return f"{round(e.mean, 2) + 0.0:+.2f} ± {e.half_width:.2f}"
-
-
 def by_cell(sample: list[Pair], run: list[Decision], sizes: Sizes) -> str:
     """Shots and item moves apart, by shells left in the gun and pooled over it. Regrets are in percentage points of the round win chance."""
     rows = []
@@ -208,7 +164,7 @@ def by_cell(sample: list[Pair], run: list[Decision], sizes: Sizes) -> str:
                     pct(mean(lambda p: p.reloads).mean),
                     two_places(mean(lambda p: p.static_regret).mean),
                     two_places(mean(lambda p: p.sampled_regret).mean),
-                    signed(mean(lambda p: p.sampled_regret - p.static_regret)),
+                    plus_minus(mean(lambda p: p.sampled_regret - p.static_regret)),
                     pct(mean(lambda p: p.best_moved).mean),
                 ]
             )
@@ -236,7 +192,7 @@ def report(sample: list[Pair], run: list[Decision], noise: tuple[int, Estimate] 
         f"A score changed in {sum(p.reloads for p in inside):,} of {len(inside):,} scored decisions where the gun held no more shells than the static search finished decisions, and in {sum(p.reloads for p in outside):,} of {len(outside):,} where it held more.",
     ]
     if noise is not None:
-        lines.append(f"On {noise[0]:,} decisions scored with 256 samples as well, mean regret with 64 minus with 256 is {signed(noise[1])} points.")
+        lines.append(f"On {noise[0]:,} decisions scored with 256 samples as well, mean regret with 64 minus with 256 is {plus_minus(noise[1])} points.")
     return "\n".join(lines) + f"\n\n### By shells left in the gun\n\n{by_cell(sample, run, sizes)}\n\n### By model\n\n{by_model(sample, sizes)}\n"
 
 
@@ -277,7 +233,7 @@ def main() -> None:
     run = population(args.regret, args.knowledge)
     if args.command == "sample":
         left_out = {tuple(line.split()) for path in args.exclude for line in path.read_text().splitlines() if line.strip()}
-        lists = draw([d for d in run if (d.match_id, str(d.ordinal)) not in left_out], QUOTA, args.lists, args.seed)
+        lists = draw([d for d in run if (d.match_id, str(d.ordinal)) not in left_out], QUOTA, args.lists, args.seed, cell)
         args.out.mkdir(parents=True, exist_ok=True)
         for index, chosen in enumerate(lists):
             (args.out / f"list-{index:02d}.txt").write_text("".join(f"{d.match_id} {d.ordinal}\n" for d in chosen))

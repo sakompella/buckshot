@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 import reload_bias as rb
+from stats import draw
 from testdb import KNOWLEDGE, REGRET, database, insert
 
 
@@ -13,23 +14,12 @@ def decision(index, shells_left=2, shot=True, model="m", depth=6):
     return rb.Decision(f"match{index}", index, shells_left, shot, model, depth)
 
 
-class SplitEvenly(unittest.TestCase):
-    def test_equal_shares_with_the_remainder_to_the_first_keys(self):
-        self.assertEqual(rb.split_evenly(7, {"a": 100, "b": 100, "c": 100}), {"a": 3, "b": 2, "c": 2})
-
-    def test_a_small_key_gives_its_unused_share_to_the_others(self):
-        self.assertEqual(rb.split_evenly(10, {"a": 1, "b": 100, "c": 100}), {"a": 1, "b": 5, "c": 4})
-
-    def test_never_more_than_exists(self):
-        self.assertEqual(rb.split_evenly(50, {"a": 2, "b": 3}), {"a": 2, "b": 3})
-
-
 class Draw(unittest.TestCase):
     def setUp(self):
         self.decisions = [decision(i, shells_left=1 + i % 2, shot=i % 4 < 2, model="abc"[i % 3]) for i in range(600)]
 
     def test_takes_each_cells_quota_spread_over_the_models_and_deals_it_evenly_into_lists(self):
-        lists = rb.draw(self.decisions, {(1, True, True): 12, (2, False, True): 6}, lists=3, seed=1)
+        lists = draw(self.decisions, {(1, True, True): 12, (2, False, True): 6}, lists=3, seed=1, cell_of=rb.cell)
         everything = [d for items in lists for d in items]
         self.assertEqual(sorted(len(items) for items in lists), [6, 6, 6])
         self.assertEqual(len({(d.match_id, d.ordinal) for d in everything}), 18)
@@ -42,11 +32,11 @@ class Draw(unittest.TestCase):
 
     def test_a_gun_the_search_cannot_empty_is_a_cell_of_its_own(self):
         decisions = [decision(i, shells_left=5, depth=3 if i % 2 else 6) for i in range(40)]
-        [chosen] = rb.draw(decisions, {(5, True, False): 4}, lists=1, seed=1)
+        [chosen] = draw(decisions, {(5, True, False): 4}, lists=1, seed=1, cell_of=rb.cell)
         self.assertEqual([d.depth for d in chosen], [3, 3, 3, 3])
 
     def test_the_same_seed_draws_the_same_sample(self):
-        self.assertEqual(rb.draw(self.decisions, {(1, True, True): 9}, 2, seed=5), rb.draw(self.decisions, {(1, True, True): 9}, 2, seed=5))
+        self.assertEqual(draw(self.decisions, {(1, True, True): 9}, 2, seed=5, cell_of=rb.cell), draw(self.decisions, {(1, True, True): 9}, 2, seed=5, cell_of=rb.cell))
 
 
 def pair(shells_left=2, shot=True, model="m", static=1.0, sampled=1.0):
