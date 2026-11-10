@@ -14,22 +14,9 @@ import ./ai/don.bend as Don
 # The AI seats use the driver's own entry points (R.mind.of, R.think,
 # R.coin.word), so the web and the driver cannot drift.
 
-def items.off() -> D.ItemRules:
-  +off : D.ItemRule = D.ItemRule{False{}, 0n, 0n}
-  D.ItemRules{off, off, off, off, off, off, off, off, off}
-
-def round.of(items: Bool) -> D.RoundRules:
-  match items:
-    case True{}:
-      D.config.default_round()
-    case False{}:
-      +load : D.LoadRule = D.LoadRule{D.RandomShells{}, D.RandomAmount{}}
-      D.RoundRules{D.RandomHealth{}, D.LoadRules{load, load, load, load}, items.off(), D.Boxed{}}
-
 # The default three-round match; with items False every item is disabled.
 def config(table: D.Table, items: Bool) -> D.Config:
-  +round : D.RoundRules = round.of(items)
-  D.Config{table, D.ThreeRounds{round, round, round}}
+  R.config(table, items)
 
 def start(config: D.Config) -> D.Stepped<&2, S.State>:
   M.start(config)

@@ -10,8 +10,13 @@ import { join } from 'node:path';
 import { list, array, kind, seatNumber } from './reference-adapter.mjs';
 import { build, makeRandom, normalize } from './machine-items-lib.mjs';
 
+// Most trials are prefixes of MAX_STEPS answers; a smaller batch plays whole
+// games (an item game can run past 2,600 random answers), and one that has
+// not finished after COMPLETE_STEPS answers fails.
 const GAMES_PER_TABLE = Number(process.env.FUZZ_GAMES ?? 500);
 const MAX_STEPS = Number(process.env.FUZZ_STEPS ?? 60);
+const COMPLETE_PER_TABLE = Number(process.env.FUZZ_COMPLETE ?? Math.ceil(GAMES_PER_TABLE / 20));
+const COMPLETE_STEPS = Number(process.env.FUZZ_COMPLETE_STEPS ?? 10000);
 
 const dir = mkdtempSync(join(tmpdir(), 'bend-mp-simple-fuzz-'));
 const bridge = build(dir, 'bridge', '../simple-abstract.bend'), abstract = build(dir, 'abstract', '../abstract.bend');
@@ -24,7 +29,7 @@ const sockets = n => n === 2 ? [1, 3] : Array.from({ length: n }, (_, i) => i);
 const seatTag = s => ({ $: `Seat${s}` });
 const json = x => JSON.stringify(normalize(x));
 const count = { refines: 0, valid: 0, board: 0, draws: 0, menus: 0, privacy: 0, schedule: 0 };
-const coverage = { games: 0, points: 0, finished: 0, itemDraws: 0, distributions: 0 };
+const coverage = { prefixes: 0, prefixesFinished: 0, complete: 0, longest: 0, points: 0, itemDraws: 0, distributions: 0 };
 const moveKinds = { Shoot: 0, Use: 0, Jam: 0, Steal: 0, StealJam: 0 };
 const capBound = { 2: 0, 3: 0, 4: 0 };
 
@@ -153,13 +158,15 @@ function answerFor(request) {
   return random() % 16 === 0 ? length + random() % 4 : random() % length;
 }
 
-function play(config, label, seats) {
+// Plays up to `limit` answers; returns how many it took to finish, or null
+// (a whole game that has not finished fails with its tape).
+function play(config, label, seats, limit, whole) {
   const started = N('start')(config);
   const game = { label, config, seats, tape: [], distribution: 0, bound: new Set(), lastTaker: null };
   let s = started.state;
   const smStart = M('start')(config);
   same('refines', 'start', { state: smStart.state, notes: smStart.notes }, { state: SA.embed(s), notes: started.notes }, game);
-  for (let step = 0; step < MAX_STEPS; step++) {
+  for (let step = 0; step < limit; step++) {
     const x = SA.embed(s);
     checkValid(game, `step ${step}`, x);
     const point = N('point')(s), smPoint = M('point')(x);
@@ -167,7 +174,7 @@ function play(config, label, seats) {
     checkPrivacy(game, s);
     coverage.points++;
     const request = point.request;
-    if (kind(request) === 'Finished') { coverage.finished++; break; }
+    if (kind(request) === 'Finished') { capBound[seats.length] += game.bound.size; return step; }
     if (kind(s.phase) === 'Stalled') throw new Mismatch(`Stalled at ${JSON.stringify(game.tape)} in ${label}`);
     if (kind(request) === 'Stuck') throw new Mismatch(`Stuck at ${JSON.stringify(game.tape)} in ${label}`);
     if (kind(request) === 'Draw') {
@@ -185,14 +192,23 @@ function play(config, label, seats) {
     watchDistributions(game, x, array(steps));
     s = next.state;
   }
+  if (whole) throw new Mismatch(`unfinished after ${limit} answers in ${label}\nrepro: ${JSON.stringify({ tape: game.tape, config: normalize(config) })}`);
   capBound[seats.length] += game.bound.size;
+  return null;
 }
 
 const started = performance.now();
 try {
-  for (const seats of [2, 3, 4]) for (let trial = 0; trial < GAMES_PER_TABLE; trial++) {
-    play(randomConfig(seats), `${seats} seats #${trial}`, sockets(seats));
-    coverage.games++;
+  for (const seats of [2, 3, 4]) {
+    for (let trial = 0; trial < GAMES_PER_TABLE; trial++) {
+      if (play(randomConfig(seats), `${seats} seats #${trial}`, sockets(seats), MAX_STEPS, false) !== null) coverage.prefixesFinished++;
+      coverage.prefixes++;
+    }
+    for (let trial = 0; trial < COMPLETE_PER_TABLE; trial++) {
+      const answers = play(randomConfig(seats), `${seats} seats whole game #${trial}`, sockets(seats), COMPLETE_STEPS, true);
+      coverage.complete++;
+      coverage.longest = Math.max(coverage.longest, answers);
+    }
   }
 } catch (error) {
   if (!(error instanceof Mismatch) && !(error instanceof assert.AssertionError)) throw error;
@@ -203,5 +219,5 @@ try {
 }
 if (process.exitCode !== 1) {
   assert.ok(Object.values(moveKinds).every(n => n > 0) && coverage.itemDraws > 0 && capBound[3] + capBound[4] > 0, 'fuzz plays every kind of move, item draws and cap-bound distributions');
-  console.log(`simple fuzz: ${coverage.games} games, ${coverage.points} points, ${((performance.now() - started) / 1000).toFixed(0)} s; checks ${JSON.stringify(count)}; moves ${JSON.stringify(moveKinds)}; ${JSON.stringify(coverage)}; cap-bound distributions by seats ${JSON.stringify(capBound)}`);
+  console.log(`simple fuzz: ${coverage.prefixes} prefixes of ${MAX_STEPS} answers (${coverage.prefixesFinished} finished), ${coverage.complete} whole games (longest ${coverage.longest} answers), ${coverage.points} points, ${((performance.now() - started) / 1000).toFixed(0)} s; checks ${JSON.stringify(count)}; moves ${JSON.stringify(moveKinds)}; ${JSON.stringify(coverage)}; cap-bound distributions by seats ${JSON.stringify(capBound)}`);
 }

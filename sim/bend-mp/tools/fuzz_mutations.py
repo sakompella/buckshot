@@ -166,7 +166,7 @@ INDEPENDENT_RUN = {"FUZZ_SKIP": "step_matches", "FUZZ_GAMES": "200"}
 
 
 def main() -> int:
-    with ThreadPoolExecutor(max_workers=3) as pool:
+    with ThreadPoolExecutor(max_workers=2) as pool:
         outcomes = list(pool.map(run_fuzz, MUTATIONS))
         independent = list(pool.map(lambda m: run_fuzz(m, INDEPENDENT_RUN), MUTATIONS))
     failures = []
