@@ -1,5 +1,7 @@
 # One site
 
+> Amended 2026-11-10 by ADR-0053: the Play page is gone and `/` moves to `/arena`.
+
 The game and the arena analysis viewer are one Foldkit app (`web/src/site/`) with three pages, each at a real URL:
 
 - **Play** at `/`: the game, run entirely in the browser as before (ADR-0027).

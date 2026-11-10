@@ -6,9 +6,9 @@ import { Letter, rosterOf } from "../players.ts";
 import { agentGame, agentMove, type AgentSource, type SeatMove } from "./view.ts";
 
 // The agent tools, whatever carries them: their names, descriptions and input
-// schemas, and what each call does to a match. A front end (WebMCP in the page,
-// the stdio MCP server) lists these tools, decodes a call with decodeCall, and
-// runs it with runTool over its own MatchSession.
+// schemas, and what each call does to a match. A front end (the stdio MCP server)
+// lists these tools, decodes a call with decodeCall, and runs it with runTool
+// over its own MatchSession.
 
 export const RULES =
   "Buckshot: a shotgun is loaded with a hidden mix of live and blank shells, and each load is announced. On your turn you shoot a player or yourself, or use an item; a live shell does damage and a blank fired at yourself keeps your turn. All players return alive at each round start. A round ends only when one player remains alive. That player wins the round and its prize, and the most cash after the last round wins. A match has three rounds.";

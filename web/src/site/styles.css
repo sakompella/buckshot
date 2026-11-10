@@ -38,5 +38,3 @@ nav.site-nav a[aria-current="page"] { color: #fff; border-bottom-color: currentC
 
 /* The bar's bottom border comes out of its height, which leaves the links 44px for a finger. */
 @media (pointer: coarse) { :root { --site-nav: 45px; } }
-
-.site-play .app { height: calc(100vh - var(--site-nav)); height: calc(100dvh - var(--site-nav)); }

@@ -1,7 +1,7 @@
 import { Option, pipe, Predicate, Schema, SchemaTransformation } from "effect";
 import { Route, type Url } from "foldkit";
 
-import { type Filter, MOVED_TARGETS, Target } from "../arena-viewer/page/model.ts";
+import type { Filter } from "../arena-viewer/page/model.ts";
 import { isOnline } from "./online.ts";
 
 // The site's pages and their URLs. The arena's shareable state lives in the query: the models and efforts switched
@@ -17,7 +17,6 @@ const ArenaQuery = Schema.Struct({ offModels: Schema.optional(Schema.String), of
 const ReplayQuery = Schema.Struct({ at: Schema.optional(Ordinal) });
 
 export const SiteRoute = Route.defineRouteUnion({
-  Play: {},
   Arena: ArenaQuery.fields,
   Replay: { id: MatchId, ...ReplayQuery.fields },
   NotFound: { path: Schema.String },
@@ -27,24 +26,19 @@ export type SiteRoute = typeof SiteRoute.Type;
 
 export type ArenaRoute = Extract<SiteRoute, { readonly _tag: "Arena" | "Replay" }>;
 
-const playRouter = pipe(Route.root, Route.mapTo(SiteRoute.Play));
-
 const arenaRouter = pipe(Route.literal("arena"), Route.query(ArenaQuery), Route.mapTo(SiteRoute.Arena));
 
 const replayRouter = pipe(Route.literal("replay"), Route.slash(Route.schemaSegment("id", MatchId)), Route.query(ReplayQuery), Route.mapTo(SiteRoute.Replay));
 
 /** The online build has no replays: a replay's URL there is an unknown page. */
-const parseRoute = Route.parseUrlWithFallback(isOnline ? Route.oneOf(arenaRouter, playRouter) : Route.oneOf(replayRouter, arenaRouter, playRouter), SiteRoute.NotFound);
+const parseRoute = Route.parseUrlWithFallback(isOnline ? arenaRouter : Route.oneOf(replayRouter, arenaRouter), SiteRoute.NotFound);
 
-/** A link from before the site had pages: the arena was at `/`, so `/#scatter` means the arena's scatter. */
-export const isOldArenaLink = (url: Url.Url): boolean =>
-  url.pathname === "/" && Option.exists(url.hash, (hash) => Schema.is(Target)(hash) || MOVED_TARGETS.has(hash));
+/** The site's root shows the arena; an old link such as `/#scatter` keeps its section. */
+export const isRootUrl = (url: Url.Url): boolean => url.pathname === "/";
 
-export const routeOf = (url: Url.Url): SiteRoute => (isOldArenaLink(url) ? SiteRoute.Arena({}) : parseRoute(url));
+export const routeOf = (url: Url.Url): SiteRoute => (isRootUrl(url) ? SiteRoute.Arena({}) : parseRoute(url));
 
 export const isArenaRoute = (route: SiteRoute): route is ArenaRoute => Predicate.isTagged(route, "Arena") || Predicate.isTagged(route, "Replay");
-
-export const PLAY_HREF = playRouter();
 
 const listOf = (value: string | undefined): ReadonlyArray<string> => (value === undefined || value === "" ? [] : value.split(","));
 

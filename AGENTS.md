@@ -1,6 +1,6 @@
 # Buckshot
 
-Research on Buckshot Roulette: a multiplayer rules library in Bend, a browser table, agent tools, and an arena where models play each other.
+Research on Buckshot Roulette: a multiplayer rules library in Bend, agent tools, and an arena where models play each other, with a site that shows its results.
 
 - **Local notes:** `_work/AGENTS.local.md` (local, gitignored) holds setup-specific notes. Read it first when it exists.
 - **Bend is the source of truth for the rules** (`sim/bend-mp/`). TypeScript may call Bend exports but never re-implements rules. Rules outside Bend (the Rust evaluator in `sim/rust/`) must be verified against Bend, and Bend wins any disagreement (ADR-0052).

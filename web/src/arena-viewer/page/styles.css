@@ -178,7 +178,7 @@ body:has(.overlay) { overflow: hidden; }
 .seedgroup { display: flex; gap: 4px 8px; align-items: center; flex-wrap: wrap; }
 .seedrow .chips { align-items: center; min-width: 0; }
 .mbody { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px; margin-top: 10px; }
-/* The replay's table is Play's, sized to its column instead of the room. */
+/* The replay's table, sized to its column instead of the room. */
 .board { container-type: inline-size; display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
 .board .stage, .board .stage[data-seats] { --size: min(100cqw, 520px); position: relative; left: auto; top: auto; flex: none; }
 /* each seat's letter under its counter, in the player's colour */
