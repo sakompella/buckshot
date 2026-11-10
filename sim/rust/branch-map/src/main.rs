@@ -240,7 +240,8 @@ fn check_rust(src: &Path) -> Result<rust::Report> {
     let mut files = Vec::new();
     for entry in std::fs::read_dir(src)? {
         let path = entry?.path();
-        if path.extension().is_some_and(|x| x == "rs") && !path.ends_with("branch.rs") {
+        let rules = !path.ends_with("branch.rs") && !path.ends_with("testing.rs");
+        if path.extension().is_some_and(|x| x == "rs") && rules {
             files.push(path);
         }
     }

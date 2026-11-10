@@ -343,18 +343,7 @@ impl Tokens<'_> {
     fn ring(&mut self) -> Result<Ring<SeatView>, ParseError> {
         let seats = u64::from(self.tag(2)).saturating_add(2);
         let table = Table::of_seats(seats).ok_or(ParseError::Wide)?;
-        let views: Vec<SeatView> = table.seats().iter().map(|_| self.seat_view()).collect();
-        let first = views.first().copied().unwrap_or(SeatView {
-            counter: Counter::Jammed,
-            slots: Slots::EMPTY,
-            cash: 0,
-            briefcase: Briefcase::NotGrabbing,
-        });
-        Ok(table
-            .seats()
-            .iter()
-            .zip(views)
-            .fold(Ring::fill(table, first), |ring, (seat, view)| ring.set(seat, view)))
+        Ok(Ring::from_fn(table, |_| self.seat_view()))
     }
 
     fn stage(&mut self) -> Stage {

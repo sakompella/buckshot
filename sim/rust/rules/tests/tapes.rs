@@ -326,8 +326,6 @@ fn tag_of<T: Copy + Debug>(v: &Value, all: &[T]) -> Result<T, String> {
         .ok_or_else(|| format!("unknown {n}"))
 }
 
-const SEATS: [Seat; 4] = [Seat::Seat0, Seat::Seat1, Seat::Seat2, Seat::Seat3];
-
 fn boolean(v: &Value) -> Result<bool, String> {
     v.as_bool().ok_or_else(|| format!("{} is not a Bool", short(v)))
 }
@@ -356,7 +354,7 @@ fn maybe_of<T>(v: &Value, f: impl Fn(&Value) -> Result<T, String>) -> Result<Opt
 }
 
 fn seat_of(v: &Value) -> Result<Seat, String> {
-    tag_of(v, &SEATS)
+    tag_of(v, &Seat::ALL)
 }
 
 fn load_of(v: &Value) -> Result<Load, String> {
@@ -393,7 +391,7 @@ fn ring_of<T: Copy>(table: Table, v: &Value, fill: T, f: impl Fn(&Value) -> Resu
         let seat = key
             .strip_prefix('s')
             .and_then(|n| n.parse::<usize>().ok())
-            .and_then(|n| SEATS.get(n))
+            .and_then(|n| Seat::ALL.get(n))
             .ok_or_else(|| format!("ring key {key}"))?;
         ring = ring.set(*seat, f(value)?);
     }

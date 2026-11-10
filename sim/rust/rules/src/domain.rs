@@ -21,6 +21,8 @@ pub enum Seat {
 }
 
 impl Seat {
+    pub const ALL: [Self; 4] = [Self::Seat0, Self::Seat1, Self::Seat2, Self::Seat3];
+
     #[must_use]
     pub fn index(self) -> usize {
         usize::from(u8::from(self))
@@ -211,6 +213,15 @@ impl<T: Copy> Ring<T> {
             table,
             cells: [value; RING_CELLS],
         }
+    }
+
+    /// `make` of every seated socket, called in ascending socket order.
+    #[must_use]
+    pub fn from_fn(table: Table, mut make: impl FnMut(Seat) -> T) -> Self {
+        let seats = table.seats();
+        let [head, ..] = seats.seats;
+        let first = Self::fill(table, make(head));
+        seats.iter().skip(1).fold(first, |ring, seat| ring.set(seat, make(seat)))
     }
 
     #[must_use]

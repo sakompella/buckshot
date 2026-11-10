@@ -103,6 +103,7 @@ name = "buckshot-rules"
 version = "0.1.0"
 dependencies = [
  "arrayvec",
+ "buckshot-rules",
  "enum-map",
  "hegeltest",
  "num_enum",

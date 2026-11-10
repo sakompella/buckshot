@@ -42,6 +42,8 @@ mod machine;
 mod point;
 mod rules;
 mod state;
+#[cfg(feature = "testing")]
+pub mod testing;
 
 #[cfg(feature = "trace")]
 pub use branch::take_trace;
