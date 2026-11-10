@@ -46,6 +46,7 @@ fn menu_helpers_agree_with_the_move_list() {
         let mut n = seed;
         let mut buffer = Notes::default();
         for _ in 0..600_u32 {
+            // A fixed walk, not a Hegel one, so `menus > 20` below holds on every run.
             n = n.wrapping_mul(1_103_515_245).wrapping_add(12_345);
             let pick = n >> 16_u32;
             let answer = match request(&config, &state) {
@@ -93,14 +94,14 @@ fn guns_keep_their_shells_in_order() {
         .map(|i| if i.is_multiple_of(3) { Shell::Live } else { Shell::Blank })
         .collect();
     for len in [0_usize, 1, 5, 63, 64] {
-        let part = shells.get(..len).unwrap_or(&shells);
+        let part = &shells[..len];
         let gun = Gun::from_shells(part.iter().copied()).expect("at most the capacity");
         assert_eq!(usize::try_from(gun.len()).ok(), Some(len), "from_shells keeps every shell");
         assert_eq!(gun.is_empty(), len == 0, "is_empty");
         for (i, shell) in part.iter().enumerate() {
-            assert_eq!(gun.nth(u32::try_from(i).unwrap_or(u32::MAX)), Some(*shell), "shell {i} of {len}");
+            assert_eq!(gun.nth(u32::try_from(i).expect("small")), Some(*shell), "shell {i} of {len}");
         }
-        assert_eq!(gun.nth(u32::try_from(len).unwrap_or(u32::MAX)), None, "nothing past the end");
+        assert_eq!(gun.nth(u32::try_from(len).expect("small")), None, "nothing past the end");
     }
     let most = Gun::from_shells(shells.iter().copied().skip(1)).expect("under the capacity");
     let pushed = most.push_front(Shell::Live);
@@ -130,7 +131,7 @@ fn a_fifth_seat_panics_rather_than_drop() {
 #[test]
 #[should_panic = "a load outgrew the gun"]
 fn a_load_past_the_gun_panics_rather_than_cut() {
-    assert_eq!(Gun::of_load(Load { live: 33, blank: 32 }).len(), 65, "unreachable: the load panics");
+    std::hint::black_box(Gun::of_load(Load { live: 33, blank: 32 }));
 }
 
 #[test]
