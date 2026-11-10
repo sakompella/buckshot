@@ -55,7 +55,7 @@ exclude_re = [
   'replace == with != in Search<._>::bounded_root',
   # best only seeds the later moves' windows. Any move's low end is a sound
   # window, so these change how much is cut, not the boxes the oracle checks.
-  'bounded.rs:599:.* in Search<._>::bounded_lines',
+  'bounded.rs:620:.* in Search<._>::bounded_lines',
   # At a sampled reload leaf the old shells are gone, so both belief sets value
   # the same deals; a branch with no private worlds has private weight 0.
   'replace (Span::is_empty -> bool with .*|>= with < in Span::is_empty)',

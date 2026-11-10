@@ -7,7 +7,12 @@ import { loadModels, makeRandom, normalize } from './machine-items-lib.mjs';
 
 const GAMES_PER_TABLE = Number(process.env.FUZZ_GAMES ?? 500);
 const SKIPPED = new Set((process.env.FUZZ_SKIP ?? '').split(',')); // lets fuzz_mutations.py see what the other properties catch alone
+// Most trials are prefixes of MAX_STEPS answers; a smaller batch plays whole
+// games (an item game can run past 2,600 random answers), and one that has
+// not finished after COMPLETE_STEPS answers fails.
 const MAX_STEPS = Number(process.env.FUZZ_STEPS ?? 50);
+const COMPLETE_PER_TABLE = Number(process.env.FUZZ_COMPLETE ?? Math.ceil(GAMES_PER_TABLE / 20));
+const COMPLETE_STEPS = Number(process.env.FUZZ_COMPLETE_STEPS ?? 10000);
 
 const { M, R, A, close } = await loadModels('bend-mp-item-fuzz-', { abstract: true });
 const mapped = state => A.ref(state);
@@ -16,7 +21,7 @@ const { random, randomConfig, answerFor } = makeRandom(0x66757a7a);
 const OBSERVE = '../domain:observe', HEAR = '../domain:hear', RESOLVE = '../domain:resolve';
 const sockets = n => n === 2 ? [1, 3] : Array.from({ length: n }, (_, i) => i);
 const count = { step_matches: 0, observe_matches: 0, legal_exact: 0, legal_accepted: 0, privacy: 0, reachable_valid: 0, state_roundtrip: 0 };
-const coverage = { games: 0, boundaries: 0, noItemGames: 0, itemGames: 0, choosePoints: 0, finished: 0, itemMoves: 0, hiddenChanged: 0 };
+const coverage = { prefixes: 0, prefixesFinished: 0, complete: 0, longest: 0, boundaries: 0, noItemGames: 0, itemGames: 0, choosePoints: 0, itemMoves: 0, hiddenChanged: 0 };
 
 class Mismatch extends Error {}
 const same = (property, label, expected, actual, game, detail = '') => {
@@ -111,14 +116,16 @@ function checkPrivacyAtPoint(game) {
   }
 }
 
-function play(config, label, seats) {
+// Plays up to `limit` answers; returns how many it took to finish, or null
+// (a whole game that has not finished fails with its tape).
+function play(config, label, seats, limit, whole) {
   const r = R.start(config), m = M.start(config);
   const game = { label, config, seats, tape: [], r: r.state, m: m.state };
   let rNotes = r.notes, mNotes = m.notes;
   same('step_matches', 'start notes', rNotes, mNotes, game);
   same('step_matches', 'start state', game.r, mapped(game.m), game, 'A.ref of the machine state');
   same('step_matches', 'start point', R.point(game.r), M.point(game.m), game);
-  for (let step = 0; step < MAX_STEPS; step++) {
+  for (let step = 0; step < limit; step++) {
     const mPoint = M.point(game.m), rPoint = R.point(game.r);
     checkObservations(game, `step ${step}`, mPoint, rPoint, mNotes, rNotes);
     checkLegal(game, mPoint.request, rPoint.request);
@@ -126,7 +133,7 @@ function play(config, label, seats) {
     checkValid(game);
     coverage.boundaries++;
     const request = requestJSON(rPoint.request);
-    if (request.kind === 'Finished') { coverage.finished++; return; }
+    if (request.kind === 'Finished') return step;
     if (request.kind === 'Stuck') assert.fail(`Stuck at ${JSON.stringify(game.tape)} in ${label}`);
     const n = answerFor(request);
     game.tape.push(n);
@@ -136,16 +143,29 @@ function play(config, label, seats) {
     same('step_matches', 'answer point', R.point(nr.state), M.point(nm.state), game);
     game.r = nr.state; game.m = nm.state; rNotes = nr.notes; mNotes = nm.notes;
   }
+  if (whole) throw new Mismatch(`unfinished after ${limit} answers in ${label}\nrepro: ${JSON.stringify({ tape: game.tape, config: normalize(config) })}`);
+  return null;
+}
+
+function playRandom(seats, label, limit, whole) {
+  const config = randomConfig(seats);
+  const anyItems = array(list(Object.values(config.plan).filter(r => r?.items))).some(r => Object.entries(r.items).some(([k, rule]) => k !== '$' && rule.enabled));
+  coverage[anyItems ? 'itemGames' : 'noItemGames']++;
+  return play(config, label, sockets(seats), limit, whole);
 }
 
 const started = performance.now();
 try {
-  for (const seats of [2, 3, 4]) for (let trial = 0; trial < GAMES_PER_TABLE; trial++) {
-    const config = randomConfig(seats);
-    const anyItems = array(list(Object.values(config.plan).filter(r => r?.items))).some(r => Object.entries(r.items).some(([k, rule]) => k !== '$' && rule.enabled));
-    coverage[anyItems ? 'itemGames' : 'noItemGames']++;
-    play(config, `${seats} seats #${trial}`, sockets(seats));
-    coverage.games++;
+  for (const seats of [2, 3, 4]) {
+    for (let trial = 0; trial < GAMES_PER_TABLE; trial++) {
+      if (playRandom(seats, `${seats} seats #${trial}`, MAX_STEPS, false) !== null) coverage.prefixesFinished++;
+      coverage.prefixes++;
+    }
+    for (let trial = 0; trial < COMPLETE_PER_TABLE; trial++) {
+      const answers = playRandom(seats, `${seats} seats whole game #${trial}`, COMPLETE_STEPS, true);
+      coverage.complete++;
+      coverage.longest = Math.max(coverage.longest, answers);
+    }
   }
 } catch (error) {
   if (!(error instanceof Mismatch) && !(error instanceof assert.AssertionError)) throw error;
@@ -156,5 +176,5 @@ try {
 }
 if (process.exitCode !== 1) {
   assert.ok(count.legal_accepted > 0 && coverage.itemMoves > 0 && coverage.noItemGames > 0 && coverage.hiddenChanged > 0, 'fuzz reaches item moves, no-item configs and non-trivial hidden swaps');
-  console.log(`machine item law fuzz: ${coverage.games} games, ${coverage.boundaries} request points, ${((performance.now() - started) / 1000).toFixed(0)} s; checks ${JSON.stringify(count)}; ${JSON.stringify(coverage)}`);
+  console.log(`machine item law fuzz: ${coverage.prefixes} prefixes of ${MAX_STEPS} answers (${coverage.prefixesFinished} finished), ${coverage.complete} whole games (longest ${coverage.longest} answers), ${coverage.boundaries} request points, ${((performance.now() - started) / 1000).toFixed(0)} s; checks ${JSON.stringify(count)}; ${JSON.stringify(coverage)}`);
 }

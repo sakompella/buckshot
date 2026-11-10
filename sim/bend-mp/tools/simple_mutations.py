@@ -160,6 +160,17 @@ def run(command: list[str], cwd: Path, env: dict[str, str] | None = None) -> sub
     )
 
 
+def proof_verdict(checked: subprocess.CompletedProcess[str]) -> str:
+    """SURVIVED when every proof checks, REJECTED when Bend reports a failing proof,
+    else ERROR with the whole output (a crash, a missing kernel, a compiler error)."""
+    output = checked.stdout + checked.stderr
+    if checked.returncode == 0 and "ALL PROOFS CHECK" in output and "SOME PROOFS FAIL" not in output:
+        return "SURVIVED"
+    if checked.returncode != 0 and "SOME PROOFS FAIL" in output:
+        return "REJECTED"
+    return f"ERROR (exit {checked.returncode}): {output.strip()}"
+
+
 def verdicts(mutation: Mutation) -> tuple[str, str]:
     """(proof verdict, fuzz verdict): REJECTED, SURVIVED, or ERROR with detail."""
     bend = os.environ.get("BEND", "bend")
@@ -169,11 +180,9 @@ def verdicts(mutation: Mutation) -> tuple[str, str]:
         target = copy / mutation.path
         target.write_text(apply(target.read_text(), mutation))
         built = run([bend, "simple/main.bend", "--check-only"], copy)
-        if "ALL PROOFS CHECK" not in built.stdout + built.stderr:
+        if proof_verdict(built) != "SURVIVED":
             return "ERROR: not type-correct", "ERROR: not type-correct"
-        proof = run([bend, "SIMPLE-PROOF.bend", "--verdict"], copy)
-        proof_out = proof.stdout + proof.stderr
-        proof_verdict = "SURVIVED" if "ALL PROOFS CHECK" in proof_out and "SOME PROOFS FAIL" not in proof_out else "REJECTED"
+        proof = proof_verdict(run([bend, "SIMPLE-PROOF.bend", "--verdict"], copy))
         fuzz = run(["bun", "test/simple-fuzz.mjs"], copy, {"FUZZ_GAMES": FUZZ_GAMES})
         fuzz_out = fuzz.stdout + fuzz.stderr
         if fuzz.returncode == 0:
@@ -181,11 +190,11 @@ def verdicts(mutation: Mutation) -> tuple[str, str]:
         else:
             caught = re.search(r"^(\w+ failed \(.*?\)|walk refused|Stuck at|Stalled at)", fuzz_out, re.MULTILINE)
             fuzz_verdict = f"REJECTED ({caught.group(1)})" if caught else "ERROR: " + fuzz_out.strip()[-300:]
-    return proof_verdict, fuzz_verdict
+    return proof, fuzz_verdict
 
 
 def main() -> int:
-    with ThreadPoolExecutor(max_workers=3) as pool:
+    with ThreadPoolExecutor(max_workers=2) as pool:
         baseline, *outcomes = pool.map(verdicts, (BASELINE, *MUTATIONS))
     if baseline != ("SURVIVED", "SURVIVED"):
         print(f"baseline is not green: proof {baseline[0]}, fuzz {baseline[1]}", file=sys.stderr)
