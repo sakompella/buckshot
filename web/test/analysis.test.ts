@@ -249,6 +249,49 @@ test("a match's cohort is its tournament config's, and a config without one stop
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test("the replay's events and secrets are stored, each seat has its socket, and each decision the events it came after", async () => {
+  const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
+
+  try {
+    const { source, manifestPath } = probeTournament(root, "medium");
+    const database = join(root, "analysis.sqlite");
+    importTournaments({ database, sources: [source] });
+    expect(rowsOf(database, "SELECT position, player, socket FROM match_seats ORDER BY position")).toEqual([{ position: 1, player: "A", socket: 1 }, { position: 2, player: "B", socket: 3 }]);
+    expect(rowsOf(database, "SELECT kind FROM events WHERE idx IN (0, (SELECT MAX(idx) FROM events)) ORDER BY idx")).toEqual([{ kind: "RoundBegan" }, { kind: "MatchConcluded" }]);
+    expect(rowsOf(database, "SELECT COUNT(*) = MAX(idx) + 1 AS dense, SUM(json_extract(json, '$._tag') IS NOT kind) AS mistagged FROM events")).toEqual([{ dense: 1, mistagged: 0 }]);
+    expect(rowsOf(database, "SELECT COUNT(*) AS n FROM secrets WHERE socket NOT IN (1, 3) OR at > (SELECT COUNT(*) FROM events)")).toEqual([{ n: 0 }]);
+    expect(rowsOf(database, `SELECT COUNT(*) AS n FROM decisions d WHERE events_before < 1 OR events_before > (SELECT COUNT(*) FROM events)
+      OR events_before < (SELECT MAX(p.events_before) FROM decisions p WHERE p.ordinal < d.ordinal)`)).toEqual([{ n: 0 }]);
+
+    const eventsPath = join(manifestPath, "..", "events.jsonl");
+    const lines = readFileSync(eventsPath, "utf8").split("\n");
+    const delivered = lines.findIndex((line) => line.includes('"kind":"delivered"') && line.includes("Player A"));
+    lines[delivered] = lines[delivered]!.replace("Player A", "Player Q");
+    writeFileSync(eventsPath, lines.join("\n"));
+    expect(() => importTournaments({ database, sources: [source] })).toThrow(`delivered line ${delivered + 1} differs from the replayed events`);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test("a match with a DeepSeek seat is imported in full and excluded", async () => {
+  const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
+
+  try {
+    const { source, manifestPath } = probeTournament(root, "medium");
+    const database = join(root, "analysis.sqlite");
+    const tournamentPath = join(source, "tournament.json");
+    const file = JSON.parse(readFileSync(tournamentPath, "utf8"));
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+
+    file.config.entrants.b.model = "faux-DeepSeek-b";
+    manifest.provenance.agents.B.model = "faux-DeepSeek-b";
+    writeFileSync(tournamentPath, JSON.stringify(file));
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+    importTournaments({ database, sources: [source] });
+    expect(rowsOf(database, "SELECT status, disposition, status_reason LIKE 'a DeepSeek seat%' AS reason FROM matches")).toEqual([{ status: "completed", disposition: "excluded", reason: 1 }]);
+    expect(rowsOf(database, "SELECT COUNT(*) > 0 AS n FROM events")).toEqual([{ n: 1 }]);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test("an entrant with an effort label is filed under it, and the others under their effort", async () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 
