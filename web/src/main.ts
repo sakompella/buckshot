@@ -143,7 +143,7 @@ export const update = (model: Model, message: Message): Return =>
     }),
     ToggledItems: () => ({ model: modifyFields(model, { setup: (setup) => ({ ...setup, isItemsEnabled: !setup.isItemsEnabled }) }) }),
     UpdatedSeed: ({ value }) => ({
-      model: modifyFields(model, { setup: (setup) => ({ ...setup, seed: Option.getOrElse(Option.filter(Option.some(Number.parseInt(value, 10)), Number.isSafeInteger), () => setup.seed) }) }),
+      model: modifyFields(model, { setup: (setup) => ({ ...setup, seed: Option.getOrElse(Option.filter(Option.some(value.trim() === "" ? Number.NaN : Number(value)), Number.isSafeInteger), () => setup.seed) }) }),
     }),
     ClickedNewMatch: () => startMatch(model),
     ClickedLeaveMatch: () => ({ model: modifyFields(model, { maybeMatch: () => Option.none(), maybeError: () => Option.none() }) }),
