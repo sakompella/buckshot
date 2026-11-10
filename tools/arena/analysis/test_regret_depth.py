@@ -4,14 +4,11 @@ import json
 import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 
 import regret_depth as rd
 from testdb import KNOWLEDGE, REGRET, database, insert
-
-
-def decision(index, shells_left=2, shot=True, model="m", depth=6):
-    return rd.Decision(f"match{index}", index, shells_left, shot, model, depth)
 
 
 def pair(shells_left=2, shot=True, model="m", regret=1.0, deep_regret=1.0, limited=False, ordinal=0):
@@ -95,7 +92,8 @@ class Pairs(unittest.TestCase):
     def test_fails_on_a_deep_row_that_was_not_searched(self):
         with tempfile.TemporaryDirectory() as directory:
             paths = write_runs(Path(directory), [("m1", 0, 6, 20000, values(1, 2), "move 1", 2, 0, 6, 0)], [("m1", 0, 8, 200000, values(1, 2), "move 1", 2, 0, 8, 0)])
-            sqlite3.connect(paths[0]).execute("UPDATE regret SET status = 'skipped'").connection.commit()
+            with closing(sqlite3.connect(paths[0])) as db, db:
+                db.execute("UPDATE regret SET status = 'skipped'")
             with self.assertRaises(ValueError):
                 rd.pairs(*paths)
 

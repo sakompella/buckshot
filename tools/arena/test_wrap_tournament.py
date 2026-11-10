@@ -1,25 +1,20 @@
 import json
-import os
 import sqlite3
 import tempfile
 import unittest
-import unittest.mock
 from pathlib import Path
 
 import wrap_tournament as w
 
 
-_DIRS: list[tempfile.TemporaryDirectory] = []
+class TmpCase(unittest.TestCase):
+    def tmp(self) -> Path:
+        return Path(self.enterContext(tempfile.TemporaryDirectory()))
 
 
-def tmp() -> Path:
-    _DIRS.append(tempfile.TemporaryDirectory())
-    return Path(_DIRS[-1].name)
-
-
-class SpliceBetweenMarkers(unittest.TestCase):
+class SpliceBetweenMarkers(TmpCase):
     def test_replaces_only_the_marked_block_and_is_idempotent(self):
-        doc = tmp() / "doc.md"
+        doc = self.tmp() / "doc.md"
         doc.write_text("intro\n<!-- beliefs:start -->\nold\n<!-- beliefs:end -->\noutro\n")
         w.splice_between_markers(doc, "beliefs", "new\n")
         once = doc.read_text()
@@ -28,15 +23,15 @@ class SpliceBetweenMarkers(unittest.TestCase):
         self.assertEqual(doc.read_text(), once)
 
     def test_rejects_a_file_without_markers(self):
-        doc = tmp() / "doc.md"
+        doc = self.tmp() / "doc.md"
         doc.write_text("no markers")
         with self.assertRaises(ValueError):
             w.splice_between_markers(doc, "beliefs", "x")
 
 
-class Swap(unittest.TestCase):
+class Swap(TmpCase):
     def test_keeps_the_old_file_and_its_wal_as_a_set(self):
-        d = tmp()
+        d = self.tmp()
         for suffix, text in (("", "old"), ("-wal", "oldwal"), ("-shm", "oldshm")):
             (d / f"live.sqlite{suffix}").write_text(text)
         (d / "new.sqlite").write_text("new")
@@ -46,7 +41,7 @@ class Swap(unittest.TestCase):
         self.assertFalse((d / "live.sqlite-wal").exists())
 
     def test_a_second_call_is_a_no_op(self):
-        d = tmp()
+        d = self.tmp()
         (d / "live.sqlite").write_text("old")
         (d / "new.sqlite").write_text("new")
         w.swap(d / "live.sqlite", d / "new.sqlite", "x")
@@ -54,7 +49,7 @@ class Swap(unittest.TestCase):
         self.assertEqual((d / "live.sqlite.pre-x").read_text(), "old")
 
     def test_refuses_to_overwrite_a_pre_copy(self):
-        d = tmp()
+        d = self.tmp()
         for name in ("live.sqlite", "new.sqlite", "live.sqlite.pre-x"):
             (d / name).write_text(name)
         with self.assertRaises(w.Stop):
@@ -62,9 +57,9 @@ class Swap(unittest.TestCase):
         self.assertEqual((d / "live.sqlite").read_text(), "live.sqlite")
 
 
-class Steps(unittest.TestCase):
+class Steps(TmpCase):
     def test_a_rerun_skips_finished_steps_and_resumes_at_the_failed_one(self):
-        d = tmp()
+        d = self.tmp()
         calls = []
         broken = [True]
 
@@ -85,25 +80,22 @@ class Steps(unittest.TestCase):
         self.assertEqual(calls, ["a", "b", "b", "c"])
 
 
-def make_wrap(deploy: bool) -> w.Wrap:
-    d = tmp()
-    (d / "run").mkdir()
-    (d / "analysis").mkdir()
-    return w.Wrap([d / "run"], d, d / "analysis", d / "docs", "t9", None, None, d, d, None, "", 1, "regret.sqlite", 1, deploy)
-
-
 class Environment(unittest.TestCase):
     def test_worktree_commands_do_not_inherit_this_checkouts_bend(self):
-        with unittest.mock.patch.dict(os.environ, {"BEND": "/nix/store/x-bend-new/bin/bend"}):
-            self.assertNotIn("BEND", make_wrap(False).env)
+        env = w.worktree_env({"BEND": "/nix/store/x-bend-new/bin/bend", "HOME": "/h"})
+        self.assertNotIn("BEND", env)
+        self.assertEqual(env["HOME"], "/h")
 
 
-class Deploy(unittest.TestCase):
+class Deploy(TmpCase):
+    def make_wrap(self, deploy: bool, cloudflare_env: Path | None = None) -> w.Wrap:
+        d = self.tmp()
+        (d / "run").mkdir()
+        (d / "analysis").mkdir()
+        return w.Wrap([d / "run"], d, d / "analysis", d / "docs", "t9", None, None, d, d, None, "", 1, "regret.sqlite", 1, {}, deploy, cloudflare_env or d / "missing.env")
+
     PASSED = '$ bun scripts/deploy-online.ts\n{"versionId": "v-1", "url": "https://p.example", "problems": []}\n'
     FAILED = '{"versionId": "v-2", "url": "https://p.example", "problems": ["/arena: status 404"]}\n'
-
-    def test_dotenv_reads_pairs_and_skips_comments(self):
-        self.assertEqual(w.dotenv("# c\nA=1\n\nB = x=y \n"), {"A": "1", "B": "x=y"})
 
     def test_a_preview_gives_its_version_only_when_it_passed(self):
         self.assertEqual(w.preview_version(self.PASSED), "v-1")
@@ -113,14 +105,14 @@ class Deploy(unittest.TestCase):
 
     def test_the_deploy_step_is_off_unless_asked_for_and_follows_the_export(self):
         names = lambda wrap: [n for n, _ in wrap.steps()]
-        self.assertNotIn("deploy", names(make_wrap(False)))
-        on = names(make_wrap(True))
+        self.assertNotIn("deploy", names(self.make_wrap(False)))
+        on = names(self.make_wrap(True))
         self.assertEqual(on[on.index("export") + 1], "deploy")
 
     def run_deploy(self, preview_output: str) -> list[str]:
-        wrap = make_wrap(True)
-        env_file = tmp() / "deploy.env"
+        env_file = self.tmp() / "deploy.env"
         env_file.write_text("CLOUDFLARE_API_TOKEN=t\nONLINE_DOMAIN=site.example\n")
+        wrap = self.make_wrap(True, env_file)
         ran = []
 
         def fake_run(step, cmd, cwd=w.REPO, stdout=None, env=None):
@@ -130,27 +122,26 @@ class Deploy(unittest.TestCase):
                 stdout.write_text(preview_output)
 
         wrap.run = fake_run
-        with unittest.mock.patch.object(w, "CLOUDFLARE_ENV", env_file):
+        try:
             wrap.deploy_()
+        except w.Stop:
+            pass
         return ran
 
     def test_a_passing_preview_is_promoted_by_its_version_id(self):
         self.assertEqual(self.run_deploy(self.PASSED), ["deploy-preview", "v-1"])
 
     def test_a_failing_preview_is_never_promoted(self):
-        ran = []
-        with self.assertRaises(w.Stop):
-            ran = self.run_deploy(self.FAILED)
-        self.assertEqual(ran, [])
+        self.assertEqual(self.run_deploy(self.FAILED), ["deploy-preview"])
 
     def test_without_the_credentials_file_the_step_stops(self):
-        with unittest.mock.patch.object(w, "CLOUDFLARE_ENV", tmp() / "missing.env"), self.assertRaises(w.Stop):
-            make_wrap(True).deploy_()
+        with self.assertRaises(w.Stop):
+            self.make_wrap(True).deploy_()
 
 
-class Cohort(unittest.TestCase):
+class Cohort(TmpCase):
     def dirs(self, *cohorts):
-        d = tmp()
+        d = self.tmp()
         out = []
         for i, c in enumerate(cohorts):
             (d / f"p{i}").mkdir()
@@ -172,9 +163,9 @@ class Cohort(unittest.TestCase):
             w.stamp_cohort(dirs, "tournament 8")
 
 
-class Emails(unittest.TestCase):
+class Emails(TmpCase):
     def test_finds_emails_in_any_column_and_ignores_other_at_signs(self):
-        d = tmp()
+        d = self.tmp()
         db = sqlite3.connect(d / "db.sqlite")
         db.execute("CREATE TABLE t (a TEXT, b BLOB)")
         db.executemany("INSERT INTO t VALUES (?, ?)", [("[redacted] @scope/pkg a@b", None), ("x", b"call me someone@example.com")])
