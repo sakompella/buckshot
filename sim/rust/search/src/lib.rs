@@ -39,7 +39,7 @@ mod searcher;
 mod types;
 
 pub use num::ARITHMETIC;
-pub use position::{Board, Briefcase, Counter, GunView, Heard, Mode, ParseError, Position, RoundView, SeatView, Stage};
+pub use position::ParseError;
 pub use search::KeyStats;
 #[cfg(feature = "f32")]
 pub use searcher::Compat;

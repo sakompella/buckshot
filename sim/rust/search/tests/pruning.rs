@@ -9,7 +9,7 @@
 
 mod common;
 
-use buckshot_search::{BoundedV1, Heard, InfoSet};
+use buckshot_search::{BoundedV1, InfoSet};
 use common::{cli, oracle_dir, oracle_rows, scores};
 use serde_json::Value;
 
@@ -63,7 +63,7 @@ fn compare(name: &str, flags: &[&str], covered: &mut Covered) -> Result<(), Stri
         }
         let info = InfoSet::parse(input["input"].as_str().unwrap_or_default()).map_err(|error| format!("{id}: {error}"))?;
         covered.rows = covered.rows.saturating_add(1);
-        if info.position().log.iter().any(|heard| matches!(heard, Heard::Learned(_))) {
+        if info.has_private_clue() {
             covered.private = covered.private.saturating_add(1);
         }
         if unpruned_lines.iter().any(|line| line["reach"] == "settled") {

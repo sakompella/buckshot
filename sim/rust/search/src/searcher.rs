@@ -7,7 +7,7 @@ use rayon::ThreadPool;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use crate::belief::build;
-use crate::position::{ParseError, Position, parse};
+use crate::position::{Heard, ParseError, Position, parse};
 use crate::search::{KeyStats, Mode, run};
 use crate::types::{Analysis, Limits, Memo, Pruning, Refusal, Reload};
 
@@ -29,9 +29,10 @@ impl InfoSet {
         parse(line).map(|position| Self { position })
     }
 
+    /// Whether the mover's log holds a private observation (a `Learned` entry).
     #[must_use]
-    pub const fn position(&self) -> &Position {
-        &self.position
+    pub fn has_private_clue(&self) -> bool {
+        self.position.log.iter().any(|heard| matches!(heard, Heard::Learned(_)))
     }
 }
 
