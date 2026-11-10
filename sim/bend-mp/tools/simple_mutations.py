@@ -194,7 +194,7 @@ def verdicts(mutation: Mutation) -> tuple[str, str]:
 
 
 def main() -> int:
-    with ThreadPoolExecutor(max_workers=3) as pool:
+    with ThreadPoolExecutor(max_workers=2) as pool:
         baseline, *outcomes = pool.map(verdicts, (BASELINE, *MUTATIONS))
     if baseline != ("SURVIVED", "SURVIVED"):
         print(f"baseline is not green: proof {baseline[0]}, fuzz {baseline[1]}", file=sys.stderr)
