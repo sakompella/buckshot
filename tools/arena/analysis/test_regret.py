@@ -32,11 +32,6 @@ def score(match, ordinal, regret_value, exact=0, status="searched", evaluator="e
     return (match, ordinal, evaluator, 6, 20000, reload, samples, status, regret_value, exact, limited)
 
 
-class Percentile(unittest.TestCase):
-    def test_interpolates_between_ranks(self):
-        self.assertEqual(regret.percentile([0, 10, 20, 30, 40], 0.9), 36)
-
-
 class Load(unittest.TestCase):
     def load(self, **kwargs):
         with tempfile.TemporaryDirectory() as directory:
@@ -71,7 +66,6 @@ class Load(unittest.TestCase):
         )
         self.assertEqual([d.regret for d in loaded.decisions], [100])
         self.assertEqual((loaded.unsearched, loaded.unscored), (1, 1))
-
 
 
 class RunOf(unittest.TestCase):

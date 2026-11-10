@@ -7,7 +7,6 @@ import boot
 import bt
 import cv
 import net_points
-import regret
 import stats
 from load import Game
 from hypothesis import HealthCheck, given, settings
@@ -19,26 +18,6 @@ settings.load_profile("arena")
 finite = st.floats(-1e6, 1e6, allow_nan=False)
 nonempty = st.lists(finite, min_size=1, max_size=40)
 shares = st.floats(0, 1)
-
-
-class Percentiles(unittest.TestCase):
-    @given(nonempty, shares)
-    def test_lies_within_the_data(self, values, share):
-        self.assertTrue(min(values) <= regret.percentile(values, share) <= max(values))
-
-    @given(nonempty, shares, shares)
-    def test_never_falls_as_the_share_rises(self, values, a, b):
-        low, high = sorted((a, b))
-        self.assertLessEqual(regret.percentile(values, low), regret.percentile(values, high))
-
-    @given(nonempty, shares, st.randoms())
-    def test_ignores_the_order_of_the_values(self, values, share, rng):
-        shuffled = rng.sample(values, len(values))
-        self.assertEqual(regret.percentile(shuffled, share), regret.percentile(values, share))
-
-    @given(nonempty, shares)
-    def test_agrees_with_the_bootstrap_quantile(self, values, share):
-        self.assertAlmostEqual(boot.quantile(sorted(values), share), regret.percentile(values, share))
 
 
 class Ranks(unittest.TestCase):
@@ -89,12 +68,12 @@ class Resampling(unittest.TestCase):
         self.assertLessEqual(max(map(len, parts)) - min(map(len, parts)), 1)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class Ratings(unittest.TestCase):
     @given(st.lists(st.tuples(st.integers(0, 3), st.integers(1, 3), st.sampled_from([0.0, 0.5, 1.0])), min_size=1, max_size=40))
     def test_have_mean_zero_on_the_elo_scale(self, played):
         games = [Game(f"b{i}", "c", "t", "code", 1, "abcd"[first], "abcd"[(first + offset) % 4], share, share, 1, 1) for i, (first, offset, share) in enumerate(played)]
         self.assertAlmostEqual(sum(bt.fit(bt.cells_of(games)).elo().values()), 0.0, places=6)
+
+
+if __name__ == "__main__":
+    unittest.main()

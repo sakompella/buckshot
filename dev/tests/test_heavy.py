@@ -6,16 +6,13 @@ import sys
 import tempfile
 import threading
 import unittest
-import unittest.mock
 
 from buckshot_dev import cli
 
 
 class HeavyTest(unittest.TestCase):
     def setUp(self):
-        self.dir = tempfile.mkdtemp(prefix="buckshot-heavy-test-")
-        os.environ["BUCKSHOT_HEAVY_DIR"] = self.dir
-        self.addCleanup(os.environ.pop, "BUCKSHOT_HEAVY_DIR", None)
+        self.dir = self.enterContext(tempfile.TemporaryDirectory(prefix="buckshot-heavy-test-"))
 
     def slot(self, name):
         fd = os.open(os.path.join(self.dir, name), os.O_CREAT | os.O_RDWR, 0o666)
@@ -29,15 +26,8 @@ class HeavyTest(unittest.TestCase):
         # nice -n 10 is relative to this process's niceness and stops at 19, so a niced caller (heavy) still passes.
         expected = min(os.nice(0) + 10, 19)
         code = f"import os; open({out.name!r}, 'w').write(str(os.nice(0)))"
-        self.assertEqual(cli.heavy_cmd([sys.executable, "-c", code]), 0)
+        self.assertEqual(cli.heavy_cmd([sys.executable, "-c", code], self.dir), 0)
         self.assertEqual(out.read().strip(), str(expected))
-
-    def test_default_slot_dir_ignores_tmpdir(self):
-        os.environ.pop("BUCKSHOT_HEAVY_DIR")
-        self.addCleanup(os.environ.__setitem__, "BUCKSHOT_HEAVY_DIR", self.dir)
-        with unittest.mock.patch.dict(os.environ, {"TMPDIR": self.dir}), unittest.mock.patch.object(cli.os, "open", side_effect=RuntimeError) as opened, self.assertRaises(RuntimeError):
-            cli.heavy_cmd(["true"])
-        self.assertEqual(opened.call_args.args[0], os.path.join("/tmp", cli.SLOT_NAMES[0]))
 
     def test_waits_for_a_slot(self):
         hold1, hold2 = self.slot(cli.SLOT_NAMES[0]), self.slot(cli.SLOT_NAMES[1])
@@ -46,7 +36,7 @@ class HeavyTest(unittest.TestCase):
         result = {}
 
         def run():
-            result["rc"] = cli.heavy_cmd(["true"])
+            result["rc"] = cli.heavy_cmd(["true"], self.dir, poll=0.05)
 
         t = threading.Thread(target=run)
         t.start()

@@ -15,7 +15,7 @@ SLOT_NAMES = ("buckshot-heavy-1.lock", "buckshot-heavy-2.lock")
 SLOT_DIR = "/tmp"
 
 
-def heavy_cmd(cmd: list[str]) -> int:
+def heavy_cmd(cmd: list[str], slot_dir: str = SLOT_DIR, poll: float = 5) -> int:
     """Run `cmd` niced, holding one of the two machine-wide heavy slots.
 
     Blocks until a slot is free: at most two heavy jobs run at once across
@@ -23,7 +23,6 @@ def heavy_cmd(cmd: list[str]) -> int:
     """
     if not cmd:
         raise SystemExit("dev heavy: no command, use `dev heavy -- CMD [ARG...]`")
-    slot_dir = os.environ.get("BUCKSHOT_HEAVY_DIR") or SLOT_DIR
     while True:
         for name in SLOT_NAMES:
             fd = os.open(os.path.join(slot_dir, name), os.O_CREAT | os.O_RDWR, 0o666)
@@ -37,7 +36,7 @@ def heavy_cmd(cmd: list[str]) -> int:
             finally:
                 fcntl.flock(fd, fcntl.LOCK_UN)
                 os.close(fd)
-        time.sleep(5)
+        time.sleep(poll)
 
 
 def main() -> None:

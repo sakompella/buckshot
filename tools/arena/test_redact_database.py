@@ -3,6 +3,7 @@ import sqlite3
 import string
 import tempfile
 import unittest
+from contextlib import closing
 
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
@@ -37,7 +38,7 @@ class RedactTests(unittest.TestCase):
         self.assertEqual(redact(text), text)
 
     def test_a_committed_email_in_any_text_column_is_redacted_while_it_is_still_in_the_wal(self):
-        d = tempfile.mkdtemp()
+        d = self.enterContext(tempfile.TemporaryDirectory())
         source = sqlite3.connect(os.path.join(d, "src.sqlite"))
         source.execute("PRAGMA journal_mode = WAL")
         source.execute("PRAGMA wal_autocheckpoint = 0")
@@ -47,8 +48,8 @@ class RedactTests(unittest.TestCase):
         source.commit()
         main(os.path.join(d, "src.sqlite"), os.path.join(d, "out.sqlite"))
         source.close()
-        out = sqlite3.connect(os.path.join(d, "out.sqlite"))
-        self.assertEqual(out.execute("SELECT response_text FROM calls").fetchall(), [("mail [redacted]",)])
+        with closing(sqlite3.connect(os.path.join(d, "out.sqlite"))) as out:
+            self.assertEqual(out.execute("SELECT response_text FROM calls").fetchall(), [("mail [redacted]",)])
 
 
 if __name__ == "__main__":

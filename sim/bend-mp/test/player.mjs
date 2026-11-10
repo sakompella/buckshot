@@ -23,8 +23,6 @@ const close = (a, b, label) => assert.ok(Math.abs(a - b) < 1e-4, `${label}: ${a}
 const sum = xs => xs.reduce((a, b) => a + b, 0);
 const count = {};
 const checked = name => { count[name] = (count[name] ?? 0) + 1; };
-const spent = {};
-const timed = (name, f) => (...args) => { const t = performance.now(); try { return f(...args); } finally { spent[name] = (spent[name] ?? 0) + performance.now() - t; } };
 
 const position = (cfg, board, log, me) => ({ $: 'Position', config: cfg, board, log: list(log), me: seat(me) });
 const STATIC = { $: 'Static' }, EXPECTED_DEAL = { $: 'ExpectedDeal' };
@@ -445,32 +443,29 @@ function checkTinyLoads() {
       assert.ok(Math.abs(line.score - value) <= 64, `tiny load ${health} HP ${live}L ${blank}B move ${index}: ${line.score} vs ${value}`);
     });
     checked('tiny load');
-    if (process.env.PLAYER_PROFILE) console.log('tiny', health, live, blank, Number(analysis.nodes), json(analysis.cached));
   }
 }
 
 const started = performance.now();
-const t = Object.fromEntries(Object.entries({ checkForcedWin, checkRoundEnd, checkLongHistory, checkHandDeal, checkMergedDeal, checkNoReload, checkCertain, checkDeeper, checkPublicOnly, checkOutcomes, checkPolicy, checkDeepening, checkInvalid, checkMemo, checkTinyLoads, analyse }).map(([k, f]) => [k, timed(k, f)]));
-t.checkForcedWin();
-t.checkRoundEnd();
-t.checkLongHistory();
-t.checkHandDeal();
-t.checkMergedDeal();
-t.checkTinyLoads();
+checkForcedWin();
+checkRoundEnd();
+checkLongHistory();
+checkHandDeal();
+checkMergedDeal();
+checkTinyLoads();
 sample.forEach((pos, i) => {
-  const analysis = t.analyse(pos.position, 1, 100000);
+  const analysis = analyse(pos.position, 1, 100000);
   checkAnalysis(analysis, 1, 100000);
-  t.checkCertain(pos, analysis);
-  t.checkDeeper(pos, analysis);
-  t.checkPublicOnly(pos);
-  if (i % 4 === 0) t.checkOutcomes(pos);
-  if (i % 4 === 1) t.checkNoReload(pos);
-  if (i % 8 === 0) t.checkPolicy(pos, analysis);
-  if (i % 16 === 0) t.checkDeepening(pos);
-  if (i % 32 === 0) t.checkInvalid(pos);
-  if (i % 16 === 3) t.checkMemo(pos);
-  if (i % 32 === 5 && pos.cfg.table.$.endsWith('TwoSeats')) t.checkMemo(pos, sampled(4));
+  checkCertain(pos, analysis);
+  checkDeeper(pos, analysis);
+  checkPublicOnly(pos);
+  if (i % 4 === 0) checkOutcomes(pos);
+  if (i % 4 === 1) checkNoReload(pos);
+  if (i % 8 === 0) checkPolicy(pos, analysis);
+  if (i % 16 === 0) checkDeepening(pos);
+  if (i % 32 === 0) checkInvalid(pos);
+  if (i % 16 === 3) checkMemo(pos);
+  if (i % 32 === 5 && pos.cfg.table.$.endsWith('TwoSeats')) checkMemo(pos, sampled(4));
 });
 assert.ok(count['certain win'] > 0 && count['deeper forced win'] > 0 && count['public only'] > 0 && count['public only, with replies'] > 0 && privateMattered > 0 && count.deepening > 0 && count['no reload in reach'] > 0 && count.memo > 0 && count['memo, sampled'] > 0, `every property ran on a case that matters: ${json(count)}`);
 console.log(`player: ${sample.length} positions, ${((performance.now() - started) / 1000).toFixed(0)} s; checks ${json(count)}; private clues changed private scores ${privateMattered} times`);
-if (process.env.PLAYER_PROFILE) console.log(json(Object.fromEntries(Object.entries(spent).map(([k, v]) => [k, Math.round(v / 1000)]))));
