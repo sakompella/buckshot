@@ -264,7 +264,7 @@ try {
     game.place(0);
   });
 
-  scenario('D56 latched completion drains holders', name => {
+  scenario('latched completion drains holders', name => {
     for (const seats of [2, 3, 4]) {
       const table = sockets(seats);
       const game = dual(config(seats, [round({ amount: 1, items: { saw: { per_player: 1, on_table: seats } } })]), `${name} ${seats}`);
@@ -295,12 +295,12 @@ try {
   const scenarioBoundaries = boundaries();
 
   const { random, randomConfig, answerFor } = makeRandom(0x6974656d);
-  const seen = { M1: 0, M3: 0, M4: 0, adrenalineRefused: 0, D56: 0, steals: 0, phoneDraws: 0, itemChoices: 0, turnAmounts: 0, finished: 0, stuck: 0 };
+  const seen = { M1: 0, M3: 0, M4: 0, adrenalineRefused: 0, placeBeforeReload: 0, steals: 0, phoneDraws: 0, itemChoices: 0, turnAmounts: 0, finished: 0, stuck: 0 };
   const observe = (game, before, notes) => {
     const events = notes.filter(note => kind(note) === 'Shown').map(note => kind(note.event));
     const done = events.indexOf('DistributionDone');
     if (done > 0 && events.slice(0, done).filter(e => e === 'GrabbingEnded').length > 1) seen.M1++;
-    if (before.request.kind === 'Choose' && before.dist === false && Object.values(before.request.menus).flat().some(move => 'Place' in move)) seen.D56++;
+    if (before.request.kind === 'Choose' && before.dist === false && Object.values(before.request.menus).flat().some(move => 'Place' in move)) seen.placeBeforeReload++;
     if (events.includes('RoundBegan') && events.includes('GrabbingBegan') && before.carried) seen.M3++;
     if (before.request.label === 'PhoneIndex') seen.phoneDraws++;
     if (before.request.label === 'ItemChoice') seen.itemChoices++;

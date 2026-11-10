@@ -1,5 +1,6 @@
 {
   "name": "buckshot-web",
+  "license": "MPL-2.0",
   "private": true,
   "type": "module",
   "dependencies": {

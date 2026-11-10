@@ -93,7 +93,7 @@ def initial(+config: D.Config) -> S.State:
   +table : D.Table = G.config.table(config)
   S.State{S.World{config, True{}, 0n, 0n, False{}, 0n, D.Seat0{}, None{}, D.Clockwise{}, None{}, False{}, 0n, False{}, Nil{}, D.Load{0n, 0n}, G.decks.full()}, D.ring.fill(S.Seat, table, S.Seat{100n, S.Free{}, 0, D.slots.empty()}), S.NeedFirst{}, Nil{}, S.Grabs{False{}, D.ring.fill(Bool, table, False{}), D.ring.fill(Maybe<&2, D.Item>, table, None{}), D.ring.fill(Nat, table, 0n), D.ring.fill(Bool, table, False{})}}
 
-# Item distribution (D05, D06, D22, D37 grabbing rows, D55 M1, D56).
+# Item distribution.
 
 def distribute.begin(+state: S.State, seats: List<&2, D.Seat>) -> S.State:
   match seats:
@@ -352,7 +352,7 @@ def aim.selected(state: S.State, shooter: D.Seat, selected: Maybe<&2, S.TargetOp
     case None{}:
       S.state.set_phase(state, S.Blocked{Some{shooter}})
 
-# Item use (D17, D18, D28, D29, D37). A use or steal consumes the slot,
+# Item use. A use or steal consumes the slot,
 # then applies the effect; jammer and adrenaline open a selection phase.
 
 def item.resume(+state: S.State, +seat: D.Seat) -> S.State:
@@ -436,7 +436,7 @@ def item.clue.found(+state: S.State, +seat: D.Seat, +owner: D.Seat, +slot: D.Slo
     case Some{shell}:
       item.consume(state, seat, owner, slot, D.Phone{}, False{}, Some{D.Clue{position, shell}})
 
-# The phone announces drawn index plus one, capped at the seventh shell (D28).
+# The phone announces drawn index plus one, capped at the seventh shell.
 def item.clue(+state: S.State, +seat: D.Seat, +owner: D.Seat, +slot: D.Slot, index: Nat) -> S.State:
   +position : Nat = D.clamp(1n+index, D.phone.cap())
   item.clue.found(state, seat, owner, slot, position, G.nth(D.Shell, S.world.gun(S.state.world(state)), G.predecessor(position)))

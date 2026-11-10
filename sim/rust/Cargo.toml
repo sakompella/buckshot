@@ -4,6 +4,7 @@ members = ["rules", "search", "branch-map"]
 
 [workspace.package]
 edition = "2024"
+license = "MPL-2.0"
 publish = false
 
 [workspace.dependencies]

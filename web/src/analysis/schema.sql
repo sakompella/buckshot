@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS matches (
 CREATE TABLE IF NOT EXISTS match_seats (
   match_id TEXT NOT NULL REFERENCES matches(id), position INTEGER NOT NULL,
   entrant_id TEXT NOT NULL REFERENCES entrants(id), player TEXT NOT NULL, label TEXT NOT NULL,
-  cash REAL, win_share REAL, provenance_json TEXT,
+  cash REAL, win_share REAL, provenance_json TEXT, socket INTEGER,
   PRIMARY KEY(match_id, position)
 );
 CREATE TABLE IF NOT EXISTS source_files (
@@ -37,9 +37,17 @@ CREATE TABLE IF NOT EXISTS decisions (
   id TEXT PRIMARY KEY, match_id TEXT NOT NULL REFERENCES matches(id), ordinal INTEGER NOT NULL,
   journal_seq INTEGER, turn INTEGER NOT NULL, player TEXT NOT NULL, position INTEGER NOT NULL,
   selected_move INTEGER NOT NULL, label TEXT NOT NULL, by_whom TEXT NOT NULL,
-  visible_json TEXT, legal_json TEXT, delivered_json TEXT NOT NULL,
+  visible_json TEXT, legal_json TEXT, delivered_json TEXT NOT NULL, events_before INTEGER,
   view_provenance TEXT, source_record TEXT NOT NULL REFERENCES source_records(id),
   UNIQUE(match_id, ordinal)
+);
+CREATE TABLE IF NOT EXISTS events (
+  match_id TEXT NOT NULL REFERENCES matches(id), idx INTEGER NOT NULL, kind TEXT NOT NULL, json TEXT NOT NULL,
+  PRIMARY KEY(match_id, idx)
+);
+CREATE TABLE IF NOT EXISTS secrets (
+  match_id TEXT NOT NULL REFERENCES matches(id), idx INTEGER NOT NULL, socket INTEGER NOT NULL, at INTEGER NOT NULL, json TEXT NOT NULL,
+  PRIMARY KEY(match_id, idx)
 );
 CREATE TABLE IF NOT EXISTS calls (
   id TEXT PRIMARY KEY, match_id TEXT NOT NULL REFERENCES matches(id), decision_id TEXT REFERENCES decisions(id),
@@ -57,6 +65,7 @@ CREATE INDEX IF NOT EXISTS entrants_model_effort ON entrants(model, effort);
 CREATE INDEX IF NOT EXISTS matches_seed ON matches(tournament_id, seed, pairing, block);
 CREATE INDEX IF NOT EXISTS matches_code ON matches(code_hash, status);
 CREATE INDEX IF NOT EXISTS seats_entrant ON match_seats(entrant_id, match_id);
+CREATE INDEX IF NOT EXISTS events_kind ON events(kind, match_id, idx);
 CREATE INDEX IF NOT EXISTS decisions_turn ON decisions(match_id, turn, player);
 CREATE INDEX IF NOT EXISTS calls_decision ON calls(decision_id);
 CREATE INDEX IF NOT EXISTS calls_model ON calls(model, match_id);

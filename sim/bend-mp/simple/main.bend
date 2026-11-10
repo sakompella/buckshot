@@ -94,8 +94,7 @@ def initial(+config: D.Config) -> T.State:
   +table : D.Table = G.config.table(config)
   T.State{S.World{config, True{}, 0n, 0n, False{}, 0n, D.Seat0{}, None{}, D.Clockwise{}, None{}, False{}, 0n, False{}, Nil{}, D.Load{0n, 0n}, G.decks.full()}, D.ring.fill(S.Seat, table, S.Seat{100n, S.Free{}, 0, D.slots.empty()}), T.NeedFirst{}, T.Empty{}, S.Grabs{False{}, D.ring.fill(Bool, table, False{}), D.ring.fill(Maybe<&2, D.Item>, table, None{}), D.ring.fill(Nat, table, 0n), D.ring.fill(Bool, table, False{})}}
 
-# Item distribution (D05, D06, D22, D37 grabbing rows, D55 M1, D56). The
-# simple machine hands items out by itself, one take or place per pass. Each
+# Item distribution. The simple machine hands items out by itself, one take or place per pass. Each
 # pass reads the pure rule I.grab.needs (who may take or place, and where):
 # the last seat to act places a granted item in its first free slot;
 # otherwise the next seat after it, in socket order, that may only take,
@@ -427,7 +426,7 @@ def shoot.gun(state: T.State, shooter: D.Seat, target: D.Seat, gun: List<&2, D.S
 def shoot(+state: T.State, shooter: D.Seat, target: D.Seat) -> T.State:
   shoot.gun(state, shooter, target, S.world.gun(T.state.world(state)))
 
-# Item use (D17, D18, D28, D29, D37). A use or steal consumes the slot,
+# Item use. A use or steal consumes the slot,
 # then applies the effect. A jammer's target and an adrenaline's steal are
 # part of the same move, so those effects leave the rest to pickup.selected.
 
@@ -512,7 +511,7 @@ def item.clue.found(+state: T.State, +seat: D.Seat, +owner: D.Seat, +slot: D.Slo
     case Some{shell}:
       item.consume(state, seat, owner, slot, D.Phone{}, False{}, Some{D.Clue{position, shell}})
 
-# The phone announces drawn index plus one, capped at the seventh shell (D28).
+# The phone announces drawn index plus one, capped at the seventh shell.
 def item.clue(+state: T.State, +seat: D.Seat, +owner: D.Seat, +slot: D.Slot, index: Nat) -> T.State:
   +position : Nat = D.clamp(1n+index, D.phone.cap())
   item.clue.found(state, seat, owner, slot, position, G.nth(D.Shell, S.world.gun(T.state.world(state)), G.predecessor(position)))

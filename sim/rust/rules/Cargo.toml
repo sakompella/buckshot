@@ -3,6 +3,7 @@ name = "buckshot-rules"
 version = "0.1.0"
 description = "The Buckshot simple machine's rules, mirrored from sim/bend-mp (Bend is the source of truth)."
 edition.workspace = true
+license.workspace = true
 publish.workspace = true
 
 [features]

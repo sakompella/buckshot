@@ -82,11 +82,11 @@ const fauxMatch = (controllers: ReadonlyArray<Controller>, seed: string, context
   });
 };
 
-const PinnedAgents = Schema.Struct({ provenance: Schema.Struct({ agents: Schema.Record(Schema.String, Schema.Struct({ auth_account_id: Schema.String })) }) });
+const PinnedAgents = Schema.Struct({ provenance: Schema.Struct({ agents: Schema.Record(Schema.String, Schema.Struct({ account_id: Schema.String })) }) });
 
-const pinOf = (dir: string) => Schema.decodeUnknownSync(Schema.fromJsonString(PinnedAgents))(readFileSync(join(dir, "manifest.json"), "utf8")).provenance.agents.A?.auth_account_id;
+const pinOf = (dir: string) => Schema.decodeUnknownSync(Schema.fromJsonString(PinnedAgents))(readFileSync(join(dir, "manifest.json"), "utf8")).provenance.agents.A?.account_id;
 
-const pinned = (account: string) => (modelId: string) => ({ ...fauxProvenance(modelId), auth_account_id: account });
+const pinned = (account: string) => (modelId: string) => ({ ...fauxProvenance(modelId), account_id: account });
 
 const ADDENDUM = "Answer in as few words as you can.";
 
@@ -241,6 +241,8 @@ test.each([...DELIVERIES])("a human types moves into the terminal client and pla
   expect(shown.some((line) => line.startsWith("error: "))).toBe(true);
 }, 60_000);
 
+/** The header a test endpoint reads an account pin from, as ARENA_ACCOUNT_HEADER names it. */
+const ACCOUNT_HEADER = "X-Account-Id";
 const ENDPOINT = { url: "http://127.0.0.1:8318", key: "sk-test-secret-value" };
 
 const endpointFrom = (env: Readonly<Record<string, string>>) => Effect.runPromiseExit(agentEndpoint(Schema.decodeUnknownSync(AgentId)("A")).pipe(Effect.provideService(ConfigProvider.ConfigProvider, ConfigProvider.fromEnvRecord(env))));
@@ -299,7 +301,7 @@ test.each([
 /** What a local server received: the request body, and the account pin header if it carried one. */
 interface Received {
   readonly body: unknown;
-  readonly accountId: string | null;
+  readonly account: string | null;
 }
 
 /** The requests an endpoint sends for `replies` replies, as pi-durable asks for each: with no reasoning option at effort off. */
@@ -309,7 +311,7 @@ const requestsSentAt = async (api: "ANT" | "OAI", model: string, effort: "off" |
   const server = Bun.serve({
     port: 0,
     fetch: async (request) => {
-      requests.push({ body: await request.json(), accountId: request.headers.get("X-Arena-Account") });
+      requests.push({ body: await request.json(), account: request.headers.get(ACCOUNT_HEADER) });
 
       return Response.json({ type: "error", error: { type: "invalid_request_error", message: "refused by the test" } }, { status: 400 });
     },
@@ -374,23 +376,23 @@ test.each([
 test.each([
   ["ANT", "claude-haiku-5-5"],
   ["OAI", "gpt-6-luna"],
-] as const)("a %s endpoint with PLAYER_A_ACCOUNT_ID pins every request to the account, and one without sends no pin", async (api, model) => {
-  const pinned = await requestsSentAt(api, model, "low", { PLAYER_A_ACCOUNT_ID: "claude-account-2.json" }, 2);
-  const unpinned = await requestsSentAt(api, model, "low", {}, 2);
+] as const)("a %s endpoint with PLAYER_A_ACCOUNT_ID pins every request to the account in ARENA_ACCOUNT_HEADER, and one without sends no pin", async (api, model) => {
+  const pinned = await requestsSentAt(api, model, "low", { ARENA_ACCOUNT_HEADER: ACCOUNT_HEADER, PLAYER_A_ACCOUNT_ID: "claude-account-2.json" }, 2);
+  const unpinned = await requestsSentAt(api, model, "low", { ARENA_ACCOUNT_HEADER: ACCOUNT_HEADER }, 2);
 
-  expect(pinned.map((received) => received.accountId)).toEqual(["claude-account-2.json", "claude-account-2.json"]);
-  expect(unpinned.map((received) => received.accountId)).toEqual([null, null]);
+  expect(pinned.map((received) => received.account)).toEqual(["claude-account-2.json", "claude-account-2.json"]);
+  expect(unpinned.map((received) => received.account)).toEqual([null, null]);
 });
 
 test("the account pin is recorded in the provenance only when set, never with the key", async () => {
   const env = { PLAYER_A_OAI_URL: ENDPOINT.url, PLAYER_A_OAI_KEY: ENDPOINT.key, PLAYER_A_MODEL: "gpt-6-luna", PLAYER_A_EFFORT: "medium" };
-  const pinned = await endpointFrom({ ...env, PLAYER_A_ACCOUNT_ID: "codex-account-1.json" });
+  const pinned = await endpointFrom({ ...env, ARENA_ACCOUNT_HEADER: ACCOUNT_HEADER, PLAYER_A_ACCOUNT_ID: "codex-account-1.json" });
   const unpinned = await endpointFrom(env);
 
   if (!Exit.isSuccess(pinned) || !Exit.isSuccess(unpinned)) throw new Error("test endpoints failed");
 
-  expect(provenanceOf("provider-A", pinned.value).auth_account_id).toBe("codex-account-1.json");
-  expect("auth_account_id" in provenanceOf("provider-A", unpinned.value)).toBe(false);
+  expect(provenanceOf("provider-A", pinned.value).account_id).toBe("codex-account-1.json");
+  expect("account_id" in provenanceOf("provider-A", unpinned.value)).toBe(false);
   expect(JSON.stringify(provenanceOf("provider-A", pinned.value))).not.toContain(ENDPOINT.key);
 });
 
@@ -406,7 +408,7 @@ test("the instructions addendum is read from PLAYER_A_INSTRUCTIONS_ADDENDUM into
 });
 
 test("a blank PLAYER_A_ACCOUNT_ID pins nothing", async () => {
-  expect((await requestsSentAt("OAI", "gpt-6-luna", "low", { PLAYER_A_ACCOUNT_ID: "" })).map((received) => received.accountId)).toEqual([null]);
+  expect((await requestsSentAt("OAI", "gpt-6-luna", "low", { ARENA_ACCOUNT_HEADER: ACCOUNT_HEADER, PLAYER_A_ACCOUNT_ID: "" })).map((received) => received.account)).toEqual([null]);
 });
 
 test("an endpoint's model alias plays as the catalog model it names", async () => {
@@ -443,6 +445,7 @@ test.each([
   [{ PLAYER_A_OAI_URL: ENDPOINT.url, PLAYER_A_OAI_KEY: ENDPOINT.key, PLAYER_A_MODEL: "gpt-6-luna-fast", PLAYER_A_CATALOG_MODEL: "gpt-6-lunar" }, "PLAYER_A_CATALOG_MODEL=gpt-6-lunar is not a pi-ai OpenAIResponses model"],
   [{ PLAYER_A_OAI_URL: ENDPOINT.url, PLAYER_A_OAI_KEY: ENDPOINT.key, PLAYER_A_MODEL: "ds", PLAYER_A_CATALOG_MODEL: "opencode/deepseek-v9" }, "PLAYER_A_CATALOG_MODEL=opencode/deepseek-v9 is not a pi-ai OpenAIResponses model"],
   [{ PLAYER_A_OAI_URL: ENDPOINT.url, PLAYER_A_OAI_KEY: ENDPOINT.key, PLAYER_A_MODEL: "ds", PLAYER_A_CATALOG_MODEL: "nowhere/deepseek-v4.1-flash" }, "PLAYER_A_CATALOG_MODEL=nowhere/deepseek-v4.1-flash is not a pi-ai OpenAIResponses model"],
+  [{ PLAYER_A_OAI_URL: ENDPOINT.url, PLAYER_A_OAI_KEY: ENDPOINT.key, PLAYER_A_MODEL: "gpt-6-luna", PLAYER_A_ACCOUNT_ID: "account-1" }, "ARENA_ACCOUNT_HEADER must be set when PLAYER_A_ACCOUNT_ID is"],
   [{ PLAYER_A_MODEL: "gpt-6-luna" }, "Set PLAYER_A_ANT_URL and PLAYER_A_ANT_KEY, or PLAYER_A_OAI_URL and PLAYER_A_OAI_KEY"],
 ])("a bad endpoint fails naming the variable, never the key: %p", async (env, expected) => {
   const failure = await failureOf(env);

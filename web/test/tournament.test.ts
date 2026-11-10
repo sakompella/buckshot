@@ -411,7 +411,7 @@ test("a model at its usage limit holds back its matches until the reset, other m
 
   if (lunaFirst === undefined || lunaSecond === undefined || claude.length !== 2) throw new Error("the schedule is not two luna matches, then two others");
 
-  /** The fault line a match's run ends on when the shared endpoint reports luna at its usage limit for `seconds`. */
+  /** The fault line a match's run ends on when the endpoint reports luna at its usage limit for `seconds`. */
   const coolDown = (dir: string, match: ScheduledMatch, seconds: number) => {
     const agent = match.seats[match.entrants.indexOf("luna")];
     const error = `openai-responses-A API error (429): ${JSON.stringify({ code: "model_cooldown", model: "gpt-6-luna", reset_seconds: seconds })}`;
@@ -945,7 +945,7 @@ const pinAndCool = (dir: string, tournament: Tournament, match: ScheduledMatch, 
   const path = join(dir, match.name, "manifest.json");
   const manifest = JSON.parse(readFileSync(path, "utf8"));
 
-  manifest.provenance.agents.A.auth_account_id = account;
+  manifest.provenance.agents.A.account_id = account;
   writeFileSync(path, JSON.stringify(manifest));
   writeFileSync(join(dir, match.name, "events.jsonl"), `${JSON.stringify({ t: new Date().toISOString(), kind: "fault", agent: "A", error: 'API error (429): {"code":"model_cooldown","reset_seconds":3600}' })}\n`);
 };

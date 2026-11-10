@@ -11,7 +11,7 @@ import { runMain, ScriptError } from "../src/script.ts";
 // Deploys the online site in two steps (ADR-0050). Before any upload, `check` refuses a file in web/online that is not
 // part of the site and runs the privacy check on the data; `preview` runs it first, and `deploy:online` before its `cf deploy`. `preview` uploads a Worker version without sending it traffic,
 // serves it at https://<alias>-buckshot.<workers.dev subdomain>.workers.dev and checks it there. `promote` sends all
-// traffic, so buckshot.akompella.dev, to a version. Needs CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in the
+// traffic, so $ONLINE_DOMAIN, to a version. Needs CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID and ONLINE_DOMAIN in the
 // environment (_work/.cloudflare-deploy.env) and must run under Node 22.23+ for `cf`, as in `nix develop`.
 
 const USAGE = "usage: bun scripts/deploy-online.ts check | preview [--alias <name>] | promote <version id>";
