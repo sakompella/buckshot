@@ -11,9 +11,9 @@ import { itemName } from "../src/text.ts";
 
 // Tables for docs/arena/analysis/beliefs-and-items.md from the database that
 // scripts/arena-knowledge.ts writes. Only completed matches and the agents' own
-// moves count; forced grabs and fallback moves do not. Matches with a DeepSeek
-// seat are left out. Every rate is
-// numerator/denominator with a 95% interval from resampling seed blocks
+// moves count; forced grabs and fallback moves do not. Excluded matches (a
+// DeepSeek seat, matches.disposition) are left out, their opponents' moves
+// too. Every rate is numerator/denominator with a 95% interval from resampling seed blocks
 // (matches.seed_block_id) within the row's cohort, never single matches. A cohort is
 // one kind of comparison pooled over every tournament: all cross-model matches, or
 // all of one model's matches against itself. It comes from each match's players.
@@ -34,10 +34,7 @@ const openReadOnly = (path: string) =>
 
 /** Prints every table of the report, reading `db`; each rate resamples seed blocks `draws` times. */
 const report = (db: Database, draws: number): void => {
-  /** DeepSeek's matches are left out of every table, its opponents' moves in them too. */
-  const EXCLUDED = "SELECT match_id FROM players WHERE model LIKE '%deepseek%'";
-
-  const cohortByMatch: ReadonlyMap<string, string> = new Map(db.query<{ match_id: string; kind: string }, []>(`SELECT match_id, kind FROM matches WHERE match_id NOT IN (${EXCLUDED})`).all().map(({ match_id, kind }) => [match_id, kind]));
+  const cohortByMatch: ReadonlyMap<string, string> = new Map(db.query<{ match_id: string; kind: string }, []>(`SELECT match_id, kind FROM matches WHERE disposition IS NULL`).all().map(({ match_id, kind }) => [match_id, kind]));
 
   const cohortOf = (matchId: string): string => cohortByMatch.get(matchId) ?? "";
 
@@ -75,7 +72,7 @@ const report = (db: Database, draws: number): void => {
       `SELECT d.match_id, d.ordinal, m.code_hash, m.seed_block_id AS block, p.model || ' ' || p.effort AS model, d.choice, d.chamber, d.remaining, d.source,
          d.clue_via_adrenaline AS via, d.moves_since_clue AS since, d.shot, d.item, d.item_stolen AS stolen, d.legal_items_json, d.own_items_json, d.exact_key, d.belief_key
        FROM decisions d JOIN matches m ON m.match_id = d.match_id JOIN players p ON p.match_id = d.match_id AND p.player = d.player
-       WHERE m.status = 'completed' AND m.match_id NOT IN (${EXCLUDED}) AND d.by_whom = 'agent'`,
+       WHERE m.status = 'completed' AND m.disposition IS NULL AND d.by_whom = 'agent'`,
     )
     .all()
     .map((row) => ({ ...row, cohort: cohortOf(row.match_id) }));
@@ -94,7 +91,7 @@ const report = (db: Database, draws: number): void => {
   const items = db
     .query<Omit<ItemRow, "cohort">, []>(
       `SELECT i.match_id, m.seed_block_id AS block, p.model || ' ' || p.effort AS model, i.item, i.end, i.moves_held, i.own_decisions_held
-       FROM items i JOIN matches m ON m.match_id = i.match_id JOIN players p ON p.match_id = i.match_id AND p.player = i.player WHERE m.status = 'completed' AND m.match_id NOT IN (${EXCLUDED})`,
+       FROM items i JOIN matches m ON m.match_id = i.match_id JOIN players p ON p.match_id = i.match_id AND p.player = i.player WHERE m.status = 'completed' AND m.disposition IS NULL`,
     )
     .all()
     .map((row) => ({ ...row, cohort: cohortOf(row.match_id) }));
@@ -110,7 +107,7 @@ const report = (db: Database, draws: number): void => {
   const deaths = db
     .query<Omit<DeathRow, "cohort">, []>(
       `SELECT x.match_id, m.seed_block_id AS block, p.model || ' ' || p.effort AS model, x.items_held
-       FROM deaths x JOIN matches m ON m.match_id = x.match_id JOIN players p ON p.match_id = x.match_id AND p.player = x.player WHERE m.status = 'completed' AND m.match_id NOT IN (${EXCLUDED})`,
+       FROM deaths x JOIN matches m ON m.match_id = x.match_id JOIN players p ON p.match_id = x.match_id AND p.player = x.player WHERE m.status = 'completed' AND m.disposition IS NULL`,
     )
     .all()
     .map((row) => ({ ...row, cohort: cohortOf(row.match_id) }));

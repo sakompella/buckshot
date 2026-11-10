@@ -2,7 +2,7 @@ import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { pressable } from "./charts.ts";
-import { colorOf, fmtPct, fmtTime, fmtUsd, keyOf, labelOf, type MatchRow, type SeatFull, sumOf, winnerOf } from "./data.ts";
+import { colorOf, fmtTime, fmtUsd, keyOf, labelOf, type MatchRow, resultOf, type SeatFull, sumOf, winnerOf } from "./data.ts";
 import { memoLast } from "./derived.ts";
 import { Message, type Model, type MatchPreset } from "./model.ts";
 import type { Rating } from "./ratings.ts";
@@ -79,14 +79,6 @@ export const rowsOf = memoLast((matches: ReadonlyArray<MatchRow>, ratings: Reado
     onSome: (preset) => presetRows(searched, ratings, preset),
   });
 });
-
-const resultOf = (match: MatchRow): string => {
-  const winner = winnerOf(match);
-
-  if (match.status !== "completed") return "unscored";
-
-  return winner === undefined ? `split ${fmtPct(match.seats[0]?.winShare ?? 0)}` : `${labelOf(keyOf(winner))} wins`;
-};
 
 const rowView = (h: H, { match, note }: Listed): Html =>
   h.keyed("tr")(

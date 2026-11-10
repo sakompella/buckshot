@@ -8,14 +8,15 @@ import { agentMoves } from "../agent/moves.ts";
 import { ArenaController } from "../arena/match.ts";
 import { replayOf } from "../arena/replay.ts";
 import type { TableMove } from "../board.ts";
-import { seatsOut } from "../domain.ts";
+import { GameEvent, type Seat, seatsOut } from "../domain.ts";
 import { Letter, rosterOf } from "../players.ts";
+import { eventText, secretText } from "../text.ts";
 import { AGGREGATE_NAMES, aggregatesOf, encodeAggregates } from "./aggregates.ts";
-import { decodeVisible, roundStory, ShellTracker, shotLineIn } from "./analysis.ts";
+import { decodeVisible, type Heard, heardBetween, isSecret, matchLog, roundStory, ShellTracker } from "./analysis.ts";
 import { Blunders, Call, CertainMistakes, Decisions, type MatchDetail, MatchDetailJson, MatchSeat, MatchSummary, type PlayerState, SeatsResponse, Step, type TablePosition } from "./api.ts";
 import { findBlunders } from "./blunders.ts";
 import type { Certain } from "./certain.ts";
-import { type ArenaPaths, loadArena, NOT_DEEPSEEK, decodeLabelled, withConfig } from "./load.ts";
+import { type ArenaPaths, loadArena, decodeLabelled, withConfig } from "./load.ts";
 import { withPotShares } from "./page/data.ts";
 import type { Regret } from "./regret.ts";
 
@@ -37,6 +38,7 @@ const DecisionRow = Schema.Struct({
   label: Schema.String,
   move: Schema.Number,
   visible: Schema.NullOr(Schema.String),
+  eventsBefore: Schema.NullOr(Schema.Number),
 });
 
 type DecisionRow = typeof DecisionRow.Type;
@@ -53,9 +55,13 @@ const encodeCertain = Schema.encodeSync(Schema.fromJsonString(CertainMistakes));
 
 const encodeMatch = Schema.encodeSync(Schema.fromJsonString(MatchDetailJson));
 
-// A move's outcome is the start of its player's next window, up to the first line by someone else or a new round, distribution or load.
-const isOutcomeEnd = (text: string, player: string): boolean =>
-  (text.startsWith("Player ") && !text.startsWith(`Player ${player} `)) || /^(Round \d+ begins|Item distribution|The shotgun is loaded)/.test(text);
+/** The seat a heard line starts with; none for a secret or a table-wide event. */
+const actorOf = (heard: GameEvent): Seat | undefined => ("seat" in heard ? heard.seat : "shooter" in heard ? heard.shooter : "by" in heard ? heard.by : undefined);
+
+const isTableWide = GameEvent.isAnyOf(["RoundBegan", "GrabbingBegan", "Loaded"]);
+
+// A move's outcome is what its player heard next, up to the first line by someone else or a new round, distribution or load.
+const isOutcomeEnd = (heard: Heard, socket: Seat): boolean => !isSecret(heard) && (isTableWide(heard) || (actorOf(heard) ?? socket) !== socket);
 
 /** What a replay needs of a match's manifest. */
 const ReplayManifest = Schema.fromJsonString(Schema.Struct({ seed: Schema.String, controllers: Schema.Array(ArenaController), letters: Schema.Array(Letter) }));
@@ -98,16 +104,14 @@ const tablesOf = (manifest: string | null, decisions: ReadonlyArray<DecisionRow>
 
 interface StepDraft {
   readonly step: Omit<Step, "outcome" | "calls">;
-  readonly events: ReadonlyArray<string>;
-  readonly previous: number | undefined;
-  readonly outcome: Array<string>;
+  readonly outcome: ReadonlyArray<string>;
   readonly calls: Array<Call>;
 }
 
 const matchDetail = (db: Database, regret: Regret | null, certain: Certain, id: string): MatchDetail | null => {
   const match = decodeSummary(
     db
-      .query(`select m.id, m.name, m.status, m.seed, m.started_at startedAt, m.ended_at endedAt, t.name tournament from matches m join tournaments t on t.id = m.tournament_id where m.id = ? and ${NOT_DEEPSEEK}`)
+      .query(`select m.id, m.name, m.status, m.seed, m.started_at startedAt, m.ended_at endedAt, t.name tournament from matches m join tournaments t on t.id = m.tournament_id where m.id = ? and m.disposition is not 'excluded'`)
       .get(id),
   );
 
@@ -121,14 +125,15 @@ const matchDetail = (db: Database, regret: Regret | null, certain: Certain, id: 
   const regretOf = regret?.moves(id);
   const certainOf = certain.moves(id);
 
-  // Each player's view is the concatenation of its own decisions' event windows, so shells and rounds are tracked per player.
+  // Each player's view is what it heard up to each of its decisions, so shells and rounds are tracked per player.
+  const log = matchLog(db, id);
   const trackers = new Map<string, ShellTracker>();
-  const lastOf = new Map<string, number>();
+  const heardTo = new Map<string, number>();
   const roundOf = new Map<string, number>();
   const healthOf = new Map<string, number>();
 
   const rows = db
-    .query(`select id, ordinal, turn, player, by_whom byWhom, label, selected_move move, visible_json visible from decisions where match_id = ? order by ordinal`)
+    .query(`select id, ordinal, turn, player, by_whom byWhom, label, selected_move move, visible_json visible, events_before eventsBefore from decisions where match_id = ? order by ordinal`)
     .all(id)
     .map((raw) => decodeDecisionRow(raw));
 
@@ -136,71 +141,53 @@ const matchDetail = (db: Database, regret: Regret | null, certain: Certain, id: 
   const tables = tablesOf(manifest, rows);
 
   const drafts = rows.map((row, index): StepDraft => {
-      const visible = row.visible === null ? null : decodeVisible(row.visible);
-      const events = visible?.events ?? [];
-      const tracker = trackers.get(row.player) ?? new ShellTracker();
-      const previous = lastOf.get(row.player);
+    const visible = row.visible === null ? null : decodeVisible(row.visible);
+    const tracker = trackers.get(row.player) ?? new ShellTracker();
+    const socket = Option.getOrUndefined(log.roster.find(row.player))?.seat;
+    const at = row.eventsBefore ?? heardTo.get(row.player) ?? 0;
+    const heard = socket === undefined ? [] : heardBetween(log, socket, heardTo.get(row.player) ?? 0, at);
 
-      trackers.set(row.player, tracker);
-      lastOf.set(row.player, index);
+    trackers.set(row.player, tracker);
+    heardTo.set(row.player, at);
 
-      for (const text of events) {
-        tracker.event(text);
-        const round = /^Round (\d+) begins/.exec(text);
+    for (const line of heard) {
+      tracker.hear(line);
 
-        if (round) roundOf.set(row.player, Number(round[1]));
-      }
+      if (GameEvent.guards.RoundBegan(line)) roundOf.set(row.player, line.round + 1);
+    }
 
-      const chamber = tracker.chamber();
+    const chamber = tracker.chamber();
 
-      const players = (visible?.players ?? []).map((seen): PlayerState => {
-        const health = seen.health ?? healthOf.get(seen.player) ?? 0;
+    const players = (visible?.players ?? []).map((seen): PlayerState => {
+      const health = seen.health ?? healthOf.get(seen.player) ?? 0;
 
-        healthOf.set(seen.player, health);
+      healthOf.set(seen.player, health);
 
-        return { player: seen.player, health, items: seen.items ?? [] };
-      });
-
-      const { visible: _visible, move: _move, ...decision } = row;
-
-      return {
-        step: {
-          ...decision,
-          round: roundOf.get(row.player) ?? 1,
-          players,
-          live: tracker.live,
-          blank: tracker.blank,
-          known: chamber !== null && (chamber.by === "glass" || chamber.by === "phone") ? chamber.known : null,
-          regret: regretOf?.get(row.ordinal) ?? null,
-          certain: certainOf.get(row.ordinal) ?? null,
-          table: tables[index] ?? null,
-        },
-        events,
-        previous,
-        outcome: [],
-        calls: [],
-      };
+      return { player: seen.player, health, items: seen.items ?? [] };
     });
 
-  for (const draft of drafts) {
-    const before = draft.previous === undefined ? undefined : drafts[draft.previous];
+    // What the player heard after this move, up to its next decision.
+    const next = rows.slice(index + 1).find(({ player }) => player === row.player)?.eventsBefore ?? log.events.length;
+    const after = socket === undefined || row.eventsBefore === null ? [] : heardBetween(log, socket, row.eventsBefore, next);
+    const end = socket === undefined ? 0 : after.findIndex((line) => isOutcomeEnd(line, socket));
 
-    if (before === undefined) continue;
+    const { visible: _visible, move: _move, eventsBefore: _eventsBefore, ...decision } = row;
 
-    const end = draft.events.findIndex((text) => isOutcomeEnd(text, before.step.player));
-
-    before.outcome.push(...(end === -1 ? draft.events : draft.events.slice(0, end)).filter((text) => !text.endsWith(" picked up the shotgun.")));
-  }
-
-  drafts.forEach((draft, index) => {
-    if (draft.outcome.length > 0 || !draft.step.label.startsWith("Shoot")) return;
-
-    const line = shotLineIn(
-      draft.step.player,
-      drafts.slice(index + 1).map(({ step, events }) => ({ player: step.player, events })),
-    );
-
-    if (line !== undefined) draft.outcome.push(line);
+    return {
+      step: {
+        ...decision,
+        round: roundOf.get(row.player) ?? 1,
+        players,
+        live: tracker.live,
+        blank: tracker.blank,
+        known: chamber !== null && (chamber.by === "glass" || chamber.by === "phone") ? chamber.known : null,
+        regret: regretOf?.get(row.ordinal) ?? null,
+        certain: certainOf.get(row.ordinal) ?? null,
+        table: tables[index] ?? null,
+      },
+      outcome: (end === -1 ? after : after.slice(0, end)).flatMap((line) => (GameEvent.guards.PickedUp(line) ? [] : [isSecret(line) ? secretText(line) : eventText(log.roster, line)])),
+      calls: [],
+    };
   });
 
   const byId = new Map(drafts.map((draft) => [draft.step.id, draft]));
@@ -220,13 +207,7 @@ const matchDetail = (db: Database, regret: Regret | null, certain: Certain, id: 
     (draft?.calls ?? unlinked).push(call);
   }
 
-  // One player's windows in order are its whole view; mixing both players' windows misorders round lines.
-  const first = seats[0]?.player;
-
-  const story = roundStory(
-    drafts.filter(({ step }) => step.player === first).flatMap(({ events }) => events),
-    new Map(seats.map((seat) => [seat.player, seat.cash ?? 0])),
-  );
+  const story = roundStory(log, new Map(seats.map((seat) => [seat.player, seat.cash ?? 0])));
 
   return { match: match.value, seats, decisions: drafts.map(({ step, outcome, calls: linked }) => ({ ...step, outcome, calls: linked })), unlinked, story };
 };
