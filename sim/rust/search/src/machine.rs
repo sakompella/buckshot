@@ -54,8 +54,8 @@ pub fn answer_into(config: &Config, state: &State, n: u32, notes: &mut Notes) ->
 #[cfg(test)]
 mod reuse {
     use buckshot_rules::{
-        AmountRule, Config, Deck, Decks, Direction, FirstDeathCheck, Grabs, Gun, HealthRule, IdleOption, Item, ItemRule, Jam, Load,
-        LoadRule, MenuInputs, Phase, Request, Ring, RoundRules, Seat, SeatRecord, Shell, ShellRule, Slot, Slots, State, Table, World,
+        AmountRule, Config, Deck, Decks, Direction, EnumMap, FirstDeathCheck, Grabs, Gun, HealthRule, IdleOption, Item, ItemRule, Jam,
+        Load, LoadRule, MenuInputs, Phase, Request, Ring, RoundRules, Seat, SeatRecord, Shell, ShellRule, Slot, Slots, State, Table, World,
         request,
     };
     use hegel::TestCase;
@@ -177,7 +177,7 @@ mod reuse {
         let rounds: Vec<RoundRules> = many(tc, 1, 3, |tc| RoundRules {
             health: HealthRule::Fixed(between(tc, 1, 5)),
             loads: std::array::from_fn(|_| load(tc)),
-            items: std::array::from_fn(|_| ItemRule {
+            items: EnumMap::from_fn(|_| ItemRule {
                 enabled: tc.draw_silent(gs::weighted_booleans(0.75)),
                 per_player: between(tc, 1, 8),
                 on_table: 32,

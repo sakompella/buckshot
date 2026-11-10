@@ -134,6 +134,12 @@ mod ops {
         n as u32
     }
 
+    /// A count, exact: `usize` is at most 64 bits.
+    #[must_use]
+    pub const fn len_u64(n: usize) -> u64 {
+        n as u64
+    }
+
     /// The window branch `at` of a probability-weighted sum is searched in,
     /// given the sum's own window `lo..hi` (the Star1 bound). Each term is a
     /// probability and the bounds of its value, in millionths. A value at most
@@ -173,7 +179,7 @@ mod ops {
     }
 }
 
-pub use ops::{branch_window, len_u32};
+pub use ops::{branch_window, len_u32, len_u64};
 
 #[cfg(test)]
 mod tests {

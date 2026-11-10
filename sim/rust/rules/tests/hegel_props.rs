@@ -12,9 +12,9 @@
 use std::hint::black_box;
 
 use buckshot_rules::{
-    AmountRule, Answer, Config, Deck, Decks, Direction, Event, FirstDeathCheck, Grabs, Gun, HealthRule, IdleOption, Item, ItemRule, Items,
-    Jam, LegalMove, Load, LoadRule, MenuInputs, Phase, Range, Request, RequestKind, Ring, RoundRules, RuleError, Seat, SeatRecord, Shell,
-    ShellRule, Slot, Slots, State, Stepped, Table, World, request, start, step, step_event,
+    AmountRule, Answer, Config, Deck, Decks, Direction, EnumMap, Event, FirstDeathCheck, Grabs, Gun, HealthRule, IdleOption, Item,
+    ItemRule, Items, Jam, LegalMove, Load, LoadRule, MenuInputs, Phase, Range, Request, RequestKind, Ring, RoundRules, RuleError, Seat,
+    SeatRecord, Shell, ShellRule, Slot, Slots, State, Stepped, Table, World, request, start, step, step_event,
 };
 use hegel::TestCase;
 use hegel::generators as gs;
@@ -125,7 +125,7 @@ fn round_rules(tc: &TestCase, heavy: bool) -> RoundRules {
     RoundRules {
         health,
         loads: std::array::from_fn(|_| load_rule(tc, heavy)),
-        items: item_rules(tc, heavy),
+        items: EnumMap::from_array(item_rules(tc, heavy)),
     }
 }
 
@@ -625,7 +625,7 @@ fn wild_round(tc: &TestCase) -> RoundRules {
     RoundRules {
         health,
         loads: std::array::from_fn(|_| load(tc)),
-        items: std::array::from_fn(|_| ItemRule {
+        items: EnumMap::from_fn(|_| ItemRule {
             enabled: flag(tc),
             per_player: num(tc),
             on_table: num(tc),

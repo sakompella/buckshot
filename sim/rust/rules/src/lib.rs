@@ -49,10 +49,11 @@ pub use domain::{
     AmountRule, Config, Damage, Direction, DrawValue, GameEvent, Gun, HealthRule, Item, ItemRule, Items, Label, Load, LoadRule, Note,
     PHONE_CAP, Range, Ring, RoundRules, Seat, Seats, Secret, Shell, ShellRule, Slot, Slots, Table, prize,
 };
+pub use enum_map::EnumMap;
 pub use machine::{initial, start, step, step_into};
 pub use point::{MenuInputs, draw_request, request};
 pub use rules::{alive, load_actual, load_next, predecessor, world_load_rule};
-pub use state::{Batch, Deck, Decks, FirstDeathCheck, Grabs, Jam, Phase, Players, SeatRecord, State, World};
+pub use state::{Batch, Deck, Decks, FirstDeathCheck, Grabs, Jam, Phase, Players, SeatRecord, State, World, players_seat};
 
 /// A whole move as the agent tools name it (simple/state.bend `Move`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

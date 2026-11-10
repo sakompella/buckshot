@@ -44,7 +44,7 @@ use buckshot_rules::{Config, MENU_CAPACITY, Menu, Request, Seat, request};
 
 use super::{Choice, Search, Span, Spent, Value, analysed, best_line, limited, lines_static, push_choices, static_value};
 use crate::memo::{Kind, Stored, Tally, hash};
-use crate::num::{Real, branch_window};
+use crate::num::{Real, branch_window, len_u64};
 use crate::types::{Analysis, Line, Reach, World};
 
 /// The highest value: `millionths` clamps every sum to a million.
@@ -473,7 +473,7 @@ impl Search<'_> {
 
     fn bounded_option(&mut self, depth: u32, beliefs: (Span, Span), index: u32, need: Need) -> Result<Boxed, Spent> {
         let (public, private) = beliefs;
-        let worlds = u64::try_from(public.len().saturating_add(private.len())).unwrap_or(u64::MAX);
+        let worlds = len_u64(public.len().saturating_add(private.len()));
         let spent = self.tally.nodes.saturating_add(worlds);
         if spent > self.budget {
             return Err(Spent);

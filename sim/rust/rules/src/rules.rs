@@ -104,7 +104,7 @@ fn successor_go(seats: &[Seat], current: Seat, wrap: Seat) -> Seat {
                     return *next;
                 }
                 branch!(B::SmRulesSuccessorPickFalse);
-                seats = seats.get(1..).unwrap_or_default();
+                seats = seats.split_at(1).1;
             }
         }
     }

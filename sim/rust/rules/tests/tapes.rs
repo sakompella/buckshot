@@ -28,9 +28,9 @@ use std::io::{BufRead, BufReader, Lines};
 use std::path::{Path, PathBuf};
 
 use buckshot_rules::{
-    AmountRule, Config, Deck, Decks, Direction, Event, FirstDeathCheck, GameEvent, Grabs, Gun, HealthRule, Item, ItemRule, Items, Jam,
-    Load, LoadRule, Move, Note, Phase, Request, Ring, RoundRules, Seat, SeatRecord, Secret, Shell, ShellRule, Slot, Slots, State, Table,
-    World, request, start, step_event,
+    AmountRule, Config, Deck, Decks, Direction, EnumMap, Event, FirstDeathCheck, GameEvent, Grabs, Gun, HealthRule, Item, ItemRule, Items,
+    Jam, Load, LoadRule, Move, Note, Phase, Request, Ring, RoundRules, Seat, SeatRecord, Secret, Shell, ShellRule, Slot, Slots, State,
+    Table, World, request, start, step_event,
 };
 use serde_json::{Value, json};
 
@@ -289,7 +289,7 @@ fn round_rules(v: &Value) -> Result<RoundRules, String> {
     Ok(RoundRules {
         health,
         loads: [load("l0")?, load("l1")?, load("l2")?, load("l3")?],
-        items: items.try_into().map_err(|_items| "nine items")?,
+        items: EnumMap::from_array(items.try_into().map_err(|_items| "nine items")?),
     })
 }
 

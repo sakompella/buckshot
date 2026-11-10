@@ -4,8 +4,8 @@
 //! these pin the helpers that consumers such as `buckshot-search` call.
 
 use buckshot_rules::{
-    AmountRule, Answer, Config, Deck, Event, Gun, HealthRule, Item, ItemRule, Items, Load, LoadRule, Move, Notes, Phase, Range, Request,
-    Ring, RoundRules, RuleError, Seat, Seats, Shell, ShellRule, State, Table, request, start, step, step_event, step_into,
+    AmountRule, Answer, Config, Deck, EnumMap, Event, Gun, HealthRule, Item, ItemRule, Items, Load, LoadRule, Move, Notes, Phase, Range,
+    Request, Ring, RoundRules, RuleError, Seat, Seats, Shell, ShellRule, State, Table, request, start, step, step_event, step_into,
 };
 
 /// Every table this build holds.
@@ -26,11 +26,11 @@ fn config(table: Table) -> Result<Config, RuleError> {
             shells: ShellRule::Random,
             items: AmountRule::Fixed(4),
         }; 4],
-        items: [ItemRule {
+        items: EnumMap::from_fn(|_| ItemRule {
             enabled: true,
             per_player: 8,
             on_table: 32,
-        }; 9],
+        }),
     };
     Config::new(table, &[round, round])
 }

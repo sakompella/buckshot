@@ -10,8 +10,8 @@
 //! ten shells. Those are a [`ParseError`], never a panic or a silent cut.
 
 use buckshot_rules::{
-    AmountRule, Config, Damage, Direction, GameEvent, HealthRule, Item, ItemRule, Load, LoadRule, Ring, RoundRules, RuleError, Seat, Seats,
-    Secret, Shell, ShellRule, Slot, Slots, Table,
+    AmountRule, Config, Damage, Direction, EnumMap, GameEvent, HealthRule, Item, ItemRule, Load, LoadRule, Ring, RoundRules, RuleError,
+    Seat, Seats, Secret, Shell, ShellRule, Slot, Slots, Table,
 };
 
 /// The most shells a load holds; the search takes no board with a longer one shown.
@@ -412,15 +412,10 @@ const fn round_of(items: bool) -> RoundRules {
             shells: ShellRule::Random,
             items: AmountRule::Random,
         };
-        let off = ItemRule {
-            enabled: false,
-            per_player: 0,
-            on_table: 0,
-        };
         RoundRules {
             health: HealthRule::Random,
             loads: [load; 4],
-            items: [off; 9],
+            items: EnumMap::from_array([ItemRule::OFF; 9]),
         }
     }
 }

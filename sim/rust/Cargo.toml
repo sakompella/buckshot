@@ -9,6 +9,7 @@ publish = false
 [workspace.dependencies]
 anyhow = "1"
 arrayvec = { version = "0.7", default-features = false }
+enum-map = { version = "3", default-features = false, features = ["derive"] }
 hegeltest = { version = "=0.52.0", features = ["static-engine"] }
 num_enum = { version = "0.7", default-features = false }
 proc-macro2 = "1"

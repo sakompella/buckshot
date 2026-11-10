@@ -53,7 +53,8 @@ impl SeatRecord {
 pub type Players = Ring<SeatRecord>;
 
 /// `players.seat` with `seat.found`: a seat missing from the ring reads as a fresh seat.
-pub(crate) fn players_seat(players: &Players, seat: Seat) -> SeatRecord {
+#[must_use]
+pub fn players_seat(players: &Players, seat: Seat) -> SeatRecord {
     if let Some(record) = players.get(seat) {
         branch!(B::SmStateSeatFoundSome);
         record
@@ -88,14 +89,22 @@ pub struct Deck {
     ids: u16,
 }
 
+/// Batch `id`'s bit: every table's deck holds fewer than 16 batches.
+const fn bit(id: u32) -> u16 {
+    match 1u16.checked_shl(id) {
+        Some(b) => b,
+        None => 0,
+    }
+}
+
 impl Deck {
     /// `batches(table.deck(table), 0)`.
     #[must_use]
     pub fn full(table: Table) -> Self {
         let mut ids = 0u16;
-        for i in 0..table.deck().len() {
+        for (id, _) in (0u32..).zip(table.deck()) {
             branch!(B::SmRulesBatchesCons);
-            ids |= u16::checked_shl(1, u32::try_from(i).unwrap_or(16)).unwrap_or(0);
+            ids |= bit(id);
         }
         branch!(B::SmRulesBatchesNil);
         Self { table, ids }
@@ -112,9 +121,7 @@ impl Deck {
     /// The batches of this deck whose ids pass `keep`.
     #[must_use]
     pub fn filtered(self, keep: impl Fn(u32) -> bool) -> Self {
-        let ids = (0u32..16)
-            .filter(|id| keep(*id))
-            .fold(0u16, |acc, id| acc | u16::checked_shl(1, id).unwrap_or(0));
+        let ids = (0u32..16).filter(|id| keep(*id)).fold(0u16, |acc, id| acc | bit(id));
         Self {
             ids: self.ids & ids,
             ..self
@@ -131,17 +138,11 @@ impl Deck {
         self.ids == 0
     }
 
-    /// The batches in order.
     pub fn iter(self) -> impl Iterator<Item = Batch> {
-        let loads = self.table.deck();
-        (0u32..16)
-            .filter(move |id| self.ids & u16::checked_shl(1, *id).unwrap_or(0) != 0)
-            .filter_map(move |id| {
-                Some(Batch {
-                    id,
-                    load: *loads.get(usize::try_from(id).ok()?)?,
-                })
-            })
+        (0u32..)
+            .zip(self.table.deck())
+            .filter(move |(id, _)| self.ids & bit(*id) != 0)
+            .map(|(id, &load)| Batch { id, load })
     }
 
     /// `nth`.
@@ -156,7 +157,7 @@ impl Deck {
         match self.nth(index) {
             Some(batch) => Self {
                 table: self.table,
-                ids: self.ids & !u16::checked_shl(1, batch.id).unwrap_or(0),
+                ids: self.ids & !bit(batch.id),
             },
             None => self,
         }

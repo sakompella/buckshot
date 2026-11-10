@@ -22,6 +22,8 @@ use crate::machine::{answer_into, answer_reusing, round_won};
 #[cfg(feature = "f32")]
 use crate::memo::Entry;
 use crate::memo::{Kind, Stored, Tally, hash};
+#[cfg(feature = "f32")]
+use crate::num::len_u64;
 use crate::num::{Real, len_u32};
 use crate::types::{Analysed, Analysis, Belief, Limits, Line, Memo, Reach, Reload, World};
 
@@ -596,10 +598,8 @@ impl Search<'_> {
     fn moves(&mut self, fuel: u64, depth: u32, public: Span, private: Span, choices: Span) -> Searched {
         let mut fuel = fuel;
         let start = self.scored.len();
-        for at in choices.start..choices.end {
-            let Some(choice) = self.choices.get(at).copied() else {
-                break;
-            };
+        for at in 0..choices.len() {
+            let choice = choices.at(&self.choices, at);
             let after = fuel.checked_sub(1);
             let result = match after {
                 Some(after) => self.option(after, depth, public, private, choice.index),
@@ -621,13 +621,7 @@ impl Search<'_> {
     }
 
     fn option(&mut self, fuel: u64, depth: u32, public: Span, private: Span, index: u32) -> Searched {
-        let worlds = u64::try_from(
-            public
-                .end
-                .saturating_sub(public.start)
-                .saturating_add(private.end.saturating_sub(private.start)),
-        )
-        .unwrap_or(u64::MAX);
+        let worlds = len_u64(public.len().saturating_add(private.len()));
         let spent = self.tally.nodes.saturating_add(worlds);
         if spent > self.budget {
             return Searched::Spent;
@@ -647,10 +641,8 @@ impl Search<'_> {
         let mut public = Real::ZERO;
         let mut private = Real::ZERO;
         let mut reach = Reach::Settled;
-        for at in branches.start..branches.end {
-            let Some(branch) = self.branches.get(at).copied() else {
-                break;
-            };
+        for at in 0..branches.len() {
+            let branch = branches.at(&self.branches, at);
             let Some(after) = fuel.checked_sub(1) else {
                 return Searched::Spent;
             };
@@ -847,7 +839,7 @@ pub(crate) fn run(
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use buckshot_rules::{AmountRule, Config, HealthRule, ItemRule, LoadRule, RoundRules, RuleError, ShellRule, Table};
+    use buckshot_rules::{AmountRule, Config, EnumMap, HealthRule, ItemRule, LoadRule, RoundRules, RuleError, ShellRule, Table};
 
     /// Two seats at 2 health, a one-shell live load and no items.
     pub(crate) fn config() -> Result<Config, RuleError> {
@@ -855,15 +847,10 @@ pub(crate) mod tests {
             shells: ShellRule::AllLive { live: 1 },
             items: AmountRule::Fixed(0),
         };
-        let off = ItemRule {
-            enabled: false,
-            per_player: 0,
-            on_table: 0,
-        };
         let round = RoundRules {
             health: HealthRule::Fixed(2),
             loads: [load; 4],
-            items: [off; 9],
+            items: EnumMap::from_fn(|_| ItemRule::OFF),
         };
         Config::new(Table::TwoSeats, &[round, round, round])
     }
