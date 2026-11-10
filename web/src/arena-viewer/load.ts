@@ -13,10 +13,8 @@ import { openRegret, type Regret } from "./regret.ts";
 import { assertCurrentImport } from "../analysis/importer-hash.ts";
 
 // Reads the arena analysis database once for the viewer server and the aggregate export. It never selects
-// match_seats.provenance_json, which holds an account email. DeepSeek is left out entirely: a match with a DeepSeek
-// seat is dropped here, so no tab, rating or total sees it.
-
-export const NOT_DEEPSEEK = `m.id not in (select x.match_id from match_seats x join entrants y on y.id = x.entrant_id where y.model = 'oc/deepseek-v4.1-flash-free')`;
+// match_seats.provenance_json, which holds an account email. Excluded matches (a DeepSeek seat, matches.disposition)
+// are dropped here, so no tab, rating or total sees them.
 
 const SEATS_SQL = `with cs as (select match_id, player, sum(cost_usd) cost, sum(input_tokens) inp, sum(output_tokens) outp,
      sum(cache_read_tokens) cr, sum(cache_write_tokens) cw, sum(reasoning_tokens) rt,
@@ -31,7 +29,7 @@ const SEATS_SQL = `with cs as (select match_id, player, sum(cost_usd) cost, sum(
    from match_seats ms join matches m on m.id = ms.match_id join tournaments t on t.id = m.tournament_id
    left join cs on cs.match_id = m.id and cs.player = ms.player
    left join ds on ds.match_id = m.id and ds.player = ms.player
-   where m.status in ('completed', 'partial') and ${NOT_DEEPSEEK} order by m.started_at, ms.position`;
+   where m.status in ('completed', 'partial') and m.disposition is not 'excluded' order by m.started_at, ms.position`;
 
 const decodeSeatRow = Schema.decodeUnknownSync(SeatRow);
 

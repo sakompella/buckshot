@@ -28,9 +28,9 @@ export type Consistency = typeof Consistency.Type;
 
 export const ITEMS = ["magnifying glass", "burner phone", "handsaw", "beer", "cigarettes", "inverter", "jammer", "adrenaline"] as const;
 
-export const Round = Schema.Struct({ winner: Schema.String, prize: Schema.Number, inferred: Schema.Boolean });
+export const Round = Schema.Struct({ winner: Schema.String, prize: Schema.Number });
 
-/** Round winners and prizes from the public events; ok means every player's prizes sum exactly to its final cash. */
+/** Round winners and prizes from the match's events; ok means every round begun has a winner and every player's prizes sum exactly to its final cash. */
 export const Story = Schema.Struct({ starter: Schema.NullOr(Schema.String), rounds: Schema.Array(Round), ok: Schema.Boolean });
 
 export type Story = typeof Story.Type;

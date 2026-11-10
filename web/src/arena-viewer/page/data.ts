@@ -383,4 +383,15 @@ export const regretStats = (seats: ReadonlyArray<Pick<SeatFull, "regret">>): Reg
   };
 };
 
-export const winnerOf = (match: MatchRow): SeatFull | undefined => match.seats.find(({ winShare }) => (winShare ?? 0) >= 1);
+type Scored<S> = { readonly status: string; readonly seats: ReadonlyArray<S> };
+
+export const winnerOf = <S extends { readonly winShare: number | null }>(match: Pick<Scored<S>, "seats">): S | undefined => match.seats.find(({ winShare }) => (winShare ?? 0) >= 1);
+
+/** A match's result as the match list and the replay print it. */
+export const resultOf = <S extends { readonly winShare: number | null; readonly model: string; readonly effort: string }>(match: Scored<S>): string => {
+  const winner = winnerOf(match);
+
+  if (match.status !== "completed") return "unscored";
+
+  return winner === undefined ? `split ${fmtPct(match.seats[0]?.winShare ?? 0)}` : `${labelOf(keyOf(winner))} wins`;
+};

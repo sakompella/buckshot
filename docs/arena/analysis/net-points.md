@@ -7,7 +7,7 @@ How many round wins a seat's moves gave up per match, by the minimax player's re
 - **Round-win equivalents lost** (the headline): a seat's own loss in a match is the sum of its regret over its searched decisions, in rounds. A regret is a drop in the chance of winning the round, so 100 points is one round. Lower is better. This is not "rounds forfeited": it adds up chances over a match, and a chance given up and then regained is counted twice, so a seat can lose more than 3.
 - **Net points** of a seat in a match: the opponent's loss minus its own. Positive means the opponent gave up more. It is a difference of two estimates, each made from that seat's own information and a public-only model of the opponent. It is not a count of rounds gained.
 - **Largest gap**: the biggest single regret of a seat in a match, in points.
-- Only matches where every agent decision has a searched row count. Missing analysis is never zero. Of the 3,537 finished matches, 1 was left out for that. A match whose round log and final cash disagree stops the run and names the match.
+- Only matches where every agent decision has a searched row count. Missing analysis is never zero. Of the 3,537 finished matches, 1 was left out for that. Round winners come from the replayed match events.
 - Intervals are 95% over seed blocks (both seat orders of one seed together), 2,000 resamples.
 
 ## Results
