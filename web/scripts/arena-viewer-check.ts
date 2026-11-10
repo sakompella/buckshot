@@ -1433,12 +1433,11 @@ const pathOf = (page: Page) => {
   return url.pathname + url.search;
 };
 
-// The site's URLs: Play and Arena from the bar, and the arena's filter, open leaderboard row and replay move, each kept by a reload.
+// The site's URLs: the root moves to the arena, and the arena's filter, open leaderboard row and replay move are each kept by a reload.
 const checkSiteRoutes = async (page: Page) => {
   await page.goto(`${base}/`);
-  await page.getByRole("link", { name: "Arena", exact: true }).click();
   await showMatches(page);
-  expectThat(pathOf(page) === "/arena", `the bar's Arena link leads to ${pathOf(page)}`);
+  expectThat(pathOf(page) === "/arena", `the site's root leads to ${pathOf(page)}`);
 
   await page.getByRole("button", { name: "minimal", exact: true }).first().click();
   await settled(page);
@@ -1483,13 +1482,6 @@ const checkSiteRoutes = async (page: Page) => {
   await openTables(page);
   console.log("leaderboard row", opened, "| open after reload", await countOf(page, "table.lbt tr.row[aria-expanded=true]"));
   expectThat(opened.startsWith("/arena?row=") && (await countOf(page, "table.lbt tr.row[aria-expanded=true]")) === 1, `an open leaderboard row is at ${opened} and does not survive a reload`);
-
-  await page.getByRole("link", { name: "Play", exact: true }).click();
-  await settled(page);
-  expectThat(pathOf(page) === "/" && (await countOf(page, ".setup")) === 1, `the bar's Play link shows ${pathOf(page)} without the game's setup`);
-  await page.goBack();
-  await page.waitForSelector("table.lbt", { state: "attached", timeout: 120_000 });
-  expectThat(pathOf(page) === opened, `back from Play returns to ${pathOf(page)}, not ${opened}`);
 };
 
 const checkOddsDropped = async (page: Page, name: string) => {

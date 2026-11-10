@@ -1,6 +1,6 @@
 # Buckshot
 
-A multiplayer Buckshot table. The rules machine is written in Bend. The table can be played in a browser, through agent tools, and in an arena where models play each other.
+A multiplayer Buckshot table. The rules machine is written in Bend. The table can be played through agent tools and in an arena where models play each other.
 
 ## Language
 

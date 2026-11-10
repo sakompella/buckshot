@@ -1,18 +1,18 @@
-# Buckshot table (web UI)
+# Buckshot web: arena, agent tools and site
 
-A web game for the Bend multiplayer rules library in `sim/bend-mp/`, built
-on Foldkit 0.167 and Effect 4 and run with bun and Vite. It builds `web.bend` to
-JavaScript and plays 2- to 4-player matches in the browser, on a dark top-down
-table drawn in DOM, CSS and SVG: you play by clicking the shotgun, a player's
-defibrillator, an item or the briefcase. Any player can be a human, a Story
-AI, a DoN AI or an agent (see below). The UI has no rules of its own. Legality,
-observation and privacy all come from the machine. See
+The TypeScript side of the project, built on Foldkit 0.167 and Effect 4 and run
+with bun and Vite. It builds the Bend rules in `sim/bend-mp/web.bend` to
+JavaScript and drives them through `src/bend.ts` and `src/driver.ts`, with no
+rules of its own: legality, observation and privacy all come from the machine.
+On top of that sit the agent tools (`src/agent/`, served by an MCP server), the
+arena that plays models against each other (`src/arena/`, `docs/arena/`), and
+the site that shows the arena's results. See
 [`sim/bend-mp/README.md`](../sim/bend-mp/README.md) for the rules library.
 
 ## Run
 
     bun install
-    bun run dev        # builds generated/rules.mjs from sim/bend-mp/web.bend, then serves http://localhost:5173/
+    bun run dev        # builds generated/rules.mjs from sim/bend-mp/web.bend, then serves the site at http://localhost:5173/
 
 `bun run rules` needs the pinned Bend (2.0.40): `$BEND`, else `bend` on PATH.
 `nix develop` at the repo root provides both.
@@ -22,59 +22,48 @@ Checks:
     bun run typecheck  # tsrs --noEmit, strict (tsrs is the Rust port of tsc)
     bun run lint       # oxlint with every anti-slop rule and the Effect group, --deny-warnings
     bun run test       # plays full Story and DoN matches through bend.ts at 2, 3 and 4 players; checks stale answers are rejected; checks the agent tool contract: privacy, read-only get_game, stale, repeated and rematch turns, new_match refused mid-match, the moves list matching the machine's legal chains, and each Agent's events adding up to the whole log, the end included
-    bun scripts/play.ts [url] [outdir]   # headless Chrome (BROWSER=firefox for Playwright Firefox): one human-vs-bot match by clicking the table, one 4-bot autoplay match
-    bun scripts/shots.ts [url] [outdir] [WxH ...]   # a screenshot of each stage of a match, at 1440x900 and 390x844 by default; MOTION=reduce for reduced motion, BROWSER=firefox for Playwright Firefox
-
-## Playing
-
-The setup screen picks the number of players, each player's controller, items
-and the seed. In a match the banner says whose view it is and the phase
-(Your turn, Grab items, Watch, Round over, Match over). Everything else is on
-the table: health is the bolts on each defibrillator, a new load is its shells
-set out in a live group and a blank group, a shot is the gun turning, its
-flash and recoil and the bolts going dark, and a private result (glass, phone)
-shows big in the middle for a moment, only to the player who learned it. Each
-of the viewer's legal moves is played by clicking the thing it acts on, which
-lifts under the pointer; the moves are buttons, so Tab and Enter play them too:
-
-| Move | Click |
-|---|---|
-| Grab | your open briefcase |
-| Place | an empty slot on your side (shown only while placing) |
-| Pick up | the shotgun |
-| Shoot, Jam | a player's defibrillator (your own to shoot yourself) |
-| Use an item | the item on your side |
-| Steal (adrenaline) | the item on another player's side |
-
-`src/board.ts` maps each move to its target. Moves that would share a target
-get plain buttons instead; the tests check that every legal move of many bot
-matches has its own target. The bots move on their own from the start of a
-match. The Menu in the corner pauses or steps them, sets their speed, switches
-whose view the table shows (hotseat), lists the controllers and WebMCP status,
-and has the event log. Animations are CSS, keyed by the event's place in the
-log so each plays once and is gone when the next step starts, and
-`prefers-reduced-motion` turns movement off.
-
-The Speed setting (Slow, Normal, Fast) scales every pause: Normal holds a load
-reveal 2.6 s, a shot 2.2 s and a round over 4.4 s, and Fast is about an eighth
-of that. ADR-0029 records why the table is 2D.
 
 Fonts are self-hosted from `@fontsource`: League Gothic (banners) and VT323
 (everything else), both under the SIL Open Font License 1.1. Every drawing is
 original CSS or SVG (ADR-0028).
 
-## Playing with an agent (WebMCP)
+## Playing with an agent (MCP server)
 
-A player set to Agent waits for tool calls, as a Human player waits for clicks. Any
-number of players can be Agents, so agents can play each other. Autoplay keeps
-moving the Story and DoN players and waits at any Agent's turn. The page
-registers tools only when the browser has `document.modelContext`. Otherwise
-the controls say WebMCP is not available.
+`bun run mcp` is a stdio MCP server with three tools, `get_game`, `play_move` and
+`new_match` (`src/agent/`), for an MCP client such as Claude Code or Codex. It builds the rules,
+then holds one table in the process and plays the DoN and Story players there, so
+by the time a tool replies the bots have moved and an Agent player has the turn
+(or the match is over). It refuses Human players, since nothing can click them.
 
-Enable it in Chrome 149 or later (tested on 155):
+One server process can serve several Agent players: name each player in `get_game`
+and `play_move`, from one agent or from several sub-agents that share the
+client's connection. Separate processes do not share a match. Two clients that
+each launch the server get two separate tables, and no other process can see them.
 
-- Open `chrome://flags/#enable-webmcp-testing`, set it to Enabled and relaunch, or
-- launch with `--enable-features=WebMCPTesting`.
+Add it to Claude Code (run in this `web/` directory, so `$PWD` is its path):
+
+    claude mcp add buckshot -- bun run --cwd "$PWD" mcp
+
+Add it to Codex the same way:
+
+    codex mcp add buckshot -- bun run --cwd "$PWD" mcp
+
+or add this to `~/.codex/config.toml`, with the absolute path to `web/`:
+
+    [mcp_servers.buckshot]
+    command = "bun"
+    args = ["run", "--cwd", "/absolute/path/to/buckshot/web", "mcp"]
+
+Each launch rebuilds the rules first, which takes a few seconds. Then ask the
+agent to call `new_match` and play its player. Checks:
+
+    bun scripts/mcp-check.ts   # spawns the server with the SDK client, lists the tools, plays two Agent players against DoN to the end, checks repeated get_game and play_move calls, new_match mid-match, the final events and a turn from the previous match after a rematch, and prints the reply sizes
+    bunx @modelcontextprotocol/inspector --cli bun scripts/mcp.ts --method tools/list
+
+The server uses `@modelcontextprotocol/server` 2.3.1, the v2 SDK. It also
+answers clients that use the older `initialize` handshake.
+
+### Tools
 
 Players are named by letter in table order: a 2-player table has Player A and
 Player B. `get_game` and `play_move` name the player they are for by its letter
@@ -83,8 +72,7 @@ player that is not an Agent, is refused. Replies
 never show the machine's seat ids. A player's view never includes another
 player's secrets or the shell order.
 
-- `get_game(player)`: the player's view as JSON, with only what that player's screen
-  shows. It is read-only: until some player moves, every call returns the same view.
+- `get_game(player)`: the player's view as JSON, with only what that player can see. It is read-only: until some player moves, every call returns the same view.
   While it is not the player's turn it is just `{"you": "B", "status": "waiting"}`.
   On the player's turn it has `status: "your turn"`, `turn`, `players` (health, which
   is left out while a player is jammed, item names, and, while players grab from the
@@ -104,10 +92,9 @@ player's secrets or the shell order.
   player's turn, a number outside the list, or any turn but the current one. A refused
   call plays nothing. It returns the player's view as `get_game` does. The bots move on
   their own afterwards, so poll `get_game` until `status` is `"your turn"`.
-- `new_match(players, items, seed?, controllers?)`: starts a match with
-  autoplay on. It is refused while a match is in progress (some player still has a
-  move): "A match is in progress; finish it first." The page's Restart match button
-  still starts a new match at any time; that is a person's choice, not a tool.
+- `new_match(players, items, seed?, controllers?)`: starts a match. It is refused
+  while a match is in progress (some player still has a move): "A match is in
+  progress; finish it first."
   `controllers` lists one controller per player in player order, for
   example `["Agent", "Agent", "DoN"]`; each is `Agent`, `DoN`, `Story` or
   `Human`. Without it Player A is the Agent and DoN plays the others. `seed` is a
@@ -136,7 +123,7 @@ A your-turn view in a 3-player match with items, as the MCP check prints it:
               {"move":9,"label":"Steal magnifying glass from Player C"},
               {"move":10,"label":"Use magnifying glass"}]}
 
-### Moves
+#### Moves
 
 The machine asks for one step at a time: pick up the shotgun, then shoot; use a
 jammer, then pick whom to jam. An agent move is a whole action, made by chaining the
@@ -158,11 +145,10 @@ So when a player has two copies of an item, the move uses the first copy, and a 
 item goes in the first free slot, as the DoN AI places it. Of two chains that differ
 only in a slot, the first is listed.
 
-### Turns
+#### Turns
 
 `turn` is a number the session advances with every accepted move, by any player,
-and every new match, across matches. It never repeats in one MCP server process or
-page load, so a `play_move` repeated after it was played, one from an earlier view,
+and every new match, across matches. It never repeats in one MCP server process, so a `play_move` repeated after it was played, one from an earlier view,
 or one from a finished match after a rematch with the same seed is refused as stale
 instead of played. Nothing else is kept per agent: a view is built from the match log
 alone.
@@ -173,75 +159,24 @@ an agent's `get_game` and its `play_move` makes that turn stale. The agent
 then calls `get_game` again for the current moves and turn. When several bots can
 move, the first player in table order goes first, as in `sim/bend-mp/driver.bend`.
 
-A refusal comes back as `{"error": "..."}` text, because Chrome shows the agent
-only a generic message when a tool throws. The MCP server sends the same text
-and also marks the result `isError`.
-
-Tools reach the game through Foldkit ports, not by touching the Model. The app
-runs with `Runtime.embed`, which returns the port handles. A tool sends
-`{id, call}` on the inbound port `agentCalled`. A subscription turns it into
-`Message.AgentCalled`, `update` answers it (a move's steps go through the
-driver and the same result handling as the buttons' `ClickedMove`), and a `ReplyToAgent` Command emits `{id, reply}`
-on the outbound port `agentReplied`.
-
-    bun scripts/agent.ts [url] [outdir]   # headless Chrome with the flag, tools only: a 2-player match (one Agent vs DoN), a 3-player match (two Agents and DoN), and that match again with the same seed, where the previous match's last turn is refused, items on
-
-Chrome 155 has no `navigator.modelContextTesting`. The script calls the tools
-through `document.modelContext.getTools()` and `executeTool()` from the spec.
-
-## Playing with an agent (MCP server)
-
-`bun run mcp` is a stdio MCP server with the same three tools, for an MCP
-client such as Claude Code or Codex. It needs no browser. It builds the rules,
-then holds one table in the process and plays the DoN and Story players there, so
-by the time a tool replies the bots have moved and an Agent player has the turn
-(or the match is over). It refuses Human players, since nothing can click them.
-
-One server process can serve several Agent players: name each player in `get_game`
-and `play_move`, from one agent or from several sub-agents that share the
-client's connection. Separate processes do not share a match. Two clients that
-each launch the server get two separate tables, and neither the page nor
-another process can see them.
-
-Add it to Claude Code (run in this `web/` directory, so `$PWD` is its path):
-
-    claude mcp add buckshot -- bun run --cwd "$PWD" mcp
-
-Add it to Codex the same way:
-
-    codex mcp add buckshot -- bun run --cwd "$PWD" mcp
-
-or add this to `~/.codex/config.toml`, with the absolute path to `web/`:
-
-    [mcp_servers.buckshot]
-    command = "bun"
-    args = ["run", "--cwd", "/absolute/path/to/buckshot/web", "mcp"]
-
-Each launch rebuilds the rules first, which takes a few seconds. Then ask the
-agent to call `new_match` and play its player. Checks:
-
-    bun scripts/mcp-check.ts   # spawns the server with the SDK client, lists the tools, plays two Agent players against DoN to the end, checks repeated get_game and play_move calls, new_match mid-match, the final events and a turn from the previous match after a rematch, and prints the reply sizes
-    bunx @modelcontextprotocol/inspector --cli bun scripts/mcp.ts --method tools/list
-
-The server uses `@modelcontextprotocol/server` 2.3.1, the v2 SDK. It also
-answers clients that use the older `initialize` handshake.
+A refusal comes back as `{"error": "..."}` text, and the result is marked `isError`.
 
 ## Arena analysis viewer
 
-The site is one app (`src/site/`) with three pages, each at its own URL:
+The site is one app (`src/site/`) with two pages, each at its own URL:
 
-| Page | URL | Needs |
-|-|-|-|
-| Play | `/` | nothing: the game runs in the browser |
-| Arena | `/arena?offModels=…&offEfforts=…&row=…` | the arena viewer's API |
-| Replay | `/replay/<match id>?at=<move ordinal>` | the arena viewer's API |
+| Page | URL |
+|-|-|
+| Arena | `/arena?offModels=…&offEfforts=…&row=…` |
+| Replay | `/replay/<match id>?at=<move ordinal>` |
+
+Both read the arena viewer's API (the online build reads its aggregate files and has no replays).
 
 The arena's filter, its open leaderboard row and a replay's move live in the
 URL, so a link shares them and a reload keeps them. Opening a replay adds a
-history entry, so Back closes it. Old links to the arena's sections
-(`/#scatter`) move to `/arena#scatter`. A build of the site with no arena
-server (`vite preview`, a static host) still plays; Arena and Replay then say
-they need the arena data.
+history entry, so Back closes it. The root `/` moves to `/arena`,
+and old links to the arena's sections (`/#scatter`) to `/arena#scatter`. A build of the site with no arena
+server (`vite preview`, a static host) says the pages need the arena data.
 
 `bun scripts/arena-viewer.ts <db> [host] [port] [--regret <regret db>] [--knowledge <knowledge db>] [--certain-mistakes <opportunities db>] [--luck <luck db>]` serves the built site
 (`web/dist`: run `bun run build` first) and its API over the arena

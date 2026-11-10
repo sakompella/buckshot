@@ -1,4 +1,4 @@
-/* The table from above, shared by Play and Replay (src/board-view.ts). Positions are percentages of the square stage; the cloth spans 8% to 92%. */
+/* The table from above, as the replay draws it (src/board-view.ts). Positions are percentages of the square stage; the cloth spans 8% to 92%. */
 
 :root {
   --charge: #bff2a6;
@@ -616,7 +616,7 @@
 }
 
 
-/* Play's page has its own; the arena's has none. */
+/* Text for screen readers only. */
 .stage .sr-only {
   position: absolute;
   width: 1px;

@@ -1,9 +1,7 @@
-import { Array as Arr, Option, Schema } from "effect";
+import { Schema } from "effect";
 
 import type { Prompt } from "./bend.ts";
 import { Move, Seat, Slot } from "./domain.ts";
-import { controllerOf, promptsOf } from "./driver.ts";
-import type { Session } from "./model.ts";
 import type { Roster } from "./players.ts";
 import { moveText } from "./text.ts";
 
@@ -76,10 +74,6 @@ export const boardMoves = (moves: ReadonlyArray<TableMove>): BoardMoves => {
   };
 };
 
-/** The prompt the viewer answers by clicking: theirs, and only at a Human seat. */
-export const viewerPrompt = (match: Session): Option.Option<Prompt> =>
-  Arr.findFirst(promptsOf(match.game), (prompt) => prompt.seat === match.viewer && controllerOf(match.controllers, prompt.seat) === "Human");
-
 /** Where a seat sits, counted from the viewer's side: 0 near, 1 left, 2 far, 3 right. */
 export type Position = 0 | 1 | 2 | 3;
 
@@ -87,6 +81,3 @@ const POSITIONS: ReadonlyArray<Position> = [0, 1, 2, 3];
 
 /** Where a seat sits, counted from the near seat. */
 export const positionOf = (near: Seat, seat: Seat): Position => POSITIONS[(seat - near + 4) % 4] ?? 0;
-
-/** The seat a match's viewer sees nearest: their own; a spectator sees the table from the first seat. */
-export const nearSeat = (match: Session): Seat => (match.viewer === "Spectator" ? (match.game.seats[0] ?? 0) : match.viewer);
