@@ -15,8 +15,7 @@
 //! Bend's search; [`BoundedV1`] is a new, versioned mode whose rows are not
 //! Bend's. Parallel work runs only on a `rayon::ThreadPool` the caller
 //! passes: [`analyse_batch`] spreads decisions over it and a sampled leaf its
-//! deals. A decision's root moves always run one after another, since they
-//! share the fuel, the node budget and the memo.
+//! deals.
 
 #[cfg(not(any(feature = "f32", feature = "f64")))]
 compile_error!(

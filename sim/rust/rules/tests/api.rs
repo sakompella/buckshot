@@ -110,14 +110,11 @@ fn guns_keep_their_shells_in_order() {
     assert_eq!(pushed.nth(1), most.nth(0), "and moves the rest back");
 }
 
-// Bug: lists past their capacity dropped entries silently in release (push_bounded, 8a8aad7);
-// the tape decoder's guns were cut the same way.
 #[test]
 fn a_gun_past_its_capacity_is_refused_not_cut() {
     assert_eq!(Gun::from_shells([Shell::Blank; 65]), None);
 }
 
-// Bug: as above (8a8aad7); a seat list dropped a fifth seat.
 #[test]
 #[should_panic = "a seat list outgrew one table's seats"]
 fn a_fifth_seat_panics_rather_than_drop() {
@@ -127,7 +124,6 @@ fn a_fifth_seat_panics_rather_than_drop() {
     }
 }
 
-// Bug: as above (8a8aad7); Gun::of_load cut a load past the gun's capacity.
 #[test]
 #[should_panic = "a load outgrew the gun"]
 fn a_load_past_the_gun_panics_rather_than_cut() {
@@ -228,7 +224,6 @@ fn deck_ids_form_a_set_inside_the_table_deck() {
         assert_eq!(deck.len(), 2, "{table:?}: len");
         let kept = Deck::of_ids(table, [0]).expect("an id inside the deck");
         assert_eq!(deck.filtered(|id| id <= 1), kept, "{table:?}: filtered keeps what is in both");
-        // Bug: ids past the deck were dropped silently (8a8aad7).
         assert_eq!(Deck::of_ids(table, [0, 15]), None, "{table:?}: an id past the deck");
         assert_eq!(Deck::of_ids(table, [40]), None, "{table:?}: an id past any deck");
     }

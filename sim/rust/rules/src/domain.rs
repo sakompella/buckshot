@@ -625,9 +625,6 @@ impl Damage {
     }
 }
 
-// Match configuration
-// ===================
-
 /// A starting health rule. `Fixed` holds the health itself (Bend's `Pos`, so at least 1).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum HealthRule {
@@ -784,9 +781,6 @@ impl Config {
         self.rounds.split_at(usize::from(self.len)).0
     }
 }
-
-// Requests
-// ========
 
 /// The semantic draw sites (domain.bend `Label`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -956,9 +950,6 @@ pub fn prize(round: u32) -> u32 {
 
 /// `phone.cap()`: the phone announces at most the seventh shell.
 pub const PHONE_CAP: u32 = 7;
-
-// Events
-// ======
 
 /// Public events (domain.bend `GameEvent`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

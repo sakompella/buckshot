@@ -931,7 +931,6 @@ pub(crate) mod tests {
 
         /// Shooting the opponent wins the round and begins the next one in the
         /// same step; the search must score the won round, not the next round's start.
-        // Bug: the round-edge winner (rust-search stage 1, P1.1) scored the next round's start.
         #[test]
         fn a_won_round_is_settled_when_the_next_round_begins_at_once() {
             let expected = (true, Some((1_000_000, Reach::Settled)), Some((0, Reach::Settled)));

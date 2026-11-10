@@ -206,7 +206,6 @@ impl Search {
     }
 }
 
-/// Decisions read and analysed at a time.
 const CHUNK: usize = 512;
 
 /// An input row; `id` and `ordinal` are echoed as they are.

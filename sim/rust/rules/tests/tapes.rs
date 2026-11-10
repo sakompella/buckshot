@@ -206,9 +206,6 @@ fn note_json(n: &Note) -> Value {
     }
 }
 
-// Config decoding
-// ===============
-
 fn get<'a>(v: &'a Value, key: &str) -> &'a Value {
     v.get(key).unwrap_or(&Value::Null)
 }
@@ -314,9 +311,6 @@ fn config(v: &Value) -> Result<(Config, bool), String> {
         .collect::<Result<Vec<_>, _>>()?;
     Ok((Config::new(table, &rounds).map_err(|e| e.to_string())?, built))
 }
-
-// State decoding, for games that start from a perturbed state
-// ============================================================
 
 fn tag_of<T: Copy + Debug>(v: &Value, all: &[T]) -> Result<T, String> {
     let n = name(v)?;
@@ -966,13 +960,11 @@ fn tape_paths(dir: &str) -> Result<Vec<PathBuf>, String> {
     Ok(paths)
 }
 
-// Bug: the replay passed with RUST_TAPES unset (f2ae6ba made it fail closed).
 #[test]
 fn replay_fails_without_rust_tapes() {
     assert_eq!(tape_paths("").ok(), None);
 }
 
-// Bug: a directory with no tapes compared nothing and passed (f2ae6ba).
 #[test]
 fn replay_fails_on_a_directory_without_tapes() {
     let dir = std::env::temp_dir().join(format!("rust-tapes-empty-{}", std::process::id()));
@@ -982,7 +974,6 @@ fn replay_fails_on_a_directory_without_tapes() {
     assert_eq!(paths.ok(), None);
 }
 
-// Bug: a perturbed state whose batch load disagrees with its id was skipped, not failed (disagreement audit #4).
 #[test]
 #[ignore = "needs RUST_TAPES; run sim/rust/check.sh"]
 fn a_state_rust_reserializes_differently_fails_the_replay() {
@@ -1006,7 +997,6 @@ fn a_state_rust_reserializes_differently_fails_the_replay() {
     assert!(error.contains("re-serializes"), "{error}");
 }
 
-// Bug: arena game ids repeated across tournaments (5352abe, rust-tapes.mjs); the replay must refuse a repeated id.
 #[test]
 #[ignore = "needs RUST_TAPES; run sim/rust/check.sh"]
 fn a_repeated_game_id_fails_the_replay() {
@@ -1028,7 +1018,7 @@ fn a_repeated_game_id_fails_the_replay() {
     assert!(error.contains("repeats an earlier game"), "{error}");
 }
 
-// Bug: steal.owner built steal.slots for the stealer's own items too (938dc73); only the traced replay catches it.
+// Only the traced replay catches a steal menu built from the stealer's own items as well.
 #[test]
 #[ignore = "needs RUST_TAPES; run sim/rust/check.sh"]
 fn tapes_match_bend() {
@@ -1150,13 +1140,11 @@ fn differences(list: &str, reviewed: &BTreeSet<String>, found: &BTreeSet<String>
     new.chain(stale).collect()
 }
 
-// Bug: a missing labels.json read as no labels, and every unreached branch passed (rust-integration review).
 #[test]
 fn missing_trace_labels_fail() {
     all_labels("/nonexistent/labels.json").unwrap_err();
 }
 
-// Bug: labels the trace could not see were exempted automatically (rust-integration review).
 #[test]
 fn coverage_must_match_the_reviewed_lists() {
     let set = |labels: &[&str]| labels.iter().map(|label| (*label).to_owned()).collect::<BTreeSet<String>>();
