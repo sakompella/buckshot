@@ -1,0 +1,75 @@
+{
+  "name": "example",
+  "seed": 2026,
+  "delivery": "on-turn",
+  "endpoints": {
+    "anthropic": {
+      "api": "anthropic",
+      "url": "https://api.anthropic.com",
+      "keyEnv": "ANTHROPIC_API_KEY"
+    },
+    "openai": {
+      "api": "openai-responses",
+      "url": "https://api.openai.com/v1",
+      "keyEnv": "OPENAI_API_KEY"
+    }
+  },
+  "entrants": {
+    "claude-haiku-4-5-20251001": {
+      "endpoint": "anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "effort": "medium"
+    },
+    "claude-haiku-5-5": {
+      "endpoint": "anthropic",
+      "model": "claude-haiku-5-5",
+      "effort": "medium"
+    },
+    "claude-sonnet-5-5": {
+      "endpoint": "anthropic",
+      "model": "claude-sonnet-5-5",
+      "effort": "medium"
+    },
+    "claude-opus-5-5": {
+      "endpoint": "anthropic",
+      "model": "claude-opus-5-5",
+      "effort": "medium"
+    },
+    "gpt-6-luna": {
+      "endpoint": "openai",
+      "model": "gpt-6-luna",
+      "effort": "medium"
+    },
+    "gpt-6.1-sol": {
+      "endpoint": "openai",
+      "model": "gpt-6.1-sol",
+      "effort": "medium"
+    },
+    "gpt-6-astra": {
+      "endpoint": "openai",
+      "model": "gpt-6-astra",
+      "effort": "medium"
+    },
+    "don": {
+      "bot": "DoN"
+    },
+    "story": {
+      "bot": "Story"
+    }
+  },
+  "pairings": {
+    "allOf": [
+      "claude-haiku-4-5-20251001",
+      "claude-haiku-5-5",
+      "claude-sonnet-5-5",
+      "claude-opus-5-5",
+      "gpt-6-luna",
+      "gpt-6.1-sol",
+      "gpt-6-astra",
+      "don",
+      "story"
+    ],
+    "size": 2
+  },
+  "blocksPerPairing": 1
+}

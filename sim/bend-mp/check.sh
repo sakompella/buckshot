@@ -332,7 +332,6 @@ gate_simple_mutations() {
   fi
 }
 
-
 # The Rust mirror of the rules (sim/rust) must agree with Bend: a Bend change
 # that the Rust port does not follow fails here (branch map hash, tapes, traces).
 gate_rust() {

@@ -73,7 +73,21 @@
       });
 
       # cargoRoot: Cargo.lock is the workspace's, not at the repository root.
-      checks = lib.mapAttrs (_: run: { pre-commit-check = run.overrideAttrs { cargoRoot = "sim/rust"; }; }) hooks;
+      # arena-python: the tools/arena and tools/arena/analysis unit tests, in the dev/ env (some call Bend and node).
+      checks = forEachSystem (pkgs:
+        let system = pkgs.stdenv.hostPlatform.system; in
+        lib.optionalAttrs (hooks ? ${system}) { pre-commit-check = hooks.${system}.overrideAttrs { cargoRoot = "sim/rust"; }; }
+        // {
+          arena-python = pkgs.runCommand "arena-python-tests" {
+            nativeBuildInputs = [ (devEnv pkgs) self.packages.${system}.bend pkgs.nodejs_22 ];
+          } ''
+            cp -r ${./.} src && chmod -R u+w src && cd src/tools/arena
+            export HOME=$TMPDIR
+            python -m unittest discover -s . -p 'test_*.py'
+            (cd analysis && python -m unittest discover -s .)
+            touch $out
+          '';
+        });
 
       apps = forEachSystem (pkgs: {
         # `nix run .#dev -- ...`: the dev/ package's commands in the uv2nix virtualenv.
