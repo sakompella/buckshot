@@ -1,3 +1,5 @@
+import { parseArgs } from "node:util";
+
 import { createModels } from "@earendil-works/pi-ai";
 import { Cause, Effect, Exit, Schema } from "effect";
 
@@ -18,19 +20,22 @@ import type { Letter } from "../src/players.ts";
 // from its store, with the settings it started with.
 // Usage: bun scripts/arena.ts [--dir ../_work/arena/<name>] [--seed N] [--seats A,B,DoN,Engine/4/20000] [--rotation 0] [--delivery on-turn]
 
-const flag = (name: string, fallback: string): string => {
-  const at = process.argv.indexOf(`--${name}`);
+const { values } = parseArgs({
+  args: process.argv.slice(2),
+  options: {
+    dir: { type: "string", default: `../_work/arena/${new Date().toISOString().replaceAll(":", "").slice(0, 15)}` },
+    seed: { type: "string", default: String(Math.floor(Math.random() * 2 ** 31)) },
+    seats: { type: "string", default: "A,B" },
+    rotation: { type: "string", default: "0" },
+    delivery: { type: "string", default: "on-turn" },
+  },
+});
 
-  return at === -1 ? fallback : (process.argv[at + 1] ?? fallback);
-};
+const { dir, seed } = values;
 
-const dir = flag("dir", `../_work/arena/${new Date().toISOString().replaceAll(":", "").slice(0, 15)}`);
+const seating = seatingOf(Schema.decodeUnknownSync(Schema.Array(SeatSpec))(values.seats.split(",")), Number(values.rotation));
 
-const seed = flag("seed", String(Math.floor(Math.random() * 2 ** 31)));
-
-const seating = seatingOf(Schema.decodeUnknownSync(Schema.Array(SeatSpec))(flag("seats", "A,B").split(",")), Number(flag("rotation", "0")));
-
-const delivery = Schema.decodeUnknownSync(Schema.Literals(DELIVERIES))(flag("delivery", "on-turn"));
+const delivery = Schema.decodeUnknownSync(Schema.Literals(DELIVERIES))(values.delivery);
 
 const isAgent = Schema.is(AgentId);
 

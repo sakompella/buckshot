@@ -4,6 +4,7 @@ import { parseArgs } from "node:util";
 import { Database } from "bun:sqlite";
 import { Effect, Schema } from "effect";
 
+import { mulberry32 } from "../src/arena/tournament-stats.ts";
 import type { Item } from "../src/domain.ts";
 import { decodeArgs, runMain, ScriptError } from "../src/script.ts";
 import { itemName } from "../src/text.ts";
@@ -115,23 +116,10 @@ const report = (db: Database, draws: number): void => {
   // Statistics
   // ==========
 
-  /** A seeded generator (mulberry32), so every run prints the same intervals. */
-  const generator = (seed: number) => {
-    let state = seed >>> 0;
-
-    return (): number => {
-      state = (state + 0x6d2b79f5) >>> 0;
-      let mixed = Math.imul(state ^ (state >>> 15), 1 | state);
-      mixed = (mixed + Math.imul(mixed ^ (mixed >>> 7), 61 | mixed)) ^ mixed;
-
-      return ((mixed ^ (mixed >>> 14)) >>> 0) / 4294967296;
-    };
-  };
-
   /** Seed-block multiplicities for each bootstrap draw: the blocks drawn with replacement, as many as there are. */
   const resamples = (blocks: ReadonlyArray<string>, label: string): ReadonlyArray<ReadonlyMap<string, number>> => {
     const unique = [...new Set(blocks)].toSorted();
-    const random = generator([...label].reduce((hash, character) => Math.imul(hash ^ character.charCodeAt(0), 16777619), 2166136261));
+    const random = mulberry32([...label].reduce((hash, character) => Math.imul(hash ^ character.charCodeAt(0), 16777619), 2166136261));
 
     return Array.from({ length: draws }, () => {
       const weights = new Map<string, number>();

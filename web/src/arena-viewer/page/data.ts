@@ -1,4 +1,5 @@
 import { EFFORTS, effortName } from "../../arena/model-names.ts";
+import { mulberry32 } from "../../arena/tournament-stats.ts";
 import type { CertainType, Seat, SeatRegret, Story } from "../api.ts";
 
 // The page's numbers: model labels and colours, per-config stats, ratings and intervals.
@@ -208,21 +209,6 @@ export const quantile = (sorted: ArrayLike<number>, p: number): number => {
   return low + (high - low) * (at - Math.floor(at));
 };
 
-/** A deterministic generator (mulberry32: 32-bit state, exact integer arithmetic), so intervals do not flicker between renders. */
-export const rng = (seed: number) => {
-  let state = seed | 0;
-
-  return () => {
-    state = (state + 0x6d2b79f5) | 0;
-
-    let mixed = Math.imul(state ^ (state >>> 15), 1 | state);
-
-    mixed = (mixed + Math.imul(mixed ^ (mixed >>> 7), 61 | mixed)) ^ mixed;
-
-    return ((mixed ^ (mixed >>> 14)) >>> 0) / 4294967296;
-  };
-};
-
 // POT SHARES
 
 /** A seat with its pot share: its cash over the match's total cash, null when it has no cash recorded. */
@@ -265,14 +251,14 @@ export interface Rate {
   readonly blocks: number;
 }
 
-// Every bootstrap draws from rng(7) from the start, so the draws are generated once and kept, as 31-bit integers
+// Every bootstrap draws from mulberry32(7) from the start, so the draws are generated once and kept, as 31-bit integers
 // (the generator's draws scaled), and extended when a bootstrap needs more.
 let draws = new Int32Array(0);
 
 const drawsFor = (count: number): Int32Array => {
   if (draws.length >= count) return draws;
 
-  const random = rng(7);
+  const random = mulberry32(7);
   const more = new Int32Array(Math.max(count, 2 * draws.length));
 
   for (let index = 0; index < more.length; index++) more[index] = random() * 0x80000000;

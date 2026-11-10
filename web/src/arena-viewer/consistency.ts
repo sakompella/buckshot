@@ -3,7 +3,8 @@ import { Database } from "bun:sqlite";
 import { Schema } from "effect";
 
 import type { Consistency } from "./api.ts";
-import { groupBy, quantile, rng } from "./page/data.ts";
+import { groupBy, quantile } from "./page/data.ts";
+import { mulberry32 } from "../arena/tournament-stats.ts";
 
 // How often a config repeats itself, from the knowledge database that scripts/arena-knowledge.ts builds. An exact_key
 // names one position: the same board, cash, round, log since the load, legal moves, code and instructions. Within one
@@ -88,7 +89,7 @@ export const consistencyOf = (positions: ReadonlyArray<ReadonlyArray<Repeat>>, e
     return counted === 0 ? Number.NaN : total / counted;
   };
 
-  const random = rng(11);
+  const random = mulberry32(11);
 
   const draws = Array.from({ length: DRAWS }, () => {
     const weights = new Float64Array(blockIds.size);
