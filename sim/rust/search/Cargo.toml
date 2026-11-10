@@ -17,13 +17,19 @@ seats-2-4 = ["buckshot-rules/seats-2-4"]
 seats-2 = ["buckshot-rules/seats-2"]
 
 [dependencies]
+anyhow.workspace = true
+arrayvec.workspace = true
 buckshot-rules = { path = "../rules", default-features = false }
+clap.workspace = true
+hashbrown.workspace = true
 rayon.workspace = true
 rustc-hash.workspace = true
+serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+buckshot-rules = { path = "../rules", default-features = false, features = ["testing"] }
 hegeltest.workspace = true
 
 [lints]

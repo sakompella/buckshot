@@ -1,6 +1,7 @@
 //! `simple/point.bend`: the request at a point and a seat's Idle menu.
 
 use arrayvec::ArrayVec;
+use enum_map::EnumMap;
 
 use crate::branch::B;
 use crate::domain::{Config, Item, Items, Label, Range, Seat, Seats, Slot, Table};
@@ -11,18 +12,10 @@ use crate::{IdleOption, MENU_CAPACITY, Menu, Request};
 
 type Options = ArrayVec<IdleOption, MENU_CAPACITY>;
 
-// Shots at up to four seats, a use per slot, jams and steal-jams at up to
-// three targets, and the steals.
 const _: () = assert!(
     4 + 8 + 3 + PICKS_CAPACITY + 3 * 3 <= MENU_CAPACITY,
     "a menu can outgrow MENU_CAPACITY"
 );
-
-/// [`MENU_CAPACITY`] bounds every menu, so `push` (which panics on a full
-/// list rather than drop the move) never fails.
-fn add(options: &mut Options, option: IdleOption) {
-    options.push(option);
-}
 
 /// `item.chained`: items whose use is part of a longer move.
 fn item_chained(item: Item) -> bool {
@@ -62,13 +55,10 @@ fn use_options(options: &mut Options, uses: &Uses) {
     for at in uses {
         branch!(B::SimplePointUseOptionsUseAtCons);
         items::keep(!(item_chained(at.item) | seen.contains(at.item)), || {
-            add(
-                options,
-                IdleOption::UseSlot {
-                    slot: at.slot,
-                    item: at.item,
-                },
-            );
+            options.push(IdleOption::UseSlot {
+                slot: at.slot,
+                item: at.item,
+            });
         });
         seen = seen.with(at.item);
     }
@@ -85,7 +75,7 @@ fn jam_options(options: &mut Options, jammer: Option<Slot>, targets: Seats) {
             branch!(B::SimplePointJamOptionsSome);
             for target in targets.iter() {
                 branch!(B::SimplePointJamTargetsJamAtCons);
-                add(options, IdleOption::JamWith { slot, target });
+                options.push(IdleOption::JamWith { slot, target });
             }
             branch!(B::SimplePointJamTargetsNil);
         }
@@ -109,42 +99,20 @@ fn steal_options(options: &mut Options, adrenaline: Option<Slot>, picks: &Picks)
 /// (sm never offers adrenaline; a jammer is `StealJam`), at the owner's first
 /// slot holding it, by owner then slot.
 fn steal_picks(options: &mut Options, adrenaline: Slot, picks: &Picks) {
-    let mut seen = SeatItems::default();
+    let mut seen: EnumMap<Seat, Items> = EnumMap::default();
     for pick in picks {
         branch!(B::SimplePointStealPicksPickCons);
-        items::keep(!(item_chained(pick.item) | seen.contains(pick.owner, pick.item)), || {
-            add(
-                options,
-                IdleOption::StealWith {
-                    adrenaline,
-                    owner: pick.owner,
-                    slot: pick.slot,
-                    item: pick.item,
-                },
-            );
+        items::keep(!(item_chained(pick.item) | seen[pick.owner].contains(pick.item)), || {
+            options.push(IdleOption::StealWith {
+                adrenaline,
+                owner: pick.owner,
+                slot: pick.slot,
+                item: pick.item,
+            });
         });
-        seen.insert(pick.owner, pick.item);
+        seen[pick.owner] = seen[pick.owner].with(pick.item);
     }
     branch!(B::SimplePointStealPicksNil);
-}
-
-/// A set of (seat, item) pairs: bit `16 * seat + rank` per pair.
-#[derive(Clone, Copy, Default)]
-struct SeatItems(u64);
-
-impl SeatItems {
-    fn bit(seat: Seat, item: Item) -> u64 {
-        1u64.checked_shl(u32::from(u8::from(seat)).wrapping_mul(16).wrapping_add(item.rank()))
-            .unwrap_or(0)
-    }
-
-    fn contains(self, seat: Seat, item: Item) -> bool {
-        self.0 & Self::bit(seat, item) != 0
-    }
-
-    fn insert(&mut self, seat: Seat, item: Item) {
-        self.0 |= Self::bit(seat, item);
-    }
 }
 
 /// `steal_jam.options`.
@@ -171,15 +139,12 @@ fn steal_jam_picks(options: &mut Options, adrenaline: Slot, picks: &Picks, targe
             branch!(B::SimplePointStealJamHereTrue);
             for target in targets.iter() {
                 branch!(B::SimplePointStealJamTargetsJamAtCons);
-                add(
-                    options,
-                    IdleOption::StealJamWith {
-                        adrenaline,
-                        owner: pick.owner,
-                        slot: pick.slot,
-                        target,
-                    },
-                );
+                options.push(IdleOption::StealJamWith {
+                    adrenaline,
+                    owner: pick.owner,
+                    slot: pick.slot,
+                    target,
+                });
             }
             branch!(B::SimplePointStealJamTargetsNil);
         } else {
@@ -204,7 +169,7 @@ pub(crate) fn options(state: &State, seat: Seat) -> Options {
     let mut options = Options::new();
     for target in rules::aim_targets(&state.players).iter() {
         branch!(B::SimplePointShotsTargetCons);
-        add(&mut options, IdleOption::ShootAt { target });
+        options.push(IdleOption::ShootAt { target });
     }
     branch!(B::SimplePointShotsNil);
     use_options(&mut options, &uses);

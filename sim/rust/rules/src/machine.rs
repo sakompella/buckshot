@@ -207,9 +207,6 @@ pub(crate) fn pick(config: &Config, state: State, seat: Seat, option: IdleOption
     Stepped { state: run.state, notes }
 }
 
-// Turns
-// =====
-
 fn pickup(r: &mut Run<'_>, seat: Seat) {
     r.emit(GameEvent::PickedUp { seat });
 }
@@ -267,9 +264,6 @@ fn grant(r: &mut Run<'_>, seat: Seat) {
     let result = rules::jam(r.state.players, seat);
     grant_step(r, rank, seat, result);
 }
-
-// Loading
-// =======
 
 /// `shuffle`.
 fn shuffle(r: &mut Run<'_>, load: Load, shells: Gun, i: u32) {
@@ -342,9 +336,6 @@ fn load_begin(r: &mut Run<'_>) {
     world.first_sequence = false;
     load_refill(r, r.deck());
 }
-
-// Item distribution
-// =================
 
 /// What the next distribution pass does (`Distribution`).
 #[derive(Clone, Copy)]
@@ -618,9 +609,6 @@ fn distribute_begin(r: &mut Run<'_>, seats: Seats) {
     }
 }
 
-// Rounds
-// ======
-
 /// `round.reset`.
 fn round_reset(r: &mut Run<'_>) {
     let world = r.state.world;
@@ -854,9 +842,6 @@ fn shoot_loaded(r: &mut Run<'_>, shooter: Seat, target: Seat, shell: Shell, rest
     death(r, target, shell, health);
     turn_end(r, shooter, rules::shot_passes(shell, shooter == target));
 }
-
-// Items
-// =====
 
 /// `item.resume`.
 fn item_resume(r: &mut Run<'_>, seat: Seat) {

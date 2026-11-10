@@ -9,7 +9,8 @@
 
 mod common;
 
-use buckshot_search::{BoundedV1, Heard, InfoSet};
+use anyhow::Context as _;
+use buckshot_search::{BoundedV1, InfoSet};
 use common::{cli, oracle_dir, oracle_rows, scores};
 use serde_json::Value;
 
@@ -23,7 +24,7 @@ struct Covered {
 }
 
 /// Checks the pruned rows of one oracle file against the unpruned ones.
-fn compare(name: &str, flags: &[&str], covered: &mut Covered) -> Result<(), String> {
+fn compare(name: &str, flags: &[&str], covered: &mut Covered) -> anyhow::Result<()> {
     let (text, inputs) = oracle_rows(&oracle_dir()?, name)?;
     let run = |extra: &[&str]| cli(&[&["--evaluator", BoundedV1::ID], flags, extra].concat(), &text);
     let (unpruned_rows, pruned_rows) = (run(&["--unpruned"])?, run(&[])?);
@@ -61,9 +62,9 @@ fn compare(name: &str, flags: &[&str], covered: &mut Covered) -> Result<(), Stri
                 ));
             }
         }
-        let info = InfoSet::parse(input["input"].as_str().unwrap_or_default()).map_err(|error| format!("{id}: {error}"))?;
+        let info = InfoSet::parse(input["input"].as_str().unwrap_or_default()).with_context(|| id.clone())?;
         covered.rows = covered.rows.saturating_add(1);
-        if info.position().log.iter().any(|heard| matches!(heard, Heard::Learned(_))) {
+        if info.has_private_clue() {
             covered.private = covered.private.saturating_add(1);
         }
         if unpruned_lines.iter().any(|line| line["reach"] == "settled") {
@@ -73,7 +74,8 @@ fn compare(name: &str, flags: &[&str], covered: &mut Covered) -> Result<(), Stri
             covered.wide = covered.wide.saturating_add(1);
         }
     }
-    if problems.is_empty() { Ok(()) } else { Err(problems.join("\n")) }
+    anyhow::ensure!(problems.is_empty(), problems.join("\n"));
+    Ok(())
 }
 
 #[test]

@@ -14,13 +14,18 @@ seats-2-4 = []
 seats-2 = []
 # Records each `branch!` label as it runs (for the trace comparison).
 trace = []
+# Hegel generators for the rules' types (`buckshot_rules::testing`), for property tests.
+testing = ["dep:hegeltest"]
 
 [dependencies]
 arrayvec.workspace = true
+enum-map.workspace = true
+hegeltest = { workspace = true, optional = true }
 num_enum.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+buckshot-rules = { path = ".", default-features = false, features = ["testing"] }
 hegeltest.workspace = true
 serde_json.workspace = true
 

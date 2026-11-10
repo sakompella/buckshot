@@ -8,7 +8,7 @@ use buckshot_rules::{
 
 use crate::num::Real;
 use crate::position::{Board, Counter, GunView, Heard, MAX_SHELLS, Mode, Position, RoundView, SeatView, Stage};
-use crate::types::{Belief, World};
+use crate::types::{Belief, Refusal, World};
 
 const fn invert(shell: Shell) -> Shell {
     match shell {
@@ -213,44 +213,30 @@ fn world_event(event: GameEvent, world: Records) -> Records {
     }
 }
 
-/// A remaining deck as a set of batch ids (bit `id` set) and its weight.
+/// A remaining deck and its weight.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct DeckMass {
-    mask: u32,
+    deck: Deck,
     weight: Real,
 }
 
-fn bit(index: u32) -> u32 {
-    1u32.checked_shl(index).unwrap_or(0)
-}
-
-/// `deck.full`: one bit per batch of the table's deck.
-fn deck_full(table: Table) -> u32 {
-    bit(crate::num::len_u32(table.deck().len())).wrapping_sub(1)
-}
-
-/// `deck.batches` of the full deck: the batches in `mask`.
-fn deck_of(table: Table, mask: u32) -> Deck {
-    Deck::full(table).filtered(|id| mask & bit(id) != 0)
-}
-
-fn deck_insert(decks: &mut Vec<DeckMass>, mask: u32, weight: Real) {
-    match decks.iter_mut().find(|deck| deck.mask == mask) {
+fn deck_insert(decks: &mut Vec<DeckMass>, deck: Deck, weight: Real) {
+    match decks.iter_mut().find(|mass| mass.deck == deck) {
         Some(found) => found.weight = found.weight.add(weight),
-        None => decks.push(DeckMass { mask, weight }),
+        None => decks.push(DeckMass { deck, weight }),
     }
 }
 
 /// `deck.load`: each deck's batches that would show `shown`, each splitting its deck's weight evenly.
 fn deck_load(decks: &[DeckMass], table: Table, rule: LoadRule, shown: Load) -> Vec<DeckMass> {
     let mut found = Vec::new();
-    for deck in decks {
-        let mask = if deck.mask == 0 { deck_full(table) } else { deck.mask };
-        let batches: Vec<_> = deck_of(table, mask).iter().collect();
-        let weight = deck.weight.div(Real::from_len(batches.len()));
+    for mass in decks {
+        let deck = if mass.deck.is_empty() { Deck::full(table) } else { mass.deck };
+        let batches: Vec<_> = deck.iter().collect();
+        let weight = mass.weight.div(Real::from_len(batches.len()));
         for batch in batches {
             if load_actual(rule, batch.load) == shown {
-                deck_insert(&mut found, mask ^ bit(batch.id), weight);
+                deck_insert(&mut found, deck.without(batch.id), weight);
             }
         }
     }
@@ -261,9 +247,9 @@ fn deck_normalize(decks: Vec<DeckMass>) -> Vec<DeckMass> {
     let total = Real::sum_right(decks.iter().map(|deck| deck.weight));
     decks
         .into_iter()
-        .map(|deck| DeckMass {
-            mask: deck.mask,
-            weight: deck.weight.div(total),
+        .map(|mass| DeckMass {
+            weight: mass.weight.div(total),
+            ..mass
         })
         .collect()
 }
@@ -272,7 +258,7 @@ fn deck_log(config: &Config, log: &[Heard]) -> Vec<DeckMass> {
     let table = config.table();
     let mut world = initial(config).world;
     let mut decks = vec![DeckMass {
-        mask: deck_full(table),
+        deck: Deck::full(table),
         weight: Real::ONE,
     }];
     for heard in log {
@@ -337,7 +323,7 @@ fn worlds(config: &Config, decks: &[DeckMass], orders: &[Gun], state: State) -> 
     let mut all = Vec::with_capacity(decks.len().saturating_mul(orders.len()));
     for deck in decks {
         let records = Records {
-            decks: state.world.decks.set(table, deck_of(table, deck.mask)),
+            decks: state.world.decks.set(table, deck.deck),
             ..state.world
         };
         for gun in orders {
@@ -370,12 +356,12 @@ fn normalize(worlds: Vec<World>) -> Vec<World> {
 /// # Errors
 ///
 /// The reason Bend's `Rejected` gives.
-pub fn build(position: &Position) -> Result<Belief, &'static str> {
+pub fn build(position: &Position) -> Result<Belief, Refusal> {
     let Position { config, board, log, me } = position;
     let seat = match board.stage {
         Stage::Playing { seat, mode: Mode::Idle } if board.gun.shown.live.saturating_add(board.gun.shown.blank) <= MAX_SHELLS => seat,
         Stage::Playing { .. } | Stage::Setup | Stage::Distributing | Stage::Loading | Stage::MatchOver => {
-            return Err("requires an Idle board and a shown load of at most ten shells");
+            return Err(Refusal::Board);
         }
     };
     let state = state_of(config, board, log, seat);
@@ -383,10 +369,10 @@ pub fn build(position: &Position) -> Result<Belief, &'static str> {
     let public = worlds(config, &decks, &orders_log(log, false), state);
     let private = worlds(config, &decks, &orders_log(log, true), state);
     if public.is_empty() {
-        return Err("public log has no consistent shell/deck belief");
+        return Err(Refusal::NoPublicBelief);
     }
     if private.is_empty() {
-        return Err("private log has no consistent shell/deck belief");
+        return Err(Refusal::NoPrivateBelief);
     }
     Ok(Belief {
         public: normalize(public),

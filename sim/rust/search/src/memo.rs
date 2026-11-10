@@ -7,10 +7,11 @@
 //! whole key: two keys that share a hash stay apart, as they do in Bend. The
 //! key is copied out of the beliefs only when an entry is stored.
 
-use std::collections::HashMap;
-use std::hash::{BuildHasherDefault, Hash, Hasher};
+use std::hash::{Hash, Hasher};
 
 use buckshot_rules::State;
+use hashbrown::HashTable;
+use hashbrown::hash_table::Entry as Slot;
 use rustc_hash::FxHasher;
 
 use crate::deal::Sums;
@@ -26,8 +27,10 @@ pub enum Kind {
     Decision,
 }
 
+/// A key with its [`hash`], which a rehash of the memo reuses.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Key {
+    hash: u64,
     kind: Kind,
     public: Vec<(Bits, State)>,
     private: Vec<(Bits, State)>,
@@ -46,8 +49,9 @@ fn same(spelled: &[(Bits, State)], worlds: &[World]) -> bool {
 }
 
 impl Key {
-    fn new(kind: Kind, public: &[World], private: &[World]) -> Self {
+    fn new(hash: u64, kind: Kind, public: &[World], private: &[World]) -> Self {
         Self {
+            hash,
             kind,
             public: spelled(public),
             private: spelled(private),
@@ -115,7 +119,7 @@ pub enum Stored {
 #[derive(Debug, Default)]
 pub struct Tally {
     pub nodes: u64,
-    memo: HashMap<u64, Vec<(Key, Stored)>, BuildHasherDefault<FxHasher>>,
+    memo: HashTable<(Key, Stored)>,
     pub cached: Cached,
 }
 
@@ -123,21 +127,22 @@ impl Tally {
     /// What is stored under the key of `kind` and the beliefs; `hash` is its [`hash`].
     pub fn find(&self, hash: u64, kind: Kind, public: &[World], private: &[World]) -> Option<Stored> {
         self.memo
-            .get(&hash)?
-            .iter()
-            .find(|(key, _)| key.is(kind, public, private))
+            .find(hash, |(key, _)| key.is(kind, public, private))
             .map(|(_, stored)| *stored)
     }
 
     /// `keep`: stores under the key, in place of what it held before.
     pub fn keep(&mut self, hash: u64, kind: Kind, beliefs: (&[World], &[World]), stored: Stored) {
         let (public, private) = beliefs;
-        let bucket = self.memo.entry(hash).or_default();
-        if let Some((_, held)) = bucket.iter_mut().find(|(key, _)| key.is(kind, public, private)) {
-            *held = stored;
-            return;
+        match self.memo.entry(hash, |(key, _)| key.is(kind, public, private), |(key, _)| key.hash) {
+            Slot::Occupied(mut held) => {
+                held.get_mut().1 = stored;
+                return;
+            }
+            Slot::Vacant(free) => {
+                free.insert((Key::new(hash, kind, public, private), stored));
+            }
         }
-        bucket.push((Key::new(kind, public, private), stored));
         match stored {
             #[cfg(feature = "f32")]
             Stored::Decision(_) => self.cached.entries = self.cached.entries.saturating_add(1),

@@ -27,7 +27,7 @@ pub fn write(bend_dir: &Path, out: &Path, rules: &Rules, sites: &[&Site], untime
     for module in &rules.modules {
         let mut lines: Vec<String> = module.source.lines().map(str::to_owned).collect();
         for def in &module.defs {
-            if rules.reachable.contains(&(module.name.clone(), def.name.clone())) {
+            if rules.reaches(&module.name, &def.name) {
                 instrument_def(&module.name, def, &ids, &mut lines);
             }
         }

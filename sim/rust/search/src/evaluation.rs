@@ -1,6 +1,6 @@
 //! The static evaluation (`player/evaluation.bend`).
 
-use buckshot_rules::{Item, Seat, SeatRecord, Shell, Slots, State, alive};
+use buckshot_rules::{Item, Seat, SeatRecord, Shell, Slots, State, alive, players_seat};
 
 use crate::belief::clue_holds;
 use crate::num::Real;
@@ -40,16 +40,11 @@ fn seat_weight(player: SeatRecord, tempo: bool) -> u32 {
 /// `state.estimate`: my share of the table's weight, in millionths.
 fn estimate(state: &State, me: Seat, knowledge: bool) -> u32 {
     let turn = state.world.turn;
-    let mut own = None;
-    let mut total = 0u32;
-    for (seat, player) in state.players.entries() {
-        let weight = seat_weight(player, turn == Some(seat));
-        if seat == me {
-            own = Some((player, weight));
-        }
-        total = total.wrapping_add(weight);
-    }
-    let (own, weight) = own.unwrap_or_else(|| (SeatRecord::FRESH, seat_weight(SeatRecord::FRESH, turn == Some(me))));
+    let total = state.players.entries().fold(0u32, |total, (seat, player)| {
+        total.wrapping_add(seat_weight(player, turn == Some(seat)))
+    });
+    let own = players_seat(&state.players, me);
+    let weight = seat_weight(own, turn == Some(me));
     let bonus = if knowledge && alive(own.health) { 25 } else { 0 };
     Real::per_million(weight.wrapping_add(bonus), total.wrapping_add(bonus).max(1))
 }

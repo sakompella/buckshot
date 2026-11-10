@@ -4,6 +4,7 @@
 
 use std::collections::BTreeMap;
 
+use arrayvec::ArrayVec;
 use buckshot_rules::{Config, Grabs, Item, Notes, Phase, Players, Request, Seat, Shell, State, World as Records, request, step_into};
 use rayon::ThreadPool;
 use rayon::iter::{IntoParallelIterator, ParallelExtend, ParallelIterator};
@@ -74,13 +75,21 @@ const fn jam_code(jam: buckshot_rules::Jam) -> u32 {
     }
 }
 
-fn put_shells(key: &mut Vec<u32>, gun: buckshot_rules::Gun) {
-    let live = crate::num::len_u32(gun.iter().filter(|shell| *shell == Shell::Live).count());
+/// The most codes a key holds: a phase (a `NeedItem` with every item), six
+/// counters, a deck's batches (a deck is 16 bits), the turn, four seats with
+/// every item's count and the grabs.
+const KEY_CAPACITY: usize = 4 + Item::ORDER.len() + 6 + 16 + 3 + 4 * (2 + Item::ORDER.len()) + 1 + 4 * 4;
+
+/// A start's key: `push` and `extend` panic past [`KEY_CAPACITY`] rather than cut it.
+type DealKey = ArrayVec<u32, KEY_CAPACITY>;
+
+fn put_shells(key: &mut DealKey, gun: buckshot_rules::Gun) {
+    let live = gun.live();
     key.push(live);
     key.push(gun.len().wrapping_sub(live));
 }
 
-fn put_phase(key: &mut Vec<u32>, phase: Phase) {
+fn put_phase(key: &mut DealKey, phase: Phase) {
     match phase {
         Phase::NeedBatch => key.push(1),
         Phase::NeedSwap { load, shells, i } => {
@@ -106,7 +115,7 @@ fn put_phase(key: &mut Vec<u32>, phase: Phase) {
     }
 }
 
-fn put_seats(key: &mut Vec<u32>, players: &Players) {
+fn put_seats(key: &mut DealKey, players: &Players) {
     for (_, player) in players.entries() {
         key.extend([player.health, jam_code(player.jam)]);
         for item in Item::ORDER {
@@ -116,7 +125,7 @@ fn put_seats(key: &mut Vec<u32>, players: &Players) {
     }
 }
 
-fn put_grabs(key: &mut Vec<u32>, grabs: &Grabs) {
+fn put_grabs(key: &mut DealKey, grabs: &Grabs) {
     key.push(u32::from(grabs.distributing));
     key.extend(grabs.grabbing.entries().map(|(_, b)| u32::from(b)));
     key.extend(grabs.holding.entries().map(|(_, item)| item_code(item)));
@@ -125,9 +134,9 @@ fn put_grabs(key: &mut Vec<u32>, grabs: &Grabs) {
 }
 
 /// `key(state, True)`: everything a deal's draws write, with the slots and the gun as counts.
-fn key(config: &Config, state: &State) -> Vec<u32> {
+fn key(config: &Config, state: &State) -> DealKey {
     let world: &Records = &state.world;
-    let mut key = Vec::with_capacity(64);
+    let mut key = DealKey::new();
     put_phase(&mut key, state.phase);
     key.push(world.load_index);
     key.push(u32::from(world.first_sequence));
@@ -192,7 +201,7 @@ struct Start {
 /// The buffers a sampled leaf reuses: the merged starts and one start's deal values.
 #[derive(Debug, Default)]
 pub struct DealScratch {
-    starts: BTreeMap<Vec<u32>, Start>,
+    starts: BTreeMap<DealKey, Start>,
     values: Vec<Option<Real>>,
     notes: Notes,
 }

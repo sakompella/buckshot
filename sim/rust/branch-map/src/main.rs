@@ -132,7 +132,7 @@ fn run() -> Result<bool> {
         "branch-map: {} Bend modules (sha256 {}), {} reachable defs, {} branch sites: {} mapped, {} in {} exempt defs; {} Rust labels, {} Rust-only control flow sites",
         rules.modules.len(),
         rules.hash.get(..12).unwrap_or_default(),
-        rules.reachable.len(),
+        rules.reachable.values().map(std::collections::BTreeSet::len).sum::<usize>(),
         all.len(),
         sites.len(),
         exempt_sites,
@@ -240,7 +240,8 @@ fn check_rust(src: &Path) -> Result<rust::Report> {
     let mut files = Vec::new();
     for entry in std::fs::read_dir(src)? {
         let path = entry?.path();
-        if path.extension().is_some_and(|x| x == "rs") && !path.ends_with("branch.rs") {
+        let rules = !path.ends_with("branch.rs") && !path.ends_with("testing.rs");
+        if path.extension().is_some_and(|x| x == "rs") && rules {
             files.push(path);
         }
     }

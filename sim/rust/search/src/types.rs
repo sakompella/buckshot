@@ -58,14 +58,6 @@ pub struct Limits {
     pub budget: u64,
 }
 
-/// The difficulty knob (`Level`): search bounds, a gap and a seed for the pick.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Level {
-    pub limits: Limits,
-    pub gap: u32,
-    pub seed: u32,
-}
-
 /// The decision nodes and reload leaves the memo holds, and how often each was reused.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct Cached {
@@ -98,10 +90,58 @@ pub struct Analysed {
     pub cached: Cached,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Analysis {
-    Analysed(Analysed),
-    Invalid { reason: &'static str, nodes: u64 },
+/// Why a position has no analysis: Bend's `Analysis.Invalid` reasons, with
+/// the nodes spent where a search ran.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum Refusal {
+    #[error("the sampled leaf needs at least one deal")]
+    NoDeals,
+    #[error("a leaf that deals the reload takes two seats only")]
+    SampledNeedsTwoSeats,
+    #[error("requires an Idle board and a shown load of at most ten shells")]
+    Board,
+    #[error("public log has no consistent shell/deck belief")]
+    NoPublicBelief,
+    #[error("private log has no consistent shell/deck belief")]
+    NoPrivateBelief,
+    #[error("the position is not a choice")]
+    NotAChoice,
+    #[error("it is not this player's turn")]
+    NotMyTurn,
+    #[error("the budget's fuel outgrows 64 bits")]
+    Fuel,
+    #[error("no legal move")]
+    NoLegalMove { nodes: u64 },
+    #[error("an answer's notes outgrew their buffer")]
+    NotesOverflow { nodes: u64 },
+}
+
+impl Refusal {
+    /// The nodes spent before the refusal.
+    #[must_use]
+    pub const fn nodes(self) -> u64 {
+        match self {
+            Self::NoLegalMove { nodes } | Self::NotesOverflow { nodes } => nodes,
+            Self::NoDeals
+            | Self::SampledNeedsTwoSeats
+            | Self::Board
+            | Self::NoPublicBelief
+            | Self::NoPrivateBelief
+            | Self::NotAChoice
+            | Self::NotMyTurn
+            | Self::Fuel => 0,
+        }
+    }
+}
+
+/// `Analysis`: the analysis, or why there is none.
+pub type Analysis = Result<Analysed, Refusal>;
+
+/// Whether bounded-v1 skips children that cannot change its result.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Pruning {
+    On,
+    Off,
 }
 
 /// One possible world and its probability. `won` is the first round winner

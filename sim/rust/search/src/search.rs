@@ -22,8 +22,10 @@ use crate::machine::{answer_into, answer_reusing, round_won};
 #[cfg(feature = "f32")]
 use crate::memo::Entry;
 use crate::memo::{Kind, Stored, Tally, hash};
+#[cfg(feature = "f32")]
+use crate::num::len_u64;
 use crate::num::{Real, len_u32};
-use crate::types::{Analysed, Analysis, Belief, Limits, Line, Memo, Reach, Reload, World};
+use crate::types::{Analysed, Analysis, Belief, Limits, Line, Memo, Pruning, Reach, Refusal, Reload, World};
 
 mod bounded;
 
@@ -41,8 +43,12 @@ impl Span {
         Self { start, end }
     }
 
+    #[expect(
+        clippy::indexing_slicing,
+        reason = "`pushed` makes a span on the stack it reads, which shrinks only below the spans in use"
+    )]
     pub fn of<T>(self, stack: &[T]) -> &[T] {
-        stack.get(self.start..self.end).unwrap_or(&[])
+        &stack[self.start..self.end]
     }
 
     const fn is_empty(self) -> bool {
@@ -51,6 +57,12 @@ impl Span {
 
     const fn len(self) -> usize {
         self.end.saturating_sub(self.start)
+    }
+
+    /// Item `at` of the span.
+    #[expect(clippy::indexing_slicing, reason = "callers count `at` below the span's length")]
+    fn at<T: Copy>(self, stack: &[T], at: usize) -> T {
+        self.of(stack)[at]
     }
 }
 
@@ -119,12 +131,9 @@ struct Buffers {
 }
 
 impl Buffers {
-    /// An out with what the move's notes (if `notes`) and the phone's draw's notes (if `later`) showed.
-    fn out(&mut self, me: Seat, world: World, notes: bool, later: bool) -> Out {
-        let parts: [&[Note]; 2] = [
-            if notes { self.notes.as_slice() } else { &[] },
-            if later { self.later.as_slice() } else { &[] },
-        ];
+    /// An out with what the move's notes and the phone's draw's notes showed.
+    fn out(&mut self, me: Seat, world: World) -> Out {
+        let parts = [self.notes.as_slice(), self.later.as_slice()];
         let public = pushed(&mut self.seen, |into| {
             for part in parts {
                 seen(part, me, false, into);
@@ -144,25 +153,26 @@ impl Buffers {
     }
 
     /// `settle`: a move ends at a choice, a draw or the end of the round;
-    /// only the phone's draw is expanded. `stepped` says whether
-    /// [`Buffers::notes`] hold the move's notes.
-    fn settle(&mut self, config: &Config, me: Seat, world: World, stepped: bool, outs: &mut Vec<Out>) {
+    /// only the phone's draw is expanded. [`Buffers::notes`] hold the move's
+    /// notes, none if no move was played.
+    fn settle(&mut self, config: &Config, me: Seat, world: World, outs: &mut Vec<Out>) {
         if let Some((Label::PhoneIndex, range)) = draw_request(config, &world.state) {
             let count = range.extra.wrapping_add(2);
             let weight = world.weight.div(Real::from_u32(count));
             for k in (0..count).rev() {
-                let out = match answer_into(config, &world.state, k, &mut self.later) {
-                    Some(state) => {
-                        self.overflow |= self.later.truncated();
-                        let won = round_won(self.later.as_slice());
-                        self.out(me, World { state, weight, won }, stepped, true)
-                    }
-                    None => self.out(me, World { weight, ..world }, stepped, false),
+                let out = if let Some(state) = answer_into(config, &world.state, k, &mut self.later) {
+                    self.overflow |= self.later.truncated();
+                    let won = round_won(self.later.as_slice());
+                    self.out(me, World { state, weight, won })
+                } else {
+                    self.later.clear();
+                    self.out(me, World { weight, ..world })
                 };
                 outs.push(out);
             }
         } else {
-            let out = self.out(me, world, stepped, false);
+            self.later.clear();
+            let out = self.out(me, world);
             outs.push(out);
         }
     }
@@ -173,18 +183,18 @@ impl Buffers {
         let mut menu = None;
         for world in worlds {
             let answer = answer_reusing(config, &world.state, index, &mut menu);
-            match answer.map(|answer| step_into(config, world.state, answer, &mut self.notes)) {
-                Some(state) => {
-                    self.overflow |= self.notes.truncated();
-                    let won = round_won(self.notes.as_slice());
-                    let after = World {
-                        state,
-                        weight: world.weight,
-                        won,
-                    };
-                    self.settle(config, me, after, true, outs);
-                }
-                None => self.settle(config, me, *world, false, outs),
+            if let Some(state) = answer.map(|answer| step_into(config, world.state, answer, &mut self.notes)) {
+                self.overflow |= self.notes.truncated();
+                let won = round_won(self.notes.as_slice());
+                let after = World {
+                    state,
+                    weight: world.weight,
+                    won,
+                };
+                self.settle(config, me, after, outs);
+            } else {
+                self.notes.clear();
+                self.settle(config, me, *world, outs);
             }
         }
     }
@@ -264,7 +274,13 @@ struct Scored {
     value: Value,
 }
 
+/// The node budget ran out (or an answer's notes outgrew their buffer, which
+/// [`Buffers::overflow`] records).
+#[derive(Clone, Copy, Debug)]
+struct Spent;
+
 /// A search's result; scores are a span of [`Search::scored`].
+#[cfg(feature = "f32")]
 #[derive(Clone, Copy, Debug)]
 enum Searched {
     Value(Value),
@@ -338,8 +354,6 @@ struct Scratch {
 }
 
 /// A search whose answers' notes outgrew their buffer, whose values are therefore not Bend's.
-const OVERFLOW: &str = "an answer's notes outgrew their buffer";
-
 struct Search<'a> {
     config: &'a Config,
     me: Seat,
@@ -406,29 +420,29 @@ impl Search<'_> {
         Span::from(start, self.branches.len())
     }
 
-    fn leaf(&self, public: Span, private: Span, reach: Reach) -> Searched {
+    fn leaf(&self, public: Span, private: Span, reach: Reach) -> Value {
         let value = static_value(public.of(&self.worlds), self.me);
-        Searched::Value(Value {
+        Value {
             public: value,
             private: static_private(private.of(&self.worlds), self.me, value),
             reach,
-        })
+        }
     }
 
     /// `node.expected`: with no private worlds the private value is the public one.
-    fn expected(sums: Sums, private: Span) -> Searched {
+    fn expected(sums: Sums, private: Span) -> Value {
         let value = sums.public.millionths();
-        Searched::Value(Value {
+        Value {
             public: value,
             private: if private.is_empty() { value } else { sums.private.millionths() },
             reach: Reach::Reloads,
-        })
+        }
     }
 
     /// `node.reload`: a deal leaf's value depends on its beliefs alone, so the memo keeps it whatever the depth.
-    fn reload_leaf(&mut self, public: Span, private: Span) -> Searched {
+    fn reload_leaf(&mut self, public: Span, private: Span) -> Result<Value, Spent> {
         let count = match self.reload {
-            Reload::Static => return self.leaf(public, private, Reach::Reloads),
+            Reload::Static => return Ok(self.leaf(public, private, Reach::Reloads)),
             Reload::Sampled { count } => count,
         };
         let (public_worlds, private_worlds) = (public.of(&self.worlds), private.of(&self.worlds));
@@ -438,7 +452,7 @@ impl Search<'_> {
                 let key = hash(Kind::Deal, public_worlds, private_worlds);
                 if let Some(Stored::Deal(sums)) = self.tally.find(key, Kind::Deal, public_worlds, private_worlds) {
                     self.tally.deal_hit();
-                    return Self::expected(sums, private);
+                    return Ok(Self::expected(sums, private));
                 }
                 Some(key)
             }
@@ -452,13 +466,13 @@ impl Search<'_> {
             &mut self.deal,
         ) else {
             self.scratch.buffers.overflow = true;
-            return Searched::Spent;
+            return Err(Spent);
         };
         if let Some(key) = key {
             self.tally
                 .keep(key, Kind::Deal, (public_worlds, private_worlds), Stored::Deal(sums));
         }
-        Self::expected(sums, private)
+        Ok(Self::expected(sums, private))
     }
 }
 
@@ -510,12 +524,14 @@ impl Search<'_> {
             }));
         };
         if first.won.is_some() {
-            return Task::Known(self.leaf(public, private, Reach::Settled));
+            return Task::Known(Searched::Value(self.leaf(public, private, Reach::Settled)));
         }
         match (request(self.config, &first.state), depth.checked_sub(1)) {
             (Request::Choose(menu), Some(child)) => self.choose(menu.seat() == self.me, child, public, private, &menu),
-            (Request::Draw { .. }, _) => Task::Known(self.reload_leaf(public, private)),
-            (Request::Choose(_), None) | (Request::Finished | Request::Stuck, _) => Task::Known(self.leaf(public, private, Reach::Cut)),
+            (Request::Draw { .. }, _) => Task::Known(self.reload_leaf(public, private).map_or(Searched::Spent, Searched::Value)),
+            (Request::Choose(_), None) | (Request::Finished | Request::Stuck, _) => {
+                Task::Known(Searched::Value(self.leaf(public, private, Reach::Cut)))
+            }
         }
     }
 
@@ -578,10 +594,8 @@ impl Search<'_> {
     fn moves(&mut self, fuel: u64, depth: u32, public: Span, private: Span, choices: Span) -> Searched {
         let mut fuel = fuel;
         let start = self.scored.len();
-        for at in choices.start..choices.end {
-            let Some(choice) = self.choices.get(at).copied() else {
-                break;
-            };
+        for at in 0..choices.len() {
+            let choice = choices.at(&self.choices, at);
             let after = fuel.checked_sub(1);
             let result = match after {
                 Some(after) => self.option(after, depth, public, private, choice.index),
@@ -603,13 +617,7 @@ impl Search<'_> {
     }
 
     fn option(&mut self, fuel: u64, depth: u32, public: Span, private: Span, index: u32) -> Searched {
-        let worlds = u64::try_from(
-            public
-                .end
-                .saturating_sub(public.start)
-                .saturating_add(private.end.saturating_sub(private.start)),
-        )
-        .unwrap_or(u64::MAX);
+        let worlds = len_u64(public.len().saturating_add(private.len()));
         let spent = self.tally.nodes.saturating_add(worlds);
         if spent > self.budget {
             return Searched::Spent;
@@ -629,10 +637,8 @@ impl Search<'_> {
         let mut public = Real::ZERO;
         let mut private = Real::ZERO;
         let mut reach = Reach::Settled;
-        for at in branches.start..branches.end {
-            let Some(branch) = self.branches.get(at).copied() else {
-                break;
-            };
+        for at in 0..branches.len() {
+            let branch = branches.at(&self.branches, at);
             let Some(after) = fuel.checked_sub(1) else {
                 return Searched::Spent;
             };
@@ -697,19 +703,20 @@ impl Search<'_> {
     }
 }
 
-fn invalid(reason: &'static str, nodes: u64) -> Analysis {
-    Analysis::Invalid { reason, nodes }
+/// The first line with the highest score, and its place.
+fn best_line(lines: &[Line]) -> Option<(usize, &Line)> {
+    lines.iter().enumerate().fold(None, |best, (j, line)| match best {
+        Some((_, top)) if line.score <= top.score => best,
+        _ => Some((j, line)),
+    })
 }
 
 fn analysed(lines: Vec<Line>, tally: &Tally, depth: u32, limited: bool) -> Analysis {
-    let Some((first, rest)) = lines.split_first() else {
-        return invalid("no legal move", tally.nodes);
+    let Some((_, best)) = best_line(&lines) else {
+        return Err(Refusal::NoLegalMove { nodes: tally.nodes });
     };
-    let best = rest
-        .iter()
-        .fold(first, |best, line| if line.score > best.score { line } else { best });
     let (index, score) = (best.index, best.score);
-    Analysis::Analysed(Analysed {
+    Ok(Analysed {
         lines,
         best: index,
         score,
@@ -722,13 +729,14 @@ fn analysed(lines: Vec<Line>, tally: &Tally, depth: u32, limited: bool) -> Analy
 
 fn limited(completed: Analysis, tally: &Tally) -> Analysis {
     match completed {
-        Analysis::Analysed(done) => Analysis::Analysed(Analysed {
+        Ok(done) => Ok(Analysed {
             nodes: tally.nodes,
             limited: true,
             cached: tally.cached,
             ..done
         }),
-        Analysis::Invalid { reason, .. } => invalid(reason, tally.nodes),
+        Err(Refusal::NoLegalMove { .. }) => Err(Refusal::NoLegalMove { nodes: tally.nodes }),
+        Err(refusal) => Err(refusal),
     }
 }
 
@@ -754,7 +762,11 @@ pub(crate) enum Mode {
     Compat,
     /// The box search, pruned or not, the chosen move (a menu index) searched
     /// exactly, gathering the decision keys of its deepest iteration with `stats`.
-    Bounded { prune: bool, chosen: Option<u32>, stats: bool },
+    Bounded {
+        pruning: Pruning,
+        chosen: Option<u32>,
+        stats: bool,
+    },
 }
 
 /// A built belief's analysis under `mode`, with its key stats if asked for.
@@ -768,14 +780,14 @@ pub(crate) fn run(
 ) -> (Analysis, Option<KeyStats>) {
     let (reload, memo) = leaves;
     let Some(first) = belief.public.first() else {
-        return (invalid("public log has no consistent shell/deck belief", 0), None);
+        return (Err(Refusal::NoPublicBelief), None);
     };
     let menu = match request(config, &first.state) {
         Request::Choose(menu) => menu,
-        Request::Draw { .. } | Request::Finished | Request::Stuck => return (invalid("the position is not a choice", 0), None),
+        Request::Draw { .. } | Request::Finished | Request::Stuck => return (Err(Refusal::NotAChoice), None),
     };
     if menu.seat() != belief.me {
-        return (invalid("it is not this player's turn", 0), None);
+        return (Err(Refusal::NotMyTurn), None);
     }
     // `fuel`: Bend's Nat cannot overflow; a budget whose fuel outgrows u64 is refused.
     #[cfg(feature = "f32")]
@@ -783,7 +795,7 @@ pub(crate) fn run(
         #[cfg(feature = "f32")]
         Mode::Compat => match limits.budget.checked_mul(8).and_then(|fuel| fuel.checked_add(64)) {
             Some(fuel) => fuel,
-            None => return (invalid("the budget's fuel outgrows 64 bits", 0), None),
+            None => return (Err(Refusal::Fuel), None),
         },
         Mode::Bounded { .. } => 0,
     };
@@ -806,7 +818,7 @@ pub(crate) fn run(
         deal: DealScratch::default(),
         boxes: Vec::new(),
         stats: matches!(mode, Mode::Bounded { stats: true, .. }).then(KeyStats::default),
-        prune: matches!(mode, Mode::Bounded { prune: true, .. }),
+        prune: matches!(mode, Mode::Bounded { pruning: Pruning::On, .. }),
     };
     let public = pushed(&mut search.worlds, |into| into.extend_from_slice(&belief.public));
     let private = pushed(&mut search.worlds, |into| into.extend_from_slice(&belief.private));
@@ -817,14 +829,14 @@ pub(crate) fn run(
         Mode::Bounded { chosen, .. } => search.bounded_root(limits.depth, (public, private), choices, chosen),
     };
     if search.scratch.buffers.overflow {
-        return (invalid(OVERFLOW, search.tally.nodes), search.stats);
+        return (Err(Refusal::NotesOverflow { nodes: search.tally.nodes }), search.stats);
     }
     (analysis, search.stats)
 }
 
 #[cfg(test)]
 pub(crate) mod tests {
-    use buckshot_rules::{AmountRule, Config, HealthRule, ItemRule, LoadRule, RoundRules, RuleError, ShellRule, Table};
+    use buckshot_rules::{AmountRule, Config, EnumMap, HealthRule, ItemRule, LoadRule, RoundRules, RuleError, ShellRule, Table};
 
     /// Two seats at 2 health, a one-shell live load and no items.
     pub(crate) fn config() -> Result<Config, RuleError> {
@@ -832,15 +844,10 @@ pub(crate) mod tests {
             shells: ShellRule::AllLive { live: 1 },
             items: AmountRule::Fixed(0),
         };
-        let off = ItemRule {
-            enabled: false,
-            per_player: 0,
-            on_table: 0,
-        };
         let round = RoundRules {
             health: HealthRule::Fixed(2),
             loads: [load; 4],
-            items: [off; 9],
+            items: EnumMap::from_fn(|_| ItemRule::OFF),
         };
         Config::new(Table::TwoSeats, &[round, round, round])
     }
@@ -910,8 +917,7 @@ pub(crate) mod tests {
                 me,
                 round: 0,
             };
-            let Analysis::Analysed(done) = analyse_belief(&config, &belief, Limits { depth: 4, budget: 20_000 }, Reload::Static, Memo::Off)
-            else {
+            let Ok(done) = analyse_belief(&config, &belief, Limits { depth: 4, budget: 20_000 }, Reload::Static, Memo::Off) else {
                 return Err(RuleError::Config("the fixture should analyse"));
             };
             let at = |own: bool| {
@@ -925,7 +931,6 @@ pub(crate) mod tests {
 
         /// Shooting the opponent wins the round and begins the next one in the
         /// same step; the search must score the won round, not the next round's start.
-        // Bug: the round-edge winner (rust-search stage 1, P1.1) scored the next round's start.
         #[test]
         fn a_won_round_is_settled_when_the_next_round_begins_at_once() {
             let expected = (true, Some((1_000_000, Reach::Settled)), Some((0, Reach::Settled)));
