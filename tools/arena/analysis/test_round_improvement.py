@@ -5,7 +5,6 @@ import tempfile
 import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from unittest.mock import patch
 
 import round_improvement as ri
 from certain_mistakes import CREATE_OPPORTUNITIES
@@ -67,11 +66,11 @@ class Estimates(unittest.TestCase):
         self.assertEqual(ri.verdict(e), "flat")
 
     def test_seats_of_one_block_are_resampled_together(self):
-        # Two blocks, one all +1 and one all -1: every resample is all +1, all -1 or a mix, so the interval spans both.
-        deltas = [(seat(n, block="up"), 1.0) for n in range(5)] + [(seat(n + 5, block="down"), -1.0) for n in range(5)]
-        with patch.object(ri, "FEWEST_BLOCKS", 2):
-            e = ri.estimate(deltas, random.Random(0))
-        self.assertEqual((e.low, e.high), (-1.0, 1.0))
+        # Five blocks all +1 and five all -1: a resample of whole blocks swings the mean both ways, where resampling the seats alone would not.
+        deltas = [(seat(n, block=f"up{n // 4}"), 1.0) for n in range(20)] + [(seat(n + 20, block=f"down{n // 4}"), -1.0) for n in range(20)]
+        e = ri.estimate(deltas, random.Random(0))
+        self.assertLess(e.low, -0.4)
+        self.assertGreater(e.high, 0.4)
 
     def test_too_few_blocks_give_no_estimate(self):
         self.assertIsNone(ri.estimate(self.deltas([1.0] * 5), random.Random(0)))

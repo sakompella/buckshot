@@ -95,7 +95,7 @@ class Pair:
 
 
 def pairs(sampled_path: Path, regret_path: Path, knowledge_path: Path, depth: int = 6, budget: int = 20000, samples: int = 256) -> list[Pair]:
-    """The sampled run's searched decisions with the static run's score of the same decision, matched by match, ordinal, depth and budget.
+    """The sampled run's decisions with the static run's score of the same decision, matched by match, ordinal, depth and budget. Fails when a sampled row has no searched static row or agent decision to match, or is not itself searched.
 
     The evaluator column is not compared: a build of the player made after the reload rules were added has a different hash, because the reload-leaf source changed, though its static path is meant to score the same.
     """
@@ -110,6 +110,9 @@ def pairs(sampled_path: Path, regret_path: Path, knowledge_path: Path, depth: in
            ORDER BY r.match_id, r.ordinal""",
         (depth, budget, samples),
     ).fetchall()
+    sampled_rows = db.execute("SELECT COUNT(*) FROM regret WHERE max_depth = ? AND budget = ? AND reload = 'sampled' AND samples = ?", (depth, budget, samples)).fetchone()[0]
+    if len(rows) != sampled_rows:
+        raise ValueError(f"{sampled_rows - len(rows):,} of the {sampled_rows:,} sampled rows are not searched or have no searched static row and agent decision to match")
     scores = lambda text: [move["score"] for move in json.loads(text)]
     return [
         Pair(remaining, bool(shot), model, static / POINT, sampled / POINT, remaining <= static_depth, scores(static_values) != scores(sampled_values), static_best != sampled_best, static_nodes == sampled_nodes and static_depth == sampled_depth)

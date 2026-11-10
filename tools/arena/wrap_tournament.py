@@ -39,7 +39,7 @@ import subprocess
 import sys
 import time
 import urllib.request
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
@@ -181,6 +181,12 @@ def run_steps(steps: list[tuple[str, Callable[[], str | None]]], state_file: Pat
         log(f"done {name}" + (f": {note}" if note else ""))
 
 
+def worktree_env(environ: Mapping[str, str]) -> dict[str, str]:
+    """The environment of the commands run in other worktrees: without $BEND, so each `nix develop <worktree>` gets the Bend of that worktree's pin.
+    A $BEND inherited from this checkout's dev shell would make an older evaluator worktree build its player with a newer, incompatible Bend."""
+    return {**{k: v for k, v in environ.items() if k != "BEND"}, "XDG_RUNTIME_DIR": environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")}
+
+
 @dataclass
 class Wrap:
     run_dirs: list[Path]
@@ -197,7 +203,9 @@ class Wrap:
     jobs: int
     regret_name: str
     threads: int
+    env: dict[str, str]
     deploy: bool = False
+    cloudflare_env: Path = CLOUDFLARE_ENV
 
     def __post_init__(self) -> None:
         self.logs = self.run_dirs[0] / "wrapup"
@@ -209,9 +217,6 @@ class Wrap:
         self.public = self.analysis / "buckshot.public.sqlite"
         self.regret_db = self.derived / self.regret_name
         self.state = self.logs / "state.json"
-        # Without $BEND: each `nix develop <worktree>` gets the Bend of that worktree's pin. A $BEND inherited from this
-        # checkout's dev shell would make an older evaluator worktree build its player with a newer, incompatible Bend.
-        self.env = {**{k: v for k, v in os.environ.items() if k != "BEND"}, "XDG_RUNTIME_DIR": os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")}
 
     @property
     def tag(self) -> str:
@@ -349,9 +354,9 @@ class Wrap:
 
     def deploy_(self) -> str:
         """Preview, check and promote the exported site. The preview step fails the run unless the preview URL passes the privacy scan and the smoke checks, so a bad site is never promoted."""
-        if not CLOUDFLARE_ENV.exists():
-            raise Stop(f"{CLOUDFLARE_ENV} is missing: see docs/arena/README.md, Deploying the online site")
-        env = {**self.env, **dotenv(CLOUDFLARE_ENV.read_text())}
+        if not self.cloudflare_env.exists():
+            raise Stop(f"{self.cloudflare_env} is missing: see docs/arena/README.md, Deploying the online site")
+        env = {**self.env, **dotenv(self.cloudflare_env.read_text())}
         web = REPO / "web"
         out = self.logs / "deploy-preview.out"
         out.unlink(missing_ok=True)
@@ -437,7 +442,7 @@ def main() -> None:
     args = p.parse_args()
     runs = [r.resolve() for r in args.run_dir]
     evaluator = (args.evaluator or REPO).resolve()
-    wrap = Wrap(runs, args.importer.resolve(), args.analysis.resolve(), args.docs.resolve(), args.name or re.sub(r"tournament-?", "t", runs[-1].name), args.cohort, args.skips, evaluator, args.knowledge, args.viewer_unit or None, args.viewer_url, args.jobs, args.regret, args.threads, args.deploy)
+    wrap = Wrap(runs, args.importer.resolve(), args.analysis.resolve(), args.docs.resolve(), args.name or re.sub(r"tournament-?", "t", runs[-1].name), args.cohort, args.skips, evaluator, args.knowledge, args.viewer_unit or None, args.viewer_url, args.jobs, args.regret, args.threads, worktree_env(os.environ), args.deploy)
     steps = [(n, f) for n, f in wrap.steps() if n not in args.skip]
     if args.dry_run:
         done = json.loads(wrap.state.read_text()) if wrap.state.exists() else {}

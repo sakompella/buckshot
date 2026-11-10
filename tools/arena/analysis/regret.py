@@ -13,12 +13,12 @@ the production file (PRODUCTION) by default.
 """
 
 import argparse
-import math
 import sqlite3
 from dataclasses import dataclass
 from itertools import groupby
 from pathlib import Path
 
+from boot import quantile
 from docs import splice_between_markers
 from fmt import pct, table
 from load import connect
@@ -78,18 +78,9 @@ class Summary:
     exact: float
 
 
-def percentile(values: list[float], share: float) -> float:
-    """Linear interpolation between the closest ranks."""
-    ordered = sorted(values)
-    rank = share * (len(ordered) - 1)
-    low = math.floor(rank)
-    high = min(low + 1, len(ordered) - 1)
-    return ordered[low] + (ordered[high] - ordered[low]) * (rank - low)
-
-
 def summarise(decisions: list[Decision]) -> Summary:
     regrets = [d.regret for d in decisions]
-    return Summary(len(regrets), sum(regrets) / len(regrets), percentile(regrets, 0.9), sum(d.exact for d in decisions) / len(decisions))
+    return Summary(len(regrets), sum(regrets) / len(regrets), quantile(sorted(regrets), 0.9), sum(d.exact for d in decisions) / len(decisions))
 
 
 def load(regret_path: Path, knowledge_path: Path) -> Loaded:

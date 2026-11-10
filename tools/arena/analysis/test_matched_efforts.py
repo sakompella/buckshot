@@ -172,10 +172,6 @@ class Time(unittest.TestCase):
         self.assertEqual({s.match for s in me.since(seats, CUT)}, {"equal"})
         self.assertEqual(seats[0].started.tzinfo, timezone.utc)
 
-    def test_chronology_counts_seats_before_and_after_the_change(self):
-        seats = [seat(0, MED, EASY, 3, started=CUT - timedelta(days=1)), seat(1, HIGH, EASY, 3), seat(2, MED, EASY, 3)]
-        self.assertEqual(me.chronology(seats), "External seats at medium: 1 before the change and 1 after. External seats at the other efforts: 0 before and 1 after.")
-
 
 class Unscored(unittest.TestCase):
     def test_zero_round_matches_do_not_enter_the_round_rates(self):

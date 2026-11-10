@@ -103,12 +103,13 @@ class Pairs(unittest.TestCase):
         )
         self.assertFalse(found.same_tree)
 
-    def test_leaves_out_decisions_the_static_run_has_not_scored_and_other_sample_counts(self):
-        found = self.read(
-            static_rows=[("m1", 0, "static", 0, values(1, 2), "move 1", 0, 100, 3)],
-            sampled_rows=[("m1", 1, "sampled", 256, values(1, 2), "move 1", 0, 100, 3), ("m1", 0, "sampled", 64, values(1, 2), "move 1", 0, 100, 3)],
-        )
-        self.assertEqual(found, [])
+    def test_ignores_other_sample_counts_but_fails_on_a_sampled_row_the_static_run_has_not_scored(self):
+        static = [("m1", 0, "static", 0, values(1, 2), "move 1", 0, 100, 3)]
+        matched = ("m1", 0, "sampled", 256, values(1, 2), "move 1", 0, 100, 3)
+        other_samples = ("m1", 1, "sampled", 64, values(1, 2), "move 1", 0, 100, 3)
+        self.assertEqual(len(self.read(static, [matched, other_samples])), 1)
+        with self.assertRaises(ValueError):
+            self.read(static, [matched, ("m1", 1, "sampled", 256, values(1, 2), "move 1", 0, 100, 3)])
 
 
 if __name__ == "__main__":
