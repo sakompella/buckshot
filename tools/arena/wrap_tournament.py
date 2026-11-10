@@ -44,6 +44,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 
+import redact_database
 import score_regret
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "analysis"))
@@ -51,7 +52,6 @@ from docs import splice_between_markers  # noqa: E402
 from regret import PRODUCTION, run_of  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
-EMAIL = re.compile(rb"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+")
 SIDECARS = ("", "-wal", "-shm")
 CLOUDFLARE_ENV = REPO / "_work/.cloudflare-deploy.env"
 
@@ -160,13 +160,9 @@ def preview_version(output: str) -> str:
 
 
 def email_hits(path: Path) -> int:
-    """How many email-shaped strings the database holds in any column. Values are read as text, not raw bytes: a record header byte can be an `@`."""
+    """How many email-shaped strings the database holds in any column."""
     db = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
-    hits = 0
-    for (table,) in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall():
-        for column in [row[1] for row in db.execute(f'PRAGMA table_info("{table}")')]:
-            for (value,) in db.execute(f'SELECT CAST("{column}" AS TEXT) FROM "{table}" WHERE CAST("{column}" AS TEXT) LIKE \'%@%\''):
-                hits += len(EMAIL.findall(value.encode()))
+    hits = sum(emails for *_, emails in redact_database.email_cells(db))
     db.close()
     return hits
 

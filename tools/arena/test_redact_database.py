@@ -1,4 +1,7 @@
+import os
+import sqlite3
 import string
+import tempfile
 import unittest
 
 from hypothesis import HealthCheck, given, settings
@@ -7,7 +10,7 @@ from hypothesis import strategies as st
 settings.register_profile("arena", deadline=None, suppress_health_check=[HealthCheck.too_slow])
 settings.load_profile("arena")
 
-from redact_database import EMAIL, redact
+from redact_database import EMAIL, main, redact
 
 word = st.text(string.ascii_letters + string.digits, min_size=1, max_size=8)
 emails = st.builds("{}@{}.{}".format, word, word, word)
@@ -32,6 +35,20 @@ class RedactTests(unittest.TestCase):
     @given(st.text(string.printable).filter(lambda text: "@" not in text))
     def test_text_without_an_at_sign_is_untouched(self, text):
         self.assertEqual(redact(text), text)
+
+    def test_a_committed_email_in_any_text_column_is_redacted_while_it_is_still_in_the_wal(self):
+        d = tempfile.mkdtemp()
+        source = sqlite3.connect(os.path.join(d, "src.sqlite"))
+        source.execute("PRAGMA journal_mode = WAL")
+        source.execute("PRAGMA wal_autocheckpoint = 0")
+        source.execute("CREATE TABLE match_seats (provenance_json TEXT)")
+        source.execute("CREATE TABLE calls (response_text TEXT)")
+        source.execute("INSERT INTO calls VALUES ('mail someone@example.com')")
+        source.commit()
+        main(os.path.join(d, "src.sqlite"), os.path.join(d, "out.sqlite"))
+        source.close()
+        out = sqlite3.connect(os.path.join(d, "out.sqlite"))
+        self.assertEqual(out.execute("SELECT response_text FROM calls").fetchall(), [("mail [redacted]",)])
 
 
 if __name__ == "__main__":
