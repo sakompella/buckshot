@@ -20,6 +20,9 @@ export type Speed = typeof Speed.Type;
 /** How long autoplay's pauses and the table's held moments last at each speed, against Normal. */
 export const SPEED_FACTOR: Readonly<Record<Speed, number>> = { Slow: 1.6, Normal: 1, Fast: 0.12 };
 
+/** The round-over beat at Normal speed: autoplay's pause after a won round, and the length of its animations (`--round-beat`). */
+export const ROUND_BEAT_MS = 4400;
+
 export const Setup = Schema.Struct({
   table: SeatCount,
   controllers: Schema.Array(Controller),

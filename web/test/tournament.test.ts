@@ -306,7 +306,8 @@ const manifestOf = (tournament: Tournament, match: ScheduledMatch, status: "fini
 
     if (entrant === undefined || !("model" in entrant)) return [];
 
-    const played = { model: entrant.model, effort: entrant.effort };
+    const endpoint = tournament.config.endpoints[entrant.endpoint];
+    const played = { api: endpoint?.api === "anthropic" ? "Anthropic" : "OpenAIResponses", url: endpoint === undefined ? null : new URL(endpoint.url).href.replace(/\/$/, ""), model: entrant.model, catalog_model: entrant.catalogModel ?? null, effort: entrant.effort };
 
     return [[seat, entrant.instructionsAddendum === undefined ? played : { ...played, instructions_addendum: entrant.instructionsAddendum }]];
   }));
@@ -787,10 +788,15 @@ test("a finished match that disagrees with the schedule is left out, and its cou
   const manifest = JSON.parse(readFileSync(join(dir, match.name, "manifest.json"), "utf8"));
   const write = (changes: Readonly<Record<string, Schema.Json>>) => writeFileSync(join(dir, match.name, "manifest.json"), JSON.stringify({ ...manifest, ...changes }));
 
-  write({ provenance: { agents: { A: { model: "gpt-6-luna", effort: "low" } } } });
+  const agent = (changes: Readonly<Record<string, Schema.Json>>) => write({ provenance: { ...manifest.provenance, agents: { A: { ...manifest.provenance.agents.A, ...changes } } } });
+
+  agent({ effort: "low" });
   expect(Result.isFailure(readMatch(dir, tournament, match))).toBe(true);
 
-  write({ provenance: { agents: { A: { model: "claude-haiku-5-5", effort: "high" } } } });
+  agent({ model: "claude-haiku-5-5", effort: "high" });
+  expect(Result.isFailure(readMatch(dir, tournament, match))).toBe(true);
+
+  agent({ url: "https://wrong.invalid" });
   expect(Result.isFailure(readMatch(dir, tournament, match))).toBe(true);
 
   write({ controllers: ["Agent", "Story"] });

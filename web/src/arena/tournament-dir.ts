@@ -11,6 +11,7 @@ import { type CallLine, endingFault, faultsIn, faultsSinceLastMove, readCalls } 
 import {
   ScheduledMatch,
   assignAccounts,
+  endpointOf,
   type MatchAccounts,
   type Tournament,
   TournamentConfig,
@@ -101,9 +102,16 @@ export const openTournament = (dir: string, tournament: Tournament, gitCommit: s
 };
 
 /** What a tournament reads of a match's manifest. */
-const Described = Schema.Struct({ model: Schema.String, effort: Schema.NullOr(Schema.String), instructions_addendum: Schema.optional(Schema.String) });
+const Described = Schema.Struct({ api: Schema.String, url: Schema.NullOr(Schema.String), model: Schema.String, catalog_model: Schema.NullOr(Schema.String), effort: Schema.NullOr(Schema.String), instructions_addendum: Schema.optional(Schema.String) });
 
-const MatchManifest = Schema.Struct({
+/** The provenance `api` of a config endpoint's api: the Endpoint tag in endpoints.ts. */
+const API_TAG = { anthropic: "Anthropic", "openai-responses": "OpenAIResponses" } as const;
+
+/** A config URL as provenance records it: baseUrlOf in endpoints.ts, which this cannot import without changing the arena code hash. */
+const baseUrl = (url: string): string => new URL(url).href.replace(/\/$/, "");
+
+/** What a tournament and the importer read of a match manifest. */
+export const MatchManifest = Schema.Struct({
   status: Schema.String,
   seed: Schema.String,
   controllers: Schema.Array(Schema.String),
@@ -114,7 +122,7 @@ const MatchManifest = Schema.Struct({
   agents: Schema.Record(Schema.String, Schema.Struct({ moves: Schema.Int, reminders: Schema.Int, interventions: Schema.Int })),
 });
 
-type MatchManifest = typeof MatchManifest.Type;
+export type MatchManifest = typeof MatchManifest.Type;
 
 const readManifest = (dir: string): Result.Result<MatchManifest, string> => {
   const path = join(dir, "manifest.json");
@@ -164,8 +172,9 @@ export const manifestProblems = (tournament: Tournament, match: ScheduledMatch, 
 
   const seats = match.seats.flatMap((seat, index) => {
     const entrant = modelEntrant(config, match.entrants[index] ?? "");
+    const endpoint = endpointOf(config, match.entrants[index] ?? "");
 
-    if (!isLetter(seat) || entrant === undefined) return [];
+    if (!isLetter(seat) || entrant === undefined || endpoint === undefined) return [];
 
     const played = manifest.provenance.agents[seat];
 
@@ -173,6 +182,9 @@ export const manifestProblems = (tournament: Tournament, match: ScheduledMatch, 
 
     return [
       ...(played.model === entrant.model ? [] : [`agent ${seat} played ${played.model}, the schedule says ${entrant.model}`]),
+      ...(played.api === API_TAG[endpoint.api] ? [] : [`agent ${seat} played through the ${played.api} API, the schedule says ${API_TAG[endpoint.api]}`]),
+      ...(played.url === baseUrl(endpoint.url) ? [] : [`agent ${seat} played at ${played.url ?? "no URL"}, the schedule says ${baseUrl(endpoint.url)}`]),
+      ...(played.catalog_model === (entrant.catalogModel ?? null) ? [] : [`agent ${seat} played as the catalog model ${played.catalog_model ?? "unset"}, the schedule says ${entrant.catalogModel ?? "unset"}`]),
       ...(played.effort === entrant.effort ? [] : [`agent ${seat} played at effort ${played.effort ?? "unset"}, the schedule says ${entrant.effort}`]),
       ...(played.instructions_addendum === entrant.instructionsAddendum ? [] : [`agent ${seat} played with the instructions addendum ${JSON.stringify(played.instructions_addendum ?? null)}, the schedule says ${JSON.stringify(entrant.instructionsAddendum ?? null)}`]),
       ...(manifest.letters[index] === seat ? [] : [`position ${index + 1} is player ${manifest.letters[index] ?? "none"}, the schedule says ${seat}`]),

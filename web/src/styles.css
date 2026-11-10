@@ -286,7 +286,7 @@ summary:focus-visible {
   text-shadow: 0 3px 0 rgb(0 0 0 / 0.75), 0 0 14px rgb(0 0 0 / 0.6);
   pointer-events: none;
   opacity: 0;
-  animation: secret max(1200ms, calc(2600ms * var(--pace, 1))) ease-out var(--wait, 0ms) forwards;
+  animation: secret max(1200ms, calc(2600ms * var(--pace, 1))) ease-out calc(var(--wait, 0ms) * var(--pace, 1)) forwards;
   z-index: 4;
 }
 
@@ -313,7 +313,7 @@ summary:focus-visible {
   text-align: center;
   pointer-events: none;
   opacity: 0;
-  animation: round-over 4400ms ease-out forwards;
+  animation: round-over var(--round-beat) ease-out forwards;
   z-index: 3;
 }
 
@@ -333,7 +333,7 @@ summary:focus-visible {
   text-transform: uppercase;
   color: var(--charge);
   text-shadow: 0 3px 0 #000;
-  animation: prize 4400ms ease-out forwards;
+  animation: prize var(--round-beat) ease-out forwards;
 }
 
 /* It waits for the last shot's labels to fade first. */
@@ -563,12 +563,12 @@ summary:focus-visible {
 }
 
 .phase-beat {
-  animation: phase-beat 4400ms forwards;
+  animation: phase-beat var(--round-beat) forwards;
 }
 
 .phase-after {
   opacity: 0;
-  animation: phase-after 4400ms forwards;
+  animation: phase-after var(--round-beat) forwards;
 }
 
 @keyframes phase-beat {

@@ -14,17 +14,9 @@ if [ -z "${IN_NIX_SHELL:-}" ] && command -v nix >/dev/null; then
 fi
 
 tapes=$(mktemp -d -t rust-parity-XXXXXX)
-# On a failure the tapes and oracle stay: they are the dump that reproduces it.
-keep() {
-  local status=$?
-  if [ "$status" -eq 0 ]; then
-    rm -rf "$tapes"
-  else
-    echo "== parity gate FAILED; its Bend inputs are kept in $tapes. Reproduce a failing test from $here with" >&2
-    echo "   RUST_TAPES=$tapes RUST_SEARCH_ORACLE=$tapes/search (or $tapes/search-2 for seats-2) cargo test --release --no-default-features --features <the failing features> -- --include-ignored --nocapture" >&2
-  fi
-}
-trap keep EXIT
+# shellcheck source=keep.sh
+source "$here/keep.sh"
+trap 'keep "$tapes" "RUST_TAPES=$tapes RUST_SEARCH_ORACLE=$tapes/search (or $tapes/search-2 for seats-2) cargo test --release --no-default-features --features <the failing features> -- --include-ignored --nocapture"' EXIT
 echo "== Bend tapes -> $tapes"
 nice -n 10 node "$root/sim/bend-mp/test/rust-tapes.mjs" \
   --seeds 1,2 --random 12 --items 8 --wild 8 --edge 2 --perturb 150 --dir "$tapes"

@@ -159,6 +159,8 @@ export const resolveConfig = (config: TournamentConfig): Result.Result<Tournamen
       if (seeds.length < config.blocksPerPairing) return yield* fail(`${label} lists ${seeds.length} seeds for ${config.blocksPerPairing} blocks`);
 
       if (twice !== undefined) return yield* fail(`${label} lists the seed ${twice} twice`);
+
+      if (pairing.length > 2 && pairing.some((name) => "engine" in (config.entrants[name] ?? {}))) return yield* fail(`${label} seats an engine at a table of ${pairing.length}; the engine's seats-2 build (engine.ts) plays two-seat tables only`);
     }
 
     return { config, pairings, seeds: seeded.map(([, seeds]) => seeds) };
@@ -249,7 +251,8 @@ export const botEntrant = (config: TournamentConfig, name: string): (typeof BOTS
 };
 
 /** The endpoint a model entrant plays through. */
-const endpointOf = (config: TournamentConfig, name: string) => config.endpoints[modelEntrant(config, name)?.endpoint ?? ""];
+/** The endpoint a model entrant plays through. */
+export const endpointOf = (config: TournamentConfig, name: string) => config.endpoints[modelEntrant(config, name)?.endpoint ?? ""];
 
 /** Per-agent account ids fixed for one match, absent for endpoints without a pool. */
 export type MatchAccounts = Readonly<Record<string, string>>;

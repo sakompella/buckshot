@@ -20,13 +20,17 @@ if [ "${1:-}" = --db ]; then
   shift 2
 fi
 [ -n "$db" ] || { echo "check-arena.sh: --db PATH or BUCKSHOT_ARENA_DB names the arena database" >&2; exit 2; }
+# The tape helper runs from web/, so a relative path is resolved here, from the caller's directory.
+db=$(realpath -- "$db")
 matches=${1:-12}
 
 # The arena tapes replay recorded matches through web/generated/rules.mjs.
 (cd "$root/web" && nice -n 10 bun run rules >/dev/null)
 
 tapes=$(mktemp -d -t rust-arena-XXXXXX)
-trap 'rm -rf "$tapes"' EXIT
+# shellcheck source=keep.sh
+source "$here/keep.sh"
+trap 'keep "$tapes" "RUST_TAPES=$tapes cargo test --release --no-default-features --features f64,seats-2-4 --test tapes -- --include-ignored --nocapture"' EXIT
 echo "== $matches recorded arena matches -> $tapes"
 nice -n 10 node "$root/sim/bend-mp/test/rust-tapes.mjs" --seeds 1 --arena "$matches" --spread --db "$db" --dir "$tapes"
 

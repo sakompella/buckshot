@@ -11,7 +11,7 @@ import { AgentId } from "../arena/agent.ts";
 import { configLabel } from "../arena/model-names.ts";
 import { RunManifest } from "../arena/match.ts";
 import { CallLine, EventLine, type MoveLine } from "../arena/runlog.ts";
-import { manifestProblems, TournamentFile, tournamentOf } from "../arena/tournament-dir.ts";
+import { MatchManifest, manifestProblems, TournamentFile, tournamentOf } from "../arena/tournament-dir.ts";
 import { replayOf, type Replay } from "../arena/replay.ts";
 import { modelEntrant } from "../arena/tournament.ts";
 import { IMPORTER_FILES, IMPORTER_HASH } from "./importer-hash.ts";
@@ -30,14 +30,7 @@ const decodeEvent = Schema.decodeUnknownResult(Schema.fromJsonString(EventLine))
 
 const decodeCall = Schema.decodeUnknownResult(Schema.fromJsonString(CallLine));
 
-const ValidationManifest = Schema.Struct({
-  status: Schema.String, seed: Schema.String, controllers: Schema.Array(Schema.String),
-  letters: Schema.Array(Schema.String), delivery: Schema.String,
-  provenance: Schema.Struct({ code_sha: Schema.String, agents: Schema.Record(Schema.String, Schema.Struct({ model: Schema.String, effort: Schema.NullOr(Schema.String), instructions_addendum: Schema.optional(Schema.String) })) }),
-  agents: Schema.Record(Schema.String, Schema.Struct({ moves: Schema.Int, reminders: Schema.Int, interventions: Schema.Int })),
-});
-
-const validateManifest = Schema.decodeUnknownResult(Schema.fromJsonString(ValidationManifest));
+const validateManifest = Schema.decodeUnknownResult(Schema.fromJsonString(MatchManifest));
 
 /** Stops the import where two sources disagree, naming the match directory, what disagrees and both sides. */
 const conflict = (matchDir: string, what: string, dump: string): never => {
