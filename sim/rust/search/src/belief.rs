@@ -8,7 +8,7 @@ use buckshot_rules::{
 
 use crate::num::Real;
 use crate::position::{Board, Counter, GunView, Heard, MAX_SHELLS, Mode, Position, RoundView, SeatView, Stage};
-use crate::types::{Belief, World};
+use crate::types::{Belief, Refusal, World};
 
 const fn invert(shell: Shell) -> Shell {
     match shell {
@@ -370,12 +370,12 @@ fn normalize(worlds: Vec<World>) -> Vec<World> {
 /// # Errors
 ///
 /// The reason Bend's `Rejected` gives.
-pub fn build(position: &Position) -> Result<Belief, &'static str> {
+pub fn build(position: &Position) -> Result<Belief, Refusal> {
     let Position { config, board, log, me } = position;
     let seat = match board.stage {
         Stage::Playing { seat, mode: Mode::Idle } if board.gun.shown.live.saturating_add(board.gun.shown.blank) <= MAX_SHELLS => seat,
         Stage::Playing { .. } | Stage::Setup | Stage::Distributing | Stage::Loading | Stage::MatchOver => {
-            return Err("requires an Idle board and a shown load of at most ten shells");
+            return Err(Refusal::Board);
         }
     };
     let state = state_of(config, board, log, seat);
@@ -383,10 +383,10 @@ pub fn build(position: &Position) -> Result<Belief, &'static str> {
     let public = worlds(config, &decks, &orders_log(log, false), state);
     let private = worlds(config, &decks, &orders_log(log, true), state);
     if public.is_empty() {
-        return Err("public log has no consistent shell/deck belief");
+        return Err(Refusal::NoPublicBelief);
     }
     if private.is_empty() {
-        return Err("private log has no consistent shell/deck belief");
+        return Err(Refusal::NoPrivateBelief);
     }
     Ok(Belief {
         public: normalize(public),

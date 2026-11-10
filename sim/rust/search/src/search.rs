@@ -25,7 +25,7 @@ use crate::memo::{Kind, Stored, Tally, hash};
 #[cfg(feature = "f32")]
 use crate::num::len_u64;
 use crate::num::{Real, len_u32};
-use crate::types::{Analysed, Analysis, Belief, Limits, Line, Memo, Reach, Reload, World};
+use crate::types::{Analysed, Analysis, Belief, Limits, Line, Memo, Pruning, Reach, Refusal, Reload, World};
 
 mod bounded;
 
@@ -131,12 +131,9 @@ struct Buffers {
 }
 
 impl Buffers {
-    /// An out with what the move's notes (if `notes`) and the phone's draw's notes (if `later`) showed.
-    fn out(&mut self, me: Seat, world: World, notes: bool, later: bool) -> Out {
-        let parts: [&[Note]; 2] = [
-            if notes { self.notes.as_slice() } else { &[] },
-            if later { self.later.as_slice() } else { &[] },
-        ];
+    /// An out with what the move's notes and the phone's draw's notes showed.
+    fn out(&mut self, me: Seat, world: World) -> Out {
+        let parts = [self.notes.as_slice(), self.later.as_slice()];
         let public = pushed(&mut self.seen, |into| {
             for part in parts {
                 seen(part, me, false, into);
@@ -156,25 +153,26 @@ impl Buffers {
     }
 
     /// `settle`: a move ends at a choice, a draw or the end of the round;
-    /// only the phone's draw is expanded. `stepped` says whether
-    /// [`Buffers::notes`] hold the move's notes.
-    fn settle(&mut self, config: &Config, me: Seat, world: World, stepped: bool, outs: &mut Vec<Out>) {
+    /// only the phone's draw is expanded. [`Buffers::notes`] hold the move's
+    /// notes, none if no move was played.
+    fn settle(&mut self, config: &Config, me: Seat, world: World, outs: &mut Vec<Out>) {
         if let Some((Label::PhoneIndex, range)) = draw_request(config, &world.state) {
             let count = range.extra.wrapping_add(2);
             let weight = world.weight.div(Real::from_u32(count));
             for k in (0..count).rev() {
-                let out = match answer_into(config, &world.state, k, &mut self.later) {
-                    Some(state) => {
-                        self.overflow |= self.later.truncated();
-                        let won = round_won(self.later.as_slice());
-                        self.out(me, World { state, weight, won }, stepped, true)
-                    }
-                    None => self.out(me, World { weight, ..world }, stepped, false),
+                let out = if let Some(state) = answer_into(config, &world.state, k, &mut self.later) {
+                    self.overflow |= self.later.truncated();
+                    let won = round_won(self.later.as_slice());
+                    self.out(me, World { state, weight, won })
+                } else {
+                    self.later.clear();
+                    self.out(me, World { weight, ..world })
                 };
                 outs.push(out);
             }
         } else {
-            let out = self.out(me, world, stepped, false);
+            self.later.clear();
+            let out = self.out(me, world);
             outs.push(out);
         }
     }
@@ -185,18 +183,18 @@ impl Buffers {
         let mut menu = None;
         for world in worlds {
             let answer = answer_reusing(config, &world.state, index, &mut menu);
-            match answer.map(|answer| step_into(config, world.state, answer, &mut self.notes)) {
-                Some(state) => {
-                    self.overflow |= self.notes.truncated();
-                    let won = round_won(self.notes.as_slice());
-                    let after = World {
-                        state,
-                        weight: world.weight,
-                        won,
-                    };
-                    self.settle(config, me, after, true, outs);
-                }
-                None => self.settle(config, me, *world, false, outs),
+            if let Some(state) = answer.map(|answer| step_into(config, world.state, answer, &mut self.notes)) {
+                self.overflow |= self.notes.truncated();
+                let won = round_won(self.notes.as_slice());
+                let after = World {
+                    state,
+                    weight: world.weight,
+                    won,
+                };
+                self.settle(config, me, after, outs);
+            } else {
+                self.notes.clear();
+                self.settle(config, me, *world, outs);
             }
         }
     }
@@ -356,8 +354,6 @@ struct Scratch {
 }
 
 /// A search whose answers' notes outgrew their buffer, whose values are therefore not Bend's.
-const OVERFLOW: &str = "an answer's notes outgrew their buffer";
-
 struct Search<'a> {
     config: &'a Config,
     me: Seat,
@@ -707,10 +703,6 @@ impl Search<'_> {
     }
 }
 
-fn invalid(reason: &'static str, nodes: u64) -> Analysis {
-    Analysis::Invalid { reason, nodes }
-}
-
 /// The first line with the highest score, and its place.
 fn best_line(lines: &[Line]) -> Option<(usize, &Line)> {
     lines.iter().enumerate().fold(None, |best, (j, line)| match best {
@@ -721,10 +713,10 @@ fn best_line(lines: &[Line]) -> Option<(usize, &Line)> {
 
 fn analysed(lines: Vec<Line>, tally: &Tally, depth: u32, limited: bool) -> Analysis {
     let Some((_, best)) = best_line(&lines) else {
-        return invalid("no legal move", tally.nodes);
+        return Err(Refusal::NoLegalMove { nodes: tally.nodes });
     };
     let (index, score) = (best.index, best.score);
-    Analysis::Analysed(Analysed {
+    Ok(Analysed {
         lines,
         best: index,
         score,
@@ -737,13 +729,14 @@ fn analysed(lines: Vec<Line>, tally: &Tally, depth: u32, limited: bool) -> Analy
 
 fn limited(completed: Analysis, tally: &Tally) -> Analysis {
     match completed {
-        Analysis::Analysed(done) => Analysis::Analysed(Analysed {
+        Ok(done) => Ok(Analysed {
             nodes: tally.nodes,
             limited: true,
             cached: tally.cached,
             ..done
         }),
-        Analysis::Invalid { reason, .. } => invalid(reason, tally.nodes),
+        Err(Refusal::NoLegalMove { .. }) => Err(Refusal::NoLegalMove { nodes: tally.nodes }),
+        Err(refusal) => Err(refusal),
     }
 }
 
@@ -769,7 +762,11 @@ pub(crate) enum Mode {
     Compat,
     /// The box search, pruned or not, the chosen move (a menu index) searched
     /// exactly, gathering the decision keys of its deepest iteration with `stats`.
-    Bounded { prune: bool, chosen: Option<u32>, stats: bool },
+    Bounded {
+        pruning: Pruning,
+        chosen: Option<u32>,
+        stats: bool,
+    },
 }
 
 /// A built belief's analysis under `mode`, with its key stats if asked for.
@@ -783,14 +780,14 @@ pub(crate) fn run(
 ) -> (Analysis, Option<KeyStats>) {
     let (reload, memo) = leaves;
     let Some(first) = belief.public.first() else {
-        return (invalid("public log has no consistent shell/deck belief", 0), None);
+        return (Err(Refusal::NoPublicBelief), None);
     };
     let menu = match request(config, &first.state) {
         Request::Choose(menu) => menu,
-        Request::Draw { .. } | Request::Finished | Request::Stuck => return (invalid("the position is not a choice", 0), None),
+        Request::Draw { .. } | Request::Finished | Request::Stuck => return (Err(Refusal::NotAChoice), None),
     };
     if menu.seat() != belief.me {
-        return (invalid("it is not this player's turn", 0), None);
+        return (Err(Refusal::NotMyTurn), None);
     }
     // `fuel`: Bend's Nat cannot overflow; a budget whose fuel outgrows u64 is refused.
     #[cfg(feature = "f32")]
@@ -798,7 +795,7 @@ pub(crate) fn run(
         #[cfg(feature = "f32")]
         Mode::Compat => match limits.budget.checked_mul(8).and_then(|fuel| fuel.checked_add(64)) {
             Some(fuel) => fuel,
-            None => return (invalid("the budget's fuel outgrows 64 bits", 0), None),
+            None => return (Err(Refusal::Fuel), None),
         },
         Mode::Bounded { .. } => 0,
     };
@@ -821,7 +818,7 @@ pub(crate) fn run(
         deal: DealScratch::default(),
         boxes: Vec::new(),
         stats: matches!(mode, Mode::Bounded { stats: true, .. }).then(KeyStats::default),
-        prune: matches!(mode, Mode::Bounded { prune: true, .. }),
+        prune: matches!(mode, Mode::Bounded { pruning: Pruning::On, .. }),
     };
     let public = pushed(&mut search.worlds, |into| into.extend_from_slice(&belief.public));
     let private = pushed(&mut search.worlds, |into| into.extend_from_slice(&belief.private));
@@ -832,7 +829,7 @@ pub(crate) fn run(
         Mode::Bounded { chosen, .. } => search.bounded_root(limits.depth, (public, private), choices, chosen),
     };
     if search.scratch.buffers.overflow {
-        return (invalid(OVERFLOW, search.tally.nodes), search.stats);
+        return (Err(Refusal::NotesOverflow { nodes: search.tally.nodes }), search.stats);
     }
     (analysis, search.stats)
 }
@@ -920,8 +917,7 @@ pub(crate) mod tests {
                 me,
                 round: 0,
             };
-            let Analysis::Analysed(done) = analyse_belief(&config, &belief, Limits { depth: 4, budget: 20_000 }, Reload::Static, Memo::Off)
-            else {
+            let Ok(done) = analyse_belief(&config, &belief, Limits { depth: 4, budget: 20_000 }, Reload::Static, Memo::Off) else {
                 return Err(RuleError::Config("the fixture should analyse"));
             };
             let at = |own: bool| {

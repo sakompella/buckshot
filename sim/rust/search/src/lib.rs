@@ -44,4 +44,4 @@ pub use search::KeyStats;
 #[cfg(feature = "f32")]
 pub use searcher::Compat;
 pub use searcher::{BoundedV1, InfoSet, Searcher, analyse_batch};
-pub use types::{Analysed, Analysis, Cached, Level, Limits, Line, Memo, Reach, Reload};
+pub use types::{Analysed, Analysis, Cached, Limits, Line, Memo, Pruning, Reach, Refusal, Reload};

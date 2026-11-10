@@ -9,7 +9,7 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use crate::belief::build;
 use crate::position::{ParseError, Position, parse};
 use crate::search::{KeyStats, Mode, run};
-use crate::types::{Analysis, Limits, Memo, Reload};
+use crate::types::{Analysis, Limits, Memo, Pruning, Refusal, Reload};
 
 /// What the mover knows: the config, the board as the mover sees it, the
 /// mover's log and seat. Built only from the position's number line, which
@@ -38,6 +38,10 @@ impl InfoSet {
 /// A search over an information set.
 pub trait Searcher: Sync {
     /// The analysis of `info` to `limits.depth` decisions within `limits.budget` nodes.
+    ///
+    /// # Errors
+    ///
+    /// The [`Refusal`] of a position the search cannot analyse.
     fn analyse(&self, info: &InfoSet, limits: Limits) -> Analysis;
 }
 
@@ -60,7 +64,7 @@ pub struct Compat<'a> {
 #[derive(Clone, Copy, Debug)]
 pub struct BoundedV1<'a> {
     pub reload: Reload,
-    pub prune: bool,
+    pub pruning: Pruning,
     pub pool: Option<&'a ThreadPool>,
 }
 
@@ -75,21 +79,17 @@ fn analyse_in(
     let position = &info.position;
     match leaves.0 {
         Reload::Static => {}
-        Reload::Sampled { count: 0 } => return (refused("the sampled leaf needs at least one deal"), None),
+        Reload::Sampled { count: 0 } => return (Err(Refusal::NoDeals), None),
         Reload::Sampled { .. } => {
             if position.config.table() != Table::TwoSeats {
-                return (refused("a leaf that deals the reload takes two seats only"), None);
+                return (Err(Refusal::SampledNeedsTwoSeats), None);
             }
         }
     }
     match build(position) {
         Ok(belief) => run(&position.config, &belief, limits, leaves, pool, mode),
-        Err(reason) => (refused(reason), None),
+        Err(refusal) => (Err(refusal), None),
     }
-}
-
-const fn refused(reason: &'static str) -> Analysis {
-    Analysis::Invalid { reason, nodes: 0 }
 }
 
 #[cfg(feature = "f32")]
@@ -106,12 +106,25 @@ impl BoundedV1<'_> {
     #[cfg(not(feature = "f32"))]
     pub const ID: &'static str = "bounded-v1-f64";
 
-    /// [`Searcher::analyse`] with the chosen move (a menu index) searched
-    /// exactly and, with `stats`, the decision keys its deepest iteration visited.
-    #[must_use]
-    pub fn analyse_chosen(&self, info: &InfoSet, limits: Limits, chosen: Option<u32>, stats: bool) -> (Analysis, Option<KeyStats>) {
+    /// [`Searcher::analyse`] with the chosen move (a menu index) searched exactly.
+    ///
+    /// # Errors
+    ///
+    /// As [`Searcher::analyse`].
+    pub fn analyse_chosen(&self, info: &InfoSet, limits: Limits, chosen: Option<u32>) -> Analysis {
+        self.analyse_in(info, limits, chosen, false).0
+    }
+
+    /// [`BoundedV1::analyse_chosen`] and the decision keys its deepest
+    /// iteration visited (none for a refused position).
+    pub fn analyse_with_stats(&self, info: &InfoSet, limits: Limits, chosen: Option<u32>) -> (Analysis, KeyStats) {
+        let (analysis, stats) = self.analyse_in(info, limits, chosen, true);
+        (analysis, stats.unwrap_or_default())
+    }
+
+    fn analyse_in(&self, info: &InfoSet, limits: Limits, chosen: Option<u32>, stats: bool) -> (Analysis, Option<KeyStats>) {
         let mode = Mode::Bounded {
-            prune: self.prune,
+            pruning: self.pruning,
             chosen,
             stats,
         };
@@ -121,7 +134,7 @@ impl BoundedV1<'_> {
 
 impl Searcher for BoundedV1<'_> {
     fn analyse(&self, info: &InfoSet, limits: Limits) -> Analysis {
-        self.analyse_chosen(info, limits, None, false).0
+        self.analyse_chosen(info, limits, None)
     }
 }
 

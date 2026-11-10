@@ -244,7 +244,7 @@ pub struct Notes {
 }
 
 impl Notes {
-    pub(crate) fn clear(&mut self) {
+    pub fn clear(&mut self) {
         self.notes.clear();
         self.truncated = false;
     }
