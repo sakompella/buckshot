@@ -408,6 +408,7 @@ class Wrap:
             ("doc-leaderboard", self.doc("leaderboard", "results.md", *dbs)),
             ("doc-regret", self.doc("regret", f"{a}/regret.md", *derived)),
             ("doc-by_round", self.doc("by_round", f"{a}/regret.md", *dbs, *derived)),
+            ("doc-round_improvement", self.doc("round_improvement", f"{a}/regret.md", *dbs, *derived, "--mistakes", str(self.derived / "certain-mistakes.sqlite"))),
             ("doc-patterns_regret", self.doc("patterns_regret", f"{a}/patterns.md", *derived)),
             ("doc-certain_mistakes", self.doc("certain_mistakes", f"{a}/certain-mistakes.md", *derived)),
             ("doc-net_points", self.doc("net_points", f"{a}/net-points.md", *dbs, *derived)),
