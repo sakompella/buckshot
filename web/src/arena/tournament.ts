@@ -251,7 +251,8 @@ export const botEntrant = (config: TournamentConfig, name: string): (typeof BOTS
 };
 
 /** The endpoint a model entrant plays through. */
-const endpointOf = (config: TournamentConfig, name: string) => config.endpoints[modelEntrant(config, name)?.endpoint ?? ""];
+/** The endpoint a model entrant plays through. */
+export const endpointOf = (config: TournamentConfig, name: string) => config.endpoints[modelEntrant(config, name)?.endpoint ?? ""];
 
 /** Per-agent account ids fixed for one match, absent for endpoints without a pool. */
 export type MatchAccounts = Readonly<Record<string, string>>;
