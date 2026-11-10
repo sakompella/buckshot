@@ -7,7 +7,7 @@ import { AgentCall, AgentReply, type MatchSession, runTool } from "./agent/tools
 import type { AnswerError, Game } from "./bend.ts";
 import { GameEvent, type Seat, SEATS_BY_TABLE, type SeatCount } from "./domain.ts";
 import { aiPrompt, aiStep, begin, type Controller, controllerOf, isAi, play, type Progress } from "./driver.ts";
-import { Message, type Model, type Session, SPEED_FACTOR, type Viewer } from "./model.ts";
+import { Message, type Model, ROUND_BEAT_MS, type Session, SPEED_FACTOR, type Viewer } from "./model.ts";
 import { rosterOf } from "./players.ts";
 import { seedRng } from "./rng.ts";
 import { describeError } from "./text.ts";
@@ -143,7 +143,7 @@ export const update = (model: Model, message: Message): Return =>
     }),
     ToggledItems: () => ({ model: modifyFields(model, { setup: (setup) => ({ ...setup, isItemsEnabled: !setup.isItemsEnabled }) }) }),
     UpdatedSeed: ({ value }) => ({
-      model: modifyFields(model, { setup: (setup) => ({ ...setup, seed: Option.getOrElse(Option.filter(Option.some(Number.parseInt(value, 10)), Number.isSafeInteger), () => setup.seed) }) }),
+      model: modifyFields(model, { setup: (setup) => ({ ...setup, seed: Option.getOrElse(Option.filter(Option.some(value.trim() === "" ? Number.NaN : Number(value)), Number.isSafeInteger), () => setup.seed) }) }),
     }),
     ClickedNewMatch: () => startMatch(model),
     ClickedLeaveMatch: () => ({ model: modifyFields(model, { maybeMatch: () => Option.none(), maybeError: () => Option.none() }) }),
@@ -188,7 +188,7 @@ const pauseAfter = (event: GameEvent): number =>
     event,
     {
       Loaded: () => 2600,
-      RoundWon: () => 4400,
+      RoundWon: () => ROUND_BEAT_MS,
       Fired: () => 2200,
       Used: () => 1000,
       Ejected: () => 1000,

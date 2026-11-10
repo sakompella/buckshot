@@ -4,7 +4,7 @@ import type { Document, Html, HtmlBuilder } from "foldkit/html";
 import type { Prompt } from "./bend.ts";
 import { GameEvent, Move, type Seat, SEATS_BY_TABLE, seatsOut } from "./domain.ts";
 import { aiPrompt, controllerOf, promptsOf } from "./driver.ts";
-import { latestLearned, latestStep, Message, type Model, type Session, type Speed, SPEED_FACTOR, type Viewer } from "./model.ts";
+import { latestLearned, latestStep, Message, type Model, ROUND_BEAT_MS, type Session, type Speed, SPEED_FACTOR, type Viewer } from "./model.ts";
 import { rosterOf } from "./players.ts";
 import { boardMoves, nearSeat, promptMoves, type TableMove, viewerPrompt } from "./board.ts";
 import { hurtView, type SeatTable, tableView } from "./board-view.ts";
@@ -15,9 +15,7 @@ type H = HtmlBuilder<Message>;
 
 const cash = (amount: number): string => `$${amount.toLocaleString("en-US")}`;
 
-/** The round-over beat and the load reveal, as long as their CSS animations. */
-const ROUND_OVER_MS = 4400;
-
+/** The load reveal, as long as its CSS animation. */
 const REVEAL_MS = 2600;
 
 // SETUP
@@ -155,7 +153,7 @@ const secretView = (h: H, match: Session): Html =>
       onNone: () => h.empty,
       onSome: ({ index, learned }) => {
         const step = latestStep(match).map(({ event }) => event);
-        const waitMs = (step.some(GameEvent.guards.RoundWon) ? ROUND_OVER_MS : 0) + (step.some(GameEvent.guards.Loaded) ? REVEAL_MS : 0);
+        const waitMs = (step.some(GameEvent.guards.RoundWon) ? ROUND_BEAT_MS : 0) + (step.some(GameEvent.guards.Loaded) ? REVEAL_MS : 0);
 
         return h.keyed("p")(
           `secret-${index}`,
@@ -286,7 +284,7 @@ const matchView = (h: H, model: Model, match: Session): Html => {
 export const view = (model: Model, h: H): Document => ({
   title: "Buckshot table",
   body: h.main(
-    [h.Class("app"), h.Style({ "--pace": `${SPEED_FACTOR[model.speed]}` })],
+    [h.Class("app"), h.Style({ "--pace": `${SPEED_FACTOR[model.speed]}`, "--round-beat": `${ROUND_BEAT_MS * SPEED_FACTOR[model.speed]}ms` })],
     [Option.match(model.maybeMatch, { onNone: () => setupView(h, model), onSome: (match) => matchView(h, model, match) })],
   ),
 });

@@ -1,20 +1,22 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { basename, join } from "node:path";
+import { readdirSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
 import { parseArgs } from "node:util";
 
 import { Effect, Schema } from "effect";
 
-import { aliasOf, allTraffic, previewUrl, siteProblems, versionIdOf, WORKER } from "../src/deploy/online.ts";
+import { aliasOf, allTraffic, dataOf, previewUrl, siteProblems, uploadProblems, versionIdOf } from "../src/deploy/online.ts";
+import { WORKER } from "../src/deploy/worker.ts";
 import { runMain, ScriptError } from "../src/script.ts";
 
-// Deploys the online site in two steps (ADR-0050). `preview` uploads a Worker version without sending it traffic,
+// Deploys the online site in two steps (ADR-0050). Before any upload, `check` refuses a file in web/online that is not
+// part of the site and runs the privacy check on the data; `preview` runs it first, and `deploy:online` before its `cf deploy`. `preview` uploads a Worker version without sending it traffic,
 // serves it at https://<alias>-buckshot.<workers.dev subdomain>.workers.dev and checks it there. `promote` sends all
 // traffic, so buckshot.akompella.dev, to a version. Needs CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in the
 // environment (_work/.cloudflare-deploy.env) and must run under Node 22.23+ for `cf`, as in `nix develop`.
 
-const USAGE = "usage: bun scripts/deploy-online.ts preview [--alias <name>] | promote <version id>";
+const USAGE = "usage: bun scripts/deploy-online.ts check | preview [--alias <name>] | promote <version id>";
 
-const DATA = join(import.meta.dir, "../online/data");
+const ONLINE = join(import.meta.dir, "../online");
 
 const API = "https://api.cloudflare.com/client/v4";
 
@@ -62,7 +64,21 @@ const enablePreviews = Effect.gen(function* () {
   if (current?.previews_enabled !== true) yield* api(`/workers/scripts/${WORKER}/subdomain`, { method: "POST", body: JSON.stringify({ enabled: current?.enabled ?? false, previews_enabled: true }) });
 });
 
-const localFiles = (): ReadonlyMap<string, string> => new Map(readdirSync(DATA).map((file) => [basename(file, ".json"), readFileSync(join(DATA, file), "utf8")]));
+/** Every file Vite copies from web/online into the site, by path. */
+const onlineFiles = (): ReadonlyMap<string, string> =>
+  new Map(readdirSync(ONLINE, { recursive: true, withFileTypes: true }).filter((entry) => entry.isFile()).map((entry) => {
+    const path = join(entry.parentPath, entry.name);
+
+    return [relative(ONLINE, path), readFileSync(path, "utf8")] as const;
+  }));
+
+/** The export data, once web/online passes the checks for an upload. */
+const check = Effect.gen(function* () {
+  const online = onlineFiles();
+  const problems = uploadProblems(online);
+
+  return problems.length === 0 ? dataOf(online) : yield* Effect.fail(fail(`web/online must not be uploaded:\n${problems.join("\n")}`));
+});
 
 const preview = (label: string) =>
   Effect.gen(function* () {
@@ -70,7 +86,7 @@ const preview = (label: string) =>
 
     if (alias === undefined) return yield* Effect.fail(fail(`no usable preview alias in ${JSON.stringify(label)}`));
 
-    if (!existsSync(join(DATA, "manifest.json"))) return yield* Effect.fail(fail("web/online/data is missing; run the export first"));
+    const local = yield* check;
 
     yield* enablePreviews;
 
@@ -84,7 +100,7 @@ const preview = (label: string) =>
     if (subdomain === undefined) return yield* Effect.fail(fail("the account has no workers.dev subdomain"));
 
     const url = previewUrl(alias, subdomain);
-    const problems = yield* Effect.tryPromise({ try: () => siteProblems(fetch, url, localFiles()), catch: (error) => fail(String(error)) });
+    const problems = yield* Effect.tryPromise({ try: () => siteProblems(fetch, url, local), catch: (error) => fail(String(error)) });
 
     console.log(JSON.stringify({ versionId, url, problems }));
 
@@ -97,6 +113,8 @@ const promote = (versionId: string) =>
 const program = Effect.gen(function* () {
   const parsed = yield* Effect.try({ try: () => parseArgs({ allowPositionals: true, options: { alias: { type: "string" } } }), catch: () => fail(USAGE) });
   const [command, version] = parsed.positionals;
+
+  if (command === "check") return yield* check.pipe(Effect.as(0));
 
   if (command === "preview") return yield* preview(parsed.values.alias ?? `preview-${new Date().toISOString().slice(0, 10)}`);
 

@@ -14,7 +14,7 @@ The arena plays language models against each other at the Buckshot table through
 - **Config:** a tournament is a JSON config, as in `web/tournaments/`. It names the endpoints, the entrants (model and effort, or a bot) and the pairings.
   - Seeds are either the config seed plus the block, or a list per pairing.
   - `cohort` (optional) names the group the analysis compares the tournament's matches in, such as `"tournament 8"`; the leaderboard titles it by that name. The importer stores it on each match (`matches.cohort`) and stops on a tournament without one; tournaments before it was added get theirs from `LEGACY_COHORTS` in `web/src/analysis/import.ts`. All phases of one run share one cohort. The wrap-up command (below) stamps it into the run dirs if a config lacked it.
-  - An engine entrant, `{"engine": {"depth": 6, "budget": 20000}}`, is the Rust search at that strength (`web/src/arena/engine.ts`): a fixed yardstick that sits at seat `Engine/<depth>/<budget>`. With `"reload": "sampled"` (seat `Engine/<depth>/<budget>/sampled`) a line that reaches a reload is valued over sampled deals instead of statically; that engine is much stronger (about 70% against DoN at depth 6, against about 54% with static reload) and takes about 0.2 s a move. It decides from the player's own log and the public board, as the regret scorer does, values every move unpruned (static reload unless sampled) and plays the first best one, in about 20 ms a move. It needs cargo, or `$BUCKSHOT_SEARCH` naming a buckshot-search built with `f64,seats-2`. Its root moves must be Bend's menu: if they differ, or the search fails, the match stops and the position, the menu and the search output are written to `engine-fault-turn-<turn>-<player>.json` in the match directory. A pairing needs at least one model or engine; `tournaments/engine-anchors-selfplay.json` plays engines and DoN with no model calls.
+  - An engine entrant, `{"engine": {"depth": 6, "budget": 20000}}`, is the Rust search at that strength (`web/src/arena/engine.ts`): a fixed yardstick that sits at seat `Engine/<depth>/<budget>`. With `"reload": "sampled"` (seat `Engine/<depth>/<budget>/sampled`) a line that reaches a reload is valued over sampled deals instead of statically; that engine is much stronger (about 70% against DoN at depth 6, against about 54% with static reload) and takes about 0.2 s a move. It decides from the player's own log and the public board, as the regret scorer does, values every move unpruned (static reload unless sampled) and plays the first best one, in about 20 ms a move. It needs cargo, or `$BUCKSHOT_SEARCH` naming a buckshot-search built with `f64,seats-2`, so it plays two-seat pairings only: the config refuses an engine in a wider one. Its root moves must be Bend's menu: if they differ, or the search fails, the match stops and the position, the menu and the search output are written to `engine-fault-turn-<turn>-<player>.json` in the match directory. A pairing needs at least one model or engine; `tournaments/engine-anchors-selfplay.json` plays engines and DoN with no model calls.
   - A model entrant may set `instructionsAddendum`: text appended to the shared instructions for that entrant's agent only (ADR-0048). Give such an entrant its own name, as in `astra-recall.json`, and the manifest records the text.
   - Use 10 seeds, each played in both seat orders: 20 matches per pairing.
   - The `3000, 3010–3018` list is balanced by first shooter.
@@ -28,6 +28,7 @@ The arena plays language models against each other at the Buckshot table through
   - `--dry-run` prints the schedule.
 - **Flags:**
   - `--limit N`: plays at most N matches, the first unfinished in schedule order. The runner exits 1 while matches remain.
+  - `--first N`: plays only the first N matches of the schedule, and exits 0 once they are finished.
   - `--cap <model>=N`, `--last <model>`, `--skip <entrant>`, `--forget-cooldown <model>`.
   - `--prefer-account <id>`, repeated in order of preference: a new match pins to these accounts first when accounts are equally loaded. With `--parallel 1 --limit 1`, rerun with a fresh order before each match, such as the account whose window resets first.
   - `--code <code_sha>=<web dir>`: see code versions below.
@@ -54,7 +55,9 @@ The Claude subscription is shared with other work, so long runs go through `tool
 - the least-used Claude account reaches the Claude line (default: 0.78 to start, 0.80 while playing);
 - the runner fails;
 - `tools/arena/check_matches.py` finds a fallback move, a failed audit flag or an unexpected endpoint;
-- the first `CAP` matches are finished.
+- the first `CAP` matches are finished (the runner's `--first`).
+
+It exits 0 on the Claude line or a finished cap, and 1 on a failed runner or check. The checker also runs after the runner exits, and before a finished run ends.
 
 Codex isn't checked there: use account pins, so a full Codex account pauses only its own matches.
 
@@ -104,6 +107,8 @@ By hand, from `web/` in `nix develop`, with the token loaded (`set -a; . ../_wor
 - `bun run deploy:preview --alias <name>` uploads, checks and prints `{"versionId", "url", "problems"}`; exit 1 when a check fails. The preview URL is `https://<alias>-buckshot.<workers.dev subdomain>.workers.dev`. It is public and holds the same aggregates as the live site. An alias is lowercase letters, digits and dashes, starting with a letter; reusing one moves it to the new version.
 - `bun run deploy:promote <versionId>` sends all traffic to that version.
 - `bun run deploy:online` is the old one-step deploy to the live domain, with no preview.
+
+Every upload first runs `bun scripts/deploy-online.ts check` on `web/online`, so nothing leaves the machine when it fails: it refuses any file other than `_headers` and the export's `data/*.json`, and runs the privacy scan on the data.
 
 `_work/.cloudflare-deploy.env` (mode 600, gitignored) holds `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`; the token is `buckshot-deploy`, without expiry, and can only edit Workers scripts on the account, read account settings, and read the zone and edit its Worker routes. Without that file, `cf auth login` (OAuth, expires daily) also works for the by-hand commands. To replace the token: `cf accounts tokens roll <token id>` (the id is `CLOUDFLARE_TOKEN_ID` in the file) or create a new one with the same permission groups, and update the file. `cf` needs Node, so run everything under `nix develop`.
 

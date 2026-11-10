@@ -20,6 +20,8 @@ const program = Effect.gen(function* () {
     catch: (cause) => new ScriptError({ message: `${bend} did not run: ${String(cause)}`, exitCode: 1 }),
   });
 
+  if (build.exitCode === null) return yield* Effect.fail(new ScriptError({ message: `${bend} was stopped by ${String(build.signalCode)}; generated/rules.mjs is not rebuilt`, exitCode: 1 }));
+
   return build.exitCode;
 });
 

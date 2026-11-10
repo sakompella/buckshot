@@ -3,7 +3,8 @@ import * as gs from "@hegeldev/hegel/generators";
 import { expect, test } from "bun:test";
 
 import { AGGREGATE_NAMES } from "../src/arena-viewer/aggregates.ts";
-import { aliasOf, allTraffic, previewUrl, siteProblems, versionIdOf, WORKER } from "../src/deploy/online.ts";
+import { aliasOf, allTraffic, previewUrl, siteProblems, uploadProblems, versionIdOf } from "../src/deploy/online.ts";
+import { WORKER } from "../src/deploy/worker.ts";
 
 test("an alias is a DNS-safe label that fits beside the worker name, or nothing", () =>
   hegel.test((tc) => {
@@ -56,4 +57,13 @@ test("a missing page, a data file that differs and a file that is not JSON are r
   expect(problems).toContain("/arena: status 404");
   expect(problems).toContain("/data/odds.json: differs from the exported file");
   expect(problems.some((problem) => problem.startsWith("/data/items.json: status 200, text/html"))).toBe(true);
+});
+
+test("a file in web/online beside the site's own is refused before an upload", () => {
+  const online = new Map([["_headers", ""], ...[...LOCAL].map(([name, text]) => [`data/${name}.json`, text] as const), ["data/private-debug.json", "{}"], ["notes.txt", ""]]);
+
+  const problems = uploadProblems(online);
+
+  expect(problems).toContain("notes.txt: not part of the site");
+  expect(problems).toContain("private-debug: not an export file");
 });

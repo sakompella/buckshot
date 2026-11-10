@@ -17,6 +17,8 @@ scale=1
 [ "$tables" = 2 ] && scale=3
 
 mkdir -p "$dir"
+# The synth script runs from web/, so a relative DIR is resolved here, from the caller's directory.
+dir=$(cd "$dir" && pwd)
 cd "$root/web"
 nice -n 10 bun run rules >/dev/null
 synth() {

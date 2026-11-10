@@ -200,11 +200,15 @@ class Settings:
     jobs: int = 4
 
 
-def open_out(path: Path) -> sqlite3.Connection:
+def open_out(path: Path, group: tuple) -> sqlite3.Connection:
+    """The regret file for `group`; one that holds another run stops before any scoring, since a file holds one run."""
     path.parent.mkdir(parents=True, exist_ok=True)
     out = sqlite3.connect(path)
     out.execute(CREATE_REGRET)
     out.execute(CREATE_BUILD)
+    others = [run for run in out.execute("SELECT DISTINCT evaluator, max_depth, budget, reload, samples FROM regret") if run != group]
+    if others:
+        raise SystemExit(f"{path} holds the run {others}, not {group} (evaluator, max_depth, budget, reload, samples); a changed evaluator or setting needs a new file.")
     return out
 
 
@@ -214,7 +218,8 @@ def score(db: Path, out: Path | None, sampled_out: Path | None, checkout: Path, 
     evaluator = evaluator_id(rust)
     runs = [(path, (evaluator, settings.depth, settings.budget, reload, samples)) for path, reload, samples in ((out, "static", 0), (sampled_out, "sampled", settings.samples)) if path is not None]
     source = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
-    todo = [(open_out(path), group, set(wanted(source, open_out(path), group, matches, decisions))) for path, group in runs]
+    outs = [(open_out(path, group), group) for path, group in runs]
+    todo = [(conn, group, set(wanted(source, conn, group, matches, decisions))) for conn, group in outs]
     players = {(m, o): p for m, o, p in source.execute("SELECT match_id, ordinal, player FROM decisions WHERE by_whom = 'agent'")}
     source.close()
     union = sorted(set().union(*(keys for *_, keys in todo)))

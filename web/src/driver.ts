@@ -51,6 +51,10 @@ const absorb = (progress: Progress, step: Step, rng: Rng): Progress => ({
   ais: progress.ais.map((ai, seat) => Option.map(ai, ({ mind, coins }) => ({ mind: hearNotes(mind, step.notes, SEATS[seat] ?? 0), coins }))),
 });
 
+/** A loop guard ran out: the rules never handed the game back. The dump is enough to replay it from the seed. */
+const stuck = (what: string, progress: Progress): Error =>
+  new Error(`${what} without reaching a seat's move: ${JSON.stringify({ ticket: progress.game.ticket, pending: progress.game.pending, seed: progress.seed, events: progress.events.length, lastEvents: progress.events.slice(-10) })}`);
+
 /** Answers every Draw from the Rng until the game needs a seat's move or is over. */
 export const settleDraws = (start: Progress): Result.Result<Progress, AnswerError> => {
   let progress = start;
@@ -68,7 +72,7 @@ export const settleDraws = (start: Progress): Result.Result<Progress, AnswerErro
     progress = absorb(progress, answered.success, rng);
   }
 
-  return Result.succeed(progress);
+  throw stuck(`${DRAW_LIMIT} draws in a row`, progress);
 };
 
 export const begin = (table: SeatCount, items: boolean, match: number, rng: Rng, controllers: ReadonlyArray<Controller>, seed: number): Result.Result<Progress, AnswerError | BendContractError> =>
@@ -123,5 +127,5 @@ export const playAis = (start: Progress, controllers: ReadonlyArray<Controller>)
     progress = stepped.success;
   }
 
-  return Result.succeed(progress);
+  throw stuck(`${AI_MOVE_LIMIT} AI moves in a row`, progress);
 };

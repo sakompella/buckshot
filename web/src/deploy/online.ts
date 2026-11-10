@@ -1,10 +1,8 @@
-import { AGGREGATE_NAMES } from "../arena-viewer/aggregates.ts";
 import { privacyViolations } from "../arena-viewer/privacy.ts";
+import { WORKER } from "./worker.ts";
 
 // The checks a Worker version passes at its preview URL before it takes the live domain (ADR-0050). Pure over a
 // `fetch`, so they run against the preview, the live site, or a stub.
-
-export const WORKER = "buckshot";
 
 const ALIAS_PATTERN = /^[a-z][a-z0-9-]*$/;
 
@@ -42,13 +40,29 @@ const pageProblem = async (fetcher: Fetch, base: string, path: string): Promise<
   return text.includes('<div id="root"') ? undefined : "no app shell";
 };
 
-/** What is wrong with the site at `base`, empty when it may go live. The data it serves must equal `local` byte for byte and pass the privacy check. */
+const DATA_FILE = /^data\/([^/]+)\.json$/;
+
+/** The export files in `web/online`, by name, from its files by path. */
+export const dataOf = (online: ReadonlyMap<string, string>): ReadonlyMap<string, string> =>
+  new Map([...online].flatMap(([path, text]) => {
+    const name = DATA_FILE.exec(path)?.[1];
+
+    return name === undefined ? [] : [[name, text] as const];
+  }));
+
+/** What stops `web/online` (its files by path) from being uploaded, empty when nothing: a file that is neither `_headers` nor export data, and the privacy check on the data. */
+export const uploadProblems = (online: ReadonlyMap<string, string>): ReadonlyArray<string> => [
+  ...[...online.keys()].flatMap((path) => (path === "_headers" || DATA_FILE.test(path) ? [] : [`${path}: not part of the site`])),
+  ...privacyViolations(dataOf(online)),
+];
+
+/** What is wrong with the site at `base`, empty when it may go live. It must serve every file in `local` byte for byte, and they must pass the privacy check. */
 export const siteProblems = async (fetcher: Fetch, base: string, local: ReadonlyMap<string, string>): Promise<ReadonlyArray<string>> => {
   const pages = await Promise.all(PAGES.map(async (path) => lines(path, await pageProblem(fetcher, base, path))));
   const served = new Map<string, string>();
 
   const data = await Promise.all(
-    [...AGGREGATE_NAMES, "manifest"].map(async (name) => {
+    [...local.keys()].map(async (name) => {
       const response = await fetcher(`${base}/data/${name}.json`);
       const text = await response.text();
 
