@@ -4,7 +4,7 @@ import { expect, test } from "bun:test";
 import { Option } from "effect";
 
 import { configSummaries, ODDS_BINS, oddsBinOf, selfShotTallies } from "../src/arena-viewer/aggregates.ts";
-import { chamberPatterns, roundStory, ShellTracker, shotLineIn } from "../src/arena-viewer/analysis.ts";
+import { chamberPatterns, roundStory, ShellTracker } from "../src/arena-viewer/analysis.ts";
 import type { Seat, SeatRegret } from "../src/arena-viewer/api.ts";
 import { type BlockTally, blockRate, colorOf, fmtBytes, groupBy, labelOf, matchRows, quantile, regretStats, rng, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { bradleyTerry, type Game, heldOutRatings, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
@@ -14,6 +14,8 @@ import { rowsOf } from "../src/arena-viewer/page/matches.ts";
 import { modelStatsOf, ranksOf } from "../src/arena-viewer/page/derived.ts";
 import { inRankOrder } from "../src/arena-viewer/page/leaderboard.ts";
 import { FULL_N, shadeOf } from "../src/arena-viewer/page/heat.ts";
+import { GameEvent, type Seat as Socket, Secret } from "../src/domain.ts";
+import { rosterOf } from "../src/players.ts";
 import { AXES, frontierOf } from "../src/arena-viewer/page/scatter.ts";
 
 const PLAYERS = ["a", "b", "c", "d", "e"];
@@ -152,24 +154,26 @@ test("the block bootstrap's kept draws give the same interval as drawing afresh,
     { testCases: 30 },
   ));
 
+const fired = (shooter: Socket, target: Socket, shell: "Live" | "Blank"): GameEvent => GameEvent.cases.Fired.make({ shooter, target, shell, captured: "Single", applied: shell === "Live" ? 1 : 0, health: 3 });
+
 test("the shell tracker knows the chamber from a glass, a phone and the count", () => {
   const tracker = new ShellTracker();
 
-  tracker.event("The shotgun is loaded: 1 live, 2 blank.");
+  tracker.hear(GameEvent.cases.Loaded.make({ load: { live: 1, blank: 2 } }));
   expect(tracker.chamber()?.pLive).toBeCloseTo(1 / 3);
 
-  tracker.event("The chambered shell is blank.");
+  tracker.hear(Secret.cases.Glimpse.make({ shell: "Blank" }));
   expect(tracker.chamber()).toEqual({ known: "blank", by: "glass", pLive: 0 });
 
-  tracker.event("Player A shot Player B: blank.");
-  tracker.event("The 2nd shell is blank.");
+  tracker.hear(fired(0, 1, "Blank"));
+  tracker.hear(Secret.cases.Clue.make({ position: 2, shell: "Blank" }));
   expect(tracker.chamber()).toEqual({ known: "live", by: "count", pLive: 1 });
 
-  tracker.event("Player A inverted the chambered shell.");
+  tracker.hear(GameEvent.cases.Inverted.make({ seat: 0 }));
   expect(tracker.chamber()).toEqual({ known: "blank", by: "count", pLive: 0 });
 
-  tracker.event("Player A racked out a blank shell.");
-  tracker.event("Player A shot Player B: blank.");
+  tracker.hear(GameEvent.cases.Ejected.make({ seat: 0, shell: "Blank" }));
+  tracker.hear(fired(0, 1, "Blank"));
   expect(tracker.chamber()).toBeNull();
   expect(tracker.checks).toEqual({ ok: 3, bad: 0 });
 });
@@ -177,9 +181,9 @@ test("the shell tracker knows the chamber from a glass, a phone and the count", 
 test("shooting the opponent with a known blank is flagged on a load's last shell too, since a blank at oneself keeps the turn", () => {
   const tracker = new ShellTracker();
 
-  tracker.event("The shotgun is loaded: 1 live, 1 blank.");
-  tracker.event("Player A shot Player B: live.");
-  tracker.event("The chambered shell is blank.");
+  tracker.hear(GameEvent.cases.Loaded.make({ load: { live: 1, blank: 1 } }));
+  tracker.hear(fired(0, 1, "Live"));
+  tracker.hear(Secret.cases.Glimpse.make({ shell: "Blank" }));
 
   const chamber = tracker.chamber();
   const patterns = chamber === null ? [] : chamberPatterns(chamber, false, new Set(["Shoot yourself", "Shoot Player B"]), "Shoot Player B");
@@ -187,25 +191,22 @@ test("shooting the opponent with a known blank is flagged on a load's last shell
   expect(patterns.filter(([, isAvailable, isChosen]) => isAvailable && isChosen).map(([pattern]) => pattern)).toEqual(["knownBlankOpp", "glassBlankOpp"]);
 });
 
-test("the round story infers the last round's winner from final cash", () => {
-  const events = [
-    "Round 1 begins. Everyone has 2 health; Player B starts.",
-    "Player B wins the round and $10,000.",
-    "Round 2 begins. Everyone has 4 health; Player A starts.",
-    "Player A wins the round and $20,000.",
-    "Round 3 begins. Everyone has 5 health; Player A starts.",
+test("the round story reads each round's winner from the events, and is ok when every round has one and the prizes add up to the final cash", () => {
+  const events: ReadonlyArray<GameEvent> = [
+    GameEvent.cases.RoundBegan.make({ round: 0, health: 2, first: 1 }),
+    GameEvent.cases.RoundWon.make({ seat: 1, prize: 10_000 }),
+    GameEvent.cases.RoundBegan.make({ round: 1, health: 4, first: 0 }),
+    GameEvent.cases.RoundWon.make({ seat: 0, prize: 20_000 }),
+    GameEvent.cases.RoundBegan.make({ round: 2, health: 5, first: 0 }),
+    GameEvent.cases.RoundWon.make({ seat: 1, prize: 60_000 }),
   ];
 
-  expect(roundStory(events, new Map([["A", 20_000], ["B", 70_000]]))).toEqual({
-    starter: "B",
-    rounds: [
-      { winner: "B", prize: 10_000, inferred: false },
-      { winner: "A", prize: 20_000, inferred: false },
-      { winner: "B", prize: 60_000, inferred: true },
-    ],
-    ok: true,
-  });
-  expect(roundStory(events, new Map([["A", 30_000], ["B", 70_000]])).ok).toBe(false);
+  const roster = rosterOf([0, 1]);
+  const cash = new Map([["A", 20_000], ["B", 70_000]]);
+
+  expect(roundStory({ events, roster }, cash)).toEqual({ starter: "B", rounds: [{ winner: "B", prize: 10_000 }, { winner: "A", prize: 20_000 }, { winner: "B", prize: 60_000 }], ok: true });
+  expect(roundStory({ events, roster }, new Map([["A", 30_000], ["B", 70_000]])).ok).toBe(false);
+  expect(roundStory({ events: events.slice(0, -1), roster }, cash).ok).toBe(false);
 });
 
 const hsl = (hex: string) => {
@@ -284,7 +285,7 @@ test("pooled ratings cover every config of a completed match, over every tournam
     const [a, b] = PAIRINGS[index % PAIRINGS.length] ?? ["", ""];
     const aWins = random() < 0.5;
 
-    const story = { starter: "A", ok: true, rounds: [{ winner: aWins ? "A" : "B", prize: 1, inferred: false }] };
+    const story = { starter: "A", ok: true, rounds: [{ winner: aWins ? "A" : "B", prize: 1 }] };
 
     const split = (config: string, player: string, position: number) => {
       const [model = "", effort = ""] = config.split("-");
@@ -373,7 +374,7 @@ const playedRoundSeats = (seed: number, rounds: number, winnerRounds: number, is
     const [a, b] = PAIRINGS[index % PAIRINGS.length] ?? ["", ""];
     const aWins = random() < 1 / (1 + 10 ** (((strength.get(b) ?? 0) - (strength.get(a) ?? 0)) / 400));
     const winner = aWins ? "A" : "B";
-    const story = { starter: "A", ok: isStoryOk, rounds: Array.from({ length: rounds }, (_round, round) => ({ winner: round < winnerRounds ? winner : aWins ? "B" : "A", prize: 1, inferred: false })) };
+    const story = { starter: "A", ok: isStoryOk, rounds: Array.from({ length: rounds }, (_round, round) => ({ winner: round < winnerRounds ? winner : aWins ? "B" : "A", prize: 1 })) };
 
     const seatOf = (config: string, player: string, position: number): Seat => {
       const [model = "", effort = ""] = config.split("-");
@@ -431,7 +432,7 @@ test("a config's round share is the rounds it won over the rounds it played", ()
   }
 });
 
-const oneRoundWonBy = (winner: string) => ({ starter: "A", ok: true, rounds: [{ winner, prize: 1, inferred: false }] });
+const oneRoundWonBy = (winner: string) => ({ starter: "A", ok: true, rounds: [{ winner, prize: 1 }] });
 
 // Two-player matches of the "strong" config against the "weak" one, the strong one winning `strongWins` of `count`.
 const upsetSeats = (count: number, strongWins: number) =>
@@ -530,17 +531,6 @@ test("a heat cell grows brighter with its win share, and fades toward the page b
   expect(level(0.8, FULL_N - 1)).toBeLessThan(level(0.8, FULL_N));
   expect(level(0.8, 1)).toBeLessThan(level(0.8, FULL_N - 1));
   expect(level(0.8, FULL_N * 5)).toBe(level(0.8, FULL_N));
-});
-
-test("a shooter with no later window gets its shot line from the next window of another player, its last shot there", () => {
-  const windows = [
-    { player: "B", events: ["Player B shot Player A: blank."] },
-    { player: "A", events: ["Player B used handsaw.", "Player B shot Player A: live, 2 damage, 1 health left.", "Player A's turn."] },
-  ];
-
-  expect(shotLineIn("B", windows)).toBe("Player B shot Player A: live, 2 damage, 1 health left.");
-  expect(shotLineIn("B", windows.slice(0, 1))).toBeUndefined();
-  expect(shotLineIn("A", windows)).toBeUndefined();
 });
 
 test("a shot shows what its log says, and the last move of a completed match is live because only a live shell ends it", () => {

@@ -2,9 +2,11 @@ import * as hegel from "@hegeldev/hegel";
 import * as gs from "@hegeldev/hegel/generators";
 import { expect, test } from "bun:test";
 
-import { placedBy } from "../src/arena-viewer/analysis.ts";
+import { itemsOf } from "../src/arena-viewer/analysis.ts";
 import { behaviorBySeat, seatFates, sumFates } from "../src/arena-viewer/aggregates.ts";
 import { useShare } from "../src/arena-viewer/page/fates.ts";
+import { GameEvent } from "../src/domain.ts";
+import { rosterOf } from "../src/players.ts";
 
 const counts = (tc: hegel.TestCase) => Array.from({ length: 8 }, () => tc.draw(gs.integers({ minValue: 0, maxValue: 6 })));
 
@@ -31,13 +33,21 @@ test("a seat's own steals do not count as its items stolen", () => {
   ]);
 });
 
-test("a seat's copies come from the public placements, including those after its own last decision", () => {
-  const log = ["Player A placed beer in slot 1.", "Player B placed beer in slot 1.", "Player A drew an item.", "Player B placed handsaw in slot 2."];
-  const placed = placedBy(log);
+test("a seat's items come from every public placement and use, a steal counting for the seat that took the item", () => {
+  const events: ReadonlyArray<GameEvent> = [
+    GameEvent.cases.Placed.make({ seat: 0, slot: 0, item: "Beer" }),
+    GameEvent.cases.Placed.make({ seat: 1, slot: 0, item: "Beer" }),
+    GameEvent.cases.Granted.make({ seat: 0, item: "Saw" }),
+    GameEvent.cases.Placed.make({ seat: 1, slot: 1, item: "Saw" }),
+    GameEvent.cases.Used.make({ seat: 0, owner: 0, slot: 0, item: "Adrenaline" }),
+    GameEvent.cases.Used.make({ seat: 0, owner: 1, slot: 1, item: "Saw" }),
+    GameEvent.cases.Used.make({ seat: 1, owner: 1, slot: 0, item: "Beer" }),
+  ];
 
-  expect(placed.get("A")).toEqual([0, 0, 0, 1, 0, 0, 0, 0]);
-  expect(placed.get("B")).toEqual([0, 0, 1, 1, 0, 0, 0, 0]);
-  expect(() => placedBy(["Player A placed spork in slot 1."])).toThrow("spork");
+  const items = itemsOf({ events, roster: rosterOf([0, 1]) });
+
+  expect(items.get("A")).toEqual({ acquired: [0, 0, 0, 1, 0, 0, 0, 0], used: [0, 0, 0, 0, 0, 0, 0, 1], stolen: [0, 0, 1, 0, 0, 0, 0, 0] });
+  expect(items.get("B")).toEqual({ acquired: [0, 0, 1, 1, 0, 0, 0, 0], used: [0, 0, 0, 1, 0, 0, 0, 0], stolen: [0, 0, 0, 0, 0, 0, 0, 0] });
 });
 
 test("more copies used and stolen than received stops with the match and counts", () => {

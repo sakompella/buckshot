@@ -4,7 +4,7 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 
 import type { Call, MatchDetail, MoveRegret, Step } from "../api.ts";
 import { linScale, pressable } from "./charts.ts";
-import { baseName, CERTAIN_NAMES, colorOf, fmtCount, fmtPoints, fmtSec, fmtPct, fmtTime, fmtUsd, keyOf, labelOf, type MatchRow, sumOf, unique } from "./data.ts";
+import { baseName, CERTAIN_NAMES, colorOf, fmtCount, fmtPoints, fmtSec, fmtPct, fmtTime, fmtUsd, keyOf, labelOf, type MatchRow, resultOf, sumOf, unique } from "./data.ts";
 import { type MatchData, Message, type Replay, type Viewport } from "./model.ts";
 import { positionOf } from "../../board.ts";
 import { tableView } from "../../board-view.ts";
@@ -57,14 +57,6 @@ export const replayIndex = (replay: Replay, steps: ReadonlyArray<Step>): number 
       Option.match(replay.maybeFocus, { onNone: () => 0, onSome: (focus) => steps.findIndex(({ ordinal }) => ordinal >= focus) }),
     ),
   );
-
-const resultOf = (detail: MatchDetail): string => {
-  const winner = detail.seats.find(({ winShare }) => (winShare ?? 0) >= 1);
-
-  if (detail.match.status !== "completed") return "unscored";
-
-  return winner === undefined ? "split" : `${labelOf(keyOf(winner))} wins`;
-};
 
 const shortNamesOf = (detail: MatchDetail): ReadonlyMap<string, string> => {
   const bases = detail.seats.map(({ model }) => baseName(model));
@@ -514,7 +506,7 @@ const detailView = (h: H, replay: Replay, detail: MatchDetail, allMatches: Reado
         ),
         h.span(
           [h.Class("k")],
-          [`seed ${detail.match.seed} · ${fmtTime(detail.match.startedAt)} · ${steps.length} moves · ${fmtUsd(cost)} · `, h.b([h.Class("res")], [resultOf(detail)])],
+          [`seed ${detail.match.seed} · ${fmtTime(detail.match.startedAt)} · ${steps.length} moves · ${fmtUsd(cost)} · `, h.b([h.Class("res")], [resultOf({ status: detail.match.status, seats: detail.seats })])],
         ),
       ],
     ),
