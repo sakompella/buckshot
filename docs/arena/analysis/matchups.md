@@ -53,7 +53,7 @@ Ratings, pair effects, seat and round 1 starter effects for the scored arena mat
 
 | cohort | entrants | scored matches | complete / half blocks | pairs played | matches per pair min / median / max | connected | scheduled by status |
 |---|---|---|---|---|---|---|---|
-| Cross-model | 51 | 2032 | 661 / 710 | 486/1275 | 1 / 2 / 41 | yes | 1860 completed, 5 partial (skipped), 138 skipped (skipped), 789 unstarted |
+| Cross-model | 51 | 2032 | 661 / 710 | 486/1275 | 1 / 2 / 41 | yes | 2032 completed, 2 partial, 5 partial (skipped), 138 skipped (skipped), 935 unstarted |
 | claude-haiku-4-5-20251001 efforts | 5 | 200 | 100 / 0 | 10/10 | 20 / 20 / 20 | yes | 200 completed |
 | claude-haiku-5-5 efforts | 6 | 300 | 150 / 0 | 15/15 | 20 / 20 / 20 | yes | 300 completed |
 | claude-opus-5-5 efforts | 6 | 137 | 58 / 21 | 15/15 | 2 / 5 / 20 | yes | 137 completed, 21 unstarted |
