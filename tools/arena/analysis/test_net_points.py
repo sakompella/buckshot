@@ -1,13 +1,12 @@
 """Tests for net points: python3 -m unittest discover -s tools/arena/analysis"""
 
-import json
 import random
-import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
 
 import net_points as np_
+from testdb import ANALYSIS, KNOWLEDGE, REGRET, database, events, insert, rounds
 
 
 def seat(model: str, lost: float, won: int, worst: int = 0, effort: str = "high") -> np_.Seat:
@@ -15,7 +14,7 @@ def seat(model: str, lost: float, won: int, worst: int = 0, effort: str = "high"
 
 
 def match(block: str, first: np_.Seat, second: np_.Seat, name: str = "m") -> np_.Match:
-    return np_.Match(name, name, block, first, second)
+    return np_.Match(name, name, block, first, second, False)
 
 
 class Arithmetic(unittest.TestCase):
@@ -43,41 +42,25 @@ class Matchups(unittest.TestCase):
         self.assertAlmostEqual(row.net, (-1.0 + 0.5) / 2)
 
 
-def event(player: str, start: int, entries: list[str]) -> str:
-    return json.dumps({"kind": "delivered", "player": player, "from": start, "entries": entries}, separators=(",", ":"))
-
-
 class Load(unittest.TestCase):
     def build(self, directory: str, searched: dict[int, int]):
         """One match, A (opus) at position 1 and B (sol) at 2; A wins rounds 1 and 3. `searched` maps an ordinal to its regret; A decides 0 and 1, B decides 2."""
-        public = []
-        for n, win in enumerate(["Player A wins the round and $70,000.", "Player B wins the round and $75,000.", "Player A wins the round and $80,000."], 1):
-            public += [f"Round {n} begins. Everyone has 3 health; Player A starts.", win]
-        analysis = sqlite3.connect(Path(directory) / "buckshot.sqlite")
-        analysis.executescript(
-            """CREATE TABLE source_files (path TEXT, match_id TEXT); CREATE TABLE source_records (path TEXT, raw TEXT, current INTEGER);
-               CREATE TABLE match_seats (match_id TEXT, player TEXT, cash INTEGER)"""
-        )
-        analysis.execute("INSERT INTO source_files VALUES ('t/m1/events.jsonl', 'm1')")
-        analysis.execute("INSERT INTO source_records VALUES ('t/m1/events.jsonl', ?, 1)", (event("A", 0, public),))
-        analysis.executemany("INSERT INTO match_seats VALUES ('m1', ?, ?)", [("A", 150_000), ("B", 75_000)])
+        analysis = database(Path(directory) / "buckshot.sqlite", ANALYSIS)
+        for player, socket in (("A", 0), ("B", 1)):
+            insert(analysis, "match_seats", match_id="m1", position=socket + 1, player=player, socket=socket)
+        events(analysis, "m1", *rounds(0, 1, 0))
         analysis.commit()
-        knowledge = sqlite3.connect(Path(directory) / "knowledge.sqlite")
-        knowledge.executescript(
-            """CREATE TABLE matches (match_id TEXT, name TEXT, status TEXT, seed_block_id TEXT);
-               CREATE TABLE players (match_id TEXT, player TEXT, position INTEGER, model TEXT, effort TEXT);
-               CREATE TABLE decisions (match_id TEXT, ordinal INTEGER, player TEXT, by_whom TEXT, remaining INTEGER, choice TEXT)"""
-        )
-        knowledge.execute("INSERT INTO matches VALUES ('m1', 'name1', 'completed', 'block1')")
-        knowledge.executemany("INSERT INTO players VALUES ('m1', ?, ?, ?, 'high')", [("A", 1, "opus"), ("B", 2, "sol")])
-        knowledge.executemany("INSERT INTO decisions VALUES ('m1', ?, ?, 'agent', 3, 'Shoot Player B')", [(0, "A"), (1, "A"), (2, "B")])
+        knowledge = database(Path(directory) / "knowledge.sqlite", KNOWLEDGE)
+        insert(knowledge, "matches", match_id="m1", name="name1", status="completed", seed_block_id="block1")
+        for player, position, model in (("A", 1, "opus"), ("B", 2, "sol")):
+            insert(knowledge, "players", match_id="m1", player=player, position=position, model=model, effort="high")
+        for ordinal, player in ((0, "A"), (1, "A"), (2, "B")):
+            insert(knowledge, "decisions", match_id="m1", ordinal=ordinal, player=player, by_whom="agent", remaining=3, shot="opponent")
         knowledge.commit()
-        out = sqlite3.connect(Path(directory) / "regret.sqlite")
-        out.execute(
-            """CREATE TABLE regret (match_id TEXT, ordinal INTEGER, player TEXT, evaluator TEXT, max_depth INTEGER, budget INTEGER, reload TEXT, samples INTEGER, status TEXT, regret INTEGER)"""
-        )
+        out = database(Path(directory) / "regret.sqlite", REGRET)
         owners = {0: "A", 1: "A", 2: "B"}
-        out.executemany("INSERT INTO regret VALUES ('m1', ?, ?, 'e', 6, 20000, 'static', 0, 'searched', ?)", [(o, owners[o], r) for o, r in searched.items()])
+        for ordinal, regret in searched.items():
+            insert(out, "regret", match_id="m1", ordinal=ordinal, player=owners[ordinal], evaluator="e", max_depth=6, budget=20000, reload="static", samples=0, status="searched", regret=regret)
         out.commit()
         return Path(directory)
 

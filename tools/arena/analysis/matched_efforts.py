@@ -5,11 +5,11 @@ Within each model, every effort is compared with the reference effort (medium) i
 pooled (every external match of either effort), common opponents (only opponent configs both efforts faced in at least
 MIN_MATCHES matches, equal weight per opponent config, so both efforts are scored on the same mix), and strict blocks (the same
 opponent config, seed and seat position in both efforts; pairs are averaged per opponent, then equally over opponents). A cell
-nobody played is left out, never read as 0. Rounds are primary (round winners come from by_round.py), match win shares secondary.
+nobody played is left out, never read as 0. Rounds are primary (round winners come from the replayed events), match win shares secondary.
 The comparison is run on every scored match and again on the matches that started at or after REQUEST_CHANGE, so each period's
 ratings, counts and coverage describe only that period. Intervals resample seeds, jointly across opponents and both efforts, and
 appear only when each effort has at least MIN_UNITS distinct seeds in the support and no resample leaves a cell empty. Games between two efforts of one model and
-games with a DeepSeek seat are left out. The database is opened read-only. With --doc FILE the tables replace the text between the
+excluded games (a DeepSeek seat) are left out. The database is opened read-only. With --doc FILE the tables replace the text between the
 matched-efforts markers of that file.
 
     python3 tools/arena/analysis/matched_efforts.py [--db PATH] [--draws 2000] [--doc <output.md>]
@@ -25,10 +25,9 @@ from typing import Callable
 
 import boot
 import bt
-import by_round
 from docs import splice_between_markers
 from fmt import pp, signed, table
-from load import DB, SKIPPED_MODEL, connect, require_current
+from load import DB, connect, require_current, round_winners
 
 REFERENCE = "medium"
 MIN_MATCHES = 2  # matches per effort and opponent config before the config counts as common support
@@ -97,24 +96,20 @@ def parse_time(text: str) -> datetime:
 
 
 def load_seats(db) -> tuple[list[Seat], int]:
-    """Both seats of every scored match without a DeepSeek seat, and how many DeepSeek matches were left out."""
-    cash: dict[str, dict[str, float]] = defaultdict(dict)
+    """Both seats of every scored match that is not excluded, and how many excluded (DeepSeek) matches were left out."""
     rows = db.execute(
         """SELECT s.match_id, m.started_at, m.seed, s.position, s.player, s.win_share, s.cash, e.model, e.effort, e.endpoint_category
            FROM match_seats s JOIN entrants e ON e.id = s.entrant_id JOIN matches m ON m.id = s.match_id
-           WHERE m.status = 'completed' ORDER BY s.match_id, s.position"""
+           WHERE m.status = 'completed' AND m.disposition IS NULL ORDER BY s.match_id, s.position"""
     ).fetchall()
     by_match: dict[str, list[tuple]] = defaultdict(list)
     for row in rows:
         by_match[row[0]].append(row)
-        cash[row[0]][row[4]] = row[6]
-    lines = by_round.public_lines(db)
-    seats, skipped = [], 0
+    skipped = db.execute("SELECT COUNT(*) FROM matches WHERE status = 'completed' AND disposition = 'excluded'").fetchone()[0]
+    winners_of = round_winners(db)
+    seats = []
     for match, pair in by_match.items():
-        if any(SKIPPED_MODEL in row[7] for row in pair):
-            skipped += 1
-            continue
-        winners = by_round.round_winners(match, lines.get(match, []), cash[match])
+        winners = winners_of[match]
         configs = [Config(row[7], row[8], row[9]) for row in pair]
         for row, focal, opponent in zip(pair, configs, reversed(configs)):
             rounds = tuple(winners[n] == row[4] for n in sorted(winners))

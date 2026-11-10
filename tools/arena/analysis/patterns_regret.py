@@ -3,8 +3,8 @@
 
 Reads the regret table (tools/arena/score_regret.py writes it) and the knowledge database (web/scripts/arena-knowledge.ts) read-only,
 joined on (match_id, ordinal), and prints one markdown table. With --doc FILE the table replaces the text between the
-patterns markers of that file. Regret is in percentage points of the deciding player's chance to win the round. Matches
-with a DeepSeek seat, unfinished matches and forced or fallback moves are left out.
+patterns markers of that file. Regret is in percentage points of the deciding player's chance to win the round. Excluded
+matches (a DeepSeek seat), unfinished matches and forced or fallback moves are left out.
 
     python3 tools/arena/analysis/patterns_regret.py [--regret PATH] [--knowledge PATH] [--doc docs/arena/analysis/patterns.md]
 """
@@ -19,7 +19,7 @@ from pathlib import Path
 
 from docs import splice_between_markers
 from fmt import table
-from load import SKIPPED_MODEL, connect
+from load import connect
 from regret import DERIVED, PRODUCTION, run_of
 from rules import POINT
 
@@ -112,12 +112,10 @@ def load(regret_path: Path, knowledge_path: Path) -> list[Move]:
                   d.legal_items_json, d.opponent_items_json, d.next_player, d.next_shot, d.player,
                   d.own_health = d.round_best AS full_health
            FROM regret r
-           JOIN k.matches m ON m.match_id = r.match_id AND m.status = 'completed'
+           JOIN k.matches m ON m.match_id = r.match_id AND m.status = 'completed' AND m.disposition IS NULL
            JOIN healthy d ON d.match_id = r.match_id AND d.ordinal = r.ordinal AND d.by_whom = 'agent'
            JOIN k.players p ON p.match_id = d.match_id AND p.player = d.player
-           WHERE r.status = 'searched'
-             AND r.match_id NOT IN (SELECT match_id FROM k.players WHERE model LIKE ?)""",
-        (f"%{SKIPPED_MODEL}%",),
+           WHERE r.status = 'searched'""",
     ).fetchall()
     return [
         Move(

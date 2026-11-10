@@ -22,11 +22,10 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import bt
-import by_round
 import regret
 from docs import splice_between_markers
 from fmt import pct, table
-from load import DB, SKIPPED_MODEL, connect, require_current
+from load import DB, connect, require_current, round_winners
 from regret import DERIVED, EFFORTS
 from reload_bias import Estimate
 from rules import POINT, ROUNDS, WIN
@@ -60,6 +59,7 @@ class Match:
     block: str  # the seed block: both seat orders of one seed
     first: Seat  # position 1
     second: Seat
+    excluded: bool  # matches.disposition = 'excluded': a DeepSeek seat
 
     @property
     def net(self) -> float:
@@ -73,8 +73,8 @@ class Match:
 
     @property
     def skipped(self) -> bool:
-        """A DeepSeek seat, or an engine's: it has no regret rows, so its net points would mean nothing."""
-        return any(seat.config[0] is None or SKIPPED_MODEL in seat.config[0] for seat in (self.first, self.second))
+        """Excluded, or with an engine's seat: an engine has no regret rows, so its net points would mean nothing."""
+        return self.excluded or any(seat.config[0] is None for seat in (self.first, self.second))
 
 
 @dataclass(frozen=True)
@@ -92,7 +92,7 @@ def load(db_path: str, regret_path: Path, knowledge_path: Path) -> Loaded:
         "SELECT p.match_id, p.player, p.position, p.model, p.effort FROM players p JOIN matches m ON m.match_id = p.match_id AND m.status = 'completed'"
     ):
         seats[match].append((position, player, model, effort))
-    blocks = {match: (block, name) for match, block, name in knowledge.execute("SELECT match_id, seed_block_id, name FROM matches")}
+    blocks = {match: (block, name, disposition == "excluded") for match, block, name, disposition in knowledge.execute("SELECT match_id, seed_block_id, name, disposition FROM matches")}
     db = connect(str(regret_path))
     db.execute("ATTACH DATABASE ? AS k", (f"file:{knowledge_path}?mode=ro",))
     rows = db.execute(
@@ -113,14 +113,10 @@ def load(db_path: str, regret_path: Path, knowledge_path: Path) -> Loaded:
         {(match, player): n for match, player, n in knowledge.execute("SELECT match_id, player, COUNT(*) FROM decisions WHERE by_whom = 'agent' GROUP BY match_id, player")}
     )
 
-    analysis = connect(db_path)
-    cash: dict[str, dict[str, int]] = defaultdict(dict)
-    for match, player, total in analysis.execute("SELECT match_id, player, cash FROM match_seats"):
-        cash[match][player] = total
-    lines = by_round.public_lines(analysis)
+    winners_of = round_winners(connect(db_path))
     matches, incomplete = [], 0
     for match, found in seats.items():
-        winners = by_round.round_winners(match, lines.get(match, []), cash[match])
+        winners = winners_of[match]
         if any(lost[match, player][1] != agent_decisions[match, player] for _, player, _, _ in found):
             incomplete += 1
             continue
@@ -128,7 +124,7 @@ def load(db_path: str, regret_path: Path, knowledge_path: Path) -> Loaded:
             Seat((model, effort), lost[match, player][0] / WIN, lost[match, player][1], sum(w == player for w in winners.values()), *lost[match, player][2:])
             for _, player, model, effort in sorted(found)
         )
-        matches.append(Match(match, blocks[match][1], blocks[match][0], first, second))
+        matches.append(Match(match, blocks[match][1], blocks[match][0], first, second, blocks[match][2]))
     return Loaded(matches, incomplete)
 
 

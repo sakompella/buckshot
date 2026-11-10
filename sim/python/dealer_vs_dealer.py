@@ -19,6 +19,10 @@ Usage: python3 dealer_vs_dealer.py [matches per matchup, default 100000]
 import random
 import sys
 from dataclasses import dataclass, field
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools" / "arena" / "analysis"))
+from rules import PRIZES
 
 LOADS_2P = [(1, 2), (2, 1), (2, 2), (3, 2), (1, 1), (2, 3), (3, 3), (3, 1), (4, 2)]
 PER_PLAYER_CAP = {
@@ -244,7 +248,7 @@ def run(upgrades_a, upgrades_b, matches, seed):
         g = Game(rng, upgrades_a, upgrades_b)
         cash = [0, 0]
         first = rng.randint(0, 1)
-        for prize in (70000, 75000, 80000):
+        for prize in PRIZES:
             winner, loser = g.play_round(first)
             rounds[winner] += 1
             cash[winner] += prize

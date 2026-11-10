@@ -21,7 +21,7 @@ from pathlib import Path
 
 from docs import splice_between_markers
 from fmt import pct, table
-from load import SKIPPED_MODEL, connect
+from load import connect
 from regret import DERIVED
 from rules import POINT
 
@@ -54,22 +54,21 @@ class Decision:
 
 
 def population(regret_path: Path, knowledge_path: Path, depth: int = 6, budget: int = 20000) -> list[Decision]:
-    """The searched static decisions of finished two-seat matches with no DeepSeek seat, as regret.py reads them."""
+    """The searched static decisions of finished two-seat matches that are not excluded, as regret.py reads them."""
     db = connect(str(regret_path))
     db.execute("ATTACH DATABASE ? AS k", (f"file:{knowledge_path}?mode=ro",))
     rows = db.execute(
-        """SELECT r.match_id, r.ordinal, d.remaining, d.choice, p.model, r.depth
+        """SELECT r.match_id, r.ordinal, d.remaining, d.shot IS NOT NULL, p.model, r.depth
            FROM regret r
-           JOIN k.matches m ON m.match_id = r.match_id AND m.status = 'completed'
+           JOIN k.matches m ON m.match_id = r.match_id AND m.status = 'completed' AND m.disposition IS NULL
            JOIN k.decisions d ON d.match_id = r.match_id AND d.ordinal = r.ordinal AND d.by_whom = 'agent'
            JOIN k.players p ON p.match_id = d.match_id AND p.player = d.player
            WHERE r.max_depth = ? AND r.budget = ? AND r.reload = 'static' AND r.status = 'searched'
              AND (SELECT COUNT(*) FROM k.players q WHERE q.match_id = r.match_id) = 2
-             AND r.match_id NOT IN (SELECT match_id FROM k.players WHERE model LIKE ?)
            ORDER BY r.match_id, r.ordinal""",
-        (depth, budget, f"%{SKIPPED_MODEL}%"),
+        (depth, budget),
     ).fetchall()
-    return [Decision(match, ordinal, remaining, choice.startswith("Shoot"), model, finished) for match, ordinal, remaining, choice, model, finished in rows]
+    return [Decision(match, ordinal, remaining, bool(shot), model, finished) for match, ordinal, remaining, shot, model, finished in rows]
 
 
 def split_evenly(total: int, sizes: dict[str, int]) -> dict[str, int]:
@@ -132,7 +131,7 @@ def pairs(sampled_path: Path, regret_path: Path, knowledge_path: Path, depth: in
     db.execute("ATTACH DATABASE ? AS s", (f"file:{regret_path}?mode=ro",))
     db.execute("ATTACH DATABASE ? AS k", (f"file:{knowledge_path}?mode=ro",))
     rows = db.execute(
-        """SELECT d.remaining, d.choice, p.model, t.regret, r.regret, t.values_json, r.values_json, t.best, r.best, t.nodes, r.nodes, t.depth, r.depth
+        """SELECT d.remaining, d.shot IS NOT NULL, p.model, t.regret, r.regret, t.values_json, r.values_json, t.best, r.best, t.nodes, r.nodes, t.depth, r.depth
            FROM regret r
            JOIN s.regret t ON t.match_id = r.match_id AND t.ordinal = r.ordinal AND t.max_depth = r.max_depth AND t.budget = r.budget AND t.reload = 'static' AND t.status = 'searched'
            JOIN k.decisions d ON d.match_id = r.match_id AND d.ordinal = r.ordinal AND d.by_whom = 'agent'
@@ -143,8 +142,8 @@ def pairs(sampled_path: Path, regret_path: Path, knowledge_path: Path, depth: in
     ).fetchall()
     scores = lambda text: [move["score"] for move in json.loads(text)]
     return [
-        Pair(remaining, choice.startswith("Shoot"), model, static / POINT, sampled / POINT, remaining <= static_depth, scores(static_values) != scores(sampled_values), static_best != sampled_best, static_nodes == sampled_nodes and static_depth == sampled_depth)
-        for remaining, choice, model, static, sampled, static_values, sampled_values, static_best, sampled_best, static_nodes, sampled_nodes, static_depth, sampled_depth in rows
+        Pair(remaining, bool(shot), model, static / POINT, sampled / POINT, remaining <= static_depth, scores(static_values) != scores(sampled_values), static_best != sampled_best, static_nodes == sampled_nodes and static_depth == sampled_depth)
+        for remaining, shot, model, static, sampled, static_values, sampled_values, static_best, sampled_best, static_nodes, sampled_nodes, static_depth, sampled_depth in rows
     ]
 
 

@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 import regret_depth as rd
+from testdb import KNOWLEDGE, REGRET, database, insert
 
 
 def decision(index, shells_left=2, shot=True, model="m", depth=6):
@@ -66,19 +67,17 @@ def values(*scores):
 
 
 def write_runs(directory: Path, production_rows, deep_rows, deep_evaluator="rust-1"):
-    """Writes the three databases the summary reads, with only the columns it uses."""
-    knowledge = sqlite3.connect(directory / "knowledge.sqlite")
-    knowledge.executescript(
-        """CREATE TABLE players (match_id TEXT, player TEXT, model TEXT);
-           CREATE TABLE decisions (match_id TEXT, ordinal INTEGER, player TEXT, by_whom TEXT, choice TEXT, remaining INTEGER);
-           INSERT INTO players VALUES ('m1', 'A', 'opus');
-           INSERT INTO decisions VALUES ('m1', 0, 'A', 'agent', 'Shoot player +1', 2), ('m1', 1, 'A', 'agent', 'Use beer', 3)"""
-    )
+    """Writes the three databases the summary reads, from their real DDL."""
+    knowledge = database(directory / "knowledge.sqlite", KNOWLEDGE)
+    insert(knowledge, "players", match_id="m1", player="A", model="opus")
+    insert(knowledge, "decisions", match_id="m1", ordinal=0, player="A", by_whom="agent", shot="opponent", remaining=2)
+    insert(knowledge, "decisions", match_id="m1", ordinal=1, player="A", by_whom="agent", shot=None, remaining=3)
     knowledge.commit()
     for name, rows, evaluator in (("regret.sqlite", production_rows, "rust-1"), ("regret-depth.sqlite", deep_rows, deep_evaluator)):
-        db = sqlite3.connect(directory / name)
-        db.execute("CREATE TABLE regret (match_id TEXT, ordinal INTEGER, max_depth INTEGER, budget INTEGER, reload TEXT, status TEXT, values_json TEXT, best TEXT, best_score INTEGER, regret INTEGER, depth INTEGER, limited INTEGER, evaluator TEXT)")
-        db.executemany("INSERT INTO regret VALUES (?, ?, ?, ?, 'static', 'searched', ?, ?, ?, ?, ?, ?, ?)", [(*row, evaluator) for row in rows])
+        db = database(directory / name, REGRET)
+        for match_id, ordinal, max_depth, budget, values_json, best, best_score, regret, depth, limited in rows:
+            insert(db, "regret", match_id=match_id, ordinal=ordinal, max_depth=max_depth, budget=budget, reload="static", status="searched",
+                   values_json=values_json, best=best, best_score=best_score, regret=regret, depth=depth, limited=limited, evaluator=evaluator)
         db.commit()
     return directory / "regret-depth.sqlite", directory / "regret.sqlite", directory / "knowledge.sqlite"
 

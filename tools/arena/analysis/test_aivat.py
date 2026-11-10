@@ -4,6 +4,7 @@ import unittest
 
 import aivat
 import numpy as np
+from testdb import ANALYSIS, database, events
 
 
 class DeckTest(unittest.TestCase):
@@ -20,9 +21,10 @@ class DeckTest(unittest.TestCase):
 
 
 class ShotTest(unittest.TestCase):
-    def test_outcomes_follow_the_public_log(self):
-        lines = ["Player A shot themselves: blank.", "Player B picked up the shotgun.", "Player B shot Player A: live, 1 damage, 3 health left."]
-        self.assertEqual(aivat.shot_outcomes(lines), [False, True])
+    def test_outcomes_follow_the_replayed_shots(self):
+        db = database(":memory:", ANALYSIS)
+        events(db, "m1", ("Fired", {"shooter": 0, "target": 0, "shell": "Blank"}), ("PickedUp", {"seat": 1}), ("Fired", {"shooter": 1, "target": 0, "shell": "Live"}))
+        self.assertEqual(aivat.shot_outcomes(db), {"m1": [False, True]})
 
 
 class FitTest(unittest.TestCase):
