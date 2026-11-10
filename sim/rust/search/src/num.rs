@@ -58,7 +58,7 @@ mod ops {
         /// `F32.from_nat` of a length: the Nat cut to a U32, then rounded.
         #[must_use]
         pub fn from_len(n: usize) -> Self {
-            Self(widen(n as u32))
+            Self(widen(len_u32(n)))
         }
 
         /// `F32.to_u32`: the floor of a value in `[1, 2^32)`, else 0 (NaN included).
