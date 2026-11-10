@@ -37,6 +37,8 @@ export const CallLine = Schema.Struct({
   stop_reason: Schema.String,
   error: Schema.optional(Schema.String),
   latency_ms: Schema.optional(Schema.Number),
+  /** The turn the call was made on, the key of the move it led to; absent from calls logged before it was recorded. */
+  turn: Schema.optional(Schema.Int),
   usage: Usage,
   tool_calls: Schema.Array(Schema.Struct({ name: Schema.String, arguments: Schema.Json })),
   text: Schema.String,
@@ -155,7 +157,7 @@ export interface Sitting {
   readonly position: number;
 }
 
-export const logCall = (dir: string, { agent, position }: Sitting, message: AssistantMessage): void => {
+export const logCall = (dir: string, { agent, position }: Sitting, message: AssistantMessage, turn: number): void => {
   const { input, output, cacheRead, cacheWrite, cacheWrite1h, reasoning } = message.usage;
 
   const line: CallLine = {
@@ -170,6 +172,7 @@ export const logCall = (dir: string, { agent, position }: Sitting, message: Assi
     stop_reason: message.stopReason,
     error: message.errorMessage,
     latency_ms: message.durationMs,
+    turn,
     usage: { input, output, cacheRead, cacheWrite, cacheWrite1h, reasoning },
     tool_calls: message.content.flatMap((block) => (block.type === "toolCall" ? [{ name: block.name, arguments: block.arguments }] : [])),
     text: message.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join(""),

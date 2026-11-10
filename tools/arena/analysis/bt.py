@@ -9,10 +9,15 @@ so tau = 0 means no pair terms and a small tau means strongly shrunk ones.
 """
 
 import math
+import os
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 
-import numpy as np
+# The Newton systems are a few hundred wide: OpenBLAS's threads only contend for the cores (on the loaded host a solve took
+# about 2 s threaded and 10 ms on one thread). Set before numpy loads.
+os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+
+import numpy as np  # noqa: E402
 
 # A near-flat prior (sd 1000) on the seat and starter terms: it keeps the Newton system solvable when a training set
 # has every game with the same starter, which makes the starter term a copy of the seat term.

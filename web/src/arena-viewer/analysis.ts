@@ -300,7 +300,7 @@ export interface Analysis {
 export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: ReadonlyMap<string, number>): Analysis => {
   const started = performance.now();
 
-  // Calls link to the next move heuristically (calls.link_method), so every linked call is added up per decision first.
+  // Several calls (retries, reminders, failed attempts) link to one decision (calls.link_method), so every linked call is added up per decision first.
   const perDecision = new Map(
     db
       .query(
