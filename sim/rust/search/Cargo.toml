@@ -19,6 +19,7 @@ seats-2 = ["buckshot-rules/seats-2"]
 [dependencies]
 arrayvec.workspace = true
 buckshot-rules = { path = "../rules", default-features = false }
+hashbrown.workspace = true
 rayon.workspace = true
 rustc-hash.workspace = true
 serde_json.workspace = true
