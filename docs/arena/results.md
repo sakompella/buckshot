@@ -9,8 +9,8 @@ Scope: 3,537 scored matches with no DeepSeek seat, from the 3,557-match snapshot
 ## Status (snapshot of 2026-11-04)
 This page describes the 3,557-match snapshot of the analysis database: 3,557 completed matches, 43 partial, 54 tournament rows (phase directories) and no replay issues.
 - **tournament-1** (`_work/arena/tournament-1`): finished. 120 scheduled matches are unplayed, all against DeepSeek: 38 started and are partial, and 82 never started. The leftover Astra and terra matches finished on 2026-10-22 (below).
-- **tournament-2** (`_work/arena/tournament-2`, config `web/tournaments/opus-effort.json`): stage A is finished. Stage B, the max pairings, hasn't started and needs the user's go-ahead.
-- **tournament-3** (`_work/arena/tournament-3`, config `web/tournaments/astra-opus-xhigh.json`): finished, 40 of 40 capped matches.
+- **tournament-2** (`_work/arena/tournament-2`, config `opus-effort.json`): stage A is finished. Stage B, the max pairings, hasn't started and needs the user's go-ahead.
+- **tournament-3** (`_work/arena/tournament-3`, config `astra-opus-xhigh.json`): finished, 40 of 40 capped matches.
 - **tournament-4** (`_work/arena/tournament-4`): finished, 288 of 288 (below). The 138 Sonnet max matches once scheduled in tournament-1 were cut when tournament-4 took over its cross-model games; the import skips them.
 - **tournament-5** (`_work/arena/tournament-5`, 11 phase directories): finished. 214 of its 264 scheduled matches were played, since the schedule was cut to a smaller selection to save usage quota (below).
 - **tournament-6** (`_work/arena/tournament-6`, 4 phases): finished 2026-11-02. 37 of its 114 scheduled matches were played (the selection was cut to save quota). Phases: astra-none, terra-claude, opus-none, haiku-ladder.
@@ -427,7 +427,7 @@ Stage B would add medium–max and xhigh–max: 40 matches, list-price cost abou
 
 **Lessons:**
 - **Pass every needed `--code` when using a cap.** While an old-code match waits for its checkout, the runner leaves it off its pending list, so `--limit` picks a match past the cap.
-- **An account with no quota data isn't over the limit.** `tools/arena/quota_guard.py` now treats it as not blocking; the old rule caused a false stop at 8:58 PM.
+- **An account with no quota data isn't over the limit.** `tools/arena/quota_guard.py` (since removed) then treated it as not blocking; the old rule caused a false stop at 8:58 PM.
 - **List accounts on every endpoint,** Claude as well as Codex, so both sides of each new match are pinned from the start.
 
 ## tournament-4: cross-model samples (finished 2026-10-25, 288 matches)
@@ -485,7 +485,6 @@ What each model knew about the chamber when it shot, whether it acted on it, wha
 ## Other analyses
 - **Matchups:** ratings within each cohort, no matchup effects, seat and round-1 starter effects: [analysis/matchups.md](analysis/matchups.md).
 - **Patterns against regret:** the mean regret of single-move choice patterns: [analysis/patterns.md](analysis/patterns.md).
-- **Ideas not yet built:** [analysis-ideas.md](analysis-ideas.md).
 
 ## Known confound: an extra system prompt on Claude calls
 The Claude subscription account behind CPA carries organization-level instructions about a LibKey scholarly-article connector, and they reach every Claude request sent through CPA. The arena's own prompts never contain them. 38 Claude calls in 38 matches mention them (Sonnet max 25, Sonnet xhigh 2, Haiku 5.5 max 11), always to say they don't apply; other calls likely carried them silently. GPT calls never saw them. The effect on play is probably small, but Claude and GPT did not get identical prompts. To remove it, turn off the account's organization instructions or use an account without them before the next tournament.

@@ -332,16 +332,6 @@ gate_simple_mutations() {
   fi
 }
 
-gate_backshot() {
-  local out
-  out="$(bun "$here/../backshot/test.mjs" 2>&1)"
-  if [[ $? -eq 0 ]]; then
-    report ok "backshot search" "$(printf '%s' "$out" | tail -1)"
-  else
-    report fail "backshot search" "$(printf '%s' "$out" | tail -20)"
-  fi
-}
-
 # The Rust mirror of the rules (sim/rust) must agree with Bend: a Bend change
 # that the Rust port does not follow fails here (branch map hash, tapes, traces).
 gate_rust() {
@@ -354,7 +344,6 @@ gate_rust() {
   fi
 }
 
-gate_backshot
 gate_domain
 gate_unsafe
 gate_ai_imports

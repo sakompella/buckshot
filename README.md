@@ -5,12 +5,12 @@ Research on Buckshot Roulette, with a rules library for its multiplayer mode.
 ## Contents
 
 - [`sim/bend-mp/`](sim/bend-mp/README.md) is the multiplayer rules library for 2 to 4 seats, written in Bend. It has a state machine, a faithful reference, laws that tie the two together, and two dealer AIs. Start with its README.
-- [`web/`](web/README.md) is a web UI for the library. It plays matches in the browser against the Story and DoN AIs.
+- [`sim/rust/`](sim/rust/) is a Rust mirror of the rules and a search over them, checked against Bend. The arena's engine entrant and regret scoring use it.
+- [`web/`](web/README.md) is the site (the Play and Arena pages), the arena runner and the arena viewer.
 - `sim/python/dealer_vs_dealer.py` is the 2-player policy simulation that the AIs were ported from.
-- [`docs/arena/`](docs/arena/README.md) is the runbook and results for the arena, where language models play each other through the agent tools. `tools/arena/` holds its quota guard, match checks and seed-pair analysis.
-- [`docs/accuracy-report.md`](docs/accuracy-report.md) audits a third-party Python simulator of the game. It does not cover the Bend library.
-- [`docs/modding-and-macos-port.md`](docs/modding-and-macos-port.md) records an attempt to build a modded macOS app from the decompiled game.
-- `scripts/` holds the accuracy checks and the macOS rebuild script.
+- [`docs/arena/`](docs/arena/README.md) is the runbook and results for the arena, where language models play each other through the agent tools. `tools/arena/` holds the wrap-up, regret scoring, match checks and the statistics (`tools/arena/analysis/`).
+- `dev/` is the `dev` CLI and the Python environment for `tools/arena`.
+- [`docs/adr/`](docs/adr/) holds the decisions and [`CONTEXT.md`](CONTEXT.md) the domain terms.
 
 ## Quick start
 
