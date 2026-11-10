@@ -68,25 +68,15 @@ pub fn num(tc: &TestCase) -> u32 {
     }
 }
 
-pub fn item_rules(tc: &TestCase, heavy: bool) -> [ItemRule; 9] {
-    std::array::from_fn(|_| {
-        if heavy {
-            ItemRule {
-                enabled: tc.draw_silent(gs::weighted_booleans(0.3)),
-                per_player: 8,
-                on_table: 32,
-            }
-        } else {
-            ItemRule {
-                enabled: tc.draw_silent(gs::weighted_booleans(0.75)),
-                per_player: between(tc, 1, if flag(tc) { 3 } else { 8 }),
-                on_table: if flag(tc) { between(tc, 1, 8) } else { 32 },
-            }
-        }
+fn item_rules(tc: &TestCase) -> [ItemRule; 9] {
+    std::array::from_fn(|_| ItemRule {
+        enabled: tc.draw_silent(gs::weighted_booleans(0.75)),
+        per_player: between(tc, 1, if flag(tc) { 3 } else { 8 }),
+        on_table: if flag(tc) { between(tc, 1, 8) } else { 32 },
     })
 }
 
-pub fn load_rule(tc: &TestCase, heavy: bool) -> LoadRule {
+fn load_rule(tc: &TestCase) -> LoadRule {
     let shells = match count(tc, 0, 2) {
         0 => ShellRule::Random,
         1 => ShellRule::Fixed {
@@ -95,15 +85,15 @@ pub fn load_rule(tc: &TestCase, heavy: bool) -> LoadRule {
         },
         _ => ShellRule::AllLive { live: between(tc, 1, 8) },
     };
-    let items = if heavy || flag(tc) {
-        AmountRule::Fixed(if heavy { 8 } else { between(tc, 0, 8) })
+    let items = if flag(tc) {
+        AmountRule::Fixed(between(tc, 0, 8))
     } else {
         AmountRule::Random
     };
     LoadRule { shells, items }
 }
 
-pub fn round_rules(tc: &TestCase, heavy: bool) -> RoundRules {
+fn round_rules(tc: &TestCase) -> RoundRules {
     let health = if flag(tc) {
         HealthRule::Random
     } else {
@@ -111,8 +101,8 @@ pub fn round_rules(tc: &TestCase, heavy: bool) -> RoundRules {
     };
     RoundRules {
         health,
-        loads: std::array::from_fn(|_| load_rule(tc, heavy)),
-        items: EnumMap::from_array(item_rules(tc, heavy)),
+        loads: std::array::from_fn(|_| load_rule(tc)),
+        items: EnumMap::from_array(item_rules(tc)),
     }
 }
 
@@ -121,9 +111,9 @@ pub fn round_rules(tc: &TestCase, heavy: bool) -> RoundRules {
 /// # Panics
 ///
 /// If the plan is invalid, a bug in the generator.
-pub fn supported_config(tc: &TestCase, heavy: bool) -> Config {
+pub fn supported_config(tc: &TestCase) -> Config {
     let table = table(tc);
-    let rounds = many(tc, 1, 3, |tc| round_rules(tc, heavy));
+    let rounds = many(tc, 1, 3, round_rules);
     tc.note(&format!("{table:?} {rounds:?}"));
     Config::new(table, &rounds).unwrap_or_else(|error| panic!("a supported plan is valid: {error}"))
 }
