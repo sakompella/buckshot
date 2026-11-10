@@ -16,14 +16,14 @@ import { decodeVisible, type Heard, heardBetween, isSecret, matchLog, roundStory
 import { Blunders, Call, CertainMistakes, Decisions, type MatchDetail, MatchDetailJson, MatchSeat, MatchSummary, type PlayerState, SeatsResponse, Step, type TablePosition } from "./api.ts";
 import { findBlunders } from "./blunders.ts";
 import type { Certain } from "./certain.ts";
-import { type ArenaPaths, loadArena, decodeLabelled, withConfig } from "./load.ts";
+import { type Arena, decodeLabelled, withConfig } from "./load.ts";
 import { withPotShares } from "./page/data.ts";
 import type { Regret } from "./regret.ts";
 
 // The arena viewer's server: the built site (web/dist), and a read-only JSON API over the arena analysis database
 // as load.ts reads it.
 
-const decodeSummary = Schema.decodeUnknownOption(MatchSummary);
+const decodeSummary = Schema.decodeUnknownSync(MatchSummary);
 
 const decodeMatchSeat = Schema.decodeUnknownSync(MatchSeat);
 
@@ -109,13 +109,13 @@ interface StepDraft {
 }
 
 const matchDetail = (db: Database, regret: Regret | null, certain: Certain, id: string): MatchDetail | null => {
-  const match = decodeSummary(
-    db
-      .query(`select m.id, m.name, m.status, m.seed, m.started_at startedAt, m.ended_at endedAt, t.name tournament from matches m join tournaments t on t.id = m.tournament_id where m.id = ? and m.disposition is not 'excluded'`)
-      .get(id),
-  );
+  const row = db
+    .query(`select m.id, m.name, m.status, m.seed, m.started_at startedAt, m.ended_at endedAt, t.name tournament from matches m join tournaments t on t.id = m.tournament_id where m.id = ? and m.disposition is not 'excluded'`)
+    .get(id);
 
-  if (Option.isNone(match)) return null;
+  if (row === null) return null;
+
+  const match = decodeSummary(row);
 
   const seats = db
     .query(`select ms.player, ms.position, ms.cash, ms.win_share winShare, ms.label from match_seats ms where match_id = ? order by position`)
@@ -209,7 +209,7 @@ const matchDetail = (db: Database, regret: Regret | null, certain: Certain, id: 
 
   const story = roundStory(log, new Map(seats.map((seat) => [seat.player, seat.cash ?? 0])));
 
-  return { match: match.value, seats, decisions: drafts.map(({ step, outcome, calls: linked }) => ({ ...step, outcome, calls: linked })), unlinked, story };
+  return { match, seats, decisions: drafts.map(({ step, outcome, calls: linked }) => ({ ...step, outcome, calls: linked })), unlinked, story };
 };
 
 /** Replaying a match through the rules takes up to seconds, so the server keeps the latest few it sent. */
@@ -281,10 +281,8 @@ export interface ViewerAccess {
   readonly download: string | undefined;
 }
 
-export const serveArenaViewer = (dbPath: string, siteDir: string, hostname: string, port: number, paths: ArenaPaths = {}, { password, download }: ViewerAccess) => {
+export const serveArenaViewer = ({ db, regret, seats, seatIndex, decisions, certain, consistency, luck }: Arena, siteDir: string, hostname: string, port: number, { password, download }: ViewerAccess) => {
   const guarded = guardedBy(password);
-  const started = performance.now();
-  const { db, regret, seats, seatIndex, decisions, certain, consistency, luck } = loadArena(dbPath, paths);
   const aggregateJson = encodeAggregates(aggregatesOf({ seats: withPotShares(seats), decisions, certain: certain.summary.rates, consistency, luck }));
   const aggregateRoutes = Object.fromEntries(AGGREGATE_NAMES.map((name) => [`/api/agg/${name}`, guarded((request) => json(request, encodedBody(aggregateJson[name])))]));
 
@@ -294,7 +292,7 @@ export const serveArenaViewer = (dbPath: string, siteDir: string, hostname: stri
   const blundersBody = encodedBody(encodeBlunders(findBlunders(db, regret, seatIndex)));
   const certainBody = encodedBody(encodeCertain(certain.summary));
 
-  console.log(`loaded ${seats.length} seats in ${Math.round(performance.now() - started)} ms; decisions payload ${(decisionsBody.gzipped.length / 1e6).toFixed(1)} MB gzipped`);
+  console.log(`serving ${seats.length} seats; decisions payload ${(decisionsBody.gzipped.length / 1e6).toFixed(1)} MB gzipped`);
 
   return Bun.serve({
     hostname,

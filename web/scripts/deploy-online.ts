@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { parseArgs } from "node:util";
 
-import { Effect, Schema } from "effect";
+import { Config, Effect, Redacted, Schema } from "effect";
 
 import { aliasOf, allTraffic, dataOf, previewUrl, siteProblems, uploadProblems, versionIdOf } from "../src/deploy/online.ts";
 import { WORKER } from "../src/deploy/worker.ts";
@@ -22,11 +22,9 @@ const API = "https://api.cloudflare.com/client/v4";
 
 const fail = (message: string) => new ScriptError({ message, exitCode: 1 });
 
-const variable = (name: string) => {
-  const value = process.env[name];
-
-  return value === undefined || value === "" ? Effect.fail(fail(`${name} is not set; load _work/.cloudflare-deploy.env`)) : Effect.succeed(value);
-};
+const credentials = Config.all({ token: Config.Redacted("CLOUDFLARE_API_TOKEN"), account: Config.NonEmptyString("CLOUDFLARE_ACCOUNT_ID") }).pipe(
+  Effect.mapError(() => fail("CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID must be set; load _work/.cloudflare-deploy.env")),
+);
 
 const cf = (...args: ReadonlyArray<string>) =>
   Effect.tryPromise({
@@ -47,10 +45,17 @@ const decodeReply = Schema.decodeUnknownEffect(Reply);
 
 const api = (path: string, init?: RequestInit) =>
   Effect.gen(function* () {
-    const token = yield* variable("CLOUDFLARE_API_TOKEN");
-    const account = yield* variable("CLOUDFLARE_ACCOUNT_ID");
-    const response = yield* Effect.tryPromise({ try: () => fetch(`${API}/accounts/${account}${path}`, { ...init, headers: { authorization: `Bearer ${token}`, "content-type": "application/json" } }), catch: (error) => fail(String(error)) });
-    const body: unknown = yield* Effect.tryPromise({ try: () => response.json(), catch: (error) => fail(String(error)) });
+    const { token, account } = yield* credentials;
+
+    const { response, body } = yield* Effect.tryPromise({
+      try: async (signal) => {
+        const response = await fetch(`${API}/accounts/${account}${path}`, { ...init, signal, headers: { authorization: `Bearer ${Redacted.value(token)}`, "content-type": "application/json" } });
+        const body: unknown = await response.json();
+
+        return { response, body };
+      },
+      catch: (error) => fail(String(error)),
+    });
 
     if (!response.ok) return yield* Effect.fail(fail(`${path}: ${response.status} ${JSON.stringify(body)}`));
 

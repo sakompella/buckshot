@@ -119,7 +119,13 @@ export interface ImportOptions {
 export const openAnalysis = (path: string): Database => {
   mkdirSync(dirname(resolve(path)), { recursive: true });
   const db = new Database(path, { strict: true });
-  db.exec(readFileSync(new URL("./schema.sql", import.meta.url), "utf8"));
+
+  try {
+    db.exec(readFileSync(new URL("./schema.sql", import.meta.url), "utf8"));
+  } catch (error) {
+    db.close();
+    throw error;
+  }
 
   return db;
 };
@@ -127,10 +133,11 @@ export const openAnalysis = (path: string): Database => {
 /** Refreshes changed matches atomically per tournament. Source files are never opened for writing. */
 export const importTournaments = ({ database, sources, skipped = {} }: ImportOptions): void => {
   const db = openAnalysis(database);
-  const prices = loadPrices(DEFAULT_PRICES);
-  const priceHash = sha(readFileSync(DEFAULT_PRICES, "utf8"));
 
   try {
+    const prices = loadPrices(DEFAULT_PRICES);
+    const priceHash = sha(readFileSync(DEFAULT_PRICES, "utf8"));
+
     for (const source of sources) {
       const dir = resolve(source);
       const tournamentPath = join(dir, "tournament.json");
