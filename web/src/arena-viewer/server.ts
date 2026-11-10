@@ -227,13 +227,11 @@ const json = (request: Request, { body, gzipped }: ReturnType<typeof encodedBody
 const digest = (text: string) => new Bun.CryptoHasher("sha256").update(text).digest();
 
 /**
- * With ARENA_VIEWER_PASSWORD set, the API asks for it through the browser's basic-auth prompt; the username is ignored.
+ * With a password, the API asks for it through the browser's basic-auth prompt; the username is ignored.
  * The page shell itself holds no data.
  */
-const guarded = (handler: (request: Request) => Response) => {
-  const password = process.env["ARENA_VIEWER_PASSWORD"];
-
-  if (password === undefined || password === "") return handler;
+const guardedBy = (password: string | undefined) => (handler: (request: Request) => Response) => {
+  if (password === undefined) return handler;
 
   const expected = digest(password);
 
@@ -277,7 +275,14 @@ const siteResponse = async (siteDir: string, request: Request): Promise<Response
   return new Response(Bun.file(join(siteDir, "index.html")), { headers: { "content-type": "text/html; charset=utf-8" } });
 };
 
-export const serveArenaViewer = (dbPath: string, siteDir: string, hostname: string, port: number, paths: ArenaPaths = {}) => {
+/** What the API guards and offers: a password for every route, and a database file to download. */
+export interface ViewerAccess {
+  readonly password: string | undefined;
+  readonly download: string | undefined;
+}
+
+export const serveArenaViewer = (dbPath: string, siteDir: string, hostname: string, port: number, paths: ArenaPaths = {}, { password, download }: ViewerAccess) => {
+  const guarded = guardedBy(password);
   const started = performance.now();
   const { db, regret, seats, seatIndex, decisions, certain, consistency, luck } = loadArena(dbPath, paths);
   const aggregateJson = encodeAggregates(aggregatesOf({ seats: withPotShares(seats), decisions, certain: certain.summary.rates, consistency, luck }));
@@ -301,18 +306,12 @@ export const serveArenaViewer = (dbPath: string, siteDir: string, hostname: stri
     routes: {
       "/api/*": () => new Response("not found", { status: 404 }),
       "/api/seats": guarded((request) => json(request, seatsBody)),
-      "/api/download": guarded(() => {
-        const download = process.env["ARENA_VIEWER_DOWNLOAD"];
-
-        return download === undefined || download === "" ? new Response("no download configured", { status: 404 }) : Response.json({ bytes: Bun.file(download).size });
-      }),
-      "/api/db": guarded(() => {
-        const download = process.env["ARENA_VIEWER_DOWNLOAD"];
-
-        return download === undefined || download === ""
+      "/api/download": guarded(() => (download === undefined ? new Response("no download configured", { status: 404 }) : Response.json({ bytes: Bun.file(download).size }))),
+      "/api/db": guarded(() =>
+        download === undefined
           ? new Response("no download configured", { status: 404 })
-          : new Response(Bun.file(download), { headers: { "content-disposition": 'attachment; filename="buckshot.sqlite"' } });
-      }),
+          : new Response(Bun.file(download), { headers: { "content-disposition": 'attachment; filename="buckshot.sqlite"' } }),
+      ),
       "/api/decisions": guarded((request) => json(request, decisionsBody)),
       "/api/blunders": guarded((request) => json(request, blundersBody)),
       ...aggregateRoutes,

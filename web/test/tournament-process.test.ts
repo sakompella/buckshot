@@ -96,7 +96,7 @@ test("SIGTERM stops the runner's child; restart resumes unfinished matches once 
   } finally {
     if (child.exitCode === null) child.kill("SIGTERM");
   }
-}, 30_000);
+});
 
 test("missing code checkouts wait, skip leaves matches untouched, and --limit resumes only the remaining match", async () => {
   const { dir, checkout, schedule, run } = setup();
@@ -110,4 +110,4 @@ test("missing code checkouts wait, skip leaves matches untouched, and --limit re
   expect(schedule.map(({ name }) => starts(dir, name))).toEqual([1, 0]);
   expect(await run(["--code", `${OLD}=${checkout}`, "--limit", "1"]).exited).toBe(0);
   expect(schedule.map(({ name }) => starts(dir, name))).toEqual([1, 1]);
-}, 30_000);
+});

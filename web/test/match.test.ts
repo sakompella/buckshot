@@ -33,7 +33,7 @@ test("Story and DoN finish a match at any table, items on or off, from any seed"
     expect(progress.game.pending.kind).toBe("Finished");
     expect(progress.events.at(-1)?._tag).toBe("MatchConcluded");
   }, { testCases: 20 });
-}, 60_000);
+});
 
 test("an AI match is reproducible from its seed", () => {
   hegel.test((tc) => {
@@ -41,7 +41,7 @@ test("an AI match is reproducible from its seed", () => {
 
     expect(playOut(size, items, seed, MIXED).events).toEqual(playOut(size, items, seed, MIXED).events);
   }, { testCases: 10 });
-}, 60_000);
+});
 
 test("items are used when they are on", () => {
   const used = [1, 2, 3].flatMap((seed) => playOut(2, true, seed, MIXED).events).filter(Predicate.isTagged("Used"));
@@ -153,4 +153,4 @@ test("bots take their items one seat at a time from the seat after the first sho
 
   expect(distributions).toBeGreaterThan(0);
   expect(shared).toBeGreaterThan(0);
-}, 60_000);
+});

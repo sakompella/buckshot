@@ -240,7 +240,7 @@ test("a view holds only what the screen shows: a bare waiting while it is not th
       }
     } });
   }, { testCases: 4, derandomize: true });
-}, 60_000);
+});
 
 test("a finished match's view says it is over and shows the final standings with every player's cash", () => {
   const table = playUntil(newMatch(2, 5, ["Agent", "DoN"]), () => false);
@@ -251,7 +251,7 @@ test("a finished match's view says it is over and shows the final standings with
   expect(events?.at(-1)).toBe("The match is over.");
   expect(standings?.map(({ player }) => player).toSorted()).toEqual(["A", "B"]);
   expect(getGame(table, "A")).toEqual(reply);
-}, 30_000);
+});
 
 /** Whether the seat's last machine move left it partway through an action: aiming, choosing a target or an item to steal, or holding a drawn item. */
 const isMidAction = (progress: Progress, seat: Seat): boolean =>
@@ -347,7 +347,7 @@ test("on random tables of 2 to 4 players, an Agent's views on its turns and the 
 
   expect(turnsRead).toBeGreaterThan(0);
   expect(secretsShown).toBeGreaterThan(0);
-}, 60_000);
+});
 
 test("a phone clue's position counts the chambered shell as 1, as the shells fired later show", () => {
   let checked = 0;
@@ -461,7 +461,7 @@ test("a repeated move, or one from before a move that kept the player's turn, is
   }, { testCases: 4, derandomize: true });
 
   expect(kept).toBeGreaterThan(0);
-}, 30_000);
+});
 
 test("new_match is refused while a match is in progress, and a turn from the finished match is refused in a rematch with the same seed and setup at the same point", () => {
   const setup = [2, 3, ["Agent", "DoN"], { items: false }] as const;
@@ -549,4 +549,4 @@ test("any safe integer seed, however written, comes back canonical and replays t
     expect(parseTable(answered(replayed.reply)).seed).toBe(returned);
     expect(viewOf(playUntil(replayed.table, () => false), "A")).toEqual(viewOf(playUntil(first.table, () => false), "A"));
   }, { testCases: 8 });
-}, 60_000);
+});

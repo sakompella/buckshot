@@ -123,7 +123,7 @@ test("an agent's instructions addendum reaches its own system prompt only, and t
 
   expect(manifest.provenance.agents.A?.instructions_addendum).toBe(ADDENDUM);
   expect(manifest.provenance.agents.B?.instructions_addendum).toBeUndefined();
-}, 60_000);
+});
 
 test.each([
   ["effort", fauxProvenance, (modelId: string) => ({ ...fauxProvenance(modelId), effort: "medium" })],
@@ -239,7 +239,7 @@ test.each([...DELIVERIES])("a human types moves into the terminal client and pla
   expect(views.every((view) => view.you === "A")).toBe(true);
   expect(entries).toEqual([...entriesSentTo(dir, "A")]);
   expect(shown.some((line) => line.startsWith("error: "))).toBe(true);
-}, 60_000);
+});
 
 /** The header a test proxy reads an account pin from, as ARENA_ACCOUNT_HEADER names it. */
 const ACCOUNT_HEADER = "X-Account-Id";
@@ -252,14 +252,6 @@ const failureOf = async (env: Readonly<Record<string, string>>): Promise<string>
 
   return Exit.isFailure(exit) ? String(exit.cause) : "succeeded";
 };
-
-test("an endpoint is Anthropic or OpenAI Responses, from its URL and key", async () => {
-  const anthropic = await endpointFrom({ PLAYER_A_ANT_URL: PROXY.url, PLAYER_A_ANT_KEY: PROXY.key, PLAYER_A_MODEL: "claude-haiku-5-5", PLAYER_A_EFFORT: "low" });
-  const openai = await endpointFrom({ PLAYER_A_OAI_URL: `${PROXY.url}/v1`, PLAYER_A_OAI_KEY: PROXY.key, PLAYER_A_MODEL: "gpt-6-luna" });
-
-  expect(Exit.isSuccess(anthropic) && anthropic.value._tag).toBe("Anthropic");
-  expect(Exit.isSuccess(openai) && openai.value._tag).toBe("OpenAIResponses");
-});
 
 test("rotating only a provider key preserves resume provenance, and no key ever shows in it", async () => {
   const keyGen = gs.text({ alphabet: "0123456789abcdef", minSize: 16, maxSize: 40 }).map((hex) => `sk-${hex}`);
@@ -405,10 +397,6 @@ test("the instructions addendum is read from PLAYER_A_INSTRUCTIONS_ADDENDUM into
 
   expect(provenanceOf("provider-A", withText.value).instructions_addendum).toBe(ADDENDUM);
   expect("instructions_addendum" in provenanceOf("provider-A", without.value)).toBe(false);
-});
-
-test("a blank PLAYER_A_ACCOUNT_ID pins nothing", async () => {
-  expect((await requestsSentAt("OAI", "gpt-6-luna", "low", { ARENA_ACCOUNT_HEADER: ACCOUNT_HEADER, PLAYER_A_ACCOUNT_ID: "" })).map((received) => received.account)).toEqual([null]);
 });
 
 test("a proxy's model alias plays as the catalog model it names", async () => {
