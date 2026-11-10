@@ -105,6 +105,8 @@ By hand, from `web/` in `nix develop`, with the token loaded (`set -a; . ../_wor
 - `bun run deploy:promote <versionId>` sends all traffic to that version.
 - `bun run deploy:online` is the old one-step deploy to the live domain, with no preview.
 
+Every upload first runs `bun scripts/deploy-online.ts check` on `web/online`, so nothing leaves the machine when it fails: it refuses any file other than `_headers` and the export's `data/*.json`, and runs the privacy scan on the data.
+
 `_work/.cloudflare-deploy.env` (mode 600, gitignored) holds `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`; the token is `buckshot-deploy`, without expiry, and can only edit Workers scripts on the account, read account settings, and read the zone and edit its Worker routes. Without that file, `cf auth login` (OAuth, expires daily) also works for the by-hand commands. To replace the token: `cf accounts tokens roll <token id>` (the id is `CLOUDFLARE_TOKEN_ID` in the file) or create a new one with the same permission groups, and update the file. `cf` needs Node, so run everything under `nix develop`.
 
 ## Reasoning settings
