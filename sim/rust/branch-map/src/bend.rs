@@ -52,9 +52,16 @@ impl Site {
 
 pub struct Rules {
     pub modules: Vec<Module>,
-    pub reachable: BTreeSet<(String, String)>,
+    /// The reachable defs' names, by module.
+    pub reachable: BTreeMap<String, BTreeSet<String>>,
     /// sha256 over every module's path and source, in module order.
     pub hash: String,
+}
+
+impl Rules {
+    pub fn reaches(&self, module: &str, def: &str) -> bool {
+        self.reachable.get(module).is_some_and(|defs| defs.contains(def))
+    }
 }
 
 pub fn load(bend_dir: &Path) -> Result<Rules> {
@@ -183,11 +190,11 @@ fn words(code: &str) -> impl Iterator<Item = &str> {
         .filter(|w| w.starts_with(|c: char| c.is_alphabetic() || c == '_'))
 }
 
-fn reachable(modules: &[Module]) -> Result<BTreeSet<(String, String)>> {
-    let mut seen = BTreeSet::new();
+fn reachable(modules: &[Module]) -> Result<BTreeMap<String, BTreeSet<String>>> {
+    let mut seen: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     let mut queue: Vec<(String, String)> = ENTRIES.iter().map(|e| (ROOT.to_owned(), (*e).to_owned())).collect();
     while let Some((module_name, def_name)) = queue.pop() {
-        if !seen.insert((module_name.clone(), def_name.clone())) {
+        if !seen.entry(module_name.clone()).or_default().insert(def_name.clone()) {
             continue;
         }
         let module = modules.iter().find(|m| m.name == module_name).context("module")?;
@@ -211,7 +218,7 @@ pub fn sites(rules: &Rules) -> Vec<Site> {
     let mut out = Vec::new();
     for module in &rules.modules {
         for def in &module.defs {
-            if !rules.reachable.contains(&(module.name.clone(), def.name.clone())) {
+            if !rules.reaches(&module.name, &def.name) {
                 continue;
             }
             out.extend(def_sites(&module.name, def));

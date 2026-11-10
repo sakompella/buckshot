@@ -39,11 +39,12 @@ use std::collections::BTreeSet;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::iter;
 
-use buckshot_rules::{Config, Menu, Request, Seat, request};
+use arrayvec::ArrayVec;
+use buckshot_rules::{Config, MENU_CAPACITY, Menu, Request, Seat, request};
 
-use super::{Search, Searched, Span, Value, analysed, limited, lines_static, push_choices, static_value};
+use super::{Choice, Search, Span, Spent, Value, analysed, best_line, limited, lines_static, push_choices, static_value};
 use crate::memo::{Kind, Stored, Tally, hash};
-use crate::num::{Real, branch_window};
+use crate::num::{Real, branch_window, len_u64};
 use crate::types::{Analysis, Line, Reach, World};
 
 /// The highest value: `millionths` clamps every sum to a million.
@@ -192,15 +193,6 @@ fn stats_key(scope: (Seat, &Config), public: &[World], private: &[World]) -> u64
         }
     }
     hasher.finish()
-}
-
-fn known(searched: Searched) -> Option<Boxed> {
-    match searched {
-        Searched::Value(value) => Some(Boxed::exact(value)),
-        Searched::Spent => None,
-        #[cfg(feature = "f32")]
-        Searched::Scores(_) => None,
-    }
 }
 
 /// `decide` over boxes, the `pending` children after `children` unsearched.
@@ -356,27 +348,29 @@ impl Fold {
 }
 
 impl Search<'_> {
-    /// `node.task` over boxes; `None` once the budget is spent.
-    fn bounded_node(&mut self, depth: u32, beliefs: (Span, Span), need: Need) -> Option<Boxed> {
+    /// `node.task` over boxes.
+    fn bounded_node(&mut self, depth: u32, beliefs: (Span, Span), need: Need) -> Result<Boxed, Spent> {
         let (public, private) = beliefs;
         let Some(first) = public.of(&self.worlds).first().copied() else {
-            return Some(Boxed::exact(Value {
+            return Ok(Boxed::exact(Value {
                 public: 0,
                 private: 0,
                 reach: Reach::Settled,
             }));
         };
         if first.won.is_some() {
-            return known(self.leaf(public, private, Reach::Settled));
+            return Ok(Boxed::exact(self.leaf(public, private, Reach::Settled)));
         }
         match (request(self.config, &first.state), depth.checked_sub(1)) {
             (Request::Choose(menu), Some(child)) => self.bounded_decision(menu.seat() == self.me, child, beliefs, &menu, need),
-            (Request::Draw { .. }, _) => known(self.reload_leaf(public, private)),
-            (Request::Choose(_), None) | (Request::Finished | Request::Stuck, _) => known(self.leaf(public, private, Reach::Cut)),
+            (Request::Draw { .. }, _) => self.reload_leaf(public, private).map(Boxed::exact),
+            (Request::Choose(_), None) | (Request::Finished | Request::Stuck, _) => {
+                Ok(Boxed::exact(self.leaf(public, private, Reach::Cut)))
+            }
         }
     }
 
-    fn bounded_decision(&mut self, mine: bool, depth: u32, beliefs: (Span, Span), menu: &Menu, need: Need) -> Option<Boxed> {
+    fn bounded_decision(&mut self, mine: bool, depth: u32, beliefs: (Span, Span), menu: &Menu, need: Need) -> Result<Boxed, Spent> {
         let (public, private) = beliefs;
         let key = {
             let (public_worlds, private_worlds) = (public.of(&self.worlds), private.of(&self.worlds));
@@ -395,7 +389,7 @@ impl Search<'_> {
                 && entry.serves(depth, need)
             {
                 self.tally.hit(0);
-                return Some(entry.boxed);
+                return Ok(entry.boxed);
             }
             (key, stored.map_or(0, |entry| entry.lead))
         };
@@ -415,7 +409,7 @@ impl Search<'_> {
                 lead: leader,
             }),
         );
-        Some(value)
+        Ok(value)
     }
 
     /// A decision's box and the move that led it: `lead` first, then the
@@ -428,13 +422,14 @@ impl Search<'_> {
         beliefs: (Span, Span),
         order: (Span, usize),
         need: Need,
-    ) -> Option<(Boxed, usize)> {
+    ) -> Result<(Boxed, usize), Spent> {
         let (choices, lead) = order;
-        let count = choices.len();
+        let moves: ArrayVec<Choice, MENU_CAPACITY> = choices.of(&self.choices).iter().copied().collect();
+        let count = moves.len();
         let lead = if self.prune && lead < count { lead } else { 0 };
         let mark = self.boxes.len();
         let mut running = Running::START;
-        for j in iter::once(lead).chain((0..count).filter(|&j| j != lead)) {
+        for (j, choice) in lead_first(&moves, lead) {
             let child_need = if self.prune {
                 match running.next(mine, j, need) {
                     Some(child_need) => child_need,
@@ -443,19 +438,25 @@ impl Search<'_> {
             } else {
                 Need::EXACT
             };
-            let index = self.choices.get(choices.start.saturating_add(j))?.index;
-            let Some(boxed) = self.bounded_option(depth, beliefs, index, child_need) else {
-                self.boxes.truncate(mark);
-                return None;
+            let boxed = match self.bounded_option(depth, beliefs, choice.index, child_need) {
+                Ok(boxed) => boxed,
+                Err(spent) => {
+                    self.boxes.truncate(mark);
+                    return Err(spent);
+                }
             };
             running = running.add(j, &boxed);
             self.boxes.push(boxed);
         }
         // Back to menu order: the unsearched moves are any, and the lead moves back to its place.
         self.boxes.resize(mark.saturating_add(count), Boxed::ANY);
-        let children = self.boxes.get_mut(mark..)?;
-        children.get_mut(..=lead)?.rotate_left(1);
-        let decided = decide_boxes(mine, children, 0);
+        let children = self.boxes.split_at_mut(mark).1;
+        children.split_at_mut(lead.saturating_add(1)).0.rotate_left(1);
+        #[expect(
+            clippy::expect_used,
+            reason = "a menu has a move, and the first lowest public high end is never beaten"
+        )]
+        let decided = decide_boxes(mine, children, 0).expect("a decision has a box");
         let leader = if mine {
             children
                 .iter()
@@ -467,15 +468,15 @@ impl Search<'_> {
             running.lowest.min(count.saturating_sub(1))
         };
         self.boxes.truncate(mark);
-        decided.map(|value| (value, leader))
+        Ok((decided, leader))
     }
 
-    fn bounded_option(&mut self, depth: u32, beliefs: (Span, Span), index: u32, need: Need) -> Option<Boxed> {
+    fn bounded_option(&mut self, depth: u32, beliefs: (Span, Span), index: u32, need: Need) -> Result<Boxed, Spent> {
         let (public, private) = beliefs;
-        let worlds = u64::try_from(public.len().saturating_add(private.len())).unwrap_or(u64::MAX);
+        let worlds = len_u64(public.len().saturating_add(private.len()));
         let spent = self.tally.nodes.saturating_add(worlds);
         if spent > self.budget {
-            return None;
+            return Err(Spent);
         }
         self.tally.nodes = spent;
         let mark = self.worlds.len();
@@ -493,9 +494,9 @@ impl Search<'_> {
     /// at any values, cannot move a needed coordinate across its window, they
     /// are skipped. A pruned sum that still misses its need (the slack of
     /// [`branch_window`] fell short) is searched again, exactly where it fell short.
-    fn bounded_branches(&mut self, depth: u32, branches: Span, need: Need) -> Option<Boxed> {
+    fn bounded_branches(&mut self, depth: u32, branches: Span, need: Need) -> Result<Boxed, Spent> {
         let mark = self.boxes.len();
-        for at in branches.start..branches.end {
+        for at in 0..branches.len() {
             if self.prune && need.met(&self.branch_sum(branches, mark)) {
                 break;
             }
@@ -504,17 +505,20 @@ impl Search<'_> {
             } else {
                 Need::EXACT
             };
-            let branch = self.branches.get(at).copied()?;
-            let Some(child) = self.bounded_node(depth, (branch.public, branch.private), child_need) else {
-                self.boxes.truncate(mark);
-                return None;
+            let branch = branches.at(&self.branches, at);
+            let child = match self.bounded_node(depth, (branch.public, branch.private), child_need) {
+                Ok(child) => child,
+                Err(spent) => {
+                    self.boxes.truncate(mark);
+                    return Err(spent);
+                }
             };
             self.boxes.push(child);
         }
         let sum = self.branch_sum(branches, mark);
         self.boxes.truncate(mark);
         if need.met(&sum) {
-            Some(sum)
+            Ok(sum)
         } else {
             self.bounded_branches(depth, branches, need.tightened(&sum))
         }
@@ -523,7 +527,7 @@ impl Search<'_> {
     /// The branch sums, with the branches searched so far on
     /// [`Search::boxes`] from `mark` and the rest unsearched.
     fn branch_sum(&self, branches: Span, mark: usize) -> Boxed {
-        let searched = self.boxes.get(mark..).unwrap_or(&[]);
+        let searched = self.boxes.split_at(mark).1;
         let (mut lo, mut hi) = (Fold::ZERO, Fold::ZERO);
         let mut reach = Reach::Settled;
         let children = searched.iter().copied().chain(iter::repeat(Boxed::ANY));
@@ -545,9 +549,9 @@ impl Search<'_> {
         }
     }
 
-    /// Branch `at`'s need: each needed coordinate's [`branch_window`].
+    /// Branch `at` of `branches`' need: each needed coordinate's [`branch_window`].
     fn branch_need(&self, branches: Span, mark: usize, at: usize, need: Need) -> Need {
-        let searched = self.boxes.get(mark..).unwrap_or(&[]);
+        let searched = self.boxes.split_at(mark).1;
         let window = |window: Window, term: fn(&super::Branch, &Boxed) -> (Real, u32, u32)| {
             if !window.needed() {
                 return Window::NONE;
@@ -558,7 +562,7 @@ impl Search<'_> {
                 .iter()
                 .zip(children)
                 .map(|(branch, child)| term(branch, &child));
-            let (lo, hi) = branch_window((window.lo, window.hi), terms, at.saturating_sub(branches.start));
+            let (lo, hi) = branch_window((window.lo, window.hi), terms, at);
             Window { lo, hi }
         };
         Need {
@@ -582,27 +586,26 @@ impl Search<'_> {
             if let Some(stats) = &mut self.stats {
                 *stats = KeyStats::default();
             }
-            let Some(lines) = self.bounded_lines(current, beliefs, choices, (lead, chosen)) else {
+            let Ok(lines) = self.bounded_lines(current, beliefs, choices, (lead, chosen)) else {
                 return limited(completed, &self.tally);
             };
-            completed = analysed(lines, &self.tally, current.saturating_add(1), false);
-            if let Analysis::Analysed(done) = &completed {
-                lead = done.lines.iter().position(|line| line.index == done.best).unwrap_or(0);
+            if let Some((best, _)) = best_line(&lines) {
+                lead = best;
             }
+            completed = analysed(lines, &self.tally, current.saturating_add(1), false);
         }
         completed
     }
 
     /// One iteration's lines, in menu order; `order` is the move searched
     /// first and the chosen move's index.
-    fn bounded_lines(&mut self, depth: u32, beliefs: (Span, Span), choices: Span, order: (usize, Option<u32>)) -> Option<Vec<Line>> {
+    fn bounded_lines(&mut self, depth: u32, beliefs: (Span, Span), choices: Span, order: (usize, Option<u32>)) -> Result<Vec<Line>, Spent> {
         let (lead, chosen) = order;
-        let moves = choices.of(&self.choices).to_vec();
+        let moves: ArrayVec<Choice, MENU_CAPACITY> = choices.of(&self.choices).iter().copied().collect();
         let lead = if self.prune { lead } else { 0 };
-        let mut found = vec![Boxed::ANY; moves.len()];
+        let mut found: ArrayVec<(usize, Boxed), MENU_CAPACITY> = ArrayVec::new();
         let mut best: Option<(usize, u32)> = None;
-        for j in iter::once(lead).chain((0..moves.len()).filter(|&j| j != lead)) {
-            let choice = moves.get(j)?;
+        for (j, choice) in lead_first(&moves, lead) {
             let window = if self.prune && Some(choice.index) != chosen {
                 root_window(j, best)
             } else {
@@ -617,22 +620,27 @@ impl Search<'_> {
             if lo == hi && best.is_none_or(|(b, score)| lo > score || (lo == score && j < b)) {
                 best = Some((j, lo));
             }
-            *found.get_mut(j)? = boxed;
+            found.push((j, boxed));
         }
-        Some(
-            moves
-                .iter()
-                .zip(found)
-                .map(|(choice, boxed)| Line {
-                    index: choice.index,
-                    r#move: choice.r#move,
-                    score: boxed.private.lo,
-                    upper: boxed.private.hi,
-                    reach: boxed.reach,
-                })
-                .collect(),
-        )
+        found.sort_unstable_by_key(|&(j, _)| j);
+        Ok(moves
+            .iter()
+            .zip(found)
+            .map(|(choice, (_, boxed))| Line {
+                index: choice.index,
+                r#move: choice.r#move,
+                score: boxed.private.lo,
+                upper: boxed.private.hi,
+                reach: boxed.reach,
+            })
+            .collect())
     }
+}
+
+/// The moves with their menu index, `lead` first and the rest in menu order.
+fn lead_first(moves: &[Choice], lead: usize) -> impl Iterator<Item = (usize, Choice)> {
+    let order = moves.iter().copied().enumerate();
+    order.clone().skip(lead).take(1).chain(order.filter(move |&(j, _)| j != lead))
 }
 
 #[cfg(test)]

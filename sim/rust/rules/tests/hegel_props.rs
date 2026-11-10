@@ -3,269 +3,15 @@
 //! tokens and arbitrary states are defined (no panic). Case counts are pinned per test (a pinned
 //! count beats `HEGEL_TEST_CASES`); `HEGEL_SEED` replays a run and a failure replays from `.hegel/`.
 
-#![expect(
-    clippy::panic,
-    clippy::expect_used,
-    reason = "Hegel reports a failed property by panic, so the helpers panic instead of returning a Result; clippy.toml only exempts #[test] fns"
-)]
-
 use std::hint::black_box;
 
+use buckshot_rules::testing::{any_u32, arbitrary_state, between, count, flag, many, num, seat, slots, supported_config, table};
 use buckshot_rules::{
-    AmountRule, Answer, Config, Deck, Decks, Direction, Event, FirstDeathCheck, Grabs, Gun, HealthRule, IdleOption, Item, ItemRule, Items,
-    Jam, LegalMove, Load, LoadRule, MenuInputs, Phase, Range, Request, RequestKind, Ring, RoundRules, RuleError, Seat, SeatRecord, Shell,
-    ShellRule, Slot, Slots, State, Stepped, Table, World, request, start, step, step_event,
+    AmountRule, Answer, Config, EnumMap, Event, HealthRule, IdleOption, Item, ItemRule, LegalMove, LoadRule, MenuInputs, Phase, Range,
+    Request, RequestKind, RoundRules, RuleError, Seat, ShellRule, Slot, State, Stepped, World, request, start, step, step_event,
 };
 use hegel::TestCase;
 use hegel::generators as gs;
-
-const SEATS: [Seat; 4] = [Seat::Seat0, Seat::Seat1, Seat::Seat2, Seat::Seat3];
-
-// Generators
-// ==========
-
-fn flag(tc: &TestCase) -> bool {
-    tc.draw_silent(gs::booleans())
-}
-
-fn between(tc: &TestCase, lo: u32, hi: u32) -> u32 {
-    tc.draw_silent(gs::integers::<u32>().min_value(lo).max_value(hi))
-}
-
-fn count(tc: &TestCase, lo: usize, hi: usize) -> usize {
-    tc.draw_silent(gs::integers::<usize>().min_value(lo).max_value(hi))
-}
-
-fn pick<T: Clone + Send + Sync>(tc: &TestCase, from: &[T]) -> T {
-    tc.draw_silent(gs::sampled_from(from.to_vec()))
-}
-
-fn maybe<T>(tc: &TestCase, make: impl FnOnce(&TestCase) -> T) -> Option<T> {
-    flag(tc).then(|| make(tc))
-}
-
-fn many<T>(tc: &TestCase, lo: usize, hi: usize, mut make: impl FnMut(&TestCase) -> T) -> Vec<T> {
-    (0..count(tc, lo, hi)).map(|_| make(tc)).collect()
-}
-
-fn table(tc: &TestCase) -> Table {
-    #[cfg(feature = "seats-2-4")]
-    let tables = [Table::TwoSeats, Table::ThreeSeats, Table::FourSeats];
-    #[cfg(not(feature = "seats-2-4"))]
-    let tables = [Table::TwoSeats];
-    pick(tc, &tables)
-}
-
-fn seat(tc: &TestCase) -> Seat {
-    pick(tc, &SEATS)
-}
-
-fn item(tc: &TestCase) -> Item {
-    pick(tc, &Item::ORDER)
-}
-
-fn shell(tc: &TestCase) -> Shell {
-    pick(tc, &[Shell::Live, Shell::Blank])
-}
-
-fn any_u32(tc: &TestCase) -> u32 {
-    tc.draw_silent(gs::integers::<u32>())
-}
-
-/// Mostly small numbers, sometimes anything.
-fn num(tc: &TestCase) -> u32 {
-    match count(tc, 0, 10) {
-        0..8 => between(tc, 0, 9),
-        8..10 => between(tc, 0, 199),
-        _ => any_u32(tc),
-    }
-}
-
-fn item_rules(tc: &TestCase, heavy: bool) -> [ItemRule; 9] {
-    std::array::from_fn(|_| {
-        if heavy {
-            ItemRule {
-                enabled: tc.draw_silent(gs::weighted_booleans(0.3)),
-                per_player: 8,
-                on_table: 32,
-            }
-        } else {
-            ItemRule {
-                enabled: tc.draw_silent(gs::weighted_booleans(0.75)),
-                per_player: between(tc, 1, if flag(tc) { 3 } else { 8 }),
-                on_table: if flag(tc) { between(tc, 1, 8) } else { 32 },
-            }
-        }
-    })
-}
-
-fn load_rule(tc: &TestCase, heavy: bool) -> LoadRule {
-    let shells = match count(tc, 0, 2) {
-        0 => ShellRule::Random,
-        1 => ShellRule::Fixed {
-            live: between(tc, 0, 7),
-            blank: between(tc, 1, 8),
-        },
-        _ => ShellRule::AllLive { live: between(tc, 1, 8) },
-    };
-    let items = if heavy || flag(tc) {
-        AmountRule::Fixed(if heavy { 8 } else { between(tc, 0, 8) })
-    } else {
-        AmountRule::Random
-    };
-    LoadRule { shells, items }
-}
-
-fn round_rules(tc: &TestCase, heavy: bool) -> RoundRules {
-    let health = if flag(tc) {
-        HealthRule::Random
-    } else {
-        HealthRule::Fixed(between(tc, 1, 5))
-    };
-    RoundRules {
-        health,
-        loads: std::array::from_fn(|_| load_rule(tc, heavy)),
-        items: item_rules(tc, heavy),
-    }
-}
-
-/// A config inside the supported domain: what `rust-tapes.mjs` plays.
-fn supported_config(tc: &TestCase, heavy: bool) -> Config {
-    let table = table(tc);
-    let rounds = many(tc, 1, 3, |tc| round_rules(tc, heavy));
-    tc.note(&format!("{table:?} {rounds:?}"));
-    Config::new(table, &rounds).unwrap_or_else(|error| panic!("a supported plan is valid: {error}"))
-}
-
-fn ring<T: Copy>(tc: &TestCase, table: Table, mut make: impl FnMut(&TestCase) -> T) -> Ring<T> {
-    let values: [T; 4] = std::array::from_fn(|_| make(tc));
-    SEATS
-        .iter()
-        .zip(values)
-        .fold(Ring::fill(table, values[0]), |ring, (seat, value)| ring.set(*seat, value))
-}
-
-fn slots(tc: &TestCase) -> Slots {
-    Slot::ORDER
-        .iter()
-        .fold(Slots::EMPTY, |slots, slot| slots.put(*slot, maybe(tc, item)))
-}
-
-fn load(tc: &TestCase) -> Load {
-    Load {
-        live: num(tc),
-        blank: num(tc),
-    }
-}
-
-fn gun(tc: &TestCase) -> Gun {
-    Gun::from_shells(many(tc, 0, 64, shell)).expect("64 shells fit the gun")
-}
-
-fn direction(tc: &TestCase) -> Direction {
-    pick(tc, &[Direction::Clockwise, Direction::CounterClockwise])
-}
-
-fn items(tc: &TestCase) -> Items {
-    many(tc, 0, 8, item).into_iter().fold(Items::EMPTY, Items::with)
-}
-
-fn deck(tc: &TestCase, table: Table) -> Deck {
-    let last = u32::try_from(table.deck().len()).map_or(0, |len| len.saturating_sub(1));
-    let ids = tc.draw_silent(gs::vecs(gs::integers::<u32>().max_value(last)).max_size(11));
-    Deck::of_ids(table, ids).expect("ids within the deck")
-}
-
-fn world(tc: &TestCase) -> World {
-    World {
-        before_round: flag(tc),
-        first_sequence: flag(tc),
-        checking_first_death: pick(tc, &[FirstDeathCheck::Off, FirstDeathCheck::On]),
-        sawed: flag(tc),
-        round_index: num(tc),
-        load_index: num(tc),
-        round_health: num(tc),
-        item_amount: num(tc),
-        first_turn: seat(tc),
-        turn: maybe(tc, seat),
-        first_death: maybe(tc, seat),
-        direction: direction(tc),
-        gun: gun(tc),
-        shown: load(tc),
-        decks: Decks {
-            two: deck(tc, Table::TwoSeats),
-            #[cfg(feature = "seats-2-4")]
-            three: deck(tc, Table::ThreeSeats),
-            #[cfg(feature = "seats-2-4")]
-            four: deck(tc, Table::FourSeats),
-        },
-    }
-}
-
-fn seat_record(tc: &TestCase) -> SeatRecord {
-    SeatRecord {
-        health: num(tc),
-        jam: pick(tc, &[Jam::Free, Jam::Jammed, Jam::JammedSkipped]),
-        cash: num(tc),
-        slots: slots(tc),
-    }
-}
-
-fn grabs(tc: &TestCase, table: Table) -> Grabs {
-    Grabs {
-        distributing: flag(tc),
-        grabbing: ring(tc, table, flag),
-        holding: ring(tc, table, |tc| maybe(tc, item)),
-        granted: ring(tc, table, num),
-        intake: ring(tc, table, flag),
-    }
-}
-
-fn phase(tc: &TestCase) -> Phase {
-    match count(tc, 0, 11) {
-        0 => Phase::NeedFirst,
-        1 => Phase::NeedHealth,
-        2 => Phase::NeedAmount,
-        3 => Phase::NeedBatch,
-        4 => Phase::NeedSwap {
-            load: load(tc),
-            shells: gun(tc),
-            i: num(tc),
-        },
-        5 => Phase::Idle { seat: seat(tc) },
-        6 => Phase::Ended,
-        7 => Phase::Blocked { holder: maybe(tc, seat) },
-        8 => Phase::Stalled,
-        9 => Phase::NeedTurnAmount {
-            from: seat(tc),
-            passing: flag(tc),
-            winner: maybe(tc, seat),
-        },
-        10 => Phase::NeedItem {
-            seat: seat(tc),
-            first: item(tc),
-            second: item(tc),
-            rest: items(tc),
-        },
-        _ => Phase::NeedPhone {
-            seat: seat(tc),
-            owner: seat(tc),
-            slot: pick(tc, &Slot::ORDER),
-        },
-    }
-}
-
-fn arbitrary_state(tc: &TestCase, table: Table) -> State {
-    State {
-        world: world(tc),
-        players: ring(tc, table, seat_record),
-        grabs: grabs(tc, table),
-        phase: phase(tc),
-    }
-}
-
-// The walk
-// ========
 
 /// A draw's raw number: mostly inside the range, sometimes anything.
 fn raw_draw(range: Range, n: u32) -> u32 {
@@ -386,15 +132,15 @@ fn check_step(before: &State, after: &State) {
     }
 }
 
-fn external(config: &Config, state: State, event: Event) -> Stepped {
-    step_event(config, state, event).unwrap_or_else(|error| panic!("{event:?} at a valid request: {error}"))
-}
-
 /// What one answer does at one point: determinism, event equivalence and the
 /// errors of a wrong or out-of-range event.
 fn check_events(config: &Config, state: State, request: &Request, event: Event, answer: Answer, stepped: &Stepped) {
     assert_eq!(&step(config, state, answer), stepped, "step is not deterministic");
-    assert_eq!(&external(config, state, event), stepped, "the event differs from its answer");
+    assert_eq!(
+        step_event(config, state, event).as_ref(),
+        Ok(stepped),
+        "the event differs from its answer"
+    );
     match request {
         Request::Draw { range, .. } => {
             assert_eq!(
@@ -407,8 +153,8 @@ fn check_events(config: &Config, state: State, request: &Request, event: Event, 
             );
             let top = step(config, state, Answer::Draw(range.value(range.extra.saturating_add(1))));
             assert_eq!(
-                external(config, state, Event::Draw(u32::MAX)),
-                top,
+                step_event(config, state, Event::Draw(u32::MAX)),
+                Ok(top),
                 "a huge draw is not the top of the range"
             );
         }
@@ -421,11 +167,9 @@ fn check_events(config: &Config, state: State, request: &Request, event: Event, 
                 }),
                 "a Draw at a Choose"
             );
-            let last = menu.clamped(u32::MAX).expect("a menu is not empty");
-            let top = step(config, state, Answer::Choice(last));
-            assert_eq!(
-                external(config, state, Event::Choose(u32::MAX)),
-                top,
+            let top = menu.clamped(u32::MAX).map(|last| step(config, state, Answer::Choice(last)));
+            assert!(
+                top.is_some_and(|top| step_event(config, state, Event::Choose(u32::MAX)) == Ok(top)),
                 "a huge choice is not the last move"
             );
         }
@@ -625,7 +369,7 @@ fn wild_round(tc: &TestCase) -> RoundRules {
     RoundRules {
         health,
         loads: std::array::from_fn(|_| load(tc)),
-        items: std::array::from_fn(|_| ItemRule {
+        items: EnumMap::from_fn(|_| ItemRule {
             enabled: flag(tc),
             per_player: num(tc),
             on_table: num(tc),

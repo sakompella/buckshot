@@ -4,8 +4,8 @@
 //! these pin the helpers that consumers such as `buckshot-search` call.
 
 use buckshot_rules::{
-    AmountRule, Answer, Config, Deck, Event, Gun, HealthRule, Item, ItemRule, Items, Load, LoadRule, Move, Notes, Phase, Range, Request,
-    Ring, RoundRules, RuleError, Seat, Seats, Shell, ShellRule, State, Table, request, start, step, step_event, step_into,
+    AmountRule, Answer, Config, Deck, EnumMap, Event, Gun, HealthRule, Item, ItemRule, Items, Load, LoadRule, Move, Notes, Phase, Range,
+    Request, Ring, RoundRules, RuleError, Seat, Seats, Shell, ShellRule, State, Table, request, start, step, step_event, step_into,
 };
 
 /// Every table this build holds.
@@ -26,11 +26,11 @@ fn config(table: Table) -> Result<Config, RuleError> {
             shells: ShellRule::Random,
             items: AmountRule::Fixed(4),
         }; 4],
-        items: [ItemRule {
+        items: EnumMap::from_fn(|_| ItemRule {
             enabled: true,
             per_player: 8,
             on_table: 32,
-        }; 9],
+        }),
     };
     Config::new(table, &[round, round])
 }
@@ -46,6 +46,7 @@ fn menu_helpers_agree_with_the_move_list() {
         let mut n = seed;
         let mut buffer = Notes::default();
         for _ in 0..600_u32 {
+            // A fixed walk, not a Hegel one, so `menus > 20` below holds on every run.
             n = n.wrapping_mul(1_103_515_245).wrapping_add(12_345);
             let pick = n >> 16_u32;
             let answer = match request(&config, &state) {
@@ -93,14 +94,14 @@ fn guns_keep_their_shells_in_order() {
         .map(|i| if i.is_multiple_of(3) { Shell::Live } else { Shell::Blank })
         .collect();
     for len in [0_usize, 1, 5, 63, 64] {
-        let part = shells.get(..len).unwrap_or(&shells);
+        let part = &shells[..len];
         let gun = Gun::from_shells(part.iter().copied()).expect("at most the capacity");
         assert_eq!(usize::try_from(gun.len()).ok(), Some(len), "from_shells keeps every shell");
         assert_eq!(gun.is_empty(), len == 0, "is_empty");
         for (i, shell) in part.iter().enumerate() {
-            assert_eq!(gun.nth(u32::try_from(i).unwrap_or(u32::MAX)), Some(*shell), "shell {i} of {len}");
+            assert_eq!(gun.nth(u32::try_from(i).expect("small")), Some(*shell), "shell {i} of {len}");
         }
-        assert_eq!(gun.nth(u32::try_from(len).unwrap_or(u32::MAX)), None, "nothing past the end");
+        assert_eq!(gun.nth(u32::try_from(len).expect("small")), None, "nothing past the end");
     }
     let most = Gun::from_shells(shells.iter().copied().skip(1)).expect("under the capacity");
     let pushed = most.push_front(Shell::Live);
@@ -109,14 +110,11 @@ fn guns_keep_their_shells_in_order() {
     assert_eq!(pushed.nth(1), most.nth(0), "and moves the rest back");
 }
 
-// Bug: lists past their capacity dropped entries silently in release (push_bounded, 8a8aad7);
-// the tape decoder's guns were cut the same way.
 #[test]
 fn a_gun_past_its_capacity_is_refused_not_cut() {
     assert_eq!(Gun::from_shells([Shell::Blank; 65]), None);
 }
 
-// Bug: as above (8a8aad7); a seat list dropped a fifth seat.
 #[test]
 #[should_panic = "a seat list outgrew one table's seats"]
 fn a_fifth_seat_panics_rather_than_drop() {
@@ -126,11 +124,10 @@ fn a_fifth_seat_panics_rather_than_drop() {
     }
 }
 
-// Bug: as above (8a8aad7); Gun::of_load cut a load past the gun's capacity.
 #[test]
 #[should_panic = "a load outgrew the gun"]
 fn a_load_past_the_gun_panics_rather_than_cut() {
-    assert_eq!(Gun::of_load(Load { live: 33, blank: 32 }).len(), 65, "unreachable: the load panics");
+    std::hint::black_box(Gun::of_load(Load { live: 33, blank: 32 }));
 }
 
 #[test]
@@ -227,7 +224,6 @@ fn deck_ids_form_a_set_inside_the_table_deck() {
         assert_eq!(deck.len(), 2, "{table:?}: len");
         let kept = Deck::of_ids(table, [0]).expect("an id inside the deck");
         assert_eq!(deck.filtered(|id| id <= 1), kept, "{table:?}: filtered keeps what is in both");
-        // Bug: ids past the deck were dropped silently (8a8aad7).
         assert_eq!(Deck::of_ids(table, [0, 15]), None, "{table:?}: an id past the deck");
         assert_eq!(Deck::of_ids(table, [40]), None, "{table:?}: an id past any deck");
     }

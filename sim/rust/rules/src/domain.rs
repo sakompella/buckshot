@@ -5,12 +5,13 @@
 //! [`Item::ORDER`], and the gun is a bit string of at most [`Gun::CAPACITY`]
 //! shells.
 
+use enum_map::{Enum, EnumMap};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
 use crate::branch::B;
 
 /// A fixed socket identity (domain.bend `Seat`), numbered from 0.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, IntoPrimitive, TryFromPrimitive, Enum)]
 #[repr(u8)]
 pub enum Seat {
     Seat0,
@@ -20,6 +21,8 @@ pub enum Seat {
 }
 
 impl Seat {
+    pub const ALL: [Self; 4] = [Self::Seat0, Self::Seat1, Self::Seat2, Self::Seat3];
+
     #[must_use]
     pub fn index(self) -> usize {
         usize::from(u8::from(self))
@@ -111,13 +114,13 @@ impl Seats {
     /// # Panics
     ///
     /// On a fifth seat, which no table has, rather than drop it.
+    #[expect(clippy::panic, reason = "a fifth seat is a bug, not a seat to drop")]
     pub fn push(&mut self, seat: Seat) {
-        let free = self.seats.get_mut(usize::from(self.len));
-        assert!(free.is_some(), "a seat list outgrew one table's seats");
-        if let Some(free) = free {
-            *free = seat;
-            self.len = self.len.saturating_add(1);
-        }
+        let Some(free) = self.seats.get_mut(usize::from(self.len)) else {
+            panic!("a seat list outgrew one table's seats");
+        };
+        *free = seat;
+        self.len = self.len.saturating_add(1);
     }
 
     /// Appends `seat` unless it is already in the list.
@@ -147,7 +150,7 @@ impl Seats {
 
     #[must_use]
     pub fn as_slice(&self) -> &[Seat] {
-        self.seats.get(..usize::from(self.len)).unwrap_or_default()
+        self.seats.split_at(usize::from(self.len)).0
     }
 
     #[must_use]
@@ -210,6 +213,15 @@ impl<T: Copy> Ring<T> {
             table,
             cells: [value; RING_CELLS],
         }
+    }
+
+    /// `make` of every seated socket, called in ascending socket order.
+    #[must_use]
+    pub fn from_fn(table: Table, mut make: impl FnMut(Seat) -> T) -> Self {
+        let seats = table.seats();
+        let [head, ..] = seats.seats;
+        let first = Self::fill(table, make(head));
+        seats.iter().skip(1).fold(first, |ring, seat| ring.set(seat, make(seat)))
     }
 
     #[must_use]
@@ -316,6 +328,12 @@ impl Gun {
         self.len
     }
 
+    /// The live shells.
+    #[must_use]
+    pub const fn live(self) -> u32 {
+        self.bits.count_ones()
+    }
+
     #[must_use]
     pub const fn is_empty(self) -> bool {
         self.len == 0
@@ -390,7 +408,7 @@ impl Gun {
 }
 
 /// domain.bend `Item`, numbered in `item.order()`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, IntoPrimitive, TryFromPrimitive)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, IntoPrimitive, TryFromPrimitive, Enum)]
 #[repr(u8)]
 pub enum Item {
     Saw,
@@ -529,26 +547,6 @@ impl Slot {
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct Slots(u32);
 
-/// A slot's content by its four bits.
-const SLOT_CONTENT: [Option<Item>; 16] = [
-    None,
-    Some(Item::Saw),
-    Some(Item::Glass),
-    Some(Item::Jammer),
-    Some(Item::Cigarettes),
-    Some(Item::Beer),
-    Some(Item::Phone),
-    Some(Item::Inverter),
-    Some(Item::Adrenaline),
-    Some(Item::Remote),
-    None,
-    None,
-    None,
-    None,
-    None,
-    None,
-];
-
 impl Slots {
     pub const EMPTY: Self = Self(0);
 
@@ -556,11 +554,16 @@ impl Slots {
         u32::from(u8::from(slot)).wrapping_mul(4)
     }
 
+    /// A slot's content by its four bits, the low ones of `bits`.
+    fn content(bits: u32) -> Option<Item> {
+        let [low, ..] = bits.to_le_bytes();
+        Item::try_from((low & 0xF).checked_sub(1)?).ok()
+    }
+
     /// `slots.get`.
     #[must_use]
     pub fn get(&self, slot: Slot) -> Option<Item> {
-        let bits = self.0.wrapping_shr(Self::shift(slot)) & 0xF;
-        SLOT_CONTENT.get(usize::try_from(bits).unwrap_or(0)).copied().flatten()
+        Self::content(self.0.wrapping_shr(Self::shift(slot)))
     }
 
     /// `slots.put`.
@@ -576,9 +579,9 @@ impl Slots {
         let mut rest = self.0;
         core::iter::from_fn(move || {
             let at = rest.trailing_zeros() & !3;
-            let bits = rest.checked_shr(at)? & 0xF;
+            let bits = rest.checked_shr(at)?;
             rest &= !0xFu32.wrapping_shl(at);
-            SLOT_CONTENT.get(usize::try_from(bits).unwrap_or(0)).copied().flatten()
+            Self::content(bits)
         })
     }
 
@@ -622,9 +625,6 @@ impl Damage {
     }
 }
 
-// Match configuration
-// ===================
-
 /// A starting health rule. `Fixed` holds the health itself (Bend's `Pos`, so at least 1).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum HealthRule {
@@ -659,26 +659,27 @@ pub struct ItemRule {
     pub on_table: u32,
 }
 
-/// One round's rules. `items` is indexed by [`Item::rank`].
+impl ItemRule {
+    pub const OFF: Self = Self {
+        enabled: false,
+        per_player: 0,
+        on_table: 0,
+    };
+}
+
+/// One round's rules.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct RoundRules {
     pub health: HealthRule,
     pub loads: [LoadRule; 4],
-    pub items: [ItemRule; 9],
+    pub items: EnumMap<Item, ItemRule>,
 }
 
 impl RoundRules {
     /// `rules.item`.
     #[must_use]
     pub fn item(&self, item: Item) -> ItemRule {
-        self.items
-            .get(usize::try_from(item.rank()).unwrap_or(0))
-            .copied()
-            .unwrap_or(ItemRule {
-                enabled: false,
-                per_player: 0,
-                on_table: 0,
-            })
+        self.items[item]
     }
 
     /// `config.default_round()`: `MP_MatchCustomization`'s defaults.
@@ -698,7 +699,7 @@ impl RoundRules {
         Self {
             health: HealthRule::Random,
             loads: [load; 4],
-            items: [
+            items: EnumMap::from_array([
                 rule(2, 32),
                 rule(2, 32),
                 rule(1, 1),
@@ -708,7 +709,7 @@ impl RoundRules {
                 rule(4, 32),
                 rule(4, 32),
                 rule(1, 2),
-            ],
+            ]),
         }
     }
 }
@@ -731,7 +732,9 @@ impl Config {
     pub fn new(table: Table, rounds: &[RoundRules]) -> Result<Self, crate::RuleError> {
         let invalid = |reason| Err(crate::RuleError::Config(reason));
         let (len, first) = match rounds {
-            [first] | [first, _] | [first, _, _] => (rounds.len(), *first),
+            [first] => (1, *first),
+            [first, _] => (2, *first),
+            [first, _, _] => (3, *first),
             [] | [_, _, _, _, ..] => return invalid("a plan has one to three rounds"),
         };
         for round in rounds {
@@ -753,11 +756,7 @@ impl Config {
         for (cell, round) in all.iter_mut().zip(rounds) {
             *cell = *round;
         }
-        Ok(Self {
-            table,
-            rounds: all,
-            len: u8::try_from(len).unwrap_or(3),
-        })
+        Ok(Self { table, rounds: all, len })
     }
 
     #[must_use]
@@ -774,21 +773,14 @@ impl Config {
     /// `plan.round`.
     #[must_use]
     pub fn round(&self, index: u32) -> Option<&RoundRules> {
-        if index >= self.plan_length() {
-            return None;
-        }
-        self.rounds.get(usize::try_from(index).ok()?)
+        self.rounds().get(usize::try_from(index).ok()?)
     }
 
-    /// The rounds of the plan.
     #[must_use]
     pub fn rounds(&self) -> &[RoundRules] {
-        self.rounds.get(..usize::from(self.len)).unwrap_or(&[])
+        self.rounds.split_at(usize::from(self.len)).0
     }
 }
-
-// Requests
-// ========
 
 /// The semantic draw sites (domain.bend `Label`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -958,9 +950,6 @@ pub fn prize(round: u32) -> u32 {
 
 /// `phone.cap()`: the phone announces at most the seventh shell.
 pub const PHONE_CAP: u32 = 7;
-
-// Events
-// ======
 
 /// Public events (domain.bend `GameEvent`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

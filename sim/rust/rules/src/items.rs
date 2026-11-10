@@ -125,7 +125,7 @@ fn copies_one(found: Option<Item>, item: Item) -> u32 {
         }
         Some(actual) => {
             branch!(B::SmItemsCopiesOneSome);
-            bool_nat(actual.rank() == item.rank())
+            bool_nat(actual == item)
         }
     }
 }
