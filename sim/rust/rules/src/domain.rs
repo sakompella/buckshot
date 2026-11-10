@@ -317,6 +317,12 @@ impl Gun {
         self.len
     }
 
+    /// The live shells.
+    #[must_use]
+    pub const fn live(self) -> u32 {
+        self.bits.count_ones()
+    }
+
     #[must_use]
     pub const fn is_empty(self) -> bool {
         self.len == 0
