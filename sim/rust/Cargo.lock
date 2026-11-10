@@ -63,6 +63,7 @@ dependencies = [
 name = "buckshot-search"
 version = "0.1.0"
 dependencies = [
+ "arrayvec",
  "buckshot-rules",
  "hegeltest",
  "rayon",

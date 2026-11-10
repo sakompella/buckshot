@@ -41,8 +41,12 @@ impl Span {
         Self { start, end }
     }
 
+    #[expect(
+        clippy::indexing_slicing,
+        reason = "`pushed` makes a span on the stack it reads, which shrinks only below the spans in use"
+    )]
     pub fn of<T>(self, stack: &[T]) -> &[T] {
-        stack.get(self.start..self.end).unwrap_or(&[])
+        &stack[self.start..self.end]
     }
 
     const fn is_empty(self) -> bool {
@@ -51,6 +55,12 @@ impl Span {
 
     const fn len(self) -> usize {
         self.end.saturating_sub(self.start)
+    }
+
+    /// Item `at` of the span.
+    #[expect(clippy::indexing_slicing, reason = "callers count `at` below the span's length")]
+    fn at<T: Copy>(self, stack: &[T], at: usize) -> T {
+        self.of(stack)[at]
     }
 }
 
@@ -264,7 +274,13 @@ struct Scored {
     value: Value,
 }
 
+/// The node budget ran out (or an answer's notes outgrew their buffer, which
+/// [`Buffers::overflow`] records).
+#[derive(Clone, Copy, Debug)]
+struct Spent;
+
 /// A search's result; scores are a span of [`Search::scored`].
+#[cfg(feature = "f32")]
 #[derive(Clone, Copy, Debug)]
 enum Searched {
     Value(Value),
@@ -406,29 +422,29 @@ impl Search<'_> {
         Span::from(start, self.branches.len())
     }
 
-    fn leaf(&self, public: Span, private: Span, reach: Reach) -> Searched {
+    fn leaf(&self, public: Span, private: Span, reach: Reach) -> Value {
         let value = static_value(public.of(&self.worlds), self.me);
-        Searched::Value(Value {
+        Value {
             public: value,
             private: static_private(private.of(&self.worlds), self.me, value),
             reach,
-        })
+        }
     }
 
     /// `node.expected`: with no private worlds the private value is the public one.
-    fn expected(sums: Sums, private: Span) -> Searched {
+    fn expected(sums: Sums, private: Span) -> Value {
         let value = sums.public.millionths();
-        Searched::Value(Value {
+        Value {
             public: value,
             private: if private.is_empty() { value } else { sums.private.millionths() },
             reach: Reach::Reloads,
-        })
+        }
     }
 
     /// `node.reload`: a deal leaf's value depends on its beliefs alone, so the memo keeps it whatever the depth.
-    fn reload_leaf(&mut self, public: Span, private: Span) -> Searched {
+    fn reload_leaf(&mut self, public: Span, private: Span) -> Result<Value, Spent> {
         let count = match self.reload {
-            Reload::Static => return self.leaf(public, private, Reach::Reloads),
+            Reload::Static => return Ok(self.leaf(public, private, Reach::Reloads)),
             Reload::Sampled { count } => count,
         };
         let (public_worlds, private_worlds) = (public.of(&self.worlds), private.of(&self.worlds));
@@ -438,7 +454,7 @@ impl Search<'_> {
                 let key = hash(Kind::Deal, public_worlds, private_worlds);
                 if let Some(Stored::Deal(sums)) = self.tally.find(key, Kind::Deal, public_worlds, private_worlds) {
                     self.tally.deal_hit();
-                    return Self::expected(sums, private);
+                    return Ok(Self::expected(sums, private));
                 }
                 Some(key)
             }
@@ -452,13 +468,13 @@ impl Search<'_> {
             &mut self.deal,
         ) else {
             self.scratch.buffers.overflow = true;
-            return Searched::Spent;
+            return Err(Spent);
         };
         if let Some(key) = key {
             self.tally
                 .keep(key, Kind::Deal, (public_worlds, private_worlds), Stored::Deal(sums));
         }
-        Self::expected(sums, private)
+        Ok(Self::expected(sums, private))
     }
 }
 
@@ -510,12 +526,14 @@ impl Search<'_> {
             }));
         };
         if first.won.is_some() {
-            return Task::Known(self.leaf(public, private, Reach::Settled));
+            return Task::Known(Searched::Value(self.leaf(public, private, Reach::Settled)));
         }
         match (request(self.config, &first.state), depth.checked_sub(1)) {
             (Request::Choose(menu), Some(child)) => self.choose(menu.seat() == self.me, child, public, private, &menu),
-            (Request::Draw { .. }, _) => Task::Known(self.reload_leaf(public, private)),
-            (Request::Choose(_), None) | (Request::Finished | Request::Stuck, _) => Task::Known(self.leaf(public, private, Reach::Cut)),
+            (Request::Draw { .. }, _) => Task::Known(self.reload_leaf(public, private).map_or(Searched::Spent, Searched::Value)),
+            (Request::Choose(_), None) | (Request::Finished | Request::Stuck, _) => {
+                Task::Known(Searched::Value(self.leaf(public, private, Reach::Cut)))
+            }
         }
     }
 
@@ -701,13 +719,18 @@ fn invalid(reason: &'static str, nodes: u64) -> Analysis {
     Analysis::Invalid { reason, nodes }
 }
 
+/// The first line with the highest score, and its place.
+fn best_line(lines: &[Line]) -> Option<(usize, &Line)> {
+    lines.iter().enumerate().fold(None, |best, (j, line)| match best {
+        Some((_, top)) if line.score <= top.score => best,
+        _ => Some((j, line)),
+    })
+}
+
 fn analysed(lines: Vec<Line>, tally: &Tally, depth: u32, limited: bool) -> Analysis {
-    let Some((first, rest)) = lines.split_first() else {
+    let Some((_, best)) = best_line(&lines) else {
         return invalid("no legal move", tally.nodes);
     };
-    let best = rest
-        .iter()
-        .fold(first, |best, line| if line.score > best.score { line } else { best });
     let (index, score) = (best.index, best.score);
     Analysis::Analysed(Analysed {
         lines,
