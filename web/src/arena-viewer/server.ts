@@ -275,13 +275,12 @@ const siteResponse = async (siteDir: string, request: Request): Promise<Response
   return new Response(Bun.file(join(siteDir, "index.html")), { headers: { "content-type": "text/html; charset=utf-8" } });
 };
 
-/** What the API guards and offers: a password for every route, and a database file to download. */
+/** What the API guards: a password for every route. */
 export interface ViewerAccess {
   readonly password: string | undefined;
-  readonly download: string | undefined;
 }
 
-export const serveArenaViewer = ({ db, regret, seats, seatIndex, decisions, certain, consistency, luck }: Arena, siteDir: string, hostname: string, port: number, { password, download }: ViewerAccess) => {
+export const serveArenaViewer = ({ db, regret, seats, seatIndex, decisions, certain, consistency, luck }: Arena, siteDir: string, hostname: string, port: number, { password }: ViewerAccess) => {
   const guarded = guardedBy(password);
   const aggregateJson = encodeAggregates(aggregatesOf({ seats: withPotShares(seats), decisions, certain: certain.summary.rates, consistency, luck }));
   const aggregateRoutes = Object.fromEntries(AGGREGATE_NAMES.map((name) => [`/api/agg/${name}`, guarded((request) => json(request, encodedBody(aggregateJson[name])))]));
@@ -304,12 +303,6 @@ export const serveArenaViewer = ({ db, regret, seats, seatIndex, decisions, cert
     routes: {
       "/api/*": () => new Response("not found", { status: 404 }),
       "/api/seats": guarded((request) => json(request, seatsBody)),
-      "/api/download": guarded(() => (download === undefined ? new Response("no download configured", { status: 404 }) : Response.json({ bytes: Bun.file(download).size }))),
-      "/api/db": guarded(() =>
-        download === undefined
-          ? new Response("no download configured", { status: 404 })
-          : new Response(Bun.file(download), { headers: { "content-disposition": 'attachment; filename="buckshot.sqlite"' } }),
-      ),
       "/api/decisions": guarded((request) => json(request, decisionsBody)),
       "/api/blunders": guarded((request) => json(request, blundersBody)),
       ...aggregateRoutes,

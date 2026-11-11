@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { afterAll, beforeAll, expect, test } from "bun:test";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -70,19 +70,8 @@ const exportTo = async (out: string) => {
 
 const readExport = (out: string): ReadonlyMap<string, string> => new Map(readdirSync(out).map((file) => [file.replace(/\.json$/, ""), readFileSync(join(out, file), "utf8")]));
 
-test("a database that keeps its provenance is refused and nothing is written", async () => {
-  const out = join(root, "refused");
-  const { code, stderr } = await exportTo(out);
-
-  expect(code).toBe(1);
-  expect(stderr).toContain("not a public database");
-  expect(existsSync(out)).toBe(false);
-});
-
-test("a public database exports aggregate files that pass the privacy check and hold no seed or seed block", async () => {
+test("the analysis database exports aggregate files that pass the privacy check and hold no seed or seed block", async () => {
   const db = new Database(database);
-
-  db.run("update match_seats set provenance_json = null");
 
   const planted = [
     db.run(`update calls set error = '${POISON.error}', reasoning_text = '${POISON.reasoning}', response_text = '${POISON.response}'`),
@@ -95,7 +84,7 @@ test("a public database exports aggregate files that pass the privacy check and 
 
   db.close();
 
-  const out = join(root, "public");
+  const out = join(root, "exported");
   const { code, stderr } = await exportTo(out);
 
   expect([code, stderr]).toEqual([0, ""]);
@@ -113,7 +102,7 @@ test("a public database exports aggregate files that pass the privacy check and 
 });
 
 test("the privacy check names each kind of leak in the exported files", () => {
-  const files = readExport(join(root, "public"));
+  const files = readExport(join(root, "exported"));
   const poisoned = (name: string, edit: (json: string) => string) => new Map([...files].map(([file, json]) => [file, file === name ? edit(json) : json]));
 
   const cases: ReadonlyArray<readonly [string, ReadonlyMap<string, string>, string]> = [

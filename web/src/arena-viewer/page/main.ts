@@ -6,7 +6,7 @@ import { modifyFields } from "foldkit/struct";
 import { aggregateUrl, isOnline } from "../../site/online.ts";
 import { type ArenaRoute, arenaHref, arenaStateOf, replayHref } from "../../site/route.ts";
 import { AGGREGATES } from "../aggregates.ts";
-import { CertainMistakes, Download, MatchDetailJson, SeatsResponse } from "../api.ts";
+import { CertainMistakes, MatchDetailJson, SeatsResponse } from "../api.ts";
 import { withPotShares } from "./data.ts";
 import { INITIAL_ROWS, MORE_ROWS } from "./matches.ts";
 import { type Filter, Group, GROUPS, type Lazy, type LazyName, LoadFailure, Message, type Model, MOVED_TARGETS, type Replay, Target, type Viewport } from "./model.ts";
@@ -75,8 +75,8 @@ const LOAD_LAZY = { items: LoadItems, odds: LoadOdds, certain: LoadCertain, cons
 
 const LoadLocal = Command.define("LoadLocal", {
   messages: [Message.SucceededLocal, Message.FailedLocal],
-  execute: Effect.all([getJson("/api/seats", SeatsResponse), getOptional("/api/certain-mistakes", CertainMistakes), getOptional("/api/download", Download)], { concurrency: 3 }).pipe(
-    Effect.map(([seats, certainMoves, download]) => Message.SucceededLocal({ local: { seats: withPotShares(seats), certainMoves, download } })),
+  execute: Effect.all([getJson("/api/seats", SeatsResponse), getOptional("/api/certain-mistakes", CertainMistakes)], { concurrency: 2 }).pipe(
+    Effect.map(([seats, certainMoves]) => Message.SucceededLocal({ local: { seats: withPotShares(seats), certainMoves } })),
     Effect.catch((error) => Effect.succeed(Message.FailedLocal({ error: describe(error) }))),
     Effect.provide(Http.layer),
   ),
