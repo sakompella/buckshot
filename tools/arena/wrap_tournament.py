@@ -384,7 +384,7 @@ class Wrap:
             ("swap-derived", self.swap_derived),
             ("export", self.export),
             *([("deploy", self.deploy_)] if self.deploy else []),
-            ("doc-leaderboard", self.doc("leaderboard", "results.md", *dbs)),
+            ("doc-leaderboard", self.doc("leaderboard", "results.md", *dbs, "--luck", str(self.derived / "luck.sqlite"))),
             ("doc-regret", self.doc("regret", f"{a}/regret.md", *derived)),
             ("doc-by_round", self.doc("by_round", f"{a}/regret.md", *dbs, *derived)),
             ("doc-round_improvement", self.doc("round_improvement", f"{a}/regret.md", *dbs, *derived, "--mistakes", str(self.derived / "certain-mistakes.sqlite"))),

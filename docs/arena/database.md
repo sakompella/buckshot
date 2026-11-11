@@ -1,6 +1,6 @@
 # Tournament database
 
-The analysis database is `_work/arena/analysis/buckshot.sqlite` by default. It is Git-ignored. Original tournament directories remain the source of truth. It is never published: the arena viewer shares it behind a password, and the online site reads only the aggregate JSON of `web/scripts/arena-export.ts`, checked by its privacy scan. The importer never writes to a tournament directory.
+The analysis database is `_work/arena/analysis/buckshot.sqlite` by default. It is Git-ignored. Original tournament directories remain the source of truth. It is never published: the arena viewer serves it with no auth, to whoever can reach its port, and the online site reads only the aggregate JSON of `web/scripts/arena-export.ts`, checked by its privacy scan. The importer never writes to a tournament directory.
 
 ## Import and rebuild
 

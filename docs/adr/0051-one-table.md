@@ -1,5 +1,7 @@
 # One table for Play and Replay
 
+> Superseded 2026-11-11 by ADR-0053 and ADR-0055: the Play page and the Replay page are gone, and the table drawing (`web/src/board-view.ts`, `web/src/table.css`) is deleted. The text below is kept as history.
+
 Play and Replay draw the same table (`web/src/board-view.ts`), styled by `web/src/table.css`, which both pages' stylesheets follow. The table takes a seat table and the legal moves of the seat to act, each move a chain of steps (`TableMove`, the agents' move model) with its label, plus an optional click handler and an optional chosen move:
 
 - **Play** passes Bend's legal moves for the human seat, each one step, and a click handler; a click sends the move's index.
