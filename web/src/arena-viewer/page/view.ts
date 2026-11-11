@@ -149,7 +149,7 @@ const navView = (h: H, maybeGroup: Option.Option<Group>): Html =>
   );
 
 const scatterCard = (h: H, derived: Derived, scatter: Model["scatter"], width: number): Html =>
-  h.div([h.Class("card")], [scatterView(h, derived.pooled, derived.everyPooled, derived.ratings, derived.ranks, scatter, width)]);
+  h.div([h.Class("card")], [scatterView(h, derived.pooled, derived.everyPooled, derived.ratings, derived.ranks, derived.ratingName, scatter, width)]);
 
 const drillCard = (h: H, derived: Derived, maybeDrill: Model["maybeDrill"], lazy: Model["lazy"]): Html =>
   Option.match(maybeDrill, { onNone: () => h.empty, onSome: (key) => configPanelView(h, derived, key, lazy) });

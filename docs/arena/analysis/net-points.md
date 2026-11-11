@@ -46,67 +46,67 @@ So running to the reload with 3 or fewer shells left is not cheap and does not s
 - Suggestion: keep depth 6 with 20,000 nodes for the headline. If a tighter number is wanted, spend the hours on the sampled leaf for 2 or fewer shells left, not on depth.
 
 <!-- net-points:start -->
-3,536 finished matches with no DeepSeek seat and no engine seat (3,708 with the engine ones, used for the ratings, which cover 50 configs). Left out: 1 with an agent decision that has no searched row. 49 configs have at least 20 matches. Intervals are 95%, 2,000 resamples of seed blocks.
+3,536 finished matches with no DeepSeek seat and no engine seat (3,708 with the engine ones, used for the ratings, which cover 51 configs). Left out: 1 with an agent decision that has no searched row. 49 configs have at least 20 matches. Intervals are 95%, 2,000 resamples of seed blocks.
 
 ### Round-win equivalents lost, by config
 
 | model | effort | matches | round-win equivalents lost per match | per round | largest gap (points) | Round Elo |
 |---|---|---|---|---|---|---|
-| claude-sonnet-5-5 | max | 140 | 0.14 (0.12 to 0.17) | 0.05 | 7.3 | +103 |
-| claude-opus-5-5 | max | 80 | 0.16 (0.14 to 0.19) | 0.05 | 8.3 | +119 |
-| gpt-6.1-sol | xhigh | 101 | 0.17 (0.14 to 0.19) | 0.06 | 7.3 | +66 |
-| claude-haiku-5-5 | max | 111 | 0.18 (0.15 to 0.21) | 0.06 | 8.5 | +46 |
-| claude-opus-5-5 | xhigh | 150 | 0.19 (0.17 to 0.22) | 0.06 | 8.8 | +99 |
-| gpt-6.1-sol | max | 122 | 0.19 (0.16 to 0.22) | 0.06 | 7.8 | +95 |
-| gpt-6.1-sol | high | 99 | 0.21 (0.17 to 0.24) | 0.07 | 8.6 | +42 |
-| claude-opus-5-5 | high | 80 | 0.21 (0.18 to 0.25) | 0.07 | 10.0 | +75 |
-| gpt-6.1-terra | max | 80 | 0.22 (0.18 to 0.26) | 0.07 | 8.6 | +123 |
-| claude-haiku-5-5 | xhigh | 158 | 0.22 (0.20 to 0.25) | 0.07 | 9.9 | +13 |
-| gpt-6-astra | low | 80 | 0.22 (0.18 to 0.27) | 0.07 | 10.9 | +62 |
-| claude-opus-5-5 | medium | 294 | 0.22 (0.20 to 0.25) | 0.07 | 9.8 | +43 |
-| gpt-6-astra | medium | 254 | 0.23 (0.21 to 0.25) | 0.08 | 11.2 | +82 |
-| claude-sonnet-5-5 | xhigh | 160 | 0.24 (0.20 to 0.28) | 0.08 | 10.6 | +48 |
-| gpt-6.1-sol | medium | 271 | 0.24 (0.22 to 0.26) | 0.08 | 10.9 | +55 |
-| gpt-6.1-sol | low | 98 | 0.25 (0.21 to 0.29) | 0.08 | 12.2 | +60 |
-| claude-opus-5-5 | off | 80 | 0.25 (0.21 to 0.29) | 0.08 | 11.4 | +62 |
-| gpt-6.1-terra | xhigh | 80 | 0.25 (0.21 to 0.30) | 0.08 | 12.6 | +59 |
-| gpt-6-astra | high | 80 | 0.25 (0.22 to 0.30) | 0.08 | 12.0 | +117 |
-| gpt-6-astra | off | 80 | 0.26 (0.22 to 0.29) | 0.09 | 12.5 | +34 |
-| claude-opus-5-5 | low | 80 | 0.26 (0.21 to 0.31) | 0.09 | 12.2 | +23 |
-| gpt-5.6-terra | max | 90 | 0.28 (0.25 to 0.32) | 0.09 | 13.7 | +17 |
-| claude-haiku-5-5 | high | 173 | 0.29 (0.26 to 0.33) | 0.10 | 13.0 | +8 |
-| gpt-6.1-terra | high | 80 | 0.30 (0.25 to 0.34) | 0.10 | 12.6 | +50 |
-| claude-sonnet-5-5 | high | 161 | 0.30 (0.27 to 0.34) | 0.10 | 12.7 | +6 |
-| gpt-6.1-terra | low | 80 | 0.34 (0.29 to 0.39) | 0.11 | 18.3 | +30 |
-| gpt-6.1-terra | medium | 80 | 0.34 (0.28 to 0.41) | 0.11 | 17.5 | +48 |
-| gpt-5.6-terra | xhigh | 93 | 0.39 (0.34 to 0.45) | 0.13 | 16.8 | +31 |
-| claude-haiku-5-5 | medium | 342 | 0.40 (0.36 to 0.43) | 0.13 | 17.3 | -1 |
-| claude-sonnet-5-5 | medium | 324 | 0.40 (0.37 to 0.43) | 0.13 | 17.9 | -3 |
-| gpt-6.1-terra | off | 79 | 0.43 (0.37 to 0.51) | 0.14 | 20.7 | +29 |
-| claude-sonnet-5-5 | low | 159 | 0.44 (0.40 to 0.49) | 0.15 | 18.8 | -41 |
-| claude-haiku-5-5 | low | 193 | 0.45 (0.41 to 0.49) | 0.15 | 19.4 | -2 |
-| claude-sonnet-5-5 | off | 164 | 0.46 (0.41 to 0.51) | 0.15 | 19.1 | -24 |
-| gpt-6-luna | max | 112 | 0.50 (0.43 to 0.58) | 0.17 | 21.7 | -18 |
-| gpt-5.6-terra | high | 91 | 0.51 (0.44 to 0.59) | 0.17 | 22.1 | -5 |
-| gpt-5.6-terra | medium | 259 | 0.52 (0.48 to 0.55) | 0.17 | 24.5 | -25 |
-| gpt-6-luna | xhigh | 115 | 0.57 (0.51 to 0.63) | 0.19 | 24.9 | -13 |
-| gpt-5.6-terra | low | 91 | 0.59 (0.52 to 0.67) | 0.20 | 26.0 | -27 |
-| gpt-6-luna | high | 112 | 0.75 (0.66 to 0.85) | 0.25 | 29.4 | -71 |
-| claude-haiku-5-5 | off | 202 | 0.77 (0.69 to 0.84) | 0.26 | 31.8 | -93 |
-| gpt-6-luna | medium | 282 | 0.93 (0.88 to 0.99) | 0.31 | 35.1 | -156 |
-| claude-haiku-4-5-20251001 | medium | 340 | 0.95 (0.88 to 1.02) | 0.32 | 36.8 | -115 |
-| gpt-6-luna | off | 110 | 0.99 (0.88 to 1.09) | 0.33 | 33.3 | -212 |
-| claude-haiku-4-5-20251001 | minimal | 143 | 1.00 (0.90 to 1.11) | 0.33 | 37.2 | -137 |
-| claude-haiku-4-5-20251001 | low | 149 | 1.02 (0.91 to 1.14) | 0.34 | 37.3 | -137 |
-| claude-haiku-4-5-20251001 | high | 135 | 1.02 (0.91 to 1.14) | 0.34 | 38.4 | -143 |
-| gpt-6-luna | low | 110 | 1.11 (0.99 to 1.23) | 0.37 | 38.9 | -225 |
-| claude-haiku-4-5-20251001 | off | 125 | 1.32 (1.21 to 1.43) | 0.44 | 46.3 | -214 |
+| claude-sonnet-5-5 | max | 140 | 0.14 (0.12 to 0.17) | 0.05 | 7.3 | +134 |
+| claude-opus-5-5 | max | 80 | 0.16 (0.14 to 0.19) | 0.05 | 8.3 | +149 |
+| gpt-6.1-sol | xhigh | 101 | 0.17 (0.14 to 0.19) | 0.06 | 7.3 | +96 |
+| claude-haiku-5-5 | max | 111 | 0.18 (0.15 to 0.21) | 0.06 | 8.5 | +73 |
+| claude-opus-5-5 | xhigh | 150 | 0.19 (0.17 to 0.22) | 0.06 | 8.8 | +128 |
+| gpt-6.1-sol | max | 122 | 0.19 (0.16 to 0.22) | 0.06 | 7.8 | +124 |
+| gpt-6.1-sol | high | 99 | 0.21 (0.17 to 0.24) | 0.07 | 8.6 | +71 |
+| claude-opus-5-5 | high | 80 | 0.21 (0.18 to 0.25) | 0.07 | 10.0 | +105 |
+| gpt-6.1-terra | max | 80 | 0.22 (0.18 to 0.26) | 0.07 | 8.6 | +153 |
+| claude-haiku-5-5 | xhigh | 158 | 0.22 (0.20 to 0.25) | 0.07 | 9.9 | +41 |
+| gpt-6-astra | low | 80 | 0.22 (0.18 to 0.27) | 0.07 | 10.9 | +91 |
+| claude-opus-5-5 | medium | 294 | 0.22 (0.20 to 0.25) | 0.07 | 9.8 | +73 |
+| gpt-6-astra | medium | 254 | 0.23 (0.21 to 0.25) | 0.08 | 11.2 | +112 |
+| claude-sonnet-5-5 | xhigh | 160 | 0.24 (0.20 to 0.28) | 0.08 | 10.6 | +83 |
+| gpt-6.1-sol | medium | 271 | 0.24 (0.22 to 0.26) | 0.08 | 10.9 | +84 |
+| gpt-6.1-sol | low | 98 | 0.25 (0.21 to 0.29) | 0.08 | 12.2 | +90 |
+| claude-opus-5-5 | off | 80 | 0.25 (0.21 to 0.29) | 0.08 | 11.4 | +92 |
+| gpt-6.1-terra | xhigh | 80 | 0.25 (0.21 to 0.30) | 0.08 | 12.6 | +88 |
+| gpt-6-astra | high | 80 | 0.25 (0.22 to 0.30) | 0.08 | 12.0 | +147 |
+| gpt-6-astra | off | 80 | 0.26 (0.22 to 0.29) | 0.09 | 12.5 | +63 |
+| claude-opus-5-5 | low | 80 | 0.26 (0.21 to 0.31) | 0.09 | 12.2 | +53 |
+| gpt-5.6-terra | max | 90 | 0.28 (0.25 to 0.32) | 0.09 | 13.7 | +46 |
+| claude-haiku-5-5 | high | 173 | 0.29 (0.26 to 0.33) | 0.10 | 13.0 | +36 |
+| gpt-6.1-terra | high | 80 | 0.30 (0.25 to 0.34) | 0.10 | 12.6 | +79 |
+| claude-sonnet-5-5 | high | 161 | 0.30 (0.27 to 0.34) | 0.10 | 12.7 | +37 |
+| gpt-6.1-terra | low | 80 | 0.34 (0.29 to 0.39) | 0.11 | 18.3 | +60 |
+| gpt-6.1-terra | medium | 80 | 0.34 (0.28 to 0.41) | 0.11 | 17.5 | +78 |
+| gpt-5.6-terra | xhigh | 93 | 0.39 (0.34 to 0.45) | 0.13 | 16.8 | +60 |
+| claude-haiku-5-5 | medium | 342 | 0.40 (0.36 to 0.43) | 0.13 | 17.3 | +29 |
+| claude-sonnet-5-5 | medium | 324 | 0.40 (0.37 to 0.43) | 0.13 | 17.9 | +27 |
+| gpt-6.1-terra | off | 79 | 0.43 (0.37 to 0.51) | 0.14 | 20.7 | +58 |
+| claude-sonnet-5-5 | low | 159 | 0.44 (0.40 to 0.49) | 0.15 | 18.8 | -10 |
+| claude-haiku-5-5 | low | 193 | 0.45 (0.41 to 0.49) | 0.15 | 19.4 | +26 |
+| claude-sonnet-5-5 | off | 164 | 0.46 (0.41 to 0.51) | 0.15 | 19.1 | +6 |
+| gpt-6-luna | max | 112 | 0.50 (0.43 to 0.58) | 0.17 | 21.7 | +11 |
+| gpt-5.6-terra | high | 91 | 0.51 (0.44 to 0.59) | 0.17 | 22.1 | +24 |
+| gpt-5.6-terra | medium | 259 | 0.52 (0.48 to 0.55) | 0.17 | 24.5 | +4 |
+| gpt-6-luna | xhigh | 115 | 0.57 (0.51 to 0.63) | 0.19 | 24.9 | +16 |
+| gpt-5.6-terra | low | 91 | 0.59 (0.52 to 0.67) | 0.20 | 26.0 | +2 |
+| gpt-6-luna | high | 112 | 0.75 (0.66 to 0.85) | 0.25 | 29.4 | -42 |
+| claude-haiku-5-5 | off | 202 | 0.77 (0.69 to 0.84) | 0.26 | 31.8 | -68 |
+| gpt-6-luna | medium | 282 | 0.93 (0.88 to 0.99) | 0.31 | 35.1 | -127 |
+| claude-haiku-4-5-20251001 | medium | 340 | 0.95 (0.88 to 1.02) | 0.32 | 36.8 | -89 |
+| gpt-6-luna | off | 110 | 0.99 (0.88 to 1.09) | 0.33 | 33.3 | -183 |
+| claude-haiku-4-5-20251001 | minimal | 143 | 1.00 (0.90 to 1.11) | 0.33 | 37.2 | -110 |
+| claude-haiku-4-5-20251001 | low | 149 | 1.02 (0.91 to 1.14) | 0.34 | 37.3 | -110 |
+| claude-haiku-4-5-20251001 | high | 135 | 1.02 (0.91 to 1.14) | 0.34 | 38.4 | -115 |
+| gpt-6-luna | low | 110 | 1.11 (0.99 to 1.23) | 0.37 | 38.9 | -196 |
+| claude-haiku-4-5-20251001 | off | 125 | 1.32 (1.21 to 1.43) | 0.44 | 46.3 | -187 |
 
 ### Against Round Elo
 
 | measure per config | Pearson | 95% interval | Spearman |
 |---|---|---|---|
-| own points lost per match | -0.95 | -0.95 to -0.90 | -0.91 |
+| own points lost per match | -0.96 | -0.95 to -0.91 | -0.92 |
 | net points per match | +0.82 | 0.72 to 0.83 | +0.69 |
 
 ### Net points within a matchup

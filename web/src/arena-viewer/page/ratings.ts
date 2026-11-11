@@ -1,4 +1,5 @@
-import { groupBy, keyOf, MIN_BLOCKS_FOR_INTERVAL, meanOf, quantile, roundResults, type SeatFull, sumOf, unique } from "./data.ts";
+import { groupBy, isProvisional, keyOf, MIN_BLOCKS_FOR_INTERVAL, meanOf, quantile, roundResults, type SeatFull, sumOf, unique } from "./data.ts";
+import { BOOTSTRAP_DRAWS } from "../../arena/bootstrap.ts";
 import { mulberry32 } from "../../arena/tournament-stats.ts";
 
 // The ratings the whole page reads: Bradley-Terry over every scored two-player match of every tournament.
@@ -33,6 +34,16 @@ const numberGames = (games: ReadonlyArray<Game>): NumberedGames => {
 };
 
 const ELO_PER_NAT = 400 / Math.LN10;
+
+/** The config rated 0: the depth-2 search engine, so adding a config moves no other rating (bt.ANCHOR in tools/arena/analysis). */
+export const ANCHOR = keyOf({ model: "Engine/2/20000", effort: "" });
+
+/** The chance of winning a match against the anchor: the round win chance of the Elo gap, in two rounds of three. */
+export const matchWinVsAnchor = (rating: number): number => {
+  const round = 1 / (1 + 10 ** (-rating / 400));
+
+  return round * round * (3 - 2 * round);
+};
 
 /** The standard deviation of the Gaussian prior on a strength, in nats: about 520 Elo, so it only keeps ratings finite and joined (docs/arena/analysis/matchups.md). */
 const PRIOR_SD = 3;
@@ -81,7 +92,7 @@ const solveInPlace = (a: Float64Array, b: Float64Array, size: number): void => {
 /**
  * The most probable Bradley-Terry strengths over the games at `rows`, by Newton steps: a win share w counts as w
  * wins and 1 - w losses, and a mean-zero Gaussian prior gives every config one finite answer. Rated on an Elo scale
- * with mean 0, only the configs the rows mention.
+ * with the anchor at 0 when the rows rate it, else the mean; only the configs the rows mention.
  */
 const fitGames = (games: NumberedGames, rows: ArrayLike<number>): Map<string, number> => {
   const slot = new Int32Array(games.ids.length).fill(-1);
@@ -163,10 +174,10 @@ const fitGames = (games: NumberedGames, rows: ArrayLike<number>): Map<string, nu
     if (largest < CONVERGED) break;
   }
 
-  const ratings = present.map((id, index) => [games.ids[id] ?? "", (strength[index] ?? 0) * ELO_PER_NAT] as const);
-  const mean = meanOf(ratings.map(([, rating]) => rating));
+  const ratings = new Map(present.map((id, index) => [games.ids[id] ?? "", (strength[index] ?? 0) * ELO_PER_NAT] as const));
+  const zero = ratings.get(ANCHOR) ?? meanOf([...ratings.values()]);
 
-  return new Map(ratings.map(([id, rating]) => [id, rating - mean]));
+  return new Map([...ratings].map(([id, rating]) => [id, rating - zero]));
 };
 
 export const bradleyTerry = (games: ReadonlyArray<Game>): Map<string, number> => fitGames(numberGames(games), Int32Array.from(games.keys()));
@@ -201,13 +212,41 @@ export interface Rating {
   readonly rating: number;
   readonly blocks: number;
   readonly interval: { readonly lo: number; readonly hi: number } | null;
+  /** The config's tier among the ranked configs, from 1; null for a provisional config. */
+  readonly tier: number | null;
 }
 
-const BOOTSTRAP_REPS = 200;
+/**
+ * Tiers of configs the data cannot tell apart. Down the ranked configs by rating, a new tier starts at the first config
+ * clearly below the top of the current tier: the 95% bootstrap interval of the gap between the two excludes 0.
+ */
+const tiersOf = (ranked: ReadonlyArray<string>, draws: ReadonlyMap<string, Float64Array>): ReadonlyMap<string, number> => {
+  const tiers = new Map<string, number>();
+  let top = ranked[0] ?? "";
+  let tier = 1;
+
+  for (const key of ranked) {
+    const above = draws.get(top) ?? new Float64Array();
+    const own = draws.get(key) ?? new Float64Array();
+
+    const gaps = Array.from(above, (rating, rep) => rating - (own[rep] ?? Number.NaN))
+      .filter((gap) => !Number.isNaN(gap))
+      .toSorted((left, right) => left - right);
+
+    if (quantile(gaps, 0.025) > 0) {
+      top = key;
+      tier++;
+    }
+
+    tiers.set(key, tier);
+  }
+
+  return tiers;
+};
 
 /**
  * Every config's rating from one fit over all the seats' completed two-player matches, with 95% percentile
- * intervals from refitting resamples of whole seed blocks. Effort sweeps join the other models through their
+ * intervals from refitting resamples of whole seed blocks, and its tier. Effort sweeps join the other models through their
  * medium configs, so one scale covers every config. The fit counts each round as a game, in the matches whose
  * rounds are known; its resamples still take whole seed blocks, since a match's rounds are not independent. With
  * `luck`, each match's round wins are first corrected for luck (tools/arena/analysis/aivat.py).
@@ -218,16 +257,18 @@ export const pooledRatings = (seats: ReadonlyArray<SeatFull>, luck: Luck = new M
   const point = fitGames(numbered, Int32Array.from(games.keys()));
   const blocks = [...groupBy(games.keys(), (index) => games[index]?.block).values()];
   const random = mulberry32(3);
-  const draws = new Map<string, Array<number>>();
+  const draws = new Map([...point.keys()].map((key) => [key, new Float64Array(BOOTSTRAP_DRAWS).fill(Number.NaN)]));
 
-  for (let rep = 0; rep < BOOTSTRAP_REPS; rep++) {
+  for (let rep = 0; rep < BOOTSTRAP_DRAWS; rep++) {
     const sample = Array.from({ length: blocks.length }, () => blocks[Math.floor(random() * blocks.length)] ?? []).flat();
+    const fitted = fitGames(numbered, sample);
 
-    for (const [key, rating] of fitGames(numbered, sample)) {
+    if (point.has(ANCHOR) && !fitted.has(ANCHOR)) throw new Error(`a resample has no match of the anchor ${ANCHOR}`);
+
+    for (const [key, rating] of fitted) {
       const keyDraws = draws.get(key);
 
-      if (keyDraws) keyDraws.push(rating);
-      else draws.set(key, [rating]);
+      if (keyDraws) keyDraws[rep] = rating;
     }
   }
 
@@ -235,12 +276,20 @@ export const pooledRatings = (seats: ReadonlyArray<SeatFull>, luck: Luck = new M
 
   for (const { a, b, block } of games) for (const key of [a, b]) spans.set(key, (spans.get(key) ?? new Set<string>()).add(block));
 
+  const scored = groupBy(
+    seats.filter(({ status }) => status === "completed"),
+    keyOf,
+  );
+
+  const ranked = [...point.keys()].filter((key) => !isProvisional({ scored: scored.get(key)?.length ?? 0 })).toSorted((left, right) => (point.get(right) ?? 0) - (point.get(left) ?? 0));
+  const tiers = tiersOf(ranked, draws);
+
   return new Map(
     [...point].map(([key, rating]) => {
-      const sorted = (draws.get(key) ?? []).toSorted((left, right) => left - right);
+      const sorted = [...(draws.get(key) ?? [])].filter((draw) => !Number.isNaN(draw)).toSorted((left, right) => left - right);
       const spanned = spans.get(key)?.size ?? 0;
 
-      return [key, { rating, blocks: spanned, interval: spanned < MIN_BLOCKS_FOR_INTERVAL ? null : { lo: quantile(sorted, 0.025), hi: quantile(sorted, 0.975) } }] as const;
+      return [key, { rating, blocks: spanned, interval: spanned < MIN_BLOCKS_FOR_INTERVAL ? null : { lo: quantile(sorted, 0.025), hi: quantile(sorted, 0.975) }, tier: tiers.get(key) ?? null }] as const;
     }),
   );
 };

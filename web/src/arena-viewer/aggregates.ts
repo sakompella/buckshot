@@ -17,7 +17,7 @@ const Interval = Schema.Struct({ lo: Schema.Number, hi: Schema.Number });
 
 export const Rate = Schema.Struct({ k: Schema.Number, n: Schema.Number, rate: Real, lo: Real, hi: Real, blocks: Schema.Number });
 
-const RatingSchema = Schema.Struct({ rating: Schema.Number, blocks: Schema.Number, interval: Schema.NullOr(Interval) });
+const RatingSchema = Schema.Struct({ rating: Schema.Number, blocks: Schema.Number, interval: Schema.NullOr(Interval), tier: Schema.NullOr(Schema.Number) });
 
 const Item = Schema.Literals(ITEMS);
 
@@ -54,6 +54,8 @@ export const ConfigSummary = Schema.Struct({
   scoredCost: Schema.Number,
   scoredMoves: Schema.Number,
   scoredLatency: Schema.Number,
+  /** Reasoning tokens the providers reported over scored matches; null when no call reported any. */
+  scoredReasoning: Schema.NullOr(Schema.Number),
   /** Round Elo from one fit over every match (page/ratings.ts); null for a config with no rated match. */
   rating: Schema.NullOr(RatingSchema),
   /** The same fit with each match's round wins corrected for luck (tools/arena/analysis/aivat.py); null without a luck database. */
@@ -416,6 +418,7 @@ export const configSummaries = (seats: ReadonlyArray<SeatFull>, decisions: Pick<
         scoredCost: scoredSum(({ cost }) => cost),
         scoredMoves: scoredSum(({ moves }) => moves),
         scoredLatency: scoredSum(({ lat }) => lat),
+        scoredReasoning: scored.some(({ rt }) => rt !== null) ? scoredSum(({ rt }) => rt) : null,
         rating: ratings.get(key) ?? null,
         luckRating: luckRatings.get(key) ?? null,
         favorite: favoriteOf.get(key) ?? null,
