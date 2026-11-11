@@ -1,7 +1,6 @@
 import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { pressable } from "./charts.ts";
 import { colorOf, fmtTime, fmtUsd, keyOf, labelOf, type MatchRow, resultOf, type SeatFull, sumOf, winnerOf } from "./data.ts";
 import { memoLast } from "./derived.ts";
 import { Message, type Model, type MatchPreset } from "./model.ts";
@@ -9,7 +8,7 @@ import type { Rating } from "./ratings.ts";
 
 type H = HtmlBuilder<Message>;
 
-// Every started match, newest first; a row opens its replay.
+// Every started match, newest first.
 
 export const INITIAL_ROWS = 25;
 
@@ -83,7 +82,7 @@ export const rowsOf = memoLast((matches: ReadonlyArray<MatchRow>, ratings: Reado
 const rowView = (h: H, { match, note }: Listed): Html =>
   h.keyed("tr")(
     match.matchId,
-    [h.Class("row"), ...pressable(h, Message.ClickedMatch({ id: match.matchId, maybeFocus: Option.none() }))],
+    [h.Class("row")],
     [
       h.td([h.Class("when")], [fmtTime(match.startedAt)]),
       h.td([h.DataAttribute("label", "seed")], [String(match.seed)]),

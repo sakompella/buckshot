@@ -1,10 +1,9 @@
 import type { Html } from "foldkit/html";
 import { inertHtml as ih } from "foldkit/html";
 
-import type { Item, Shell } from "./domain.ts";
+import type { Item } from "./domain.ts";
 
-// Original top-down drawings of the table's things, in a muted palette that
-// the board's grain and scanlines sit over. Each item fits a 32 by 32 box.
+// Original top-down drawings of the items, in a muted palette. Each item fits a 32 by 32 box.
 
 const svg = (viewBox: string, className: string, children: ReadonlyArray<Html>): Html =>
   ih.svg([ih.ViewBox(viewBox), ih.Class(className), ih.AriaHidden(true), ih.Attribute("focusable", "false")], children);
@@ -160,34 +159,3 @@ const DRAWINGS: Readonly<Record<Item, () => ReadonlyArray<Html>>> = {
 };
 
 export const itemIcon = (item: Item): Html => svg("0 0 32 32", "item-icon", DRAWINGS[item]());
-
-/** A shell seen from the side, cap on the left. */
-export const shellIcon = (shell: Shell): Html =>
-  svg("0 0 40 14", `shell-icon ${shell === "Live" ? "live" : "blank"}`, [
-    rect(9, 1, 30, 12, shell === "Live" ? "#a3281f" : "#2f5591", 2),
-    rect(11, 3, 26, 2, shell === "Live" ? "#c8574a" : "#5a7fbd", 1),
-    rect(1, 0.5, 10, 13, "#b08d4a", 1.5),
-    rect(1, 0.5, 2.5, 13, "#7d6232", 1),
-  ]);
-
-/** The shotgun from above, muzzle down. A sawn-off barrel ends short. */
-export const gunIcon = (isSawed: boolean): Html => {
-  const barrelEnd = isSawed ? 128 : 186;
-
-  return svg("0 0 40 190", "gun-icon", [
-    path("M11 2 L29 2 L27 46 L13 46 Z", "#5b2f24", INK, 1.5),
-    path("M14 8 L26 8", "none", "#74402f", 1.5),
-    rect(13, 44, 14, 14, "#4a2a20", 2),
-    rect(12, 56, 16, 30, "#2a2924", 2),
-    rect(14, 60, 3, 22, "#4b4a42", 1),
-    rect(14.5, 84, 5, barrelEnd - 84, "#3f3e37", 1.5),
-    rect(20.5, 84, 5, Math.min(barrelEnd, 160) - 84, "#33322c", 1.5),
-    rect(13, 104, 14, 22, "#5b2f24", 3),
-    path("M13 110 L27 110 M13 115 L27 115 M13 120 L27 120", "none", "#3e2018", 1),
-    rect(14, barrelEnd - 3, 6, 3, "#1b1a16", 1),
-  ]);
-};
-
-const BOLT = "M11 1 L3 15 L9 15 L5 27 L15 11 L9 11 L13 1 Z";
-
-export const boltIcon = (className: string): Html => svg("0 0 18 28", className, [path(BOLT, "currentColor")]);

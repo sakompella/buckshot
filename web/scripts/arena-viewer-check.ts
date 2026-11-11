@@ -5,16 +5,14 @@ import { Schema } from "effect";
 import { type Browser, chromium, type Page } from "playwright-core";
 
 import { AGGREGATES, selfShotTallies } from "../src/arena-viewer/aggregates.ts";
-import { Blunders, CERTAIN_TYPES, CertainMistakes, Decisions, ITEMS, MatchDetail, MatchDetailJson, type MoveRegret, NO_GAP, SeatsResponse } from "../src/arena-viewer/api.ts";
-import { baseName, baseOrder, CERTAIN_NAMES, effortLabel, fmtCount, fmtPct, blocksOf, groupBy, keyOf, labelOf, MIN_BLOCKS_FOR_INTERVAL, shortName, withPotShares } from "../src/arena-viewer/page/data.ts";
+import { CERTAIN_TYPES, CertainMistakes, Decisions, ITEMS, NO_GAP, SeatsResponse } from "../src/arena-viewer/api.ts";
+import { baseName, baseOrder, CERTAIN_NAMES, effortLabel, fmtCount, fmtPct, blocksOf, keyOf, labelOf, MIN_BLOCKS_FOR_INTERVAL, shortName, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { GROUPS, MOVED_TARGETS, Section } from "../src/arena-viewer/page/model.ts";
 import { pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 import { droppedConfigs, droppedText, oddsPanels } from "../src/arena-viewer/page/odds.ts";
-import { stepsOf } from "../src/arena-viewer/page/replay.ts";
 import { tourOf } from "../src/arena-viewer/page/tour.ts";
-import { coverageOfMatch, type RegretCoverage, withoutRegret } from "./arena-viewer-regret-coverage.ts";
 
-// Clicks through the arena viewer's page, its jump menu and replay in headless Chromium at
+// Clicks through the arena viewer's page and its jump menu in headless Chromium at
 // desktop, phone and tablet widths and saves screenshots. Pointed at the old viewer too,
 // it gives the pictures to compare against.
 // It runs $CHROME, or chromium from PATH.
@@ -34,7 +32,7 @@ const expectThat = (isOk: boolean, what: string) => {
   if (!isOk) failures.push(what);
 };
 
-// A failed check can leave a replay or the tour open over the page, which would make every later click time out. The
+// A failed check can leave the tour open over the page, which would make every later click time out. The
 // next check starts from the bare page, so one failure is reported once.
 const attempt = async (viewport: string, check: string, run: () => Promise<void>, reset: () => Promise<void> = () => Promise.resolve()) => {
   try {
@@ -54,7 +52,7 @@ const ACTION_TIMEOUT_MS = 10_000;
 
 const clearOverlays = async (page: Page) => {
   await page.keyboard.press("Escape");
-  await page.waitForSelector(".modal, .tour-layer", { state: "detached", timeout: ACTION_TIMEOUT_MS });
+  await page.waitForSelector(".tour-layer", { state: "detached", timeout: ACTION_TIMEOUT_MS });
 };
 
 const VIEWPORTS = [
@@ -142,7 +140,7 @@ const openPage = async (page: Page) => {
 // Visible controls smaller than 44px either way (heat cells are left out).
 const smallTargets = (page: Page) =>
   page.evaluate(() =>
-    [...document.querySelectorAll("nav a, .toggle button, .chip, .cmb, .tablelink, select, input:not([type=checkbox]), .stepper button, .modal .x, .tourstart, .drillclose")].flatMap((element) => {
+    [...document.querySelectorAll("nav a, .toggle button, .chip, .cmb, .tablelink, select, input:not([type=checkbox]), .tourstart, .drillclose")].flatMap((element) => {
       const box = element.getBoundingClientRect();
 
       return box.width > 0 && (box.height < 44 || box.width < 44) ? [`${element.className || element.tagName} ${element.textContent?.slice(0, 20)} ${Math.round(box.width)}x${Math.round(box.height)}`] : [];
@@ -437,222 +435,8 @@ const openBreakdown = async (page: Page) => {
   await settled(page);
 };
 
-const servedDetail = async (id: string) => Schema.decodeUnknownSync(MatchDetailJson)(await (await fetch(`${base}/api/match?id=${encodeURIComponent(id)}`)).json());
-
-const servedDecisions = async (id: string) => (await servedDetail(id)).decisions;
-
-const openedMatchId = async (page: Page) => {
-  await page.waitForSelector(".modal .step");
-
-  const matchId = await page.locator(".modal .mhead").getAttribute("data-match");
-
-  if (matchId === null) throw new Error("the replay's header names no match");
-
-  return matchId;
-};
-
-const openReplay = async (page: Page, open: () => Promise<void>) => {
-  await open();
-
-  const matchId = await openedMatchId(page);
-
-  return { matchId, ...(await coverageOfMatch(matchId, servedDecisions)) };
-};
-
-const closeReplay = async (page: Page) => {
-  await page.keyboard.press("Escape");
-  await page.waitForSelector(".modal", { state: "detached" });
-};
-
-const expectRegretShown = async (page: Page, coverage: RegretCoverage, what: string) => {
-  const shown = { tagged: await regretTags(page).count(), rings: await countOf(page, ".modal .chart circle"), turning: await countOf(page, ".modal .turning .chip") };
-
-  expectThat(shown.tagged === coverage.tagged && shown.rings === coverage.rings && shown.turning === coverage.turning, `${what}: replay shows ${JSON.stringify(shown)}, its data has ${JSON.stringify({ tagged: coverage.tagged, rings: coverage.rings, turning: coverage.turning })}`);
-};
-
-const expectedCandidates = (regret: MoveRegret) =>
-  regret.values
-    .toSorted((left, right) => right.score - left.score)
-    .map(({ label, score }) => ({ label, pct: `${score.toFixed(1)}%`, isChosen: label === regret.chosen, isBest: score === regret.bestScore }));
-
-const expectedVerdict = (regret: MoveRegret) => {
-  if (regret.points === 0) return `Best move, looking ${regret.depth} moves ahead`;
-
-  return regret.exact ? `Proven worse · gave up ${regret.points.toFixed(1)} points` : `Gave up ${regret.points.toFixed(1)} points (estimate)`;
-};
-
-const checkCandidates = async (page: Page, matchId: string, what: string): Promise<boolean> => {
-  await settled(page);
-
-  const detail = await servedDetail(matchId);
-  const at = Number(/move (\d+) of/.exec(await textOf(page, ".modal .stepper .k"))?.[1] ?? Number.NaN) - 1;
-  const step = stepsOf(detail)[at];
-  const list = page.locator(".modal .sel .cands");
-
-  if (step === undefined) throw new Error(`${what}: the replay shows move ${at + 1}, which ${matchId} does not have`);
-
-  if (step.regret === null) {
-    expectThat((await list.count()) === 0, `${what}: move ${at + 1} has no regret but shows a candidate list`);
-
-    return false;
-  }
-
-  const wasFolded = (await list.getAttribute("open")) === null;
-
-  if (wasFolded) await list.locator("summary").click();
-
-  await settled(page);
-
-  const shown = await list.locator(".cand").evaluateAll((rows) =>
-    rows.map((row) => ({
-      label: row.querySelector(".label")?.textContent ?? "",
-      pct: row.querySelector(".pct")?.textContent ?? "",
-      isChosen: row.classList.contains("chosen"),
-      isBest: row.classList.contains("best"),
-    })),
-  );
-
-  const expected = expectedCandidates(step.regret);
-  const lines = (await list.locator(":scope > .k").allInnerTexts()).map((line) => line.trim());
-  const reloadInReach = step.live + step.blank <= Math.min(3, step.regret.depth);
-
-  expectThat(JSON.stringify(shown) === JSON.stringify(expected), `${what}: move ${at + 1} lists ${JSON.stringify(shown)}, its data has ${JSON.stringify(expected)}`);
-  expectThat((await textOf(page, ".modal .sel .cands > summary")).trim() === expectedVerdict(step.regret), `${what}: move ${at + 1} says "${await textOf(page, ".modal .sel .cands > summary")}", not "${expectedVerdict(step.regret)}"`);
-  expectThat(lines[0]?.endsWith(`· looking ${step.regret.depth} moves ahead${step.regret.limited ? " · stopped early" : ""}`) === true, `${what}: move ${at + 1} has the depth line "${lines[0]}"`);
-  expectThat(lines.length === (reloadInReach ? 2 : 1) && (!reloadInReach || /reload is within reach/.test(lines[1] ?? "")) && !/static leaf|budget|depth/i.test(lines.join(" ")), `${what}: move ${at + 1} has ${lines.length} lines under its list with a reload ${reloadInReach ? "" : "not "}in reach`);
-  console.log(what, "move", at + 1, "candidates", shown.length, "|", expectedVerdict(step.regret), step.regret.limited ? "| stopped early" : "", reloadInReach ? "| reload in reach" : "", wasFolded ? "| was folded" : "| was open");
-
-  return wasFolded;
-};
-
-const openBudgetStopped = async (page: Page, matchId: string) => {
-  const at = stepsOf(await servedDetail(matchId)).findIndex(({ regret }) => regret?.limited === true);
-
-  if (at === -1) return false;
-
-  await page.locator(".modal .step").nth(at).click();
-
-  return true;
-};
-
-const regretSteps = (page: Page, kind: "exact" | "not exact") => page.locator(".modal .step").filter({ has: kind === "exact" ? page.locator(".tag.regret.exact") : page.locator(".tag.regret:not(.exact)") });
-
-const FixtureSeats = Schema.Array(Schema.Struct({ matchId: Schema.String, seed: Schema.Number, startedAt: Schema.String, model: Schema.String, effort: Schema.String, status: Schema.String }));
-
-interface RegretFixture {
-  readonly matchId: string;
-  readonly seed: number;
-  readonly listQuery: string;
-  readonly listRow: number;
-  readonly model: string;
-  readonly effort: string;
-}
-
-type FixtureSeat = typeof FixtureSeats.Type[number];
-
-const labelsOf = (both: ReadonlyArray<FixtureSeat>) => both.map((seat) => labelOf(keyOf(seat))).toSorted();
-
-const listQueryOf = (seed: number, both: ReadonlyArray<FixtureSeat>) => [String(seed), ...labelsOf(both)].join(" ");
-
-const listRowOf = (matches: ReadonlyArray<ReadonlyArray<FixtureSeat>>, target: ReadonlyArray<FixtureSeat>) => {
-  const words = listQueryOf(target[0]?.seed ?? 0, target).toLowerCase().split(" ");
-
-  const listed = matches.filter(
-    (both) => both[0]?.seed === target[0]?.seed && words.every((word) => [...labelsOf(both), String(both[0]?.seed)].some((text) => text.toLowerCase().includes(word))),
-  );
-
-  return listed.toSorted((left, right) => (right[0]?.startedAt ?? "").localeCompare(left[0]?.startedAt ?? "")).findIndex((both) => both[0]?.matchId === target[0]?.matchId);
-};
-
-const listOf = (seats: ReadonlyArray<FixtureSeat>, seat: FixtureSeat) => {
-  const matches = [...groupBy(seats, ({ matchId }) => matchId).values()];
-  const both = matches.find(([first]) => first?.matchId === seat.matchId) ?? [];
-
-  return { listQuery: listQueryOf(seat.seed, both), listRow: listRowOf(matches, both) };
-};
-
-const regretFixtures = async (count: number): Promise<ReadonlyArray<RegretFixture>> => {
-  const seats = Schema.decodeUnknownSync(FixtureSeats)(await (await fetch(`${base}/api/seats`)).json());
-  const blunders = Schema.decodeUnknownSync(Blunders)(await (await fetch(`${base}/api/blunders`)).json());
-  const costliest = blunders.seat.map((_seat, at) => at).toSorted((left, right) => (blunders.exact[right] ?? 0) - (blunders.exact[left] ?? 0) || (blunders.points[right] ?? 0) - (blunders.points[left] ?? 0));
-  const picked = new Map<string, RegretFixture>();
-
-  for (const at of costliest) {
-    const seat = seats[blunders.seat[at] ?? -1];
-
-    if (seat !== undefined && seat.status === "completed" && !picked.has(seat.matchId) && picked.size < count) picked.set(seat.matchId, { ...seat, ...listOf(seats, seat) });
-  }
-
-  return [...picked.values()];
-};
-
-const openFromMatchList = async (page: Page, fixture: RegretFixture) => {
-  const filter = page.locator("#matches .bar input");
-
-  await filter.fill(fixture.listQuery);
-  await page.locator("#matches tbody tr.row").filter({ has: page.locator('td[data-label="seed"]', { hasText: new RegExp(`^${fixture.seed}$`) }) }).nth(fixture.listRow).click();
-  await filter.fill("");
-};
-
-const coveredMatchIds: Array<string> = [];
-
-const REGRET_TAG = /^−\d+\.\d$/;
-
-const SHOT_FIXTURE = "0b1ca8ab272b8e3c56bd1d0bfbd552aadfa430ef886ee5047eef9f3275b61624";
-
-const checkShotTags = async (page: Page, matchId: string, what: string) => {
-  const detail = await servedDetail(matchId);
-  const steps = stepsOf(detail);
-  const lastId = detail.decisions.at(-1)?.id;
-  const shown = await page.locator(".modal .moves .step").evaluateAll((rows) => rows.map((row) => ({ label: row.querySelector(".label")?.textContent ?? "", shot: row.querySelector(".shot")?.textContent ?? "" })));
-
-  const expected = steps.map((step) => {
-    const logged = / shot [^:]*: (live|blank)/.exec(step.outcome.join(" "))?.[1];
-
-    return logged ?? (step.label.startsWith("Shoot") && step.id === lastId && detail.match.status === "completed" ? "live" : "");
-  });
-
-  expectThat(shown.length === steps.length && shown.every((row, index) => row.shot === expected[index]), `${what}: the move list tags ${shown.filter((row, index) => row.shot !== expected[index]).length} shots other than the log or the final death gives`);
-  expectThat(steps.every((step, index) => !step.label.startsWith("Shoot") || expected[index] !== "" || detail.match.status !== "completed"), `${what}: a shot in a completed match has no live or blank tag`);
-  console.log(what, "shots tagged", shown.filter((row) => row.shot !== "").length, "of", steps.filter((step) => step.label.startsWith("Shoot")).length);
-};
-
-const checkShotFixture = async (page: Page) => {
-  await page.locator("#matches .bar input").fill("4006");
-  await settled(page);
-
-  for (const row of Array.from({ length: 25 }, (_, index) => index)) {
-    if ((await page.locator("#matches tbody tr.row").count()) <= row) break;
-
-    await page.locator("#matches tbody tr.row").nth(row).click();
-
-    const matchId = await openedMatchId(page);
-
-    if (matchId === SHOT_FIXTURE) {
-      const steps = stepsOf(await servedDetail(matchId));
-
-      await checkShotTags(page, matchId, "seed 4006");
-      expectThat([37, 43].every((at) => steps[at]?.label.startsWith("Shoot") === true), "seed 4006 moves 38 and 44 are no longer shots");
-      expectThat((await page.locator(".modal .moves .step").nth(37).locator(".shot").innerText()) === "live" && (await page.locator(".modal .moves .step").nth(43).locator(".shot").innerText()) === "live", "seed 4006 moves 38 and 44 are not tagged live");
-      expectThat((steps[37]?.outcome.length ?? 0) > 0 && (steps[43]?.outcome.length ?? 1) === 0, "seed 4006 move 38 has no logged shot, or move 44 has one");
-      await closeReplay(page);
-      await page.locator("#matches .bar input").fill("");
-      await settled(page);
-
-      return;
-    }
-
-    await closeReplay(page);
-  }
-
-  throw new Error("seed 4006's Opus max match is not in the match list");
-};
-
-const regretTags = (page: Page) => page.locator(".modal .step .tag.regret");
-
-// With a regret database every leaderboard row shows its mean regret, or a dash when none of its moves were searched, and
-// the replay's move list tags each searched model move that gave up a real share of the win chance: a proven exact one
-// apart from the rest, and the chosen move's folded evaluator line says which it is. Without one the page shows no regret.
+// With a regret database every leaderboard row shows its mean regret, or a dash when none of its moves were searched.
+// Without one the page shows no regret.
 const checkRegret = async (page: Page) => {
   const hasRegret = (await page.locator("table.lbt thead th", { hasText: /^Accuracy$/ }).count()) > 0;
   const cells = page.locator('table.lbt td[data-label="accuracy"]');
@@ -677,135 +461,6 @@ const checkRegret = async (page: Page) => {
   expectThat(titles.length === scored.length && titles.every((title) => /^[\d,]+ moves with a real choice$/.test(title)), "a regret cell does not say how many moves it rests on");
 
   await page.locator(".lb").first().screenshot({ path: shot("leaderboard-regret"), style: UNSTICK });
-
-  for (const row of [0, 1, 2, 3, 4]) {
-    const coverage = await openReplay(page, () => page.locator("#matches tbody tr.row").nth(row).click());
-
-    await expectRegretShown(page, coverage, `match ${row}`);
-    await checkShotTags(page, coverage.matchId, `match ${row}`);
-    console.log("match", row, "searched moves", coverage.searched, "tags", coverage.tagged);
-    await closeReplay(page);
-  }
-
-  await checkShotFixture(page);
-
-  const fixtures = await regretFixtures(5);
-  let exact = 0;
-  let notExact = 0;
-  let budgetStopped = 0;
-
-  expectThat(fixtures.length > 0, "no regret blunder to open a regret-covered replay from");
-
-  for (const [card, fixture] of fixtures.entries()) {
-    const coverage = await openReplay(page, () => openFromMatchList(page, fixture));
-
-    coveredMatchIds.push(coverage.matchId);
-    expectThat(coverage.matchId === fixture.matchId, `blunder match ${card}: the match list opened ${coverage.matchId}, not ${fixture.matchId}`);
-    expectThat(coverage.searched > 0 && coverage.tagged > 0 && coverage.turning > 0, `blunder match ${card}: its replay has ${coverage.searched} searched, ${coverage.tagged} tagged, ${coverage.turning} turning`);
-    await expectRegretShown(page, coverage, `blunder match ${card}`);
-
-    const tags = await regretTags(page).evaluateAll((found) => found.map((tag) => ({ text: tag.textContent ?? "", isExact: tag.classList.contains("exact") })));
-
-    expectThat(tags.every(({ text }) => REGRET_TAG.test(text.trim())), `blunder match ${card}: regret tags ${tags.slice(0, 3).map(({ text }) => text).join(" | ")}`);
-    exact += tags.filter(({ isExact }) => isExact).length;
-    notExact += tags.filter(({ isExact }) => !isExact).length;
-
-    for (const kind of ["exact", "not exact"] as const) {
-      const step = regretSteps(page, kind).first();
-
-      if ((await step.count()) === 0) continue;
-
-      await step.click();
-
-      const wasFolded = await checkCandidates(page, coverage.matchId, `blunder match ${card} ${kind}`);
-
-      expectThat(!wasFolded, `blunder match ${card}: the candidate list of a ${kind} move came up folded on the desktop`);
-
-      if (card === 0) await page.locator(".modal").screenshot({ path: shot(`replay-regret-${kind.replace(" ", "-")}`) });
-    }
-
-    const best = page.locator(".modal .step").filter({ hasNot: page.locator(".tag") }).first();
-
-    await best.click();
-    await checkCandidates(page, coverage.matchId, `blunder match ${card} untagged`);
-
-    if (await openBudgetStopped(page, coverage.matchId)) {
-      budgetStopped++;
-      await checkCandidates(page, coverage.matchId, `blunder match ${card} budget stopped`);
-
-      if (card === 0) await page.locator(".modal").screenshot({ path: shot("replay-regret-budget-stopped") });
-    }
-
-    console.log("blunder match", card, "searched moves", coverage.searched, "tags", coverage.tagged, "turning points", coverage.turning);
-    await closeReplay(page);
-  }
-
-  console.log("regret tags over the covered replays:", exact, "exact,", notExact, "not proven exact");
-  expectThat(exact + notExact > 0, "no covered replay shows a regret tag");
-  expectThat(budgetStopped > 0, "no covered replay has a move the node budget stopped");
-};
-
-const checkMissingRegret = async (browser: Browser, viewport: Viewport) => {
-  const [missingId, coveredId] = coveredMatchIds;
-
-  if (missingId === undefined || coveredId === undefined) throw new Error("the regret check found fewer than two regret-covered replays to build the fixture from");
-
-  const page = await newPage(browser, viewport);
-  const fixtures = await regretFixtures(5);
-  let incomingRegrets = 0;
-
-  const openFixtureOf = async (matchId: string) => {
-    const fixture = fixtures.find((candidate) => candidate.matchId === matchId);
-
-    if (fixture === undefined) throw new Error(`no regret blunder opens match ${matchId}`);
-
-    await openFromMatchList(page, fixture);
-    await openedMatchId(page);
-  };
-
-  try {
-    page.setDefaultTimeout(ACTION_TIMEOUT_MS);
-    watch(page, `${viewport.name} missing regret`);
-
-    await page.route(/\/api\/match\?id=/, async (route) => {
-      if (new URL(route.request().url()).searchParams.get("id") !== missingId) return route.fallback();
-
-      const response = await route.fetch();
-      const detail = Schema.decodeUnknownSync(MatchDetailJson)(await response.json());
-
-      incomingRegrets = Math.max(incomingRegrets, detail.decisions.filter(({ regret }) => regret !== null).length);
-
-      return route.fulfill({ response, json: { ...detail, decisions: withoutRegret(detail.decisions) } });
-    });
-    await loadPage(page);
-
-    await openFixtureOf(missingId);
-
-    const shown = { tagged: await regretTags(page).count(), rings: await countOf(page, ".modal .chart circle"), turning: await countOf(page, ".modal .turning .chip") };
-    const detail = (await page.locator(".modal").innerText()).replaceAll(/\s+/g, " ");
-
-    expectThat(incomingRegrets > 0, "the fixture route did not fire on a match that came with regret, so it proves nothing");
-    expectThat(shown.tagged === 0 && shown.rings === 0 && shown.turning === 0, `a replay with no regret shows ${JSON.stringify(shown)}`);
-    expectThat(!/Gave up \d|Best move, looking|Proven worse/.test(detail), "a replay with no regret still words a regret");
-    expectThat((await page.locator(".modal .cands").count()) === 0, "a replay with no regret shows a candidate list");
-
-    for (const step of [0, 1, 2]) {
-      await page.locator(".modal .step").nth(step).click();
-      expectThat((await countOf(page, ".modal .cands")) === 0, `the missing regret fixture's move ${step + 1} shows a candidate list`);
-    }
-
-    await page.locator(".modal").screenshot({ path: shot("replay-missing-regret") });
-    await closeReplay(page);
-
-    await openFixtureOf(coveredId);
-    await expectRegretShown(page, await coverageOfMatch(coveredId, servedDecisions), "the covered replay beside the fixture");
-
-    await clearOverlays(page);
-    expectThat((await page.locator(".modal").count()) === 0, "clearing the overlays left the replay open");
-    console.log("missing regret fixture: 0 tags, 0 rings, 0 turning points; the covered replay beside it keeps its own");
-  } finally {
-    await page.context().close();
-  }
 };
 
 const served = async <A, I>(path: string, schema: Schema.Codec<A, I>): Promise<A> => Schema.decodeUnknownSync(schema)(await (await fetch(`${base}${path}`)).json());
@@ -856,31 +511,6 @@ const press = (isTouch: boolean, target: ReturnType<Page["locator"]>) => (isTouc
 
 const comebackSize = (winner: ServedSeat) =>
   Math.max(0, ...(winner.story?.ok === true ? winner.story.rounds.flatMap((round, index) => (round.winner === winner.player ? [winner.deficits[index] ?? 0] : [])) : []));
-
-const worstGapInWonRounds = (detail: MatchDetail, player: string) =>
-  Math.max(
-    0,
-    ...detail.decisions.flatMap(({ players, round }) => {
-      const own = players.find((state) => state.player === player)?.health;
-      const other = players.find((state) => state.player !== player)?.health;
-
-      return detail.story.ok && detail.story.rounds[round - 1]?.winner === player && own !== undefined && other !== undefined ? [other - own] : [];
-    }),
-  );
-
-const checkComebacksAgainstReplays = async (name: string) => {
-  const decided = decidedPairs(await servedSeats());
-  const comebacks = decided.filter(({ winner }) => comebackSize(winner) >= MATCH_PRESETS[0].minimum);
-  const others = decided.filter(({ winner }) => comebackSize(winner) < MATCH_PRESETS[0].minimum);
-  const sampled = others.filter((_pair, at) => at % Math.ceil(others.length / 60) === 0);
-  const fromReplay = async ({ winner }: (typeof decided)[number]) => worstGapInWonRounds(await servedDetail(winner.matchId), winner.player);
-  const listed = await Promise.all(comebacks.map(fromReplay));
-  const unlisted = await Promise.all(sampled.map(fromReplay));
-
-  console.log(name, "comebacks read from replays", comebacks.length, "| smallest", Math.min(...listed), "| unlisted sample", sampled.length, "| biggest", Math.max(...unlisted));
-  expectThat(listed.every((gap) => gap >= MATCH_PRESETS[0].minimum), `${name}: a listed comeback's winner never trailed by ${MATCH_PRESETS[0].minimum} in a round it won, by its replay`);
-  expectThat(unlisted.every((gap) => gap < MATCH_PRESETS[0].minimum), `${name}: a match left out of Comebacks has a winner who trailed by ${MATCH_PRESETS[0].minimum} in a round it won, by its replay`);
-};
 
 const MATCH_PRESETS = [
   { label: "Comebacks", note: /^from (\d+) health behind in round [123]$/, minimum: 3 },
@@ -1108,23 +738,6 @@ const writtenRate = (scope: "model" | "all", model: string, type: (typeof CERTAI
 
 const shownInterval = (bounds: { lo: number; hi: number } | null | undefined): string => (bounds === null || bounds === undefined ? "" : `[${(bounds.lo * 100).toFixed(1)}%, ${(bounds.hi * 100).toFixed(1)}%]`);
 
-const expectCertainMarks = async (page: Page, matchId: string, what: string) => {
-  const detail = await servedDetail(matchId);
-  const marked = stepsOf(detail).filter(({ certain }) => certain !== null);
-  const listed = servedCertain.moveOrd.filter((_ordinal, move) => certainSeats[servedCertain.moveSeat[move] ?? -1]?.matchId === matchId).length;
-
-  expectThat(marked.length === listed, `${what}: the match serves ${marked.length} certain mistakes, the opportunities list ${listed}`);
-  expectThat((await page.locator(".modal .moves .step .tag.certain").count()) === marked.length, `${what}: the replay marks ${await page.locator(".modal .moves .step .tag.certain").count()} moves, its data has ${marked.length}`);
-
-  const on = page.locator(".modal .moves .step.on");
-  const at = Number(/move (\d+) of/.exec(await textOf(page, ".modal .stepper .k"))?.[1] ?? Number.NaN) - 1;
-  const isMarked = stepsOf(detail)[at]?.certain !== null;
-
-  expectThat((await on.locator(".tag.certain").count()) === (isMarked ? 1 : 0) && (await page.locator(".modal .sel .selh .tag.certain").count()) === (isMarked ? 1 : 0), `${what}: move ${at + 1} is ${isMarked ? "" : "not "}a certain mistake and the replay disagrees`);
-
-  return { marked: marked.length, at };
-};
-
 const checkCertain = async (page: Page, name: string, press: (target: ReturnType<Page["locator"]>) => Promise<void>, isTouch: boolean) => {
   if (!hasCertain) {
     expectThat((await page.locator("#certain-mistakes, #certain-table").count()) === 0, `${name}: a viewer without certain mistakes draws their section`);
@@ -1238,19 +851,6 @@ const checkCertain = async (page: Page, name: string, press: (target: ReturnType
 
     if (picture !== "") await fold.screenshot({ path: shot(`${name}-certain-mistakes-${picture}`), style: UNSTICK });
 
-    await press(chips.first());
-
-    const matchId = await openedMatchId(page);
-    const { marked, at } = await expectCertainMarks(page, matchId, `${name} ${label}`);
-    const opened = stepsOf(await servedDetail(matchId))[at];
-    const first = Math.min(...own.filter((mistake) => mistake.matchId === matchId).map(({ ordinal }) => ordinal));
-
-    expectThat(opened !== undefined && opened.certain === CERTAIN_TYPES[typeIndex] && opened.ordinal === first, `${name}: ${label} opened at ordinal ${opened?.ordinal} marked ${opened?.certain}, its first mistake of that type is ${first}`);
-    console.log(name, label, "opens", matchIds.size, "matches | replay at move", at + 1, "| marked moves", marked, "|", await textOf(page, ".modal .sel .selh"));
-
-    if (picture !== "") await page.locator(".modal").screenshot({ path: shot(`${name}-certain-mistakes-replay-${picture}`) });
-
-    await closeReplay(page);
     await press(button);
     await settled(page);
     expectThat((await fold.locator(".cmmatches").count()) === 0, `${name}: a second press on the count of ${label} left its matches open`);
@@ -1264,13 +864,6 @@ const checkCertain = async (page: Page, name: string, press: (target: ReturnType
 
   await openMistake(busiest, 0, "self");
   await openMistake(guaranteed, 1, "");
-
-  for (const row of [0, 1, 2]) {
-    const sample = await openReplay(page, () => press(page.locator("#matches tbody tr.row").nth(row)));
-
-    await expectCertainMarks(page, sample.matchId, `${name} match ${row}`);
-    await closeReplay(page);
-  }
 };
 
 const checkDesktop = async (browser: Browser, viewport: Viewport) => {
@@ -1305,7 +898,6 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
   await check("fixed axes", () => checkFixedAxes(page, scatter));
   await check("ratings", () => checkRatings(page));
   await check("regret", () => checkRegret(page));
-  await check("missing regret", () => checkMissingRegret(browser, viewport));
   await check("certain mistakes", () => checkCertain(page, viewport.name, (target) => target.click(), false));
   await check("heatmap", async () => {
     await checkHeat(page, viewport.name);
@@ -1313,7 +905,6 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
     await heat(page).screenshot({ path: shot("heat-opp"), style: UNSTICK });
   });
   await check("match list", () => checkMatchList(page, viewport.name, false));
-  await check("comebacks by replay", () => checkComebacksAgainstReplays(viewport.name));
   await check("drill-down", async () => {
     await page.locator("table.lbt tr.row").first().click();
     await page.locator(".lb").first().screenshot({ path: shot("leaderboard"), style: UNSTICK });
@@ -1321,70 +912,6 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
     await checkDrill(page, viewport.name, false);
   });
   await check("item usage", () => checkItemUsage(page, viewport.name));
-  await check("replays", async () => {
-    for (const [row, name] of [
-      [0, "replay"],
-      [4, "replay-fifth"],
-    ] as const) {
-      await page.locator("#matches tbody tr.row").nth(row).click();
-      await page.waitForSelector(".modal .step");
-
-      for (let step = 0; step < (row === 0 ? 6 : 0); step++) await page.keyboard.press("ArrowRight");
-
-      expectThat((await countOf(page, ".modal .board .stage")) === 1 && (await countOf(page, ".modal .board .chosen")) > 0, `${name}: the replay's table is missing or marks no chosen move`);
-      console.log(name, "steps", await countOf(page, ".modal .step"), "| on:", await textOf(page, ".modal .step.on"), "| reasoning blocks", await countOf(page, ".modal .sel pre"), "| same-seed chips", await countOf(page, ".seedrow .chip"));
-      await page.locator(".modal").screenshot({ path: shot(name) });
-      await page.keyboard.press("Escape");
-    }
-  });
-  await check("same-seed link", async () => {
-    const seats = await servedSeats();
-    const shared = matchesOf(seats).find(([seat]) => matchesOf(seats).filter(([other]) => other?.seed === seat?.seed).length > 1);
-
-    if (shared?.[0] === undefined) throw new Error("no two served matches share a seed");
-
-    await page.locator("#matches .bar input").fill(String(shared[0].seed));
-    await settled(page);
-
-    const coverage = await openReplay(page, () => page.locator("#matches tbody tr.row").first().click());
-
-    await page.waitForSelector(".modal .step.on");
-    await expectRegretShown(page, coverage, "a listed match's replay");
-    await page.locator(".modal details.seeds > summary").click();
-    expectThat((await countOf(page, ".seedrow .chip")) > 0, "a replay's same-seed link lists no other match");
-    await page.locator(".seedrow .chip").first().click();
-    await page.waitForSelector(".modal .step");
-    await settled(page);
-    expectThat((await openedMatchId(page)) !== coverage.matchId, "the same-seed chip reopened the same match");
-    console.log("after same-seed chip:", await textOf(page, ".mhead h2"));
-    await closeReplay(page);
-    await page.locator("#matches .bar input").fill("");
-  });
-  await check("turning points", async () => {
-    const [fixture] = await regretFixtures(1);
-
-    if (fixture === undefined) throw new Error("no regret blunder to open turning points from");
-
-    const coverage = await openReplay(page, () => openFromMatchList(page, fixture));
-    const turning = page.locator(".modal .turning .chip");
-    const listed = await turning.count();
-    const rings = await countOf(page, ".modal .chart circle");
-
-    console.log("turning points", listed, "| blunder rings", rings);
-    expectThat(coverage.turning > 0 && listed === coverage.turning && rings === coverage.rings, `the replay of a regret blunder lists ${listed} turning points and ${rings} rings, its data has ${coverage.turning} and ${coverage.rings}`);
-
-    const [, label = "", points = ""] = (await turning.first().innerText()).replaceAll(/\s+/g, " ").split(" · ");
-
-    await turning.first().click();
-    await settled(page);
-
-    const opened = await textOf(page, ".modal .step.on");
-
-    console.log("turning point opens", opened);
-    expectThat(opened.includes(label) && opened.includes(points), `a turning point "${label} · ${points}" opened "${opened}"`);
-    await page.locator(".modal").screenshot({ path: shot("replay-turning-points") });
-    await closeReplay(page);
-  });
   await check("mark tip by keyboard", async () => {
     const mark = page.locator("#odds svg g[role=button]").first();
 
@@ -1403,12 +930,6 @@ const checkDesktop = async (browser: Browser, viewport: Viewport) => {
   await check("section counts", async () => console.log("matches", await countOf(page, "#matches tbody tr.row"), "| item usage rows", await countOf(page, "#items .fate")));
   await check("jump menu", () => checkJumps(page, viewport.name, false));
   await check("sticky filters", async () => console.log("the filters stay in view:", await page.evaluate(() => Math.round(document.querySelector(".filters")?.getBoundingClientRect().top ?? -1)), "px from the top at scroll", await page.evaluate(() => Math.round(scrollY))));
-  await check("matches", async () => {
-    await page.locator("#matches tbody tr.row").first().click();
-    await page.waitForSelector(".modal .step");
-    console.log("matches → modal", await textOf(page, ".mhead h2"));
-    await page.keyboard.press("Escape");
-  });
   await check("deep link", async () => {
     await page.goto(`${base}/#luck`);
     await page.waitForSelector("#odds", { timeout: 120_000 });
@@ -1432,7 +953,7 @@ const pathOf = (page: Page) => {
   return url.pathname + url.search;
 };
 
-// The site's URLs: the root moves to the arena, and the arena's filter, open leaderboard row and replay move are each kept by a reload.
+// The site's URLs: the root moves to the arena, and the arena's filter and open leaderboard row are each kept by a reload.
 const checkSiteRoutes = async (page: Page) => {
   await page.goto(`${base}/`);
   await showMatches(page);
@@ -1449,26 +970,6 @@ const checkSiteRoutes = async (page: Page) => {
   console.log("filter", filtered, "| points", scatterPoints, "→ after reload", await countOf(page, "#scatter svg g.pt"));
   expectThat(filtered === "/arena?offEfforts=minimal" && pathOf(page) === filtered, `switching off an effort gives ${filtered}, a reload ${pathOf(page)}`);
   expectThat((await countOf(page, "#scatter svg g.pt")) === scatterPoints, "a reload of a filtered arena shows a different scatter");
-
-  await page.locator("#matches tbody tr.row").first().click();
-  await page.waitForSelector(".modal .stepper");
-  await page.keyboard.press("ArrowRight");
-  await page.keyboard.press("ArrowRight");
-  await settled(page);
-
-  const replayed = pathOf(page);
-  const move = await textOf(page, ".modal .stepper .k");
-
-  await page.reload();
-  await page.waitForSelector(".modal .stepper", { timeout: 120_000 });
-  await settled(page);
-  console.log("replay", replayed, move, "→ after reload", pathOf(page), await textOf(page, ".modal .stepper .k"));
-  expectThat(/^\/replay\/[0-9a-f]+\?at=\d+$/.test(replayed) && pathOf(page) === replayed, `a stepped replay is at ${replayed}, a reload at ${pathOf(page)}`);
-  expectThat((await textOf(page, ".modal .stepper .k")) === move, `a reload moves the replay from ${move} to ${await textOf(page, ".modal .stepper .k")}`);
-
-  await page.keyboard.press("Escape");
-  await settled(page);
-  expectThat(pathOf(page) === "/arena" && (await countOf(page, ".modal")) === 0, `closing a reloaded replay leaves ${pathOf(page)}`);
 
   await openTables(page);
   await page.locator("table.lbt tr.row").first().click();
@@ -1534,9 +1035,6 @@ const checkTour = async (page: Page, name: string) => {
   for (const [index, step] of steps.entries()) {
     if (index > 0) await page.keyboard.press("ArrowRight");
 
-    // A match the server has not sent lately is replayed through the rules first, which takes up to seconds.
-    if (step.isReplay) await page.waitForSelector(".modal .step", { timeout: ACTION_TIMEOUT_MS });
-
     await settled(page);
 
     const drawn = await page.evaluate((focus) => [...document.querySelectorAll(focus)].some((element) => element.getBoundingClientRect().height > 0), step.focus);
@@ -1548,13 +1046,11 @@ const checkTour = async (page: Page, name: string) => {
     expectThat(box !== null && box.x + box.width <= width + 8, `${name}: tour step "${step.title}" highlights outside the page`);
     expectThat(counter === `${index + 1} / ${steps.length}` && (await page.locator(".tour-card").innerText()).includes(step.title), `${name}: tour card ${index + 1} reads "${counter}", the page's tour has ${steps.length} steps`);
     expectThat(hasCertain || !/certain/i.test(await page.locator(".tour-card").innerText()), `${name}: a page without certain mistakes tours them at "${step.title}"`);
-    expectThat(step.isReplay === ((await page.locator(".modal .step").count()) > 0), `${name}: tour step "${step.title}" ${step.isReplay ? "has no replay open" : "leaves a replay open"}`);
     await page.screenshot({ path: shot(`${name}-tour-${String(index + 1).padStart(2, "0")}`) });
   }
 
   await page.keyboard.press("Escape");
   console.log(name, "tour steps", steps.length, "| closed by Escape:", (await countOf(page, ".tour-layer")) === 0);
-  expectThat((await countOf(page, ".modal")) === 0, `${name}: closing the tour left a replay open`);
 };
 
 const checkTouch = async (browser: Browser, viewport: Viewport) => {
@@ -1660,48 +1156,7 @@ const checkTouch = async (browser: Browser, viewport: Viewport) => {
   await check("match list", () => checkMatchList(page, name, true));
   await check("drill-down", () => checkDrill(page, name, true));
   await check("item usage", () => checkItemUsage(page, name));
-  await check("replay", async () => {
-    await page.locator("#matches tbody tr.row").first().tap();
-    await page.waitForSelector(".modal .step");
-
-    const box = await page.locator(".modal").boundingBox();
-    const before = await textOf(page, ".modal .stepper .k");
-
-    await page.locator(".stepper button", { hasText: "Next" }).tap();
-    await page.locator(".stepper button", { hasText: "Next" }).tap();
-    await settled(page);
-    console.log(name, "replay", `${box?.width}x${box?.height}`, "| stepper", before, "→", await textOf(page, ".modal .stepper .k"), "| on:", await textOf(page, ".modal .step.on"), "| small targets", await smallTargets(page));
-    await page.screenshot({ path: shot(`${name}-replay`) });
-
-    const crowded = await page.locator(".modal .step").evaluateAll((headers) => headers.filter((header) => header.scrollWidth > header.clientWidth).length);
-
-    console.log(name, "regret tags", await regretTags(page).count(), "| move rows wider than the list", crowded);
-    expectThat(crowded === 0, `${name}: a move row overflows with its regret tag`);
-    await page.goBack();
-    console.log(name, "back closes replay:", (await countOf(page, ".modal")) === 0);
-  });
   await check("certain mistakes", () => checkCertain(page, name, (target) => target.tap(), true));
-  await check("candidate list", async () => {
-    const [fixture] = await regretFixtures(1);
-
-    if (fixture === undefined) throw new Error("no regret blunder to open a candidate list from");
-
-    await openFromMatchList(page, fixture);
-
-    const matchId = await openedMatchId(page);
-
-    if (!(await openBudgetStopped(page, matchId))) throw new Error(`${name}: ${matchId} has no move the node budget stopped`);
-
-    const wasFolded = await checkCandidates(page, matchId, `${name} candidates`);
-    const summary = await page.locator(".modal .sel .cands > summary").boundingBox();
-    const overflow = await page.evaluate(() => Math.max(document.documentElement.scrollWidth - innerWidth, ...[...document.querySelectorAll(".modal, .modal .cands")].map((element) => element.scrollWidth - element.clientWidth)));
-
-    expectThat(wasFolded === width < 640, `${name}: the candidate list came up ${wasFolded ? "folded" : "open"}`);
-    expectThat(summary !== null && summary.height >= 44, `${name}: the candidate list's summary is ${summary?.height ?? 0}px tall`);
-    expectThat(overflow <= 0, `${name}: the replay with its candidate list overflows by ${overflow}px`);
-    await page.locator(".modal .sel").screenshot({ path: shot(`${name}-candidates`) });
-    await closeReplay(page);
-  });
   await check("jump menu", async () => {
     await checkJumps(page, name, true);
     console.log(name, "overflow after every section", await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "| small targets", await smallTargets(page));

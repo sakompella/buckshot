@@ -8,16 +8,13 @@ import * as Arena from "../arena-viewer/page/main.ts";
 import { Message as ArenaMessage, Model as ArenaModel } from "../arena-viewer/page/model.ts";
 import { view as arenaView } from "../arena-viewer/page/view.ts";
 import arenaStyles from "../arena-viewer/page/styles.css?inline";
-import tableStyles from "../table.css?inline";
 import { type ArenaRoute, isArenaRoute, isRootUrl, routeOf, SiteRoute } from "./route.ts";
 
-// The site: the arena's analysis under Arena, and one arena match under Replay. Both ask the arena server for its data.
+// The site: the arena's analysis under Arena, asking the arena server for its data.
 
 export const Model = Schema.Struct({
   route: SiteRoute,
   maybeArena: Schema.Option(ArenaModel),
-  /** Whether the open replay's history entry is one this page pushed, so closing the replay goes back to the arena. */
-  isReplayPushed: Schema.Boolean,
 });
 
 export type Model = typeof Model.Type;
@@ -41,7 +38,6 @@ const navigation = (name: string, effect: Effect.Effect<void>) =>
 const PushUrl = (href: string) => navigation("PushUrl", Navigation.pushUrl(href))();
 const ReplaceUrl = (href: string) => navigation("ReplaceUrl", Navigation.replaceUrl(href))();
 const LoadUrl = (href: string) => navigation("LoadUrl", Navigation.load(href))();
-const GoBack = () => navigation("GoBack", Navigation.back())();
 
 const toArenaMessage = (message: ArenaMessage): Message => Message.GotArenaMessage({ message });
 
@@ -63,7 +59,7 @@ const enterArena = (model: Model, route: ArenaRoute): Return =>
     },
   });
 
-/** Writes what the arena now shows into the URL: opening a replay adds a history entry, closing it leaves that entry. */
+/** Writes what the arena now shows into the URL, so a link shares it and a reload keeps it. */
 const withArenaUrl = (before: Option.Option<ArenaModel>, after: Return): Return =>
   Option.match(Option.all([before, after.model.maybeArena]), {
     onNone: () => after,
@@ -72,16 +68,7 @@ const withArenaUrl = (before: Option.Option<ArenaModel>, after: Return): Return 
 
       if (!isArenaRoute(after.model.route) || href === Arena.hrefOf(was)) return after;
 
-      const isOpening = Option.isNone(was.maybeReplay) && Option.isSome(arena.maybeReplay);
-      const isClosing = Option.isSome(was.maybeReplay) && Option.isNone(arena.maybeReplay);
-
-      const [command, isReplayPushed] = isOpening
-        ? [PushUrl(href), true]
-        : isClosing && after.model.isReplayPushed
-          ? [GoBack(), false]
-          : [ReplaceUrl(Option.isSome(arena.maybeReplay) ? href : href + location.hash), after.model.isReplayPushed && !isClosing];
-
-      return { model: modifyFields(after.model, { isReplayPushed: () => isReplayPushed }), commands: [...(after.commands ?? []), command] };
+      return { model: after.model, commands: [...(after.commands ?? []), ReplaceUrl(href + location.hash)] };
     },
   });
 
@@ -91,7 +78,7 @@ const changedUrl = (model: Model, route: SiteRoute, href: string): Return => {
 
   if (!isArenaRoute(route) || isArenaShowing) return { model: routed };
 
-  return enterArena(modifyFields(routed, { isReplayPushed: () => false }), route);
+  return enterArena(routed, route);
 };
 
 export const update = (model: Model, message: Message): Return =>
@@ -108,7 +95,7 @@ export const update = (model: Model, message: Message): Return =>
 
 export const init = (url: Url.Url): Return => {
   const route = routeOf(url);
-  const start: Model = { route, maybeArena: Option.none(), isReplayPushed: false };
+  const start: Model = { route, maybeArena: Option.none() };
   const arena = isArenaRoute(route) ? enterArena(start, route) : { model: start };
   // The root is the arena: it moves to the arena's own URL, keeping a section link such as `/#scatter`.
   const moved = isRootUrl(url) ? [ReplaceUrl(`/arena${location.hash}`)] : [];
@@ -125,7 +112,7 @@ const isArenaShown = (model: Model): boolean => isArenaRoute(model.route);
 export const subscriptions = Subscription.lift(Arena.subscriptions)<Model, Message>({
   read: (model) => model.maybeArena,
   toParentMessage: toArenaMessage,
-  when: { replayKeys: isArenaShown, scroll: isArenaShown, tappedTitle: isArenaShown, tourKeys: isArenaShown, hash: isArenaShown },
+  when: { scroll: isArenaShown, tappedTitle: isArenaShown, tourKeys: isArenaShown, hash: isArenaShown },
 });
 
 type H = HtmlBuilder<Message>;
@@ -144,15 +131,13 @@ const navView = (h: H, model: Model): Html => {
   );
 };
 
-// The replay draws the table, so its stylesheet comes first.
-const ARENA_STYLES = `${tableStyles}\n${arenaStyles}`;
+const ARENA_STYLES = arenaStyles;
 
 const pageOf = (h: H, model: Model, page: Html): Html => h.div([h.Class("site")], [h.style([], [ARENA_STYLES]), navView(h, model), page]);
 
 export const view = (model: Model, h: H): Document =>
   SiteRoute.match(model.route, {
     Arena: () => arenaPage(h, model),
-    Replay: () => arenaPage(h, model),
     NotFound: ({ path }) => ({
       title: "Buckshot",
       body: pageOf(h, model, h.main([], [h.p([h.Class("k")], [`Nothing lives at ${path}. `, h.a([h.Href("/arena")], ["The arena"]), " has every config's results."])])),
