@@ -1,6 +1,6 @@
 # Net points
 
-How many round wins a seat's moves gave up per match, by the minimax player's reading ([regret.md](regret.md)), and how that compares with the Round Elo and with who actually won the rounds. A casual pass over the 3,536 finished matches with no DeepSeek seat of the 2026-11-04 run, one scoring run (the Rust `bounded-v1-f64-unpruned-c89fc327422c68ac`, depth 6, 20,000 nodes, sampled reload with 256 deals; [regret.md](regret.md#production-scoring)). The scripts write the tables below. The two plots are not committed: `--plots DIR` writes them, and their data is the config table and the round-margin table.
+How many round wins a seat's moves gave up per match, by the minimax player's reading ([regret.md](regret.md)), and how that compares with the Round Elo and with who actually won the rounds. A casual pass over the 3,536 finished matches with no DeepSeek seat of the 2026-11-04 run, one scoring run (the Rust `bounded-v1-f64-unpruned-ced80df221f27e04`, depth 6, 20,000 nodes, sampled reload with 256 deals; [regret.md](regret.md#production-scoring)). The scripts write the tables below. The two plots are not committed: `--plots DIR` writes them, and their data is the config table and the round-margin table.
 
 ## Definition
 
