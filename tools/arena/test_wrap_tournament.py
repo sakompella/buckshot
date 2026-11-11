@@ -1,5 +1,4 @@
 import json
-import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -161,17 +160,6 @@ class Cohort(TmpCase):
         _, dirs = self.dirs("tournament 7")
         with self.assertRaises(w.Stop):
             w.stamp_cohort(dirs, "tournament 8")
-
-
-class Emails(TmpCase):
-    def test_finds_emails_in_any_column_and_ignores_other_at_signs(self):
-        d = self.tmp()
-        db = sqlite3.connect(d / "db.sqlite")
-        db.execute("CREATE TABLE t (a TEXT, b BLOB)")
-        db.executemany("INSERT INTO t VALUES (?, ?)", [("[redacted] @scope/pkg a@b", None), ("x", b"call me someone@example.com")])
-        db.commit()
-        db.close()
-        self.assertEqual(w.email_hits(d / "db.sqlite"), 1)
 
 
 if __name__ == "__main__":

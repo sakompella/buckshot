@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Wrap up finished tournaments: import them, refresh every derived database, rebuild the public copy and the doc tables.
+"""Wrap up finished tournaments: import them, refresh every derived database and the doc tables.
 
     python3 tools/arena/wrap_tournament.py --run-dir _work/arena/tournament-8 --importer <checkout with the importer> --cohort "tournament 8"
 
@@ -20,8 +20,7 @@ check stops the run with a message and a non-zero exit; fix the cause and rerun.
   certain   certain-mistakes database
   luck      luck corrections of the luck-adjusted Round Elo (analysis/aivat.py)
   swap-derived  swap regret, knowledge, certain-mistakes and luck in, each keeping a .pre-<name> copy
-  public    redact_database.py, scan every column for emails, swap, restart the viewer
-  export    arena-export.ts: the online site's aggregate JSON from the public copy into web/online/data
+  export    arena-export.ts: the online site's aggregate JSON from the analysis database into web/online/data
   deploy    only with --deploy: upload the site as a preview version, check it at its preview URL, then promote it to $ONLINE_DOMAIN (docs/arena/README.md)
   doc-*     rerun the doc table scripts into the working tree (nothing is committed)
   cleanup   restart the viewer, delete the scratch files
@@ -44,7 +43,6 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from pathlib import Path
 
-import redact_database
 import score_regret
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "analysis"))
@@ -159,14 +157,6 @@ def preview_version(output: str) -> str:
     raise Stop("deploy-online.ts preview printed no result")
 
 
-def email_hits(path: Path) -> int:
-    """How many email-shaped strings the database holds in any column."""
-    db = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
-    hits = sum(emails for *_, emails in redact_database.email_cells(db))
-    db.close()
-    return hits
-
-
 def run_steps(steps: list[tuple[str, Callable[[], str | None]]], state_file: Path, log: Callable[[str], None]) -> None:
     """Runs the steps in order, skipping those the state file lists as done and recording each as it finishes."""
     state = json.loads(state_file.read_text()) if state_file.exists() else {}
@@ -214,7 +204,6 @@ class Wrap:
         self.scratch.mkdir(exist_ok=True)
         self.derived = self.analysis / "derived"
         self.main = self.analysis / "buckshot.sqlite"
-        self.public = self.analysis / "buckshot.public.sqlite"
         self.regret_db = self.derived / self.regret_name
         self.state = self.logs / "state.json"
 
@@ -335,20 +324,10 @@ class Wrap:
         moved = [swap(live, self.scratch / new, self.tag) for live, new in pairs]
         return f"swapped {moved}; " + self.viewer_up()
 
-    def public_(self) -> str:
-        new = self.scratch / "public.sqlite"
-        if not new.exists():
-            self.run("public", [sys.executable, "tools/arena/redact_database.py", str(self.main), str(new)])
-        hits = email_hits(new)
-        if hits:
-            raise Stop(f"{new} holds {hits} email-shaped strings; it was not swapped in")
-        swap(self.public, new, self.tag)
-        return "0 emails in the public copy; " + self.viewer_up()
-
     def export(self) -> str:
         out = REPO / "web/online/data"
         derived = [("--regret", self.regret_db), ("--knowledge", self.derived / "knowledge.sqlite"), ("--certain-mistakes", self.derived / "certain-mistakes.sqlite"), ("--luck", self.derived / "luck.sqlite")]
-        args = [str(self.public), "--out", str(out), *[a for flag, path in derived for a in (flag, str(path))]]
+        args = [str(self.main), "--out", str(out), *[a for flag, path in derived for a in (flag, str(path))]]
         self.run("export", self.nix(REPO, "bun", "scripts/arena-export.ts", *args), cwd=REPO / "web")
         return f"aggregates in {out}" + ("" if self.deploy else "; deploy with --deploy or `bun run deploy:online` from web/")
 
@@ -403,7 +382,6 @@ class Wrap:
             ("certain", self.certain),
             ("luck", self.luck),
             ("swap-derived", self.swap_derived),
-            ("public", self.public_),
             ("export", self.export),
             *([("deploy", self.deploy_)] if self.deploy else []),
             ("doc-leaderboard", self.doc("leaderboard", "results.md", *dbs)),

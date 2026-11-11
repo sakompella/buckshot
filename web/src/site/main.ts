@@ -99,8 +99,7 @@ export const update = (model: Model, message: Message): Return =>
     ChangedUrl: ({ route, href }) => changedUrl(model, route, href),
     RequestedUrl: ({ request }) =>
       Navigation.UrlRequest.match(request, {
-        // The database download is the server's, not a page of the site.
-        Internal: ({ url }) => ({ model, commands: [url.pathname.startsWith("/api/") ? LoadUrl(hrefOfUrl(url)) : PushUrl(hrefOfUrl(url))] }),
+        Internal: ({ url }) => ({ model, commands: [PushUrl(hrefOfUrl(url))] }),
         External: ({ href }) => ({ model, commands: [LoadUrl(href)] }),
       }),
     CompletedNavigation: () => ({ model }),
