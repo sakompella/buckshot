@@ -430,19 +430,19 @@ Ten games per config is a small sample: read single cells as rough. Two patterns
 
 ## Tournament 5 (finished 2026-11-01)
 
-214 scored matches in 11 phases, $353.50 of list-price usage (every call priced). The database total is now $1,557.95. Seeds are 4000 to 4061, which no earlier tournament played, so there is no matched-seed comparison with tournaments 1 to 4. The matched-seed tool (`tools/arena/seed_pairs.py`) was used within the tournament. The ratings quoted in this section are the match ratings of the 2026-11-04 snapshot (the older fit on match results, kept in [matchups.md](analysis/matchups.md)), not the Round Elo of the leaderboard above.
+214 scored matches in 11 phases, $353.50 of list-price usage (every call priced). The database total is now $1,557.95. Seeds are 4000 to 4061, which no earlier tournament played, so there is no matched-seed comparison with tournaments 1 to 4. The matched-seed tool (`tools/arena/seed_pairs.py`) was used within the tournament. The ratings quoted in this section are the luck-adjusted Round Elo of the leaderboard above (depth-2 engine at 0); the match ratings with their intervals are in [matchups.md](analysis/matchups.md).
 
-Only three pairings played 5 seeds in both seats (10 matches): Opus max against low, medium and xhigh. The top-four round robin also plays 5 seeds per pair. Everything else is one seed in both seats (2 matches per pairing), so a single pairing says very little. Counts below are from tournament 5 alone. With tournaments 7, 8 and 9 added, Opus off, Astra low and high, and every Terra 6.1 effort have 80 matches each. Ratings are the pooled ones of the 2026-11-04 snapshot.
+Only three pairings played 5 seeds in both seats (10 matches): Opus max against low, medium and xhigh. The top-four round robin also plays 5 seeds per pair. Everything else is one seed in both seats (2 matches per pairing), so a single pairing says very little. Counts below are from tournament 5 alone. With tournaments 7, 8 and 9 added, Opus off, Astra low and high, and every Terra 6.1 effort have 80 matches each. Ratings are over all tournaments.
 
-- **Opus max:** 24 wins in 40 matches (60%) here; 59 of 80 overall (73.8%), pooled rating +218 (+137 to +318), the top of the all-configs table. Before this tournament it had 8 matches and +334.
+- **Opus max:** 24 wins in 40 matches (60%) here; 59 of 80 overall (73.8%), Round Elo +125, third in the all-configs table after Terra 6.1 max (+140) and Sonnet max (+130).
   - Against its own efforts, 5 seeds in both seats: 7-3 against low, 6-4 against medium, 5-5 against xhigh. The 95% intervals on those shares span 60 to 70 points (20% to 80% for xhigh), so none is settled.
   - Against Sonnet, Haiku 5.5, Astra, Sol and Terra 6.1 at medium, one seed each: 6 wins in 10.
-  - On the pooled scale Opus xhigh is +170, high +147, medium +85 and low -7.
-- **Terra 6.1:** results at all six efforts. Medium has 80 matches overall, 50 wins, +103 (+26 to +185). The others, with tournament-5 wins and the pooled rating over 80 matches: off 4 of 8 (+91), low 5 of 8 (+48), high 2 of 8 (+85), xhigh 4 of 10 (+157), max 3 of 4 (+202, +120 to +296). Max is second in the all-configs table.
+  - On the same scale Opus xhigh is +112, high +82, medium +61 and low +41.
+- **Terra 6.1:** results at all six efforts. Medium has 80 matches overall, 50 wins, +51. The others, with tournament-5 wins and the rating over 80 matches: off 4 of 8 (+25), low 5 of 8 (+27), high 2 of 8 (+67), xhigh 4 of 10 (+68), max 3 of 4 (+140). Max is first in the all-configs table.
   - Against each other: low beat off 2-0, xhigh beat high 2-0, max beat xhigh 2-0, medium beat xhigh 2-0, and medium split 1-1 with off, low and high.
-  - Terra 6.1 medium (+103) is above Terra 5.6 medium (-61), on 80 matches against 259.
-- **Opus off:** 7 wins in 12 matches (58%) here; 50 of 80 overall (62.5%), +108 (+30 to +193). It split 1-1 with Opus low, medium, high, Haiku 5.5 medium and Luna xhigh, and beat Sonnet off 2-0. That is above Opus medium (+85) and below high (+147); the intervals overlap.
-- **Astra low and high:** low won 7 of 12 here (+123 pooled over 80 matches, +52 to +209), high won 3 of 8 (+179 over 80, +98 to +274), against Astra medium at +149 (254 matches).
+  - Terra 6.1 medium (+51) is above Terra 5.6 medium (-6), on 80 matches against 259.
+- **Opus off:** 7 wins in 12 matches (58%) here; 50 of 80 overall (62.5%), +67. It split 1-1 with Opus low, medium, high, Haiku 5.5 medium and Luna xhigh, and beat Sonnet off 2-0. That is above Opus medium (+61) and below high (+82); the match-rating intervals overlap.
+- **Astra low and high:** low won 7 of 12 here (+81 over 80 matches), high won 3 of 8 (+118 over 80), against Astra medium at +87 (254 matches).
   - Astra medium beat Astra low 2-0 and split 1-1 with Astra high.
   - Low: Sonnet medium 2-0 for low, Luna medium 2-0, 1-1 with Opus, Haiku 5.5 and Sol at medium.
   - High: lost 0-2 to Sonnet medium, 1-1 with Opus and Sol at medium.
@@ -457,7 +457,7 @@ Only three pairings played 5 seeds in both seats (10 matches): Opus max against 
 | Opus xhigh v Sol max | 4-6 |
 | Opus xhigh v Astra | 22-19 |
 
-  Sonnet max won 8 of 10 against Opus xhigh (over complete seed pairs, 95% interval 60% to 100%). The pooled ratings are Sonnet max +173, Astra +149, Opus xhigh +170, Sol max +143. Opus xhigh was +180 before tournament 5, Sonnet max +160.
+  Sonnet max won 8 of 10 against Opus xhigh (over complete seed pairs, 95% interval 60% to 100%). The Round Elos are Sonnet max +130, Opus xhigh +112, Sol max +109 and Astra +87.
 
 ## Tournament 8 (finished 2026-11-04)
 
