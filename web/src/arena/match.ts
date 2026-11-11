@@ -69,7 +69,7 @@ export const DELIVERIES = ["on-turn", "live"] as const;
 export type Delivery = (typeof DELIVERIES)[number];
 
 /** The instructions one agent's conversation starts with: the shared ones, then its addendum if its entrant has one. */
-const agentInstructions = ({ provenance }: Entrant): string => (provenance.instructions_addendum === undefined ? INSTRUCTIONS : `${INSTRUCTIONS}\n\n${provenance.instructions_addendum}`);
+export const agentInstructions = ({ provenance }: Pick<Entrant, "provenance">): string => (provenance.instructions_addendum === undefined ? INSTRUCTIONS : `${INSTRUCTIONS}\n\n${provenance.instructions_addendum}`);
 
 /** Who plays one position, as the arena sees it: a controller, or an engine with its depth and budget. */
 export const ArenaController = Schema.Union([Controller, EngineSeat]);
@@ -341,6 +341,18 @@ interface SeatHost {
   readonly crashAt: (point: string) => void;
 }
 
+/** The seat tools as the model is offered them; seatTools adds what they do. */
+export const GET_GAME = { name: "get_game", description: "Your current view, as JSON, without log entries: those reach you once, as messages.", parameters: Type.Object({}) };
+
+export const PLAY_MOVE = {
+  name: "play_move",
+  description: "Play one of your legal moves. Returns the move played; your next turn comes as a new message.",
+  parameters: Type.Object({
+    move: Type.Integer({ minimum: 0, description: "The number of the move, from your view's moves." }),
+    turn: Type.Integer({ minimum: 0, description: "The turn of the view you chose the move from." }),
+  }),
+};
+
 const seatTools = (dir: string, { table, onReply, exportJournal, crashAt }: SeatHost) => {
   const sittingOf = async (snapshot: Harness["snapshot"], conversationId: ConversationId): Promise<Sitting> => {
     const doc = await snapshot(SeatDoc, conversationId, context);
@@ -354,9 +366,7 @@ const seatTools = (dir: string, { table, onReply, exportJournal, crashAt }: Seat
     name: "buckshot-seat",
     tools: [
       defineTool({
-        name: "get_game",
-        description: "Your current view, as JSON, without log entries: those reach you once, as messages.",
-        parameters: Type.Object({}),
+        ...GET_GAME,
         execute: async (_args, api) => {
           const sitting = await sittingOf(api.snapshot, api.conversationId);
 
@@ -366,12 +376,7 @@ const seatTools = (dir: string, { table, onReply, exportJournal, crashAt }: Seat
         },
       }),
       defineTool({
-        name: "play_move",
-        description: "Play one of your legal moves. Returns the move played; your next turn comes as a new message.",
-        parameters: Type.Object({
-          move: Type.Integer({ minimum: 0, description: "The number of the move, from your view's moves." }),
-          turn: Type.Integer({ minimum: 0, description: "The turn of the view you chose the move from." }),
-        }),
+        ...PLAY_MOVE,
         replay: "safe",
         execute: async (args, api) => {
           const sitting = await sittingOf(api.snapshot, api.conversationId);
