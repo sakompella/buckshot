@@ -2,6 +2,7 @@ import { Result } from "effect";
 
 import { type PriceTable, type Total, totalsBy } from "./cost.ts";
 import { callsOf, faultsOf, finishedNames, readMatch, type TournamentFile } from "./tournament-dir.ts";
+import { BOOTSTRAP_DRAWS } from "./bootstrap.ts";
 import {
   type CodeVersion,
   codeVersions,
@@ -26,8 +27,6 @@ import { botEntrant, type Tournament } from "./tournament.ts";
 
 // The tournament's report: the stats of its finished matches that agree with
 // the schedule, as plain data. scripts/arena-stats.ts prints it.
-
-export const RESAMPLES = 1000;
 
 /** Below this many seeds the clustered intervals are rough. */
 export const FEW_SEEDS = 20;
@@ -90,7 +89,7 @@ export interface Report {
 
 const FREE: Total = { calls: 0, input: 0, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0, dollars: 0, unpriced: 0 };
 
-export const reportOf = (dir: string, file: TournamentFile, tournament: Tournament, prices: PriceTable, resampleCount: number = RESAMPLES): Report => {
+export const reportOf = (dir: string, file: TournamentFile, tournament: Tournament, prices: PriceTable, resampleCount: number = BOOTSTRAP_DRAWS): Report => {
   const { config } = tournament;
   const finished = finishedNames(dir, file.schedule);
   const read = file.schedule.flatMap((match) => (finished.has(match.name) ? [{ match, result: readMatch(dir, tournament, match) }] : []));

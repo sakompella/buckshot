@@ -9,7 +9,7 @@ import type { Seat, SeatRegret } from "../src/arena-viewer/api.ts";
 import { isEngine as isArenaEngine } from "../src/arena/agent.ts";
 import { type BlockTally, baseName, blockRate, fmtBytes, groupBy, isEngine, labelOf, matchRows, quantile, regretStats, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { mulberry32 } from "../src/arena/tournament-stats.ts";
-import { bradleyTerry, type Game, heldOutRatings, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
+import { ANCHOR, bradleyTerry, type Game, heldOutRatings, matchWinVsAnchor, pooledRatings, type Rating } from "../src/arena-viewer/page/ratings.ts";
 import { droppedConfigs, oddsPanels } from "../src/arena-viewer/page/odds.ts";
 import { rowsOf } from "../src/arena-viewer/page/matches.ts";
 import { modelStatsOf, ranksOf } from "../src/arena-viewer/page/derived.ts";
@@ -356,7 +356,10 @@ test("rounds ratings leave out matches whose round winners are not all known", (
   const known = playedRoundSeats(1, 3, 2);
   const unknown = playedRoundSeats(2, 3, 3, false).map((seat) => ({ ...seat, matchId: `unknown-${seat.matchId}` }));
 
-  expect(pooledRatings([...known, ...unknown])).toEqual(pooledRatings(known));
+  // Tiers leave provisional configs out, and the unknown matches still count toward a config's scored matches.
+  const withoutTiers = (ratings: ReadonlyMap<string, Rating>) => new Map([...ratings].map(([key, { tier: _tier, ...rest }]) => [key, rest]));
+
+  expect(withoutTiers(pooledRatings([...known, ...unknown]))).toEqual(withoutTiers(pooledRatings(known)));
 });
 
 test("a config's round share is the rounds it won over the rounds it played", () => {
@@ -423,7 +426,7 @@ test("playing the odds keeps every effort the filter keeps, named as itself, wit
 test("ranks go to rated configs of 20 or more matches by rating, equal ratings by label; the rest have no rank and the leaderboard lists them after, the better rated first", () => {
   const played = (model: string, matches: number) => Array.from({ length: matches }, (_, index) => ({ ...SEAT, matchId: `${model}${index}`, model, potShare: null }));
   const stats = modelStats([...played("delta", 20), ...played("alpha", 20), ...played("charlie", 20), ...played("bravo", 20), ...played("echo", 19), ...played("foxtrot", 3)]);
-  const rated = (rating: number) => ({ rating, blocks: 4, interval: { lo: rating, hi: rating } });
+  const rated = (rating: number) => ({ rating, blocks: 4, interval: { lo: rating, hi: rating }, tier: null });
   const ratings = new Map([["charlie|medium", rated(5)], ["bravo|medium", rated(5)], ["alpha|medium", rated(-20)], ["echo|medium", rated(90)], ["foxtrot|medium", rated(10)]]);
   const ranks = ranksOf(stats, ratings);
 
@@ -435,6 +438,29 @@ test("the page reads engine seats as the arena defines them", () => {
   for (const seat of ["Engine/2/20000", "Engine/6/20000/sampled", "Engine/6/20000/static", "Engine/x/1", "claude-opus-5-5"]) expect(isEngine(seat)).toBe(isArenaEngine(seat));
 
   expect(baseName("Engine/6/20000/sampled")).toBe("Search engine, depth 6 (sampled reloads)");
+});
+
+test("the anchor is rated 0, and an even match against it is a coin flip", () => {
+  const games = [{ a: ANCHOR, b: "x|medium", sa: 0.3 }, { a: "x|medium", b: "y|medium", sa: 0.6 }];
+
+  expect(bradleyTerry(games).get(ANCHOR)).toBe(0);
+  expect(matchWinVsAnchor(0)).toBe(0.5);
+  expect(matchWinVsAnchor(200)).toBeGreaterThan(1 / (1 + 10 ** (-200 / 400)));
+});
+
+test("a config the data clearly ranks below the top starts the next tier; one it cannot tell apart joins it", () => {
+  const seatsOf = (a: string, b: string, aRounds: (index: number) => number) =>
+    Array.from({ length: 40 }, (_match, index) => {
+      const won = aRounds(index);
+      const story = { starter: "A", ok: true, rounds: Array.from({ length: 3 }, (_round, round) => ({ winner: round < won ? "A" : "B", prize: 1 })) };
+      const seatOf = (model: string, player: string, position: number, share: number): Seat => ({ ...SEAT, matchId: `${a}${b}${index}`, seedBlock: `${a}${b}${index}`, model, effort: "medium", player, position, winShare: share, story });
+
+      return [seatOf(a, "A", 0, won >= 2 ? 1 : 0), seatOf(b, "B", 1, won >= 2 ? 0 : 1)];
+    }).flat();
+
+  const ratings = pooledRatings(withPotShares([...seatsOf("strong", "mid", () => 3), ...seatsOf("mid", "low", (index) => (index % 2 === 0 ? 2 : 1))]));
+
+  expect(["strong", "mid", "low"].map((model) => ratings.get(`${model}|medium`)?.tier)).toEqual([1, 2, 2]);
 });
 
 test("the best-value line runs through ranked configs only", () => {

@@ -17,16 +17,16 @@ const DAY = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "short", 
 /** "Oct 15 – Nov 9, 2026", or the one day when both ends are the same. */
 const runDates = (runs: Runs): string => (runs.from === runs.to ? DAY.format(new Date(runs.from)) : `${DAY.format(new Date(runs.from))} – ${DAY.format(new Date(runs.to))}`);
 
-/** The ranked configs' Round Elo with intervals, and the search engines as reference lines. */
+/** The ranked configs' headline rating with intervals, and the search engines as reference lines. */
 export const summaryView = (h: H, derived: Derived): Html =>
   h.div(
     [],
     [
       h.h2([], ["Results at a glance"]),
       h.p([h.Class("sub")], [
-        "Round Elo of every ranked config, best first",
+        `${derived.ratingName} of every ranked config, best first`,
         ...(derived.runs === undefined ? [] : [`, from matches played ${runDates(derived.runs)}`]),
-        ". Round Elo pools every match of every tournament; the bar is its 95% interval, so configs whose bars overlap are not separated by the data. The dashed lines are the search engines, fixed players that About explains.",
+        `. It pools every match of every tournament, with the depth-2 search engine at 0; the bar is its 95% interval, so configs whose bars overlap are not separated by the data. The dashed lines are the search engines, fixed players that About explains. The leaderboard groups the configs into tiers.`,
       ]),
       forestView(h, derived),
     ],
@@ -79,19 +79,19 @@ export const aboutView = (h: H, derived: Derived): Html => {
       ]),
       h.p([h.Class("sub")], [
         h.b([], ["Round Elo. "]),
-        "One Bradley-Terry rating fitted over every scored match, counting each round as one game; the average player sits at 0. The bracket beside a rating is a 95% bootstrap over seed blocks, so it carries the luck a whole seed shares.",
+        "One Bradley-Terry rating fitted over every scored match, counting each round as one game. The depth-2 search engine (Engine/2/20000) is fixed at 0, so a new config does not move the others. The bracket beside a rating is a 95% bootstrap over seed blocks, so it carries the luck a whole seed shares.",
       ]),
       ...(hasLuck
         ? [
             h.p([h.Class("sub")], [
               h.b([], ["Luck-adjusted Elo. "]),
-              "The same fit with each round's luck — the shots, loads and first seat — corrected out (AIVAT), estimating the same strengths with less noise.",
+              "The same fit with each round's luck — the shots, loads and first seat — corrected out (AIVAT), estimating the same strengths with less noise. It is the headline rating: it ranks the leaderboard and the results summary.",
             ]),
           ]
         : []),
       h.p([h.Class("sub")], [
         h.b([], ["What to keep in mind. "]),
-        "Overlapping intervals mean the order between two configs is not settled; the chart at the top shows where they overlap. Provisional configs (fewer than 20 scored matches) have no rank. Points lost and accuracy are measured against a minimax player, not against perfect play; certain mistakes need no such player. Costs are the providers' list prices applied to the usage, not what anyone was billed.",
+        "Configs are grouped in tiers. Down the ranking, a new tier starts at the first config clearly below the top of the current one: the 95% bootstrap interval of the gap between the two excludes 0. Within a tier the order is not settled. Provisional configs (fewer than 20 scored matches) have no tier. Points lost and accuracy are measured against a minimax player, not against perfect play; certain mistakes need no such player. Costs are the providers' list prices applied to the usage, not what anyone was billed.",
       ]),
     ],
   );

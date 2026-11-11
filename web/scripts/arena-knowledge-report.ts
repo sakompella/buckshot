@@ -4,6 +4,7 @@ import { parseArgs } from "node:util";
 import { Database } from "bun:sqlite";
 import { Effect, Schema } from "effect";
 
+import { BOOTSTRAP_DRAWS } from "../src/arena/bootstrap.ts";
 import { mulberry32 } from "../src/arena/tournament-stats.ts";
 import type { Item } from "../src/domain.ts";
 import { decodeArgs, runMain, ScriptError } from "../src/script.ts";
@@ -19,11 +20,9 @@ import { itemName } from "../src/text.ts";
 // one kind of comparison pooled over every tournament: all cross-model matches, or
 // all of one model's matches against itself. It comes from each match's players.
 //
-//   bun scripts/arena-knowledge-report.ts --db <knowledge.sqlite> [--draws 2000]
+//   bun scripts/arena-knowledge-report.ts --db <knowledge.sqlite> [--draws N]
 
-const USAGE = "Usage: bun scripts/arena-knowledge-report.ts --db <knowledge.sqlite> [--draws 2000]";
-
-const DEFAULT_DRAWS = 2000;
+const USAGE = "Usage: bun scripts/arena-knowledge-report.ts --db <knowledge.sqlite> [--draws N]";
 
 const Args = Schema.Struct({ db: Schema.String, draws: Schema.optional(Schema.NumberFromString.check(Schema.isInt(), Schema.isGreaterThanOrEqualTo(1))) });
 
@@ -645,7 +644,7 @@ const report = (db: Database, draws: number): void => {
 
 const program = Effect.gen(function* () {
   const args = yield* Effect.try({ try: () => parseArgs({ args: process.argv.slice(2), options: { db: { type: "string" }, draws: { type: "string" } } }).values, catch: () => new ScriptError({ message: USAGE, exitCode: 1 }) });
-  const { db: path, draws = DEFAULT_DRAWS } = yield* decodeArgs(Args, USAGE)(args);
+  const { db: path, draws = BOOTSTRAP_DRAWS } = yield* decodeArgs(Args, USAGE)(args);
   const db = yield* openReadOnly(path);
 
   yield* Effect.sync(() => report(db, draws));

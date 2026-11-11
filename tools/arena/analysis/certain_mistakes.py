@@ -26,13 +26,12 @@ from enum import Enum
 from pathlib import Path
 
 from docs import splice_between_markers
-from boot import interval, weights
+from boot import DRAWS, interval, weights
 from fmt import pct, table
 from load import connect
 from regret import DERIVED, EFFORTS, PRODUCTION, run_of
 from rules import WIN
 
-RESAMPLES = 2000
 FEWEST_FOR_INTERVAL = 20
 
 
@@ -162,7 +161,7 @@ def rate(decisions: list[Decision]) -> Rate:
         tally[1] += d.chose
     blocks = sorted(per_block)
     replicates = []
-    for _ in range(RESAMPLES if blocks else 0):
+    for _ in range(DRAWS if blocks else 0):
         drawn = weights(blocks, rng)
         replicates.append(sum(per_block[b][1] * n for b, n in drawn.items()) / sum(per_block[b][0] * n for b, n in drawn.items()))
     return Rate(len(decisions), sum(d.chose for d in decisions), interval(replicates))
