@@ -1,15 +1,15 @@
 //! The CLI: one analysis row per input decision, read from a jsonl path or stdin.
 
-use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::num::NonZero;
 use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
 use buckshot_rules::Move;
-use buckshot_search::{Analysis, BoundedV1, InfoSet, KeyStats, Limits, Pruning, Reload, analyse_batch};
+use buckshot_search::{Analysis, BoundedV1, InfoSet, Limits, Pruning, Reload, analyse_batch};
 #[cfg(feature = "f32")]
 use buckshot_search::{Compat, Memo, Searcher};
+#[cfg(feature = "f32")]
 use clap::builder::PossibleValue;
 use clap::{Parser, ValueEnum};
 use rayon::{ThreadPool, ThreadPoolBuilder};
@@ -50,23 +50,18 @@ struct Args {
     #[arg(long, default_value_t = default_threads(), hide_default_value = true)]
     threads: NonZero<usize>,
     /// compat (the f32 build only, and its default) is Bend's search, bit for
-    /// bit. bounded-v1-f32 or bounded-v1-f64, whichever matches the build (the
-    /// f64 build's default), is the box search: lines add `upper`, the high end
+    /// bit. bounded-v1-f32 is the box search: lines add `upper`, the high end
     /// of the private value's box, and `exact`, whether the score is exact at
     /// the row's depth. The best move and the row's `chosenIndex` move (a menu
     /// index, if given) are exact; every other line's box is proved no better.
     /// Its budget counts nodes only (no fuel) and memo hits are free.
+    /// The f64 build has only bounded-v1-f64, so it takes no --evaluator.
+    #[cfg(feature = "f32")]
     #[arg(long, default_value_t = Evaluator::DEFAULT)]
     evaluator: Evaluator,
     /// With bounded-v1-*: search every child, every box exact.
     #[arg(long)]
     unpruned: bool,
-    /// With bounded-v1-*: count the decision belief keys (the exact memo key)
-    /// of each decision's deepest iteration. Rows add visits, distinct,
-    /// inMatch (keys an earlier decision of the same id saw) and elsewhere
-    /// (keys an earlier decision of another id saw), and a summary goes to stderr.
-    #[arg(long)]
-    stats: bool,
     /// The input rows [default: stdin].
     path: Option<PathBuf>,
 }
@@ -100,12 +95,8 @@ enum Evaluator {
 impl Evaluator {
     #[cfg(feature = "f32")]
     const DEFAULT: Self = Self::Compat;
-    #[cfg(not(feature = "f32"))]
-    const DEFAULT: Self = Self::BoundedV1;
     #[cfg(feature = "f32")]
     const ALL: &[Self] = &[Self::Compat, Self::BoundedV1];
-    #[cfg(not(feature = "f32"))]
-    const ALL: &[Self] = &[Self::BoundedV1];
 
     /// The id rows record; bounded-v1's names the build's arithmetic.
     const fn id(self) -> &'static str {
@@ -117,6 +108,7 @@ impl Evaluator {
     }
 }
 
+#[cfg(feature = "f32")]
 impl ValueEnum for Evaluator {
     fn value_variants<'a>() -> &'a [Self] {
         Self::ALL
@@ -127,6 +119,7 @@ impl ValueEnum for Evaluator {
     }
 }
 
+#[cfg(feature = "f32")]
 impl std::fmt::Display for Evaluator {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.id())
@@ -141,7 +134,6 @@ struct Search {
     #[cfg(feature = "f32")]
     memo: Memo,
     pruning: Pruning,
-    stats: bool,
 }
 
 impl Search {
@@ -156,15 +148,18 @@ impl Search {
         #[cfg(feature = "f32")]
         let memo = match (args.evaluator, args.memo) {
             (Evaluator::BoundedV1, Some(_)) => bail!("--memo needs --evaluator compat"),
-            (Evaluator::Compat, _) if args.stats || args.unpruned => {
-                bail!("--stats and --unpruned need --evaluator {}", BoundedV1::ID)
+            (Evaluator::Compat, _) if args.unpruned => {
+                bail!("--unpruned needs --evaluator {}", BoundedV1::ID)
             }
             (_, None | Some(MemoRule::Off)) => Memo::Off,
             (_, Some(MemoRule::Charged)) => Memo::Charged,
             (_, Some(MemoRule::Free)) => Memo::Free,
         };
         Ok(Self {
+            #[cfg(feature = "f32")]
             evaluator: args.evaluator,
+            #[cfg(not(feature = "f32"))]
+            evaluator: Evaluator::BoundedV1,
             limits: Limits {
                 depth: args.depth,
                 budget: args.budget,
@@ -173,12 +168,11 @@ impl Search {
             #[cfg(feature = "f32")]
             memo,
             pruning: if args.unpruned { Pruning::Off } else { Pruning::On },
-            stats: args.stats,
         })
     }
 
-    /// One decision's analysis, and its keys with `--stats`.
-    fn analyse(&self, pool: &ThreadPool, info: &InfoSet, chosen: Option<u32>) -> (Analysis, Option<KeyStats>) {
+    /// One decision's analysis.
+    fn analyse(&self, pool: &ThreadPool, info: &InfoSet, chosen: Option<u32>) -> Analysis {
         match self.evaluator {
             #[cfg(feature = "f32")]
             Evaluator::Compat => {
@@ -187,7 +181,7 @@ impl Search {
                     memo: self.memo,
                     pool: Some(pool),
                 };
-                (searcher.analyse(info, self.limits), None)
+                searcher.analyse(info, self.limits)
             }
             Evaluator::BoundedV1 => {
                 let searcher = BoundedV1 {
@@ -195,12 +189,7 @@ impl Search {
                     pruning: self.pruning,
                     pool: Some(pool),
                 };
-                if self.stats {
-                    let (analysis, stats) = searcher.analyse_with_stats(info, self.limits, chosen);
-                    (analysis, Some(stats))
-                } else {
-                    (searcher.analyse_chosen(info, self.limits, chosen), None)
-                }
+                searcher.analyse_chosen(info, self.limits, chosen)
             }
         }
     }
@@ -225,8 +214,6 @@ struct Row<'a> {
     evaluator: &'static str,
     #[serde(flatten)]
     outcome: Outcome,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    stats: Option<Counts>,
 }
 
 #[derive(Serialize)]
@@ -322,82 +309,18 @@ fn outcome(analysis: Analysis, evaluator: Evaluator) -> Outcome {
     }
 }
 
-#[derive(Clone, Copy, Default, Serialize)]
-#[serde(rename_all = "camelCase")]
-struct Counts {
-    visits: u64,
-    distinct: usize,
-    in_match: usize,
-    elsewhere: usize,
-}
-
-#[derive(Serialize)]
-struct Summary {
-    #[serde(flatten)]
-    counts: Counts,
-    matches: usize,
-    keys: usize,
-}
-
-/// The ids that saw each belief key, ids numbered in first-seen order.
-#[derive(Default)]
-struct Seen {
-    ids: HashMap<String, usize>,
-    owners: HashMap<u64, Vec<usize>>,
-    total: Counts,
-}
-
-impl Seen {
-    /// Counts a decision's keys against the earlier decisions', then adds them.
-    fn add(&mut self, id: &Value, stats: &KeyStats) -> Counts {
-        let next = self.ids.len();
-        let me = *self.ids.entry(id.to_string()).or_insert(next);
-        let mut counts = Counts {
-            visits: stats.visits,
-            distinct: stats.keys.len(),
-            ..Counts::default()
-        };
-        for key in &stats.keys {
-            let owners = self.owners.entry(*key).or_default();
-            let mine = owners.contains(&me);
-            counts.in_match = counts.in_match.saturating_add(usize::from(mine));
-            counts.elsewhere = counts
-                .elsewhere
-                .saturating_add(usize::from(owners.iter().any(|owner| *owner != me)));
-            if !mine {
-                owners.push(me);
-            }
-        }
-        self.total = Counts {
-            visits: self.total.visits.saturating_add(counts.visits),
-            distinct: self.total.distinct.saturating_add(counts.distinct),
-            in_match: self.total.in_match.saturating_add(counts.in_match),
-            elsewhere: self.total.elsewhere.saturating_add(counts.elsewhere),
-        };
-        counts
-    }
-
-    fn summary(&self) -> Value {
-        json!({"summary": Summary { counts: self.total, matches: self.ids.len(), keys: self.owners.len() }})
-    }
-}
-
 /// Writes the rows of a chunk of decisions, in input order.
-fn write_rows(out: &mut impl Write, search: &Search, pool: &ThreadPool, decisions: &[Decision], seen: &mut Seen) -> Result<()> {
+fn write_rows(out: &mut impl Write, search: &Search, pool: &ThreadPool, decisions: &[Decision]) -> Result<()> {
     let done = analyse_batch(decisions, pool, |decision| match InfoSet::parse(&decision.input) {
-        Ok(info) => {
-            let (analysis, stats) = search.analyse(pool, &info, decision.chosen);
-            (outcome(analysis, search.evaluator), stats)
-        }
-        Err(error) => (Outcome::Unread { error: error.to_string() }, None),
+        Ok(info) => outcome(search.analyse(pool, &info, decision.chosen), search.evaluator),
+        Err(error) => Outcome::Unread { error: error.to_string() },
     });
-    for (decision, (outcome, stats)) in decisions.iter().zip(done) {
+    for (decision, outcome) in decisions.iter().zip(done) {
         let row = Row {
             id: &decision.id,
             ordinal: &decision.ordinal,
             evaluator: search.evaluator.id(),
             outcome,
-            stats: stats.map(|stats| seen.add(&decision.id, &stats)),
         };
         serde_json::to_writer(&mut *out, &row)?;
         writeln!(out)?;
@@ -417,7 +340,6 @@ fn main() -> Result<()> {
     };
     let mut out = std::io::stdout().lock();
     let mut chunk = Vec::with_capacity(CHUNK);
-    let mut seen = Seen::default();
     for (n, line) in reader.lines().enumerate() {
         let line = line?;
         if line.trim().is_empty() {
@@ -425,38 +347,10 @@ fn main() -> Result<()> {
         }
         chunk.push(serde_json::from_str(&line).with_context(|| format!("input line {}", n.saturating_add(1)))?);
         if chunk.len() >= CHUNK {
-            write_rows(&mut out, &search, &pool, &chunk, &mut seen)?;
+            write_rows(&mut out, &search, &pool, &chunk)?;
             chunk.clear();
         }
     }
-    write_rows(&mut out, &search, &pool, &chunk, &mut seen)?;
-    if search.stats {
-        eprintln!("{}", seen.summary());
-    }
+    write_rows(&mut out, &search, &pool, &chunk)?;
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use buckshot_search::KeyStats;
-    use serde_json::json;
-
-    use super::Seen;
-
-    /// A key counts as elsewhere when any earlier decision of another id saw
-    /// it, not only its first owner: for ids A, B, A the last A sees B's keys.
-    #[test]
-    fn elsewhere_counts_every_earlier_owner() {
-        let stats = KeyStats {
-            visits: 2,
-            keys: [1, 2].into(),
-        };
-        let mut seen = Seen::default();
-        let counts: Vec<_> = ["A", "B", "A"]
-            .map(|id| seen.add(&json!(id), &stats))
-            .iter()
-            .map(|c| (c.distinct, c.in_match, c.elsewhere))
-            .collect();
-        assert_eq!(counts, [(2, 0, 0), (2, 0, 2), (2, 2, 2)], "(distinct, inMatch, elsewhere)");
-    }
 }

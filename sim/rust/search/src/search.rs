@@ -29,7 +29,7 @@ use crate::types::{Analysed, Analysis, Belief, Limits, Line, Memo, Pruning, Reac
 
 mod bounded;
 
-pub use bounded::{BoxEntry, KeyStats};
+pub use bounded::BoxEntry;
 
 /// A run of a stack: `start..end`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -372,7 +372,6 @@ struct Search<'a> {
     scratch: Scratch,
     deal: DealScratch,
     boxes: Vec<bounded::Boxed>,
-    stats: Option<KeyStats>,
     prune: bool,
 }
 
@@ -761,15 +760,11 @@ pub(crate) enum Mode {
     #[cfg(feature = "f32")]
     Compat,
     /// The box search, pruned or not, the chosen move (a menu index) searched
-    /// exactly, gathering the decision keys of its deepest iteration with `stats`.
-    Bounded {
-        pruning: Pruning,
-        chosen: Option<u32>,
-        stats: bool,
-    },
+    /// exactly.
+    Bounded { pruning: Pruning, chosen: Option<u32> },
 }
 
-/// A built belief's analysis under `mode`, with its key stats if asked for.
+/// A built belief's analysis under `mode`.
 pub(crate) fn run(
     config: &Config,
     belief: &Belief,
@@ -777,17 +772,17 @@ pub(crate) fn run(
     leaves: (Reload, Memo),
     pool: Option<&ThreadPool>,
     mode: Mode,
-) -> (Analysis, Option<KeyStats>) {
+) -> Analysis {
     let (reload, memo) = leaves;
     let Some(first) = belief.public.first() else {
-        return (Err(Refusal::NoPublicBelief), None);
+        return Err(Refusal::NoPublicBelief);
     };
     let menu = match request(config, &first.state) {
         Request::Choose(menu) => menu,
-        Request::Draw { .. } | Request::Finished | Request::Stuck => return (Err(Refusal::NotAChoice), None),
+        Request::Draw { .. } | Request::Finished | Request::Stuck => return Err(Refusal::NotAChoice),
     };
     if menu.seat() != belief.me {
-        return (Err(Refusal::NotMyTurn), None);
+        return Err(Refusal::NotMyTurn);
     }
     // `fuel`: Bend's Nat cannot overflow; a budget whose fuel outgrows u64 is refused.
     #[cfg(feature = "f32")]
@@ -795,7 +790,7 @@ pub(crate) fn run(
         #[cfg(feature = "f32")]
         Mode::Compat => match limits.budget.checked_mul(8).and_then(|fuel| fuel.checked_add(64)) {
             Some(fuel) => fuel,
-            None => return (Err(Refusal::Fuel), None),
+            None => return Err(Refusal::Fuel),
         },
         Mode::Bounded { .. } => 0,
     };
@@ -817,7 +812,6 @@ pub(crate) fn run(
         scratch: Scratch::default(),
         deal: DealScratch::default(),
         boxes: Vec::new(),
-        stats: matches!(mode, Mode::Bounded { stats: true, .. }).then(KeyStats::default),
         prune: matches!(mode, Mode::Bounded { pruning: Pruning::On, .. }),
     };
     let public = pushed(&mut search.worlds, |into| into.extend_from_slice(&belief.public));
@@ -829,9 +823,9 @@ pub(crate) fn run(
         Mode::Bounded { chosen, .. } => search.bounded_root(limits.depth, (public, private), choices, chosen),
     };
     if search.scratch.buffers.overflow {
-        return (Err(Refusal::NotesOverflow { nodes: search.tally.nodes }), search.stats);
+        return Err(Refusal::NotesOverflow { nodes: search.tally.nodes });
     }
-    (analysis, search.stats)
+    analysis
 }
 
 #[cfg(test)]
@@ -864,7 +858,7 @@ pub(crate) mod tests {
 
         /// The compat analysis of a belief built by hand.
         fn analyse_belief(config: &Config, belief: &Belief, limits: Limits, reload: Reload, memo: Memo) -> Analysis {
-            run(config, belief, limits, (reload, memo), None, Mode::Compat).0
+            run(config, belief, limits, (reload, memo), None, Mode::Compat)
         }
 
         /// The first choice of the match, each seat at 1 health and one batch left in the deck.

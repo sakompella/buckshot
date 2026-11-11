@@ -13,8 +13,7 @@
 
 mod common;
 
-use buckshot_search::BoundedV1;
-use common::{cli, oracle_dir, oracle_rows, scores};
+use common::{BOUNDED, cli, oracle_dir, oracle_rows, scores};
 use serde_json::Value;
 
 /// The fields Bend's analysis and the CLI's row share.
@@ -77,7 +76,7 @@ fn compat_matches_bend() {
 fn unpruned_bounded_matches_compat() {
     let (text, _) = oracle_rows(&oracle_dir().unwrap(), "static.jsonl").unwrap();
     let compat_rows = cli(&[], &text).unwrap();
-    let unpruned_rows = cli(&["--evaluator", BoundedV1::ID, "--unpruned"], &text).unwrap();
+    let unpruned_rows = cli(&[BOUNDED, &["--unpruned"]].concat(), &text).unwrap();
     let mut compared = 0_u32;
     for (compat, unpruned) in compat_rows.iter().zip(&unpruned_rows) {
         if [compat, unpruned].iter().any(|row| row["limited"] != Value::Bool(false)) {

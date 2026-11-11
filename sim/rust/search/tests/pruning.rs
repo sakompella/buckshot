@@ -10,8 +10,8 @@
 mod common;
 
 use anyhow::Context as _;
-use buckshot_search::{BoundedV1, InfoSet};
-use common::{cli, oracle_dir, oracle_rows, scores};
+use buckshot_search::InfoSet;
+use common::{BOUNDED, cli, oracle_dir, oracle_rows, scores};
 use serde_json::Value;
 
 /// What the compared rows covered.
@@ -26,7 +26,7 @@ struct Covered {
 /// Checks the pruned rows of one oracle file against the unpruned ones.
 fn compare(name: &str, flags: &[&str], covered: &mut Covered) -> anyhow::Result<()> {
     let (text, inputs) = oracle_rows(&oracle_dir()?, name)?;
-    let run = |extra: &[&str]| cli(&[&["--evaluator", BoundedV1::ID], flags, extra].concat(), &text);
+    let run = |extra: &[&str]| cli(&[BOUNDED, flags, extra].concat(), &text);
     let (unpruned_rows, pruned_rows) = (run(&["--unpruned"])?, run(&[])?);
     let best = |row: &Value| scores(row).into_iter().max_by_key(Value::as_u64);
     let lines = |row: &Value| row["lines"].as_array().cloned().unwrap_or_default();
@@ -105,7 +105,7 @@ fn pruned_matches_unpruned() {
 #[ignore = "needs RUST_SEARCH_ORACLE; run by sim/rust/check.sh"]
 fn bounded_keeps_the_chosen_move_exact_and_its_budget() {
     let (inputs, _) = oracle_rows(&oracle_dir().unwrap(), "static.jsonl").unwrap();
-    let unbounded = ["--evaluator", BoundedV1::ID, "--budget", "1000000000"];
+    let unbounded: Vec<&str> = [BOUNDED, &["--budget", "1000000000"]].concat();
     let pruned_rows = cli(&unbounded, &inputs).unwrap();
     // The chosen move is one plain pruning leaves inexact.
     let with_chosen: String = inputs
@@ -152,7 +152,7 @@ fn bounded_keeps_the_chosen_move_exact_and_its_budget() {
         .expect("a row within budget");
     let input = format!("{input}\n");
     let at = |budget: u64| {
-        cli(&["--evaluator", BoundedV1::ID, "--budget", &budget.to_string()], &input)
+        cli(&[BOUNDED, &["--budget", &budget.to_string()]].concat(), &input)
             .unwrap()
             .remove(0)
     };

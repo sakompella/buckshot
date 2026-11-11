@@ -8,7 +8,7 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use crate::belief::build;
 use crate::position::{Heard, ParseError, Position, parse};
-use crate::search::{KeyStats, Mode, run};
+use crate::search::{Mode, run};
 use crate::types::{Analysis, Limits, Memo, Pruning, Refusal, Reload};
 
 /// What the mover knows: the config, the board as the mover sees it, the
@@ -70,33 +70,27 @@ pub struct BoundedV1<'a> {
 }
 
 /// `analyse.table`: the reload leaf's own refusals, then the belief.
-fn analyse_in(
-    info: &InfoSet,
-    limits: Limits,
-    leaves: (Reload, Memo),
-    pool: Option<&ThreadPool>,
-    mode: Mode,
-) -> (Analysis, Option<KeyStats>) {
+fn analyse_in(info: &InfoSet, limits: Limits, leaves: (Reload, Memo), pool: Option<&ThreadPool>, mode: Mode) -> Analysis {
     let position = &info.position;
     match leaves.0 {
         Reload::Static => {}
-        Reload::Sampled { count: 0 } => return (Err(Refusal::NoDeals), None),
+        Reload::Sampled { count: 0 } => return Err(Refusal::NoDeals),
         Reload::Sampled { .. } => {
             if position.config.table() != Table::TwoSeats {
-                return (Err(Refusal::SampledNeedsTwoSeats), None);
+                return Err(Refusal::SampledNeedsTwoSeats);
             }
         }
     }
     match build(position) {
         Ok(belief) => run(&position.config, &belief, limits, leaves, pool, mode),
-        Err(refusal) => (Err(refusal), None),
+        Err(refusal) => Err(refusal),
     }
 }
 
 #[cfg(feature = "f32")]
 impl Searcher for Compat<'_> {
     fn analyse(&self, info: &InfoSet, limits: Limits) -> Analysis {
-        analyse_in(info, limits, (self.reload, self.memo), self.pool, Mode::Compat).0
+        analyse_in(info, limits, (self.reload, self.memo), self.pool, Mode::Compat)
     }
 }
 
@@ -113,21 +107,9 @@ impl BoundedV1<'_> {
     ///
     /// As [`Searcher::analyse`].
     pub fn analyse_chosen(&self, info: &InfoSet, limits: Limits, chosen: Option<u32>) -> Analysis {
-        self.analyse_in(info, limits, chosen, false).0
-    }
-
-    /// [`BoundedV1::analyse_chosen`] and the decision keys its deepest
-    /// iteration visited (none for a refused position).
-    pub fn analyse_with_stats(&self, info: &InfoSet, limits: Limits, chosen: Option<u32>) -> (Analysis, KeyStats) {
-        let (analysis, stats) = self.analyse_in(info, limits, chosen, true);
-        (analysis, stats.unwrap_or_default())
-    }
-
-    fn analyse_in(&self, info: &InfoSet, limits: Limits, chosen: Option<u32>, stats: bool) -> (Analysis, Option<KeyStats>) {
         let mode = Mode::Bounded {
             pruning: self.pruning,
             chosen,
-            stats,
         };
         analyse_in(info, limits, (self.reload, Memo::Charged), self.pool, mode)
     }

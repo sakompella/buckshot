@@ -16,7 +16,7 @@ exclude_globs = [
   "branch-map/**",
   # Hegel generators for the property tests, behind the `testing` feature.
   "rules/src/testing.rs",
-  # The search CLI's flag parsing and --stats summary; the oracle test runs it with its defaults.
+  # The search CLI's flag parsing; the oracle test runs it with its defaults.
   "search/src/main.rs",
 ]
 

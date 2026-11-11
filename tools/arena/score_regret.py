@@ -13,7 +13,7 @@ matches. The wrap-up and the analyses call `score` rather than running the steps
   1. build buckshot-search in --checkout's sim/rust: the f64 and seats-2 features (arena matches have two seats)
   2. web/scripts/rust-search-inputs.ts in --checkout (after `bun run rules`) writes each decision's position as the deciding player sees it,
      with its menu in the player's move order and the shells left, in --jobs processes split by match
-  3. buckshot-search --evaluator bounded-v1-f64 --unpruned scores them on --threads threads, once per reload rule:
+  3. buckshot-search --unpruned (the f64 build's only evaluator) scores them on --threads threads, once per reload rule:
      every move's value is exact at the depth reached, which the replay's move list shows
   4. each result becomes a row of the regret table (columns: docs/arena/analysis/regret.md, The `regret` table)
 
@@ -152,7 +152,7 @@ def run_search(binary: Path, inputs: list[Path], work: Path, out: sqlite3.Connec
     Stops after an input file with a disagreement between Bend and Rust, with a dump of each in `bugs`. Returns the rows written."""
     _, depth, budget, reload, samples = group
     sampled = ["--reload", "sampled", "--samples", str(samples)] if reload == "sampled" else []
-    cmd = [str(binary), "--evaluator", CLI_EVALUATOR, "--unpruned", "--depth", str(depth), "--budget", str(budget), "--threads", str(threads), *sampled]
+    cmd = [str(binary), "--unpruned", "--depth", str(depth), "--budget", str(budget), "--threads", str(threads), *sampled]
     written = 0
     for path in inputs:
         decisions = [d for d in map(json.loads, path.read_text().splitlines()) if (d["id"], d["ordinal"]) in keys]
