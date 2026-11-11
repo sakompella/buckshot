@@ -2,7 +2,7 @@
 * { box-sizing: border-box; }
 :focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 tr:focus-visible td { background: #111; }
-body { -webkit-tap-highlight-color: transparent; margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 system-ui, "Inter", "Segoe UI", sans-serif; }
 main { max-width: 1500px; margin: 0 auto; padding: 18px 36px 80px; }
 h2 { font-size: 19px; font-weight: 600; margin: 0 0 6px; }
 h3 { font-size: 15px; font-weight: 600; margin: 18px 0 6px; }
