@@ -3,7 +3,7 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { CERTAIN_TYPES, type CertainMistakes, type CertainRate, type CertainType, type OpportunityType } from "../api.ts";
 import { anchorId, chartWidth, linScale, REFERENCE, REFERENCE_DASH, tippedDot } from "./charts.ts";
-import { baseName, baseOrder, CERTAIN_NAMES, byEffort, colorOf, effortLabel, fmtTime, groupBy, keyOf, labelOf, type MatchRow, type SeatFull, shortName, sumOf } from "./data.ts";
+import { baseName, baseOrder, CERTAIN_NAMES, byEffort, colorOf, effortLabel, fmtShare, fmtTime, groupBy, keyOf, labelOf, type MatchRow, type SeatFull, shortName, sumOf } from "./data.ts";
 import { memoLast } from "./derived.ts";
 import { type CertainCell, Message } from "./model.ts";
 
@@ -120,9 +120,7 @@ const listedOf = ({ certain, seats, allMatches }: CertainLinks, { key, type }: C
     .toSorted((left, right) => right.startedAt.localeCompare(left.startedAt));
 };
 
-const fmtRate = (share: number): string => `${(share * 100).toFixed(1)}%`;
-
-const fmtBounds = ({ lo, hi }: NonNullable<CertainRate["bounds"]>): string => `[${fmtRate(lo)}, ${fmtRate(hi)}]`;
+const fmtBounds = ({ lo, hi }: NonNullable<CertainRate["bounds"]>): string => `[${fmtShare(lo)}, ${fmtShare(hi)}]`;
 
 const intervalView = (h: H, bounds: NonNullable<CertainRate["bounds"]>): Html => h.span([h.Class("pm")], [` ${fmtBounds(bounds)}`]);
 
@@ -139,7 +137,7 @@ const cellView = (h: H, cell: Cell, link: { readonly key: string; readonly isOpe
       link !== null && cell.mistakes > 0
         ? h.button([h.Type("button"), h.Class("cmb"), h.AriaExpanded(link.isOpen), h.OnClick(Message.ClickedCertainCount({ key: link.key, type: cell.type }))], [counts])
         : h.span([], [counts]),
-      hasRate(cell) ? h.span([h.Class("cmr")], [h.b([], [fmtRate(cell.mistakes / cell.opportunities)]), cell.bounds === null ? h.empty : intervalView(h, cell.bounds)]) : h.empty,
+      hasRate(cell) ? h.span([h.Class("cmr")], [h.b([], [fmtShare(cell.mistakes / cell.opportunities)]), cell.bounds === null ? h.empty : intervalView(h, cell.bounds)]) : h.empty,
     ],
   );
 };
@@ -257,7 +255,7 @@ const panelView = (h: H, type: CertainType, models: ReadonlyArray<Row>, pooled: 
                     tippedDot(
                       h,
                       anchorId("certain", type, model),
-                      `${baseName(model)} · ${cell.mistakes.toLocaleString()} of ${cell.opportunities.toLocaleString()} opportunities, ${fmtRate(cell.mistakes / cell.opportunities)}${cell.bounds === null ? "" : ` ${fmtBounds(cell.bounds)}`}`,
+                      `${baseName(model)} · ${cell.mistakes.toLocaleString()} of ${cell.opportunities.toLocaleString()} opportunities, ${fmtShare(cell.mistakes / cell.opportunities)}${cell.bounds === null ? "" : ` ${fmtBounds(cell.bounds)}`}`,
                       String(x.at(cell.mistakes / cell.opportunities)),
                       String(y),
                       [h.R("3.5"), h.Fill(color)],
@@ -274,7 +272,7 @@ const panelView = (h: H, type: CertainType, models: ReadonlyArray<Row>, pooled: 
 };
 
 const pooledNote = (cell: Cell): string =>
-  `All shown configs: ${cell.mistakes.toLocaleString()} of ${cell.opportunities.toLocaleString()}${hasRate(cell) ? `, ${fmtRate(cell.mistakes / cell.opportunities)}${cell.bounds === null ? "" : ` ${fmtBounds(cell.bounds)}`}` : ""}`;
+  `All shown configs: ${cell.mistakes.toLocaleString()} of ${cell.opportunities.toLocaleString()}${hasRate(cell) ? `, ${fmtShare(cell.mistakes / cell.opportunities)}${cell.bounds === null ? "" : ` ${fmtBounds(cell.bounds)}`}` : ""}`;
 
 export const certainView = (h: H, rates: ReadonlyArray<CertainRate>, kept: ReadonlySet<string>, width: number, content: number): Html => {
   const { models, pooled, provenBlanks, hiddenHealth } = talliesOf(rates, kept);
@@ -295,7 +293,7 @@ export const certainView = (h: H, rates: ReadonlyArray<CertainRate>, kept: Reado
         [h.Class("k")],
         [
           `Not counted: on a proven blank, giving the turn away (${provenBlanks.gaveTurnAway.toLocaleString()} of ${provenBlanks.total.toLocaleString()}) is not proven worse, and ${hiddenHealth.toLocaleString()} decisions where a jammed opponent hid its health. `,
-          h.button([h.Type("button"), h.Class("tablelink"), h.OnClick(Message.ClickedTableLink({ id: CERTAIN_TABLE }))], ["Each config's counts and matches are in a table at the end."]),
+          h.button([h.Type("button"), h.Class("tablelink"), h.OnClick(Message.ClickedTableLink({ id: CERTAIN_TABLE }))], ["Each config's counts and matches are in a table further down."]),
         ],
       ),
     ],

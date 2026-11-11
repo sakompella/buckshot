@@ -70,7 +70,19 @@ export const oklch = (lightness: number, chroma: number, hue: number): string =>
 
 const baseOf = (model: string): Base | undefined => BASES.find(({ id }) => model.includes(id));
 
-export const baseName = (model: string): string => baseOf(model)?.name ?? model;
+// An engine seat's label (EngineSeat in arena/agent.ts), read without Effect so this file stays plain TypeScript for the Python checks.
+const ENGINE = /^Engine\/(\d+)\/\d+(\/sampled)?$/;
+
+export const isEngine = (model: string): boolean => ENGINE.test(model);
+
+/** The page's name for an engine seat such as `Engine/6/20000/sampled`: its depth, and how it values a reload. */
+const engineName = (model: string): string | undefined => {
+  const [, depth, sampled] = ENGINE.exec(model) ?? [];
+
+  return depth === undefined ? undefined : `Search engine, depth ${depth}${sampled === undefined ? "" : " (sampled reloads)"}`;
+};
+
+export const baseName = (model: string): string => engineName(model) ?? baseOf(model)?.name ?? model;
 
 export const colorOf = (model: string): string => {
   const base = baseOf(model);
@@ -96,13 +108,15 @@ export const splitKey = (key: string): readonly [string, string] => {
 /** Models with no reasoning-off whose "off" config is low effort plus the immediate-recall prompt (ADR-0048), marked with an asterisk. */
 const PROMPTED_OFF: ReadonlySet<string> = new Set(["gpt-6-astra"]);
 
+export const isPromptedOff = ({ model, effort }: { readonly model: string; readonly effort: string }): boolean => effort === "off" && PROMPTED_OFF.has(model);
+
 /** How the page names a config's effort, everywhere it shows one. */
-export const effortLabel = (model: string, effort: string): string => `${effortName(effort)}${effort === "off" && PROMPTED_OFF.has(model) ? "*" : ""}`;
+export const effortLabel = (model: string, effort: string): string => `${effortName(effort)}${isPromptedOff({ model, effort }) ? "*" : ""}`;
 
 export const labelOf = (key: string): string => {
   const [model, effort] = splitKey(key);
 
-  return `${baseName(model)} ${effortLabel(model, effort)}`;
+  return effort === "" ? baseName(model) : `${baseName(model)} ${effortLabel(model, effort)}`;
 };
 
 export const CERTAIN_NAMES: Readonly<Record<CertainType, string>> = {
@@ -149,6 +163,9 @@ export const fmtCount = (value: number | null | undefined): string => {
 };
 
 export const fmtPct = (value: number): string => `${(value * 100).toFixed(0)}%`;
+
+/** A small share, such as a certain-mistake rate, to a tenth of a percent. */
+export const fmtShare = (share: number): string => `${(share * 100).toFixed(1)}%`;
 
 export const fmtSec = (ms: number | null | undefined): string => {
   if (ms === null || ms === undefined) return "–";
@@ -220,7 +237,7 @@ const knownRounds = (seat: Pick<Seat, "story">): Story["rounds"] => (seat.story?
 /** What each known round of a match was to a seat: 1 for a round it won, 0 for one it lost. */
 export const roundResults = (seat: Pick<Seat, "story" | "player">): ReadonlyArray<number> => knownRounds(seat).map(({ winner }) => (winner === seat.player ? 1 : 0));
 
-export const shortName = (model: string): string => baseOf(model)?.short ?? model;
+export const shortName = (model: string): string => baseOf(model)?.short ?? baseName(model);
 
 export const withPotShares = (seats: ReadonlyArray<Seat>): ReadonlyArray<SeatFull> => {
   const potOf = new Map([...groupBy(seats, ({ matchId }) => matchId)].map(([matchId, matchSeats]) => [matchId, sumOf(matchSeats.map(({ cash }) => cash ?? 0))]));

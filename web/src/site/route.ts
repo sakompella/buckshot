@@ -21,6 +21,9 @@ const arenaRouter = pipe(Route.literal("arena"), Route.query(ArenaQuery), Route.
 
 const parseRoute = Route.parseUrlWithFallback(arenaRouter, SiteRoute.NotFound);
 
+/** The paths the site has a page at; every other path answers 404 with the app, which says nothing lives there. */
+export const PAGE_PATHS: ReadonlyArray<string> = ["/", "/arena"];
+
 /** The site's root shows the arena; an old link such as `/#scatter` keeps its section. */
 export const isRootUrl = (url: Url.Url): boolean => url.pathname === "/";
 

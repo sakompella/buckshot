@@ -69,7 +69,12 @@ export const Runs = Schema.Struct({ from: Schema.String, to: Schema.String });
 
 export type Runs = typeof Runs.Type;
 
-export const Summary = Schema.Struct({ configs: Schema.Array(ConfigSummary), hasCertain: Schema.Boolean, runs: Schema.optional(Runs) });
+/** How many seed blocks hold a scored match, and how many of them hold only one, so their seat order is not balanced. */
+export const SeedBlocks = Schema.Struct({ blocks: Schema.Number, unpaired: Schema.Number });
+
+export type SeedBlocks = typeof SeedBlocks.Type;
+
+export const Summary = Schema.Struct({ configs: Schema.Array(ConfigSummary), hasCertain: Schema.Boolean, runs: Schema.optional(Runs), seedBlocks: SeedBlocks });
 
 /** The two-player matches between two configs, `first` at the table's first position. Wins are win shares summed over scored matches. */
 export const Pair = Schema.Struct({
@@ -454,8 +459,14 @@ const runsOf = (seats: ReadonlyArray<Pick<SeatFull, "startedAt">>): Runs | undef
   return days.length === 0 ? undefined : { from: days.reduce((least, day) => (day < least ? day : least)), to: days.reduce((most, day) => (day > most ? day : most)) };
 };
 
+const seedBlocksOf = (seats: ReadonlyArray<Pick<SeatFull, "status" | "seedBlock" | "matchId">>): SeedBlocks => {
+  const blocks = [...groupBy(seats.filter(({ status }) => status === "completed"), ({ seedBlock }) => seedBlock).values()];
+
+  return { blocks: blocks.length, unpaired: blocks.filter((own) => new Set(own.map(({ matchId }) => matchId)).size === 1).length };
+};
+
 export const aggregatesOf = ({ seats, decisions, certain, consistency, luck }: Sources): Aggregates => ({
-  summary: { configs: configSummaries(seats, decisions, luck), hasCertain: certain.length > 0, runs: runsOf(seats) },
+  summary: { configs: configSummaries(seats, decisions, luck), hasCertain: certain.length > 0, runs: runsOf(seats), seedBlocks: seedBlocksOf(seats) },
   pairs: pairsOf(seats),
   items: configItems(seats, decisions),
   odds: [...selfShotTallies(decisions, seats, seats.map(() => true))].map(([config, bins]) => ({ config, bins })),

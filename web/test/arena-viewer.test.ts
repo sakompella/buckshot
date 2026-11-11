@@ -6,14 +6,14 @@ import { Option } from "effect";
 import { configSummaries, ODDS_BINS, oddsBinOf, selfShotTallies } from "../src/arena-viewer/aggregates.ts";
 import { chamberPatterns, roundStory, ShellTracker } from "../src/arena-viewer/analysis.ts";
 import type { Seat, SeatRegret } from "../src/arena-viewer/api.ts";
-import { type BlockTally, blockRate, fmtBytes, groupBy, labelOf, matchRows, quantile, regretStats, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
+import { isEngine as isArenaEngine } from "../src/arena/agent.ts";
+import { type BlockTally, baseName, blockRate, fmtBytes, groupBy, isEngine, labelOf, matchRows, quantile, regretStats, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { mulberry32 } from "../src/arena/tournament-stats.ts";
 import { bradleyTerry, type Game, heldOutRatings, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 import { droppedConfigs, oddsPanels } from "../src/arena-viewer/page/odds.ts";
 import { rowsOf } from "../src/arena-viewer/page/matches.ts";
 import { modelStatsOf, ranksOf } from "../src/arena-viewer/page/derived.ts";
 import { inRankOrder } from "../src/arena-viewer/page/leaderboard.ts";
-import { tooCloseNote } from "../src/arena-viewer/page/about.ts";
 import { FULL_N, shadeOf } from "../src/arena-viewer/page/heat.ts";
 import { GameEvent, type Seat as Socket, Secret } from "../src/domain.ts";
 import { rosterOf } from "../src/players.ts";
@@ -431,14 +431,10 @@ test("ranks go to rated configs of 20 or more matches by rating, equal ratings b
   expect(inRankOrder(stats, ranks, ratings).map(({ model }) => model)).toEqual(["bravo", "charlie", "alpha", "echo", "foxtrot", "delta"]);
 });
 
-test("the results summary calls the top too close only when the leaders' intervals overlap", () => {
-  const leader = (label: string, lo: number, hi: number) => ({ label, rating: 0, interval: { lo, hi } });
+test("the page reads engine seats as the arena defines them", () => {
+  for (const seat of ["Engine/2/20000", "Engine/6/20000/sampled", "Engine/6/20000/static", "Engine/x/1", "claude-opus-5-5"]) expect(isEngine(seat)).toBe(isArenaEngine(seat));
 
-  expect(tooCloseNote(leader("a", 80, 170), leader("b", 75, 162))).toContain("Too close");
-  expect(tooCloseNote(leader("a", 100, 170), leader("b", 10, 99))).toBeNull();
-  expect(tooCloseNote(leader("a", 100, 170), leader("b", 10, 100))).toContain("Too close");
-  expect(tooCloseNote({ label: "a", rating: 0, interval: null }, leader("b", 10, 99))).toBeNull();
-  expect(tooCloseNote(undefined, leader("b", 10, 99))).toBeNull();
+  expect(baseName("Engine/6/20000/sampled")).toBe("Search engine, depth 6 (sampled reloads)");
 });
 
 test("the best-value line runs through ranked configs only", () => {

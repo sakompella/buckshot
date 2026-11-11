@@ -5,6 +5,7 @@ import { expect, test } from "bun:test";
 import { AGGREGATE_NAMES } from "../src/arena-viewer/aggregates.ts";
 import { aliasOf, allTraffic, previewUrl, siteProblems, uploadProblems, versionIdOf } from "../src/deploy/online.ts";
 import { WORKER } from "../src/deploy/worker.ts";
+import { PAGE_PATHS } from "../src/site/route.ts";
 
 test("an alias is a DNS-safe label that fits beside the worker name, or nothing", () =>
   hegel.test((tc) => {
@@ -35,7 +36,7 @@ const LOCAL = new Map([...AGGREGATE_NAMES, "manifest"].map((name) => [name, `{"$
 
 const site = (overrides: Record<string, Response>) => async (url: string) => {
   const path = new URL(url).pathname;
-  const shell = new Response('<div id="root"></div>', { headers: { "content-type": "text/html" } });
+  const shell = new Response('<div id="root"></div>', { status: PAGE_PATHS.includes(path) ? 200 : 404, headers: { "content-type": "text/html" } });
   const data = LOCAL.get(path.replace(/^\/data\/|\.json$/g, ""));
 
   return overrides[path] ?? (data === undefined ? shell : new Response(data, { headers: { "content-type": "application/json" } }));
