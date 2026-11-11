@@ -23,8 +23,7 @@ Checks:
     bun run lint       # oxlint with every anti-slop rule and the Effect group, --deny-warnings
     bun run test       # plays full Story and DoN matches through bend.ts at 2, 3 and 4 players; checks stale answers are rejected; checks the agent tool contract: privacy, read-only get_game, stale, repeated and rematch turns, new_match refused mid-match, the moves list matching the machine's legal chains, and each Agent's events adding up to the whole log, the end included
 
-Fonts are self-hosted from `@fontsource`: League Gothic (banners) and VT323
-(everything else), both under the SIL Open Font License 1.1. Every drawing is
+The page uses the system font stack and no web fonts. Every drawing is
 original CSS or SVG (ADR-0028).
 
 ## Playing with an agent (MCP server)
@@ -184,34 +183,19 @@ With `--luck` (the file `tools/arena/analysis/aivat.py --out` writes) the leader
 Elo (`docs/arena/analysis/matchups.md#luck-adjusted-round-elo`). `bun run dev` proxies `/api` to a viewer on that port, so the arena pages work in
 development while one runs.
 
-The Arena page is one long page in six groups, in this order:
+The Arena page is one long page in five groups, in this order (`Group` and `Section` in `src/arena-viewer/page/model.ts` are the list):
 
-- the hero numbers;
-- Results: the cost, moves, output tokens or mean regret vs rating scatter, each model's rating across its efforts,
-  how often the higher-rated player wins at each rating gap (rated by fits that held the match's seed block out,
-  against the Bradley-Terry curve);
-- Watch a match: a few interesting matches and, with `--regret`, the costliest blunders, each marked exact or
-  estimated (listed only; there is no replay, ADR-0055);
-- Decisions: with `--certain-mistakes` (the file `tools/arena/analysis/certain_mistakes.py --opportunities` writes), each
-  config's certain mistakes over their opportunities (`docs/arena/analysis/certain-mistakes.md`), each count opening its
-  matches at the move; how often each config shoots itself by the odds it counts (one panel per model, a line per effort);
-  with `--regret`, each model's mean regret per move by shells left in the gun and each config's blunder rate (the
-  share of its searched moves that gave up 10 or more points); item fates (used, stolen by the opponent or left
-  unused, per config and per item); with `--knowledge` (the database `scripts/arena-knowledge.ts` builds) each
-  config's chance of repeating its move in a repeated position, in the chosen cohort, with the seed-block interval
-  `docs/arena/analysis/beliefs-and-items.md` uses; and how often the player with higher estimated regret still won;
-- Rounds: the table position and round-1 starter charts, results after round 1 (round 2 after a round-1 win, with
-  each config's round 2 and 1-1 round 3 folded below), output tokens per move by health gap and dead rubbers
-  (round 3 at 1-1 against after 2-0);
-- Reliability: service failures (failed calls, the time they cost, and each model's failed replies by the hour each
-  call was logged) apart from model failures (turns ended without a move), one bar per config, then where the money
-  went (each config's share of the list-price usage);
-- Details: the leaderboard by cohort, the newest matches, each seed's results per config from table position 1
-  and 2 and, last, the breakdown heatmaps.
+- Standings: the hero numbers, the Round Elo of every config, the cost, moves, output tokens or mean regret vs rating
+  scatter, and the breakdown heatmaps;
+- How they play: each config's certain mistakes over their opportunities (`docs/arena/analysis/certain-mistakes.md`),
+  how often each config shoots itself by the odds it counts, and item fates (used, stolen or left unused);
+- Matches: a few interesting matches and the newest ones, listed only (there is no replay, ADR-0055). The online
+  site has no matches group, because it reads aggregates only;
+- Tables: the leaderboard by cohort and the accuracy table;
+- About: how the game works and how the experiment was run.
 
-Seats and reliability fold their full tables under the charts. The jump menu at the top links to the six groups
-(`#results`, `#watch`, `#decisions`, `#rounds`, `#reliability`, `#details`); every section keeps its own anchor
-(`#scatter`, `#seats`, `#matches`, ...), so older links still land. Its Tour button starts a guided tour: each
+Each section has its own anchor (`#scatter`, `#matches`, ...), and a link to a section the page no longer has lands at
+its `MOVED_TARGETS` entry. The jump menu at the top links to the groups. Its Tour button starts a guided tour: each
 step scrolls to a section or control, highlights it and shows a short card, with Back, Next and Close, the arrow
 keys and Escape (`page/tour.ts` holds the steps). The filter bar
 under it applies to the whole page; on a wide screen both stay at the top, and

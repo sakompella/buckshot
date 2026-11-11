@@ -2,370 +2,370 @@
 
 This page summarizes the finished tournaments and the findings about model reasoning. The raw data isn't committed. See [README.md](README.md) for how to run and resume. All costs are list-price costs: list prices applied to usage on subscription plans, not money paid.
 
-Ratings are one Bradley-Terry fit over every scored match of every tournament, on an Elo scale with the mean at 0, per configuration (model + endpoint + effort). So one rating scale covers every config. This match rating is not the viewer's Round Elo, which fits each round as a game; [net-points.md](analysis/net-points.md) lists Round Elo per config. A second fit on pot share (a config's cash over the match's cash, which also credits round prizes a loser banked) gives the cash rating. 95% intervals are in [matchups.md](analysis/matchups.md). Each pairing plays 10 seeds in both seat orders, 20 matches, unless stated otherwise. With 10 seeds, close rankings aren't reliable. "Medium" also isn't equal compute across providers.
-
-Scope: 3,537 scored matches with no DeepSeek seat, from the 3,557-match snapshot of 2026-11-04 (tournaments 1 to 9). The regret and patterns pages under [analysis/](analysis/) cover the same snapshot (3,536 matches; one match with an unsearched decision is left out).
+The rating is the luck-adjusted Round Elo: a Bradley-Terry fit that counts each round as a game, with the luck of each round's chance events taken out ([ADR-0058](../adr/0058-luck-adjusted-elo.md)), over every scored match of every tournament. It is on an Elo scale with the mean at 0, per configuration (model + endpoint + effort), so one scale covers every config. The match rating, a fit on match results, is about 1.6 times as wide and carries the same signal with more noise; [matchups.md](analysis/matchups.md) keeps it with the 95% intervals and the luck adjustment's method. Most pairings play 10 seeds in both seat orders, 20 matches. Tournaments 6, 7 and 8 play one match per seed, with no seat swap. With 10 seeds, close rankings aren't reliable. "Medium" also isn't equal compute across providers.
 
 ## Leaderboard
-One table per cohort, ranked by the pooled match rating. Matches, win share and pot share count the cohort's own games; ratings come from the one pooled fit, so a config has the same rating in every table. Sonnet max has 2 games in tournament 1's cross-model cohort (it lost both to Opus), so its rating there rests on its tournament-4 games. Tournament 5's 214 matches are one table of their own. Most of its configs had 2 to 12 matches against different opponents there, so their ratings rest mostly on the prior and later tournaments, not on that record. A config with fewer than 20 matches in total is provisional, as in the viewer. `python3 tools/arena/analysis/leaderboard.py --doc docs/arena/results.md` rewrites the tables.
+One table per cohort, ranked by the pooled Round Elo. Matches, win share and pot share count the cohort's own games; ratings come from the one pooled fit, so a config has the same rating in every table. Sonnet max has 2 games in tournament 1's cross-model cohort (it lost both to Opus), so its rating there rests on its tournament-4 games. Tournament 5's 214 matches are one table of their own. Most of its configs had 2 to 12 matches against different opponents there, so their ratings rest mostly on the prior and later tournaments, not on that record. A config with fewer than 20 matches in total is provisional, as in the viewer. `python3 tools/arena/analysis/leaderboard.py --doc docs/arena/results.md` rewrites the tables.
 
 <!-- leaderboard:start -->
+Scope: 3,709 scored matches of tournaments 1 to 11.
+
 ### All configs
 
 3709 scored matches.
 
-| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
-|---|---|---|---|---|---|
-| claude-opus-5-5-max | 80 | 73.8% | 64.4% | +215 | +117 |
-| gpt-6.1-terra-max | 80 | 72.5% | 66.0% | +200 | +120 |
-| gpt-6-astra-high | 80 | 71.2% | 66.1% | +177 | +115 |
-| claude-sonnet-5-5-max | 140 | 67.1% | 62.3% | +170 | +104 |
-| claude-opus-5-5-xhigh | 150 | 54.7% | 53.4% | +166 | +98 |
-| gpt-6.1-terra-xhigh | 80 | 70.0% | 59.7% | +155 | +58 |
-| gpt-6-astra-medium | 254 | 66.5% | 60.2% | +147 | +83 |
-| claude-opus-5-5-high | 80 | 58.8% | 54.7% | +142 | +76 |
-| gpt-6.1-sol-max | 122 | 57.4% | 54.9% | +141 | +94 |
-| claude-sonnet-5-5-xhigh | 176 | 59.7% | 53.7% | +122 | +52 |
-| gpt-6-astra-low | 80 | 65.0% | 59.4% | +121 | +62 |
-| claude-opus-5-5-off | 80 | 62.5% | 58.8% | +106 | +62 |
-| Engine/6/20000/sampled | 76 | 57.9% | 57.2% | +103 | +71 |
-| gpt-6.1-terra-medium | 80 | 62.5% | 57.7% | +101 | +49 |
-| gpt-6-astra-off | 80 | 63.7% | 55.9% | +101 | +30 |
-| gpt-6.1-terra-off | 80 | 65.0% | 56.9% | +90 | +25 |
-| gpt-6.1-sol-low | 98 | 52.0% | 50.9% | +88 | +59 |
-| gpt-6.1-sol-xhigh | 101 | 51.5% | 52.4% | +84 | +67 |
-| gpt-6.1-terra-high | 80 | 63.7% | 59.7% | +84 | +46 |
-| claude-opus-5-5-medium | 334 | 56.3% | 53.8% | +74 | +42 |
-| claude-haiku-5-5-max | 111 | 61.3% | 58.7% | +72 | +44 |
-| gpt-6.1-sol-medium | 271 | 57.2% | 56.8% | +63 | +54 |
-| claude-haiku-5-5-xhigh | 158 | 54.4% | 50.4% | +61 | +12 |
-| gpt-6.1-sol-high | 99 | 47.5% | 48.0% | +58 | +40 |
-| gpt-6.1-terra-low | 80 | 56.2% | 55.5% | +47 | +30 |
-| claude-sonnet-5-5-high | 161 | 46.6% | 46.9% | +32 | +5 |
-| claude-haiku-5-5-high | 173 | 51.4% | 50.3% | +32 | +6 |
-| gpt-5.6-terra-xhigh | 93 | 57.0% | 55.1% | +5 | +32 |
-| claude-haiku-5-5-medium | 382 | 50.5% | 50.3% | +5 | -2 |
-| claude-sonnet-5-5-medium | 364 | 48.1% | 48.8% | +2 | -2 |
-| gpt-5.6-terra-max | 90 | 57.8% | 53.8% | +0 | +18 |
-| claude-haiku-5-5-low | 194 | 50.5% | 51.3% | +0 | -2 |
-| claude-opus-5-5-low | 80 | 41.2% | 49.4% | -11 | +22 |
-| claude-sonnet-5-5-off | 164 | 39.6% | 42.4% | -16 | -25 |
-| gpt-6-luna-xhigh | 115 | 68.7% | 63.6% | -27 | -10 |
-| Engine/2/20000 | 96 | 50.0% | 50.4% | -43 | -30 |
-| gpt-6-luna-max | 112 | 67.0% | 63.2% | -45 | -15 |
-| gpt-5.6-terra-medium | 259 | 45.9% | 48.0% | -62 | -25 |
-| claude-sonnet-5-5-low | 159 | 31.4% | 39.5% | -70 | -42 |
-| gpt-5.6-terra-high | 91 | 44.0% | 49.5% | -77 | -5 |
-| gpt-5.6-terra-low | 91 | 40.7% | 45.5% | -94 | -26 |
-| gpt-6-luna-high | 112 | 59.8% | 55.5% | -101 | -67 |
-| claude-haiku-5-5-off | 220 | 36.8% | 39.9% | -138 | -99 |
-| claude-haiku-4-5-20251001-medium | 358 | 34.4% | 38.6% | -189 | -119 |
-| claude-haiku-4-5-20251001-minimal | 143 | 39.9% | 42.5% | -232 | -139 |
-| claude-haiku-4-5-20251001-low | 149 | 36.9% | 41.9% | -247 | -139 |
-| gpt-6-luna-medium | 282 | 26.2% | 34.1% | -262 | -155 |
-| claude-haiku-4-5-20251001-high | 135 | 34.8% | 42.0% | -277 | -146 |
-| gpt-6-luna-off | 110 | 26.4% | 33.8% | -342 | -208 |
-| gpt-6-luna-low | 110 | 25.5% | 31.4% | -347 | -223 |
-| claude-haiku-4-5-20251001-off | 125 | 22.4% | 32.6% | -385 | -216 |
+| config | matches | win share | pot share | Round Elo (luck-adjusted) |
+|---|---|---|---|---|
+| gpt-6.1-terra-max | 80 | 72.5% | 66.0% | +126 |
+| claude-sonnet-5-5-max | 140 | 67.1% | 62.3% | +116 |
+| claude-opus-5-5-max | 80 | 73.8% | 64.4% | +111 |
+| gpt-6-astra-high | 80 | 71.2% | 66.1% | +104 |
+| claude-opus-5-5-xhigh | 150 | 54.7% | 53.4% | +98 |
+| gpt-6.1-sol-max | 122 | 57.4% | 54.9% | +95 |
+| Engine/6/20000/sampled | 76 | 57.9% | 57.2% | +87 |
+| gpt-6-astra-medium | 254 | 66.5% | 60.2% | +73 |
+| gpt-6.1-sol-xhigh | 101 | 51.5% | 52.4% | +72 |
+| claude-opus-5-5-high | 80 | 58.8% | 54.7% | +68 |
+| gpt-6-astra-low | 80 | 65.0% | 59.4% | +67 |
+| gpt-6.1-sol-low | 98 | 52.0% | 50.9% | +63 |
+| gpt-6.1-sol-high | 99 | 47.5% | 48.0% | +58 |
+| gpt-6.1-sol-medium | 271 | 57.2% | 56.8% | +56 |
+| gpt-6.1-terra-xhigh | 80 | 70.0% | 59.7% | +54 |
+| gpt-6.1-terra-high | 80 | 63.7% | 59.7% | +53 |
+| claude-opus-5-5-off | 80 | 62.5% | 58.8% | +53 |
+| claude-sonnet-5-5-xhigh | 176 | 59.7% | 53.7% | +51 |
+| gpt-6-astra-off | 80 | 63.7% | 55.9% | +50 |
+| claude-opus-5-5-medium | 334 | 56.3% | 53.8% | +47 |
+| claude-haiku-5-5-max | 111 | 61.3% | 58.7% | +45 |
+| gpt-6.1-terra-medium | 80 | 62.5% | 57.7% | +38 |
+| claude-opus-5-5-low | 80 | 41.2% | 49.4% | +27 |
+| gpt-5.6-terra-max | 90 | 57.8% | 53.8% | +26 |
+| gpt-5.6-terra-xhigh | 93 | 57.0% | 55.1% | +26 |
+| claude-haiku-5-5-xhigh | 158 | 54.4% | 50.4% | +16 |
+| gpt-6.1-terra-low | 80 | 56.2% | 55.5% | +14 |
+| gpt-6.1-terra-off | 80 | 65.0% | 56.9% | +11 |
+| claude-sonnet-5-5-medium | 364 | 48.1% | 48.8% | +9 |
+| claude-haiku-5-5-high | 173 | 51.4% | 50.3% | +8 |
+| claude-sonnet-5-5-high | 161 | 46.6% | 46.9% | +5 |
+| claude-haiku-5-5-medium | 382 | 50.5% | 50.3% | -6 |
+| gpt-5.6-terra-high | 91 | 44.0% | 49.5% | -7 |
+| Engine/2/20000 | 96 | 50.0% | 50.4% | -14 |
+| claude-haiku-5-5-low | 194 | 50.5% | 51.3% | -16 |
+| gpt-5.6-terra-medium | 259 | 45.9% | 48.0% | -20 |
+| gpt-5.6-terra-low | 91 | 40.7% | 45.5% | -22 |
+| gpt-6-luna-max | 112 | 67.0% | 63.2% | -27 |
+| claude-sonnet-5-5-low | 159 | 31.4% | 39.5% | -28 |
+| gpt-6-luna-xhigh | 115 | 68.7% | 63.6% | -32 |
+| claude-sonnet-5-5-off | 164 | 39.6% | 42.4% | -33 |
+| gpt-6-luna-high | 112 | 59.8% | 55.5% | -87 |
+| claude-haiku-5-5-off | 220 | 36.8% | 39.9% | -98 |
+| claude-haiku-4-5-20251001-medium | 358 | 34.4% | 38.6% | -127 |
+| claude-haiku-4-5-20251001-high | 135 | 34.8% | 42.0% | -145 |
+| claude-haiku-4-5-20251001-minimal | 143 | 39.9% | 42.5% | -150 |
+| claude-haiku-4-5-20251001-low | 149 | 36.9% | 41.9% | -152 |
+| gpt-6-luna-medium | 282 | 26.2% | 34.1% | -154 |
+| gpt-6-luna-off | 110 | 26.4% | 33.8% | -190 |
+| gpt-6-luna-low | 110 | 25.5% | 31.4% | -210 |
+| claude-haiku-4-5-20251001-off | 125 | 22.4% | 32.6% | -210 |
 
 ### Tournament 8
 
 642 scored matches.
 
-| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
-|---|---|---|---|---|---|
-| claude-opus-5-5-max | 40 | 87.5% | 73.8% | +215 | +117 |
-| gpt-6.1-terra-max | 60 | 71.7% | 64.7% | +200 | +120 |
-| gpt-6-astra-high | 60 | 76.7% | 69.8% | +177 | +115 |
-| claude-opus-5-5-xhigh | 38 | 57.9% | 56.2% | +166 | +98 |
-| gpt-6.1-terra-xhigh | 60 | 76.7% | 64.7% | +155 | +58 |
-| claude-opus-5-5-high | 23 | 87.0% | 73.0% | +142 | +76 |
-| claude-sonnet-5-5-xhigh | 38 | 63.2% | 56.0% | +122 | +52 |
-| gpt-6-astra-low | 60 | 71.7% | 62.6% | +121 | +62 |
-| claude-opus-5-5-off | 54 | 64.8% | 60.6% | +106 | +62 |
-| gpt-6.1-terra-medium | 59 | 67.8% | 61.1% | +101 | +49 |
-| gpt-6-astra-off | 60 | 63.3% | 54.1% | +101 | +30 |
-| gpt-6.1-terra-off | 60 | 68.3% | 59.2% | +90 | +25 |
-| gpt-6.1-terra-high | 60 | 70.0% | 62.4% | +84 | +46 |
-| claude-opus-5-5-medium | 25 | 44.0% | 49.6% | +74 | +42 |
-| claude-haiku-5-5-xhigh | 42 | 35.7% | 42.5% | +61 | +12 |
-| gpt-6.1-terra-low | 60 | 56.7% | 56.7% | +47 | +30 |
-| claude-sonnet-5-5-high | 38 | 31.6% | 37.7% | +32 | +5 |
-| claude-haiku-5-5-high | 43 | 37.2% | 39.4% | +32 | +6 |
-| claude-haiku-5-5-medium | 31 | 25.8% | 35.7% | +5 | -2 |
-| claude-sonnet-5-5-medium | 32 | 37.5% | 40.0% | +2 | -2 |
-| claude-haiku-5-5-low | 41 | 34.1% | 42.7% | +0 | -2 |
-| claude-opus-5-5-low | 32 | 43.8% | 46.5% | -11 | +22 |
-| claude-sonnet-5-5-off | 43 | 18.6% | 29.6% | -16 | -25 |
-| claude-sonnet-5-5-low | 38 | 15.8% | 31.5% | -70 | -42 |
-| claude-haiku-5-5-off | 37 | 10.8% | 26.5% | -138 | -99 |
-| claude-haiku-4-5-20251001-medium | 32 | 12.5% | 26.0% | -189 | -119 |
-| claude-haiku-4-5-20251001-minimal | 31 | 9.7% | 26.2% | -232 | -139 |
-| claude-haiku-4-5-20251001-low | 34 | 11.8% | 22.5% | -247 | -139 |
-| claude-haiku-4-5-20251001-high | 29 | 6.9% | 25.1% | -277 | -146 |
-| claude-haiku-4-5-20251001-off | 24 | 0.0% | 17.8% | -385 | -216 |
+| config | matches | win share | pot share | Round Elo (luck-adjusted) |
+|---|---|---|---|---|
+| gpt-6.1-terra-max | 60 | 71.7% | 64.7% | +126 |
+| claude-opus-5-5-max | 40 | 87.5% | 73.8% | +111 |
+| gpt-6-astra-high | 60 | 76.7% | 69.8% | +104 |
+| claude-opus-5-5-xhigh | 38 | 57.9% | 56.2% | +98 |
+| claude-opus-5-5-high | 23 | 87.0% | 73.0% | +68 |
+| gpt-6-astra-low | 60 | 71.7% | 62.6% | +67 |
+| gpt-6.1-terra-xhigh | 60 | 76.7% | 64.7% | +54 |
+| gpt-6.1-terra-high | 60 | 70.0% | 62.4% | +53 |
+| claude-opus-5-5-off | 54 | 64.8% | 60.6% | +53 |
+| claude-sonnet-5-5-xhigh | 38 | 63.2% | 56.0% | +51 |
+| gpt-6-astra-off | 60 | 63.3% | 54.1% | +50 |
+| claude-opus-5-5-medium | 25 | 44.0% | 49.6% | +47 |
+| gpt-6.1-terra-medium | 59 | 67.8% | 61.1% | +38 |
+| claude-opus-5-5-low | 32 | 43.8% | 46.5% | +27 |
+| claude-haiku-5-5-xhigh | 42 | 35.7% | 42.5% | +16 |
+| gpt-6.1-terra-low | 60 | 56.7% | 56.7% | +14 |
+| gpt-6.1-terra-off | 60 | 68.3% | 59.2% | +11 |
+| claude-sonnet-5-5-medium | 32 | 37.5% | 40.0% | +9 |
+| claude-haiku-5-5-high | 43 | 37.2% | 39.4% | +8 |
+| claude-sonnet-5-5-high | 38 | 31.6% | 37.7% | +5 |
+| claude-haiku-5-5-medium | 31 | 25.8% | 35.7% | -6 |
+| claude-haiku-5-5-low | 41 | 34.1% | 42.7% | -16 |
+| claude-sonnet-5-5-low | 38 | 15.8% | 31.5% | -28 |
+| claude-sonnet-5-5-off | 43 | 18.6% | 29.6% | -33 |
+| claude-haiku-5-5-off | 37 | 10.8% | 26.5% | -98 |
+| claude-haiku-4-5-20251001-medium | 32 | 12.5% | 26.0% | -127 |
+| claude-haiku-4-5-20251001-high | 29 | 6.9% | 25.1% | -145 |
+| claude-haiku-4-5-20251001-minimal | 31 | 9.7% | 26.2% | -150 |
+| claude-haiku-4-5-20251001-low | 34 | 11.8% | 22.5% | -152 |
+| claude-haiku-4-5-20251001-off | 24 | 0.0% | 17.8% | -210 |
 
 ### Cross-model games (tournament 1)
 
 562 scored matches.
 
-| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
-|---|---|---|---|---|---|
-| claude-sonnet-5-5-max | 2 | 0.0% | 34.4% | +170 | +104 |
-| gpt-6-astra-medium | 140 | 72.1% | 63.3% | +147 | +83 |
-| claude-opus-5-5-medium | 142 | 62.7% | 58.2% | +74 | +42 |
-| gpt-6.1-sol-medium | 140 | 59.3% | 58.2% | +63 | +54 |
-| claude-haiku-5-5-medium | 140 | 57.9% | 53.7% | +5 | -2 |
-| claude-sonnet-5-5-medium | 140 | 55.0% | 54.2% | +2 | -2 |
-| gpt-5.6-terra-medium | 140 | 45.7% | 48.3% | -62 | -25 |
-| claude-haiku-4-5-20251001-medium | 140 | 30.0% | 35.7% | -189 | -119 |
-| gpt-6-luna-medium | 140 | 17.9% | 28.5% | -262 | -155 |
+| config | matches | win share | pot share | Round Elo (luck-adjusted) |
+|---|---|---|---|---|
+| claude-sonnet-5-5-max | 2 | 0.0% | 34.4% | +116 |
+| gpt-6-astra-medium | 140 | 72.1% | 63.3% | +73 |
+| gpt-6.1-sol-medium | 140 | 59.3% | 58.2% | +56 |
+| claude-opus-5-5-medium | 142 | 62.7% | 58.2% | +47 |
+| claude-sonnet-5-5-medium | 140 | 55.0% | 54.2% | +9 |
+| claude-haiku-5-5-medium | 140 | 57.9% | 53.7% | -6 |
+| gpt-5.6-terra-medium | 140 | 45.7% | 48.3% | -20 |
+| claude-haiku-4-5-20251001-medium | 140 | 30.0% | 35.7% | -127 |
+| gpt-6-luna-medium | 140 | 17.9% | 28.5% | -154 |
 
 ### claude-haiku-5-5 efforts (tournament 1)
 
 300 scored matches.
 
-| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
-|---|---|---|---|---|---|
-| claude-haiku-5-5-max | 100 | 60.0% | 57.8% | +72 | +44 |
-| claude-haiku-5-5-xhigh | 100 | 65.0% | 55.0% | +61 | +12 |
-| claude-haiku-5-5-high | 100 | 54.0% | 53.6% | +32 | +6 |
-| claude-haiku-5-5-medium | 100 | 45.0% | 49.5% | +5 | -2 |
-| claude-haiku-5-5-low | 100 | 45.0% | 47.8% | +0 | -2 |
-| claude-haiku-5-5-off | 100 | 31.0% | 36.2% | -138 | -99 |
+| config | matches | win share | pot share | Round Elo (luck-adjusted) |
+|---|---|---|---|---|
+| claude-haiku-5-5-max | 100 | 60.0% | 57.8% | +45 |
+| claude-haiku-5-5-xhigh | 100 | 65.0% | 55.0% | +16 |
+| claude-haiku-5-5-high | 100 | 54.0% | 53.6% | +8 |
+| claude-haiku-5-5-medium | 100 | 45.0% | 49.5% | -6 |
+| claude-haiku-5-5-low | 100 | 45.0% | 47.8% | -16 |
+| claude-haiku-5-5-off | 100 | 31.0% | 36.2% | -98 |
 
 ### claude-sonnet-5-5 efforts (tournament 1)
 
 300 scored matches.
 
-| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
-|---|---|---|---|---|---|
-| claude-sonnet-5-5-max | 100 | 68.0% | 63.4% | +170 | +104 |
-| claude-sonnet-5-5-xhigh | 100 | 58.0% | 52.9% | +122 | +52 |
-| claude-sonnet-5-5-high | 100 | 51.0% | 49.2% | +32 | +5 |
-| claude-sonnet-5-5-medium | 100 | 45.0% | 47.6% | +2 | -2 |
-| claude-sonnet-5-5-off | 100 | 43.0% | 44.9% | -16 | -25 |
-| claude-sonnet-5-5-low | 100 | 35.0% | 42.0% | -70 | -42 |
+| config | matches | win share | pot share | Round Elo (luck-adjusted) |
+|---|---|---|---|---|
+| claude-sonnet-5-5-max | 100 | 68.0% | 63.4% | +116 |
+| claude-sonnet-5-5-xhigh | 100 | 58.0% | 52.9% | +51 |
+| claude-sonnet-5-5-medium | 100 | 45.0% | 47.6% | +9 |
+| claude-sonnet-5-5-high | 100 | 51.0% | 49.2% | +5 |
+| claude-sonnet-5-5-low | 100 | 35.0% | 42.0% | -28 |
+| claude-sonnet-5-5-off | 100 | 43.0% | 44.9% | -33 |
 
 ### gpt-6-luna efforts (tournament 1)
 
 300 scored matches.
 
-| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
-|---|---|---|---|---|---|
-| gpt-6-luna-xhigh | 100 | 72.0% | 66.0% | -27 | -10 |
-| gpt-6-luna-max | 100 | 72.0% | 66.1% | -45 | -15 |
-| gpt-6-luna-high | 100 | 62.0% | 56.8% | -101 | -67 |
-| gpt-6-luna-medium | 100 | 39.0% | 42.7% | -262 | -155 |
-| gpt-6-luna-off | 100 | 28.0% | 35.4% | -342 | -208 |
-| gpt-6-luna-low | 100 | 27.0% | 32.9% | -347 | -223 |
+| config | matches | win share | pot share | Round Elo (luck-adjusted) |
+|---|---|---|---|---|
+| gpt-6-luna-max | 100 | 72.0% | 66.1% | -27 |
+| gpt-6-luna-xhigh | 100 | 72.0% | 66.0% | -32 |
+| gpt-6-luna-high | 100 | 62.0% | 56.8% | -87 |
+| gpt-6-luna-medium | 100 | 39.0% | 42.7% | -154 |
+| gpt-6-luna-off | 100 | 28.0% | 35.4% | -190 |
+| gpt-6-luna-low | 100 | 27.0% | 32.9% | -210 |
 
 ### Tournament 5
 
 214 scored matches.
 
-| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
-|---|---|---|---|---|---|
-| claude-opus-5-5-max | 40 | 60.0% | 55.0% | +215 | +117 |
-| gpt-6.1-terra-max | 4 | 75.0% | 66.1% | +200 | +120 |
-| gpt-6-astra-high | 8 | 37.5% | 50.6% | +177 | +115 |
-| claude-sonnet-5-5-max | 30 | 60.0% | 54.7% | +170 | +104 |
-| claude-opus-5-5-xhigh | 30 | 36.7% | 45.7% | +166 | +98 |
-| gpt-6.1-terra-xhigh | 10 | 40.0% | 40.0% | +155 | +58 |
-| gpt-6-astra-medium | 34 | 58.8% | 55.0% | +147 | +83 |
-| claude-opus-5-5-high | 2 | 50.0% | 33.3% | +142 | +76 |
-| gpt-6.1-sol-max | 32 | 46.9% | 49.7% | +141 | +94 |
-| claude-sonnet-5-5-xhigh | 8 | 87.5% | 83.3% | +122 | +52 |
-| gpt-6-astra-low | 12 | 58.3% | 55.4% | +121 | +62 |
-| claude-opus-5-5-off | 12 | 58.3% | 61.1% | +106 | +62 |
-| gpt-6.1-terra-medium | 20 | 50.0% | 50.8% | +101 | +49 |
-| gpt-6.1-terra-off | 8 | 50.0% | 41.7% | +90 | +25 |
-| gpt-6.1-sol-low | 6 | 66.7% | 61.1% | +88 | +59 |
-| gpt-6.1-sol-xhigh | 10 | 60.0% | 60.4% | +84 | +67 |
-| gpt-6.1-terra-high | 8 | 25.0% | 33.1% | +84 | +46 |
-| claude-opus-5-5-medium | 28 | 57.1% | 51.1% | +74 | +42 |
-| gpt-6.1-sol-medium | 12 | 58.3% | 61.1% | +63 | +54 |
-| gpt-6.1-sol-high | 8 | 37.5% | 42.8% | +58 | +40 |
-| gpt-6.1-terra-low | 8 | 62.5% | 58.6% | +47 | +30 |
-| claude-sonnet-5-5-high | 8 | 62.5% | 53.6% | +32 | +5 |
-| claude-haiku-5-5-high | 6 | 66.7% | 54.8% | +32 | +6 |
-| claude-haiku-5-5-medium | 14 | 35.7% | 37.6% | +5 | -2 |
-| claude-sonnet-5-5-medium | 10 | 30.0% | 30.0% | +2 | -2 |
-| claude-haiku-5-5-low | 8 | 37.5% | 45.6% | +0 | -2 |
-| claude-opus-5-5-low | 12 | 33.3% | 44.4% | -11 | +22 |
-| claude-sonnet-5-5-off | 8 | 62.5% | 57.8% | -16 | -25 |
-| gpt-6-luna-xhigh | 4 | 50.0% | 49.4% | -27 | -10 |
-| gpt-6-luna-max | 2 | 50.0% | 66.7% | -45 | -15 |
-| claude-sonnet-5-5-low | 8 | 25.0% | 31.9% | -70 | -42 |
-| claude-haiku-4-5-20251001-medium | 8 | 25.0% | 28.9% | -189 | -119 |
-| gpt-6-luna-medium | 10 | 10.0% | 20.2% | -262 | -155 |
+| config | matches | win share | pot share | Round Elo (luck-adjusted) |
+|---|---|---|---|---|
+| gpt-6.1-terra-max | 4 | 75.0% | 66.1% | +126 |
+| claude-sonnet-5-5-max | 30 | 60.0% | 54.7% | +116 |
+| claude-opus-5-5-max | 40 | 60.0% | 55.0% | +111 |
+| gpt-6-astra-high | 8 | 37.5% | 50.6% | +104 |
+| claude-opus-5-5-xhigh | 30 | 36.7% | 45.7% | +98 |
+| gpt-6.1-sol-max | 32 | 46.9% | 49.7% | +95 |
+| gpt-6-astra-medium | 34 | 58.8% | 55.0% | +73 |
+| gpt-6.1-sol-xhigh | 10 | 60.0% | 60.4% | +72 |
+| claude-opus-5-5-high | 2 | 50.0% | 33.3% | +68 |
+| gpt-6-astra-low | 12 | 58.3% | 55.4% | +67 |
+| gpt-6.1-sol-low | 6 | 66.7% | 61.1% | +63 |
+| gpt-6.1-sol-high | 8 | 37.5% | 42.8% | +58 |
+| gpt-6.1-sol-medium | 12 | 58.3% | 61.1% | +56 |
+| gpt-6.1-terra-xhigh | 10 | 40.0% | 40.0% | +54 |
+| gpt-6.1-terra-high | 8 | 25.0% | 33.1% | +53 |
+| claude-opus-5-5-off | 12 | 58.3% | 61.1% | +53 |
+| claude-sonnet-5-5-xhigh | 8 | 87.5% | 83.3% | +51 |
+| claude-opus-5-5-medium | 28 | 57.1% | 51.1% | +47 |
+| gpt-6.1-terra-medium | 20 | 50.0% | 50.8% | +38 |
+| claude-opus-5-5-low | 12 | 33.3% | 44.4% | +27 |
+| gpt-6.1-terra-low | 8 | 62.5% | 58.6% | +14 |
+| gpt-6.1-terra-off | 8 | 50.0% | 41.7% | +11 |
+| claude-sonnet-5-5-medium | 10 | 30.0% | 30.0% | +9 |
+| claude-haiku-5-5-high | 6 | 66.7% | 54.8% | +8 |
+| claude-sonnet-5-5-high | 8 | 62.5% | 53.6% | +5 |
+| claude-haiku-5-5-medium | 14 | 35.7% | 37.6% | -6 |
+| claude-haiku-5-5-low | 8 | 37.5% | 45.6% | -16 |
+| gpt-6-luna-max | 2 | 50.0% | 66.7% | -27 |
+| claude-sonnet-5-5-low | 8 | 25.0% | 31.9% | -28 |
+| gpt-6-luna-xhigh | 4 | 50.0% | 49.4% | -32 |
+| claude-sonnet-5-5-off | 8 | 62.5% | 57.8% | -33 |
+| claude-haiku-4-5-20251001-medium | 8 | 25.0% | 28.9% | -127 |
+| gpt-6-luna-medium | 10 | 10.0% | 20.2% | -154 |
 
 ### claude-haiku-4-5-20251001 efforts (tournament 1)
 
 200 scored matches.
 
-| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
-|---|---|---|---|---|---|
-| claude-haiku-4-5-20251001-medium | 80 | 58.8% | 55.8% | -189 | -119 |
-| claude-haiku-4-5-20251001-minimal | 80 | 57.5% | 51.2% | -232 | -139 |
-| claude-haiku-4-5-20251001-low | 80 | 51.2% | 52.7% | -247 | -139 |
-| claude-haiku-4-5-20251001-high | 80 | 53.8% | 52.4% | -277 | -146 |
-| claude-haiku-4-5-20251001-off | 80 | 28.7% | 38.0% | -385 | -216 |
+| config | matches | win share | pot share | Round Elo (luck-adjusted) |
+|---|---|---|---|---|
+| claude-haiku-4-5-20251001-medium | 80 | 58.8% | 55.8% | -127 |
+| claude-haiku-4-5-20251001-high | 80 | 53.8% | 52.4% | -145 |
+| claude-haiku-4-5-20251001-minimal | 80 | 57.5% | 51.2% | -150 |
+| claude-haiku-4-5-20251001-low | 80 | 51.2% | 52.7% | -152 |
+| claude-haiku-4-5-20251001-off | 80 | 28.7% | 38.0% | -210 |
 
 ### gpt-5.6-terra efforts (tournament 1)
 
 200 scored matches.
 
-| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
-|---|---|---|---|---|---|
-| gpt-5.6-terra-xhigh | 80 | 60.0% | 56.1% | +5 | +32 |
-| gpt-5.6-terra-max | 80 | 58.8% | 53.9% | +0 | +18 |
-| gpt-5.6-terra-medium | 80 | 45.0% | 45.0% | -62 | -25 |
-| gpt-5.6-terra-high | 80 | 46.2% | 50.8% | -77 | -5 |
-| gpt-5.6-terra-low | 80 | 40.0% | 44.2% | -94 | -26 |
+| config | matches | win share | pot share | Round Elo (luck-adjusted) |
+|---|---|---|---|---|
+| gpt-5.6-terra-max | 80 | 58.8% | 53.9% | +26 |
+| gpt-5.6-terra-xhigh | 80 | 60.0% | 56.1% | +26 |
+| gpt-5.6-terra-high | 80 | 46.2% | 50.8% | -7 |
+| gpt-5.6-terra-medium | 80 | 45.0% | 45.0% | -20 |
+| gpt-5.6-terra-low | 80 | 40.0% | 44.2% | -22 |
 
 ### gpt-6.1-sol efforts (tournament 1)
 
 200 scored matches.
 
-| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
-|---|---|---|---|---|---|
-| gpt-6.1-sol-max | 80 | 58.8% | 54.7% | +141 | +94 |
-| gpt-6.1-sol-low | 80 | 48.8% | 48.7% | +88 | +59 |
-| gpt-6.1-sol-xhigh | 80 | 48.8% | 49.8% | +84 | +67 |
-| gpt-6.1-sol-medium | 80 | 46.2% | 49.1% | +63 | +54 |
-| gpt-6.1-sol-high | 80 | 47.5% | 47.7% | +58 | +40 |
+| config | matches | win share | pot share | Round Elo (luck-adjusted) |
+|---|---|---|---|---|
+| gpt-6.1-sol-max | 80 | 58.8% | 54.7% | +95 |
+| gpt-6.1-sol-xhigh | 80 | 48.8% | 49.8% | +72 |
+| gpt-6.1-sol-low | 80 | 48.8% | 48.7% | +63 |
+| gpt-6.1-sol-high | 80 | 47.5% | 47.7% | +58 |
+| gpt-6.1-sol-medium | 80 | 46.2% | 49.1% | +56 |
 
 ### Tournament 10
 
 120 scored matches.
 
-| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
-|---|---|---|---|---|---|
-| Engine/6/20000/sampled | 60 | 61.7% | 57.4% | +103 | +71 |
-| claude-opus-5-5-medium | 40 | 47.5% | 50.4% | +74 | +42 |
-| claude-haiku-5-5-medium | 40 | 52.5% | 50.8% | +5 | -2 |
-| claude-sonnet-5-5-medium | 40 | 40.0% | 43.5% | +2 | -2 |
-| Engine/2/20000 | 60 | 45.0% | 46.2% | -43 | -30 |
+| config | matches | win share | pot share | Round Elo (luck-adjusted) |
+|---|---|---|---|---|
+| Engine/6/20000/sampled | 60 | 61.7% | 57.4% | +87 |
+| claude-opus-5-5-medium | 40 | 47.5% | 50.4% | +47 |
+| claude-sonnet-5-5-medium | 40 | 40.0% | 43.5% | +9 |
+| claude-haiku-5-5-medium | 40 | 52.5% | 50.8% | -6 |
+| Engine/2/20000 | 60 | 45.0% | 46.2% | -14 |
 
 ### Tournament 9
 
 100 scored matches.
 
-| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
-|---|---|---|---|---|---|
-| claude-haiku-5-5-high | 10 | 90.0% | 70.4% | +32 | +6 |
-| claude-haiku-5-5-medium | 10 | 80.0% | 83.8% | +5 | -2 |
-| claude-haiku-5-5-low | 30 | 86.7% | 73.1% | +0 | -2 |
-| claude-haiku-5-5-off | 50 | 70.0% | 59.3% | -138 | -99 |
-| claude-haiku-4-5-20251001-medium | 40 | 25.0% | 30.6% | -189 | -119 |
-| claude-haiku-4-5-20251001-minimal | 20 | 15.0% | 33.6% | -232 | -139 |
-| claude-haiku-4-5-20251001-low | 20 | 20.0% | 33.4% | -247 | -139 |
-| claude-haiku-4-5-20251001-high | 10 | 20.0% | 40.0% | -277 | -146 |
-| claude-haiku-4-5-20251001-off | 10 | 30.0% | 33.6% | -385 | -216 |
+| config | matches | win share | pot share | Round Elo (luck-adjusted) |
+|---|---|---|---|---|
+| claude-haiku-5-5-high | 10 | 90.0% | 70.4% | +8 |
+| claude-haiku-5-5-medium | 10 | 80.0% | 83.8% | -6 |
+| claude-haiku-5-5-low | 30 | 86.7% | 73.1% | -16 |
+| claude-haiku-5-5-off | 50 | 70.0% | 59.3% | -98 |
+| claude-haiku-4-5-20251001-medium | 40 | 25.0% | 30.6% | -127 |
+| claude-haiku-4-5-20251001-high | 10 | 20.0% | 40.0% | -145 |
+| claude-haiku-4-5-20251001-minimal | 20 | 15.0% | 33.6% | -150 |
+| claude-haiku-4-5-20251001-low | 20 | 20.0% | 33.4% | -152 |
+| claude-haiku-4-5-20251001-off | 10 | 30.0% | 33.6% | -210 |
 
 ### Opus efforts (tournament 2)
 
 80 scored matches.
 
-| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
-|---|---|---|---|---|---|
-| claude-opus-5-5-xhigh | 40 | 65.0% | 58.6% | +166 | +98 |
-| claude-opus-5-5-high | 40 | 45.0% | 44.1% | +142 | +76 |
-| claude-opus-5-5-medium | 60 | 48.3% | 48.1% | +74 | +42 |
-| claude-opus-5-5-low | 20 | 35.0% | 50.2% | -11 | +22 |
+| config | matches | win share | pot share | Round Elo (luck-adjusted) |
+|---|---|---|---|---|
+| claude-opus-5-5-xhigh | 40 | 65.0% | 58.6% | +98 |
+| claude-opus-5-5-high | 40 | 45.0% | 44.1% | +68 |
+| claude-opus-5-5-medium | 60 | 48.3% | 48.1% | +47 |
+| claude-opus-5-5-low | 20 | 35.0% | 50.2% | +27 |
 
 ### Tournament 7
 
 73 scored matches.
 
-| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
-|---|---|---|---|---|---|
-| gpt-6.1-terra-max | 16 | 75.0% | 70.7% | +200 | +120 |
-| gpt-6-astra-high | 12 | 66.7% | 58.1% | +177 | +115 |
-| claude-opus-5-5-xhigh | 1 | 100.0% | 64.4% | +166 | +98 |
-| gpt-6.1-terra-xhigh | 6 | 66.7% | 55.6% | +155 | +58 |
-| gpt-6-astra-medium | 1 | 0.0% | 0.0% | +147 | +83 |
-| claude-opus-5-5-high | 4 | 50.0% | 51.1% | +142 | +76 |
-| claude-sonnet-5-5-xhigh | 3 | 33.3% | 22.2% | +122 | +52 |
-| gpt-6-astra-low | 7 | 14.3% | 38.4% | +121 | +62 |
-| claude-opus-5-5-off | 3 | 66.7% | 43.7% | +106 | +62 |
-| gpt-6-astra-off | 13 | 76.9% | 69.1% | +101 | +30 |
-| gpt-6.1-terra-off | 9 | 77.8% | 63.0% | +90 | +25 |
-| gpt-6.1-sol-low | 2 | 100.0% | 65.6% | +88 | +59 |
-| gpt-6.1-sol-xhigh | 1 | 0.0% | 33.3% | +84 | +67 |
-| gpt-6.1-terra-high | 9 | 66.7% | 66.4% | +84 | +46 |
-| claude-opus-5-5-medium | 1 | 0.0% | 31.1% | +74 | +42 |
-| gpt-6.1-sol-medium | 2 | 100.0% | 84.4% | +63 | +54 |
-| claude-haiku-5-5-xhigh | 4 | 25.0% | 33.3% | +61 | +12 |
-| gpt-6.1-sol-high | 1 | 0.0% | 31.1% | +58 | +40 |
-| gpt-6.1-terra-low | 9 | 55.6% | 48.9% | +47 | +30 |
-| claude-sonnet-5-5-high | 3 | 33.3% | 34.8% | +32 | +5 |
-| claude-haiku-5-5-high | 2 | 0.0% | 0.0% | +32 | +6 |
-| gpt-5.6-terra-xhigh | 3 | 66.7% | 67.4% | +5 | +32 |
-| claude-haiku-5-5-medium | 4 | 0.0% | 32.8% | +5 | -2 |
-| claude-sonnet-5-5-medium | 4 | 25.0% | 33.3% | +2 | -2 |
-| claude-haiku-5-5-low | 2 | 50.0% | 66.7% | +0 | -2 |
-| claude-opus-5-5-low | 4 | 0.0% | 32.8% | -11 | +22 |
-| claude-sonnet-5-5-off | 2 | 50.0% | 34.4% | -16 | -25 |
-| gpt-6-luna-xhigh | 1 | 0.0% | 0.0% | -27 | -10 |
-| gpt-5.6-terra-medium | 3 | 0.0% | 22.2% | -62 | -25 |
-| claude-sonnet-5-5-low | 2 | 50.0% | 47.8% | -70 | -42 |
-| gpt-5.6-terra-high | 1 | 0.0% | 35.6% | -77 | -5 |
-| gpt-5.6-terra-low | 1 | 0.0% | 31.1% | -94 | -26 |
-| gpt-6-luna-high | 2 | 50.0% | 51.1% | -101 | -67 |
-| claude-haiku-5-5-off | 2 | 0.0% | 0.0% | -138 | -99 |
-| claude-haiku-4-5-20251001-medium | 1 | 0.0% | 0.0% | -189 | -119 |
-| claude-haiku-4-5-20251001-minimal | 1 | 100.0% | 66.7% | -232 | -139 |
-| claude-haiku-4-5-20251001-low | 2 | 0.0% | 17.8% | -247 | -139 |
-| claude-haiku-4-5-20251001-high | 2 | 0.0% | 16.7% | -277 | -146 |
+| config | matches | win share | pot share | Round Elo (luck-adjusted) |
+|---|---|---|---|---|
+| gpt-6.1-terra-max | 16 | 75.0% | 70.7% | +126 |
+| gpt-6-astra-high | 12 | 66.7% | 58.1% | +104 |
+| claude-opus-5-5-xhigh | 1 | 100.0% | 64.4% | +98 |
+| gpt-6-astra-medium | 1 | 0.0% | 0.0% | +73 |
+| gpt-6.1-sol-xhigh | 1 | 0.0% | 33.3% | +72 |
+| claude-opus-5-5-high | 4 | 50.0% | 51.1% | +68 |
+| gpt-6-astra-low | 7 | 14.3% | 38.4% | +67 |
+| gpt-6.1-sol-low | 2 | 100.0% | 65.6% | +63 |
+| gpt-6.1-sol-high | 1 | 0.0% | 31.1% | +58 |
+| gpt-6.1-sol-medium | 2 | 100.0% | 84.4% | +56 |
+| gpt-6.1-terra-xhigh | 6 | 66.7% | 55.6% | +54 |
+| gpt-6.1-terra-high | 9 | 66.7% | 66.4% | +53 |
+| claude-opus-5-5-off | 3 | 66.7% | 43.7% | +53 |
+| claude-sonnet-5-5-xhigh | 3 | 33.3% | 22.2% | +51 |
+| gpt-6-astra-off | 13 | 76.9% | 69.1% | +50 |
+| claude-opus-5-5-medium | 1 | 0.0% | 31.1% | +47 |
+| claude-opus-5-5-low | 4 | 0.0% | 32.8% | +27 |
+| gpt-5.6-terra-xhigh | 3 | 66.7% | 67.4% | +26 |
+| claude-haiku-5-5-xhigh | 4 | 25.0% | 33.3% | +16 |
+| gpt-6.1-terra-low | 9 | 55.6% | 48.9% | +14 |
+| gpt-6.1-terra-off | 9 | 77.8% | 63.0% | +11 |
+| claude-sonnet-5-5-medium | 4 | 25.0% | 33.3% | +9 |
+| claude-haiku-5-5-high | 2 | 0.0% | 0.0% | +8 |
+| claude-sonnet-5-5-high | 3 | 33.3% | 34.8% | +5 |
+| claude-haiku-5-5-medium | 4 | 0.0% | 32.8% | -6 |
+| gpt-5.6-terra-high | 1 | 0.0% | 35.6% | -7 |
+| claude-haiku-5-5-low | 2 | 50.0% | 66.7% | -16 |
+| gpt-5.6-terra-medium | 3 | 0.0% | 22.2% | -20 |
+| gpt-5.6-terra-low | 1 | 0.0% | 31.1% | -22 |
+| claude-sonnet-5-5-low | 2 | 50.0% | 47.8% | -28 |
+| gpt-6-luna-xhigh | 1 | 0.0% | 0.0% | -32 |
+| claude-sonnet-5-5-off | 2 | 50.0% | 34.4% | -33 |
+| gpt-6-luna-high | 2 | 50.0% | 51.1% | -87 |
+| claude-haiku-5-5-off | 2 | 0.0% | 0.0% | -98 |
+| claude-haiku-4-5-20251001-medium | 1 | 0.0% | 0.0% | -127 |
+| claude-haiku-4-5-20251001-high | 2 | 0.0% | 16.7% | -145 |
+| claude-haiku-4-5-20251001-minimal | 1 | 100.0% | 66.7% | -150 |
+| claude-haiku-4-5-20251001-low | 2 | 0.0% | 17.8% | -152 |
 
 ### Tournament 11
 
 52 scored matches.
 
-| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
-|---|---|---|---|---|---|
-| claude-sonnet-5-5-xhigh | 16 | 56.2% | 43.6% | +122 | +52 |
-| Engine/6/20000/sampled | 16 | 43.8% | 56.4% | +103 | +71 |
-| Engine/2/20000 | 36 | 58.3% | 57.3% | -43 | -30 |
-| claude-haiku-5-5-off | 18 | 33.3% | 40.7% | -138 | -99 |
-| claude-haiku-4-5-20251001-medium | 18 | 50.0% | 44.6% | -189 | -119 |
+| config | matches | win share | pot share | Round Elo (luck-adjusted) |
+|---|---|---|---|---|
+| Engine/6/20000/sampled | 16 | 43.8% | 56.4% | +87 |
+| claude-sonnet-5-5-xhigh | 16 | 56.2% | 43.6% | +51 |
+| Engine/2/20000 | 36 | 58.3% | 57.3% | -14 |
+| claude-haiku-5-5-off | 18 | 33.3% | 40.7% | -98 |
+| claude-haiku-4-5-20251001-medium | 18 | 50.0% | 44.6% | -127 |
 
 ### Tournament 6
 
 37 scored matches.
 
-| config | matches | win share | pot share | match rating (Elo) | cash rating (Elo) |
-|---|---|---|---|---|---|
-| gpt-6.1-terra-xhigh | 4 | 50.0% | 41.1% | +155 | +58 |
-| claude-opus-5-5-high | 1 | 0.0% | 33.3% | +142 | +76 |
-| claude-sonnet-5-5-xhigh | 1 | 100.0% | 66.7% | +122 | +52 |
-| gpt-6-astra-low | 1 | 100.0% | 68.9% | +121 | +62 |
-| claude-opus-5-5-off | 11 | 54.5% | 51.7% | +106 | +62 |
-| gpt-6.1-terra-medium | 1 | 0.0% | 0.0% | +101 | +49 |
-| gpt-6-astra-off | 7 | 42.9% | 47.0% | +101 | +30 |
-| gpt-6.1-terra-off | 3 | 0.0% | 33.3% | +90 | +25 |
-| gpt-6.1-terra-high | 3 | 33.3% | 55.6% | +84 | +46 |
-| claude-opus-5-5-medium | 2 | 100.0% | 66.7% | +74 | +42 |
-| claude-haiku-5-5-max | 1 | 100.0% | 66.7% | +72 | +44 |
-| gpt-6.1-sol-medium | 1 | 100.0% | 64.4% | +63 | +54 |
-| claude-haiku-5-5-xhigh | 2 | 50.0% | 51.1% | +61 | +12 |
-| gpt-6.1-terra-low | 3 | 33.3% | 44.4% | +47 | +30 |
-| claude-sonnet-5-5-high | 2 | 0.0% | 32.2% | +32 | +5 |
-| claude-haiku-5-5-high | 2 | 100.0% | 100.0% | +32 | +6 |
-| claude-haiku-5-5-medium | 5 | 100.0% | 73.8% | +5 | -2 |
-| claude-sonnet-5-5-medium | 2 | 50.0% | 51.1% | +2 | -2 |
-| claude-haiku-5-5-low | 3 | 33.3% | 45.9% | +0 | -2 |
-| claude-opus-5-5-low | 2 | 100.0% | 65.6% | -11 | +22 |
-| claude-sonnet-5-5-off | 1 | 100.0% | 100.0% | -16 | -25 |
-| claude-sonnet-5-5-low | 1 | 100.0% | 66.7% | -70 | -42 |
-| claude-haiku-5-5-off | 3 | 66.7% | 56.3% | -138 | -99 |
-| claude-haiku-4-5-20251001-medium | 3 | 0.0% | 22.2% | -189 | -119 |
-| claude-haiku-4-5-20251001-minimal | 1 | 0.0% | 31.1% | -232 | -139 |
-| claude-haiku-4-5-20251001-low | 3 | 66.7% | 54.1% | -247 | -139 |
-| claude-haiku-4-5-20251001-high | 4 | 0.0% | 16.7% | -277 | -146 |
-| claude-haiku-4-5-20251001-off | 1 | 0.0% | 35.6% | -385 | -216 |
+| config | matches | win share | pot share | Round Elo (luck-adjusted) |
+|---|---|---|---|---|
+| claude-opus-5-5-high | 1 | 0.0% | 33.3% | +68 |
+| gpt-6-astra-low | 1 | 100.0% | 68.9% | +67 |
+| gpt-6.1-sol-medium | 1 | 100.0% | 64.4% | +56 |
+| gpt-6.1-terra-xhigh | 4 | 50.0% | 41.1% | +54 |
+| gpt-6.1-terra-high | 3 | 33.3% | 55.6% | +53 |
+| claude-opus-5-5-off | 11 | 54.5% | 51.7% | +53 |
+| claude-sonnet-5-5-xhigh | 1 | 100.0% | 66.7% | +51 |
+| gpt-6-astra-off | 7 | 42.9% | 47.0% | +50 |
+| claude-opus-5-5-medium | 2 | 100.0% | 66.7% | +47 |
+| claude-haiku-5-5-max | 1 | 100.0% | 66.7% | +45 |
+| gpt-6.1-terra-medium | 1 | 0.0% | 0.0% | +38 |
+| claude-opus-5-5-low | 2 | 100.0% | 65.6% | +27 |
+| claude-haiku-5-5-xhigh | 2 | 50.0% | 51.1% | +16 |
+| gpt-6.1-terra-low | 3 | 33.3% | 44.4% | +14 |
+| gpt-6.1-terra-off | 3 | 0.0% | 33.3% | +11 |
+| claude-sonnet-5-5-medium | 2 | 50.0% | 51.1% | +9 |
+| claude-haiku-5-5-high | 2 | 100.0% | 100.0% | +8 |
+| claude-sonnet-5-5-high | 2 | 0.0% | 32.2% | +5 |
+| claude-haiku-5-5-medium | 5 | 100.0% | 73.8% | -6 |
+| claude-haiku-5-5-low | 3 | 33.3% | 45.9% | -16 |
+| claude-sonnet-5-5-low | 1 | 100.0% | 66.7% | -28 |
+| claude-sonnet-5-5-off | 1 | 100.0% | 100.0% | -33 |
+| claude-haiku-5-5-off | 3 | 66.7% | 56.3% | -98 |
+| claude-haiku-4-5-20251001-medium | 3 | 0.0% | 22.2% | -127 |
+| claude-haiku-4-5-20251001-high | 4 | 0.0% | 16.7% | -145 |
+| claude-haiku-4-5-20251001-minimal | 1 | 0.0% | 31.1% | -150 |
+| claude-haiku-4-5-20251001-low | 3 | 66.7% | 54.1% | -152 |
+| claude-haiku-4-5-20251001-off | 1 | 0.0% | 35.6% | -210 |
 <!-- leaderboard:end -->
 
 
@@ -430,7 +430,7 @@ Ten games per config is a small sample: read single cells as rough. Two patterns
 
 ## Tournament 5 (finished 2026-11-01)
 
-214 scored matches in 11 phases, $353.50 of list-price usage (every call priced). The database total is now $1,557.95. Seeds are 4000 to 4061, which no earlier tournament played, so there is no matched-seed comparison with tournaments 1 to 4. The matched-seed tool (`tools/arena/seed_pairs.py`) was used within the tournament. Ratings below are the pooled ones in the leaderboard.
+214 scored matches in 11 phases, $353.50 of list-price usage (every call priced). The database total is now $1,557.95. Seeds are 4000 to 4061, which no earlier tournament played, so there is no matched-seed comparison with tournaments 1 to 4. The matched-seed tool (`tools/arena/seed_pairs.py`) was used within the tournament. The ratings quoted in this section are the match ratings of the 2026-11-04 snapshot (the older fit on match results, kept in [matchups.md](analysis/matchups.md)), not the Round Elo of the leaderboard above.
 
 Only three pairings played 5 seeds in both seats (10 matches): Opus max against low, medium and xhigh. The top-four round robin also plays 5 seeds per pair. Everything else is one seed in both seats (2 matches per pairing), so a single pairing says very little. Counts below are from tournament 5 alone. With tournaments 7, 8 and 9 added, Opus off, Astra low and high, and every Terra 6.1 effort have 80 matches each. Ratings are the pooled ones of the 2026-11-04 snapshot.
 
@@ -458,6 +458,22 @@ Only three pairings played 5 seeds in both seats (10 matches): Opus max against 
 | Opus xhigh v Astra | 22-19 |
 
   Sonnet max won 8 of 10 against Opus xhigh (over complete seed pairs, 95% interval 60% to 100%). The pooled ratings are Sonnet max +173, Astra +149, Opus xhigh +170, Sol max +143. Opus xhigh was +180 before tournament 5, Sonnet max +160.
+
+## Tournament 8 (finished 2026-11-04)
+
+642 scored matches, $373.87 of list-price usage. Nine GPT configs (Terra 6.1 at all six efforts, Astra off, low and high) and Opus off and max played the Claude configs at every effort, about 3 matches against each. It gave the new configs 60 matches each against a spread of opponents, to bring them to 80 with tournaments 5, 7 and 9. Seeds are 5000 to 7302, one match per seed and no seat swap. The tournament scheduled the swapped half of each match too (another 642), and they never started. So every match here is unpaired, and the seat that opens round 1 is not balanced by design. Ratings are the pooled ones in the leaderboard.
+
+## Tournament 10 (finished 2026-11-09)
+
+120 matches, $13.75 of list-price usage. It put the two search-engine configs, `Engine/2/20000` (depth 2) and `Engine/6/20000/sampled` (depth 6, sampled reload), against Haiku 5.5, Sonnet 5.5 and Opus 5.5, all at medium. Each of the six pairings plays 10 seeds (3000 to 3018) in both seat orders, 20 matches. The engines are reference points for the models (see [ADR-0059](../adr/0059-engine-anchors.md)).
+
+Match wins, engine first:
+- Engine depth 6: 10-10 against Haiku, 13-7 against Opus, 14-6 against Sonnet;
+- Engine depth 2: 9-11 against Haiku, 8-12 against Opus, 10-10 against Sonnet.
+
+## Tournament 11 (2026-11-09)
+
+52 scored matches, $10.87 of list-price usage. Of 200 scheduled matches, 2 more were partly played and 146 never started. Same seeds and both seat orders as tournament 10. It gave the engines opponents outside tournament 10: Engine depth 2 against Haiku 4.5 medium (9-9) and Haiku 5.5 off (12-6), and Engine depth 6 against Sonnet 5.5 xhigh (7-9).
 
 ## Beliefs and items
 What each model knew about the chamber when it shot, whether it acted on it, what became of its items, and how consistently it chose in repeated positions: [analysis/beliefs-and-items.md](analysis/beliefs-and-items.md).

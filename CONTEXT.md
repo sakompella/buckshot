@@ -141,7 +141,25 @@ A config's reader-facing score for its moves, computed as lichess computes accur
 _Avoid_: lost per match, largest missed chance
 
 **Pot share**:
-A player's cash at the end of a match divided by all the cash in that match: 1 for a sweep, less when the loser banked round prizes. The viewer's cash rating is a Bradley-Terry fit on it.
+A player's cash at the end of a match divided by all the cash in that match: 1 for a sweep, less when the loser banked round prizes. It is shown beside the rating and is not rated.
 
 **Round share**:
-The rounds a player won divided by the rounds it played, where the match's public events give every round winner. The viewer's rounds rating is a Bradley-Terry fit that counts each round as one game.
+The rounds a player won divided by the rounds it played, where the match's public events give every round winner. Round Elo is a fit on these.
+
+**Config**:
+One model on one endpoint at one effort. It is the unit the arena rates and lists, named by its model and effort, such as `claude-opus-5-5-max`; an engine's name is its seat, `Engine/6/20000/sampled`.
+_Avoid_: model (a model has many configs), entrant (a tournament's name for a seat to fill, which may carry an instructions addendum)
+
+**Effort**:
+The reasoning level requested from a model (off, low, medium, high, xhigh, max). It is what the request asked for, not what the model did: one label spends very different reasoning across providers, and two labels can send the same request.
+
+**Cohort**:
+The group of matches the analysis lists and compares together, named in a tournament's config (such as "tournament 8"). The first tournaments' effort sweeps and cross-model games are cohorts too. The leaderboard has one table per cohort, rated on one pooled fit.
+
+**Round Elo**:
+The arena's rating: a Bradley-Terry fit over every scored match in which each round is a game, on an Elo scale with its zero set by the fit, per config. The headline number is luck-adjusted, with the luck of each round's chance events (shots, loads and the coin for round 1) taken out. It is not match Elo: +120 here is about +200 on match results. See ADR-0056 and ADR-0058.
+_Avoid_: rounds rating, match rating, cash rating (older fits on match results and on pot share, kept in `docs/arena/analysis/matchups.md`)
+
+**Engine anchor**:
+An engine seat (`Engine/<depth>/<budget>`) used as a fixed yardstick on the same scale as the models: the Rust search playing the move its own scorer rates best, at a fixed depth and node budget. See ADR-0059.
+_Avoid_: bot (the Story and DoN AIs), baseline
