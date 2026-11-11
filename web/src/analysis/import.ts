@@ -146,9 +146,26 @@ export const importTournaments = ({ database, sources, skipped = {} }: ImportOpt
       const tournamentId = sha(`${file.created_at}\0${file.config.name}`);
       const tournament = Result.getOrThrow(tournamentOf(file));
       db.transaction(() => {
+        // The update leaves the primary key alone: setting a parent key, even to its own value, makes
+        // SQLite scan each child table for rows that reference it, and calls and decisions hold millions.
+        const primaryKeys = new Map<string, ReadonlySet<string>>();
+
+        const primaryOf = (table: string) => {
+          const known = primaryKeys.get(table);
+
+          if (known !== undefined) return known;
+
+          const columns = new Set(db.query<{ name: string }, []>(`SELECT name FROM pragma_table_info('${table}') WHERE pk > 0`).all().map((column) => column.name));
+
+          primaryKeys.set(table, columns);
+
+          return columns;
+        };
+
         const put = (table: string, values: Readonly<Record<string, string | number | null>>) => {
           const keys = Object.keys(values);
-          db.query(`INSERT INTO ${table} (${keys.join(",")}) VALUES (${keys.map(() => "?").join(",")}) ON CONFLICT DO UPDATE SET ${keys.map((key) => `${key}=excluded.${key}`).join(",")}`).run(...Object.values(values));
+          const primary = primaryOf(table);
+          db.query(`INSERT INTO ${table} (${keys.join(",")}) VALUES (${keys.map(() => "?").join(",")}) ON CONFLICT DO UPDATE SET ${keys.filter((key) => !primary.has(key)).map((key) => `${key}=excluded.${key}`).join(",")}`).run(...Object.values(values));
         };
 
         const observe = (path: string, text: string, matchId: string | null): void => {
