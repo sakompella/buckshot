@@ -259,7 +259,8 @@ export const view = (model: Model, h: H): Document =>
           [],
           [
             // Touch has no hover: a tap pins a point, and a tap anywhere outside the chart unpins it.
-            h.main(isPinned(model) ? [h.OnClick(Message.ClickedOutsideChart())] : [], [pageView(h, model, derived)]),
+            // The tour is an overlay: the page under it is inert, so the keyboard and screen readers stay inside it.
+            h.main([...(isPinned(model) ? [h.OnClick(Message.ClickedOutsideChart())] : []), h.Inert(Option.isSome(model.maybeTour))], [pageView(h, model, derived)]),
             Option.match(Option.orElse(model.markTip.maybeHover, () => model.markTip.maybePin), { onNone: () => h.empty, onSome: ({ anchor, text }) => tipView(h, anchor, [text]) }),
             Option.match(model.maybeTappedTitle, { onNone: () => h.empty, onSome: (text) => h.div([h.Class("tip tapped"), h.Role("status")], [text]) }),
             Option.match(model.maybeTour, { onNone: () => h.empty, onSome: (tour) => tourView(h, tour, model.viewport.width) }),

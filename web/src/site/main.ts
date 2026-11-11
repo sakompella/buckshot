@@ -123,7 +123,7 @@ const navView = (h: H, model: Model): Html => {
   const link = (label: string, href: string, isCurrent: boolean) => h.a([h.Href(href), ...(isCurrent ? [h.AriaCurrent("page")] : [])], [label]);
 
   return h.nav(
-    [h.Class("site-nav"), h.AriaLabel("Site")],
+    [h.Class("site-nav"), h.AriaLabel("Site"), h.Inert(Option.exists(model.maybeArena, (arena) => Option.isSome(arena.maybeTour)))],
     [
       h.span([h.Class("site-name")], ["Buckshot"]),
       link("Arena", Option.match(model.maybeArena, { onNone: () => "/arena", onSome: (arena) => Arena.hrefOf(arena) }), isArenaRoute(model.route)),

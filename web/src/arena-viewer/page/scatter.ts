@@ -142,7 +142,7 @@ const TYPE = { desktop: { title: 14, tick: 12, axis: 13, name: 12.5, eff: 10 }, 
 /** Below this chart width the controls are menus and the type is the phone's. */
 const NARROW = 640;
 
-const SANS = '-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif';
+const SANS = 'system-ui, "Inter", "Segoe UI", sans-serif';
 
 const MONO = "ui-monospace, SFMono-Regular, Menlo, monospace";
 
