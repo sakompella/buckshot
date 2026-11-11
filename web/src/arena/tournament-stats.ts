@@ -206,6 +206,7 @@ const solve = (a: ReadonlyArray<ReadonlyArray<number>>, b: ReadonlyArray<number>
  * exp(theta_i + s[n][position_i]) / the sum of that over the table, where n is the table size and the
  * first position has no seat term. Gaussian priors of standard deviation 1 on every theta and seat term
  * give the fit a single answer. A tied win counts by its share. Newton steps find the peak.
+ * tools/arena/analysis/test_round_elo.py ties this fit to bt.fit on two-player matches.
  */
 export const fitRatings = (matches: ReadonlyArray<PlayedMatch>, anchor: string | undefined): Ratings => {
   const entrants = [...new Set(matches.flatMap((match) => match.players.map((player) => player.entrant)))].toSorted();

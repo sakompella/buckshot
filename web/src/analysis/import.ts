@@ -53,14 +53,11 @@ const LEGACY_COHORTS: ReadonlyArray<readonly [string, ReadonlyArray<string>]> = 
   ["tournament 7", ["t7-terra-max", "t7-cross-a", "t7-astra-off", "t7-terra-off", "t7-astra-high", "t7-cross-b", "t7-terra-low-high", "t7-terra-xhigh"]],
 ];
 
-/** Tournament 1's name in its run directories. */
-const TOURNAMENT_1 = "cpa-tiers";
-
-/** The comparison a match is pooled in: its tournament's `cohort`; for tournament 1, each model's effort sweep or the cross-model games. */
-const cohortOf = (tournament: string, declared: string | undefined, models: ReadonlyArray<string | null>): string | undefined => {
+/** The comparison a match is pooled in: its tournament's `cohort`; for the tiers tournament, each model's effort sweep or the cross-model games. */
+const cohortOf = (tournament: string, tiers: string | undefined, declared: string | undefined, models: ReadonlyArray<string | null>): string | undefined => {
   if (declared !== undefined) return declared;
 
-  if (tournament === TOURNAMENT_1) return new Set(models).size === 1 ? `tiers sweep ${models[0]}` : "tiers cross-model";
+  if (tiers !== undefined && tournament === tiers) return new Set(models).size === 1 ? `tiers sweep ${models[0]}` : "tiers cross-model";
 
   return LEGACY_COHORTS.find(([, names]) => names.includes(tournament))?.[0];
 };
@@ -117,6 +114,8 @@ export interface ImportOptions {
   readonly sources: ReadonlyArray<string>;
   /** Tournament directory to scheduled match name to the reason it is not scored. Unstarted work is not evidence of a skip. */
   readonly skipped?: Readonly<Record<string, Readonly<Record<string, string>>>>;
+  /** The name of the tiers tournament (tournament 1), whose config predates `cohort`: a private name, passed like the skips, not tracked. */
+  readonly tiers?: string | undefined;
 }
 
 export const openAnalysis = (path: string): Database => {
@@ -134,7 +133,7 @@ export const openAnalysis = (path: string): Database => {
 };
 
 /** Refreshes changed matches atomically per tournament. Source files are never opened for writing. */
-export const importTournaments = ({ database, sources, skipped = {} }: ImportOptions): void => {
+export const importTournaments = ({ database, sources, skipped = {}, tiers }: ImportOptions): void => {
   const db = openAnalysis(database);
 
   try {
@@ -230,7 +229,7 @@ export const importTournaments = ({ database, sources, skipped = {} }: ImportOpt
 
           const models = match.entrants.map((name) => modelEntrant(file.config, name)?.model ?? null);
           const isExcluded = models.some((model) => model?.toLowerCase().includes(EXCLUDED_MODEL) === true);
-          const cohort = cohortOf(file.config.name, file.config.cohort, models) ?? conflict(matchDir, "the tournament config names no cohort", json({ tournament: file.config.name }));
+          const cohort = cohortOf(file.config.name, tiers, file.config.cohort, models) ?? conflict(matchDir, "the tournament config names no cohort and no tiers tournament names it", json({ tournament: file.config.name }));
           const fingerprint = sha(json([IMPORTER_HASH, json(match), manifestText, eventText, callText, priceHash, skipReason ?? null, matchDir]));
           const previous = db.query<{ fingerprint: string }, [string]>("SELECT fingerprint FROM matches WHERE id = ?").get(matchId);
 

@@ -247,6 +247,39 @@ test("a match's cohort is its tournament config's, and a config without one stop
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
+test("the tiers tournament's matches pool by model sweep or cross-model, named per import", async () => {
+  const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
+
+  try {
+    const asTiers = (tag: string, models: ReadonlyArray<string>) => {
+      const at = join(root, tag);
+      mkdirSync(at, { recursive: true });
+      const { source } = probeTournament(at, "medium");
+      const file = JSON.parse(readFileSync(join(source, "tournament.json"), "utf8"));
+      delete file.config.cohort;
+      file.config.name = "named-per-import";
+      file.config.entrants.a.model = models[0];
+      file.config.entrants.b.model = models[1];
+      writeFileSync(join(source, "tournament.json"), JSON.stringify(file));
+      // The manifest records the models the config came with; without it the changed config is never cross-checked.
+      rmSync(join(source, "a_b_b0_p0", "manifest.json"));
+
+      return source;
+    };
+
+    const sweep = join(root, "sweep.sqlite");
+    importTournaments({ database: sweep, sources: [asTiers("sweep", ["faux", "faux"])], tiers: "named-per-import" });
+    expect(rowsOf(sweep, "SELECT cohort FROM matches")).toEqual([{ cohort: "tiers sweep faux" }]);
+
+    const cross = join(root, "cross.sqlite");
+    importTournaments({ database: cross, sources: [asTiers("cross", ["faux-a", "faux-b"])], tiers: "named-per-import" });
+    expect(rowsOf(cross, "SELECT cohort FROM matches")).toEqual([{ cohort: "tiers cross-model" }]);
+
+    const database = join(root, "unnamed.sqlite");
+    expect(() => importTournaments({ database, sources: [asTiers("unnamed", ["faux", "faux"])] })).toThrow("the tournament config names no cohort");
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test("the replay's events and secrets are stored, each seat has its socket, and each decision the events it came after", async () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 

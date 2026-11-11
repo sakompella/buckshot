@@ -25,7 +25,6 @@ Checks:
 
 The page uses the system font stack and no web fonts. Every drawing is
 original CSS or SVG (ADR-0028).
-
 ## Playing with an agent (MCP server)
 
 `bun run mcp` is a stdio MCP server with three tools, `get_game`, `play_move` and

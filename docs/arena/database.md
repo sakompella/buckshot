@@ -9,10 +9,13 @@ From `web/`, after installing the locked dependencies and building the rules wit
 ```sh
 bun scripts/arena-import.ts --db /absolute/path/to/buckshot.sqlite \
   --skips /absolute/path/to/skips.json \
+  --tiers <name of tournament 1> \
   /absolute/path/to/tournament-1 /absolute/path/to/tournament-2 /absolute/path/to/tournament-3
 ```
 
 `--skips` is optional. It takes a JSON object of the form `{absoluteTournamentPath: {matchName: reason}}`: each absolute tournament path maps to its exact scheduled match names, and each match name maps to the reason it is not scored. The reason is stored in `matches.status_reason`, so every skip keeps its own. This is an explicit disposition, not a guess based on missing files. Keep this local file beside the database. A skipped match that has logs, finished or not, is stored as `partial` and keeps its moves and costs, but it is never scored. Tournament 1 has 120 skipped matches (38 started and partial, 82 never started) and tournament 3 has 5 unfinished matches past its 40-match cap.
+
+`--tiers` names tournament 1, whose config predates `cohort`: its matches pool by each model's effort sweep (`tiers sweep <model>`) or as the cross-model games (`tiers cross-model`). The name is a private one, like the skips file, so it is passed per run and stays out of the repository; a tournament whose config names no cohort stops the import without it.
 
 Run the same command after more matches finish. Unchanged matches are not replayed. A match is unchanged only if its files, schedule entry, skip reason, source directory and the result of checking its manifest against the tournament's configuration are all the same, so changing a tournament's configuration or importing a copy from a new directory refreshes the affected matches. Changed matches refresh in a transaction per tournament. Stable IDs derive from the tournament's creation date and name, the scheduled match name, and the observation's position. Copies of the same tournament should not be imported as separate tournaments. Importing the same tournament from a new directory moves it: its rows point at the new paths, and the observations at the old paths stay as history but are no longer current. The database retains previous raw observations when files change. Analytical tables describe the latest imported snapshot, not every historical snapshot.
 

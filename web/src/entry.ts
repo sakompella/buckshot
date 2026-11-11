@@ -1,5 +1,3 @@
-import "@fontsource/league-gothic/400.css";
-import "@fontsource/vt323/400.css";
 import "./site/styles.css";
 import { Runtime } from "foldkit";
 
