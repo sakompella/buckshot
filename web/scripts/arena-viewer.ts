@@ -37,8 +37,8 @@ const program = Effect.gen(function* () {
 
   const listenPort = yield* Schema.decodeUnknownEffect(Port)(port).pipe(Effect.mapError(usage));
 
-  // ARENA_VIEWER_PASSWORD guards the API; ARENA_VIEWER_DOWNLOAD names the database file the page offers. Blank is unset.
-  const access = { password: process.env["ARENA_VIEWER_PASSWORD"] || undefined, download: process.env["ARENA_VIEWER_DOWNLOAD"] || undefined };
+  // ARENA_VIEWER_PASSWORD guards the API. Blank is unset.
+  const access = { password: process.env["ARENA_VIEWER_PASSWORD"] || undefined };
 
   const started = performance.now();
   const arena = yield* openArena(dbPath, { regret: regretPath, knowledge: knowledgePath, certain: certainPath, luck: luckPath });
