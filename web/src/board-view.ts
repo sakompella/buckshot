@@ -4,15 +4,20 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 import { type BoardMove, boardMoves, type Position, positionOf, type TableMove, Target, targetKey, targetsOf } from "./board.ts";
 import { type Board, Briefcase, Counter, GameEvent, type Item, Move, type Seat, type SeatView, type Shell, Slot, Stage } from "./domain.ts";
 import { boltIcon, gunIcon, itemIcon, shellIcon } from "./icons.ts";
-import type { StepEvent } from "./model.ts";
 import { itemName, itemNote } from "./text.ts";
 
-// The table from above, shared by Play and Replay. Each seat's things sit in a
+// The table from above, as the arena's replay draws it. Each seat's things sit in a
 // layer turned to face its edge, so one layout serves all four sides. Legal
 // moves with an onMove are buttons on the things they act on; a chosen move is
 // marked on them instead. The latest step's events play once as CSS
 // animations, keyed by their place in the event log, and are gone when the
 // next step starts.
+
+/** One event of the latest step, with its place in the event log. */
+export interface StepEvent {
+  readonly index: number;
+  readonly event: GameEvent;
+}
 
 /** What one seat sees of the table: the machine's public board, and the shells as that seat counts them when known. */
 export interface SeatTable {

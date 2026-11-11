@@ -2,6 +2,7 @@ import { groupBy, keyOf, MIN_BLOCKS_FOR_INTERVAL, meanOf, quantile, roundResults
 import { mulberry32 } from "../../arena/tournament-stats.ts";
 
 // The ratings the whole page reads: Bradley-Terry over every scored two-player match of every tournament.
+// tools/arena/analysis/test_round_elo.py ties this fit to bt.round_elo, the docs' Round Elo.
 
 /** One scored two-player match: a's share against b. With a weight, it stands for that many games with that mean share. */
 export interface Game {

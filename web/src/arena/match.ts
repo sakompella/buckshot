@@ -104,9 +104,19 @@ export interface ArenaMatch {
   readonly crashAt?: (point: string) => void;
 }
 
-export class ArenaFault extends Data.TaggedError("ArenaFault")<{ readonly message: string }> {}
+/** A match that cannot go on. `cause` is the error behind it, for its stack; only an Error, which `Cause.pretty` can print. */
+export class ArenaFault extends Data.TaggedError("ArenaFault")<{ readonly message: string; readonly cause?: Error }> {}
 
-const attempt = <A>(step: string, run: () => Promise<A>) => Effect.tryPromise({ try: run, catch: (cause) => new ArenaFault({ message: `${step}: ${String(cause)}` }) });
+const faultOf = (message: string, cause: unknown) => new ArenaFault(cause instanceof Error ? { message, cause } : { message });
+
+const attempt = <A>(step: string, run: () => Promise<A>) => Effect.tryPromise({ try: run, catch: (cause) => faultOf(`${step}: ${String(cause)}`, cause) });
+
+/** Closes a store or storage when the match's scope ends, also on a fault; a failed close is reported, not raised. */
+const closing = (what: string, close: () => Promise<void>) =>
+  attempt(`close ${what}`, close).pipe(
+    Effect.tapError((fault) => Effect.sync(() => console.error(fault.message))),
+    Effect.ignore,
+  );
 
 type MoveLine = { readonly turn: number; readonly player: Letter; readonly move: number; readonly label: string; readonly by: "agent" | "human" | "engine" | "forced" | "fallback" };
 
@@ -538,8 +548,8 @@ export const playMatch = (match: ArenaMatch) =>
 
     registry.install(extension);
 
-    const storage = yield* attempt("open the store", () => openNodeSqliteStorage(join(dir, "session.sqlite")));
-    const store = yield* attempt("open the harness", () => Harness.open(storage, { models: match.models, registry, settings: { compaction: { enabled: false } } }, context));
+    const storage = yield* Effect.acquireRelease(attempt("open the store", () => openNodeSqliteStorage(join(dir, "session.sqlite"))), (opened) => closing("the store", () => opened.close(context)));
+    const store = yield* Effect.acquireRelease(attempt("open the harness", () => Harness.open(storage, { models: match.models, registry, settings: { compaction: { enabled: false } } }, context)), (opened) => closing("the harness", () => opened.close(context)));
     const journal = () => attempt("read the journal", async () => (await store.snapshot(MatchDoc, context)) ?? emptyMatch());
     const record = (change: (state: MatchState) => void) => attempt("write the journal", () => store.commit(async (tx) => void change(await tx.doc(MatchDoc)), context));
     // A store with no match in its journal is a fresh start, also after a crash before the first commit.
@@ -730,7 +740,7 @@ export const playMatch = (match: ArenaMatch) =>
 
         if (connectHuman === undefined) return yield* new ArenaFault({ message: `Player ${player} is Human, and this arena has no way to reach a human` });
 
-        const link = yield* attempt(`connect Player ${player}`, () => connectHuman(player));
+        const link = yield* Effect.acquireRelease(attempt(`connect Player ${player}`, () => connectHuman(player)), (connected) => Effect.sync(() => connected.close()));
 
         // A human reads the same instructions an agent is given, once per terminal.
         yield* attempt(`write to Player ${player}`, () => link.send({ text: INSTRUCTIONS, expectsMove: false }));
@@ -768,7 +778,7 @@ export const playMatch = (match: ArenaMatch) =>
         Effect.gen(function* () {
           const startedAt = performance.now();
           const menu = (view.moves ?? []).map(({ label }) => label);
-          const choice = yield* Effect.try({ try: () => engine.choose(playing.match(), player, seat, menu, { dir, turn }), catch: (cause) => new ArenaFault({ message: `engine at Player ${player}, turn ${turn}: ${String(cause)}` }) });
+          const choice = yield* Effect.try({ try: () => engine.choose(playing.match(), player, seat, menu, { dir, turn }), catch: (cause) => faultOf(`engine at Player ${player}, turn ${turn}: ${String(cause)}`, cause) });
           const played = playing.tryMove(player, menu.indexOf(choice.label), turn, "engine");
 
           if (!played.ok) return yield* new ArenaFault({ message: `engine at Player ${player}, turn ${turn}, chose "${choice.label}": ${played.text}` });
@@ -787,7 +797,7 @@ export const playMatch = (match: ArenaMatch) =>
       if (controller === "Agent") players.set(player, agentPlayer(player));
       else if (controller === "Human") players.set(player, yield* humanPlayer(player));
       else if (isEngine(controller)) {
-        engine ??= yield* Effect.try({ try: openEngine, catch: (cause) => new ArenaFault({ message: `start the engine: ${String(cause)}` }) });
+        engine ??= yield* Effect.try({ try: openEngine, catch: (cause) => faultOf(`start the engine: ${String(cause)}`, cause) });
         players.set(player, enginePlayer(engine, player, controller));
       }
     }
@@ -841,8 +851,6 @@ export const playMatch = (match: ArenaMatch) =>
 
     for (const [player, write] of listeners) yield* sendPending(player, write, "end");
 
-    for (const link of humans.values()) link.close();
-
     const final = yield* journal();
     const audit = yield* auditOf(dir, store, final, playing, listeners.map(([player]) => player));
     const storeUsage = yield* attempt("read usage", () => store.usage(context));
@@ -865,10 +873,9 @@ export const playMatch = (match: ArenaMatch) =>
       provenance,
       ...result,
     });
-    yield* attempt("close the harness", () => store.close(context));
 
     return { ...result, storeUsage: Object.fromEntries(Object.entries(storeUsage.models).map(([model, spent]) => [model, { input: spent.input, output: spent.output }])), loggedUsage: addTokens(readCalls(dir)) };
-  });
+  }).pipe(Effect.scoped);
 
 /**
  * Checks the match from the store, not from arena memory: every view an agent was given is its own, the entries each
