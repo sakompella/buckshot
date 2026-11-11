@@ -7,7 +7,7 @@ import { Option, Result } from "effect";
 
 import { DEFAULT_PRICES, loadPrices } from "../src/arena/cost.ts";
 import { checkPrices, childCommand, childEnv, parseConfig, resolveKeys, type ScheduledMatch, type MatchAccounts, scheduleOf, type TournamentError, unfinished } from "../src/arena/tournament.ts";
-import { codeSha } from "../src/arena/match.ts";
+import { gitCommit } from "../src/arena/match.ts";
 import { cooldownOf, costOf, faultsOf, finishedNames, openTournament, runPending, type Settled, startedUnder, winnersOf } from "../src/arena/tournament-dir.ts";
 
 // Plays a tournament: every scheduled match, in schedule order, as a child
@@ -27,9 +27,9 @@ import { cooldownOf, costOf, faultsOf, finishedNames, openTournament, runPending
 // --skip <entrant> leaves that entrant's matches unplayed this run; --prefer-account <account id>, in order of
 // preference, pins new matches to those accounts first when accounts are equally loaded.
 // A match resumes under the code version it started under (its manifest's
-// code_sha), so a tournament can span versions: --code <code_sha>=<web dir>,
+// git commit), so a tournament can span versions: --code <commit>=<web dir>,
 // once per older version, names a checkout of it to resume its matches from,
-// and without one they wait. New matches start under this checkout's code.
+// and without one they wait. New matches start under this checkout's commit.
 // A match that fails goes to the back of the queue after a pause, up to three
 // runs, and the rest go on. Rerun the same command to resume: finished matches
 // never run again. Do not run two of these on one directory. --limit plays at
@@ -38,7 +38,7 @@ import { cooldownOf, costOf, faultsOf, finishedNames, openTournament, runPending
 // it starts, every 30 minutes and when it ends. --dry-run prints the schedule
 // of the last config.
 // Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel N] [--cap <model>=N]... [--last <model>]...
-//          [--forget-cooldown <model>]... [--skip <entrant>]... [--prefer-account <id>]... [--code <code_sha>=<web dir>]... [--limit N] [--first N] [--dry-run]
+//          [--forget-cooldown <model>]... [--skip <entrant>]... [--prefer-account <id>]... [--code <commit>=<web dir>]... [--limit N] [--first N] [--dry-run]
 //        bun scripts/arena-stats.ts <tournament dir> [--json]
 
 const WEB = join(import.meta.dir, "..");
@@ -75,7 +75,7 @@ const exit = (message: string): never => {
 
 const unwrap = <A>(result: Result.Result<A, TournamentError>): A => Result.match(result, { onFailure: (error) => exit(error.message), onSuccess: (value) => value });
 
-if (configPaths.length === 0) exit("Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel N] [--cap <model>=N]... [--last <model>]... [--forget-cooldown <model>]... [--skip <entrant>]... [--prefer-account <id>]... [--code <code_sha>=<web dir>]... [--limit N] [--first N] [--dry-run]");
+if (configPaths.length === 0) exit("Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel N] [--cap <model>=N]... [--last <model>]... [--forget-cooldown <model>]... [--skip <entrant>]... [--prefer-account <id>]... [--code <commit>=<web dir>]... [--limit N] [--first N] [--dry-run]");
 
 if (!Number.isInteger(parallel) || parallel < 1) exit("--parallel must be a whole number from 1");
 
@@ -99,12 +99,13 @@ const skipped = new Set(values.skip);
 
 const prefer = values["prefer-account"];
 
-const CODE = codeSha();
+/** This checkout's commit, which its tree must identify: the runner refuses to start or resume anything over uncommitted changes to tracked files. */
+const CODE = gitCommit();
 
-/** Checkouts of older code versions, by code_sha, for the matches that started under them. */
+/** Checkouts of older code versions, by commit, for the matches that started under them. */
 const checkouts = new Map(
   values.code.map((entry) => {
-    const [, code = "", web = ""] = /^([0-9a-f]+)=(.+)$/.exec(entry) ?? exit(`--code takes <code_sha>=<web dir>, not "${entry}"`);
+    const [, code = "", web = ""] = /^([0-9a-f]+)=(.+)$/.exec(entry) ?? exit(`--code takes <commit>=<web dir>, not "${entry}"`);
 
     return [code, resolve(web)] as const;
   }),
@@ -137,9 +138,7 @@ if (values["dry-run"]) {
 
 const dir = resolve(values.dir ?? exit("--dir is required"));
 
-const gitCommit = Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: WEB }).stdout.toString().trim();
-
-const file = tournaments.map((each) => unwrap(openTournament(dir, each, gitCommit, new Date()))).at(-1) ?? exit("no config");
+const file = tournaments.map((each) => unwrap(openTournament(dir, each, CODE, new Date()))).at(-1) ?? exit("no config");
 
 const keys = unwrap(resolveKeys(file.config, file.schedule, process.env));
 
@@ -250,12 +249,12 @@ const played = unfinished(scope, finishedNames(dir, file.schedule)).filter(isPla
 
 const pending = played.filter((match) => webOf(match) !== undefined).slice(0, limit);
 
-console.log(`${file.config.name}: ${pending.length} of ${file.schedule.length} matches to run, ${parallel} at a time${[...caps].map(([model, most]) => `, at most ${most} with ${model}`).join("")}${[...last].map((model) => `, ${model} last`).join("")}${[...forget].map((model) => `, ${model}'s recorded cooldowns ignored`).join("")}, in ${dir}, new matches under code ${CODE}${[...checkouts].map(([code, web]) => `, code ${code} from ${web}`).join("")}`);
+console.log(`${file.config.name}: ${pending.length} of ${file.schedule.length} matches to run, ${parallel} at a time${[...caps].map(([model, most]) => `, at most ${most} with ${model}`).join("")}${[...last].map((model) => `, ${model} last`).join("")}${[...forget].map((model) => `, ${model}'s recorded cooldowns ignored`).join("")}, in ${dir}, new matches under commit ${CODE}${[...checkouts].map(([code, web]) => `, commit ${code} from ${web}`).join("")}`);
 
 const waitingCodes = played.flatMap((match) => (webOf(match) === undefined ? Option.toArray(startedUnder(dir, match)) : []));
 
 for (const code of new Set(waitingCodes)) {
-  console.log(`  ${waitingCodes.filter((each) => each === code).length} matches started under code ${code} wait for a checkout of it: --code ${code}=<web dir>`);
+  console.log(`  ${waitingCodes.filter((each) => each === code).length} matches started under commit ${code} wait for a checkout of it: --code ${code}=<web dir>`);
 }
 
 noteProgress("started");

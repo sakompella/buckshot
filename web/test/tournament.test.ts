@@ -299,7 +299,7 @@ const manifestOf = (tournament: Tournament, match: ScheduledMatch, status: "fini
     controllers: match.seats.map((seat) => (seat === "DoN" || seat === "Story" ? seat : "Agent")),
     letters,
     delivery: "on-turn",
-    provenance: { code_sha: "abc123", agents },
+    provenance: { git_commit: "abc123", agents },
     agents: Object.fromEntries(Object.keys(agents).map((seat) => [seat, { moves: 2, reminders: 1, interventions: 1 }])),
     standings: letters.map((player, index) => ({ player, cash: index === winner ? 150_000 : 0, controller: null })),
   };
@@ -653,7 +653,7 @@ test("a match started under a code version is resumed under it, and a match not 
   if (started === undefined || fresh === undefined) throw new Error("the schedule has fewer than two matches");
 
   mkdirSync(join(dir, started.name));
-  writeFileSync(join(dir, started.name, "manifest.json"), JSON.stringify({ status: "running", provenance: { code_sha: "51b8366684f0", agents: {} } }));
+  writeFileSync(join(dir, started.name, "manifest.json"), JSON.stringify({ status: "running", provenance: { git_commit: "51b8366684f0", agents: {} } }));
 
   expect(startedUnder(dir, started)).toEqual(Option.some("51b8366684f0"));
   expect(startedUnder(dir, fresh)).toEqual(Option.none());

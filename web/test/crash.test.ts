@@ -165,12 +165,12 @@ test("a changed agent provenance is refused before more calls or moves", async (
   expect(moveLogSha(dir)).toBe(moveLogSha(baseline));
 });
 
-test("a journal started under another code_sha refuses to resume and names both versions", async () => {
+test("a journal started under another commit refuses to resume and names both versions", async () => {
   const dir = join(root, "old-code");
 
   expect(await play(dir, "move:after-export", 3)).toBe(CRASH_EXIT);
-  const code = Schema.decodeUnknownSync(Schema.Struct({ provenance: Schema.Struct({ code_sha: Schema.String }) }))(readManifest(dir)).provenance.code_sha;
-  const old = "000000000000";
+  const code = Schema.decodeUnknownSync(Schema.Struct({ provenance: Schema.Struct({ git_commit: Schema.String }) }))(readManifest(dir)).provenance.git_commit;
+  const old = "0".repeat(40);
   const db = new Database(join(dir, "session.sqlite"));
 
   try {
@@ -184,7 +184,7 @@ test("a journal started under another code_sha refuses to resume and names both 
   expect(await refused.exited).not.toBe(0);
   const error = await new Response(refused.stderr).text();
 
-  expect(error).toContain(`code_sha was ${old}, now ${code}`);
+  expect(error).toContain(`git_commit was ${old}, now ${code}`);
 });
 
 test("a truncated manifest is rebuilt from the journal after a stop", async () => {
