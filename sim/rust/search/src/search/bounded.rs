@@ -35,17 +35,15 @@
 //! round and never the next round's start. A reload is a leaf valued by the
 //! reload mode.
 
-use std::collections::BTreeSet;
-use std::hash::{DefaultHasher, Hash, Hasher};
 use std::iter;
 
 use arrayvec::ArrayVec;
-use buckshot_rules::{Config, MENU_CAPACITY, Menu, Request, Seat, request};
+use buckshot_rules::{MENU_CAPACITY, Menu, Request, request};
 
 use super::{Choice, Search, Span, Spent, Value, analysed, best_line, limited, lines_static, push_choices, static_value};
 use crate::memo::{Kind, Stored, Tally, hash};
 use crate::num::{Real, branch_window, len_u64};
-use crate::types::{Analysis, Line, Reach, World};
+use crate::types::{Analysis, Line, Reach};
 
 /// The highest value: `millionths` clamps every sum to a million.
 const TOP: u32 = 1_000_000;
@@ -170,29 +168,6 @@ impl BoxEntry {
     const fn serves(&self, depth: u32, need: Need) -> bool {
         self.depth == depth && need.met(&self.boxed)
     }
-}
-
-/// The decision nodes one search visited: every visit, and the distinct
-/// belief keys among them. A key is a 64-bit `SipHash` of the exact memo key
-/// in the scope a shared table would need (the searcher's seat and the
-/// config), so two keys collide with odds near `n² / 2^65`.
-#[derive(Clone, Debug, Default)]
-pub struct KeyStats {
-    pub visits: u64,
-    pub keys: BTreeSet<u64>,
-}
-
-fn stats_key(scope: (Seat, &Config), public: &[World], private: &[World]) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    scope.hash(&mut hasher);
-    for worlds in [public, private] {
-        worlds.len().hash(&mut hasher);
-        for world in worlds {
-            world.weight.bits().hash(&mut hasher);
-            world.state.hash(&mut hasher);
-        }
-    }
-    hasher.finish()
 }
 
 /// `decide` over boxes, the `pending` children after `children` unsearched.
@@ -374,10 +349,6 @@ impl Search<'_> {
         let (public, private) = beliefs;
         let key = {
             let (public_worlds, private_worlds) = (public.of(&self.worlds), private.of(&self.worlds));
-            if let Some(stats) = &mut self.stats {
-                stats.visits = stats.visits.saturating_add(1);
-                stats.keys.insert(stats_key((self.me, self.config), public_worlds, private_worlds));
-            }
             let key = hash(Kind::Decision, public_worlds, private_worlds);
             let stored = match self.tally.find(key, Kind::Decision, public_worlds, private_worlds) {
                 Some(Stored::Box(entry)) => Some(entry),
@@ -583,9 +554,6 @@ impl Search<'_> {
         let mut completed = analysed(static_lines, &Tally::default(), 0, true);
         let mut lead = 0;
         for current in 0..depth {
-            if let Some(stats) = &mut self.stats {
-                *stats = KeyStats::default();
-            }
             let Ok(lines) = self.bounded_lines(current, beliefs, choices, (lead, chosen)) else {
                 return limited(completed, &self.tally);
             };
@@ -645,11 +613,8 @@ fn lead_first(moves: &[Choice], lead: usize) -> impl Iterator<Item = (usize, Cho
 
 #[cfg(test)]
 mod tests {
-    use buckshot_rules::{Config, RoundRules, RuleError, Seat, Table};
-
-    use super::{Bounds, BoxEntry, Boxed, Need, Running, TOP, Window, decide_boxes, root_window, stats_key};
+    use super::{Bounds, BoxEntry, Boxed, Need, Running, TOP, Window, decide_boxes, root_window};
     use crate::num::{Real, branch_window};
-    use crate::search::tests::config;
     use crate::types::Reach;
 
     fn exact(public: u32, private: u32) -> Boxed {
@@ -832,19 +797,6 @@ mod tests {
             "depths 2, 3, 4"
         );
         assert!(!entry.serves(3, Need::EXACT), "an inexact box for an exact need");
-    }
-
-    /// The keys of one empty belief for seat 1 and seat 3 under one config, and seat 1 under another.
-    fn scoped_keys() -> Result<[u64; 3], RuleError> {
-        let (one, other) = (config()?, Config::new(Table::TwoSeats, &[RoundRules::default_round()])?);
-        let key = |seat, config| stats_key((seat, config), &[], &[]);
-        Ok([key(Seat::Seat1, &one), key(Seat::Seat3, &one), key(Seat::Seat1, &other)])
-    }
-
-    #[test]
-    fn stats_keys_differ_by_seat_and_config() {
-        let keys = scoped_keys();
-        assert!(keys.is_ok_and(|[one, seat, config]| one != seat && one != config), "{keys:?}");
     }
 
     #[test]
