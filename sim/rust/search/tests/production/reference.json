@@ -8,6 +8,7 @@
     "bend": "2.0.36"
   },
   "settings": {
+    "evaluator": "compat",
     "depth": 6,
     "budget": 20000,
     "reload": "static",

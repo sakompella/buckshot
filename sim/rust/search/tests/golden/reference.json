@@ -1,0 +1,19 @@
+{
+  "evaluator": "bounded-v1-f64-unpruned",
+  "identity": "BoundedV1::ID (sim/rust/search/src/searcher.rs) plus -unpruned: the declared algorithm version. tools/arena/score_regret.py records it on every regret row.",
+  "source": {
+    "evaluator": "bounded-v1-f64-unpruned-ced80df221f27e04",
+    "commit": "4ed3a643c690de415d3a8485a9ccb3c495559e5d",
+    "features": "f64,seats-2",
+    "file": "regret-rust-ced80df2-sampled256.sqlite"
+  },
+  "settings": {
+    "unpruned": true,
+    "depth": 6,
+    "budget": 20000,
+    "reload": "sampled",
+    "samples": 256
+  },
+  "decisions": 300,
+  "about": "Two-seat arena decisions drawn at random from the production regret run named in source: the position as the number line the player reads, and the evaluator's lines (move label and score, in the player's move order), best move, depth reached, whether the budget cut it, and nodes. No match ids or player names."
+}

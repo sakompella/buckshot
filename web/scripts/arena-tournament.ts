@@ -99,7 +99,7 @@ const skipped = new Set(values.skip);
 
 const prefer = values["prefer-account"];
 
-/** This checkout's commit, which its tree must identify: the runner refuses to start or resume anything over uncommitted changes to tracked files. */
+/** This checkout's code version (`gitCommit`): the runner refuses to start or resume anything over uncommitted changes to the code that plays. */
 const CODE = gitCommit();
 
 /** Checkouts of older code versions, by commit, for the matches that started under them. */
