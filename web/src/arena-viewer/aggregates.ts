@@ -64,7 +64,12 @@ export const ConfigSummary = Schema.Struct({
 
 export type ConfigSummary = typeof ConfigSummary.Type;
 
-export const Summary = Schema.Struct({ configs: Schema.Array(ConfigSummary), hasCertain: Schema.Boolean });
+/** The UTC dates of the first and last started match, for the page's run dates. Optional: an export from before the field may still be served. */
+export const Runs = Schema.Struct({ from: Schema.String, to: Schema.String });
+
+export type Runs = typeof Runs.Type;
+
+export const Summary = Schema.Struct({ configs: Schema.Array(ConfigSummary), hasCertain: Schema.Boolean, runs: Schema.optional(Runs) });
 
 /** The two-player matches between two configs, `first` at the table's first position. Wins are win shares summed over scored matches. */
 export const Pair = Schema.Struct({
@@ -442,8 +447,15 @@ export interface Sources {
   readonly luck?: Luck;
 }
 
+/** The first and last day a match started, as YYYY-MM-DD; none with no seat. */
+const runsOf = (seats: ReadonlyArray<Pick<SeatFull, "startedAt">>): Runs | undefined => {
+  const days = seats.map(({ startedAt }) => startedAt.slice(0, 10));
+
+  return days.length === 0 ? undefined : { from: days.reduce((least, day) => (day < least ? day : least)), to: days.reduce((most, day) => (day > most ? day : most)) };
+};
+
 export const aggregatesOf = ({ seats, decisions, certain, consistency, luck }: Sources): Aggregates => ({
-  summary: { configs: configSummaries(seats, decisions, luck), hasCertain: certain.length > 0 },
+  summary: { configs: configSummaries(seats, decisions, luck), hasCertain: certain.length > 0, runs: runsOf(seats) },
   pairs: pairsOf(seats),
   items: configItems(seats, decisions),
   odds: [...selfShotTallies(decisions, seats, seats.map(() => true))].map(([config, bins]) => ({ config, bins })),

@@ -1,4 +1,4 @@
-import type { ConfigSummary, Pair } from "../aggregates.ts";
+import type { ConfigSummary, Pair, Runs } from "../aggregates.ts";
 import { baseName, colorOf, DASH, isProvisional, keyOf, labelOf, type MatchRow, matchRows, type SeatFull } from "./data.ts";
 import type { Filter, Loaded } from "./model.ts";
 import type { Rating } from "./ratings.ts";
@@ -41,6 +41,8 @@ export interface Derived {
   /** The pairs with a kept config on either side: a match counts when either of its configs is kept. */
   readonly pairs: ReadonlyArray<Pair>;
   readonly hasCertain: boolean;
+  /** The first and last day a match started, when the aggregate files carry it. */
+  readonly runs: Runs | undefined;
 }
 
 // A filter keeps or drops whole configs, so whatever is grouped by config is worked out once for every config and then
@@ -80,6 +82,7 @@ export const derive = memoLast((loaded: Loaded, filter: Filter): Derived => {
     ranks: ranksOf(every, ratings),
     pairs: loaded.pairs.filter(({ first, second }) => kept.has(first) || kept.has(second)),
     hasCertain: loaded.summary.hasCertain,
+    runs: loaded.summary.runs,
   };
 });
 

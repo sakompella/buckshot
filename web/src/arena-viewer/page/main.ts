@@ -9,8 +9,8 @@ import { AGGREGATES } from "../aggregates.ts";
 import { CertainMistakes, SeatsResponse } from "../api.ts";
 import { withPotShares } from "./data.ts";
 import { INITIAL_ROWS, MORE_ROWS } from "./matches.ts";
+import { relandJump, noteOwnScroll, scrollToTarget } from "./jump.ts";
 import { type Filter, Group, GROUPS, type Lazy, type LazyName, LoadFailure, Message, type Model, MOVED_TARGETS, Target, type Viewport } from "./model.ts";
-import { reveal } from "./reveal.ts";
 import { PlaceTour, tourKeyMessage, tourOf } from "./tour.ts";
 import { stickyHeight } from "./view.ts";
 
@@ -91,6 +91,7 @@ const GROUP_NEEDS: Readonly<Record<Group, ReadonlyArray<Need>>> = {
   decisions: ["certain", "odds", "items"],
   watch: ["local"],
   tables: ["certain", "local"],
+  about: [],
 };
 
 const DRILL_NEEDS: ReadonlyArray<Need> = ["consistency", "items", "local"];
@@ -127,16 +128,6 @@ const needsOfHash = (): ReadonlyArray<Need> => {
   return GROUPS.filter(({ group, sections }) => group === target || sections.some((section) => section === target)).flatMap(({ group }) => GROUP_NEEDS[group]);
 };
 
-const scrollToTarget = (id: Target) => {
-  const target = document.getElementById(id);
-
-  if (target === null) return;
-
-  reveal(target);
-  // The target's top rule tucks under the bar's own.
-  scrollTo(0, target.getBoundingClientRect().top + scrollY - stickyHeight() + 1);
-};
-
 /** Scrolls a group's or a section's heading to just below the sticky bar and puts it in the URL. */
 const JumpTo = Command.define("JumpTo", {
   args: { target: Target },
@@ -151,15 +142,7 @@ const JumpTo = Command.define("JumpTo", {
 const OpenTable = Command.define("OpenTable", {
   args: { id: Schema.String },
   messages: [Message.CompletedScroll],
-  execute: ({ id }) =>
-    Effect.sync(() => {
-      const table = document.getElementById(id);
-
-      if (table === null) return;
-
-      reveal(table);
-      scrollTo(0, table.getBoundingClientRect().top + scrollY - stickyHeight() - 8);
-    }).pipe(Effect.as(Message.CompletedScroll())),
+  execute: ({ id }) => Effect.sync(() => scrollToTarget(id)).pipe(Effect.as(Message.CompletedScroll())),
 });
 
 const RevealNavLink = Command.define("RevealNavLink", {
@@ -174,9 +157,12 @@ const RevealNavLink = Command.define("RevealNavLink", {
     }).pipe(Effect.as(Message.CompletedScroll())),
 });
 
-const groupInView = (): Option.Option<Message> => {
+const groupInView = () => {
+  noteOwnScroll();
   const line = stickyHeight() + 8;
-  const passed = [...document.querySelectorAll("section.part[id]")].filter((group) => group.getBoundingClientRect().top <= line).at(-1);
+  const parts = [...document.querySelectorAll("section.part[id]")];
+  // Above the first group the hero fills the screen, so the first group is the one being read.
+  const passed = parts.filter((group) => group.getBoundingClientRect().top <= line).at(-1) ?? parts[0];
 
   return Option.map(Schema.decodeUnknownOption(Group)(passed?.id), (group) => Message.ScrolledInto({ group }));
 };
@@ -214,8 +200,17 @@ const MeasureNear = Command.define("MeasureNear", {
   execute: nextFrame.pipe(Effect.map(groupsNear)),
 });
 
-/** An aggregate arriving changes the page's height, so which groups are near is measured again. */
-const lazyArrived = (model: Model): Return => ({ model, commands: [MeasureNear()] });
+/** An aggregate arriving changes the page's height: the groups near are measured again, the settling jump re-lands and the group at the bar is re-read. */
+const SettledLazy = Command.define("SettledLazy", {
+  messages: [Message.ScrolledInto, Message.CompletedScroll],
+  execute: nextFrame.pipe(
+    Effect.tap(Effect.sync(relandJump)),
+    Effect.map(groupInView),
+    Effect.map((maybe) => Option.getOrElse(maybe, () => Message.CompletedScroll())),
+  ),
+});
+
+const lazyArrived = (model: Model): Return => ({ model, commands: [MeasureNear(), SettledLazy()] });
 
 const NO_MARK_TIP: Model["markTip"] = { maybeHover: Option.none(), maybePin: Option.none() };
 
@@ -229,9 +224,10 @@ export const update = (model: Model, message: Message): Return =>
   Message.match<Return>(message, {
     ResizedViewport: (viewport) => ({
       model: modifyFields(model, { viewport: () => viewport }),
-      commands: Option.match(model.maybeTour, { onNone: () => [], onSome: ({ step, hasCertain }) => [PlaceTour({ step, hasCertain })] }),
+      commands: [...Option.match(model.maybeTour, { onNone: () => [], onSome: ({ step, hasCertain }) => [PlaceTour({ step, hasCertain })] }), SettledLazy()],
     }),
-    ClickedJump: ({ target }) => ({ model, commands: [JumpTo({ target })] }),
+    // A jump's landing moves when the sections above it load, so it asks for everything and settles after each arrival.
+    ClickedJump: ({ target }) => withNeeds({ model, commands: [JumpTo({ target })] }, GROUPS.flatMap(({ group }) => GROUP_NEEDS[group])),
     ClickedTableLink: ({ id }) => ({ model, commands: [OpenTable({ id })] }),
     NavigatedToHash: () => ({ model, commands: [ScrollToHash()] }),
     SucceededLoad: ({ loaded }) => ({ model: modifyFields(model, { data: () => AsyncData.succeed(loaded) }), commands: [AwaitFirstPaint()] }),
@@ -242,8 +238,8 @@ export const update = (model: Model, message: Message): Return =>
     SucceededCertain: ({ certain }) => lazyArrived(modifyFields(model, { lazy: (lazy) => ({ ...lazy, certain: AsyncData.succeed(certain) }) })),
     SucceededConsistency: ({ consistency }) => lazyArrived(modifyFields(model, { lazy: (lazy) => ({ ...lazy, consistency: AsyncData.succeed(consistency) }) })),
     FailedLazy: ({ name, error }) => lazyArrived(modifyFields(model, { lazy: (lazy) => withLazy(lazy, name, AsyncData.fail<string, never>(error)) })),
-    SucceededLocal: ({ local }) => ({ model: modifyFields(model, { local: () => AsyncData.succeed(local) }) }),
-    FailedLocal: ({ error }) => ({ model: modifyFields(model, { local: () => AsyncData.fail(error) }) }),
+    SucceededLocal: ({ local }) => ({ model: modifyFields(model, { local: () => AsyncData.succeed(local) }), commands: [SettledLazy()] }),
+    FailedLocal: ({ error }) => ({ model: modifyFields(model, { local: () => AsyncData.fail(error) }), commands: [SettledLazy()] }),
     CameNear: ({ groups }) => withNeeds({ model }, groups.flatMap((group) => GROUP_NEEDS[group]).filter((need) => need !== "local" || isLayoutSettled(model))),
     ToggledEffort: ({ effort }) => withFilter(model, (filter) => ({ ...filter, offEfforts: toggled(filter.offEfforts, effort) })),
     ToggledModel: ({ name }) => withFilter(model, (filter) => ({ ...filter, offModels: toggled(filter.offModels, name) })),

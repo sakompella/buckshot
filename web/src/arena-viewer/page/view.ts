@@ -3,6 +3,7 @@ import { AsyncData } from "foldkit";
 import { createLazy, type Document, type Html, type HtmlBuilder } from "foldkit/html";
 
 import { EFFORTS, effortName } from "../../arena/model-names.ts";
+import { aboutView, howView, summaryView } from "./about.ts";
 import { baseName, baseOrder, colorOf, fmtCount, sumOf, unique } from "./data.ts";
 import { tipView } from "./charts.ts";
 import { type CertainLinks, certainTableView, certainView } from "./certain.ts";
@@ -58,6 +59,7 @@ const filtersView = (h: H, derived: Derived, filter: Model["filter"], isOpen: bo
     [h.Class(isOpen ? "filters open" : "filters")],
     [
       h.button([h.Type("button"), h.Class("filtersum"), h.AriaExpanded(isOpen), h.OnClick(Message.ToggledFilters())], [h.span([], [summary]), h.span([h.Class("k")], [isOpen ? "done" : "change"])]),
+      h.span([h.Class("flabel")], ["Models"]),
       h.span(
         [h.Class("chips")],
         names.map((name) => {
@@ -69,6 +71,7 @@ const filtersView = (h: H, derived: Derived, filter: Model["filter"], isOpen: bo
           );
         }),
       ),
+      h.span([h.Class("flabel")], ["Efforts"]),
       h.span(
         [h.Class("chips")],
         efforts.map((effort) => h.button([h.Type("button"), h.Class(`chip ${filter.offEfforts.includes(effort) ? "" : "on"}`), h.OnClick(Message.ToggledEffort({ effort }))], [effortName(effort)])),
@@ -186,6 +189,8 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
       lazyHero(heroView, [h, derived]),
       h.div([h.Class("top")], [lazyNav(navView, [h, model.maybeGroup]), lazyFilters(filtersView, [h, derived, model.filter, model.isFiltersOpen])]),
       groupView(h, "standings", [
+        sectionView(h, "summary", summaryView(h, derived)),
+        sectionView(h, "how", howView(h)),
         sectionView(h, "scatter", h.div([], [lazyScatter(scatterCard, [h, derived, model.scatter, card]), lazyDrill(drillCard, [h, derived, model.maybeDrill, lazy])])),
         sectionView(h, "breakdown", afterFirstPaint(() => lazyBreakdown(breakdownView, [h, derived, model.heat]))),
       ]),
@@ -224,6 +229,7 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
           ),
         ),
       ]),
+      groupView(h, "about", [sectionView(h, "about", aboutView(h, derived))]),
     ],
   );
 };
