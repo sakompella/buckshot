@@ -2,74 +2,35 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { isOnline } from "../../site/online.ts";
 import type { Runs } from "../aggregates.ts";
-import { colorOf, fmtRating, isClaude } from "./data.ts";
-import type { Derived, ModelStats } from "./derived.ts";
-import { inRankOrder } from "./leaderboard.ts";
+import { isPromptedOff } from "./data.ts";
+import type { Derived } from "./derived.ts";
+import { forestView } from "./forest.ts";
 import { Message } from "./model.ts";
-import type { Rating } from "./ratings.ts";
 
 type H = HtmlBuilder<Message>;
 
-// The page's reader-facing text: the results summary at the top, the game explained before the charts,
-// and the method under About. Numbers come from the aggregates; the rules come from the shared instructions.
+// The page's reader-facing text: the results summary at the top, the game explained after the first chart,
+// the method under About and the footer. Numbers come from the aggregates; the rules come from the shared instructions.
 
 const DAY = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" });
 
 /** "Oct 15 – Nov 9, 2026", or the one day when both ends are the same. */
 const runDates = (runs: Runs): string => (runs.from === runs.to ? DAY.format(new Date(runs.from)) : `${DAY.format(new Date(runs.from))} – ${DAY.format(new Date(runs.to))}`);
 
-/** How many configs the results summary lists. */
-const SUMMARY_ROWS = 3;
-
-/** A config's rating as the summary needs it. */
-export interface Leader {
-  readonly label: string;
-  readonly rating: number;
-  readonly interval: { readonly lo: number; readonly hi: number } | null;
-}
-
-const leaderOf = ({ label }: ModelStats, elo: Rating | undefined): Leader => ({ label, rating: elo?.rating ?? 0, interval: elo?.interval ?? null });
-
-/** The note when the top two's intervals overlap: the order between them is not settled. */
-export const tooCloseNote = (first: Leader | undefined, second: Leader | undefined): string | null => {
-  if (first === undefined || second === undefined || first.interval === null || second.interval === null) return null;
-
-  return first.interval.lo <= second.interval.hi && second.interval.lo <= first.interval.hi ? `Too close to call at the top: the intervals of ${first.label} and ${second.label} overlap, so the order between them is not settled.` : null;
-};
-
-const leaderLine = (h: H, m: ModelStats, rank: number | undefined, elo: Rating | undefined): Html =>
-  h.li(
-    [],
-    [
-      h.span([h.Class("rk")], [rank === undefined ? "" : String(rank)]),
-      h.span([h.Class(`dot ${isClaude(m.model) ? "a" : "o"}`), h.Style({ background: colorOf(m.model) })], []),
-      h.span([h.Class("lp")], [m.label]),
-      h.b([], [fmtRating(elo?.rating ?? 0)]),
-      ...(elo?.interval === undefined || elo?.interval === null ? [] : [h.span([h.Class("pm")], [` [${Math.round(elo.interval.lo)}, ${Math.round(elo.interval.hi)}]`])]),
-    ],
-  );
-
-/** The first few leaderboard rows, with the too-close-to-call note when the leaders' intervals overlap. */
-export const summaryView = (h: H, derived: Derived): Html => {
-  const ranked = inRankOrder(derived.pooled, derived.ranks, derived.ratings).filter(({ key }) => derived.ranks.has(key));
-  const leaders = ranked.slice(0, SUMMARY_ROWS);
-  const [first, second] = leaders;
-  const note = tooCloseNote(first === undefined ? undefined : leaderOf(first, derived.ratings.get(first.key)), second === undefined ? undefined : leaderOf(second, derived.ratings.get(second.key)));
-
-  return h.div(
+/** The ranked configs' Round Elo with intervals, and the search engines as reference lines. */
+export const summaryView = (h: H, derived: Derived): Html =>
+  h.div(
     [],
     [
       h.h2([], ["Results at a glance"]),
       h.p([h.Class("sub")], [
-        `The leading configs by Round Elo`,
-        ...(derived.runs === undefined ? [] : [` from matches played ${runDates(derived.runs)}`]),
-        ". Round Elo pools every match of every tournament; the bracket is its 95% interval. The full leaderboard is under Tables.",
+        "Round Elo of every ranked config, best first",
+        ...(derived.runs === undefined ? [] : [`, from matches played ${runDates(derived.runs)}`]),
+        ". Round Elo pools every match of every tournament; the bar is its 95% interval, so configs whose bars overlap are not separated by the data. The dashed lines are the search engines, fixed players that About explains.",
       ]),
-      leaders.length === 0 ? h.p([h.Class("k")], ["No scored matches for this filter."]) : h.ol([h.Class("toplist")], leaders.map((m) => leaderLine(h, m, derived.ranks.get(m.key), derived.ratings.get(m.key)))),
-      ...(note === null ? [] : [h.p([h.Class("sub")], [h.b([], [note])])]),
+      forestView(h, derived),
     ],
   );
-};
 
 /** The game, the experiment and one worked turn, before the charts. */
 export const howView = (h: H): Html =>
@@ -88,7 +49,7 @@ export const howView = (h: H): Html =>
         "The gun holds two live shells and one blank, and your magnifying glass showed the chambered shell is blank. Shooting yourself is free: the blank keeps your turn, and the next shell is a proven live one for your opponent. Shooting the opponent instead passes the turn and hands the gun over. The How they play section counts moves like that as certain mistakes.",
       ]),
       h.p([h.Class("sub")], [
-        "Each player here is a language model. On its turn it receives its view as JSON — both players' health and items, the shotgun, the log of every event so far, and its numbered legal moves — and answers with one move number. It sees the public log plus its own secrets, never the true shell order or the other player's secrets. A config is one model at one effort setting; the effort (none to max) is how much thinking the provider allows per move, and more of it costs more. The chips at the top switch models and efforts off and on.",
+        "Each player here is a language model, apart from the two search engines. On its turn it receives its view as JSON — both players' health and items, the shotgun, the log entries it has not been sent yet, and its numbered legal moves — and answers with one move number. Each log entry reaches it once, so it must remember the earlier ones. It sees the public log plus its own secrets, never the true shell order or the other player's secrets. A config is one model at one effort setting; the effort (none to max) is how much thinking the provider allows per move, and more of it costs more. The chips at the top switch models and efforts off and on.",
       ]),
     ],
   );
@@ -96,6 +57,8 @@ export const howView = (h: H): Html =>
 /** Run dates, conditions, the ratings, and what the comparison cannot settle. */
 export const aboutView = (h: H, derived: Derived): Html => {
   const hasLuck = derived.everyPooled.some(({ luckRating }) => luckRating !== null);
+  const promptedOff = derived.everyPooled.filter(isPromptedOff).map(({ label }) => label);
+  const { blocks, unpaired } = derived.seedBlocks;
 
   return h.div(
     [],
@@ -103,8 +66,16 @@ export const aboutView = (h: H, derived: Derived): Html => {
       h.h2([], ["About this experiment"]),
       ...(derived.runs === undefined ? [] : [h.p([h.Class("sub")], [`The matches here were played ${runDates(derived.runs)} (UTC).`])]),
       h.p([h.Class("sub")], [
-        "Every match is two players with items. Each pairing plays whole seed blocks — the same seed in both seat orders — so neither side gains from sitting first. All tournaments are pooled, and every model plays under the same shared instructions with the same tools.",
+        `Every match is two players with items. A seed fixes the deals, and a seed block is one seed a pairing plays in both seat orders, so neither side gains from sitting first. ${unpaired.toLocaleString()} of the ${blocks.toLocaleString()} seed blocks hold only one scored match, so their seat order is not balanced. All tournaments are pooled. Every model plays under the same shared instructions with the same tools`,
+        ...(promptedOff.length === 0
+          ? ["."]
+          : [`, except ${promptedOff.join(", ")}: its API has no reasoning-off setting, so it plays at low effort with one added line telling it to answer at once, without planning or checking ("immediate-recall mode").`]),
+        " The models were reached through subscription accounts via a proxy, not first-party API keys.",
         ...(isOnline ? [] : [" The Matches section lists every match."]),
+      ]),
+      h.p([h.Class("sub")], [
+        h.b([], ["Search engines. "]),
+        "The configs named Search engine are the arena's own minimax search, not language models. Depth is how many decisions ahead it looks; with sampled reloads it values a new load by sampling the possible deals. They cost nothing, so the charts draw them as reference lines.",
       ]),
       h.p([h.Class("sub")], [
         h.b([], ["Round Elo. "]),
@@ -120,8 +91,22 @@ export const aboutView = (h: H, derived: Derived): Html => {
         : []),
       h.p([h.Class("sub")], [
         h.b([], ["What to keep in mind. "]),
-        "Overlapping intervals mean the order between two configs is not settled; the results summary says so at the top. Provisional configs (fewer than 20 scored matches) have no rank. Regret and accuracy are measured against a fixed-depth minimax player, not against perfect play. Costs are the providers' list prices, not what anyone was billed.",
+        "Overlapping intervals mean the order between two configs is not settled; the chart at the top shows where they overlap. Provisional configs (fewer than 20 scored matches) have no rank. Points lost and accuracy are measured against a minimax player, not against perfect play; certain mistakes need no such player. Costs are the providers' list prices applied to the usage, not what anyone was billed.",
       ]),
     ],
   );
 };
+
+/** The data date, a link to the method, and whose game this is. */
+export const footerView = (h: H, derived: Derived): Html =>
+  h.footer(
+    [h.Class("foot")],
+    [
+      h.p([], [
+        ...(derived.runs === undefined ? [] : [`Matches through ${DAY.format(new Date(derived.runs.to))}. `]),
+        h.a([h.Href("#about"), h.OnClick(Message.ClickedJump({ target: "about" }), { defaultAction: "Prevent" })], ["Methods"]),
+        ".",
+      ]),
+      h.p([], ["An unofficial project, not affiliated with the game's developer. Buckshot Roulette is a game by Mike Klubnika."]),
+    ],
+  );

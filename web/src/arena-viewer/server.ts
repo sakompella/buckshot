@@ -8,6 +8,7 @@ import { Blunders, CertainMistakes, Decisions, SeatsResponse } from "./api.ts";
 import { findBlunders } from "./blunders.ts";
 import { type Arena } from "./load.ts";
 import { withPotShares } from "./page/data.ts";
+import { PAGE_PATHS } from "../site/route.ts";
 
 // The arena viewer's server: the built site (web/dist), and a read-only JSON API over the arena analysis database
 // as load.ts reads it.
@@ -73,7 +74,7 @@ const siteResponse = async (siteDir: string, request: Request): Promise<Response
 
   if (pathname !== "/" && (await file.exists())) return pathname.startsWith("/assets/") ? assetResponse(pathname, file, request) : new Response(file);
 
-  return new Response(Bun.file(join(siteDir, "index.html")), { headers: { "content-type": "text/html; charset=utf-8" } });
+  return new Response(Bun.file(join(siteDir, "index.html")), { status: PAGE_PATHS.includes(pathname) ? 200 : 404, headers: { "content-type": "text/html; charset=utf-8" } });
 };
 
 /** What the API guards: a password for every route. */

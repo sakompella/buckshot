@@ -3,7 +3,7 @@ import { AsyncData } from "foldkit";
 import { createLazy, type Document, type Html, type HtmlBuilder } from "foldkit/html";
 
 import { EFFORTS, effortName } from "../../arena/model-names.ts";
-import { aboutView, howView, summaryView } from "./about.ts";
+import { aboutView, footerView, howView, summaryView } from "./about.ts";
 import { baseName, baseOrder, colorOf, fmtCount, sumOf, unique } from "./data.ts";
 import { tipView } from "./charts.ts";
 import { type CertainLinks, certainTableView, certainView } from "./certain.ts";
@@ -156,7 +156,7 @@ const drillCard = (h: H, derived: Derived, maybeDrill: Model["maybeDrill"], lazy
 
 const optionalView = <A>(h: H, data: AsyncData.AsyncData<A, string>, what: string, draw: (loaded: A) => Html): Html =>
   AsyncData.matchData(data, {
-    onEmpty: () => h.empty,
+    onEmpty: () => h.div([h.Class("pending")], [h.p([h.Class("k")], [`Loading the ${what}…`])]),
     onFailure: (error) => h.div([h.Class("card")], [h.p([h.Class("k")], [`Could not load the ${what}: ${error}`])]),
     onData: draw,
   });
@@ -213,23 +213,27 @@ const pageView = (h: H, model: Model, derived: Derived): Html => {
           ]
         : []),
       groupView(h, "tables", [
-        afterFirstPaint(() =>
-          h.details(
-            [h.Class("tables")],
-            [
-              h.summary([], ["Leaderboard · Accuracy · Certain mistakes by config"]),
-              sectionView(h, "leaderboards", lazyLeaderboard(leaderboardView, [h, derived, model.leaderboard, lazy])),
-              derived.everyPooled.some(({ regret }) => regret !== null) ? lazyAccuracyTable(accuracyTableView, [h, derived]) : h.empty,
-              AsyncData.matchData(lazy.certain, {
-                onEmpty: () => h.empty,
-                onFailure: () => h.empty,
-                onData: (rates) => (rates.length === 0 ? h.empty : lazyCertainTable(certainTableView, [h, rates, derived.kept, maybeLinks, model.maybeCertainOpen])),
-              }),
-            ],
+        sectionView(
+          h,
+          "leaderboards",
+          afterFirstPaint(() =>
+            h.div(
+              [],
+              [
+                lazyLeaderboard(leaderboardView, [h, derived, model.leaderboard, lazy]),
+                derived.everyPooled.some(({ regret }) => regret !== null) ? lazyAccuracyTable(accuracyTableView, [h, derived, lazy.certain]) : h.empty,
+                AsyncData.matchData(lazy.certain, {
+                  onEmpty: () => h.empty,
+                  onFailure: () => h.empty,
+                  onData: (rates) => (rates.length === 0 ? h.empty : lazyCertainTable(certainTableView, [h, rates, derived.kept, maybeLinks, model.maybeCertainOpen])),
+                }),
+              ],
+            ),
           ),
         ),
       ]),
       groupView(h, "about", [sectionView(h, "about", aboutView(h, derived))]),
+      footerView(h, derived),
     ],
   );
 };

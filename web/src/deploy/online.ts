@@ -1,4 +1,5 @@
 import { privacyViolations } from "../arena-viewer/privacy.ts";
+import { PAGE_PATHS } from "../site/route.ts";
 import { WORKER } from "./worker.ts";
 
 // The checks a Worker version passes at its preview URL before it takes the live domain (ADR-0050). Pure over a
@@ -24,18 +25,18 @@ export const versionIdOf = (output: string): string | undefined => /Worker Versi
 /** The `--versions` value that sends all traffic to one version. */
 export const allTraffic = (versionId: string): string => JSON.stringify([{ version_id: versionId, percentage: 100 }]);
 
-/** Pages that must answer with the app shell; the Worker serves every path as the single-page app. */
-const PAGES = ["/", "/arena"] as const;
+/** A path the site has no page at, which must answer 404 with the app shell. */
+const MISSING_PAGE = "/no-such-page";
 
 type Fetch = (url: string) => Promise<Response>;
 
 const lines = (what: string, problem: string | undefined): ReadonlyArray<string> => (problem === undefined ? [] : [`${what}: ${problem}`]);
 
-const pageProblem = async (fetcher: Fetch, base: string, path: string): Promise<string | undefined> => {
+const pageProblem = async (fetcher: Fetch, base: string, path: string, status: number): Promise<string | undefined> => {
   const response = await fetcher(base + path);
   const text = await response.text();
 
-  if (response.status !== 200) return `status ${response.status}`;
+  if (response.status !== status) return `status ${response.status}`;
 
   return text.includes('<div id="root"') ? undefined : "no app shell";
 };
@@ -58,7 +59,7 @@ export const uploadProblems = (online: ReadonlyMap<string, string>): ReadonlyArr
 
 /** What is wrong with the site at `base`, empty when it may go live. It must serve every file in `local` byte for byte, and they must pass the privacy check. */
 export const siteProblems = async (fetcher: Fetch, base: string, local: ReadonlyMap<string, string>): Promise<ReadonlyArray<string>> => {
-  const pages = await Promise.all(PAGES.map(async (path) => lines(path, await pageProblem(fetcher, base, path))));
+  const pages = await Promise.all([...PAGE_PATHS.map((path) => [path, 200] as const), [MISSING_PAGE, 404] as const].map(async ([path, status]) => lines(path, await pageProblem(fetcher, base, path, status))));
   const served = new Map<string, string>();
 
   const data = await Promise.all(

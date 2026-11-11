@@ -27,7 +27,7 @@ const TOUR: ReadonlyArray<TourStep> = [
     anchor: "summary",
     focus: "#summary",
     title: "Results at a glance",
-    text: "The top of the page names the leading configs by Round Elo, with their intervals. When the leaders' intervals overlap, it says the top is too close to call.",
+    text: "The first chart gives every ranked config's Round Elo with its 95% interval, best first. Configs whose bars overlap are not separated by the data. The dashed lines are the two search engines, fixed reference players.",
   },
   {
     anchor: "how",
@@ -81,7 +81,7 @@ const TOUR: ReadonlyArray<TourStep> = [
     anchor: "leaderboards",
     focus: "#leaderboards .lbt thead, #leaderboards .lbt tbody tr:first-child",
     title: "Leaderboard columns",
-    text: "At the end of the page, one fold holds the tables. Per config the leaderboard gives its Round Elo, one Bradley-Terry rating pooled over every tournament, drawn as a bar with its interval, then its matches, cost per match, match wins against its own opponents, round wins, cash share, Regret, cost per move, time per move, output tokens and favourite item.",
+    text: "Near the end of the page come the tables. Per config the leaderboard gives its Round Elo, one Bradley-Terry rating pooled over every tournament, drawn as a bar with its interval, then its matches, cost per match, match wins against its own opponents, round wins, cash share, Regret, cost per move, time per move, output tokens and favourite item.",
   },
   {
     anchor: "leaderboards",

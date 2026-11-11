@@ -43,7 +43,7 @@ test("the kept pairs' sums equal the counts over the matches with a kept seat, u
     const offModels = tc.draw(gs.arrays(gs.sampledFrom(MODELS.map(baseName)), { maxSize: 2, unique: true }));
     const offEfforts = tc.draw(gs.arrays(gs.sampledFrom(EFFORTS), { maxSize: 2, unique: true }));
     const isKept = (seat: Seat) => !offModels.includes(baseName(seat.model)) && !offEfforts.includes(seat.effort);
-    const { pairs, kept } = derive({ summary: { configs: configSummaries(seats, { seat: [], legalUse: [], useItem: [] }), hasCertain: false }, pairs: pairsOf(seats) }, { offModels, offEfforts });
+    const { pairs, kept } = derive({ summary: { configs: configSummaries(seats, { seat: [], legalUse: [], useItem: [] }), hasCertain: false, seedBlocks: { blocks: 0, unpaired: 0 } }, pairs: pairsOf(seats) }, { offModels, offEfforts });
 
     const scoredWithKept = played.flatMap((_match, index) => {
       const both = seats.filter(({ matchId }) => matchId === `m${index}`);
