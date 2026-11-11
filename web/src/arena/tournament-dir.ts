@@ -107,7 +107,7 @@ const Described = Schema.Struct({ api: Schema.String, url: Schema.NullOr(Schema.
 /** The provenance `api` of a config endpoint's api: the Endpoint tag in endpoints.ts. */
 const API_TAG = { anthropic: "Anthropic", "openai-responses": "OpenAIResponses" } as const;
 
-/** A config URL as provenance records it: baseUrlOf in endpoints.ts, which this cannot import without changing the arena code hash. */
+/** A config URL as provenance records it: baseUrlOf in endpoints.ts, kept local so this module does not pull in the endpoint code. */
 const baseUrl = (url: string): string => new URL(url).href.replace(/\/$/, "");
 
 /** What a tournament and the importer read of a match manifest. */
@@ -118,7 +118,7 @@ export const MatchManifest = Schema.Struct({
   letters: Schema.Array(Schema.String),
   delivery: Schema.String,
   standings: Schema.optional(Schema.Array(Schema.Struct({ player: Schema.String, cash: Schema.Number }))),
-  provenance: Schema.Struct({ code_sha: Schema.String, agents: Schema.Record(Schema.String, Described) }),
+  provenance: Schema.Struct({ git_commit: Schema.optional(Schema.String), agents: Schema.Record(Schema.String, Described) }),
   agents: Schema.Record(Schema.String, Schema.Struct({ moves: Schema.Int, reminders: Schema.Int, interventions: Schema.Int })),
 });
 
@@ -132,13 +132,13 @@ const readManifest = (dir: string): Result.Result<MatchManifest, string> => {
 
 const StatusOnly = Schema.Struct({ status: Schema.String });
 
-const CodeOnly = Schema.Struct({ provenance: Schema.Struct({ code_sha: Schema.String }) });
+const CodeOnly = Schema.Struct({ provenance: Schema.Struct({ git_commit: Schema.String }) });
 
 /** The code version a match started under, as its manifest records it; none before it starts. */
 export const startedUnder = (dir: string, match: ScheduledMatch): Option.Option<string> => {
   const path = join(dir, match.name, "manifest.json");
 
-  return existsSync(path) ? Option.map(Result.getSuccess(Schema.decodeUnknownResult(Schema.fromJsonString(CodeOnly))(readFileSync(path, "utf8"))), ({ provenance }) => provenance.code_sha) : Option.none();
+  return existsSync(path) ? Option.map(Result.getSuccess(Schema.decodeUnknownResult(Schema.fromJsonString(CodeOnly))(readFileSync(path, "utf8"))), ({ provenance }) => provenance.git_commit) : Option.none();
 };
 
 /** An agent's pin; older manifests name it cpa_auth_id. */
@@ -225,11 +225,15 @@ export const readMatch = (dir: string, tournament: Tournament, match: ScheduledM
 
     if (problems.length > 0) return yield* Result.fail(problems);
 
+    const code = manifest.provenance.git_commit;
+
+    if (code === undefined) return yield* Result.fail(["the manifest records no git commit, so the match started before the code version was one (ADR-0054)"]);
+
     const shares = yield* Result.mapError(sharesOf(match, manifest), (message) => [message]);
     const table = yield* Result.mapError(decodeSeatCount(match.seats.length), () => [`${match.seats.length} seats is not a table size`]);
     const players: ReadonlyArray<Player> = match.entrants.map((entrant, index) => ({ entrant, share: shares[index] ?? 0, ...countsOf(manifest, match.seats[index] ?? "") }));
 
-    return { name: match.name, pairing: match.pairing, seed: match.seed, code: manifest.provenance.code_sha, starter: firstPositionOf(match.seed, table), players };
+    return { name: match.name, pairing: match.pairing, seed: match.seed, code, starter: firstPositionOf(match.seed, table), players };
   });
 
 /** The entrants that won a finished match, from its manifest alone, even when the match is left out of the stats. */

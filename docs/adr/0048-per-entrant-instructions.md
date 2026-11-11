@@ -17,4 +17,4 @@ This is a labelled exception to the equal-prompt rule, not a change to it:
 
 ## Consequences
 
-`match.ts` and `endpoints.ts` are in the code hash, so matches from before this change resume only under their own checkout (ADR-0041). Analysis that keys positions on the match's `instructions_sha` alone does not tell an addendum agent from a plain one; use the entrant or the agent's provenance.
+`match.ts` and `endpoints.ts` are part of the code the commit identifies (ADR-0054), so matches from before this change resume only under their own checkout (ADR-0041). Analysis that keys positions on the match's `instructions_sha` alone does not tell an addendum agent from a plain one; use the entrant or the agent's provenance.

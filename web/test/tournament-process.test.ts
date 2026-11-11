@@ -38,7 +38,7 @@ const setup = () => {
 
   for (const match of schedule) {
     mkdirSync(join(dir, match.name), { recursive: true });
-    writeFileSync(join(dir, match.name, "manifest.json"), JSON.stringify({ status: "running", provenance: { code_sha: OLD, agents: {} } }));
+    writeFileSync(join(dir, match.name, "manifest.json"), JSON.stringify({ status: "running", provenance: { git_commit: OLD, agents: {} } }));
   }
 
   const run = (flags: ReadonlyArray<string> = []) => {

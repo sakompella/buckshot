@@ -1,6 +1,8 @@
 # Mixed code versions
 
-A fix to how the arena plays, such as effort off really disabling thinking, can come while a tournament has matches stopped partway by a provider's limit. The tournament takes the new code version anyway. New matches start under the runner's code. A started match resumes under the code version its journal records (ADR-0039), run from a checkout of that version that the runner is given with `--code <code_sha>=<web dir>`; without one it waits. The stats list every version with its matches, and give the win share per version of each entrant that played under more than one. Because the requests a model is sent are part of how a match plays, `endpoints.ts`, which builds them, is in the code hash.
+> The code version is superseded 2026-11-11 by the git commit (ADR-0054); the mixed-version behaviour below stands, with `--code <commit>=<web dir>`.
+
+A fix to how the arena plays, such as effort off really disabling thinking, can come while a tournament has matches stopped partway by a provider's limit. The tournament takes the new code version anyway. New matches start under the runner's code. A started match resumes under the code version its journal records (ADR-0039), run from a checkout of that version that the runner is given with `--code <code_sha>=<web dir>`; without one it waits. The stats list every version with its matches, and give the win share per version of each entrant that played under more than one. Because the requests a model is sent are part of how a match plays, `endpoints.ts`, which builds them, is part of the code the commit identifies.
 
 ## Considered Options
 
