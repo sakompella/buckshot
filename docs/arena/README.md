@@ -27,13 +27,13 @@ The arena plays language models against each other at the Buckshot table through
   - `--first N`: plays only the first N matches of the schedule, and exits 0 once they are finished.
   - `--cap <model>=N`, `--last <model>`, `--skip <entrant>`, `--forget-cooldown <model>`.
   - `--prefer-account <id>`, repeated in order of preference: a new match pins to these accounts first when accounts are equally loaded. With `--parallel 1 --limit 1`, rerun with a fresh order before each match, such as the account whose window resets first.
-  - `--code <code_sha>=<web dir>`: see code versions below.
+  - `--code <commit>=<web dir>`: see code versions below.
 - **Where the data goes:** keep tournament directories under `_work/arena/`, which is gitignored. They hold raw harness data: journals, per-call logs with reasoning text, and costs. None of it is committed.
 
 ## Code versions
-Every match records a code hash, `codeSha()` in `web/src/arena/match.ts`, a hash of the files that play a match. A started match resumes only under the code it started on. A tournament can therefore mix versions: new matches start under the current checkout, and `--code <sha>=<web dir of a checkout of that version>` resumes older ones. Without a matching checkout they wait.
+Every match records the git commit of the checkout it played from, `gitCommit()` in `web/src/arena/match.ts`, and refuses to start or resume while the checkout has uncommitted changes to tracked files, so the commit alone identifies the code that played it. A started match resumes only under the commit it started on. A tournament can therefore mix versions: new matches start under the current checkout, and `--code <commit>=<web dir of a checkout of that commit>` resumes older ones. Without a matching checkout they wait.
 
-Use the hash, not a hand-assigned version id. It changes exactly when gameplay code changes, so two different versions can't share a label.
+The commit is the version id: no hand-assigned labels, and no second hash to keep in sync. Because a match refuses to play over a dirty tree, the arena tests that start matches (`bun run test`) also need a clean checkout.
 
 ## Usage limits
 - **Usage-limit 429s:** a match stopped by one doesn't count as failed. It waits for the reset, and other matches fill its slot.

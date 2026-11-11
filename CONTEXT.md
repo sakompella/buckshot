@@ -127,7 +127,7 @@ Text a tournament entrant adds after the shared instructions, for its agent only
 _Avoid_: system prompt override
 
 **Provenance**:
-What a match records when it starts about what decides its play: the code and instructions hashes and each agent's endpoint, model, effort, resolved thinking settings and instructions addendum. A resume must bring the same, keys aside.
+What a match records when it starts about what decides its play: the git commit of the checkout, the instructions hash and each agent's endpoint, model, effort, resolved thinking settings and instructions addendum. A resume must bring the same, keys aside.
 
 **Intervention**:
 A fallback move, counted against the agent it was played for, because the agent ended its turn without a move even after the arena's one reminder. A reminder alone is not an intervention. A match with an intervention is still scored, and the tournament stats flag it.

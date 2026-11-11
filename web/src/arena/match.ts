@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { mkdirSync } from "node:fs";
+import { join } from "node:path";
 
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { type AssistantMessage, contentText, type Message, type Models, type ModelThinkingLevel, Type } from "@earendil-works/pi-ai";
@@ -127,7 +127,7 @@ type DeliveryLine = { readonly player: Letter; readonly via: "input" | "live" | 
  * What decides how a match plays, fixed when it starts; a resume with anything else is refused. `instructions_sha` covers
  * the shared instructions only; an agent's addendum is in its own provenance entry.
  */
-type MatchProvenance = { code_sha: string; instructions_sha: string; compaction: "off"; agents: Record<string, AgentProvenance> };
+type MatchProvenance = { git_commit: string; instructions_sha: string; compaction: "off"; agents: Record<string, AgentProvenance> };
 
 type MatchState = {
   seed: string;
@@ -449,18 +449,28 @@ const sha = (text: string | Buffer) => createHash("sha256").update(text).digest(
 /** For people reading a run: the agent at each Agent position, from 1. */
 const seatingIn = (state: MatchState) => Object.fromEntries(state.letters.flatMap((letter, index) => (state.controllers[index] === "Agent" ? [[String(index + 1), letter]] : [])));
 
+/** This checkout's web/ directory. */
 const WEB = new URL("../..", import.meta.url).pathname;
 
-/** The files that decide how a match plays, under web/: the generated rules, the game and agent core, this match loop, the requests each model is sent and the pinned dependencies. */
-const PLAY_FILES = ["generated", "src/agent", "src/bend.ts", "src/domain.ts", "src/driver.ts", "src/players.ts", "src/rng.ts", "src/text.ts", "src/analysis/native-input.ts", "src/analysis/player.ts", "src/arena/agent.ts", "src/arena/endpoints.ts", "src/arena/engine.ts", "src/arena/match.ts", "package.json", "bun.lock"];
+/** The commit of the checkout this code runs from: the code version a match records when it starts, and must find again to resume. Refused while tracked files have uncommitted changes, so the commit alone identifies the code that plays (ADR-0054). */
+export const gitCommit = (): string => {
+  const git = (args: ReadonlyArray<string>): string => {
+    const run = Bun.spawnSync(["git", ...args], { cwd: WEB });
 
-const filesUnder = (path: string): ReadonlyArray<string> => (statSync(path).isDirectory() ? readdirSync(path).flatMap((name) => filesUnder(join(path, name))) : [path]);
+    if (run.exitCode !== 0) throw new Error(`git ${args.join(" ")} in ${WEB} failed: ${run.stderr.toString().trim()}`);
 
-/** The code version a match started now records, and must find again to resume. */
-export const codeSha = (): string => sha(Buffer.concat(PLAY_FILES.flatMap((path) => filesUnder(join(WEB, path))).toSorted().flatMap((file) => [Buffer.from(`${relative(WEB, file)}\0`), readFileSync(file), Buffer.from("\0")])));
+    return run.stdout.toString().trim();
+  };
+
+  const dirty = git(["status", "--porcelain", "--untracked-files=no"]);
+
+  if (dirty !== "") throw new Error(`the checkout at ${WEB} has uncommitted changes to tracked files, so its commit does not identify its code:\n${dirty}`);
+
+  return git(["rev-parse", "HEAD"]);
+};
 
 const provenanceOf = (match: ArenaMatch): MatchProvenance => ({
-  code_sha: codeSha(),
+  git_commit: gitCommit(),
   instructions_sha: sha(INSTRUCTIONS),
   compaction: "off",
   agents: Object.fromEntries(match.entrants.map((entrant) => [entrant.agent, entrant.provenance])),
@@ -470,7 +480,7 @@ const sameAgent = Schema.toEquivalence(Schema.NullOr(AgentProvenance));
 
 /** Where the configuration a resume brings differs from the one the match started with. */
 const changesFrom = (started: MatchProvenance, now: MatchProvenance): ReadonlyArray<string> => [
-  ...(["code_sha", "instructions_sha", "compaction"] as const).flatMap((key) => (started[key] === now[key] ? [] : [`${key} was ${started[key]}, now ${now[key]}`])),
+  ...(["git_commit", "instructions_sha", "compaction"] as const).flatMap((key) => (started[key] === now[key] ? [] : [`${key} was ${started[key]}, now ${now[key]}`])),
   ...[...new Set([...Object.keys(started.agents), ...Object.keys(now.agents)])].flatMap((agent) => {
     const [before, after] = [started.agents[agent] ?? null, now.agents[agent] ?? null];
 

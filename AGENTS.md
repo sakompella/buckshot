@@ -15,6 +15,6 @@ Research on Buckshot Roulette: a multiplayer rules library in Bend, agent tools,
   - Run heavy jobs with `dev heavy --` (niced).
 - **Git:** work on `main`. Do branch work in a git worktree. Merge only verified work, with `--no-ff`.
 - **Arena work** (tournaments, model endpoints, usage limits): read `docs/arena/README.md` first. Stop only processes you started.
-  - Editing the files that play a match (`PLAY_FILES` in `web/src/arena/match.ts`) changes the arena's code hash.
+  - A match records the git commit of the checkout it plays from (`gitCommit()` in `web/src/arena/match.ts`) and refuses to start or resume over uncommitted changes to tracked files, so the commit alone names the code that played it (ADR-0054).
 - **Domain terms and decisions:** `CONTEXT.md` and `docs/adr/`.
 - **Issues:** this repository's GitHub Issues, through `gh`. Labels and conventions are in `docs/agents/`.

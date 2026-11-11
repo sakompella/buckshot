@@ -29,6 +29,9 @@ const decodeTournament = Schema.decodeUnknownSync(Schema.fromJsonString(Tourname
 
 const decodeManifest = Schema.decodeUnknownResult(Schema.fromJsonString(RunManifest));
 
+/** The code identity a match played under: the git commit it recorded when it started (ADR-0054), or the code_sha of a manifest from before commits were recorded — the one place the old field is read. */
+const CodeProvenance = Schema.Struct({ git_commit: Schema.optional(Schema.String), code_sha: Schema.optional(Schema.String), instructions_sha: Schema.String });
+
 const decodeEvent = Schema.decodeUnknownResult(Schema.fromJsonString(EventLine));
 
 const decodeCall = Schema.decodeUnknownResult(Schema.fromJsonString(CallLine));
@@ -256,8 +259,8 @@ export const importTournaments = ({ database, sources, skipped = {} }: ImportOpt
           const status = manifestText !== undefined || eventText !== undefined || callText !== undefined ? "partial" : isSkipped ? "skipped" : "unstarted";
           put("matches", { id: matchId, tournament_id: tournamentId, name: match.name, pairing: match.pairing, block: match.block, seed: match.seed, seed_block_id: sha(json([tournamentId, match.pairing, match.block, match.seed])), status, cohort, disposition: isExcluded ? "excluded" : isSkipped ? "skipped" : null, status_reason: skipReason ?? (isExcluded ? EXCLUSION : null), started_at: null, ended_at: null, code_hash: null, validated_with: null, instructions_hash: null, source_dir: matchDir, schedule_json: json(match), manifest_json: manifestText ?? null, source_record: null, fingerprint, replay_status: manifest === undefined ? "unavailable" : "pending" });
           const provenanceObject = manifest?.provenance ?? null;
-          const provenance = Schema.decodeUnknownOption(Schema.Struct({ code_sha: Schema.String, instructions_sha: Schema.String }))(provenanceObject);
-          db.query("UPDATE matches SET code_hash = ?, instructions_hash = ? WHERE id = ?").run(Option.isSome(provenance) ? provenance.value.code_sha : null, Option.isSome(provenance) ? provenance.value.instructions_sha : null, matchId);
+          const provenance = Schema.decodeUnknownOption(CodeProvenance)(provenanceObject);
+          db.query("UPDATE matches SET code_hash = ?, instructions_hash = ? WHERE id = ?").run(Option.getOrElse(Option.map(provenance, ({ git_commit, code_sha }) => git_commit ?? code_sha ?? null), () => null), Option.isSome(provenance) ? provenance.value.instructions_sha : null, matchId);
 
           if (manifestText !== undefined) {
             observe(manifestPath, manifestText, matchId);
