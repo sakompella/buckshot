@@ -3,6 +3,9 @@
 Round Elo is fitted twice: here by bt.round_elo for the docs (net_points, aivat) and in TypeScript by the viewer for the
 site (web/src/arena-viewer/page/ratings.ts). They cannot share code - each refits thousands of times on bootstrap
 resamples in its own runtime - so this test feeds both the same matches and fails on any difference beyond float noise.
+The tournament report's ratings (web/src/arena/tournament-stats.ts fitRatings) are a third Bradley-Terry: the same
+winner-choice model on two-player tables, with a seat term and Gaussian priors of standard deviation 1, so the test
+also ties them to bt.fit with the same priors, each match one game.
 The matches are the analysis database's when this checkout has it, else a seeded synthetic tournament of the same shape,
 so the tie also runs where the private data is absent (nix flake check).
 """
@@ -19,6 +22,7 @@ from load import DB, connect, round_winners
 
 REPO = Path(__file__).resolve().parents[3]
 RATINGS = REPO / "web/src/arena-viewer/page/ratings.ts"
+TOURNAMENT_STATS = REPO / "web/src/arena/tournament-stats.ts"
 TOLERANCE = 1e-6  # Elo points; on the real matches the two fits agree to about 1e-14
 
 
@@ -77,10 +81,58 @@ def viewer_ratings(rows: list[tuple[str, str, float, float]]) -> dict[str, float
     return json.loads(fitted.stdout)
 
 
+def tournament_fit(rows: list[tuple[str, str, float, float]]) -> dict[str, float]:
+    """The docs' fit of the report's model: bt.fit with its priors (theta and seat sd 1), each match one game.
+
+    bt's `first` sits at position 2, where the report's seat term lands, so a cell's share is the second-listed config's.
+    """
+    cells: bt.Cells = {}
+    for first, second, rounds, wins in rows:
+        cell = cells.setdefault((second, first), [0.0, 0.0])
+        cell[0] += 1.0
+        cell[1] += 1.0 - wins / rounds
+    return bt.fit(cells, seat=True, theta_sd=1.0, seat_sd=1.0).elo()
+
+
+def report_ratings(rows: list[tuple[str, str, float, float]]) -> dict[str, float]:
+    """The tournament report's fit of the same matches: node runs the TypeScript (web/src/arena/tournament-stats.ts) on them."""
+    played = [
+        {
+            "name": str(at),
+            "pairing": 0,
+            "seed": 0,
+            "code": "",
+            "starter": 1,
+            "players": [
+                {"entrant": first, "share": wins / rounds, "moves": 0, "reminders": 0, "interventions": 0},
+                {"entrant": second, "share": 1.0 - wins / rounds, "moves": 0, "reminders": 0, "interventions": 0},
+            ],
+        }
+        for at, (first, second, rounds, wins) in enumerate(rows)
+    ]
+    read = 'import { readFileSync } from "node:fs"; const { fitRatings } = await import(process.argv[1]);'
+    read += ' console.log(JSON.stringify(Object.fromEntries(fitRatings(JSON.parse(readFileSync(0, "utf8")), undefined).entrants)))'
+    fitted = subprocess.run(
+        ["node", "--experimental-strip-types", "--input-type=module", "-e", read, TOURNAMENT_STATS.as_uri()],
+        input=json.dumps(played),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return json.loads(fitted.stdout)
+
+
 class RoundElo(unittest.TestCase):
     def test_the_docs_fit_is_the_sites_fit(self):
         rows = matches()
         ours, theirs = bt.round_elo(rows), viewer_ratings(rows)
+        self.assertEqual(sorted(ours), sorted(theirs))
+        for name, elo in ours.items():
+            self.assertAlmostEqual(elo, theirs[name], delta=TOLERANCE, msg=name)
+
+    def test_the_tournament_reports_fit_is_tied_too(self):
+        rows = matches()
+        ours, theirs = tournament_fit(rows), report_ratings(rows)
         self.assertEqual(sorted(ours), sorted(theirs))
         for name, elo in ours.items():
             self.assertAlmostEqual(elo, theirs[name], delta=TOLERANCE, msg=name)
