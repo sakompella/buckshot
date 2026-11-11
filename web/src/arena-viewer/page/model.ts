@@ -5,7 +5,7 @@ import { defineTaggedUnion } from "foldkit/schema";
 
 import { isOnline } from "../../site/online.ts";
 import { AGGREGATES } from "../aggregates.ts";
-import { CertainMistakes, CertainType, MatchDetail, Seat } from "../api.ts";
+import { CertainMistakes, CertainType, Seat } from "../api.ts";
 
 /** The page's groups below the hero, in page order: the jump menu's links, and the sections the reader can be in. */
 export const Group = Schema.Literals(["standings", "decisions", "watch", "tables"]);
@@ -68,7 +68,7 @@ export type Lazy = typeof Lazy.Type;
 
 /**
  * The per-seat and per-move data only the arena server has, fetched when a section that needs it first comes near: the
- * match list, replays and their links, and the drill's per-move line. The online build never fetches it.
+ * match list and the drill's per-move line. The online build never fetches it.
  */
 export const Local = Schema.Struct({ seats: Schema.Array(SeatFull), certainMoves: OptionalData(CertainMistakes) });
 
@@ -96,11 +96,6 @@ export const CertainCell = Schema.Struct({ key: Schema.String, type: CertainType
 
 export type CertainCell = typeof CertainCell.Type;
 
-/** An open replay. Until a move is chosen, it shows the first model move at or after the focus ordinal. */
-export const Replay = Schema.Struct({ id: Schema.String, maybeFocus: Schema.Option(Schema.Number), maybeAt: Schema.Option(Schema.Number) });
-
-export type Replay = typeof Replay.Type;
-
 export const MatchPreset = Schema.Literals(["comebacks", "upsets"]);
 
 export type MatchPreset = typeof MatchPreset.Type;
@@ -120,10 +115,6 @@ export type TourBox = typeof TourBox.Type;
 export const Tour = Schema.Struct({ step: Schema.Number, hasCertain: Schema.Boolean, maybeBox: Schema.Option(TourBox), isCardUnder: Schema.Boolean });
 
 export type Tour = typeof Tour.Type;
-
-export const MatchData = AsyncData.Schema(MatchDetail, Schema.String).schema;
-
-export type MatchData = typeof MatchData.Type;
 
 export const Viewport = Schema.Struct({ width: Schema.Number, height: Schema.Number });
 
@@ -152,8 +143,6 @@ export const Model = Schema.Struct({
   maybeTappedTitle: Schema.Option(Schema.String),
   maybeGroup: Schema.Option(Group),
   isFiltersOpen: Schema.Boolean,
-  matches: Schema.Record(Schema.String, MatchData),
-  maybeReplay: Schema.Option(Replay),
   /** Whether the page has painted once with the data. Most sections wait for it, so the first paint is quick. */
   isFirstPaintDone: Schema.Boolean,
   maybeTour: Schema.Option(Tour),
@@ -196,12 +185,6 @@ export const Message = defineMessageUnion({
   ClickedLeaderboardRow: { id: Schema.String },
   ClickedTableLink: { id: Schema.String },
   ClickedCertainCount: { key: Schema.String, type: CertainType },
-  ClickedMatch: { id: Schema.String, maybeFocus: Schema.Option(Schema.Number) },
-  SucceededMatch: { id: Schema.String, detail: MatchDetail },
-  FailedMatch: { id: Schema.String, error: Schema.String },
-  ClosedReplay: {},
-  SteppedReplay: { delta: Schema.Number },
-  SelectedStep: { index: Schema.Number },
   ChangedMatchQuery: { query: Schema.String },
   ClickedMatchPreset: { preset: MatchPreset },
   ClickedShowMore: {},

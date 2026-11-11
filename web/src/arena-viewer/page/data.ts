@@ -373,7 +373,7 @@ type Scored<S> = { readonly status: string; readonly seats: ReadonlyArray<S> };
 
 export const winnerOf = <S extends { readonly winShare: number | null }>(match: Pick<Scored<S>, "seats">): S | undefined => match.seats.find(({ winShare }) => (winShare ?? 0) >= 1);
 
-/** A match's result as the match list and the replay print it. */
+/** A match's result as the match list prints it. */
 export const resultOf = <S extends { readonly winShare: number | null; readonly model: string; readonly effort: string }>(match: Scored<S>): string => {
   const winner = winnerOf(match);
 

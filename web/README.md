@@ -163,20 +163,18 @@ A refusal comes back as `{"error": "..."}` text, and the result is marked `isErr
 
 ## Arena analysis viewer
 
-The site is one app (`src/site/`) with two pages, each at its own URL:
+The site is one app (`src/site/`) with one page, at its own URL:
 
 | Page | URL |
 |-|-|
 | Arena | `/arena?offModels=…&offEfforts=…&row=…` |
-| Replay | `/replay/<match id>?at=<move ordinal>` |
 
-Both read the arena viewer's API (the online build reads its aggregate files and has no replays).
+It reads the arena viewer's API (the online build reads its aggregate files).
 
-The arena's filter, its open leaderboard row and a replay's move live in the
-URL, so a link shares them and a reload keeps them. Opening a replay adds a
-history entry, so Back closes it. The root `/` moves to `/arena`,
+The arena's filter and its open leaderboard row live in the
+URL, so a link shares them and a reload keeps them. The root `/` moves to `/arena`,
 and old links to the arena's sections (`/#scatter`) to `/arena#scatter`. A build of the site with no arena
-server (`vite preview`, a static host) says the pages need the arena data.
+server (`vite preview`, a static host) says the page needs the arena data.
 
 `bun scripts/arena-viewer.ts <db> [host] [port] [--regret <regret db>] [--knowledge <knowledge db>] [--certain-mistakes <opportunities db>] [--luck <luck db>]` serves the built site
 (`web/dist`: run `bun run build` first) and its API over the arena
@@ -193,10 +191,10 @@ The Arena page is one long page in six groups, in this order:
   how often the higher-rated player wins at each rating gap (rated by fits that held the match's seed block out,
   against the Bradley-Terry curve);
 - Watch a match: a few interesting matches and, with `--regret`, the costliest blunders, each marked exact or
-  estimated;
+  estimated (listed only; there is no replay, ADR-0054);
 - Decisions: with `--certain-mistakes` (the file `tools/arena/analysis/certain_mistakes.py --opportunities` writes), each
   config's certain mistakes over their opportunities (`docs/arena/analysis/certain-mistakes.md`), each count opening its
-  matches at the move, which the replay marks; how often each config shoots itself by the odds it counts (one panel per model, a line per effort);
+  matches at the move; how often each config shoots itself by the odds it counts (one panel per model, a line per effort);
   with `--regret`, each model's mean regret per move by shells left in the gun and each config's blunder rate (the
   share of its searched moves that gave up 10 or more points); item fates (used, stolen by the opponent or left
   unused, per config and per item); with `--knowledge` (the database `scripts/arena-knowledge.ts` builds) each
