@@ -4,7 +4,7 @@ import { expect, test } from "bun:test";
 import { Option } from "effect";
 import { Url } from "foldkit";
 
-import { arenaHref, arenaStateOf, replayHref, routeOf, SiteRoute } from "../src/site/route.ts";
+import { arenaHref, arenaStateOf, routeOf, SiteRoute } from "../src/site/route.ts";
 
 const routeAt = (href: string): SiteRoute => routeOf(Option.getOrThrow(Url.fromString(`http://site.test${href}`)));
 
@@ -22,17 +22,9 @@ test("an arena URL gives back the filter and open row it was built from", () =>
     expect(arenaStateOf(route)).toEqual({ filter, maybeRow });
   }));
 
-test("a replay URL gives back its match and move", () =>
-  hegel.test((tc) => {
-    const id = tc.draw(gs.sampledFrom(["0749d95aa85420a706c6010b199b9ad35ef034ab71997083fed58bc3108caac9", "0", "ff"]));
-    const maybeAt = tc.draw(gs.booleans()) ? Option.some(tc.draw(gs.integers({ minValue: 0, maxValue: 500 }))) : Option.none<number>();
-
-    expect(routeAt(replayHref(id, maybeAt))).toEqual(SiteRoute.Replay({ id, at: Option.getOrUndefined(maybeAt) }));
-  }));
-
-test("the root and its old section links lead to the arena; other paths, and replays of no match id, are not found", () => {
+test("the root and its old section links lead to the arena; other paths are not found", () => {
   expect(routeAt("/")).toEqual(SiteRoute.Arena({}));
   expect(routeAt("/#scatter")).toEqual(SiteRoute.Arena({}));
   expect(routeAt("/nowhere")).toEqual(SiteRoute.NotFound({ path: "/nowhere" }));
-  expect(routeAt("/replay/not%20a%20match")).toEqual(SiteRoute.NotFound({ path: "/replay/not%20a%20match" }));
+  expect(routeAt("/replay/0749d95aa85420a706c6010b199b9ad35ef034ab71997083fed58bc3108caac9")).toEqual(SiteRoute.NotFound({ path: "/replay/0749d95aa85420a706c6010b199b9ad35ef034ab71997083fed58bc3108caac9" }));
 });

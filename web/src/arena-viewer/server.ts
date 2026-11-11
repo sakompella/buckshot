@@ -1,49 +1,16 @@
-import type { Database } from "bun:sqlite";
 import crypto from "node:crypto";
 import { join, normalize } from "node:path";
 
-import { Array as Arr, Option, Result, Schema } from "effect";
+import { Schema } from "effect";
 
-import { agentMoves } from "../agent/moves.ts";
-import { ArenaController } from "../arena/match.ts";
-import { replayOf } from "../arena/replay.ts";
-import type { TableMove } from "../board.ts";
-import { GameEvent, type Seat, seatsOut } from "../domain.ts";
-import { Letter, rosterOf } from "../players.ts";
-import { eventText, secretText } from "../text.ts";
 import { AGGREGATE_NAMES, aggregatesOf, encodeAggregates } from "./aggregates.ts";
-import { decodeVisible, type Heard, heardBetween, isSecret, matchLog, roundStory, ShellTracker } from "./analysis.ts";
-import { Blunders, Call, CertainMistakes, Decisions, type MatchDetail, MatchDetailJson, MatchSeat, MatchSummary, type PlayerState, SeatsResponse, Step, type TablePosition } from "./api.ts";
+import { Blunders, CertainMistakes, Decisions, SeatsResponse } from "./api.ts";
 import { findBlunders } from "./blunders.ts";
-import type { Certain } from "./certain.ts";
-import { type Arena, decodeLabelled, withConfig } from "./load.ts";
+import { type Arena } from "./load.ts";
 import { withPotShares } from "./page/data.ts";
-import type { Regret } from "./regret.ts";
 
 // The arena viewer's server: the built site (web/dist), and a read-only JSON API over the arena analysis database
 // as load.ts reads it.
-
-const decodeSummary = Schema.decodeUnknownSync(MatchSummary);
-
-const decodeMatchSeat = Schema.decodeUnknownSync(MatchSeat);
-
-const decodeCall = Schema.decodeUnknownSync(Call);
-
-const DecisionRow = Schema.Struct({
-  id: Schema.String,
-  ordinal: Schema.Number,
-  turn: Schema.Number,
-  player: Letter,
-  byWhom: Step.fields.byWhom,
-  label: Schema.String,
-  move: Schema.Number,
-  visible: Schema.NullOr(Schema.String),
-  eventsBefore: Schema.NullOr(Schema.Number),
-});
-
-type DecisionRow = typeof DecisionRow.Type;
-
-const decodeDecisionRow = Schema.decodeUnknownSync(DecisionRow);
 
 const encodeSeats = Schema.encodeSync(Schema.fromJsonString(SeatsResponse));
 
@@ -52,168 +19,6 @@ const encodeDecisions = Schema.encodeSync(Schema.fromJsonString(Decisions));
 const encodeBlunders = Schema.encodeSync(Schema.fromJsonString(Blunders));
 
 const encodeCertain = Schema.encodeSync(Schema.fromJsonString(CertainMistakes));
-
-const encodeMatch = Schema.encodeSync(Schema.fromJsonString(MatchDetailJson));
-
-/** The seat a heard line starts with; none for a secret or a table-wide event. */
-const actorOf = (heard: GameEvent): Seat | undefined => ("seat" in heard ? heard.seat : "shooter" in heard ? heard.shooter : "by" in heard ? heard.by : undefined);
-
-const isTableWide = GameEvent.isAnyOf(["RoundBegan", "GrabbingBegan", "Loaded"]);
-
-// A move's outcome is what its player heard next, up to the first line by someone else or a new round, distribution or load.
-const isOutcomeEnd = (heard: Heard, socket: Seat): boolean => !isSecret(heard) && (isTableWide(heard) || (actorOf(heard) ?? socket) !== socket);
-
-/** What a replay needs of a match's manifest. */
-const ReplayManifest = Schema.fromJsonString(Schema.Struct({ seed: Schema.String, controllers: Schema.Array(ArenaController), letters: Schema.Array(Letter) }));
-
-const decodeReplayManifest = Schema.decodeUnknownOption(ReplayManifest);
-
-/** Each decision's table, from the match replayed through the rules; none from where it stops replaying. */
-const tablesOf = (manifest: string | null, decisions: ReadonlyArray<DecisionRow>): ReadonlyArray<TablePosition> =>
-  Option.match(decodeReplayManifest(manifest), {
-    onNone: () => [],
-    onSome: (setup) =>
-      Result.match(replayOf(Option.none(), setup, decisions.map(({ turn, player, move, label, byWhom }) => ({ turn, player, move, label, by: byWhom }))), {
-        onFailure: () => [],
-        onSuccess: (replay) =>
-          replay.applied.flatMap((line, index) => {
-            const source = replay.frames[index]?.source;
-
-            if (source === undefined) return [];
-
-            const roster = rosterOf(source.game.seats, source.letters);
-
-            return Option.match(roster.find(line.player), {
-              onNone: () => [],
-              onSome: ({ seat }) =>
-                Result.match(agentMoves(source, roster, seat), {
-                  onFailure: () => [],
-                  onSuccess: (moves) => [
-                    {
-                      board: source.game.board,
-                      out: [...seatsOut(source.events)],
-                      moves: moves.map(({ label, chain }): TableMove => ({ seat, steps: Arr.map(chain, ({ move }) => move), label })),
-                      chosen: line.move,
-                    },
-                  ],
-                }),
-            });
-          }),
-      }),
-  });
-
-interface StepDraft {
-  readonly step: Omit<Step, "outcome" | "calls">;
-  readonly outcome: ReadonlyArray<string>;
-  readonly calls: Array<Call>;
-}
-
-const matchDetail = (db: Database, regret: Regret | null, certain: Certain, id: string): MatchDetail | null => {
-  const row = db
-    .query(`select m.id, m.name, m.status, m.seed, m.started_at startedAt, m.ended_at endedAt, t.name tournament from matches m join tournaments t on t.id = m.tournament_id where m.id = ? and m.disposition is not 'excluded'`)
-    .get(id);
-
-  if (row === null) return null;
-
-  const match = decodeSummary(row);
-
-  const seats = db
-    .query(`select ms.player, ms.position, ms.cash, ms.win_share winShare, ms.label from match_seats ms where match_id = ? order by position`)
-    .all(id)
-    .map((row) => decodeMatchSeat(withConfig(decodeLabelled(row))));
-
-  const regretOf = regret?.moves(id);
-  const certainOf = certain.moves(id);
-
-  // Each player's view is what it heard up to each of its decisions, so shells and rounds are tracked per player.
-  const log = matchLog(db, id);
-  const trackers = new Map<string, ShellTracker>();
-  const heardTo = new Map<string, number>();
-  const roundOf = new Map<string, number>();
-  const healthOf = new Map<string, number>();
-
-  const rows = db
-    .query(`select id, ordinal, turn, player, by_whom byWhom, label, selected_move move, visible_json visible, events_before eventsBefore from decisions where match_id = ? order by ordinal`)
-    .all(id)
-    .map((raw) => decodeDecisionRow(raw));
-
-  const manifest = db.query<{ manifest: string | null }, [string]>(`select manifest_json manifest from matches where id = ?`).get(id)?.manifest ?? null;
-  const tables = tablesOf(manifest, rows);
-
-  const drafts = rows.map((row, index): StepDraft => {
-    const visible = row.visible === null ? null : decodeVisible(row.visible);
-    const tracker = trackers.get(row.player) ?? new ShellTracker();
-    const socket = Option.getOrUndefined(log.roster.find(row.player))?.seat;
-    const at = row.eventsBefore ?? heardTo.get(row.player) ?? 0;
-    const heard = socket === undefined ? [] : heardBetween(log, socket, heardTo.get(row.player) ?? 0, at);
-
-    trackers.set(row.player, tracker);
-    heardTo.set(row.player, at);
-
-    for (const line of heard) {
-      tracker.hear(line);
-
-      if (GameEvent.guards.RoundBegan(line)) roundOf.set(row.player, line.round + 1);
-    }
-
-    const chamber = tracker.chamber();
-
-    const players = (visible?.players ?? []).map((seen): PlayerState => {
-      const health = seen.health ?? healthOf.get(seen.player) ?? 0;
-
-      healthOf.set(seen.player, health);
-
-      return { player: seen.player, health, items: seen.items ?? [] };
-    });
-
-    // What the player heard after this move, up to its next decision.
-    const next = rows.slice(index + 1).find(({ player }) => player === row.player)?.eventsBefore ?? log.events.length;
-    const after = socket === undefined || row.eventsBefore === null ? [] : heardBetween(log, socket, row.eventsBefore, next);
-    const end = socket === undefined ? 0 : after.findIndex((line) => isOutcomeEnd(line, socket));
-
-    const { visible: _visible, move: _move, eventsBefore: _eventsBefore, ...decision } = row;
-
-    return {
-      step: {
-        ...decision,
-        round: roundOf.get(row.player) ?? 1,
-        players,
-        live: tracker.live,
-        blank: tracker.blank,
-        known: chamber !== null && (chamber.by === "glass" || chamber.by === "phone") ? chamber.known : null,
-        regret: regretOf?.get(row.ordinal) ?? null,
-        certain: certainOf.get(row.ordinal) ?? null,
-        table: tables[index] ?? null,
-      },
-      outcome: (end === -1 ? after : after.slice(0, end)).flatMap((line) => (GameEvent.guards.PickedUp(line) ? [] : [isSecret(line) ? secretText(line) : eventText(log.roster, line)])),
-      calls: [],
-    };
-  });
-
-  const byId = new Map(drafts.map((draft) => [draft.step.id, draft]));
-  const unlinked: Array<Call> = [];
-
-  const calls = db.query(
-    `select decision_id decisionId, player, t, status, error, latency_ms latency, input_tokens inp, output_tokens outp,
-       cache_read_tokens cr, cache_write_tokens cw, reasoning_tokens rt, cost_usd cost,
-       reasoning_text reasoning, response_text response, tool_calls_json tools
-     from calls where match_id = ? order by ordinal`,
-  );
-
-  for (const raw of calls.all(id)) {
-    const call = decodeCall(raw);
-    const draft = call.decisionId === null ? undefined : byId.get(call.decisionId);
-
-    (draft?.calls ?? unlinked).push(call);
-  }
-
-  const story = roundStory(log, new Map(seats.map((seat) => [seat.player, seat.cash ?? 0])));
-
-  return { match, seats, decisions: drafts.map(({ step, outcome, calls: linked }) => ({ ...step, outcome, calls: linked })), unlinked, story };
-};
-
-/** Replaying a match through the rules takes up to seconds, so the server keeps the latest few it sent. */
-const RECENT_MATCHES = 32;
 
 const JSON_TYPE = { "content-type": "application/json" };
 
@@ -244,10 +49,6 @@ const guardedBy = (password: string | undefined) => (handler: (request: Request)
   };
 };
 
-/**
- * Loads and analyses the database once, then serves the page and the API. With a regret database, seats and moves carry their regret.
- * With a knowledge database, the page shows how consistent each config is.
- */
 /** A file of the built site when the path names one; any other path gets the page, which routes itself. */
 const COMPRESSIBLE = /\.(js|css|svg)$/;
 
@@ -286,7 +87,6 @@ export const serveArenaViewer = ({ db, regret, seats, seatIndex, decisions, cert
   const aggregateRoutes = Object.fromEntries(AGGREGATE_NAMES.map((name) => [`/api/agg/${name}`, guarded((request) => json(request, encodedBody(aggregateJson[name])))]));
 
   const seatsBody = encodedBody(encodeSeats(seats));
-  const recentMatches = new Map<string, ReturnType<typeof encodedBody>>();
   const decisionsBody = encodedBody(encodeDecisions(decisions));
   const blundersBody = encodedBody(encodeBlunders(findBlunders(db, regret, seatIndex)));
   const certainBody = encodedBody(encodeCertain(certain.summary));
@@ -307,19 +107,6 @@ export const serveArenaViewer = ({ db, regret, seats, seatIndex, decisions, cert
       "/api/blunders": guarded((request) => json(request, blundersBody)),
       ...aggregateRoutes,
       "/api/certain-mistakes": guarded((request) => json(request, certainBody)),
-      "/api/match": guarded((request) => {
-        const id = new URL(request.url).searchParams.get("id") ?? "";
-        const body = Option.orElse(Option.fromUndefinedOr(recentMatches.get(id)), () => Option.map(Option.fromNullOr(matchDetail(db, regret, certain, id)), (detail) => encodedBody(encodeMatch(detail))));
-
-        if (Option.isSome(body)) {
-          recentMatches.delete(id);
-          recentMatches.set(id, body.value);
-
-          for (const old of [...recentMatches.keys()].slice(0, Math.max(0, recentMatches.size - RECENT_MATCHES))) recentMatches.delete(old);
-        }
-
-        return Option.match(body, { onNone: () => new Response("not found", { status: 404 }), onSome: (found) => json(request, found) });
-      }),
     },
   });
 };

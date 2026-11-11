@@ -1,8 +1,5 @@
 import { Schema } from "effect";
 
-import { TableMove } from "../board.ts";
-import { Board, Seat as BoardSeat } from "../domain.ts";
-
 // The arena viewer's JSON API: what its server encodes and its page decodes.
 // The server reads the analysis database (docs/arena/database.md) read-only.
 
@@ -215,30 +212,6 @@ export const Shell = Schema.Literals(["live", "blank"]);
 
 export type Shell = typeof Shell.Type;
 
-export const Call = Schema.Struct({
-  decisionId: Schema.NullOr(Schema.String),
-  player: Schema.String,
-  t: Schema.String,
-  status: Schema.String,
-  error: Schema.NullOr(Schema.String),
-  latency: Count,
-  inp: Count,
-  outp: Count,
-  cr: Count,
-  cw: Count,
-  rt: Count,
-  cost: Count,
-  reasoning: Schema.String,
-  response: Schema.String,
-  tools: Schema.String,
-});
-
-export type Call = typeof Call.Type;
-
-export const PlayerState = Schema.Struct({ player: Schema.String, health: Schema.Number, items: Schema.Array(Schema.String) });
-
-export type PlayerState = typeof PlayerState.Type;
-
 /**
  * What the minimax player made of one searched agent move, in percentage points of the round win chance: the regret,
  * the best move's score and the chosen move's. exact is true only for a proven settled round; false means not proven
@@ -257,72 +230,3 @@ export const MoveRegret = Schema.Struct({
 });
 
 export type MoveRegret = typeof MoveRegret.Type;
-
-/**
- * The table just before a decision, from the match replayed through the rules (ADR-0001): the public board, the
- * seats out of the round, and the deciding player's legal moves, of which `chosen` is the one played.
- */
-export const TablePosition = Schema.Struct({ board: Board, out: Schema.Array(BoardSeat), moves: Schema.Array(TableMove), chosen: Schema.Number });
-
-export type TablePosition = typeof TablePosition.Type;
-
-/**
- * One decision of a match, with the deciding player's view: everyone's health and items, the shells it counts
- * by original type, and the chambered shell if glass or phone told it. A view can omit a jammed player's health,
- * so the last known value is carried forward. outcome is the public events the move caused.
- */
-export const Step = Schema.Struct({
-  id: Schema.String,
-  ordinal: Schema.Number,
-  turn: Schema.Number,
-  player: Schema.String,
-  byWhom: Schema.Literals(["agent", "human", "engine", "fallback", "forced"]),
-  label: Schema.String,
-  round: Schema.Number,
-  players: Schema.Array(PlayerState),
-  live: Schema.Number,
-  blank: Schema.Number,
-  known: Schema.NullOr(Shell),
-  regret: Schema.NullOr(MoveRegret),
-  certain: Schema.NullOr(CertainType),
-  outcome: Schema.Array(Schema.String),
-  calls: Schema.Array(Call),
-  /** Null when the match does not replay to this decision. */
-  table: Schema.NullOr(TablePosition),
-});
-
-export type Step = typeof Step.Type;
-
-export const MatchSummary = Schema.Struct({
-  id: Schema.String,
-  name: Schema.String,
-  status: Schema.String,
-  seed: Schema.Number,
-  startedAt: Schema.String,
-  endedAt: Schema.NullOr(Schema.String),
-  tournament: Schema.String,
-});
-
-export const MatchSeat = Schema.Struct({
-  player: Schema.String,
-  position: Schema.Number,
-  cash: Count,
-  winShare: Count,
-  model: Schema.String,
-  effort: Schema.String,
-});
-
-export type MatchSeat = typeof MatchSeat.Type;
-
-export const MatchDetail = Schema.Struct({
-  match: MatchSummary,
-  seats: Schema.Array(MatchSeat),
-  decisions: Schema.Array(Step),
-  unlinked: Schema.Array(Call),
-  story: Story,
-});
-
-export type MatchDetail = typeof MatchDetail.Type;
-
-/** A match detail as JSON: a board's empty slots are Options. */
-export const MatchDetailJson = Schema.toCodecJson(MatchDetail);

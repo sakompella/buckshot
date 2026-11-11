@@ -89,8 +89,6 @@ export interface CertainLinks {
 }
 
 interface Listed {
-  readonly matchId: string;
-  readonly ordinal: number;
   readonly count: number;
   readonly startedAt: string;
   readonly opponent: SeatFull | undefined;
@@ -102,7 +100,7 @@ const listedOf = ({ certain, seats, allMatches }: CertainLinks, { key, type }: C
   const found = certain.moveSeat.flatMap((seatAt, move) => {
     const seat = seats[seatAt];
 
-    return seat !== undefined && keyOf(seat) === key && certain.moveType[move] === CERTAIN_TYPES.indexOf(type) ? [{ seat, ordinal: certain.moveOrd[move] ?? 0 }] : [];
+    return seat !== undefined && keyOf(seat) === key && certain.moveType[move] === CERTAIN_TYPES.indexOf(type) ? [{ seat }] : [];
   });
 
   return [...groupBy(found, ({ seat }) => seat.matchId).values()]
@@ -113,8 +111,6 @@ const listedOf = ({ certain, seats, allMatches }: CertainLinks, { key, type }: C
         ? []
         : [
             {
-              matchId: first.seat.matchId,
-              ordinal: Math.min(...moves.map(({ ordinal }) => ordinal)),
               count: moves.length,
               startedAt: first.seat.startedAt,
               opponent: matches.get(first.seat.matchId)?.seats.find(({ player }) => player !== first.seat.player),
@@ -151,9 +147,9 @@ const cellView = (h: H, cell: Cell, link: { readonly key: string; readonly isOpe
 const matchesView = (h: H, listed: ReadonlyArray<Listed>): Html =>
   h.div(
     [h.Class("chips cmmatches")],
-    listed.map(({ matchId, ordinal, count, startedAt, opponent }) =>
-      h.button(
-        [h.Type("button"), h.Class("chip on"), h.OnClick(Message.ClickedMatch({ id: matchId, maybeFocus: Option.some(ordinal) }))],
+    listed.map(({ count, startedAt, opponent }) =>
+      h.span(
+        [h.Class("chip")],
         [
           opponent === undefined ? h.empty : h.i([h.Style({ background: colorOf(opponent.model) })], []),
           `${fmtTime(startedAt)}${opponent === undefined ? "" : ` · vs ${labelOf(keyOf(opponent))}`}${count > 1 ? ` · ${count} mistakes` : ""}`,

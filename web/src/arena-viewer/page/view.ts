@@ -3,7 +3,7 @@ import { AsyncData } from "foldkit";
 import { createLazy, type Document, type Html, type HtmlBuilder } from "foldkit/html";
 
 import { EFFORTS, effortName } from "../../arena/model-names.ts";
-import { baseName, baseOrder, colorOf, fmtCount, type MatchRow, sumOf, unique } from "./data.ts";
+import { baseName, baseOrder, colorOf, fmtCount, sumOf, unique } from "./data.ts";
 import { tipView } from "./charts.ts";
 import { type CertainLinks, certainTableView, certainView } from "./certain.ts";
 import { allMatchesOf, type Derived, derive, keptMatchesOf, memoLast } from "./derived.ts";
@@ -13,7 +13,6 @@ import { accuracyTableView, configPanelView, leaderboardView } from "./leaderboa
 import { oddsView } from "./odds.ts";
 import { matchesView } from "./matches.ts";
 import { type Group, GROUPS, LoadFailure, type Local, Message, type Model, type Section, type Viewport } from "./model.ts";
-import { replayView } from "./replay.ts";
 import { scatterView } from "./scatter.ts";
 import { tourView } from "./tour.ts";
 
@@ -133,8 +132,6 @@ const lazyItems = createLazy();
 
 const lazyBreakdown = createLazy();
 
-const lazyReplay = createLazy();
-
 const lazyDrill = createLazy();
 
 const navView = (h: H, maybeGroup: Option.Option<Group>): Html =>
@@ -164,8 +161,6 @@ const optionalView = <A>(h: H, data: AsyncData.AsyncData<A, string>, what: strin
 const certainLinksOf = memoLast((local: Local): Option.Option<CertainLinks> =>
   Option.map(AsyncData.getData(local.certainMoves), (certain) => ({ certain, seats: local.seats, allMatches: allMatchesOf(local.seats) })),
 );
-
-const NO_MATCHES: ReadonlyArray<MatchRow> = [];
 
 const localData = (local: Model["local"]): Option.Option<Local> => AsyncData.getData(local);
 
@@ -258,11 +253,6 @@ export const view = (model: Model, h: H): Document =>
     onData: (loaded) => {
       const derived = derive(loaded, model.filter);
 
-      const replay = Option.match(model.maybeReplay, {
-        onNone: () => h.empty,
-        onSome: (open) => lazyReplay(replayView, [h, open, model.matches[open.id], Option.match(localData(model.local), { onNone: () => NO_MATCHES, onSome: ({ seats }) => allMatchesOf(seats) }), model.viewport]),
-      });
-
       return {
         title: "Buckshot Arena",
         body: h.div(
@@ -270,7 +260,6 @@ export const view = (model: Model, h: H): Document =>
           [
             // Touch has no hover: a tap pins a point, and a tap anywhere outside the chart unpins it.
             h.main(isPinned(model) ? [h.OnClick(Message.ClickedOutsideChart())] : [], [pageView(h, model, derived)]),
-            replay,
             Option.match(Option.orElse(model.markTip.maybeHover, () => model.markTip.maybePin), { onNone: () => h.empty, onSome: ({ anchor, text }) => tipView(h, anchor, [text]) }),
             Option.match(model.maybeTappedTitle, { onNone: () => h.empty, onSome: (text) => h.div([h.Class("tip tapped"), h.Role("status")], [text]) }),
             Option.match(model.maybeTour, { onNone: () => h.empty, onSome: (tour) => tourView(h, tour, model.viewport.width) }),

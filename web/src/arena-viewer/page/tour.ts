@@ -2,7 +2,6 @@ import { Effect, Option, Schema } from "effect";
 import { Command } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import type { SeatFull } from "./data.ts";
 import { GROUPS, Message, type Section, type Tour } from "./model.ts";
 import { reveal } from "./reveal.ts";
 import { stickyHeight } from "./view.ts";
@@ -21,7 +20,6 @@ export interface TourStep {
   readonly focus: string;
   readonly title: string;
   readonly text: string;
-  readonly isReplay: boolean;
 }
 
 const TOUR: ReadonlyArray<TourStep> = [
@@ -30,87 +28,56 @@ const TOUR: ReadonlyArray<TourStep> = [
     focus: ".filters",
     title: "Filters",
     text: "The model and effort chips apply to the whole page; on a phone they fold into one line, and a tap opens them. Every scored match from every tournament is pooled.",
-    isReplay: false,
   },
   {
     anchor: "scatter",
     focus: "#scatter .card",
     title: "Cost, Moves, Tokens, Accuracy",
     text: "Each point is a config, a model at one effort, placed by its Round Elo against its cost, model moves or output tokens per match, or its accuracy, scored like lichess scores a game from how much win chance each move gave up (higher is better, 100 is perfect). A click on a point opens that config's drill-down under the chart.",
-    isReplay: false,
   },
   {
     anchor: "breakdown",
     focus: "#breakdown details",
     title: "Win share against each opponent",
     text: "Each config's win share against each opponent model, folded until a click on the title opens it. Inside, a click on a column head sorts by it, and the small grey number in each cell is the sample behind it.",
-    isReplay: false,
   },
   {
     anchor: "certain-mistakes",
     focus: "#certain-mistakes .chartrow",
     title: "Certain mistakes",
     text: "Shots a player's own information proves worse than the other shot, counted over every decision where it could have made one. The dashed line is every config pooled; a tap on a dot shows its interval.",
-    isReplay: false,
   },
   {
     anchor: "odds",
     focus: "#odds .chartrow figure:first-child",
     title: "Playing the odds",
     text: "How often a config shoots itself against the chance, by its own count, that the shell is live, one panel per model and a line per effort. A model that counts shells shoots itself on a sure blank.",
-    isReplay: false,
   },
   {
     anchor: "items",
     focus: "#items .chartrow",
     title: "Item usage",
     text: "How often each model used an item when it had one, and what became of each kind of item: used, stolen by the opponent or left unused. Look for the items most often left unused.",
-    isReplay: false,
   },
   {
     anchor: "matches",
     focus: "#matches .bar",
     title: "Matches",
-    text: "Every started match, newest first, with a search and two shortcuts, Comebacks and Upsets. A row opens its replay, where the arrow keys step through the moves and Escape closes it.",
-    isReplay: false,
-  },
-  {
-    anchor: "matches",
-    focus: ".modal .moves",
-    title: "Regret tags",
-    text: "In the replay each model move has a regret tag, filled when the move gave up a lot and marked exact when both scores are settled. Open a move for the best move, both scores and the search depth.",
-    isReplay: true,
-  },
-  {
-    anchor: "matches",
-    focus: ".modal .timeline",
-    title: "Turning points",
-    text: "On the replay's health chart, rings mark the costly moves, and the biggest are listed under it as turning points. A click on one jumps to that move.",
-    isReplay: true,
+    text: "Every started match, newest first, with a search and two shortcuts, Comebacks and Upsets, for matches a winner took from far behind or against the rating.",
   },
   {
     anchor: "leaderboards",
     focus: "#leaderboards .lbt thead, #leaderboards .lbt tbody tr:first-child",
     title: "Leaderboard columns",
     text: "At the end of the page, one fold holds the tables. Per config the leaderboard gives its Round Elo, one Bradley-Terry rating pooled over every tournament, drawn as a bar with its interval, then its matches, cost per match, match wins against its own opponents, round wins, cash share, Regret, cost per move, time per move, output tokens and favourite item.",
-    isReplay: false,
   },
   {
     anchor: "leaderboards",
     focus: "#leaderboards .lbt tbody tr:first-child",
     title: "A config's row",
     text: "A click on a row shows how steady it is, how much it writes when behind or ahead, and what became of its items. Faded rows rest on few scored matches and have no rank.",
-    isReplay: false,
   },
 ];
-
-export const tourMatchOf = (seats: ReadonlyArray<Pick<SeatFull, "matchId" | "status" | "regret">>): Option.Option<string> => {
-  const given = new Map<string, number>();
-
-  for (const { matchId, status, regret } of seats) if (status === "completed") given.set(matchId, (given.get(matchId) ?? 0) + (regret?.total ?? 0));
-
-  return Option.fromUndefinedOr([...given].toSorted(([, left], [, right]) => right - left)[0]?.[0]);
-};
 
 /** The steps over the sections this page draws. */
 export const tourOf = (hasCertain: boolean): ReadonlyArray<TourStep> =>
@@ -141,9 +108,8 @@ const placed = (step: number, hasCertain: boolean) => {
 
   const cardHeight = document.querySelector(".tour-card")?.getBoundingClientRect().height ?? CARD_GUESS;
 
-  // A target inside the sticky bar is already in view, and one in the replay scrolls the replay, not the page.
-  if (target.closest(".overlay") !== null) target.scrollIntoView({ block: "start" });
-  else if (target.closest(".top") === null) scrollTo(0, target.getBoundingClientRect().top + scrollY - stickyHeight() - GAP);
+  // A target inside the sticky bar is already in view.
+  if (target.closest(".top") === null) scrollTo(0, target.getBoundingClientRect().top + scrollY - stickyHeight() - GAP);
 
   const rect = target.getBoundingClientRect();
   // A row wider than its scrolling table is cut at the page's edge, so the highlight never widens the page.

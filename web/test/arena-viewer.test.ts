@@ -10,7 +10,6 @@ import { type BlockTally, blockRate, fmtBytes, groupBy, labelOf, matchRows, quan
 import { mulberry32 } from "../src/arena/tournament-stats.ts";
 import { bradleyTerry, type Game, heldOutRatings, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 import { droppedConfigs, oddsPanels } from "../src/arena-viewer/page/odds.ts";
-import { shotOf, showsReloadNote, turningPoints } from "../src/arena-viewer/page/replay.ts";
 import { rowsOf } from "../src/arena-viewer/page/matches.ts";
 import { modelStatsOf, ranksOf } from "../src/arena-viewer/page/derived.ts";
 import { inRankOrder } from "../src/arena-viewer/page/leaderboard.ts";
@@ -420,15 +419,6 @@ test("playing the odds keeps every effort the filter keeps, named as itself, wit
   expect(effortsOf([true, false, true, true])).toEqual([["claude-opus-5-5", ["low", "high", "max"]]]);
 });
 
-test("turning points are the biggest blunders, biggest first, and none when no move gave up 5 points", () => {
-  const stepWith = (points: number | null) => ({ regret: points === null ? null : { points } });
-  const steps = [4.9, null, 12, 5, 30, 12, 8].map(stepWith);
-
-  expect(turningPoints(steps)).toEqual([4, 2, 5]);
-  expect(turningPoints(steps, 10)).toEqual([4, 2, 5, 6, 3]);
-  expect(turningPoints([4.9, null, 0].map(stepWith))).toEqual([]);
-});
-
 test("ranks go to rated configs of 20 or more matches by rating, equal ratings by label; the rest have no rank and the leaderboard lists them after, the better rated first", () => {
   const played = (model: string, matches: number) => Array.from({ length: matches }, (_, index) => ({ ...SEAT, matchId: `${model}${index}`, model, potShare: null }));
   const stats = modelStats([...played("delta", 20), ...played("alpha", 20), ...played("charlie", 20), ...played("bravo", 20), ...played("echo", 19), ...played("foxtrot", 3)]);
@@ -438,12 +428,6 @@ test("ranks go to rated configs of 20 or more matches by rating, equal ratings b
 
   expect([...ranks]).toEqual([["bravo|medium", 1], ["charlie|medium", 2], ["alpha|medium", 3]]);
   expect(inRankOrder(stats, ranks, ratings).map(({ model }) => model)).toEqual(["bravo", "charlie", "alpha", "echo", "foxtrot", "delta"]);
-});
-
-test("the reload note shows only when a reload is within the depth reached and 1 to 3 shells are left", () => {
-  expect([1, 2, 3].map((shells) => showsReloadNote(shells, 6))).toEqual([true, true, true]);
-  expect([4, 5, 6].map((shells) => showsReloadNote(shells, 6))).toEqual([false, false, false]);
-  expect([showsReloadNote(2, 1), showsReloadNote(1, 1), showsReloadNote(3, 3), showsReloadNote(3, 2)]).toEqual([false, true, true, false]);
 });
 
 test("the best-value line runs through ranked configs only", () => {
@@ -464,19 +448,6 @@ test("a heat cell grows brighter with its win share, and fades toward the page b
   expect(level(0.8, FULL_N - 1)).toBeLessThan(level(0.8, FULL_N));
   expect(level(0.8, 1)).toBeLessThan(level(0.8, FULL_N - 1));
   expect(level(0.8, FULL_N * 5)).toBe(level(0.8, FULL_N));
-});
-
-test("a shot shows what its log says, and the last move of a completed match is live because only a live shell ends it", () => {
-  const step = (id: string, label: string, outcome: ReadonlyArray<string>) => ({ id, label, outcome });
-  const logged = step("a", "Shoot yourself", ["Player A shot Player A: blank."]);
-  const last = step("c", "Shoot Player B", []);
-  const detail = (status: string) => ({ match: { status }, decisions: [logged, step("b", "Shoot Player B", []), last] });
-
-  expect(shotOf(detail("completed"), logged)).toBe("blank");
-  expect(shotOf(detail("completed"), last)).toBe("live");
-  expect(shotOf(detail("completed"), step("b", "Shoot Player B", []))).toBeNull();
-  expect(shotOf(detail("partial"), last)).toBeNull();
-  expect(shotOf(detail("completed"), step("c", "Use handsaw", []))).toBeNull();
 });
 
 test("a match search needs each of its words in a seat's label or the seed, in any order and with any spacing", () => {
