@@ -35,9 +35,6 @@ body:has(.tip.tapped) .tip:not(.tapped) { display: none; }
 .tip.tapped { left: 8px; right: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); max-width: none; font-size: 13px; padding: 10px 12px; }
 .chips { display: flex; gap: 4px; flex-wrap: wrap; }
 .flabel { color: var(--dim); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; width: 100%; }
-.toplist { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; }
-.toplist li { display: flex; align-items: baseline; gap: 10px; font-size: 14px; }
-.toplist .lp { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .scrollcue { display: none; }
 @media (max-width: 639px) { .scrollcue { display: block; margin: 0 0 6px; } }
 .chip { font-size: 12px; padding: 2px 8px; border-color: var(--line); color: var(--dim); }
@@ -94,6 +91,26 @@ tr.provisional td { opacity: 0.55; }
 .dot { display: inline-block; width: 9px; height: 9px; margin-right: 9px; border-radius: 50%; }
 .dot.o { border-radius: 2px; }
 .track { position: relative; height: 10px; background: #0d0d0d; }
+.forest { max-width: 980px; }
+.frow { display: grid; grid-template-columns: minmax(0, 15em) minmax(0, 1fr) 8.5em; column-gap: 12px; align-items: center; min-height: 20px; font-size: 13px; }
+.fname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fval { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ftrack { position: relative; align-self: stretch; }
+.fzero { position: absolute; top: 0; bottom: 0; border-left: 1px solid #333; }
+.fanchor { position: absolute; top: 0; bottom: 0; border-left: 1px dashed var(--mut); }
+.fci { position: absolute; top: 50%; height: 2px; margin-top: -1px; opacity: 0.55; }
+.fdot { position: absolute; top: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border: 1px solid #000; }
+.fdot.a { border-radius: 50%; }
+.fdot.o { border-radius: 1.5px; }
+.falabel { position: absolute; top: 2px; padding: 0 5px; background: var(--bg); color: var(--mut); font-size: 12px; white-space: nowrap; }
+.falabel.end { transform: translateX(-100%); }
+.faxis { position: relative; height: 18px; font-size: 11px; color: var(--dim); }
+.faxis span { position: absolute; top: 3px; transform: translateX(-50%); }
+@media (max-width: 639px) { .frow { grid-template-columns: minmax(0, 9.5em) minmax(0, 1fr) 2.6em; column-gap: 8px; font-size: 12px; } .fval .pm { display: none; } .falabel { font-size: 11px; } .faxis span:nth-child(even) { display: none; } }
+.pending { min-height: 320px; }
+.foot { border-top: 1px solid var(--line); margin-top: 56px; padding: 18px 0 28px; color: var(--mut); font-size: 12.5px; }
+.foot p { margin: 0 0 6px; }
+.foot a { color: var(--mut); }
 .fill { position: absolute; top: 0; bottom: 0; }
 .zero { position: absolute; top: -3px; bottom: -3px; border-left: 1px solid #555; }
 .whisk { position: absolute; top: -3px; height: 16px; border-left: 1px solid #ddd; border-right: 1px solid #ddd; }

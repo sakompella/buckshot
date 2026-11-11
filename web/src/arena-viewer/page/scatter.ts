@@ -2,7 +2,7 @@ import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { anchorId, linScale, logScale, REFERENCE, REFERENCE_DASH, selectView, tipView, toggleView } from "./charts.ts";
-import { baseName, DEFAULT_EFFORT, effortLabel, fmtCount, fmtPct, fmtRating, fmtUsd, isClaude, isProvisional } from "./data.ts";
+import { baseName, DEFAULT_EFFORT, effortLabel, fmtCount, fmtPct, fmtRating, fmtUsd, isClaude, isEngine, isProvisional } from "./data.ts";
 import { leader, measureText, placeLabels, uncrowded } from "./labels.ts";
 import { memoLast, type ModelStats } from "./derived.ts";
 import { Message, type Model, type ScatterAxis } from "./model.ts";
@@ -12,7 +12,7 @@ type H = HtmlBuilder<Message>;
 
 // Average cost, model moves or output tokens against the Round Elo, one point per config, labelled
 // as on DeepSWE: the model's name, its effort below in small caps. The dashed line is the frontier: no other point is
-// both lower on the x axis and higher rated.
+// both lower on the x axis and higher rated. The search engines cost nothing, so they are labelled horizontal lines.
 
 interface Axis {
   readonly label: string;
@@ -152,6 +152,8 @@ const pointsOf = memoLast(
   (stats: ReadonlyArray<ModelStats>, ratings: ReadonlyMap<string, Rating>, ranks: ReadonlyMap<string, number>): Readonly<Record<ScatterAxis, ReadonlyArray<Point>>> => {
     const on = (axis: ScatterAxis): ReadonlyArray<Point> =>
       stats.flatMap((m) => {
+        if (isEngine(m.model)) return [];
+
         const rating = ratings.get(m.key)?.rating;
         const rank = ranks.get(m.key);
         const x = AXES[axis].valueOf(m);
@@ -191,6 +193,8 @@ const domainOf = memoLast((every: ReadonlyArray<ModelStats>, ratings: ReadonlyMa
   const xOf = (axis: ScatterAxis) =>
     extent(
       rated.flatMap((m) => {
+        if (isEngine(m.model)) return [];
+
         const value = AXES[axis].valueOf(m);
 
         return value === null ? [] : [value];
@@ -403,6 +407,21 @@ export const scatterView = (
           ...y.ticks.map((value) => h.g([], [gridLine(L, width - right, y.at(value), y.at(value)), textAt(h, L - 10, y.at(value) + 4, "end", tick, fmtRating(value))])),
           ...x.ticks.map((value) => h.g([], [gridLine(x.at(value), x.at(value), T, height - B), xLabels.has(value) ? textAt(h, x.at(value), height - B + 18, "middle", tick, axis.tick(value)) : h.empty])),
           textAt(h, (L + width - right) / 2, height - 14, "middle", { fill: "var(--fg)", "font-size": `${type.axis}px` }, axis.axisLabel),
+          ...stats.flatMap((m) => {
+            const rating = ratings.get(m.key)?.rating;
+
+            return isEngine(m.model) && rating !== undefined
+              ? [
+                  h.g(
+                    [h.Class("anchor")],
+                    [
+                      h.line([h.X1(`${L}`), h.X2(`${width - right}`), h.Y1(`${y.at(rating)}`), h.Y2(`${y.at(rating)}`), h.Stroke(REFERENCE), h.StrokeOpacity("0.6"), h.StrokeDasharray("2 4")], []),
+                      textAt(h, L + 4, y.at(rating) - 5, "start", { fill: "var(--mut)", "font-size": `${type.tick}px`, ...halo(3) }, `${m.label} ${fmtRating(rating)}`),
+                    ],
+                  ),
+                ]
+              : [];
+          }),
           h.path(
             [
               h.D(frontier.map((point, index) => `${index === 0 ? "M" : "L"}${x.at(point.x)},${y.at(point.rating)}`).join("")),

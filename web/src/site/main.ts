@@ -139,13 +139,13 @@ export const view = (model: Model, h: H): Document =>
   SiteRoute.match(model.route, {
     Arena: () => arenaPage(h, model),
     NotFound: ({ path }) => ({
-      title: "Buckshot",
+      title: "Not found · Buckshot Arena",
       body: pageOf(h, model, h.main([], [h.p([h.Class("k")], [`Nothing lives at ${path}. `, h.a([h.Href("/arena")], ["The arena"]), " has every config's results."])])),
     }),
   });
 
 const arenaPage = (h: H, model: Model): Document => ({
-  title: "Buckshot Arena",
+  title: "Buckshot Arena: language models playing Buckshot Roulette",
   body: pageOf(
     h,
     model,

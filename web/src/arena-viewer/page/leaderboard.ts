@@ -1,8 +1,12 @@
 import { Option } from "effect";
+import { AsyncData } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
+import { CERTAIN_TYPES, type CertainRate } from "../api.ts";
+import { type Cell as CertainCell, talliesOf } from "./certain.ts";
+
 import { pressable } from "./charts.ts";
-import { baseName, costPerMove, effortLabel, fmtCount, fmtPct, fmtPoints, fmtSec, fmtUsd, isClaude, isProvisional } from "./data.ts";
+import { baseName, CERTAIN_NAMES, costPerMove, effortLabel, fmtCount, fmtPct, fmtPoints, fmtSec, fmtShare, fmtUsd, isClaude, isProvisional } from "./data.ts";
 import type { Derived, ModelStats } from "./derived.ts";
 import { drillView } from "./drill.ts";
 import { itemIconOf } from "./items.ts";
@@ -233,8 +237,9 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
 
 const ACCURACY_HEADERS: ReadonlyArray<readonly [string, string]> = [
   ["Model", ""],
+  ["Avg points lost", "Mean points of round win chance a move gave up against the minimax player's best move; lower is better"],
+  ...CERTAIN_TYPES.map((type) => [CERTAIN_NAMES[type], "Share of the decisions where this mistake was a legal move that made it; the player's own information proves it worse, with no evaluator"] as const),
   ["Accuracy", ACCURACY_TITLE],
-  ["Avg points lost", "Mean points of round win chance a move gave up against the minimax player's best move"],
   ["p99 points lost", P99_TITLE],
   ["Best moves", "Moves as good as the minimax player's best"],
   ["Inaccuracies / 100", "Moves per 100 that gave up 5 to 10 points of round win chance (lichess's inaccuracy, 0.1 of its winning chances)"],
@@ -243,21 +248,27 @@ const ACCURACY_HEADERS: ReadonlyArray<readonly [string, string]> = [
   ["Moves", "Moves with a real choice, over the config's scored matches; decisions where every move is within a point are left out"],
 ];
 
-/** Configs with a scored move, best accuracy first. */
-export const inAccuracyOrder = (stats: ReadonlyArray<ModelStats>): ReadonlyArray<ModelStats> =>
-  stats.filter(({ regret }) => regret !== null).toSorted((left, right) => (right.regret?.accuracy ?? 0) - (left.regret?.accuracy ?? 0) || left.label.localeCompare(right.label));
+/** Configs with a scored move, fewest points lost first. */
+export const inPointsLostOrder = (stats: ReadonlyArray<ModelStats>): ReadonlyArray<ModelStats> =>
+  stats.filter(({ regret }) => regret !== null).toSorted((left, right) => (left.regret?.meanLost ?? 0) - (right.regret?.meanLost ?? 0) || left.label.localeCompare(right.label));
 
-const accuracyRowView = (h: H, m: ModelStats, rank: number): Html => {
+const certainCellView = (h: H, cell: CertainCell | undefined): Html =>
+  cell === undefined || cell.opportunities === 0
+    ? h.td([h.DataAttribute("label", cell === undefined ? "" : CERTAIN_NAMES[cell.type])], ["–"])
+    : h.td([h.DataAttribute("label", CERTAIN_NAMES[cell.type]), h.Title(`${cell.mistakes.toLocaleString()} of ${cell.opportunities.toLocaleString()}`)], [fmtShare(cell.mistakes / cell.opportunities)]);
+
+const accuracyRowView = (h: H, m: ModelStats, rank: number, certain: ReadonlyArray<CertainCell> | undefined): Html => {
   const { regret } = m;
-  const cell = (label: string, text: string | undefined) => h.td([h.DataAttribute("label", label), ...(label === "accuracy" ? [h.Title(movesTitle(m))] : [])], [text ?? "–"]);
+  const cell = (label: string, text: string | undefined) => h.td([h.DataAttribute("label", label), ...(label === "avg points lost" ? [h.Title(movesTitle(m))] : [])], [text ?? "–"]);
 
   return h.keyed("tr")(
     m.key,
     [h.Class(`row ${isProvisional(m) ? "provisional" : ""}`)],
     [
       h.td([], [h.span([h.Class("rk")], [String(rank)]), ...nameView(h, m)]),
-      cell("accuracy", regret?.accuracy.toFixed(1)),
       cell("avg points lost", regret === null ? undefined : fmtPoints(regret.meanLost)),
+      ...CERTAIN_TYPES.map((type) => certainCellView(h, certain?.find((own) => own.type === type))),
+      cell("accuracy", regret?.accuracy.toFixed(1)),
       cell("p99 points lost", regret === null ? undefined : fmtPoints(regret.p99Lost)),
       cell("best moves", regret === null ? undefined : fmtPct(regret.bestShare)),
       cell("inaccuracies / 100", regret?.inaccuraciesPer100.toFixed(1)),
@@ -268,15 +279,18 @@ const accuracyRowView = (h: H, m: ModelStats, rank: number): Html => {
   );
 };
 
-/** One table of how well each config's moves held the round win chance, best accuracy first. */
-export const accuracyTableView = (h: H, derived: Derived): Html => {
-  const configs = inAccuracyOrder(derived.pooled);
+/** One table of how much each config's moves gave up, fewest points lost first, with its certain mistakes once they load. */
+export const accuracyTableView = (h: H, derived: Derived, certain: AsyncData.AsyncData<ReadonlyArray<CertainRate>, string>): Html => {
+  const configs = inPointsLostOrder(derived.pooled);
+  const certainRows = new Map(Option.match(AsyncData.getData(certain), { onNone: () => [], onSome: (rates) => talliesOf(rates, derived.kept).rows.map((row) => [row.key, row.cells] as const) }));
 
   return h.div(
     [h.Id("accuracy-table")],
     [
-      h.h2([], ["Accuracy by config"]),
-      h.p([h.Class("sub")], ["Each move is scored by the round win chance it gave up against the minimax player's best move, with lichess's accuracy formula and its inaccuracy, mistake and blunder cut-offs. Decisions where every move is within a point are left out."]),
+      h.h2([], ["Points lost and certain mistakes by config"]),
+      h.p([h.Class("sub")], [
+        "Points lost: the round win chance each move gave up against the minimax player's best move. Certain mistakes: shots the player's own information proves worse, which need no evaluator. Accuracy applies lichess's formula and its inaccuracy, mistake and blunder cut-offs to the points lost. Decisions where every move is within a point are left out.",
+      ]),
       configs.length === 0
         ? h.div([h.Class("empty")], ["No config in this filter has a scored move."])
         : h.div(
@@ -286,7 +300,7 @@ export const accuracyTableView = (h: H, derived: Derived): Html => {
                 [h.Class("lbt rows")],
                 [
                   h.thead([], [h.tr([], ACCURACY_HEADERS.map(([label, title]) => h.th(title === "" ? [] : [h.Title(title)], [label])))]),
-                  h.tbody([], configs.map((m, index) => accuracyRowView(h, m, index + 1))),
+                  h.tbody([], configs.map((m, index) => accuracyRowView(h, m, index + 1, certainRows.get(m.key)))),
                 ],
               ),
             ],
