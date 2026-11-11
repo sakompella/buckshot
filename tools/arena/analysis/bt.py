@@ -80,14 +80,14 @@ class Fit:
         return {name: (value - mean) * ELO for name, value in self.theta.items()}
 
 
-def fit(cells: Cells, tau: float = 0.0, seat: bool = False, start: bool = False, theta_sd: float = 3.0, entrants: set[str] = frozenset(), pair_terms: set[tuple[str, str]] | None = None) -> Fit:
+def fit(cells: Cells, tau: float = 0.0, seat: bool = False, start: bool = False, theta_sd: float = 3.0, seat_sd: float = 1000.0, entrants: set[str] = frozenset(), pair_terms: set[tuple[str, str]] | None = None) -> Fit:
     """Newton steps on the log posterior; `entrants` without a game get theta 0."""
     names = sorted({name for key in cells for name in key[:2]} | set(entrants))
     column = {("theta", name): i for i, name in enumerate(names)}
     penalty = [1 / theta_sd**2] * len(names)
     if seat:
         column[("seat", "")] = len(column)
-        penalty.append(FLAT)
+        penalty.append(1 / seat_sd**2)
     if start:
         column[("start", "")] = len(column)
         penalty.append(FLAT)
