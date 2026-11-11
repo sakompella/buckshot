@@ -47,10 +47,10 @@ const decodeManifest = Schema.decodeUnknownResult(Schema.fromJsonString(Manifest
 
 /** The strings the files may hold: the configs the summary lists, the items, the certain-mistake scopes and types, the empty model and effort of a pooled scope, and the manifest's own. */
 const allowedStrings = (files: ReadonlyMap<string, string>): ReadonlySet<string> => {
-  const { configs } = Result.getOrElse(decodeSummary(files.get("summary") ?? ""), () => ({ configs: [] }));
+  const { configs, runs } = Result.getOrElse(decodeSummary(files.get("summary") ?? ""), () => ({ configs: [], runs: undefined }));
   const { generated } = Result.getOrElse(decodeManifest(files.get("manifest") ?? ""), () => ({ generated: "" }));
 
-  return new Set(["", ...configs.flatMap(({ model, effort }) => [model, effort, `${model}|${effort}`]), ...ITEMS, "config", "model", "all", ...OpportunityType.literals, generated, ...AGGREGATE_NAMES]);
+  return new Set(["", ...configs.flatMap(({ model, effort }) => [model, effort, `${model}|${effort}`]), ...ITEMS, "config", "model", "all", ...OpportunityType.literals, generated, ...(runs === undefined ? [] : [runs.from, runs.to]), ...AGGREGATE_NAMES]);
 };
 
 const fileViolations = (name: FileName, json: string, allowed: ReadonlySet<string>): ReadonlyArray<string> => {

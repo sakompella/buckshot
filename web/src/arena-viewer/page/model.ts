@@ -8,12 +8,12 @@ import { AGGREGATES } from "../aggregates.ts";
 import { CertainMistakes, CertainType, Seat } from "../api.ts";
 
 /** The page's groups below the hero, in page order: the jump menu's links, and the sections the reader can be in. */
-export const Group = Schema.Literals(["standings", "decisions", "watch", "tables"]);
+export const Group = Schema.Literals(["standings", "decisions", "watch", "tables", "about"]);
 
 export type Group = typeof Group.Type;
 
 /** The sections, each an in-page anchor; a link to one the page no longer has lands at its MOVED_TARGETS entry. */
-export const Section = Schema.Literals(["scatter", "breakdown", "certain-mistakes", "odds", "items", "matches", "leaderboards"]);
+export const Section = Schema.Literals(["summary", "how", "scatter", "breakdown", "certain-mistakes", "odds", "items", "matches", "leaderboards", "about"]);
 
 export type Section = typeof Section.Type;
 
@@ -22,7 +22,7 @@ export const Target = Schema.Union([Group, Section]);
 export type Target = typeof Target.Type;
 
 export const MOVED_TARGETS: ReadonlyMap<string, Target> = new Map([
-  ["results", "standings"],
+  ["results", "summary"],
   ["details", "leaderboards"],
   ["interesting", "matches"],
   ["blunders", "matches"],
@@ -33,10 +33,11 @@ export const MOVED_TARGETS: ReadonlyMap<string, Target> = new Map([
 ]);
 
 const EVERY_GROUP: ReadonlyArray<{ readonly group: Group; readonly label: string; readonly sections: ReadonlyArray<Section> }> = [
-  { group: "standings", label: "Standings", sections: ["scatter", "breakdown"] },
+  { group: "standings", label: "Standings", sections: ["summary", "how", "scatter", "breakdown"] },
   { group: "decisions", label: "How they play", sections: ["certain-mistakes", "odds", "items"] },
   { group: "watch", label: "Matches", sections: ["matches"] },
   { group: "tables", label: "Tables", sections: ["leaderboards"] },
+  { group: "about", label: "About", sections: ["about"] },
 ];
 
 /** The groups this build draws: the online one has no matches, which need per-match data. */

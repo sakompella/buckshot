@@ -1,4 +1,4 @@
-:root { --bg: #000; --fg: #ececec; --mut: #8b8b8b; --dim: #7a7a7a; --grid: #1c1c1c; --line: #262626; color-scheme: dark; }
+:root { --bg: #000; --fg: #ececec; --mut: #9c9c9c; --dim: #8a8a8a; --grid: #1c1c1c; --line: #262626; color-scheme: dark; }
 * { box-sizing: border-box; }
 :focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 tr:focus-visible td { background: #111; }
@@ -6,9 +6,9 @@ body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 syste
 main { max-width: 1500px; margin: 0 auto; padding: 18px 36px 80px; }
 h2 { font-size: 19px; font-weight: 600; margin: 0 0 6px; }
 h3 { font-size: 15px; font-weight: 600; margin: 18px 0 6px; }
-.sub { color: var(--mut); font-size: 13px; margin: 0 0 18px; max-width: 980px; }
-.k { color: var(--mut); font-size: 12px; }
-.pm { color: var(--dim); font-size: 11px; }
+.sub { color: var(--mut); font-size: 13.5px; line-height: 1.55; margin: 0 0 18px; max-width: 980px; }
+.k { color: var(--mut); font-size: 12.5px; }
+.pm { color: var(--dim); font-size: 11.5px; }
 section { border-top: 1px solid var(--line); padding-top: 28px; margin-top: 28px; }
 /* A group's heading, then its sections; the first section's rule would double the group's own. */
 section.part { border-top-color: #3a3a3a; margin-top: 56px; }
@@ -34,6 +34,12 @@ nav a.on { color: var(--fg); box-shadow: inset 0 -2px 0 var(--fg); border-radius
 body:has(.tip.tapped) .tip:not(.tapped) { display: none; }
 .tip.tapped { left: 8px; right: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); max-width: none; font-size: 13px; padding: 10px 12px; }
 .chips { display: flex; gap: 4px; flex-wrap: wrap; }
+.flabel { color: var(--dim); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; width: 100%; }
+.toplist { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 6px; }
+.toplist li { display: flex; align-items: baseline; gap: 10px; font-size: 14px; }
+.toplist .lp { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.scrollcue { display: none; }
+@media (max-width: 639px) { .scrollcue { display: block; margin: 0 0 6px; } }
 .chip { font-size: 12px; padding: 2px 8px; border-color: var(--line); color: var(--dim); }
 .chip.on { color: var(--fg); }
 .chip i, .legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; }
