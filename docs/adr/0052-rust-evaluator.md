@@ -1,6 +1,6 @@
 # Rust evaluator
 
-> Accepted 2026-11-08.
+> Accepted 2026-11-08. Amended 2026-11-11: an evaluator id is a declared version, kept by a golden set, not a source hash.
 
 The minimax player of ADR-0043 has a Rust implementation in `sim/rust/`: a rules crate (`buckshot-rules`) that steps the simple machine, a player crate (`buckshot-search`) and a batch CLI. Bend stays the source of truth (ADR-0001 as amended): the Rust rules mirror `sim/bend-mp/simple/` and `sim/bend-mp/sm/`, and are verified against them. The arena's play, the browser table and the agent tools keep calling Bend.
 
