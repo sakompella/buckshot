@@ -719,7 +719,7 @@ test("a tournament grows by seed blocks and by endpoints for new entrants, but n
   expect(Result.isSuccess(extended) && extended.success.schedule.slice(0, schedule.length)).toEqual([...schedule]);
   expect(Result.isSuccess(extended) && extended.success.schedule.slice(schedule.length).every((match) => match.block === 2)).toBe(true);
 
-  const withRouter = { ...ENDPOINTS, router: { api: "openai-responses", url: "http://localhost:20128/v1", keyEnv: "ROUTER_KEY" } };
+  const withRouter = { ...ENDPOINTS, router: { api: "openai-responses", url: "http://localhost:9440/v1", keyEnv: "ROUTER_KEY" } };
 
   const routed = (endpoints: Readonly<Record<string, Schema.Json>>) =>
     tournamentFrom(configJson({ endpoints, entrants: { ...ENTRANTS, routed: { endpoint: "router", model: "oc/routed", catalogModel: "gpt-6-luna", effort: "high" } }, pairings: [["luna", "don"], ["haiku-5-5", "luna"], ["opus", "story"], ["routed", "luna"]], blocksPerPairing: 3 }));

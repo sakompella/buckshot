@@ -205,7 +205,7 @@ const ResponsesRequest = Schema.StructWithRest(Schema.Struct({ reasoning: Schema
 
 /**
  * Whether the model is asked for OpenAI's detailed reasoning summary. A model of another provider served on the
- * Responses API by a router, such as DeepSeek through 9router, keeps pi-ai's "auto": it returns its own reasoning
+ * Responses API by a router, such as DeepSeek through a local router, keeps pi-ai's "auto": it returns its own reasoning
  * text, and whether the router accepts "detailed" is untested.
  */
 const asksDetailedSummaries = (catalogModel: Model<Api>): boolean => catalogModel.provider === "openai";

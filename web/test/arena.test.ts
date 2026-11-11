@@ -411,14 +411,14 @@ test("a proxy's model alias plays as the catalog model it names", async () => {
 });
 
 test("a router's model plays as a model of the pi-ai provider its catalog model names", async () => {
-  const routed = await endpointFrom({ PLAYER_A_OAI_URL: "http://localhost:20128/v1", PLAYER_A_OAI_KEY: PROXY.key, PLAYER_A_MODEL: "oc/deepseek-v4.1-flash-free", PLAYER_A_CATALOG_MODEL: "opencode/deepseek-v4.1-flash" });
+  const routed = await endpointFrom({ PLAYER_A_OAI_URL: "http://localhost:9440/v1", PLAYER_A_OAI_KEY: PROXY.key, PLAYER_A_MODEL: "oc/deepseek-v4.1-flash-free", PLAYER_A_CATALOG_MODEL: "opencode/deepseek-v4.1-flash" });
 
   if (!Exit.isSuccess(routed)) throw new Error(String(routed.cause));
 
   const model = providerOf("openai-responses-A", routed.value).getModels()[0];
 
   expect(model?.id).toBe("oc/deepseek-v4.1-flash-free");
-  expect(model?.baseUrl).toBe("http://localhost:20128/v1");
+  expect(model?.baseUrl).toBe("http://localhost:9440/v1");
   expect(model?.contextWindow).toBeGreaterThan(0);
   expect(model?.api).toBe("openai-responses");
   expect(provenanceOf("openai-responses-A", routed.value).catalog_model).toBe("opencode/deepseek-v4.1-flash");

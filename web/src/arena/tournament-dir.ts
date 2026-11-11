@@ -276,7 +276,7 @@ const isRateLimit = (error: string): boolean => /^429 |API error \(429\)/.test(e
 
 /**
  * The seconds until a provider takes the model again, when the error is a usage or rate limit: a usage limit with its
- * reset, a router's "reset after 1m 30s" (9router, once every account of a model is limited), or else any 429, which
+ * reset, a router's "reset after 1m 30s" (once every account of a model is limited), or else any 429, which
  * waits RATE_LIMIT_WAIT_SECONDS, doubled for each earlier refusal in a row.
  */
 const limitSecondsOf = (error: string, refusals: number): Option.Option<number> => {

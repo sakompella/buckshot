@@ -138,7 +138,7 @@
       "output": 0,
       "cacheRead": 0,
       "cacheWrite": 0,
-      "source": "free: DeepSeek V4.1 Flash Free on OpenCode Zen, through 9router; the paid deepseek-v4.1-flash lists $0.30 input, $1.20 output, $0.006 cached read, https://opencode.ai/docs/zen/#pricing, 2026-10-16"
+      "source": "free: DeepSeek V4.1 Flash Free on OpenCode Zen, through a local router; the paid deepseek-v4.1-flash lists $0.30 input, $1.20 output, $0.006 cached read, https://opencode.ai/docs/zen/#pricing, 2026-10-16"
     },
     "gpt-5.6-terra": {
       "input": 2,

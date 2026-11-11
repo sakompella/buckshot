@@ -433,7 +433,7 @@ def main() -> None:
     p.add_argument("--regret", default=PRODUCTION.name, help="file name under <analysis>/derived of the regret rows (default %(default)s)")
     p.add_argument("--threads", type=int, default=score_regret.Settings.threads, help="buckshot-search threads (half the cores)")
     p.add_argument("--knowledge", type=Path, default=REPO, help="checkout that runs arena-knowledge.ts (default this checkout)")
-    p.add_argument("--viewer-unit", default="buckshot-viewer", help="user unit to restart; '' leaves the viewer alone")
+    p.add_argument("--viewer-unit", default="", help="systemd user unit that serves the local viewer; unset leaves the viewer alone")
     p.add_argument("--viewer-url", default="http://127.0.0.1:8790/")
     p.add_argument("--jobs", type=int, default=4, help="regret scoring processes")
     p.add_argument("--skip", action="append", default=[], help="step to leave out, repeatable")
