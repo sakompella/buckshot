@@ -51,9 +51,9 @@ One short file per decision: what was decided and why. Status comes from each fi
 | 0049 | [One site](0049-one-site.md) | Accepted, amended | ADR-0053, ADR-0055 |
 | 0050 | [The online site: aggregates on Cloudflare](0050-online-site.md) | Accepted |  |
 | 0051 | [One table for Play and Replay](0051-one-table.md) | Superseded | ADR-0053, ADR-0055 |
-| 0052 | [Rust evaluator](0052-rust-evaluator.md) | Accepted |  |
+| 0052 | [Rust evaluator](0052-rust-evaluator.md) | Accepted, amended 2026-11-11 |  |
 | 0053 | [No game table in the release](0053-no-game-table.md) | Accepted |  |
-| 0054 | [The git commit as the code identity](0054-git-code-id.md) | Accepted |  |
+| 0054 | [The git commit as the code identity](0054-git-code-id.md) | Accepted, amended 2026-11-11 |  |
 | 0055 | [No match replay](0055-no-replay.md) | Accepted |  |
 | 0056 | [Round Elo](0056-round-elo.md) | Accepted |  |
 | 0057 | [Accuracy](0057-accuracy.md) | Accepted |  |

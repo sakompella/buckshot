@@ -31,9 +31,9 @@ The arena plays language models against each other at the Buckshot table through
 - **Where the data goes:** keep tournament directories under `_work/arena/`, which is gitignored. They hold raw harness data: journals, per-call logs with reasoning text, and costs. None of it is committed.
 
 ## Code versions
-Every match records the git commit of the checkout it played from, `gitCommit()` in `web/src/arena/match.ts`, and refuses to start or resume while the checkout has uncommitted changes to tracked files, so the commit alone identifies the code that played it. A started match resumes only under the commit it started on. A tournament can therefore mix versions: new matches start under the current checkout, and `--code <commit>=<web dir of a checkout of that commit>` resumes older ones. Without a matching checkout they wait.
+Every match records the git commit of the code it played from, `gitCommit()` in `web/src/arena/match.ts`: the last commit that changed `web/`, `sim/` or `flake.lock`. It refuses to start or resume while those paths have uncommitted changes to tracked files, so the commit alone identifies the code that played it. A docs-only commit is no new version. A started match resumes only under the commit it started on. A tournament can therefore mix versions: new matches start under the current checkout, and `--code <commit>=<web dir of a checkout of that commit>` resumes older ones. Without a matching checkout they wait.
 
-The commit is the version id: no hand-assigned labels, and no second hash to keep in sync. Because a match refuses to play over a dirty tree, the arena tests that start matches (`bun run test`) also need a clean checkout.
+The commit is the version id: no hand-assigned labels, and no second hash to keep in sync. `bun run test` sets `BUCKSHOT_CODE=test`, so its matches record the code id `test` and the tests pass on an uncommitted tree.
 
 ## Usage limits
 - **Usage-limit 429s:** a match stopped by one doesn't count as failed. It waits for the reset, and other matches fill its slot.

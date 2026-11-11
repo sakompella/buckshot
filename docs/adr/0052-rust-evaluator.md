@@ -1,6 +1,6 @@
 # Rust evaluator
 
-> Accepted 2026-11-08.
+> Accepted 2026-11-08. Amended 2026-11-11: an evaluator id is a declared version, kept by a golden set, not a source hash.
 
 The minimax player of ADR-0043 has a Rust implementation in `sim/rust/`: a rules crate (`buckshot-rules`) that steps the simple machine, a player crate (`buckshot-search`) and a batch CLI. Bend stays the source of truth (ADR-0001 as amended): the Rust rules mirror `sim/bend-mp/simple/` and `sim/bend-mp/sm/`, and are verified against them. The arena's play, the browser table and the agent tools keep calling Bend.
 
@@ -25,6 +25,8 @@ Each mode has an evaluator id that every output row records.
 
 Later evaluator ids may change the search again (a deeper search, a fitted horizon heuristic). Every id keeps its own rows; rows of different ids are never mixed.
 
+An id is a declared algorithm version, not a hash of the sources (amended 2026-11-11). The production rows carry `bounded-v1-f64-unpruned`, and a golden set of production decisions must reproduce bit for bit (see Verification). A refactor that keeps the golden set keeps the id, so it needs no rescore. A change meant to move a value (the search, the leaf evaluation, the rules) bumps the version and regenerates the golden set. The scorer records the source hash with each run as build metadata (`evaluator_build`).
+
 ### Features
 
 - `f64` (default) or `f32`, exactly one; both or neither fail to compile. `f32` is Bend's F32, bit for bit, and the only build with `compat`. All float math stays in `num.rs`, behind a newtype with methods and no operators.
@@ -39,6 +41,7 @@ Equivalence with Bend is checked in layers:
 - **Properties** (Hegel) over the rules.
 - **The search oracle.** Rows from the current Bend player on synthetic decisions, generated in the gate, must match `compat` exactly, and `bounded-v1` unpruned must equal `compat`, and its pruned run must agree with its unpruned run (same best move, every box holding the exact value). This pins Rust to the Bend source of the same checkout.
 - **A production golden suite** (`search/tests/production/`). 36 two-seat decisions as the production evaluator `a3962092b561cfb4` (the hash the regret rows carry) scored them, with no match ids or names; `reference.json` records its source commit, file hash, Bend version and settings. `compat` must reproduce every line, best move, depth, cut and node count, so compatibility with the rows already in the corpus does not depend on whatever the current Bend player is.
+- **The golden set** (`search/tests/golden/`). 300 decisions drawn at random from the production `bounded-v1-f64` unpruned run, as positions only. The f64 build must reproduce every line score, best move, depth, cut and node count on both table builds, and its rows must record the id the set names. It takes half a minute in release and many minutes in a debug build, so a debug `cargo test` ignores it and `check.sh` runs it.
 
 The fast checks (fmt, clippy on every feature set of `sim/rust/features.sh`, `cargo check`, `cargo branch-map check`) are plain commands in `sim/rust/hooks.sh`, listed once as pre-commit hooks in `sim/rust/pre-commit-config.json`. `bash sim/rust/install-hooks.sh` installs one hook that runs them with `pre-commit` or `prek` from `PATH`; entering the dev shell changes no git config. The flake runs them in `nix flake check` through git-hooks.nix. Rustup takes the dev shell's toolchain from `sim/rust/rust-toolchain.toml`.
 
@@ -55,6 +58,6 @@ Mutation testing (cargo-mutants, `sim/rust/mutants.sh`) checks that these tests 
 
 - A second implementation of the rules exists. A rule change is made in Bend first; the Rust arm labels and the cross-reference gate make the matching Rust change required before `check.sh` passes.
 - Rust code must stay isomorphic to Bend at the branch level for path tracing; optimizations either keep the arm structure or move to helpers on a reasoned exemption list.
-- Regret rows from Rust carry their own evaluator id. Since 2026-11-08 the production rows are `bounded-v1-f64` unpruned, from the `seats-2` build, scored by `tools/arena/score_regret.py` ([regret.md](../arena/analysis/regret.md#production-scoring)). Its node-only budget reaches deeper than `compat` at the same 20,000 nodes, so those rows differ from the Bend rows where the old budget cut the search short; they are a new evaluator, not a replacement of the old rows. `compat` rows must equal the Bend rows they replace (the golden suite checks this) before the corpus is rescored with them.
+- Regret rows from Rust carry their own evaluator id, a declared version kept by the golden set. Since 2026-11-08 the production rows are `bounded-v1-f64` unpruned, from the `seats-2` build, scored by `tools/arena/score_regret.py` ([regret.md](../arena/analysis/regret.md#production-scoring)). Its node-only budget reaches deeper than `compat` at the same 20,000 nodes, so those rows differ from the Bend rows where the old budget cut the search short; they are a new evaluator, not a replacement of the old rows. `compat` rows must equal the Bend rows they replace (the golden suite checks this) before the corpus is rescored with them.
 - This amends ADR-0043 for later evaluators only: `bounded-v1` prunes, uses a memo and drops the fuel. `compat` keeps ADR-0043's search exactly.
 - Rows from the `f32` and `f64` builds can't be confused: `compat` exists only in `f32`, and `bounded-v1` ids name their arithmetic.
