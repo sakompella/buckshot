@@ -17,9 +17,11 @@ matches. The wrap-up and the analyses call `score` rather than running the steps
      every move's value is exact at the depth reached, which the replay's move list shows
   4. each result becomes a row of the regret table (columns: docs/arena/analysis/regret.md, The `regret` table)
 
-The evaluator id is `bounded-v1-f64-unpruned-<16 hex>`: the hex hashes the Rust sources, Cargo files and features the
-binary was built from, so rows of different builds never share an id. `evaluator_build` records each id's source
-commit, features, binary hash, decision count and wall time. Rows carry no per-decision time (`ms` is null).
+The evaluator id is `bounded-v1-f64-unpruned`: the CLI's declared algorithm version (BoundedV1::ID) and `-unpruned`.
+A refactor keeps it; sim/rust/search/tests/golden pins it to production rows that must reproduce bit for bit, and a
+change meant to move a value bumps the version (ADR-0052). `evaluator_build` records each run's source commit, a hash
+of the Rust sources, Cargo files and features, the features, binary hash, decision count and wall time. Rows carry no
+per-decision time (`ms` is null).
 """
 
 import argparse
@@ -40,6 +42,7 @@ from rules import WIN  # noqa: E402
 REPO = Path(__file__).resolve().parents[2]
 FEATURES = "f64,seats-2"
 CLI_EVALUATOR = "bounded-v1-f64"
+EVALUATOR = f"{CLI_EVALUATOR}-unpruned"
 
 CREATE_REGRET = """CREATE TABLE IF NOT EXISTS regret (
     match_id TEXT, ordinal INTEGER, player TEXT, label TEXT,
@@ -50,18 +53,18 @@ CREATE_REGRET = """CREATE TABLE IF NOT EXISTS regret (
 
 CREATE_BUILD = """CREATE TABLE IF NOT EXISTS evaluator_build (
     evaluator TEXT, max_depth INTEGER, budget INTEGER, reload TEXT, samples INTEGER,
-    source_commit TEXT, features TEXT, binary_sha256 TEXT, decisions INTEGER, seconds REAL, threads INTEGER, finished TEXT)"""
+    source_commit TEXT, features TEXT, binary_sha256 TEXT, decisions INTEGER, seconds REAL, threads INTEGER, finished TEXT, sources_sha256 TEXT)"""
 
 
-def evaluator_id(rust: Path) -> str:
-    """The CLI's id, `-unpruned`, and a hash of what decides the binary's results: the rules and search sources, the Cargo files and the features."""
+def sources_hash(rust: Path) -> str:
+    """A hash of what the binary is built from: the rules and search sources, the Cargo files and the features. Build metadata, not the id."""
     digest = hashlib.sha256(FEATURES.encode())
     files = [rust / "Cargo.toml", rust / "Cargo.lock", rust / "rust-toolchain.toml"]
     for crate in ("rules", "search"):
         files += [rust / crate / "Cargo.toml", *sorted((rust / crate / "src").rglob("*.rs"))]
     for file in files:
         digest.update(str(file.relative_to(rust)).encode() + b"\0" + file.read_bytes() + b"\0")
-    return f"{CLI_EVALUATOR}-unpruned-{digest.hexdigest()[:16]}"
+    return digest.hexdigest()
 
 
 def build(rust: Path) -> Path:
@@ -167,6 +170,8 @@ def run_search(binary: Path, inputs: list[Path], work: Path, out: sqlite3.Connec
                 result = json.loads(line)
                 if (result["id"], result["ordinal"]) != (decision["id"], decision["ordinal"]):
                     raise SystemExit(f"buckshot-search answered {result['id']} {result['ordinal']} for {decision['id']} {decision['ordinal']}")
+                if result["evaluator"] != CLI_EVALUATOR:
+                    raise SystemExit(f"buckshot-search is {result['evaluator']}, not {CLI_EVALUATOR}: update CLI_EVALUATOR with the golden set")
                 reason = disagreement(decision, result)
                 if reason is not None:
                     dumps.append(dump(bugs, reason, decision, given, line.rstrip("\n"), {**build, "command": cmd}))
@@ -215,7 +220,7 @@ def open_out(path: Path, group: tuple) -> sqlite3.Connection:
 def score(db: Path, out: Path | None, sampled_out: Path | None, checkout: Path, settings: Settings, matches: set[str] | None = None, decisions: set[tuple[str, int]] | None = None, work: Path | None = None) -> dict:
     """Scores the decisions `out` (static reload) and `sampled_out` (sampled reload) lack, writing their rows. Returns a summary."""
     rust = checkout / "sim/rust"
-    evaluator = evaluator_id(rust)
+    evaluator = EVALUATOR
     runs = [(path, (evaluator, settings.depth, settings.budget, reload, samples)) for path, reload, samples in ((out, "static", 0), (sampled_out, "sampled", settings.samples)) if path is not None]
     source = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
     outs = [(open_out(path, group), group) for path, group in runs]
@@ -235,12 +240,13 @@ def score(db: Path, out: Path | None, sampled_out: Path | None, checkout: Path, 
     inputs = write_inputs(union, db, checkout / "web", work, settings.jobs)
     summary["input_seconds"] = round(time.monotonic() - started)
     commit = git_commit(checkout)
+    sources = sources_hash(rust)
     for (path, _), (conn, group, keys) in zip(runs, todo, strict=True):
         started = time.monotonic()
-        build_info = {"evaluator": evaluator, "features": FEATURES, "binary_sha256": sha, "source_commit": commit}
+        build_info = {"evaluator": evaluator, "features": FEATURES, "binary_sha256": sha, "source_commit": commit, "sources_sha256": sources}
         written = run_search(binary, inputs, work, conn, players, group, settings.threads, keys, path.parent / f"{path.stem}-bugs", build_info)
         seconds = time.monotonic() - started
-        conn.execute("INSERT INTO evaluator_build VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))", (*group, commit, FEATURES, sha, written, seconds, settings.threads))
+        conn.execute("INSERT INTO evaluator_build VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)", (*group, commit, FEATURES, sha, written, seconds, settings.threads, sources))
         conn.commit()
         conn.close()
         summary[group[3]] = {"rows": written, "seconds": round(seconds)}

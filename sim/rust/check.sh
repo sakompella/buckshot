@@ -44,7 +44,8 @@ nice -n 10 node "$root/sim/bend-mp/test/bend-trace.mjs" "$tapes/traced" "$tapes"
 
 # Each table build replays the tapes; seats-2 skips the wider tables' games and
 # reads the two-seat search oracle. The ignored tests are the ones that need
-# RUST_TAPES or RUST_SEARCH_ORACLE, so every run includes them.
+# RUST_TAPES or RUST_SEARCH_ORACLE, and the release-only golden set, so every run
+# includes them.
 # CI=true makes the Hegel properties deterministic and keeps them off .hegel/.
 for seats in seats-2-4 seats-2; do
   oracle="$tapes/search"

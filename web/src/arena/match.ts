@@ -452,8 +452,16 @@ const seatingIn = (state: MatchState) => Object.fromEntries(state.letters.flatMa
 /** This checkout's web/ directory. */
 const WEB = new URL("../..", import.meta.url).pathname;
 
-/** The commit of the checkout this code runs from: the code version a match records when it starts, and must find again to resume. Refused while tracked files have uncommitted changes, so the commit alone identifies the code that plays (ADR-0054). */
+/** The paths whose code plays a match (ADR-0054): a change elsewhere, such as the docs, is no new code version. */
+const PLAYING = [":/web", ":/sim", ":/flake.lock"];
+
+/** The code id of the test suite's matches: `bun run test` sets BUCKSHOT_CODE=test, so the tests run on an uncommitted tree. */
+const TEST_CODE = "test";
+
+/** The code version a match records when it starts, and must find again to resume: the last commit that changed a playing path. Refused while those paths have uncommitted changes to tracked files, so the commit alone identifies the code that plays (ADR-0054). */
 export const gitCommit = (): string => {
+  if (process.env["BUCKSHOT_CODE"] === TEST_CODE) return TEST_CODE;
+
   const git = (args: ReadonlyArray<string>): string => {
     const run = Bun.spawnSync(["git", ...args], { cwd: WEB });
 
@@ -462,11 +470,11 @@ export const gitCommit = (): string => {
     return run.stdout.toString().trim();
   };
 
-  const dirty = git(["status", "--porcelain", "--untracked-files=no"]);
+  const dirty = git(["status", "--porcelain", "--untracked-files=no", "--", ...PLAYING]);
 
-  if (dirty !== "") throw new Error(`the checkout at ${WEB} has uncommitted changes to tracked files, so its commit does not identify its code:\n${dirty}`);
+  if (dirty !== "") throw new Error(`the checkout at ${WEB} has uncommitted changes to the code that plays, so its commit does not identify it:\n${dirty}`);
 
-  return git(["rev-parse", "HEAD"]);
+  return git(["log", "-1", "--format=%H", "--", ...PLAYING]);
 };
 
 const provenanceOf = (match: ArenaMatch): MatchProvenance => ({
