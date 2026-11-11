@@ -13,6 +13,7 @@ import { droppedConfigs, oddsPanels } from "../src/arena-viewer/page/odds.ts";
 import { rowsOf } from "../src/arena-viewer/page/matches.ts";
 import { modelStatsOf, ranksOf } from "../src/arena-viewer/page/derived.ts";
 import { inRankOrder } from "../src/arena-viewer/page/leaderboard.ts";
+import { tooCloseNote } from "../src/arena-viewer/page/about.ts";
 import { FULL_N, shadeOf } from "../src/arena-viewer/page/heat.ts";
 import { GameEvent, type Seat as Socket, Secret } from "../src/domain.ts";
 import { rosterOf } from "../src/players.ts";
@@ -428,6 +429,16 @@ test("ranks go to rated configs of 20 or more matches by rating, equal ratings b
 
   expect([...ranks]).toEqual([["bravo|medium", 1], ["charlie|medium", 2], ["alpha|medium", 3]]);
   expect(inRankOrder(stats, ranks, ratings).map(({ model }) => model)).toEqual(["bravo", "charlie", "alpha", "echo", "foxtrot", "delta"]);
+});
+
+test("the results summary calls the top too close only when the leaders' intervals overlap", () => {
+  const leader = (label: string, lo: number, hi: number) => ({ label, rating: 0, interval: { lo, hi } });
+
+  expect(tooCloseNote(leader("a", 80, 170), leader("b", 75, 162))).toContain("Too close");
+  expect(tooCloseNote(leader("a", 100, 170), leader("b", 10, 99))).toBeNull();
+  expect(tooCloseNote(leader("a", 100, 170), leader("b", 10, 100))).toContain("Too close");
+  expect(tooCloseNote({ label: "a", rating: 0, interval: null }, leader("b", 10, 99))).toBeNull();
+  expect(tooCloseNote(undefined, leader("b", 10, 99))).toBeNull();
 });
 
 test("the best-value line runs through ranked configs only", () => {

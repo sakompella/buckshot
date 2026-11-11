@@ -24,6 +24,18 @@ export interface TourStep {
 
 const TOUR: ReadonlyArray<TourStep> = [
   {
+    anchor: "summary",
+    focus: "#summary",
+    title: "Results at a glance",
+    text: "The top of the page names the leading configs by Round Elo, with their intervals. When the leaders' intervals overlap, it says the top is too close to call.",
+  },
+  {
+    anchor: "how",
+    focus: "#how",
+    title: "How the game works",
+    text: "If you don't know Buckshot Roulette, this explains the objective, what a turn is, why a blank fired at yourself keeps your turn, and what the models see and do, with one worked turn.",
+  },
+  {
     anchor: "scatter",
     focus: ".filters",
     title: "Filters",
@@ -76,6 +88,12 @@ const TOUR: ReadonlyArray<TourStep> = [
     focus: "#leaderboards .lbt tbody tr:first-child",
     title: "A config's row",
     text: "A click on a row shows how steady it is, how much it writes when behind or ahead, and what became of its items. Faded rows rest on few scored matches and have no rank.",
+  },
+  {
+    anchor: "about",
+    focus: "#about",
+    title: "About the method",
+    text: "Run dates, the conditions every match plays under, what Round Elo and luck-adjusted Elo are, and what the comparison cannot settle.",
   },
 ];
 

@@ -121,6 +121,8 @@ const heatmapView = (h: H, derived: Derived, heat: Model["heat"]): Html => {
   return h.div(
     [],
     [
+      // The grid is wider than a phone; the cue shows only there (styles.css).
+      h.p([h.Class("k scrollcue")], ["Swipe sideways for more opponents"]),
       h.div(
         [h.Class("heatscroll")],
         [
