@@ -191,7 +191,7 @@ The Arena page is one long page in six groups, in this order:
   how often the higher-rated player wins at each rating gap (rated by fits that held the match's seed block out,
   against the Bradley-Terry curve);
 - Watch a match: a few interesting matches and, with `--regret`, the costliest blunders, each marked exact or
-  estimated (listed only; there is no replay, ADR-0054);
+  estimated (listed only; there is no replay, ADR-0055);
 - Decisions: with `--certain-mistakes` (the file `tools/arena/analysis/certain_mistakes.py --opportunities` writes), each
   config's certain mistakes over their opportunities (`docs/arena/analysis/certain-mistakes.md`), each count opening its
   matches at the move; how often each config shoots itself by the odds it counts (one panel per model, a line per effort);

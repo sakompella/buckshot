@@ -1,7 +1,7 @@
 # One site
 
 > Amended 2026-11-10 by ADR-0053: the Play page is gone and `/` moves to `/arena`.
-> Amended 2026-11-11 by ADR-0054: the Replay page is gone; the site is the Arena page only.
+> Amended 2026-11-11 by ADR-0055: the Replay page is gone; the site is the Arena page only.
 
 The game and the arena analysis viewer are one Foldkit app (`web/src/site/`) with three pages, each at a real URL:
 
