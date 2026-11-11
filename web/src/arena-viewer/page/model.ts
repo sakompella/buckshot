@@ -80,8 +80,8 @@ export const Filter = Schema.Struct({ offEfforts: Schema.Array(Schema.String), o
 
 export type Filter = typeof Filter.Type;
 
-/** What the scatter's x axis measures per player per match: cost, model moves or output tokens, or the mean regret per move. */
-export const ScatterAxis = Schema.Literals(["cost", "moves", "tokens", "regret"]);
+/** What the scatter's x axis measures: reasoning tokens per move, cost, model moves or output tokens per match, or accuracy. */
+export const ScatterAxis = Schema.Literals(["reasoning", "cost", "moves", "tokens", "regret"]);
 
 export type ScatterAxis = typeof ScatterAxis.Type;
 

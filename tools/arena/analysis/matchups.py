@@ -5,7 +5,7 @@ Reads the analysis database read-only and prints markdown tables. With --doc FIL
 between the tables markers of that file. Ratings come from one pooled fit over every scored match; kinds (see kind_of below) group matches only for pair effects and seat figures. Intervals
 are 95% bootstraps over seed blocks, drawn with a fixed RNG seed so a rerun prints the same numbers.
 
-    python3 tools/arena/analysis/matchups.py [--db PATH] [--draws 2000] [--doc docs/arena/analysis/matchups.md]
+    python3 tools/arena/analysis/matchups.py [--db PATH] [--draws N] [--doc docs/arena/analysis/matchups.md]
 """
 
 from pathlib import Path
@@ -133,7 +133,7 @@ def pooled_ratings(games: list[Game], by_cohort: dict[str, list[Game]], draws: i
         ]
         for e in sorted(names, key=lambda e: -elo["wins"][e])
     ]
-    header = ["config", "wins/matches = win share", "rating (Elo, mean 0)", "95% CI, seed blocks drawn", "95% CI, seeds drawn (sensitivity)", "pot share", "cash rating (Elo, mean 0)", "95% CI, seed blocks drawn"]
+    header = ["config", "wins/matches = win share", "rating (Elo, depth-2 engine at 0)", "95% CI, seed blocks drawn", "95% CI, seeds drawn (sensitivity)", "pot share", "cash rating (Elo, depth-2 engine at 0)", "95% CI, seed blocks drawn"]
     text = "\n".join([table(header, rows), sensitivity(games, names, elo["wins"])])
     pair_header = ["pair", "wins/matches = observed share", "fitted share", "difference (pp)", "bootstrap range of the difference (descriptive)"]
     pair_tables = {}
@@ -301,7 +301,7 @@ def by_seed_table(blocks: list[seats.Block]) -> str:
     big = {s for s in {b.seed for b in blocks} if sum(b.seed == s for b in blocks) >= 10}
     shares = {s: sum(b.starter_wins for b in blocks if b.seed == s) / (2 * sum(b.seed == s for b in blocks)) for s in big}
     seeds, rng = sorted(shares), random.Random(7)
-    means = sorted(sum(shares[rng.choice(seeds)] for _ in seeds) / len(seeds) for _ in range(2000))
+    means = sorted(sum(shares[rng.choice(seeds)] for _ in seeds) / len(seeds) for _ in range(boot.DRAWS))
     mean = sum(shares.values()) / len(shares)
     rows.append([f"the {len(seeds)} seeds with 10 or more blocks, each once", "", str(sum(b.seed in big for b in blocks)), f"mean of seed shares {pct(mean)} (95% CI {pct(boot.quantile(means, 0.025))} to {pct(boot.quantile(means, 0.975))}, seeds drawn)"])
     return table(["seed", "position that starts", "complete blocks", "starter wins/matches = share"], rows)
@@ -341,7 +341,7 @@ def first_shooter_check(games: list[Game]) -> str:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--db")
-    parser.add_argument("--draws", type=int, default=2000)
+    parser.add_argument("--draws", type=int, default=boot.DRAWS)
     parser.add_argument("--repeats", type=int, default=5, help="repeats of the 10-fold cross-validation")
     parser.add_argument("--doc")
     args = parser.parse_args()

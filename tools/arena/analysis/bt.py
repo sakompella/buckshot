@@ -4,7 +4,8 @@ A game's first-listed player wins with probability p = 1 / (1 + exp(-eta)),
     eta = theta[first] - theta[second] + seat + sign * delta[pair],
 and its win share w in [0, 1] counts as w wins and 1 - w losses (a split is half each). The fit is the most
 probable parameters under Gaussian regularization: a mean-zero prior on every theta (standard deviation 3, which
-also shrinks rating differences slightly; ratings are reported with the entrants' mean at 0), and delta ~ N(0, tau^2),
+also shrinks rating differences slightly; ratings are reported with ANCHOR at 0, or the entrants' mean when the fit
+does not rate it), and delta ~ N(0, tau^2),
 so tau = 0 means no pair terms and a small tau means strongly shrunk ones.
 """
 
@@ -26,6 +27,9 @@ FLAT = 1e-6
 from load import Game
 
 ELO = 400 / math.log(10)  # Elo points per unit of theta
+
+# The config rated 0, the depth-2 search engine, so adding a config moves no other rating (ANCHOR in web/src/arena-viewer/page/ratings.ts).
+ANCHOR = "Engine/2/20000"
 
 
 def solve(a: list[list[float]], b: list[float]) -> list[float]:
@@ -75,9 +79,9 @@ class Fit:
         return sigmoid(self.eta(first, second, first_starts))
 
     def elo(self) -> dict[str, float]:
-        """Ratings on the Elo scale with the mean of the entrants at 0."""
-        mean = sum(self.theta.values()) / len(self.theta)
-        return {name: (value - mean) * ELO for name, value in self.theta.items()}
+        """Ratings on the Elo scale with ANCHOR at 0, or the mean of the entrants when the fit does not rate it."""
+        zero = self.theta.get(ANCHOR, sum(self.theta.values()) / len(self.theta))
+        return {name: (value - zero) * ELO for name, value in self.theta.items()}
 
 
 def fit(cells: Cells, tau: float = 0.0, seat: bool = False, start: bool = False, theta_sd: float = 3.0, seat_sd: float = 1000.0, entrants: set[str] = frozenset(), pair_terms: set[tuple[str, str]] | None = None) -> Fit:
@@ -139,7 +143,7 @@ def fit(cells: Cells, tau: float = 0.0, seat: bool = False, start: bool = False,
 def round_elo(matches: Iterable[tuple[str, str, float, float]], entrants: Iterable[str] = ()) -> dict[str, float]:
     """Round Elo, the viewer's rating (web/src/arena-viewer/page/ratings.ts): the fit on round shares, each match counting its rounds.
 
-    `matches` are (first config, second config, rounds, the first config's round wins), wins fractional for luck-adjusted ones; the Elo of each config, entrants' mean at 0.
+    `matches` are (first config, second config, rounds, the first config's round wins), wins fractional for luck-adjusted ones; the Elo of each config, ANCHOR at 0 (Fit.elo).
     """
     cells: Cells = {}
     for first, second, rounds, wins in matches:

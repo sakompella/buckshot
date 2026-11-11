@@ -2,7 +2,7 @@ import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { anchorId, linScale, logScale, REFERENCE, REFERENCE_DASH, selectView, tipView, toggleView } from "./charts.ts";
-import { baseName, DEFAULT_EFFORT, effortLabel, fmtCount, fmtPct, fmtRating, fmtUsd, isClaude, isEngine, isProvisional } from "./data.ts";
+import { baseName, DEFAULT_EFFORT, effortLabel, fmtCount, fmtPct, fmtRating, fmtUsd, isClaude, isEngine, isProvisional, reasoningPerMove } from "./data.ts";
 import { leader, measureText, placeLabels, uncrowded } from "./labels.ts";
 import { memoLast, type ModelStats } from "./derived.ts";
 import { Message, type Model, type ScatterAxis } from "./model.ts";
@@ -10,7 +10,7 @@ import type { Rating } from "./ratings.ts";
 
 type H = HtmlBuilder<Message>;
 
-// Average cost, model moves or output tokens against the Round Elo, one point per config, labelled
+// Reasoning tokens per move, average cost, model moves, output tokens or accuracy against the headline rating, one point per config, labelled
 // as on DeepSWE: the model's name, its effort below in small caps. The dashed line is the frontier: no other point is
 // both lower on the x axis and higher rated. The search engines cost nothing, so they are labelled horizontal lines.
 
@@ -71,6 +71,19 @@ const positive = (value: number): number | null => (value > 0 ? value : null);
 
 // Output tokens include reasoning tokens, as the providers report them.
 export const AXES: Readonly<Record<ScatterAxis, Axis>> = {
+  reasoning: {
+    label: "Reasoning",
+    axisLabel: "Reasoning tok / move (log; configs with none left out)",
+    isLog: true,
+    valueOf: (m) => {
+      const reasoning = reasoningPerMove(m);
+
+      return reasoning === null ? null : positive(reasoning);
+    },
+    format: fmtCount,
+    tick: (value) => (value >= 1e3 ? `${value / 1e3}k` : String(value)),
+    perMatch: (value) => `${fmtCount(value)} reasoning tok / move`,
+  },
   cost: {
     label: "Cost",
     axisLabel: "Cost / match (USD, log)",
@@ -109,7 +122,7 @@ export const AXES: Readonly<Record<ScatterAxis, Axis>> = {
   },
 };
 
-const axisOptions = (hasRegret: boolean): ReadonlyArray<readonly [ScatterAxis, string]> => (hasRegret ? (["cost", "moves", "tokens", "regret"] as const) : (["cost", "moves", "tokens"] as const)).map((axis) => [axis, AXES[axis].label]);
+const axisOptions = (hasRegret: boolean): ReadonlyArray<readonly [ScatterAxis, string]> => (hasRegret ? (["reasoning", "cost", "moves", "tokens", "regret"] as const) : (["reasoning", "cost", "moves", "tokens"] as const)).map((axis) => [axis, AXES[axis].label]);
 
 interface Point {
   readonly m: ModelStats;
@@ -161,7 +174,7 @@ const pointsOf = memoLast(
         return rating !== undefined && x !== null && m.scored > 0 ? [{ m, x, rating, rank }] : [];
       });
 
-    return { cost: on("cost"), moves: on("moves"), tokens: on("tokens"), regret: on("regret") };
+    return { reasoning: on("reasoning"), cost: on("cost"), moves: on("moves"), tokens: on("tokens"), regret: on("regret") };
   },
 );
 
@@ -201,7 +214,7 @@ const domainOf = memoLast((every: ReadonlyArray<ModelStats>, ratings: ReadonlyMa
       }),
     );
 
-  return { x: { cost: xOf("cost"), moves: xOf("moves"), tokens: xOf("tokens"), regret: xOf("regret") }, elo: extent(rated.map((m) => ratings.get(m.key)?.rating ?? 0)) };
+  return { x: { reasoning: xOf("reasoning"), cost: xOf("cost"), moves: xOf("moves"), tokens: xOf("tokens"), regret: xOf("regret") }, elo: extent(rated.map((m) => ratings.get(m.key)?.rating ?? 0)) };
 });
 
 const xScaleOf = (axis: Axis, least: number, most: number, left: number, right: number) => {
@@ -290,12 +303,13 @@ export const scatterView = (
   everyConfig: ReadonlyArray<ModelStats>,
   ratings: ReadonlyMap<string, Rating>,
   ranks: ReadonlyMap<string, number>,
+  ratingName: string,
   scatter: Model["scatter"],
   width: number,
 ): Html => {
   const axis = AXES[scatter.axis];
-  const yLabel = "Round Elo";
-  const title = `${axis.label} vs Round Elo`;
+  const yLabel = ratingName;
+  const title = `${axis.label} vs ${ratingName}`;
   const byAxis = pointsOf(stats, ratings, ranks);
   const points = byAxis[scatter.axis];
   const layout = layoutOf(points, width, scatter.axis, domainOf(everyConfig, ratings));
@@ -445,7 +459,7 @@ export const scatterView = (
           tipView(h, anchorId("pt", point.m.key), [
             h.b([], [point.m.label]),
             h.br([]),
-            `${point.rank === undefined ? "provisional" : `rank ${point.rank}`} · Round Elo ${fmtRating(point.rating)} · ${fmtPct(point.m.roundShare)} of rounds won, ${fmtPct(point.m.winShare)} of matches won, ${fmtPct(point.m.potShare)} of the pot, over ${point.m.scored} matches`,
+            `${ratings.get(point.m.key)?.tier == null ? "provisional" : `tier ${ratings.get(point.m.key)?.tier}`} · ${ratingName} ${fmtRating(point.rating)} · ${fmtPct(point.m.roundShare)} of rounds won, ${fmtPct(point.m.winShare)} of matches won, ${fmtPct(point.m.potShare)} of the pot, over ${point.m.scored} matches`,
             h.br([]),
             axis.perMatch(point.x),
           ]),

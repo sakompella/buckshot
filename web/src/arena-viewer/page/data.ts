@@ -1,4 +1,5 @@
 import { EFFORTS, effortName } from "../../arena/model-names.ts";
+import { BOOTSTRAP_DRAWS } from "../../arena/bootstrap.ts";
 import { mulberry32 } from "../../arena/tournament-stats.ts";
 import type { CertainType, Seat, SeatRegret, Story } from "../api.ts";
 
@@ -286,7 +287,7 @@ const drawsFor = (count: number): Int32Array => {
 };
 
 /** A ratio of sums with a 95% percentile bootstrap that resamples seed blocks. */
-export const blockRate = (tally: BlockTally, reps = 400): Rate => {
+export const blockRate = (tally: BlockTally, reps = BOOTSTRAP_DRAWS): Rate => {
   const blocks = [...tally.values()];
   const blockHits = Float64Array.from(blocks, ([hits]) => hits);
   const blockTrials = Float64Array.from(blocks, ([, trials]) => trials);
@@ -329,6 +330,10 @@ export const isProvisional = ({ scored }: { readonly scored: number }): boolean 
 export const blocksOf = (seats: ReadonlyArray<Pick<SeatFull, "seedBlock">>): number => new Set(seats.map(({ seedBlock }) => seedBlock)).size;
 
 export const costPerMove = ({ scoredCost, scoredMoves }: { readonly scoredCost: number; readonly scoredMoves: number }): number | null => (scoredMoves > 0 ? scoredCost / scoredMoves : null);
+
+/** Reasoning tokens per model move, as the providers reported them; null when none were reported. */
+export const reasoningPerMove = ({ scoredReasoning, scoredMoves }: { readonly scoredReasoning: number | null; readonly scoredMoves: number }): number | null =>
+  scoredReasoning === null || scoredMoves === 0 ? null : scoredReasoning / scoredMoves;
 
 export interface MatchRow {
   readonly matchId: string;

@@ -3,6 +3,7 @@ import { Schema } from "effect";
 import type { Consistency } from "./api.ts";
 import { groupBy, quantile } from "./page/data.ts";
 import { readOnly } from "./read-only.ts";
+import { BOOTSTRAP_DRAWS } from "../arena/bootstrap.ts";
 import { mulberry32 } from "../arena/tournament-stats.ts";
 
 // How often a config repeats itself, from the knowledge database that scripts/arena-knowledge.ts builds. An exact_key
@@ -12,8 +13,6 @@ import { mulberry32 } from "../arena/tournament-stats.ts";
 
 /** A config needs this many repeated positions to be shown. */
 const MIN_POSITIONS = 30;
-
-const DRAWS = 1000;
 
 /** One decision in a repeated position: the move it chose and the seed block of its match. */
 export interface Repeat {
@@ -90,7 +89,7 @@ export const consistencyOf = (positions: ReadonlyArray<ReadonlyArray<Repeat>>, e
 
   const random = mulberry32(11);
 
-  const draws = Array.from({ length: DRAWS }, () => {
+  const draws = Array.from({ length: BOOTSTRAP_DRAWS }, () => {
     const weights = new Float64Array(blockIds.size);
 
     for (let draw = 0; draw < blockIds.size; draw++) {

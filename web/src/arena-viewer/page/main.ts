@@ -343,7 +343,7 @@ export const init = (viewport: Viewport, route: ArenaRoute): Return => {
     lazy: { items: AsyncData.Idle(), odds: AsyncData.Idle(), certain: AsyncData.Idle(), consistency: AsyncData.Idle() },
     local: AsyncData.Idle(),
     filter: { offEfforts: [], offModels: [] },
-    scatter: { axis: "cost", maybeHover: Option.none(), maybePin: Option.none() },
+    scatter: { axis: "reasoning", maybeHover: Option.none(), maybePin: Option.none() },
     heat: { sort: "rating", maybeTip: Option.none() },
     leaderboard: { maybeOpen: Option.none() },
     maybeDrill: Option.none(),

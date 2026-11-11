@@ -23,7 +23,6 @@ import boot
 from fmt import frac, pct, span, table
 from stats import pearson, ranks
 
-RESAMPLES = 2000
 
 
 def load(path: Path) -> list[dict]:
@@ -74,7 +73,7 @@ def mean_of(groups: dict[int, list[float]]) -> float:
 def bootstrap(groups: dict[int, list[float]], statistic, rng: random.Random) -> tuple[float, tuple[float, float] | None]:
     """The statistic of the groups and its 95% interval over resamples that draw whole seeds."""
     seeds = list(groups)
-    replicates = [statistic({i: groups[rng.choice(seeds)] for i in range(len(seeds))}) for _ in range(RESAMPLES)]
+    replicates = [statistic({i: groups[rng.choice(seeds)] for i in range(len(seeds))}) for _ in range(boot.DRAWS)]
     return statistic(groups), boot.interval(replicates)
 
 

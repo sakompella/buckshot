@@ -21,6 +21,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
+import boot
 import bt
 import regret
 from docs import splice_between_markers
@@ -31,15 +32,14 @@ from rules import POINT, ROUNDS, WIN
 from stats import pearson, spearman
 MIN_MATCHES = 20
 MIN_BLOCKS = 10
-BOOTSTRAP = 2000
 SEED = 20261102
 
-Config = tuple[str, str]  # model, effort
+Config = tuple[str, str]  # model, effort; an engine's label with no effort
 Interval = tuple[float, float]
 
 
 def label(config: Config) -> str:
-    return f"{config[0]} {config[1]}"
+    return f"{config[0]} {config[1]}" if config[1] else config[0]
 
 
 @dataclass(frozen=True)
@@ -73,7 +73,7 @@ class Match:
     @property
     def skipped(self) -> bool:
         """With an engine's seat: an engine has no regret rows, so its net points would mean nothing."""
-        return any(seat.config[0] is None for seat in (self.first, self.second))
+        return any(not seat.config[1] for seat in (self.first, self.second))
 
 
 @dataclass(frozen=True)
@@ -111,7 +111,9 @@ def load(db_path: str, regret_path: Path, knowledge_path: Path) -> Loaded:
         {(match, player): n for match, player, n in knowledge.execute("SELECT match_id, player, COUNT(*) FROM decisions WHERE by_whom = 'agent' GROUP BY match_id, player")}
     )
 
-    winners_of = round_winners(connect(db_path))
+    main = connect(db_path)
+    seat_labels = {(match, player): name for match, player, name in main.execute("SELECT match_id, player, label FROM match_seats")}
+    winners_of = round_winners(main)
     matches, incomplete = [], 0
     for match, found in seats.items():
         winners = winners_of[match]
@@ -119,7 +121,7 @@ def load(db_path: str, regret_path: Path, knowledge_path: Path) -> Loaded:
             incomplete += 1
             continue
         first, second = (
-            Seat((model, effort), lost[match, player][0] / WIN, lost[match, player][1], sum(w == player for w in winners.values()), *lost[match, player][2:])
+            Seat((model, effort) if model else (seat_labels[match, player], ""), lost[match, player][0] / WIN, lost[match, player][1], sum(w == player for w in winners.values()), *lost[match, player][2:])
             for _, player, model, effort in sorted(found)
         )
         matches.append(Match(match, blocks[match][1], blocks[match][0], first, second))
@@ -200,7 +202,7 @@ def config_rows(matches: list[Match], elo: dict[str, float], rng: random.Random)
         count = sum(c[3] for c in cells)
         if count < MIN_MATCHES:
             continue
-        draws = [[cells[rng.randrange(len(cells))] for _ in cells] for _ in range(BOOTSTRAP)]
+        draws = [[cells[rng.randrange(len(cells))] for _ in cells] for _ in range(boot.DRAWS)]
         totals = [(sum(c[0] for c in d), sum(c[3] for c in d)) for d in draws]
         rows.append(
             ConfigRow(
@@ -289,7 +291,7 @@ def matchup_rows(matches: list[Match], rng: random.Random, minimum: int = MIN_BL
     for (a, b), values in per_pair.items():
         if len(values) >= minimum:
             nets = [net for net, _ in values]
-            means = [sum(nets[rng.randrange(len(nets))] for _ in nets) / len(nets) for _ in range(BOOTSTRAP)]
+            means = [sum(nets[rng.randrange(len(nets))] for _ in nets) / len(nets) for _ in range(boot.DRAWS)]
             rows.append(Matchup(a, b, len(values), sum(nets) / len(nets), percentile_interval(means), sum(margin for _, margin in values) / len(values)))
     return sorted(rows, key=lambda r: -abs(r.net))
 
@@ -331,7 +333,7 @@ def margin_fit(matches: list[Match], rng: random.Random) -> Margin:
     xs, ys = [m.net for m in kept], [float(m.margin) for m in kept]
     blocks = list(by_block(kept).values())
     slopes = []
-    for _ in range(BOOTSTRAP):
+    for _ in range(boot.DRAWS):
         sample = [m for _ in blocks for m in blocks[rng.randrange(len(blocks))]]
         slopes.append(ols([m.net for m in sample], [float(m.margin) for m in sample]).slope)
     bins = []
@@ -413,7 +415,7 @@ def report(loaded: Loaded, rows: list[ConfigRow], elo_lost: Correlation, elo_net
     ranked = len({label(c) for m in loaded.matches for c in (m.first.config, m.second.config)})
     return (
         f"{len(kept):,} finished matches with no DeepSeek seat and no engine seat ({len(loaded.matches):,} with the engine ones, used for the ratings, which cover {ranked} configs). Left out: {loaded.incomplete:,} with an agent decision that has no searched row. "
-        f"{len(rows)} configs have at least {MIN_MATCHES} matches. Intervals are 95%, {BOOTSTRAP:,} resamples of seed blocks.\n\n"
+        f"{len(rows)} configs have at least {MIN_MATCHES} matches. Intervals are 95%, {boot.DRAWS:,} resamples of seed blocks.\n\n"
         f"### Round-win equivalents lost, by config\n\n{config_table(rows)}\n\n"
         f"### Against Round Elo\n\n"
         + table(

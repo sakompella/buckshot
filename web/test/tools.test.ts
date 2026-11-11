@@ -125,9 +125,8 @@ interface Watchers {
 /** Same cases on every run, so the coverage guards after a property cannot flake. */
 const RANDOM_TABLES = { testCases: 6, derandomize: true } as const;
 
-/** Plays one random match with items on at a table of 2 to 4 players, with Agents moving at random. Returns the table size. */
-const playRandomTable = (tc: hegel.TestCase, { check, onMove, onOver }: Watchers): SeatCount => {
-  const players = tc.draw(gs.sampledFrom(SeatCount.literals));
+/** Plays one random match with items on at a table of 2 to 4 players, with Agents moving at random. */
+const playRandomTable = (tc: hegel.TestCase, { check, onMove, onOver }: Watchers, players: SeatCount = tc.draw(gs.sampledFrom(SeatCount.literals))): void => {
   const lead = tc.draw(gs.integers({ minValue: 0, maxValue: players - 1 }));
   const controllers = Arr.makeBy(players, (position): Controller => (position === lead ? "Agent" : tc.draw(gs.sampledFrom(["Agent", "DoN", "Story"] as const))));
   let table = newMatch(players, tc.draw(gs.integers()), controllers);
@@ -146,8 +145,6 @@ const playRandomTable = (tc: hegel.TestCase, { check, onMove, onOver }: Watchers
 
   expect(isOver(table)).toBe(true);
   onOver?.(table);
-
-  return players;
 };
 
 /** A view without the moves, which the machine state behind the board decides. */
@@ -160,59 +157,59 @@ const withoutMoves = (reply: AgentReply) => {
 test("on random tables of 2 to 4 players, each Agent sees the players as Player A to the last letter and never another player's secrets or the hidden shells, get_game changes nothing and says the same twice, and calls for other players or other turns are refused", () => {
   const otherState = match(newMatch(4, 8, ["Agent", "DoN", "DoN", "DoN"])).game.state;
   let otherAgentNotes = 0;
-  const tableSizes = new Set<SeatCount>();
 
-  hegel.test((tc) => {
-    tableSizes.add(playRandomTable(tc, { check: (table) => {
-      const current = match(table);
-      const agents = agentPlayers(table);
-      const roster = rosterAt(table);
-      const { turn } = table;
+  for (const size of SeatCount.literals) {
+    hegel.test((tc) => {
+      playRandomTable(tc, { check: (table) => {
+        const current = match(table);
+        const agents = agentPlayers(table);
+        const roster = rosterAt(table);
+        const { turn } = table;
 
-      for (const player of EVERY_LETTER) {
-        if (!agents.includes(player)) {
-          const outcome = play(table, player, 0, turn);
-          const isAtTable = roster.players.some(({ letter }) => letter === player);
+        for (const player of EVERY_LETTER) {
+          if (!agents.includes(player)) {
+            const outcome = play(table, player, 0, turn);
+            const isAtTable = roster.players.some(({ letter }) => letter === player);
 
-          expect(refusal(getGame(table, player))).toContain(isAtTable ? "not an Agent player" : "no Player");
-          expect(refusal(outcome.reply)).toContain(isAtTable ? "not an Agent player" : "no Player");
-          expect(outcome.table).toBe(table);
+            expect(refusal(getGame(table, player))).toContain(isAtTable ? "not an Agent player" : "no Player");
+            expect(refusal(outcome.reply)).toContain(isAtTable ? "not an Agent player" : "no Player");
+            expect(outcome.table).toBe(table);
 
-          if (isAtTable) expectOnlyPlayers(table, outcome.reply);
+            if (isAtTable) expectOnlyPlayers(table, outcome.reply);
 
-          continue;
+            continue;
+          }
+
+          const seat = seatOfPlayer(table, player);
+          const read = call(table, "get_game", { player });
+          const view = parseView(answered(read.reply));
+          const ownNotes = current.learned.filter((note) => note.seat === seat);
+          const hiddenSwapped = new Game(current.game.table, current.game.seats, current.game.ticket, current.game.board, current.game.pending, otherState);
+
+          otherAgentNotes += current.learned.filter((note) => note.seat !== seat && agents.includes(roster.playerOf(note.seat).letter)).length;
+          expectOnlyPlayers(table, read.reply);
+          expect(view.you).toBe(player);
+          expect(read.table).toBe(table);
+          expect(getGame(table, player)).toEqual(read.reply);
+          expect(getGame({ ...table, maybeMatch: Option.some({ ...current, learned: ownNotes }) }, player)).toEqual(read.reply);
+          expect(withoutMoves(getGame({ ...table, maybeMatch: Option.some({ ...current, game: hiddenSwapped }) }, player))).toEqual(withoutMoves(read.reply));
+
+          if (view.status !== "your turn") continue;
+
+          expect(view.turn).toBe(turn);
+          expect(view.players?.map((entry) => entry.player)).toEqual(roster.players.map(({ letter }) => letter));
+
+          for (const other of [turn - 1, turn + 1]) {
+            const outcome = play(table, player, 0, other);
+
+            expect(refusal(outcome.reply)).toContain("Stale");
+            expect(outcome.table).toBe(table);
+          }
         }
+      } }, size);
+    }, { testCases: 4, derandomize: true });
+  }
 
-        const seat = seatOfPlayer(table, player);
-        const read = call(table, "get_game", { player });
-        const view = parseView(answered(read.reply));
-        const ownNotes = current.learned.filter((note) => note.seat === seat);
-        const hiddenSwapped = new Game(current.game.table, current.game.seats, current.game.ticket, current.game.board, current.game.pending, otherState);
-
-        otherAgentNotes += current.learned.filter((note) => note.seat !== seat && agents.includes(roster.playerOf(note.seat).letter)).length;
-        expectOnlyPlayers(table, read.reply);
-        expect(view.you).toBe(player);
-        expect(read.table).toBe(table);
-        expect(getGame(table, player)).toEqual(read.reply);
-        expect(getGame({ ...table, maybeMatch: Option.some({ ...current, learned: ownNotes }) }, player)).toEqual(read.reply);
-        expect(withoutMoves(getGame({ ...table, maybeMatch: Option.some({ ...current, game: hiddenSwapped }) }, player))).toEqual(withoutMoves(read.reply));
-
-        if (view.status !== "your turn") continue;
-
-        expect(view.turn).toBe(turn);
-        expect(view.players?.map((entry) => entry.player)).toEqual(roster.players.map(({ letter }) => letter));
-
-        for (const other of [turn - 1, turn + 1]) {
-          const outcome = play(table, player, 0, other);
-
-          expect(refusal(outcome.reply)).toContain("Stale");
-          expect(outcome.table).toBe(table);
-        }
-      }
-    } }));
-  }, RANDOM_TABLES);
-
-  expect(tableSizes).toEqual(new Set(SeatCount.literals));
   expect(otherAgentNotes).toBeGreaterThan(0);
 }, 120_000);
 

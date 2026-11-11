@@ -25,13 +25,12 @@ from pathlib import Path
 from statistics import fmean, stdev
 
 from docs import splice_between_markers
-from boot import interval
+from boot import DRAWS, interval
 from fmt import table
 from load import DB, connect, require_current, round_winners
 from regret import DERIVED, EFFORTS, PRODUCTION, run_of
 from rules import POINT, ROUNDS
 
-RESAMPLES = 2000
 FEWEST_SEATS = 80  # seats with a regret in both rounds below which a config is shown but not tested
 FEWEST_BLOCKS = 10
 FALSE_DISCOVERY = 0.05
@@ -149,7 +148,7 @@ def estimate(deltas: list[tuple[Seat, float]], rng: random.Random) -> Estimate |
     sums, counts = [sum(v) for v in blocks.values()], [len(v) for v in blocks.values()]
     picks = range(len(blocks))
     replicates = []
-    for _ in range(RESAMPLES):
+    for _ in range(DRAWS):
         drawn = rng.choices(picks, k=len(blocks))
         replicates.append(sum(map(sums.__getitem__, drawn)) / sum(map(counts.__getitem__, drawn)))
     mean = sum(sums) / sum(counts)

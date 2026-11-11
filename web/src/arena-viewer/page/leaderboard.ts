@@ -6,16 +6,17 @@ import { CERTAIN_TYPES, type CertainRate } from "../api.ts";
 import { type Cell as CertainCell, talliesOf } from "./certain.ts";
 
 import { pressable } from "./charts.ts";
-import { baseName, CERTAIN_NAMES, costPerMove, effortLabel, fmtCount, fmtPct, fmtPoints, fmtSec, fmtShare, fmtUsd, isClaude, isProvisional } from "./data.ts";
-import type { Derived, ModelStats } from "./derived.ts";
+import { effortName } from "../../arena/model-names.ts";
+import { baseName, CERTAIN_NAMES, costPerMove, effortLabel, fmtCount, fmtPct, fmtPoints, fmtSec, fmtShare, fmtUsd, isClaude, isProvisional, reasoningPerMove } from "./data.ts";
+import { type Derived, LUCK_ELO, type ModelStats, ROUND_ELO } from "./derived.ts";
 import { drillView } from "./drill.ts";
 import { itemIconOf } from "./items.ts";
 import { type Lazy, Message, type Model } from "./model.ts";
-import type { Rating } from "./ratings.ts";
+import { matchWinVsAnchor, type Rating } from "./ratings.ts";
 
 type H = HtmlBuilder<Message>;
 
-// One table, ranked by the pooled Bradley-Terry rating on round wins (Round Elo).
+// One table, ranked by the headline rating (derived.ts), in tiers of configs the data cannot tell apart.
 
 const ratingView = (h: H, elo: Rating | undefined): ReadonlyArray<Html | string> =>
   elo === undefined ? ["–"] : [`${elo.rating >= 0 ? "+" : ""}${elo.rating.toFixed(0)} `, ...(elo.interval === null ? [] : [h.span([h.Class("pm")], [`[${elo.interval.lo.toFixed(0)}, ${elo.interval.hi.toFixed(0)}]`])])];
@@ -81,26 +82,51 @@ const eloBarView = (h: H, scale: EloScale, m: ModelStats, elo: Rating | undefine
   );
 };
 
-/** A config's dot, model name and effort. */
+/** Below this many reasoning tokens per move a config reasons not at all. */
+const NO_REASONING = 0.5;
+
+/** Whether the reasoning measured disagrees with the effort asked for: reasoning with effort off, or none with effort on. */
+const isEffortMismatch = (m: ModelStats): boolean => {
+  const reasoning = reasoningPerMove(m);
+
+  return reasoning !== null && m.effort !== "" && (m.effort === "off") === reasoning >= NO_REASONING;
+};
+
+/** Pairs of one model's configs whose efforts differ but whose measured reasoning per move is the same, within 2%. */
+export const sameTreatments = (stats: ReadonlyArray<ModelStats>): ReadonlyArray<readonly [ModelStats, ModelStats]> =>
+  stats.flatMap((m, index) =>
+    stats.slice(index + 1).flatMap((other) => {
+      const [own, theirs] = [reasoningPerMove(m), reasoningPerMove(other)];
+
+      return m.model === other.model && own !== null && theirs !== null && Math.abs(own - theirs) <= NO_REASONING + 0.02 * Math.max(own, theirs) ? [[m, other] as const] : [];
+    }),
+  );
+
+/** A config's dot, model name and effort; an effort the measured reasoning disagrees with is marked as requested. */
 const nameView = (h: H, m: ModelStats): ReadonlyArray<Html | string> => {
   const effort = effortLabel(m.model, m.effort);
+  const mismatch = isEffortMismatch(m);
 
   return [
     h.span([h.Class(`dot ${isClaude(m.model) ? "a" : "o"}`), h.Style({ background: m.color })], []),
     `${baseName(m.model)} `,
-    ...(effort === "" ? [] : [h.span([h.Class("eff")], [`[${effort}]`])]),
+    ...(effort === "" ? [] : [h.span([h.Class("eff"), ...(mismatch ? [h.Title(`requested ${effortName(m.effort)}, measured ${fmtCount(reasoningPerMove(m))} reasoning tokens per move`)] : [])], [`[${effort}${mismatch ? " (requested)" : ""}]`])]),
   ];
 };
 
-const rowView = (h: H, m: ModelStats, rank: number | undefined, elo: Rating | undefined, hasLuck: boolean, scale: EloScale, details: ReadonlyArray<Detail>, isOpen: boolean): Html =>
+const matchWinView = (elo: Rating | undefined): string => (elo === undefined ? "–" : fmtPct(matchWinVsAnchor(elo.rating)));
+
+const rowView = (h: H, m: ModelStats, elo: Rating | undefined, hasLuck: boolean, scale: EloScale, details: ReadonlyArray<Detail>, isOpen: boolean, startsTier: boolean): Html =>
   h.keyed("tr")(
     m.key,
-    [h.Class(`row ${isOpen ? "sel" : ""} ${isProvisional(m) ? "provisional" : ""}`), h.AriaExpanded(isOpen), ...pressable(h, Message.ClickedLeaderboardRow({ id: m.key }))],
+    [h.Class(`row ${isOpen ? "sel" : ""} ${isProvisional(m) ? "provisional" : ""} ${startsTier ? "tierstart" : ""}`), h.AriaExpanded(isOpen), ...pressable(h, Message.ClickedLeaderboardRow({ id: m.key }))],
     [
-      h.td([], [h.span([h.Class("rk")], [rank === undefined ? "" : String(rank)]), ...nameView(h, m)]),
-      h.td([h.DataAttribute("label", "round elo")], ratingView(h, elo)),
-      ...(hasLuck ? [h.td([h.DataAttribute("label", "luck-adjusted")], ratingView(h, m.luckRating ?? undefined))] : []),
+      h.td([], [h.span([h.Class("rk")], [elo?.tier == null ? "" : String(elo.tier)]), ...nameView(h, m)]),
+      h.td([h.DataAttribute("label", hasLuck ? "luck-adjusted" : "round elo")], ratingView(h, elo)),
+      h.td([h.DataAttribute("label", "match win vs engine")], [matchWinView(elo)]),
+      ...(hasLuck ? [h.td([h.DataAttribute("label", "round elo")], ratingView(h, m.rating ?? undefined))] : []),
       h.td([h.DataAttribute("label", "matches"), h.Title(`${m.win.blocks} seed blocks`)], [m.scored.toLocaleString()]),
+      h.td([h.DataAttribute("label", "reasoning tok / move")], [fmtCount(reasoningPerMove(m))]),
       h.td([h.DataAttribute("label", "cost / match")], [fmtUsd(m.avgCost)]),
       h.td([h.Class("barcol")], [eloBarView(h, scale, m, elo)]),
       ...details.map(({ label, title, content }) => h.td([h.Class("detail"), h.DataAttribute("label", label), ...(title === "" ? [] : [h.Title(title)])], [...content])),
@@ -134,11 +160,17 @@ export const configPanelView = (h: H, derived: Derived, key: string, lazy: Lazy)
   );
 };
 
-const headersOf = (hasRegret: boolean, hasLuck: boolean): ReadonlyArray<string> => [
+const MATCH_WIN = "Match win vs engine";
+
+const REASONING = "Reasoning tok / move";
+
+const headersOf = (ratingName: string, hasRegret: boolean, hasLuck: boolean): ReadonlyArray<string> => [
   "Model",
-  "Round Elo",
-  ...(hasLuck ? [LUCK] : []),
+  ratingName,
+  MATCH_WIN,
+  ...(hasLuck ? [ROUND_ELO] : []),
   "Matches",
+  REASONING,
   "Cost / match",
   "",
   "Match wins vs own opponents",
@@ -151,15 +183,15 @@ const headersOf = (hasRegret: boolean, hasLuck: boolean): ReadonlyArray<string> 
   "Favorite item",
 ];
 
-const LUCK = "Luck-adjusted Elo";
-
 export const ACCURACY_TITLE = "Lichess's accuracy over points of round win chance: each move scored by what it gave up against the minimax player's best move, a game's value combining a volatility-weighted and a harmonic mean, averaged over the config's matches; higher is better, 100 is perfect";
 
 export const P99_TITLE = "Points of round win chance lost by the 99th-percentile move: one move in a hundred gave up at least this much";
 
 const HEADER_TITLES = new Map([
-  ["Round Elo", "one Bradley-Terry rating over every match, on round win share; the interval is a 95% bootstrap over seed blocks"],
-  [LUCK, "Round Elo with each round's result corrected for the luck of its shots, loads and first seat (AIVAT): the same strengths with less noise"],
+  [ROUND_ELO, "one Bradley-Terry rating over every match, on round win share, with the depth-2 search engine at 0; the interval is a 95% bootstrap over seed blocks"],
+  [LUCK_ELO, "Round Elo with each round's result corrected for the luck of its shots, loads and first seat (AIVAT): the same strengths with less noise"],
+  [MATCH_WIN, "the chance of winning a match against the depth-2 search engine (Engine/2/20000, rated 0), from the rating: two round wins of three"],
+  [REASONING, "reasoning tokens the provider reported per model move, over scored matches"],
   ["Cash share", "a config's cash over the match's cash, averaged over scored matches"],
   ["Round wins", "the rounds a config won over the rounds it played"],
   ["Accuracy", ACCURACY_TITLE],
@@ -169,7 +201,7 @@ const HEADER_TITLES = new Map([
 const headerView = (h: H, label: string): Html => {
   const title = HEADER_TITLES.get(label);
 
-  return h.th(label === "" ? [h.Class("barcol")] : [...(label === "Round Elo" || label === LUCK ? [h.Class("rating")] : []), ...(title === undefined ? [] : [h.Title(title)])], [label]);
+  return h.th(label === "" ? [h.Class("barcol")] : [...(label === ROUND_ELO || label === LUCK_ELO ? [h.Class("rating")] : []), ...(title === undefined ? [] : [h.Title(title)])], [label]);
 };
 
 /** Configs with a scored match, by rank; the unranked (provisional or unrated) after them, by rating and then label. */
@@ -182,19 +214,23 @@ export const inRankOrder = (stats: ReadonlyArray<ModelStats>, ranks: ReadonlyMap
 };
 
 export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["leaderboard"], lazy: Lazy): Html => {
-  const { pooled: stats, everyPooled: every, ranks, ratings } = derived;
+  const { pooled: stats, everyPooled: every, ranks, ratings, ratingName } = derived;
   const hasRegret = every.some(({ regret }) => regret !== null);
-  const hasLuck = every.some(({ luckRating }) => luckRating !== null);
-  const headers = headersOf(hasRegret, hasLuck);
+  const hasLuck = ratingName === LUCK_ELO;
+  const headers = headersOf(ratingName, hasRegret, hasLuck);
   const barColumn = headers.indexOf("");
   const configs = inRankOrder(stats, ranks, ratings);
   const scale = eloScaleOf(ratings, ranks);
+  const tierOf = (m: ModelStats | undefined) => (m === undefined ? undefined : ratings.get(m.key)?.tier);
+  const same = sameTreatments(configs);
 
   return h.div(
     [h.Class("lb")],
     [
       h.div([h.Class("lbbar")], [h.h2([], ["Leaderboard"])]),
-      h.p([h.Class("sub")], [`Round Elo is one Bradley-Terry rating over every match, on round win share; the bar runs from the average at 0, with its 95% interval over seed blocks.${hasLuck ? " Luck-adjusted Elo is the same fit with the luck of each round's shots, loads and first seat taken out." : ""} Match wins count a config's own opponents only.`]),
+      h.p([h.Class("sub")], [
+        `${hasLuck ? `${LUCK_ELO} is Round Elo with the luck of each round's shots, loads and first seat taken out. ` : ""}Round Elo is one Bradley-Terry rating over every match, on round win share. The depth-2 search engine (Engine/2/20000) is fixed at 0, so adding a config does not move the others. The bar runs from 0, with its 95% interval over seed blocks. The number before a config is its tier: the data cannot tell the configs of one tier apart. Match wins count a config's own opponents only.`,
+      ]),
       h.div(
         [h.Class("card")],
         [
@@ -204,12 +240,12 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
               h.thead([], [h.tr([], headers.map((label) => headerView(h, label)))]),
               h.tbody(
                 [],
-                configs.flatMap((m) => {
+                configs.flatMap((m, index) => {
                   const isOpen = Option.exists(leaderboard.maybeOpen, (open) => open === m.key);
                   const details = detailsOf(h, m, hasRegret);
 
                   return [
-                    rowView(h, m, ranks.get(m.key), ratings.get(m.key), hasLuck, scale, details, isOpen),
+                    rowView(h, m, ratings.get(m.key), hasLuck, scale, details, isOpen, index > 0 && tierOf(m) !== tierOf(configs[index - 1])),
                     isOpen ? h.keyed("tr")(`drill-${m.key}`, [h.Class("drill")], [h.td([h.Colspan(headers.length)], [detailsView(h, details), drillView(h, m, lazy)])]) : h.empty,
                   ];
                 }),
@@ -231,6 +267,10 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
           ),
         ],
       ),
+      ...[
+        ...(same.length === 0 ? [] : [`Same measured reasoning under different requested efforts: ${same.map(([one, other]) => `${one.label} and ${other.label} (${fmtCount(reasoningPerMove(one))} and ${fmtCount(reasoningPerMove(other))} tokens per move)`).join("; ")}.`]),
+        ...(configs.some(isEffortMismatch) ? ["An effort marked (requested) disagrees with the measured reasoning: reasoning at effort none, or none at another effort."] : []),
+      ].map((note) => h.p([h.Class("sub")], [note])),
     ],
   );
 };

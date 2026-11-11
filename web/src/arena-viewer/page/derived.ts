@@ -35,8 +35,13 @@ export interface Derived {
   readonly pooled: ReadonlyArray<ModelStats>;
   /** The keys of the configs the filter keeps. */
   readonly kept: ReadonlySet<string>;
-  /** One round-win rating per config, fitted over every match of every tournament: filters pick rows, not the scale. */
+  /**
+   * The headline rating per config, fitted over every match of every tournament: filters pick rows, not the scale. It
+   * is the luck-adjusted Round Elo when the aggregates carry it, else Round Elo.
+   */
   readonly ratings: ReadonlyMap<string, Rating>;
+  /** The headline rating's name. */
+  readonly ratingName: string;
   readonly ranks: ReadonlyMap<string, number>;
   /** The pairs with a kept config on either side: a match counts when either of its configs is kept. */
   readonly pairs: ReadonlyArray<Pair>;
@@ -57,7 +62,21 @@ export const modelStatsOf = memoLast((configs: ReadonlyArray<ConfigSummary>): Re
   }),
 );
 
-const ratingsOf = memoLast((every: ReadonlyArray<ModelStats>): ReadonlyMap<string, Rating> => new Map(every.flatMap(({ key, rating }) => (rating === null ? [] : [[key, rating] as const]))));
+export const ROUND_ELO = "Round Elo";
+
+export const LUCK_ELO = "Luck-adjusted Elo";
+
+const hasLuckOf = (every: ReadonlyArray<ModelStats>): boolean => every.some(({ luckRating }) => luckRating !== null);
+
+const ratingsOf = memoLast((every: ReadonlyArray<ModelStats>): ReadonlyMap<string, Rating> => {
+  const hasLuck = hasLuckOf(every);
+
+  return new Map(every.flatMap(({ key, rating, luckRating }) => {
+    const headline = hasLuck ? luckRating : rating;
+
+    return headline === null ? [] : [[key, headline] as const];
+  }));
+});
 
 const passes = (filter: Filter, config: Pick<ConfigSummary, "model" | "effort">): boolean => !filter.offEfforts.includes(config.effort) && !filter.offModels.includes(baseName(config.model));
 
@@ -80,6 +99,7 @@ export const derive = memoLast((loaded: Loaded, filter: Filter): Derived => {
     pooled,
     kept,
     ratings,
+    ratingName: hasLuckOf(every) ? LUCK_ELO : ROUND_ELO,
     ranks: ranksOf(every, ratings),
     pairs: loaded.pairs.filter(({ first, second }) => kept.has(first) || kept.has(second)),
     hasCertain: loaded.summary.hasCertain,

@@ -29,6 +29,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 
+import boot
 import bt
 import numpy as np
 import pandas as pd
@@ -44,7 +45,6 @@ from docs import splice_between_markers
 # The two-seat deck, table.deck(TwoSeats) in sim/bend-mp: (live, blank) per load.
 DECK = ((1, 2), (2, 1), (2, 2), (3, 2), (1, 1), (2, 3), (3, 3), (3, 1), (4, 2))
 FOLDS = 5
-DRAWS = 200
 
 
 def shot_outcomes(db: sqlite3.Connection) -> dict[str, list[bool]]:
@@ -91,7 +91,7 @@ def read(db_path: str, knowledge_path: str) -> Data:
     starters, winners = round_one_starters(db), round_winners(db)
     seats = defaultdict(list)
     for row in db.execute(
-        """SELECT s.match_id, s.player, e.name FROM match_seats s JOIN entrants e ON e.id = s.entrant_id
+        """SELECT s.match_id, s.player, s.label FROM match_seats s
            JOIN matches m ON m.id = s.match_id WHERE m.status = 'completed' AND m.disposition IS NULL ORDER BY s.match_id, s.position"""
     ):
         seats[row[0]].append(row[1:])
@@ -359,7 +359,7 @@ def intervals(t: Rated, wins: np.ndarray) -> np.ndarray:
     """2.5% and 97.5% quantiles over seed-block resamples, per config."""
     rng = np.random.default_rng(1)
     U = t.block.max() + 1
-    draws = np.array([fit(t, wins, np.bincount(rng.integers(0, U, U), minlength=U)[t.block].astype(float)) for _ in range(DRAWS)])
+    draws = np.array([fit(t, wins, np.bincount(rng.integers(0, U, U), minlength=U)[t.block].astype(float)) for _ in range(boot.DRAWS)])
     return np.percentile(draws, [2.5, 97.5], axis=0).T
 
 

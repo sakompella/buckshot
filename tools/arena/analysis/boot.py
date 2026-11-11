@@ -2,6 +2,8 @@
 
 import random
 
+DRAWS = 2000  # resamples per bootstrap interval, as BOOTSTRAP_DRAWS in web/src/arena/bootstrap.ts
+
 
 def weights(blocks: list[str], rng: random.Random) -> dict[str, int]:
     """How often each block is drawn in one resample of the same size."""
