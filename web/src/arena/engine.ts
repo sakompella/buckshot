@@ -77,7 +77,7 @@ export const openEngine = (): Engine => {
       const me = Option.getOrThrow(roster.find(letter)).seat;
       const input = nativeInput({ table: source.game.table, items: true, board: boardOf(source.game), log: ownLog(source.events, source.learned, me), me });
 
-      const search = Bun.spawnSync([binary, "--evaluator", "bounded-v1-f64", "--unpruned", "--depth", depth ?? "", "--budget", budget ?? "", "--reload", reload ?? "static", "--threads", "1"], {
+      const search = Bun.spawnSync([binary, "--unpruned", "--depth", depth ?? "", "--budget", budget ?? "", "--reload", reload ?? "static", "--threads", "1"], {
         stdin: Buffer.from(`${JSON.stringify({ id: "engine", ordinal: 0, input })}\n`),
         stderr: "pipe",
       });

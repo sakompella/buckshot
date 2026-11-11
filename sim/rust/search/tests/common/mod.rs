@@ -51,6 +51,13 @@ pub fn cli(flags: &[&str], input: &str) -> Result<Vec<Value>> {
     Ok(rows)
 }
 
+/// The flags that pick bounded-v1: the f32 build needs --evaluator (compat is
+/// its default); the f64 build has only bounded-v1, and no --evaluator.
+#[cfg(feature = "f32")]
+pub const BOUNDED: &[&str] = &["--evaluator", buckshot_search::BoundedV1::ID];
+#[cfg(not(feature = "f32"))]
+pub const BOUNDED: &[&str] = &[];
+
 /// A row's line scores.
 pub fn scores(row: &Value) -> Vec<Value> {
     row["lines"]

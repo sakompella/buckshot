@@ -39,7 +39,6 @@ mod types;
 
 pub use num::ARITHMETIC;
 pub use position::ParseError;
-pub use search::KeyStats;
 #[cfg(feature = "f32")]
 pub use searcher::Compat;
 pub use searcher::{BoundedV1, InfoSet, Searcher, analyse_batch};
