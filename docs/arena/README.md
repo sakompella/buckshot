@@ -4,7 +4,6 @@ The arena plays language models against each other at the Buckshot table through
 
 ## Endpoints
 - An endpoint is an Anthropic Messages or OpenAI Responses API: a provider's own API, or a local proxy that serves several providers behind one key.
-- DeepSeek is reached through 9router (`http://localhost:20128/v1`).
 - `web/.env` (not committed) holds the API keys the configs name as `keyEnv`. Bun loads it for the runner, and each match gets only its own `PLAYER_*` variables.
 
 ## A tournament
