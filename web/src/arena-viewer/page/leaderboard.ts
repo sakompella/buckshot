@@ -12,7 +12,7 @@ import { type Derived, LUCK_ELO, type ModelStats, ROUND_ELO } from "./derived.ts
 import { drillView } from "./drill.ts";
 import { itemIconOf } from "./items.ts";
 import { type Lazy, Message, type Model } from "./model.ts";
-import { matchWinVsAnchor, type Rating } from "./ratings.ts";
+import { ANCHOR, matchWinVsAnchor, type Rating } from "./ratings.ts";
 
 type H = HtmlBuilder<Message>;
 
@@ -189,7 +189,7 @@ export const P99_TITLE = "Points of round win chance lost by the 99th-percentile
 
 const HEADER_TITLES = new Map([
   [ROUND_ELO, "one Bradley-Terry rating over every match, on round win share, with the depth-2 search engine at 0; the interval is a 95% bootstrap over seed blocks"],
-  [LUCK_ELO, "Round Elo with each round's result corrected for the luck of its shots, loads and first seat (AIVAT): the same strengths with less noise"],
+  [LUCK_ELO, "Round Elo with each round's result corrected for the luck of its shots, loads, first seat, item deals and the shells items show (AIVAT): the same strengths with less noise"],
   [MATCH_WIN, "the chance of winning a match against the depth-2 search engine (Engine/2/20000, rated 0), from the rating: two round wins of three"],
   [REASONING, "reasoning tokens the provider reported per model move, over scored matches"],
   ["Cash share", "a config's cash over the match's cash, averaged over scored matches"],
@@ -223,13 +223,14 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
   const scale = eloScaleOf(ratings, ranks);
   const tierOf = (m: ModelStats | undefined) => (m === undefined ? undefined : ratings.get(m.key)?.tier);
   const same = sameTreatments(configs);
+  const zero = ratings.get(ANCHOR)?.interval ?? null;
 
   return h.div(
     [h.Class("lb")],
     [
       h.div([h.Class("lbbar")], [h.h2([], ["Leaderboard"])]),
       h.p([h.Class("sub")], [
-        `${hasLuck ? `${LUCK_ELO} is Round Elo with the luck of each round's shots, loads and first seat taken out. ` : ""}Round Elo is one Bradley-Terry rating over every match, on round win share. The depth-2 search engine (Engine/2/20000) is fixed at 0, so adding a config does not move the others. The bar runs from 0, with its 95% interval over seed blocks. The number before a config is its tier: the data cannot tell the configs of one tier apart. Match wins count a config's own opponents only.`,
+        `${hasLuck ? `${LUCK_ELO} is Round Elo with the luck of each round's shots, loads, first seat, item deals and the shells items show taken out. ` : ""}Round Elo is one Bradley-Terry rating over every match, on round win share. The depth-2 search engine (Engine/2/20000) is fixed at 0, so adding a config does not move the others. The bar runs from 0, with its 95% interval over seed blocks.${zero === null ? "" : ` The 0 is itself uncertain: against the mean of all configs, the engine's own 95% interval is ${Math.round(zero.lo)} to +${Math.round(zero.hi)}. The other intervals are measured the same way, so they leave out the engine's noise.`} The number before a config is its tier: the data cannot tell the configs of one tier apart. Match wins count a config's own opponents only.`,
       ]),
       h.div(
         [h.Class("card")],

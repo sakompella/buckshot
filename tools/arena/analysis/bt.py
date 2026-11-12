@@ -78,9 +78,12 @@ class Fit:
     def p_first(self, first: str, second: str, first_starts: bool = True) -> float:
         return sigmoid(self.eta(first, second, first_starts))
 
-    def elo(self) -> dict[str, float]:
-        """Ratings on the Elo scale with ANCHOR at 0, or the mean of the entrants when the fit does not rate it."""
-        zero = self.theta.get(ANCHOR, sum(self.theta.values()) / len(self.theta))
+    def elo(self, anchor: str | None = ANCHOR) -> dict[str, float]:
+        """Ratings on the Elo scale with `anchor` at 0, or centred on the mean of the entrants when it is None or the fit does not rate it.
+
+        Bootstrap draws are best centred and then moved by the point fit's shift: anchoring each draw would add the anchor's own noise to every interval.
+        """
+        zero = self.theta.get(anchor, sum(self.theta.values()) / len(self.theta))
         return {name: (value - zero) * ELO for name, value in self.theta.items()}
 
 
@@ -140,17 +143,17 @@ def fit(cells: Cells, tau: float = 0.0, seat: bool = False, start: bool = False,
     return out
 
 
-def round_elo(matches: Iterable[tuple[str, str, float, float]], entrants: Iterable[str] = ()) -> dict[str, float]:
+def round_elo(matches: Iterable[tuple[str, str, float, float]], entrants: Iterable[str] = (), anchor: str | None = ANCHOR) -> dict[str, float]:
     """Round Elo, the viewer's rating (web/src/arena-viewer/page/ratings.ts): the fit on round shares, each match counting its rounds.
 
-    `matches` are (first config, second config, rounds, the first config's round wins), wins fractional for luck-adjusted ones; the Elo of each config, ANCHOR at 0 (Fit.elo).
+    `matches` are (first config, second config, rounds, the first config's round wins), wins fractional for luck-adjusted ones; the Elo of each config, `anchor` at 0 (Fit.elo).
     """
     cells: Cells = {}
     for first, second, rounds, wins in matches:
         cell = cells.setdefault((first, second), [0.0, 0.0])
         cell[0] += rounds
         cell[1] += wins
-    return fit(cells, entrants=set(entrants)).elo()
+    return fit(cells, entrants=set(entrants)).elo(anchor)
 
 
 def log_loss(fitted: Fit, games: list[Game]) -> float:

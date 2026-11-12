@@ -33,7 +33,7 @@ Ratings, pair effects, seat and round 1 starter effects for the scored arena mat
 - Inconclusive either way, as `results.md` says.
 
 ## Method
-- **Ratings:** the first-seated entrant wins with probability 1/(1 + exp(-(theta_first - theta_second))), and a share w counts as w wins and 1 - w losses. One fit covers every scored match of every tournament. A mean-zero Gaussian prior on theta (standard deviation 3) regularizes the fit; it also shrinks rating differences slightly. Ratings are reported on the Elo scale with the depth-2 search engine (Engine/2/20000) at 0, which is what `web/src/arena-viewer/page/ratings.ts` computes. The win rating counts win shares; the cash rating is the same fit on pot shares. Intervals draw seed blocks 2,000 times, refitting each draw, as the viewer does.
+- **Ratings:** the first-seated entrant wins with probability 1/(1 + exp(-(theta_first - theta_second))), and a share w counts as w wins and 1 - w losses. One fit covers every scored match of every tournament. A mean-zero Gaussian prior on theta (standard deviation 3) regularizes the fit; it also shrinks rating differences slightly. Ratings are reported on the Elo scale with the depth-2 search engine (Engine/2/20000) at 0, which is what `web/src/arena-viewer/page/ratings.ts` computes. The win rating counts win shares; the cash rating is the same fit on pot shares. Intervals draw seed blocks 2,000 times, refitting each draw, as the viewer does. Each draw is centred on the mean entrant and moved by the point fit's shift, so an interval leaves out the engine's own noise; the engine's interval is the uncertainty of the 0.
 - **Observed against fitted:** for each pair in a cohort, the observed share of the alphabetically first entrant minus the sum of its pooled-fit win probabilities over the pair's matches, as a share, with each resample refitted. Descriptive only (see above).
 - **Pair effects:** a term delta per pair with a prior of standard deviation tau, tau in {0 (ratings only), 0.1, 0.2, 0.4, 0.8, 1.6}, fitted within a cohort. Scored by mean log loss on held-out blocks (5 repeats of 10-fold cross-validation); the nested row picks tau by 5-fold cross-validation inside each training set. The verdict needs the lower end of the 95% interval of the gain (drawn over blocks) above 0.
 - **Seat and starter:** for a complete block, position 1's share is the mean over its two matches, which cancels who the entrants are. The starter's share is taken the same way. The two effects are the position and starter terms of an additive split of those block shares by which position starts, weighting the two starts equally. Headline intervals draw seeds.
@@ -1048,9 +1048,18 @@ outcomes minus the value of the one that came, sum_o P(o) V(o) - V(realised), in
 - **Loads.** The two-seat deck of nine compositions is drawn without replacement and refilled when empty, across rounds; P is
   the count left over the deck's size (every recorded load fits the deck). V is a logistic on the health gap and the composition.
 - **Round 1's first seat**, a coin flip. V is each starter's mean round 1 result.
+- **Item deals.** Each granted item is a uniform draw from the items its seat may still get, under the per-seat and table caps of
+  the rules (`ItemRules` in `sim/bend-mp/domain.bend`). The pool is rebuilt from the public events, and a grant outside it stops
+  the run (every recorded grant fits). V is a logistic on both inventories, the health gap and who moves first, fitted on the
+  state after each deal.
+- **Shells shown by items:** glass (the chamber), beer (the shell it ejects) and the phone (a later shell). V is the search's
+  value from the regret file: for glass and beer, the value after the reveal and the other shell's value, inferred from the
+  chosen move's value and the mover's live chance; for the phone, the chosen move's value minus the value after it. The search's
+  values drift with the position, which would credit skill as luck, so each term has its out-of-fold prediction from the state
+  before the event removed. Only rounds the search scored throughout get these terms.
 
-There are no decision terms, since the models' policies are unknown, and no deal terms, since the logs lack the item pool. The
-corrections have mean zero for any V that depends only on the history before the event and its outcome, so they leave the
+There are no decision terms, since the models' policies are unknown. The luck file depends on the regret file, so the wrap-up
+rebuilds it after the regret step. The corrections have mean zero for any V that depends only on the history before the event and its outcome, so they leave the
 strengths the same in expectation. Each V is fitted out of fold (five folds by seed), so no round is corrected by a model that saw
 it. The bias test checks the mean zero: per config, the mean correction per round against zero, with standard errors clustered by
 seed, and its correlation with Round Elo fitted on the other half of the seeds. The wrap-up writes the corrections to
