@@ -8,7 +8,7 @@ import { type Cell as CertainCell, talliesOf } from "./certain.ts";
 import { pressable } from "./charts.ts";
 import { effortName } from "../../arena/model-names.ts";
 import { baseName, CERTAIN_NAMES, costPerMove, effortLabel, fmtCount, fmtPct, fmtPoints, fmtSec, fmtShare, fmtUsd, isClaude, isProvisional, reasoningPerMove } from "./data.ts";
-import { type Derived, LUCK_ELO, type ModelStats, ROUND_ELO } from "./derived.ts";
+import { type Derived, LUCK_ELO, type ModelStats, MOVE_ELO, ROUND_ELO } from "./derived.ts";
 import { drillView } from "./drill.ts";
 import { itemIconOf } from "./items.ts";
 import { type Lazy, Message, type Model } from "./model.ts";
@@ -116,7 +116,7 @@ const nameView = (h: H, m: ModelStats): ReadonlyArray<Html | string> => {
 
 const matchWinView = (elo: Rating | undefined): string => (elo === undefined ? "–" : fmtPct(matchWinVsAnchor(elo.rating)));
 
-const rowView = (h: H, m: ModelStats, elo: Rating | undefined, hasLuck: boolean, scale: EloScale, details: ReadonlyArray<Detail>, isOpen: boolean, startsTier: boolean): Html =>
+const rowView = (h: H, m: ModelStats, elo: Rating | undefined, hasLuck: boolean, hasMoveElo: boolean, scale: EloScale, details: ReadonlyArray<Detail>, isOpen: boolean, startsTier: boolean): Html =>
   h.keyed("tr")(
     m.key,
     [h.Class(`row ${isOpen ? "sel" : ""} ${isProvisional(m) ? "provisional" : ""} ${startsTier ? "tierstart" : ""}`), h.AriaExpanded(isOpen), ...pressable(h, Message.ClickedLeaderboardRow({ id: m.key }))],
@@ -125,6 +125,7 @@ const rowView = (h: H, m: ModelStats, elo: Rating | undefined, hasLuck: boolean,
       h.td([h.DataAttribute("label", hasLuck ? "luck-adjusted" : "round elo")], ratingView(h, elo)),
       h.td([h.DataAttribute("label", "match win vs engine")], [matchWinView(elo)]),
       ...(hasLuck ? [h.td([h.DataAttribute("label", "round elo")], ratingView(h, m.rating ?? undefined))] : []),
+      ...(hasMoveElo ? [h.td([h.DataAttribute("label", "play and move quality")], ratingView(h, m.moveRating ?? undefined))] : []),
       h.td([h.DataAttribute("label", "matches"), h.Title(`${m.win.blocks} seed blocks`)], [m.scored.toLocaleString()]),
       h.td([h.DataAttribute("label", "reasoning tok / move")], [fmtCount(reasoningPerMove(m))]),
       h.td([h.DataAttribute("label", "cost / match")], [fmtUsd(m.avgCost)]),
@@ -164,11 +165,12 @@ const MATCH_WIN = "Match win vs engine";
 
 const REASONING = "Reasoning tok / move";
 
-const headersOf = (ratingName: string, hasRegret: boolean, hasLuck: boolean): ReadonlyArray<string> => [
+const headersOf = (ratingName: string, hasRegret: boolean, hasLuck: boolean, hasMoveElo: boolean): ReadonlyArray<string> => [
   "Model",
   ratingName,
   MATCH_WIN,
   ...(hasLuck ? [ROUND_ELO] : []),
+  ...(hasMoveElo ? [MOVE_ELO] : []),
   "Matches",
   REASONING,
   "Cost / match",
@@ -190,6 +192,7 @@ export const P99_TITLE = "Points of round win chance lost by the 99th-percentile
 const HEADER_TITLES = new Map([
   [ROUND_ELO, "one Bradley-Terry rating over every match, on round win share, with the depth-2 search engine at 0; the interval is a 95% bootstrap over seed blocks"],
   [LUCK_ELO, "Round Elo with each round's result corrected for the luck of its shots, loads, first seat, item deals and the shells items show (AIVAT): the same strengths with less noise"],
+  [MOVE_ELO, "the headline rating combined with the rating predicted by points lost per move, as the move scorer counts them; a config with few matches leans on its moves"],
   [MATCH_WIN, "the chance of winning a match against the depth-2 search engine (Engine/2/20000, rated 0), from the rating: two round wins of three"],
   [REASONING, "reasoning tokens the provider reported per model move, over scored matches"],
   ["Cash share", "a config's cash over the match's cash, averaged over scored matches"],
@@ -201,7 +204,7 @@ const HEADER_TITLES = new Map([
 const headerView = (h: H, label: string): Html => {
   const title = HEADER_TITLES.get(label);
 
-  return h.th(label === "" ? [h.Class("barcol")] : [...(label === ROUND_ELO || label === LUCK_ELO ? [h.Class("rating")] : []), ...(title === undefined ? [] : [h.Title(title)])], [label]);
+  return h.th(label === "" ? [h.Class("barcol")] : [...(label === ROUND_ELO || label === LUCK_ELO || label === MOVE_ELO ? [h.Class("rating")] : []), ...(title === undefined ? [] : [h.Title(title)])], [label]);
 };
 
 /** Configs with a scored match, by rank; the unranked (provisional or unrated) after them, by rating and then label. */
@@ -217,7 +220,8 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
   const { pooled: stats, everyPooled: every, ranks, ratings, ratingName } = derived;
   const hasRegret = every.some(({ regret }) => regret !== null);
   const hasLuck = ratingName === LUCK_ELO;
-  const headers = headersOf(ratingName, hasRegret, hasLuck);
+  const hasMoveElo = every.some(({ moveRating }) => moveRating !== null);
+  const headers = headersOf(ratingName, hasRegret, hasLuck, hasMoveElo);
   const barColumn = headers.indexOf("");
   const configs = inRankOrder(stats, ranks, ratings);
   const scale = eloScaleOf(ratings, ranks);
@@ -246,7 +250,7 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
                   const details = detailsOf(h, m, hasRegret);
 
                   return [
-                    rowView(h, m, ratings.get(m.key), hasLuck, scale, details, isOpen, index > 0 && tierOf(m) !== tierOf(configs[index - 1])),
+                    rowView(h, m, ratings.get(m.key), hasLuck, hasMoveElo, scale, details, isOpen, index > 0 && tierOf(m) !== tierOf(configs[index - 1])),
                     isOpen ? h.keyed("tr")(`drill-${m.key}`, [h.Class("drill")], [h.td([h.Colspan(headers.length)], [detailsView(h, details), drillView(h, m, lazy)])]) : h.empty,
                   ];
                 }),

@@ -2,6 +2,7 @@ import { Match, Schema, SchemaTransformation } from "effect";
 
 import { CertainRate, Consistency, type Decisions, ITEMS, NO_GAP, type Seat } from "./api.ts";
 import { addTo, type BlockTally, blockRate, blocksOf, groupBy, keyOf, MIN_BLOCKS_FOR_INTERVAL, meanOf, regretStats, roundResults, type SeatFull, sumOf } from "./page/data.ts";
+import { playAndMoveRatings } from "./page/play-and-moves.ts";
 import { type Luck, pooledRatings } from "./page/ratings.ts";
 
 // What the arena page shows, worked out once from every seat and agent move: per config and per pair of configs, never
@@ -60,6 +61,8 @@ export const ConfigSummary = Schema.Struct({
   rating: Schema.NullOr(RatingSchema),
   /** The same fit with each match's round wins corrected for luck (tools/arena/analysis/aivat.py); null without a luck database. */
   luckRating: Schema.NullOr(RatingSchema),
+  /** The headline rating combined with the rating its points lost per move predict (page/play-and-moves.ts); null without scored moves. */
+  moveRating: Schema.NullOr(RatingSchema),
   /** The item used most often when legal, over at least MIN_LEGAL legal moves. */
   favorite: Schema.NullOr(Schema.Struct({ item: Item, rate: Schema.Number, k: Schema.Number, n: Schema.Number })),
 });
@@ -383,6 +386,7 @@ export const pairsOf = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<Pair> =>
 export const configSummaries = (seats: ReadonlyArray<SeatFull>, decisions: Pick<Decisions, "seat" | "legalUse" | "useItem">, luck: Luck = new Map()): ReadonlyArray<ConfigSummary> => {
   const ratings = pooledRatings(seats);
   const luckRatings = luck.size === 0 ? new Map<string, never>() : pooledRatings(seats, luck);
+  const moveRatings = playAndMoveRatings(luck.size === 0 ? ratings : luckRatings, seats);
   const favoriteOf = favorites(seats, decisions);
 
   return [...groupBy(seats, keyOf)].flatMap(([key, started]) => {
@@ -421,6 +425,7 @@ export const configSummaries = (seats: ReadonlyArray<SeatFull>, decisions: Pick<
         scoredReasoning: scored.some(({ rt }) => rt !== null) ? scoredSum(({ rt }) => rt) : null,
         rating: ratings.get(key) ?? null,
         luckRating: luckRatings.get(key) ?? null,
+        moveRating: moveRatings.get(key) ?? null,
         favorite: favoriteOf.get(key) ?? null,
       },
     ];

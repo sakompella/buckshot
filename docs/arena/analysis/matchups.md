@@ -1126,6 +1126,24 @@ Bias test: the mean correction per round of each config, seed-clustered, gives c
 | claude-haiku-4-5-20251001-off | 125 | 375 | -187 [-240, -137] | -196 [-240, -158] |
 <!-- luck:end -->
 
+## Elo from play and move quality
+
+The leaderboard's second rating column (`web/src/arena-viewer/page/play-and-moves.ts`) combines each language-model config's
+headline rating with the rating its points lost per move predict. Across the configs the headline rating lies close to a line in
+points lost per move (on 3,709 matches: Elo = 126 - 71 x points lost per move, centred on the mean config, correlation -0.96).
+A config's true distance from the line has a spread of its own, about 17 Elo. The line and the spread are fitted together by
+maximum likelihood, each config weighted by the variance of its rating (from its 95% interval) plus the spread plus the slope
+squared times the variance of its points lost (clustered by seed block). Each config then takes the precision-weighted mean of its
+rating and the line's prediction, so a config with few matches leans on its move scores and one with many on its results. The
+median 95% half-width falls from about ±31 to ±24 Elo.
+
+It is checked out of sample by splitting the seeds in half 30 times: the combination fitted on one half is closer to the other
+half's luck-adjusted Elo than that half's own rating (RMS error after removing the other half's noise: 16 against 21 Elo over all
+configs, 17 against 23 over the top 20, 24 against 29 over the top 6). It trusts the move scorer. Every top-six config sits 23 to
+53 Elo above its line prediction and is pulled down 8 to 27; out of sample the top six end up about 15 Elo too low, where results
+alone are about 11 too high. Model families differ around the line (spread about 15 Elo), but a family term did not help out of
+sample, nor did fitting the line only on configs with many matches. The headline stays the results-only rating.
+
 ## Minimax self-play
 
 The Bend minimax player plays itself under the arena's rules (`web/scripts/arena-selfplay.ts`, tables from `tools/arena/analysis/selfplay.py`). Each seed is played twice: once as the seed starts it, once with the first draw answered for the other seat, so the other seat starts round 1. Equal best moves are broken at random from seed, swap and rep.

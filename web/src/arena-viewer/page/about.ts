@@ -3,7 +3,7 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 import { isOnline } from "../../site/online.ts";
 import type { Runs } from "../aggregates.ts";
 import { isPromptedOff } from "./data.ts";
-import type { Derived } from "./derived.ts";
+import { type Derived, MOVE_ELO } from "./derived.ts";
 import { forestView } from "./forest.ts";
 import { Message } from "./model.ts";
 
@@ -86,6 +86,14 @@ export const aboutView = (h: H, derived: Derived): Html => {
             h.p([h.Class("sub")], [
               h.b([], ["Luck-adjusted Elo. "]),
               "The same fit with each round's luck — the shots, loads, first seat, item deals and the shells items show — corrected out (AIVAT), estimating the same strengths with less noise. It is the headline rating: it ranks the leaderboard and the results summary.",
+            ]),
+          ]
+        : []),
+      ...(derived.everyPooled.some(({ moveRating }) => moveRating !== null)
+        ? [
+            h.p([h.Class("sub")], [
+              h.b([], [`${MOVE_ELO}. `]),
+              "A second column, never the ranking. Across the language-model configs the headline rating lies close to a line in points lost per move, as the move scorer counts them. Each config's rating is combined with the one its points lost predict, each weighted by its precision, so a config with few matches leans on its moves and one with many on its results. It trusts the move scorer: a config whose strength the scorer cannot see is pulled toward the line.",
             ]),
           ]
         : []),

@@ -66,6 +66,8 @@ export const ROUND_ELO = "Round Elo";
 
 export const LUCK_ELO = "Luck-adjusted Elo";
 
+export const MOVE_ELO = "Elo from play and move quality";
+
 const hasLuckOf = (every: ReadonlyArray<ModelStats>): boolean => every.some(({ luckRating }) => luckRating !== null);
 
 const ratingsOf = memoLast((every: ReadonlyArray<ModelStats>): ReadonlyMap<string, Rating> => {
