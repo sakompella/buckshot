@@ -91,8 +91,8 @@ const solveInPlace = (a: Float64Array, b: Float64Array, size: number): void => {
 
 /**
  * The most probable Bradley-Terry strengths over the games at `rows`, by Newton steps: a win share w counts as w
- * wins and 1 - w losses, and a mean-zero Gaussian prior gives every config one finite answer. Rated on an Elo scale
- * with the anchor at 0 when the rows rate it, else the mean; only the configs the rows mention.
+ * wins and 1 - w losses, and a mean-zero Gaussian prior gives every config one finite answer. On an Elo scale centred
+ * on the configs the rows mention: the prior makes their strengths sum to 0. Only those configs.
  */
 const fitGames = (games: NumberedGames, rows: ArrayLike<number>): Map<string, number> => {
   const slot = new Int32Array(games.ids.length).fill(-1);
@@ -174,13 +174,17 @@ const fitGames = (games: NumberedGames, rows: ArrayLike<number>): Map<string, nu
     if (largest < CONVERGED) break;
   }
 
-  const ratings = new Map(present.map((id, index) => [games.ids[id] ?? "", (strength[index] ?? 0) * ELO_PER_NAT] as const));
-  const zero = ratings.get(ANCHOR) ?? meanOf([...ratings.values()]);
-
-  return new Map([...ratings].map(([id, rating]) => [id, rating - zero]));
+  return new Map(present.map((id, index) => [games.ids[id] ?? "", (strength[index] ?? 0) * ELO_PER_NAT] as const));
 };
 
-export const bradleyTerry = (games: ReadonlyArray<Game>): Map<string, number> => fitGames(numberGames(games), Int32Array.from(games.keys()));
+/** Where the anchor sits on a centred scale, or the mean when the ratings leave it out: what to subtract so it reads 0. */
+const zeroOf = (centred: ReadonlyMap<string, number>): number => centred.get(ANCHOR) ?? meanOf([...centred.values()]);
+
+const shifted = (ratings: ReadonlyMap<string, number>, by: number): Map<string, number> => new Map([...ratings].map(([id, rating]) => [id, rating - by]));
+
+const anchored = (centred: ReadonlyMap<string, number>): Map<string, number> => shifted(centred, zeroOf(centred));
+
+export const bradleyTerry = (games: ReadonlyArray<Game>): Map<string, number> => anchored(fitGames(numberGames(games), Int32Array.from(games.keys())));
 
 const pairsOf = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<readonly [SeatFull, SeatFull]> =>
   [...groupBy(
@@ -246,7 +250,9 @@ const tiersOf = (ranked: ReadonlyArray<string>, draws: ReadonlyMap<string, Float
 
 /**
  * Every config's rating from one fit over all the seats' completed two-player matches, with 95% percentile
- * intervals from refitting resamples of whole seed blocks, and its tier. Effort sweeps join the other models through their
+ * intervals from refitting resamples of whole seed blocks, and its tier. The resamples are centred on the mean config and
+ * moved by the point fit's shift, so an interval leaves out the anchor's own noise and the anchor's interval is the
+ * uncertainty of the zero. Effort sweeps join the other models through their
  * medium configs, so one scale covers every config. The fit counts each round as a game, in the matches whose
  * rounds are known; its resamples still take whole seed blocks, since a match's rounds are not independent. With
  * `luck`, each match's round wins are first corrected for luck (tools/arena/analysis/aivat.py).
@@ -254,21 +260,20 @@ const tiersOf = (ranked: ReadonlyArray<string>, draws: ReadonlyMap<string, Float
 export const pooledRatings = (seats: ReadonlyArray<SeatFull>, luck: Luck = new Map()): ReadonlyMap<string, Rating> => {
   const games = gamesOfSeats(seats, luck);
   const numbered = numberGames(games);
-  const point = fitGames(numbered, Int32Array.from(games.keys()));
+  const centred = fitGames(numbered, Int32Array.from(games.keys()));
+  const zero = zeroOf(centred);
+  const point = shifted(centred, zero);
   const blocks = [...groupBy(games.keys(), (index) => games[index]?.block).values()];
   const random = mulberry32(3);
   const draws = new Map([...point.keys()].map((key) => [key, new Float64Array(BOOTSTRAP_DRAWS).fill(Number.NaN)]));
 
   for (let rep = 0; rep < BOOTSTRAP_DRAWS; rep++) {
     const sample = Array.from({ length: blocks.length }, () => blocks[Math.floor(random() * blocks.length)] ?? []).flat();
-    const fitted = fitGames(numbered, sample);
 
-    if (point.has(ANCHOR) && !fitted.has(ANCHOR)) throw new Error(`a resample has no match of the anchor ${ANCHOR}`);
-
-    for (const [key, rating] of fitted) {
+    for (const [key, rating] of fitGames(numbered, sample)) {
       const keyDraws = draws.get(key);
 
-      if (keyDraws) keyDraws[rep] = rating;
+      if (keyDraws) keyDraws[rep] = rating - zero;
     }
   }
 
@@ -308,7 +313,7 @@ export const heldOutRatings = (seats: ReadonlyArray<SeatFull>): ((block: string)
   const fits = Array.from({ length: FOLDS }, (_, fold) => {
     const training = Int32Array.from(games.keys()).filter((index) => foldOf.get(games[index]?.block ?? "") !== fold);
 
-    return new Map([...fitGames(numbered, training)].map(([key, rating]) => [key, { rating }]));
+    return new Map([...anchored(fitGames(numbered, training))].map(([key, rating]) => [key, { rating }]));
   });
 
   return (block) => fits[foldOf.get(block) ?? -1] ?? new Map();

@@ -18,7 +18,7 @@ check stops the run with a message and a non-zero exit; fix the cause and rerun.
             A changed evaluator needs a full rescore: name a new file with --regret
   knowledge arena-knowledge.ts --verify from the knowledge worktree
   certain   certain-mistakes database
-  luck      luck corrections of the luck-adjusted Round Elo (analysis/aivat.py)
+  luck      luck corrections of the luck-adjusted Round Elo (analysis/aivat.py), from the staged regret file
   swap-derived  swap regret, knowledge, certain-mistakes and luck in, each keeping a .pre-<name> copy
   export    arena-export.ts: the online site's aggregate JSON from the analysis database into web/online/data
   deploy    only with --deploy: upload the site as a preview version, check it at its preview URL, then promote it to $ONLINE_DOMAIN (docs/arena/README.md)
@@ -315,7 +315,7 @@ class Wrap:
         settle(out)
 
     def luck(self) -> None:
-        python = [sys.executable, "tools/arena/analysis/aivat.py", "--db", str(self.scratch / "snapshot.sqlite"), "--knowledge", str(self.scratch / "knowledge.sqlite"), "--out", str(self.scratch / "luck.sqlite")]
+        python = [sys.executable, "tools/arena/analysis/aivat.py", "--db", str(self.scratch / "snapshot.sqlite"), "--knowledge", str(self.scratch / "knowledge.sqlite"), "--regret", str(self.scratch / "regret.staged.sqlite"), "--out", str(self.scratch / "luck.sqlite")]
         self.run("luck", python)
 
     def swap_derived(self) -> str:
@@ -393,7 +393,7 @@ class Wrap:
             ("doc-net_points", self.doc("net_points", f"{a}/net-points.md", *dbs, *derived)),
             ("doc-beliefs", self.beliefs),
             ("doc-matchups", self.doc("matchups", f"{a}/matchups.md", *dbs)),
-            ("doc-luck", self.doc("aivat", f"{a}/matchups.md", *dbs, "--knowledge", str(kn))),
+            ("doc-luck", self.doc("aivat", f"{a}/matchups.md", *dbs, "--knowledge", str(kn), "--regret", str(reg))),
             ("cleanup", self.cleanup),
         ]
 

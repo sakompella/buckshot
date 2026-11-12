@@ -79,13 +79,13 @@ export const aboutView = (h: H, derived: Derived): Html => {
       ]),
       h.p([h.Class("sub")], [
         h.b([], ["Round Elo. "]),
-        "One Bradley-Terry rating fitted over every scored match, counting each round as one game. The depth-2 search engine (Engine/2/20000) is fixed at 0, so a new config does not move the others. The bracket beside a rating is a 95% bootstrap over seed blocks, so it carries the luck a whole seed shares.",
+        "One Bradley-Terry rating fitted over every scored match, counting each round as one game. The depth-2 search engine (Engine/2/20000) is fixed at 0, so a new config does not move the others. The bracket beside a rating is a 95% bootstrap over seed blocks, so it carries the luck a whole seed shares. It is measured against the mean of all configs, so it leaves out the engine's own noise; the leaderboard gives that once.",
       ]),
       ...(hasLuck
         ? [
             h.p([h.Class("sub")], [
               h.b([], ["Luck-adjusted Elo. "]),
-              "The same fit with each round's luck — the shots, loads and first seat — corrected out (AIVAT), estimating the same strengths with less noise. It is the headline rating: it ranks the leaderboard and the results summary.",
+              "The same fit with each round's luck — the shots, loads, first seat, item deals and the shells items show — corrected out (AIVAT), estimating the same strengths with less noise. It is the headline rating: it ranks the leaderboard and the results summary.",
             ]),
           ]
         : []),
