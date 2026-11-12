@@ -2,6 +2,7 @@ import { AsyncData } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import type { ConfigItems } from "../aggregates.ts";
+import { noteView } from "./charts.ts";
 import { fmtCount, fmtPct, keyOf, MIN_BLOCKS_FOR_INTERVAL } from "./data.ts";
 import type { ModelStats } from "./derived.ts";
 import { itemBarsView } from "./fates.ts";
@@ -20,7 +21,7 @@ const gapLineView = (h: H, tokensByGap: ConfigItems["tokensByGap"]): Html =>
     h,
     "Output tokens per move by health gap",
     tokensByGap.map(({ moves, tokens }, index) =>
-      h.span([h.Class("dv"), ...(moves < MIN_MOVES ? [] : [h.Title(`${moves.toLocaleString()} moves`)])], [h.span([h.Class("k")], [`${GAP_NAMES[index] ?? ""} `]), moves < MIN_MOVES ? "–" : fmtCount(tokens)]),
+      h.span([h.Class("dv")], [h.span([h.Class("k")], [`${GAP_NAMES[index] ?? ""} `]), moves < MIN_MOVES ? "–" : fmtCount(tokens), ...(moves < MIN_MOVES ? [] : [noteView(h, `${moves.toLocaleString()} moves`)])]),
     ),
   );
 
