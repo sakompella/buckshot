@@ -255,7 +255,7 @@ The budget still stops 29.9% of the depth 8 searches, against 40.2% at depth 6.
 ## Tables
 
 <!-- tables:start -->
-184,004 searched decisions; 0 left out for having no search; 3 agent decisions with no row.
+186,108 searched decisions; 0 left out for having no search; 3 agent decisions with no row.
 
 ### Regret by config
 
@@ -265,23 +265,23 @@ The budget still stops 29.9% of the depth 8 searches, against 40.2% at depth 6.
 | claude-opus-5-5 | low | 1,941 | 1.1 | 2.4 | 11.1% |
 | claude-opus-5-5 | medium | 8,528 | 0.9 | 2.5 | 12.9% |
 | claude-opus-5-5 | high | 1,985 | 0.9 | 2.4 | 11.8% |
-| claude-opus-5-5 | xhigh | 3,747 | 0.8 | 2.1 | 12.2% |
+| claude-opus-5-5 | xhigh | 4,313 | 0.7 | 2.0 | 11.9% |
 | claude-opus-5-5 | max | 2,180 | 0.6 | 1.5 | 13.7% |
 | gpt-6.1-sol | low | 2,284 | 1.1 | 2.6 | 12.1% |
 | gpt-6.1-sol | medium | 6,746 | 1.0 | 2.6 | 12.8% |
 | gpt-6.1-sol | high | 2,458 | 0.8 | 2.5 | 12.4% |
 | gpt-6.1-sol | xhigh | 2,527 | 0.7 | 2.0 | 13.3% |
-| gpt-6.1-sol | max | 3,151 | 0.7 | 2.3 | 12.0% |
+| gpt-6.1-sol | max | 3,686 | 0.7 | 2.2 | 11.3% |
 | gpt-6-astra | off | 2,103 | 1.0 | 2.4 | 11.9% |
 | gpt-6-astra | low | 1,992 | 0.9 | 2.1 | 13.6% |
 | gpt-6-astra | medium | 6,298 | 0.9 | 2.4 | 13.2% |
-| gpt-6-astra | high | 2,157 | 0.9 | 2.6 | 13.3% |
+| gpt-6-astra | high | 2,641 | 1.0 | 2.6 | 13.3% |
 | gpt-6.1-terra | off | 1,934 | 1.8 | 3.6 | 12.5% |
 | gpt-6.1-terra | low | 1,883 | 1.4 | 3.0 | 14.0% |
 | gpt-6.1-terra | medium | 1,976 | 1.4 | 2.9 | 13.8% |
 | gpt-6.1-terra | high | 2,118 | 1.1 | 2.7 | 11.8% |
 | gpt-6.1-terra | xhigh | 2,079 | 1.0 | 2.3 | 13.4% |
-| gpt-6.1-terra | max | 2,444 | 0.7 | 2.1 | 13.9% |
+| gpt-6.1-terra | max | 2,963 | 0.7 | 2.1 | 13.5% |
 | claude-sonnet-5-5 | off | 3,996 | 1.9 | 4.2 | 11.4% |
 | claude-sonnet-5-5 | low | 3,682 | 1.9 | 4.4 | 11.2% |
 | claude-sonnet-5-5 | medium | 8,949 | 1.7 | 3.8 | 12.4% |
@@ -310,18 +310,18 @@ The budget still stops 29.9% of the depth 8 searches, against 40.2% at depth 6.
 | claude-haiku-4-5-20251001 | low | 3,898 | 3.9 | 9.6 | 7.0% |
 | claude-haiku-4-5-20251001 | medium | 8,550 | 4.0 | 9.7 | 7.5% |
 | claude-haiku-4-5-20251001 | high | 3,461 | 4.0 | 9.6 | 7.4% |
-| all |  | 184,004 | 1.9 | 4.0 | 11.3% |
+| all |  | 186,108 | 1.9 | 4.0 | 11.3% |
 
 ### Regret by shells left in the gun
 
 | shells left | stopped by budget | shots | mean | 90th percentile | item moves | mean | 90th percentile |
 |---|---|---|---|---|---|---|---|
-| 1 | 0.0% | 19,580 | 1.5 | 3.6 | 8,528 | 1.3 | 3.7 |
-| 2 | 1.0% | 19,115 | 3.0 | 5.6 | 15,608 | 0.8 | 2.0 |
-| 3 | 12.5% | 18,458 | 3.1 | 9.4 | 22,217 | 1.2 | 2.7 |
-| 4 | 37.6% | 14,596 | 2.4 | 7.3 | 20,647 | 1.3 | 3.5 |
-| 5 | 66.8% | 10,200 | 1.9 | 6.2 | 17,327 | 1.8 | 4.6 |
-| 6 | 89.1% | 5,792 | 1.7 | 4.6 | 11,936 | 2.3 | 4.8 |
+| 1 | 0.0% | 19,765 | 1.5 | 3.6 | 8,590 | 1.3 | 3.7 |
+| 2 | 1.0% | 19,334 | 2.9 | 5.5 | 15,802 | 0.8 | 2.0 |
+| 3 | 12.5% | 18,669 | 3.1 | 9.1 | 22,486 | 1.2 | 2.7 |
+| 4 | 37.6% | 14,774 | 2.3 | 7.1 | 20,905 | 1.3 | 3.5 |
+| 5 | 66.8% | 10,314 | 1.9 | 6.1 | 17,515 | 1.8 | 4.5 |
+| 6 | 89.2% | 5,860 | 1.7 | 4.5 | 12,094 | 2.3 | 4.8 |
 <!-- tables:end -->
 
 ## By round
@@ -337,30 +337,30 @@ Does a model play the short early rounds differently from the later, item-heavy 
    - Round 3 is a dead rubber when one seat leads 2-0: the prizes are 70k, 75k and 80k, so the winner is settled. That is 1,852 of 3,709 round 3s. Models play them a little worse, not much. Mean regret per decision in round 3, live against dead: Opus 0.82 and 0.88, Sol 0.72 and 0.90, Astra 0.78 and 1.11 points (production run). The trailing player wins exactly half of them (926 of 1,852), so there is no sign that the leader coasts or the trailer gives up. Round Elo keeps dead rubbers in, which is defensible at this size of difference. The table "Round 3 minus round 1 regret, by whether round 3 still decides the match" splits the regret change by it.
 
 <!-- by-round:start -->
-10,869 rounds of finished matches.
+10,989 rounds of finished matches.
 
 ### Win rate and regret by round, per model
 
 | model | effort | round 1 win rate | round 1 mean regret | round 2 win rate | round 2 mean regret | round 3 win rate | round 3 mean regret |
 |---|---|---|---|---|---|---|---|
-| claude-opus-5-5 | all | 55.1% (804) | 0.8 (6,581) | 55.1% (804) | 0.9 (7,132) | 54.6% (804) | 0.8 (6,748) |
-| gpt-6.1-sol | all | 53.4% (691) | 0.8 (5,253) | 54.8% (691) | 1.0 (6,178) | 53.0% (691) | 0.8 (5,735) |
-| gpt-6-astra | all | 59.3% (494) | 0.9 (4,050) | 61.5% (494) | 0.9 (4,224) | 60.1% (494) | 0.9 (4,276) |
-| gpt-6.1-terra | all | 60.2% (480) | 1.2 (4,170) | 59.6% (480) | 1.3 (4,078) | 58.1% (480) | 1.2 (4,186) |
+| claude-opus-5-5 | all | 54.7% (824) | 0.8 (6,767) | 54.7% (824) | 0.9 (7,361) | 54.6% (824) | 0.9 (6,899) |
+| gpt-6.1-sol | all | 53.4% (711) | 0.8 (5,427) | 54.4% (711) | 0.9 (6,354) | 53.2% (711) | 0.8 (5,920) |
+| gpt-6-astra | all | 58.9% (514) | 0.9 (4,206) | 61.1% (514) | 0.9 (4,365) | 60.3% (514) | 0.9 (4,463) |
+| gpt-6.1-terra | all | 59.8% (500) | 1.2 (4,307) | 59.0% (500) | 1.2 (4,247) | 57.8% (500) | 1.1 (4,399) |
 | claude-sonnet-5-5 | all | 48.5% (1,164) | 1.5 (8,720) | 48.4% (1,164) | 1.4 (10,366) | 49.3% (1,164) | 1.3 (9,498) |
 | claude-haiku-5-5 | all | 48.9% (1,238) | 1.7 (9,820) | 50.0% (1,238) | 1.6 (10,580) | 49.1% (1,238) | 1.7 (10,582) |
 | gpt-5.6-terra | all | 48.9% (624) | 2.0 (4,764) | 49.5% (624) | 1.9 (5,273) | 50.8% (624) | 1.9 (5,262) |
 | gpt-6-luna | all | 43.6% (841) | 3.1 (7,399) | 44.2% (841) | 2.8 (8,459) | 45.4% (841) | 2.9 (7,802) |
 | claude-haiku-4-5-20251001 | all | 41.2% (910) | 4.1 (7,459) | 37.9% (910) | 3.9 (7,919) | 39.3% (910) | 4.3 (7,490) |
-| all |  | - | 1.9 (58,216) | - | 1.8 (64,209) | - | 1.9 (61,579) |
+| all |  | - | 1.9 (58,869) | - | 1.8 (64,924) | - | 1.9 (62,315) |
 
 ### Mean regret by round and kind of move
 
 | round | all moves | shots | item moves |
 |---|---|---|---|
-| 1 | 1.9 (58,216) | 2.6 (28,364) | 1.4 (29,852) |
-| 2 | 1.8 (64,209) | 2.2 (30,253) | 1.5 (33,956) |
-| 3 | 1.9 (61,579) | 2.3 (29,124) | 1.4 (32,455) |
+| 1 | 1.9 (58,869) | 2.5 (28,674) | 1.3 (30,195) |
+| 2 | 1.8 (64,924) | 2.2 (30,583) | 1.5 (34,341) |
+| 3 | 1.9 (62,315) | 2.3 (29,459) | 1.4 (32,856) |
 
 ### Win rate and regret by round, per config
 
@@ -370,23 +370,23 @@ Does a model play the short early rounds differently from the later, item-heavy 
 | claude-opus-5-5 | low | 51.2% (80) | 1.2 (696) | 52.5% (80) | 1.1 (633) | 45.0% (80) | 0.9 (612) |
 | claude-opus-5-5 | medium | 53.9% (334) | 0.8 (2,730) | 54.2% (334) | 0.9 (2,967) | 53.3% (334) | 0.9 (2,831) |
 | claude-opus-5-5 | high | 48.8% (80) | 0.9 (538) | 60.0% (80) | 0.8 (754) | 55.0% (80) | 0.9 (693) |
-| claude-opus-5-5 | xhigh | 53.3% (150) | 0.7 (1,173) | 52.0% (150) | 0.9 (1,315) | 54.7% (150) | 0.7 (1,259) |
+| claude-opus-5-5 | xhigh | 51.8% (170) | 0.6 (1,359) | 50.6% (170) | 0.9 (1,544) | 54.7% (170) | 0.7 (1,410) |
 | claude-opus-5-5 | max | 70.0% (80) | 0.4 (740) | 61.3% (80) | 0.7 (748) | 62.5% (80) | 0.7 (692) |
 | gpt-6.1-sol | low | 55.1% (98) | 0.8 (717) | 48.0% (98) | 1.4 (822) | 50.0% (98) | 0.9 (745) |
 | gpt-6.1-sol | medium | 55.7% (271) | 1.0 (2,183) | 60.9% (271) | 0.9 (2,386) | 53.9% (271) | 1.0 (2,177) |
 | gpt-6.1-sol | high | 51.5% (99) | 1.0 (732) | 46.5% (99) | 0.8 (946) | 46.5% (99) | 0.7 (780) |
 | gpt-6.1-sol | xhigh | 47.5% (101) | 0.7 (750) | 50.5% (101) | 0.7 (884) | 58.4% (101) | 0.6 (893) |
-| gpt-6.1-sol | max | 53.3% (122) | 0.5 (871) | 57.4% (122) | 0.9 (1,140) | 54.1% (122) | 0.7 (1,140) |
+| gpt-6.1-sol | max | 53.5% (142) | 0.5 (1,045) | 54.9% (142) | 0.8 (1,316) | 54.9% (142) | 0.7 (1,325) |
 | gpt-6-astra | off | 61.3% (80) | 0.9 (677) | 62.5% (80) | 0.9 (685) | 45.0% (80) | 1.1 (741) |
 | gpt-6-astra | low | 51.2% (80) | 0.9 (670) | 62.5% (80) | 1.0 (668) | 63.7% (80) | 0.8 (654) |
 | gpt-6-astra | medium | 57.5% (254) | 1.0 (2,000) | 61.0% (254) | 0.9 (2,167) | 61.8% (254) | 0.9 (2,131) |
-| gpt-6-astra | high | 71.2% (80) | 1.0 (703) | 61.3% (80) | 0.9 (704) | 66.2% (80) | 0.9 (750) |
+| gpt-6-astra | high | 67.0% (100) | 0.9 (859) | 59.0% (100) | 1.0 (845) | 66.0% (100) | 0.9 (937) |
 | gpt-6.1-terra | off | 56.2% (80) | 1.9 (629) | 66.2% (80) | 1.7 (721) | 48.8% (80) | 1.8 (584) |
 | gpt-6.1-terra | low | 50.0% (80) | 1.4 (642) | 61.3% (80) | 1.5 (611) | 55.0% (80) | 1.4 (630) |
 | gpt-6.1-terra | medium | 53.8% (80) | 1.4 (660) | 55.0% (80) | 1.5 (660) | 63.7% (80) | 1.3 (656) |
 | gpt-6.1-terra | high | 68.8% (80) | 1.1 (736) | 56.2% (80) | 1.2 (666) | 55.0% (80) | 1.1 (716) |
 | gpt-6.1-terra | xhigh | 60.0% (80) | 1.1 (703) | 52.5% (80) | 0.9 (634) | 66.2% (80) | 0.9 (742) |
-| gpt-6.1-terra | max | 72.5% (80) | 0.6 (800) | 66.2% (80) | 0.8 (786) | 60.0% (80) | 0.7 (858) |
+| gpt-6.1-terra | max | 68.0% (100) | 0.6 (937) | 62.0% (100) | 0.8 (955) | 58.0% (100) | 0.7 (1,071) |
 | claude-sonnet-5-5 | off | 45.1% (164) | 1.9 (1,184) | 39.6% (164) | 2.0 (1,473) | 42.7% (164) | 1.7 (1,339) |
 | claude-sonnet-5-5 | low | 45.3% (159) | 2.1 (1,123) | 34.6% (159) | 1.7 (1,315) | 39.0% (159) | 1.9 (1,244) |
 | claude-sonnet-5-5 | medium | 43.1% (364) | 2.0 (2,647) | 50.5% (364) | 1.7 (3,282) | 52.2% (364) | 1.4 (3,020) |
@@ -415,7 +415,7 @@ Does a model play the short early rounds differently from the later, item-heavy 
 | claude-haiku-4-5-20251001 | low | 40.9% (149) | 3.8 (1,258) | 38.9% (149) | 3.7 (1,355) | 45.6% (149) | 4.3 (1,285) |
 | claude-haiku-4-5-20251001 | medium | 43.3% (358) | 4.1 (2,750) | 35.2% (358) | 4.1 (2,938) | 37.7% (358) | 3.9 (2,862) |
 | claude-haiku-4-5-20251001 | high | 42.2% (135) | 3.8 (1,121) | 51.1% (135) | 3.4 (1,238) | 33.3% (135) | 4.8 (1,102) |
-| all |  | - | 1.9 (58,216) | - | 1.8 (64,209) | - | 1.9 (61,579) |
+| all |  | - | 1.9 (58,869) | - | 1.8 (64,924) | - | 1.9 (62,315) |
 <!-- by-round:end -->
 
 ### Within a match
@@ -442,113 +442,113 @@ Do models get better, or worse, from round 1 to rounds 2 and 3 of the same match
 This says what changes, not why. It could be learning from the earlier rounds, warming up on round 1, or both. It does not show that the models would improve over a longer match. Opponents differ between tournaments, and the adjustment covers shells left and the kind of move only, not health or items held.
 
 <!-- round-improvement:start -->
-3,709 finished matches, 7,246 seats. A regret change counts only the seats that moved in both rounds. Negative regret change is better; win changes are in percentage points of rounds won.
+3,789 finished matches, 7,326 seats. A regret change counts only the seats that moved in both rounds. Negative regret change is better; win changes are in percentage points of rounds won.
 
 ### Change within a match, per model
 
 | model | seats | regret, round 2 minus 1 | regret, round 3 minus 1 | round 3: verdict | win, round 2 minus 1 (points) | win, round 3 minus 1 (points) | shot with a proven live: self-shots, round 3 minus 1 (points) |
 |---|---|---|---|---|---|---|---|
-| gpt-6-luna | 814 | -0.34 (-0.71 to +0.04) | -0.52 (-0.92 to -0.13) | better | +0.6 (-1.4 to +2.5) | +1.8 (-0.4 to +4.0) | -4.8 (-8.0 to -1.8) |
-| claude-sonnet-5-5 | 1,099 | -0.34 (-0.59 to -0.08) | -0.42 (-0.66 to -0.17) | better | -0.1 (-2.6 to +2.6) | +0.9 (-1.8 to +3.5) | +0.0 (-0.5 to +0.5) |
-| gpt-5.6-terra | 585 | -0.22 (-0.58 to +0.11) | -0.14 (-0.48 to +0.20) | flat | +0.6 (-1.8 to +3.3) | +1.9 (-1.2 to +5.0) | -0.5 (-1.8 to +0.7) |
-| gpt-6.1-sol | 660 | +0.15 (-0.00 to +0.30) | -0.10 (-0.23 to +0.02) | flat | +1.4 (-1.4 to +4.3) | -0.4 (-3.3 to +2.4) | +0.0 (+0.0 to +0.0) |
-| gpt-6-astra | 479 | -0.11 (-0.31 to +0.08) | -0.09 (-0.29 to +0.08) | flat | +2.2 (-3.6 to +7.6) | +0.8 (-4.4 to +6.2) | +0.0 (+0.0 to +0.0) |
-| claude-opus-5-5 | 760 | +0.02 (-0.12 to +0.15) | +0.00 (-0.14 to +0.14) | flat | +0.0 (-4.0 to +3.9) | -0.5 (-3.9 to +3.3) | +0.0 (+0.0 to +0.1) |
+| gpt-6-luna | 814 | -0.34 (-0.73 to +0.04) | -0.52 (-0.90 to -0.15) | better | +0.6 (-1.4 to +2.7) | +1.8 (-0.2 to +3.9) | -4.8 (-8.2 to -1.8) |
+| claude-sonnet-5-5 | 1,099 | -0.34 (-0.59 to -0.08) | -0.42 (-0.67 to -0.16) | better | -0.1 (-2.7 to +2.6) | +0.9 (-1.8 to +3.6) | +0.0 (-0.4 to +0.5) |
+| gpt-5.6-terra | 585 | -0.22 (-0.57 to +0.12) | -0.14 (-0.48 to +0.21) | flat | +0.6 (-1.9 to +3.4) | +1.9 (-1.1 to +5.0) | -0.5 (-1.8 to +0.7) |
+| gpt-6.1-sol | 679 | +0.14 (-0.00 to +0.29) | -0.09 (-0.22 to +0.04) | flat | +1.0 (-1.7 to +3.8) | -0.3 (-3.1 to +2.6) | +0.0 (+0.0 to +0.0) |
+| gpt-6-astra | 498 | -0.09 (-0.28 to +0.10) | -0.08 (-0.25 to +0.11) | flat | +2.1 (-3.4 to +7.6) | +1.4 (-3.8 to +6.7) | +0.0 (+0.0 to +0.0) |
+| claude-opus-5-5 | 779 | +0.03 (-0.10 to +0.16) | +0.02 (-0.11 to +0.16) | flat | +0.0 (-3.8 to +3.9) | -0.1 (-3.8 to +3.4) | +0.0 (+0.0 to +0.1) |
 | claude-haiku-5-5 | 1,203 | -0.10 (-0.30 to +0.07) | +0.03 (-0.17 to +0.22) | flat | +1.1 (-1.4 to +3.7) | +0.2 (-2.5 to +2.8) | +0.3 (-0.3 to +0.9) |
 | claude-haiku-4-5-20251001 | 895 | -0.33 (-0.76 to +0.10) | +0.07 (-0.40 to +0.54) | flat | -3.3 (-6.4 to -0.4) | -1.9 (-4.8 to +1.1) | -0.7 (-2.4 to +1.0) |
-| gpt-6.1-terra | 466 | -0.00 (-0.26 to +0.29) | +0.10 (-0.17 to +0.39) | flat | -0.6 (-6.1 to +5.0) | -2.1 (-8.1 to +4.1) | +0.1 (+0.0 to +0.4) |
-| all | 6,961 | -0.16 (-0.26 to -0.07) | -0.13 (-0.24 to -0.03) | better | +0.1 (-0.1 to +0.4) | +0.1 (-0.1 to +0.3) | -0.6 (-1.0 to -0.2) |
+| gpt-6.1-terra | 484 | +0.00 (-0.26 to +0.26) | +0.12 (-0.15 to +0.41) | flat | -0.8 (-6.2 to +4.7) | -2.0 (-7.6 to +3.8) | +0.1 (+0.0 to +0.4) |
+| all | 7,036 | -0.16 (-0.26 to -0.06) | -0.13 (-0.24 to -0.03) | better | +0.1 (-0.2 to +0.4) | +0.2 (-0.0 to +0.5) | -0.6 (-1.0 to -0.2) |
 
 ### Where the regret change sits, round 3 minus round 1
 
 | model | all moves, raw regret | all moves, adjusted | shots, adjusted | item moves, adjusted |
 |---|---|---|---|---|
-| gpt-6-luna | -0.59 (-0.99 to -0.20) | -0.52 (-0.92 to -0.13) | -1.18 (-1.88 to -0.49) | +0.30 (+0.10 to +0.49) |
-| claude-sonnet-5-5 | -0.44 (-0.70 to -0.17) | -0.42 (-0.66 to -0.17) | -0.63 (-0.99 to -0.29) | +0.07 (-0.07 to +0.21) |
-| gpt-5.6-terra | -0.18 (-0.52 to +0.18) | -0.14 (-0.48 to +0.20) | -0.43 (-0.99 to +0.15) | +0.10 (-0.10 to +0.29) |
-| gpt-6.1-sol | -0.08 (-0.21 to +0.04) | -0.10 (-0.23 to +0.02) | -0.23 (-0.51 to +0.03) | +0.02 (-0.10 to +0.14) |
-| gpt-6-astra | -0.05 (-0.25 to +0.16) | -0.09 (-0.29 to +0.08) | +0.06 (-0.25 to +0.38) | -0.14 (-0.30 to +0.01) |
-| claude-opus-5-5 | -0.00 (-0.15 to +0.14) | +0.00 (-0.14 to +0.14) | -0.06 (-0.32 to +0.19) | +0.11 (-0.03 to +0.25) |
+| gpt-6-luna | -0.59 (-1.00 to -0.19) | -0.52 (-0.90 to -0.15) | -1.18 (-1.90 to -0.47) | +0.30 (+0.11 to +0.50) |
+| claude-sonnet-5-5 | -0.44 (-0.70 to -0.18) | -0.42 (-0.67 to -0.16) | -0.63 (-0.99 to -0.28) | +0.07 (-0.07 to +0.21) |
+| gpt-5.6-terra | -0.18 (-0.52 to +0.17) | -0.14 (-0.48 to +0.21) | -0.43 (-0.98 to +0.13) | +0.10 (-0.12 to +0.30) |
+| gpt-6.1-sol | -0.07 (-0.21 to +0.06) | -0.09 (-0.22 to +0.04) | -0.22 (-0.49 to +0.04) | +0.03 (-0.09 to +0.15) |
+| gpt-6-astra | -0.03 (-0.22 to +0.16) | -0.08 (-0.25 to +0.11) | +0.07 (-0.24 to +0.37) | -0.11 (-0.28 to +0.04) |
+| claude-opus-5-5 | +0.01 (-0.12 to +0.16) | +0.02 (-0.11 to +0.16) | -0.05 (-0.28 to +0.21) | +0.12 (-0.02 to +0.27) |
 | claude-haiku-5-5 | +0.01 (-0.19 to +0.20) | +0.03 (-0.17 to +0.22) | -0.14 (-0.54 to +0.28) | +0.10 (-0.03 to +0.23) |
 | claude-haiku-4-5-20251001 | +0.01 (-0.46 to +0.46) | +0.07 (-0.40 to +0.54) | +0.03 (-0.80 to +0.78) | +0.17 (-0.04 to +0.40) |
-| gpt-6.1-terra | +0.09 (-0.20 to +0.39) | +0.10 (-0.17 to +0.39) | +0.27 (-0.17 to +0.72) | -0.06 (-0.26 to +0.15) |
-| all | -0.16 (-0.26 to -0.05) | -0.13 (-0.24 to -0.03) | -0.30 (-0.47 to -0.13) | +0.09 (+0.03 to +0.15) |
+| gpt-6.1-terra | +0.10 (-0.17 to +0.39) | +0.12 (-0.15 to +0.41) | +0.27 (-0.15 to +0.71) | -0.03 (-0.22 to +0.17) |
+| all | -0.15 (-0.25 to -0.05) | -0.13 (-0.24 to -0.03) | -0.29 (-0.47 to -0.12) | +0.10 (+0.04 to +0.16) |
 
 ### Round 3 minus round 1 regret, by whether round 3 still decides the match
 
 | model | level: seats | level: change | decided: seats | decided: change |
 |---|---|---|---|---|
-| claude-haiku-4-5-20251001 | 433 | +0.18 (-0.50 to +0.83) | 462 | -0.04 (-0.71 to +0.61) |
-| claude-haiku-5-5 | 635 | +0.01 (-0.24 to +0.28) | 568 | +0.04 (-0.25 to +0.33) |
-| claude-opus-5-5 | 366 | +0.10 (-0.12 to +0.33) | 394 | -0.08 (-0.26 to +0.08) |
-| claude-sonnet-5-5 | 503 | -0.45 (-0.81 to -0.10) | 596 | -0.40 (-0.71 to -0.09) |
-| gpt-5.6-terra | 319 | +0.06 (-0.34 to +0.45) | 266 | -0.37 (-0.91 to +0.18) |
-| gpt-6-astra | 235 | -0.25 (-0.50 to +0.00) | 244 | +0.05 (-0.20 to +0.33) |
-| gpt-6-luna | 388 | -0.21 (-0.75 to +0.32) | 426 | -0.81 (-1.38 to -0.23) |
-| gpt-6.1-sol | 352 | -0.11 (-0.31 to +0.06) | 308 | -0.09 (-0.26 to +0.09) |
-| gpt-6.1-terra | 224 | +0.12 (-0.22 to +0.50) | 242 | +0.09 (-0.35 to +0.61) |
+| claude-haiku-4-5-20251001 | 433 | +0.18 (-0.52 to +0.83) | 462 | -0.04 (-0.66 to +0.61) |
+| claude-haiku-5-5 | 635 | +0.01 (-0.25 to +0.26) | 568 | +0.04 (-0.25 to +0.33) |
+| claude-opus-5-5 | 374 | +0.10 (-0.13 to +0.31) | 405 | -0.05 (-0.22 to +0.12) |
+| claude-sonnet-5-5 | 503 | -0.45 (-0.82 to -0.10) | 596 | -0.40 (-0.70 to -0.08) |
+| gpt-5.6-terra | 319 | +0.06 (-0.33 to +0.45) | 266 | -0.37 (-0.88 to +0.16) |
+| gpt-6-astra | 242 | -0.22 (-0.47 to +0.03) | 256 | +0.06 (-0.19 to +0.31) |
+| gpt-6-luna | 388 | -0.21 (-0.76 to +0.28) | 426 | -0.81 (-1.40 to -0.29) |
+| gpt-6.1-sol | 364 | -0.10 (-0.28 to +0.06) | 315 | -0.08 (-0.25 to +0.08) |
+| gpt-6.1-terra | 234 | +0.13 (-0.21 to +0.48) | 250 | +0.10 (-0.33 to +0.62) |
 
 ### Change within a match, per config
 
 | model | effort | seats | regret, round 2 minus 1 | regret, round 3 minus 1 | win, round 2 minus 1 (points) | win, round 3 minus 1 (points) | round 3 regret |
 |---|---|---|---|---|---|---|---|
-| claude-haiku-4-5-20251001 | off | 121 | -1.11 (-2.41 to +0.20) | -0.21 (-1.45 to +1.12) | -6.4 (-18.0 to +6.1) | +0.8 (-10.8 to +11.1) | flat |
-| claude-haiku-4-5-20251001 | minimal | 142 | -0.74 (-1.60 to +0.14) | -0.10 (-1.19 to +1.02) | -1.4 (-12.2 to +9.7) | +4.9 (-5.6 to +15.8) | flat |
-| claude-haiku-4-5-20251001 | low | 147 | -0.06 (-0.94 to +0.83) | +0.58 (-0.40 to +1.58) | -2.0 (-11.9 to +7.7) | +4.7 (-4.8 to +13.6) | flat |
-| claude-haiku-4-5-20251001 | medium | 353 | +0.11 (-0.55 to +0.77) | -0.26 (-0.95 to +0.46) | -8.1 (-14.2 to -2.0) | -5.6 (-11.5 to +0.8) | flat |
-| claude-haiku-4-5-20251001 | high | 132 | -0.61 (-1.64 to +0.42) | +0.80 (-0.49 to +2.06) | +8.9 (-3.4 to +20.3) | -8.9 (-18.0 to +0.7) | flat |
-| claude-haiku-5-5 | off | 214 | -0.49 (-1.27 to +0.23) | -0.14 (-0.87 to +0.53) | -7.3 (-16.8 to +1.8) | -6.4 (-15.0 to +2.3) | flat |
-| claude-haiku-5-5 | low | 188 | +0.09 (-0.35 to +0.53) | +0.12 (-0.33 to +0.54) | -2.6 (-11.2 to +6.2) | +4.6 (-5.6 to +14.8) | flat |
-| claude-haiku-5-5 | medium | 372 | -0.19 (-0.48 to +0.09) | -0.11 (-0.44 to +0.23) | +2.9 (-3.8 to +9.7) | -1.8 (-8.4 to +4.9) | flat |
-| claude-haiku-5-5 | high | 168 | +0.20 (-0.12 to +0.50) | +0.08 (-0.24 to +0.40) | -1.7 (-11.5 to +7.6) | -1.7 (-12.3 to +8.0) | flat |
-| claude-haiku-5-5 | xhigh | 152 | +0.04 (-0.20 to +0.27) | +0.28 (-0.01 to +0.55) | +5.1 (-4.1 to +14.2) | +7.0 (-2.5 to +16.6) | flat |
-| claude-haiku-5-5 | max | 109 | -0.06 (-0.27 to +0.15) | +0.22 (-0.09 to +0.57) | +16.2 (+6.2 to +26.1) | +5.4 (-4.5 to +15.3) | flat |
-| claude-opus-5-5 | off | 75 | -0.11 (-0.76 to +0.49) | -0.37 (-0.91 to +0.10) | -2.5 (-16.0 to +11.1) | +2.5 (-11.0 to +16.5) | too few seats |
-| claude-opus-5-5 | low | 77 | -0.22 (-0.79 to +0.37) | -0.51 (-0.97 to -0.06) | +1.2 (-13.2 to +15.0) | -6.2 (-20.0 to +7.1) | too few seats |
-| claude-opus-5-5 | medium | 317 | +0.05 (-0.16 to +0.24) | +0.17 (-0.07 to +0.41) | +0.3 (-6.9 to +7.8) | -0.6 (-7.1 to +6.4) | flat |
-| claude-opus-5-5 | high | 71 | -0.08 (-0.39 to +0.27) | +0.05 (-0.31 to +0.45) | +11.2 (-1.2 to +23.1) | +6.2 (-5.0 to +18.4) | too few seats |
-| claude-opus-5-5 | xhigh | 142 | +0.16 (-0.08 to +0.41) | -0.07 (-0.29 to +0.13) | -1.3 (-11.3 to +9.0) | +1.3 (-8.6 to +11.9) | flat |
-| claude-opus-5-5 | max | 78 | +0.13 (-0.07 to +0.34) | +0.29 (+0.05 to +0.58) | -8.8 (-22.4 to +6.1) | -7.5 (-18.5 to +3.6) | too few seats |
-| claude-sonnet-5-5 | off | 153 | -0.18 (-1.02 to +0.61) | -0.62 (-1.41 to +0.13) | -5.5 (-14.8 to +3.9) | -2.4 (-12.4 to +7.3) | flat |
-| claude-sonnet-5-5 | low | 151 | -0.32 (-1.05 to +0.44) | +0.07 (-0.63 to +0.79) | -10.7 (-19.9 to -1.3) | -6.3 (-16.9 to +4.5) | flat |
-| claude-sonnet-5-5 | medium | 346 | -0.49 (-0.98 to -0.01) | -0.80 (-1.28 to -0.34) | +7.4 (+1.1 to +13.6) | +9.1 (+1.9 to +16.3) | better |
-| claude-sonnet-5-5 | high | 152 | -0.50 (-1.03 to +0.00) | -0.34 (-0.93 to +0.25) | +5.0 (-3.7 to +13.4) | -5.6 (-14.9 to +3.6) | flat |
-| claude-sonnet-5-5 | xhigh | 167 | -0.42 (-0.89 to +0.01) | -0.43 (-0.95 to +0.01) | -9.1 (-18.8 to +0.0) | -5.1 (-14.9 to +4.2) | flat |
-| claude-sonnet-5-5 | max | 130 | +0.16 (+0.00 to +0.34) | +0.20 (+0.01 to +0.40) | +4.3 (-5.0 to +13.6) | +6.4 (-4.3 to +17.1) | worse |
-| gpt-5.6-terra | low | 83 | -0.66 (-1.66 to +0.33) | -0.42 (-1.52 to +0.70) | +3.3 (-11.2 to +16.7) | +4.4 (-7.7 to +16.3) | flat |
-| gpt-5.6-terra | medium | 243 | -0.43 (-1.03 to +0.15) | -0.55 (-1.13 to +0.02) | +2.3 (-5.0 to +9.9) | +1.5 (-7.3 to +9.8) | flat |
-| gpt-5.6-terra | high | 86 | -0.16 (-0.93 to +0.61) | +0.44 (-0.58 to +1.61) | -1.1 (-15.2 to +12.2) | +1.1 (-12.0 to +15.4) | flat |
-| gpt-5.6-terra | xhigh | 89 | +0.28 (-0.26 to +0.78) | +0.37 (-0.17 to +0.92) | -3.2 (-16.3 to +9.5) | -2.2 (-15.6 to +9.9) | flat |
-| gpt-5.6-terra | max | 84 | +0.22 (-0.14 to +0.62) | +0.22 (-0.10 to +0.54) | -1.1 (-14.4 to +11.1) | +5.6 (-6.7 to +17.8) | flat |
-| gpt-6-astra | off | 77 | -0.15 (-0.73 to +0.34) | +0.17 (-0.40 to +0.66) | +1.2 (-13.8 to +16.2) | -16.2 (-32.5 to +0.0) | too few seats |
-| gpt-6-astra | low | 78 | -0.01 (-0.41 to +0.41) | -0.18 (-0.60 to +0.19) | +11.2 (-4.9 to +27.5) | +12.5 (-1.3 to +27.3) | too few seats |
-| gpt-6-astra | medium | 247 | -0.20 (-0.47 to +0.06) | -0.10 (-0.37 to +0.19) | +3.5 (-3.1 to +10.2) | +4.3 (-2.0 to +10.5) | flat |
-| gpt-6-astra | high | 77 | +0.10 (-0.39 to +0.67) | -0.24 (-0.63 to +0.11) | -10.0 (-24.7 to +5.1) | -5.0 (-19.0 to +8.8) | too few seats |
-| gpt-6-luna | off | 104 | -1.71 (-2.90 to -0.62) | -1.96 (-3.15 to -0.88) | +5.5 (-6.4 to +18.2) | +5.5 (-5.5 to +16.4) | better |
-| gpt-6-luna | low | 103 | -0.57 (-1.76 to +0.60) | -0.76 (-2.00 to +0.33) | +9.1 (-3.6 to +21.8) | -4.5 (-14.5 to +6.4) | flat |
-| gpt-6-luna | medium | 277 | -0.34 (-1.07 to +0.42) | -0.64 (-1.32 to +0.03) | -3.5 (-11.0 to +3.6) | -1.4 (-8.9 to +5.7) | flat |
-| gpt-6-luna | high | 108 | +0.28 (-0.63 to +1.14) | +0.03 (-1.03 to +1.14) | +4.5 (-7.9 to +16.2) | +6.2 (-7.1 to +20.4) | flat |
-| gpt-6-luna | xhigh | 111 | +0.35 (-0.58 to +1.26) | +0.23 (-0.67 to +1.08) | -4.3 (-14.8 to +5.3) | +4.3 (-7.0 to +16.4) | flat |
-| gpt-6-luna | max | 111 | -0.10 (-0.75 to +0.54) | +0.03 (-0.57 to +0.63) | -0.9 (-13.4 to +10.7) | +5.4 (-7.1 to +17.0) | flat |
-| gpt-6.1-sol | low | 92 | +0.89 (+0.37 to +1.52) | -0.02 (-0.41 to +0.36) | -7.1 (-15.3 to +1.0) | -5.1 (-15.8 to +6.1) | flat |
-| gpt-6.1-sol | medium | 263 | -0.07 (-0.37 to +0.24) | -0.17 (-0.41 to +0.06) | +5.2 (-1.9 to +12.2) | -1.8 (-8.6 to +4.4) | flat |
-| gpt-6.1-sol | high | 93 | -0.05 (-0.34 to +0.22) | -0.21 (-0.50 to +0.05) | -5.1 (-15.2 to +5.0) | -5.1 (-16.5 to +6.1) | flat |
-| gpt-6.1-sol | xhigh | 97 | -0.03 (-0.22 to +0.17) | -0.13 (-0.32 to +0.05) | +3.0 (-7.8 to +12.9) | +10.9 (+1.0 to +20.8) | flat |
-| gpt-6.1-sol | max | 115 | +0.34 (+0.15 to +0.54) | +0.10 (-0.14 to +0.33) | +4.1 (-4.9 to +13.9) | +0.8 (-9.0 to +10.7) | flat |
-| gpt-6.1-terra | off | 78 | -0.24 (-0.97 to +0.47) | +0.97 (-0.25 to +2.43) | +10.0 (-6.2 to +25.6) | -7.5 (-22.1 to +8.8) | too few seats |
-| gpt-6.1-terra | low | 76 | +0.24 (-0.68 to +1.28) | -0.20 (-0.67 to +0.28) | +11.2 (-4.9 to +27.9) | +5.0 (-11.3 to +20.5) | too few seats |
-| gpt-6.1-terra | medium | 77 | -0.26 (-1.02 to +0.42) | -0.18 (-0.98 to +0.71) | +1.2 (-11.5 to +14.1) | +10.0 (-6.3 to +25.0) | too few seats |
-| gpt-6.1-terra | high | 79 | +0.17 (-0.25 to +0.61) | -0.02 (-0.42 to +0.41) | -12.5 (-26.2 to +1.3) | -13.8 (-27.2 to -1.2) | too few seats |
-| gpt-6.1-terra | xhigh | 79 | -0.16 (-0.63 to +0.32) | -0.10 (-0.65 to +0.42) | -7.5 (-22.5 to +6.3) | +6.2 (-8.6 to +20.3) | too few seats |
-| gpt-6.1-terra | max | 77 | +0.23 (+0.00 to +0.48) | +0.12 (-0.13 to +0.40) | -6.2 (-20.7 to +7.6) | -12.5 (-26.6 to +2.5) | too few seats |
+| claude-haiku-4-5-20251001 | off | 121 | -1.11 (-2.40 to +0.12) | -0.21 (-1.49 to +1.02) | -6.4 (-18.0 to +6.1) | +0.8 (-9.9 to +11.5) | flat |
+| claude-haiku-4-5-20251001 | minimal | 142 | -0.74 (-1.66 to +0.14) | -0.10 (-1.15 to +1.06) | -1.4 (-12.4 to +9.3) | +4.9 (-5.8 to +16.1) | flat |
+| claude-haiku-4-5-20251001 | low | 147 | -0.06 (-0.92 to +0.80) | +0.58 (-0.45 to +1.62) | -2.0 (-11.6 to +8.2) | +4.7 (-4.8 to +14.0) | flat |
+| claude-haiku-4-5-20251001 | medium | 353 | +0.11 (-0.58 to +0.72) | -0.26 (-0.91 to +0.41) | -8.1 (-14.2 to -1.9) | -5.6 (-11.7 to +0.8) | flat |
+| claude-haiku-4-5-20251001 | high | 132 | -0.61 (-1.72 to +0.46) | +0.80 (-0.44 to +2.05) | +8.9 (-3.0 to +20.9) | -8.9 (-18.6 to +1.5) | flat |
+| claude-haiku-5-5 | off | 214 | -0.49 (-1.21 to +0.20) | -0.14 (-0.83 to +0.56) | -7.3 (-16.4 to +1.8) | -6.4 (-14.9 to +2.7) | flat |
+| claude-haiku-5-5 | low | 188 | +0.09 (-0.37 to +0.54) | +0.12 (-0.31 to +0.56) | -2.6 (-11.3 to +6.5) | +4.6 (-5.1 to +14.4) | flat |
+| claude-haiku-5-5 | medium | 372 | -0.19 (-0.48 to +0.09) | -0.11 (-0.45 to +0.23) | +2.9 (-3.8 to +9.4) | -1.8 (-8.6 to +4.5) | flat |
+| claude-haiku-5-5 | high | 168 | +0.20 (-0.11 to +0.51) | +0.08 (-0.23 to +0.41) | -1.7 (-11.8 to +7.6) | -1.7 (-12.0 to +8.3) | flat |
+| claude-haiku-5-5 | xhigh | 152 | +0.04 (-0.20 to +0.28) | +0.28 (+0.02 to +0.55) | +5.1 (-4.5 to +14.2) | +7.0 (-3.1 to +17.0) | worse |
+| claude-haiku-5-5 | max | 109 | -0.06 (-0.26 to +0.15) | +0.22 (-0.09 to +0.57) | +16.2 (+6.2 to +26.1) | +5.4 (-4.5 to +15.2) | flat |
+| claude-opus-5-5 | off | 75 | -0.11 (-0.72 to +0.56) | -0.37 (-0.89 to +0.09) | -2.5 (-16.1 to +12.5) | +2.5 (-11.4 to +16.3) | too few seats |
+| claude-opus-5-5 | low | 77 | -0.22 (-0.79 to +0.32) | -0.51 (-0.99 to -0.06) | +1.2 (-13.6 to +15.7) | -6.2 (-20.5 to +6.6) | too few seats |
+| claude-opus-5-5 | medium | 317 | +0.05 (-0.16 to +0.24) | +0.17 (-0.05 to +0.41) | +0.3 (-6.9 to +7.4) | -0.6 (-7.7 to +6.5) | flat |
+| claude-opus-5-5 | high | 71 | -0.08 (-0.40 to +0.26) | +0.05 (-0.32 to +0.45) | +11.2 (-1.2 to +23.7) | +6.2 (-5.0 to +19.0) | too few seats |
+| claude-opus-5-5 | xhigh | 161 | +0.17 (-0.05 to +0.39) | +0.01 (-0.21 to +0.22) | -1.2 (-10.2 to +8.5) | +2.9 (-7.0 to +12.4) | flat |
+| claude-opus-5-5 | max | 78 | +0.13 (-0.08 to +0.34) | +0.29 (+0.03 to +0.56) | -8.8 (-22.4 to +5.3) | -7.5 (-18.5 to +3.8) | too few seats |
+| claude-sonnet-5-5 | off | 153 | -0.18 (-1.01 to +0.61) | -0.62 (-1.44 to +0.12) | -5.5 (-14.4 to +3.8) | -2.4 (-12.4 to +7.2) | flat |
+| claude-sonnet-5-5 | low | 151 | -0.32 (-0.98 to +0.41) | +0.07 (-0.66 to +0.80) | -10.7 (-19.8 to -1.3) | -6.3 (-16.9 to +4.5) | flat |
+| claude-sonnet-5-5 | medium | 346 | -0.49 (-0.95 to -0.04) | -0.80 (-1.29 to -0.36) | +7.4 (+1.4 to +13.9) | +9.1 (+1.9 to +15.9) | better |
+| claude-sonnet-5-5 | high | 152 | -0.50 (-1.03 to -0.02) | -0.34 (-0.97 to +0.26) | +5.0 (-3.7 to +13.9) | -5.6 (-14.2 to +3.4) | flat |
+| claude-sonnet-5-5 | xhigh | 167 | -0.42 (-0.90 to +0.02) | -0.43 (-0.95 to +0.01) | -9.1 (-18.3 to +0.0) | -5.1 (-14.8 to +4.3) | flat |
+| claude-sonnet-5-5 | max | 130 | +0.16 (-0.01 to +0.34) | +0.20 (+0.01 to +0.41) | +4.3 (-5.7 to +12.9) | +6.4 (-4.3 to +16.4) | worse |
+| gpt-5.6-terra | low | 83 | -0.66 (-1.62 to +0.31) | -0.42 (-1.54 to +0.67) | +3.3 (-10.1 to +16.5) | +4.4 (-6.7 to +16.3) | flat |
+| gpt-5.6-terra | medium | 243 | -0.43 (-1.05 to +0.15) | -0.55 (-1.12 to +0.08) | +2.3 (-5.4 to +9.5) | +1.5 (-7.3 to +9.6) | flat |
+| gpt-5.6-terra | high | 86 | -0.16 (-0.93 to +0.59) | +0.44 (-0.61 to +1.50) | -1.1 (-14.3 to +12.4) | +1.1 (-12.1 to +14.4) | flat |
+| gpt-5.6-terra | xhigh | 89 | +0.28 (-0.27 to +0.79) | +0.37 (-0.19 to +0.91) | -3.2 (-16.3 to +9.7) | -2.2 (-14.3 to +10.8) | flat |
+| gpt-5.6-terra | max | 84 | +0.22 (-0.15 to +0.59) | +0.22 (-0.13 to +0.53) | -1.1 (-14.4 to +11.1) | +5.6 (-6.7 to +17.8) | flat |
+| gpt-6-astra | off | 77 | -0.15 (-0.74 to +0.35) | +0.17 (-0.39 to +0.67) | +1.2 (-13.8 to +16.2) | -16.2 (-32.5 to -1.2) | too few seats |
+| gpt-6-astra | low | 78 | -0.01 (-0.44 to +0.41) | -0.18 (-0.58 to +0.19) | +11.2 (-4.8 to +26.5) | +12.5 (-1.3 to +26.9) | too few seats |
+| gpt-6-astra | medium | 247 | -0.21 (-0.45 to +0.04) | -0.11 (-0.38 to +0.18) | +3.5 (-3.5 to +10.6) | +4.3 (-2.4 to +10.9) | flat |
+| gpt-6-astra | high | 96 | +0.20 (-0.23 to +0.65) | -0.11 (-0.42 to +0.21) | -8.0 (-21.0 to +4.2) | -1.0 (-14.1 to +11.6) | flat |
+| gpt-6-luna | off | 104 | -1.71 (-2.86 to -0.66) | -1.96 (-3.09 to -0.85) | +5.5 (-6.4 to +18.2) | +5.5 (-6.4 to +16.4) | better |
+| gpt-6-luna | low | 103 | -0.57 (-1.87 to +0.59) | -0.76 (-1.98 to +0.37) | +9.1 (-3.6 to +21.8) | -4.5 (-14.5 to +5.5) | flat |
+| gpt-6-luna | medium | 277 | -0.34 (-1.06 to +0.42) | -0.64 (-1.34 to +0.05) | -3.5 (-10.6 to +3.9) | -1.4 (-8.5 to +5.7) | flat |
+| gpt-6-luna | high | 108 | +0.28 (-0.67 to +1.16) | +0.03 (-1.06 to +1.07) | +4.5 (-7.4 to +17.1) | +6.2 (-7.1 to +19.6) | flat |
+| gpt-6-luna | xhigh | 111 | +0.35 (-0.63 to +1.28) | +0.23 (-0.62 to +1.09) | -4.3 (-14.8 to +6.0) | +4.3 (-7.0 to +16.4) | flat |
+| gpt-6-luna | max | 111 | -0.10 (-0.78 to +0.57) | +0.03 (-0.58 to +0.67) | -0.9 (-12.5 to +10.7) | +5.4 (-6.2 to +17.0) | flat |
+| gpt-6.1-sol | low | 92 | +0.90 (+0.36 to +1.53) | -0.02 (-0.41 to +0.33) | -7.1 (-16.2 to +2.0) | -5.1 (-16.2 to +6.1) | flat |
+| gpt-6.1-sol | medium | 263 | -0.07 (-0.35 to +0.25) | -0.17 (-0.41 to +0.05) | +5.2 (-1.9 to +12.2) | -1.8 (-8.5 to +4.8) | flat |
+| gpt-6.1-sol | high | 93 | -0.05 (-0.33 to +0.23) | -0.21 (-0.49 to +0.07) | -5.1 (-15.2 to +4.1) | -5.1 (-16.3 to +6.0) | flat |
+| gpt-6.1-sol | xhigh | 97 | -0.03 (-0.23 to +0.17) | -0.13 (-0.33 to +0.06) | +3.0 (-7.0 to +13.1) | +10.9 (+2.0 to +20.8) | flat |
+| gpt-6.1-sol | max | 134 | +0.30 (+0.13 to +0.47) | +0.12 (-0.09 to +0.32) | +1.4 (-7.7 to +11.3) | +1.4 (-7.7 to +9.9) | flat |
+| gpt-6.1-terra | off | 78 | -0.24 (-0.99 to +0.46) | +0.97 (-0.20 to +2.50) | +10.0 (-5.1 to +25.9) | -7.5 (-22.2 to +8.8) | too few seats |
+| gpt-6.1-terra | low | 76 | +0.24 (-0.78 to +1.26) | -0.20 (-0.67 to +0.29) | +11.2 (-5.1 to +27.8) | +5.0 (-10.4 to +21.5) | too few seats |
+| gpt-6.1-terra | medium | 77 | -0.26 (-1.00 to +0.44) | -0.17 (-1.02 to +0.72) | +1.2 (-12.3 to +14.3) | +10.0 (-5.2 to +25.3) | too few seats |
+| gpt-6.1-terra | high | 79 | +0.17 (-0.27 to +0.60) | -0.02 (-0.40 to +0.40) | -12.5 (-26.2 to +2.5) | -13.8 (-26.6 to +0.0) | too few seats |
+| gpt-6.1-terra | xhigh | 79 | -0.16 (-0.65 to +0.33) | -0.10 (-0.61 to +0.42) | -7.5 (-22.5 to +6.4) | +6.2 (-7.8 to +20.5) | too few seats |
+| gpt-6.1-terra | max | 95 | +0.22 (+0.02 to +0.42) | +0.20 (-0.02 to +0.42) | -6.0 (-18.4 to +6.1) | -10.0 (-22.5 to +2.1) | flat |
 
 ### What chance alone would give
 
-36 of 49 configs have 80 or more seats with a regret in rounds 1 and 3. Per delta, with a 95% interval, about 0.9 should land on each side by chance alone.
-- regret, round 2 minus 1: 2 better, 3 worse, 31 flat. 3 survive Benjamini-Hochberg at 5%.
-- regret, round 3 minus 1: 2 better, 1 worse, 33 flat. 2 survive Benjamini-Hochberg at 5%.
-- win, round 2 minus 1: 2 better, 2 worse, 32 flat. 0 survive Benjamini-Hochberg at 5%.
-- win, round 3 minus 1: 2 better, 0 worse, 34 flat. 0 survive Benjamini-Hochberg at 5%.
+38 of 49 configs have 80 or more seats with a regret in rounds 1 and 3. Per delta, with a 95% interval, about 1.0 should land on each side by chance alone.
+- regret, round 2 minus 1: 3 better, 3 worse, 32 flat. 3 survive Benjamini-Hochberg at 5%.
+- regret, round 3 minus 1: 2 better, 2 worse, 34 flat. 2 survive Benjamini-Hochberg at 5%.
+- win, round 2 minus 1: 2 better, 2 worse, 34 flat. 0 survive Benjamini-Hochberg at 5%.
+- win, round 3 minus 1: 2 better, 0 worse, 36 flat. 0 survive Benjamini-Hochberg at 5%.
 
 9 of 9 models have 80 or more seats with a regret in rounds 1 and 3. Per delta, with a 95% interval, about 0.2 should land on each side by chance alone.
 - regret, round 2 minus 1: 1 better, 0 worse, 8 flat. 0 survive Benjamini-Hochberg at 5%.
