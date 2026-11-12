@@ -147,6 +147,10 @@ details summary { cursor: pointer; margin: 4px 0; }
 .fate-bar i { display: block; height: 100%; }
 .fate-val { font-variant-numeric: tabular-nums; }
 details.tables { margin-top: 34px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+dl.terms { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 18px; margin: 6px 0 18px; max-width: 980px; font-size: 12.5px; color: var(--mut); }
+dl.terms dt { color: var(--fg); } dl.terms dd { margin: 0; }
+@media (max-width: 639px) { dl.terms { grid-template-columns: minmax(0, 1fr); gap: 0; } dl.terms dd { margin-bottom: 8px; } }
 details.fold > summary { color: var(--mut); font-size: 13px; }
 details.tables > summary { color: var(--mut); font-size: 13px; }
 svg .cell { fill: #fff; stroke: #000; stroke-width: 2.5px; paint-order: stroke; }

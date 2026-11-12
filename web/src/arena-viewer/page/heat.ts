@@ -1,7 +1,7 @@
 import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { anchorId, pressable, tipView } from "./charts.ts";
+import { anchorId, pressable, termsView, tipView } from "./charts.ts";
 import type { Pair } from "../aggregates.ts";
 import { baseName, baseOrder, fmtCount, fmtPct, fmtRating, fmtUsd, isClaude, shortName, splitKey, unique } from "./data.ts";
 import { type Derived, memoLast } from "./derived.ts";
@@ -108,8 +108,8 @@ const heatmapView = (h: H, derived: Derived, heat: Model["heat"]): Html => {
   const cellOfRow = (row: HeatRow, col: string) => cells.get(row.key)?.get(col) ?? null;
   const sorted = sortedRows(shown, heat.sort, (row) => cellOfRow(row, heat.sort)?.value ?? -1);
 
-  const header = (id: string, label: string, title: string, extra = "") =>
-    h.th([h.Title(title), h.Class(`${extra} sortable ${heat.sort === id && id !== "rating" ? "sorted" : ""}`), ...pressable(h, Message.ClickedHeatColumn({ column: id }))], [label]);
+  const header = (id: string, label: string, extra = "") =>
+    h.th([h.Class(`${extra} sortable ${heat.sort === id && id !== "rating" ? "sorted" : ""}`), ...pressable(h, Message.ClickedHeatColumn({ column: id }))], [label]);
 
   const tip = Option.flatMap(heat.maybeTip, ({ row, col }) => {
     const shownRow = shown.find((candidate) => candidate.key === row);
@@ -135,10 +135,10 @@ const heatmapView = (h: H, derived: Derived, heat: Model["heat"]): Html => {
                   h.tr(
                     [],
                     [
-                      header("model", "Model", "", "left"),
-                      ...columns.map((col) => header(col.id, col.label, col.title)),
-                      header("rating", "Round Elo", "Bradley-Terry rating fitted over every match of every tournament, on round win share"),
-                      header("cost", "$/match", "avg list-price cost per player per scored match"),
+                      header("model", "Model", "left"),
+                      ...columns.map((col) => header(col.id, col.label)),
+                      header("rating", "Round Elo"),
+                      header("cost", "$/match"),
                     ],
                   ),
                 ],
@@ -165,7 +165,7 @@ const heatmapView = (h: H, derived: Derived, heat: Model["heat"]): Html => {
                             h.OnMouseEnter(Message.HoveredCell({ row: row.key, col: col.id })),
                             h.OnMouseLeave(Message.LeftCell()),
                           ],
-                          [cell.text, h.span([h.Class("n")], [fmtCount(cell.n)])],
+                          [h.span([h.AriaHidden(true)], [cell.text, h.span([h.Class("n")], [fmtCount(cell.n)])]), h.span([h.Class("sr")], [`${row.label} ${cell.tip}`])],
                         );
                       }),
                       h.td([h.Class("total")], [fmtRating(row.rating)]),
@@ -179,6 +179,12 @@ const heatmapView = (h: H, derived: Derived, heat: Model["heat"]): Html => {
         ],
       ),
       Option.getOrElse(tip, () => h.empty),
+      termsView(h, "What the columns mean", [
+        ...columns.filter(({ label, title }) => label !== title).map(({ label, title }) => [label, title] as const),
+        ["Round Elo", "Bradley-Terry rating fitted over every match of every tournament, on round win share"],
+        ["$/match", "avg list-price cost per player per scored match"],
+        ["A cell", `A config's win share against that opponent model, with the number of matches it rests on in the corner. The shade fades toward the page's colour below ${FULL_N} matches.`],
+      ]),
     ],
   );
 };
