@@ -94,6 +94,8 @@ def pooled_ratings(games: list[Game], by_cohort: dict[str, list[Game]], draws: i
     names = {n for g in games for n in (g.first, g.second)}
     fits = {basis: bt.fit(bt.cells_of(games, share=share), entrants=names) for basis, share in SHARES.items()}
     elo = {basis: fitted.elo() for basis, fitted in fits.items()}
+    # Draws are centred, then moved by the point fit's shift, so the intervals leave out the anchor's own noise (bt.Fit.elo).
+    zero = {basis: fitted.elo(None).get(bt.ANCHOR, 0.0) for basis, fitted in fits.items()}
     ids = sorted(blocks_of(games))
     rating_draws = {basis: {} for basis in SHARES}
     effect_draws: dict[str, dict[tuple[str, str], list[float]]] = {name: {} for name in by_cohort}
@@ -101,8 +103,8 @@ def pooled_ratings(games: list[Game], by_cohort: dict[str, list[Game]], draws: i
         weights = boot.weights(ids, rng)
         for basis, share in SHARES.items():
             sample = bt.fit(bt.cells_of(games, weights, share=share), entrants=names)
-            for entrant, value in sample.elo().items():
-                rating_draws[basis].setdefault(entrant, []).append(value)
+            for entrant, value in sample.elo(None).items():
+                rating_draws[basis].setdefault(entrant, []).append(value - zero[basis])
             if basis == "wins":
                 for name, cohort_games in by_cohort.items():
                     for pair, (n, won, expected) in summarize(bt.cells_of(cohort_games, weights), sample.theta).items():
@@ -110,9 +112,9 @@ def pooled_ratings(games: list[Game], by_cohort: dict[str, list[Game]], draws: i
     seeds = sorted({g.seed for g in games})
     seed_draws: dict[str, list[float]] = {}
     for _ in range(draws):
-        sample = bt.fit(bt.cells_of(games, boot.weights(seeds, rng), unit=lambda g: g.seed), entrants=names).elo()
+        sample = bt.fit(bt.cells_of(games, boot.weights(seeds, rng), unit=lambda g: g.seed), entrants=names).elo(None)
         for entrant, value in sample.items():
-            seed_draws.setdefault(entrant, []).append(value)
+            seed_draws.setdefault(entrant, []).append(value - zero["wins"])
     totals: dict[str, list[float]] = {}
     for g in games:
         for entrant, share, pot in ((g.first, g.share_first, g.pot_first), (g.second, 1 - g.share_first, 1 - g.pot_first)):

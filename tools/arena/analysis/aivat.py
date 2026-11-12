@@ -12,13 +12,23 @@ terms. The chance events:
 - Loads. The two-seat deck of nine compositions is drawn without replacement and refilled when empty, across rounds, so P is the
   count left in the deck over its size. V: a logistic on the health gap and the composition.
 - Round 1's first seat, a coin flip. V: the mean round 1 result of each starter.
+- Item deals. Each granted item is a uniform draw from the items its seat may still get: under the per-seat cap and the
+  table cap of sim/bend-mp/domain.bend's ItemRules, rebuilt from the public events (a grant outside the rebuilt pool is an
+  error). V: a logistic on both inventories, the health gap and who moves first after the deal, fitted on the state after
+  each deal.
+- Item uses that show a shell: glass (the chamber), beer (the shell it ejects) and the phone (one later shell). Their V is the
+  search's (the regret file of tools/arena/analysis/regret.py): for glass and beer, the value after the reveal and, from the
+  chosen move's value and the mover's live chance, the value of the other shell; for the phone, the chosen move's value minus
+  the value after it. The search's values drift with the position, so each term has its out-of-fold prediction from the state
+  before the event removed (a regression fitted on these terms and the same terms at shots). Only rounds with every decision
+  searched get them.
 
 Every V is fitted out of fold, five folds by seed, so no round is corrected by a model that saw it. The output database holds
 per match and player the sum of that player's corrections over the match's rounds; the viewer adds it to the player's round wins
 before the Round Elo fit (web/src/arena-viewer/page/ratings.ts). With --doc FILE the method's tables replace the text between the
 luck markers of that file (docs/arena/analysis/matchups.md).
 
-    python3 tools/arena/analysis/aivat.py [--db PATH] [--knowledge PATH] [--out derived/luck.sqlite] [--doc FILE]
+    python3 tools/arena/analysis/aivat.py [--db PATH] [--knowledge PATH] [--regret PATH] [--out derived/luck.sqlite] [--doc FILE]
 """
 
 import argparse
@@ -35,9 +45,9 @@ import numpy as np
 import pandas as pd
 from fmt import table
 from load import DB, connect, require_current, round_one_starters, round_winners
-from regret import DERIVED
+from regret import DERIVED, PRODUCTION
 from scipy import stats
-from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
 from sklearn.linear_model import LogisticRegression
 
 from docs import splice_between_markers
@@ -45,12 +55,16 @@ from docs import splice_between_markers
 # The two-seat deck, table.deck(TwoSeats) in sim/bend-mp: (live, blank) per load.
 DECK = ((1, 2), (2, 1), (2, 2), (3, 2), (1, 1), (2, 3), (3, 3), (3, 1), (4, 2))
 FOLDS = 5
+# The items dealt at two seats (the remote is not) with their caps per seat and on the table: the ItemRules defaults in sim/bend-mp/domain.bend.
+ITEMS = ("Saw", "Glass", "Jammer", "Cigarettes", "Beer", "Phone", "Inverter", "Adrenaline")
+PER_SEAT = np.array([2, 2, 1, 1, 8, 8, 4, 4])
+ON_TABLE = np.array([32, 32, 1, 32, 32, 32, 32, 32])
 
 
-def shot_outcomes(db: sqlite3.Connection) -> dict[str, list[bool]]:
-    """Match id to whether each of its shots was live, in order."""
+def shot_outcomes(db: sqlite3.Connection, kind: str = "Fired") -> dict[str, list[bool]]:
+    """Match id to whether each of its shots (or, with kind 'Ejected', each shell beer ejected) was live, in order."""
     outcomes = defaultdict(list)
-    for match, shell in db.execute("SELECT match_id, json_extract(json, '$.shell') FROM events WHERE kind = 'Fired' ORDER BY match_id, idx"):
+    for match, shell in db.execute("SELECT match_id, json_extract(json, '$.shell') FROM events WHERE kind = ? ORDER BY match_id, idx", (kind,)):
         outcomes[match].append(shell == "Live")
     return outcomes
 
@@ -75,6 +89,52 @@ def folds(seeds, rs: int = 0, k: int = FOLDS) -> np.ndarray:
     return np.array([f[s] for s in seeds])
 
 
+def item_pool(own: np.ndarray, other: np.ndarray) -> np.ndarray:
+    """Which items a seat holding `own` (counts in ITEMS order) can be granted while the other seat holds `other`."""
+    return (own < PER_SEAT) & (own + other < ON_TABLE)
+
+
+def deals_of(db: sqlite3.Connection, mi_of: dict) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Every item grant of the matches in `mi_of` and the state after every deal, from the public events.
+
+    Grants: mi, r, deal (its index in the round), pos, item (index in ITEMS), pool, inv1, inv2 (the inventories before it), h1, h2.
+    Deals: mi, r, deal, inv1, inv2, h1, h2 and mover, the position that moves first after it. Raises on a grant outside its pool.
+    """
+    pos_of = {(m, s): p for m, p, s in db.execute("SELECT match_id, position, socket FROM match_seats")}
+    grants, deals = [], []
+    kinds = ("RoundBegan", "GrabbingBegan", "Granted", "Used", "Fired", "Healed", "Loaded", "TurnGiven")
+    rows = db.execute(f"SELECT match_id, kind, json FROM events WHERE kind IN ({', '.join('?' * len(kinds))}) ORDER BY match_id, idx", kinds)
+    for m, kind, text in rows:
+        if m not in mi_of:
+            continue
+        e = json.loads(text)
+        if kind == "RoundBegan":
+            r, deal, loaded = e["round"], -1, False
+            health, inv = {1: e["health"], 2: e["health"]}, {1: np.zeros(len(ITEMS), int), 2: np.zeros(len(ITEMS), int)}
+        elif kind == "GrabbingBegan":
+            deal += 1
+        elif kind == "Granted":
+            p, k = pos_of[(m, e["seat"])], ITEMS.index(e["item"])
+            pool = item_pool(inv[p], inv[3 - p])
+            if not pool[k]:
+                raise ValueError(f"match {m}: {e['item']} granted outside its pool")
+            grants.append((mi_of[m], r, deal, p, k, pool, inv[1].copy(), inv[2].copy(), health[1], health[2]))
+            inv[p][k] += 1
+        elif kind == "Used":
+            inv[pos_of[(m, e["owner"])]][ITEMS.index(e["item"])] -= 1
+        elif kind in ("Fired", "Healed"):
+            health[pos_of[(m, e["target" if kind == "Fired" else "seat"])]] = e["health"]
+        elif kind == "Loaded":
+            loaded = True
+        elif loaded:
+            deals.append((mi_of[m], r, deal, inv[1].copy(), inv[2].copy(), health[1], health[2], pos_of[(m, e["seat"])]))
+            loaded = False
+    return (
+        pd.DataFrame(grants, columns=["mi", "r", "deal", "pos", "item", "pool", "inv1", "inv2", "h1", "h2"]),
+        pd.DataFrame(deals, columns=["mi", "r", "deal", "inv1", "inv2", "h1", "h2", "mover"]),
+    )
+
+
 @dataclass
 class Data:
     matches: pd.DataFrame  # mi, match_id, seed, block, first, second, letter1, letter2, starter
@@ -84,9 +144,13 @@ class Data:
     inverters: dict  # match_id -> ordinals of inverter uses
     clues: pd.DataFrame
     outcomes: dict  # match_id -> live per shot, in order
+    ejected: dict  # match_id -> live per shell beer ejected, in order
+    grants: pd.DataFrame  # deals_of
+    deals: pd.DataFrame
 
 
-def read(db_path: str, knowledge_path: str) -> Data:
+def read(db_path: str, knowledge_path: str, regret_path: str) -> Data:
+    """The rated matches; each decision carries the search's best and chosen values (B, Q, round win chances) when the regret file scored it."""
     db, kn = connect(db_path), connect(knowledge_path)
     starters, winners = round_one_starters(db), round_winners(db)
     seats = defaultdict(list)
@@ -112,7 +176,8 @@ def read(db_path: str, knowledge_path: str) -> Data:
         " health_json, own_items_json, opponent_items_json, shown_live, shown_blank FROM decisions",
         kn,
     )
-    dec = dec[dec.match_id.isin(ids)].sort_values(["match_id", "ordinal"]).reset_index(drop=True)
+    search = pd.read_sql("SELECT match_id, ordinal, best_score / 1e6 B, chosen_score / 1e6 Q FROM regret WHERE status = 'searched'", connect(regret_path))
+    dec = dec[dec.match_id.isin(ids)].merge(search, on=["match_id", "ordinal"], how="left").sort_values(["match_id", "ordinal"]).reset_index(drop=True)
     spends = (dec.shot.notna() | (dec.item == "Beer")).astype(int)  # a shot, or beer used or stolen, spends a shell
     consumed = {m: dict(zip(g.ordinal, np.concatenate([[0], np.cumsum(spends[g.index].values)[:-1]]))) for m, g in dec.groupby("match_id")}
     inverters = defaultdict(list)
@@ -121,7 +186,8 @@ def read(db_path: str, knowledge_path: str) -> Data:
     clues = pd.read_sql("SELECT match_id, ordinal, player, position, shell FROM clues", kn)
     shots = shot_outcomes(db)
     outcomes = {m: shots[m] for m in ids}
-    return Data(matches, rounds=pd.DataFrame(rounds, columns=["mi", "r", "O"]), dec=dec, consumed=consumed, inverters=inverters, clues=clues, outcomes=outcomes)
+    grants, deals = deals_of(db, dict(zip(matches.match_id, matches.mi)))
+    return Data(matches, pd.DataFrame(rounds, columns=["mi", "r", "O"]), dec, consumed, inverters, clues, outcomes, shot_outcomes(db, "Ejected"), grants, deals)
 
 
 def shots_of(d: Data) -> pd.DataFrame:
@@ -312,9 +378,94 @@ def seat_corrections(d: Data) -> np.ndarray:
     return c
 
 
+def deal_features(inv1: np.ndarray, inv2: np.ndarray, h1, h2, mover, first) -> np.ndarray:
+    """A deal's end state in position 1's view: inventory gaps (also on the first deal of a round, and per health left), health gap, who moves first."""
+    gap = inv1 - inv2
+    moves = np.where(np.asarray(mover) == 1, 1.0, -1.0)[:, None]
+    hgap, hsum = (np.asarray(h1) - np.asarray(h2))[:, None].astype(float), (np.asarray(h1) + np.asarray(h2))[:, None].astype(float)
+    first = np.asarray(first, float)[:, None]
+    return np.hstack([gap, gap * first, gap / hsum * 4, hgap, moves, moves * first, hgap * moves, gap.sum(1, keepdims=True)])
+
+
+def deal_corrections(d: Data) -> np.ndarray:
+    O = pd.Series(d.rounds.O.values, pd.MultiIndex.from_arrays([d.rounds.mi, d.rounds.r]))
+    deals = d.deals.assign(O=O.reindex(pd.MultiIndex.from_arrays([d.deals.mi, d.deals.r])).values).dropna(subset="O")
+    grants = d.grants.merge(deals[["mi", "r", "deal", "mover"]], on=["mi", "r", "deal"])
+    fold = folds(d.matches.seed.values)
+    fd, fg = fold[deals.mi], fold[grants.mi]
+    X = deal_features(np.stack(deals.inv1), np.stack(deals.inv2), deals.h1, deals.h2, deals.mover, deals.deal == 0)
+    inv1, inv2, pool = np.stack(grants.inv1), np.stack(grants.inv2), np.stack(grants.pool)
+    ones = grants.pos.values == 1
+    c = np.zeros(len(grants))
+    for k in range(FOLDS):
+        model = LogisticRegression(max_iter=2000).fit(X[fd != k], deals.O.values[fd != k])
+        test = np.where(fg == k)[0]
+        V = np.empty((len(test), len(ITEMS)))
+        for item in range(len(ITEMS)):
+            a, b = inv1[test].copy(), inv2[test].copy()
+            a[ones[test], item] += 1
+            b[~ones[test], item] += 1
+            g = grants.iloc[test]
+            V[:, item] = model.predict_proba(deal_features(a, b, g.h1, g.h2, g.mover, g.deal == 0))[:, 1]
+        P = pool[test] / pool[test].sum(1, keepdims=True)
+        c[test] = (P * V).sum(1) - V[np.arange(len(test)), grants.item.values[test]]
+    return round_sum(c, grants.mi.values, grants.r.values, d.rounds)
+
+
+def use_corrections(d: Data) -> np.ndarray:
+    mi_of = dict(zip(d.matches.match_id, d.matches.mi))
+    pos_of = {(m, l): p for m, l1, l2 in zip(d.matches.match_id, d.matches.letter1, d.matches.letter2) for l, p in ((l1, 1), (l2, 2))}
+    O = pd.Series(d.rounds.O.values, pd.MultiIndex.from_arrays([d.rounds.mi, d.rounds.r]))
+    dec = d.dec.assign(mi=d.dec.match_id.map(mi_of), pos=[pos_of[(m, p)] for m, p in zip(d.dec.match_id, d.dec.player)])
+    dec["O1"] = O.reindex(pd.MultiIndex.from_arrays([dec.mi, dec["round"]])).values
+    dec = dec[dec.O1.notna()].reset_index(drop=True)
+    shot, glass, beer, phone = dec.shot.notna().values, (dec.item == "Glass").values, (dec.item == "Beer").values, (dec.item == "Phone").values
+    lives = [json.loads(s) for s in dec.private_live_json]
+    dec["p"] = [lv[0] / n if lv and n else np.nan for lv, n in zip(lives, dec.private_orders)]
+    dec["El"] = [sum(lv) / n if lv and n else np.nan for lv, n in zip(lives, dec.private_orders)]
+    reveal = shot | glass | beer
+    dec["pt"] = np.nan
+    dec.loc[reveal, "pt"] = true_live_chances(d, dec[reveal])
+    # The shell each shot, beer and glass showed: the replayed shots, the ejected shells, the glass's clue.
+    glass_clue = {(m, o): s == "Live" for m, o, at, s in zip(d.clues.match_id, d.clues.ordinal, d.clues.position, d.clues.shell) if at == 1}
+    real = np.full(len(dec), np.nan)
+    for m, g in dec.groupby("match_id"):
+        fired, ejected = iter(d.outcomes[m]), iter(d.ejected.get(m, []))
+        for i, s, it, o in zip(g.index, shot[g.index], g.item, g.ordinal):
+            real[i] = next(fired, np.nan) if s else next(ejected, np.nan) if it == "Beer" else glass_clue.get((m, o), np.nan) if it == "Glass" else np.nan
+    # The value after a decision in the mover's view: the next decision's best value, or the round's result.
+    by_round = dec.groupby(["match_id", "round"])
+    next_B, next_pos = by_round.B.shift(-1).values, by_round.pos.shift(-1).values
+    own = np.where(dec.pos == 1, dec.O1, 1 - dec.O1)
+    after = np.where(np.isnan(next_pos), own, np.where(next_pos == dec.pos, next_B, 1 - next_B))
+    p, P, Q, live = dec.p.values, dec.pt.values, dec.Q.values, real == 1
+    with np.errstate(divide="ignore", invalid="ignore"):
+        other = np.clip(np.where(live, (Q - p * after) / (1 - p), (Q - (1 - p) * after) / p), 0, 1)
+    two = np.where(live, (1 - P) * (other - after), P * (other - after))
+    two = np.where((p > 0) & (p < 1) & (P > 0) & (P < 1) & ~np.isnan(real), two, 0.0)
+    c = np.nan_to_num(np.where(phone, Q - after, np.where(reveal, two, 0.0)))
+    hj = [json.loads(h) for h in dec.health_json]
+    X = np.column_stack(
+        [dec.p.fillna(-1), dec.pt.fillna(-1), dec.Q.fillna(-1), dec.B.fillna(-1), dec.remaining, dec.El.fillna(-1), dec["round"], [h[0]["health"] for h in hj],
+         [h[1].get("health", -1) for h in hj], dec.sawed.fillna(0), shot, glass, beer, phone, (dec.shot == "self").values,
+         [len(json.loads(s)) for s in dec.own_items_json], [len(json.loads(s)) for s in dec.opponent_items_json]]
+    ).astype(float)
+    events, searched = reveal | phone, dec.B.notna().values
+    fold = folds(d.matches.seed.values)[dec.mi.values]
+    drift = np.zeros(len(dec))
+    for k in range(FOLDS):
+        train, test = events & searched & (fold != k), events & searched & (fold == k)
+        model = HistGradientBoostingRegressor(max_iter=200, learning_rate=0.08, min_samples_leaf=200, random_state=0).fit(X[train], c[train])
+        drift[test] = model.predict(X[test])
+    c -= drift
+    uses = (glass | beer | phone) & searched
+    full = by_round.B.transform(lambda s: s.notna().all()).values  # rounds the search scored throughout
+    return round_sum(np.where(uses & full, c, 0.0) * np.where(dec.pos == 1, 1.0, -1.0), dec.mi.values, dec["round"].values, d.rounds)
+
+
 def corrections(d: Data) -> np.ndarray:
     """Per round of d.rounds, the sum of its corrections in position 1's view."""
-    return shot_corrections(d, shots_of(d)) + load_corrections(d) + seat_corrections(d)
+    return shot_corrections(d, shots_of(d)) + load_corrections(d) + seat_corrections(d) + deal_corrections(d) + use_corrections(d)
 
 
 # RATINGS AND THE BIAS TEST
@@ -348,19 +499,20 @@ def rated(d: Data, c: np.ndarray) -> Rated:
     )
 
 
-def fit(t: Rated, wins: np.ndarray, w: np.ndarray | None = None) -> np.ndarray:
+def fit(t: Rated, wins: np.ndarray, w: np.ndarray | None = None, anchor: str | None = bt.ANCHOR) -> np.ndarray:
     """Round Elo (bt.round_elo) per config of `wins`, with each match counted `w` times (bootstrap weights)."""
     w = np.ones(len(t.i)) if w is None else w
-    elo = bt.round_elo(((t.names[i], t.names[j], k * n, k * y) for i, j, n, y, k in zip(t.i, t.j, t.n, wins, w) if k), t.names)
+    elo = bt.round_elo(((t.names[i], t.names[j], k * n, k * y) for i, j, n, y, k in zip(t.i, t.j, t.n, wins, w) if k), t.names, anchor)
     return np.array([elo[name] for name in t.names])
 
 
 def intervals(t: Rated, wins: np.ndarray) -> np.ndarray:
-    """2.5% and 97.5% quantiles over seed-block resamples, per config."""
+    """2.5% and 97.5% quantiles over seed-block resamples, per config: centred draws moved by the point fit's shift (bt.Fit.elo)."""
     rng = np.random.default_rng(1)
     U = t.block.max() + 1
-    draws = np.array([fit(t, wins, np.bincount(rng.integers(0, U, U), minlength=U)[t.block].astype(float)) for _ in range(boot.DRAWS)])
-    return np.percentile(draws, [2.5, 97.5], axis=0).T
+    shift = fit(t, wins, anchor=None) - fit(t, wins)
+    draws = np.array([fit(t, wins, np.bincount(rng.integers(0, U, U), minlength=U)[t.block].astype(float), None) for _ in range(boot.DRAWS)])
+    return np.percentile(draws - shift, [2.5, 97.5], axis=0).T
 
 
 def bias(t: Rated, splits: int = 20) -> dict:
@@ -391,13 +543,15 @@ def report(t: Rated) -> str:
     counts = np.bincount(t.i, t.n, len(t.names)) + np.bincount(t.j, t.n, len(t.names))
     matches = np.bincount(t.i, minlength=len(t.names)) + np.bincount(t.j, minlength=len(t.names))
     order = np.argsort(-adj)
+    a = t.names.index(bt.ANCHOR)
     rows = [[t.names[k], f"{matches[k]}", f"{counts[k]:.0f}", f"{raw[k]:+.0f} [{ri[k][0]:+.0f}, {ri[k][1]:+.0f}]", f"{adj[k]:+.0f} [{ai[k][0]:+.0f}, {ai[k][1]:+.0f}]"] for k in order]
     widths = (ri[:, 1] - ri[:, 0]) / 2, (ai[:, 1] - ai[:, 0]) / 2
     rank_raw, rank_adj = stats.rankdata(-raw), stats.rankdata(-adj)
     summary = (
         f"{len(t.i):,} matches, {int(t.n.sum()):,} rounds. The median 95% half-width falls from ±{np.median(widths[0]):.0f} to ±{np.median(widths[1]):.0f} Elo"
         f" (variance of a match's round share {np.var(t.raw / t.n):.3f} → {np.var((t.raw + t.luck) / t.n):.3f}). Spearman rank correlation with the raw"
-        f" ratings {stats.spearmanr(raw, adj)[0]:.3f}, largest rank change {int(abs(rank_raw - rank_adj).max())}.\n\n"
+        f" ratings {stats.spearmanr(raw, adj)[0]:.3f}, largest rank change {int(abs(rank_raw - rank_adj).max())}. The intervals are measured against the mean"
+        f" config and moved so {bt.ANCHOR} reads 0, so they leave out its own noise; its own luck-adjusted interval, {ai[a][0]:+.0f} to {ai[a][1]:+.0f}, is the uncertainty of that 0.\n\n"
         f"Bias test: the mean correction per round of each config, seed-clustered, gives chi2 {b['chi2']:.1f} on {b['k']} configs (p {b['p']:.2f})."
         f" Its correlation with Round Elo fitted on the other half of the seeds (20 random halvings) is {b['corr']:+.2f}."
     )
@@ -420,11 +574,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--db", default=DB)
     parser.add_argument("--knowledge", default=str(DERIVED / "knowledge.sqlite"))
+    parser.add_argument("--regret", default=str(PRODUCTION))
     parser.add_argument("--out", type=Path)
     parser.add_argument("--doc", type=Path)
     args = parser.parse_args()
     require_current(args.db)
-    d = read(args.db, args.knowledge)
+    d = read(args.db, args.knowledge, args.regret)
     c = corrections(d)
     if args.out:
         write(args.out, d, c)

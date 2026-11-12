@@ -4,7 +4,7 @@ import unittest
 
 import aivat
 import numpy as np
-from testdb import ANALYSIS, database, events
+from testdb import ANALYSIS, database, events, insert
 
 
 class DeckTest(unittest.TestCase):
@@ -25,6 +25,28 @@ class ShotTest(unittest.TestCase):
         db = database(":memory:", ANALYSIS)
         events(db, "m1", ("Fired", {"shooter": 0, "target": 0, "shell": "Blank"}), ("PickedUp", {"seat": 1}), ("Fired", {"shooter": 1, "target": 0, "shell": "Live"}))
         self.assertEqual(aivat.shot_outcomes(db), {"m1": [False, True]})
+
+
+class DealTest(unittest.TestCase):
+    def deal(self, *grants: tuple[int, str]) -> tuple:
+        db = database(":memory:", ANALYSIS)
+        for position, socket in ((1, 0), (2, 1)):
+            insert(db, "match_seats", match_id="m1", position=position, socket=socket)
+        granted = [("Granted", {"seat": seat, "item": item}) for seat, item in grants]
+        events(db, "m1", ("RoundBegan", {"round": 0, "health": 3, "first": 1}), ("GrabbingBegan", {"seats": [0, 1]}), *granted, ("Loaded", {"load": {"live": 1, "blank": 2}}), ("TurnGiven", {"seat": 1}))
+        return aivat.deals_of(db, {"m1": 0})
+
+    def test_a_grant_draws_from_the_items_under_both_caps(self):
+        grants, deals = self.deal((0, "Saw"), (0, "Saw"), (1, "Jammer"))
+        self.assertTrue(grants.pool[2].all())  # the other seat's saws do not cap this seat's
+        self.assertEqual(list(grants.inv1[2]), [2, 0, 0, 0, 0, 0, 0, 0])
+        held, other = np.array([2, 0, 0, 0, 0, 0, 0, 0]), np.array([0, 0, 1, 0, 0, 0, 0, 0])
+        self.assertEqual([aivat.ITEMS[k] for k in np.flatnonzero(~aivat.item_pool(held, other))], ["Saw", "Jammer"])
+        self.assertEqual(list(deals.mover), [2])
+
+    def test_a_grant_outside_its_pool_is_an_error(self):
+        with self.assertRaises(ValueError):
+            self.deal((0, "Saw"), (0, "Saw"), (0, "Saw"))
 
 
 class FitTest(unittest.TestCase):
