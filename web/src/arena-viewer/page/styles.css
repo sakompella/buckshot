@@ -265,7 +265,7 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
   table.lbt.rows td:first-child { flex: 1 1 auto; }
   table.lbt.rows td.barcol { order: 1; flex: 1 0 100%; width: auto; padding: 4px 0; }
   table.lbt.rows td[data-label] { order: 2; }
-  table.lbt.rows td[data-label="round elo"], table.lbt.rows td[data-label="luck-adjusted"] { order: 0; }
+  table.lbt.rows td[data-label="round elo"], table.lbt.rows td[data-label="luck-adjusted"], table.lbt.rows td[data-label="play and move quality"] { order: 0; }
   .track { min-width: 0; }
   table.matchrows td:first-child { flex: 0 0 auto; font-size: 12.5px; color: var(--mut); }
   table.matchrows td.seat { order: -2; flex: 1 0 100%; font-size: 13.5px; }
