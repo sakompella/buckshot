@@ -7,10 +7,11 @@ import { configSummaries, ODDS_BINS, oddsBinOf, selfShotTallies } from "../src/a
 import { chamberPatterns, roundStory, ShellTracker } from "../src/arena-viewer/analysis.ts";
 import type { Seat, SeatRegret } from "../src/arena-viewer/api.ts";
 import { isEngine as isArenaEngine } from "../src/arena/agent.ts";
-import { type BlockTally, baseName, blockRate, fmtBytes, groupBy, isEngine, labelOf, matchRows, quantile, regretStats, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
+import { type BlockTally, baseName, blockRate, fmtBytes, groupBy, isEngine, keyOf, labelOf, matchRows, quantile, regretStats, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { mulberry32 } from "../src/arena/tournament-stats.ts";
 import { ANCHOR, bradleyTerry, type Game, heldOutRatings, matchWinVsAnchor, pooledRatings, type Rating } from "../src/arena-viewer/page/ratings.ts";
 import { droppedConfigs, oddsPanels } from "../src/arena-viewer/page/odds.ts";
+import { playAndMoveRatings } from "../src/arena-viewer/page/play-and-moves.ts";
 import { rowsOf } from "../src/arena-viewer/page/matches.ts";
 import { modelStatsOf, ranksOf } from "../src/arena-viewer/page/derived.ts";
 import { inRankOrder } from "../src/arena-viewer/page/leaderboard.ts";
@@ -288,6 +289,28 @@ test("a config's regret weighs every searched move equally, whichever seat it ca
   expect(regretStats(seats)).toEqual({ moves: 4, accuracy: 60, meanLost: 3, p99Lost: 10, bestShare: 0.25, inaccuraciesPer100: 0, mistakesPer100: 25, blundersPer100: 0 });
   expect(regretStats([{ regret: null }])).toBeNull();
   expect(regretStats([])).toBeNull();
+});
+
+test("the Elo from play and move quality leans on the moves where the results are unsure, and on the results where they are sure", () => {
+  const configs = [
+    { model: "m1", lost: 0.5, rating: 75, half: 10 },
+    { model: "m2", lost: 1, rating: 50, half: 10 },
+    { model: "m3", lost: 1.5, rating: 25, half: 10 },
+    { model: "m4", lost: 2, rating: 0, half: 10 },
+    { model: "unsure", lost: 1, rating: 0, half: 300 },
+    { model: "sure", lost: 1, rating: 0, half: 3 },
+  ];
+
+  const seats = configs.flatMap(({ model, lost }) =>
+    [0.9, 1.1, 0.95, 1.05].map((scale, block): SeatFull => ({ ...SEAT, model, seedBlock: `b${block}`, potShare: null, regret: seatRegret(100, [100 * lost * scale]) })),
+  );
+
+  const headline = new Map(configs.map(({ model, rating, half }) => [keyOf({ model, effort: "medium" }), { rating, blocks: 4, interval: { lo: rating - half, hi: rating + half }, tier: null }] as const));
+  const combined = playAndMoveRatings(headline, seats);
+  const ratingOf = (model: string) => combined.get(keyOf({ model, effort: "medium" }))?.rating ?? Number.NaN;
+
+  expect(ratingOf("unsure")).toBeGreaterThan(25);
+  expect(Math.abs(ratingOf("sure"))).toBeLessThan(5);
 });
 
 test("the 99th-percentile loss counts the moves that lost nothing, by nearest rank", () => {
