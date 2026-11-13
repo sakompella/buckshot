@@ -40,6 +40,7 @@ The commit is the version id: no hand-assigned labels, and no second hash to kee
 - **Unpinned agents:** the cooldown is per model.
 - **Account pins:** when the endpoint is a proxy over several accounts, an endpoint may list `accounts`, the proxy's ids for them.
   - Each new match pins each agent of that endpoint to one account by sending its id in the header that `ARENA_ACCOUNT_HEADER` names (set it in `web/.env`; an account id without it is an error), and records it in provenance as `account_id`.
+- **Requests to the proxy:** every request carries `X-CPA-Agent: buckshot` and, from a tournament, `X-CPA-Project: <config name>` (`ARENA_PROJECT`). On Anthropic endpoints the cache blocks ask for `ttl` 5m, and, except at api.anthropic.com, `prompt_cache_options.mode: "explicit"`: without it CLIProxyAPI adds 1 hour breakpoints of its own and every write is 1 hour. OpenAI Responses calls send a `prompt_cache_key` (and `session_id`) of the conversation's own provider session id, one per match and seat.
   - It picks an account that isn't cooling, with the fewest running matches; ties go to config order.
   - When an account is full, the proxy answers 429, and only that (model, account) pair cools. The match pauses until the reset, and new matches start on another account.
   - Resumed matches always keep their pin. Matches started without a pin stay unpinned.

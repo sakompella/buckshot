@@ -294,16 +294,17 @@ test.each([
 interface Received {
   readonly body: unknown;
   readonly account: string | null;
+  readonly headers: Headers;
 }
 
 /** The requests an endpoint sends for `replies` replies, as pi-durable asks for each: with no reasoning option at effort off. */
-const requestsSentAt = async (api: "ANT" | "OAI", model: string, effort: "off" | "low" | "medium", extraEnv: Readonly<Record<string, string>> = {}, replies = 1) => {
+const requestsSentAt = async (api: "ANT" | "OAI", model: string, effort: "off" | "low" | "medium", extraEnv: Readonly<Record<string, string>> = {}, replies = 1, options: { readonly sessionId?: string } = {}) => {
   const requests: Array<Received> = [];
 
   const server = Bun.serve({
     port: 0,
     fetch: async (request) => {
-      requests.push({ body: await request.json(), account: request.headers.get(ACCOUNT_HEADER) });
+      requests.push({ body: await request.json(), account: request.headers.get(ACCOUNT_HEADER), headers: request.headers });
 
       return Response.json({ type: "error", error: { type: "invalid_request_error", message: "refused by the test" } }, { status: 400 });
     },
@@ -322,7 +323,7 @@ const requestsSentAt = async (api: "ANT" | "OAI", model: string, effort: "off" |
 
   if (listed === undefined) throw new Error(`${model} is not listed`);
 
-  for (let reply = 0; reply < replies; reply++) await models.completeSimple(listed, { messages: [{ role: "user", content: "Your turn.", timestamp: 0 }] }, effort === "off" ? {} : { reasoning: effort });
+  for (let reply = 0; reply < replies; reply++) await models.completeSimple(listed, { messages: [{ role: "user", content: "Your turn.", timestamp: 0 }] }, effort === "off" ? options : { ...options, reasoning: effort });
 
   await server.stop(true);
 
@@ -440,4 +441,34 @@ test.each([
 
   expect(failure).toContain(expected);
   expect(failure).not.toContain(PROXY.key);
+});
+
+test.each([
+  ["ANT", "claude-haiku-5-5"],
+  ["OAI", "gpt-6-luna"],
+] as const)("a %s endpoint tells the proxy it is buckshot and, when ARENA_PROJECT is set, which project", async (api, model) => {
+  const [named] = await requestsSentAt(api, model, "low", { ARENA_PROJECT: "tournament 13" });
+  const [anonymous] = await requestsSentAt(api, model, "low");
+
+  expect([named?.headers.get("X-CPA-Agent"), named?.headers.get("X-CPA-Project")]).toEqual(["buckshot", "tournament 13"]);
+  expect([anonymous?.headers.get("X-CPA-Agent"), anonymous?.headers.get("X-CPA-Project")]).toEqual(["buckshot", null]);
+});
+
+test("an Anthropic request asks for the 5 minute cache on every block it caches", async () => {
+  const [request] = await requestsSentAt("ANT", "claude-haiku-5-5", "low");
+  const blocks = JSON.stringify(request?.body).match(/"cache_control":\{[^}]*\}/g) ?? [];
+
+  expect(blocks.length).toBeGreaterThan(0);
+  expect(blocks.every((block) => block === `"cache_control":{"type":"ephemeral","ttl":"5m"}`)).toBe(true);
+  expect(request?.body).toMatchObject({ prompt_cache_options: { mode: "explicit" } });
+});
+
+test("an OpenAI Responses endpoint sends a prompt cache key that is the conversation's session id, and a session id of its own for each conversation", async () => {
+  const keyOf = async (sessionId: string) => {
+    const [request] = await requestsSentAt("OAI", "gpt-6-luna", "low", {}, 1, { sessionId });
+
+    return Schema.decodeUnknownSync(Schema.Struct({ prompt_cache_key: Schema.String }))(request?.body).prompt_cache_key;
+  };
+
+  expect([await keyOf("seat-A"), await keyOf("seat-B")]).toEqual(["seat-A", "seat-B"]);
 });

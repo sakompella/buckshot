@@ -17,7 +17,10 @@ import { configLabel } from "./model-names.ts";
 // PLAYER_A_MODEL and an optional PLAYER_A_EFFORT; B to D likewise. An optional
 // PLAYER_A_ACCOUNT_ID pins every request of the agent to one account of a
 // proxy, by sending the id in the header ARENA_ACCOUNT_HEADER names; without it
-// no header is sent and the proxy picks the account. An optional PLAYER_A_INSTRUCTIONS_ADDENDUM is
+// no header is sent and the proxy picks the account. Every request also names
+// the arena to the proxy (X-CPA-Agent) and, when ARENA_PROJECT is set (the
+// tournament runner sets it to the config's name), the project (X-CPA-Project);
+// the proxy records both and strips them before the request goes upstream. An optional PLAYER_A_INSTRUCTIONS_ADDENDUM is
 // text appended to the shared instructions for that agent only (ADR-0048), and an
 // optional PLAYER_A_EFFORT_LABEL names the effort in the agent's label when it is
 // not PLAYER_A_EFFORT, as for an "off" that is low effort plus that text. A model id
@@ -39,6 +42,8 @@ const EndpointFields = {
   effort: Schema.optional(Schema.Literals(THINKING_LEVELS)),
   /** The proxy account every request is pinned to, and the header that names it. An id, not a secret. */
   account: Schema.optional(Schema.Struct({ header: Schema.NonEmptyString, id: Schema.NonEmptyString })),
+  /** The project the proxy files the agent's requests under: the tournament config's name. */
+  project: Schema.optional(Schema.NonEmptyString),
   /** Text appended to the shared instructions for this agent only. */
   instructionsAddendum: Schema.optional(Schema.NonEmptyString),
   /** The effort the agent's label names, when it is not `effort`. */
@@ -112,6 +117,7 @@ export const agentEndpoint = (agent: AgentId) =>
       effort: Config.option(Config.Literals(THINKING_LEVELS, name("EFFORT"))),
       accountId: Config.option(Config.NonEmptyString(name("ACCOUNT_ID"))),
       accountHeader: Config.option(Config.NonEmptyString("ARENA_ACCOUNT_HEADER")),
+      project: Config.option(Config.NonEmptyString("ARENA_PROJECT")),
       instructionsAddendum: Config.option(Config.NonEmptyString(name("INSTRUCTIONS_ADDENDUM"))),
       effortLabel: Config.option(Config.NonEmptyString(name("EFFORT_LABEL"))),
     }).pipe(
@@ -125,7 +131,7 @@ export const agentEndpoint = (agent: AgentId) =>
     if (Option.isSome(settings.accountId) && Option.isNone(settings.accountHeader)) return yield* new EndpointConfigError({ message: `ARENA_ACCOUNT_HEADER must be set when ${name("ACCOUNT_ID")} is` });
 
     const account = Option.getOrUndefined(Option.zipWith(settings.accountHeader, settings.accountId, (header, id) => ({ header, id })));
-    const fields = { model: settings.model.value, catalogModel: Option.getOrUndefined(settings.catalogModel), effort: Option.getOrUndefined(settings.effort), account, instructionsAddendum: Option.getOrUndefined(settings.instructionsAddendum), effortLabel: Option.getOrUndefined(settings.effortLabel) };
+    const fields = { model: settings.model.value, catalogModel: Option.getOrUndefined(settings.catalogModel), effort: Option.getOrUndefined(settings.effort), account, project: Option.getOrUndefined(settings.project), instructionsAddendum: Option.getOrUndefined(settings.instructionsAddendum), effortLabel: Option.getOrUndefined(settings.effortLabel) };
 
     const notListed = (endpoint: Endpoint): string =>
       Option.match(settings.catalogModel, {
@@ -145,15 +151,15 @@ export const agentEndpoint = (agent: AgentId) =>
 /** The base URL as the SDKs want it, without a trailing slash. */
 const baseUrlOf = (url: URL): string => url.href.replace(/\/$/, "");
 
-/** The key, and the account pin when the endpoint has one, as pi-ai resolves them for every request. createProvider's own `headers` option is never sent. */
+/** The headers every request carries: who is calling and for which project, for the proxy to record, and the account pin when the endpoint has one. */
+const requestHeaders = (endpoint: Endpoint) =>
+  Object.fromEntries([["X-CPA-Agent", "buckshot"], ...(endpoint.project === undefined ? [] : [["X-CPA-Project", endpoint.project]]), ...(endpoint.account === undefined ? [] : [[endpoint.account.header, endpoint.account.id]])]);
+
+/** The key and the headers, as pi-ai resolves them for every request. createProvider's own `headers` option is never sent. */
 const requestAuth = (endpoint: Endpoint, source: string) => ({
   apiKey: {
     name: source,
-    resolve: async () => {
-      const auth = { apiKey: Redacted.value(endpoint.key) };
-
-      return { auth: endpoint.account === undefined ? auth : { ...auth, headers: { [endpoint.account.header]: endpoint.account.id } }, source };
-    },
+    resolve: async () => ({ auth: { apiKey: Redacted.value(endpoint.key), headers: requestHeaders(endpoint) }, source }),
   },
 });
 
@@ -171,6 +177,46 @@ const rewriting = <A>(api: ProviderStreams, schema: Schema.Decoder<A>, rewrite: 
 });
 
 const Rest = [Schema.Record(Schema.String, Schema.Unknown)] as const;
+
+const CacheControl = Schema.StructWithRest(Schema.Struct({ ttl: Schema.optional(Schema.String) }), Rest);
+
+/** A block of a Messages API request that may carry a cache breakpoint. */
+const CachedBlock = Schema.StructWithRest(Schema.Struct({ cache_control: Schema.optional(CacheControl) }), Rest);
+
+const BlocksRequest = Schema.StructWithRest(
+  Schema.Struct({
+    system: Schema.optional(Schema.Array(CachedBlock)),
+    tools: Schema.optional(Schema.Array(CachedBlock)),
+    messages: Schema.Array(Schema.StructWithRest(Schema.Struct({ content: Schema.Union([Schema.String, Schema.Array(CachedBlock)]) }), Rest)),
+  }),
+  Rest,
+);
+
+type CachedBlock = typeof CachedBlock.Type;
+
+/** The block with a breakpoint that names no ttl asking for "5m". */
+const shortLived = (block: CachedBlock): CachedBlock => (block.cache_control === undefined || block.cache_control.ttl !== undefined ? block : { ...block, cache_control: { ...block.cache_control, ttl: "5m" } });
+
+const ANTHROPIC_HOST = "api.anthropic.com";
+
+/**
+ * The Messages API, with each cache write asking for the 5 minute lifetime. pi-ai sends a bare ephemeral block, and
+ * CLIProxyAPI both upgrades such a block to 1 hour (a write that costs 1.6 times as much) and adds 1 hour breakpoints
+ * of its own. Its `prompt_cache_options.mode: "explicit"` (stripped before the request goes upstream) leaves the
+ * breakpoints and their ttl to the caller; Anthropic itself does not know the field, so it is not sent there.
+ * Checked against the proxy with Claude Haiku 5.5 on 2026-11-13: ttl alone still wrote 1 hour, with explicit mode every write was 5 minutes.
+ */
+const withShortCache = (api: ProviderStreams, url: URL): ProviderStreams =>
+  rewriting(api, BlocksRequest, ({ system, tools, messages, ...request }) => {
+    const short = {
+      ...request,
+      system: system?.map(shortLived),
+      tools: tools?.map(shortLived),
+      messages: messages.map((message) => ({ ...message, content: Array.isArray(message.content) ? message.content.map(shortLived) : message.content })),
+    };
+
+    return url.hostname === ANTHROPIC_HOST ? short : { ...short, prompt_cache_options: { mode: "explicit" } };
+  });
 
 /** A Messages API request, by the parts that carry thinking and effort; the rest passes through. */
 const MessagesRequest = Schema.StructWithRest(
@@ -230,7 +276,7 @@ export const providerOf = (providerId: string, endpoint: Endpoint): Provider => 
       createProvider({
         ...options,
         models: [{ ...model, api: "anthropic-messages" } as Model<"anthropic-messages">],
-        api: endpoint.effort === "off" && setsEffortPerMessage(model) ? withThinkingOff(anthropicMessagesApi(), thinkingOffType(catalogModel)) : anthropicMessagesApi(),
+        api: withShortCache(endpoint.effort === "off" && setsEffortPerMessage(model) ? withThinkingOff(anthropicMessagesApi(), thinkingOffType(catalogModel)) : anthropicMessagesApi(), endpoint.url),
       }),
     // SAFETY: as above.
     OpenAIResponses: (): Provider => createProvider({ ...options, models: [{ ...model, api: "openai-responses" } as Model<"openai-responses">], api: asksDetailedSummaries(catalogModel) ? withDetailedSummaries(openAIResponsesApi()) : openAIResponsesApi() }),
