@@ -178,46 +178,6 @@ const rewriting = <A>(api: ProviderStreams, schema: Schema.Decoder<A>, rewrite: 
 
 const Rest = [Schema.Record(Schema.String, Schema.Unknown)] as const;
 
-const CacheControl = Schema.StructWithRest(Schema.Struct({ ttl: Schema.optional(Schema.String) }), Rest);
-
-/** A block of a Messages API request that may carry a cache breakpoint. */
-const CachedBlock = Schema.StructWithRest(Schema.Struct({ cache_control: Schema.optional(CacheControl) }), Rest);
-
-const BlocksRequest = Schema.StructWithRest(
-  Schema.Struct({
-    system: Schema.optional(Schema.Array(CachedBlock)),
-    tools: Schema.optional(Schema.Array(CachedBlock)),
-    messages: Schema.Array(Schema.StructWithRest(Schema.Struct({ content: Schema.Union([Schema.String, Schema.Array(CachedBlock)]) }), Rest)),
-  }),
-  Rest,
-);
-
-type CachedBlock = typeof CachedBlock.Type;
-
-/** The block with a breakpoint that names no ttl asking for "5m". */
-const shortLived = (block: CachedBlock): CachedBlock => (block.cache_control === undefined || block.cache_control.ttl !== undefined ? block : { ...block, cache_control: { ...block.cache_control, ttl: "5m" } });
-
-const ANTHROPIC_HOST = "api.anthropic.com";
-
-/**
- * The Messages API, with each cache write asking for the 5 minute lifetime. pi-ai sends a bare ephemeral block, and
- * CLIProxyAPI both upgrades such a block to 1 hour (a write that costs 1.6 times as much) and adds 1 hour breakpoints
- * of its own. Its `prompt_cache_options.mode: "explicit"` (stripped before the request goes upstream) leaves the
- * breakpoints and their ttl to the caller; Anthropic itself does not know the field, so it is not sent there.
- * Checked against the proxy with Claude Haiku 5.5 on 2026-11-13: ttl alone still wrote 1 hour, with explicit mode every write was 5 minutes.
- */
-const withShortCache = (api: ProviderStreams, url: URL): ProviderStreams =>
-  rewriting(api, BlocksRequest, ({ system, tools, messages, ...request }) => {
-    const short = {
-      ...request,
-      system: system?.map(shortLived),
-      tools: tools?.map(shortLived),
-      messages: messages.map((message) => ({ ...message, content: Array.isArray(message.content) ? message.content.map(shortLived) : message.content })),
-    };
-
-    return url.hostname === ANTHROPIC_HOST ? short : { ...short, prompt_cache_options: { mode: "explicit" } };
-  });
-
 /** A Messages API request, by the parts that carry thinking and effort; the rest passes through. */
 const MessagesRequest = Schema.StructWithRest(
   Schema.Struct({
@@ -276,7 +236,7 @@ export const providerOf = (providerId: string, endpoint: Endpoint): Provider => 
       createProvider({
         ...options,
         models: [{ ...model, api: "anthropic-messages" } as Model<"anthropic-messages">],
-        api: withShortCache(endpoint.effort === "off" && setsEffortPerMessage(model) ? withThinkingOff(anthropicMessagesApi(), thinkingOffType(catalogModel)) : anthropicMessagesApi(), endpoint.url),
+        api: endpoint.effort === "off" && setsEffortPerMessage(model) ? withThinkingOff(anthropicMessagesApi(), thinkingOffType(catalogModel)) : anthropicMessagesApi(),
       }),
     // SAFETY: as above.
     OpenAIResponses: (): Provider => createProvider({ ...options, models: [{ ...model, api: "openai-responses" } as Model<"openai-responses">], api: asksDetailedSummaries(catalogModel) ? withDetailedSummaries(openAIResponsesApi()) : openAIResponsesApi() }),

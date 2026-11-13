@@ -454,15 +454,6 @@ test.each([
   expect([anonymous?.headers.get("X-CPA-Agent"), anonymous?.headers.get("X-CPA-Project")]).toEqual(["buckshot", null]);
 });
 
-test("an Anthropic request asks for the 5 minute cache on every block it caches", async () => {
-  const [request] = await requestsSentAt("ANT", "claude-haiku-5-5", "low");
-  const blocks = JSON.stringify(request?.body).match(/"cache_control":\{[^}]*\}/g) ?? [];
-
-  expect(blocks.length).toBeGreaterThan(0);
-  expect(blocks.every((block) => block === `"cache_control":{"type":"ephemeral","ttl":"5m"}`)).toBe(true);
-  expect(request?.body).toMatchObject({ prompt_cache_options: { mode: "explicit" } });
-});
-
 test("an OpenAI Responses endpoint sends a prompt cache key that is the conversation's session id, and a session id of its own for each conversation", async () => {
   const keyOf = async (sessionId: string) => {
     const [request] = await requestsSentAt("OAI", "gpt-6-luna", "low", {}, 1, { sessionId });
