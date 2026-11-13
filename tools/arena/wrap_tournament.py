@@ -240,7 +240,8 @@ class Wrap:
         if not self.viewer_unit:
             return "viewer skipped"
         self.viewer("restart")
-        for _ in range(60):
+        # The viewer builds the page and loads every database before it answers.
+        for _ in range(600):
             try:
                 with urllib.request.urlopen(self.viewer_url) as response:
                     if response.status == 200:

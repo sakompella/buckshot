@@ -147,7 +147,7 @@ A player's cash at the end of a match divided by all the cash in that match: 1 f
 The rounds a player won divided by the rounds it played, where the match's public events give every round winner. Round Elo is a fit on these.
 
 **Config**:
-One model on one endpoint at one effort. It is the unit the arena rates and lists, named by its model and effort, such as `claude-opus-5-5-max`; an engine's name is its seat, `Engine/6/20000/sampled`.
+One model on one endpoint at one effort. It is the unit the arena rates and lists, named by its model and effort, such as `claude-opus-5-5-max`; an engine's name is its seat, `Engine/6/20000/sampled`. Two efforts of one model that requested different efforts and ran the same, billing the same reasoning, count as one config named by both, such as `claude-opus-5-5-off/low`; `web/src/arena/same-treatments.json` lists them, for the site and the Python analyses alike, and seat labels keep the effort each match requested.
 _Avoid_: model (a model has many configs), entrant (a tournament's name for a seat to fill, which may carry an instructions addendum)
 
 **Effort**:

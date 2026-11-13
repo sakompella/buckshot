@@ -2,7 +2,7 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { type ConfigOdds, ODDS_BINS, type ShotTally } from "../aggregates.ts";
 import { anchorId, chartWidth, lineKeyView, linScale, tippedDot } from "./charts.ts";
-import { baseName, baseOrder, byEffort, colorOf, DASH, effortLabel, groupBy, labelOf, splitKey } from "./data.ts";
+import { baseName, baseOrder, byEffort, colorOf, dashOf, effortLabel, groupBy, labelOf, splitKey } from "./data.ts";
 import { memoLast } from "./derived.ts";
 import type { Message } from "./model.ts";
 
@@ -108,7 +108,7 @@ const panelView = (h: H, model: string, lines: ReadonlyArray<OddsLine>, width: n
       ...ODDS_BINS.map(({ label }, bin) => h.text([h.X(String(x.at(bin))), h.Y(String(height - B + 18)), h.TextAnchor("middle"), h.Class("small")], [label])),
       h.text([h.X(String((L + width - right) / 2)), h.Y(String(height - 6)), h.TextAnchor("middle"), h.Class("small")], ["chance the chambered shell is live"]),
       ...lines.flatMap(({ key, effort, points }, index) => [
-        h.path([h.D(points.map(({ bin, share }, at) => `${at === 0 ? "M" : "L"}${x.at(bin)},${y.at(share)}`).join(" ")), h.Fill("none"), h.Stroke(color), h.StrokeWidth("1.6"), h.StrokeDasharray(DASH.get(effort) ?? "")], []),
+        h.path([h.D(points.map(({ bin, share }, at) => `${at === 0 ? "M" : "L"}${x.at(bin)},${y.at(share)}`).join(" ")), h.Fill("none"), h.Stroke(color), h.StrokeWidth("1.6"), h.StrokeDasharray(dashOf(effort))], []),
         ...points.map(({ bin, share }) =>
           tippedDot(h, anchorId("odds", key, bin), spotText(lines, bin, (other) => Math.abs(y.at(other) - y.at(share)) < 1), String(x.at(bin)), String(y.at(share)), [h.R("3"), h.Fill(color)]),
         ),
@@ -122,7 +122,7 @@ const panelView = (h: H, model: string, lines: ReadonlyArray<OddsLine>, width: n
     ],
   );
 
-  return isKeyedBelow ? h.div([], [chart, lineKeyView(h, lines.map(({ effort }) => ({ label: effortLabel(model, effort), color, dash: DASH.get(effort) ?? "" })))]) : chart;
+  return isKeyedBelow ? h.div([], [chart, lineKeyView(h, lines.map(({ effort }) => ({ label: effortLabel(model, effort), color, dash: dashOf(effort) })))]) : chart;
 };
 
 export const droppedText = (keys: ReadonlyArray<string>): string =>

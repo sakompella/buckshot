@@ -19,6 +19,7 @@ import bt
 import cv
 import seats
 import tournament3
+from configs import config_label
 from docs import splice_between_markers
 from fmt import frac, pct, pp, signed, span, table
 from load import DB, Game, blocks_of, cohorts, connect, scored_games, require_current
@@ -350,7 +351,7 @@ def main() -> None:
     require_current(args.db or DB)
     db = connect(args.db) if args.db else connect()
     # An engine has no model: it stands for itself, so its matches are cross-model.
-    model_of = {label: model or label for label, model in db.execute("SELECT DISTINCT s.label, e.model FROM match_seats s JOIN entrants e ON e.id = s.entrant_id")}
+    model_of = {config_label(label): model or label for label, model in db.execute("SELECT DISTINCT s.label, e.model FROM match_seats s JOIN entrants e ON e.id = s.entrant_id")}
     tournament_games = scored_games(db)
     games = [replace(game, cohort=kind_of(model_of[game.first], model_of[game.second])) for game in tournament_games]
     by_cohort = cohorts(games)

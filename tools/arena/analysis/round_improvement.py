@@ -28,7 +28,8 @@ from docs import splice_between_markers
 from boot import DRAWS, interval
 from fmt import table
 from load import DB, connect, require_current, round_winners
-from regret import DERIVED, EFFORTS, PRODUCTION, run_of
+from configs import config_effort, effort_rank
+from regret import DERIVED, PRODUCTION, run_of
 from rules import POINT, ROUNDS
 
 FEWEST_SEATS = 80  # seats with a regret in both rounds below which a config is shown but not tested
@@ -89,7 +90,7 @@ def load_moves(regret_path: Path, knowledge_path: Path, mistakes_path: Path, db_
     for match, _, player, model, effort, block, round, left, shot, regret, mistake in rows:
         if any(r not in (won := winners[match]) for r in ROUNDS):
             continue
-        seat = Seat(match, player, model, effort, block, won[1] != won[2], frozenset(r for r, w in won.items() if w == player))
+        seat = Seat(match, player, model, config_effort(model, effort), block, won[1] != won[2], frozenset(r for r, w in won.items() if w == player))
         moves.append(Move(seat, round, bool(shot), left, regret, None if mistake is None else bool(mistake)))
     return with_excess(moves)
 
@@ -205,7 +206,7 @@ def model_rows(values, rng) -> list[Row]:
 
 
 def config_rows(values, rng) -> list[Row]:
-    order = lambda r: (r.label.rsplit(" ", 1)[0], EFFORTS.index(r.label.rsplit(" ", 1)[1]))
+    order = lambda r: (r.label.rsplit(" ", 1)[0], effort_rank(r.label.rsplit(" ", 1)[1]))
     return sorted(rows_for(values, lambda s: s.config, rng, COLUMNS), key=order)
 
 

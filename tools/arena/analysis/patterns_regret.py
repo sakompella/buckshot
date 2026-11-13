@@ -17,6 +17,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from configs import config_effort
 from docs import splice_between_markers
 from fmt import table
 from load import connect
@@ -107,7 +108,7 @@ def load(regret_path: Path, knowledge_path: Path) -> list[Move]:
              SELECT *, MAX(MAX(COALESCE(own_health, 0), COALESCE(other_health, 0))) OVER (PARTITION BY match_id, round) AS round_best
              FROM seen
            )
-           SELECT p.model || ' ' || p.effort AS config, r.regret, d.remaining, d.chamber, d.source, d.private_live_min, d.private_live_max, d.sawed, d.shot, d.item, d.item_stolen,
+           SELECT p.model, p.effort, r.regret, d.remaining, d.chamber, d.source, d.private_live_min, d.private_live_max, d.sawed, d.shot, d.item, d.item_stolen,
                   d.legal_items_json, d.opponent_items_json, d.next_player, d.next_shot, d.player,
                   d.own_health = d.round_best AS full_health
            FROM regret r
@@ -118,7 +119,7 @@ def load(regret_path: Path, knowledge_path: Path) -> list[Move]:
     ).fetchall()
     return [
         Move(
-            r["config"], r["regret"], r["remaining"], r["chamber"], r["source"],
+            f"{r['model']} {config_effort(r['model'], r['effort'])}", r["regret"], r["remaining"], r["chamber"], r["source"],
             r["private_live_min"] if r["private_live_min"] == r["private_live_max"] else None,
             bool(r["sawed"]), r["shot"], r["item"], bool(r["item_stolen"]),
             frozenset(json.loads(r["legal_items_json"])), frozenset(json.loads(r["opponent_items_json"])),
