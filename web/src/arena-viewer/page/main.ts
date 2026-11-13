@@ -364,12 +364,12 @@ export const init = (viewport: Viewport, route: ArenaRoute): Return => {
 
 export const viewportNow = (): Viewport => ({ width: document.documentElement.clientWidth, height: innerHeight });
 
-// Controls answer a tap themselves; a tap anywhere else shows the nearest title (or a heat cell's data-tip), or clears the one shown.
+// Controls answer a tap themselves; a tap anywhere else shows the nearest heat cell's data-tip, or clears the one shown.
 const tappedTitleMessage = (event: PointerEvent): Option.Option<Message> => {
   if (event.pointerType !== "touch" || !(event.target instanceof Element) || event.target.closest("button, a, select, input, label, summary, [role=button], .tip") !== null) return Option.none();
 
   for (let element: Element | null = event.target; element !== null; element = element.parentElement) {
-    const text = element.getAttribute("data-tip") ?? element.querySelector(":scope > title")?.textContent ?? element.getAttribute("title");
+    const text = element.getAttribute("data-tip");
 
     if (text) return Option.some(Message.TappedTitle({ text }));
   }

@@ -5,9 +5,9 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 import { CERTAIN_TYPES, type CertainRate } from "../api.ts";
 import { type Cell as CertainCell, talliesOf } from "./certain.ts";
 
-import { pressable } from "./charts.ts";
+import { noteView, pressable, termsView } from "./charts.ts";
 import { effortName } from "../../arena/model-names.ts";
-import { baseName, CERTAIN_NAMES, costPerMove, effortLabel, fmtCount, fmtPct, fmtPoints, fmtSec, fmtShare, fmtUsd, isClaude, isProvisional, reasoningPerMove } from "./data.ts";
+import { baseName, CERTAIN_NAMES, costPerMove, effortLabel, fmtCount, fmtPct, fmtPoints, fmtSec, fmtShare, fmtUsd, isClaude, isProvisional, PROVISIONAL_BELOW, reasoningPerMove } from "./data.ts";
 import { type Derived, LUCK_ELO, type ModelStats, MOVE_ELO, ROUND_ELO } from "./derived.ts";
 import { drillView } from "./drill.ts";
 import { itemIconOf } from "./items.ts";
@@ -23,7 +23,7 @@ const ratingView = (h: H, elo: Rating | undefined): ReadonlyArray<Html | string>
 
 interface Detail {
   readonly label: string;
-  readonly title: string;
+  readonly note: string;
   readonly content: ReadonlyArray<Html | string>;
 }
 
@@ -34,19 +34,19 @@ const detailsOf = (h: H, m: ModelStats, hasRegret: boolean): ReadonlyArray<Detai
   const { favorite } = m;
 
   return [
-    { label: "wins vs own opponents", title: "", content: [h.b([], [fmtPct(m.winShare)]), " ", h.span([h.Class("pm")], [`${m.win.k.toFixed(m.win.k % 1 ? 1 : 0)}/${m.win.n}`])] },
-    { label: "round wins", title: "", content: [fmtPct(m.roundShare)] },
-    { label: "cash share", title: "", content: [fmtPct(m.potShare)] },
+    { label: "wins vs own opponents", note: "", content: [h.b([], [fmtPct(m.winShare)]), " ", h.span([h.Class("pm")], [`${m.win.k.toFixed(m.win.k % 1 ? 1 : 0)}/${m.win.n}`])] },
+    { label: "round wins", note: "", content: [fmtPct(m.roundShare)] },
+    { label: "cash share", note: "", content: [fmtPct(m.potShare)] },
     ...(hasRegret
       ? [
-          { label: "accuracy", title: movesTitle(m), content: [m.regret === null ? "–" : m.regret.accuracy.toFixed(1)] },
-          { label: "p99 points lost", title: movesTitle(m), content: [m.regret === null ? "–" : fmtPoints(m.regret.p99Lost)] },
+          { label: "accuracy", note: movesTitle(m), content: [m.regret === null ? "–" : m.regret.accuracy.toFixed(1)] },
+          { label: "p99 points lost", note: movesTitle(m), content: [m.regret === null ? "–" : fmtPoints(m.regret.p99Lost)] },
         ]
       : []),
-    { label: "cost / move", title: "", content: [fmtUsd(costPerMove(m))] },
-    { label: "time / move", title: "", content: [fmtSec(m.scoredMoves > 0 ? m.scoredLatency / m.scoredMoves : null)] },
-    { label: "output tok / match", title: "", content: [fmtCount(m.avgOut)] },
-    { label: "fav", title: favorite === null ? "" : `${favorite.k} of ${favorite.n} legal moves`, content: favorite === null ? ["–"] : [itemIconOf(h, favorite.item), `${favorite.item} `, h.span([h.Class("pm")], [fmtPct(favorite.rate)])] },
+    { label: "cost / move", note: "", content: [fmtUsd(costPerMove(m))] },
+    { label: "time / move", note: "", content: [fmtSec(m.scoredMoves > 0 ? m.scoredLatency / m.scoredMoves : null)] },
+    { label: "output tok / match", note: "", content: [fmtCount(m.avgOut)] },
+    { label: "fav", note: favorite === null ? "" : `${favorite.k} of ${favorite.n} legal moves`, content: favorite === null ? ["–"] : [itemIconOf(h, favorite.item), `${favorite.item} `, h.span([h.Class("pm")], [fmtPct(favorite.rate)])] },
   ];
 };
 
@@ -110,7 +110,7 @@ const nameView = (h: H, m: ModelStats): ReadonlyArray<Html | string> => {
   return [
     h.span([h.Class(`dot ${isClaude(m.model) ? "a" : "o"}`), h.Style({ background: m.color })], []),
     `${baseName(m.model)} `,
-    ...(effort === "" ? [] : [h.span([h.Class("eff"), ...(mismatch ? [h.Title(`requested ${effortName(m.effort)}, measured ${fmtCount(reasoningPerMove(m))} reasoning tokens per move`)] : [])], [`[${effort}${mismatch ? " (requested)" : ""}]`])]),
+    ...(effort === "" ? [] : [h.span([h.Class("eff")], [`[${effort}${mismatch ? " (requested)" : ""}]`, ...(mismatch ? [noteView(h, `requested ${effortName(m.effort)}, measured ${fmtCount(reasoningPerMove(m))} reasoning tokens per move`)] : [])])]),
   ];
 };
 
@@ -121,21 +121,21 @@ const rowView = (h: H, m: ModelStats, elo: Rating | undefined, hasLuck: boolean,
     m.key,
     [h.Class(`row ${isOpen ? "sel" : ""} ${isProvisional(m) ? "provisional" : ""} ${startsTier ? "tierstart" : ""}`), h.AriaExpanded(isOpen), ...pressable(h, Message.ClickedLeaderboardRow({ id: m.key }))],
     [
-      h.td([], [h.span([h.Class("rk")], [elo?.tier == null ? "" : String(elo.tier)]), ...nameView(h, m)]),
+      h.td([], [h.span([h.Class("rk")], [elo?.tier == null ? "–" : String(elo.tier)]), ...nameView(h, m)]),
       h.td([h.DataAttribute("label", hasLuck ? "luck-adjusted" : "round elo")], ratingView(h, elo)),
       h.td([h.DataAttribute("label", "match win vs engine")], [matchWinView(elo)]),
       ...(hasLuck ? [h.td([h.DataAttribute("label", "round elo")], ratingView(h, m.rating ?? undefined))] : []),
       ...(hasMoveElo ? [h.td([h.DataAttribute("label", "play and move quality")], ratingView(h, m.moveRating ?? undefined))] : []),
-      h.td([h.DataAttribute("label", "matches"), h.Title(`${m.win.blocks} seed blocks`)], [m.scored.toLocaleString()]),
+      h.td([h.DataAttribute("label", "matches")], [m.scored.toLocaleString(), noteView(h, `${m.win.blocks} seed blocks`)]),
       h.td([h.DataAttribute("label", "reasoning tok / move")], [fmtCount(reasoningPerMove(m))]),
       h.td([h.DataAttribute("label", "cost / match")], [fmtUsd(m.avgCost)]),
       h.td([h.Class("barcol")], [eloBarView(h, scale, m, elo)]),
-      ...details.map(({ label, title, content }) => h.td([h.Class("detail"), h.DataAttribute("label", label), ...(title === "" ? [] : [h.Title(title)])], [...content])),
+      ...details.map(({ label, note, content }) => h.td([h.Class("detail"), h.DataAttribute("label", label), ], [...content, ...(note === "" ? [] : [noteView(h, note)])])),
     ],
   );
 
 const detailsView = (h: H, details: ReadonlyArray<Detail>): Html =>
-  h.dl([h.Class("drillstats")], details.flatMap(({ label, title, content }) => [h.dt([], [label]), h.dd(title === "" ? [] : [h.Title(title)], [...content])]));
+  h.dl([h.Class("drillstats")], details.flatMap(({ label, note, content }) => [h.dt([], [label]), h.dd([], [...content, ...(note === "" ? [] : [" ", h.span([h.Class("pm")], [note])])])]));
 
 export const configPanelView = (h: H, derived: Derived, key: string, lazy: Lazy): Html => {
   const m = derived.pooled.find((candidate) => candidate.key === key);
@@ -160,6 +160,10 @@ export const configPanelView = (h: H, derived: Derived, key: string, lazy: Lazy)
     ],
   );
 };
+
+const PROVISIONAL_NOTE = `A faded row with a – for its tier is provisional: it has fewer than ${PROVISIONAL_BELOW} scored matches and no rank.`;
+
+const PROVISIONAL_NOTE_ACCURACY = `A faded row is provisional: it has fewer than ${PROVISIONAL_BELOW} scored matches.`;
 
 const MATCH_WIN = "Match win vs engine";
 
@@ -202,9 +206,7 @@ const HEADER_TITLES = new Map([
 ]);
 
 const headerView = (h: H, label: string): Html => {
-  const title = HEADER_TITLES.get(label);
-
-  return h.th(label === "" ? [h.Class("barcol")] : [...(label === ROUND_ELO || label === LUCK_ELO || label === MOVE_ELO ? [h.Class("rating")] : []), ...(title === undefined ? [] : [h.Title(title)])], [label]);
+  return h.th(label === "" ? [h.Class("barcol")] : label === ROUND_ELO || label === LUCK_ELO || label === MOVE_ELO ? [h.Class("rating")] : [], [label]);
 };
 
 /** Configs with a scored match, by rank; the unranked (provisional or unrated) after them, by rating and then label. */
@@ -272,8 +274,10 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
           ),
         ],
       ),
+      termsView(h, "What the columns mean", headers.flatMap((label) => (HEADER_TITLES.has(label) ? [[label, HEADER_TITLES.get(label) ?? ""] as const] : []))),
       ...[
         ...(same.length === 0 ? [] : [`Same measured reasoning under different requested efforts: ${same.map(([one, other]) => `${one.label} and ${other.label} (${fmtCount(reasoningPerMove(one))} and ${fmtCount(reasoningPerMove(other))} tokens per move)`).join("; ")}.`]),
+        ...(configs.some(isProvisional) ? [PROVISIONAL_NOTE] : []),
         ...(configs.some(isEffortMismatch) ? ["An effort marked (requested) disagrees with the measured reasoning: reasoning at effort none, or none at another effort."] : []),
       ].map((note) => h.p([h.Class("sub")], [note])),
     ],
@@ -300,11 +304,11 @@ export const inPointsLostOrder = (stats: ReadonlyArray<ModelStats>): ReadonlyArr
 const certainCellView = (h: H, cell: CertainCell | undefined): Html =>
   cell === undefined || cell.opportunities === 0
     ? h.td([h.DataAttribute("label", cell === undefined ? "" : CERTAIN_NAMES[cell.type])], ["–"])
-    : h.td([h.DataAttribute("label", CERTAIN_NAMES[cell.type]), h.Title(`${cell.mistakes.toLocaleString()} of ${cell.opportunities.toLocaleString()}`)], [fmtShare(cell.mistakes / cell.opportunities)]);
+    : h.td([h.DataAttribute("label", CERTAIN_NAMES[cell.type])], [fmtShare(cell.mistakes / cell.opportunities), noteView(h, `${cell.mistakes.toLocaleString()} of ${cell.opportunities.toLocaleString()}`)]);
 
 const accuracyRowView = (h: H, m: ModelStats, rank: number, certain: ReadonlyArray<CertainCell> | undefined): Html => {
   const { regret } = m;
-  const cell = (label: string, text: string | undefined) => h.td([h.DataAttribute("label", label), ...(label === "avg points lost" ? [h.Title(movesTitle(m))] : [])], [text ?? "–"]);
+  const cell = (label: string, text: string | undefined) => h.td([h.DataAttribute("label", label), ], [text ?? "–", ...(label === "avg points lost" && movesTitle(m) !== "" ? [noteView(h, movesTitle(m))] : [])]);
 
   return h.keyed("tr")(
     m.key,
@@ -344,12 +348,14 @@ export const accuracyTableView = (h: H, derived: Derived, certain: AsyncData.Asy
               h.table(
                 [h.Class("lbt rows")],
                 [
-                  h.thead([], [h.tr([], ACCURACY_HEADERS.map(([label, title]) => h.th(title === "" ? [] : [h.Title(title)], [label])))]),
+                  h.thead([], [h.tr([], ACCURACY_HEADERS.map(([label]) => h.th([], [label])))]),
                   h.tbody([], configs.map((m, index) => accuracyRowView(h, m, index + 1, certainRows.get(m.key)))),
                 ],
               ),
             ],
           ),
+      termsView(h, "What the columns mean", ACCURACY_HEADERS.filter(([, text]) => text !== "")),
+      ...(configs.some(isProvisional) ? [h.p([h.Class("sub")], [PROVISIONAL_NOTE_ACCURACY])] : []),
     ],
   );
 };

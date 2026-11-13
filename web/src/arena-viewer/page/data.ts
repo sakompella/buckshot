@@ -321,7 +321,7 @@ export const blockRate = (tally: BlockTally, reps = BOOTSTRAP_DRAWS): Rate => {
 
 // CONFIG STATS
 
-const PROVISIONAL_BELOW = 20;
+export const PROVISIONAL_BELOW = 20;
 
 export const MIN_BLOCKS_FOR_INTERVAL = 4;
 

@@ -307,7 +307,7 @@ export const childCommand = (matchDir: string, config: TournamentConfig, match: 
   "--delivery", config.delivery,
 ];
 
-/** The runner's environment, without any PLAYER_* variable, plus the PLAYER_<letter>_* variables of this match's model entrants. */
+/** The runner's environment, without any PLAYER_* variable, plus ARENA_PROJECT (the config's name) and the PLAYER_<letter>_* variables of this match's model entrants. */
 export const childEnv = (base: Env, config: TournamentConfig, match: ScheduledMatch, keys: ReadonlyMap<string, Redacted.Redacted<string>>, accounts: MatchAccounts = {}): Env => {
   const inherited = Object.entries(base).filter(([name]) => !name.startsWith("PLAYER_"));
 
@@ -333,7 +333,7 @@ export const childEnv = (base: Env, config: TournamentConfig, match: ScheduledMa
     ] as const;
   });
 
-  return Object.fromEntries([...inherited, ...seats]);
+  return Object.fromEntries([...inherited, ["ARENA_PROJECT", config.name], ...seats]);
 };
 
 /** The scheduled matches whose names are not finished. */

@@ -140,7 +140,7 @@ export const Model = Schema.Struct({
   matchList: MatchList,
   /** The chart mark the mouse is over, and the one a click, tap or Enter pinned; the hovered one shows first. */
   markTip: Schema.Struct({ maybeHover: Schema.Option(MarkTip), maybePin: Schema.Option(MarkTip) }),
-  /** The text of a chart mark a touch tapped: its SVG title or title attribute, which only a mouse can hover. */
+  /** The text of a heat cell a touch tapped: its data-tip. */
   maybeTappedTitle: Schema.Option(Schema.String),
   maybeGroup: Schema.Option(Group),
   isFiltersOpen: Schema.Boolean,

@@ -40,6 +40,13 @@ export const logScale = (d0: number, d1: number, r0: number, r1: number): Scale 
 export const pressable = (h: H, message: Message) =>
   [h.OnClick(message), h.Tabindex(0), h.Role("button"), h.OnKeyDownSelfPreventDefault((key) => (key === "Enter" || key === " " ? Option.some(message) : Option.none()))] as const;
 
+/** Text for screen readers only, in parentheses after the figure it explains. */
+export const noteView = (h: H, text: string): Html => h.span([h.Class("sr")], [` (${text})`]);
+
+/** The terms a table's column heads stand for, in a fold under it: a head's `title` shows only to a mouse. */
+export const termsView = (h: H, summary: string, terms: ReadonlyArray<readonly [string, string]>): Html =>
+  terms.length === 0 ? h.empty : h.details([h.Class("fold")], [h.summary([], [summary]), h.dl([h.Class("terms")], terms.flatMap(([term, text]) => [h.dt([], [term]), h.dd([], [text])]))]);
+
 /** An id for an element a tooltip points at, from any key. */
 export const anchorId = (...parts: ReadonlyArray<string | number>): string => `a-${parts.join("-").replaceAll(/[^\w-]/g, "_")}`;
 
