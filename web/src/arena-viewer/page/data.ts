@@ -1,17 +1,21 @@
 import { EFFORTS, effortName } from "../../arena/model-names.ts";
+import { effortParts } from "../../arena/same-treatment.ts";
 import { BOOTSTRAP_DRAWS } from "../../arena/bootstrap.ts";
 import { mulberry32 } from "../../arena/tournament-stats.ts";
 import type { CertainType, Seat, SeatRegret, Story } from "../api.ts";
 
 // The page's numbers: model labels and colours, per-config stats, ratings and intervals.
 
-/** Sorts efforts weakest first; one model-names.ts does not list sorts before them all. */
-export const byEffort = (left: string, right: string): number => EFFORTS.indexOf(left) - EFFORTS.indexOf(right);
+/** Where an effort sorts: a same-treatment group at its weakest effort; one model-names.ts does not list before them all. */
+const effortOrder = (effort: string): number => EFFORTS.indexOf(effortParts(effort)[0] ?? effort);
+
+/** Sorts efforts weakest first. */
+export const byEffort = (left: string, right: string): number => effortOrder(left) - effortOrder(right);
 
 export const DEFAULT_EFFORT = "medium";
 
 /** A line dash per effort, for charts that draw one line per config. */
-export const DASH: ReadonlyMap<string, string> = new Map([
+const DASH: ReadonlyMap<string, string> = new Map([
   ["off", "1 3"],
   ["minimal", "1 3"],
   ["low", "2 3"],
@@ -20,6 +24,9 @@ export const DASH: ReadonlyMap<string, string> = new Map([
   ["xhigh", "4 2"],
   ["max", "9 2 2 2"],
 ]);
+
+/** A config's line dash: a same-treatment group's is its weakest effort's. */
+export const dashOf = (effort: string): string => DASH.get(effortParts(effort)[0] ?? effort) ?? "";
 
 interface Base {
   readonly id: string;
@@ -112,7 +119,7 @@ const PROMPTED_OFF: ReadonlySet<string> = new Set(["gpt-6-astra"]);
 export const isPromptedOff = ({ model, effort }: { readonly model: string; readonly effort: string }): boolean => effort === "off" && PROMPTED_OFF.has(model);
 
 /** How the page names a config's effort, everywhere it shows one. */
-export const effortLabel = (model: string, effort: string): string => `${effortName(effort)}${isPromptedOff({ model, effort }) ? "*" : ""}`;
+export const effortLabel = (model: string, effort: string): string => `${effortParts(effort).map(effortName).join("/")}${isPromptedOff({ model, effort }) ? "*" : ""}`;
 
 export const labelOf = (key: string): string => {
   const [model, effort] = splitKey(key);
@@ -334,6 +341,10 @@ export const costPerMove = ({ scoredCost, scoredMoves }: { readonly scoredCost: 
 /** Reasoning tokens per model move, as the providers reported them; null when none were reported. */
 export const reasoningPerMove = ({ scoredReasoning, scoredMoves }: { readonly scoredReasoning: number | null; readonly scoredMoves: number }): number | null =>
   scoredReasoning === null || scoredMoves === 0 ? null : scoredReasoning / scoredMoves;
+
+/** The share of scored model moves whose calls billed any reasoning tokens; null when no call reported a count. */
+export const reasonedShare = ({ scoredReasoning, scoredReasonedMoves, scoredMoves }: { readonly scoredReasoning: number | null; readonly scoredReasonedMoves: number; readonly scoredMoves: number }): number | null =>
+  scoredReasoning === null || scoredMoves === 0 ? null : scoredReasonedMoves / scoredMoves;
 
 export interface MatchRow {
   readonly matchId: string;

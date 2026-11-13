@@ -2,7 +2,7 @@ import { Database } from "bun:sqlite";
 
 import { Effect, Schema } from "effect";
 
-import { configOfLabel } from "../arena/model-names.ts";
+import { configOf } from "../arena/same-treatment.ts";
 
 import { analyse } from "./analysis.ts";
 import { type Consistency, type Decisions, type Seat, SeatRow } from "./api.ts";
@@ -21,12 +21,15 @@ const SEATS_SQL = `with cs as (select match_id, player, sum(cost_usd) cost, sum(
      sum(cache_read_tokens) cr, sum(cache_write_tokens) cw, sum(reasoning_tokens) rt,
      sum(latency_ms) lat,
      sum(reasoning_tokens > 0 and coalesce(reasoning_text, '') = '') rsHidden, sum(coalesce(reasoning_text, '') != '') rsText,
-     sum(json_valid(tool_calls_json) and json_array_length(tool_calls_json) > 1) multiTool
+     sum(json_valid(tool_calls_json) and json_array_length(tool_calls_json) > 1) multiTool,
+     sum(status = 'returned') returned, sum(status = 'returned' and reasoning_tokens is null) rtUnreported
    from calls group by match_id, player),
-   ds as (select match_id, player, sum(by_whom = 'agent') moves from decisions group by match_id, player)
+   reasoned as (select decision_id, max(reasoning_tokens > 0) billed from calls where decision_id is not null group by decision_id),
+   ds as (select d.match_id, d.player, sum(d.by_whom = 'agent') moves, sum(d.by_whom = 'agent' and r.billed) reasonedMoves
+     from decisions d left join reasoned r on r.decision_id = d.id group by d.match_id, d.player)
    select t.name tournament, m.id matchId, m.name matchName, m.status, m.started_at startedAt, m.seed, m.seed_block_id seedBlock,
      substr(m.code_hash, 1, 8) codeHash, ms.label, ms.player, ms.position, ms.win_share winShare, ms.cash,
-     cs.cost, cs.inp, cs.outp, cs.cr, cs.cw, cs.rt, cs.lat, cs.rsHidden, cs.rsText, cs.multiTool, ds.moves
+     cs.cost, cs.inp, cs.outp, cs.cr, cs.cw, cs.rt, cs.lat, cs.rsHidden, cs.rsText, cs.multiTool, cs.returned, cs.rtUnreported, ds.moves, ds.reasonedMoves
    from match_seats ms join matches m on m.id = ms.match_id join tournaments t on t.id = m.tournament_id
    left join cs on cs.match_id = m.id and cs.player = ms.player
    left join ds on ds.match_id = m.id and ds.player = ms.player
@@ -38,7 +41,7 @@ const decodeSeatRow = Schema.decodeUnknownSync(SeatRow);
 export const decodeLabelled = Schema.decodeUnknownSync(Schema.StructWithRest(Schema.Struct({ label: Schema.String }), [Schema.Record(Schema.String, Schema.Unknown)]));
 
 /** A seat row with its label read as the config the page groups and colours seats by. */
-export const withConfig = ({ label, ...rest }: ReturnType<typeof decodeLabelled>) => ({ ...rest, ...configOfLabel(label) });
+export const withConfig = ({ label, ...rest }: ReturnType<typeof decodeLabelled>) => ({ ...rest, ...configOf(label) });
 
 export interface ArenaPaths {
   readonly regret?: string | undefined;

@@ -19,6 +19,7 @@ from itertools import groupby
 from pathlib import Path
 
 from boot import quantile
+from configs import config_effort, effort_rank
 from docs import splice_between_markers
 from fmt import pct, table
 from load import connect
@@ -28,9 +29,6 @@ DERIVED = Path(__file__).resolve().parents[3] / "_work/arena/analysis/derived"
 
 # The production regret file: the one run the site, the export and the doc tables read (docs/arena/analysis/regret.md, Production scoring).
 PRODUCTION = DERIVED / "regret-rust-bounded-v1-sampled256.sqlite"
-
-EFFORTS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"]
-
 
 @dataclass(frozen=True)
 class Run:
@@ -101,7 +99,7 @@ def load(regret_path: Path, knowledge_path: Path) -> Loaded:
     ).fetchone()[0]
     searched = [row for row in rows if row["status"] == "searched"]
     return Loaded(
-        [Decision(r["model"], r["effort"], r["remaining"], bool(r["shot"]), r["regret"], bool(r["exact"]), bool(r["limited"]), r["round"]) for r in searched],
+        [Decision(r["model"], config_effort(r["model"], r["effort"]), r["remaining"], bool(r["shot"]), r["regret"], bool(r["exact"]), bool(r["limited"]), r["round"]) for r in searched],
         len(rows) - len(searched),
         unscored,
     )
@@ -113,7 +111,7 @@ def points(millionths: float) -> str:
 
 def by_config(decisions: list[Decision]) -> str:
     """Models from the lowest mean regret to the highest, each with its efforts from off to max."""
-    key = lambda d: (d.model, EFFORTS.index(d.effort))
+    key = lambda d: (d.model, effort_rank(d.effort))
     models = {model: summarise(list(group)).mean for model, group in groupby(sorted(decisions, key=key), lambda d: d.model)}
     rows = []
     for (model, effort), group in groupby(sorted(decisions, key=lambda d: (models[d.model], *key(d))), lambda d: (d.model, d.effort)):

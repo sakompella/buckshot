@@ -1,5 +1,6 @@
 import type { ConfigSummary, Pair, Runs, SeedBlocks } from "../aggregates.ts";
-import { baseName, colorOf, DASH, isProvisional, keyOf, labelOf, type MatchRow, matchRows, type SeatFull } from "./data.ts";
+import { effortParts } from "../../arena/same-treatment.ts";
+import { baseName, colorOf, dashOf, isProvisional, keyOf, labelOf, type MatchRow, matchRows, type SeatFull } from "./data.ts";
 import type { Filter, Loaded } from "./model.ts";
 import type { Rating } from "./ratings.ts";
 
@@ -58,7 +59,7 @@ export const modelStatsOf = memoLast((configs: ReadonlyArray<ConfigSummary>): Re
   configs.map((config) => {
     const key = keyOf(config);
 
-    return { ...config, key, label: labelOf(key), color: colorOf(config.model), dash: DASH.get(config.effort) ?? "" };
+    return { ...config, key, label: labelOf(key), color: colorOf(config.model), dash: dashOf(config.effort) };
   }),
 );
 
@@ -80,7 +81,8 @@ const ratingsOf = memoLast((every: ReadonlyArray<ModelStats>): ReadonlyMap<strin
   }));
 });
 
-const passes = (filter: Filter, config: Pick<ConfigSummary, "model" | "effort">): boolean => !filter.offEfforts.includes(config.effort) && !filter.offModels.includes(baseName(config.model));
+/** A same-treatment group is hidden with any of its efforts. */
+const passes = (filter: Filter, config: Pick<ConfigSummary, "model" | "effort">): boolean => !effortParts(config.effort).some((effort) => filter.offEfforts.includes(effort)) && !filter.offModels.includes(baseName(config.model));
 
 /** Each rated config's place by rating, ties by label so places are distinct; a provisional config or one without a rating has none. */
 export const ranksOf = memoLast((pooled: ReadonlyArray<ModelStats>, ratings: ReadonlyMap<string, Rating>): ReadonlyMap<string, number> => {

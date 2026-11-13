@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
 
+from configs import config_label
+
 REPO = Path(__file__).resolve().parents[3]
 DB = str(REPO / "_work/arena/analysis/buckshot.sqlite")
 
@@ -107,7 +109,7 @@ def scored_games(db: sqlite3.Connection) -> list[Game]:
         (_, _, letter_a, share_a, cash_a, a), (_, _, letter_b, _, cash_b, b) = by_match[match]
         letter_of = {letter_a: 1, letter_b: 2}
         games.append(
-            Game(block, cohort, tournament, code, seed, a, b, share_a, cash_a / (cash_a + cash_b), letter_of[starters[match]], shooters[match])
+            Game(block, cohort, tournament, code, seed, config_label(a), config_label(b), share_a, cash_a / (cash_a + cash_b), letter_of[starters[match]], shooters[match])
         )
     return games
 

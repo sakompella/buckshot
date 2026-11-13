@@ -27,7 +27,8 @@ import regret
 from docs import splice_between_markers
 from fmt import pct, table
 from load import DB, connect, require_current, round_winners
-from regret import DERIVED, EFFORTS
+from configs import config_effort, effort_rank
+from regret import DERIVED
 from rules import POINT, ROUNDS, WIN
 from stats import pearson, spearman
 MIN_MATCHES = 20
@@ -90,7 +91,7 @@ def load(db_path: str, regret_path: Path, knowledge_path: Path) -> Loaded:
     for match, player, position, model, effort in knowledge.execute(
         "SELECT p.match_id, p.player, p.position, p.model, p.effort FROM players p JOIN matches m ON m.match_id = p.match_id AND m.status = 'completed' AND m.disposition IS NULL"
     ):
-        seats[match].append((position, player, model, effort))
+        seats[match].append((position, player, model, config_effort(model, effort)))
     blocks = {match: (block, name) for match, block, name in knowledge.execute("SELECT match_id, seed_block_id, name FROM matches")}
     db = connect(str(regret_path), k=knowledge_path)
     rows = db.execute(
@@ -228,7 +229,7 @@ def span(interval: Interval) -> str:
 
 
 def config_table(rows: list[ConfigRow]) -> str:
-    key = lambda r: (r.lost, EFFORTS.index(r.config[1]))
+    key = lambda r: (r.lost, effort_rank(r.config[1]))
     body = [
         [r.config[0], r.config[1], str(r.matches), f"{two(r.lost)} ({span(r.lost_interval)})", two(r.lost / len(ROUNDS)), f"{r.worst:.1f}", f"{r.elo:+.0f}"]
         for r in sorted(rows, key=key)

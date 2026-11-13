@@ -29,7 +29,8 @@ from docs import splice_between_markers
 from boot import DRAWS, interval, weights
 from fmt import pct, table
 from load import connect
-from regret import DERIVED, EFFORTS, PRODUCTION, run_of
+from configs import config_effort, effort_rank
+from regret import DERIVED, PRODUCTION, run_of
 from rules import WIN
 
 FEWEST_FOR_INTERVAL = 20
@@ -113,7 +114,7 @@ def decision(match, ordinal, player, model, effort, block, chamber, source, shot
         else:
             pattern = Pattern.GAVE_TURN_AWAY
         chose = shot == "opponent"
-    return Decision(match, ordinal, player, model, effort, block, pattern, chose, source, remaining == 1, opponent_health is None, search_of(values))
+    return Decision(match, ordinal, player, model, config_effort(model, effort), block, pattern, chose, source, remaining == 1, opponent_health is None, search_of(values))
 
 
 def load(knowledge_path: Path, regret_path: Path) -> list[Decision]:
@@ -169,7 +170,7 @@ def rate(decisions: list[Decision]) -> Rate:
 
 def configs(decisions: list[Decision]) -> list[tuple[list[str], list[Decision]]]:
     """Each config's decisions, then every decision pooled."""
-    keys = sorted({(d.model, d.effort) for d in decisions}, key=lambda c: (c[0], EFFORTS.index(c[1])))
+    keys = sorted({(d.model, d.effort) for d in decisions}, key=lambda c: (c[0], effort_rank(c[1])))
     return [([model, effort], [d for d in decisions if (d.model, d.effort) == (model, effort)]) for model, effort in keys] + [(["all", ""], decisions)]
 
 

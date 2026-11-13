@@ -3,6 +3,7 @@ import { AsyncData } from "foldkit";
 import { createLazy, type Document, type Html, type HtmlBuilder } from "foldkit/html";
 
 import { EFFORTS, effortName } from "../../arena/model-names.ts";
+import { effortParts } from "../../arena/same-treatment.ts";
 import { aboutView, footerView, howView, summaryView } from "./about.ts";
 import { baseName, baseOrder, colorOf, fmtCount, sumOf, unique } from "./data.ts";
 import { tipView } from "./charts.ts";
@@ -52,7 +53,7 @@ const filtersView = (h: H, derived: Derived, filter: Model["filter"], isOpen: bo
   const seats = derived.everyPooled;
   const models = unique(seats.map(({ model }) => model)).toSorted((left, right) => baseOrder(left) - baseOrder(right));
   const names = unique(models.map((model) => baseName(model)));
-  const efforts = EFFORTS.filter((effort) => seats.some((seat) => seat.effort === effort));
+  const efforts = EFFORTS.filter((effort) => seats.some((seat) => effortParts(seat.effort).includes(effort)));
   const summary = [keptOf(names, filter.offModels, "models"), keptOf(efforts.map(effortName), filter.offEfforts.map(effortName), "efforts")].join(" · ");
 
   return h.div(

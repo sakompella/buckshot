@@ -57,6 +57,11 @@ export const ConfigSummary = Schema.Struct({
   scoredLatency: Schema.Number,
   /** Reasoning tokens the providers reported over scored matches; null when no call reported any. */
   scoredReasoning: Schema.NullOr(Schema.Number),
+  /** Scored moves whose calls billed reasoning tokens. */
+  scoredReasonedMoves: Schema.Number,
+  /** Returned calls over scored matches, and those of them whose provider reported no reasoning token count. */
+  scoredReturned: Schema.Number,
+  scoredUnreported: Schema.Number,
   /** Round Elo from one fit over every match (page/ratings.ts); null for a config with no rated match. */
   rating: Schema.NullOr(RatingSchema),
   /** The same fit with each match's round wins corrected for luck (tools/arena/analysis/aivat.py); null without a luck database. */
@@ -423,6 +428,9 @@ export const configSummaries = (seats: ReadonlyArray<SeatFull>, decisions: Pick<
         scoredMoves: scoredSum(({ moves }) => moves),
         scoredLatency: scoredSum(({ lat }) => lat),
         scoredReasoning: scored.some(({ rt }) => rt !== null) ? scoredSum(({ rt }) => rt) : null,
+        scoredReasonedMoves: scoredSum(({ reasonedMoves }) => reasonedMoves),
+        scoredReturned: scoredSum(({ returned }) => returned),
+        scoredUnreported: scoredSum(({ rtUnreported }) => rtUnreported),
         rating: ratings.get(key) ?? null,
         luckRating: luckRatings.get(key) ?? null,
         moveRating: moveRatings.get(key) ?? null,

@@ -13,6 +13,7 @@ from pathlib import Path
 import argparse
 
 import bt
+from configs import config_label
 from docs import splice_between_markers
 from fmt import pct, signed, table
 from load import DB, Game, cohorts, connect, round_winners, scored_games, require_current
@@ -42,7 +43,7 @@ def luck_adjusted_elo(db, luck_path: Path) -> dict[str, float]:
         """SELECT s.match_id, s.player, s.label FROM match_seats s JOIN matches m ON m.id = s.match_id
            WHERE m.status = 'completed' AND m.disposition IS NULL ORDER BY s.match_id, s.position"""
     ):
-        seats.setdefault(match, []).append((player, label))
+        seats.setdefault(match, []).append((player, config_label(label)))
     rows = [
         (first, second, len(winners[match]), sum(w == a for w in winners[match].values()) + luck[(match, a)])
         for match, ((a, first), (_, second)) in seats.items()
