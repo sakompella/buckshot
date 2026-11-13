@@ -58,7 +58,12 @@ export const SeatRow = Schema.Struct({
   rsHidden: Count,
   rsText: Count,
   multiTool: Count,
+  /** Calls that returned, and those of them whose provider reported no reasoning token count. */
+  returned: Count,
+  rtUnreported: Count,
   moves: Count,
+  /** Agent moves whose calls billed reasoning tokens. */
+  reasonedMoves: Count,
 });
 
 export type SeatRow = typeof SeatRow.Type;

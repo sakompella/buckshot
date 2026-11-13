@@ -4,6 +4,7 @@ import type { Consistency } from "./api.ts";
 import { groupBy, quantile } from "./page/data.ts";
 import { readOnly } from "./read-only.ts";
 import { BOOTSTRAP_DRAWS } from "../arena/bootstrap.ts";
+import { configEffort } from "../arena/same-treatment.ts";
 import { mulberry32 } from "../arena/tournament-stats.ts";
 
 // How often a config repeats itself, from the knowledge database that scripts/arena-knowledge.ts builds. An exact_key
@@ -119,7 +120,11 @@ export const openConsistency = (path: string, seedBlocks: ReadonlyMap<string, st
     db
       .query(`select d.match_id matchId, p.model, p.effort, d.exact_key position, d.choice from decisions d join players p on p.match_id = d.match_id and p.player = d.player where d.by_whom = 'agent'`)
       .all()
-      .map((raw) => decodeRow(raw)),
+      .map((raw) => {
+        const row = decodeRow(raw);
+
+        return { ...row, effort: configEffort(row.model, row.effort) };
+      }),
   );
 
   const scoped = rows.flatMap((row) => {

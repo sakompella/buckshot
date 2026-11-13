@@ -18,7 +18,8 @@ import regret
 from docs import splice_between_markers
 from fmt import pct, table
 from load import DB, connect, require_current, round_winners
-from regret import DERIVED, EFFORTS, PRODUCTION, Decision, points
+from configs import EFFORTS, config_effort, effort_rank
+from regret import DERIVED, PRODUCTION, Decision, points
 from rules import ROUNDS
 
 
@@ -38,7 +39,7 @@ def load_results(db_path: str, knowledge_path: Path) -> list[RoundResult]:
         """SELECT p.match_id, p.player, p.model, p.effort FROM players p
            JOIN matches m ON m.match_id = p.match_id AND m.status = 'completed' AND m.disposition IS NULL WHERE p.model IS NOT NULL"""
     ):
-        seats[match][player] = (model, effort)
+        seats[match][player] = (model, config_effort(model, effort))
     results = []
     winners_of = round_winners(connect(db_path))
     for match in seats:
@@ -53,7 +54,7 @@ def cell(values: list[float], show) -> str:
 
 def by_round(results: list[RoundResult], decisions: list[Decision]) -> str:
     """Models from the lowest mean regret to the highest, each with its efforts from off to max (or "all", first). Counts in brackets."""
-    key = lambda config: (config[0], EFFORTS.index(config[1]) if config[1] in EFFORTS else -1)
+    key = lambda config: (config[0], effort_rank(config[1]) if config[1].split("/")[0] in EFFORTS else -1)
     wins: dict[tuple[str, str, int], list[float]] = defaultdict(list)
     regrets: dict[tuple[str, str, int], list[float]] = defaultdict(list)
     for r in results:

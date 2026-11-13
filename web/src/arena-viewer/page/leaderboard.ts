@@ -7,7 +7,8 @@ import { type Cell as CertainCell, talliesOf } from "./certain.ts";
 
 import { noteView, pressable, termsView } from "./charts.ts";
 import { effortName } from "../../arena/model-names.ts";
-import { baseName, CERTAIN_NAMES, costPerMove, effortLabel, fmtCount, fmtPct, fmtPoints, fmtSec, fmtShare, fmtUsd, isClaude, isProvisional, PROVISIONAL_BELOW, reasoningPerMove } from "./data.ts";
+import { isSameTreatment } from "../../arena/same-treatment.ts";
+import { baseName, CERTAIN_NAMES, costPerMove, effortLabel, fmtCount, fmtPct, fmtPoints, fmtSec, fmtShare, fmtUsd, isClaude, isProvisional, PROVISIONAL_BELOW, reasonedShare, reasoningPerMove } from "./data.ts";
 import { type Derived, LUCK_ELO, type ModelStats, MOVE_ELO, ROUND_ELO } from "./derived.ts";
 import { drillView } from "./drill.ts";
 import { itemIconOf } from "./items.ts";
@@ -89,18 +90,19 @@ const NO_REASONING = 0.5;
 const isEffortMismatch = (m: ModelStats): boolean => {
   const reasoning = reasoningPerMove(m);
 
-  return reasoning !== null && m.effort !== "" && (m.effort === "off") === reasoning >= NO_REASONING;
+  return reasoning !== null && m.effort !== "" && !isSameTreatment(m.effort) && (m.effort === "off") === reasoning >= NO_REASONING;
 };
 
-/** Pairs of one model's configs whose efforts differ but whose measured reasoning per move is the same, within 2%. */
-export const sameTreatments = (stats: ReadonlyArray<ModelStats>): ReadonlyArray<readonly [ModelStats, ModelStats]> =>
-  stats.flatMap((m, index) =>
-    stats.slice(index + 1).flatMap((other) => {
-      const [own, theirs] = [reasoningPerMove(m), reasoningPerMove(other)];
+/** A config whose provider reported no reasoning token count on some of its calls: those calls and the share they are of its calls. */
+const unreportedOf = ({ scoredUnreported, scoredReturned }: ModelStats): string | null =>
+  scoredUnreported === 0 ? null : `${scoredUnreported.toLocaleString()} of ${scoredReturned.toLocaleString()} calls (${fmtShare(scoredUnreported / scoredReturned)})`;
 
-      return m.model === other.model && own !== null && theirs !== null && Math.abs(own - theirs) <= NO_REASONING + 0.02 * Math.max(own, theirs) ? [[m, other] as const] : [];
-    }),
-  );
+/** A reasoning cell's mark for a config whose provider did not report every reasoning token count. */
+const unreportedMark = (h: H, m: ModelStats): ReadonlyArray<Html | string> => {
+  const unreported = unreportedOf(m);
+
+  return unreported === null ? [] : [h.span([h.AriaHidden(true)], [" †"]), noteView(h, `no reasoning count reported on ${unreported}`)];
+};
 
 /** A config's dot, model name and effort; an effort the measured reasoning disagrees with is marked as requested. */
 const nameView = (h: H, m: ModelStats): ReadonlyArray<Html | string> => {
@@ -127,7 +129,8 @@ const rowView = (h: H, m: ModelStats, elo: Rating | undefined, hasLuck: boolean,
       ...(hasLuck ? [h.td([h.DataAttribute("label", "round elo")], ratingView(h, m.rating ?? undefined))] : []),
       ...(hasMoveElo ? [h.td([h.DataAttribute("label", "play and move quality")], ratingView(h, m.moveRating ?? undefined))] : []),
       h.td([h.DataAttribute("label", "matches")], [m.scored.toLocaleString(), noteView(h, `${m.win.blocks} seed blocks`)]),
-      h.td([h.DataAttribute("label", "reasoning tok / move")], [fmtCount(reasoningPerMove(m))]),
+      h.td([h.DataAttribute("label", "reasoning tok / move")], [fmtCount(reasoningPerMove(m)), ...unreportedMark(h, m)]),
+      h.td([h.DataAttribute("label", "moves with reasoning")], [fmtShareOrDash(reasonedShare(m)), ...unreportedMark(h, m)]),
       h.td([h.DataAttribute("label", "cost / match")], [fmtUsd(m.avgCost)]),
       h.td([h.Class("barcol")], [eloBarView(h, scale, m, elo)]),
       ...details.map(({ label, note, content }) => h.td([h.Class("detail"), h.DataAttribute("label", label), ], [...content, ...(note === "" ? [] : [noteView(h, note)])])),
@@ -169,6 +172,10 @@ const MATCH_WIN = "Match win vs engine";
 
 const REASONING = "Reasoning tok / move";
 
+const REASONED = "Moves with reasoning";
+
+const fmtShareOrDash = (share: number | null): string => (share === null ? "–" : fmtShare(share));
+
 const headersOf = (ratingName: string, hasRegret: boolean, hasLuck: boolean, hasMoveElo: boolean): ReadonlyArray<string> => [
   "Model",
   ratingName,
@@ -177,6 +184,7 @@ const headersOf = (ratingName: string, hasRegret: boolean, hasLuck: boolean, has
   ...(hasMoveElo ? [MOVE_ELO] : []),
   "Matches",
   REASONING,
+  REASONED,
   "Cost / match",
   "",
   "Match wins vs own opponents",
@@ -199,6 +207,7 @@ const HEADER_TITLES = new Map([
   [MOVE_ELO, "the headline rating combined with the rating predicted by points lost per move, as the move scorer counts them; a config with few matches leans on its moves"],
   [MATCH_WIN, "the chance of winning a match against the depth-2 search engine (Engine/2/20000, rated 0), from the rating: two round wins of three"],
   [REASONING, "reasoning tokens the provider reported per model move, over scored matches"],
+  [REASONED, "the share of scored model moves whose calls billed any reasoning tokens, so a small mean per move reads as a little reasoning on every move or more on a few"],
   ["Cash share", "a config's cash over the match's cash, averaged over scored matches"],
   ["Round wins", "the rounds a config won over the rounds it played"],
   ["Accuracy", ACCURACY_TITLE],
@@ -228,7 +237,8 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
   const configs = inRankOrder(stats, ranks, ratings);
   const scale = eloScaleOf(ratings, ranks);
   const tierOf = (m: ModelStats | undefined) => (m === undefined ? undefined : ratings.get(m.key)?.tier);
-  const same = sameTreatments(configs);
+  const sameTreatment = configs.filter(({ effort }) => isSameTreatment(effort));
+  const unreported = configs.flatMap((m) => [unreportedOf(m)].flatMap((calls) => (calls === null ? [] : [`${m.label} on ${calls}`])));
   const zero = ratings.get(ANCHOR)?.interval ?? null;
 
   return h.div(
@@ -276,7 +286,8 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
       ),
       termsView(h, "What the columns mean", headers.flatMap((label) => (HEADER_TITLES.has(label) ? [[label, HEADER_TITLES.get(label) ?? ""] as const] : []))),
       ...[
-        ...(same.length === 0 ? [] : [`Same measured reasoning under different requested efforts: ${same.map(([one, other]) => `${one.label} and ${other.label} (${fmtCount(reasoningPerMove(one))} and ${fmtCount(reasoningPerMove(other))} tokens per move)`).join("; ")}.`]),
+        ...(sameTreatment.length === 0 ? [] : [`${sameTreatment.map(({ label }) => label).join(", ")}: each is one config from two that requested different efforts and ran the same, billing the same reasoning tokens per call.`]),
+        ...(unreported.length === 0 ? [] : [`† The provider reported no reasoning token count on some calls: ${unreported.join("; ")}. Reasoning figures count only the calls that reported one.`]),
         ...(configs.some(isProvisional) ? [PROVISIONAL_NOTE] : []),
         ...(configs.some(isEffortMismatch) ? ["An effort marked (requested) disagrees with the measured reasoning: reasoning at effort none, or none at another effort."] : []),
       ].map((note) => h.p([h.Class("sub")], [note])),

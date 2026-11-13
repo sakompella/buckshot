@@ -43,6 +43,7 @@ import boot
 import bt
 import numpy as np
 import pandas as pd
+from configs import config_label
 from fmt import table
 from load import DB, connect, require_current, round_one_starters, round_winners
 from regret import DERIVED, PRODUCTION
@@ -158,7 +159,7 @@ def read(db_path: str, knowledge_path: str, regret_path: str) -> Data:
         """SELECT s.match_id, s.player, s.label FROM match_seats s
            JOIN matches m ON m.id = s.match_id WHERE m.status = 'completed' AND m.disposition IS NULL ORDER BY s.match_id, s.position"""
     ):
-        seats[row[0]].append(row[1:])
+        seats[row[0]].append((row[1], config_label(row[2])))
     rows, rounds = [], []
     for match, seed, block in db.execute("SELECT id, seed, seed_block_id FROM matches WHERE status = 'completed' AND disposition IS NULL ORDER BY id"):
         s = seats[match]
