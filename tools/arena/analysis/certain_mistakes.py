@@ -18,20 +18,20 @@ matches (a DeepSeek seat), unfinished matches and fallback moves are left out. W
 
 import argparse
 import json
-import random
 import sqlite3
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
+import numpy as np
 from docs import splice_between_markers
-from boot import DRAWS, interval, weights
+from boot import DRAWS, interval
 from fmt import pct, table
 from load import connect
 from configs import config_effort, effort_rank
 from regret import DERIVED, PRODUCTION, run_of
-from rules import WIN
+from rules import SAW_DAMAGE, WIN
 
 FEWEST_FOR_INTERVAL = 20
 
@@ -79,7 +79,7 @@ class Decision:
 
 def kill_damage(holds_saw: bool) -> int:
     """The most damage a player can do with its next shot: the saw is always free again after a shot."""
-    return 2 if holds_saw else 1
+    return SAW_DAMAGE if holds_saw else 1
 
 
 def guaranteed_win(own_health: int, opponent_health: int, own_saw: bool, opponent_saw: bool) -> bool:
@@ -154,17 +154,17 @@ class Rate:
 
 def rate(decisions: list[Decision]) -> Rate:
     """The share that chose the pattern's move, with a 95% interval from resampling whole seed blocks."""
-    rng = random.Random(0)
     per_block: dict[str, list[int]] = {}
     for d in decisions:
         tally = per_block.setdefault(d.block, [0, 0])
         tally[0] += 1
         tally[1] += d.chose
-    blocks = sorted(per_block)
+    tallies = np.array([per_block[b] for b in sorted(per_block)])
     replicates = []
-    for _ in range(DRAWS if blocks else 0):
-        drawn = weights(blocks, rng)
-        replicates.append(sum(per_block[b][1] * n for b, n in drawn.items()) / sum(per_block[b][0] * n for b, n in drawn.items()))
+    if len(tallies):
+        drawn = np.random.default_rng(0).integers(0, len(tallies), (DRAWS, len(tallies)))
+        totals = tallies[drawn].sum(axis=1)
+        replicates = (totals[:, 1] / totals[:, 0]).tolist()
     return Rate(len(decisions), sum(d.chose for d in decisions), interval(replicates))
 
 
