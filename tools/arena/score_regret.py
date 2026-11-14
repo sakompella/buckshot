@@ -36,10 +36,12 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent / "analysis"))
+REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO / "tools/arena/analysis"))
+sys.path.insert(0, str(REPO / "dev/src"))
+from buckshot_dev import cli  # noqa: E402
 from rules import WIN  # noqa: E402
 
-REPO = Path(__file__).resolve().parents[2]
 FEATURES = "f64,seats-2"
 CLI_EVALUATOR = "bounded-v1-f64"
 EVALUATOR = f"{CLI_EVALUATOR}-unpruned"
@@ -54,6 +56,19 @@ CREATE_REGRET = """CREATE TABLE IF NOT EXISTS regret (
 CREATE_BUILD = """CREATE TABLE IF NOT EXISTS evaluator_build (
     evaluator TEXT, max_depth INTEGER, budget INTEGER, reload TEXT, samples INTEGER,
     source_commit TEXT, features TEXT, binary_sha256 TEXT, decisions INTEGER, seconds REAL, threads INTEGER, finished TEXT, sources_sha256 TEXT)"""
+
+
+# The run's peak memory: SEARCH_BASE_BYTES + threads * budget * SEARCH_BYTES_PER_NODE (docs/arena/README.md, "Heavy jobs").
+# Measured 2026-11-14 on 3 threads: the input writers and Python peaked at 0.8 GB resident (depth 6, 200k, 200 decisions),
+# and buckshot-search at 31 MB (depth 6, 200k), 39 MB (depth 7, 200k), 124 MB (depth 7, 1M), 203 MB (depth 7, 2M), about
+# 30 bytes per thread and node; 40 leaves room. Refit both after a change to the search memo.
+SEARCH_BASE_BYTES = 1 << 30
+SEARCH_BYTES_PER_NODE = 40
+
+
+def declared_memory(settings: "Settings") -> int:
+    """Bytes the run is expected to peak at: what it declares to the `dev heavy` queue and is capped at."""
+    return SEARCH_BASE_BYTES + settings.threads * settings.budget * SEARCH_BYTES_PER_NODE
 
 
 def sources_hash(rust: Path) -> str:
@@ -272,6 +287,8 @@ def main() -> None:
     if args.out is None and args.sampled_out is None:
         p.error("give --sampled-out, --out or both")
     settings = Settings(args.depth, args.budget, args.samples, args.threads, args.jobs)
+    if "BUCKSHOT_HEAVY_MEM" not in os.environ:  # not in the queue yet: run again through it, declaring the memory the settings need
+        sys.exit(cli.heavy_cmd([sys.executable, *sys.argv], str(declared_memory(settings))))
     matches = set(args.matches.read_text().split()) if args.matches else None
     listed = {(m, int(o)) for m, o in (line.split() for line in args.decisions.read_text().splitlines() if line.strip())} if args.decisions else None
     print(json.dumps(score(args.db.resolve(), args.out, args.sampled_out, args.checkout.resolve(), settings, matches, listed, args.work)))
