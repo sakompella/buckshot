@@ -5,14 +5,16 @@
 //!
 //! The memo is indexed by a hash of the key, but every lookup compares the
 //! whole key: two keys that share a hash stay apart, as they do in Bend. The
-//! key is copied out of the beliefs only when an entry is stored.
+//! key is copied out of the beliefs only when an entry is stored. A key holds
+//! each world's state as an index into the memo's [`States`], which keeps
+//! every distinct state once: the beliefs of nearby nodes share most states.
 
-use std::hash::{Hash, Hasher};
+use std::hash::{BuildHasher, Hash, Hasher};
 
 use buckshot_rules::State;
 use hashbrown::HashTable;
 use hashbrown::hash_table::Entry as Slot;
-use rustc_hash::FxHasher;
+use rustc_hash::{FxBuildHasher, FxHasher};
 
 use crate::deal::Sums;
 use crate::num::Bits;
@@ -27,39 +29,82 @@ pub enum Kind {
     Decision,
 }
 
-/// A key with its [`hash`], which a rehash of the memo reuses.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// Every distinct state the memo's keys hold, each once, by index; the index
+/// table holds each state's hash beside its index.
+#[derive(Debug, Default)]
+struct States {
+    all: Vec<State>,
+    index: HashTable<(u64, u32)>,
+}
+
+impl States {
+    fn get(&self, id: u32) -> Option<&State> {
+        self.all.get(usize::try_from(id).ok()?)
+    }
+
+    /// The index of `state`, added if it is new.
+    fn id(&mut self, state: State) -> u32 {
+        let hash = FxBuildHasher.hash_one(state);
+        let Self { all, index } = self;
+        let held = |id: u32| usize::try_from(id).ok().and_then(|id| all.get(id)) == Some(&state);
+        match index.entry(hash, |&(_, id)| held(id), |&(hash, _)| hash) {
+            Slot::Occupied(found) => found.get().1,
+            Slot::Vacant(free) => {
+                #[expect(clippy::expect_used, reason = "a memo never holds 2^32 states")]
+                let id = u32::try_from(all.len()).expect("fewer than 2^32 states");
+                all.push(state);
+                free.insert((hash, id));
+                id
+            }
+        }
+    }
+}
+
+/// A key with its [`hash`], which a rehash of the memo reuses: the public
+/// worlds, then the private ones, each as its weight's bits and its state's
+/// index in [`States`].
+#[derive(Debug)]
 struct Key {
     hash: u64,
     kind: Kind,
-    public: Vec<(Bits, State)>,
-    private: Vec<(Bits, State)>,
+    public: u32,
+    worlds: Box<[(Bits, u32)]>,
 }
 
-fn spelled(worlds: &[World]) -> Vec<(Bits, State)> {
-    worlds.iter().map(|world| (world.weight.bits(), world.state)).collect()
-}
-
-fn same(spelled: &[(Bits, State)], worlds: &[World]) -> bool {
-    spelled.len() == worlds.len()
-        && spelled
+fn same(held: &[(Bits, u32)], worlds: &[World], states: &States) -> bool {
+    held.len() == worlds.len()
+        && held
             .iter()
             .zip(worlds)
-            .all(|((bits, state), world)| *bits == world.weight.bits() && *state == world.state)
+            .all(|(&(bits, id), world)| bits == world.weight.bits() && states.get(id) == Some(&world.state))
 }
 
 impl Key {
-    fn new(hash: u64, kind: Kind, public: &[World], private: &[World]) -> Self {
+    fn new(hash: u64, kind: Kind, beliefs: (&[World], &[World]), states: &mut States) -> Self {
+        let (public, private) = beliefs;
+        #[expect(clippy::expect_used, reason = "a belief never holds 2^32 worlds")]
+        let count = u32::try_from(public.len()).expect("fewer than 2^32 worlds");
         Self {
             hash,
             kind,
-            public: spelled(public),
-            private: spelled(private),
+            public: count,
+            worlds: public
+                .iter()
+                .chain(private)
+                .map(|world| (world.weight.bits(), states.id(world.state)))
+                .collect(),
         }
     }
 
-    fn is(&self, kind: Kind, public: &[World], private: &[World]) -> bool {
-        self.kind == kind && same(&self.public, public) && same(&self.private, private)
+    fn is(&self, kind: Kind, beliefs: (&[World], &[World]), states: &States) -> bool {
+        let (public, private) = beliefs;
+        let Some((held_public, held_private)) = usize::try_from(self.public)
+            .ok()
+            .and_then(|count| self.worlds.split_at_checked(count))
+        else {
+            return false;
+        };
+        self.kind == kind && same(held_public, public, states) && same(held_private, private, states)
     }
 }
 
@@ -120,6 +165,7 @@ pub enum Stored {
 pub struct Tally {
     pub nodes: u64,
     memo: HashTable<(Key, Stored)>,
+    states: States,
     pub cached: Cached,
 }
 
@@ -127,27 +173,27 @@ impl Tally {
     /// What is stored under the key of `kind` and the beliefs; `hash` is its [`hash`].
     pub fn find(&self, hash: u64, kind: Kind, public: &[World], private: &[World]) -> Option<Stored> {
         self.memo
-            .find(hash, |(key, _)| key.is(kind, public, private))
+            .find(hash, |(key, _)| key.is(kind, (public, private), &self.states))
             .map(|(_, stored)| *stored)
     }
 
     /// `keep`: stores under the key, in place of what it held before.
     pub fn keep(&mut self, hash: u64, kind: Kind, beliefs: (&[World], &[World]), stored: Stored) {
-        let (public, private) = beliefs;
-        match self.memo.entry(hash, |(key, _)| key.is(kind, public, private), |(key, _)| key.hash) {
+        let Self { memo, states, cached, .. } = self;
+        match memo.entry(hash, |(key, _)| key.is(kind, beliefs, states), |(key, _)| key.hash) {
             Slot::Occupied(mut held) => {
                 held.get_mut().1 = stored;
                 return;
             }
             Slot::Vacant(free) => {
-                free.insert((Key::new(hash, kind, public, private), stored));
+                free.insert((Key::new(hash, kind, beliefs, states), stored));
             }
         }
         match stored {
             #[cfg(feature = "f32")]
-            Stored::Decision(_) => self.cached.entries = self.cached.entries.saturating_add(1),
-            Stored::Box(_) => self.cached.entries = self.cached.entries.saturating_add(1),
-            Stored::Deal(_) => self.cached.deals = self.cached.deals.saturating_add(1),
+            Stored::Decision(_) => cached.entries = cached.entries.saturating_add(1),
+            Stored::Box(_) => cached.entries = cached.entries.saturating_add(1),
+            Stored::Deal(_) => cached.deals = cached.deals.saturating_add(1),
         }
     }
 
