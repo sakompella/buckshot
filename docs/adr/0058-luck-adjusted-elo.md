@@ -6,7 +6,7 @@ The headline rating is Round Elo (ADR-0056) with the luck of each round's chance
 
 ## Considered Options
 
-- **Raw Round Elo.** Unbiased, but a round's result is mostly luck, so intervals are wide. The adjustment cuts the median 95% half-width from about 36 to about 30 Elo.
+- **Raw Round Elo.** Unbiased, but a round's result is mostly luck, so intervals are wide. The adjustment cuts the median 90% half-width from about 30 to about 25 Elo.
 - **Decision terms too.** Needs a model of the players' policies, which are unknown. The correction uses chance events only.
 
 ## Consequences
