@@ -44,15 +44,6 @@ class Regression(unittest.TestCase):
         self.assertAlmostEqual(line.intercept, intercept, places=5)
         self.assertAlmostEqual(line.r2, 1.0)
 
-    @given(st.integers(1, 5).flatmap(lambda n: st.tuples(st.lists(st.lists(st.floats(-1, 1), min_size=n, max_size=n), min_size=n, max_size=n), st.lists(finite, min_size=n, max_size=n))))
-    def test_solve_satisfies_the_system(self, system):
-        matrix, b = system
-        n = len(b)
-        dominant = [[row[c] + (n + 1) * (c == r) for c in range(n)] for r, row in enumerate(matrix)]
-        x = bt.solve(dominant, b)
-        for row, target in zip(dominant, b):
-            self.assertAlmostEqual(sum(a * v for a, v in zip(row, x)), target, delta=1e-6 * (1 + abs(target)))
-
 
 class Resampling(unittest.TestCase):
     @given(st.lists(st.text(max_size=3), min_size=1, max_size=30, unique=True), st.integers())

@@ -32,11 +32,6 @@ ELO = 400 / math.log(10)  # Elo points per unit of theta
 ANCHOR = "Engine/2/20000"
 
 
-def solve(a: list[list[float]], b: list[float]) -> list[float]:
-    """Solves a x = b."""
-    return np.linalg.solve(np.array(a), np.array(b)).tolist()
-
-
 def sigmoid(x: float) -> float:
     return 1 / (1 + math.exp(-x)) if x >= 0 else math.exp(x) / (1 + math.exp(x))
 
@@ -118,20 +113,19 @@ def fit(cells: Cells, tau: float = 0.0, seat: bool = False, start: bool = False,
         if tau > 0 and (pair_terms is None or (low, high) in pair_terms):
             row[column[("delta", (low, high))]] = 1.0 if first == low else -1.0
         design[key] = row
-    x = [0.0] * size
+    games, shares = np.array(list(cells.values())).reshape(-1, 2).T
+    matrix = np.zeros((len(cells), size))
+    for r, key in enumerate(cells):
+        for i, v in design[key].items():
+            matrix[r, i] = v
+    prior = np.array(penalty)
+    x = np.zeros(size)
     for _ in range(100):
-        grad = [-penalty[i] * x[i] for i in range(size)]
-        hess = [[penalty[i] if i == j else 0.0 for j in range(size)] for i in range(size)]
-        for key, (n, wins) in cells.items():
-            row = design[key]
-            p = sigmoid(sum(v * x[i] for i, v in row.items()))
-            for i, vi in row.items():
-                grad[i] += (wins - n * p) * vi
-                for j, vj in row.items():
-                    hess[i][j] += n * p * (1 - p) * vi * vj
-        step = solve(hess, grad)
-        x = [a + b for a, b in zip(x, step)]
-        if max(abs(s) for s in step) < 1e-10:
+        p = 0.5 * (1 + np.tanh(matrix @ x / 2))
+        grad = matrix.T @ (shares - games * p) - prior * x
+        step = np.linalg.solve((matrix.T * (games * p * (1 - p))) @ matrix + np.diag(prior), grad)
+        x += step
+        if np.abs(step).max() < 1e-10:
             break
     out = Fit({name: x[column[("theta", name)]] for name in names})
     if seat:
