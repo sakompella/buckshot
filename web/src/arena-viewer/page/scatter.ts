@@ -86,7 +86,7 @@ export const AXES: Readonly<Record<ScatterAxis, Axis>> = {
   },
   cost: {
     label: "Cost",
-    axisLabel: "Cost / match (USD, log)",
+    axisLabel: "Cost / match (USD, log scale)",
     isLog: true,
     valueOf: (m) => positive(m.avgCost),
     format: fmtUsd,

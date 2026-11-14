@@ -28,7 +28,7 @@ const TOUR: ReadonlyArray<TourStep> = [
     anchor: "summary",
     focus: "#summary",
     title: "Results at a glance",
-    text: `The first chart shows every ranked config's Round Elo with its ${INTERVAL_PERCENT} interval, best first. When two lines overlap, the data cannot tell those configs apart. The dashed lines are the two search engines, fixed players to compare against.`,
+    text: `The first chart shows every ranked config's rating with its ${INTERVAL_PERCENT} interval, best first. When two lines overlap, the data cannot tell those configs apart. The dashed lines are the fixed reference players that About explains.`,
   },
   {
     anchor: "how",
@@ -45,8 +45,8 @@ const TOUR: ReadonlyArray<TourStep> = [
   {
     anchor: "scatter",
     focus: "#scatter .card",
-    title: "Cost, Moves, Tokens, Accuracy",
-    text: "Each point is a config: one model at one effort. It is placed by its Round Elo against one of: cost per match, model moves per match, output tokens per match, or accuracy. Accuracy is scored the way lichess scores a game, from how much win chance each move gave up (higher is better, 100 is perfect). Click a point to open that config's details under the chart.",
+    title: "Reasoning, Cost, Moves, Tokens, Accuracy",
+    text: "Each point is a config: one model at one effort. It is placed by its rating against one of: reasoning tokens per move, cost per match, model moves per match, output tokens per match, or accuracy. Accuracy is scored the way lichess scores a game, from how much win chance each move gave up (higher is better, 100 is perfect). Click a point to open that config's details under the chart.",
   },
   {
     anchor: "breakdown",
@@ -82,7 +82,7 @@ const TOUR: ReadonlyArray<TourStep> = [
     anchor: "leaderboards",
     focus: "#leaderboards .lbt thead, #leaderboards .lbt tbody tr:first-child",
     title: "Leaderboard columns",
-    text: "The tables come near the end of the page. For each config the leaderboard gives its Round Elo, one Bradley-Terry rating pooled over every tournament, drawn as a dot with its interval. Then come its matches, cost per match, match wins against its own opponents, round wins, cash share, accuracy, cost per move, time per move, output tokens and favorite item.",
+    text: "The tables come near the end of the page. For each config the leaderboard gives its rating, pooled over every tournament and drawn as a dot with its interval. The other columns are its chance of winning a match against the depth-7 search engine, its other ratings, matches, reasoning, cost per match, match wins against its own opponents, round wins, cash share, accuracy, p99 points lost, cost per move, time per move, output tokens and favorite item.",
   },
   {
     anchor: "leaderboards",
