@@ -6,7 +6,7 @@ Ratings, pair effects, seat and round 1 starter effects for the scored arena mat
 
 ## Findings
 
-**Ratings are pooled.** One Bradley-Terry fit covers every scored match of every tournament, so all 49 configs share one Elo scale with the depth-2 search engine (Engine/2/20000) at 0, as in the viewer, so a new config does not move the others. Tournament 4 gave every older config games against other models, so no rating leans on an assumption that effort gaps carry across opponents. The 13 newest configs have 80 matches each against changing opponents, so their intervals are 205 to 234 Elo wide. `results.md` and the viewer rank by the luck-adjusted Round Elo (see below); the match ratings here are a derived view of the same results, about 1.6 times as wide. A second fit on pot share (a config's cash over the match's cash, which credits the round prizes a loser banks) gives the cash rating. Cohorts are only a way to group matches. A cohort is one kind of comparison, pooled over every tournament: Cross-model (every match between different models) or one model's efforts (every match of that model against itself), as in the viewer. There are ten: Cross-model and the efforts of Astra, Haiku 4.5, Haiku 5.5, Luna, Opus, Sol, Sonnet, Terra and Terra 6.1.
+**Ratings are pooled.** One Bradley-Terry fit covers every scored match of every tournament, so all 49 configs share one Elo scale with the depth-7 search engine (Engine/7/2000000/sampled) at 0, as in the viewer, so a new config does not move the others. Tournament 4 gave every older config games against other models, so no rating leans on an assumption that effort gaps carry across opponents. The 13 newest configs have 80 matches each against changing opponents, so their intervals are 205 to 234 Elo wide. `results.md` and the viewer rank by the luck-adjusted Round Elo (see below); the match ratings here are a derived view of the same results, about 1.6 times as wide. A second fit on pot share (a config's cash over the match's cash, which credits the round prizes a loser banks) gives the cash rating. Cohorts are only a way to group matches. A cohort is one kind of comparison, pooled over every tournament: Cross-model (every match between different models) or one model's efforts (every match of that model against itself), as in the viewer. There are ten: Cross-model and the efforts of Astra, Haiku 4.5, Haiku 5.5, Luna, Opus, Sol, Sonnet, Terra and Terra 6.1.
 - **Coverage.** The Cross-model cohort has 49 entrants and 1,860 matches over 477 of the 1,176 pairs, 1 to 41 matches per pair. Each older effort cohort is a round robin with 20 matches per pair. Opus efforts plays all 15 pairs (2 to 20 matches each), Terra 6.1 efforts all 15 (1 to 3 matches each) and Astra efforts 5 of 6 (1 to 2 matches each). Tournament 5 is finished; the scheduled matches it did not play stay unstarted in the table below.
 - **Cross-model medium configs**, win rating (95% CI by seed blocks): astra +190 (+110 to +278), opus +117 (+41 to +196), sol +107 (+26 to +196), haiku 5.5 +48 (-26 to +128), sonnet +45 (-29 to +131), terra -19 (-104 to +68), haiku 4.5 -145 (-225 to -64), luna -219 (-317 to -126). Astra leads and luna and haiku 4.5 trail; neighbouring intervals overlap. Drawing seeds instead of blocks moves the intervals modestly.
 - **Top and bottom.** Every config has 80 or more matches. Opus max +258 (+155 to +387), Terra 6.1 max +243 (+137 to +360), Astra high +220 (+118 to +352), Sonnet max +213 (+119 to +321) and Opus xhigh +209 (+122 to +308) lead, and their intervals overlap. Haiku 4.5 off -342, luna low -304 and luna off -299 trail. Intervals are 154 to 258 Elo wide.
@@ -33,7 +33,7 @@ Ratings, pair effects, seat and round 1 starter effects for the scored arena mat
 - Inconclusive either way, as `results.md` says.
 
 ## Method
-- **Ratings:** the first-seated entrant wins with probability 1/(1 + exp(-(theta_first - theta_second))), and a share w counts as w wins and 1 - w losses. One fit covers every scored match of every tournament. A mean-zero Gaussian prior on theta (standard deviation 3) regularizes the fit; it also shrinks rating differences slightly. Ratings are reported on the Elo scale with the depth-2 search engine (Engine/2/20000) at 0, which is what `web/src/arena-viewer/page/ratings.ts` computes. The win rating counts win shares; the cash rating is the same fit on pot shares. Intervals draw seed blocks 2,000 times, refitting each draw, as the viewer does. Each draw is centred on the mean entrant and moved by the point fit's shift, so an interval leaves out the engine's own noise; the engine's interval is the uncertainty of the 0.
+- **Ratings:** the first-seated entrant wins with probability 1/(1 + exp(-(theta_first - theta_second))), and a share w counts as w wins and 1 - w losses. One fit covers every scored match of every tournament. A mean-zero Gaussian prior on theta (standard deviation 3) regularizes the fit; it also shrinks rating differences slightly. Ratings are reported on the Elo scale with the depth-7 search engine (Engine/7/2000000/sampled) at 0, which is what `web/src/arena-viewer/page/ratings.ts` computes. The win rating counts win shares; the cash rating is the same fit on pot shares. Intervals draw seed blocks 2,000 times, refitting each draw, as the viewer does. Each draw is centred on the mean entrant and moved by the point fit's shift, so an interval leaves out the engine's own noise; the engine's interval is the uncertainty of the 0.
 - **Observed against fitted:** for each pair in a cohort, the observed share of the alphabetically first entrant minus the sum of its pooled-fit win probabilities over the pair's matches, as a share, with each resample refitted. Descriptive only (see above).
 - **Pair effects:** a term delta per pair with a prior of standard deviation tau, tau in {0 (ratings only), 0.1, 0.2, 0.4, 0.8, 1.6}, fitted within a cohort. Scored by mean log loss on held-out blocks (5 repeats of 10-fold cross-validation); the nested row picks tau by 5-fold cross-validation inside each training set. The verdict needs the lower end of the 95% interval of the gain (drawn over blocks) above 0.
 - **Seat and starter:** for a complete block, position 1's share is the mean over its two matches, which cancels who the entrants are. The starter's share is taken the same way. The two effects are the position and starter terms of an additive split of those block shares by which position starts, weighting the two starts equally. Headline intervals draw seeds.
@@ -53,7 +53,7 @@ Ratings, pair effects, seat and round 1 starter effects for the scored arena mat
 
 | cohort | entrants | scored matches | complete / half blocks | pairs played | matches per pair min / median / max | connected | scheduled by status |
 |---|---|---|---|---|---|---|---|
-| Cross-model | 47 | 3310 | 1300 / 710 | 441/1081 | 1 / 3 / 466 | yes | 3310 completed, 2 partial, 5 partial (skipped), 138 skipped (skipped), 935 unstarted |
+| Cross-model | 48 | 4432 | 1861 / 710 | 444/1128 | 1 / 3 / 1040 | yes | 3312 completed, 2 partial, 5 partial (skipped), 138 skipped (skipped), 973 unstarted |
 | claude-haiku-4-5-20251001 efforts | 4 | 200 | 100 / 0 | 7/6 | 20 / 20 / 40 | yes | 200 completed |
 | claude-haiku-5-5 efforts | 6 | 300 | 150 / 0 | 15/15 | 20 / 20 / 20 | yes | 300 completed |
 | claude-opus-5-5 efforts | 5 | 137 | 58 / 21 | 11/10 | 2 / 10 / 24 | yes | 137 completed, 21 unstarted |
@@ -66,57 +66,58 @@ Ratings, pair effects, seat and round 1 starter effects for the scored arena mat
 
 ### Pooled ratings
 
-| config | wins/matches = win share | rating (Elo, depth-2 engine at 0) | 95% CI, seed blocks drawn | 95% CI, seeds drawn (sensitivity) | pot share | cash rating (Elo, depth-2 engine at 0) | 95% CI, seed blocks drawn |
+| config | wins/matches = win share | rating (Elo, depth-7 engine at 0) | 95% CI, seed blocks drawn | 95% CI, seeds drawn (sensitivity) | pot share | cash rating (Elo, depth-7 engine at 0) | 95% CI, seed blocks drawn |
 |---|---|---|---|---|---|---|---|
-| claude-opus-5-5-max | 59/80 = 73.8% | +231 | +156 to +326 | +156 to +340 | 64.4% | +132 | +90 to +176 |
-| gpt-6.1-terra-max | 68/100 = 68.0% | +198 | +125 to +275 | +126 to +275 | 62.4% | +124 | +84 to +166 |
-| gpt-6-astra-high | 68/100 = 68.0% | +190 | +125 to +268 | +122 to +267 | 64.0% | +131 | +94 to +168 |
-| claude-sonnet-5-5-max | 94/140 = 67.1% | +183 | +120 to +251 | +101 to +289 | 62.3% | +119 | +83 to +154 |
-| claude-opus-5-5-xhigh | 89/170 = 52.4% | +164 | +114 to +215 | +114 to +217 | 52.4% | +107 | +81 to +134 |
-| gpt-6-astra-medium | 169/254 = 66.5% | +162 | +121 to +205 | +123 to +203 | 60.2% | +98 | +76 to +121 |
-| Engine/6/20000/sampled | 86/156 = 55.1% | +160 | +109 to +216 | +109 to +221 | 53.4% | +102 | +72 to +133 |
-| gpt-6.1-terra-xhigh | 71/102 = 69.6% | +158 | +91 to +231 | +93 to +233 | 60.2% | +74 | +37 to +111 |
-| gpt-6.1-sol-max | 80/142 = 56.3% | +155 | +104 to +213 | +104 to +214 | 54.5% | +109 | +81 to +140 |
-| claude-opus-5-5-high | 47/80 = 58.8% | +150 | +73 to +230 | +70 to +245 | 54.7% | +88 | +43 to +130 |
-| claude-sonnet-5-5-xhigh | 105/176 = 59.7% | +139 | +86 to +193 | +81 to +207 | 53.7% | +67 | +39 to +94 |
-| gpt-6.1-terra-medium | 87/130 = 66.9% | +138 | +73 to +203 | +76 to +204 | 59.8% | +74 | +39 to +109 |
-| gpt-6-astra-low | 52/80 = 65.0% | +133 | +60 to +218 | +61 to +219 | 59.4% | +76 | +38 to +117 |
-| gpt-6-astra-off | 51/80 = 63.7% | +113 | +39 to +202 | +37 to +199 | 55.9% | +44 | +4 to +86 |
-| gpt-6.1-sol-low | 51/98 = 52.0% | +103 | +33 to +178 | +33 to +176 | 50.9% | +74 | +33 to +116 |
-| gpt-6.1-sol-xhigh | 52/101 = 51.5% | +100 | +34 to +167 | +33 to +170 | 52.4% | +82 | +46 to +119 |
-| claude-opus-5-5-medium | 188/334 = 56.3% | +96 | +58 to +134 | +60 to +134 | 53.8% | +60 | +42 to +79 |
-| gpt-6.1-terra-high | 51/82 = 62.2% | +84 | +5 to +177 | +3 to +168 | 59.1% | +56 | +16 to +102 |
-| claude-haiku-5-5-max | 68/111 = 61.3% | +83 | +20 to +147 | +7 to +172 | 58.7% | +58 | +26 to +88 |
-| gpt-6.1-sol-medium | 155/271 = 57.2% | +82 | +43 to +124 | +28 to +143 | 56.8% | +71 | +49 to +93 |
-| gpt-6.1-sol-high | 47/99 = 47.5% | +75 | +9 to +141 | +6 to +140 | 48.0% | +56 | +18 to +96 |
-| claude-haiku-5-5-xhigh | 86/158 = 54.4% | +71 | +17 to +125 | +14 to +121 | 50.4% | +25 | -4 to +52 |
-| gpt-6.1-terra-off/low | 145/242 = 59.9% | +69 | +25 to +115 | +21 to +114 | 55.3% | +33 | +12 to +56 |
-| claude-opus-5-5-off/low | 83/160 = 51.9% | +56 | -3 to +116 | +0 to +116 | 54.1% | +52 | +22 to +81 |
-| claude-haiku-5-5-high | 118/223 = 52.9% | +46 | -3 to +95 | +1 to +90 | 50.8% | +19 | -6 to +44 |
-| claude-sonnet-5-5-high | 75/161 = 46.6% | +46 | -15 to +107 | -14 to +107 | 46.9% | +19 | -13 to +52 |
-| claude-haiku-5-5-medium | 229/444 = 51.6% | +28 | -1 to +57 | +1 to +56 | 50.6% | +15 | +0 to +31 |
-| claude-sonnet-5-5-medium | 175/364 = 48.1% | +22 | -14 to +62 | -27 to +67 | 48.8% | +15 | -4 to +35 |
-| gpt-5.6-terra-xhigh | 53/93 = 57.0% | +22 | -55 to +106 | -52 to +104 | 55.1% | +47 | +7 to +89 |
-| gpt-5.6-terra-max | 52/90 = 57.8% | +18 | -69 to +104 | -44 to +80 | 53.8% | +34 | -10 to +76 |
-| gpt-6-luna-xhigh | 79/115 = 68.7% | +8 | -61 to +78 | -47 to +63 | 63.6% | +17 | -22 to +58 |
-| claude-haiku-5-5-low | 137/278 = 49.3% | +0 | -47 to +46 | -43 to +43 | 51.0% | +8 | -16 to +31 |
-| Engine/2/20000 | 806/1294 = 62.3% | +0 | -30 to +28 | -30 to +29 | 58.4% | +0 | -15 to +15 |
-| claude-sonnet-5-5-off | 65/164 = 39.6% | -3 | -60 to +50 | -60 to +47 | 42.4% | -11 | -40 to +18 |
-| gpt-6-luna-max | 75/112 = 67.0% | -8 | -81 to +69 | -71 to +55 | 63.2% | +13 | -29 to +54 |
-| gpt-5.6-terra-medium | 119/259 = 45.9% | -42 | -86 to +1 | -89 to +3 | 48.0% | -8 | -30 to +16 |
-| gpt-6-luna-high | 116/218 = 53.2% | -46 | -103 to +11 | -105 to +14 | 51.6% | -29 | -57 to -1 |
-| claude-sonnet-5-5-low | 50/159 = 31.4% | -56 | -123 to +0 | -120 to -2 | 39.5% | -28 | -61 to +4 |
-| gpt-5.6-terra-high | 40/91 = 44.0% | -60 | -140 to +16 | -124 to -8 | 49.5% | +11 | -30 to +54 |
-| gpt-5.6-terra-low | 37/91 = 40.7% | -77 | -162 to -3 | -150 to -5 | 45.5% | -11 | -53 to +28 |
-| claude-haiku-5-5-off | 221/668 = 33.1% | -132 | -166 to -99 | -171 to -102 | 38.4% | -86 | -104 to -69 |
-| claude-haiku-4-5-20251001-medium | 123/358 = 34.4% | -169 | -214 to -129 | -218 to -131 | 38.6% | -102 | -124 to -80 |
-| claude-haiku-4-5-20251001-minimal/low | 112/292 = 38.4% | -215 | -270 to -169 | -272 to -169 | 42.2% | -120 | -147 to -95 |
-| gpt-6-luna-medium | 101/398 = 25.4% | -227 | -272 to -186 | -271 to -187 | 33.9% | -129 | -151 to -110 |
-| claude-haiku-4-5-20251001-high | 47/135 = 34.8% | -259 | -334 to -197 | -365 to -190 | 42.0% | -131 | -164 to -100 |
-| gpt-6-luna-off/low | 77/396 = 19.4% | -308 | -367 to -259 | -376 to -258 | 28.7% | -184 | -211 to -159 |
-| claude-haiku-4-5-20251001-off | 28/125 = 22.4% | -367 | -454 to -291 | -470 to -282 | 32.6% | -200 | -236 to -167 |
+| claude-opus-5-5-max | 59/82 = 72.0% | +27 | -49 to +116 | -57 to +131 | 63.2% | +10 | -32 to +55 |
+| gpt-6.1-terra-max | 68/100 = 68.0% | +10 | -62 to +86 | -61 to +88 | 62.4% | +10 | -31 to +52 |
+| gpt-6-astra-high | 68/100 = 68.0% | +2 | -62 to +81 | -67 to +82 | 64.0% | +17 | -18 to +53 |
+| Engine/7/2000000/sampled | 829/1120 = 74.0% | +0 | -34 to +34 | -35 to +33 | 65.3% | +0 | -16 to +17 |
+| claude-sonnet-5-5-max | 96/142 = 67.6% | -1 | -64 to +67 | -83 to +102 | 62.6% | +8 | -28 to +43 |
+| Engine/6/20000/sampled | 127/236 = 53.8% | -16 | -58 to +31 | -57 to +30 | 52.8% | -4 | -27 to +21 |
+| claude-opus-5-5-xhigh | 89/170 = 52.4% | -26 | -77 to +30 | -75 to +29 | 52.4% | -7 | -35 to +20 |
+| gpt-6-astra-medium | 169/254 = 66.5% | -30 | -69 to +14 | -69 to +12 | 60.2% | -17 | -39 to +6 |
+| gpt-6.1-sol-max | 80/142 = 56.3% | -33 | -84 to +17 | -88 to +27 | 54.5% | -4 | -31 to +22 |
+| gpt-6.1-terra-xhigh | 71/102 = 69.6% | -35 | -102 to +40 | -101 to +39 | 60.2% | -42 | -80 to -3 |
+| claude-opus-5-5-high | 47/80 = 58.8% | -42 | -116 to +39 | -126 to +51 | 54.7% | -28 | -72 to +16 |
+| claude-sonnet-5-5-xhigh | 105/176 = 59.7% | -50 | -101 to +5 | -111 to +18 | 53.7% | -47 | -73 to -20 |
+| gpt-6.1-terra-medium | 87/130 = 66.9% | -57 | -118 to +8 | -118 to +10 | 59.8% | -43 | -76 to -9 |
+| gpt-6-astra-low | 52/80 = 65.0% | -59 | -132 to +23 | -135 to +21 | 59.4% | -40 | -77 to +1 |
+| gpt-6-astra-off | 51/80 = 63.7% | -80 | -159 to +3 | -159 to +8 | 55.9% | -72 | -114 to -32 |
+| gpt-6.1-sol-low | 51/98 = 52.0% | -87 | -156 to -13 | -153 to -16 | 50.9% | -41 | -79 to -1 |
+| gpt-6.1-sol-xhigh | 52/101 = 51.5% | -91 | -157 to -24 | -157 to -24 | 52.4% | -33 | -68 to +5 |
+| claude-opus-5-5-medium | 188/334 = 56.3% | -96 | -132 to -58 | -130 to -58 | 53.8% | -55 | -73 to -36 |
+| gpt-6.1-terra-high | 51/82 = 62.2% | -109 | -187 to -18 | -190 to -20 | 59.1% | -59 | -101 to -12 |
+| gpt-6.1-sol-medium | 155/271 = 57.2% | -110 | -154 to -67 | -165 to -51 | 56.8% | -45 | -68 to -21 |
+| claude-haiku-5-5-max | 68/111 = 61.3% | -111 | -173 to -49 | -192 to -25 | 58.7% | -59 | -88 to -29 |
+| gpt-6.1-sol-high | 47/99 = 47.5% | -116 | -179 to -53 | -186 to -53 | 48.0% | -59 | -97 to -21 |
+| claude-haiku-5-5-xhigh | 86/158 = 54.4% | -122 | -173 to -71 | -182 to -74 | 50.4% | -92 | -118 to -63 |
+| gpt-6.1-terra-off/low | 145/242 = 59.9% | -125 | -171 to -79 | -168 to -81 | 55.3% | -84 | -106 to -62 |
+| claude-opus-5-5-off/low | 83/160 = 51.9% | -137 | -192 to -79 | -193 to -80 | 54.1% | -64 | -94 to -34 |
+| claude-sonnet-5-5-high | 75/161 = 46.6% | -145 | -205 to -83 | -204 to -88 | 46.9% | -96 | -129 to -62 |
+| claude-haiku-5-5-high | 118/223 = 52.9% | -149 | -195 to -101 | -193 to -105 | 50.8% | -98 | -123 to -73 |
+| claude-haiku-5-5-medium | 229/444 = 51.6% | -165 | -197 to -135 | -192 to -139 | 50.6% | -101 | -117 to -85 |
+| claude-sonnet-5-5-medium | 175/364 = 48.1% | -169 | -207 to -131 | -218 to -123 | 48.8% | -100 | -119 to -81 |
+| gpt-5.6-terra-xhigh | 53/93 = 57.0% | -170 | -250 to -90 | -258 to -97 | 55.1% | -69 | -107 to -30 |
+| gpt-5.6-terra-max | 52/90 = 57.8% | -175 | -259 to -86 | -240 to -110 | 53.8% | -82 | -123 to -39 |
+| gpt-6-luna-xhigh | 79/115 = 68.7% | -187 | -256 to -117 | -239 to -133 | 63.6% | -100 | -140 to -60 |
+| claude-sonnet-5-5-off | 65/164 = 39.6% | -194 | -249 to -139 | -249 to -144 | 42.4% | -126 | -155 to -96 |
+| claude-haiku-5-5-low | 137/278 = 49.3% | -194 | -239 to -152 | -235 to -153 | 51.0% | -109 | -132 to -86 |
+| Engine/2/20000 | 1056/2334 = 45.2% | -197 | -224 to -171 | -225 to -171 | 47.3% | -118 | -132 to -105 |
+| gpt-6-luna-max | 75/112 = 67.0% | -203 | -270 to -129 | -266 to -144 | 63.2% | -104 | -145 to -63 |
+| gpt-5.6-terra-medium | 119/259 = 45.9% | -234 | -281 to -192 | -280 to -188 | 48.0% | -123 | -145 to -100 |
+| gpt-6-luna-high | 116/218 = 53.2% | -242 | -299 to -186 | -300 to -179 | 51.6% | -147 | -176 to -119 |
+| claude-sonnet-5-5-low | 50/159 = 31.4% | -247 | -313 to -190 | -305 to -192 | 39.5% | -143 | -176 to -111 |
+| gpt-5.6-terra-high | 40/91 = 44.0% | -252 | -334 to -173 | -320 to -199 | 49.5% | -105 | -147 to -62 |
+| gpt-5.6-terra-low | 37/91 = 40.7% | -270 | -353 to -194 | -345 to -198 | 45.5% | -127 | -170 to -88 |
+| claude-haiku-5-5-off | 221/668 = 33.1% | -328 | -363 to -296 | -363 to -297 | 38.4% | -204 | -222 to -187 |
+| claude-haiku-4-5-20251001-medium | 123/358 = 34.4% | -362 | -403 to -322 | -410 to -324 | 38.6% | -218 | -239 to -198 |
+| claude-haiku-4-5-20251001-minimal/low | 112/292 = 38.4% | -409 | -463 to -361 | -463 to -364 | 42.2% | -236 | -264 to -213 |
+| gpt-6-luna-medium | 101/398 = 25.4% | -421 | -468 to -381 | -466 to -381 | 33.9% | -246 | -268 to -227 |
+| claude-haiku-4-5-20251001-high | 47/135 = 34.8% | -453 | -523 to -389 | -554 to -379 | 42.0% | -247 | -280 to -216 |
+| gpt-6-luna-off/low | 77/396 = 19.4% | -503 | -561 to -455 | -565 to -455 | 28.7% | -302 | -329 to -277 |
+| claude-haiku-4-5-20251001-off | 28/125 = 22.4% | -561 | -653 to -486 | -666 to -477 | 32.6% | -317 | -352 to -283 |
 
-With a seat term and a round 1 starter term in the fit (position 1 +15 Elo, the starter +39 Elo) the largest rating change is 14.3 Elo.
+With a seat term and a round 1 starter term in the fit (position 1 +23 Elo, the starter +36 Elo) the largest rating change is 11.0 Elo.
 
 
 ### Observed pairs against the pooled ratings
@@ -127,602 +128,605 @@ Win share is the first-named entrant's. Difference is observed minus fitted, in 
 
 | pair | wins/matches = observed share | fitted share | difference (pp) | bootstrap range of the difference (descriptive) |
 |---|---|---|---|---|
-| Engine/2/20000 vs claude-haiku-4-5-20251001-medium | 9/18 = 50.0% | 72.5% | -22.5 | -45.0 to -1.1 |
-| Engine/2/20000 vs claude-haiku-5-5-high | 21/50 = 42.0% | 43.5% | -1.5 | -13.6 to +11.0 |
-| Engine/2/20000 vs claude-haiku-5-5-low | 45/84 = 53.6% | 50.0% | +3.6 | -4.7 to +12.0 |
-| Engine/2/20000 vs claude-haiku-5-5-medium | 35/82 = 42.7% | 46.0% | -3.3 | -12.3 to +5.8 |
-| Engine/2/20000 vs claude-haiku-5-5-off | 320/466 = 68.7% | 68.1% | +0.5 | -1.3 to +2.3 |
-| Engine/2/20000 vs claude-opus-5-5-medium | 8/20 = 40.0% | 36.5% | +3.5 | -14.4 to +22.5 |
-| Engine/2/20000 vs claude-sonnet-5-5-medium | 10/20 = 50.0% | 46.8% | +3.2 | -16.8 to +23.8 |
-| Engine/2/20000 vs gpt-6-luna-high | 57/106 = 53.8% | 56.5% | -2.8 | -9.1 to +3.2 |
-| Engine/2/20000 vs gpt-6-luna-medium | 89/116 = 76.7% | 78.7% | -1.9 | -7.5 to +3.4 |
-| Engine/2/20000 vs gpt-6-luna-off/low | 156/176 = 88.6% | 85.5% | +3.2 | -0.6 to +6.8 |
-| Engine/2/20000 vs gpt-6.1-terra-high | 2/2 = 100.0% | 38.2% | +61.8 | +49.0 to +73.0 |
-| Engine/2/20000 vs gpt-6.1-terra-medium | 13/50 = 26.0% | 31.2% | -5.2 | -14.9 to +4.2 |
-| Engine/2/20000 vs gpt-6.1-terra-off/low | 34/82 = 41.5% | 40.2% | +1.3 | -6.1 to +8.9 |
-| Engine/2/20000 vs gpt-6.1-terra-xhigh | 7/22 = 31.8% | 28.7% | +3.1 | -10.2 to +16.8 |
-| Engine/6/20000/sampled vs claude-haiku-5-5-medium | 10/20 = 50.0% | 68.1% | -18.1 | -33.1 to -4.2 |
-| Engine/6/20000/sampled vs claude-opus-5-5-medium | 13/20 = 65.0% | 59.1% | +5.9 | -12.6 to +24.7 |
-| Engine/6/20000/sampled vs claude-opus-5-5-xhigh | 13/20 = 65.0% | 49.5% | +15.5 | -3.0 to +34.2 |
-| Engine/6/20000/sampled vs claude-sonnet-5-5-medium | 14/20 = 70.0% | 68.8% | +1.2 | -14.1 to +16.7 |
-| Engine/6/20000/sampled vs claude-sonnet-5-5-xhigh | 7/16 = 43.8% | 53.0% | -9.2 | -28.8 to +11.4 |
-| Engine/6/20000/sampled vs gpt-6-astra-high | 9/20 = 45.0% | 45.7% | -0.7 | -16.0 to +15.6 |
-| Engine/6/20000/sampled vs gpt-6.1-sol-max | 10/20 = 50.0% | 50.7% | -0.7 | -18.7 to +17.0 |
-| Engine/6/20000/sampled vs gpt-6.1-terra-max | 10/20 = 50.0% | 44.6% | +5.4 | -11.8 to +22.5 |
-| claude-haiku-4-5-20251001-high vs claude-haiku-5-5-high | 0/1 = 0.0% | 14.7% | -14.7 | -21.0 to -9.4 |
-| claude-haiku-4-5-20251001-high vs claude-haiku-5-5-max | 0/1 = 0.0% | 12.2% | -12.2 | -18.8 to -7.2 |
-| claude-haiku-4-5-20251001-high vs claude-haiku-5-5-medium | 0/1 = 0.0% | 16.0% | -16.0 | -21.7 to -10.9 |
-| claude-haiku-4-5-20251001-high vs claude-haiku-5-5-off | 2/10 = 20.0% | 32.5% | -12.5 | -34.9 to +15.8 |
-| claude-haiku-4-5-20251001-high vs claude-haiku-5-5-xhigh | 0/1 = 0.0% | 13.0% | -13.0 | -19.0 to -7.9 |
-| claude-haiku-4-5-20251001-high vs claude-opus-5-5-max | 0/2 = 0.0% | 5.6% | -5.6 | -9.4 to -2.8 |
-| claude-haiku-4-5-20251001-high vs claude-opus-5-5-off/low | 1/3 = 33.3% | 14.0% | +19.3 | -17.4 to +87.2 |
-| claude-haiku-4-5-20251001-high vs claude-sonnet-5-5-medium | 0/2 = 0.0% | 16.5% | -16.5 | -22.9 to -10.8 |
-| claude-haiku-4-5-20251001-high vs gpt-5.6-terra-medium | 0/2 = 0.0% | 22.2% | -22.2 | -30.4 to -14.5 |
-| claude-haiku-4-5-20251001-high vs gpt-6-astra-high | 0/2 = 0.0% | 7.0% | -7.0 | -11.2 to -3.9 |
-| claude-haiku-4-5-20251001-high vs gpt-6-astra-low | 0/2 = 0.0% | 9.5% | -9.5 | -14.9 to -5.1 |
-| claude-haiku-4-5-20251001-high vs gpt-6-astra-medium | 0/2 = 0.0% | 8.1% | -8.1 | -11.8 to -5.0 |
-| claude-haiku-4-5-20251001-high vs gpt-6-astra-off | 0/3 = 0.0% | 10.5% | -10.5 | -16.8 to -5.6 |
-| claude-haiku-4-5-20251001-high vs gpt-6-luna-medium | 0/2 = 0.0% | 45.3% | -45.3 | -55.3 to -33.2 |
-| claude-haiku-4-5-20251001-high vs gpt-6.1-sol-medium | 0/2 = 0.0% | 12.3% | -12.3 | -17.4 to -7.7 |
-| claude-haiku-4-5-20251001-high vs gpt-6.1-terra-high | 0/4 = 0.0% | 12.2% | -12.2 | -19.9 to -6.5 |
-| claude-haiku-4-5-20251001-high vs gpt-6.1-terra-max | 0/2 = 0.0% | 6.7% | -6.7 | -10.9 to -3.6 |
-| claude-haiku-4-5-20251001-high vs gpt-6.1-terra-medium | 1/3 = 33.3% | 9.2% | +24.1 | -11.6 to +92.0 |
-| claude-haiku-4-5-20251001-high vs gpt-6.1-terra-off/low | 0/7 = 0.0% | 13.1% | -13.1 | -18.7 to -8.4 |
-| claude-haiku-4-5-20251001-high vs gpt-6.1-terra-xhigh | 0/3 = 0.0% | 8.3% | -8.3 | -13.3 to -4.7 |
-| claude-haiku-4-5-20251001-medium vs claude-haiku-5-5-high | 1/12 = 8.3% | 22.6% | -14.2 | -27.6 to +6.0 |
-| claude-haiku-4-5-20251001-medium vs claude-haiku-5-5-low | 4/14 = 28.6% | 27.4% | +1.1 | -20.6 to +21.4 |
-| claude-haiku-4-5-20251001-medium vs claude-haiku-5-5-max | 0/2 = 0.0% | 19.0% | -19.0 | -26.0 to -12.8 |
-| claude-haiku-4-5-20251001-medium vs claude-haiku-5-5-medium | 8/31 = 25.8% | 24.4% | +1.4 | -10.2 to +13.5 |
-| claude-haiku-4-5-20251001-medium vs claude-haiku-5-5-off | 5/12 = 41.7% | 44.8% | -3.1 | -32.4 to +28.1 |
-| claude-haiku-4-5-20251001-medium vs claude-haiku-5-5-xhigh | 1/2 = 50.0% | 20.1% | +29.9 | +22.4 to +35.4 |
-| claude-haiku-4-5-20251001-medium vs claude-opus-5-5-high | 0/1 = 0.0% | 13.8% | -13.8 | -20.5 to -8.4 |
-| claude-haiku-4-5-20251001-medium vs claude-opus-5-5-max | 0/2 = 0.0% | 9.1% | -9.1 | -14.2 to -5.1 |
-| claude-haiku-4-5-20251001-medium vs claude-opus-5-5-medium | 7/20 = 35.0% | 17.9% | +17.1 | -2.5 to +36.4 |
-| claude-haiku-4-5-20251001-medium vs claude-opus-5-5-off/low | 1/5 = 20.0% | 21.5% | -1.5 | -26.6 to +75.7 |
-| claude-haiku-4-5-20251001-medium vs claude-sonnet-5-5-high | 0/2 = 0.0% | 22.6% | -22.6 | -30.6 to -15.4 |
-| claude-haiku-4-5-20251001-medium vs claude-sonnet-5-5-low | 0/2 = 0.0% | 34.4% | -34.4 | -44.0 to -24.5 |
-| claude-haiku-4-5-20251001-medium vs claude-sonnet-5-5-max | 0/2 = 0.0% | 11.7% | -11.7 | -16.8 to -7.3 |
-| claude-haiku-4-5-20251001-medium vs claude-sonnet-5-5-medium | 2/20 = 10.0% | 25.0% | -15.0 | -27.6 to -0.6 |
-| claude-haiku-4-5-20251001-medium vs claude-sonnet-5-5-off | 0/4 = 0.0% | 27.8% | -27.8 | -37.0 to -20.2 |
-| claude-haiku-4-5-20251001-medium vs claude-sonnet-5-5-xhigh | 0/2 = 0.0% | 14.5% | -14.5 | -19.5 to -10.1 |
-| claude-haiku-4-5-20251001-medium vs gpt-5.6-terra-low | 0/2 = 0.0% | 37.2% | -37.2 | -48.6 to -25.8 |
-| claude-haiku-4-5-20251001-medium vs gpt-5.6-terra-max | 0/2 = 0.0% | 25.5% | -25.5 | -35.9 to -15.9 |
-| claude-haiku-4-5-20251001-medium vs gpt-5.6-terra-medium | 6/20 = 30.0% | 32.6% | -2.6 | -18.5 to +11.7 |
-| claude-haiku-4-5-20251001-medium vs gpt-5.6-terra-xhigh | 1/2 = 50.0% | 25.0% | +25.0 | +13.2 to +33.0 |
-| claude-haiku-4-5-20251001-medium vs gpt-6-astra-high | 0/3 = 0.0% | 11.3% | -11.3 | -16.9 to -7.0 |
-| claude-haiku-4-5-20251001-medium vs gpt-6-astra-low | 1/3 = 33.3% | 15.0% | +18.3 | -19.0 to +86.4 |
-| claude-haiku-4-5-20251001-medium vs gpt-6-astra-medium | 3/20 = 15.0% | 13.0% | +2.0 | -11.9 to +17.7 |
-| claude-haiku-4-5-20251001-medium vs gpt-6-astra-off | 0/3 = 0.0% | 16.5% | -16.5 | -24.2 to -9.8 |
-| claude-haiku-4-5-20251001-medium vs gpt-6-luna-high | 1/2 = 50.0% | 33.0% | +17.0 | +7.5 to +25.5 |
-| claude-haiku-4-5-20251001-medium vs gpt-6-luna-medium | 12/20 = 60.0% | 58.3% | +1.7 | -25.7 to +27.2 |
-| claude-haiku-4-5-20251001-medium vs gpt-6-luna-off/low | 2/2 = 100.0% | 69.0% | +31.0 | +22.6 to +38.7 |
-| claude-haiku-4-5-20251001-medium vs gpt-6-luna-xhigh | 1/2 = 50.0% | 26.6% | +23.4 | +13.3 to +31.9 |
-| claude-haiku-4-5-20251001-medium vs gpt-6.1-sol-high | 1/2 = 50.0% | 19.8% | +30.2 | +21.9 to +36.4 |
-| claude-haiku-4-5-20251001-medium vs gpt-6.1-sol-low | 1/2 = 50.0% | 17.3% | +32.7 | +24.7 to +38.6 |
-| claude-haiku-4-5-20251001-medium vs gpt-6.1-sol-medium | 6/20 = 30.0% | 19.1% | +10.9 | -8.4 to +32.9 |
-| claude-haiku-4-5-20251001-medium vs gpt-6.1-sol-xhigh | 1/2 = 50.0% | 17.6% | +32.4 | +24.2 to +38.0 |
-| claude-haiku-4-5-20251001-medium vs gpt-6.1-terra-high | 0/4 = 0.0% | 19.0% | -19.0 | -27.7 to -11.2 |
-| claude-haiku-4-5-20251001-medium vs gpt-6.1-terra-max | 0/3 = 0.0% | 10.8% | -10.8 | -16.4 to -6.8 |
-| claude-haiku-4-5-20251001-medium vs gpt-6.1-terra-medium | 1/3 = 33.3% | 14.6% | +18.7 | -18.6 to +86.7 |
-| claude-haiku-4-5-20251001-medium vs gpt-6.1-terra-off/low | 1/7 = 14.3% | 20.3% | -6.0 | -23.9 to +28.7 |
-| claude-haiku-4-5-20251001-medium vs gpt-6.1-terra-xhigh | 0/3 = 0.0% | 13.2% | -13.2 | -19.3 to -8.4 |
-| claude-haiku-4-5-20251001-minimal/low vs claude-haiku-5-5-low | 2/21 = 9.5% | 22.4% | -12.9 | -24.6 to +2.9 |
-| claude-haiku-4-5-20251001-minimal/low vs claude-haiku-5-5-medium | 2/5 = 40.0% | 19.8% | +20.2 | -20.7 to +33.8 |
-| claude-haiku-4-5-20251001-minimal/low vs claude-haiku-5-5-off | 7/22 = 31.8% | 38.3% | -6.4 | -25.8 to +12.8 |
-| claude-haiku-4-5-20251001-minimal/low vs claude-opus-5-5-high | 0/1 = 0.0% | 10.9% | -10.9 | -16.6 to -6.4 |
-| claude-haiku-4-5-20251001-minimal/low vs claude-opus-5-5-max | 0/4 = 0.0% | 7.1% | -7.1 | -11.4 to -4.0 |
-| claude-haiku-4-5-20251001-minimal/low vs claude-opus-5-5-medium | 1/4 = 25.0% | 14.3% | +10.7 | -16.9 to +38.1 |
-| claude-haiku-4-5-20251001-minimal/low vs claude-opus-5-5-off/low | 0/7 = 0.0% | 17.3% | -17.3 | -24.1 to -11.8 |
-| claude-haiku-4-5-20251001-minimal/low vs claude-sonnet-5-5-medium | 1/2 = 50.0% | 20.3% | +29.7 | +23.2 to +35.2 |
-| claude-haiku-4-5-20251001-minimal/low vs gpt-5.6-terra-medium | 1/2 = 50.0% | 27.0% | +23.0 | +15.1 to +29.9 |
-| claude-haiku-4-5-20251001-minimal/low vs gpt-6-astra-high | 0/6 = 0.0% | 8.8% | -8.8 | -13.7 to -5.2 |
-| claude-haiku-4-5-20251001-minimal/low vs gpt-6-astra-low | 0/5 = 0.0% | 11.9% | -11.9 | -18.0 to -7.0 |
-| claude-haiku-4-5-20251001-minimal/low vs gpt-6-astra-medium | 0/2 = 0.0% | 10.3% | -10.3 | -14.1 to -7.0 |
-| claude-haiku-4-5-20251001-minimal/low vs gpt-6-astra-off | 1/6 = 16.7% | 13.2% | +3.5 | -17.2 to +40.6 |
-| claude-haiku-4-5-20251001-minimal/low vs gpt-6-luna-medium | 3/4 = 75.0% | 51.6% | +23.4 | -7.3 to +54.4 |
-| claude-haiku-4-5-20251001-minimal/low vs gpt-6.1-sol-medium | 0/2 = 0.0% | 15.3% | -15.3 | -20.5 to -10.8 |
-| claude-haiku-4-5-20251001-minimal/low vs gpt-6.1-terra-high | 3/8 = 37.5% | 15.2% | +22.3 | -12.7 to +60.3 |
-| claude-haiku-4-5-20251001-minimal/low vs gpt-6.1-terra-max | 1/5 = 20.0% | 8.5% | +11.5 | -11.1 to +58.2 |
-| claude-haiku-4-5-20251001-minimal/low vs gpt-6.1-terra-medium | 0/6 = 0.0% | 11.6% | -11.6 | -17.4 to -7.6 |
-| claude-haiku-4-5-20251001-minimal/low vs gpt-6.1-terra-off/low | 3/14 = 21.4% | 16.3% | +5.1 | -14.9 to +27.2 |
-| claude-haiku-4-5-20251001-minimal/low vs gpt-6.1-terra-xhigh | 0/6 = 0.0% | 10.4% | -10.4 | -15.8 to -6.6 |
-| claude-haiku-4-5-20251001-off vs claude-haiku-5-5-medium | 1/2 = 50.0% | 9.3% | +40.7 | +35.7 to +44.1 |
-| claude-haiku-4-5-20251001-off vs claude-haiku-5-5-off | 3/11 = 27.3% | 20.5% | +6.7 | -21.2 to +44.0 |
-| claude-haiku-4-5-20251001-off vs claude-opus-5-5-max | 0/1 = 0.0% | 3.1% | -3.1 | -5.5 to -1.5 |
-| claude-haiku-4-5-20251001-off vs claude-opus-5-5-off/low | 0/2 = 0.0% | 8.0% | -8.0 | -13.1 to -4.5 |
-| claude-haiku-4-5-20251001-off vs claude-sonnet-5-5-medium | 1/2 = 50.0% | 9.6% | +40.4 | +34.8 to +44.0 |
-| claude-haiku-4-5-20251001-off vs gpt-5.6-terra-medium | 0/2 = 0.0% | 13.3% | -13.3 | -19.8 to -7.9 |
-| claude-haiku-4-5-20251001-off vs gpt-6-astra-high | 0/2 = 0.0% | 3.9% | -3.9 | -6.7 to -2.0 |
-| claude-haiku-4-5-20251001-off vs gpt-6-astra-low | 0/2 = 0.0% | 5.3% | -5.3 | -9.4 to -2.7 |
+| Engine/2/20000 vs Engine/7/2000000/sampled | 250/1040 = 24.0% | 24.3% | -0.3 | -0.8 to +0.3 |
+| Engine/2/20000 vs claude-haiku-4-5-20251001-medium | 9/18 = 50.0% | 72.1% | -22.1 | -45.1 to +0.8 |
+| Engine/2/20000 vs claude-haiku-5-5-high | 21/50 = 42.0% | 43.1% | -1.1 | -13.2 to +11.3 |
+| Engine/2/20000 vs claude-haiku-5-5-low | 45/84 = 53.6% | 49.6% | +3.9 | -4.8 to +12.8 |
+| Engine/2/20000 vs claude-haiku-5-5-medium | 35/82 = 42.7% | 45.4% | -2.7 | -11.8 to +6.3 |
+| Engine/2/20000 vs claude-haiku-5-5-off | 320/466 = 68.7% | 68.0% | +0.6 | -1.2 to +2.4 |
+| Engine/2/20000 vs claude-opus-5-5-medium | 8/20 = 40.0% | 35.8% | +4.2 | -14.6 to +22.9 |
+| Engine/2/20000 vs claude-sonnet-5-5-medium | 10/20 = 50.0% | 45.9% | +4.1 | -15.9 to +24.4 |
+| Engine/2/20000 vs gpt-6-luna-high | 57/106 = 53.8% | 56.4% | -2.6 | -8.5 to +3.4 |
+| Engine/2/20000 vs gpt-6-luna-medium | 89/116 = 76.7% | 78.4% | -1.7 | -7.5 to +3.7 |
+| Engine/2/20000 vs gpt-6-luna-off/low | 156/176 = 88.6% | 85.4% | +3.3 | -0.6 to +6.9 |
+| Engine/2/20000 vs gpt-6.1-terra-high | 2/2 = 100.0% | 37.6% | +62.4 | +49.6 to +73.3 |
+| Engine/2/20000 vs gpt-6.1-terra-medium | 13/50 = 26.0% | 30.8% | -4.8 | -14.6 to +5.2 |
+| Engine/2/20000 vs gpt-6.1-terra-off/low | 34/82 = 41.5% | 39.8% | +1.7 | -5.8 to +9.5 |
+| Engine/2/20000 vs gpt-6.1-terra-xhigh | 7/22 = 31.8% | 28.2% | +3.6 | -10.7 to +19.7 |
+| Engine/6/20000/sampled vs Engine/7/2000000/sampled | 41/80 = 51.2% | 47.6% | +3.6 | -3.8 to +10.7 |
+| Engine/6/20000/sampled vs claude-haiku-5-5-medium | 10/20 = 50.0% | 70.2% | -20.2 | -35.6 to -5.2 |
+| Engine/6/20000/sampled vs claude-opus-5-5-medium | 13/20 = 65.0% | 61.2% | +3.8 | -16.3 to +23.0 |
+| Engine/6/20000/sampled vs claude-opus-5-5-xhigh | 13/20 = 65.0% | 51.4% | +13.6 | -6.3 to +33.5 |
+| Engine/6/20000/sampled vs claude-sonnet-5-5-medium | 14/20 = 70.0% | 70.6% | -0.6 | -16.5 to +14.8 |
+| Engine/6/20000/sampled vs claude-sonnet-5-5-xhigh | 7/16 = 43.8% | 54.8% | -11.1 | -33.0 to +9.9 |
+| Engine/6/20000/sampled vs gpt-6-astra-high | 9/20 = 45.0% | 47.4% | -2.4 | -20.0 to +14.0 |
+| Engine/6/20000/sampled vs gpt-6.1-sol-max | 10/20 = 50.0% | 52.4% | -2.4 | -20.4 to +15.8 |
+| Engine/6/20000/sampled vs gpt-6.1-terra-max | 10/20 = 50.0% | 46.2% | +3.8 | -14.6 to +22.3 |
+| claude-haiku-4-5-20251001-high vs claude-haiku-5-5-high | 0/1 = 0.0% | 14.8% | -14.8 | -21.0 to -9.5 |
+| claude-haiku-4-5-20251001-high vs claude-haiku-5-5-max | 0/1 = 0.0% | 12.2% | -12.2 | -18.6 to -7.4 |
+| claude-haiku-4-5-20251001-high vs claude-haiku-5-5-medium | 0/1 = 0.0% | 16.0% | -16.0 | -22.5 to -10.8 |
+| claude-haiku-4-5-20251001-high vs claude-haiku-5-5-off | 2/10 = 20.0% | 32.8% | -12.8 | -35.7 to +14.7 |
+| claude-haiku-4-5-20251001-high vs claude-haiku-5-5-xhigh | 0/1 = 0.0% | 13.0% | -13.0 | -18.8 to -8.1 |
+| claude-haiku-4-5-20251001-high vs claude-opus-5-5-max | 0/2 = 0.0% | 5.9% | -5.9 | -10.0 to -3.0 |
+| claude-haiku-4-5-20251001-high vs claude-opus-5-5-off/low | 1/3 = 33.3% | 13.9% | +19.4 | -17.7 to +87.6 |
+| claude-haiku-4-5-20251001-high vs claude-sonnet-5-5-medium | 0/2 = 0.0% | 16.3% | -16.3 | -22.4 to -10.5 |
+| claude-haiku-4-5-20251001-high vs gpt-5.6-terra-medium | 0/2 = 0.0% | 22.1% | -22.1 | -30.2 to -14.8 |
+| claude-haiku-4-5-20251001-high vs gpt-6-astra-high | 0/2 = 0.0% | 6.8% | -6.8 | -10.9 to -3.8 |
+| claude-haiku-4-5-20251001-high vs gpt-6-astra-low | 0/2 = 0.0% | 9.4% | -9.4 | -15.1 to -5.2 |
+| claude-haiku-4-5-20251001-high vs gpt-6-astra-medium | 0/2 = 0.0% | 8.0% | -8.0 | -11.9 to -5.0 |
+| claude-haiku-4-5-20251001-high vs gpt-6-astra-off | 0/3 = 0.0% | 10.4% | -10.4 | -17.1 to -5.7 |
+| claude-haiku-4-5-20251001-high vs gpt-6-luna-medium | 0/2 = 0.0% | 45.4% | -45.4 | -55.4 to -34.1 |
+| claude-haiku-4-5-20251001-high vs gpt-6.1-sol-medium | 0/2 = 0.0% | 12.2% | -12.2 | -17.8 to -7.8 |
+| claude-haiku-4-5-20251001-high vs gpt-6.1-terra-high | 0/4 = 0.0% | 12.1% | -12.1 | -19.7 to -6.8 |
+| claude-haiku-4-5-20251001-high vs gpt-6.1-terra-max | 0/2 = 0.0% | 6.5% | -6.5 | -10.8 to -3.6 |
+| claude-haiku-4-5-20251001-high vs gpt-6.1-terra-medium | 1/3 = 33.3% | 9.3% | +24.1 | -11.7 to +92.3 |
+| claude-haiku-4-5-20251001-high vs gpt-6.1-terra-off/low | 0/7 = 0.0% | 13.2% | -13.2 | -18.9 to -8.6 |
+| claude-haiku-4-5-20251001-high vs gpt-6.1-terra-xhigh | 0/3 = 0.0% | 8.3% | -8.3 | -13.4 to -4.8 |
+| claude-haiku-4-5-20251001-medium vs claude-haiku-5-5-high | 1/12 = 8.3% | 22.7% | -14.4 | -26.9 to +4.9 |
+| claude-haiku-4-5-20251001-medium vs claude-haiku-5-5-low | 4/14 = 28.6% | 27.6% | +1.0 | -20.1 to +21.9 |
+| claude-haiku-4-5-20251001-medium vs claude-haiku-5-5-max | 0/2 = 0.0% | 19.1% | -19.1 | -25.9 to -13.2 |
+| claude-haiku-4-5-20251001-medium vs claude-haiku-5-5-medium | 8/31 = 25.8% | 24.3% | +1.5 | -11.6 to +13.6 |
+| claude-haiku-4-5-20251001-medium vs claude-haiku-5-5-off | 5/12 = 41.7% | 45.2% | -3.5 | -36.5 to +26.9 |
+| claude-haiku-4-5-20251001-medium vs claude-haiku-5-5-xhigh | 1/2 = 50.0% | 20.1% | +29.9 | +23.0 to +35.1 |
+| claude-haiku-4-5-20251001-medium vs claude-opus-5-5-high | 0/1 = 0.0% | 13.7% | -13.7 | -20.2 to -8.3 |
+| claude-haiku-4-5-20251001-medium vs claude-opus-5-5-max | 0/2 = 0.0% | 9.6% | -9.6 | -15.0 to -5.5 |
+| claude-haiku-4-5-20251001-medium vs claude-opus-5-5-medium | 7/20 = 35.0% | 17.8% | +17.2 | -2.6 to +37.4 |
+| claude-haiku-4-5-20251001-medium vs claude-opus-5-5-off/low | 1/5 = 20.0% | 21.5% | -1.5 | -26.0 to +74.4 |
+| claude-haiku-4-5-20251001-medium vs claude-sonnet-5-5-high | 0/2 = 0.0% | 22.3% | -22.3 | -29.8 to -15.5 |
+| claude-haiku-4-5-20251001-medium vs claude-sonnet-5-5-low | 0/2 = 0.0% | 34.1% | -34.1 | -43.6 to -24.9 |
+| claude-haiku-4-5-20251001-medium vs claude-sonnet-5-5-max | 0/2 = 0.0% | 11.1% | -11.1 | -16.1 to -7.3 |
+| claude-haiku-4-5-20251001-medium vs claude-sonnet-5-5-medium | 2/20 = 10.0% | 24.7% | -14.7 | -26.8 to -0.2 |
+| claude-haiku-4-5-20251001-medium vs claude-sonnet-5-5-off | 0/4 = 0.0% | 27.5% | -27.5 | -35.6 to -20.1 |
+| claude-haiku-4-5-20251001-medium vs claude-sonnet-5-5-xhigh | 0/2 = 0.0% | 14.2% | -14.2 | -19.1 to -10.0 |
+| claude-haiku-4-5-20251001-medium vs gpt-5.6-terra-low | 0/2 = 0.0% | 37.0% | -37.0 | -48.7 to -26.4 |
+| claude-haiku-4-5-20251001-medium vs gpt-5.6-terra-max | 0/2 = 0.0% | 25.4% | -25.4 | -36.4 to -16.0 |
+| claude-haiku-4-5-20251001-medium vs gpt-5.6-terra-medium | 6/20 = 30.0% | 32.4% | -2.4 | -18.5 to +13.5 |
+| claude-haiku-4-5-20251001-medium vs gpt-5.6-terra-xhigh | 1/2 = 50.0% | 24.9% | +25.1 | +13.9 to +33.1 |
+| claude-haiku-4-5-20251001-medium vs gpt-6-astra-high | 0/3 = 0.0% | 11.0% | -11.0 | -16.2 to -6.9 |
+| claude-haiku-4-5-20251001-medium vs gpt-6-astra-low | 1/3 = 33.3% | 14.9% | +18.4 | -19.2 to +86.1 |
+| claude-haiku-4-5-20251001-medium vs gpt-6-astra-medium | 3/20 = 15.0% | 12.9% | +2.1 | -11.8 to +17.6 |
+| claude-haiku-4-5-20251001-medium vs gpt-6-astra-off | 0/3 = 0.0% | 16.5% | -16.5 | -25.1 to -10.0 |
+| claude-haiku-4-5-20251001-medium vs gpt-6-luna-high | 1/2 = 50.0% | 33.3% | +16.7 | +7.9 to +25.0 |
+| claude-haiku-4-5-20251001-medium vs gpt-6-luna-medium | 12/20 = 60.0% | 58.4% | +1.6 | -24.9 to +27.6 |
+| claude-haiku-4-5-20251001-medium vs gpt-6-luna-off/low | 2/2 = 100.0% | 69.3% | +30.7 | +22.8 to +38.5 |
+| claude-haiku-4-5-20251001-medium vs gpt-6-luna-xhigh | 1/2 = 50.0% | 26.7% | +23.3 | +13.2 to +31.2 |
+| claude-haiku-4-5-20251001-medium vs gpt-6.1-sol-high | 1/2 = 50.0% | 19.6% | +30.4 | +22.3 to +36.4 |
+| claude-haiku-4-5-20251001-medium vs gpt-6.1-sol-low | 1/2 = 50.0% | 17.1% | +32.9 | +24.8 to +38.4 |
+| claude-haiku-4-5-20251001-medium vs gpt-6.1-sol-medium | 6/20 = 30.0% | 19.0% | +11.0 | -8.1 to +32.5 |
+| claude-haiku-4-5-20251001-medium vs gpt-6.1-sol-xhigh | 1/2 = 50.0% | 17.4% | +32.6 | +24.9 to +37.8 |
+| claude-haiku-4-5-20251001-medium vs gpt-6.1-terra-high | 0/4 = 0.0% | 18.9% | -18.9 | -27.7 to -11.5 |
+| claude-haiku-4-5-20251001-medium vs gpt-6.1-terra-max | 0/3 = 0.0% | 10.5% | -10.5 | -15.9 to -6.5 |
+| claude-haiku-4-5-20251001-medium vs gpt-6.1-terra-medium | 1/3 = 33.3% | 14.7% | +18.6 | -18.6 to +86.7 |
+| claude-haiku-4-5-20251001-medium vs gpt-6.1-terra-off/low | 1/7 = 14.3% | 20.4% | -6.1 | -23.9 to +28.4 |
+| claude-haiku-4-5-20251001-medium vs gpt-6.1-terra-xhigh | 0/3 = 0.0% | 13.2% | -13.2 | -19.0 to -8.4 |
+| claude-haiku-4-5-20251001-minimal/low vs claude-haiku-5-5-low | 2/21 = 9.5% | 22.6% | -13.0 | -24.8 to +2.4 |
+| claude-haiku-4-5-20251001-minimal/low vs claude-haiku-5-5-medium | 2/5 = 40.0% | 19.7% | +20.3 | -20.4 to +33.9 |
+| claude-haiku-4-5-20251001-minimal/low vs claude-haiku-5-5-off | 7/22 = 31.8% | 38.6% | -6.8 | -25.6 to +13.2 |
+| claude-haiku-4-5-20251001-minimal/low vs claude-opus-5-5-high | 0/1 = 0.0% | 10.8% | -10.8 | -16.7 to -6.2 |
+| claude-haiku-4-5-20251001-minimal/low vs claude-opus-5-5-max | 0/4 = 0.0% | 7.5% | -7.5 | -12.1 to -4.1 |
+| claude-haiku-4-5-20251001-minimal/low vs claude-opus-5-5-medium | 1/4 = 25.0% | 14.2% | +10.8 | -16.6 to +38.5 |
+| claude-haiku-4-5-20251001-minimal/low vs claude-opus-5-5-off/low | 0/7 = 0.0% | 17.3% | -17.3 | -23.8 to -11.5 |
+| claude-haiku-4-5-20251001-minimal/low vs claude-sonnet-5-5-medium | 1/2 = 50.0% | 20.1% | +29.9 | +23.5 to +35.0 |
+| claude-haiku-4-5-20251001-minimal/low vs gpt-5.6-terra-medium | 1/2 = 50.0% | 26.8% | +23.2 | +14.6 to +30.1 |
+| claude-haiku-4-5-20251001-minimal/low vs gpt-6-astra-high | 0/6 = 0.0% | 8.6% | -8.6 | -13.0 to -5.2 |
+| claude-haiku-4-5-20251001-minimal/low vs gpt-6-astra-low | 0/5 = 0.0% | 11.8% | -11.8 | -17.9 to -6.9 |
+| claude-haiku-4-5-20251001-minimal/low vs gpt-6-astra-medium | 0/2 = 0.0% | 10.1% | -10.1 | -13.5 to -7.0 |
+| claude-haiku-4-5-20251001-minimal/low vs gpt-6-astra-off | 1/6 = 16.7% | 13.1% | +3.6 | -16.9 to +41.6 |
+| claude-haiku-4-5-20251001-minimal/low vs gpt-6-luna-medium | 3/4 = 75.0% | 51.8% | +23.2 | -7.5 to +54.2 |
+| claude-haiku-4-5-20251001-minimal/low vs gpt-6.1-sol-medium | 0/2 = 0.0% | 15.2% | -15.2 | -20.3 to -10.6 |
+| claude-haiku-4-5-20251001-minimal/low vs gpt-6.1-terra-high | 3/8 = 37.5% | 15.1% | +22.4 | -11.7 to +58.8 |
+| claude-haiku-4-5-20251001-minimal/low vs gpt-6.1-terra-max | 1/5 = 20.0% | 8.2% | +11.8 | -10.6 to +61.0 |
+| claude-haiku-4-5-20251001-minimal/low vs gpt-6.1-terra-medium | 0/6 = 0.0% | 11.7% | -11.7 | -16.9 to -7.5 |
+| claude-haiku-4-5-20251001-minimal/low vs gpt-6.1-terra-off/low | 3/14 = 21.4% | 16.4% | +5.1 | -15.2 to +27.9 |
+| claude-haiku-4-5-20251001-minimal/low vs gpt-6.1-terra-xhigh | 0/6 = 0.0% | 10.4% | -10.4 | -15.7 to -6.5 |
+| claude-haiku-4-5-20251001-off vs claude-haiku-5-5-medium | 1/2 = 50.0% | 9.3% | +40.7 | +35.6 to +44.1 |
+| claude-haiku-4-5-20251001-off vs claude-haiku-5-5-off | 3/11 = 27.3% | 20.8% | +6.5 | -21.5 to +42.7 |
+| claude-haiku-4-5-20251001-off vs claude-opus-5-5-max | 0/1 = 0.0% | 3.3% | -3.3 | -5.7 to -1.5 |
+| claude-haiku-4-5-20251001-off vs claude-opus-5-5-off/low | 0/2 = 0.0% | 8.0% | -8.0 | -12.8 to -4.5 |
+| claude-haiku-4-5-20251001-off vs claude-sonnet-5-5-medium | 1/2 = 50.0% | 9.5% | +40.5 | +34.9 to +44.3 |
+| claude-haiku-4-5-20251001-off vs gpt-5.6-terra-medium | 0/2 = 0.0% | 13.2% | -13.2 | -19.9 to -7.9 |
+| claude-haiku-4-5-20251001-off vs gpt-6-astra-high | 0/2 = 0.0% | 3.8% | -3.8 | -6.5 to -2.0 |
+| claude-haiku-4-5-20251001-off vs gpt-6-astra-low | 0/2 = 0.0% | 5.3% | -5.3 | -9.3 to -2.6 |
 | claude-haiku-4-5-20251001-off vs gpt-6-astra-medium | 0/2 = 0.0% | 4.5% | -4.5 | -7.1 to -2.6 |
-| claude-haiku-4-5-20251001-off vs gpt-6-astra-off | 0/2 = 0.0% | 5.9% | -5.9 | -10.2 to -2.9 |
-| claude-haiku-4-5-20251001-off vs gpt-6.1-sol-medium | 0/2 = 0.0% | 7.0% | -7.0 | -10.7 to -4.1 |
-| claude-haiku-4-5-20251001-off vs gpt-6.1-terra-high | 0/3 = 0.0% | 6.9% | -6.9 | -12.1 to -3.4 |
-| claude-haiku-4-5-20251001-off vs gpt-6.1-terra-max | 0/2 = 0.0% | 3.7% | -3.7 | -6.6 to -1.9 |
-| claude-haiku-4-5-20251001-off vs gpt-6.1-terra-medium | 0/2 = 0.0% | 5.2% | -5.2 | -8.9 to -2.9 |
-| claude-haiku-4-5-20251001-off vs gpt-6.1-terra-off/low | 0/5 = 0.0% | 7.5% | -7.5 | -12.0 to -4.3 |
-| claude-haiku-4-5-20251001-off vs gpt-6.1-terra-xhigh | 0/3 = 0.0% | 4.6% | -4.6 | -7.9 to -2.4 |
-| claude-haiku-5-5-high vs claude-opus-5-5-high | 0/2 = 0.0% | 35.4% | -35.4 | -48.2 to -23.7 |
-| claude-haiku-5-5-high vs claude-opus-5-5-max | 0/4 = 0.0% | 25.6% | -25.6 | -36.7 to -15.4 |
-| claude-haiku-5-5-high vs claude-opus-5-5-medium | 1/2 = 50.0% | 42.8% | +7.2 | -1.4 to +15.2 |
-| claude-haiku-5-5-high vs claude-opus-5-5-off/low | 6/7 = 85.7% | 48.5% | +37.2 | +4.1 to +58.7 |
-| claude-haiku-5-5-high vs claude-sonnet-5-5-medium | 2/4 = 50.0% | 53.3% | -3.3 | -57.8 to +51.3 |
-| claude-haiku-5-5-high vs gpt-6-astra-high | 2/4 = 50.0% | 30.3% | +19.7 | -32.4 to +72.1 |
-| claude-haiku-5-5-high vs gpt-6-astra-low | 1/4 = 25.0% | 37.7% | -12.7 | -45.6 to +43.8 |
-| claude-haiku-5-5-high vs gpt-6-astra-medium | 0/2 = 0.0% | 33.9% | -33.9 | -41.9 to -25.8 |
-| claude-haiku-5-5-high vs gpt-6-astra-off | 1/4 = 25.0% | 40.5% | -15.5 | -48.2 to +50.5 |
-| claude-haiku-5-5-high vs gpt-6-luna-medium | 1/2 = 50.0% | 82.7% | -32.7 | -37.1 to -26.9 |
-| claude-haiku-5-5-high vs gpt-6.1-sol-medium | 0/2 = 0.0% | 44.8% | -44.8 | -53.3 to -35.2 |
-| claude-haiku-5-5-high vs gpt-6.1-terra-high | 2/4 = 50.0% | 44.5% | +5.5 | -47.3 to +58.4 |
-| claude-haiku-5-5-high vs gpt-6.1-terra-max | 0/4 = 0.0% | 29.4% | -29.4 | -41.1 to -19.5 |
-| claude-haiku-5-5-high vs gpt-6.1-terra-medium | 2/4 = 50.0% | 37.1% | +12.9 | -43.2 to +64.8 |
-| claude-haiku-5-5-high vs gpt-6.1-terra-off/low | 3/7 = 42.9% | 46.7% | -3.8 | -43.9 to +37.1 |
-| claude-haiku-5-5-high vs gpt-6.1-terra-xhigh | 2/4 = 50.0% | 34.3% | +15.7 | -36.4 to +68.1 |
-| claude-haiku-5-5-low vs claude-opus-5-5-high | 1/2 = 50.0% | 29.7% | +20.3 | -35.9 to +76.5 |
-| claude-haiku-5-5-low vs claude-opus-5-5-max | 1/3 = 33.3% | 20.9% | +12.4 | -26.8 to +79.9 |
-| claude-haiku-5-5-low vs claude-opus-5-5-medium | 2/2 = 100.0% | 36.6% | +63.4 | +54.4 to +70.7 |
-| claude-haiku-5-5-low vs claude-opus-5-5-off/low | 1/6 = 16.7% | 42.1% | -25.4 | -48.7 to +11.0 |
-| claude-haiku-5-5-low vs claude-sonnet-5-5-medium | 1/2 = 50.0% | 46.8% | +3.2 | -5.0 to +11.9 |
-| claude-haiku-5-5-low vs gpt-5.6-terra-medium | 1/2 = 50.0% | 56.1% | -6.1 | -14.9 to +3.2 |
-| claude-haiku-5-5-low vs gpt-6-astra-high | 0/4 = 0.0% | 25.1% | -25.1 | -34.8 to -16.9 |
-| claude-haiku-5-5-low vs gpt-6-astra-low | 0/4 = 0.0% | 31.8% | -31.8 | -43.0 to -21.5 |
-| claude-haiku-5-5-low vs gpt-6-astra-medium | 0/2 = 0.0% | 28.3% | -28.3 | -35.6 to -21.1 |
-| claude-haiku-5-5-low vs gpt-6-astra-off | 3/4 = 75.0% | 34.4% | +40.6 | -29.3 to +73.5 |
-| claude-haiku-5-5-low vs gpt-6-luna-medium | 1/2 = 50.0% | 78.7% | -28.7 | -33.9 to -22.3 |
-| claude-haiku-5-5-low vs gpt-6.1-sol-medium | 2/2 = 100.0% | 38.5% | +61.5 | +52.1 to +68.9 |
-| claude-haiku-5-5-low vs gpt-6.1-terra-high | 3/4 = 75.0% | 38.2% | +36.8 | -23.3 to +71.4 |
-| claude-haiku-5-5-low vs gpt-6.1-terra-max | 1/4 = 25.0% | 24.3% | +0.7 | -29.7 to +70.2 |
-| claude-haiku-5-5-low vs gpt-6.1-terra-medium | 3/4 = 75.0% | 31.2% | +43.8 | -23.4 to +75.0 |
-| claude-haiku-5-5-low vs gpt-6.1-terra-off/low | 4/8 = 50.0% | 40.3% | +9.7 | -22.7 to +44.1 |
-| claude-haiku-5-5-low vs gpt-6.1-terra-xhigh | 0/4 = 0.0% | 28.7% | -28.7 | -39.0 to -20.2 |
-| claude-haiku-5-5-max vs claude-opus-5-5-medium | 2/2 = 100.0% | 48.2% | +51.8 | +40.0 to +61.2 |
-| claude-haiku-5-5-max vs claude-sonnet-5-5-medium | 1/2 = 50.0% | 58.7% | -8.7 | -17.5 to +2.7 |
-| claude-haiku-5-5-max vs gpt-5.6-terra-medium | 1/2 = 50.0% | 67.3% | -17.3 | -25.7 to -6.5 |
-| claude-haiku-5-5-max vs gpt-6.1-sol-medium | 1/2 = 50.0% | 50.2% | -0.2 | -10.6 to +9.8 |
-| claude-haiku-5-5-medium vs claude-opus-5-5-high | 0/2 = 0.0% | 33.2% | -33.2 | -43.6 to -23.1 |
-| claude-haiku-5-5-medium vs claude-opus-5-5-max | 1/3 = 33.3% | 23.7% | +9.6 | -28.9 to +31.9 |
-| claude-haiku-5-5-medium vs claude-opus-5-5-medium | 7/20 = 35.0% | 40.4% | -5.4 | -22.1 to +8.8 |
-| claude-haiku-5-5-medium vs claude-opus-5-5-off/low | 3/6 = 50.0% | 46.0% | +4.0 | -40.8 to +51.1 |
-| claude-haiku-5-5-medium vs claude-sonnet-5-5-high | 1/4 = 25.0% | 47.5% | -22.5 | -53.2 to +7.8 |
-| claude-haiku-5-5-medium vs claude-sonnet-5-5-low | 2/2 = 100.0% | 61.9% | +38.1 | +28.4 to +46.6 |
-| claude-haiku-5-5-medium vs claude-sonnet-5-5-max | 0/2 = 0.0% | 29.1% | -29.1 | -37.4 to -20.9 |
-| claude-haiku-5-5-medium vs claude-sonnet-5-5-medium | 12/20 = 60.0% | 50.8% | +9.2 | -9.4 to +28.2 |
-| claude-haiku-5-5-medium vs claude-sonnet-5-5-off | 1/2 = 50.0% | 54.5% | -4.5 | -13.2 to +4.5 |
-| claude-haiku-5-5-medium vs claude-sonnet-5-5-xhigh | 1/4 = 25.0% | 34.5% | -9.5 | -39.4 to +20.8 |
-| claude-haiku-5-5-medium vs gpt-5.6-terra-high | 2/2 = 100.0% | 62.4% | +37.6 | +26.1 to +48.4 |
-| claude-haiku-5-5-medium vs gpt-5.6-terra-low | 1/2 = 50.0% | 64.7% | -14.7 | -25.4 to -3.3 |
-| claude-haiku-5-5-medium vs gpt-5.6-terra-max | 2/2 = 100.0% | 51.5% | +48.5 | +34.9 to +59.6 |
-| claude-haiku-5-5-medium vs gpt-5.6-terra-medium | 13/20 = 65.0% | 60.0% | +5.0 | -9.6 to +21.1 |
-| claude-haiku-5-5-medium vs gpt-6-astra-high | 1/4 = 25.0% | 28.3% | -3.3 | -34.3 to +46.3 |
-| claude-haiku-5-5-medium vs gpt-6-astra-low | 2/4 = 50.0% | 35.4% | +14.6 | -37.2 to +68.2 |
-| claude-haiku-5-5-medium vs gpt-6-astra-medium | 6/20 = 30.0% | 31.7% | -1.7 | -16.7 to +14.5 |
-| claude-haiku-5-5-medium vs gpt-6-astra-off | 3/4 = 75.0% | 38.1% | +36.9 | -30.6 to +70.0 |
-| claude-haiku-5-5-medium vs gpt-6-luna-high | 1/2 = 50.0% | 60.5% | -10.5 | -18.5 to -1.3 |
-| claude-haiku-5-5-medium vs gpt-6-luna-max | 1/2 = 50.0% | 55.2% | -5.2 | -15.9 to +6.0 |
-| claude-haiku-5-5-medium vs gpt-6-luna-medium | 19/20 = 95.0% | 81.3% | +13.7 | +2.9 to +21.9 |
-| claude-haiku-5-5-medium vs gpt-6-luna-off/low | 2/2 = 100.0% | 87.4% | +12.6 | +8.9 to +16.5 |
-| claude-haiku-5-5-medium vs gpt-6.1-sol-high | 2/4 = 50.0% | 43.4% | +6.6 | -3.8 to +16.3 |
-| claude-haiku-5-5-medium vs gpt-6.1-sol-low | 0/2 = 0.0% | 39.3% | -39.3 | -49.3 to -28.8 |
-| claude-haiku-5-5-medium vs gpt-6.1-sol-max | 1/2 = 50.0% | 32.5% | +17.5 | +9.4 to +24.6 |
-| claude-haiku-5-5-medium vs gpt-6.1-sol-medium | 10/20 = 50.0% | 42.3% | +7.7 | -6.4 to +22.7 |
-| claude-haiku-5-5-medium vs gpt-6.1-sol-xhigh | 1/2 = 50.0% | 39.8% | +10.2 | -1.0 to +19.4 |
-| claude-haiku-5-5-medium vs gpt-6.1-terra-high | 1/4 = 25.0% | 42.1% | -17.1 | -50.5 to +52.5 |
-| claude-haiku-5-5-medium vs gpt-6.1-terra-max | 1/4 = 25.0% | 27.3% | -2.3 | -32.9 to +64.6 |
-| claude-haiku-5-5-medium vs gpt-6.1-terra-medium | 1/4 = 25.0% | 34.8% | -9.8 | -40.8 to +57.4 |
-| claude-haiku-5-5-medium vs gpt-6.1-terra-off/low | 1/8 = 12.5% | 44.2% | -31.7 | -48.9 to -1.8 |
-| claude-haiku-5-5-medium vs gpt-6.1-terra-xhigh | 0/4 = 0.0% | 32.1% | -32.1 | -41.9 to -23.2 |
-| claude-haiku-5-5-off vs claude-opus-5-5-high | 0/1 = 0.0% | 16.5% | -16.5 | -24.0 to -10.8 |
-| claude-haiku-5-5-off vs claude-opus-5-5-max | 0/2 = 0.0% | 11.0% | -11.0 | -16.7 to -6.3 |
-| claude-haiku-5-5-off vs claude-opus-5-5-off/low | 0/5 = 0.0% | 25.3% | -25.3 | -33.2 to -18.6 |
-| claude-haiku-5-5-off vs gpt-5.6-terra-medium | 1/2 = 50.0% | 37.3% | +12.7 | +5.1 to +19.7 |
-| claude-haiku-5-5-off vs gpt-6-astra-high | 1/3 = 33.3% | 13.5% | +19.8 | -17.0 to +87.6 |
-| claude-haiku-5-5-off vs gpt-6-astra-low | 0/3 = 0.0% | 17.9% | -17.9 | -25.5 to -11.3 |
-| claude-haiku-5-5-off vs gpt-6-astra-medium | 0/2 = 0.0% | 15.6% | -15.6 | -20.1 to -11.5 |
-| claude-haiku-5-5-off vs gpt-6-astra-off | 1/4 = 25.0% | 19.6% | +5.4 | -24.7 to +76.4 |
-| claude-haiku-5-5-off vs gpt-6-luna-medium | 1/2 = 50.0% | 63.3% | -13.3 | -19.6 to -6.8 |
-| claude-haiku-5-5-off vs gpt-6.1-sol-medium | 0/2 = 0.0% | 22.6% | -22.6 | -28.3 to -17.5 |
-| claude-haiku-5-5-off vs gpt-6.1-terra-high | 0/4 = 0.0% | 22.4% | -22.4 | -32.5 to -13.8 |
-| claude-haiku-5-5-off vs gpt-6.1-terra-max | 0/3 = 0.0% | 13.0% | -13.0 | -19.3 to -8.3 |
-| claude-haiku-5-5-off vs gpt-6.1-terra-medium | 0/3 = 0.0% | 17.5% | -17.5 | -24.3 to -12.5 |
-| claude-haiku-5-5-off vs gpt-6.1-terra-off/low | 2/7 = 28.6% | 23.9% | +4.7 | -25.5 to +42.8 |
-| claude-haiku-5-5-off vs gpt-6.1-terra-xhigh | 0/4 = 0.0% | 15.8% | -15.8 | -22.1 to -10.7 |
-| claude-haiku-5-5-xhigh vs claude-opus-5-5-high | 0/2 = 0.0% | 38.9% | -38.9 | -51.6 to -26.4 |
-| claude-haiku-5-5-xhigh vs claude-opus-5-5-max | 0/3 = 0.0% | 28.5% | -28.5 | -40.4 to -17.6 |
-| claude-haiku-5-5-xhigh vs claude-opus-5-5-medium | 0/2 = 0.0% | 46.5% | -46.5 | -55.3 to -36.8 |
-| claude-haiku-5-5-xhigh vs claude-opus-5-5-off/low | 2/7 = 28.6% | 52.2% | -23.7 | -55.9 to +11.4 |
-| claude-haiku-5-5-xhigh vs claude-sonnet-5-5-medium | 1/2 = 50.0% | 57.0% | -7.0 | -15.7 to +2.9 |
-| claude-haiku-5-5-xhigh vs gpt-6-astra-high | 1/4 = 25.0% | 33.6% | -8.6 | -41.6 to +56.1 |
-| claude-haiku-5-5-xhigh vs gpt-6-astra-low | 1/4 = 25.0% | 41.2% | -16.2 | -49.3 to +52.0 |
-| claude-haiku-5-5-xhigh vs gpt-6-astra-medium | 0/2 = 0.0% | 37.3% | -37.3 | -46.5 to -28.2 |
-| claude-haiku-5-5-xhigh vs gpt-6-astra-off | 3/4 = 75.0% | 44.1% | +30.9 | -35.1 to +66.5 |
-| claude-haiku-5-5-xhigh vs gpt-6-luna-medium | 2/2 = 100.0% | 84.8% | +15.2 | +10.6 to +20.7 |
-| claude-haiku-5-5-xhigh vs gpt-6.1-terra-high | 2/4 = 50.0% | 48.2% | +1.8 | -51.6 to +58.0 |
-| claude-haiku-5-5-xhigh vs gpt-6.1-terra-max | 0/4 = 0.0% | 32.5% | -32.5 | -44.2 to -21.9 |
-| claude-haiku-5-5-xhigh vs gpt-6.1-terra-medium | 3/4 = 75.0% | 40.6% | +34.4 | -34.2 to +67.0 |
-| claude-haiku-5-5-xhigh vs gpt-6.1-terra-off/low | 2/7 = 28.6% | 50.4% | -21.8 | -53.8 to +17.3 |
-| claude-haiku-5-5-xhigh vs gpt-6.1-terra-xhigh | 2/4 = 50.0% | 37.8% | +12.2 | -40.8 to +65.5 |
-| claude-opus-5-5-high vs claude-sonnet-5-5-high | 2/2 = 100.0% | 64.6% | +35.4 | +23.5 to +48.6 |
-| claude-opus-5-5-high vs claude-sonnet-5-5-low | 2/2 = 100.0% | 76.6% | +23.4 | +14.4 to +34.7 |
-| claude-opus-5-5-high vs claude-sonnet-5-5-medium | 1/2 = 50.0% | 67.6% | -17.6 | -27.2 to -5.7 |
-| claude-opus-5-5-high vs claude-sonnet-5-5-off | 2/2 = 100.0% | 70.7% | +29.3 | +19.1 to +41.2 |
-| claude-opus-5-5-high vs claude-sonnet-5-5-xhigh | 2/2 = 100.0% | 51.5% | +48.5 | +34.8 to +61.1 |
-| claude-opus-5-5-high vs gpt-6-astra-high | 0/1 = 0.0% | 44.2% | -44.2 | -58.5 to -29.3 |
-| claude-opus-5-5-high vs gpt-6-astra-medium | 1/2 = 50.0% | 48.3% | +1.7 | -10.1 to +13.2 |
-| claude-opus-5-5-high vs gpt-6-astra-off | 0/1 = 0.0% | 55.3% | -55.3 | -68.8 to -38.2 |
-| claude-opus-5-5-high vs gpt-6-luna-medium | 2/2 = 100.0% | 89.7% | +10.3 | +6.3 to +15.6 |
-| claude-opus-5-5-high vs gpt-6.1-sol-medium | 0/2 = 0.0% | 59.6% | -59.6 | -69.2 to -46.4 |
-| claude-opus-5-5-high vs gpt-6.1-terra-max | 1/1 = 100.0% | 43.1% | +56.9 | +40.8 to +69.7 |
-| claude-opus-5-5-high vs gpt-6.1-terra-off/low | 1/1 = 100.0% | 61.4% | +38.6 | +26.9 to +50.0 |
-| claude-opus-5-5-max vs claude-sonnet-5-5-high | 3/4 = 75.0% | 74.4% | +0.6 | -70.1 to +32.4 |
-| claude-opus-5-5-max vs claude-sonnet-5-5-low | 2/3 = 66.7% | 84.0% | -17.3 | -85.7 to +20.6 |
-| claude-opus-5-5-max vs claude-sonnet-5-5-medium | 3/3 = 100.0% | 76.9% | +23.1 | +14.3 to +33.1 |
-| claude-opus-5-5-max vs claude-sonnet-5-5-off | 3/3 = 100.0% | 79.4% | +20.6 | +12.2 to +30.4 |
-| claude-opus-5-5-max vs claude-sonnet-5-5-xhigh | 2/3 = 66.7% | 62.9% | +3.7 | -64.9 to +44.8 |
-| claude-opus-5-5-max vs gpt-6-astra-medium | 1/2 = 50.0% | 59.9% | -9.9 | -22.2 to +2.2 |
-| claude-opus-5-5-max vs gpt-6.1-sol-medium | 1/2 = 50.0% | 70.3% | -20.3 | -29.8 to -8.2 |
-| claude-opus-5-5-max vs gpt-6.1-terra-medium | 1/2 = 50.0% | 63.2% | -13.2 | -26.2 to +0.5 |
-| claude-opus-5-5-medium vs claude-sonnet-5-5-high | 2/2 = 100.0% | 57.2% | +42.8 | +32.2 to +52.2 |
-| claude-opus-5-5-medium vs claude-sonnet-5-5-low | 2/4 = 50.0% | 70.6% | -20.6 | -75.0 to +33.5 |
-| claude-opus-5-5-medium vs claude-sonnet-5-5-max | 2/2 = 100.0% | 37.7% | +62.3 | +51.4 to +71.3 |
-| claude-opus-5-5-medium vs claude-sonnet-5-5-medium | 12/20 = 60.0% | 60.4% | -0.4 | -19.7 to +18.0 |
-| claude-opus-5-5-medium vs claude-sonnet-5-5-off | 1/2 = 50.0% | 63.9% | -13.9 | -22.2 to -4.4 |
-| claude-opus-5-5-medium vs claude-sonnet-5-5-xhigh | 2/2 = 100.0% | 43.8% | +56.2 | +46.5 to +64.9 |
-| claude-opus-5-5-medium vs gpt-5.6-terra-high | 2/2 = 100.0% | 71.0% | +29.0 | +19.4 to +38.8 |
-| claude-opus-5-5-medium vs gpt-5.6-terra-low | 1/2 = 50.0% | 73.1% | -23.1 | -31.0 to -12.5 |
-| claude-opus-5-5-medium vs gpt-5.6-terra-max | 2/2 = 100.0% | 61.1% | +38.9 | +26.4 to +50.6 |
-| claude-opus-5-5-medium vs gpt-5.6-terra-medium | 12/20 = 60.0% | 68.9% | -8.9 | -20.8 to +4.8 |
-| claude-opus-5-5-medium vs gpt-5.6-terra-xhigh | 2/2 = 100.0% | 60.4% | +39.6 | +27.9 to +51.1 |
-| claude-opus-5-5-medium vs gpt-6-astra-high | 2/4 = 50.0% | 36.8% | +13.2 | -38.4 to +65.7 |
-| claude-opus-5-5-medium vs gpt-6-astra-low | 2/4 = 50.0% | 44.7% | +5.3 | -46.8 to +58.4 |
-| claude-opus-5-5-medium vs gpt-6-astra-medium | 9/20 = 45.0% | 40.7% | +4.3 | -7.0 to +14.0 |
-| claude-opus-5-5-medium vs gpt-6-astra-off | 2/4 = 50.0% | 47.6% | +2.4 | -50.0 to +56.3 |
-| claude-opus-5-5-medium vs gpt-6-luna-max | 1/2 = 50.0% | 64.6% | -14.6 | -24.0 to -1.8 |
-| claude-opus-5-5-medium vs gpt-6-luna-medium | 16/20 = 80.0% | 86.5% | -6.5 | -28.3 to +12.4 |
-| claude-opus-5-5-medium vs gpt-6-luna-off/low | 2/2 = 100.0% | 91.1% | +8.9 | +6.0 to +12.1 |
-| claude-opus-5-5-medium vs gpt-6-luna-xhigh | 1/2 = 50.0% | 62.4% | -12.4 | -22.3 to -1.3 |
-| claude-opus-5-5-medium vs gpt-6.1-sol-high | 2/2 = 100.0% | 53.1% | +46.9 | +36.1 to +56.8 |
-| claude-opus-5-5-medium vs gpt-6.1-sol-low | 1/2 = 50.0% | 48.9% | +1.1 | -10.5 to +12.8 |
-| claude-opus-5-5-medium vs gpt-6.1-sol-max | 1/2 = 50.0% | 41.5% | +8.5 | -0.4 to +17.2 |
-| claude-opus-5-5-medium vs gpt-6.1-sol-medium | 12/20 = 60.0% | 52.0% | +8.0 | -11.1 to +26.3 |
-| claude-opus-5-5-medium vs gpt-6.1-sol-xhigh | 2/4 = 50.0% | 49.5% | +0.5 | -9.9 to +11.3 |
-| claude-opus-5-5-medium vs gpt-6.1-terra-high | 0/3 = 0.0% | 51.8% | -51.8 | -64.1 to -37.8 |
-| claude-opus-5-5-medium vs gpt-6.1-terra-max | 1/4 = 25.0% | 35.7% | -10.7 | -43.1 to +56.1 |
-| claude-opus-5-5-medium vs gpt-6.1-terra-medium | 2/3 = 66.7% | 44.0% | +22.6 | -0.4 to +62.3 |
-| claude-opus-5-5-medium vs gpt-6.1-terra-off/low | 4/7 = 57.1% | 53.9% | +3.2 | -35.4 to +44.6 |
-| claude-opus-5-5-medium vs gpt-6.1-terra-xhigh | 1/3 = 33.3% | 41.1% | -7.8 | -47.8 to +60.7 |
-| claude-opus-5-5-off/low vs claude-sonnet-5-5-high | 4/7 = 57.1% | 51.5% | +5.6 | -34.7 to +46.5 |
-| claude-opus-5-5-off/low vs claude-sonnet-5-5-low | 4/5 = 80.0% | 65.6% | +14.4 | -32.5 to +41.8 |
-| claude-opus-5-5-off/low vs claude-sonnet-5-5-medium | 5/7 = 71.4% | 54.8% | +16.6 | -15.2 to +48.8 |
-| claude-opus-5-5-off/low vs claude-sonnet-5-5-off | 3/7 = 42.9% | 58.4% | -15.5 | -62.0 to +24.9 |
-| claude-opus-5-5-off/low vs claude-sonnet-5-5-xhigh | 2/7 = 28.6% | 38.2% | -9.6 | -41.4 to +28.1 |
-| claude-opus-5-5-off/low vs gpt-5.6-terra-medium | 0/2 = 0.0% | 63.7% | -63.7 | -72.2 to -52.5 |
-| claude-opus-5-5-off/low vs gpt-6-astra-high | 1/2 = 50.0% | 31.6% | +18.4 | -38.2 to +74.4 |
-| claude-opus-5-5-off/low vs gpt-6-astra-low | 1/2 = 50.0% | 39.1% | +10.9 | -45.7 to +68.4 |
-| claude-opus-5-5-off/low vs gpt-6-astra-off | 0/2 = 0.0% | 41.9% | -41.9 | -54.8 to -27.5 |
-| claude-opus-5-5-off/low vs gpt-6-luna-medium | 2/2 = 100.0% | 83.6% | +16.4 | +11.2 to +22.5 |
-| claude-opus-5-5-off/low vs gpt-6-luna-xhigh | 1/2 = 50.0% | 56.9% | -6.9 | -18.8 to +5.5 |
-| claude-opus-5-5-off/low vs gpt-6.1-terra-max | 0/2 = 0.0% | 30.6% | -30.6 | -42.1 to -20.1 |
-| claude-opus-5-5-off/low vs gpt-6.1-terra-medium | 1/1 = 100.0% | 38.5% | +61.5 | +49.4 to +71.5 |
-| claude-opus-5-5-off/low vs gpt-6.1-terra-off/low | 2/2 = 100.0% | 48.1% | +51.9 | +41.0 to +61.8 |
-| claude-opus-5-5-off/low vs gpt-6.1-terra-xhigh | 1/2 = 50.0% | 35.7% | +14.3 | -42.9 to +70.3 |
-| claude-opus-5-5-xhigh vs claude-sonnet-5-5-max | 2/10 = 20.0% | 47.2% | -27.2 | -51.9 to -1.9 |
-| claude-opus-5-5-xhigh vs gpt-6-astra-high | 2/4 = 50.0% | 46.2% | +3.8 | -49.6 to +56.7 |
-| claude-opus-5-5-xhigh vs gpt-6-astra-low | 2/4 = 50.0% | 54.4% | -4.4 | -57.6 to +48.3 |
-| claude-opus-5-5-xhigh vs gpt-6-astra-medium | 22/41 = 53.7% | 50.3% | +3.4 | -8.7 to +15.0 |
-| claude-opus-5-5-xhigh vs gpt-6-astra-off | 2/4 = 50.0% | 57.3% | -7.3 | -60.3 to +46.8 |
-| claude-opus-5-5-xhigh vs gpt-6.1-sol-max | 4/10 = 40.0% | 51.2% | -11.2 | -35.4 to +4.2 |
-| claude-opus-5-5-xhigh vs gpt-6.1-terra-high | 1/3 = 33.3% | 61.3% | -28.0 | -68.6 to +38.6 |
-| claude-opus-5-5-xhigh vs gpt-6.1-terra-max | 5/5 = 100.0% | 45.0% | +55.0 | +41.9 to +68.1 |
-| claude-opus-5-5-xhigh vs gpt-6.1-terra-medium | 2/3 = 66.7% | 53.7% | +12.9 | -54.7 to +53.2 |
-| claude-opus-5-5-xhigh vs gpt-6.1-terra-off/low | 4/6 = 66.7% | 63.3% | +3.4 | -39.7 to +39.8 |
-| claude-opus-5-5-xhigh vs gpt-6.1-terra-xhigh | 1/3 = 33.3% | 50.8% | -17.4 | -59.0 to +50.7 |
-| claude-sonnet-5-5-high vs gpt-5.6-terra-medium | 1/2 = 50.0% | 62.3% | -12.3 | -21.7 to -0.9 |
-| claude-sonnet-5-5-high vs gpt-6-astra-high | 2/4 = 50.0% | 30.3% | +19.7 | -31.8 to +73.1 |
-| claude-sonnet-5-5-high vs gpt-6-astra-low | 2/4 = 50.0% | 37.7% | +12.3 | -39.7 to +65.6 |
-| claude-sonnet-5-5-high vs gpt-6-astra-medium | 2/2 = 100.0% | 33.9% | +66.1 | +54.9 to +73.9 |
-| claude-sonnet-5-5-high vs gpt-6-astra-off | 0/4 = 0.0% | 40.5% | -40.5 | -53.3 to -27.0 |
-| claude-sonnet-5-5-high vs gpt-6-luna-medium | 1/2 = 50.0% | 82.7% | -32.7 | -37.9 to -25.6 |
-| claude-sonnet-5-5-high vs gpt-6.1-sol-medium | 0/2 = 0.0% | 44.8% | -44.8 | -54.4 to -33.6 |
-| claude-sonnet-5-5-high vs gpt-6.1-terra-high | 3/3 = 100.0% | 44.5% | +55.5 | +41.0 to +69.3 |
-| claude-sonnet-5-5-high vs gpt-6.1-terra-max | 1/4 = 25.0% | 29.4% | -4.4 | -37.0 to +65.3 |
-| claude-sonnet-5-5-high vs gpt-6.1-terra-medium | 1/3 = 33.3% | 37.1% | -3.7 | -44.4 to +63.8 |
-| claude-sonnet-5-5-high vs gpt-6.1-terra-off/low | 2/7 = 28.6% | 46.6% | -18.1 | -50.6 to +19.3 |
-| claude-sonnet-5-5-high vs gpt-6.1-terra-xhigh | 0/3 = 0.0% | 34.3% | -34.3 | -46.6 to -23.1 |
-| claude-sonnet-5-5-low vs gpt-6-astra-high | 0/4 = 0.0% | 19.5% | -19.5 | -28.6 to -12.1 |
-| claude-sonnet-5-5-low vs gpt-6-astra-low | 0/4 = 0.0% | 25.2% | -25.2 | -36.7 to -15.2 |
-| claude-sonnet-5-5-low vs gpt-6-astra-medium | 0/2 = 0.0% | 22.2% | -22.2 | -29.4 to -15.0 |
-| claude-sonnet-5-5-low vs gpt-6-astra-off | 0/4 = 0.0% | 27.4% | -27.4 | -39.1 to -16.7 |
-| claude-sonnet-5-5-low vs gpt-6-luna-medium | 1/2 = 50.0% | 72.7% | -22.7 | -30.4 to -12.6 |
-| claude-sonnet-5-5-low vs gpt-6.1-sol-medium | 1/2 = 50.0% | 31.1% | +18.9 | +9.6 to +27.5 |
-| claude-sonnet-5-5-low vs gpt-6.1-terra-high | 1/4 = 25.0% | 30.9% | -5.9 | -39.2 to +59.3 |
-| claude-sonnet-5-5-low vs gpt-6.1-terra-max | 1/3 = 33.3% | 18.8% | +14.6 | -24.6 to +84.2 |
-| claude-sonnet-5-5-low vs gpt-6.1-terra-medium | 1/4 = 25.0% | 24.7% | +0.3 | -31.5 to +27.5 |
-| claude-sonnet-5-5-low vs gpt-6.1-terra-off/low | 3/8 = 37.5% | 32.7% | +4.8 | -30.0 to +50.4 |
-| claude-sonnet-5-5-low vs gpt-6.1-terra-xhigh | 1/4 = 25.0% | 22.5% | +2.5 | -28.3 to +72.2 |
-| claude-sonnet-5-5-max vs gpt-6-astra-medium | 4/10 = 40.0% | 53.1% | -13.1 | -38.0 to +3.2 |
-| claude-sonnet-5-5-max vs gpt-6-luna-medium | 2/2 = 100.0% | 91.4% | +8.6 | +5.5 to +12.7 |
-| claude-sonnet-5-5-max vs gpt-6.1-sol-max | 6/10 = 60.0% | 54.0% | +6.0 | -10.9 to +29.4 |
-| claude-sonnet-5-5-max vs gpt-6.1-sol-medium | 2/2 = 100.0% | 64.2% | +35.8 | +25.7 to +45.1 |
-| claude-sonnet-5-5-medium vs gpt-5.6-terra-high | 1/2 = 50.0% | 61.6% | -11.6 | -22.5 to +0.6 |
-| claude-sonnet-5-5-medium vs gpt-5.6-terra-low | 1/2 = 50.0% | 64.0% | -14.0 | -24.9 to -2.0 |
-| claude-sonnet-5-5-medium vs gpt-5.6-terra-medium | 11/20 = 55.0% | 59.2% | -4.2 | -28.1 to +19.8 |
-| claude-sonnet-5-5-medium vs gpt-5.6-terra-xhigh | 0/2 = 0.0% | 50.0% | -50.0 | -61.5 to -36.5 |
-| claude-sonnet-5-5-medium vs gpt-6-astra-high | 3/4 = 75.0% | 27.6% | +47.4 | -26.1 to +78.1 |
-| claude-sonnet-5-5-medium vs gpt-6-astra-low | 1/4 = 25.0% | 34.6% | -9.6 | -42.0 to +66.6 |
-| claude-sonnet-5-5-medium vs gpt-6-astra-medium | 7/20 = 35.0% | 31.0% | +4.0 | -10.8 to +17.5 |
-| claude-sonnet-5-5-medium vs gpt-6-astra-off | 2/4 = 50.0% | 37.3% | +12.7 | -40.2 to +65.5 |
-| claude-sonnet-5-5-medium vs gpt-6-luna-medium | 17/20 = 85.0% | 80.7% | +4.3 | -10.6 to +18.2 |
-| claude-sonnet-5-5-medium vs gpt-6-luna-off/low | 4/4 = 100.0% | 87.0% | +13.0 | +9.1 to +17.3 |
-| claude-sonnet-5-5-medium vs gpt-6-luna-xhigh | 1/2 = 50.0% | 52.1% | -2.1 | -13.0 to +9.1 |
-| claude-sonnet-5-5-medium vs gpt-6.1-sol-high | 1/2 = 50.0% | 42.6% | +7.4 | -4.1 to +17.1 |
-| claude-sonnet-5-5-medium vs gpt-6.1-sol-low | 1/2 = 50.0% | 38.5% | +11.5 | -0.0 to +21.4 |
-| claude-sonnet-5-5-medium vs gpt-6.1-sol-max | 0/2 = 0.0% | 31.7% | -31.7 | -39.7 to -23.7 |
-| claude-sonnet-5-5-medium vs gpt-6.1-sol-medium | 8/20 = 40.0% | 41.5% | -1.5 | -19.7 to +17.0 |
-| claude-sonnet-5-5-medium vs gpt-6.1-sol-xhigh | 1/2 = 50.0% | 39.0% | +11.0 | -0.4 to +20.4 |
-| claude-sonnet-5-5-medium vs gpt-6.1-terra-high | 0/4 = 0.0% | 41.3% | -41.3 | -53.9 to -28.0 |
-| claude-sonnet-5-5-medium vs gpt-6.1-terra-max | 1/4 = 25.0% | 26.7% | -1.7 | -33.1 to +70.2 |
-| claude-sonnet-5-5-medium vs gpt-6.1-terra-medium | 1/4 = 25.0% | 34.0% | -9.0 | -41.3 to +60.9 |
-| claude-sonnet-5-5-medium vs gpt-6.1-terra-off/low | 4/8 = 50.0% | 43.3% | +6.7 | -32.0 to +45.0 |
-| claude-sonnet-5-5-medium vs gpt-6.1-terra-xhigh | 3/4 = 75.0% | 31.4% | +43.6 | -25.1 to +75.3 |
-| claude-sonnet-5-5-off vs gpt-5.6-terra-medium | 1/2 = 50.0% | 55.6% | -5.6 | -15.4 to +4.5 |
-| claude-sonnet-5-5-off vs gpt-6-astra-high | 0/4 = 0.0% | 24.8% | -24.8 | -35.1 to -16.2 |
-| claude-sonnet-5-5-off vs gpt-6-astra-low | 1/4 = 25.0% | 31.4% | -6.4 | -38.6 to +61.8 |
-| claude-sonnet-5-5-off vs gpt-6-astra-medium | 2/2 = 100.0% | 27.9% | +72.1 | +62.5 to +78.9 |
-| claude-sonnet-5-5-off vs gpt-6-astra-off | 1/4 = 25.0% | 33.9% | -8.9 | -41.6 to +59.0 |
-| claude-sonnet-5-5-off vs gpt-6-luna-medium | 2/2 = 100.0% | 78.4% | +21.6 | +15.3 to +29.2 |
-| claude-sonnet-5-5-off vs gpt-6.1-sol-medium | 1/2 = 50.0% | 38.0% | +12.0 | +2.3 to +20.9 |
-| claude-sonnet-5-5-off vs gpt-6.1-terra-high | 0/4 = 0.0% | 37.8% | -37.8 | -51.5 to -24.9 |
-| claude-sonnet-5-5-off vs gpt-6.1-terra-max | 1/4 = 25.0% | 23.9% | +1.1 | -30.1 to +68.7 |
-| claude-sonnet-5-5-off vs gpt-6.1-terra-medium | 0/4 = 0.0% | 30.8% | -30.8 | -42.0 to -22.0 |
-| claude-sonnet-5-5-off vs gpt-6.1-terra-off/low | 2/8 = 25.0% | 39.8% | -14.8 | -43.1 to +20.1 |
-| claude-sonnet-5-5-off vs gpt-6.1-terra-xhigh | 1/4 = 25.0% | 28.3% | -3.3 | -35.0 to +65.1 |
-| claude-sonnet-5-5-xhigh vs gpt-5.6-terra-medium | 2/2 = 100.0% | 74.0% | +26.0 | +18.5 to +34.5 |
-| claude-sonnet-5-5-xhigh vs gpt-6-astra-high | 1/4 = 25.0% | 42.8% | -17.8 | -51.2 to +47.3 |
-| claude-sonnet-5-5-xhigh vs gpt-6-astra-low | 3/4 = 75.0% | 50.9% | +24.1 | -36.8 to +58.6 |
-| claude-sonnet-5-5-xhigh vs gpt-6-astra-medium | 1/2 = 50.0% | 46.8% | +3.2 | -6.9 to +13.0 |
-| claude-sonnet-5-5-xhigh vs gpt-6-astra-off | 4/4 = 100.0% | 53.8% | +46.2 | +34.0 to +60.4 |
-| claude-sonnet-5-5-xhigh vs gpt-6-luna-medium | 2/2 = 100.0% | 89.2% | +10.8 | +7.3 to +15.0 |
-| claude-sonnet-5-5-xhigh vs gpt-6.1-sol-medium | 1/2 = 50.0% | 58.2% | -8.2 | -17.1 to +1.5 |
-| claude-sonnet-5-5-xhigh vs gpt-6.1-terra-high | 2/3 = 66.7% | 57.9% | +8.7 | -59.7 to +50.7 |
-| claude-sonnet-5-5-xhigh vs gpt-6.1-terra-max | 2/4 = 50.0% | 41.6% | +8.4 | -43.9 to +61.3 |
-| claude-sonnet-5-5-xhigh vs gpt-6.1-terra-medium | 2/3 = 66.7% | 50.3% | +16.4 | -50.5 to +56.5 |
-| claude-sonnet-5-5-xhigh vs gpt-6.1-terra-off/low | 5/7 = 71.4% | 60.0% | +11.4 | -26.2 to +42.8 |
-| claude-sonnet-5-5-xhigh vs gpt-6.1-terra-xhigh | 2/3 = 66.7% | 47.3% | +19.4 | -4.4 to +61.4 |
-| gpt-5.6-terra-high vs gpt-6-astra-off | 0/1 = 0.0% | 27.1% | -27.1 | -39.8 to -15.4 |
-| gpt-5.6-terra-high vs gpt-6-luna-medium | 1/2 = 50.0% | 72.3% | -22.3 | -31.2 to -10.6 |
-| gpt-5.6-terra-high vs gpt-6.1-sol-medium | 1/2 = 50.0% | 30.7% | +19.3 | +7.4 to +28.2 |
-| gpt-5.6-terra-low vs gpt-6-astra-medium | 0/2 = 0.0% | 20.2% | -20.2 | -28.7 to -12.6 |
-| gpt-5.6-terra-low vs gpt-6.1-terra-high | 0/1 = 0.0% | 28.4% | -28.4 | -42.1 to -15.8 |
-| gpt-5.6-terra-max vs gpt-6-astra-medium | 1/2 = 50.0% | 30.4% | +19.6 | +6.3 to +29.3 |
-| gpt-5.6-terra-max vs gpt-6-luna-medium | 2/2 = 100.0% | 80.3% | +19.7 | +11.6 to +29.2 |
-| gpt-5.6-terra-medium vs gpt-6-astra-medium | 5/20 = 25.0% | 23.6% | +1.4 | -14.2 to +16.3 |
-| gpt-5.6-terra-medium vs gpt-6-astra-off | 0/1 = 0.0% | 29.1% | -29.1 | -40.4 to -18.7 |
-| gpt-5.6-terra-medium vs gpt-6-luna-high | 2/2 = 100.0% | 50.5% | +49.5 | +38.6 to +58.9 |
-| gpt-5.6-terra-medium vs gpt-6-luna-max | 2/2 = 100.0% | 45.2% | +54.8 | +41.7 to +66.2 |
-| gpt-5.6-terra-medium vs gpt-6-luna-medium | 15/20 = 75.0% | 74.3% | +0.7 | -21.2 to +20.1 |
-| gpt-5.6-terra-medium vs gpt-6-luna-off/low | 3/4 = 75.0% | 82.2% | -7.2 | -36.4 to +21.1 |
-| gpt-5.6-terra-medium vs gpt-6.1-sol-high | 0/2 = 0.0% | 33.8% | -33.8 | -43.5 to -24.0 |
-| gpt-5.6-terra-medium vs gpt-6.1-sol-low | 0/2 = 0.0% | 30.2% | -30.2 | -40.7 to -20.7 |
-| gpt-5.6-terra-medium vs gpt-6.1-sol-max | 0/2 = 0.0% | 24.3% | -24.3 | -31.9 to -17.3 |
-| gpt-5.6-terra-medium vs gpt-6.1-sol-medium | 6/20 = 30.0% | 32.9% | -2.9 | -18.6 to +12.1 |
-| gpt-5.6-terra-medium vs gpt-6.1-sol-xhigh | 0/2 = 0.0% | 30.7% | -30.7 | -40.3 to -21.5 |
-| gpt-5.6-terra-medium vs gpt-6.1-terra-off/low | 0/1 = 0.0% | 34.6% | -34.6 | -43.2 to -26.5 |
-| gpt-5.6-terra-medium vs gpt-6.1-terra-xhigh | 0/1 = 0.0% | 24.0% | -24.0 | -33.2 to -15.5 |
-| gpt-5.6-terra-xhigh vs gpt-6-astra-high | 1/1 = 100.0% | 27.6% | +72.4 | +57.5 to +82.4 |
-| gpt-5.6-terra-xhigh vs gpt-6-astra-low | 1/1 = 100.0% | 34.6% | +65.4 | +48.1 to +77.8 |
-| gpt-5.6-terra-xhigh vs gpt-6-astra-medium | 0/2 = 0.0% | 31.0% | -31.0 | -42.1 to -21.0 |
-| gpt-5.6-terra-xhigh vs gpt-6.1-sol-medium | 0/2 = 0.0% | 41.5% | -41.5 | -53.9 to -29.1 |
-| gpt-5.6-terra-xhigh vs gpt-6.1-terra-off/low | 0/1 = 0.0% | 43.3% | -43.3 | -56.9 to -30.6 |
-| gpt-6-astra-high vs gpt-6.1-sol-high | 1/1 = 100.0% | 66.0% | +34.0 | +21.5 to +46.8 |
-| gpt-6-astra-high vs gpt-6.1-sol-medium | 1/2 = 50.0% | 65.1% | -15.1 | -25.0 to -4.0 |
-| gpt-6-astra-high vs gpt-6.1-terra-high | 1/1 = 100.0% | 64.8% | +35.2 | +21.5 to +50.5 |
-| gpt-6-astra-high vs gpt-6.1-terra-max | 1/2 = 50.0% | 48.8% | +1.2 | -56.4 to +59.7 |
-| gpt-6-astra-high vs gpt-6.1-terra-medium | 0/1 = 0.0% | 57.5% | -57.5 | -70.4 to -43.6 |
-| gpt-6-astra-high vs gpt-6.1-terra-off/low | 3/3 = 100.0% | 66.7% | +33.3 | +22.7 to +44.3 |
-| gpt-6-astra-high vs gpt-6.1-terra-xhigh | 0/1 = 0.0% | 54.5% | -54.5 | -68.5 to -39.7 |
-| gpt-6-astra-low vs gpt-6-luna-medium | 2/2 = 100.0% | 88.8% | +11.2 | +6.8 to +16.8 |
-| gpt-6-astra-low vs gpt-6.1-sol-low | 0/1 = 0.0% | 54.2% | -54.2 | -67.6 to -38.3 |
-| gpt-6-astra-low vs gpt-6.1-sol-medium | 1/2 = 50.0% | 57.3% | -7.3 | -19.1 to +4.5 |
-| gpt-6-astra-low vs gpt-6.1-terra-high | 1/1 = 100.0% | 57.0% | +43.0 | +27.4 to +58.9 |
-| gpt-6-astra-low vs gpt-6.1-terra-max | 0/2 = 0.0% | 40.7% | -40.7 | -55.7 to -27.1 |
-| gpt-6-astra-low vs gpt-6.1-terra-medium | 1/1 = 100.0% | 49.3% | +50.7 | +35.2 to +63.4 |
-| gpt-6-astra-low vs gpt-6.1-terra-off/low | 0/2 = 0.0% | 59.1% | -59.1 | -71.0 to -47.1 |
-| gpt-6-astra-low vs gpt-6.1-terra-xhigh | 1/1 = 100.0% | 46.4% | +53.6 | +37.6 to +67.5 |
-| gpt-6-astra-medium vs gpt-6-luna-high | 1/2 = 50.0% | 76.7% | -26.7 | -32.8 to -18.0 |
-| gpt-6-astra-medium vs gpt-6-luna-max | 2/2 = 100.0% | 72.7% | +27.3 | +18.3 to +37.5 |
-| gpt-6-astra-medium vs gpt-6-luna-medium | 19/20 = 95.0% | 90.3% | +4.7 | -6.7 to +11.8 |
-| gpt-6-astra-medium vs gpt-6-luna-off/low | 2/2 = 100.0% | 93.7% | +6.3 | +4.2 to +8.8 |
-| gpt-6-astra-medium vs gpt-6-luna-xhigh | 1/2 = 50.0% | 70.8% | -20.8 | -29.1 to -10.1 |
-| gpt-6-astra-medium vs gpt-6.1-sol-high | 1/2 = 50.0% | 62.3% | -12.3 | -21.9 to -1.7 |
-| gpt-6-astra-medium vs gpt-6.1-sol-low | 3/4 = 75.0% | 58.3% | +16.7 | -14.5 to +48.1 |
-| gpt-6-astra-medium vs gpt-6.1-sol-max | 6/10 = 60.0% | 50.9% | +9.1 | -6.1 to +29.2 |
-| gpt-6-astra-medium vs gpt-6.1-sol-medium | 12/20 = 60.0% | 61.3% | -1.3 | -20.6 to +17.6 |
-| gpt-6-astra-medium vs gpt-6.1-sol-xhigh | 0/2 = 0.0% | 58.8% | -58.8 | -67.4 to -46.7 |
-| gpt-6-astra-medium vs gpt-6.1-terra-max | 0/1 = 0.0% | 44.8% | -44.8 | -55.7 to -31.9 |
-| gpt-6-astra-off vs gpt-6-luna-xhigh | 1/1 = 100.0% | 64.6% | +35.4 | +22.1 to +48.9 |
-| gpt-6-astra-off vs gpt-6.1-sol-medium | 0/1 = 0.0% | 54.4% | -54.4 | -67.4 to -41.6 |
-| gpt-6-astra-off vs gpt-6.1-terra-high | 1/1 = 100.0% | 54.2% | +45.8 | +29.4 to +61.7 |
-| gpt-6-astra-off vs gpt-6.1-terra-max | 0/1 = 0.0% | 37.9% | -37.9 | -53.3 to -24.2 |
-| gpt-6-astra-off vs gpt-6.1-terra-medium | 0/1 = 0.0% | 46.4% | -46.4 | -61.0 to -32.9 |
-| gpt-6-astra-off vs gpt-6.1-terra-off/low | 3/3 = 100.0% | 56.3% | +43.7 | +30.4 to +56.1 |
-| gpt-6-astra-off vs gpt-6.1-terra-xhigh | 1/2 = 50.0% | 43.5% | +6.5 | -51.9 to +63.0 |
-| gpt-6-luna-high vs gpt-6.1-sol-medium | 1/2 = 50.0% | 32.4% | +17.6 | +8.5 to +26.2 |
-| gpt-6-luna-high vs gpt-6.1-terra-high | 1/1 = 100.0% | 32.2% | +67.8 | +53.8 to +79.1 |
-| gpt-6-luna-high vs gpt-6.1-terra-off/low | 0/1 = 0.0% | 34.1% | -34.1 | -43.2 to -25.5 |
-| gpt-6-luna-max vs gpt-6.1-sol-medium | 0/2 = 0.0% | 37.3% | -37.3 | -48.0 to -26.1 |
-| gpt-6-luna-max vs gpt-6.1-terra-off/low | 1/2 = 50.0% | 39.1% | +10.9 | -1.5 to +21.6 |
-| gpt-6-luna-medium vs gpt-6.1-sol-high | 1/2 = 50.0% | 15.0% | +35.0 | +27.5 to +39.8 |
-| gpt-6-luna-medium vs gpt-6.1-sol-low | 0/2 = 0.0% | 13.0% | -13.0 | -19.3 to -8.2 |
-| gpt-6-luna-medium vs gpt-6.1-sol-max | 0/2 = 0.0% | 10.0% | -10.0 | -13.7 to -6.7 |
-| gpt-6-luna-medium vs gpt-6.1-sol-medium | 3/20 = 15.0% | 14.5% | +0.5 | -13.4 to +15.5 |
-| gpt-6-luna-medium vs gpt-6.1-sol-xhigh | 0/2 = 0.0% | 13.3% | -13.3 | -19.3 to -8.7 |
-| gpt-6-luna-off/low vs gpt-6.1-sol-medium | 1/4 = 25.0% | 9.6% | +15.4 | -11.5 to +42.2 |
-| gpt-6-luna-xhigh vs gpt-6.1-sol-medium | 1/2 = 50.0% | 39.5% | +10.5 | -1.4 to +20.6 |
-| gpt-6-luna-xhigh vs gpt-6.1-terra-off/low | 1/2 = 50.0% | 41.3% | +8.7 | -3.7 to +19.3 |
-| gpt-6.1-sol-high vs gpt-6.1-terra-medium | 1/2 = 50.0% | 41.0% | +9.0 | -4.3 to +21.1 |
-| gpt-6.1-sol-low vs gpt-6.1-terra-max | 1/1 = 100.0% | 36.7% | +63.3 | +47.4 to +76.0 |
-| gpt-6.1-sol-max vs gpt-6.1-terra-max | 1/2 = 50.0% | 43.9% | +6.1 | -6.7 to +18.3 |
-| gpt-6.1-sol-medium vs gpt-6.1-terra-max | 1/1 = 100.0% | 33.9% | +66.1 | +54.5 to +76.6 |
-| gpt-6.1-sol-medium vs gpt-6.1-terra-medium | 1/2 = 50.0% | 42.1% | +7.9 | -2.9 to +18.0 |
-| gpt-6.1-sol-medium vs gpt-6.1-terra-off/low | 1/1 = 100.0% | 51.9% | +48.1 | +38.9 to +57.0 |
-| gpt-6.1-sol-xhigh vs gpt-6.1-terra-high | 1/2 = 50.0% | 52.3% | -2.3 | -16.7 to +12.6 |
-| gpt-6.1-sol-xhigh vs gpt-6.1-terra-max | 0/1 = 0.0% | 36.2% | -36.2 | -50.2 to -23.5 |
-| gpt-6.1-sol-xhigh vs gpt-6.1-terra-xhigh | 1/2 = 50.0% | 41.7% | +8.3 | -5.0 to +20.9 |
+| claude-haiku-4-5-20251001-off vs gpt-6-astra-off | 0/2 = 0.0% | 5.9% | -5.9 | -10.3 to -3.0 |
+| claude-haiku-4-5-20251001-off vs gpt-6.1-sol-medium | 0/2 = 0.0% | 6.9% | -6.9 | -11.1 to -4.1 |
+| claude-haiku-4-5-20251001-off vs gpt-6.1-terra-high | 0/3 = 0.0% | 6.9% | -6.9 | -12.1 to -3.3 |
+| claude-haiku-4-5-20251001-off vs gpt-6.1-terra-max | 0/2 = 0.0% | 3.6% | -3.6 | -6.4 to -1.8 |
+| claude-haiku-4-5-20251001-off vs gpt-6.1-terra-medium | 0/2 = 0.0% | 5.2% | -5.2 | -8.7 to -2.8 |
+| claude-haiku-4-5-20251001-off vs gpt-6.1-terra-off/low | 0/5 = 0.0% | 7.5% | -7.5 | -11.9 to -4.3 |
+| claude-haiku-4-5-20251001-off vs gpt-6.1-terra-xhigh | 0/3 = 0.0% | 4.6% | -4.6 | -7.8 to -2.4 |
+| claude-haiku-5-5-high vs claude-opus-5-5-high | 0/2 = 0.0% | 35.1% | -35.1 | -46.6 to -24.0 |
+| claude-haiku-5-5-high vs claude-opus-5-5-max | 0/4 = 0.0% | 26.6% | -26.6 | -38.0 to -16.6 |
+| claude-haiku-5-5-high vs claude-opus-5-5-medium | 1/2 = 50.0% | 42.4% | +7.6 | -0.6 to +16.0 |
+| claude-haiku-5-5-high vs claude-opus-5-5-off/low | 6/7 = 85.7% | 48.3% | +37.4 | +3.4 to +59.3 |
+| claude-haiku-5-5-high vs claude-sonnet-5-5-medium | 2/4 = 50.0% | 52.8% | -2.8 | -57.6 to +50.7 |
+| claude-haiku-5-5-high vs gpt-6-astra-high | 2/4 = 50.0% | 29.6% | +20.4 | -31.5 to +73.8 |
+| claude-haiku-5-5-high vs gpt-6-astra-low | 1/4 = 25.0% | 37.4% | -12.4 | -45.2 to +53.6 |
+| claude-haiku-5-5-high vs gpt-6-astra-medium | 0/2 = 0.0% | 33.5% | -33.5 | -41.4 to -25.4 |
+| claude-haiku-5-5-high vs gpt-6-astra-off | 1/4 = 25.0% | 40.2% | -15.2 | -48.7 to +38.6 |
+| claude-haiku-5-5-high vs gpt-6-luna-medium | 1/2 = 50.0% | 82.7% | -32.7 | -37.5 to -26.9 |
+| claude-haiku-5-5-high vs gpt-6.1-sol-medium | 0/2 = 0.0% | 44.4% | -44.4 | -53.1 to -35.1 |
+| claude-haiku-5-5-high vs gpt-6.1-terra-high | 2/4 = 50.0% | 44.3% | +5.7 | -47.7 to +58.8 |
+| claude-haiku-5-5-high vs gpt-6.1-terra-max | 0/4 = 0.0% | 28.6% | -28.6 | -39.6 to -19.0 |
+| claude-haiku-5-5-high vs gpt-6.1-terra-medium | 2/4 = 50.0% | 37.0% | +13.0 | -42.5 to +63.9 |
+| claude-haiku-5-5-high vs gpt-6.1-terra-off/low | 3/7 = 42.9% | 46.6% | -3.7 | -45.0 to +39.5 |
+| claude-haiku-5-5-high vs gpt-6.1-terra-xhigh | 2/4 = 50.0% | 34.2% | +15.8 | -36.7 to +69.2 |
+| claude-haiku-5-5-low vs claude-opus-5-5-high | 1/2 = 50.0% | 29.4% | +20.6 | -35.3 to +76.5 |
+| claude-haiku-5-5-low vs claude-opus-5-5-max | 1/3 = 33.3% | 21.8% | +11.5 | -27.5 to +80.0 |
+| claude-haiku-5-5-low vs claude-opus-5-5-medium | 2/2 = 100.0% | 36.1% | +63.9 | +55.6 to +70.6 |
+| claude-haiku-5-5-low vs claude-opus-5-5-off/low | 1/6 = 16.7% | 41.8% | -25.1 | -49.2 to +12.6 |
+| claude-haiku-5-5-low vs claude-sonnet-5-5-medium | 1/2 = 50.0% | 46.3% | +3.7 | -4.1 to +11.6 |
+| claude-haiku-5-5-low vs gpt-5.6-terra-medium | 1/2 = 50.0% | 55.7% | -5.7 | -14.7 to +2.7 |
+| claude-haiku-5-5-low vs gpt-6-astra-high | 0/4 = 0.0% | 24.4% | -24.4 | -33.2 to -16.0 |
+| claude-haiku-5-5-low vs gpt-6-astra-low | 0/4 = 0.0% | 31.4% | -31.4 | -42.8 to -21.0 |
+| claude-haiku-5-5-low vs gpt-6-astra-medium | 0/2 = 0.0% | 27.9% | -27.9 | -35.0 to -21.1 |
+| claude-haiku-5-5-low vs gpt-6-astra-off | 3/4 = 75.0% | 34.1% | +40.9 | -22.4 to +73.9 |
+| claude-haiku-5-5-low vs gpt-6-luna-medium | 1/2 = 50.0% | 78.7% | -28.7 | -33.9 to -22.5 |
+| claude-haiku-5-5-low vs gpt-6.1-sol-medium | 2/2 = 100.0% | 38.0% | +62.0 | +52.7 to +69.8 |
+| claude-haiku-5-5-low vs gpt-6.1-terra-high | 3/4 = 75.0% | 37.9% | +37.1 | -26.0 to +71.7 |
+| claude-haiku-5-5-low vs gpt-6.1-terra-max | 1/4 = 25.0% | 23.6% | +1.4 | -29.4 to +69.3 |
+| claude-haiku-5-5-low vs gpt-6.1-terra-medium | 3/4 = 75.0% | 31.2% | +43.8 | -24.9 to +74.9 |
+| claude-haiku-5-5-low vs gpt-6.1-terra-off/low | 4/8 = 50.0% | 40.2% | +9.8 | -27.2 to +42.5 |
+| claude-haiku-5-5-low vs gpt-6.1-terra-xhigh | 0/4 = 0.0% | 28.5% | -28.5 | -38.7 to -19.5 |
+| claude-haiku-5-5-max vs claude-opus-5-5-medium | 2/2 = 100.0% | 47.8% | +52.2 | +41.1 to +61.6 |
+| claude-haiku-5-5-max vs claude-sonnet-5-5-medium | 1/2 = 50.0% | 58.2% | -8.2 | -17.5 to +2.7 |
+| claude-haiku-5-5-max vs gpt-5.6-terra-medium | 1/2 = 50.0% | 67.1% | -17.1 | -25.9 to -7.4 |
+| claude-haiku-5-5-max vs gpt-6.1-sol-medium | 1/2 = 50.0% | 49.8% | +0.2 | -10.1 to +10.6 |
+| claude-haiku-5-5-medium vs claude-opus-5-5-high | 0/2 = 0.0% | 33.0% | -33.0 | -43.1 to -22.8 |
+| claude-haiku-5-5-medium vs claude-opus-5-5-max | 1/3 = 33.3% | 24.9% | +8.4 | -29.8 to +30.7 |
+| claude-haiku-5-5-medium vs claude-opus-5-5-medium | 7/20 = 35.0% | 40.2% | -5.2 | -21.0 to +8.9 |
+| claude-haiku-5-5-medium vs claude-opus-5-5-off/low | 3/6 = 50.0% | 46.0% | +4.0 | -40.7 to +50.2 |
+| claude-haiku-5-5-medium vs claude-sonnet-5-5-high | 1/4 = 25.0% | 47.2% | -22.2 | -53.3 to +8.6 |
+| claude-haiku-5-5-medium vs claude-sonnet-5-5-low | 2/2 = 100.0% | 61.6% | +38.4 | +28.9 to +48.0 |
+| claude-haiku-5-5-medium vs claude-sonnet-5-5-max | 0/2 = 0.0% | 28.0% | -28.0 | -36.2 to -19.8 |
+| claude-haiku-5-5-medium vs claude-sonnet-5-5-medium | 12/20 = 60.0% | 50.5% | +9.5 | -9.0 to +26.8 |
+| claude-haiku-5-5-medium vs claude-sonnet-5-5-off | 1/2 = 50.0% | 54.1% | -4.1 | -12.5 to +5.1 |
+| claude-haiku-5-5-medium vs claude-sonnet-5-5-xhigh | 1/4 = 25.0% | 34.0% | -9.0 | -38.5 to +20.2 |
+| claude-haiku-5-5-medium vs gpt-5.6-terra-high | 2/2 = 100.0% | 62.3% | +37.7 | +26.3 to +48.4 |
+| claude-haiku-5-5-medium vs gpt-5.6-terra-low | 1/2 = 50.0% | 64.6% | -14.6 | -25.0 to -2.9 |
+| claude-haiku-5-5-medium vs gpt-5.6-terra-max | 2/2 = 100.0% | 51.4% | +48.6 | +35.0 to +60.7 |
+| claude-haiku-5-5-medium vs gpt-5.6-terra-medium | 13/20 = 65.0% | 59.9% | +5.1 | -9.8 to +20.4 |
+| claude-haiku-5-5-medium vs gpt-6-astra-high | 1/4 = 25.0% | 27.7% | -2.7 | -34.3 to +65.6 |
+| claude-haiku-5-5-medium vs gpt-6-astra-low | 2/4 = 50.0% | 35.2% | +14.8 | -35.7 to +68.8 |
+| claude-haiku-5-5-medium vs gpt-6-astra-medium | 6/20 = 30.0% | 31.5% | -1.5 | -17.6 to +13.7 |
+| claude-haiku-5-5-medium vs gpt-6-astra-off | 3/4 = 75.0% | 38.0% | +37.0 | -31.2 to +70.4 |
+| claude-haiku-5-5-medium vs gpt-6-luna-high | 1/2 = 50.0% | 60.9% | -10.9 | -18.9 to -1.8 |
+| claude-haiku-5-5-medium vs gpt-6-luna-max | 1/2 = 50.0% | 55.5% | -5.5 | -15.6 to +6.0 |
+| claude-haiku-5-5-medium vs gpt-6-luna-medium | 19/20 = 95.0% | 81.4% | +13.6 | +2.5 to +21.7 |
+| claude-haiku-5-5-medium vs gpt-6-luna-off/low | 2/2 = 100.0% | 87.5% | +12.5 | +9.1 to +16.3 |
+| claude-haiku-5-5-medium vs gpt-6.1-sol-high | 2/4 = 50.0% | 43.0% | +7.0 | -3.2 to +16.3 |
+| claude-haiku-5-5-medium vs gpt-6.1-sol-low | 0/2 = 0.0% | 39.0% | -39.0 | -49.0 to -28.7 |
+| claude-haiku-5-5-medium vs gpt-6.1-sol-max | 1/2 = 50.0% | 31.9% | +18.1 | +10.4 to +24.8 |
+| claude-haiku-5-5-medium vs gpt-6.1-sol-medium | 10/20 = 50.0% | 42.1% | +7.9 | -7.7 to +24.0 |
+| claude-haiku-5-5-medium vs gpt-6.1-sol-xhigh | 1/2 = 50.0% | 39.5% | +10.5 | +0.7 to +20.0 |
+| claude-haiku-5-5-medium vs gpt-6.1-terra-high | 1/4 = 25.0% | 42.0% | -17.0 | -50.4 to +50.9 |
+| claude-haiku-5-5-medium vs gpt-6.1-terra-max | 1/4 = 25.0% | 26.8% | -1.8 | -33.5 to +64.8 |
+| claude-haiku-5-5-medium vs gpt-6.1-terra-medium | 1/4 = 25.0% | 34.9% | -9.9 | -40.9 to +55.1 |
+| claude-haiku-5-5-medium vs gpt-6.1-terra-off/low | 1/8 = 12.5% | 44.3% | -31.8 | -49.9 to -2.3 |
+| claude-haiku-5-5-medium vs gpt-6.1-terra-xhigh | 0/4 = 0.0% | 32.1% | -32.1 | -41.9 to -22.6 |
+| claude-haiku-5-5-off vs claude-opus-5-5-high | 0/1 = 0.0% | 16.1% | -16.1 | -23.5 to -10.4 |
+| claude-haiku-5-5-off vs claude-opus-5-5-max | 0/2 = 0.0% | 11.5% | -11.5 | -17.0 to -6.8 |
+| claude-haiku-5-5-off vs claude-opus-5-5-off/low | 0/5 = 0.0% | 25.0% | -25.0 | -32.4 to -18.4 |
+| claude-haiku-5-5-off vs gpt-5.6-terra-medium | 1/2 = 50.0% | 36.8% | +13.2 | +4.7 to +19.9 |
+| claude-haiku-5-5-off vs gpt-6-astra-high | 1/3 = 33.3% | 13.0% | +20.3 | -16.2 to +88.4 |
+| claude-haiku-5-5-off vs gpt-6-astra-low | 0/3 = 0.0% | 17.5% | -17.5 | -24.9 to -11.1 |
+| claude-haiku-5-5-off vs gpt-6-astra-medium | 0/2 = 0.0% | 15.2% | -15.2 | -19.4 to -11.4 |
+| claude-haiku-5-5-off vs gpt-6-astra-off | 1/4 = 25.0% | 19.3% | +5.7 | -24.7 to +79.3 |
+| claude-haiku-5-5-off vs gpt-6-luna-medium | 1/2 = 50.0% | 63.1% | -13.1 | -19.9 to -6.1 |
+| claude-haiku-5-5-off vs gpt-6.1-sol-medium | 0/2 = 0.0% | 22.1% | -22.1 | -28.0 to -16.7 |
+| claude-haiku-5-5-off vs gpt-6.1-terra-high | 0/4 = 0.0% | 22.1% | -22.1 | -31.3 to -13.6 |
+| claude-haiku-5-5-off vs gpt-6.1-terra-max | 0/3 = 0.0% | 12.5% | -12.5 | -18.4 to -8.1 |
+| claude-haiku-5-5-off vs gpt-6.1-terra-medium | 0/3 = 0.0% | 17.3% | -17.3 | -23.4 to -12.0 |
+| claude-haiku-5-5-off vs gpt-6.1-terra-off/low | 2/7 = 28.6% | 23.7% | +4.9 | -25.4 to +46.1 |
+| claude-haiku-5-5-off vs gpt-6.1-terra-xhigh | 0/4 = 0.0% | 15.6% | -15.6 | -21.7 to -10.4 |
+| claude-haiku-5-5-xhigh vs claude-opus-5-5-high | 0/2 = 0.0% | 38.6% | -38.6 | -51.7 to -26.5 |
+| claude-haiku-5-5-xhigh vs claude-opus-5-5-max | 0/3 = 0.0% | 29.7% | -29.7 | -42.2 to -19.0 |
+| claude-haiku-5-5-xhigh vs claude-opus-5-5-medium | 0/2 = 0.0% | 46.2% | -46.2 | -54.4 to -37.2 |
+| claude-haiku-5-5-xhigh vs claude-opus-5-5-off/low | 2/7 = 28.6% | 52.1% | -23.5 | -55.8 to +14.9 |
+| claude-haiku-5-5-xhigh vs claude-sonnet-5-5-medium | 1/2 = 50.0% | 56.6% | -6.6 | -15.7 to +2.6 |
+| claude-haiku-5-5-xhigh vs gpt-6-astra-high | 1/4 = 25.0% | 32.9% | -7.9 | -39.8 to +59.6 |
+| claude-haiku-5-5-xhigh vs gpt-6-astra-low | 1/4 = 25.0% | 41.0% | -16.0 | -49.9 to +51.5 |
+| claude-haiku-5-5-xhigh vs gpt-6-astra-medium | 0/2 = 0.0% | 37.0% | -37.0 | -46.0 to -27.8 |
+| claude-haiku-5-5-xhigh vs gpt-6-astra-off | 3/4 = 75.0% | 43.9% | +31.1 | -27.5 to +66.0 |
+| claude-haiku-5-5-xhigh vs gpt-6-luna-medium | 2/2 = 100.0% | 84.8% | +15.2 | +10.6 to +20.2 |
+| claude-haiku-5-5-xhigh vs gpt-6.1-terra-high | 2/4 = 50.0% | 48.1% | +1.9 | -51.1 to +54.2 |
+| claude-haiku-5-5-xhigh vs gpt-6.1-terra-max | 0/4 = 0.0% | 31.8% | -31.8 | -43.0 to -21.7 |
+| claude-haiku-5-5-xhigh vs gpt-6.1-terra-medium | 3/4 = 75.0% | 40.7% | +34.3 | -34.0 to +66.6 |
+| claude-haiku-5-5-xhigh vs gpt-6.1-terra-off/low | 2/7 = 28.6% | 50.4% | -21.8 | -53.8 to +16.2 |
+| claude-haiku-5-5-xhigh vs gpt-6.1-terra-xhigh | 2/4 = 50.0% | 37.7% | +12.3 | -39.4 to +65.6 |
+| claude-opus-5-5-high vs claude-sonnet-5-5-high | 2/2 = 100.0% | 64.4% | +35.6 | +23.2 to +49.2 |
+| claude-opus-5-5-high vs claude-sonnet-5-5-low | 2/2 = 100.0% | 76.5% | +23.5 | +14.7 to +34.8 |
+| claude-opus-5-5-high vs claude-sonnet-5-5-medium | 1/2 = 50.0% | 67.5% | -17.5 | -27.3 to -6.3 |
+| claude-opus-5-5-high vs claude-sonnet-5-5-off | 2/2 = 100.0% | 70.5% | +29.5 | +19.0 to +41.9 |
+| claude-opus-5-5-high vs claude-sonnet-5-5-xhigh | 2/2 = 100.0% | 51.1% | +48.9 | +35.0 to +61.4 |
+| claude-opus-5-5-high vs gpt-6-astra-high | 0/1 = 0.0% | 43.8% | -43.8 | -57.9 to -29.6 |
+| claude-opus-5-5-high vs gpt-6-astra-medium | 1/2 = 50.0% | 48.2% | +1.8 | -11.1 to +12.6 |
+| claude-opus-5-5-high vs gpt-6-astra-off | 0/1 = 0.0% | 55.4% | -55.4 | -69.6 to -38.8 |
+| claude-opus-5-5-high vs gpt-6-luna-medium | 2/2 = 100.0% | 89.9% | +10.1 | +6.0 to +15.6 |
+| claude-opus-5-5-high vs gpt-6.1-sol-medium | 0/2 = 0.0% | 59.6% | -59.6 | -69.9 to -46.4 |
+| claude-opus-5-5-high vs gpt-6.1-terra-max | 1/1 = 100.0% | 42.6% | +57.4 | +41.2 to +70.9 |
+| claude-opus-5-5-high vs gpt-6.1-terra-off/low | 1/1 = 100.0% | 61.8% | +38.2 | +25.9 to +49.7 |
+| claude-opus-5-5-max vs claude-sonnet-5-5-high | 3/4 = 75.0% | 72.9% | +2.1 | -66.2 to +34.0 |
+| claude-opus-5-5-max vs claude-sonnet-5-5-low | 2/3 = 66.7% | 82.9% | -16.2 | -84.9 to +21.7 |
+| claude-opus-5-5-max vs claude-sonnet-5-5-max | 0/2 = 0.0% | 54.0% | -54.0 | -66.6 to -38.9 |
+| claude-opus-5-5-max vs claude-sonnet-5-5-medium | 3/3 = 100.0% | 75.5% | +24.5 | +15.4 to +33.9 |
+| claude-opus-5-5-max vs claude-sonnet-5-5-off | 3/3 = 100.0% | 78.1% | +21.9 | +12.9 to +32.1 |
+| claude-opus-5-5-max vs claude-sonnet-5-5-xhigh | 2/3 = 66.7% | 60.9% | +5.8 | -62.6 to +46.5 |
+| claude-opus-5-5-max vs gpt-6-astra-medium | 1/2 = 50.0% | 58.1% | -8.1 | -20.6 to +4.1 |
+| claude-opus-5-5-max vs gpt-6.1-sol-medium | 1/2 = 50.0% | 68.7% | -18.7 | -29.6 to -7.1 |
+| claude-opus-5-5-max vs gpt-6.1-terra-medium | 1/2 = 50.0% | 61.8% | -11.8 | -24.4 to +2.8 |
+| claude-opus-5-5-medium vs claude-sonnet-5-5-high | 2/2 = 100.0% | 57.1% | +42.9 | +32.5 to +52.8 |
+| claude-opus-5-5-medium vs claude-sonnet-5-5-low | 2/4 = 50.0% | 70.5% | -20.5 | -75.1 to +33.5 |
+| claude-opus-5-5-medium vs claude-sonnet-5-5-max | 2/2 = 100.0% | 36.7% | +63.3 | +52.0 to +71.9 |
+| claude-opus-5-5-medium vs claude-sonnet-5-5-medium | 12/20 = 60.0% | 60.4% | -0.4 | -19.5 to +18.3 |
+| claude-opus-5-5-medium vs claude-sonnet-5-5-off | 1/2 = 50.0% | 63.7% | -13.7 | -21.5 to -4.7 |
+| claude-opus-5-5-medium vs claude-sonnet-5-5-xhigh | 2/2 = 100.0% | 43.4% | +56.6 | +46.7 to +65.0 |
+| claude-opus-5-5-medium vs gpt-5.6-terra-high | 2/2 = 100.0% | 71.1% | +28.9 | +19.1 to +38.4 |
+| claude-opus-5-5-medium vs gpt-5.6-terra-low | 1/2 = 50.0% | 73.1% | -23.1 | -32.0 to -12.3 |
+| claude-opus-5-5-medium vs gpt-5.6-terra-max | 2/2 = 100.0% | 61.2% | +38.8 | +26.4 to +50.5 |
+| claude-opus-5-5-medium vs gpt-5.6-terra-medium | 12/20 = 60.0% | 69.0% | -9.0 | -21.1 to +4.8 |
+| claude-opus-5-5-medium vs gpt-5.6-terra-xhigh | 2/2 = 100.0% | 60.5% | +39.5 | +27.0 to +51.1 |
+| claude-opus-5-5-medium vs gpt-6-astra-high | 2/4 = 50.0% | 36.3% | +13.7 | -36.8 to +65.9 |
+| claude-opus-5-5-medium vs gpt-6-astra-low | 2/4 = 50.0% | 44.8% | +5.2 | -46.4 to +56.7 |
+| claude-opus-5-5-medium vs gpt-6-astra-medium | 9/20 = 45.0% | 40.6% | +4.4 | -8.2 to +14.1 |
+| claude-opus-5-5-medium vs gpt-6-astra-off | 2/4 = 50.0% | 47.7% | +2.3 | -50.5 to +56.2 |
+| claude-opus-5-5-medium vs gpt-6-luna-max | 1/2 = 50.0% | 65.0% | -15.0 | -25.2 to -3.1 |
+| claude-opus-5-5-medium vs gpt-6-luna-medium | 16/20 = 80.0% | 86.7% | -6.7 | -30.5 to +11.6 |
+| claude-opus-5-5-medium vs gpt-6-luna-off/low | 2/2 = 100.0% | 91.3% | +8.7 | +5.9 to +11.8 |
+| claude-opus-5-5-medium vs gpt-6-luna-xhigh | 1/2 = 50.0% | 62.8% | -12.8 | -22.0 to -1.8 |
+| claude-opus-5-5-medium vs gpt-6.1-sol-high | 2/2 = 100.0% | 53.0% | +47.0 | +36.1 to +55.8 |
+| claude-opus-5-5-medium vs gpt-6.1-sol-low | 1/2 = 50.0% | 48.8% | +1.2 | -10.5 to +12.5 |
+| claude-opus-5-5-medium vs gpt-6.1-sol-max | 1/2 = 50.0% | 41.1% | +8.9 | -0.3 to +16.7 |
+| claude-opus-5-5-medium vs gpt-6.1-sol-medium | 12/20 = 60.0% | 52.0% | +8.0 | -11.7 to +26.6 |
+| claude-opus-5-5-medium vs gpt-6.1-sol-xhigh | 2/4 = 50.0% | 49.3% | +0.7 | -9.4 to +11.3 |
+| claude-opus-5-5-medium vs gpt-6.1-terra-high | 0/3 = 0.0% | 51.9% | -51.9 | -64.1 to -37.7 |
+| claude-opus-5-5-medium vs gpt-6.1-terra-max | 1/4 = 25.0% | 35.3% | -10.3 | -42.8 to +55.5 |
+| claude-opus-5-5-medium vs gpt-6.1-terra-medium | 2/3 = 66.7% | 44.4% | +22.2 | -1.1 to +62.3 |
+| claude-opus-5-5-medium vs gpt-6.1-terra-off/low | 4/7 = 57.1% | 54.3% | +2.9 | -38.1 to +44.5 |
+| claude-opus-5-5-medium vs gpt-6.1-terra-xhigh | 1/3 = 33.3% | 41.4% | -8.0 | -47.8 to +59.8 |
+| claude-opus-5-5-off/low vs claude-sonnet-5-5-high | 4/7 = 57.1% | 51.2% | +6.0 | -37.6 to +46.3 |
+| claude-opus-5-5-off/low vs claude-sonnet-5-5-low | 4/5 = 80.0% | 65.3% | +14.7 | -32.0 to +42.0 |
+| claude-opus-5-5-off/low vs claude-sonnet-5-5-medium | 5/7 = 71.4% | 54.6% | +16.9 | -14.5 to +48.5 |
+| claude-opus-5-5-off/low vs claude-sonnet-5-5-off | 3/7 = 42.9% | 58.1% | -15.2 | -61.1 to +26.8 |
+| claude-opus-5-5-off/low vs claude-sonnet-5-5-xhigh | 2/7 = 28.6% | 37.7% | -9.1 | -40.7 to +28.6 |
+| claude-opus-5-5-off/low vs gpt-5.6-terra-medium | 0/2 = 0.0% | 63.7% | -63.7 | -72.0 to -53.1 |
+| claude-opus-5-5-off/low vs gpt-6-astra-high | 1/2 = 50.0% | 31.0% | +19.0 | -37.4 to +75.2 |
+| claude-opus-5-5-off/low vs gpt-6-astra-low | 1/2 = 50.0% | 39.0% | +11.0 | -45.5 to +67.9 |
+| claude-opus-5-5-off/low vs gpt-6-astra-off | 0/2 = 0.0% | 41.8% | -41.8 | -55.4 to -28.4 |
+| claude-opus-5-5-off/low vs gpt-6-luna-medium | 2/2 = 100.0% | 83.7% | +16.3 | +11.1 to +22.2 |
+| claude-opus-5-5-off/low vs gpt-6-luna-xhigh | 1/2 = 50.0% | 57.1% | -7.1 | -18.5 to +5.8 |
+| claude-opus-5-5-off/low vs gpt-6.1-terra-max | 0/2 = 0.0% | 30.0% | -30.0 | -41.4 to -19.7 |
+| claude-opus-5-5-off/low vs gpt-6.1-terra-medium | 1/1 = 100.0% | 38.7% | +61.3 | +49.6 to +71.7 |
+| claude-opus-5-5-off/low vs gpt-6.1-terra-off/low | 2/2 = 100.0% | 48.3% | +51.7 | +40.8 to +61.5 |
+| claude-opus-5-5-off/low vs gpt-6.1-terra-xhigh | 1/2 = 50.0% | 35.7% | +14.3 | -41.5 to +72.0 |
+| claude-opus-5-5-xhigh vs claude-sonnet-5-5-max | 2/10 = 20.0% | 46.3% | -26.3 | -51.8 to -1.1 |
+| claude-opus-5-5-xhigh vs gpt-6-astra-high | 2/4 = 50.0% | 46.0% | +4.0 | -49.4 to +55.9 |
+| claude-opus-5-5-xhigh vs gpt-6-astra-low | 2/4 = 50.0% | 54.7% | -4.7 | -58.5 to +47.7 |
+| claude-opus-5-5-xhigh vs gpt-6-astra-medium | 22/41 = 53.7% | 50.5% | +3.2 | -8.4 to +15.4 |
+| claude-opus-5-5-xhigh vs gpt-6-astra-off | 2/4 = 50.0% | 57.6% | -7.6 | -62.0 to +45.2 |
+| claude-opus-5-5-xhigh vs gpt-6.1-sol-max | 4/10 = 40.0% | 50.9% | -10.9 | -33.3 to +4.8 |
+| claude-opus-5-5-xhigh vs gpt-6.1-terra-high | 1/3 = 33.3% | 61.7% | -28.3 | -70.1 to +38.8 |
+| claude-opus-5-5-xhigh vs gpt-6.1-terra-max | 5/5 = 100.0% | 44.8% | +55.2 | +42.1 to +68.1 |
+| claude-opus-5-5-xhigh vs gpt-6.1-terra-medium | 2/3 = 66.7% | 54.4% | +12.3 | -54.4 to +53.6 |
+| claude-opus-5-5-xhigh vs gpt-6.1-terra-off/low | 4/6 = 66.7% | 63.9% | +2.8 | -39.4 to +38.8 |
+| claude-opus-5-5-xhigh vs gpt-6.1-terra-xhigh | 1/3 = 33.3% | 51.2% | -17.9 | -58.8 to +51.4 |
+| claude-sonnet-5-5-high vs gpt-5.6-terra-medium | 1/2 = 50.0% | 62.6% | -12.6 | -22.3 to -2.0 |
+| claude-sonnet-5-5-high vs gpt-6-astra-high | 2/4 = 50.0% | 30.0% | +20.0 | -32.6 to +72.9 |
+| claude-sonnet-5-5-high vs gpt-6-astra-low | 2/4 = 50.0% | 37.9% | +12.1 | -39.9 to +65.0 |
+| claude-sonnet-5-5-high vs gpt-6-astra-medium | 2/2 = 100.0% | 34.0% | +66.0 | +55.4 to +74.0 |
+| claude-sonnet-5-5-high vs gpt-6-astra-off | 0/4 = 0.0% | 40.7% | -40.7 | -55.2 to -27.3 |
+| claude-sonnet-5-5-high vs gpt-6-luna-medium | 1/2 = 50.0% | 83.0% | -33.0 | -38.5 to -25.7 |
+| claude-sonnet-5-5-high vs gpt-6.1-sol-medium | 0/2 = 0.0% | 44.9% | -44.9 | -55.1 to -34.0 |
+| claude-sonnet-5-5-high vs gpt-6.1-terra-high | 3/3 = 100.0% | 44.8% | +55.2 | +40.6 to +68.9 |
+| claude-sonnet-5-5-high vs gpt-6.1-terra-max | 1/4 = 25.0% | 29.1% | -4.1 | -36.7 to +66.4 |
+| claude-sonnet-5-5-high vs gpt-6.1-terra-medium | 1/3 = 33.3% | 37.6% | -4.2 | -45.8 to +63.8 |
+| claude-sonnet-5-5-high vs gpt-6.1-terra-off/low | 2/7 = 28.6% | 47.1% | -18.6 | -51.7 to +20.1 |
+| claude-sonnet-5-5-high vs gpt-6.1-terra-xhigh | 0/3 = 0.0% | 34.7% | -34.7 | -47.3 to -23.2 |
+| claude-sonnet-5-5-low vs gpt-6-astra-high | 0/4 = 0.0% | 19.3% | -19.3 | -28.5 to -11.7 |
+| claude-sonnet-5-5-low vs gpt-6-astra-low | 0/4 = 0.0% | 25.3% | -25.3 | -35.9 to -15.7 |
+| claude-sonnet-5-5-low vs gpt-6-astra-medium | 0/2 = 0.0% | 22.2% | -22.2 | -29.7 to -14.9 |
+| claude-sonnet-5-5-low vs gpt-6-astra-off | 0/4 = 0.0% | 27.6% | -27.6 | -40.3 to -17.6 |
+| claude-sonnet-5-5-low vs gpt-6-luna-medium | 1/2 = 50.0% | 73.1% | -23.1 | -30.9 to -13.1 |
+| claude-sonnet-5-5-low vs gpt-6.1-sol-medium | 1/2 = 50.0% | 31.2% | +18.8 | +9.4 to +27.6 |
+| claude-sonnet-5-5-low vs gpt-6.1-terra-high | 1/4 = 25.0% | 31.1% | -6.1 | -38.9 to +65.2 |
+| claude-sonnet-5-5-low vs gpt-6.1-terra-max | 1/3 = 33.3% | 18.5% | +14.8 | -23.8 to +83.6 |
+| claude-sonnet-5-5-low vs gpt-6.1-terra-medium | 1/4 = 25.0% | 25.1% | -0.1 | -31.2 to +26.7 |
+| claude-sonnet-5-5-low vs gpt-6.1-terra-off/low | 3/8 = 37.5% | 33.1% | +4.4 | -30.8 to +48.9 |
+| claude-sonnet-5-5-low vs gpt-6.1-terra-xhigh | 1/4 = 25.0% | 22.8% | +2.2 | -28.3 to +71.5 |
+| claude-sonnet-5-5-max vs gpt-6-astra-medium | 4/10 = 40.0% | 54.2% | -14.2 | -39.2 to +2.2 |
+| claude-sonnet-5-5-max vs gpt-6-luna-medium | 2/2 = 100.0% | 91.8% | +8.2 | +5.1 to +12.1 |
+| claude-sonnet-5-5-max vs gpt-6.1-sol-max | 6/10 = 60.0% | 54.6% | +5.4 | -12.4 to +29.0 |
+| claude-sonnet-5-5-max vs gpt-6.1-sol-medium | 2/2 = 100.0% | 65.2% | +34.8 | +24.8 to +44.4 |
+| claude-sonnet-5-5-medium vs gpt-5.6-terra-high | 1/2 = 50.0% | 61.8% | -11.8 | -22.0 to +0.9 |
+| claude-sonnet-5-5-medium vs gpt-5.6-terra-low | 1/2 = 50.0% | 64.1% | -14.1 | -25.0 to -2.9 |
+| claude-sonnet-5-5-medium vs gpt-5.6-terra-medium | 11/20 = 55.0% | 59.4% | -4.4 | -29.5 to +18.4 |
+| claude-sonnet-5-5-medium vs gpt-5.6-terra-xhigh | 0/2 = 0.0% | 50.2% | -50.2 | -61.5 to -36.8 |
+| claude-sonnet-5-5-medium vs gpt-6-astra-high | 3/4 = 75.0% | 27.3% | +47.7 | -26.6 to +78.8 |
+| claude-sonnet-5-5-medium vs gpt-6-astra-low | 1/4 = 25.0% | 34.7% | -9.7 | -41.7 to +65.8 |
+| claude-sonnet-5-5-medium vs gpt-6-astra-medium | 7/20 = 35.0% | 31.0% | +4.0 | -11.1 to +18.5 |
+| claude-sonnet-5-5-medium vs gpt-6-astra-off | 2/4 = 50.0% | 37.5% | +12.5 | -39.3 to +66.2 |
+| claude-sonnet-5-5-medium vs gpt-6-luna-medium | 17/20 = 85.0% | 81.0% | +4.0 | -11.9 to +18.0 |
+| claude-sonnet-5-5-medium vs gpt-6-luna-off/low | 4/4 = 100.0% | 87.3% | +12.7 | +8.8 to +17.2 |
+| claude-sonnet-5-5-medium vs gpt-6-luna-xhigh | 1/2 = 50.0% | 52.6% | -2.6 | -13.0 to +8.9 |
+| claude-sonnet-5-5-medium vs gpt-6.1-sol-high | 1/2 = 50.0% | 42.5% | +7.5 | -2.9 to +17.7 |
+| claude-sonnet-5-5-medium vs gpt-6.1-sol-low | 1/2 = 50.0% | 38.5% | +11.5 | +0.7 to +22.2 |
+| claude-sonnet-5-5-medium vs gpt-6.1-sol-max | 0/2 = 0.0% | 31.4% | -31.4 | -39.3 to -23.8 |
+| claude-sonnet-5-5-medium vs gpt-6.1-sol-medium | 8/20 = 40.0% | 41.6% | -1.6 | -20.1 to +17.0 |
+| claude-sonnet-5-5-medium vs gpt-6.1-sol-xhigh | 1/2 = 50.0% | 39.0% | +11.0 | -0.4 to +20.7 |
+| claude-sonnet-5-5-medium vs gpt-6.1-terra-high | 0/4 = 0.0% | 41.5% | -41.5 | -54.1 to -28.7 |
+| claude-sonnet-5-5-medium vs gpt-6.1-terra-max | 1/4 = 25.0% | 26.3% | -1.3 | -32.5 to +69.0 |
+| claude-sonnet-5-5-medium vs gpt-6.1-terra-medium | 1/4 = 25.0% | 34.4% | -9.4 | -40.2 to +62.2 |
+| claude-sonnet-5-5-medium vs gpt-6.1-terra-off/low | 4/8 = 50.0% | 43.8% | +6.2 | -29.1 to +43.0 |
+| claude-sonnet-5-5-medium vs gpt-6.1-terra-xhigh | 3/4 = 75.0% | 31.7% | +43.3 | -25.2 to +75.2 |
+| claude-sonnet-5-5-off vs gpt-5.6-terra-medium | 1/2 = 50.0% | 55.8% | -5.8 | -15.8 to +4.1 |
+| claude-sonnet-5-5-off vs gpt-6-astra-high | 0/4 = 0.0% | 24.5% | -24.5 | -34.6 to -16.4 |
+| claude-sonnet-5-5-off vs gpt-6-astra-low | 1/4 = 25.0% | 31.5% | -6.5 | -38.7 to +49.2 |
+| claude-sonnet-5-5-off vs gpt-6-astra-medium | 2/2 = 100.0% | 28.0% | +72.0 | +62.5 to +78.4 |
+| claude-sonnet-5-5-off vs gpt-6-astra-off | 1/4 = 25.0% | 34.2% | -9.2 | -41.9 to +58.2 |
+| claude-sonnet-5-5-off vs gpt-6-luna-medium | 2/2 = 100.0% | 78.7% | +21.3 | +15.0 to +28.4 |
+| claude-sonnet-5-5-off vs gpt-6.1-sol-medium | 1/2 = 50.0% | 38.1% | +11.9 | +2.2 to +20.5 |
+| claude-sonnet-5-5-off vs gpt-6.1-terra-high | 0/4 = 0.0% | 38.0% | -38.0 | -51.4 to -25.3 |
+| claude-sonnet-5-5-off vs gpt-6.1-terra-max | 1/4 = 25.0% | 23.6% | +1.4 | -30.2 to +71.4 |
+| claude-sonnet-5-5-off vs gpt-6.1-terra-medium | 0/4 = 0.0% | 31.3% | -31.3 | -41.9 to -21.7 |
+| claude-sonnet-5-5-off vs gpt-6.1-terra-off/low | 2/8 = 25.0% | 40.3% | -15.3 | -42.9 to +21.1 |
+| claude-sonnet-5-5-off vs gpt-6.1-terra-xhigh | 1/4 = 25.0% | 28.6% | -3.6 | -35.6 to +65.1 |
+| claude-sonnet-5-5-xhigh vs gpt-5.6-terra-medium | 2/2 = 100.0% | 74.3% | +25.7 | +18.1 to +33.2 |
+| claude-sonnet-5-5-xhigh vs gpt-6-astra-high | 1/4 = 25.0% | 42.6% | -17.6 | -50.8 to +50.2 |
+| claude-sonnet-5-5-xhigh vs gpt-6-astra-low | 3/4 = 75.0% | 51.3% | +23.7 | -39.9 to +57.6 |
+| claude-sonnet-5-5-xhigh vs gpt-6-astra-medium | 1/2 = 50.0% | 47.1% | +2.9 | -7.0 to +12.3 |
+| claude-sonnet-5-5-xhigh vs gpt-6-astra-off | 4/4 = 100.0% | 54.3% | +45.7 | +32.9 to +59.1 |
+| claude-sonnet-5-5-xhigh vs gpt-6-luna-medium | 2/2 = 100.0% | 89.4% | +10.6 | +7.1 to +14.6 |
+| claude-sonnet-5-5-xhigh vs gpt-6.1-sol-medium | 1/2 = 50.0% | 58.5% | -8.5 | -17.9 to +1.4 |
+| claude-sonnet-5-5-xhigh vs gpt-6.1-terra-high | 2/3 = 66.7% | 58.4% | +8.2 | -60.6 to +49.6 |
+| claude-sonnet-5-5-xhigh vs gpt-6.1-terra-max | 2/4 = 50.0% | 41.5% | +8.5 | -44.1 to +61.3 |
+| claude-sonnet-5-5-xhigh vs gpt-6.1-terra-medium | 2/3 = 66.7% | 51.0% | +15.7 | -53.5 to +57.0 |
+| claude-sonnet-5-5-xhigh vs gpt-6.1-terra-off/low | 5/7 = 71.4% | 60.7% | +10.7 | -24.8 to +41.9 |
+| claude-sonnet-5-5-xhigh vs gpt-6.1-terra-xhigh | 2/3 = 66.7% | 47.9% | +18.8 | -5.4 to +59.0 |
+| gpt-5.6-terra-high vs gpt-6-astra-off | 0/1 = 0.0% | 27.0% | -27.0 | -40.2 to -16.1 |
+| gpt-5.6-terra-high vs gpt-6-luna-medium | 1/2 = 50.0% | 72.6% | -22.6 | -31.1 to -10.8 |
+| gpt-5.6-terra-high vs gpt-6.1-sol-medium | 1/2 = 50.0% | 30.6% | +19.4 | +7.5 to +28.7 |
+| gpt-5.6-terra-low vs gpt-6-astra-medium | 0/2 = 0.0% | 20.1% | -20.1 | -28.3 to -12.1 |
+| gpt-5.6-terra-low vs gpt-6.1-terra-high | 0/1 = 0.0% | 28.4% | -28.4 | -42.1 to -16.1 |
+| gpt-5.6-terra-max vs gpt-6-astra-medium | 1/2 = 50.0% | 30.3% | +19.7 | +6.0 to +29.4 |
+| gpt-5.6-terra-max vs gpt-6-luna-medium | 2/2 = 100.0% | 80.5% | +19.5 | +11.8 to +28.6 |
+| gpt-5.6-terra-medium vs gpt-6-astra-medium | 5/20 = 25.0% | 23.5% | +1.5 | -14.5 to +17.7 |
+| gpt-5.6-terra-medium vs gpt-6-astra-off | 0/1 = 0.0% | 29.1% | -29.1 | -40.4 to -19.1 |
+| gpt-5.6-terra-medium vs gpt-6-luna-high | 2/2 = 100.0% | 51.0% | +49.0 | +38.3 to +59.4 |
+| gpt-5.6-terra-medium vs gpt-6-luna-max | 2/2 = 100.0% | 45.5% | +54.5 | +41.2 to +64.7 |
+| gpt-5.6-terra-medium vs gpt-6-luna-medium | 15/20 = 75.0% | 74.5% | +0.5 | -21.0 to +20.2 |
+| gpt-5.6-terra-medium vs gpt-6-luna-off/low | 3/4 = 75.0% | 82.5% | -7.5 | -36.1 to +21.1 |
+| gpt-5.6-terra-medium vs gpt-6.1-sol-high | 0/2 = 0.0% | 33.6% | -33.6 | -43.6 to -23.8 |
+| gpt-5.6-terra-medium vs gpt-6.1-sol-low | 0/2 = 0.0% | 30.0% | -30.0 | -39.7 to -20.6 |
+| gpt-5.6-terra-medium vs gpt-6.1-sol-max | 0/2 = 0.0% | 23.9% | -23.9 | -30.6 to -16.7 |
+| gpt-5.6-terra-medium vs gpt-6.1-sol-medium | 6/20 = 30.0% | 32.8% | -2.8 | -18.2 to +12.5 |
+| gpt-5.6-terra-medium vs gpt-6.1-sol-xhigh | 0/2 = 0.0% | 30.4% | -30.4 | -39.5 to -21.1 |
+| gpt-5.6-terra-medium vs gpt-6.1-terra-off/low | 0/1 = 0.0% | 34.8% | -34.8 | -43.3 to -26.4 |
+| gpt-5.6-terra-medium vs gpt-6.1-terra-xhigh | 0/1 = 0.0% | 24.1% | -24.1 | -32.8 to -15.7 |
+| gpt-5.6-terra-xhigh vs gpt-6-astra-high | 1/1 = 100.0% | 27.1% | +72.9 | +58.9 to +83.4 |
+| gpt-5.6-terra-xhigh vs gpt-6-astra-low | 1/1 = 100.0% | 34.6% | +65.4 | +48.6 to +78.9 |
+| gpt-5.6-terra-xhigh vs gpt-6-astra-medium | 0/2 = 0.0% | 30.8% | -30.8 | -42.1 to -20.3 |
+| gpt-5.6-terra-xhigh vs gpt-6.1-sol-medium | 0/2 = 0.0% | 41.4% | -41.4 | -52.9 to -28.8 |
+| gpt-5.6-terra-xhigh vs gpt-6.1-terra-off/low | 0/1 = 0.0% | 43.6% | -43.6 | -56.9 to -30.8 |
+| gpt-6-astra-high vs gpt-6.1-sol-high | 1/1 = 100.0% | 66.3% | +33.7 | +22.3 to +46.2 |
+| gpt-6-astra-high vs gpt-6.1-sol-medium | 1/2 = 50.0% | 65.5% | -15.5 | -25.5 to -4.6 |
+| gpt-6-astra-high vs gpt-6.1-terra-high | 1/1 = 100.0% | 65.4% | +34.6 | +21.8 to +49.1 |
+| gpt-6-astra-high vs gpt-6.1-terra-max | 1/2 = 50.0% | 48.8% | +1.2 | -56.7 to +58.3 |
+| gpt-6-astra-high vs gpt-6.1-terra-medium | 0/1 = 0.0% | 58.3% | -58.3 | -71.0 to -44.2 |
+| gpt-6-astra-high vs gpt-6.1-terra-off/low | 3/3 = 100.0% | 67.5% | +32.5 | +22.3 to +43.3 |
+| gpt-6-astra-high vs gpt-6.1-terra-xhigh | 0/1 = 0.0% | 55.3% | -55.3 | -68.5 to -40.3 |
+| gpt-6-astra-low vs gpt-6-luna-medium | 2/2 = 100.0% | 88.9% | +11.1 | +6.4 to +16.5 |
+| gpt-6-astra-low vs gpt-6.1-sol-low | 0/1 = 0.0% | 54.0% | -54.0 | -67.4 to -38.5 |
+| gpt-6-astra-low vs gpt-6.1-sol-medium | 1/2 = 50.0% | 57.2% | -7.2 | -19.0 to +4.7 |
+| gpt-6-astra-low vs gpt-6.1-terra-high | 1/1 = 100.0% | 57.1% | +42.9 | +27.7 to +57.7 |
+| gpt-6-astra-low vs gpt-6.1-terra-max | 0/2 = 0.0% | 40.2% | -40.2 | -55.2 to -25.9 |
+| gpt-6-astra-low vs gpt-6.1-terra-medium | 1/1 = 100.0% | 49.7% | +50.3 | +35.1 to +63.3 |
+| gpt-6-astra-low vs gpt-6.1-terra-off/low | 0/2 = 0.0% | 59.4% | -59.4 | -70.8 to -46.7 |
+| gpt-6-astra-low vs gpt-6.1-terra-xhigh | 1/1 = 100.0% | 46.5% | +53.5 | +37.1 to +67.4 |
+| gpt-6-astra-medium vs gpt-6-luna-high | 1/2 = 50.0% | 77.2% | -27.2 | -33.6 to -18.9 |
+| gpt-6-astra-medium vs gpt-6-luna-max | 2/2 = 100.0% | 73.1% | +26.9 | +18.3 to +36.2 |
+| gpt-6-astra-medium vs gpt-6-luna-medium | 19/20 = 95.0% | 90.5% | +4.5 | -6.7 to +11.4 |
+| gpt-6-astra-medium vs gpt-6-luna-off/low | 2/2 = 100.0% | 93.9% | +6.1 | +4.1 to +8.5 |
+| gpt-6-astra-medium vs gpt-6-luna-xhigh | 1/2 = 50.0% | 71.2% | -21.2 | -29.5 to -10.9 |
+| gpt-6-astra-medium vs gpt-6.1-sol-high | 1/2 = 50.0% | 62.2% | -12.2 | -21.5 to -2.2 |
+| gpt-6-astra-medium vs gpt-6.1-sol-low | 3/4 = 75.0% | 58.2% | +16.8 | -14.7 to +47.6 |
+| gpt-6-astra-medium vs gpt-6.1-sol-max | 6/10 = 60.0% | 50.4% | +9.6 | -5.6 to +32.1 |
+| gpt-6-astra-medium vs gpt-6.1-sol-medium | 12/20 = 60.0% | 61.3% | -1.3 | -19.7 to +16.4 |
+| gpt-6-astra-medium vs gpt-6.1-sol-xhigh | 0/2 = 0.0% | 58.7% | -58.7 | -67.6 to -47.2 |
+| gpt-6-astra-medium vs gpt-6.1-terra-max | 0/1 = 0.0% | 44.3% | -44.3 | -56.0 to -32.0 |
+| gpt-6-astra-off vs gpt-6-luna-xhigh | 1/1 = 100.0% | 65.0% | +35.0 | +22.3 to +49.4 |
+| gpt-6-astra-off vs gpt-6.1-sol-medium | 0/1 = 0.0% | 54.3% | -54.3 | -66.6 to -40.3 |
+| gpt-6-astra-off vs gpt-6.1-terra-high | 1/1 = 100.0% | 54.2% | +45.8 | +29.6 to +62.4 |
+| gpt-6-astra-off vs gpt-6.1-terra-max | 0/1 = 0.0% | 37.4% | -37.4 | -51.8 to -23.2 |
+| gpt-6-astra-off vs gpt-6.1-terra-medium | 0/1 = 0.0% | 46.7% | -46.7 | -61.9 to -32.4 |
+| gpt-6-astra-off vs gpt-6.1-terra-off/low | 3/3 = 100.0% | 56.5% | +43.5 | +30.9 to +56.4 |
+| gpt-6-astra-off vs gpt-6.1-terra-xhigh | 1/2 = 50.0% | 43.6% | +6.4 | -50.7 to +64.0 |
+| gpt-6-luna-high vs gpt-6.1-sol-medium | 1/2 = 50.0% | 31.9% | +18.1 | +8.8 to +26.2 |
+| gpt-6-luna-high vs gpt-6.1-terra-high | 1/1 = 100.0% | 31.8% | +68.2 | +54.0 to +79.5 |
+| gpt-6-luna-high vs gpt-6.1-terra-off/low | 0/1 = 0.0% | 33.9% | -33.9 | -43.9 to -24.7 |
+| gpt-6-luna-max vs gpt-6.1-sol-medium | 0/2 = 0.0% | 36.9% | -36.9 | -47.9 to -26.0 |
+| gpt-6-luna-max vs gpt-6.1-terra-off/low | 1/2 = 50.0% | 39.0% | +11.0 | -1.8 to +21.0 |
+| gpt-6-luna-medium vs gpt-6.1-sol-high | 1/2 = 50.0% | 14.7% | +35.3 | +28.6 to +39.7 |
+| gpt-6-luna-medium vs gpt-6.1-sol-low | 0/2 = 0.0% | 12.8% | -12.8 | -18.7 to -7.8 |
+| gpt-6-luna-medium vs gpt-6.1-sol-max | 0/2 = 0.0% | 9.7% | -9.7 | -13.4 to -6.7 |
+| gpt-6-luna-medium vs gpt-6.1-sol-medium | 3/20 = 15.0% | 14.3% | +0.7 | -13.4 to +16.0 |
+| gpt-6-luna-medium vs gpt-6.1-sol-xhigh | 0/2 = 0.0% | 13.0% | -13.0 | -18.8 to -8.3 |
+| gpt-6-luna-off/low vs gpt-6.1-sol-medium | 1/4 = 25.0% | 9.4% | +15.6 | -11.2 to +42.5 |
+| gpt-6-luna-xhigh vs gpt-6.1-sol-medium | 1/2 = 50.0% | 39.1% | +10.9 | -0.9 to +21.3 |
+| gpt-6-luna-xhigh vs gpt-6.1-terra-off/low | 1/2 = 50.0% | 41.2% | +8.8 | -3.5 to +19.6 |
+| gpt-6.1-sol-high vs gpt-6.1-terra-medium | 1/2 = 50.0% | 41.5% | +8.5 | -3.3 to +20.0 |
+| gpt-6.1-sol-low vs gpt-6.1-terra-max | 1/1 = 100.0% | 36.4% | +63.6 | +48.0 to +75.8 |
+| gpt-6.1-sol-max vs gpt-6.1-terra-max | 1/2 = 50.0% | 43.9% | +6.1 | -6.0 to +18.8 |
+| gpt-6.1-sol-medium vs gpt-6.1-terra-max | 1/1 = 100.0% | 33.4% | +66.6 | +54.3 to +76.2 |
+| gpt-6.1-sol-medium vs gpt-6.1-terra-medium | 1/2 = 50.0% | 42.4% | +7.6 | -2.8 to +18.6 |
+| gpt-6.1-sol-medium vs gpt-6.1-terra-off/low | 1/1 = 100.0% | 52.2% | +47.8 | +38.6 to +56.6 |
+| gpt-6.1-sol-xhigh vs gpt-6.1-terra-high | 1/2 = 50.0% | 52.6% | -2.6 | -17.5 to +12.5 |
+| gpt-6.1-sol-xhigh vs gpt-6.1-terra-max | 0/1 = 0.0% | 35.9% | -35.9 | -49.6 to -23.5 |
+| gpt-6.1-sol-xhigh vs gpt-6.1-terra-xhigh | 1/2 = 50.0% | 42.0% | +8.0 | -5.5 to +19.8 |
 #### claude-haiku-4-5-20251001 efforts
 
 | pair | wins/matches = observed share | fitted share | difference (pp) | bootstrap range of the difference (descriptive) |
 |---|---|---|---|---|
-| claude-haiku-4-5-20251001-high vs claude-haiku-4-5-20251001-medium | 11/20 = 55.0% | 37.2% | +17.8 | +2.0 to +36.0 |
-| claude-haiku-4-5-20251001-high vs claude-haiku-4-5-20251001-minimal/low | 19/40 = 47.5% | 43.7% | +3.8 | -7.1 to +15.0 |
-| claude-haiku-4-5-20251001-high vs claude-haiku-4-5-20251001-off | 13/20 = 65.0% | 65.0% | -0.0 | -18.0 to +17.5 |
-| claude-haiku-4-5-20251001-medium vs claude-haiku-4-5-20251001-minimal/low | 22/40 = 55.0% | 56.7% | -1.7 | -13.7 to +9.6 |
-| claude-haiku-4-5-20251001-medium vs claude-haiku-4-5-20251001-off | 16/20 = 80.0% | 75.8% | +4.2 | -11.6 to +18.5 |
+| claude-haiku-4-5-20251001-high vs claude-haiku-4-5-20251001-medium | 11/20 = 55.0% | 37.2% | +17.8 | +2.6 to +35.1 |
+| claude-haiku-4-5-20251001-high vs claude-haiku-4-5-20251001-minimal/low | 19/40 = 47.5% | 43.7% | +3.8 | -6.6 to +15.0 |
+| claude-haiku-4-5-20251001-high vs claude-haiku-4-5-20251001-off | 13/20 = 65.0% | 65.0% | -0.0 | -18.9 to +17.3 |
+| claude-haiku-4-5-20251001-medium vs claude-haiku-4-5-20251001-minimal/low | 22/40 = 55.0% | 56.7% | -1.7 | -13.8 to +10.2 |
+| claude-haiku-4-5-20251001-medium vs claude-haiku-4-5-20251001-off | 16/20 = 80.0% | 75.9% | +4.1 | -11.7 to +18.6 |
 | claude-haiku-4-5-20251001-minimal/low vs claude-haiku-4-5-20251001-minimal/low | 20/40 = 50.0% | 50.0% | +0.0 | +0.0 to +0.0 |
-| claude-haiku-4-5-20251001-minimal/low vs claude-haiku-4-5-20251001-off | 28/40 = 70.0% | 70.6% | -0.6 | -11.6 to +10.1 |
+| claude-haiku-4-5-20251001-minimal/low vs claude-haiku-4-5-20251001-off | 28/40 = 70.0% | 70.6% | -0.6 | -11.7 to +10.2 |
 #### claude-haiku-5-5 efforts
 
 | pair | wins/matches = observed share | fitted share | difference (pp) | bootstrap range of the difference (descriptive) |
 |---|---|---|---|---|
-| claude-haiku-5-5-high vs claude-haiku-5-5-low | 13/20 = 65.0% | 56.5% | +8.5 | -11.7 to +28.4 |
-| claude-haiku-5-5-high vs claude-haiku-5-5-max | 9/20 = 45.0% | 44.6% | +0.4 | -20.4 to +21.3 |
-| claude-haiku-5-5-high vs claude-haiku-5-5-medium | 13/20 = 65.0% | 52.5% | +12.5 | -2.3 to +28.8 |
-| claude-haiku-5-5-high vs claude-haiku-5-5-off | 13/20 = 65.0% | 73.6% | -8.6 | -22.5 to +6.5 |
-| claude-haiku-5-5-high vs claude-haiku-5-5-xhigh | 6/20 = 30.0% | 46.3% | -16.3 | -32.9 to -1.4 |
-| claude-haiku-5-5-low vs claude-haiku-5-5-max | 7/20 = 35.0% | 38.3% | -3.3 | -21.4 to +15.2 |
-| claude-haiku-5-5-low vs claude-haiku-5-5-medium | 12/20 = 60.0% | 46.0% | +14.0 | -4.8 to +33.5 |
-| claude-haiku-5-5-low vs claude-haiku-5-5-off | 11/20 = 55.0% | 68.2% | -13.2 | -36.8 to +7.0 |
-| claude-haiku-5-5-low vs claude-haiku-5-5-xhigh | 8/20 = 40.0% | 39.9% | +0.1 | -14.6 to +12.6 |
-| claude-haiku-5-5-max vs claude-haiku-5-5-medium | 11/20 = 55.0% | 57.9% | -2.9 | -17.8 to +14.6 |
-| claude-haiku-5-5-max vs claude-haiku-5-5-off | 16/20 = 80.0% | 77.6% | +2.4 | -13.2 to +16.8 |
-| claude-haiku-5-5-max vs claude-haiku-5-5-xhigh | 9/20 = 45.0% | 51.7% | -6.7 | -24.4 to +9.6 |
-| claude-haiku-5-5-medium vs claude-haiku-5-5-off | 14/20 = 70.0% | 71.6% | -1.6 | -16.4 to +13.8 |
-| claude-haiku-5-5-medium vs claude-haiku-5-5-xhigh | 7/20 = 35.0% | 43.8% | -8.8 | -27.2 to +10.6 |
-| claude-haiku-5-5-off vs claude-haiku-5-5-xhigh | 5/20 = 25.0% | 23.7% | +1.3 | -18.1 to +24.0 |
+| claude-haiku-5-5-high vs claude-haiku-5-5-low | 13/20 = 65.0% | 56.5% | +8.5 | -12.8 to +27.4 |
+| claude-haiku-5-5-high vs claude-haiku-5-5-max | 9/20 = 45.0% | 44.5% | +0.5 | -19.4 to +20.8 |
+| claude-haiku-5-5-high vs claude-haiku-5-5-medium | 13/20 = 65.0% | 52.3% | +12.7 | -1.7 to +28.9 |
+| claude-haiku-5-5-high vs claude-haiku-5-5-off | 13/20 = 65.0% | 73.7% | -8.7 | -23.9 to +6.8 |
+| claude-haiku-5-5-high vs claude-haiku-5-5-xhigh | 6/20 = 30.0% | 46.2% | -16.2 | -32.4 to -1.3 |
+| claude-haiku-5-5-low vs claude-haiku-5-5-max | 7/20 = 35.0% | 38.2% | -3.2 | -22.9 to +15.6 |
+| claude-haiku-5-5-low vs claude-haiku-5-5-medium | 12/20 = 60.0% | 45.8% | +14.2 | -3.9 to +34.3 |
+| claude-haiku-5-5-low vs claude-haiku-5-5-off | 11/20 = 55.0% | 68.4% | -13.4 | -34.7 to +8.6 |
+| claude-haiku-5-5-low vs claude-haiku-5-5-xhigh | 8/20 = 40.0% | 39.8% | +0.2 | -14.3 to +12.7 |
+| claude-haiku-5-5-max vs claude-haiku-5-5-medium | 11/20 = 55.0% | 57.7% | -2.7 | -19.4 to +14.0 |
+| claude-haiku-5-5-max vs claude-haiku-5-5-off | 16/20 = 80.0% | 77.8% | +2.2 | -13.6 to +17.2 |
+| claude-haiku-5-5-max vs claude-haiku-5-5-xhigh | 9/20 = 45.0% | 51.7% | -6.7 | -22.8 to +9.4 |
+| claude-haiku-5-5-medium vs claude-haiku-5-5-off | 14/20 = 70.0% | 71.9% | -1.9 | -17.8 to +13.6 |
+| claude-haiku-5-5-medium vs claude-haiku-5-5-xhigh | 7/20 = 35.0% | 43.9% | -8.9 | -27.8 to +12.8 |
+| claude-haiku-5-5-off vs claude-haiku-5-5-xhigh | 5/20 = 25.0% | 23.4% | +1.6 | -18.4 to +23.7 |
 #### claude-opus-5-5 efforts
 
 | pair | wins/matches = observed share | fitted share | difference (pp) | bootstrap range of the difference (descriptive) |
 |---|---|---|---|---|
-| claude-opus-5-5-high vs claude-opus-5-5-max | 1/2 = 50.0% | 38.5% | +11.5 | -46.4 to +69.3 |
-| claude-opus-5-5-high vs claude-opus-5-5-medium | 11/20 = 55.0% | 57.7% | -2.7 | -22.0 to +16.7 |
-| claude-opus-5-5-high vs claude-opus-5-5-off/low | 4/7 = 57.1% | 63.2% | -6.0 | -45.4 to +32.9 |
-| claude-opus-5-5-high vs claude-opus-5-5-xhigh | 7/20 = 35.0% | 48.0% | -13.0 | -31.8 to +5.0 |
-| claude-opus-5-5-max vs claude-opus-5-5-medium | 6/10 = 60.0% | 68.5% | -8.5 | -45.0 to +25.4 |
-| claude-opus-5-5-max vs claude-opus-5-5-off/low | 9/12 = 75.0% | 73.3% | +1.7 | -29.6 to +27.4 |
-| claude-opus-5-5-max vs claude-opus-5-5-xhigh | 5/10 = 50.0% | 59.6% | -9.6 | -39.5 to +17.6 |
-| claude-opus-5-5-medium vs claude-opus-5-5-off/low | 16/24 = 66.7% | 55.7% | +10.9 | -1.7 to +25.4 |
-| claude-opus-5-5-medium vs claude-opus-5-5-xhigh | 7/20 = 35.0% | 40.4% | -5.4 | -20.5 to +8.7 |
+| claude-opus-5-5-high vs claude-opus-5-5-max | 1/2 = 50.0% | 40.2% | +9.8 | -47.2 to +68.0 |
+| claude-opus-5-5-high vs claude-opus-5-5-medium | 11/20 = 55.0% | 57.7% | -2.7 | -22.4 to +16.6 |
+| claude-opus-5-5-high vs claude-opus-5-5-off/low | 4/7 = 57.1% | 63.3% | -6.2 | -41.6 to +34.1 |
+| claude-opus-5-5-high vs claude-opus-5-5-xhigh | 7/20 = 35.0% | 47.8% | -12.8 | -33.1 to +5.3 |
+| claude-opus-5-5-max vs claude-opus-5-5-medium | 6/10 = 60.0% | 66.9% | -6.9 | -45.6 to +29.2 |
+| claude-opus-5-5-max vs claude-opus-5-5-off/low | 9/12 = 75.0% | 72.0% | +3.0 | -26.2 to +29.5 |
+| claude-opus-5-5-max vs claude-opus-5-5-xhigh | 5/10 = 50.0% | 57.6% | -7.6 | -36.4 to +21.5 |
+| claude-opus-5-5-medium vs claude-opus-5-5-off/low | 16/24 = 66.7% | 55.9% | +10.7 | -2.0 to +25.1 |
+| claude-opus-5-5-medium vs claude-opus-5-5-xhigh | 7/20 = 35.0% | 40.2% | -5.2 | -20.9 to +9.2 |
 | claude-opus-5-5-off/low vs claude-opus-5-5-off/low | 5/10 = 50.0% | 50.0% | +0.0 | +0.0 to +0.0 |
-| claude-opus-5-5-off/low vs claude-opus-5-5-xhigh | 3/7 = 42.9% | 35.0% | +7.9 | -31.4 to +48.7 |
+| claude-opus-5-5-off/low vs claude-opus-5-5-xhigh | 3/7 = 42.9% | 34.6% | +8.3 | -31.3 to +48.9 |
 #### claude-sonnet-5-5 efforts
 
 | pair | wins/matches = observed share | fitted share | difference (pp) | bootstrap range of the difference (descriptive) |
 |---|---|---|---|---|
-| claude-sonnet-5-5-high vs claude-sonnet-5-5-low | 11/20 = 55.0% | 64.3% | -9.3 | -32.8 to +14.4 |
-| claude-sonnet-5-5-high vs claude-sonnet-5-5-max | 8/20 = 40.0% | 31.2% | +8.8 | -12.3 to +30.6 |
-| claude-sonnet-5-5-high vs claude-sonnet-5-5-medium | 13/20 = 65.0% | 53.3% | +11.7 | -8.9 to +31.9 |
-| claude-sonnet-5-5-high vs claude-sonnet-5-5-off | 14/20 = 70.0% | 56.9% | +13.1 | -2.4 to +29.9 |
-| claude-sonnet-5-5-high vs claude-sonnet-5-5-xhigh | 5/20 = 25.0% | 36.8% | -11.8 | -32.2 to +9.5 |
-| claude-sonnet-5-5-low vs claude-sonnet-5-5-max | 3/20 = 15.0% | 20.1% | -5.1 | -19.5 to +9.7 |
-| claude-sonnet-5-5-low vs claude-sonnet-5-5-medium | 9/20 = 45.0% | 38.8% | +6.2 | -14.5 to +27.0 |
-| claude-sonnet-5-5-low vs claude-sonnet-5-5-off | 10/20 = 50.0% | 42.4% | +7.6 | -10.2 to +26.6 |
-| claude-sonnet-5-5-low vs claude-sonnet-5-5-xhigh | 4/20 = 20.0% | 24.5% | -4.5 | -19.7 to +10.5 |
-| claude-sonnet-5-5-max vs claude-sonnet-5-5-medium | 12/20 = 60.0% | 71.6% | -11.6 | -30.1 to +6.7 |
-| claude-sonnet-5-5-max vs claude-sonnet-5-5-off | 14/20 = 70.0% | 74.5% | -4.5 | -29.0 to +16.8 |
-| claude-sonnet-5-5-max vs claude-sonnet-5-5-xhigh | 13/20 = 65.0% | 56.3% | +8.7 | -9.3 to +27.4 |
-| claude-sonnet-5-5-medium vs claude-sonnet-5-5-off | 10/20 = 50.0% | 53.6% | -3.6 | -23.2 to +14.3 |
-| claude-sonnet-5-5-medium vs claude-sonnet-5-5-xhigh | 9/20 = 45.0% | 33.8% | +11.2 | -9.2 to +32.7 |
-| claude-sonnet-5-5-off vs claude-sonnet-5-5-xhigh | 11/20 = 55.0% | 30.6% | +24.4 | +13.8 to +38.0 |
+| claude-sonnet-5-5-high vs claude-sonnet-5-5-low | 11/20 = 55.0% | 64.3% | -9.3 | -32.7 to +13.7 |
+| claude-sonnet-5-5-high vs claude-sonnet-5-5-max | 8/20 = 40.0% | 30.3% | +9.7 | -10.1 to +33.7 |
+| claude-sonnet-5-5-high vs claude-sonnet-5-5-medium | 13/20 = 65.0% | 53.4% | +11.6 | -8.8 to +31.7 |
+| claude-sonnet-5-5-high vs claude-sonnet-5-5-off | 14/20 = 70.0% | 56.9% | +13.1 | -1.9 to +29.7 |
+| claude-sonnet-5-5-high vs claude-sonnet-5-5-xhigh | 5/20 = 25.0% | 36.6% | -11.6 | -31.0 to +8.1 |
+| claude-sonnet-5-5-low vs claude-sonnet-5-5-max | 3/20 = 15.0% | 19.5% | -4.5 | -18.6 to +10.1 |
+| claude-sonnet-5-5-low vs claude-sonnet-5-5-medium | 9/20 = 45.0% | 38.9% | +6.1 | -15.0 to +26.7 |
+| claude-sonnet-5-5-low vs claude-sonnet-5-5-off | 10/20 = 50.0% | 42.4% | +7.6 | -10.8 to +26.6 |
+| claude-sonnet-5-5-low vs claude-sonnet-5-5-xhigh | 4/20 = 20.0% | 24.3% | -4.3 | -19.2 to +11.6 |
+| claude-sonnet-5-5-max vs claude-sonnet-5-5-medium | 12/20 = 60.0% | 72.5% | -12.5 | -31.8 to +5.5 |
+| claude-sonnet-5-5-max vs claude-sonnet-5-5-off | 14/20 = 70.0% | 75.2% | -5.2 | -30.5 to +15.2 |
+| claude-sonnet-5-5-max vs claude-sonnet-5-5-xhigh | 13/20 = 65.0% | 57.0% | +8.0 | -11.6 to +26.9 |
+| claude-sonnet-5-5-medium vs claude-sonnet-5-5-off | 10/20 = 50.0% | 53.6% | -3.6 | -22.9 to +15.3 |
+| claude-sonnet-5-5-medium vs claude-sonnet-5-5-xhigh | 9/20 = 45.0% | 33.5% | +11.5 | -8.9 to +34.2 |
+| claude-sonnet-5-5-off vs claude-sonnet-5-5-xhigh | 11/20 = 55.0% | 30.4% | +24.6 | +14.7 to +37.4 |
 #### gpt-5.6-terra efforts
 
 | pair | wins/matches = observed share | fitted share | difference (pp) | bootstrap range of the difference (descriptive) |
 |---|---|---|---|---|
-| gpt-5.6-terra-high vs gpt-5.6-terra-low | 9/20 = 45.0% | 52.5% | -7.5 | -26.4 to +11.2 |
-| gpt-5.6-terra-high vs gpt-5.6-terra-max | 8/20 = 40.0% | 39.1% | +0.9 | -15.0 to +18.7 |
-| gpt-5.6-terra-high vs gpt-5.6-terra-medium | 10/20 = 50.0% | 47.5% | +2.5 | -12.1 to +17.8 |
-| gpt-5.6-terra-high vs gpt-5.6-terra-xhigh | 10/20 = 50.0% | 38.4% | +11.6 | -8.2 to +32.5 |
-| gpt-5.6-terra-low vs gpt-5.6-terra-max | 8/20 = 40.0% | 36.7% | +3.3 | -15.4 to +23.0 |
-| gpt-5.6-terra-low vs gpt-5.6-terra-medium | 9/20 = 45.0% | 44.9% | +0.1 | -15.4 to +16.1 |
-| gpt-5.6-terra-low vs gpt-5.6-terra-xhigh | 4/20 = 20.0% | 36.0% | -16.0 | -31.9 to -1.0 |
-| gpt-5.6-terra-max vs gpt-5.6-terra-medium | 12/20 = 60.0% | 58.5% | +1.5 | -18.9 to +21.1 |
-| gpt-5.6-terra-max vs gpt-5.6-terra-xhigh | 11/20 = 55.0% | 49.3% | +5.7 | -9.8 to +23.2 |
-| gpt-5.6-terra-medium vs gpt-5.6-terra-xhigh | 7/20 = 35.0% | 40.8% | -5.8 | -21.6 to +8.8 |
+| gpt-5.6-terra-high vs gpt-5.6-terra-low | 9/20 = 45.0% | 52.5% | -7.5 | -26.2 to +9.7 |
+| gpt-5.6-terra-high vs gpt-5.6-terra-max | 8/20 = 40.0% | 39.1% | +0.9 | -16.6 to +17.6 |
+| gpt-5.6-terra-high vs gpt-5.6-terra-medium | 10/20 = 50.0% | 47.5% | +2.5 | -11.6 to +16.7 |
+| gpt-5.6-terra-high vs gpt-5.6-terra-xhigh | 10/20 = 50.0% | 38.4% | +11.6 | -6.9 to +30.1 |
+| gpt-5.6-terra-low vs gpt-5.6-terra-max | 8/20 = 40.0% | 36.7% | +3.3 | -15.7 to +22.2 |
+| gpt-5.6-terra-low vs gpt-5.6-terra-medium | 9/20 = 45.0% | 45.0% | +0.0 | -15.0 to +17.1 |
+| gpt-5.6-terra-low vs gpt-5.6-terra-xhigh | 4/20 = 20.0% | 36.0% | -16.0 | -33.1 to -1.2 |
+| gpt-5.6-terra-max vs gpt-5.6-terra-medium | 12/20 = 60.0% | 58.5% | +1.5 | -19.1 to +21.7 |
+| gpt-5.6-terra-max vs gpt-5.6-terra-xhigh | 11/20 = 55.0% | 49.3% | +5.7 | -10.9 to +22.4 |
+| gpt-5.6-terra-medium vs gpt-5.6-terra-xhigh | 7/20 = 35.0% | 40.8% | -5.8 | -20.4 to +8.9 |
 #### gpt-6-astra efforts
 
 | pair | wins/matches = observed share | fitted share | difference (pp) | bootstrap range of the difference (descriptive) |
 |---|---|---|---|---|
-| gpt-6-astra-high vs gpt-6-astra-low | 2/2 = 100.0% | 58.1% | +41.9 | +27.7 to +56.8 |
-| gpt-6-astra-high vs gpt-6-astra-medium | 1/2 = 50.0% | 54.1% | -4.1 | -15.5 to +7.1 |
-| gpt-6-astra-high vs gpt-6-astra-off | 0/1 = 0.0% | 60.9% | -60.9 | -73.6 to -45.0 |
-| gpt-6-astra-low vs gpt-6-astra-medium | 0/2 = 0.0% | 45.9% | -45.9 | -57.8 to -33.6 |
-| gpt-6-astra-low vs gpt-6-astra-off | 2/2 = 100.0% | 52.9% | +47.1 | +31.4 to +63.4 |
+| gpt-6-astra-high vs gpt-6-astra-low | 2/2 = 100.0% | 58.7% | +41.3 | +27.7 to +56.6 |
+| gpt-6-astra-high vs gpt-6-astra-medium | 1/2 = 50.0% | 54.5% | -4.5 | -16.6 to +7.1 |
+| gpt-6-astra-high vs gpt-6-astra-off | 0/1 = 0.0% | 61.5% | -61.5 | -74.6 to -45.6 |
+| gpt-6-astra-low vs gpt-6-astra-medium | 0/2 = 0.0% | 45.8% | -45.8 | -58.1 to -33.3 |
+| gpt-6-astra-low vs gpt-6-astra-off | 2/2 = 100.0% | 53.0% | +47.0 | +31.1 to +62.5 |
 #### gpt-6-luna efforts
 
 | pair | wins/matches = observed share | fitted share | difference (pp) | bootstrap range of the difference (descriptive) |
 |---|---|---|---|---|
-| gpt-6-luna-high vs gpt-6-luna-max | 7/20 = 35.0% | 44.7% | -9.7 | -30.2 to +13.5 |
-| gpt-6-luna-high vs gpt-6-luna-medium | 12/20 = 60.0% | 73.9% | -13.9 | -37.2 to +8.9 |
-| gpt-6-luna-high vs gpt-6-luna-off/low | 32/40 = 80.0% | 81.9% | -1.9 | -13.0 to +8.2 |
-| gpt-6-luna-high vs gpt-6-luna-xhigh | 11/20 = 55.0% | 42.4% | +12.6 | -5.8 to +33.3 |
-| gpt-6-luna-max vs gpt-6-luna-medium | 15/20 = 75.0% | 77.8% | -2.8 | -18.9 to +12.9 |
-| gpt-6-luna-max vs gpt-6-luna-off/low | 34/40 = 85.0% | 84.9% | +0.1 | -8.4 to +9.2 |
-| gpt-6-luna-max vs gpt-6-luna-xhigh | 10/20 = 50.0% | 47.7% | +2.3 | -12.3 to +16.1 |
-| gpt-6-luna-medium vs gpt-6-luna-off/low | 24/40 = 60.0% | 61.5% | -1.5 | -16.3 to +13.2 |
-| gpt-6-luna-medium vs gpt-6-luna-xhigh | 2/20 = 10.0% | 20.6% | -10.6 | -23.0 to +2.7 |
+| gpt-6-luna-high vs gpt-6-luna-max | 7/20 = 35.0% | 44.5% | -9.5 | -29.7 to +13.2 |
+| gpt-6-luna-high vs gpt-6-luna-medium | 12/20 = 60.0% | 73.8% | -13.8 | -37.3 to +8.8 |
+| gpt-6-luna-high vs gpt-6-luna-off/low | 32/40 = 80.0% | 81.9% | -1.9 | -11.8 to +8.8 |
+| gpt-6-luna-high vs gpt-6-luna-xhigh | 11/20 = 55.0% | 42.2% | +12.8 | -5.4 to +33.1 |
+| gpt-6-luna-max vs gpt-6-luna-medium | 15/20 = 75.0% | 77.8% | -2.8 | -18.8 to +12.1 |
+| gpt-6-luna-max vs gpt-6-luna-off/low | 34/40 = 85.0% | 84.9% | +0.1 | -8.8 to +8.5 |
+| gpt-6-luna-max vs gpt-6-luna-xhigh | 10/20 = 50.0% | 47.7% | +2.3 | -11.7 to +16.4 |
+| gpt-6-luna-medium vs gpt-6-luna-off/low | 24/40 = 60.0% | 61.6% | -1.6 | -17.9 to +13.1 |
+| gpt-6-luna-medium vs gpt-6-luna-xhigh | 2/20 = 10.0% | 20.6% | -10.6 | -23.1 to +3.2 |
 | gpt-6-luna-off/low vs gpt-6-luna-off/low | 20/40 = 50.0% | 50.0% | +0.0 | +0.0 to +0.0 |
-| gpt-6-luna-off/low vs gpt-6-luna-xhigh | 5/40 = 12.5% | 14.0% | -1.5 | -10.7 to +9.1 |
+| gpt-6-luna-off/low vs gpt-6-luna-xhigh | 5/40 = 12.5% | 13.9% | -1.4 | -10.3 to +8.3 |
 #### gpt-6.1-sol efforts
 
 | pair | wins/matches = observed share | fitted share | difference (pp) | bootstrap range of the difference (descriptive) |
 |---|---|---|---|---|
-| gpt-6.1-sol-high vs gpt-6.1-sol-low | 12/20 = 60.0% | 45.8% | +14.2 | -1.0 to +31.8 |
-| gpt-6.1-sol-high vs gpt-6.1-sol-max | 9/20 = 45.0% | 38.6% | +6.4 | -12.6 to +26.3 |
-| gpt-6.1-sol-high vs gpt-6.1-sol-medium | 8/20 = 40.0% | 48.9% | -8.9 | -23.0 to +3.4 |
-| gpt-6.1-sol-high vs gpt-6.1-sol-xhigh | 9/20 = 45.0% | 46.4% | -1.4 | -16.9 to +14.0 |
-| gpt-6.1-sol-low vs gpt-6.1-sol-max | 6/20 = 30.0% | 42.6% | -12.6 | -31.5 to +5.0 |
-| gpt-6.1-sol-low vs gpt-6.1-sol-medium | 13/20 = 65.0% | 53.1% | +11.9 | -5.8 to +30.4 |
-| gpt-6.1-sol-low vs gpt-6.1-sol-xhigh | 12/20 = 60.0% | 50.5% | +9.5 | -7.4 to +27.8 |
-| gpt-6.1-sol-max vs gpt-6.1-sol-medium | 12/20 = 60.0% | 60.4% | -0.4 | -18.9 to +18.1 |
-| gpt-6.1-sol-max vs gpt-6.1-sol-xhigh | 10/20 = 50.0% | 57.9% | -7.9 | -22.1 to +5.4 |
-| gpt-6.1-sol-medium vs gpt-6.1-sol-xhigh | 10/20 = 50.0% | 47.4% | +2.6 | -18.4 to +24.3 |
+| gpt-6.1-sol-high vs gpt-6.1-sol-low | 12/20 = 60.0% | 45.8% | +14.2 | -2.0 to +32.5 |
+| gpt-6.1-sol-high vs gpt-6.1-sol-max | 9/20 = 45.0% | 38.2% | +6.8 | -12.1 to +26.5 |
+| gpt-6.1-sol-high vs gpt-6.1-sol-medium | 8/20 = 40.0% | 49.1% | -9.1 | -22.9 to +3.6 |
+| gpt-6.1-sol-high vs gpt-6.1-sol-xhigh | 9/20 = 45.0% | 46.4% | -1.4 | -18.5 to +14.4 |
+| gpt-6.1-sol-low vs gpt-6.1-sol-max | 6/20 = 30.0% | 42.3% | -12.3 | -31.4 to +6.4 |
+| gpt-6.1-sol-low vs gpt-6.1-sol-medium | 13/20 = 65.0% | 53.2% | +11.8 | -6.8 to +30.8 |
+| gpt-6.1-sol-low vs gpt-6.1-sol-xhigh | 12/20 = 60.0% | 50.5% | +9.5 | -6.9 to +24.7 |
+| gpt-6.1-sol-max vs gpt-6.1-sol-medium | 12/20 = 60.0% | 60.9% | -0.9 | -19.3 to +18.1 |
+| gpt-6.1-sol-max vs gpt-6.1-sol-xhigh | 10/20 = 50.0% | 58.3% | -8.3 | -23.1 to +5.5 |
+| gpt-6.1-sol-medium vs gpt-6.1-sol-xhigh | 10/20 = 50.0% | 47.3% | +2.7 | -17.9 to +23.6 |
 #### gpt-6.1-terra efforts
 
 | pair | wins/matches = observed share | fitted share | difference (pp) | bootstrap range of the difference (descriptive) |
 |---|---|---|---|---|
-| gpt-6.1-terra-high vs gpt-6.1-terra-max | 0/1 = 0.0% | 34.1% | -34.1 | -50.3 to -21.2 |
-| gpt-6.1-terra-high vs gpt-6.1-terra-medium | 2/3 = 66.7% | 42.3% | +24.4 | -1.7 to +66.7 |
-| gpt-6.1-terra-high vs gpt-6.1-terra-off/low | 1/3 = 33.3% | 52.1% | -18.8 | -61.0 to +49.4 |
-| gpt-6.1-terra-high vs gpt-6.1-terra-xhigh | 1/3 = 33.3% | 39.4% | -6.1 | -47.0 to +67.2 |
-| gpt-6.1-terra-max vs gpt-6.1-terra-medium | 1/1 = 100.0% | 58.6% | +41.4 | +27.8 to +54.1 |
-| gpt-6.1-terra-max vs gpt-6.1-terra-off/low | 0/2 = 0.0% | 67.8% | -67.8 | -77.3 to -55.9 |
-| gpt-6.1-terra-max vs gpt-6.1-terra-xhigh | 3/3 = 100.0% | 55.7% | +44.3 | +30.7 to +58.1 |
-| gpt-6.1-terra-medium vs gpt-6.1-terra-off/low | 4/6 = 66.7% | 59.8% | +6.9 | -13.3 to +44.2 |
-| gpt-6.1-terra-medium vs gpt-6.1-terra-xhigh | 3/3 = 100.0% | 47.0% | +53.0 | +39.1 to +65.7 |
+| gpt-6.1-terra-high vs gpt-6.1-terra-max | 0/1 = 0.0% | 33.5% | -33.5 | -48.3 to -21.1 |
+| gpt-6.1-terra-high vs gpt-6.1-terra-medium | 2/3 = 66.7% | 42.5% | +24.1 | -1.4 to +66.2 |
+| gpt-6.1-terra-high vs gpt-6.1-terra-off/low | 1/3 = 33.3% | 52.3% | -19.0 | -61.4 to +49.9 |
+| gpt-6.1-terra-high vs gpt-6.1-terra-xhigh | 1/3 = 33.3% | 39.5% | -6.2 | -47.0 to +67.2 |
+| gpt-6.1-terra-max vs gpt-6.1-terra-medium | 1/1 = 100.0% | 59.5% | +40.5 | +27.6 to +53.6 |
+| gpt-6.1-terra-max vs gpt-6.1-terra-off/low | 0/2 = 0.0% | 68.5% | -68.5 | -78.1 to -57.3 |
+| gpt-6.1-terra-max vs gpt-6.1-terra-xhigh | 3/3 = 100.0% | 56.4% | +43.6 | +29.4 to +56.8 |
+| gpt-6.1-terra-medium vs gpt-6.1-terra-off/low | 4/6 = 66.7% | 59.7% | +6.9 | -13.0 to +44.0 |
+| gpt-6.1-terra-medium vs gpt-6.1-terra-xhigh | 3/3 = 100.0% | 46.9% | +53.1 | +39.8 to +65.7 |
 | gpt-6.1-terra-off/low vs gpt-6.1-terra-off/low | 3/6 = 50.0% | 50.0% | +0.0 | +0.0 to +0.0 |
-| gpt-6.1-terra-off/low vs gpt-6.1-terra-xhigh | 0/3 = 0.0% | 37.4% | -37.4 | -49.2 to -26.9 |
+| gpt-6.1-terra-off/low vs gpt-6.1-terra-xhigh | 0/3 = 0.0% | 37.3% | -37.3 | -47.9 to -26.7 |
 
 ### Pair effects against ratings alone
 
 | cohort | ratings-only loss | nested pair-effect loss | gain per match | 95% CI of gain | tau chosen (folds) | fixed-tau loss (picked with the held-out blocks in view) | verdict |
 |---|---|---|---|---|---|---|---|
-| Cross-model | 0.5983 | 0.5983 | -0.0000 | -0.0000 to -0.0000 | 0: 49, 0.1: 1 | tau=0.1: 0.5984, tau=0.2: 0.5989, tau=0.4: 0.6007, tau=0.8: 0.6061, tau=1.6: 0.6195 | not kept |
-| Cross-model (seat and starter terms) | 0.5936 | 0.5937 | -0.0000 | -0.0000 to -0.0000 | 0: 48, 0.1: 2 | tau=0.1: 0.5938, tau=0.2: 0.5942, tau=0.4: 0.5959, tau=0.8: 0.6012, tau=1.6: 0.6145 | not kept |
-| claude-haiku-4-5-20251001 efforts | 0.6655 | 0.6655 | -0.0000 | -0.0001 to +0.0000 | 0: 49, 0.1: 1 | tau=0.1: 0.6659, tau=0.2: 0.6667, tau=0.4: 0.6688, tau=0.8: 0.6716, tau=1.6: 0.6737 | not kept |
-| claude-haiku-4-5-20251001 efforts (seat and starter terms) | 0.6687 | 0.6695 | -0.0009 | -0.0020 to -0.0000 | 0: 45, 0.1: 1, 0.2: 1, 0.4: 3 | tau=0.1: 0.6691, tau=0.2: 0.6703, tau=0.4: 0.6734, tau=0.8: 0.6774, tau=1.6: 0.6801 | not kept |
-| claude-haiku-5-5 efforts | 0.6614 | 0.6618 | -0.0004 | -0.0009 to +0.0000 | 0: 46, 0.1: 1, 0.2: 2, 0.4: 1 | tau=0.1: 0.6617, tau=0.2: 0.6629, tau=0.4: 0.6671, tau=0.8: 0.6758, tau=1.6: 0.6832 | not kept |
-| claude-haiku-5-5 efforts (seat and starter terms) | 0.6398 | 0.6415 | -0.0017 | -0.0029 to -0.0008 | 0: 42, 0.1: 3, 0.2: 4, 0.8: 1 | tau=0.1: 0.6401, tau=0.2: 0.6411, tau=0.4: 0.6449, tau=0.8: 0.6529, tau=1.6: 0.6599 | not kept |
-| claude-opus-5-5 efforts | 0.6839 | 0.6852 | -0.0013 | -0.0027 to -0.0002 | 0: 48, 0.2: 1, 0.4: 1 | tau=0.1: 0.6849, tau=0.2: 0.6878, tau=0.4: 0.6972, tau=0.8: 0.7183, tau=1.6: 0.7475 | not kept |
-| claude-opus-5-5 efforts (seat and starter terms) | 0.6992 | 0.6992 | +0.0000 | +0.0000 to +0.0000 | 0: 50 | tau=0.1: 0.7001, tau=0.2: 0.7024, tau=0.4: 0.7101, tau=0.8: 0.7276, tau=1.6: 0.7526 | not kept |
-| claude-sonnet-5-5 efforts | 0.6701 | 0.6725 | -0.0024 | -0.0080 to +0.0029 | 0: 11, 0.1: 4, 0.2: 16, 0.4: 18, 0.8: 1 | tau=0.1: 0.6697, tau=0.2: 0.6690, tau=0.4: 0.6695, tau=0.8: 0.6761, tau=1.6: 0.6849 | not kept |
-| claude-sonnet-5-5 efforts (seat and starter terms) | 0.6731 | 0.6748 | -0.0017 | -0.0069 to +0.0031 | 0: 13, 0.1: 5, 0.2: 17, 0.4: 15 | tau=0.1: 0.6727, tau=0.2: 0.6719, tau=0.4: 0.6723, tau=0.8: 0.6786, tau=1.6: 0.6868 | not kept |
-| gpt-5.6-terra efforts | 0.6886 | 0.6912 | -0.0026 | -0.0052 to -0.0005 | 0: 36, 0.1: 3, 0.2: 7, 0.4: 4 | tau=0.1: 0.6888, tau=0.2: 0.6892, tau=0.4: 0.6916, tau=0.8: 0.6973, tau=1.6: 0.7023 | not kept |
-| gpt-5.6-terra efforts (seat and starter terms) | 0.6985 | 0.7007 | -0.0022 | -0.0047 to +0.0001 | 0: 39, 0.1: 1, 0.2: 7, 0.4: 2, 0.8: 1 | tau=0.1: 0.6988, tau=0.2: 0.6998, tau=0.4: 0.7037, tau=0.8: 0.7120, tau=1.6: 0.7193 | not kept |
+| Cross-model | 0.5890 | 0.5891 | -0.0001 | -0.0001 to -0.0000 | 0: 46, 0.1: 3, 0.2: 1 | tau=0.1: 0.5891, tau=0.2: 0.5895, tau=0.4: 0.5907, tau=0.8: 0.5945, tau=1.6: 0.6038 | not kept |
+| Cross-model (seat and starter terms) | 0.5831 | 0.5831 | -0.0000 | -0.0000 to +0.0000 | 0: 48, 0.1: 2 | tau=0.1: 0.5832, tau=0.2: 0.5836, tau=0.4: 0.5848, tau=0.8: 0.5887, tau=1.6: 0.5984 | not kept |
+| claude-haiku-4-5-20251001 efforts | 0.6676 | 0.6681 | -0.0005 | -0.0015 to +0.0005 | 0: 46, 0.1: 1, 0.4: 2, 0.8: 1 | tau=0.1: 0.6680, tau=0.2: 0.6690, tau=0.4: 0.6715, tau=0.8: 0.6753, tau=1.6: 0.6783 | not kept |
+| claude-haiku-4-5-20251001 efforts (seat and starter terms) | 0.6692 | 0.6709 | -0.0017 | -0.0042 to -0.0001 | 0: 44, 0.1: 2, 0.2: 1, 0.4: 2, 0.8: 1 | tau=0.1: 0.6696, tau=0.2: 0.6707, tau=0.4: 0.6735, tau=0.8: 0.6779, tau=1.6: 0.6814 | not kept |
+| claude-haiku-5-5 efforts | 0.6634 | 0.6639 | -0.0005 | -0.0008 to -0.0001 | 0: 45, 0.1: 2, 0.2: 3 | tau=0.1: 0.6638, tau=0.2: 0.6648, tau=0.4: 0.6686, tau=0.8: 0.6761, tau=1.6: 0.6820 | not kept |
+| claude-haiku-5-5 efforts (seat and starter terms) | 0.6404 | 0.6412 | -0.0008 | -0.0015 to -0.0002 | 0: 47, 0.2: 2, 0.4: 1 | tau=0.1: 0.6406, tau=0.2: 0.6414, tau=0.4: 0.6445, tau=0.8: 0.6517, tau=1.6: 0.6582 | not kept |
+| claude-opus-5-5 efforts | 0.6861 | 0.6863 | -0.0002 | -0.0006 to +0.0000 | 0: 49, 0.2: 1 | tau=0.1: 0.6870, tau=0.2: 0.6895, tau=0.4: 0.6977, tau=0.8: 0.7164, tau=1.6: 0.7432 | not kept |
+| claude-opus-5-5 efforts (seat and starter terms) | 0.7007 | 0.7007 | +0.0000 | +0.0000 to +0.0000 | 0: 50 | tau=0.1: 0.7015, tau=0.2: 0.7038, tau=0.4: 0.7113, tau=0.8: 0.7286, tau=1.6: 0.7532 | not kept |
+| claude-sonnet-5-5 efforts | 0.6752 | 0.6794 | -0.0042 | -0.0102 to +0.0009 | 0: 20, 0.1: 4, 0.2: 12, 0.4: 12, 0.8: 2 | tau=0.1: 0.6748, tau=0.2: 0.6741, tau=0.4: 0.6747, tau=0.8: 0.6815, tau=1.6: 0.6898 | not kept |
+| claude-sonnet-5-5 efforts (seat and starter terms) | 0.6686 | 0.6715 | -0.0029 | -0.0089 to +0.0025 | 0: 14, 0.1: 3, 0.2: 17, 0.4: 14, 0.8: 2 | tau=0.1: 0.6682, tau=0.2: 0.6673, tau=0.4: 0.6672, tau=0.8: 0.6723, tau=1.6: 0.6790 | not kept |
+| gpt-5.6-terra efforts | 0.6901 | 0.6923 | -0.0021 | -0.0048 to +0.0004 | 0: 37, 0.1: 2, 0.2: 6, 0.4: 4, 0.8: 1 | tau=0.1: 0.6904, tau=0.2: 0.6912, tau=0.4: 0.6943, tau=0.8: 0.7008, tau=1.6: 0.7063 | not kept |
+| gpt-5.6-terra efforts (seat and starter terms) | 0.6972 | 0.6996 | -0.0024 | -0.0044 to -0.0006 | 0: 37, 0.1: 6, 0.2: 2, 0.4: 5 | tau=0.1: 0.6975, tau=0.2: 0.6982, tau=0.4: 0.7015, tau=0.8: 0.7090, tau=1.6: 0.7160 | not kept |
 | gpt-6-astra efforts | - | - | - | - | - | - | 7 seed blocks, under the minimum of 10: the fit with seat and starter terms can be singular on so few, so not tested |
-| gpt-6-luna efforts | 0.5704 | 0.5774 | -0.0070 | -0.0114 to -0.0029 | 0: 31, 0.1: 3, 0.2: 5, 0.4: 6, 0.8: 5 | tau=0.1: 0.5709, tau=0.2: 0.5720, tau=0.4: 0.5755, tau=0.8: 0.5820, tau=1.6: 0.5899 | not kept |
-| gpt-6-luna efforts (seat and starter terms) | 0.5794 | 0.5829 | -0.0035 | -0.0075 to -0.0001 | 0: 37, 0.2: 6, 0.4: 3, 0.8: 4 | tau=0.1: 0.5795, tau=0.2: 0.5800, tau=0.4: 0.5816, tau=0.8: 0.5857, tau=1.6: 0.5925 | not kept |
-| gpt-6.1-sol efforts | 0.7042 | 0.7142 | -0.0100 | -0.0196 to -0.0016 | 0: 15, 0.1: 4, 0.2: 12, 0.4: 14, 0.8: 4, 1.6: 1 | tau=0.1: 0.7042, tau=0.2: 0.7045, tau=0.4: 0.7072, tau=0.8: 0.7151, tau=1.6: 0.7226 | not kept |
-| gpt-6.1-sol efforts (seat and starter terms) | 0.7104 | 0.7169 | -0.0065 | -0.0139 to -0.0003 | 0: 19, 0.1: 6, 0.2: 11, 0.4: 13, 0.8: 1 | tau=0.1: 0.7103, tau=0.2: 0.7103, tau=0.4: 0.7121, tau=0.8: 0.7191, tau=1.6: 0.7259 | not kept |
-| gpt-6.1-terra efforts | 0.8699 | 0.8281 | +0.0418 | -0.0835 to +0.1714 | 0: 2, 0.4: 1, 0.8: 8, 1.6: 39 | tau=0.1: 0.8685, tau=0.2: 0.8645, tau=0.4: 0.8498, tau=0.8: 0.8106, tau=1.6: 0.7724 | not kept |
-| gpt-6.1-terra efforts (seat and starter terms) | 0.9543 | 0.8791 | +0.0752 | -0.0580 to +0.2041 | 0: 2, 0.2: 1, 0.4: 2, 0.8: 8, 1.6: 37 | tau=0.1: 0.9525, tau=0.2: 0.9472, tau=0.4: 0.9281, tau=0.8: 0.8762, tau=1.6: 0.8212 | not kept |
+| gpt-6-luna efforts | 0.5718 | 0.5758 | -0.0040 | -0.0079 to -0.0007 | 0: 41, 0.1: 1, 0.2: 2, 0.4: 3, 0.8: 3 | tau=0.1: 0.5719, tau=0.2: 0.5723, tau=0.4: 0.5740, tau=0.8: 0.5784, tau=1.6: 0.5855 | not kept |
+| gpt-6-luna efforts (seat and starter terms) | 0.5752 | 0.5784 | -0.0032 | -0.0067 to +0.0001 | 0: 32, 0.1: 3, 0.2: 5, 0.4: 7, 0.8: 3 | tau=0.1: 0.5753, tau=0.2: 0.5755, tau=0.4: 0.5767, tau=0.8: 0.5800, tau=1.6: 0.5857 | not kept |
+| gpt-6.1-sol efforts | 0.7081 | 0.7097 | -0.0016 | -0.0081 to +0.0044 | 0: 11, 0.1: 7, 0.2: 14, 0.4: 16, 0.8: 2 | tau=0.1: 0.7078, tau=0.2: 0.7074, tau=0.4: 0.7081, tau=0.8: 0.7130, tau=1.6: 0.7182 | not kept |
+| gpt-6.1-sol efforts (seat and starter terms) | 0.7081 | 0.7122 | -0.0042 | -0.0114 to +0.0020 | 0: 17, 0.1: 4, 0.2: 15, 0.4: 12, 0.8: 2 | tau=0.1: 0.7078, tau=0.2: 0.7075, tau=0.4: 0.7088, tau=0.8: 0.7156, tau=1.6: 0.7231 | not kept |
+| gpt-6.1-terra efforts | 0.8312 | 0.7682 | +0.0630 | -0.0662 to +0.1880 | 0: 3, 0.2: 1, 0.4: 1, 0.8: 6, 1.6: 39 | tau=0.1: 0.8295, tau=0.2: 0.8247, tau=0.4: 0.8073, tau=0.8: 0.7603, tau=1.6: 0.7077 | not kept |
+| gpt-6.1-terra efforts (seat and starter terms) | 0.9527 | 0.8948 | +0.0579 | -0.0596 to +0.1646 | 0: 3, 0.1: 1, 0.8: 10, 1.6: 36 | tau=0.1: 0.9511, tau=0.2: 0.9466, tau=0.4: 0.9305, tau=0.8: 0.8885, tau=1.6: 0.8526 | not kept |
 
 Loss is the mean held-out log loss per match, in nats, over repeats of 10-fold cross-validation over whole seed blocks (a fair coin scores 0.6931). Gain is ratings-only loss minus nested loss, so positive means pair effects helped. A cohort keeps its pair effects only when the lower end of the interval is above 0.
 
@@ -730,7 +734,7 @@ Reverse pairs: opposite signs for the entrant seated first, observed minus fitte
 
 | cohort | pairs with opposite signs | correlation of A-first effect with minus B-first effect |
 |---|---|---|
-| Cross-model | 204/394 = 51.8% | -0.11 |
+| Cross-model | 204/397 = 51.4% | -0.11 |
 | claude-haiku-4-5-20251001 efforts | 3/7 = 42.9% | -0.29 |
 | claude-haiku-5-5 efforts | 5/15 = 33.3% | -0.45 |
 | claude-opus-5-5 efforts | 1/11 = 9.1% | -0.81 |
@@ -739,15 +743,15 @@ Reverse pairs: opposite signs for the entrant seated first, observed minus fitte
 | gpt-6-luna efforts | 4/11 = 36.4% | -0.19 |
 | gpt-6.1-sol efforts | 6/10 = 60.0% | -0.18 |
 | gpt-6.1-terra efforts | 5/7 = 71.4% | +0.76 |
-| all cohorts pooled | 238/480 = 49.6% | -0.11 |
+| all cohorts pooled | 238/483 = 49.3% | -0.11 |
 
-Pair-level effects (all matches of a pair, either order) are exactly opposite for the two entrants: the largest sum of the two entrants' effects over every pair of every cohort is 5.6e-17, because each match's shares sum to 1.
+Pair-level effects (all matches of a pair, either order) are exactly opposite for the two entrants: the largest sum of the two entrants' effects over every pair of every cohort is 8.9e-17, because each match's shares sum to 1.
 
 Cohorts that keep pair effects: none.
 
 ### Seat and round 1 starter
 
-The player who opened round 1 (from the public line `Round 1 begins ... Player X starts.` in events.jsonl) also fired the first accepted shot in 4987 of 4987 scored matches.
+The player who opened round 1 (from the public line `Round 1 begins ... Player X starts.` in events.jsonl) also fired the first accepted shot in 6109 of 6109 scored matches.
 
 #### Overall and per cohort
 
@@ -755,48 +759,48 @@ Position 1:
 
 | group | position 1 wins/matches = share | 95% CI, seeds drawn | 95% CI, seed blocks drawn |
 |---|---|---|---|
-| all cohorts: 2117 blocks, 767 seeds (753 matches in half blocks left out) | 2219/4234 = 52.4% | 47.9% to 57.1% | 51.0% to 53.9% |
-| Cross-model: 1300 blocks, 757 seeds (710 matches in half blocks left out) | 1371/2600 = 52.7% | 49.1% to 56.8% | 50.9% to 54.5% |
-| claude-haiku-4-5-20251001 efforts: 100 blocks, 10 seeds | 105/200 = 52.5% | 42.5% to 60.5% | 45.5% to 59.5% |
-| claude-haiku-5-5 efforts: 150 blocks, 10 seeds | 142/300 = 47.3% | 34.3% to 60.0% | 41.0% to 53.0% |
-| claude-opus-5-5 efforts: 58 blocks, 18 seeds (21 matches in half blocks left out) | 61/116 = 52.6% | 38.8% to 66.4% | 43.1% to 62.9% |
-| claude-sonnet-5-5 efforts: 150 blocks, 10 seeds | 162/300 = 54.0% | 43.0% to 64.3% | 48.7% to 60.0% |
-| gpt-5.6-terra efforts: 100 blocks, 10 seeds | 96/200 = 48.0% | 36.5% to 59.0% | 40.5% to 55.0% |
+| all cohorts: 2678 blocks, 1328 seeds (753 matches in half blocks left out) | 2859/5356 = 53.4% | 49.6% to 57.2% | 52.1% to 54.6% |
+| Cross-model: 1861 blocks, 1318 seeds (710 matches in half blocks left out) | 2011/3722 = 54.0% | 51.2% to 57.0% | 52.6% to 55.5% |
+| claude-haiku-4-5-20251001 efforts: 100 blocks, 10 seeds | 105/200 = 52.5% | 42.5% to 60.0% | 45.5% to 59.5% |
+| claude-haiku-5-5 efforts: 150 blocks, 10 seeds | 142/300 = 47.3% | 34.7% to 60.0% | 41.3% to 53.3% |
+| claude-opus-5-5 efforts: 58 blocks, 18 seeds (21 matches in half blocks left out) | 61/116 = 52.6% | 38.9% to 66.7% | 43.1% to 62.1% |
+| claude-sonnet-5-5 efforts: 150 blocks, 10 seeds | 162/300 = 54.0% | 43.0% to 64.3% | 48.7% to 59.3% |
+| gpt-5.6-terra efforts: 100 blocks, 10 seeds | 96/200 = 48.0% | 36.5% to 59.0% | 40.5% to 55.5% |
 | gpt-6-astra efforts: 2 blocks, 1 seeds (5 matches in half blocks left out) | 3/4 = 75.0% | 75.0% to 75.0% | 50.0% to 100.0% |
-| gpt-6-luna efforts: 150 blocks, 10 seeds | 160/300 = 53.3% | 47.7% to 59.3% | 48.3% to 58.0% |
-| gpt-6.1-sol efforts: 100 blocks, 10 seeds | 111/200 = 55.5% | 43.0% to 67.5% | 48.0% to 62.5% |
+| gpt-6-luna efforts: 150 blocks, 10 seeds | 160/300 = 53.3% | 47.3% to 59.3% | 48.7% to 58.0% |
+| gpt-6.1-sol efforts: 100 blocks, 10 seeds | 111/200 = 55.5% | 43.5% to 68.5% | 48.0% to 63.0% |
 | gpt-6.1-terra efforts: 7 blocks, 7 seeds (17 matches in half blocks left out) | 8/14 = 57.1% | 35.7% to 78.6% | 35.7% to 78.6% |
 
 Round 1 starter:
 
 | group | starter wins/matches = share | 95% CI, seeds drawn | 95% CI, seed blocks drawn | blocks where position 1 starts |
 |---|---|---|---|---|
-| all cohorts | 2319/4234 = 54.8% | 50.4% to 58.8% | 53.3% to 56.3% | 1048/2117 |
-| Cross-model | 1409/2600 = 54.2% | 50.9% to 57.6% | 52.4% to 56.0% | 636/1300 |
-| claude-haiku-4-5-20251001 efforts | 115/200 = 57.5% | 50.5% to 65.5% | 51.0% to 64.5% | 50/100 |
-| claude-haiku-5-5 efforts | 186/300 = 62.0% | 52.0% to 72.0% | 56.3% to 68.0% | 75/150 |
-| claude-opus-5-5 efforts | 67/116 = 57.8% | 44.1% to 70.4% | 48.3% to 67.2% | 31/58 |
-| claude-sonnet-5-5 efforts | 164/300 = 54.7% | 42.7% to 64.7% | 49.0% to 60.0% | 75/150 |
-| gpt-5.6-terra efforts | 108/200 = 54.0% | 42.5% to 64.5% | 46.5% to 61.5% | 50/100 |
+| all cohorts | 2911/5356 = 54.4% | 51.0% to 58.0% | 53.0% to 55.7% | 1334/2678 |
+| Cross-model | 2001/3722 = 53.8% | 51.3% to 56.3% | 52.3% to 55.3% | 922/1861 |
+| claude-haiku-4-5-20251001 efforts | 115/200 = 57.5% | 50.0% to 65.5% | 50.5% to 64.5% | 50/100 |
+| claude-haiku-5-5 efforts | 186/300 = 62.0% | 51.3% to 72.3% | 56.3% to 67.7% | 75/150 |
+| claude-opus-5-5 efforts | 67/116 = 57.8% | 44.1% to 70.5% | 48.3% to 67.2% | 31/58 |
+| claude-sonnet-5-5 efforts | 164/300 = 54.7% | 43.0% to 65.0% | 49.0% to 60.0% | 75/150 |
+| gpt-5.6-terra efforts | 108/200 = 54.0% | 43.0% to 64.5% | 46.5% to 61.5% | 50/100 |
 | gpt-6-astra efforts | 3/4 = 75.0% | 75.0% to 75.0% | 50.0% to 100.0% | 2/2 |
-| gpt-6-luna efforts | 152/300 = 50.7% | 44.7% to 57.0% | 46.0% to 55.7% | 75/150 |
-| gpt-6.1-sol efforts | 107/200 = 53.5% | 41.0% to 66.0% | 46.0% to 61.0% | 50/100 |
+| gpt-6-luna efforts | 152/300 = 50.7% | 44.3% to 57.3% | 46.0% to 55.7% | 75/150 |
+| gpt-6.1-sol efforts | 107/200 = 53.5% | 40.5% to 66.5% | 46.0% to 61.0% | 50/100 |
 | gpt-6.1-terra efforts | 8/14 = 57.1% | 35.7% to 78.6% | 35.7% to 78.6% | 4/7 |
 
 Position and starter effects, in percentage points: a descriptive additive split of block shares by which position starts. Every seed has one starter position, so starter and seed effects are not separated; the seeds-drawn interval is the one that reaches beyond these seeds.
 
 | group | position effect | 95% CI, seeds drawn | 95% CI, seed blocks drawn | starter effect | 95% CI, seeds drawn | 95% CI, seed blocks drawn |
 |---|---|---|---|---|---|---|
-| all cohorts | +2.5 | -1.8 to +6.6 | +1.0 to +4.0 | +4.8 | +0.3 to +8.9 | +3.4 to +6.3 |
-| Cross-model | +2.8 | -0.4 to +6.4 | +1.0 to +4.6 | +4.3 | +0.6 to +7.6 | +2.4 to +6.1 |
-| claude-haiku-4-5-20251001 efforts | +2.5 | -6.3 to +9.5 | -4.4 to +9.6 | +7.5 | +0.5 to +16.3 | +0.6 to +14.5 |
-| claude-haiku-5-5 efforts | -2.7 | -14.0 to +7.6 | -8.4 to +3.2 | +12.0 | +1.3 to +22.7 | +6.3 to +18.0 |
-| claude-opus-5-5 efforts | +2.1 | -12.0 to +15.6 | -7.0 to +11.7 | +7.6 | -6.3 to +20.8 | -2.0 to +16.9 |
-| claude-sonnet-5-5 efforts | +4.0 | -7.9 to +14.6 | -1.3 to +9.9 | +4.7 | -8.1 to +15.0 | -1.0 to +10.1 |
-| gpt-5.6-terra efforts | -2.0 | -14.4 to +8.6 | -9.3 to +5.0 | +4.0 | -8.5 to +15.2 | -3.3 to +11.4 |
-| gpt-6-luna efforts | +3.3 | -3.1 to +9.7 | -1.6 to +8.0 | +0.7 | -5.5 to +7.1 | -4.2 to +5.7 |
-| gpt-6.1-sol efforts | +5.5 | -7.8 to +18.1 | -2.1 to +12.6 | +3.5 | -9.4 to +16.5 | -4.0 to +11.1 |
-| gpt-6.1-terra efforts | +6.2 | -20.8 to +33.3 | -20.8 to +35.0 | +6.2 | -20.8 to +33.3 | -20.8 to +33.8 |
+| all cohorts | +3.4 | -0.1 to +6.8 | +2.1 to +4.7 | +4.4 | +0.9 to +7.7 | +3.0 to +5.7 |
+| Cross-model | +4.1 | +1.4 to +6.8 | +2.6 to +5.5 | +3.8 | +1.1 to +6.4 | +2.3 to +5.3 |
+| claude-haiku-4-5-20251001 efforts | +2.5 | -6.5 to +9.5 | -4.2 to +9.3 | +7.5 | +0.4 to +16.3 | +0.7 to +14.5 |
+| claude-haiku-5-5 efforts | -2.7 | -13.9 to +7.6 | -8.2 to +3.0 | +12.0 | +0.7 to +23.1 | +6.3 to +17.7 |
+| claude-opus-5-5 efforts | +2.1 | -11.7 to +15.8 | -7.4 to +11.8 | +7.6 | -6.4 to +20.6 | -1.7 to +17.0 |
+| claude-sonnet-5-5 efforts | +4.0 | -7.7 to +14.4 | -1.6 to +9.3 | +4.7 | -7.5 to +15.3 | -0.9 to +10.1 |
+| gpt-5.6-terra efforts | -2.0 | -14.0 to +8.8 | -9.5 to +5.4 | +4.0 | -7.8 to +14.8 | -3.4 to +11.3 |
+| gpt-6-luna efforts | +3.3 | -3.3 to +9.4 | -1.6 to +8.1 | +0.7 | -5.7 to +7.4 | -4.1 to +5.6 |
+| gpt-6.1-sol efforts | +5.5 | -7.0 to +19.6 | -2.2 to +13.1 | +3.5 | -9.8 to +16.5 | -3.8 to +11.1 |
+| gpt-6.1-terra efforts | +6.2 | -20.8 to +33.4 | -20.0 to +33.3 | +6.2 | -20.8 to +35.0 | -20.8 to +33.3 |
 
 #### Per model
 
@@ -806,17 +810,18 @@ Position 1:
 
 | group | position 1 wins/matches = share | 95% CI, seeds drawn | 95% CI, seed blocks drawn |
 |---|---|---|---|
-| Engine/2/20000: 647 blocks, 609 seeds | 747/1294 = 57.7% | 55.1% to 60.2% | 55.3% to 60.3% |
-| Engine/6/20000/sampled: 78 blocks, 50 seeds | 80/156 = 51.3% | 40.6% to 62.0% | 42.9% to 59.6% |
-| claude-haiku-4-5-20251001: 271 blocks, 73 seeds | 270/542 = 49.8% | 43.8% to 55.6% | 45.9% to 53.7% |
-| claude-haiku-5-5: 679 blocks, 404 seeds | 715/1358 = 52.7% | 47.7% to 57.4% | 49.9% to 55.4% |
-| claude-opus-5-5: 233 blocks, 67 seeds | 230/466 = 49.4% | 41.2% to 57.6% | 44.6% to 54.1% |
-| claude-sonnet-5-5: 327 blocks, 41 seeds | 334/654 = 51.1% | 43.5% to 58.0% | 47.4% to 54.7% |
-| gpt-5.6-terra: 208 blocks, 19 seeds | 217/416 = 52.2% | 42.9% to 61.0% | 47.1% to 57.0% |
-| gpt-6-astra: 144 blocks, 57 seeds | 138/288 = 47.9% | 39.9% to 57.2% | 41.7% to 54.2% |
-| gpt-6-luna: 468 blocks, 226 seeds | 479/936 = 51.2% | 48.0% to 54.6% | 48.5% to 53.8% |
-| gpt-6.1-sol: 252 blocks, 49 seeds | 249/504 = 49.4% | 41.2% to 57.9% | 44.6% to 54.4% |
-| gpt-6.1-terra: 110 blocks, 100 seeds | 131/220 = 59.5% | 52.7% to 66.5% | 52.7% to 66.4% |
+| Engine/2/20000: 1167 blocks, 1129 seeds | 1349/2334 = 57.8% | 56.0% to 59.6% | 56.0% to 59.6% |
+| Engine/6/20000/sampled: 118 blocks, 90 seeds | 117/236 = 49.6% | 41.2% to 57.5% | 42.4% to 56.4% |
+| Engine/7/2000000/sampled: 560 blocks, 560 seeds | 639/1120 = 57.1% | 54.6% to 59.4% | 54.6% to 59.3% |
+| claude-haiku-4-5-20251001: 271 blocks, 73 seeds | 270/542 = 49.8% | 43.7% to 55.5% | 45.9% to 53.9% |
+| claude-haiku-5-5: 679 blocks, 404 seeds | 715/1358 = 52.7% | 47.9% to 57.4% | 50.1% to 55.4% |
+| claude-opus-5-5: 234 blocks, 68 seeds | 231/468 = 49.4% | 41.4% to 57.5% | 44.4% to 54.1% |
+| claude-sonnet-5-5: 328 blocks, 42 seeds | 335/656 = 51.1% | 43.7% to 58.5% | 47.3% to 54.6% |
+| gpt-5.6-terra: 208 blocks, 19 seeds | 217/416 = 52.2% | 43.3% to 61.5% | 47.4% to 57.5% |
+| gpt-6-astra: 144 blocks, 57 seeds | 138/288 = 47.9% | 39.7% to 57.3% | 42.0% to 53.8% |
+| gpt-6-luna: 468 blocks, 226 seeds | 479/936 = 51.2% | 47.8% to 54.5% | 48.6% to 53.8% |
+| gpt-6.1-sol: 252 blocks, 49 seeds | 249/504 = 49.4% | 41.6% to 58.1% | 44.6% to 54.2% |
+| gpt-6.1-terra: 110 blocks, 100 seeds | 131/220 = 59.5% | 52.8% to 66.0% | 52.3% to 66.4% |
 
 #### Per seed, all cohorts
 
@@ -992,6 +997,566 @@ Cohorts reuse seeds 3000 to 3018 (tournament 3 adds 3020 to 3029, and tournament
 | 12037 | 2 | 1 | 0/2 = 0.0% |
 | 12038 | 2 | 1 | 2/2 = 100.0% |
 | 12039 | 1 | 1 | 1/2 = 50.0% |
+| 14000 | 1 | 1 | 1/2 = 50.0% |
+| 14001 | 2 | 1 | 0/2 = 0.0% |
+| 14002 | 2 | 1 | 0/2 = 0.0% |
+| 14003 | 1 | 1 | 1/2 = 50.0% |
+| 14004 | 1 | 1 | 1/2 = 50.0% |
+| 14005 | 2 | 1 | 0/2 = 0.0% |
+| 14006 | 2 | 1 | 1/2 = 50.0% |
+| 14007 | 1 | 1 | 1/2 = 50.0% |
+| 14008 | 1 | 1 | 2/2 = 100.0% |
+| 14009 | 2 | 1 | 1/2 = 50.0% |
+| 14010 | 2 | 1 | 0/2 = 0.0% |
+| 14011 | 2 | 1 | 0/2 = 0.0% |
+| 14012 | 1 | 1 | 1/2 = 50.0% |
+| 14013 | 2 | 1 | 1/2 = 50.0% |
+| 14014 | 1 | 1 | 1/2 = 50.0% |
+| 14015 | 1 | 1 | 1/2 = 50.0% |
+| 14016 | 2 | 1 | 2/2 = 100.0% |
+| 14017 | 1 | 1 | 1/2 = 50.0% |
+| 14018 | 1 | 1 | 2/2 = 100.0% |
+| 14019 | 1 | 1 | 2/2 = 100.0% |
+| 14020 | 1 | 1 | 2/2 = 100.0% |
+| 14021 | 2 | 1 | 1/2 = 50.0% |
+| 14022 | 2 | 1 | 1/2 = 50.0% |
+| 14023 | 2 | 1 | 0/2 = 0.0% |
+| 14024 | 1 | 1 | 1/2 = 50.0% |
+| 14025 | 2 | 1 | 1/2 = 50.0% |
+| 14026 | 2 | 1 | 1/2 = 50.0% |
+| 14027 | 2 | 1 | 2/2 = 100.0% |
+| 14028 | 1 | 1 | 1/2 = 50.0% |
+| 14029 | 1 | 1 | 1/2 = 50.0% |
+| 14030 | 1 | 1 | 1/2 = 50.0% |
+| 14031 | 1 | 1 | 2/2 = 100.0% |
+| 14032 | 2 | 1 | 1/2 = 50.0% |
+| 14033 | 2 | 1 | 0/2 = 0.0% |
+| 14034 | 2 | 1 | 2/2 = 100.0% |
+| 14035 | 2 | 1 | 2/2 = 100.0% |
+| 14036 | 1 | 1 | 1/2 = 50.0% |
+| 14037 | 1 | 1 | 1/2 = 50.0% |
+| 14038 | 2 | 1 | 1/2 = 50.0% |
+| 14039 | 2 | 1 | 1/2 = 50.0% |
+| 14040 | 2 | 1 | 0/2 = 0.0% |
+| 14041 | 2 | 1 | 1/2 = 50.0% |
+| 14042 | 2 | 1 | 1/2 = 50.0% |
+| 14043 | 1 | 1 | 2/2 = 100.0% |
+| 14044 | 1 | 1 | 1/2 = 50.0% |
+| 14045 | 1 | 1 | 1/2 = 50.0% |
+| 14046 | 1 | 1 | 1/2 = 50.0% |
+| 14047 | 2 | 1 | 1/2 = 50.0% |
+| 14048 | 2 | 1 | 1/2 = 50.0% |
+| 14049 | 2 | 1 | 0/2 = 0.0% |
+| 14050 | 1 | 1 | 2/2 = 100.0% |
+| 14051 | 2 | 1 | 1/2 = 50.0% |
+| 14052 | 1 | 1 | 1/2 = 50.0% |
+| 14053 | 1 | 1 | 2/2 = 100.0% |
+| 14054 | 2 | 1 | 1/2 = 50.0% |
+| 14055 | 1 | 1 | 1/2 = 50.0% |
+| 14056 | 1 | 1 | 2/2 = 100.0% |
+| 14057 | 2 | 1 | 1/2 = 50.0% |
+| 14058 | 2 | 1 | 1/2 = 50.0% |
+| 14059 | 2 | 1 | 1/2 = 50.0% |
+| 14060 | 2 | 1 | 1/2 = 50.0% |
+| 14061 | 2 | 1 | 0/2 = 0.0% |
+| 14062 | 1 | 1 | 1/2 = 50.0% |
+| 14063 | 1 | 1 | 2/2 = 100.0% |
+| 14064 | 2 | 1 | 1/2 = 50.0% |
+| 14065 | 1 | 1 | 2/2 = 100.0% |
+| 14066 | 1 | 1 | 0/2 = 0.0% |
+| 14067 | 2 | 1 | 2/2 = 100.0% |
+| 14068 | 2 | 1 | 0/2 = 0.0% |
+| 14069 | 2 | 1 | 1/2 = 50.0% |
+| 14070 | 2 | 1 | 1/2 = 50.0% |
+| 14071 | 2 | 1 | 1/2 = 50.0% |
+| 14072 | 1 | 1 | 2/2 = 100.0% |
+| 14073 | 2 | 1 | 1/2 = 50.0% |
+| 14074 | 1 | 1 | 1/2 = 50.0% |
+| 14075 | 1 | 1 | 1/2 = 50.0% |
+| 14076 | 2 | 1 | 1/2 = 50.0% |
+| 14077 | 2 | 1 | 1/2 = 50.0% |
+| 14078 | 1 | 1 | 1/2 = 50.0% |
+| 14079 | 1 | 1 | 1/2 = 50.0% |
+| 14080 | 2 | 1 | 2/2 = 100.0% |
+| 14081 | 2 | 1 | 1/2 = 50.0% |
+| 14082 | 1 | 1 | 1/2 = 50.0% |
+| 14083 | 2 | 1 | 1/2 = 50.0% |
+| 14084 | 1 | 1 | 2/2 = 100.0% |
+| 14085 | 2 | 1 | 0/2 = 0.0% |
+| 14086 | 2 | 1 | 0/2 = 0.0% |
+| 14087 | 2 | 1 | 1/2 = 50.0% |
+| 14088 | 1 | 1 | 2/2 = 100.0% |
+| 14089 | 2 | 1 | 0/2 = 0.0% |
+| 14090 | 2 | 1 | 1/2 = 50.0% |
+| 14091 | 1 | 1 | 1/2 = 50.0% |
+| 14092 | 1 | 1 | 1/2 = 50.0% |
+| 14093 | 1 | 1 | 2/2 = 100.0% |
+| 14094 | 1 | 1 | 2/2 = 100.0% |
+| 14095 | 1 | 1 | 2/2 = 100.0% |
+| 14096 | 2 | 1 | 1/2 = 50.0% |
+| 14097 | 2 | 1 | 1/2 = 50.0% |
+| 14098 | 2 | 1 | 1/2 = 50.0% |
+| 14099 | 1 | 1 | 1/2 = 50.0% |
+| 14100 | 1 | 1 | 1/2 = 50.0% |
+| 14101 | 2 | 1 | 2/2 = 100.0% |
+| 14102 | 1 | 1 | 1/2 = 50.0% |
+| 14103 | 1 | 1 | 1/2 = 50.0% |
+| 14104 | 1 | 1 | 0/2 = 0.0% |
+| 14105 | 1 | 1 | 1/2 = 50.0% |
+| 14106 | 2 | 1 | 1/2 = 50.0% |
+| 14107 | 1 | 1 | 1/2 = 50.0% |
+| 14108 | 1 | 1 | 1/2 = 50.0% |
+| 14109 | 2 | 1 | 1/2 = 50.0% |
+| 14110 | 1 | 1 | 1/2 = 50.0% |
+| 14111 | 2 | 1 | 2/2 = 100.0% |
+| 14112 | 2 | 1 | 0/2 = 0.0% |
+| 14113 | 2 | 1 | 2/2 = 100.0% |
+| 14114 | 2 | 1 | 2/2 = 100.0% |
+| 14115 | 1 | 1 | 2/2 = 100.0% |
+| 14116 | 2 | 1 | 1/2 = 50.0% |
+| 14117 | 2 | 1 | 1/2 = 50.0% |
+| 14118 | 2 | 1 | 1/2 = 50.0% |
+| 14119 | 1 | 1 | 1/2 = 50.0% |
+| 14120 | 2 | 1 | 0/2 = 0.0% |
+| 14121 | 1 | 1 | 2/2 = 100.0% |
+| 14122 | 2 | 1 | 1/2 = 50.0% |
+| 14123 | 1 | 1 | 1/2 = 50.0% |
+| 14124 | 2 | 1 | 0/2 = 0.0% |
+| 14125 | 2 | 1 | 1/2 = 50.0% |
+| 14126 | 1 | 1 | 0/2 = 0.0% |
+| 14127 | 1 | 1 | 1/2 = 50.0% |
+| 14128 | 2 | 1 | 0/2 = 0.0% |
+| 14129 | 2 | 1 | 1/2 = 50.0% |
+| 14130 | 1 | 1 | 2/2 = 100.0% |
+| 14131 | 2 | 1 | 1/2 = 50.0% |
+| 14132 | 1 | 1 | 1/2 = 50.0% |
+| 14133 | 1 | 1 | 2/2 = 100.0% |
+| 14134 | 1 | 1 | 1/2 = 50.0% |
+| 14135 | 2 | 1 | 1/2 = 50.0% |
+| 14136 | 2 | 1 | 0/2 = 0.0% |
+| 14137 | 2 | 1 | 1/2 = 50.0% |
+| 14138 | 2 | 1 | 1/2 = 50.0% |
+| 14139 | 2 | 1 | 0/2 = 0.0% |
+| 14140 | 1 | 1 | 1/2 = 50.0% |
+| 14141 | 2 | 1 | 2/2 = 100.0% |
+| 14142 | 2 | 1 | 1/2 = 50.0% |
+| 14143 | 1 | 1 | 2/2 = 100.0% |
+| 14144 | 2 | 1 | 1/2 = 50.0% |
+| 14145 | 1 | 1 | 2/2 = 100.0% |
+| 14146 | 1 | 1 | 2/2 = 100.0% |
+| 14147 | 1 | 1 | 1/2 = 50.0% |
+| 14148 | 2 | 1 | 1/2 = 50.0% |
+| 14149 | 2 | 1 | 0/2 = 0.0% |
+| 14150 | 2 | 1 | 1/2 = 50.0% |
+| 14151 | 2 | 1 | 1/2 = 50.0% |
+| 14152 | 2 | 1 | 1/2 = 50.0% |
+| 14153 | 1 | 1 | 1/2 = 50.0% |
+| 14154 | 2 | 1 | 1/2 = 50.0% |
+| 14155 | 1 | 1 | 1/2 = 50.0% |
+| 14156 | 1 | 1 | 1/2 = 50.0% |
+| 14157 | 1 | 1 | 2/2 = 100.0% |
+| 14158 | 1 | 1 | 1/2 = 50.0% |
+| 14159 | 1 | 1 | 1/2 = 50.0% |
+| 14160 | 2 | 1 | 1/2 = 50.0% |
+| 14161 | 2 | 1 | 1/2 = 50.0% |
+| 14162 | 1 | 1 | 1/2 = 50.0% |
+| 14163 | 2 | 1 | 0/2 = 0.0% |
+| 14164 | 1 | 1 | 1/2 = 50.0% |
+| 14165 | 1 | 1 | 1/2 = 50.0% |
+| 14166 | 1 | 1 | 1/2 = 50.0% |
+| 14167 | 1 | 1 | 1/2 = 50.0% |
+| 14168 | 2 | 1 | 1/2 = 50.0% |
+| 14169 | 1 | 1 | 1/2 = 50.0% |
+| 14170 | 1 | 1 | 0/2 = 0.0% |
+| 14171 | 1 | 1 | 2/2 = 100.0% |
+| 14172 | 2 | 1 | 0/2 = 0.0% |
+| 14173 | 1 | 1 | 1/2 = 50.0% |
+| 14174 | 1 | 1 | 1/2 = 50.0% |
+| 14175 | 1 | 1 | 2/2 = 100.0% |
+| 14176 | 2 | 1 | 1/2 = 50.0% |
+| 14177 | 1 | 1 | 1/2 = 50.0% |
+| 14178 | 1 | 1 | 2/2 = 100.0% |
+| 14179 | 2 | 1 | 0/2 = 0.0% |
+| 14180 | 1 | 1 | 2/2 = 100.0% |
+| 14181 | 1 | 1 | 1/2 = 50.0% |
+| 14182 | 2 | 1 | 2/2 = 100.0% |
+| 14183 | 2 | 1 | 1/2 = 50.0% |
+| 14184 | 1 | 1 | 1/2 = 50.0% |
+| 14185 | 1 | 1 | 1/2 = 50.0% |
+| 14186 | 1 | 1 | 1/2 = 50.0% |
+| 14187 | 1 | 1 | 1/2 = 50.0% |
+| 14188 | 1 | 1 | 1/2 = 50.0% |
+| 14189 | 2 | 1 | 1/2 = 50.0% |
+| 14190 | 1 | 1 | 1/2 = 50.0% |
+| 14191 | 1 | 1 | 0/2 = 0.0% |
+| 14192 | 1 | 1 | 1/2 = 50.0% |
+| 14193 | 2 | 1 | 1/2 = 50.0% |
+| 14194 | 1 | 1 | 2/2 = 100.0% |
+| 14195 | 2 | 1 | 2/2 = 100.0% |
+| 14196 | 2 | 1 | 1/2 = 50.0% |
+| 14197 | 2 | 1 | 1/2 = 50.0% |
+| 14198 | 2 | 1 | 0/2 = 0.0% |
+| 14199 | 2 | 1 | 1/2 = 50.0% |
+| 14200 | 2 | 1 | 0/2 = 0.0% |
+| 14201 | 2 | 1 | 1/2 = 50.0% |
+| 14202 | 1 | 1 | 2/2 = 100.0% |
+| 14203 | 1 | 1 | 1/2 = 50.0% |
+| 14204 | 1 | 1 | 2/2 = 100.0% |
+| 14205 | 1 | 1 | 2/2 = 100.0% |
+| 14206 | 1 | 1 | 2/2 = 100.0% |
+| 14207 | 1 | 1 | 1/2 = 50.0% |
+| 14208 | 2 | 1 | 1/2 = 50.0% |
+| 14209 | 2 | 1 | 1/2 = 50.0% |
+| 14210 | 1 | 1 | 1/2 = 50.0% |
+| 14211 | 2 | 1 | 0/2 = 0.0% |
+| 14212 | 1 | 1 | 1/2 = 50.0% |
+| 14213 | 2 | 1 | 1/2 = 50.0% |
+| 14214 | 2 | 1 | 1/2 = 50.0% |
+| 14215 | 2 | 1 | 1/2 = 50.0% |
+| 14216 | 1 | 1 | 1/2 = 50.0% |
+| 14217 | 1 | 1 | 0/2 = 0.0% |
+| 14218 | 2 | 1 | 1/2 = 50.0% |
+| 14219 | 1 | 1 | 2/2 = 100.0% |
+| 14220 | 1 | 1 | 1/2 = 50.0% |
+| 14221 | 2 | 1 | 1/2 = 50.0% |
+| 14222 | 2 | 1 | 1/2 = 50.0% |
+| 14223 | 1 | 1 | 2/2 = 100.0% |
+| 14224 | 2 | 1 | 2/2 = 100.0% |
+| 14225 | 1 | 1 | 2/2 = 100.0% |
+| 14226 | 1 | 1 | 1/2 = 50.0% |
+| 14227 | 2 | 1 | 1/2 = 50.0% |
+| 14228 | 1 | 1 | 0/2 = 0.0% |
+| 14229 | 2 | 1 | 1/2 = 50.0% |
+| 14230 | 1 | 1 | 1/2 = 50.0% |
+| 14231 | 1 | 1 | 1/2 = 50.0% |
+| 14232 | 1 | 1 | 1/2 = 50.0% |
+| 14233 | 1 | 1 | 1/2 = 50.0% |
+| 14234 | 1 | 1 | 2/2 = 100.0% |
+| 14235 | 1 | 1 | 1/2 = 50.0% |
+| 14236 | 1 | 1 | 2/2 = 100.0% |
+| 14237 | 1 | 1 | 1/2 = 50.0% |
+| 14238 | 1 | 1 | 2/2 = 100.0% |
+| 14239 | 2 | 1 | 1/2 = 50.0% |
+| 14240 | 2 | 1 | 2/2 = 100.0% |
+| 14241 | 2 | 1 | 1/2 = 50.0% |
+| 14242 | 1 | 1 | 1/2 = 50.0% |
+| 14243 | 2 | 1 | 1/2 = 50.0% |
+| 14244 | 1 | 1 | 1/2 = 50.0% |
+| 14245 | 2 | 1 | 1/2 = 50.0% |
+| 14246 | 1 | 1 | 1/2 = 50.0% |
+| 14247 | 1 | 1 | 0/2 = 0.0% |
+| 14248 | 1 | 1 | 1/2 = 50.0% |
+| 14249 | 1 | 1 | 2/2 = 100.0% |
+| 14250 | 2 | 1 | 1/2 = 50.0% |
+| 14251 | 2 | 1 | 2/2 = 100.0% |
+| 14252 | 2 | 1 | 1/2 = 50.0% |
+| 14253 | 2 | 1 | 0/2 = 0.0% |
+| 14254 | 2 | 1 | 0/2 = 0.0% |
+| 14255 | 1 | 1 | 1/2 = 50.0% |
+| 14256 | 1 | 1 | 1/2 = 50.0% |
+| 14257 | 1 | 1 | 2/2 = 100.0% |
+| 14258 | 2 | 1 | 0/2 = 0.0% |
+| 14259 | 2 | 1 | 0/2 = 0.0% |
+| 14260 | 1 | 1 | 1/2 = 50.0% |
+| 14261 | 2 | 1 | 0/2 = 0.0% |
+| 14262 | 1 | 1 | 1/2 = 50.0% |
+| 14263 | 2 | 1 | 0/2 = 0.0% |
+| 14264 | 1 | 1 | 1/2 = 50.0% |
+| 14265 | 1 | 1 | 2/2 = 100.0% |
+| 14266 | 2 | 1 | 1/2 = 50.0% |
+| 14267 | 1 | 1 | 1/2 = 50.0% |
+| 14268 | 1 | 1 | 0/2 = 0.0% |
+| 14269 | 1 | 1 | 1/2 = 50.0% |
+| 14270 | 2 | 1 | 2/2 = 100.0% |
+| 14271 | 1 | 1 | 1/2 = 50.0% |
+| 14272 | 2 | 1 | 0/2 = 0.0% |
+| 14273 | 1 | 1 | 0/2 = 0.0% |
+| 14274 | 2 | 1 | 2/2 = 100.0% |
+| 14275 | 2 | 1 | 1/2 = 50.0% |
+| 14276 | 1 | 1 | 1/2 = 50.0% |
+| 14277 | 1 | 1 | 2/2 = 100.0% |
+| 14278 | 1 | 1 | 1/2 = 50.0% |
+| 14279 | 1 | 1 | 1/2 = 50.0% |
+| 14280 | 2 | 1 | 1/2 = 50.0% |
+| 14281 | 2 | 1 | 1/2 = 50.0% |
+| 14282 | 2 | 1 | 0/2 = 0.0% |
+| 14283 | 2 | 1 | 2/2 = 100.0% |
+| 14284 | 1 | 1 | 1/2 = 50.0% |
+| 14285 | 1 | 1 | 2/2 = 100.0% |
+| 14286 | 2 | 1 | 0/2 = 0.0% |
+| 14287 | 2 | 1 | 0/2 = 0.0% |
+| 14288 | 1 | 1 | 2/2 = 100.0% |
+| 14289 | 2 | 1 | 0/2 = 0.0% |
+| 14290 | 1 | 1 | 1/2 = 50.0% |
+| 14291 | 1 | 1 | 1/2 = 50.0% |
+| 14292 | 2 | 1 | 0/2 = 0.0% |
+| 14293 | 2 | 1 | 0/2 = 0.0% |
+| 14294 | 1 | 1 | 2/2 = 100.0% |
+| 14295 | 2 | 1 | 1/2 = 50.0% |
+| 14296 | 1 | 1 | 2/2 = 100.0% |
+| 14297 | 1 | 1 | 1/2 = 50.0% |
+| 14298 | 2 | 1 | 1/2 = 50.0% |
+| 14299 | 1 | 1 | 1/2 = 50.0% |
+| 14300 | 1 | 1 | 2/2 = 100.0% |
+| 14301 | 2 | 1 | 1/2 = 50.0% |
+| 14302 | 1 | 1 | 1/2 = 50.0% |
+| 14303 | 1 | 1 | 1/2 = 50.0% |
+| 14304 | 1 | 1 | 1/2 = 50.0% |
+| 14305 | 2 | 1 | 1/2 = 50.0% |
+| 14306 | 2 | 1 | 1/2 = 50.0% |
+| 14307 | 1 | 1 | 1/2 = 50.0% |
+| 14308 | 2 | 1 | 1/2 = 50.0% |
+| 14309 | 1 | 1 | 1/2 = 50.0% |
+| 14310 | 2 | 1 | 0/2 = 0.0% |
+| 14311 | 2 | 1 | 2/2 = 100.0% |
+| 14312 | 2 | 1 | 1/2 = 50.0% |
+| 14313 | 2 | 1 | 2/2 = 100.0% |
+| 14314 | 1 | 1 | 1/2 = 50.0% |
+| 14315 | 1 | 1 | 1/2 = 50.0% |
+| 14316 | 2 | 1 | 1/2 = 50.0% |
+| 14317 | 2 | 1 | 1/2 = 50.0% |
+| 14318 | 2 | 1 | 1/2 = 50.0% |
+| 14319 | 1 | 1 | 1/2 = 50.0% |
+| 14320 | 2 | 1 | 1/2 = 50.0% |
+| 14321 | 1 | 1 | 2/2 = 100.0% |
+| 14322 | 1 | 1 | 1/2 = 50.0% |
+| 14323 | 2 | 1 | 0/2 = 0.0% |
+| 14324 | 2 | 1 | 0/2 = 0.0% |
+| 14325 | 2 | 1 | 1/2 = 50.0% |
+| 14326 | 2 | 1 | 1/2 = 50.0% |
+| 14327 | 2 | 1 | 1/2 = 50.0% |
+| 14328 | 2 | 1 | 1/2 = 50.0% |
+| 14329 | 1 | 1 | 1/2 = 50.0% |
+| 14330 | 2 | 1 | 1/2 = 50.0% |
+| 14331 | 1 | 1 | 1/2 = 50.0% |
+| 14332 | 2 | 1 | 0/2 = 0.0% |
+| 14333 | 2 | 1 | 1/2 = 50.0% |
+| 14334 | 2 | 1 | 1/2 = 50.0% |
+| 14335 | 2 | 1 | 1/2 = 50.0% |
+| 14336 | 1 | 1 | 2/2 = 100.0% |
+| 14337 | 1 | 1 | 2/2 = 100.0% |
+| 14338 | 2 | 1 | 1/2 = 50.0% |
+| 14339 | 1 | 1 | 0/2 = 0.0% |
+| 14340 | 2 | 1 | 1/2 = 50.0% |
+| 14341 | 1 | 1 | 1/2 = 50.0% |
+| 14342 | 2 | 1 | 1/2 = 50.0% |
+| 14343 | 1 | 1 | 1/2 = 50.0% |
+| 14344 | 1 | 1 | 1/2 = 50.0% |
+| 14345 | 2 | 1 | 1/2 = 50.0% |
+| 14346 | 1 | 1 | 1/2 = 50.0% |
+| 14347 | 1 | 1 | 1/2 = 50.0% |
+| 14348 | 1 | 1 | 1/2 = 50.0% |
+| 14349 | 2 | 1 | 1/2 = 50.0% |
+| 14350 | 2 | 1 | 1/2 = 50.0% |
+| 14351 | 2 | 1 | 1/2 = 50.0% |
+| 14352 | 1 | 1 | 2/2 = 100.0% |
+| 14353 | 1 | 1 | 1/2 = 50.0% |
+| 14354 | 1 | 1 | 2/2 = 100.0% |
+| 14355 | 1 | 1 | 2/2 = 100.0% |
+| 14356 | 1 | 1 | 0/2 = 0.0% |
+| 14357 | 1 | 1 | 1/2 = 50.0% |
+| 14358 | 2 | 1 | 2/2 = 100.0% |
+| 14359 | 2 | 1 | 1/2 = 50.0% |
+| 14360 | 2 | 1 | 1/2 = 50.0% |
+| 14361 | 2 | 1 | 1/2 = 50.0% |
+| 14362 | 2 | 1 | 0/2 = 0.0% |
+| 14363 | 1 | 1 | 1/2 = 50.0% |
+| 14364 | 2 | 1 | 1/2 = 50.0% |
+| 14365 | 1 | 1 | 2/2 = 100.0% |
+| 14366 | 2 | 1 | 2/2 = 100.0% |
+| 14367 | 1 | 1 | 1/2 = 50.0% |
+| 14368 | 2 | 1 | 1/2 = 50.0% |
+| 14369 | 2 | 1 | 1/2 = 50.0% |
+| 14370 | 1 | 1 | 0/2 = 0.0% |
+| 14371 | 1 | 1 | 1/2 = 50.0% |
+| 14372 | 1 | 1 | 0/2 = 0.0% |
+| 14373 | 2 | 1 | 1/2 = 50.0% |
+| 14374 | 1 | 1 | 1/2 = 50.0% |
+| 14375 | 1 | 1 | 1/2 = 50.0% |
+| 14376 | 1 | 1 | 2/2 = 100.0% |
+| 14377 | 1 | 1 | 0/2 = 0.0% |
+| 14378 | 2 | 1 | 1/2 = 50.0% |
+| 14379 | 2 | 1 | 0/2 = 0.0% |
+| 14380 | 1 | 1 | 1/2 = 50.0% |
+| 14381 | 2 | 1 | 1/2 = 50.0% |
+| 14382 | 2 | 1 | 1/2 = 50.0% |
+| 14383 | 1 | 1 | 1/2 = 50.0% |
+| 14384 | 2 | 1 | 1/2 = 50.0% |
+| 14385 | 1 | 1 | 0/2 = 0.0% |
+| 14386 | 1 | 1 | 1/2 = 50.0% |
+| 14387 | 1 | 1 | 0/2 = 0.0% |
+| 14388 | 1 | 1 | 1/2 = 50.0% |
+| 14389 | 2 | 1 | 0/2 = 0.0% |
+| 14390 | 2 | 1 | 2/2 = 100.0% |
+| 14391 | 1 | 1 | 1/2 = 50.0% |
+| 14392 | 1 | 1 | 0/2 = 0.0% |
+| 14393 | 1 | 1 | 1/2 = 50.0% |
+| 14394 | 1 | 1 | 2/2 = 100.0% |
+| 14395 | 2 | 1 | 1/2 = 50.0% |
+| 14396 | 1 | 1 | 1/2 = 50.0% |
+| 14397 | 2 | 1 | 1/2 = 50.0% |
+| 14398 | 2 | 1 | 1/2 = 50.0% |
+| 14399 | 1 | 1 | 1/2 = 50.0% |
+| 14400 | 1 | 1 | 2/2 = 100.0% |
+| 14401 | 1 | 1 | 1/2 = 50.0% |
+| 14402 | 1 | 1 | 0/2 = 0.0% |
+| 14403 | 2 | 1 | 0/2 = 0.0% |
+| 14404 | 2 | 1 | 0/2 = 0.0% |
+| 14405 | 1 | 1 | 1/2 = 50.0% |
+| 14406 | 2 | 1 | 0/2 = 0.0% |
+| 14407 | 1 | 1 | 1/2 = 50.0% |
+| 14408 | 2 | 1 | 1/2 = 50.0% |
+| 14409 | 1 | 1 | 1/2 = 50.0% |
+| 14410 | 1 | 1 | 1/2 = 50.0% |
+| 14411 | 1 | 1 | 1/2 = 50.0% |
+| 14412 | 1 | 1 | 1/2 = 50.0% |
+| 14413 | 2 | 1 | 1/2 = 50.0% |
+| 14414 | 2 | 1 | 0/2 = 0.0% |
+| 14415 | 2 | 1 | 1/2 = 50.0% |
+| 14416 | 1 | 1 | 1/2 = 50.0% |
+| 14417 | 2 | 1 | 1/2 = 50.0% |
+| 14418 | 2 | 1 | 1/2 = 50.0% |
+| 14419 | 2 | 1 | 1/2 = 50.0% |
+| 14420 | 2 | 1 | 1/2 = 50.0% |
+| 14421 | 1 | 1 | 1/2 = 50.0% |
+| 14422 | 2 | 1 | 1/2 = 50.0% |
+| 14423 | 2 | 1 | 1/2 = 50.0% |
+| 14424 | 1 | 1 | 1/2 = 50.0% |
+| 14425 | 2 | 1 | 1/2 = 50.0% |
+| 14426 | 2 | 1 | 1/2 = 50.0% |
+| 14427 | 2 | 1 | 0/2 = 0.0% |
+| 14428 | 2 | 1 | 1/2 = 50.0% |
+| 14429 | 2 | 1 | 1/2 = 50.0% |
+| 14430 | 1 | 1 | 1/2 = 50.0% |
+| 14431 | 1 | 1 | 2/2 = 100.0% |
+| 14432 | 1 | 1 | 1/2 = 50.0% |
+| 14433 | 1 | 1 | 1/2 = 50.0% |
+| 14434 | 2 | 1 | 1/2 = 50.0% |
+| 14435 | 1 | 1 | 1/2 = 50.0% |
+| 14436 | 1 | 1 | 1/2 = 50.0% |
+| 14437 | 2 | 1 | 1/2 = 50.0% |
+| 14438 | 1 | 1 | 1/2 = 50.0% |
+| 14439 | 1 | 1 | 2/2 = 100.0% |
+| 14440 | 2 | 1 | 2/2 = 100.0% |
+| 14441 | 1 | 1 | 0/2 = 0.0% |
+| 14442 | 2 | 1 | 2/2 = 100.0% |
+| 14443 | 1 | 1 | 2/2 = 100.0% |
+| 14444 | 2 | 1 | 2/2 = 100.0% |
+| 14445 | 1 | 1 | 1/2 = 50.0% |
+| 14446 | 2 | 1 | 1/2 = 50.0% |
+| 14447 | 2 | 1 | 1/2 = 50.0% |
+| 14448 | 1 | 1 | 2/2 = 100.0% |
+| 14449 | 2 | 1 | 1/2 = 50.0% |
+| 14450 | 1 | 1 | 1/2 = 50.0% |
+| 14451 | 2 | 1 | 1/2 = 50.0% |
+| 14452 | 2 | 1 | 1/2 = 50.0% |
+| 14453 | 2 | 1 | 1/2 = 50.0% |
+| 14454 | 1 | 1 | 1/2 = 50.0% |
+| 14455 | 1 | 1 | 1/2 = 50.0% |
+| 14456 | 2 | 1 | 1/2 = 50.0% |
+| 14457 | 1 | 1 | 1/2 = 50.0% |
+| 14458 | 2 | 1 | 0/2 = 0.0% |
+| 14459 | 1 | 1 | 1/2 = 50.0% |
+| 14460 | 2 | 1 | 1/2 = 50.0% |
+| 14461 | 1 | 1 | 1/2 = 50.0% |
+| 14462 | 1 | 1 | 2/2 = 100.0% |
+| 14463 | 2 | 1 | 1/2 = 50.0% |
+| 14464 | 2 | 1 | 0/2 = 0.0% |
+| 14465 | 1 | 1 | 1/2 = 50.0% |
+| 14466 | 2 | 1 | 1/2 = 50.0% |
+| 14467 | 2 | 1 | 1/2 = 50.0% |
+| 14468 | 1 | 1 | 2/2 = 100.0% |
+| 14469 | 2 | 1 | 1/2 = 50.0% |
+| 14470 | 1 | 1 | 2/2 = 100.0% |
+| 14471 | 2 | 1 | 0/2 = 0.0% |
+| 14472 | 1 | 1 | 1/2 = 50.0% |
+| 14473 | 2 | 1 | 1/2 = 50.0% |
+| 14474 | 2 | 1 | 1/2 = 50.0% |
+| 14475 | 1 | 1 | 1/2 = 50.0% |
+| 14476 | 1 | 1 | 1/2 = 50.0% |
+| 14477 | 1 | 1 | 2/2 = 100.0% |
+| 14478 | 2 | 1 | 2/2 = 100.0% |
+| 14479 | 1 | 1 | 2/2 = 100.0% |
+| 14480 | 2 | 1 | 0/2 = 0.0% |
+| 14481 | 2 | 1 | 1/2 = 50.0% |
+| 14482 | 1 | 1 | 1/2 = 50.0% |
+| 14483 | 1 | 1 | 2/2 = 100.0% |
+| 14484 | 1 | 1 | 1/2 = 50.0% |
+| 14485 | 1 | 1 | 1/2 = 50.0% |
+| 14486 | 1 | 1 | 1/2 = 50.0% |
+| 14487 | 1 | 1 | 1/2 = 50.0% |
+| 14488 | 2 | 1 | 1/2 = 50.0% |
+| 14489 | 1 | 1 | 2/2 = 100.0% |
+| 14490 | 1 | 1 | 1/2 = 50.0% |
+| 14491 | 1 | 1 | 1/2 = 50.0% |
+| 14492 | 2 | 1 | 2/2 = 100.0% |
+| 14493 | 2 | 1 | 0/2 = 0.0% |
+| 14494 | 1 | 1 | 1/2 = 50.0% |
+| 14495 | 2 | 1 | 1/2 = 50.0% |
+| 14496 | 2 | 1 | 1/2 = 50.0% |
+| 14497 | 2 | 1 | 1/2 = 50.0% |
+| 14498 | 2 | 1 | 2/2 = 100.0% |
+| 14499 | 1 | 1 | 2/2 = 100.0% |
+| 14500 | 1 | 1 | 2/2 = 100.0% |
+| 14501 | 2 | 1 | 1/2 = 50.0% |
+| 14502 | 2 | 1 | 1/2 = 50.0% |
+| 14503 | 2 | 1 | 2/2 = 100.0% |
+| 14504 | 2 | 1 | 0/2 = 0.0% |
+| 14505 | 1 | 1 | 0/2 = 0.0% |
+| 14506 | 1 | 1 | 1/2 = 50.0% |
+| 14507 | 2 | 1 | 1/2 = 50.0% |
+| 14508 | 2 | 1 | 1/2 = 50.0% |
+| 14509 | 2 | 1 | 1/2 = 50.0% |
+| 14510 | 2 | 1 | 1/2 = 50.0% |
+| 14511 | 1 | 1 | 2/2 = 100.0% |
+| 14512 | 1 | 1 | 2/2 = 100.0% |
+| 14513 | 1 | 1 | 1/2 = 50.0% |
+| 14514 | 1 | 1 | 2/2 = 100.0% |
+| 14515 | 1 | 1 | 1/2 = 50.0% |
+| 14516 | 1 | 1 | 1/2 = 50.0% |
+| 14517 | 1 | 1 | 2/2 = 100.0% |
+| 14518 | 2 | 1 | 1/2 = 50.0% |
+| 14519 | 2 | 1 | 1/2 = 50.0% |
+| 15000 | 2 | 1 | 2/2 = 100.0% |
+| 15001 | 2 | 1 | 1/2 = 50.0% |
+| 15002 | 1 | 1 | 0/2 = 0.0% |
+| 15003 | 1 | 1 | 1/2 = 50.0% |
+| 15004 | 1 | 1 | 0/2 = 0.0% |
+| 15005 | 2 | 1 | 1/2 = 50.0% |
+| 15006 | 2 | 1 | 1/2 = 50.0% |
+| 15007 | 2 | 1 | 1/2 = 50.0% |
+| 15008 | 1 | 1 | 1/2 = 50.0% |
+| 15009 | 2 | 1 | 1/2 = 50.0% |
+| 15010 | 1 | 1 | 0/2 = 0.0% |
+| 15011 | 2 | 1 | 0/2 = 0.0% |
+| 15012 | 2 | 1 | 1/2 = 50.0% |
+| 15013 | 2 | 1 | 1/2 = 50.0% |
+| 15014 | 1 | 1 | 2/2 = 100.0% |
+| 15015 | 2 | 1 | 1/2 = 50.0% |
+| 15016 | 2 | 1 | 2/2 = 100.0% |
+| 15017 | 1 | 1 | 0/2 = 0.0% |
+| 15018 | 2 | 1 | 2/2 = 100.0% |
+| 15019 | 2 | 1 | 2/2 = 100.0% |
+| 15020 | 2 | 1 | 0/2 = 0.0% |
+| 15021 | 1 | 1 | 1/2 = 50.0% |
+| 15022 | 1 | 1 | 1/2 = 50.0% |
+| 15023 | 1 | 1 | 2/2 = 100.0% |
+| 15024 | 1 | 1 | 2/2 = 100.0% |
+| 15025 | 1 | 1 | 1/2 = 50.0% |
+| 15026 | 1 | 1 | 2/2 = 100.0% |
+| 15027 | 1 | 1 | 2/2 = 100.0% |
+| 15028 | 2 | 1 | 2/2 = 100.0% |
+| 15029 | 1 | 1 | 1/2 = 50.0% |
+| 15030 | 1 | 1 | 2/2 = 100.0% |
+| 15031 | 2 | 1 | 2/2 = 100.0% |
+| 15032 | 1 | 1 | 0/2 = 0.0% |
+| 15033 | 1 | 1 | 1/2 = 50.0% |
+| 15034 | 1 | 1 | 0/2 = 0.0% |
+| 15035 | 1 | 1 | 2/2 = 100.0% |
+| 15036 | 2 | 1 | 1/2 = 50.0% |
+| 15037 | 1 | 1 | 0/2 = 0.0% |
+| 15038 | 2 | 1 | 1/2 = 50.0% |
+| 15039 | 2 | 1 | 0/2 = 0.0% |
 | 22000 | 2 | 1 | 1/2 = 50.0% |
 | 22001 | 2 | 1 | 0/2 = 0.0% |
 | 22002 | 2 | 1 | 1/2 = 50.0% |
@@ -1591,13 +2156,14 @@ Cohorts reuse seeds 3000 to 3018 (tournament 3 adds 3020 to 3029, and tournament
 | 22596 | 2 | 1 | 1/2 = 50.0% |
 | 22597 | 1 | 1 | 2/2 = 100.0% |
 | 22598 | 1 | 1 | 1/2 = 50.0% |
+| 30000 | 2 | 1 | 1/2 = 50.0% |
 | the 19 seeds with 10 or more blocks, each once |  | 1311 | mean of seed shares 57.8% (95% CI 51.7% to 64.1%, seeds drawn) |
 
 ### Tournament 3
 
 | scored matches | Opus xhigh wins/matches = share | 95% CI (seed blocks drawn, wins over matches) | mean of block shares (a block counts once) | 95% CI | Opus minus Astra, Elo (95% CI) | blocks Opus both / split / Astra both |
 |---|---|---|---|---|---|---|
-| 41 matches, 21 seed blocks (seed 3030 half) | 22/41 = 53.7% | 39.0% to 68.3% | 52.4% | 38.1% to 66.7% | +25 (-84 to +139) | 6 / 10 / 4 |
+| 41 matches, 21 seed blocks (seed 3030 half) | 22/41 = 53.7% | 38.1% to 68.3% | 52.4% | 38.0% to 66.7% | +25 (-77 to +139) | 6 / 10 / 4 |
 | 40 matches, 20 complete seed pairs | 22/40 = 55.0% | 40.0% to 70.0% | 55.0% | 40.0% to 70.0% | +35 (-70 to +146) | 6 / 10 / 4 |
 
 The 41-match estimate adds seed 3030's one scored match, which Astra won, to the 40 matches of complete pairs.
@@ -1642,59 +2208,60 @@ seed, and its correlation with Round Elo fitted on the other half of the seeds. 
 the same seed-block bootstrap. The table below is the same fit in Python.
 
 <!-- luck:start -->
-4,987 matches, 14,961 rounds. The median 95% half-width falls from ±30 to ±24 Elo (variance of a match's round share 0.085 → 0.057). Spearman rank correlation with the raw ratings 0.973, largest rank change 11. The intervals are measured against the mean config and moved so Engine/2/20000 reads 0, so they leave out its own noise; its own luck-adjusted interval, -12 to +11, is the uncertainty of that 0.
+6,109 matches, 18,327 rounds. The median 95% half-width falls from ±30 to ±24 Elo (variance of a match's round share 0.085 → 0.058). Spearman rank correlation with the raw ratings 0.972, largest rank change 10. The intervals are measured against the mean config and moved so Engine/7/2000000/sampled reads 0, so they leave out its own noise; its own luck-adjusted interval, -13 to +13, is the uncertainty of that 0.
 
-Bias test: the mean correction per round of each config, seed-clustered, gives chi2 42.9 on 47 configs (p 0.64). Its correlation with Round Elo fitted on the other half of the seeds (20 random halvings) is -0.05.
+Bias test: the mean correction per round of each config, seed-clustered, gives chi2 43.5 on 48 configs (p 0.66). Its correlation with Round Elo fitted on the other half of the seeds (20 random halvings) is -0.05.
 
 | config | matches | rounds | Round Elo [95%] | luck-adjusted [95%] |
 |---|---|---|---|---|
-| gpt-6.1-terra-max | 100 | 300 | +128 [+88, +171] | +138 [+108, +168] |
-| claude-sonnet-5-5-max | 140 | 420 | +120 [+85, +157] | +131 [+106, +159] |
-| claude-opus-5-5-max | 80 | 240 | +135 [+93, +181] | +117 [+80, +156] |
-| Engine/6/20000/sampled | 156 | 468 | +106 [+77, +136] | +113 [+88, +137] |
-| claude-opus-5-5-xhigh | 170 | 510 | +108 [+79, +137] | +108 [+88, +130] |
-| gpt-6-astra-high | 100 | 300 | +133 [+97, +171] | +104 [+78, +135] |
-| gpt-6.1-sol-max | 142 | 426 | +112 [+83, +140] | +98 [+77, +119] |
-| gpt-6-astra-medium | 254 | 762 | +99 [+76, +121] | +88 [+72, +105] |
-| gpt-6.1-sol-xhigh | 101 | 303 | +83 [+47, +120] | +80 [+54, +108] |
-| claude-sonnet-5-5-xhigh | 176 | 528 | +70 [+42, +97] | +72 [+52, +92] |
-| gpt-6-astra-low | 80 | 240 | +75 [+37, +113] | +72 [+39, +107] |
-| gpt-6-astra-off | 80 | 240 | +48 [+5, +90] | +71 [+39, +103] |
-| gpt-6.1-sol-low | 98 | 294 | +77 [+37, +118] | +70 [+43, +99] |
-| claude-opus-5-5-high | 80 | 240 | +88 [+47, +133] | +69 [+43, +99] |
-| claude-haiku-5-5-max | 111 | 333 | +57 [+28, +87] | +62 [+35, +90] |
-| gpt-6.1-terra-xhigh | 102 | 306 | +75 [+38, +114] | +62 [+36, +89] |
-| gpt-6.1-terra-high | 82 | 246 | +59 [+15, +104] | +61 [+25, +101] |
-| gpt-6.1-terra-medium | 130 | 390 | +74 [+40, +108] | +61 [+37, +84] |
-| claude-opus-5-5-medium | 334 | 1002 | +61 [+43, +81] | +60 [+45, +74] |
-| gpt-6.1-sol-medium | 271 | 813 | +72 [+50, +94] | +60 [+44, +77] |
-| gpt-5.6-terra-max | 90 | 270 | +34 [-9, +76] | +53 [+18, +90] |
-| claude-opus-5-5-off/low | 160 | 480 | +52 [+24, +83] | +51 [+27, +76] |
-| gpt-6.1-sol-high | 99 | 297 | +59 [+21, +96] | +50 [+25, +76] |
-| gpt-5.6-terra-xhigh | 93 | 279 | +48 [+5, +91] | +40 [+3, +77] |
-| claude-haiku-5-5-xhigh | 158 | 474 | +24 [-3, +52] | +37 [+14, +58] |
-| gpt-6.1-terra-off/low | 242 | 726 | +33 [+10, +57] | +28 [+11, +47] |
-| claude-sonnet-5-5-medium | 364 | 1092 | +15 [-3, +35] | +22 [+8, +37] |
-| claude-sonnet-5-5-high | 161 | 483 | +22 [-13, +54] | +22 [-2, +45] |
-| claude-haiku-5-5-high | 223 | 669 | +19 [-6, +43] | +15 [-5, +35] |
-| gpt-5.6-terra-high | 91 | 273 | +11 [-30, +52] | +14 [-22, +51] |
-| claude-haiku-5-5-medium | 444 | 1332 | +16 [+1, +32] | +8 [-3, +21] |
-| gpt-5.6-terra-medium | 259 | 777 | -7 [-30, +15] | +1 [-18, +19] |
-| Engine/2/20000 | 1294 | 3882 | +0 [-14, +15] | +0 [-12, +11] |
-| claude-haiku-5-5-low | 278 | 834 | +7 [-16, +30] | -3 [-20, +16] |
-| gpt-5.6-terra-low | 91 | 273 | -11 [-52, +28] | -7 [-44, +28] |
-| gpt-6-luna-max | 112 | 336 | +10 [-29, +51] | -9 [-40, +24] |
-| claude-sonnet-5-5-low | 159 | 477 | -25 [-58, +6] | -9 [-33, +14] |
-| gpt-6-luna-xhigh | 115 | 345 | +15 [-26, +57] | -15 [-43, +13] |
-| claude-sonnet-5-5-off | 164 | 492 | -9 [-38, +20] | -16 [-40, +8] |
-| gpt-6-luna-high | 218 | 654 | -32 [-61, -3] | -38 [-61, -16] |
-| claude-haiku-5-5-off | 668 | 2004 | -87 [-105, -69] | -87 [-102, -73] |
-| claude-haiku-4-5-20251001-medium | 358 | 1074 | -101 [-124, -81] | -116 [-135, -99] |
-| claude-haiku-4-5-20251001-high | 135 | 405 | -131 [-163, -99] | -132 [-162, -103] |
-| gpt-6-luna-medium | 398 | 1194 | -130 [-150, -110] | -134 [-151, -117] |
-| claude-haiku-4-5-20251001-minimal/low | 292 | 876 | -124 [-152, -99] | -134 [-158, -112] |
-| gpt-6-luna-off/low | 396 | 1188 | -188 [-215, -163] | -186 [-208, -166] |
-| claude-haiku-4-5-20251001-off | 125 | 375 | -202 [-238, -169] | -188 [-214, -162] |
+| gpt-6.1-terra-max | 100 | 300 | +13 [-25, +55] | +20 [-8, +49] |
+| claude-sonnet-5-5-max | 142 | 426 | +8 [-27, +43] | +18 [-9, +46] |
+| Engine/7/2000000/sampled | 1120 | 3360 | +0 [-17, +17] | +0 [-13, +13] |
+| Engine/6/20000/sampled | 236 | 708 | -2 [-25, +22] | -0 [-19, +19] |
+| claude-opus-5-5-max | 82 | 246 | +12 [-30, +57] | -3 [-38, +34] |
+| claude-opus-5-5-xhigh | 170 | 510 | -7 [-35, +21] | -9 [-31, +11] |
+| gpt-6-astra-high | 100 | 300 | +19 [-15, +56] | -11 [-37, +17] |
+| gpt-6.1-sol-max | 142 | 426 | -3 [-32, +25] | -20 [-43, +2] |
+| gpt-6-astra-medium | 254 | 762 | -17 [-39, +5] | -29 [-46, -12] |
+| gpt-6.1-sol-xhigh | 101 | 303 | -33 [-69, +5] | -39 [-67, -11] |
+| claude-sonnet-5-5-xhigh | 176 | 528 | -45 [-70, -18] | -46 [-66, -26] |
+| gpt-6.1-sol-low | 98 | 294 | -38 [-80, +0] | -48 [-75, -20] |
+| gpt-6-astra-low | 80 | 240 | -41 [-78, -3] | -48 [-79, -14] |
+| gpt-6-astra-off | 80 | 240 | -69 [-112, -27] | -48 [-83, -15] |
+| claude-opus-5-5-high | 80 | 240 | -28 [-72, +17] | -52 [-80, -23] |
+| gpt-6.1-terra-high | 82 | 246 | -57 [-100, -12] | -57 [-92, -16] |
+| claude-haiku-5-5-max | 111 | 333 | -60 [-90, -30] | -58 [-85, -29] |
+| claude-opus-5-5-medium | 334 | 1002 | -55 [-73, -36] | -58 [-73, -44] |
+| gpt-6.1-terra-medium | 130 | 390 | -43 [-77, -9] | -59 [-83, -36] |
+| gpt-6.1-terra-xhigh | 102 | 306 | -42 [-80, -5] | -59 [-84, -34] |
+| gpt-6.1-sol-medium | 271 | 813 | -44 [-68, -21] | -60 [-76, -44] |
+| gpt-5.6-terra-max | 90 | 270 | -83 [-124, -39] | -65 [-102, -30] |
+| claude-opus-5-5-off/low | 160 | 480 | -64 [-94, -34] | -69 [-90, -46] |
+| gpt-6.1-sol-high | 99 | 297 | -57 [-93, -19] | -71 [-96, -45] |
+| gpt-5.6-terra-xhigh | 93 | 279 | -69 [-109, -28] | -78 [-113, -42] |
+| claude-haiku-5-5-xhigh | 158 | 474 | -93 [-120, -64] | -83 [-106, -60] |
+| gpt-6.1-terra-off/low | 242 | 726 | -84 [-107, -61] | -90 [-109, -72] |
+| claude-sonnet-5-5-high | 161 | 483 | -94 [-127, -61] | -94 [-119, -71] |
+| claude-sonnet-5-5-medium | 364 | 1092 | -101 [-120, -82] | -97 [-113, -82] |
+| gpt-5.6-terra-high | 91 | 273 | -105 [-147, -64] | -102 [-137, -64] |
+| claude-haiku-5-5-high | 223 | 669 | -98 [-124, -75] | -105 [-126, -85] |
+| claude-haiku-5-5-medium | 444 | 1332 | -101 [-116, -85] | -110 [-122, -98] |
+| gpt-5.6-terra-medium | 259 | 777 | -124 [-145, -100] | -117 [-135, -98] |
+| Engine/2/20000 | 2334 | 7002 | -118 [-132, -105] | -121 [-131, -110] |
+| claude-haiku-5-5-low | 278 | 834 | -110 [-132, -87] | -122 [-140, -104] |
+| gpt-5.6-terra-low | 91 | 273 | -127 [-168, -89] | -123 [-160, -88] |
+| claude-sonnet-5-5-low | 159 | 477 | -141 [-174, -108] | -125 [-150, -100] |
+| gpt-6-luna-max | 112 | 336 | -107 [-148, -67] | -131 [-162, -98] |
+| claude-sonnet-5-5-off | 164 | 492 | -124 [-154, -94] | -132 [-159, -108] |
+| gpt-6-luna-xhigh | 115 | 345 | -103 [-141, -63] | -137 [-166, -110] |
+| gpt-6-luna-high | 218 | 654 | -150 [-177, -123] | -160 [-184, -138] |
+| claude-haiku-5-5-off | 668 | 2004 | -205 [-223, -188] | -208 [-222, -194] |
+| claude-haiku-4-5-20251001-medium | 358 | 1074 | -218 [-240, -197] | -236 [-255, -219] |
+| gpt-6-luna-medium | 398 | 1194 | -247 [-269, -227] | -251 [-268, -235] |
+| claude-haiku-4-5-20251001-high | 135 | 405 | -247 [-280, -217] | -254 [-285, -227] |
+| claude-haiku-4-5-20251001-minimal/low | 292 | 876 | -241 [-267, -217] | -255 [-276, -234] |
+| gpt-6-luna-off/low | 396 | 1188 | -306 [-332, -278] | -306 [-327, -284] |
+| claude-haiku-4-5-20251001-off | 125 | 375 | -319 [-356, -285] | -306 [-334, -280] |
 <!-- luck:end -->
 
 ## Elo from play and move quality

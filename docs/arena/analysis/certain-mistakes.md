@@ -53,13 +53,13 @@ Inside `nix develop`, from the repository root:
 | claude-opus-5-5 | medium | 0.0% (1/2468) [0.0%, 0.1%] | 0/15 | 76 |
 | claude-opus-5-5 | high | 0.0% (0/582) [0.0%, 0.0%] | 0/1 | 18 |
 | claude-opus-5-5 | xhigh | 0.0% (0/1230) [0.0%, 0.0%] | 0/7 | 24 |
-| claude-opus-5-5 | max | 0.0% (0/704) [0.0%, 0.0%] | 0/3 | 26 |
+| claude-opus-5-5 | max | 0.0% (0/716) [0.0%, 0.0%] | 0/3 | 26 |
 | claude-sonnet-5-5 | off | 0.8% (10/1179) [0.3%, 1.5%] | 0/7 | 20 |
 | claude-sonnet-5-5 | low | 0.3% (3/1013) [0.0%, 0.7%] | 0/5 | 11 |
 | claude-sonnet-5-5 | medium | 0.3% (9/2632) [0.1%, 0.6%] | 0/12 | 49 |
 | claude-sonnet-5-5 | high | 0.3% (3/1176) [0.0%, 0.6%] | 0/10 | 35 |
 | claude-sonnet-5-5 | xhigh | 0.0% (0/1376) [0.0%, 0.0%] | 0/5 | 36 |
-| claude-sonnet-5-5 | max | 0.0% (0/1115) [0.0%, 0.0%] | 0/4 | 26 |
+| claude-sonnet-5-5 | max | 0.0% (0/1131) [0.0%, 0.0%] | 0/4 | 26 |
 | gpt-5.6-terra | low | 1.9% (10/522) [0.8%, 3.2%] | 0/3 | 19 |
 | gpt-5.6-terra | medium | 0.8% (12/1457) [0.4%, 1.3%] | 0/8 | 52 |
 | gpt-5.6-terra | high | 2.0% (11/540) [1.1%, 3.2%] | 0/1 | 21 |
@@ -84,7 +84,7 @@ Inside `nix develop`, from the repository root:
 | gpt-6.1-terra | high | 0.0% (0/606) [0.0%, 0.0%] | 0/4 | 18 |
 | gpt-6.1-terra | xhigh | 0.0% (0/741) [0.0%, 0.0%] | – | 19 |
 | gpt-6.1-terra | max | 0.0% (0/787) [0.0%, 0.0%] | 0/5 | 17 |
-| all |  | 1.5% (854/57863) [1.3%, 1.6%] | 5.3% (16/303) [2.9%, 8.0%] | 1,468 |
+| all |  | 1.5% (854/57891) [1.3%, 1.6%] | 5.3% (16/303) [2.9%, 8.0%] | 1,468 |
 
 ### Not a certain mistake: proven blank, gave the turn away, by config
 
@@ -104,13 +104,13 @@ Inside `nix develop`, from the repository root:
 | claude-opus-5-5 | medium | 0.3% (4/1245) [0.1%, 0.7%] |
 | claude-opus-5-5 | high | 0.0% (0/284) [0.0%, 0.0%] |
 | claude-opus-5-5 | xhigh | 0.1% (1/670) [0.0%, 0.5%] |
-| claude-opus-5-5 | max | 0.0% (0/305) [0.0%, 0.0%] |
+| claude-opus-5-5 | max | 0.0% (0/310) [0.0%, 0.0%] |
 | claude-sonnet-5-5 | off | 4.9% (29/597) [3.0%, 7.0%] |
 | claude-sonnet-5-5 | low | 2.7% (15/564) [1.3%, 4.2%] |
 | claude-sonnet-5-5 | medium | 1.9% (23/1226) [1.1%, 2.7%] |
 | claude-sonnet-5-5 | high | 0.9% (5/563) [0.2%, 1.7%] |
 | claude-sonnet-5-5 | xhigh | 0.9% (6/700) [0.3%, 1.6%] |
-| claude-sonnet-5-5 | max | 0.3% (2/621) [0.0%, 0.8%] |
+| claude-sonnet-5-5 | max | 0.3% (2/629) [0.0%, 0.8%] |
 | gpt-5.6-terra | low | 8.9% (27/305) [5.4%, 12.5%] |
 | gpt-5.6-terra | medium | 6.8% (61/891) [5.2%, 8.6%] |
 | gpt-5.6-terra | high | 5.6% (19/338) [3.0%, 8.7%] |
@@ -135,19 +135,19 @@ Inside `nix develop`, from the repository root:
 | gpt-6.1-terra | high | 2.6% (8/312) [0.6%, 5.0%] |
 | gpt-6.1-terra | xhigh | 2.3% (9/393) [1.0%, 4.0%] |
 | gpt-6.1-terra | max | 0.2% (1/450) [0.0%, 0.7%] |
-| all |  | 13.3% (4397/32951) [12.7%, 13.9%] |
+| all |  | 13.3% (4397/32964) [12.7%, 14.0%] |
 
 ### Not a certain mistake: proven blank, gave the turn away, by what the search scored, all configs
 
 | opponent jammed | search scores the opponent shot higher | search settles the self shot as a win and the opponent shot as a loss | the rest | no search |
 |---|---|---|---|---|
-| 19.5% (1085/5568) [18.2%, 20.8%] | 6.2% (18/288) [3.8%, 9.2%] | 3.0% (11/371) [1.3%, 4.9%] | 12.3% (3283/26723) [11.7%, 12.9%] | 0/1 |
+| 19.5% (1085/5570) [18.1%, 20.8%] | 6.2% (18/288) [3.8%, 9.2%] | 3.0% (11/371) [1.3%, 4.9%] | 12.3% (3283/26734) [11.7%, 12.9%] | 0/1 |
 
 ### By source of the proof and shells left, all configs
 
 | pattern | public | glass | phone | combined | last shell | earlier shells |
 |---|---|---|---|---|---|---|
-| shot itself on a proven live | 2.1% (652/31294) [1.9%, 2.3%] | 0.1% (25/21244) [0.1%, 0.2%] | 3.4% (175/5211) [2.8%, 3.9%] | 1.8% (2/114) [0.0%, 4.4%] | 2.5% (470/19067) [2.2%, 2.7%] | 1.0% (384/38796) [0.9%, 1.1%] |
+| shot itself on a proven live | 2.1% (652/31311) [1.9%, 2.3%] | 0.1% (25/21255) [0.1%, 0.2%] | 3.4% (175/5211) [2.8%, 3.9%] | 1.8% (2/114) [0.0%, 4.4%] | 2.5% (470/19079) [2.2%, 2.7%] | 1.0% (384/38812) [0.9%, 1.1%] |
 | shot the opponent, giving up a guaranteed win | 2/3 | 2.7% (6/225) [0.9%, 4.9%] | 10.0% (7/70) [2.9%, 18.6%] | 1/5 | – | 5.3% (16/303) [2.9%, 8.0%] |
-| proven blank, gave the turn away | 19.1% (3476/18201) [18.2%, 20.0%] | 3.7% (410/10946) [3.3%, 4.2%] | 13.6% (500/3665) [12.4%, 14.9%] | 7.9% (11/139) [4.0%, 12.9%] | 20.5% (2561/12479) [19.5%, 21.5%] | 9.0% (1836/20472) [8.4%, 9.5%] |
+| proven blank, gave the turn away | 19.1% (3476/18211) [18.2%, 20.0%] | 3.7% (410/10949) [3.3%, 4.2%] | 13.6% (500/3665) [12.4%, 14.9%] | 7.9% (11/139) [4.0%, 12.9%] | 20.5% (2561/12484) [19.5%, 21.5%] | 9.0% (1836/20480) [8.4%, 9.5%] |
 <!-- tables:end -->
