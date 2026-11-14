@@ -66,7 +66,7 @@ const eloScaleOf = (ratings: ReadonlyMap<string, Rating>, ranks: ReadonlyMap<str
   const from = Math.floor(Math.min(...ends) / TICK) * TICK;
   const to = Math.ceil(Math.max(...ends) / TICK) * TICK;
 
-  return { from, to, ticks: Array.from({ length: (to - from) / TICK + 1 }, (_, index) => from + index * TICK).filter((tick) => tick % 50 === 0) };
+  return { from, to, ticks: Array.from({ length: (to - from) / TICK + 1 }, (_, index) => from + index * TICK).filter((tick) => tick % 100 === 0) };
 };
 
 const percentOf = ({ from, to }: EloScale, elo: number): number => Math.min(100, Math.max(0, ((elo - from) / (to - from)) * 100));
