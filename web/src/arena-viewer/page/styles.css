@@ -84,6 +84,7 @@ tr.provisional td { opacity: 0.55; }
 .lbt th { padding: 9px 3px; }
 .lbt .barcol { width: 110px; min-width: 110px; padding: 0 4px; }
 .lbt .track { min-width: 0; }
+@media (min-width: 1025px) { .lbt td:first-child { min-width: 220px; white-space: normal; } }
 .lbt .eff { color: var(--dim); }
 .lbt .drillstats { display: none; }
 .configpanel .drillstats { display: grid; grid-template-columns: repeat(4, auto 1fr); justify-content: start; gap: 2px 12px; margin: 4px 0 12px; font-size: 12.5px; }
