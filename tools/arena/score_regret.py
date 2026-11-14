@@ -13,9 +13,10 @@ matches. The wrap-up and the analyses call `score` rather than running the steps
   1. build buckshot-search in --checkout's sim/rust: the f64 and seats-2 features (arena matches have two seats)
   2. web/scripts/rust-search-inputs.ts in --checkout (after `bun run rules`) writes each decision's position as the deciding player sees it,
      with its menu in the player's move order and the shells left, in --jobs processes split by match
-  3. buckshot-search --unpruned (the f64 build's only evaluator) scores them on --threads threads, once per reload rule:
-     every move's value is exact at the depth reached, which the replay's move list shows
-  4. each result becomes a row of the regret table (columns: docs/arena/analysis/regret.md, The `regret` table)
+  3. `buckshot-search --unpruned ... score` (the f64 build's only evaluator) scores them on --threads threads, once per reload
+     rule, and writes each one's row of the regret table (columns: docs/arena/analysis/regret.md, The `regret` table): every
+     move's value is exact at the depth reached, which the replay's move list shows. A decision whose root moves are not
+     Bend's menu gets a dump instead (sim/rust/search/src/score.rs)
 
 The evaluator id is `bounded-v1-f64-unpruned`: the CLI's declared algorithm version (BoundedV1::ID) and `-unpruned`.
 A refactor keeps it; sim/rust/search/tests/golden pins it to production rows that must reproduce bit for bit, and a
@@ -37,14 +38,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(REPO / "tools/arena/analysis"))
 sys.path.insert(0, str(REPO / "dev/src"))
 from buckshot_dev import cli  # noqa: E402
-from rules import WIN  # noqa: E402
 
 FEATURES = "f64,seats-2"
-CLI_EVALUATOR = "bounded-v1-f64"
-EVALUATOR = f"{CLI_EVALUATOR}-unpruned"
+EVALUATOR = "bounded-v1-f64-unpruned"
 
 CREATE_REGRET = """CREATE TABLE IF NOT EXISTS regret (
     match_id TEXT, ordinal INTEGER, player TEXT, label TEXT,
@@ -130,79 +128,22 @@ def write_inputs(decisions: list[tuple[str, int]], db: Path, web: Path, work: Pa
     return [work / f"inputs-{k}.jsonl" for k, _ in procs]
 
 
-def disagreement(decision: dict, result: dict) -> str | None:
-    """Why Bend's analysis of a decision and Rust's disagree, if they do (Bend wins, so either is a bug to fix)."""
-    if decision["menu"] is None:
-        return f"Bend's player refuses a position the game reached: {decision['invalid']}"
-    if "error" in result:
-        return f"Rust refuses a position Bend analysed: {result['error']}"
-    codes = [line["code"] for line in result["lines"]]
-    if codes != decision["codes"]:
-        return f"Rust's root moves {codes} are not Bend's {decision['codes']}"
-    return None
-
-
-def dump(bugs: Path, reason: str, decision: dict, fed: str, line: str, build: dict) -> Path:
-    """Writes what reproduces a disagreement: the input exactly as fed to buckshot-search, Bend's menu, Rust's whole row and the build."""
-    bugs.mkdir(parents=True, exist_ok=True)
-    path = bugs / f"{decision['id']}-{decision['ordinal']}.json"
-    bend = {key: decision.get(key) for key in ("menu", "codes", "invalid", "chosen", "me", "table", "shells")}
-    path.write_text(json.dumps({"match_id": decision["id"], "ordinal": decision["ordinal"], "reason": reason, "fed": fed, "bend": bend, "rust": line, **build}, indent=2) + "\n")
-    return path
-
-
-def row_of(decision: dict, result: dict, player: str, group: tuple) -> dict:
-    """The regret row of a decision Bend and Rust agree on: searched (a regret) or fallback (depth 0: values, no regret)."""
-    evaluator, depth, budget, reload, samples = group
-    row = {"match_id": decision["id"], "ordinal": decision["ordinal"], "player": player, "label": decision["chosen"], "evaluator": evaluator, "max_depth": depth, "budget": budget, "reload": reload, "samples": samples, "nodes": result.get("nodes")}
-    values = [{"label": label, "score": line["score"]} for label, line in zip(decision["menu"], result["lines"], strict=True)]
-    row |= {"values_json": json.dumps(values, separators=(",", ":")), "limited": int(result["limited"])}
-    if result["depth"] == 0:
-        return {**row, "status": "fallback", "depth": 0}
-    best = values[result["best"]]
-    chosen = next(value for value in values if value["label"] == decision["chosen"])
-    certain = best["score"] in (0, WIN) and chosen["score"] in (0, WIN)
-    return {**row, "status": "searched", "best": best["label"], "best_score": best["score"], "chosen_score": chosen["score"], "regret": best["score"] - chosen["score"], "exact": int(certain), "depth": result["depth"]}
-
-
-def run_search(binary: Path, inputs: list[Path], work: Path, out: sqlite3.Connection, players: dict[tuple[str, int], str], group: tuple, threads: int, keys: set[tuple[str, int]], bugs: Path, build: dict) -> int:
-    """Feeds the inputs of `keys` to buckshot-search and writes a row per result, committing every chunk.
-    Stops after an input file with a disagreement between Bend and Rust, with a dump of each in `bugs`. Returns the rows written."""
+def run_search(binary: Path, inputs: list[Path], work: Path, out: Path, db: Path, group: tuple, threads: int, bugs: Path) -> int:
+    """Runs `buckshot-search score` on the inputs: it adds the rows `out` lacks for the group, committing every chunk, and
+    stops, after every input, on a disagreement between Bend and Rust, with a dump of each in `bugs`. Returns the rows written."""
     _, depth, budget, reload, samples = group
     sampled = ["--reload", "sampled", "--samples", str(samples)] if reload == "sampled" else []
     cmd = [str(binary), "--unpruned", "--depth", str(depth), "--budget", str(budget), "--threads", str(threads), *sampled]
-    written = 0
-    for path in inputs:
-        decisions = [d for d in map(json.loads, path.read_text().splitlines()) if (d["id"], d["ordinal"]) in keys]
-        feed = work / f"{path.stem}.{group[3]}.jsonl"
-        fed = [json.dumps({"id": d["id"], "ordinal": d["ordinal"], "input": d["input"]}) for d in decisions]
-        feed.write_text("".join(line + "\n" for line in fed))
-        dumps = []
-        with open(feed) as stdin, open(work / f"{path.stem}.{group[3]}.log", "w") as log:
-            proc = subprocess.Popen(cmd, stdin=stdin, stdout=subprocess.PIPE, stderr=log, text=True)
-            assert proc.stdout is not None
-            for decision, given, line in zip(decisions, fed, proc.stdout, strict=True):
-                result = json.loads(line)
-                if (result["id"], result["ordinal"]) != (decision["id"], decision["ordinal"]):
-                    raise SystemExit(f"buckshot-search answered {result['id']} {result['ordinal']} for {decision['id']} {decision['ordinal']}")
-                if result["evaluator"] != CLI_EVALUATOR:
-                    raise SystemExit(f"buckshot-search is {result['evaluator']}, not {CLI_EVALUATOR}: update CLI_EVALUATOR with the golden set")
-                reason = disagreement(decision, result)
-                if reason is not None:
-                    dumps.append(dump(bugs, reason, decision, given, line.rstrip("\n"), {**build, "command": cmd}))
-                    continue
-                row = row_of(decision, result, players[(decision["id"], decision["ordinal"])], group)
-                out.execute(f"INSERT INTO regret ({', '.join(row)}) VALUES ({', '.join('?' * len(row))})", list(row.values()))
-                written += 1
-                if written % 512 == 0:
-                    out.commit()
-                    print(f"{written} rows", file=sys.stderr, flush=True)
-        if proc.wait() != 0:
-            raise SystemExit(f"buckshot-search exited {proc.returncode}; see {work / f'{path.stem}.{group[3]}.log'}")
-        out.commit()
-        if dumps:
-            raise SystemExit(f"Bend and Rust disagree on {len(dumps)} decisions; dumps:\n" + "\n".join(map(str, dumps)))
-    return written
+    cmd += ["score", "--out", str(out), "--source", str(db), "--bugs", str(bugs), *map(str, inputs)]
+    log = work / f"score.{reload}.log"
+    with open(log, "w") as stderr:
+        done = subprocess.run(cmd, check=False, stdout=subprocess.PIPE, stderr=stderr, text=True)
+    if done.returncode != 0:
+        raise SystemExit(f"buckshot-search score exited {done.returncode}; {log}:\n" + "\n".join(log.read_text().splitlines()[-20:]))
+    summary = json.loads(done.stdout)
+    if summary["evaluator"] != group[0]:
+        raise SystemExit(f"buckshot-search wrote {summary['evaluator']} rows, not {group[0]}: update EVALUATOR with the golden set")
+    return summary["rows"]
 
 
 def git_commit(checkout: Path) -> str:
@@ -240,7 +181,6 @@ def score(db: Path, out: Path | None, sampled_out: Path | None, checkout: Path, 
     source = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
     outs = [(open_out(path, group), group) for path, group in runs]
     todo = [(conn, group, set(wanted(source, conn, group, matches, decisions))) for conn, group in outs]
-    players = {(m, o): p for m, o, p in source.execute("SELECT match_id, ordinal, player FROM decisions WHERE by_whom = 'agent'")}
     source.close()
     union = sorted(set().union(*(keys for *_, keys in todo)))
     summary: dict = {"evaluator": evaluator, "decisions": len(union)}
@@ -256,10 +196,10 @@ def score(db: Path, out: Path | None, sampled_out: Path | None, checkout: Path, 
     summary["input_seconds"] = round(time.monotonic() - started)
     commit = git_commit(checkout)
     sources = sources_hash(rust)
-    for (path, _), (conn, group, keys) in zip(runs, todo, strict=True):
+    for (path, _), (conn, group, _) in zip(runs, todo, strict=True):
         started = time.monotonic()
-        build_info = {"evaluator": evaluator, "features": FEATURES, "binary_sha256": sha, "source_commit": commit, "sources_sha256": sources}
-        written = run_search(binary, inputs, work, conn, players, group, settings.threads, keys, path.parent / f"{path.stem}-bugs", build_info)
+        conn.commit()
+        written = run_search(binary, inputs, work, path, db, group, settings.threads, path.parent / f"{path.stem}-bugs")
         seconds = time.monotonic() - started
         conn.execute("INSERT INTO evaluator_build VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)", (*group, commit, FEATURES, sha, written, seconds, settings.threads, sources))
         conn.commit()
