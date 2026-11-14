@@ -65,6 +65,8 @@ exclude_re = [
   # A wrong argmin only steers the opponent's later windows and the next lead;
   # the boxes stay sound (search/tests/pruning.rs), so it costs nodes, not values.
   'replace && with \|\| in Running::add',
+  # The chunk size only sets how many rows each transaction commits; the rows are the same.
+  'score\.rs:.*replace >= with < in run$',
 ]
 
 # Equivalent field deletions. cargo-mutants 27.1 does not apply exclude_re (or
