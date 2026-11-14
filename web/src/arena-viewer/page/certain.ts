@@ -282,7 +282,7 @@ export const certainView = (h: H, rates: ReadonlyArray<CertainRate>, kept: Reado
     [],
     [
       h.h2([], ["Certain mistakes"]),
-      h.p([h.Class("sub")], ["All selected efforts, pooled. An opportunity is every decision where the mistake was a legal move."]),
+      h.p([h.Class("sub")], ["All selected efforts, pooled. Opportunities are the decisions where the mistake was one of the legal moves."]),
       models.length === 0
         ? h.div([h.Class("empty")], ["No config in this filter has a decision with a proven shell."])
         : h.div(
@@ -292,7 +292,7 @@ export const certainView = (h: H, rates: ReadonlyArray<CertainRate>, kept: Reado
       h.p(
         [h.Class("k")],
         [
-          `Not counted: on a proven blank, giving the turn away (${provenBlanks.gaveTurnAway.toLocaleString()} of ${provenBlanks.total.toLocaleString()}) is not proven worse, and ${hiddenHealth.toLocaleString()} decisions where a jammed opponent hid its health. `,
+          `Not counted: giving the turn away on a proven blank (${provenBlanks.gaveTurnAway.toLocaleString()} of ${provenBlanks.total.toLocaleString()}), because it is not proven worse, and ${hiddenHealth.toLocaleString()} decisions where a jammed opponent hid its health. `,
           h.button([h.Type("button"), h.Class("tablelink"), h.OnClick(Message.ClickedTableLink({ id: CERTAIN_TABLE }))], ["Each config's counts and matches are in a table further down."]),
         ],
       ),

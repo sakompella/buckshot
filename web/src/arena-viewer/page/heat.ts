@@ -79,7 +79,7 @@ const opponentColumns = memoLast((pairs: ReadonlyArray<Pair>): ReadonlyArray<Hea
 const cellAt = (derived: Derived, row: HeatRow, col: string): HeatCell | null => {
   const counts = versus(derived.pairs).get(row.key)?.get(col);
 
-  return counts === undefined ? null : { value: counts[0] / counts[1], text: fmtPct(counts[0] / counts[1]), tip: `vs ${col}: ${fmtPct(counts[0] / counts[1])} of ${counts[1]} matches. Full strength from ${FULL_N} matches.`, n: counts[1] };
+  return counts === undefined ? null : { value: counts[0] / counts[1], text: fmtPct(counts[0] / counts[1]), tip: `vs ${col}: ${fmtPct(counts[0] / counts[1])} of ${counts[1]} matches. The shade is at full strength from ${FULL_N} matches.`, n: counts[1] };
 };
 
 export const heatRowsOf = memoLast((derived: Derived): ReadonlyArray<HeatRow> =>
@@ -182,8 +182,8 @@ const heatmapView = (h: H, derived: Derived, heat: Model["heat"]): Html => {
       termsView(h, "What the columns mean", [
         ...columns.filter(({ label, title }) => label !== title).map(({ label, title }) => [label, title] as const),
         ["Round Elo", "Bradley-Terry rating fitted over every match of every tournament, on round win share"],
-        ["$/match", "avg list-price cost per player per scored match"],
-        ["A cell", `A config's win share against that opponent model, with the number of matches it rests on in the corner. The shade fades toward the page's colour below ${FULL_N} matches.`],
+        ["$/match", "average list-price cost per player per scored match"],
+        ["A cell", `A config's win share against that opponent model. The number in the corner is how many matches it rests on. Below ${FULL_N} matches the shade fades toward the page's color.`],
       ]),
     ],
   );
