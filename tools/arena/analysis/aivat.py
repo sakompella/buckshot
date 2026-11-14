@@ -51,10 +51,13 @@ from rules import DECK, ITEMS, ON_TABLE, PER_SEAT, SAW_DAMAGE
 from scipy import stats
 from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
 from sklearn.linear_model import LogisticRegression
+from threadpoolctl import threadpool_limits
 
 from docs import splice_between_markers
 
 FOLDS = 5
+# One thread: the gradient boosting fits are a few seconds each, and OpenMP's threads only contend for the cores (on a loaded host one fit took 350 s threaded and 1.6 s on one thread). The results are identical.
+threadpool_limits(1)
 
 
 def shot_outcomes(db: sqlite3.Connection, kind: str = "Fired") -> dict[str, list[bool]]:
