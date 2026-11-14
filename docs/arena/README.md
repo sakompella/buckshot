@@ -59,7 +59,7 @@ The commit is the version id: no hand-assigned labels, and no second hash to kee
       python3 tools/arena/seed_pairs.py <dir> <entrant> <opponent> [--baseline <dir> <entrant> <opponent>]
 
   It gives the win share over complete seed pairs and compares the same seeds against another tournament.
-- **Matchups, seat and starter effects:** `python3 tools/arena/analysis/matchups.py --doc docs/arena/analysis/matchups.md` reads the analysis database and rewrites the tables of [analysis/matchups.md](analysis/matchups.md): pooled match ratings with intervals, pot share and cash rating (a derived view; the headline is the luck-adjusted Round Elo), pair effects, seat and starter effects. It takes about 8 minutes under `nice` and counts as a heavy job.
+- **Matchups, seat and starter effects:** `python3 tools/arena/analysis/matchups.py --doc docs/arena/analysis/matchups.md` reads the analysis database and rewrites the tables of [analysis/matchups.md](analysis/matchups.md): pooled match ratings with intervals, pot share and cash rating (a derived view; the headline is the luck-adjusted Round Elo), pair effects, seat and starter effects. It takes about 8 minutes and is a heavy job.
 - **Leaderboard:** `python3 tools/arena/analysis/leaderboard.py --doc docs/arena/results.md` rewrites the scope line and the leaderboard tables of [results.md](results.md), in a few seconds. It ranks by the luck-adjusted Round Elo, the viewer's headline, so it reads the luck file (`--luck`, by default `derived/luck.sqlite`) that the Luck-adjusted Round Elo step below writes.
 - **Viewer:** the arena viewer is the site's Arena page (`/arena`, ADR-0049), served with its API by `web/scripts/arena-viewer.ts` after `bun run build`; see [web/README.md](../../web/README.md#arena-analysis-viewer). There is no replay page (ADR-0055).
 - **Regret:** `python3 tools/arena/score_regret.py --db <buckshot.sqlite> --sampled-out <regret file>` scores the agent moves no row covers yet with the Rust evaluator and the sampled reload rule ([analysis/regret.md](analysis/regret.md#production-scoring)); the wrap-up runs it. A regret file holds one run; the viewer, the export and the analyses below read the production file (`PRODUCTION` in `tools/arena/analysis/regret.py`) by default. `python3 tools/arena/analysis/regret.py --doc docs/arena/analysis/regret.md` rewrites the summary tables of [analysis/regret.md](analysis/regret.md) from the stored rows. `tools/arena/analysis/regret_depth.py` draws and summarises a depth 8 re-score of a stratified sample, for its Deeper search section.
@@ -72,6 +72,22 @@ The commit is the version id: no hand-assigned labels, and no second hash to kee
       bun scripts/arena-cost.ts <dir>
 
   This is theoretical cost at `web/src/arena/prices.json` list prices; a subscription plan bills nothing per call.
+
+## Heavy jobs
+
+Every heavy job (buckshot-search, `score_regret.py`, arena-knowledge, `aivat.py`, imports, cargo test and mutants, `check.sh`) goes through `dev heavy --mem SIZE -- <cmd...>`. The job declares its expected peak memory. It starts when a slot is free (`$BUCKSHOT_HEAVY_SLOTS`, the CPU limit), the declared memory of the live jobs plus its own fits `$BUCKSHOT_HEAVY_MEM_BUDGET` (default 60% of MemTotal), and the host's MemAvailable has room for it; otherwise it waits. `SIZE` is also a hard cap: the job runs in a `systemd-run --user --scope` with `MemoryMax=SIZE` and no swap, so a job that outgrows its declaration dies alone, children included (without systemd-run there is no cap). `dev heavy --status` lists the live jobs with declared and current memory. An undeclared job counts as 4G.
+
+Measured peaks (resident memory of the job's processes, the cgroup's page cache left out):
+
+| Job | Peak |
+|---|---|
+| `score_regret.py`, depth 6, 200k nodes, 3 threads, 200 decisions: the input writers and Python | 0.8 GB |
+| buckshot-search alone, 3 threads: depth 6 / 200k, depth 7 / 200k, depth 7 / 1M, depth 7 / 2M | 31, 39, 124, 203 MB |
+| buckshot-search, depth 7, unbounded budget (1e12), 6 threads | past 21.5 GB: the kernel killed it |
+| `arena-knowledge.ts --verify`, all 5,212 matches (42 minutes) | 0.5 GB |
+| `aivat.py` | 0.9 GB (more than 15 minutes on the full database) |
+
+`score_regret.py` declares its own memory: `SEARCH_BASE_BYTES + threads * budget * SEARCH_BYTES_PER_NODE` (1 GiB base, 40 bytes per node and thread, the constants at the top of the script, which says where they were measured). Run alone it queues itself with that figure; a run whose figure exceeds the budget, such as an unbounded budget, refuses to start. Refit the two constants after a change to the search memo.
 
 ## Wrap-up
 `python3 tools/arena/wrap_tournament.py --run-dir <dir> --importer <checkout> --cohort "<name>"`, inside `nix develop` from the main checkout, imports finished tournaments and refreshes everything derived from them: the steps are in its docstring. It is rerunnable (a `wrapup/state.json` in the run dir records finished steps), stops on the first failed check, and rewrites doc tables in the working tree without committing. `--dry-run` lists the steps.
