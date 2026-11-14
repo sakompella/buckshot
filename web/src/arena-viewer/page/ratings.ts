@@ -35,8 +35,8 @@ const numberGames = (games: ReadonlyArray<Game>): NumberedGames => {
 
 const ELO_PER_NAT = 400 / Math.LN10;
 
-/** The config rated 0: the depth-2 search engine, so adding a config moves no other rating (bt.ANCHOR in tools/arena/analysis). */
-export const ANCHOR = keyOf({ model: "Engine/2/20000", effort: "" });
+/** The config rated 0: the depth-7 search engine, so adding a config moves no other rating (bt.ANCHOR in tools/arena/analysis). */
+export const ANCHOR = keyOf({ model: "Engine/7/2000000/sampled", effort: "" });
 
 /** The chance of winning a match against the anchor: the round win chance of the Elo gap, in two rounds of three. */
 export const matchWinVsAnchor = (rating: number): number => {

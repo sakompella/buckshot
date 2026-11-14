@@ -26,7 +26,7 @@ export const summaryView = (h: H, derived: Derived): Html =>
       h.p([h.Class("sub")], [
         `${derived.ratingName} of every ranked config, best first`,
         ...(derived.runs === undefined ? [] : [`, from matches played ${runDates(derived.runs)}`]),
-        `. It pools every match of every tournament, with the depth-2 search engine at 0; the bar is its 95% interval, so configs whose bars overlap are not separated by the data. The dashed lines are the search engines, fixed players that About explains. The leaderboard groups the configs into tiers.`,
+        `. It pools every match of every tournament, with the depth-7 search engine at 0; the bar is its 95% interval, so configs whose bars overlap are not separated by the data. The dashed lines are the search engines, fixed players that About explains. The leaderboard groups the configs into tiers.`,
       ]),
       forestView(h, derived),
     ],
@@ -49,7 +49,7 @@ export const howView = (h: H): Html =>
         "The gun holds two live shells and one blank, and your magnifying glass showed the chambered shell is blank. Shooting yourself is free: the blank keeps your turn, and the next shell is a proven live one for your opponent. Shooting the opponent instead passes the turn and hands the gun over. The How they play section counts moves like that as certain mistakes.",
       ]),
       h.p([h.Class("sub")], [
-        "Each player here is a language model, apart from the two search engines. On its turn it receives its view as JSON — both players' health and items, the shotgun, the log entries it has not been sent yet, and its numbered legal moves — and answers with one move number. Each log entry reaches it once, so it must remember the earlier ones. It sees the public log plus its own secrets, never the true shell order or the other player's secrets. A config is one model at one effort setting; the effort (none to max) is how much thinking the provider allows per move, and more of it costs more. The chips at the top switch models and efforts off and on.",
+        "Each player here is a language model, apart from the search engines. On its turn it receives its view as JSON — both players' health and items, the shotgun, the log entries it has not been sent yet, and its numbered legal moves — and answers with one move number. Each log entry reaches it once, so it must remember the earlier ones. It sees the public log plus its own secrets, never the true shell order or the other player's secrets. A config is one model at one effort setting; the effort (none to max) is how much thinking the provider allows per move, and more of it costs more. The chips at the top switch models and efforts off and on.",
       ]),
     ],
   );
@@ -79,7 +79,7 @@ export const aboutView = (h: H, derived: Derived): Html => {
       ]),
       h.p([h.Class("sub")], [
         h.b([], ["Round Elo. "]),
-        "One Bradley-Terry rating fitted over every scored match, counting each round as one game. The depth-2 search engine (Engine/2/20000) is fixed at 0, so a new config does not move the others. The bracket beside a rating is a 95% bootstrap over seed blocks, so it carries the luck a whole seed shares. It is measured against the mean of all configs, so it leaves out the engine's own noise; the leaderboard gives that once.",
+        "One Bradley-Terry rating fitted over every scored match, counting each round as one game. The depth-7 search engine (Engine/7/2000000/sampled) is fixed at 0, so a new config does not move the others. The bracket beside a rating is a 95% bootstrap over seed blocks, so it carries the luck a whole seed shares. It is measured against the mean of all configs, so it leaves out the engine's own noise; the leaderboard gives that once.",
       ]),
       ...(hasLuck
         ? [

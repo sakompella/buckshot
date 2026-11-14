@@ -28,8 +28,8 @@ from load import Game
 
 ELO = 400 / math.log(10)  # Elo points per unit of theta
 
-# The config rated 0, the depth-2 search engine, so adding a config moves no other rating (ANCHOR in web/src/arena-viewer/page/ratings.ts).
-ANCHOR = "Engine/2/20000"
+# The config rated 0, the depth-7 search engine, so adding a config moves no other rating (ANCHOR in web/src/arena-viewer/page/ratings.ts).
+ANCHOR = "Engine/7/2000000/sampled"
 
 
 def sigmoid(x: float) -> float:
