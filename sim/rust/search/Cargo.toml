@@ -24,6 +24,7 @@ buckshot-rules = { path = "../rules", default-features = false }
 clap.workspace = true
 hashbrown.workspace = true
 rayon.workspace = true
+rusqlite.workspace = true
 rustc-hash.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true

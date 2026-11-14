@@ -1,4 +1,7 @@
-//! The CLI: one analysis row per input decision, read from a jsonl path or stdin.
+//! The CLI: one analysis row per input decision, read from a jsonl path or stdin, or with `score` the production
+//! regret rows (`score.rs`).
+
+mod score;
 
 use std::io::{BufRead, BufReader, Write};
 use std::num::NonZero;
@@ -11,7 +14,7 @@ use buckshot_search::{Analysis, BoundedV1, InfoSet, Limits, Pruning, Reload, ana
 use buckshot_search::{Compat, Memo, Searcher};
 #[cfg(feature = "f32")]
 use clap::builder::PossibleValue;
-use clap::{Parser, ValueEnum};
+use clap::{Parser, Subcommand, ValueEnum};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -64,6 +67,14 @@ struct Args {
     unpruned: bool,
     /// The input rows [default: stdin].
     path: Option<PathBuf>,
+    #[command(subcommand)]
+    command: Option<Command>,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// Add the regret rows of rust-search-inputs.ts rows to a regret database, with the search flags given before it.
+    Score(score::ScoreArgs),
 }
 
 fn default_threads() -> NonZero<usize> {
@@ -332,6 +343,9 @@ fn main() -> Result<()> {
     let args = Args::parse();
     let search = Search::of(&args)?;
     let pool = ThreadPoolBuilder::new().num_threads(args.threads.get()).build()?;
+    if let Some(Command::Score(score_args)) = &args.command {
+        return score::run(score_args, &search, &pool);
+    }
     let reader: Box<dyn BufRead> = match &args.path {
         Some(path) => Box::new(BufReader::new(
             std::fs::File::open(path).with_context(|| path.display().to_string())?,
