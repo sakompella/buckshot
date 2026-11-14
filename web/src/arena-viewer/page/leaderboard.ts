@@ -57,12 +57,16 @@ interface EloScale {
   readonly ticks: ReadonlyArray<number>;
 }
 
-const eloScaleOf = (ratings: ReadonlyMap<string, Rating>, ranks: ReadonlyMap<string, number>): EloScale => {
-  const ends = [...ratings].filter(([key]) => ranks.has(key)).flatMap(([, { rating, interval }]) => [rating, interval?.lo ?? rating, interval?.hi ?? rating]);
-  const from = Math.floor(Math.min(0, ...ends) / 100) * 100;
-  const to = Math.ceil(Math.max(0, ...ends) / 100) * 100;
+/** Zoomed to the top tiers, where configs overlap; weaker configs clip at the left edge (◂). */
+const ZOOM_TIERS = 3;
+const TICK = 25;
 
-  return { from, to, ticks: Array.from({ length: (to - from) / 100 + 1 }, (_, index) => from + index * 100) };
+const eloScaleOf = (ratings: ReadonlyMap<string, Rating>, ranks: ReadonlyMap<string, number>): EloScale => {
+  const ends = [...ratings].filter(([key, { tier }]) => ranks.has(key) && tier !== null && tier <= ZOOM_TIERS).flatMap(([, { rating, interval }]) => [rating, interval?.lo ?? rating, interval?.hi ?? rating]);
+  const from = Math.floor(Math.min(...ends) / TICK) * TICK;
+  const to = Math.ceil(Math.max(...ends) / TICK) * TICK;
+
+  return { from, to, ticks: Array.from({ length: (to - from) / TICK + 1 }, (_, index) => from + index * TICK).filter((tick) => tick % 50 === 0) };
 };
 
 const percentOf = ({ from, to }: EloScale, elo: number): number => Math.min(100, Math.max(0, ((elo - from) / (to - from)) * 100));
