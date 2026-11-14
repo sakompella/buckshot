@@ -136,7 +136,7 @@ def pooled_ratings(games: list[Game], by_cohort: dict[str, list[Game]], draws: i
         ]
         for e in sorted(names, key=lambda e: -elo["wins"][e])
     ]
-    header = ["config", "wins/matches = win share", "rating (Elo, depth-2 engine at 0)", "95% CI, seed blocks drawn", "95% CI, seeds drawn (sensitivity)", "pot share", "cash rating (Elo, depth-2 engine at 0)", "95% CI, seed blocks drawn"]
+    header = ["config", "wins/matches = win share", "rating (Elo, depth-7 engine at 0)", "95% CI, seed blocks drawn", "95% CI, seeds drawn (sensitivity)", "pot share", "cash rating (Elo, depth-7 engine at 0)", "95% CI, seed blocks drawn"]
     text = "\n".join([table(header, rows), sensitivity(games, names, elo["wins"])])
     pair_header = ["pair", "wins/matches = observed share", "fitted share", "difference (pp)", "bootstrap range of the difference (descriptive)"]
     pair_tables = {}
