@@ -4,11 +4,11 @@ import { fmtRating, isClaude, isEngine } from "./data.ts";
 import type { Derived, ModelStats } from "./derived.ts";
 import { inRankOrder } from "./leaderboard.ts";
 import type { Message } from "./model.ts";
-import type { Rating } from "./ratings.ts";
+import { INTERVAL_PERCENT, type Rating } from "./ratings.ts";
 
 type H = HtmlBuilder<Message>;
 
-// The first chart: every ranked config's headline rating (derived.ts) with its 95% interval, best first, and the search engines as
+// The first chart: every ranked config's headline rating (derived.ts) with its interval, best first, and the search engines as
 // labelled reference lines. Overlapping bars show what the data cannot order.
 
 interface Rated {
@@ -48,7 +48,7 @@ export const forestView = (h: H, derived: Derived): Html => {
     h.div([h.Class(className)], [h.span([h.Class("fname")], name), h.div([h.Class("ftrack")], [...lines, ...track]), h.span([h.Class("fval")], value)]);
 
   return h.div(
-    [h.Class("forest"), h.Role("img"), h.AriaLabel(`${derived.ratingName} of each ranked config with its 95% interval`)],
+    [h.Class("forest"), h.Role("img"), h.AriaLabel(`${derived.ratingName} of each ranked config with its ${INTERVAL_PERCENT} interval`)],
     [
       ...anchors.map(({ m, elo }) =>
         row([], [h.span([h.Class(scale.at(elo.rating) > 50 ? "falabel end" : "falabel"), h.Style(left(elo.rating))], [`${m.label} ${fmtRating(elo.rating)}`])], [], "frow fhead"),

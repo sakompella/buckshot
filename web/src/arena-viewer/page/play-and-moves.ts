@@ -1,5 +1,5 @@
 import { groupBy, keyOf, type SeatFull, sumOf } from "./data.ts";
-import type { Rating } from "./ratings.ts";
+import { INTERVAL_Z, type Rating } from "./ratings.ts";
 
 // The Elo from play and move quality: each language-model config's headline rating combined with the rating its points
 // lost per move predict. Across the configs the headline rating lies close to a line in points lost per move, and a
@@ -7,8 +7,6 @@ import type { Rating } from "./ratings.ts";
 // then weighs its two ratings by their precision, so one with few matches leans on its move scores and one with many on
 // its results. A 30-fold split-half test found it closer to the other half's rating than the results alone
 // (docs/arena/analysis/matchups.md).
-
-const Z95 = 1.96;
 
 /** The largest spread of the configs around the line that the fit tries, and its step, in Elo. */
 const MAX_SPREAD = 100;
@@ -20,7 +18,7 @@ const PASSES = 5;
 interface Point {
   readonly key: string;
   readonly rating: number;
-  /** The variance of the headline rating, from its 95% interval. */
+  /** The variance of the headline rating, from its interval. */
   readonly ratingVariance: number;
   readonly lost: number;
   /** The variance of `lost`, clustered by seed block. */
@@ -94,7 +92,7 @@ export const playAndMoveRatings = (headline: ReadonlyMap<string, Rating>, seats:
 
     return rating?.interval == null || lost === null
       ? []
-      : [{ key, rating: rating.rating, ratingVariance: ((rating.interval.hi - rating.interval.lo) / (2 * Z95)) ** 2, lost: lost.lost, lostVariance: lost.variance }];
+      : [{ key, rating: rating.rating, ratingVariance: ((rating.interval.hi - rating.interval.lo) / (2 * INTERVAL_Z)) ** 2, lost: lost.lost, lostVariance: lost.variance }];
   });
 
   if (points.length < 3) return new Map();
@@ -107,7 +105,7 @@ export const playAndMoveRatings = (headline: ReadonlyMap<string, Rating>, seats:
       const predictedVariance = line.spread + line.slope ** 2 * point.lostVariance;
       const variance = 1 / (1 / point.ratingVariance + 1 / predictedVariance);
       const rating = variance * (point.rating / point.ratingVariance + predicted / predictedVariance);
-      const half = Z95 * Math.sqrt(variance);
+      const half = INTERVAL_Z * Math.sqrt(variance);
 
       return [point.key, { rating, blocks: headline.get(point.key)?.blocks ?? 0, interval: { lo: rating - half, hi: rating + half }, tier: null }] as const;
     }),

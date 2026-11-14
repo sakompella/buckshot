@@ -220,9 +220,20 @@ export interface Rating {
   readonly tier: number | null;
 }
 
+/** The share of resamples the rating intervals and the tier gaps cover: about one in ten true values falls outside. */
+export const INTERVAL_LEVEL = 0.9;
+
+/** The normal quantile of `INTERVAL_LEVEL`, for turning an interval back into a variance. */
+export const INTERVAL_Z = 1.6449;
+
+/** The level as text, for the pages that say it. */
+export const INTERVAL_PERCENT = `${Math.round(INTERVAL_LEVEL * 100)}%`;
+
+const TAIL = (1 - INTERVAL_LEVEL) / 2;
+
 /**
  * Tiers of configs the data cannot tell apart. Down the ranked configs by rating, a new tier starts at the first config
- * clearly below the top of the current tier: the 95% bootstrap interval of the gap between the two excludes 0.
+ * clearly below the top of the current tier: the bootstrap interval of the gap between the two excludes 0.
  */
 const tiersOf = (ranked: ReadonlyArray<string>, draws: ReadonlyMap<string, Float64Array>): ReadonlyMap<string, number> => {
   const tiers = new Map<string, number>();
@@ -237,7 +248,7 @@ const tiersOf = (ranked: ReadonlyArray<string>, draws: ReadonlyMap<string, Float
       .filter((gap) => !Number.isNaN(gap))
       .toSorted((left, right) => left - right);
 
-    if (quantile(gaps, 0.025) > 0) {
+    if (quantile(gaps, TAIL) > 0) {
       top = key;
       tier++;
     }
@@ -249,8 +260,8 @@ const tiersOf = (ranked: ReadonlyArray<string>, draws: ReadonlyMap<string, Float
 };
 
 /**
- * Every config's rating from one fit over all the seats' completed two-player matches, with 95% percentile
- * intervals from refitting resamples of whole seed blocks, and its tier. The resamples are centred on the mean config and
+ * Every config's rating from one fit over all the seats' completed two-player matches, with percentile
+ * intervals at `INTERVAL_LEVEL` from refitting resamples of whole seed blocks, and its tier. The resamples are centred on the mean config and
  * moved by the point fit's shift, so an interval leaves out the anchor's own noise and the anchor's interval is the
  * uncertainty of the zero. Effort sweeps join the other models through their
  * medium configs, so one scale covers every config. The fit counts each round as a game, in the matches whose
@@ -294,7 +305,7 @@ export const pooledRatings = (seats: ReadonlyArray<SeatFull>, luck: Luck = new M
       const sorted = [...(draws.get(key) ?? [])].filter((draw) => !Number.isNaN(draw)).toSorted((left, right) => left - right);
       const spanned = spans.get(key)?.size ?? 0;
 
-      return [key, { rating, blocks: spanned, interval: spanned < MIN_BLOCKS_FOR_INTERVAL ? null : { lo: quantile(sorted, 0.025), hi: quantile(sorted, 0.975) }, tier: tiers.get(key) ?? null }] as const;
+      return [key, { rating, blocks: spanned, interval: spanned < MIN_BLOCKS_FOR_INTERVAL ? null : { lo: quantile(sorted, TAIL), hi: quantile(sorted, 1 - TAIL) }, tier: tiers.get(key) ?? null }] as const;
     }),
   );
 };

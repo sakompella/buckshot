@@ -2,8 +2,8 @@
 """Matchup analysis of the scored arena matches: ratings per cohort, pair effects, seat and starter effects.
 
 Reads the analysis database read-only and prints markdown tables. With --doc FILE the tables replace the text
-between the tables markers of that file. Ratings come from one pooled fit over every scored match; kinds (see kind_of below) group matches only for pair effects and seat figures. Intervals
-are 95% bootstraps over seed blocks, drawn with a fixed RNG seed so a rerun prints the same numbers.
+between the tables markers of that file. Ratings come from one pooled fit over every scored match; kinds (see kind_of below) group matches only for pair effects and seat figures. Rating intervals
+are 90% bootstraps over seed blocks (`boot.LEVEL`), the other intervals 95%, drawn with a fixed RNG seed so a rerun prints the same numbers.
 
     python3 tools/arena/analysis/matchups.py [--db PATH] [--draws N] [--doc docs/arena/analysis/matchups.md]
 """
@@ -128,15 +128,15 @@ def pooled_ratings(games: list[Game], by_cohort: dict[str, list[Game]], draws: i
             e,
             frac(totals[e][1], totals[e][0]),
             signed(elo["wins"][e]),
-            span(boot.interval(rating_draws["wins"][e]), signed),
-            span(boot.interval(seed_draws[e]), signed),
+            span(boot.interval(rating_draws["wins"][e], boot.TAIL), signed),
+            span(boot.interval(seed_draws[e], boot.TAIL), signed),
             pct(totals[e][2] / totals[e][0]),
             signed(elo["cash"][e]),
-            span(boot.interval(rating_draws["cash"][e]), signed),
+            span(boot.interval(rating_draws["cash"][e], boot.TAIL), signed),
         ]
         for e in sorted(names, key=lambda e: -elo["wins"][e])
     ]
-    header = ["config", "wins/matches = win share", "rating (Elo, depth-7 engine at 0)", "95% CI, seed blocks drawn", "95% CI, seeds drawn (sensitivity)", "pot share", "cash rating (Elo, depth-7 engine at 0)", "95% CI, seed blocks drawn"]
+    header = ["config", "wins/matches = win share", "rating (Elo, depth-7 engine at 0)", f"{boot.PERCENT} CI, seed blocks drawn", f"{boot.PERCENT} CI, seeds drawn (sensitivity)", "pot share", "cash rating (Elo, depth-7 engine at 0)", f"{boot.PERCENT} CI, seed blocks drawn"]
     text = "\n".join([table(header, rows), sensitivity(games, names, elo["wins"])])
     pair_header = ["pair", "wins/matches = observed share", "fitted share", "difference (pp)", "bootstrap range of the difference (descriptive)"]
     pair_tables = {}

@@ -510,12 +510,12 @@ def fit(t: Rated, wins: np.ndarray, w: np.ndarray | None = None, anchor: str | N
 
 
 def intervals(t: Rated, wins: np.ndarray) -> np.ndarray:
-    """2.5% and 97.5% quantiles over seed-block resamples, per config: centred draws moved by the point fit's shift (bt.Fit.elo)."""
+    """The `boot.LEVEL` interval over seed-block resamples, per config: centred draws moved by the point fit's shift (bt.Fit.elo)."""
     rng = np.random.default_rng(1)
     U = t.block.max() + 1
     shift = fit(t, wins, anchor=None) - fit(t, wins)
     draws = np.array([fit(t, wins, np.bincount(rng.integers(0, U, U), minlength=U)[t.block].astype(float), None) for _ in range(boot.DRAWS)])
-    return np.percentile(draws - shift, [2.5, 97.5], axis=0).T
+    return np.percentile(draws - shift, [100 * boot.TAIL, 100 * (1 - boot.TAIL)], axis=0).T
 
 
 def bias(t: Rated, splits: int = 20) -> dict:
@@ -551,14 +551,14 @@ def report(t: Rated) -> str:
     widths = (ri[:, 1] - ri[:, 0]) / 2, (ai[:, 1] - ai[:, 0]) / 2
     rank_raw, rank_adj = stats.rankdata(-raw), stats.rankdata(-adj)
     summary = (
-        f"{len(t.i):,} matches, {int(t.n.sum()):,} rounds. The median 95% half-width falls from ±{np.median(widths[0]):.0f} to ±{np.median(widths[1]):.0f} Elo"
+        f"{len(t.i):,} matches, {int(t.n.sum()):,} rounds. The median {boot.PERCENT} half-width falls from ±{np.median(widths[0]):.0f} to ±{np.median(widths[1]):.0f} Elo"
         f" (variance of a match's round share {np.var(t.raw / t.n):.3f} → {np.var((t.raw + t.luck) / t.n):.3f}). Spearman rank correlation with the raw"
         f" ratings {stats.spearmanr(raw, adj)[0]:.3f}, largest rank change {int(abs(rank_raw - rank_adj).max())}. The intervals are measured against the mean"
         f" config and moved so {bt.ANCHOR} reads 0, so they leave out its own noise; its own luck-adjusted interval, {ai[a][0]:+.0f} to {ai[a][1]:+.0f}, is the uncertainty of that 0.\n\n"
         f"Bias test: the mean correction per round of each config, seed-clustered, gives chi2 {b['chi2']:.1f} on {b['k']} configs (p {b['p']:.2f})."
         f" Its correlation with Round Elo fitted on the other half of the seeds (20 random halvings) is {b['corr']:+.2f}."
     )
-    return summary + "\n\n" + table(["config", "matches", "rounds", "Round Elo [95%]", "luck-adjusted [95%]"], rows)
+    return summary + "\n\n" + table(["config", "matches", "rounds", f"Round Elo [{boot.PERCENT}]", f"luck-adjusted [{boot.PERCENT}]"], rows)
 
 
 def write(path: Path, d: Data, c: np.ndarray) -> None:

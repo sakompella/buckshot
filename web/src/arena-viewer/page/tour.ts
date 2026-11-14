@@ -3,6 +3,7 @@ import { Command } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { GROUPS, Message, type Section, type Tour } from "./model.ts";
+import { INTERVAL_PERCENT } from "./ratings.ts";
 import { reveal } from "./reveal.ts";
 import { stickyHeight } from "./view.ts";
 
@@ -27,7 +28,7 @@ const TOUR: ReadonlyArray<TourStep> = [
     anchor: "summary",
     focus: "#summary",
     title: "Results at a glance",
-    text: "The first chart gives every ranked config's Round Elo with its 95% interval, best first. Configs whose bars overlap are not separated by the data. The dashed lines are the two search engines, fixed reference players.",
+    text: `The first chart gives every ranked config's Round Elo with its ${INTERVAL_PERCENT} interval, best first. Configs whose lines overlap are not separated by the data. The dashed lines are the two search engines, fixed reference players.`,
   },
   {
     anchor: "how",

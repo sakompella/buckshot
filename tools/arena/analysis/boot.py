@@ -21,9 +21,16 @@ def quantile(sorted_values: list[float], level: float) -> float:
     return sorted_values[low] + (sorted_values[high] - sorted_values[low]) * (at - low)
 
 
-def interval(values: list[float]) -> tuple[float, float] | None:
-    """The central 95% of the replicates, or None when there are too few to say."""
+# The share of replicates a rating interval covers: about one in ten true values falls outside. The viewer's INTERVAL_LEVEL
+# (web/src/arena-viewer/page/ratings.ts) is the same number.
+LEVEL = 0.90
+PERCENT = f"{round(LEVEL * 100)}%"
+TAIL = (1 - LEVEL) / 2
+
+
+def interval(values: list[float], tail: float = 0.025) -> tuple[float, float] | None:
+    """The central 95% of the replicates (rating intervals pass `TAIL`), or None when there are too few to say."""
     if len(values) < 20:
         return None
     ordered = sorted(values)
-    return quantile(ordered, 0.025), quantile(ordered, 0.975)
+    return quantile(ordered, tail), quantile(ordered, 1 - tail)
