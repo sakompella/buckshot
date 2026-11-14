@@ -81,7 +81,7 @@ tr.provisional td { opacity: 0.55; }
 .toggle button.on { background: var(--fg); color: #000; }
 .card, .configpanel { border: 1px solid var(--line); border-radius: 4px; padding: 18px 20px; margin-bottom: 26px; }
 .lbt td { padding: 8px; }
-.lbt .barcol { width: 50%; min-width: 360px; padding: 0 22px; }
+.lbt .barcol { width: 300px; min-width: 300px; padding: 0 16px; }
 .lbt .eff { color: var(--dim); }
 .lbt .drillstats { display: none; }
 .configpanel .drillstats { display: grid; grid-template-columns: repeat(4, auto 1fr); justify-content: start; gap: 2px 12px; margin: 4px 0 12px; font-size: 12.5px; }
