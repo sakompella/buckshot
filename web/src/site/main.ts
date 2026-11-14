@@ -140,7 +140,7 @@ export const view = (model: Model, h: H): Document =>
     Arena: () => arenaPage(h, model),
     NotFound: ({ path }) => ({
       title: "Not found · Buckshot Arena",
-      body: pageOf(h, model, h.main([], [h.p([h.Class("k")], [`Nothing lives at ${path}. `, h.a([h.Href("/arena")], ["The arena"]), " has every config's results."])])),
+      body: pageOf(h, model, h.main([], [h.p([h.Class("k")], [`There is no page at ${path}. `, h.a([h.Href("/arena")], ["The arena"]), " has every config's results."])])),
     }),
   });
 
