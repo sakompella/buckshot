@@ -13,7 +13,7 @@ terms. The chance events:
   count left in the deck over its size. V: a logistic on the health gap and the composition.
 - Round 1's first seat, a coin flip. V: the mean round 1 result of each starter.
 - Item deals. Each granted item is a uniform draw from the items its seat may still get: under the per-seat cap and the
-  table cap of sim/bend-mp/domain.bend's ItemRules, rebuilt from the public events (a grant outside the rebuilt pool is an
+  table cap of sim/bend-mp/domain.bend's ItemRules (rules.py, checked against Bend), rebuilt from the public events (a grant outside the rebuilt pool is an
   error). V: a logistic on both inventories, the health gap and who moves first after the deal, fitted on the state after
   each deal.
 - Item uses that show a shell: glass (the chamber), beer (the shell it ejects) and the phone (one later shell). Their V is the
@@ -47,19 +47,14 @@ from configs import config_label
 from fmt import table
 from load import DB, connect, require_current, round_one_starters, round_winners
 from regret import DERIVED, PRODUCTION
+from rules import DECK, ITEMS, ON_TABLE, PER_SEAT, SAW_DAMAGE
 from scipy import stats
 from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
 from sklearn.linear_model import LogisticRegression
 
 from docs import splice_between_markers
 
-# The two-seat deck, table.deck(TwoSeats) in sim/bend-mp: (live, blank) per load.
-DECK = ((1, 2), (2, 1), (2, 2), (3, 2), (1, 1), (2, 3), (3, 3), (3, 1), (4, 2))
 FOLDS = 5
-# The items dealt at two seats (the remote is not) with their caps per seat and on the table: the ItemRules defaults in sim/bend-mp/domain.bend.
-ITEMS = ("Saw", "Glass", "Jammer", "Cigarettes", "Beer", "Phone", "Inverter", "Adrenaline")
-PER_SEAT = np.array([2, 2, 1, 1, 8, 8, 4, 4])
-ON_TABLE = np.array([32, 32, 1, 32, 32, 32, 32, 32])
 
 
 def shot_outcomes(db: sqlite3.Connection, kind: str = "Fired") -> dict[str, list[bool]]:
@@ -286,7 +281,7 @@ def opponent_health(d: Data, sh: pd.DataFrame) -> list[float]:
                 at[(m, t.ordinal)] = hp.get(op, np.nan)
                 s, lv, sw = shot_at[(m, t.ordinal)]
                 if lv == 1:
-                    hp[me if s == "self" else op] -= 2 if sw else 1
+                    hp[me if s == "self" else op] -= SAW_DAMAGE if sw else 1
             if t.item == "Cigarettes":
                 hp[me] += 1
     return [at[(a, b)] for a, b in zip(sh.match_id, sh.ordinal)]
@@ -294,7 +289,7 @@ def opponent_health(d: Data, sh: pd.DataFrame) -> list[float]:
 
 def after_shot(sh: pd.DataFrame, live: np.ndarray):
     """The state after the shot, if it was live (1) or blank (0), as features, and the round's result when the shot ends it."""
-    dmg = np.where(sh.sawed == 1, 2, 1) * live
+    dmg = np.where(sh.sawed == 1, SAW_DAMAGE, 1) * live
     selfshot = (sh.shot == "self").values
     hm = sh.hm.values - np.where(selfshot, dmg, 0)
     ho = sh.ho.values - np.where(~selfshot, dmg, 0)
@@ -501,9 +496,13 @@ def rated(d: Data, c: np.ndarray) -> Rated:
 
 
 def fit(t: Rated, wins: np.ndarray, w: np.ndarray | None = None, anchor: str | None = bt.ANCHOR) -> np.ndarray:
-    """Round Elo (bt.round_elo) per config of `wins`, with each match counted `w` times (bootstrap weights)."""
+    """Round Elo per config of `wins` (the fit of bt.round_elo, on each pair's summed rounds and wins), with each match counted `w` times (bootstrap weights)."""
     w = np.ones(len(t.i)) if w is None else w
-    elo = bt.round_elo(((t.names[i], t.names[j], k * n, k * y) for i, j, n, y, k in zip(t.i, t.j, t.n, wins, w) if k), t.names, anchor)
+    K = len(t.names)
+    pair = t.i * K + t.j
+    rounds, won = np.bincount(pair, w * t.n, K * K), np.bincount(pair, w * wins, K * K)
+    cells = {(t.names[p // K], t.names[p % K]): [rounds[p], won[p]] for p in np.flatnonzero(rounds)}
+    elo = bt.fit(cells, entrants=set(t.names)).elo(anchor)
     return np.array([elo[name] for name in t.names])
 
 
