@@ -73,7 +73,7 @@ const positive = (value: number): number | null => (value > 0 ? value : null);
 export const AXES: Readonly<Record<ScatterAxis, Axis>> = {
   reasoning: {
     label: "Reasoning",
-    axisLabel: "Reasoning tok / move (log; configs with none left out)",
+    axisLabel: "Reasoning tok / move (log scale; configs with none left out)",
     isLog: true,
     valueOf: (m) => {
       const reasoning = reasoningPerMove(m);
@@ -104,7 +104,7 @@ export const AXES: Readonly<Record<ScatterAxis, Axis>> = {
   },
   tokens: {
     label: "Tokens",
-    axisLabel: "Output tok / match (log)",
+    axisLabel: "Output tok / match (log scale)",
     isLog: true,
     valueOf: (m) => positive(m.avgOut),
     format: fmtCount,

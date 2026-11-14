@@ -199,19 +199,19 @@ const headersOf = (ratingName: string, hasRegret: boolean, hasLuck: boolean, has
   "Favorite item",
 ];
 
-export const ACCURACY_TITLE = "Lichess's accuracy over points of round win chance: each move scored by what it gave up against the minimax player's best move, a game's value combining a volatility-weighted and a harmonic mean, averaged over the config's matches; higher is better, 100 is perfect";
+export const ACCURACY_TITLE = "Lichess's accuracy formula, applied to points of round win chance. Each move is scored by how much it gave up compared with the minimax player's best move. A game's score combines a volatility-weighted mean and a harmonic mean, and a config's accuracy averages its matches. Higher is better; 100 is perfect.";
 
-export const P99_TITLE = "Points of round win chance lost by the 99th-percentile move: one move in a hundred gave up at least this much";
+export const P99_TITLE = "The points of round win chance given up by the 99th-percentile move. One move in a hundred gave up at least this much.";
 
 const HEADER_TITLES = new Map([
-  [ROUND_ELO, `one Bradley-Terry rating over every match, on round win share, with the depth-7 search engine at 0; the interval is a ${INTERVAL_PERCENT} bootstrap over seed blocks`],
-  [LUCK_ELO, "Round Elo with each round's result corrected for the luck of its shots, loads, first seat, item deals and the shells items show (AIVAT): the same strengths with less noise"],
-  [MOVE_ELO, "the headline rating combined with the rating predicted by points lost per move, as the move scorer counts them; a config with few matches leans on its moves"],
-  [MATCH_WIN, "the chance of winning a match against the depth-7 search engine (Engine/7/2000000/sampled, rated 0), from the rating: two round wins of three"],
-  [REASONING, "reasoning tokens the provider reported per model move, over scored matches"],
-  [REASONED, "the share of scored model moves whose calls billed any reasoning tokens, so a small mean per move reads as a little reasoning on every move or more on a few"],
-  ["Cash share", "a config's cash over the match's cash, averaged over scored matches"],
-  ["Round wins", "the rounds a config won over the rounds it played"],
+  [ROUND_ELO, `One Bradley-Terry rating fitted over every match on round win share, with the depth-7 search engine at 0. The interval is a ${INTERVAL_PERCENT} bootstrap interval over seed blocks.`],
+  [LUCK_ELO, "Round Elo with each round's result corrected for luck: the shots, loads, first seat, item deals and the shells that items show. The correction (AIVAT) estimates the same strengths with less noise."],
+  [MOVE_ELO, "The headline rating combined with the rating that points lost per move predict, as the move scorer counts them. A config with few matches leans on its moves."],
+  [MATCH_WIN, "The chance of winning a match against the depth-7 search engine (Engine/7/2000000/sampled, rated 0), worked out from the rating as the chance of two round wins out of three."],
+  [REASONING, "Reasoning tokens the provider reported per model move, over scored matches."],
+  [REASONED, "The share of scored model moves whose calls billed any reasoning tokens. With a small average per move, a high share means a little reasoning on every move, and a low share means more reasoning on a few."],
+  ["Cash share", "A config's cash divided by all the cash in the match, averaged over scored matches."],
+  ["Round wins", "The rounds a config won divided by the rounds it played."],
   ["Accuracy", ACCURACY_TITLE],
   ["p99 points lost", P99_TITLE],
 ]);
@@ -248,7 +248,7 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
     [
       h.div([h.Class("lbbar")], [h.h2([], ["Leaderboard"])]),
       h.p([h.Class("sub")], [
-        `${hasLuck ? `${LUCK_ELO} is Round Elo with the luck of each round's shots, loads, first seat, item deals and the shells items show taken out. ` : ""}Round Elo is one Bradley-Terry rating over every match, on round win share. The depth-7 search engine (Engine/7/2000000/sampled) is fixed at 0, so adding a config does not move the others. The dot is the rating and the line its ${INTERVAL_PERCENT} interval over seed blocks (about one in ten true values falls outside); the vertical line is the depth-7 engine at 0. Configs whose lines do not overlap differ clearly; the tier number says which configs the data cannot order.${zero === null ? "" : ` The 0 is itself uncertain: against the mean of all configs, the engine's own ${INTERVAL_PERCENT} interval is ${Math.round(zero.lo)} to +${Math.round(zero.hi)}. The other intervals are measured the same way, so they leave out the engine's noise.`} The number before a config is its tier. Match wins count a config's own opponents only.`,
+        `${hasLuck ? `${LUCK_ELO} is Round Elo with the luck taken out of each round: its shots, loads, first seat, item deals and the shells that items show. ` : ""}Round Elo is one Bradley-Terry rating fitted over every match on round win share. The depth-7 search engine (Engine/7/2000000/sampled) is fixed at 0, so adding a config does not move the others. The dot is the rating, and the line is its ${INTERVAL_PERCENT} interval over seed blocks: about one in ten true values falls outside it. The vertical line is the depth-7 engine at 0. Configs whose lines do not overlap differ clearly. The number before a config is its tier, and the data cannot put the configs within one tier in order.${zero === null ? "" : ` The 0 is uncertain too: measured against the mean of all configs, the engine's own ${INTERVAL_PERCENT} interval is ${Math.round(zero.lo)} to +${Math.round(zero.hi)}. The other intervals are measured the same way, so they leave out the engine's noise.`} Match wins count only a config's own opponents.`,
       ]),
       h.div(
         [h.Class("card")],
@@ -288,10 +288,10 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
       ),
       termsView(h, "What the columns mean", headers.flatMap((label) => (HEADER_TITLES.has(label) ? [[label, HEADER_TITLES.get(label) ?? ""] as const] : []))),
       ...[
-        ...(sameTreatment.length === 0 ? [] : [`${sameTreatment.map(({ label }) => label).join(", ")}: each is one config from two that requested different efforts and ran the same, billing the same reasoning tokens per call.`]),
+        ...(sameTreatment.length === 0 ? [] : [`${sameTreatment.map(({ label }) => label).join(", ")}: each of these merges two requested efforts into one config. The two ran the same and billed the same reasoning tokens per call.`]),
         ...(unreported.length === 0 ? [] : [`† The provider reported no reasoning token count on some calls: ${unreported.join("; ")}. Reasoning figures count only the calls that reported one.`]),
         ...(configs.some(isProvisional) ? [PROVISIONAL_NOTE] : []),
-        ...(configs.some(isEffortMismatch) ? ["An effort marked (requested) disagrees with the measured reasoning: reasoning at effort none, or none at another effort."] : []),
+        ...(configs.some(isEffortMismatch) ? ["An effort marked (requested) does not match the reasoning that was measured: the config reasoned at effort none, or did not reason at another effort."] : []),
       ].map((note) => h.p([h.Class("sub")], [note])),
     ],
   );
@@ -299,15 +299,15 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
 
 const ACCURACY_HEADERS: ReadonlyArray<readonly [string, string]> = [
   ["Model", ""],
-  ["Avg points lost", "Mean points of round win chance a move gave up against the minimax player's best move; lower is better"],
-  ...CERTAIN_TYPES.map((type) => [CERTAIN_NAMES[type], "Share of the decisions where this mistake was a legal move that made it; the player's own information proves it worse, with no evaluator"] as const),
+  ["Avg points lost", "The average points of round win chance a move gave up compared with the minimax player's best move. Lower is better."],
+  ...CERTAIN_TYPES.map((type) => [CERTAIN_NAMES[type], "Of the decisions where this mistake was a legal move, the share where the player made it. The player's own information proves this mistake worse, so no evaluator is needed."] as const),
   ["Accuracy", ACCURACY_TITLE],
   ["p99 points lost", P99_TITLE],
   ["Best moves", "Moves as good as the minimax player's best"],
   ["Inaccuracies / 100", "Moves per 100 that gave up 5 to 10 points of round win chance (lichess's inaccuracy, 0.1 of its winning chances)"],
   ["Mistakes / 100", "Moves per 100 that gave up 10 to 15 points (lichess's mistake, 0.2)"],
   ["Blunders / 100", "Moves per 100 that gave up 15 points or more (lichess's blunder, 0.3)"],
-  ["Moves", "Moves with a real choice, over the config's scored matches; decisions where every move is within a point are left out"],
+  ["Moves", "Moves with a real choice in the config's scored matches. Decisions where every move is within a point are left out."],
 ];
 
 /** Configs with a scored move, fewest points lost first. */
@@ -351,7 +351,7 @@ export const accuracyTableView = (h: H, derived: Derived, certain: AsyncData.Asy
     [
       h.h2([], ["Points lost and certain mistakes by config"]),
       h.p([h.Class("sub")], [
-        "Points lost: the round win chance each move gave up against the minimax player's best move. Certain mistakes: shots the player's own information proves worse, which need no evaluator. Accuracy applies lichess's formula and its inaccuracy, mistake and blunder cut-offs to the points lost. Decisions where every move is within a point are left out.",
+        "Points lost is the round win chance each move gave up compared with the minimax player's best move. Certain mistakes are shots that the player's own information proves worse; they need no evaluator. Accuracy applies lichess's formula, and its cut-offs for inaccuracies, mistakes and blunders, to the points lost. Decisions where every move is within a point are left out.",
       ]),
       configs.length === 0
         ? h.div([h.Class("empty")], ["No config in this filter has a scored move."])

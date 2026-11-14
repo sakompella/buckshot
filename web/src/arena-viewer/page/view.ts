@@ -253,7 +253,7 @@ export const view = (model: Model, h: H): Document =>
             [h.Class("k")],
             [
               LoadFailure.match(failure, {
-                NoServer: () => "The arena needs the arena data, which this copy of the site does not serve. Run the arena viewer (web/README.md) to see it.",
+                NoServer: () => "This copy of the site does not serve the arena data. Run the arena viewer (web/README.md) to see it.",
                 Failed: ({ error }) => `Could not load the analysis database: ${error}`,
               }),
             ],

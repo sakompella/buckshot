@@ -27,7 +27,7 @@ export const summaryView = (h: H, derived: Derived): Html =>
       h.p([h.Class("sub")], [
         `${derived.ratingName} of every ranked config, best first`,
         ...(derived.runs === undefined ? [] : [`, from matches played ${runDates(derived.runs)}`]),
-        `. It pools every match of every tournament, with the depth-7 search engine at 0; the dot is its rating and the line its ${INTERVAL_PERCENT} interval, so configs whose lines overlap are not separated by the data. The dashed lines are the search engines, fixed players that About explains. The leaderboard groups the configs into tiers.`,
+        `. Every match of every tournament counts, and the depth-7 search engine sits at 0. The dot is a config's rating and the line is its ${INTERVAL_PERCENT} interval. When two lines overlap, the data cannot tell those configs apart. The dashed lines are the search engines, fixed players that About explains. The leaderboard groups the configs into tiers.`,
       ]),
       forestView(h, derived),
     ],
@@ -40,17 +40,17 @@ export const howView = (h: H): Html =>
     [
       h.h2([], ["How the game works"]),
       h.p([h.Class("sub")], [
-        "Two players share a shotgun loaded with a hidden mix of live and blank shells. Each load announces how many of each it holds, never their order. On your turn you may use items, then you must shoot: yourself or the other player. A live shell does one damage; a blank does none. Shooting the other player always passes the turn. Shooting yourself on a blank keeps it — the one way to buy another move. Each player starts a round with 3 or 4 health; a round ends when one player is left alive, who takes the round's prize. A match is three rounds, and the most cash at the end wins it.",
+        "Two players share a shotgun loaded with a hidden mix of live and blank shells. Each load announces how many of each it holds, but never their order. On your turn you may use items, then you must shoot: yourself or the other player. A live shell does one damage; a blank does none. Shooting the other player always passes the turn. Shooting yourself with a blank keeps the turn, and that is the only way to get another move. Each player starts a round with 3 or 4 health. A round ends when one player is left alive, and that player takes the round's prize. A match is three rounds, and whoever has the most cash at the end wins it.",
       ]),
       h.p([h.Class("sub")], [
-        "Nobody is told the shell order. Players learn it from the counts announced at each load, the shells already fired, and their own items: the magnifying glass shows the chambered shell, the burner phone a later one. The other items change the gun or the players: the handsaw doubles the next shot's damage, beer ejects the chambered shell, the inverter flips it between live and blank, cigarettes heal one health, the jammer makes the opponent skip a turn, and adrenaline steals and uses an opponent's item.",
+        "Nobody is told the shell order. Players learn it from the counts announced at each load, the shells already fired, and their own items: the magnifying glass shows the chambered shell, and the burner phone shows a later one. The other items change the gun or the players: the handsaw doubles the next shot's damage, beer ejects the chambered shell, the inverter flips it between live and blank, cigarettes heal one health, the jammer makes the opponent skip a turn, and adrenaline steals an opponent's item and uses it.",
       ]),
       h.p([h.Class("sub")], [
-        h.b([], ["A worked turn. "]),
-        "The gun holds two live shells and one blank, and your magnifying glass showed the chambered shell is blank. Shooting yourself is free: the blank keeps your turn, and the next shell is a proven live one for your opponent. Shooting the opponent instead passes the turn and hands the gun over. The How they play section counts moves like that as certain mistakes.",
+        h.b([], ["An example turn. "]),
+        "The gun holds two live shells and one blank, and your magnifying glass showed that the chambered shell is the blank. Shooting yourself costs nothing: the blank keeps your turn, and the next shell is then sure to be live, so you can fire it at your opponent. Shooting the opponent instead passes the turn and hands over the gun. The How they play section counts moves like that as certain mistakes.",
       ]),
       h.p([h.Class("sub")], [
-        "Each player here is a language model, apart from the search engines. On its turn it receives its view as JSON — both players' health and items, the shotgun, the log entries it has not been sent yet, and its numbered legal moves — and answers with one move number. Each log entry reaches it once, so it must remember the earlier ones. It sees the public log plus its own secrets, never the true shell order or the other player's secrets. A config is one model at one effort setting; the effort (none to max) is how much thinking the provider allows per move, and more of it costs more. The chips at the top switch models and efforts off and on.",
+        "Each player here is a language model, apart from the search engines. On its turn a model receives its view as JSON: both players' health and items, the shotgun, the log entries it has not been sent yet, and its numbered legal moves. It answers with one move number. Each log entry is sent only once, so the model must remember the earlier ones. It sees the public log and its own secrets, never the true shell order or the other player's secrets. A config is one model at one effort setting. The effort (none to max) is how much thinking the provider allows per move, and more effort costs more. The chips at the top turn models and efforts off and on.",
       ]),
     ],
   );
@@ -67,26 +67,26 @@ export const aboutView = (h: H, derived: Derived): Html => {
       h.h2([], ["About this experiment"]),
       ...(derived.runs === undefined ? [] : [h.p([h.Class("sub")], [`The matches here were played ${runDates(derived.runs)} (UTC).`])]),
       h.p([h.Class("sub")], [
-        `Every match is two players with items. A seed fixes the deals, and a seed block is one seed a pairing plays in both seat orders, so neither side gains from sitting first. ${unpaired.toLocaleString()} of the ${blocks.toLocaleString()} seed blocks hold only one scored match, so their seat order is not balanced. All tournaments are pooled. Every model plays under the same shared instructions with the same tools`,
+        `Every match has two players and uses items. A seed fixes the deals. A seed block is one seed that a pairing plays in both seat orders, so neither side gains from sitting first. ${unpaired.toLocaleString()} of the ${blocks.toLocaleString()} seed blocks hold only one scored match, so their seat order is not balanced. All tournaments are pooled. Every model plays under the same shared instructions with the same tools`,
         ...(promptedOff.length === 0
           ? ["."]
           : [`, except ${promptedOff.join(", ")}: its API has no reasoning-off setting, so it plays at low effort with one added line telling it to answer at once, without planning or checking ("immediate-recall mode").`]),
-        " The models were reached through subscription accounts via a proxy, not first-party API keys.",
+        " The models were called through subscription accounts behind a proxy, not with first-party API keys.",
         ...(isOnline ? [] : [" The Matches section lists every match."]),
       ]),
       h.p([h.Class("sub")], [
         h.b([], ["Search engines. "]),
-        "The configs named Search engine are the arena's own minimax search, not language models. Depth is how many decisions ahead it looks; with sampled reloads it values a new load by sampling the possible deals. They cost nothing, so the charts draw them as reference lines.",
+        "The configs named Search engine are not language models. They are the arena's own minimax search program, which looks ahead through the possible moves, assumes the opponent also plays its best, and plays the move that scores best. Depth is how many decisions ahead it looks. With sampled reloads, it values a new load by trying a sample of the possible deals. Search engines cost nothing, so the charts draw them as reference lines.",
       ]),
       h.p([h.Class("sub")], [
         h.b([], ["Round Elo. "]),
-        `One Bradley-Terry rating fitted over every scored match, counting each round as one game. The depth-7 search engine (Engine/7/2000000/sampled) is fixed at 0, so a new config does not move the others. The bracket beside a rating is a ${INTERVAL_PERCENT} bootstrap over seed blocks (about one in ten true values falls outside), so it carries the luck a whole seed shares. It is measured against the mean of all configs, so it leaves out the engine's own noise; the leaderboard gives that once.`,
+        `A Bradley-Terry rating: one fit over every scored match, where each round counts as one game. The gap between two ratings says how often one config beats the other in a round. The depth-7 search engine (Engine/7/2000000/sampled) is fixed at 0, so adding a config does not move the others. The bracket beside a rating is its ${INTERVAL_PERCENT} bootstrap interval: the fit is redone many times on seed blocks drawn at random, with repeats, and about one in ten true values falls outside the bracket. Because whole seed blocks are drawn, the bracket includes the luck that all matches on one seed share. Each bracket is measured against the mean of all configs, so it leaves out the engine's own noise; the leaderboard gives that noise once.`,
       ]),
       ...(hasLuck
         ? [
             h.p([h.Class("sub")], [
               h.b([], ["Luck-adjusted Elo. "]),
-              "The same fit with each round's luck — the shots, loads, first seat, item deals and the shells items show — corrected out (AIVAT), estimating the same strengths with less noise. It is the headline rating: it ranks the leaderboard and the results summary.",
+              "The same fit, with each round's luck taken out: the shots, loads, first seat, item deals and the shells that items show. The correction method is AIVAT. It estimates the same strengths with less noise. This is the headline rating, and it ranks the leaderboard and the results summary.",
             ]),
           ]
         : []),
@@ -94,13 +94,13 @@ export const aboutView = (h: H, derived: Derived): Html => {
         ? [
             h.p([h.Class("sub")], [
               h.b([], [`${MOVE_ELO}. `]),
-              "A second column, never the ranking. Across the language-model configs the headline rating lies close to a line in points lost per move, as the move scorer counts them. Each config's rating is combined with the one its points lost predict, each weighted by its precision, so a config with few matches leans on its moves and one with many on its results. It trusts the move scorer: a config whose strength the scorer cannot see is pulled toward the line.",
+              "A second column. It never sets the ranking. Across the language-model configs, the headline rating falls close to a straight line when set against points lost per move, as the move scorer counts them. Each config's rating is combined with the rating its points lost predict, and each of the two is weighted by how precise it is. So a config with few matches leans on its moves, and a config with many matches leans on its results. This trusts the move scorer: a config whose strength the scorer cannot see is pulled toward the line.",
             ]),
           ]
         : []),
       h.p([h.Class("sub")], [
         h.b([], ["What to keep in mind. "]),
-        `Configs are grouped in tiers. Down the ranking, a new tier starts at the first config clearly below the top of the current one: the ${INTERVAL_PERCENT} bootstrap interval of the gap between the two excludes 0. Within a tier the order is not settled. Provisional configs (fewer than 20 scored matches) have no tier. Points lost and accuracy are measured against a minimax player, not against perfect play; certain mistakes need no such player. Costs are the providers' list prices applied to the usage, not what anyone was billed.`,
+        `Configs are grouped in tiers. Going down the ranking, a new tier starts at the first config that is clearly below the top config of the current tier: the ${INTERVAL_PERCENT} bootstrap interval of the gap between the two does not include 0. Within a tier the order is not settled. Provisional configs (fewer than 20 scored matches) have no tier. Points lost and accuracy are measured against a minimax player, not against perfect play; certain mistakes do not need such a player. Costs are the providers' list prices applied to the usage, not what anyone was billed.`,
       ]),
     ],
   );
