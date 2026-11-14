@@ -8,12 +8,12 @@ import { type Cell as CertainCell, talliesOf } from "./certain.ts";
 import { noteView, pressable, termsView } from "./charts.ts";
 import { effortName } from "../../arena/model-names.ts";
 import { isSameTreatment } from "../../arena/same-treatment.ts";
-import { baseName, CERTAIN_NAMES, costPerMove, effortLabel, fmtCount, fmtPct, fmtPoints, fmtSec, fmtShare, fmtUsd, isClaude, isProvisional, PROVISIONAL_BELOW, reasonedShare, reasoningPerMove } from "./data.ts";
+import { baseName, CERTAIN_NAMES, costPerMove, effortLabel, fmtCount, fmtPct, fmtPoints, fmtRating, fmtSec, fmtShare, fmtUsd, isClaude, isProvisional, PROVISIONAL_BELOW, reasonedShare, reasoningPerMove } from "./data.ts";
 import { type Derived, LUCK_ELO, type ModelStats, MOVE_ELO, ROUND_ELO } from "./derived.ts";
 import { drillView } from "./drill.ts";
 import { itemIconOf } from "./items.ts";
 import { type Lazy, Message, type Model } from "./model.ts";
-import { ANCHOR, matchWinVsAnchor, type Rating } from "./ratings.ts";
+import { ANCHOR, INTERVAL_PERCENT, matchWinVsAnchor, type Rating } from "./ratings.ts";
 
 type H = HtmlBuilder<Message>;
 
@@ -67,18 +67,20 @@ const eloScaleOf = (ratings: ReadonlyMap<string, Rating>, ranks: ReadonlyMap<str
 
 const percentOf = ({ from, to }: EloScale, elo: number): number => Math.min(100, Math.max(0, ((elo - from) / (to - from)) * 100));
 
+const ratingText = ({ rating, interval }: Rating): string => `${fmtRating(rating)}${interval === null ? "" : `, ${INTERVAL_PERCENT} interval ${fmtRating(interval.lo)} to ${fmtRating(interval.hi)}`}`;
+
 const eloBarView = (h: H, scale: EloScale, m: ModelStats, elo: Rating | undefined): Html => {
   if (elo === undefined) return h.empty;
 
-  const [low, high] = [percentOf(scale, Math.min(0, elo.rating)), percentOf(scale, Math.max(0, elo.rating))];
   const whisker = elo.interval === null ? null : { left: percentOf(scale, elo.interval.lo), right: percentOf(scale, elo.interval.hi), clippedLow: elo.interval.lo < scale.from, clippedHigh: elo.interval.hi > scale.to };
 
   return h.div(
     [h.Class("track")],
     [
       h.div([h.Class("zero"), h.Style({ left: `${percentOf(scale, 0)}%` })], []),
-      h.div([h.Class("fill"), h.Style({ left: `${low}%`, width: `${high - low}%`, background: m.color })], []),
       ...(whisker === null ? [] : [h.div([h.Class(`whisk${whisker.clippedLow ? " clip-lo" : ""}${whisker.clippedHigh ? " clip-hi" : ""}`), h.Style({ left: `${whisker.left}%`, width: `${whisker.right - whisker.left}%` })], [])]),
+      h.div([h.Class(`mark ${isClaude(m.model) ? "a" : "o"}`), h.Style({ left: `${percentOf(scale, elo.rating)}%`, background: m.color })], []),
+      noteView(h, ratingText(elo)),
     ],
   );
 };
@@ -202,7 +204,7 @@ export const ACCURACY_TITLE = "Lichess's accuracy over points of round win chanc
 export const P99_TITLE = "Points of round win chance lost by the 99th-percentile move: one move in a hundred gave up at least this much";
 
 const HEADER_TITLES = new Map([
-  [ROUND_ELO, "one Bradley-Terry rating over every match, on round win share, with the depth-7 search engine at 0; the interval is a 95% bootstrap over seed blocks"],
+  [ROUND_ELO, `one Bradley-Terry rating over every match, on round win share, with the depth-7 search engine at 0; the interval is a ${INTERVAL_PERCENT} bootstrap over seed blocks`],
   [LUCK_ELO, "Round Elo with each round's result corrected for the luck of its shots, loads, first seat, item deals and the shells items show (AIVAT): the same strengths with less noise"],
   [MOVE_ELO, "the headline rating combined with the rating predicted by points lost per move, as the move scorer counts them; a config with few matches leans on its moves"],
   [MATCH_WIN, "the chance of winning a match against the depth-7 search engine (Engine/7/2000000/sampled, rated 0), from the rating: two round wins of three"],
@@ -246,7 +248,7 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
     [
       h.div([h.Class("lbbar")], [h.h2([], ["Leaderboard"])]),
       h.p([h.Class("sub")], [
-        `${hasLuck ? `${LUCK_ELO} is Round Elo with the luck of each round's shots, loads, first seat, item deals and the shells items show taken out. ` : ""}Round Elo is one Bradley-Terry rating over every match, on round win share. The depth-7 search engine (Engine/7/2000000/sampled) is fixed at 0, so adding a config does not move the others. The bar runs from 0, with its 95% interval over seed blocks.${zero === null ? "" : ` The 0 is itself uncertain: against the mean of all configs, the engine's own 95% interval is ${Math.round(zero.lo)} to +${Math.round(zero.hi)}. The other intervals are measured the same way, so they leave out the engine's noise.`} The number before a config is its tier: the data cannot tell the configs of one tier apart. Match wins count a config's own opponents only.`,
+        `${hasLuck ? `${LUCK_ELO} is Round Elo with the luck of each round's shots, loads, first seat, item deals and the shells items show taken out. ` : ""}Round Elo is one Bradley-Terry rating over every match, on round win share. The depth-7 search engine (Engine/7/2000000/sampled) is fixed at 0, so adding a config does not move the others. The dot is the rating and the line its ${INTERVAL_PERCENT} interval over seed blocks (about one in ten true values falls outside); the vertical line is the depth-7 engine at 0. Configs whose lines do not overlap differ clearly; the tier number says which configs the data cannot order.${zero === null ? "" : ` The 0 is itself uncertain: against the mean of all configs, the engine's own ${INTERVAL_PERCENT} interval is ${Math.round(zero.lo)} to +${Math.round(zero.hi)}. The other intervals are measured the same way, so they leave out the engine's noise.`} The number before a config is its tier. Match wins count a config's own opponents only.`,
       ]),
       h.div(
         [h.Class("card")],

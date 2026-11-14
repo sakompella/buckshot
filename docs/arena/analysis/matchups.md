@@ -1,6 +1,6 @@
 # Matchup analysis
 
-Ratings, pair effects, seat and round 1 starter effects for the scored arena matches, from the analysis database ([database.md](../database.md)). All scored matches are two-player. Every rate shows numerator/denominator, a win share counts a split by its share, and every interval is a 95% bootstrap that draws whole units, never single matches or seat swaps: seed blocks (the two seat-swapped matches of one pair and seed) for ratings, and seeds (every block played at a seed, in any pairing) for the headline seat and starter figures. The tables below the line "Tables" are generated: `python3 tools/arena/analysis/matchups.py --doc docs/arena/analysis/matchups.md` rewrites them, with a fixed RNG seed. Nothing here reads provenance or account data.
+Ratings, pair effects, seat and round 1 starter effects for the scored arena matches, from the analysis database ([database.md](../database.md)). All scored matches are two-player. Every rate shows numerator/denominator, a win share counts a split by its share, and every interval is a bootstrap that draws whole units, never single matches or seat swaps: seed blocks (the two seat-swapped matches of one pair and seed) for ratings, and seeds (every block played at a seed, in any pairing) for the headline seat and starter figures. Rating intervals are 90% (about one in ten true values falls outside); the other intervals are 95%. The tables below the line "Tables" are generated: `python3 tools/arena/analysis/matchups.py --doc docs/arena/analysis/matchups.md` rewrites them, with a fixed RNG seed. Nothing here reads provenance or account data.
 
 **DeepSeek is left out.** Every match with deepseek-v4.1-flash (20 scored matches) is dropped from all cohorts, fits, seat and starter figures and tables, because its free tier refused requests, so its games are not a random sample of what was scheduled. That leaves 3,537 scored matches from the 3,557-match snapshot of 2026-11-04. Every finding below uses these.
 
@@ -66,56 +66,56 @@ Ratings, pair effects, seat and round 1 starter effects for the scored arena mat
 
 ### Pooled ratings
 
-| config | wins/matches = win share | rating (Elo, depth-7 engine at 0) | 95% CI, seed blocks drawn | 95% CI, seeds drawn (sensitivity) | pot share | cash rating (Elo, depth-7 engine at 0) | 95% CI, seed blocks drawn |
+| config | wins/matches = win share | rating (Elo, depth-7 engine at 0) | 90% CI, seed blocks drawn | 90% CI, seeds drawn (sensitivity) | pot share | cash rating (Elo, depth-7 engine at 0) | 90% CI, seed blocks drawn |
 |---|---|---|---|---|---|---|---|
-| claude-opus-5-5-max | 59/82 = 72.0% | +27 | -49 to +116 | -57 to +131 | 63.2% | +10 | -32 to +55 |
-| gpt-6.1-terra-max | 68/100 = 68.0% | +10 | -62 to +86 | -61 to +88 | 62.4% | +10 | -31 to +52 |
-| gpt-6-astra-high | 68/100 = 68.0% | +2 | -62 to +81 | -67 to +82 | 64.0% | +17 | -18 to +53 |
-| Engine/7/2000000/sampled | 829/1120 = 74.0% | +0 | -34 to +34 | -35 to +33 | 65.3% | +0 | -16 to +17 |
-| claude-sonnet-5-5-max | 96/142 = 67.6% | -1 | -64 to +67 | -83 to +102 | 62.6% | +8 | -28 to +43 |
-| Engine/6/20000/sampled | 127/236 = 53.8% | -16 | -58 to +31 | -57 to +30 | 52.8% | -4 | -27 to +21 |
-| claude-opus-5-5-xhigh | 89/170 = 52.4% | -26 | -77 to +30 | -75 to +29 | 52.4% | -7 | -35 to +20 |
-| gpt-6-astra-medium | 169/254 = 66.5% | -30 | -69 to +14 | -69 to +12 | 60.2% | -17 | -39 to +6 |
-| gpt-6.1-sol-max | 80/142 = 56.3% | -33 | -84 to +17 | -88 to +27 | 54.5% | -4 | -31 to +22 |
-| gpt-6.1-terra-xhigh | 71/102 = 69.6% | -35 | -102 to +40 | -101 to +39 | 60.2% | -42 | -80 to -3 |
-| claude-opus-5-5-high | 47/80 = 58.8% | -42 | -116 to +39 | -126 to +51 | 54.7% | -28 | -72 to +16 |
-| claude-sonnet-5-5-xhigh | 105/176 = 59.7% | -50 | -101 to +5 | -111 to +18 | 53.7% | -47 | -73 to -20 |
-| gpt-6.1-terra-medium | 87/130 = 66.9% | -57 | -118 to +8 | -118 to +10 | 59.8% | -43 | -76 to -9 |
-| gpt-6-astra-low | 52/80 = 65.0% | -59 | -132 to +23 | -135 to +21 | 59.4% | -40 | -77 to +1 |
-| gpt-6-astra-off | 51/80 = 63.7% | -80 | -159 to +3 | -159 to +8 | 55.9% | -72 | -114 to -32 |
-| gpt-6.1-sol-low | 51/98 = 52.0% | -87 | -156 to -13 | -153 to -16 | 50.9% | -41 | -79 to -1 |
-| gpt-6.1-sol-xhigh | 52/101 = 51.5% | -91 | -157 to -24 | -157 to -24 | 52.4% | -33 | -68 to +5 |
-| claude-opus-5-5-medium | 188/334 = 56.3% | -96 | -132 to -58 | -130 to -58 | 53.8% | -55 | -73 to -36 |
-| gpt-6.1-terra-high | 51/82 = 62.2% | -109 | -187 to -18 | -190 to -20 | 59.1% | -59 | -101 to -12 |
-| gpt-6.1-sol-medium | 155/271 = 57.2% | -110 | -154 to -67 | -165 to -51 | 56.8% | -45 | -68 to -21 |
-| claude-haiku-5-5-max | 68/111 = 61.3% | -111 | -173 to -49 | -192 to -25 | 58.7% | -59 | -88 to -29 |
-| gpt-6.1-sol-high | 47/99 = 47.5% | -116 | -179 to -53 | -186 to -53 | 48.0% | -59 | -97 to -21 |
-| claude-haiku-5-5-xhigh | 86/158 = 54.4% | -122 | -173 to -71 | -182 to -74 | 50.4% | -92 | -118 to -63 |
-| gpt-6.1-terra-off/low | 145/242 = 59.9% | -125 | -171 to -79 | -168 to -81 | 55.3% | -84 | -106 to -62 |
-| claude-opus-5-5-off/low | 83/160 = 51.9% | -137 | -192 to -79 | -193 to -80 | 54.1% | -64 | -94 to -34 |
-| claude-sonnet-5-5-high | 75/161 = 46.6% | -145 | -205 to -83 | -204 to -88 | 46.9% | -96 | -129 to -62 |
-| claude-haiku-5-5-high | 118/223 = 52.9% | -149 | -195 to -101 | -193 to -105 | 50.8% | -98 | -123 to -73 |
-| claude-haiku-5-5-medium | 229/444 = 51.6% | -165 | -197 to -135 | -192 to -139 | 50.6% | -101 | -117 to -85 |
-| claude-sonnet-5-5-medium | 175/364 = 48.1% | -169 | -207 to -131 | -218 to -123 | 48.8% | -100 | -119 to -81 |
-| gpt-5.6-terra-xhigh | 53/93 = 57.0% | -170 | -250 to -90 | -258 to -97 | 55.1% | -69 | -107 to -30 |
-| gpt-5.6-terra-max | 52/90 = 57.8% | -175 | -259 to -86 | -240 to -110 | 53.8% | -82 | -123 to -39 |
-| gpt-6-luna-xhigh | 79/115 = 68.7% | -187 | -256 to -117 | -239 to -133 | 63.6% | -100 | -140 to -60 |
-| claude-sonnet-5-5-off | 65/164 = 39.6% | -194 | -249 to -139 | -249 to -144 | 42.4% | -126 | -155 to -96 |
-| claude-haiku-5-5-low | 137/278 = 49.3% | -194 | -239 to -152 | -235 to -153 | 51.0% | -109 | -132 to -86 |
-| Engine/2/20000 | 1056/2334 = 45.2% | -197 | -224 to -171 | -225 to -171 | 47.3% | -118 | -132 to -105 |
-| gpt-6-luna-max | 75/112 = 67.0% | -203 | -270 to -129 | -266 to -144 | 63.2% | -104 | -145 to -63 |
-| gpt-5.6-terra-medium | 119/259 = 45.9% | -234 | -281 to -192 | -280 to -188 | 48.0% | -123 | -145 to -100 |
-| gpt-6-luna-high | 116/218 = 53.2% | -242 | -299 to -186 | -300 to -179 | 51.6% | -147 | -176 to -119 |
-| claude-sonnet-5-5-low | 50/159 = 31.4% | -247 | -313 to -190 | -305 to -192 | 39.5% | -143 | -176 to -111 |
-| gpt-5.6-terra-high | 40/91 = 44.0% | -252 | -334 to -173 | -320 to -199 | 49.5% | -105 | -147 to -62 |
-| gpt-5.6-terra-low | 37/91 = 40.7% | -270 | -353 to -194 | -345 to -198 | 45.5% | -127 | -170 to -88 |
-| claude-haiku-5-5-off | 221/668 = 33.1% | -328 | -363 to -296 | -363 to -297 | 38.4% | -204 | -222 to -187 |
-| claude-haiku-4-5-20251001-medium | 123/358 = 34.4% | -362 | -403 to -322 | -410 to -324 | 38.6% | -218 | -239 to -198 |
-| claude-haiku-4-5-20251001-minimal/low | 112/292 = 38.4% | -409 | -463 to -361 | -463 to -364 | 42.2% | -236 | -264 to -213 |
-| gpt-6-luna-medium | 101/398 = 25.4% | -421 | -468 to -381 | -466 to -381 | 33.9% | -246 | -268 to -227 |
-| claude-haiku-4-5-20251001-high | 47/135 = 34.8% | -453 | -523 to -389 | -554 to -379 | 42.0% | -247 | -280 to -216 |
-| gpt-6-luna-off/low | 77/396 = 19.4% | -503 | -561 to -455 | -565 to -455 | 28.7% | -302 | -329 to -277 |
-| claude-haiku-4-5-20251001-off | 28/125 = 22.4% | -561 | -653 to -486 | -666 to -477 | 32.6% | -317 | -352 to -283 |
+| claude-opus-5-5-max | 59/82 = 72.0% | +27 | -36 to +105 | -41 to +116 | 63.2% | +10 | -26 to +48 |
+| gpt-6.1-terra-max | 68/100 = 68.0% | +10 | -51 to +76 | -49 to +74 | 62.4% | +10 | -24 to +45 |
+| gpt-6-astra-high | 68/100 = 68.0% | +2 | -55 to +63 | -55 to +67 | 64.0% | +17 | -12 to +48 |
+| Engine/7/2000000/sampled | 829/1120 = 74.0% | +0 | -28 to +27 | -29 to +28 | 65.3% | +0 | -14 to +14 |
+| claude-sonnet-5-5-max | 96/142 = 67.6% | -1 | -54 to +56 | -71 to +82 | 62.6% | +8 | -22 to +37 |
+| Engine/6/20000/sampled | 127/236 = 53.8% | -16 | -52 to +23 | -51 to +23 | 52.8% | -4 | -23 to +17 |
+| claude-opus-5-5-xhigh | 89/170 = 52.4% | -26 | -70 to +21 | -68 to +21 | 52.4% | -7 | -30 to +15 |
+| gpt-6-astra-medium | 169/254 = 66.5% | -30 | -63 to +6 | -62 to +6 | 60.2% | -17 | -35 to +2 |
+| gpt-6.1-sol-max | 80/142 = 56.3% | -33 | -75 to +9 | -78 to +15 | 54.5% | -4 | -27 to +19 |
+| gpt-6.1-terra-xhigh | 71/102 = 69.6% | -35 | -91 to +27 | -90 to +26 | 60.2% | -42 | -74 to -9 |
+| claude-opus-5-5-high | 47/80 = 58.8% | -42 | -105 to +28 | -114 to +33 | 54.7% | -28 | -66 to +11 |
+| claude-sonnet-5-5-xhigh | 105/176 = 59.7% | -50 | -92 to -4 | -101 to +8 | 53.7% | -47 | -69 to -24 |
+| gpt-6.1-terra-medium | 87/130 = 66.9% | -57 | -106 to -3 | -109 to -1 | 59.8% | -43 | -71 to -15 |
+| gpt-6-astra-low | 52/80 = 65.0% | -59 | -121 to +9 | -122 to +9 | 59.4% | -40 | -72 to -6 |
+| gpt-6-astra-off | 51/80 = 63.7% | -80 | -146 to -9 | -144 to -5 | 55.9% | -72 | -106 to -39 |
+| gpt-6.1-sol-low | 51/98 = 52.0% | -87 | -148 to -25 | -141 to -26 | 50.9% | -41 | -72 to -8 |
+| gpt-6.1-sol-xhigh | 52/101 = 51.5% | -91 | -145 to -34 | -144 to -35 | 52.4% | -33 | -63 to -1 |
+| claude-opus-5-5-medium | 188/334 = 56.3% | -96 | -127 to -64 | -124 to -63 | 53.8% | -55 | -71 to -39 |
+| gpt-6.1-terra-high | 51/82 = 62.2% | -109 | -177 to -33 | -180 to -35 | 59.1% | -59 | -94 to -20 |
+| gpt-6.1-sol-medium | 155/271 = 57.2% | -110 | -145 to -73 | -156 to -59 | 56.8% | -45 | -64 to -25 |
+| claude-haiku-5-5-max | 68/111 = 61.3% | -111 | -163 to -58 | -176 to -36 | 58.7% | -59 | -83 to -34 |
+| gpt-6.1-sol-high | 47/99 = 47.5% | -116 | -169 to -62 | -175 to -61 | 48.0% | -59 | -90 to -28 |
+| claude-haiku-5-5-xhigh | 86/158 = 54.4% | -122 | -164 to -77 | -171 to -81 | 50.4% | -92 | -113 to -68 |
+| gpt-6.1-terra-off/low | 145/242 = 59.9% | -125 | -164 to -86 | -163 to -89 | 55.3% | -84 | -103 to -65 |
+| claude-opus-5-5-off/low | 83/160 = 51.9% | -137 | -182 to -88 | -184 to -89 | 54.1% | -64 | -89 to -39 |
+| claude-sonnet-5-5-high | 75/161 = 46.6% | -145 | -196 to -91 | -195 to -97 | 46.9% | -96 | -123 to -68 |
+| claude-haiku-5-5-high | 118/223 = 52.9% | -149 | -188 to -109 | -186 to -112 | 50.8% | -98 | -119 to -77 |
+| claude-haiku-5-5-medium | 229/444 = 51.6% | -165 | -191 to -139 | -189 to -143 | 50.6% | -101 | -114 to -87 |
+| claude-sonnet-5-5-medium | 175/364 = 48.1% | -169 | -200 to -137 | -209 to -131 | 48.8% | -100 | -116 to -84 |
+| gpt-5.6-terra-xhigh | 53/93 = 57.0% | -170 | -236 to -103 | -241 to -109 | 55.1% | -69 | -102 to -37 |
+| gpt-5.6-terra-max | 52/90 = 57.8% | -175 | -247 to -105 | -230 to -120 | 53.8% | -82 | -117 to -46 |
+| gpt-6-luna-xhigh | 79/115 = 68.7% | -187 | -246 to -128 | -231 to -141 | 63.6% | -100 | -133 to -66 |
+| claude-sonnet-5-5-off | 65/164 = 39.6% | -194 | -240 to -147 | -241 to -152 | 42.4% | -126 | -150 to -100 |
+| claude-haiku-5-5-low | 137/278 = 49.3% | -194 | -232 to -158 | -230 to -159 | 51.0% | -109 | -128 to -90 |
+| Engine/2/20000 | 1056/2334 = 45.2% | -197 | -220 to -175 | -221 to -175 | 47.3% | -118 | -130 to -107 |
+| gpt-6-luna-max | 75/112 = 67.0% | -203 | -261 to -140 | -254 to -153 | 63.2% | -104 | -138 to -69 |
+| gpt-5.6-terra-medium | 119/259 = 45.9% | -234 | -273 to -200 | -273 to -196 | 48.0% | -123 | -141 to -105 |
+| gpt-6-luna-high | 116/218 = 53.2% | -242 | -291 to -194 | -292 to -191 | 51.6% | -147 | -170 to -124 |
+| claude-sonnet-5-5-low | 50/159 = 31.4% | -247 | -304 to -197 | -297 to -202 | 39.5% | -143 | -171 to -116 |
+| gpt-5.6-terra-high | 40/91 = 44.0% | -252 | -318 to -189 | -306 to -207 | 49.5% | -105 | -139 to -71 |
+| gpt-5.6-terra-low | 37/91 = 40.7% | -270 | -341 to -209 | -332 to -210 | 45.5% | -127 | -163 to -95 |
+| claude-haiku-5-5-off | 221/668 = 33.1% | -328 | -358 to -301 | -357 to -302 | 38.4% | -204 | -219 to -190 |
+| claude-haiku-4-5-20251001-medium | 123/358 = 34.4% | -362 | -396 to -329 | -403 to -330 | 38.6% | -218 | -236 to -201 |
+| claude-haiku-4-5-20251001-minimal/low | 112/292 = 38.4% | -409 | -455 to -370 | -455 to -372 | 42.2% | -236 | -260 to -216 |
+| gpt-6-luna-medium | 101/398 = 25.4% | -421 | -462 to -387 | -458 to -388 | 33.9% | -246 | -265 to -230 |
+| claude-haiku-4-5-20251001-high | 47/135 = 34.8% | -453 | -512 to -400 | -530 to -390 | 42.0% | -247 | -275 to -222 |
+| gpt-6-luna-off/low | 77/396 = 19.4% | -503 | -551 to -462 | -553 to -463 | 28.7% | -302 | -325 to -281 |
+| claude-haiku-4-5-20251001-off | 28/125 = 22.4% | -561 | -633 to -497 | -649 to -492 | 32.6% | -317 | -346 to -289 |
 
 With a seat term and a round 1 starter term in the fit (position 1 +23 Elo, the starter +36 Elo) the largest rating change is 11.0 Elo.
 
@@ -745,7 +745,7 @@ Reverse pairs: opposite signs for the entrant seated first, observed minus fitte
 | gpt-6.1-terra efforts | 5/7 = 71.4% | +0.76 |
 | all cohorts pooled | 238/483 = 49.3% | -0.11 |
 
-Pair-level effects (all matches of a pair, either order) are exactly opposite for the two entrants: the largest sum of the two entrants' effects over every pair of every cohort is 8.9e-17, because each match's shares sum to 1.
+Pair-level effects (all matches of a pair, either order) are exactly opposite for the two entrants: the largest sum of the two entrants' effects over every pair of every cohort is 1.1e-16, because each match's shares sum to 1.
 
 Cohorts that keep pair effects: none.
 
@@ -2208,60 +2208,60 @@ seed, and its correlation with Round Elo fitted on the other half of the seeds. 
 the same seed-block bootstrap. The table below is the same fit in Python.
 
 <!-- luck:start -->
-6,109 matches, 18,327 rounds. The median 95% half-width falls from ±30 to ±24 Elo (variance of a match's round share 0.085 → 0.058). Spearman rank correlation with the raw ratings 0.972, largest rank change 10. The intervals are measured against the mean config and moved so Engine/7/2000000/sampled reads 0, so they leave out its own noise; its own luck-adjusted interval, -13 to +13, is the uncertainty of that 0.
+6,109 matches, 18,327 rounds. The median 90% half-width falls from ±25 to ±20 Elo (variance of a match's round share 0.085 → 0.058). Spearman rank correlation with the raw ratings 0.972, largest rank change 10. The intervals are measured against the mean config and moved so Engine/7/2000000/sampled reads 0, so they leave out its own noise; its own luck-adjusted interval, -11 to +11, is the uncertainty of that 0.
 
 Bias test: the mean correction per round of each config, seed-clustered, gives chi2 43.5 on 48 configs (p 0.66). Its correlation with Round Elo fitted on the other half of the seeds (20 random halvings) is -0.05.
 
-| config | matches | rounds | Round Elo [95%] | luck-adjusted [95%] |
+| config | matches | rounds | Round Elo [90%] | luck-adjusted [90%] |
 |---|---|---|---|---|
-| gpt-6.1-terra-max | 100 | 300 | +13 [-25, +55] | +20 [-8, +49] |
-| claude-sonnet-5-5-max | 142 | 426 | +8 [-27, +43] | +18 [-9, +46] |
-| Engine/7/2000000/sampled | 1120 | 3360 | +0 [-17, +17] | +0 [-13, +13] |
-| Engine/6/20000/sampled | 236 | 708 | -2 [-25, +22] | -0 [-19, +19] |
-| claude-opus-5-5-max | 82 | 246 | +12 [-30, +57] | -3 [-38, +34] |
-| claude-opus-5-5-xhigh | 170 | 510 | -7 [-35, +21] | -9 [-31, +11] |
-| gpt-6-astra-high | 100 | 300 | +19 [-15, +56] | -11 [-37, +17] |
-| gpt-6.1-sol-max | 142 | 426 | -3 [-32, +25] | -20 [-43, +2] |
-| gpt-6-astra-medium | 254 | 762 | -17 [-39, +5] | -29 [-46, -12] |
-| gpt-6.1-sol-xhigh | 101 | 303 | -33 [-69, +5] | -39 [-67, -11] |
-| claude-sonnet-5-5-xhigh | 176 | 528 | -45 [-70, -18] | -46 [-66, -26] |
-| gpt-6.1-sol-low | 98 | 294 | -38 [-80, +0] | -48 [-75, -20] |
-| gpt-6-astra-low | 80 | 240 | -41 [-78, -3] | -48 [-79, -14] |
-| gpt-6-astra-off | 80 | 240 | -69 [-112, -27] | -48 [-83, -15] |
-| claude-opus-5-5-high | 80 | 240 | -28 [-72, +17] | -52 [-80, -23] |
-| gpt-6.1-terra-high | 82 | 246 | -57 [-100, -12] | -57 [-92, -16] |
-| claude-haiku-5-5-max | 111 | 333 | -60 [-90, -30] | -58 [-85, -29] |
-| claude-opus-5-5-medium | 334 | 1002 | -55 [-73, -36] | -58 [-73, -44] |
-| gpt-6.1-terra-medium | 130 | 390 | -43 [-77, -9] | -59 [-83, -36] |
-| gpt-6.1-terra-xhigh | 102 | 306 | -42 [-80, -5] | -59 [-84, -34] |
-| gpt-6.1-sol-medium | 271 | 813 | -44 [-68, -21] | -60 [-76, -44] |
-| gpt-5.6-terra-max | 90 | 270 | -83 [-124, -39] | -65 [-102, -30] |
-| claude-opus-5-5-off/low | 160 | 480 | -64 [-94, -34] | -69 [-90, -46] |
-| gpt-6.1-sol-high | 99 | 297 | -57 [-93, -19] | -71 [-96, -45] |
-| gpt-5.6-terra-xhigh | 93 | 279 | -69 [-109, -28] | -78 [-113, -42] |
-| claude-haiku-5-5-xhigh | 158 | 474 | -93 [-120, -64] | -83 [-106, -60] |
-| gpt-6.1-terra-off/low | 242 | 726 | -84 [-107, -61] | -90 [-109, -72] |
-| claude-sonnet-5-5-high | 161 | 483 | -94 [-127, -61] | -94 [-119, -71] |
-| claude-sonnet-5-5-medium | 364 | 1092 | -101 [-120, -82] | -97 [-113, -82] |
-| gpt-5.6-terra-high | 91 | 273 | -105 [-147, -64] | -102 [-137, -64] |
-| claude-haiku-5-5-high | 223 | 669 | -98 [-124, -75] | -105 [-126, -85] |
-| claude-haiku-5-5-medium | 444 | 1332 | -101 [-116, -85] | -110 [-122, -98] |
-| gpt-5.6-terra-medium | 259 | 777 | -124 [-145, -100] | -117 [-135, -98] |
-| Engine/2/20000 | 2334 | 7002 | -118 [-132, -105] | -121 [-131, -110] |
-| claude-haiku-5-5-low | 278 | 834 | -110 [-132, -87] | -122 [-140, -104] |
-| gpt-5.6-terra-low | 91 | 273 | -127 [-168, -89] | -123 [-160, -88] |
-| claude-sonnet-5-5-low | 159 | 477 | -141 [-174, -108] | -125 [-150, -100] |
-| gpt-6-luna-max | 112 | 336 | -107 [-148, -67] | -131 [-162, -98] |
-| claude-sonnet-5-5-off | 164 | 492 | -124 [-154, -94] | -132 [-159, -108] |
-| gpt-6-luna-xhigh | 115 | 345 | -103 [-141, -63] | -137 [-166, -110] |
-| gpt-6-luna-high | 218 | 654 | -150 [-177, -123] | -160 [-184, -138] |
-| claude-haiku-5-5-off | 668 | 2004 | -205 [-223, -188] | -208 [-222, -194] |
-| claude-haiku-4-5-20251001-medium | 358 | 1074 | -218 [-240, -197] | -236 [-255, -219] |
-| gpt-6-luna-medium | 398 | 1194 | -247 [-269, -227] | -251 [-268, -235] |
-| claude-haiku-4-5-20251001-high | 135 | 405 | -247 [-280, -217] | -254 [-285, -227] |
-| claude-haiku-4-5-20251001-minimal/low | 292 | 876 | -241 [-267, -217] | -255 [-276, -234] |
-| gpt-6-luna-off/low | 396 | 1188 | -306 [-332, -278] | -306 [-327, -284] |
-| claude-haiku-4-5-20251001-off | 125 | 375 | -319 [-356, -285] | -306 [-334, -280] |
+| gpt-6.1-terra-max | 100 | 300 | +13 [-20, +47] | +20 [-4, +44] |
+| claude-sonnet-5-5-max | 142 | 426 | +8 [-22, +37] | +18 [-4, +41] |
+| Engine/7/2000000/sampled | 1120 | 3360 | +0 [-13, +14] | +0 [-11, +11] |
+| Engine/6/20000/sampled | 236 | 708 | -2 [-21, +19] | -0 [-16, +16] |
+| claude-opus-5-5-max | 82 | 246 | +12 [-24, +51] | -3 [-33, +28] |
+| claude-opus-5-5-xhigh | 170 | 510 | -7 [-31, +16] | -9 [-27, +7] |
+| gpt-6-astra-high | 100 | 300 | +19 [-11, +50] | -11 [-33, +12] |
+| gpt-6.1-sol-max | 142 | 426 | -3 [-26, +21] | -20 [-39, -2] |
+| gpt-6-astra-medium | 254 | 762 | -17 [-36, +2] | -29 [-43, -14] |
+| gpt-6.1-sol-xhigh | 101 | 303 | -33 [-64, -3] | -39 [-62, -16] |
+| claude-sonnet-5-5-xhigh | 176 | 528 | -45 [-67, -22] | -46 [-63, -29] |
+| gpt-6.1-sol-low | 98 | 294 | -38 [-72, -6] | -48 [-71, -24] |
+| gpt-6-astra-low | 80 | 240 | -41 [-72, -10] | -48 [-75, -20] |
+| gpt-6-astra-off | 80 | 240 | -69 [-105, -34] | -48 [-77, -20] |
+| claude-opus-5-5-high | 80 | 240 | -28 [-64, +10] | -52 [-76, -27] |
+| gpt-6.1-terra-high | 82 | 246 | -57 [-92, -18] | -57 [-85, -23] |
+| claude-haiku-5-5-max | 111 | 333 | -60 [-86, -35] | -58 [-81, -33] |
+| claude-opus-5-5-medium | 334 | 1002 | -55 [-70, -39] | -58 [-71, -47] |
+| gpt-6.1-terra-medium | 130 | 390 | -43 [-71, -13] | -59 [-78, -40] |
+| gpt-6.1-terra-xhigh | 102 | 306 | -42 [-73, -11] | -59 [-79, -37] |
+| gpt-6.1-sol-medium | 271 | 813 | -44 [-64, -25] | -60 [-74, -46] |
+| gpt-5.6-terra-max | 90 | 270 | -83 [-119, -46] | -65 [-95, -35] |
+| claude-opus-5-5-off/low | 160 | 480 | -64 [-89, -39] | -69 [-86, -49] |
+| gpt-6.1-sol-high | 99 | 297 | -57 [-88, -25] | -71 [-91, -49] |
+| gpt-5.6-terra-xhigh | 93 | 279 | -69 [-102, -36] | -78 [-107, -48] |
+| claude-haiku-5-5-xhigh | 158 | 474 | -93 [-116, -70] | -83 [-102, -64] |
+| gpt-6.1-terra-off/low | 242 | 726 | -84 [-102, -64] | -90 [-107, -75] |
+| claude-sonnet-5-5-high | 161 | 483 | -94 [-122, -67] | -94 [-115, -74] |
+| claude-sonnet-5-5-medium | 364 | 1092 | -101 [-116, -85] | -97 [-110, -85] |
+| gpt-5.6-terra-high | 91 | 273 | -105 [-139, -71] | -102 [-131, -72] |
+| claude-haiku-5-5-high | 223 | 669 | -98 [-121, -78] | -105 [-122, -90] |
+| claude-haiku-5-5-medium | 444 | 1332 | -101 [-114, -87] | -110 [-121, -100] |
+| gpt-5.6-terra-medium | 259 | 777 | -124 [-142, -104] | -117 [-132, -101] |
+| Engine/2/20000 | 2334 | 7002 | -118 [-129, -107] | -121 [-129, -112] |
+| claude-haiku-5-5-low | 278 | 834 | -110 [-129, -91] | -122 [-138, -107] |
+| gpt-5.6-terra-low | 91 | 273 | -127 [-162, -93] | -123 [-153, -93] |
+| claude-sonnet-5-5-low | 159 | 477 | -141 [-169, -112] | -125 [-147, -104] |
+| gpt-6-luna-max | 112 | 336 | -107 [-141, -72] | -131 [-158, -103] |
+| claude-sonnet-5-5-off | 164 | 492 | -124 [-149, -100] | -132 [-155, -111] |
+| gpt-6-luna-xhigh | 115 | 345 | -103 [-135, -70] | -137 [-160, -115] |
+| gpt-6-luna-high | 218 | 654 | -150 [-173, -127] | -160 [-179, -140] |
+| claude-haiku-5-5-off | 668 | 2004 | -205 [-219, -191] | -208 [-220, -196] |
+| claude-haiku-4-5-20251001-medium | 358 | 1074 | -218 [-237, -200] | -236 [-252, -222] |
+| gpt-6-luna-medium | 398 | 1194 | -247 [-265, -231] | -251 [-265, -238] |
+| claude-haiku-4-5-20251001-high | 135 | 405 | -247 [-275, -222] | -254 [-279, -230] |
+| claude-haiku-4-5-20251001-minimal/low | 292 | 876 | -241 [-262, -221] | -255 [-273, -238] |
+| gpt-6-luna-off/low | 396 | 1188 | -306 [-327, -283] | -306 [-323, -289] |
+| claude-haiku-4-5-20251001-off | 125 | 375 | -319 [-351, -290] | -306 [-330, -284] |
 <!-- luck:end -->
 
 ## Elo from play and move quality
@@ -2270,10 +2270,10 @@ The leaderboard's second rating column (`web/src/arena-viewer/page/play-and-move
 headline rating with the rating its points lost per move predict. Across the configs the headline rating lies close to a line in
 points lost per move (on 3,709 matches: Elo = 126 - 71 x points lost per move, centred on the mean config, correlation -0.96).
 A config's true distance from the line has a spread of its own, about 17 Elo. The line and the spread are fitted together by
-maximum likelihood, each config weighted by the variance of its rating (from its 95% interval) plus the spread plus the slope
+maximum likelihood, each config weighted by the variance of its rating (from its 90% interval) plus the spread plus the slope
 squared times the variance of its points lost (clustered by seed block). Each config then takes the precision-weighted mean of its
 rating and the line's prediction, so a config with few matches leans on its move scores and one with many on its results. The
-median 95% half-width falls from about ±31 to ±24 Elo.
+median 90% half-width falls from about ±26 to ±20 Elo.
 
 It is checked out of sample by splitting the seeds in half 30 times: the combination fitted on one half is closer to the other
 half's luck-adjusted Elo than that half's own rating (RMS error after removing the other half's noise: 16 against 21 Elo over all
