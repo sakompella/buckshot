@@ -57,12 +57,16 @@ interface EloScale {
   readonly ticks: ReadonlyArray<number>;
 }
 
-const eloScaleOf = (ratings: ReadonlyMap<string, Rating>, ranks: ReadonlyMap<string, number>): EloScale => {
-  const ends = [...ratings].filter(([key]) => ranks.has(key)).flatMap(([, { rating, interval }]) => [rating, interval?.lo ?? rating, interval?.hi ?? rating]);
-  const from = Math.floor(Math.min(0, ...ends) / 100) * 100;
-  const to = Math.ceil(Math.max(0, ...ends) / 100) * 100;
+/** Zoomed to the top tiers, where configs overlap; weaker configs clip at the left edge (◂). */
+const ZOOM_TIERS = 3;
+const TICK = 25;
 
-  return { from, to, ticks: Array.from({ length: (to - from) / 100 + 1 }, (_, index) => from + index * 100) };
+const eloScaleOf = (ratings: ReadonlyMap<string, Rating>, ranks: ReadonlyMap<string, number>): EloScale => {
+  const ends = [...ratings].filter(([key, { tier }]) => ranks.has(key) && tier !== null && tier <= ZOOM_TIERS).flatMap(([, { rating, interval }]) => [rating, interval?.lo ?? rating, interval?.hi ?? rating]);
+  const from = Math.floor(Math.min(...ends) / TICK) * TICK;
+  const to = Math.ceil(Math.max(...ends) / TICK) * TICK;
+
+  return { from, to, ticks: Array.from({ length: (to - from) / TICK + 1 }, (_, index) => from + index * TICK).filter((tick) => tick % 100 === 0) };
 };
 
 const percentOf = ({ from, to }: EloScale, elo: number): number => Math.min(100, Math.max(0, ((elo - from) / (to - from)) * 100));
@@ -127,6 +131,7 @@ const rowView = (h: H, m: ModelStats, elo: Rating | undefined, hasLuck: boolean,
     [
       h.td([], [h.span([h.Class("rk")], [elo?.tier == null ? "–" : String(elo.tier)]), ...nameView(h, m)]),
       h.td([h.DataAttribute("label", hasLuck ? "luck-adjusted" : "round elo")], ratingView(h, elo)),
+      h.td([h.Class("barcol")], [eloBarView(h, scale, m, elo)]),
       h.td([h.DataAttribute("label", "match win vs engine")], [matchWinView(elo)]),
       ...(hasLuck ? [h.td([h.DataAttribute("label", "round elo")], ratingView(h, m.rating ?? undefined))] : []),
       ...(hasMoveElo ? [h.td([h.DataAttribute("label", "play and move quality")], ratingView(h, m.moveRating ?? undefined))] : []),
@@ -134,7 +139,6 @@ const rowView = (h: H, m: ModelStats, elo: Rating | undefined, hasLuck: boolean,
       h.td([h.DataAttribute("label", "reasoning tok / move")], [fmtCount(reasoningPerMove(m)), ...unreportedMark(h, m)]),
       h.td([h.DataAttribute("label", "moves with reasoning")], [fmtShareOrDash(reasonedShare(m)), ...unreportedMark(h, m)]),
       h.td([h.DataAttribute("label", "cost / match")], [fmtUsd(m.avgCost)]),
-      h.td([h.Class("barcol")], [eloBarView(h, scale, m, elo)]),
       ...details.map(({ label, note, content }) => h.td([h.Class("detail"), h.DataAttribute("label", label), ], [...content, ...(note === "" ? [] : [noteView(h, note)])])),
     ],
   );
@@ -181,6 +185,7 @@ const fmtShareOrDash = (share: number | null): string => (share === null ? "–"
 const headersOf = (ratingName: string, hasRegret: boolean, hasLuck: boolean, hasMoveElo: boolean): ReadonlyArray<string> => [
   "Model",
   ratingName,
+  "",
   MATCH_WIN,
   ...(hasLuck ? [ROUND_ELO] : []),
   ...(hasMoveElo ? [MOVE_ELO] : []),
@@ -188,7 +193,6 @@ const headersOf = (ratingName: string, hasRegret: boolean, hasLuck: boolean, has
   REASONING,
   REASONED,
   "Cost / match",
-  "",
   "Match wins vs own opponents",
   "Round wins",
   "Cash share",
@@ -248,7 +252,7 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
     [
       h.div([h.Class("lbbar")], [h.h2([], ["Leaderboard"])]),
       h.p([h.Class("sub")], [
-        `${hasLuck ? `${LUCK_ELO} is Round Elo with the luck taken out of each round: its shots, loads, first seat, item deals and the shells that items show. ` : ""}Round Elo is one Bradley-Terry rating fitted over every match on round win share. The depth-7 search engine (Engine/7/2000000/sampled) is fixed at 0, so adding a config does not move the others. The dot is the rating, and the line is its ${INTERVAL_PERCENT} interval over seed blocks: about one in ten true values falls outside it. The vertical line is the depth-7 engine at 0. Configs whose lines do not overlap differ clearly. The number before a config is its tier, and the data cannot put the configs within one tier in order.${zero === null ? "" : ` The 0 is uncertain too: measured against the mean of all configs, the engine's own ${INTERVAL_PERCENT} interval is ${Math.round(zero.lo)} to +${Math.round(zero.hi)}. The other intervals are measured the same way, so they leave out the engine's noise.`} Match wins count only a config's own opponents.`,
+        `${hasLuck ? `${LUCK_ELO} is Round Elo with the luck taken out of each round: its shots, loads, first seat, item deals and the shells that items show. ` : ""}Round Elo is one Bradley-Terry rating fitted over every match on round win share. The depth-7 search engine (Engine/7/2000000/sampled) is fixed at 0, so adding a config does not move the others. The dot is the rating, and the line is its ${INTERVAL_PERCENT} interval over seed blocks: about one in ten true values falls outside it. The vertical line is the depth-7 engine at 0. The scale shows the top three tiers, so an arrow at the end of a line means it runs past the edge. Configs whose lines do not overlap differ clearly. The number before a config is its tier, and the data cannot put the configs within one tier in order.${zero === null ? "" : ` The 0 is uncertain too: measured against the mean of all configs, the engine's own ${INTERVAL_PERCENT} interval is ${Math.round(zero.lo)} to +${Math.round(zero.hi)}. The other intervals are measured the same way, so they leave out the engine's noise.`} Match wins count only a config's own opponents.`,
       ]),
       h.div(
         [h.Class("card")],
