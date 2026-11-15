@@ -1,12 +1,16 @@
 import { groupBy, keyOf, type SeatFull, sumOf } from "./data.ts";
-import { INTERVAL_Z, type Rating } from "./ratings.ts";
+import { type Fitted, INTERVAL_Z, pairsOf, type Rating, withTiers } from "./ratings.ts";
 
 // The Elo from play and move quality: each language-model config's headline rating combined with the rating its points
 // lost per move predict. Across the configs the headline rating lies close to a line in points lost per move, and a
 // config's own distance from the line has a spread of its own, fitted with the line by maximum likelihood. Each config
 // then weighs its two ratings by their precision, so one with few matches leans on its move scores and one with many on
 // its results. A 30-fold split-half test found it closer to the other half's rating than the results alone
-// (docs/arena/analysis/matchups.md).
+// (docs/arena/analysis/matchups.md). A config with fewer than MOVES_BELOW matches also takes it as its headline rating
+// (ADR-0060).
+
+/** Below this many scored two-player matches, a config with scored moves has its Elo from play and move quality as its headline rating. */
+export const MOVES_BELOW = 100;
 
 /** The largest spread of the configs around the line that the fit tries, and its step, in Elo. */
 const MAX_SPREAD = 100;
@@ -110,4 +114,30 @@ export const playAndMoveRatings = (headline: ReadonlyMap<string, Rating>, seats:
       return [point.key, { rating, blocks: headline.get(point.key)?.blocks ?? 0, interval: { lo: rating - half, hi: rating + half }, tier: null }] as const;
     }),
   );
+};
+
+/**
+ * The headline ratings with tiers: the results-only fit, where each config of `combined` with fewer than MOVES_BELOW
+ * scored two-player matches takes its Elo from play and move quality. For the tiers, such a config's results draws are
+ * moved to the combined rating and scaled by the ratio of the two interval widths, so its gaps to the other configs keep
+ * the draws' correlation. A simple approximation: the move scores' own noise enters only through that scale.
+ */
+export const headlineRatings = (results: Fitted, combined: ReadonlyMap<string, Rating>, seats: ReadonlyArray<SeatFull>): ReadonlyMap<string, Rating> => {
+  const matches = groupBy(pairsOf(seats).flat(), keyOf);
+  const ratings = new Map(results.ratings);
+  const draws = new Map(results.draws);
+
+  for (const [key, rating] of combined) {
+    const own = results.ratings.get(key);
+    const ownDraws = results.draws.get(key);
+
+    if ((matches.get(key)?.length ?? 0) >= MOVES_BELOW || own?.interval == null || rating.interval === null || ownDraws === undefined) continue;
+
+    const scale = (rating.interval.hi - rating.interval.lo) / (own.interval.hi - own.interval.lo);
+
+    ratings.set(key, { ...rating, moves: true });
+    draws.set(key, ownDraws.map((draw) => rating.rating + (draw - own.rating) * scale));
+  }
+
+  return withTiers({ ratings, draws }, seats);
 };

@@ -12,6 +12,7 @@ import { baseName, CERTAIN_NAMES, costPerMove, effortLabel, fmtCount, fmtPct, fm
 import { type Derived, LUCK_ELO, type ModelStats, MOVE_ELO, ROUND_ELO } from "./derived.ts";
 import { drillView } from "./drill.ts";
 import { itemIconOf } from "./items.ts";
+import { MOVES_BELOW } from "./play-and-moves.ts";
 import { type Lazy, Message, type Model } from "./model.ts";
 import { ANCHOR, INTERVAL_PERCENT, matchWinVsAnchor, type Rating } from "./ratings.ts";
 
@@ -20,7 +21,7 @@ type H = HtmlBuilder<Message>;
 // One table, ranked by the headline rating (derived.ts), in tiers of configs the data cannot tell apart.
 
 const ratingView = (h: H, elo: Rating | undefined): ReadonlyArray<Html | string> =>
-  elo === undefined ? ["–"] : [`${elo.rating >= 0 ? "+" : ""}${elo.rating.toFixed(0)} `, ...(elo.interval === null ? [] : [h.span([h.Class("pm")], [`[${elo.interval.lo.toFixed(0)}, ${elo.interval.hi.toFixed(0)}]`])])];
+  elo === undefined ? ["–"] : [`${elo.rating >= 0 ? "+" : ""}${elo.rating.toFixed(0)}${elo.moves === true ? "†" : ""} `, ...(elo.interval === null ? [] : [h.span([h.Class("pm")], [`[${elo.interval.lo.toFixed(0)}, ${elo.interval.hi.toFixed(0)}]`])])];
 
 interface Detail {
   readonly label: string;
@@ -107,7 +108,7 @@ const unreportedOf = ({ scoredUnreported, scoredReturned }: ModelStats): string 
 const unreportedMark = (h: H, m: ModelStats): ReadonlyArray<Html | string> => {
   const unreported = unreportedOf(m);
 
-  return unreported === null ? [] : [h.span([h.AriaHidden(true)], [" †"]), noteView(h, `no reasoning count reported on ${unreported}`)];
+  return unreported === null ? [] : [h.span([h.AriaHidden(true)], [" ‡"]), noteView(h, `no reasoning count reported on ${unreported}`)];
 };
 
 /** A config's dot, model name and effort; an effort the measured reasoning disagrees with is marked as requested. */
@@ -171,6 +172,8 @@ export const configPanelView = (h: H, derived: Derived, key: string, lazy: Lazy)
 };
 
 const PROVISIONAL_NOTE = `A faded row with a – for its tier is provisional: it has fewer than ${PROVISIONAL_BELOW} scored matches and no rank.`;
+
+const MOVES_NOTE = `† Includes move quality: this config has fewer than ${MOVES_BELOW} matches.`;
 
 const PROVISIONAL_NOTE_ACCURACY = `A faded row is provisional: it has fewer than ${PROVISIONAL_BELOW} scored matches.`;
 
@@ -293,7 +296,8 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
       termsView(h, "What the columns mean", headers.flatMap((label) => (HEADER_TITLES.has(label) ? [[label, HEADER_TITLES.get(label) ?? ""] as const] : []))),
       ...[
         ...(sameTreatment.length === 0 ? [] : [`${sameTreatment.map(({ label }) => label).join(", ")}: each of these merges two requested efforts into one config. The two ran the same and billed the same reasoning tokens per call.`]),
-        ...(unreported.length === 0 ? [] : [`† The provider reported no reasoning token count on some calls: ${unreported.join("; ")}. Reasoning figures count only the calls that reported one.`]),
+        ...(configs.some(({ key }) => ratings.get(key)?.moves === true) ? [MOVES_NOTE] : []),
+        ...(unreported.length === 0 ? [] : [`‡ The provider reported no reasoning token count on some calls: ${unreported.join("; ")}. Reasoning figures count only the calls that reported one.`]),
         ...(configs.some(isProvisional) ? [PROVISIONAL_NOTE] : []),
         ...(configs.some(isEffortMismatch) ? ["An effort marked (requested) does not match the reasoning that was measured: the config reasoned at effort none, or did not reason at another effort."] : []),
       ].map((note) => h.p([h.Class("sub")], [note])),

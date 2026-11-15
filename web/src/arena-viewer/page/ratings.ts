@@ -186,7 +186,7 @@ const anchored = (centred: ReadonlyMap<string, number>): Map<string, number> => 
 
 export const bradleyTerry = (games: ReadonlyArray<Game>): Map<string, number> => anchored(fitGames(numberGames(games), Int32Array.from(games.keys())));
 
-const pairsOf = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<readonly [SeatFull, SeatFull]> =>
+export const pairsOf = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<readonly [SeatFull, SeatFull]> =>
   [...groupBy(
     seats.filter(({ status }) => status === "completed"),
     ({ matchId }) => matchId,
@@ -218,6 +218,14 @@ export interface Rating {
   readonly interval: { readonly lo: number; readonly hi: number } | null;
   /** The config's tier among the ranked configs, from 1; null for a provisional config. */
   readonly tier: number | null;
+  /** True on a headline rating that is the config's Elo from play and move quality (play-and-moves.ts). */
+  readonly moves?: boolean;
+}
+
+/** Ratings before their tiers, with each config's bootstrap draws (NaN where a resample left it out). */
+export interface Fitted {
+  readonly ratings: ReadonlyMap<string, Rating>;
+  readonly draws: ReadonlyMap<string, Float64Array>;
 }
 
 /** The share of resamples the rating intervals and the tier gaps cover: about one in ten true values falls outside. */
@@ -261,14 +269,14 @@ const tiersOf = (ranked: ReadonlyArray<string>, draws: ReadonlyMap<string, Float
 
 /**
  * Every config's rating from one fit over all the seats' completed two-player matches, with percentile
- * intervals at `INTERVAL_LEVEL` from refitting resamples of whole seed blocks, and its tier. The resamples are centred on the mean config and
+ * intervals at `INTERVAL_LEVEL` from refitting resamples of whole seed blocks. The resamples are centred on the mean config and
  * moved by the point fit's shift, so an interval leaves out the anchor's own noise and the anchor's interval is the
  * uncertainty of the zero. Effort sweeps join the other models through their
  * medium configs, so one scale covers every config. The fit counts each round as a game, in the matches whose
  * rounds are known; its resamples still take whole seed blocks, since a match's rounds are not independent. With
  * `luck`, each match's round wins are first corrected for luck (tools/arena/analysis/aivat.py).
  */
-export const pooledRatings = (seats: ReadonlyArray<SeatFull>, luck: Luck = new Map()): ReadonlyMap<string, Rating> => {
+export const fittedRatings = (seats: ReadonlyArray<SeatFull>, luck: Luck = new Map()): Fitted => {
   const games = gamesOfSeats(seats, luck);
   const numbered = numberGames(games);
   const centred = fitGames(numbered, Int32Array.from(games.keys()));
@@ -292,23 +300,33 @@ export const pooledRatings = (seats: ReadonlyArray<SeatFull>, luck: Luck = new M
 
   for (const { a, b, block } of games) for (const key of [a, b]) spans.set(key, (spans.get(key) ?? new Set<string>()).add(block));
 
+  const ratings = new Map(
+    [...point].map(([key, rating]) => {
+      const sorted = [...(draws.get(key) ?? [])].filter((draw) => !Number.isNaN(draw)).toSorted((left, right) => left - right);
+      const spanned = spans.get(key)?.size ?? 0;
+
+      return [key, { rating, blocks: spanned, interval: spanned < MIN_BLOCKS_FOR_INTERVAL ? null : { lo: quantile(sorted, TAIL), hi: quantile(sorted, 1 - TAIL) }, tier: null }] as const;
+    }),
+  );
+
+  return { ratings, draws };
+};
+
+/** The ratings with their tiers, from the ranked (not provisional) configs' draws. */
+export const withTiers = ({ ratings, draws }: Fitted, seats: ReadonlyArray<SeatFull>): ReadonlyMap<string, Rating> => {
   const scored = groupBy(
     seats.filter(({ status }) => status === "completed"),
     keyOf,
   );
 
-  const ranked = [...point.keys()].filter((key) => !isProvisional({ scored: scored.get(key)?.length ?? 0 })).toSorted((left, right) => (point.get(right) ?? 0) - (point.get(left) ?? 0));
+  const ranked = [...ratings.keys()].filter((key) => !isProvisional({ scored: scored.get(key)?.length ?? 0 })).toSorted((left, right) => (ratings.get(right)?.rating ?? 0) - (ratings.get(left)?.rating ?? 0));
   const tiers = tiersOf(ranked, draws);
 
-  return new Map(
-    [...point].map(([key, rating]) => {
-      const sorted = [...(draws.get(key) ?? [])].filter((draw) => !Number.isNaN(draw)).toSorted((left, right) => left - right);
-      const spanned = spans.get(key)?.size ?? 0;
-
-      return [key, { rating, blocks: spanned, interval: spanned < MIN_BLOCKS_FOR_INTERVAL ? null : { lo: quantile(sorted, TAIL), hi: quantile(sorted, 1 - TAIL) }, tier: tiers.get(key) ?? null }] as const;
-    }),
-  );
+  return new Map([...ratings].map(([key, rating]) => [key, { ...rating, tier: tiers.get(key) ?? null }] as const));
 };
+
+/** Every config's rating, interval and tier from one fit (`fittedRatings`). */
+export const pooledRatings = (seats: ReadonlyArray<SeatFull>, luck: Luck = new Map()): ReadonlyMap<string, Rating> => withTiers(fittedRatings(seats, luck), seats);
 
 const FOLDS = 5;
 

@@ -2,8 +2,8 @@ import { Match, Schema, SchemaTransformation } from "effect";
 
 import { CertainRate, Consistency, type Decisions, ITEMS, NO_GAP, type Seat } from "./api.ts";
 import { addTo, type BlockTally, blockRate, blocksOf, groupBy, keyOf, MIN_BLOCKS_FOR_INTERVAL, meanOf, regretStats, roundResults, type SeatFull, sumOf } from "./page/data.ts";
-import { playAndMoveRatings } from "./page/play-and-moves.ts";
-import { type Luck, pooledRatings } from "./page/ratings.ts";
+import { headlineRatings, playAndMoveRatings } from "./page/play-and-moves.ts";
+import { fittedRatings, type Luck, pooledRatings } from "./page/ratings.ts";
 
 // What the arena page shows, worked out once from every seat and agent move: per config and per pair of configs, never
 // per match or per move. The viewer server serves the set at /api/agg/<name> and scripts/arena-export.ts writes it as
@@ -18,7 +18,7 @@ const Interval = Schema.Struct({ lo: Schema.Number, hi: Schema.Number });
 
 export const Rate = Schema.Struct({ k: Schema.Number, n: Schema.Number, rate: Real, lo: Real, hi: Real, blocks: Schema.Number });
 
-const RatingSchema = Schema.Struct({ rating: Schema.Number, blocks: Schema.Number, interval: Schema.NullOr(Interval), tier: Schema.NullOr(Schema.Number) });
+const RatingSchema = Schema.Struct({ rating: Schema.Number, blocks: Schema.Number, interval: Schema.NullOr(Interval), tier: Schema.NullOr(Schema.Number), moves: Schema.optionalKey(Schema.Boolean) });
 
 const Item = Schema.Literals(ITEMS);
 
@@ -64,7 +64,10 @@ export const ConfigSummary = Schema.Struct({
   scoredUnreported: Schema.Number,
   /** Round Elo from one fit over every match (page/ratings.ts); null for a config with no rated match. */
   rating: Schema.NullOr(RatingSchema),
-  /** The same fit with each match's round wins corrected for luck (tools/arena/analysis/aivat.py); null without a luck database. */
+  /**
+   * The headline: the same fit with each match's round wins corrected for luck (tools/arena/analysis/aivat.py), or the
+   * Elo from play and move quality for a config with scored moves and fewer than MOVES_BELOW matches; null without a luck database.
+   */
   luckRating: Schema.NullOr(RatingSchema),
   /** The headline rating combined with the rating its points lost per move predict (page/play-and-moves.ts); null without scored moves. */
   moveRating: Schema.NullOr(RatingSchema),
@@ -390,8 +393,9 @@ export const pairsOf = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<Pair> =>
 
 export const configSummaries = (seats: ReadonlyArray<SeatFull>, decisions: Pick<Decisions, "seat" | "legalUse" | "useItem">, luck: Luck = new Map()): ReadonlyArray<ConfigSummary> => {
   const ratings = pooledRatings(seats);
-  const luckRatings = luck.size === 0 ? new Map<string, never>() : pooledRatings(seats, luck);
-  const moveRatings = playAndMoveRatings(luck.size === 0 ? ratings : luckRatings, seats);
+  const luckFit = luck.size === 0 ? null : fittedRatings(seats, luck);
+  const moveRatings = playAndMoveRatings(luckFit?.ratings ?? ratings, seats);
+  const luckRatings = luckFit === null ? new Map<string, never>() : headlineRatings(luckFit, moveRatings, seats);
   const favoriteOf = favorites(seats, decisions);
 
   return [...groupBy(seats, keyOf)].flatMap(([key, started]) => {

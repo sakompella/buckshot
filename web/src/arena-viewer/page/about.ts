@@ -5,6 +5,7 @@ import type { Runs } from "../aggregates.ts";
 import { isPromptedOff } from "./data.ts";
 import { type Derived, MOVE_ELO } from "./derived.ts";
 import { forestView } from "./forest.ts";
+import { MOVES_BELOW } from "./play-and-moves.ts";
 import { INTERVAL_PERCENT } from "./ratings.ts";
 import { Message } from "./model.ts";
 
@@ -86,7 +87,7 @@ export const aboutView = (h: H, derived: Derived): Html => {
         ? [
             h.p([h.Class("sub")], [
               h.b([], ["Luck-adjusted Elo. "]),
-              "The same fit, with each round's luck taken out: the shots, loads, first seat, item deals and the shells that items show. The correction method is AIVAT. It estimates the same strengths with less noise. This is the headline rating, and it ranks the leaderboard and the results summary.",
+              `The same fit, with each round's luck taken out: the shots, loads, first seat, item deals and the shells that items show. The correction method is AIVAT. It estimates the same strengths with less noise. This is the headline rating, and it ranks the leaderboard and the results summary. A language-model config with fewer than ${MOVES_BELOW} matches takes its ${MOVE_ELO} instead.`,
             ]),
           ]
         : []),
@@ -94,7 +95,7 @@ export const aboutView = (h: H, derived: Derived): Html => {
         ? [
             h.p([h.Class("sub")], [
               h.b([], [`${MOVE_ELO}. `]),
-              "A second column. It never sets the ranking. Across the language-model configs, the headline rating falls close to a straight line when set against points lost per move, as the move scorer counts them. Each config's rating is combined with the rating its points lost predict, and each of the two is weighted by how precise it is. So a config with few matches leans on its moves, and a config with many matches leans on its results. This trusts the move scorer: a config whose strength the scorer cannot see is pulled toward the line.",
+              `A second column. Across the language-model configs, the headline rating falls close to a straight line when set against points lost per move, as the move scorer counts them. Each config's rating is combined with the rating its points lost predict, and each of the two is weighted by how precise it is. So a config with few matches leans on its moves, and a config with many matches leans on its results. This trusts the move scorer: a config whose strength the scorer cannot see is pulled toward the line. Below ${MOVES_BELOW} matches it is also the headline rating. A split-half test found it closer to the other half's rating than the results alone for these configs.`,
             ]),
           ]
         : []),

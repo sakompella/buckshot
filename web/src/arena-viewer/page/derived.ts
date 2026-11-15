@@ -38,7 +38,8 @@ export interface Derived {
   readonly kept: ReadonlySet<string>;
   /**
    * The headline rating per config, fitted over every match of every tournament: filters pick rows, not the scale. It
-   * is the luck-adjusted Round Elo when the aggregates carry it, else Round Elo.
+   * is the luck-adjusted Round Elo when the aggregates carry it (with move quality for configs with few matches, ADR-0060),
+   * else Round Elo.
    */
   readonly ratings: ReadonlyMap<string, Rating>;
   /** The headline rating's name. */

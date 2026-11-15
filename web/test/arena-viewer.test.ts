@@ -11,7 +11,7 @@ import { type BlockTally, baseName, blockRate, fmtBytes, groupBy, isEngine, isFi
 import { mulberry32 } from "../src/arena/tournament-stats.ts";
 import { ANCHOR, bradleyTerry, type Game, heldOutRatings, matchWinVsAnchor, pooledRatings, type Rating } from "../src/arena-viewer/page/ratings.ts";
 import { droppedConfigs, oddsPanels } from "../src/arena-viewer/page/odds.ts";
-import { playAndMoveRatings } from "../src/arena-viewer/page/play-and-moves.ts";
+import { headlineRatings, MOVES_BELOW, playAndMoveRatings } from "../src/arena-viewer/page/play-and-moves.ts";
 import { rowsOf } from "../src/arena-viewer/page/matches.ts";
 import { modelStatsOf, ranksOf } from "../src/arena-viewer/page/derived.ts";
 import { inRankOrder } from "../src/arena-viewer/page/leaderboard.ts";
@@ -311,6 +311,20 @@ test("the Elo from play and move quality leans on the moves where the results ar
 
   expect(ratingOf("unsure")).toBeGreaterThan(25);
   expect(Math.abs(ratingOf("sure"))).toBeLessThan(5);
+});
+
+test("the headline takes the Elo from play and move quality below MOVES_BELOW matches, and the results from there on", () => {
+  const seatsOf = (model: string, matches: number) =>
+    Array.from({ length: matches }, (_match, index) => [0, 1].map((position): SeatFull => ({ ...SEAT, model: position === 0 ? model : "opponent", player: position === 0 ? "A" : "B", position, matchId: `${model}${index}`, potShare: null, regret: null }))).flat();
+
+  const [thin, thick] = ["thin", "thick"].map((model) => keyOf({ model, effort: "medium" }));
+  const keys = [thin ?? "", thick ?? ""];
+  const results = { ratings: new Map(keys.map((key) => [key, { rating: 0, blocks: 4, interval: { lo: -20, hi: 20 }, tier: null }] as const)), draws: new Map(keys.map((key) => [key, Float64Array.from([-10, 0, 10])] as const)) };
+  const combined = new Map(keys.map((key) => [key, { rating: 50, blocks: 4, interval: { lo: 40, hi: 60 }, tier: null }] as const));
+  const headline = headlineRatings(results, combined, [...seatsOf("thin", MOVES_BELOW - 1), ...seatsOf("thick", MOVES_BELOW)]);
+
+  expect(headline.get(thin ?? "")).toEqual({ rating: 50, blocks: 4, interval: { lo: 40, hi: 60 }, tier: 1, moves: true });
+  expect(headline.get(thick ?? "")).toEqual({ rating: 0, blocks: 4, interval: { lo: -20, hi: 20 }, tier: 2 });
 });
 
 test("the 99th-percentile loss counts the moves that lost nothing, by nearest rank", () => {
