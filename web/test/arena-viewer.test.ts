@@ -7,7 +7,7 @@ import { configSummaries, ODDS_BINS, oddsBinOf, selfShotTallies } from "../src/a
 import { chamberPatterns, roundStory, ShellTracker } from "../src/arena-viewer/analysis.ts";
 import type { Seat, SeatRegret } from "../src/arena-viewer/api.ts";
 import { isEngine as isArenaEngine } from "../src/arena/agent.ts";
-import { type BlockTally, baseName, blockRate, fmtBytes, groupBy, isEngine, keyOf, labelOf, matchRows, quantile, regretStats, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
+import { type BlockTally, baseName, blockRate, fmtBytes, groupBy, isEngine, isFixedPlayer, keyOf, labelOf, matchRows, quantile, regretStats, type SeatFull, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { mulberry32 } from "../src/arena/tournament-stats.ts";
 import { ANCHOR, bradleyTerry, type Game, heldOutRatings, matchWinVsAnchor, pooledRatings, type Rating } from "../src/arena-viewer/page/ratings.ts";
 import { droppedConfigs, oddsPanels } from "../src/arena-viewer/page/odds.ts";
@@ -461,6 +461,15 @@ test("the page reads engine seats as the arena defines them", () => {
   for (const seat of ["Engine/2/20000", "Engine/6/20000/sampled", "Engine/6/20000/static", "Engine/x/1", "claude-opus-5-5"]) expect(isEngine(seat)).toBe(isArenaEngine(seat));
 
   expect(baseName("Engine/6/20000/sampled")).toBe("Search engine, depth 6 (sampled reloads)");
+});
+
+test("the dealer AIs are fixed players like the engines, and no model is", () => {
+  for (const seat of ["Story", "DoN", "Engine/2/20000"]) expect(isFixedPlayer(seat)).toBe(true);
+
+  for (const seat of ["claude-opus-5-5", "toString", "story"]) expect(isFixedPlayer(seat)).toBe(false);
+
+  expect(baseName("DoN")).toBe("Double or Nothing dealer AI");
+  expect(baseName("toString")).toBe("toString");
 });
 
 test("the anchor is rated 0, and an even match against it is a coin flip", () => {

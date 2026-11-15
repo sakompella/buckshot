@@ -2,7 +2,7 @@ import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { anchorId, linScale, logScale, REFERENCE, REFERENCE_DASH, selectView, tipView, toggleView } from "./charts.ts";
-import { baseName, DEFAULT_EFFORT, effortLabel, fmtCount, fmtPct, fmtRating, fmtUsd, isClaude, isEngine, isProvisional, reasoningPerMove } from "./data.ts";
+import { baseName, DEFAULT_EFFORT, effortLabel, fmtCount, fmtPct, fmtRating, fmtUsd, isClaude, isFixedPlayer, isProvisional, reasoningPerMove } from "./data.ts";
 import { leader, measureText, placeLabels, uncrowded } from "./labels.ts";
 import { memoLast, type ModelStats } from "./derived.ts";
 import { Message, type Model, type ScatterAxis } from "./model.ts";
@@ -165,7 +165,7 @@ const pointsOf = memoLast(
   (stats: ReadonlyArray<ModelStats>, ratings: ReadonlyMap<string, Rating>, ranks: ReadonlyMap<string, number>): Readonly<Record<ScatterAxis, ReadonlyArray<Point>>> => {
     const on = (axis: ScatterAxis): ReadonlyArray<Point> =>
       stats.flatMap((m) => {
-        if (isEngine(m.model)) return [];
+        if (isFixedPlayer(m.model)) return [];
 
         const rating = ratings.get(m.key)?.rating;
         const rank = ranks.get(m.key);
@@ -206,7 +206,7 @@ const domainOf = memoLast((every: ReadonlyArray<ModelStats>, ratings: ReadonlyMa
   const xOf = (axis: ScatterAxis) =>
     extent(
       rated.flatMap((m) => {
-        if (isEngine(m.model)) return [];
+        if (isFixedPlayer(m.model)) return [];
 
         const value = AXES[axis].valueOf(m);
 
@@ -424,7 +424,7 @@ export const scatterView = (
           ...stats.flatMap((m) => {
             const rating = ratings.get(m.key)?.rating;
 
-            return isEngine(m.model) && rating !== undefined
+            return isFixedPlayer(m.model) && rating !== undefined
               ? [
                   h.g(
                     [h.Class("anchor")],

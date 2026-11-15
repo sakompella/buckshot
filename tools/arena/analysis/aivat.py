@@ -139,7 +139,8 @@ class Data:
     matches: pd.DataFrame  # mi, match_id, seed, block, first, second, letter1, letter2, starter
     rounds: pd.DataFrame  # mi, r (0-based), O (position 1 won)
     dec: pd.DataFrame  # knowledge decisions of the rated matches
-    consumed: dict  # match_id -> ordinal -> shells consumed before it
+    consumed: dict  # match_id -> ordinal -> shells consumed before it, counted from the public events
+    loads: dict  # match_id -> (shells consumed before it, composition) of each load, in order
     inverters: dict  # match_id -> ordinals of inverter uses
     clues: pd.DataFrame
     outcomes: dict  # match_id -> live per shot, in order
@@ -177,8 +178,16 @@ def read(db_path: str, knowledge_path: str, regret_path: str) -> Data:
     )
     search = pd.read_sql("SELECT match_id, ordinal, best_score / 1e6 B, chosen_score / 1e6 Q FROM regret WHERE status = 'searched'", connect(regret_path))
     dec = dec[dec.match_id.isin(ids)].merge(search, on=["match_id", "ordinal"], how="left").sort_values(["match_id", "ordinal"]).reset_index(drop=True)
-    spends = (dec.shot.notna() | (dec.item == "Beer")).astype(int)  # a shot, or beer used or stolen, spends a shell
-    consumed = {m: dict(zip(g.ordinal, np.concatenate([[0], np.cumsum(spends[g.index].values)[:-1]]))) for m, g in dec.groupby("match_id")}
+    shells, loads = defaultdict(list), defaultdict(list)  # per match: the event index of each shell shot or ejected, and of each load with its composition
+    for match, at, kind, text in db.execute("SELECT match_id, idx, kind, json FROM events WHERE kind IN ('Fired', 'Ejected', 'Loaded') ORDER BY match_id, idx"):
+        if kind == "Loaded":
+            load = json.loads(text)["load"]
+            loads[match].append((at, (load["live"], load["blank"])))
+        else:
+            shells[match].append(at)
+    before = {(m, o): e for m, o, e in db.execute("SELECT match_id, ordinal, events_before FROM decisions")}
+    consumed = {m: {o: bisect.bisect_left(shells[m], before[(m, o)]) for o in g.ordinal} for m, g in dec.groupby("match_id")}
+    starts = {m: [(bisect.bisect_left(shells[m], at), comp) for at, comp in ls] for m, ls in loads.items()}
     inverters = defaultdict(list)
     for t in dec[dec.item == "Inverter"].itertuples():
         inverters[t.match_id].append(t.ordinal)
@@ -186,7 +195,7 @@ def read(db_path: str, knowledge_path: str, regret_path: str) -> Data:
     shots = shot_outcomes(db)
     outcomes = {m: shots[m] for m in ids}
     grants, deals = deals_of(db, dict(zip(matches.match_id, matches.mi)))
-    return Data(matches, pd.DataFrame(rounds, columns=["mi", "r", "O"]), dec, consumed, inverters, clues, outcomes, shot_outcomes(db, "Ejected"), grants, deals)
+    return Data(matches, pd.DataFrame(rounds, columns=["mi", "r", "O"]), dec, consumed, starts, inverters, clues, outcomes, shot_outcomes(db, "Ejected"), grants, deals)
 
 
 def shots_of(d: Data) -> pd.DataFrame:
@@ -334,15 +343,19 @@ def load_corrections(d: Data) -> np.ndarray:
     dec["start"] = dec.C - (dec.shown_live + dec.shown_blank - dec.remaining)
     rows = []
     for m, g in dec.groupby("match_id"):
-        firsts = g.groupby("start").first().reset_index()
-        comps = [(int(a), int(b)) for a, b in zip(firsts.shown_live, firsts.shown_blank)]
-        for t, comp, chances in zip(firsts.itertuples(), comps, deck_chances(comps)):
+        # The first decision of a load, before any shell of it is gone: a dealer AI's decisions are not in the record, so a load can open with its moves.
+        firsts = g[g.remaining == g.shown_live + g.shown_blank].groupby("start").first().reset_index()
+        chances = dict(zip((start for start, _ in d.loads[m]), deck_chances([comp for _, comp in d.loads[m]])))
+        for t in firsts.itertuples():
+            comp = (int(t.shown_live), int(t.shown_blank))
+            if (t.start, comp) not in d.loads[m]:
+                raise ValueError(f"match {m}: the decision at shell {t.start} shows load {comp}, which the events do not load there")
             if (mi_of[m], t.round) not in O:
                 continue
             h = json.loads(t.health_json)
             pos = pos_of[(m, t.player)]
             o1 = O[(mi_of[m], t.round)]
-            rows.append((mi_of[m], t.round, pos, comp, chances, h[0]["health"], h[1].get("health", np.nan), o1 if pos == 1 else 1 - o1))
+            rows.append((mi_of[m], t.round, pos, comp, chances[t.start], h[0]["health"], h[1].get("health", np.nan), o1 if pos == 1 else 1 - o1))
     ld = pd.DataFrame(rows, columns=["mi", "round", "pos", "comp", "chances", "hm", "ho", "Om"])
 
     def features(df, comps):

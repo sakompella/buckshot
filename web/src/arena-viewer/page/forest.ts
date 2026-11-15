@@ -1,6 +1,6 @@
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { fmtRating, isClaude, isEngine } from "./data.ts";
+import { fmtRating, isClaude, isFixedPlayer } from "./data.ts";
 import type { Derived, ModelStats } from "./derived.ts";
 import { inRankOrder } from "./leaderboard.ts";
 import type { Message } from "./model.ts";
@@ -35,8 +35,8 @@ const ratedOf = (stats: ReadonlyArray<ModelStats>, ratings: ReadonlyMap<string, 
 
 export const forestView = (h: H, derived: Derived): Html => {
   const ranked = inRankOrder(derived.pooled, derived.ranks, derived.ratings).filter(({ key }) => derived.ranks.has(key));
-  const rows = ratedOf(ranked.filter(({ model }) => !isEngine(model)), derived.ratings);
-  const anchors = ratedOf(ranked.filter(({ model }) => isEngine(model)), derived.ratings);
+  const rows = ratedOf(ranked.filter(({ model }) => !isFixedPlayer(model)), derived.ratings);
+  const anchors = ratedOf(ranked.filter(({ model }) => isFixedPlayer(model)), derived.ratings);
 
   if (rows.length === 0) return h.p([h.Class("k")], ["No ranked config for this filter."]);
 

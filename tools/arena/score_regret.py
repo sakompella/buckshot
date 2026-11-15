@@ -154,8 +154,8 @@ def git_commit(checkout: Path) -> str:
 
 @dataclass(frozen=True)
 class Settings:
-    depth: int = 6
-    budget: int = 20000
+    depth: int = 7
+    budget: int = 1_000_000
     samples: int = 256
     threads: int = max(1, (os.cpu_count() or 2) // 2)
     jobs: int = 4

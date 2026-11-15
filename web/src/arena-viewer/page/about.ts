@@ -27,7 +27,7 @@ export const summaryView = (h: H, derived: Derived): Html =>
       h.p([h.Class("sub")], [
         `${derived.ratingName} of every ranked config, best first`,
         ...(derived.runs === undefined ? [] : [`, from matches played ${runDates(derived.runs)}`]),
-        `. Every match of every tournament counts, and the depth-7 search engine sits at 0. The dot is a config's rating and the line is its ${INTERVAL_PERCENT} interval. When two lines overlap, the data cannot tell those configs apart. The dashed lines are the search engines, fixed players that About explains. The leaderboard groups the configs into tiers.`,
+        `. Every match of every tournament counts, and the depth-7 search engine sits at 0. The dot is a config's rating and the line is its ${INTERVAL_PERCENT} interval. When two lines overlap, the data cannot tell those configs apart. The dashed lines are the search engines and the dealer AIs, fixed players that About explains. The leaderboard groups the configs into tiers.`,
       ]),
       forestView(h, derived),
     ],
@@ -75,8 +75,8 @@ export const aboutView = (h: H, derived: Derived): Html => {
         ...(isOnline ? [] : [" The Matches section lists every match."]),
       ]),
       h.p([h.Class("sub")], [
-        h.b([], ["Search engines. "]),
-        "The configs named Search engine are not language models. They are the arena's own minimax search program, which looks ahead through the possible moves, assumes the opponent also plays its best, and plays the move that scores best. Depth is how many decisions ahead it looks. With sampled reloads, it values a new load by trying a sample of the possible deals. Search engines cost nothing, so the charts draw them as reference lines.",
+        h.b([], ["Search engines and dealer AIs. "]),
+        "The configs named Search engine are not language models. They are the arena's own minimax search program, which looks ahead through the possible moves, assumes the opponent also plays its best, and plays the move that scores best. Depth is how many decisions ahead it looks. With sampled reloads, it values a new load by trying a sample of the possible deals. Search engines cost nothing, so the charts draw them as reference lines. The Story and Double or Nothing dealer AIs, the game's own computer players, are drawn the same way: they call no model and cost nothing.",
       ]),
       h.p([h.Class("sub")], [
         h.b([], ["Round Elo. "]),
@@ -100,7 +100,7 @@ export const aboutView = (h: H, derived: Derived): Html => {
         : []),
       h.p([h.Class("sub")], [
         h.b([], ["What to keep in mind. "]),
-        `Configs are grouped in tiers. Going down the ranking, a new tier starts at the first config that is clearly below the top config of the current tier: the ${INTERVAL_PERCENT} bootstrap interval of the gap between the two does not include 0. Within a tier the order is not settled. Provisional configs (fewer than 20 scored matches) have no tier. Points lost and accuracy are measured against a minimax player, not against perfect play; certain mistakes do not need such a player. Costs are the providers' list prices applied to the usage, not what anyone was billed.`,
+        `Configs are grouped in tiers. Going down the ranking, a new tier starts at the first config that is clearly below the top config of the current tier: the ${INTERVAL_PERCENT} bootstrap interval of the gap between the two does not include 0. Within a tier the order is not settled. Provisional configs (fewer than 20 scored matches) have no tier. Points lost and accuracy are measured against a minimax search to depth 7, not against perfect play; certain mistakes do not need such a player. Costs are the providers' list prices applied to the usage, not what anyone was billed.`,
       ]),
     ],
   );

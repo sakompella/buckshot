@@ -83,14 +83,20 @@ const ENGINE = /^Engine\/(\d+)\/\d+(\/sampled)?$/;
 
 export const isEngine = (model: string): boolean => ENGINE.test(model);
 
-/** The page's name for an engine seat such as `Engine/6/20000/sampled`: its depth, and how it values a reload. */
-const engineName = (model: string): string | undefined => {
+// The two dealer AIs' seat labels (BOTS in arena/tournament.ts), with the page's names for them.
+const BOT_NAMES = new Map([["Story", "Story dealer AI"], ["DoN", "Double or Nothing dealer AI"]]);
+
+/** A fixed player, not a model: an engine or a dealer AI. The charts draw them as reference lines. */
+export const isFixedPlayer = (model: string): boolean => isEngine(model) || BOT_NAMES.has(model);
+
+/** The page's name for an engine seat such as `Engine/6/20000/sampled` (its depth, and how it values a reload) or a dealer AI. */
+const fixedName = (model: string): string | undefined => {
   const [, depth, sampled] = ENGINE.exec(model) ?? [];
 
-  return depth === undefined ? undefined : `Search engine, depth ${depth}${sampled === undefined ? "" : " (sampled reloads)"}`;
+  return depth === undefined ? BOT_NAMES.get(model) : `Search engine, depth ${depth}${sampled === undefined ? "" : " (sampled reloads)"}`;
 };
 
-export const baseName = (model: string): string => engineName(model) ?? baseOf(model)?.name ?? model;
+export const baseName = (model: string): string => fixedName(model) ?? baseOf(model)?.name ?? model;
 
 export const colorOf = (model: string): string => {
   const base = baseOf(model);
