@@ -4,6 +4,8 @@ import { dirname, relative, resolve } from "node:path";
 
 import type { Database } from "bun:sqlite";
 
+import { codeOnly } from "./code-only.ts";
+
 const REPO = resolve(import.meta.dir, "../../..");
 
 const sha = (text: string): string => createHash("sha256").update(text).digest("hex");
@@ -25,11 +27,13 @@ const importerFiles = (): ReadonlyArray<string> => {
   return [...seen, resolve(import.meta.dir, "schema.sql")].map((path) => relative(REPO, path)).toSorted();
 };
 
-/** Each importer file, repository-relative, with its SHA-256. */
-export const IMPORTER_FILES: Readonly<Record<string, string>> = Object.fromEntries(importerFiles().map((path) => [path, sha(readFileSync(resolve(REPO, path), "utf8"))]));
+/** Each importer file, repository-relative, with the SHA-256 of its code alone: a comment or whitespace edit leaves it unchanged. */
+export const IMPORTER_FILES: Readonly<Record<string, string>> = Object.fromEntries(importerFiles().map((path) => [path, sha(codeOnly(readFileSync(resolve(REPO, path), "utf8"), path.endsWith(".sql") ? "sql" : "js"))]));
 
-/** The importer code hash every validated match is stamped with. */
+/** The importer code hash every validated match is stamped with. The Python analysis reads it by running this file. */
 export const IMPORTER_HASH = sha(JSON.stringify(IMPORTER_FILES));
+
+if (import.meta.main) console.log(IMPORTER_HASH);
 
 /** Refuses a database with a match that was validated by other importer, replay or rules code than this checkout's. */
 export const assertCurrentImport = (db: Database): void => {

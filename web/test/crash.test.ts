@@ -46,11 +46,11 @@ const POINTS = [
 
 const play = async (dir: string, point: string, occurrence: number, signal = "exit"): Promise<number> => Bun.spawn(["nice", "-n", "10", "bun", "test/crash-run.ts", dir, point, String(occurrence), signal], { cwd: WEB, env: { ...process.env, CRASH_TEST_EFFORT: undefined }, stdout: "ignore", stderr: "pipe" }).exited;
 
-const readManifest = (dir: string) => Schema.decodeUnknownSync(Schema.fromJsonString(RunManifest))(readFileSync(join(dir, "manifest.json"), "utf8"));
+const readManifest = (dir: string) => Schema.decodeSync(Schema.fromJsonString(RunManifest))(readFileSync(join(dir, "manifest.json"), "utf8"));
 
 const ManifestSha = Schema.Struct({ move_log_sha: Schema.String });
 
-const moveLogSha = (dir: string) => Schema.decodeUnknownSync(Schema.fromJsonString(ManifestSha))(readFileSync(join(dir, "manifest.json"), "utf8")).move_log_sha;
+const moveLogSha = (dir: string) => Schema.decodeSync(Schema.fromJsonString(ManifestSha))(readFileSync(join(dir, "manifest.json"), "utf8")).move_log_sha;
 
 const eventsOf = (dir: string) => readJsonl(readFileSync(join(dir, "events.jsonl"), "utf8"), decodeEventLine);
 

@@ -57,7 +57,7 @@ const api = (path: string, init?: RequestInit) =>
       catch: (error) => fail(String(error)),
     });
 
-    if (!response.ok) return yield* Effect.fail(fail(`${path}: ${response.status} ${JSON.stringify(body)}`));
+    if (!response.ok) return yield* fail(`${path}: ${response.status} ${JSON.stringify(body)}`);
 
     return (yield* decodeReply(body).pipe(Effect.mapError((error) => fail(`${path}: ${error.message}`)))).result;
   });
@@ -82,14 +82,14 @@ const check = Effect.gen(function* () {
   const online = onlineFiles();
   const problems = uploadProblems(online);
 
-  return problems.length === 0 ? dataOf(online) : yield* Effect.fail(fail(`web/online must not be uploaded:\n${problems.join("\n")}`));
+  return problems.length === 0 ? dataOf(online) : yield* fail(`web/online must not be uploaded:\n${problems.join("\n")}`);
 });
 
 const preview = (label: string) =>
   Effect.gen(function* () {
     const alias = aliasOf(label);
 
-    if (alias === undefined) return yield* Effect.fail(fail(`no usable preview alias in ${JSON.stringify(label)}`));
+    if (alias === undefined) return yield* fail(`no usable preview alias in ${JSON.stringify(label)}`);
 
     const local = yield* check;
 
@@ -98,18 +98,18 @@ const preview = (label: string) =>
     const output = yield* cf("workers", "versions", "create", "--mode", "online", "--preview-alias", alias, "--message", `preview ${alias}`);
     const versionId = versionIdOf(output);
 
-    if (versionId === undefined) return yield* Effect.fail(fail(`no version id in the upload output:\n${output}`));
+    if (versionId === undefined) return yield* fail(`no version id in the upload output:\n${output}`);
 
     const subdomain = (yield* api("/workers/subdomain"))?.subdomain;
 
-    if (subdomain === undefined) return yield* Effect.fail(fail("the account has no workers.dev subdomain"));
+    if (subdomain === undefined) return yield* fail("the account has no workers.dev subdomain");
 
     const url = previewUrl(alias, subdomain);
     const problems = yield* Effect.tryPromise({ try: () => siteProblems(fetch, url, local), catch: (error) => fail(String(error)) });
 
     console.log(JSON.stringify({ versionId, url, problems }));
 
-    return problems.length === 0 ? 0 : yield* Effect.fail(fail(`${url} fails its checks:\n${problems.join("\n")}`));
+    return problems.length === 0 ? 0 : yield* fail(`${url} fails its checks:\n${problems.join("\n")}`);
   });
 
 const promote = (versionId: string) =>
@@ -125,7 +125,7 @@ const program = Effect.gen(function* () {
 
   if (command === "promote" && version !== undefined) return yield* promote(version);
 
-  return yield* Effect.fail(fail(USAGE));
+  return yield* fail(USAGE);
 });
 
 await runMain(program);

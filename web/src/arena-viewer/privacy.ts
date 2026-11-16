@@ -54,7 +54,7 @@ const allowedStrings = (files: ReadonlyMap<string, string>): ReadonlySet<string>
 };
 
 const fileViolations = (name: FileName, json: string, allowed: ReadonlySet<string>): ReadonlyArray<string> => {
-  const decoded = Schema.decodeUnknownResult(Schema.fromJsonString(schemaOf(name)))(json, STRICT);
+  const decoded = Schema.decodeResult(Schema.fromJsonString(schemaOf(name)))(json, STRICT);
   const undecodable = Result.isFailure(decoded) ? [`${name}: ${decoded.failure.message}`] : [];
 
   const strings = stringsOf(json).flatMap(({ text, isKey }) => {

@@ -32,4 +32,4 @@ export type ParsedArgs = ReturnType<typeof parseArgs>["values"];
 export const decodeArgs =
   <A>(schema: Schema.Decoder<A>, usage: string) =>
   (values: ParsedArgs) =>
-    Schema.decodeUnknownEffect(schema)(values).pipe(Effect.mapError(() => new ScriptError({ message: usage, exitCode: 1 })));
+    Schema.decodeEffect(schema)(values).pipe(Effect.mapError(() => new ScriptError({ message: usage, exitCode: 1 })));

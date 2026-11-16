@@ -32,7 +32,7 @@ const program = Effect.gen(function* () {
   const { out, regret, knowledge, "certain-mistakes": certain, luck } = yield* decodeArgs(Flags, USAGE)(parsed.values);
   const [dbPath] = parsed.positionals;
 
-  if (dbPath === undefined || isMissing(dbPath) || isMissing(regret) || isMissing(knowledge) || isMissing(certain) || isMissing(luck)) return yield* Effect.fail(usage());
+  if (dbPath === undefined || isMissing(dbPath) || isMissing(regret) || isMissing(knowledge) || isMissing(certain) || isMissing(luck)) return yield* usage();
 
   const json = yield* openArena(dbPath, { regret, knowledge, certain, luck }).pipe(
     Effect.map((arena) => encodeAggregates(aggregatesOf({ seats: withPotShares(arena.seats), decisions: arena.decisions, certain: arena.certain.summary.rates, consistency: arena.consistency, luck: arena.luck }))),
@@ -54,7 +54,7 @@ const program = Effect.gen(function* () {
 
   const violations = privacyViolations(files);
 
-  if (violations.length > 0) return yield* Effect.fail(new ScriptError({ message: `not written, the files fail the privacy check:\n${violations.join("\n")}`, exitCode: 1 }));
+  if (violations.length > 0) return yield* new ScriptError({ message: `not written, the files fail the privacy check:\n${violations.join("\n")}`, exitCode: 1 });
 
   yield* Effect.try({ try: () => { rmSync(target, { recursive: true, force: true }); renameSync(staging, target); }, catch: ioError(`replace ${target}`) });
 

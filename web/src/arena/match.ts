@@ -6,7 +6,7 @@ import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { type AssistantMessage, contentText, type Message, type Models, type ModelThinkingLevel, Type } from "@earendil-works/pi-ai";
 import { type ConversationId, createRegistry, defineDoc, defineExtension, defineTool, GenerationTask, Harness, hook, type ModelRef } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
-import { Data, Effect, Option, Result, Schema } from "effect";
+import { Data, Effect, Option, Predicate, Result, Schema } from "effect";
 
 import { emptyTable, type HeadlessTable, headlessSession } from "../agent/headless.ts";
 import { type AgentCall, AgentReply, type MatchSession, replyText, RULES, runTool, tools } from "../agent/tools.ts";
@@ -185,7 +185,7 @@ const parseView = (text: string): View => decodeView(text, { onExcessProperty: "
 const Delivered = Schema.Struct({ events: Schema.optional(Schema.Array(Schema.String)) });
 
 /** The log entries a user message carried: a turn input, a live write or the end notice. */
-const parseDelivery = (text: string) => (text.includes("{") ? Schema.decodeUnknownSync(Schema.fromJsonString(Delivered))(text.slice(text.indexOf("{"))) : { events: undefined });
+const parseDelivery = (text: string) => (text.includes("{") ? Schema.decodeSync(Schema.fromJsonString(Delivered))(text.slice(text.indexOf("{"))) : { events: undefined });
 
 /** The view in a message that carries one: a turn input ("Your turn.\n{...}") or a tool result. */
 const viewIn = (text: string): Option.Option<View> => (text.includes('"you"') ? Option.some(parseView(text.slice(text.indexOf("{")))) : Option.none());
@@ -669,13 +669,14 @@ export const playMatch = (match: ArenaMatch) =>
     const humans = new Map<Letter, HumanLink>();
 
     const conversationOf = (state: MatchState, agent: AgentId) =>
-      Effect.flatMap(
+      Effect.filterOrFail(
         attempt("find a conversation", async () => {
           const id = state.conversations[agent];
 
           return id === undefined ? undefined : store.conversation(id, context);
         }),
-        (conversation) => (conversation === undefined ? Effect.fail(new ArenaFault({ message: `agent ${agent} has no conversation` })) : Effect.succeed(conversation)),
+        Predicate.isNotUndefined,
+        () => new ArenaFault({ message: `agent ${agent} has no conversation` }),
       );
 
     /** A player's turn input, its view and the log entries it has not been sent, and the delivery that journals them, once per turn. */

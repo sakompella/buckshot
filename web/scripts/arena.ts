@@ -68,6 +68,7 @@ const program = Effect.gen(function* () {
 
       return { agent, label: labelOf(endpoint), model: modelRefOf(providerId, endpoint), thinkingLevel: endpoint.effort, provenance: provenanceOf(providerId, endpoint) };
     }),
+    { concurrency: 1 },
   );
 
   console.error(`arena: ${dir}, seed ${seed}, ${delivery} delivery, seating ${seating.map((seat, index) => `position ${index + 1}: ${seat}`).join(", ")}`);

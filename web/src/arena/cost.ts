@@ -18,7 +18,7 @@ export type PriceTable = typeof PriceTable.Type;
 
 export const DEFAULT_PRICES = new URL("./prices.json", import.meta.url).pathname;
 
-export const loadPrices = (path: string): PriceTable => Schema.decodeUnknownSync(Schema.fromJsonString(PriceTable))(readFileSync(path, "utf8"));
+export const loadPrices = (path: string): PriceTable => Schema.decodeSync(Schema.fromJsonString(PriceTable))(readFileSync(path, "utf8"));
 
 /** The call's cost in dollars, or undefined when the table has no price for its model. */
 export const costOf = (prices: PriceTable, call: Pick<CallLine, "model" | "usage">): number | undefined => {

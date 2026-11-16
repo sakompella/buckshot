@@ -29,13 +29,13 @@ const program = Effect.gen(function* () {
   const [dbPath, host = "127.0.0.1", port = "8790"] = parsed.positionals;
   const { regret: regretPath, knowledge: knowledgePath, "certain-mistakes": certainPath, luck: luckPath } = flags;
 
-  if (dbPath === undefined || isMissing(dbPath) || isMissing(regretPath) || isMissing(knowledgePath) || isMissing(certainPath) || isMissing(luckPath)) return yield* Effect.fail(usage());
+  if (dbPath === undefined || isMissing(dbPath) || isMissing(regretPath) || isMissing(knowledgePath) || isMissing(certainPath) || isMissing(luckPath)) return yield* usage();
 
   const siteDir = fileURLToPath(new URL("../dist", import.meta.url));
 
-  if (!existsSync(`${siteDir}/index.html`)) return yield* Effect.fail(new ScriptError({ message: `no built site at ${siteDir}: run \`bun run build\` first`, exitCode: 1 }));
+  if (!existsSync(`${siteDir}/index.html`)) return yield* new ScriptError({ message: `no built site at ${siteDir}: run \`bun run build\` first`, exitCode: 1 });
 
-  const listenPort = yield* Schema.decodeUnknownEffect(Port)(port).pipe(Effect.mapError(usage));
+  const listenPort = yield* Schema.decodeEffect(Port)(port).pipe(Effect.mapError(usage));
 
   // ARENA_VIEWER_PASSWORD guards the API. Blank is unset.
   const access = { password: process.env["ARENA_VIEWER_PASSWORD"] || undefined };

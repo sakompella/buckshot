@@ -211,7 +211,7 @@ for (const [count, match] of matches.entries()) {
       const log = loadLog(before.events, before.learned, seat);
       const knowledge: Knowledge = knowledgeOf(belief, log);
       const board = before.game.board;
-      const legal = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Array(Schema.Struct({ move: Schema.Number, label: Schema.String }))))(decision.legal_json).map(({ label }) => label);
+      const legal = Schema.decodeSync(Schema.fromJsonString(Schema.Array(Schema.Struct({ move: Schema.Number, label: Schema.String }))))(decision.legal_json).map(({ label }) => label);
       const keys = positionKeys(roster, seat, board, log, { public: belief.orders(log, false), private: belief.orders(log, true) }, legal, [match.code_hash, match.instructions_hash]);
       const clueOrdinal = Option.map(knowledge.clue, (index) => learnedOrdinal[index] ?? -1);
       const viaAdrenaline = Option.map(knowledge.clue, (index) => stolenClue(before.events, before.learned[index]?.at ?? 0, seat));

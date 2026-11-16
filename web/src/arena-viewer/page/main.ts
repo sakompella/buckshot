@@ -23,7 +23,7 @@ class NoArenaServer extends Data.TaggedError("NoArenaServer") {}
 
 const getJson = <A, I>(url: string, schema: Schema.Codec<A, I>) =>
   HttpClient.get(url).pipe(
-    Effect.flatMap((response) => (response.status === 404 || !(response.headers["content-type"] ?? "").includes("json") ? Effect.fail(new NoArenaServer()) : Effect.succeed(response))),
+    Effect.filterOrFail((response) => response.status !== 404 && (response.headers["content-type"] ?? "").includes("json"), () => new NoArenaServer()),
     Effect.flatMap(HttpClientResponse.filterStatusOk),
     Effect.flatMap((response) => response.json),
     Effect.flatMap((body) => Schema.decodeUnknownEffect(schema)(body)),

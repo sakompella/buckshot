@@ -31,7 +31,7 @@ export const consistencyOf = (rows: Iterable<unknown>): Consistency => {
 const program = Effect.gen(function* () {
   const path = process.argv[2];
 
-  if (path === undefined) return yield* Effect.fail(new ScriptError({ message: "usage: bun scripts/arena-regret-consistency.ts <regret db>", exitCode: 2 }));
+  if (path === undefined) return yield* new ScriptError({ message: "usage: bun scripts/arena-regret-consistency.ts <regret db>", exitCode: 2 });
 
   const db = yield* Effect.acquireRelease(
     Effect.try({ try: () => new Database(path, { readonly: true }), catch: (cause) => new ScriptError({ message: `cannot open ${path}: ${String(cause)}`, exitCode: 1 }) }),

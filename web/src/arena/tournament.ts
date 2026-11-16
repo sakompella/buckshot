@@ -169,7 +169,7 @@ export const resolveConfig = (config: TournamentConfig): Result.Result<Tournamen
 /** Decodes a config from its JSON text. A mistyped key is an error, and so is a name that points at nothing. */
 export const parseConfig = (text: string): Result.Result<Tournament, TournamentError> =>
   Result.flatMap(
-    Result.mapError(Schema.decodeUnknownResult(Schema.fromJsonString(TournamentConfig))(text, { onExcessProperty: "error" }), (error) => new TournamentError({ message: `the config is not valid: ${error.message}` })),
+    Result.mapError(Schema.decodeResult(Schema.fromJsonString(TournamentConfig))(text, { onExcessProperty: "error" }), (error) => new TournamentError({ message: `the config is not valid: ${error.message}` })),
     resolveConfig,
   );
 

@@ -14,6 +14,7 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "2.0.0-beta.v.11",
+    "@effect/tsgo": "0.69.0",
     "@foldkit/vite-plugin": "0.27.1",
     "@hegeldev/hegel": "0.4.12",
     "@modelcontextprotocol/client": "2.3.1",
@@ -21,7 +22,7 @@
     "@types/bun": "1.4.2",
     "cf": "1.0.0-beta.27",
     "oxlint": "1.87.0",
-    "tsrs": "0.18.0-ts7.1.0-dev.20260929",
+    "tsrs": "0.25.0-ts7.1.0-beta",
     "vite": "8.3.4"
   },
   "scripts": {
@@ -29,7 +30,7 @@
     "dev": "bun run rules && vite --port 5173 --strictPort",
     "build": "bun run rules && vite build",
     "lint": "oxlint --deny-warnings",
-    "typecheck": "tsrs --noEmit -p .",
+    "typecheck": "effect-tsgo tsrs --noEmit -p .",
     "test": "bun run rules && BUCKSHOT_CODE=test bun test ./test --timeout 60000",
     "mcp": "bun run rules 1>&2 && bun scripts/mcp.ts",
     "dev:online": "bun run rules && cf dev --mode online",

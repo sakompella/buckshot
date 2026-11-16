@@ -25,7 +25,7 @@ const render = (text: string): ReadonlyArray<string> => {
 
   const heading = text.slice(0, at).trim();
   const shown = decodeObject(text.slice(at));
-  const { events = [], moves = [], error } = Schema.decodeUnknownSync(Lists)(shown);
+  const { events = [], moves = [], error } = Schema.decodeSync(Lists)(shown);
   const rest = Object.fromEntries(Object.entries(shown).filter(([key]) => !["events", "moves", "error"].includes(key)));
 
   return [

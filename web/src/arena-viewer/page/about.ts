@@ -76,6 +76,10 @@ export const aboutView = (h: H, derived: Derived): Html => {
         ...(isOnline ? [] : [" The Matches section lists every match."]),
       ]),
       h.p([h.Class("sub")], [
+        h.b([], ["Disclosures. "]),
+        "Claude models were reached through Claude Code subscription logins behind an endpoint. For these, the endpoint puts a \"You are Claude Code\" system block first, moves our instructions into the conversation after the first turn, and renames our two tools. This is the same for every Claude config. In 37 matches of the first tournament, the thinking of Claude Sonnet 5.5 and Haiku 5.5 mentions an organisation instruction about a university library tool (LibKey) that we did not send. It appeared between Oct 16 and Oct 20 and in no later match; the models set it aside each time. We excluded those 37 matches and replayed them with the same pairings, seats and seeds, and the new thinking never mentions it. One known limitation: the rules text is ambiguous about a blank shot at yourself on the last shell (the gun reloads and you go first). Models of every provider visibly struggle with it. We kept the wording so that all matches stay comparable.",
+      ]),
+      h.p([h.Class("sub")], [
         h.b([], ["Search engines and dealer AIs. "]),
         "The configs named Search engine are not language models. They are the arena's own minimax search program, which looks ahead through the possible moves, assumes the opponent also plays its best, and plays the move that scores best. Depth is how many decisions ahead it looks. With sampled reloads, it values a new load by trying a sample of the possible deals. Search engines cost nothing, so the charts draw them as reference lines. The Story and Double or Nothing dealer AIs, the game's own computer players, are drawn the same way: they call no model and cost nothing.",
       ]),

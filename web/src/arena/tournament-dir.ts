@@ -47,7 +47,7 @@ const fileOf = (dir: string) => join(dir, "tournament.json");
 /** The directory's tournament.json, or an error that says why it can't be read. */
 export const readTournamentFile = (dir: string): Result.Result<TournamentFile, TournamentError> =>
   existsSync(fileOf(dir))
-    ? Result.mapError(Schema.decodeUnknownResult(Schema.fromJsonString(TournamentFile))(readFileSync(fileOf(dir), "utf8")), (error) => new TournamentError({ message: `${fileOf(dir)} is not valid: ${error.message}` }))
+    ? Result.mapError(Schema.decodeResult(Schema.fromJsonString(TournamentFile))(readFileSync(fileOf(dir), "utf8")), (error) => new TournamentError({ message: `${fileOf(dir)} is not valid: ${error.message}` }))
     : fail(`${dir} has no tournament.json`);
 
 export const tournamentOf = (file: TournamentFile): Result.Result<Tournament, TournamentError> => resolveConfig(file.config);
@@ -127,7 +127,7 @@ export type MatchManifest = typeof MatchManifest.Type;
 const readManifest = (dir: string): Result.Result<MatchManifest, string> => {
   const path = join(dir, "manifest.json");
 
-  return existsSync(path) ? Result.mapError(Schema.decodeUnknownResult(Schema.fromJsonString(MatchManifest))(readFileSync(path, "utf8")), (error) => `manifest.json is not readable: ${error.message}`) : Result.fail("there is no manifest.json");
+  return existsSync(path) ? Result.mapError(Schema.decodeResult(Schema.fromJsonString(MatchManifest))(readFileSync(path, "utf8")), (error) => `manifest.json is not readable: ${error.message}`) : Result.fail("there is no manifest.json");
 };
 
 const StatusOnly = Schema.Struct({ status: Schema.String });
@@ -138,7 +138,7 @@ const CodeOnly = Schema.Struct({ provenance: Schema.Struct({ git_commit: Schema.
 export const startedUnder = (dir: string, match: ScheduledMatch): Option.Option<string> => {
   const path = join(dir, match.name, "manifest.json");
 
-  return existsSync(path) ? Option.map(Result.getSuccess(Schema.decodeUnknownResult(Schema.fromJsonString(CodeOnly))(readFileSync(path, "utf8"))), ({ provenance }) => provenance.git_commit) : Option.none();
+  return existsSync(path) ? Option.map(Result.getSuccess(Schema.decodeResult(Schema.fromJsonString(CodeOnly))(readFileSync(path, "utf8"))), ({ provenance }) => provenance.git_commit) : Option.none();
 };
 
 /** An agent's pin; older manifests name it auth_account_id. */
@@ -150,7 +150,7 @@ export const recordedAccounts = (dir: string, match: ScheduledMatch): MatchAccou
 
   if (!existsSync(path)) return undefined;
 
-  const manifest = Schema.decodeUnknownSync(Schema.fromJsonString(AccountProvenance))(readFileSync(path, "utf8"));
+  const manifest = Schema.decodeSync(Schema.fromJsonString(AccountProvenance))(readFileSync(path, "utf8"));
 
   return Object.fromEntries(Object.entries(manifest.provenance.agents).flatMap(([agent, provenance]) => {
     const account = provenance.account_id ?? provenance.auth_account_id;
@@ -162,7 +162,7 @@ export const recordedAccounts = (dir: string, match: ScheduledMatch): MatchAccou
 const isFinished = (matchDir: string): boolean => {
   const path = join(matchDir, "manifest.json");
 
-  return existsSync(path) && Result.match(Schema.decodeUnknownResult(Schema.fromJsonString(StatusOnly))(readFileSync(path, "utf8")), { onFailure: () => false, onSuccess: ({ status }) => status === "finished" });
+  return existsSync(path) && Result.match(Schema.decodeResult(Schema.fromJsonString(StatusOnly))(readFileSync(path, "utf8")), { onFailure: () => false, onSuccess: ({ status }) => status === "finished" });
 };
 
 /** The names of the scheduled matches whose manifest says finished. It reads only the status, so a finished match is never run again over another field. */
@@ -342,6 +342,8 @@ export interface Scheduling {
   readonly last?: ReadonlySet<string>;
   readonly forget?: ReadonlySet<string>;
   readonly prefer?: ReadonlyArray<string>;
+  /** Account ids fixed by seat letter: a new match pins that seat to the account, whatever the load. */
+  readonly pin?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -359,7 +361,7 @@ export const runPending = async (
   runOne: (match: ScheduledMatch, accounts: MatchAccounts) => Promise<number>,
   onSettled: (settled: Settled) => void,
   stop: AbortSignal,
-  { retry = RETRY, caps = new Map(), last = new Set(), forget = new Set(), prefer = [] }: Scheduling = {},
+  { retry = RETRY, caps = new Map(), last = new Set(), forget = new Set(), prefer = [], pin = {} }: Scheduling = {},
 ): Promise<ReadonlyArray<Settled>> => {
   const settled: Array<Settled> = [];
   const queue = [...unfinished(schedule, finishedNames(dir, schedule))];
@@ -380,7 +382,12 @@ export const runPending = async (
   const isCooling = (model: string, account?: string) => (coolingUntil.get(cooldownKey(model, account)) ?? 0) > Date.now();
   const assigned = new Map<string, MatchAccounts>();
   const accountLoad = new Map<string, number>();
-  const accountsFor = (match: ScheduledMatch) => assigned.get(match.name) ?? assignAccounts(config, match, isCooling, (account) => accountLoad.get(account) ?? 0, prefer);
+
+  const accountsFor = (match: ScheduledMatch) => {
+    const pinned = Object.fromEntries(match.seats.flatMap((seat) => (pin[seat] === undefined ? [] : [[seat, pin[seat]]])));
+
+    return assigned.get(match.name) ?? { ...assignAccounts(config, match, isCooling, (account) => accountLoad.get(account) ?? 0, prefer), ...pinned };
+  };
 
   const isReady = (match: ScheduledMatch) => {
     if (![...modelsOf(match)].every((model) => !isCooling(model) && (playing.get(model) ?? 0) < (caps.get(model) ?? Infinity))) return false;

@@ -14,7 +14,22 @@
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
     "skipLibCheck": true,
-    "noEmit": true
+    "noEmit": true,
+    "plugins": [
+      {
+        "name": "@effect/language-service",
+        // Suggestions fail typecheck too: every rule on by default is enforced.
+        "ignoreEffectSuggestionsInTscExitCode": false,
+        // The site's fetch client; Effect 4 marks it unstable.
+        "allowedUnstableApis": ["effect/http/HttpClient", "effect/http/HttpClientResponse"],
+        "diagnosticSeverity": {
+          // Off: 218 hits, and the numbers come from JSON, which cannot carry NaN or Infinity.
+          "schemaNumber": "off",
+          // On (off by default): Effect.forEach is sequential unless said otherwise.
+          "missingConcurrencyOption": "warning"
+        }
+      }
+    ]
   },
   "include": ["src", "scripts", "test", "generated/*.d.mts", "oxlint.config.ts", "vite.config.ts", "cloudflare.config.ts"],
   "exclude": ["tools"]

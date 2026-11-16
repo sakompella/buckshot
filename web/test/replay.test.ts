@@ -16,7 +16,7 @@ const tempDir = (prefix: string) => mkdtempSync(join(tmpdir(), prefix));
 
 const Numbered = Schema.Struct({ n: Schema.Int });
 
-const decodeNumbered = (line: string) => Result.mapError(Schema.decodeUnknownResult(Schema.fromJsonString(Numbered))(line), (error) => error.message);
+const decodeNumbered = (line: string) => Result.mapError(Schema.decodeResult(Schema.fromJsonString(Numbered))(line), (error) => error.message);
 
 const dir = join(tempDir("replay-run-"), "faux");
 
@@ -50,7 +50,7 @@ const tailInChunks = <A>(file: string, decode: (line: string) => Result.Result<A
 test("reading events.jsonl with a cursor while it is written in chunks gives every line once, in order", () => tailInChunks("events.jsonl", decodeEventLine));
 
 test("a faux match replays move for move to its final cash, extends a partial replay", () => {
-  const manifest = Schema.decodeUnknownSync(Schema.fromJsonString(RunManifest))(readFileSync(join(dir, "manifest.json"), "utf8"));
+  const manifest = Schema.decodeSync(Schema.fromJsonString(RunManifest))(readFileSync(join(dir, "manifest.json"), "utf8"));
   const moves = movesOf(readJsonl(readFileSync(join(dir, "events.jsonl"), "utf8"), decodeEventLine));
   const replay = Result.getOrThrow(replayOf(Option.none(), manifest, moves));
   const last = replay.frames.at(-1);

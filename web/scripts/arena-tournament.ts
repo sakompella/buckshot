@@ -24,7 +24,7 @@ import { cooldownOf, costOf, faultsOf, finishedNames, openTournament, runPending
 // model, plays at most N matches of that model at once; --last <model> starts
 // its matches only when no other match can; --forget-cooldown <model> ignores
 // the model's recorded cooldowns at the start, after its provider reset early;
-// --skip <entrant> leaves that entrant's matches unplayed this run; --prefer-account <account id>, in order of
+// --skip <entrant> leaves that entrant's matches unplayed this run; --only <match name>, once per match, plays only those; --pin <seat letter>=<account id> pins that seat's agent to the account in every new match; --prefer-account <account id>, in order of
 // preference, pins new matches to those accounts first when accounts are equally loaded.
 // A match resumes under the code version it started under (its manifest's
 // git commit), so a tournament can span versions: --code <commit>=<web dir>,
@@ -38,7 +38,7 @@ import { cooldownOf, costOf, faultsOf, finishedNames, openTournament, runPending
 // it starts, every 30 minutes and when it ends. --dry-run prints the schedule
 // of the last config.
 // Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel N] [--cap <model>=N]... [--last <model>]...
-//          [--forget-cooldown <model>]... [--skip <entrant>]... [--prefer-account <id>]... [--code <commit>=<web dir>]... [--limit N] [--first N] [--dry-run]
+//          [--forget-cooldown <model>]... [--skip <entrant>]... [--only <match>]... [--pin <seat>=<id>]... [--prefer-account <id>]... [--code <commit>=<web dir>]... [--limit N] [--first N] [--dry-run]
 //        bun scripts/arena-stats.ts <tournament dir> [--json]
 
 const WEB = join(import.meta.dir, "..");
@@ -57,6 +57,8 @@ const { values, positionals: configPaths } = parseArgs({
     skip: { type: "string", multiple: true, default: [] },
     "prefer-account": { type: "string", multiple: true, default: [] },
     code: { type: "string", multiple: true, default: [] },
+    only: { type: "string", multiple: true, default: [] },
+    pin: { type: "string", multiple: true, default: [] },
     "dry-run": { type: "boolean", default: false },
   },
 });
@@ -75,7 +77,7 @@ const exit = (message: string): never => {
 
 const unwrap = <A>(result: Result.Result<A, TournamentError>): A => Result.match(result, { onFailure: (error) => exit(error.message), onSuccess: (value) => value });
 
-if (configPaths.length === 0) exit("Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel N] [--cap <model>=N]... [--last <model>]... [--forget-cooldown <model>]... [--skip <entrant>]... [--prefer-account <id>]... [--code <commit>=<web dir>]... [--limit N] [--first N] [--dry-run]");
+if (configPaths.length === 0) exit("Usage: bun scripts/arena-tournament.ts <config.json>... --dir <tournament dir> [--parallel N] [--cap <model>=N]... [--last <model>]... [--forget-cooldown <model>]... [--skip <entrant>]... [--only <match>]... [--pin <seat>=<id>]... [--prefer-account <id>]... [--code <commit>=<web dir>]... [--limit N] [--first N] [--dry-run]");
 
 if (!Number.isInteger(parallel) || parallel < 1) exit("--parallel must be a whole number from 1");
 
@@ -98,6 +100,16 @@ const forget = new Set(values["forget-cooldown"]);
 const skipped = new Set(values.skip);
 
 const prefer = values["prefer-account"];
+
+const only = new Set(values.only);
+
+const pin = Object.fromEntries(
+  values.pin.map((entry) => {
+    const [, seat = "", account = ""] = /^([A-D])=(.+)$/.exec(entry) ?? exit(`--pin takes <seat letter>=<account id>, not "${entry}"`);
+
+    return [seat, account] as const;
+  }),
+);
 
 /** This checkout's code version (`gitCommit`): the runner refuses to start or resume anything over uncommitted changes to the code that plays. */
 const CODE = gitCommit();
@@ -240,7 +252,7 @@ const settle = (settled: Settled) => {
   report(settled);
 };
 
-const isPlayed = (match: ScheduledMatch) => !match.entrants.some((entrant) => skipped.has(entrant));
+const isPlayed = (match: ScheduledMatch) => (only.size === 0 || only.has(match.name)) && !match.entrants.some((entrant) => skipped.has(entrant));
 
 /** The matches this run is for: the whole schedule, or its first --first. */
 const scope = file.schedule.slice(0, first);
@@ -261,7 +273,7 @@ noteProgress("started");
 
 const every30Minutes = setInterval(() => noteProgress("check"), 30 * 60 * 1000);
 
-const settled = await runPending(dir, file.config, pending, parallel, runOne, settle, stop.signal, { caps, last, forget, prefer });
+const settled = await runPending(dir, file.config, pending, parallel, runOne, settle, stop.signal, { caps, last, forget, prefer, pin });
 
 clearInterval(every30Minutes);
 

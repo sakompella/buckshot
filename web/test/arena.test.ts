@@ -84,7 +84,7 @@ const fauxMatch = (controllers: ReadonlyArray<Controller>, seed: string, context
 
 const PinnedAgents = Schema.Struct({ provenance: Schema.Struct({ agents: Schema.Record(Schema.String, Schema.Struct({ account_id: Schema.String })) }) });
 
-const pinOf = (dir: string) => Schema.decodeUnknownSync(Schema.fromJsonString(PinnedAgents))(readFileSync(join(dir, "manifest.json"), "utf8")).provenance.agents.A?.account_id;
+const pinOf = (dir: string) => Schema.decodeSync(Schema.fromJsonString(PinnedAgents))(readFileSync(join(dir, "manifest.json"), "utf8")).provenance.agents.A?.account_id;
 
 const pinned = (account: string) => (modelId: string) => ({ ...fauxProvenance(modelId), account_id: account });
 
@@ -119,7 +119,7 @@ test("an agent's instructions addendum reaches its own system prompt only, and t
   expect(promptB?.[0]).toContain(INSTRUCTIONS);
   expect(promptB?.[0]).not.toContain(ADDENDUM);
 
-  const manifest = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Struct({ provenance: Schema.Struct({ agents: Schema.Record(Schema.String, Schema.Struct({ instructions_addendum: Schema.optional(Schema.String) })) }) })))(readFileSync(join(dir, "manifest.json"), "utf8"));
+  const manifest = Schema.decodeSync(Schema.fromJsonString(Schema.Struct({ provenance: Schema.Struct({ agents: Schema.Record(Schema.String, Schema.Struct({ instructions_addendum: Schema.optional(Schema.String) })) }) })))(readFileSync(join(dir, "manifest.json"), "utf8"));
 
   expect(manifest.provenance.agents.A?.instructions_addendum).toBe(ADDENDUM);
   expect(manifest.provenance.agents.B?.instructions_addendum).toBeUndefined();
@@ -176,7 +176,7 @@ const Delivered = Schema.Struct({ kind: Schema.String, agent: Schema.optional(Sc
 
 /** By agent, every entry the arena logged as sent, in order, and how many deliveries carried them. */
 const deliveriesIn = (dir: string) => {
-  const lines = readFileSync(join(dir, "events.jsonl"), "utf8").trim().split("\n").map((line) => Schema.decodeUnknownSync(Schema.fromJsonString(Delivered))(line));
+  const lines = readFileSync(join(dir, "events.jsonl"), "utf8").trim().split("\n").map((line) => Schema.decodeSync(Schema.fromJsonString(Delivered))(line));
   const sent = lines.filter((line) => line.kind === "delivered");
 
   return Object.fromEntries(["A", "B", "C"].map((agent) => [agent, { entries: sent.filter((line) => line.agent === agent).flatMap((line) => line.entries ?? []), deliveries: sent.filter((line) => line.agent === agent && (line.entries?.length ?? 0) > 0).length }]));
@@ -245,7 +245,7 @@ test.each([...DELIVERIES])("a human types moves into the terminal client and pla
 const ACCOUNT_HEADER = "X-Account-Id";
 const ENDPOINT = { url: "http://127.0.0.1:8318", key: "sk-test-secret-value" };
 
-const endpointFrom = (env: Readonly<Record<string, string>>) => Effect.runPromiseExit(agentEndpoint(Schema.decodeUnknownSync(AgentId)("A")).pipe(Effect.provideService(ConfigProvider.ConfigProvider, ConfigProvider.fromEnvRecord(env))));
+const endpointFrom = (env: Readonly<Record<string, string>>) => Effect.runPromiseExit(agentEndpoint(Schema.decodeSync(AgentId)("A")).pipe(Effect.provideService(ConfigProvider.ConfigProvider, ConfigProvider.fromEnvRecord(env))));
 
 const failureOf = async (env: Readonly<Record<string, string>>): Promise<string> => {
   const exit = await endpointFrom(env);

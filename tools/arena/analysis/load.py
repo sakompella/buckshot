@@ -3,11 +3,11 @@
 Only the columns the analysis needs are read: never match_seats.provenance_json, which holds account ids.
 """
 
-import json
+import os
 import sqlite3
+import subprocess
 from collections import defaultdict
 from dataclasses import dataclass
-from hashlib import sha256
 from pathlib import Path
 
 from configs import config_label
@@ -43,14 +43,10 @@ def connect(path: str = DB, **attached: str | Path) -> sqlite3.Connection:
 def require_current(path: str) -> None:
     """Stops unless every validated match in the analysis database was replayed by this checkout's importer, replay and rules code.
 
-    The hash is web/src/analysis/importer-hash.ts's: the SHA-256 of the JSON object mapping each file the importer records to its SHA-256.
+    The hash is web/src/analysis/importer-hash.ts's, which prints it when run: the SHA-256 of the JSON object mapping each file the importer records to the SHA-256 of its code without comments and whitespace.
     """
+    current = subprocess.run([os.environ.get("BUN", "bun"), str(REPO / "web/src/analysis/importer-hash.ts")], capture_output=True, text=True, check=True).stdout.strip()
     db = connect(path)
-    row = db.execute("SELECT value FROM metadata WHERE key = 'importer_files'").fetchone()
-    if row is None:
-        raise SystemExit(f"{path} records no importer files; re-import it")
-    files = {name: sha256((REPO / name).read_bytes()).hexdigest() for name in json.loads(row[0])}
-    current = sha256(json.dumps(files, separators=(",", ":")).encode()).hexdigest()
     stale = db.execute("SELECT name, validated_with FROM matches WHERE replay_status = 'validated' AND validated_with IS NOT ? LIMIT 3", (current,)).fetchall()
     db.close()
     if stale:
