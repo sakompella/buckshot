@@ -22,6 +22,9 @@ exclude_globs = [
 
 # Equivalent mutants: no input can tell them apart from the original.
 exclude_re = [
+  # Without the trace feature, `!cfg!(feature = "trace")` picks the counted fast path; deleting the `!`
+  # runs Bend's walk instead, which returns the same value.
+  'delete ! in (occupied|slots_copies|pool|grab_act)$',
   # Each shell (batch id) sets a distinct bit, so or and xor agree.
   'replace \| with \^ in (Gun::of_load|Deck::filtered)',
   # The shifted list's low bit is zero, so or and xor agree.

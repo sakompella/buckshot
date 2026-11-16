@@ -8,8 +8,8 @@ const isWord = (char: string | undefined): boolean => char !== undefined && (/[\
 const startsRegex = (previous: string | undefined): boolean => previous === undefined || (isWord(previous[0]) ? BEFORE_REGEX.has(previous) : !")]}'\"`".includes(previous.at(-1) ?? ""));
 
 /**
- * The source with comments and whitespace removed: its tokens joined by single spaces. String, template and regular expression literals stay byte-exact, so any change to code, and nothing else, changes the result.
- * A minimal lexer, not a parser: a `/` is a regular expression after an operator or keyword and a division otherwise, and every operator character is its own token.
+ * The source with comments removed and each run of whitespace or comments between two tokens collapsed to one space. String, template and regular expression literals stay byte-exact, so any change to code, and nothing else, changes the result.
+ * A minimal lexer, not a parser: a `/` is a regular expression after an operator or keyword and a division otherwise, and every operator character is its own token. Tokens with nothing between them stay adjacent, so `a++ + b` and `a + ++b` differ.
  * "js" covers TypeScript and JavaScript; "sql" has `--` comments and no templates or regular expressions.
  */
 export const codeOnly = (source: string, language: Language): string => {
@@ -69,40 +69,53 @@ export const codeOnly = (source: string, language: Language): string => {
   const tokens = (inTemplate: boolean): string => {
     const out: Array<string> = [];
     let depth = 0;
+    let gap = false;
+
+    const push = (token: string): void => {
+      out.push(gap && out.length > 0 ? ` ${token}` : token);
+      gap = false;
+    };
+
+    const previous = (): string | undefined => out.at(-1)?.trimStart();
 
     while (at < source.length) {
       const char = source[at]!;
 
-      if (/\s/.test(char)) at++;
-      else if (source.startsWith(sql ? "--" : "//", at)) while (at < source.length && source[at] !== "\n") at++;
-      else if (source.startsWith("/*", at)) {
+      if (/\s/.test(char)) {
+        at++;
+        gap = true;
+      } else if (source.startsWith(sql ? "--" : "//", at)) {
+        while (at < source.length && source[at] !== "\n") at++;
+        gap = true;
+      } else if (source.startsWith("/*", at)) {
         const end = source.indexOf("*/", at + 2);
 
         if (end < 0) throw unterminated("comment");
         at = end + 2;
-      } else if (char === "'" || char === '"') out.push(quoted(char));
-      else if (char === "`" && !sql) out.push(template());
-      else if (char === "/" && !sql && startsRegex(out.at(-1))) out.push(regex());
+        gap = true;
+      } else if (char === "'" || char === '"') push(quoted(char));
+      else if (char === "`" && !sql) push(template());
+      else if (char === "/" && !sql && startsRegex(previous())) push(regex());
       else if (isWord(char)) {
         const start = at;
 
         while (isWord(source[at])) at++;
-        out.push(source.slice(start, at));
+        push(source.slice(start, at));
       } else {
         at++;
 
-        if (inTemplate && char === "}" && depth === 0) return out.join(" ");
+        if (inTemplate && char === "}" && depth === 0) return out.join("");
 
         if (char === "{") depth++;
         else if (char === "}") depth--;
 
-        out.push(char);
+        push(char);
       }
     }
 
     if (inTemplate) throw unterminated("template substitution");
 
-    return out.join(" ");
+    return out.join("");
   };
 
   return tokens(false);

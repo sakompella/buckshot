@@ -495,10 +495,17 @@ impl Items {
         Item::ORDER.into_iter().filter(move |item| self.contains(*item))
     }
 
-    /// `nth` over the list in order.
+    /// `nth` over the list in order: the lowest set bit once the `n` below it are cleared.
     #[must_use]
     pub fn nth(self, n: u32) -> Option<Item> {
-        self.iter().nth(usize::try_from(n).ok()?)
+        let mut bits = self.0;
+        for _ in 0..n {
+            bits &= bits.wrapping_sub(1);
+        }
+        if bits == 0 {
+            return None;
+        }
+        Item::try_from(u8::try_from(bits.trailing_zeros()).ok()?).ok()
     }
 
     /// The first item and the rest.
@@ -588,6 +595,25 @@ impl Slots {
     /// Every slot with its content, in slot order.
     pub fn entries(&self) -> impl Iterator<Item = (Slot, Option<Item>)> + '_ {
         Slot::ORDER.into_iter().map(|slot| (slot, self.get(slot)))
+    }
+
+    /// One bit per slot whose four bits are not zero, the slot's lowest bit.
+    const fn nonzero(bits: u32) -> u32 {
+        (bits | (bits >> 1_u32) | (bits >> 2_u32) | (bits >> 3_u32)) & 0x1111_1111
+    }
+
+    /// The slots holding an item.
+    #[must_use]
+    pub const fn occupied(self) -> u32 {
+        Self::nonzero(self.0).count_ones()
+    }
+
+    /// The slots holding `item`: a slot's bits equal the item's code exactly
+    /// where its bits xor the code repeated in every slot are zero.
+    #[must_use]
+    pub fn copies(self, item: Item) -> u32 {
+        let codes = item.rank().wrapping_add(1).wrapping_mul(0x1111_1111);
+        8_u32.wrapping_sub(Self::nonzero(self.0 ^ codes).count_ones())
     }
 }
 

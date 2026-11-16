@@ -210,7 +210,7 @@ const gamesOf =
   };
 
 /** Every completed two-player match in `seats`, as the games the round rating counts. */
-const gamesOfSeats = (seats: ReadonlyArray<SeatFull>, luck: Luck = new Map()): ReadonlyArray<BlockGame> => pairsOf(seats).flatMap(gamesOf(luck));
+export const gamesOfSeats = (seats: ReadonlyArray<SeatFull>, luck: Luck = new Map()): ReadonlyArray<BlockGame> => pairsOf(seats).flatMap(gamesOf(luck));
 
 export interface Rating {
   readonly rating: number;

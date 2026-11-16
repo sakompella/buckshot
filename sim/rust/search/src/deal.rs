@@ -5,9 +5,11 @@
 use std::collections::BTreeMap;
 
 use arrayvec::ArrayVec;
-use buckshot_rules::{Config, Grabs, Item, Notes, Phase, Players, Request, Seat, Shell, State, World as Records, request, step_into};
+use buckshot_rules::{Config, Grabs, Item, Notes, Phase, Players, Request, Seat, Shell, State, World as Records, request, step_in_place};
+use hashbrown::HashMap;
 use rayon::ThreadPool;
 use rayon::iter::{IntoParallelIterator, ParallelExtend, ParallelIterator};
+use rustc_hash::FxBuildHasher;
 
 use crate::evaluation::state_value;
 use crate::machine::{round_won, token};
@@ -179,7 +181,7 @@ fn sample_deal(config: &Config, start: &Start, seed: u32, notes: &mut Notes) -> 
         let count = range.extra.wrapping_add(2);
         let k = mix(seed ^ mix(n)).checked_rem(count).unwrap_or(0);
         if let Some(answer) = token(&at, k) {
-            state = step_into(config, state, answer, notes);
+            step_in_place(config, &mut state, answer, notes);
             if notes.truncated() {
                 return None;
             }
@@ -198,12 +200,16 @@ struct Start {
     private: Real,
 }
 
-/// The buffers a sampled leaf reuses: the merged starts and one start's deal values.
+/// The buffers a sampled leaf reuses: the merged starts and one start's deal
+/// values, and the mean of every start valued so far. A start's deals read only
+/// its state and winner and are seeded by its key, a function of its state, so
+/// its mean is the same whenever it is valued.
 #[derive(Debug, Default)]
 pub struct DealScratch {
     starts: BTreeMap<DealKey, Start>,
     values: Vec<Option<Real>>,
     notes: Notes,
+    means: HashMap<(State, Option<Seat>), Real, FxBuildHasher>,
 }
 
 /// One deal's static value, `None` if an answer's notes outgrew their buffer.
@@ -228,7 +234,12 @@ pub fn sampled(
     scratch: &mut DealScratch,
 ) -> Option<Sums> {
     let (public, private) = beliefs;
-    let DealScratch { starts, values, notes } = scratch;
+    let DealScratch {
+        starts,
+        values,
+        notes,
+        means,
+    } = scratch;
     starts.clear();
     let weighted = public
         .iter()
@@ -259,23 +270,29 @@ pub fn sampled(
         private: Real::ZERO,
     };
     for (key, start) in starts.iter() {
-        let seed = key_seed(key, SEED);
-        values.clear();
-        match pool {
-            Some(pool) => pool.install(|| {
-                values.par_extend(
-                    (0..count)
-                        .into_par_iter()
-                        .map_init(Notes::default, |own, k| deal(config, start, seed, k, me, own)),
-                );
-            }),
-            None => values.extend((0..count).map(|k| deal(config, start, seed, k, me, notes))),
-        }
-        let total = values
-            .iter()
-            .rev()
-            .try_fold(Real::ZERO, |total, value| value.map(|value| total.add(value)))?;
-        let value = total.div(n);
+        let value = if let Some(mean) = means.get(&(start.state, start.won)) {
+            *mean
+        } else {
+            let seed = key_seed(key, SEED);
+            values.clear();
+            match pool {
+                Some(pool) => pool.install(|| {
+                    values.par_extend(
+                        (0..count)
+                            .into_par_iter()
+                            .map_init(Notes::default, |own, k| deal(config, start, seed, k, me, own)),
+                    );
+                }),
+                None => values.extend((0..count).map(|k| deal(config, start, seed, k, me, notes))),
+            }
+            let total = values
+                .iter()
+                .rev()
+                .try_fold(Real::ZERO, |total, value| value.map(|value| total.add(value)))?;
+            let mean = total.div(n);
+            means.insert((start.state, start.won), mean);
+            mean
+        };
         sums = Sums {
             public: sums.public.add(start.public.mul(value)),
             private: sums.private.add(start.private.mul(value)),

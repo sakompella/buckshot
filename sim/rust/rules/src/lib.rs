@@ -52,7 +52,7 @@ pub use domain::{
     PHONE_CAP, Range, Ring, RoundRules, Seat, Seats, Secret, Shell, ShellRule, Slot, Slots, Table, prize,
 };
 pub use enum_map::EnumMap;
-pub use machine::{initial, start, step, step_into};
+pub use machine::{initial, start, step, step_in_place, step_into};
 pub use point::{MenuInputs, draw_request, request};
 pub use rules::{alive, load_actual, load_next, predecessor, world_load_rule};
 pub use state::{Batch, Deck, Decks, FirstDeathCheck, Grabs, Jam, Phase, Players, SeatRecord, State, World, players_seat};

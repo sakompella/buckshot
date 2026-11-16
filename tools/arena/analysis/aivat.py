@@ -7,10 +7,12 @@ adjusted results rate the same strengths with less luck in them. The model seats
 terms. The chance events:
 
 - Shots. The shell order is uniform over the orders that fit both players' clues together, so P(live) is the chamber's live
-  chance given every clue either player holds. V: gradient boosting on the state after the shot (both healths, shells and
+  chance given every clue either player holds. A recorded shot takes its outcome from its own Fired event, so matches with a dealer
+  AI's unrecorded shots are corrected too. V: gradient boosting on the state after the shot (both healths, shells and
   expected lives left, who moves, item counts, round); a shot that ends the round has its exact 0 or 1.
 - Loads. The two-seat deck of nine compositions is drawn without replacement and refilled when empty, across rounds, so P is the
-  count left in the deck over its size. V: a logistic on the health gap and the composition.
+  count left in the deck over its size. V: a logistic on the health gap of the player who moves first and the composition. Every
+  load of a rated round counts, whoever's decisions are recorded.
 - Round 1's first seat, a coin flip. V: the mean round 1 result of each starter.
 - Item deals. Each granted item is a uniform draw from the items its seat may still get: under the per-seat cap and the
   table cap of sim/bend-mp/domain.bend's ItemRules (rules.py, checked against Bend), rebuilt from the public events (a grant outside the rebuilt pool is an
@@ -140,10 +142,9 @@ class Data:
     rounds: pd.DataFrame  # mi, r (0-based), O (position 1 won)
     dec: pd.DataFrame  # knowledge decisions of the rated matches
     consumed: dict  # match_id -> ordinal -> shells consumed before it, counted from the public events
-    loads: dict  # match_id -> (shells consumed before it, composition) of each load, in order
+    loads: dict  # match_id -> composition of each load, in order
     inverters: dict  # match_id -> ordinals of inverter uses
     clues: pd.DataFrame
-    outcomes: dict  # match_id -> live per shot, in order
     ejected: dict  # match_id -> live per shell beer ejected, in order
     grants: pd.DataFrame  # deals_of
     deals: pd.DataFrame
@@ -173,29 +174,32 @@ def read(db_path: str, knowledge_path: str, regret_path: str) -> Data:
     ids = set(matches.match_id)
     dec = pd.read_sql(
         "SELECT match_id, ordinal, player, round, remaining, private_known, private_orders, private_live_json, shot, sawed, item,"
-        " health_json, own_items_json, opponent_items_json, shown_live, shown_blank FROM decisions",
+        " health_json, own_items_json, opponent_items_json FROM decisions",
         kn,
     )
     search = pd.read_sql("SELECT match_id, ordinal, best_score / 1e6 B, chosen_score / 1e6 Q FROM regret WHERE status = 'searched'", connect(regret_path))
     dec = dec[dec.match_id.isin(ids)].merge(search, on=["match_id", "ordinal"], how="left").sort_values(["match_id", "ordinal"]).reset_index(drop=True)
-    shells, loads = defaultdict(list), defaultdict(list)  # per match: the event index of each shell shot or ejected, and of each load with its composition
+    shells, loads = defaultdict(list), defaultdict(list)  # per match: the event index of each shell shot or ejected, and the composition of each load
+    fired = defaultdict(list)  # per match: the event index and liveness of each shot
     for match, at, kind, text in db.execute("SELECT match_id, idx, kind, json FROM events WHERE kind IN ('Fired', 'Ejected', 'Loaded') ORDER BY match_id, idx"):
         if kind == "Loaded":
             load = json.loads(text)["load"]
-            loads[match].append((at, (load["live"], load["blank"])))
+            loads[match].append((load["live"], load["blank"]))
         else:
             shells[match].append(at)
+            if kind == "Fired":
+                fired[match].append((at, json.loads(text)["shell"] == "Live"))
     before = {(m, o): e for m, o, e in db.execute("SELECT match_id, ordinal, events_before FROM decisions")}
     consumed = {m: {o: bisect.bisect_left(shells[m], before[(m, o)]) for o in g.ordinal} for m, g in dec.groupby("match_id")}
-    starts = {m: [(bisect.bisect_left(shells[m], at), comp) for at, comp in ls] for m, ls in loads.items()}
+    # A recorded shot is the first Fired event after its decision: a dealer AI's shots have no decision, so the events, not the decisions, say what each shot was.
+    live = [fired[m][bisect.bisect_left(fired[m], (before[(m, o)], False))][1] if pd.notna(s) else np.nan for m, o, s in zip(dec.match_id, dec.ordinal, dec.shot)]
+    dec["live"] = np.array(live, dtype=float)
     inverters = defaultdict(list)
     for t in dec[dec.item == "Inverter"].itertuples():
         inverters[t.match_id].append(t.ordinal)
     clues = pd.read_sql("SELECT match_id, ordinal, player, position, shell FROM clues", kn)
-    shots = shot_outcomes(db)
-    outcomes = {m: shots[m] for m in ids}
     grants, deals = deals_of(db, dict(zip(matches.match_id, matches.mi)))
-    return Data(matches, pd.DataFrame(rounds, columns=["mi", "r", "O"]), dec, consumed, starts, inverters, clues, outcomes, shot_outcomes(db, "Ejected"), grants, deals)
+    return Data(matches, pd.DataFrame(rounds, columns=["mi", "r", "O"]), dec, consumed, loads, inverters, clues, shot_outcomes(db, "Ejected"), grants, deals)
 
 
 def shots_of(d: Data) -> pd.DataFrame:
@@ -204,11 +208,6 @@ def shots_of(d: Data) -> pd.DataFrame:
     pos_of = {(m, l): p for m, l1, l2 in zip(d.matches.match_id, d.matches.letter1, d.matches.letter2) for l, p in ((l1, 1), (l2, 2))}
     O = {(mi, r): o for mi, r, o in zip(d.rounds.mi, d.rounds.r, d.rounds.O)}
     sh = d.dec[d.dec.shot.notna()].copy()
-    live = []
-    for m, g in sh.groupby("match_id", sort=False):
-        seen = d.outcomes[m]
-        live += seen if len(seen) == len(g) else [np.nan] * len(g)
-    sh["live"] = live
     sh["mi"] = sh.match_id.map(mi_of)
     sh["O1"] = [O.get((a, b), np.nan) for a, b in zip(sh.mi, sh["round"])]
     sh = sh[sh.live.notna() & sh.O1.notna()].reset_index(drop=True)
@@ -335,34 +334,24 @@ def shot_corrections(d: Data, sh: pd.DataFrame) -> np.ndarray:
 
 
 def load_corrections(d: Data) -> np.ndarray:
-    pos_of = {(m, l): p for m, l1, l2 in zip(d.matches.match_id, d.matches.letter1, d.matches.letter2) for l, p in ((l1, 1), (l2, 2))}
-    mi_of = dict(zip(d.matches.match_id, d.matches.mi))
+    """One term per load of a rated round, from the public events: the mover's health gap and who moves first after it, whoever's decisions were recorded."""
     O = {(mi, r): o for mi, r, o in zip(d.rounds.mi, d.rounds.r, d.rounds.O)}
-    dec = d.dec.copy()
-    dec["C"] = [d.consumed[m][o] for m, o in zip(dec.match_id, dec.ordinal)]
-    dec["start"] = dec.C - (dec.shown_live + dec.shown_blank - dec.remaining)
+    mi_of = dict(zip(d.matches.match_id, d.matches.mi))
+    comps = {mi_of[m]: cs for m, cs in d.loads.items() if m in mi_of}
     rows = []
-    for m, g in dec.groupby("match_id"):
-        # The first decision of a load, before any shell of it is gone: a dealer AI's decisions are not in the record, so a load can open with its moves.
-        firsts = g[g.remaining == g.shown_live + g.shown_blank].groupby("start").first().reset_index()
-        chances = dict(zip((start for start, _ in d.loads[m]), deck_chances([comp for _, comp in d.loads[m]])))
-        for t in firsts.itertuples():
-            comp = (int(t.shown_live), int(t.shown_blank))
-            if (t.start, comp) not in d.loads[m]:
-                raise ValueError(f"match {m}: the decision at shell {t.start} shows load {comp}, which the events do not load there")
-            if (mi_of[m], t.round) not in O:
-                continue
-            h = json.loads(t.health_json)
-            pos = pos_of[(m, t.player)]
-            o1 = O[(mi_of[m], t.round)]
-            rows.append((mi_of[m], t.round, pos, comp, chances[t.start], h[0]["health"], h[1].get("health", np.nan), o1 if pos == 1 else 1 - o1))
+    for mi, g in d.deals.groupby("mi"):
+        assert len(g) == len(comps[mi]), f"match index {mi}: {len(g)} deals, {len(comps[mi])} loads"
+        for t, comp, chances in zip(g.itertuples(), comps[mi], deck_chances(comps[mi])):
+            if (mi, t.r) in O:
+                hm, ho = (t.h1, t.h2) if t.mover == 1 else (t.h2, t.h1)
+                rows.append((mi, t.r, t.mover, comp, chances, hm, ho, O[(mi, t.r)] if t.mover == 1 else 1 - O[(mi, t.r)]))
     ld = pd.DataFrame(rows, columns=["mi", "round", "pos", "comp", "chances", "hm", "ho", "Om"])
 
     def features(df, comps):
         lc = np.array([c[0] for c in comps])
         bk = np.array([c[1] for c in comps])
         n = lc + bk
-        hm, ho = df.hm.fillna(df.hm.mean()).values, df.ho.fillna(3).values
+        hm, ho = df.hm.values, df.ho.values
         return np.column_stack([hm - ho, lc / n, n, (hm - ho) * lc / n, lc, bk, lc / n / ho, lc / n / hm])
 
     f = folds(d.matches.seed.values[ld.mi])
@@ -442,9 +431,9 @@ def use_corrections(d: Data) -> np.ndarray:
     glass_clue = {(m, o): s == "Live" for m, o, at, s in zip(d.clues.match_id, d.clues.ordinal, d.clues.position, d.clues.shell) if at == 1}
     real = np.full(len(dec), np.nan)
     for m, g in dec.groupby("match_id"):
-        fired, ejected = iter(d.outcomes[m]), iter(d.ejected.get(m, []))
+        ejected = iter(d.ejected.get(m, []))
         for i, s, it, o in zip(g.index, shot[g.index], g.item, g.ordinal):
-            real[i] = next(fired, np.nan) if s else next(ejected, np.nan) if it == "Beer" else glass_clue.get((m, o), np.nan) if it == "Glass" else np.nan
+            real[i] = dec.live[i] if s else next(ejected, np.nan) if it == "Beer" else glass_clue.get((m, o), np.nan) if it == "Glass" else np.nan
     # The value after a decision in the mover's view: the next decision's best value, or the round's result.
     by_round = dec.groupby(["match_id", "round"])
     next_B, next_pos = by_round.B.shift(-1).values, by_round.pos.shift(-1).values

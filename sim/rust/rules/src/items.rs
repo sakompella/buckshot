@@ -47,6 +47,11 @@ fn read<T: Copy>(ring: &Ring<T>, seat: Seat, fallback: T) -> T {
     ring.get(seat).unwrap_or(fallback)
 }
 
+/// Bend is strict: it evaluates both sides of `&&` and `||`. The trace build
+/// does too, to record Bend's branches; the others skip the pool checks whose
+/// result cannot change the answer.
+const STRICT: bool = cfg!(feature = "trace");
+
 /// `keep`: runs `on_keep` when the element is kept in the result list.
 pub(crate) fn keep(kept: bool, on_keep: impl FnOnce()) {
     if kept {
@@ -84,8 +89,11 @@ fn slots_items(slots: Slots) -> impl Iterator<Item = Option<Item>> {
     Slot::ORDER.into_iter().map(move |slot| slots.get(slot))
 }
 
-/// `occupied`.
+/// `occupied`. The trace build walks the slots, as Bend does, to record its branches.
 fn occupied(slots: Slots) -> u32 {
+    if !cfg!(feature = "trace") {
+        return slots.occupied();
+    }
     let mut count = 0u32;
     let mut found = slots_items(slots);
     loop {
@@ -130,8 +138,11 @@ fn copies_one(found: Option<Item>, item: Item) -> u32 {
     }
 }
 
-/// `slots.copies`.
+/// `slots.copies`. The trace build walks the slots, as Bend does, to record its branches.
 fn slots_copies(slots: Slots, item: Item) -> u32 {
+    if !cfg!(feature = "trace") {
+        return slots.copies(item);
+    }
     slots_items(slots).fold(0u32, |total, found| total.saturating_add(copies_one(found, item)))
 }
 
@@ -323,9 +334,49 @@ fn stock_counted(rule: ItemRule, dealt: bool, state: &State, seat: Seat, item: I
     }
 }
 
+/// Each item's copies `seat` owns (`owned`), by rank.
+fn owned_counts(players: &Players, grabs: &Grabs, seat: Seat) -> [u32; Item::ORDER.len()] {
+    let mut counts = [0u32; Item::ORDER.len()];
+    let held = seat_slots(players, seat).items().chain(seat_holding(grabs, seat));
+    for item in held {
+        if let Some(count) = usize::try_from(item.rank()).ok().and_then(|rank| counts.get_mut(rank)) {
+            *count = count.saturating_add(1);
+        }
+    }
+    counts
+}
+
+/// [`pool`] from every item's counts at once, for the build without the trace.
+fn pool_counted(config: &Config, state: &State, seat: Seat) -> Items {
+    let table = config.table();
+    let rules = rules::world_rules_ref(config, &state.world);
+    let mut owns = [0u32; Item::ORDER.len()];
+    let mut totals = [0u32; Item::ORDER.len()];
+    for at in table.seats().iter() {
+        let counts = owned_counts(&state.players, &state.grabs, at);
+        if at == seat {
+            owns = counts;
+        }
+        for (sum, count) in totals.iter_mut().zip(counts) {
+            *sum = sum.saturating_add(count);
+        }
+    }
+    let mut pool = Items::EMPTY;
+    for ((item, own), total) in Item::ORDER.into_iter().zip(owns).zip(totals) {
+        let rule = rules.item(item);
+        if rule.enabled && item.dealt_at(table) && own < rule.per_player && total < rule.on_table {
+            pool = pool.with(item);
+        }
+    }
+    pool
+}
+
 /// `pool`: the items `seat` may still be granted, in item order. Held items
-/// count against both caps.
+/// count against both caps. The trace build walks Bend's branches.
 pub(crate) fn pool(config: &Config, state: &State, seat: Seat) -> Items {
+    if !cfg!(feature = "trace") {
+        return pool_counted(config, state, seat);
+    }
     let table = config.table();
     let rules = rules::world_rules_ref(config, &state.world);
     // `pool.go` over `item.order()`.
@@ -377,7 +428,7 @@ fn begin_go(seats: Seats, config: &Config, state: &State, new_round: bool) -> Se
     for seat in seats.iter() {
         branch!(B::SmItemsBeginGoCons);
         let can = begin_can(new_round, seat_health(&state.players, seat), seat_slots(&state.players, seat));
-        let stocked = stocked(config, state, seat);
+        let stocked = (STRICT || can) && stocked(config, state, seat);
         keep(can && stocked, || kept.push(seat));
     }
     branch!(B::SmItemsBeginGoNil);
@@ -482,10 +533,11 @@ pub(crate) fn grab_needs(config: &Config, state: &State) -> Needs {
 /// `placing.last`: the placing seat still holds its item here.
 pub(crate) fn placing_last(config: &Config, state: &State, seat: Seat) -> bool {
     let grabs = &state.grabs;
-    let empty_pool = !stocked(config, state, seat);
     let last_slot = occupied(seat_slots(&state.players, seat)).saturating_add(1) == 8;
     let enough = seat_granted(grabs, seat) >= state.world.item_amount;
-    empty_pool || last_slot || enough
+    let full = last_slot || enough;
+    let empty_pool = (STRICT || !full) && !stocked(config, state, seat);
+    empty_pool || full
 }
 
 /// `finish.ended`.
@@ -515,7 +567,7 @@ fn finish_empty(seats: Seats, config: &Config, state: &State) -> bool {
 /// grabbing, or every seat's pool is empty.
 pub(crate) fn finished(config: &Config, state: &State) -> bool {
     let ended = finish_ended(&state.grabs);
-    let empty = finish_empty(config.table().seats(), config, state);
+    let empty = (STRICT || !ended) && finish_empty(config.table().seats(), config, state);
     ended || empty
 }
 
@@ -528,8 +580,9 @@ fn stalled(seats: Seats, config: &Config, state: &State, placing: Seat) -> Seats
         let grabbing = seat_grabbing(grabs, seat);
         let empty_handed = is_none(seat_holding(grabs, seat));
         let other = seat != placing;
-        let dry = !stocked(config, state, seat);
-        keep(grabbing && empty_handed && other && dry, || out.push(seat));
+        let eligible = grabbing && empty_handed && other;
+        let dry = (STRICT || eligible) && !stocked(config, state, seat);
+        keep(eligible && dry, || out.push(seat));
     }
     branch!(B::SmItemsStalledNil);
     out

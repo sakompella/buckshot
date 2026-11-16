@@ -974,6 +974,24 @@ test("all cooling accounts hold new games back while an unrelated model still pl
   expect(runs.length).toBeGreaterThan(0);
 });
 
+test("a new match waits while every account of its model is cooling, never starting unpinned", async () => {
+  const tournament = pinnedTournament();
+  const [first, second, fresh] = scheduleOf(tournament);
+  const dir = mkdtempSync(join(tmpdir(), "tournament-no-account-"));
+  const stop = new AbortController();
+
+  if (first === undefined || second === undefined || fresh === undefined) throw new Error("too few matches");
+
+  pinAndCool(dir, tournament, first, "account-a");
+  pinAndCool(dir, tournament, second, "account-b");
+
+  const runs: Array<string> = [];
+
+  setTimeout(() => stop.abort(), 200);
+  await runPending(dir, tournament.config, [first, second, fresh], 1, async (match) => (runs.push(match.name), 1), () => undefined, stop.signal);
+  expect(runs).toEqual([]);
+});
+
 test("a match started without pins stays unpinned when its current endpoint lists accounts", async () => {
   const tournament = pinnedTournament();
   const match = scheduleOf(tournament)[0];

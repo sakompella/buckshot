@@ -386,7 +386,9 @@ export const runPending = async (
   const accountsFor = (match: ScheduledMatch) => {
     const pinned = Object.fromEntries(match.seats.flatMap((seat) => (pin[seat] === undefined ? [] : [[seat, pin[seat]]])));
 
-    return assigned.get(match.name) ?? { ...assignAccounts(config, match, isCooling, (account) => accountLoad.get(account) ?? 0, prefer), ...pinned };
+    const available = assigned.has(match.name) ? undefined : assignAccounts(config, match, isCooling, (account) => accountLoad.get(account) ?? 0, prefer);
+
+    return assigned.get(match.name) ?? (available === undefined ? undefined : { ...available, ...pinned });
   };
 
   const isReady = (match: ScheduledMatch) => {

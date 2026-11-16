@@ -7,8 +7,8 @@ use std::hint::black_box;
 
 use buckshot_rules::testing::{any_u32, arbitrary_state, between, count, flag, many, num, seat, slots, supported_config, table};
 use buckshot_rules::{
-    AmountRule, Answer, Config, EnumMap, Event, HealthRule, IdleOption, Item, ItemRule, LegalMove, LoadRule, MenuInputs, Phase, Range,
-    Request, RequestKind, RoundRules, RuleError, Seat, ShellRule, Slot, State, Stepped, World, request, start, step, step_event,
+    AmountRule, Answer, Config, EnumMap, Event, HealthRule, IdleOption, Item, ItemRule, Items, LegalMove, LoadRule, MenuInputs, Phase,
+    Range, Request, RequestKind, RoundRules, RuleError, Seat, ShellRule, Slot, State, Stepped, World, request, start, step, step_event,
 };
 use hegel::TestCase;
 use hegel::generators as gs;
@@ -344,6 +344,35 @@ fn slot_items_are_the_occupied_slots(tc: TestCase) {
     let slots = slots(&tc);
     let occupied: Vec<Item> = slots.entries().filter_map(|(_, item)| item).collect();
     assert_eq!(slots.items().collect::<Vec<_>>(), occupied, "items of {slots:?}");
+}
+
+/// `Slots::occupied` and `Slots::copies` count what the slots' entries hold.
+#[hegel::test(test_cases = 256)]
+fn slot_counts_are_the_entries(tc: TestCase) {
+    let slots = slots(&tc);
+    let held = || slots.entries().filter_map(|(_, item)| item);
+    assert_eq!(usize::try_from(slots.occupied()).ok(), Some(held().count()), "occupied {slots:?}");
+    for item in Item::ORDER {
+        let copies = held().filter(|held| *held == item).count();
+        assert_eq!(
+            usize::try_from(slots.copies(item)).ok(),
+            Some(copies),
+            "copies of {item:?} in {slots:?}"
+        );
+    }
+}
+
+/// `Items::nth` is the n-th item of the set's items in order.
+#[hegel::test(test_cases = 256)]
+fn items_nth_is_the_nth_in_order(tc: TestCase) {
+    let items = Item::ORDER.into_iter().filter(|_| flag(&tc)).fold(Items::EMPTY, Items::with);
+    for n in 0..10 {
+        assert_eq!(
+            items.nth(n),
+            items.iter().nth(usize::try_from(n).unwrap_or(usize::MAX)),
+            "item {n} of {items:?}"
+        );
+    }
 }
 
 fn wild_round(tc: &TestCase) -> RoundRules {

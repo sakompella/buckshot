@@ -57,11 +57,12 @@ CREATE_BUILD = """CREATE TABLE IF NOT EXISTS evaluator_build (
 
 
 # The run's peak memory: SEARCH_BASE_BYTES + threads * budget * SEARCH_BYTES_PER_NODE (docs/arena/README.md, "Heavy jobs").
-# Measured 2026-11-14 on 3 threads: the input writers and Python peaked at 0.8 GB resident (depth 6, 200k, 200 decisions),
-# and buckshot-search at 31 MB (depth 6, 200k), 39 MB (depth 7, 200k), 124 MB (depth 7, 1M), 203 MB (depth 7, 2M), about
-# 30 bytes per thread and node; 40 leaves room. Refit both after a change to the search memo.
+# Measured 2026-11-14 on 3 threads: the input writers and Python peaked at 0.8 GB resident (depth 6, 200k, 200 decisions).
+# Measured 2026-11-16 with the smaller memo keys (perf/search-speed): buckshot-search at depth 7 and 50M nodes peaked at
+# 225 and 353 MB on two hosts, one thread, over limited decisions, and at 1.0 GB over 6 threads on 2,660 mixed decisions,
+# so 7 bytes per thread and node at most; 8 leaves room. Refit both after a change to the search memo.
 SEARCH_BASE_BYTES = 1 << 30
-SEARCH_BYTES_PER_NODE = 40
+SEARCH_BYTES_PER_NODE = 8
 
 
 def declared_memory(settings: "Settings") -> int:
@@ -155,7 +156,7 @@ def git_commit(checkout: Path) -> str:
 @dataclass(frozen=True)
 class Settings:
     depth: int = 7
-    budget: int = 1_000_000
+    budget: int = 50_000_000
     samples: int = 256
     threads: int = max(1, (os.cpu_count() or 2) // 2)
     jobs: int = 4

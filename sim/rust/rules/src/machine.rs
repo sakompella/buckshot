@@ -16,7 +16,7 @@ use crate::{Answer, IdleOption, Notes, Stepped};
 
 pub(crate) struct Run<'a> {
     pub config: &'a Config,
-    pub state: State,
+    pub state: &'a mut State,
     pub notes: &'a mut Notes,
 }
 
@@ -91,13 +91,13 @@ pub fn initial(config: &Config) -> State {
 #[must_use]
 pub fn start(config: &Config) -> Stepped {
     let mut notes = Notes::default();
-    let mut run = Run {
+    let mut state = initial(config);
+    first_begin(&mut Run {
         config,
-        state: initial(config),
+        state: &mut state,
         notes: &mut notes,
-    };
-    first_begin(&mut run);
-    Stepped { state: run.state, notes }
+    });
+    Stepped { state, notes }
 }
 
 /// One answer: `answer.draw` for a Draw token, `answer.choice` for a Choice
@@ -117,10 +117,17 @@ pub fn step(config: &Config, state: State, answer: Answer) -> Stepped {
 /// [`step`] writing the answer's notes into `notes`, in place of what it
 /// held, so a caller that steps often reuses one buffer.
 pub fn step_into(config: &Config, state: State, answer: Answer, notes: &mut Notes) -> State {
+    let mut state = state;
+    step_in_place(config, &mut state, answer, notes);
+    state
+}
+
+/// [`step_into`] on `state` in place, so a caller that steps one state over and over copies none.
+pub fn step_in_place(config: &Config, state: &mut State, answer: Answer, notes: &mut Notes) {
     notes.clear();
-    let mut run = Run { config, state, notes };
-    let r = &mut run;
-    match (state.phase, answer) {
+    let phase = state.phase;
+    let r = &mut Run { config, state, notes };
+    match (phase, answer) {
         (Phase::NeedFirst, Answer::Draw(value)) => {
             branch!(B::SimpleMainAnswerDrawAtNeedFirst);
             let seat = config
@@ -192,19 +199,22 @@ pub fn step_into(config: &Config, state: State, answer: Answer, notes: &mut Note
             r.set_phase(Phase::Blocked { holder: None });
         }
     }
-    run.state
 }
 
 /// `answer.idle`'s chosen move: `pickup.selected` for a move of `seat`'s own menu.
 pub(crate) fn pick(config: &Config, state: State, seat: Seat, option: IdleOption) -> Stepped {
     let mut notes = Notes::default();
-    let mut run = Run {
-        config,
-        state,
-        notes: &mut notes,
-    };
-    pickup_selected(&mut run, seat, Some(option));
-    Stepped { state: run.state, notes }
+    let mut state = state;
+    pickup_selected(
+        &mut Run {
+            config,
+            state: &mut state,
+            notes: &mut notes,
+        },
+        seat,
+        Some(option),
+    );
+    Stepped { state, notes }
 }
 
 fn pickup(r: &mut Run<'_>, seat: Seat) {
@@ -349,7 +359,7 @@ enum Distribution {
 
 /// `grab.check`.
 fn grab_check(r: &mut Run<'_>) {
-    let done = r.state.grabs.distributing && items::finished(r.config, &r.state);
+    let done = r.state.grabs.distributing && items::finished(r.config, r.state);
     if done {
         branch!(B::SimpleMainGrabCheckDoneTrue);
         r.state.grabs.distributing = false;
@@ -391,12 +401,12 @@ fn grab_put(r: &mut Run<'_>, seat: Seat, slot: Slot) {
 /// `grab.place`: a last placement ends the seat, checks completion, ends
 /// the noneligible empty-handed grabbers, and checks completion again.
 fn grab_place(r: &mut Run<'_>, seat: Seat, slot: Slot) {
-    if items::placing_last(r.config, &r.state, seat) {
+    if items::placing_last(r.config, r.state, seat) {
         branch!(B::SimpleMainGrabPlaceLastTrue);
         r.state.grabs = items::grabs_close(r.state.grabs, seat);
         r.emit(GameEvent::GrabbingEnded { seat });
         grab_check(r);
-        let stalled = items::stalled_seats(r.config, &r.state, seat);
+        let stalled = items::stalled_seats(r.config, r.state, seat);
         grab_end_all(r, stalled);
         grab_check(r);
     } else {
@@ -476,8 +486,32 @@ fn seats_after(seats: &[Seat], after: Seat) -> Seats {
     }
 }
 
-/// `grab.act` with `grab.act.own` and `grab.taker`.
+/// [`grab_act`] without building every seat's options, for the build without
+/// the trace: a seat's first option is a put exactly when it grabs, holds an
+/// item and has an empty slot, and its options are a lone take exactly when
+/// it grabs, holds nothing and its intake is open while distributing.
+fn grab_act_direct(config: &Config, state: &State, after: Seat) -> Distribution {
+    let grabs = &state.grabs;
+    let grabbing = |seat| grabs.grabbing.get(seat).unwrap_or(false);
+    let holding = |seat| grabs.holding.get(seat).flatten();
+    if grabbing(after) && holding(after).is_some() {
+        let slots = items::seat_slots(&state.players, after);
+        if let Some(slot) = Slot::ORDER.into_iter().find(|slot| slots.get(*slot).is_none()) {
+            return Distribution::Placing { seat: after, slot };
+        }
+    }
+    let takes = |seat| grabbing(seat) && holding(seat).is_none() && grabs.intake.get(seat).unwrap_or(false) && grabs.distributing;
+    seats_after(config.table().seats().as_slice(), after)
+        .iter()
+        .find(|seat| takes(*seat))
+        .map_or(Distribution::NoTaker, |seat| Distribution::Taking { seat })
+}
+
+/// `grab.act` with `grab.act.own` and `grab.taker`. The trace build walks Bend's branches.
 fn grab_act(config: &Config, state: &State, after: Seat) -> Distribution {
+    if !cfg!(feature = "trace") {
+        return grab_act_direct(config, state, after);
+    }
     let needs = items::grab_needs(config, state);
     if let Some(GrabOption::PutAt { slot }) = needs.of(after).first() {
         branch!(B::SimpleMainGrabActOwnPutAtCons);
@@ -573,16 +607,16 @@ fn grab_loop(r: &mut Run<'_>, fuel: u32, next: Distribution) {
             (Some(rest), Distribution::Taking { seat }) => {
                 branch!(B::SimpleMainGrabLoopSuccTaking);
                 r.state.grabs = items::grabs_stop_intake(r.state.grabs, seat);
-                let pool = items::pool(r.config, &r.state, seat);
+                let pool = items::pool(r.config, r.state, seat);
                 grab_pool(r, seat, pool);
                 fuel = rest;
-                next = grab_next(r.config, &r.state, pool, seat);
+                next = grab_next(r.config, r.state, pool, seat);
             }
             (Some(rest), Distribution::Placing { seat, slot }) => {
                 branch!(B::SimpleMainGrabLoopSuccPlacing);
                 grab_place(r, seat, slot);
                 fuel = rest;
-                next = grab_continue(r.config, &r.state, seat);
+                next = grab_continue(r.config, r.state, seat);
             }
         }
     }
@@ -590,7 +624,7 @@ fn grab_loop(r: &mut Run<'_>, fuel: u32, next: Distribution) {
 
 /// `grab.distribute`.
 fn grab_distribute(r: &mut Run<'_>, after: Seat) {
-    let next = grab_continue(r.config, &r.state, after);
+    let next = grab_continue(r.config, r.state, after);
     grab_loop(r, grab_fuel(r.config), next);
 }
 
@@ -634,7 +668,7 @@ fn round_reset(r: &mut Run<'_>) {
         health,
         first: world.first_turn,
     });
-    let seats = items::begin_seats(r.config, &r.state, true, world.item_amount);
+    let seats = items::begin_seats(r.config, r.state, true, world.item_amount);
     distribute_begin(r, seats);
 }
 
@@ -724,7 +758,7 @@ fn win(r: &mut Run<'_>, seat: Seat) {
 
 /// `reload.begin`.
 fn reload_begin(r: &mut Run<'_>) {
-    let seats = items::begin_seats(r.config, &r.state, false, r.state.world.item_amount);
+    let seats = items::begin_seats(r.config, r.state, false, r.state.world.item_amount);
     distribute_begin(r, seats);
 }
 
@@ -758,7 +792,7 @@ fn turn_winner(r: &mut Run<'_>, shooter: Seat, passing: bool, winner: Option<Sea
 /// shot's winner check, or None after beer ejects the last shell.
 fn turn_packet(r: &mut Run<'_>, shooter: Seat, passing: bool, winner: Option<Seat>) {
     let rule = rules::load_amount(rules::world_load_rule(r.config, &r.state.world));
-    let live = items::amount_live(rule, r.state.grabs.distributing, items::reload_wanted(r.config, &r.state, winner));
+    let live = items::amount_live(rule, r.state.grabs.distributing, items::reload_wanted(r.config, r.state, winner));
     if live {
         branch!(B::SimpleMainTurnLiveTrue);
         r.set_phase(Phase::NeedTurnAmount {
