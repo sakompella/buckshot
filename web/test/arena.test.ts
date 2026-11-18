@@ -411,7 +411,7 @@ test("an endpoint's model alias plays as the catalog model it names", async () =
   expect(model?.contextWindow).toBeGreaterThan(0);
 });
 
-test("an endpoint's model plays as a model of the pi-ai provider its catalog model names", async () => {
+test("an endpoint's model of another provider plays as a model of the pi-ai provider its catalog model names", async () => {
   const routed = await endpointFrom({ PLAYER_A_OAI_URL: "http://localhost:9440/v1", PLAYER_A_OAI_KEY: ENDPOINT.key, PLAYER_A_MODEL: "oc/deepseek-v4.1-flash-free", PLAYER_A_CATALOG_MODEL: "opencode/deepseek-v4.1-flash" });
 
   if (!Exit.isSuccess(routed)) throw new Error(String(routed.cause));
@@ -446,12 +446,15 @@ test.each([
 test.each([
   ["ANT", "claude-haiku-5-5"],
   ["OAI", "gpt-6-luna"],
-] as const)("a %s endpoint tells the endpoint it is buckshot and, when ARENA_PROJECT is set, which project", async (api, model) => {
-  const [named] = await requestsSentAt(api, model, "low", { ARENA_PROJECT: "tournament 13" });
-  const [anonymous] = await requestsSentAt(api, model, "low");
+] as const)("a %s endpoint labels its requests in the headers ARENA_AGENT_HEADER and ARENA_PROJECT_HEADER name, and sends no label without them", async (api, model) => {
+  const names = { ARENA_AGENT_HEADER: "X-Agent", ARENA_PROJECT_HEADER: "X-Project" };
+  const [named] = await requestsSentAt(api, model, "low", { ...names, ARENA_PROJECT: "tournament 13" });
+  const [anonymous] = await requestsSentAt(api, model, "low", names);
+  const [unnamed] = await requestsSentAt(api, model, "low", { ARENA_PROJECT: "tournament 13" });
 
-  expect([named?.headers.get("X-Arena-Agent"), named?.headers.get("X-Arena-Project")]).toEqual(["buckshot", "tournament 13"]);
-  expect([anonymous?.headers.get("X-Arena-Agent"), anonymous?.headers.get("X-Arena-Project")]).toEqual(["buckshot", null]);
+  expect([named?.headers.get("X-Agent"), named?.headers.get("X-Project")]).toEqual(["buckshot", "tournament 13"]);
+  expect([anonymous?.headers.get("X-Agent"), anonymous?.headers.get("X-Project")]).toEqual(["buckshot", null]);
+  expect([unnamed?.headers.get("X-Agent"), unnamed?.headers.get("X-Project")]).toEqual([null, null]);
 });
 
 test("an OpenAI Responses endpoint sends a prompt cache key that is the conversation's session id, and a session id of its own for each conversation", async () => {

@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 # Mutation testing for sim/rust with cargo-mutants (settings in .cargo/mutants.toml).
-# Too slow for check.sh or the pre-commit hook (see AGENTS.md for the chunks).
+# Too slow for check.sh or the pre-commit hook: run it through `dev heavy --` in
+# chunks of about 15 minutes, one rules file (--package buckshot-rules --file
+# rules/src/<file>.rs) or one search shard (the second example, --shard k/4) at a time.
 # Writes the oracles once: a small fixed set of Bend tapes (RUST_TAPES) and
 # synthetic decisions with the Bend player's analyses (RUST_SEARCH_ORACLE, from
 # search-oracle.sh, read by search/tests/oracle.rs and pruning.rs). Then runs cargo mutants with any
 # extra arguments, for example:
 #   bash sim/rust/mutants.sh --package buckshot-rules --file rules/src/items.rs
 #   bash sim/rust/mutants.sh --package buckshot-search --no-default-features --features f32,seats-2-4 --shard 0/2
-# Results land in sim/rust/mutants.out/ (gitignored). Fails when a mutant survives.
+# Results land in sim/rust/mutants.out/ (gitignored). Fails when a mutant survives:
+# add a test, or list the mutant in exclude_re with the reason it is equivalent or unreachable.
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)

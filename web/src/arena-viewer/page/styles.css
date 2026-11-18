@@ -4,18 +4,18 @@
 tr:focus-visible td { background: #111; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 system-ui, "Inter", "Segoe UI", sans-serif; }
 main { max-width: 1500px; margin: 0 auto; padding: 18px 36px 80px; }
-h2 { font-size: 19px; font-weight: 600; margin: 0 0 6px; }
-h3 { font-size: 15px; font-weight: 600; margin: 18px 0 6px; }
+h2, h3 { font-size: 19px; font-weight: 600; margin: 0 0 6px; }
+h4 { font-size: 15px; font-weight: 600; margin: 18px 0 6px; }
 .sub { color: var(--mut); font-size: 13.5px; line-height: 1.55; margin: 0 0 18px; max-width: 980px; }
 .k { color: var(--mut); font-size: 12.5px; }
 .pm { color: var(--dim); font-size: 11.5px; }
 section { border-top: 1px solid var(--line); padding-top: 28px; margin-top: 28px; }
 /* A group's heading, then its sections; the first section's rule would double the group's own. */
 section.part { border-top-color: #3a3a3a; margin-top: 56px; }
-h1.ghead { font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mut); margin: 0 0 18px; }
-h1.ghead + section { border-top: 0; margin-top: 0; padding-top: 0; }
+h2.ghead { font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mut); margin: 0 0 18px; }
+h2.ghead + section { border-top: 0; margin-top: 0; padding-top: 0; }
 /* The jump menu right above names the first group, so its heading is only for screen readers. */
-.top + .part > h1.ghead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.top + .part > h2.ghead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
 .grid2 > section { min-width: 0; }
 .empty { color: var(--mut); padding: 40px 0; }
@@ -67,10 +67,11 @@ tr.row:hover td { background: #0b0b0b; cursor: pointer; }
 .lbt tr.tierstart td { border-top: 1px solid var(--line); }
 tr.sel td { background: #111; }
 tr.provisional td { opacity: 0.55; }
+.rowbtn { background: none; border: 0; color: inherit; font: inherit; padding: 0; text-align: left; cursor: pointer; }
 .rk { display: inline-block; min-width: 1.6em; color: #8a8a8a; font-variant-numeric: tabular-nums; }
 
 .hero { display: flex; justify-content: space-between; align-items: flex-end; padding: 36px 0 26px; }
-.hero .title { font-size: 52px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; }
+.hero .title { margin: 0; font-size: 52px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; }
 .hero .lead { color: var(--mut); font-size: 17px; margin: 14px 0 0; }
 .stats { display: grid; grid-template-columns: auto auto; gap: 2px 34px; margin: 0; font: 12px ui-monospace, Menlo, monospace; }
 .stats dt { color: var(--mut); } .stats dd { margin: 0; text-align: right; }
@@ -139,7 +140,7 @@ pre { white-space: pre-wrap; word-break: break-word; background: #0a0a0a; border
 details summary { cursor: pointer; margin: 4px 0; }
 .chartrow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px; align-items: start; }
 .chartrow figure { margin: 0; min-width: 0; }
-.chartrow h3 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+.chartrow h4 { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
 .chartrow .sub { margin-bottom: 12px; }
 .chartrow.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .fate-legend { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 0 0 18px; color: var(--mut); font-size: 13px; }
@@ -167,7 +168,7 @@ tr.group td { color: var(--fg); font-weight: 600; padding-top: 18px; border-bott
 td.pick { cursor: pointer; }
 td.pick:hover { outline: 1px solid #666; }
 
-.lbbar h2 { margin: 0; }
+.lbbar h3 { margin: 0; }
 .rounds { display: flex; gap: 16px; margin: 10px 0 0; font-size: 13px; flex-wrap: wrap; align-items: baseline; }
 
 /* scatter */

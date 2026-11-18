@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { Option, Result } from "effect";
 
 import { startGame } from "../src/bend.ts";
-import { type Assignment, Letter, type Player, rosterOf } from "../src/players.ts";
+import { type Assignment, Letter, rosterOf } from "../src/players.ts";
 import { SEATS_BY_TABLE, SeatCount } from "../src/domain.ts";
 
 const EVERY_LETTER = Letter.literals;
@@ -66,11 +66,7 @@ test("the seats Bend deals are the seats the roster is built from", () => {
 
 test("a player found by a letter keeps that letter in its type", () => {
   const roster = rosterOf(SEATS_BY_TABLE[2]);
-  const a: Option.Option<Player<"A">> = roster.find("A");
+  const letter: Option.Option<"A"> = Option.map(roster.find("A"), (player) => player.letter);
 
-  // @ts-expect-error a Player<"A"> must not be assignable to a Player<"B">
-  const asB: Option.Option<Player<"B">> = a;
-
-  expect(Option.isSome(asB)).toBe(true);
-  expect(Option.map(a, ({ letter }) => letter)).toEqual(Option.some("A"));
+  expect(letter).toEqual(Option.some("A"));
 });

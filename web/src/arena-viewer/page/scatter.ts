@@ -324,7 +324,7 @@ export const scatterView = (
   // A phone has no room for a row of buttons above the chart, so the choice is a menu.
   const controls = h.div([h.Class(width < NARROW ? "ctl menus" : "ctl")], [width < NARROW ? selectView(h, "x axis", scatter.axis, axes, selectAxis) : toggleView(h, scatter.axis, axes, selectAxis)]);
 
-  if (layout === null) return h.div([h.Class("chart")], [h.div([h.Class("lbbar")], [h.h2([], [title])]), controls, h.div([h.Class("empty")], ["No scored matches for this filter."])]);
+  if (layout === null) return h.div([h.Class("chart")], [h.div([h.Class("lbbar")], [h.h3([], [title])]), controls, h.div([h.Class("empty")], ["No scored matches for this filter."])]);
 
   const { type, height, right, x, xLabels, y, at, labels, frontier } = layout;
   const grid = { stroke: "oklch(72% 0 0)", "stroke-opacity": "0.25" };
@@ -412,7 +412,7 @@ export const scatterView = (
   return h.div(
     [h.Class("chart")],
     [
-      h.div([h.Class("lbbar")], [h.h2([], [title])]),
+      h.div([h.Class("lbbar")], [h.h3([], [title])]),
       controls,
       h.svg(
         [h.Width(`${width}`), h.Height(`${height}`), h.OnClick(Message.ClickedOutsideChart())],

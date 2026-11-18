@@ -120,9 +120,16 @@ const listedOf = ({ certain, seats, allMatches }: CertainLinks, { key, type }: C
     .toSorted((left, right) => right.startedAt.localeCompare(left.startedAt));
 };
 
-const fmtBounds = ({ lo, hi }: NonNullable<CertainRate["bounds"]>): string => `[${fmtShare(lo)}, ${fmtShare(hi)}]`;
+/** A resample of zero mistakes is all zeros, so a zero count shows the rule-of-three 95% upper bound, 3 / opportunities, instead. */
+const boundsOf = (cell: Cell): CertainRate["bounds"] => (cell.bounds !== null && cell.mistakes === 0 ? { lo: 0, hi: 3 / cell.opportunities } : cell.bounds);
 
-const intervalView = (h: H, bounds: NonNullable<CertainRate["bounds"]>): Html => h.span([h.Class("pm")], [` ${fmtBounds(bounds)}`]);
+const fmtBounds = (cell: Cell): string => {
+  const bounds = boundsOf(cell);
+
+  return bounds === null ? "" : cell.mistakes === 0 ? ` (under ${fmtShare(bounds.hi)})` : ` [${fmtShare(bounds.lo)}, ${fmtShare(bounds.hi)}]`;
+};
+
+const intervalView = (h: H, cell: Cell): Html => h.span([h.Class("pm")], [fmtBounds(cell)]);
 
 const cellView = (h: H, cell: Cell, link: { readonly key: string; readonly isOpen: boolean } | null): Html => {
   const label = h.DataAttribute("label", CERTAIN_NAMES[cell.type]);
@@ -137,7 +144,7 @@ const cellView = (h: H, cell: Cell, link: { readonly key: string; readonly isOpe
       link !== null && cell.mistakes > 0
         ? h.button([h.Type("button"), h.Class("cmb"), h.AriaExpanded(link.isOpen), h.OnClick(Message.ClickedCertainCount({ key: link.key, type: cell.type }))], [counts])
         : h.span([], [counts]),
-      hasRate(cell) ? h.span([h.Class("cmr")], [h.b([], [fmtShare(cell.mistakes / cell.opportunities)]), cell.bounds === null ? h.empty : intervalView(h, cell.bounds)]) : h.empty,
+      hasRate(cell) ? h.span([h.Class("cmr")], [h.b([], [fmtShare(cell.mistakes / cell.opportunities)]), cell.bounds === null ? h.empty : intervalView(h, cell)]) : h.empty,
     ],
   );
 };
@@ -182,7 +189,7 @@ export const certainTableView = (h: H, rates: ReadonlyArray<CertainRate>, kept: 
   return h.div(
     [h.Id(CERTAIN_TABLE)],
     [
-      h.h2([], ["Certain mistakes by config"]),
+      h.h3([], ["Certain mistakes by config"]),
       rows.length === 0
         ? h.div([h.Class("empty")], ["No config in this filter has a decision with a proven shell."])
         : h.div(
@@ -239,6 +246,7 @@ const panelView = (h: H, type: CertainType, models: ReadonlyArray<Row>, pooled: 
         const y = TOP + index * ROW + ROW / 2;
         const color = colorOf(model);
         const counts = cell.opportunities === 0 ? "–" : `${cell.mistakes.toLocaleString()} / ${cell.opportunities.toLocaleString()}`;
+        const bounds = boundsOf(cell);
         const name = isNarrow ? shortName(model) : baseName(model);
 
         return h.g(
@@ -249,13 +257,13 @@ const panelView = (h: H, type: CertainType, models: ReadonlyArray<Row>, pooled: 
               ? h.g(
                   [],
                   [
-                    cell.bounds === null
+                    bounds === null
                       ? h.empty
-                      : h.line([h.X1(String(x.at(cell.bounds.lo))), h.X2(String(x.at(cell.bounds.hi))), h.Y1(String(y)), h.Y2(String(y)), h.Stroke(color), h.StrokeOpacity("0.4"), h.StrokeWidth("3")], []),
+                      : h.line([h.X1(String(x.at(bounds.lo))), h.X2(String(x.at(bounds.hi))), h.Y1(String(y)), h.Y2(String(y)), h.Stroke(color), h.StrokeOpacity("0.4"), h.StrokeWidth("3")], []),
                     tippedDot(
                       h,
                       anchorId("certain", type, model),
-                      `${baseName(model)} · ${cell.mistakes.toLocaleString()} of ${cell.opportunities.toLocaleString()} opportunities, ${fmtShare(cell.mistakes / cell.opportunities)}${cell.bounds === null ? "" : ` ${fmtBounds(cell.bounds)}`}`,
+                      `${baseName(model)} · ${cell.mistakes.toLocaleString()} of ${cell.opportunities.toLocaleString()} opportunities, ${fmtShare(cell.mistakes / cell.opportunities)}${fmtBounds(cell)}`,
                       String(x.at(cell.mistakes / cell.opportunities)),
                       String(y),
                       [h.R("3.5"), h.Fill(color)],
@@ -272,7 +280,7 @@ const panelView = (h: H, type: CertainType, models: ReadonlyArray<Row>, pooled: 
 };
 
 const pooledNote = (cell: Cell): string =>
-  `All shown configs: ${cell.mistakes.toLocaleString()} of ${cell.opportunities.toLocaleString()}${hasRate(cell) ? `, ${fmtShare(cell.mistakes / cell.opportunities)}${cell.bounds === null ? "" : ` ${fmtBounds(cell.bounds)}`}` : ""}`;
+  `All shown configs: ${cell.mistakes.toLocaleString()} of ${cell.opportunities.toLocaleString()}${hasRate(cell) ? `, ${fmtShare(cell.mistakes / cell.opportunities)}${fmtBounds(cell)}` : ""}`;
 
 export const certainView = (h: H, rates: ReadonlyArray<CertainRate>, kept: ReadonlySet<string>, width: number, content: number): Html => {
   const { models, pooled, provenBlanks, hiddenHealth } = talliesOf(rates, kept);
@@ -281,13 +289,13 @@ export const certainView = (h: H, rates: ReadonlyArray<CertainRate>, kept: Reado
   return h.div(
     [],
     [
-      h.h2([], ["Certain mistakes"]),
+      h.h3([], ["Certain mistakes"]),
       h.p([h.Class("sub")], ["All selected efforts, pooled. Opportunities are the decisions where the mistake was one of the legal moves."]),
       models.length === 0
         ? h.div([h.Class("empty")], ["No config in this filter has a decision with a proven shell."])
         : h.div(
             [h.Class("chartrow")],
-            pooled.map((cell) => h.figure([], [h.h3([], [CERTAIN_NAMES[cell.type]]), h.p([h.Class("sub")], [pooledNote(cell)]), panelView(h, cell.type, models, cell, figure)])),
+            pooled.map((cell) => h.figure([], [h.h4([], [CERTAIN_NAMES[cell.type]]), h.p([h.Class("sub")], [pooledNote(cell)]), panelView(h, cell.type, models, cell, figure)])),
           ),
       h.p(
         [h.Class("k")],

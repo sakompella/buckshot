@@ -5,7 +5,7 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 import { CERTAIN_TYPES, type CertainRate } from "../api.ts";
 import { type Cell as CertainCell, talliesOf } from "./certain.ts";
 
-import { noteView, pressable, termsView } from "./charts.ts";
+import { noteView, termsView } from "./charts.ts";
 import { effortName } from "../../arena/model-names.ts";
 import { isSameTreatment } from "../../arena/same-treatment.ts";
 import { baseName, CERTAIN_NAMES, costPerMove, effortLabel, fmtCount, fmtPct, fmtPoints, fmtRating, fmtSec, fmtShare, fmtUsd, isClaude, isProvisional, PROVISIONAL_BELOW, reasonedShare, reasoningPerMove } from "./data.ts";
@@ -128,9 +128,10 @@ const matchWinView = (elo: Rating | undefined): string => (elo === undefined ? "
 const rowView = (h: H, m: ModelStats, elo: Rating | undefined, hasLuck: boolean, hasMoveElo: boolean, scale: EloScale, details: ReadonlyArray<Detail>, isOpen: boolean, startsTier: boolean): Html =>
   h.keyed("tr")(
     m.key,
-    [h.Class(`row ${isOpen ? "sel" : ""} ${isProvisional(m) ? "provisional" : ""} ${startsTier ? "tierstart" : ""}`), h.AriaExpanded(isOpen), ...pressable(h, Message.ClickedLeaderboardRow({ id: m.key }))],
+    [h.Class(`row ${isOpen ? "sel" : ""} ${isProvisional(m) ? "provisional" : ""} ${startsTier ? "tierstart" : ""}`), h.OnClick(Message.ClickedLeaderboardRow({ id: m.key }))],
     [
-      h.td([], [h.span([h.Class("rk")], [elo?.tier == null ? "–" : String(elo.tier)]), ...nameView(h, m)]),
+      // The row takes the click anywhere in it; the name is the button that gives the row to the keyboard and to screen readers, and its click bubbles to the row.
+      h.td([], [h.span([h.Class("rk")], [elo?.tier == null ? "–" : String(elo.tier)]), h.button([h.Type("button"), h.Class("rowbtn"), h.AriaExpanded(isOpen)], nameView(h, m))]),
       h.td([h.DataAttribute("label", hasLuck ? "luck-adjusted" : "round elo")], ratingView(h, elo)),
       h.td([h.Class("barcol")], [eloBarView(h, scale, m, elo)]),
       h.td([h.DataAttribute("label", "match win vs engine")], [matchWinView(elo)]),
@@ -253,9 +254,9 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
   return h.div(
     [h.Class("lb")],
     [
-      h.div([h.Class("lbbar")], [h.h2([], ["Leaderboard"])]),
+      h.div([h.Class("lbbar")], [h.h3([], ["Leaderboard"])]),
       h.p([h.Class("sub")], [
-        `${hasLuck ? `${LUCK_ELO} is Round Elo with the luck taken out of each round: its shots, loads, first seat, item deals and the shells that items show. ` : ""}Round Elo is one Bradley-Terry rating fitted over every match on round win share. The depth-7 search engine (Engine/7/2000000/sampled) is fixed at 0, so adding a config does not move the others. The dot is the rating, and the line is its ${INTERVAL_PERCENT} interval over seed blocks: about one in ten true values falls outside it. The vertical line is the depth-7 engine at 0. The scale shows the top three tiers, so an arrow at the end of a line means it runs past the edge. Configs whose lines do not overlap differ clearly. The number before a config is its tier, and the data cannot put the configs within one tier in order.${zero === null ? "" : ` The 0 is uncertain too: measured against the mean of all configs, the engine's own ${INTERVAL_PERCENT} interval is ${Math.round(zero.lo)} to +${Math.round(zero.hi)}. The other intervals are measured the same way, so they leave out the engine's noise.`} Match wins count only a config's own opponents.`,
+        `${hasLuck ? `${LUCK_ELO} is Round Elo with the luck taken out of each round: its shots, loads, first seat, item deals and the shells that items show. ` : ""}Round Elo is one Bradley-Terry rating fitted over every match on round win share. Ratings are measured from the depth-7 search engine (Engine/7/2000000/sampled), a fixed program, so 0 means the same thing as configs are added. The dot is the rating, and the line is its ${INTERVAL_PERCENT} interval over seed blocks: about one in ten true values falls outside it. The vertical line is the depth-7 engine at 0. The scale shows the top three tiers, so an arrow at the end of a line means it runs past the edge. Configs whose lines do not overlap differ clearly. The number before a config is its tier, and the data cannot put the configs within one tier in order.${zero === null ? "" : ` The 0 is uncertain too: measured against the mean of all configs, the engine's own ${INTERVAL_PERCENT} interval is ${Math.round(zero.lo)} to +${Math.round(zero.hi)}. The other intervals are measured the same way, so they leave out the engine's noise.`} Match wins count only a config's own opponents.`,
       ]),
       h.div(
         [h.Class("card")],
@@ -357,7 +358,7 @@ export const accuracyTableView = (h: H, derived: Derived, certain: AsyncData.Asy
   return h.div(
     [h.Id("accuracy-table")],
     [
-      h.h2([], ["Points lost and certain mistakes by config"]),
+      h.h3([], ["Points lost and certain mistakes by config"]),
       h.p([h.Class("sub")], [
         "Points lost is the round win chance each move gave up compared with the minimax player's best move. Certain mistakes are shots that the player's own information proves worse; they need no evaluator. Accuracy applies lichess's formula, and its cut-offs for inaccuracies, mistakes and blunders, to the points lost. Decisions where every move is within a point are left out.",
       ]),

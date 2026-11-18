@@ -15,12 +15,13 @@ import { configLabel } from "./model-names.ts";
 // A is configured by PLAYER_A_ANT_URL and _ANT_KEY for the Anthropic Messages
 // API, or PLAYER_A_OAI_URL and _OAI_KEY for the OpenAI Responses API, plus
 // PLAYER_A_MODEL and an optional PLAYER_A_EFFORT; B to D likewise. An optional
-// PLAYER_A_ACCOUNT_ID pins every request of the agent to one account of a
-// endpoint, by sending the id in the header ARENA_ACCOUNT_HEADER names; without it
-// no header is sent and the endpoint picks the account. Every request also names
-// the arena to the endpoint (X-Arena-Agent) and, when ARENA_PROJECT is set (the
-// tournament runner sets it to the config's name), the project (X-Arena-Project);
-// the endpoint records both and strips them before the request goes upstream. An optional PLAYER_A_INSTRUCTIONS_ADDENDUM is
+// PLAYER_A_ACCOUNT_ID pins every request of the agent to one account, for an
+// endpoint that serves several, by sending the id in the optional request header
+// ARENA_ACCOUNT_HEADER names; without it no header is sent and the endpoint
+// picks the account. Every request also names the arena in the optional header
+// ARENA_AGENT_HEADER names (value "buckshot") and, when ARENA_PROJECT is set (the
+// tournament runner sets it to the config's name), the project in the header
+// ARENA_PROJECT_HEADER names; a header whose setting is missing is not sent. An optional PLAYER_A_INSTRUCTIONS_ADDENDUM is
 // text appended to the shared instructions for that agent only (ADR-0048), and an
 // optional PLAYER_A_EFFORT_LABEL names the effort in the agent's label when it is
 // not PLAYER_A_EFFORT, as for an "off" that is low effort plus that text. A model id
@@ -42,8 +43,8 @@ const EndpointFields = {
   effort: Schema.optional(Schema.Literals(THINKING_LEVELS)),
   /** The endpoint account every request is pinned to, and the header that names it. An id, not a secret. */
   account: Schema.optional(Schema.Struct({ header: Schema.NonEmptyString, id: Schema.NonEmptyString })),
-  /** The project the endpoint files the agent's requests under: the tournament config's name. */
-  project: Schema.optional(Schema.NonEmptyString),
+  /** Optional headers that label every request for the endpoint: the arena's name, and the tournament config's name as the project. */
+  labels: Schema.Record(Schema.String, Schema.NonEmptyString),
   /** Text appended to the shared instructions for this agent only. */
   instructionsAddendum: Schema.optional(Schema.NonEmptyString),
   /** The effort the agent's label names, when it is not `effort`. */
@@ -117,6 +118,8 @@ export const agentEndpoint = (agent: AgentId) =>
       effort: Config.option(Config.Literals(THINKING_LEVELS, name("EFFORT"))),
       accountId: Config.option(Config.NonEmptyString(name("ACCOUNT_ID"))),
       accountHeader: Config.option(Config.NonEmptyString("ARENA_ACCOUNT_HEADER")),
+      agentHeader: Config.option(Config.NonEmptyString("ARENA_AGENT_HEADER")),
+      projectHeader: Config.option(Config.NonEmptyString("ARENA_PROJECT_HEADER")),
       project: Config.option(Config.NonEmptyString("ARENA_PROJECT")),
       instructionsAddendum: Config.option(Config.NonEmptyString(name("INSTRUCTIONS_ADDENDUM"))),
       effortLabel: Config.option(Config.NonEmptyString(name("EFFORT_LABEL"))),
@@ -131,7 +134,13 @@ export const agentEndpoint = (agent: AgentId) =>
     if (Option.isSome(settings.accountId) && Option.isNone(settings.accountHeader)) return yield* new EndpointConfigError({ message: `ARENA_ACCOUNT_HEADER must be set when ${name("ACCOUNT_ID")} is` });
 
     const account = Option.getOrUndefined(Option.zipWith(settings.accountHeader, settings.accountId, (header, id) => ({ header, id })));
-    const fields = { model: settings.model.value, catalogModel: Option.getOrUndefined(settings.catalogModel), effort: Option.getOrUndefined(settings.effort), account, project: Option.getOrUndefined(settings.project), instructionsAddendum: Option.getOrUndefined(settings.instructionsAddendum), effortLabel: Option.getOrUndefined(settings.effortLabel) };
+
+    const labels = Object.fromEntries([
+      ...Option.toArray(Option.map(settings.agentHeader, (header) => [header, "buckshot"] as const)),
+      ...Option.toArray(Option.zipWith(settings.projectHeader, settings.project, (header, project) => [header, project] as const)),
+    ]);
+
+    const fields = { model: settings.model.value, catalogModel: Option.getOrUndefined(settings.catalogModel), effort: Option.getOrUndefined(settings.effort), account, labels, instructionsAddendum: Option.getOrUndefined(settings.instructionsAddendum), effortLabel: Option.getOrUndefined(settings.effortLabel) };
 
     const notListed = (endpoint: Endpoint): string =>
       Option.match(settings.catalogModel, {
@@ -151,9 +160,8 @@ export const agentEndpoint = (agent: AgentId) =>
 /** The base URL as the SDKs want it, without a trailing slash. */
 const baseUrlOf = (url: URL): string => url.href.replace(/\/$/, "");
 
-/** The headers every request carries: who is calling and for which project, for the endpoint to record, and the account pin when the endpoint has one. */
-const requestHeaders = (endpoint: Endpoint) =>
-  Object.fromEntries([["X-Arena-Agent", "buckshot"], ...(endpoint.project === undefined ? [] : [["X-Arena-Project", endpoint.project]]), ...(endpoint.account === undefined ? [] : [[endpoint.account.header, endpoint.account.id]])]);
+/** The headers every request carries: the labels, and the account pin when the endpoint has one. */
+const requestHeaders = (endpoint: Endpoint) => Object.fromEntries([...Object.entries(endpoint.labels), ...(endpoint.account === undefined ? [] : [[endpoint.account.header, endpoint.account.id]])]);
 
 /** The key and the headers, as pi-ai resolves them for every request. createProvider's own `headers` option is never sent. */
 const requestAuth = (endpoint: Endpoint, source: string) => ({
@@ -211,8 +219,8 @@ const ResponsesRequest = Schema.StructWithRest(Schema.Struct({ reasoning: Schema
 
 /**
  * Whether the model is asked for OpenAI's detailed reasoning summary. A model of another provider served on the
- * Responses API by an endpoint, such as DeepSeek on OpenCode Zen, keeps pi-ai's "auto": it returns its own reasoning
- * text, and whether the endpoint accepts "detailed" is untested.
+ * Responses API by another provider's endpoint, such as DeepSeek, keeps pi-ai's "auto": it returns its own reasoning
+ * text, and whether such an endpoint accepts "detailed" is untested.
  */
 const asksDetailedSummaries = (catalogModel: Model<Api>): boolean => catalogModel.provider === "openai";
 
@@ -229,7 +237,7 @@ export const providerOf = (providerId: string, endpoint: Endpoint): Provider => 
 
   return Endpoint.match(endpoint, {
     // SAFETY: a catalog model from another provider can list another API, such
-    // as openai-completions for a model an endpoint serves on the Responses API.
+    // as openai-completions for a model another endpoint serves on the Responses API.
     // The model takes the endpoint's API and keeps its compat flags, which say
     // what the model upstream accepts; each API reads only the flags it knows.
     Anthropic: (): Provider =>

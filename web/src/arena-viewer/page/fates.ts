@@ -133,19 +133,19 @@ export const itemUsageView = (h: H, every: ReadonlyArray<ConfigItems>, kept: Rea
   return h.div(
     [],
     [
-      h.h2([], ["Item usage"]),
+      h.h3([], ["Item usage"]),
       h.p([h.Class("sub")], ["All selected efforts, pooled."]),
       h.div(
         [h.Class("chartrow two")],
         [
           h.figure(
             [],
-            [h.h3([], ["Moves using an item when one is available"]), useRows.length === 0 ? h.div([h.Class("empty")], ["No moves for this filter."]) : h.div([h.Class("fates")], useRows.map((row) => useRowView(h, row)))],
+            [h.h4([], ["Moves using an item when one is available"]), useRows.length === 0 ? h.div([h.Class("empty")], ["No moves for this filter."]) : h.div([h.Class("fates")], useRows.map((row) => useRowView(h, row)))],
           ),
           h.figure(
             [],
             [
-              h.h3([], ["What became of each item"]),
+              h.h4([], ["What became of each item"]),
               items.length === 0 ? h.div([h.Class("empty")], ["No scored matches for this filter."]) : h.div([], [legendView(h, ITEM_COLOR), h.div([h.Class("fates")], items.map((row) => rowView(h, "page", row, itemLabel(h, row.name))))]),
             ],
           ),

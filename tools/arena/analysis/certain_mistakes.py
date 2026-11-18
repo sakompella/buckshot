@@ -148,7 +148,13 @@ class Rate:
             return "–"
         if self.decisions < FEWEST_FOR_INTERVAL:
             return f"{self.chose}/{self.decisions}"
-        bounds = "" if self.interval is None else f" [{pct(self.interval[0])}, {pct(self.interval[1])}]"
+        if self.interval is None:
+            bounds = ""
+        elif self.chose == 0:
+            # Every resample of zero is zero; the rule of three gives the 95% upper bound instead.
+            bounds = f", under {pct(3 / self.decisions)}"
+        else:
+            bounds = f" [{pct(self.interval[0])}, {pct(self.interval[1])}]"
         return f"{pct(self.chose / self.decisions)} ({self.chose}/{self.decisions}){bounds}"
 
 

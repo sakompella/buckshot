@@ -91,7 +91,7 @@ const heroView = (h: H, derived: Derived): Html => {
       h.div(
         [],
         [
-          h.div([h.Class("title")], ["Buckshot Arena"]),
+          h.h1([h.Class("title")], ["Buckshot Arena"]),
           h.p([h.Class("lead")], ["Frontier models playing two-player Buckshot Roulette. ", h.button([h.Type("button"), h.Class("tourstart"), h.OnClick(Message.ClickedTour())], ["Take the tour"])]),
         ],
       ),
@@ -175,7 +175,7 @@ const sectionView = (h: H, section: Section, content: Html): Html => h.section([
 const groupLabel = (group: Group): string => GROUPS.find((entry) => entry.group === group)?.label ?? group;
 
 /** A group of sections under one heading: what the jump menu links to. */
-const groupView = (h: H, group: Group, sections: ReadonlyArray<Html>): Html => h.section([h.Id(group), h.Class("part")], [h.h1([h.Class("ghead")], [groupLabel(group)]), ...sections]);
+const groupView = (h: H, group: Group, sections: ReadonlyArray<Html>): Html => h.section([h.Id(group), h.Class("part")], [h.h2([h.Class("ghead")], [groupLabel(group)]), ...sections]);
 
 const pageView = (h: H, model: Model, derived: Derived): Html => {
   const content = contentWidth(model.viewport);

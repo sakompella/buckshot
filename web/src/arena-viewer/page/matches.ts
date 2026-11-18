@@ -101,7 +101,7 @@ export const matchesView = (h: H, matches: ReadonlyArray<MatchRow>, ratings: Rea
   return h.div(
     [],
     [
-      h.h2([], ["Matches"]),
+      h.h3([], ["Matches"]),
       h.div(
         [h.Class("bar")],
         [

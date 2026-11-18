@@ -136,11 +136,11 @@ export const oddsView = (h: H, odds: ReadonlyArray<ConfigOdds>, kept: ReadonlySe
   return h.div(
     [],
     [
-      h.h2([], ["Playing the odds"]),
+      h.h3([], ["Playing the odds"]),
       h.p([h.Class("sub")], ["How often each config shoots itself, by the chance that the chambered shell is live, going by the player's own count of the shells. One panel per model, one line per effort. Only shots with no clue from the magnifying glass or the burner phone count."]),
       panels.length === 0
         ? h.div([h.Class("empty")], ["No config in this filter has enough shots."])
-        : h.div([h.Class("chartrow")], panels.map(({ model, lines }) => h.figure([], [h.h3([], [baseName(model)]), panelView(h, model, lines, figure)]))),
+        : h.div([h.Class("chartrow")], panels.map(({ model, lines }) => h.figure([], [h.h4([], [baseName(model)]), panelView(h, model, lines, figure)]))),
       dropped.length === 0 ? h.empty : h.p([h.Class("k dropped")], [`Left out for too few shots: ${droppedText(dropped)}.`]),
     ],
   );

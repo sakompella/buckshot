@@ -24,11 +24,11 @@ export const summaryView = (h: H, derived: Derived): Html =>
   h.div(
     [],
     [
-      h.h2([], ["Results at a glance"]),
+      h.h3([], ["Results at a glance"]),
       h.p([h.Class("sub")], [
         `${derived.ratingName} of every ranked config, best first`,
         ...(derived.runs === undefined ? [] : [`, from matches played ${runDates(derived.runs)}`]),
-        `. Every match of every tournament counts, and the depth-7 search engine sits at 0. The dot is a config's rating and the line is its ${INTERVAL_PERCENT} interval. When two lines overlap, the data cannot tell those configs apart. The dashed lines are the search engines and the dealer AIs, fixed players that About explains. The leaderboard groups the configs into tiers.`,
+        `. Every match of every tournament counts, and the depth-7 search engine sits at 0. The dot is a config's rating and the line is its ${INTERVAL_PERCENT} interval. When two lines overlap a lot, their order is not settled; the leaderboard's tiers test each gap directly. The best configs cannot be told apart from the depth-7 search engine. That engine also scores every move, so a model that plays better than it somewhere is counted as losing points there. The dashed lines are the search engines and the dealer AIs, fixed players that About explains. The leaderboard groups the configs into tiers.`,
       ]),
       forestView(h, derived),
     ],
@@ -39,7 +39,7 @@ export const howView = (h: H): Html =>
   h.div(
     [],
     [
-      h.h2([], ["How the game works"]),
+      h.h3([], ["How the game works"]),
       h.p([h.Class("sub")], [
         "Two players share a shotgun loaded with a hidden mix of live and blank shells. Each load announces how many of each it holds, but never their order. On your turn you may use items, then you must shoot: yourself or the other player. A live shell does one damage; a blank does none. Shooting the other player always passes the turn. Shooting yourself with a blank keeps the turn, and that is the only way to get another move. Each player starts a round with 3 or 4 health. A round ends when one player is left alive, and that player takes the round's prize. A match is three rounds, and whoever has the most cash at the end wins it.",
       ]),
@@ -65,19 +65,14 @@ export const aboutView = (h: H, derived: Derived): Html => {
   return h.div(
     [],
     [
-      h.h2([], ["About this experiment"]),
+      h.h3([], ["About this experiment"]),
       ...(derived.runs === undefined ? [] : [h.p([h.Class("sub")], [`The matches here were played ${runDates(derived.runs)} (UTC).`])]),
       h.p([h.Class("sub")], [
         `Every match has two players and uses items. A seed fixes the deals. A seed block is one seed that a pairing plays in both seat orders, so neither side gains from sitting first. ${unpaired.toLocaleString()} of the ${blocks.toLocaleString()} seed blocks hold only one scored match, so their seat order is not balanced. All tournaments are pooled. Every model plays under the same shared instructions with the same tools`,
         ...(promptedOff.length === 0
           ? ["."]
           : [`, except ${promptedOff.join(", ")}: its API has no reasoning-off setting, so it plays at low effort with one added line telling it to answer at once, without planning or checking ("immediate-recall mode").`]),
-        " The models were called through subscription accounts behind an endpoint, not with first-party API keys.",
         ...(isOnline ? [] : [" The Matches section lists every match."]),
-      ]),
-      h.p([h.Class("sub")], [
-        h.b([], ["Disclosures. "]),
-        "Claude models were reached through Claude Code subscription logins behind an endpoint. For these, the endpoint puts a \"You are Claude Code\" system block first, moves our instructions into the conversation after the first turn, and renames our two tools. This is the same for every Claude config. In 37 matches of the first tournament, the thinking of Claude Sonnet 5.5 and Haiku 5.5 mentions an organisation instruction about a university library tool (LibKey) that we did not send. It appeared between Oct 16 and Oct 20 and in no later match; the models set it aside each time. We excluded those 37 matches and replayed them with the same pairings, seats and seeds, and the new thinking never mentions it. One known limitation: the rules text is ambiguous about a blank shot at yourself on the last shell (the gun reloads and you go first). Models of every provider visibly struggle with it. We kept the wording so that all matches stay comparable.",
       ]),
       h.p([h.Class("sub")], [
         h.b([], ["Search engines and dealer AIs. "]),
@@ -85,7 +80,7 @@ export const aboutView = (h: H, derived: Derived): Html => {
       ]),
       h.p([h.Class("sub")], [
         h.b([], ["Round Elo. "]),
-        `A Bradley-Terry rating: one fit over every scored match, where each round counts as one game. The gap between two ratings says how often one config beats the other in a round. The depth-7 search engine (Engine/7/2000000/sampled) is fixed at 0, so adding a config does not move the others. The bracket beside a rating is its ${INTERVAL_PERCENT} bootstrap interval: the fit is redone many times on seed blocks drawn at random, with repeats, and about one in ten true values falls outside the bracket. Because whole seed blocks are drawn, the bracket includes the luck that all matches on one seed share. Each bracket is measured against the mean of all configs, so it leaves out the engine's own noise; the leaderboard gives that noise once.`,
+        `A Bradley-Terry rating: one fit over every scored match, where each round counts as one game. The gap between two ratings says how often one config beats the other in a round. Ratings are measured from the depth-7 search engine (Engine/7/2000000/sampled), a fixed program, so 0 means the same thing as configs are added. The bracket beside a rating is its ${INTERVAL_PERCENT} bootstrap interval: the fit is redone many times on seed blocks drawn at random, with repeats, and about one in ten true values falls outside the bracket. Because whole seed blocks are drawn, the bracket includes the luck that all matches on one seed share. Each bracket is measured against the mean of all configs, so it leaves out the engine's own noise; the leaderboard gives that noise once.`,
       ]),
       ...(hasLuck
         ? [

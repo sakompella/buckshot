@@ -2,7 +2,8 @@
 # check.sh and hooks.sh): arithmetic by tables by trace. Never
 # --all-features: `f64` (default) and `f32` exclude each other, as do
 # `seats-2-4` (default) and `seats-2`, and buckshot-rules' `trace` changes what
-# `branch!` expands to.
+# `branch!` expands to. `f32` is the Bend-exact build and the only one with the
+# compat evaluator.
 feature_sets=()
 for arithmetic in f64 f32; do
   for seats in seats-2-4 seats-2; do
