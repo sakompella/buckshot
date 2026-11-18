@@ -50,7 +50,7 @@ test("an assignment that leaves a seat without a letter, or gives two seats one 
   const [first, second] = SEATS_BY_TABLE[2];
   const a = "A" satisfies Letter;
 
-  if (first === undefined || second === undefined) return expect.unreachable("a 2-seat table has two seats");
+  if (first === undefined || second === undefined) throw new Error("a 2-seat table has two seats");
 
   expect(() => rosterOf(SEATS_BY_TABLE[2], new Map([[first, a]]))).toThrow();
   expect(() => rosterOf(SEATS_BY_TABLE[2], new Map([[first, a], [second, a]]))).toThrow();

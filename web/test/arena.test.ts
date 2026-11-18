@@ -134,7 +134,7 @@ test.each([
   ["dropped instructions addendum", withAddendum(ADDENDUM), fauxProvenance],
 ])("a match refuses to resume when its %s changed", async (_, started, changed) => {
   const dir = mkdtempSync(join(tmpdir(), "arena-resume-"));
-  const resume = (provenance: (modelId: string) => AgentProvenance) => Effect.runPromiseExit(fauxMatch(["Agent", "DoN"], "3", 200_000, "on-turn", { dir, provenance }));
+  const resume = async (provenance: (modelId: string) => AgentProvenance) => Effect.runPromiseExit(fauxMatch(["Agent", "DoN"], "3", 200_000, "on-turn", { dir, provenance }));
 
   expect(Exit.isSuccess(await resume(started))).toBe(true);
 
@@ -247,7 +247,7 @@ test.each([...DELIVERIES])("a human types moves into the terminal client and pla
 const ACCOUNT_HEADER = "X-Account-Id";
 const ENDPOINT = { url: "http://127.0.0.1:8318", key: "sk-test-secret-value" };
 
-const endpointFrom = (env: Readonly<Record<string, string>>) => Effect.runPromiseExit(agentEndpoint(Schema.decodeSync(AgentId)("A")).pipe(Effect.provideService(ConfigProvider.ConfigProvider, ConfigProvider.fromEnvRecord(env))));
+const endpointFrom = async (env: Readonly<Record<string, string>>) => Effect.runPromiseExit(agentEndpoint(Schema.decodeSync(AgentId)("A")).pipe(Effect.provideService(ConfigProvider.ConfigProvider, ConfigProvider.fromEnvRecord(env))));
 
 const failureOf = async (env: Readonly<Record<string, string>>): Promise<string> => {
   const exit = await endpointFrom(env);

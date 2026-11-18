@@ -49,7 +49,7 @@ const program = Effect.gen(function* () {
   // Released first, so the server stops before the databases close.
   const server = yield* Effect.acquireRelease(
     Effect.try({ try: () => serveArenaViewer(arena, siteDir, host, listenPort, access), catch: (cause) => new ScriptError({ message: `cannot serve: ${String(cause)}`, exitCode: 1 }) }),
-    (running) => Effect.promise(() => running.stop()),
+    (running) => Effect.promise(async () => running.stop()),
   );
 
   console.log(`arena viewer: ${server.url.href} reading ${[dbPath, regretPath, knowledgePath, certainPath, luckPath].filter((path) => path !== undefined).join(" and ")}`);

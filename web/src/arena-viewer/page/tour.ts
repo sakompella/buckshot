@@ -142,7 +142,9 @@ const placed = (step: number, hasCertain: boolean) => {
 };
 
 const nextFrame = Effect.callback<void>((resume) => {
-  requestAnimationFrame(() => resume(Effect.void));
+  requestAnimationFrame(() => {
+    resume(Effect.void);
+  });
 });
 
 /** Places a step a frame after the card is drawn. */

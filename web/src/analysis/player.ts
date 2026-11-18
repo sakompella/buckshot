@@ -2,9 +2,9 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { Schema } from "effect";
+import { Match, Predicate, Schema } from "effect";
 
-import rules, { type BendNode } from "../../generated/rules.mjs";
+import rules, { type BendNode, type BendValue } from "../../generated/rules.mjs";
 import { type Game } from "../bend.ts";
 import { type GameEvent as Event, GameEvent, Item, type LearnedSecret, Move, Seat, type SeatCount, Secret } from "../domain.ts";
 
@@ -21,6 +21,15 @@ interface PlayerExports {
   readonly analyse: (position: BendNode, depth: number, budget: number, reload: BendNode, memo: BendNode) => BendNode;
   readonly orders: (log: BendNode, isPrivate: boolean) => BendNode;
 }
+
+const PlayerModule = Schema.Struct({
+  default: Schema.Struct({
+    analyse: Schema.declare((value): value is PlayerExports["analyse"] => Predicate.isFunction(value)),
+    orders: Schema.declare((value): value is PlayerExports["orders"] => Predicate.isFunction(value)),
+  }),
+});
+
+const decodePlayerModule = Schema.decodeUnknownSync(PlayerModule);
 
 // A player's own log
 // ==================
@@ -40,18 +49,27 @@ export const ownLog = (events: ReadonlyArray<Event>, learned: ReadonlyArray<Lear
 // =========
 
 const bendList = (items: ReadonlyArray<BendNode>): BendNode =>
-  // SAFETY: a cons cell is a Bend value; BendNode names only its tag.
-  items.reduceRight<BendNode>((tail, head) => ({ $: "Con", head, tail }) as BendNode, { $: "Nil" });
+  items.reduceRight<BendNode>((tail, head) => ({ $: "Con", head, tail }), { $: "Nil" });
+
+const Node = Schema.Struct({ $: Schema.String });
+
+export const isBendNode = Schema.is(Node);
+
+const isNode = (value: BendValue | undefined): value is BendNode => isBendNode(value);
+
+const isPoint = Schema.is(Schema.Struct({ board: Node }));
 
 const nodesOf = (list: BendNode): ReadonlyArray<BendNode> => {
   const nodes: Array<BendNode> = [];
   let rest = list;
 
-  while (rest.$ === "Con" && "head" in rest && "tail" in rest) {
-    // SAFETY: a Bend cons cell's head and tail are Bend values.
-    nodes.push(rest.head as BendNode);
-    // SAFETY: as above.
-    rest = rest.tail as BendNode;
+  while (rest.$ === "Con") {
+    const { head, tail } = rest;
+
+    if (!isNode(head) || !isNode(tail)) throw new Error("a Bend cons cell has no head and tail");
+
+    nodes.push(head);
+    rest = tail;
   }
 
   return nodes;
@@ -104,8 +122,9 @@ const TABLES = { 2: "TwoSeats", 3: "ThreeSeats", 4: "FourSeats" } as const satis
 
 /** The public board at a game's request point, as the rules build returns it. Nothing else is read off the machine state. */
 export const boardOf = (game: Game): BendNode => {
-  // SAFETY: point returns domain.Point{board, request} (sim/bend-mp/web.bend).
-  const point = rules.point(game.state) as BendNode & { readonly board: BendNode };
+  const point = rules.point(game.state);
+
+  if (!isPoint(point)) throw new Error("point returned no board");
 
   return point.board;
 };
@@ -120,8 +139,7 @@ export interface PlayerInput {
 }
 
 const inputNode = ({ table, items, board, log, me }: PlayerInput): BendNode =>
-  // SAFETY: the fields are player/types.Position's, each a Bend value; BendNode names only the tag.
-  ({ $: "Position", config: rules.config({ $: TABLES[table] }, items), board, log: logNode(log), me: seatNode(me) }) as BendNode;
+  ({ $: "Position", config: rules.config({ $: TABLES[table] }, items), board, log: logNode(log), me: seatNode(me) });
 
 // Out of Bend
 // ===========
@@ -130,8 +148,6 @@ const inputNode = ({ table, items, board, log, me }: PlayerInput): BendNode =>
 export type Orders = ReadonlyArray<string>;
 
 const orderText = (order: BendNode): string => nodesOf(order).map((shell) => (shell.$ === "Live" ? "L" : "B")).join("");
-
-const Node = Schema.Struct({ $: Schema.String });
 
 /** A move as Bend writes it, and buckshot-search too. */
 export const RawMove = Schema.Union([
@@ -149,7 +165,7 @@ const REACH = { Settled: "settled", Reloads: "reloads", Cut: "cut" } as const;
 const RawCached = Schema.Struct({ $: Schema.Literal("Cached"), entries: Schema.Number, hits: Schema.Number, deals: Schema.Number, deal_hits: Schema.Number });
 
 const RawAnalysis = Schema.Union([
-  Schema.Struct({ $: Schema.Literal("Analysed"), lines: Schema.Unknown, best: Schema.Number, nodes: Schema.Number, depth: Schema.Number, limited: Schema.Boolean, cached: RawCached }),
+  Schema.Struct({ $: Schema.Literal("Analysed"), lines: Schema.declare(isBendNode), best: Schema.Number, nodes: Schema.Number, depth: Schema.Number, limited: Schema.Boolean, cached: RawCached }),
   Schema.Struct({ $: Schema.Literal("Invalid"), reason: Schema.String, nodes: Schema.Number }),
 ]);
 
@@ -172,18 +188,15 @@ const itemOf = (node: typeof Node.Type): Item => decodeItem(node.$);
 export const stepsOf = (move: typeof RawMove.Type): ReadonlyArray<Move> => {
   const use = (item: Item): Move => Move.cases.UseItem.make({ slot: 0, item });
 
-  switch (move.$) {
-    case "Shoot":
-      return [Move.cases.PickUp.make({}), Move.cases.Shoot.make({ target: seatOf(move.target) })];
-    case "Use":
-      return [use(itemOf(move.item))];
-    case "Jam":
-      return [use("Jammer"), Move.cases.JamTarget.make({ target: seatOf(move.target) })];
-    case "Steal":
-      return [use("Adrenaline"), Move.cases.Steal.make({ owner: seatOf(move.owner), slot: 0, item: itemOf(move.item) })];
-    case "StealJam":
-      return [use("Adrenaline"), Move.cases.Steal.make({ owner: seatOf(move.owner), slot: 0, item: "Jammer" }), Move.cases.JamTarget.make({ target: seatOf(move.target) })];
-  }
+  return Match.value(move).pipe(
+    Match.discriminatorsExhaustive("$")({
+      "Shoot": ({ target }): ReadonlyArray<Move> => [Move.cases.PickUp.make({}), Move.cases.Shoot.make({ target: seatOf(target) })],
+      "Use": ({ item }) => [use(itemOf(item))],
+      "Jam": ({ target }) => [use("Jammer"), Move.cases.JamTarget.make({ target: seatOf(target) })],
+      "Steal": ({ owner, item }) => [use("Adrenaline"), Move.cases.Steal.make({ owner: seatOf(owner), slot: 0, item: itemOf(item) })],
+      "StealJam": ({ owner, target }) => [use("Adrenaline"), Move.cases.Steal.make({ owner: seatOf(owner), slot: 0, item: "Jammer" }), Move.cases.JamTarget.make({ target: seatOf(target) })],
+    }),
+  );
 };
 
 /** One legal move and its score: the deciding seat's chance of winning the current round, in millionths. */
@@ -215,8 +228,7 @@ const analysisOf = (raw: typeof RawAnalysis.Type): Analysis =>
     ? { kind: "invalid", reason: raw.reason, nodes: raw.nodes }
     : {
         kind: "analysed",
-        // SAFETY: Analysed.lines is a Bend List<Line>.
-        lines: nodesOf(raw.lines as BendNode).map((node) => {
+        lines: nodesOf(raw.lines).map((node) => {
           const line = decodeLine(node);
 
           return { steps: stepsOf(line.move), score: line.score, reach: REACH[line.reach.$] };
@@ -248,17 +260,14 @@ export type ReloadRule = (typeof RELOAD_RULES)[number];
 
 export type Reload = { readonly rule: "static" } | { readonly rule: "expected-deal" } | { readonly rule: "sampled"; readonly samples: number };
 
-const reloadNode = (reload: Reload): BendNode => {
-  switch (reload.rule) {
-    case "static":
-      return { $: "Static" };
-    case "expected-deal":
-      return { $: "ExpectedDeal" };
-    case "sampled":
-      // SAFETY: count is player/types.Sampled's one field, a Nat; BendNode names only the tag.
-      return { $: "Sampled", count: reload.samples } as BendNode;
-  }
-};
+const reloadNode = (reload: Reload): BendNode =>
+  Match.value(reload).pipe(
+    Match.discriminatorsExhaustive("rule")({
+      "static": (): BendNode => ({ $: "Static" }),
+      "expected-deal": (): BendNode => ({ $: "ExpectedDeal" }),
+      "sampled": ({ samples }): BendNode => ({ $: "Sampled", count: samples }),
+    }),
+  );
 
 /**
  * How the search reuses a position it has already valued. "off" searches every node again. "charged" reuses the value but spends the nodes
@@ -289,9 +298,7 @@ export const loadPlayer = async (dir: string): Promise<Player> => {
 
   if (build.exitCode !== 0) throw new Error(`Bend player build failed:\n${build.stdout.toString()}${build.stderr.toString()}`);
 
-  // SAFETY: output is the module bend just compiled from PLAYER_SOURCE, whose default export is the analysis.bend export table PlayerExports describes.
-  const loaded = (await import(output)) as { readonly default: PlayerExports };
-  const exports = loaded.default;
+  const { default: exports } = decodePlayerModule(await import(output));
 
   return {
     version: createHash("sha256").update(readFileSync(output)).digest("hex").slice(0, 16),

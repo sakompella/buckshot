@@ -322,13 +322,24 @@ export const RETRY: Retry = { attempts: 3, pauseMs: 120_000 };
 /** How long a slot with no match to start waits before it looks again, at most. */
 const IDLE_MS = 60_000;
 
-const pause = (ms: number, stop: AbortSignal) =>
+const pause = async (ms: number, stop: AbortSignal): Promise<void> =>
   new Promise<void>((resume) => {
-    if (stop.aborted) return resume();
+    if (stop.aborted) {
+      resume();
+
+      return;
+    }
 
     const timer = setTimeout(resume, ms);
 
-    stop.addEventListener("abort", () => (clearTimeout(timer), resume()), { once: true });
+    stop.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        resume();
+      },
+      { once: true },
+    );
   });
 
 /** How runPending treats models: `caps` holds the most matches a model plays at once, for a model with a tight rate limit; a match with a model in `last` starts only when no other match can; a recorded cooldown of a model in `forget` is not read at the start, as when its provider reset early; a new match pins the `prefer` accounts first among equally loaded ones, as when the operator picks the account that resets soonest. */

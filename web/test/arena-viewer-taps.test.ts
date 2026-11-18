@@ -21,7 +21,7 @@ const isInside = (cell: ReadonlyArray<Point>, point: Point): boolean => {
 
 const distance = (a: Point, b: Point): number => Math.hypot(a.x - b.x, a.y - b.y);
 
-test("a tap lands in the cell of the nearest point within reach, and in no other cell", () =>
+test("a tap lands in the cell of the nearest point within reach, and in no other cell", () => {
   hegel.test(
     (tc) => {
       const position = gs.tuples(gs.integers({ minValue: 0, maxValue: 3000 }), gs.integers({ minValue: 0, maxValue: 2000 })).map(([x, y]): Point => ({ x: x / 10, y: y / 10 }));
@@ -31,7 +31,7 @@ test("a tap lands in the cell of the nearest point within reach, and in no other
       const [nearest, runnerUp] = points.map((from, index) => ({ index, gap: distance(from, at) })).toSorted((left, right) => left.gap - right.gap);
       const inside = cells.flatMap((cell, index) => (isInside(cell, at) ? [index] : []));
 
-      if (nearest === undefined) return expect.unreachable("there is at least one point");
+      if (nearest === undefined) throw new Error("there is at least one point");
 
       // Ties and the edge of reach are left out: either answer is right there.
       tc.assume(Math.abs(nearest.gap - TAP_REACH) >= 1 && (runnerUp === undefined || runnerUp.gap - nearest.gap >= 0.01));
@@ -42,4 +42,5 @@ test("a tap lands in the cell of the nearest point within reach, and in no other
       else expect(inside.every((index) => index === nearest.index)).toBe(true);
     },
     { testCases: 500 },
-  ));
+  );
+});

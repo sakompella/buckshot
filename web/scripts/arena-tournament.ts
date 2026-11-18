@@ -171,7 +171,7 @@ const webOf = (match: ScheduledMatch): string | undefined =>
   Option.match(startedUnder(dir, match), { onNone: () => WEB, onSome: (code) => (code === CODE ? WEB : checkouts.get(code)) });
 
 /** One match as a child process, which gives its exit code. Its output is appended to the match's arena.log. */
-const runOne = (match: ScheduledMatch, accounts: MatchAccounts): Promise<number> =>
+const runOne = async (match: ScheduledMatch, accounts: MatchAccounts): Promise<number> =>
   new Promise((done) => {
     const matchDir = join(dir, match.name);
 
@@ -271,7 +271,7 @@ for (const code of new Set(waitingCodes)) {
 
 noteProgress("started");
 
-const every30Minutes = setInterval(() => noteProgress("check"), 30 * 60 * 1000);
+const every30Minutes = setInterval(() => { noteProgress("check"); }, 30 * 60 * 1000);
 
 const settled = await runPending(dir, file.config, pending, parallel, runOne, settle, stop.signal, { caps, last, forget, prefer, pin });
 

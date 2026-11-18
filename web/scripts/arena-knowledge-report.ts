@@ -31,7 +31,7 @@ const decodeLabels = Schema.decodeUnknownSync(Schema.fromJsonString(Schema.Array
 const openReadOnly = (path: string) =>
   Effect.acquireRelease(
     Effect.try({ try: () => new Database(resolve(path), { readonly: true }), catch: (cause) => new ScriptError({ message: `cannot open ${path}: ${String(cause)}`, exitCode: 1 }) }),
-    (database) => Effect.sync(() => database.close()),
+    (database) => Effect.sync(() => { database.close(); }),
   );
 
 /** Prints every table of the report, reading `db`; each rate resamples seed blocks `draws` times. */
@@ -647,7 +647,7 @@ const program = Effect.gen(function* () {
   const { db: path, draws = BOOTSTRAP_DRAWS } = yield* decodeArgs(Args, USAGE)(args);
   const db = yield* openReadOnly(path);
 
-  yield* Effect.sync(() => report(db, draws));
+  yield* Effect.sync(() => { report(db, draws); });
 }).pipe(Effect.scoped);
 
 await runMain(program);

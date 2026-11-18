@@ -7,7 +7,7 @@ import { aliasOf, allTraffic, previewUrl, siteProblems, uploadProblems, versionI
 import { WORKER } from "../src/deploy/worker.ts";
 import { PAGE_PATHS } from "../src/site/route.ts";
 
-test("an alias is a DNS-safe label that fits beside the worker name, or nothing", () =>
+test("an alias is a DNS-safe label that fits beside the worker name, or nothing", () => {
   hegel.test((tc) => {
     const alias = aliasOf(tc.draw(gs.text()));
 
@@ -16,7 +16,8 @@ test("an alias is a DNS-safe label that fits beside the worker name, or nothing"
     expect(alias).toMatch(/^[a-z][a-z0-9-]*[a-z0-9]$|^[a-z]$/);
     expect(previewUrl(alias, "me").split(".")[0]?.length).toBeLessThanOrEqual(`https://`.length + 63);
     expect(`${alias}-${WORKER}`.length).toBeLessThanOrEqual(63);
-  }));
+  });
+});
 
 test("a branch name becomes an alias", () => {
   expect(aliasOf("site/Deploy_Previews")).toBe(aliasOf("site-deploy-previews"));
@@ -34,7 +35,7 @@ test("the version id is read from the upload output, and all traffic goes to it"
 
 const LOCAL = new Map([...AGGREGATE_NAMES, "manifest"].map((name) => [name, `{"${name}":1}`]));
 
-const site = (overrides: Record<string, Response>) => (url: string) => {
+const site = (overrides: Readonly<Record<string, Response>>) => async (url: string) => {
   const path = new URL(url).pathname;
   const shell = new Response('<div id="root"></div>', { status: PAGE_PATHS.includes(path) ? 200 : 404, headers: { "content-type": "text/html" } });
   const data = LOCAL.get(path.replace(/^\/data\/|\.json$/g, ""));

@@ -25,7 +25,7 @@ const linkOver = (socket: Socket): HumanLink => {
   const lines = createInterface({ input: socket })[Symbol.asyncIterator]();
 
   return {
-    send: (message) => new Promise<void>((sent, failed) => {
+    send: async (message) => new Promise<void>((sent, failed) => {
       socket.write(`${JSON.stringify(message)}\n`, (error) => {
         if (error === undefined || error === null) sent();
         else failed(error);
@@ -45,7 +45,7 @@ const linkOver = (socket: Socket): HumanLink => {
 };
 
 /** Listens on `path` for one terminal. It resolves once listening, so the caller can tell the human where to connect. */
-export const listenForHuman = (path: string): Promise<{ readonly connected: Promise<HumanLink> }> =>
+export const listenForHuman = async (path: string): Promise<{ readonly connected: Promise<HumanLink> }> =>
   new Promise((listening, failed) => {
     let accept = (_link: HumanLink): void => undefined;
 
@@ -60,5 +60,7 @@ export const listenForHuman = (path: string): Promise<{ readonly connected: Prom
 
     rmSync(path, { force: true });
     server.once("error", failed);
-    server.listen(path, () => listening({ connected }));
+    server.listen(path, () => {
+      listening({ connected });
+    });
   });

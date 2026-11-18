@@ -18,7 +18,7 @@ const matchGen = gs.tuples(configGen, configGen, gs.booleans(), gs.booleans(), g
 
 // The page used to count the hero's matches over the seats of every match with a kept seat; it
 // now sums the per-pair aggregates of the pairs with a kept config. Both must give the same numbers under any filter.
-test("the kept pairs' sums equal the counts over the matches with a kept seat, under any filter", () =>
+test("the kept pairs' sums equal the counts over the matches with a kept seat, under any filter", () => {
   hegel.test((tc) => {
     const played = tc.draw(gs.arrays(matchGen, { minSize: 1, maxSize: 30 }));
 
@@ -54,4 +54,5 @@ test("the kept pairs' sums equal the counts over the matches with a kept seat, u
     expect(kept).toEqual(new Set(seats.filter(isKept).map(keyOf)));
     expect(sumOf(pairs.map(({ scored }) => scored))).toBe(scoredWithKept.length);
     expect(sumOf(pairs.map(({ firstWins }) => firstWins))).toBe(sumOf(scoredWithKept.map(([first]) => first?.winShare ?? 0)));
-  }));
+  });
+});

@@ -32,9 +32,9 @@ const program = Effect.gen(function* () {
   const { out, regret, knowledge, "certain-mistakes": certain, luck } = yield* decodeArgs(Flags, USAGE)(parsed.values);
   const [dbPath] = parsed.positionals;
 
-  if (dbPath === undefined || isMissing(dbPath) || isMissing(regret) || isMissing(knowledge) || isMissing(certain) || isMissing(luck)) return yield* usage();
+  const db = yield* dbPath === undefined || isMissing(dbPath) || isMissing(regret) || isMissing(knowledge) || isMissing(certain) || isMissing(luck) ? usage() : Effect.succeed(dbPath);
 
-  const json = yield* openArena(dbPath, { regret, knowledge, certain, luck }).pipe(
+  const json = yield* openArena(db, { regret, knowledge, certain, luck }).pipe(
     Effect.map((arena) => encodeAggregates(aggregatesOf({ seats: withPotShares(arena.seats), decisions: arena.decisions, certain: arena.certain.summary.rates, consistency: arena.consistency, luck: arena.luck }))),
     Effect.scoped,
   );
@@ -47,14 +47,14 @@ const program = Effect.gen(function* () {
   // Removed on every exit; after the rename the path is gone and this does nothing.
   const staging = yield* Effect.acquireRelease(
     Effect.try({ try: () => mkdtempSync(join(dirname(target), `.${basename(target)}-`)), catch: ioError(`make a staging directory beside ${target}`) }),
-    (dir) => Effect.sync(() => rmSync(dir, { recursive: true, force: true })),
+    (dir) => Effect.sync(() => { rmSync(dir, { recursive: true, force: true }); }),
   );
 
   yield* Effect.try({ try: () => { for (const [name, text] of files) writeFileSync(join(staging, `${name}.json`), text); }, catch: ioError(`write ${staging}`) });
 
   const violations = privacyViolations(files);
 
-  if (violations.length > 0) return yield* new ScriptError({ message: `not written, the files fail the privacy check:\n${violations.join("\n")}`, exitCode: 1 });
+  yield* violations.length === 0 ? Effect.void : new ScriptError({ message: `not written, the files fail the privacy check:\n${violations.join("\n")}`, exitCode: 1 });
 
   yield* Effect.try({ try: () => { rmSync(target, { recursive: true, force: true }); renameSync(staging, target); }, catch: ioError(`replace ${target}`) });
 

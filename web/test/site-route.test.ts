@@ -10,17 +10,18 @@ const routeAt = (href: string): SiteRoute => routeOf(Option.getOrThrow(Url.fromS
 
 const NAMES = ["gpt-6.1-terra", "claude-opus-5-5", "Opus 5.5", "a&b=c", "100% / max", "é"];
 
-test("an arena URL gives back the filter and open row it was built from", () =>
+test("an arena URL gives back the filter and open row it was built from", () => {
   hegel.test((tc) => {
     const names = gs.arrays(gs.sampledFrom(NAMES), { maxSize: 4, unique: true });
     const filter = { offModels: tc.draw(names), offEfforts: tc.draw(names) };
     const maybeRow = tc.draw(gs.booleans()) ? Option.some(`${tc.draw(gs.sampledFrom(NAMES))}|max`) : Option.none();
     const route = routeAt(arenaHref(filter, maybeRow));
 
-    if (!SiteRoute.guards.Arena(route)) return expect.unreachable(`${arenaHref(filter, maybeRow)} is not an arena URL`);
+    if (!SiteRoute.guards.Arena(route)) throw new Error(`${arenaHref(filter, maybeRow)} is not an arena URL`);
 
     expect(arenaStateOf(route)).toEqual({ filter, maybeRow });
-  }));
+  });
+});
 
 test("the root and its old section links lead to the arena; other paths are not found", () => {
   expect(routeAt("/")).toEqual(SiteRoute.Arena({}));

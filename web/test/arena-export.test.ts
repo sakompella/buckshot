@@ -60,7 +60,7 @@ beforeAll(async () => {
   importTournaments({ database, sources: [source] });
 });
 
-afterAll(() => rmSync(root, { recursive: true, force: true }));
+afterAll(() => { rmSync(root, { recursive: true, force: true }); });
 
 const exportTo = async (out: string) => {
   const child = Bun.spawn(["nice", "-n", "10", "bun", "scripts/arena-export.ts", database, "--out", out], { cwd: WEB, stdout: "pipe", stderr: "pipe" });

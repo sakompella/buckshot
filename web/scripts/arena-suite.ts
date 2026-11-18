@@ -135,7 +135,7 @@ const program = Effect.gen(function* () {
   const { models, model, label, thinkingLevel, instructions } = flags.faux ? fauxModels() : yield* endpointModels;
   const system = systemMessage(instructions);
   const prices = loadPrices(DEFAULT_PRICES);
-  const keyOf = ({ match_id, ordinal }: { match_id: string; ordinal: number }) => `${match_id}:${ordinal}`;
+  const keyOf = ({ match_id, ordinal }: Readonly<{ match_id: string; ordinal: number }>) => `${match_id}:${ordinal}`;
   const lines = (path: string) => readFileSync(path, "utf8").split("\n").filter(Boolean);
   const done = new Set(existsSync(flags.out) ? lines(flags.out).map((line) => keyOf(decodeAnswered(line))) : []);
   const positions = lines(flags.suite).map((line) => decodePosition(line));
@@ -146,7 +146,7 @@ const program = Effect.gen(function* () {
   // The shared instructions and the tools must be the ones the recorded players were sent; an addendum of the config asked goes after them.
   const other = positions.find((position) => position.system_sha !== systemSha);
 
-  if (other !== undefined) return yield* new ScriptError({ message: `position ${other.match_id}:${other.ordinal} was played under another system message (${other.system_sha}); this checkout sends ${systemSha}`, exitCode: 1 });
+  yield* other === undefined ? Effect.void : new ScriptError({ message: `position ${other.match_id}:${other.ordinal} was played under another system message (${other.system_sha}); this checkout sends ${systemSha}`, exitCode: 1 });
 
   const ask = async (position: Position) => {
     const started = performance.now();
@@ -181,7 +181,7 @@ const program = Effect.gen(function* () {
 
   const queue = [...todo];
 
-  yield* Effect.promise(() => Promise.all(Array.from({ length: flags.parallel }, async () => { for (let position = queue.shift(); position !== undefined; position = queue.shift()) await ask(position); })));
+  yield* Effect.promise(async () => Promise.all(Array.from({ length: flags.parallel }, async () => { for (let position = queue.shift(); position !== undefined; position = queue.shift()) await ask(position); })));
 
   console.error(`${label}: asked ${todo.length} of ${positions.length} positions -> ${flags.out}`);
 });

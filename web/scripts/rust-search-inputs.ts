@@ -51,7 +51,7 @@ const reload: Reload = values.reload === "sampled" ? { rule: "sampled", samples 
 const memo: Memo = values.memo;
 
 const scratch = mkdtempSync(join(tmpdir(), "buckshot-rust-inputs-"));
-const player = await loadPlayer(scratch).finally(() => rmSync(scratch, { recursive: true, force: true }));
+const player = await loadPlayer(scratch).finally(() => { rmSync(scratch, { recursive: true, force: true }); });
 
 const decodeManifest = Schema.decodeUnknownSync(Schema.fromJsonString(RunManifest));
 const decodeMove = Schema.decodeUnknownSync(Schema.fromJsonString(MoveLine));

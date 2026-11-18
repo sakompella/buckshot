@@ -118,5 +118,8 @@ export const openArena = (dbPath: string, paths: ArenaPaths = {}) =>
       },
       catch: (cause) => new ScriptError({ message: `cannot read ${dbPath}: ${String(cause)}`, exitCode: 1 }),
     }),
-    (arena) => Effect.sync(() => closeArena(arena)),
+    (arena) =>
+      Effect.sync(() => {
+        closeArena(arena);
+      }),
   );

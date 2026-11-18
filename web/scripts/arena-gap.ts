@@ -36,7 +36,7 @@ const program = openArena(dbPath, { luck: values.luck }).pipe(
     return { a, b, ratingA: point.get(a), ratingB: point.get(b), gap: (point.get(a) ?? Number.NaN) - (point.get(b) ?? Number.NaN), se, matchesBetween: between.length, roundsBetween: rounds };
   }),
   Effect.scoped,
-  Effect.tap((result) => Effect.sync(() => console.log(JSON.stringify(result)))),
+  Effect.tap((result) => Effect.sync(() => { console.log(JSON.stringify(result)); })),
   Effect.asVoid,
 );
 

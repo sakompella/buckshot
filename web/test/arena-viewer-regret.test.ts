@@ -161,12 +161,13 @@ const consistentRow = (random: (below: number) => number, ordinal: number): Move
 
 const drawnRow = (tc: hegel.TestCase): MoveRow => consistentRow((below) => tc.draw(gs.integers({ minValue: 0, maxValue: below - 1 })), 0);
 
-test("a consistent row has no mismatch", () =>
+test("a consistent row has no mismatch", () => {
   hegel.test((tc) => {
     expect(mismatchesOf(drawnRow(tc))).toEqual([]);
-  }));
+  });
+});
 
-test("each kind of damage to a consistent row shows as its own mismatch", () =>
+test("each kind of damage to a consistent row shows as its own mismatch", () => {
   hegel.test((tc) => {
     const row = drawnRow(tc);
 
@@ -174,7 +175,8 @@ test("each kind of damage to a consistent row shows as its own mismatch", () =>
     expect(mismatchesOf({ ...row, label: "not a move" })).toEqual(["chosen move has no value"]);
     expect(mismatchesOf({ ...row, chosenScore: row.chosenScore - 1, regret: row.regret + 1 })).toEqual(["chosen value is not the chosen score"]);
     expect(mismatchesOf({ ...row, regret: row.regret + 1 })).toEqual(["regret is not best minus chosen"]);
-  }));
+  });
+});
 
 test("the consistency check counts every row, the rows that do not decode and each mismatch", () => {
   const random = randomOf(5);

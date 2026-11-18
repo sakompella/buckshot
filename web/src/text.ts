@@ -1,12 +1,15 @@
 import { Match } from "effect";
 
-import type { AnswerError } from "./bend.ts";
+import type { BendContractError, NoPrompt, StaleAnswer } from "./bend.ts";
 import { GameEvent, type Item, Move, type Seat, Secret } from "./domain.ts";
 import type { Roster } from "./players.ts";
 
 // The words the UI and the agent tools both use for players, items, moves and events.
 
-export const describeError = (roster: Roster, error: AnswerError): string =>
+/** An `AnswerError` without the Error members, which TypeScript cannot make readonly. */
+type AnswerFailure = Readonly<Pick<BendContractError, "_tag" | "call" | "detail">> | Readonly<Pick<StaleAnswer, "_tag">> | Readonly<Pick<NoPrompt, "_tag" | "seat">>;
+
+export const describeError = (roster: Roster, error: AnswerFailure): string =>
   Match.value(error).pipe(
     Match.tag("BendContractError", ({ call, detail }) => `Bend returned an unexpected value from ${call}: ${detail}`),
     Match.tag("StaleAnswer", () => "That move was for an earlier turn. Choose again."),

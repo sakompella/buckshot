@@ -150,7 +150,6 @@ interface Label {
   readonly dotX: number;
   readonly dotY: number;
   readonly candidates: ReadonlyArray<Candidate>;
-  current: Candidate;
 }
 
 export const placeLabels = (points: ReadonlyArray<LabelPoint>, area: Box): ReadonlyArray<Placed> => {
@@ -162,19 +161,32 @@ export const placeLabels = (points: ReadonlyArray<LabelPoint>, area: Box): Reado
     const all = candidatesOf(point);
     const usable = all.filter((candidate) => isInArea(boxOf(candidate, point.w, point.h)));
     const candidates = usable.length > 0 ? usable : all.slice(0, 1);
-    const [first = all[0]] = candidates;
+
+    return { idx, w: point.w, h: point.h, dotX: point.x, dotY: point.y, candidates };
+  });
+
+  const current = labels.map((label): Candidate => {
+    const [first] = label.candidates;
 
     if (first === undefined) throw new Error("a label always has a first candidate");
 
-    return { idx, w: point.w, h: point.h, dotX: point.x, dotY: point.y, candidates, current: first };
+    return first;
   });
 
-  const boxes = labels.map((label) => boxOf(label.current, label.w, label.h));
-  const segments = labels.map((label) => segmentOf(label.dotX, label.dotY, label.current, label.w, label.h));
+  const currentOf = (label: Label): Candidate => {
+    const candidate = current[label.idx];
+
+    if (candidate === undefined) throw new Error(`label ${label.idx} has no current candidate`);
+
+    return candidate;
+  };
+
+  const boxes = labels.map((label) => boxOf(currentOf(label), label.w, label.h));
+  const segments = labels.map((label) => segmentOf(label.dotX, label.dotY, currentOf(label), label.w, label.h));
 
   const refresh = (label: Label) => {
-    boxes[label.idx] = boxOf(label.current, label.w, label.h);
-    segments[label.idx] = segmentOf(label.dotX, label.dotY, label.current, label.w, label.h);
+    boxes[label.idx] = boxOf(currentOf(label), label.w, label.h);
+    segments[label.idx] = segmentOf(label.dotX, label.dotY, currentOf(label), label.w, label.h);
   };
 
   const between = (box: Box, segment: Segment, otherBox: Box, otherSegment: Segment): number =>
@@ -202,7 +214,7 @@ export const placeLabels = (points: ReadonlyArray<LabelPoint>, area: Box): Reado
   };
 
   const cheapest = (label: Label): Candidate => {
-    let best = label.current;
+    let best = currentOf(label);
     let bestCost = Infinity;
 
     for (const candidate of label.candidates) {
@@ -223,8 +235,8 @@ export const placeLabels = (points: ReadonlyArray<LabelPoint>, area: Box): Reado
     for (const label of labels) {
       const best = cheapest(label);
 
-      if (best !== label.current) {
-        label.current = best;
+      if (best !== currentOf(label)) {
+        current[label.idx] = best;
         refresh(label);
         hasMoved = true;
       }
@@ -235,7 +247,7 @@ export const placeLabels = (points: ReadonlyArray<LabelPoint>, area: Box): Reado
 
   const cheaperPair = (a: Label, b: Label): readonly [Candidate, Candidate] | null => {
     let best: readonly [Candidate, Candidate] | null = null;
-    let bestCost = costAt(a, a.current) + costAt(b, b.current);
+    let bestCost = costAt(a, currentOf(a)) + costAt(b, currentOf(b));
 
     const placesOf = (label: Label, other: Label) =>
       label.candidates.map((candidate) => ({ candidate, alone: costAt(label, candidate, other), box: boxOf(candidate, label.w, label.h), segment: segmentOf(label.dotX, label.dotY, candidate, label.w, label.h) }));
@@ -270,7 +282,7 @@ export const placeLabels = (points: ReadonlyArray<LabelPoint>, area: Box): Reado
 
         if (pair === null) continue;
 
-        [a.current, b.current] = pair;
+        [current[a.idx], current[b.idx]] = pair;
         refresh(a);
         refresh(b);
         hasUntangled = true;
@@ -280,7 +292,11 @@ export const placeLabels = (points: ReadonlyArray<LabelPoint>, area: Box): Reado
     if (!hasUntangled) break;
   }
 
-  return labels.map((label) => ({ idx: label.idx, left: label.current.left, y: label.current.y, w: label.w, h: label.h, anchorX: label.current.anchorX, align: label.current.align, dotX: label.dotX, dotY: label.dotY }));
+  return labels.map((label) => {
+    const { left, y, anchorX, align } = currentOf(label);
+
+    return { idx: label.idx, left, y, w: label.w, h: label.h, anchorX, align, dotX: label.dotX, dotY: label.dotY };
+  });
 };
 
 /** The leader from the dot's edge to the nearest point of the label box, or null when the label hugs its dot. */

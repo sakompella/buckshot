@@ -23,12 +23,22 @@ const encodeCertain = Schema.encodeSync(Schema.fromJsonString(CertainMistakes));
 
 const JSON_TYPE = { "content-type": "application/json" };
 
-const encodedBody = (body: string) => ({ body, gzipped: Bun.gzipSync(new TextEncoder().encode(body)) });
+interface EncodedBody {
+  readonly gzippedLength: number;
+  readonly respond: (request: Request) => Response;
+}
 
-const json = (request: Request, { body, gzipped }: ReturnType<typeof encodedBody>) =>
-  /\bgzip\b/.test(request.headers.get("accept-encoding") ?? "")
-    ? new Response(gzipped, { headers: { ...JSON_TYPE, "content-encoding": "gzip", vary: "accept-encoding" } })
-    : new Response(body, { headers: { ...JSON_TYPE, vary: "accept-encoding" } });
+const encodedBody = (body: string): EncodedBody => {
+  const gzipped = Bun.gzipSync(new TextEncoder().encode(body));
+
+  return {
+    gzippedLength: gzipped.length,
+    respond: (request) =>
+      /\bgzip\b/.test(request.headers.get("accept-encoding") ?? "")
+        ? new Response(gzipped, { headers: { ...JSON_TYPE, "content-encoding": "gzip", vary: "accept-encoding" } })
+        : new Response(body, { headers: { ...JSON_TYPE, vary: "accept-encoding" } }),
+  };
+};
 
 const digest = (text: string) => new Bun.CryptoHasher("sha256").update(text).digest();
 
@@ -56,7 +66,8 @@ const COMPRESSIBLE = /\.(js|css|svg)$/;
 const gzippedAssets = new Map<string, Uint8Array<ArrayBuffer>>();
 
 /** A hashed script or stylesheet, gzipped once when asked for; the others are sent as they are. */
-const assetResponse = async (pathname: string, file: ReturnType<typeof Bun.file>, request: Request): Promise<Response> => {
+const assetResponse = async (pathname: string, path: string, request: Request): Promise<Response> => {
+  const file = Bun.file(path);
   const headers = { "cache-control": "public, max-age=31536000, immutable" };
 
   if (!COMPRESSIBLE.test(pathname) || !/\bgzip\b/.test(request.headers.get("accept-encoding") ?? "")) return new Response(file, { headers });
@@ -70,9 +81,10 @@ const assetResponse = async (pathname: string, file: ReturnType<typeof Bun.file>
 
 const siteResponse = async (siteDir: string, request: Request): Promise<Response> => {
   const { pathname } = new URL(request.url);
-  const file = Bun.file(join(siteDir, normalize(decodeURIComponent(pathname))));
+  const path = join(siteDir, normalize(decodeURIComponent(pathname)));
+  const file = Bun.file(path);
 
-  if (pathname !== "/" && (await file.exists())) return pathname.startsWith("/assets/") ? assetResponse(pathname, file, request) : new Response(file);
+  if (pathname !== "/" && (await file.exists())) return pathname.startsWith("/assets/") ? assetResponse(pathname, path, request) : new Response(file);
 
   return new Response(Bun.file(join(siteDir, "index.html")), { status: PAGE_PATHS.includes(pathname) ? 200 : 404, headers: { "content-type": "text/html; charset=utf-8" } });
 };
@@ -85,14 +97,14 @@ export interface ViewerAccess {
 export const serveArenaViewer = ({ db, regret, seats, seatIndex, decisions, certain, consistency, luck }: Arena, siteDir: string, hostname: string, port: number, { password }: ViewerAccess) => {
   const guarded = guardedBy(password);
   const aggregateJson = encodeAggregates(aggregatesOf({ seats: withPotShares(seats), decisions, certain: certain.summary.rates, consistency, luck }));
-  const aggregateRoutes = Object.fromEntries(AGGREGATE_NAMES.map((name) => [`/api/agg/${name}`, guarded((request) => json(request, encodedBody(aggregateJson[name])))]));
+  const aggregateRoutes = Object.fromEntries(AGGREGATE_NAMES.map((name) => [`/api/agg/${name}`, guarded((request) => encodedBody(aggregateJson[name]).respond(request))]));
 
   const seatsBody = encodedBody(encodeSeats(seats));
   const decisionsBody = encodedBody(encodeDecisions(decisions));
   const blundersBody = encodedBody(encodeBlunders(findBlunders(db, regret, seatIndex)));
   const certainBody = encodedBody(encodeCertain(certain.summary));
 
-  console.log(`serving ${seats.length} seats; decisions payload ${(decisionsBody.gzipped.length / 1e6).toFixed(1)} MB gzipped`);
+  console.log(`serving ${seats.length} seats; decisions payload ${(decisionsBody.gzippedLength / 1e6).toFixed(1)} MB gzipped`);
 
   return Bun.serve({
     hostname,
@@ -100,14 +112,14 @@ export const serveArenaViewer = ({ db, regret, seats, seatIndex, decisions, cert
     // With routes, Bun otherwise shares the port with a viewer already on it and splits requests between the two.
     reusePort: false,
     development: false,
-    fetch: (request) => siteResponse(siteDir, request),
+    fetch: async (request) => siteResponse(siteDir, request),
     routes: {
       "/api/*": () => new Response("not found", { status: 404 }),
-      "/api/seats": guarded((request) => json(request, seatsBody)),
-      "/api/decisions": guarded((request) => json(request, decisionsBody)),
-      "/api/blunders": guarded((request) => json(request, blundersBody)),
+      "/api/seats": guarded((request) => seatsBody.respond(request)),
+      "/api/decisions": guarded((request) => decisionsBody.respond(request)),
+      "/api/blunders": guarded((request) => blundersBody.respond(request)),
       ...aggregateRoutes,
-      "/api/certain-mistakes": guarded((request) => json(request, certainBody)),
+      "/api/certain-mistakes": guarded((request) => certainBody.respond(request)),
     },
   });
 };

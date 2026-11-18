@@ -20,7 +20,7 @@ const decodeNumbered = (line: string) => Result.mapError(Schema.decodeResult(Sch
 
 const dir = join(tempDir("replay-run-"), "faux");
 
-beforeAll(() => playFauxRun(dir, ["Agent", "Agent", "DoN"], "live"));
+beforeAll(async () => playFauxRun(dir, ["Agent", "Agent", "DoN"], "live"));
 
 test("a line cut mid-JSON is left out until it is complete, and a malformed complete line is unreadable in place", () => {
   const cut = '{"n":1}\n{"n":2}\n{"n":';
@@ -35,7 +35,7 @@ test("a line cut mid-JSON is left out until it is complete, and a malformed comp
 });
 
 /** Reads `file` from the faux run with a cursor after each of a series of prefixes cut at arbitrary byte offsets, as a tailing reader sees a file being written. */
-const tailInChunks = <A>(file: string, decode: (line: string) => Result.Result<A, string>) =>
+const tailInChunks = <A>(file: string, decode: (line: string) => Result.Result<A, string>) => {
   hegel.test((tc) => {
     const bytes = readFileSync(join(dir, file));
     const cuts = tc.draw(gs.arrays(gs.integers({ minValue: 0, maxValue: bytes.length }), { maxSize: 50 })).toSorted((left, right) => left - right);
@@ -46,8 +46,9 @@ const tailInChunks = <A>(file: string, decode: (line: string) => Result.Result<A
     expect(seen).toEqual([...readJsonl(bytes.toString("utf8"), decode)]);
     expect(seen.every((line) => line.kind === "read")).toBe(true);
   });
+};
 
-test("reading events.jsonl with a cursor while it is written in chunks gives every line once, in order", () => tailInChunks("events.jsonl", decodeEventLine));
+test("reading events.jsonl with a cursor while it is written in chunks gives every line once, in order", () => { tailInChunks("events.jsonl", decodeEventLine); });
 
 test("a faux match replays move for move to its final cash, extends a partial replay", () => {
   const manifest = Schema.decodeSync(Schema.fromJsonString(RunManifest))(readFileSync(join(dir, "manifest.json"), "utf8"));

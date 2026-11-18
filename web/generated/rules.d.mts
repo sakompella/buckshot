@@ -5,8 +5,11 @@
 // These types only name the boundary: web/src/bend.ts decodes every result
 // with a Schema before the app reads it.
 
+export type BendValue = number | bigint | boolean | string | BendNode;
+
 export interface BendNode {
   readonly $: string;
+  readonly [field: string]: BendValue;
 }
 
 declare const rules: {

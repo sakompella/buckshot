@@ -18,7 +18,7 @@ const runners = new Set<ReturnType<typeof Bun.spawn>>();
 
 afterEach(async () => {
   for (const child of runners) if (child.exitCode === null) child.kill("SIGTERM");
-  await Promise.all([...runners].map((child) => child.exited));
+  await Promise.all([...runners].map(async (child) => child.exited));
   runners.clear();
 });
 

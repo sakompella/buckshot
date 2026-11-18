@@ -171,7 +171,7 @@ const requestHeaders = (endpoint: Endpoint) => {
 const requestAuth = (endpoint: Endpoint, source: string) => ({
   apiKey: {
     name: source,
-    resolve: () => Promise.resolve({ auth: { apiKey: Redacted.value(endpoint.key), headers: requestHeaders(endpoint) }, source }),
+    resolve: async () => Promise.resolve({ auth: { apiKey: Redacted.value(endpoint.key), headers: requestHeaders(endpoint) }, source }),
   },
 });
 
@@ -232,22 +232,25 @@ const asksDetailedSummaries = (catalogModel: Model<Api>): boolean => catalogMode
 const withDetailedSummaries = (api: ProviderStreams): ProviderStreams =>
   rewriting(api, ResponsesRequest, (request) => (request.reasoning?.summary === undefined ? request : { ...request, reasoning: { ...request.reasoning, summary: "detailed" } }));
 
+const isAnthropicModel = (catalogModel: Model<Api>): catalogModel is Model<"anthropic-messages"> => catalogModel.api === "anthropic-messages";
+
 /** The endpoint as a pi-ai provider with one model. */
 export const providerOf = (providerId: string, endpoint: Endpoint): Provider => {
   const baseUrl = baseUrlOf(endpoint.url);
   const catalogModel = listedModelOf(endpoint);
   const model = { ...catalogModel, id: endpoint.model, provider: providerId, baseUrl };
+  const { compat: _compat, ...withoutCompat } = model;
   const options = { id: providerId, baseUrl, auth: requestAuth(endpoint, providerId) };
 
   return Endpoint.match(endpoint, {
-    // SAFETY: a catalog model from another provider can list another API, such
-    // as openai-completions for a model another endpoint serves on the Responses API.
-    // The model takes the endpoint's API and keeps its compat flags, which say
-    // what the model upstream accepts; each API reads only the flags it knows.
+    // A catalog model from another provider can list another API, such as
+    // openai-completions for a model another endpoint serves on the Responses API.
+    // The model takes the endpoint's API; its compat flags are kept only when they
+    // are Anthropic's, since each API reads only the flags it knows.
     Anthropic: (): Provider =>
       createProvider({
         ...options,
-        models: [{ ...model, api: "anthropic-messages" } as Model<"anthropic-messages">],
+        models: [isAnthropicModel(catalogModel) ? { ...catalogModel, id: endpoint.model, provider: providerId, baseUrl } : { ...withoutCompat, api: "anthropic-messages" }],
         api: endpoint.effort === "off" && setsEffortPerMessage(model) ? withThinkingOff(anthropicMessagesApi(), thinkingOffType(catalogModel)) : anthropicMessagesApi(),
       }),
     OpenAIResponses: (): Provider => createProvider({ ...options, models: [{ ...model, api: "openai-responses" }], api: asksDetailedSummaries(catalogModel) ? withDetailedSummaries(openAIResponsesApi()) : openAIResponsesApi() }),

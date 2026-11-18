@@ -110,7 +110,7 @@ const panelView = (h: H, model: string, lines: ReadonlyArray<OddsLine>, width: n
       ...lines.flatMap(({ key, effort, points }, index) => [
         h.path([h.D(points.map(({ bin, share }, at) => `${at === 0 ? "M" : "L"}${x.at(bin)},${y.at(share)}`).join(" ")), h.Fill("none"), h.Stroke(color), h.StrokeWidth("1.6"), h.StrokeDasharray(dashOf(effort))], []),
         ...points.map(({ bin, share }) =>
-          tippedDot(h, anchorId("odds", key, bin), spotText(lines, bin, (other) => Math.abs(y.at(other) - y.at(share)) < 1), String(x.at(bin)), String(y.at(share)), [h.R("3"), h.Fill(color)]),
+          tippedDot(h, anchorId("odds", key, bin), spotText(lines, bin, (other) => Math.abs(y.at(other) - y.at(share)) < 1), String(x.at(bin)), String(y.at(share)), "3", color),
         ),
         ...(isKeyedBelow
           ? []

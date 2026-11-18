@@ -98,7 +98,7 @@ test("a phone clue keeps its offset as shots remove shells, and becomes the cham
   expect(later.public.live).toEqual([1, 1]);
 });
 
-test("what a player believes about the shells is never contradicted by the shells actually loaded", () =>
+test("what a player believes about the shells is never contradicted by the shells actually loaded", () => {
   hegel.test((tc) => {
     const shells = tc.draw(gs.arrays(gs.booleans(), { minSize: 2, maxSize: 8 }));
     const name = (isLive: boolean): "Live" | "Blank" => (isLive ? "Live" : "Blank");
@@ -126,7 +126,8 @@ test("what a player believes about the shells is never contradicted by the shell
     if (Option.isSome(knowledge.chamber)) expect(knowledge.chamber.value).toBe(truth);
 
     expect(Option.isSome(knowledge.chamber) || !hasGlass).toBe(true);
-  }));
+  });
+});
 
 test("the public count settles the chamber before a clue does", () => {
   const knowledge = knowledgeAfter([loaded(1, 2), used(ME, ME, "Phone"), { heard: clue(3, "Live") }, fired(ME, ME, "Blank"), fired(ME, THEM, "Blank")]);

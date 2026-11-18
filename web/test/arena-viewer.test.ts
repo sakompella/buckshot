@@ -31,22 +31,24 @@ const gamesGen = gs.composite<ReadonlyArray<Game>>((tc) => {
   return tc.draw(gs.arrays(game, { minSize: 1, maxSize: 40 }));
 });
 
-test("Bradley-Terry ratings have mean 0", () =>
+test("Bradley-Terry ratings have mean 0", () => {
   hegel.test((tc) => {
     const values = [...bradleyTerry(tc.draw(gamesGen)).values()];
 
     expect(Math.abs(values.reduce((total, value) => total + value, 0))).toBeLessThan(1e-6);
-  }));
+  });
+});
 
-test("Bradley-Terry ratings do not depend on which side a game lists first", () =>
+test("Bradley-Terry ratings do not depend on which side a game lists first", () => {
   hegel.test((tc) => {
     const games = tc.draw(gamesGen);
     const swapped = bradleyTerry(games.map(({ a, b, sa }) => ({ a: b, b: a, sa: 1 - sa })));
 
     for (const [id, rating] of bradleyTerry(games)) expect(swapped.get(id) ?? Number.NaN).toBeCloseTo(rating, 6);
-  }));
+  });
+});
 
-test("one more win for a player over another never narrows the gap between them", () =>
+test("one more win for a player over another never narrows the gap between them", () => {
   hegel.test((tc) => {
     const games = tc.draw(gamesGen);
     const winnerAt = tc.draw(gs.integers({ minValue: 0, maxValue: 4 }));
@@ -60,7 +62,8 @@ test("one more win for a player over another never narrows the gap between them"
     };
 
     expect(gap([...games, { a: winner, b: loser, sa: 1 }])).toBeGreaterThanOrEqual(gap(games) - 1e-6);
-  }));
+  });
+});
 
 test("Bradley-Terry ranks a player that wins more of the same games higher", () => {
   const games = [
@@ -141,7 +144,7 @@ const plainBlockRate = (tally: BlockTally, reps: number) => {
   return { lo: quantile(rates, 0.025), hi: quantile(rates, 0.975) };
 };
 
-test("the block bootstrap's kept draws give the same interval as drawing afresh, whatever sizes came before", () =>
+test("the block bootstrap's kept draws give the same interval as drawing afresh, whatever sizes came before", () => {
   hegel.test(
     (tc) => {
       const draws = gs.tuples(gs.integers({ minValue: 1, maxValue: 120 }), gs.sampledFrom([200, 300, 400, 1000]));
@@ -155,7 +158,8 @@ test("the block bootstrap's kept draws give the same interval as drawing afresh,
       }
     },
     { testCases: 30 },
-  ));
+  );
+});
 
 const fired = (shooter: Socket, target: Socket, shell: "Live" | "Blank"): GameEvent => GameEvent.cases.Fired.make({ shooter, target, shell, captured: "Single", applied: shell === "Live" ? 1 : 0, health: 3 });
 

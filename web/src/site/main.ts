@@ -60,15 +60,13 @@ const enterArena = (model: Model, route: ArenaRoute): Return =>
   });
 
 /** Writes what the arena now shows into the URL, so a link shares it and a reload keeps it. */
-const withArenaUrl = (before: Option.Option<ArenaModel>, after: Return): Return =>
-  Option.match(Option.all([before, after.model.maybeArena]), {
-    onNone: () => after,
+const arenaUrlCommands = (before: Option.Option<ArenaModel>, after: Model) =>
+  Option.match(Option.all([before, after.maybeArena]), {
+    onNone: () => [],
     onSome: ([was, arena]) => {
       const href = Arena.hrefOf(arena);
 
-      if (!isArenaRoute(after.model.route) || href === Arena.hrefOf(was)) return after;
-
-      return { model: after.model, commands: [...(after.commands ?? []), ReplaceUrl(href + location.hash)] };
+      return !isArenaRoute(after.route) || href === Arena.hrefOf(was) ? [] : [ReplaceUrl(href + location.hash)];
     },
   });
 
@@ -90,7 +88,11 @@ export const update = (model: Model, message: Message): Return =>
         External: ({ href }) => ({ model, commands: [LoadUrl(href)] }),
       }),
     CompletedNavigation: () => ({ model }),
-    GotArenaMessage: ({ message: arenaMessage }) => withArenaUrl(model.maybeArena, foldArena(model, arenaMessage)),
+    GotArenaMessage: ({ message: arenaMessage }) => {
+      const { model: next, commands = [] } = foldArena(model, arenaMessage);
+
+      return { model: next, commands: [...commands, ...arenaUrlCommands(model.maybeArena, next)] };
+    },
   });
 
 export const init = (url: Url.Url): Return => {

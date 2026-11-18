@@ -37,7 +37,7 @@ console.log("tools:", JSON.stringify(tools, null, 2));
 
 const replySizes: Array<number> = [];
 
-const callTool = async (name: string, input: Record<string, number | string | boolean | ReadonlyArray<string>>): Promise<{ readonly ok: boolean; readonly text: string }> => {
+const callTool = async (name: string, input: Readonly<Record<string, number | string | boolean | ReadonlyArray<string>>>): Promise<{ readonly ok: boolean; readonly text: string }> => {
   const { content, isError } = parseToolText(await client.callTool({ name, arguments: input }));
 
   if (RAW_SEAT.test(content[0].text)) throw new Error(`${name} reply names a seat or a numbered player: ${content[0].text}`);
@@ -144,7 +144,7 @@ console.log("a your-turn reply with items:", sample);
 
 const finals = await Promise.all(agents.map(async (player) => (await getView(player)).view));
 
-agents.forEach((player, position) => hear(player, finals[position]?.events));
+agents.forEach((player, position) => { hear(player, finals[position]?.events); });
 
 const isOver = finals.every((view) => view.status === "over");
 

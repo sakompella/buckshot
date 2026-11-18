@@ -102,9 +102,9 @@ export const lineKeyView = (h: H, lines: ReadonlyArray<KeyLine>): Html =>
 /** A finger's reach around a small mark. */
 const HIT_RADIUS = 11;
 
-/** A dot with the shared tip, inside a clear circle wide enough to tap. `look` draws the dot itself. */
-export const tippedDot = (h: H, anchor: string, text: string, cx: string, cy: string, look: ReadonlyArray<Parameters<H["circle"]>[0][number]>): Html =>
-  h.g(markTip(h, anchor, text), [h.circle([h.Cx(cx), h.Cy(cy), h.R(String(HIT_RADIUS)), h.Fill("transparent")], []), h.circle([h.Cx(cx), h.Cy(cy), ...look], [])]);
+/** A dot with the shared tip, inside a clear circle wide enough to tap. `radius` and `fill` draw the dot itself. */
+export const tippedDot = (h: H, anchor: string, text: string, cx: string, cy: string, radius: string, fill: string): Html =>
+  h.g(markTip(h, anchor, text), [h.circle([h.Cx(cx), h.Cy(cy), h.R(String(HIT_RADIUS)), h.Fill("transparent")], []), h.circle([h.Cx(cx), h.Cy(cy), h.R(radius), h.Fill(fill)], [])]);
 
 const TIP_GAP_X = 14;
 

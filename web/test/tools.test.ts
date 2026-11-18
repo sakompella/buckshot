@@ -34,7 +34,7 @@ const parseView = Schema.decodeUnknownSync(Schema.fromJsonString(View));
 
 type ToolName = (typeof tools)[number]["name"];
 
-type ToolInput = Record<string, number | string | boolean | ReadonlyArray<string>>;
+type ToolInput = Readonly<Record<string, number | string | boolean | ReadonlyArray<string>>>;
 
 type Outcome = { readonly table: HeadlessTable; readonly reply: AgentReply };
 
@@ -70,7 +70,7 @@ const getGame = (table: HeadlessTable, player: string): AgentReply => call(table
 const viewOf = (table: HeadlessTable, player: string) => parseView(answered(getGame(table, player)));
 
 /** A view of a player who has the turn, with its turn and moves. */
-const turnViewOf = (table: HeadlessTable, player: string) => {
+const turnViewOf = (table: HeadlessTable, player: string): typeof View.Type & { readonly turn: number; readonly moves: NonNullable<(typeof View.Type)["moves"]> } => {
   const { turn, moves = [], ...view } = viewOf(table, player);
 
   return { ...view, turn: turn ?? expect.unreachable("a player to move has no turn"), moves };
@@ -495,7 +495,7 @@ const expectSeedRefused = (seed: string): void => {
 };
 
 test("new_match refuses a seed with no digit in it", () => {
-  hegel.test((tc) => expectSeedRefused(tc.draw(gs.text({ excludeCategories: ["Nd"] }))));
+  hegel.test((tc) => { expectSeedRefused(tc.draw(gs.text({ excludeCategories: ["Nd"] }))); });
 });
 
 test("new_match refuses a decimal seed with one stray character, and one outside the safe integers", () => {

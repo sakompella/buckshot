@@ -53,12 +53,12 @@ const memo: Memo = values.memo;
 const tables = requested.filter((table) => values.reload !== "sampled" || table === 2);
 
 const scratch = mkdtempSync(join(tmpdir(), "buckshot-rust-synth-"));
-const player = await loadPlayer(scratch).finally(() => rmSync(scratch, { recursive: true, force: true }));
+const player = await loadPlayer(scratch).finally(() => { rmSync(scratch, { recursive: true, force: true }); });
 
 const ok = <A>(result: Result.Result<A, unknown>): A => Result.getOrThrowWith(result, (error) => new Error(String(error)));
 
 /** Plays one game with random legal choices. Analyses and emits the decision points whose index is in `chosen`; returns how many decision points had two or more options. */
-const playGame = (table: SeatCount, game: number, seed: number, chosen: ReadonlySet<number>, rows: Array<string>): number => {
+const playGame = (table: SeatCount, game: number, seed: number, chosen: ReadonlySet<number>, emit: (row: string) => void): number => {
   let progress = ok(begin(table, true, 1, seedRng(seed), [], seed));
   let choice = seedRng(seed ^ 0x5bd1e995);
   let eligible = 0;
@@ -88,7 +88,7 @@ const playGame = (table: SeatCount, game: number, seed: number, chosen: Readonly
             ? analysis
             : { kind: analysis.kind, best: analysis.best, score: analysis.lines[analysis.best]?.score, nodes: analysis.nodes, depth: analysis.depth, limited: analysis.limited, ...analysis.cached, lines: analysis.lines.map((line) => ({ code: moveCode(line.steps), score: line.score, reach: line.reach })) };
 
-        rows.push(JSON.stringify({ id: `synth-${table}-${game}`, ordinal: eligible, me, table: input.table, input: nativeInput(input), menu: moves.map((move) => move.label), chosen: moves[index]?.label, js, reference: player.version, ms }));
+        emit(JSON.stringify({ id: `synth-${table}-${game}`, ordinal: eligible, me, table: input.table, input: nativeInput(input), menu: moves.map((move) => move.label), chosen: moves[index]?.label, js, reference: player.version, ms }));
       }
 
       eligible += 1;
@@ -110,7 +110,7 @@ const counts: Record<number, number> = {};
 for (const table of tables) {
   for (let game = 0; game < games; game++) {
     const seed = baseSeed * 1000003 + table * 10007 + game;
-    const total = playGame(table, game, seed, new Set(), []);
+    const total = playGame(table, game, seed, new Set(), () => undefined);
     let pick = seedRng(seed ^ 0x2545f491);
     const indices = new Set<number>();
     const want = Math.min(perGame, total);
@@ -123,7 +123,7 @@ for (const table of tables) {
 
     const before = rows.length;
 
-    playGame(table, game, seed, indices, rows);
+    playGame(table, game, seed, indices, (row) => { rows.push(row); });
     counts[table] = (counts[table] ?? 0) + rows.length - before;
   }
 }

@@ -266,7 +266,8 @@ const panelView = (h: H, type: CertainType, models: ReadonlyArray<Row>, pooled: 
                       `${baseName(model)} · ${cell.mistakes.toLocaleString()} of ${cell.opportunities.toLocaleString()} opportunities, ${fmtShare(cell.mistakes / cell.opportunities)}${fmtBounds(cell)}`,
                       String(x.at(cell.mistakes / cell.opportunities)),
                       String(y),
-                      [h.R("3.5"), h.Fill(color)],
+                      "3.5",
+                      color,
                     ),
                   ],
                 )

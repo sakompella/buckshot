@@ -35,7 +35,7 @@ const program = Effect.gen(function* () {
 
   const db = yield* Effect.acquireRelease(
     Effect.try({ try: () => new Database(path, { readonly: true }), catch: (cause) => new ScriptError({ message: `cannot open ${path}: ${String(cause)}`, exitCode: 1 }) }),
-    (database) => Effect.sync(() => database.close()),
+    (database) => Effect.sync(() => { database.close(); }),
   );
 
   const { rows, undecodable, mismatches } = yield* Effect.sync(() => consistencyOf(db.query(`select ${MOVE_COLUMNS} from regret where status = 'searched'`).iterate()));

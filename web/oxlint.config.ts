@@ -87,15 +87,28 @@ export default defineConfig({
     "typescript/switch-exhaustiveness-check": "error",
     "typescript/unbound-method": "error",
     "typescript/use-unknown-in-catch-callback-variable": "error",
-    // Off: fights Effect.gen's `return yield* fail` (effect-tsgo missingReturnYieldStar).
-    "typescript/consistent-return": "off",
-    // Off: 1000+ hits; Effect and DOM types are not deeply readonly.
-    "typescript/prefer-readonly-parameter-types": "off",
-    // Off: rejects the `() => voidCall()` callback shorthand used throughout.
-    "typescript/no-confusing-void-expression": "off",
-    // Off: style only; plain functions returning Effect.runPromise are fine.
-    "typescript/promise-function-async": "off",
-    // Off: anti-slop/require-safety-comment-for-type-assertion already gates every assertion.
-    "typescript/no-unsafe-type-assertion": "off",
+    "typescript/consistent-return": "error",
+    "typescript/prefer-readonly-parameter-types": [
+      "error",
+      {
+        treatMethodsAsReadonly: true,
+        ignoreInferredTypes: true,
+        // Third-party and DOM types are not deeply readonly, and this code cannot change them.
+        allow: [
+          { from: "package", package: "effect", name: ["Option", "Result", "Effect", "Codec", "Decoder", "Json", "ConstraintDecoder", "Top", "SchemaError"] },
+          { from: "package", package: "foldkit", name: ["Url", "UrlRequest"] },
+          { from: "package", package: "bun:sqlite", name: ["Database"] },
+          { from: "package", package: "@hegeldev/hegel", name: ["TestCase"] },
+          { from: "package", package: "@earendil-works/pi-ai", name: ["TranscriptContext", "Model", "AssistantMessage", "Message"] },
+          { from: "package", package: "node:net", name: ["Socket"] },
+          { from: "lib", name: ["Float64Array", "Int32Array", "AbortSignal", "Request", "RequestInit", "Element", "PointerEvent", "URL"] },
+          { from: "package", package: "foldkit", name: ["HtmlBuilder", "Html", "VNode", "MessageUniverse", "HtmlElements", "HtmlAttributes", "KeyedFunction"] },
+        ],
+      },
+    ],
+    "typescript/no-confusing-void-expression": "error",
+    "typescript/promise-function-async": "error",
+    "typescript/no-unsafe-type-assertion": "error",
+    "typescript/consistent-type-assertions": ["error", { assertionStyle: "never" }],
   },
 });

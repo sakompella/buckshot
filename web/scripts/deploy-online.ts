@@ -105,7 +105,7 @@ const preview = (label: string) =>
     if (subdomain === undefined) return yield* fail("the account has no workers.dev subdomain");
 
     const url = previewUrl(alias, subdomain);
-    const problems = yield* Effect.tryPromise({ try: () => siteProblems(fetch, url, local), catch: (error) => fail(String(error)) });
+    const problems = yield* Effect.tryPromise({ try: async () => siteProblems(fetch, url, local), catch: (error) => fail(String(error)) });
 
     console.log(JSON.stringify({ versionId, url, problems }));
 
@@ -113,7 +113,7 @@ const preview = (label: string) =>
   });
 
 const promote = (versionId: string) =>
-  cf("workers", "deployments", "create", "--worker", WORKER, "--strategy", "percentage", "--versions", allTraffic(versionId)).pipe(Effect.map((output) => console.log(output.trim())));
+  cf("workers", "deployments", "create", "--worker", WORKER, "--strategy", "percentage", "--versions", allTraffic(versionId)).pipe(Effect.map((output) => { console.log(output.trim()); }));
 
 const program = Effect.gen(function* () {
   const parsed = yield* Effect.try({ try: () => parseArgs({ allowPositionals: true, options: { alias: { type: "string" } } }), catch: () => fail(USAGE) });

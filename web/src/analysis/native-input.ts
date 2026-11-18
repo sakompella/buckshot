@@ -2,7 +2,7 @@ import { Schema } from "effect";
 
 import { type BendNode } from "../../generated/rules.mjs";
 import { Item, type Move } from "../domain.ts";
-import { logNode, type PlayerInput } from "./player.ts";
+import { isBendNode, logNode, type PlayerInput } from "./player.ts";
 
 // The numbers sim/bend-mp/native.bend decodes, and the move names it prints. A throwaway format: one analysis input per line, fields in constructor order.
 
@@ -44,6 +44,8 @@ const isNumber = Schema.is(Schema.Union([Schema.Number, Schema.BigInt]));
 
 const isBoolean = Schema.is(Schema.Boolean);
 
+const isValue = (value: unknown): value is Value => isNumber(value) || isBoolean(value) || isBendNode(value);
+
 const nameOf = (node: BendNode): string => node.$.split(/[./]/).pop() ?? "";
 
 /** Numbers of a Bend value, fields in constructor order. A list is its length then its items last first, because native.bend's decoders cons each item onto the front. */
@@ -70,10 +72,13 @@ const encode = (node: Value): ReadonlyArray<number> => {
     return [items.length, ...items.toReversed().flatMap(encode)];
   }
 
-  // SAFETY: a node's fields are Bend values.
   const fields = Object.entries(node)
     .filter(([key]) => key !== "$")
-    .flatMap(([, field]) => encode(field as Value));
+    .flatMap(([key, field]) => {
+      if (!isValue(field)) throw new Error(`${name}.${key} is not a Bend value`);
+
+      return encode(field);
+    });
 
   if (SINGLE.has(name)) return fields;
 

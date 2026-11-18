@@ -116,8 +116,12 @@ export class ShellTracker {
         Used: ({ item }) => {
           if (item === "Saw") this.sawed = true;
         },
-        Fired: ({ shell }) => this.spend(shellOf(shell), true),
-        Ejected: ({ shell }) => this.spend(shellOf(shell), false),
+        Fired: ({ shell }) => {
+          this.spend(shellOf(shell), true);
+        },
+        Ejected: ({ shell }) => {
+          this.spend(shellOf(shell), false);
+        },
       },
       () => undefined,
     );
@@ -266,17 +270,15 @@ const itemColumn = (item: Item): number => {
 export const itemsOf = (log: Pick<MatchLog, "events" | "roster">): ReadonlyMap<string, Pick<SeatTally, "acquired" | "used" | "stolen">> => {
   const tallies = new Map<string, Pick<SeatTally, "acquired" | "used" | "stolen">>(log.roster.players.map(({ letter }) => [letter, { acquired: ITEMS.map(() => 0), used: ITEMS.map(() => 0), stolen: ITEMS.map(() => 0) }]));
 
-  const add = (counts: Array<number> | undefined, item: Item) => {
+  const count = (seat: Seat, kind: "acquired" | "used" | "stolen", item: Item) => {
+    const counts = tallies.get(log.roster.playerOf(seat).letter)?.[kind];
+
     if (counts) counts[itemColumn(item)] = (counts[itemColumn(item)] ?? 0) + 1;
   };
 
   for (const event of log.events) {
-    if (GameEvent.guards.Placed(event)) add(tallies.get(log.roster.playerOf(event.seat).letter)?.acquired, event.item);
-    else if (GameEvent.guards.Used(event)) {
-      const tally = tallies.get(log.roster.playerOf(event.seat).letter);
-
-      add(event.seat === event.owner ? tally?.used : tally?.stolen, event.item);
-    }
+    if (GameEvent.guards.Placed(event)) count(event.seat, "acquired", event.item);
+    else if (GameEvent.guards.Used(event)) count(event.seat, event.seat === event.owner ? "used" : "stolen", event.item);
   }
 
   return tallies;

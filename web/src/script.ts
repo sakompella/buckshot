@@ -1,5 +1,3 @@
-import type { parseArgs } from "node:util";
-
 import { Cause, Data, Effect, Exit, Option, Schema } from "effect";
 
 /** A script's expected failure: the message goes to stderr and the process exits with `exitCode`. */
@@ -26,7 +24,7 @@ export const runMain = async <E>(program: Effect.Effect<number | void, E>): Prom
   }
 };
 
-export type ParsedArgs = ReturnType<typeof parseArgs>["values"];
+export type ParsedArgs = Readonly<Record<string, string | boolean | ReadonlyArray<string | boolean> | undefined>>;
 
 /** Decodes the values parseArgs read with `schema`; anything it rejects is a usage error. */
 export const decodeArgs =

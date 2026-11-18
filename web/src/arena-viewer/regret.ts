@@ -42,18 +42,14 @@ export type Mismatch = (typeof MISMATCHES)[number];
 export const mismatchesOf = (row: MoveRow): ReadonlyArray<Mismatch> => {
   const chosen = row.values.find(({ label }) => label === row.label);
 
-  return MISMATCHES.filter((mismatch) => {
-    switch (mismatch) {
-      case "best score is not the top value":
-        return Math.max(...row.values.map(({ score }) => score)) !== row.bestScore;
-      case "chosen move has no value":
-        return chosen === undefined;
-      case "chosen value is not the chosen score":
-        return chosen !== undefined && chosen.score !== row.chosenScore;
-      case "regret is not best minus chosen":
-        return row.regret !== row.bestScore - row.chosenScore;
-    }
-  });
+  const failed = {
+    "best score is not the top value": Math.max(...row.values.map(({ score }) => score)) !== row.bestScore,
+    "chosen move has no value": chosen === undefined,
+    "chosen value is not the chosen score": chosen !== undefined && chosen.score !== row.chosenScore,
+    "regret is not best minus chosen": row.regret !== row.bestScore - row.chosenScore,
+  } satisfies Record<Mismatch, boolean>;
+
+  return MISMATCHES.filter((mismatch) => failed[mismatch]);
 };
 
 export const decodeMoveRow = Schema.decodeUnknownSync(MoveRow);
@@ -166,6 +162,8 @@ const regretOf = (path: string, db: Database): Regret => {
 
       return [row.ordinal, moveOf(row)];
     })),
-    close: () => db.close(),
+    close: () => {
+      db.close();
+    },
   };
 };

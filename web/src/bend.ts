@@ -19,15 +19,15 @@ export type AnswerError = BendContractError | StaleAnswer | NoPrompt;
 // Bend lists and options
 // ======================
 
-interface RawCons<A> {
+type RawCons<A> = {
   readonly $: "Con";
   readonly head: A;
   readonly tail: RawList<A>;
-}
+};
 
-interface RawNil {
+type RawNil = {
   readonly $: "Nil";
-}
+};
 
 type RawList<A> = RawCons<A> | RawNil;
 

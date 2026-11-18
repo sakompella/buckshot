@@ -115,7 +115,9 @@ const readEvents = (dir: string) => linesOf(join(dir, "events.jsonl")).map((line
 /** Every log entry the arena sent a player, in order, as its delivered lines record them. */
 export const entriesSentTo = (dir: string, player: Letter): ReadonlyArray<string> => readEvents(dir).flatMap((event) => (event.kind === "delivered" && event.player === player ? (event.entries ?? []) : []));
 
-const append = (path: string, line: string) => appendFileSync(path, `${line}\n`);
+const append = (path: string, line: string): void => {
+  appendFileSync(path, `${line}\n`);
+};
 
 /** The agent each provider fault in the run stopped the match on, one per fault line. */
 export const faultsIn = (dir: string): ReadonlyArray<AgentId> => readEvents(dir).flatMap((event) => (event.kind === "fault" && event.agent !== undefined ? [event.agent] : []));
@@ -185,7 +187,9 @@ export const logCall = (dir: string, { agent, position }: Sitting, message: Assi
 
 export type EventFields = Readonly<Record<string, Schema.Json>>;
 
-export const logEvent = (dir: string, kind: string, fields: EventFields): void => append(join(dir, "events.jsonl"), JSON.stringify({ t: new Date().toISOString(), kind, ...fields }));
+export const logEvent = (dir: string, kind: string, fields: EventFields): void => {
+  append(join(dir, "events.jsonl"), JSON.stringify({ t: new Date().toISOString(), kind, ...fields }));
+};
 
 const TOKEN_KEYS = ["input", "output", "cacheRead", "cacheWrite", "reasoning"] as const;
 
@@ -218,4 +222,6 @@ export const agentTotals = (dir: string, agent: AgentId) => {
   };
 };
 
-export const writeManifest = (dir: string, manifest: Readonly<Record<string, Schema.Json>>): void => writeFileSync(join(dir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+export const writeManifest = (dir: string, manifest: Readonly<Record<string, Schema.Json>>): void => {
+  writeFileSync(join(dir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
+};

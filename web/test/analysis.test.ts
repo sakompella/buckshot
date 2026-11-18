@@ -27,16 +27,16 @@ const readMove = Schema.decodeUnknownSync(Schema.fromJsonString(MoveLine));
 
 const Call = Schema.decodeUnknownSync(Schema.fromJsonString(loose({ turn: Schema.Number })));
 
-const withEntrant = (file: typeof Tournament.Type, entrant: string, changes: Record<string, Schema.Json>) => ({ ...file, config: { ...file.config, entrants: { ...file.config.entrants, [entrant]: { ...file.config.entrants[entrant], ...changes } } } });
+const withEntrant = (file: typeof Tournament.Type, entrant: string, changes: Readonly<Record<string, Schema.Json>>) => ({ ...file, config: { ...file.config, entrants: { ...file.config.entrants, [entrant]: { ...file.config.entrants[entrant], ...changes } } } });
 
-const withAgent = (manifest: typeof Run.Type, seat: string, changes: Record<string, Schema.Json>) => ({ ...manifest, provenance: { ...manifest.provenance, agents: { ...manifest.provenance.agents, [seat]: { ...manifest.provenance.agents[seat], ...changes } } } });
+const withAgent = (manifest: typeof Run.Type, seat: string, changes: Readonly<Record<string, Schema.Json>>) => ({ ...manifest, provenance: { ...manifest.provenance, agents: { ...manifest.provenance.agents, [seat]: { ...manifest.provenance.agents[seat], ...changes } } } });
 
 const played = mkdtempSync(join(tmpdir(), "buckshot-analysis-faux-"));
 
 
-beforeAll(() => playFauxRun(played, ["Agent", "Agent"], "on-turn"));
+beforeAll(async () => playFauxRun(played, ["Agent", "Agent"], "on-turn"));
 
-afterAll(() => rmSync(played, { recursive: true, force: true }));
+afterAll(() => { rmSync(played, { recursive: true, force: true }); });
 
 /** Every test reads the same finished match, so it is played once and copied, with both agents at medium effort as the tests' configs say. */
 const fauxMatchInto = (dir: string) => {
@@ -64,7 +64,7 @@ test("refreshes resumed logs without duplicating calls or repeated moves, stops 
     const callsPath = join(match, "calls.jsonl");
     const events = readFileSync(eventsPath, "utf8");
     const calls = readFileSync(callsPath, "utf8");
-    const refresh = () => importTournaments({ database, sources: [source], skipped: { [source]: { b_a_b0_p1: "never played" } } });
+    const refresh = () => { importTournaments({ database, sources: [source], skipped: { [source]: { b_a_b0_p1: "never played" } } }); };
 
     const snapshot = () => {
       const db = openAnalysis(database);
@@ -167,7 +167,8 @@ const probeTournament = (root: string, effort: string) => {
   fauxMatchInto(join(source, name));
   const manifestPath = join(source, name, "manifest.json");
   const configured = (aEffort: string) => ({ format: 1, created_at: "2026-01-01T00:00:00Z", git_commit: "test", config: { name: "probe", seed: 42, cohort: "test", delivery: "on-turn", endpoints: { fake: { api: "anthropic", url: "http://invalid", keyEnv: "UNUSED" } }, entrants: { a: { endpoint: "fake", model: "faux-a", effort: aEffort }, b: { endpoint: "fake", model: "faux-b", effort: "medium" } }, pairings: [["a", "b"]], blocksPerPairing: 1 }, schedule: [{ name, pairing: 0, block: 0, seed: 42, seats: ["A", "B"], entrants: ["a", "b"] }] });
-  const configure = (aEffort: string) => writeFileSync(join(source, "tournament.json"), JSON.stringify(configured(aEffort)));
+  const configure = (aEffort: string) => { writeFileSync(join(source, "tournament.json"), JSON.stringify(configured(aEffort))); };
+
   configure(effort);
 
   return { source, manifestPath, configure };
@@ -187,7 +188,7 @@ test("calls join on the turn they were made on: logged where the log has it, tak
     const callsPath = join(manifestPath, "..", "calls.jsonl");
     const logged = readFileSync(callsPath, "utf8").trimEnd().split("\n").map((line) => Call(line));
     const links = "SELECT link_method, decision_id IS NULL AS unlinked, COUNT(*) AS n FROM calls GROUP BY 1, 2";
-    const write = (lines: ReadonlyArray<object>) => writeFileSync(callsPath, `${lines.map((line) => JSON.stringify(line)).join("\n")}\n`);
+    const write = (lines: ReadonlyArray<object>) => { writeFileSync(callsPath, `${lines.map((line) => JSON.stringify(line)).join("\n")}\n`); };
 
     const import_ = (name: string) => {
       const database = join(root, `${name}.sqlite`);
@@ -229,7 +230,7 @@ test("a database validated by other replay or rules code is refused, by the Type
     assertCurrentImport(db);
     expect(python().exitCode).toBe(0);
     db.run("UPDATE matches SET validated_with = 'older rules'");
-    expect(() => assertCurrentImport(db)).toThrow("validated by other replay or rules code");
+    expect(() => { assertCurrentImport(db); }).toThrow("validated by other replay or rules code");
     expect(python().stderr.toString()).toContain("validated by other replay or rules code");
     db.close();
   } finally { rmSync(root, { recursive: true, force: true }); }
@@ -244,8 +245,8 @@ test("a changed tournament config is checked on unchanged matches, as a fresh re
     const fresh = join(root, "fresh.sqlite");
     importTournaments({ database, sources: [source] });
     configure("high");
-    expect(() => importTournaments({ database, sources: [source] })).toThrow("agent A played at effort medium, the schedule says high");
-    expect(() => importTournaments({ database: fresh, sources: [source] })).toThrow("agent A played at effort medium, the schedule says high");
+    expect(() => { importTournaments({ database, sources: [source] }); }).toThrow("agent A played at effort medium, the schedule says high");
+    expect(() => { importTournaments({ database: fresh, sources: [source] }); }).toThrow("agent A played at effort medium, the schedule says high");
     configure("medium");
     importTournaments({ database, sources: [source] });
   } finally { rmSync(root, { recursive: true, force: true }); }
@@ -261,7 +262,7 @@ test("a match's cohort is its tournament config's, and a config without one stop
     expect(rowsOf(database, "SELECT cohort FROM matches")).toEqual([{ cohort: "test" }]);
     const { config: { cohort: _cohort, ...config }, ...file } = readTournament(join(source, "tournament.json"));
     writeFileSync(join(source, "tournament.json"), JSON.stringify({ ...file, config }));
-    expect(() => importTournaments({ database, sources: [source] })).toThrow("the tournament config names no cohort");
+    expect(() => { importTournaments({ database, sources: [source] }); }).toThrow("the tournament config names no cohort");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -291,7 +292,7 @@ test("the tiers tournament's matches pool by model sweep or cross-model, named p
     expect(rowsOf(cross, "SELECT cohort FROM matches")).toEqual([{ cohort: "tiers cross-model" }]);
 
     const database = join(root, "unnamed.sqlite");
-    expect(() => importTournaments({ database, sources: [asTiers("unnamed", ["faux", "faux"])] })).toThrow("the tournament config names no cohort");
+    expect(() => { importTournaments({ database, sources: [asTiers("unnamed", ["faux", "faux"])] }); }).toThrow("the tournament config names no cohort");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -314,7 +315,7 @@ test("the replay's events and secrets are stored, each seat has its socket, and 
     const delivered = lines.findIndex((line) => line.includes('"kind":"delivered"') && line.includes("Player A"));
     lines[delivered] = lines[delivered]!.replace("Player A", "Player Q");
     writeFileSync(eventsPath, lines.join("\n"));
-    expect(() => importTournaments({ database, sources: [source] })).toThrow(`delivered line ${delivered + 1} differs from the replayed events`);
+    expect(() => { importTournaments({ database, sources: [source] }); }).toThrow(`delivered line ${delivered + 1} differs from the replayed events`);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -397,7 +398,7 @@ test("a finished match whose standings do not cover every player stops the impor
 
     for (const [label, broken] of [["no standings", undefined], ["one player", standings.slice(0, 1)], ["a repeated player", [standings[0], standings[0]]], ["an unscheduled player", [standings[0], { ...standings[1], player: "C" }]]] as const) {
       writeFileSync(manifestPath, JSON.stringify({ ...manifest, standings: broken }));
-      expect(() => importTournaments({ database, sources: [source] }), label).toThrow(/Finished manifest (has no standings|standings do not cover)/);
+      expect(() => { importTournaments({ database, sources: [source] }); }, label).toThrow(/Finished manifest (has no standings|standings do not cover)/);
     }
 
     writeFileSync(manifestPath, JSON.stringify(manifest));
@@ -421,11 +422,11 @@ test("a finished match whose replay or end event disagrees with the manifest sto
     expect(scored()).toEqual([{ status: "completed", shares: 2 }]);
 
     writeFileSync(manifestPath, JSON.stringify({ ...manifest, standings: manifest.standings.map((standing, index) => ({ ...standing, cash: standing.cash + index + 1 })) }));
-    expect(() => importTournaments({ database, sources: [source] })).toThrow("the replayed cash of");
+    expect(() => { importTournaments({ database, sources: [source] }); }).toThrow("the replayed cash of");
 
     writeFileSync(manifestPath, JSON.stringify(manifest));
     writeFileSync(eventsPath, events.split("\n").filter((line) => !line.includes('"kind":"end"')).join("\n"));
-    expect(() => importTournaments({ database, sources: [source] })).toThrow("the manifest says finished, the events have no end event");
+    expect(() => { importTournaments({ database, sources: [source] }); }).toThrow("the manifest says finished, the events have no end event");
 
     writeFileSync(eventsPath, events);
     importTournaments({ database, sources: [source] });
@@ -450,7 +451,7 @@ test("a truncated but legal move prefix with an end marker and matching current 
     expect(cash.length).toBe(2);
     writeFileSync(eventsPath, lines.filter((_, index) => index !== lastMove).join("\n"));
     writeFileSync(manifestPath, JSON.stringify({ ...manifest, standings: manifest.standings.map((standing) => ({ ...standing, cash: cash.find(({ player }) => player === standing.player)?.cash })) }));
-    expect(() => importTournaments({ database, sources: [source] })).toThrow("the replay did not reach the end");
+    expect(() => { importTournaments({ database, sources: [source] }); }).toThrow("the replay did not reach the end");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

@@ -68,7 +68,7 @@ const out = resolve(values.out);
 
 const scratch = mkdtempSync(join(tmpdir(), "buckshot-selfplay-"));
 
-const player = await loadPlayer(scratch).finally(() => rmSync(scratch, { recursive: true, force: true }));
+const player = await loadPlayer(scratch).finally(() => { rmSync(scratch, { recursive: true, force: true }); });
 
 const ok = <A>(result: Result.Result<A, unknown>): A => Result.getOrThrowWith(result, (error) => new Error(String(error)));
 

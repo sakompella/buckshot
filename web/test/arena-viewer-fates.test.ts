@@ -10,7 +10,7 @@ import { rosterOf } from "../src/players.ts";
 
 const counts = (tc: hegel.TestCase) => Array.from({ length: 8 }, () => tc.draw(gs.integers({ minValue: 0, maxValue: 6 })));
 
-test("a seat's fates read the stolen copies from its opponent and add up to what it received", () =>
+test("a seat's fates read the stolen copies from its opponent and add up to what it received", () => {
   hegel.test((tc) => {
     const acquired = counts(tc);
     const used = acquired.map((count) => tc.draw(gs.integers({ minValue: 0, maxValue: count })));
@@ -21,7 +21,8 @@ test("a seat's fates read the stolen copies from its opponent and add up to what
     expect(total.used + total.stolen + total.unused).toBe(acquired.reduce((sum, count) => sum + count, 0));
     expect(fates.every(({ unused }) => unused >= 0)).toBe(true);
     expect(fates.map((fate) => fate.stolen)).toEqual(stolen);
-  }));
+  });
+});
 
 test("a seat's own steals do not count as its items stolen", () => {
   const own = { matchId: "m", player: "A", acquired: [3, 0], used: [1, 0], stolen: [0, 2] };

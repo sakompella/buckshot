@@ -75,7 +75,7 @@ assertCurrentImport(source);
 
 const scratch = mkdtempSync(join(tmpdir(), "buckshot-knowledge-"));
 
-const belief = await loadPlayer(scratch).finally(() => rmSync(scratch, { recursive: true, force: true }));
+const belief = await loadPlayer(scratch).finally(() => { rmSync(scratch, { recursive: true, force: true }); });
 
 const decodeManifest = Schema.decodeUnknownSync(Schema.fromJsonString(RunManifest));
 
@@ -205,7 +205,7 @@ for (const [count, match] of matches.entries()) {
     const before = current();
     const seat = seatOf(decision.player);
 
-    Option.map(ledgerMismatch(ledger, before.game.board), (message) => problem(decision.ordinal, message));
+    Option.map(ledgerMismatch(ledger, before.game.board), (message) => { problem(decision.ordinal, message); });
 
     if (decision.by_whom !== "forced") {
       const log = loadLog(before.events, before.learned, seat);
@@ -316,10 +316,11 @@ for (const [count, match] of matches.entries()) {
 
       if (note === undefined) continue;
 
-      const clue = (kind: string, position: number, shell: string) =>
+      const clue = (kind: string, position: number, shell: string) => {
         put("clues", { match_id: match.id, learned: index, ordinal: decision.ordinal, player: letterOf(note.seat), kind, position, shell, via_adrenaline: stolenClue(after.events, note.at, note.seat) ? 1 : 0 });
+      };
 
-      Secret.match(note.secret, { Glimpse: ({ shell }) => clue("glass", 1, shell), Clue: ({ position, shell }) => clue("phone", position, shell), NoClue: () => undefined, EmptyBriefcase: () => undefined });
+      Secret.match(note.secret, { Glimpse: ({ shell }) => { clue("glass", 1, shell); }, Clue: ({ position, shell }) => { clue("phone", position, shell); }, NoClue: () => undefined, EmptyBriefcase: () => undefined });
     }
   }
 
@@ -342,19 +343,27 @@ for (const [count, match] of matches.entries()) {
   if (out !== undefined && (count + 1) % 50 === 0) console.error(`${count + 1}/${matches.length} matches, ${Math.round((performance.now() - started) / 1000)} s`);
 }
 
-interface ShellList {
-  readonly $: string;
-  readonly head?: { readonly $: string };
-  readonly tail?: ShellList;
+interface ShellCons {
+  readonly $: "Con";
+  readonly head: { readonly $: string };
+  readonly tail: ShellList;
 }
+
+type ShellList = ShellCons | { readonly $: "Nil" };
+
+const ShellList: Schema.Codec<ShellList> = Schema.Union([
+  Schema.Struct({ $: Schema.Literal("Con"), head: Schema.Struct({ $: Schema.String }), tail: Schema.suspend((): Schema.Codec<ShellList> => ShellList) }),
+  Schema.Struct({ $: Schema.Literal("Nil") }),
+]);
+
+const decodeGunState = Schema.decodeUnknownSync(Schema.Struct({ world: Schema.Struct({ gun: ShellList }) }));
 
 /** Validation only: the hidden gun, read to check the belief and never written or used to judge a player. */
 function trueGun(at: AgentSource): string {
-  // SAFETY: the machine state is sm/state.State{world: World{..., gun: List<Shell>}} (sim/bend-mp/sm/state.bend).
-  const state = at.game.state as { readonly $: string; readonly world: { readonly gun: ShellList } };
+  const state = decodeGunState(at.game.state);
   const shells: Array<string> = [];
 
-  for (let rest: ShellList | undefined = state.world.gun; rest?.$ === "Con"; rest = rest.tail) shells.push(rest.head?.$ === "Live" ? "L" : "B");
+  for (let rest = state.world.gun; rest.$ === "Con"; rest = rest.tail) shells.push(rest.head.$ === "Live" ? "L" : "B");
 
   return shells.join("");
 }

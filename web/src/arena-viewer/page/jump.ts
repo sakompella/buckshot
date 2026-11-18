@@ -39,4 +39,6 @@ export const noteOwnScroll = (): void => {
 };
 
 // Growth with no message of its own — a font swapping in, a fold opening — moves a settling jump too.
-new ResizeObserver(() => relandJump()).observe(document.body);
+new ResizeObserver(() => {
+  relandJump();
+}).observe(document.body);
