@@ -62,7 +62,7 @@ export class EndpointConfigError extends Data.TaggedError("EndpointConfigError")
 
 interface Credentials {
   readonly url: URL;
-  readonly key: Redacted.Redacted<string>;
+  readonly key: Redacted.Redacted;
 }
 
 /** A URL and its key, both or neither; one without the other is an error that names the missing variable. */
@@ -161,13 +161,17 @@ export const agentEndpoint = (agent: AgentId) =>
 const baseUrlOf = (url: URL): string => url.href.replace(/\/$/, "");
 
 /** The headers every request carries: the labels, and the account pin when the endpoint has one. */
-const requestHeaders = (endpoint: Endpoint) => Object.fromEntries([...Object.entries(endpoint.labels), ...(endpoint.account === undefined ? [] : [[endpoint.account.header, endpoint.account.id]])]);
+const requestHeaders = (endpoint: Endpoint) => {
+  const pin = endpoint.account === undefined ? [] : ([[endpoint.account.header, endpoint.account.id]] satisfies Array<[string, string]>);
+
+  return Object.fromEntries([...Object.entries(endpoint.labels), ...pin]);
+};
 
 /** The key and the headers, as pi-ai resolves them for every request. createProvider's own `headers` option is never sent. */
 const requestAuth = (endpoint: Endpoint, source: string) => ({
   apiKey: {
     name: source,
-    resolve: async () => ({ auth: { apiKey: Redacted.value(endpoint.key), headers: requestHeaders(endpoint) }, source }),
+    resolve: () => Promise.resolve({ auth: { apiKey: Redacted.value(endpoint.key), headers: requestHeaders(endpoint) }, source }),
   },
 });
 
@@ -246,8 +250,7 @@ export const providerOf = (providerId: string, endpoint: Endpoint): Provider => 
         models: [{ ...model, api: "anthropic-messages" } as Model<"anthropic-messages">],
         api: endpoint.effort === "off" && setsEffortPerMessage(model) ? withThinkingOff(anthropicMessagesApi(), thinkingOffType(catalogModel)) : anthropicMessagesApi(),
       }),
-    // SAFETY: as above.
-    OpenAIResponses: (): Provider => createProvider({ ...options, models: [{ ...model, api: "openai-responses" } as Model<"openai-responses">], api: asksDetailedSummaries(catalogModel) ? withDetailedSummaries(openAIResponsesApi()) : openAIResponsesApi() }),
+    OpenAIResponses: (): Provider => createProvider({ ...options, models: [{ ...model, api: "openai-responses" }], api: asksDetailedSummaries(catalogModel) ? withDetailedSummaries(openAIResponsesApi()) : openAIResponsesApi() }),
   });
 };
 

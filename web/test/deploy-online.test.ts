@@ -34,12 +34,12 @@ test("the version id is read from the upload output, and all traffic goes to it"
 
 const LOCAL = new Map([...AGGREGATE_NAMES, "manifest"].map((name) => [name, `{"${name}":1}`]));
 
-const site = (overrides: Record<string, Response>) => async (url: string) => {
+const site = (overrides: Record<string, Response>) => (url: string) => {
   const path = new URL(url).pathname;
   const shell = new Response('<div id="root"></div>', { status: PAGE_PATHS.includes(path) ? 200 : 404, headers: { "content-type": "text/html" } });
   const data = LOCAL.get(path.replace(/^\/data\/|\.json$/g, ""));
 
-  return overrides[path] ?? (data === undefined ? shell : new Response(data, { headers: { "content-type": "application/json" } }));
+  return Promise.resolve(overrides[path] ?? (data === undefined ? shell : new Response(data, { headers: { "content-type": "application/json" } })));
 };
 
 test("a preview that serves the exported data raises no difference or page problem", async () => {

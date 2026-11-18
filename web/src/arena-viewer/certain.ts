@@ -50,7 +50,7 @@ export const openCertain = (path: string, seatIndex: ReadonlyMap<string, number>
 
   const byMatch = new Map<string, Map<number, CertainType>>();
 
-  for (const { matchId, ordinal, type } of mistakes) byMatch.set(matchId, (byMatch.get(matchId) ?? new Map()).set(ordinal, type));
+  for (const { matchId, ordinal, type } of mistakes) byMatch.set(matchId, (byMatch.get(matchId) ?? new Map<number, CertainType>()).set(ordinal, type));
 
   return {
     summary: {

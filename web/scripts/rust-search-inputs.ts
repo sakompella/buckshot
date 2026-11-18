@@ -113,7 +113,7 @@ for (const match of matches) {
   const roster = rosterOf(current().game.seats, current().letters);
 
   for (const decision of decisions) {
-    if (decision.by_whom === "agent" && listed.get(match.id)?.has(decision.ordinal)) {
+    if (decision.by_whom === "agent" && listed.get(match.id)?.has(decision.ordinal) === true) {
       const before = current();
       const me = Option.getOrThrow(roster.find(decodeLetter(decision.player))).seat;
       const input = { table: before.game.table, items: true, board: boardOf(before.game), log: ownLog(before.events, before.learned, me), me };

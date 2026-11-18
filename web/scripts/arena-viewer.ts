@@ -38,7 +38,8 @@ const program = Effect.gen(function* () {
   const listenPort = yield* Schema.decodeEffect(Port)(port).pipe(Effect.mapError(usage));
 
   // ARENA_VIEWER_PASSWORD guards the API. Blank is unset.
-  const access = { password: process.env["ARENA_VIEWER_PASSWORD"] || undefined };
+  const password = process.env.ARENA_VIEWER_PASSWORD;
+  const access = { password: password === "" ? undefined : password };
 
   const started = performance.now();
   const arena = yield* openArena(dbPath, { regret: regretPath, knowledge: knowledgePath, certain: certainPath, luck: luckPath });

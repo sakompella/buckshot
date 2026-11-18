@@ -39,7 +39,7 @@ const faux = fauxProvider({ provider: "faux", models: [{ id: "faux-a", contextWi
 
 const models = createModels();
 
-faux.setResponses(Array.from({ length: 5_000 }, () => async (transcript) => {
+faux.setResponses(Array.from({ length: 5_000 }, () => (transcript) => {
   if (point === "model:in-flight") process.kill(process.pid, "SIGKILL");
 
   if (point === "model:fault") return fauxAssistantMessage("", { stopReason: "error", errorMessage: "503 faux provider unavailable" });

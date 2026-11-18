@@ -207,7 +207,7 @@ test("on random tables of 2 to 4 players, each Agent sees the players as Player 
           }
         }
       } }, size);
-    }, { testCases: 4, derandomize: true });
+    }, { testCases: 4, derandomize: true, suppressHealthCheck: [hegel.HealthCheck.TooSlow] });
   }
 
   expect(otherAgentNotes).toBeGreaterThan(0);
@@ -298,7 +298,8 @@ test("on random tables of 2 to 4 players with items, the moves list is exactly t
           }, progress);
 
           expect(isMidAction(end, seat)).toBe(false);
-          chain.forEach(({ move }) => kinds.add(move._tag));
+
+          for (const { move } of chain) kinds.add(move._tag);
           checked += 1;
         }
       }

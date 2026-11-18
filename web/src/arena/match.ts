@@ -3,9 +3,10 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { type AssistantMessage, contentText, type Message, type Models, type ModelThinkingLevel, Type } from "@earendil-works/pi-ai";
+import { type AssistantMessage, contentText, type Message, type Models, type ModelThinkingLevel } from "@earendil-works/pi-ai";
 import { type ConversationId, createRegistry, defineDoc, defineExtension, defineTool, GenerationTask, Harness, hook, type ModelRef } from "@earendil-works/pi-durable";
 import { openNodeSqliteStorage } from "@earendil-works/pi-durable/storage/sqlite/node";
+import { int, obj } from "@earendil-works/pi-schema";
 import { Data, Effect, Option, Predicate, Result, Schema } from "effect";
 
 import { emptyTable, type HeadlessTable, headlessSession } from "../agent/headless.ts";
@@ -159,10 +160,10 @@ const lettersOf = (controllers: ReadonlyArray<ArenaController>, agents: Readonly
   return Option.all(controllers.map((controller, seat) => Option.fromUndefinedOr((isAgent(controller) ? agents : spare)[controllers.slice(0, seat).filter((other) => isAgent(other) === isAgent(controller)).length])));
 };
 
-const MatchDoc = defineDoc<MatchState>({ kind: "arena.match", version: 1, scope: "session", initial: emptyMatch });
+const MatchDoc = defineDoc<MatchState>({ kind: "arena.match", version: 1, scope: "session", initial: emptyMatch, checkpointWhen: () => false });
 
 /** Written when the conversation is created, so its agent is set before any tool runs. */
-const SeatDoc = defineDoc<{ agent: AgentId | null; position: number }>({ kind: "arena.seat", version: 1, scope: "conversation", history: "latest", fork: "initial", initial: () => ({ agent: null, position: 0 }) });
+const SeatDoc = defineDoc<{ agent: AgentId | null; position: number }>({ kind: "arena.seat", version: 1, scope: "conversation", history: "latest", fork: "initial", initial: () => ({ agent: null, position: 0 }), checkpointWhen: () => false });
 
 const View = Schema.Struct({
   you: Letter,
@@ -342,15 +343,18 @@ interface SeatHost {
 }
 
 /** The seat tools as the model is offered them; seatTools adds what they do. */
-export const GET_GAME = { name: "get_game", description: "Your current view, as JSON, without log entries: those reach you once, as messages.", parameters: Type.Object({}) };
+export const GET_GAME = { name: "get_game", description: "Your current view, as JSON, without log entries: those reach you once, as messages.", parameters: obj({}, { open: true }) };
 
 export const PLAY_MOVE = {
   name: "play_move",
   description: "Play one of your legal moves. Returns the move played; your next turn comes as a new message.",
-  parameters: Type.Object({
-    move: Type.Integer({ minimum: 0, description: "The number of the move, from your view's moves." }),
-    turn: Type.Integer({ minimum: 0, description: "The turn of the view you chose the move from." }),
-  }),
+  parameters: obj(
+    {
+      move: int({ minimum: 0, description: "The number of the move, from your view's moves." }),
+      turn: int({ minimum: 0, description: "The turn of the view you chose the move from." }),
+    },
+    { open: true },
+  ),
 };
 
 const seatTools = (dir: string, { table, onReply, exportJournal, crashAt }: SeatHost) => {
@@ -372,7 +376,7 @@ const seatTools = (dir: string, { table, onReply, exportJournal, crashAt }: Seat
 
           logEvent(dir, "tool", { ...lineOf(sitting), name: "get_game", call_id: api.callId, ok: true });
 
-          return { content: [{ type: "text", text: table().stateText(sitting.agent) }] };
+          return { output: [{ type: "text", text: table().stateText(sitting.agent) }] };
         },
       }),
       defineTool({
@@ -384,13 +388,13 @@ const seatTools = (dir: string, { table, onReply, exportJournal, crashAt }: Seat
           const recorded = journal?.moves.find((line) => line.turn === args.turn && line.player === sitting.agent);
 
           // A rerun after a crash finds its own move already journaled.
-          if (recorded !== undefined) return { content: [{ type: "text", text: JSON.stringify({ played: recorded.label }) }], control: { terminate: true } };
+          if (recorded !== undefined) return { output: [{ type: "text", text: JSON.stringify({ played: recorded.label }) }], control: { terminate: true } };
 
           const played = table().tryMove(sitting.agent, args.move, args.turn, "agent");
 
           logEvent(dir, "tool", { ...lineOf(sitting), name: "play_move", call_id: api.callId, ok: played.ok });
 
-          if (!played.ok) return { content: [{ type: "text", text: played.text }], isError: true };
+          if (!played.ok) return { output: [{ type: "text", text: played.text }], isError: true };
 
           crashAt("move:before-commit");
           await api.commit(async (tx) => void (await tx.doc(MatchDoc)).moves.push(played.line), context);
@@ -398,7 +402,7 @@ const seatTools = (dir: string, { table, onReply, exportJournal, crashAt }: Seat
           exportJournal((await api.snapshot(MatchDoc, context)) ?? emptyMatch());
           crashAt("move:after-export");
 
-          return { content: [{ type: "text", text: JSON.stringify({ played: played.line.label }) }], control: { terminate: true } };
+          return { output: [{ type: "text", text: JSON.stringify({ played: played.line.label }) }], control: { terminate: true } };
         },
       }),
     ],
@@ -465,7 +469,7 @@ const TEST_CODE = "test";
 
 /** The code version a match records when it starts, and must find again to resume: the last commit that changed a playing path. Refused while those paths have uncommitted changes to tracked files, so the commit alone identifies the code that plays (ADR-0054). */
 export const gitCommit = (): string => {
-  if (process.env["BUCKSHOT_CODE"] === TEST_CODE) return TEST_CODE;
+  if (process.env.BUCKSHOT_CODE === TEST_CODE) return TEST_CODE;
 
   const git = (args: ReadonlyArray<string>): string => {
     const run = Bun.spawnSync(["git", ...args], { cwd: WEB });
@@ -566,7 +570,12 @@ export const playMatch = (match: ArenaMatch) =>
     };
 
     const lastReplies = new Map<AgentId, AssistantMessage>();
-    const extension = seatTools(dir, { table: currentTable, onReply: (agent, message) => lastReplies.set(agent, message), exportJournal: exportFrom, crashAt });
+
+    const recordReply = (agent: AgentId, message: AssistantMessage): void => {
+      lastReplies.set(agent, message);
+    };
+
+    const extension = seatTools(dir, { table: currentTable, onReply: recordReply, exportJournal: exportFrom, crashAt });
     const registry = createRegistry();
 
     registry.install(extension);
@@ -574,7 +583,13 @@ export const playMatch = (match: ArenaMatch) =>
     const storage = yield* Effect.acquireRelease(attempt("open the store", () => openNodeSqliteStorage(join(dir, "session.sqlite"))), (opened) => closing("the store", () => opened.close(context)));
     const store = yield* Effect.acquireRelease(attempt("open the harness", () => Harness.open(storage, { models: match.models, registry, settings: { compaction: { enabled: false } } }, context)), (opened) => closing("the harness", () => opened.close(context)));
     const journal = () => attempt("read the journal", async () => (await store.snapshot(MatchDoc, context)) ?? emptyMatch());
-    const record = (change: (state: MatchState) => void) => attempt("write the journal", () => store.commit(async (tx) => void change(await tx.doc(MatchDoc)), context));
+
+    const applyToJournal = async (tx: Parameters<Parameters<typeof store.commit>[0]>[0], change: (state: MatchState) => void): Promise<void> => {
+      change(await tx.doc(MatchDoc));
+    };
+
+    const record = (change: (state: MatchState) => void) => attempt("write the journal", () => store.commit((tx) => applyToJournal(tx, change), context));
+
     // A store with no match in its journal is a fresh start, also after a crash before the first commit.
     const isFresh = (yield* journal()).controllers.length === 0;
 

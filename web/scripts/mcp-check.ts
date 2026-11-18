@@ -113,7 +113,7 @@ for (; calls < CALL_LIMIT; calls++) {
 
   if (turn === undefined) throw new Error("an agent with the turn has no turn number");
 
-  if (!heard.has(mover.player) && !events?.[0]?.startsWith("Round 1 begins")) throw new Error(`the first view of player ${mover.player} does not start at the match start: ${JSON.stringify(events)}`);
+  if (!heard.has(mover.player) && events?.[0]?.startsWith("Round 1 begins") !== true) throw new Error(`the first view of player ${mover.player} does not start at the match start: ${JSON.stringify(events)}`);
 
   if (moves === 0) console.log("out-of-range move:", await callTool("play_move", { player: mover.player, move: legal.length, turn }));
 

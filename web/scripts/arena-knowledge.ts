@@ -139,8 +139,8 @@ if (matches.length === 0) {
 const out = args.out === undefined ? undefined : (() => {
   mkdirSync(dirname(resolve(args.out)), { recursive: true });
   const db = new Database(resolve(args.out), { create: true, strict: true });
-  db.exec("PRAGMA journal_mode = WAL");
-  db.exec(readFileSync(new URL("../src/analysis/knowledge.sql", import.meta.url), "utf8"));
+  db.run("PRAGMA journal_mode = WAL");
+  db.run(readFileSync(new URL("../src/analysis/knowledge.sql", import.meta.url), "utf8"));
 
   return db;
 })();
@@ -199,7 +199,7 @@ for (const [count, match] of matches.entries()) {
 
   for (const seat of seats) put("players", { match_id: match.id, player: seat.player, position: seat.position, entrant: seat.entrant, model: seat.model, effort: seat.effort });
 
-  out?.exec("BEGIN");
+  out?.run("BEGIN");
 
   for (const decision of decisions) {
     const before = current();
@@ -337,7 +337,7 @@ for (const [count, match] of matches.entries()) {
     put("items", { match_id: match.id, player, item: record.item, slot: record.slot, round: roundOf(record.placed), placed_ordinal: placed, end: record.end, ended_ordinal: ended, by_player: Option.getOrNull(Option.map(record.by, letterOf)), moves_held: ended - placed, own_decisions_held: held });
   }
 
-  out?.exec("COMMIT");
+  out?.run("COMMIT");
 
   if (out !== undefined && (count + 1) % 50 === 0) console.error(`${count + 1}/${matches.length} matches, ${Math.round((performance.now() - started) / 1000)} s`);
 }

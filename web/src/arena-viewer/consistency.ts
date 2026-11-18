@@ -37,7 +37,7 @@ export const consistencyOf = (positions: ReadonlyArray<ReadonlyArray<Repeat>>, e
   const decisions = positions.flat();
   const starts = new Int32Array(positions.length + 1);
 
-  positions.forEach((repeats, index) => (starts[index + 1] = (starts[index] ?? 0) + repeats.length));
+  for (const [index, repeats] of positions.entries()) starts[index + 1] = (starts[index] ?? 0) + repeats.length;
 
   const blocks = Int32Array.from(decisions, ({ block }) => idOf(blockIds, block));
 

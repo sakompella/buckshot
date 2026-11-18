@@ -15,6 +15,7 @@ import { balancedSeeds, firstPositionOf } from "../src/arena/seeds.ts";
 import { cooldownOf, costOf, openTournament, recordedAccounts, RATE_LIMIT_WAIT_SECONDS, readMatch, runPending, type Scheduling, startedUnder, TOURNAMENT_FORMAT } from "../src/arena/tournament-dir.ts";
 import { reportOf } from "../src/arena/tournament-report.ts";
 import { codeVersions, fitRatings, ELO_PER_NAT, intervalsOf, mulberry32, type PlayedMatch, resamples, sharesByEntrant, sharesByVersion, starterRates, winShares } from "../src/arena/tournament-stats.ts";
+import { readManifest } from "./json-file.ts";
 
 // The tournament's schedule, config checks, stats and runner. No model is called:
 // matches are played by fakes that write the manifests an arena match would.
@@ -403,7 +404,7 @@ test("a model at its usage limit holds back its matches until the reset, other m
 
   const playAll = async (dir: string, runOne: (match: ScheduledMatch) => number) => {
     const runs: Array<string> = [];
-    const settled = await runPending(dir, tournament.config, schedule, 1, async (match) => (runs.push(match.name), runOne(match)), () => undefined, new AbortController().signal, { retry: { attempts: 1, pauseMs: 60_000 } });
+    const settled = await runPending(dir, tournament.config, schedule, 1, (match) => (runs.push(match.name), Promise.resolve(runOne(match))), () => undefined, new AbortController().signal, { retry: { attempts: 1, pauseMs: 60_000 } });
 
     return { runs, settled };
   };
@@ -495,7 +496,7 @@ test("a match with a model in last starts only when no other can, and a forgotte
   const playAll = async (dir: string, scheduling: Scheduling) => {
     const runs: Array<string> = [];
 
-    await runPending(dir, tournament.config, schedule, 1, async (match) => (runs.push(match.name), writeManifest(dir, tournament, match, "finished"), 0), () => undefined, new AbortController().signal, scheduling);
+    await runPending(dir, tournament.config, schedule, 1, (match) => (runs.push(match.name), writeManifest(dir, tournament, match, "finished"), Promise.resolve(0)), () => undefined, new AbortController().signal, scheduling);
 
     return runs;
   };
@@ -547,7 +548,7 @@ test("a stop during a failed match's pause ends the run at once", async () => {
   const stop = new AbortController();
   const started = Date.now();
 
-  await runPending(dir, tournament.config, scheduleOf(tournament), 1, async () => (stop.abort(), 1), () => undefined, stop.signal, { retry: { attempts: 3, pauseMs: 60_000 } });
+  await runPending(dir, tournament.config, scheduleOf(tournament), 1, () => (stop.abort(), Promise.resolve(1)), () => undefined, stop.signal, { retry: { attempts: 3, pauseMs: 60_000 } });
 
   expect(Date.now() - started).toBeLessThan(5_000);
 });
@@ -562,7 +563,7 @@ test("a failure with no provider fault is final and runs once", async () => {
   const tournament = tournamentFrom(configJson({ pairings: [["luna", "don"]], blocksPerPairing: 1 }));
   const schedule = scheduleOf(tournament).slice(0, 1);
   const dir = mkdtempSync(join(tmpdir(), "tournament-final-"));
-  const settled = await runPending(dir, tournament.config, schedule, 1, async (match) => (writeManifest(dir, tournament, match, "running"), 1), () => undefined, new AbortController().signal, { retry: { attempts: 3, pauseMs: 0 } });
+  const settled = await runPending(dir, tournament.config, schedule, 1, (match) => (writeManifest(dir, tournament, match, "running"), Promise.resolve(1)), () => undefined, new AbortController().signal, { retry: { attempts: 3, pauseMs: 0 } });
 
   expect(settled.map(({ status }) => status)).toEqual(["failed"]);
 });
@@ -572,7 +573,7 @@ test("a restarted runner gets a fresh three-run failure allowance", async () => 
   const schedule = scheduleOf(tournament).slice(0, 1);
   const dir = mkdtempSync(join(tmpdir(), "tournament-restart-retry-"));
 
-  const runThree = () => runPending(dir, tournament.config, schedule, 1, async (candidate) => (writeManifest(dir, tournament, candidate, "running"), failOnProvider(dir, candidate), 1), () => undefined, new AbortController().signal, { retry: { attempts: 3, pauseMs: 0 } });
+  const runThree = () => runPending(dir, tournament.config, schedule, 1, (candidate) => (writeManifest(dir, tournament, candidate, "running"), failOnProvider(dir, candidate), Promise.resolve(1)), () => undefined, new AbortController().signal, { retry: { attempts: 3, pauseMs: 0 } });
 
   expect((await runThree()).map(({ status }) => status)).toEqual(["failed", "failed", "failed"]);
   expect((await runThree()).map(({ status }) => status)).toEqual(["failed", "failed", "failed"]);
@@ -592,7 +593,7 @@ test("a failed match goes to the back of the queue and is retried, up to its att
     tournament.config,
     schedule,
     1,
-    async (match) => {
+    (match) => {
       runs.push(match.name);
 
       const fails = match.name === broken.name || (match.name === flaky.name && runs.filter((name) => name === flaky.name).length === 1);
@@ -601,7 +602,7 @@ test("a failed match goes to the back of the queue and is retried, up to its att
 
       if (fails) failOnProvider(dir, match);
 
-      return fails ? 1 : 0;
+      return Promise.resolve(fails ? 1 : 0);
     },
     () => undefined,
     new AbortController().signal,
@@ -739,12 +740,16 @@ test("a finished match that disagrees with the schedule is left out, and its cou
 
   const played = readMatch(dir, tournament, match);
 
-  expect(Result.isSuccess(played) && played.success.players).toEqual([
-    { entrant: "luna", share: expect.any(Number), moves: 2, reminders: 1, interventions: 1 },
-    { entrant: "don", share: expect.any(Number), moves: 0, reminders: 0, interventions: 0 },
+  const anyShare: unknown = expect.any(Number);
+
+  const players: unknown = Result.isSuccess(played) && played.success.players;
+
+  expect(players).toEqual([
+    { entrant: "luna", share: anyShare, moves: 2, reminders: 1, interventions: 1 },
+    { entrant: "don", share: anyShare, moves: 0, reminders: 0, interventions: 0 },
   ].toSorted((a, b) => match.entrants.indexOf(a.entrant) - match.entrants.indexOf(b.entrant)));
 
-  const manifest = JSON.parse(readFileSync(join(dir, match.name, "manifest.json"), "utf8"));
+  const manifest = readManifest(join(dir, match.name, "manifest.json"));
   const write = (changes: Readonly<Record<string, Schema.Json>>) => writeFileSync(join(dir, match.name, "manifest.json"), JSON.stringify({ ...manifest, ...changes }));
 
   const agent = (changes: Readonly<Record<string, Schema.Json>>) => write({ provenance: { ...manifest.provenance, agents: { A: { ...manifest.provenance.agents.A, ...changes } } } });
@@ -819,8 +824,8 @@ test("a finished match whose agent played without the instructions addendum the 
 
   expect(Result.isSuccess(readMatch(dir, tournament, match))).toBe(true);
 
-  const manifest = JSON.parse(readFileSync(join(dir, match.name, "manifest.json"), "utf8"));
-  const agents = Object.fromEntries(Object.entries<Record<string, Schema.Json>>(manifest.provenance.agents).map(([seat, { instructions_addendum: _dropped, ...rest }]) => [seat, rest]));
+  const manifest = readManifest(join(dir, match.name, "manifest.json"));
+  const agents = Object.fromEntries(Object.entries(manifest.provenance.agents).map(([seat, { instructions_addendum: _dropped, ...rest }]) => [seat, rest]));
 
   writeFileSync(join(dir, match.name, "manifest.json"), JSON.stringify({ ...manifest, provenance: { ...manifest.provenance, agents } }));
 
@@ -902,10 +907,10 @@ test("account ids travel only in the child environment, and unconfigured agents 
 const pinAndCool = (dir: string, tournament: Tournament, match: ScheduledMatch, account: string) => {
   writeManifest(dir, tournament, match, "running");
   const path = join(dir, match.name, "manifest.json");
-  const manifest = JSON.parse(readFileSync(path, "utf8"));
+  const manifest = readManifest(path);
+  const { agents } = manifest.provenance;
 
-  manifest.provenance.agents.A.account_id = account;
-  writeFileSync(path, JSON.stringify(manifest));
+  writeFileSync(path, JSON.stringify({ ...manifest, provenance: { ...manifest.provenance, agents: { ...agents, A: { ...agents.A, account_id: account } } } }));
   writeFileSync(join(dir, match.name, "events.jsonl"), `${JSON.stringify({ t: new Date().toISOString(), kind: "fault", agent: "A", error: 'API error (429): {"code":"model_cooldown","reset_seconds":3600}' })}\n`);
 };
 
@@ -923,23 +928,23 @@ test("a pinned refusal cools only its model/account pair; new games use the othe
 
   const runs: Array<string> = [];
 
-  await runPending(dir, tournament.config, schedule, 1, async (match, accounts) => {
+  await runPending(dir, tournament.config, schedule, 1, (match, accounts) => {
     expect(accounts).toEqual({ A: "account-b" });
     runs.push(match.name);
     writeManifest(dir, tournament, match, "finished");
     stop.abort();
 
-    return 0;
+    return Promise.resolve(0);
   }, () => undefined, stop.signal);
   expect(runs).toEqual(schedule.slice(1, 2).map((match) => match.name));
 
   const resumed: Array<string> = [];
 
-  await runPending(dir, tournament.config, [stopped], 1, async (match, accounts) => {
+  await runPending(dir, tournament.config, [stopped], 1, (match, accounts) => {
     resumed.push(accounts.A ?? "");
     writeManifest(dir, tournament, match, "finished");
 
-    return 0;
+    return Promise.resolve(0);
   }, () => undefined, new AbortController().signal, { forget: new Set(["gpt-6-luna"]) });
   expect(resumed).toEqual(["account-a"]);
 });
@@ -962,14 +967,14 @@ test("all cooling accounts hold new games back while an unrelated model still pl
   // Another seed block supplies new games which must not get either cooling account.
   expect(fresh).toBeDefined();
 
-  await runPending(dir, tournament.config, schedule, 2, async (match, accounts) => {
+  await runPending(dir, tournament.config, schedule, 2, (match, accounts) => {
     runs.push(match.name);
     expect(match.entrants).not.toContain("luna");
     expect(accounts).toEqual({});
     writeManifest(dir, tournament, match, "finished");
     stop.abort();
 
-    return 0;
+    return Promise.resolve(0);
   }, () => undefined, stop.signal);
   expect(runs.length).toBeGreaterThan(0);
 });
@@ -988,7 +993,7 @@ test("a new match waits while every account of its model is cooling, never start
   const runs: Array<string> = [];
 
   setTimeout(() => stop.abort(), 200);
-  await runPending(dir, tournament.config, [first, second, fresh], 1, async (match) => (runs.push(match.name), 1), () => undefined, stop.signal);
+  await runPending(dir, tournament.config, [first, second, fresh], 1, (match) => (runs.push(match.name), Promise.resolve(1)), () => undefined, stop.signal);
   expect(runs).toEqual([]);
 });
 
@@ -1000,11 +1005,11 @@ test("a match started without pins stays unpinned when its current endpoint list
   if (match === undefined) throw new Error("no match");
 
   writeManifest(dir, tournament, match, "running");
-  await runPending(dir, tournament.config, [match], 1, async (candidate, accounts) => {
+  await runPending(dir, tournament.config, [match], 1, (candidate, accounts) => {
     expect(accounts).toEqual({});
     writeManifest(dir, tournament, candidate, "finished");
 
-    return 0;
+    return Promise.resolve(0);
   }, () => undefined, new AbortController().signal);
 });
 
@@ -1039,19 +1044,19 @@ test("a refusal during this run leaves other accounts playing and keeps the paus
 
   if (first === undefined) throw new Error("no match");
 
-  const settled = await runPending(dir, tournament.config, schedule, 1, async (match, accounts) => {
+  const settled = await runPending(dir, tournament.config, schedule, 1, (match, accounts) => {
     pins.push(accounts.A ?? "");
 
     if (match === first) {
       pinAndCool(dir, tournament, match, accounts.A ?? "");
 
-      return 1;
+      return Promise.resolve(1);
     }
 
     writeManifest(dir, tournament, match, "finished");
     stop.abort();
 
-    return 0;
+    return Promise.resolve(0);
   }, () => undefined, stop.signal);
 
   expect(pins).toEqual(["account-a", "account-b"]);

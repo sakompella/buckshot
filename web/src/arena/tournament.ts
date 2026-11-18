@@ -287,7 +287,7 @@ export const assignAccounts = (
 };
 
 /** Each key variable the model entrants of the schedule use, read from the environment. A missing one is named, never shown. */
-export const resolveKeys = (config: TournamentConfig, schedule: ReadonlyArray<ScheduledMatch>, env: Env): Result.Result<ReadonlyMap<string, Redacted.Redacted<string>>, TournamentError> => {
+export const resolveKeys = (config: TournamentConfig, schedule: ReadonlyArray<ScheduledMatch>, env: Env): Result.Result<ReadonlyMap<string, Redacted.Redacted>, TournamentError> => {
   const variables = [...new Set(schedule.flatMap((match) => match.entrants.flatMap((name) => endpointOf(config, name)?.keyEnv ?? [])))];
 
   const missing = variables.filter((variable) => (env[variable] ?? "") === "");
@@ -308,10 +308,10 @@ export const childCommand = (matchDir: string, config: TournamentConfig, match: 
 ];
 
 /** The runner's environment, without any PLAYER_* variable, plus ARENA_PROJECT (the config's name) and the PLAYER_<letter>_* variables of this match's model entrants. */
-export const childEnv = (base: Env, config: TournamentConfig, match: ScheduledMatch, keys: ReadonlyMap<string, Redacted.Redacted<string>>, accounts: MatchAccounts = {}): Env => {
+export const childEnv = (base: Env, config: TournamentConfig, match: ScheduledMatch, keys: ReadonlyMap<string, Redacted.Redacted>, accounts: MatchAccounts = {}): Env => {
   const inherited = Object.entries(base).filter(([name]) => !name.startsWith("PLAYER_"));
 
-  const seats = match.seats.flatMap((seat, index) => {
+  const seats = match.seats.flatMap((seat, index): Array<[string, string]> => {
     const entrant = modelEntrant(config, match.entrants[index] ?? "");
     const endpoint = endpointOf(config, match.entrants[index] ?? "");
     const key = keys.get(endpoint?.keyEnv ?? "");
@@ -321,16 +321,25 @@ export const childEnv = (base: Env, config: TournamentConfig, match: ScheduledMa
     const prefix = `PLAYER_${seat}_`;
     const api = endpoint.api === "anthropic" ? "ANT" : "OAI";
 
-    return [
+    const variables: Array<[string, string]> = [
       [`${prefix}${api}_URL`, endpoint.url],
       [`${prefix}${api}_KEY`, Redacted.value(key)],
       [`${prefix}MODEL`, entrant.model],
-      ...(entrant.catalogModel === undefined ? [] : [[`${prefix}CATALOG_MODEL`, entrant.catalogModel]]),
-      [`${prefix}EFFORT`, entrant.effort],
-      ...(entrant.instructionsAddendum === undefined ? [] : [[`${prefix}INSTRUCTIONS_ADDENDUM`, entrant.instructionsAddendum]]),
-      ...(entrant.effortLabel === undefined ? [] : [[`${prefix}EFFORT_LABEL`, entrant.effortLabel]]),
-      ...(accounts[seat] === undefined ? [] : [[`${prefix}ACCOUNT_ID`, accounts[seat]]]),
-    ] as const;
+    ];
+
+    if (entrant.catalogModel !== undefined) variables.push([`${prefix}CATALOG_MODEL`, entrant.catalogModel]);
+
+    variables.push([`${prefix}EFFORT`, entrant.effort]);
+
+    if (entrant.instructionsAddendum !== undefined) variables.push([`${prefix}INSTRUCTIONS_ADDENDUM`, entrant.instructionsAddendum]);
+
+    if (entrant.effortLabel !== undefined) variables.push([`${prefix}EFFORT_LABEL`, entrant.effortLabel]);
+
+    const account = accounts[seat];
+
+    if (account !== undefined) variables.push([`${prefix}ACCOUNT_ID`, account]);
+
+    return variables;
   });
 
   return Object.fromEntries([...inherited, ["ARENA_PROJECT", config.name], ...seats]);

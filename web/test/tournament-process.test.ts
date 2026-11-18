@@ -3,9 +3,12 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, unlinkSync, writeFile
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { Result } from "effect";
+import { Result, Schema } from "effect";
 
 import { parseConfig, scheduleOf } from "../src/arena/tournament.ts";
+import { readJson } from "./json-file.ts";
+
+const readStatus = readJson(Schema.Struct({ status: Schema.String }));
 
 const WEB = join(import.meta.dir, "..");
 
@@ -90,7 +93,7 @@ test("SIGTERM stops the runner's child; restart resumes unfinished matches once 
     expect(await resumed.exited).toBe(0);
     expect(schedule.map(({ name }) => starts(dir, name))).toEqual([2, 1]);
 
-    for (const { name } of schedule) expect(JSON.parse(readFileSync(join(dir, name, "manifest.json"), "utf8")).status).toBe("finished");
+    for (const { name } of schedule) expect(readStatus(join(dir, name, "manifest.json")).status).toBe("finished");
     expect(await run(["--code", `${OLD}=${checkout}`]).exited).toBe(0);
     expect(schedule.map(({ name }) => starts(dir, name))).toEqual([2, 1]);
   } finally {

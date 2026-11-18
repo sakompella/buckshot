@@ -25,7 +25,12 @@ const linkOver = (socket: Socket): HumanLink => {
   const lines = createInterface({ input: socket })[Symbol.asyncIterator]();
 
   return {
-    send: (message) => new Promise((sent, failed) => socket.write(`${JSON.stringify(message)}\n`, (error) => (error === undefined || error === null ? sent() : failed(error)))),
+    send: (message) => new Promise<void>((sent, failed) => {
+      socket.write(`${JSON.stringify(message)}\n`, (error) => {
+        if (error === undefined || error === null) sent();
+        else failed(error);
+      });
+    }),
     nextLine: async () => {
       const next = await lines.next();
 
@@ -33,7 +38,9 @@ const linkOver = (socket: Socket): HumanLink => {
 
       return next.value;
     },
-    close: () => socket.end(),
+    close: () => {
+      socket.end();
+    },
   };
 };
 

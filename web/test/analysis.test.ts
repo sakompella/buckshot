@@ -3,12 +3,33 @@ import { appendFileSync, cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, w
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { Option, Result } from "effect";
+import { Option, Result, Schema } from "effect";
 
 import { importTournaments, openAnalysis } from "../src/analysis/import.ts";
 import { assertCurrentImport } from "../src/analysis/importer-hash.ts";
+import { RunManifest } from "../src/arena/match.ts";
 import { replayOf } from "../src/arena/replay.ts";
+import { MoveLine } from "../src/arena/runlog.ts";
 import { playFauxRun } from "./faux-run.ts";
+import { Agents, loose, readJson, readManifest } from "./json-file.ts";
+
+const Tournament = loose({ config: loose({ name: Schema.String, entrants: Schema.Record(Schema.String, Schema.Record(Schema.String, Schema.Json)) }) });
+
+const readTournament = readJson(Tournament);
+
+const Run = loose({ provenance: loose({ agents: Agents }), letters: Schema.Array(Schema.String), standings: Schema.Array(loose({ player: Schema.String, cash: Schema.Number })) });
+
+const readRun = readJson(Run);
+
+const readSetup = readJson(RunManifest);
+
+const readMove = Schema.decodeUnknownSync(Schema.fromJsonString(MoveLine));
+
+const Call = Schema.decodeUnknownSync(Schema.fromJsonString(loose({ turn: Schema.Number })));
+
+const withEntrant = (file: typeof Tournament.Type, entrant: string, changes: Record<string, Schema.Json>) => ({ ...file, config: { ...file.config, entrants: { ...file.config.entrants, [entrant]: { ...file.config.entrants[entrant], ...changes } } } });
+
+const withAgent = (manifest: typeof Run.Type, seat: string, changes: Record<string, Schema.Json>) => ({ ...manifest, provenance: { ...manifest.provenance, agents: { ...manifest.provenance.agents, [seat]: { ...manifest.provenance.agents[seat], ...changes } } } });
 
 const played = mkdtempSync(join(tmpdir(), "buckshot-analysis-faux-"));
 
@@ -21,16 +42,14 @@ afterAll(() => rmSync(played, { recursive: true, force: true }));
 const fauxMatchInto = (dir: string) => {
   cpSync(played, dir, { recursive: true });
   const manifestPath = join(dir, "manifest.json");
-  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  const { labels: _labels, provenance, ...manifest } = readManifest(manifestPath);
+  const agents = Object.fromEntries(Object.entries(provenance.agents).map(([seat, agent]) => [seat, { ...agent, effort: "medium" }]));
 
-  for (const agent of Object.values<{ effort: string | null }>(manifest.provenance.agents)) agent.effort = "medium";
   // Without recorded labels each seat is labelled by its entrant's config, as a match from before labels.
-  delete manifest.labels;
-
-  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+  writeFileSync(manifestPath, JSON.stringify({ ...manifest, provenance: { ...provenance, agents } }, null, 2));
 };
 
-test("refreshes resumed logs without duplicating calls or repeated moves, stops at a bad line, and rebuilds the same projections", async () => {
+test("refreshes resumed logs without duplicating calls or repeated moves, stops at a bad line, and rebuilds the same projections", () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
   const source = join(root, "tournament");
   const database = join(root, "analysis.sqlite");
@@ -116,7 +135,7 @@ test("refreshes resumed logs without duplicating calls or repeated moves, stops 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("a finished match with an explicit skip keeps its moves and costs but is not scored, and each skip keeps its own reason", async () => {
+test("a finished match with an explicit skip keeps its moves and costs but is not scored, and each skip keeps its own reason", () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
   const source = join(root, "tournament");
   const database = join(root, "analysis.sqlite");
@@ -160,13 +179,13 @@ const rowsOf = (database: string, sql: string) => {
   try { return db.query(sql).all(); } finally { db.close(); }
 };
 
-test("calls join on the turn they were made on: logged where the log has it, taken from the events where not, and unlinked when no move was made then", async () => {
+test("calls join on the turn they were made on: logged where the log has it, taken from the events where not, and unlinked when no move was made then", () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 
   try {
     const { source, manifestPath } = probeTournament(root, "medium");
     const callsPath = join(manifestPath, "..", "calls.jsonl");
-    const logged = readFileSync(callsPath, "utf8").trimEnd().split("\n").map((line) => JSON.parse(line));
+    const logged = readFileSync(callsPath, "utf8").trimEnd().split("\n").map((line) => Call(line));
     const links = "SELECT link_method, decision_id IS NULL AS unlinked, COUNT(*) AS n FROM calls GROUP BY 1, 2";
     const write = (lines: ReadonlyArray<object>) => writeFileSync(callsPath, `${lines.map((line) => JSON.stringify(line)).join("\n")}\n`);
 
@@ -197,7 +216,7 @@ test("calls join on the turn they were made on: logged where the log has it, tak
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("a database validated by other replay or rules code is refused, by the TypeScript readers and the Python analysis alike", async () => {
+test("a database validated by other replay or rules code is refused, by the TypeScript readers and the Python analysis alike", () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 
   try {
@@ -216,7 +235,7 @@ test("a database validated by other replay or rules code is refused, by the Type
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("a changed tournament config is checked on unchanged matches, as a fresh rebuild does", async () => {
+test("a changed tournament config is checked on unchanged matches, as a fresh rebuild does", () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 
   try {
@@ -232,7 +251,7 @@ test("a changed tournament config is checked on unchanged matches, as a fresh re
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("a match's cohort is its tournament config's, and a config without one stops the import", async () => {
+test("a match's cohort is its tournament config's, and a config without one stops the import", () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 
   try {
@@ -240,14 +259,13 @@ test("a match's cohort is its tournament config's, and a config without one stop
     const database = join(root, "analysis.sqlite");
     importTournaments({ database, sources: [source] });
     expect(rowsOf(database, "SELECT cohort FROM matches")).toEqual([{ cohort: "test" }]);
-    const file = JSON.parse(readFileSync(join(source, "tournament.json"), "utf8"));
-    delete file.config.cohort;
-    writeFileSync(join(source, "tournament.json"), JSON.stringify(file));
+    const { config: { cohort: _cohort, ...config }, ...file } = readTournament(join(source, "tournament.json"));
+    writeFileSync(join(source, "tournament.json"), JSON.stringify({ ...file, config }));
     expect(() => importTournaments({ database, sources: [source] })).toThrow("the tournament config names no cohort");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("the tiers tournament's matches pool by model sweep or cross-model, named per import", async () => {
+test("the tiers tournament's matches pool by model sweep or cross-model, named per import", () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 
   try {
@@ -255,12 +273,9 @@ test("the tiers tournament's matches pool by model sweep or cross-model, named p
       const at = join(root, tag);
       mkdirSync(at, { recursive: true });
       const { source } = probeTournament(at, "medium");
-      const file = JSON.parse(readFileSync(join(source, "tournament.json"), "utf8"));
-      delete file.config.cohort;
-      file.config.name = "named-per-import";
-      file.config.entrants.a.model = models[0];
-      file.config.entrants.b.model = models[1];
-      writeFileSync(join(source, "tournament.json"), JSON.stringify(file));
+      const { config: { cohort: _cohort, ...config }, ...file } = readTournament(join(source, "tournament.json"));
+      const named = withEntrant(withEntrant({ ...file, config: { ...config, name: "named-per-import" } }, "a", { model: models[0] ?? null }), "b", { model: models[1] ?? null });
+      writeFileSync(join(source, "tournament.json"), JSON.stringify(named));
       // The manifest records the models the config came with; without it the changed config is never cross-checked.
       rmSync(join(source, "a_b_b0_p0", "manifest.json"));
 
@@ -280,7 +295,7 @@ test("the tiers tournament's matches pool by model sweep or cross-model, named p
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("the replay's events and secrets are stored, each seat has its socket, and each decision the events it came after", async () => {
+test("the replay's events and secrets are stored, each seat has its socket, and each decision the events it came after", () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 
   try {
@@ -303,42 +318,36 @@ test("the replay's events and secrets are stored, each seat has its socket, and 
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("a match with a DeepSeek seat is imported in full and excluded", async () => {
+test("a match with a DeepSeek seat is imported in full and excluded", () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 
   try {
     const { source, manifestPath } = probeTournament(root, "medium");
     const database = join(root, "analysis.sqlite");
     const tournamentPath = join(source, "tournament.json");
-    const file = JSON.parse(readFileSync(tournamentPath, "utf8"));
-    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 
-    file.config.entrants.b.model = "faux-DeepSeek-b";
-    manifest.provenance.agents.B.model = "faux-DeepSeek-b";
-    writeFileSync(tournamentPath, JSON.stringify(file));
-    writeFileSync(manifestPath, JSON.stringify(manifest));
+    writeFileSync(tournamentPath, JSON.stringify(withEntrant(readTournament(tournamentPath), "b", { model: "faux-DeepSeek-b" })));
+    writeFileSync(manifestPath, JSON.stringify(withAgent(readRun(manifestPath), "B", { model: "faux-DeepSeek-b" })));
     importTournaments({ database, sources: [source] });
     expect(rowsOf(database, "SELECT status, disposition, status_reason LIKE 'a DeepSeek seat%' AS reason FROM matches")).toEqual([{ status: "completed", disposition: "excluded", reason: 1 }]);
     expect(rowsOf(database, "SELECT COUNT(*) > 0 AS n FROM events")).toEqual([{ n: 1 }]);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("an entrant with an effort label is filed under it, and the others under their effort", async () => {
+test("an entrant with an effort label is filed under it, and the others under their effort", () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 
   try {
     const { source } = probeTournament(root, "medium");
     const database = join(root, "analysis.sqlite");
-    const file = JSON.parse(readFileSync(join(source, "tournament.json"), "utf8"));
 
-    file.config.entrants.a.effortLabel = "off";
-    writeFileSync(join(source, "tournament.json"), JSON.stringify(file));
+    writeFileSync(join(source, "tournament.json"), JSON.stringify(withEntrant(readTournament(join(source, "tournament.json")), "a", { effortLabel: "off" })));
     importTournaments({ database, sources: [source] });
     expect(rowsOf(database, "SELECT name, effort FROM entrants ORDER BY name")).toEqual([{ name: "a", effort: "off" }, { name: "b", effort: "medium" }]);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("a match whose agent played its entrant's instructions addendum imports", async () => {
+test("a match whose agent played its entrant's instructions addendum imports", () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 
   try {
@@ -346,19 +355,16 @@ test("a match whose agent played its entrant's instructions addendum imports", a
     const database = join(root, "analysis.sqlite");
     const tournamentPath = join(source, "tournament.json");
     const manifestPath = join(source, "a_b_b0_p0", "manifest.json");
-    const file = JSON.parse(readFileSync(tournamentPath, "utf8"));
-    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    const manifest = readRun(manifestPath);
 
-    file.config.entrants.a.instructionsAddendum = "Answer at once.";
-    manifest.provenance.agents[manifest.letters[0]].instructions_addendum = "Answer at once.";
-    writeFileSync(tournamentPath, JSON.stringify(file));
-    writeFileSync(manifestPath, JSON.stringify(manifest));
+    writeFileSync(tournamentPath, JSON.stringify(withEntrant(readTournament(tournamentPath), "a", { instructionsAddendum: "Answer at once." })));
+    writeFileSync(manifestPath, JSON.stringify(withAgent(manifest, manifest.letters[0] ?? "", { instructions_addendum: "Answer at once." })));
     importTournaments({ database, sources: [source] });
     expect(rowsOf(database, "SELECT status FROM matches")).toEqual([{ status: "completed" }]);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("importing the same tournament from a new directory leaves every row and source observation pointing at the new one", async () => {
+test("importing the same tournament from a new directory leaves every row and source observation pointing at the new one", () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 
   try {
@@ -380,13 +386,13 @@ test("importing the same tournament from a new directory leaves every row and so
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("a finished match whose standings do not cover every player stops the import", async () => {
+test("a finished match whose standings do not cover every player stops the import", () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 
   try {
     const { source, manifestPath } = probeTournament(root, "medium");
     const database = join(root, "analysis.sqlite");
-    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    const manifest = readRun(manifestPath);
     const standings = manifest.standings;
 
     for (const [label, broken] of [["no standings", undefined], ["one player", standings.slice(0, 1)], ["a repeated player", [standings[0], standings[0]]], ["an unscheduled player", [standings[0], { ...standings[1], player: "C" }]]] as const) {
@@ -401,20 +407,20 @@ test("a finished match whose standings do not cover every player stops the impor
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("a finished match whose replay or end event disagrees with the manifest stops the import", async () => {
+test("a finished match whose replay or end event disagrees with the manifest stops the import", () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 
   try {
     const { source, manifestPath } = probeTournament(root, "medium");
     const database = join(root, "analysis.sqlite");
     const eventsPath = join(source, "a_b_b0_p0", "events.jsonl");
-    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    const manifest = readRun(manifestPath);
     const events = readFileSync(eventsPath, "utf8");
     const scored = () => rowsOf(database, "SELECT m.status, COUNT(s.win_share) AS shares FROM matches m JOIN match_seats s ON s.match_id = m.id GROUP BY m.id");
     importTournaments({ database, sources: [source] });
     expect(scored()).toEqual([{ status: "completed", shares: 2 }]);
 
-    writeFileSync(manifestPath, JSON.stringify({ ...manifest, standings: manifest.standings.map((standing: { cash: number }, index: number) => ({ ...standing, cash: standing.cash + index + 1 })) }));
+    writeFileSync(manifestPath, JSON.stringify({ ...manifest, standings: manifest.standings.map((standing, index) => ({ ...standing, cash: standing.cash + index + 1 })) }));
     expect(() => importTournaments({ database, sources: [source] })).toThrow("the replayed cash of");
 
     writeFileSync(manifestPath, JSON.stringify(manifest));
@@ -427,27 +433,28 @@ test("a finished match whose replay or end event disagrees with the manifest sto
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("a truncated but legal move prefix with an end marker and matching current cash stops the import", async () => {
+test("a truncated but legal move prefix with an end marker and matching current cash stops the import", () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 
   try {
     const { source, manifestPath } = probeTournament(root, "medium");
     const database = join(root, "analysis.sqlite");
     const eventsPath = join(source, "a_b_b0_p0", "events.jsonl");
-    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    const manifest = readRun(manifestPath);
+    const setup = readSetup(manifestPath);
     const lines = readFileSync(eventsPath, "utf8").split("\n");
     const lastMove = lines.findLastIndex((line) => line.includes('"kind":"move"'));
-    const moves = lines.flatMap((line) => line.includes('"kind":"move"') ? [JSON.parse(line)] : []);
-    const prefix = replayOf(replayOf(Option.none(), manifest, []).pipe(Result.getOrThrow, Option.some), manifest, moves.slice(0, -1)).pipe(Result.getOrThrow);
+    const moves = lines.flatMap((line) => line.includes('"kind":"move"') ? [readMove(line)] : []);
+    const prefix = replayOf(replayOf(Option.none(), setup, []).pipe(Result.getOrThrow, Option.some), setup, moves.slice(0, -1)).pipe(Result.getOrThrow);
     const cash = prefix.frames.at(-1)?.players ?? [];
     expect(cash.length).toBe(2);
     writeFileSync(eventsPath, lines.filter((_, index) => index !== lastMove).join("\n"));
-    writeFileSync(manifestPath, JSON.stringify({ ...manifest, standings: manifest.standings.map((standing: { player: string }) => ({ ...standing, cash: cash.find(({ player }) => player === standing.player)?.cash })) }));
+    writeFileSync(manifestPath, JSON.stringify({ ...manifest, standings: manifest.standings.map((standing) => ({ ...standing, cash: cash.find(({ player }) => player === standing.player)?.cash })) }));
     expect(() => importTournaments({ database, sources: [source] })).toThrow("the replay did not reach the end");
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
-test("importing a tournament from a directory that contains its earlier source retires the earlier source files and observations", async () => {
+test("importing a tournament from a directory that contains its earlier source retires the earlier source files and observations", () => {
   const root = mkdtempSync(join(tmpdir(), "buckshot-analysis-"));
 
   try {

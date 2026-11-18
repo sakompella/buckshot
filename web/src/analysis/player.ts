@@ -280,7 +280,7 @@ export interface Player {
 
 /** Builds the player into `dir` (with $BEND, else `bend` on PATH) and wraps its exports. */
 export const loadPlayer = async (dir: string): Promise<Player> => {
-  const bend = process.env["BEND"] ?? Bun.which("bend") ?? undefined;
+  const bend = process.env.BEND ?? Bun.which("bend") ?? undefined;
 
   if (bend === undefined) throw new Error("bend not found: run inside `nix develop`, or set BEND to the pinned Bend binary");
 
@@ -289,7 +289,8 @@ export const loadPlayer = async (dir: string): Promise<Player> => {
 
   if (build.exitCode !== 0) throw new Error(`Bend player build failed:\n${build.stdout.toString()}${build.stderr.toString()}`);
 
-  const loaded: { readonly default: PlayerExports } = await import(output);
+  // SAFETY: output is the module bend just compiled from PLAYER_SOURCE, whose default export is the analysis.bend export table PlayerExports describes.
+  const loaded = (await import(output)) as { readonly default: PlayerExports };
   const exports = loaded.default;
 
   return {

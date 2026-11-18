@@ -53,7 +53,7 @@ export interface Summary {
 }
 
 export const summaryOf = (orders: Orders): Summary => {
-  const lives = orders.map((order) => [...order].filter((shell) => shell === "L").length);
+  const lives = orders.map((order) => Array.from(order).filter((shell) => shell === "L").length);
   const length = orders[0]?.length ?? 0;
 
   return {

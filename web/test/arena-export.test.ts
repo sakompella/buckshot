@@ -7,6 +7,7 @@ import { join } from "node:path";
 import { importTournaments } from "../src/analysis/import.ts";
 import { privacyViolations } from "../src/arena-viewer/privacy.ts";
 import { playFauxRun } from "./faux-run.ts";
+import { readManifest } from "./json-file.ts";
 
 const WEB = join(import.meta.dir, "..");
 
@@ -37,11 +38,10 @@ beforeAll(async () => {
   // The faux agents play as the configs the tournament below names.
   const manifest = join(source, "a_b_b0_p0", "manifest.json");
 
-  const manifestJson = JSON.parse(readFileSync(manifest, "utf8"));
+  const manifestJson = readManifest(manifest);
+  const { agents } = manifestJson.provenance;
 
-  manifestJson.provenance.agents.A.effort = "medium";
-  manifestJson.provenance.agents.B.effort = "high";
-  writeFileSync(manifest, JSON.stringify({ ...manifestJson, labels: ["faux-a-medium", "faux-b-high"] }));
+  writeFileSync(manifest, JSON.stringify({ ...manifestJson, provenance: { ...manifestJson.provenance, agents: { ...agents, A: { ...agents.A, effort: "medium" }, B: { ...agents.B, effort: "high" } } }, labels: ["faux-a-medium", "faux-b-high"] }));
 
   const config = {
     name: "test",

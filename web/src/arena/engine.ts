@@ -30,11 +30,11 @@ const decodeResult = Schema.decodeUnknownOption(Schema.fromJsonString(SearchResu
 
 /** The binary $BUCKSHOT_SEARCH names, or the one cargo builds in sim/rust with the scorer's features. */
 const searchBinary = (): string => {
-  const given = process.env["BUCKSHOT_SEARCH"];
+  const given = process.env.BUCKSHOT_SEARCH;
 
   if (given !== undefined) return given;
 
-  const build = Bun.spawnSync([process.env["CARGO"] ?? "cargo", "build", "--release", "--quiet", "-p", "buckshot-search", "--no-default-features", "--features", "f64,seats-2", "--message-format", "json"], { cwd: RUST, stderr: "pipe" });
+  const build = Bun.spawnSync([process.env.CARGO ?? "cargo", "build", "--release", "--quiet", "-p", "buckshot-search", "--no-default-features", "--features", "f64,seats-2", "--message-format", "json"], { cwd: RUST, stderr: "pipe" });
 
   if (build.exitCode !== 0) throw new Error(`buckshot-search build failed:\n${build.stderr.toString()}`);
 

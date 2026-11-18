@@ -246,7 +246,7 @@ export const quantile = (sorted: ArrayLike<number>, p: number): number => {
 export type SeatFull = Seat & { readonly potShare: number | null };
 
 /** A match's rounds with their winners, or none when the events do not give every round (Story.ok). */
-const knownRounds = (seat: Pick<Seat, "story">): Story["rounds"] => (seat.story?.ok ? seat.story.rounds : []);
+const knownRounds = (seat: Pick<Seat, "story">): Story["rounds"] => (seat.story?.ok === true ? seat.story.rounds : []);
 
 /** What each known round of a match was to a seat: 1 for a round it won, 0 for one it lost. */
 export const roundResults = (seat: Pick<Seat, "story" | "player">): ReadonlyArray<number> => knownRounds(seat).map(({ winner }) => (winner === seat.player ? 1 : 0));

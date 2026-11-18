@@ -347,7 +347,7 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
 
   const seatsOf = new Map<string, Array<number>>();
 
-  seats.forEach((seat, index) => seatsOf.set(seat.matchId, [...(seatsOf.get(seat.matchId) ?? []), index]));
+  for (const [index, seat] of seats.entries()) seatsOf.set(seat.matchId, [...(seatsOf.get(seat.matchId) ?? []), index]);
 
   let tracker = new ShellTracker();
   let currentSeat = "";

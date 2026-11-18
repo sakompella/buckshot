@@ -26,7 +26,9 @@ const TAG_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
 
 const TAGS: Record<string, number> = {};
 
-for (const names of TAG_GROUPS) names.forEach((name, index) => (TAGS[name] = index));
+for (const names of TAG_GROUPS) {
+  for (const [index, name] of names.entries()) TAGS[name] = index;
+}
 
 // Types with one constructor carry no tag in the decoders.
 const SINGLE = new Set(["Board", "RoundView", "GunView", "SeatView", "Load", "Slots"]);

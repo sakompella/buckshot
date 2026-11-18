@@ -88,6 +88,8 @@ const pinOf = (dir: string) => Schema.decodeSync(Schema.fromJsonString(PinnedAge
 
 const pinned = (account: string) => (modelId: string) => ({ ...fauxProvenance(modelId), account_id: account });
 
+const byName = (left: string | null, right: string | null) => (left ?? "").localeCompare(right ?? "");
+
 const ADDENDUM = "Answer in as few words as you can.";
 
 /** Agent A's provenance carries the addendum; the other agents' do not. */
@@ -166,7 +168,7 @@ test("faux players play any table to game over, each seeing only its own seat, w
 
     expect(result.audit).toEqual({ over: true, every_view_is_own_player: true, delivered_is_own_log_exactly: true, replay_matches: true });
     expect(result.moves.fallback).toBe(0);
-    expect(result.standings.map((standing) => standing.controller).toSorted()).toEqual([...controllers].toSorted());
+    expect(result.standings.map((standing) => standing.controller).toSorted(byName)).toEqual([...controllers].toSorted(byName));
     expect(result.loggedUsage.input).toBe(stored.reduce((total, usage) => total + usage.input, 0));
     expect(result.loggedUsage.output).toBe(stored.reduce((total, usage) => total + usage.output, 0));
   }, { testCases: 8, suppressHealthCheck: [hegel.HealthCheck.TooSlow] });
@@ -212,7 +214,7 @@ test.each([...DELIVERIES])("a human types moves into the terminal client and pla
     const { connected } = await listenForHuman(socket);
     const client = Bun.spawn(["bun", "scripts/arena-human.ts", socket], { cwd: join(import.meta.dir, ".."), stdin: "pipe", stdout: "pipe", stderr: "inherit" });
 
-    client.stdin.write(TYPED);
+    void client.stdin.write(TYPED);
     void client.stdin.end();
     clients.push(client);
 
@@ -227,7 +229,7 @@ test.each([...DELIVERIES])("a human types moves into the terminal client and pla
   expect(await client.exited).toBe(0);
   expect(result.audit).toEqual({ over: true, every_view_is_own_player: true, delivered_is_own_log_exactly: true, replay_matches: true });
   expect(result.moves.human).toBeGreaterThan(0);
-  expect(result.standings.map((standing) => standing.controller).toSorted()).toEqual(["DoN", "Human", "Story"]);
+  expect(result.standings.map((standing) => standing.controller).toSorted(byName)).toEqual(["DoN", "Human", "Story"]);
 
   const instructions = new Set(INSTRUCTIONS.split("\n"));
   const shown = (await new Response(client.stdout).text()).split("\n").map((line) => line.replace(/^(> )+/, ""));

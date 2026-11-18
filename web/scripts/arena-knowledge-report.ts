@@ -130,7 +130,7 @@ const report = (db: Database, draws: number): void => {
   /** Seed-block multiplicities for each bootstrap draw: the blocks drawn with replacement, as many as there are. */
   const resamples = (blocks: ReadonlyArray<string>, label: string): ReadonlyArray<ReadonlyMap<string, number>> => {
     const unique = [...new Set(blocks)].toSorted();
-    const random = mulberry32([...label].reduce((hash, character) => Math.imul(hash ^ character.charCodeAt(0), 16777619), 2166136261));
+    const random = mulberry32(Array.from(label).reduce((hash, character) => Math.imul(hash ^ character.charCodeAt(0), 16777619), 2166136261));
 
     return Array.from({ length: draws }, () => {
       const weights = new Map<string, number>();

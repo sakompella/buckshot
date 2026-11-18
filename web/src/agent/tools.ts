@@ -74,7 +74,7 @@ export const tools = [
     description: `${RULES} Returns your view as JSON, without any field that has nothing to show. Reading it changes nothing: until a player moves, every call returns the same view. When it is not your turn the view is just {"status":"waiting"}: call get_game again in a moment. On your turn it is what your screen shows: status "your turn"; turn, to pass to play_move; players with health (not shown while jammed), item names, and, while players grab from the briefcase, holding, the item a player drew and has not placed yet; gun, with sawed when it is; events, what happened since your previous turn ended (your last move first, then the others' moves; from the match start on your first turn), with what only you learned from the magnifying glass or the phone in its place (a load's live and blank counts, round wins and prizes, and round starts are events; turn order is clockwise at each round's start and changes only when an event says so); and moves, your legal moves, each with its number (move) and its words (label). Each move is a whole action: "Shoot Player B" picks up the shotgun and fires, "Grab an item" draws one and puts it in a free slot. Events are not shown again on a later turn, so remember what you need. When the match is over the view is "over" with the events since your last turn ended and the final standings, which show each player's cash. Several players can be Agents; each sees only its own secrets.`,
     inputSchema: inputSchemaOf(GetGameArguments),
     isReadOnly: true,
-    decodeCall: decoder("get_game", GetGameArguments, AgentCall.cases.GetGame.make),
+    decodeCall: decoder("get_game", GetGameArguments, (input) => AgentCall.cases.GetGame.make(input)),
   },
   {
     name: "play_move",
@@ -82,7 +82,7 @@ export const tools = [
       'Play one of your legal moves, by its number from the view\'s moves, with the turn from that view. Refused, playing nothing, if it is not your turn or the turn is not the current one: every move by any player and every new match starts a new turn, so a repeated move or one from an earlier view or match is refused. After a refusal call get_game for the current moves and turn. Returns your view as get_game does. The other players move on their own, so call get_game until status is "your turn".',
     inputSchema: inputSchemaOf(PlayMoveArguments),
     isReadOnly: false,
-    decodeCall: decoder("play_move", PlayMoveArguments, AgentCall.cases.PlayMove.make),
+    decodeCall: decoder("play_move", PlayMoveArguments, (input) => AgentCall.cases.PlayMove.make(input)),
   },
   {
     name: "new_match",
@@ -90,7 +90,7 @@ export const tools = [
       "Start a new match. Refused while a match is in progress: finish it first. By default Player A is the Agent and DoN bots play the others; pass controllers to make more players Agents. Returns each player's letter and controller, and the seed; then call get_game for an Agent player.",
     inputSchema: inputSchemaOf(NewMatchArguments),
     isReadOnly: false,
-    decodeCall: decoder("new_match", NewMatchArguments, AgentCall.cases.NewMatch.make),
+    decodeCall: decoder("new_match", NewMatchArguments, (input) => AgentCall.cases.NewMatch.make(input)),
   },
 ] as const;
 
@@ -171,7 +171,7 @@ const isInProgress = (source: AgentSource): boolean => source.game.pending.kind 
 
 /** Runs one tool call over a session. A refused call leaves the state as it was. */
 export const runTool = <S>(session: MatchSession<S>, state: S, call: AgentCall): ToolOutcome<S> =>
-  AgentCall.match<ToolOutcome<S>>(call, {
+  AgentCall.match(call, {
     GetGame: ({ player }) => viewReply(session, state, player),
     PlayMove: ({ player, move, turn }) =>
       withSource(session, state, (source) =>

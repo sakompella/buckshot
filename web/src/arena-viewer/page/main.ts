@@ -178,7 +178,9 @@ const groupsNear = () =>
   });
 
 const nextFrame = Effect.callback<void>((resume) => {
-  requestAnimationFrame(() => requestAnimationFrame(() => resume(Effect.void)));
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => resume(Effect.void));
+  });
 });
 
 /** Scrolls to the section the URL names once the page has drawn it: the browser's own jump came before the data. */
@@ -237,7 +239,7 @@ export const update = (model: Model, message: Message): Return =>
     SucceededOdds: ({ odds }) => lazyArrived(modifyFields(model, { lazy: (lazy) => ({ ...lazy, odds: AsyncData.succeed(odds) }) })),
     SucceededCertain: ({ certain }) => lazyArrived(modifyFields(model, { lazy: (lazy) => ({ ...lazy, certain: AsyncData.succeed(certain) }) })),
     SucceededConsistency: ({ consistency }) => lazyArrived(modifyFields(model, { lazy: (lazy) => ({ ...lazy, consistency: AsyncData.succeed(consistency) }) })),
-    FailedLazy: ({ name, error }) => lazyArrived(modifyFields(model, { lazy: (lazy) => withLazy(lazy, name, AsyncData.fail<string, never>(error)) })),
+    FailedLazy: ({ name, error }) => lazyArrived(modifyFields(model, { lazy: (lazy) => withLazy(lazy, name, AsyncData.fail<string>(error)) })),
     SucceededLocal: ({ local }) => ({ model: modifyFields(model, { local: () => AsyncData.succeed(local) }), commands: [SettledLazy()] }),
     FailedLocal: ({ error }) => ({ model: modifyFields(model, { local: () => AsyncData.fail(error) }), commands: [SettledLazy()] }),
     CameNear: ({ groups }) => withNeeds({ model }, groups.flatMap((group) => GROUP_NEEDS[group]).filter((need) => need !== "local" || isLayoutSettled(model))),
@@ -371,7 +373,7 @@ const tappedTitleMessage = (event: PointerEvent): Option.Option<Message> => {
   for (let element: Element | null = event.target; element !== null; element = element.parentElement) {
     const text = element.getAttribute("data-tip");
 
-    if (text) return Option.some(Message.TappedTitle({ text }));
+    if (text !== null && text !== "") return Option.some(Message.TappedTitle({ text }));
   }
 
   return Option.some(Message.ClearedTappedTitle());
