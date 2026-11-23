@@ -5,9 +5,9 @@ import ./player/types.bend as A
 import ./player/belief.bend as B
 
 # The minimax player's exports for the arena's analysis scripts
-# (web/src/analysis/player.ts is the only caller). Rooted here beside web.bend,
-# domain values carry the rules build's "domain." tags, so a board or config
-# from that build passes in unchanged.
+# (web/src/analysis/player.ts is the only caller). Constructors are bare in
+# every Bend JS build, so a board or config from the rules build (web.bend)
+# passes in unchanged.
 
 def analyse(position: A.Position, depth: Nat, budget: Nat, reload: A.Reload, memo: A.Memo) -> A.Analysis:
   P.analyse(position, depth, budget, reload, memo)

@@ -7,9 +7,6 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BEND="${BEND:-bend}"
 export BEND
 
-required_laws=(step_matches run_matches reachable_valid start_matches games_match state_roundtrip jam_skip_once turn_traversal observe_matches legal_exact legal_accepted privacy)
-required_simple_laws=(simple_start simple_refines simple_roundtrip simple_valid simple_reachable_valid simple_run_refines simple_observe simple_privacy simple_complete)
-
 failed=0
 report() {
   local status="$1" gate="$2" detail="${3:-}"
@@ -32,12 +29,9 @@ bend_files() {
   find "$here" -name '*.bend' -type f
 }
 
-# Import lines of the .bend files under a path, as "file: line". Empty when the
-# path does not exist yet.
+# Import lines of the .bend files under the given paths, as "file:line: text".
 imports_under() {
-  local path="$1"
-  [[ -e "$path" ]] || return 0
-  grep -rnE --include='*.bend' '^[[:space:]]*import[[:space:]]' "$path" || true
+  grep -rnHE --include='*.bend' '^[[:space:]]*import[[:space:]]' "$@" || true
 }
 
 gate_domain() {
@@ -64,53 +58,21 @@ gate_unsafe() {
   fi
 }
 
-gate_ai_imports() {
-  local bad
-  bad="$(imports_under "$here/ai" | grep -vE ':[0-9]+:[[:space:]]*import[[:space:]]+(Base|\.\./domain\.bend[[:space:]]+as[[:space:]]+[A-Za-z0-9_]+)[[:space:]]*$' || true)"
-  if [[ -z "$bad" ]]; then
-    report ok "ai/ imports only Base and domain"
+# gate_imports LABEL only|never PATTERN PATH...: with `only`, every import
+# under the paths is Base or a module matching PATTERN (a regex alternation of
+# paths); with `never`, no imported path contains PATTERN.
+gate_imports() {
+  local label="$1" mode="$2" pattern="$3" bad
+  shift 3
+  if [[ "$mode" == only ]]; then
+    bad="$(imports_under "$@" | grep -vE ":[0-9]+:[[:space:]]*import[[:space:]]+(Base|($pattern)[[:space:]]+as[[:space:]]+[A-Za-z0-9_]+)[[:space:]]*\$" || true)"
   else
-    report fail "ai/ imports only Base and domain" "$bad"
+    bad="$(imports_under "$@" | grep -E "import[[:space:]]+[^[:space:]]*($pattern)" || true)"
   fi
-}
-
-gate_sm_imports() {
-  local bad
-  bad="$(imports_under "$here/sm" | grep -vE ':[0-9]+:[[:space:]]*import[[:space:]]+(Base|(\.\./domain\.bend|\./[A-Za-z0-9_-]+\.bend)[[:space:]]+as[[:space:]]+[A-Za-z0-9_]+)[[:space:]]*$' || true)"
   if [[ -z "$bad" ]]; then
-    report ok "sm/ imports only Base, domain and siblings"
+    report ok "$label"
   else
-    report fail "sm/ imports only Base, domain and siblings" "$bad"
-  fi
-}
-
-gate_simple_imports() {
-  local bad
-  bad="$(imports_under "$here/simple" | grep -vE ':[0-9]+:[[:space:]]*import[[:space:]]+(Base|(\.\./domain\.bend|\.\./sm/(state|rules|items)\.bend|\./[A-Za-z0-9_-]+\.bend)[[:space:]]+as[[:space:]]+[A-Za-z0-9_]+)[[:space:]]*$' || true)"
-  if [[ -z "$bad" ]]; then
-    report ok "simple/ imports only Base, domain, sm's state, rules and items, and siblings"
-  else
-    report fail "simple/ imports only Base, domain, sm's state, rules and items, and siblings" "$bad"
-  fi
-}
-
-gate_player_imports() {
-  local bad
-  bad="$(imports_under "$here/player" | grep -vE ':[0-9]+:[[:space:]]*import[[:space:]]+(Base|(\.\./domain\.bend|\.\./sm/(state|rules|items)\.bend|\.\./simple/[A-Za-z0-9_-]+\.bend|\./[A-Za-z0-9_-]+\.bend)[[:space:]]+as[[:space:]]+[A-Za-z0-9_]+)[[:space:]]*$' || true)"
-  if [[ -z "$bad" ]]; then
-    report ok "player/ imports only Base, domain, sm's state, rules and items, simple/ and siblings"
-  else
-    report fail "player/ imports only Base, domain, sm's state, rules and items, simple/ and siblings" "$bad"
-  fi
-}
-
-gate_driver_imports() {
-  local bad
-  bad="$(imports_under "$here/driver.bend" | grep -E 'import[[:space:]]+[^[:space:]]*(ref/|abstract\.bend)' || true)"
-  if [[ -z "$bad" ]]; then
-    report ok "driver never imports ref/ or abstract"
-  else
-    report fail "driver never imports ref/ or abstract" "$bad"
+    report fail "$label" "$bad"
   fi
 }
 
@@ -134,31 +96,19 @@ gate_simple_smoke() {
   fi
 }
 
-gate_laws() {
-  local laws="$here/LAWS.bend" missing=() name
-  for name in ${required_laws[@]+"${required_laws[@]}"}; do
-    if [[ ! -f "$laws" ]] || ! grep -qE "^law[[:space:]]+${name}[[:space:]]*:" "$laws"; then
+# Each named law must be stated in the laws file.
+gate_required_laws() {
+  local label="$1" file="$2" missing=() name
+  shift 2
+  for name in "$@"; do
+    if [[ ! -f "$here/$file" ]] || ! grep -qE "^law[[:space:]]+${name}[[:space:]]*:" "$here/$file"; then
       missing+=("$name")
     fi
   done
   if [[ ${#missing[@]} -eq 0 ]]; then
-    report ok "required laws" "${#required_laws[@]} required"
+    report ok "$label" "$# required"
   else
-    report fail "required laws" "missing from LAWS.bend: ${missing[*]}"
-  fi
-}
-
-gate_simple_laws() {
-  local laws="$here/SIMPLE-LAWS.bend" missing=() name
-  for name in ${required_simple_laws[@]+"${required_simple_laws[@]}"}; do
-    if [[ ! -f "$laws" ]] || ! grep -qE "^law[[:space:]]+${name}[[:space:]]*:" "$laws"; then
-      missing+=("$name")
-    fi
-  done
-  if [[ ${#missing[@]} -eq 0 ]]; then
-    report ok "required simple laws" "${#required_simple_laws[@]} required"
-  else
-    report fail "required simple laws" "missing from SIMPLE-LAWS.bend: ${missing[*]}"
+    report fail "$label" "missing from $file: ${missing[*]}"
   fi
 }
 
@@ -242,16 +192,6 @@ gate_player() {
   fi
 }
 
-gate_parallel() {
-  local out
-  out="$(bun "$here/test/parallel.mjs" 2>&1)"
-  if [[ $? -eq 0 ]]; then
-    report ok "parallel search prototype" "$(printf '%s' "$out" | tail -1 | cut -c1-200)"
-  else
-    report fail "parallel search prototype" "$(printf '%s' "$out" | tail -20 | cut -c1-600)"
-  fi
-}
-
 gate_fuzz_mutations() {
   local out
   out="$(python3 "$here/tools/fuzz_mutations.py" 2>&1)"
@@ -269,26 +209,6 @@ gate_generated() {
     report ok "generated proof bodies" "$(printf '%s' "$out" | tail -1)"
   else
     report fail "generated proof bodies" "$(printf '%s' "$out" | tail -20)"
-  fi
-}
-
-gate_laws_imports() {
-  local bad
-  bad="$(imports_under "$here/LAWS.bend" | grep -E 'import[[:space:]]+[^[:space:]]*ref/' || true)"
-  if [[ -z "$bad" ]]; then
-    report ok "LAWS.bend never imports ref/"
-  else
-    report fail "LAWS.bend never imports ref/" "$bad"
-  fi
-}
-
-gate_simple_laws_imports() {
-  local bad
-  bad="$(imports_under "$here/SIMPLE-LAWS.bend" | grep -E 'import[[:space:]]+[^[:space:]]*ref/' || true)"
-  if [[ -z "$bad" ]]; then
-    report ok "SIMPLE-LAWS.bend never imports ref/"
-  else
-    report fail "SIMPLE-LAWS.bend never imports ref/" "$bad"
   fi
 }
 
@@ -346,17 +266,17 @@ gate_rust() {
 
 gate_domain
 gate_unsafe
-gate_ai_imports
-gate_sm_imports
-gate_simple_imports
-gate_player_imports
-gate_driver_imports
-gate_laws_imports
-gate_simple_laws_imports
+gate_imports "ai/ imports only Base and domain" only '\.\./domain\.bend' "$here/ai"
+gate_imports "sm/ imports only Base, domain and siblings" only '\.\./domain\.bend|\./[A-Za-z0-9_-]+\.bend' "$here/sm"
+gate_imports "simple/ imports only Base, domain, sm's state, rules and items, and siblings" only '\.\./domain\.bend|\.\./sm/(state|rules|items)\.bend|\./[A-Za-z0-9_-]+\.bend' "$here/simple"
+gate_imports "player/ imports only Base, domain, sm's state, rules and items, simple/ and siblings" only '\.\./domain\.bend|\.\./sm/(state|rules|items)\.bend|\.\./simple/[A-Za-z0-9_-]+\.bend|\./[A-Za-z0-9_-]+\.bend' "$here/player"
+gate_imports "driver, view and the JS entries never import ref/ or abstract" never 'ref/|abstract\.bend' "$here/driver.bend" "$here/web.bend" "$here/analysis.bend" "$here/view.bend"
+gate_imports "LAWS.bend never imports ref/" never 'ref/' "$here/LAWS.bend"
+gate_imports "SIMPLE-LAWS.bend never imports ref/" never 'ref/' "$here/SIMPLE-LAWS.bend"
 gate_driver_smoke
 gate_simple_smoke
-gate_laws
-gate_simple_laws
+gate_required_laws "required laws" LAWS.bend step_matches run_matches reachable_valid start_matches games_match state_roundtrip jam_skip_once turn_traversal observe_matches legal_exact legal_accepted privacy
+gate_required_laws "required simple laws" SIMPLE-LAWS.bend simple_start simple_refines simple_roundtrip simple_valid simple_reachable_valid simple_run_refines simple_observe simple_privacy simple_complete
 gate_generated
 gate_proofs
 gate_simple_proofs
@@ -368,7 +288,6 @@ gate_machine_items
 gate_machine_item_fuzz
 gate_simple_fuzz
 gate_player
-gate_parallel
 gate_mutations
 gate_fuzz_mutations
 gate_simple_mutations

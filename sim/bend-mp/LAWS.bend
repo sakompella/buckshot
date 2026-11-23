@@ -5,6 +5,11 @@ import ./sm/state.bend as S
 import ./sm/main.bend as M
 import ./sm/rules.bend as Q
 
+# What a seat sees of the machine's board is what it sees of the reference's:
+# a corollary of the Point equality that step_matches proves. The heard half
+# holds by definition, since A.ref copies the machine's notes. That the notes
+# are right, and go only to the seats that may hear them, rests on
+# step_matches, which checks each step's notes against the reference.
 law observe_matches:
   for +state: S.State
   for +valid: A.Valid(state)
@@ -46,6 +51,11 @@ law start_result_matches:
   for +config: D.Config
   {A.ref_start(config) == A.stepped(M.start(config)) : A.RefStep()}
 
+# Replacing the hidden gun (with one of the same length) and the decks leaves
+# what every seat sees of the board unchanged. The heard half holds by
+# construction: M.replace_hidden changes only the gun and the decks, not the
+# notes. Which notes a step writes is checked by step_matches against the
+# reference, not by this law.
 law privacy:
   for +state: S.State
   for +gun: List<&2, D.Shell>

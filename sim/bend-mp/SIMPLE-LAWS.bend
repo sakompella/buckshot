@@ -46,11 +46,17 @@ law simple_run_refines:
   for +tape: List<&2, Nat>
   {SA.replay(SA.embed(state), SA.chains(fuel, state, tape)) == SA.ran(N.run(fuel, state, tape)) : Maybe<&2, D.Stepped<&2, S.State>>}
 
+# The simple machine's board and heard notes are those of its embedding in sm.
+# The heard half holds by construction (the embedding carries the log over);
+# the notes themselves are checked through simple_refines and step_matches.
 law simple_observe:
   for +state: T.State
   for +seat: D.Seat
   {(D.Obs{seat, P.board(state)}, D.hear(T.state.notes(state), seat)) == (D.observe(M.point(SA.embed(state)), seat), D.hear(S.state.notes(SA.embed(state)), seat)) : D.Obs & List<&2, D.Heard>}
 
+# As privacy: replacing the hidden gun and decks leaves every seat's board
+# unchanged. The heard half holds by construction, since N.replace_hidden
+# leaves the log alone.
 law simple_privacy:
   for +state: T.State
   for +gun: List<&2, D.Shell>

@@ -15,6 +15,6 @@ def line(label: String, totals: R.Totals) -> String:
 
 def main() -> IO(Unit):
   do IO<Unit>:
-    IO.print(line("2", R.batch(6n, 20000n, D.TwoSeats{}, items(), D.Duo{R.DoNBrain{}, R.StoryBrain{}}, 1, 11)))
-    IO.print(line("3", R.batch(6n, 20000n, D.ThreeSeats{}, items(), D.Trio{R.DoNBrain{}, R.StoryBrain{}, R.StoryBrain{}}, 1, 12)))
-    IO.print(line("4", R.batch(6n, 20000n, D.FourSeats{}, items(), D.Quad{R.DoNBrain{}, R.DoNBrain{}, R.StoryBrain{}, R.StoryBrain{}}, 1, 13)))
+    IO.print(line("2", R.batch(6n, 20000n, D.TwoSeats{}, items(), D.Duo{R.DoNBrain{}, R.StoryBrain{}}, 1)))
+    IO.print(line("3", R.batch(6n, 20000n, D.ThreeSeats{}, items(), D.Trio{R.DoNBrain{}, R.StoryBrain{}, R.StoryBrain{}}, 1)))
+    IO.print(line("4", R.batch(6n, 20000n, D.FourSeats{}, items(), D.Quad{R.DoNBrain{}, R.DoNBrain{}, R.StoryBrain{}, R.StoryBrain{}}, 1)))

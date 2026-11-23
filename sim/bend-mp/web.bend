@@ -2,14 +2,16 @@ import Base
 import ./domain.bend as D
 import ./sm/main.bend as M
 import ./sm/state.bend as S
+import ./sm/items.bend as I
 import ./driver.bend as R
 import ./ai/story.bend as Story
 import ./ai/don.bend as Don
 
-# The JS entry for the web UI (web/src/bend.ts is its only caller). Rooted
-# here, these defs export under bare names; domain constructors carry the
-# "domain." prefix. Each def is a thin, stable name over the machine so the UI
-# never reaches into sm/ internals.
+# The JS entry for web/ (web/src/bend.ts and the rules constants test are its
+# callers). Rooted here, these defs export under bare names, and constructors
+# are bare (`Seat1`); defs of other modules export as `module:name`, which web/
+# does not use. Each def is a thin, stable name over the machine so web/ never
+# reaches into sm/ or domain internals.
 #
 # The AI seats use the driver's own entry points (R.mind.of, R.think,
 # R.coin.word), so the web and the driver cannot drift.
@@ -66,3 +68,23 @@ def mind.decide(+state: S.State, +prompt: D.Prompt, mind: R.Mind, coin: U32) -> 
 # Word number count of a seat's own random stream for a match seed.
 def mind.coin(seed: U32, +seat: D.Seat, count: U32) -> U32:
   R.coin.word(R.mix(seed), seat, count)
+
+# Rule constants
+# ==============
+
+# Each round's prize in a default (three-round) match.
+def prize(round: Nat) -> U32:
+  D.prize(round)
+
+def item.order() -> List<&2, D.Item>:
+  D.item.order()
+
+def damage.amount(damage: D.Damage) -> Nat:
+  D.damage.amount(damage)
+
+def phone.cap() -> Nat:
+  D.phone.cap()
+
+# The phone's draw for a gun of this many shells.
+def phone.request(length: Nat) -> D.Request:
+  I.phone.request(length)

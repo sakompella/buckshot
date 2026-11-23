@@ -57,7 +57,8 @@ def think(mind: Mind, prompt: D.Prompt, obs: D.Obs, heard: List<&2, D.Heard>, co
       think.don(Don.decide(prompt, obs, heard, mem, coin))
 
 # Hearing eagerly is the same as passing the backlog to think: every decide
-# starts by updating its memory with the heard notes. The web UI uses this.
+# starts by updating its memory with the heard notes. web.bend's mind.hear uses
+# this.
 def hear.mind(mind: Mind, heard: List<&2, D.Heard>, +seat: D.Seat) -> Mind:
   match mind:
     case StoryMind{mem}:
@@ -398,17 +399,19 @@ def totals.of(played: Played) -> Totals:
     case Played{Run{state, minds, heard, rng, +rounds, +cash, verbose, trace}, outcome}:
       totals.outcome(outcome, rounds, cash)
 
-def match.seed(+id: U32, +salt: U32) -> U32:
-  mix(U32.xor(id, salt))
+def match.seed(+id: U32) -> U32:
+  mix(id)
 
-# 2^depth independent matches as a fork tree, summed.
-def batch(depth: Nat, +fuel: Nat, +table: D.Table, +items: Bool, +brains: D.Ring<&2, Brain>, +id: U32, +salt: U32) -> Totals:
+# 2^depth independent matches as a fork tree, summed. The leaves are the ids
+# 2^depth to 2^(depth+1) - 1 under the root id 1, so every batch of one depth
+# plays the same seeds: its lines compare on common random numbers.
+def batch(depth: Nat, +fuel: Nat, +table: D.Table, +items: Bool, +brains: D.Ring<&2, Brain>, +id: U32) -> Totals:
   match depth:
     case 0n:
-      totals.of(run_match(fuel, table, items, brains, match.seed(id, salt), False{}))
+      totals.of(run_match(fuel, table, items, brains, match.seed(id), False{}))
     case 1n++p:
       +left : U32 = U32.shln(id, 1n)
-      l r = batch(p, fuel, table, items, brains, left, salt) batch(p, fuel, table, items, brains, (left + 1 : U32), salt)
+      l r = batch(p, fuel, table, items, brains, left) batch(p, fuel, table, items, brains, (left + 1 : U32))
       totals.add(l, r)
 
 def verbose_match(fuel: Nat, table: D.Table, items: Bool, brains: D.Ring<&2, Brain>, seed: U32) -> Played:

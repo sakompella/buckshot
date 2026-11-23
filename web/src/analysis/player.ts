@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { Match, Predicate, Schema } from "effect";
 
@@ -11,13 +12,13 @@ import { GameEvent, Item, Move, Seat, Secret } from "../domain.ts";
 import type { GameEvent as Event, LearnedSecret, SeatCount } from "../domain.ts";
 
 // The minimax player (sim/bend-mp/player/, ADR-0043) for the analysis scripts,
-// through its export table sim/bend-mp/analysis.bend. That table is rooted
-// beside the rules' own (web.bend), so the board and config the rules build
-// returns pass into it unchanged. This module only marshals: a player's own log
+// through its export table sim/bend-mp/analysis.bend. Constructors are bare in
+// both Bend builds, so the board and config the rules build returns pass into
+// it unchanged. This module only marshals: a player's own log
 // and the public board go into Bend, shell orders and analyses come out. The
 // machine state, with its hidden gun, never enters.
 
-const PLAYER_SOURCE = new URL("../../../sim/bend-mp/analysis.bend", import.meta.url).pathname;
+const PLAYER_SOURCE = fileURLToPath(new URL("../../../sim/bend-mp/analysis.bend", import.meta.url));
 
 interface PlayerExports {
   readonly analyse: (position: BendNode, depth: number, budget: number, reload: BendNode, memo: BendNode) => BendNode;
@@ -253,7 +254,7 @@ export interface Limits {
 /**
  * How the search values a reload it stops at: the static evaluation before the draw, that evaluation averaged over every distinct deal
  * of the reload, or its mean over `samples` deals drawn at random (both two seats only; at three or four the analysis is invalid).
- * See docs/arena/analysis/regret.md.
+ * See "Accuracy and move quality (regret)" in docs/arena/methods.md.
  */
 export const RELOAD_RULES = ["static", "expected-deal", "sampled"] as const;
 

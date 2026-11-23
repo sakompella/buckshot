@@ -594,7 +594,7 @@ export const nextPrompt = (game: Game, prompts: ReadonlyArray<Prompt>): Option.O
   );
 
 /** Each round's prize in a default (three-round) match: Bend's `prize`. */
-export const PRIZES: ReadonlyArray<number> = [0, 1, 2].map((round) => rules["domain:prize"](round));
+export const PRIZES: ReadonlyArray<number> = [0, 1, 2].map((round) => rules.prize(round));
 
 // AI seats
 // ========

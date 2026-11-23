@@ -14,12 +14,12 @@ interface Cell extends BendNode {
 const tags = (list: Cell): ReadonlyArray<string> => (list.$ === "Con" && list.head !== undefined && list.tail !== undefined ? [list.head.$, ...tags(list.tail)] : []);
 
 test("the item list is Bend's item order", () => {
-  expect<ReadonlyArray<string>>(Item.literals).toEqual(tags(rules["domain:item.order"]()));
+  expect<ReadonlyArray<string>>(Item.literals).toEqual(tags(rules["item.order"]()));
 });
 
 test("the prompt's handsaw damage and phone range are Bend's", () => {
-  const draw = Schema.decodeUnknownSync(Schema.Struct({ range: Schema.Struct({ lo: Schema.Finite }) }))(rules["sm/items:phone.request"](4));
+  const draw = Schema.decodeUnknownSync(Schema.Struct({ range: Schema.Struct({ lo: Schema.Finite }) }))(rules["phone.request"](4));
 
-  expect(INSTRUCTIONS).toContain(`Handsaw: your next shot does ${rules["domain:damage.amount"]({ $: "Double" })} damage instead of ${rules["domain:damage.amount"]({ $: "Single" })}.`);
-  expect(INSTRUCTIONS).toContain(`The position is from ${1 + draw.range.lo} to ${rules["domain:phone.cap"]()}.`);
+  expect(INSTRUCTIONS).toContain(`Handsaw: your next shot does ${rules["damage.amount"]({ $: "Double" })} damage instead of ${rules["damage.amount"]({ $: "Single" })}.`);
+  expect(INSTRUCTIONS).toContain(`The position is from ${1 + draw.range.lo} to ${rules["phone.cap"]()}.`);
 });

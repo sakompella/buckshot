@@ -26,7 +26,7 @@ After a move, worlds are grouped by what the public and the searcher observe. On
 - **The round ended.** The value is exact: 1,000,000 if `me` won the round, 0 if not. This holds even when the next round began without a draw and already waits on a choice.
 - **A reload needs a draw.** A move that empties the gun, by a shot or an ejected shell, stops at the reload's first draw (`NeedTurnAmount`, `NeedItem`, `NeedBatch` or `NeedSwap`). A fully deterministic reload can finish in the same answer, and search continues at its next choice. Expanding random item and batch draws multiplies the branches beyond a useful budget. The `reload` argument says how the leaf is valued:
   - `Static`: the state as it stands, before the draw is resolved. `choose` always uses it.
-  - `ExpectedDeal` (two seats only; at three or four `analyse` is invalid): the static evaluation averaged over every distinct deal, as `deal.bend` enumerates it. The machine answers each draw with every value until the next choice. States that differ only in where items sit in the slots, or in the order of the shells, are merged, so each deal is carried once with its probability. The batch and the shuffle read and write no slot, so each load is drawn once for all the ways the items came out. It is exact and slow: see `docs/arena/analysis/regret.md`.
+  - `ExpectedDeal` (two seats only; at three or four `analyse` is invalid): the static evaluation averaged over every distinct deal, as `deal.bend` enumerates it. The machine answers each draw with every value until the next choice. States that differ only in where items sit in the slots, or in the order of the shells, are merged, so each deal is carried once with its probability. The batch and the shuffle read and write no slot, so each load is drawn once for all the ways the items came out. It is exact and slow.
   - `Sampled{count}` (two seats only; at least one deal): the static evaluation averaged over `count` deals drawn at random, each draw answered with a value picked uniformly as the machine asks for it. Each start of the deal seeds its own draws from its key, so a leaf draws the same deals whenever it is valued.
 
   A deal leaf costs no nodes, so every rule searches the same tree.
@@ -47,7 +47,7 @@ A decision node is keyed by both beliefs, each world's state spelled out in full
 
 - `belief.bend` reconstructs synthetic states from public information, enumerates shell orders, replays observations and groups outcomes.
 - `evaluation.bend` holds all starting weights and the static win-share estimate.
-- `search.bend` does bounded paranoid expectiminimax and iterative deepening. With `fan` (prototype, native builds only) it searches the root moves in parallel; `test/parallel.mjs` checks the fan against the sequential root.
+- `search.bend` does bounded paranoid expectiminimax and iterative deepening.
 - `deal.bend` enumerates or samples a reload's deals for the deal leaves. Sampled deals are valued in a balanced fork tree, so a native build spreads them across threads.
 - `memo.bend` keys beliefs and keeps the memo of decision nodes and deal leaves.
 - `policy.bend` selects a move from completed analysis.
@@ -65,7 +65,7 @@ Build with the pinned dev shell, from the repository root:
 
     nix develop -c bend sim/bend-mp/player/main.bend -o /tmp/buckshot-player.mjs
 
-The default export is the Bend export table, as in `../web.bend`. Call `analyse`, `choose` and `regret` from that table. Domain tags are `../domain.*`, simple move tags are `../simple/state.*`, and player types have their module prefix. JavaScript callers only marshal values and call exports. They do not rebuild rules or beliefs. The player is not wired into the web table or the arena's play. The analysis scripts call it through `../analysis.bend` (`web/src/analysis/player.ts`), which sits beside `../web.bend` so that its domain tags are `domain.*`, the same as the rules build's: a board or config from that build passes in unchanged.
+The default export is the Bend export table, as in `../web.bend`. Call `analyse`, `choose` and `regret` from that table. Constructors are bare in the JavaScript build (`Seat1`, `Shoot`), whatever module defines them. JavaScript callers only marshal values and call exports. They do not rebuild rules or beliefs. The player is not wired into the web table or the arena's play. The analysis scripts call it through `../analysis.bend` (`web/src/analysis/player.ts`). Since constructors are bare, a board or config from the rules build passes in unchanged.
 
 ## Verification
 
