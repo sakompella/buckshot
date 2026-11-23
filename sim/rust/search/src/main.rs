@@ -11,7 +11,7 @@ use anyhow::{Context, Result, bail};
 use buckshot_rules::Move;
 use buckshot_search::{Analysis, BoundedV1, InfoSet, Limits, Pruning, Reload, analyse_batch};
 #[cfg(feature = "f32")]
-use buckshot_search::{Compat, Memo, Searcher};
+use buckshot_search::{Compat, Memo};
 #[cfg(feature = "f32")]
 use clap::builder::PossibleValue;
 use clap::{Parser, Subcommand, ValueEnum};
@@ -21,15 +21,17 @@ use serde_json::{Value, json};
 
 const AFTER_HELP: &str = "\
 The decisions run in parallel on a pool of --threads workers (never rayon's
-global pool), and so do the deals of a sampled leaf. Each decision's root
+global pool). A lone decision runs its sampled leaves' deals on that pool;
+with several, each decision's deals stay on its own thread, so a worker never
+holds more than one decision's memo. Each decision's root
 moves run one after another: they share the fuel, the node budget and the
 memo, so a move's result depends on the moves before it. Every row is the one
 a single thread gives, in input order. Every row records its `evaluator` id.";
 
 /// One JSON row per input decision ({id, ordinal, input, chosenIndex?}), read from the path or stdin.
 ///
-/// Each line names its root move twice: by `code`, as native.bend's show.move
-/// prints it, and by `move`, as Bend writes a Move.
+/// Each line names its root move twice: by `code`, as `moveCode` in
+/// web/src/analysis/native-input.ts writes it, and by `move`, as Bend writes a Move.
 #[derive(Parser)]
 #[command(name = "buckshot-search", after_help = AFTER_HELP)]
 struct Args {
@@ -44,7 +46,7 @@ struct Args {
     reload: ReloadRule,
     /// Deals per sampled leaf, with --reload sampled [default: 256].
     #[arg(long)]
-    samples: Option<u32>,
+    samples: Option<NonZero<u32>>,
     /// How compat reuses a finished node [default: off].
     #[cfg(feature = "f32")]
     #[arg(long, value_enum)]
@@ -76,6 +78,11 @@ enum Command {
     /// Add the regret rows of rust-search-inputs.ts rows to a regret database, with the search flags given before it.
     Score(score::ScoreArgs),
 }
+
+const DEFAULT_SAMPLES: NonZero<u32> = match NonZero::new(256) {
+    Some(samples) => samples,
+    None => NonZero::<u32>::MIN,
+};
 
 fn default_threads() -> NonZero<usize> {
     let cores = std::thread::available_parallelism().map_or(1, NonZero::get);
@@ -153,7 +160,7 @@ impl Search {
             (ReloadRule::Static, None) => Reload::Static,
             (ReloadRule::Static, Some(_)) => bail!("--samples needs --reload sampled"),
             (ReloadRule::Sampled, count) => Reload::Sampled {
-                count: count.unwrap_or(256),
+                count: count.unwrap_or(DEFAULT_SAMPLES),
             },
         };
         #[cfg(feature = "f32")]
@@ -182,15 +189,15 @@ impl Search {
         })
     }
 
-    /// One decision's analysis.
-    fn analyse(&self, pool: &ThreadPool, info: &InfoSet, chosen: Option<u32>) -> Analysis {
+    /// One decision's analysis; `pool`, if any, runs its sampled leaves' deals.
+    fn analyse(&self, pool: Option<&ThreadPool>, info: &InfoSet, chosen: Option<u32>) -> Analysis {
         match self.evaluator {
             #[cfg(feature = "f32")]
             Evaluator::Compat => {
                 let searcher = Compat {
                     reload: self.reload,
                     memo: self.memo,
-                    pool: Some(pool),
+                    pool,
                 };
                 searcher.analyse(info, self.limits)
             }
@@ -198,9 +205,9 @@ impl Search {
                 let searcher = BoundedV1 {
                     reload: self.reload,
                     pruning: self.pruning,
-                    pool: Some(pool),
+                    pool,
                 };
-                searcher.analyse_chosen(info, self.limits, chosen)
+                searcher.analyse(info, self.limits, chosen)
             }
         }
     }
@@ -262,7 +269,7 @@ struct Line {
     reach: &'static str,
 }
 
-/// A move as native.bend's `show.move` prints it (`moveCode` in web/src/analysis/native-input.ts).
+/// A move's code, as `moveCode` in web/src/analysis/native-input.ts writes it.
 fn code(step: Move) -> String {
     match step {
         Move::Shoot { target } => format!("0.{}", u8::from(target)),
@@ -322,8 +329,9 @@ fn outcome(analysis: Analysis, evaluator: Evaluator) -> Outcome {
 
 /// Writes the rows of a chunk of decisions, in input order.
 fn write_rows(out: &mut impl Write, search: &Search, pool: &ThreadPool, decisions: &[Decision]) -> Result<()> {
+    let leaves = (decisions.len() == 1).then_some(pool);
     let done = analyse_batch(decisions, pool, |decision| match InfoSet::parse(&decision.input) {
-        Ok(info) => outcome(search.analyse(pool, &info, decision.chosen), search.evaluator),
+        Ok(info) => outcome(search.analyse(leaves, &info, decision.chosen), search.evaluator),
         Err(error) => Outcome::Unread { error: error.to_string() },
     });
     for (decision, outcome) in decisions.iter().zip(done) {
@@ -344,6 +352,9 @@ fn main() -> Result<()> {
     let search = Search::of(&args)?;
     let pool = ThreadPoolBuilder::new().num_threads(args.threads.get()).build()?;
     if let Some(Command::Score(score_args)) = &args.command {
+        if let Some(path) = &args.path {
+            bail!("score reads its own inputs, not {}", path.display());
+        }
         return score::run(score_args, &search, &pool);
     }
     let reader: Box<dyn BufRead> = match &args.path {

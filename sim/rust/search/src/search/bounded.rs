@@ -43,10 +43,7 @@ use buckshot_rules::{MENU_CAPACITY, Menu, Request, request};
 use super::{Choice, Search, Span, Spent, Value, analysed, best_line, limited, lines_static, push_choices, static_value};
 use crate::memo::{Kind, Stored, Tally, hash};
 use crate::num::{Real, branch_window, len_u64};
-use crate::types::{Analysis, Line, Reach};
-
-/// The highest value: `millionths` clamps every sum to a million.
-const TOP: u32 = 1_000_000;
+use crate::types::{Analysis, Line, Reach, WIN};
 
 /// The values a coordinate can take: `lo..=hi`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -56,7 +53,7 @@ pub struct Bounds {
 }
 
 impl Bounds {
-    const ANY: Self = Self { lo: 0, hi: TOP };
+    const ANY: Self = Self { lo: 0, hi: WIN };
 
     const fn exact(value: u32) -> Self {
         Self { lo: value, hi: value }
@@ -246,7 +243,7 @@ impl Running {
         if mine {
             // A child at most the best low end so far changes no maximum.
             let raise = |window: Window, lo: u32| {
-                if window.met(Bounds { lo, hi: TOP }) {
+                if window.met(Bounds { lo, hi: WIN }) {
                     Window::NONE
                 } else {
                     Window {
@@ -277,7 +274,7 @@ impl Running {
         }
         let public = Bounds {
             lo: 0,
-            hi: self.public_hi.min(TOP),
+            hi: self.public_hi.min(WIN),
         };
         (!need.public.met(public)).then_some(Need {
             public: Window {
@@ -613,7 +610,10 @@ fn lead_first(moves: &[Choice], lead: usize) -> impl Iterator<Item = (usize, Cho
 
 #[cfg(test)]
 mod tests {
-    use super::{Bounds, BoxEntry, Boxed, Need, Running, TOP, Window, decide_boxes, root_window};
+    use hegel::TestCase;
+    use hegel::generators as gs;
+
+    use super::{Bounds, BoxEntry, Boxed, Fold, Need, Running, WIN, Window, decide_boxes, root_window};
     use crate::num::{Real, branch_window};
     use crate::types::Reach;
 
@@ -680,9 +680,9 @@ mod tests {
     #[test]
     fn a_pruned_child_counts_as_any_value_and_a_cut_reach() {
         let children = [exact(800_000, 900_000)];
-        let expected = boxed((800_000, TOP), (900_000, TOP), Reach::Cut);
+        let expected = boxed((800_000, WIN), (900_000, WIN), Reach::Cut);
         assert_eq!(decide_boxes(true, &children, 1), Some(expected), "one pruned child");
-        let lowest = boxed((0, 800_000), (0, TOP), Reach::Cut);
+        let lowest = boxed((0, 800_000), (0, WIN), Reach::Cut);
         assert_eq!(
             decide_boxes(false, &children, 1),
             Some(lowest),
@@ -708,7 +708,7 @@ mod tests {
     #[test]
     fn an_opponent_needs_exact_public_values_below_the_lowest_while_private_matters() {
         let need = Need {
-            public: Window { lo: 500_000, hi: TOP },
+            public: Window { lo: 500_000, hi: WIN },
             private: Window::EXACT,
         };
         let running = Running::START.add(0, &exact(300_000, 100_000));
@@ -783,7 +783,7 @@ mod tests {
     #[test]
     fn a_box_serves_only_at_its_own_depth_and_when_it_meets_the_need() {
         let entry = BoxEntry {
-            boxed: boxed((0, TOP), (200_000, 300_000), Reach::Cut),
+            boxed: boxed((0, WIN), (200_000, 300_000), Reach::Cut),
             depth: 3,
             lead: 0,
         };
@@ -802,18 +802,44 @@ mod tests {
     #[test]
     fn a_branch_outside_its_window_settles_the_sum() {
         let half = Real::ONE.div(Real::from_u32(2));
-        let terms = [(half, 0, TOP), (half, 400_000, 400_000)];
+        let terms = [(half, 0, WIN), (half, 400_000, 400_000)];
         let (lo, hi) = branch_window((300_000, 600_000), terms.into_iter(), 0);
         let sum = |value: u32| half.mul(Real::from_u32(value)).add(half.mul(Real::from_u32(400_000))).millionths();
         assert!(sum(lo) <= 300_000 && sum(hi) >= 600_000, "{lo}: {}, {hi}: {}", sum(lo), sum(hi));
         assert!(lo > 150_000 && hi < 850_000, "the window is not empty: {lo}..{hi}");
     }
 
-    #[test]
-    fn the_low_and_high_sums_bracket_the_exact_sum() {
-        let (p, q) = (Real::from_u32(1).div(Real::from_u32(3)), Real::from_u32(2).div(Real::from_u32(3)));
-        let sum = |a: u32, b: u32| super::Fold::ZERO.add(p, p, a, a).add(q, q, b, b).public.millionths();
-        let (lo, mid, hi) = (sum(100_000, 200_000), sum(150_000, 250_000), sum(200_000, 300_000));
+    /// `branch_sum`'s claim: folding each branch's low ends and high ends
+    /// brackets the fold of any values inside the bounds, an unsearched
+    /// branch's `0..=WIN` included.
+    #[hegel::test(test_cases = 256)]
+    fn the_low_and_high_sums_bracket_any_sum_inside(tc: TestCase) {
+        let weights = tc.draw(
+            gs::vecs(gs::integers::<u32>().min_value(1).max_value(1_000))
+                .min_size(1)
+                .max_size(8),
+        );
+        let total = Real::from_u32(weights.iter().sum());
+        let (mut lo, mut mid, mut hi) = (Fold::ZERO, Fold::ZERO, Fold::ZERO);
+        for weight in weights {
+            let p = Real::from_u32(weight).div(total);
+            let unsearched = tc.draw(gs::booleans());
+            let low = if unsearched {
+                0
+            } else {
+                tc.draw(gs::integers::<u32>().max_value(WIN))
+            };
+            let high = if unsearched {
+                WIN
+            } else {
+                tc.draw(gs::integers::<u32>().min_value(low).max_value(WIN))
+            };
+            let value = tc.draw(gs::integers::<u32>().min_value(low).max_value(high));
+            lo = lo.add(p, p, low, low);
+            mid = mid.add(p, p, value, value);
+            hi = hi.add(p, p, high, high);
+        }
+        let (lo, mid, hi) = (lo.private.millionths(), mid.private.millionths(), hi.private.millionths());
         assert!(lo <= mid && mid <= hi, "{lo} <= {mid} <= {hi}");
     }
 }

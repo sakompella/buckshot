@@ -1,0 +1,17 @@
+{
+  "evaluator": "bounded-v1-f64-unpruned",
+  "identity": "BoundedV1::ID (sim/rust/search/src/searcher.rs) plus -unpruned, as in tests/golden.",
+  "source": {
+    "inputs": "tests/golden/decisions.jsonl, the rows this budget cuts during the depth-7 iteration or earlier",
+    "features": "f64,seats-2"
+  },
+  "settings": {
+    "unpruned": true,
+    "depth": 7,
+    "budget": 1000000,
+    "reload": "sampled",
+    "samples": 256
+  },
+  "decisions": 8,
+  "about": "Golden positions searched at the production depth with a 1,000,000-node budget, every one cut by the budget, so the set covers the deepening that gives up partway and the memo at a large tally. The values are this evaluator's own, written when the set was made: a change that moves one must bump BoundedV1::ID."
+}

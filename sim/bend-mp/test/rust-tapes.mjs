@@ -17,7 +17,8 @@
 //                      recorded end and cash, with one answer fitting the recorded moves at every step
 //
 // Each tape has a sibling <tape>.manifest.json: mode, seeds, settings, games,
-// steps, capped games, lines and a sha256 over every .bend file under sim/bend-mp.
+// steps, capped games, lines, Bend's item order and default round, and a sha256
+// over every .bend file under sim/bend-mp.
 //
 // A step line: {game, step, config (step 0 only), state, request,
 //   event: {kind: "Draw"|"Choice", n}, next, notes}. n is the answer fed to
@@ -254,6 +255,7 @@ const seatAny = (state, random) => random() % 2 ? { $: `Seat${random() % 4}` } :
 const slotNames = [0, 1, 2, 3, 4, 5, 6, 7].map(i => `s${i}`);
 const fullTwoSeatDeck = array(normalize(SA['sm/rules:decks.full']()).two);
 const itemOrder = array(normalize(SA['domain:item.order']()));
+const defaultRound = normalize(SA['domain:config.default_round']());
 const mutations = [
   state => { state.world.gun = list([]); },
   (state, random) => { state.world.gun = list([shell(random)]); },
@@ -425,7 +427,7 @@ try {
     const path = arg('out', null) ?? join(arg('dir', '/tmp/rust-tapes'), `${name}.jsonl`);
     open(path);
     const result = run();
-    writeFileSync(`${path}.manifest.json`, `${JSON.stringify({ tape: basename(path), mode: name, seeds, settings: { ...settings, maxSteps: MAX_STEPS }, result, games, steps, capped, lines, items: itemOrder.map(item => item.$), bend: sources }, null, 2)}\n`);
+    writeFileSync(`${path}.manifest.json`, `${JSON.stringify({ tape: basename(path), mode: name, seeds, settings: { ...settings, maxSteps: MAX_STEPS }, result, games, steps, capped, lines, items: itemOrder.map(item => item.$), defaultRound, bend: sources }, null, 2)}\n`);
     console.log(`${name} tapes: ${games} games (${capped} capped), ${steps} answers, ${lines} lines -> ${path}`);
   }
 } finally {

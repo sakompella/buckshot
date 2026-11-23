@@ -378,6 +378,5 @@ pub fn build(position: &Position) -> Result<Belief, Refusal> {
         public: normalize(public),
         private: normalize(private),
         me: *me,
-        round: state.world.round_index,
     })
 }

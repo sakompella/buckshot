@@ -1,13 +1,14 @@
-//! A position as the web encodes it for the native player (the number line of
-//! `native.bend`'s `position.of`): fields in constructor order, a constructor
+//! A position as `web/src/analysis/native-input.ts` encodes it (`nativeInput`),
+//! which with this parser defines the format: fields in constructor order, a constructor
 //! as its tag, a list as its count and then its items last first. A tag past
 //! the last constructor reads as the last one, and a missing or unreadable
-//! number reads as 0, as Bend's decoder does.
+//! number reads as 0.
 //!
-//! Bend's decoder trusts its input, so this one refuses what the rules and the
-//! search cannot hold: a list whose count is more than the numbers left, a
-//! `GrabbingBegan` with more seats than the table, and a `Loaded` of more than
-//! ten shells. Those are a [`ParseError`], never a panic or a silent cut.
+//! This parser refuses what the rules and the search cannot hold: a list whose
+//! count is more than the numbers left, a `GrabbingBegan` with more seats than
+//! the table, a `Loaded` of more than ten shells, and numbers past the end
+//! (the encoder writes none). Those are a [`ParseError`], never a panic or a
+//! silent cut.
 
 use buckshot_rules::{
     AmountRule, Config, Damage, Direction, EnumMap, GameEvent, HealthRule, Item, ItemRule, Load, LoadRule, Ring, RoundRules, RuleError,
@@ -107,6 +108,8 @@ pub enum ParseError {
     Grabbing { table: Table, count: usize },
     #[error("a load of {live} live and {blank} blank shells, over {}", MAX_SHELLS)]
     Loaded { live: u32, blank: u32 },
+    #[error("{left} numbers past the end of the position")]
+    Trailing { left: usize },
     #[error(transparent)]
     Config(#[from] RuleError),
 }
@@ -417,7 +420,7 @@ const fn round_of(items: bool) -> RoundRules {
 /// and [`ParseError::Wide`] for a table the build lacks. [`ParseError::List`]
 /// for a list count over the numbers left, [`ParseError::Grabbing`] for more
 /// grabbing seats than the table has and [`ParseError::Loaded`] for a load of
-/// more than ten shells.
+/// more than ten shells. [`ParseError::Trailing`] for numbers past the log.
 pub fn parse(line: &str) -> Result<Position, ParseError> {
     let numbers: Vec<&str> = line.split(' ').collect();
     let mut rest = numbers.iter();
@@ -428,6 +431,10 @@ pub fn parse(line: &str) -> Result<Position, ParseError> {
     let me = tokens.seat();
     let board = tokens.board()?;
     let log = tokens.list(Tokens::heard)?;
+    let left = tokens.rest.len();
+    if left > 0 {
+        return Err(ParseError::Trailing { left });
+    }
     let views = board.views.table();
     if views != table {
         return Err(ParseError::Ring { table, views });
@@ -471,6 +478,12 @@ mod tests {
         );
         assert_eq!(with_log("18446744073709551615"), Err(ParseError::List { count: u64::MAX, left: 0 }));
         assert_eq!(with_log("3 0 0"), Err(ParseError::List { count: 3, left: 2 }));
+    }
+
+    #[test]
+    fn numbers_past_the_log_are_refused() {
+        assert!(with_log("0").is_ok(), "an empty log ends the line");
+        assert_eq!(with_log("0 7"), Err(ParseError::Trailing { left: 1 }));
     }
 
     #[test]

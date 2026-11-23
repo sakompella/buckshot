@@ -6,7 +6,7 @@
 //! operations in f64 and has no compat evaluator. The player instantiates the simple machine
 //! (`buckshot-rules`).
 //!
-//! A [`Searcher`] analyses an [`InfoSet`], the mover's view. An [`InfoSet`]
+//! A searcher ([`Compat`], [`BoundedV1`]) analyses an [`InfoSet`], the mover's view. An [`InfoSet`]
 //! comes only from [`InfoSet::parse`] of a number line, the crate's one way
 //! in: the belief builder and the raw worlds are private, so the search sees
 //! the hidden state only through what the line carries. The line is trusted
@@ -41,5 +41,5 @@ pub use num::ARITHMETIC;
 pub use position::ParseError;
 #[cfg(feature = "f32")]
 pub use searcher::Compat;
-pub use searcher::{BoundedV1, InfoSet, Searcher, analyse_batch};
-pub use types::{Analysed, Analysis, Cached, Limits, Line, Memo, Pruning, Reach, Refusal, Reload};
+pub use searcher::{BoundedV1, InfoSet, analyse_batch};
+pub use types::{Analysed, Analysis, Cached, Limits, Line, Memo, Pruning, Reach, Refusal, Reload, WIN};

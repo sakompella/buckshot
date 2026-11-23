@@ -7,7 +7,7 @@ use arrayvec::ArrayVec;
 use crate::branch::B;
 use crate::domain::{AmountRule, Config, Direction, Gun, Item, ItemRule, Items, Ring, Seat, Seats, Shell, Slot, Slots, Table};
 use crate::rules;
-use crate::state::{Grabs, Jam, Players, State};
+use crate::state::{Grabs, Jam, Players, SeatRecord, State};
 
 /// sm/state.bend `IdleOption::UseAt` (`uses` only makes these).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -94,6 +94,11 @@ fn occupied(slots: Slots) -> u32 {
     if !cfg!(feature = "trace") {
         return slots.occupied();
     }
+    occupied_walk(slots)
+}
+
+/// [`occupied`] as Bend walks it.
+pub(crate) fn occupied_walk(slots: Slots) -> u32 {
     let mut count = 0u32;
     let mut found = slots_items(slots);
     loop {
@@ -143,12 +148,17 @@ fn slots_copies(slots: Slots, item: Item) -> u32 {
     if !cfg!(feature = "trace") {
         return slots.copies(item);
     }
+    slots_copies_walk(slots, item)
+}
+
+/// [`slots_copies`] as Bend walks it.
+pub(crate) fn slots_copies_walk(slots: Slots, item: Item) -> u32 {
     slots_items(slots).fold(0u32, |total, found| total.saturating_add(copies_one(found, item)))
 }
 
 /// `seat.health`.
 pub(crate) fn seat_health(players: &Players, seat: Seat) -> u32 {
-    players.get(seat).map_or(100, |record| record.health)
+    players.get(seat).map_or(SeatRecord::FRESH.health, |record| record.health)
 }
 
 /// `seat.slots`.
@@ -347,7 +357,7 @@ fn owned_counts(players: &Players, grabs: &Grabs, seat: Seat) -> [u32; Item::ORD
 }
 
 /// [`pool`] from every item's counts at once, for the build without the trace.
-fn pool_counted(config: &Config, state: &State, seat: Seat) -> Items {
+pub(crate) fn pool_counted(config: &Config, state: &State, seat: Seat) -> Items {
     let table = config.table();
     let rules = rules::world_rules_ref(config, &state.world);
     let mut owns = [0u32; Item::ORDER.len()];
@@ -377,6 +387,11 @@ pub(crate) fn pool(config: &Config, state: &State, seat: Seat) -> Items {
     if !cfg!(feature = "trace") {
         return pool_counted(config, state, seat);
     }
+    pool_walk(config, state, seat)
+}
+
+/// [`pool`] as Bend walks it.
+pub(crate) fn pool_walk(config: &Config, state: &State, seat: Seat) -> Items {
     let table = config.table();
     let rules = rules::world_rules_ref(config, &state.world);
     // `pool.go` over `item.order()`.

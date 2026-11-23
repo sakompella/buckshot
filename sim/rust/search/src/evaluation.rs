@@ -4,7 +4,7 @@ use buckshot_rules::{Item, Seat, SeatRecord, Shell, Slots, State, alive, players
 
 use crate::belief::clue_holds;
 use crate::num::Real;
-use crate::types::World;
+use crate::types::{WIN, World};
 
 const fn item_weight(item: Item) -> u32 {
     match item {
@@ -52,7 +52,7 @@ fn estimate(state: &State, me: Seat, knowledge: bool) -> u32 {
 /// `state`: the exact value of a won round, else the estimate.
 pub fn state_value(state: &State, won: Option<Seat>, me: Seat, knowledge: bool) -> u32 {
     match won {
-        Some(seat) if seat == me => 1_000_000,
+        Some(seat) if seat == me => WIN,
         Some(_) => 0,
         None => estimate(state, me, knowledge),
     }

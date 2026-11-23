@@ -930,6 +930,12 @@ fn check_manifest(path: &Path, tally: &mut Tally) -> Result<String, String> {
             .problems
             .push(format!("Bend's item order {} is not Item::ORDER {order}", get(&manifest, "items")));
     }
+    if round_rules(get(&manifest, "defaultRound"))? != RoundRules::default_round() {
+        tally.problems.push(format!(
+            "Bend's config.default_round() {} is not RoundRules::default_round()",
+            get(&manifest, "defaultRound")
+        ));
+    }
     Ok(format!(
         "{} from {} Bend files, sha256 {}",
         get(&manifest, "mode").as_str().unwrap_or("?"),

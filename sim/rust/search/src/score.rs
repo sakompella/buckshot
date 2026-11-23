@@ -1,4 +1,4 @@
-//! `buckshot-search score`: the production regret rows (docs/arena/analysis/regret.md, The `regret` table).
+//! `buckshot-search score`: the production regret rows (docs/arena/methods.md, Production scoring).
 //!
 //! Reads the rows `web/scripts/rust-search-inputs.ts` writes (each decision's position with Bend's menu, Bend's move
 //! codes and the agent's move), searches each decision the regret database has no row for under this run's evaluator
@@ -11,7 +11,7 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use buckshot_search::{Analysed, Analysis, InfoSet, ParseError, Pruning, Reload, analyse_batch};
+use buckshot_search::{Analysed, Analysis, InfoSet, Line, ParseError, Pruning, Reach, Reload, WIN, analyse_batch};
 use rayon::ThreadPool;
 use rusqlite::{Connection, OpenFlags, Transaction, params};
 use rustc_hash::FxHashSet;
@@ -19,9 +19,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use crate::{CHUNK, Evaluator, Outcome, Search, code, outcome};
-
-/// A round win, in the search's millionths.
-const WIN: u32 = 1_000_000;
 
 #[derive(clap::Args)]
 pub struct ScoreArgs {
@@ -68,9 +65,12 @@ impl Run {
                 Evaluator::BoundedV1.id()
             );
         }
+        if search.limits.depth == 0 {
+            bail!("score needs --depth 1 or more: a depth-0 search gives no regret");
+        }
         let (reload, samples) = match search.reload {
             Reload::Static => ("static", 0),
-            Reload::Sampled { count } => ("sampled", count),
+            Reload::Sampled { count } => ("sampled", count.get()),
         };
         Ok(Self {
             evaluator: format!("{}-unpruned", Evaluator::BoundedV1.id()),
@@ -113,7 +113,8 @@ struct Searched {
     best: String,
     best_score: u32,
     chosen_score: u32,
-    exact: bool,
+    /// Both values are a settled round loss or win: every line below them reached the end of the round.
+    solved: bool,
     depth: u32,
 }
 
@@ -148,20 +149,22 @@ fn row_of(position: &Position, analysis: &Result<Analysis, ParseError>) -> Resul
     if done.depth == 0 {
         return Ok(row);
     }
-    let best = usize::try_from(done.best).ok().and_then(|best| values.get(best));
-    let chosen = values.iter().find(|value| value.label == position.chosen);
-    let (Some(best), Some(chosen)) = (best, chosen) else {
+    let best = usize::try_from(done.best)
+        .ok()
+        .and_then(|best| values.get(best).zip(done.lines.get(best)));
+    let chosen = values.iter().zip(&done.lines).find(|(value, _)| value.label == position.chosen);
+    let (Some((best, best_line)), Some((chosen, chosen_line))) = (best, chosen) else {
         return Err(format!(
             "Rust's best move {} or the chosen {:?} is not on Bend's menu",
             done.best, position.chosen
         ));
     };
-    let certain = |score: u32| score == 0 || score == WIN;
+    let solved = |line: &Line| line.reach == Reach::Settled && (line.score == 0 || line.score == WIN);
     row.searched = Some(Searched {
         best: best.label.to_owned(),
         best_score: best.score,
         chosen_score: chosen.score,
-        exact: certain(best.score) && certain(chosen.score),
+        solved: solved(best_line) && solved(chosen_line),
         depth: done.depth,
     });
     Ok(row)
@@ -191,7 +194,7 @@ fn insert(tx: &Transaction, run: &Run, position: &Position, player: &str, row: &
         searched.map(|s| s.best_score),
         searched.map(|s| s.chosen_score),
         regret,
-        searched.map(|s| s.exact),
+        searched.map(|s| s.solved),
         searched.map_or(0, |s| s.depth),
         row.limited,
         row.nodes,
@@ -233,7 +236,7 @@ struct Scoring<'a> {
 fn write_chunk(ctx: &mut Scoring, chunk: Vec<(Position, String)>) -> Result<u64> {
     let (search, pool) = (ctx.search, ctx.pool);
     let analyses = analyse_batch(&chunk, pool, |(position, _)| {
-        InfoSet::parse(&position.input).map(|info| search.analyse(pool, &info, None))
+        InfoSet::parse(&position.input).map(|info| search.analyse(None, &info, None))
     });
     let tx = ctx.out.transaction()?;
     let mut written = 0_u64;
@@ -338,7 +341,6 @@ mod tests {
         Analysed {
             lines: vec![line(0, Seat::Seat0, 250_000), line(1, Seat::Seat1, 750_000)],
             best: 1,
-            score: 750_000,
             nodes: 9,
             depth,
             limited: true,
@@ -383,12 +385,27 @@ mod tests {
         let menu = Some(vec!["Shoot yourself", "Shoot Player B"]);
         let row = row_of(&position(menu, Some(vec!["0.0", "0.1"])), &Ok(Ok(done))).ok();
         let searched = row.as_ref().and_then(|row| row.searched.as_ref());
-        let found = searched.map(|s| (s.best.as_str(), s.best_score, s.chosen_score, s.exact, s.depth));
+        let found = searched.map(|s| (s.best.as_str(), s.best_score, s.chosen_score, s.solved, s.depth));
         assert_eq!(
             found,
             Some(("Shoot Player B", 1_000_000, 250_000, false, 3)),
             "only both scores settled make a row exact"
         );
+    }
+
+    #[test]
+    fn a_round_end_value_is_solved_only_when_settled() {
+        let solved = |reach| {
+            let mut done = analysed(3);
+            if let [chosen, best] = done.lines.as_mut_slice() {
+                (chosen.score, chosen.reach, best.score) = (0, reach, super::WIN);
+            }
+            let menu = Some(vec!["Shoot yourself", "Shoot Player B"]);
+            let row = row_of(&position(menu, Some(vec!["0.0", "0.1"])), &Ok(Ok(done))).ok();
+            row.and_then(|row| row.searched).map(|s| s.solved)
+        };
+        assert_eq!(solved(Reach::Settled), Some(true), "a settled loss beside a settled win");
+        assert_eq!(solved(Reach::Reloads), Some(false), "a zero that reached a reload is not solved");
     }
 
     #[test]

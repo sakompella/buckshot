@@ -1,15 +1,20 @@
 //! The player's types (`player/types.bend`).
 
+use std::num::NonZero;
+
 use buckshot_rules::{Move, Seat, State};
 
 use crate::num::Real;
+
+/// A won round's value, in millionths: the highest value the search gives.
+pub const WIN: u32 = 1_000_000;
 
 /// How a leaf at a reload is valued: by the static evaluation before the
 /// draw, or by that evaluation's mean over `count` deals drawn at random.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Reload {
     Static,
-    Sampled { count: u32 },
+    Sampled { count: NonZero<u32> },
 }
 
 /// How the search reuses a node it has already finished (memo.bend).
@@ -83,7 +88,6 @@ pub struct Line {
 pub struct Analysed {
     pub lines: Vec<Line>,
     pub best: u32,
-    pub score: u32,
     pub nodes: u64,
     pub depth: u32,
     pub limited: bool,
@@ -94,8 +98,6 @@ pub struct Analysed {
 /// the nodes spent where a search ran.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Refusal {
-    #[error("the sampled leaf needs at least one deal")]
-    NoDeals,
     #[error("a leaf that deals the reload takes two seats only")]
     SampledNeedsTwoSeats,
     #[error("requires an Idle board and a shown load of at most ten shells")]
@@ -122,8 +124,7 @@ impl Refusal {
     pub const fn nodes(self) -> u64 {
         match self {
             Self::NoLegalMove { nodes } | Self::NotesOverflow { nodes } => nodes,
-            Self::NoDeals
-            | Self::SampledNeedsTwoSeats
+            Self::SampledNeedsTwoSeats
             | Self::Board
             | Self::NoPublicBelief
             | Self::NoPrivateBelief
@@ -154,11 +155,10 @@ pub struct World {
     pub won: Option<Seat>,
 }
 
-/// The public belief, the searcher's private belief, the searcher and the round.
+/// The public belief, the searcher's private belief and the searcher.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Belief {
     pub public: Vec<World>,
     pub private: Vec<World>,
     pub me: Seat,
-    pub round: u32,
 }

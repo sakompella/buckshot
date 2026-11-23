@@ -348,8 +348,8 @@ fn load_begin(r: &mut Run<'_>) {
 }
 
 /// What the next distribution pass does (`Distribution`).
-#[derive(Clone, Copy)]
-enum Distribution {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Distribution {
     Taking { seat: Seat },
     Placing { seat: Seat, slot: Slot },
     Drawing,
@@ -490,7 +490,7 @@ fn seats_after(seats: &[Seat], after: Seat) -> Seats {
 /// the trace: a seat's first option is a put exactly when it grabs, holds an
 /// item and has an empty slot, and its options are a lone take exactly when
 /// it grabs, holds nothing and its intake is open while distributing.
-fn grab_act_direct(config: &Config, state: &State, after: Seat) -> Distribution {
+pub(crate) fn grab_act_direct(config: &Config, state: &State, after: Seat) -> Distribution {
     let grabs = &state.grabs;
     let grabbing = |seat| grabs.grabbing.get(seat).unwrap_or(false);
     let holding = |seat| grabs.holding.get(seat).flatten();
@@ -512,6 +512,11 @@ fn grab_act(config: &Config, state: &State, after: Seat) -> Distribution {
     if !cfg!(feature = "trace") {
         return grab_act_direct(config, state, after);
     }
+    grab_act_walk(config, state, after)
+}
+
+/// [`grab_act`] as Bend walks it, building every seat's options.
+pub(crate) fn grab_act_walk(config: &Config, state: &State, after: Seat) -> Distribution {
     let needs = items::grab_needs(config, state);
     if let Some(GrabOption::PutAt { slot }) = needs.of(after).first() {
         branch!(B::SimpleMainGrabActOwnPutAtCons);
@@ -859,7 +864,7 @@ fn shoot(r: &mut Run<'_>, shooter: Seat, target: Seat) {
 /// `shoot.loaded`.
 fn shoot_loaded(r: &mut Run<'_>, shooter: Seat, target: Seat, shell: Shell, rest: Gun) {
     let damage = rules::captured(r.state.world.sawed);
-    let before = r.state.players.get(target).map_or(100, |record| record.health);
+    let before = r.state.players.get(target).map_or(SeatRecord::FRESH.health, |record| record.health);
     let health = rules::shot_health(shell, before, damage);
     r.players_update(target, |record| SeatRecord { health, ..record });
     let world = r.world();

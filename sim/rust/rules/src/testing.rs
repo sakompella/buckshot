@@ -246,3 +246,36 @@ pub fn arbitrary_state(tc: &TestCase, table: Table) -> State {
         phase: phase(tc),
     }
 }
+/// The fast paths the untraced builds take equal the Bend walks the trace build takes.
+#[cfg(test)]
+mod walks {
+    use hegel::TestCase;
+
+    use super::{arbitrary_state, slots, supported_config};
+    use crate::Item;
+    use crate::items::{occupied_walk, pool_counted, pool_walk, slots_copies_walk};
+    use crate::machine::{grab_act_direct, grab_act_walk};
+
+    #[hegel::test(test_cases = 512)]
+    fn fast_paths_equal_bend_walks(tc: TestCase) {
+        let config = supported_config(&tc);
+        let state = arbitrary_state(&tc, config.table());
+        for seat in config.table().seats().iter() {
+            assert_eq!(
+                pool_counted(&config, &state, seat),
+                pool_walk(&config, &state, seat),
+                "pool of {seat:?}"
+            );
+            assert_eq!(
+                grab_act_direct(&config, &state, seat),
+                grab_act_walk(&config, &state, seat),
+                "grab act after {seat:?}"
+            );
+        }
+        let inventory = slots(&tc);
+        assert_eq!(inventory.occupied(), occupied_walk(inventory), "occupied in {inventory:?}");
+        for item in Item::ORDER {
+            assert_eq!(inventory.copies(item), slots_copies_walk(inventory, item), "copies of {item:?}");
+        }
+    }
+}

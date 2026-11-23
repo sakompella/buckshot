@@ -5,6 +5,8 @@
 //! [`Item::ORDER`], and the gun is a bit string of at most [`Gun::CAPACITY`]
 //! shells.
 
+use std::hash::{Hash, Hasher};
+
 use enum_map::{Enum, EnumMap};
 use num_enum::{IntoPrimitive, TryFromPrimitive};
 
@@ -181,8 +183,9 @@ impl Seats {
 
 /// One value per seated socket (domain.bend `Ring`: `Duo`, `Trio`, `Quad`).
 /// The table is part of the value, so a ring never holds an unseated socket.
-/// The `seats-2` build stores only the two-seat table's sockets.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+/// The `seats-2` build stores only the two-seat table's sockets. Equality and
+/// hashing look at the seated cells only.
+#[derive(Clone, Copy, Debug)]
 pub struct Ring<T> {
     table: Table,
     cells: [T; RING_CELLS],
@@ -203,6 +206,23 @@ fn ring_cell(seat: Seat) -> usize {
 #[cfg(not(feature = "seats-2-4"))]
 fn ring_cell(seat: Seat) -> usize {
     seat.index().wrapping_shr(1)
+}
+
+impl<T: Copy + PartialEq> PartialEq for Ring<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.table == other.table && self.entries().eq(other.entries())
+    }
+}
+
+impl<T: Copy + Eq> Eq for Ring<T> {}
+
+impl<T: Copy + Hash> Hash for Ring<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.table.hash(state);
+        for (_, value) in self.entries() {
+            value.hash(state);
+        }
+    }
 }
 
 impl<T: Copy> Ring<T> {
@@ -496,10 +516,11 @@ impl Items {
     }
 
     /// `nth` over the list in order: the lowest set bit once the `n` below it are cleared.
+    /// Clearing `len` bits empties the set, so a larger `n` stops there.
     #[must_use]
     pub fn nth(self, n: u32) -> Option<Item> {
         let mut bits = self.0;
-        for _ in 0..n {
+        for _ in 0..n.min(self.len()) {
             bits &= bits.wrapping_sub(1);
         }
         if bits == 0 {
@@ -774,7 +795,7 @@ impl Config {
                     ShellRule::AllLive { live } => (1..=Gun::CAPACITY).contains(&live),
                 };
                 if !ok {
-                    return invalid("a fixed load has 1 to 64 shells");
+                    return invalid("a fixed load has at least one blank and at most 64 shells; an all-live load has 1 to 64");
                 }
             }
         }

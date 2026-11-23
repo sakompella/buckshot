@@ -90,7 +90,7 @@ mod ops {
         /// `millionths`: `min(1000000, F32.to_u32(x + 0.5))`.
         #[must_use]
         pub fn millionths(self) -> u32 {
-            self.add(Self::HALF).to_u32().min(1_000_000)
+            self.add(Self::HALF).to_u32().min(crate::types::WIN)
         }
 
         /// `state.estimate`'s ratio: `F32.to_u32(1000000.0 * (weight / total))`.

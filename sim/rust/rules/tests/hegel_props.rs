@@ -373,6 +373,7 @@ fn items_nth_is_the_nth_in_order(tc: TestCase) {
             "item {n} of {items:?}"
         );
     }
+    assert_eq!(items.nth(u32::MAX), None, "a forged index past the end is None, not a long loop");
 }
 
 fn wild_round(tc: &TestCase) -> RoundRules {

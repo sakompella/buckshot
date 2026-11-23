@@ -163,10 +163,10 @@ fn score_writes_the_regret_rows_and_dumps_a_disagreement() -> Result<()> {
     let dir = std::env::temp_dir().join(format!("buckshot-search-score-{}", std::process::id()));
     std::fs::create_dir_all(&dir)?;
     databases(&dir, &["golden-82", "golden-299", "golden-138", "golden-54"])?;
-    // Chosen: a worse move, a settled loss beside a settled win (exact), and the best move.
+    // Chosen: a worse move, a 0 that reached a reload beside a settled win (not exact), and the best move.
     let cases = [
         ("golden-82", "Shoot yourself", 0_i64),
-        ("golden-299", "Shoot yourself", 1_i64),
+        ("golden-299", "Shoot yourself", 0_i64),
         ("golden-138", "Shoot Player B", 0_i64),
     ];
     let searched = cases.map(|(id, _, _)| analyse(id));

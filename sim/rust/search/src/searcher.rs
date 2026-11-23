@@ -1,4 +1,4 @@
-//! The pluggable search (ADR-0052): a [`Searcher`] analyses the mover's
+//! The pluggable search (ADR-0052): a searcher analyses the mover's
 //! information set within [`Limits`]. [`Compat`] is Bend's search, bit for
 //! bit; [`BoundedV1`] is the box search of a new, versioned mode.
 
@@ -36,16 +36,6 @@ impl InfoSet {
     }
 }
 
-/// A search over an information set.
-pub trait Searcher: Sync {
-    /// The analysis of `info` to `limits.depth` decisions within `limits.budget` nodes.
-    ///
-    /// # Errors
-    ///
-    /// The [`Refusal`] of a position the search cannot analyse.
-    fn analyse(&self, info: &InfoSet, limits: Limits) -> Analysis;
-}
-
 /// Bend's search (`player/search.bend`), every row bit-identical to Bend's.
 /// A pool runs the deals of a sampled leaf in parallel and leaves the rows as they are.
 /// Only in the `f32` build.
@@ -74,7 +64,6 @@ fn analyse_in(info: &InfoSet, limits: Limits, leaves: (Reload, Memo), pool: Opti
     let position = &info.position;
     match leaves.0 {
         Reload::Static => {}
-        Reload::Sampled { count: 0 } => return Err(Refusal::NoDeals),
         Reload::Sampled { .. } => {
             if position.config.table() != Table::TwoSeats {
                 return Err(Refusal::SampledNeedsTwoSeats);
@@ -88,8 +77,13 @@ fn analyse_in(info: &InfoSet, limits: Limits, leaves: (Reload, Memo), pool: Opti
 }
 
 #[cfg(feature = "f32")]
-impl Searcher for Compat<'_> {
-    fn analyse(&self, info: &InfoSet, limits: Limits) -> Analysis {
+impl Compat<'_> {
+    /// The analysis of `info` to `limits.depth` decisions within `limits.budget` nodes.
+    ///
+    /// # Errors
+    ///
+    /// The [`Refusal`] of a position the search cannot analyse.
+    pub fn analyse(&self, info: &InfoSet, limits: Limits) -> Analysis {
         analyse_in(info, limits, (self.reload, self.memo), self.pool, Mode::Compat)
     }
 }
@@ -101,23 +95,19 @@ impl BoundedV1<'_> {
     #[cfg(not(feature = "f32"))]
     pub const ID: &'static str = "bounded-v1-f64";
 
-    /// [`Searcher::analyse`] with the chosen move (a menu index) searched exactly.
+    /// The analysis of `info` to `limits.depth` decisions within `limits.budget`
+    /// nodes, with the chosen move (a menu index), if any, searched exactly.
     ///
     /// # Errors
     ///
-    /// As [`Searcher::analyse`].
-    pub fn analyse_chosen(&self, info: &InfoSet, limits: Limits, chosen: Option<u32>) -> Analysis {
+    /// The [`Refusal`] of a position the search cannot analyse.
+    pub fn analyse(&self, info: &InfoSet, limits: Limits, chosen: Option<u32>) -> Analysis {
         let mode = Mode::Bounded {
             pruning: self.pruning,
             chosen,
         };
-        analyse_in(info, limits, (self.reload, Memo::Charged), self.pool, mode)
-    }
-}
-
-impl Searcher for BoundedV1<'_> {
-    fn analyse(&self, info: &InfoSet, limits: Limits) -> Analysis {
-        self.analyse_chosen(info, limits, None)
+        // Any memo but Off keeps the sampled leaves' deals; the box memo charges nothing for a hit.
+        analyse_in(info, limits, (self.reload, Memo::Free), self.pool, mode)
     }
 }
 

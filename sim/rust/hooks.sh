@@ -23,7 +23,7 @@ case ${1:-} in
       nice -n 10 cargo clippy --workspace --all-targets $features -- -D warnings
     done
     ;;
-  # The clippy sets name every feature; this checks the defaults name one of them.
+  # The clippy sets all pass --no-default-features; this checks that the default features build.
   check) nice -n 10 cargo check --workspace --all-targets ;;
   branch-map) nice -n 10 cargo branch-map check ;;
   *) echo "usage: hooks.sh fmt|clippy|check|branch-map" >&2; exit 2 ;;

@@ -1,6 +1,6 @@
 {
   "evaluator": "a3962092b561cfb4",
-  "identity": "the first 16 hex digits of the sha256 of the JS that Bend 2.0.36 emits for sim/bend-mp/analysis.bend at the source commit (web/src/analysis/player.ts names a build this way); docs/arena/analysis/regret.md (Reproduce) records the same build",
+  "identity": "the first 16 hex digits of the sha256 of the JS that Bend 2.0.36 emits for sim/bend-mp/analysis.bend at the source commit (web/src/analysis/player.ts names a build this way)",
   "source": {
     "commit": "03978b0f3d1bea52188fdae49547d4f3d9288ad3",
     "file": "sim/bend-mp/analysis.bend",

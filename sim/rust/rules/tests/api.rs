@@ -168,6 +168,14 @@ fn rings_ignore_sockets_off_the_table() {
         Some(2),
         "a seated socket takes the value"
     );
+    let same = Ring::fill(Table::TwoSeats, 0_u8).set(Seat::Seat1, 1).set(Seat::Seat3, 1);
+    assert_eq!(same, ring, "rings equal on their seats are equal");
+    let state = std::collections::hash_map::RandomState::new();
+    assert_eq!(
+        std::hash::BuildHasher::hash_one(&state, same),
+        std::hash::BuildHasher::hash_one(&state, ring),
+        "and hash alike"
+    );
 }
 
 #[test]

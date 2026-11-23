@@ -32,7 +32,7 @@
           "name": "cargo branch-map check",
           "entry": "bash sim/rust/hooks.sh branch-map",
           "language": "system",
-          "files": "^sim/rust/",
+          "files": "^sim/(rust|bend-mp)/",
           "pass_filenames": false
         }
       ]

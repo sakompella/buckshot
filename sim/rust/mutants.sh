@@ -2,13 +2,15 @@
 # Mutation testing for sim/rust with cargo-mutants (settings in .cargo/mutants.toml).
 # Too slow for check.sh or the pre-commit hook: run it through `dev heavy --` in
 # chunks of about 15 minutes, one rules file (--package buckshot-rules --file
-# rules/src/<file>.rs) or one search shard (the second example, --shard k/4) at a time.
+# rules/src/<file>.rs) or one search shard (the second example, --shard k/N) at a time.
 # Writes the oracles once: a small fixed set of Bend tapes (RUST_TAPES) and
 # synthetic decisions with the Bend player's analyses (RUST_SEARCH_ORACLE, from
 # search-oracle.sh, read by search/tests/oracle.rs and pruning.rs). Then runs cargo mutants with any
 # extra arguments, for example:
 #   bash sim/rust/mutants.sh --package buckshot-rules --file rules/src/items.rs
 #   bash sim/rust/mutants.sh --package buckshot-search --no-default-features --features f32,seats-2-4 --shard 0/2
+# The production build (f64,seats-2) needs the two-seat oracle: set MUTANTS_TABLES=2, as in
+#   MUTANTS_TABLES=2 bash sim/rust/mutants.sh --package buckshot-search --no-default-features --features f64,seats-2 --shard 0/4
 # Results land in sim/rust/mutants.out/ (gitignored). Fails when a mutant survives:
 # add a test, or list the mutant in exclude_re with the reason it is equivalent or unreachable.
 set -euo pipefail
@@ -28,7 +30,7 @@ echo "== Bend tapes -> $tapes"
 nice -n 10 node "$root/sim/bend-mp/test/rust-tapes.mjs" \
   --seeds 1 --random 4 --items 3 --wild 3 --edge 1 --perturb 40 --dir "$tapes"
 echo "== Bend player analyses -> $tapes/search"
-bash "$here/search-oracle.sh" "$tapes/search"
+bash "$here/search-oracle.sh" "$tapes/search" "${MUTANTS_TABLES:-2,3,4}"
 
 cd "$here"
 # CI=true makes the Hegel properties deterministic and keeps them off .hegel/.

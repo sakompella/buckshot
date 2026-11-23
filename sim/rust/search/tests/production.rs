@@ -10,6 +10,8 @@
 //!   not on a hash of the sources (ADR-0052): a change that keeps it keeps the
 //!   id, and a change meant to move a value bumps `BoundedV1::ID` and
 //!   regenerates the set.
+//! - `tests/golden-depth7/`: golden positions at the production depth, each cut
+//!   by a smaller budget, which pin the same id.
 
 use std::process::Command;
 
@@ -98,4 +100,14 @@ fn bounded_v1_reproduces_the_golden_set() {
         format!("{id}-unpruned"),
         "the golden set pins this evaluator id"
     );
+}
+
+#[cfg(feature = "f64")]
+#[test]
+#[ignore = "seconds in a release build: check.sh runs it"]
+fn bounded_v1_reproduces_the_depth_7_set() {
+    let (reference, ids) = reproduce!("golden-depth7", "4");
+    let id = buckshot_search::BoundedV1::ID;
+    assert!(ids.iter().all(|row| *row == id), "every row records {id}");
+    assert_eq!(reference["evaluator"], format!("{id}-unpruned"), "the set pins this evaluator id");
 }

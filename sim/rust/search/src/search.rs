@@ -353,7 +353,7 @@ struct Scratch {
     private_groups: Vec<Group>,
 }
 
-/// A search whose answers' notes outgrew their buffer, whose values are therefore not Bend's.
+/// One decision's search: its limits, memo and tally, and the stacks the nodes share.
 struct Search<'a> {
     config: &'a Config,
     me: Seat,
@@ -442,7 +442,7 @@ impl Search<'_> {
     fn reload_leaf(&mut self, public: Span, private: Span) -> Result<Value, Spent> {
         let count = match self.reload {
             Reload::Static => return Ok(self.leaf(public, private, Reach::Reloads)),
-            Reload::Sampled { count } => count,
+            Reload::Sampled { count } => count.get(),
         };
         let (public_worlds, private_worlds) = (public.of(&self.worlds), private.of(&self.worlds));
         let key = match self.memo {
@@ -714,11 +714,10 @@ fn analysed(lines: Vec<Line>, tally: &Tally, depth: u32, limited: bool) -> Analy
     let Some((_, best)) = best_line(&lines) else {
         return Err(Refusal::NoLegalMove { nodes: tally.nodes });
     };
-    let (index, score) = (best.index, best.score);
+    let index = best.index;
     Ok(Analysed {
         lines,
         best: index,
-        score,
         nodes: tally.nodes,
         depth,
         limited,
@@ -846,6 +845,105 @@ pub(crate) mod tests {
         Config::new(Table::TwoSeats, &[round, round, round])
     }
 
+    /// bounded-v1's pruning against its own unpruned search on positions a
+    /// random game reaches, seen with every card face up: the best move and its
+    /// value are the unpruned ones, every line's box holds the unpruned value,
+    /// and the chosen move is exact. Rows the budget cuts are skipped.
+    mod pruning {
+        use std::num::NonZero;
+
+        use buckshot_rules::testing::supported_config;
+        use buckshot_rules::{Event, Request, Table, initial, request, step_event};
+        use hegel::TestCase;
+        use hegel::generators as gs;
+
+        use crate::num::Real;
+        use crate::search::{Mode, run};
+        use crate::types::{Belief, Limits, Memo, Pruning, Reload, World};
+
+        #[hegel::test(test_cases = 64)]
+        fn pruned_matches_unpruned(tc: TestCase) {
+            let config = supported_config(&tc);
+            let mut state = initial(&config);
+            let steps = tc.draw(gs::integers::<u32>().max_value(60));
+            let mut menu = None;
+            for step in 0..200_u32 {
+                let n = tc.draw(gs::integers::<u32>().max_value(8));
+                match request(&config, &state) {
+                    Request::Choose(found) if step >= steps => {
+                        menu = Some(found);
+                        break;
+                    }
+                    Request::Choose(_) => state = step_event(&config, state, Event::Choose(n)).map_or(state, |next| next.state),
+                    Request::Draw { .. } => state = step_event(&config, state, Event::Draw(n)).map_or(state, |next| next.state),
+                    Request::Finished | Request::Stuck => break,
+                }
+            }
+            let Some(menu) = menu else { return };
+            let world = World {
+                state,
+                weight: Real::ONE,
+                won: None,
+            };
+            let belief = Belief {
+                public: vec![world],
+                private: vec![world],
+                me: menu.seat(),
+            };
+            let limits = Limits {
+                depth: tc.draw(gs::integers::<u32>().min_value(1).max_value(4)),
+                budget: 20_000,
+            };
+            let sampled = config.table() == Table::TwoSeats && tc.draw(gs::booleans());
+            let reload = if sampled {
+                Reload::Sampled {
+                    count: NonZero::<u32>::MIN.saturating_add(3),
+                }
+            } else {
+                Reload::Static
+            };
+            let chosen = u32::try_from(menu.len())
+                .ok()
+                .map(|len| tc.draw(gs::integers::<u32>().max_value(len.saturating_sub(1))));
+            let search = |pruning| {
+                run(
+                    &config,
+                    &belief,
+                    limits,
+                    (reload, Memo::Free),
+                    None,
+                    Mode::Bounded { pruning, chosen },
+                )
+            };
+            let (Ok(pruned), Ok(unpruned)) = (search(Pruning::On), search(Pruning::Off)) else {
+                panic!("a position a game reaches analyses");
+            };
+            if pruned.limited || unpruned.limited {
+                return;
+            }
+            let best = |lines: &[crate::types::Line]| lines.iter().map(|line| line.score).max();
+            assert_eq!(
+                (pruned.best, best(&pruned.lines)),
+                (unpruned.best, best(&unpruned.lines)),
+                "the best move and its value"
+            );
+            assert_eq!(pruned.lines.len(), unpruned.lines.len(), "one line per move");
+            for (boxed, exact) in pruned.lines.iter().zip(&unpruned.lines) {
+                assert!(
+                    boxed.score <= exact.score && exact.score <= boxed.upper,
+                    "line {}: box {}..={} misses {}",
+                    boxed.index,
+                    boxed.score,
+                    boxed.upper,
+                    exact.score
+                );
+            }
+            if let Some(line) = chosen.and_then(|at| pruned.lines.get(usize::try_from(at).ok()?)) {
+                assert_eq!(line.score, line.upper, "the chosen move is exact");
+            }
+        }
+    }
+
     /// Bend's search, in the `f32` build only.
     #[cfg(feature = "f32")]
     mod compat {
@@ -909,7 +1007,6 @@ pub(crate) mod tests {
                 public: vec![world],
                 private: vec![world],
                 me,
-                round: 0,
             };
             let Ok(done) = analyse_belief(&config, &belief, Limits { depth: 4, budget: 20_000 }, Reload::Static, Memo::Off) else {
                 return Err(RuleError::Config("the fixture should analyse"));
