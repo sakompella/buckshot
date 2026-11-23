@@ -251,13 +251,12 @@ export const botEntrant = (config: TournamentConfig, name: string): (typeof BOTS
 };
 
 /** The endpoint a model entrant plays through. */
-/** The endpoint a model entrant plays through. */
 export const endpointOf = (config: TournamentConfig, name: string) => config.endpoints[modelEntrant(config, name)?.endpoint ?? ""];
 
 /** Per-agent account ids fixed for one match, absent for endpoints without a pool. */
 export type MatchAccounts = Readonly<Record<string, string>>;
 
-/** Assign each configured agent an available account with the fewest running matches. Ties go to the `preferred` accounts in their order, then to config order. */
+/** Assign each configured agent an available account with the fewest seats playing on it, counting the seats this match has assigned so far. Ties go to the `preferred` accounts in their order, then to config order. */
 export const assignAccounts = (
   config: TournamentConfig,
   match: ScheduledMatch,
@@ -268,6 +267,7 @@ export const assignAccounts = (
   const rank = (account: string) => (preferred.includes(account) ? preferred.indexOf(account) : preferred.length);
 
   const assigned: Record<string, string> = {};
+  const load = (account: string) => running(account) + Object.values(assigned).filter((id) => id === account).length;
 
   for (const [index, seat] of match.seats.entries()) {
     const name = match.entrants[index] ?? "";
@@ -276,7 +276,7 @@ export const assignAccounts = (
 
     if (entrant === undefined || accounts === undefined) { continue; }
 
-    const account = accounts.filter((id) => !isCooling(entrant.model, id)).toSorted((a, b) => running(a) - running(b) || rank(a) - rank(b))[0];
+    const account = accounts.filter((id) => !isCooling(entrant.model, id)).toSorted((a, b) => load(a) - load(b) || rank(a) - rank(b))[0];
 
     if (account === undefined) { return undefined; }
 
@@ -347,5 +347,3 @@ export const childEnv = (base: Env, config: TournamentConfig, match: ScheduledMa
 
 /** The scheduled matches whose names are not finished. */
 export const unfinished = (schedule: ReadonlyArray<ScheduledMatch>, finished: ReadonlySet<string>): ReadonlyArray<ScheduledMatch> => schedule.filter((match) => !finished.has(match.name));
-
-/** Runs the items, at most `parallel` at a time, in order. Once `stop` aborts, no new item starts and the running ones finish. */

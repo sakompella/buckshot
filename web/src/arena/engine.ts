@@ -1,5 +1,7 @@
-import { writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { Option, Schema } from "effect";
 
@@ -17,7 +19,12 @@ import type { EngineSeat } from "./agent.ts";
 // static reload, unpruned, and the first best move is played. Rust's root moves must be Bend's menu: if they differ,
 // the rules disagree, which is a bug, so the match stops and the position is dumped for a look.
 
-const RUST = new URL("../../../sim/rust", import.meta.url).pathname;
+const RUST = fileURLToPath(new URL("../../../sim/rust", import.meta.url));
+
+const FEATURES = "f64,seats-2";
+
+/** The search settings every engine seat shares; its depth, budget and reload rule are in the seat's name. */
+const SETTINGS = ["--unpruned", "--threads", "1"] as const;
 
 const SearchResult = Schema.Struct({
   lines: Schema.optional(Schema.Array(Schema.Struct({ move: RawMove, score: Schema.Finite }))),
@@ -29,13 +36,18 @@ const SearchResult = Schema.Struct({
 
 const decodeResult = Schema.decodeUnknownOption(Schema.fromJsonString(SearchResult));
 
+/** Which search binary the engine seats of a match play with: its hash, where it came from, and the settings they share. */
+export type EngineIdentity = { readonly binary_sha256: string; readonly binary: "BUCKSHOT_SEARCH" | `cargo --features ${typeof FEATURES}`; readonly settings: string };
+
+type SearchBinary = { readonly path: string; readonly binary: EngineIdentity["binary"] };
+
 /** The binary $BUCKSHOT_SEARCH names, or the one cargo builds in sim/rust with the scorer's features. */
-const searchBinary = (): string => {
+const searchBinary = (): SearchBinary => {
   const given = process.env.BUCKSHOT_SEARCH;
 
-  if (given !== undefined) { return given; }
+  if (given !== undefined) { return { path: given, binary: "BUCKSHOT_SEARCH" }; }
 
-  const build = Bun.spawnSync([process.env.CARGO ?? "cargo", "build", "--release", "--quiet", "-p", "buckshot-search", "--no-default-features", "--features", "f64,seats-2", "--message-format", "json"], { cwd: RUST, stderr: "pipe" });
+  const build = Bun.spawnSync([process.env.CARGO ?? "cargo", "build", "--release", "--quiet", "-p", "buckshot-search", "--no-default-features", "--features", FEATURES, "--message-format", "json"], { cwd: RUST, stderr: "pipe" });
 
   if (build.exitCode !== 0) { throw new Error(`buckshot-search build failed:\n${build.stderr.toString()}`); }
 
@@ -50,7 +62,7 @@ const searchBinary = (): string => {
 
   if (built === undefined) { throw new Error("cargo built no buckshot-search binary"); }
 
-  return built;
+  return { path: built, binary: `cargo --features ${FEATURES}` };
 };
 
 /** One engine move: its label in the player's view, and what the search reached. */
@@ -61,6 +73,7 @@ export interface EngineChoice {
 }
 
 export interface Engine {
+  readonly identity: EngineIdentity;
   /** The move for `player` at its turn, from `menu`, the labels of its moves in Bend's menu. A disagreement with Bend is dumped in the match's `dir`. */
   readonly choose: (source: AgentSource, player: Letter, seat: EngineSeat, menu: ReadonlyArray<string>, at: { readonly dir: string; readonly turn: number }) => EngineChoice;
 }
@@ -69,16 +82,18 @@ const sameMoves = (left: ReadonlyArray<string>, right: ReadonlyArray<string>) =>
 
 /** Finds the search binary, once per match process. */
 export const openEngine = (): Engine => {
-  const binary = searchBinary();
+  const { path, binary } = searchBinary();
+  const identity = { binary_sha256: createHash("sha256").update(readFileSync(path)).digest("hex"), binary, settings: SETTINGS.join(" ") };
 
   return {
+    identity,
     choose: (source, letter, seat, menu, { dir, turn }) => {
       const [, depth, budget, reload] = seat.split("/");
       const roster = rosterOf(source.game.seats, source.letters);
       const me = Option.getOrThrow(roster.find(letter)).seat;
       const input = nativeInput({ table: source.game.table, items: true, board: boardOf(source.game), log: ownLog(source.events, source.learned, me), me });
 
-      const search = Bun.spawnSync([binary, "--unpruned", "--depth", depth ?? "", "--budget", budget ?? "", "--reload", reload ?? "static", "--threads", "1"], {
+      const search = Bun.spawnSync([path, ...SETTINGS, "--depth", depth ?? "", "--budget", budget ?? "", "--reload", reload ?? "static"], {
         stdin: Buffer.from(`${JSON.stringify({ id: "engine", ordinal: 0, input })}\n`),
         stderr: "pipe",
       });

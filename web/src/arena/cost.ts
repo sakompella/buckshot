@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import { Schema } from "effect";
 
@@ -16,7 +17,7 @@ const PriceTable = Schema.Struct({
 
 export type PriceTable = typeof PriceTable.Type;
 
-export const DEFAULT_PRICES = new URL("./prices.json", import.meta.url).pathname;
+export const DEFAULT_PRICES = fileURLToPath(new URL("./prices.json", import.meta.url));
 
 export const loadPrices = (path: string): PriceTable => Schema.decodeSync(Schema.fromJsonString(PriceTable))(readFileSync(path, "utf8"));
 

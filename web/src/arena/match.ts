@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { contentText } from "@earendil-works/pi-ai";
@@ -23,7 +24,7 @@ import { eventText, secretText } from "../text.ts";
 import { AGENTS, EngineSeat, isEngine } from "./agent.ts";
 import type { AgentId } from "./agent.ts";
 import { openEngine } from "./engine.ts";
-import type { Engine } from "./engine.ts";
+import type { Engine, EngineIdentity } from "./engine.ts";
 import { AgentProvenance } from "./endpoints.ts";
 import type { HumanLink } from "./human.ts";
 import { addTokens, agentTotals, dropPartialLine, entriesSentTo, exportedSeqs, logCall, logEvent, readCalls, RUN_FORMAT, Standing, writeManifest } from "./runlog.ts";
@@ -128,7 +129,8 @@ const closing = (what: string, close: () => Promise<void>) =>
     Effect.ignore,
   );
 
-type MoveLine = { readonly turn: number; readonly player: Letter; readonly move: number; readonly label: string; readonly by: "agent" | "human" | "engine" | "forced" | "fallback" };
+/** `call_id` is the play_move call that played an agent's move; journals from before it was recorded lack it. */
+type MoveLine = { readonly turn: number; readonly player: Letter; readonly move: number; readonly label: string; readonly by: "agent" | "human" | "engine" | "forced" | "fallback"; readonly call_id?: string };
 
 /** Log entries sent to a player: `count` entries of its log from `from`. */
 type DeliveryLine = { readonly player: Letter; readonly via: "input" | "live" | "end"; readonly turn: number; readonly from: number; readonly count: number };
@@ -137,7 +139,7 @@ type DeliveryLine = { readonly player: Letter; readonly via: "input" | "live" | 
  * What decides how a match plays, fixed when it starts; a resume with anything else is refused. `instructions_sha` covers
  * the shared instructions only; an agent's addendum is in its own provenance entry.
  */
-type MatchProvenance = { readonly git_commit: string; readonly instructions_sha: string; readonly compaction: "off"; readonly agents: Readonly<Record<string, AgentProvenance>> };
+type MatchProvenance = { readonly git_commit: string; readonly instructions_sha: string; readonly compaction: "off"; readonly agents: Readonly<Record<string, AgentProvenance>>; readonly engine?: EngineIdentity };
 
 type MatchState = {
   readonly seed: string;
@@ -329,7 +331,7 @@ class Table {
   viewText(player: Letter): string {
     const text = replyText(this.run(decode("get_game", { player })));
 
-    return !this.isOver && text.includes('"status":"your turn"') && this.onTurn() !== player ? JSON.stringify({ you: player, status: "waiting" }) : text;
+    return parseView(text).status === "your turn" && this.onTurn() !== player ? JSON.stringify({ you: player, status: "waiting" }) : text;
   }
 
   view(player: Letter): View {
@@ -427,9 +429,9 @@ const seatTools = (dir: string, { table, onReply, exportJournal, crashAt }: Seat
         execute: async (args, api) => {
           const sitting = await sittingOf(api.snapshot, api.conversationId);
           const journal = await api.snapshot(MatchDoc, context);
-          const recorded = journal?.moves.find((line) => line.turn === args.turn && line.player === sitting.agent);
+          // A rerun of this call after a crash finds its move already journaled. A line without a call ID can only be matched by its turn.
+          const recorded = journal?.moves.find((line) => line.player === sitting.agent && (line.call_id === undefined ? line.turn === args.turn : line.call_id === api.callId));
 
-          // A rerun after a crash finds its own move already journaled.
           if (recorded !== undefined) { return { output: [{ type: "text", text: JSON.stringify({ played: recorded.label }) }], control: { terminate: true } }; }
 
           const played = table().tryMove(sitting.agent, args.move, args.turn, "agent");
@@ -439,7 +441,7 @@ const seatTools = (dir: string, { table, onReply, exportJournal, crashAt }: Seat
           if (!played.ok) { return { output: [{ type: "text", text: played.text }], isError: true }; }
 
           crashAt("move:before-commit");
-          await api.commit(async (tx) => void (await tx.doc(MatchDoc)).moves.push(played.line), context);
+          await api.commit(async (tx) => void (await tx.doc(MatchDoc)).moves.push({ ...played.line, call_id: api.callId }), context);
           crashAt("move:after-commit");
           exportJournal((await api.snapshot(MatchDoc, context)) ?? emptyMatch());
           crashAt("move:after-export");
@@ -500,7 +502,7 @@ const sha = (text: string) => createHash("sha256").update(text).digest("hex").sl
 const seatingIn = (state: MatchState) => Object.fromEntries(state.letters.flatMap((letter, index) => (state.controllers[index] === "Agent" ? [[String(index + 1), letter]] : [])));
 
 /** This checkout's web/ directory. */
-const WEB = new URL("../..", import.meta.url).pathname;
+const WEB = fileURLToPath(new URL("../..", import.meta.url));
 
 /** The paths whose code plays a match (ADR-0054): a change elsewhere, such as the docs, is no new code version. */
 const PLAYING = [":/web", ":/sim", ":/flake.lock"];
@@ -527,18 +529,19 @@ export const gitCommit = (): string => {
   return git(["log", "-1", "--format=%H", "--", ...PLAYING]);
 };
 
-const provenanceOf = (match: ArenaMatch): MatchProvenance => ({
-  git_commit: gitCommit(),
-  instructions_sha: sha(INSTRUCTIONS),
-  compaction: "off",
-  agents: Object.fromEntries(match.entrants.map((entrant) => [entrant.agent, entrant.provenance])),
-});
+/** The match's configuration; `engine` is set when an engine plays a seat. */
+const provenanceOf = (match: ArenaMatch, engine: Engine | undefined): MatchProvenance => {
+  const provenance: MatchProvenance = { git_commit: gitCommit(), instructions_sha: sha(INSTRUCTIONS), compaction: "off", agents: Object.fromEntries(match.entrants.map((entrant) => [entrant.agent, entrant.provenance])) };
+
+  return engine === undefined ? provenance : { ...provenance, engine: engine.identity };
+};
 
 const sameAgent = Schema.toEquivalence(Schema.NullOr(AgentProvenance));
 
 /** Where the configuration a resume brings differs from the one the match started with. */
 const changesFrom = (started: MatchProvenance, now: MatchProvenance): ReadonlyArray<string> => [
   ...(["git_commit", "instructions_sha", "compaction"] as const).flatMap((key) => (started[key] === now[key] ? [] : [`${key} was ${started[key]}, now ${now[key]}`])),
+  ...(JSON.stringify(started.engine) === JSON.stringify(now.engine) ? [] : [`engine was ${JSON.stringify(started.engine)}, now ${JSON.stringify(now.engine)}`]),
   ...[...new Set([...Object.keys(started.agents), ...Object.keys(now.agents)])].flatMap((agent) => {
     const [before, after] = [started.agents[agent] ?? null, now.agents[agent] ?? null];
 
@@ -647,6 +650,8 @@ export const playMatch = (match: ArenaMatch) =>
         }, context),
       );
 
+    const engine = match.controllers.some(isEngine) ? yield* Effect.try({ try: openEngine, catch: (cause) => faultOf(`start the engine: ${String(cause)}`, cause) }) : undefined;
+
     // A store with no match in its journal is a fresh start, also after a crash before the first commit.
     const isFresh = (yield* journal()).controllers.length === 0;
 
@@ -692,7 +697,7 @@ export const playMatch = (match: ArenaMatch) =>
 
       if (Option.isNone(letters)) { return yield* ArenaFault.make({ message: `${match.controllers.filter((controller) => controller === "Agent").length} Agent seats but ${match.entrants.length} entrants` }); }
 
-      const provenance = provenanceOf(match);
+      const provenance = provenanceOf(match, engine);
       const labels = match.controllers.map((controller, seat) => (controller === "Agent" ? (match.entrants.find(({ agent }) => agent === letters.value[seat])?.label ?? "") : controller));
       const conversations: Record<string, ConversationId> = {};
       const state: MatchState = { seed: match.seed, controllers: [...match.controllers], letters: letters.value, labels, delivery: match.delivery, conversations, moves: [], deliveries: [], retries: {}, provenance };
@@ -725,7 +730,7 @@ export const playMatch = (match: ArenaMatch) =>
 
       if (state.provenance === null) { return yield* ArenaFault.make({ message: "This match was started before the arena recorded its configuration, so it cannot be resumed; start a new one." }); }
 
-      const changes = changesFrom(state.provenance, provenanceOf(match));
+      const changes = changesFrom(state.provenance, provenanceOf(match, engine));
 
       if (changes.length > 0) { return yield* ArenaFault.make({ message: `This match started with another configuration, so it cannot resume with this one (a key may change, nothing else): ${changes.join("; ")}` }); }
 
@@ -897,7 +902,6 @@ export const playMatch = (match: ArenaMatch) =>
     });
 
     const players = new Map<Letter, Player>();
-    let engine: Engine | undefined;
 
     for (const player of playing.arenaPlayers()) {
       const controller = playing.controllerOf(player);
@@ -908,10 +912,7 @@ export const playMatch = (match: ArenaMatch) =>
 
         players.set(player, human);
       }
-      else if (isEngine(controller)) {
-        engine ??= yield* Effect.try({ try: openEngine, catch: (cause) => faultOf(`start the engine: ${String(cause)}`, cause) });
-        players.set(player, enginePlayer(engine, player, controller));
-      }
+      else if (isEngine(controller) && engine !== undefined) { players.set(player, enginePlayer(engine, player, controller)); }
     }
 
     /** Sends a player the log entries it has not been sent; at the end, with the final view. */
@@ -971,7 +972,7 @@ export const playMatch = (match: ArenaMatch) =>
     const someone = Option.getOrThrow(Option.fromUndefinedOr(playing.arenaPlayers()[0]));
     const standings = (playing.view(someone).standings ?? []).map((standing) => ({ ...standing, controller: final.controllers[final.letters.indexOf(standing.player)] ?? null }));
     const moves = Object.fromEntries((["agent", "human", "engine", "forced", "fallback"] as const).map((by) => [by, final.moves.filter((line) => line.by === by).length]));
-    const movesJson = yield* jsonOf(final.moves);
+    const movesJson = yield* jsonOf(final.moves.map(({ turn, player, move, label, by }) => ({ turn, player, move, label, by })));
     const result = { audit, moves, standings, agents: agentsIn(playing, provenance), move_log_sha: sha(movesJson) };
 
     logEvent(dir, "end", { standings });

@@ -9,7 +9,7 @@ import { DEFAULT_PRICES, loadPrices } from "../src/arena/cost.ts";
 import { checkPrices, childCommand, childEnv, parseConfig, resolveKeys, scheduleOf, unfinished } from "../src/arena/tournament.ts";
 import type { ScheduledMatch, MatchAccounts, TournamentError } from "../src/arena/tournament.ts";
 import { gitCommit } from "../src/arena/match.ts";
-import { cooldownOf, costOf, faultsOf, finishedNames, openTournament, runPending, startedUnder, winnersOf } from "../src/arena/tournament-dir.ts";
+import { cooldownOf, costOf, faultsOf, finishedNames, openTournament, RETRY, runPending, startedUnder, winnersOf } from "../src/arena/tournament-dir.ts";
 import type { Settled } from "../src/arena/tournament-dir.ts";
 
 // Plays a tournament: every scheduled match, in schedule order, as a child
@@ -32,8 +32,8 @@ import type { Settled } from "../src/arena/tournament-dir.ts";
 // git commit), so a tournament can span versions: --code <commit>=<web dir>,
 // once per older version, names a checkout of it to resume its matches from,
 // and without one they wait. New matches start under this checkout's commit.
-// A match that fails goes to the back of the queue after a pause, up to three
-// runs, and the rest go on. Rerun the same command to resume: finished matches
+// A match that fails on a provider fault goes to the back of the queue after a
+// pause, for RETRY.attempts runs in all (tournament-dir.ts), and the rest go on. Rerun the same command to resume: finished matches
 // never run again. Do not run two of these on one directory. --limit plays at
 // most that many matches. --first N plays only the first N matches of the schedule, and exits 0 once they are
 // finished. The runner appends a line to <dir>/PROGRESS.md when
@@ -214,17 +214,31 @@ const tail = (match: ScheduledMatch, lines: number): string => {
 
 const clock = (time: number): string => new Date(time).toLocaleString("sv-SE").slice(0, 16);
 
+/** By match, its cost so far. A settled match recounts its own; only the progress lines read every log. */
+const costs = new Map<string, number>();
+
+const recount = (matches: ReadonlyArray<ScheduledMatch>) => {
+  for (const match of matches) { costs.set(match.name, costOf(dir, prices, [match])); }
+};
+
+const totalCost = () => [...costs.values()].reduce((total, cost) => total + cost, 0);
+
 const report = (settled: Settled) => {
   const { match, status } = settled;
   const done = finishedNames(dir, file.schedule).size;
   const winning = status === "finished" ? winnersOf(dir, match) : [];
   const winners = winning.length === 0 ? "" : `, won by ${winning.join(" and ")}`;
 
-  console.log(`[${done}/${file.schedule.length}] ${match.name} ${status}${winners}, ${money(costOf(dir, prices, [match]))}, total ${money(costOf(dir, prices, file.schedule))}`);
+  recount([match]);
+  console.log(`[${done}/${file.schedule.length}] ${match.name} ${status}${winners}, ${money(costs.get(match.name) ?? 0)}, total ${money(totalCost())}`);
 
   if (settled.status === "cooling") { console.log(`  ${settled.cooldown.model}${settled.cooldown.account === undefined ? "" : ` on ${settled.cooldown.account}`} is at its usage limit until ${clock(settled.cooldown.until)}; its matches wait, and this one resumes then.`); }
 
-  if (status === "failed") { console.log(`${tail(match, 8)}\n  It is retried after a pause, up to three runs; rerun the same command to resume it after that.`); }
+  if (settled.status === "failed") {
+    const next = settled.retried ? `It is retried after a pause, for ${RETRY.attempts} runs in all; rerun the same command to resume it after that.` : "It is not retried in this run; rerun the same command to resume it.";
+
+    console.log(`${tail(match, 8)}\n  ${next}`);
+  }
 };
 
 /** Each config's own matches, the ones it added to the tournament, for the progress lines. */
@@ -240,6 +254,8 @@ let failedRuns = 0;
 
 /** Appends one line to <dir>/PROGRESS.md, so the tournament's progress is on disk without anyone watching it. */
 const noteProgress = (event: string) => {
+  recount(file.schedule);
+
   const finished = finishedNames(dir, file.schedule);
   const faults = file.schedule.reduce((total, match) => total + faultsOf(dir, match).length, 0);
   const byPhase = phases.map(({ label, names }) => `${label} ${names.filter((name) => finished.has(name)).length}/${names.length}`).join(", ");
@@ -248,7 +264,7 @@ const noteProgress = (event: string) => {
 
   appendFileSync(
     join(dir, "PROGRESS.md"),
-    `- ${clock(Date.now())} runner ${event}: ${finished.size}/${file.schedule.length} finished (${byPhase}); ${children.size} running; ${failedRuns} failed runs since ${clock(startedAt.getTime())}; ${faults} provider faults in all;${waiting === "" ? "" : ` at the usage limit: ${waiting};`} ${money(costOf(dir, prices, file.schedule))} at list prices\n`,
+    `- ${clock(Date.now())} runner ${event}: ${finished.size}/${file.schedule.length} finished (${byPhase}); ${children.size} running; ${failedRuns} failed runs since ${clock(startedAt.getTime())}; ${faults} provider faults in all;${waiting === "" ? "" : ` at the usage limit: ${waiting};`} ${money(totalCost())} at list prices\n`,
   );
 };
 
@@ -288,7 +304,7 @@ const failed = settled.filter(({ status }) => status === "failed").length;
 // Skipped matches do not count, so a run that skips an entrant ends with exit 0 once the rest are finished.
 const remaining = unfinished(scope, finishedNames(dir, file.schedule)).filter(isPlayed).length;
 
-console.log(`\n${settled.length - failed} matches finished, ${failed} failed runs, ${remaining} not finished. Total cost ${money(costOf(dir, prices, file.schedule))}.`);
+console.log(`\n${settled.filter(({ status }) => status === "finished").length} matches finished, ${failed} failed runs, ${remaining} not finished. Total cost ${money(totalCost())}.`);
 
 if (remaining > 0) { console.log("Rerun the same command to resume the rest."); }
 

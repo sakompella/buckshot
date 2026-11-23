@@ -273,7 +273,13 @@ const isRateLimit = (error: string): boolean => /^429 |API error \(429\)/.test(e
  */
 const limitSecondsOf = (error: string, refusals: number): Option.Option<number> => {
   const usageLimit = Option.map(decodeUsageLimit(error.slice(error.indexOf("{"))), (limit) => ("code" in limit ? limit.reset_seconds : limit.resets_in_seconds));
-  const resetAfterLimit = Option.map(Option.fromNullishOr(/reset after (?:(\d+)h ?)?(?:(\d+)m ?)?(?:(\d+)s)?/.exec(error)), ([, hours = "0", minutes = "0", seconds = "0"]) => 3600 * Number(hours) + 60 * Number(minutes) + Number(seconds));
+
+  // A reset in a form this does not read, such as "1.5s" or "500ms", adds up to 0 and is left to the 429 wait.
+  const resetAfterLimit = Option.filter(
+    Option.map(Option.fromNullishOr(/reset after (?:(\d+)h ?)?(?:(\d+)m(?!s) ?)?(?:(\d+)s)?/.exec(error)), ([, hours = "0", minutes = "0", seconds = "0"]) => 3600 * Number(hours) + 60 * Number(minutes) + Number(seconds)),
+    (seconds) => seconds > 0,
+  );
+
   const rateLimit = isRateLimit(error) ? Option.some(RATE_LIMIT_WAIT_SECONDS * 2 ** Math.min(refusals - 1, MOST_DOUBLINGS)) : Option.none();
 
   return Option.firstSomeOf([usageLimit, resetAfterLimit, rateLimit]);
@@ -299,11 +305,13 @@ export const cooldownOf = (dir: string, config: TournamentConfig, match: Schedul
   });
 
 export type Settled =
-  | { readonly match: ScheduledMatch; readonly status: "finished" | "failed" }
+  | { readonly match: ScheduledMatch; readonly status: "finished" }
+  /** `retried` when it goes back in the queue, as `Retry` says. */
+  | { readonly match: ScheduledMatch; readonly status: "failed"; readonly retried: boolean }
   /** Stopped by a model's usage limit: it waits for the reset, and the stop is not a failed run. */
   | { readonly match: ScheduledMatch; readonly status: "cooling"; readonly cooldown: Cooldown };
 
-/** What happens to a failed match: when it ended on a provider fault (network, timeout, an error status), it goes to the back of the queue, for `attempts` runs in all; any other failure is deterministic and final, and its slot waits `pauseMs` first, so a provider's cooldown has fewer matches at once. */
+/** What happens to a failed match: when it ended on a provider fault (network, timeout, an error status), it goes to the back of the queue, for `attempts` runs in all; any other failure is deterministic and final. After any failure the slot waits `pauseMs`, so a provider's cooldown has fewer matches at once. */
 export interface Retry {
   readonly attempts: number;
   readonly pauseMs: number;
@@ -392,7 +400,7 @@ export const runPending = async (
   const countPlaying = (match: ScheduledMatch, change: 1 | -1) => {
     for (const model of modelsOf(match)) { playing.set(model, (playing.get(model) ?? 0) + change); }
 
-    for (const account of new Set(Object.values(assigned.get(match.name) ?? {}))) { accountLoad.set(account, (accountLoad.get(account) ?? 0) + change); }
+    for (const account of Object.values(assigned.get(match.name) ?? {})) { accountLoad.set(account, (accountLoad.get(account) ?? 0) + change); }
   };
 
   // A slot with nothing to start waits until a reset, a minute, or the end of a
@@ -432,10 +440,18 @@ export const runPending = async (
       matchEnded = new AbortController();
       const cooldown = cooldownOf(dir, config, match, Date.now());
 
+      const failedRun = (): Settled => {
+        const failed = (failures.get(match.name) ?? 0) + 1;
+
+        failures.set(match.name, failed);
+
+        return { match, status: "failed", retried: failed < retry.attempts && Option.isSome(endingFault(join(dir, match.name))) };
+      };
+
       const result: Settled =
         exitCode === 0 && isFinished(join(dir, match.name))
           ? { match, status: "finished" }
-          : Option.match(cooldown, { onNone: () => ({ match, status: "failed" as const }), onSome: (value) => ({ match, status: "cooling" as const, cooldown: value }) });
+          : Option.match(cooldown, { onNone: failedRun, onSome: (value) => ({ match, status: "cooling" as const, cooldown: value }) });
 
       settled.push(result);
       onSettled(result);
@@ -446,11 +462,7 @@ export const runPending = async (
       }
 
       if (result.status === "failed") {
-        const failed = (failures.get(match.name) ?? 0) + 1;
-
-        failures.set(match.name, failed);
-
-        if (failed < retry.attempts && Option.isSome(endingFault(join(dir, match.name)))) { queue.push(match); }
+        if (result.retried) { queue.push(match); }
 
         await pause(retry.pauseMs, stop);
       }

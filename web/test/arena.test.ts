@@ -57,7 +57,8 @@ const fauxMatch = (controllers: ReadonlyArray<Controller>, seed: string, context
     provenance = fauxProvenance,
     crashAt,
     onRequest,
-  }: { readonly dir?: string; readonly agents?: ReadonlyArray<AgentId>; readonly provenance?: (modelId: string) => AgentProvenance; readonly crashAt?: (point: string) => void; readonly onRequest?: (transcript: TranscriptContext) => void } = {},
+    respond = decide,
+  }: { readonly dir?: string; readonly agents?: ReadonlyArray<AgentId>; readonly provenance?: (modelId: string) => AgentProvenance; readonly crashAt?: (point: string) => void; readonly onRequest?: (transcript: TranscriptContext) => void; readonly respond?: (transcript: TranscriptContext) => AssistantMessage } = {},
 ) => {
   const faux = fauxProvider({ provider: "faux", models: [{ id: "faux-a", contextWindow, maxTokens: 512 }, { id: "faux-b", contextWindow, maxTokens: 512 }] });
   const models = createModels();
@@ -66,7 +67,7 @@ const fauxMatch = (controllers: ReadonlyArray<Controller>, seed: string, context
   faux.setResponses(Array.from({ length: 5_000 }, () => (transcript: TranscriptContext) => {
     onRequest?.(transcript);
 
-    return decide(transcript);
+    return respond(transcript);
   }));
   models.setProvider(faux.provider);
 
@@ -153,6 +154,27 @@ test.each(["start:before-commit", "start:after-commit"])("the pin is recoverable
   await Effect.runPromiseExit(fauxMatch(["Agent", "DoN"], "3", 200_000, "on-turn", { dir, provenance: pinned("account-a"), crashAt: (at) => { if (at === point) { throw new Error("crash"); } } }));
 
   expect(pinOf(dir)).toBe("account-a");
+});
+
+test("a play_move that repeats an earlier turn is refused as stale, not answered with the journaled move", async () => {
+  const refusals: Array<string> = [];
+
+  // At its second turn the agent replays its first turn's call once; otherwise it plays as usual.
+  const replayFirstTurn = (transcript: TranscriptContext): AssistantMessage => {
+    const last = transcript.messages.findLast((message) => message.role !== "system");
+    const [first, second] = transcript.messages.filter((message) => message.role === "user" && textOf(message).startsWith("Your turn."));
+
+    if (last?.role === "toolResult" && last.isError) { refusals.push(textOf(last)); }
+
+    if (first === undefined || last !== second || refusals.length > 0) { return decide(transcript); }
+
+    return fauxAssistantMessage([fauxToolCall("play_move", { move: 0, turn: parseView(textOf(first).slice(textOf(first).indexOf("{"))).turn ?? 0 })], { stopReason: "toolUse" });
+  };
+
+  const result = await Effect.runPromise(fauxMatch(["Agent", "DoN"], "3", 200_000, "on-turn", { respond: replayFirstTurn }));
+
+  expect(refusals[0]).toContain("Stale move");
+  expect(result.moves.fallback).toBe(0);
 });
 
 const tableOf = (tc: hegel.TestCase): ReadonlyArray<Controller> => {
@@ -277,23 +299,6 @@ test("rotating only a provider key preserves resume provenance, and no key ever 
   });
 });
 
-test.each([
-  ["ANT", "claude-haiku-4-5-20251001", "medium", { level: "medium", mode: "budget", effort: null, budget_tokens: 8192, summary: "summarized" }],
-  ["ANT", "claude-haiku-5-5", "medium", { level: "medium", mode: "adaptive", effort: "medium", budget_tokens: null, summary: "summarized" }],
-  ["ANT", "claude-sonnet-5-5", "xhigh", { level: "xhigh", mode: "adaptive", effort: "xhigh", budget_tokens: null, summary: "summarized" }],
-  ["OAI", "gpt-6-luna", "medium", { level: "medium", mode: "effort", effort: "medium", budget_tokens: null, summary: "detailed" }],
-  ["OAI", "opencode/deepseek-v4.1-flash", "high", { level: "high", mode: "effort", effort: "high", budget_tokens: null, summary: "auto" }],
-] as const)("the provenance records the thinking settings %s %s resolves to at effort %s", async (api, model, effort, thinking) => {
-  const catalogModel = model.includes("/") ? { PLAYER_A_CATALOG_MODEL: model } : {};
-  const endpoint = await endpointFrom({ [`PLAYER_A_${api}_URL`]: ENDPOINT.url, [`PLAYER_A_${api}_KEY`]: ENDPOINT.key, PLAYER_A_MODEL: model, ...catalogModel, PLAYER_A_EFFORT: effort });
-
-  if (!Exit.isSuccess(endpoint)) { throw new Error(String(endpoint.cause)); }
-
-  const provenance = provenanceOf("provider-A", endpoint.value);
-
-  expect(provenance.thinking).toEqual(thinking);
-  expect(JSON.stringify(provenance)).not.toContain(ENDPOINT.key);
-});
 
 /** What a local server received: the request body, and the account pin header if it carried one. */
 interface Received {
@@ -303,7 +308,7 @@ interface Received {
 }
 
 /** The requests an endpoint sends for `replies` replies, as pi-durable asks for each: with no reasoning option at effort off. */
-const requestsSentAt = async (api: "ANT" | "OAI", model: string, effort: "off" | "low" | "medium", extraEnv: Readonly<Record<string, string>> = {}, replies = 1, options: { readonly sessionId?: string } = {}) => {
+const requestsSentAt = async (api: "ANT" | "OAI", model: string, effort: "off" | "low" | "medium" | "high" | "xhigh", extraEnv: Readonly<Record<string, string>> = {}, replies = 1, options: { readonly sessionId?: string } = {}) => {
   const requests: Array<Received> = [];
 
   const server = Bun.serve({
@@ -336,18 +341,57 @@ const requestsSentAt = async (api: "ANT" | "OAI", model: string, effort: "off" |
 };
 
 /** The first request an endpoint sends. */
-const firstRequestAt = async (api: "ANT" | "OAI", model: string, effort: "off" | "low" | "medium") => Schema.decodeUnknownSync(SentRequest)((await requestsSentAt(api, model, effort))[0]?.body);
+const firstRequestAt = async (api: "ANT" | "OAI", model: string, effort: "off" | "low" | "medium" | "high" | "xhigh", extraEnv: Readonly<Record<string, string>> = {}) => Schema.decodeUnknownSync(SentRequest)((await requestsSentAt(api, model, effort, extraEnv))[0]?.body);
 
 const Effort = Schema.Struct({ effort: Schema.String });
 
 const SentRequest = Schema.Struct({
-  thinking: Schema.optional(Schema.Struct({ type: Schema.String })),
+  thinking: Schema.optional(Schema.Struct({ type: Schema.String, budget_tokens: Schema.optional(Schema.Int), display: Schema.optional(Schema.Literal("summarized")) })),
   output_config: Schema.optional(Effort),
   messages: Schema.optional(Schema.Array(Schema.Struct({ output_config: Schema.optional(Effort) }))),
-  reasoning: Schema.optional(Schema.Struct({ summary: Schema.optional(Schema.String) })),
+  reasoning: Schema.optional(Schema.Struct({ summary: Schema.optional(Schema.Literals(["detailed", "auto"])), effort: Schema.optional(Schema.String) })),
 });
 
 const OFF = { level: "off", effort: null, budget_tokens: null, summary: null };
+
+/** The thinking settings a request asks for, in the provenance's terms but for the level, which the wire does not carry. The effort of a model whose effort pi-ai sets per message is the last message's. */
+const thinkingOnWire = (request: typeof SentRequest.Type): Omit<AgentProvenance["thinking"], "level"> => {
+  const messageEffort = (request.messages ?? []).flatMap((message) => (message.output_config === undefined ? [] : [message.output_config.effort])).at(-1);
+  const none = { effort: null, budget_tokens: null, summary: null };
+
+  switch (request.thinking?.type) {
+    case "enabled":
+      return { ...none, mode: "budget", budget_tokens: request.thinking?.budget_tokens ?? null, summary: request.thinking?.display ?? null };
+    case "adaptive":
+      return { ...none, mode: "adaptive", effort: messageEffort ?? request.output_config?.effort ?? null, summary: request.thinking?.display ?? null };
+    case "between_tools":
+      return { ...none, mode: "between_tools" };
+    case undefined:
+      return request.reasoning?.effort === undefined ? { ...none, mode: "off" } : { ...none, mode: "effort", effort: request.reasoning.effort, summary: request.reasoning.summary ?? null };
+    default:
+      return { ...none, mode: "off" };
+  }
+};
+
+test.each([
+  ["ANT", "claude-haiku-4-5-20251001", "medium", { level: "medium", mode: "budget", effort: null, budget_tokens: 8192, summary: "summarized" }],
+  ["ANT", "claude-haiku-5-5", "medium", { level: "medium", mode: "adaptive", effort: "medium", budget_tokens: null, summary: "summarized" }],
+  ["ANT", "claude-sonnet-5-5", "xhigh", { level: "xhigh", mode: "adaptive", effort: "xhigh", budget_tokens: null, summary: "summarized" }],
+  ["OAI", "gpt-6-luna", "medium", { level: "medium", mode: "effort", effort: "medium", budget_tokens: null, summary: "detailed" }],
+  ["OAI", "opencode/deepseek-v4.1-flash", "high", { level: "high", mode: "effort", effort: "high", budget_tokens: null, summary: "auto" }],
+] as const)("the provenance records the thinking settings %s %s sends at effort %s", async (api, model, effort, thinking) => {
+  const catalogModel = model.includes("/") ? { PLAYER_A_CATALOG_MODEL: model } : {};
+  const endpoint = await endpointFrom({ [`PLAYER_A_${api}_URL`]: ENDPOINT.url, [`PLAYER_A_${api}_KEY`]: ENDPOINT.key, PLAYER_A_MODEL: model, ...catalogModel, PLAYER_A_EFFORT: effort });
+
+  if (!Exit.isSuccess(endpoint)) { throw new Error(String(endpoint.cause)); }
+
+  const provenance = provenanceOf("provider-A", endpoint.value);
+  const { level: _level, ...asked } = thinking;
+
+  expect(provenance.thinking).toEqual(thinking);
+  expect(thinkingOnWire(await firstRequestAt(api, model, effort, catalogModel))).toEqual(asked);
+  expect(JSON.stringify(provenance)).not.toContain(ENDPOINT.key);
+});
 
 test.each([
   ["claude-haiku-5-5", "disabled", { ...OFF, mode: "off" }],
@@ -471,3 +515,4 @@ const keyOf = async (sessionId: string) => {
 test("an OpenAI Responses endpoint sends a prompt cache key that is the conversation's session id, and a session id of its own for each conversation", async () => {
   expect([await keyOf("seat-A"), await keyOf("seat-B")]).toEqual(["seat-A", "seat-B"]);
 });
+

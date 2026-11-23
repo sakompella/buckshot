@@ -442,6 +442,8 @@ test.each([
   ['openai-responses-A API error (429): {"code":"model_cooldown","reset_seconds":90}', 90],
   ['openai-responses-A API error (503): {"error":{"message":"[oc/deepseek-v4.1-flash-free] Rate limited (reset after 1h 2m 3s)"}}', 3723],
   ['openai-responses-A API error (429): {"error":{"message":"Too many requests"}}', RATE_LIMIT_WAIT_SECONDS],
+  ['openai-responses-A API error (429): {"error":{"message":"Rate limited (reset after 500ms)"}}', RATE_LIMIT_WAIT_SECONDS],
+  ['openai-responses-A API error (429): {"error":{"message":"Rate limited (reset after 1.5s)"}}', RATE_LIMIT_WAIT_SECONDS],
   ['429 {"type":"error","error":{"type":"rate_limit_error","message":"Number of requests has exceeded your rate limit"}}', RATE_LIMIT_WAIT_SECONDS],
   ['openai-responses-A API error (503): {"message":"server_is_overloaded"}', undefined],
 ])("a fault holds back the model for the reset its error gives, a 429 without one for a fixed wait, and any other fault not at all: %s", (error, seconds) => {
@@ -590,7 +592,7 @@ test("a failure with no provider fault is final and runs once", async () => {
     return Promise.resolve(1);
   }, () => undefined, new AbortController().signal, { retry: { attempts: 3, pauseMs: 0 } });
 
-  expect(settled.map(({ status }) => status)).toEqual(["failed"]);
+  expect(settled).toMatchObject([{ status: "failed", retried: false }]);
 });
 
 test("a restarted runner gets a fresh three-run failure allowance", async () => {
@@ -605,8 +607,10 @@ test("a restarted runner gets a fresh three-run failure allowance", async () => 
     return Promise.resolve(1);
   }, () => undefined, new AbortController().signal, { retry: { attempts: 3, pauseMs: 0 } });
 
-  expect((await runThree()).map(({ status }) => status)).toEqual(["failed", "failed", "failed"]);
-  expect((await runThree()).map(({ status }) => status)).toEqual(["failed", "failed", "failed"]);
+  const retriedTwice = [{ status: "failed", retried: true }, { status: "failed", retried: true }, { status: "failed", retried: false }];
+
+  expect(await runThree()).toMatchObject(retriedTwice);
+  expect(await runThree()).toMatchObject(retriedTwice);
 });
 
 test("a failed match goes to the back of the queue and is retried, up to its attempts", async () => {
@@ -923,6 +927,26 @@ test("account assignment excludes cooling accounts, minimizes running matches an
   const unpinned = tournamentFrom(configJson({ pairings: [["luna", "don"]] }));
 
   expect(assignAccounts(unpinned.config, match, () => true, () => 0)).toEqual({});
+});
+
+test("two agents of one match on one pool count each other's seat, so equal loads put them on different accounts", () => {
+  const tournament = tournamentFrom(configJson({
+    endpoints: { ...ENDPOINTS, "shared-openai": { ...ENDPOINTS["shared-openai"], accounts: ["account-a", "account-b"] } },
+    entrants: { ...ENTRANTS, "luna-low": { ...ENTRANTS.luna, effort: "low" } },
+    pairings: [["luna", "luna-low"]],
+  }));
+
+  const match = scheduleOf(tournament)[0];
+
+  if (match === undefined) { throw new Error("no match"); }
+
+  for (const load of [0, 2]) {
+    const assigned = assignAccounts(tournament.config, match, () => false, () => load);
+
+    expect(new Set(Object.values(assigned ?? {}))).toEqual(new Set(["account-a", "account-b"]));
+  }
+
+  expect(Object.values(assignAccounts(tournament.config, match, () => false, (id) => (id === "account-a" ? 0 : 2)) ?? {})).toEqual(["account-a", "account-a"]);
 });
 
 test("account ids travel only in the child environment, and unconfigured agents inherit no pin", () => {

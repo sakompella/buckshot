@@ -295,7 +295,7 @@ export type AgentProvenance = typeof AgentProvenance.Type;
 
 const setsEffortPerMessage = (model: Model<Api>): boolean => model.compat !== undefined && "supportsMidConvoEffort" in model.compat && model.compat.supportsMidConvoEffort === true;
 
-/** The thinking settings the arena asks for at the effort, as pi-ai 1.1.0 derives them from the catalog model (api/anthropic-messages.js and openai-responses.js) and providerOf rewrites them. */
+/** The thinking settings the arena asks for at the effort, as pi-ai derives them from the catalog model (api/anthropic-messages.js and openai-responses.js) and providerOf rewrites them. */
 const thinkingOf = (endpoint: Endpoint, model: Model<Api>): AgentProvenance["thinking"] => {
   const off = { mode: "off", effort: null, budget_tokens: null, summary: null } as const;
 
