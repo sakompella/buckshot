@@ -11,7 +11,7 @@ import { decodeArgs, runMain, ScriptError } from "../src/script.ts";
 import { itemName } from "../src/text.ts";
 
 
-// Tables for docs/arena/analysis/beliefs-and-items.md from the database that
+// Tables on beliefs and items from the database that
 // scripts/arena-knowledge.ts writes. Only completed matches and the agents' own
 // moves count; forced grabs and fallback moves do not. Excluded matches (a
 // DeepSeek seat, matches.disposition) are left out, their opponents' moves

@@ -36,7 +36,7 @@ const numberGames = (games: ReadonlyArray<Game>): NumberedGames => {
 
 const ELO_PER_NAT = 400 / Math.LN10;
 
-/** The config rated 0: the depth-7 search engine, so adding a config moves no other rating (bt.ANCHOR in tools/arena/analysis). */
+/** The config rated 0: the depth-7 search engine, a fixed program (bt.ANCHOR in tools/arena/analysis). */
 export const ANCHOR = keyOf({ model: "Engine/7/2000000/sampled", effort: "" });
 
 /** The chance of winning a match against the anchor: the round win chance of the Elo gap, in two rounds of three. */
@@ -46,7 +46,7 @@ export const matchWinVsAnchor = (rating: number): number => {
   return round * round * (3 - 2 * round);
 };
 
-/** The standard deviation of the Gaussian prior on a strength, in nats: about 520 Elo, so it only keeps ratings finite and joined (docs/arena/analysis/matchups.md). */
+/** The standard deviation of the Gaussian prior on a strength, in nats: about 520 Elo, so it only keeps ratings finite and joined (docs/arena/methods.md, "Round Elo"). */
 const PRIOR_SD = 3;
 
 const MAX_STEPS = 50;
@@ -221,6 +221,8 @@ export interface Rating {
   readonly tier: number | null;
   /** True on a headline rating that is the config's Elo from play and move quality (play-and-moves.ts). */
   readonly moves?: boolean;
+  /** The interval of the config's rating minus the anchor's, both from the same resamples; absent for the anchor and for a config with no interval. */
+  readonly engineGap?: { readonly lo: number; readonly hi: number };
 }
 
 /** Ratings before their tiers, with each config's bootstrap draws (NaN where a resample left it out). */
@@ -272,8 +274,7 @@ const tiersOf = (ranked: ReadonlyArray<string>, draws: ReadonlyMap<string, Float
  * Every config's rating from one fit over all the seats' completed two-player matches, with percentile
  * intervals at `INTERVAL_LEVEL` from refitting resamples of whole seed blocks. The resamples are centred on the mean config and
  * moved by the point fit's shift, so an interval leaves out the anchor's own noise and the anchor's interval is the
- * uncertainty of the zero. Effort sweeps join the other models through their
- * medium configs, so one scale covers every config. The fit counts each round as a game, in the matches whose
+ * uncertainty of the zero. The fit counts each round as a game, in the matches whose
  * rounds are known; its resamples still take whole seed blocks, since a match's rounds are not independent. With
  * `luck`, each match's round wins are first corrected for luck (tools/arena/analysis/aivat.py).
  */
@@ -313,7 +314,21 @@ export const fittedRatings = (seats: ReadonlyArray<SeatFull>, luck: Luck = new M
   return { ratings, draws };
 };
 
-/** The ratings with their tiers, from the ranked (not provisional) configs' draws. */
+/** The interval at `INTERVAL_LEVEL` of `key`'s draws minus the anchor's, resample by resample. */
+const engineGapOf = (draws: ReadonlyMap<string, Float64Array>, key: string): { readonly lo: number; readonly hi: number } | undefined => {
+  const own = draws.get(key);
+  const anchor = draws.get(ANCHOR);
+
+  if (own === undefined || anchor === undefined || key === ANCHOR) { return undefined; }
+
+  const gaps = Array.from(own, (draw, rep) => draw - (anchor[rep] ?? Number.NaN))
+    .filter((gap) => !Number.isNaN(gap))
+    .toSorted((left, right) => left - right);
+
+  return gaps.length === 0 ? undefined : { lo: quantile(gaps, TAIL), hi: quantile(gaps, 1 - TAIL) };
+};
+
+/** The ratings with their tiers, from the ranked (not provisional) configs' draws, and each one's paired gap to the anchor. */
 export const withTiers = ({ ratings, draws }: Fitted, seats: ReadonlyArray<SeatFull>): ReadonlyMap<string, Rating> => {
   const scored = groupBy(
     seats.filter(({ status }) => status === "completed"),
@@ -323,28 +338,13 @@ export const withTiers = ({ ratings, draws }: Fitted, seats: ReadonlyArray<SeatF
   const ranked = [...ratings.keys()].filter((key) => !isProvisional({ scored: scored.get(key)?.length ?? 0 })).toSorted((left, right) => (ratings.get(right)?.rating ?? 0) - (ratings.get(left)?.rating ?? 0));
   const tiers = tiersOf(ranked, draws);
 
-  return new Map([...ratings].map(([key, rating]) => [key, { ...rating, tier: tiers.get(key) ?? null }] as const));
+  return new Map([...ratings].map(([key, rating]) => {
+    const tiered = { ...rating, tier: tiers.get(key) ?? null };
+    const engineGap = rating.interval === null ? undefined : engineGapOf(draws, key);
+
+    return [key, engineGap === undefined ? tiered : { ...tiered, engineGap }] as const;
+  }));
 };
 
 /** Every config's rating, interval and tier from one fit (`fittedRatings`). */
 export const pooledRatings = (seats: ReadonlyArray<SeatFull>, luck: Luck = new Map()): ReadonlyMap<string, Rating> => withTiers(fittedRatings(seats, luck), seats);
-
-const FOLDS = 5;
-
-/**
- * Ratings that never saw a match's own seed block: the blocks are dealt into FOLDS folds in order, and each fold's
- * matches are rated by one fit over the other folds. By seed block; a config absent from the other folds has no rating.
- */
-export const heldOutRatings = (seats: ReadonlyArray<SeatFull>): ((block: string) => ReadonlyMap<string, { readonly rating: number }>) => {
-  const games = gamesOfSeats(seats);
-  const numbered = numberGames(games);
-  const foldOf = new Map(unique(games.map(({ block }) => block)).toSorted().map((block, index) => [block, index % FOLDS]));
-
-  const fits = Array.from({ length: FOLDS }, (_, fold) => {
-    const training = Int32Array.from(games.keys()).filter((index) => foldOf.get(games[index]?.block ?? "") !== fold);
-
-    return new Map([...anchored(fitGames(numbered, training))].map(([key, rating]) => [key, { rating }]));
-  });
-
-  return (block) => fits[foldOf.get(block) ?? -1] ?? new Map();
-};

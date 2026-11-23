@@ -168,7 +168,7 @@ const RevealNavLink = Command.define("RevealNavLink", {
       const nav = document.querySelector("main nav");
       const link = nav?.querySelector(`a[href="#${group}"]`);
 
-      if (nav instanceof HTMLElement && link instanceof HTMLElement) { nav.scrollTo({ left: link.offsetLeft - (nav.clientWidth - link.offsetWidth) / 2, behavior: "smooth" }); }
+      if (nav instanceof HTMLElement && link instanceof HTMLElement) { nav.scrollTo({ left: link.offsetLeft - (nav.clientWidth - link.offsetWidth) / 2, behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); }
     }).pipe(Effect.as(Message.CompletedScroll())),
 });
 
@@ -226,6 +226,19 @@ const SettledLazy = Command.define("SettledLazy", {
     Effect.tap(Effect.sync(relandJump)),
     Effect.map(groupInView),
     Effect.map((maybe) => Option.getOrElse(maybe, () => Message.CompletedScroll())),
+  ),
+});
+
+/** Gives focus back to the button that opened the tour, once the page under the tour is no longer inert. */
+const FocusTourStart = Command.define("FocusTourStart", {
+  messages: [Message.CompletedScroll],
+  execute: nextFrame.pipe(
+    Effect.tap(
+      Effect.sync(() => {
+        document.querySelector<HTMLElement>(".tourstart")?.focus();
+      }),
+    ),
+    Effect.as(Message.CompletedScroll()),
   ),
 });
 
@@ -323,7 +336,6 @@ export const update = (model: Model, message: Message): Return =>
     }),
     ClickedShowMore: () => ({ model: modifyFields(model, { matchList: (list) => ({ ...list, limit: list.limit + MORE_ROWS }) }) }),
     PlacedTip: () => ({ model }),
-    CompletedStepScroll: () => ({ model }),
     CompletedScroll: () => ({ model }),
     ClickedTour: () => {
       const hasCertain = AsyncData.matchData(model.data, { onEmpty: () => false, onFailure: () => false, onData: ({ summary }) => summary.hasCertain });
@@ -347,7 +359,7 @@ export const update = (model: Model, message: Message): Return =>
           return { model: modifyFields(model, { maybeTour: () => Option.some({ ...tour, step }) }), commands: [PlaceTour({ step, hasCertain: tour.hasCertain })] };
         },
       }),
-    ClosedTour: () => ({ model: modifyFields(model, { maybeTour: () => Option.none() }) }),
+    ClosedTour: () => ({ model: modifyFields(model, { maybeTour: () => Option.none() }), commands: [FocusTourStart()] }),
     PlacedTour: ({ step, maybeBox, isCardUnder }) => ({
       model: modifyFields(model, { maybeTour: (maybeTour) => Option.map(maybeTour, (tour) => (tour.step === step ? { ...tour, maybeBox, isCardUnder } : tour)) }),
     }),

@@ -3,12 +3,13 @@ import { parseArgs } from "node:util";
 import { Console, Effect, Schema } from "effect";
 
 import { openArena } from "../src/arena-viewer/load.ts";
-import { fittedRatings, gamesOfSeats } from "../src/arena-viewer/page/ratings.ts";
-import { withPotShares } from "../src/arena-viewer/page/data.ts";
+import { fittedRatings, gamesOfSeats, INTERVAL_LEVEL } from "../src/arena-viewer/page/ratings.ts";
+import { quantile, withPotShares } from "../src/arena-viewer/page/data.ts";
 import { BOOTSTRAP_DRAWS } from "../src/arena/bootstrap.ts";
 import { runMain } from "../src/script.ts";
 
-// The luck-adjusted Round Elo gap of two configs, with the standard error the site's block bootstrap gives it:
+// The luck-adjusted Round Elo gap of two configs, with the standard error and the INTERVAL_LEVEL percentile interval of
+// the site's block bootstrap (both ratings from the same resample), and a's rounds won against b in their direct matches:
 // bun scripts/arena-gap.ts <db> --luck <luck db> --a "<model>|<effort>" --b "<model>|<effort>"  (a - b, prints JSON)
 
 const options = { luck: { type: "string" }, a: { type: "string" }, b: { type: "string" } } as const;
@@ -29,13 +30,20 @@ const program = openArena(dbPath, { luck: values.luck }).pipe(
     const point = new Map([...ratings].map(([key, { rating }]) => [key, rating]));
     const left = draws.get(a) ?? new Float64Array();
     const right = draws.get(b) ?? new Float64Array();
-    const gaps = Array.from({ length: BOOTSTRAP_DRAWS }, (_, rep) => (left[rep] ?? Number.NaN) - (right[rep] ?? Number.NaN)).filter((gap) => !Number.isNaN(gap));
+
+    const gaps = Array.from({ length: BOOTSTRAP_DRAWS }, (_, rep) => (left[rep] ?? Number.NaN) - (right[rep] ?? Number.NaN))
+      .filter((gap) => !Number.isNaN(gap))
+      .toSorted((low, high) => low - high);
+
+    const tail = (1 - INTERVAL_LEVEL) / 2;
     const mean = gaps.reduce((sum, gap) => sum + gap, 0) / gaps.length;
     const se = Math.sqrt(gaps.reduce((sum, gap) => sum + (gap - mean) ** 2, 0) / (gaps.length - 1));
     const between = games.filter((game) => (game.a === a && game.b === b) || (game.a === b && game.b === a));
     const rounds = between.reduce((sum, game) => sum + (game.weight ?? 1), 0);
+    const direct = gamesOfSeats(seats).filter((game) => (game.a === a && game.b === b) || (game.a === b && game.b === a));
+    const roundsWonByA = direct.reduce((sum, game) => sum + (game.weight ?? 1) * (game.a === a ? game.sa : 1 - game.sa), 0);
 
-    return { a, b, ratingA: point.get(a), ratingB: point.get(b), gap: (point.get(a) ?? Number.NaN) - (point.get(b) ?? Number.NaN), se, matchesBetween: between.length, roundsBetween: rounds };
+    return { a, b, ratingA: point.get(a), ratingB: point.get(b), gap: (point.get(a) ?? Number.NaN) - (point.get(b) ?? Number.NaN), se, gapLo: quantile(gaps, tail), gapHi: quantile(gaps, 1 - tail), matchesBetween: between.length, roundsBetween: rounds, roundsWonByA };
   }),
   Effect.scoped,
   Effect.flatMap(encodeJson),

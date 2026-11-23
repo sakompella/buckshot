@@ -5,7 +5,7 @@ import type { Document, Html, HtmlBuilder } from "foldkit/html";
 
 import { EFFORTS, effortName } from "../../arena/model-names.ts";
 import { effortParts } from "../../arena/same-treatment.ts";
-import { aboutView, footerView, howView, summaryView } from "./about.ts";
+import { aboutView, footerView, howView, leadFinding, summaryView } from "./about.ts";
 import { baseName, baseOrder, colorOf, fmtCount, sumOf, unique } from "./data.ts";
 import { tipView } from "./charts.ts";
 import { certainTableView, certainView } from "./certain.ts";
@@ -71,7 +71,7 @@ const filtersView = (h: H, derived: Derived, filter: Model["filter"], isOpen: bo
           const model = models.find((candidate) => baseName(candidate) === name) ?? name;
 
           return h.button(
-            [h.Type("button"), h.Class(`chip ${filter.offModels.includes(name) ? "" : "on"}`), h.OnClick(Message.ToggledModel({ name }))],
+            [h.Type("button"), h.Class(`chip ${filter.offModels.includes(name) ? "" : "on"}`), h.AriaPressed(String(!filter.offModels.includes(name))), h.OnClick(Message.ToggledModel({ name }))],
             [h.i([h.Style({ background: colorOf(model) })], []), name],
           );
         }),
@@ -79,7 +79,7 @@ const filtersView = (h: H, derived: Derived, filter: Model["filter"], isOpen: bo
       h.span([h.Class("flabel")], ["Efforts"]),
       h.span(
         [h.Class("chips")],
-        efforts.map((effort) => h.button([h.Type("button"), h.Class(`chip ${filter.offEfforts.includes(effort) ? "" : "on"}`), h.OnClick(Message.ToggledEffort({ effort }))], [effortName(effort)])),
+        efforts.map((effort) => h.button([h.Type("button"), h.Class(`chip ${filter.offEfforts.includes(effort) ? "" : "on"}`), h.AriaPressed(String(!filter.offEfforts.includes(effort))), h.OnClick(Message.ToggledEffort({ effort }))], [effortName(effort)])),
       ),
     ],
   );
@@ -88,6 +88,7 @@ const filtersView = (h: H, derived: Derived, filter: Model["filter"], isOpen: bo
 const heroView = (h: H, derived: Derived): Html => {
   const scored = sumOf(derived.pairs.map((pair) => pair.scored));
   const stat = (label: string, value: string) => [h.dt([], [label]), h.dd([], [value])];
+  const finding = leadFinding(derived);
 
   return h.div(
     [h.Class("hero")],
@@ -97,6 +98,7 @@ const heroView = (h: H, derived: Derived): Html => {
         [
           h.h1([h.Class("title")], ["Buckshot Arena"]),
           h.p([h.Class("lead")], ["Frontier models playing two-player Buckshot Roulette. ", h.button([h.Type("button"), h.Class("tourstart"), h.OnClick(Message.ClickedTour())], ["Take the tour"])]),
+          ...(finding === null ? [] : [h.p([h.Class("sub")], [finding])]),
         ],
       ),
       h.dl(
@@ -144,7 +146,7 @@ const lazyDrill = createLazy();
 
 const navView = (h: H, maybeGroup: Option.Option<Group>): Html =>
   h.nav(
-    [],
+    [h.AriaLabel("Sections")],
     [
       h.span([h.Class("brand")], ["Buckshot Arena"]),
       ...GROUPS.map(({ group, label }) =>
@@ -247,7 +249,7 @@ const isPinned = (model: Model): boolean => Option.isSome(model.scatter.maybePin
 
 export const view = (model: Model, h: H): Document =>
   AsyncData.matchData(model.data, {
-    onEmpty: () => ({ title: "Buckshot Arena", body: h.main([], [h.p([h.Class("k")], ["Loading the analysis database…"])]) }),
+    onEmpty: () => ({ title: "Buckshot Arena", body: h.main([], [h.p([h.Class("k")], ["Loading the arena data…"])]) }),
     onFailure: (failure) => ({
       title: "Buckshot Arena",
       body: h.main(
@@ -258,7 +260,7 @@ export const view = (model: Model, h: H): Document =>
             [
               LoadFailure.match(failure, {
                 NoServer: () => "This copy of the site does not serve the arena data. Run the arena viewer (web/README.md) to see it.",
-                Failed: ({ error }) => `Could not load the analysis database: ${error}`,
+                Failed: ({ error }) => `Could not load the arena data: ${error}`,
               }),
             ],
           ),

@@ -99,47 +99,12 @@ test("a move that fell back has no regret, not a zero", () => {
   );
 
   expect(regret.seats.get("m1|A")?.moves).toBe(1);
-  expect(regret.moves("m1").has(2)).toBe(false);
-});
-
-test("a move shows its regret, whether it is exact and the scores in percentage points", () => {
-  const regret = openRegret(
-    regretFile([
-      { match: "m1", ordinal: 1, player: "A", best: 600_000, chosen: 500_000 },
-      { match: "m1", ordinal: 2, player: "A", best: 1_000_000, chosen: 1_000_000, exact: true },
-    ]),
-  );
-
-  expect(regret.moves("m1").get(1)).toEqual({
-    points: 10,
-    exact: false,
-    best: "best move",
-    bestScore: 60,
-    chosen: "chosen move",
-    chosenScore: 50,
-    depth: 4,
-    limited: true,
-    values: [
-      { label: "best move", score: 60 },
-      { label: "other move", score: 0 },
-      { label: "chosen move", score: 50 },
-    ],
-  });
-  expect(regret.moves("m1").get(2)?.exact).toBe(true);
-  expect(regret.moves("other").size).toBe(0);
 });
 
 const run = (other: Partial<Run>) => () => openRegret(regretFile([{ match: "m1", ordinal: 1, player: "A", best: 600_000, chosen: 500_000 }, { match: "m1", ordinal: 1, player: "A", best: 900_000, chosen: 100_000, run: other }]));
 
 test("a file holding more than one run is refused, so evaluators, reload rules and sample counts never mix", () => {
   for (const other of [{ evaluator: "v2" }, { depth: 3 }, { reload: "sampled", samples: 256 }]) { expect(run(other)).toThrow("regret runs, not one"); }
-});
-
-const broken = (row: Partial<Row>) => openRegret(regretFile([{ match: "m1", ordinal: 1, player: "A", best: 600_000, chosen: 500_000, ...row }]));
-
-test("a stored row whose values do not decode or do not agree with its scores fails the match", () => {
-  expect(() => broken({ values: "not json" }).moves("m1")).toThrow();
-  expect(() => broken({ values: JSON.stringify([{ label: "best move", score: 700_000 }, { label: "chosen move", score: 500_000 }]) }).moves("m1")).toThrow("best score is not the top value");
 });
 
 const randomOf = (seed: number) => {

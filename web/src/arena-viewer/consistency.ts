@@ -10,7 +10,7 @@ import { mulberry32 } from "../arena/tournament-stats.ts";
 // How often a config repeats itself, from the knowledge database that scripts/arena-knowledge.ts builds. An exact_key
 // names one position: the same board, cash, round, log since the load, legal moves, code and instructions. Within one
 // config, the chance that two different decisions in the same position chose the same move, averaged over positions.
-// The estimate and its interval are the ones docs/arena/analysis/beliefs-and-items.md reports.
+// The estimate and its interval are the same as those of the knowledge report (scripts/arena-knowledge-report.ts).
 
 /** A config needs this many repeated positions to be shown. */
 const MIN_POSITIONS = 30;

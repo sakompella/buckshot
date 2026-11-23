@@ -18,7 +18,8 @@ import { itemIconOf } from "./items.ts";
 import { MOVES_BELOW } from "./play-and-moves.ts";
 import { Message } from "./model.ts";
 import type { Lazy, Model } from "./model.ts";
-import { ANCHOR, INTERVAL_PERCENT, matchWinVsAnchor } from "./ratings.ts";
+import { ANCHOR, INTERVAL_LEVEL, INTERVAL_PERCENT, matchWinVsAnchor } from "./ratings.ts";
+import { BLUNDER_POINTS, INACCURACY_POINTS, MISTAKE_POINTS } from "../accuracy.ts";
 import type { Rating } from "./ratings.ts";
 
 type H = HtmlBuilder<Message>;
@@ -26,7 +27,7 @@ type H = HtmlBuilder<Message>;
 // One table, ranked by the headline rating (derived.ts), in tiers of configs the data cannot tell apart.
 
 const ratingView = (h: H, elo: Rating | undefined): ReadonlyArray<Html | string> =>
-  elo === undefined ? ["–"] : [`${elo.rating >= 0 ? "+" : ""}${elo.rating.toFixed(0)}${elo.moves === true ? "†" : ""} `, ...(elo.interval === null ? [] : [h.span([h.Class("pm")], [`[${elo.interval.lo.toFixed(0)}, ${elo.interval.hi.toFixed(0)}]`])])];
+  elo === undefined ? ["–"] : [`${fmtRating(elo.rating)}${elo.moves === true ? "†" : ""} `, ...(elo.interval === null ? [] : [h.span([h.Class("pm")], [`${fmtRating(elo.interval.lo)} to ${fmtRating(elo.interval.hi)}`])])];
 
 interface Detail {
   readonly label: string;
@@ -179,7 +180,7 @@ export const configPanelView = (h: H, derived: Derived, key: string, lazy: Lazy)
 
 const PROVISIONAL_NOTE = `A faded row with a – for its tier is provisional: it has fewer than ${PROVISIONAL_BELOW} scored matches and no rank.`;
 
-const MOVES_NOTE = `† Includes move quality: this config has fewer than ${MOVES_BELOW} matches.`;
+export const MOVES_NOTE = `† Includes move quality: this config has fewer than ${MOVES_BELOW} matches.`;
 
 const PROVISIONAL_NOTE_ACCURACY = `A faded row is provisional: it has fewer than ${PROVISIONAL_BELOW} scored matches.`;
 
@@ -216,7 +217,7 @@ export const ACCURACY_TITLE = "Lichess's accuracy formula, applied to points of 
 
 export const P99_TITLE = "The points of round win chance given up by the 99th-percentile move. One move in a hundred gave up at least this much.";
 
-const HEADER_TITLES = new Map([
+export const HEADER_TITLES = new Map([
   [ROUND_ELO, `One Bradley-Terry rating fitted over every match on round win share, with the depth-7 search engine at 0. The interval is a ${INTERVAL_PERCENT} bootstrap interval over seed blocks.`],
   [LUCK_ELO, "Round Elo with each round's result corrected for luck: the shots, loads, first seat, item deals and the shells that items show. The correction (AIVAT) estimates the same strengths with less noise."],
   [MOVE_ELO, "The headline rating combined with the rating that points lost per move predict, as the move scorer counts them. A config with few matches leans on its moves."],
@@ -230,7 +231,7 @@ const HEADER_TITLES = new Map([
 ]);
 
 const headerView = (h: H, label: string): Html =>
-  h.th(label === "" ? [h.Class("barcol")] : label === ROUND_ELO || label === LUCK_ELO || label === MOVE_ELO ? [h.Class("rating")] : [], [label]);
+  label === "" ? h.th([h.Class("barcol")], [h.span([h.Class("sr")], [`${INTERVAL_PERCENT} interval chart`])]) : h.th(label === ROUND_ELO || label === LUCK_ELO || label === MOVE_ELO ? [h.Class("rating")] : [], [label]);
 
 /** Configs with a scored match, by rank; the unranked (provisional or unrated) after them, by rating and then label. */
 export const inRankOrder = (stats: ReadonlyArray<ModelStats>, ranks: ReadonlyMap<string, number>, ratings: ReadonlyMap<string, Rating>): ReadonlyArray<ModelStats> => {
@@ -260,7 +261,7 @@ export const leaderboardView = (h: H, derived: Derived, leaderboard: Model["lead
     [
       h.div([h.Class("lbbar")], [h.h3([], ["Leaderboard"])]),
       h.p([h.Class("sub")], [
-        `${hasLuck ? `${LUCK_ELO} is Round Elo with the luck taken out of each round: its shots, loads, first seat, item deals and the shells that items show. ` : ""}Round Elo is one Bradley-Terry rating fitted over every match on round win share. Ratings are measured from the depth-7 search engine (Engine/7/2000000/sampled), a fixed program, so 0 means the same thing as configs are added. The dot is the rating, and the line is its ${INTERVAL_PERCENT} interval over seed blocks: about one in ten true values falls outside it. The vertical line is the depth-7 engine at 0. The scale shows the top three tiers, so an arrow at the end of a line means it runs past the edge. Configs whose lines do not overlap differ clearly. The number before a config is its tier, and the data cannot put the configs within one tier in order.${zero === null ? "" : ` The 0 is uncertain too: measured against the mean of all configs, the engine's own ${INTERVAL_PERCENT} interval is ${Math.round(zero.lo)} to +${Math.round(zero.hi)}. The other intervals are measured the same way, so they leave out the engine's noise.`} Match wins count only a config's own opponents.`,
+        `${hasLuck ? `${LUCK_ELO} is Round Elo with the luck taken out of each round: its shots, loads, first seat, item deals and the shells that items show. ` : ""}Round Elo is one Bradley-Terry rating fitted over every match on round win share. Ratings are measured from the depth-7 search engine (Engine/7/2000000/sampled), a fixed program, so 0 means the same thing as configs are added. The dot is the rating, and the line is its ${INTERVAL_PERCENT} interval over seed blocks: about ${fmtPct(1 - INTERVAL_LEVEL)} of true values fall outside it. The vertical line is the depth-7 engine at 0. The scale shows the top ${ZOOM_TIERS} tiers, so an arrow at the end of a line means it runs past the edge. Each line is one config's own interval, not a test between two configs. The number before a config is its tier, and the data cannot put the configs within one tier in order.${zero === null ? "" : ` The 0 is uncertain too: measured against the mean of all configs, the engine's own ${INTERVAL_PERCENT} interval is ${fmtRating(zero.lo)} to ${fmtRating(zero.hi)}. The other intervals are measured the same way, so they leave out the engine's noise.`} Match wins count only a config's own opponents.`,
       ]),
       h.div(
         [h.Class("card")],
@@ -317,9 +318,9 @@ const ACCURACY_HEADERS: ReadonlyArray<readonly [string, string]> = [
   ["Accuracy", ACCURACY_TITLE],
   ["p99 points lost", P99_TITLE],
   ["Best moves", "Moves as good as the minimax player's best"],
-  ["Inaccuracies / 100", "Moves per 100 that gave up 5 to 10 points of round win chance (lichess's inaccuracy, 0.1 of its winning chances)"],
-  ["Mistakes / 100", "Moves per 100 that gave up 10 to 15 points (lichess's mistake, 0.2)"],
-  ["Blunders / 100", "Moves per 100 that gave up 15 points or more (lichess's blunder, 0.3)"],
+  ["Inaccuracies / 100", `Moves per 100 that gave up ${INACCURACY_POINTS} to ${MISTAKE_POINTS} points of round win chance (lichess's inaccuracy, 0.1 of its winning chances)`],
+  ["Mistakes / 100", `Moves per 100 that gave up ${MISTAKE_POINTS} to ${BLUNDER_POINTS} points (lichess's mistake, 0.2)`],
+  ["Blunders / 100", `Moves per 100 that gave up ${BLUNDER_POINTS} points or more (lichess's blunder, 0.3)`],
   ["Moves", "Moves with a real choice in the config's scored matches. Decisions where every move is within a point are left out."],
 ];
 

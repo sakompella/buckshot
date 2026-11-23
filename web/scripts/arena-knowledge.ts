@@ -25,7 +25,7 @@ import { assertCurrentImport } from "../src/analysis/importer-hash.ts";
 // (docs/arena/database.md) and writes it to a separate database: the shell
 // belief and where a certain chamber came from, the items on the table, each
 // item's fate, deaths and position keys. The analysis database is opened read
-// only. See docs/arena/analysis/beliefs-and-items.md.
+// only. scripts/arena-knowledge-report.ts tabulates it.
 //
 //   bun scripts/arena-knowledge.ts --db <buckshot.sqlite> --out <knowledge.sqlite>
 //   bun scripts/arena-knowledge.ts --db <buckshot.sqlite> --trace <match name>

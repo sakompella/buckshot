@@ -190,7 +190,6 @@ export const Message = defineMessageUnion({
   ClickedMatchPreset: { preset: MatchPreset },
   ClickedShowMore: {},
   PlacedTip: {},
-  CompletedStepScroll: {},
   CompletedScroll: {},
   CompletedFirstPaint: {},
   ClickedTour: {},

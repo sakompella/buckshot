@@ -10,7 +10,7 @@ import type { Rating } from "./ratings.ts";
 type H = HtmlBuilder<Message>;
 
 // The first chart: every ranked config's headline rating (derived.ts) with its interval, best first, and the search engines as
-// labelled reference lines. Overlapping bars show what the data cannot order.
+// labelled reference lines. Each bar is one config's own interval.
 
 interface Rated {
   readonly m: ModelStats;
@@ -45,14 +45,15 @@ export const forestView = (h: H, derived: Derived): Html => {
   const left = (elo: number) => ({ left: `${scale.at(elo)}%` });
   const lines = [h.div([h.Class("fzero"), h.Style(left(0))], []), ...anchors.map(({ elo }) => h.div([h.Class("fanchor"), h.Style(left(elo.rating))], []))];
 
-  const row = (name: ReadonlyArray<Html | string>, track: ReadonlyArray<Html>, value: ReadonlyArray<Html | string>, className = "frow") =>
-    h.div([h.Class(className)], [h.span([h.Class("fname")], name), h.div([h.Class("ftrack")], [...lines, ...track]), h.span([h.Class("fval")], value)]);
+  // The tracks only draw the numbers beside them, so screen readers skip them and read each row's name and value.
+  const row = (name: ReadonlyArray<Html | string>, track: ReadonlyArray<Html>, value: ReadonlyArray<Html | string>, className = "frow", isDrawing = true) =>
+    h.div([h.Class(className)], [h.span([h.Class("fname")], name), h.div([h.Class("ftrack"), ...(isDrawing ? [h.AriaHidden(true)] : [])], [...lines, ...track]), h.span([h.Class("fval")], value)]);
 
   return h.div(
-    [h.Class("forest"), h.Role("img"), h.AriaLabel(`${derived.ratingName} of each ranked config with its ${INTERVAL_PERCENT} interval`)],
+    [h.Class("forest")],
     [
       ...anchors.map(({ m, elo }) =>
-        row([], [h.span([h.Class(scale.at(elo.rating) > 50 ? "falabel end" : "falabel"), h.Style(left(elo.rating))], [`${m.label} ${fmtRating(elo.rating)}`])], [], "frow fhead"),
+        row([], [h.span([h.Class(scale.at(elo.rating) > 50 ? "falabel end" : "falabel"), h.Style(left(elo.rating))], [`${m.label} ${fmtRating(elo.rating)}`])], [], "frow fhead", false),
       ),
       ...rows.map(({ m, elo }) =>
         row(
@@ -61,7 +62,7 @@ export const forestView = (h: H, derived: Derived): Html => {
             ...(elo.interval === null ? [] : [h.div([h.Class("fci"), h.Style({ left: `${scale.at(elo.interval.lo)}%`, width: `${scale.at(elo.interval.hi) - scale.at(elo.interval.lo)}%`, background: m.color })], [])]),
             h.div([h.Class(`fdot ${isClaude(m.model) ? "a" : "o"}`), h.Style({ ...left(elo.rating), background: m.color })], []),
           ],
-          [fmtRating(elo.rating), ...(elo.interval === null ? [] : [h.span([h.Class("pm")], [` [${Math.round(elo.interval.lo)}, ${Math.round(elo.interval.hi)}]`])])],
+          [fmtRating(elo.rating), ...(elo.interval === null ? [] : [h.span([h.Class("sr")], [`, ${INTERVAL_PERCENT} interval`]), h.span([h.Class("pm")], [` ${fmtRating(elo.interval.lo)} to ${fmtRating(elo.interval.hi)}`])])],
         ),
       ),
       row([], [h.div([h.Class("faxis")], scale.ticks.map((tick) => h.span([h.Style(left(tick))], [fmtRating(tick)])))], [], "frow ffoot"),

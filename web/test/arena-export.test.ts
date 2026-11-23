@@ -62,8 +62,8 @@ beforeAll(async () => {
 
 afterAll(() => { rmSync(root, { recursive: true, force: true }); });
 
-const exportTo = async (out: string) => {
-  const child = Bun.spawn(["nice", "-n", "10", "bun", "scripts/arena-export.ts", database, "--out", out], { cwd: WEB, stdout: "pipe", stderr: "pipe" });
+const exportTo = async (out: string, ...flags: ReadonlyArray<string>) => {
+  const child = Bun.spawn(["nice", "-n", "10", "bun", "scripts/arena-export.ts", database, "--out", out, ...flags], { cwd: WEB, stdout: "pipe", stderr: "pipe" });
 
   return { code: await child.exited, stderr: await new Response(child.stderr).text() };
 };
@@ -117,4 +117,54 @@ test("the privacy check names each kind of leak in the exported files", () => {
   expect(files.size).toBe(7);
 
   for (const [, leaky, expected] of cases) { expect(privacyViolations(leaky).join("\n")).toContain(expected); }
+});
+
+test("the export refuses to replace a directory it did not write, and replaces one it did", async () => {
+  const out = join(root, "not-an-export");
+  const sentinel = join(out, "keep.txt");
+
+  mkdirSync(out);
+  writeFileSync(sentinel, "not an export");
+
+  const refused = await exportTo(out);
+
+  expect(refused.code).toBe(1);
+  expect(refused.stderr).toContain("holds no export manifest");
+  expect(readFileSync(sentinel, "utf8")).toBe("not an export");
+
+  const again = await exportTo(join(root, "exported"));
+
+  expect([again.code, again.stderr]).toEqual([0, ""]);
+});
+
+/** A luck file with a zero correction for each of these seats of the exported match. */
+const luckFile = (players: ReadonlyArray<string>): string => {
+  const path = join(mkdtempSync(join(root, "luck-")), "luck.sqlite");
+  const source = new Database(database, { readonly: true });
+  const [match] = source.query<{ readonly id: string }, []>("select id from matches").all();
+
+  source.close();
+
+  const db = new Database(path);
+
+  db.run("create table luck (match_id text, player text, correction real)");
+
+  for (const player of players) { db.query("insert into luck values (?, ?, 0)").run(match?.id ?? "", player); }
+
+  db.close();
+
+  return path;
+};
+
+test("the export needs a luck file that covers both seats of every scored match, and names the file it read", async () => {
+  const out = join(root, "with-luck");
+  const partial = await exportTo(out, "--luck", luckFile(["A"]));
+
+  expect(partial.code).toBe(1);
+  expect(partial.stderr).toContain("lacks 1 of the 2 scored seats");
+
+  const covered = await exportTo(out, "--luck", luckFile(["A", "B"]));
+
+  expect([covered.code, covered.stderr]).toEqual([0, ""]);
+  expect(readFileSync(join(out, "manifest.json"), "utf8")).toMatch(/"sources":\{"luck":"sha256:[0-9a-f]{64}","certain":null\}/);
 });

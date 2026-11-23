@@ -158,12 +158,6 @@ export const fmtUsd = (value: number | null | undefined): string => {
   return value >= 0.01 ? `$${value.toFixed(3)}` : `$${value.toFixed(4)}`;
 };
 
-export const fmtBytes = (bytes: number): string => {
-  if (bytes >= 1e9) { return `${(bytes / 1e9).toFixed(1)} GB`; }
-
-  return bytes >= 1e6 ? `${Math.round(bytes / 1e6)} MB` : `${Math.max(1, Math.round(bytes / 1e3))} KB`;
-};
-
 export const fmtCount = (value: number | null | undefined): string => {
   if (value === null || value === undefined) { return "–"; }
 
@@ -299,8 +293,8 @@ const drawsFor = (count: number): Int32Array => {
   return draws;
 };
 
-/** A ratio of sums with a 95% percentile bootstrap that resamples seed blocks. */
-export const blockRate = (tally: BlockTally, reps = BOOTSTRAP_DRAWS): Rate => {
+/** A ratio of sums with a percentile bootstrap that resamples seed blocks, leaving `tail` out at each end (a 95% interval unless given). */
+export const blockRate = (tally: BlockTally, reps = BOOTSTRAP_DRAWS, tail = 0.025): Rate => {
   const blocks = [...tally.values()];
   const blockHits = Float64Array.from(blocks, ([hits]) => hits);
   const blockTrials = Float64Array.from(blocks, ([, trials]) => trials);
@@ -329,7 +323,7 @@ export const blockRate = (tally: BlockTally, reps = BOOTSTRAP_DRAWS): Rate => {
 
   const sorted = rates.subarray(0, count).sort();
 
-  return { k, n, rate: k / n, lo: count === 0 ? null : quantile(sorted, 0.025), hi: count === 0 ? null : quantile(sorted, 0.975), blocks: blocks.length };
+  return { k, n, rate: k / n, lo: count === 0 ? null : quantile(sorted, tail), hi: count === 0 ? null : quantile(sorted, 1 - tail), blocks: blocks.length };
 };
 
 // CONFIG STATS

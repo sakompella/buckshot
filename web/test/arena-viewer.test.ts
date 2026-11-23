@@ -1,16 +1,21 @@
 import * as hegel from "@hegeldev/hegel";
+import { Database } from "bun:sqlite";
 import * as gs from "@hegeldev/hegel/generators";
 import { expect, test } from "bun:test";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { Option } from "effect";
 
 import { configSummaries, ODDS_BINS, oddsBinOf, selfShotTallies } from "../src/arena-viewer/aggregates.ts";
-import { chamberPatterns, roundStory, ShellTracker } from "../src/arena-viewer/analysis.ts";
+import { chamberPatterns, openKnowledge, roundStory } from "../src/arena-viewer/analysis.ts";
 import type { Seat, SeatRegret } from "../src/arena-viewer/api.ts";
 import { isEngine as isArenaEngine } from "../src/arena/agent.ts";
-import { baseName, blockRate, fmtBytes, groupBy, isEngine, isFixedPlayer, keyOf, labelOf, matchRows, quantile, regretStats, withPotShares } from "../src/arena-viewer/page/data.ts";
+import { baseName, blockRate, groupBy, isEngine, isFixedPlayer, keyOf, labelOf, matchRows, quantile, regretStats, splitKey, withPotShares } from "../src/arena-viewer/page/data.ts";
 import type { BlockTally, SeatFull } from "../src/arena-viewer/page/data.ts";
 import { mulberry32 } from "../src/arena/tournament-stats.ts";
-import { ANCHOR, bradleyTerry, heldOutRatings, matchWinVsAnchor, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
+import { ANCHOR, bradleyTerry, matchWinVsAnchor, pooledRatings } from "../src/arena-viewer/page/ratings.ts";
 import type { Game, Rating } from "../src/arena-viewer/page/ratings.ts";
 import { droppedConfigs, oddsPanels } from "../src/arena-viewer/page/odds.ts";
 import { headlineRatings, MOVES_BELOW, playAndMoveRatings } from "../src/arena-viewer/page/play-and-moves.ts";
@@ -18,8 +23,7 @@ import { rowsOf } from "../src/arena-viewer/page/matches.ts";
 import { modelStatsOf, ranksOf } from "../src/arena-viewer/page/derived.ts";
 import { inRankOrder } from "../src/arena-viewer/page/leaderboard.ts";
 import { FULL_N, shadeOf } from "../src/arena-viewer/page/heat.ts";
-import { GameEvent, Secret } from "../src/domain.ts";
-import type { Seat as Socket } from "../src/domain.ts";
+import { GameEvent } from "../src/domain.ts";
 import { rosterOf } from "../src/players.ts";
 import { AXES, frontierOf } from "../src/arena-viewer/page/scatter.ts";
 import { SEAT } from "./fixtures.ts";
@@ -164,39 +168,46 @@ test("the block bootstrap's kept draws give the same interval as drawing afresh,
   );
 });
 
-const fired = (shooter: Socket, target: Socket, shell: "Live" | "Blank"): GameEvent => GameEvent.cases.Fired.make({ shooter, target, shell, captured: "Single", applied: shell === "Live" ? 1 : 0, health: 3 });
+/** A knowledge database with these agent decisions of match m1: ordinal, round, remaining, sawed, chamber, source, private orders, live per position. */
+const knowledgeFile = (rows: ReadonlyArray<readonly [number, number, number, number, string | null, string | null, number, string]>): string => {
+  const path = join(mkdtempSync(join(tmpdir(), "knowledge-")), "knowledge.sqlite");
+  const db = new Database(path);
 
-test("the shell tracker knows the chamber from a glass, a phone and the count", () => {
-  const tracker = new ShellTracker();
+  db.run("create table decisions (match_id text, ordinal integer, by_whom text, round integer, remaining integer, sawed integer, chamber text, source text, private_orders integer, private_live_json text)");
 
-  tracker.hear(GameEvent.cases.Loaded.make({ load: { live: 1, blank: 2 } }));
-  expect(tracker.chamber()?.pLive).toBeCloseTo(1 / 3);
+  for (const row of rows) { db.query("insert into decisions values ('m1', ?, 'agent', ?, ?, ?, ?, ?, ?, ?)").run(...row); }
 
-  tracker.hear(Secret.cases.Glimpse.make({ shell: "Blank" }));
-  expect(tracker.chamber()).toEqual({ known: "blank", by: "glass", pLive: 0 });
+  db.close();
 
-  tracker.hear(fired(0, 1, "Blank"));
-  tracker.hear(Secret.cases.Clue.make({ position: 2, shell: "Blank" }));
-  expect(tracker.chamber()).toEqual({ known: "live", by: "count", pLive: 1 });
+  return path;
+};
 
-  tracker.hear(GameEvent.cases.Inverted.make({ seat: 0 }));
-  expect(tracker.chamber()).toEqual({ known: "blank", by: "count", pLive: 0 });
+test("the chamber comes from the knowledge database: a glass or phone clue, a count, or the odds over the orders the player holds possible", () => {
+  const knowledge = openKnowledge(knowledgeFile([
+    [1, 0, 3, 0, "Blank", "glass", 1, "[0,1,1]"],
+    [2, 0, 2, 0, "Live", "combined", 1, "[1,1]"],
+    [3, 0, 3, 0, null, null, 3, "[1,2,0]"],
+    [4, 0, 0, 0, null, null, 0, "[]"],
+  ]));
 
-  tracker.hear(GameEvent.cases.Ejected.make({ seat: 0, shell: "Blank" }));
-  tracker.hear(fired(0, 1, "Blank"));
-  expect(tracker.chamber()).toBeNull();
-  expect(tracker.checks).toEqual({ ok: 3, bad: 0 });
+  expect([1, 2, 3, 4].map((ordinal) => knowledge.get(`m1|${ordinal}`)?.chamber)).toEqual([
+    { known: "blank", by: "glass", pLive: 0 },
+    { known: "live", by: "count", pLive: 1 },
+    { known: null, by: null, pLive: 1 / 3 },
+    null,
+  ]);
+});
+
+test("a saw stays on after beer ejects a load's last shell, so the next load's self-shot is a sawed self-shot", () => {
+  // Saw used, beer ejected the last shell, the gun reloaded: Bend keeps the saw, and the knowledge row says so.
+  const after = openKnowledge(knowledgeFile([[5, 0, 4, 1, null, null, 4, "[1,2,2,2]"]])).get("m1|5");
+  const patterns = after?.chamber === null || after === undefined ? [] : chamberPatterns(after.chamber, after.sawed, new Set(["Shoot yourself", "Shoot Player B"]), "Shoot yourself");
+
+  expect(patterns.filter(([, isAvailable, isChosen]) => isAvailable && isChosen).map(([pattern]) => pattern)).toEqual(["sawSelf"]);
 });
 
 test("shooting the opponent with a known blank is flagged on a load's last shell too, since a blank at oneself keeps the turn", () => {
-  const tracker = new ShellTracker();
-
-  tracker.hear(GameEvent.cases.Loaded.make({ load: { live: 1, blank: 1 } }));
-  tracker.hear(fired(0, 1, "Live"));
-  tracker.hear(Secret.cases.Glimpse.make({ shell: "Blank" }));
-
-  const chamber = tracker.chamber();
-  const patterns = chamber === null ? [] : chamberPatterns(chamber, false, new Set(["Shoot yourself", "Shoot Player B"]), "Shoot Player B");
+  const patterns = chamberPatterns({ known: "blank", by: "glass", pLive: 0 }, false, new Set(["Shoot yourself", "Shoot Player B"]), "Shoot Player B");
 
   expect(patterns.filter(([, isAvailable, isChosen]) => isAvailable && isChosen).map(([pattern]) => pattern)).toEqual(["knownBlankOpp", "glassBlankOpp"]);
 });
@@ -334,6 +345,15 @@ test("the headline takes the Elo from play and move quality below MOVES_BELOW ma
   expect(headline.get(thick ?? "")).toEqual({ rating: 0, blocks: 4, interval: { lo: -20, hi: 20 }, tier: 2 });
 });
 
+test("a config's matches against itself count once toward MOVES_BELOW, not once per seat", () => {
+  const self = keyOf({ model: "self", effort: "medium" });
+  const results = { ratings: new Map([[self, { rating: 0, blocks: 4, interval: { lo: -20, hi: 20 }, tier: null }]]), draws: new Map([[self, Float64Array.from([-10, 0, 10])]]) };
+  const combined = new Map([[self, { rating: 50, blocks: 4, interval: { lo: 40, hi: 60 }, tier: null }]]);
+  const selfMatches = Array.from({ length: MOVES_BELOW / 2 + 1 }, (_match, index) => [0, 1].map((position): SeatFull => ({ ...SEAT, model: "self", player: position === 0 ? "A" : "B", position, matchId: `self${index}`, potShare: null, regret: null }))).flat();
+
+  expect(headlineRatings(results, combined, selfMatches).get(self)?.moves).toBe(true);
+});
+
 test("the 99th-percentile loss counts the moves that lost nothing, by nearest rank", () => {
   const losses = Array.from({ length: 5 }, (_, at) => at + 1);
 
@@ -416,28 +436,28 @@ test("a config's round share is the rounds it won over the rounds it played", ()
 
 const oneRoundWonBy = (winner: string) => ({ starter: "A", ok: true, rounds: [{ winner, prize: 1 }] });
 
-// Two-player matches of the "strong" config against the "weak" one, the strong one winning `strongWins` of `count`.
-const upsetSeats = (count: number, strongWins: number) =>
+// Two-player matches of the "strong" config against the depth-7 engine, the strong one winning `strongWins` of `count`.
+const versusEngine = (count: number, strongWins: number) =>
   withPotShares(
     Array.from({ length: count }, (_match, index) => {
       const isStrong = index < strongWins;
 
       return [
         { ...SEAT, matchId: `m${index}`, seedBlock: `block${index}`, model: "strong", player: "A", position: 0, winShare: isStrong ? 1 : 0, story: oneRoundWonBy(isStrong ? "A" : "B") },
-        { ...SEAT, matchId: `m${index}`, seedBlock: `block${index}`, model: "weak", player: "B", position: 1, winShare: isStrong ? 0 : 1, story: oneRoundWonBy(isStrong ? "A" : "B") },
+        { ...SEAT, matchId: `m${index}`, seedBlock: `block${index}`, model: splitKey(ANCHOR)[0], effort: "", player: "B", position: 1, winShare: isStrong ? 0 : 1, story: oneRoundWonBy(isStrong ? "A" : "B") },
       ];
     }).flat(),
   );
 
-const strongIn = (played: ReadonlyArray<SeatFull>, block: string) => heldOutRatings(played)(block).get("strong|medium")?.rating;
+test("a config's record against the depth-7 engine counts its rounds in their matches, and its rating gap to the engine comes from the same resamples", () => {
+  const configs = configSummaries(versusEngine(40, 30), { seat: [], legalUse: [], useItem: [] });
+  const strong = configs.find(({ model }) => model === "strong");
 
-test("a match's held-out ratings do not depend on its own seed block's results", () => {
-  const seats = upsetSeats(40, 30);
-  const flipped = seats.map((seat) => (seat.seedBlock === "block3" ? { ...seat, winShare: 1 - (seat.winShare ?? 0), story: oneRoundWonBy(seat.story?.rounds[0]?.winner === "A" ? "B" : "A") } : seat));
-
-  expect(strongIn(flipped, "block3")).toBe(strongIn(seats, "block3"));
-  expect(strongIn(flipped, "block4")).not.toBe(strongIn(seats, "block4"));
-  expect(strongIn(seats, "block3")).toBeGreaterThan(0);
+  expect(strong?.vsEngine).toMatchObject({ k: 30, n: 40, rate: 0.75, blocks: 40 });
+  expect(strong?.vsEngine?.lo).toBeLessThan(0.75);
+  expect(strong?.vsEngine?.hi).toBeGreaterThan(0.75);
+  expect(strong?.rating?.engineGap?.lo).toBeGreaterThan(0);
+  expect(configs.find(({ effort }) => effort === "")?.vsEngine).toBeNull();
 });
 
 test("odds bins cover every whole percent once, with the ends and even odds on their own", () => {
@@ -554,10 +574,6 @@ test("a match search needs each of its words in a seat's label or the seed, in a
   expect(found("sol low")).toEqual(["b", "c"]);
   expect(found("opus luna")).toEqual([]);
   expect(found("")).toEqual(["a", "b", "c"]);
-});
-
-test("a file size is in KB, MB or GB, whichever reads shortest", () => {
-  expect([fmtBytes(2_400), fmtBytes(87_300_000), fmtBytes(1_540_000_000)]).toEqual(["2 KB", "87 MB", "1.5 GB"]);
 });
 
 test("off reads none, and Astra's off, low effort with the recall prompt, is starred", () => {

@@ -1,11 +1,13 @@
 import { Match, Schema } from "effect";
 
+import { BOOTSTRAP_DRAWS } from "../arena/bootstrap.ts";
+
 import { CertainRate, Consistency, ITEMS, NO_GAP } from "./api.ts";
 import type { Decisions, Seat } from "./api.ts";
 import { addTo, blockRate, blocksOf, groupBy, keyOf, MIN_BLOCKS_FOR_INTERVAL, meanOf, regretStats, roundResults, sumOf } from "./page/data.ts";
 import type { BlockTally, SeatFull } from "./page/data.ts";
 import { headlineRatings, playAndMoveRatings } from "./page/play-and-moves.ts";
-import { fittedRatings, pooledRatings } from "./page/ratings.ts";
+import { ANCHOR, fittedRatings, INTERVAL_LEVEL, pairsOf as completedPairsOf, pooledRatings } from "./page/ratings.ts";
 import type { Luck } from "./page/ratings.ts";
 
 // What the arena page shows, worked out once from every seat and agent move: per config and per pair of configs, never
@@ -19,7 +21,7 @@ const Interval = Schema.Struct({ lo: Schema.Finite, hi: Schema.Finite });
 
 export const Rate = Schema.Struct({ k: Schema.Finite, n: Schema.Finite, rate: EmptyAsNull, lo: EmptyAsNull, hi: EmptyAsNull, blocks: Schema.Finite });
 
-const RatingSchema = Schema.Struct({ rating: Schema.Finite, blocks: Schema.Finite, interval: Schema.NullOr(Interval), tier: Schema.NullOr(Schema.Finite), moves: Schema.optionalKey(Schema.Boolean) });
+const RatingSchema = Schema.Struct({ rating: Schema.Finite, blocks: Schema.Finite, interval: Schema.NullOr(Interval), tier: Schema.NullOr(Schema.Finite), moves: Schema.optionalKey(Schema.Boolean), engineGap: Schema.optionalKey(Interval) });
 
 const Item = Schema.Literals(ITEMS);
 
@@ -36,6 +38,8 @@ export const ConfigSummary = Schema.Struct({
   roundShare: Schema.Finite,
   /** Observed win share with a seed-block bootstrap interval. */
   win: Rate,
+  /** Rounds won over rounds played in its scored matches against the depth-7 engine (page/ratings.ts ANCHOR), with a seed-block bootstrap interval at INTERVAL_LEVEL; null with none. */
+  vsEngine: Schema.NullOr(Rate),
   regret: Schema.NullOr(
     Schema.Struct({
       moves: Schema.Finite,
@@ -392,12 +396,34 @@ export const pairsOf = (seats: ReadonlyArray<SeatFull>): ReadonlyArray<Pair> =>
 
 // CONFIGS
 
+/** Per config, its round wins and rounds by seed block in its completed two-player matches against the anchor. */
+const roundsVsAnchor = (seats: ReadonlyArray<SeatFull>): ReadonlyMap<string, BlockTally> => {
+  const tallies = new Map<string, BlockTally>();
+
+  for (const [first, second] of completedPairsOf(seats)) {
+    for (const [own, other] of [[first, second], [second, first]] as const) {
+      const rounds = roundResults(own);
+      const key = keyOf(own);
+
+      if (keyOf(other) === ANCHOR && key !== ANCHOR && rounds.length > 0) {
+        const tally = tallies.get(key) ?? new Map();
+
+        addTo(tally, own.seedBlock, sumOf(rounds), rounds.length);
+        tallies.set(key, tally);
+      }
+    }
+  }
+
+  return tallies;
+};
+
 export const configSummaries = (seats: ReadonlyArray<SeatFull>, decisions: Pick<Decisions, "seat" | "legalUse" | "useItem">, luck: Luck = new Map()): ReadonlyArray<ConfigSummary> => {
   const ratings = pooledRatings(seats);
   const luckFit = luck.size === 0 ? null : fittedRatings(seats, luck);
   const moveRatings = playAndMoveRatings(luckFit?.ratings ?? ratings, seats);
   const luckRatings = luckFit === null ? new Map<string, never>() : headlineRatings(luckFit, moveRatings, seats);
   const favoriteOf = favorites(seats, decisions);
+  const vsAnchor = roundsVsAnchor(seats);
 
   return [...groupBy(seats, keyOf)].flatMap(([key, started]) => {
     const [first] = started;
@@ -405,6 +431,7 @@ export const configSummaries = (seats: ReadonlyArray<SeatFull>, decisions: Pick<
     if (first === undefined) { return []; }
 
     const scored = started.filter(({ status }) => status === "completed");
+    const engineRounds = vsAnchor.get(key);
     const wins: BlockTally = new Map();
 
     for (const seat of scored) { addTo(wins, seat.seedBlock, seat.winShare ?? 0, 1); }
@@ -423,6 +450,7 @@ export const configSummaries = (seats: ReadonlyArray<SeatFull>, decisions: Pick<
         potShare: scoredMean(({ potShare }) => potShare),
         roundShare: meanOf(scored.flatMap(roundResults)),
         win: blockRate(wins),
+        vsEngine: engineRounds === undefined ? null : blockRate(engineRounds, BOOTSTRAP_DRAWS, (1 - INTERVAL_LEVEL) / 2),
         regret: regretStats(scored),
         totalCost: sumOf(started.map(({ cost }) => cost ?? 0)),
         startedMoves: sumOf(started.map(({ moves }) => moves ?? 0)),

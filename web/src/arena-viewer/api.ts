@@ -140,29 +140,9 @@ export const Decisions = Schema.Struct({
   stealItem: Column,
   shot: Column,
   odds: Column,
-  checks: Schema.Struct({ ok: Schema.Finite, bad: Schema.Finite }),
 });
 
 export type Decisions = typeof Decisions.Type;
-
-/**
- * Every blunder, column by column: seat indexes the seats response, ord is the decision's ordinal, points its regret,
- * and chosen and best index labels (the move taken and the best legal move). Scores are percentage points of the round
- * win chance. Empty without a regret database.
- */
-export const Blunders = Schema.Struct({
-  labels: Schema.Array(Schema.String),
-  seat: Column,
-  ord: Column,
-  points: Column,
-  exact: Column,
-  chosen: Column,
-  best: Column,
-  bestScore: Column,
-  chosenScore: Column,
-});
-
-export type Blunders = typeof Blunders.Type;
 
 export const CERTAIN_TYPES = ["self_on_live", "gave_up_guaranteed_win"] as const;
 
@@ -216,22 +196,3 @@ export const patternBit = (pattern: Pattern): number => 1 << PATTERNS.indexOf(pa
 export const Shell = Schema.Literals(["live", "blank"]);
 
 export type Shell = typeof Shell.Type;
-
-/**
- * What the minimax player made of one searched agent move, in percentage points of the round win chance: the regret,
- * the best move's score and the chosen move's. exact is true only for a proven settled round; false means not proven
- * exact, not that the score is a guess. depth is how deep the search got, and limited whether the node budget stopped it.
- */
-export const MoveRegret = Schema.Struct({
-  points: Schema.Finite,
-  exact: Schema.Boolean,
-  best: Schema.String,
-  bestScore: Schema.Finite,
-  chosen: Schema.String,
-  chosenScore: Schema.Finite,
-  depth: Schema.Finite,
-  limited: Schema.Boolean,
-  values: Schema.Array(Schema.Struct({ label: Schema.String, score: Schema.Finite })),
-});
-
-export type MoveRegret = typeof MoveRegret.Type;

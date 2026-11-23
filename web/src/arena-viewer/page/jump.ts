@@ -8,11 +8,21 @@ let pending: string | null = null;
 
 let landedY = 0;
 
+// Growth with no message of its own — a font swapping in, a fold opening — moves a settling jump too. Made at the first jump.
+let growth: ResizeObserver | null = null;
+
 /** Scrolls an element to just below the sticky bar, opening the folds around it, and remembers the jump. */
 export const scrollToTarget = (id: string): void => {
   const target = document.getElementById(id);
 
   if (target === null) { return; }
+
+  if (growth === null) {
+    growth = new ResizeObserver(() => {
+      relandJump();
+    });
+    growth.observe(document.body);
+  }
 
   reveal(target);
   scrollTo(0, target.getBoundingClientRect().top + scrollY - stickyHeight() + 1);
@@ -20,11 +30,11 @@ export const scrollToTarget = (id: string): void => {
   landedY = scrollY;
 };
 
-/** Re-lands the jump that is still settling, unless a replay or the tour owns the page. */
+/** Re-lands the jump that is still settling, unless the tour owns the page. */
 export const relandJump = (): void => {
   if (pending === null) { return; }
 
-  if (document.querySelector(".overlay, .tour-layer") !== null) {
+  if (document.querySelector(".tour-layer") !== null) {
     pending = null;
 
     return;
@@ -38,7 +48,3 @@ export const noteOwnScroll = (): void => {
   if (pending !== null && scrollY !== landedY) { pending = null; }
 };
 
-// Growth with no message of its own — a font swapping in, a fold opening — moves a settling jump too.
-new ResizeObserver(() => {
-  relandJump();
-}).observe(document.body);

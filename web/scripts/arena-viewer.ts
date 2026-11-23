@@ -9,7 +9,7 @@ import { serveArenaViewer } from "../src/arena-viewer/server.ts";
 import { decodeArgs, runMain, ScriptError } from "../src/script.ts";
 
 // Serves the site (web/dist, from `bun run build`) with the arena viewer's API over the arena analysis database (docs/arena/database.md). With --regret it also shows the
-// regret table of a derived database (docs/arena/analysis/regret.md); without, the viewer has no regret. With --knowledge
+// regret table of a derived database (docs/arena/methods.md, "Production scoring"); without, the viewer has no regret. With --knowledge
 // it also shows how consistent each config is in repeated positions (the knowledge database of scripts/arena-knowledge.ts). With --luck it also shows the luck-adjusted Round Elo (tools/arena/analysis/aivat.py).
 // Usage: bun scripts/arena-viewer.ts <db> [host] [port] [--regret <regret db>] [--knowledge <knowledge db>] [--certain-mistakes <opportunities db>] [--luck <luck db>]
 

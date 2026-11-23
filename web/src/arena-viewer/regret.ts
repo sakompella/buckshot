@@ -1,12 +1,13 @@
-import { Database } from "bun:sqlite";
+import type { Database } from "bun:sqlite";
 
 import { Schema } from "effect";
 
 import { gameAccuracy, judgementOf, NO_CHOICE_POINTS } from "./accuracy.ts";
 import type { ScoredMove } from "./accuracy.ts";
-import type { MoveRegret, SeatRegret } from "./api.ts";
+import type { SeatRegret } from "./api.ts";
+import { readOnly } from "./read-only.ts";
 
-// The regret table of the derived database that tools/arena builds (docs/arena/analysis/regret.md), read only. A regret
+// The regret table of the derived database that tools/arena builds (docs/arena/methods.md, "Production scoring"), read only. A regret
 // file holds one run (evaluator, depth limit, budget, reload rule, samples); a file with several is refused. Scores are
 // millionths of the round win chance, shown as points.
 
@@ -55,14 +56,6 @@ export const mismatchesOf = (row: MoveRow): ReadonlyArray<Mismatch> => {
 
 export const decodeMoveRow = Schema.decodeUnknownSync(MoveRow);
 
-const consistent = (row: MoveRow): MoveRow => {
-  const mismatches = mismatchesOf(row);
-
-  if (mismatches.length > 0) { throw new Error(`regret row ${row.matchId} #${row.ordinal}: ${mismatches.join("; ")}`); }
-
-  return row;
-};
-
 const Run = Schema.Struct({ evaluator: Schema.String, depth: Schema.Finite, budget: Schema.Finite, reload: Schema.String, samples: Schema.Finite });
 
 const decodeRuns = Schema.decodeUnknownSync(Schema.Array(Run));
@@ -71,8 +64,6 @@ const decodeSeatMove = Schema.decodeUnknownSync(SeatMoveRow);
 
 export interface Regret {
   readonly seats: ReadonlyMap<string, SeatRegret>;
-  readonly moves: (matchId: string) => Map<number, MoveRegret>;
-  readonly close: () => void;
 }
 
 type SeatMoveRow = typeof SeatMoveRow.Type;
@@ -103,30 +94,6 @@ const seatRegretOf = (moves: ReadonlyArray<SeatMoveRow>): SeatRegret | null => {
       };
 };
 
-const moveOf = (row: MoveRow): MoveRegret => ({
-  points: row.regret / POINT,
-  exact: row.exact === 1,
-  best: row.best,
-  bestScore: row.bestScore / POINT,
-  chosen: row.label,
-  chosenScore: row.chosenScore / POINT,
-  depth: row.depth,
-  limited: row.limited === 1,
-  values: row.values.map(({ label, score }) => ({ label, score: score / POINT })),
-});
-
-/** The scores of the file's one run. It keeps the file open for `moves` until `close`. */
-export const openRegret = (path: string): Regret => {
-  const db = new Database(path, { readonly: true });
-
-  try {
-    return regretOf(path, db);
-  } catch (error) {
-    db.close();
-    throw error;
-  }
-};
-
 const regretOf = (path: string, db: Database): Regret => {
   const runs = decodeRuns(db.query(`select distinct evaluator, max_depth depth, budget, reload, samples from regret`).all());
 
@@ -138,7 +105,6 @@ const regretOf = (path: string, db: Database): Regret => {
      from regret where status = 'searched' order by match_id, player, ordinal`,
   );
 
-  const matchMoves = db.query(`select ${MOVE_COLUMNS} from regret where match_id = ? and status = 'searched'`);
   const bySeat = new Map<string, Array<SeatMoveRow>>();
 
   for (const raw of seatMoves.all()) {
@@ -158,13 +124,8 @@ const regretOf = (path: string, db: Database): Regret => {
         return regret === null ? [] : [[seat, regret] as const];
       }),
     ),
-    moves: (matchId) => new Map(matchMoves.all(matchId).map((raw) => {
-      const row = consistent(decodeMoveRow(raw));
-
-      return [row.ordinal, moveOf(row)];
-    })),
-    close: () => {
-      db.close();
-    },
   };
 };
+
+/** The seat statistics of the file's one run. */
+export const openRegret = (path: string): Regret => readOnly(path, (db) => regretOf(path, db));

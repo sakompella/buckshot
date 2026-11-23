@@ -8,7 +8,7 @@ import type { Fitted, Rating } from "./ratings.ts";
 // config's own distance from the line has a spread of its own, fitted with the line by maximum likelihood. Each config
 // then weighs its two ratings by their precision, so one with few matches leans on its move scores and one with many on
 // its results. A 30-fold split-half test found it closer to the other half's rating than the results alone
-// (docs/arena/analysis/matchups.md). A config with fewer than MOVES_BELOW matches also takes it as its headline rating
+// (docs/arena/methods.md, "Round Elo"). A config with fewer than MOVES_BELOW matches also takes it as its headline rating
 // (ADR-0060).
 
 /** Below this many scored two-player matches, a config with scored moves has its Elo from play and move quality as its headline rating. */
@@ -125,7 +125,8 @@ export const playAndMoveRatings = (headline: ReadonlyMap<string, Rating>, seats:
  * the draws' correlation. A simple approximation: the move scores' own noise enters only through that scale.
  */
 export const headlineRatings = (results: Fitted, combined: ReadonlyMap<string, Rating>, seats: ReadonlyArray<SeatFull>): ReadonlyMap<string, Rating> => {
-  const matches = groupBy(pairsOf(seats).flat(), keyOf);
+  // Distinct matches, so a config's match against itself counts once.
+  const matches = new Map([...groupBy(pairsOf(seats).flat(), keyOf)].map(([key, own]) => [key, new Set(own.map(({ matchId }) => matchId)).size]));
   const ratings = new Map(results.ratings);
   const draws = new Map(results.draws);
 
@@ -133,7 +134,7 @@ export const headlineRatings = (results: Fitted, combined: ReadonlyMap<string, R
     const own = results.ratings.get(key);
     const ownDraws = results.draws.get(key);
 
-    if ((matches.get(key)?.length ?? 0) >= MOVES_BELOW || own === undefined || own.interval === null || rating.interval === null || ownDraws === undefined) { continue; }
+    if ((matches.get(key) ?? 0) >= MOVES_BELOW || own === undefined || own.interval === null || rating.interval === null || ownDraws === undefined) { continue; }
 
     const scale = (rating.interval.hi - rating.interval.lo) / (own.interval.hi - own.interval.lo);
 

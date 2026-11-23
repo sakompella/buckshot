@@ -28,6 +28,38 @@ export interface Certain {
 
 export const NO_CERTAIN: Certain = { summary: { rates: [], moveSeat: [], moveType: [], moveOrd: [] }, moves: () => new Map() };
 
+const OpportunityRow = Schema.Struct({ matchId: Schema.String, player: Schema.String, type: OpportunityType, outcome: Schema.String });
+
+const decodeOpportunity = Schema.decodeUnknownSync(OpportunityRow);
+
+/** The outcomes that count as choosing a type's move in its rate; none for the excluded type, whose rate counts every decision. */
+const CHOSE: Readonly<Record<OpportunityType, string | null>> = { self_on_live: "mistake", gave_up_guaranteed_win: "mistake", gave_turn_away: "fact pattern", hidden_health: null };
+
+/**
+ * Why a certain-mistakes file does not fit the scored seats (`completed`, "<match id>|<player>"), empty when it does:
+ * every opportunity is a scored seat's, and the pooled rates count exactly its opportunities, so the rates the page shows
+ * were worked out from these rows.
+ */
+export const certainProblems = (path: string, completed: ReadonlySet<string>): ReadonlyArray<string> => {
+  const { rows, pooled } = readOnly(path, (db) => ({
+    rows: db.query(`select match_id matchId, player, type, outcome from opportunities`).all().map((raw) => decodeOpportunity(raw)),
+    pooled: db.query(`select scope, model, effort, type, chose, opportunities, lo, hi from rates where scope = 'all'`).all().map((raw) => decodeRate(raw)),
+  }));
+
+  const stale = rows.filter(({ matchId, player }) => !completed.has(`${matchId}|${player}`));
+
+  const mismatched = OpportunityType.literals.flatMap((type) => {
+    const own = rows.filter((row) => row.type === type);
+    const chose = CHOSE[type];
+    const rate = pooled.find((row) => row.type === type) ?? { chose: 0, opportunities: 0 };
+    const counted = { chose: chose === null ? rate.chose : own.filter(({ outcome }) => outcome === chose).length, opportunities: own.length };
+
+    return counted.chose === rate.chose && counted.opportunities === rate.opportunities ? [] : [`the certain-mistake rates for ${type} (${rate.chose} of ${rate.opportunities}) are not those of its opportunities (${counted.chose} of ${counted.opportunities})`];
+  });
+
+  return [...(stale.length === 0 ? [] : [`${stale.length} certain-mistake opportunities are not on scored seats of this database, such as ${stale[0]?.matchId ?? ""}|${stale[0]?.player ?? ""}`]), ...mismatched];
+};
+
 export const openCertain = (path: string, seatIndex: ReadonlyMap<string, number>): Certain => {
   const { rates, mistakes } = readOnly(path, (db) => ({
     rates: db

@@ -6,7 +6,7 @@ import { join } from "node:path";
 
 import type { CertainMistakes, CertainRate } from "../src/arena-viewer/api.ts";
 import { thresholdedCertain } from "../src/arena-viewer/aggregates.ts";
-import { openCertain } from "../src/arena-viewer/certain.ts";
+import { certainProblems, openCertain } from "../src/arena-viewer/certain.ts";
 import { talliesOf } from "../src/arena-viewer/page/certain.ts";
 
 const OPPORTUNITIES = [
@@ -27,7 +27,7 @@ const WRITTEN_RATES = [
   ["all", "", "", "self_on_live", 2, 43, 0.012, 0.11],
 ] as const;
 
-const opportunitiesFile = (): string => {
+const opportunitiesFile = (rates: ReadonlyArray<readonly [string, string, string, string, number, number, number | null, number | null]> = WRITTEN_RATES): string => {
   const path = join(mkdtempSync(join(tmpdir(), "certain-")), "certain-mistakes.sqlite");
   const db = new Database(path);
 
@@ -40,7 +40,7 @@ const opportunitiesFile = (): string => {
 
   const insertRate = db.query("insert into rates values (?, ?, ?, ?, ?, ?, ?, ?)");
 
-  for (const row of WRITTEN_RATES) { insertRate.run(...row); }
+  for (const row of rates) { insertRate.run(...row); }
 
   db.close();
 
@@ -77,6 +77,21 @@ test("only certain mistakes are listed, each with its seat, type and decision, a
     [7, "gave_up_guaranteed_win"],
   ]);
   expect(moves("partial").size).toBe(0);
+});
+
+test("a certain-mistakes file fits only when its opportunities are scored seats and its pooled rates count them", () => {
+  const scored = new Set([...SEATS.keys(), "partial|A"]);
+
+  const fitting = [
+    ["all", "", "", "self_on_live", 3, 4, null, null],
+    ["all", "", "", "gave_up_guaranteed_win", 1, 1, null, null],
+    ["all", "", "", "hidden_health", 1, 1, null, null],
+    ["all", "", "", "gave_turn_away", 1, 2, null, null],
+  ] as const;
+
+  expect(certainProblems(opportunitiesFile(fitting), scored)).toEqual([]);
+  expect(certainProblems(opportunitiesFile(fitting), new Set(SEATS.keys()))).toEqual(["1 certain-mistake opportunities are not on scored seats of this database, such as partial|A"]);
+  expect(certainProblems(opportunitiesFile(), scored)).toHaveLength(4);
 });
 
 type Written = readonly [CertainRate["scope"], string, string, CertainRate["type"], number, number, number | null];

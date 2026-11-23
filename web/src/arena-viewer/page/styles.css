@@ -16,8 +16,6 @@ h2.ghead { font-size: 13px; font-weight: 600; letter-spacing: 0.08em; text-trans
 h2.ghead + section { border-top: 0; margin-top: 0; padding-top: 0; }
 /* The jump menu right above names the first group, so its heading is only for screen readers. */
 .top + .part > h2.ghead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; }
-.grid2 > section { min-width: 0; }
 .empty { color: var(--mut); padding: 40px 0; }
 
 /* The jump menu and the filters stay at the top of a wide screen; below that only the jump menu does. */
@@ -48,7 +46,6 @@ input[type="text"], input:not([type]) { width: 280px; }
 
 svg text { fill: var(--mut); font-size: 12px; }
 svg .small { font-size: 11px; }
-svg .cell { font-size: 10.5px; font-variant-numeric: tabular-nums; }
 svg .note { font-style: italic; font-size: 11px; }
 svg .grid { stroke: var(--grid); }
 .hrow:hover rect:first-child { fill: #0b0b0b; }
@@ -63,10 +60,10 @@ th { font-weight: 500; color: var(--mut); text-align: right; padding: 9px 8px; b
 td { text-align: right; padding: 10px 8px; border-bottom: 1px solid #161616; white-space: nowrap; }
 th:first-child, td:first-child { text-align: left; }
 table.lbt th { white-space: normal; }
-tr.row:hover td { background: #0b0b0b; cursor: pointer; }
+table.lbt tr.row:hover td { background: #0b0b0b; cursor: pointer; }
 .lbt tr.tierstart td { border-top: 1px solid var(--line); }
 tr.sel td { background: #111; }
-tr.provisional td { opacity: 0.55; }
+tr.provisional td { color: var(--dim); }
 .rowbtn { background: none; border: 0; color: inherit; font: inherit; padding: 0; text-align: left; cursor: pointer; }
 .rk { display: inline-block; min-width: 1.6em; color: #8a8a8a; font-variant-numeric: tabular-nums; }
 
@@ -151,6 +148,9 @@ details summary { cursor: pointer; margin: 4px 0; }
 .fate-bar { display: flex; height: 12px; background: #0d0d0d; }
 .fate-bar i { display: block; height: 100%; }
 .fate-val { font-variant-numeric: tabular-nums; }
+/* A bar with a tip is a 24px target; the 12px bar is drawn in its middle. */
+.fate-hit { height: 24px; align-items: center; background: linear-gradient(#0d0d0d, #0d0d0d) center / 100% 12px no-repeat; }
+.fate-hit i { height: 12px; }
 details.tables { margin-top: 34px; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 dl.terms { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 18px; margin: 6px 0 18px; max-width: 980px; font-size: 12.5px; color: var(--mut); }
@@ -158,7 +158,6 @@ dl.terms dt { color: var(--fg); } dl.terms dd { margin: 0; }
 @media (max-width: 639px) { dl.terms { grid-template-columns: minmax(0, 1fr); gap: 0; } dl.terms dd { margin-bottom: 8px; } }
 details.fold > summary { color: var(--mut); font-size: 13px; }
 details.tables > summary { color: var(--mut); font-size: 13px; }
-svg .cell { fill: #fff; stroke: #000; stroke-width: 2.5px; paint-order: stroke; }
 svg text { pointer-events: none; }
 [role="button"] { cursor: pointer; }
 .track { min-width: 180px; }
@@ -172,20 +171,19 @@ td.pick:hover { outline: 1px solid #666; }
 .rounds { display: flex; gap: 16px; margin: 10px 0 0; font-size: 13px; flex-wrap: wrap; align-items: baseline; }
 
 /* scatter */
-svg .plabel { stroke: #000; stroke-width: 3px; paint-order: stroke; stroke-linejoin: round; }
 
 /* heatmap, after RuneBench */
 .heatscroll { overflow-x: auto; }
 table.heat { width: auto; border-collapse: separate; border-spacing: 2px; }
 table.heat th { font-size: 11px; padding: 4px 6px; border: 0; white-space: normal; max-width: 86px; vertical-align: bottom; line-height: 1.2; text-align: center; }
 table.heat th.left, table.heat td.left { text-align: left; }
-table.heat th.sortable { cursor: pointer; } table.heat th.sortable:hover { color: var(--fg); }
+table.heat th.sortable button { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-decoration: inherit; text-underline-offset: inherit; cursor: pointer; } table.heat th.sortable:hover { color: var(--fg); }
 table.heat th.sorted { color: var(--fg); text-decoration: underline; text-underline-offset: 3px; }
 table.heat td { border: 0; padding: 3px 8px; font-size: 11.5px; }
 table.heat td.left { padding-right: 16px; }
 table.heat td.cellv { text-align: center; min-width: 58px; border-radius: 2px; position: relative; }
-table.heat td .n { position: absolute; right: 3px; bottom: 1px; font-size: 10px; line-height: 1; opacity: 0.6; }
-table.heat td.none { color: #444; }
+table.heat td .n { position: absolute; right: 3px; bottom: 1px; font-size: 10px; line-height: 1; }
+table.heat td.none { color: var(--dim); }
 table.heat td.cost { text-align: center; color: var(--mut); }
 table.heat td.click { cursor: pointer; }
 table.heat td.click:hover, table.heat td.ring { outline: 1.5px solid #fff; outline-offset: -1.5px; }
@@ -223,7 +221,7 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
   .fate-hit { height: 44px; align-items: center; background: linear-gradient(#0d0d0d, #0d0d0d) center / 100% 12px no-repeat; }
   .fate-hit i { height: 12px; }
   details > summary { min-height: 44px; display: flex; align-items: center; }
-  table.heat th.sortable { height: 44px; }
+  table.heat th.sortable { height: 44px; } table.heat th.sortable button { min-height: 44px; }
   table.heat td .n { position: static; display: block; text-align: right; margin: 1px -5px -2px 0; }
 }
 
@@ -301,8 +299,7 @@ table.heat th .item-icon { display: block; width: 24px; height: 24px; margin: 0 
   .card, .configpanel { padding: 12px 10px; margin-bottom: 18px; }
   .sub { font-size: 12.5px; margin-bottom: 12px; }
   .filters { gap: 8px; }
-  .ctl.menus { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr) minmax(0, 0.8fr); gap: 8px; }
-  .ctl.menus select { width: 100%; min-width: 0; }
+  .ctl.menus select { max-width: 100%; }
   .chips { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; scrollbar-width: none; }
   .chips .chip { flex: none; }
   .filters.open .chips { flex-wrap: wrap; overflow-x: visible; }

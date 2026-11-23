@@ -3,23 +3,19 @@ import type { Database } from "bun:sqlite";
 import { Schema } from "effect";
 
 import { GameEvent, Seat, Secret } from "../domain.ts";
-import type { Item, Shell as Loaded } from "../domain.ts";
+import type { Item } from "../domain.ts";
 import { Letter, rosterOf } from "../players.ts";
 import type { Roster } from "../players.ts";
 import { itemName } from "../text.ts";
 import { ITEMS, NO_GAP, patternBit } from "./api.ts";
+import { readOnly } from "./read-only.ts";
 import type { Decisions, Pattern, SeatAnalysis, Shell, Story } from "./api.ts";
 
 // Per-decision columns for choice patterns, items, reasoning and compute, worked out once at server start.
 // Each player's view is what it heard up to each of its decisions: the match's replayed events and its own secrets,
 // as the importer stored them (events, secrets and decisions.events_before in docs/arena/database.md).
-// Rules checked against sim/bend-mp/sm/main.bend: cigarettes heal only below round health, any shot clears the saw,
-// a blank self-shot keeps the turn; phone positions count from 1 = the chambered shell (src/text.ts).
-// This tracks the events, not a Bend replay of beliefs: it knows counts, glass and phone clues, inversions and racks.
-
-const flip = (shell: Shell): Shell => (shell === "live" ? "blank" : "live");
-
-const shellOf = (shell: Loaded): Shell => (shell === "Live" ? "live" : "blank");
+// What a player knew of the gun (the chambered shell, its odds, the saw) comes from the knowledge database, the Bend
+// belief over the player's own log; without one, no chamber pattern or odds is counted.
 
 /** One thing a player heard: a public event, or a secret only it learned. The two unions share no tag. */
 export type Heard = GameEvent | Secret;
@@ -55,122 +51,61 @@ export const matchLog = (db: Database, matchId: string): MatchLog => {
 export const heardBetween = (log: MatchLog, socket: Seat, from: number, to: number): ReadonlyArray<Heard> =>
   log.events.slice(from, to).flatMap((event, offset) => [event, ...log.secrets.flatMap((note) => (note.socket === socket && note.at === from + offset + 1 ? [note.secret] : []))]);
 
-type Clue = "glass" | "phone";
-
 /** The chambered shell as one player knows it: its type and how it knows, or only the chance it is live. */
 export interface Chamber {
   readonly known: Shell | null;
-  readonly by: Clue | "count" | null;
+  readonly by: "glass" | "phone" | "count" | null;
   readonly pLive: number;
 }
 
-/** One player's knowledge of the gun, fed that player's events in order. */
-export class ShellTracker {
-  roundHealth = 0;
-  live = 0;
-  blank = 0;
-  cursor = 0;
-  total = 0;
-  inverted = false;
-  sawed = false;
-  readonly known = new Map<number, { shell: Shell; by: Clue }>();
-  readonly checks = { ok: 0, bad: 0 };
-  loadNo = 0;
-  /** Inversions seen, so a pending inverter use can tell its own inversion from later ones. */
-  inversions = 0;
-
-  hear(heard: Heard): void {
-    if (isSecret(heard)) {
-      Secret.matchOrElse(
-        heard,
-        {
-          Glimpse: ({ shell }) => this.known.set(this.cursor, { shell: shellOf(shell), by: "glass" }),
-          Clue: ({ position, shell }) => this.known.set(this.cursor + position - 1, { shell: shellOf(shell), by: "phone" }),
-        },
-        () => undefined,
-      );
-
-      return;
-    }
-
-    GameEvent.matchOrElse(
-      heard,
-      {
-        RoundBegan: ({ health }) => {
-          this.roundHealth = health;
-        },
-        Loaded: ({ load }) => {
-          this.loadNo++;
-          this.live = load.live;
-          this.blank = load.blank;
-          this.total = this.live + this.blank;
-          this.cursor = 0;
-          this.inverted = false;
-          this.sawed = false;
-          this.known.clear();
-        },
-        Inverted: () => {
-          this.inverted = !this.inverted;
-          this.inversions++;
-          const clue = this.known.get(this.cursor);
-
-          if (clue) { clue.shell = flip(clue.shell); }
-        },
-        Used: ({ item }) => {
-          if (item === "Saw") { this.sawed = true; }
-        },
-        Fired: ({ shell }) => {
-          this.spend(shellOf(shell), true);
-        },
-        Ejected: ({ shell }) => {
-          this.spend(shellOf(shell), false);
-        },
-      },
-      () => undefined,
-    );
-  }
-
-  private spend(now: Shell, isShot: boolean): void {
-    const chamber = this.chamber();
-
-    if (chamber?.known) {
-      if (chamber.known === now) { this.checks.ok++; }
-      else { this.checks.bad++; }
-    }
-
-    if ((this.inverted ? flip(now) : now) === "live") { this.live--; }
-    else { this.blank--; }
-
-    this.known.delete(this.cursor);
-    this.cursor++;
-    this.inverted = false;
-
-    if (isShot) { this.sawed = false; }
-  }
-
-  /** The chambered shell, or null when the load is spent. */
-  chamber(): Chamber | null {
-    if (this.cursor >= this.total) { return null; }
-
-    const clue = this.known.get(this.cursor);
-
-    if (clue) { return { known: clue.shell, by: clue.by, pLive: clue.shell === "live" ? 1 : 0 }; }
-
-    const later = [...this.known].filter(([at]) => at > this.cursor);
-    const live = this.live - later.filter(([, { shell }]) => shell === "live").length;
-    const blank = this.blank - later.filter(([, { shell }]) => shell === "blank").length;
-
-    if (live + blank <= 0) { return null; }
-
-    const pLive = this.inverted ? blank / (live + blank) : live / (live + blank);
-
-    if (pLive === 1) { return { known: "live", by: "count", pLive }; }
-
-    if (pLive === 0) { return { known: "blank", by: "count", pLive }; }
-
-    return { known: null, by: null, pLive };
-  }
+/** What a player knew at one decision, from the knowledge database (scripts/arena-knowledge.ts, the Bend belief over its own log). */
+export interface Knowledge {
+  /** Null when the gun holds no shell. */
+  readonly chamber: Chamber | null;
+  readonly sawed: boolean;
+  /** The shells left in the gun, and the round, to tell one shell from the next. */
+  readonly remaining: number;
+  readonly round: number;
 }
+
+const KnowledgeRow = Schema.Struct({
+  matchId: Schema.String,
+  ordinal: Schema.Finite,
+  round: Schema.Finite,
+  remaining: Schema.Finite,
+  sawed: Schema.Finite,
+  chamber: Schema.NullOr(Schema.Literals(["Live", "Blank"])),
+  source: Schema.NullOr(Schema.Literals(["glass", "phone", "public", "combined"])),
+  /** The share of the shell orders the player still holds possible with a live shell chambered; null with none. */
+  pLive: Schema.NullOr(Schema.Finite),
+});
+
+const decodeKnowledgeRow = Schema.decodeUnknownSync(KnowledgeRow);
+
+const chamberOf = ({ chamber, source, pLive }: typeof KnowledgeRow.Type): Chamber | null => {
+  if (chamber !== null) { return { known: chamber === "Live" ? "live" : "blank", by: source === "glass" || source === "phone" ? source : "count", pLive: chamber === "Live" ? 1 : 0 }; }
+
+  return pLive === null ? null : { known: null, by: null, pLive };
+};
+
+/** Each agent decision's knowledge, by "<match id>|<ordinal>". */
+export const openKnowledge = (path: string): ReadonlyMap<string, Knowledge> =>
+  readOnly(path, (db) =>
+    new Map(
+      db
+        .query(
+          `select match_id matchId, ordinal, round, remaining, sawed, chamber, source,
+             case when private_orders > 0 and remaining > 0 then json_extract(private_live_json, '$[0]') * 1.0 / private_orders end pLive
+           from decisions where by_whom = 'agent'`,
+        )
+        .all()
+        .map((raw) => {
+          const row = decodeKnowledgeRow(raw);
+
+          return [`${row.matchId}|${row.ordinal}`, { chamber: chamberOf(row), sawed: row.sawed === 1, remaining: row.remaining, round: row.round }] as const;
+        }),
+    ),
+  );
 
 /**
  * The shot and glass patterns a move had the chance to show, given the chamber as the player knows it: each pattern,
@@ -313,14 +248,10 @@ const emptySeat = (): SeatTally => ({
   deficits: [],
 });
 
-type MutableColumns = { -readonly [K in keyof Omit<Decisions, "checks">]: Array<number> };
+type MutableColumns = { -readonly [K in keyof Decisions]: Array<number> };
 
-/** An inverter use on a known live shell, tied to that exact shell: same load, same cursor, and only its own inversion since. */
-interface PendingInvert {
-  readonly load: number;
-  readonly cursor: number;
-  readonly inversions: number;
-}
+/** An inverter use on a known live shell, tied to that shell: the same round with the same shells left. */
+type PendingInvert = Pick<Knowledge, "round" | "remaining">;
 
 /** Works out the decision columns and each seat's analysis. seatIndex maps `matchId|player` to a place in seats. */
 export interface Analysis {
@@ -328,7 +259,7 @@ export interface Analysis {
   readonly seats: ReadonlyArray<SeatAnalysis>;
 }
 
-export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: ReadonlyMap<string, number>): Analysis => {
+export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: ReadonlyMap<string, number>, knowledge: ReadonlyMap<string, Knowledge>): Analysis => {
   const started = performance.now();
 
   // Several calls (retries, reminders, failed attempts) link to one decision (calls.link_method), so every linked call is added up per decision first.
@@ -350,23 +281,17 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
 
   const extra = seats.map(() => emptySeat());
   const columns: MutableColumns = { seat: [], ord: [], opp: [], pick: [], rt: [], out: [], gap: [], cost: [], lat: [], tok: [], legalUse: [], legalSteal: [], useItem: [], stealItem: [], shot: [], odds: [] };
-  const checks = { ok: 0, bad: 0 };
 
   const seatsOf = new Map<string, Array<number>>();
 
   for (const [index, seat] of seats.entries()) { seatsOf.set(seat.matchId, [...(seatsOf.get(seat.matchId) ?? []), index]); }
 
-  let tracker = new ShellTracker();
+  let roundHealth = 0;
   let currentSeat = "";
   let currentMatch = "";
   let pendingInvert: PendingInvert | null = null;
   let log: MatchLog | null = null;
   let heardTo = 0;
-
-  const finishSeat = () => {
-    checks.ok += tracker.checks.ok;
-    checks.bad += tracker.checks.bad;
-  };
 
   const finishMatch = () => {
     if (log === null) { return; }
@@ -400,9 +325,8 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
     }
 
     if (`${row.m}|${row.p}` !== currentSeat) {
-      finishSeat();
       currentSeat = `${row.m}|${row.p}`;
-      tracker = new ShellTracker();
+      roundHealth = 0;
       pendingInvert = null;
       heardTo = 0;
     }
@@ -415,9 +339,8 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
     const visible = decodeVisible(row.v);
 
     for (const heard of heardBetween(log, row.s, heardTo, row.e)) {
-      tracker.hear(heard);
-
       if (GameEvent.guards.RoundBegan(heard)) {
+        roundHealth = heard.health;
         seat.round = heard.round + 1;
         seat.deficits.push(0);
       }
@@ -438,7 +361,8 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
     const legalLabels = [...legal];
     const isSelf = row.label === "Shoot yourself";
     const isOpp = row.label.startsWith("Shoot Player ");
-    const chamber = tracker.chamber();
+    const known = knowledge.get(`${row.m}|${row.ord}`);
+    const chamber = known?.chamber ?? null;
     let chances = 0;
     let taken = 0;
 
@@ -450,19 +374,20 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
       if (isChosen) { taken |= patternBit(pattern); }
     };
 
-    if (chamber) { for (const [pattern, isAvailable, isChosen] of chamberPatterns(chamber, tracker.sawed, legal, row.label)) {flag(pattern, isAvailable, isChosen); }}
+    if (chamber && known) { for (const [pattern, isAvailable, isChosen] of chamberPatterns(chamber, known.sawed, legal, row.label)) {flag(pattern, isAvailable, isChosen); }}
 
-    // Inverting a known live shell, then shooting the opponent with the now blank shell: checked at the next shot.
-    if (pendingInvert && (pendingInvert.load !== tracker.loadNo || pendingInvert.cursor !== tracker.cursor || tracker.inversions !== pendingInvert.inversions + 1)) { pendingInvert = null; }
+    // Inverting a known live shell, then shooting the opponent with the now blank shell: checked at the next shot,
+    // which must be at the same shell, still blank (not inverted back).
+    if (pendingInvert && (pendingInvert.round !== known?.round || pendingInvert.remaining !== known.remaining || chamber?.known !== "blank")) { pendingInvert = null; }
 
     if (pendingInvert && (isSelf || isOpp)) {
       flag("invertLiveOpp", true, isOpp);
       pendingInvert = null;
     }
 
-    if (row.label === "Use inverter" && chamber?.known === "live") { pendingInvert = { load: tracker.loadNo, cursor: tracker.cursor, inversions: tracker.inversions }; }
+    if (row.label === "Use inverter" && chamber?.known === "live" && known) { pendingInvert = { round: known.round, remaining: known.remaining }; }
 
-    flag("cigsFull", tracker.roundHealth > 0 && (ownHealth ?? 0) >= tracker.roundHealth && legal.has("Use cigarettes"), row.label === "Use cigarettes");
+    flag("cigsFull", roundHealth > 0 && (ownHealth ?? 0) >= roundHealth && legal.has("Use cigarettes"), row.label === "Use cigarettes");
 
     let legalUse = 0;
     let legalSteal = 0;
@@ -507,10 +432,9 @@ export const analyse = (db: Database, seats: ReadonlyArray<SeatKey>, seatIndex: 
     columns.odds.push(chamber !== null && (isSelf || isOpp) && chamber.by !== "glass" && chamber.by !== "phone" ? Math.round(chamber.pLive * 100) : -1);
   }
 
-  finishSeat();
   finishMatch();
 
-  console.log(`analysis: ${columns.seat.length} agent moves in ${Math.round(performance.now() - started)} ms; known-shell predictions matched ${checks.ok}, contradicted ${checks.bad}`);
+  console.log(`analysis: ${columns.seat.length} agent moves in ${Math.round(performance.now() - started)} ms`);
 
-  return { decisions: { ...columns, checks }, seats: extra };
+  return { decisions: columns, seats: extra };
 };

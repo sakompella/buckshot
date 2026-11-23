@@ -1,5 +1,5 @@
 import { Effect, Option, Schema } from "effect";
-import { Command } from "foldkit";
+import { Command, Mount } from "foldkit";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { GROUPS, Message } from "./model.ts";
@@ -29,7 +29,7 @@ const TOUR: ReadonlyArray<TourStep> = [
     anchor: "summary",
     focus: "#summary",
     title: "Results at a glance",
-    text: `The first chart shows every ranked config's rating with its ${INTERVAL_PERCENT} interval, best first. When two lines overlap, the data cannot tell those configs apart. The dashed lines are the fixed reference players that About explains.`,
+    text: `The first chart shows every ranked config's rating with its ${INTERVAL_PERCENT} interval, best first. Each line is that config's own interval, not a test between two configs. The dashed lines are the fixed reference players that About explains.`,
   },
   {
     anchor: "how",
@@ -155,6 +155,17 @@ export const PlaceTour = Command.define("PlaceTour", {
   execute: ({ step, hasCertain }) => nextFrame.pipe(Effect.map(() => placed(step, hasCertain))),
 });
 
+/** The dialog takes focus when it opens: its Next button. */
+const FocusNext = Mount.define("FocusNext", {
+  messages: [Message.CompletedScroll],
+  execute: ({ element }) =>
+    Effect.sync(() => {
+      element.querySelector<HTMLElement>("button.on")?.focus({ preventScroll: true });
+
+      return Message.CompletedScroll();
+    }),
+});
+
 // VIEW
 
 export const tourKeyMessage = (key: string): Option.Option<Message> => {
@@ -185,7 +196,7 @@ export const tourView = (h: H, tour: Tour, viewportWidth: number): Html => {
       h.div([h.Class("tour-backdrop"), h.OnClick(Message.ClosedTour())], []),
       box === undefined ? h.empty : h.div([h.Class("tour-focus"), h.Style({ top: px(box.top - 4), left: px(box.left - 4), width: px(box.width + 8), height: px(box.height + 8) })], []),
       h.div(
-        [h.Class(`tour-card ${tour.isCardUnder ? "under" : ""}`), h.Role("dialog"), h.AriaLabel("Tour"), h.Style(cardPlace)],
+        [h.Class(`tour-card ${tour.isCardUnder ? "under" : ""}`), h.Role("dialog"), h.AriaModal(true), h.AriaLabel("Tour"), h.Style(cardPlace), h.OnMount(FocusNext())],
         [
           h.div([h.Class("tour-head")], [h.b([], [step.title]), h.span([h.Class("k")], [`${tour.step + 1} / ${steps.length}`])]),
           h.p([], [step.text]),

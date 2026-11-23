@@ -124,13 +124,16 @@ const listedOf = ({ certain, seats, allMatches }: CertainLinks, { key, type }: C
     .toSorted((left, right) => right.startedAt.localeCompare(left.startedAt));
 };
 
-/** A resample of zero mistakes is all zeros, so a zero count shows the rule-of-three 95% upper bound, 3 / opportunities, instead. */
-const boundsOf = (cell: Cell): CertainRate["bounds"] => (cell.bounds !== null && cell.mistakes === 0 ? { lo: 0, hi: 3 / cell.opportunities } : cell.bounds);
+/**
+ * A resample of zero mistakes is all zeros, and decisions within a match are not independent, so no interval is drawn for
+ * a zero count: it shows as zero observed out of its opportunities.
+ */
+const boundsOf = (cell: Cell): CertainRate["bounds"] => (cell.mistakes === 0 ? null : cell.bounds);
 
 const fmtBounds = (cell: Cell): string => {
   const bounds = boundsOf(cell);
 
-  return bounds === null ? "" : cell.mistakes === 0 ? ` (under ${fmtShare(bounds.hi)})` : ` [${fmtShare(bounds.lo)}, ${fmtShare(bounds.hi)}]`;
+  return bounds === null ? "" : ` [${fmtShare(bounds.lo)}, ${fmtShare(bounds.hi)}]`;
 };
 
 const intervalView = (h: H, cell: Cell): Html => h.span([h.Class("pm")], [fmtBounds(cell)]);

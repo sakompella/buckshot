@@ -2,12 +2,12 @@ import type { Html, HtmlBuilder } from "foldkit/html";
 
 import { isOnline } from "../../site/online.ts";
 import type { Runs } from "../aggregates.ts";
-import { isPromptedOff } from "./data.ts";
+import { fmtPct, fmtRating, fmtShare, isFixedPlayer, isPromptedOff, PROVISIONAL_BELOW } from "./data.ts";
 import { MOVE_ELO } from "./derived.ts";
 import type { Derived } from "./derived.ts";
 import { forestView } from "./forest.ts";
 import { MOVES_BELOW } from "./play-and-moves.ts";
-import { INTERVAL_PERCENT } from "./ratings.ts";
+import { INTERVAL_LEVEL, INTERVAL_PERCENT } from "./ratings.ts";
 import { Message } from "./model.ts";
 
 type H = HtmlBuilder<Message>;
@@ -15,10 +15,45 @@ type H = HtmlBuilder<Message>;
 // The page's reader-facing text: the results summary at the top, the game explained after the first chart,
 // the method under About and the footer. Numbers come from the aggregates; the rules come from the shared instructions.
 
+const SOURCE = "https://github.com/sakompella/buckshot";
+
 const DAY = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" });
 
 /** "Oct 15 – Nov 9, 2026", or the one day when both ends are the same. */
 const runDates = (runs: Runs): string => (runs.from === runs.to ? DAY.format(new Date(runs.from)) : `${DAY.format(new Date(runs.from))} – ${DAY.format(new Date(runs.to))}`);
+
+/** "+13 (-8 to +35)": a rating gap with its interval. */
+const gapText = (gap: number, interval: { readonly lo: number; readonly hi: number } | undefined): string => `${fmtRating(gap)}${interval === undefined ? "" : ` (${fmtRating(interval.lo)} to ${fmtRating(interval.hi)})`}`;
+
+/** The language-model configs that played the depth-7 engine directly: their rounds won, and their rating minus the engine's. */
+const engineRecordView = (h: H, derived: Derived): ReadonlyArray<Html> => {
+  const played = derived.everyPooled.flatMap((config) => (config.vsEngine === null || config.vsEngine.rate === null || isFixedPlayer(config.model) ? [] : [{ config, record: config.vsEngine, rate: config.vsEngine.rate }]));
+
+  return played.length === 0
+    ? []
+    : [
+        h.p([h.Class("sub")], [
+          `Against the depth-7 engine directly, over whole seed blocks resampled for ${INTERVAL_PERCENT} intervals: `,
+          played
+            .map(({ config, record, rate }) => {
+              const rating = derived.ratings.get(config.key);
+              const bounds = record.lo === null || record.hi === null ? "" : `, ${fmtShare(record.lo)} to ${fmtShare(record.hi)}`;
+
+              return `${config.label} won ${record.k} of ${record.n} rounds (${fmtShare(rate)}${bounds}); its ${derived.ratingName} minus the engine's, both from the same resamples, is ${rating === undefined ? "–" : gapText(rating.rating, rating.engineGap)}`;
+            })
+            .join(". "),
+          played.every(({ record }) => record.lo !== null && record.hi !== null && record.lo < 0.5 && record.hi > 0.5) ? ". Each record's interval includes an even share, so these matches do not show either side as stronger." : ".",
+        ]),
+      ];
+};
+
+/** One result for the hero: the top-ranked language-model config's headline rating against the depth-7 engine, at 0. */
+export const leadFinding = (derived: Derived): string | null => {
+  const top = derived.everyPooled.filter(({ key, model }) => !isFixedPlayer(model) && derived.ranks.has(key)).toSorted((left, right) => (derived.ranks.get(left.key) ?? 0) - (derived.ranks.get(right.key) ?? 0))[0];
+  const rating = top === undefined ? undefined : derived.ratings.get(top.key);
+
+  return top === undefined || rating === undefined ? null : `The top-ranked model config, ${top.label}, has a ${derived.ratingName} of ${fmtRating(rating.rating)} against the depth-7 search engine at 0${rating.engineGap === undefined ? "" : ` (${INTERVAL_PERCENT} interval of the gap ${fmtRating(rating.engineGap.lo)} to ${fmtRating(rating.engineGap.hi)})`}.`;
+};
 
 /** The ranked configs' headline rating with intervals, and the search engines as reference lines. */
 export const summaryView = (h: H, derived: Derived): Html =>
@@ -29,9 +64,10 @@ export const summaryView = (h: H, derived: Derived): Html =>
       h.p([h.Class("sub")], [
         `${derived.ratingName} of every ranked config, best first`,
         ...(derived.runs === undefined ? [] : [`, from matches played ${runDates(derived.runs)}`]),
-        `. Every match of every tournament counts, and the depth-7 search engine sits at 0. The dot is a config's rating and the line is its ${INTERVAL_PERCENT} interval. When two lines overlap a lot, their order is not settled; the leaderboard's tiers test each gap directly. The best configs cannot be told apart from the depth-7 search engine. That engine also scores every move, so a model that plays better than it somewhere is counted as losing points there. The dashed lines are the search engines and the dealer AIs, fixed players that About explains. The leaderboard groups the configs into tiers.`,
+        `. Every match of every tournament counts, and the depth-7 search engine sits at 0. The dot is a config's rating and the line is its ${INTERVAL_PERCENT} interval. Each line is one config's own interval, not a test between two configs; the leaderboard's tiers test the gaps. The depth-7 engine also scores every move, so a model that plays better than it somewhere is counted as losing points there. The dashed lines are the search engines and the dealer AIs, fixed players that About explains.`,
       ]),
       forestView(h, derived),
+      ...engineRecordView(h, derived),
     ],
   );
 
@@ -52,7 +88,7 @@ export const howView = (h: H): Html =>
         "The gun holds two live shells and one blank, and your magnifying glass showed that the chambered shell is the blank. Shooting yourself costs nothing: the blank keeps your turn, and the next shell is then sure to be live, so you can fire it at your opponent. Shooting the opponent instead passes the turn and hands over the gun. The How they play section counts moves like that as certain mistakes.",
       ]),
       h.p([h.Class("sub")], [
-        "Each player here is a language model, apart from the search engines. On its turn a model receives its view as JSON: both players' health and items, the shotgun, the log entries it has not been sent yet, and its numbered legal moves. It answers with one move number. Each log entry is sent only once, so the model must remember the earlier ones. It sees the public log and its own secrets, never the true shell order or the other player's secrets. A config is one model at one effort setting. The effort (none to max) is how much thinking the provider allows per move, and more effort costs more. The chips at the top turn models and efforts off and on.",
+        "Each player here is a language model, apart from the fixed players: the search engines and the game's dealer AIs. On its turn a model receives its view as JSON: both players' health (hidden while a player is jammed) and items, the shotgun, the log entries it has not been sent yet, and its numbered legal moves. It answers with one move number. Each log entry is sent only once, so the model must remember the earlier ones. It sees the public log and its own secrets, never the true shell order or the other player's secrets. A config is one model at one effort setting. The effort (none to max) is how much thinking the provider allows per move, and more effort costs more. The chips at the top turn models and efforts off and on.",
       ]),
     ],
   );
@@ -69,7 +105,9 @@ export const aboutView = (h: H, derived: Derived): Html => {
       h.h3([], ["About this experiment"]),
       ...(derived.runs === undefined ? [] : [h.p([h.Class("sub")], [`The matches here were played ${runDates(derived.runs)} (UTC).`])]),
       h.p([h.Class("sub")], [
-        `Every match has two players and uses items. A seed fixes the deals. A seed block is one seed that a pairing plays in both seat orders, so neither side gains from sitting first. ${unpaired.toLocaleString()} of the ${blocks.toLocaleString()} seed blocks hold only one scored match, so their seat order is not balanced. All tournaments are pooled. Every model plays under the same shared instructions with the same tools`,
+        `Every match has two players and uses items. A seed fixes the deals. A seed block is one seed that a pairing plays in both seat orders, so neither side gains from sitting first. ${unpaired.toLocaleString()} of the ${blocks.toLocaleString()} seed blocks hold only one scored match, so their seat order is not balanced. All tournaments are pooled. Every model gets the same shared base instructions and legal-move interface (`,
+        h.a([h.Href(`${SOURCE}/blob/main/web/src/arena/match.ts`)], ["the instructions"]),
+        ")",
         ...(promptedOff.length === 0
           ? ["."]
           : [`, except ${promptedOff.join(", ")}: its API has no reasoning-off setting, so it plays at low effort with one added line telling it to answer at once, without planning or checking ("immediate-recall mode").`]),
@@ -81,7 +119,10 @@ export const aboutView = (h: H, derived: Derived): Html => {
       ]),
       h.p([h.Class("sub")], [
         h.b([], ["Round Elo. "]),
-        `A Bradley-Terry rating: one fit over every scored match, where each round counts as one game. The gap between two ratings says how often one config beats the other in a round. Ratings are measured from the depth-7 search engine (Engine/7/2000000/sampled), a fixed program, so 0 means the same thing as configs are added. The bracket beside a rating is its ${INTERVAL_PERCENT} bootstrap interval: the fit is redone many times on seed blocks drawn at random, with repeats, and about one in ten true values falls outside the bracket. Because whole seed blocks are drawn, the bracket includes the luck that all matches on one seed share. Each bracket is measured against the mean of all configs, so it leaves out the engine's own noise; the leaderboard gives that noise once.`,
+        "A Bradley-Terry rating: one fit over every scored match, where each round counts as one game. The gap between two ratings says how often one config beats the other in a round. Ratings are measured from the depth-7 search engine (Engine/7/2000000/sampled), a fixed program, so 0 means the same thing as configs are added.",
+      ]),
+      h.p([h.Class("sub")], [
+        `The bracket beside a rating is its ${INTERVAL_PERCENT} bootstrap interval: the fit is redone many times on seed blocks drawn at random, with repeats, and about ${fmtPct(1 - INTERVAL_LEVEL)} of true values fall outside the bracket. Because whole seed blocks are drawn, the bracket includes the luck that all matches on one seed share. Each bracket is measured against the mean of all configs, so it leaves out the engine's own noise; the leaderboard gives that noise once, and the comparison with the engine above takes the gap within each resample.`,
       ]),
       ...(hasLuck
         ? [
@@ -101,13 +142,13 @@ export const aboutView = (h: H, derived: Derived): Html => {
         : []),
       h.p([h.Class("sub")], [
         h.b([], ["What to keep in mind. "]),
-        `Configs are grouped in tiers. Going down the ranking, a new tier starts at the first config that is clearly below the top config of the current tier: the ${INTERVAL_PERCENT} bootstrap interval of the gap between the two does not include 0. Within a tier the order is not settled. Provisional configs (fewer than 20 scored matches) have no tier. Points lost and accuracy are measured against a minimax search to depth 7, not against perfect play; certain mistakes do not need such a player. Costs are the providers' list prices applied to the usage, not what anyone was billed.`,
+        `Configs are grouped in tiers. Going down the ranking, a new tier starts at the first config that is clearly below the top config of the current tier: the ${INTERVAL_PERCENT} bootstrap interval of the gap between the two does not include 0. Within a tier the order is not settled. Each step down tests one gap, and many gaps are tested, so some tier breaks will be wrong by chance. Provisional configs (fewer than ${PROVISIONAL_BELOW} scored matches) have no tier. Points lost and accuracy are measured against a minimax search to depth 7, not against perfect play; certain mistakes do not need such a player. The models may have read about Buckshot Roulette in training; nothing here tests for that. Costs are the providers' list prices applied to the usage, not what anyone was billed.`,
       ]),
     ],
   );
 };
 
-/** The data date, a link to the method, and whose game this is. */
+/** The data date, a link to the method, the author and source, and whose game this is. */
 export const footerView = (h: H, derived: Derived): Html =>
   h.footer(
     [h.Class("foot")],
@@ -117,6 +158,7 @@ export const footerView = (h: H, derived: Derived): Html =>
         h.a([h.Href("#about"), h.OnClick(Message.ClickedJump({ target: "about" }), { defaultAction: "Prevent" })], ["Methods"]),
         ".",
       ]),
+      h.p([], ["By Aditya Kompella. ", h.a([h.Href(SOURCE)], ["Source on GitHub"]), "."]),
       h.p([], ["An unofficial project, not affiliated with the game's developer. Buckshot Roulette is a game by Mike Klubnika."]),
     ],
   );

@@ -24,7 +24,7 @@ const L = 46;
 const LABEL_GAP = 13;
 
 /** End labels from the top down, pushed apart so none overlaps the one above, and pulled up so none passes `bottom`. */
-const spreadLabels = (ys: ReadonlyArray<number>, bottom: number): ReadonlyArray<number> => {
+export const spreadLabels = (ys: ReadonlyArray<number>, bottom: number): ReadonlyArray<number> => {
   const order = ys.map((y, index) => ({ y, index })).toSorted((left, right) => left.y - right.y);
   const placed = ys.map(() => 0);
   let last = Number.NEGATIVE_INFINITY;
@@ -111,7 +111,7 @@ const panelView = (h: H, model: string, lines: ReadonlyArray<OddsLine>, width: n
       ...lines.flatMap(({ key, effort, points }, index) => [
         h.path([h.D(points.map(({ bin, share }, at) => `${at === 0 ? "M" : "L"}${x.at(bin)},${y.at(share)}`).join(" ")), h.Fill("none"), h.Stroke(color), h.StrokeWidth("1.6"), h.StrokeDasharray(dashOf(effort))], []),
         ...points.map(({ bin, share }) =>
-          tippedDot(h, anchorId("odds", key, bin), spotText(lines, bin, (other) => Math.abs(y.at(other) - y.at(share)) < 1), String(x.at(bin)), String(y.at(share)), "3", color),
+          tippedDot(h, anchorId("odds", key, bin), spotText(lines, bin, (other) => Math.abs(y.at(other) - y.at(share)) < 1), String(x.at(bin)), String(y.at(share)), "3", color, false),
         ),
         ...(isKeyedBelow
           ? []
@@ -123,7 +123,13 @@ const panelView = (h: H, model: string, lines: ReadonlyArray<OddsLine>, width: n
     ],
   );
 
-  return isKeyedBelow ? h.div([], [chart, lineKeyView(h, lines.map(({ effort }) => ({ label: effortLabel(model, effort), color, dash: dashOf(effort) })))]) : chart;
+  // The dots stay out of the tab order (there are hundreds); this list gives screen readers the same numbers.
+  const summary = h.ul(
+    [h.Class("sr")],
+    lines.map(({ effort, points }) => h.li([], [`${effortLabel(model, effort)}: ${points.map(({ bin, self, shots }) => `chance live ${ODDS_BINS[bin]?.label}, ${self} of ${shots} shots at itself`).join("; ")}`])),
+  );
+
+  return isKeyedBelow ? h.div([], [chart, summary, lineKeyView(h, lines.map(({ effort }) => ({ label: effortLabel(model, effort), color, dash: dashOf(effort) })))]) : h.div([], [chart, summary]);
 };
 
 export const droppedText = (keys: ReadonlyArray<string>): string =>

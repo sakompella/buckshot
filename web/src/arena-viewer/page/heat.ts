@@ -1,7 +1,8 @@
 import { Option } from "effect";
 import type { Html, HtmlBuilder } from "foldkit/html";
 
-import { anchorId, pressable, termsView, tipView } from "./charts.ts";
+import { anchorId, termsView, tipView } from "./charts.ts";
+import { HEADER_TITLES, MOVES_NOTE } from "./leaderboard.ts";
 import type { Pair } from "../aggregates.ts";
 import { baseName, baseOrder, fmtCount, fmtPct, fmtRating, fmtUsd, isClaude, shortName, splitKey, unique } from "./data.ts";
 import { memoLast } from "./derived.ts";
@@ -20,6 +21,8 @@ export interface HeatRow {
   readonly label: string;
   readonly color: string;
   readonly rating: number;
+  /** The headline rating is the Elo from play and move quality (play-and-moves.ts). */
+  readonly moves: boolean;
   readonly cost: number;
 }
 
@@ -45,7 +48,8 @@ const PAGE = 0x10;
 export const shadeOf = (value: number, n: number) => {
   const level = Math.round(PAGE + (DARKEST + value * (BRIGHTEST - DARKEST) - PAGE) * Math.min(1, n / FULL_N));
 
-  return { background: `rgb(${level}, ${level}, ${level})`, color: level > 0x80 ? "#000" : "#e6e6e6" };
+  // Black text from the grey where it reaches 4.5:1, white below it, where white still does.
+  return { background: `rgb(${level}, ${level}, ${level})`, color: level >= 0x76 ? "#000" : "#fff" };
 };
 
 /** Per config, its win shares summed and its scored matches against each opponent model. */
@@ -86,9 +90,9 @@ const cellAt = (derived: Derived, row: HeatRow, col: string): HeatCell | null =>
 
 export const heatRowsOf = memoLast((derived: Derived): ReadonlyArray<HeatRow> =>
   derived.pooled.flatMap((m) => {
-    const rating = derived.ratings.get(m.key)?.rating;
+    const rating = derived.ratings.get(m.key);
 
-    return rating === undefined || m.scored === 0 ? [] : [{ key: m.key, model: m.model, label: m.label, color: m.color, rating, cost: m.avgCost }];
+    return rating === undefined || m.scored === 0 ? [] : [{ key: m.key, model: m.model, label: m.label, color: m.color, rating: rating.rating, moves: rating.moves === true, cost: m.avgCost }];
   }),
 );
 
@@ -110,8 +114,12 @@ const heatmapView = (h: H, derived: Derived, heat: Model["heat"]): Html => {
   const cellOfRow = (row: HeatRow, col: string) => cells.get(row.key)?.get(col) ?? null;
   const sorted = sortedRows(shown, heat.sort, (row) => cellOfRow(row, heat.sort)?.value ?? -1);
 
+  // A head stays a column header, with a button inside to sort by it; the sorted column says which way.
   const header = (id: string, label: string, extra = "") =>
-    h.th([h.Class(`${extra} sortable ${heat.sort === id && id !== "rating" ? "sorted" : ""}`), ...pressable(h, Message.ClickedHeatColumn({ column: id }))], [label]);
+    h.th(
+      [h.Class(`${extra} sortable ${heat.sort === id && id !== "rating" ? "sorted" : ""}`), ...(heat.sort === id ? [h.AriaSort(id === "model" || id === "cost" ? "ascending" : "descending")] : [])],
+      [h.button([h.Type("button"), h.OnClick(Message.ClickedHeatColumn({ column: id }))], [label])],
+    );
 
   const tip = Option.flatMap(heat.maybeTip, ({ row, col }) => {
     const shownRow = shown.find((candidate) => candidate.key === row);
@@ -139,7 +147,7 @@ const heatmapView = (h: H, derived: Derived, heat: Model["heat"]): Html => {
                     [
                       header("model", "Model", "left"),
                       ...columns.map((col) => header(col.id, col.label)),
-                      header("rating", "Round Elo"),
+                      header("rating", derived.ratingName),
                       header("cost", "$/match"),
                     ],
                   ),
@@ -170,7 +178,7 @@ const heatmapView = (h: H, derived: Derived, heat: Model["heat"]): Html => {
                           [h.span([h.AriaHidden(true)], [cell.text, h.span([h.Class("n")], [fmtCount(cell.n)])]), h.span([h.Class("sr")], [`${row.label} ${cell.tip}`])],
                         );
                       }),
-                      h.td([h.Class("total")], [fmtRating(row.rating)]),
+                      h.td([h.Class("total")], [`${fmtRating(row.rating)}${row.moves ? "†" : ""}`]),
                       h.td([h.Class("cost")], [row.cost > 0 ? fmtUsd(row.cost) : "–"]),
                     ],
                   ),
@@ -183,7 +191,8 @@ const heatmapView = (h: H, derived: Derived, heat: Model["heat"]): Html => {
       Option.getOrElse(tip, () => h.empty),
       termsView(h, "What the columns mean", [
         ...columns.filter(({ label, title }) => label !== title).map(({ label, title }) => [label, title] as const),
-        ["Round Elo", "Bradley-Terry rating fitted over every match of every tournament, on round win share"],
+        [derived.ratingName, HEADER_TITLES.get(derived.ratingName) ?? ""],
+        ...(shown.some(({ moves }) => moves) ? [["†", MOVES_NOTE] as const] : []),
         ["$/match", "average list-price cost per player per scored match"],
         ["A cell", `A config's win share against that opponent model. The number in the corner is how many matches it rests on. Below ${FULL_N} matches the shade fades toward the page's color.`],
       ]),

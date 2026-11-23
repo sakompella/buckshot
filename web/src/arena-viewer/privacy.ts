@@ -6,11 +6,17 @@ import { ITEMS, OpportunityType } from "./api.ts";
 
 // The last gate before the aggregate files leave this machine: they must hold per-config and per-pair numbers only,
 // never a match, seed, move or account. Each file decodes strictly, no key names a per-match field, and every string
-// is a model, effort, config, item or label from the files themselves, with nothing that looks like an id or an email.
+// is a model, effort, config, item or label from the files themselves, with nothing that looks like an id or an email
+// apart from the manifest's source hashes.
+
+/** A derived database the export read, by the SHA-256 of its bytes, so a published set names the inputs it came from. */
+const SourceId = Schema.String.check(Schema.isPattern(/^sha256:[0-9a-f]{64}$/));
 
 export const Manifest = Schema.Struct({
   generated: Schema.String.check(Schema.isPattern(/^\d{4}-\d{2}-\d{2}$/)),
   files: Schema.Array(Schema.Struct({ name: Schema.Literals(AGGREGATE_NAMES), bytes: Schema.Finite })),
+  /** The luck and certain-mistakes databases, null when the export read none. */
+  sources: Schema.Struct({ luck: Schema.NullOr(SourceId), certain: Schema.NullOr(SourceId) }),
 });
 
 export type Manifest = typeof Manifest.Type;
@@ -46,15 +52,22 @@ const decodeSummary = Schema.decodeUnknownResult(Schema.fromJsonString(Summary))
 
 const decodeManifest = Schema.decodeUnknownResult(Schema.fromJsonString(Manifest));
 
+/** The manifest's source hashes, which may look like ids. */
+const sourceIdsOf = (files: ReadonlyMap<string, string>): ReadonlySet<string> => {
+  const { sources } = Result.getOrElse(decodeManifest(files.get("manifest") ?? ""), () => ({ sources: { luck: null, certain: null } }));
+
+  return new Set([sources.luck, sources.certain].flatMap((id) => (id === null ? [] : [id])));
+};
+
 /** The strings the files may hold: the configs the summary lists, the items, the certain-mistake scopes and types, the empty model and effort of a pooled scope, and the manifest's own. */
 const allowedStrings = (files: ReadonlyMap<string, string>): ReadonlySet<string> => {
   const { configs, runs } = Result.getOrElse(decodeSummary(files.get("summary") ?? ""), () => ({ configs: [], runs: undefined }));
   const { generated } = Result.getOrElse(decodeManifest(files.get("manifest") ?? ""), () => ({ generated: "" }));
 
-  return new Set(["", ...configs.flatMap(({ model, effort }) => [model, effort, `${model}|${effort}`]), ...ITEMS, "config", "model", "all", ...OpportunityType.literals, generated, ...(runs === undefined ? [] : [runs.from, runs.to]), ...AGGREGATE_NAMES]);
+  return new Set(["", ...configs.flatMap(({ model, effort }) => [model, effort, `${model}|${effort}`]), ...ITEMS, "config", "model", "all", ...OpportunityType.literals, generated, ...(runs === undefined ? [] : [runs.from, runs.to]), ...AGGREGATE_NAMES, ...sourceIdsOf(files)]);
 };
 
-const fileViolations = (name: FileName, json: string, allowed: ReadonlySet<string>): ReadonlyArray<string> => {
+const fileViolations = (name: FileName, json: string, allowed: ReadonlySet<string>, sourceIds: ReadonlySet<string>): ReadonlyArray<string> => {
   const decoded = Schema.decodeResult(Schema.fromJsonString(schemaOf(name)))(json, STRICT);
   const undecodable = Result.isFailure(decoded) ? [`${name}: ${decoded.failure.message}`] : [];
 
@@ -63,7 +76,9 @@ const fileViolations = (name: FileName, json: string, allowed: ReadonlySet<strin
     const named = isKey && FORBIDDEN_KEYS.has(text.toLowerCase()) ? [`${name}: forbidden key ${quoted}`] : [];
     const unexpected = !isKey && !allowed.has(text) ? [`${name}: unexpected string ${quoted}`] : [];
 
-    return [...named, ...unexpected, ...SUSPECT.flatMap(([pattern, why]) => (pattern.test(text) ? [`${name}: ${quoted} ${why}`] : []))];
+    const suspect = name === "manifest" && sourceIds.has(text) ? [] : SUSPECT.flatMap(([pattern, why]) => (pattern.test(text) ? [`${name}: ${quoted} ${why}`] : []));
+
+    return [...named, ...unexpected, ...suspect];
   });
 
   return [...undecodable, ...strings];
@@ -72,11 +87,12 @@ const fileViolations = (name: FileName, json: string, allowed: ReadonlySet<strin
 /** What is wrong with a set of export files, by file name; empty when they may be published. */
 export const privacyViolations = (files: ReadonlyMap<string, string>): ReadonlyArray<string> => {
   const allowed = allowedStrings(files);
+  const sourceIds = sourceIdsOf(files);
   const unknown = [...files.keys()].flatMap((name) => (FILE_NAMES.some((known) => known === name) ? [] : [`${name}: not an export file`]));
 
   return [...unknown, ...FILE_NAMES.flatMap((name) => {
     const json = files.get(name);
 
-    return json === undefined ? [`${name}: missing`] : fileViolations(name, json, allowed);
+    return json === undefined ? [`${name}: missing`] : fileViolations(name, json, allowed, sourceIds);
   })];
 };

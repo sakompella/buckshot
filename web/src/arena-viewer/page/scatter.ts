@@ -8,6 +8,7 @@ import { memoLast } from "./derived.ts";
 import type { ModelStats } from "./derived.ts";
 import { Message } from "./model.ts";
 import type { Model, ScatterAxis } from "./model.ts";
+import { spreadLabels } from "./odds.ts";
 import type { Rating } from "./ratings.ts";
 
 type H = HtmlBuilder<Message>;
@@ -156,6 +157,9 @@ const TYPE = { desktop: { title: 14, tick: 12, axis: 13, name: 12.5, eff: 10 }, 
 
 /** Below this chart width the controls are menus and the type is the phone's. */
 const NARROW = 640;
+
+/** A phone's axis title: the label without its note in parentheses, keeping a log scale's. */
+const shortAxisLabel = ({ axisLabel, isLog }: Axis): string => axisLabel.replace(/ \(.*\)$/, isLog ? " (log scale)" : "");
 
 const SANS = 'system-ui, "Inter", "Segoe UI", sans-serif';
 
@@ -384,6 +388,8 @@ export const scatterView = (
         h.Style({ cursor: "pointer", ...dim(point) }),
         h.OnMouseEnter(Message.HoveredPoint({ key: point.m.key })),
         h.OnMouseLeave(Message.LeftPoint()),
+        h.OnFocus(Message.HoveredPoint({ key: point.m.key })),
+        h.OnBlur(Message.LeftPoint()),
         h.OnClick(Message.ClickedPoint({ key: point.m.key }), { propagation: "Stop" }),
         h.Tabindex(0),
         h.Role("button"),
@@ -416,6 +422,15 @@ export const scatterView = (
     );
   });
 
+  // The fixed players' lines, each labelled just above it; labels of close lines are pushed apart.
+  const references = stats.flatMap((m) => {
+    const rating = ratings.get(m.key)?.rating;
+
+    return isFixedPlayer(m.model) && rating !== undefined ? [{ m, rating }] : [];
+  });
+
+  const referenceYs = spreadLabels(references.map(({ rating }) => y.at(rating) - 5), height - B);
+
   return h.div(
     [h.Class("chart")],
     [
@@ -427,22 +442,16 @@ export const scatterView = (
           textAt(h, L, T - 16, "start", { fill: "var(--fg)", "font-size": `${type.title}px`, "font-weight": "600" }, yLabel),
           ...y.ticks.map((value) => h.g([], [gridLine(L, width - right, y.at(value), y.at(value)), textAt(h, L - 10, y.at(value) + 4, "end", tick, fmtRating(value))])),
           ...x.ticks.map((value) => h.g([], [gridLine(x.at(value), x.at(value), T, height - B), xLabels.has(value) ? textAt(h, x.at(value), height - B + 18, "middle", tick, axis.tick(value)) : h.empty])),
-          textAt(h, (L + width - right) / 2, height - 14, "middle", { fill: "var(--fg)", "font-size": `${type.axis}px` }, axis.axisLabel),
-          ...stats.flatMap((m) => {
-            const rating = ratings.get(m.key)?.rating;
-
-            return isFixedPlayer(m.model) && rating !== undefined
-              ? [
-                  h.g(
-                    [h.Class("anchor")],
-                    [
-                      h.line([h.X1(`${L}`), h.X2(`${width - right}`), h.Y1(`${y.at(rating)}`), h.Y2(`${y.at(rating)}`), h.Stroke(REFERENCE), h.StrokeOpacity("0.6"), h.StrokeDasharray("2 4")], []),
-                      textAt(h, L + 4, y.at(rating) - 5, "start", { fill: "var(--mut)", "font-size": `${type.tick}px`, ...halo(3) }, `${m.label} ${fmtRating(rating)}`),
-                    ],
-                  ),
-                ]
-              : [];
-          }),
+          textAt(h, (L + width - right) / 2, height - 14, "middle", { fill: "var(--fg)", "font-size": `${type.axis}px` }, width < NARROW ? shortAxisLabel(axis) : axis.axisLabel),
+          ...references.map(({ m, rating }, index) =>
+            h.g(
+              [h.Class("anchor")],
+              [
+                h.line([h.X1(`${L}`), h.X2(`${width - right}`), h.Y1(`${y.at(rating)}`), h.Y2(`${y.at(rating)}`), h.Stroke(REFERENCE), h.StrokeOpacity("0.6"), h.StrokeDasharray("2 4")], []),
+                textAt(h, L + 4, referenceYs[index] ?? 0, "start", { fill: "var(--mut)", "font-size": `${type.tick}px`, ...halo(3) }, `${m.label} ${fmtRating(rating)}`),
+              ],
+            ),
+          ),
           h.path(
             [
               h.D(frontier.map((point, index) => `${index === 0 ? "M" : "L"}${x.at(point.x)},${y.at(point.rating)}`).join("")),

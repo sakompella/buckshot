@@ -1,10 +1,10 @@
-import { Database } from "bun:sqlite";
+import type { Database } from "bun:sqlite";
 
 import { Effect, Schema } from "effect";
 
 import { configOf } from "../arena/same-treatment.ts";
 
-import { analyse } from "./analysis.ts";
+import { analyse, openKnowledge } from "./analysis.ts";
 import { SeatRow } from "./api.ts";
 import type { Consistency, Decisions, Seat } from "./api.ts";
 import { NO_CERTAIN, openCertain } from "./certain.ts";
@@ -12,7 +12,7 @@ import type { Certain } from "./certain.ts";
 import { openConsistency } from "./consistency.ts";
 import { openLuck } from "./luck.ts";
 import { openRegret } from "./regret.ts";
-import type { Regret } from "./regret.ts";
+import { readOnly } from "./read-only.ts";
 import { assertCurrentImport } from "../analysis/importer-hash.ts";
 import { ScriptError } from "../script.ts";
 
@@ -54,10 +54,7 @@ export interface ArenaPaths {
 }
 
 export interface Arena {
-  readonly db: Database;
-  readonly regret: Regret | null;
   readonly seats: ReadonlyArray<Seat>;
-  readonly seatIndex: ReadonlyMap<string, number>;
   readonly decisions: Decisions;
   readonly certain: Certain;
   readonly consistency: ReadonlyArray<Consistency>;
@@ -65,14 +62,11 @@ export interface Arena {
   readonly luck: ReadonlyMap<string, number>;
 }
 
-const closeArena = ({ db, regret }: Pick<Arena, "db" | "regret">) => {
-  regret?.close();
-  db.close();
-};
-
-/** With a regret database, seats carry their regret; with a knowledge database, each config's consistency; with a certain-mistakes database, its rates and moves; with a luck database, the luck-adjusted ratings. */
-const loadFrom = (db: Database, regret: Regret | null, paths: ArenaPaths): Arena => {
+/** With a regret database, seats carry their regret; with a knowledge database, the chamber patterns and odds and each config's consistency; with a certain-mistakes database, its rates and moves; with a luck database, the luck-adjusted ratings. */
+const loadFrom = (db: Database, paths: ArenaPaths): Arena => {
   assertCurrentImport(db);
+
+  const regret = paths.regret === undefined ? null : openRegret(paths.regret);
 
   const rows = db
     .query(SEATS_SQL)
@@ -80,7 +74,7 @@ const loadFrom = (db: Database, regret: Regret | null, paths: ArenaPaths): Arena
     .map((row) => decodeSeatRow(withConfig(decodeLabelled(row))));
 
   const seatIndex = new Map(rows.map((row, index) => [`${row.matchId}|${row.player}`, index]));
-  const { decisions, seats: analysed } = analyse(db, rows, seatIndex);
+  const { decisions, seats: analysed } = analyse(db, rows, seatIndex, paths.knowledge === undefined ? new Map() : openKnowledge(paths.knowledge));
 
   const seats = rows.flatMap((row, index) => {
     const extra = analysed[index];
@@ -91,10 +85,7 @@ const loadFrom = (db: Database, regret: Regret | null, paths: ArenaPaths): Arena
   const seedBlocks = new Map(seats.map(({ matchId, seedBlock }) => [matchId, seedBlock]));
 
   return {
-    db,
-    regret,
     seats,
-    seatIndex,
     decisions,
     certain: paths.certain === undefined ? NO_CERTAIN : openCertain(paths.certain, seatIndex),
     consistency: paths.knowledge === undefined ? [] : openConsistency(paths.knowledge, seedBlocks),
@@ -102,27 +93,9 @@ const loadFrom = (db: Database, regret: Regret | null, paths: ArenaPaths): Arena
   };
 };
 
-/** The arena of `dbPath`, open until the scope closes. The main and regret databases stay open for the per-match routes. */
+/** The arena of `dbPath`, read once; the databases are closed when it returns. */
 export const openArena = (dbPath: string, paths: ArenaPaths = {}) =>
-  Effect.acquireRelease(
-    Effect.try({
-      try: () => {
-        const db = new Database(dbPath, { readonly: true });
-        let regret: Regret | null = null;
-
-        try {
-          regret = paths.regret === undefined ? null : openRegret(paths.regret);
-
-          return loadFrom(db, regret, paths);
-        } catch (error) {
-          closeArena({ db, regret });
-          throw error;
-        }
-      },
-      catch: (cause) => ScriptError.make({ message: `cannot read ${dbPath}: ${String(cause)}`, exitCode: 1 }),
-    }),
-    (arena) =>
-      Effect.sync(() => {
-        closeArena(arena);
-      }),
-  );
+  Effect.try({
+    try: () => readOnly(dbPath, (db) => loadFrom(db, paths)),
+    catch: (cause) => ScriptError.make({ message: `cannot read ${dbPath}: ${String(cause)}`, exitCode: 1 }),
+  });

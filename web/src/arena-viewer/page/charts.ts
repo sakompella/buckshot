@@ -36,10 +36,6 @@ export const logScale = (d0: number, d1: number, r0: number, r1: number): Scale 
   return { at: (value) => r0 + ((Math.log10(Math.max(value, d0)) - l0) / (l1 - l0 || 1)) * (r1 - r0), ticks };
 };
 
-/** A click target that is not a button: it takes focus, and Enter or Space press it. */
-export const pressable = (h: H, message: Message) =>
-  [h.OnClick(message), h.Tabindex(0), h.Role("button"), h.OnKeyDownSelfPreventDefault((key) => (key === "Enter" || key === " " ? Option.some(message) : Option.none()))] as const;
-
 /** Text for screen readers only, in parentheses after the figure it explains. */
 export const noteView = (h: H, text: string): Html => h.span([h.Class("sr")], [` (${text})`]);
 
@@ -102,9 +98,9 @@ export const lineKeyView = (h: H, lines: ReadonlyArray<KeyLine>): Html =>
 /** A finger's reach around a small mark. */
 const HIT_RADIUS = 11;
 
-/** A dot with the shared tip, inside a clear circle wide enough to tap. `radius` and `fill` draw the dot itself. */
-export const tippedDot = (h: H, anchor: string, text: string, cx: string, cy: string, radius: string, fill: string): Html =>
-  h.g(markTip(h, anchor, text), [h.circle([h.Cx(cx), h.Cy(cy), h.R(String(HIT_RADIUS)), h.Fill("transparent")], []), h.circle([h.Cx(cx), h.Cy(cy), h.R(radius), h.Fill(fill)], [])]);
+/** A dot with the shared tip, inside a clear circle wide enough to tap. `radius` and `fill` draw the dot itself; a dense chart's dots stay out of the tab order. */
+export const tippedDot = (h: H, anchor: string, text: string, cx: string, cy: string, radius: string, fill: string, isFocusable = true): Html =>
+  h.g(markTip(h, anchor, text, isFocusable), [h.circle([h.Cx(cx), h.Cy(cy), h.R(String(HIT_RADIUS)), h.Fill("transparent")], []), h.circle([h.Cx(cx), h.Cy(cy), h.R(radius), h.Fill(fill)], [])]);
 
 const TIP_GAP_X = 14;
 
@@ -157,7 +153,7 @@ export const tipView = (h: H, anchor: string, children: ReadonlyArray<Html | str
 export const toggleView = <A extends string>(h: H, value: A, options: ReadonlyArray<readonly [A, string]>, toMessage: (value: A) => Message): Html =>
   h.div(
     [h.Class("toggle")],
-    options.map(([option, label]) => h.button([h.Type("button"), h.Class(option === value ? "on" : ""), h.OnClick(toMessage(option))], [label])),
+    options.map(([option, label]) => h.button([h.Type("button"), h.Class(option === value ? "on" : ""), h.AriaPressed(String(option === value)), h.OnClick(toMessage(option))], [label])),
   );
 
 /** The same choice as toggleView, as a native menu, for a phone row with no room for buttons. */

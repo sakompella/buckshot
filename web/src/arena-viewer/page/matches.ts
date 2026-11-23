@@ -108,7 +108,7 @@ export const matchesView = (h: H, matches: ReadonlyArray<MatchRow>, ratings: Rea
       h.div(
         [h.Class("bar")],
         [
-          h.input([h.Placeholder("filter by model or seed"), h.Value(list.query), h.OnInput((query) => Message.ChangedMatchQuery({ query }))]),
+          h.input([h.Type("search"), h.AriaLabel("Filter matches by model or seed"), h.Placeholder("filter by model or seed"), h.Value(list.query), h.OnInput((query) => Message.ChangedMatchQuery({ query }))]),
           h.span(
             [h.Class("chips")],
             PRESETS.map(({ preset, label }) => {

@@ -8,7 +8,6 @@ import { modifyFields } from "foldkit/struct";
 import * as Arena from "../arena-viewer/page/main.ts";
 import { Message as ArenaMessage, Model as ArenaModel } from "../arena-viewer/page/model.ts";
 import { view as arenaView } from "../arena-viewer/page/view.ts";
-import arenaStyles from "../arena-viewer/page/styles.css?inline";
 import { isArenaRoute, isRootUrl, routeOf, SiteRoute } from "./route.ts";
 import type { ArenaRoute } from "./route.ts";
 
@@ -123,28 +122,14 @@ type H = HtmlBuilder<Message>;
 
 const arenaBody = Submodel.defineView<ArenaModel, ArenaMessage>((model, h) => arenaView(model, h).body);
 
-const navView = (h: H, model: Model): Html => {
-  const link = (label: string, href: string, isCurrent: boolean) => h.a([h.Href(href), ...(isCurrent ? [h.AriaCurrent("page")] : [])], [label]);
-
-  return h.nav(
-    [h.Class("site-nav"), h.AriaLabel("Site"), h.Inert(Option.exists(model.maybeArena, (arena) => Option.isSome(arena.maybeTour)))],
-    [
-      h.span([h.Class("site-name")], ["Buckshot"]),
-      link("Arena", Option.match(model.maybeArena, { onNone: () => "/arena", onSome: (arena) => Arena.hrefOf(arena) }), isArenaRoute(model.route)),
-    ],
-  );
-};
-
-const ARENA_STYLES = arenaStyles;
-
-const pageOf = (h: H, model: Model, page: Html): Html => h.div([h.Class("site")], [h.style([], [ARENA_STYLES]), navView(h, model), page]);
+const pageOf = (h: H, page: Html): Html => h.div([h.Class("site")], [page]);
 
 export const view = (model: Model, h: H): Document =>
   SiteRoute.match(model.route, {
     Arena: () => arenaPage(h, model),
     NotFound: ({ path }) => ({
       title: "Not found · Buckshot Arena",
-      body: pageOf(h, model, h.main([], [h.p([h.Class("k")], [`There is no page at ${path}. `, h.a([h.Href("/arena")], ["The arena"]), " has every config's results."])])),
+      body: pageOf(h, h.main([], [h.p([h.Class("k")], [`There is no page at ${path}. `, h.a([h.Href("/arena")], ["The arena"]), " has every config's results."])])),
     }),
   });
 
@@ -152,7 +137,6 @@ const arenaPage = (h: H, model: Model): Document => ({
   title: "Buckshot Arena: language models playing Buckshot Roulette",
   body: pageOf(
     h,
-    model,
     Option.match(model.maybeArena, {
       onNone: () => h.empty,
       onSome: (arena) => h.submodel({ slotId: "arena", view: arenaBody, model: arena, toParentMessage: toArenaMessage }),
