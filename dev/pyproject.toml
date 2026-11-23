@@ -4,12 +4,13 @@ version = "0.1.0"
 description = "Buckshot developer commands: heavy jobs, checks, wrap-up"
 requires-python = ">=3.12"
 license = "MPL-2.0"
-# numpy, pandas, scikit-learn and hypothesis are not used by `dev` itself: dev/ is also the
-# Python env for the tools/arena scripts and analyses and their tests (`nix develop`, the arena-python flake check).
+# `dev` itself uses only the standard library: the packages here are the Python env for the
+# tools/arena scripts and analyses and their tests (`nix develop`, the arena-python flake check).
 dependencies = [
     "numpy>=2",
     "hypothesis>=6",
     "scikit-learn>=1.5",
+    "scipy>=1.11",
     "pandas>=2",
 ]
 
@@ -22,3 +23,12 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/buckshot_dev"]
+
+# ty resolves the scripts' own modules (they import each other by bare name, run from their directory).
+[tool.ty.environment]
+extra-paths = ["src", "../tools/arena", "../tools/arena/analysis"]
+
+# The scripts import each other by bare name, so those directories are first-party: the same import order whatever else the checkout holds.
+# Run as `ruff check --config dev/pyproject.toml tools/arena dev` (and `ruff format`) from the repository root.
+[tool.ruff]
+src = ["src", "../tools/arena", "../tools/arena/analysis"]

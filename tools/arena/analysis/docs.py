@@ -9,4 +9,6 @@ def splice_between_markers(path: Path, name: str, body: str) -> None:
     head, found, rest = path.read_text().partition(start)
     if not found or end not in rest:
         raise ValueError(f"{path} lacks the {start} / {end} markers")
-    path.write_text(head + start + "\n" + body.strip("\n") + "\n" + end + rest.partition(end)[2])
+    path.write_text(
+        head + start + "\n" + body.strip("\n") + "\n" + end + rest.partition(end)[2]
+    )

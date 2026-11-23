@@ -28,7 +28,7 @@ terms. The chance events:
 Every V is fitted out of fold, five folds by seed, so no round is corrected by a model that saw it. The output database holds
 per match and player the sum of that player's corrections over the match's rounds; the viewer adds it to the player's round wins
 before the Round Elo fit (web/src/arena-viewer/page/ratings.ts). With --doc FILE the method's tables replace the text between the
-luck markers of that file (docs/arena/analysis/matchups.md).
+luck markers of that file (method: docs/arena/methods.md, Luck correction).
 
     python3 tools/arena/analysis/aivat.py [--db PATH] [--knowledge PATH] [--regret PATH] [--out derived/luck.sqlite] [--doc FILE]
 """
@@ -46,16 +46,18 @@ import bt
 import numpy as np
 import pandas as pd
 from configs import config_label
+from docs import splice_between_markers
 from fmt import table
 from load import DB, connect, require_current, round_one_starters, round_winners
-from regret import DERIVED, PRODUCTION
+from regret import DERIVED, PRODUCTION, run_of
 from rules import DECK, ITEMS, ON_TABLE, PER_SEAT, SAW_DAMAGE
 from scipy import stats
-from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
+from sklearn.ensemble import (
+    HistGradientBoostingClassifier,
+    HistGradientBoostingRegressor,
+)
 from sklearn.linear_model import LogisticRegression
 from threadpoolctl import threadpool_limits
-
-from docs import splice_between_markers
 
 FOLDS = 5
 # One thread: the gradient boosting fits are a few seconds each, and OpenMP's threads only contend for the cores (on a loaded host one fit took 350 s threaded and 1.6 s on one thread). The results are identical.
@@ -65,7 +67,10 @@ threadpool_limits(1)
 def shot_outcomes(db: sqlite3.Connection, kind: str = "Fired") -> dict[str, list[bool]]:
     """Match id to whether each of its shots (or, with kind 'Ejected', each shell beer ejected) was live, in order."""
     outcomes = defaultdict(list)
-    for match, shell in db.execute("SELECT match_id, json_extract(json, '$.shell') FROM events WHERE kind = ? ORDER BY match_id, idx", (kind,)):
+    for match, shell in db.execute(
+        "SELECT match_id, json_extract(json, '$.shell') FROM events WHERE kind = ? ORDER BY match_id, idx",
+        (kind,),
+    ):
         outcomes[match].append(shell == "Live")
     return outcomes
 
@@ -101,17 +106,35 @@ def deals_of(db: sqlite3.Connection, mi_of: dict) -> tuple[pd.DataFrame, pd.Data
     Grants: mi, r, deal (its index in the round), pos, item (index in ITEMS), pool, inv1, inv2 (the inventories before it), h1, h2.
     Deals: mi, r, deal, inv1, inv2, h1, h2 and mover, the position that moves first after it. Raises on a grant outside its pool.
     """
-    pos_of = {(m, s): p for m, p, s in db.execute("SELECT match_id, position, socket FROM match_seats")}
+    pos_of = {
+        (m, s): p
+        for m, p, s in db.execute("SELECT match_id, position, socket FROM match_seats")
+    }
     grants, deals = [], []
-    kinds = ("RoundBegan", "GrabbingBegan", "Granted", "Used", "Fired", "Healed", "Loaded", "TurnGiven")
-    rows = db.execute(f"SELECT match_id, kind, json FROM events WHERE kind IN ({', '.join('?' * len(kinds))}) ORDER BY match_id, idx", kinds)
+    kinds = (
+        "RoundBegan",
+        "GrabbingBegan",
+        "Granted",
+        "Used",
+        "Fired",
+        "Healed",
+        "Loaded",
+        "TurnGiven",
+    )
+    rows = db.execute(
+        f"SELECT match_id, kind, json FROM events WHERE kind IN ({', '.join('?' * len(kinds))}) ORDER BY match_id, idx",
+        kinds,
+    )
     for m, kind, text in rows:
         if m not in mi_of:
             continue
         e = json.loads(text)
         if kind == "RoundBegan":
             r, deal, loaded = e["round"], -1, False
-            health, inv = {1: e["health"], 2: e["health"]}, {1: np.zeros(len(ITEMS), int), 2: np.zeros(len(ITEMS), int)}
+            health, inv = (
+                {1: e["health"], 2: e["health"]},
+                {1: np.zeros(len(ITEMS), int), 2: np.zeros(len(ITEMS), int)},
+            )
         elif kind == "GrabbingBegan":
             deal += 1
         elif kind == "Granted":
@@ -119,26 +142,70 @@ def deals_of(db: sqlite3.Connection, mi_of: dict) -> tuple[pd.DataFrame, pd.Data
             pool = item_pool(inv[p], inv[3 - p])
             if not pool[k]:
                 raise ValueError(f"match {m}: {e['item']} granted outside its pool")
-            grants.append((mi_of[m], r, deal, p, k, pool, inv[1].copy(), inv[2].copy(), health[1], health[2]))
+            grants.append(
+                (
+                    mi_of[m],
+                    r,
+                    deal,
+                    p,
+                    k,
+                    pool,
+                    inv[1].copy(),
+                    inv[2].copy(),
+                    health[1],
+                    health[2],
+                )
+            )
             inv[p][k] += 1
         elif kind == "Used":
             inv[pos_of[(m, e["owner"])]][ITEMS.index(e["item"])] -= 1
         elif kind in ("Fired", "Healed"):
-            health[pos_of[(m, e["target" if kind == "Fired" else "seat"])]] = e["health"]
+            health[pos_of[(m, e["target" if kind == "Fired" else "seat"])]] = e[
+                "health"
+            ]
         elif kind == "Loaded":
             loaded = True
         elif loaded:
-            deals.append((mi_of[m], r, deal, inv[1].copy(), inv[2].copy(), health[1], health[2], pos_of[(m, e["seat"])]))
+            deals.append(
+                (
+                    mi_of[m],
+                    r,
+                    deal,
+                    inv[1].copy(),
+                    inv[2].copy(),
+                    health[1],
+                    health[2],
+                    pos_of[(m, e["seat"])],
+                )
+            )
             loaded = False
     return (
-        pd.DataFrame(grants, columns=["mi", "r", "deal", "pos", "item", "pool", "inv1", "inv2", "h1", "h2"]),
-        pd.DataFrame(deals, columns=["mi", "r", "deal", "inv1", "inv2", "h1", "h2", "mover"]),
+        pd.DataFrame(
+            grants,
+            columns=[
+                "mi",
+                "r",
+                "deal",
+                "pos",
+                "item",
+                "pool",
+                "inv1",
+                "inv2",
+                "h1",
+                "h2",
+            ],
+        ),
+        pd.DataFrame(
+            deals, columns=["mi", "r", "deal", "inv1", "inv2", "h1", "h2", "mover"]
+        ),
     )
 
 
 @dataclass
 class Data:
-    matches: pd.DataFrame  # mi, match_id, seed, block, first, second, letter1, letter2, starter
+    matches: (
+        pd.DataFrame
+    )  # mi, match_id, seed, block, first, second, letter1, letter2, starter
     rounds: pd.DataFrame  # mi, r (0-based), O (position 1 won)
     dec: pd.DataFrame  # knowledge decisions of the rated matches
     consumed: dict  # match_id -> ordinal -> shells consumed before it, counted from the public events
@@ -161,27 +228,57 @@ def read(db_path: str, knowledge_path: str, regret_path: str) -> Data:
     ):
         seats[row[0]].append((row[1], config_label(row[2])))
     rows, rounds = [], []
-    for match, seed, block in db.execute("SELECT id, seed, seed_block_id FROM matches WHERE status = 'completed' AND disposition IS NULL ORDER BY id"):
+    for match, seed, block in db.execute(
+        "SELECT id, seed, seed_block_id FROM matches WHERE status = 'completed' AND disposition IS NULL ORDER BY id"
+    ):
         s = seats[match]
         if len(s) != 2:
             continue
         (la, a), (lb, b) = s
         won = winners[match]
         mi = len(rows)
-        rows.append((mi, match, seed, block, a, b, la, lb, 1 if starters[match] == la else 2))
+        rows.append(
+            (mi, match, seed, block, a, b, la, lb, 1 if starters[match] == la else 2)
+        )
         rounds += [(mi, n - 1, 1.0 if w == la else 0.0) for n, w in sorted(won.items())]
-    matches = pd.DataFrame(rows, columns=["mi", "match_id", "seed", "block", "first", "second", "letter1", "letter2", "starter"])
+    matches = pd.DataFrame(
+        rows,
+        columns=[
+            "mi",
+            "match_id",
+            "seed",
+            "block",
+            "first",
+            "second",
+            "letter1",
+            "letter2",
+            "starter",
+        ],
+    )
     ids = set(matches.match_id)
     dec = pd.read_sql(
         "SELECT match_id, ordinal, player, round, remaining, private_known, private_orders, private_live_min, private_live_max, private_live_json, shot, sawed, item,"
         " health_json, own_items_json, opponent_items_json FROM decisions",
         kn,
     )
-    search = pd.read_sql("SELECT match_id, ordinal, best_score / 1e6 B, chosen_score / 1e6 Q FROM regret WHERE status = 'searched'", connect(regret_path))
-    dec = dec[dec.match_id.isin(ids)].merge(search, on=["match_id", "ordinal"], how="left").sort_values(["match_id", "ordinal"]).reset_index(drop=True)
-    shells, loads = defaultdict(list), defaultdict(list)  # per match: the event index of each shell shot or ejected, and the composition of each load
+    search = pd.read_sql(
+        "SELECT match_id, ordinal, best_score / 1e6 B, chosen_score / 1e6 Q FROM regret WHERE status = 'searched'",
+        connect(regret_path),
+    )
+    dec = (
+        dec[dec.match_id.isin(ids)]
+        .merge(search, on=["match_id", "ordinal"], how="left")
+        .sort_values(["match_id", "ordinal"])
+        .reset_index(drop=True)
+    )
+    shells, loads = (
+        defaultdict(list),
+        defaultdict(list),
+    )  # per match: the event index of each shell shot or ejected, and the composition of each load
     fired = defaultdict(list)  # per match: the event index and liveness of each shot
-    for match, at, kind, text in db.execute("SELECT match_id, idx, kind, json FROM events WHERE kind IN ('Fired', 'Ejected', 'Loaded') ORDER BY match_id, idx"):
+    for match, at, kind, text in db.execute(
+        "SELECT match_id, idx, kind, json FROM events WHERE kind IN ('Fired', 'Ejected', 'Loaded') ORDER BY match_id, idx"
+    ):
         if kind == "Loaded":
             load = json.loads(text)["load"]
             loads[match].append((load["live"], load["blank"]))
@@ -189,23 +286,53 @@ def read(db_path: str, knowledge_path: str, regret_path: str) -> Data:
             shells[match].append(at)
             if kind == "Fired":
                 fired[match].append((at, json.loads(text)["shell"] == "Live"))
-    before = {(m, o): e for m, o, e in db.execute("SELECT match_id, ordinal, events_before FROM decisions")}
-    consumed = {m: {o: bisect.bisect_left(shells[m], before[(m, o)]) for o in g.ordinal} for m, g in dec.groupby("match_id")}
+    before = {
+        (m, o): e
+        for m, o, e in db.execute(
+            "SELECT match_id, ordinal, events_before FROM decisions"
+        )
+    }
+    consumed = {
+        m: {o: bisect.bisect_left(shells[m], before[(m, o)]) for o in g.ordinal}
+        for m, g in dec.groupby("match_id")
+    }
     # A recorded shot is the first Fired event after its decision: a dealer AI's shots have no decision, so the events, not the decisions, say what each shot was.
-    live = [fired[m][bisect.bisect_left(fired[m], (before[(m, o)], False))][1] if pd.notna(s) else np.nan for m, o, s in zip(dec.match_id, dec.ordinal, dec.shot)]
+    live = [
+        fired[m][bisect.bisect_left(fired[m], (before[(m, o)], False))][1]
+        if pd.notna(s)
+        else np.nan
+        for m, o, s in zip(dec.match_id, dec.ordinal, dec.shot)
+    ]
     dec["live"] = np.array(live, dtype=float)
     inverters = defaultdict(list)
     for t in dec[dec.item == "Inverter"].itertuples():
         inverters[t.match_id].append(t.ordinal)
-    clues = pd.read_sql("SELECT match_id, ordinal, player, position, shell FROM clues", kn)
+    clues = pd.read_sql(
+        "SELECT match_id, ordinal, player, position, shell FROM clues", kn
+    )
     grants, deals = deals_of(db, dict(zip(matches.match_id, matches.mi)))
-    return Data(matches, pd.DataFrame(rounds, columns=["mi", "r", "O"]), dec, consumed, loads, inverters, clues, shot_outcomes(db, "Ejected"), grants, deals)
+    return Data(
+        matches,
+        pd.DataFrame(rounds, columns=["mi", "r", "O"]),
+        dec,
+        consumed,
+        loads,
+        inverters,
+        clues,
+        shot_outcomes(db, "Ejected"),
+        grants,
+        deals,
+    )
 
 
 def shots_of(d: Data) -> pd.DataFrame:
     """Every shot of a known round, with its outcome, the true live chance, and the mover's view of the state."""
     mi_of = dict(zip(d.matches.match_id, d.matches.mi))
-    pos_of = {(m, l): p for m, l1, l2 in zip(d.matches.match_id, d.matches.letter1, d.matches.letter2) for l, p in ((l1, 1), (l2, 2))}
+    pos_of = {
+        (m, l): p
+        for m, l1, l2 in zip(d.matches.match_id, d.matches.letter1, d.matches.letter2)
+        for l, p in ((l1, 1), (l2, 2))
+    }
     O = {(mi, r): o for mi, r, o in zip(d.rounds.mi, d.rounds.r, d.rounds.O)}
     sh = d.dec[d.dec.shot.notna()].copy()
     sh["mi"] = sh.match_id.map(mi_of)
@@ -227,7 +354,9 @@ def shots_of(d: Data) -> pd.DataFrame:
     return sh
 
 
-def chamber_chance(pins: dict[int, bool], remaining: int, live_min: int, live_max: int) -> float:
+def chamber_chance(
+    pins: dict[int, bool], remaining: int, live_min: int, live_max: int
+) -> float:
     """The chamber's live chance, uniform over the shell orders that fit the pinned shells (position from the chamber: live).
 
     `live_min` and `live_max` are the fewest and most live shells left in the orders the mover's own log allows. They differ only while the mover's
@@ -243,14 +372,36 @@ def chamber_chance(pins: dict[int, bool], remaining: int, live_min: int, live_ma
 def true_live_chances(d: Data, sh: pd.DataFrame) -> list[float]:
     """The chamber's live chance given the clues of both players: uniform over the shell orders they all fit."""
     rows_by, clue_by = defaultdict(list), defaultdict(list)
-    for t in d.dec.itertuples():
-        rows_by[(t.match_id, t.player)].append((t.ordinal, t.round, t.private_known))
-    for t in d.clues.itertuples():
-        clue_by[(t.match_id, t.player)].append((t.ordinal, t.position, t.shell == "Live"))
-    known_at = {(t.match_id, t.ordinal): t.private_known for t in d.dec.itertuples()}
+    for match, player, ordinal, round, known in zip(
+        d.dec.match_id,
+        d.dec.player,
+        d.dec.ordinal,
+        d.dec["round"],
+        d.dec.private_known,
+        strict=True,
+    ):
+        rows_by[(match, player)].append((ordinal, round, known))
+    for match, player, ordinal, position, shell in zip(
+        d.clues.match_id,
+        d.clues.player,
+        d.clues.ordinal,
+        d.clues.position,
+        d.clues.shell,
+        strict=True,
+    ):
+        clue_by[(match, player)].append((ordinal, position, shell == "Live"))
+    known_at = dict(
+        zip(
+            zip(d.dec.match_id, d.dec.ordinal, strict=True),
+            d.dec.private_known,
+            strict=True,
+        )
+    )
 
     def by_index(text, consumed):
-        return {consumed + int(tok[:-1]) - 1: tok[-1] == "L" for tok in (text or "").split()}
+        return {
+            consumed + int(tok[:-1]) - 1: tok[-1] == "L" for tok in (text or "").split()
+        }
 
     def flipped(m, g, lo, hi, v):
         for at in d.inverters[m]:
@@ -267,13 +418,21 @@ def true_live_chances(d: Data, sh: pd.DataFrame) -> list[float]:
         i = bisect.bisect_left(rs, (row.ordinal,)) - 1
         if i >= 0 and rs[i][1] == row.round:
             o0 = rs[i][0]
-            know.update({g: flipped(m, g, o0, row.ordinal, v) for g, v in by_index(rs[i][2], C[o0]).items()})
+            know.update(
+                {
+                    g: flipped(m, g, o0, row.ordinal, v)
+                    for g, v in by_index(rs[i][2], C[o0]).items()
+                }
+            )
             for oc, at, lv in clue_by[(m, other)]:
                 if o0 <= oc < row.ordinal:
                     g = C[oc] + at - 1
                     know[g] = flipped(m, g, oc + 1, row.ordinal, lv)
         know = {g: v for g, v in know.items() if cs <= g < cs + rem}
-        pins = {g - cs: v for g, v in {**know, **by_index(known_at[(m, row.ordinal)], cs)}.items()}
+        pins = {
+            g - cs: v
+            for g, v in {**know, **by_index(known_at[(m, row.ordinal)], cs)}.items()
+        }
         return chamber_chance(pins, rem, row.private_live_min, row.private_live_max)
 
     letters = d.matches.set_index("match_id")[["letter1", "letter2"]]
@@ -283,8 +442,14 @@ def true_live_chances(d: Data, sh: pd.DataFrame) -> list[float]:
 
 def opponent_health(d: Data, sh: pd.DataFrame) -> list[float]:
     """The opponent's health at each shot; a jammed opponent's is hidden, so carry the last seen value through shots and cigarettes."""
-    shot_at = {(a, b): (s, lv, sw) for a, b, s, lv, sw in zip(sh.match_id, sh.ordinal, sh.shot, sh.live, sh.sawed)}
-    letters = {m: (a, b) for m, a, b in zip(d.matches.match_id, d.matches.letter1, d.matches.letter2)}
+    shot_at = {
+        (a, b): (s, lv, sw)
+        for a, b, s, lv, sw in zip(sh.match_id, sh.ordinal, sh.shot, sh.live, sh.sawed)
+    }
+    letters = {
+        m: (a, b)
+        for m, a, b in zip(d.matches.match_id, d.matches.letter1, d.matches.letter2)
+    }
     at = {}
     for m, g in d.dec[d.dec.match_id.isin(set(sh.match_id))].groupby("match_id"):
         hp, rnd = {}, None
@@ -316,12 +481,34 @@ def after_shot(sh: pd.DataFrame, live: np.ndarray):
     end = np.where(hm <= 0, 0.0, np.where(ho <= 0, 1.0, np.nan))
     keeps = (selfshot & (live == 0)) | (sh.jo.values & ~(selfshot & (live == 0)))
     n2, l2 = sh.remaining.values - 1, sh.El.values - live
-    return np.column_stack([hm, ho, hm - ho, n2, l2, n2 - l2, keeps, n2 == 0, sh.im, sh.io, sh["round"], sh.jo, sh.sawed]), end
+    return np.column_stack(
+        [
+            hm,
+            ho,
+            hm - ho,
+            n2,
+            l2,
+            n2 - l2,
+            keeps,
+            n2 == 0,
+            sh.im,
+            sh.io,
+            sh["round"],
+            sh.jo,
+            sh.sawed,
+        ]
+    ), end
 
 
 def round_sum(values, mi, r, rounds: pd.DataFrame) -> np.ndarray:
     idx = pd.MultiIndex.from_arrays([rounds.mi, rounds.r])
-    return pd.Series(np.asarray(values, float)).groupby([np.asarray(mi), np.asarray(r)]).sum().reindex(idx, fill_value=0).values
+    return (
+        pd.Series(np.asarray(values, float))
+        .groupby([np.asarray(mi), np.asarray(r)])
+        .sum()
+        .reindex(idx, fill_value=0)
+        .values
+    )
 
 
 def shot_corrections(d: Data, sh: pd.DataFrame) -> np.ndarray:
@@ -334,11 +521,22 @@ def shot_corrections(d: Data, sh: pd.DataFrame) -> np.ndarray:
     vL, vB = np.empty(len(sh)), np.empty(len(sh))
     for k in range(FOLDS):
         train, test = (f != k) & np.isnan(E), f == k
-        model = HistGradientBoostingClassifier(max_iter=200, learning_rate=0.08, max_leaf_nodes=31, min_samples_leaf=50, random_state=0)
+        model = HistGradientBoostingClassifier(
+            max_iter=200,
+            learning_rate=0.08,
+            max_leaf_nodes=31,
+            min_samples_leaf=50,
+            random_state=0,
+        )
         model.fit(X[train], sh.Om.values[train])
-        vL[test], vB[test] = model.predict_proba(XL[test])[:, 1], model.predict_proba(XB[test])[:, 1]
+        vL[test], vB[test] = (
+            model.predict_proba(XL[test])[:, 1],
+            model.predict_proba(XB[test])[:, 1],
+        )
     vL, vB = np.where(np.isnan(EL), vL, EL), np.where(np.isnan(EB), vB, EB)
-    c = (sh.pt * vL + (1 - sh.pt) * vB - np.where(lv, vL, vB)) * np.where(sh.pos == 1, 1.0, -1.0)
+    c = (sh.pt * vL + (1 - sh.pt) * vB - np.where(lv, vL, vB)) * np.where(
+        sh.pos == 1, 1.0, -1.0
+    )
     return round_sum(c.values, sh.mi.values, sh["round"].values, d.rounds)
 
 
@@ -349,30 +547,60 @@ def load_corrections(d: Data) -> np.ndarray:
     comps = {mi_of[m]: cs for m, cs in d.loads.items() if m in mi_of}
     rows = []
     for mi, g in d.deals.groupby("mi"):
-        assert len(g) == len(comps[mi]), f"match index {mi}: {len(g)} deals, {len(comps[mi])} loads"
-        for t, comp, chances in zip(g.itertuples(), comps[mi], deck_chances(comps[mi])):
-            if (mi, t.r) in O:
-                hm, ho = (t.h1, t.h2) if t.mover == 1 else (t.h2, t.h1)
-                rows.append((mi, t.r, t.mover, comp, chances, hm, ho, O[(mi, t.r)] if t.mover == 1 else 1 - O[(mi, t.r)]))
-    ld = pd.DataFrame(rows, columns=["mi", "round", "pos", "comp", "chances", "hm", "ho", "Om"])
+        assert len(g) == len(comps[mi]), (
+            f"match index {mi}: {len(g)} deals, {len(comps[mi])} loads"
+        )
+        for r, mover, h1, h2, comp, chances in zip(
+            g["r"], g.mover, g.h1, g.h2, comps[mi], deck_chances(comps[mi]), strict=True
+        ):
+            if (mi, r) in O:
+                hm, ho = (h1, h2) if mover == 1 else (h2, h1)
+                rows.append(
+                    (
+                        mi,
+                        r,
+                        mover,
+                        comp,
+                        chances,
+                        hm,
+                        ho,
+                        O[(mi, r)] if mover == 1 else 1 - O[(mi, r)],
+                    )
+                )
+    ld = pd.DataFrame(
+        rows, columns=["mi", "round", "pos", "comp", "chances", "hm", "ho", "Om"]
+    )
 
     def features(df, comps):
         lc = np.array([c[0] for c in comps])
         bk = np.array([c[1] for c in comps])
         n = lc + bk
         hm, ho = df.hm.values, df.ho.values
-        return np.column_stack([hm - ho, lc / n, n, (hm - ho) * lc / n, lc, bk, lc / n / ho, lc / n / hm])
+        return np.column_stack(
+            [hm - ho, lc / n, n, (hm - ho) * lc / n, lc, bk, lc / n / ho, lc / n / hm]
+        )
 
     f = folds(d.matches.seed.values[ld.mi])
     c = np.zeros(len(ld))
     for k in range(FOLDS):
         train, test = f != k, np.where(f == k)[0]
         sub = ld.iloc[test]
-        model = LogisticRegression(max_iter=1000).fit(features(ld[train], list(ld.comp[train])), ld.Om.values[train])
-        V = np.column_stack([model.predict_proba(features(sub, [comp] * len(sub)))[:, 1] for comp in DECK])
+        model = LogisticRegression(max_iter=1000).fit(
+            features(ld[train], list(ld.comp[train])), ld.Om.values[train]
+        )
+        V = np.column_stack(
+            [
+                model.predict_proba(features(sub, [comp] * len(sub)))[:, 1]
+                for comp in DECK
+            ]
+        )
         P = np.array([[p.get(comp, 0) for comp in DECK] for p in sub.chances])
-        c[test] = (P * V).sum(1) - V[np.arange(len(sub)), [DECK.index(comp) for comp in sub.comp]]
-    return round_sum(c * np.where(ld.pos == 1, 1, -1), ld.mi.values, ld["round"].values, d.rounds)
+        c[test] = (P * V).sum(1) - V[
+            np.arange(len(sub)), [DECK.index(comp) for comp in sub.comp]
+        ]
+    return round_sum(
+        c * np.where(ld.pos == 1, 1, -1), ld.mi.values, ld["round"].values, d.rounds
+    )
 
 
 def seat_corrections(d: Data) -> np.ndarray:
@@ -388,27 +616,60 @@ def seat_corrections(d: Data) -> np.ndarray:
     return c
 
 
-def deal_features(inv1: np.ndarray, inv2: np.ndarray, h1, h2, mover, first) -> np.ndarray:
+def deal_features(
+    inv1: np.ndarray, inv2: np.ndarray, h1, h2, mover, first
+) -> np.ndarray:
     """A deal's end state in position 1's view: inventory gaps (also on the first deal of a round, and per health left), health gap, who moves first."""
     gap = inv1 - inv2
     moves = np.where(np.asarray(mover) == 1, 1.0, -1.0)[:, None]
-    hgap, hsum = (np.asarray(h1) - np.asarray(h2))[:, None].astype(float), (np.asarray(h1) + np.asarray(h2))[:, None].astype(float)
+    hgap, hsum = (
+        (np.asarray(h1) - np.asarray(h2))[:, None].astype(float),
+        (np.asarray(h1) + np.asarray(h2))[:, None].astype(float),
+    )
     first = np.asarray(first, float)[:, None]
-    return np.hstack([gap, gap * first, gap / hsum * 4, hgap, moves, moves * first, hgap * moves, gap.sum(1, keepdims=True)])
+    return np.hstack(
+        [
+            gap,
+            gap * first,
+            gap / hsum * 4,
+            hgap,
+            moves,
+            moves * first,
+            hgap * moves,
+            gap.sum(1, keepdims=True),
+        ]
+    )
 
 
 def deal_corrections(d: Data) -> np.ndarray:
-    O = pd.Series(d.rounds.O.values, pd.MultiIndex.from_arrays([d.rounds.mi, d.rounds.r]))
-    deals = d.deals.assign(O=O.reindex(pd.MultiIndex.from_arrays([d.deals.mi, d.deals.r])).values).dropna(subset="O")
+    O = pd.Series(
+        d.rounds.O.values, pd.MultiIndex.from_arrays([d.rounds.mi, d.rounds.r])
+    )
+    deals = d.deals.assign(
+        O=O.reindex(pd.MultiIndex.from_arrays([d.deals.mi, d.deals.r])).values
+    ).dropna(subset="O")
     grants = d.grants.merge(deals[["mi", "r", "deal", "mover"]], on=["mi", "r", "deal"])
     fold = folds(d.matches.seed.values)
     fd, fg = fold[deals.mi], fold[grants.mi]
-    X = deal_features(np.stack(deals.inv1), np.stack(deals.inv2), deals.h1, deals.h2, deals.mover, deals.deal == 0)
-    inv1, inv2, pool = np.stack(grants.inv1), np.stack(grants.inv2), np.stack(grants.pool)
+    X = deal_features(
+        np.stack(deals.inv1),
+        np.stack(deals.inv2),
+        deals.h1,
+        deals.h2,
+        deals.mover,
+        deals.deal == 0,
+    )
+    inv1, inv2, pool = (
+        np.stack(grants.inv1),
+        np.stack(grants.inv2),
+        np.stack(grants.pool),
+    )
     ones = grants.pos.values == 1
     c = np.zeros(len(grants))
     for k in range(FOLDS):
-        model = LogisticRegression(max_iter=2000).fit(X[fd != k], deals.O.values[fd != k])
+        model = LogisticRegression(max_iter=2000).fit(
+            X[fd != k], deals.O.values[fd != k]
+        )
         test = np.where(fg == k)[0]
         V = np.empty((len(test), len(ITEMS)))
         for item in range(len(ITEMS)):
@@ -416,7 +677,9 @@ def deal_corrections(d: Data) -> np.ndarray:
             a[ones[test], item] += 1
             b[~ones[test], item] += 1
             g = grants.iloc[test]
-            V[:, item] = model.predict_proba(deal_features(a, b, g.h1, g.h2, g.mover, g.deal == 0))[:, 1]
+            V[:, item] = model.predict_proba(
+                deal_features(a, b, g.h1, g.h2, g.mover, g.deal == 0)
+            )[:, 1]
         P = pool[test] / pool[test].sum(1, keepdims=True)
         c[test] = (P * V).sum(1) - V[np.arange(len(test)), grants.item.values[test]]
     return round_sum(c, grants.mi.values, grants.r.values, d.rounds)
@@ -424,58 +687,125 @@ def deal_corrections(d: Data) -> np.ndarray:
 
 def use_corrections(d: Data) -> np.ndarray:
     mi_of = dict(zip(d.matches.match_id, d.matches.mi))
-    pos_of = {(m, l): p for m, l1, l2 in zip(d.matches.match_id, d.matches.letter1, d.matches.letter2) for l, p in ((l1, 1), (l2, 2))}
-    O = pd.Series(d.rounds.O.values, pd.MultiIndex.from_arrays([d.rounds.mi, d.rounds.r]))
-    dec = d.dec.assign(mi=d.dec.match_id.map(mi_of), pos=[pos_of[(m, p)] for m, p in zip(d.dec.match_id, d.dec.player)])
+    pos_of = {
+        (m, l): p
+        for m, l1, l2 in zip(d.matches.match_id, d.matches.letter1, d.matches.letter2)
+        for l, p in ((l1, 1), (l2, 2))
+    }
+    O = pd.Series(
+        d.rounds.O.values, pd.MultiIndex.from_arrays([d.rounds.mi, d.rounds.r])
+    )
+    dec = d.dec.assign(
+        mi=d.dec.match_id.map(mi_of),
+        pos=[pos_of[(m, p)] for m, p in zip(d.dec.match_id, d.dec.player)],
+    )
     dec["O1"] = O.reindex(pd.MultiIndex.from_arrays([dec.mi, dec["round"]])).values
     dec = dec[dec.O1.notna()].reset_index(drop=True)
-    shot, glass, beer, phone = dec.shot.notna().values, (dec.item == "Glass").values, (dec.item == "Beer").values, (dec.item == "Phone").values
+    shot, glass, beer, phone = (
+        dec.shot.notna().values,
+        (dec.item == "Glass").values,
+        (dec.item == "Beer").values,
+        (dec.item == "Phone").values,
+    )
     lives = [json.loads(s) for s in dec.private_live_json]
-    dec["p"] = [lv[0] / n if lv and n else np.nan for lv, n in zip(lives, dec.private_orders)]
-    dec["El"] = [sum(lv) / n if lv and n else np.nan for lv, n in zip(lives, dec.private_orders)]
+    dec["p"] = [
+        lv[0] / n if lv and n else np.nan for lv, n in zip(lives, dec.private_orders)
+    ]
+    dec["El"] = [
+        sum(lv) / n if lv and n else np.nan for lv, n in zip(lives, dec.private_orders)
+    ]
     reveal = shot | glass | beer
     dec["pt"] = np.nan
     dec.loc[reveal, "pt"] = true_live_chances(d, dec[reveal])
     # The shell each shot, beer and glass showed: the replayed shots, the ejected shells, the glass's clue.
-    glass_clue = {(m, o): s == "Live" for m, o, at, s in zip(d.clues.match_id, d.clues.ordinal, d.clues.position, d.clues.shell) if at == 1}
+    glass_clue = {
+        (m, o): s == "Live"
+        for m, o, at, s in zip(
+            d.clues.match_id, d.clues.ordinal, d.clues.position, d.clues.shell
+        )
+        if at == 1
+    }
     real = np.full(len(dec), np.nan)
     for m, g in dec.groupby("match_id"):
         ejected = iter(d.ejected.get(m, []))
         for i, s, it, o in zip(g.index, shot[g.index], g.item, g.ordinal):
-            real[i] = dec.live[i] if s else next(ejected, np.nan) if it == "Beer" else glass_clue.get((m, o), np.nan) if it == "Glass" else np.nan
+            real[i] = (
+                dec.live[i]
+                if s
+                else next(ejected, np.nan)
+                if it == "Beer"
+                else glass_clue.get((m, o), np.nan)
+                if it == "Glass"
+                else np.nan
+            )
     # The value after a decision in the mover's view: the next decision's best value, or the round's result.
     by_round = dec.groupby(["match_id", "round"])
     next_B, next_pos = by_round.B.shift(-1).values, by_round.pos.shift(-1).values
     own = np.where(dec.pos == 1, dec.O1, 1 - dec.O1)
-    after = np.where(np.isnan(next_pos), own, np.where(next_pos == dec.pos, next_B, 1 - next_B))
+    after = np.where(
+        np.isnan(next_pos), own, np.where(next_pos == dec.pos, next_B, 1 - next_B)
+    )
     p, P, Q, live = dec.p.values, dec.pt.values, dec.Q.values, real == 1
     with np.errstate(divide="ignore", invalid="ignore"):
-        other = np.clip(np.where(live, (Q - p * after) / (1 - p), (Q - (1 - p) * after) / p), 0, 1)
+        other = np.clip(
+            np.where(live, (Q - p * after) / (1 - p), (Q - (1 - p) * after) / p), 0, 1
+        )
     two = np.where(live, (1 - P) * (other - after), P * (other - after))
     two = np.where((p > 0) & (p < 1) & (P > 0) & (P < 1) & ~np.isnan(real), two, 0.0)
     c = np.nan_to_num(np.where(phone, Q - after, np.where(reveal, two, 0.0)))
     hj = [json.loads(h) for h in dec.health_json]
     X = np.column_stack(
-        [dec.p.fillna(-1), dec.pt.fillna(-1), dec.Q.fillna(-1), dec.B.fillna(-1), dec.remaining, dec.El.fillna(-1), dec["round"], [h[0]["health"] for h in hj],
-         [h[1].get("health", -1) for h in hj], dec.sawed.fillna(0), shot, glass, beer, phone, (dec.shot == "self").values,
-         [len(json.loads(s)) for s in dec.own_items_json], [len(json.loads(s)) for s in dec.opponent_items_json]]
+        [
+            dec.p.fillna(-1),
+            dec.pt.fillna(-1),
+            dec.Q.fillna(-1),
+            dec.B.fillna(-1),
+            dec.remaining,
+            dec.El.fillna(-1),
+            dec["round"],
+            [h[0]["health"] for h in hj],
+            [h[1].get("health", -1) for h in hj],
+            dec.sawed.fillna(0),
+            shot,
+            glass,
+            beer,
+            phone,
+            (dec.shot == "self").values,
+            [len(json.loads(s)) for s in dec.own_items_json],
+            [len(json.loads(s)) for s in dec.opponent_items_json],
+        ]
     ).astype(float)
     events, searched = reveal | phone, dec.B.notna().values
     fold = folds(d.matches.seed.values)[dec.mi.values]
     drift = np.zeros(len(dec))
     for k in range(FOLDS):
         train, test = events & searched & (fold != k), events & searched & (fold == k)
-        model = HistGradientBoostingRegressor(max_iter=200, learning_rate=0.08, min_samples_leaf=200, random_state=0).fit(X[train], c[train])
+        model = HistGradientBoostingRegressor(
+            max_iter=200, learning_rate=0.08, min_samples_leaf=200, random_state=0
+        ).fit(X[train], c[train])
         drift[test] = model.predict(X[test])
     c -= drift
     uses = (glass | beer | phone) & searched
-    full = by_round.B.transform(lambda s: s.notna().all()).values  # rounds the search scored throughout
-    return round_sum(np.where(uses & full, c, 0.0) * np.where(dec.pos == 1, 1.0, -1.0), dec.mi.values, dec["round"].values, d.rounds)
+    full = by_round.B.transform(
+        lambda s: s.notna().all()
+    ).values  # rounds the search scored throughout
+    return round_sum(
+        np.where(uses & full, c, 0.0) * np.where(dec.pos == 1, 1.0, -1.0),
+        dec.mi.values,
+        dec["round"].values,
+        d.rounds,
+    )
 
 
 def corrections(d: Data) -> np.ndarray:
     """Per round of d.rounds, the sum of its corrections in position 1's view."""
-    return shot_corrections(d, shots_of(d)) + load_corrections(d) + seat_corrections(d) + deal_corrections(d) + use_corrections(d)
+    return (
+        shot_corrections(d, shots_of(d))
+        + load_corrections(d)
+        + seat_corrections(d)
+        + deal_corrections(d)
+        + use_corrections(d)
+    )
 
 
 # RATINGS AND THE BIAS TEST
@@ -509,15 +839,25 @@ def rated(d: Data, c: np.ndarray) -> Rated:
     )
 
 
-def fit(t: Rated, wins: np.ndarray, w: np.ndarray | None = None, anchor: str | None = bt.ANCHOR) -> np.ndarray:
-    """Round Elo per config of `wins` (the fit of bt.round_elo, on each pair's summed rounds and wins), with each match counted `w` times (bootstrap weights)."""
+def fit(
+    t: Rated,
+    wins: np.ndarray,
+    w: np.ndarray | None = None,
+    anchor: str | None = bt.ANCHOR,
+) -> np.ndarray:
+    """Round Elo per config of `wins` (the fit of bt.round_elo, on each pair's summed rounds and wins), with each match counted `w` times (bootstrap weights).
+
+    A config no counted match mentions is NaN under weights, as in the site's resamples (ratings.ts fittedRatings); the point fit rates every config."""
     w = np.ones(len(t.i)) if w is None else w
     K = len(t.names)
     pair = t.i * K + t.j
     rounds, won = np.bincount(pair, w * t.n, K * K), np.bincount(pair, w * wins, K * K)
-    cells = {(t.names[p // K], t.names[p % K]): [rounds[p], won[p]] for p in np.flatnonzero(rounds)}
-    elo = bt.fit(cells, entrants=set(t.names)).elo(anchor)
-    return np.array([elo[name] for name in t.names])
+    cells = {
+        (t.names[p // K], t.names[p % K]): [rounds[p], won[p]]
+        for p in np.flatnonzero(rounds)
+    }
+    elo = bt.fit(cells, entrants=set(t.names) if w is None else set()).elo(anchor)
+    return np.array([elo.get(name, np.nan) for name in t.names])
 
 
 def intervals(t: Rated, wins: np.ndarray) -> np.ndarray:
@@ -525,8 +865,20 @@ def intervals(t: Rated, wins: np.ndarray) -> np.ndarray:
     rng = np.random.default_rng(1)
     U = t.block.max() + 1
     shift = fit(t, wins, anchor=None) - fit(t, wins)
-    draws = np.array([fit(t, wins, np.bincount(rng.integers(0, U, U), minlength=U)[t.block].astype(float), None) for _ in range(boot.DRAWS)])
-    return np.percentile(draws - shift, [100 * boot.TAIL, 100 * (1 - boot.TAIL)], axis=0).T
+    draws = np.array(
+        [
+            fit(
+                t,
+                wins,
+                np.bincount(rng.integers(0, U, U), minlength=U)[t.block].astype(float),
+                None,
+            )
+            for _ in range(boot.DRAWS)
+        ]
+    )
+    return np.nanpercentile(
+        draws - shift, [100 * boot.TAIL, 100 * (1 - boot.TAIL)], axis=0
+    ).T
 
 
 def bias(t: Rated, splits: int = 20) -> dict:
@@ -535,9 +887,15 @@ def bias(t: Rated, splits: int = 20) -> dict:
     mu, se = np.zeros(K), np.zeros(K)
     for c in range(K):
         a, b = t.i == c, t.j == c
-        v, n, s = np.concatenate([t.luck[a], -t.luck[b]]), np.concatenate([t.n[a], t.n[b]]), np.concatenate([t.seed[a], t.seed[b]])
+        v, n, s = (
+            np.concatenate([t.luck[a], -t.luck[b]]),
+            np.concatenate([t.n[a], t.n[b]]),
+            np.concatenate([t.seed[a], t.seed[b]]),
+        )
         mu[c] = v.sum() / n.sum()
-        se[c] = np.sqrt((pd.Series(v - mu[c] * n).groupby(s).sum() ** 2).sum()) / n.sum()
+        se[c] = (
+            np.sqrt((pd.Series(v - mu[c] * n).groupby(s).sum() ** 2).sum()) / n.sum()
+        )
     chi2 = float(((mu / se) ** 2).sum())
     corr = []
     for s in range(splits):
@@ -545,9 +903,27 @@ def bias(t: Rated, splits: int = 20) -> dict:
         for k in (0, 1):
             elo = fit(t, t.raw, (f != k).astype(float))
             w = f == k
-            m = np.array([np.concatenate([t.luck[(t.i == c) & w], -t.luck[(t.j == c) & w]]).sum() / max(1.0, np.concatenate([t.n[(t.i == c) & w], t.n[(t.j == c) & w]]).sum()) for c in range(K)])
+            m = np.array(
+                [
+                    np.concatenate(
+                        [t.luck[(t.i == c) & w], -t.luck[(t.j == c) & w]]
+                    ).sum()
+                    / max(
+                        1.0,
+                        np.concatenate(
+                            [t.n[(t.i == c) & w], t.n[(t.j == c) & w]]
+                        ).sum(),
+                    )
+                    for c in range(K)
+                ]
+            )
             corr.append(np.corrcoef(elo, m)[0, 1])
-    return {"chi2": chi2, "k": K, "p": float(stats.chi2.sf(chi2, K)), "corr": float(np.mean(corr))}
+    return {
+        "chi2": chi2,
+        "k": K,
+        "p": float(stats.chi2.sf(chi2, K)),
+        "corr": float(np.mean(corr)),
+    }
 
 
 def report(t: Rated) -> str:
@@ -555,10 +931,21 @@ def report(t: Rated) -> str:
     ri, ai = intervals(t, t.raw), intervals(t, t.raw + t.luck)
     b = bias(t)
     counts = np.bincount(t.i, t.n, len(t.names)) + np.bincount(t.j, t.n, len(t.names))
-    matches = np.bincount(t.i, minlength=len(t.names)) + np.bincount(t.j, minlength=len(t.names))
+    matches = np.bincount(t.i, minlength=len(t.names)) + np.bincount(
+        t.j, minlength=len(t.names)
+    )
     order = np.argsort(-adj)
     a = t.names.index(bt.ANCHOR)
-    rows = [[t.names[k], f"{matches[k]}", f"{counts[k]:.0f}", f"{raw[k]:+.0f} [{ri[k][0]:+.0f}, {ri[k][1]:+.0f}]", f"{adj[k]:+.0f} [{ai[k][0]:+.0f}, {ai[k][1]:+.0f}]"] for k in order]
+    rows = [
+        [
+            t.names[k],
+            f"{matches[k]}",
+            f"{counts[k]:.0f}",
+            f"{raw[k]:+.0f} [{ri[k][0]:+.0f}, {ri[k][1]:+.0f}]",
+            f"{adj[k]:+.0f} [{ai[k][0]:+.0f}, {ai[k][1]:+.0f}]",
+        ]
+        for k in order
+    ]
     widths = (ri[:, 1] - ri[:, 0]) / 2, (ai[:, 1] - ai[:, 0]) / 2
     rank_raw, rank_adj = stats.rankdata(-raw), stats.rankdata(-adj)
     summary = (
@@ -569,7 +956,20 @@ def report(t: Rated) -> str:
         f"Bias test: the mean correction per round of each config, seed-clustered, gives chi2 {b['chi2']:.1f} on {b['k']} configs (p {b['p']:.2f})."
         f" Its correlation with Round Elo fitted on the other half of the seeds (20 random halvings) is {b['corr']:+.2f}."
     )
-    return summary + "\n\n" + table(["config", "matches", "rounds", f"Round Elo [{boot.PERCENT}]", f"luck-adjusted [{boot.PERCENT}]"], rows)
+    return (
+        summary
+        + "\n\n"
+        + table(
+            [
+                "config",
+                "matches",
+                "rounds",
+                f"Round Elo [{boot.PERCENT}]",
+                f"luck-adjusted [{boot.PERCENT}]",
+            ],
+            rows,
+        )
+    )
 
 
 def write(path: Path, d: Data, c: np.ndarray) -> None:
@@ -577,8 +977,19 @@ def write(path: Path, d: Data, c: np.ndarray) -> None:
     tmp = path.with_suffix(".tmp")
     tmp.unlink(missing_ok=True)
     out = sqlite3.connect(tmp)
-    out.execute("CREATE TABLE luck (match_id TEXT, player TEXT, correction REAL, PRIMARY KEY (match_id, player))")
-    out.executemany("INSERT INTO luck VALUES (?, ?, ?)", [row for m, a, b, x in zip(d.matches.match_id, d.matches.letter1, d.matches.letter2, luck) for row in ((m, a, float(x)), (m, b, -float(x)))])
+    out.execute(
+        "CREATE TABLE luck (match_id TEXT, player TEXT, correction REAL, PRIMARY KEY (match_id, player))"
+    )
+    out.executemany(
+        "INSERT INTO luck VALUES (?, ?, ?)",
+        [
+            row
+            for m, a, b, x in zip(
+                d.matches.match_id, d.matches.letter1, d.matches.letter2, luck
+            )
+            for row in ((m, a, float(x)), (m, b, -float(x)))
+        ],
+    )
     out.commit()
     out.close()
     tmp.replace(path)
@@ -593,6 +1004,7 @@ def main() -> None:
     parser.add_argument("--doc", type=Path)
     args = parser.parse_args()
     require_current(args.db)
+    run_of(Path(args.regret))
     d = read(args.db, args.knowledge, args.regret)
     c = corrections(d)
     if args.out:

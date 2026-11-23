@@ -13,7 +13,7 @@ certain-mistake rate. Its decisions are split by what the depth-limited search o
 "Proves" is the knowledge database (web/scripts/arena-knowledge.ts): the Bend belief over the player's own log. Excluded
 matches (a DeepSeek seat), unfinished matches and fallback moves are left out. With --doc FILE the tables replace the text between the tables markers of that file.
 
-    python3 tools/arena/analysis/certain_mistakes.py [--knowledge PATH] [--regret PATH] [--doc docs/arena/analysis/certain-mistakes.md] [--opportunities PATH]
+    python3 tools/arena/analysis/certain_mistakes.py [--knowledge PATH] [--regret PATH] [--doc FILE] [--opportunities PATH]
 """
 
 import argparse
@@ -24,13 +24,13 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
+import analysis_cli
 import numpy as np
-from docs import splice_between_markers
 from boot import DRAWS, interval
+from configs import config_effort, effort_rank
 from fmt import pct, table
 from load import connect
-from configs import config_effort, effort_rank
-from regret import DERIVED, PRODUCTION, run_of
+from regret import run_of
 from rules import SAW_DAMAGE, WIN
 
 FEWEST_FOR_INTERVAL = 20
@@ -54,7 +54,9 @@ class Search(Enum):
     """What the depth-limited search scored for the two shots at a proven blank."""
 
     OPPONENT_SHOT_HIGHER = "search scores the opponent shot higher"
-    SETTLED_FOR_SELF_SHOT = "search settles the self shot as a win and the opponent shot as a loss"
+    SETTLED_FOR_SELF_SHOT = (
+        "search settles the self shot as a win and the opponent shot as a loss"
+    )
     OTHER = "the rest"
     UNSEARCHED = "no search"
 
@@ -82,9 +84,13 @@ def kill_damage(holds_saw: bool) -> int:
     return SAW_DAMAGE if holds_saw else 1
 
 
-def guaranteed_win(own_health: int, opponent_health: int, own_saw: bool, opponent_saw: bool) -> bool:
+def guaranteed_win(
+    own_health: int, opponent_health: int, own_saw: bool, opponent_saw: bool
+) -> bool:
     """With the next shell a proven live, a self shot on the proven blank keeps the move and the live kills the opponent; an opponent shot hands it a move that can kill the player."""
-    return opponent_health <= kill_damage(own_saw) and own_health <= kill_damage(opponent_saw)
+    return opponent_health <= kill_damage(own_saw) and own_health <= kill_damage(
+        opponent_saw
+    )
 
 
 def search_of(values: str | None) -> Search:
@@ -92,7 +98,9 @@ def search_of(values: str | None) -> Search:
         return Search.UNSEARCHED
     scores = {v["label"]: v["score"] for v in json.loads(values)}
     own = scores["Shoot yourself"]
-    [other] = [score for label, score in scores.items() if label.startswith("Shoot Player")]
+    [other] = [
+        score for label, score in scores.items() if label.startswith("Shoot Player")
+    ]
     if other > own:
         return Search.OPPONENT_SHOT_HIGHER
     if (own, other) == (WIN, 0):
@@ -100,7 +108,23 @@ def search_of(values: str | None) -> Search:
     return Search.OTHER
 
 
-def decision(match, ordinal, player, model, effort, block, chamber, source, shot, health, known, own_items, opponent_items, remaining, values) -> Decision:
+def decision(
+    match,
+    ordinal,
+    player,
+    model,
+    effort,
+    block,
+    chamber,
+    source,
+    shot,
+    health,
+    known,
+    own_items,
+    opponent_items,
+    remaining,
+    values,
+) -> Decision:
     own, opponent = json.loads(health)
     opponent_health = opponent.get("health")
     if chamber == "Live":
@@ -109,12 +133,30 @@ def decision(match, ordinal, player, model, effort, block, chamber, source, shot
         next_live = "2L" in (known or "").split()
         if next_live and opponent_health is None:
             pattern = Pattern.HIDDEN_HEALTH
-        elif next_live and guaranteed_win(own["health"], opponent_health, "Saw" in json.loads(own_items), "Saw" in json.loads(opponent_items)):
+        elif next_live and guaranteed_win(
+            own["health"],
+            opponent_health,
+            "Saw" in json.loads(own_items),
+            "Saw" in json.loads(opponent_items),
+        ):
             pattern = Pattern.GAVE_UP_GUARANTEED_WIN
         else:
             pattern = Pattern.GAVE_TURN_AWAY
         chose = shot == "opponent"
-    return Decision(match, ordinal, player, model, config_effort(model, effort), block, pattern, chose, source, remaining == 1, opponent_health is None, search_of(values))
+    return Decision(
+        match,
+        ordinal,
+        player,
+        model,
+        config_effort(model, effort),
+        block,
+        pattern,
+        chose,
+        source,
+        remaining == 1,
+        opponent_health is None,
+        search_of(values),
+    )
 
 
 def load(knowledge_path: Path, regret_path: Path) -> list[Decision]:
@@ -148,11 +190,10 @@ class Rate:
             return "–"
         if self.decisions < FEWEST_FOR_INTERVAL:
             return f"{self.chose}/{self.decisions}"
-        if self.interval is None:
+        if (
+            self.interval is None or self.chose == 0
+        ):  # every resample of zero is zero: the count says it all
             bounds = ""
-        elif self.chose == 0:
-            # Every resample of zero is zero; the rule of three gives the 95% upper bound instead.
-            bounds = f", under {pct(3 / self.decisions)}"
         else:
             bounds = f" [{pct(self.interval[0])}, {pct(self.interval[1])}]"
         return f"{pct(self.chose / self.decisions)} ({self.chose}/{self.decisions}){bounds}"
@@ -168,7 +209,9 @@ def rate(decisions: list[Decision]) -> Rate:
     tallies = np.array([per_block[b] for b in sorted(per_block)])
     replicates = []
     if len(tallies):
-        drawn = np.random.default_rng(0).integers(0, len(tallies), (DRAWS, len(tallies)))
+        drawn = np.random.default_rng(0).integers(
+            0, len(tallies), (DRAWS, len(tallies))
+        )
         totals = tallies[drawn].sum(axis=1)
         replicates = (totals[:, 1] / totals[:, 0]).tolist()
     return Rate(len(decisions), sum(d.chose for d in decisions), interval(replicates))
@@ -176,8 +219,17 @@ def rate(decisions: list[Decision]) -> Rate:
 
 def configs(decisions: list[Decision]) -> list[tuple[list[str], list[Decision]]]:
     """Each config's decisions, then every decision pooled."""
-    keys = sorted({(d.model, d.effort) for d in decisions}, key=lambda c: (c[0], effort_rank(c[1])))
-    return [([model, effort], [d for d in decisions if (d.model, d.effort) == (model, effort)]) for model, effort in keys] + [(["all", ""], decisions)]
+    keys = sorted(
+        {(d.model, d.effort) for d in decisions},
+        key=lambda c: (c[0], effort_rank(c[1])),
+    )
+    return [
+        (
+            [model, effort],
+            [d for d in decisions if (d.model, d.effort) == (model, effort)],
+        )
+        for model, effort in keys
+    ] + [(["all", ""], decisions)]
 
 
 def of(decisions: list[Decision], pattern: Pattern) -> list[Decision]:
@@ -195,14 +247,28 @@ def outcome_of(d: Decision) -> Outcome:
 def rate_rows(decisions: list[Decision]) -> list[tuple]:
     *per_config, (_, pooled) = configs(decisions)
     groups = [("config", model, effort, mine) for [model, effort], mine in per_config]
-    groups += [("model", model, "", [d for d in decisions if d.model == model]) for model in sorted({d.model for d in decisions})]
+    groups += [
+        ("model", model, "", [d for d in decisions if d.model == model])
+        for model in sorted({d.model for d in decisions})
+    ]
     groups.append(("all", "", "", pooled))
     rows = []
     for scope, model, effort, mine in groups:
         for pattern in Pattern:
             found = rate(of(mine, pattern))
             lo, hi = found.bounds() or (None, None)
-            rows.append((scope, model, effort, pattern.name.lower(), found.chose, found.decisions, lo, hi))
+            rows.append(
+                (
+                    scope,
+                    model,
+                    effort,
+                    pattern.name.lower(),
+                    found.chose,
+                    found.decisions,
+                    lo,
+                    hi,
+                )
+            )
     return rows
 
 
@@ -217,42 +283,124 @@ def write_opportunities(decisions: list[Decision], path: Path) -> None:
         db.execute(CREATE_OPPORTUNITIES)
         db.executemany(
             "INSERT INTO opportunities VALUES (?, ?, ?, ?, ?, ?)",
-            [(d.match, d.ordinal, d.player, d.pattern.name.lower(), outcome_of(d).value, d.source) for d in decisions],
+            [
+                (
+                    d.match,
+                    d.ordinal,
+                    d.player,
+                    d.pattern.name.lower(),
+                    outcome_of(d).value,
+                    d.source,
+                )
+                for d in decisions
+            ],
         )
         db.execute(
             """CREATE TABLE rates (scope TEXT NOT NULL, model TEXT NOT NULL, effort TEXT NOT NULL, type TEXT NOT NULL,
                                    chose INTEGER NOT NULL, opportunities INTEGER NOT NULL, lo REAL, hi REAL, PRIMARY KEY (scope, model, effort, type)) WITHOUT ROWID"""
         )
-        db.executemany("INSERT INTO rates VALUES (?, ?, ?, ?, ?, ?, ?, ?)", rate_rows(decisions))
+        db.executemany(
+            "INSERT INTO rates VALUES (?, ?, ?, ?, ?, ?, ?, ?)", rate_rows(decisions)
+        )
     db.close()
+
+
+def require_matching(opportunities: Path, knowledge: Path, regret: Path) -> None:
+    """Stops unless the opportunities database holds what these knowledge and regret files give: same decisions, types and outcomes."""
+    expected = sorted(
+        (
+            d.match,
+            d.ordinal,
+            d.player,
+            d.pattern.name.lower(),
+            outcome_of(d).value,
+            d.source,
+        )
+        for d in load(knowledge, regret)
+    )
+    db = connect(str(opportunities))
+    stored = sorted(
+        db.execute(
+            "SELECT match_id, ordinal, player, type, outcome, source FROM opportunities"
+        )
+    )
+    db.close()
+    if stored != expected:
+        raise SystemExit(
+            f"{opportunities} was not built from {knowledge} and {regret} ({len(stored)} opportunities stored, {len(expected)} found); rerun certain_mistakes.py --opportunities"
+        )
 
 
 def certain(decisions: list[Decision]) -> str:
     rows = [
         names
-        + [rate(of(mine, Pattern.SELF_ON_LIVE)).cell(), rate(of(mine, Pattern.GAVE_UP_GUARANTEED_WIN)).cell(), f"{len(of(mine, Pattern.HIDDEN_HEALTH)):,}"]
+        + [
+            rate(of(mine, Pattern.SELF_ON_LIVE)).cell(),
+            rate(of(mine, Pattern.GAVE_UP_GUARANTEED_WIN)).cell(),
+            f"{len(of(mine, Pattern.HIDDEN_HEALTH)):,}",
+        ]
         for names, mine in configs(decisions)
     ]
-    return table(["model", "effort", Pattern.SELF_ON_LIVE.value, Pattern.GAVE_UP_GUARANTEED_WIN.value, f"excluded: {Pattern.HIDDEN_HEALTH.value}"], rows)
+    return table(
+        [
+            "model",
+            "effort",
+            Pattern.SELF_ON_LIVE.value,
+            Pattern.GAVE_UP_GUARANTEED_WIN.value,
+            f"excluded: {Pattern.HIDDEN_HEALTH.value}",
+        ],
+        rows,
+    )
 
 
 def turn_away_by_config(decisions: list[Decision]) -> str:
-    rows = [names + [rate(of(mine, Pattern.GAVE_TURN_AWAY)).cell()] for names, mine in configs(decisions)]
+    rows = [
+        names + [rate(of(mine, Pattern.GAVE_TURN_AWAY)).cell()]
+        for names, mine in configs(decisions)
+    ]
     return table(["model", "effort", "shot the opponent on a proven blank"], rows)
 
 
 def turn_away_by_search(decisions: list[Decision]) -> str:
-    groups: list[tuple[str, Callable[[Decision], bool]]] = [("opponent jammed", lambda d: d.opponent_jammed)]
-    groups += [(search.value, lambda d, search=search: not d.opponent_jammed and d.search is search) for search in Search]
+    groups: list[tuple[str, Callable[[Decision], bool]]] = [
+        ("opponent jammed", lambda d: d.opponent_jammed)
+    ]
+    groups += [
+        (
+            search.value,
+            lambda d, search=search: not d.opponent_jammed and d.search is search,
+        )
+        for search in Search
+    ]
     away = of(decisions, Pattern.GAVE_TURN_AWAY)
-    return table([name for name, _ in groups], [[rate([d for d in away if keep(d)]).cell() for _, keep in groups]])
+    return table(
+        [name for name, _ in groups],
+        [[rate([d for d in away if keep(d)]).cell() for _, keep in groups]],
+    )
 
 
 def by_source(decisions: list[Decision]) -> str:
-    groups = [(source, lambda d, source=source: d.source == source) for source in ("public", "glass", "phone", "combined")]
-    groups += [("last shell", lambda d: d.last_shell), ("earlier shells", lambda d: not d.last_shell)]
-    patterns = [Pattern.SELF_ON_LIVE, Pattern.GAVE_UP_GUARANTEED_WIN, Pattern.GAVE_TURN_AWAY]
-    rows = [[pattern.value] + [rate([d for d in of(decisions, pattern) if keep(d)]).cell() for _, keep in groups] for pattern in patterns]
+    groups: list[tuple[str, Callable[[Decision], bool]]] = [
+        (source, lambda d, source=source: d.source == source)
+        for source in ("public", "glass", "phone", "combined")
+    ]
+    groups += [
+        ("last shell", lambda d: d.last_shell),
+        ("earlier shells", lambda d: not d.last_shell),
+    ]
+    patterns = [
+        Pattern.SELF_ON_LIVE,
+        Pattern.GAVE_UP_GUARANTEED_WIN,
+        Pattern.GAVE_TURN_AWAY,
+    ]
+    rows = [
+        [pattern.value]
+        + [
+            rate([d for d in of(decisions, pattern) if keep(d)]).cell()
+            for _, keep in groups
+        ]
+        for pattern in patterns
+    ]
     return table(["pattern"] + [name for name, _ in groups], rows)
 
 
@@ -266,20 +414,18 @@ def report(decisions: list[Decision]) -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--knowledge", type=Path, default=DERIVED / "knowledge.sqlite")
-    parser.add_argument("--regret", type=Path, default=PRODUCTION)
-    parser.add_argument("--doc", type=Path)
-    parser.add_argument("--opportunities", type=Path)
-    args = parser.parse_args()
-    decisions = load(args.knowledge, args.regret)
-    if args.opportunities is not None:
-        write_opportunities(decisions, args.opportunities)
-    text = report(decisions)
-    if args.doc is None:
-        print(text)
-    else:
-        splice_between_markers(args.doc, "tables", text)
+    def build(args: argparse.Namespace) -> str:
+        decisions = load(args.knowledge, args.regret)
+        if args.opportunities is not None:
+            write_opportunities(decisions, args.opportunities)
+        return report(decisions)
+
+    analysis_cli.main(
+        __doc__,
+        "tables",
+        build,
+        lambda parser: parser.add_argument("--opportunities", type=Path),
+    )
 
 
 if __name__ == "__main__":

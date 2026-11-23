@@ -6,7 +6,7 @@ in regret.py. All three are opened read-only. With --doc FILE the tables replace
 file. A config is a model with its effort. Excluded matches (matches.disposition, as the importer sets it) and unfinished
 matches are left out.
 
-    python3 tools/arena/analysis/by_round.py [--db PATH] [--regret PATH] [--knowledge PATH] [--doc docs/arena/analysis/regret.md]
+    python3 tools/arena/analysis/by_round.py [--db PATH] [--regret PATH] [--knowledge PATH] [--doc FILE]
 """
 
 import argparse
@@ -14,12 +14,12 @@ from collections import defaultdict
 from dataclasses import dataclass, replace
 from pathlib import Path
 
+import analysis_cli
 import regret
-from docs import splice_between_markers
+from configs import EFFORTS, config_effort, effort_rank
 from fmt import pct, table
 from load import DB, connect, require_current, round_winners
-from configs import EFFORTS, config_effort, effort_rank
-from regret import DERIVED, PRODUCTION, Decision, points
+from regret import Decision, points
 from rules import ROUNDS
 
 
@@ -44,7 +44,11 @@ def load_results(db_path: str, knowledge_path: Path) -> list[RoundResult]:
     winners_of = round_winners(connect(db_path))
     for match in seats:
         winners = winners_of[match]
-        results += [RoundResult(model, effort, round, winner == player) for round, winner in winners.items() for player, (model, effort) in seats[match].items()]
+        results += [
+            RoundResult(model, effort, round, winner == player)
+            for round, winner in winners.items()
+            for player, (model, effort) in seats[match].items()
+        ]
     return results
 
 
@@ -54,7 +58,10 @@ def cell(values: list[float], show) -> str:
 
 def by_round(results: list[RoundResult], decisions: list[Decision]) -> str:
     """Models from the lowest mean regret to the highest, each with its efforts from off to max (or "all", first). Counts in brackets."""
-    key = lambda config: (config[0], effort_rank(config[1]) if config[1].split("/")[0] in EFFORTS else -1)
+    key = lambda config: (
+        config[0],
+        effort_rank(config[1]) if config[1].split("/")[0] in EFFORTS else -1,
+    )
     wins: dict[tuple[str, str, int], list[float]] = defaultdict(list)
     regrets: dict[tuple[str, str, int], list[float]] = defaultdict(list)
     for r in results:
@@ -62,10 +69,24 @@ def by_round(results: list[RoundResult], decisions: list[Decision]) -> str:
     for d in decisions:
         regrets[d.model, d.effort, d.round].append(d.regret)
     configs = sorted({k[:2] for k in wins}, key=key)
-    model_mean = {m: sum(d.regret for d in decisions if d.model == m) / sum(d.model == m for d in decisions) for m, _ in configs}
-    header = ["model", "effort"] + [f"round {n} {what}" for n in ROUNDS for what in ("win rate", "mean regret")]
+    model_mean = {
+        m: sum(d.regret for d in decisions if d.model == m)
+        / sum(d.model == m for d in decisions)
+        for m, _ in configs
+    }
+    header = ["model", "effort"] + [
+        f"round {n} {what}" for n in ROUNDS for what in ("win rate", "mean regret")
+    ]
     rows = [
-        [model, effort] + [c for n in ROUNDS for c in (cell(wins[model, effort, n], pct), cell(regrets[model, effort, n], points))]
+        [model, effort]
+        + [
+            c
+            for n in ROUNDS
+            for c in (
+                cell(wins[model, effort, n], pct),
+                cell(regrets[model, effort, n], points),
+            )
+        ]
         for model, effort in sorted(configs, key=lambda c: (model_mean[c[0]], *key(c)))
     ]
     everyone = ["all", ""]
@@ -80,13 +101,22 @@ def by_move_kind(decisions: list[Decision]) -> str:
     for n in ROUNDS:
         row = [str(n), cell([d.regret for d in decisions if d.round == n], points)]
         for shot in (True, False):
-            row.append(cell([d.regret for d in decisions if d.round == n and d.shot == shot], points))
+            row.append(
+                cell(
+                    [d.regret for d in decisions if d.round == n and d.shot == shot],
+                    points,
+                )
+            )
         rows.append(row)
     return table(["round", "all moves", "shots", "item moves"], rows)
 
 
-def pooled_over_efforts(results: list[RoundResult], decisions: list[Decision]) -> tuple[list[RoundResult], list[Decision]]:
-    return [replace(r, effort="all") for r in results], [replace(d, effort="all") for d in decisions]
+def pooled_over_efforts(
+    results: list[RoundResult], decisions: list[Decision]
+) -> tuple[list[RoundResult], list[Decision]]:
+    return [replace(r, effort="all") for r in results], [
+        replace(d, effort="all") for d in decisions
+    ]
 
 
 def report(results: list[RoundResult], decisions: list[Decision]) -> str:
@@ -99,18 +129,19 @@ def report(results: list[RoundResult], decisions: list[Decision]) -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--db", default=DB)
-    parser.add_argument("--regret", type=Path, default=PRODUCTION)
-    parser.add_argument("--knowledge", type=Path, default=DERIVED / "knowledge.sqlite")
-    parser.add_argument("--doc", type=Path)
-    args = parser.parse_args()
-    require_current(args.db)
-    text = report(load_results(args.db, args.knowledge), regret.load(args.regret, args.knowledge).decisions)
-    if args.doc is None:
-        print(text)
-    else:
-        splice_between_markers(args.doc, "by-round", text)
+    def build(args: argparse.Namespace) -> str:
+        require_current(args.db)
+        return report(
+            load_results(args.db, args.knowledge),
+            regret.load(args.regret, args.knowledge).decisions,
+        )
+
+    analysis_cli.main(
+        __doc__,
+        "by-round",
+        build,
+        lambda parser: parser.add_argument("--db", default=DB),
+    )
 
 
 if __name__ == "__main__":

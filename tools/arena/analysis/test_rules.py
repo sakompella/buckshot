@@ -30,11 +30,25 @@ class Rules(unittest.TestCase):
     def setUpClass(cls):
         with tempfile.TemporaryDirectory() as directory:
             module = Path(directory) / "domain.mjs"
-            subprocess.run([os.environ.get("BEND", "bend"), str(DOMAIN), "-o", str(module)], check=True, capture_output=True)
-            cls.bend = json.loads(subprocess.run(["node", "--input-type=module", "-e", READ, module.as_uri()], check=True, capture_output=True, text=True).stdout)
+            subprocess.run(
+                [os.environ.get("BEND", "bend"), str(DOMAIN), "-o", str(module)],
+                check=True,
+                capture_output=True,
+            )
+            cls.bend = json.loads(
+                subprocess.run(
+                    ["node", "--input-type=module", "-e", READ, module.as_uri()],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout
+            )
 
     def test_rounds_and_prizes_are_bends(self):
-        self.assertEqual((self.bend["rounds"], self.bend["prizes"]), (len(rules.ROUNDS), list(rules.PRIZES)))
+        self.assertEqual(
+            (self.bend["rounds"], self.bend["prizes"]),
+            (len(rules.ROUNDS), list(rules.PRIZES)),
+        )
 
     def test_the_two_seat_deck_is_bends(self):
         self.assertEqual(self.bend["deck"], [list(load) for load in rules.DECK])
@@ -43,7 +57,9 @@ class Rules(unittest.TestCase):
         # The remote is last in Bend's order and is not dealt at two seats.
         self.assertEqual(self.bend["order"][:-1], list(rules.ITEMS))
         caps = [self.bend["caps"][item.lower()] for item in rules.ITEMS]
-        self.assertEqual(caps, [list(pair) for pair in zip(rules.PER_SEAT, rules.ON_TABLE)])
+        self.assertEqual(
+            caps, [list(pair) for pair in zip(rules.PER_SEAT, rules.ON_TABLE)]
+        )
 
     def test_a_sawed_shot_does_bends_damage(self):
         self.assertEqual(self.bend["sawDamage"], rules.SAW_DAMAGE)

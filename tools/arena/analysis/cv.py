@@ -20,27 +20,58 @@ def folds(ids: list[str], k: int, rng: random.Random) -> list[list[str]]:
     return [shuffled[i::k] for i in range(k)]
 
 
-def fit_on(by_block: dict[str, list[Game]], ids: list[str], names: set[str], tau: float, terms: bool, pair_terms: set[tuple[str, str]] | None = None) -> bt.Fit:
+def fit_on(
+    by_block: dict[str, list[Game]],
+    ids: list[str],
+    names: set[str],
+    tau: float,
+    terms: bool,
+    pair_terms: set[tuple[str, str]] | None = None,
+) -> bt.Fit:
     """terms adds a seat term and a round 1 starter term to the ratings."""
     games = [game for block in ids for game in by_block[block]]
-    return bt.fit(bt.cells_of(games, starter=terms), tau=tau, seat=terms, start=terms, entrants=names, pair_terms=pair_terms)
+    return bt.fit(
+        bt.cells_of(games, starter=terms),
+        tau=tau,
+        seat=terms,
+        start=terms,
+        entrants=names,
+        pair_terms=pair_terms,
+    )
 
 
-def best_tau(by_block: dict[str, list[Game]], ids: list[str], names: set[str], terms: bool, rng: random.Random, k: int, pair_terms: set[tuple[str, str]]) -> float:
+def best_tau(
+    by_block: dict[str, list[Game]],
+    ids: list[str],
+    names: set[str],
+    terms: bool,
+    rng: random.Random,
+    k: int,
+    pair_terms: set[tuple[str, str]],
+) -> float:
     """The tau with the lowest held-out loss over k folds of these blocks; the smaller tau wins a tie."""
     totals = {tau: 0.0 for tau in GRID}
     for held in folds(ids, k, rng):
         train = [b for b in ids if b not in set(held)]
         test = [game for block in held for game in by_block[block]]
         for tau in GRID:
-            totals[tau] += bt.log_loss(fit_on(by_block, train, names, tau, terms, pair_terms), test)
+            totals[tau] += bt.log_loss(
+                fit_on(by_block, train, names, tau, terms, pair_terms), test
+            )
     return min(GRID, key=lambda tau: (totals[tau], tau))
 
 
 OUTER_FOLDS = 10
 
 
-def nested(games: list[Game], terms: bool, rng: random.Random, repeats: int = 5, outer: int = OUTER_FOLDS, inner: int = 5):
+def nested(
+    games: list[Game],
+    terms: bool,
+    rng: random.Random,
+    repeats: int = 5,
+    outer: int = OUTER_FOLDS,
+    inner: int = 5,
+):
     """Per block, the held-out log loss averaged over the repeats, for each fixed tau and for the nested choice.
 
     Returns (losses, chosen): losses maps 'tau=..' and 'nested' to {block: loss}; chosen counts the taus picked.
@@ -60,9 +91,19 @@ def nested(games: list[Game], terms: bool, rng: random.Random, repeats: int = 5,
             train = [b for b in ids if b not in set(held)]
             tau_star = best_tau(by_block, train, names, terms, rng, inner, pair_terms)
             chosen[tau_star] += 1
-            fits = {tau: fit_on(by_block, train, names, tau, terms, pair_terms) for tau in GRID}
+            fits = {
+                tau: fit_on(by_block, train, names, tau, terms, pair_terms)
+                for tau in GRID
+            }
             for block in held:
-                for label, tau in [*((f"tau={t}", t) for t in GRID), ("nested", tau_star)]:
+                for label, tau in [
+                    *((f"tau={t}", t) for t in GRID),
+                    ("nested", tau_star),
+                ]:
                     row = sums.setdefault(label, {})
-                    row[block] = row.get(block, 0.0) + bt.log_loss(fits[tau], by_block[block])
-    return {label: {b: v / repeats for b, v in row.items()} for label, row in sums.items()}, chosen
+                    row[block] = row.get(block, 0.0) + bt.log_loss(
+                        fits[tau], by_block[block]
+                    )
+    return {
+        label: {b: v / repeats for b, v in row.items()} for label, row in sums.items()
+    }, chosen

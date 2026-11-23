@@ -33,10 +33,11 @@
       inherit (nixpkgs) lib;
       # x86_64-darwin is gone: nixpkgs 26.11 dropped it.
       systems = [ "aarch64-darwin" "aarch64-linux" "x86_64-linux" ];
-      forEachSystem = f: lib.genAttrs systems (system: f (import nixpkgs {
+      pkgsFor = lib.genAttrs systems (system: import nixpkgs {
         inherit system;
         overlays = [ rust-overlay.overlays.default ];
-      }));
+      });
+      forEachSystem = f: lib.genAttrs systems (system: f pkgsFor.${system});
 
       # The pre-commit hooks are plain commands in sim/rust/pre-commit-config.json,
       # which `bash sim/rust/install-hooks.sh` installs for plain pre-commit or prek.
@@ -44,7 +45,7 @@
       # runs the hooks on the whole tree, with the crates vendored from Cargo.lock.
       hookConfig = (builtins.head (lib.importJSON ./sim/rust/pre-commit-config.json).repos).hooks;
       hooks = lib.genAttrs (builtins.filter (system: git-hooks.lib ? ${system}) systems) (system:
-        let pkgs = import nixpkgs { inherit system; overlays = [ rust-overlay.overlays.default ]; }; in
+        let pkgs = pkgsFor.${system}; in
         git-hooks.lib.${system}.run {
           src = ./.;
           settings.rust.check.cargoDeps = pkgs.rustPlatform.importCargoLock { lockFile = ./sim/rust/Cargo.lock; };
@@ -73,18 +74,27 @@
       });
 
       # cargoRoot: Cargo.lock is the workspace's, not at the repository root.
-      # arena-python: the tools/arena and tools/arena/analysis unit tests, in the dev/ env (some call Bend and node).
+      # arena-python: ruff, ruff format and ty over tools/arena and dev, then the tools/arena, tools/arena/analysis and dev/tests
+      # unit tests, in the dev/ env (some call Bend and node). Its source is only what those read, so a docs change does not rerun it.
       checks = forEachSystem (pkgs:
         let system = pkgs.stdenv.hostPlatform.system; in
         lib.optionalAttrs (hooks ? ${system}) { pre-commit-check = hooks.${system}.overrideAttrs { cargoRoot = "sim/rust"; }; }
         // {
           arena-python = pkgs.runCommand "arena-python-tests" {
-            nativeBuildInputs = [ (devEnv pkgs) self.packages.${system}.bend pkgs.nodejs_22 ];
+            nativeBuildInputs = [ (devEnv pkgs) self.packages.${system}.bend pkgs.nodejs_22 pkgs.ruff pkgs.ty ];
+            src = lib.fileset.toSource {
+              root = ./.;
+              fileset = lib.fileset.unions [ ./tools ./dev ./web ./sim ];
+            };
           } ''
-            cp -r ${./.} src && chmod -R u+w src && cd src/tools/arena
+            cp -r $src src && chmod -R u+w src && cd src
             export HOME=$TMPDIR
-            python -m unittest discover -s . -p 'test_*.py'
-            (cd analysis && python -m unittest discover -s .)
+            ruff check --config dev/pyproject.toml tools/arena dev
+            ruff format --config dev/pyproject.toml --check tools/arena dev
+            ty check --project dev --python ${devEnv pkgs} tools/arena dev
+            (cd tools/arena && python -m unittest discover -s . -p 'test_*.py')
+            (cd tools/arena/analysis && python -m unittest discover -s .)
+            (cd dev && BUCKSHOT_HEAVY_MEM_BUDGET=8G python -m unittest discover -s tests -t .)
             touch $out
           '';
         });

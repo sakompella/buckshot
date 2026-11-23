@@ -1,22 +1,30 @@
 #!/usr/bin/env python3
-"""The arena leaderboard of docs/arena/results.md: one table per cohort.
+"""The arena leaderboard: one table per cohort.
 
-The rating is the luck-adjusted Round Elo (docs/arena/analysis/matchups.md#luck-adjusted-round-elo), one pooled fit over every scored
+The rating is the luck-adjusted Round Elo (docs/arena/methods.md, Luck correction and Round Elo), one pooled fit over every scored
 match, so a config has the same rating in every table. Win share, pot share and matches count only the cohort's own matches. Intervals
-are in matchups.md. Tournament 3 and tournament 4 have no table of their own: their matches are in the first one. With --doc FILE the
+are in the matchups tables (matchups.py). Tournament 3 and tournament 4 have no table of their own: their matches are in the first one. With --doc FILE the
 scope line and the tables replace the text between the leaderboard markers of that file.
 
-    python3 tools/arena/analysis/leaderboard.py [--db PATH] [--luck PATH] [--doc docs/arena/results.md]
+    python3 tools/arena/analysis/leaderboard.py [--db PATH] [--luck PATH] [--doc FILE]
 """
 
-from pathlib import Path
 import argparse
+from pathlib import Path
 
 import bt
 from configs import config_label
 from docs import splice_between_markers
 from fmt import pct, signed, table
-from load import DB, Game, cohorts, connect, round_winners, scored_games, require_current
+from load import (
+    DB,
+    Game,
+    cohorts,
+    connect,
+    require_current,
+    round_winners,
+    scored_games,
+)
 from regret import DERIVED
 
 # Cohorts are named by the importer (web/src/analysis/import.ts); a "tournament N" cohort is titled as is.
@@ -36,7 +44,12 @@ def title_of(cohort: str) -> str:
 
 def luck_adjusted_elo(db, luck_path: Path) -> dict[str, float]:
     """The luck-adjusted Round Elo of every config: bt.round_elo over each match's rounds, the first config's round wins plus its luck correction."""
-    luck = {(match, player): correction for match, player, correction in connect(str(luck_path)).execute("SELECT match_id, player, correction FROM luck")}
+    luck = {
+        (match, player): correction
+        for match, player, correction in connect(str(luck_path)).execute(
+            "SELECT match_id, player, correction FROM luck"
+        )
+    }
     winners = round_winners(db)
     seats: dict[str, list[tuple[str, str]]] = {}
     for match, player, label in db.execute(
@@ -45,7 +58,12 @@ def luck_adjusted_elo(db, luck_path: Path) -> dict[str, float]:
     ):
         seats.setdefault(match, []).append((player, config_label(label)))
     rows = [
-        (first, second, len(winners[match]), sum(w == a for w in winners[match].values()) + luck[(match, a)])
+        (
+            first,
+            second,
+            len(winners[match]),
+            sum(w == a for w in winners[match].values()) + luck[(match, a)],
+        )
         for match, ((a, first), (_, second)) in seats.items()
         if winners[match]
     ]
@@ -55,26 +73,44 @@ def luck_adjusted_elo(db, luck_path: Path) -> dict[str, float]:
 def cohort_table(games: list[Game], elo: dict[str, float]) -> str:
     seats: dict[str, list[float]] = {}
     for g in games:
-        for config, win, pot in ((g.first, g.share_first, g.pot_first), (g.second, 1 - g.share_first, 1 - g.pot_first)):
+        for config, win, pot in (
+            (g.first, g.share_first, g.pot_first),
+            (g.second, 1 - g.share_first, 1 - g.pot_first),
+        ):
             row = seats.setdefault(config, [0.0, 0.0, 0.0])
             row[0] += 1
             row[1] += win
             row[2] += pot
     rows = [
         [config, f"{n:g}", pct(won / n), pct(pot / n), signed(elo[config])]
-        for config, (n, won, pot) in sorted(seats.items(), key=lambda item: -elo[item[0]])
+        for config, (n, won, pot) in sorted(
+            seats.items(), key=lambda item: -elo[item[0]]
+        )
     ]
-    return table(["config", "matches", "win share", "pot share", "Round Elo (luck-adjusted)"], rows)
+    return table(
+        ["config", "matches", "win share", "pot share", "Round Elo (luck-adjusted)"],
+        rows,
+    )
 
 
 def leaderboard(games: list[Game], elo: dict[str, float]) -> str:
-    last = max(int(cohort.removeprefix("tournament ")) for cohort in cohorts(games) if cohort.startswith("tournament "))
+    last = max(
+        int(cohort.removeprefix("tournament "))
+        for cohort in cohorts(games)
+        if cohort.startswith("tournament ")
+    )
     scope = f"Scope: {len(games):,} scored matches of tournaments 1 to {last}."
-    parts = [f"{scope}\n\n### All configs\n\n{len(games)} scored matches.\n\n{cohort_table(games, elo)}"]
-    for cohort, cohort_games in sorted(cohorts(games).items(), key=lambda item: -len(item[1])):
+    parts = [
+        f"{scope}\n\n### All configs\n\n{len(games)} scored matches.\n\n{cohort_table(games, elo)}"
+    ]
+    for cohort, cohort_games in sorted(
+        cohorts(games).items(), key=lambda item: -len(item[1])
+    ):
         if cohort in ("tournament 3", "tournament 4"):
             continue
-        parts.append(f"### {title_of(cohort)}\n\n{len(cohort_games)} scored matches.\n\n{cohort_table(cohort_games, elo)}")
+        parts.append(
+            f"### {title_of(cohort)}\n\n{len(cohort_games)} scored matches.\n\n{cohort_table(cohort_games, elo)}"
+        )
     return "\n\n".join(parts)
 
 

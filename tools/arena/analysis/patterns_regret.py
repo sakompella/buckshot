@@ -6,10 +6,9 @@ joined on (match_id, ordinal), and prints one markdown table. With --doc FILE th
 patterns markers of that file. Regret is in percentage points of the deciding player's chance to win the round. Excluded
 matches (a DeepSeek seat), unfinished matches and forced or fallback moves are left out.
 
-    python3 tools/arena/analysis/patterns_regret.py [--regret PATH] [--knowledge PATH] [--doc docs/arena/analysis/patterns.md]
+    python3 tools/arena/analysis/patterns_regret.py [--regret PATH] [--knowledge PATH] [--doc FILE]
 """
 
-import argparse
 import json
 import sqlite3
 from collections import defaultdict
@@ -17,11 +16,11 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+import analysis_cli
 from configs import config_effort
-from docs import splice_between_markers
 from fmt import table
 from load import connect
-from regret import DERIVED, PRODUCTION, run_of
+from regret import run_of
 from rules import POINT
 
 
@@ -33,7 +32,9 @@ class Move:
     regret: int
     shells_left: int
     chamber: str | None  # "Live" or "Blank" when the player's own log proves the shell
-    source: str | None  # where that certainty came from: public, glass, phone or combined
+    source: (
+        str | None
+    )  # where that certainty came from: public, glass, phone or combined
     live_count: int | None  # the live shells left, when the log fixes it
     sawed: bool
     shot: str | None  # "self" or "opponent"
@@ -49,7 +50,12 @@ class Move:
 
     @property
     def unknown_count_known(self) -> bool:
-        return self.shot is not None and self.chamber is None and self.live_count is not None and not self.sawed
+        return (
+            self.shot is not None
+            and self.chamber is None
+            and self.live_count is not None
+            and not self.sawed
+        )
 
 
 @dataclass(frozen=True)
@@ -64,22 +70,93 @@ def is_luna(move: Move) -> bool:
 
 
 PATTERNS = [
-    Pattern("Invert the last shell and shoot yourself, known live", lambda m: m.chamber == "Live" and m.shells_left == 1 and "Inverter" in m.legal_items, lambda m: m.item == "Inverter" and m.shoots_self_next),
-    Pattern("Smoke at full health, outside Luna", lambda m: m.full_health and "Cigarettes" in m.legal_items and not is_luna(m), lambda m: m.item == "Cigarettes" and not m.stolen),
-    Pattern("Smoke at full health, outside Luna, opponent holds adrenaline", lambda m: m.full_health and "Cigarettes" in m.legal_items and not is_luna(m) and "Adrenaline" in m.opponent_items, lambda m: m.item == "Cigarettes" and not m.stolen),
-    Pattern("Smoke at full health, Luna", lambda m: m.full_health and "Cigarettes" in m.legal_items and is_luna(m), lambda m: m.item == "Cigarettes" and not m.stolen),
-    Pattern("Shoot yourself, unknown chamber, under half live", lambda m: m.unknown_count_known and 2 * (m.live_count or 0) < m.shells_left, lambda m: m.shot == "self"),
-    Pattern("Shoot yourself on a certain live, from the count", lambda m: m.shot is not None and m.chamber == "Live" and m.source == "public", lambda m: m.shot == "self"),
-    Pattern("Shoot yourself on a certain live, from the glass", lambda m: m.shot is not None and m.chamber == "Live" and m.source == "glass", lambda m: m.shot == "self"),
-    Pattern("Shoot yourself on a certain live, from the phone", lambda m: m.shot is not None and m.chamber == "Live" and m.source == "phone", lambda m: m.shot == "self"),
-    Pattern("Shoot the opponent on a certain blank, not the last shell", lambda m: m.shot is not None and m.chamber == "Blank" and m.shells_left > 1, lambda m: m.shot == "opponent"),
-    Pattern("Shoot the opponent on a certain blank, last shell", lambda m: m.shot is not None and m.chamber == "Blank" and m.shells_left == 1, lambda m: m.shot == "opponent"),
-    Pattern("Use the phone with two or fewer shells left", lambda m: m.shells_left <= 2 and m.can_use("Phone"), lambda m: m.item == "Phone"),
-    Pattern("Shoot yourself at exactly half live, no saw", lambda m: m.unknown_count_known and 2 * (m.live_count or 0) == m.shells_left, lambda m: m.shot == "self"),
-    Pattern("Shoot yourself with the gun sawed", lambda m: m.shot is not None and m.sawed, lambda m: m.shot == "self"),
-    Pattern("Saw an unknown chamber (not a pattern)", lambda m: m.chamber is None and not m.sawed and m.can_use("Saw"), lambda m: m.item == "Saw"),
-    Pattern("Saw a certain live (not a pattern)", lambda m: m.chamber == "Live" and not m.sawed and m.can_use("Saw"), lambda m: m.item == "Saw"),
-    Pattern("Beer a certain live (not a pattern)", lambda m: m.chamber == "Live" and m.can_use("Beer"), lambda m: m.item == "Beer"),
+    Pattern(
+        "Invert the last shell and shoot yourself, known live",
+        lambda m: (
+            m.chamber == "Live" and m.shells_left == 1 and "Inverter" in m.legal_items
+        ),
+        lambda m: m.item == "Inverter" and m.shoots_self_next,
+    ),
+    Pattern(
+        "Smoke at full health, outside Luna",
+        lambda m: m.full_health and "Cigarettes" in m.legal_items and not is_luna(m),
+        lambda m: m.item == "Cigarettes" and not m.stolen,
+    ),
+    Pattern(
+        "Smoke at full health, outside Luna, opponent holds adrenaline",
+        lambda m: (
+            m.full_health
+            and "Cigarettes" in m.legal_items
+            and not is_luna(m)
+            and "Adrenaline" in m.opponent_items
+        ),
+        lambda m: m.item == "Cigarettes" and not m.stolen,
+    ),
+    Pattern(
+        "Smoke at full health, Luna",
+        lambda m: m.full_health and "Cigarettes" in m.legal_items and is_luna(m),
+        lambda m: m.item == "Cigarettes" and not m.stolen,
+    ),
+    Pattern(
+        "Shoot yourself, unknown chamber, under half live",
+        lambda m: m.unknown_count_known and 2 * (m.live_count or 0) < m.shells_left,
+        lambda m: m.shot == "self",
+    ),
+    Pattern(
+        "Shoot yourself on a certain live, from the count",
+        lambda m: m.shot is not None and m.chamber == "Live" and m.source == "public",
+        lambda m: m.shot == "self",
+    ),
+    Pattern(
+        "Shoot yourself on a certain live, from the glass",
+        lambda m: m.shot is not None and m.chamber == "Live" and m.source == "glass",
+        lambda m: m.shot == "self",
+    ),
+    Pattern(
+        "Shoot yourself on a certain live, from the phone",
+        lambda m: m.shot is not None and m.chamber == "Live" and m.source == "phone",
+        lambda m: m.shot == "self",
+    ),
+    Pattern(
+        "Shoot the opponent on a certain blank, not the last shell",
+        lambda m: m.shot is not None and m.chamber == "Blank" and m.shells_left > 1,
+        lambda m: m.shot == "opponent",
+    ),
+    Pattern(
+        "Shoot the opponent on a certain blank, last shell",
+        lambda m: m.shot is not None and m.chamber == "Blank" and m.shells_left == 1,
+        lambda m: m.shot == "opponent",
+    ),
+    Pattern(
+        "Use the phone with two or fewer shells left",
+        lambda m: m.shells_left <= 2 and m.can_use("Phone"),
+        lambda m: m.item == "Phone",
+    ),
+    Pattern(
+        "Shoot yourself at exactly half live, no saw",
+        lambda m: m.unknown_count_known and 2 * (m.live_count or 0) == m.shells_left,
+        lambda m: m.shot == "self",
+    ),
+    Pattern(
+        "Shoot yourself with the gun sawed",
+        lambda m: m.shot is not None and m.sawed,
+        lambda m: m.shot == "self",
+    ),
+    Pattern(
+        "Saw an unknown chamber (not a pattern)",
+        lambda m: m.chamber is None and not m.sawed and m.can_use("Saw"),
+        lambda m: m.item == "Saw",
+    ),
+    Pattern(
+        "Saw a certain live (not a pattern)",
+        lambda m: m.chamber == "Live" and not m.sawed and m.can_use("Saw"),
+        lambda m: m.item == "Saw",
+    ),
+    Pattern(
+        "Beer a certain live (not a pattern)",
+        lambda m: m.chamber == "Live" and m.can_use("Beer"),
+        lambda m: m.item == "Beer",
+    ),
 ]
 
 
@@ -144,8 +221,19 @@ def evaluate(pattern: Pattern, moves: list[Move]) -> Row | None:
     for m in others:
         other_by_config[m.config].append(m)
     comparable = [m for m in matched if m.config in other_by_config]
-    same_configs = sum(mean(other_by_config[m.config]) for m in comparable) / len(comparable) if comparable else None
-    return Row(pattern.name, len(matched), mean(matched), len(others), mean(others), same_configs)
+    same_configs = (
+        sum(mean(other_by_config[m.config]) for m in comparable) / len(comparable)
+        if comparable
+        else None
+    )
+    return Row(
+        pattern.name,
+        len(matched),
+        mean(matched),
+        len(others),
+        mean(others),
+        same_configs,
+    )
 
 
 def points(millionths: float | None) -> str:
@@ -157,24 +245,34 @@ def report(moves: list[Move]) -> str:
     return (
         f"{len(moves):,} searched decisions.\n\n"
         + table(
-            ["pattern", "matched", "mean regret", "other applicable", "mean regret", "same configs"],
-            [[r.pattern, f"{r.matched:,}", points(r.matched_mean), f"{r.others:,}", points(r.others_mean), points(r.others_mean_same_configs)] for r in rows],
+            [
+                "pattern",
+                "matched",
+                "mean regret",
+                "other applicable",
+                "mean regret",
+                "same configs",
+            ],
+            [
+                [
+                    r.pattern,
+                    f"{r.matched:,}",
+                    points(r.matched_mean),
+                    f"{r.others:,}",
+                    points(r.others_mean),
+                    points(r.others_mean_same_configs),
+                ]
+                for r in rows
+            ],
         )
         + "\n"
     )
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--regret", type=Path, default=PRODUCTION)
-    parser.add_argument("--knowledge", type=Path, default=DERIVED / "knowledge.sqlite")
-    parser.add_argument("--doc", type=Path)
-    args = parser.parse_args()
-    text = report(load(args.regret, args.knowledge))
-    if args.doc is None:
-        print(text)
-    else:
-        splice_between_markers(args.doc, "regret", text)
+    analysis_cli.main(
+        __doc__, "regret", lambda args: report(load(args.regret, args.knowledge))
+    )
 
 
 if __name__ == "__main__":

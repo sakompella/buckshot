@@ -8,8 +8,16 @@ from pathlib import Path
 
 EFFORTS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"]
 
-_GROUPS = json.loads((Path(__file__).resolve().parents[3] / "web/src/arena/same-treatments.json").read_text())
-_EFFORT_OF = {(group["model"], effort): "/".join(group["efforts"]) for group in _GROUPS for effort in group["efforts"]}
+_GROUPS = json.loads(
+    (
+        Path(__file__).resolve().parents[3] / "web/src/arena/same-treatments.json"
+    ).read_text()
+)
+_EFFORT_OF = {
+    (group["model"], effort): "/".join(group["efforts"])
+    for group in _GROUPS
+    for effort in group["efforts"]
+}
 
 
 def config_effort(model: str, effort: str) -> str:
@@ -20,7 +28,11 @@ def config_effort(model: str, effort: str) -> str:
 def config_label(label: str) -> str:
     """A seat label as the config it counts as: `<model>-<effort>`, or the label itself for a seat with no effort."""
     model, _, effort = label.rpartition("-")
-    return f"{model}-{_EFFORT_OF[model, effort]}" if (model, effort) in _EFFORT_OF else label
+    return (
+        f"{model}-{_EFFORT_OF[model, effort]}"
+        if (model, effort) in _EFFORT_OF
+        else label
+    )
 
 
 def effort_rank(effort: str) -> int:

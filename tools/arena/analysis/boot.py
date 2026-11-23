@@ -1,13 +1,14 @@
 """Seed-block bootstrap: whole blocks are drawn with replacement, never single matches or seat swaps."""
 
 import random
+from collections.abc import Hashable
 
 DRAWS = 2000  # resamples per bootstrap interval, as BOOTSTRAP_DRAWS in web/src/arena/bootstrap.ts
 
 
-def weights(blocks: list[str], rng: random.Random) -> dict[str, int]:
+def weights[T: Hashable](blocks: list[T], rng: random.Random) -> dict[T, int]:
     """How often each block is drawn in one resample of the same size."""
-    counts: dict[str, int] = {}
+    counts: dict[T, int] = {}
     for _ in blocks:
         pick = rng.choice(blocks)
         counts[pick] = counts.get(pick, 0) + 1
@@ -28,9 +29,17 @@ PERCENT = f"{round(LEVEL * 100)}%"
 TAIL = (1 - LEVEL) / 2
 
 
-def interval(values: list[float], tail: float = 0.025) -> tuple[float, float] | None:
-    """The central 95% of the replicates (rating intervals pass `TAIL`), or None when there are too few to say."""
-    if len(values) < 20:
-        return None
+MIN_REPLICATES = 20
+
+
+def bounds(values: list[float], tail: float = 0.025) -> tuple[float, float]:
+    """The central 95% of the replicates (rating intervals pass `TAIL`); fewer than MIN_REPLICATES is an error."""
+    if len(values) < MIN_REPLICATES:
+        raise ValueError(f"{len(values)} replicates are too few for an interval")
     ordered = sorted(values)
     return quantile(ordered, tail), quantile(ordered, 1 - tail)
+
+
+def interval(values: list[float], tail: float = 0.025) -> tuple[float, float] | None:
+    """`bounds`, or None when there are too few replicates to say."""
+    return bounds(values, tail) if len(values) >= MIN_REPLICATES else None

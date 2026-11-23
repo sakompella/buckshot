@@ -17,7 +17,9 @@ import unittest
 from collections import defaultdict
 from pathlib import Path
 
+import aivat
 import bt
+import numpy as np
 from configs import config_label
 from load import DB, connect, round_winners
 
@@ -44,7 +46,14 @@ def from_database() -> list[tuple[str, str, float, float]] | None:
         won = winners.get(match, {})
         if len(found) == 2 and won:
             first, second = sorted(found)
-            out.append((first[2], second[2], float(len(won)), float(sum(w == first[1] for w in won.values()))))
+            out.append(
+                (
+                    first[2],
+                    second[2],
+                    float(len(won)),
+                    float(sum(w == first[1] for w in won.values())),
+                )
+            )
     db.close()
     return out
 
@@ -58,7 +67,10 @@ def synthetic() -> list[tuple[str, str, float, float]]:
     for _ in range(400):
         first, second = rng.sample(names, 2)
         rounds = rng.randint(2, 6)
-        wins = sum(rng.random() < 0.5 + strength[first] - strength[second] for _ in range(rounds))
+        wins = sum(
+            rng.random() < 0.5 + strength[first] - strength[second]
+            for _ in range(rounds)
+        )
         out.append((first, second, float(rounds), float(wins)))
     return out
 
@@ -69,11 +81,21 @@ def matches() -> list[tuple[str, str, float, float]]:
 
 def viewer_ratings(rows: list[tuple[str, str, float, float]]) -> dict[str, float]:
     """The viewer's fit of the same matches: node runs the TypeScript (web/src/arena-viewer/page/ratings.ts) on them."""
-    games = [{"a": a, "b": b, "sa": wins / rounds, "weight": rounds} for a, b, rounds, wins in rows]
+    games = [
+        {"a": a, "b": b, "sa": wins / rounds, "weight": rounds}
+        for a, b, rounds, wins in rows
+    ]
     read = 'import { readFileSync } from "node:fs"; const { bradleyTerry } = await import(process.argv[1]);'
     read += ' console.log(JSON.stringify(Object.fromEntries(bradleyTerry(JSON.parse(readFileSync(0, "utf8"))))))'
     fitted = subprocess.run(
-        ["node", "--experimental-strip-types", "--input-type=module", "-e", read, RATINGS.as_uri()],
+        [
+            "node",
+            "--experimental-strip-types",
+            "--input-type=module",
+            "-e",
+            read,
+            RATINGS.as_uri(),
+        ],
         input=json.dumps(games),
         check=True,
         capture_output=True,
@@ -105,8 +127,20 @@ def report_ratings(rows: list[tuple[str, str, float, float]]) -> dict[str, float
             "code": "",
             "starter": 1,
             "players": [
-                {"entrant": first, "share": wins / rounds, "moves": 0, "reminders": 0, "interventions": 0},
-                {"entrant": second, "share": 1.0 - wins / rounds, "moves": 0, "reminders": 0, "interventions": 0},
+                {
+                    "entrant": first,
+                    "share": wins / rounds,
+                    "moves": 0,
+                    "reminders": 0,
+                    "interventions": 0,
+                },
+                {
+                    "entrant": second,
+                    "share": 1.0 - wins / rounds,
+                    "moves": 0,
+                    "reminders": 0,
+                    "interventions": 0,
+                },
             ],
         }
         for at, (first, second, rounds, wins) in enumerate(rows)
@@ -114,13 +148,110 @@ def report_ratings(rows: list[tuple[str, str, float, float]]) -> dict[str, float
     read = 'import { readFileSync } from "node:fs"; const { fitRatings } = await import(process.argv[1]);'
     read += ' console.log(JSON.stringify(Object.fromEntries(fitRatings(JSON.parse(readFileSync(0, "utf8")), undefined).entrants)))'
     fitted = subprocess.run(
-        ["node", "--experimental-strip-types", "--input-type=module", "-e", read, TOURNAMENT_STATS.as_uri()],
+        [
+            "node",
+            "--experimental-strip-types",
+            "--input-type=module",
+            "-e",
+            read,
+            TOURNAMENT_STATS.as_uri(),
+        ],
         input=json.dumps(played),
         check=True,
         capture_output=True,
         text=True,
     )
     return json.loads(fitted.stdout)
+
+
+def viewer_resamples(
+    resamples: list[list[tuple[str, str, float, float]]],
+) -> list[dict[str, float]]:
+    """The viewer's fit of each resample, in one node run: only configs a resample mentions are rated."""
+    batches = [
+        [
+            {"a": a, "b": b, "sa": wins / rounds, "weight": rounds}
+            for a, b, rounds, wins in rows
+        ]
+        for rows in resamples
+    ]
+    read = 'import { readFileSync } from "node:fs"; const { bradleyTerry } = await import(process.argv[1]);'
+    read += ' console.log(JSON.stringify(JSON.parse(readFileSync(0, "utf8")).map((games) => Object.fromEntries(bradleyTerry(games)))))'
+    fitted = subprocess.run(
+        [
+            "node",
+            "--experimental-strip-types",
+            "--input-type=module",
+            "-e",
+            read,
+            RATINGS.as_uri(),
+        ],
+        input=json.dumps(batches),
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return json.loads(fitted.stdout)
+
+
+def rare_config_tournament() -> aivat.Rated:
+    """Forty seed blocks of three configs; `rare` plays in only two of them, and luck corrections shift each match's round wins."""
+    rng = random.Random(7)
+    names = ["engine", "mid", "rare"]
+    first, second, rounds, raw, luck, seed, block = [], [], [], [], [], [], []
+    for b in range(40):
+        pair = ("mid", "rare") if b < 2 else ("engine", "mid")
+        for order in (pair, pair[::-1]):
+            first.append(names.index(order[0]))
+            second.append(names.index(order[1]))
+            rounds.append(3.0)
+            raw.append(float(rng.randint(0, 3)))
+            luck.append(rng.uniform(-0.5, 0.5))
+            seed.append(b)
+            block.append(b)
+    return aivat.Rated(
+        names,
+        np.array(first),
+        np.array(second),
+        np.array(rounds),
+        np.array(raw),
+        np.array(luck),
+        np.array(seed),
+        np.array(block),
+    )
+
+
+class Resamples(unittest.TestCase):
+    def test_a_resample_rates_only_the_configs_it_mentions_as_the_site_does(self):
+        t = rare_config_tournament()
+        rng = np.random.default_rng(1)
+        wins = t.raw + t.luck
+        blocks = t.block.max() + 1
+        weights = [
+            np.bincount(rng.integers(0, blocks, blocks), minlength=blocks).astype(float)
+            for _ in range(30)
+        ]
+        self.assertTrue(
+            any(w[:2].sum() == 0 for w in weights),
+            "the fixture needs a resample without the rare config",
+        )
+        resamples = []
+        for w in weights:
+            counts = w[t.block].astype(int)
+            resamples.append(
+                [
+                    (t.names[t.i[k]], t.names[t.j[k]], t.n[k], wins[k])
+                    for k in range(len(t.i))
+                    for _ in range(counts[k])
+                ]
+            )
+        for w, theirs in zip(weights, viewer_resamples(resamples), strict=True):
+            ours = aivat.fit(t, wins, w[t.block], None)
+            for name, elo in zip(t.names, ours, strict=True):
+                if name in theirs:
+                    self.assertAlmostEqual(elo, theirs[name], delta=TOLERANCE, msg=name)
+                else:
+                    self.assertTrue(np.isnan(elo), name)
 
 
 class RoundElo(unittest.TestCase):
@@ -130,9 +261,17 @@ class RoundElo(unittest.TestCase):
         self_pair = (a, config_label("claude-opus-5-5-low"), 3.0, 3.0)
         self.assertEqual(self_pair[0], self_pair[1])
         rows = [(a, b, 3.0, 2.0)]
-        without, ours, theirs = bt.round_elo(rows), bt.round_elo([*rows, self_pair]), viewer_ratings([*rows, self_pair])
-        self.assertAlmostEqual(ours[a] - ours[b], without[a] - without[b], delta=TOLERANCE)
-        self.assertAlmostEqual(ours[a] - ours[b], theirs[a] - theirs[b], delta=TOLERANCE)
+        without, ours, theirs = (
+            bt.round_elo(rows),
+            bt.round_elo([*rows, self_pair]),
+            viewer_ratings([*rows, self_pair]),
+        )
+        self.assertAlmostEqual(
+            ours[a] - ours[b], without[a] - without[b], delta=TOLERANCE
+        )
+        self.assertAlmostEqual(
+            ours[a] - ours[b], theirs[a] - theirs[b], delta=TOLERANCE
+        )
 
     def test_the_docs_fit_is_the_sites_fit(self):
         rows = matches()

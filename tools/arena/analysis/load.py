@@ -1,4 +1,4 @@
-"""Scored two-player matches from the analysis database, with the cohort each belongs to and who started round 1.
+"""Scored two-player matches (matches with other seat counts are left out) from the analysis database, with the cohort each belongs to and who started round 1.
 
 Only the columns the analysis needs are read: never match_seats.provenance_json, which holds account ids.
 """
@@ -14,6 +14,7 @@ from configs import config_label
 
 REPO = Path(__file__).resolve().parents[3]
 DB = str(REPO / "_work/arena/analysis/buckshot.sqlite")
+
 
 @dataclass(frozen=True)
 class Game:
@@ -45,12 +46,22 @@ def require_current(path: str) -> None:
 
     The hash is web/src/analysis/importer-hash.ts's, which prints it when run: the SHA-256 of the JSON object mapping each file the importer records to the SHA-256 of its code without comments and whitespace.
     """
-    current = subprocess.run([os.environ.get("BUN", "bun"), str(REPO / "web/src/analysis/importer-hash.ts")], capture_output=True, text=True, check=True).stdout.strip()
+    current = subprocess.run(
+        [os.environ.get("BUN", "bun"), str(REPO / "web/src/analysis/importer-hash.ts")],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
     db = connect(path)
-    stale = db.execute("SELECT name, validated_with FROM matches WHERE replay_status = 'validated' AND validated_with IS NOT ? LIMIT 3", (current,)).fetchall()
+    stale = db.execute(
+        "SELECT name, validated_with FROM matches WHERE replay_status = 'validated' AND validated_with IS NOT ? LIMIT 3",
+        (current,),
+    ).fetchall()
     db.close()
     if stale:
-        raise SystemExit(f"{path} was validated by other replay or rules code (now {current}); re-import it. Such as: {stale}")
+        raise SystemExit(
+            f"{path} was validated by other replay or rules code (now {current}); re-import it. Such as: {stale}"
+        )
 
 
 def round_one_starters(db: sqlite3.Connection) -> dict[str, str]:
@@ -97,15 +108,33 @@ def scored_games(db: sqlite3.Connection) -> list[Game]:
     by_match: dict[str, list[tuple]] = {}
     for row in seats:
         by_match.setdefault(row[0], []).append(row)
+    # Two-player matches only: a match with more seats is not a head-to-head and has no first and second.
+    by_match = {match: rows for match, rows in by_match.items() if len(rows) == 2}
     games = []
     for match, tournament, block, seed, code, cohort in db.execute(
         "SELECT m.id, t.name, m.seed_block_id, m.seed, m.code_hash, m.cohort FROM matches m JOIN tournaments t ON t.id = m.tournament_id"
         " WHERE m.status = 'completed' AND m.disposition IS NULL ORDER BY m.id"
     ):
-        (_, _, letter_a, share_a, cash_a, a), (_, _, letter_b, _, cash_b, b) = by_match[match]
+        if match not in by_match:
+            continue
+        (_, _, letter_a, share_a, cash_a, a), (_, _, letter_b, _, cash_b, b) = by_match[
+            match
+        ]
         letter_of = {letter_a: 1, letter_b: 2}
         games.append(
-            Game(block, cohort, tournament, code, seed, config_label(a), config_label(b), share_a, cash_a / (cash_a + cash_b), letter_of[starters[match]], shooters[match])
+            Game(
+                block,
+                cohort,
+                tournament,
+                code,
+                seed,
+                config_label(a),
+                config_label(b),
+                share_a,
+                cash_a / (cash_a + cash_b),
+                letter_of[starters[match]],
+                shooters[match],
+            )
         )
     return games
 

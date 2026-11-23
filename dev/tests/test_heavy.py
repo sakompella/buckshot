@@ -3,10 +3,12 @@
 import fcntl
 import json
 import os
+import signal
 import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 import unittest.mock
 
@@ -27,16 +29,15 @@ class HeavyTest(unittest.TestCase):
         return fd
 
     def test_runs_niced(self):
-        out = tempfile.NamedTemporaryFile("r", suffix=".txt", delete=False)
-        self.addCleanup(out.close)
-        self.addCleanup(os.unlink, out.name)
+        out = os.path.join(self.dir, "nice.txt")
         # nice -n 10 is relative to this process's niceness and stops at 19, so a niced caller (heavy) still passes.
         expected = min(os.nice(0) + 10, 19)
-        code = f"import os; open({out.name!r}, 'w').write(str(os.nice(0)))"
+        code = f"import os; open({out!r}, 'w').write(str(os.nice(0)))"
         self.assertEqual(
             cli.heavy_cmd([sys.executable, "-c", code], slot_dir=self.dir), 0
         )
-        self.assertEqual(out.read().strip(), str(expected))
+        with open(out) as f:
+            self.assertEqual(f.read().strip(), str(expected))
 
     def test_waits_for_a_slot(self):
         with unittest.mock.patch.dict(os.environ, {"BUCKSHOT_HEAVY_SLOTS": "2"}):
@@ -84,6 +85,31 @@ class HeavyTest(unittest.TestCase):
             cli.admits(live_mem=0, size=4 * gib, budget=10 * gib, available=3 * gib),
             "host is short",
         )
+
+    def test_killed_wrapper_leaves_its_job_visible_and_slot_held(self):
+        wrapper_code = (
+            "import sys, unittest.mock\n"
+            "from buckshot_dev import cli\n"
+            "with unittest.mock.patch('shutil.which', return_value=None):\n"
+            "    cli.heavy_cmd(['sleep', '30'], slot_dir=sys.argv[1])\n"
+        )
+        wrapper = subprocess.Popen([sys.executable, "-c", wrapper_code, self.dir])
+        self.addCleanup(wrapper.wait)
+        self.addCleanup(wrapper.kill)
+        deadline = time.time() + 10
+        while time.time() < deadline:
+            jobs = cli.live_jobs(self.dir)
+            if jobs and jobs[0]["pid"] != wrapper.pid:
+                break
+            time.sleep(0.05)
+        child_pid = jobs[0]["pid"]
+        self.assertNotEqual(child_pid, wrapper.pid)
+        self.addCleanup(os.kill, child_pid, signal.SIGKILL)
+        wrapper.kill()
+        wrapper.wait()
+        self.assertEqual([job["pid"] for job in cli.live_jobs(self.dir)], [child_pid])
+        with self.assertRaises(OSError):
+            fcntl.flock(self.slot(cli.slot_names(1)[0]), fcntl.LOCK_EX | fcntl.LOCK_NB)
 
     def test_waits_for_memory_and_dead_pid_frees_its_share(self):
         child = subprocess.Popen(["true"])

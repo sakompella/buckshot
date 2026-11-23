@@ -8,7 +8,6 @@ let
   version = "2.0.40";
   archives = {
     aarch64-darwin = { target = "darwin-arm64"; sha256 = "b2be003b041eb6cfc65326be18f79eb2e0bae2189be79a18c507e661b4b6900b"; };
-    x86_64-darwin = { target = "darwin-x64"; sha256 = "9229c8bdd0a93f63fa45cc5af5e9e56389ebb620d655920915daf966c6ca561c"; };
     aarch64-linux = { target = "linux-arm64"; sha256 = "2f42a6fa34ecdaa71ae105e5fa734f9a07e129d333e45448ab6d2ff03a837570"; };
     x86_64-linux = { target = "linux-x64"; sha256 = "c9ff8d67bd903fb6ad9a26b43d8a62c01021de82a44d55ce4a3dcd4732113d6b"; };
   };

@@ -8,11 +8,13 @@ import bt
 import cv
 import net_points
 import stats
-from load import Game
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
+from load import Game
 
-settings.register_profile("arena", deadline=None, suppress_health_check=[HealthCheck.too_slow])
+settings.register_profile(
+    "arena", deadline=None, suppress_health_check=[HealthCheck.too_slow]
+)
 settings.load_profile("arena")
 
 finite = st.floats(-1e6, 1e6, allow_nan=False)
@@ -29,41 +31,86 @@ class Ranks(unittest.TestCase):
             for j, y in enumerate(values):
                 self.assertEqual((x < y), (out[i] < out[j]))
 
-    @given(st.lists(st.integers(-20, 20), min_size=2, max_size=30, unique=True), st.lists(st.integers(-20, 20), min_size=2, max_size=30, unique=True))
+    @given(
+        st.lists(st.integers(-20, 20), min_size=2, max_size=30, unique=True),
+        st.lists(st.integers(-20, 20), min_size=2, max_size=30, unique=True),
+    )
     def test_spearman_ignores_increasing_maps(self, xs, ys):
         n = min(len(xs), len(ys))
         xs, ys = xs[:n], ys[:n]
-        self.assertAlmostEqual(stats.spearman(xs, ys), stats.spearman([x**3 + 2 * x for x in xs], ys))
+        self.assertAlmostEqual(
+            stats.spearman(xs, ys), stats.spearman([x**3 + 2 * x for x in xs], ys)
+        )
 
 
 class Regression(unittest.TestCase):
-    @given(st.lists(st.integers(-30, 30), min_size=2, max_size=20, unique=True), st.integers(-9, 9).filter(bool), st.integers(-50, 50))
+    @given(
+        st.lists(st.integers(-30, 30), min_size=2, max_size=20, unique=True),
+        st.integers(-9, 9).filter(bool),
+        st.integers(-50, 50),
+    )
     def test_ols_recovers_any_line(self, xs, slope, intercept):
-        line = net_points.ols([float(x) for x in xs], [float(slope * x + intercept) for x in xs])
+        line = net_points.ols(
+            [float(x) for x in xs], [float(slope * x + intercept) for x in xs]
+        )
         self.assertAlmostEqual(line.slope, slope)
         self.assertAlmostEqual(line.intercept, intercept, places=5)
         self.assertAlmostEqual(line.r2, 1.0)
 
 
 class Resampling(unittest.TestCase):
-    @given(st.lists(st.text(max_size=3), min_size=1, max_size=30, unique=True), st.integers())
+    @given(
+        st.lists(st.text(max_size=3), min_size=1, max_size=30, unique=True),
+        st.integers(),
+    )
     def test_a_resample_draws_exactly_as_many_blocks_as_there_are(self, blocks, seed):
         drawn = boot.weights(blocks, random.Random(seed))
         self.assertEqual(sum(drawn.values()), len(blocks))
         self.assertLessEqual(set(drawn), set(blocks))
 
-    @given(st.lists(st.text(max_size=3), min_size=1, max_size=40, unique=True), st.integers(1, 10), st.integers())
-    def test_folds_hold_out_every_block_exactly_once_in_near_equal_parts(self, ids, k, seed):
+    @given(
+        st.lists(st.text(max_size=3), min_size=1, max_size=40, unique=True),
+        st.integers(1, 10),
+        st.integers(),
+    )
+    def test_folds_hold_out_every_block_exactly_once_in_near_equal_parts(
+        self, ids, k, seed
+    ):
         parts = cv.folds(ids, k, random.Random(seed))
         self.assertEqual(sorted(b for part in parts for b in part), sorted(ids))
         self.assertLessEqual(max(map(len, parts)) - min(map(len, parts)), 1)
 
 
 class Ratings(unittest.TestCase):
-    @given(st.lists(st.tuples(st.integers(0, 3), st.integers(1, 3), st.sampled_from([0.0, 0.5, 1.0])), min_size=1, max_size=40))
+    @given(
+        st.lists(
+            st.tuples(
+                st.integers(0, 3), st.integers(1, 3), st.sampled_from([0.0, 0.5, 1.0])
+            ),
+            min_size=1,
+            max_size=40,
+        )
+    )
     def test_have_mean_zero_on_the_elo_scale(self, played):
-        games = [Game(f"b{i}", "c", "t", "code", 1, "abcd"[first], "abcd"[(first + offset) % 4], share, share, 1, 1) for i, (first, offset, share) in enumerate(played)]
-        self.assertAlmostEqual(sum(bt.fit(bt.cells_of(games)).elo().values()), 0.0, places=6)
+        games = [
+            Game(
+                f"b{i}",
+                "c",
+                "t",
+                "code",
+                1,
+                "abcd"[first],
+                "abcd"[(first + offset) % 4],
+                share,
+                share,
+                1,
+                1,
+            )
+            for i, (first, offset, share) in enumerate(played)
+        ]
+        self.assertAlmostEqual(
+            sum(bt.fit(bt.cells_of(games)).elo().values()), 0.0, places=6
+        )
 
 
 if __name__ == "__main__":

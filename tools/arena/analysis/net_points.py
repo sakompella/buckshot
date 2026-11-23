@@ -10,7 +10,7 @@ Excluded matches (a DeepSeek seat) are left out entirely, as the viewer does. Wi
 text between the net-points markers of that file, and with --plots DIR two SVG plots are written.
 
     python3 tools/arena/analysis/net_points.py [--db PATH] [--regret PATH] [--knowledge PATH]
-        [--plots DIR] [--doc docs/arena/analysis/net-points.md]
+        [--plots DIR] [--doc FILE]
 """
 
 import argparse
@@ -24,14 +24,16 @@ from pathlib import Path
 import boot
 import bt
 import regret
+from configs import config_effort, effort_rank
 from docs import splice_between_markers
 from fmt import pct, table
 from load import DB, connect, require_current, round_winners
-from configs import config_effort, effort_rank
 from regret import DERIVED
 from rules import POINT, ROUNDS, WIN
 from stats import pearson, spearman
+
 MIN_MATCHES = 20
+CORRELATION_DRAWS = 300  # fewer than boot.DRAWS: each draw refits the ratings
 MIN_BLOCKS = 10
 SEED = 20261102
 
@@ -92,7 +94,12 @@ def load(db_path: str, regret_path: Path, knowledge_path: Path) -> Loaded:
         "SELECT p.match_id, p.player, p.position, p.model, p.effort FROM players p JOIN matches m ON m.match_id = p.match_id AND m.status = 'completed' AND m.disposition IS NULL"
     ):
         seats[match].append((position, player, model, config_effort(model, effort)))
-    blocks = {match: (block, name) for match, block, name in knowledge.execute("SELECT match_id, seed_block_id, name FROM matches")}
+    blocks = {
+        match: (block, name)
+        for match, block, name in knowledge.execute(
+            "SELECT match_id, seed_block_id, name FROM matches"
+        )
+    }
     db = connect(str(regret_path), k=knowledge_path)
     rows = db.execute(
         """SELECT r.match_id, r.player, r.regret, r.ordinal
@@ -101,7 +108,9 @@ def load(db_path: str, regret_path: Path, knowledge_path: Path) -> Loaded:
            JOIN k.decisions d ON d.match_id = r.match_id AND d.ordinal = r.ordinal AND d.by_whom = 'agent'
            WHERE r.status = 'searched'"""
     ).fetchall()
-    lost: dict[tuple[str, str], list[int]] = defaultdict(lambda: [0, 0, 0, 0])  # summed regret, decisions, largest regret, its ordinal
+    lost: dict[tuple[str, str], list[int]] = defaultdict(
+        lambda: [0, 0, 0, 0]
+    )  # summed regret, decisions, largest regret, its ordinal
     for match, player, regret_millionths, ordinal in rows:
         seat = lost[match, player]
         seat[0] += regret_millionths
@@ -109,20 +118,40 @@ def load(db_path: str, regret_path: Path, knowledge_path: Path) -> Loaded:
         if regret_millionths > seat[2]:
             seat[2], seat[3] = regret_millionths, ordinal
     agent_decisions = Counter(
-        {(match, player): n for match, player, n in knowledge.execute("SELECT match_id, player, COUNT(*) FROM decisions WHERE by_whom = 'agent' GROUP BY match_id, player")}
+        {
+            (match, player): n
+            for match, player, n in knowledge.execute(
+                # A one-move menu is no choice: the scorer gives it no row (score_regret.wanted).
+                "SELECT match_id, player, COUNT(*) FROM decisions WHERE by_whom = 'agent' AND json_array_length(legal_json) > 1 GROUP BY match_id, player"
+            )
+        }
     )
 
     main = connect(db_path)
-    seat_labels = {(match, player): name for match, player, name in main.execute("SELECT match_id, player, label FROM match_seats")}
+    seat_labels = {
+        (match, player): name
+        for match, player, name in main.execute(
+            "SELECT match_id, player, label FROM match_seats"
+        )
+    }
     winners_of = round_winners(main)
     matches, incomplete = [], 0
     for match, found in seats.items():
         winners = winners_of[match]
-        if any(lost[match, player][1] != agent_decisions[match, player] for _, player, _, _ in found):
+        if any(
+            lost[match, player][1] != agent_decisions[match, player]
+            for _, player, _, _ in found
+        ):
             incomplete += 1
             continue
         first, second = (
-            Seat((model, effort) if model else (seat_labels[match, player], ""), lost[match, player][0] / WIN, lost[match, player][1], sum(w == player for w in winners.values()), *lost[match, player][2:])
+            Seat(
+                (model, effort) if model else (seat_labels[match, player], ""),
+                lost[match, player][0] / WIN,
+                lost[match, player][1],
+                sum(w == player for w in winners.values()),
+                *lost[match, player][2:],
+            )
             for _, player, model, effort in sorted(found)
         )
         matches.append(Match(match, blocks[match][1], blocks[match][0], first, second))
@@ -135,7 +164,7 @@ def load(db_path: str, regret_path: Path, knowledge_path: Path) -> Loaded:
 
 def percentile_interval(values: list[float]) -> Interval:
     ordered = sorted(values)
-    return ordered[int(0.025 * len(ordered))], ordered[int(0.975 * len(ordered)) - 1]
+    return boot.quantile(ordered, 0.025), boot.quantile(ordered, 0.975)
 
 
 @dataclass(frozen=True)
@@ -147,9 +176,17 @@ class Line:
 
 def ols(xs: list[float], ys: list[float]) -> Line:
     n, sx, sy = len(xs), sum(xs), sum(ys)
-    sxx, sxy, syy = sum(x * x for x in xs), sum(x * y for x, y in zip(xs, ys, strict=False)), sum(y * y for y in ys)
+    sxx, sxy, syy = (
+        sum(x * x for x in xs),
+        sum(x * y for x, y in zip(xs, ys, strict=False)),
+        sum(y * y for y in ys),
+    )
     slope = (n * sxy - sx * sy) / (n * sxx - sx * sx)
-    return Line(slope, (sy - slope * sx) / n, (n * sxy - sx * sy) ** 2 / ((n * sxx - sx * sx) * (n * syy - sy * sy)))
+    return Line(
+        slope,
+        (sy - slope * sx) / n,
+        (n * sxy - sx * sy) ** 2 / ((n * sxx - sx * sx) * (n * syy - sy * sy)),
+    )
 
 
 def by_block(matches: list[Match]) -> dict[str, list[Match]]:
@@ -161,7 +198,10 @@ def by_block(matches: list[Match]) -> dict[str, list[Match]]:
 
 def elo_of(matches: list[Match]) -> dict[str, float]:
     """Round Elo per config label."""
-    return bt.round_elo((label(m.first.config), label(m.second.config), len(ROUNDS), m.first.rounds_won) for m in matches)
+    return bt.round_elo(
+        (label(m.first.config), label(m.second.config), len(ROUNDS), m.first.rounds_won)
+        for m in matches
+    )
 
 
 # Per config
@@ -183,14 +223,34 @@ class ConfigRow:
 def seat_views(matches: list[Match]):
     """(config, block, own points lost, net points, decisions, largest regret in points) for each seat of each match."""
     for m in matches:
-        yield m.first.config, m.block, m.first.lost, m.net, m.first.moves, m.first.worst / POINT
-        yield m.second.config, m.block, m.second.lost, -m.net, m.second.moves, m.second.worst / POINT
+        yield (
+            m.first.config,
+            m.block,
+            m.first.lost,
+            m.net,
+            m.first.moves,
+            m.first.worst / POINT,
+        )
+        yield (
+            m.second.config,
+            m.block,
+            m.second.lost,
+            -m.net,
+            m.second.moves,
+            m.second.worst / POINT,
+        )
 
 
-def config_rows(matches: list[Match], elo: dict[str, float], rng: random.Random) -> list[ConfigRow]:
+def config_rows(
+    matches: list[Match], elo: dict[str, float], rng: random.Random
+) -> list[ConfigRow]:
     """Configs with at least MIN_MATCHES matches, the fewest points lost first. Matches with an engine seat are left out."""
-    per_block: dict[Config, dict[str, list[float]]] = defaultdict(lambda: defaultdict(lambda: [0.0, 0.0, 0.0, 0.0, 0.0]))
-    for config, block, lost, net, moves, worst in seat_views([m for m in matches if not m.skipped]):
+    per_block: dict[Config, dict[str, list[float]]] = defaultdict(
+        lambda: defaultdict(lambda: [0.0, 0.0, 0.0, 0.0, 0.0])
+    )
+    for config, block, lost, net, moves, worst in seat_views(
+        [m for m in matches if not m.skipped]
+    ):
         cell = per_block[config][block]
         cell[0] += lost
         cell[1] += net
@@ -203,7 +263,9 @@ def config_rows(matches: list[Match], elo: dict[str, float], rng: random.Random)
         count = sum(c[3] for c in cells)
         if count < MIN_MATCHES:
             continue
-        draws = [[cells[rng.randrange(len(cells))] for _ in cells] for _ in range(boot.DRAWS)]
+        draws = [
+            [cells[rng.randrange(len(cells))] for _ in cells] for _ in range(boot.DRAWS)
+        ]
         totals = [(sum(c[0] for c in d), sum(c[3] for c in d)) for d in draws]
         rows.append(
             ConfigRow(
@@ -231,10 +293,29 @@ def span(interval: Interval) -> str:
 def config_table(rows: list[ConfigRow]) -> str:
     key = lambda r: (r.lost, effort_rank(r.config[1]))
     body = [
-        [r.config[0], r.config[1], str(r.matches), f"{two(r.lost)} ({span(r.lost_interval)})", two(r.lost / len(ROUNDS)), f"{r.worst:.1f}", f"{r.elo:+.0f}"]
+        [
+            r.config[0],
+            r.config[1],
+            str(r.matches),
+            f"{two(r.lost)} ({span(r.lost_interval)})",
+            two(r.lost / len(ROUNDS)),
+            f"{r.worst:.1f}",
+            f"{r.elo:+.0f}",
+        ]
         for r in sorted(rows, key=key)
     ]
-    return table(["model", "effort", "matches", "round-win equivalents lost per match", "per round", "largest gap (points)", "Round Elo"], body)
+    return table(
+        [
+            "model",
+            "effort",
+            "matches",
+            "round-win equivalents lost per match",
+            "per round",
+            "largest gap (points)",
+            "Round Elo",
+        ],
+        body,
+    )
 
 
 @dataclass(frozen=True)
@@ -244,7 +325,13 @@ class Correlation:
     interval: Interval  # of the Pearson one: seed blocks resampled, ratings refitted and configs reselected each time
 
 
-def correlation(rows: list[ConfigRow], matches: list[Match], measure: str, rng: random.Random, reps: int = 300) -> Correlation:
+def correlation(
+    rows: list[ConfigRow],
+    matches: list[Match],
+    measure: str,
+    rng: random.Random,
+    reps: int = CORRELATION_DRAWS,
+) -> Correlation:
     """Config means of a row's `measure` ("lost" or "net") against Round Elo. The interval resamples seed blocks of all matches, refits the ratings and recomputes the means."""
     column = {"lost": 2, "net": 3}[measure]
     point = pearson([getattr(r, measure) for r in rows], [r.elo for r in rows])
@@ -260,8 +347,16 @@ def correlation(rows: list[ConfigRow], matches: list[Match], measure: str, rng: 
                 total[view[0]][0] += view[column]
                 total[view[0]][1] += 1
         kept = [c for c in wanted if total[c][1] and label(c) in elo]
-        draws.append(pearson([total[c][0] / total[c][1] for c in kept], [elo[label(c)] for c in kept]))
-    return Correlation(point, spearman([getattr(r, measure) for r in rows], [r.elo for r in rows]), percentile_interval(draws))
+        draws.append(
+            pearson(
+                [total[c][0] / total[c][1] for c in kept], [elo[label(c)] for c in kept]
+            )
+        )
+    return Correlation(
+        point,
+        spearman([getattr(r, measure) for r in rows], [r.elo for r in rows]),
+        percentile_interval(draws),
+    )
 
 
 # Within a matchup
@@ -278,29 +373,68 @@ class Matchup:
     margin: float  # round margin of a, per match
 
 
-def matchup_rows(matches: list[Match], rng: random.Random, minimum: int = MIN_BLOCKS) -> list[Matchup]:
+def matchup_rows(
+    matches: list[Match], rng: random.Random, minimum: int = MIN_BLOCKS
+) -> list[Matchup]:
     """Net points per match of the first-named config over each pairing's complete seed blocks (both seat orders played), the largest first.
 
     Pairings with fewer than `minimum` complete blocks are left out. A block's value is the mean of its two matches, so seat order cancels.
     """
     per_pair: dict[tuple[Config, Config], list[tuple[float, float]]] = defaultdict(list)
     for pair in by_block([m for m in matches if not m.skipped]).values():
-        if len(pair) == 2 and pair[0].first.config == pair[1].second.config and pair[0].second.config == pair[1].first.config:
+        if (
+            len(pair) == 2
+            and pair[0].first.config == pair[1].second.config
+            and pair[0].second.config == pair[1].first.config
+        ):
             a, b = sorted((pair[0].first.config, pair[0].second.config))
-            per_pair[a, b].append((sum((1 if m.first.config == a else -1) * m.net for m in pair) / 2, sum((1 if m.first.config == a else -1) * m.margin for m in pair) / 2))
+            per_pair[a, b].append(
+                (
+                    sum((1 if m.first.config == a else -1) * m.net for m in pair) / 2,
+                    sum((1 if m.first.config == a else -1) * m.margin for m in pair)
+                    / 2,
+                )
+            )
     rows = []
     for (a, b), values in per_pair.items():
         if len(values) >= minimum:
             nets = [net for net, _ in values]
-            means = [sum(nets[rng.randrange(len(nets))] for _ in nets) / len(nets) for _ in range(boot.DRAWS)]
-            rows.append(Matchup(a, b, len(values), sum(nets) / len(nets), percentile_interval(means), sum(margin for _, margin in values) / len(values)))
+            means = [
+                sum(nets[rng.randrange(len(nets))] for _ in nets) / len(nets)
+                for _ in range(boot.DRAWS)
+            ]
+            rows.append(
+                Matchup(
+                    a,
+                    b,
+                    len(values),
+                    sum(nets) / len(nets),
+                    percentile_interval(means),
+                    sum(margin for _, margin in values) / len(values),
+                )
+            )
     return sorted(rows, key=lambda r: -abs(r.net))
 
 
 def matchup_table(rows: list[Matchup], count: int = 10) -> str:
     return table(
-        ["config", "against", "complete seed blocks", "net points per match (positive: the first gave up less)", "round margin per match"],
-        [[label(r.a), label(r.b), str(r.blocks), f"{r.net:+.2f} ({span(r.interval)})", f"{r.margin:+.2f}"] for r in rows[:count]],
+        [
+            "config",
+            "against",
+            "complete seed blocks",
+            "net points per match (positive: the first gave up less)",
+            "round margin per match",
+        ],
+        [
+            [
+                label(r.a),
+                label(r.b),
+                str(r.blocks),
+                f"{r.net:+.2f} ({span(r.interval)})",
+                f"{r.margin:+.2f}",
+            ]
+            for r in rows[:count]
+        ],
     )
 
 
@@ -310,7 +444,13 @@ MISS_LEVELS = (10, 25, 50, 100)
 def worst_table(matches: list[Match]) -> str:
     """How large each seat's largest single regret in a match is, over all seats of all matches. 100 points is a certain win given up."""
     seats = [s.worst / POINT for m in matches for s in (m.first, m.second)]
-    return table(["largest gap in a match, at least (points)", "share of seats"], [[str(level), pct(sum(w >= level for w in seats) / len(seats))] for level in MISS_LEVELS])
+    return table(
+        ["largest gap in a match, at least (points)", "share of seats"],
+        [
+            [str(level), pct(sum(w >= level for w in seats) / len(seats))]
+            for level in MISS_LEVELS
+        ],
+    )
 
 
 # Match margin
@@ -336,30 +476,74 @@ def margin_fit(matches: list[Match], rng: random.Random) -> Margin:
     slopes = []
     for _ in range(boot.DRAWS):
         sample = [m for _ in blocks for m in blocks[rng.randrange(len(blocks))]]
-        slopes.append(ols([m.net for m in sample], [float(m.margin) for m in sample]).slope)
+        slopes.append(
+            ols([m.net for m in sample], [float(m.margin) for m in sample]).slope
+        )
     bins = []
     for low, high in itertools.pairwise(BIN_EDGES):
         inside = [m for m in kept if low <= m.net < high]
-        bins.append((sum(m.net for m in inside) / len(inside), sum(m.margin for m in inside) / len(inside), len(inside)))
+        bins.append(
+            (
+                sum(m.net for m in inside) / len(inside),
+                sum(m.margin for m in inside) / len(inside),
+                len(inside),
+            )
+        )
     return Margin(ols(xs, ys), percentile_interval(slopes), len(kept), bins)
 
 
 def bin_name(low: float, high: float) -> str:
-    return f"below {high:g}" if low == -math.inf else f"{low:g} and above" if high == math.inf else f"{low:g} to {high:g}"
+    return (
+        f"below {high:g}"
+        if low == -math.inf
+        else f"{low:g} and above"
+        if high == math.inf
+        else f"{low:g} to {high:g}"
+    )
 
 
 def margin_table(margin: Margin) -> str:
-    rows = [[bin_name(low, high), f"{n:,}", f"{mean_net:+.2f}", f"{mean_margin:+.2f}"] for (low, high), (mean_net, mean_margin, n) in zip(itertools.pairwise(BIN_EDGES), margin.bins, strict=False)]
-    return table(["net points of the first seat", "matches", "mean net points", "mean round margin"], rows)
+    rows = [
+        [bin_name(low, high), f"{n:,}", f"{mean_net:+.2f}", f"{mean_margin:+.2f}"]
+        for (low, high), (mean_net, mean_margin, n) in zip(
+            itertools.pairwise(BIN_EDGES), margin.bins, strict=False
+        )
+    ]
+    return table(
+        [
+            "net points of the first seat",
+            "matches",
+            "mean net points",
+            "mean round margin",
+        ],
+        rows,
+    )
 
 
 # Plots
 # =====
 
-PALETTE = ["#1b9e77", "#d95f02", "#7570b3", "#e7298a", "#66a61e", "#e6ab02", "#a6761d", "#666666", "#1f78b4"]
+PALETTE = [
+    "#1b9e77",
+    "#d95f02",
+    "#7570b3",
+    "#e7298a",
+    "#66a61e",
+    "#e6ab02",
+    "#a6761d",
+    "#666666",
+    "#1f78b4",
+]
 
 
-def scatter_svg(points: list[tuple[float, float, str, str]], x_label: str, y_label: str, title: str, line: Line | None, legend: dict[str, str] | None = None) -> str:
+def scatter_svg(
+    points: list[tuple[float, float, str, str]],
+    x_label: str,
+    y_label: str,
+    title: str,
+    line: Line | None,
+    legend: dict[str, str] | None = None,
+) -> str:
     """A dependency-free scatter plot: (x, y, text, colour) points, an optional fitted line and a legend of colours."""
     width, height, left, right, top, bottom = 760, 520, 70, 150, 40, 55
     xs, ys = [p[0] for p in points], [p[1] for p in points]
@@ -376,15 +560,27 @@ def scatter_svg(points: list[tuple[float, float, str, str]], x_label: str, y_lab
         f'<text transform="translate(18 {(top + height - bottom) / 2}) rotate(-90)" text-anchor="middle">{y_label}</text>',
     ]
     for tick in [x0 + (x1 - x0) * i / 6 for i in range(7)]:
-        out.append(f'<text x="{px(tick)}" y="{height - bottom + 14}" text-anchor="middle" fill="#555">{tick:.0f}</text>' if x1 - x0 > 20 else f'<text x="{px(tick)}" y="{height - bottom + 14}" text-anchor="middle" fill="#555">{tick:.1f}</text>')
+        out.append(
+            f'<text x="{px(tick)}" y="{height - bottom + 14}" text-anchor="middle" fill="#555">{tick:.0f}</text>'
+            if x1 - x0 > 20
+            else f'<text x="{px(tick)}" y="{height - bottom + 14}" text-anchor="middle" fill="#555">{tick:.1f}</text>'
+        )
     for tick in [y0 + (y1 - y0) * i / 5 for i in range(6)]:
-        out.append(f'<line x1="{left}" x2="{width - right}" y1="{py(tick)}" y2="{py(tick)}" stroke="#eee"/><text x="{left - 6}" y="{py(tick) + 4}" text-anchor="end" fill="#555">{tick:.2f}</text>')
+        out.append(
+            f'<line x1="{left}" x2="{width - right}" y1="{py(tick)}" y2="{py(tick)}" stroke="#eee"/><text x="{left - 6}" y="{py(tick) + 4}" text-anchor="end" fill="#555">{tick:.2f}</text>'
+        )
     if line:
-        out.append(f'<line x1="{px(x0)}" y1="{py(line.slope * x0 + line.intercept)}" x2="{px(x1)}" y2="{py(line.slope * x1 + line.intercept)}" stroke="#444" stroke-dasharray="5 4"/>')
+        out.append(
+            f'<line x1="{px(x0)}" y1="{py(line.slope * x0 + line.intercept)}" x2="{px(x1)}" y2="{py(line.slope * x1 + line.intercept)}" stroke="#444" stroke-dasharray="5 4"/>'
+        )
     for x, y, text, colour in points:
-        out.append(f'<circle cx="{px(x)}" cy="{py(y)}" r="4" fill="{colour}" fill-opacity="0.85"/><text x="{px(x) + 6}" y="{py(y) - 5}" font-size="9" fill="#333">{text}</text>')
+        out.append(
+            f'<circle cx="{px(x)}" cy="{py(y)}" r="4" fill="{colour}" fill-opacity="0.85"/><text x="{px(x) + 6}" y="{py(y) - 5}" font-size="9" fill="#333">{text}</text>'
+        )
     for i, (name, colour) in enumerate((legend or {}).items()):
-        out.append(f'<circle cx="{width - right + 16}" cy="{top + 12 + 18 * i}" r="5" fill="{colour}"/><text x="{width - right + 26}" y="{top + 16 + 18 * i}">{name}</text>')
+        out.append(
+            f'<circle cx="{width - right + 16}" cy="{top + 12 + 18 * i}" r="5" fill="{colour}"/><text x="{width - right + 26}" y="{top + 16 + 18 * i}">{name}</text>'
+        )
     return "\n".join(out + ["</svg>"]) + "\n"
 
 
@@ -399,29 +595,64 @@ def elo_plot(rows: list[ConfigRow]) -> str:
     colour = {m: PALETTE[i % len(PALETTE)] for i, m in enumerate(models)}
     points = [(r.elo, r.lost, r.config[1], colour[r.config[0]]) for r in rows]
     line = ols([p[0] for p in points], [p[1] for p in points])
-    return scatter_svg(points, "Round Elo", "round-win equivalents lost per match", "Round-win equivalents lost per match against Round Elo, one point per config", line, {SHORT.get(m, m): colour[m] for m in models})
+    return scatter_svg(
+        points,
+        "Round Elo",
+        "round-win equivalents lost per match",
+        "Round-win equivalents lost per match against Round Elo, one point per config",
+        line,
+        {SHORT.get(m, m): colour[m] for m in models},
+    )
 
 
 def margin_plot(margin: Margin) -> str:
     points = [(x, y, f"{n:,}", PALETTE[0]) for x, y, n in margin.bins]
-    return scatter_svg(points, "net points of the first seat (rounds)", "mean round margin of the first seat", "Round margin against net points, binned (labels: matches)", margin.line)
+    return scatter_svg(
+        points,
+        "net points of the first seat (rounds)",
+        "mean round margin of the first seat",
+        "Round margin against net points, binned (labels: matches)",
+        margin.line,
+    )
 
 
 # Report
 # ======
 
 
-def report(loaded: Loaded, rows: list[ConfigRow], elo_lost: Correlation, elo_net: Correlation, matchups: list[Matchup], margin: Margin) -> str:
+def report(
+    loaded: Loaded,
+    rows: list[ConfigRow],
+    elo_lost: Correlation,
+    elo_net: Correlation,
+    matchups: list[Matchup],
+    margin: Margin,
+) -> str:
     kept = [m for m in loaded.matches if not m.skipped]
-    ranked = len({label(c) for m in loaded.matches for c in (m.first.config, m.second.config)})
+    ranked = len(
+        {label(c) for m in loaded.matches for c in (m.first.config, m.second.config)}
+    )
     return (
         f"{len(kept):,} finished matches with no DeepSeek seat and no engine seat ({len(loaded.matches):,} with the engine ones, used for the ratings, which cover {ranked} configs). Left out: {loaded.incomplete:,} with an agent decision that has no searched row. "
-        f"{len(rows)} configs have at least {MIN_MATCHES} matches. Intervals are 95%, {boot.DRAWS:,} resamples of seed blocks.\n\n"
+        f"{len(rows)} configs have at least {MIN_MATCHES} matches. Intervals are 95% over resamples of seed blocks: {boot.DRAWS:,} for the per-config, matchup and slope intervals, {CORRELATION_DRAWS} for the correlations (each refits the ratings).\n\n"
         f"### Round-win equivalents lost, by config\n\n{config_table(rows)}\n\n"
         f"### Against Round Elo\n\n"
         + table(
             ["measure per config", "Pearson", "95% interval", "Spearman"],
-            [["own points lost per match", f"{elo_lost.pearson:+.2f}", span(elo_lost.interval), f"{elo_lost.spearman:+.2f}"], ["net points per match", f"{elo_net.pearson:+.2f}", span(elo_net.interval), f"{elo_net.spearman:+.2f}"]],
+            [
+                [
+                    "own points lost per match",
+                    f"{elo_lost.pearson:+.2f}",
+                    span(elo_lost.interval),
+                    f"{elo_lost.spearman:+.2f}",
+                ],
+                [
+                    "net points per match",
+                    f"{elo_net.pearson:+.2f}",
+                    span(elo_net.interval),
+                    f"{elo_net.spearman:+.2f}",
+                ],
+            ],
         )
         + f"\n\n### Net points within a matchup\n\n{len(matchups)} pairings have at least {MIN_BLOCKS} complete seed blocks. Across them, net points and round margin per match correlate at {pearson([r.net for r in matchups], [r.margin for r in matchups]):+.2f}. The ten largest nets:\n\n{matchup_table(matchups)}\n\n"
         f"### Largest gap per match\n\n{worst_table(kept)}\n\n"
@@ -443,7 +674,10 @@ def main() -> None:
     rng = random.Random(SEED)
     elo = elo_of(loaded.matches)
     rows = config_rows(loaded.matches, elo, rng)
-    elo_lost, elo_net = correlation(rows, loaded.matches, "lost", rng), correlation(rows, loaded.matches, "net", rng)
+    elo_lost, elo_net = (
+        correlation(rows, loaded.matches, "lost", rng),
+        correlation(rows, loaded.matches, "net", rng),
+    )
     matchups = matchup_rows(loaded.matches, rng)
     margin = margin_fit(loaded.matches, rng)
     text = report(loaded, rows, elo_lost, elo_net, matchups, margin)

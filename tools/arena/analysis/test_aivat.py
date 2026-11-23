@@ -24,7 +24,13 @@ class DeckTest(unittest.TestCase):
 class ShotTest(unittest.TestCase):
     def test_outcomes_follow_the_replayed_shots(self):
         db = database(":memory:", ANALYSIS)
-        events(db, "m1", ("Fired", {"shooter": 0, "target": 0, "shell": "Blank"}), ("PickedUp", {"seat": 1}), ("Fired", {"shooter": 1, "target": 0, "shell": "Live"}))
+        events(
+            db,
+            "m1",
+            ("Fired", {"shooter": 0, "target": 0, "shell": "Blank"}),
+            ("PickedUp", {"seat": 1}),
+            ("Fired", {"shooter": 1, "target": 0, "shell": "Live"}),
+        )
         self.assertEqual(aivat.shot_outcomes(db), {"m1": [False, True]})
 
 
@@ -34,15 +40,31 @@ class DealTest(unittest.TestCase):
         for position, socket in ((1, 0), (2, 1)):
             insert(db, "match_seats", match_id="m1", position=position, socket=socket)
         granted = [("Granted", {"seat": seat, "item": item}) for seat, item in grants]
-        events(db, "m1", ("RoundBegan", {"round": 0, "health": 3, "first": 1}), ("GrabbingBegan", {"seats": [0, 1]}), *granted, ("Loaded", {"load": {"live": 1, "blank": 2}}), ("TurnGiven", {"seat": 1}))
+        events(
+            db,
+            "m1",
+            ("RoundBegan", {"round": 0, "health": 3, "first": 1}),
+            ("GrabbingBegan", {"seats": [0, 1]}),
+            *granted,
+            ("Loaded", {"load": {"live": 1, "blank": 2}}),
+            ("TurnGiven", {"seat": 1}),
+        )
         return aivat.deals_of(db, {"m1": 0})
 
     def test_a_grant_draws_from_the_items_under_both_caps(self):
         grants, deals = self.deal((0, "Saw"), (0, "Saw"), (1, "Jammer"))
-        self.assertTrue(grants.pool[2].all())  # the other seat's saws do not cap this seat's
+        self.assertTrue(
+            grants.pool[2].all()
+        )  # the other seat's saws do not cap this seat's
         self.assertEqual(list(grants.inv1[2]), [2, 0, 0, 0, 0, 0, 0, 0])
-        held, other = np.array([2, 0, 0, 0, 0, 0, 0, 0]), np.array([0, 0, 1, 0, 0, 0, 0, 0])
-        self.assertEqual([aivat.ITEMS[k] for k in np.flatnonzero(~aivat.item_pool(held, other))], ["Saw", "Jammer"])
+        held, other = (
+            np.array([2, 0, 0, 0, 0, 0, 0, 0]),
+            np.array([0, 0, 1, 0, 0, 0, 0, 0]),
+        )
+        self.assertEqual(
+            [aivat.ITEMS[k] for k in np.flatnonzero(~aivat.item_pool(held, other))],
+            ["Saw", "Jammer"],
+        )
         self.assertEqual(list(deals.mover), [2])
 
     def test_a_grant_outside_its_pool_is_an_error(self):
@@ -57,23 +79,62 @@ class FitTest(unittest.TestCase):
         i = rng.integers(0, 3, n)
         j = (i + rng.integers(1, 3, n)) % 3
         wins = rng.binomial(3, np.where(i == 0, 0.7, 0.5)).astype(float)
-        t = aivat.Rated(["a", "b", "c"], i, j, np.full(n, 3.0), wins, np.zeros(n), np.arange(n) % 30, np.arange(n) % 30)
+        t = aivat.Rated(
+            ["a", "b", "c"],
+            i,
+            j,
+            np.full(n, 3.0),
+            wins,
+            np.zeros(n),
+            np.arange(n) % 30,
+            np.arange(n) % 30,
+        )
         raw = aivat.fit(t, t.raw)
         self.assertGreater(raw[0], 0)
         lucky = aivat.fit(t, t.raw - np.where(i == 0, 0.3, 0.0))
         self.assertLess(lucky[0], raw[0])
 
     def test_a_weight_counts_a_match_that_many_times(self):
-        t = aivat.Rated(["a", "b"], np.array([0, 1]), np.array([1, 0]), np.full(2, 3.0), np.array([2.0, 1.0]), np.zeros(2), np.arange(2), np.arange(2))
-        twice = aivat.Rated(["a", "b"], np.array([0, 1, 0]), np.array([1, 0, 1]), np.full(3, 3.0), np.array([2.0, 1.0, 2.0]), np.zeros(3), np.arange(3), np.arange(3))
-        np.testing.assert_allclose(aivat.fit(t, t.raw, np.array([2.0, 1.0])), aivat.fit(twice, twice.raw))
+        t = aivat.Rated(
+            ["a", "b"],
+            np.array([0, 1]),
+            np.array([1, 0]),
+            np.full(2, 3.0),
+            np.array([2.0, 1.0]),
+            np.zeros(2),
+            np.arange(2),
+            np.arange(2),
+        )
+        twice = aivat.Rated(
+            ["a", "b"],
+            np.array([0, 1, 0]),
+            np.array([1, 0, 1]),
+            np.full(3, 3.0),
+            np.array([2.0, 1.0, 2.0]),
+            np.zeros(3),
+            np.arange(3),
+            np.arange(3),
+        )
+        np.testing.assert_allclose(
+            aivat.fit(t, t.raw, np.array([2.0, 1.0])), aivat.fit(twice, twice.raw)
+        )
 
 
-def enumerated(remaining: int, live: int, inverted: bool, mover: frozenset[int], other: frozenset[int], truth: tuple[bool, ...]) -> tuple[frozenset[int], int, int, float]:
+def enumerated(
+    remaining: int,
+    live: int,
+    inverted: bool,
+    mover: frozenset[int],
+    other: frozenset[int],
+    truth: tuple[bool, ...],
+) -> tuple[frozenset[int], int, int, float]:
     """By enumeration of every order of `live` live shells among `remaining`, the chamber flipped when `inverted` (the inverter: sim/bend-mp/ref/main.bend):
     the positions certain in the orders the mover's clues allow and the fewest and most live shells left in them (the knowledge file's private_known,
     private_live_min and private_live_max), and the chamber's live chance given both players' clues of `truth`."""
-    orders = [tuple(i in lives for i in range(remaining)) for lives in itertools.combinations(range(remaining), live)]
+    orders = [
+        tuple(i in lives for i in range(remaining))
+        for lives in itertools.combinations(range(remaining), live)
+    ]
     now = [(o[0] != inverted, *o[1:]) for o in orders]
 
     def fits(order, clues):
@@ -93,16 +154,35 @@ class ChamberChance(unittest.TestCase):
     def test_it_is_the_enumerated_chance_of_small_loads(self):
         for remaining in range(1, 6):
             positions = range(remaining)
-            subsets = [frozenset(s) for k in range(remaining + 1) for s in itertools.combinations(positions, k)]
+            subsets = [
+                frozenset(s)
+                for k in range(remaining + 1)
+                for s in itertools.combinations(positions, k)
+            ]
             for live in range(remaining + 1):
                 for inverted in (False, True):
                     for lives in itertools.combinations(positions, live):
-                        truth = tuple((i in lives) != (inverted and i == 0) for i in positions)
+                        truth = tuple(
+                            (i in lives) != (inverted and i == 0) for i in positions
+                        )
                         for mover in subsets:
                             for other in subsets:
-                                certain, low, high, chance = enumerated(remaining, live, inverted, mover, other, truth)
+                                certain, low, high, chance = enumerated(
+                                    remaining, live, inverted, mover, other, truth
+                                )
                                 pins = {i: truth[i] for i in certain | other}
-                                self.assertAlmostEqual(aivat.chamber_chance(pins, remaining, low, high), chance, msg=(remaining, live, inverted, mover, other, truth))
+                                self.assertAlmostEqual(
+                                    aivat.chamber_chance(pins, remaining, low, high),
+                                    chance,
+                                    msg=(
+                                        remaining,
+                                        live,
+                                        inverted,
+                                        mover,
+                                        other,
+                                        truth,
+                                    ),
+                                )
 
 
 if __name__ == "__main__":

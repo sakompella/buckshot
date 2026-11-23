@@ -14,7 +14,7 @@ matches. The wrap-up and the analyses call `score` rather than running the steps
   2. web/scripts/rust-search-inputs.ts in --checkout (after `bun run rules`) writes each decision's position as the deciding player sees it,
      with its menu in the player's move order and the shells left, in --jobs processes split by match
   3. `buckshot-search --unpruned ... score` (the f64 build's only evaluator) scores them on --threads threads, once per reload
-     rule, and writes each one's row of the regret table (columns: docs/arena/analysis/regret.md, The `regret` table): every
+     rule, and writes each one's row of the regret table (columns: CREATE_REGRET below): every
      move's value is exact at the depth reached, which the replay's move list shows. A decision whose root moves are not
      Bend's menu gets a dump instead (sim/rust/search/src/score.rs)
 
@@ -39,7 +39,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "dev/src"))
-from buckshot_dev import cli  # noqa: E402
+from buckshot_dev import cli
 
 FEATURES = "f64,seats-2"
 EVALUATOR = "bounded-v1-f64-unpruned"
@@ -67,7 +67,9 @@ SEARCH_BYTES_PER_NODE = 8
 
 def declared_memory(settings: "Settings") -> int:
     """Bytes the run is expected to peak at: what it declares to the `dev heavy` queue and is capped at."""
-    return SEARCH_BASE_BYTES + settings.threads * settings.budget * SEARCH_BYTES_PER_NODE
+    return (
+        SEARCH_BASE_BYTES + settings.threads * settings.budget * SEARCH_BYTES_PER_NODE
+    )
 
 
 def sources_hash(rust: Path) -> str:
@@ -75,38 +77,80 @@ def sources_hash(rust: Path) -> str:
     digest = hashlib.sha256(FEATURES.encode())
     files = [rust / "Cargo.toml", rust / "Cargo.lock", rust / "rust-toolchain.toml"]
     for crate in ("rules", "search"):
-        files += [rust / crate / "Cargo.toml", *sorted((rust / crate / "src").rglob("*.rs"))]
+        files += [
+            rust / crate / "Cargo.toml",
+            *sorted((rust / crate / "src").rglob("*.rs")),
+        ]
     for file in files:
-        digest.update(str(file.relative_to(rust)).encode() + b"\0" + file.read_bytes() + b"\0")
+        digest.update(
+            str(file.relative_to(rust)).encode() + b"\0" + file.read_bytes() + b"\0"
+        )
     return digest.hexdigest()
 
 
 def build(rust: Path) -> Path:
     """Builds buckshot-search with the arena features and returns the binary."""
-    cmd = [os.environ.get("CARGO", "cargo"), "build", "--release", "--quiet", "-p", "buckshot-search", "--no-default-features", "--features", FEATURES, "--message-format", "json"]
+    cmd = [
+        os.environ.get("CARGO", "cargo"),
+        "build",
+        "--release",
+        "--quiet",
+        "-p",
+        "buckshot-search",
+        "--no-default-features",
+        "--features",
+        FEATURES,
+        "--message-format",
+        "json",
+    ]
     done = subprocess.run(cmd, cwd=rust, check=True, stdout=subprocess.PIPE, text=True)
     for line in done.stdout.splitlines():
         message = json.loads(line)
-        if message.get("reason") == "compiler-artifact" and message["target"]["name"] == "buckshot-search" and message.get("executable"):
+        if (
+            message.get("reason") == "compiler-artifact"
+            and message["target"]["name"] == "buckshot-search"
+            and message.get("executable")
+        ):
             return Path(message["executable"])
     raise SystemExit("cargo built no buckshot-search binary")
 
 
-def wanted(db: sqlite3.Connection, out: sqlite3.Connection, group: tuple, matches: set[str] | None, decisions: set[tuple[str, int]] | None) -> list[tuple[str, int]]:
+def wanted(
+    db: sqlite3.Connection,
+    out: sqlite3.Connection,
+    group: tuple,
+    matches: set[str] | None,
+    decisions: set[tuple[str, int]] | None,
+) -> list[tuple[str, int]]:
     """The agent decisions of replay-validated matches to score, minus those --out has for the group, ordered by match.
     A one-move menu is no choice: the run logs of match 4f16575f… record three item grabs as the agent's."""
     rows = db.execute(
         """SELECT d.match_id, d.ordinal, m.name FROM decisions d JOIN matches m ON m.id = d.match_id
            WHERE d.by_whom = 'agent' AND json_array_length(d.legal_json) > 1 AND m.replay_status = 'validated' AND m.manifest_json IS NOT NULL ORDER BY d.match_id, d.ordinal"""
     ).fetchall()
-    done = set(out.execute("SELECT match_id, ordinal FROM regret WHERE evaluator = ? AND max_depth = ? AND budget = ? AND reload = ? AND samples = ?", group).fetchall())
-    keep = [(match, ordinal) for match, ordinal, name in rows if (match, ordinal) not in done and (matches is None or name in matches) and (decisions is None or (match, ordinal) in decisions)]
+    done = set(
+        out.execute(
+            "SELECT match_id, ordinal FROM regret WHERE evaluator = ? AND max_depth = ? AND budget = ? AND reload = ? AND samples = ?",
+            group,
+        ).fetchall()
+    )
+    keep = [
+        (match, ordinal)
+        for match, ordinal, name in rows
+        if (match, ordinal) not in done
+        and (matches is None or name in matches)
+        and (decisions is None or (match, ordinal) in decisions)
+    ]
     if decisions is not None and len(decisions - {(m, o) for m, o, _ in rows}):
-        raise SystemExit(f"--decisions names decisions that are not agent decisions of a replay-validated match: {sorted(decisions - {(m, o) for m, o, _ in rows})[:5]}")
+        raise SystemExit(
+            f"--decisions names decisions that are not agent decisions of a replay-validated match: {sorted(decisions - {(m, o) for m, o, _ in rows})[:5]}"
+        )
     return keep
 
 
-def write_inputs(decisions: list[tuple[str, int]], db: Path, web: Path, work: Path, jobs: int) -> list[Path]:
+def write_inputs(
+    decisions: list[tuple[str, int]], db: Path, web: Path, work: Path, jobs: int
+) -> list[Path]:
     """Runs rust-search-inputs.ts on the decisions in `jobs` processes, whole matches to each, and returns their input files."""
     by_match: dict[str, list[int]] = {}
     for match, ordinal in decisions:
@@ -114,42 +158,109 @@ def write_inputs(decisions: list[tuple[str, int]], db: Path, web: Path, work: Pa
     parts: list[list[str]] = [[] for _ in range(jobs)]
     for k, (match, ordinals) in enumerate(by_match.items()):
         parts[k % jobs] += [f"{match} {ordinal}\n" for ordinal in ordinals]
-    subprocess.run([os.environ.get("BUN", "bun"), "run", "rules"], cwd=web, check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(
+        [os.environ.get("BUN", "bun"), "run", "rules"],
+        cwd=web,
+        check=True,
+        stdout=subprocess.DEVNULL,
+    )
     procs = []
     for k, lines in enumerate(parts):
         if not lines:
             continue
         (work / f"decisions-{k}.txt").write_text("".join(lines))
-        cmd = [os.environ.get("BUN", "bun"), "scripts/rust-search-inputs.ts", "--db", str(db), "--decisions", str(work / f"decisions-{k}.txt"), "--out", str(work / f"inputs-{k}")]
+        cmd = [
+            os.environ.get("BUN", "bun"),
+            "scripts/rust-search-inputs.ts",
+            "--db",
+            str(db),
+            "--decisions",
+            str(work / f"decisions-{k}.txt"),
+            "--out",
+            str(work / f"inputs-{k}"),
+        ]
         with open(work / f"inputs-{k}.log", "w") as log:
             procs.append((k, subprocess.Popen(cmd, cwd=web, stderr=log)))
     for k, proc in procs:
         if proc.wait() != 0:
-            raise SystemExit(f"rust-search-inputs.ts exited {proc.returncode}; see {work / f'inputs-{k}.log'}")
+            raise SystemExit(
+                f"rust-search-inputs.ts exited {proc.returncode}; see {work / f'inputs-{k}.log'}"
+            )
     return [work / f"inputs-{k}.jsonl" for k, _ in procs]
 
 
-def run_search(binary: Path, inputs: list[Path], work: Path, out: Path, db: Path, group: tuple, threads: int, bugs: Path) -> int:
+def run_search(
+    binary: Path,
+    inputs: list[Path],
+    work: Path,
+    out: Path,
+    db: Path,
+    group: tuple,
+    threads: int,
+    bugs: Path,
+) -> int:
     """Runs `buckshot-search score` on the inputs: it adds the rows `out` lacks for the group, committing every chunk, and
     stops, after every input, on a disagreement between Bend and Rust, with a dump of each in `bugs`. Returns the rows written."""
     _, depth, budget, reload, samples = group
-    sampled = ["--reload", "sampled", "--samples", str(samples)] if reload == "sampled" else []
-    cmd = [str(binary), "--unpruned", "--depth", str(depth), "--budget", str(budget), "--threads", str(threads), *sampled]
-    cmd += ["score", "--out", str(out), "--source", str(db), "--bugs", str(bugs), *map(str, inputs)]
+    sampled = (
+        ["--reload", "sampled", "--samples", str(samples)]
+        if reload == "sampled"
+        else []
+    )
+    cmd = [
+        str(binary),
+        "--unpruned",
+        "--depth",
+        str(depth),
+        "--budget",
+        str(budget),
+        "--threads",
+        str(threads),
+        *sampled,
+    ]
+    cmd += [
+        "score",
+        "--out",
+        str(out),
+        "--source",
+        str(db),
+        "--bugs",
+        str(bugs),
+        *map(str, inputs),
+    ]
     log = work / f"score.{reload}.log"
     with open(log, "w") as stderr:
-        done = subprocess.run(cmd, check=False, stdout=subprocess.PIPE, stderr=stderr, text=True)
+        done = subprocess.run(
+            cmd, check=False, stdout=subprocess.PIPE, stderr=stderr, text=True
+        )
     if done.returncode != 0:
-        raise SystemExit(f"buckshot-search score exited {done.returncode}; {log}:\n" + "\n".join(log.read_text().splitlines()[-20:]))
+        raise SystemExit(
+            f"buckshot-search score exited {done.returncode}; {log}:\n"
+            + "\n".join(log.read_text().splitlines()[-20:])
+        )
     summary = json.loads(done.stdout)
     if summary["evaluator"] != group[0]:
-        raise SystemExit(f"buckshot-search wrote {summary['evaluator']} rows, not {group[0]}: update EVALUATOR with the golden set")
+        raise SystemExit(
+            f"buckshot-search wrote {summary['evaluator']} rows, not {group[0]}: update EVALUATOR with the golden set"
+        )
     return summary["rows"]
 
 
 def git_commit(checkout: Path) -> str:
-    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=checkout, stdout=subprocess.PIPE, text=True, check=True).stdout.strip()
-    dirty = subprocess.run(["git", "status", "--porcelain", "--", "sim/rust"], cwd=checkout, stdout=subprocess.PIPE, text=True, check=True).stdout.strip()
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=checkout,
+        stdout=subprocess.PIPE,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    dirty = subprocess.run(
+        ["git", "status", "--porcelain", "--", "sim/rust"],
+        cwd=checkout,
+        stdout=subprocess.PIPE,
+        text=True,
+        check=True,
+    ).stdout.strip()
     return head + ("+dirty" if dirty else "")
 
 
@@ -168,24 +279,53 @@ def open_out(path: Path, group: tuple) -> sqlite3.Connection:
     out = sqlite3.connect(path)
     out.execute(CREATE_REGRET)
     out.execute(CREATE_BUILD)
-    others = [run for run in out.execute("SELECT DISTINCT evaluator, max_depth, budget, reload, samples FROM regret") if run != group]
+    others = [
+        run
+        for run in out.execute(
+            "SELECT DISTINCT evaluator, max_depth, budget, reload, samples FROM regret"
+        )
+        if run != group
+    ]
     if others:
-        raise SystemExit(f"{path} holds the run {others}, not {group} (evaluator, max_depth, budget, reload, samples); a changed evaluator or setting needs a new file.")
+        raise SystemExit(
+            f"{path} holds the run {others}, not {group} (evaluator, max_depth, budget, reload, samples); a changed evaluator or setting needs a new file."
+        )
     return out
 
 
-def score(db: Path, out: Path | None, sampled_out: Path | None, checkout: Path, settings: Settings, matches: set[str] | None = None, decisions: set[tuple[str, int]] | None = None, work: Path | None = None) -> dict:
+def score(
+    db: Path,
+    out: Path | None,
+    sampled_out: Path | None,
+    checkout: Path,
+    settings: Settings,
+    matches: set[str] | None = None,
+    decisions: set[tuple[str, int]] | None = None,
+    work: Path | None = None,
+) -> dict:
     """Scores the decisions `out` (static reload) and `sampled_out` (sampled reload) lack, writing their rows. Returns a summary."""
     rust = checkout / "sim/rust"
     evaluator = EVALUATOR
-    runs = [(path, (evaluator, settings.depth, settings.budget, reload, samples)) for path, reload, samples in ((out, "static", 0), (sampled_out, "sampled", settings.samples)) if path is not None]
+    runs = [
+        (path, (evaluator, settings.depth, settings.budget, reload, samples))
+        for path, reload, samples in (
+            (out, "static", 0),
+            (sampled_out, "sampled", settings.samples),
+        )
+        if path is not None
+    ]
     source = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
     outs = [(open_out(path, group), group) for path, group in runs]
-    todo = [(conn, group, set(wanted(source, conn, group, matches, decisions))) for conn, group in outs]
+    todo = [
+        (conn, group, set(wanted(source, conn, group, matches, decisions)))
+        for conn, group in outs
+    ]
     source.close()
     union = sorted(set().union(*(keys for *_, keys in todo)))
     summary: dict = {"evaluator": evaluator, "decisions": len(union)}
-    print(f"{evaluator}: inputs for {len(union)} decisions", file=sys.stderr, flush=True)
+    print(
+        f"{evaluator}: inputs for {len(union)} decisions", file=sys.stderr, flush=True
+    )
     if not union:
         return summary
     binary = build(rust)
@@ -200,9 +340,30 @@ def score(db: Path, out: Path | None, sampled_out: Path | None, checkout: Path, 
     for (path, _), (conn, group, _) in zip(runs, todo, strict=True):
         started = time.monotonic()
         conn.commit()
-        written = run_search(binary, inputs, work, path, db, group, settings.threads, path.parent / f"{path.stem}-bugs")
+        written = run_search(
+            binary,
+            inputs,
+            work,
+            path,
+            db,
+            group,
+            settings.threads,
+            path.parent / f"{path.stem}-bugs",
+        )
         seconds = time.monotonic() - started
-        conn.execute("INSERT INTO evaluator_build VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)", (*group, commit, FEATURES, sha, written, seconds, settings.threads, sources))
+        conn.execute(
+            "INSERT INTO evaluator_build VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)",
+            (
+                *group,
+                commit,
+                FEATURES,
+                sha,
+                written,
+                seconds,
+                settings.threads,
+                sources,
+            ),
+        )
         conn.commit()
         conn.close()
         summary[group[3]] = {"rows": written, "seconds": round(seconds)}
@@ -211,28 +372,96 @@ def score(db: Path, out: Path | None, sampled_out: Path | None, checkout: Path, 
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--db", type=Path, required=True, help="the analysis database, opened read only")
-    p.add_argument("--sampled-out", type=Path, help="derived database for the sampled rows, the production run (created if missing)")
-    p.add_argument("--out", type=Path, help="derived database for static rows, for research (created if missing)")
-    p.add_argument("--checkout", type=Path, default=REPO, help="checkout whose sim/rust builds the evaluator and whose web/ writes the inputs")
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument(
+        "--db", type=Path, required=True, help="the analysis database, opened read only"
+    )
+    p.add_argument(
+        "--sampled-out",
+        type=Path,
+        help="derived database for the sampled rows, the production run (created if missing)",
+    )
+    p.add_argument(
+        "--out",
+        type=Path,
+        help="derived database for static rows, for research (created if missing)",
+    )
+    p.add_argument(
+        "--checkout",
+        type=Path,
+        default=REPO,
+        help="checkout whose sim/rust builds the evaluator and whose web/ writes the inputs",
+    )
     p.add_argument("--depth", type=int, default=Settings.depth)
-    p.add_argument("--budget", type=int, default=Settings.budget, help="nodes per decision")
-    p.add_argument("--samples", type=int, default=Settings.samples, help="deals per sampled leaf")
-    p.add_argument("--matches", type=Path, help="file of match names, one per line: score only these")
-    p.add_argument("--decisions", type=Path, help="file of '<match id> <ordinal>' lines: score only these")
-    p.add_argument("--threads", type=int, default=Settings.threads, help="buckshot-search threads (half the cores)")
-    p.add_argument("--jobs", type=int, default=Settings.jobs, help="processes writing the inputs")
-    p.add_argument("--work", type=Path, help="directory for the inputs and logs (kept); a temporary one by default")
+    p.add_argument(
+        "--budget", type=int, default=Settings.budget, help="nodes per decision"
+    )
+    p.add_argument(
+        "--samples", type=int, default=Settings.samples, help="deals per sampled leaf"
+    )
+    p.add_argument(
+        "--matches",
+        type=Path,
+        help="file of match names, one per line: score only these",
+    )
+    p.add_argument(
+        "--decisions",
+        type=Path,
+        help="file of '<match id> <ordinal>' lines: score only these",
+    )
+    p.add_argument(
+        "--threads",
+        type=int,
+        default=Settings.threads,
+        help="buckshot-search threads (half the cores)",
+    )
+    p.add_argument(
+        "--jobs", type=int, default=Settings.jobs, help="processes writing the inputs"
+    )
+    p.add_argument(
+        "--work",
+        type=Path,
+        help="directory for the inputs and logs (kept); a temporary one by default",
+    )
     args = p.parse_args()
     if args.out is None and args.sampled_out is None:
         p.error("give --sampled-out, --out or both")
     settings = Settings(args.depth, args.budget, args.samples, args.threads, args.jobs)
-    if "BUCKSHOT_HEAVY_MEM" not in os.environ:  # not in the queue yet: run again through it, declaring the memory the settings need
-        sys.exit(cli.heavy_cmd([sys.executable, *sys.argv], str(declared_memory(settings))))
+    if (
+        "BUCKSHOT_HEAVY_MEM" not in os.environ
+    ):  # not in the queue yet: run again through it, declaring the memory the settings need
+        sys.exit(
+            cli.heavy_cmd([sys.executable, *sys.argv], str(declared_memory(settings)))
+        )
     matches = set(args.matches.read_text().split()) if args.matches else None
-    listed = {(m, int(o)) for m, o in (line.split() for line in args.decisions.read_text().splitlines() if line.strip())} if args.decisions else None
-    print(json.dumps(score(args.db.resolve(), args.out, args.sampled_out, args.checkout.resolve(), settings, matches, listed, args.work)))
+    listed = (
+        {
+            (m, int(o))
+            for m, o in (
+                line.split()
+                for line in args.decisions.read_text().splitlines()
+                if line.strip()
+            )
+        }
+        if args.decisions
+        else None
+    )
+    print(
+        json.dumps(
+            score(
+                args.db.resolve(),
+                args.out,
+                args.sampled_out,
+                args.checkout.resolve(),
+                settings,
+                matches,
+                listed,
+                args.work,
+            )
+        )
+    )
 
 
 if __name__ == "__main__":

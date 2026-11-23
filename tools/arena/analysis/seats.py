@@ -27,7 +27,9 @@ class Block:
     starter_wins: float
 
 
-def complete_blocks(games: list[Game], model_of: dict[str, str]) -> tuple[list[Block], int]:
+def complete_blocks(
+    games: list[Game], model_of: dict[str, str]
+) -> tuple[list[Block], int]:
     """The complete blocks, and the number of matches left out in half blocks."""
     blocks, left_out = [], 0
     for block_id, pair in sorted(blocks_of(games).items()):
@@ -36,11 +38,27 @@ def complete_blocks(games: list[Game], model_of: dict[str, str]) -> tuple[list[B
             continue
         a, b = pair
         if (a.first, a.second) != (b.second, b.first) or a.starter != b.starter:
-            raise ValueError(f"block {block_id} does not swap seats on one starter position")
-        starter_wins = sum(g.share_first if g.starter == 1 else 1 - g.share_first for g in pair)
+            raise ValueError(
+                f"block {block_id} does not swap seats on one starter position"
+            )
+        starter_wins = sum(
+            g.share_first if g.starter == 1 else 1 - g.share_first for g in pair
+        )
         first_wins = a.share_first + b.share_first
         models = tuple(sorted({model_of[a.first], model_of[a.second]}))
-        blocks.append(Block(block_id, a.seed, a.code if a.code == b.code else "mixed", models, first_wins / 2, starter_wins / 2, a.starter, first_wins, starter_wins))
+        blocks.append(
+            Block(
+                block_id,
+                a.seed,
+                a.code if a.code == b.code else "mixed",
+                models,
+                first_wins / 2,
+                starter_wins / 2,
+                a.starter,
+                first_wins,
+                starter_wins,
+            )
+        )
     return blocks, left_out
 
 
@@ -57,7 +75,10 @@ def estimates(blocks: list[Block]) -> dict[str, float]:
     With a1 and a2 the mean share of position 1 over blocks where position 1 / 2 starts,
     seat = (a1 + a2) / 2 - 1/2 and starter = (a1 - a2) / 2, each strata weighted equally.
     """
-    out = {"first": mean([b.first_share for b in blocks]), "starter": mean([b.starter_share for b in blocks])}
+    out = {
+        "first": mean([b.first_share for b in blocks]),
+        "starter": mean([b.starter_share for b in blocks]),
+    }
     one = [b.first_share for b in blocks if b.starter == 1]
     two = [b.first_share for b in blocks if b.starter == 2]
     if one and two:
@@ -66,7 +87,9 @@ def estimates(blocks: list[Block]) -> dict[str, float]:
     return out
 
 
-def bootstrap(blocks: list[Block], count: int, rng: random.Random, by_seed: bool = False) -> dict[str, tuple[float, float] | None]:
+def bootstrap(
+    blocks: list[Block], count: int, rng: random.Random, by_seed: bool = False
+) -> dict[str, tuple[float, float] | None]:
     """Intervals drawing whole blocks, or (by_seed) whole seeds with every block played at them in any pairing."""
     groups: dict = {}
     for b in blocks:

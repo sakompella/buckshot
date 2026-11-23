@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 # about 2 s threaded and 10 ms on one thread). Set before numpy loads.
 os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
-import numpy as np  # noqa: E402
+import numpy as np
 
 # A near-flat prior (sd 1000) on the seat and starter terms: it keeps the Newton system solvable when a training set
 # has every game with the same starter, which makes the starter term a copy of the seat term.
@@ -44,13 +44,23 @@ def pair_of(a: str, b: str) -> tuple[str, str]:
 Cells = dict[tuple, list[float]]
 
 
-def cells_of(games: list[Game], weights: dict | None = None, unit=lambda game: game.block, starter: bool = False, share=lambda game: game.share_first) -> Cells:
+def cells_of(
+    games: list[Game],
+    weights: dict | None = None,
+    unit=lambda game: game.block,
+    starter: bool = False,
+    share=lambda game: game.share_first,
+) -> Cells:
     """Games grouped by who sat first; `weights` counts each resampling unit's repeats (a block unless `unit` says seed). `share` is what a game counts: its win share, or its pot share."""
     cells: Cells = {}
     for game in games:
         count = 1 if weights is None else weights.get(unit(game), 0)
         if count:
-            key = (game.first, game.second, int(game.starter == 1)) if starter else (game.first, game.second)
+            key = (
+                (game.first, game.second, int(game.starter == 1))
+                if starter
+                else (game.first, game.second)
+            )
             cell = cells.setdefault(key, [0.0, 0.0])
             cell[0] += count
             cell[1] += count * share(game)
@@ -62,13 +72,21 @@ class Fit:
     theta: dict[str, float]
     seat: float = 0.0
     start: float = 0.0  # the edge of the player who opens round 1
-    delta: dict[tuple[str, str], float] = field(default_factory=dict)  # of the pair's alphabetically first entrant
+    delta: dict[tuple[str, str], float] = field(
+        default_factory=dict
+    )  # of the pair's alphabetically first entrant
 
     def eta(self, first: str, second: str, first_starts: bool = True) -> float:
         low, high = pair_of(first, second)
         sign = 1 if first == low else -1
         edge = self.start if first_starts else -self.start
-        return self.theta[first] - self.theta[second] + self.seat + edge + sign * self.delta.get((low, high), 0.0)
+        return (
+            self.theta[first]
+            - self.theta[second]
+            + self.seat
+            + edge
+            + sign * self.delta.get((low, high), 0.0)
+        )
 
     def p_first(self, first: str, second: str, first_starts: bool = True) -> float:
         return sigmoid(self.eta(first, second, first_starts))
@@ -82,11 +100,21 @@ class Fit:
         return {name: (value - zero) * ELO for name, value in self.theta.items()}
 
 
-def fit(cells: Cells, tau: float = 0.0, seat: bool = False, start: bool = False, theta_sd: float = 3.0, seat_sd: float = 1000.0, entrants: set[str] = frozenset(), pair_terms: set[tuple[str, str]] | None = None) -> Fit:
+def fit(
+    cells: Cells,
+    tau: float = 0.0,
+    seat: bool = False,
+    start: bool = False,
+    theta_sd: float = 3.0,
+    seat_sd: float = 1000.0,
+    entrants: Iterable[str] = (),
+    pair_terms: set[tuple[str, str]] | None = None,
+) -> Fit:
     """Newton steps on the log posterior; `entrants` without a game get theta 0."""
     names = sorted({name for key in cells for name in key[:2]} | set(entrants))
     column = {("theta", name): i for i, name in enumerate(names)}
     penalty = [1 / theta_sd**2] * len(names)
+    delta_pairs: list[tuple[str, str]] = []
     if seat:
         column[("seat", "")] = len(column)
         penalty.append(1 / seat_sd**2)
@@ -97,7 +125,8 @@ def fit(cells: Cells, tau: float = 0.0, seat: bool = False, start: bool = False,
         pairs = {pair_of(*key[:2]) for key in cells}
         if pair_terms is not None:
             pairs &= pair_terms
-        for pair in sorted(pairs):
+        delta_pairs = sorted(pairs)
+        for pair in delta_pairs:
             column[("delta", pair)] = len(column)
             penalty.append(1 / tau**2)
     size = len(column)
@@ -125,7 +154,9 @@ def fit(cells: Cells, tau: float = 0.0, seat: bool = False, start: bool = False,
     for _ in range(100):
         p = 0.5 * (1 + np.tanh(matrix @ x / 2))
         grad = matrix.T @ (shares - games * p) - prior * x
-        step = np.linalg.solve((matrix.T * (games * p * (1 - p))) @ matrix + np.diag(prior), grad)
+        step = np.linalg.solve(
+            (matrix.T * (games * p * (1 - p))) @ matrix + np.diag(prior), grad
+        )
         x += step
         if np.abs(step).max() < 1e-10:
             break
@@ -135,11 +166,15 @@ def fit(cells: Cells, tau: float = 0.0, seat: bool = False, start: bool = False,
     if start:
         out.start = x[column[("start", "")]]
     if tau > 0:
-        out.delta = {key[1]: x[i] for key, i in column.items() if key[0] == "delta"}
+        out.delta = {pair: x[column[("delta", pair)]] for pair in delta_pairs}
     return out
 
 
-def round_elo(matches: Iterable[tuple[str, str, float, float]], entrants: Iterable[str] = (), anchor: str | None = ANCHOR) -> dict[str, float]:
+def round_elo(
+    matches: Iterable[tuple[str, str, float, float]],
+    entrants: Iterable[str] = (),
+    anchor: str | None = ANCHOR,
+) -> dict[str, float]:
     """Round Elo, the viewer's rating (web/src/arena-viewer/page/ratings.ts): the fit on round shares, each match counting its rounds.
 
     `matches` are (first config, second config, rounds, the first config's round wins), wins fractional for luck-adjusted ones; the Elo of each config, `anchor` at 0 (Fit.elo).
@@ -156,8 +191,13 @@ def log_loss(fitted: Fit, games: list[Game]) -> float:
     """Summed negative log likelihood of the games' shares; an entrant the fit never saw counts as theta 0."""
     total = 0.0
     for game in games:
-        p = min(max(fitted.p_first(game.first, game.second, game.starter == 1), 1e-12), 1 - 1e-12)
-        total -= game.share_first * math.log(p) + (1 - game.share_first) * math.log(1 - p)
+        p = min(
+            max(fitted.p_first(game.first, game.second, game.starter == 1), 1e-12),
+            1 - 1e-12,
+        )
+        total -= game.share_first * math.log(p) + (1 - game.share_first) * math.log(
+            1 - p
+        )
     return total
 
 

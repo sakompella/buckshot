@@ -35,10 +35,14 @@ def gib(n: int) -> str:
 
 
 def meminfo(field: str) -> int:
-    with open("/proc/meminfo") as f:
-        for line in f:
-            if line.startswith(field + ":"):
-                return int(line.split()[1]) << 10
+    """A /proc/meminfo field in bytes. Without /proc (macOS) MemTotal comes from sysconf and MemAvailable equals it, so only the budget limits jobs."""
+    try:
+        with open("/proc/meminfo") as f:
+            for line in f:
+                if line.startswith(field + ":"):
+                    return int(line.split()[1]) << 10
+    except FileNotFoundError:
+        return os.sysconf("SC_PHYS_PAGES") * os.sysconf("SC_PAGE_SIZE")
     raise SystemExit(f"dev heavy: no {field} in /proc/meminfo")
 
 
@@ -90,6 +94,8 @@ def tree_rss(pid: int) -> int:
     """Resident bytes of `pid` and its descendants, from /proc."""
     children: dict[int, list[int]] = {}
     rss: dict[int, int] = {}
+    if not os.path.isdir("/proc"):
+        return 0
     for entry in os.listdir("/proc"):
         if not entry.isdigit():
             continue
@@ -160,11 +166,27 @@ def heavy_cmd(
             announced = True
         time.sleep(poll)
     try:
-        return subprocess.run(command_line(cmd, mem), env={**os.environ, "BUCKSHOT_HEAVY_MEM": mem}).returncode
+        # The child inherits the slot fd, so the lock outlives a killed wrapper; the record then follows the child.
+        child = subprocess.Popen(
+            command_line(cmd, mem),
+            env={**os.environ, "BUCKSHOT_HEAVY_MEM": mem},
+            pass_fds=[slot],
+        )
+        record_child(slot_dir, child.pid)
+        return child.wait()
     finally:
         os.unlink(job_path(slot_dir, os.getpid()))
         fcntl.flock(slot, fcntl.LOCK_UN)
         os.close(slot)
+
+
+def record_child(slot_dir: str, child_pid: int) -> None:
+    """Point this job's record at the child process, which a killed wrapper leaves behind."""
+    path = job_path(slot_dir, os.getpid())
+    with open(path) as f:
+        job = json.load(f)
+    with open(path, "w") as f:
+        json.dump({**job, "pid": child_pid}, f)
 
 
 def admit(
@@ -178,8 +200,11 @@ def admit(
     )
     try:
         fcntl.flock(admission, fcntl.LOCK_EX)
-        live = sum(job["mem"] for job in live_jobs(slot_dir))
-        if not admits(live, size, budget, meminfo("MemAvailable")):
+        jobs = live_jobs(slot_dir)
+        live = sum(job["mem"] for job in jobs)
+        # A job that just started has not yet grown into its declared memory, so MemAvailable still counts it as free.
+        growth = sum(max(0, job["mem"] - tree_rss(job["pid"])) for job in jobs)
+        if not admits(live, size, budget, meminfo("MemAvailable") - growth):
             return None
         for name in names:
             fd = os.open(os.path.join(slot_dir, name), os.O_CREAT | os.O_RDWR, 0o666)

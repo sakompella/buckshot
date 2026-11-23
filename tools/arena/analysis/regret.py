@@ -6,13 +6,12 @@ read-only and prints markdown tables. With --doc FILE the tables replace the tex
 that file. A config is a model with its effort. Regret is in percentage points of the deciding player's chance to win the
 round. Excluded matches (a DeepSeek seat), unfinished matches and forced or fallback moves are left out.
 
-    python3 tools/arena/analysis/regret.py [--regret PATH] [--knowledge PATH] [--doc docs/arena/analysis/regret.md]
+    python3 tools/arena/analysis/regret.py [--regret PATH] [--knowledge PATH] [--doc FILE]
 
 A regret file holds one run (evaluator, depth, budget, reload rule, samples); every analysis reads the run its --regret file holds,
 the production file (PRODUCTION) by default.
 """
 
-import argparse
 import sqlite3
 from dataclasses import dataclass
 from itertools import groupby
@@ -20,15 +19,15 @@ from pathlib import Path
 
 from boot import quantile
 from configs import config_effort, effort_rank
-from docs import splice_between_markers
 from fmt import pct, table
 from load import connect
 from rules import POINT
 
 DERIVED = Path(__file__).resolve().parents[3] / "_work/arena/analysis/derived"
 
-# The production regret file: the one run the site, the export and the doc tables read (docs/arena/analysis/regret.md, Production scoring).
+# The production regret file: the one run the site, the export and the doc tables read (docs/arena/methods.md, Production scoring).
 PRODUCTION = DERIVED / "regret-rust-bounded-v1-d7-b50m-sampled256.sqlite"
+
 
 @dataclass(frozen=True)
 class Run:
@@ -42,10 +41,14 @@ class Run:
 def run_of(path: Path) -> Run:
     """The one run a regret file holds; a file with none or several stops the analysis, naming what it found."""
     db = connect(str(path))
-    runs = db.execute("SELECT DISTINCT evaluator, max_depth, budget, reload, samples FROM regret").fetchall()
+    runs = db.execute(
+        "SELECT DISTINCT evaluator, max_depth, budget, reload, samples FROM regret"
+    ).fetchall()
     db.close()
     if len(runs) != 1:
-        raise SystemExit(f"{path} must hold exactly one regret run (evaluator, max_depth, budget, reload, samples); it holds {runs}.")
+        raise SystemExit(
+            f"{path} must hold exactly one regret run (evaluator, max_depth, budget, reload, samples); it holds {runs}."
+        )
     return Run(*runs[0])
 
 
@@ -78,7 +81,12 @@ class Summary:
 
 def summarise(decisions: list[Decision]) -> Summary:
     regrets = [d.regret for d in decisions]
-    return Summary(len(regrets), sum(regrets) / len(regrets), quantile(sorted(regrets), 0.9), sum(d.exact for d in decisions) / len(decisions))
+    return Summary(
+        len(regrets),
+        sum(regrets) / len(regrets),
+        quantile(sorted(regrets), 0.9),
+        sum(d.exact for d in decisions) / len(decisions),
+    )
 
 
 def load(regret_path: Path, knowledge_path: Path) -> Loaded:
@@ -99,7 +107,19 @@ def load(regret_path: Path, knowledge_path: Path) -> Loaded:
     ).fetchone()[0]
     searched = [row for row in rows if row["status"] == "searched"]
     return Loaded(
-        [Decision(r["model"], config_effort(r["model"], r["effort"]), r["remaining"], bool(r["shot"]), r["regret"], bool(r["exact"]), bool(r["limited"]), r["round"]) for r in searched],
+        [
+            Decision(
+                r["model"],
+                config_effort(r["model"], r["effort"]),
+                r["remaining"],
+                bool(r["shot"]),
+                r["regret"],
+                bool(r["exact"]),
+                bool(r["limited"]),
+                r["round"],
+            )
+            for r in searched
+        ],
         len(rows) - len(searched),
         unscored,
     )
@@ -112,14 +132,34 @@ def points(millionths: float) -> str:
 def by_config(decisions: list[Decision]) -> str:
     """Models from the lowest mean regret to the highest, each with its efforts from off to max."""
     key = lambda d: (d.model, effort_rank(d.effort))
-    models = {model: summarise(list(group)).mean for model, group in groupby(sorted(decisions, key=key), lambda d: d.model)}
+    models = {
+        model: summarise(list(group)).mean
+        for model, group in groupby(sorted(decisions, key=key), lambda d: d.model)
+    }
     rows = []
-    for (model, effort), group in groupby(sorted(decisions, key=lambda d: (models[d.model], *key(d))), lambda d: (d.model, d.effort)):
+    for (model, effort), group in groupby(
+        sorted(decisions, key=lambda d: (models[d.model], *key(d))),
+        lambda d: (d.model, d.effort),
+    ):
         s = summarise(list(group))
-        rows.append([model, effort, f"{s.count:,}", points(s.mean), points(s.p90), pct(s.exact)])
+        rows.append(
+            [model, effort, f"{s.count:,}", points(s.mean), points(s.p90), pct(s.exact)]
+        )
     everyone = summarise(decisions)
-    rows.append(["all", "", f"{everyone.count:,}", points(everyone.mean), points(everyone.p90), pct(everyone.exact)])
-    return table(["model", "effort", "decisions", "mean regret", "90th percentile", "exact"], rows)
+    rows.append(
+        [
+            "all",
+            "",
+            f"{everyone.count:,}",
+            points(everyone.mean),
+            points(everyone.p90),
+            pct(everyone.exact),
+        ]
+    )
+    return table(
+        ["model", "effort", "decisions", "mean regret", "90th percentile", "exact"],
+        rows,
+    )
 
 
 def by_shells_left(decisions: list[Decision]) -> str:
@@ -132,29 +172,37 @@ def by_shells_left(decisions: list[Decision]) -> str:
             s = summarise([d for d in at if d.shot == shot])
             row += [f"{s.count:,}", points(s.mean), points(s.p90)]
         rows.append(row)
-    return table(["shells left", "stopped by budget", "shots", "mean", "90th percentile", "item moves", "mean", "90th percentile"], rows)
+    return table(
+        [
+            "shells left",
+            "stopped by budget",
+            "shots",
+            "mean",
+            "90th percentile",
+            "item moves",
+            "mean",
+            "90th percentile",
+        ],
+        rows,
+    )
 
 
 def report(loaded: Loaded) -> str:
     decisions = loaded.decisions
     return (
         f"{len(decisions):,} searched decisions; {loaded.unsearched:,} left out for having no search; {loaded.unscored:,} agent decisions with no row.\n\n"
+        "Mean regret averages every searched decision. The site's average points lost leaves out decisions whose moves all score within one point (`NO_CHOICE_POINTS` in web/src/arena-viewer/accuracy.ts), so it reads higher.\n\n"
         f"### Regret by config\n\n{by_config(decisions)}\n\n"
         f"### Regret by shells left in the gun\n\n{by_shells_left(decisions)}\n"
     )
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("--regret", type=Path, default=PRODUCTION)
-    parser.add_argument("--knowledge", type=Path, default=DERIVED / "knowledge.sqlite")
-    parser.add_argument("--doc", type=Path)
-    args = parser.parse_args()
-    text = report(load(args.regret, args.knowledge))
-    if args.doc is None:
-        print(text)
-    else:
-        splice_between_markers(args.doc, "tables", text)
+    import analysis_cli  # imported here: it reads its defaults from this module
+
+    analysis_cli.main(
+        __doc__, "tables", lambda args: report(load(args.regret, args.knowledge))
+    )
 
 
 if __name__ == "__main__":
