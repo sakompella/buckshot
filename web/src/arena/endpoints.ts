@@ -58,7 +58,7 @@ export const Endpoint = Schema.TaggedUnion({
 
 export type Endpoint = typeof Endpoint.Type;
 
-export class EndpointConfigError extends Schema.TaggedError<EndpointConfigError>()("EndpointConfigError", { message: Schema.String }) {}
+export class EndpointConfigError extends Schema.TaggedError<EndpointConfigError, { readonly brand: unique symbol }>()("EndpointConfigError", { message: Schema.String }) {}
 
 interface Credentials {
   readonly url: URL;

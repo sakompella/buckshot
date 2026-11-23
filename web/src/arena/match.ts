@@ -97,7 +97,7 @@ export interface ArenaMatch {
 }
 
 /** A match that cannot go on. `cause` is the error behind it, for its stack; only an Error, which `Cause.pretty` can print. */
-export class ArenaFault extends Schema.TaggedError<ArenaFault>()("ArenaFault", { message: Schema.String, cause: Schema.optional(Schema.instanceOf(Error)) }) {}
+export class ArenaFault extends Schema.TaggedError<ArenaFault, { readonly brand: unique symbol }>()("ArenaFault", { message: Schema.String, cause: Schema.optional(Schema.instanceOf(Error)) }) {}
 
 const faultOf = (message: string, cause: unknown) => ArenaFault.make(cause instanceof Error ? { message, cause } : { message });
 

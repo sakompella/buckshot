@@ -1,7 +1,7 @@
 import { Cause, Effect, Exit, Layer, ManagedRuntime, Option, Schema } from "effect";
 
 /** A script's expected failure: the message goes to stderr and the process exits with `exitCode`. */
-export class ScriptError extends Schema.TaggedError<ScriptError>()("ScriptError", { message: Schema.String, exitCode: Schema.Finite }) {}
+export class ScriptError extends Schema.TaggedError<ScriptError, { readonly brand: unique symbol }>()("ScriptError", { message: Schema.String, exitCode: Schema.Finite }) {}
 
 /** Runs a script's program with the services `layer` builds. A number it succeeds with is the exit code; a `ScriptError` prints its message, and any other failure prints its cause and exits 1. */
 export const runMainWith = async <E, R>(layer: Layer.Layer<R>, program: Effect.Effect<number | void, E, R>): Promise<void> => {

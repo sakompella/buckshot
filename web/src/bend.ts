@@ -10,11 +10,11 @@ import type { Damage, Direction, DrawLabel, HeardSecret, Mode, SeatCount, SeatVi
 // before the app sees it. Raw schemas mirror the Bend shapes exactly; small
 // functions then convert them to the app types in domain.ts.
 
-export class BendContractError extends Schema.TaggedError<BendContractError>()("BendContractError", { call: Schema.String, detail: Schema.String }) {}
+export class BendContractError extends Schema.TaggedError<BendContractError, { readonly brand: unique symbol }>()("BendContractError", { call: Schema.String, detail: Schema.String }) {}
 
-export class StaleAnswer extends Schema.TaggedError<StaleAnswer>()("StaleAnswer", { expected: Schema.Finite, received: Schema.Finite }) {}
+export class StaleAnswer extends Schema.TaggedError<StaleAnswer, { readonly brand: unique symbol }>()("StaleAnswer", { expected: Schema.Finite, received: Schema.Finite }) {}
 
-export class NoPrompt extends Schema.TaggedError<NoPrompt>()("NoPrompt", { seat: Seat }) {}
+export class NoPrompt extends Schema.TaggedError<NoPrompt, { readonly brand: unique symbol }>()("NoPrompt", { seat: Seat }) {}
 
 export type AnswerError = BendContractError | StaleAnswer | NoPrompt;
 

@@ -27,7 +27,7 @@ type Return = Update.Return<Model, Message, Resources>;
 const describe = (error: { readonly message: string }) => error.message;
 
 /** No arena server answers: a static build of the site, whose host sends a 404 or the page itself for `/api/...`. */
-class NoArenaServer extends Schema.TaggedError<NoArenaServer>()("NoArenaServer", {}) {}
+class NoArenaServer extends Schema.TaggedError<NoArenaServer, { readonly brand: unique symbol }>()("NoArenaServer", {}) {}
 
 const getJson = <A, I>(url: string, schema: Schema.Codec<A, I>) =>
   Effect.flatMap(Fetch, ({ json }) => json(url)).pipe(Effect.flatMap((body) => Schema.decodeUnknownEffect(schema)(body)));

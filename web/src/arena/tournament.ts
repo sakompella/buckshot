@@ -44,7 +44,7 @@ type Entrant = TournamentConfig["entrants"][string];
 
 type ModelEntrant = typeof ModelEntrant.Type;
 
-export class TournamentError extends Schema.TaggedError<TournamentError>()("TournamentError", { message: Schema.String }) {}
+export class TournamentError extends Schema.TaggedError<TournamentError, { readonly brand: unique symbol }>()("TournamentError", { message: Schema.String }) {}
 
 const fail = (message: string) => Result.fail(TournamentError.make({ message }));
 
