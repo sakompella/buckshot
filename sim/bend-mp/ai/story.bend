@@ -3,14 +3,13 @@ import ../domain.bend as D
 
 # Story-mode dealer AI (Buckshot multiplayer).
 #
-# One pure controller for one seat, ported from the verified two-player dealer
-# policy. It sees
-# only D.Prompt (its legal moves), D.Obs (the public board) and D.Heard (public
-# events plus its own secrets); it keeps its own Mem.
+# One pure controller for one seat. It sees only D.Prompt (its legal moves),
+# D.Obs (the public board) and D.Heard (public events plus its own secrets);
+# it keeps its own Mem.
 #
 # The story policy has no upgrades: fair coins, the dealer's item rules only.
 #
-# Multiplayer adaptations:
+# How it plays:
 #   - Intent is a move; prompt.index finds it in the menu. If it is not there
 #     the pick is 0, the menu's first move.
 #   - "The opponent" is the living opponent with the lowest health (a jammed
@@ -18,8 +17,8 @@ import ../domain.bend as D
 #     ties broken by a hash of the seat's own random word and the target's
 #     socket, so seats do not all pick the lowest socket. Shooting and
 #     jamming both use it.
-#   - The hybrid decided and shot in one step. Here Idle decides: it uses an
-#     item or takes the gun, and remembers the aim; Aiming shoots at that aim.
+#   - Idle decides: it uses an item or takes the gun, and remembers the aim;
+#     Aiming shoots at that aim.
 #   - Items come in inventory (slot) order. Adrenaline is a UseItem and the
 #     steal is its own prompt: the first eligible item among the Steal moves.
 #   - Remote is never used. Grabs: take every Grab, place in the first slot.
@@ -28,7 +27,7 @@ import ../domain.bend as D
 #     (all public); another seat's inverter makes them unknown until the next
 #     load, and unknown counts disable every use of them.
 #   - Any shot clears the known chamber. After its own beer the story policy
-#     keeps its (now stale) known shell, as the hybrid does.
+#     keeps its (now stale) known shell.
 
 type Aim is Data:
   AtSelf{}

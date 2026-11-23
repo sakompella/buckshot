@@ -16,10 +16,10 @@ import ./use-proof.bend as U
 import ./aim-proof.bend as AP
 import ./sm/point.bend as PT
 
-# The win and the round start with items: WinRound onward to the next
+# The win and the round start with items: win_round onward to the next
 # round's grab start. Each closure is stated from qh(s), so it holds from any
 # phase; the fuel counts the reference's silent frames down to
-# BeginGrabbing (T.distribute.close).
+# begin_grabbing (T.distribute.close).
 
 def reset.host(+h: H.Host) -> H.Host:
   +h1 : H.Host = H.host.set_direction(H.host.set_checking_first_death(h, True{}), D.Clockwise{})
@@ -86,7 +86,7 @@ def shape.reset(+s: S.State, +shape: A.Shape(s)) -> A.Shape(A.reset.state(s)):
       ISP.shape.move(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, D.Clockwise{}, died, True{}, amount, saw, gun, shown, deck}, S.players.reset(p, rh), ph, n, g, ph, List.append(&2, D.Note, n, [D.Shown{D.RoundBegan{round, rh, recipient}}]), shape_p)
 
 
-# RoundSetup .. ClearInventories, then the grab start.
+# round_setup .. clear_inventories, then the grab start.
 def reset.close(+s: S.State, +k: Nat, +shape: A.Shape(s)) -> {R.settle(Nat.add(16n, k), R.RefState{T.qh(s), R.RoundSetup{}, S.state.notes(s)}) == A.ref(M.round.reset(s)) : R.RefState}:
   match s:
     case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
@@ -94,12 +94,12 @@ def reset.close(+s: S.State, +k: Nat, +shape: A.Shape(s)) -> {R.settle(Nat.add(1
       +s1 : S.State = A.reset.state(st)
       +shape1 : A.Shape(s1) = shape.reset(st, shape)
       +told : A.Notes() = S.state.notes(s1)
-      +e_host : {R.settle(Nat.add(12n, k), R.RefState{reset.host(T.qh(st)), R.BeginGrabbing{G.GrabSeats(reset.host(T.qh(st)), True{}, H.host.item_amount(reset.host(T.qh(st))))}, told}) == R.settle(Nat.add(12n, k), R.RefState{T.qh(s1), R.BeginGrabbing{G.GrabSeats(T.qh(s1), True{}, H.host.item_amount(T.qh(s1)))}, told}) : R.RefState} = Equal.cong(H.Host, R.RefState, x => R.settle(Nat.add(12n, k), R.RefState{x, R.BeginGrabbing{G.GrabSeats(x, True{}, H.host.item_amount(x))}, told}), reset.host(T.qh(st)), T.qh(s1), reset.eq(st, shape))
-      +e_seats : {R.settle(Nat.add(12n, k), R.RefState{T.qh(s1), R.BeginGrabbing{G.GrabSeats(T.qh(s1), True{}, amount)}, told}) == R.settle(Nat.add(12n, k), R.RefState{T.qh(s1), R.BeginGrabbing{I.begin.seats(s1, True{}, amount)}, told}) : R.RefState} = Equal.cong(List<&2, D.Seat>, R.RefState, xs => R.settle(Nat.add(12n, k), R.RefState{T.qh(s1), R.BeginGrabbing{xs}, told}), G.GrabSeats(T.qh(s1), True{}, amount), I.begin.seats(s1, True{}, amount), T.begin.eq(s1, True{}, amount, shape1))
-      Equal.trans(R.RefState, R.settle(Nat.add(12n, k), R.RefState{reset.host(T.qh(st)), R.BeginGrabbing{G.GrabSeats(reset.host(T.qh(st)), True{}, H.host.item_amount(reset.host(T.qh(st))))}, told}), R.settle(Nat.add(12n, k), R.RefState{T.qh(s1), R.BeginGrabbing{G.GrabSeats(T.qh(s1), True{}, amount)}, told}), A.ref(M.round.reset(st)), e_host, Equal.trans(R.RefState, R.settle(Nat.add(12n, k), R.RefState{T.qh(s1), R.BeginGrabbing{G.GrabSeats(T.qh(s1), True{}, amount)}, told}), R.settle(Nat.add(12n, k), R.RefState{T.qh(s1), R.BeginGrabbing{I.begin.seats(s1, True{}, amount)}, told}), A.ref(M.round.reset(st)), e_seats, T.distribute.close(I.begin.seats(s1, True{}, amount), s1, k, shape1)))
+      +e_host : {R.settle(Nat.add(12n, k), R.RefState{reset.host(T.qh(st)), R.BeginGrabbing{G.grab_seats(reset.host(T.qh(st)), True{}, H.host.item_amount(reset.host(T.qh(st))))}, told}) == R.settle(Nat.add(12n, k), R.RefState{T.qh(s1), R.BeginGrabbing{G.grab_seats(T.qh(s1), True{}, H.host.item_amount(T.qh(s1)))}, told}) : R.RefState} = Equal.cong(H.Host, R.RefState, x => R.settle(Nat.add(12n, k), R.RefState{x, R.BeginGrabbing{G.grab_seats(x, True{}, H.host.item_amount(x))}, told}), reset.host(T.qh(st)), T.qh(s1), reset.eq(st, shape))
+      +e_seats : {R.settle(Nat.add(12n, k), R.RefState{T.qh(s1), R.BeginGrabbing{G.grab_seats(T.qh(s1), True{}, amount)}, told}) == R.settle(Nat.add(12n, k), R.RefState{T.qh(s1), R.BeginGrabbing{I.begin.seats(s1, True{}, amount)}, told}) : R.RefState} = Equal.cong(List<&2, D.Seat>, R.RefState, xs => R.settle(Nat.add(12n, k), R.RefState{T.qh(s1), R.BeginGrabbing{xs}, told}), G.grab_seats(T.qh(s1), True{}, amount), I.begin.seats(s1, True{}, amount), T.begin.eq(s1, True{}, amount, shape1))
+      Equal.trans(R.RefState, R.settle(Nat.add(12n, k), R.RefState{reset.host(T.qh(st)), R.BeginGrabbing{G.grab_seats(reset.host(T.qh(st)), True{}, H.host.item_amount(reset.host(T.qh(st))))}, told}), R.settle(Nat.add(12n, k), R.RefState{T.qh(s1), R.BeginGrabbing{G.grab_seats(T.qh(s1), True{}, amount)}, told}), A.ref(M.round.reset(st)), e_host, Equal.trans(R.RefState, R.settle(Nat.add(12n, k), R.RefState{T.qh(s1), R.BeginGrabbing{G.grab_seats(T.qh(s1), True{}, amount)}, told}), R.settle(Nat.add(12n, k), R.RefState{T.qh(s1), R.BeginGrabbing{I.begin.seats(s1, True{}, amount)}, told}), A.ref(M.round.reset(st)), e_seats, T.distribute.close(I.begin.seats(s1, True{}, amount), s1, k, shape1)))
 
 
-def arule.close(+rule: D.AmountRule, +s: S.State, +k: Nat, +shape: A.Shape(s)) -> {R.settle(Nat.add(16n, k), R.DrawItemAmount.rule(R.RefState{T.qh(s), R.DrawItemAmount{R.RoundSetup{}}, S.state.notes(s)}, R.RoundSetup{}, rule)) == A.ref(M.amount.rule(s, rule)) : R.RefState}:
+def arule.close(+rule: D.AmountRule, +s: S.State, +k: Nat, +shape: A.Shape(s)) -> {R.settle(Nat.add(16n, k), R.draw_item_amount.rule(R.RefState{T.qh(s), R.DrawItemAmount{R.RoundSetup{}}, S.state.notes(s)}, R.RoundSetup{}, rule)) == A.ref(M.amount.rule(s, rule)) : R.RefState}:
   match rule s:
     case D.RandomAmount{} S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
       {==}
@@ -107,10 +107,10 @@ def arule.close(+rule: D.AmountRule, +s: S.State, +k: Nat, +shape: A.Shape(s)) -
       reset.close(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, x, saw, gun, shown, deck}, p, ph, n, g}, k, AP.shape.world(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, x, saw, gun, shown, deck}, p, ph, n, g, {==}, shape))
 
 
-# DrawItemAmount at a round start: the item amount, drawn or fixed.
+# draw_item_amount at a round start: the item amount, drawn or fixed.
 def amount.close(+s: S.State, +k: Nat, +shape: A.Shape(s)) -> {R.settle(Nat.add(17n, k), R.RefState{T.qh(s), R.DrawItemAmount{R.RoundSetup{}}, S.state.notes(s)}) == A.ref(M.amount.begin(s)) : R.RefState}:
   +rs : R.RefState = R.RefState{T.qh(s), R.DrawItemAmount{R.RoundSetup{}}, S.state.notes(s)}
-  Equal.trans(R.RefState, R.settle(Nat.add(16n, k), R.DrawItemAmount.rule(rs, R.RoundSetup{}, G.load.amount(H.host.load_rule(T.qh(s))))), R.settle(Nat.add(16n, k), R.DrawItemAmount.rule(rs, R.RoundSetup{}, Q.load.amount(Q.world.load_rule(S.state.world(s))))), A.ref(M.amount.begin(s)), Equal.cong(D.AmountRule, R.RefState, r => R.settle(Nat.add(16n, k), R.DrawItemAmount.rule(rs, R.RoundSetup{}, r)), G.load.amount(H.host.load_rule(T.qh(s))), Q.load.amount(Q.world.load_rule(S.state.world(s))), T.rule.eq(s)), arule.close(Q.load.amount(Q.world.load_rule(S.state.world(s))), s, k, shape))
+  Equal.trans(R.RefState, R.settle(Nat.add(16n, k), R.draw_item_amount.rule(rs, R.RoundSetup{}, G.load.amount(H.host.load_rule(T.qh(s))))), R.settle(Nat.add(16n, k), R.draw_item_amount.rule(rs, R.RoundSetup{}, Q.load.amount(Q.world.load_rule(S.state.world(s))))), A.ref(M.amount.begin(s)), Equal.cong(D.AmountRule, R.RefState, r => R.settle(Nat.add(16n, k), R.draw_item_amount.rule(rs, R.RoundSetup{}, r)), G.load.amount(H.host.load_rule(T.qh(s))), Q.load.amount(Q.world.load_rule(S.state.world(s))), T.rule.eq(s)), arule.close(Q.load.amount(Q.world.load_rule(S.state.world(s))), s, k, shape))
 
 
 def found.eq(+m: Maybe<&2, D.RoundRules>) -> {H.rules.found(m) == Q.value.or(D.RoundRules, m, D.config.default_round()) : D.RoundRules}:
@@ -134,7 +134,7 @@ def hrule.eq(+s: S.State) -> {H.rules.health(H.host.rules(T.qh(s))) == Q.round.h
       Equal.trans(D.HealthRule, H.rules.health(H.rules.found(m)), H.rules.health(Q.value.or(D.RoundRules, m, D.config.default_round())), Q.round.health(Q.value.or(D.RoundRules, m, D.config.default_round())), Equal.cong(D.RoundRules, D.HealthRule, r => H.rules.health(r), H.rules.found(m), Q.value.or(D.RoundRules, m, D.config.default_round()), found.eq(m)), healthof.eq(Q.value.or(D.RoundRules, m, D.config.default_round())))
 
 
-def hrule.close(+rule: D.HealthRule, +s: S.State, +k: Nat, +shape: A.Shape(s)) -> {R.settle(Nat.add(17n, k), R.DrawHealth.rule(R.RefState{T.qh(s), R.DrawHealth{}, S.state.notes(s)}, rule)) == A.ref(M.health.rule(s, rule)) : R.RefState}:
+def hrule.close(+rule: D.HealthRule, +s: S.State, +k: Nat, +shape: A.Shape(s)) -> {R.settle(Nat.add(17n, k), R.draw_health.rule(R.RefState{T.qh(s), R.DrawHealth{}, S.state.notes(s)}, rule)) == A.ref(M.health.rule(s, rule)) : R.RefState}:
   match rule s:
     case D.RandomHealth{} S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
       {==}
@@ -142,13 +142,13 @@ def hrule.close(+rule: D.HealthRule, +s: S.State, +k: Nat, +shape: A.Shape(s)) -
       amount.close(S.State{S.World{D.Config{table, plan}, before, round, load, first, D.pos.nat(x), recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g}, k, AP.shape.world(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, S.World{D.Config{table, plan}, before, round, load, first, D.pos.nat(x), recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g, {==}, shape))
 
 
-# DrawHealth: the round's starting health, drawn or fixed.
+# draw_health: the round's starting health, drawn or fixed.
 def health.close(+s: S.State, +k: Nat, +shape: A.Shape(s)) -> {R.settle(Nat.add(18n, k), R.RefState{T.qh(s), R.DrawHealth{}, S.state.notes(s)}) == A.ref(M.health.begin(s)) : R.RefState}:
   +rs : R.RefState = R.RefState{T.qh(s), R.DrawHealth{}, S.state.notes(s)}
-  Equal.trans(R.RefState, R.settle(Nat.add(17n, k), R.DrawHealth.rule(rs, H.rules.health(H.host.rules(T.qh(s))))), R.settle(Nat.add(17n, k), R.DrawHealth.rule(rs, Q.round.health(Q.world.rules(S.state.world(s))))), A.ref(M.health.begin(s)), Equal.cong(D.HealthRule, R.RefState, r => R.settle(Nat.add(17n, k), R.DrawHealth.rule(rs, r)), H.rules.health(H.host.rules(T.qh(s))), Q.round.health(Q.world.rules(S.state.world(s))), hrule.eq(s)), hrule.close(Q.round.health(Q.world.rules(S.state.world(s))), s, k, shape))
+  Equal.trans(R.RefState, R.settle(Nat.add(17n, k), R.draw_health.rule(rs, H.rules.health(H.host.rules(T.qh(s))))), R.settle(Nat.add(17n, k), R.draw_health.rule(rs, Q.round.health(Q.world.rules(S.state.world(s))))), A.ref(M.health.begin(s)), Equal.cong(D.HealthRule, R.RefState, r => R.settle(Nat.add(17n, k), R.draw_health.rule(rs, r)), H.rules.health(H.host.rules(T.qh(s))), Q.round.health(Q.world.rules(S.state.world(s))), hrule.eq(s)), hrule.close(Q.round.health(Q.world.rules(S.state.world(s))), s, k, shape))
 
 
-# StartRound with the first seat chosen: the round index moves on.
+# start_round with the first seat chosen: the round index moves on.
 def fc.close(+s: S.State, +seat: D.Seat, +k: Nat, +shape: A.Shape(s)) -> {R.settle(Nat.add(19n, k), R.RefState{T.qh(s), R.StartRound{R.FirstChosen{seat}}, S.state.notes(s)}) == A.ref(M.first.chosen(s, seat)) : R.RefState}:
   match s:
     case S.State{+w, +p, +ph, +n, +g}:
@@ -159,7 +159,7 @@ def fc.close(+s: S.State, +seat: D.Seat, +k: Nat, +shape: A.Shape(s)) -> {R.sett
           health.close(S.State{S.World{D.Config{table, plan}, False{}, 1n+round, load, True{}, rh, seat, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g}, k, AP.shape.world(S.World{D.Config{table, plan}, False{}, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, S.World{D.Config{table, plan}, False{}, 1n+round, load, True{}, rh, seat, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g, {==}, shape))
 
 
-# ChooseFirstSeat: the first seat, drawn or the first death's.
+# choose_first_seat: the first seat, drawn or the first death's.
 def first.close(+s: S.State, +k: Nat, +shape: A.Shape(s)) -> {R.settle(Nat.add(20n, k), R.RefState{T.qh(s), R.ChooseFirstSeat{}, S.state.notes(s)}) == A.ref(M.first.begin(s)) : R.RefState}:
   match s:
     case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, None{}, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
@@ -226,8 +226,8 @@ def award.eq(+s: S.State, +seat: D.Seat, +prize: U32, +shape: A.Shape(s)) -> awa
               GP.absurd(award.claim(S.State{S.World{D.Config{D.FourSeats{}, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, D.Trio{S.Seat{h0, j0, c0, s0}, S.Seat{h1, j1, c1, s1}, S.Seat{h2, j2, c2, s2}}, phase, notes, S.Grabs{dist, grabbing, holding, granted, intake}}, seat, prize), GP.clash.three_four(e_players))
 
 
-# AfterWin: the match ends after the plan's last round.
-def lb.close(+final: Bool, +s: S.State, +k: Nat, +shape: A.Shape(s)) -> {R.settle(Nat.add(21n, k), R.AfterWin.final(R.RefState{T.qh(s), R.AfterWin{}, S.state.notes(s)}, final)) == A.ref(M.win.final(s, final)) : R.RefState}:
+# after_win: the match ends after the plan's last round.
+def lb.close(+final: Bool, +s: S.State, +k: Nat, +shape: A.Shape(s)) -> {R.settle(Nat.add(21n, k), R.after_win.final(R.RefState{T.qh(s), R.AfterWin{}, S.state.notes(s)}, final)) == A.ref(M.win.final(s, final)) : R.RefState}:
   match final s:
     case True{} S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:
       {==}
@@ -235,7 +235,7 @@ def lb.close(+final: Bool, +s: S.State, +k: Nat, +shape: A.Shape(s)) -> {R.settl
       first.close(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, g}, k, shape)
 
 
-# WinRound onward: the prize, then the match end or the next round.
+# win_round onward: the prize, then the match end or the next round.
 def win.close(+s: S.State, +seat: D.Seat, +shape: A.Shape(s), +k: Nat) -> {R.settle(Nat.add(23n, k), R.RefState{T.qh(s), R.WinRound{seat}, S.state.notes(s)}) == A.ref(M.win(s, seat)) : R.RefState}:
   match s:
     case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, +g}:

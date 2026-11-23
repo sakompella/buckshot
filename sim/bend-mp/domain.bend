@@ -161,7 +161,7 @@ type Shell is Data:
 type Load is Data:
   Load{live: Nat, blank: Nat}
 
-# Expired medicine (game item id 7) is absent: the unmodified customization never
+# Expired medicine (item id 7) is absent: the unmodified customization never
 # enables it, so no distribution can grant it.
 type Item is Data:
   Saw{}
@@ -174,12 +174,12 @@ type Item is Data:
   Adrenaline{}
   Remote{}
 
-# The game's resource-array order 1,2,3,4,5,6,(7),9,8,10. Item-choice draws index
+# The game's item order by id: 1,2,3,4,5,6,(7),9,8,10. Item-choice draws index
 # the eligible subsequence of this list, so its order is part of the tape.
 def item.order() -> List<&2, Item>:
   [Saw{}, Glass{}, Jammer{}, Cigarettes{}, Beer{}, Phone{}, Inverter{}, Adrenaline{}, Remote{}]
 
-def item.game_id(item: Item) -> Nat:
+def item.id(item: Item) -> Nat:
   match item:
     case Saw{}:
       1n
@@ -385,7 +385,7 @@ def nonempty.length(-A: Data, xs: NonEmpty<&2, A>) -> Nat:
 # A random draw a model must request: the inclusive range lo..lo+extra+1. It
 # always holds at least two values. A draw whose range has one value cannot
 # affect play, so it is never a request: the model uses that value directly
-# (the game's draw over one value reads no RNG word either).
+# (the game's draw over one value reads no random word either).
 type Range is Data:
   Range{lo: Nat, extra: Nat}
 
@@ -461,7 +461,7 @@ type Move is Data:
   Steal{owner: Seat, slot: Slot, item: Item}
 
 def item.eq(a: Item, b: Item) -> Bool:
-  Nat.is_eq(item.game_id(a), item.game_id(b))
+  Nat.is_eq(item.id(a), item.id(b))
 
 def slot.code(slot: Slot) -> Nat:
   match slot:
@@ -720,10 +720,9 @@ def prompt.index(prompt: Prompt, +wanted: Move) -> Maybe<&2, Nat>:
 # ===========
 
 # A seat's health counter and jam state as every client shows them, in one
-# value. ApplyJam sets is_jammed and hides the counter; only RemoveJam
-# clears is_jammed and shows it again; JamCheck flickers it and ends hidden
-# (the game's jammer logic). Round start unjams every seat through
-# RemoveJam. So at every request point the counter is hidden exactly
+# value. Jamming a seat hides the counter; only lifting the jam shows it again,
+# and the per-turn jam check flickers it and ends hidden. Round start lifts
+# every seat's jam. So at every request point the counter is hidden exactly
 # while the seat is jammed. Display visibility and the health value must be
 # separate because request points occur while it is hidden: here the visibility
 # is the constructor and the value exists only while visible. A jammed seat's

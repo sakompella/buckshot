@@ -7,7 +7,7 @@
 # compared on every tape step through the states, menus and notes.
 [exempt]
 "domain:seat.eq" = "seat equality by constructor pairs; Rust derives PartialEq on Seat"
-"domain:item.game_id" = "item ids for item.eq; Rust derives PartialEq on Item"
+"domain:item.id" = "item ids for item.eq; Rust derives PartialEq on Item"
 "domain:ring.fill" = "builds a per-table ring; Rust's Ring is an array of cells (4, or 2 in the seats-2 build) with its Table"
 "domain:ring.get" = "ring field by seat; Ring::get indexes the array, None off the table as Bend's None"
 "domain:ring.set" = "ring field by seat; Ring::set writes the array, a no-op off the table as in Bend"

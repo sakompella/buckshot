@@ -90,8 +90,8 @@ def occupied(xs: List<&2, Maybe<&2, D.Item>>) -> Nat:
     case Some{item} <> rest:
       1n+occupied(rest)
 
-def PlacingLast(+host: S.Host, +seat: D.Seat) -> Bool:
-  Bool.or(Bool.not(G.nonempty(D.Item, G.PickGrabItem.pool(D.item.order(), host, seat))), Bool.or(Nat.is_eq(1n+occupied(G.slots.list(props.slots(S.host.props(host, seat)))), 8n), Bool.not(Nat.is_lt(progress.count(S.host.progress(host, seat)), S.host.item_amount(host)))))
+def placing_last(+host: S.Host, +seat: D.Seat) -> Bool:
+  Bool.or(Bool.not(G.nonempty(D.Item, G.pick_grab_item.pool(D.item.order(), host, seat))), Bool.or(Nat.is_eq(1n+occupied(G.slots.list(props.slots(S.host.props(host, seat)))), 8n), Bool.not(Nat.is_lt(progress.count(S.host.progress(host, seat)), S.host.item_amount(host)))))
 
 def all_ended(entries: List<&2, D.At<&2, S.Props>>) -> Bool:
   match entries:
@@ -105,21 +105,21 @@ def all_empty(entries: List<&2, D.At<&2, S.Props>>, +host: S.Host) -> Bool:
     case Nil{}:
       True{}
     case D.At{seat, _} <> rest:
-      Bool.and(Bool.not(G.nonempty(D.Item, G.PickGrabItem.pool(D.item.order(), host, seat))), all_empty(rest, host))
+      Bool.and(Bool.not(G.nonempty(D.Item, G.pick_grab_item.pool(D.item.order(), host, seat))), all_empty(rest, host))
 
 # Fix M1 (ADR-0016) retains the two whole-table predicates. Holders are not
 # ended by the noneligible pass, even when their pool is empty.
-def CheckGrabsDone(+host: S.Host) -> Bool:
+def check_grabs_done(+host: S.Host) -> Bool:
   Bool.or(all_ended(D.ring.entries(S.Props, S.host.seats(host))), all_empty(D.ring.entries(S.Props, S.host.seats(host)), host))
 
-def IneligibleGrabbers(entries: List<&2, D.At<&2, S.Props>>, +host: S.Host, +placing: D.Seat) -> List<&2, D.Seat>:
+def ineligible_grabbers(entries: List<&2, D.At<&2, S.Props>>, +host: S.Host, +placing: D.Seat) -> List<&2, D.Seat>:
   match entries:
     case Nil{}:
       Nil{}
     case D.At{+seat, S.Props{_, _, _, _, _, True{}, None{}, _}} <> rest:
-      G.turn_ring.put(Bool.and(Bool.not(D.seat.eq(seat, placing)), Bool.not(G.nonempty(D.Item, G.PickGrabItem.pool(D.item.order(), host, seat)))), seat, IneligibleGrabbers(rest, host, placing))
+      G.turn_ring.put(Bool.and(Bool.not(D.seat.eq(seat, placing)), Bool.not(G.nonempty(D.Item, G.pick_grab_item.pool(D.item.order(), host, seat)))), seat, ineligible_grabbers(rest, host, placing))
     case entry <> rest:
-      IneligibleGrabbers(rest, host, placing)
+      ineligible_grabbers(rest, host, placing)
 
 def jam_target(props: S.Props) -> Bool:
   match props:
@@ -133,7 +133,7 @@ def jam_targets(entries: List<&2, D.At<&2, S.Props>>, +by: D.Seat) -> List<&2, D
     case D.At{+seat, props} <> rest:
       G.turn_ring.put(Bool.and(Bool.not(D.seat.eq(seat, by)), jam_target(props)), seat, jam_targets(rest, by))
 
-def JammerHasTargets(+host: S.Host, seat: D.Seat) -> Bool:
+def jammer_has_targets(+host: S.Host, seat: D.Seat) -> Bool:
   G.nonempty(D.Seat, jam_targets(D.ring.entries(S.Props, S.host.seats(host)), seat))
 
 # Fix M4 (ADR-0016) is a prospective stealing-mode mask, not the raw
@@ -145,7 +145,7 @@ def valid_steal(+host: S.Host, +seat: D.Seat, item: D.Item) -> Bool:
     case D.Saw{}:
       Bool.not(S.host.sawed(host))
     case D.Jammer{}:
-      JammerHasTargets(host, seat)
+      jammer_has_targets(host, seat)
     case _:
       True{}
 
@@ -184,7 +184,7 @@ def steal_moves(entries: List<&2, D.At<&2, S.Props>>, +host: S.Host, +thief: D.S
     case D.At{+owner, _} <> rest:
       steal_moves.here(D.seat.eq(owner, thief), host, thief, owner, steal_moves(rest, host, thief))
 
-def InvalidItems(+host: S.Host, +seat: D.Seat, item: D.Item) -> Bool:
+def invalid_items(+host: S.Host, +seat: D.Seat, item: D.Item) -> Bool:
   match item:
     case D.Adrenaline{}:
       Bool.not(G.nonempty(D.Move, steal_moves(D.ring.entries(S.Props, S.host.seats(host)), host, seat)))
@@ -196,7 +196,7 @@ def use_moves.here(found: Maybe<&2, D.Item>, host: S.Host, seat: D.Seat, slot: D
     case None{}:
       rest
     case Some{+item}:
-      use_moves.put(Bool.not(InvalidItems(host, seat, item)), D.UseItem{slot, item}, rest)
+      use_moves.put(Bool.not(invalid_items(host, seat, item)), D.UseItem{slot, item}, rest)
 
 def use_moves(slots: List<&2, D.Slot>, +host: S.Host, +seat: D.Seat) -> List<&2, D.Move>:
   match slots:
@@ -212,7 +212,7 @@ def jam_moves(seats: List<&2, D.Seat>) -> List<&2, D.Move>:
     case seat <> rest:
       D.JamTarget{seat} <> jam_moves(rest)
 
-def FlipDirection(direction: D.Direction) -> D.Direction:
+def flip_direction(direction: D.Direction) -> D.Direction:
   match direction:
     case D.Clockwise{}:
       D.CounterClockwise{}
@@ -226,7 +226,7 @@ def inverted(shell: D.Shell) -> D.Shell:
     case D.Blank{}:
       D.Live{}
 
-def ItemTurnCheck(item: D.Item, length: Nat) -> Bool:
+def item_turn_check(item: D.Item, length: Nat) -> Bool:
   match item:
     case D.Beer{}:
       Nat.is_eq(length, 1n)

@@ -335,7 +335,7 @@ def grab.nth(options: List<&2, S.GrabOption>, n: Nat) -> Maybe<&2, S.GrabOption>
     case option <> rest 1n+n:
       grab.nth(rest, n)
 
-# PlacingLast: the placing seat still holds its item here.
+# placing_last: the placing seat still holds its item here.
 def placing.last(+state: S.State, +seat: D.Seat) -> Bool:
   +grabs : S.Grabs = S.state.grabs(state)
   Bool.or(Bool.not(stocked(state, seat)), Bool.or(Nat.is_eq(1n+occupied(slots.items(seat.slots(S.state.players(state), seat))), 8n), Bool.not(Nat.is_lt(seat.granted(grabs, seat), S.world.item_amount(S.state.world(state))))))

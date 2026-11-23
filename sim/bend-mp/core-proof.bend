@@ -447,5 +447,5 @@ def merge_final_state(+step: D.Stepped<&2, S.State>, +ran: D.Ran<&2, S.State>) -
     case D.Stepped{before, first} D.Ran{state, notes, tape}:
       {==}
 
-# Split shape, shooter, target, shell and the written health so the reference chain ApplyDamage..CheckTurnEnd computes; every leaf is the same tail call.
+# Split shape, shooter, target, shell and the written health so the reference chain apply_damage..check_turn_end computes; every leaf is the same tail call.
 # Split the ring shape, each seat health (0n or 1n+_) and the tape answer until the menu, the chosen index and the target are concrete.

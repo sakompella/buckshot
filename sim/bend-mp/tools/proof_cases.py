@@ -224,11 +224,11 @@ def total_leaf(shape: Shape, _seat: int | None, _state: str) -> list[str]:
 
 
 def last_leaf(shape: Shape, seat: int | None, state: str) -> list[str]:
-    """PlacingLast's three reads; a missing seat reads empty slots and no grants."""
+    """placing_last's three reads; a missing seat reads empty slots and no grants."""
     slots, granted = (f"s{seat}", f"n{seat}") if seat in shape.seated else ("D.slots.empty()", "0n")
     at = SEATS[seat]
     return [
-        f"last.parts(G.PickGrabItem.pool(D.item.order(), A.ref_host({state}), {at}), I.stocked({state}, {at}), "
+        f"last.parts(G.pick_grab_item.pool(D.item.order(), A.ref_host({state}), {at}), I.stocked({state}, {at}), "
         f"{slots}, {granted}, amount, empty.eq({state}, {at}, shape))"
     ]
 
@@ -441,7 +441,7 @@ def shot_leaf(shell: str, same: str, hp: str, checking: str | None = None) -> st
     shot = f"R.Shot{{seat, t, {shell}, {SHOT_DAMAGE}, {SHOT_LENGTH}}}"
 
     def grow_at(b: str, host: str) -> str:
-        return f"R.settle(94n, R.ResolveShot.grow(R.RefState{{{host}, R.ResolveShot{{{shot}}}, Nil{{}}}}, {shot}, Bool.and({b}, G.shell.live({shell}))))"
+        return f"R.settle(94n, R.resolve_shot.grow(R.RefState{{{host}, R.ResolveShot{{{shot}}}, Nil{{}}}}, {shot}, Bool.and({b}, G.shell.live({shell}))))"
 
     def outcome(v: str) -> str:
         so = f"so.state({st1}, seat, t, {shell}, {SHOT_DAMAGE}, {v})"

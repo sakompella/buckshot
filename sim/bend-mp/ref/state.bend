@@ -279,10 +279,10 @@ def batches(xs: List<&2, D.Load>, +index: Nat) -> List<&2, Batch>:
     case load <> rest:
       Batch{index, load} <> batches(rest, 1n+index)
 
-def FreshDecks() -> Decks:
+def fresh_decks() -> Decks:
   Decks{batches(D.table.deck(D.TwoSeats{}), 0n), batches(D.table.deck(D.ThreeSeats{}), 0n), batches(D.table.deck(D.FourSeats{}), 0n)}
 
-def TableDeck(decks: Decks, table: D.Table) -> List<&2, Batch>:
+def table_deck(decks: Decks, table: D.Table) -> List<&2, Batch>:
   match decks table:
     case Decks{a, b, c} D.TwoSeats{}:
       a
@@ -301,7 +301,7 @@ def decks.set(decks: Decks, table: D.Table, deck: List<&2, Batch>) -> Decks:
       Decks{a, b, deck}
 
 def host.deck(+host: Host) -> List<&2, Batch>:
-  TableDeck(host.decks(host), host.table(host))
+  table_deck(host.decks(host), host.table(host))
 
 def host.set_deck(+host: Host, deck: List<&2, Batch>) -> Host:
   host.set_decks(host, decks.set(host.decks(host), host.table(host), deck))
@@ -312,7 +312,7 @@ def config.table(config: D.Config) -> D.Table:
       table
 
 def host.initial(+config: D.Config) -> Host:
-  Host{config, True{}, 0n, 0n, False{}, 0n, D.Seat0{}, None{}, D.Clockwise{}, None{}, False{}, 0n, False{}, False{}, Nil{}, D.Load{0n, 0n}, FreshDecks(), D.ring.fill(Props, config.table(config), props.initial()), D.ring.fill(GrabProgress, config.table(config), GrabProgress{0n, False{}})}
+  Host{config, True{}, 0n, 0n, False{}, 0n, D.Seat0{}, None{}, D.Clockwise{}, None{}, False{}, 0n, False{}, False{}, Nil{}, D.Load{0n, 0n}, fresh_decks(), D.ring.fill(Props, config.table(config), props.initial()), D.ring.fill(GrabProgress, config.table(config), GrabProgress{0n, False{}})}
 
 # The game keeps jammer_checked after a lift, but reads it only while jammed and
 # every jam resets it, so a lift clears it (ADR-0018).

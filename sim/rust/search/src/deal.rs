@@ -47,8 +47,8 @@ fn maybe_seat_code(seat: Option<Seat>) -> u32 {
     }
 }
 
-/// `item.game_id`.
-pub const fn game_id(item: Item) -> u32 {
+/// `item.id`.
+pub const fn item_id(item: Item) -> u32 {
     match item {
         Item::Saw => 1,
         Item::Glass => 2,
@@ -65,7 +65,7 @@ pub const fn game_id(item: Item) -> u32 {
 const fn item_code(item: Option<Item>) -> u32 {
     match item {
         None => 0,
-        Some(item) => game_id(item),
+        Some(item) => item_id(item),
     }
 }
 
@@ -104,8 +104,8 @@ fn put_phase(key: &mut DealKey, phase: Phase) {
             key.extend([4, seat_code(from), u32::from(passing), maybe_seat_code(winner)]);
         }
         Phase::NeedItem { seat, first, second, rest } => {
-            key.extend([5, seat_code(seat), game_id(first), game_id(second)]);
-            key.extend(rest.iter().map(game_id));
+            key.extend([5, seat_code(seat), item_id(first), item_id(second)]);
+            key.extend(rest.iter().map(item_id));
         }
         Phase::NeedFirst
         | Phase::NeedHealth

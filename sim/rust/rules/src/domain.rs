@@ -443,7 +443,7 @@ pub enum Item {
 }
 
 impl Item {
-    /// `item.order()`: the game's resource order. Item-choice draws index it.
+    /// `item.order()`: the game's item order. Item-choice draws index it.
     pub const ORDER: [Self; 9] = [
         Self::Saw,
         Self::Glass,

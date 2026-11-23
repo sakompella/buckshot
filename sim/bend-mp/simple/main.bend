@@ -381,7 +381,7 @@ def turn.live(+state: T.State, shooter: D.Seat, passing: Bool, winner: Maybe<&2,
     case False{}:
       turn.amount(state, shooter, passing, winner, rule)
 
-# EndTurn: the packet's winner is the shot's winner check, or
+# end_turn: the packet's winner is the shot's winner check, or
 # None after beer ejects the last shell.
 def turn.packet(+state: T.State, shooter: D.Seat, passing: Bool, +winner: Maybe<&2, D.Seat>) -> T.State:
   +rule : D.AmountRule = G.load.amount(G.world.load_rule(T.state.world(state)))

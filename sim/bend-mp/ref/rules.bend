@@ -115,7 +115,7 @@ def subtract(a: Nat, b: Nat) -> Nat:
     case 1n+a 1n+b:
       subtract(a, b)
 
-def RoundWinner.result(xs: List<&2, D.Seat>) -> Maybe<&2, D.Seat>:
+def round_winner.result(xs: List<&2, D.Seat>) -> Maybe<&2, D.Seat>:
   match xs:
     case seat <> Nil{}:
       Some{seat}
@@ -139,7 +139,7 @@ def eligible.rule(rule: D.ItemRule, dealt: Bool, own: Nat, total: Nat) -> Bool:
     case D.ItemRule{enabled, cap, global_cap}:
       Bool.and(enabled, Bool.and(dealt, Bool.and(Nat.is_lt(own, cap), Nat.is_lt(total, global_cap))))
 
-def PickGrabItem.put(keep: Bool, item: D.Item, rest: List<&2, D.Item>) -> List<&2, D.Item>:
+def pick_grab_item.put(keep: Bool, item: D.Item, rest: List<&2, D.Item>) -> List<&2, D.Item>:
   match keep:
     case True{}:
       item <> rest
@@ -244,8 +244,8 @@ def traversal(xs: List<&2, D.Seat>, +current: D.Seat) -> D.Seat:
     case +head <> rest:
       after(head <> rest, current, head)
 
-def RoundWinner(host: S.Host) -> Maybe<&2, D.Seat>:
-  RoundWinner.result(living(D.ring.entries(S.Props, S.host.seats(host))))
+def round_winner(host: S.Host) -> Maybe<&2, D.Seat>:
+  round_winner.result(living(D.ring.entries(S.Props, S.host.seats(host))))
 
 def item.count(xs: List<&2, Maybe<&2, D.Item>>, +item: D.Item) -> Nat:
   match xs:
@@ -271,7 +271,7 @@ def props.item_count(props: S.Props, +item: D.Item) -> Nat:
 
 # The next turn includes a dead current socket, sorts socket IDs and traverses only
 # that socket plus living seats in the current direction.
-def NextTurn(+host: S.Host, +current: D.Seat) -> D.Seat:
+def next_turn(+host: S.Host, +current: D.Seat) -> D.Seat:
   directed(S.host.direction(host), turn_ring(D.ring.entries(S.Props, S.host.seats(host)), current), current)
 
 def table.item_count(entries: List<&2, D.At<&2, S.Props>>, +item: D.Item) -> Nat:
@@ -281,28 +281,28 @@ def table.item_count(entries: List<&2, D.At<&2, S.Props>>, +item: D.Item) -> Nat
     case D.At{_, props} <> rest:
       Nat.add(props.item_count(props, item), table.item_count(rest, item))
 
-def PickGrabItem.pool(xs: List<&2, D.Item>, +host: S.Host, +seat: D.Seat) -> List<&2, D.Item>:
+def pick_grab_item.pool(xs: List<&2, D.Item>, +host: S.Host, +seat: D.Seat) -> List<&2, D.Item>:
   match xs:
     case Nil{}:
       Nil{}
     case +item <> rest:
-      PickGrabItem.put(eligible.rule(D.rules.item(S.rules.items(S.host.rules(host)), item), D.item.dealt_at(S.host.table(host), item), props.item_count(S.host.props(host, seat), item), table.item_count(D.ring.entries(S.Props, S.host.seats(host)), item)), item, PickGrabItem.pool(rest, host, seat))
+      pick_grab_item.put(eligible.rule(D.rules.item(S.rules.items(S.host.rules(host)), item), D.item.dealt_at(S.host.table(host), item), props.item_count(S.host.props(host, seat), item), table.item_count(D.ring.entries(S.Props, S.host.seats(host)), item)), item, pick_grab_item.pool(rest, host, seat))
 
-def GrabSeats.go(entries: List<&2, D.At<&2, S.Props>>, +host: S.Host, +new_round: Bool) -> List<&2, D.Seat>:
+def grab_seats.go(entries: List<&2, D.At<&2, S.Props>>, +host: S.Host, +new_round: Bool) -> List<&2, D.Seat>:
   match entries:
     case Nil{}:
       Nil{}
     case D.At{+seat, props} <> rest:
-      turn_ring.put(Bool.and(props.can_grab(props, new_round), nonempty(D.Item, PickGrabItem.pool(D.item.order(), host, seat))), seat, GrabSeats.go(rest, host, new_round))
+      turn_ring.put(Bool.and(props.can_grab(props, new_round), nonempty(D.Item, pick_grab_item.pool(D.item.order(), host, seat))), seat, grab_seats.go(rest, host, new_round))
 
 # Random reload preflight may use a positive amount probe. Actual
 # selection uses the freshly stored amount, including its zero guard.
-def GrabSeats(+host: S.Host, new_round: Bool, amount: Nat) -> List<&2, D.Seat>:
+def grab_seats(+host: S.Host, new_round: Bool, amount: Nat) -> List<&2, D.Seat>:
   match amount:
     case 0n:
       Nil{}
     case _:
-      GrabSeats.go(D.ring.entries(S.Props, S.host.seats(host)), host, new_round)
+      grab_seats.go(D.ring.entries(S.Props, S.host.seats(host)), host, new_round)
 
 def round_seat_write(props: S.Props, write: RoundSeatWrite) -> S.Props:
   match write:

@@ -34,7 +34,7 @@ function session(c) {
       const menu = array(R.point(this.state).request.menus[`s${s}`]);
       const localIndex = this.moves.slice(0, index).filter(choice => choice.seat === s).length;
       const choice = tag('Choice', { seat: tag(`Seat${s}`), index: localIndex, move: menu[localIndex] });
-      assert.equal(R.MoveAllowed(this.state, choice), true, 'every offered choice passes the host guards');
+      assert.equal(R.move_allowed(this.state, choice), true, 'every offered choice passes the host guards');
       return this.answer(index);
     },
     ...itemSteps(game => game.state),
@@ -175,15 +175,15 @@ try {
     aiming.distribute(() => 'Glass');
     aiming.move(0, move => 'PickUp' in move);
     assert.ok(aiming.moves.every(({ move }) => 'Shoot' in move));
-    assert.equal(R.MoveAllowed(aiming.state, packet(tag('UseItem', { slot: tag('Slot0'), item: tag('Glass') }))), true);
-    assert.equal(R.MoveAllowed(aiming.state, packet(tag('PickUp'))), false);
+    assert.equal(R.move_allowed(aiming.state, packet(tag('UseItem', { slot: tag('Slot0'), item: tag('Glass') }))), true);
+    assert.equal(R.move_allowed(aiming.state, packet(tag('PickUp'))), false);
     for (const item of ['Jammer', 'Adrenaline']) {
       const game = session(config(3, [round({ live: 3, amount: 2, items: rules([item, 'Glass']) })]));
       game.distribute((s, snapshot) => s === 0 && !snapshot.seats[s].slots.includes(item) ? item : 'Glass');
       game.use(0, item);
       assert.ok(game.moves.every(({ move }) => item === 'Jammer' ? 'JamTarget' in move : 'Steal' in move));
-      assert.equal(R.MoveAllowed(game.state, packet(tag('PickUp'))), true);
-      assert.equal(R.MoveAllowed(game.state, packet(tag('UseItem', { slot: tag('Slot1'), item: tag('Glass') }))), true);
+      assert.equal(R.move_allowed(game.state, packet(tag('PickUp'))), true);
+      assert.equal(R.move_allowed(game.state, packet(tag('UseItem', { slot: tag('Slot1'), item: tag('Glass') }))), true);
     }
   });
 

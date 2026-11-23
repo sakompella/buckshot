@@ -205,7 +205,7 @@ def item.decode(n: Nat) -> D.Item:
     case _:
       D.Remote{}
 
-def item.decode.code(+i: D.Item) -> {item.decode(D.item.game_id(i)) == i : D.Item}:
+def item.decode.code(+i: D.Item) -> {item.decode(D.item.id(i)) == i : D.Item}:
   match i:
     case D.Saw{}:
       {==}
@@ -227,11 +227,11 @@ def item.decode.code(+i: D.Item) -> {item.decode(D.item.game_id(i)) == i : D.Ite
       {==}
 
 def item.eq.sound(+a: D.Item, +b: D.Item, e: {D.item.eq(a, b) == True{} : Bool}) -> {a == b : D.Item}:
-  +codes : {item.decode(D.item.game_id(a)) == item.decode(D.item.game_id(b)) : D.Item} = Equal.cong(Nat, D.Item, item.decode, D.item.game_id(a), D.item.game_id(b), nat_eq.sound(D.item.game_id(a), D.item.game_id(b), e))
-  Equal.trans(D.Item, a, item.decode(D.item.game_id(b)), b, Equal.trans(D.Item, a, item.decode(D.item.game_id(a)), item.decode(D.item.game_id(b)), Equal.sym(D.Item, item.decode(D.item.game_id(a)), a, item.decode.code(a)), codes), item.decode.code(b))
+  +codes : {item.decode(D.item.id(a)) == item.decode(D.item.id(b)) : D.Item} = Equal.cong(Nat, D.Item, item.decode, D.item.id(a), D.item.id(b), nat_eq.sound(D.item.id(a), D.item.id(b), e))
+  Equal.trans(D.Item, a, item.decode(D.item.id(b)), b, Equal.trans(D.Item, a, item.decode(D.item.id(a)), item.decode(D.item.id(b)), Equal.sym(D.Item, item.decode(D.item.id(a)), a, item.decode.code(a)), codes), item.decode.code(b))
 
 def item.eq.refl(+a: D.Item) -> {D.item.eq(a, a) == True{} : Bool}:
-  nat_eq.refl(D.item.game_id(a))
+  nat_eq.refl(D.item.id(a))
 
 # The flat choice index. A prompt's answer to its menu's k-th move picks that
 # move of that seat.

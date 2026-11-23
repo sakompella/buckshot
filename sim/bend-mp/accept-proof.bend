@@ -20,12 +20,12 @@ import ./aim-proof.bend as AP
 import ./pick-proof.bend as PK
 
 # legal_accepted for every config: at a valid state, every move the machine
-# offers passes the host's MoveAllowed. The MoveAllowed facts are the ones
+# offers passes the host's move_allowed. The move_allowed facts are the ones
 # the step proofs use (U.idle.*.verify and the like); here the offered choice
 # is read back from the request, by the phase.
 
 def Accepts(+s: S.State, +n: Nat, +choice: D.Choice) -> Type:
-  @+selected:{D.resolve(M.request(s), n) == D.Chose{choice} : D.Resolved} -> {R.MoveAllowed(A.ref(s), choice) == True{} : Bool}
+  @+selected:{D.resolve(M.request(s), n) == D.Chose{choice} : D.Resolved} -> {R.move_allowed(A.ref(s), choice) == True{} : Bool}
 
 def resolved.chose(r: D.Resolved) -> Bool:
   match r:
@@ -70,7 +70,7 @@ def any.on(+seat: D.Seat, +table: D.Table, +moves: List<&2, D.Move>, +n: Nat, +c
 def seat.on(+table: D.Table, +seat: D.Seat, +moves: List<&2, D.Move>, +n: Nat, +choice: D.Choice, +sel: {D.resolve(Q.seat.menu(table, seat, moves), n) == D.Chose{choice} : D.Resolved}) -> U.OnSeat(seat, table, moves, choice):
   any.on(seat, table, moves, n, choice, D.menus.any(D.ring.entries(List<&2, D.Move>, U.menu.of(table, seat, moves))), sel)
 
-def idle.verify(+w: S.World, +p: S.Players, +seat: D.Seat, +g: S.Grabs, +i: Nat, +m: D.Move, +sel: U.IdleSel(D.nonempty.list(S.IdleOption, U.idle.opts(w, p, g, seat)), i, m), +seated: P.seated(S.world.table(w), seat), +ready: {R.current.eq(S.world.turn(w), seat) == True{} : Bool}, +shape: A.Shape(U.idle.at(w, p, seat, Nil{}, g))) -> {R.MoveAllowed(U.idle.ref(w, p, g, seat), D.Choice{seat, i, m}) == True{} : Bool}:
+def idle.verify(+w: S.World, +p: S.Players, +seat: D.Seat, +g: S.Grabs, +i: Nat, +m: D.Move, +sel: U.IdleSel(D.nonempty.list(S.IdleOption, U.idle.opts(w, p, g, seat)), i, m), +seated: P.seated(S.world.table(w), seat), +ready: {R.current.eq(S.world.turn(w), seat) == True{} : Bool}, +shape: A.Shape(U.idle.at(w, p, seat, Nil{}, g))) -> {R.move_allowed(U.idle.ref(w, p, g, seat), D.Choice{seat, i, m}) == True{} : Bool}:
   match m:
     case D.PickUp{}:
       U.idle.pickup.verify(w, p, seat, g, i, seated, ready, shape)
@@ -87,12 +87,12 @@ def idle.verify(+w: S.World, +p: S.Players, +seat: D.Seat, +g: S.Grabs, +i: Nat,
     case D.Steal{a, b, c}:
       match sel:
 
-def idle.on(+w: S.World, +p: S.Players, +seat: D.Seat, +n0: A.Notes(), +g: S.Grabs, +choice: D.Choice, +on: U.OnSeat(seat, S.world.table(w), U.idle.moves(w, p, g, seat), choice), +ready: {R.current.eq(S.world.turn(w), seat) == True{} : Bool}, +shape: A.Shape(U.idle.at(w, p, seat, Nil{}, g))) -> {R.MoveAllowed(A.ref(U.idle.at(w, p, seat, n0, g)), choice) == True{} : Bool}:
+def idle.on(+w: S.World, +p: S.Players, +seat: D.Seat, +n0: A.Notes(), +g: S.Grabs, +choice: D.Choice, +on: U.OnSeat(seat, S.world.table(w), U.idle.moves(w, p, g, seat), choice), +ready: {R.current.eq(S.world.turn(w), seat) == True{} : Bool}, +shape: A.Shape(U.idle.at(w, p, seat, Nil{}, g))) -> {R.move_allowed(A.ref(U.idle.at(w, p, seat, n0, g)), choice) == True{} : Bool}:
   match choice:
     case D.Choice{+s, +i, +m}:
       match on:
         case Tuple{+e_s, Tuple{+e_nth, +seated}}:
-          %Equal.sym(D.Seat, s, seat, e_s) : {R.MoveAllowed(A.ref(U.idle.at(w, p, seat, n0, g)), D.Choice{_, i, m}) == True{} : Bool}
+          %Equal.sym(D.Seat, s, seat, e_s) : {R.move_allowed(A.ref(U.idle.at(w, p, seat, n0, g)), D.Choice{_, i, m}) == True{} : Bool}
           idle.verify(w, p, seat, g, i, m, U.idle.sel(D.nonempty.list(S.IdleOption, U.idle.opts(w, p, g, seat)), i, m, e_nth), seated, ready, shape)
 
 def accept.idle(+w: S.World, +p: S.Players, +seat: D.Seat, +options: D.NonEmpty<&2, S.IdleOption>, +notes: A.Notes(), +g: S.Grabs, +n: Nat, +choice: D.Choice, +valid: A.Valid(S.State{w, p, S.Idle{seat, options}, notes, g})) -> Accepts(S.State{w, p, S.Idle{seat, options}, notes, g}, n, choice):
@@ -100,7 +100,7 @@ def accept.idle(+w: S.World, +p: S.Players, +seat: D.Seat, +options: D.NonEmpty<
   %A.valid.normal(S.State{w, p, S.Idle{seat, options}, notes, g}, valid) : Accepts(_, n, choice)
   +selected => idle.on(w, p, seat, notes, g, choice, seat.on(S.world.table(w), seat, U.idle.moves(w, p, g, seat), n, choice, selected), A.valid.ready(U.idle.at(w, p, seat, notes, g), normal), ISP.shape.move(w, p, S.Idle{seat, U.idle.opts(w, p, g, seat)}, notes, g, S.Idle{seat, U.idle.opts(w, p, g, seat)}, Nil{}, A.valid.shape(U.idle.at(w, p, seat, notes, g), normal)))
 
-def aim.verify(+w: S.World, +p: S.Players, +seat: D.Seat, +g: S.Grabs, +i: Nat, +m: D.Move, +sel: AP.AimSel(Q.aim.targets(p), i, m), +seated: P.seated(S.world.table(w), seat), +ready: {R.current.eq(S.world.turn(w), seat) == True{} : Bool}, +shape: A.Shape(AP.aim.at(w, p, seat, Nil{}, g))) -> {R.MoveAllowed(AP.aim.ref(w, p, g, seat), D.Choice{seat, i, m}) == True{} : Bool}:
+def aim.verify(+w: S.World, +p: S.Players, +seat: D.Seat, +g: S.Grabs, +i: Nat, +m: D.Move, +sel: AP.AimSel(Q.aim.targets(p), i, m), +seated: P.seated(S.world.table(w), seat), +ready: {R.current.eq(S.world.turn(w), seat) == True{} : Bool}, +shape: A.Shape(AP.aim.at(w, p, seat, Nil{}, g))) -> {R.move_allowed(AP.aim.ref(w, p, g, seat), D.Choice{seat, i, m}) == True{} : Bool}:
   match w m:
     case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck} D.Shoot{+t}:
       +st : S.State = AP.aim.at(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, seat, Nil{}, g)
@@ -118,18 +118,18 @@ def aim.verify(+w: S.World, +p: S.Players, +seat: D.Seat, +g: S.Grabs, +i: Nat, 
     case +w2 D.Steal{a, b, c}:
       match sel:
 
-def aim.on(+w: S.World, +p: S.Players, +seat: D.Seat, +n0: A.Notes(), +g: S.Grabs, +choice: D.Choice, +on: U.OnSeat(seat, S.world.table(w), AP.aim.moves(p), choice), +ready: {R.current.eq(S.world.turn(w), seat) == True{} : Bool}, +shape: A.Shape(AP.aim.at(w, p, seat, Nil{}, g))) -> {R.MoveAllowed(A.ref(AP.aim.at(w, p, seat, n0, g)), choice) == True{} : Bool}:
+def aim.on(+w: S.World, +p: S.Players, +seat: D.Seat, +n0: A.Notes(), +g: S.Grabs, +choice: D.Choice, +on: U.OnSeat(seat, S.world.table(w), AP.aim.moves(p), choice), +ready: {R.current.eq(S.world.turn(w), seat) == True{} : Bool}, +shape: A.Shape(AP.aim.at(w, p, seat, Nil{}, g))) -> {R.move_allowed(A.ref(AP.aim.at(w, p, seat, n0, g)), choice) == True{} : Bool}:
   match choice:
     case D.Choice{+s, +i, +m}:
       match on:
         case Tuple{+e_s, Tuple{+e_nth, +seated}}:
-          %Equal.sym(D.Seat, s, seat, e_s) : {R.MoveAllowed(A.ref(AP.aim.at(w, p, seat, n0, g)), D.Choice{_, i, m}) == True{} : Bool}
+          %Equal.sym(D.Seat, s, seat, e_s) : {R.move_allowed(A.ref(AP.aim.at(w, p, seat, n0, g)), D.Choice{_, i, m}) == True{} : Bool}
           aim.verify(w, p, seat, g, i, m, AP.aim.sel(Q.aim.targets(p), i, m, e_nth), seated, ready, shape)
 
 def accept.aim(+w: S.World, +p: S.Players, +seat: D.Seat, +notes: A.Notes(), +g: S.Grabs, +n: Nat, +choice: D.Choice, +valid: A.Valid(AP.aim.at(w, p, seat, notes, g))) -> Accepts(AP.aim.at(w, p, seat, notes, g), n, choice):
   +selected => aim.on(w, p, seat, notes, g, choice, seat.on(S.world.table(w), seat, AP.aim.moves(p), n, choice, selected), A.valid.ready(AP.aim.at(w, p, seat, notes, g), valid), ISP.shape.move(w, p, S.Aim{seat}, notes, g, S.Aim{seat}, Nil{}, A.valid.shape(AP.aim.at(w, p, seat, notes, g), valid)))
 
-def jam.verify(+w: S.World, +p: S.Players, +seat: D.Seat, +targets: List<&2, S.JamOption>, +n0: A.Notes(), +g: S.Grabs, +i: Nat, +m: D.Move, +sel: PK.JamSel(targets, i, m), +seated: P.seated(S.world.table(w), seat), +shape: A.Shape(PK.jam.at(w, p, seat, targets, Nil{}, g))) -> {R.MoveAllowed(A.ref(PK.jam.at(w, p, seat, targets, n0, g)), D.Choice{seat, i, m}) == True{} : Bool}:
+def jam.verify(+w: S.World, +p: S.Players, +seat: D.Seat, +targets: List<&2, S.JamOption>, +n0: A.Notes(), +g: S.Grabs, +i: Nat, +m: D.Move, +sel: PK.JamSel(targets, i, m), +seated: P.seated(S.world.table(w), seat), +shape: A.Shape(PK.jam.at(w, p, seat, targets, Nil{}, g))) -> {R.move_allowed(A.ref(PK.jam.at(w, p, seat, targets, n0, g)), D.Choice{seat, i, m}) == True{} : Bool}:
   match m:
     case D.JamTarget{+t}:
       +st : S.State = PK.jam.at(w, p, seat, targets, Nil{}, g)
@@ -147,18 +147,18 @@ def jam.verify(+w: S.World, +p: S.Players, +seat: D.Seat, +targets: List<&2, S.J
     case D.Steal{a, b, c}:
       match sel:
 
-def jam.on(+w: S.World, +p: S.Players, +seat: D.Seat, +targets: List<&2, S.JamOption>, +n0: A.Notes(), +g: S.Grabs, +choice: D.Choice, +on: U.OnSeat(seat, S.world.table(w), I.jam.moves(targets), choice), +shape: A.Shape(PK.jam.at(w, p, seat, targets, Nil{}, g))) -> {R.MoveAllowed(A.ref(PK.jam.at(w, p, seat, targets, n0, g)), choice) == True{} : Bool}:
+def jam.on(+w: S.World, +p: S.Players, +seat: D.Seat, +targets: List<&2, S.JamOption>, +n0: A.Notes(), +g: S.Grabs, +choice: D.Choice, +on: U.OnSeat(seat, S.world.table(w), I.jam.moves(targets), choice), +shape: A.Shape(PK.jam.at(w, p, seat, targets, Nil{}, g))) -> {R.move_allowed(A.ref(PK.jam.at(w, p, seat, targets, n0, g)), choice) == True{} : Bool}:
   match choice:
     case D.Choice{+s, +i, +m}:
       match on:
         case Tuple{+e_s, Tuple{+e_nth, +seated}}:
-          %Equal.sym(D.Seat, s, seat, e_s) : {R.MoveAllowed(A.ref(PK.jam.at(w, p, seat, targets, n0, g)), D.Choice{_, i, m}) == True{} : Bool}
+          %Equal.sym(D.Seat, s, seat, e_s) : {R.move_allowed(A.ref(PK.jam.at(w, p, seat, targets, n0, g)), D.Choice{_, i, m}) == True{} : Bool}
           jam.verify(w, p, seat, targets, n0, g, i, m, PK.jam.sel(targets, i, m, e_nth), seated, shape)
 
 def accept.jam(+w: S.World, +p: S.Players, +seat: D.Seat, +targets: List<&2, S.JamOption>, +notes: A.Notes(), +g: S.Grabs, +n: Nat, +choice: D.Choice, +valid: A.Valid(PK.jam.at(w, p, seat, targets, notes, g))) -> Accepts(PK.jam.at(w, p, seat, targets, notes, g), n, choice):
   +selected => jam.on(w, p, seat, targets, notes, g, choice, seat.on(S.world.table(w), seat, I.jam.moves(targets), n, choice, selected), ISP.shape.move(w, p, S.JamPick{seat, targets}, notes, g, S.JamPick{seat, targets}, Nil{}, A.valid.shape(PK.jam.at(w, p, seat, targets, notes, g), valid)))
 
-def steal.verify(+w: S.World, +p: S.Players, +seat: D.Seat, +g: S.Grabs, +i: Nat, +m: D.Move, +sel: PK.StealSel(PK.steal.picks(w, p, g, seat), i, m), +seated: P.seated(S.world.table(w), seat), +ready: {R.current.eq(S.world.turn(w), seat) == True{} : Bool}, +shape: A.Shape(PK.steal.at(w, p, seat, Nil{}, g))) -> {R.MoveAllowed(PK.steal.ref(w, p, g, seat), D.Choice{seat, i, m}) == True{} : Bool}:
+def steal.verify(+w: S.World, +p: S.Players, +seat: D.Seat, +g: S.Grabs, +i: Nat, +m: D.Move, +sel: PK.StealSel(PK.steal.picks(w, p, g, seat), i, m), +seated: P.seated(S.world.table(w), seat), +ready: {R.current.eq(S.world.turn(w), seat) == True{} : Bool}, +shape: A.Shape(PK.steal.at(w, p, seat, Nil{}, g))) -> {R.move_allowed(PK.steal.ref(w, p, g, seat), D.Choice{seat, i, m}) == True{} : Bool}:
   match w m:
     case S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck} D.Steal{+owner, +slot, +item}:
       +st : S.State = PK.steal.at(S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, seat, Nil{}, g)
@@ -177,12 +177,12 @@ def steal.verify(+w: S.World, +p: S.Players, +seat: D.Seat, +g: S.Grabs, +i: Nat
     case +w2 D.JamTarget{x}:
       match sel:
 
-def steal.on(+w: S.World, +p: S.Players, +seat: D.Seat, +n0: A.Notes(), +g: S.Grabs, +choice: D.Choice, +on: U.OnSeat(seat, S.world.table(w), I.steal.moves(PK.steal.picks(w, p, g, seat)), choice), +ready: {R.current.eq(S.world.turn(w), seat) == True{} : Bool}, +shape: A.Shape(PK.steal.at(w, p, seat, Nil{}, g))) -> {R.MoveAllowed(A.ref(PK.steal.at(w, p, seat, n0, g)), choice) == True{} : Bool}:
+def steal.on(+w: S.World, +p: S.Players, +seat: D.Seat, +n0: A.Notes(), +g: S.Grabs, +choice: D.Choice, +on: U.OnSeat(seat, S.world.table(w), I.steal.moves(PK.steal.picks(w, p, g, seat)), choice), +ready: {R.current.eq(S.world.turn(w), seat) == True{} : Bool}, +shape: A.Shape(PK.steal.at(w, p, seat, Nil{}, g))) -> {R.move_allowed(A.ref(PK.steal.at(w, p, seat, n0, g)), choice) == True{} : Bool}:
   match choice:
     case D.Choice{+s, +i, +m}:
       match on:
         case Tuple{+e_s, Tuple{+e_nth, +seated}}:
-          %Equal.sym(D.Seat, s, seat, e_s) : {R.MoveAllowed(A.ref(PK.steal.at(w, p, seat, n0, g)), D.Choice{_, i, m}) == True{} : Bool}
+          %Equal.sym(D.Seat, s, seat, e_s) : {R.move_allowed(A.ref(PK.steal.at(w, p, seat, n0, g)), D.Choice{_, i, m}) == True{} : Bool}
           steal.verify(w, p, seat, g, i, m, PK.steal.sel(PK.steal.picks(w, p, g, seat), i, m, e_nth), seated, ready, shape)
 
 def accept.steal(+w: S.World, +p: S.Players, +seat: D.Seat, +picks: List<&2, S.StealOption>, +notes: A.Notes(), +g: S.Grabs, +n: Nat, +choice: D.Choice, +valid: A.Valid(S.State{w, p, S.StealPick{seat, picks}, notes, g})) -> Accepts(S.State{w, p, S.StealPick{seat, picks}, notes, g}, n, choice):
@@ -190,25 +190,25 @@ def accept.steal(+w: S.World, +p: S.Players, +seat: D.Seat, +picks: List<&2, S.S
   %A.valid.normal(S.State{w, p, S.StealPick{seat, picks}, notes, g}, valid) : Accepts(_, n, choice)
   +selected => steal.on(w, p, seat, notes, g, choice, seat.on(S.world.table(w), seat, I.steal.moves(PK.steal.picks(w, p, g, seat)), n, choice, selected), A.valid.ready(PK.steal.at(w, p, seat, notes, g), normal), ISP.shape.move(w, p, S.StealPick{seat, PK.steal.picks(w, p, g, seat)}, notes, g, S.StealPick{seat, PK.steal.picks(w, p, g, seat)}, Nil{}, A.valid.shape(PK.steal.at(w, p, seat, notes, g), normal)))
 
-def grab.verify(+w: S.World, +p: S.Players, +notes: A.Notes(), +g: S.Grabs, +c: D.Choice, +sel: GP.Selected(ISP.needs.at(w, p, g), c), +shape: A.Shape(ISP.grab.at(w, p, notes, g))) -> {R.MoveAllowed(A.ref(ISP.grab.at(w, p, notes, g)), c) == True{} : Bool}:
+def grab.verify(+w: S.World, +p: S.Players, +notes: A.Notes(), +g: S.Grabs, +c: D.Choice, +sel: GP.Selected(ISP.needs.at(w, p, g), c), +shape: A.Shape(ISP.grab.at(w, p, notes, g))) -> {R.move_allowed(A.ref(ISP.grab.at(w, p, notes, g)), c) == True{} : Bool}:
   match c:
     case D.Choice{+seat, +index, +move}:
       GP.accept.at(ISP.grab.at(w, p, notes, g), seat, index, move, shape, sel)
 
-def grab.picked.on(+w: S.World, +p: S.Players, +notes: A.Notes(), +g: S.Grabs, +picked: Maybe<&2, D.Choice>, +sel: GP.MaybeSelected(ISP.needs.at(w, p, g), picked), +choice: D.Choice, +e: {D.resolve.choice(picked) == D.Chose{choice} : D.Resolved}, +shape: A.Shape(ISP.grab.at(w, p, notes, g))) -> {R.MoveAllowed(A.ref(ISP.grab.at(w, p, notes, g)), choice) == True{} : Bool}:
+def grab.picked.on(+w: S.World, +p: S.Players, +notes: A.Notes(), +g: S.Grabs, +picked: Maybe<&2, D.Choice>, +sel: GP.MaybeSelected(ISP.needs.at(w, p, g), picked), +choice: D.Choice, +e: {D.resolve.choice(picked) == D.Chose{choice} : D.Resolved}, +shape: A.Shape(ISP.grab.at(w, p, notes, g))) -> {R.move_allowed(A.ref(ISP.grab.at(w, p, notes, g)), choice) == True{} : Bool}:
   match picked:
     case None{}:
-      GP.absurd({R.MoveAllowed(A.ref(ISP.grab.at(w, p, notes, g)), choice) == True{} : Bool}, unanswerable(choice, e))
+      GP.absurd({R.move_allowed(A.ref(ISP.grab.at(w, p, notes, g)), choice) == True{} : Bool}, unanswerable(choice, e))
     case Some{+c}:
-      %chose.inj(c, choice, e) : {R.MoveAllowed(A.ref(ISP.grab.at(w, p, notes, g)), _) == True{} : Bool}
+      %chose.inj(c, choice, e) : {R.move_allowed(A.ref(ISP.grab.at(w, p, notes, g)), _) == True{} : Bool}
       grab.verify(w, p, notes, g, c, sel, shape)
 
-def grab.any.on(+w: S.World, +p: S.Players, +notes: A.Notes(), +g: S.Grabs, +n: Nat, +choice: D.Choice, +any: Bool, +e: {D.resolve(D.request.choose.any(any, I.grab.menus(ISP.needs.at(w, p, g))), n) == D.Chose{choice} : D.Resolved}, +shape: A.Shape(ISP.grab.at(w, p, notes, g))) -> {R.MoveAllowed(A.ref(ISP.grab.at(w, p, notes, g)), choice) == True{} : Bool}:
+def grab.any.on(+w: S.World, +p: S.Players, +notes: A.Notes(), +g: S.Grabs, +n: Nat, +choice: D.Choice, +any: Bool, +e: {D.resolve(D.request.choose.any(any, I.grab.menus(ISP.needs.at(w, p, g))), n) == D.Chose{choice} : D.Resolved}, +shape: A.Shape(ISP.grab.at(w, p, notes, g))) -> {R.move_allowed(A.ref(ISP.grab.at(w, p, notes, g)), choice) == True{} : Bool}:
   match any:
     case True{}:
       grab.picked.on(w, p, notes, g, D.choose(I.grab.menus(ISP.needs.at(w, p, g)), n), GP.sel.choose(ISP.needs.at(w, p, g), n), choice, e, shape)
     case False{}:
-      GP.absurd({R.MoveAllowed(A.ref(ISP.grab.at(w, p, notes, g)), choice) == True{} : Bool}, unanswerable(choice, e))
+      GP.absurd({R.move_allowed(A.ref(ISP.grab.at(w, p, notes, g)), choice) == True{} : Bool}, unanswerable(choice, e))
 
 def accept.grab(+w: S.World, +p: S.Players, +needs: D.Ring<&2, List<&2, S.GrabOption>>, +notes: A.Notes(), +g: S.Grabs, +n: Nat, +choice: D.Choice, +valid: A.Valid(S.State{w, p, S.Grab{needs}, notes, g})) -> Accepts(S.State{w, p, S.Grab{needs}, notes, g}, n, choice):
   +normal : A.Valid(ISP.grab.at(w, p, notes, g)) = ISP.valid.normalized(S.State{w, p, S.Grab{needs}, notes, g}, valid)
@@ -235,7 +235,7 @@ def no.choice(+r: D.Request, +n: Nat, +choice: D.Choice, +offers: {request.choos
       unanswerable(choice, sel)
 
 def refuted(+s: S.State, +n: Nat, +choice: D.Choice, +offers: {request.chooses(M.request(s)) == False{} : Bool}) -> Accepts(s, n, choice):
-  +selected => GP.absurd({R.MoveAllowed(A.ref(s), choice) == True{} : Bool}, no.choice(M.request(s), n, choice, offers, selected))
+  +selected => GP.absurd({R.move_allowed(A.ref(s), choice) == True{} : Bool}, no.choice(M.request(s), n, choice, offers, selected))
 
 def batch.draws(+size: Nat) -> {request.chooses(V.batch.request(size)) == False{} : Bool}:
   match size:

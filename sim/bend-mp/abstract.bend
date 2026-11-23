@@ -308,7 +308,7 @@ def subtract_zero(n: Nat) -> Nat:
 
 
 def verify(state: R.RefState, choice: D.Choice) -> Bool:
-  R.MoveAllowed(state, choice)
+  R.move_allowed(state, choice)
 
 def ref_shell_nth(shells: List<&2, D.Shell>, index: Nat) -> Maybe<&2, D.Shell>:
   G.nth(D.Shell, shells, index)
@@ -590,7 +590,7 @@ def RefBatches() -> Data:
   List<&2, H.Batch>
 
 def ref_turn(world: S.World, seats: D.Ring<&2, CoreSeat>, current: D.Seat) -> D.Seat:
-  G.NextTurn(host(world, seats), current)
+  G.next_turn(host(world, seats), current)
 
 def turn_entries_machine(entries: List<&2, D.At<&2, CoreSeat>>, current: D.Seat) -> List<&2, D.Seat>:
   Q.turn_candidates(health_entries(entries), current)
@@ -663,7 +663,7 @@ def grant.pass_case(+world: S.World, result: GrantCase, +seat: D.Seat, notes: Li
       grant.give.jams(S.world.set_turn(world, Some{seat}), seats, seat, List.append(&2, D.Note, notes, [D.Shown{D.JamLifted{seat}}]))
     case GrantSkip{+seats}:
       +turned : S.World = S.world.set_turn(world, Some{seat})
-      grant.pass(turned, seats, G.NextTurn(host.jams(turned, seats), seat), List.append(&2, D.Note, notes, [D.Shown{D.TurnSkipped{seat}}]))
+      grant.pass(turned, seats, G.next_turn(host.jams(turned, seats), seat), List.append(&2, D.Note, notes, [D.Shown{D.TurnSkipped{seat}}]))
 
 def grant.clear_at(+seats: D.Ring<&2, CoreSeat>, seat: D.Seat, props: CoreSeat) -> D.Ring<&2, CoreSeat>:
   match props:
@@ -822,7 +822,7 @@ def reset.state(+state: S.State) -> S.State:
   S.state.emit(S.state.set_players(S.state.set_world(state, world), players), D.RoundBegan{S.world.round_index(world), S.world.round_health(world), S.world.first_turn(world)})
 
 def ref_next_load(first: Bool, index: Nat) -> Nat:
-  R.AdvanceIndex(first, index)
+  R.advance_index(first, index)
 
 def machine_next_load(first: Bool, index: Nat) -> Nat:
   Q.load.next(first, index)
@@ -892,7 +892,7 @@ def ref_decks3(a: List<&2, H.Batch>, b: List<&2, H.Batch>, c: List<&2, H.Batch>)
   H.Decks{a, b, c}
 
 def ref_full_decks() -> H.Decks:
-  H.FreshDecks()
+  H.fresh_decks()
 
 def machine_full_decks() -> H.Decks:
   decks(Q.decks.full())

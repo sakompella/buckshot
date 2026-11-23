@@ -24,7 +24,7 @@ law legal_exact:
 
 
 # Every move the machine offers at a valid state passes the host's
-# MoveAllowed.
+# move_allowed.
 law legal_accepted:
   for +state: S.State
   for +valid: A.Valid(state)

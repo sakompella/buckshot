@@ -39,7 +39,7 @@ try {
     for (const direction of ['Clockwise', 'CounterClockwise']) {
       const deadR = { ...reference, host: { ...reference.host, direction: tag(direction), seats: ring(reference.host.seats, (props, key) => ({ ...props, health: key === `s${actor}` ? 0 : props.health })) } };
       const deadM = { ...machine, world: { ...machine.world, direction: tag(direction) }, players: ring(machine.players, (s, key) => key === `s${actor}` ? { ...s, health: 0 } : s) };
-      assert.deepEqual(normalize(M['rules:next_turn'](M['state:players.health'](deadM.players), deadM.world.direction, seat(actor))), normalize(R['rules:NextTurn'](deadR.host, seat(actor))));
+      assert.deepEqual(normalize(M['rules:next_turn'](M['state:players.health'](deadM.players), deadM.world.direction, seat(actor))), normalize(R['rules:next_turn'](deadR.host, seat(actor))));
     }
     for (const shell of ['Live', 'Blank']) {
       const sawR = { ...reference, host: { ...reference.host, sawed: true, gun: list([tag(shell)]) } };

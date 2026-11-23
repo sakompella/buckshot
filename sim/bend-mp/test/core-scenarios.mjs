@@ -35,7 +35,7 @@ try {
     assert.equal(array(R.answer(state, 99).notes).length, 0);
   });
 
-  // Self blank follows CheckTurnEnd/UserEndTurn/AdvanceTurn.
+  // Self blank follows check_turn_end/end_turn/advance_turn.
   scenario('self blank keeps turn through end-turn path', () => {
     const { state, notes } = replay(twoBlank, [0, 0, 0, 0, 0]);
     assert.deepEqual(req(state), { kind: 'Choose', menus: { 1: [{ PickUp: true }], 3: [] } });
@@ -63,7 +63,7 @@ try {
   });
 
   // One live hits3; empty reload carries recipient3.
-  // Current socket stays1 until LoadGun calls AdvanceTurn.
+  // Current socket stays1 until load_gun calls advance_turn.
   scenario('reload mid-round carries the pending turn', () => {
     const c = config(2, [round({ health: 3 })]);
     const { state } = replay(c, [0, 0, 0, 1]);
@@ -261,27 +261,27 @@ try {
   scenario('injected CCW and CW traversal include dead current only', () => {
     const state = replay(config(4, [round({ health: 2 })]), [0, 0]).state;
     const host = { ...state.host, seats: { ...state.host.seats, s1: { ...state.host.seats.s1, health: 0 } } };
-    assert.equal(R['rules:NextTurn'](host, seat(1)).$, seat(2).$);
-    assert.equal(R['rules:NextTurn'](host, seat(2)).$, seat(3).$);
+    assert.equal(R['rules:next_turn'](host, seat(1)).$, seat(2).$);
+    assert.equal(R['rules:next_turn'](host, seat(2)).$, seat(3).$);
     const ccw = { ...host, direction: tag('CounterClockwise') };
-    assert.equal(R['rules:NextTurn'](ccw, seat(2)).$, seat(0).$);
-    assert.equal(R['rules:NextTurn'](ccw, seat(1)).$, seat(0).$);
+    assert.equal(R['rules:next_turn'](ccw, seat(2)).$, seat(0).$);
+    assert.equal(R['rules:next_turn'](ccw, seat(1)).$, seat(0).$);
   });
 
   // The host predicate checks turn/holding/has_turn, not target health.
   scenario('canonical core menus pass the host guards', () => {
     const idle = replay(twoBlank, [0, 0, 0]).state;
     const choice = (s, move) => tag('Choice', { seat: seat(s), index: 0, move });
-    assert.equal(R.MoveAllowed(idle, choice(1, tag('PickUp'))), true);
-    assert.equal(R.MoveAllowed(idle, choice(3, tag('PickUp'))), false);
-    assert.equal(R.MoveAllowed(idle, choice(1, tag('Shoot', { target: seat(3) }))), false);
+    assert.equal(R.move_allowed(idle, choice(1, tag('PickUp'))), true);
+    assert.equal(R.move_allowed(idle, choice(3, tag('PickUp'))), false);
+    assert.equal(R.move_allowed(idle, choice(1, tag('Shoot', { target: seat(3) }))), false);
     const aiming = R.answer(idle, 0).state;
-    assert.equal(R.MoveAllowed(aiming, choice(1, tag('PickUp'))), false);
-    assert.equal(R.MoveAllowed(aiming, choice(1, tag('Shoot', { target: seat(3) }))), true);
+    assert.equal(R.move_allowed(aiming, choice(1, tag('PickUp'))), false);
+    assert.equal(R.move_allowed(aiming, choice(1, tag('Shoot', { target: seat(3) }))), true);
     const dead = { ...aiming, host: { ...aiming.host, seats: { ...aiming.host.seats, s3: { ...aiming.host.seats.s3, health: 0 } } } };
-    assert.equal(R.MoveAllowed(dead, choice(1, tag('Shoot', { target: seat(3) }))), true);
+    assert.equal(R.move_allowed(dead, choice(1, tag('Shoot', { target: seat(3) }))), true);
     const noTurn = { ...aiming, host: { ...aiming.host, seats: { ...aiming.host.seats, s1: { ...aiming.host.seats.s1, has_turn: false } } } };
-    assert.equal(R.MoveAllowed(noTurn, choice(1, tag('Shoot', { target: seat(3) }))), false);
+    assert.equal(R.move_allowed(noTurn, choice(1, tag('Shoot', { target: seat(3) }))), false);
   });
 
   // Public API contract. Fuel=answers, not silent calls. Finished keeps tail.

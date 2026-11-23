@@ -37,7 +37,7 @@ exclude_re = [
   'replace Notes::truncated -> bool with false',
   # A sampled leaf starts at a reload's first draw: the gun is empty, nobody holds
   # an item and no item draw is pending, so these key parts never vary there.
-  'replace (game_id|item_code) -> u32 with [01]',
+  'replace (item_id|item_code) -> u32 with [01]',
   'replace == with != in put_shells',
   # find compares the whole key, so a constant hash only makes every lookup collide.
   'replace hash -> u64 with [01]',

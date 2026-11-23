@@ -77,7 +77,7 @@ def put.item(item: Maybe<&2, D.Item>, rest: String) -> String:
     case None{}:
       put(0, rest)
     case Some{item}:
-      put.nat(D.item.game_id(item), rest)
+      put.nat(D.item.id(item), rest)
 
 def put.load(load: D.Load, rest: String) -> String:
   match load:

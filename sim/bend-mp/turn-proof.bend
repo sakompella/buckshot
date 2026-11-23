@@ -82,7 +82,7 @@ def irr.load(+w: S.World, +p: S.Players, +ph: S.Phase, +n: A.Notes(), +g: S.Grab
   +w2 : S.World = S.world.set_first_sequence(w1, False{})
   irr.refill(S.world.deck(w2), w2, p, ph, n, g)
 
-# The distribution start (BeginGrabbing vs distribute.begin).
+# The distribution start (begin_grabbing vs distribute.begin).
 
 def shape.open(+s: S.State, +seat: D.Seat, +shape: A.Shape(s)) -> A.Shape(S.state.set_grabs(s, I.grabs.open(S.state.grabs(s), seat))):
   match s:
@@ -313,7 +313,7 @@ def distribute.close(+xs: List<&2, D.Seat>, +s: S.State, +k: Nat, +shape: A.Shap
           +shape1 : A.Shape(out) = ISP.shape.move(w, p, ph, n, g1, S.Grab{I.grab.needs(s1)}, told, shape.dist(opened(s0, ys), shape.opened(ys, s0, shape)))
           Equal.trans(R.RefState, grab.frame(h1, told), grab.frame(qh(s1), told), A.ref(out), Equal.cong(H.Host, R.RefState, h => grab.frame(h, told), h1, qh(s1), e_host), Equal.cong(D.Ring<&2, List<&2, D.Move>>, R.RefState, x => R.RefState{qh(s1), R.Await{D.request.choose(x), D.Distributing{}, R.GrabAnswer{}}, told}, R.grab_menus(D.ring.entries(H.Props, H.host.seats(qh(s1))), qh(s1), D.ring.fill(List<&2, D.Move>, H.host.table(qh(s1)), Nil{})), I.grab.menus(I.grab.needs(out)), GP.menus.eq(out, shape1)))
 
-# Who begins grabbing: GrabSeats vs begin.seats.
+# Who begins grabbing: grab_seats vs begin.seats.
 
 def bool.holds(b: Bool) -> Type:
   match b:
@@ -381,7 +381,7 @@ def put.keep(+b: Bool, +seat: D.Seat, +xs: List<&2, D.Seat>, +ys: List<&2, D.Sea
 def can.eq(+nr: Bool, +hp: Nat, +sl: D.Slots) -> {Bool.or(nr, Bool.and(G.alive(hp), Bool.not(G.slots.full(G.slots.list(sl))))) == I.begin.can(nr, hp, sl) : Bool}:
   or.cong(nr, nr, Bool.and(G.alive(hp), Bool.not(G.slots.full(G.slots.list(sl)))), Bool.and(Q.alive(hp), Nat.is_lt(I.occupied(I.slots.items(sl)), 8n)), {==}, and.cong(G.alive(hp), Q.alive(hp), Bool.not(G.slots.full(G.slots.list(sl))), Nat.is_lt(I.occupied(I.slots.items(sl)), 8n), LP.alive.eq(hp), full.slots(sl)))
 
-def begin.go_eq(+s: S.State, +seats: List<&2, D.Seat>, +nr: Bool, +shape: A.Shape(s)) -> {G.GrabSeats.go(GP.lens.entries(seats, quiet(s)), qh(s), nr) == I.begin.go(seats, s, nr) : List<&2, D.Seat>}:
+def begin.go_eq(+s: S.State, +seats: List<&2, D.Seat>, +nr: Bool, +shape: A.Shape(s)) -> {G.grab_seats.go(GP.lens.entries(seats, quiet(s)), qh(s), nr) == I.begin.go(seats, s, nr) : List<&2, D.Seat>}:
   match s:
     case S.State{+w, +p, +ph, +n, +g}:
       match seats:
@@ -392,15 +392,15 @@ def begin.go_eq(+s: S.State, +seats: List<&2, D.Seat>, +nr: Bool, +shape: A.Shap
           +sq : S.State = S.State{w, p, S.Blocked{None{}}, n, g}
           +hp : Nat = I.seat.health(p, seat)
           +sl : D.Slots = I.seat.slots(p, seat)
-          +pool_r : List<&2, D.Item> = G.PickGrabItem.pool(D.item.order(), qh(s0), seat)
+          +pool_r : List<&2, D.Item> = G.pick_grab_item.pool(D.item.order(), qh(s0), seat)
           +pool_m : List<&2, D.Item> = I.pool(s0, seat)
           +e_pool : {G.nonempty(D.Item, pool_r) == I.stocked(s0, seat) : Bool} = Equal.trans(Bool, G.nonempty(D.Item, pool_r), I.has_items(pool_m), I.stocked(s0, seat), Equal.trans(Bool, G.nonempty(D.Item, pool_r), G.nonempty(D.Item, pool_m), I.has_items(pool_m), Equal.cong(List<&2, D.Item>, Bool, xs => G.nonempty(D.Item, xs), pool_r, pool_m, GP.pool.eq(sq, seat, ISP.shape.move(w, p, ph, n, g, S.Blocked{None{}}, n, shape))), nonempty.items(pool_m)), GP.stocked.eq(s0, seat))
           +e_bit : {Bool.and(Bool.or(nr, Bool.and(G.alive(hp), Bool.not(G.slots.full(G.slots.list(sl))))), G.nonempty(D.Item, pool_r)) == Bool.and(I.begin.can(nr, hp, sl), I.stocked(s0, seat)) : Bool} = and.cong(Bool.or(nr, Bool.and(G.alive(hp), Bool.not(G.slots.full(G.slots.list(sl))))), I.begin.can(nr, hp, sl), G.nonempty(D.Item, pool_r), I.stocked(s0, seat), can.eq(nr, hp, sl), e_pool)
-          +e_rest : {G.GrabSeats.go(GP.lens.entries(rest, sq), qh(s0), nr) == I.begin.go(rest, s0, nr) : List<&2, D.Seat>} = begin.go_eq(s0, rest, nr, shape)
-          %Equal.sym(Bool, Bool.and(Bool.or(nr, Bool.and(G.alive(hp), Bool.not(G.slots.full(G.slots.list(sl))))), G.nonempty(D.Item, pool_r)), Bool.and(I.begin.can(nr, hp, sl), I.stocked(s0, seat)), e_bit) : {G.turn_ring.put(_, seat, G.GrabSeats.go(GP.lens.entries(rest, sq), qh(s0), nr)) == I.keep(D.Seat, Bool.and(I.begin.can(nr, hp, sl), I.stocked(s0, seat)), seat, I.begin.go(rest, s0, nr)) : List<&2, D.Seat>}
-          put.keep(Bool.and(I.begin.can(nr, hp, sl), I.stocked(s0, seat)), seat, G.GrabSeats.go(GP.lens.entries(rest, sq), qh(s0), nr), I.begin.go(rest, s0, nr), e_rest)
+          +e_rest : {G.grab_seats.go(GP.lens.entries(rest, sq), qh(s0), nr) == I.begin.go(rest, s0, nr) : List<&2, D.Seat>} = begin.go_eq(s0, rest, nr, shape)
+          %Equal.sym(Bool, Bool.and(Bool.or(nr, Bool.and(G.alive(hp), Bool.not(G.slots.full(G.slots.list(sl))))), G.nonempty(D.Item, pool_r)), Bool.and(I.begin.can(nr, hp, sl), I.stocked(s0, seat)), e_bit) : {G.turn_ring.put(_, seat, G.grab_seats.go(GP.lens.entries(rest, sq), qh(s0), nr)) == I.keep(D.Seat, Bool.and(I.begin.can(nr, hp, sl), I.stocked(s0, seat)), seat, I.begin.go(rest, s0, nr)) : List<&2, D.Seat>}
+          put.keep(Bool.and(I.begin.can(nr, hp, sl), I.stocked(s0, seat)), seat, G.grab_seats.go(GP.lens.entries(rest, sq), qh(s0), nr), I.begin.go(rest, s0, nr), e_rest)
 
-def begin.eq(+s: S.State, +nr: Bool, +amount: Nat, +shape: A.Shape(s)) -> {G.GrabSeats(qh(s), nr, amount) == I.begin.seats(s, nr, amount) : List<&2, D.Seat>}:
+def begin.eq(+s: S.State, +nr: Bool, +amount: Nat, +shape: A.Shape(s)) -> {G.grab_seats(qh(s), nr, amount) == I.begin.seats(s, nr, amount) : List<&2, D.Seat>}:
   match s:
     case S.State{+w, +p, +ph, +n, +g}:
       match amount:
@@ -409,11 +409,11 @@ def begin.eq(+s: S.State, +nr: Bool, +amount: Nat, +shape: A.Shape(s)) -> {G.Gra
         case 1n+a:
           +s0 : S.State = S.State{w, p, ph, n, g}
           +sq : S.State = S.State{w, p, S.Blocked{None{}}, n, g}
-          %GP.entries.eq(sq, ISP.shape.move(w, p, ph, n, g, S.Blocked{None{}}, n, shape)) : {G.GrabSeats.go(_, qh(s0), nr) == I.begin.go(D.table.seats(S.world.table(w)), s0, nr) : List<&2, D.Seat>}
+          %GP.entries.eq(sq, ISP.shape.move(w, p, ph, n, g, S.Blocked{None{}}, n, shape)) : {G.grab_seats.go(_, qh(s0), nr) == I.begin.go(D.table.seats(S.world.table(w)), s0, nr) : List<&2, D.Seat>}
           begin.go_eq(s0, D.table.seats(S.world.table(w)), nr, shape)
 
-# The end of a turn: FinishTurn vs turn.winner, and
-# EndTurn vs turn.packet. The win (WinRound onward) is a premise,
+# The end of a turn: finish_turn vs turn.winner, and
+# end_turn vs turn.packet. The win (win_round onward) is a premise,
 # discharged in round-proof.bend.
 
 def WinClosure() -> Type:
@@ -425,7 +425,7 @@ def empty.of(+s: S.State) -> Bool:
 def end.packet(+s: S.State, +from: D.Seat, +passing: Bool, +winner: Maybe<&2, D.Seat>) -> R.TurnEnd:
   R.TurnEnd{from, passing, empty.of(s), winner}
 
-def recipient.eq(+passing: Bool, +from: D.Seat, +a: D.Seat, +b: D.Seat, +e: {a == b : D.Seat}) -> {R.FinishTurn.recipient(passing, from, a) == M.turn.recipient(passing, from, b) : D.Seat}:
+def recipient.eq(+passing: Bool, +from: D.Seat, +a: D.Seat, +b: D.Seat, +e: {a == b : D.Seat}) -> {R.finish_turn.recipient(passing, from, a) == M.turn.recipient(passing, from, b) : D.Seat}:
   match passing:
     case True{}:
       e
@@ -442,22 +442,22 @@ def main.close(+winner: Maybe<&2, D.Seat>, +s: S.State, +from: D.Seat, +passing:
           match k:
             case k:
               +s0 : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, Nil{}, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}
-              +nr : D.Seat = G.NextTurn(qh(s0), from)
+              +nr : D.Seat = G.next_turn(qh(s0), from)
               +nm : D.Seat = Q.next_turn(S.players.health(p), direction, from)
-              +rr : D.Seat = R.FinishTurn.recipient(passing, from, nr)
+              +rr : D.Seat = R.finish_turn.recipient(passing, from, nr)
               +rm : D.Seat = M.turn.recipient(passing, from, nm)
               +e_r : {rr == rm : D.Seat} = recipient.eq(passing, from, nr, nm, LP.next.eq(s0, from, shape))
               +s1 : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, rm, turn, direction, died, checking, amount, saw, Nil{}, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}
-              +moved : {R.settle(23n+k, R.RefState{qh(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, rr, turn, direction, died, checking, amount, saw, Nil{}, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}), R.BeginGrabbing{G.GrabSeats(qh(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, rr, turn, direction, died, checking, amount, saw, Nil{}, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}), False{}, amount)}, n}) == R.settle(23n+k, R.RefState{qh(s1), R.BeginGrabbing{G.GrabSeats(qh(s1), False{}, amount)}, n}) : R.RefState} = Equal.cong(D.Seat, R.RefState, r => R.settle(23n+k, R.RefState{qh(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, r, turn, direction, died, checking, amount, saw, Nil{}, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}), R.BeginGrabbing{G.GrabSeats(qh(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, r, turn, direction, died, checking, amount, saw, Nil{}, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}), False{}, amount)}, n}), rr, rm, e_r)
-              +seats : {R.settle(23n+k, R.RefState{qh(s1), R.BeginGrabbing{G.GrabSeats(qh(s1), False{}, amount)}, n}) == R.settle(23n+k, R.RefState{qh(s1), R.BeginGrabbing{I.begin.seats(s1, False{}, amount)}, n}) : R.RefState} = Equal.cong(List<&2, D.Seat>, R.RefState, xs => R.settle(23n+k, R.RefState{qh(s1), R.BeginGrabbing{xs}, n}), G.GrabSeats(qh(s1), False{}, amount), I.begin.seats(s1, False{}, amount), begin.eq(s1, False{}, amount, shape))
-              Equal.trans(R.RefState, R.settle(23n+k, R.RefState{qh(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, rr, turn, direction, died, checking, amount, saw, Nil{}, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}), R.BeginGrabbing{G.GrabSeats(qh(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, rr, turn, direction, died, checking, amount, saw, Nil{}, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}), False{}, amount)}, n}), R.settle(23n+k, R.RefState{qh(s1), R.BeginGrabbing{G.GrabSeats(qh(s1), False{}, amount)}, n}), A.ref(M.distribute.begin(s1, I.begin.seats(s1, False{}, amount))), moved, Equal.trans(R.RefState, R.settle(23n+k, R.RefState{qh(s1), R.BeginGrabbing{G.GrabSeats(qh(s1), False{}, amount)}, n}), R.settle(23n+k, R.RefState{qh(s1), R.BeginGrabbing{I.begin.seats(s1, False{}, amount)}, n}), A.ref(M.distribute.begin(s1, I.begin.seats(s1, False{}, amount))), seats, distribute.close(I.begin.seats(s1, False{}, amount), s1, Nat.add(11n, k), shape)))
+              +moved : {R.settle(23n+k, R.RefState{qh(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, rr, turn, direction, died, checking, amount, saw, Nil{}, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}), R.BeginGrabbing{G.grab_seats(qh(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, rr, turn, direction, died, checking, amount, saw, Nil{}, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}), False{}, amount)}, n}) == R.settle(23n+k, R.RefState{qh(s1), R.BeginGrabbing{G.grab_seats(qh(s1), False{}, amount)}, n}) : R.RefState} = Equal.cong(D.Seat, R.RefState, r => R.settle(23n+k, R.RefState{qh(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, r, turn, direction, died, checking, amount, saw, Nil{}, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}), R.BeginGrabbing{G.grab_seats(qh(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, r, turn, direction, died, checking, amount, saw, Nil{}, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}), False{}, amount)}, n}), rr, rm, e_r)
+              +seats : {R.settle(23n+k, R.RefState{qh(s1), R.BeginGrabbing{G.grab_seats(qh(s1), False{}, amount)}, n}) == R.settle(23n+k, R.RefState{qh(s1), R.BeginGrabbing{I.begin.seats(s1, False{}, amount)}, n}) : R.RefState} = Equal.cong(List<&2, D.Seat>, R.RefState, xs => R.settle(23n+k, R.RefState{qh(s1), R.BeginGrabbing{xs}, n}), G.grab_seats(qh(s1), False{}, amount), I.begin.seats(s1, False{}, amount), begin.eq(s1, False{}, amount, shape))
+              Equal.trans(R.RefState, R.settle(23n+k, R.RefState{qh(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, rr, turn, direction, died, checking, amount, saw, Nil{}, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}), R.BeginGrabbing{G.grab_seats(qh(S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, rr, turn, direction, died, checking, amount, saw, Nil{}, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}), False{}, amount)}, n}), R.settle(23n+k, R.RefState{qh(s1), R.BeginGrabbing{G.grab_seats(qh(s1), False{}, amount)}, n}), A.ref(M.distribute.begin(s1, I.begin.seats(s1, False{}, amount))), moved, Equal.trans(R.RefState, R.settle(23n+k, R.RefState{qh(s1), R.BeginGrabbing{G.grab_seats(qh(s1), False{}, amount)}, n}), R.settle(23n+k, R.RefState{qh(s1), R.BeginGrabbing{I.begin.seats(s1, False{}, amount)}, n}), A.ref(M.distribute.begin(s1, I.begin.seats(s1, False{}, amount))), seats, distribute.close(I.begin.seats(s1, False{}, amount), s1, Nat.add(11n, k), shape)))
         case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +shell <> +rest, +shown, +deck}, +p, +ph, +n, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
           match k:
             case k:
               +s0 : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, shell <> rest, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}
-              +nr : D.Seat = G.NextTurn(qh(s0), from)
+              +nr : D.Seat = G.next_turn(qh(s0), from)
               +nm : D.Seat = Q.next_turn(S.players.health(p), direction, from)
-              +rr : D.Seat = R.FinishTurn.recipient(passing, from, nr)
+              +rr : D.Seat = R.finish_turn.recipient(passing, from, nr)
               +rm : D.Seat = M.turn.recipient(passing, from, nm)
               +e_r : {rr == rm : D.Seat} = recipient.eq(passing, from, nr, nm, LP.next.eq(s0, from, shape))
               +rank : Nat = Q.jam_rank(p)
@@ -483,7 +483,7 @@ def rule.eq(+s: S.State) -> {G.load.amount(H.host.load_rule(qh(s))) == Q.load.am
 
 # The reload probe: the packet's reload flag and a positive-amount begin
 # list against reload.wanted.
-def live.eq(+winner: Maybe<&2, D.Seat>, +s: S.State, +from: D.Seat, +passing: Bool, +shape: A.Shape(s)) -> {Bool.and(R.TurnEnd.reload(end.packet(s, from, passing, winner)), G.nonempty(D.Seat, G.GrabSeats(qh(s), False{}, 1n))) == I.reload.wanted(s, winner) : Bool}:
+def live.eq(+winner: Maybe<&2, D.Seat>, +s: S.State, +from: D.Seat, +passing: Bool, +shape: A.Shape(s)) -> {Bool.and(R.TurnEnd.reload(end.packet(s, from, passing, winner)), G.nonempty(D.Seat, G.grab_seats(qh(s), False{}, 1n))) == I.reload.wanted(s, winner) : Bool}:
   match winner:
     case Some{+seat}:
       match s:
@@ -495,21 +495,21 @@ def live.eq(+winner: Maybe<&2, D.Seat>, +s: S.State, +from: D.Seat, +passing: Bo
       match s:
         case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, Nil{}, +shown, +deck}, +p, +ph, +n, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
           +s0 : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, Nil{}, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}
-          Equal.trans(Bool, G.nonempty(D.Seat, G.GrabSeats(qh(s0), False{}, 1n)), G.nonempty(D.Seat, I.begin.seats(s0, False{}, 1n)), I.has_seats(I.begin.seats(s0, False{}, 1n)), Equal.cong(List<&2, D.Seat>, Bool, xs => G.nonempty(D.Seat, xs), G.GrabSeats(qh(s0), False{}, 1n), I.begin.seats(s0, False{}, 1n), begin.eq(s0, False{}, 1n, shape)), nonempty.seats(I.begin.seats(s0, False{}, 1n)))
+          Equal.trans(Bool, G.nonempty(D.Seat, G.grab_seats(qh(s0), False{}, 1n)), G.nonempty(D.Seat, I.begin.seats(s0, False{}, 1n)), I.has_seats(I.begin.seats(s0, False{}, 1n)), Equal.cong(List<&2, D.Seat>, Bool, xs => G.nonempty(D.Seat, xs), G.grab_seats(qh(s0), False{}, 1n), I.begin.seats(s0, False{}, 1n), begin.eq(s0, False{}, 1n, shape)), nonempty.seats(I.begin.seats(s0, False{}, 1n)))
         case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +shell <> +rest, +shown, +deck}, +p, +ph, +n, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
           {==}
 
 def packet.at(+fuel: Nat, +h: H.Host, +pkt: R.TurnEnd, +notes: A.Notes(), +rule: D.AmountRule) -> R.RefState:
-  R.settle(fuel, R.EndTurn.amount(R.RefState{h, R.EndTurn{pkt}, notes}, pkt, rule))
+  R.settle(fuel, R.end_turn.amount(R.RefState{h, R.EndTurn{pkt}, notes}, pkt, rule))
 
-def packet.live(+live: Bool, +s: S.State, +from: D.Seat, +passing: Bool, +winner: Maybe<&2, D.Seat>, +k: Nat, +shape: A.Shape(s), +e_rule: {G.load.amount(H.host.load_rule(qh(s))) == D.RandomAmount{} : D.AmountRule}, win: WinClosure()) -> {R.settle(Nat.add(24n, k), R.EndTurn.live(R.RefState{qh(s), R.EndTurn{end.packet(s, from, passing, winner)}, S.state.notes(s)}, end.packet(s, from, passing, winner), live)) == A.ref(M.turn.live(s, from, passing, winner, D.RandomAmount{}, live)) : R.RefState}:
+def packet.live(+live: Bool, +s: S.State, +from: D.Seat, +passing: Bool, +winner: Maybe<&2, D.Seat>, +k: Nat, +shape: A.Shape(s), +e_rule: {G.load.amount(H.host.load_rule(qh(s))) == D.RandomAmount{} : D.AmountRule}, win: WinClosure()) -> {R.settle(Nat.add(24n, k), R.end_turn.live(R.RefState{qh(s), R.EndTurn{end.packet(s, from, passing, winner)}, S.state.notes(s)}, end.packet(s, from, passing, winner), live)) == A.ref(M.turn.live(s, from, passing, winner, D.RandomAmount{}, live)) : R.RefState}:
   match live:
     case True{}:
       match s:
         case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
           +s0 : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}
           +next : R.Frame = R.FinishTurn{end.packet(s0, from, passing, winner)}
-          Equal.cong(D.AmountRule, R.RefState, x => R.settle(23n+k, R.DrawItemAmount.rule(R.RefState{qh(s0), R.DrawItemAmount{next}, n}, next, x)), G.load.amount(H.host.load_rule(qh(s0))), D.RandomAmount{}, e_rule)
+          Equal.cong(D.AmountRule, R.RefState, x => R.settle(23n+k, R.draw_item_amount.rule(R.RefState{qh(s0), R.DrawItemAmount{next}, n}, next, x)), G.load.amount(H.host.load_rule(qh(s0))), D.RandomAmount{}, e_rule)
     case False{}:
       main.close(winner, s, from, passing, k, shape, win)
 
@@ -524,10 +524,10 @@ def packet.rule(+rule: D.AmountRule, +s: S.State, +from: D.Seat, +passing: Bool,
         case S.State{S.World{D.Config{+table, +plan}, +before, +round, +load, +first, +rh, +recipient, +turn, +direction, +died, +checking, +amount, +saw, +gun, +shown, +deck}, +p, +ph, +n, S.Grabs{+dist, +grabbing, +holding, +granted, +intake}}:
           +s0 : S.State = S.State{S.World{D.Config{table, plan}, before, round, load, first, rh, recipient, turn, direction, died, checking, amount, saw, gun, shown, deck}, p, ph, n, S.Grabs{dist, grabbing, holding, granted, intake}}
           +pkt : R.TurnEnd = end.packet(s0, from, passing, winner)
-          +x : Bool = Bool.and(R.TurnEnd.reload(pkt), G.nonempty(D.Seat, G.GrabSeats(qh(s0), False{}, 1n)))
+          +x : Bool = Bool.and(R.TurnEnd.reload(pkt), G.nonempty(D.Seat, G.grab_seats(qh(s0), False{}, 1n)))
           +y : Bool = I.reload.wanted(s0, winner)
           +e_live : {Bool.or(dist, x) == Bool.or(dist, y) : Bool} = or.cong(dist, dist, x, y, {==}, live.eq(winner, s0, from, passing, shape))
-          Equal.trans(R.RefState, R.settle(Nat.add(24n, k), R.EndTurn.live(R.RefState{qh(s0), R.EndTurn{pkt}, n}, pkt, Bool.or(dist, x))), R.settle(Nat.add(24n, k), R.EndTurn.live(R.RefState{qh(s0), R.EndTurn{pkt}, n}, pkt, Bool.or(dist, y))), A.ref(M.turn.live(s0, from, passing, winner, D.RandomAmount{}, Bool.or(dist, y))), Equal.cong(Bool, R.RefState, b => R.settle(Nat.add(24n, k), R.EndTurn.live(R.RefState{qh(s0), R.EndTurn{pkt}, n}, pkt, b)), Bool.or(dist, x), Bool.or(dist, y), e_live), packet.live(Bool.or(dist, y), s0, from, passing, winner, k, shape, e_rule, win))
+          Equal.trans(R.RefState, R.settle(Nat.add(24n, k), R.end_turn.live(R.RefState{qh(s0), R.EndTurn{pkt}, n}, pkt, Bool.or(dist, x))), R.settle(Nat.add(24n, k), R.end_turn.live(R.RefState{qh(s0), R.EndTurn{pkt}, n}, pkt, Bool.or(dist, y))), A.ref(M.turn.live(s0, from, passing, winner, D.RandomAmount{}, Bool.or(dist, y))), Equal.cong(Bool, R.RefState, b => R.settle(Nat.add(24n, k), R.end_turn.live(R.RefState{qh(s0), R.EndTurn{pkt}, n}, pkt, b)), Bool.or(dist, x), Bool.or(dist, y), e_live), packet.live(Bool.or(dist, y), s0, from, passing, winner, k, shape, e_rule, win))
 
 def packet.close(+s: S.State, +from: D.Seat, +passing: Bool, +winner: Maybe<&2, D.Seat>, +k: Nat, +shape: A.Shape(s), win: WinClosure()) -> {R.settle(Nat.add(25n, k), R.RefState{qh(s), R.EndTurn{end.packet(s, from, passing, winner)}, S.state.notes(s)}) == A.ref(M.turn.packet(s, from, passing, winner)) : R.RefState}:
   +pkt : R.TurnEnd = end.packet(s, from, passing, winner)

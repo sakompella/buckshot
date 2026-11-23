@@ -58,7 +58,7 @@ function checkLegal(game, mRequest, rRequest) {
     const { choice } = resolved;
     same('legal_accepted', `seat ${s} index ${index}`, { seat: Number(s), index, move }, { seat: seatNumber(choice.seat), index: Number(choice.index), move: requestMove(choice.move) }, game, 'resolved choice is the offered move');
     if ('UseItem' in move || 'Steal' in move || 'Grab' in move || 'Place' in move) coverage.itemMoves++;
-    same('legal_accepted', `seat ${s} index ${index}`, true, R.MoveAllowed(game.r, choice), game, `reference rejects offered move ${JSON.stringify(move)}`);
+    same('legal_accepted', `seat ${s} index ${index}`, true, R.move_allowed(game.r, choice), game, `reference rejects offered move ${JSON.stringify(move)}`);
   }
 }
 
